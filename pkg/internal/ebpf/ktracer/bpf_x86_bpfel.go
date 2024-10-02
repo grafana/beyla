@@ -257,6 +257,17 @@ type bpfProgramSpecs struct {
 	ProtocolHttp2           *ebpf.ProgramSpec `ebpf:"protocol_http2"`
 	ProtocolTcp             *ebpf.ProgramSpec `ebpf:"protocol_tcp"`
 	SocketHttpFilter        *ebpf.ProgramSpec `ebpf:"socket__http_filter"`
+	UprobeSslDoHandshake    *ebpf.ProgramSpec `ebpf:"uprobe_ssl_do_handshake"`
+	UprobeSslRead           *ebpf.ProgramSpec `ebpf:"uprobe_ssl_read"`
+	UprobeSslReadEx         *ebpf.ProgramSpec `ebpf:"uprobe_ssl_read_ex"`
+	UprobeSslShutdown       *ebpf.ProgramSpec `ebpf:"uprobe_ssl_shutdown"`
+	UprobeSslWrite          *ebpf.ProgramSpec `ebpf:"uprobe_ssl_write"`
+	UprobeSslWriteEx        *ebpf.ProgramSpec `ebpf:"uprobe_ssl_write_ex"`
+	UretprobeSslDoHandshake *ebpf.ProgramSpec `ebpf:"uretprobe_ssl_do_handshake"`
+	UretprobeSslRead        *ebpf.ProgramSpec `ebpf:"uretprobe_ssl_read"`
+	UretprobeSslReadEx      *ebpf.ProgramSpec `ebpf:"uretprobe_ssl_read_ex"`
+	UretprobeSslWrite       *ebpf.ProgramSpec `ebpf:"uretprobe_ssl_write"`
+	UretprobeSslWriteEx     *ebpf.ProgramSpec `ebpf:"uretprobe_ssl_write_ex"`
 }
 
 // bpfMapSpecs contains maps before they are loaded into the kernel.
@@ -425,6 +436,17 @@ type bpfPrograms struct {
 	ProtocolHttp2           *ebpf.Program `ebpf:"protocol_http2"`
 	ProtocolTcp             *ebpf.Program `ebpf:"protocol_tcp"`
 	SocketHttpFilter        *ebpf.Program `ebpf:"socket__http_filter"`
+	UprobeSslDoHandshake    *ebpf.Program `ebpf:"uprobe_ssl_do_handshake"`
+	UprobeSslRead           *ebpf.Program `ebpf:"uprobe_ssl_read"`
+	UprobeSslReadEx         *ebpf.Program `ebpf:"uprobe_ssl_read_ex"`
+	UprobeSslShutdown       *ebpf.Program `ebpf:"uprobe_ssl_shutdown"`
+	UprobeSslWrite          *ebpf.Program `ebpf:"uprobe_ssl_write"`
+	UprobeSslWriteEx        *ebpf.Program `ebpf:"uprobe_ssl_write_ex"`
+	UretprobeSslDoHandshake *ebpf.Program `ebpf:"uretprobe_ssl_do_handshake"`
+	UretprobeSslRead        *ebpf.Program `ebpf:"uretprobe_ssl_read"`
+	UretprobeSslReadEx      *ebpf.Program `ebpf:"uretprobe_ssl_read_ex"`
+	UretprobeSslWrite       *ebpf.Program `ebpf:"uretprobe_ssl_write"`
+	UretprobeSslWriteEx     *ebpf.Program `ebpf:"uretprobe_ssl_write_ex"`
 }
 
 func (p *bpfPrograms) Close() error {
@@ -448,6 +470,17 @@ func (p *bpfPrograms) Close() error {
 		p.ProtocolHttp2,
 		p.ProtocolTcp,
 		p.SocketHttpFilter,
+		p.UprobeSslDoHandshake,
+		p.UprobeSslRead,
+		p.UprobeSslReadEx,
+		p.UprobeSslShutdown,
+		p.UprobeSslWrite,
+		p.UprobeSslWriteEx,
+		p.UretprobeSslDoHandshake,
+		p.UretprobeSslRead,
+		p.UretprobeSslReadEx,
+		p.UretprobeSslWrite,
+		p.UretprobeSslWriteEx,
 	)
 }
 

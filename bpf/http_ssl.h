@@ -10,6 +10,8 @@
 #include "sockaddr.h"
 #include "tcp_info.h"
 
+char __license[] SEC("license") = "Dual MIT/GPL";
+
 // We use this map to track ssl handshake enter/exit, it should be only
 // temporary
 struct {

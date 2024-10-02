@@ -8,8 +8,6 @@
 #include "k_tracer.h"
 #include "http_ssl.h"
 
-char __license[] SEC("license") = "Dual MIT/GPL";
-
 #define TC_SYN_PACKET_ID 0xdeadf00d
 
 // Temporary tracking of accept arguments

@@ -685,8 +685,8 @@ Kubernetes metadata decoration.
 |--------------------------|-------------------------------------|----------|---------|
 | `informers_sync_timeout` | `BEYLA_KUBE_INFORMERS_SYNC_TIMEOUT` | Duration | 30s     |
 
-Maximum time that Beyla will wait for getting all the Kubernetes metadata before starting
-to decorate metrics and traces. If this timeout is reached, Beyla will start normally but
+Maximum time that Beyla waits for getting all the Kubernetes metadata before starting
+to decorate metrics and traces. If this timeout is reached, Beyla starts normally but
 the metadata attributes might be incomplete until all the Kubernetes metadata is locally
 updated in background.
 
@@ -695,10 +695,10 @@ updated in background.
 | `informers_resync_period` | `BEYLA_KUBE_INFORMERS_RESYNC_PERIOD` | Duration | 30m     |
 
 Beyla is subscribed to immediately receive any update on resources' metadata. In addition,
-Beyla will periodically resynchronize the whole Kubernetes metadata, at the frequency specified
+Beyla periodically resynchronizes the whole Kubernetes metadata at the frequency specified
 by this property.
 
-Higher values will reduce the load on the Kubernetes API service.
+Higher values reduce the load on the Kubernetes API service.
 
 ## Routes decorator
 

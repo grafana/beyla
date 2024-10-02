@@ -9,7 +9,6 @@
 #include "pid.h"
 #include "sockaddr.h"
 #include "tcp_info.h"
-#include "http_ssl.h"
 
 // We use this map to track ssl handshake enter/exit, it should be only
 // temporary

@@ -1,6 +1,6 @@
 //go:build linux
 
-package ktracer
+package generictracer
 
 import (
 	"testing"

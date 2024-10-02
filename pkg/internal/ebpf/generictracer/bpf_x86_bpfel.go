@@ -105,6 +105,13 @@ type bpfHttpInfoT struct {
 	_       [4]byte
 }
 
+type bpfPartialConnectionInfoT struct {
+	S_addr [16]uint8
+	S_port uint16
+	D_port uint16
+	TcpSeq uint32
+}
+
 type bpfPidConnectionInfoT struct {
 	Conn bpfConnectionInfoT
 	Pid  uint32
@@ -113,6 +120,21 @@ type bpfPidConnectionInfoT struct {
 type bpfPidKeyT struct {
 	Pid uint32
 	Ns  uint32
+}
+
+type bpfRecvArgsT struct {
+	SockPtr  uint64
+	IovecCtx [40]uint8
+}
+
+type bpfSendArgsT struct {
+	P_conn bpfPidConnectionInfoT
+	Size   uint64
+}
+
+type bpfSockArgsT struct {
+	Addr       uint64
+	AcceptTime uint64
 }
 
 type bpfSslArgsT struct {
@@ -216,9 +238,25 @@ type bpfSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfProgramSpecs struct {
+	AppEgress               *ebpf.ProgramSpec `ebpf:"app_egress"`
+	AppIngress              *ebpf.ProgramSpec `ebpf:"app_ingress"`
+	KprobeSysExit           *ebpf.ProgramSpec `ebpf:"kprobe_sys_exit"`
+	KprobeTcpCleanupRbuf    *ebpf.ProgramSpec `ebpf:"kprobe_tcp_cleanup_rbuf"`
+	KprobeTcpClose          *ebpf.ProgramSpec `ebpf:"kprobe_tcp_close"`
+	KprobeTcpConnect        *ebpf.ProgramSpec `ebpf:"kprobe_tcp_connect"`
+	KprobeTcpRcvEstablished *ebpf.ProgramSpec `ebpf:"kprobe_tcp_rcv_established"`
+	KprobeTcpRecvmsg        *ebpf.ProgramSpec `ebpf:"kprobe_tcp_recvmsg"`
+	KprobeTcpSendmsg        *ebpf.ProgramSpec `ebpf:"kprobe_tcp_sendmsg"`
+	KretprobeSockAlloc      *ebpf.ProgramSpec `ebpf:"kretprobe_sock_alloc"`
+	KretprobeSysAccept4     *ebpf.ProgramSpec `ebpf:"kretprobe_sys_accept4"`
+	KretprobeSysClone       *ebpf.ProgramSpec `ebpf:"kretprobe_sys_clone"`
+	KretprobeSysConnect     *ebpf.ProgramSpec `ebpf:"kretprobe_sys_connect"`
+	KretprobeTcpRecvmsg     *ebpf.ProgramSpec `ebpf:"kretprobe_tcp_recvmsg"`
+	KretprobeTcpSendmsg     *ebpf.ProgramSpec `ebpf:"kretprobe_tcp_sendmsg"`
 	ProtocolHttp            *ebpf.ProgramSpec `ebpf:"protocol_http"`
 	ProtocolHttp2           *ebpf.ProgramSpec `ebpf:"protocol_http2"`
 	ProtocolTcp             *ebpf.ProgramSpec `ebpf:"protocol_tcp"`
+	SocketHttpFilter        *ebpf.ProgramSpec `ebpf:"socket__http_filter"`
 	UprobeSslDoHandshake    *ebpf.ProgramSpec `ebpf:"uprobe_ssl_do_handshake"`
 	UprobeSslRead           *ebpf.ProgramSpec `ebpf:"uprobe_ssl_read"`
 	UprobeSslReadEx         *ebpf.ProgramSpec `ebpf:"uprobe_ssl_read_ex"`
@@ -236,7 +274,12 @@ type bpfProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfMapSpecs struct {
+	ActiveAcceptArgs        *ebpf.MapSpec `ebpf:"active_accept_args"`
+	ActiveConnectArgs       *ebpf.MapSpec `ebpf:"active_connect_args"`
 	ActiveNodejsIds         *ebpf.MapSpec `ebpf:"active_nodejs_ids"`
+	ActiveRecvArgs          *ebpf.MapSpec `ebpf:"active_recv_args"`
+	ActiveSendArgs          *ebpf.MapSpec `ebpf:"active_send_args"`
+	ActiveSendSockArgs      *ebpf.MapSpec `ebpf:"active_send_sock_args"`
 	ActiveSslConnections    *ebpf.MapSpec `ebpf:"active_ssl_connections"`
 	ActiveSslHandshakes     *ebpf.MapSpec `ebpf:"active_ssl_handshakes"`
 	ActiveSslReadArgs       *ebpf.MapSpec `ebpf:"active_ssl_read_args"`
@@ -262,6 +305,7 @@ type bpfMapSpecs struct {
 	ServerTraces            *ebpf.MapSpec `ebpf:"server_traces"`
 	SslToConn               *ebpf.MapSpec `ebpf:"ssl_to_conn"`
 	SslToPidTid             *ebpf.MapSpec `ebpf:"ssl_to_pid_tid"`
+	TcpConnectionMap        *ebpf.MapSpec `ebpf:"tcp_connection_map"`
 	TcpReqMem               *ebpf.MapSpec `ebpf:"tcp_req_mem"`
 	TpCharBufMem            *ebpf.MapSpec `ebpf:"tp_char_buf_mem"`
 	TpInfoMem               *ebpf.MapSpec `ebpf:"tp_info_mem"`
@@ -288,7 +332,12 @@ func (o *bpfObjects) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfMaps struct {
+	ActiveAcceptArgs        *ebpf.Map `ebpf:"active_accept_args"`
+	ActiveConnectArgs       *ebpf.Map `ebpf:"active_connect_args"`
 	ActiveNodejsIds         *ebpf.Map `ebpf:"active_nodejs_ids"`
+	ActiveRecvArgs          *ebpf.Map `ebpf:"active_recv_args"`
+	ActiveSendArgs          *ebpf.Map `ebpf:"active_send_args"`
+	ActiveSendSockArgs      *ebpf.Map `ebpf:"active_send_sock_args"`
 	ActiveSslConnections    *ebpf.Map `ebpf:"active_ssl_connections"`
 	ActiveSslHandshakes     *ebpf.Map `ebpf:"active_ssl_handshakes"`
 	ActiveSslReadArgs       *ebpf.Map `ebpf:"active_ssl_read_args"`
@@ -314,6 +363,7 @@ type bpfMaps struct {
 	ServerTraces            *ebpf.Map `ebpf:"server_traces"`
 	SslToConn               *ebpf.Map `ebpf:"ssl_to_conn"`
 	SslToPidTid             *ebpf.Map `ebpf:"ssl_to_pid_tid"`
+	TcpConnectionMap        *ebpf.Map `ebpf:"tcp_connection_map"`
 	TcpReqMem               *ebpf.Map `ebpf:"tcp_req_mem"`
 	TpCharBufMem            *ebpf.Map `ebpf:"tp_char_buf_mem"`
 	TpInfoMem               *ebpf.Map `ebpf:"tp_info_mem"`
@@ -323,7 +373,12 @@ type bpfMaps struct {
 
 func (m *bpfMaps) Close() error {
 	return _BpfClose(
+		m.ActiveAcceptArgs,
+		m.ActiveConnectArgs,
 		m.ActiveNodejsIds,
+		m.ActiveRecvArgs,
+		m.ActiveSendArgs,
+		m.ActiveSendSockArgs,
 		m.ActiveSslConnections,
 		m.ActiveSslHandshakes,
 		m.ActiveSslReadArgs,
@@ -349,6 +404,7 @@ func (m *bpfMaps) Close() error {
 		m.ServerTraces,
 		m.SslToConn,
 		m.SslToPidTid,
+		m.TcpConnectionMap,
 		m.TcpReqMem,
 		m.TpCharBufMem,
 		m.TpInfoMem,
@@ -361,9 +417,25 @@ func (m *bpfMaps) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfPrograms struct {
+	AppEgress               *ebpf.Program `ebpf:"app_egress"`
+	AppIngress              *ebpf.Program `ebpf:"app_ingress"`
+	KprobeSysExit           *ebpf.Program `ebpf:"kprobe_sys_exit"`
+	KprobeTcpCleanupRbuf    *ebpf.Program `ebpf:"kprobe_tcp_cleanup_rbuf"`
+	KprobeTcpClose          *ebpf.Program `ebpf:"kprobe_tcp_close"`
+	KprobeTcpConnect        *ebpf.Program `ebpf:"kprobe_tcp_connect"`
+	KprobeTcpRcvEstablished *ebpf.Program `ebpf:"kprobe_tcp_rcv_established"`
+	KprobeTcpRecvmsg        *ebpf.Program `ebpf:"kprobe_tcp_recvmsg"`
+	KprobeTcpSendmsg        *ebpf.Program `ebpf:"kprobe_tcp_sendmsg"`
+	KretprobeSockAlloc      *ebpf.Program `ebpf:"kretprobe_sock_alloc"`
+	KretprobeSysAccept4     *ebpf.Program `ebpf:"kretprobe_sys_accept4"`
+	KretprobeSysClone       *ebpf.Program `ebpf:"kretprobe_sys_clone"`
+	KretprobeSysConnect     *ebpf.Program `ebpf:"kretprobe_sys_connect"`
+	KretprobeTcpRecvmsg     *ebpf.Program `ebpf:"kretprobe_tcp_recvmsg"`
+	KretprobeTcpSendmsg     *ebpf.Program `ebpf:"kretprobe_tcp_sendmsg"`
 	ProtocolHttp            *ebpf.Program `ebpf:"protocol_http"`
 	ProtocolHttp2           *ebpf.Program `ebpf:"protocol_http2"`
 	ProtocolTcp             *ebpf.Program `ebpf:"protocol_tcp"`
+	SocketHttpFilter        *ebpf.Program `ebpf:"socket__http_filter"`
 	UprobeSslDoHandshake    *ebpf.Program `ebpf:"uprobe_ssl_do_handshake"`
 	UprobeSslRead           *ebpf.Program `ebpf:"uprobe_ssl_read"`
 	UprobeSslReadEx         *ebpf.Program `ebpf:"uprobe_ssl_read_ex"`
@@ -379,9 +451,25 @@ type bpfPrograms struct {
 
 func (p *bpfPrograms) Close() error {
 	return _BpfClose(
+		p.AppEgress,
+		p.AppIngress,
+		p.KprobeSysExit,
+		p.KprobeTcpCleanupRbuf,
+		p.KprobeTcpClose,
+		p.KprobeTcpConnect,
+		p.KprobeTcpRcvEstablished,
+		p.KprobeTcpRecvmsg,
+		p.KprobeTcpSendmsg,
+		p.KretprobeSockAlloc,
+		p.KretprobeSysAccept4,
+		p.KretprobeSysClone,
+		p.KretprobeSysConnect,
+		p.KretprobeTcpRecvmsg,
+		p.KretprobeTcpSendmsg,
 		p.ProtocolHttp,
 		p.ProtocolHttp2,
 		p.ProtocolTcp,
+		p.SocketHttpFilter,
 		p.UprobeSslDoHandshake,
 		p.UprobeSslRead,
 		p.UprobeSslReadEx,

@@ -2,7 +2,7 @@
 
 // this file is emptied on purpose to allow Beyla compiling in non-linux environments
 
-package ktracer
+package generictracer
 
 import (
 	"context"

@@ -72,8 +72,8 @@ func TestWatcherKubeEnricher(t *testing.T) {
 			containerInfoForPID = fakeContainerInfo
 			// Setup a fake K8s API connected to the watcherKubeEnricher
 			k8sClient := fakek8sclientset.NewSimpleClientset()
-			informer := kube.Metadata{}
-			require.NoError(t, informer.InitFromClient(context.TODO(), k8sClient, "", 30*time.Minute))
+			informer := kube.Metadata{SyncTimeout: 30 * time.Minute}
+			require.NoError(t, informer.InitFromClient(context.TODO(), k8sClient, ""))
 			wkeNodeFunc, err := WatcherKubeEnricherProvider(context.TODO(), &informerProvider{informer: &informer}, fakeInternalMetrics{})()
 			require.NoError(t, err)
 			inputCh, outputCh := make(chan []Event[processAttrs], 10), make(chan []Event[processAttrs], 10)
@@ -118,8 +118,8 @@ func TestWatcherKubeEnricherWithMatcher(t *testing.T) {
 	processInfo = fakeProcessInfo
 	// Setup a fake K8s API connected to the watcherKubeEnricher
 	k8sClient := fakek8sclientset.NewSimpleClientset()
-	informer := kube.Metadata{}
-	require.NoError(t, informer.InitFromClient(context.TODO(), k8sClient, "", 30*time.Minute))
+	informer := kube.Metadata{SyncTimeout: 30 * time.Minute}
+	require.NoError(t, informer.InitFromClient(context.TODO(), k8sClient, ""))
 	wkeNodeFunc, err := WatcherKubeEnricherProvider(context.TODO(), &informerProvider{informer: &informer}, fakeInternalMetrics{})()
 	require.NoError(t, err)
 	pipeConfig := beyla.Config{}

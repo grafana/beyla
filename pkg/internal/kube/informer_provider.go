@@ -16,32 +16,43 @@ import (
 	"github.com/grafana/beyla/pkg/kubeflags"
 )
 
+type MetadataConfig struct {
+	Enable                kubeflags.EnableFlag
+	DisabledInformers     []string
+	KubeConfigPath        string
+	EnableNetworkMetadata bool
+	SyncTimeout           time.Duration
+	ResyncPeriod          time.Duration
+}
+
 type MetadataProvider struct {
 	mt       sync.Mutex
 	metadata *Metadata
 
 	kubeConfigPath string
 	syncTimeout    time.Duration
+	resyncPeriod   time.Duration
 
 	enable            atomic.Value
 	disabledInformers maps.Bits
 	enableNetworkMeta bool
 }
 
-func NewMetadataProvider(
-	enable kubeflags.EnableFlag,
-	disabledInformers []string,
-	kubeConfigPath string,
-	enableNetworkMetadata bool,
-	syncTimeout time.Duration,
-) *MetadataProvider {
-	mp := &MetadataProvider{
-		enableNetworkMeta: enableNetworkMetadata,
-		kubeConfigPath:    kubeConfigPath,
-		syncTimeout:       syncTimeout,
-		disabledInformers: informerTypes(disabledInformers),
+func NewMetadataProvider(config MetadataConfig) *MetadataProvider {
+	if config.SyncTimeout == 0 {
+		config.SyncTimeout = defaultSyncTimeout
 	}
-	mp.enable.Store(enable)
+	if config.ResyncPeriod == 0 {
+		config.ResyncPeriod = defaultResyncTime
+	}
+	mp := &MetadataProvider{
+		enableNetworkMeta: config.EnableNetworkMetadata,
+		kubeConfigPath:    config.KubeConfigPath,
+		syncTimeout:       config.SyncTimeout,
+		resyncPeriod:      config.ResyncPeriod,
+		disabledInformers: informerTypes(config.DisabledInformers),
+	}
+	mp.enable.Store(config.Enable)
 	return mp
 }
 
@@ -106,8 +117,12 @@ func (mp *MetadataProvider) Get(ctx context.Context) (*Metadata, error) {
 			return nil, fmt.Errorf("can't get current node name: %w", err)
 		}
 	}
-	mp.metadata = &Metadata{disabledInformers: mp.disabledInformers}
-	if err := mp.metadata.InitFromClient(ctx, kubeClient, restrictNodeName, mp.syncTimeout); err != nil {
+	mp.metadata = &Metadata{
+		disabledInformers: mp.disabledInformers,
+		SyncTimeout:       mp.syncTimeout,
+		resyncPeriod:      mp.resyncPeriod,
+	}
+	if err := mp.metadata.InitFromClient(ctx, kubeClient, restrictNodeName); err != nil {
 		return nil, fmt.Errorf("can't initialize kubernetes metadata: %w", err)
 	}
 	return mp.metadata, nil

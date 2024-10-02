@@ -20,7 +20,7 @@ jobs:
       - name: Check git-lfs files
         run: |
 
-          files=$(git diff --name-only origin/main...HEAD | grep '\.o$' || true)
+          files=$(git diff --name-status origin/main...HEAD | awk '$1 != "D" && /\.o$/ { print $2 }' || true)
           if [ -z "$files" ]; then
             echo "No .o files modified"
             exit 0

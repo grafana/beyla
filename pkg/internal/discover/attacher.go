@@ -45,7 +45,7 @@ type TraceAttacher struct {
 	// unique purpose is to notify other parts of the system that this process is active, even
 	// if no spans are detected. This would allow, for example, to start instrumenting this process
 	// from the Process metrics pipeline even before it starts to do/receive requests.
-	ReadDecoratorInput chan<- []request.Span
+	SpanSignalsShortcut chan<- []request.Span
 }
 
 func TraceAttacherProvider(ta *TraceAttacher) pipe.FinalProvider[[]Event[ebpf.Instrumentable]] {
@@ -256,7 +256,7 @@ func (ta *TraceAttacher) monitorPIDs(tracer *ebpf.ProcessTracer, ie *ebpf.Instru
 	for _, pid := range ie.ChildPids {
 		tracer.AllowPID(pid, ie.FileInfo.Ns, &ie.FileInfo.Service)
 	}
-	if ta.ReadDecoratorInput != nil {
+	if ta.SpanSignalsShortcut != nil {
 		spans := make([]request.Span, 0, len(ie.ChildPids)+1)
 		spans = append(spans, request.Span{
 			Type:      request.EventTypeProcessAlive,
@@ -270,7 +270,7 @@ func (ta *TraceAttacher) monitorPIDs(tracer *ebpf.ProcessTracer, ie *ebpf.Instru
 				ServiceID: service,
 			})
 		}
-		ta.ReadDecoratorInput <- spans
+		ta.SpanSignalsShortcut <- spans
 	}
 }
 

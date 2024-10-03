@@ -76,12 +76,12 @@ func (pf *ProcessFinder) Start() (<-chan *ebpf.Instrumentable, <-chan *ebpf.Inst
 	pipe.AddMiddleProvider(gb, containerDBUpdater,
 		ContainerDBUpdaterProvider(pf.ctxInfo.K8sInformer.IsKubeEnabled(), pf.ctxInfo.AppO11y.K8sDatabase))
 	pipe.AddFinalProvider(gb, traceAttacher, TraceAttacherProvider(&TraceAttacher{
-		Cfg:                pf.cfg,
-		Ctx:                pf.ctx,
-		DiscoveredTracers:  discoveredTracers,
-		DeleteTracers:      deleteTracers,
-		Metrics:            pf.ctxInfo.Metrics,
-		ReadDecoratorInput: pf.tracesInput,
+		Cfg:                 pf.cfg,
+		Ctx:                 pf.ctx,
+		DiscoveredTracers:   discoveredTracers,
+		DeleteTracers:       deleteTracers,
+		Metrics:             pf.ctxInfo.Metrics,
+		SpanSignalsShortcut: pf.tracesInput,
 	}))
 	pipeline, err := gb.Build()
 	if err != nil {

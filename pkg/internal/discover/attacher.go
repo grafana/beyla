@@ -13,6 +13,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/goexec"
 	"github.com/grafana/beyla/pkg/internal/helpers/maps"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
+	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
@@ -38,6 +39,13 @@ type TraceAttacher struct {
 	existingTracers  map[uint64]*ebpf.ProcessTracer
 	reusableTracer   *ebpf.ProcessTracer
 	reusableGoTracer *ebpf.ProcessTracer
+
+	// Usually, only ebpf.Tracer implementations will send spans data to the read decorator.
+	// But on each new process, we will send a "process alive" span type to the read decorator, whose
+	// unique purpose is to notify other parts of the system that this process is active, even
+	// if no spans are detected. This would allow, for example, to start instrumenting this process
+	// from the Process metrics pipeline even before it starts to do/receive requests.
+	ReadDecoratorInput chan<- []request.Span
 }
 
 func TraceAttacherProvider(ta *TraceAttacher) pipe.FinalProvider[[]Event[ebpf.Instrumentable]] {
@@ -96,12 +104,12 @@ func (ta *TraceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 			"exec", ie.FileInfo.CmdExePath)
 		ie.FileInfo.Service.SDKLanguage = ie.Type
 		// allowing the tracer to forward traces from the new PID and its children processes
-		monitorPIDs(tracer, ie)
+		ta.monitorPIDs(tracer, ie)
 		ta.Metrics.InstrumentProcess(ie.FileInfo.ExecutableName())
 		if tracer.Type == ebpf.Generic {
-			monitorPIDs(ta.reusableTracer, ie)
+			ta.monitorPIDs(ta.reusableTracer, ie)
 		} else {
-			monitorPIDs(ta.reusableGoTracer, ie)
+			ta.monitorPIDs(ta.reusableGoTracer, ie)
 		}
 		ta.log.Debug(".done")
 		return ok
@@ -147,7 +155,7 @@ func (ta *TraceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 					"child", ie.ChildPids,
 					"exec", ie.FileInfo.CmdExePath)
 
-				monitorPIDs(ta.reusableGoTracer, ie)
+				ta.monitorPIDs(ta.reusableGoTracer, ie)
 				ta.existingTracers[ie.FileInfo.Ino] = ta.reusableGoTracer
 
 				return true
@@ -195,11 +203,11 @@ func (ta *TraceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 		"child", ie.ChildPids,
 		"exec", ie.FileInfo.CmdExePath)
 	// allowing the tracer to forward traces from the discovered PID and its children processes
-	monitorPIDs(tracer, ie)
+	ta.monitorPIDs(tracer, ie)
 	ta.existingTracers[ie.FileInfo.Ino] = tracer
 	if tracer.Type == ebpf.Generic {
 		if ta.reusableTracer != nil {
-			monitorPIDs(ta.reusableTracer, ie)
+			ta.monitorPIDs(ta.reusableTracer, ie)
 		} else {
 			ta.reusableTracer = tracer
 		}
@@ -231,7 +239,7 @@ func (ta *TraceAttacher) genericTracers() []ebpf.Tracer {
 	return newNonGoTracersGroup(ta.Cfg, ta.Metrics)
 }
 
-func monitorPIDs(tracer *ebpf.ProcessTracer, ie *ebpf.Instrumentable) {
+func (ta *TraceAttacher) monitorPIDs(tracer *ebpf.ProcessTracer, ie *ebpf.Instrumentable) {
 	// If the user does not override the service name via configuration
 	// the service name is the name of the found executable
 	// Unless the case of system-wide tracing, where the name of the
@@ -247,6 +255,22 @@ func monitorPIDs(tracer *ebpf.ProcessTracer, ie *ebpf.Instrumentable) {
 	tracer.AllowPID(uint32(ie.FileInfo.Pid), ie.FileInfo.Ns, &ie.FileInfo.Service)
 	for _, pid := range ie.ChildPids {
 		tracer.AllowPID(pid, ie.FileInfo.Ns, &ie.FileInfo.Service)
+	}
+	if ta.ReadDecoratorInput != nil {
+		spans := make([]request.Span, 0, len(ie.ChildPids)+1)
+		spans = append(spans, request.Span{
+			Type:      request.EventTypeProcessAlive,
+			ServiceID: ie.FileInfo.Service,
+		})
+		for _, pid := range ie.ChildPids {
+			service := ie.FileInfo.Service
+			service.ProcPID = int32(pid)
+			spans = append(spans, request.Span{
+				Type:      request.EventTypeProcessAlive,
+				ServiceID: service,
+			})
+		}
+		ta.ReadDecoratorInput <- spans
 	}
 }
 

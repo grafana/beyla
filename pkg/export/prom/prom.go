@@ -583,6 +583,9 @@ func (r *metricsReporter) otelSpanObserved(span *request.Span) bool {
 
 // nolint:cyclop
 func (r *metricsReporter) observe(span *request.Span) {
+	if span.InternalSignal() {
+		return
+	}
 	t := span.Timings()
 	r.beylaInfo.WithLabelValues(span.ServiceID.SDKLanguage.String()).metric.Set(1.0)
 	duration := t.End.Sub(t.RequestStart).Seconds()

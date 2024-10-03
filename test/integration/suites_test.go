@@ -231,17 +231,19 @@ func TestSuite_PrometheusScrape(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
-	t.Run("RED metrics", testREDMetricsHTTP)
-	t.Run("GRPC RED metrics", testREDMetricsGRPC)
-	t.Run("Internal Prometheus metrics", testInternalPrometheusExport)
-	t.Run("Testing Beyla Build Info metric", testPrometheusBeylaBuildInfo)
-	t.Run("Testing for no Beyla self metrics", testPrometheusNoBeylaEvents)
+	// checking process metrics before any other test lets us verify that even if an application
+	// hasn't received any request, their processes are still instrumented
 	t.Run("Testing process-level metrics", testProcesses(map[string]string{
 		"process_executable_name": "testserver",
 		"process_executable_path": "/testserver",
 		"process_command":         "testserver",
 		"process_command_line":    "/testserver",
 	}))
+	t.Run("RED metrics", testREDMetricsHTTP)
+	t.Run("GRPC RED metrics", testREDMetricsGRPC)
+	t.Run("Internal Prometheus metrics", testInternalPrometheusExport)
+	t.Run("Testing Beyla Build Info metric", testPrometheusBeylaBuildInfo)
+	t.Run("Testing for no Beyla self metrics", testPrometheusNoBeylaEvents)
 
 	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
@@ -420,14 +422,16 @@ func TestSuite_Python(t *testing.T) {
 	compose.Env = append(compose.Env, `BEYLA_OPEN_PORT=8380`, `BEYLA_EXECUTABLE_NAME=`, `TEST_SERVICE_PORTS=8381:8380`)
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
-	t.Run("Python RED metrics", testREDMetricsPythonHTTP)
-	t.Run("Python RED metrics with timeouts", testREDMetricsTimeoutPythonHTTP)
+	// checking process metrics before any other test lets us verify that even if an application
+	// hasn't received any request, their processes are still instrumented
 	t.Run("Checking process metrics", testProcesses(map[string]string{
 		"process_executable_name": "python",
 		"process_executable_path": "/usr/local/bin/python",
 		"process_command":         "gunicorn",
 		"process_command_line":    "/usr/local/bin/python /usr/local/bin/gunicorn -w 4 -b 0.0.0.0:8380 main:app --timeout 90",
 	}))
+	t.Run("Python RED metrics", testREDMetricsPythonHTTP)
+	t.Run("Python RED metrics with timeouts", testREDMetricsTimeoutPythonHTTP)
 	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)

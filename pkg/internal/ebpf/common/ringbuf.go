@@ -11,6 +11,7 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/ringbuf"
 
+	"github.com/grafana/beyla/pkg/config"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/request"
 )
@@ -29,7 +30,7 @@ var readerFactory = func(rb *ebpf.Map) (ringBufReader, error) {
 }
 
 type ringBufForwarder struct {
-	cfg        *TracerConfig
+	cfg        *config.EPPFTracer
 	logger     *slog.Logger
 	ringbuffer *ebpf.Map
 	closers    []io.Closer
@@ -51,7 +52,7 @@ var singleRbfLock sync.Mutex
 // internal buffer, and forwards them to an output events channel, previously converted to request.Span
 // instances.
 func SharedRingbuf(
-	cfg *TracerConfig,
+	cfg *config.EPPFTracer,
 	filter ServiceFilter,
 	ringbuffer *ebpf.Map,
 	metrics imetrics.Reporter,
@@ -74,7 +75,7 @@ func SharedRingbuf(
 }
 
 func ForwardRingbuf(
-	cfg *TracerConfig,
+	cfg *config.EPPFTracer,
 	ringbuffer *ebpf.Map,
 	filter ServiceFilter,
 	reader func(*ringbuf.Record, ServiceFilter) (request.Span, bool, error),

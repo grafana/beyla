@@ -14,12 +14,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/grafana/beyla/pkg/config"
 	"github.com/grafana/beyla/pkg/export/attributes"
 	"github.com/grafana/beyla/pkg/export/debug"
 	"github.com/grafana/beyla/pkg/export/instrumentations"
 	"github.com/grafana/beyla/pkg/export/otel"
 	"github.com/grafana/beyla/pkg/export/prom"
-	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/infraolly/process"
 	"github.com/grafana/beyla/pkg/internal/netolly/transform/cidr"
@@ -110,7 +110,7 @@ network:
 		EnforceSysCaps:   false,
 		Printer:          false,
 		TracePrinter:     "json",
-		EBPF: ebpfcommon.TracerConfig{
+		EBPF: config.EPPFTracer{
 			BatchLength:        100,
 			BatchTimeout:       time.Second,
 			BpfBaseDir:         "/var/run/beyla",
@@ -412,7 +412,7 @@ time=\S+ level=DEBUG msg=debug arg=debug$`),
 		tracing: true,
 		expectedCfg: Config{
 			TracePrinter: debug.TracePrinterText,
-			EBPF:         ebpfcommon.TracerConfig{BpfDebug: true},
+			EBPF:         config.EPPFTracer{BpfDebug: true},
 		},
 	}, {
 		name: "debug log with network flows",
@@ -426,7 +426,7 @@ time=\S+ level=DEBUG msg=debug arg=debug$`),
 		tracing: true,
 		expectedCfg: Config{
 			TracePrinter: debug.TracePrinterText,
-			EBPF:         ebpfcommon.TracerConfig{BpfDebug: true},
+			EBPF:         config.EPPFTracer{BpfDebug: true},
 			NetworkFlows: NetworkConfig{Enable: true, Print: true},
 		},
 	}} {

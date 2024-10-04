@@ -10,6 +10,10 @@
 
 char __license[] SEC("license") = "Dual MIT/GPL";
 
+#define MIN_IP_LEN 20
+#define MAX_TC_TP_LEN 20
+#define TC_TP_ID 0x1488
+
 // Temporary tracking of accept arguments
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
@@ -714,34 +718,36 @@ int app_ingress(struct __sk_buff *skb) {
 
     unsigned char tp_buf[TP_MAX_VAL_LENGTH];
 
-    if (tcp_ack(&tcp)) {
-        if (tcp.ip_len > 20) {
-            u16 opts = 0;
-            int ip_off = 20 + ETH_HLEN;
+    if (tcp_ack(&tcp)) { // ack field must be set, which means we are looking at non SYN packet
+        if (tcp.ip_len ==
+            MIN_IP_LEN +
+                MAX_TC_TP_LEN) { // assumes we are the only ones that added options, this can be improved
+            u16 key = 0;
+            int ip_off = MIN_IP_LEN + ETH_HLEN;
 
             print_http_connection_info(&conn);
 
-            bpf_skb_load_bytes(skb, ip_off, &opts, sizeof(opts));
-            bpf_printk("options %llx, len = %d", opts, tcp.ip_len);
-            if (opts == 0x1488) {
+            bpf_skb_load_bytes(skb, ip_off, &key, sizeof(key));
+            bpf_printk("options %llx, len = %d", key, tcp.ip_len);
+            if (key == TC_TP_ID) {
                 tp_info_pid_t *existing_tp = bpf_map_lookup_elem(&incoming_trace_map, &conn);
                 if (!existing_tp) {
                     bpf_printk("Found tp context in opts! ihl = %d", tcp.ip_len);
                     tp_info_pid_t new_tp = {.pid = TC_SYN_PACKET_ID, .valid = 1};
+                    // We use a combination of the TCP sequence + TCP ack as a SpanID
                     *((u32 *)(&new_tp.tp.span_id[0])) = tcp.seq;
                     *((u32 *)(&new_tp.tp.span_id[4])) = tcp.ack;
-                    bpf_skb_load_bytes(skb, ip_off + sizeof(opts), &new_tp.tp.trace_id[0], 16);
-                    //clear_upper_trace_id(&new_tp.tp);
-
-                    // if (tcp.ip_len > 20) {
-                    //     bpf_printk("loading the second part of the trace_id");
-                    //     bpf_skb_load_bytes(
-                    //         skb, ETH_HLEN + tcp.ip_len + 2 * sizeof(u8), &new_tp.tp.trace_id[8], 8);
-                    // }
+                    // We load the TraceID from the IP options field. We skip two bytes for the key 0x88 + len (2 bytes)
+                    bpf_skb_load_bytes(skb,
+                                       ip_off + sizeof(key),
+                                       &new_tp.tp.trace_id[0],
+                                       sizeof(new_tp.tp.trace_id));
 
                     make_tp_string(tp_buf, &new_tp.tp);
                     bpf_printk("tp: %s", tp_buf);
                     bpf_map_update_elem(&incoming_trace_map, &conn, &new_tp, BPF_ANY);
+
+                    return 0;
                 } else {
                     bpf_printk("ignoring existing tp");
                 }
@@ -814,38 +820,73 @@ encode_data_in_syn_packet(struct __sk_buff *skb, protocol_info_t *tcp, tp_info_p
     bpf_skb_store_bytes(skb, offset_ip_tot_len, &new_tot_len, sizeof(u16), 0);
 }
 
-static __always_inline void encode_data_in_tcp_options(struct __sk_buff *skb,
-                                                       connection_info_t *conn,
-                                                       protocol_info_t *tcp,
-                                                       tp_info_pid_t *tp) {
-    if ((tcp->ip_len != 0) && (tcp->ip_len < MAX_IP_HDR_LEN - 20)) {
+static __always_inline void encode_data_in_ip_options(struct __sk_buff *skb,
+                                                      connection_info_t *conn,
+                                                      protocol_info_t *tcp,
+                                                      tp_info_pid_t *tp) {
+    if (tcp->ip_len ==
+        MIN_IP_LEN) { // we only do this if the IP header doesn't have any options, this can be improved if needed
         bpf_printk("Adding the trace_id in the IP Options");
-        bpf_skb_adjust_room(skb, 20, BPF_ADJ_ROOM_NET, 0);
-        int ip_off = tcp->ip_len + ETH_HLEN;
-        u16 key = 0x1488; // stream_id, 8 bytes length
-        bpf_skb_store_bytes(skb, ip_off, &key, sizeof(key), 0);
-        bpf_skb_store_bytes(skb, ip_off + sizeof(key), &tp->tp.trace_id[0], 16, 0);
-        u8 offset_ip_tot_len = ETH_HLEN + offsetof(struct iphdr, tot_len);
+        if (!bpf_skb_adjust_room(
+                skb, MAX_TC_TP_LEN, BPF_ADJ_ROOM_NET, BPF_F_ADJ_ROOM_NO_CSUM_RESET)) {
+            pid_connection_info_t p_conn = {};
+            __builtin_memcpy(&p_conn.conn, conn, sizeof(connection_info_t));
+            p_conn.pid = tp->pid;
 
-        u16 new_tot_len = bpf_htons(bpf_ntohs(tcp->tot_len) + 20);
+            http_info_t *h_info = bpf_map_lookup_elem(&ongoing_http, &p_conn);
+            if (h_info && tp->valid) {
+                bpf_printk("Found HTTP info, resetting the span id to %x%x", tcp->seq, tcp->ack);
+                *((u32 *)(&h_info->tp.span_id[0])) = tcp->seq;
+                *((u32 *)(&h_info->tp.span_id[4])) = tcp->ack;
+            }
 
-        u8 hdr_len;
-        u8 hdr_ver;
-        u8 new_len;
-        // ip4 header lengths are variable
-        // access ihl as a u8 (linux/include/linux/skbuff.h)
-        bpf_skb_load_bytes(skb, ETH_HLEN, &hdr_len, sizeof(hdr_len));
-        hdr_ver = hdr_len;
-        new_len = hdr_len;
-        new_len &= 0x0f;
-        new_len += 5;
-        new_len |= hdr_ver & 0xf0;
+            u16 zero = 0;
+            // Stream_id, 20 bytes length. The length value must be a multiple of 4, so we need 20 bytes total.
+            // The length includes the TC_TP_ID, 2 bytes (TC_TP_ID) + 16 bytes (TraceID) + 2 bytes zeroes = 20 bytes.
+            u16 key = TC_TP_ID;
+            int ip_off = tcp->ip_len + ETH_HLEN;
+            bpf_skb_store_bytes(skb, ip_off, &key, sizeof(key), 0);
+            bpf_skb_store_bytes(
+                skb, ip_off + sizeof(key), &tp->tp.trace_id[0], sizeof(tp->tp.trace_id), 0);
+            bpf_skb_store_bytes(
+                skb, ip_off + sizeof(key) + sizeof(tp->tp.trace_id), &zero, sizeof(zero), 0);
+            u8 offset_ip_tot_len = ETH_HLEN + offsetof(struct iphdr, tot_len);
 
-        bpf_printk("prev h_len %d, new_h_len %d, new_tot_len %d", hdr_len, new_len, new_tot_len);
+            u16 new_tot_len = bpf_htons(bpf_ntohs(tcp->tot_len) + MAX_TC_TP_LEN);
 
-        bpf_skb_store_bytes(
-            skb, offset_ip_tot_len, &new_tot_len, sizeof(u16), BPF_F_RECOMPUTE_CSUM);
-        bpf_skb_store_bytes(skb, ETH_HLEN, &new_len, sizeof(u8), BPF_F_RECOMPUTE_CSUM);
+            u8 hdr_len; // this 1 byte field is a composite of the IP version and the IHL
+            bpf_skb_load_bytes(skb, ETH_HLEN, &hdr_len, sizeof(hdr_len));
+
+            u8 hdr_ver = hdr_len;
+            u8 new_hdr_len = hdr_len;
+            new_hdr_len &= 0x0f;
+            new_hdr_len += (MAX_TC_TP_LEN / 4); // IHL is a number of 32bit words
+            new_hdr_len |= hdr_ver & 0xf0;
+
+            bpf_printk(
+                "prev h_len %d, new_h_len %d, new_tot_len %d", hdr_len, new_hdr_len, new_tot_len);
+
+            bpf_skb_store_bytes(skb, offset_ip_tot_len, &new_tot_len, sizeof(u16), 0);
+            bpf_skb_store_bytes(skb, ETH_HLEN, &new_hdr_len, sizeof(u8), 0);
+
+            u32 offset_ip_checksum = ETH_HLEN + offsetof(struct iphdr, check);
+
+            // Update the IPv4 checksum for the change of the total packet length
+            bpf_l3_csum_replace(skb, offset_ip_checksum, tcp->tot_len, new_tot_len, sizeof(u16));
+            // Update the IPv4 checksum for the change of the IHL IP header field. We use replace of 2 bytes because
+            // it's the minimum the API can do.
+            bpf_l3_csum_replace(skb, offset_ip_checksum, hdr_len, new_hdr_len, sizeof(u16));
+            // Update the IPv4 checksum for the addition of the ID magic number 0x88 + length (20)
+            bpf_l3_csum_replace(skb, offset_ip_checksum, 0, TC_TP_ID, sizeof(u16));
+            // Update the IPv4 checksum for the TraceID value. The l3_csum_replace can only replace 2 or 4 byte values
+            for (int i = 0; i < 4; i++) {
+                bpf_l3_csum_replace(skb,
+                                    offset_ip_checksum,
+                                    0,
+                                    *((u32 *)&tp->tp.trace_id[i * sizeof(u32)]),
+                                    sizeof(u32));
+            }
+        }
 
         bpf_map_delete_elem(&outgoing_trace_map, conn);
     }
@@ -874,7 +915,7 @@ int app_egress(struct __sk_buff *skb) {
         if (tcp_syn(&tcp) && !tcp_ack(&tcp)) {
             encode_data_in_syn_packet(skb, &tcp, tp);
         } else if (tp->pid != TC_SYN_PACKET_ID) {
-            encode_data_in_tcp_options(skb, &conn, &tcp, tp);
+            encode_data_in_ip_options(skb, &conn, &tcp, tp);
         }
     }
 

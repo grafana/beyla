@@ -252,7 +252,7 @@ func monitorPIDs(tracer *ebpf.ProcessTracer, ie *ebpf.Instrumentable) {
 
 func (ta *TraceAttacher) notifyProcessDeletion(ie *ebpf.Instrumentable) {
 	if tracer, ok := ta.existingTracers[ie.FileInfo.Ino]; ok {
-		ta.log.Info("process ended for already instrumented executable",
+		ta.log.Debug("process ended for already instrumented executable",
 			"pid", ie.FileInfo.Pid,
 			"exec", ie.FileInfo.CmdExePath)
 		// notifying the tracer to block any trace from that PID

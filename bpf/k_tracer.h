@@ -6,7 +6,7 @@
 #include "sockaddr.h"
 #include "tcp_info.h"
 #include "k_tracer_defs.h"
-#include "http_ssl.h"
+#include "http_ssl_defs.h"
 
 #define TC_SYN_PACKET_ID 0xdeadf00d
 

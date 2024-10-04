@@ -50,16 +50,17 @@ In order to configure which attributes to show or which attributes to hide, chec
 | Application (all)              | `http.request.method`        | shown                                             |
 | Application (all)              | `http.response.status_code`  | shown                                             |
 | Application (all)              | `http.route`                 | shown if `routes` configuration section exists    |
-| Application (all)              | `k8s.daemonset.name`         | shown if network metrics are enabled              |
-| Application (all)              | `k8s.deployment.name`        | shown if network metrics are enabled              |
-| Application (all)              | `k8s.namespace.name`         | shown if network metrics are enabled              |
-| Application (all)              | `k8s.node.name`              | shown if network metrics are enabled              |
-| Application (all)              | `k8s.pod.name`               | shown if network metrics are enabled              |
-| Application (all)              | `k8s.pod.start_time`         | shown if network metrics are enabled              |
-| Application (all)              | `k8s.pod.uid`                | shown if network metrics are enabled              |
-| Application (all)              | `k8s.replicaset.name`        | shown if network metrics are enabled              |
-| Application (all)              | `k8s.statefulset.name`       | shown if network metrics are enabled              |
-| Application (all)              | `k8s.cluster.name`           | shown if network metrics are enabled              |
+| Application (all)              | `k8s.daemonset.name`         | shown if kubernetes metadata is enabled           |
+| Application (all)              | `k8s.deployment.name`        | shown if kubernetes metadata is enabled           |
+| Application (all)              | `k8s.namespace.name`         | shown if kubernetes metadata is enabled           |
+| Application (all)              | `k8s.node.name`              | shown if kubernetes metadata is enabled           |
+| Application (all)              | `k8s.owner.name`             | shown if kubernetes metadata is enabled           |
+| Application (all)              | `k8s.pod.name`               | shown if kubernetes metadata is enabled           |
+| Application (all)              | `k8s.pod.start_time`         | shown if kubernetes metadata is enabled           |
+| Application (all)              | `k8s.pod.uid`                | shown if kubernetes metadata is enabled           |
+| Application (all)              | `k8s.replicaset.name`        | shown if kubernetes metadata is enabled           |
+| Application (all)              | `k8s.statefulset.name`       | shown if kubernetes metadata is enabled           |
+| Application (all)              | `k8s.cluster.name`           | shown if kubernetes metadata is enabled           |
 | Application (all)              | `service.name`               | shown                                             | 
 | Application (all)              | `service.namespace`          | shown                                             | 
 | Application (all)              | `target.instance`            | shown                                             |

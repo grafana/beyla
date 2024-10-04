@@ -110,8 +110,9 @@ var DefaultConfig = Config{
 			HostnameDNSResolution: true,
 		},
 		Kubernetes: transform.KubernetesDecorator{
-			Enable:               kubeflags.EnabledDefault,
-			InformersSyncTimeout: 30 * time.Second,
+			Enable:                kubeflags.EnabledDefault,
+			InformersSyncTimeout:  30 * time.Second,
+			InformersResyncPeriod: 30 * time.Minute,
 		},
 		HostID: HostIDConfig{
 			FetchTimeout: 500 * time.Millisecond,

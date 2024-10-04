@@ -681,6 +681,25 @@ reduces the load of the Kubernetes API.
 The Pods informer can't be disabled. For that purpose, you should disable the whole
 Kubernetes metadata decoration.
 
+| YAML                     | Environment variable                | Type     | Default |
+|--------------------------|-------------------------------------|----------|---------|
+| `informers_sync_timeout` | `BEYLA_KUBE_INFORMERS_SYNC_TIMEOUT` | Duration | 30s     |
+
+Maximum time that Beyla waits for getting all the Kubernetes metadata before starting
+to decorate metrics and traces. If this timeout is reached, Beyla starts normally but
+the metadata attributes might be incomplete until all the Kubernetes metadata is locally
+updated in background.
+
+| YAML                      | Environment variable                 | Type     | Default |
+|---------------------------|--------------------------------------|----------|---------|
+| `informers_resync_period` | `BEYLA_KUBE_INFORMERS_RESYNC_PERIOD` | Duration | 30m     |
+
+Beyla is subscribed to immediately receive any update on resources' metadata. In addition,
+Beyla periodically resynchronizes the whole Kubernetes metadata at the frequency specified
+by this property.
+
+Higher values reduce the load on the Kubernetes API service.
+
 ## Routes decorator
 
 YAML section `routes`.

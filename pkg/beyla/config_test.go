@@ -174,9 +174,10 @@ network:
 				HostnameDNSResolution: true,
 			},
 			Kubernetes: transform.KubernetesDecorator{
-				KubeconfigPath:       "/foo/bar",
-				Enable:               kubeflags.EnabledTrue,
-				InformersSyncTimeout: 30 * time.Second,
+				KubeconfigPath:        "/foo/bar",
+				Enable:                kubeflags.EnabledTrue,
+				InformersSyncTimeout:  30 * time.Second,
+				InformersResyncPeriod: 30 * time.Minute,
 			},
 			HostID: HostIDConfig{
 				Override:     "the-host-id",

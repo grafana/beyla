@@ -1,7 +1,6 @@
 #include "vmlinux.h"
 #include "bpf_helpers.h"
 #include "http_types.h"
-#include "k_tracer_defs.h"
 #include "bpf_dbg.h"
 #include "pid.h"
 #include "sockaddr.h"

@@ -107,13 +107,14 @@ func buildCommonContextInfo(
 	promMgr := &connector.PrometheusManager{}
 	ctxInfo := &global.ContextInfo{
 		Prometheus: promMgr,
-		K8sInformer: kube.NewMetadataProvider(
-			config.Attributes.Kubernetes.Enable,
-			config.Attributes.Kubernetes.DisableInformers,
-			config.Attributes.Kubernetes.KubeconfigPath,
-			config.Enabled(beyla.FeatureNetO11y),
-			config.Attributes.Kubernetes.InformersSyncTimeout,
-		),
+		K8sInformer: kube.NewMetadataProvider(kube.MetadataConfig{
+			Enable:                config.Attributes.Kubernetes.Enable,
+			EnableNetworkMetadata: config.Enabled(beyla.FeatureNetO11y),
+			KubeConfigPath:        config.Attributes.Kubernetes.KubeconfigPath,
+			SyncTimeout:           config.Attributes.Kubernetes.InformersSyncTimeout,
+			ResyncPeriod:          config.Attributes.Kubernetes.InformersResyncPeriod,
+			DisabledInformers:     config.Attributes.Kubernetes.DisableInformers,
+		}),
 	}
 	switch {
 	case config.InternalMetrics.Prometheus.Port != 0:

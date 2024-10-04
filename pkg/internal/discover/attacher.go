@@ -258,9 +258,13 @@ func (ta *TraceAttacher) monitorPIDs(tracer *ebpf.ProcessTracer, ie *ebpf.Instru
 	}
 	if ta.SpanSignalsShortcut != nil {
 		spans := make([]request.Span, 0, len(ie.ChildPids)+1)
+		// the forwarded signal must include
+		// - ServiceID, which includes several metadata about the process
+		// - PID namespace, to allow further kubernetes decoration
 		spans = append(spans, request.Span{
 			Type:      request.EventTypeProcessAlive,
 			ServiceID: ie.FileInfo.Service,
+			Pid:       request.PidInfo{Namespace: ie.FileInfo.Ns},
 		})
 		for _, pid := range ie.ChildPids {
 			service := ie.FileInfo.Service
@@ -268,6 +272,7 @@ func (ta *TraceAttacher) monitorPIDs(tracer *ebpf.ProcessTracer, ie *ebpf.Instru
 			spans = append(spans, request.Span{
 				Type:      request.EventTypeProcessAlive,
 				ServiceID: service,
+				Pid:       request.PidInfo{Namespace: ie.FileInfo.Ns},
 			})
 		}
 		ta.SpanSignalsShortcut <- spans

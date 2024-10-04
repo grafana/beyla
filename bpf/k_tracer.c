@@ -752,6 +752,11 @@ static __always_inline void encode_data_in_ip_options(struct __sk_buff *skb,
             __builtin_memcpy(&p_conn.conn, conn, sizeof(connection_info_t));
             p_conn.pid = tp->pid;
 
+            // We picked a span ID when we made the new client outgoing trace_id/span_id pair.
+            // At that time we don't know the sequence numbers for the TCP packet, so we look up
+            // here for the outgoing info and we update the span_id with the one we can propagate.
+            // When the client request is going to be finally serialized on ending the client request
+            // it will use the span_id value we gave it here.
             http_info_t *h_info = bpf_map_lookup_elem(&ongoing_http, &p_conn);
             if (h_info && tp->valid) {
                 bpf_printk("Found HTTP info, resetting the span id to %x%x", tcp->seq, tcp->ack);

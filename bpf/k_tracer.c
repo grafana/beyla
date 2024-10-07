@@ -700,14 +700,16 @@ int app_ingress(struct __sk_buff *skb) {
     unsigned char tp_buf[TP_MAX_VAL_LENGTH];
 
     if (tcp_ack(&tcp)) { // ack field must be set, which means we are looking at non SYN packet
-        if (tcp.ip_len ==
-            MIN_IP_LEN +
-                MAX_TC_TP_LEN) { // assumes we are the only ones that added options, this can be improved
+        if (tcp.h_proto == ETH_P_IP &&
+            tcp.ip_len ==
+                MIN_IP_LEN +
+                    MAX_TC_TP_LEN) { // assumes we are the only ones that added options, this can be improved
             u16 key = 0;
             int ip_off = MIN_IP_LEN + ETH_HLEN;
 
             print_http_connection_info(&conn);
 
+            sort_connection_info(&conn);
             bpf_skb_load_bytes(skb, ip_off, &key, sizeof(key));
             bpf_printk("options %llx, len = %d", key, tcp.ip_len);
             if (key == TC_TP_ID) {
@@ -727,11 +729,28 @@ int app_ingress(struct __sk_buff *skb) {
                     make_tp_string(tp_buf, &new_tp.tp);
                     bpf_printk("tp: %s", tp_buf);
                     bpf_map_update_elem(&incoming_trace_map, &conn, &new_tp, BPF_ANY);
-
-                    return 0;
                 } else {
                     bpf_printk("ignoring existing tp");
                 }
+            }
+        } else if (tcp.h_proto == ETH_P_IPV6 && tcp.l4_proto == 60) { // Destination options used
+            bpf_printk("IPv6 ingress");
+            print_http_connection_info(&conn);
+
+            sort_connection_info(&conn);
+            tp_info_pid_t *existing_tp = bpf_map_lookup_elem(&incoming_trace_map, &conn);
+            if (!existing_tp) {
+                tp_info_pid_t new_tp = {.pid = 0, .valid = 1};
+                // We use a combination of the TCP sequence + TCP ack as a SpanID
+                *((u32 *)(&new_tp.tp.span_id[0])) = tcp.seq;
+                *((u32 *)(&new_tp.tp.span_id[4])) = tcp.ack;
+                int ip_off = tcp.ip_len + 4;
+                // We load the TraceID from the IP options field. We skip two bytes for the key 0x88 + len (2 bytes)
+                bpf_skb_load_bytes(skb, ip_off, &new_tp.tp.trace_id[0], sizeof(new_tp.tp.trace_id));
+
+                make_tp_string(tp_buf, &new_tp.tp);
+                bpf_printk("tp: %s", tp_buf);
+                bpf_map_update_elem(&incoming_trace_map, &conn, &new_tp, BPF_ANY);
             }
         }
     }
@@ -743,8 +762,10 @@ static __always_inline void encode_data_in_ip_options(struct __sk_buff *skb,
                                                       connection_info_t *conn,
                                                       protocol_info_t *tcp,
                                                       tp_info_pid_t *tp) {
-    if (tcp->ip_len ==
-        MIN_IP_LEN) { // we only do this if the IP header doesn't have any options, this can be improved if needed
+    // Handling IPv4
+    if (tcp->h_proto == ETH_P_IP &&
+        tcp->ip_len ==
+            MIN_IP_LEN) { // we only do this if the IP header doesn't have any options, this can be improved if needed
         bpf_printk("Adding the trace_id in the IP Options");
         if (!bpf_skb_adjust_room(
                 skb, MAX_TC_TP_LEN, BPF_ADJ_ROOM_NET, BPF_F_ADJ_ROOM_NO_CSUM_RESET)) {
@@ -812,6 +833,50 @@ static __always_inline void encode_data_in_ip_options(struct __sk_buff *skb,
             }
         }
 
+        bpf_map_delete_elem(&outgoing_trace_map, conn);
+    } else if (tcp->h_proto == ETH_P_IPV6 && tcp->l4_proto == IPPROTO_TCP) { // Handling IPv6
+        bpf_printk("Found IPv6 header");
+
+        if (!bpf_skb_adjust_room(skb,
+                                 24,
+                                 BPF_ADJ_ROOM_NET,
+                                 BPF_F_ADJ_ROOM_NO_CSUM_RESET)) { // Must be 8 byte aligned size
+            u8 next_hdr = 60;                                     // 60 -> Destination options
+            int next_hdr_off = ETH_HLEN + offsetof(struct ipv6hdr, nexthdr);
+            bpf_skb_store_bytes(skb, next_hdr_off, &next_hdr, sizeof(next_hdr), 0);
+
+            int next_hdr_start = tcp->ip_len;
+            bpf_skb_store_bytes(skb,
+                                next_hdr_start,
+                                &tcp->l4_proto,
+                                sizeof(tcp->l4_proto),
+                                0); // The next header now has the L4 protocol info
+
+            u8 offset_ip_tot_len = ETH_HLEN + offsetof(struct ipv6hdr, payload_len);
+            u16 new_tot_len = bpf_htons(bpf_ntohs(tcp->tot_len) + 24);
+            bpf_skb_store_bytes(skb, offset_ip_tot_len, &new_tot_len, sizeof(u16), 0);
+
+            u8 hdr_len = (24 - 8) / 8; // this value is expressed as multiples of 8
+            bpf_skb_store_bytes(skb,
+                                next_hdr_start + sizeof(next_hdr),
+                                &hdr_len,
+                                sizeof(hdr_len),
+                                0); // The next header length is the total size - the first 8 bytes
+
+            u16 options = 0x1401; // 01 - PadN, 14 = 20 bytes length total padding
+            bpf_skb_store_bytes(skb,
+                                next_hdr_start + sizeof(next_hdr) + sizeof(hdr_len),
+                                &options,
+                                sizeof(options),
+                                0); // The next header length is the total size - the first 8 bytes
+
+            bpf_skb_store_bytes(skb,
+                                next_hdr_start + sizeof(next_hdr) + sizeof(hdr_len) +
+                                    sizeof(options),
+                                &tp->tp.trace_id[0],
+                                sizeof(tp->tp.trace_id),
+                                0);
+        }
         bpf_map_delete_elem(&outgoing_trace_map, conn);
     }
 }

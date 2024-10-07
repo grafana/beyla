@@ -146,6 +146,7 @@ typedef struct protocol_info {
     u8 opts_off;
     u8 flags;
     u8 ip_len;
+    u8 l4_proto;
 } protocol_info_t;
 
 // Here we keep information on the ongoing filtered connections, PID/TID and connection type

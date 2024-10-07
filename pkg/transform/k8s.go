@@ -135,6 +135,7 @@ func (md *metadataDecorator) appendMetadata(span *request.Span, info *kube.PodIn
 		span.ServiceID.Metadata[attr.Name(info.Owner.LabelName)] = info.Owner.Name
 		topOwner := info.Owner.TopOwner()
 		span.ServiceID.Metadata[attr.Name(topOwner.LabelName)] = topOwner.Name
+		span.ServiceID.Metadata[attr.K8sOwnerName] = topOwner.Name
 	}
 	// override hostname by the Pod name
 	span.ServiceID.HostName = info.Name

@@ -29,8 +29,6 @@ type Instrumenter struct {
 
 	// tracesInput is used to communicate the found traces between the ProcessFinder and
 	// the ProcessTracer.
-	// TODO: When we split beyla into two executables, probably the BPF map
-	// should be the traces' communication mechanism instead of a native channel
 	tracesInput chan []request.Span
 }
 
@@ -48,7 +46,7 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 // FindAndInstrument searches in background for any new executable matching the
 // selection criteria.
 func (i *Instrumenter) FindAndInstrument() error {
-	finder := discover.NewProcessFinder(i.ctx, i.config, i.ctxInfo)
+	finder := discover.NewProcessFinder(i.ctx, i.config, i.ctxInfo, i.tracesInput)
 	foundProcesses, deletedProcesses, err := finder.Start()
 	if err != nil {
 		return fmt.Errorf("couldn't start Process Finder: %w", err)
@@ -101,8 +99,6 @@ func (i *Instrumenter) ReadAndForward() error {
 	log := log()
 	log.Debug("creating instrumentation pipeline")
 
-	// TODO: when we split the executable, tracer should be reconstructed somehow
-	// from this instance
 	bp, err := pipe.Build(i.ctx, i.config, i.ctxInfo, i.tracesInput)
 	if err != nil {
 		return fmt.Errorf("can't instantiate instrumentation pipeline: %w", err)

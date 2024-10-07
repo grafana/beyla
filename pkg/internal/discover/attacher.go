@@ -98,7 +98,7 @@ func (ta *TraceAttacher) skipSelfInstrumentation(ie *ebpf.Instrumentable) bool {
 //nolint:cyclop
 func (ta *TraceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 	if tracer, ok := ta.existingTracers[ie.FileInfo.Ino]; ok {
-		ta.log.Info("new process for already instrumented executable",
+		ta.log.Debug("new process for already instrumented executable",
 			"pid", ie.FileInfo.Pid,
 			"child", ie.ChildPids,
 			"exec", ie.FileInfo.CmdExePath)

@@ -134,7 +134,7 @@ func setupKubernetes(ctx context.Context, ctxInfo *global.ContextInfo) {
 		return
 	}
 
-	if ctxInfo.AppO11y.K8sDatabase, err = kube.StartDatabase(informer, ctxInfo.Metrics); err != nil {
+	if ctxInfo.AppO11y.K8sDatabase, err = kube.StartDatabase(informer); err != nil {
 		slog.Error("can't setup Kubernetes database. Your traces won't be decorated with Kubernetes metadata",
 			"error", err)
 		ctxInfo.K8sInformer.ForceDisable()

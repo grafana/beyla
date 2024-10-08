@@ -197,6 +197,8 @@ func (tr *tracesOTELReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], err
 			return
 		}
 
+		sampler := tr.cfg.Sampler.Implementation()
+
 		for spans := range in {
 			for i := range spans {
 				span := &spans[i]
@@ -206,6 +208,19 @@ func (tr *tracesOTELReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], err
 				if tr.spanDiscarded(span) {
 					continue
 				}
+
+				sr := sampler.ShouldSample(trace.SamplingParameters{
+					ParentContext: tr.ctx,
+					Name:          span.TraceName(),
+					TraceID:       span.TraceID,
+					Kind:          spanKind(span),
+					Attributes:    traceAttributes(span, traceAttrs),
+				})
+
+				if sr.Decision == trace.Drop {
+					continue
+				}
+
 				envResourceAttrs := ResourceAttrsFromEnv(&span.ServiceID)
 				traces := GenerateTraces(span, tr.ctxInfo.HostID, traceAttrs, envResourceAttrs)
 				err := exp.ConsumeTraces(tr.ctx, traces)

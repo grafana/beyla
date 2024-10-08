@@ -7,7 +7,7 @@
 #include "http_types.h"
 #include "bpf_endian.h"
 
-#define IP_V6_DEST_OPTS 60
+enum { IP_V6_DEST_OPTS = 60 };
 
 // Taken from uapi/linux/tcp.h
 struct __tcphdr {

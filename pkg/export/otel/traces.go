@@ -33,7 +33,6 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.25.0"
 	trace2 "go.opentelemetry.io/otel/trace"
-	tracenoop "go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/zap"
 
 	"github.com/grafana/beyla/pkg/export/attributes"
@@ -310,7 +309,7 @@ func instrumentTraceExporter(in trace.SpanExporter, internalMetrics imetrics.Rep
 	}
 }
 
-func traceProviderWithInternalMetrics(ctxInfo *global.ContextInfo, cfg TracesConfig, in trace.SpanExporter) trace2.TracerProvider {
+func makeTraceProvider(ctxInfo *global.ContextInfo, cfg TracesConfig, tracer trace.SpanExporter, withMetrics bool) trace2.TracerProvider {
 	var opts []trace.BatchSpanProcessorOption
 	if cfg.MaxExportBatchSize > 0 {
 		opts = append(opts, trace.WithMaxExportBatchSize(cfg.MaxExportBatchSize))
@@ -324,7 +323,9 @@ func traceProviderWithInternalMetrics(ctxInfo *global.ContextInfo, cfg TracesCon
 	if cfg.ExportTimeout > 0 {
 		opts = append(opts, trace.WithExportTimeout(cfg.ExportTimeout))
 	}
-	tracer := instrumentTraceExporter(in, ctxInfo.Metrics)
+	if withMetrics {
+		tracer = instrumentTraceExporter(tracer, ctxInfo.Metrics)
+	}
 	bsp := trace.NewBatchSpanProcessor(tracer, opts...)
 	return trace.NewTracerProvider(
 		trace.WithSpanProcessor(bsp),
@@ -333,20 +334,18 @@ func traceProviderWithInternalMetrics(ctxInfo *global.ContextInfo, cfg TracesCon
 }
 
 func getTraceSettings(ctxInfo *global.ContextInfo, cfg TracesConfig, in trace.SpanExporter) exporter.Settings {
-	var traceProvider trace2.TracerProvider
-
 	telemetryLevel := configtelemetry.LevelNone
-	traceProvider = tracenoop.NewTracerProvider()
 
 	if internalMetricsEnabled(ctxInfo) {
 		telemetryLevel = configtelemetry.LevelBasic
-		traceProvider = traceProviderWithInternalMetrics(ctxInfo, cfg, in)
 	}
+
+	tp := makeTraceProvider(ctxInfo, cfg, in, internalMetricsEnabled(ctxInfo))
 
 	telemetrySettings := component.TelemetrySettings{
 		Logger:         zap.NewNop(),
 		MeterProvider:  metric.NewMeterProvider(),
-		TracerProvider: traceProvider,
+		TracerProvider: tp,
 		MetricsLevel:   telemetryLevel,
 	}
 	return exporter.Settings{

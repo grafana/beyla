@@ -13,6 +13,7 @@ char __license[] SEC("license") = "Dual MIT/GPL";
 #define MIN_IP_LEN 20
 #define MAX_TC_TP_LEN 20
 #define TC_TP_ID 0x1488
+#define MAX_IPV6_OPTS_LEN 24
 
 // Temporary tracking of accept arguments
 struct {
@@ -733,7 +734,8 @@ int app_ingress(struct __sk_buff *skb) {
                     bpf_printk("ignoring existing tp");
                 }
             }
-        } else if (tcp.h_proto == ETH_P_IPV6 && tcp.l4_proto == 60) { // Destination options used
+        } else if (tcp.h_proto == ETH_P_IPV6 &&
+                   tcp.l4_proto == IP_V6_DEST_OPTS) { // Destination options used
             bpf_printk("IPv6 ingress");
             print_http_connection_info(&conn);
 
@@ -744,7 +746,8 @@ int app_ingress(struct __sk_buff *skb) {
                 // We use a combination of the TCP sequence + TCP ack as a SpanID
                 *((u32 *)(&new_tp.tp.span_id[0])) = tcp.seq;
                 *((u32 *)(&new_tp.tp.span_id[4])) = tcp.ack;
-                int ip_off = tcp.ip_len + 4;
+                int ip_off = tcp.ip_len +
+                             4; // Skip the first 4 bytes (next header, len, dest option, dest len)
                 // We load the TraceID from the IP options field. We skip two bytes for the key 0x88 + len (2 bytes)
                 bpf_skb_load_bytes(skb, ip_off, &new_tp.tp.trace_id[0], sizeof(new_tp.tp.trace_id));
 
@@ -838,10 +841,10 @@ static __always_inline void encode_data_in_ip_options(struct __sk_buff *skb,
         bpf_printk("Found IPv6 header");
 
         if (!bpf_skb_adjust_room(skb,
-                                 24,
+                                 MAX_IPV6_OPTS_LEN,
                                  BPF_ADJ_ROOM_NET,
                                  BPF_F_ADJ_ROOM_NO_CSUM_RESET)) { // Must be 8 byte aligned size
-            u8 next_hdr = 60;                                     // 60 -> Destination options
+            u8 next_hdr = IP_V6_DEST_OPTS;                        // 60 -> Destination options
             int next_hdr_off = ETH_HLEN + offsetof(struct ipv6hdr, nexthdr);
             bpf_skb_store_bytes(skb, next_hdr_off, &next_hdr, sizeof(next_hdr), 0);
 
@@ -853,10 +856,10 @@ static __always_inline void encode_data_in_ip_options(struct __sk_buff *skb,
                                 0); // The next header now has the L4 protocol info
 
             u8 offset_ip_tot_len = ETH_HLEN + offsetof(struct ipv6hdr, payload_len);
-            u16 new_tot_len = bpf_htons(bpf_ntohs(tcp->tot_len) + 24);
+            u16 new_tot_len = bpf_htons(bpf_ntohs(tcp->tot_len) + MAX_IPV6_OPTS_LEN);
             bpf_skb_store_bytes(skb, offset_ip_tot_len, &new_tot_len, sizeof(u16), 0);
 
-            u8 hdr_len = (24 - 8) / 8; // this value is expressed as multiples of 8
+            u8 hdr_len = (MAX_IPV6_OPTS_LEN - 8) / 8; // this value is expressed as multiples of 8
             bpf_skb_store_bytes(skb,
                                 next_hdr_start + sizeof(next_hdr),
                                 &hdr_len,
@@ -878,6 +881,17 @@ static __always_inline void encode_data_in_ip_options(struct __sk_buff *skb,
                                 &tp->tp.trace_id[0],
                                 sizeof(tp->tp.trace_id),
                                 0);
+
+            pid_connection_info_t p_conn = {};
+            __builtin_memcpy(&p_conn.conn, conn, sizeof(connection_info_t));
+            p_conn.pid = tp->pid;
+
+            http_info_t *h_info = bpf_map_lookup_elem(&ongoing_http, &p_conn);
+            if (h_info && tp->valid) {
+                bpf_printk("Found HTTP info, resetting the span id to %x%x", tcp->seq, tcp->ack);
+                *((u32 *)(&h_info->tp.span_id[0])) = tcp->seq;
+                *((u32 *)(&h_info->tp.span_id[4])) = tcp->ack;
+            }
         }
         bpf_map_delete_elem(&outgoing_trace_map, conn);
     }

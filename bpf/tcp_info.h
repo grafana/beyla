@@ -7,9 +7,7 @@
 #include "http_types.h"
 #include "bpf_endian.h"
 
-#define MAX_IP_HDR_LEN 60
-#define PARSE_TCP_ONLY 1
-#define PARSE_IPV6_ANY 0
+#define IP_V6_DEST_OPTS 60
 
 // Taken from uapi/linux/tcp.h
 struct __tcphdr {
@@ -92,7 +90,7 @@ read_sk_buff(struct __sk_buff *skb, protocol_info_t *tcp, connection_info_t *con
     tcp->l4_proto = proto;
 
     // Handle Destination Options extra header for propagating the traceparent
-    if (proto == 60 && h_proto == ETH_P_IPV6) {
+    if (proto == IP_V6_DEST_OPTS && h_proto == ETH_P_IPV6) {
         bpf_skb_load_bytes(skb, tcp->ip_len, &proto, sizeof(proto));
         if (proto == IPPROTO_TCP) {
             u8 hdr_len = 0;

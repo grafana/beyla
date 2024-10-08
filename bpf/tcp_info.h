@@ -7,6 +7,8 @@
 #include "http_types.h"
 #include "bpf_endian.h"
 
+enum { IP_V6_DEST_OPTS = 60 };
+
 // Taken from uapi/linux/tcp.h
 struct __tcphdr {
     __be16 source;
@@ -27,6 +29,8 @@ read_sk_buff(struct __sk_buff *skb, protocol_info_t *tcp, connection_info_t *con
     bpf_skb_load_bytes(skb, offsetof(struct ethhdr, h_proto), &h_proto, sizeof(h_proto));
     h_proto = __bpf_htons(h_proto);
 
+    tcp->ip_len = 0;
+
     u8 proto = 0;
     // do something similar as linux/samples/bpf/parse_varlen.c
     switch (h_proto) {
@@ -37,6 +41,7 @@ read_sk_buff(struct __sk_buff *skb, protocol_info_t *tcp, connection_info_t *con
         bpf_skb_load_bytes(skb, ETH_HLEN, &hdr_len, sizeof(hdr_len));
         hdr_len &= 0x0f;
         hdr_len *= 4;
+        tcp->ip_len = hdr_len;
 
         /* verify hlen meets minimum size requirements */
         if (hdr_len < sizeof(struct iphdr)) {
@@ -76,9 +81,23 @@ read_sk_buff(struct __sk_buff *skb, protocol_info_t *tcp, connection_info_t *con
             skb, ETH_HLEN + offsetof(struct ipv6hdr, daddr), &conn->d_addr, sizeof(conn->d_addr));
 
         tcp->hdr_len = ETH_HLEN + sizeof(struct ipv6hdr);
+        tcp->ip_len = tcp->hdr_len;
         break;
     default:
         return false;
+    }
+
+    tcp->l4_proto = proto;
+
+    // Handle Destination Options extra header for propagating the traceparent
+    if (proto == IP_V6_DEST_OPTS && h_proto == ETH_P_IPV6) {
+        bpf_skb_load_bytes(skb, tcp->ip_len, &proto, sizeof(proto));
+        if (proto == IPPROTO_TCP) {
+            u8 hdr_len = 0;
+            bpf_skb_load_bytes(skb, tcp->ip_len + 1, &hdr_len, sizeof(hdr_len));
+            tcp->hdr_len += (hdr_len + 1) * 8;
+        } else {
+        }
     }
 
     if (proto != IPPROTO_TCP) {
@@ -95,6 +114,10 @@ read_sk_buff(struct __sk_buff *skb, protocol_info_t *tcp, connection_info_t *con
     u32 seq;
     bpf_skb_load_bytes(skb, tcp->hdr_len + offsetof(struct __tcphdr, seq), &seq, sizeof(seq));
     tcp->seq = __bpf_htonl(seq);
+
+    u32 ack;
+    bpf_skb_load_bytes(skb, tcp->hdr_len + offsetof(struct __tcphdr, ack_seq), &ack, sizeof(ack));
+    tcp->ack = __bpf_htonl(ack);
 
     u8 doff;
     bpf_skb_load_bytes(
@@ -115,6 +138,9 @@ read_sk_buff(struct __sk_buff *skb, protocol_info_t *tcp, connection_info_t *con
         sizeof(flags)); // read the second byte past __tcphdr->doff, again bit fields offsets
     tcp->flags = flags;
     tcp->h_proto = h_proto;
+    tcp->opts_off =
+        tcp->hdr_len + sizeof(struct __tcphdr); // must be done before we add data offset
+
     tcp->hdr_len += doff;
 
     if (tcp->hdr_len >
@@ -130,7 +156,7 @@ static __always_inline bool tcp_close(protocol_info_t *tcp) {
 }
 
 static __always_inline bool tcp_ack(protocol_info_t *tcp) {
-    return tcp->flags == TCPHDR_ACK;
+    return tcp->flags & TCPHDR_ACK;
 }
 
 static __always_inline bool tcp_syn(protocol_info_t *tcp) {

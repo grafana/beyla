@@ -7,10 +7,9 @@
 #include "tcp_info.h"
 #include "k_tracer.h"
 #include "http_ssl.h"
+#include "tc_ip.h"
 
 char __license[] SEC("license") = "Dual MIT/GPL";
-
-#define TC_SYN_PACKET_ID 0xdeadf00d
 
 // Temporary tracking of accept arguments
 struct {
@@ -193,40 +192,6 @@ int BPF_KPROBE(kprobe_tcp_connect, struct sock *sk) {
     }
 
     bpf_dbg_printk("=== tcp connect %llx ===", id);
-
-    tp_info_pid_t *tp_p = tp_buf();
-
-    // Connect runs before the SYN packet is sent.
-    // We use this opportunity to setup a trace context information for the connection.
-    // We'll later query the trace information in tc_egress, and serialize it on the TCP packet.
-    // Why would we do this here instead of on the tc_egress itself? We could move this on the tc_egress,
-    // but we would be modifying all packets, not just for processes which are instrumented,
-    // since we can't reliably tell the process PID in TC or socket filters.
-    if (tp_p) {
-        tp_p->tp.ts = bpf_ktime_get_ns();
-        tp_p->tp.flags = 1;
-        tp_p->valid = 1;
-        tp_p->pid =
-            TC_SYN_PACKET_ID; // set an ID up here in case someone else is doing what we are doing
-        urand_bytes(tp_p->tp.span_id, SPAN_ID_SIZE_BYTES);
-        tp_info_pid_t *server_tp = find_parent_trace();
-        if (server_tp && valid_trace(server_tp->tp.trace_id)) {
-            __builtin_memcpy(tp_p->tp.trace_id, server_tp->tp.trace_id, sizeof(tp_p->tp.trace_id));
-            __builtin_memcpy(tp_p->tp.parent_id, server_tp->tp.span_id, sizeof(tp_p->tp.parent_id));
-        } else {
-            urand_bytes(tp_p->tp.trace_id, TRACE_ID_SIZE_BYTES);
-            __builtin_memset(tp_p->tp.parent_id, 0, sizeof(tp_p->tp.span_id));
-        }
-
-        connection_info_t conn = {};
-        parse_sock_info(sk, &conn);
-        sort_connection_info(&conn);
-
-        bpf_dbg_printk("Setting up tp info");
-        dbg_print_http_connection_info(&conn);
-
-        bpf_map_update_elem(&outgoing_trace_map, &conn, tp_p, BPF_ANY);
-    }
 
     u64 addr = (u64)sk;
 
@@ -729,36 +694,56 @@ int app_ingress(struct __sk_buff *skb) {
         return 0;
     }
 
-    // handle SYN only, ignore SYN+ACK packets
-    if (!tcp_syn(&tcp) || tcp_ack(&tcp)) {
-        return 0;
+    if (tcp_ack(&tcp)) { // ack field must be set, which means we are looking at non SYN packet
+        // assumes we are the only ones that added options, this can be improved
+        if (tcp.h_proto == ETH_P_IP && tcp.ip_len == MIN_IP_LEN + MAX_TC_TP_LEN) {
+            parse_ip_options_ipv4(skb, &conn, &tcp);
+        } else if (tcp.h_proto == ETH_P_IPV6 &&
+                   tcp.l4_proto == IP_V6_DEST_OPTS) { // Destination options used
+            parse_ip_options_ipv6(skb, &conn, &tcp);
+        }
     }
-
-    if (skb->len - tcp.hdr_len < sizeof(tp_info_pid_t)) {
-        bpf_printk("SYN packet without tp info");
-        return 0;
-    }
-
-    tp_info_pid_t tp = {0};
-
-    bpf_skb_load_bytes(skb, tcp.hdr_len, &tp, sizeof(tp_info_pid_t));
-
-    if (tp.pid != TC_SYN_PACKET_ID) {
-        bpf_printk("SYN packet without the custom ID inside pid, ignoring...");
-        return 0;
-    }
-
-    s32 len = skb->len - sizeof(u32);
-    bpf_printk("Received SYN packed len = %d, offset = %d, hdr_len %d", skb->len, len, tcp.hdr_len);
-
-    unsigned char tp_buf[TP_MAX_VAL_LENGTH];
-    make_tp_string(tp_buf, &tp.tp);
-    bpf_printk("tp: %s", tp_buf);
-
-    // Once we receive a traceID over the wire (TCP packet) we store it for later to be used by the trace code.
-    bpf_map_update_elem(&incoming_trace_map, &conn, &tp, BPF_ANY);
 
     return 0;
+}
+
+static __always_inline void
+update_outgoing_request_span_id(connection_info_t *conn, protocol_info_t *tcp, tp_info_pid_t *tp) {
+    pid_connection_info_t p_conn = {};
+    __builtin_memcpy(&p_conn.conn, conn, sizeof(connection_info_t));
+    p_conn.pid = tp->pid;
+
+    http_info_t *h_info = bpf_map_lookup_elem(&ongoing_http, &p_conn);
+    if (h_info && tp->valid) {
+        bpf_printk("Found HTTP info, resetting the span id to %x%x", tcp->seq, tcp->ack);
+        *((u32 *)(&h_info->tp.span_id[0])) = tcp->seq;
+        *((u32 *)(&h_info->tp.span_id[4])) = tcp->ack;
+    }
+}
+
+static __always_inline void encode_data_in_ip_options(struct __sk_buff *skb,
+                                                      connection_info_t *conn,
+                                                      protocol_info_t *tcp,
+                                                      tp_info_pid_t *tp) {
+    // Handling IPv4
+    // We only do this if the IP header doesn't have any options, this can be improved if needed
+    if (tcp->h_proto == ETH_P_IP && tcp->ip_len == MIN_IP_LEN) {
+        bpf_printk("Adding the trace_id in the IP Options");
+
+        if (inject_tc_ip_options_ipv4(skb, conn, tcp, tp)) {
+            update_outgoing_request_span_id(conn, tcp, tp);
+        }
+
+        bpf_map_delete_elem(&outgoing_trace_map, conn);
+    } else if (tcp->h_proto == ETH_P_IPV6 && tcp->l4_proto == IPPROTO_TCP) { // Handling IPv6
+        bpf_printk("Found IPv6 header");
+
+        if (inject_tc_ip_options_ipv6(skb, conn, tcp, tp)) {
+            update_outgoing_request_span_id(conn, tcp, tp);
+        }
+
+        bpf_map_delete_elem(&outgoing_trace_map, conn);
+    }
 }
 
 SEC("tc_egress")
@@ -772,47 +757,15 @@ int app_egress(struct __sk_buff *skb) {
         return 0;
     }
 
-    // handle SYN only, ignore SYN+ACK packets
-    if (!tcp_syn(&tcp) || tcp_ack(&tcp)) {
-        return 0;
-    }
-
     sort_connection_info(&conn);
 
     tp_info_pid_t *tp = bpf_map_lookup_elem(&outgoing_trace_map, &conn);
 
     if (tp) {
-        bpf_printk("SYN packed len = %d", skb->len);
+        bpf_printk("egress flags %x, sequence %x", tcp.flags, tcp.seq);
+        print_http_connection_info(&conn);
 
-        unsigned char tp_buf[TP_MAX_VAL_LENGTH];
-        make_tp_string(tp_buf, &tp->tp);
-        bpf_printk("tp: %s", tp_buf);
-
-        uint16_t pkt_end = skb->data_end - skb->data;
-        bpf_printk("Changing tail and setting data on syn, end=%d", pkt_end);
-        bpf_skb_change_tail(skb, pkt_end + sizeof(tp_info_pid_t), 0);
-        bpf_skb_store_bytes(skb, pkt_end, tp, sizeof(tp_info_pid_t), 0);
-
-        u32 offset_ip_tot_len = 0;
-        u32 offset_ip_checksum = 0;
-        if (tcp.h_proto == ETH_P_IP) {
-            offset_ip_tot_len = ETH_HLEN + offsetof(struct iphdr, tot_len);
-            offset_ip_checksum = ETH_HLEN + offsetof(struct iphdr, check);
-        } else {
-            offset_ip_tot_len = ETH_HLEN + offsetof(struct ipv6hdr, payload_len);
-        }
-
-        u16 new_tot_len = bpf_htons(bpf_ntohs(tcp.tot_len) + sizeof(tp_info_pid_t));
-
-        bpf_printk(
-            "tot_len = %u, new_tot_len = %u", bpf_ntohs(tcp.tot_len), bpf_ntohs(new_tot_len));
-        bpf_printk("h_proto = %u, skb->len = %u", tcp.h_proto, skb->len);
-
-        if (offset_ip_checksum) {
-            bpf_l3_csum_replace(skb, offset_ip_checksum, tcp.tot_len, new_tot_len, sizeof(u16));
-        }
-
-        bpf_skb_store_bytes(skb, offset_ip_tot_len, &new_tot_len, sizeof(u16), 0);
+        encode_data_in_ip_options(skb, &conn, &tcp, tp);
     }
 
     return 0;

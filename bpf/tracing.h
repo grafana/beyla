@@ -99,4 +99,15 @@ static __always_inline u8 correlated_request_with_current(tp_info_pid_t *existin
     return 0;
 }
 
+static __always_inline void clear_upper_trace_id(tp_info_t *tp) {
+    *((u32 *)(&tp->trace_id[0])) = 0;
+    *((u16 *)(&tp->trace_id[4])) = 0;
+}
+
+// The trace id is 16 bytes, but we can only use 11 bytes in options
+static __always_inline void new_trace_id(tp_info_t *tp) {
+    urand_bytes(tp->trace_id, TRACE_ID_SIZE_BYTES);
+    //clear_upper_trace_id(tp);
+}
+
 #endif

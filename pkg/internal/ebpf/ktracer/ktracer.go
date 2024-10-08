@@ -28,9 +28,7 @@ import (
 )
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/k_tracer.c -- -I../../../../bpf/headers
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_tp ../../../../bpf/k_tracer.c -- -I../../../../bpf/headers -DBPF_TRACEPARENT
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../../bpf/k_tracer.c -- -I../../../../bpf/headers -DBPF_DEBUG
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_tp_debug ../../../../bpf/k_tracer.c -- -I../../../../bpf/headers -DBPF_DEBUG -DBPF_TRACEPARENT
 
 type Tracer struct {
 	pidsFilter     ebpfcommon.ServiceFilter
@@ -119,22 +117,11 @@ func (p *Tracer) BlockPID(pid, ns uint32) {
 }
 
 func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
-	loader := loadBpf
 	if p.cfg.EBPF.BpfDebug {
-		loader = loadBpf_debug
+		return loadBpf_debug()
 	}
 
-	if p.cfg.EBPF.TrackRequestHeaders {
-		if ebpfcommon.SupportsEBPFLoops() {
-			p.log.Info("Found Linux kernel later than 5.17, enabling trace information parsing")
-			loader = loadBpf_tp
-			if p.cfg.EBPF.BpfDebug {
-				loader = loadBpf_tp_debug
-			}
-		}
-	}
-
-	return loader()
+	return loadBpf()
 }
 
 func (p *Tracer) SetupTailCalls() {
@@ -164,7 +151,7 @@ func (p *Tracer) SetupTailCalls() {
 }
 
 func (p *Tracer) Constants() map[string]any {
-	m := make(map[string]any, 2)
+	m := make(map[string]any, 4)
 
 	// The eBPF side does some basic filtering of events that do not belong to
 	// processes which we monitor. We filter more accurately in the userspace, but
@@ -178,6 +165,11 @@ func (p *Tracer) Constants() map[string]any {
 
 	if p.cfg.EBPF.TrackRequestHeaders {
 		m["capture_header_buffer"] = int32(1)
+
+		if ebpfcommon.SupportsEBPFLoops() {
+			p.log.Info("Found Linux kernel later than 5.17, enabling trace information parsing")
+			m["BPF_TRACEPARENT"] = uint8(1)
+		}
 	} else {
 		m["capture_header_buffer"] = int32(0)
 	}

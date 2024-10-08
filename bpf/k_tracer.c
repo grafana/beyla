@@ -11,6 +11,8 @@
 
 char __license[] SEC("license") = "Dual MIT/GPL";
 
+volatile const u8 BPF_TRACEPARENT = 0;
+
 // Temporary tracking of accept arguments
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);

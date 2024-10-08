@@ -8,6 +8,8 @@
 
 char __license[] SEC("license") = "Dual MIT/GPL";
 
+volatile const u8 BPF_TRACEPARENT = 0;
+
 // We start by looking when the SSL handshake is established. In between
 // the start and the end of the SSL handshake, we'll see at least one tcp_sendmsg
 // between the parties. Sandwitching this tcp_sendmsg allows us to grab the sock *

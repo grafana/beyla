@@ -863,7 +863,9 @@ static __always_inline void encode_data_in_ip_options(struct __sk_buff *skb,
                                 sizeof(hdr_len),
                                 0); // The next header length is the total size - the first 8 bytes
 
-            u16 options = 0x1401; // 01 - PadN, 14 = 20 bytes length total padding
+            u16 options =
+                0x1409; // 09 - Unknown option (thought about PadN but Linux kernel doesn't like it), 14 = 20 bytes length total padding
+            // https://github.com/torvalds/linux/blob/87d6aab2389e5ce0197d8257d5f8ee965a67c4cd/net/ipv6/exthdrs.c#L150
             bpf_skb_store_bytes(skb,
                                 next_hdr_start + sizeof(next_hdr) + sizeof(hdr_len),
                                 &options,

@@ -1,9 +1,11 @@
 package discover
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
+	"time"
 
 	"github.com/cilium/ebpf/rlimit"
 	"golang.org/x/sys/unix"
@@ -31,14 +33,29 @@ func (ta *TraceAttacher) mountBpfPinPath() error {
 }
 
 func UnmountBPFFS(pinPath string, log *slog.Logger) {
-	if err := unix.Unmount(pinPath, unix.MNT_FORCE|unix.MNT_DETACH); err != nil {
-		log.Debug("can't unmount pinned root. Try unmounting and removing it manually", "error", err)
-	}
-	log.Debug("unmounted bpf file system")
-	if err := os.RemoveAll(pinPath); err != nil {
-		log.Warn("can't remove pinned root. Try removing it manually", "error", err)
-	} else {
-		log.Debug("removed pin path")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	done := make(chan struct{})
+
+	go func() {
+		if err := unix.Unmount(pinPath, unix.MNT_FORCE|unix.MNT_DETACH); err != nil {
+			log.Debug("can't unmount pinned root. Try unmounting and removing it manually", "error", err)
+		}
+		log.Debug("unmounted bpf file system")
+		if err := os.RemoveAll(pinPath); err != nil {
+			log.Warn("can't remove pinned root. Try removing it manually", "error", err)
+		} else {
+			log.Debug("removed pin path")
+		}
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		log.Debug("Unmount BPF finished")
+	case <-ctx.Done():
+		log.Debug("Timed out while waiting for BPF unmount to finish")
 	}
 }
 

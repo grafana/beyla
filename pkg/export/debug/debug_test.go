@@ -54,7 +54,7 @@ func traceFuncHelper(t *testing.T, tracePrinter TracePrinter) string {
 		End:            35000,
 		TraceID:        trace2.TraceID{0x1, 0x2, 0x3},
 		SpanID:         trace2.SpanID{0x1, 0x2, 0x3},
-		ParentSpanID:   trace2.SpanID{0x1, 0x2, 0x3},
+		ParentSpanID:   trace2.SpanID{0x1, 0x2, 0x4},
 		Flags:          1,
 		PeerName:       "peername",
 		HostName:       "hostname",
@@ -96,7 +96,7 @@ func traceFuncHelper(t *testing.T, tracePrinter TracePrinter) string {
 func TestTracePrinterResolve_PrinterText(t *testing.T) {
 	expected := "(25µs[20µs]) HTTP 200 method path [peer as peername:1234]->" +
 		"[host as hostname:5678] size:1024B svc=[ go]" +
-		" traceparent=[00-01020300000000000000000000000000-0102030000000000-01]\n"
+		" traceparent=[00-01020300000000000000000000000000-0102030000000000[0102040000000000]-01]\n"
 
 	actual := traceFuncHelper(t, TracePrinterText)
 	assert.True(t, strings.HasSuffix(actual, expected))
@@ -113,7 +113,7 @@ func TestTracePrinterResolve_PrinterJSON(t *testing.T) {
 
 	prefix := `[{"type":"HTTP","ignoreSpan":"Metrics","peer":"peer","peerPort":"1234",` +
 		`"host":"host","hostPort":"5678","traceID":"01020300000000000000000000000000",` +
-		`"spanID":"0102030000000000","parentSpanID":"0102030000000000","flags":"1",` +
+		`"spanID":"0102030000000000","parentSpanID":"0102040000000000","flags":"1",` +
 		`"peerName":"peername","hostName":"hostname","kind":"SPAN_KIND_SERVER","`
 
 	suffix := `duration":"25µs","durationUSec":"25","handlerDuration":"20µs",` +
@@ -139,7 +139,7 @@ func TestTracePrinterResolve_PrinterJSONIndent(t *testing.T) {
   "hostPort": "5678",
   "traceID": "01020300000000000000000000000000",
   "spanID": "0102030000000000",
-  "parentSpanID": "0102030000000000",
+  "parentSpanID": "0102040000000000",
   "flags": "1",
   "peerName": "peername",
   "hostName": "hostname",

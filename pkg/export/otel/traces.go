@@ -210,12 +210,14 @@ func (tr *tracesOTELReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], err
 					continue
 				}
 
+				finalAttrs := traceAttributes(span, traceAttrs)
+
 				sr := sampler.ShouldSample(trace.SamplingParameters{
 					ParentContext: tr.ctx,
 					Name:          span.TraceName(),
 					TraceID:       span.TraceID,
 					Kind:          spanKind(span),
-					Attributes:    traceAttributes(span, traceAttrs),
+					Attributes:    finalAttrs,
 				})
 
 				if sr.Decision == trace.Drop {
@@ -223,7 +225,7 @@ func (tr *tracesOTELReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], err
 				}
 
 				envResourceAttrs := ResourceAttrsFromEnv(&span.ServiceID)
-				traces := GenerateTraces(span, tr.ctxInfo.HostID, traceAttrs, envResourceAttrs)
+				traces := GenerateTracesWithAttributes(span, tr.ctxInfo.HostID, finalAttrs, envResourceAttrs)
 				err := exp.ConsumeTraces(tr.ctx, traces)
 				if err != nil {
 					slog.Error("error sending trace to consumer", "error", err)
@@ -399,8 +401,7 @@ func traceAppResourceAttrs(hostID string, service *svc.ID) []attribute.KeyValue 
 	return attrs
 }
 
-// GenerateTraces creates a ptrace.Traces from a request.Span
-func GenerateTraces(span *request.Span, hostID string, userAttrs map[attr.Name]struct{}, envResourceAttrs []attribute.KeyValue) ptrace.Traces {
+func GenerateTracesWithAttributes(span *request.Span, hostID string, attrs []attribute.KeyValue, envResourceAttrs []attribute.KeyValue) ptrace.Traces {
 	t := span.Timings()
 	start := spanStartTime(t)
 	hasSubSpans := t.Start.After(start)
@@ -439,7 +440,6 @@ func GenerateTraces(span *request.Span, hostID string, userAttrs map[attr.Name]s
 	}
 
 	// Set span attributes
-	attrs := traceAttributes(span, userAttrs)
 	m := attrsToMap(attrs)
 	m.CopyTo(s.Attributes())
 
@@ -448,6 +448,11 @@ func GenerateTraces(span *request.Span, hostID string, userAttrs map[attr.Name]s
 	s.Status().SetCode(statusCode)
 	s.SetEndTimestamp(pcommon.NewTimestampFromTime(t.End))
 	return traces
+}
+
+// GenerateTraces creates a ptrace.Traces from a request.Span
+func GenerateTraces(span *request.Span, hostID string, userAttrs map[attr.Name]struct{}, envResourceAttrs []attribute.KeyValue) ptrace.Traces {
+	return GenerateTracesWithAttributes(span, hostID, traceAttributes(span, userAttrs), envResourceAttrs)
 }
 
 // createSubSpans creates the internal spans for a request.Span

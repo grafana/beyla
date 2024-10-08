@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"time"
 
 	"github.com/mariomac/pipes/pipe"
 	"k8s.io/client-go/tools/cache"
@@ -12,7 +11,6 @@ import (
 	attr "github.com/grafana/beyla/pkg/export/attributes/names"
 	"github.com/grafana/beyla/pkg/internal/helpers/container"
 	"github.com/grafana/beyla/pkg/internal/helpers/maps"
-	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/services"
 )
@@ -24,10 +22,8 @@ var (
 
 // kubeMetadata is implemented by kube.Metadata
 type kubeMetadata interface {
-	FetchPodOwnerInfo(pod *kube.PodInfo)
 	GetContainerPod(containerID string) (*kube.PodInfo, bool)
 	AddPodEventHandler(handler cache.ResourceEventHandler) error
-	AddReplicaSetEventHandler(handler cache.ResourceEventHandler) error
 }
 
 // watcherKubeEnricher keeps an update relational snapshot of the in-host process-pods-deployments,
@@ -36,7 +32,7 @@ type watcherKubeEnricher struct {
 	informer kubeMetadata
 
 	log *slog.Logger
-	m   imetrics.Reporter
+
 	// cached system objects
 	containerByPID     map[PID]container.Info
 	processByContainer map[string]processAttrs
@@ -47,7 +43,6 @@ type watcherKubeEnricher struct {
 	podsByOwner maps.Map2[nsName, string, *kube.PodInfo]
 
 	podsInfoCh chan Event[*kube.PodInfo]
-	rsInfoCh   chan Event[*kube.ReplicaSetInfo]
 }
 
 type nsName struct {
@@ -65,7 +60,6 @@ type kubeMetadataProvider interface {
 func WatcherKubeEnricherProvider(
 	ctx context.Context,
 	informerProvider kubeMetadataProvider,
-	m imetrics.Reporter,
 ) pipe.MiddleProvider[[]Event[processAttrs], []Event[processAttrs]] {
 	return func() (pipe.MiddleFunc[[]Event[processAttrs], []Event[processAttrs]], error) {
 		if !informerProvider.IsKubeEnabled() {
@@ -75,7 +69,7 @@ func WatcherKubeEnricherProvider(
 		if err != nil {
 			return nil, fmt.Errorf("instantiating WatcherKubeEnricher: %w", err)
 		}
-		wk := watcherKubeEnricher{informer: informer, m: m}
+		wk := watcherKubeEnricher{informer: informer}
 		if err := wk.init(); err != nil {
 			return nil, err
 		}
@@ -94,16 +88,10 @@ func (wk *watcherKubeEnricher) init() error {
 	wk.podsInfoCh = make(chan Event[*kube.PodInfo], 10)
 	if err := wk.informer.AddPodEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			pod := obj.(*kube.PodInfo)
-			d := time.Since(pod.CreationTimestamp.Time)
 			wk.podsInfoCh <- Event[*kube.PodInfo]{Type: EventCreated, Obj: obj.(*kube.PodInfo)}
-			wk.m.InformerAddDuration("pod", d)
 		},
 		UpdateFunc: func(_, newObj interface{}) {
-			pod := newObj.(*kube.PodInfo)
-			d := time.Since(pod.CreationTimestamp.Time)
 			wk.podsInfoCh <- Event[*kube.PodInfo]{Type: EventCreated, Obj: newObj.(*kube.PodInfo)}
-			wk.m.InformerUpdateDuration("pod", d)
 		},
 		DeleteFunc: func(obj interface{}) {
 			wk.podsInfoCh <- Event[*kube.PodInfo]{Type: EventDeleted, Obj: obj.(*kube.PodInfo)}
@@ -112,27 +100,6 @@ func (wk *watcherKubeEnricher) init() error {
 		return fmt.Errorf("can't register watcherKubeEnricher as Pod event handler in the K8s informer: %w", err)
 	}
 
-	// the rsInfoCh channel will receive any update about replicasets being created or deleted
-	wk.rsInfoCh = make(chan Event[*kube.ReplicaSetInfo], 10)
-	if err := wk.informer.AddReplicaSetEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			rs := obj.(*kube.ReplicaSetInfo)
-			d := time.Since(rs.CreationTimestamp.Time)
-			wk.rsInfoCh <- Event[*kube.ReplicaSetInfo]{Type: EventCreated, Obj: obj.(*kube.ReplicaSetInfo)}
-			wk.m.InformerAddDuration("replicaset", d)
-		},
-		UpdateFunc: func(_, newObj interface{}) {
-			rs := newObj.(*kube.ReplicaSetInfo)
-			d := time.Since(rs.CreationTimestamp.Time)
-			wk.rsInfoCh <- Event[*kube.ReplicaSetInfo]{Type: EventCreated, Obj: newObj.(*kube.ReplicaSetInfo)}
-			wk.m.InformerUpdateDuration("replicaset", d)
-		},
-		DeleteFunc: func(obj interface{}) {
-			wk.rsInfoCh <- Event[*kube.ReplicaSetInfo]{Type: EventDeleted, Obj: obj.(*kube.ReplicaSetInfo)}
-		},
-	}); err != nil {
-		return fmt.Errorf("can't register watcherKubeEnricher as ReplicaSet event handler in the K8s informer: %w", err)
-	}
 	return nil
 }
 
@@ -147,8 +114,6 @@ func (wk *watcherKubeEnricher) enrich(in <-chan []Event[processAttrs], out chan<
 		select {
 		case podEvent := <-wk.podsInfoCh:
 			wk.enrichPodEvent(podEvent, out)
-		case rsEvent := <-wk.rsInfoCh:
-			wk.enrichReplicaSetEvent(rsEvent, out)
 		case processEvents, ok := <-in:
 			if !ok {
 				wk.log.Debug("input channel closed. Stopping")
@@ -171,20 +136,6 @@ func (wk *watcherKubeEnricher) enrichPodEvent(podEvent Event[*kube.PodInfo], out
 		wk.log.Debug("Pod deleted", "namespace", podEvent.Obj.Namespace, "name", podEvent.Obj.Name)
 		wk.onDeletedPod(podEvent.Obj)
 		// we don't forward Pod deletion, as it will be eventually done
-		// when the process is removed
-	}
-}
-
-func (wk *watcherKubeEnricher) enrichReplicaSetEvent(rsEvent Event[*kube.ReplicaSetInfo], out chan<- []Event[processAttrs]) {
-	switch rsEvent.Type {
-	case EventCreated:
-		wk.log.Debug("ReplicaSet added", "namespace",
-			rsEvent.Obj.Namespace, "name", rsEvent.Obj.Name, "owner", rsEvent.Obj.Owner)
-		out <- wk.onNewReplicaSet(rsEvent.Obj)
-	case EventDeleted:
-		wk.log.Debug("ReplicaSet deleted", "namespace", rsEvent.Obj.Namespace, "name", rsEvent.Obj.Name)
-		wk.onDeletedReplicaSet(rsEvent.Obj)
-		// we don't forward replicaset deletion, as it will be eventually done
 		// when the process is removed
 	}
 }
@@ -225,7 +176,7 @@ func (wk *watcherKubeEnricher) onNewProcess(procInfo processAttrs) (processAttrs
 
 	wk.processByContainer[containerInfo.ContainerID] = procInfo
 
-	if pod, ok := wk.getPodInfo(containerInfo.ContainerID); ok {
+	if pod, ok := wk.informer.GetContainerPod(containerInfo.ContainerID); ok {
 		procInfo = withMetadata(procInfo, pod)
 	}
 	return procInfo, true
@@ -233,12 +184,6 @@ func (wk *watcherKubeEnricher) onNewProcess(procInfo processAttrs) (processAttrs
 
 func (wk *watcherKubeEnricher) onNewPod(pod *kube.PodInfo) []Event[processAttrs] {
 	wk.updateNewPodsByOwnerIndex(pod)
-
-	// update PodInfo with its owner's info, if any
-	// for each container in the Pod
-	//   - get matching process, if available
-	//		- forward enriched processAttrs data
-	wk.informer.FetchPodOwnerInfo(pod)
 
 	var events []Event[processAttrs]
 	for _, containerID := range pod.ContainerIDs {
@@ -259,35 +204,6 @@ func (wk *watcherKubeEnricher) onDeletedPod(pod *kube.PodInfo) {
 	}
 }
 
-func (wk *watcherKubeEnricher) onNewReplicaSet(rsInfo *kube.ReplicaSetInfo) []Event[processAttrs] {
-	// for each Pod in the ReplicaSet
-	//   for each container in the Pod
-	//      - get matching process, if any
-	//         - enrich and forward it
-	podInfos := wk.getReplicaSetPods(rsInfo.Namespace, rsInfo.Name)
-	var allProcesses []Event[processAttrs]
-	for _, pod := range podInfos {
-		for _, containerID := range pod.ContainerIDs {
-			if procInfo, ok := wk.processByContainer[containerID]; ok {
-				pod.Owner = &kube.Owner{
-					LabelName: kube.OwnerReplicaSet,
-					Name:      rsInfo.Name,
-					Owner:     rsInfo.Owner,
-				}
-				allProcesses = append(allProcesses, Event[processAttrs]{
-					Type: EventCreated,
-					Obj:  withMetadata(procInfo, pod),
-				})
-			}
-		}
-	}
-	return allProcesses
-}
-
-func (wk *watcherKubeEnricher) onDeletedReplicaSet(rsInfo *kube.ReplicaSetInfo) {
-	wk.podsByOwner.DeleteAll(nsName{namespace: rsInfo.Namespace, name: rsInfo.Name})
-}
-
 func (wk *watcherKubeEnricher) getContainerInfo(pid PID) (container.Info, error) {
 	if cntInfo, ok := wk.containerByPID[pid]; ok {
 		return cntInfo, nil
@@ -298,25 +214,6 @@ func (wk *watcherKubeEnricher) getContainerInfo(pid PID) (container.Info, error)
 	}
 	wk.containerByPID[pid] = cntInfo
 	return cntInfo, nil
-}
-
-func (wk *watcherKubeEnricher) getPodInfo(containerID string) (*kube.PodInfo, bool) {
-	if pod, ok := wk.informer.GetContainerPod(containerID); ok {
-		wk.informer.FetchPodOwnerInfo(pod)
-		return pod, true
-	}
-	return nil, false
-}
-
-func (wk *watcherKubeEnricher) getReplicaSetPods(namespace, name string) []*kube.PodInfo {
-	var podInfos []*kube.PodInfo
-	if pods, ok := wk.podsByOwner[nsName{namespace: namespace, name: name}]; ok {
-		podInfos = make([]*kube.PodInfo, 0, len(pods))
-		for _, pod := range pods {
-			podInfos = append(podInfos, pod)
-		}
-	}
-	return podInfos
 }
 
 func (wk *watcherKubeEnricher) updateNewPodsByOwnerIndex(pod *kube.PodInfo) {
@@ -342,9 +239,9 @@ func withMetadata(pp processAttrs, info *kube.PodInfo) processAttrs {
 
 	if info.Owner != nil {
 		ret.metadata[attr.Name(info.Owner.LabelName).Prom()] = info.Owner.Name
-		topName, topLabel := info.Owner.TopOwnerNameLabel()
-		ret.metadata[attr.Name(topLabel).Prom()] = topName
-		ret.metadata[services.AttrOwnerName] = topName
+		topOwner := info.Owner.TopOwner()
+		ret.metadata[attr.Name(topOwner.LabelName).Prom()] = topOwner.Name
+		ret.metadata[services.AttrOwnerName] = topOwner.Name
 	}
 	return ret
 }

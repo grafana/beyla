@@ -62,30 +62,30 @@ func unrecognizedOwner(or *metav1.OwnerReference) *Owner {
 	}
 }
 
-// TopOwnerNameLabel returns the top-level name and metadata label in the owner chain.
+// TopOwner returns the top Owner in the owner chain.
 // For example, if the owner is a ReplicaSet, it will return the Deployment name.
-func (o *Owner) TopOwnerNameLabel() (string, OwnerLabel) {
-	if o == nil {
-		return "", ""
-	}
-	if o.LabelName == OwnerReplicaSet {
-		// we have two levels of ownership at most
-		if o.Owner != nil {
-			return o.Owner.Name, o.Owner.LabelName
-		}
-		// if the replicaset informer is disabled, we can't get the owner deployment,
-		// so we will heuristically extract it from the ReplicaSet Name (and cache it)
-		topOwnerName := o.Name
-		if idx := strings.LastIndexByte(topOwnerName, '-'); idx > 0 {
-			topOwnerName = topOwnerName[:idx]
+func (o *Owner) TopOwner() *Owner {
+	// we have two levels of ownership at most
+	if o != nil && o.LabelName == OwnerReplicaSet && o.Owner == nil {
+		// we heuristically extract the Deployment name from the replicaset name
+		if idx := strings.LastIndexByte(o.Name, '-'); idx > 0 {
 			o.Owner = &Owner{
-				Name:      topOwnerName,
+				Name:      o.Name[:idx],
 				LabelName: OwnerDeployment,
+				Kind:      "Deployment",
 			}
-			return topOwnerName, OwnerDeployment
+		} else {
+			// just caching the own replicaset as owner, in order to cache the result
+			o.Owner = o
 		}
+		return o.Owner
 	}
-	return o.Name, o.LabelName
+
+	// just return the highest existing owner (two levels of ownership maximum)
+	if o == nil || o.Owner == nil {
+		return o
+	}
+	return o.Owner
 }
 
 func (o *Owner) String() string {

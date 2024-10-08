@@ -18,7 +18,6 @@ import (
 
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/helpers/container"
-	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/testutil"
 	"github.com/grafana/beyla/pkg/services"
@@ -72,9 +71,9 @@ func TestWatcherKubeEnricher(t *testing.T) {
 			containerInfoForPID = fakeContainerInfo
 			// Setup a fake K8s API connected to the watcherKubeEnricher
 			k8sClient := fakek8sclientset.NewSimpleClientset()
-			informer := kube.Metadata{}
-			require.NoError(t, informer.InitFromClient(context.TODO(), k8sClient, 30*time.Minute))
-			wkeNodeFunc, err := WatcherKubeEnricherProvider(context.TODO(), &informerProvider{informer: &informer}, fakeInternalMetrics{})()
+			informer := kube.Metadata{SyncTimeout: 30 * time.Minute}
+			require.NoError(t, informer.InitFromClient(context.TODO(), k8sClient, ""))
+			wkeNodeFunc, err := WatcherKubeEnricherProvider(context.TODO(), &informerProvider{informer: &informer})()
 			require.NoError(t, err)
 			inputCh, outputCh := make(chan []Event[processAttrs], 10), make(chan []Event[processAttrs], 10)
 			defer close(inputCh)
@@ -118,9 +117,9 @@ func TestWatcherKubeEnricherWithMatcher(t *testing.T) {
 	processInfo = fakeProcessInfo
 	// Setup a fake K8s API connected to the watcherKubeEnricher
 	k8sClient := fakek8sclientset.NewSimpleClientset()
-	informer := kube.Metadata{}
-	require.NoError(t, informer.InitFromClient(context.TODO(), k8sClient, 30*time.Minute))
-	wkeNodeFunc, err := WatcherKubeEnricherProvider(context.TODO(), &informerProvider{informer: &informer}, fakeInternalMetrics{})()
+	informer := kube.Metadata{SyncTimeout: 30 * time.Minute}
+	require.NoError(t, informer.InitFromClient(context.TODO(), k8sClient, ""))
+	wkeNodeFunc, err := WatcherKubeEnricherProvider(context.TODO(), &informerProvider{informer: &informer})()
 	require.NoError(t, err)
 	pipeConfig := beyla.Config{}
 	require.NoError(t, yaml.Unmarshal([]byte(`discovery:
@@ -309,13 +308,6 @@ func fakeProcessInfo(pp processAttrs) (*services.ProcessInfo, error) {
 		ExePath:   fmt.Sprintf("/bin/process%d", pp.pid),
 	}, nil
 }
-
-type fakeInternalMetrics struct {
-	imetrics.NoopReporter
-}
-
-func (fakeInternalMetrics) InformerAddDuration(_ string, _ time.Duration)    {}
-func (fakeInternalMetrics) InformerUpdateDuration(_ string, _ time.Duration) {}
 
 type informerProvider struct {
 	informer *kube.Metadata

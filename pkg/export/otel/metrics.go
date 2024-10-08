@@ -545,7 +545,7 @@ func (mr *MetricsReporter) setupGraphMeters(m *Metrics, meter instrument.Meter) 
 func (mr *MetricsReporter) newMetricSet(service *svc.ID) (*Metrics, error) {
 	mlog := mlog().With("service", service)
 	mlog.Debug("creating new Metrics reporter")
-	resourceAttributes := append(getAppResourceAttrs(mr.hostID, service), ResourceAttrsFromEnv()...)
+	resourceAttributes := append(getAppResourceAttrs(mr.hostID, service), ResourceAttrsFromEnv(service)...)
 	resources := resource.NewWithAttributes(semconv.SchemaURL, resourceAttributes...)
 
 	opts := []metric.Option{
@@ -848,7 +848,9 @@ func (mr *MetricsReporter) reportMetrics(input <-chan []request.Span) {
 	for spans := range input {
 		for i := range spans {
 			s := &spans[i]
-
+			if s.InternalSignal() {
+				continue
+			}
 			// If we are ignoring this span because of route patterns, don't do anything
 			if s.IgnoreMetrics() {
 				continue

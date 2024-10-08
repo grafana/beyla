@@ -65,6 +65,7 @@ func TestDecoration(t *testing.T) {
 			"k8s.pod.name":        "pod-12",
 			"k8s.pod.uid":         "uid-12",
 			"k8s.deployment.name": "deployment-12",
+			"k8s.owner.name":      "deployment-12",
 			"k8s.pod.start_time":  "2020-01-02 12:12:56",
 			"k8s.cluster.name":    "the-cluster",
 		}, deco[0].ServiceID.Metadata)
@@ -82,6 +83,7 @@ func TestDecoration(t *testing.T) {
 			"k8s.namespace.name":  "the-ns",
 			"k8s.replicaset.name": "rs-34",
 			"k8s.deployment.name": "rs",
+			"k8s.owner.name":      "rs",
 			"k8s.pod.name":        "pod-34",
 			"k8s.pod.uid":         "uid-34",
 			"k8s.pod.start_time":  "2020-01-02 12:34:56",
@@ -131,6 +133,7 @@ func TestDecoration(t *testing.T) {
 			"k8s.pod.name":        "pod-12",
 			"k8s.pod.uid":         "uid-12",
 			"k8s.deployment.name": "deployment-12",
+			"k8s.owner.name":      "deployment-12",
 			"k8s.pod.start_time":  "2020-01-02 12:12:56",
 			"k8s.cluster.name":    "the-cluster",
 		}, deco[0].ServiceID.Metadata)

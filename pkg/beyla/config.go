@@ -11,12 +11,12 @@ import (
 	otelconsumer "go.opentelemetry.io/collector/consumer"
 	"gopkg.in/yaml.v3"
 
+	"github.com/grafana/beyla/pkg/config"
 	"github.com/grafana/beyla/pkg/export/attributes"
 	"github.com/grafana/beyla/pkg/export/debug"
 	"github.com/grafana/beyla/pkg/export/instrumentations"
 	"github.com/grafana/beyla/pkg/export/otel"
 	"github.com/grafana/beyla/pkg/export/prom"
-	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/filter"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/infraolly/process"
@@ -44,7 +44,7 @@ var DefaultConfig = Config{
 	ChannelBufferLen: 10,
 	LogLevel:         "INFO",
 	EnforceSysCaps:   false,
-	EBPF: ebpfcommon.TracerConfig{
+	EBPF: config.EPPFTracer{
 		BatchLength:        100,
 		BatchTimeout:       time.Second,
 		BpfBaseDir:         "/var/run/beyla",
@@ -110,8 +110,9 @@ var DefaultConfig = Config{
 			HostnameDNSResolution: true,
 		},
 		Kubernetes: transform.KubernetesDecorator{
-			Enable:               kubeflags.EnabledDefault,
-			InformersSyncTimeout: 30 * time.Second,
+			Enable:                kubeflags.EnabledDefault,
+			InformersSyncTimeout:  30 * time.Second,
+			InformersResyncPeriod: 30 * time.Minute,
 		},
 		HostID: HostIDConfig{
 			FetchTimeout: 500 * time.Millisecond,
@@ -129,7 +130,7 @@ var DefaultConfig = Config{
 }
 
 type Config struct {
-	EBPF ebpfcommon.TracerConfig `yaml:"ebpf"`
+	EBPF config.EPPFTracer `yaml:"ebpf"`
 
 	// NetworkFlows configuration for Network Observability feature
 	NetworkFlows NetworkConfig `yaml:"network"`

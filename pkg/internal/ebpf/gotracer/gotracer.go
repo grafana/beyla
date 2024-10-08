@@ -23,6 +23,7 @@ import (
 	"github.com/cilium/ebpf"
 
 	"github.com/grafana/beyla/pkg/beyla"
+	"github.com/grafana/beyla/pkg/config"
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/exec"
 	"github.com/grafana/beyla/pkg/internal/goexec"
@@ -39,7 +40,7 @@ import (
 type Tracer struct {
 	log        *slog.Logger
 	pidsFilter ebpfcommon.ServiceFilter
-	cfg        *ebpfcommon.TracerConfig
+	cfg        *config.EPPFTracer
 	metrics    imetrics.Reporter
 	bpfObjects bpfObjects
 	closers    []io.Closer

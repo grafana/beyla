@@ -590,7 +590,7 @@ func TestGenerateTracesAttributes(t *testing.T) {
 		defer restoreEnvAfterExecution()()
 		require.NoError(t, os.Setenv(envResourceAttrs, "deployment.environment=productions,source.upstream=beyla"))
 		span := request.Span{Type: request.EventTypeHTTP, Method: "GET", Route: "/test", Status: 200}
-		traces := GenerateTraces(&span, "host-id", map[attr.Name]struct{}{}, ResourceAttrsFromEnv())
+		traces := GenerateTraces(&span, "host-id", map[attr.Name]struct{}{}, ResourceAttrsFromEnv(&span.ServiceID))
 
 		assert.Equal(t, 1, traces.ResourceSpans().Len())
 		rs := traces.ResourceSpans().At(0)

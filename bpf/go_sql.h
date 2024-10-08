@@ -35,7 +35,7 @@ typedef struct sql_func_invocation {
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, goroutine_key_t); // key: pointer to the request goroutine
+    __type(key, go_addr_key_t); // key: pointer to the request goroutine
     __type(value, sql_func_invocation_t);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_sql_queries SEC(".maps");
@@ -48,8 +48,8 @@ static __always_inline void set_sql_info(void *goroutine_addr, void *sql_param, 
 
     // We don't look up in the headers, no http/grpc request, therefore 0 as last argument
     client_trace_parent(goroutine_addr, &invocation.tp, 0);
-    goroutine_key_t g_key = {};
-    goroutine_key_from_id(&g_key, goroutine_addr);
+    go_addr_key_t g_key = {};
+    go_addr_key_from_id(&g_key, goroutine_addr);
 
     // Write event
     if (bpf_map_update_elem(&ongoing_sql_queries, &g_key, &invocation, BPF_ANY)) {
@@ -87,8 +87,8 @@ int uprobe_queryReturn(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/query return === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
-    goroutine_key_t g_key = {};
-    goroutine_key_from_id(&g_key, goroutine_addr);
+    go_addr_key_t g_key = {};
+    go_addr_key_from_id(&g_key, goroutine_addr);
 
     sql_func_invocation_t *invocation = bpf_map_lookup_elem(&ongoing_sql_queries, &g_key);
     if (invocation == NULL) {

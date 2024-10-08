@@ -78,6 +78,8 @@ type ID struct {
 	// by other metadata if available (e.g., Pod Name, Node Name, etc...)
 	HostName string
 
+	EnvVars map[string]string
+
 	flags idFlags
 }
 

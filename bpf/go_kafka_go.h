@@ -29,35 +29,35 @@ typedef struct topic {
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, void *);      // w_ptr
-    __type(value, tp_info_t); // traceparent
+    __type(key, go_addr_key_t); // w_ptr
+    __type(value, tp_info_t);   // traceparent
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } produce_traceparents SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, goroutine_key_t); // goroutine
-    __type(value, topic_t);       // topic info
+    __type(key, go_addr_key_t); // goroutine
+    __type(value, topic_t);     // topic info
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_produce_topics SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, void *);    // msg ptr
-    __type(value, topic_t); // topic info
+    __type(key, go_addr_key_t); // msg ptr
+    __type(value, topic_t);     // topic info
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_produce_messages SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, goroutine_key_t); // goroutine
+    __type(key, go_addr_key_t);   // goroutine
     __type(value, produce_req_t); // rw ptr + start time
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } produce_requests SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, goroutine_key_t);  // goroutine
+    __type(key, go_addr_key_t);    // goroutine
     __type(value, kafka_go_req_t); // rw ptr + start time
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } fetch_requests SEC(".maps");
@@ -74,8 +74,10 @@ int uprobe_writer_write_messages(struct pt_regs *ctx) {
 
     // We don't look up in the headers, no http/grpc request, therefore 0 as last argument
     client_trace_parent(goroutine_addr, &tp, 0);
+    go_addr_key_t p_key = {};
+    go_addr_key_from_id(&p_key, w_ptr);
 
-    bpf_map_update_elem(&produce_traceparents, &w_ptr, &tp, BPF_ANY);
+    bpf_map_update_elem(&produce_traceparents, &p_key, &tp, BPF_ANY);
     return 0;
 }
 
@@ -83,8 +85,8 @@ SEC("uprobe/writer_produce")
 int uprobe_writer_produce(struct pt_regs *ctx) {
     void *goroutine_addr = (void *)GOROUTINE_PTR(ctx);
     bpf_dbg_printk("=== uprobe/kafka-go writer_produce %llx === ", goroutine_addr);
-    goroutine_key_t g_key = {};
-    goroutine_key_from_id(&g_key, goroutine_addr);
+    go_addr_key_t g_key = {};
+    go_addr_key_from_id(&g_key, goroutine_addr);
 
     void *w_ptr = (void *)GO_PARAM1(ctx);
     off_table_t *ot = get_offsets_table();
@@ -96,10 +98,11 @@ int uprobe_writer_produce(struct pt_regs *ctx) {
                             w_ptr + go_offset_of(ot, (go_offset){.v = _kafka_go_writer_topic_pos}));
 
         bpf_dbg_printk("topic_ptr %llx", topic_ptr);
+        go_addr_key_t p_key = {};
+        go_addr_key_from_id(&p_key, w_ptr);
         if (topic_ptr) {
             topic_t topic = {};
-
-            tp_info_t *tp = bpf_map_lookup_elem(&produce_traceparents, &w_ptr);
+            tp_info_t *tp = bpf_map_lookup_elem(&produce_traceparents, &p_key);
             if (tp) {
                 bpf_dbg_printk("found existing traceparent %llx", tp);
                 __builtin_memcpy(&topic.tp, tp, sizeof(tp_info_t));
@@ -111,7 +114,7 @@ int uprobe_writer_produce(struct pt_regs *ctx) {
             bpf_probe_read_user(&topic.name, sizeof(topic.name), topic_ptr);
             bpf_map_update_elem(&ongoing_produce_topics, &g_key, &topic, BPF_ANY);
         }
-        bpf_map_delete_elem(&produce_traceparents, &w_ptr);
+        bpf_map_delete_elem(&produce_traceparents, &p_key);
     }
 
     return 0;
@@ -121,8 +124,8 @@ SEC("uprobe/client_roundTrip")
 int uprobe_client_roundTrip(struct pt_regs *ctx) {
     void *goroutine_addr = (void *)GOROUTINE_PTR(ctx);
     bpf_dbg_printk("=== uprobe/kafka-go client_roundTrip %llx === ", goroutine_addr);
-    goroutine_key_t g_key = {};
-    goroutine_key_from_id(&g_key, goroutine_addr);
+    go_addr_key_t g_key = {};
+    go_addr_key_from_id(&g_key, goroutine_addr);
 
     topic_t *topic_ptr = bpf_map_lookup_elem(&ongoing_produce_topics, &g_key);
 
@@ -132,7 +135,9 @@ int uprobe_client_roundTrip(struct pt_regs *ctx) {
         if (msg_ptr) {
             topic_t topic;
             __builtin_memcpy(&topic, topic_ptr, sizeof(topic_t));
-            bpf_map_update_elem(&ongoing_produce_messages, &msg_ptr, &topic, BPF_ANY);
+            go_addr_key_t m_key = {};
+            go_addr_key_from_id(&m_key, msg_ptr);
+            bpf_map_update_elem(&ongoing_produce_messages, &m_key, &topic, BPF_ANY);
         }
     }
 
@@ -150,11 +155,13 @@ int uprobe_protocol_roundtrip(struct pt_regs *ctx) {
 
     bpf_dbg_printk(
         "goroutine_addr %lx, rw ptr %llx, msg_ptr %llx", goroutine_addr, rw_ptr, msg_ptr);
-    goroutine_key_t g_key = {};
-    goroutine_key_from_id(&g_key, goroutine_addr);
+    go_addr_key_t g_key = {};
+    go_addr_key_from_id(&g_key, goroutine_addr);
 
     if (rw_ptr) {
-        topic_t *topic_ptr = bpf_map_lookup_elem(&ongoing_produce_messages, &msg_ptr);
+        go_addr_key_t m_key = {};
+        go_addr_key_from_id(&m_key, msg_ptr);
+        topic_t *topic_ptr = bpf_map_lookup_elem(&ongoing_produce_messages, &m_key);
         bpf_dbg_printk("Found topic %llx", topic_ptr);
         if (topic_ptr) {
             produce_req_t p = {
@@ -175,8 +182,8 @@ SEC("uprobe/protocol_RoundTrip_ret")
 int uprobe_protocol_roundtrip_ret(struct pt_regs *ctx) {
     void *goroutine_addr = (void *)GOROUTINE_PTR(ctx);
     bpf_dbg_printk("=== uprobe/protocol_RoundTrip ret %llx === ", goroutine_addr);
-    goroutine_key_t g_key = {};
-    goroutine_key_from_id(&g_key, goroutine_addr);
+    go_addr_key_t g_key = {};
+    go_addr_key_from_id(&g_key, goroutine_addr);
 
     produce_req_t *p_ptr = bpf_map_lookup_elem(&produce_requests, &g_key);
 
@@ -184,7 +191,9 @@ int uprobe_protocol_roundtrip_ret(struct pt_regs *ctx) {
 
     if (p_ptr) {
         void *msg_ptr = (void *)p_ptr->msg_ptr;
-        topic_t *topic_ptr = bpf_map_lookup_elem(&ongoing_produce_messages, &msg_ptr);
+        go_addr_key_t m_key = {};
+        go_addr_key_from_id(&m_key, msg_ptr);
+        topic_t *topic_ptr = bpf_map_lookup_elem(&ongoing_produce_messages, &m_key);
 
         bpf_dbg_printk("goroutine_addr %lx, conn ptr %llx", goroutine_addr, p_ptr->conn_ptr);
         bpf_dbg_printk("msg_ptr = %llx, topic_ptr = %llx", p_ptr->msg_ptr, topic_ptr);
@@ -214,7 +223,7 @@ int uprobe_protocol_roundtrip_ret(struct pt_regs *ctx) {
                 bpf_ringbuf_submit(trace, get_flags());
             }
         }
-        bpf_map_delete_elem(&ongoing_produce_messages, &msg_ptr);
+        bpf_map_delete_elem(&ongoing_produce_messages, &m_key);
     }
 
     bpf_map_delete_elem(&produce_requests, &g_key);
@@ -231,8 +240,8 @@ int uprobe_reader_read(struct pt_regs *ctx) {
     off_table_t *ot = get_offsets_table();
 
     bpf_dbg_printk("=== uprobe/kafka-go reader_read %llx r_ptr %llx=== ", goroutine_addr, r_ptr);
-    goroutine_key_t g_key = {};
-    goroutine_key_from_id(&g_key, goroutine_addr);
+    go_addr_key_t g_key = {};
+    go_addr_key_from_id(&g_key, goroutine_addr);
 
     if (r_ptr) {
         kafka_go_req_t r = {
@@ -273,8 +282,8 @@ SEC("uprobe/reader_send_message")
 int uprobe_reader_send_message(struct pt_regs *ctx) {
     void *goroutine_addr = (void *)GOROUTINE_PTR(ctx);
     bpf_dbg_printk("=== uprobe/kafka-go reader_send_message %llx === ", goroutine_addr);
-    goroutine_key_t g_key = {};
-    goroutine_key_from_id(&g_key, goroutine_addr);
+    go_addr_key_t g_key = {};
+    go_addr_key_from_id(&g_key, goroutine_addr);
 
     kafka_go_req_t *req = (kafka_go_req_t *)bpf_map_lookup_elem(&fetch_requests, &g_key);
     bpf_dbg_printk("Found req_ptr %llx", req);
@@ -290,8 +299,8 @@ SEC("uprobe/reader_read")
 int uprobe_reader_read_ret(struct pt_regs *ctx) {
     void *goroutine_addr = (void *)GOROUTINE_PTR(ctx);
     bpf_dbg_printk("=== uprobe/kafka-go reader_read ret %llx === ", goroutine_addr);
-    goroutine_key_t g_key = {};
-    goroutine_key_from_id(&g_key, goroutine_addr);
+    go_addr_key_t g_key = {};
+    go_addr_key_from_id(&g_key, goroutine_addr);
 
     kafka_go_req_t *req = (kafka_go_req_t *)bpf_map_lookup_elem(&fetch_requests, &g_key);
     bpf_dbg_printk("Found req_ptr %llx", req);

@@ -167,27 +167,7 @@ func (k *Metadata) infoForIP(idx cache.Indexer, ip string) (any, bool) {
 
 func (k *Metadata) getOwner(meta *metav1.ObjectMeta, info *IPInfo) Owner {
 	if len(meta.OwnerReferences) > 0 {
-		ownerReference := meta.OwnerReferences[0]
-		if ownerReference.Kind != "ReplicaSet" {
-			return *OwnerFrom(meta.OwnerReferences)
-		}
-
-		if !k.disabledInformers.Has(InformerReplicaSet) {
-			item, ok, err := k.replicaSets.GetIndexer().GetByKey(meta.Namespace + "/" + ownerReference.Name)
-			switch {
-			case err != nil:
-				k.log.Debug("can't get ReplicaSet info from informer. Ignoring",
-					"key", meta.Namespace+"/"+ownerReference.Name, "error", err)
-			case !ok:
-				k.log.Debug("ReplicaSet info still not in the informer. Ignoring",
-					"key", meta.Namespace+"/"+ownerReference.Name)
-			default:
-				rsInfo := item.(*ReplicaSetInfo).ObjectMeta
-				if len(rsInfo.OwnerReferences) > 0 {
-					return *OwnerFrom(rsInfo.OwnerReferences)
-				}
-			}
-		}
+		return *OwnerFrom(meta.OwnerReferences)
 	}
 	// If no owner references found, return itself as owner
 	return Owner{

@@ -172,6 +172,9 @@ func (tr *tracesOTELReceiver) spanDiscarded(span *request.Span) bool {
 func (tr *tracesOTELReceiver) processSpans(exp exporter.Traces, spans []request.Span, traceAttrs map[attr.Name]struct{}, envResourceAttrs []attribute.KeyValue, sampler trace.Sampler) {
 	for i := range spans {
 		span := &spans[i]
+		if span.InternalSignal() {
+			continue
+		}
 		if tr.spanDiscarded(span) {
 			continue
 		}

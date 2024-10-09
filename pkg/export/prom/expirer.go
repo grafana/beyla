@@ -61,7 +61,6 @@ func (ex *Expirer[T]) Describe(descs chan<- *prometheus.Desc) {
 // Collect wraps prometheus.Collector Wrap method
 func (ex *Expirer[T]) Collect(metrics chan<- prometheus.Metric) {
 	log := plog()
-	log.Debug("invoking metrics collection")
 	for _, old := range ex.entries.DeleteExpired() {
 		ex.wrapped.DeleteLabelValues(old.labelVals...)
 		log.With("labelValues", old).Debug("deleting old Prometheus metric")

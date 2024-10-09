@@ -57,7 +57,7 @@ func TestDaemonSetMetadata(t *testing.T) {
 					}
 
 					// Check the information of the parent span
-					res := trace.FindByOperationName("GET /pingpong")
+					res := trace.FindByOperationName("GET /pingpong", "server")
 					require.Len(t, res, 1)
 					parent := res[0]
 					sd := jaeger.DiffAsRegexp([]jaeger.Tag{

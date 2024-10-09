@@ -50,7 +50,7 @@ func testClientWithMethodAndStatusCode(t *testing.T, method string, statusCode i
 
 	var trace jaeger.Trace
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
-		resp, err := http.Get(jaegerQueryURL + fmt.Sprintf("?service=pingclient&operation=%s", method))
+		resp, err := http.Get(jaegerQueryURL + fmt.Sprintf("?service=pingclient&operation=%s%%20/oss/", method))
 		require.NoError(t, err)
 		if resp == nil {
 			return
@@ -63,9 +63,9 @@ func testClientWithMethodAndStatusCode(t *testing.T, method string, statusCode i
 		trace = traces[0]
 	}, test.Interval(100*time.Millisecond))
 
-	res := trace.FindByOperationName(method)
-	require.Len(t, res, 1)
-	parent := res[0]
+	spans := trace.FindByOperationName(method+" /oss/", "")
+	require.Len(t, spans, 1)
+	parent := spans[0]
 
 	addr, ok := jaeger.FindIn(parent.Tags, "server.address")
 	assert.True(t, ok)

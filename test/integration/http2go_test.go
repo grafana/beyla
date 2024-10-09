@@ -86,7 +86,7 @@ func testNestedHTTP2Traces(t *testing.T, url string) {
 	}, test.Interval(100*time.Millisecond))
 
 	// Check the information of the python parent span
-	res := trace.FindByOperationName("GET /" + url)
+	res := trace.FindByOperationName("GET /"+url, "server")
 	require.Len(t, res, 1)
 	parent := res[0]
 	require.NotEmpty(t, parent.TraceID)
@@ -106,7 +106,7 @@ func testNestedHTTP2Traces(t *testing.T, url string) {
 	assert.Empty(t, sd, sd.String())
 
 	// Check the information of the rails parent span
-	res = trace.FindByOperationName("GET")
+	res = trace.FindByOperationName("GET /"+url, "client")
 	require.Len(t, res, 1)
 	parent = res[0]
 	require.NotEmpty(t, parent.TraceID)

@@ -50,7 +50,7 @@ func TestTracesDecoration(t *testing.T) {
 
 					// Check the K8s metadata information of the parent span's process
 					trace = traces[0]
-					res := trace.FindByOperationName("GET /traced-ping")
+					res := trace.FindByOperationName("GET /traced-ping", "server")
 					require.Len(t, res, 1)
 					parent = res[0]
 

@@ -62,7 +62,7 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
 	}, test.Interval(100*time.Millisecond))
 
 	// Check the information of the parent span
-	res := trace.FindByOperationName("GET /" + slug)
+	res := trace.FindByOperationName("GET /"+slug, "server")
 	require.Len(t, res, 1)
 	parent := res[0]
 	require.NotEmpty(t, parent.TraceID)
@@ -94,7 +94,7 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
 	}
 
 	// Check the information of the "in queue" span
-	res = trace.FindByOperationName("in queue")
+	res = trace.FindByOperationName("in queue", "internal")
 	require.Len(t, res, 1)
 	queue := res[0]
 	// Check parenthood
@@ -115,7 +115,7 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
 	assert.Empty(t, sd, sd.String())
 
 	// Check the information of the "processing" span
-	res = trace.FindByOperationName("processing")
+	res = trace.FindByOperationName("processing", "internal")
 	require.Len(t, res, 1)
 	processing := res[0]
 	// Check parenthood
@@ -137,6 +137,7 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
 	require.Contains(t, trace.Processes, parent.ProcessID)
 	assert.Equal(t, parent.ProcessID, queue.ProcessID)
 	assert.Equal(t, parent.ProcessID, processing.ProcessID)
+
 	process := trace.Processes[parent.ProcessID]
 	assert.Equal(t, "testserver", process.ServiceName)
 
@@ -187,7 +188,7 @@ func testGRPCTracesForServiceName(t *testing.T, svcName string) {
 	}, test.Interval(100*time.Millisecond))
 
 	// Check the information of the parent span
-	res := trace.FindByOperationName("/routeguide.RouteGuide/Debug")
+	res := trace.FindByOperationName("/routeguide.RouteGuide/Debug", "server")
 	require.Len(t, res, 1)
 	parent := res[0]
 	require.NotEmpty(t, parent.TraceID)
@@ -201,6 +202,45 @@ func testGRPCTracesForServiceName(t *testing.T, svcName string) {
 		jaeger.Tag{Key: "rpc.method", Type: "string", Value: "/routeguide.RouteGuide/Debug"},
 		jaeger.Tag{Key: "rpc.system", Type: "string", Value: "grpc"},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
+	)
+	assert.Empty(t, sd, sd.String())
+
+	// Check the information of the "in queue" span
+	res = trace.FindByOperationName("in queue", "internal")
+	require.Len(t, res, 1)
+	queue := res[0]
+	// Check parenthood
+	p, ok := trace.ParentOf(&queue)
+	require.True(t, ok)
+	assert.Equal(t, parent.TraceID, p.TraceID)
+	assert.Equal(t, parent.SpanID, p.SpanID)
+	// check reasonable start and end times
+	assert.GreaterOrEqual(t, queue.StartTime, parent.StartTime)
+	assert.LessOrEqual(t,
+		queue.StartTime+queue.Duration,
+		parent.StartTime+parent.Duration+1) // adding 1 to tolerate inaccuracies from rounding from ns to ms
+	// check span attributes
+	sd = queue.Diff(
+		jaeger.Tag{Key: "span.kind", Type: "string", Value: "internal"},
+	)
+	assert.Empty(t, sd, sd.String())
+
+	// Check the information of the "processing" span
+	res = trace.FindByOperationName("processing", "internal")
+	require.Len(t, res, 1)
+	processing := res[0]
+	// Check parenthood
+	p, ok = trace.ParentOf(&queue)
+	require.True(t, ok)
+	assert.Equal(t, parent.TraceID, p.TraceID)
+	require.False(t, strings.HasSuffix(parent.TraceID, "0000000000000000")) // the Debug call doesn't add any traceparent to the request header, the traceID is auto-generated won't look like this
+	assert.Equal(t, parent.SpanID, p.SpanID)
+	// check reasonable start and end times
+	assert.GreaterOrEqual(t, processing.StartTime, queue.StartTime+queue.Duration)
+	assert.LessOrEqual(t, processing.StartTime+processing.Duration, parent.StartTime+parent.Duration+1)
+	// check span attributes
+	sd = queue.Diff(
+		jaeger.Tag{Key: "span.kind", Type: "string", Value: "internal"},
 	)
 	assert.Empty(t, sd, sd.String())
 
@@ -235,7 +275,7 @@ func testGRPCTracesForServiceName(t *testing.T, svcName string) {
 	}, test.Interval(100*time.Millisecond))
 
 	// Check the information of the parent span
-	res = trace.FindByOperationName("/routeguide.RouteGuide/ListFeatures")
+	res = trace.FindByOperationName("/routeguide.RouteGuide/ListFeatures", "server")
 	require.Len(t, res, 1)
 	parent = res[0]
 	require.NotEmpty(t, parent.TraceID)
@@ -281,7 +321,7 @@ func testGRPCKProbeTraces(t *testing.T) {
 	}, test.Interval(100*time.Millisecond))
 
 	// Check the information of the parent span
-	res := trace.FindByOperationName("/routeguide.RouteGuide/Debug")
+	res := trace.FindByOperationName("/routeguide.RouteGuide/Debug", "server")
 	require.Len(t, res, 1)
 	parent := res[0]
 	require.NotEmpty(t, parent.TraceID)
@@ -325,7 +365,7 @@ func testHTTPTracesKProbes(t *testing.T) {
 	}, test.Interval(100*time.Millisecond))
 
 	// Check the information of the parent span
-	res := trace.FindByOperationName("GET /bye")
+	res := trace.FindByOperationName("GET /bye", "server")
 	require.Len(t, res, 1)
 	parent := res[0]
 	require.NotEmpty(t, parent.TraceID)
@@ -398,7 +438,7 @@ func testHTTPTracesNestedCalls(t *testing.T) {
 	}, test.Interval(100*time.Millisecond))
 
 	// Check the information of the parent span
-	res := trace.FindByOperationName("GET /echo")
+	res := trace.FindByOperationName("GET /echo", "server")
 	require.Len(t, res, 1)
 	server := res[0]
 	require.NotEmpty(t, server.TraceID)
@@ -421,8 +461,8 @@ func testHTTPTracesNestedCalls(t *testing.T) {
 	assert.Empty(t, sd, sd.String())
 
 	// Check the information of the "in queue" span
-	res = trace.FindByOperationName("in queue")
-	require.GreaterOrEqual(t, len(res), 1)
+	res = trace.FindByOperationName("in queue", "internal")
+	require.Equal(t, len(res), numNested)
 
 	var queue *jaeger.Span
 
@@ -446,7 +486,7 @@ func testHTTPTracesNestedCalls(t *testing.T) {
 	assert.Empty(t, sd, sd.String())
 
 	// Check the information of the "processing" span
-	res = trace.FindByOperationName("processing")
+	res = trace.FindByOperationName("processing", "internal")
 	require.GreaterOrEqual(t, len(res), 1)
 
 	var processing *jaeger.Span
@@ -470,8 +510,7 @@ func testHTTPTracesNestedCalls(t *testing.T) {
 	)
 	assert.Empty(t, sd, sd.String())
 
-	// Check the information of the "processing" span
-	res = trace.FindByOperationName("GET")
+	res = trace.FindByOperationName("GET /echoBack", "client")
 	require.Len(t, res, 1)
 	client := res[0]
 	// Check parenthood
@@ -530,7 +569,7 @@ func testHTTP2GRPCTracesNestedCalls(t *testing.T, contextPropagation bool) {
 	}, test.Interval(100*time.Millisecond))
 
 	// Check the information of the parent span
-	res := trace.FindByOperationName("GET /echoCall")
+	res := trace.FindByOperationName("GET /echoCall", "server")
 	require.Len(t, res, 1)
 	server := res[0]
 	require.NotEmpty(t, server.TraceID)
@@ -554,7 +593,7 @@ func testHTTP2GRPCTracesNestedCalls(t *testing.T, contextPropagation bool) {
 	numNested := 1
 
 	// Check the information of the "in queue" span
-	res = trace.FindByOperationName("in queue")
+	res = trace.FindByOperationName("in queue", "internal")
 	require.Equal(t, len(res), numNested)
 
 	var queue *jaeger.Span
@@ -579,7 +618,7 @@ func testHTTP2GRPCTracesNestedCalls(t *testing.T, contextPropagation bool) {
 	assert.Empty(t, sd, sd.String())
 
 	// Check the information of the "processing" span
-	res = trace.FindByOperationName("processing")
+	res = trace.FindByOperationName("processing", "internal")
 	require.Equal(t, len(res), numNested)
 
 	var processing *jaeger.Span
@@ -609,8 +648,7 @@ func testHTTP2GRPCTracesNestedCalls(t *testing.T, contextPropagation bool) {
 		numNestedGRPC = 2
 	}
 
-	// Check the information of the "processing" span
-	res = trace.FindByOperationName("/routeguide.RouteGuide/GetFeature")
+	res = trace.FindByOperationName("/routeguide.RouteGuide/GetFeature", "client")
 	require.Len(t, res, numNestedGRPC)
 	for index := range res {
 		grpc := res[index]
@@ -687,7 +725,7 @@ func testNestedHTTPTracesKProbes(t *testing.T, extended bool) {
 	// Ensure all 5 traces have proper full chain
 	for _, trace := range multipleTraces {
 		// Check the information of the rust parent span
-		res := trace.FindByOperationName("GET /dist")
+		res := trace.FindByOperationName("GET /dist", "server")
 		require.Len(t, res, 1)
 		parent := res[0]
 		require.NotEmpty(t, parent.TraceID)
@@ -707,7 +745,7 @@ func testNestedHTTPTracesKProbes(t *testing.T, extended bool) {
 		assert.Empty(t, sd, sd.String())
 
 		// Check the information of the java parent span
-		res = trace.FindByOperationName("GET /jtrace")
+		res = trace.FindByOperationName("GET /jtrace", "server")
 		require.Len(t, res, 1)
 		parent = res[0]
 		require.NotEmpty(t, parent.TraceID)
@@ -727,7 +765,7 @@ func testNestedHTTPTracesKProbes(t *testing.T, extended bool) {
 		assert.Empty(t, sd, sd.String())
 
 		// Check the information of the nodejs parent span
-		res = trace.FindByOperationName("GET /traceme")
+		res = trace.FindByOperationName("GET /traceme", "server")
 		require.Len(t, res, 1)
 		parent = res[0]
 		require.NotEmpty(t, parent.TraceID)
@@ -747,7 +785,7 @@ func testNestedHTTPTracesKProbes(t *testing.T, extended bool) {
 		assert.Empty(t, sd, sd.String())
 
 		// Check the information of the go parent span
-		res = trace.FindByOperationName("GET /gotracemetoo")
+		res = trace.FindByOperationName("GET /gotracemetoo", "server")
 		require.Len(t, res, 1)
 		parent = res[0]
 		require.NotEmpty(t, parent.TraceID)
@@ -767,7 +805,7 @@ func testNestedHTTPTracesKProbes(t *testing.T, extended bool) {
 		assert.Empty(t, sd, sd.String())
 
 		// Check the information of the python parent span
-		res = trace.FindByOperationName("GET /tracemetoo")
+		res = trace.FindByOperationName("GET /tracemetoo", "server")
 		require.Len(t, res, 1)
 		parent = res[0]
 		require.NotEmpty(t, parent.TraceID)
@@ -787,7 +825,7 @@ func testNestedHTTPTracesKProbes(t *testing.T, extended bool) {
 		assert.Empty(t, sd, sd.String())
 
 		// Check the information of the rails parent span
-		res = trace.FindByOperationName("GET /users")
+		res = trace.FindByOperationName("GET /users", "server")
 		require.Len(t, res, 1)
 		parent = res[0]
 		require.NotEmpty(t, parent.TraceID)
@@ -807,16 +845,14 @@ func testNestedHTTPTracesKProbes(t *testing.T, extended bool) {
 		assert.Empty(t, sd, sd.String())
 	}
 
-	if extended {
-		// test now with a different version of Java thread pool
-		for i := 0; i < 10; i++ {
-			doHTTPGet(t, "http://localhost:8086/jtraceA", 200)
-		}
-
-		t.Run("Traces RestClient client /jtraceA", func(t *testing.T) {
-			ensureTracesMatch(t, "jtraceA")
-		})
+	// test now with a different version of Java thread pool
+	for i := 0; i < 10; i++ {
+		doHTTPGet(t, "http://localhost:8086/jtraceB", 200)
 	}
+
+	t.Run("Traces RestClient client /jtraceB", func(t *testing.T) {
+		ensureTracesMatch(t, "jtraceB")
+	})
 }
 
 func ensureTracesMatch(t *testing.T, urlPath string) {
@@ -838,7 +874,7 @@ func ensureTracesMatch(t *testing.T, urlPath string) {
 	// Ensure all 5 traces have proper full chain Java -> Node
 	for _, trace := range multipleTraces {
 		// Check the information of the java parent span
-		res := trace.FindByOperationName("GET /" + urlPath)
+		res := trace.FindByOperationName("GET /"+urlPath, "server")
 		require.Len(t, res, 1)
 		parent := res[0]
 		require.NotEmpty(t, parent.TraceID)
@@ -858,7 +894,7 @@ func ensureTracesMatch(t *testing.T, urlPath string) {
 		assert.Empty(t, sd, sd.String())
 
 		// Check the information of the nodejs parent span
-		res = trace.FindByOperationName("GET /traceme")
+		res = trace.FindByOperationName("GET /traceme", "server")
 		require.Len(t, res, 1)
 		parent = res[0]
 		require.NotEmpty(t, parent.TraceID)
@@ -904,7 +940,7 @@ func testNestedHTTPSTracesKProbes(t *testing.T) {
 	}, test.Interval(100*time.Millisecond))
 
 	// Check the information of the python parent span
-	res := trace.FindByOperationName("GET /tracemetoo")
+	res := trace.FindByOperationName("GET /tracemetoo", "server")
 	require.Len(t, res, 1)
 	parent := res[0]
 	require.NotEmpty(t, parent.TraceID)
@@ -924,7 +960,7 @@ func testNestedHTTPSTracesKProbes(t *testing.T) {
 	assert.Empty(t, sd, sd.String())
 
 	// Check the information of the rails parent span
-	res = trace.FindByOperationName("GET /users")
+	res = trace.FindByOperationName("GET /users", "server")
 	require.Len(t, res, 1)
 	parent = res[0]
 	require.NotEmpty(t, parent.TraceID)
@@ -968,7 +1004,7 @@ func testHTTPTracesNestedSelfCalls(t *testing.T) {
 	}, test.Interval(100*time.Millisecond))
 
 	// Check the information of the parent span
-	res := trace.FindByOperationName("GET /api1")
+	res := trace.FindByOperationName("GET /api1", "")
 	require.Len(t, res, 1)
 	server := res[0]
 	require.NotEmpty(t, server.TraceID)
@@ -1053,7 +1089,7 @@ func testHTTPTracesNestedNodeJSDistCalls(t *testing.T) {
 	}, test.Interval(100*time.Millisecond))
 
 	// Check the information of the parent span
-	res := trace.FindByOperationName("GET /b")
+	res := trace.FindByOperationName("GET /b", "")
 	require.Len(t, res, 1)
 	server := res[0]
 	require.NotEmpty(t, server.TraceID)

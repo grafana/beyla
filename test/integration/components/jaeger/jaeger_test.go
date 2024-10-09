@@ -17,8 +17,8 @@ func TestFind(t *testing.T) {
 		Tag{Key: "http.target", Type: "string", Value: "/holanena"})
 	require.Len(t, traces, 1)
 	trace := &traces[0]
-	assert.Empty(t, trace.FindByOperationName("hola"))
-	sp := trace.FindByOperationName("processing")
+	assert.Empty(t, trace.FindByOperationName("hola", ""))
+	sp := trace.FindByOperationName("processing", "")
 	require.Len(t, sp, 1)
 	assert.Equal(t, "processing", sp[0].OperationName)
 	parent, ok := trace.ParentOf(&sp[0])

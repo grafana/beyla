@@ -80,7 +80,7 @@ func testREDMetricsForRustHTTPLibrary(t *testing.T, url, comm, namespace string,
 	}, test.Interval(100*time.Millisecond))
 
 	// Check the information of the parent span
-	res := trace.FindByOperationName("GET /trace")
+	res := trace.FindByOperationName("GET /trace", "server")
 	require.Len(t, res, 1)
 	parent := res[0]
 	require.NotEmpty(t, parent.TraceID)

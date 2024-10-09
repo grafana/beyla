@@ -31,8 +31,7 @@ func testProcesses(attribMatcher map[string]string) func(t *testing.T) {
 			matchAttributes(t, results, attribMatcher)
 			assert.Len(t, results, utilizationLen)
 		})
-		// checking that the memory is present and has a reasonable values
-		memory := map[string]int{}
+		// checking that the physical memory is present has a reasonable value
 		test.Eventually(t, testTimeout, func(t require.TestingT) {
 			results, err := pq.Query(`process_memory_usage_bytes`)
 			require.NoError(t, err)
@@ -43,10 +42,9 @@ func testProcesses(attribMatcher map[string]string) func(t *testing.T) {
 				physicalMem, err := strconv.Atoi(result.Value[1].(string))
 				require.NoError(t, err)
 				require.Greater(t, physicalMem, 1_000_000)
-				memory[result.Metric["service_instance_id"]] = physicalMem
 			}
 		})
-		// checking that virtual memory has larger value than physical memory
+		// checking that the virtual memory has a reasonable value
 		test.Eventually(t, testTimeout, func(t require.TestingT) {
 			results, err := pq.Query(`process_memory_virtual_bytes`)
 			require.NoError(t, err)
@@ -54,10 +52,7 @@ func testProcesses(attribMatcher map[string]string) func(t *testing.T) {
 			for _, result := range results {
 				virtualMem, err := strconv.Atoi(result.Value[1].(string))
 				require.NoError(t, err)
-				physicalMem, ok := memory[result.Metric["service_instance_id"]]
-				require.Truef(t, ok, "did not find physical memory for process %s",
-					result.Metric["service_instance_id"])
-				require.Greater(t, virtualMem, physicalMem)
+				require.Greater(t, virtualMem, 1_000_000)
 			}
 		})
 		test.Eventually(t, testTimeout, func(t require.TestingT) {

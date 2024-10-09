@@ -6,7 +6,6 @@
 #include "bpf_dbg.h"
 #include "pid.h"
 #include "ringbuf.h"
-#include "nodejs.h"
 #include "map_sizing.h"
 
 struct {

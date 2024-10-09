@@ -78,7 +78,7 @@ func (ps *Collector) Run(out chan<- []*Status) {
 	for {
 		select {
 		case <-ps.ctx.Done():
-			ps.log.Debug("exiting")
+			// exiting
 		case spans := <-newPids:
 			// updating PIDs map with spans information
 			for i := range spans {

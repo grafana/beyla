@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -15,10 +16,13 @@ import (
 	"github.com/mariomac/pipes/pipe"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.25.0"
 	"go.opentelemetry.io/otel/trace"
 
@@ -597,6 +601,77 @@ func TestGenerateTracesAttributes(t *testing.T) {
 		attrs := rs.Resource().Attributes()
 		ensureTraceStrAttr(t, attrs, attribute.Key("deployment.environment"), "productions")
 		ensureTraceStrAttr(t, attrs, attribute.Key("source.upstream"), "beyla")
+	})
+}
+
+func TestTraceSampling(t *testing.T) {
+	spans := []request.Span{}
+	start := time.Now()
+	for i := 0; i < 10; i++ {
+		span := request.Span{Type: request.EventTypeHTTP,
+			RequestStart: start.UnixNano(),
+			Start:        start.Add(time.Second).UnixNano(),
+			End:          start.Add(3 * time.Second).UnixNano(),
+			Method:       "GET",
+			Route:        "/test" + strconv.Itoa(i),
+			Status:       200,
+			ServiceID:    svc.ID{},
+			TraceID:      randomTraceID(),
+		}
+		spans = append(spans, span)
+	}
+
+	receiver := makeTracesTestReceiver([]string{"http"})
+	envResourceAttrs := []attribute.KeyValue{}
+
+	t.Run("test sample all", func(t *testing.T) {
+		sampler := sdktrace.AlwaysSample()
+		attrs := make(map[attr.Name]struct{})
+
+		tr := []ptrace.Traces{}
+
+		exporter := TestExporter{
+			collector: func(td ptrace.Traces) {
+				tr = append(tr, td)
+			},
+		}
+
+		receiver.processSpans(exporter, spans, attrs, envResourceAttrs, sampler)
+		assert.Equal(t, 10, len(tr))
+	})
+
+	t.Run("test sample nothing", func(t *testing.T) {
+		sampler := sdktrace.NeverSample()
+		attrs := make(map[attr.Name]struct{})
+
+		tr := []ptrace.Traces{}
+
+		exporter := TestExporter{
+			collector: func(td ptrace.Traces) {
+				tr = append(tr, td)
+			},
+		}
+
+		receiver.processSpans(exporter, spans, attrs, envResourceAttrs, sampler)
+		assert.Equal(t, 0, len(tr))
+	})
+
+	t.Run("test sample 1/10th", func(t *testing.T) {
+		sampler := sdktrace.TraceIDRatioBased(0.1)
+		attrs := make(map[attr.Name]struct{})
+
+		tr := []ptrace.Traces{}
+
+		exporter := TestExporter{
+			collector: func(td ptrace.Traces) {
+				tr = append(tr, td)
+			},
+		}
+
+		receiver.processSpans(exporter, spans, attrs, envResourceAttrs, sampler)
+		// The result is likely 0,1,2 with 1/10th, but we don't want
+		// to maybe fail if it accidentally it randomly becomes 3
+		assert.GreaterOrEqual(t, 3, len(tr))
 	})
 }
 
@@ -1231,4 +1306,25 @@ func generateTracesForSpans(t *testing.T, tr *tracesOTELReceiver, spans []reques
 	}
 
 	return res
+}
+
+type TestExporter struct {
+	collector func(td ptrace.Traces)
+}
+
+func (e TestExporter) Start(_ context.Context, _ component.Host) error {
+	return nil
+}
+
+func (e TestExporter) Shutdown(_ context.Context) error {
+	return nil
+}
+
+func (e TestExporter) ConsumeTraces(_ context.Context, td ptrace.Traces) error {
+	e.collector(td)
+	return nil
+}
+
+func (e TestExporter) Capabilities() consumer.Capabilities {
+	return consumer.Capabilities{}
 }

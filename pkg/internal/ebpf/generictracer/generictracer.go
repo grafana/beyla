@@ -391,7 +391,8 @@ func (p *Tracer) AddModuleCloser(id uint64, c ...io.Closer) {
 		instrumentedLibs[id] = libModule{closers: c, references: 0}
 		p.log.Debug("added new module closer", "ino", id, "module", module)
 	} else {
-		closers := append(module.closers, c...)
+		closers := module.closers
+		closers = append(closers, c...)
 		mod := libModule{closers: closers, references: module.references}
 		instrumentedLibs[id] = mod
 		p.log.Debug("added module closer", "ino", id, "module", module)

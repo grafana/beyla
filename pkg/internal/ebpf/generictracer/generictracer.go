@@ -368,11 +368,12 @@ func (p *Tracer) UnlinkInstrumentedLib(id uint64) {
 	libsMux.Lock()
 	defer libsMux.Unlock()
 	if module, ok := instrumentedLibs[id]; ok {
-		p.log.Debug("Unlinking instrumented Lib, before state:", "ino", id, "module", module)
+		p.log.Debug("Unlinking instrumented Lib - before state", "ino", id, "module", module)
 		if module.references > 1 {
 			instrumentedLibs[id] = libModule{closers: module.closers, references: module.references - 1}
 		} else {
 			for _, c := range module.closers {
+				p.log.Debug("Closing", "closable", c)
 				if err := c.Close(); err != nil {
 					p.log.Debug("Unable to close on unlink", "closable", c)
 				}
@@ -383,15 +384,17 @@ func (p *Tracer) UnlinkInstrumentedLib(id uint64) {
 }
 
 func (p *Tracer) AddModuleCloser(id uint64, c ...io.Closer) {
+	libsMux.Lock()
+	defer libsMux.Unlock()
 	module, ok := instrumentedLibs[id]
-	if ok {
+	if !ok {
 		instrumentedLibs[id] = libModule{closers: c, references: 0}
-		p.log.Debug("Recorded instrumented Lib", "ino", id, "module", module)
+		p.log.Debug("added new module closer", "ino", id, "module", module)
 	} else {
-		module.closers = append(module.closers, c...)
-		module = libModule{closers: module.closers, references: module.references}
-		instrumentedLibs[id] = module
-		p.log.Debug("Recorded instrumented Lib", "ino", id, "module", module)
+		closers := append(module.closers, c...)
+		mod := libModule{closers: closers, references: module.references}
+		instrumentedLibs[id] = mod
+		p.log.Debug("added module closer", "ino", id, "module", module)
 	}
 }
 
@@ -401,7 +404,7 @@ func (p *Tracer) AlreadyInstrumentedLib(id uint64) bool {
 
 	module, ok := instrumentedLibs[id]
 
-	p.log.Debug("Already instrumented Lib", "ino", id, "module", module)
+	p.log.Debug("checking already instrumented Lib", "ino", id, "module", module)
 	return ok
 }
 

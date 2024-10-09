@@ -169,6 +169,39 @@ func (tr *tracesOTELReceiver) spanDiscarded(span *request.Span) bool {
 	return span.IgnoreTraces() || span.ServiceID.ExportsOTelTraces() || !tr.acceptSpan(span)
 }
 
+func (tr *tracesOTELReceiver) processSpans(exp exporter.Traces, spans []request.Span, traceAttrs map[attr.Name]struct{}, sampler trace.Sampler) {
+	for i := range spans {
+		span := &spans[i]
+		if span.InternalSignal() {
+			continue
+		}
+		if tr.spanDiscarded(span) {
+			continue
+		}
+
+		finalAttrs := traceAttributes(span, traceAttrs)
+
+		sr := sampler.ShouldSample(trace.SamplingParameters{
+			ParentContext: tr.ctx,
+			Name:          span.TraceName(),
+			TraceID:       span.TraceID,
+			Kind:          spanKind(span),
+			Attributes:    finalAttrs,
+		})
+
+		if sr.Decision == trace.Drop {
+			continue
+		}
+
+		envResourceAttrs := ResourceAttrsFromEnv(&span.ServiceID)
+		traces := GenerateTracesWithAttributes(span, tr.ctxInfo.HostID, finalAttrs, envResourceAttrs)
+		err := exp.ConsumeTraces(tr.ctx, traces)
+		if err != nil {
+			slog.Error("error sending trace to consumer", "error", err)
+		}
+	}
+}
+
 func (tr *tracesOTELReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], error) {
 	if !tr.cfg.Enabled() {
 		return pipe.IgnoreFinal[[]request.Span](), nil
@@ -201,36 +234,7 @@ func (tr *tracesOTELReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], err
 		sampler := tr.cfg.Sampler.Implementation()
 
 		for spans := range in {
-			for i := range spans {
-				span := &spans[i]
-				if span.InternalSignal() {
-					continue
-				}
-				if tr.spanDiscarded(span) {
-					continue
-				}
-
-				finalAttrs := traceAttributes(span, traceAttrs)
-
-				sr := sampler.ShouldSample(trace.SamplingParameters{
-					ParentContext: tr.ctx,
-					Name:          span.TraceName(),
-					TraceID:       span.TraceID,
-					Kind:          spanKind(span),
-					Attributes:    finalAttrs,
-				})
-
-				if sr.Decision == trace.Drop {
-					continue
-				}
-
-				envResourceAttrs := ResourceAttrsFromEnv(&span.ServiceID)
-				traces := GenerateTracesWithAttributes(span, tr.ctxInfo.HostID, finalAttrs, envResourceAttrs)
-				err := exp.ConsumeTraces(tr.ctx, traces)
-				if err != nil {
-					slog.Error("error sending trace to consumer", "error", err)
-				}
-			}
+			tr.processSpans(exp, spans, traceAttrs, sampler)
 		}
 	}, nil
 }

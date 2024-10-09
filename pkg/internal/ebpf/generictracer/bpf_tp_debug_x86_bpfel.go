@@ -240,6 +240,9 @@ type bpf_tp_debugSpecs struct {
 type bpf_tp_debugProgramSpecs struct {
 	AppEgress               *ebpf.ProgramSpec `ebpf:"app_egress"`
 	AppIngress              *ebpf.ProgramSpec `ebpf:"app_ingress"`
+	AsyncReset              *ebpf.ProgramSpec `ebpf:"async_reset"`
+	AsyncResetRet           *ebpf.ProgramSpec `ebpf:"async_reset_ret"`
+	EmitAsyncInit           *ebpf.ProgramSpec `ebpf:"emit_async_init"`
 	KprobeSysExit           *ebpf.ProgramSpec `ebpf:"kprobe_sys_exit"`
 	KprobeTcpCleanupRbuf    *ebpf.ProgramSpec `ebpf:"kprobe_tcp_cleanup_rbuf"`
 	KprobeTcpClose          *ebpf.ProgramSpec `ebpf:"kprobe_tcp_close"`
@@ -284,6 +287,7 @@ type bpf_tp_debugMapSpecs struct {
 	ActiveSslHandshakes     *ebpf.MapSpec `ebpf:"active_ssl_handshakes"`
 	ActiveSslReadArgs       *ebpf.MapSpec `ebpf:"active_ssl_read_args"`
 	ActiveSslWriteArgs      *ebpf.MapSpec `ebpf:"active_ssl_write_args"`
+	AsyncResetArgs          *ebpf.MapSpec `ebpf:"async_reset_args"`
 	CloneMap                *ebpf.MapSpec `ebpf:"clone_map"`
 	ConnectionMetaMem       *ebpf.MapSpec `ebpf:"connection_meta_mem"`
 	DebugEvents             *ebpf.MapSpec `ebpf:"debug_events"`
@@ -343,6 +347,7 @@ type bpf_tp_debugMaps struct {
 	ActiveSslHandshakes     *ebpf.Map `ebpf:"active_ssl_handshakes"`
 	ActiveSslReadArgs       *ebpf.Map `ebpf:"active_ssl_read_args"`
 	ActiveSslWriteArgs      *ebpf.Map `ebpf:"active_ssl_write_args"`
+	AsyncResetArgs          *ebpf.Map `ebpf:"async_reset_args"`
 	CloneMap                *ebpf.Map `ebpf:"clone_map"`
 	ConnectionMetaMem       *ebpf.Map `ebpf:"connection_meta_mem"`
 	DebugEvents             *ebpf.Map `ebpf:"debug_events"`
@@ -385,6 +390,7 @@ func (m *bpf_tp_debugMaps) Close() error {
 		m.ActiveSslHandshakes,
 		m.ActiveSslReadArgs,
 		m.ActiveSslWriteArgs,
+		m.AsyncResetArgs,
 		m.CloneMap,
 		m.ConnectionMetaMem,
 		m.DebugEvents,
@@ -422,6 +428,9 @@ func (m *bpf_tp_debugMaps) Close() error {
 type bpf_tp_debugPrograms struct {
 	AppEgress               *ebpf.Program `ebpf:"app_egress"`
 	AppIngress              *ebpf.Program `ebpf:"app_ingress"`
+	AsyncReset              *ebpf.Program `ebpf:"async_reset"`
+	AsyncResetRet           *ebpf.Program `ebpf:"async_reset_ret"`
+	EmitAsyncInit           *ebpf.Program `ebpf:"emit_async_init"`
 	KprobeSysExit           *ebpf.Program `ebpf:"kprobe_sys_exit"`
 	KprobeTcpCleanupRbuf    *ebpf.Program `ebpf:"kprobe_tcp_cleanup_rbuf"`
 	KprobeTcpClose          *ebpf.Program `ebpf:"kprobe_tcp_close"`
@@ -456,6 +465,9 @@ func (p *bpf_tp_debugPrograms) Close() error {
 	return _Bpf_tp_debugClose(
 		p.AppEgress,
 		p.AppIngress,
+		p.AsyncReset,
+		p.AsyncResetRet,
+		p.EmitAsyncInit,
 		p.KprobeSysExit,
 		p.KprobeTcpCleanupRbuf,
 		p.KprobeTcpClose,

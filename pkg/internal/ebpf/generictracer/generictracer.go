@@ -33,8 +33,13 @@ import (
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../../bpf/generic_tracer.c -- -I../../../../bpf/headers -DBPF_DEBUG
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_tp_debug ../../../../bpf/generic_tracer.c -- -I../../../../bpf/headers -DBPF_DEBUG -DBPF_TRACEPARENT
 
+type libModule struct {
+	references uint64
+	closers    []io.Closer
+}
+
 // Hold onto Linux inode numbers of files that are already instrumented, e.g. libssl.so.3
-var instrumentedLibs = make(map[uint64]bool)
+var instrumentedLibs = make(map[uint64]libModule)
 var libsMux sync.Mutex
 
 type Tracer struct {
@@ -191,6 +196,11 @@ func (p *Tracer) Constants() map[string]any {
 		m["high_request_volume"] = uint32(1)
 	}
 
+	// TODO: These need to be moved to RegisterOffsets if they change position
+	// based on the NodeJS runtime
+	m["async_wrap_async_id_off"] = int32(0x28)
+	m["async_wrap_trigger_async_id_off"] = int32(0x30)
+
 	return m
 }
 
@@ -308,6 +318,30 @@ func (p *Tracer) UProbes() map[string]map[string]ebpfcommon.FunctionPrograms {
 				Start:    p.bpfObjects.UprobeSslShutdown,
 			},
 		},
+		"node": {
+			"_ZN4node9AsyncWrap13EmitAsyncInitEPNS_11EnvironmentEN2v85LocalINS3_6ObjectEEENS4_INS3_6StringEEEdd": {
+				Required: false,
+				Start:    p.bpfObjects.EmitAsyncInit,
+			},
+			"_ZN4node13EmitAsyncInitEPN2v87IsolateENS0_5LocalINS0_6ObjectEEENS3_INS0_6StringEEEd": {
+				Required: false,
+				Start:    p.bpfObjects.EmitAsyncInit,
+			},
+			"_ZN4node13EmitAsyncInitEPN2v87IsolateENS0_5LocalINS0_6ObjectEEEPKcd": {
+				Required: false,
+				Start:    p.bpfObjects.EmitAsyncInit,
+			},
+			"_ZN4node9AsyncWrap10AsyncResetEN2v85LocalINS1_6ObjectEEEdb": {
+				Required: false,
+				Start:    p.bpfObjects.AsyncReset,
+				End:      p.bpfObjects.AsyncResetRet,
+			},
+			"_ZN4node9AsyncWrap10AsyncResetERKN2v820FunctionCallbackInfoINS1_5ValueEEE": {
+				Required: false,
+				Start:    p.bpfObjects.AsyncReset,
+				End:      p.bpfObjects.AsyncResetRet,
+			},
+		},
 	}
 }
 
@@ -318,15 +352,56 @@ func (p *Tracer) SocketFilters() []*ebpf.Program {
 func (p *Tracer) RecordInstrumentedLib(id uint64) {
 	libsMux.Lock()
 	defer libsMux.Unlock()
-	instrumentedLibs[id] = true
+
+	module, ok := instrumentedLibs[id]
+	if ok {
+		instrumentedLibs[id] = libModule{closers: module.closers, references: module.references + 1}
+		p.log.Debug("Recorded instrumented Lib", "ino", id, "module", module)
+	} else {
+		module = libModule{references: 1}
+		instrumentedLibs[id] = module
+		p.log.Debug("Recorded instrumented Lib", "ino", id, "module", module)
+	}
+}
+
+func (p *Tracer) UnlinkInstrumentedLib(id uint64) {
+	libsMux.Lock()
+	defer libsMux.Unlock()
+	if module, ok := instrumentedLibs[id]; ok {
+		p.log.Debug("Unlinking instrumented Lib, before state:", "ino", id, "module", module)
+		if module.references > 1 {
+			instrumentedLibs[id] = libModule{closers: module.closers, references: module.references - 1}
+		} else {
+			for _, c := range module.closers {
+				if err := c.Close(); err != nil {
+					p.log.Debug("Unable to close on unlink", "closable", c)
+				}
+			}
+			delete(instrumentedLibs, id)
+		}
+	}
+}
+
+func (p *Tracer) AddModuleCloser(id uint64, c ...io.Closer) {
+	module, ok := instrumentedLibs[id]
+	if ok {
+		instrumentedLibs[id] = libModule{closers: c, references: 0}
+		p.log.Debug("Recorded instrumented Lib", "ino", id, "module", module)
+	} else {
+		module.closers = append(module.closers, c...)
+		module = libModule{closers: module.closers, references: module.references}
+		instrumentedLibs[id] = module
+		p.log.Debug("Recorded instrumented Lib", "ino", id, "module", module)
+	}
 }
 
 func (p *Tracer) AlreadyInstrumentedLib(id uint64) bool {
 	libsMux.Lock()
 	defer libsMux.Unlock()
 
-	_, ok := instrumentedLibs[id]
+	module, ok := instrumentedLibs[id]
 
+	p.log.Debug("Already instrumented Lib", "ino", id, "module", module)
 	return ok
 }
 

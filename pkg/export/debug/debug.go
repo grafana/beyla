@@ -124,7 +124,7 @@ func traceparent(span *request.Span) string {
 	if !trace.TraceID(span.TraceID).IsValid() {
 		return ""
 	}
-	return fmt.Sprintf("00-%s-%s-%02x", trace.TraceID(span.TraceID).String(), trace.SpanID(span.ParentSpanID).String(), span.Flags)
+	return fmt.Sprintf("00-%s-%s[%s]-%02x", trace.TraceID(span.TraceID).String(), trace.SpanID(span.SpanID).String(), trace.SpanID(span.ParentSpanID).String(), span.Flags)
 }
 
 func makeCounterPrinter() pipe.FinalFunc[[]request.Span] {

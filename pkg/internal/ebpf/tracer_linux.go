@@ -31,6 +31,7 @@ type instrumenter struct {
 	offsets   *goexec.Offsets
 	exe       *link.Executable
 	closables []io.Closer
+	modules   map[uint64]struct{}
 }
 
 func NewProcessTracer(cfg *beyla.Config, tracerType ProcessTracerType, programs []Tracer) *ProcessTracer {
@@ -83,6 +84,8 @@ func (pt *ProcessTracer) loadTracers() error {
 
 	var log = ptlog()
 
+	i := instrumenter{} // dummy instrumenter to setup the kprobes, socket filters and tracepoint probes
+
 	for _, p := range pt.Programs {
 		plog := log.With("program", reflect.TypeOf(p))
 		plog.Debug("loading eBPF program", "PinPath", pt.PinPath, "type", pt.Type)
@@ -122,40 +125,9 @@ func (pt *ProcessTracer) loadTracers() error {
 
 		// Setup any traffic control probes
 		p.SetupTC()
-	}
-
-	btf.FlushKernelSpec()
-
-	return nil
-}
-
-func (pt *ProcessTracer) Init() error {
-	return pt.loadTracers()
-}
-
-func (pt *ProcessTracer) NewExecutable(exe *link.Executable, ie *Instrumentable) error {
-	i := instrumenter{
-		exe:     exe,
-		offsets: ie.Offsets, // this is needed for the function offsets, not fields
-	}
-
-	for _, p := range pt.Programs {
-		p.RegisterOffsets(ie.FileInfo, ie.Offsets)
-
-		// Go style Uprobes
-		if err := i.goprobes(p); err != nil {
-			printVerifierErrorInfo(err)
-			return err
-		}
 
 		// Kprobes to be used for native instrumentation points
 		if err := i.kprobes(p); err != nil {
-			printVerifierErrorInfo(err)
-			return err
-		}
-
-		// Uprobes to be used for native module instrumentation points
-		if err := i.uprobes(ie.FileInfo.Pid, p); err != nil {
 			printVerifierErrorInfo(err)
 			return err
 		}
@@ -173,6 +145,54 @@ func (pt *ProcessTracer) NewExecutable(exe *link.Executable, ie *Instrumentable)
 		}
 	}
 
+	btf.FlushKernelSpec()
+
+	return nil
+}
+
+func (pt *ProcessTracer) Init() error {
+	return pt.loadTracers()
+}
+
+func (pt *ProcessTracer) NewExecutableInstance(ie *Instrumentable) error {
+	if i, ok := pt.Instrumentables[ie.FileInfo.Ino]; ok {
+		for _, p := range pt.Programs {
+			// Uprobes to be used for native module instrumentation points
+			if err := i.uprobes(ie.FileInfo.Pid, p); err != nil {
+				printVerifierErrorInfo(err)
+				return err
+			}
+		}
+	} else {
+		pt.log.Warn("Attempted to update non-existent tracer", "path", ie.FileInfo.CmdExePath, "pid", ie.FileInfo.Pid)
+	}
+
+	return nil
+}
+
+func (pt *ProcessTracer) NewExecutable(exe *link.Executable, ie *Instrumentable) error {
+	i := instrumenter{
+		exe:     exe,
+		offsets: ie.Offsets, // this is needed for the function offsets, not fields
+		modules: map[uint64]struct{}{},
+	}
+
+	for _, p := range pt.Programs {
+		p.RegisterOffsets(ie.FileInfo, ie.Offsets)
+
+		// Go style Uprobes
+		if err := i.goprobes(p); err != nil {
+			printVerifierErrorInfo(err)
+			return err
+		}
+
+		// Uprobes to be used for native module instrumentation points
+		if err := i.uprobes(ie.FileInfo.Pid, p); err != nil {
+			printVerifierErrorInfo(err)
+			return err
+		}
+	}
+
 	pt.Instrumentables[ie.FileInfo.Ino] = &i
 
 	return nil
@@ -185,6 +205,12 @@ func (pt *ProcessTracer) UnlinkExecutable(info *exec.FileInfo) {
 				pt.log.Debug("Unable to close on unlink", "closable", c)
 			}
 		}
+		for ino := range i.modules {
+			for _, p := range pt.Programs {
+				p.UnlinkInstrumentedLib(ino)
+			}
+		}
+		delete(pt.Instrumentables, info.Ino)
 	} else {
 		pt.log.Warn("Unable to find executable to unlink", "info", info)
 	}

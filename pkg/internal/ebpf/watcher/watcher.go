@@ -66,6 +66,8 @@ func (p *Watcher) AddCloser(c ...io.Closer) {
 	p.closers = append(p.closers, c...)
 }
 
+func (p *Watcher) AddModuleCloser(_ uint64, _ ...io.Closer) {}
+
 func (p *Watcher) KProbes() map[string]ebpfcommon.FunctionPrograms {
 	kprobes := map[string]ebpfcommon.FunctionPrograms{
 		"sys_bind": {

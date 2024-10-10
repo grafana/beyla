@@ -17,12 +17,11 @@ import (
 )
 
 type MetadataConfig struct {
-	Enable                kubeflags.EnableFlag
-	DisabledInformers     []string
-	KubeConfigPath        string
-	EnableNetworkMetadata bool
-	SyncTimeout           time.Duration
-	ResyncPeriod          time.Duration
+	Enable            kubeflags.EnableFlag
+	DisabledInformers []string
+	KubeConfigPath    string
+	SyncTimeout       time.Duration
+	ResyncPeriod      time.Duration
 }
 
 type MetadataProvider struct {
@@ -35,7 +34,6 @@ type MetadataProvider struct {
 
 	enable            atomic.Value
 	disabledInformers maps.Bits
-	enableNetworkMeta bool
 }
 
 func NewMetadataProvider(config MetadataConfig) *MetadataProvider {
@@ -46,7 +44,6 @@ func NewMetadataProvider(config MetadataConfig) *MetadataProvider {
 		config.ResyncPeriod = defaultResyncTime
 	}
 	mp := &MetadataProvider{
-		enableNetworkMeta: config.EnableNetworkMetadata,
 		kubeConfigPath:    config.KubeConfigPath,
 		syncTimeout:       config.SyncTimeout,
 		resyncPeriod:      config.ResyncPeriod,
@@ -106,23 +103,12 @@ func (mp *MetadataProvider) Get(ctx context.Context) (*Metadata, error) {
 		return nil, fmt.Errorf("kubernetes client can't be initialized: %w", err)
 	}
 
-	// restricting the node name of the informers for App O11y, as we will only decorate
-	// instances running on the same node that Beyla
-	// however, for network o11y, we need to get all the nodes so the node name restriction
-	// would remain unset
-	restrictNodeName := ""
-	if !mp.enableNetworkMeta {
-		restrictNodeName, err = mp.CurrentNodeName(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("can't get current node name: %w", err)
-		}
-	}
 	mp.metadata = &Metadata{
 		disabledInformers: mp.disabledInformers,
 		SyncTimeout:       mp.syncTimeout,
 		resyncPeriod:      mp.resyncPeriod,
 	}
-	if err := mp.metadata.InitFromClient(ctx, kubeClient, restrictNodeName); err != nil {
+	if err := mp.metadata.InitFromClient(ctx, kubeClient); err != nil {
 		return nil, fmt.Errorf("can't initialize kubernetes metadata: %w", err)
 	}
 	return mp.metadata, nil

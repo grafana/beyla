@@ -33,6 +33,7 @@ func (p *Tracer) UProbes() map[string]map[string]ebpfcommon.FunctionPrograms { r
 func (p *Tracer) Tracepoints() map[string]ebpfcommon.FunctionPrograms        { return nil }
 func (p *Tracer) SocketFilters() []*ebpf.Program                             { return nil }
 func (p *Tracer) RecordInstrumentedLib(_ uint64)                             {}
+func (p *Tracer) UnlinkInstrumentedLib(_ uint64)                             {}
 func (p *Tracer) AlreadyInstrumentedLib(_ uint64) bool                       { return false }
 func (p *Tracer) Run(_ context.Context, _ chan<- []request.Span)             {}
 func (p *Tracer) Constants() map[string]any                                  { return nil }

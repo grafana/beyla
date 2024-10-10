@@ -130,31 +130,61 @@ func (i *instrumenter) uprobes(pid int32, p Tracer) error {
 		return nil
 	}
 
+	exePath := fmt.Sprintf("/proc/%d/exe", pid)
+	exeIno := uint64(0)
+
+	info, err := os.Stat(exePath)
+	if err == nil {
+		stat, ok := info.Sys().(*syscall.Stat_t)
+		if ok {
+			exeIno = stat.Ino
+		} else {
+			return fmt.Errorf("can't extract executable stats")
+		}
+	} else {
+		return err
+	}
+
 	for lib, pMap := range p.UProbes() {
 		log.Debug("finding library", "lib", lib)
 		libMap := exec.LibPath(lib, maps)
-		instrPath := fmt.Sprintf("/proc/%d/exe", pid)
+		instrPath := exePath
 
-		ino := uint64(0)
+		instrumentedIno := uint64(0)
+		sharedLib := false
 
 		if libMap != nil {
 			log.Debug("instrumenting library", "lib", lib, "path", libMap.Pathname)
 			// we do this to make sure instrumenting something like libssl.so works with Docker
-			instrPath = fmt.Sprintf("/proc/%d/map_files/%x-%x", pid, libMap.StartAddr, libMap.EndAddr)
+			libInstrPath := fmt.Sprintf("/proc/%d/map_files/%x-%x", pid, libMap.StartAddr, libMap.EndAddr)
 
-			info, err := os.Stat(instrPath)
+			info, err := os.Stat(libInstrPath)
 			if err == nil {
 				stat, ok := info.Sys().(*syscall.Stat_t)
-				if ok {
-					if p.AlreadyInstrumentedLib(stat.Ino) {
-						log.Debug("library already instrumented", "lib", lib, "path", libMap.Pathname, "ino", stat.Ino)
+				if ok && stat.Ino != exeIno {
+					// We've already attached probes to this shared library for this executable
+					if i.hasModule(stat.Ino) {
+						log.Debug("already instrumented module, ignoring...", "path", libInstrPath, "ino", stat.Ino)
 						continue
 					}
-					ino = stat.Ino
-					log.Debug("found inode number, recording this instrumentation if successful", "lib", lib, "path", libMap.Pathname, "ino", ino)
+					// Check if this is a library used by multiple executables
+					if p.AlreadyInstrumentedLib(stat.Ino) {
+						log.Debug("library already instrumented", "lib", lib, "path", libMap.Pathname, "ino", stat.Ino)
+						i.addModule(stat.Ino)             // remember this mapping for linking/unlinking for this executable instance
+						p.RecordInstrumentedLib(stat.Ino) // record one more use of this shared library
+						continue
+					}
+					// override the instrumented path to be the shared library
+					instrPath = libInstrPath
+					sharedLib = true
+					instrumentedIno = stat.Ino
+					log.Debug("found inode number, recording this instrumentation if successful", "lib", lib, "path", libMap.Pathname, "ino", stat.Ino)
 				}
 			}
-		} else {
+		}
+
+		// We didn't find this library in the shared libraries, look up for the symbols in the executable directly
+		if !sharedLib { // default executable instrumented path
 			// E.g. NodeJS uses OpenSSL but they ship it as statically linked in the node binary
 			log.Debug(fmt.Sprintf("%s not linked, attempting to instrument executable", lib), "path", instrPath)
 		}
@@ -167,7 +197,7 @@ func (i *instrumenter) uprobes(pid int32, p Tracer) error {
 
 		for funcName, funcPrograms := range pMap {
 			log.Debug("going to instrument function", "function", funcName, "programs", funcPrograms)
-			if err := i.uprobe(funcName, libExe, funcPrograms); err != nil {
+			if err := i.uprobe(p, instrumentedIno, sharedLib, funcName, libExe, funcPrograms); err != nil {
 				if funcPrograms.Required {
 					return fmt.Errorf("instrumenting function %q: %w", funcName, err)
 				}
@@ -175,24 +205,29 @@ func (i *instrumenter) uprobes(pid int32, p Tracer) error {
 				// error will be common here since this could be no openssl loaded
 				log.Debug("error instrumenting uprobe", "function", funcName, "error", err)
 			}
-			p.AddCloser(i.closables...)
 		}
 
-		if ino != 0 {
-			p.RecordInstrumentedLib(ino)
+		if sharedLib {
+			// We bump the count of uses of the underlying shared library with a new executable
+			p.RecordInstrumentedLib(instrumentedIno)
+			i.addModule(instrumentedIno)
 		}
 	}
 
 	return nil
 }
 
-func (i *instrumenter) uprobe(funcName string, exe *link.Executable, probe ebpfcommon.FunctionPrograms) error {
+func (i *instrumenter) uprobe(p Tracer, instrumentedIno uint64, sharedLib bool, funcName string, exe *link.Executable, probe ebpfcommon.FunctionPrograms) error {
 	if probe.Start != nil {
 		up, err := exe.Uprobe(funcName, probe.Start, nil)
 		if err != nil {
 			return fmt.Errorf("setting uprobe: %w", err)
 		}
-		i.closables = append(i.closables, up)
+		if sharedLib {
+			p.AddModuleCloser(instrumentedIno, up)
+		} else {
+			i.closables = append(i.closables, up)
+		}
 	}
 
 	if probe.End != nil {
@@ -200,7 +235,11 @@ func (i *instrumenter) uprobe(funcName string, exe *link.Executable, probe ebpfc
 		if err != nil {
 			return fmt.Errorf("setting uretprobe: %w", err)
 		}
-		i.closables = append(i.closables, up)
+		if sharedLib {
+			p.AddModuleCloser(instrumentedIno, up)
+		} else {
+			i.closables = append(i.closables, up)
+		}
 	}
 
 	return nil
@@ -259,6 +298,17 @@ func (i *instrumenter) tracepoint(funcName string, programs ebpfcommon.FunctionP
 	}
 
 	return nil
+}
+
+func (i *instrumenter) hasModule(ino uint64) bool {
+	slog.Debug("looking up module", "instrumenter", i, "ino", ino)
+	_, ok := i.modules[ino]
+	return ok
+}
+
+func (i *instrumenter) addModule(ino uint64) {
+	slog.Debug("remembering module for", "instrumenter", i, "ino", ino)
+	i.modules[ino] = struct{}{}
 }
 
 func isLittleEndian() bool {

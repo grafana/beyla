@@ -130,10 +130,25 @@ func (i *instrumenter) uprobes(pid int32, p Tracer) error {
 		return nil
 	}
 
+	exePath := fmt.Sprintf("/proc/%d/exe", pid)
+	exeIno := uint64(0)
+
+	info, err := os.Stat(exePath)
+	if err == nil {
+		stat, ok := info.Sys().(*syscall.Stat_t)
+		if ok {
+			exeIno = stat.Ino
+		} else {
+			return fmt.Errorf("can't extract executable stats")
+		}
+	} else {
+		return err
+	}
+
 	for lib, pMap := range p.UProbes() {
 		log.Debug("finding library", "lib", lib)
 		libMap := exec.LibPath(lib, maps)
-		instrPath := fmt.Sprintf("/proc/%d/exe", pid)
+		instrPath := exePath
 
 		instrumentedIno := uint64(0)
 		sharedLib := false
@@ -146,7 +161,7 @@ func (i *instrumenter) uprobes(pid int32, p Tracer) error {
 			info, err := os.Stat(libInstrPath)
 			if err == nil {
 				stat, ok := info.Sys().(*syscall.Stat_t)
-				if ok {
+				if ok && stat.Ino != exeIno {
 					// We've already attached probes to this shared library for this executable
 					if i.hasModule(stat.Ino) {
 						log.Debug("already instrumented module, ignoring...", "path", libInstrPath, "ino", stat.Ino)
@@ -164,8 +179,6 @@ func (i *instrumenter) uprobes(pid int32, p Tracer) error {
 					sharedLib = true
 					instrumentedIno = stat.Ino
 					log.Debug("found inode number, recording this instrumentation if successful", "lib", lib, "path", libMap.Pathname, "ino", stat.Ino)
-				} else {
-					log.Error("can't stat file info for shared library", "lib", lib)
 				}
 			}
 		}
@@ -174,24 +187,6 @@ func (i *instrumenter) uprobes(pid int32, p Tracer) error {
 		if !sharedLib { // default executable instrumented path
 			// E.g. NodeJS uses OpenSSL but they ship it as statically linked in the node binary
 			log.Debug(fmt.Sprintf("%s not linked, attempting to instrument executable", lib), "path", instrPath)
-			info, err := os.Stat(instrPath)
-			if err == nil {
-				stat, ok := info.Sys().(*syscall.Stat_t)
-				if ok {
-					if i.hasModule(stat.Ino) {
-						// We've alredy attached probes to this executable
-						log.Debug("already instrumented module, ignoring...", "path", instrPath)
-						continue
-					}
-					instrumentedIno = stat.Ino
-				} else {
-					log.Error("can't stat file info", "path", instrPath)
-					continue
-				}
-			} else {
-				log.Info("error looking up file info for executable, not instrumenting", "path", instrPath, "error", err)
-				continue
-			}
 		}
 
 		libExe, err := link.OpenExecutable(instrPath)
@@ -215,9 +210,8 @@ func (i *instrumenter) uprobes(pid int32, p Tracer) error {
 		if sharedLib {
 			// We bump the count of uses of the underlying shared library with a new executable
 			p.RecordInstrumentedLib(instrumentedIno)
+			i.addModule(instrumentedIno)
 		}
-
-		i.addModule(instrumentedIno)
 	}
 
 	return nil

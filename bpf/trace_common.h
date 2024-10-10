@@ -184,6 +184,23 @@ static __always_inline void server_or_client_trace(http_connection_metadata_t *m
 
         // bpf_dbg_printk("Saving server span for id=%llx, pid=%d, ns=%d, extra_id=%llx", bpf_get_current_pid_tgid(), t_key.p_key.pid, t_key.p_key.ns, t_key.extra_id);
         bpf_map_update_elem(&server_traces, &t_key, tp_p, BPF_ANY);
+    } else {
+        tp_info_pid_t *in_tp = bpf_map_lookup_elem(&outgoing_trace_map, conn);
+
+        // We found info setup with a SYN packet, just clean it up
+        if (in_tp) {
+            bpf_map_delete_elem(&outgoing_trace_map, conn);
+        } else {
+            // If we didn't set this current tp_p as default
+            // Setup a pid too, so that we can find it in TC.
+            // When we don't find a SYN packet, we use the flags field
+            // to store the trace_id and the SEQ/ACK combination for span_id.
+            // We need the PID id to be able to query ongoing_http and update
+            // the span id with the SEQ/ACK pair.
+            u64 id = bpf_get_current_pid_tgid();
+            tp_p->pid = pid_from_pid_tgid(id);
+            bpf_map_update_elem(&outgoing_trace_map, conn, tp_p, BPF_ANY);
+        }
     }
 }
 
@@ -245,6 +262,7 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
                     tp_p->tp.trace_id, existing_tp->tp.trace_id, sizeof(tp_p->tp.trace_id));
                 __builtin_memcpy(
                     tp_p->tp.parent_id, existing_tp->tp.span_id, sizeof(tp_p->tp.parent_id));
+                bpf_map_delete_elem(&incoming_trace_map, conn);
             } else {
                 existing_tp = trace_info_for_connection(conn);
 
@@ -262,7 +280,7 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
 
     if (!found_tp) {
         bpf_dbg_printk("Generating new traceparent id");
-        urand_bytes(tp_p->tp.trace_id, TRACE_ID_SIZE_BYTES);
+        new_trace_id(&tp_p->tp);
         __builtin_memset(tp_p->tp.parent_id, 0, sizeof(tp_p->tp.span_id));
     } else {
         bpf_dbg_printk("Using old traceparent id");

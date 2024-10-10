@@ -1,0 +1,100 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: beyla-config
+data:
+  beyla-config.yml: |
+    prometheus_export:
+      port: 8999
+      features:
+        - application
+        - application_process
+    attributes:
+      select:
+        process_cpu_utilization:
+          include: ["*"]
+          exclude: ["cpu_mode"]
+        process_cpu_time:
+          include: ["*"]
+          exclude: ["cpu_mode"]
+        process_memory_usage:
+          include: ["*"]
+        process_memory_virtual:
+          include: ["*"]
+        process_disk_io:
+          include: ["*"]
+        process_network_io:
+          include: ["*"]
+      kubernetes:
+        enable: true
+        cluster_name: beyla
+    trace_printer: text
+    log_level: debug
+    discovery:
+      services:
+        - k8s_deployment_name: (otherinstance|testserver)
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: beyla
+spec:
+  selector:
+    matchLabels:
+      instrumentation: beyla
+  template:
+    metadata:
+      labels:
+        instrumentation: beyla
+        # this label will trigger a deletion of beyla pods before tearing down
+        # kind, to force Beyla writing the coverage data
+        teardown: delete
+    spec:
+      hostPID: true  #important!
+      serviceAccountName: beyla
+      volumes:
+        - name: beyla-config
+          configMap:
+            name: beyla-config
+        - name: testoutput
+          persistentVolumeClaim:
+            claimName: testoutput
+      containers:
+        - name: beyla
+          image: beyla:dev
+          imagePullPolicy: Never # loaded into Kind from localhost
+          args: ["--config=/config/beyla-config.yml"]
+          securityContext:
+            privileged: true
+            runAsUser: 0
+          volumeMounts:
+            - mountPath: /config
+              name: beyla-config
+            - mountPath: /testoutput
+              name: testoutput
+          env:
+            - name: GOCOVERDIR
+              value: "/testoutput"
+            - name: BEYLA_DISCOVERY_POLL_INTERVAL
+              value: "500ms"
+            - name: BEYLA_METRICS_INTERVAL
+              value: "10ms"
+            - name: BEYLA_BPF_BATCH_TIMEOUT
+              value: "10ms"
+          ports:
+            - containerPort: 8999
+              name: prometheus
+              protocol: TCP
+---
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: beyla-promscrape
+spec:
+  selector:
+    instrumentation: beyla
+  ports:
+    - port: 8999
+      name: prometheus
+      protocol: TCP

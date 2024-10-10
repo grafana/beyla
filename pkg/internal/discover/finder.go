@@ -13,12 +13,14 @@ import (
 	"github.com/grafana/beyla/pkg/internal/ebpf/nodejs"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
+	"github.com/grafana/beyla/pkg/internal/request"
 )
 
 type ProcessFinder struct {
-	ctx     context.Context
-	cfg     *beyla.Config
-	ctxInfo *global.ContextInfo
+	ctx         context.Context
+	cfg         *beyla.Config
+	ctxInfo     *global.ContextInfo
+	tracesInput chan<- []request.Span
 }
 
 // nodesMap stores ProcessFinder pipeline architecture
@@ -54,8 +56,8 @@ func containerDBUpdater(pf *nodesMap) *pipe.Middle[[]Event[ebpf.Instrumentable],
 }
 func traceAttacher(pf *nodesMap) *pipe.Final[[]Event[ebpf.Instrumentable]] { return &pf.TraceAttacher }
 
-func NewProcessFinder(ctx context.Context, cfg *beyla.Config, ctxInfo *global.ContextInfo) *ProcessFinder {
-	return &ProcessFinder{ctx: ctx, cfg: cfg, ctxInfo: ctxInfo}
+func NewProcessFinder(ctx context.Context, cfg *beyla.Config, ctxInfo *global.ContextInfo, tracesInput chan<- []request.Span) *ProcessFinder {
+	return &ProcessFinder{ctx: ctx, cfg: cfg, ctxInfo: ctxInfo, tracesInput: tracesInput}
 }
 
 // Start the ProcessFinder pipeline in background. It returns a channel where each new discovered
@@ -67,17 +69,18 @@ func (pf *ProcessFinder) Start() (<-chan *ebpf.Instrumentable, <-chan *ebpf.Inst
 	gb := pipe.NewBuilder(&nodesMap{}, pipe.ChannelBufferLen(pf.cfg.ChannelBufferLen))
 	pipe.AddStart(gb, processWatcher, ProcessWatcherFunc(pf.ctx, pf.cfg))
 	pipe.AddMiddleProvider(gb, ptrWatcherKubeEnricher,
-		WatcherKubeEnricherProvider(pf.ctx, pf.ctxInfo.K8sInformer, pf.ctxInfo.Metrics))
+		WatcherKubeEnricherProvider(pf.ctx, pf.ctxInfo.K8sInformer))
 	pipe.AddMiddleProvider(gb, criteriaMatcher, CriteriaMatcherProvider(pf.cfg))
 	pipe.AddMiddleProvider(gb, execTyper, ExecTyperProvider(pf.cfg, pf.ctxInfo.Metrics))
 	pipe.AddMiddleProvider(gb, containerDBUpdater,
 		ContainerDBUpdaterProvider(pf.ctxInfo.K8sInformer.IsKubeEnabled(), pf.ctxInfo.AppO11y.K8sDatabase))
 	pipe.AddFinalProvider(gb, traceAttacher, TraceAttacherProvider(&TraceAttacher{
-		Cfg:               pf.cfg,
-		Ctx:               pf.ctx,
-		DiscoveredTracers: discoveredTracers,
-		DeleteTracers:     deleteTracers,
-		Metrics:           pf.ctxInfo.Metrics,
+		Cfg:                 pf.cfg,
+		Ctx:                 pf.ctx,
+		DiscoveredTracers:   discoveredTracers,
+		DeleteTracers:       deleteTracers,
+		Metrics:             pf.ctxInfo.Metrics,
+		SpanSignalsShortcut: pf.tracesInput,
 	}))
 	pipeline, err := gb.Build()
 	if err != nil {

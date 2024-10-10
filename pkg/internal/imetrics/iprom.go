@@ -23,17 +23,15 @@ type PrometheusConfig struct {
 
 // PrometheusReporter is an internal metrics Reporter that exports to Prometheus
 type PrometheusReporter struct {
-	connector              *connector.PrometheusManager
-	tracerFlushes          prometheus.Histogram
-	otelMetricExports      prometheus.Counter
-	otelMetricExportErrs   *prometheus.CounterVec
-	otelTraceExports       prometheus.Counter
-	otelTraceExportErrs    *prometheus.CounterVec
-	prometheusRequests     *prometheus.CounterVec
-	instrumentedProcesses  *prometheus.GaugeVec
-	beylaInfo              prometheus.Gauge
-	informerAddDuration    *prometheus.HistogramVec
-	informerUpdateDuration *prometheus.HistogramVec
+	connector             *connector.PrometheusManager
+	tracerFlushes         prometheus.Histogram
+	otelMetricExports     prometheus.Counter
+	otelMetricExportErrs  *prometheus.CounterVec
+	otelTraceExports      prometheus.Counter
+	otelTraceExportErrs   *prometheus.CounterVec
+	prometheusRequests    *prometheus.CounterVec
+	instrumentedProcesses *prometheus.GaugeVec
+	beylaInfo             prometheus.Gauge
 }
 
 func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusManager, registry *prometheus.Registry) *PrometheusReporter {
@@ -83,22 +81,6 @@ func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusM
 				"revision":  buildinfo.Revision,
 			},
 		}),
-		informerAddDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:                            "beyla_k8s_informer_add_duration_seconds",
-			Help:                            "Duration of the object add event in the Kubernetes informer",
-			Buckets:                         prometheus.DefBuckets,
-			NativeHistogramBucketFactor:     1.1,
-			NativeHistogramMaxBucketNumber:  100,
-			NativeHistogramMinResetDuration: 1 * time.Hour,
-		}, []string{"kind"}),
-		informerUpdateDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:                            "beyla_k8s_informer_update_duration_seconds",
-			Help:                            "Duration of the object update event in the Kubernetes informer",
-			Buckets:                         prometheus.DefBuckets,
-			NativeHistogramBucketFactor:     1.1,
-			NativeHistogramMaxBucketNumber:  100,
-			NativeHistogramMinResetDuration: 1 * time.Hour,
-		}, []string{"kind"}),
 	}
 	if registry != nil {
 		registry.MustRegister(pr.tracerFlushes,
@@ -108,9 +90,7 @@ func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusM
 			pr.otelTraceExportErrs,
 			pr.prometheusRequests,
 			pr.instrumentedProcesses,
-			pr.beylaInfo,
-			pr.informerAddDuration,
-			pr.informerUpdateDuration)
+			pr.beylaInfo)
 	} else {
 		manager.Register(cfg.Port, cfg.Path,
 			pr.tracerFlushes,
@@ -120,9 +100,7 @@ func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusM
 			pr.otelTraceExportErrs,
 			pr.prometheusRequests,
 			pr.instrumentedProcesses,
-			pr.beylaInfo,
-			pr.informerAddDuration,
-			pr.informerUpdateDuration)
+			pr.beylaInfo)
 	}
 
 	return pr
@@ -165,12 +143,4 @@ func (p *PrometheusReporter) InstrumentProcess(processName string) {
 
 func (p *PrometheusReporter) UninstrumentProcess(processName string) {
 	p.instrumentedProcesses.WithLabelValues(processName).Dec()
-}
-
-func (p *PrometheusReporter) InformerAddDuration(kind string, d time.Duration) {
-	p.informerAddDuration.WithLabelValues(kind).Observe(d.Seconds())
-}
-
-func (p *PrometheusReporter) InformerUpdateDuration(kind string, d time.Duration) {
-	p.informerUpdateDuration.WithLabelValues(kind).Observe(d.Seconds())
 }

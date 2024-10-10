@@ -848,7 +848,9 @@ func (mr *MetricsReporter) reportMetrics(input <-chan []request.Span) {
 	for spans := range input {
 		for i := range spans {
 			s := &spans[i]
-
+			if s.InternalSignal() {
+				continue
+			}
 			// If we are ignoring this span because of route patterns, don't do anything
 			if s.IgnoreMetrics() {
 				continue

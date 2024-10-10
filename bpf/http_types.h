@@ -140,9 +140,13 @@ typedef struct call_protocol_args {
 typedef struct protocol_info {
     u32 hdr_len;
     u32 seq;
+    u32 ack;
     u16 h_proto;
     u16 tot_len;
+    u8 opts_off;
     u8 flags;
+    u8 ip_len;
+    u8 l4_proto;
 } protocol_info_t;
 
 // Here we keep information on the ongoing filtered connections, PID/TID and connection type
@@ -194,6 +198,17 @@ static __always_inline void dbg_print_http_connection_info(connection_info_t *in
 static __always_inline void dbg_print_http_connection_info(connection_info_t *info) {
 }
 #endif
+
+static __always_inline void print_http_connection_info(connection_info_t *info) {
+    bpf_printk("[conn] s_h = %llx, s_l = %llx, s_port=%d",
+               *(u64 *)(&info->s_addr),
+               *(u64 *)(&info->s_addr[8]),
+               info->s_port);
+    bpf_printk("[conn] d_h = %llx, d_l = %llx, d_port=%d",
+               *(u64 *)(&info->d_addr),
+               *(u64 *)(&info->d_addr[8]),
+               info->d_port);
+}
 
 static __always_inline bool likely_ephemeral_port(u16 port) {
     return port >= EPHEMERAL_PORT_MIN;

@@ -21,7 +21,9 @@ type EventType uint8
 // The following consts need to coincide with some C identifiers:
 // EVENT_HTTP_REQUEST, EVENT_GRPC_REQUEST, EVENT_HTTP_CLIENT, EVENT_GRPC_CLIENT, EVENT_SQL_CLIENT
 const (
-	EventTypeHTTP EventType = iota + 1
+	// EventTypeProcessAlive is an internal signal. It will be ignored by the metrics exporters.
+	EventTypeProcessAlive EventType = iota
+	EventTypeHTTP
 	EventTypeGRPC
 	EventTypeHTTPClient
 	EventTypeGRPCClient
@@ -41,6 +43,8 @@ const (
 
 func (t EventType) String() string {
 	switch t {
+	case EventTypeProcessAlive:
+		return "ProcessAlive"
 	case EventTypeHTTP:
 		return "HTTP"
 	case EventTypeGRPC:
@@ -148,6 +152,12 @@ type Span struct {
 
 func (s *Span) Inside(parent *Span) bool {
 	return s.RequestStart >= parent.RequestStart && s.End <= parent.End
+}
+
+// InternalSignal returns whether a span is not aimed to be exported as a metric
+// or a trace, because it's used to internally send messages through the pipeline.
+func (s *Span) InternalSignal() bool {
+	return s.Type == EventTypeProcessAlive
 }
 
 // helper attribute functions used by JSON serialization

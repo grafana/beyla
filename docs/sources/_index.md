@@ -13,6 +13,7 @@ keywords:
   - instrumentation
 aliases:
   - /docs/grafana-cloud/monitor-applications/beyla/
+  - /docs/beyla/latest/tutorial/getting-started/
 ---
 
 # Grafana Beyla
@@ -20,6 +21,8 @@ aliases:
 ![Grafana Beyla Logo](https://grafana.com/media/docs/grafana-cloud/beyla/beyla-logo.png)
 
 ## eBPF application auto-instrumentation
+
+> To reduce the time it takes to instrument
 
 Instrumenting an application to obtain metrics and traces typically requires adding a language agent to the application deployment/packages.
 In some compiled languages like Go or Rust, you must manually add tracepoints to the code.
@@ -38,6 +41,18 @@ Beyla offers the following features:
 - listen to the Kubernetes API to decorate metrics and traces with Pods and Services metadata
 - simple setup for Grafana customers already using Grafana Alloy
 
+## eBPF overview
+
+eBPF stands for Extended Berkeley Packet Filter, and allows attaching applications to different points of the Linux Kernel. eBPF applications run in privileged mode and allow the runtime information of the Linux Kernel to be inspected: system calls, network stack, as well as inserting probes in user space applications.
+
+The eBPF applications are safe, they are compiled for their own [Virtual Machine instruction set](https://docs.kernel.org/bpf/instruction-set.html) and run in a sandboxed environment that verifies each loaded eBPF program for memory access safety and finite execution time. Unlike older technologies, such as the natively-compiled Kprobes and Uprobes, there is no chance that a poorly programmed probe will cause the Linux Kernel to hang.
+
+After being the eBPF binaries have been verified they are compiled with a Just-In-Time (JIT) compiler for the native host architecture (x86-64, ARM64, etc). This allows for efficient and fast execution.
+
+The eBPF code is loaded from ordinary applications running in user space. The kernel and the user space applications can share information through a set of well defined communication mechanisms, which are provided by the eBPF specification. For example: ring buffers, arrays, hash maps, etc.
+
+![Beyla eBPF architecture](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/ebpf-arch.svg)
+
 ## Requirements
 
 - Linux with Kernel 5.8 or higher with BPF Type Format [(BTF)](https://www.kernel.org/doc/html/latest/bpf/btf.html)
@@ -51,6 +66,14 @@ Beyla offers the following features:
   support Go applications built with a major **Go version no earlier than 3 versions** behind the current
   stable major release.
 - Administrative access rights to execute Beyla.
+
+## Limitations
+
+Beyla has its limitations too. It only provides generic metrics and transaction level trace span information. Language agents and manual instrumentation is still recommended, so that you can specify the granularity of each part of the code to be instrumented, putting the focus on your critical operations.
+
+Another limitation to consider is that Beyla requires elevated privileges; not actually a root user, but at least it has to run with the CAP_SYS_ADMIN capability. If you run the tool as a container (Docker, Kubernetes…), it has to be privileged.
+
+Distributed tracing is only supported for Go services, while other programming language support remains on the road-map.
 
 ## Get started
 

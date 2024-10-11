@@ -7,7 +7,6 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"path"
 	"reflect"
 	"strings"
 	"sync"
@@ -70,7 +69,6 @@ func resolveInternalMaps(spec *ebpf.CollectionSpec) (*ebpf.CollectionOptions, er
 func NewProcessTracer(cfg *beyla.Config, tracerType ProcessTracerType, programs []Tracer) *ProcessTracer {
 	return &ProcessTracer{
 		Programs:        programs,
-		PinPath:         BuildPinPath(cfg),
 		SystemWide:      cfg.Discovery.SystemWide,
 		Type:            tracerType,
 		Instrumentables: map[uint64]*instrumenter{},
@@ -90,13 +88,6 @@ func (pt *ProcessTracer) Run(ctx context.Context, out chan<- []request.Span) {
 	go func() {
 		<-ctx.Done()
 	}()
-}
-
-// BuildPinPath pinpath must be unique for a given executable group
-// it will be:
-//   - current beyla PID
-func BuildPinPath(cfg *beyla.Config) string {
-	return path.Join(cfg.EBPF.BpfBaseDir, cfg.EBPF.BpfPath)
 }
 
 func (pt *ProcessTracer) loadSpec(p Tracer) (*ebpf.CollectionSpec, error) {
@@ -121,7 +112,7 @@ func (pt *ProcessTracer) loadTracers() error {
 
 	for _, p := range pt.Programs {
 		plog := log.With("program", reflect.TypeOf(p))
-		plog.Debug("loading eBPF program", "PinPath", pt.PinPath, "type", pt.Type)
+		plog.Debug("loading eBPF program", "type", pt.Type)
 		spec, err := pt.loadSpec(p)
 		if err != nil {
 			return err
@@ -132,7 +123,6 @@ func (pt *ProcessTracer) loadTracers() error {
 			return err
 		}
 
-		collOpts.Maps = ebpf.MapOptions{PinPath: pt.PinPath}
 		collOpts.Programs = ebpf.ProgramOptions{LogSize: 640 * 1024}
 
 		if err := spec.LoadAndAssign(p.BpfObjects(), collOpts); err != nil {
@@ -151,7 +141,6 @@ func (pt *ProcessTracer) loadTracers() error {
 						return err
 					}
 
-					collOpts.Maps = ebpf.MapOptions{PinPath: pt.PinPath}
 					collOpts.Programs = ebpf.ProgramOptions{LogSize: 640 * 1024}
 
 					err = spec.LoadAndAssign(p.BpfObjects(), collOpts)
@@ -266,7 +255,7 @@ func printVerifierErrorInfo(err error) {
 	}
 }
 
-func RunUtilityTracer(p UtilityTracer, pinPath string) error {
+func RunUtilityTracer(p UtilityTracer) error {
 	i := instrumenter{}
 	plog := ptlog()
 	plog.Debug("loading independent eBPF program")
@@ -279,8 +268,6 @@ func RunUtilityTracer(p UtilityTracer, pinPath string) error {
 	if err != nil {
 		return err
 	}
-
-	collOpts.Maps = ebpf.MapOptions{PinPath: pinPath}
 
 	if err := spec.LoadAndAssign(p.BpfObjects(), collOpts); err != nil {
 		printVerifierErrorInfo(err)

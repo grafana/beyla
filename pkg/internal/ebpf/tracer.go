@@ -111,7 +111,6 @@ const (
 type ProcessTracer struct {
 	log      *slog.Logger //nolint:unused
 	Programs []Tracer
-	PinPath  string
 
 	SystemWide      bool
 	Type            ProcessTracerType

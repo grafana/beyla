@@ -562,6 +562,16 @@ func (tr *tracesOTELReceiver) acceptSpan(span *request.Span) bool {
 func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) []attribute.KeyValue {
 	var attrs []attribute.KeyValue
 
+	// add namespace to server and peer name across namespaces
+	if span.OtherNamespace != "" && span.OtherNamespace != span.ServiceID.Namespace {
+		if span.HostName != "" {
+			span.HostName = span.HostName + "." + span.OtherNamespace
+		}
+		if span.PeerName != "" {
+			span.PeerName = span.PeerName + "." + span.OtherNamespace
+		}
+	}
+
 	switch span.Type {
 	case request.EventTypeHTTP:
 		attrs = []attribute.KeyValue{

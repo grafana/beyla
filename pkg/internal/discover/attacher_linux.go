@@ -18,6 +18,11 @@ func (ta *TraceAttacher) close() {
 }
 
 func (ta *TraceAttacher) mountBpfPinPath() error {
+	if !ta.Cfg.EBPF.EnableBpfPinning {
+		ta.log.Debug("BPF pinning disabled, not mounting pinpath")
+		return nil
+	}
+
 	ta.log.Debug("mounting BPF map pinning", "path", ta.pinPath)
 	if _, err := os.Stat(ta.pinPath); err != nil {
 		if !os.IsNotExist(err) {
@@ -60,6 +65,11 @@ func UnmountBPFFS(pinPath string, log *slog.Logger) {
 }
 
 func (ta *TraceAttacher) unmountBpfPinPath() {
+	if !ta.Cfg.EBPF.EnableBpfPinning {
+		ta.log.Debug("BPF pinning disabled, will not attempt to unmount pinpath")
+		return
+	}
+
 	UnmountBPFFS(ta.pinPath, ta.log)
 }
 

@@ -109,7 +109,10 @@ func (i *Instrumenter) ReadAndForward() error {
 	bp.Run(i.ctx)
 
 	log.Info("exiting auto-instrumenter")
-	discover.UnmountBPFFS(ebpf.BuildPinPath(i.config), log)
+
+	if i.config.EBPF.EnableBpfPinning {
+		discover.UnmountBPFFS(ebpf.BuildPinPath(i.config), log)
+	}
 
 	return nil
 }

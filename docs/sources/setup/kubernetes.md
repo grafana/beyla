@@ -9,6 +9,7 @@ keywords:
   - Kubernetes
 aliases:
   - /docs/grafana-cloud/monitor-applications/beyla/setup/kubernetes/
+  - /docs/beyla/latest/tutorial/k8s-walkthrough/
 ---
 
 # Deploy Beyla in Kubernetes
@@ -266,14 +267,14 @@ Because of the AppArmour restriction, to run Beyla as unprivileged container, yo
 - Set `container.apparmor.security.beta.kubernetes.io/beyla: "unconfined"` in your Kubernetes deployment files.
 - Set a modified AppArmour policy which allows Beyla to perform `mount`.
 
-**Note** Since the `beyla` container does not have the privileges required to mount or un-mount the BPF filesystem, this sample leaves the BPF filesystem mounted on the host, even after the sample is deleted. This samples uses a unique path for each namespace to ensure re-use the same mount if Beyla is re-deployed, but to avoid collisions if multiple instances of Beyla is run in different namespaces. 
+**Note** Since the `beyla` container does not have the privileges required to mount or un-mount the BPF filesystem, this sample leaves the BPF filesystem mounted on the host, even after the sample is deleted. This samples uses a unique path for each namespace to ensure re-use the same mount if Beyla is re-deployed, but to avoid collisions if multiple instances of Beyla is run in different namespaces.
 
-**Note** Loading BPF programs requires that Beyla is able to read the Linux performance events, or at least be able to execute the Linux Kernel API `perf_event_open()`. 
+**Note** Loading BPF programs requires that Beyla is able to read the Linux performance events, or at least be able to execute the Linux Kernel API `perf_event_open()`.
 This permission is granted by `CAP_PERFMON` or more liberally through `CAP_SYS_ADMIN`. Since both `CAP_PERFMON` and `CAP_SYS_ADMIN` grant Beyla the permission to read performance
-events, you should use `CAP_PERFMON` because it grants lesser permissions. However, at system level, the access to the performance 
+events, you should use `CAP_PERFMON` because it grants lesser permissions. However, at system level, the access to the performance
 events is controlled through the setting `kernel.perf_event_paranoid`, which you can read or write by using `sysctl` or by modifying the file `/proc/sys/kernel/perf_event_paranoid`.
 The default setting for `kernel.perf_event_paranoid` is typically `2`, which is documented under the `perf_event_paranoid` section in the [kernel documentation](https://www.kernel.org/doc/Documentation/sysctl/kernel.txt).
-Some Linux distributions define higher levels for `kernel.perf_event_paranoid`, for example Debian based distributions [also use](https://lwn.net/Articles/696216/) `kernel.perf_event_paranoid=3`, 
+Some Linux distributions define higher levels for `kernel.perf_event_paranoid`, for example Debian based distributions [also use](https://lwn.net/Articles/696216/) `kernel.perf_event_paranoid=3`,
 which disallows access to `perf_event_open()` without `CAP_SYS_ADMIN`. If you are running on a distribution with `kernel.perf_event_paranoid` setting higher than `2`,
 you can either modify your configuration to lower it to `2` or use `CAP_SYS_ADMIN` instead of `CAP_PERFMON`.
 

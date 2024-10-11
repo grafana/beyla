@@ -5,7 +5,6 @@ import (
 	"github.com/grafana/beyla/pkg/internal/connector"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	kube2 "github.com/grafana/beyla/pkg/internal/kube"
-	"github.com/grafana/beyla/pkg/internal/transform/kube"
 )
 
 // ContextInfo stores some context information that must be shared across some nodes of the
@@ -34,5 +33,5 @@ type AppO11y struct {
 	// ReportRoutes sets whether the metrics should set the http.route attribute
 	ReportRoutes bool
 	// K8sDatabase provides access to shared kubernetes metadata
-	K8sDatabase *kube.Database
+	K8sDatabase *kube2.Database
 }

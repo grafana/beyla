@@ -12,7 +12,6 @@ import (
 	kube2 "github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
-	"github.com/grafana/beyla/pkg/internal/transform/kube"
 )
 
 func TestSuffixPrefix(t *testing.T) {
@@ -32,7 +31,7 @@ func TestSuffixPrefix(t *testing.T) {
 }
 
 func TestResolvePodsFromK8s(t *testing.T) {
-	db := kube.CreateDatabase(nil)
+	db := kube2.CreateDatabase(nil)
 
 	pod1 := kube2.PodInfo{
 		ObjectMeta: metav1.ObjectMeta{Name: "pod1"},
@@ -49,9 +48,9 @@ func TestResolvePodsFromK8s(t *testing.T) {
 		IPInfo:     kube2.IPInfo{IPs: []string{"10.0.0.3", "10.1.0.3"}},
 	}
 
-	db.UpdateNewPodsByIPIndex(&pod1)
-	db.UpdateNewPodsByIPIndex(&pod2)
-	db.UpdateNewPodsByIPIndex(&pod3)
+	db.updateNewPodsByIPIndex(&pod1)
+	db.updateNewPodsByIPIndex(&pod2)
+	db.updateNewPodsByIPIndex(&pod3)
 
 	assert.Equal(t, &pod1, db.PodInfoForIP("10.0.0.1"))
 	assert.Equal(t, &pod1, db.PodInfoForIP("10.1.0.1"))
@@ -115,7 +114,7 @@ func TestResolvePodsFromK8s(t *testing.T) {
 }
 
 func TestResolveServiceFromK8s(t *testing.T) {
-	db := kube.CreateDatabase(nil)
+	db := kube2.CreateDatabase(nil)
 
 	svc1 := kube2.ServiceInfo{
 		ObjectMeta: metav1.ObjectMeta{Name: "pod1"},
@@ -217,7 +216,7 @@ func TestCleanName(t *testing.T) {
 }
 
 func TestResolveNodesFromK8s(t *testing.T) {
-	db := kube.CreateDatabase(nil)
+	db := kube2.CreateDatabase(nil)
 
 	node1 := kube2.NodeInfo{
 		ObjectMeta: metav1.ObjectMeta{Name: "node1"},

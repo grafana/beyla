@@ -4,7 +4,7 @@ import (
 	"github.com/mariomac/pipes/pipe"
 
 	"github.com/grafana/beyla/pkg/internal/ebpf"
-	"github.com/grafana/beyla/pkg/internal/transform/kube"
+	"github.com/grafana/beyla/pkg/internal/kube"
 )
 
 // ContainerDBUpdaterProvider is a stage in the Process Finder pipeline that will be

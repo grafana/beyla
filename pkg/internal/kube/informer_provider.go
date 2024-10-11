@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -11,6 +12,8 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/grafana/beyla/pkg/internal/helpers/maps"
 	"github.com/grafana/beyla/pkg/kubeflags"
@@ -141,4 +144,31 @@ func (mp *MetadataProvider) CurrentNodeName(ctx context.Context) (string, error)
 		return "", fmt.Errorf("can't get pod %s/%s: %w", currentNamespace, currentPod, err)
 	}
 	return pods.Items[0].Spec.NodeName, nil
+}
+
+func LoadConfig(kubeConfigPath string) (*rest.Config, error) {
+	// if no config path is provided, load it from the env variable
+	if kubeConfigPath == "" {
+		kubeConfigPath = os.Getenv(kubeConfigEnvVariable)
+	}
+	// otherwise, load it from the $HOME/.kube/config file
+	if kubeConfigPath == "" {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return nil, fmt.Errorf("can't get user home dir: %w", err)
+		}
+		kubeConfigPath = path.Join(homeDir, ".kube", "config")
+	}
+	config, err := clientcmd.BuildConfigFromFlags("", kubeConfigPath)
+	if err == nil {
+		return config, nil
+	}
+	// fallback: use in-cluster config
+	config, err = rest.InClusterConfig()
+	if err != nil {
+		return nil, fmt.Errorf("can't access kubenetes. Tried using config from: "+
+			"config parameter, %s env, homedir and InClusterConfig. Got: %w",
+			kubeConfigEnvVariable, err)
+	}
+	return config, nil
 }

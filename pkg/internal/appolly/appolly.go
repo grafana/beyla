@@ -10,10 +10,10 @@ import (
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/discover"
 	"github.com/grafana/beyla/pkg/internal/ebpf"
+	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/pipe"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
-	"github.com/grafana/beyla/pkg/internal/transform/kube"
 )
 
 func log() *slog.Logger {

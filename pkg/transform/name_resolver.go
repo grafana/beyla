@@ -11,10 +11,10 @@ import (
 
 	attr "github.com/grafana/beyla/pkg/export/attributes/names"
 	"github.com/grafana/beyla/pkg/internal/helpers/maps"
+	kube2 "github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
-	kube2 "github.com/grafana/beyla/pkg/internal/transform/kube"
 )
 
 const (

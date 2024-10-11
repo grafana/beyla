@@ -107,6 +107,7 @@ func detectHostID(ctx context.Context, timeout time.Duration, detector resource.
 	return "", fmt.Errorf("can't find host.id in %v", res.Attributes())
 }
 
+// TODO: move contents to pkg/kube package
 func (ci *ContextInfo) kubeNodeFetcher(ctx context.Context, _ time.Duration) (string, error) {
 	if ci.K8sInformer == nil || !ci.K8sInformer.IsKubeEnabled() {
 		return "", errors.New("kubernetes is not enabled")

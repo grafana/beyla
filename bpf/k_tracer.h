@@ -64,7 +64,7 @@ struct {
         partial_connection_info_t); // key: the connection info without the destination address, but with the tcp sequence
     __type(value, connection_info_t); // value: traceparent info
     __uint(max_entries, 1024);
-    __uint(pinning, LIBBPF_PIN_BY_NAME);
+    __uint(pinning, LIBBPF_PIN_INTERNAL);
 } tcp_connection_map SEC(".maps");
 
 // Used by accept to grab the sock details

@@ -19,7 +19,7 @@ struct {
     __type(key, trace_key_t);     // key: pid_tid
     __type(value, tp_info_pid_t); // value: traceparent info
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
-    __uint(pinning, LIBBPF_PIN_BY_NAME);
+    __uint(pinning, LIBBPF_PIN_INTERNAL);
 } server_traces SEC(".maps");
 
 struct {
@@ -41,7 +41,7 @@ struct {
     __type(key, pid_key_t);   // key: the child pid
     __type(value, pid_key_t); // value: the parent pid
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
-    __uint(pinning, LIBBPF_PIN_BY_NAME);
+    __uint(pinning, LIBBPF_PIN_INTERNAL);
 } clone_map SEC(".maps");
 
 static __always_inline unsigned char *tp_char_buf() {

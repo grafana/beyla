@@ -115,7 +115,6 @@ network:
 			BatchTimeout:       time.Second,
 			BpfBaseDir:         "/var/run/beyla",
 			BpfPath:            DefaultConfig.EBPF.BpfPath,
-			EnableBpfPinning:   true,
 			HTTPRequestTimeout: 30 * time.Second,
 		},
 		Grafana: otel.GrafanaConfig{

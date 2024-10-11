@@ -39,6 +39,6 @@ func (pt *ProcessTracer) NewExecutableInstance(_ *link.Executable, _ *Instrument
 
 func (pt *ProcessTracer) UnlinkExecutable(_ *exec.FileInfo) {}
 
-func RunUtilityTracer(_ UtilityTracer, _ string, _ bool) error {
+func RunUtilityTracer(_ UtilityTracer, _ string) error {
 	return nil
 }

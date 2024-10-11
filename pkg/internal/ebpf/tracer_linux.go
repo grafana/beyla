@@ -67,30 +67,10 @@ func resolveInternalMaps(spec *ebpf.CollectionSpec) (*ebpf.CollectionOptions, er
 	return &collOpts, nil
 }
 
-func validatePinnings(spec *ebpf.CollectionSpec, pinningEnabled bool) error {
-	for k, v := range spec.Maps {
-		switch v.Pinning {
-		case ebpf.PinNone:
-			continue
-		case PinInternal:
-			continue
-		case ebpf.PinByName:
-			if !pinningEnabled {
-				return fmt.Errorf("cannot load pinned map %s: pinning not enabled", k)
-			}
-		default:
-			return fmt.Errorf("Unknown map pinning: %d", v.Pinning)
-		}
-	}
-
-	return nil
-}
-
 func NewProcessTracer(cfg *beyla.Config, tracerType ProcessTracerType, programs []Tracer) *ProcessTracer {
 	return &ProcessTracer{
 		Programs:        programs,
 		PinPath:         BuildPinPath(cfg),
-		PinningEnabled:  cfg.EBPF.EnableBpfPinning,
 		SystemWide:      cfg.Discovery.SystemWide,
 		Type:            tracerType,
 		Instrumentables: map[uint64]*instrumenter{},
@@ -147,10 +127,6 @@ func (pt *ProcessTracer) loadTracers() error {
 			return err
 		}
 
-		if err = validatePinnings(spec, pt.PinningEnabled); err != nil {
-			return err
-		}
-
 		collOpts, err := resolveInternalMaps(spec)
 		if err != nil {
 			return err
@@ -169,9 +145,6 @@ func (pt *ProcessTracer) loadTracers() error {
 				common.IntegrityModeOverride = true
 				spec, err = pt.loadSpec(p)
 				if err == nil {
-					if err = validatePinnings(spec, pt.PinningEnabled); err != nil {
-						return err
-					}
 
 					collOpts, err = resolveInternalMaps(spec)
 					if err != nil {
@@ -293,17 +266,13 @@ func printVerifierErrorInfo(err error) {
 	}
 }
 
-func RunUtilityTracer(p UtilityTracer, pinPath string, pinningEnabled bool) error {
+func RunUtilityTracer(p UtilityTracer, pinPath string) error {
 	i := instrumenter{}
 	plog := ptlog()
 	plog.Debug("loading independent eBPF program")
 	spec, err := p.Load()
 	if err != nil {
 		return fmt.Errorf("loading eBPF program: %w", err)
-	}
-
-	if err = validatePinnings(spec, pinningEnabled); err != nil {
-		return err
 	}
 
 	collOpts, err := resolveInternalMaps(spec)

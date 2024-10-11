@@ -27,10 +27,6 @@ type EPPFTracer struct {
 	// By default, it will be beyla-<pid>.
 	BpfPath string `yaml:"bpf_fs_path" env:"BEYLA_BPF_FS_PATH"`
 
-	// EnableBpfPinning specifies whether shared bpf objects should be pinned
-	// to BpfPath. When set to 'false', the eBPF FS will not be mounted.
-	EnableBpfPinning bool `yaml:"bpf_enable_pinning" env:"BEYLA_BPF_ENABLE_PINNING"`
-
 	// If enabled, the kprobes based HTTP request tracking will start tracking the request
 	// headers to process any 'Traceparent' fields.
 	TrackRequestHeaders bool `yaml:"track_request_headers" env:"BEYLA_BPF_TRACK_REQUEST_HEADERS"`

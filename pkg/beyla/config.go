@@ -49,7 +49,6 @@ var DefaultConfig = Config{
 		BatchTimeout:       time.Second,
 		BpfBaseDir:         "/var/run/beyla",
 		BpfPath:            fmt.Sprintf("beyla-%d", os.Getpid()),
-		EnableBpfPinning:   false,
 		HTTPRequestTimeout: 30 * time.Second,
 	},
 	Grafana: otel.GrafanaConfig{

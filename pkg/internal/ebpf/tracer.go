@@ -109,10 +109,9 @@ const (
 // ProcessTracer instruments an executable with eBPF and provides the eBPF readers
 // that will forward the traces to later stages in the pipeline
 type ProcessTracer struct {
-	log            *slog.Logger //nolint:unused
-	Programs       []Tracer
-	PinPath        string
-	PinningEnabled bool
+	log      *slog.Logger //nolint:unused
+	Programs []Tracer
+	PinPath  string
 
 	SystemWide      bool
 	Type            ProcessTracerType

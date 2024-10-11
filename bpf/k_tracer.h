@@ -232,7 +232,7 @@ int BPF_KRETPROBE(kretprobe_sys_connect, int fd) {
     if (parse_connect_sock_info(args, &info.p_conn.conn)) {
         bpf_dbg_printk("=== connect ret id=%d, pid=%d ===", id, pid_from_pid_tgid(id));
         u16 orig_dport = info.p_conn.conn.d_port;
-        //dbg_print_http_connection_info(&info.conn);
+        dbg_print_http_connection_info(&info.p_conn.conn);
         sort_connection_info(&info.p_conn.conn);
         info.p_conn.pid = pid_from_pid_tgid(id);
         info.orig_dport = orig_dport;
@@ -291,7 +291,8 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
 
     if (parse_sock_info(sk, &s_args.p_conn.conn)) {
         u16 orig_dport = s_args.p_conn.conn.d_port;
-        //dbg_print_http_connection_info(&s_args.p_conn.conn); // commented out since GitHub CI doesn't like this call
+        dbg_print_http_connection_info(
+            &s_args.p_conn.conn); // commented out since GitHub CI doesn't like this call
         sort_connection_info(&s_args.p_conn.conn);
         s_args.p_conn.pid = pid_from_pid_tgid(id);
 

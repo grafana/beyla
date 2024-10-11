@@ -14,6 +14,15 @@ func TestProcessKafkaRequest(t *testing.T) {
 		expected *KafkaInfo
 	}{
 		{
+			name:  "Fetch request (v11) truncated - 1",
+			input: []byte{0, 0, 0, 94, 0, 1, 0, 11, 0, 0, 0, 224, 0, 6, 115, 97, 114, 97, 109, 97, 255, 255, 255, 255, 0, 0, 1, 244, 0, 0, 0, 1, 6, 64, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 255, 0, 0, 0, 1, 0},
+			expected: &KafkaInfo{
+				ClientID:    "sarama",
+				Operation:   Fetch,
+				TopicOffset: 45,
+			},
+		},
+		{
 			name:  "Fetch request (v11) truncated",
 			input: []byte{0, 0, 0, 94, 0, 1, 0, 11, 0, 0, 0, 224, 0, 6, 115, 97, 114, 97, 109, 97, 255, 255, 255, 255, 0, 0, 1, 244, 0, 0, 0, 1, 6, 64, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 255, 0, 0, 0, 1},
 			expected: &KafkaInfo{

@@ -9,6 +9,8 @@ keywords:
   - Kubernetes
   - Alloy
   - tutorial
+aliases:
+  - /docs/beyla/latest/tutorial/helm-alloy/
 ---
 
 # Run Beyla in Kubernetes using Grafana Alloy Helm's chart

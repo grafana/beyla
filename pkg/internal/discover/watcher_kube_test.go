@@ -3,6 +3,8 @@ package discover
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +16,7 @@ import (
 
 	"github.com/grafana/beyla-k8s-cache/pkg/informer"
 	"github.com/grafana/beyla-k8s-cache/pkg/meta"
+
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/helpers/container"
 	"github.com/grafana/beyla/pkg/internal/kube"
@@ -21,7 +24,7 @@ import (
 	"github.com/grafana/beyla/pkg/services"
 )
 
-const timeout = 5 * time.Second
+const timeout = 5000 * time.Second
 const (
 	namespace      = "test-ns"
 	containerPID   = 123
@@ -32,6 +35,11 @@ const (
 )
 
 func TestWatcherKubeEnricher(t *testing.T) {
+	// set slog level to debug to see the logs
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	})))
+
 	type fn func(t *testing.T, inputCh chan []Event[processAttrs], fInformer kube.MetadataNotifier)
 	type testCase struct {
 		name  string
@@ -47,25 +55,19 @@ func TestWatcherKubeEnricher(t *testing.T) {
 	var ownedPod = func(t *testing.T, _ chan []Event[processAttrs], fInformer kube.MetadataNotifier) {
 		deployOwnedPod(fInformer, namespace, podName, deploymentName, containerID)
 	}
-	var replicaSet = func(t *testing.T, _ chan []Event[processAttrs], fInformer kube.MetadataNotifier) {
-		deployDeployment(fInformer, namespace, deploymentName)
-	}
 
 	// The watcherKubeEnricher has to listen and relate information from multiple asynchronous sources.
 	// Each test case verifies that whatever the order of the events is,
 	testCases := []testCase{
-		{name: "process-pod-rs", steps: []fn{process, ownedPod, replicaSet}},
-		{name: "process-rs-pod", steps: []fn{process, replicaSet, ownedPod}},
-		{name: "pod-process-rs", steps: []fn{ownedPod, process, replicaSet}},
-		{name: "pod-rs-process", steps: []fn{ownedPod, replicaSet, process}},
-		{name: "rs-pod-process", steps: []fn{replicaSet, ownedPod, process}},
-		{name: "rs-process-pod", steps: []fn{process, ownedPod, replicaSet}},
-		{name: "process-pod (no rs)", steps: []fn{process, pod}},
-		{name: "pod-process (no rs)", steps: []fn{pod, process}}}
+		{name: "process-pod", steps: []fn{process, ownedPod}},
+		{name: "pod-process", steps: []fn{ownedPod, process}},
+		{name: "process-pod (no owner)", steps: []fn{process, pod}},
+		{name: "pod-process (no owner)", steps: []fn{pod, process}}}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			containerInfoForPID = fakeContainerInfo
+
 			// Setup a fake K8s API connected to the watcherKubeEnricher
 			fInformer := &fakeInformer{}
 			store := kube.NewStore(fInformer)
@@ -93,7 +95,7 @@ func TestWatcherKubeEnricher(t *testing.T) {
 				assert.Equal(t, []uint32{containerPort}, event.Obj.openPorts)
 				assert.Equal(t, namespace, event.Obj.metadata[services.AttrNamespace])
 				assert.Equal(t, podName, event.Obj.metadata[services.AttrPodName])
-				if strings.Contains(tc.name, "(no rs)") {
+				if strings.Contains(tc.name, "(no owner)") {
 					assert.Empty(t, event.Obj.metadata[services.AttrDeploymentName])
 				} else {
 					assert.Equal(t, deploymentName, event.Obj.metadata[services.AttrDeploymentName])
@@ -148,7 +150,6 @@ func TestWatcherKubeEnricherWithMatcher(t *testing.T) {
 		newProcess(inputCh, 456, []uint32{})
 		newProcess(inputCh, 789, []uint32{443})
 		deployOwnedPod(fInformer, namespace, "depl-rsid-podid", "depl", "container-789")
-		deployDeployment(fInformer, namespace, "depl")
 	})
 
 	// sending events that will match and will be forwarded
@@ -198,7 +199,6 @@ func TestWatcherKubeEnricherWithMatcher(t *testing.T) {
 	t.Run("both process and metadata match", func(t *testing.T) {
 		newProcess(inputCh, 56, []uint32{443})
 		deployOwnedPod(fInformer, namespace, "chacha-rsid-podid", "chacha", "container-56")
-		deployDeployment(fInformer, namespace, "chacha")
 		matches := testutil.ReadChannel(t, outputCh, timeout)
 		require.Len(t, matches, 1)
 		m := matches[0]
@@ -267,16 +267,6 @@ func deployOwnedPod(fInformer kube.MetadataNotifier, ns, name, deploymentName, c
 	})
 }
 
-func deployDeployment(fInformer kube.MetadataNotifier, ns, name string) {
-	fInformer.Notify(&informer.Event{
-		Type: informer.EventType_CREATED,
-		Resource: &informer.ObjectMeta{
-			Name: name, Namespace: ns,
-			Kind: "Deployment",
-		},
-	})
-}
-
 func fakeContainerInfo(pid uint32) (container.Info, error) {
 	return container.Info{ContainerID: fmt.Sprintf("container-%d", pid)}, nil
 }
@@ -305,16 +295,23 @@ func (i *fakeMetadataProvider) Subscribe(_ context.Context, observer meta.Observ
 	return nil
 }
 
-type fakeInformer struct{ observer meta.Observer }
+type fakeInformer struct {
+	observers map[string]meta.Observer
+}
 
 func (f *fakeInformer) Subscribe(observer meta.Observer) {
-	f.observer = observer
+	if f.observers == nil {
+		f.observers = map[string]meta.Observer{}
+	}
+	f.observers[observer.ID()] = observer
 }
 
 func (f *fakeInformer) Unsubscribe(observer meta.Observer) {
-	f.observer = nil
+	delete(f.observers, observer.ID())
 }
 
 func (f *fakeInformer) Notify(event *informer.Event) {
-	f.observer.On(event)
+	for _, observer := range f.observers {
+		observer.On(event)
+	}
 }

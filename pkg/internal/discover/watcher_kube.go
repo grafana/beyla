@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sync"
 
 	"github.com/mariomac/pipes/pipe"
 
 	"github.com/grafana/beyla-k8s-cache/pkg/informer"
 	"github.com/grafana/beyla-k8s-cache/pkg/meta"
+
 	"github.com/grafana/beyla/pkg/internal/helpers/container"
 	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/services"
@@ -28,6 +30,7 @@ type watcherKubeEnricher struct {
 	log *slog.Logger
 
 	// cached system objects
+	mt                 sync.RWMutex
 	containerByPID     map[PID]container.Info
 	processByContainer map[string]processAttrs
 
@@ -149,7 +152,9 @@ func (wk *watcherKubeEnricher) enrichProcessEvent(processEvents []Event[processA
 			}
 		case EventDeleted:
 			wk.log.Debug("process stopped", "pid", procEvent.Obj.pid)
+			wk.mt.Lock()
 			delete(wk.containerByPID, procEvent.Obj.pid)
+			wk.mt.Unlock()
 			// no need to decorate deleted processes
 			eventsWithMeta = append(eventsWithMeta, procEvent)
 		}
@@ -167,7 +172,9 @@ func (wk *watcherKubeEnricher) onNewProcess(procInfo processAttrs) (processAttrs
 		return processAttrs{}, false
 	}
 
+	wk.mt.Lock()
 	wk.processByContainer[containerInfo.ContainerID] = procInfo
+	wk.mt.Unlock()
 
 	if pod := wk.store.PodByContainerID(containerInfo.ContainerID); pod != nil {
 		procInfo = withMetadata(procInfo, pod)
@@ -176,6 +183,8 @@ func (wk *watcherKubeEnricher) onNewProcess(procInfo processAttrs) (processAttrs
 }
 
 func (wk *watcherKubeEnricher) onNewPod(pod *informer.ObjectMeta) []Event[processAttrs] {
+	wk.mt.RLock()
+	defer wk.mt.RUnlock()
 	var events []Event[processAttrs]
 	for _, containerID := range pod.Pod.ContainerIds {
 		if procInfo, ok := wk.processByContainer[containerID]; ok {
@@ -189,20 +198,27 @@ func (wk *watcherKubeEnricher) onNewPod(pod *informer.ObjectMeta) []Event[proces
 }
 
 func (wk *watcherKubeEnricher) onDeletedPod(pod *informer.ObjectMeta) {
+	wk.mt.Lock()
+	defer wk.mt.Unlock()
 	for _, containerID := range pod.Pod.ContainerIds {
 		delete(wk.processByContainer, containerID)
 	}
 }
 
 func (wk *watcherKubeEnricher) getContainerInfo(pid PID) (container.Info, error) {
-	if cntInfo, ok := wk.containerByPID[pid]; ok {
+	wk.mt.RLock()
+	cntInfo, ok := wk.containerByPID[pid]
+	wk.mt.RUnlock()
+	if ok {
 		return cntInfo, nil
 	}
 	cntInfo, err := containerInfoForPID(uint32(pid))
 	if err != nil {
 		return container.Info{}, err
 	}
+	wk.mt.Lock()
 	wk.containerByPID[pid] = cntInfo
+	wk.mt.Unlock()
 	return cntInfo, nil
 }
 

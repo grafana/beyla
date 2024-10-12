@@ -9,6 +9,7 @@ import (
 
 	"github.com/grafana/beyla-k8s-cache/pkg/informer"
 	"github.com/grafana/beyla-k8s-cache/pkg/meta"
+
 	attr "github.com/grafana/beyla/pkg/export/attributes/names"
 	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/request"
@@ -149,17 +150,22 @@ func TestDecoration(t *testing.T) {
 }
 
 type fakeInformer struct {
-	observer meta.Observer
+	observers map[string]meta.Observer
 }
 
 func (f *fakeInformer) Subscribe(observer meta.Observer) {
-	f.observer = observer
+	if f.observers == nil {
+		f.observers = map[string]meta.Observer{}
+	}
+	f.observers[observer.ID()] = observer
 }
 
-func (f *fakeInformer) Unsubscribe(_ meta.Observer) {
-	f.observer = nil
+func (f *fakeInformer) Unsubscribe(observer meta.Observer) {
+	delete(f.observers, observer.ID())
 }
 
 func (f *fakeInformer) Notify(event *informer.Event) {
-	f.observer.On(event)
+	for _, observer := range f.observers {
+		observer.On(event)
+	}
 }

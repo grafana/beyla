@@ -10,7 +10,6 @@ import (
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/discover"
 	"github.com/grafana/beyla/pkg/internal/ebpf"
-	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/pipe"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
@@ -34,7 +33,7 @@ type Instrumenter struct {
 
 // New Instrumenter, given a Config
 func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config) *Instrumenter {
-	setupFeatureContextInfo(ctx, ctxInfo, config)
+	setupFeatureContextInfo(ctxInfo, config)
 	return &Instrumenter{
 		ctx:         ctx,
 		config:      config,
@@ -114,29 +113,6 @@ func (i *Instrumenter) ReadAndForward() error {
 	return nil
 }
 
-func setupFeatureContextInfo(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config) {
+func setupFeatureContextInfo(ctxInfo *global.ContextInfo, config *beyla.Config) {
 	ctxInfo.AppO11y.ReportRoutes = config.Routes != nil
-	setupKubernetes(ctx, ctxInfo)
-}
-
-// setupKubernetes sets up common Kubernetes database and API clients that need to be accessed
-// from different stages in the Beyla pipeline
-func setupKubernetes(ctx context.Context, ctxInfo *global.ContextInfo) {
-	if !ctxInfo.K8sInformer.IsKubeEnabled() {
-		return
-	}
-
-	informer, err := ctxInfo.K8sInformer.Get(ctx)
-	if err != nil {
-		slog.Error("can't init Kubernetes informer. You can't setup Kubernetes discovery and your"+
-			" traces won't be decorated with Kubernetes metadata", "error", err)
-		ctxInfo.K8sInformer.ForceDisable()
-		return
-	}
-
-	if ctxInfo.AppO11y.K8sDatabase, err = kube.StartDatabase(informer); err != nil {
-		slog.Error("can't setup Kubernetes database. Your traces won't be decorated with Kubernetes metadata",
-			"error", err)
-		ctxInfo.K8sInformer.ForceDisable()
-	}
 }

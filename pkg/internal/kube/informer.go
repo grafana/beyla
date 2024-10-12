@@ -47,6 +47,7 @@ type InformersMetadata struct {
 }
 
 func NewInformersMetadata(ctx context.Context, kubeConfigPath string) (*InformersMetadata, error) {
+	// TODO: Add a context timeout to the initialization of the informers
 	informers, err := meta.InitInformers(ctx, kubeConfigPath, defaultResyncTime)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize informers: %w", err)

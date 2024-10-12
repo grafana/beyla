@@ -6,13 +6,13 @@ import (
 	"log/slog"
 
 	"github.com/mariomac/pipes/pipe"
-	"k8s.io/client-go/tools/cache"
 
-	attr "github.com/grafana/beyla/pkg/export/attributes/names"
+	"github.com/grafana/beyla-k8s-cache/pkg/informer"
+	"github.com/grafana/beyla-k8s-cache/pkg/meta"
 	"github.com/grafana/beyla/pkg/internal/helpers/container"
-	"github.com/grafana/beyla/pkg/internal/helpers/maps"
 	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/services"
+	"github.com/grafana/beyla/pkg/transform"
 )
 
 // injectable functions for testing
@@ -20,29 +20,18 @@ var (
 	containerInfoForPID = container.InfoForPID
 )
 
-// kubeMetadata is implemented by kube.Metadata
-type kubeMetadata interface {
-	GetContainerPod(containerID string) (*kube.PodInfo, bool)
-	AddPodEventHandler(handler cache.ResourceEventHandler) error
-}
-
 // watcherKubeEnricher keeps an update relational snapshot of the in-host process-pods-deployments,
 // which is continuously updated from two sources: the input from the ProcessWatcher and the kube.Metadata informers.
 type watcherKubeEnricher struct {
-	informer kubeMetadata
+	store *kube.Store
 
 	log *slog.Logger
 
 	// cached system objects
 	containerByPID     map[PID]container.Info
 	processByContainer map[string]processAttrs
-	// podByOwners indexes all the PodInfos owned by a given ReplicaSet
-	// we use our own indexer instead an informer indexer because we need a 1:N relation while
-	// the other indices provide N:1 relation
-	// level-1 key: replicaset ns/name. Level-2 key: Pod name
-	podsByOwner maps.Map2[nsName, string, *kube.PodInfo]
 
-	podsInfoCh chan Event[*kube.PodInfo]
+	podsInfoCh chan Event[*informer.ObjectMeta]
 }
 
 type nsName struct {
@@ -54,23 +43,24 @@ type nsName struct {
 // injection in tests
 type kubeMetadataProvider interface {
 	IsKubeEnabled() bool
-	Get(context.Context) (*kube.Metadata, error)
+	Store(ctx context.Context) (*kube.Store, error)
+	Subscribe(ctx context.Context, observer meta.Observer) error
 }
 
 func WatcherKubeEnricherProvider(
 	ctx context.Context,
-	informerProvider kubeMetadataProvider,
+	kubeMetaProvider kubeMetadataProvider,
 ) pipe.MiddleProvider[[]Event[processAttrs], []Event[processAttrs]] {
 	return func() (pipe.MiddleFunc[[]Event[processAttrs], []Event[processAttrs]], error) {
-		if !informerProvider.IsKubeEnabled() {
+		if !kubeMetaProvider.IsKubeEnabled() {
 			return pipe.Bypass[[]Event[processAttrs]](), nil
 		}
-		informer, err := informerProvider.Get(ctx)
+		store, err := kubeMetaProvider.Store(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("instantiating WatcherKubeEnricher: %w", err)
 		}
-		wk := watcherKubeEnricher{informer: informer}
-		if err := wk.init(); err != nil {
+		wk := watcherKubeEnricher{store: store}
+		if err := wk.init(ctx, kubeMetaProvider); err != nil {
 			return nil, err
 		}
 
@@ -78,29 +68,31 @@ func WatcherKubeEnricherProvider(
 	}
 }
 
-func (wk *watcherKubeEnricher) init() error {
+func (wk *watcherKubeEnricher) init(ctx context.Context, kubeMetaProvider kubeMetadataProvider) error {
 	wk.log = slog.With("component", "discover.watcherKubeEnricher")
 	wk.containerByPID = map[PID]container.Info{}
 	wk.processByContainer = map[string]processAttrs{}
-	wk.podsByOwner = maps.Map2[nsName, string, *kube.PodInfo]{}
 
 	// the podsInfoCh channel will receive any update about pods being created or deleted
-	wk.podsInfoCh = make(chan Event[*kube.PodInfo], 10)
-	if err := wk.informer.AddPodEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			wk.podsInfoCh <- Event[*kube.PodInfo]{Type: EventCreated, Obj: obj.(*kube.PodInfo)}
-		},
-		UpdateFunc: func(_, newObj interface{}) {
-			wk.podsInfoCh <- Event[*kube.PodInfo]{Type: EventCreated, Obj: newObj.(*kube.PodInfo)}
-		},
-		DeleteFunc: func(obj interface{}) {
-			wk.podsInfoCh <- Event[*kube.PodInfo]{Type: EventDeleted, Obj: obj.(*kube.PodInfo)}
-		},
-	}); err != nil {
-		return fmt.Errorf("can't register watcherKubeEnricher as Pod event handler in the K8s informer: %w", err)
-	}
+	wk.podsInfoCh = make(chan Event[*informer.ObjectMeta], 10)
+	return kubeMetaProvider.Subscribe(ctx, wk)
+}
 
-	return nil
+func (wk *watcherKubeEnricher) ID() string { return "unique-watcher-kube-enricher-id" }
+
+func (wk *watcherKubeEnricher) On(event *informer.Event) {
+	// ignoring updates on non-pod resources
+	if event.Resource.Pod == nil {
+		return
+	}
+	switch event.Type {
+	case informer.EventType_CREATED, informer.EventType_UPDATED:
+		wk.podsInfoCh <- Event[*informer.ObjectMeta]{Type: EventCreated, Obj: event.Resource}
+	case informer.EventType_DELETED:
+		wk.podsInfoCh <- Event[*informer.ObjectMeta]{Type: EventDeleted, Obj: event.Resource}
+	default:
+		wk.log.Debug("ignoring unknown event type", "event", event)
+	}
 }
 
 // enrich listens for any potential instrumentable process from three asyncronous sources:
@@ -124,11 +116,12 @@ func (wk *watcherKubeEnricher) enrich(in <-chan []Event[processAttrs], out chan<
 	}
 }
 
-func (wk *watcherKubeEnricher) enrichPodEvent(podEvent Event[*kube.PodInfo], out chan<- []Event[processAttrs]) {
+func (wk *watcherKubeEnricher) enrichPodEvent(podEvent Event[*informer.ObjectMeta], out chan<- []Event[processAttrs]) {
 	switch podEvent.Type {
 	case EventCreated:
 		wk.log.Debug("Pod added",
-			"namespace", podEvent.Obj.Namespace, "name", podEvent.Obj.Name, "containers", podEvent.Obj.ContainerIDs)
+			"namespace", podEvent.Obj.Namespace, "name", podEvent.Obj.Name,
+			"containers", podEvent.Obj.Pod.ContainerIds)
 		if events := wk.onNewPod(podEvent.Obj); len(events) > 0 {
 			out <- events
 		}
@@ -176,17 +169,15 @@ func (wk *watcherKubeEnricher) onNewProcess(procInfo processAttrs) (processAttrs
 
 	wk.processByContainer[containerInfo.ContainerID] = procInfo
 
-	if pod, ok := wk.informer.GetContainerPod(containerInfo.ContainerID); ok {
+	if pod := wk.store.PodByContainerID(containerInfo.ContainerID); pod != nil {
 		procInfo = withMetadata(procInfo, pod)
 	}
 	return procInfo, true
 }
 
-func (wk *watcherKubeEnricher) onNewPod(pod *kube.PodInfo) []Event[processAttrs] {
-	wk.updateNewPodsByOwnerIndex(pod)
-
+func (wk *watcherKubeEnricher) onNewPod(pod *informer.ObjectMeta) []Event[processAttrs] {
 	var events []Event[processAttrs]
-	for _, containerID := range pod.ContainerIDs {
+	for _, containerID := range pod.Pod.ContainerIds {
 		if procInfo, ok := wk.processByContainer[containerID]; ok {
 			events = append(events, Event[processAttrs]{
 				Type: EventCreated,
@@ -197,9 +188,8 @@ func (wk *watcherKubeEnricher) onNewPod(pod *kube.PodInfo) []Event[processAttrs]
 	return events
 }
 
-func (wk *watcherKubeEnricher) onDeletedPod(pod *kube.PodInfo) {
-	wk.updateDeletedPodsByOwnerIndex(pod)
-	for _, containerID := range pod.ContainerIDs {
+func (wk *watcherKubeEnricher) onDeletedPod(pod *informer.ObjectMeta) {
+	for _, containerID := range pod.Pod.ContainerIds {
 		delete(wk.processByContainer, containerID)
 	}
 }
@@ -216,32 +206,15 @@ func (wk *watcherKubeEnricher) getContainerInfo(pid PID) (container.Info, error)
 	return cntInfo, nil
 }
 
-func (wk *watcherKubeEnricher) updateNewPodsByOwnerIndex(pod *kube.PodInfo) {
-	if pod.Owner != nil {
-		wk.podsByOwner.Put(nsName{namespace: pod.Namespace, name: pod.Owner.Name}, pod.Name, pod)
-	}
-}
-
-func (wk *watcherKubeEnricher) updateDeletedPodsByOwnerIndex(pod *kube.PodInfo) {
-	if pod.Owner != nil {
-		wk.podsByOwner.Delete(nsName{namespace: pod.Namespace, name: pod.Owner.Name}, pod.Name)
-	}
-}
-
 // withMetadata returns a copy with a new map to avoid race conditions in later stages of the pipeline
-func withMetadata(pp processAttrs, info *kube.PodInfo) processAttrs {
+func withMetadata(pp processAttrs, info *informer.ObjectMeta) processAttrs {
 	ret := pp
 	ret.metadata = map[string]string{
-		services.AttrNamespace: info.Namespace,
-		services.AttrPodName:   info.Name,
+		services.AttrNamespace:                              info.Namespace,
+		services.AttrPodName:                                info.Name,
+		transform.OwnerLabelName(info.Pod.OwnerKind).Prom(): info.Pod.OwnerName,
+		services.AttrOwnerName:                              info.Pod.OwnerName,
 	}
 	ret.podLabels = info.Labels
-
-	if info.Owner != nil {
-		ret.metadata[attr.Name(info.Owner.LabelName).Prom()] = info.Owner.Name
-		topOwner := info.Owner.TopOwner()
-		ret.metadata[attr.Name(topOwner.LabelName).Prom()] = topOwner.Name
-		ret.metadata[services.AttrOwnerName] = topOwner.Name
-	}
 	return ret
 }

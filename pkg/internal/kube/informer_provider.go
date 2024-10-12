@@ -15,7 +15,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/grafana/beyla/pkg/internal/helpers/maps"
+	"github.com/grafana/beyla-k8s-cache/pkg/meta"
 	"github.com/grafana/beyla/pkg/kubeflags"
 )
 
@@ -28,15 +28,16 @@ type MetadataConfig struct {
 }
 
 type MetadataProvider struct {
-	mt       sync.Mutex
-	metadata *Metadata
+	mt sync.Mutex
+
+	metadata *Store
+	informer *InformersMetadata
 
 	kubeConfigPath string
 	syncTimeout    time.Duration
 	resyncPeriod   time.Duration
 
-	enable            atomic.Value
-	disabledInformers maps.Bits
+	enable atomic.Value
 }
 
 func NewMetadataProvider(config MetadataConfig) *MetadataProvider {
@@ -47,10 +48,9 @@ func NewMetadataProvider(config MetadataConfig) *MetadataProvider {
 		config.ResyncPeriod = defaultResyncTime
 	}
 	mp := &MetadataProvider{
-		kubeConfigPath:    config.KubeConfigPath,
-		syncTimeout:       config.SyncTimeout,
-		resyncPeriod:      config.ResyncPeriod,
-		disabledInformers: informerTypes(config.DisabledInformers),
+		kubeConfigPath: config.KubeConfigPath,
+		syncTimeout:    config.SyncTimeout,
+		resyncPeriod:   config.ResyncPeriod,
 	}
 	mp.enable.Store(config.Enable)
 	return mp
@@ -93,7 +93,7 @@ func (mp *MetadataProvider) KubeClient() (kubernetes.Interface, error) {
 	return kubernetes.NewForConfig(restCfg)
 }
 
-func (mp *MetadataProvider) Get(ctx context.Context) (*Metadata, error) {
+func (mp *MetadataProvider) Store(ctx context.Context) (*Store, error) {
 	mp.mt.Lock()
 	defer mp.mt.Unlock()
 
@@ -101,20 +101,33 @@ func (mp *MetadataProvider) Get(ctx context.Context) (*Metadata, error) {
 		return mp.metadata, nil
 	}
 
-	kubeClient, err := mp.KubeClient()
+	informer, err := NewInformersMetadata(ctx, mp.kubeConfigPath)
 	if err != nil {
-		return nil, fmt.Errorf("kubernetes client can't be initialized: %w", err)
+		return nil, err
 	}
 
-	mp.metadata = &Metadata{
-		disabledInformers: mp.disabledInformers,
-		SyncTimeout:       mp.syncTimeout,
-		resyncPeriod:      mp.resyncPeriod,
-	}
-	if err := mp.metadata.InitFromClient(ctx, kubeClient); err != nil {
-		return nil, fmt.Errorf("can't initialize kubernetes metadata: %w", err)
-	}
+	mp.metadata = NewStore(informer)
+
 	return mp.metadata, nil
+}
+
+func (mp *MetadataProvider) Subscribe(ctx context.Context, observer meta.Observer) error {
+	mp.mt.Lock()
+	defer mp.mt.Unlock()
+
+	if informer, err := mp.getInformer(ctx); err != nil {
+		return fmt.Errorf("can't subscribe to informer: %w", err)
+	} else {
+		informer.Subscribe(observer)
+	}
+	return nil
+}
+
+func (mp *MetadataProvider) getInformer(ctx context.Context) (*InformersMetadata, error) {
+	if mp.informer != nil {
+		return mp.informer, nil
+	}
+	return NewInformersMetadata(ctx, mp.kubeConfigPath)
 }
 
 func (mp *MetadataProvider) CurrentNodeName(ctx context.Context) (string, error) {
@@ -136,7 +149,7 @@ func (mp *MetadataProvider) CurrentNodeName(ctx context.Context) (string, error)
 		currentNamespace = string(nsBytes)
 	}
 	// second: get the node for the current Pod
-	// using List instead of Get because to not require extra serviceaccount permissions
+	// using List instead of Store because to not require extra serviceaccount permissions
 	pods, err := kubeClient.CoreV1().Pods(currentNamespace).List(ctx, metav1.ListOptions{
 		FieldSelector: "metadata.name=" + currentPod,
 	})

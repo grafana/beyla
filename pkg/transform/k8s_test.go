@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/grafana/beyla-k8s-cache/pkg/informer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -18,30 +19,32 @@ import (
 const timeout = 5 * time.Second
 
 func TestDecoration(t *testing.T) {
+	kube.NewStore()
 	// pre-populated kubernetes metadata database
-	dec := metadataDecorator{db: &fakeDatabase{pidNSPods: map[uint32]*kube.PodInfo{
-		12: &kube.PodInfo{
-			ObjectMeta: v1.ObjectMeta{
-				Name: "pod-12", Namespace: "the-ns", UID: "uid-12",
-			},
-			NodeName:     "the-node",
-			StartTimeStr: "2020-01-02 12:12:56",
-			Owner:        &kube.Owner{LabelName: kube.OwnerDeployment, Name: "deployment-12"},
+	dec := metadataDecorator{db: &fakeDatabase{pidNSPods: map[uint32]*informer.ObjectMeta{
+		12: &informer.ObjectMeta{
+				Name: "pod-12", Namespace: "the-ns",
+				Pod: &informer.PodInfo{
+					NodeName:     "the-node",
+					StartTimeStr: "2020-01-02 12:12:56",
+					Uid: "uid-12",
+					Owner:        &kube.Owner{LabelName: kube.OwnerDeployment, Name: "deployment-12"},
+				},
 		},
-		34: &kube.PodInfo{
-			ObjectMeta: v1.ObjectMeta{
-				Name: "pod-34", Namespace: "the-ns", UID: "uid-34",
-			},
-			NodeName:     "the-node",
-			StartTimeStr: "2020-01-02 12:34:56",
-			Owner:        &kube.Owner{LabelName: kube.OwnerReplicaSet, Name: "rs-34"},
+		34: &informer.ObjectMeta{
+				Name: "pod-34", Namespace: "the-ns", Uid: "uid-34",
+				Pod: &informer.PodInfo{
+					NodeName:     "the-node",
+					StartTimeStr: "2020-01-02 12:34:56",
+					Owner:        &kube.Owner{LabelName: kube.OwnerReplicaSet, Name: "rs-34"},
+				},
 		},
-		56: &kube.PodInfo{
-			ObjectMeta: v1.ObjectMeta{
-				Name: "the-pod", Namespace: "the-ns", UID: "uid-56",
-			},
-			NodeName:     "the-node",
-			StartTimeStr: "2020-01-02 12:56:56",
+		56: &informer.ObjectMeta{
+				Name: "the-pod", Namespace: "the-ns", Uid: "uid-56",
+				Pod: &informer.PodInfo{
+					NodeName:     "the-node",
+					StartTimeStr: "2020-01-02 12:56:56",
+				},
 		},
 	}}, clusterName: "the-cluster"}
 	inputCh, outputhCh := make(chan []request.Span, 10), make(chan []request.Span, 10)
@@ -140,16 +143,6 @@ func TestDecoration(t *testing.T) {
 	})
 }
 
-type fakeDatabase struct {
-	pidNSPods map[uint32]*kube.PodInfo
-	ipNames   map[string]string
-}
+type fakeInformer struct {
 
-func (f *fakeDatabase) HostNameForIP(ip string) string {
-	return f.ipNames[ip]
-}
-
-func (f *fakeDatabase) OwnerPodInfo(pidNamespace uint32) (*kube.PodInfo, bool) {
-	pi, ok := f.pidNSPods[pidNamespace]
-	return pi, ok
 }

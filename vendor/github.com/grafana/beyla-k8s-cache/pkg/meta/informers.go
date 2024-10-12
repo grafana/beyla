@@ -30,19 +30,19 @@ func (i *Informers) Subscribe(observer Observer) {
 	for _, pod := range i.pods.GetStore().List() {
 		observer.On(&informer.Event{
 			Type:     informer.EventType_CREATED,
-			Resource: &informer.Event_Pod{Pod: pod.(*indexableEntity).Pod},
+			Resource: pod.(*indexableEntity).EncodedMeta,
 		})
 	}
 	for _, node := range i.nodes.GetStore().List() {
 		observer.On(&informer.Event{
 			Type:     informer.EventType_CREATED,
-			Resource: &informer.Event_IpInfo{IpInfo: node.(*indexableEntity).IPInfo},
+			Resource: node.(*indexableEntity).EncodedMeta,
 		})
 	}
 	for _, service := range i.services.GetStore().List() {
 		observer.On(&informer.Event{
 			Type:     informer.EventType_CREATED,
-			Resource: &informer.Event_IpInfo{IpInfo: service.(*indexableEntity).IPInfo},
+			Resource: service.(*indexableEntity).EncodedMeta,
 		})
 	}
 }

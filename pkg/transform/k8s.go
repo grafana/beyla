@@ -2,11 +2,13 @@ package transform
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"time"
 
 	"github.com/mariomac/pipes/pipe"
 
+	"github.com/grafana/beyla-k8s-cache/pkg/informer"
 	attr "github.com/grafana/beyla/pkg/export/attributes/names"
 	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
@@ -61,19 +63,17 @@ func KubeDecoratorProvider(
 			// if kubernetes decoration is disabled, we just bypass the node
 			return pipe.Bypass[[]request.Span](), nil
 		}
-		decorator := &metadataDecorator{db: ctxInfo.AppO11y.K8sDatabase, clusterName: KubeClusterName(ctx, cfg)}
+		metaStore, err := ctxInfo.K8sInformer.Store(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("inititalizing KubeDecoratorProvider: %w", err)
+		}
+		decorator := &metadataDecorator{db: metaStore, clusterName: KubeClusterName(ctx, cfg)}
 		return decorator.nodeLoop, nil
 	}
 }
 
-// production implementer: kube.Database
-type kubeDatabase interface {
-	OwnerPodInfo(pidNamespace uint32) (*kube.PodInfo, bool)
-	HostNameForIP(ip string) string
-}
-
 type metadataDecorator struct {
-	db          kubeDatabase
+	db          *kube.Store
 	clusterName string
 }
 
@@ -90,55 +90,76 @@ func (md *metadataDecorator) nodeLoop(in <-chan []request.Span, out chan<- []req
 }
 
 func (md *metadataDecorator) do(span *request.Span) {
-	if podInfo, ok := md.db.OwnerPodInfo(span.Pid.Namespace); ok {
-		md.appendMetadata(span, podInfo)
+	if objectMeta := md.db.PodByPIDNs(span.Pid.Namespace); objectMeta != nil {
+		md.appendMetadata(span, objectMeta)
 	} else {
 		// do not leave the service attributes map as nil
 		span.ServiceID.Metadata = map[attr.Name]string{}
 	}
 	// override the peer and host names from Kubernetes metadata, if found
-	if hn := md.db.HostNameForIP(span.Host); hn != "" {
-		span.HostName = hn
+	if ip := md.db.ObjectMetaByIP(span.Host); ip != nil {
+		span.HostName = ip.Name
 	}
-	if pn := md.db.HostNameForIP(span.Peer); pn != "" {
-		span.PeerName = pn
+	if ip := md.db.ObjectMetaByIP(span.Peer); ip != nil {
+		span.PeerName = ip.Name
 	}
 }
 
-func (md *metadataDecorator) appendMetadata(span *request.Span, info *kube.PodInfo) {
+func (md *metadataDecorator) appendMetadata(span *request.Span, meta *informer.ObjectMeta) {
+	if meta.Pod == nil {
+		// if this message happen, there is a bug
+		klog().Debug("pod metadata for is nil. Ignoring decoration", "meta", meta)
+		return
+	}
 	// If the user has not defined criteria values for the reported
 	// service name and namespace, we will automatically set it from
 	// the kubernetes metadata
 	if span.ServiceID.AutoName() {
-		span.ServiceID.Name = info.ServiceName()
+		// By contract, we expect that the informer returns the top owner name for a Pod
+		// (this is, instead of the ReplicaSet name, the Deployment name)
+		span.ServiceID.Name = meta.Pod.OwnerName
 	}
 	if span.ServiceID.Namespace == "" {
-		span.ServiceID.Namespace = info.Namespace
+		span.ServiceID.Namespace = meta.Namespace
 	}
 	// overriding the UID here will avoid reusing the OTEL resource reporter
 	// if the application/process was discovered and reported information
 	// before the kubernetes metadata was available
 	// (related issue: https://github.com/grafana/beyla/issues/1124)
-	span.ServiceID.UID = svc.NewUID(string(info.UID))
+	span.ServiceID.UID = svc.NewUID(meta.Pod.Uid)
 
 	// if, in the future, other pipeline steps modify the service metadata, we should
 	// replace the map literal by individual entry insertions
 	span.ServiceID.Metadata = map[attr.Name]string{
-		attr.K8sNamespaceName: info.Namespace,
-		attr.K8sPodName:       info.Name,
-		attr.K8sNodeName:      info.NodeName,
-		attr.K8sPodUID:        string(info.UID),
-		attr.K8sPodStartTime:  info.StartTimeStr,
+		attr.K8sNamespaceName: meta.Namespace,
+		attr.K8sPodName:       meta.Name,
+		attr.K8sNodeName:      meta.Pod.NodeName,
+		attr.K8sPodUID:        meta.Pod.Uid,
+		attr.K8sPodStartTime:  meta.Pod.StartTimeStr,
 		attr.K8sClusterName:   md.clusterName,
 	}
-	if info.Owner != nil {
-		span.ServiceID.Metadata[attr.Name(info.Owner.LabelName)] = info.Owner.Name
-		topOwner := info.Owner.TopOwner()
-		span.ServiceID.Metadata[attr.Name(topOwner.LabelName)] = topOwner.Name
-		span.ServiceID.Metadata[attr.K8sOwnerName] = topOwner.Name
+
+	// ownerKind could be also "Pod", but we won't insert it as "owner" label to avoid
+	// growing cardinality
+	if kindLabel := OwnerLabelName(meta.Pod.OwnerKind); kindLabel != "" {
+		span.ServiceID.Metadata[kindLabel] = meta.Pod.OwnerName
+		span.ServiceID.Metadata[attr.K8sOwnerName] = meta.Pod.OwnerName
 	}
-	// override hostname by the Pod name
-	span.ServiceID.HostName = info.Name
+}
+
+func OwnerLabelName(kind string) attr.Name {
+	switch kind {
+	case "Deployment":
+		return attr.K8sDeploymentName
+	case "StatefulSet":
+		return attr.K8sStatefulSetName
+	case "DaemonSet":
+		return attr.K8sDaemonSetName
+	case "ReplicaSet":
+		return attr.K8sReplicaSetName
+	default:
+		return ""
+	}
 }
 
 func KubeClusterName(ctx context.Context, cfg *KubernetesDecorator) string {

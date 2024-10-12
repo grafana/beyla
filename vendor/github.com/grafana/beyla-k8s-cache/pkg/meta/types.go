@@ -9,16 +9,17 @@ import (
 )
 
 type indexableEntity struct {
+	// the informers library requires to embed this field
 	metav1.ObjectMeta
-	Pod        *informer.PodInfo
-	IPInfo     *informer.IPInfo
+	// the protobuf-encoded object Metadata that will be actually sent over the wire
+	EncodedMeta *informer.ObjectMeta
 }
 
 // ownerFrom returns the most plausible Owner reference. It might be
 // null if the entity does not have any owner
 func ownerFrom(meta *metav1.ObjectMeta) (kind, name string) {
 	if len(meta.OwnerReferences) == 0 {
-		// If no owner references found, return itself as owner
+		// If no owner references' found, return itself as owner
 		return "Pod", meta.Name
 	}
 

@@ -139,21 +139,21 @@ func (k *Informers) initPodInformer(informerFactory informers.SharedInformerFact
 
 		return &indexableEntity{
 			ObjectMeta: pod.ObjectMeta,
-			Pod: &informer.PodInfo{
-				IpInfo: &informer.IPInfo{
-					Name:      pod.Name,
-					Namespace: pod.Namespace,
-					Labels:    pod.Labels,
-					Ips:       ips,
-					Kind:      "Pod",
+			EncodedMeta: &informer.ObjectMeta{
+				Name:      pod.Name,
+				Namespace: pod.Namespace,
+				Labels:    pod.Labels,
+				Ips:       ips,
+				Kind:      "Pod",
+				Pod: &informer.PodInfo{
+					Uid:          string(pod.UID),
+					NodeName:     pod.Spec.NodeName,
+					StartTimeStr: startTime,
+					ContainerIds: containerIDs,
+					OwnerName:    ownerName,
+					OwnerKind:    ownerKind,
+					HostIp:       pod.Status.HostIP,
 				},
-				Uid:          string(pod.UID),
-				NodeName:     pod.Spec.NodeName,
-				StartTimeStr: startTime,
-				ContainerIds: containerIDs,
-				OwnerName:    ownerName,
-				OwnerKind:    ownerKind,
-				HostIp:       pod.Status.HostIP,
 			},
 		}, nil
 	}); err != nil {
@@ -162,24 +162,21 @@ func (k *Informers) initPodInformer(informerFactory informers.SharedInformerFact
 
 	_, err := pods.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			ie := obj.(*indexableEntity)
 			k.Notify(&informer.Event{
 				Type:     informer.EventType_CREATED,
-				Resource: &informer.Event_Pod{Pod: ie.Pod},
+				Resource: obj.(*indexableEntity).EncodedMeta,
 			})
 		},
 		UpdateFunc: func(_, newObj interface{}) {
-			ie := newObj.(*indexableEntity)
 			k.Notify(&informer.Event{
 				Type:     informer.EventType_UPDATED,
-				Resource: &informer.Event_Pod{Pod: ie.Pod},
+				Resource: newObj.(*indexableEntity).EncodedMeta,
 			})
 		},
 		DeleteFunc: func(obj interface{}) {
-			ie := obj.(*indexableEntity)
 			k.Notify(&informer.Event{
 				Type:     informer.EventType_DELETED,
-				Resource: &informer.Event_Pod{Pod: ie.Pod},
+				Resource: obj.(*indexableEntity).EncodedMeta,
 			})
 		},
 	})
@@ -204,7 +201,7 @@ func rmContainerIDSchema(containerID string) string {
 
 func (k *Informers) initNodeIPInformer(informerFactory informers.SharedInformerFactory) error {
 	nodes := informerFactory.Core().V1().Nodes().Informer()
-	// Transform any *v1.Node instance into a *IPInfo instance to save space
+	// Transform any *v1.Node instance into an *indexableEntity instance to save space
 	// in the informer's cache
 	if err := nodes.SetTransform(func(i interface{}) (interface{}, error) {
 		node, ok := i.(*v1.Node)
@@ -228,7 +225,7 @@ func (k *Informers) initNodeIPInformer(informerFactory informers.SharedInformerF
 
 		return &indexableEntity{
 			ObjectMeta: node.ObjectMeta,
-			IPInfo: &informer.IPInfo{
+			EncodedMeta: &informer.ObjectMeta{
 				Name:      node.Name,
 				Namespace: node.Namespace,
 				Labels:    node.Labels,
@@ -251,7 +248,7 @@ func (k *Informers) initNodeIPInformer(informerFactory informers.SharedInformerF
 
 func (k *Informers) initServiceIPInformer(informerFactory informers.SharedInformerFactory) error {
 	services := informerFactory.Core().V1().Services().Informer()
-	// Transform any *v1.Service instance into a *IPInfo instance to save space
+	// Transform any *v1.Service instance into a *indexableEntity instance to save space
 	// in the informer's cache
 	if err := services.SetTransform(func(i interface{}) (interface{}, error) {
 		svc, ok := i.(*v1.Service)
@@ -270,7 +267,7 @@ func (k *Informers) initServiceIPInformer(informerFactory informers.SharedInform
 		}
 		return &indexableEntity{
 			ObjectMeta: svc.ObjectMeta,
-			IPInfo: &informer.IPInfo{
+			EncodedMeta: &informer.ObjectMeta{
 				Name:      svc.Name,
 				Namespace: svc.Namespace,
 				Labels:    svc.Labels,
@@ -296,19 +293,19 @@ func (k *Informers) ipInfoEventHandler() *cache.ResourceEventHandlerFuncs {
 		AddFunc: func(obj interface{}) {
 			k.Notify(&informer.Event{
 				Type:     informer.EventType_CREATED,
-				Resource: &informer.Event_IpInfo{IpInfo: obj.(*indexableEntity).IPInfo},
+				Resource: obj.(*indexableEntity).EncodedMeta,
 			})
 		},
 		UpdateFunc: func(_, newObj interface{}) {
 			k.Notify(&informer.Event{
 				Type:     informer.EventType_UPDATED,
-				Resource: &informer.Event_IpInfo{IpInfo: newObj.(*indexableEntity).IPInfo},
+				Resource: newObj.(*indexableEntity).EncodedMeta,
 			})
 		},
 		DeleteFunc: func(obj interface{}) {
 			k.Notify(&informer.Event{
 				Type:     informer.EventType_DELETED,
-				Resource: &informer.Event_IpInfo{IpInfo: obj.(*indexableEntity).IPInfo},
+				Resource: obj.(*indexableEntity).EncodedMeta,
 			})
 		},
 	}

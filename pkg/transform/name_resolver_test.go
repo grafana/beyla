@@ -31,7 +31,7 @@ func TestSuffixPrefix(t *testing.T) {
 }
 
 func TestResolvePodsFromK8s(t *testing.T) {
-	db := kube2.CreateDatabase(nil)
+	db := kube2.NewStore(nil)
 
 	pod1 := kube2.PodInfo{
 		ObjectMeta: metav1.ObjectMeta{Name: "pod1"},
@@ -114,7 +114,7 @@ func TestResolvePodsFromK8s(t *testing.T) {
 }
 
 func TestResolveServiceFromK8s(t *testing.T) {
-	db := kube2.CreateDatabase(nil)
+	db := kube2.NewStore(nil)
 
 	svc1 := kube2.ServiceInfo{
 		ObjectMeta: metav1.ObjectMeta{Name: "pod1"},
@@ -216,7 +216,7 @@ func TestCleanName(t *testing.T) {
 }
 
 func TestResolveNodesFromK8s(t *testing.T) {
-	db := kube2.CreateDatabase(nil)
+	db := kube2.NewStore(nil)
 
 	node1 := kube2.NodeInfo{
 		ObjectMeta: metav1.ObjectMeta{Name: "node1"},

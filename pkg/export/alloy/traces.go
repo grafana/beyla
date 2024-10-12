@@ -39,7 +39,7 @@ func (tr *tracesReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], error) 
 		return pipe.IgnoreFinal[[]request.Span](), nil
 	}
 	return func(in <-chan []request.Span) {
-		// Get user attributes
+		// Store user attributes
 		traceAttrs, err := otel.GetUserSelectedAttributes(tr.attributes)
 		if err != nil {
 			slog.Error("error fetching user defined attributes", "error", err)

@@ -32,6 +32,4 @@ type ContextInfo struct {
 type AppO11y struct {
 	// ReportRoutes sets whether the metrics should set the http.route attribute
 	ReportRoutes bool
-	// K8sDatabase provides access to shared kubernetes metadata
-	K8sDatabase *kube2.Database
 }

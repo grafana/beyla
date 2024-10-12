@@ -151,7 +151,7 @@ type tracesOTELReceiver struct {
 }
 
 func GetUserSelectedAttributes(attrs attributes.Selection) (map[attr.Name]struct{}, error) {
-	// Get user attributes
+	// Store user attributes
 	attribProvider, err := attributes.NewAttrSelector(attributes.GroupTraces, attrs)
 	if err != nil {
 		return nil, err

@@ -2,6 +2,7 @@ package transform
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"strings"
 	"time"
@@ -46,24 +47,28 @@ type NameResolverConfig struct {
 type NameResolver struct {
 	cache *expirable.LRU[string, string]
 	cfg   *NameResolverConfig
-	db    *kube2.Database
+	db    *kube2.Store
 
 	sources maps.Bits
 }
 
-func NameResolutionProvider(ctxInfo *global.ContextInfo, cfg *NameResolverConfig) pipe.MiddleProvider[[]request.Span, []request.Span] {
+func NameResolutionProvider(ctx context.Context, ctxInfo *global.ContextInfo, cfg *NameResolverConfig) pipe.MiddleProvider[[]request.Span, []request.Span] {
 	return func() (pipe.MiddleFunc[[]request.Span, []request.Span], error) {
 		if cfg == nil || len(cfg.Sources) == 0 {
 			return pipe.Bypass[[]request.Span](), nil
 		}
-		return nameResolver(ctxInfo, cfg)
+		return nameResolver(ctx, ctxInfo, cfg)
 	}
 }
 
-func nameResolver(ctxInfo *global.ContextInfo, cfg *NameResolverConfig) (pipe.MiddleFunc[[]request.Span, []request.Span], error) {
+func nameResolver(ctx context.Context, ctxInfo *global.ContextInfo, cfg *NameResolverConfig) (pipe.MiddleFunc[[]request.Span, []request.Span], error) {
+	store, err := ctxInfo.K8sInformer.Store(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("initializing NameResolutionProvider: %w", err)
+	}
 	nr := NameResolver{
 		cfg:     cfg,
-		db:      ctxInfo.AppO11y.K8sDatabase,
+		db:      store,
 		cache:   expirable.NewLRU[string, string](cfg.CacheLen, nil, cfg.CacheTTL),
 		sources: resolverSources(cfg.Sources),
 	}
@@ -173,7 +178,8 @@ func (nr *NameResolver) dnsResolve(svc *svc.ID, ip string) (string, string) {
 }
 
 func (nr *NameResolver) resolveFromK8s(ip string) (string, string) {
-	return nr.db.ServiceNameNamespaceForIP(ip)
+	om := nr.db.ObjectMetaByIP(ip)
+	return om.Name, om.Namespace
 }
 
 func (nr *NameResolver) resolveIP(ip string) string {

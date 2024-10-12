@@ -65,7 +65,6 @@ func (pf *ProcessFinder) Start() (<-chan *ebpf.Instrumentable, <-chan *ebpf.Inst
 
 	discoveredTracers, deleteTracers := make(chan *ebpf.Instrumentable), make(chan *ebpf.Instrumentable)
 
-
 	gb := pipe.NewBuilder(&nodesMap{}, pipe.ChannelBufferLen(pf.cfg.ChannelBufferLen))
 	pipe.AddStart(gb, processWatcher, ProcessWatcherFunc(pf.ctx, pf.cfg))
 	pipe.AddMiddleProvider(gb, ptrWatcherKubeEnricher,

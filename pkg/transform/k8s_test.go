@@ -4,11 +4,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/grafana/beyla-k8s-cache/pkg/informer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/grafana/beyla-k8s-cache/pkg/informer"
+	"github.com/grafana/beyla-k8s-cache/pkg/meta"
 	attr "github.com/grafana/beyla/pkg/export/attributes/names"
 	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/request"
@@ -19,34 +19,39 @@ import (
 const timeout = 5 * time.Second
 
 func TestDecoration(t *testing.T) {
-	kube.NewStore()
+	inf := &fakeInformer{}
+	store := kube.NewStore(inf)
 	// pre-populated kubernetes metadata database
-	dec := metadataDecorator{db: &fakeDatabase{pidNSPods: map[uint32]*informer.ObjectMeta{
-		12: &informer.ObjectMeta{
-				Name: "pod-12", Namespace: "the-ns",
-				Pod: &informer.PodInfo{
-					NodeName:     "the-node",
-					StartTimeStr: "2020-01-02 12:12:56",
-					Uid: "uid-12",
-					Owner:        &kube.Owner{LabelName: kube.OwnerDeployment, Name: "deployment-12"},
-				},
+	inf.Notify(&informer.Event{Type: informer.EventType_CREATED, Resource: &informer.ObjectMeta{
+		Name: "pod-12", Namespace: "the-ns",
+		Pod: &informer.PodInfo{
+			NodeName:     "the-node",
+			StartTimeStr: "2020-01-02 12:12:56",
+			Uid:          "uid-12",
+			OwnerKind:    "Deployment",
+			OwnerName:    "deployment-12",
 		},
-		34: &informer.ObjectMeta{
-				Name: "pod-34", Namespace: "the-ns", Uid: "uid-34",
-				Pod: &informer.PodInfo{
-					NodeName:     "the-node",
-					StartTimeStr: "2020-01-02 12:34:56",
-					Owner:        &kube.Owner{LabelName: kube.OwnerReplicaSet, Name: "rs-34"},
-				},
+	}})
+	inf.Notify(&informer.Event{Type: informer.EventType_CREATED, Resource: &informer.ObjectMeta{
+		Name: "pod-34", Namespace: "the-ns",
+		Pod: &informer.PodInfo{
+			NodeName:     "the-node",
+			StartTimeStr: "2020-01-02 12:34:56",
+			Uid:          "uid-34",
+			OwnerName:    "rs-34",
+			OwnerKind:    "ReplicaSet",
 		},
-		56: &informer.ObjectMeta{
-				Name: "the-pod", Namespace: "the-ns", Uid: "uid-56",
-				Pod: &informer.PodInfo{
-					NodeName:     "the-node",
-					StartTimeStr: "2020-01-02 12:56:56",
-				},
+	}})
+	inf.Notify(&informer.Event{Type: informer.EventType_CREATED, Resource: &informer.ObjectMeta{
+		Name: "the-pod", Namespace: "the-ns",
+		Pod: &informer.PodInfo{
+			NodeName:     "the-node",
+			Uid:          "uid-56",
+			StartTimeStr: "2020-01-02 12:56:56",
 		},
-	}}, clusterName: "the-cluster"}
+	}})
+
+	dec := metadataDecorator{db: store, clusterName: "the-cluster"}
 	inputCh, outputhCh := make(chan []request.Span, 10), make(chan []request.Span, 10)
 	defer close(inputCh)
 	go dec.nodeLoop(inputCh, outputhCh)
@@ -144,5 +149,17 @@ func TestDecoration(t *testing.T) {
 }
 
 type fakeInformer struct {
+	observer meta.Observer
+}
 
+func (f *fakeInformer) Subscribe(observer meta.Observer) {
+	f.observer = observer
+}
+
+func (f *fakeInformer) Unsubscribe(_ meta.Observer) {
+	f.observer = nil
+}
+
+func (f *fakeInformer) Notify(event *informer.Event) {
+	f.observer.On(event)
 }

@@ -153,6 +153,8 @@ type bpf_tp_debugSqlFuncInvocationT struct {
 	StartMonotimeNs uint64
 	SqlParam        uint64
 	QueryLen        uint64
+	Conn            bpf_tp_debugConnectionInfoT
+	_               [4]byte
 	Tp              bpf_tp_debugTpInfoT
 }
 

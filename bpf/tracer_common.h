@@ -51,6 +51,7 @@ typedef struct sql_request_trace_t {
     u64 end_monotime_ns;
     u8 sql[SQL_MAX_LEN];
     u16 status;
+    connection_info_t conn __attribute__((aligned(8)));
     tp_info_t tp;
     pid_info pid;
 } __attribute__((packed)) sql_request_trace;

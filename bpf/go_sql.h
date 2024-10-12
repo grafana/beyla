@@ -30,6 +30,7 @@ typedef struct sql_func_invocation {
     u64 start_monotime_ns;
     u64 sql_param;
     u64 query_len;
+    connection_info_t conn __attribute__((aligned(8)));
     tp_info_t tp;
 } sql_func_invocation_t;
 
@@ -65,6 +66,43 @@ int uprobe_queryDC(struct pt_regs *ctx) {
 
     void *sql_param = GO_PARAM8(ctx);
     void *query_len = GO_PARAM9(ctx);
+
+    off_table_t *ot = get_offsets_table();
+    go_addr_key_t g_key = {};
+    go_addr_key_from_id(&g_key, goroutine_addr);
+
+    connection_info_t *existing = bpf_map_lookup_elem(&ongoing_server_connections, &g_key);
+
+    if (!existing) {
+        void *c_ptr = GO_PARAM1(ctx);
+        if (c_ptr) {
+            void *conn_conn_ptr =
+                c_ptr + 8 + go_offset_of(ot, (go_offset){.v = _c_rwc_pos}); // embedded struct
+            void *tls_state = 0;
+            bpf_probe_read(&tls_state,
+                           sizeof(tls_state),
+                           (void *)(c_ptr + go_offset_of(ot, (go_offset){.v = _c_tls_pos})));
+            conn_conn_ptr = unwrap_tls_conn_info(conn_conn_ptr, tls_state);
+            //bpf_dbg_printk("conn_conn_ptr %llx, tls_state %llx, c_tls_pos = %d, c_tls_ptr = %llx", conn_conn_ptr, tls_state, c_tls_pos, c_ptr + c_tls_pos);
+            if (conn_conn_ptr) {
+                void *conn_ptr = 0;
+                bpf_probe_read(
+                    &conn_ptr,
+                    sizeof(conn_ptr),
+                    (void *)(conn_conn_ptr +
+                             go_offset_of(ot, (go_offset){.v = _net_conn_pos}))); // find conn
+                bpf_dbg_printk("conn_ptr %llx", conn_ptr);
+                if (conn_ptr) {
+                    connection_info_t conn = {0};
+                    get_conn_info(
+                        conn_ptr,
+                        &conn); // initialized to 0, no need to check the result if we succeeded
+                    bpf_map_update_elem(&ongoing_server_connections, &g_key, &conn, BPF_ANY);
+                }
+            }
+        }
+    }
+
     set_sql_info(goroutine_addr, sql_param, query_len);
     return 0;
 }
@@ -117,6 +155,22 @@ int uprobe_queryReturn(struct pt_regs *ctx) {
         if (query_len < sizeof(trace->sql)) {
             trace->sql[query_len] = 0;
         }
+
+        connection_info_t *info = bpf_map_lookup_elem(&ongoing_server_connections, &g_key);
+
+        if (info) {
+            //dbg_print_http_connection_info(info);
+            __builtin_memcpy(&trace->conn, info, sizeof(connection_info_t));
+        } else {
+            // We can't find the connection info, this typically means there are too many requests per second
+            // and the connection map is too small for the workload.
+            bpf_dbg_printk("Can't find connection info for %llx", goroutine_addr);
+            __builtin_memset(&trace->conn, 0, sizeof(connection_info_t));
+        }
+
+        // Server connections have opposite order, source port is the server port
+        swap_connection_info_order(&trace->conn);
+
         // submit the completed trace via ringbuffer
         bpf_ringbuf_submit(trace, get_flags());
     } else {

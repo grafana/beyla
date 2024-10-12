@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -27,6 +28,7 @@ const PinInternal = ebpf.PinType(100)
 var loadMux sync.Mutex
 
 var internalMaps = make(map[string]*ebpf.Map)
+var internalMapsMux sync.Mutex
 
 func ptlog() *slog.Logger { return slog.With("component", "ebpf.ProcessTracer") }
 
@@ -39,6 +41,9 @@ type instrumenter struct {
 
 func resolveInternalMaps(spec *ebpf.CollectionSpec) (*ebpf.CollectionOptions, error) {
 	collOpts := ebpf.CollectionOptions{MapReplacements: map[string]*ebpf.Map{}}
+
+	internalMapsMux.Lock()
+	defer internalMapsMux.Unlock()
 
 	for k, v := range spec.Maps {
 		if v.Pinning != PinInternal {
@@ -58,6 +63,7 @@ func resolveInternalMaps(spec *ebpf.CollectionSpec) (*ebpf.CollectionOptions, er
 			}
 
 			internalMaps[k] = internalMap
+			runtime.SetFinalizer(internalMap, (*ebpf.Map).Close)
 		}
 
 		collOpts.MapReplacements[k] = internalMap

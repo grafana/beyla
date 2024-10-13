@@ -10,7 +10,6 @@ import (
 
 	"github.com/grafana/beyla-k8s-cache/pkg/informer"
 	"github.com/grafana/beyla-k8s-cache/pkg/meta"
-
 	"github.com/grafana/beyla/pkg/internal/helpers/container"
 	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/services"
@@ -35,11 +34,6 @@ type watcherKubeEnricher struct {
 	processByContainer map[string]processAttrs
 
 	podsInfoCh chan Event[*informer.ObjectMeta]
-}
-
-type nsName struct {
-	namespace string
-	name      string
 }
 
 // kubeMetadataProvider abstracts kube.MetadataProvider for easier dependency

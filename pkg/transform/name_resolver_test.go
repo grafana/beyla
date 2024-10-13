@@ -34,7 +34,7 @@ func TestResolvePodsFromK8s(t *testing.T) {
 	inf := &fakeInformer{}
 	db := kube2.NewStore(inf)
 	pod1 := &informer.ObjectMeta{Name: "pod1", Kind: "Pod", Ips: []string{"10.0.0.1", "10.1.0.1"}}
-	pod2 := &informer.ObjectMeta{Name: "pod2", Kind: "Pod", Ips: []string{"10.0.0.2", "10.1.0.2"}}
+	pod2 := &informer.ObjectMeta{Name: "pod2", Namespace: "something", Kind: "Pod", Ips: []string{"10.0.0.2", "10.1.0.2"}}
 	pod3 := &informer.ObjectMeta{Name: "pod3", Kind: "Pod", Ips: []string{"10.0.0.3", "10.1.0.3"}}
 	inf.Notify(&informer.Event{Type: informer.EventType_CREATED, Resource: pod1})
 	inf.Notify(&informer.Event{Type: informer.EventType_CREATED, Resource: pod2})
@@ -202,11 +202,11 @@ func TestResolveNodesFromK8s(t *testing.T) {
 	inf.Notify(&informer.Event{Type: informer.EventType_CREATED, Resource: node2})
 	inf.Notify(&informer.Event{Type: informer.EventType_CREATED, Resource: node3})
 
-	assert.Equal(t, &node1, db.ObjectMetaByIP("10.0.0.1"))
-	assert.Equal(t, &node1, db.ObjectMetaByIP("10.1.0.1"))
-	assert.Equal(t, &node2, db.ObjectMetaByIP("10.0.0.2"))
-	assert.Equal(t, &node2, db.ObjectMetaByIP("10.1.0.2"))
-	assert.Equal(t, &node3, db.ObjectMetaByIP("10.1.0.3"))
+	assert.Equal(t, node1, db.ObjectMetaByIP("10.0.0.1"))
+	assert.Equal(t, node1, db.ObjectMetaByIP("10.1.0.1"))
+	assert.Equal(t, node2, db.ObjectMetaByIP("10.0.0.2"))
+	assert.Equal(t, node2, db.ObjectMetaByIP("10.1.0.2"))
+	assert.Equal(t, node3, db.ObjectMetaByIP("10.1.0.3"))
 	inf.Notify(&informer.Event{Type: informer.EventType_DELETED, Resource: node3})
 	assert.Nil(t, db.ObjectMetaByIP("10.1.0.3"))
 

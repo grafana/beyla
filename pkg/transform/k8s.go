@@ -115,9 +115,13 @@ func (md *metadataDecorator) appendMetadata(span *request.Span, meta *informer.O
 	// service name and namespace, we will automatically set it from
 	// the kubernetes metadata
 	if span.ServiceID.AutoName() {
-		// By contract, we expect that the informer returns the top owner name for a Pod
+		// By contract, we expect that our custom Informer cache (beyla-k8s-cache) returns the top owner name for a Pod
 		// (this is, instead of the ReplicaSet name, the Deployment name)
-		span.ServiceID.Name = meta.Pod.OwnerName
+		if meta.Pod.OwnerName != "" {
+			span.ServiceID.Name = meta.Pod.OwnerName
+		} else {
+			span.ServiceID.Name = meta.Name
+		}
 	}
 	if span.ServiceID.Namespace == "" {
 		span.ServiceID.Namespace = meta.Namespace

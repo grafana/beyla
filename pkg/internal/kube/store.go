@@ -6,7 +6,6 @@ import (
 
 	"github.com/grafana/beyla-k8s-cache/pkg/informer"
 	"github.com/grafana/beyla-k8s-cache/pkg/meta"
-
 	"github.com/grafana/beyla/pkg/internal/helpers/container"
 )
 
@@ -64,9 +63,11 @@ func (s *Store) On(event *informer.Event) {
 	}
 }
 
+// InfoForPID is an injectable dependency for system-independent testing
+var InfoForPID = container.InfoForPID
+
 func (s *Store) AddProcess(pid uint32) {
-	// TODO: hide this behind an interface for proper testing
-	ifp, err := container.InfoForPID(pid)
+	ifp, err := InfoForPID(pid)
 	if err != nil {
 		dblog().Debug("failing to get container information", "pid", pid, "error", err)
 		return

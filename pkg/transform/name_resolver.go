@@ -178,8 +178,10 @@ func (nr *NameResolver) dnsResolve(svc *svc.ID, ip string) (string, string) {
 }
 
 func (nr *NameResolver) resolveFromK8s(ip string) (string, string) {
-	om := nr.db.ObjectMetaByIP(ip)
-	return om.Name, om.Namespace
+	if om := nr.db.ObjectMetaByIP(ip); om != nil {
+		return om.Name, om.Namespace
+	}
+	return "", ""
 }
 
 func (nr *NameResolver) resolveIP(ip string) string {

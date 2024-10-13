@@ -16,7 +16,6 @@ import (
 
 	"github.com/grafana/beyla-k8s-cache/pkg/informer"
 	"github.com/grafana/beyla-k8s-cache/pkg/meta"
-
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/helpers/container"
 	"github.com/grafana/beyla/pkg/internal/kube"
@@ -40,19 +39,19 @@ func TestWatcherKubeEnricher(t *testing.T) {
 		Level: slog.LevelDebug,
 	})))
 
-	type fn func(t *testing.T, inputCh chan []Event[processAttrs], fInformer kube.MetadataNotifier)
+	type fn func(inputCh chan []Event[processAttrs], fInformer kube.MetadataNotifier)
 	type testCase struct {
 		name  string
 		steps []fn
 	}
 	// test deployment functions
-	var process = func(_ *testing.T, inputCh chan []Event[processAttrs], _ kube.MetadataNotifier) {
+	var process = func(inputCh chan []Event[processAttrs], _ kube.MetadataNotifier) {
 		newProcess(inputCh, containerPID, []uint32{containerPort})
 	}
-	var pod = func(t *testing.T, _ chan []Event[processAttrs], fInformer kube.MetadataNotifier) {
+	var pod = func(_ chan []Event[processAttrs], fInformer kube.MetadataNotifier) {
 		deployPod(fInformer, namespace, podName, containerID, nil)
 	}
-	var ownedPod = func(t *testing.T, _ chan []Event[processAttrs], fInformer kube.MetadataNotifier) {
+	var ownedPod = func(_ chan []Event[processAttrs], fInformer kube.MetadataNotifier) {
 		deployOwnedPod(fInformer, namespace, podName, deploymentName, containerID)
 	}
 
@@ -82,7 +81,7 @@ func TestWatcherKubeEnricher(t *testing.T) {
 
 			// deploy all the involved elements where the metadata are composed of
 			for _, step := range tc.steps {
-				step(t, inputCh, fInformer)
+				step(inputCh, fInformer)
 			}
 
 			// check that the watcherKubeEnricher eventually submits an event with the expected metadata
@@ -145,12 +144,10 @@ func TestWatcherKubeEnricherWithMatcher(t *testing.T) {
 
 	// sending some events that shouldn't match any of the above discovery criteria
 	// so they won't be forwarded before any of later matched events
-	t.Run("unmatched events", func(t *testing.T) {
-		newProcess(inputCh, 123, []uint32{777})
-		newProcess(inputCh, 456, []uint32{})
-		newProcess(inputCh, 789, []uint32{443})
-		deployOwnedPod(fInformer, namespace, "depl-rsid-podid", "depl", "container-789")
-	})
+	newProcess(inputCh, 123, []uint32{777})
+	newProcess(inputCh, 456, []uint32{})
+	newProcess(inputCh, 789, []uint32{443})
+	deployOwnedPod(fInformer, namespace, "depl-rsid-podid", "depl", "container-789")
 
 	// sending events that will match and will be forwarded
 	t.Run("port-only match", func(t *testing.T) {

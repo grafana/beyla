@@ -10,6 +10,7 @@ import (
 
 	"github.com/grafana/beyla-k8s-cache/pkg/informer"
 	"github.com/grafana/beyla-k8s-cache/pkg/meta"
+
 	"github.com/grafana/beyla/pkg/internal/helpers/container"
 	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/services"
@@ -57,10 +58,15 @@ func WatcherKubeEnricherProvider(
 			return nil, fmt.Errorf("instantiating WatcherKubeEnricher: %w", err)
 		}
 		wk := watcherKubeEnricher{store: store}
-		if err := wk.init(ctx, kubeMetaProvider); err != nil {
-			return nil, err
-		}
-
+		go func() {
+			// the initialization needs to go in a different thread,
+			// as the subscription "welcome message" would otherwise be blocked
+			// trying to send events to the wk.podsInfoCh channel
+			// before the enrich loop has the chance to receive them
+			if err := wk.init(ctx, kubeMetaProvider); err != nil {
+				wk.log.Error("can't subscribe to kubernetes metadata", "err", err)
+			}
+		}()
 		return wk.enrich, nil
 	}
 }

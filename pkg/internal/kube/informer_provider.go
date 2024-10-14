@@ -113,6 +113,8 @@ func (mp *MetadataProvider) Store(ctx context.Context) (*Store, error) {
 }
 
 func (mp *MetadataProvider) Subscribe(ctx context.Context, observer meta.Observer) error {
+	mp.mt.Lock()
+	defer mp.mt.Unlock()
 	if informer, err := mp.getInformer(ctx); err != nil {
 		return fmt.Errorf("can't subscribe to informer: %w", err)
 	} else {
@@ -122,8 +124,6 @@ func (mp *MetadataProvider) Subscribe(ctx context.Context, observer meta.Observe
 }
 
 func (mp *MetadataProvider) getInformer(ctx context.Context) (*InformersMetadata, error) {
-	mp.mt.Lock()
-	defer mp.mt.Unlock()
 	if mp.informer != nil {
 		return mp.informer, nil
 	}

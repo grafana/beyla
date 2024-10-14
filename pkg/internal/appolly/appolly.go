@@ -33,7 +33,7 @@ type Instrumenter struct {
 
 // New Instrumenter, given a Config
 func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config) *Instrumenter {
-	setupFeatureContextInfo(ctxInfo, config)
+	setupFeatureContextInfo(ctx, ctxInfo, config)
 	return &Instrumenter{
 		ctx:         ctx,
 		config:      config,
@@ -113,6 +113,25 @@ func (i *Instrumenter) ReadAndForward() error {
 	return nil
 }
 
-func setupFeatureContextInfo(ctxInfo *global.ContextInfo, config *beyla.Config) {
+func setupFeatureContextInfo(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config) {
 	ctxInfo.AppO11y.ReportRoutes = config.Routes != nil
+	setupKubernetes(ctx, ctxInfo)
+}
+
+// setupKubernetes sets up common Kubernetes database and API clients that need to be accessed
+// from different stages in the Beyla pipeline
+func setupKubernetes(ctx context.Context, ctxInfo *global.ContextInfo) {
+	if !ctxInfo.K8sInformer.IsKubeEnabled() {
+		return
+	}
+
+	// caching the database initialization. Discarding it as subsequent
+	// invocations to Store will return the same initialized instance
+	_, err := ctxInfo.K8sInformer.Store(ctx)
+	if err != nil {
+		slog.Error("can't init Kubernetes informer. You can't setup Kubernetes discovery and your"+
+			" traces won't be decorated with Kubernetes metadata", "error", err)
+		ctxInfo.K8sInformer.ForceDisable()
+		return
+	}
 }

@@ -288,6 +288,7 @@ type bpf_tp_debugMapSpecs struct {
 	ActiveSslReadArgs       *ebpf.MapSpec `ebpf:"active_ssl_read_args"`
 	ActiveSslWriteArgs      *ebpf.MapSpec `ebpf:"active_ssl_write_args"`
 	AsyncResetArgs          *ebpf.MapSpec `ebpf:"async_reset_args"`
+	ClientConnectInfo       *ebpf.MapSpec `ebpf:"client_connect_info"`
 	CloneMap                *ebpf.MapSpec `ebpf:"clone_map"`
 	ConnectionMetaMem       *ebpf.MapSpec `ebpf:"connection_meta_mem"`
 	DebugEvents             *ebpf.MapSpec `ebpf:"debug_events"`
@@ -348,6 +349,7 @@ type bpf_tp_debugMaps struct {
 	ActiveSslReadArgs       *ebpf.Map `ebpf:"active_ssl_read_args"`
 	ActiveSslWriteArgs      *ebpf.Map `ebpf:"active_ssl_write_args"`
 	AsyncResetArgs          *ebpf.Map `ebpf:"async_reset_args"`
+	ClientConnectInfo       *ebpf.Map `ebpf:"client_connect_info"`
 	CloneMap                *ebpf.Map `ebpf:"clone_map"`
 	ConnectionMetaMem       *ebpf.Map `ebpf:"connection_meta_mem"`
 	DebugEvents             *ebpf.Map `ebpf:"debug_events"`
@@ -391,6 +393,7 @@ func (m *bpf_tp_debugMaps) Close() error {
 		m.ActiveSslReadArgs,
 		m.ActiveSslWriteArgs,
 		m.AsyncResetArgs,
+		m.ClientConnectInfo,
 		m.CloneMap,
 		m.ConnectionMetaMem,
 		m.DebugEvents,

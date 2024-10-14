@@ -44,6 +44,14 @@ struct {
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } clone_map SEC(".maps");
 
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, pid_connection_info_t); // key: conn_info
+    __type(value, trace_key_t);         // value: tracekey to lookup in server_traces
+    __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
+    __uint(pinning, LIBBPF_PIN_BY_NAME);
+} client_connect_info SEC(".maps");
+
 static __always_inline unsigned char *tp_char_buf() {
     int zero = 0;
     return bpf_map_lookup_elem(&tp_char_buf_mem, &zero);
@@ -92,7 +100,7 @@ static __always_inline unsigned char *bpf_strstr_tp_loop(unsigned char *buf, int
 }
 #endif
 
-static __always_inline tp_info_pid_t *find_parent_trace() {
+static __always_inline tp_info_pid_t *find_parent_trace(pid_connection_info_t *p_conn) {
     trace_key_t t_key = {0};
 
     task_tid(&t_key.p_key);
@@ -128,7 +136,13 @@ static __always_inline tp_info_pid_t *find_parent_trace() {
         }
 
         attempts++;
-    } while (attempts < 3); // Up to 3 levels of goroutine nesting allowed
+    } while (attempts < 3); // Up to 3 levels of thread nesting allowed
+
+    trace_key_t *conn_t_key = bpf_map_lookup_elem(&client_connect_info, p_conn);
+
+    if (conn_t_key) {
+        return bpf_map_lookup_elem(&server_traces, conn_t_key);
+    }
 
     return 0;
 }
@@ -152,6 +166,15 @@ static __always_inline void delete_server_trace(trace_key_t *t_key) {
     int __attribute__((unused)) res = bpf_map_delete_elem(&server_traces, t_key);
     // Fails on 5.10 with unknown function
     // bpf_dbg_printk("Deleting server span for id=%llx, pid=%d, ns=%d, res = %d", bpf_get_current_pid_tgid(), t_key->p_key.pid, t_key->p_key.ns, res);
+}
+
+static __always_inline void delete_client_trace_info(pid_connection_info_t *pid_conn) {
+    bpf_dbg_printk("Deleting client trace map for connection");
+    dbg_print_http_connection_info(&pid_conn->conn);
+
+    bpf_map_delete_elem(&trace_map, &pid_conn->conn);
+    bpf_map_delete_elem(&outgoing_trace_map, &pid_conn->conn);
+    bpf_map_delete_elem(&client_connect_info, pid_conn);
 }
 
 static __always_inline u8 valid_span(const unsigned char *span_id) {
@@ -217,7 +240,9 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
 
     if (meta) {
         if (meta->type == EVENT_HTTP_CLIENT) {
-            tp_info_pid_t *server_tp = find_parent_trace();
+            pid_connection_info_t p_conn = {.pid = pid};
+            __builtin_memcpy(&p_conn.conn, conn, sizeof(connection_info_t));
+            tp_info_pid_t *server_tp = find_parent_trace(&p_conn);
 
             if (server_tp && server_tp->valid && valid_trace(server_tp->tp.trace_id)) {
                 found_tp = 1;

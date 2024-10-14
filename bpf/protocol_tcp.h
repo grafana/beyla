@@ -54,7 +54,7 @@ static __always_inline void handle_unknown_tcp_connection(pid_connection_info_t 
             task_pid(&req->pid);
             bpf_probe_read(req->buf, K_TCP_MAX_LEN, u_buf);
 
-            tp_info_pid_t *server_tp = find_parent_trace();
+            tp_info_pid_t *server_tp = find_parent_trace(pid_conn);
 
             if (server_tp && server_tp->valid && valid_trace(server_tp->tp.trace_id)) {
                 bpf_dbg_printk("Found existing server tp for client call");

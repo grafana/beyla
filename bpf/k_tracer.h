@@ -237,7 +237,16 @@ int BPF_KRETPROBE(kretprobe_sys_connect, int fd) {
         info.p_conn.pid = pid_from_pid_tgid(id);
         info.orig_dport = orig_dport;
 
-        bpf_map_update_elem(&pid_tid_to_conn, &id, &info, BPF_ANY); // to support SSL
+        bpf_map_update_elem(&pid_tid_to_conn, &id, &info, BPF_ANY); // Support SSL lookup
+
+        trace_key_t t_key = {0};
+
+        task_tid(&t_key.p_key);
+        u64 extra_id = extra_runtime_id();
+        t_key.extra_id = extra_id;
+
+        bpf_map_update_elem(
+            &client_connect_info, &info.p_conn, &t_key, BPF_ANY); // Support connection thread pools
     }
 
 cleanup:

@@ -228,10 +228,7 @@ static __always_inline void handle_http_response(unsigned char *small_buf,
         t_key.p_key.pid = info->task_tid;
         delete_server_trace(&t_key);
     } else {
-        //bpf_dbg_printk("Deleting client trace map for connection");
-        //dbg_print_http_connection_info(&pid_conn->conn);
-
-        bpf_map_delete_elem(&trace_map, &pid_conn->conn);
+        delete_client_trace_info(pid_conn);
     }
     bpf_map_delete_elem(&active_ssl_connections, pid_conn);
 }

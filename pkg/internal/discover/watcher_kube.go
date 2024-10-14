@@ -57,27 +57,27 @@ func WatcherKubeEnricherProvider(
 			return nil, fmt.Errorf("instantiating WatcherKubeEnricher: %w", err)
 		}
 		wk := watcherKubeEnricher{store: store}
-		go func() {
-			// the initialization needs to go in a different thread,
-			// as the subscription "welcome message" would otherwise be blocked
-			// trying to send events to the wk.podsInfoCh channel
-			// before the enrich loop has the chance to receive them
-			if err := wk.init(ctx, kubeMetaProvider); err != nil {
-				wk.log.Error("can't subscribe to kubernetes metadata", "err", err)
-			}
-		}()
+		wk.init(ctx, kubeMetaProvider)
 		return wk.enrich, nil
 	}
 }
 
-func (wk *watcherKubeEnricher) init(ctx context.Context, kubeMetaProvider kubeMetadataProvider) error {
+func (wk *watcherKubeEnricher) init(ctx context.Context, kubeMetaProvider kubeMetadataProvider) {
 	wk.log = slog.With("component", "discover.watcherKubeEnricher")
 	wk.containerByPID = map[PID]container.Info{}
 	wk.processByContainer = map[string]processAttrs{}
 
 	// the podsInfoCh channel will receive any update about pods being created or deleted
 	wk.podsInfoCh = make(chan Event[*informer.ObjectMeta], 10)
-	return kubeMetaProvider.Subscribe(ctx, wk)
+	go func() {
+		// the initialization needs to go in a different thread,
+		// as the subscription "welcome message" would otherwise be blocked
+		// trying to send events to the wk.podsInfoCh channel
+		// before the enrich loop has the chance to receive them
+		if err := kubeMetaProvider.Subscribe(ctx, wk); err != nil {
+			wk.log.Error("can't subscribe to kubernetes metadata", "err", err)
+		}
+	}()
 }
 
 func (wk *watcherKubeEnricher) ID() string { return "unique-watcher-kube-enricher-id" }

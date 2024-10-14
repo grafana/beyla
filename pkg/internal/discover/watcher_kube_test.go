@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 
 	"github.com/grafana/beyla-k8s-cache/pkg/informer"
 	"github.com/grafana/beyla-k8s-cache/pkg/meta"
+
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/helpers/container"
 	"github.com/grafana/beyla/pkg/internal/kube"
@@ -293,10 +295,13 @@ func (i *fakeMetadataProvider) Subscribe(_ context.Context, observer meta.Observ
 }
 
 type fakeInformer struct {
+	mt        sync.Mutex
 	observers map[string]meta.Observer
 }
 
 func (f *fakeInformer) Subscribe(observer meta.Observer) {
+	f.mt.Lock()
+	defer f.mt.Unlock()
 	if f.observers == nil {
 		f.observers = map[string]meta.Observer{}
 	}
@@ -304,10 +309,14 @@ func (f *fakeInformer) Subscribe(observer meta.Observer) {
 }
 
 func (f *fakeInformer) Unsubscribe(observer meta.Observer) {
+	f.mt.Lock()
+	defer f.mt.Unlock()
 	delete(f.observers, observer.ID())
 }
 
 func (f *fakeInformer) Notify(event *informer.Event) {
+	f.mt.Lock()
+	defer f.mt.Unlock()
 	for _, observer := range f.observers {
 		observer.On(event)
 	}

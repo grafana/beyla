@@ -62,15 +62,29 @@ func NameResolutionProvider(ctx context.Context, ctxInfo *global.ContextInfo, cf
 }
 
 func nameResolver(ctx context.Context, ctxInfo *global.ContextInfo, cfg *NameResolverConfig) (pipe.MiddleFunc[[]request.Span, []request.Span], error) {
-	store, err := ctxInfo.K8sInformer.Store(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("initializing NameResolutionProvider: %w", err)
+	sources := resolverSources(cfg.Sources)
+
+	var kubeStore *kube2.Store
+	if ctxInfo.K8sInformer.IsKubeEnabled() {
+		var err error
+		kubeStore, err = ctxInfo.K8sInformer.Store(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("initializing NameResolutionProvider: %w", err)
+		}
+	} else {
+		sources &= ^ResolverK8s
 	}
+	// after potentially remove k8s resolver, check again if
+	// this node needs to be bypassed
+	if sources == 0 {
+		return pipe.Bypass[[]request.Span](), nil
+	}
+
 	nr := NameResolver{
 		cfg:     cfg,
-		db:      store,
+		db:      kubeStore,
 		cache:   expirable.NewLRU[string, string](cfg.CacheLen, nil, cfg.CacheTTL),
-		sources: resolverSources(cfg.Sources),
+		sources: sources,
 	}
 
 	return func(in <-chan []request.Span, out chan<- []request.Span) {

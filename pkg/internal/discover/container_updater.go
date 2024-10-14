@@ -3,6 +3,7 @@ package discover
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/mariomac/pipes/pipe"
 
@@ -27,17 +28,18 @@ func ContainerDBUpdaterProvider(ctx context.Context, meta kubeMetadataProvider) 
 }
 
 func updateLoop(db *kube.Store) pipe.MiddleFunc[[]Event[ebpf.Instrumentable], []Event[ebpf.Instrumentable]] {
+	log := slog.With("component", "ContainerDBUpdater")
 	return func(in <-chan []Event[ebpf.Instrumentable], out chan<- []Event[ebpf.Instrumentable]) {
 		for instrumentables := range in {
 			for i := range instrumentables {
 				ev := &instrumentables[i]
 				switch ev.Type {
 				case EventCreated:
+					log.Debug("adding process", "pid", ev.Obj.FileInfo.Pid)
 					db.AddProcess(uint32(ev.Obj.FileInfo.Pid))
 				case EventDeleted:
 					// we don't need to handle process deletion from here, as the Kubernetes informer will
 					// remove the process from the database when the Pod that contains it is deleted.
-					// However we clean-up the performance related caches, in case we miss pod removal event
 				}
 			}
 			out <- instrumentables

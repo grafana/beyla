@@ -16,6 +16,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/grafana/beyla-k8s-cache/pkg/meta"
+
 	"github.com/grafana/beyla/pkg/kubeflags"
 )
 
@@ -101,7 +102,7 @@ func (mp *MetadataProvider) Store(ctx context.Context) (*Store, error) {
 		return mp.metadata, nil
 	}
 
-	informer, err := NewInformersMetadata(ctx, mp.kubeConfigPath)
+	informer, err := mp.getInformer(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -112,9 +113,6 @@ func (mp *MetadataProvider) Store(ctx context.Context) (*Store, error) {
 }
 
 func (mp *MetadataProvider) Subscribe(ctx context.Context, observer meta.Observer) error {
-	mp.mt.Lock()
-	defer mp.mt.Unlock()
-
 	if informer, err := mp.getInformer(ctx); err != nil {
 		return fmt.Errorf("can't subscribe to informer: %w", err)
 	} else {
@@ -124,10 +122,17 @@ func (mp *MetadataProvider) Subscribe(ctx context.Context, observer meta.Observe
 }
 
 func (mp *MetadataProvider) getInformer(ctx context.Context) (*InformersMetadata, error) {
+	mp.mt.Lock()
+	defer mp.mt.Unlock()
 	if mp.informer != nil {
 		return mp.informer, nil
 	}
-	return NewInformersMetadata(ctx, mp.kubeConfigPath)
+	var err error
+	mp.informer, err = NewInformersMetadata(ctx, mp.kubeConfigPath)
+	if err != nil {
+		return nil, fmt.Errorf("can't get informer: %w", err)
+	}
+	return mp.informer, nil
 }
 
 func (mp *MetadataProvider) CurrentNodeName(ctx context.Context) (string, error) {

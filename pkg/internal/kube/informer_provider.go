@@ -16,7 +16,6 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/grafana/beyla-k8s-cache/pkg/meta"
-
 	"github.com/grafana/beyla/pkg/kubeflags"
 )
 

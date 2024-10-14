@@ -9,6 +9,7 @@ import (
 	"github.com/mariomac/pipes/pipe"
 
 	"github.com/grafana/beyla-k8s-cache/pkg/informer"
+
 	attr "github.com/grafana/beyla/pkg/export/attributes/names"
 	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"

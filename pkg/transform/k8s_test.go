@@ -10,6 +10,7 @@ import (
 
 	"github.com/grafana/beyla-k8s-cache/pkg/informer"
 	"github.com/grafana/beyla-k8s-cache/pkg/meta"
+
 	attr "github.com/grafana/beyla/pkg/export/attributes/names"
 	"github.com/grafana/beyla/pkg/internal/helpers/container"
 	"github.com/grafana/beyla/pkg/internal/kube"

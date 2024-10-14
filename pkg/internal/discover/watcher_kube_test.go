@@ -17,6 +17,7 @@ import (
 
 	"github.com/grafana/beyla-k8s-cache/pkg/informer"
 	"github.com/grafana/beyla-k8s-cache/pkg/meta"
+
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/helpers/container"
 	"github.com/grafana/beyla/pkg/internal/kube"
@@ -25,6 +26,7 @@ import (
 )
 
 const timeout = 5000 * time.Second
+
 const (
 	namespace      = "test-ns"
 	containerPID   = 123

@@ -121,7 +121,7 @@ prereqs: install-hooks
 fmt: prereqs
 	@echo "### Formatting code and fixing imports"
 	@$(foreach FILE, $(shell find . -name "*.go" -not -path "**/vendor/*"), \
-		$(GOIMPORTS_REVISER) -company-prefixes github.com/grafana $(FILE);)
+		$(GOIMPORTS_REVISER) -company-prefixes github.com/grafana -project-name github.com/grafana/beyla/ $(FILE);)
 
 .PHONY: checkfmt
 checkfmt:

@@ -6,6 +6,7 @@ import (
 
 	"github.com/grafana/beyla-k8s-cache/pkg/informer"
 	"github.com/grafana/beyla-k8s-cache/pkg/meta"
+
 	"github.com/grafana/beyla/pkg/internal/helpers/container"
 )
 

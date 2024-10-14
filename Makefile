@@ -91,9 +91,11 @@ KIND = $(TOOLS_DIR)/kind
 DASHBOARD_LINTER = $(TOOLS_DIR)/dashboard-linter
 GINKGO = $(TOOLS_DIR)/ginkgo
 
+GOIMPORTS_REVISER_ARGS = -company-prefixes github.com/grafana -project-name github.com/grafana/beyla/
+
 define check_format
 	$(shell $(foreach FILE, $(shell find . -name "*.go" -not -path "**/vendor/*"), \
-		$(GOIMPORTS_REVISER) -company-prefixes github.com/grafana -list-diff -output stdout $(FILE);))
+		$(GOIMPORTS_REVISER) $(GOIMPORTS_REVISER_ARGS) -list-diff -output stdout $(FILE);))
 endef
 
 
@@ -121,7 +123,7 @@ prereqs: install-hooks
 fmt: prereqs
 	@echo "### Formatting code and fixing imports"
 	@$(foreach FILE, $(shell find . -name "*.go" -not -path "**/vendor/*"), \
-		$(GOIMPORTS_REVISER) -company-prefixes github.com/grafana -project-name github.com/grafana/beyla/ $(FILE);)
+		$(GOIMPORTS_REVISER) $(GOIMPORTS_REVISER_ARGS) $(FILE);)
 
 .PHONY: checkfmt
 checkfmt:

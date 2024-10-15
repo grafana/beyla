@@ -259,15 +259,6 @@ To run Beyla unprivileged, you need to run a `privileged` init container which p
 - `CAP_PERFMON` is required to load BPF programs, i.e. be able to perform `perf_event_open()`.
 - `CAP_SYS_RESOURCE` is required only on kernels **< 5.11** so that Beyla can increase the amount of locked memory available.
 
-In addition to these Linux capabilities, many Kubernetes versions include [AppArmour](https://kubernetes.io/docs/tutorials/security/apparmor/), which tough policies adds additional restrictions to unprivileged containers. By [default](https://github.com/moby/moby/blob/master/profiles/apparmor/template.go), the AppArmour policy restricts the use of `mount` and the access to `/sys/fs/` directories. Beyla uses the BPF Linux file system to store pinned BPF maps, for communication among the different BPF programs. For this reason, Beyla either needs to `mount` a BPF file system, or write to `/sys/fs/bpf`, which are both restricted.
-
-Because of the AppArmour restriction, to run Beyla as unprivileged container, you need to either:
-
-- Set `container.apparmor.security.beta.kubernetes.io/beyla: "unconfined"` in your Kubernetes deployment files.
-- Set a modified AppArmour policy which allows Beyla to perform `mount`.
-
-**Note** Since the `beyla` container does not have the privileges required to mount or un-mount the BPF filesystem, this sample leaves the BPF filesystem mounted on the host, even after the sample is deleted. This samples uses a unique path for each namespace to ensure re-use the same mount if Beyla is re-deployed, but to avoid collisions if multiple instances of Beyla is run in different namespaces. 
-
 **Note** Loading BPF programs requires that Beyla is able to read the Linux performance events, or at least be able to execute the Linux Kernel API `perf_event_open()`. 
 This permission is granted by `CAP_PERFMON` or more liberally through `CAP_SYS_ADMIN`. Since both `CAP_PERFMON` and `CAP_SYS_ADMIN` grant Beyla the permission to read performance
 events, you should use `CAP_PERFMON` because it grants lesser permissions. However, at system level, the access to the performance 
@@ -297,40 +288,9 @@ spec:
     metadata:
       labels:
         k8s-app: beyla
-      annotations:
-        # We need to set beyla container as unconfined so it is able to write
-        # the BPF file system.
-        # Instead of 'unconfined', you can define a more refined policy which allows Beyla to use 'mount'
-        container.apparmor.security.beta.kubernetes.io/beyla: "unconfined" # <-- Important
     spec:
       serviceAccount: beyla
       hostPID: true           # <-- Important. Required in Daemonset mode so Beyla can discover all monitored processes
-      initContainers:
-        - name: mount-bpf-fs
-          image: grafana/beyla:latest
-          args:
-          # Create the directory and mount the BPF filesystem.
-          - 'mkdir -p /sys/fs/bpf/$BEYLA_BPF_FS_PATH && mount -t bpf bpf /sys/fs/bpf/$BEYLA_BPF_FS_PATH'
-          command:
-          - /bin/bash
-          - -c
-          - --
-          securityContext:
-            # The init container is privileged so that it can use bidirectional mount propagation
-            privileged: true
-          volumeMounts:
-          - name: bpffs
-            mountPath: /sys/fs/bpf
-            # Make sure the mount is propagated back to the host so it can be used by the Beyla container
-            mountPropagation: Bidirectional
-          env:
-            - name: KUBE_NAMESPACE
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.namespace
-              # Use a unique path for each namespace to prevent collisions with other namespaces.
-            - name: BEYLA_BPF_FS_PATH
-              value: beyla-$(KUBE_NAMESPACE)
       containers:
       - name: beyla
         terminationMessagePolicy: FallbackToLogsOnError
@@ -344,11 +304,6 @@ spec:
             valueFrom:
               fieldRef:
                 fieldPath: metadata.namespace
-            # Use a unique path for each namespace to prevent collisions with other namespaces.
-          - name: BEYLA_BPF_FS_PATH
-            value: beyla-$(KUBE_NAMESPACE)
-          - name: BEYLA_BPF_FS_BASE_DIR
-            value: /sys/fs/bpf
           ...
         securityContext:
           runAsUser: 0
@@ -370,9 +325,6 @@ spec:
           mountPath: /var/run/beyla
         - name: cgroup
           mountPath: /sys/fs/cgroup
-        - name: bpffs
-          mountPath: /sys/fs/bpf
-          mountPropagation: HostToContainer # <-- Important. Allows Beyla to see the BPF mount from the init container
       tolerations:
       - effect: NoSchedule
         operator: Exists
@@ -384,9 +336,6 @@ spec:
       - name: cgroup
         hostPath:
           path: /sys/fs/cgroup
-      - name: bpffs
-        hostPath:
-          path: /sys/fs/bpf
 ---
 apiVersion: apps/v1
 kind: Deployment

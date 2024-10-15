@@ -14,6 +14,7 @@
 
 #include "vmlinux.h"
 #include "bpf_core_read.h"
+#include "pin_internal.h"
 
 #ifdef BPF_DEBUG
 
@@ -26,7 +27,7 @@ typedef struct log_info {
 struct {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
     __uint(max_entries, 1 << 12);
-    __uint(pinning, LIBBPF_PIN_BY_NAME);
+    __uint(pinning, BEYLA_PIN_INTERNAL);
 } debug_events SEC(".maps");
 
 enum bpf_func_id___x { BPF_FUNC_snprintf___x = 42 /* avoid zero */ };

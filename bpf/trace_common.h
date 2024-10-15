@@ -8,6 +8,7 @@
 #include "pid_types.h"
 #include "runtime.h"
 #include "ringbuf.h"
+#include "pin_internal.h"
 
 typedef struct trace_key {
     pid_key_t p_key; // pid key as seen by the userspace (for example, inside its container)
@@ -19,7 +20,7 @@ struct {
     __type(key, trace_key_t);     // key: pid_tid
     __type(value, tp_info_pid_t); // value: traceparent info
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
-    __uint(pinning, LIBBPF_PIN_BY_NAME);
+    __uint(pinning, BEYLA_PIN_INTERNAL);
 } server_traces SEC(".maps");
 
 struct {
@@ -41,7 +42,7 @@ struct {
     __type(key, pid_key_t);   // key: the child pid
     __type(value, pid_key_t); // value: the parent pid
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
-    __uint(pinning, LIBBPF_PIN_BY_NAME);
+    __uint(pinning, BEYLA_PIN_INTERNAL);
 } clone_map SEC(".maps");
 
 static __always_inline unsigned char *tp_char_buf() {

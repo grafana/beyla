@@ -19,14 +19,6 @@ type EPPFTracer struct {
 	// reach the BatchLength size
 	BatchTimeout time.Duration `yaml:"batch_timeout" env:"BEYLA_BPF_BATCH_TIMEOUT"`
 
-	// BpfBaseDir specifies the base directory where the BPF pinned maps will be mounted.
-	// By default, it will be /var/run/beyla
-	BpfBaseDir string `yaml:"bpf_fs_base_dir" env:"BEYLA_BPF_FS_BASE_DIR"`
-
-	// BpfPath specifies the path in the base directory where the BPF pinned maps will be mounted.
-	// By default, it will be beyla-<pid>.
-	BpfPath string `yaml:"bpf_fs_path" env:"BEYLA_BPF_FS_PATH"`
-
 	// If enabled, the kprobes based HTTP request tracking will start tracking the request
 	// headers to process any 'Traceparent' fields.
 	TrackRequestHeaders bool `yaml:"track_request_headers" env:"BEYLA_BPF_TRACK_REQUEST_HEADERS"`

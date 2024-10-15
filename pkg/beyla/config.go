@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"os"
 	"time"
 
 	"github.com/caarlos0/env/v9"
@@ -47,8 +46,6 @@ var DefaultConfig = Config{
 	EBPF: config.EPPFTracer{
 		BatchLength:        100,
 		BatchTimeout:       time.Second,
-		BpfBaseDir:         "/var/run/beyla",
-		BpfPath:            fmt.Sprintf("beyla-%d", os.Getpid()),
 		HTTPRequestTimeout: 30 * time.Second,
 	},
 	Grafana: otel.GrafanaConfig{

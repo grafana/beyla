@@ -9,5 +9,3 @@ func (ta *TraceAttacher) init() error {
 }
 
 func (ta *TraceAttacher) close() {}
-
-func UnmountBPFFS(_ string, _ *slog.Logger) {}

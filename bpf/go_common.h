@@ -21,6 +21,7 @@
 #include "trace_util.h"
 #include "go_offsets.h"
 #include "go_traceparent.h"
+#include "pin_internal.h"
 
 char __license[] SEC("license") = "Dual MIT/GPL";
 
@@ -47,7 +48,7 @@ struct {
     __type(key, go_addr_key_t);        // key: pointer to the goroutine
     __type(value, goroutine_metadata); // value: timestamp of the goroutine creation
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
-    __uint(pinning, LIBBPF_PIN_BY_NAME);
+    __uint(pinning, BEYLA_PIN_INTERNAL);
 } ongoing_goroutines SEC(".maps");
 
 struct {
@@ -55,7 +56,7 @@ struct {
     __type(key, go_addr_key_t); // key: pointer to the request goroutine
     __type(value, connection_info_t);
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
-    __uint(pinning, LIBBPF_PIN_BY_NAME);
+    __uint(pinning, BEYLA_PIN_INTERNAL);
 } ongoing_server_connections SEC(".maps");
 
 struct {
@@ -70,7 +71,7 @@ struct {
     __type(key, go_addr_key_t); // key: pointer to the goroutine
     __type(value, tp_info_t);   // value: traceparent info
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
-    __uint(pinning, LIBBPF_PIN_BY_NAME);
+    __uint(pinning, BEYLA_PIN_INTERNAL);
 } go_trace_map SEC(".maps");
 
 static __always_inline void go_addr_key_from_id(go_addr_key_t *current, void *addr) {

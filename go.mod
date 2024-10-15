@@ -13,7 +13,7 @@ require (
 	github.com/goccy/go-json v0.10.2
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
-	github.com/grafana/beyla-k8s-cache v0.0.0-20241012093738-d84b7efcf9c1
+	github.com/grafana/beyla-k8s-cache v0.0.0-20241015143649-2766c4d5b2da
 	github.com/grafana/go-offsets-tracker v0.1.7
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/mariomac/guara v0.0.0-20230621100729-42bd7716e524
@@ -77,6 +77,8 @@ replace go.opentelemetry.io/otel/trace => github.com/grafana/opentelemetry-go/tr
 replace go.opentelemetry.io/otel/sdk => github.com/grafana/opentelemetry-go/sdk v1.28.0-grafana.3
 
 replace go.opentelemetry.io/otel/sdk/metric => github.com/grafana/opentelemetry-go/sdk/metric v1.28.0-grafana.3
+
+//replace github.com/grafana/beyla-k8s-cache => ../k8s-meta-cache
 
 require (
 	cloud.google.com/go/compute/metadata v0.5.0 // indirect

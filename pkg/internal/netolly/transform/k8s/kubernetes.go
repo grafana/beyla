@@ -133,13 +133,16 @@ func (n *decorator) decorate(flow *ebpf.Record, prefix, ip string) bool {
 	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixNs)] = meta.Namespace
 	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixName)] = meta.Name
 	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixType)] = meta.Kind
-	if meta.Pod != nil {
+	if meta.Pod == nil {
+		flow.Attrs.Metadata[attr.Name(prefix+attrSuffixOwnerName)] = meta.Name
+		flow.Attrs.Metadata[attr.Name(prefix+attrSuffixOwnerType)] = meta.Kind
+	} else {
 		flow.Attrs.Metadata[attr.Name(prefix+attrSuffixOwnerName)] = meta.Pod.OwnerName
 		flow.Attrs.Metadata[attr.Name(prefix+attrSuffixOwnerType)] = meta.Pod.OwnerKind
 		if meta.Pod.HostIp != "" {
 			flow.Attrs.Metadata[attr.Name(prefix+attrSuffixHostIP)] = meta.Pod.HostIp
-			if meta.Pod.HostName != "" {
-				flow.Attrs.Metadata[attr.Name(prefix+attrSuffixHostName)] = meta.Pod.HostName
+			if host := n.kube.ObjectMetaByIP(meta.Pod.HostIp); host != nil {
+				flow.Attrs.Metadata[attr.Name(prefix+attrSuffixHostName)] = host.Name
 			}
 		}
 	}

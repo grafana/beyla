@@ -24,8 +24,6 @@ aliases:
 
 ## eBPF application auto-instrumentation
 
-> To reduce the time it takes to instrument
-
 Instrumenting an application to obtain metrics and traces typically requires adding a language agent to the application deployment/packages.
 In some compiled languages like Go or Rust, you must manually add tracepoints to the code.
 

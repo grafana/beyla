@@ -36,7 +36,7 @@ func DoTestNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T,
 		require.NotEmpty(t, results)
 
 		// check that the metrics are properly decorated
-		require.Len(t, results, 1)
+		require.GreaterOrEqual(t, len(results), 1) // tests could establish more than one connection from different client_ports
 		metric := results[0].Metric
 		assertIsIP(t, metric["src_address"])
 		assertIsIP(t, metric["dst_address"])
@@ -67,7 +67,7 @@ func DoTestNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T,
 		require.NotEmpty(t, results)
 
 		// check that the metrics are properly decorated
-		require.Len(t, results, 1)
+		require.GreaterOrEqual(t, len(results), 1) // tests could establish more than one connection from different client_ports
 		metric := results[0].Metric
 		assertIsIP(t, metric["src_address"])
 		assertIsIP(t, metric["dst_address"])
@@ -102,7 +102,7 @@ func DoTestNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T,
 		require.NotEmpty(t, results)
 
 		// check that the metrics are properly decorated
-		require.Len(t, results, 1)
+		require.GreaterOrEqual(t, len(results), 1) // tests could establish more than one connection from different client_ports
 		metric := results[0].Metric
 		assertIsIP(t, metric["src_address"])
 		assertIsIP(t, metric["dst_address"])
@@ -137,7 +137,7 @@ func DoTestNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T,
 		require.NotEmpty(t, results)
 
 		// check that the metrics are properly decorated
-		require.Len(t, results, 1)
+		require.GreaterOrEqual(t, len(results), 1) // tests could establish more than one connection from different client_ports
 		metric := results[0].Metric
 		assertIsIP(t, metric["src_address"])
 		assertIsIP(t, metric["dst_address"])

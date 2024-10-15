@@ -7,8 +7,8 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"path"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -23,7 +23,12 @@ import (
 	"github.com/grafana/beyla/pkg/internal/request"
 )
 
+const PinInternal = ebpf.PinType(100)
+
 var loadMux sync.Mutex
+
+var internalMaps = make(map[string]*ebpf.Map)
+var internalMapsMux sync.Mutex
 
 func ptlog() *slog.Logger { return slog.With("component", "ebpf.ProcessTracer") }
 
@@ -34,10 +39,42 @@ type instrumenter struct {
 	modules   map[uint64]struct{}
 }
 
+func resolveInternalMaps(spec *ebpf.CollectionSpec) (*ebpf.CollectionOptions, error) {
+	collOpts := ebpf.CollectionOptions{MapReplacements: map[string]*ebpf.Map{}}
+
+	internalMapsMux.Lock()
+	defer internalMapsMux.Unlock()
+
+	for k, v := range spec.Maps {
+		if v.Pinning != PinInternal {
+			continue
+		}
+
+		v.Pinning = ebpf.PinNone
+		internalMap := internalMaps[k]
+
+		var err error
+
+		if internalMap == nil {
+			internalMap, err = ebpf.NewMap(v)
+
+			if err != nil {
+				return nil, fmt.Errorf("failed to load shared map: %w", err)
+			}
+
+			internalMaps[k] = internalMap
+			runtime.SetFinalizer(internalMap, (*ebpf.Map).Close)
+		}
+
+		collOpts.MapReplacements[k] = internalMap
+	}
+
+	return &collOpts, nil
+}
+
 func NewProcessTracer(cfg *beyla.Config, tracerType ProcessTracerType, programs []Tracer) *ProcessTracer {
 	return &ProcessTracer{
 		Programs:        programs,
-		PinPath:         BuildPinPath(cfg),
 		SystemWide:      cfg.Discovery.SystemWide,
 		Type:            tracerType,
 		Instrumentables: map[uint64]*instrumenter{},
@@ -57,13 +94,6 @@ func (pt *ProcessTracer) Run(ctx context.Context, out chan<- []request.Span) {
 	go func() {
 		<-ctx.Done()
 	}()
-}
-
-// BuildPinPath pinpath must be unique for a given executable group
-// it will be:
-//   - current beyla PID
-func BuildPinPath(cfg *beyla.Config) string {
-	return path.Join(cfg.EBPF.BpfBaseDir, cfg.EBPF.BpfPath)
 }
 
 func (pt *ProcessTracer) loadSpec(p Tracer) (*ebpf.CollectionSpec, error) {
@@ -88,16 +118,20 @@ func (pt *ProcessTracer) loadTracers() error {
 
 	for _, p := range pt.Programs {
 		plog := log.With("program", reflect.TypeOf(p))
-		plog.Debug("loading eBPF program", "PinPath", pt.PinPath, "type", pt.Type)
+		plog.Debug("loading eBPF program", "type", pt.Type)
 		spec, err := pt.loadSpec(p)
 		if err != nil {
 			return err
 		}
-		if err := spec.LoadAndAssign(p.BpfObjects(), &ebpf.CollectionOptions{
-			Programs: ebpf.ProgramOptions{LogSize: 640 * 1024},
-			Maps: ebpf.MapOptions{
-				PinPath: pt.PinPath,
-			}}); err != nil {
+
+		collOpts, err := resolveInternalMaps(spec)
+		if err != nil {
+			return err
+		}
+
+		collOpts.Programs = ebpf.ProgramOptions{LogSize: 640 * 1024}
+
+		if err := spec.LoadAndAssign(p.BpfObjects(), collOpts); err != nil {
 			if strings.Contains(err.Error(), "unknown func bpf_probe_write_user") {
 				plog.Warn("Failed to enable distributed tracing context-propagation on a Linux Kernel without write memory support. " +
 					"To avoid seeing this message, please ensure you have correctly mounted /sys/kernel/security. " +
@@ -107,11 +141,15 @@ func (pt *ProcessTracer) loadTracers() error {
 				common.IntegrityModeOverride = true
 				spec, err = pt.loadSpec(p)
 				if err == nil {
-					err = spec.LoadAndAssign(p.BpfObjects(), &ebpf.CollectionOptions{
-						Programs: ebpf.ProgramOptions{LogSize: 640 * 1024},
-						Maps: ebpf.MapOptions{
-							PinPath: pt.PinPath,
-						}})
+
+					collOpts, err = resolveInternalMaps(spec)
+					if err != nil {
+						return err
+					}
+
+					collOpts.Programs = ebpf.ProgramOptions{LogSize: 640 * 1024}
+
+					err = spec.LoadAndAssign(p.BpfObjects(), collOpts)
 				}
 			}
 			if err != nil {
@@ -223,7 +261,7 @@ func printVerifierErrorInfo(err error) {
 	}
 }
 
-func RunUtilityTracer(p UtilityTracer, pinPath string) error {
+func RunUtilityTracer(p UtilityTracer) error {
 	i := instrumenter{}
 	plog := ptlog()
 	plog.Debug("loading independent eBPF program")
@@ -232,10 +270,12 @@ func RunUtilityTracer(p UtilityTracer, pinPath string) error {
 		return fmt.Errorf("loading eBPF program: %w", err)
 	}
 
-	if err := spec.LoadAndAssign(p.BpfObjects(), &ebpf.CollectionOptions{
-		Maps: ebpf.MapOptions{
-			PinPath: pinPath,
-		}}); err != nil {
+	collOpts, err := resolveInternalMaps(spec)
+	if err != nil {
+		return err
+	}
+
+	if err := spec.LoadAndAssign(p.BpfObjects(), collOpts); err != nil {
 		printVerifierErrorInfo(err)
 		return fmt.Errorf("loading and assigning BPF objects: %w", err)
 	}

@@ -50,7 +50,7 @@ struct {
     __type(key, pid_connection_info_t); // key: conn_info
     __type(value, trace_key_t);         // value: tracekey to lookup in server_traces
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
-    __uint(pinning, LIBBPF_PIN_BY_NAME);
+    __uint(pinning, BEYLA_PIN_INTERNAL);
 } client_connect_info SEC(".maps");
 
 static __always_inline unsigned char *tp_char_buf() {

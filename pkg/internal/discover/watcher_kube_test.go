@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
@@ -25,7 +24,7 @@ import (
 	"github.com/grafana/beyla/pkg/services"
 )
 
-const timeout = 5000 * time.Second
+const timeout = 5 * time.Second
 
 const (
 	namespace      = "test-ns"
@@ -42,29 +41,43 @@ func TestWatcherKubeEnricher(t *testing.T) {
 		Level: slog.LevelDebug,
 	})))
 
-	type fn func(inputCh chan []Event[processAttrs], fInformer kube.MetadataNotifier)
+	type event struct {
+		fn           func(inputCh chan []Event[processAttrs], fInformer kube.MetadataNotifier, store *kube.Store)
+		shouldNotify bool
+	}
 	type testCase struct {
 		name  string
-		steps []fn
+		steps []event
 	}
 	// test deployment functions
-	var process = func(inputCh chan []Event[processAttrs], _ kube.MetadataNotifier) {
+	var process = func(inputCh chan []Event[processAttrs], _ kube.MetadataNotifier, _ *kube.Store) {
 		newProcess(inputCh, containerPID, []uint32{containerPort})
 	}
-	var pod = func(_ chan []Event[processAttrs], fInformer kube.MetadataNotifier) {
+	var pod = func(_ chan []Event[processAttrs], fInformer kube.MetadataNotifier, store *kube.Store) {
+		store.On(&informer.Event{Type: informer.EventType_CREATED, Resource: &informer.ObjectMeta{
+			Name: podName, Namespace: namespace, Kind: "Pod",
+			Pod: &informer.PodInfo{ContainerIds: []string{containerID}},
+		}})
 		deployPod(fInformer, namespace, podName, containerID, nil)
 	}
-	var ownedPod = func(_ chan []Event[processAttrs], fInformer kube.MetadataNotifier) {
+	var ownedPod = func(_ chan []Event[processAttrs], fInformer kube.MetadataNotifier, store *kube.Store) {
+		store.On(&informer.Event{Type: informer.EventType_CREATED, Resource: &informer.ObjectMeta{
+			Name: podName, Namespace: namespace, Kind: "Pod",
+			Pod: &informer.PodInfo{
+				OwnerName: deploymentName, OwnerKind: "Deployment",
+				ContainerIds: []string{containerID},
+			},
+		}})
 		deployOwnedPod(fInformer, namespace, podName, deploymentName, containerID)
 	}
 
 	// The watcherKubeEnricher has to listen and relate information from multiple asynchronous sources.
 	// Each test case verifies that whatever the order of the events is,
 	testCases := []testCase{
-		{name: "process-pod", steps: []fn{process, ownedPod}},
-		{name: "pod-process", steps: []fn{ownedPod, process}},
-		{name: "process-pod (no owner)", steps: []fn{process, pod}},
-		{name: "pod-process (no owner)", steps: []fn{pod, process}}}
+		{name: "process-pod", steps: []event{{fn: process, shouldNotify: true}, {fn: ownedPod, shouldNotify: true}}},
+		{name: "pod-process", steps: []event{{fn: ownedPod, shouldNotify: false}, {fn: process, shouldNotify: true}}},
+		{name: "process-pod (no owner)", steps: []event{{fn: process, shouldNotify: true}, {fn: pod, shouldNotify: true}}},
+		{name: "pod-process (no owner)", steps: []event{{fn: pod, shouldNotify: false}, {fn: process, shouldNotify: true}}}}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -83,26 +96,27 @@ func TestWatcherKubeEnricher(t *testing.T) {
 			go wkeNodeFunc(inputCh, outputCh)
 
 			// deploy all the involved elements where the metadata are composed of
+			// in different orders to test that watcherKubeEnricher will eventually handle everything
+			var events []Event[processAttrs]
 			for _, step := range tc.steps {
-				step(inputCh, fInformer)
+				step.fn(inputCh, fInformer, store)
+				if step.shouldNotify {
+					events = testutil.ReadChannel(t, outputCh, timeout)
+				}
 			}
 
-			// check that the watcherKubeEnricher eventually submits an event with the expected metadata
-			test.Eventually(t, timeout, func(t require.TestingT) {
-				events := <-outputCh
-				require.Len(t, events, 1)
-				event := events[0]
-				assert.Equal(t, EventCreated, event.Type)
-				assert.EqualValues(t, containerPID, event.Obj.pid)
-				assert.Equal(t, []uint32{containerPort}, event.Obj.openPorts)
-				assert.Equal(t, namespace, event.Obj.metadata[services.AttrNamespace])
-				assert.Equal(t, podName, event.Obj.metadata[services.AttrPodName])
-				if strings.Contains(tc.name, "(no owner)") {
-					assert.Empty(t, event.Obj.metadata[services.AttrDeploymentName])
-				} else {
-					assert.Equal(t, deploymentName, event.Obj.metadata[services.AttrDeploymentName])
-				}
-			})
+			require.Len(t, events, 1)
+			event := events[0]
+			assert.Equal(t, EventCreated, event.Type)
+			assert.EqualValues(t, containerPID, event.Obj.pid)
+			assert.Equal(t, []uint32{containerPort}, event.Obj.openPorts)
+			assert.Equal(t, namespace, event.Obj.metadata[services.AttrNamespace])
+			assert.Equal(t, podName, event.Obj.metadata[services.AttrPodName])
+			if strings.Contains(tc.name, "(no owner)") {
+				assert.Empty(t, event.Obj.metadata[services.AttrDeploymentName])
+			} else {
+				assert.Equal(t, deploymentName, event.Obj.metadata[services.AttrDeploymentName])
+			}
 		})
 	}
 }

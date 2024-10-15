@@ -2,7 +2,7 @@
 title: Configure Beyla
 menuTitle: Configure
 description: Learn how to configure Beyla.
-weight: 2
+weight: 4
 keywords:
   - Beyla
   - eBPF

@@ -30,9 +30,7 @@ Beyla can export data in two modes:
 
 ## Running in Direct mode
 
-You can follow our [getting started tutorial]({{< relref "../tutorial/getting-started.md" >}}) for a quick introduction
-to auto-instrumentation in Direct mode, by using OpenTelemetry. The OTLP endpoint authentication credentials are provided
-by using the following environment variables:
+The OTLP endpoint authentication credentials are provided by using the following environment variables:
 
 - `OTEL_EXPORTER_OTLP_ENDPOINT`
 - `OTEL_EXPORTER_OTLP_HEADERS`

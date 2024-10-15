@@ -2,7 +2,7 @@
 title: Beyla exported metrics
 menuTitle: Exported metrics
 description: Learn about the HTTP/gRPC metrics Beyla can export.
-weight: 4
+weight: 21
 keywords:
   - Beyla
   - eBPF
@@ -61,8 +61,8 @@ In order to configure which attributes to show or which attributes to hide, chec
 | Application (all)              | `k8s.replicaset.name`        | shown if Kubernetes metadata is enabled           |
 | Application (all)              | `k8s.statefulset.name`       | shown if Kubernetes metadata is enabled           |
 | Application (all)              | `k8s.cluster.name`           | shown if Kubernetes metadata is enabled           |
-| Application (all)              | `service.name`               | shown                                             | 
-| Application (all)              | `service.namespace`          | shown                                             | 
+| Application (all)              | `service.name`               | shown                                             |
+| Application (all)              | `service.namespace`          | shown                                             |
 | Application (all)              | `target.instance`            | shown                                             |
 | Application (all)              | `url.path`                   | hidden                                            |
 | Application (client)           | `server.address`             | hidden                                            |
@@ -94,19 +94,19 @@ In order to configure which attributes to show or which attributes to hide, chec
 | `beyla.network.flow.bytes`     | `dst.port`                   | hidden                                            |
 | `beyla.network.flow.bytes`     | `iface`                      | hidden                                            |
 | `beyla.network.flow.bytes`     | `k8s.cluster.name`           | shown if network metrics are enabled              |
-| `beyla.network.flow.bytes`     | `k8s.dst.name`               | hidden                                            | 
-| `beyla.network.flow.bytes`     | `k8s.dst.namespace`          | shown if network metrics are enabled              | 
+| `beyla.network.flow.bytes`     | `k8s.dst.name`               | hidden                                            |
+| `beyla.network.flow.bytes`     | `k8s.dst.namespace`          | shown if network metrics are enabled              |
 | `beyla.network.flow.bytes`     | `k8s.dst.node.ip`            | hidden                                            |
 | `beyla.network.flow.bytes`     | `k8s.dst.node.name`          | hidden                                            |
-| `beyla.network.flow.bytes`     | `k8s.dst.owner.type`         | hidden                                            | 
+| `beyla.network.flow.bytes`     | `k8s.dst.owner.type`         | hidden                                            |
 | `beyla.network.flow.bytes`     | `k8s.dst.type`               | hidden                                            |
-| `beyla.network.flow.bytes`     | `k8s.dst.owner.name`         | shown if network metrics are enabled              | 
-| `beyla.network.flow.bytes`     | `k8s.src.name`               | hidden                                            | 
-| `beyla.network.flow.bytes`     | `k8s.src.namespace`          | shown if network metrics are enabled              | 
+| `beyla.network.flow.bytes`     | `k8s.dst.owner.name`         | shown if network metrics are enabled              |
+| `beyla.network.flow.bytes`     | `k8s.src.name`               | hidden                                            |
+| `beyla.network.flow.bytes`     | `k8s.src.namespace`          | shown if network metrics are enabled              |
 | `beyla.network.flow.bytes`     | `k8s.src.node.ip`            | hidden                                            |
 | `beyla.network.flow.bytes`     | `k8s.src.owner.name`         | shown if network metrics are enabled              |
 | `beyla.network.flow.bytes`     | `k8s.src.owner.type`         | hidden                                            |
-| `beyla.network.flow.bytes`     | `k8s.src.type`               | hidden                                            | 
+| `beyla.network.flow.bytes`     | `k8s.src.type`               | hidden                                            |
 | `beyla.network.flow.bytes`     | `server.port`                | hidden                                            |
 | `beyla.network.flow.bytes`     | `src.address`                | hidden                                            |
 | `beyla.network.flow.bytes`     | `src.cidr`                   | shown if the `cidrs` configuration section exists |

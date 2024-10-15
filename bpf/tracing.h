@@ -3,6 +3,7 @@
 #include "vmlinux.h"
 #include "trace_util.h"
 #include "http_types.h"
+#include "pin_internal.h"
 
 #define NANOSECONDS_PER_EPOCH (15LL * 1000000000LL) // 15 seconds
 #define NANOSECONDS_PER_IMM_EPOCH (100000000LL)     // 100 ms
@@ -12,7 +13,7 @@ struct {
     __type(key, connection_info_t); // key: the connection info
     __type(value, tp_info_pid_t);   // value: traceparent info
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
-    __uint(pinning, LIBBPF_PIN_INTERNAL);
+    __uint(pinning, BEYLA_PIN_INTERNAL);
 } trace_map SEC(".maps");
 
 struct {

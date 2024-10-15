@@ -7,6 +7,7 @@
 #include "ringbuf.h"
 #include "pid.h"
 #include "bpf_dbg.h"
+#include "pin_internal.h"
 
 #define MIN_HTTP_SIZE 12      // HTTP/1.1 CCC is the smallest valid request we can have
 #define RESPONSE_STATUS_POS 9 // HTTP/1.1 <--
@@ -45,7 +46,7 @@ struct {
     __type(key, pid_connection_info_t); // connection that's SSL
     __type(value, u64);                 // ssl
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
-    __uint(pinning, LIBBPF_PIN_INTERNAL);
+    __uint(pinning, BEYLA_PIN_INTERNAL);
 } active_ssl_connections SEC(".maps");
 
 static __always_inline http_connection_metadata_t *empty_connection_meta() {

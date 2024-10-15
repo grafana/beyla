@@ -8,6 +8,7 @@
 #include "pid.h"
 #include "protocol_common.h"
 #include "trace_common.h"
+#include "pin_internal.h"
 
 // Keeps track of tcp buffers for unknown protocols
 struct {
@@ -15,7 +16,7 @@ struct {
     __type(key, pid_connection_info_t);
     __type(value, tcp_req_t);
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
-    __uint(pinning, LIBBPF_PIN_INTERNAL);
+    __uint(pinning, BEYLA_PIN_INTERNAL);
 } ongoing_tcp_req SEC(".maps");
 
 struct {

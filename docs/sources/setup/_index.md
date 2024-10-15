@@ -16,10 +16,10 @@ aliases:
 
 There are different options to set up and run Beyla:
 
-1. [As a standalone Linux process]({{< relref "./standalone.md" >}}).
-2. [With Docker to instrument a process running in a container]({{< relref "./docker.md" >}}).
-3. [As a Kubernetes DaemonSet using Helm]({{< relref "./kubernetes-helm.md" >}})
-4. [As a Kubernetes DaemonSet or as a sidecar container (manual process)]({{< relref "./kubernetes.md" >}})
+1. [With Docker to instrument a process running in a container]({{< relref "./docker.md" >}}).
+1. [As a Kubernetes DaemonSet using Helm]({{< relref "./kubernetes-helm.md" >}})
+1. [As a Kubernetes DaemonSet the Grafana Alloy Helm chart]({{< relref "./helm-alloy.md" >}})
+1. [As a Kubernetes DaemonSet or as a sidecar container (manual process)]({{< relref "./kubernetes.md" >}})
 
 For information on configuration options and data export modes, see the [Configure Beyla]({{< relref "../configure/_index.md" >}}) documentation.
 

@@ -14,6 +14,8 @@ keywords:
 aliases:
   - /docs/grafana-cloud/monitor-applications/beyla/
   - /docs/beyla/latest/tutorial/getting-started/
+  - /docs/grafana-cloud/monitor-applications/beyla/stability/
+  - /docs/beyla/latest/stability/
 ---
 
 # Grafana Beyla
@@ -77,13 +79,10 @@ Distributed tracing is only supported for Go services, while other programming l
 
 ## Get started
 
+- Follow the [setup]({{< relref "./setup/_index.md" >}}) documentation to get started with Beyla either with Docker or Kubernetes.
+
 - Follow the [language quickstart guides]({{< relref "./quickstart" >}}) for quick instructions
   about how to set up Beyla to instrument applications written in a particular language.
-
-- Follow the [setup]({{< relref "./setup/_index.md" >}}) documentation to get started with Beyla either as a standalone
-  service, with Docker or with Kubernetes.
-
-- Follow the [tutorials]({{< relref "./tutorial/_index.md" >}}) to get a complete guide to instrument an application with Beyla and data to Grafana Cloud.
 
 ## Learn more about Grafana Beyla
 

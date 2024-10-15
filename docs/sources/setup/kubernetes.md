@@ -1,6 +1,6 @@
 ---
 title: Deploy Beyla in Kubernetes
-menuTitle: Deploy in Kubernetes
+menuTitle: Kubernetes
 description: Learn how to deploy Beyla in Kubernetes.
 weight: 3
 keywords:

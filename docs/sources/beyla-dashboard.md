@@ -1,8 +1,8 @@
 ---
-title: Getting started with Beyla
-menuTitle: Getting started tutorial
-description: Learn how to instrument an application export data with Prometheus to Grafana Cloud.
-weight: 3
+title: Beyla RED metrics dashboard
+menuTitle: RED metrics dashboard
+description: Learn how to use the Beyla RED metrics dashboard.
+weight: 23
 keywords:
   - Beyla
   - eBPF
@@ -11,7 +11,7 @@ keywords:
   - dashboard
 ---
 
-# Beyla RED Metrics Dashboard
+# Beyla RED metrics dashboard
 
 You could start composing your PromQL queries for better visualization of
 your auto-instrumented RED metrics; to save you time, we provide a sample

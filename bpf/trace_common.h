@@ -45,6 +45,14 @@ struct {
     __uint(pinning, BEYLA_PIN_INTERNAL);
 } clone_map SEC(".maps");
 
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, pid_connection_info_t); // key: conn_info
+    __type(value, trace_key_t);         // value: tracekey to lookup in server_traces
+    __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
+    __uint(pinning, BEYLA_PIN_INTERNAL);
+} client_connect_info SEC(".maps");
+
 static __always_inline unsigned char *tp_char_buf() {
     int zero = 0;
     return bpf_map_lookup_elem(&tp_char_buf_mem, &zero);
@@ -93,7 +101,7 @@ static __always_inline unsigned char *bpf_strstr_tp_loop(unsigned char *buf, int
 }
 #endif
 
-static __always_inline tp_info_pid_t *find_parent_trace() {
+static __always_inline tp_info_pid_t *find_parent_trace(pid_connection_info_t *p_conn) {
     trace_key_t t_key = {0};
 
     task_tid(&t_key.p_key);
@@ -129,7 +137,13 @@ static __always_inline tp_info_pid_t *find_parent_trace() {
         }
 
         attempts++;
-    } while (attempts < 3); // Up to 3 levels of goroutine nesting allowed
+    } while (attempts < 3); // Up to 3 levels of thread nesting allowed
+
+    trace_key_t *conn_t_key = bpf_map_lookup_elem(&client_connect_info, p_conn);
+
+    if (conn_t_key) {
+        return bpf_map_lookup_elem(&server_traces, conn_t_key);
+    }
 
     return 0;
 }
@@ -153,6 +167,15 @@ static __always_inline void delete_server_trace(trace_key_t *t_key) {
     int __attribute__((unused)) res = bpf_map_delete_elem(&server_traces, t_key);
     // Fails on 5.10 with unknown function
     // bpf_dbg_printk("Deleting server span for id=%llx, pid=%d, ns=%d, res = %d", bpf_get_current_pid_tgid(), t_key->p_key.pid, t_key->p_key.ns, res);
+}
+
+static __always_inline void delete_client_trace_info(pid_connection_info_t *pid_conn) {
+    bpf_dbg_printk("Deleting client trace map for connection");
+    dbg_print_http_connection_info(&pid_conn->conn);
+
+    bpf_map_delete_elem(&trace_map, &pid_conn->conn);
+    bpf_map_delete_elem(&outgoing_trace_map, &pid_conn->conn);
+    bpf_map_delete_elem(&client_connect_info, pid_conn);
 }
 
 static __always_inline u8 valid_span(const unsigned char *span_id) {
@@ -186,22 +209,12 @@ static __always_inline void server_or_client_trace(http_connection_metadata_t *m
         // bpf_dbg_printk("Saving server span for id=%llx, pid=%d, ns=%d, extra_id=%llx", bpf_get_current_pid_tgid(), t_key.p_key.pid, t_key.p_key.ns, t_key.extra_id);
         bpf_map_update_elem(&server_traces, &t_key, tp_p, BPF_ANY);
     } else {
-        tp_info_pid_t *in_tp = bpf_map_lookup_elem(&outgoing_trace_map, conn);
-
-        // We found info setup with a SYN packet, just clean it up
-        if (in_tp) {
-            bpf_map_delete_elem(&outgoing_trace_map, conn);
-        } else {
-            // If we didn't set this current tp_p as default
-            // Setup a pid too, so that we can find it in TC.
-            // When we don't find a SYN packet, we use the flags field
-            // to store the trace_id and the SEQ/ACK combination for span_id.
-            // We need the PID id to be able to query ongoing_http and update
-            // the span id with the SEQ/ACK pair.
-            u64 id = bpf_get_current_pid_tgid();
-            tp_p->pid = pid_from_pid_tgid(id);
-            bpf_map_update_elem(&outgoing_trace_map, conn, tp_p, BPF_ANY);
-        }
+        // Setup a pid, so that we can find it in TC.
+        // We need the PID id to be able to query ongoing_http and update
+        // the span id with the SEQ/ACK pair.
+        u64 id = bpf_get_current_pid_tgid();
+        tp_p->pid = pid_from_pid_tgid(id);
+        bpf_map_update_elem(&outgoing_trace_map, conn, tp_p, BPF_ANY);
     }
 }
 
@@ -228,27 +241,17 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
 
     if (meta) {
         if (meta->type == EVENT_HTTP_CLIENT) {
-            // Before this change the client code only looked for a server wrapped trace and
-            // if it didn't find it would generate the trace information later. Now we look if
-            // the TC egress has setup TCP trace info for us. If we find this info we set the bool as having trace info,
-            // i.e. we must not regenerate it later. The kprobe on 'tcp_connect' does the lookup of the server trace
-            // for us, so the server context should already be setup.
-            tp_info_pid_t *in_tp = bpf_map_lookup_elem(&outgoing_trace_map, conn);
-            tp_p->pid = -1; // we only want to prevent correlation of duplicate server calls by PID
-            if (in_tp) {
-                found_tp = 1;
-                tp_p = in_tp;
-            } else {
-                tp_info_pid_t *server_tp = find_parent_trace();
+            pid_connection_info_t p_conn = {.pid = pid};
+            __builtin_memcpy(&p_conn.conn, conn, sizeof(connection_info_t));
+            tp_info_pid_t *server_tp = find_parent_trace(&p_conn);
 
-                if (server_tp && server_tp->valid && valid_trace(server_tp->tp.trace_id)) {
-                    found_tp = 1;
-                    bpf_dbg_printk("Found existing server tp for client call");
-                    __builtin_memcpy(
-                        tp_p->tp.trace_id, server_tp->tp.trace_id, sizeof(tp_p->tp.trace_id));
-                    __builtin_memcpy(
-                        tp_p->tp.parent_id, server_tp->tp.span_id, sizeof(tp_p->tp.parent_id));
-                }
+            if (server_tp && server_tp->valid && valid_trace(server_tp->tp.trace_id)) {
+                found_tp = 1;
+                bpf_dbg_printk("Found existing server tp for client call");
+                __builtin_memcpy(
+                    tp_p->tp.trace_id, server_tp->tp.trace_id, sizeof(tp_p->tp.trace_id));
+                __builtin_memcpy(
+                    tp_p->tp.parent_id, server_tp->tp.span_id, sizeof(tp_p->tp.parent_id));
             }
         } else {
             //bpf_dbg_printk("Looking up existing trace for connection");

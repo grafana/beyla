@@ -6,6 +6,7 @@
 #include "bpf_core_read.h"
 #include "pid_types.h"
 #include "bpf_dbg.h"
+#include "pin_internal.h"
 
 #define MAX_CONCURRENT_PIDS                                                                        \
     3001 // estimate: 1000 concurrent processes (including children) * 3 namespaces per pid
@@ -18,7 +19,7 @@ struct {
     __uint(max_entries, MAX_CONCURRENT_PIDS);
     __type(key, u32);
     __type(value, u64); // using 8 bytes, because array elements are 8 bytes aligned anyway
-    __uint(pinning, LIBBPF_PIN_BY_NAME);
+    __uint(pinning, BEYLA_PIN_INTERNAL);
 } valid_pids SEC(".maps");
 
 struct {
@@ -26,7 +27,7 @@ struct {
     __uint(max_entries, MAX_CONCURRENT_PIDS);
     __type(key, u32);
     __type(value, u32);
-    __uint(pinning, LIBBPF_PIN_BY_NAME);
+    __uint(pinning, BEYLA_PIN_INTERNAL);
 } pid_cache SEC(".maps");
 
 static __always_inline u8 pid_matches(pid_key_t *p) {

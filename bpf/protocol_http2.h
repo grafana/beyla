@@ -8,6 +8,7 @@
 #include "pid.h"
 #include "protocol_common.h"
 #include "http2_grpc.h"
+#include "pin_internal.h"
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
@@ -21,7 +22,7 @@ struct {
     __type(key, http2_conn_stream_t);
     __type(value, http2_grpc_request_t);
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
-    __uint(pinning, LIBBPF_PIN_BY_NAME);
+    __uint(pinning, BEYLA_PIN_INTERNAL);
 } ongoing_http2_grpc SEC(".maps");
 
 // We want to be able to collect larger amount of data for the grpc/http headers

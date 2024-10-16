@@ -110,7 +110,7 @@ services:
       - 3044:3043
         
   jtestserver:
-    image: ghcr.io/grafana/beyla-test/greeting-java-jar/0.0.4
+    image: ghcr.io/grafana/beyla-test/greeting-java-jar/0.0.7
     ports:
       - "8086:8085"
 

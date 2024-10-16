@@ -327,10 +327,10 @@ func fetchProcessPorts(scanPorts bool) (map[PID]processAttrs, error) {
 
 func loadBPFWatcher(cfg *beyla.Config, events chan<- watcher.Event) error {
 	wt := watcher.New(cfg, events)
-	return ebpf.RunUtilityTracer(wt, ebpf.BuildPinPath(cfg))
+	return ebpf.RunUtilityTracer(wt)
 }
 
 func loadBPFLogger(cfg *beyla.Config) error {
 	wt := logger.New(cfg)
-	return ebpf.RunUtilityTracer(wt, ebpf.BuildPinPath(cfg))
+	return ebpf.RunUtilityTracer(wt)
 }

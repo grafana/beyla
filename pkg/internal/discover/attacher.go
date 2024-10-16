@@ -26,7 +26,6 @@ type TraceAttacher struct {
 	DiscoveredTracers chan *ebpf.Instrumentable
 	DeleteTracers     chan *ebpf.Instrumentable
 	Metrics           imetrics.Reporter
-	pinPath           string
 	beylaPID          int
 
 	// processInstances keeps track of the instances of each process. This will help making sure
@@ -56,7 +55,6 @@ func (ta *TraceAttacher) attacherLoop() (pipe.FinalFunc[[]Event[ebpf.Instrumenta
 	ta.existingTracers = map[uint64]*ebpf.ProcessTracer{}
 	ta.processInstances = maps.MultiCounter[uint64]{}
 	ta.beylaPID = os.Getpid()
-	ta.pinPath = ebpf.BuildPinPath(ta.Cfg)
 
 	if err := ta.init(); err != nil {
 		ta.log.Error("cant start process tracer. Stopping it", "error", err)

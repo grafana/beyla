@@ -9,7 +9,6 @@ import (
 
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/discover"
-	"github.com/grafana/beyla/pkg/internal/ebpf"
 	"github.com/grafana/beyla/pkg/internal/pipe"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
@@ -108,7 +107,6 @@ func (i *Instrumenter) ReadAndForward() error {
 	bp.Run(i.ctx)
 
 	log.Info("exiting auto-instrumenter")
-	discover.UnmountBPFFS(ebpf.BuildPinPath(i.config), log)
 
 	return nil
 }

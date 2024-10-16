@@ -42,7 +42,7 @@ func TestWatcherKubeEnricher(t *testing.T) {
 	})))
 
 	type event struct {
-		fn           func(inputCh chan []Event[processAttrs], fInformer kube.MetadataNotifier, store *kube.Store)
+		fn           func(inputCh chan []Event[processAttrs], fInformer kube.MetadataNotifier)
 		shouldNotify bool
 	}
 	type testCase struct {
@@ -50,13 +50,13 @@ func TestWatcherKubeEnricher(t *testing.T) {
 		steps []event
 	}
 	// test deployment functions
-	var process = func(inputCh chan []Event[processAttrs], _ kube.MetadataNotifier, _ *kube.Store) {
+	var process = func(inputCh chan []Event[processAttrs], _ kube.MetadataNotifier) {
 		newProcess(inputCh, containerPID, []uint32{containerPort})
 	}
-	var pod = func(_ chan []Event[processAttrs], fInformer kube.MetadataNotifier, store *kube.Store) {
+	var pod = func(_ chan []Event[processAttrs], fInformer kube.MetadataNotifier) {
 		deployPod(fInformer, namespace, podName, containerID, nil)
 	}
-	var ownedPod = func(_ chan []Event[processAttrs], fInformer kube.MetadataNotifier, store *kube.Store) {
+	var ownedPod = func(_ chan []Event[processAttrs], fInformer kube.MetadataNotifier) {
 		deployOwnedPod(fInformer, namespace, podName, deploymentName, containerID)
 	}
 
@@ -88,7 +88,7 @@ func TestWatcherKubeEnricher(t *testing.T) {
 			// in different orders to test that watcherKubeEnricher will eventually handle everything
 			var events []Event[processAttrs]
 			for _, step := range tc.steps {
-				step.fn(inputCh, fInformer, store)
+				step.fn(inputCh, fInformer)
 				if step.shouldNotify {
 					events = testutil.ReadChannel(t, outputCh, timeout)
 				}

@@ -73,6 +73,41 @@ struct {
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } go_trace_map SEC(".maps");
 
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, go_addr_key_t); // key: goroutine
+    __type(value, void *);      // the transport *
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+} ongoing_grpc_operate_headers SEC(".maps");
+
+typedef struct grpc_transports {
+    u8 type;
+    connection_info_t conn;
+} grpc_transports_t;
+
+// TODO: use go_addr_key_t as key
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, void *); // key: pointer to the transport pointer
+    __type(value, grpc_transports_t);
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+} ongoing_grpc_transports SEC(".maps");
+
+typedef struct sql_func_invocation {
+    u64 start_monotime_ns;
+    u64 sql_param;
+    u64 query_len;
+    connection_info_t conn __attribute__((aligned(8)));
+    tp_info_t tp;
+} sql_func_invocation_t;
+
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, go_addr_key_t); // key: pointer to the request goroutine
+    __type(value, sql_func_invocation_t);
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+} ongoing_sql_queries SEC(".maps");
+
 static __always_inline void go_addr_key_from_id(go_addr_key_t *current, void *addr) {
     u64 pid_tid = bpf_get_current_pid_tgid();
     u32 pid = pid_from_pid_tgid(pid_tid);

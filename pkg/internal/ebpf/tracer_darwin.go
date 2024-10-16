@@ -25,11 +25,11 @@ func (pt *ProcessTracer) Init() error {
 	return nil
 }
 
-func (pt *ProcessTracer) NewExecutable(_ *Instrumentable) error {
+func (pt *ProcessTracer) NewExecutable(_ *link.Executable, _ *Instrumentable) error {
 	return nil
 }
 
-func (pt *ProcessTracer) NewExecutableInstance(_ *link.Executable, _ *Instrumentable) error {
+func (pt *ProcessTracer) NewExecutableInstance(_ *Instrumentable) error {
 	return nil
 }
 

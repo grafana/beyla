@@ -85,3 +85,4 @@ test/integration/components/go_otel_grpc/rolldice
 test/integration/components/pythonserver/lib/
 test/integration/components/pythonserver/lib64
 test/integration/components/pythonserver/pyvenv.cfg
+test/integration/components/gosql/qosql

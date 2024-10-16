@@ -143,6 +143,18 @@ func (s *Store) ObjectMetaByIP(ip string) *informer.ObjectMeta {
 	return s.ipInfos[ip]
 }
 
+// ServiceNameNamespaceForIP returns the service name and namespace for a given IP address
+// This means that, for a given Pod, we will not return the Pod Name, but the Pod Owner Name
+func (s *Store) ServiceNameNamespaceForIP(ip string) (string, string) {
+	if om := s.ObjectMetaByIP(ip); om != nil {
+		if om.Pod != nil && om.Pod.OwnerName != "" {
+			return om.Pod.OwnerName, om.Namespace
+		}
+		return om.Name, om.Namespace
+	}
+	return "", ""
+}
+
 // Subscribe overrides BaseNotifier to send a "welcome message" to each new observer
 // containing the whole metadata store
 func (s *Store) Subscribe(observer meta.Observer) {

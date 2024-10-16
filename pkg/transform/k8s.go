@@ -150,6 +150,8 @@ func (md *metadataDecorator) appendMetadata(span *request.Span, meta *informer.O
 		span.ServiceID.Metadata[kindLabel] = meta.Pod.OwnerName
 		span.ServiceID.Metadata[attr.K8sOwnerName] = meta.Pod.OwnerName
 	}
+	// override hostname by the Pod name
+	span.ServiceID.HostName = meta.Name
 }
 
 func OwnerLabelName(kind string) attr.Name {

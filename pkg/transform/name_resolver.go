@@ -192,10 +192,7 @@ func (nr *NameResolver) dnsResolve(svc *svc.ID, ip string) (string, string) {
 }
 
 func (nr *NameResolver) resolveFromK8s(ip string) (string, string) {
-	if om := nr.db.ObjectMetaByIP(ip); om != nil {
-		return om.Name, om.Namespace
-	}
-	return "", ""
+	return nr.db.ServiceNameNamespaceForIP(ip)
 }
 
 func (nr *NameResolver) resolveIP(ip string) string {

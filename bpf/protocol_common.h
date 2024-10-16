@@ -5,7 +5,6 @@
 #include "bpf_helpers.h"
 #include "http_types.h"
 #include "ringbuf.h"
-#include "pid.h"
 #include "bpf_dbg.h"
 #include "pin_internal.h"
 

@@ -216,13 +216,24 @@ func (wk *watcherKubeEnricher) getContainerInfo(pid PID) (container.Info, error)
 
 // withMetadata returns a copy with a new map to avoid race conditions in later stages of the pipeline
 func withMetadata(pp processAttrs, info *informer.ObjectMeta) processAttrs {
+
+	ownerName := info.Name
+	if topOwner := kube.TopOwner(info.Pod); topOwner != nil {
+		ownerName = topOwner.Name
+	}
+
 	ret := pp
 	ret.metadata = map[string]string{
-		services.AttrNamespace:                              info.Namespace,
-		services.AttrPodName:                                info.Name,
-		transform.OwnerLabelName(info.Pod.OwnerKind).Prom(): info.Pod.OwnerName,
-		services.AttrOwnerName:                              info.Pod.OwnerName,
+		services.AttrNamespace: info.Namespace,
+		services.AttrPodName:   info.Name,
+		services.AttrOwnerName: ownerName,
 	}
 	ret.podLabels = info.Labels
+
+	// add any other owner name (they might be several, e.g. replicaset and deployment)
+	for _, owner := range info.Pod.Owners {
+		ret.metadata[transform.OwnerLabelName(owner.Kind).Prom()] = owner.Name
+	}
+
 	return ret
 }

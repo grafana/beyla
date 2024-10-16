@@ -130,20 +130,21 @@ func (n *decorator) decorate(flow *ebpf.Record, prefix, ip string) bool {
 		}
 		return false
 	}
+	ownerName, ownerKind := meta.Name, meta.Kind
+	if owner := kube.TopOwner(meta.Pod); owner != nil {
+		ownerName, ownerKind = owner.Name, owner.Kind
+	}
+
 	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixNs)] = meta.Namespace
 	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixName)] = meta.Name
 	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixType)] = meta.Kind
-	if meta.Pod == nil {
-		flow.Attrs.Metadata[attr.Name(prefix+attrSuffixOwnerName)] = meta.Name
-		flow.Attrs.Metadata[attr.Name(prefix+attrSuffixOwnerType)] = meta.Kind
-	} else {
-		flow.Attrs.Metadata[attr.Name(prefix+attrSuffixOwnerName)] = meta.Pod.OwnerName
-		flow.Attrs.Metadata[attr.Name(prefix+attrSuffixOwnerType)] = meta.Pod.OwnerKind
-		if meta.Pod.HostIp != "" {
-			flow.Attrs.Metadata[attr.Name(prefix+attrSuffixHostIP)] = meta.Pod.HostIp
-			if host := n.kube.ObjectMetaByIP(meta.Pod.HostIp); host != nil {
-				flow.Attrs.Metadata[attr.Name(prefix+attrSuffixHostName)] = host.Name
-			}
+	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixOwnerName)] = ownerName
+	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixOwnerType)] = ownerKind
+	// add any other ownership label (they might be several, e.g. replicaset and deployment)¡
+	if meta.Pod != nil && meta.Pod.HostIp != "" {
+		flow.Attrs.Metadata[attr.Name(prefix+attrSuffixHostIP)] = meta.Pod.HostIp
+		if host := n.kube.ObjectMetaByIP(meta.Pod.HostIp); host != nil {
+			flow.Attrs.Metadata[attr.Name(prefix+attrSuffixHostName)] = host.Name
 		}
 	}
 	// decorate other names from metadata, if required

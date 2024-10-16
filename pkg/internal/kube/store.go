@@ -147,8 +147,8 @@ func (s *Store) ObjectMetaByIP(ip string) *informer.ObjectMeta {
 // This means that, for a given Pod, we will not return the Pod Name, but the Pod Owner Name
 func (s *Store) ServiceNameNamespaceForIP(ip string) (string, string) {
 	if om := s.ObjectMetaByIP(ip); om != nil {
-		if om.Pod != nil && om.Pod.OwnerName != "" {
-			return om.Pod.OwnerName, om.Namespace
+		if owner := TopOwner(om.Pod); owner != nil {
+			return owner.Name, om.Namespace
 		}
 		return om.Name, om.Namespace
 	}

@@ -31,6 +31,7 @@ const (
 	containerPID   = 123
 	containerID    = "container-123"
 	containerPort  = 332
+	replicaSetName = "the-deployment-123456789"
 	deploymentName = "the-deployment"
 	podName        = "the-deployment-123456789-abcde"
 )
@@ -57,7 +58,7 @@ func TestWatcherKubeEnricher(t *testing.T) {
 		deployPod(fInformer, namespace, podName, containerID, nil)
 	}
 	var ownedPod = func(_ chan []Event[processAttrs], fInformer kube.MetadataNotifier) {
-		deployOwnedPod(fInformer, namespace, podName, deploymentName, containerID)
+		deployOwnedPod(fInformer, namespace, podName, replicaSetName, deploymentName, containerID)
 	}
 
 	// The watcherKubeEnricher has to listen and relate information from multiple asynchronous sources.
@@ -102,8 +103,10 @@ func TestWatcherKubeEnricher(t *testing.T) {
 			assert.Equal(t, namespace, event.Obj.metadata[services.AttrNamespace])
 			assert.Equal(t, podName, event.Obj.metadata[services.AttrPodName])
 			if strings.Contains(tc.name, "(no owner)") {
+				assert.Empty(t, event.Obj.metadata[services.AttrReplicaSetName])
 				assert.Empty(t, event.Obj.metadata[services.AttrDeploymentName])
 			} else {
+				assert.Equal(t, replicaSetName, event.Obj.metadata[services.AttrReplicaSetName])
 				assert.Equal(t, deploymentName, event.Obj.metadata[services.AttrDeploymentName])
 			}
 		})
@@ -153,7 +156,7 @@ func TestWatcherKubeEnricherWithMatcher(t *testing.T) {
 	newProcess(inputCh, 123, []uint32{777})
 	newProcess(inputCh, 456, []uint32{})
 	newProcess(inputCh, 789, []uint32{443})
-	deployOwnedPod(fInformer, namespace, "depl-rsid-podid", "depl", "container-789")
+	deployOwnedPod(fInformer, namespace, "depl-rsid-podid", "depl-rsid", "depl", "container-789")
 
 	// sending events that will match and will be forwarded
 	t.Run("port-only match", func(t *testing.T) {
@@ -201,7 +204,7 @@ func TestWatcherKubeEnricherWithMatcher(t *testing.T) {
 
 	t.Run("both process and metadata match", func(t *testing.T) {
 		newProcess(inputCh, 56, []uint32{443})
-		deployOwnedPod(fInformer, namespace, "chacha-rsid-podid", "chacha", "container-56")
+		deployOwnedPod(fInformer, namespace, "chacha-rsid-podid", "chacha-rsid", "chacha", "container-56")
 		matches := testutil.ReadChannel(t, outputCh, timeout)
 		require.Len(t, matches, 1)
 		m := matches[0]
@@ -252,7 +255,7 @@ func deployPod(fInformer kube.MetadataNotifier, ns, name, containerID string, la
 	})
 }
 
-func deployOwnedPod(fInformer kube.MetadataNotifier, ns, name, deploymentName, containerID string) {
+func deployOwnedPod(fInformer kube.MetadataNotifier, ns, name, replicaSetName, deploymentName, containerID string) {
 	fInformer.Notify(&informer.Event{
 		Type: informer.EventType_CREATED,
 		Resource: &informer.ObjectMeta{
@@ -260,11 +263,8 @@ func deployOwnedPod(fInformer kube.MetadataNotifier, ns, name, deploymentName, c
 			Kind: "Pod",
 			Pod: &informer.PodInfo{
 				ContainerIds: []string{containerID},
-				// In K8s informers, the owner will be typically a ReplicaSet or DaemonSet
-				// however our intermediate cache library already extracts the Deployment name
-				// as replicasets are actually owned by Deployments
-				OwnerName: deploymentName,
-				OwnerKind: "Deployment",
+				Owners: []*informer.Owner{{Name: replicaSetName, Kind: "ReplicaSet"},
+					{Name: deploymentName, Kind: "Deployment"}},
 			},
 		},
 	})

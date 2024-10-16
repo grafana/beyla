@@ -15,37 +15,27 @@ type indexableEntity struct {
 	EncodedMeta *informer.ObjectMeta
 }
 
-// ownerFrom returns the most plausible Owner reference. It might be
+// ownerFrom returns the owner references, as well as the owners from the owners. It might be
 // null if the entity does not have any owner
-func ownerFrom(meta *metav1.ObjectMeta) (kind, name string) {
+func ownersFrom(meta *metav1.ObjectMeta) []*informer.Owner {
 	if len(meta.OwnerReferences) == 0 {
 		// If no owner references' found, return itself as owner
-		return "Pod", meta.Name
+		return []*informer.Owner{{Kind: "Pod", Name: meta.Name}}
 	}
-
+	owners := make([]*informer.Owner, 0, len(meta.OwnerReferences))
 	for i := range meta.OwnerReferences {
 		or := &meta.OwnerReferences[i]
-		if or.APIVersion != "apps/v1" {
-			// as fallback, we store any found owner that is not part of the bundled
-			// K8s owner types (e.g. argocd rollouts).
-			// It will be returned if no standard K8s owners are found
-			kind, name = or.Kind, or.Name
-			continue
-		}
-		return topOwner(or.Kind, or.Name)
-	}
-	return kind, name
-}
-
-// topOwner returns the top Owner in the owner chain.
-// For example, if the owner is a ReplicaSet, it will return the Deployment name.
-func topOwner(kind, name string) (string, string) {
-	// we have two levels of ownership at most, and
-	// we heuristically extract the Deployment name from the replicaset name
-	if kind == "ReplicaSet" {
-		if idx := strings.IndexByte(name, '-'); idx > 0 {
-			return "Deployment", name[:idx]
+		owners = append(owners, &informer.Owner{Kind: or.Kind, Name: or.Name})
+		// ReplicaSets usually have a Deployment as owner too. Returning it as well
+		if or.APIVersion == "apps/v1" && or.Kind == "ReplicaSet" {
+			// we heuristically extract the Deployment name from the replicaset name
+			if idx := strings.IndexByte(or.Name, '-'); idx > 0 {
+				owners = append(owners, &informer.Owner{Kind: "Deployment", Name: or.Name[:idx]})
+				// we already have what we need for decoration and selection. Ignoring any other owner
+				// it might hypothetically have (it would be a rare case)
+				return owners
+			}
 		}
 	}
-	return kind, name
+	return owners
 }

@@ -112,14 +112,15 @@ func (md *metadataDecorator) appendMetadata(span *request.Span, meta *informer.O
 		klog().Debug("pod metadata for is nil. Ignoring decoration", "meta", meta)
 		return
 	}
+	topOwner := kube.TopOwner(meta.Pod)
 	// If the user has not defined criteria values for the reported
 	// service name and namespace, we will automatically set it from
 	// the kubernetes metadata
 	if span.ServiceID.AutoName() {
 		// By contract, we expect that our custom Informer cache (beyla-k8s-cache) returns the top owner name for a Pod
 		// (this is, instead of the ReplicaSet name, the Deployment name)
-		if meta.Pod.OwnerName != "" {
-			span.ServiceID.Name = meta.Pod.OwnerName
+		if topOwner != nil {
+			span.ServiceID.Name = topOwner.Name
 		} else {
 			span.ServiceID.Name = meta.Name
 		}
@@ -146,10 +147,16 @@ func (md *metadataDecorator) appendMetadata(span *request.Span, meta *informer.O
 
 	// ownerKind could be also "Pod", but we won't insert it as "owner" label to avoid
 	// growing cardinality
-	if kindLabel := OwnerLabelName(meta.Pod.OwnerKind); kindLabel != "" {
-		span.ServiceID.Metadata[kindLabel] = meta.Pod.OwnerName
-		span.ServiceID.Metadata[attr.K8sOwnerName] = meta.Pod.OwnerName
+	if topOwner != nil {
+		span.ServiceID.Metadata[attr.K8sOwnerName] = topOwner.Name
 	}
+
+	for _, owner := range meta.Pod.Owners {
+		if kindLabel := OwnerLabelName(owner.Kind); kindLabel != "" {
+			span.ServiceID.Metadata[kindLabel] = owner.Name
+		}
+	}
+
 	// override hostname by the Pod name
 	span.ServiceID.HostName = meta.Name
 }

@@ -128,13 +128,10 @@ func (k *Informers) initPodInformer(informerFactory informers.SharedInformerFact
 			}
 		}
 
-		ownerKind, ownerName := ownerFrom(&pod.ObjectMeta)
 		startTime := pod.GetCreationTimestamp().String()
 		if k.log.Enabled(context.TODO(), slog.LevelDebug) {
-			k.log.Debug("inserting pod", "name", pod.Name, "namespace", pod.Namespace,
-				"uid", pod.UID, "ownerKind", ownerKind, "ownerName", ownerName,
-				"node", pod.Spec.NodeName, "startTime", startTime,
-				"containerIDs", containerIDs)
+			k.log.Debug("inserting pod", "name", pod.Name, "namespace", pod.Namespace, "uid", pod.UID,
+				"node", pod.Spec.NodeName, "startTime", startTime, "containerIDs", containerIDs)
 		}
 
 		return &indexableEntity{
@@ -150,8 +147,7 @@ func (k *Informers) initPodInformer(informerFactory informers.SharedInformerFact
 					NodeName:     pod.Spec.NodeName,
 					StartTimeStr: startTime,
 					ContainerIds: containerIDs,
-					OwnerName:    ownerName,
-					OwnerKind:    ownerKind,
+					Owners:       ownersFrom(&pod.ObjectMeta),
 					HostIp:       pod.Status.HostIP,
 				},
 			},

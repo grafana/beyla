@@ -31,8 +31,7 @@ func TestDecoration(t *testing.T) {
 			NodeName:     "the-node",
 			StartTimeStr: "2020-01-02 12:12:56",
 			Uid:          "uid-12",
-			OwnerKind:    "Deployment",
-			OwnerName:    "deployment-12",
+			Owners:       []*informer.Owner{{Kind: "Deployment", Name: "deployment-12"}},
 			ContainerIds: []string{"container-12"},
 		},
 	}})
@@ -42,8 +41,7 @@ func TestDecoration(t *testing.T) {
 			NodeName:     "the-node",
 			StartTimeStr: "2020-01-02 12:34:56",
 			Uid:          "uid-34",
-			OwnerName:    "rs",
-			OwnerKind:    "ReplicaSet",
+			Owners:       []*informer.Owner{{Kind: "ReplicaSet", Name: "rs"}},
 			ContainerIds: []string{"container-34"},
 		},
 	}})

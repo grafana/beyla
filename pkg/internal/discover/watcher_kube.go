@@ -22,7 +22,7 @@ var (
 )
 
 // watcherKubeEnricher keeps an update relational snapshot of the in-host process-pods-deployments,
-// which is continuously updated from two sources: the input from the ProcessWatcher and the kube.Metadata informers.
+// which is continuously updated from two sources: the input from the ProcessWatcher and the kube.Store.
 type watcherKubeEnricher struct {
 	store *kube.Store
 
@@ -40,7 +40,7 @@ type watcherKubeEnricher struct {
 // injection in tests
 type kubeMetadataProvider interface {
 	IsKubeEnabled() bool
-	Store(ctx context.Context) (*kube.Store, error)
+	Get(ctx context.Context) (*kube.Store, error)
 }
 
 func WatcherKubeEnricherProvider(
@@ -51,7 +51,7 @@ func WatcherKubeEnricherProvider(
 		if !kubeMetaProvider.IsKubeEnabled() {
 			return pipe.Bypass[[]Event[processAttrs]](), nil
 		}
-		store, err := kubeMetaProvider.Store(ctx)
+		store, err := kubeMetaProvider.Get(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("instantiating WatcherKubeEnricher: %w", err)
 		}
@@ -68,6 +68,9 @@ func WatcherKubeEnricherProvider(
 
 func (wk *watcherKubeEnricher) ID() string { return "unique-watcher-kube-enricher-id" }
 
+// On is invoked every time an object metadata instance is stored or deleted in the
+// kube.Store. It will just forward the event via channel for proper asynchronous
+// handling in the enrich main loop
 func (wk *watcherKubeEnricher) On(event *informer.Event) {
 	// ignoring updates on non-pod resources
 	if event.Resource.Pod == nil {
@@ -84,9 +87,9 @@ func (wk *watcherKubeEnricher) On(event *informer.Event) {
 }
 
 // enrich listens for any potential instrumentable process from three asyncronous sources:
-// ProcessWatcher, and the ReplicaSet and Pod informers from kube.Metadata.
+// ProcessWatcher, and the ReplicaSet and Pod informers from kube.Store.
 // We can't assume any order in the reception of the events, so we always keep an in-memory
-// snapshot of the process-pod-replicaset 3-tuple that is updated as long as each event
+// snapshot of the process-pod tuple that is updated as long as each event
 // is received from different sources.
 func (wk *watcherKubeEnricher) enrich(in <-chan []Event[processAttrs], out chan<- []Event[processAttrs]) {
 	wk.log.Debug("starting watcherKubeEnricher")
@@ -144,6 +147,9 @@ func (wk *watcherKubeEnricher) enrichProcessEvent(processEvents []Event[processA
 		case EventDeleted:
 			wk.log.Debug("process stopped", "pid", procEvent.Obj.pid)
 			wk.mt.Lock()
+			if cnt, ok := wk.containerByPID[procEvent.Obj.pid]; ok {
+				delete(wk.processByContainer, cnt.ContainerID)
+			}
 			delete(wk.containerByPID, procEvent.Obj.pid)
 			wk.mt.Unlock()
 			// no need to decorate deleted processes
@@ -154,6 +160,8 @@ func (wk *watcherKubeEnricher) enrichProcessEvent(processEvents []Event[processA
 }
 
 func (wk *watcherKubeEnricher) onNewProcess(procInfo processAttrs) (processAttrs, bool) {
+	wk.mt.Lock()
+	defer wk.mt.Unlock()
 	// 1. get container owning the process and cache it
 	// 2. if there is already a pod registered for that container, decorate processAttrs with pod attributes
 	containerInfo, err := wk.getContainerInfo(procInfo.pid)
@@ -163,10 +171,7 @@ func (wk *watcherKubeEnricher) onNewProcess(procInfo processAttrs) (processAttrs
 		return processAttrs{}, false
 	}
 
-	wk.mt.Lock()
-	wk.containerByPID[procInfo.pid] = containerInfo
 	wk.processByContainer[containerInfo.ContainerID] = procInfo
-	wk.mt.Unlock()
 
 	if pod := wk.store.PodByContainerID(containerInfo.ContainerID); pod != nil {
 		procInfo = withMetadata(procInfo, pod)
@@ -193,24 +198,22 @@ func (wk *watcherKubeEnricher) onDeletedPod(pod *informer.ObjectMeta) {
 	wk.mt.Lock()
 	defer wk.mt.Unlock()
 	for _, containerID := range pod.Pod.ContainerIds {
+		if pbc, ok := wk.processByContainer[containerID]; ok {
+			delete(wk.containerByPID, pbc.pid)
+		}
 		delete(wk.processByContainer, containerID)
 	}
 }
 
 func (wk *watcherKubeEnricher) getContainerInfo(pid PID) (container.Info, error) {
-	wk.mt.RLock()
-	cntInfo, ok := wk.containerByPID[pid]
-	wk.mt.RUnlock()
-	if ok {
+	if cntInfo, ok := wk.containerByPID[pid]; ok {
 		return cntInfo, nil
 	}
 	cntInfo, err := containerInfoForPID(uint32(pid))
 	if err != nil {
 		return container.Info{}, err
 	}
-	wk.mt.Lock()
 	wk.containerByPID[pid] = cntInfo
-	wk.mt.Unlock()
 	return cntInfo, nil
 }
 
@@ -234,6 +237,5 @@ func withMetadata(pp processAttrs, info *informer.ObjectMeta) processAttrs {
 	for _, owner := range info.Pod.Owners {
 		ret.metadata[transform.OwnerLabelName(owner.Kind).Prom()] = owner.Name
 	}
-
 	return ret
 }

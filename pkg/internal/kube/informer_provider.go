@@ -3,6 +3,7 @@ package kube
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path"
 	"strings"
@@ -15,8 +16,20 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
+	"github.com/grafana/beyla-k8s-cache/pkg/meta"
+
 	"github.com/grafana/beyla/pkg/kubeflags"
 )
+
+const (
+	kubeConfigEnvVariable = "KUBECONFIG"
+	defaultResyncTime     = 30 * time.Minute
+	defaultSyncTimeout    = 60 * time.Second
+)
+
+func klog() *slog.Logger {
+	return slog.With("component", "kube.Metadata")
+}
 
 type MetadataConfig struct {
 	Enable            kubeflags.EnableFlag
@@ -30,7 +43,7 @@ type MetadataProvider struct {
 	mt sync.Mutex
 
 	metadata *Store
-	informer *InformersMetadata
+	informer *meta.Informers
 
 	kubeConfigPath string
 	syncTimeout    time.Duration
@@ -92,7 +105,7 @@ func (mp *MetadataProvider) KubeClient() (kubernetes.Interface, error) {
 	return kubernetes.NewForConfig(restCfg)
 }
 
-func (mp *MetadataProvider) Store(ctx context.Context) (*Store, error) {
+func (mp *MetadataProvider) Get(ctx context.Context) (*Store, error) {
 	mp.mt.Lock()
 	defer mp.mt.Unlock()
 
@@ -110,12 +123,12 @@ func (mp *MetadataProvider) Store(ctx context.Context) (*Store, error) {
 	return mp.metadata, nil
 }
 
-func (mp *MetadataProvider) getInformer(ctx context.Context) (*InformersMetadata, error) {
+func (mp *MetadataProvider) getInformer(ctx context.Context) (*meta.Informers, error) {
 	if mp.informer != nil {
 		return mp.informer, nil
 	}
 	var err error
-	mp.informer, err = NewInformersMetadata(ctx, mp.kubeConfigPath)
+	mp.informer, err = mp.initInformers(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("can't get informer: %w", err)
 	}
@@ -141,7 +154,7 @@ func (mp *MetadataProvider) CurrentNodeName(ctx context.Context) (string, error)
 		currentNamespace = string(nsBytes)
 	}
 	// second: get the node for the current Pod
-	// using List instead of Store because to not require extra serviceaccount permissions
+	// using List instead of Get because to not require extra serviceaccount permissions
 	pods, err := kubeClient.CoreV1().Pods(currentNamespace).List(ctx, metav1.ListOptions{
 		FieldSelector: "metadata.name=" + currentPod,
 	})
@@ -149,6 +162,33 @@ func (mp *MetadataProvider) CurrentNodeName(ctx context.Context) (string, error)
 		return "", fmt.Errorf("can't get pod %s/%s: %w", currentNamespace, currentPod, err)
 	}
 	return pods.Items[0].Spec.NodeName, nil
+}
+
+func (mp *MetadataProvider) initInformers(ctx context.Context) (*meta.Informers, error) {
+	done := make(chan error)
+	ctx, cancel := context.WithTimeout(ctx, mp.syncTimeout)
+	defer cancel()
+	var informers *meta.Informers
+
+	go func() {
+		var err error
+		if informers, err = meta.InitInformers(ctx, mp.kubeConfigPath, defaultResyncTime); err != nil {
+			done <- err
+		} else {
+			close(done)
+		}
+	}()
+
+	select {
+	case <-ctx.Done():
+		klog().Warn("kubernetes cache has not been synced after timeout. The kubernetes attributes might be incomplete."+
+			" Consider increasing the BEYLA_KUBE_INFORMERS_SYNC_TIMEOUT value", "timeout", mp.syncTimeout)
+	case err, ok := <-done:
+		if ok {
+			return nil, fmt.Errorf("failed to initialize Kubernetes informers: %w", err)
+		}
+	}
+	return informers, nil
 }
 
 func LoadConfig(kubeConfigPath string) (*rest.Config, error) {

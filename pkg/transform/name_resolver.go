@@ -67,7 +67,7 @@ func nameResolver(ctx context.Context, ctxInfo *global.ContextInfo, cfg *NameRes
 	var kubeStore *kube2.Store
 	if ctxInfo.K8sInformer.IsKubeEnabled() {
 		var err error
-		kubeStore, err = ctxInfo.K8sInformer.Store(ctx)
+		kubeStore, err = ctxInfo.K8sInformer.Get(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("initializing NameResolutionProvider: %w", err)
 		}

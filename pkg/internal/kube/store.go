@@ -21,7 +21,7 @@ func dblog() *slog.Logger {
 type Store struct {
 	access sync.RWMutex
 
-	metadataNotifier MetadataNotifier
+	metadataNotifier meta.Notifier
 
 	containerIDs map[string]*container.Info
 
@@ -41,7 +41,7 @@ type Store struct {
 	meta.BaseNotifier
 }
 
-func NewStore(kubeMetadata MetadataNotifier) *Store {
+func NewStore(kubeMetadata meta.Notifier) *Store {
 	db := &Store{
 		containerIDs:     map[string]*container.Info{},
 		namespaces:       map[uint32]*container.Info{},
@@ -54,10 +54,10 @@ func NewStore(kubeMetadata MetadataNotifier) *Store {
 	return db
 }
 
-func (s *Store) ID() string {
-	return "unique-metadata-observer"
-}
+func (s *Store) ID() string { return "unique-metadata-observer" }
 
+// On is invoked by the informer when a new Kube object is created, updated or deleted.
+// It will forward the notification to all the Stroe subscribers
 func (s *Store) On(event *informer.Event) {
 	switch event.Type {
 	case informer.EventType_CREATED, informer.EventType_UPDATED:

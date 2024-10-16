@@ -19,7 +19,7 @@ func ContainerDBUpdaterProvider(ctx context.Context, meta kubeMetadataProvider) 
 		if !meta.IsKubeEnabled() {
 			return pipe.Bypass[[]Event[ebpf.Instrumentable]](), nil
 		}
-		store, err := meta.Store(ctx)
+		store, err := meta.Get(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("instantiating ContainerDBUpdater: %w", err)
 		}

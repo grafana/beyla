@@ -3,8 +3,6 @@ package discover
 import (
 	"context"
 	"fmt"
-	"log/slog"
-	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -37,13 +35,8 @@ const (
 )
 
 func TestWatcherKubeEnricher(t *testing.T) {
-	// set slog level to debug to see the logs
-	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelDebug,
-	})))
-
 	type event struct {
-		fn           func(inputCh chan []Event[processAttrs], fInformer kube.MetadataNotifier)
+		fn           func(inputCh chan []Event[processAttrs], fInformer meta.Notifier)
 		shouldNotify bool
 	}
 	type testCase struct {
@@ -51,13 +44,13 @@ func TestWatcherKubeEnricher(t *testing.T) {
 		steps []event
 	}
 	// test deployment functions
-	var process = func(inputCh chan []Event[processAttrs], _ kube.MetadataNotifier) {
+	var process = func(inputCh chan []Event[processAttrs], _ meta.Notifier) {
 		newProcess(inputCh, containerPID, []uint32{containerPort})
 	}
-	var pod = func(_ chan []Event[processAttrs], fInformer kube.MetadataNotifier) {
+	var pod = func(_ chan []Event[processAttrs], fInformer meta.Notifier) {
 		deployPod(fInformer, namespace, podName, containerID, nil)
 	}
-	var ownedPod = func(_ chan []Event[processAttrs], fInformer kube.MetadataNotifier) {
+	var ownedPod = func(_ chan []Event[processAttrs], fInformer meta.Notifier) {
 		deployOwnedPod(fInformer, namespace, podName, replicaSetName, deploymentName, containerID)
 	}
 
@@ -76,10 +69,7 @@ func TestWatcherKubeEnricher(t *testing.T) {
 			// Setup a fake K8s API connected to the watcherKubeEnricher
 			fInformer := &fakeInformer{}
 			store := kube.NewStore(fInformer)
-			wkeNodeFunc, err := WatcherKubeEnricherProvider(context.TODO(), &fakeMetadataProvider{
-				store:    store,
-				informer: fInformer,
-			})()
+			wkeNodeFunc, err := WatcherKubeEnricherProvider(context.TODO(), &fakeMetadataProvider{store: store})()
 			require.NoError(t, err)
 			inputCh, outputCh := make(chan []Event[processAttrs], 10), make(chan []Event[processAttrs], 10)
 			defer close(inputCh)
@@ -119,10 +109,7 @@ func TestWatcherKubeEnricherWithMatcher(t *testing.T) {
 	// Setup a fake K8s API connected to the watcherKubeEnricher
 	fInformer := &fakeInformer{}
 	store := kube.NewStore(fInformer)
-	wkeNodeFunc, err := WatcherKubeEnricherProvider(context.TODO(), &fakeMetadataProvider{
-		store:    store,
-		informer: fInformer,
-	})()
+	wkeNodeFunc, err := WatcherKubeEnricherProvider(context.TODO(), &fakeMetadataProvider{store: store})()
 	require.NoError(t, err)
 	pipeConfig := beyla.Config{}
 	require.NoError(t, yaml.Unmarshal([]byte(`discovery:
@@ -242,7 +229,7 @@ func newProcess(inputCh chan []Event[processAttrs], pid PID, ports []uint32) {
 	}}
 }
 
-func deployPod(fInformer kube.MetadataNotifier, ns, name, containerID string, labels map[string]string) {
+func deployPod(fInformer meta.Notifier, ns, name, containerID string, labels map[string]string) {
 	fInformer.Notify(&informer.Event{
 		Type: informer.EventType_CREATED,
 		Resource: &informer.ObjectMeta{
@@ -255,7 +242,7 @@ func deployPod(fInformer kube.MetadataNotifier, ns, name, containerID string, la
 	})
 }
 
-func deployOwnedPod(fInformer kube.MetadataNotifier, ns, name, replicaSetName, deploymentName, containerID string) {
+func deployOwnedPod(fInformer meta.Notifier, ns, name, replicaSetName, deploymentName, containerID string) {
 	fInformer.Notify(&informer.Event{
 		Type: informer.EventType_CREATED,
 		Resource: &informer.ObjectMeta{
@@ -283,19 +270,13 @@ func fakeProcessInfo(pp processAttrs) (*services.ProcessInfo, error) {
 }
 
 type fakeMetadataProvider struct {
-	store    *kube.Store
-	informer *fakeInformer
+	store *kube.Store
 }
 
 func (i *fakeMetadataProvider) IsKubeEnabled() bool { return true }
 
-func (i *fakeMetadataProvider) Store(_ context.Context) (*kube.Store, error) {
+func (i *fakeMetadataProvider) Get(_ context.Context) (*kube.Store, error) {
 	return i.store, nil
-}
-
-func (i *fakeMetadataProvider) Subscribe(_ context.Context, observer meta.Observer) error {
-	i.informer.Subscribe(observer)
-	return nil
 }
 
 type fakeInformer struct {

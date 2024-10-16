@@ -57,7 +57,7 @@ func MetadataDecoratorProvider(
 		// This node is not going to be instantiated. Let the pipes library just bypassing it.
 		return pipe.Bypass[[]*ebpf.Record](), nil
 	}
-	metadata, err := k8sInformer.Store(ctx)
+	metadata, err := k8sInformer.Get(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("instantiating k8s.MetadataDecorator: %w", err)
 	}

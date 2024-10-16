@@ -25,10 +25,6 @@ func (pt *ProcessTracer) Init() error {
 	return nil
 }
 
-func BuildPinPath(_ *beyla.Config) string {
-	return ""
-}
-
 func (pt *ProcessTracer) NewExecutable(_ *link.Executable, _ *Instrumentable) error {
 	return nil
 }

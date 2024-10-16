@@ -64,7 +64,7 @@ func KubeDecoratorProvider(
 			// if kubernetes decoration is disabled, we just bypass the node
 			return pipe.Bypass[[]request.Span](), nil
 		}
-		metaStore, err := ctxInfo.K8sInformer.Store(ctx)
+		metaStore, err := ctxInfo.K8sInformer.Get(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("inititalizing KubeDecoratorProvider: %w", err)
 		}

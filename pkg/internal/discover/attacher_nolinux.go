@@ -2,8 +2,6 @@
 
 package discover
 
-import "log/slog"
-
 func (ta *TraceAttacher) init() error {
 	return nil
 }

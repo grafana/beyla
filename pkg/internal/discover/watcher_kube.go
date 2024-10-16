@@ -9,7 +9,6 @@ import (
 	"github.com/mariomac/pipes/pipe"
 
 	"github.com/grafana/beyla-k8s-cache/pkg/informer"
-	"github.com/grafana/beyla-k8s-cache/pkg/meta"
 
 	"github.com/grafana/beyla/pkg/internal/helpers/container"
 	"github.com/grafana/beyla/pkg/internal/kube"
@@ -42,7 +41,6 @@ type watcherKubeEnricher struct {
 type kubeMetadataProvider interface {
 	IsKubeEnabled() bool
 	Store(ctx context.Context) (*kube.Store, error)
-	Subscribe(ctx context.Context, observer meta.Observer) error
 }
 
 func WatcherKubeEnricherProvider(

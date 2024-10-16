@@ -15,8 +15,6 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/grafana/beyla-k8s-cache/pkg/meta"
-
 	"github.com/grafana/beyla/pkg/kubeflags"
 )
 
@@ -110,18 +108,6 @@ func (mp *MetadataProvider) Store(ctx context.Context) (*Store, error) {
 	mp.metadata = NewStore(informer)
 
 	return mp.metadata, nil
-}
-
-// TODO: hide, as people should subscribe to the Store directly
-func (mp *MetadataProvider) Subscribe(ctx context.Context, observer meta.Observer) error {
-	mp.mt.Lock()
-	defer mp.mt.Unlock()
-	if informer, err := mp.getInformer(ctx); err != nil {
-		return fmt.Errorf("can't subscribe to informer: %w", err)
-	} else {
-		informer.Subscribe(observer)
-	}
-	return nil
 }
 
 func (mp *MetadataProvider) getInformer(ctx context.Context) (*InformersMetadata, error) {

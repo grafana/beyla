@@ -34,6 +34,11 @@ type Store struct {
 
 	// ip to generic IP info (Node, Service, *including* Pods)
 	ipInfos map[string]*informer.ObjectMeta
+
+	// Instead of subscribing to the informer directly, the rest of components
+	// will subscribe to this store, to make sure that any "new object" notification
+	// they receive is already present in the store
+	meta.BaseNotifier
 }
 
 func NewStore(kubeMetadata MetadataNotifier) *Store {
@@ -43,6 +48,7 @@ func NewStore(kubeMetadata MetadataNotifier) *Store {
 		podsByContainer:  map[string]*informer.ObjectMeta{},
 		ipInfos:          map[string]*informer.ObjectMeta{},
 		metadataNotifier: kubeMetadata,
+		BaseNotifier:     meta.NewBaseNotifier(),
 	}
 	kubeMetadata.Subscribe(db)
 	return db
@@ -62,6 +68,7 @@ func (s *Store) On(event *informer.Event) {
 	case informer.EventType_DELETED:
 		s.updateDeletedObjectMetaByIPIndex(event.Resource)
 	}
+	s.BaseNotifier.Notify(event)
 }
 
 // InfoForPID is an injectable dependency for system-independent testing
@@ -136,6 +143,19 @@ func (s *Store) ObjectMetaByIP(ip string) *informer.ObjectMeta {
 	return s.ipInfos[ip]
 }
 
-func (s *Store) Subscribe(wk meta.Observer) {
-	s.metadataNotifier.Subscribe(wk)
+// Subscribe overrides BaseNotifier to send a "welcome message" to each new observer
+// containing the whole metadata store
+func (s *Store) Subscribe(observer meta.Observer) {
+	s.access.RLock()
+	defer s.access.RUnlock()
+	s.BaseNotifier.Subscribe(observer)
+	for _, pod := range s.podsByContainer {
+		observer.On(&informer.Event{Type: informer.EventType_CREATED, Resource: pod})
+	}
+	// the IPInfos could contain IPInfo data from Pods already sent in the previous loop
+	// is the subscriber the one that should decide whether to ignore such duplicates or
+	// incomplete info
+	for _, ips := range s.ipInfos {
+		observer.On(&informer.Event{Type: informer.EventType_CREATED, Resource: ips})
+	}
 }

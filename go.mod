@@ -78,7 +78,7 @@ replace go.opentelemetry.io/otel/sdk => github.com/grafana/opentelemetry-go/sdk 
 
 replace go.opentelemetry.io/otel/sdk/metric => github.com/grafana/opentelemetry-go/sdk/metric v1.28.0-grafana.3
 
-//replace github.com/grafana/beyla-k8s-cache => ../k8s-meta-cache
+replace github.com/grafana/beyla-k8s-cache => ../k8s-meta-cache
 
 require (
 	cloud.google.com/go/compute/metadata v0.5.0 // indirect

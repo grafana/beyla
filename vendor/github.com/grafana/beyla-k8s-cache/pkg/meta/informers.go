@@ -2,7 +2,6 @@ package meta
 
 import (
 	"log/slog"
-	"sync"
 
 	"k8s.io/client-go/tools/cache"
 
@@ -16,15 +15,11 @@ type Informers struct {
 	nodes    cache.SharedIndexInformer
 	services cache.SharedIndexInformer
 
-	// notifier implementation
-	mutex     sync.RWMutex
-	observers map[string]Observer
+	BaseNotifier
 }
 
 func (i *Informers) Subscribe(observer Observer) {
-	i.mutex.Lock()
-	i.observers[observer.ID()] = observer
-	i.mutex.Unlock()
+	i.BaseNotifier.Subscribe(observer)
 
 	// as a "welcome" message, we send the whole kube metadata to the new observer
 	for _, pod := range i.pods.GetStore().List() {
@@ -44,19 +39,5 @@ func (i *Informers) Subscribe(observer Observer) {
 			Type:     informer.EventType_CREATED,
 			Resource: service.(*indexableEntity).EncodedMeta,
 		})
-	}
-}
-
-func (i *Informers) Unsubscribe(observer Observer) {
-	i.mutex.Lock()
-	delete(i.observers, observer.ID())
-	i.mutex.Unlock()
-}
-
-func (i *Informers) Notify(event *informer.Event) {
-	i.mutex.RLock()
-	defer i.mutex.RUnlock()
-	for _, observer := range i.observers {
-		observer.On(event)
 	}
 }

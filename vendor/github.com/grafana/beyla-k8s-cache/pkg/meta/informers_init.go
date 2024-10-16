@@ -30,7 +30,7 @@ const (
 
 func InitInformers(ctx context.Context, kubeconfigPath string, resyncPeriod time.Duration) (*Informers, error) {
 	log := slog.With("component", "kube.Informers")
-	k := &Informers{log: log, observers: make(map[string]Observer)}
+	k := &Informers{log: log, BaseNotifier: NewBaseNotifier()}
 
 	kubeCfg, err := loadKubeconfig(kubeconfigPath)
 	if err != nil {

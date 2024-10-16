@@ -54,20 +54,9 @@ func TestWatcherKubeEnricher(t *testing.T) {
 		newProcess(inputCh, containerPID, []uint32{containerPort})
 	}
 	var pod = func(_ chan []Event[processAttrs], fInformer kube.MetadataNotifier, store *kube.Store) {
-		store.On(&informer.Event{Type: informer.EventType_CREATED, Resource: &informer.ObjectMeta{
-			Name: podName, Namespace: namespace, Kind: "Pod",
-			Pod: &informer.PodInfo{ContainerIds: []string{containerID}},
-		}})
 		deployPod(fInformer, namespace, podName, containerID, nil)
 	}
 	var ownedPod = func(_ chan []Event[processAttrs], fInformer kube.MetadataNotifier, store *kube.Store) {
-		store.On(&informer.Event{Type: informer.EventType_CREATED, Resource: &informer.ObjectMeta{
-			Name: podName, Namespace: namespace, Kind: "Pod",
-			Pod: &informer.PodInfo{
-				OwnerName: deploymentName, OwnerKind: "Deployment",
-				ContainerIds: []string{containerID},
-			},
-		}})
 		deployOwnedPod(fInformer, namespace, podName, deploymentName, containerID)
 	}
 

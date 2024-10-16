@@ -112,6 +112,7 @@ func (mp *MetadataProvider) Store(ctx context.Context) (*Store, error) {
 	return mp.metadata, nil
 }
 
+// TODO: hide, as people should subscribe to the Store directly
 func (mp *MetadataProvider) Subscribe(ctx context.Context, observer meta.Observer) error {
 	mp.mt.Lock()
 	defer mp.mt.Unlock()

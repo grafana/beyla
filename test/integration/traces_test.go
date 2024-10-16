@@ -752,7 +752,7 @@ func testNestedHTTPTracesKProbes(t *testing.T) {
 
 		// Check the information of the java parent span
 		res = trace.FindByOperationName("GET /jtrace")
-		require.Len(t, res, 1)
+		require.Len(t, res, 2)
 		parent = res[0]
 		require.NotEmpty(t, parent.TraceID)
 		require.Equal(t, traceID, parent.TraceID)
@@ -772,7 +772,7 @@ func testNestedHTTPTracesKProbes(t *testing.T) {
 
 		// Check the information of the nodejs parent span
 		res = trace.FindByOperationName("GET /traceme")
-		require.Len(t, res, 1)
+		require.Len(t, res, 2)
 		parent = res[0]
 		require.NotEmpty(t, parent.TraceID)
 		require.Equal(t, traceID, parent.TraceID)
@@ -792,7 +792,7 @@ func testNestedHTTPTracesKProbes(t *testing.T) {
 
 		// Check the information of the go parent span
 		res = trace.FindByOperationName("GET /gotracemetoo")
-		require.Len(t, res, 1)
+		require.Len(t, res, 2)
 		parent = res[0]
 		require.NotEmpty(t, parent.TraceID)
 		traceID = parent.TraceID // we reset the traceID here
@@ -812,7 +812,7 @@ func testNestedHTTPTracesKProbes(t *testing.T) {
 
 		// Check the information of the python parent span
 		res = trace.FindByOperationName("GET /tracemetoo")
-		require.Len(t, res, 1)
+		require.Len(t, res, 2)
 		parent = res[0]
 		require.NotEmpty(t, parent.TraceID)
 		require.Equal(t, traceID, parent.TraceID)
@@ -832,7 +832,7 @@ func testNestedHTTPTracesKProbes(t *testing.T) {
 
 		// Check the information of the rails parent span
 		res = trace.FindByOperationName("GET /users")
-		require.Len(t, res, 1)
+		require.Len(t, res, 2)
 		parent = res[0]
 		require.NotEmpty(t, parent.TraceID)
 		require.Equal(t, traceID, parent.TraceID)

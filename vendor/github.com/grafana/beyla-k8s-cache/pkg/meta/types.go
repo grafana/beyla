@@ -29,7 +29,7 @@ func ownersFrom(meta *metav1.ObjectMeta) []*informer.Owner {
 		// ReplicaSets usually have a Deployment as owner too. Returning it as well
 		if or.APIVersion == "apps/v1" && or.Kind == "ReplicaSet" {
 			// we heuristically extract the Deployment name from the replicaset name
-			if idx := strings.IndexByte(or.Name, '-'); idx > 0 {
+			if idx := strings.LastIndexByte(or.Name, '-'); idx > 0 {
 				owners = append(owners, &informer.Owner{Kind: "Deployment", Name: or.Name[:idx]})
 				// we already have what we need for decoration and selection. Ignoring any other owner
 				// it might hypothetically have (it would be a rare case)

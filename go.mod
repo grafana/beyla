@@ -13,7 +13,7 @@ require (
 	github.com/goccy/go-json v0.10.2
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
-	github.com/grafana/beyla-k8s-cache v0.0.0-20241016133046-c7eff03e27be
+	github.com/grafana/beyla-k8s-cache v0.0.0-20241016170428-8b4efb83c725
 	github.com/grafana/go-offsets-tracker v0.1.7
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/mariomac/guara v0.0.0-20230621100729-42bd7716e524

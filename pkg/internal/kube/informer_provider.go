@@ -8,7 +8,6 @@ import (
 	"path"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,7 +27,7 @@ const (
 )
 
 func klog() *slog.Logger {
-	return slog.With("component", "kube.Metadata")
+	return slog.With("component", "kube.MetadataProvider")
 }
 
 type MetadataConfig struct {
@@ -49,7 +48,7 @@ type MetadataProvider struct {
 	syncTimeout    time.Duration
 	resyncPeriod   time.Duration
 
-	enable atomic.Value
+	enable kubeflags.EnableFlag
 }
 
 func NewMetadataProvider(config MetadataConfig) *MetadataProvider {
@@ -63,8 +62,8 @@ func NewMetadataProvider(config MetadataConfig) *MetadataProvider {
 		kubeConfigPath: config.KubeConfigPath,
 		syncTimeout:    config.SyncTimeout,
 		resyncPeriod:   config.ResyncPeriod,
+		enable:         config.Enable,
 	}
-	mp.enable.Store(config.Enable)
 	return mp
 }
 
@@ -72,33 +71,37 @@ func (mp *MetadataProvider) IsKubeEnabled() bool {
 	if mp == nil {
 		return false
 	}
-	switch strings.ToLower(string(mp.enable.Load().(kubeflags.EnableFlag))) {
+	mp.mt.Lock()
+	defer mp.mt.Unlock()
+	switch strings.ToLower(string(mp.enable)) {
 	case string(kubeflags.EnabledTrue):
 		return true
 	case string(kubeflags.EnabledFalse), "": // empty value is disabled
 		return false
 	case string(kubeflags.EnabledAutodetect):
 		// We autodetect that we are in a kubernetes if we can properly load a K8s configuration file
-		_, err := LoadConfig(mp.kubeConfigPath)
+		_, err := loadKubeConfig(mp.kubeConfigPath)
 		if err != nil {
 			klog().Debug("kubeconfig can't be detected. Assuming we are not in Kubernetes", "error", err)
-			mp.enable.Store(kubeflags.EnabledFalse)
+			mp.enable = kubeflags.EnabledFalse
 			return false
 		}
-		mp.enable.Store(kubeflags.EnabledTrue)
+		mp.enable = kubeflags.EnabledTrue
 		return true
 	default:
-		klog().Warn("invalid value for Enable value. Ignoring stage", "value", mp.enable.Load())
+		klog().Warn("invalid value for Enable value. Ignoring stage", "value", mp.enable)
 		return false
 	}
 }
 
 func (mp *MetadataProvider) ForceDisable() {
-	mp.enable.Store(kubeflags.EnabledFalse)
+	mp.mt.Lock()
+	defer mp.mt.Unlock()
+	mp.enable = kubeflags.EnabledFalse
 }
 
 func (mp *MetadataProvider) KubeClient() (kubernetes.Interface, error) {
-	restCfg, err := LoadConfig(mp.kubeConfigPath)
+	restCfg, err := loadKubeConfig(mp.kubeConfigPath)
 	if err != nil {
 		return nil, fmt.Errorf("kubeconfig can't be detected: %w", err)
 	}
@@ -166,21 +169,17 @@ func (mp *MetadataProvider) CurrentNodeName(ctx context.Context) (string, error)
 
 func (mp *MetadataProvider) initInformers(ctx context.Context) (*meta.Informers, error) {
 	done := make(chan error)
-	ctx, cancel := context.WithTimeout(ctx, mp.syncTimeout)
-	defer cancel()
 	var informers *meta.Informers
-
 	go func() {
 		var err error
 		if informers, err = meta.InitInformers(ctx, mp.kubeConfigPath, defaultResyncTime); err != nil {
 			done <- err
-		} else {
-			close(done)
 		}
+		close(done)
 	}()
 
 	select {
-	case <-ctx.Done():
+	case <-time.After(mp.syncTimeout):
 		klog().Warn("kubernetes cache has not been synced after timeout. The kubernetes attributes might be incomplete."+
 			" Consider increasing the BEYLA_KUBE_INFORMERS_SYNC_TIMEOUT value", "timeout", mp.syncTimeout)
 	case err, ok := <-done:
@@ -191,7 +190,7 @@ func (mp *MetadataProvider) initInformers(ctx context.Context) (*meta.Informers,
 	return informers, nil
 }
 
-func LoadConfig(kubeConfigPath string) (*rest.Config, error) {
+func loadKubeConfig(kubeConfigPath string) (*rest.Config, error) {
 	// if no config path is provided, load it from the env variable
 	if kubeConfigPath == "" {
 		kubeConfigPath = os.Getenv(kubeConfigEnvVariable)

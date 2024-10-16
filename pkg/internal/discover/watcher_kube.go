@@ -40,7 +40,7 @@ type watcherKubeEnricher struct {
 // injection in tests
 type kubeMetadataProvider interface {
 	IsKubeEnabled() bool
-	Get(ctx context.Context) (*kube.Store, error)
+	Get(context.Context) (*kube.Store, error)
 }
 
 func WatcherKubeEnricherProvider(
@@ -151,6 +151,7 @@ func (wk *watcherKubeEnricher) enrichProcessEvent(processEvents []Event[processA
 				delete(wk.processByContainer, cnt.ContainerID)
 			}
 			delete(wk.containerByPID, procEvent.Obj.pid)
+			wk.store.DeleteProcess(uint32(procEvent.Obj.pid))
 			wk.mt.Unlock()
 			// no need to decorate deleted processes
 			eventsWithMeta = append(eventsWithMeta, procEvent)

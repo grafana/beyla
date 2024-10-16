@@ -19,11 +19,16 @@ func dblog() *slog.Logger {
 // - the inspected container.Info objects, indexed either by container ID and PID namespace
 // - a cache of decorated PodInfo that would avoid reconstructing them on each trace decoration
 type Store struct {
+	log    *slog.Logger
 	access sync.RWMutex
 
 	metadataNotifier meta.Notifier
 
 	containerIDs map[string]*container.Info
+
+	// stores container info by PID. It is only required for
+	// deleting entries in namespaces and podsByContainer when DeleteProcess is called
+	containerByPID map[uint32]*container.Info
 
 	// a single namespace will point to any container inside the pod
 	// but we don't care which one
@@ -43,9 +48,11 @@ type Store struct {
 
 func NewStore(kubeMetadata meta.Notifier) *Store {
 	db := &Store{
+		log:              dblog(),
 		containerIDs:     map[string]*container.Info{},
 		namespaces:       map[uint32]*container.Info{},
 		podsByContainer:  map[string]*informer.ObjectMeta{},
+		containerByPID:   map[uint32]*container.Info{},
 		ipInfos:          map[string]*informer.ObjectMeta{},
 		metadataNotifier: kubeMetadata,
 		BaseNotifier:     meta.NewBaseNotifier(),
@@ -77,14 +84,29 @@ var InfoForPID = container.InfoForPID
 func (s *Store) AddProcess(pid uint32) {
 	ifp, err := InfoForPID(pid)
 	if err != nil {
-		dblog().Debug("failing to get container information", "pid", pid, "error", err)
+		s.log.Debug("failing to get container information", "pid", pid, "error", err)
 		return
 	}
+
+	s.log.Debug("Adding containerID for process", "pid", pid, "containerID", ifp.ContainerID, "pidNs", ifp.PIDNamespace)
 
 	s.access.Lock()
 	defer s.access.Unlock()
 	s.namespaces[ifp.PIDNamespace] = &ifp
 	s.containerIDs[ifp.ContainerID] = &ifp
+	s.containerByPID[pid] = &ifp
+}
+
+func (s *Store) DeleteProcess(pid uint32) {
+	s.access.Lock()
+	defer s.access.Unlock()
+	info, ok := s.containerByPID[pid]
+	if !ok {
+		return
+	}
+	delete(s.containerByPID, pid)
+	delete(s.namespaces, info.PIDNamespace)
+	delete(s.containerIDs, info.ContainerID)
 }
 
 func (s *Store) updateNewObjectMetaByIPIndex(meta *informer.ObjectMeta) {
@@ -94,6 +116,8 @@ func (s *Store) updateNewObjectMetaByIPIndex(meta *informer.ObjectMeta) {
 		s.ipInfos[ip] = meta
 	}
 	if meta.Pod != nil {
+		s.log.Debug("adding pod to store",
+			"ips", meta.Ips, "pod", meta.Name, "namespace", meta.Namespace, "containerIDs", meta.Pod.ContainerIds)
 		for _, cid := range meta.Pod.ContainerIds {
 			s.podsByContainer[cid] = meta
 			// TODO: make sure we can handle when the containerIDs is set after this function is triggered
@@ -112,6 +136,8 @@ func (s *Store) updateDeletedObjectMetaByIPIndex(meta *informer.ObjectMeta) {
 		delete(s.ipInfos, ip)
 	}
 	if meta.Pod != nil {
+		s.log.Debug("deleting pod from store",
+			"ips", meta.Ips, "pod", meta.Name, "namespace", meta.Namespace, "containerIDs", meta.Pod.ContainerIds)
 		for _, cid := range meta.Pod.ContainerIds {
 			info, ok := s.containerIDs[cid]
 			if ok {

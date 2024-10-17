@@ -84,7 +84,7 @@ func MetadataDecoratorProvider(
 type decorator struct {
 	log              *slog.Logger
 	alreadyLoggedIPs *simplelru.LRU[string, struct{}]
-	kube             *kube.Metadata
+	kube             *kube.Store
 	clusterName      string
 }
 
@@ -119,8 +119,8 @@ func (n *decorator) transform(flow *ebpf.Record) bool {
 
 // decorate the flow with Kube metadata. Returns false if there is no metadata found for such IP
 func (n *decorator) decorate(flow *ebpf.Record, prefix, ip string) bool {
-	ipinfo, meta, ok := n.kube.GetInfo(ip)
-	if !ok {
+	meta := n.kube.ObjectMetaByIP(ip)
+	if meta == nil {
 		if n.log.Enabled(context.TODO(), slog.LevelDebug) {
 			// avoid spoofing the debug logs with the same message for each flow whose IP can't be decorated
 			if !n.alreadyLoggedIPs.Contains(ip) {
@@ -130,16 +130,21 @@ func (n *decorator) decorate(flow *ebpf.Record, prefix, ip string) bool {
 		}
 		return false
 	}
-	topOwner := ipinfo.Owner.TopOwner()
+	ownerName, ownerKind := meta.Name, meta.Kind
+	if owner := kube.TopOwner(meta.Pod); owner != nil {
+		ownerName, ownerKind = owner.Name, owner.Kind
+	}
+
 	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixNs)] = meta.Namespace
 	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixName)] = meta.Name
-	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixType)] = ipinfo.Kind
-	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixOwnerName)] = topOwner.Name
-	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixOwnerType)] = topOwner.Kind
-	if ipinfo.HostIP != "" {
-		flow.Attrs.Metadata[attr.Name(prefix+attrSuffixHostIP)] = ipinfo.HostIP
-		if ipinfo.HostName != "" {
-			flow.Attrs.Metadata[attr.Name(prefix+attrSuffixHostName)] = ipinfo.HostName
+	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixType)] = meta.Kind
+	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixOwnerName)] = ownerName
+	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixOwnerType)] = ownerKind
+	// add any other ownership label (they might be several, e.g. replicaset and deployment)¡
+	if meta.Pod != nil && meta.Pod.HostIp != "" {
+		flow.Attrs.Metadata[attr.Name(prefix+attrSuffixHostIP)] = meta.Pod.HostIp
+		if host := n.kube.ObjectMetaByIP(meta.Pod.HostIp); host != nil {
+			flow.Attrs.Metadata[attr.Name(prefix+attrSuffixHostName)] = host.Name
 		}
 	}
 	// decorate other names from metadata, if required
@@ -156,7 +161,7 @@ func (n *decorator) decorate(flow *ebpf.Record, prefix, ip string) bool {
 }
 
 // newDecorator create a new transform
-func newDecorator(ctx context.Context, cfg *transform.KubernetesDecorator, meta *kube.Metadata) (*decorator, error) {
+func newDecorator(ctx context.Context, cfg *transform.KubernetesDecorator, meta *kube.Store) (*decorator, error) {
 	nt := decorator{
 		log:         log(),
 		clusterName: transform.KubeClusterName(ctx, cfg),

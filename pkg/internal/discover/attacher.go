@@ -65,7 +65,8 @@ func (ta *TraceAttacher) attacherLoop() (pipe.FinalFunc[[]Event[ebpf.Instrumenta
 	mainLoop:
 		for instrumentables := range in {
 			for _, instr := range instrumentables {
-				ta.log.Debug("Instrumentable", "len", len(instrumentables), "inst", instr)
+				ta.log.Debug("Instrumentable", "created", instr.Type, "type", instr.Obj.Type,
+					"exec", instr.Obj.FileInfo.CmdExePath, "pid", instr.Obj.FileInfo.Pid)
 				switch instr.Type {
 				case EventCreated:
 					ta.processInstances.Inc(instr.Obj.FileInfo.Ino)

@@ -12,7 +12,6 @@ import (
 	"github.com/grafana/beyla/pkg/internal/pipe"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
-	"github.com/grafana/beyla/pkg/internal/transform/kube"
 )
 
 func log() *slog.Logger {
@@ -124,17 +123,16 @@ func setupKubernetes(ctx context.Context, ctxInfo *global.ContextInfo) {
 		return
 	}
 
-	informer, err := ctxInfo.K8sInformer.Get(ctx)
-	if err != nil {
+	if err := refreshK8sInformerCache(ctx, ctxInfo); err != nil {
 		slog.Error("can't init Kubernetes informer. You can't setup Kubernetes discovery and your"+
 			" traces won't be decorated with Kubernetes metadata", "error", err)
 		ctxInfo.K8sInformer.ForceDisable()
 		return
 	}
+}
 
-	if ctxInfo.AppO11y.K8sDatabase, err = kube.StartDatabase(informer); err != nil {
-		slog.Error("can't setup Kubernetes database. Your traces won't be decorated with Kubernetes metadata",
-			"error", err)
-		ctxInfo.K8sInformer.ForceDisable()
-	}
+func refreshK8sInformerCache(ctx context.Context, ctxInfo *global.ContextInfo) error {
+	// force the cache to be populated and cached
+	_, err := ctxInfo.K8sInformer.Get(ctx)
+	return err
 }

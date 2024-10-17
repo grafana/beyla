@@ -60,8 +60,12 @@ func RunBeyla(ctx context.Context, cfg *beyla.Config) error {
 
 func setupAppO11y(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config) error {
 	slog.Info("starting Beyla in Application Observability mode")
+
+	wg := sync.WaitGroup{}
+	defer wg.Wait()
+
 	instr := appolly.New(ctx, ctxInfo, config)
-	if err := instr.FindAndInstrument(); err != nil {
+	if err := instr.FindAndInstrument(&wg); err != nil {
 		return fmt.Errorf("can't find target process: %w", err)
 	}
 	if err := instr.ReadAndForward(); err != nil {

@@ -88,12 +88,19 @@ func (pt *ProcessTracer) Run(ctx context.Context, out chan<- []request.Span) {
 	// Searches for traceable functions
 	trcrs := pt.Programs
 
+	wg := sync.WaitGroup{}
+
 	for _, t := range trcrs {
-		go t.Run(ctx, out)
+		wg.Add(1)
+		go func() {
+			t.Run(ctx, out)
+			wg.Done()
+		}()
 	}
-	go func() {
-		<-ctx.Done()
-	}()
+
+	<-ctx.Done()
+
+	wg.Wait()
 }
 
 func (pt *ProcessTracer) loadSpec(p Tracer) (*ebpf.CollectionSpec, error) {

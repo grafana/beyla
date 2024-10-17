@@ -247,7 +247,7 @@ github.com/gorilla/mux
 # github.com/gorilla/websocket v1.5.0
 ## explicit; go 1.12
 github.com/gorilla/websocket
-# github.com/grafana/beyla-k8s-cache v0.0.0-20241016170428-8b4efb83c725
+# github.com/grafana/beyla-k8s-cache v0.0.0-20241017085642-6184f64013fa
 ## explicit; go 1.23.2
 github.com/grafana/beyla-k8s-cache/pkg/informer
 github.com/grafana/beyla-k8s-cache/pkg/meta

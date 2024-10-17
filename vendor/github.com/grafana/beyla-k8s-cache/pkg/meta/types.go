@@ -20,7 +20,7 @@ type indexableEntity struct {
 func ownersFrom(meta *metav1.ObjectMeta) []*informer.Owner {
 	if len(meta.OwnerReferences) == 0 {
 		// If no owner references' found, return itself as owner
-		return []*informer.Owner{{Kind: "Pod", Name: meta.Name}}
+		return []*informer.Owner{{Kind: typePod, Name: meta.Name}}
 	}
 	owners := make([]*informer.Owner, 0, len(meta.OwnerReferences))
 	for i := range meta.OwnerReferences {

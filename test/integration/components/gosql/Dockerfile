@@ -15,7 +15,7 @@ COPY gosql.go gosql.go
 
 # Build
 RUN go mod download
-RUN go build -o qosql gosql.go
+RUN go build -o gosql gosql.go
 
 # Create final image from minimal + built binary
 FROM debian:bookworm-slim
@@ -24,4 +24,4 @@ WORKDIR /
 COPY --from=builder /src/gosql .
 USER 0:0
 
-CMD [ "/qosql" ]
+CMD [ "/gosql" ]

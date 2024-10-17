@@ -23,13 +23,4 @@ func TestIsMountFS(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, mounted)
 	assert.True(t, matched)
-
-	mounted, matched, err = IsMountFS(FilesystemTypeBPFFS, "/sys/fs/bpf")
-	assert.NoError(t, err)
-	// We can't expect /sys/fs/bpf is mounted, so only check fstype
-	// if it is mounted. IOW, if /sys/fs/bpf is a mount point,
-	// we expect it to be bpffs.
-	if mounted {
-		assert.True(t, matched)
-	}
 }

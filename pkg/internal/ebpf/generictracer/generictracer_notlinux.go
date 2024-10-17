@@ -40,3 +40,4 @@ func (p *Tracer) Constants() map[string]any                                  { r
 func (p *Tracer) SetupTC()                                                   {}
 func (p *Tracer) SetupTailCalls()                                            {}
 func (p *Tracer) RegisterOffsets(_ *exec.FileInfo, _ *goexec.Offsets)        {}
+func (p *Tracer) AddModuleCloser(_ uint64, _ ...io.Closer)                   {}

@@ -113,8 +113,6 @@ network:
 		EBPF: config.EPPFTracer{
 			BatchLength:        100,
 			BatchTimeout:       time.Second,
-			BpfBaseDir:         "/var/run/beyla",
-			BpfPath:            DefaultConfig.EBPF.BpfPath,
 			HTTPRequestTimeout: 30 * time.Second,
 		},
 		Grafana: otel.GrafanaConfig{

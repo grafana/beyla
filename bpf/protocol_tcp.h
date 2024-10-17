@@ -8,6 +8,7 @@
 #include "pid.h"
 #include "protocol_common.h"
 #include "trace_common.h"
+#include "pin_internal.h"
 
 // Keeps track of tcp buffers for unknown protocols
 struct {
@@ -15,7 +16,7 @@ struct {
     __type(key, pid_connection_info_t);
     __type(value, tcp_req_t);
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
-    __uint(pinning, LIBBPF_PIN_BY_NAME);
+    __uint(pinning, BEYLA_PIN_INTERNAL);
 } ongoing_tcp_req SEC(".maps");
 
 struct {
@@ -54,7 +55,7 @@ static __always_inline void handle_unknown_tcp_connection(pid_connection_info_t 
             task_pid(&req->pid);
             bpf_probe_read(req->buf, K_TCP_MAX_LEN, u_buf);
 
-            tp_info_pid_t *server_tp = find_parent_trace();
+            tp_info_pid_t *server_tp = find_parent_trace(pid_conn);
 
             if (server_tp && server_tp->valid && valid_trace(server_tp->tp.trace_id)) {
                 bpf_dbg_printk("Found existing server tp for client call");

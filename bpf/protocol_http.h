@@ -9,6 +9,7 @@
 #include "runtime.h"
 #include "protocol_common.h"
 #include "trace_common.h"
+#include "pin_internal.h"
 
 volatile const u32 high_request_volume;
 
@@ -27,7 +28,7 @@ struct {
     __type(key, pid_connection_info_t);
     __type(value, http_info_t);
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
-    __uint(pinning, LIBBPF_PIN_BY_NAME);
+    __uint(pinning, BEYLA_PIN_INTERNAL);
 } ongoing_http SEC(".maps");
 
 struct {
@@ -35,7 +36,7 @@ struct {
     __type(key, connection_info_t);
     __type(value, http_info_t);
     __uint(max_entries, 1024);
-    __uint(pinning, LIBBPF_PIN_BY_NAME);
+    __uint(pinning, BEYLA_PIN_INTERNAL);
 } ongoing_http_fallback SEC(".maps");
 
 // empty_http_info zeroes and return the unique percpu copy in the map
@@ -228,10 +229,7 @@ static __always_inline void handle_http_response(unsigned char *small_buf,
         t_key.p_key.pid = info->task_tid;
         delete_server_trace(&t_key);
     } else {
-        //bpf_dbg_printk("Deleting client trace map for connection");
-        //dbg_print_http_connection_info(&pid_conn->conn);
-
-        bpf_map_delete_elem(&trace_map, &pid_conn->conn);
+        delete_client_trace_info(pid_conn);
     }
     bpf_map_delete_elem(&active_ssl_connections, pid_conn);
 }

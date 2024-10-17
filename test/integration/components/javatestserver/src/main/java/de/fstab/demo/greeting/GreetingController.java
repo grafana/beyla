@@ -14,9 +14,13 @@ import java.util.concurrent.ThreadLocalRandom;
 @RestController
 public class GreetingController {
 	private final LookupService lookupService;
+	private final ApiCallService apiCallService;
 
-	public GreetingController(LookupService lookupService) {
+	RestClient commonClient = RestClient.create();
+
+	public GreetingController(LookupService lookupService, ApiCallService apiCallService) {
 		this.lookupService = lookupService;
+		this.apiCallService = apiCallService;
 	}
 
 	public static void randomSleep(Duration averageDuration) throws InterruptedException{
@@ -62,4 +66,29 @@ public class GreetingController {
 		CompletableFuture.allOf(aa).join();
 		return ResponseEntity.status(response).body(aa.get());
 	}
+
+	@GetMapping("/jtraceA")
+	public ResponseEntity<String> getDistA(
+			@RequestParam(required = false, defaultValue = "10", name="delay") Integer delay,
+			@RequestParam(required = false, defaultValue = "200", name="response") Integer response
+	) throws Exception {
+		randomSleep(Duration.ofMillis(delay));
+		String data = commonClient.get()
+				.uri("http://ntestserver:3030/traceme")
+				.accept(MediaType.ALL)
+				.retrieve()
+				.body(String.class);
+		return ResponseEntity.status(response).body(data);
+	}
+
+	@GetMapping("/jtraceB")
+	public ResponseEntity<String> getDistB(
+			@RequestParam(required = false, defaultValue = "10", name="delay") Integer delay,
+			@RequestParam(required = false, defaultValue = "200", name="response") Integer response
+	) throws Exception {
+		randomSleep(Duration.ofMillis(delay));
+		String data = apiCallService.makeApiCall("http://ntestserver:3030/traceme");
+		return ResponseEntity.status(response).body(data);
+	}
+
 }

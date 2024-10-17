@@ -45,8 +45,6 @@ type MetadataProvider struct {
 	informer *meta.Informers
 
 	cfg *MetadataConfig
-
-	enable kubeflags.EnableFlag
 }
 
 func NewMetadataProvider(config MetadataConfig) *MetadataProvider {
@@ -56,20 +54,17 @@ func NewMetadataProvider(config MetadataConfig) *MetadataProvider {
 	if config.ResyncPeriod == 0 {
 		config.ResyncPeriod = defaultResyncTime
 	}
-	mp := &MetadataProvider{
-		cfg:    &config,
-		enable: config.Enable,
-	}
+	mp := &MetadataProvider{cfg: &config}
 	return mp
 }
 
 func (mp *MetadataProvider) IsKubeEnabled() bool {
-	if mp == nil {
+	if mp == nil || mp.cfg == nil {
 		return false
 	}
 	mp.mt.Lock()
 	defer mp.mt.Unlock()
-	switch strings.ToLower(string(mp.enable)) {
+	switch strings.ToLower(string(mp.cfg.Enable)) {
 	case string(kubeflags.EnabledTrue):
 		return true
 	case string(kubeflags.EnabledFalse), "": // empty value is disabled
@@ -79,13 +74,13 @@ func (mp *MetadataProvider) IsKubeEnabled() bool {
 		_, err := loadKubeConfig(mp.cfg.KubeConfigPath)
 		if err != nil {
 			klog().Debug("kubeconfig can't be detected. Assuming we are not in Kubernetes", "error", err)
-			mp.enable = kubeflags.EnabledFalse
+			mp.cfg.Enable = kubeflags.EnabledFalse
 			return false
 		}
-		mp.enable = kubeflags.EnabledTrue
+		mp.cfg.Enable = kubeflags.EnabledTrue
 		return true
 	default:
-		klog().Warn("invalid value for Enable value. Ignoring stage", "value", mp.enable)
+		klog().Warn("invalid value for Enable value. Ignoring stage", "value", mp.cfg.Enable)
 		return false
 	}
 }
@@ -93,7 +88,7 @@ func (mp *MetadataProvider) IsKubeEnabled() bool {
 func (mp *MetadataProvider) ForceDisable() {
 	mp.mt.Lock()
 	defer mp.mt.Unlock()
-	mp.enable = kubeflags.EnabledFalse
+	mp.cfg.Enable = kubeflags.EnabledFalse
 }
 
 func (mp *MetadataProvider) KubeClient() (kubernetes.Interface, error) {

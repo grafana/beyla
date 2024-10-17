@@ -98,5 +98,9 @@ func newGoTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Trac
 }
 
 func newGenericTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Tracer {
-	return []ebpf.Tracer{generictracer.New(cfg, metrics), tctracer.New(cfg)}
+	if cfg.EBPF.UseLinuxTC {
+		return []ebpf.Tracer{generictracer.New(cfg, metrics), tctracer.New(cfg)}
+	}
+
+	return []ebpf.Tracer{generictracer.New(cfg, metrics)}
 }

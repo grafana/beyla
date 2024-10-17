@@ -69,7 +69,7 @@ func WatcherKubeEnricherProvider(
 func (wk *watcherKubeEnricher) ID() string { return "unique-watcher-kube-enricher-id" }
 
 // On is invoked every time an object metadata instance is stored or deleted in the
-// kube.Store. It will just forward the event via channel for proper asynchronous
+// kube.Store. It will just forward the event via the channel for proper asynchronous
 // handling in the enrich main loop
 func (wk *watcherKubeEnricher) On(event *informer.Event) {
 	// ignoring updates on non-pod resources

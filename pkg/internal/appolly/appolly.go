@@ -123,13 +123,16 @@ func setupKubernetes(ctx context.Context, ctxInfo *global.ContextInfo) {
 		return
 	}
 
-	// caching the database initialization. Discarding it as subsequent
-	// invocations to Get will return the same initialized instance
-	_, err := ctxInfo.K8sInformer.Get(ctx)
-	if err != nil {
+	if err := refreshK8sInformerCache(ctx, ctxInfo); err != nil {
 		slog.Error("can't init Kubernetes informer. You can't setup Kubernetes discovery and your"+
 			" traces won't be decorated with Kubernetes metadata", "error", err)
 		ctxInfo.K8sInformer.ForceDisable()
 		return
 	}
+}
+
+func refreshK8sInformerCache(ctx context.Context, ctxInfo *global.ContextInfo) error {
+	// force the cache to be populated and cached
+	_, err := ctxInfo.K8sInformer.Get(ctx)
+	return err
 }

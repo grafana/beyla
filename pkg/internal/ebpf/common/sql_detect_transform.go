@@ -209,11 +209,13 @@ func parsePosgresQueryCommand(buf []byte) (string, error) {
 
 func TCPToSQLToSpan(trace *TCPRequestInfo, op, table, sql string) request.Span {
 	peer := ""
+	peerPort := 0
 	hostname := ""
 	hostPort := 0
 
 	if trace.ConnInfo.S_port != 0 || trace.ConnInfo.D_port != 0 {
 		peer, hostname = (*BPFConnInfo)(unsafe.Pointer(&trace.ConnInfo)).reqHostInfo()
+		peerPort = int(trace.ConnInfo.S_port)
 		hostPort = int(trace.ConnInfo.D_port)
 	}
 
@@ -222,7 +224,7 @@ func TCPToSQLToSpan(trace *TCPRequestInfo, op, table, sql string) request.Span {
 		Method:        op,
 		Path:          table,
 		Peer:          peer,
-		PeerPort:      int(trace.ConnInfo.S_port),
+		PeerPort:      peerPort,
 		Host:          hostname,
 		HostPort:      hostPort,
 		ContentLength: 0,

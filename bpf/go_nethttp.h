@@ -912,17 +912,41 @@ int uprobe_netFdRead(struct pt_regs *ctx) {
     go_addr_key_t g_key = {};
     go_addr_key_from_id(&g_key, goroutine_addr);
 
+    // lookup active HTTP connection
     connection_info_t *conn = bpf_map_lookup_elem(&ongoing_server_connections, &g_key);
-
     if (conn) {
-        bpf_dbg_printk(
-            "Found existing server connection, parsing FD information for socket tuples, %llx",
-            goroutine_addr);
+        if (conn->d_port == 0 && conn->s_port == 0) {
+            bpf_dbg_printk(
+                "Found existing server connection, parsing FD information for socket tuples, %llx",
+                goroutine_addr);
 
-        void *fd_ptr = GO_PARAM1(ctx);
-        get_conn_info_from_fd(fd_ptr, conn); // ok to not check the result, we leave it as 0
-
+            void *fd_ptr = GO_PARAM1(ctx);
+            get_conn_info_from_fd(fd_ptr, conn); // ok to not check the result, we leave it as 0
+        }
         //dbg_print_http_connection_info(conn);
+    }
+    // lookup a grpc connection
+    // Sets up the connection info to be grabbed and mapped over the transport to operateHeaders
+    void *tr = bpf_map_lookup_elem(&ongoing_grpc_operate_headers, &g_key);
+    bpf_dbg_printk("tr %llx", tr);
+    if (tr) {
+        grpc_transports_t *t = bpf_map_lookup_elem(&ongoing_grpc_transports, tr);
+        bpf_dbg_printk("t %llx", t);
+        if (t) {
+            if (t->conn.d_port == 0 && t->conn.s_port == 0) {
+                void *fd_ptr = GO_PARAM1(ctx);
+                get_conn_info_from_fd(fd_ptr,
+                                      &t->conn); // ok to not check the result, we leave it as 0
+            }
+        }
+    }
+    // lookup active sql connection
+    sql_func_invocation_t *sql_conn = bpf_map_lookup_elem(&ongoing_sql_queries, &g_key);
+    bpf_dbg_printk("sql_conn %llx", sql_conn);
+    if (sql_conn) {
+        void *fd_ptr = GO_PARAM1(ctx);
+        get_conn_info_from_fd(fd_ptr,
+                              &sql_conn->conn); // ok to not check the result, we leave it as 0
     }
 
     return 0;

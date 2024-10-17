@@ -104,7 +104,7 @@ func (rbf *ringBufForwarder) sharedReadAndForward(ctx context.Context, closers [
 	rbf.spansLen = 0
 
 	// If the underlying context is closed, it closes the objects we have allocated for this bpf program
-	go rbf.bgListenSharedContextCancelation(ctx, closers)
+	go rbf.bgListenSharedContextCancelation(ctx, closers, eventsReader)
 	rbf.readAndForwardInner(eventsReader, spansChan)
 }
 
@@ -221,12 +221,13 @@ func (rbf *ringBufForwarder) bgListenContextCancelation(ctx context.Context, eve
 	_ = eventsReader.Close()
 }
 
-func (rbf *ringBufForwarder) bgListenSharedContextCancelation(ctx context.Context, closers []io.Closer) {
+func (rbf *ringBufForwarder) bgListenSharedContextCancelation(ctx context.Context, closers []io.Closer, eventsReader ringBufReader) {
 	<-ctx.Done()
 	rbf.logger.Debug("context is cancelled. Closing eBPF resources")
 	for _, c := range closers {
 		_ = c.Close()
 	}
+	_ = eventsReader.Close()
 }
 
 func (rbf *ringBufForwarder) closeAllResources() {

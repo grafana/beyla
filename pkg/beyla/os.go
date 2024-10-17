@@ -83,6 +83,10 @@ func checkCapabilitiesForSetOptions(config *Config, caps *helpers.OSCapabilities
 	if config.Enabled(FeatureAppO11y) {
 		testAndSet(caps, capError, unix.CAP_CHECKPOINT_RESTORE)
 		testAndSet(caps, capError, unix.CAP_SYS_PTRACE)
+
+		if config.EBPF.UseLinuxTC {
+			testAndSet(caps, capError, unix.CAP_NET_ADMIN)
+		}
 	}
 
 	if config.Enabled(FeatureNetO11y) {

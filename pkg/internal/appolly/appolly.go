@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sync"
 
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/discover"
@@ -43,7 +44,7 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 
 // FindAndInstrument searches in background for any new executable matching the
 // selection criteria.
-func (i *Instrumenter) FindAndInstrument() error {
+func (i *Instrumenter) FindAndInstrument(wg *sync.WaitGroup) error {
 	finder := discover.NewProcessFinder(i.ctx, i.config, i.ctxInfo, i.tracesInput)
 	foundProcesses, deletedProcesses, err := finder.Start()
 	if err != nil {
@@ -51,7 +52,9 @@ func (i *Instrumenter) FindAndInstrument() error {
 	}
 	// In background, listen indefinitely for each new process and run its
 	// associated ebpf.ProcessTracer once it is found.
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		log := log()
 		type cancelCtx struct {
 			ctx    context.Context
@@ -76,7 +79,11 @@ func (i *Instrumenter) FindAndInstrument() error {
 						cctx.ctx, cctx.cancel = context.WithCancel(i.ctx)
 						contexts[pt.FileInfo.Ino] = cctx
 					}
-					go pt.Tracer.Run(cctx.ctx, i.tracesInput)
+					wg.Add(1)
+					go func() {
+						defer wg.Done()
+						pt.Tracer.Run(cctx.ctx, i.tracesInput)
+					}()
 				}
 			case dp := <-deletedProcesses:
 				log.Debug("stopping ProcessTracer because there are no more instances of such process",

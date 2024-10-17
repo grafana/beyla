@@ -88,12 +88,19 @@ func (pt *ProcessTracer) Run(ctx context.Context, out chan<- []request.Span) {
 	// Searches for traceable functions
 	trcrs := pt.Programs
 
+	wg := sync.WaitGroup{}
+
 	for _, t := range trcrs {
-		go t.Run(ctx, out)
+		wg.Add(1)
+		go func() {
+			t.Run(ctx, out)
+			wg.Done()
+		}()
 	}
-	go func() {
-		<-ctx.Done()
-	}()
+
+	<-ctx.Done()
+
+	wg.Wait()
 }
 
 func (pt *ProcessTracer) loadSpec(p Tracer) (*ebpf.CollectionSpec, error) {
@@ -108,77 +115,83 @@ func (pt *ProcessTracer) loadSpec(p Tracer) (*ebpf.CollectionSpec, error) {
 	return spec, nil
 }
 
+func (pt *ProcessTracer) loadAndAssign(p Tracer) error {
+	spec, err := pt.loadSpec(p)
+
+	if err != nil {
+		return err
+	}
+
+	collOpts, err := resolveInternalMaps(spec)
+
+	if err != nil {
+		return err
+	}
+
+	collOpts.Programs = ebpf.ProgramOptions{LogSize: 640 * 1024}
+
+	return spec.LoadAndAssign(p.BpfObjects(), collOpts)
+}
+
+func (pt *ProcessTracer) loadTracer(p Tracer, log *slog.Logger) error {
+	plog := log.With("program", reflect.TypeOf(p))
+	plog.Debug("loading eBPF program", "type", pt.Type)
+
+	err := pt.loadAndAssign(p)
+
+	if err != nil && strings.Contains(err.Error(), "unknown func bpf_probe_write_user") {
+		plog.Warn("Failed to enable distributed tracing context-propagation on a " +
+			"Linux Kernel without write memory support. " +
+			"To avoid seeing this message, please ensure you have correctly mounted /sys/kernel/security. " +
+			"and ensure beyla has the SYS_ADMIN linux capability" +
+			"For more details set BEYLA_LOG_LEVEL=DEBUG.")
+
+		common.IntegrityModeOverride = true
+		err = pt.loadAndAssign(p)
+	}
+
+	if err != nil {
+		printVerifierErrorInfo(err)
+		return fmt.Errorf("loading and assigning BPF objects: %w", err)
+	}
+
+	// Setup any tail call jump tables
+	p.SetupTailCalls()
+
+	// Setup any traffic control probes
+	p.SetupTC()
+
+	i := instrumenter{} // dummy instrumenter to setup the kprobes, socket filters and tracepoint probes
+
+	// Kprobes to be used for native instrumentation points
+	if err := i.kprobes(p); err != nil {
+		printVerifierErrorInfo(err)
+		return err
+	}
+
+	// Tracepoints support
+	if err := i.tracepoints(p); err != nil {
+		printVerifierErrorInfo(err)
+		return err
+	}
+
+	// Sock filters support
+	if err := i.sockfilters(p); err != nil {
+		printVerifierErrorInfo(err)
+		return err
+	}
+
+	return nil
+}
+
 func (pt *ProcessTracer) loadTracers() error {
 	loadMux.Lock()
 	defer loadMux.Unlock()
 
 	var log = ptlog()
 
-	i := instrumenter{} // dummy instrumenter to setup the kprobes, socket filters and tracepoint probes
-
 	for _, p := range pt.Programs {
-		plog := log.With("program", reflect.TypeOf(p))
-		plog.Debug("loading eBPF program", "type", pt.Type)
-		spec, err := pt.loadSpec(p)
-		if err != nil {
-			return err
-		}
-
-		collOpts, err := resolveInternalMaps(spec)
-		if err != nil {
-			return err
-		}
-
-		collOpts.Programs = ebpf.ProgramOptions{LogSize: 640 * 1024}
-
-		if err := spec.LoadAndAssign(p.BpfObjects(), collOpts); err != nil {
-			if strings.Contains(err.Error(), "unknown func bpf_probe_write_user") {
-				plog.Warn("Failed to enable distributed tracing context-propagation on a Linux Kernel without write memory support. " +
-					"To avoid seeing this message, please ensure you have correctly mounted /sys/kernel/security. " +
-					"and ensure beyla has the SYS_ADMIN linux capability" +
-					"For more details set BEYLA_LOG_LEVEL=DEBUG.")
-
-				common.IntegrityModeOverride = true
-				spec, err = pt.loadSpec(p)
-				if err == nil {
-
-					collOpts, err = resolveInternalMaps(spec)
-					if err != nil {
-						return err
-					}
-
-					collOpts.Programs = ebpf.ProgramOptions{LogSize: 640 * 1024}
-
-					err = spec.LoadAndAssign(p.BpfObjects(), collOpts)
-				}
-			}
-			if err != nil {
-				printVerifierErrorInfo(err)
-				return fmt.Errorf("loading and assigning BPF objects: %w", err)
-			}
-		}
-
-		// Setup any tail call jump tables
-		p.SetupTailCalls()
-
-		// Setup any traffic control probes
-		p.SetupTC()
-
-		// Kprobes to be used for native instrumentation points
-		if err := i.kprobes(p); err != nil {
-			printVerifierErrorInfo(err)
-			return err
-		}
-
-		// Tracepoints support
-		if err := i.tracepoints(p); err != nil {
-			printVerifierErrorInfo(err)
-			return err
-		}
-
-		// Sock filters support
-		if err := i.sockfilters(p); err != nil {
-			printVerifierErrorInfo(err)
+		if err := pt.loadTracer(p, log); err != nil {
 			return err
 		}
 	}

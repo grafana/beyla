@@ -238,8 +238,6 @@ type bpfSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfProgramSpecs struct {
-	AppEgress               *ebpf.ProgramSpec `ebpf:"app_egress"`
-	AppIngress              *ebpf.ProgramSpec `ebpf:"app_ingress"`
 	AsyncReset              *ebpf.ProgramSpec `ebpf:"async_reset"`
 	AsyncResetRet           *ebpf.ProgramSpec `ebpf:"async_reset_ret"`
 	EmitAsyncInit           *ebpf.ProgramSpec `ebpf:"emit_async_init"`
@@ -426,8 +424,6 @@ func (m *bpfMaps) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfPrograms struct {
-	AppEgress               *ebpf.Program `ebpf:"app_egress"`
-	AppIngress              *ebpf.Program `ebpf:"app_ingress"`
 	AsyncReset              *ebpf.Program `ebpf:"async_reset"`
 	AsyncResetRet           *ebpf.Program `ebpf:"async_reset_ret"`
 	EmitAsyncInit           *ebpf.Program `ebpf:"emit_async_init"`
@@ -463,8 +459,6 @@ type bpfPrograms struct {
 
 func (p *bpfPrograms) Close() error {
 	return _BpfClose(
-		p.AppEgress,
-		p.AppIngress,
 		p.AsyncReset,
 		p.AsyncResetRet,
 		p.EmitAsyncInit,

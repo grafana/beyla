@@ -5,11 +5,11 @@
 #include "bpf_helpers.h"
 #include "http_types.h"
 #include "ringbuf.h"
-#include "pid.h"
 #include "runtime.h"
 #include "protocol_common.h"
 #include "trace_common.h"
 #include "pin_internal.h"
+#include "http_maps.h"
 
 volatile const u32 high_request_volume;
 
@@ -21,23 +21,6 @@ struct {
     __type(value, http_info_t);
     __uint(max_entries, 1);
 } http_info_mem SEC(".maps");
-
-// Keeps track of the ongoing http connections we match for request/response
-struct {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, pid_connection_info_t);
-    __type(value, http_info_t);
-    __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
-    __uint(pinning, BEYLA_PIN_INTERNAL);
-} ongoing_http SEC(".maps");
-
-struct {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, connection_info_t);
-    __type(value, http_info_t);
-    __uint(max_entries, 1024);
-    __uint(pinning, BEYLA_PIN_INTERNAL);
-} ongoing_http_fallback SEC(".maps");
 
 // empty_http_info zeroes and return the unique percpu copy in the map
 // this function assumes that a given thread is not trying to use many

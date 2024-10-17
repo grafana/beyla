@@ -6,7 +6,6 @@
 #include "http_types.h"
 #include "k_tracer_defs.h"
 #include "bpf_dbg.h"
-#include "pid.h"
 #include "sockaddr.h"
 #include "tcp_info.h"
 #include "pin_internal.h"

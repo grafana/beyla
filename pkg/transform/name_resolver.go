@@ -125,9 +125,15 @@ func (nr *NameResolver) resolveNames(span *request.Span) {
 	// in a previous stage (e.g. Kubernetes decorator)
 	if pn != "" {
 		span.PeerName = pn
+		if span.OtherNamespace != "" {
+			span.PeerName = pn + "." + span.OtherNamespace
+		}
 	}
 	if hn != "" {
 		span.HostName = hn
+		if span.OtherNamespace != "" {
+			span.HostName = hn + "." + span.OtherNamespace
+		}
 	}
 }
 

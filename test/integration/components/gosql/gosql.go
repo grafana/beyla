@@ -16,7 +16,7 @@ func main() {
 
 	http.HandleFunc("/psqltest", func(w http.ResponseWriter, r *http.Request) {
 		if !psqlInit {
-			db, err = sql.Open("postgres", "user=postgres dbname=sqltest sslmode=disable password=postgres host=localhost port=5432")
+			db, err = sql.Open("postgres", "user=postgres dbname=sqltest sslmode=disable password=postgres host=sqlserver port=5432")
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -51,7 +51,7 @@ func main() {
 			}
 			fmt.Println("name: ", name, " id: ", id)
 		} else {
-			log.Printf("no data", err)
+			log.Println("no data", err)
 			w.WriteHeader(500)
 			return
 		}

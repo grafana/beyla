@@ -263,7 +263,7 @@ static __always_inline int is_http_request(struct __sk_buff *ctx) {
         return 0;
     }
 
-    char req_buf[] = "POST";
+    char req_buf[] = "OPTIONS /"; // largest HTTP request operation
 
     const __u32 offset = (void *)payload - ctx_data(ctx);
 
@@ -271,8 +271,21 @@ static __always_inline int is_http_request(struct __sk_buff *ctx) {
         return 0;
     }
 
-    return (req_buf[0] == 'G' && req_buf[1] == 'E' && req_buf[2] == 'T') ||
-           (req_buf[0] == 'P' && req_buf[1] == 'O' && req_buf[2] == 'S' && req_buf[3] == 'T');
+    return req_buf[0] == 'G' && req_buf[1] == 'E' && req_buf[2] == 'T' && req_buf[3] == ' ' &&
+               req_buf[4] == '/' ||
+           req_buf[0] == 'P' && req_buf[1] == 'O' && req_buf[2] == 'S' && req_buf[3] == 'T' &&
+               req_buf[4] == ' ' && req_buf[5] == '/' ||
+           req_buf[0] == 'P' && req_buf[1] == 'U' && req_buf[2] == 'T' && req_buf[3] == ' ' &&
+               req_buf[4] == '/' ||
+           req_buf[0] == 'P' && req_buf[1] == 'A' && req_buf[2] == 'T' && req_buf[3] == 'C' &&
+               req_buf[4] == 'H' && req_buf[5] == ' ' && req_buf[5] == '/' ||
+           req_buf[0] == 'D' && req_buf[1] == 'E' && req_buf[2] == 'L' && req_buf[3] == 'E' &&
+               req_buf[4] == 'T' && req_buf[5] == 'E' && req_buf[6] == ' ' && req_buf[7] == '/' ||
+           req_buf[0] == 'H' && req_buf[1] == 'E' && req_buf[2] == 'A' && req_buf[3] == 'D' &&
+               req_buf[4] == ' ' && req_buf[5] == '/' ||
+           req_buf[0] == 'O' && req_buf[1] == 'P' && req_buf[1] == 'T' && req_buf[1] == 'I' &&
+               req_buf[1] == 'O' && req_buf[1] == 'N' && req_buf[1] == 'S' && req_buf[1] == ' ' &&
+               req_buf[1] == '/';
 }
 
 static __always_inline unsigned char *

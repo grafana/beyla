@@ -236,7 +236,7 @@ func deployPod(fInformer meta.Notifier, ns, name, containerID string, labels map
 			Name: name, Namespace: ns, Labels: labels,
 			Kind: "Pod",
 			Pod: &informer.PodInfo{
-				ContainerIds: []string{containerID},
+				Containers: []*informer.ContainerInfo{{Id: containerID}},
 			},
 		},
 	})
@@ -249,7 +249,7 @@ func deployOwnedPod(fInformer meta.Notifier, ns, name, replicaSetName, deploymen
 			Name: name, Namespace: ns,
 			Kind: "Pod",
 			Pod: &informer.PodInfo{
-				ContainerIds: []string{containerID},
+				Containers: []*informer.ContainerInfo{{Id: containerID}},
 				Owners: []*informer.Owner{{Name: replicaSetName, Kind: "ReplicaSet"},
 					{Name: deploymentName, Kind: "Deployment"}},
 			},

@@ -7,11 +7,24 @@ import (
 	"github.com/grafana/beyla-k8s-cache/pkg/informer"
 	"github.com/grafana/beyla-k8s-cache/pkg/meta"
 
+	"github.com/grafana/beyla/pkg/export/attributes"
 	"github.com/grafana/beyla/pkg/internal/helpers/container"
 )
 
 func dblog() *slog.Logger {
 	return slog.With("component", "kube.Store")
+}
+
+const (
+	envServiceName      = "OTEL_SERVICE_NAME"
+	envResourceAttrs    = "OTEL_RESOURCE_ATTRIBUTES"
+	serviceNameKey      = "service.name"
+	serviceNamespaceKey = "service.namespace"
+)
+
+type OTelServiceNamePair struct {
+	Name      string
+	Namespace string
 }
 
 // Store aggregates Kubernetes information from multiple sources:
@@ -35,10 +48,12 @@ type Store struct {
 	namespaces map[uint32]*container.Info
 
 	// container ID to pod matcher
-	podsByContainer map[string]*informer.ObjectMeta
+	podsByContainer   map[string]*informer.ObjectMeta
+	containersByOwner map[string][]*informer.ContainerInfo
 
 	// ip to generic IP info (Node, Service, *including* Pods)
-	ipInfos map[string]*informer.ObjectMeta
+	ipInfos             map[string]*informer.ObjectMeta
+	otelServiceInfoByIP map[string]OTelServiceNamePair
 
 	// Instead of subscribing to the informer directly, the rest of components
 	// will subscribe to this store, to make sure that any "new object" notification
@@ -48,14 +63,16 @@ type Store struct {
 
 func NewStore(kubeMetadata meta.Notifier) *Store {
 	db := &Store{
-		log:              dblog(),
-		containerIDs:     map[string]*container.Info{},
-		namespaces:       map[uint32]*container.Info{},
-		podsByContainer:  map[string]*informer.ObjectMeta{},
-		containerByPID:   map[uint32]*container.Info{},
-		ipInfos:          map[string]*informer.ObjectMeta{},
-		metadataNotifier: kubeMetadata,
-		BaseNotifier:     meta.NewBaseNotifier(),
+		log:                 dblog(),
+		containerIDs:        map[string]*container.Info{},
+		namespaces:          map[uint32]*container.Info{},
+		podsByContainer:     map[string]*informer.ObjectMeta{},
+		containerByPID:      map[uint32]*container.Info{},
+		ipInfos:             map[string]*informer.ObjectMeta{},
+		containersByOwner:   map[string][]*informer.ContainerInfo{},
+		otelServiceInfoByIP: map[string]OTelServiceNamePair{},
+		metadataNotifier:    kubeMetadata,
+		BaseNotifier:        meta.NewBaseNotifier(),
 	}
 	kubeMetadata.Subscribe(db)
 	return db
@@ -117,14 +134,23 @@ func (s *Store) updateNewObjectMetaByIPIndex(meta *informer.ObjectMeta) {
 	}
 	if meta.Pod != nil {
 		s.log.Debug("adding pod to store",
-			"ips", meta.Ips, "pod", meta.Name, "namespace", meta.Namespace, "containerIDs", meta.Pod.ContainerIds)
-		for _, cid := range meta.Pod.ContainerIds {
-			s.podsByContainer[cid] = meta
+			"ips", meta.Ips, "pod", meta.Name, "namespace", meta.Namespace, "containers", meta.Pod.Containers)
+		for _, c := range meta.Pod.Containers {
+			s.podsByContainer[c.Id] = meta
 			// TODO: make sure we can handle when the containerIDs is set after this function is triggered
-			info, ok := s.containerIDs[cid]
+			info, ok := s.containerIDs[c.Id]
 			if ok {
 				s.namespaces[info.PIDNamespace] = info
 			}
+		}
+		if owner := TopOwner(meta.Pod); owner != nil {
+			ownerId := ownerId(meta.Namespace, owner.Name)
+			containers, ok := s.containersByOwner[ownerId]
+			if !ok {
+				containers = []*informer.ContainerInfo{}
+			}
+			containers = append(containers, meta.Pod.Containers...)
+			s.containersByOwner[ownerId] = containers
 		}
 	}
 }
@@ -132,17 +158,44 @@ func (s *Store) updateNewObjectMetaByIPIndex(meta *informer.ObjectMeta) {
 func (s *Store) updateDeletedObjectMetaByIPIndex(meta *informer.ObjectMeta) {
 	s.access.Lock()
 	defer s.access.Unlock()
+	// clean up the IP to service cache, we have to clean everything since
+	// Otel variables on specific pods can change the outcome.
+	s.otelServiceInfoByIP = map[string]OTelServiceNamePair{}
+
 	for _, ip := range meta.Ips {
 		delete(s.ipInfos, ip)
 	}
 	if meta.Pod != nil {
 		s.log.Debug("deleting pod from store",
-			"ips", meta.Ips, "pod", meta.Name, "namespace", meta.Namespace, "containerIDs", meta.Pod.ContainerIds)
-		for _, cid := range meta.Pod.ContainerIds {
-			info, ok := s.containerIDs[cid]
+			"ips", meta.Ips, "pod", meta.Name, "namespace", meta.Namespace, "containers", meta.Pod.Containers)
+		toRemove := map[string]struct{}{}
+		for _, c := range meta.Pod.Containers {
+			toRemove[c.Id] = struct{}{}
+
+			info, ok := s.containerIDs[c.Id]
 			if ok {
-				delete(s.containerIDs, cid)
+				delete(s.containerIDs, c.Id)
 				delete(s.namespaces, info.PIDNamespace)
+			}
+		}
+
+		// clean up the owner to container map
+		if owner := TopOwner(meta.Pod); owner != nil {
+			ownerId := ownerId(meta.Namespace, owner.Name)
+			if containers, ok := s.containersByOwner[ownerId]; ok {
+				withoutPod := []*informer.ContainerInfo{}
+				// filter out all containers owned by this pod
+				for _, c := range containers {
+					if _, ok := toRemove[c.Id]; !ok {
+						withoutPod = append(withoutPod, c)
+					}
+				}
+				// update the owner to container mapping or remove if empty
+				if len(withoutPod) > 0 {
+					s.containersByOwner[ownerId] = withoutPod
+				} else {
+					delete(s.containersByOwner, ownerId)
+				}
 			}
 		}
 	}
@@ -172,13 +225,93 @@ func (s *Store) ObjectMetaByIP(ip string) *informer.ObjectMeta {
 // ServiceNameNamespaceForIP returns the service name and namespace for a given IP address
 // This means that, for a given Pod, we will not return the Pod Name, but the Pod Owner Name
 func (s *Store) ServiceNameNamespaceForIP(ip string) (string, string) {
-	if om := s.ObjectMetaByIP(ip); om != nil {
-		if owner := TopOwner(om.Pod); owner != nil {
-			return owner.Name, om.Namespace
-		}
-		return om.Name, om.Namespace
+	if serviceInfo, ok := s.otelServiceInfoByIP[ip]; ok {
+		return serviceInfo.Name, serviceInfo.Namespace
 	}
+
+	if om := s.ObjectMetaByIP(ip); om != nil {
+		var name string
+		var namespace string
+		if owner := TopOwner(om.Pod); owner != nil {
+			name, namespace = s.serviceNameNamespaceForPod(om, owner)
+		} else {
+			name, namespace = s.serviceNameNamespaceForOwner(om)
+		}
+		s.otelServiceInfoByIP[ip] = OTelServiceNamePair{Name: name, Namespace: namespace}
+		return name, namespace
+	}
+
+	s.otelServiceInfoByIP[ip] = OTelServiceNamePair{Name: "", Namespace: ""}
 	return "", ""
+}
+
+func (s *Store) serviceNameNamespaceForOwner(om *informer.ObjectMeta) (string, string) {
+	ownerKey := ownerId(om.Namespace, om.Name)
+	return s.serviceNameNamespaceOwnerId(ownerKey, om.Name, om.Namespace)
+}
+
+func (s *Store) serviceNameNamespaceForPod(om *informer.ObjectMeta, owner *informer.Owner) (string, string) {
+	ownerKey := ownerId(om.Namespace, owner.Name)
+	return s.serviceNameNamespaceOwnerId(ownerKey, owner.Name, om.Namespace)
+}
+
+func (s *Store) serviceNameNamespaceOwnerId(ownerKey, name, namespace string) (string, string) {
+	serviceName := name
+	serviceNamespace := namespace
+
+	if envName, ok := s.serviceNameFromEnv(ownerKey); ok {
+		serviceName = envName
+	}
+	if envName, ok := s.serviceNamespaceFromEnv(ownerKey); ok {
+		serviceNamespace = envName
+	}
+
+	return serviceName, serviceNamespace
+}
+
+func (s *Store) nameFromResourceAttrs(variable string, c *informer.ContainerInfo) (string, bool) {
+	if resourceVars, ok := c.Env[envResourceAttrs]; ok {
+		allVars := map[string]string{}
+		collect := func(k string, v string) {
+			allVars[k] = v
+		}
+		attributes.ParseOTELResourceVariable(resourceVars, collect)
+		if result, ok := allVars[variable]; ok {
+			return result, true
+		}
+	}
+
+	return "", false
+}
+
+func (s *Store) serviceNameFromEnv(ownerKey string) (string, bool) {
+	if containers, ok := s.containersByOwner[ownerKey]; ok {
+		for _, c := range containers {
+			if serviceName, ok := c.Env[envServiceName]; ok {
+				return serviceName, true
+			}
+
+			if serviceName, ok := s.nameFromResourceAttrs(serviceNameKey, c); ok {
+				return serviceName, true
+			}
+		}
+	}
+	return "", false
+}
+
+func (s *Store) serviceNamespaceFromEnv(ownerKey string) (string, bool) {
+	if containers, ok := s.containersByOwner[ownerKey]; ok {
+		for _, c := range containers {
+			if namespace, ok := s.nameFromResourceAttrs(serviceNamespaceKey, c); ok {
+				return namespace, true
+			}
+		}
+	}
+	return "", false
+}
+
+func ownerId(namespace, name string) string {
+	return namespace + "." + name
 }
 
 // Subscribe overrides BaseNotifier to send a "welcome message" to each new observer

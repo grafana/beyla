@@ -10,6 +10,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/ebpf"
 	"github.com/grafana/beyla/pkg/internal/ebpf/generictracer"
 	"github.com/grafana/beyla/pkg/internal/ebpf/gotracer"
+	"github.com/grafana/beyla/pkg/internal/ebpf/httptracer"
 	"github.com/grafana/beyla/pkg/internal/ebpf/tctracer"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"

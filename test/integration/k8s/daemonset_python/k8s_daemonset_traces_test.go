@@ -107,6 +107,7 @@ func TestPythonBasicTracing(t *testing.T) {
 					require.Len(t, res, 1)
 					parent := res[0]
 					sd := jaeger.Diff([]jaeger.Tag{
+						{Key: "service.name", Type: "string", Value: "mypythonapp"},
 						{Key: "service.namespace", Type: "string", Value: "integration-test"},
 						{Key: "telemetry.sdk.language", Type: "string", Value: "python"},
 					}, trace.Processes[parent.ProcessID].Tags)

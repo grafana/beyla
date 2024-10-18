@@ -23,7 +23,7 @@ There are different options to set up and run Beyla:
 
 For information on configuration options and data export modes, see the [Configure Beyla]({{< relref "../configure/_index.md" >}}) documentation.
 
-You can run Beyla as a standalone process. This approach is suitable for local development or advanced use cases. Consult the documentation in the [git repository](https://github.com/grafana/beyla/blob/main/docs/sources/setup/standalone.md) to learn how to set up Beyla as a standalone process.
+You can run Beyla as a standalone process. This approach is suitable for running with bare metal installations, in virtual machines, for local development, or advanced use cases. Consult the documentation in the [Git repository](https://github.com/grafana/beyla/blob/main/docs/sources/setup/standalone.md) to learn how to set up Beyla as a standalone process.
 
 **Note**: If you will be using Beyla to generate traces, please make sure you've read our documentation section on configuring
 the [Routes Decorator]({{< relref "../configure/options#routes-decorator" >}}). Since Beyla is auto-instrumenting your application without any

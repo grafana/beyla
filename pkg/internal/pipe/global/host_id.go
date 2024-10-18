@@ -129,11 +129,11 @@ func (ci *ContextInfo) kubeNodeFetcher(ctx context.Context, _ time.Duration) (st
 }
 
 func linuxLocalMachineIDFetcher(_ context.Context, _ time.Duration) (string, error) {
-	if result, err := os.ReadFile("/etc/machine-id"); err == nil || len(result) == 0 {
+	if result, err := os.ReadFile("/etc/machine-id"); err == nil && len(bytes.TrimSpace(result)) > 0 {
 		return string(bytes.TrimSpace(result)), nil
 	}
 
-	if result, err := os.ReadFile("/var/lib/dbus/machine-id"); err == nil || len(result) == 0 {
+	if result, err := os.ReadFile("/var/lib/dbus/machine-id"); err == nil && len(bytes.TrimSpace(result)) > 0 {
 		return string(bytes.TrimSpace(result)), nil
 	} else {
 		return "", fmt.Errorf("can't read host ID: %w", err)

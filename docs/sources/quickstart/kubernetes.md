@@ -1,8 +1,8 @@
 ---
-title: Beyla and Kubernetes walkthrough
-menuTitle: Beyla and Kubernetes tutorial
+title: Beyla and Kubernetes quickstart
+menuTitle: Kubernetes quickstart
 description: Learn how to instrument an application export data with Prometheus to Grafana Cloud.
-weight: 3
+weight: 99
 keywords:
   - Beyla
   - eBPF
@@ -10,12 +10,12 @@ keywords:
   - tutorial
 ---
 
-# Beyla and Kubernetes walkthrough
+# Beyla and Kubernetes quickstart
 
 Kubernetes is fully integrated into the Beyla operation mode.
 
 On one side, metrics and traces can be decorated
-with the metadata of the kubernetes entities running the automatically instrumented
+with the metadata of the Kubernetes entities running the automatically instrumented
 services.
 
 On the other side, DaemonSet has become the preferred deployment

@@ -227,9 +227,6 @@ func (p *Tracer) GoProbes() map[string][]ebpfcommon.FunctionPrograms {
 			{
 				Start: p.bpfObjects.UprobeNetFdRead,
 			},
-			{ // for grpc
-				Start: p.bpfObjects.UprobeNetFdReadGRPC,
-			},
 		},
 		"net/http.(*persistConn).roundTrip": {{ // http client
 			Start: p.bpfObjects.UprobePersistConnRoundTrip,

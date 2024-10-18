@@ -26,24 +26,11 @@
 #include "go_common.h"
 #include "ringbuf.h"
 
-typedef struct sql_func_invocation {
-    u64 start_monotime_ns;
-    u64 sql_param;
-    u64 query_len;
-    tp_info_t tp;
-} sql_func_invocation_t;
-
-struct {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, go_addr_key_t); // key: pointer to the request goroutine
-    __type(value, sql_func_invocation_t);
-    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
-} ongoing_sql_queries SEC(".maps");
-
 static __always_inline void set_sql_info(void *goroutine_addr, void *sql_param, void *query_len) {
     sql_func_invocation_t invocation = {.start_monotime_ns = bpf_ktime_get_ns(),
                                         .sql_param = (u64)sql_param,
                                         .query_len = (u64)query_len,
+                                        .conn = {0},
                                         .tp = {0}};
 
     // We don't look up in the headers, no http/grpc request, therefore 0 as last argument
@@ -65,6 +52,7 @@ int uprobe_queryDC(struct pt_regs *ctx) {
 
     void *sql_param = GO_PARAM8(ctx);
     void *query_len = GO_PARAM9(ctx);
+
     set_sql_info(goroutine_addr, sql_param, query_len);
     return 0;
 }
@@ -117,6 +105,9 @@ int uprobe_queryReturn(struct pt_regs *ctx) {
         if (query_len < sizeof(trace->sql)) {
             trace->sql[query_len] = 0;
         }
+
+        __builtin_memcpy(&trace->conn, &invocation->conn, sizeof(connection_info_t));
+
         // submit the completed trace via ringbuffer
         bpf_ringbuf_submit(trace, get_flags());
     } else {

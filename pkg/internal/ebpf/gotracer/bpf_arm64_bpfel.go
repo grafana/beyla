@@ -141,6 +141,8 @@ type bpfSqlFuncInvocationT struct {
 	StartMonotimeNs uint64
 	SqlParam        uint64
 	QueryLen        uint64
+	Conn            bpfConnectionInfoT
+	_               [4]byte
 	Tp              bpfTpInfoT
 }
 
@@ -227,7 +229,6 @@ type bpfProgramSpecs struct {
 	UprobeHttp2ServerOperateHeaders           *ebpf.ProgramSpec `ebpf:"uprobe_http2Server_operateHeaders"`
 	UprobeHttp2serverConnRunHandler           *ebpf.ProgramSpec `ebpf:"uprobe_http2serverConn_runHandler"`
 	UprobeNetFdRead                           *ebpf.ProgramSpec `ebpf:"uprobe_netFdRead"`
-	UprobeNetFdReadGRPC                       *ebpf.ProgramSpec `ebpf:"uprobe_netFdReadGRPC"`
 	UprobePersistConnRoundTrip                *ebpf.ProgramSpec `ebpf:"uprobe_persistConnRoundTrip"`
 	UprobeProcGoexit1                         *ebpf.ProgramSpec `ebpf:"uprobe_proc_goexit1"`
 	UprobeProcNewproc1                        *ebpf.ProgramSpec `ebpf:"uprobe_proc_newproc1"`
@@ -410,7 +411,6 @@ type bpfPrograms struct {
 	UprobeHttp2ServerOperateHeaders           *ebpf.Program `ebpf:"uprobe_http2Server_operateHeaders"`
 	UprobeHttp2serverConnRunHandler           *ebpf.Program `ebpf:"uprobe_http2serverConn_runHandler"`
 	UprobeNetFdRead                           *ebpf.Program `ebpf:"uprobe_netFdRead"`
-	UprobeNetFdReadGRPC                       *ebpf.Program `ebpf:"uprobe_netFdReadGRPC"`
 	UprobePersistConnRoundTrip                *ebpf.Program `ebpf:"uprobe_persistConnRoundTrip"`
 	UprobeProcGoexit1                         *ebpf.Program `ebpf:"uprobe_proc_goexit1"`
 	UprobeProcNewproc1                        *ebpf.Program `ebpf:"uprobe_proc_newproc1"`
@@ -466,7 +466,6 @@ func (p *bpfPrograms) Close() error {
 		p.UprobeHttp2ServerOperateHeaders,
 		p.UprobeHttp2serverConnRunHandler,
 		p.UprobeNetFdRead,
-		p.UprobeNetFdReadGRPC,
 		p.UprobePersistConnRoundTrip,
 		p.UprobeProcGoexit1,
 		p.UprobeProcNewproc1,

@@ -10,6 +10,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/ebpf"
 	"github.com/grafana/beyla/pkg/internal/ebpf/generictracer"
 	"github.com/grafana/beyla/pkg/internal/ebpf/gotracer"
+	"github.com/grafana/beyla/pkg/internal/ebpf/tctracer"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
@@ -97,5 +98,9 @@ func newGoTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Trac
 }
 
 func newGenericTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Tracer {
+	if cfg.EBPF.UseLinuxTC {
+		return []ebpf.Tracer{generictracer.New(cfg, metrics), tctracer.New(cfg)}
+	}
+
 	return []ebpf.Tracer{generictracer.New(cfg, metrics)}
 }

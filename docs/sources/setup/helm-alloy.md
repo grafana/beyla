@@ -1,6 +1,6 @@
 ---
 title: Run Beyla in Kubernetes using Grafana Alloy Helm's chart
-menuTitle: Kubernetes and Grafana Alloy tutorial
+menuTitle: Grafana Alloy Helm chart
 description: Learn how to instrument an application export data with Prometheus to Grafana Cloud
 weight: 4
 keywords:
@@ -9,6 +9,8 @@ keywords:
   - Kubernetes
   - Alloy
   - tutorial
+aliases:
+  - /docs/beyla/latest/tutorial/helm-alloy/
 ---
 
 # Run Beyla in Kubernetes using Grafana Alloy Helm's chart
@@ -19,7 +21,7 @@ Alloy offers native pipelines for OpenTelemetry, Prometheus, and other telemetry
 Grafana Alloy bundles Beyla allowing you to instrument your applications at the same time
 you instrument your infrastructure. It also provides a Helm chart to deploy Alloy in Kubernetes.
 
-In this tutorial, you learn how to deploy Beyla in Kubernetes using Grafana Alloy Helm's chart. It's based on the examples from the [Beyla and Kubernetes walkthrough]({{< relref "./k8s-walkthrough.md" >}}).
+In this tutorial, you learn how to deploy Beyla in Kubernetes using Grafana Alloy Helm's chart.
 
 ## Prerequisites
 

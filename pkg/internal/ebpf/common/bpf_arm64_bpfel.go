@@ -174,6 +174,8 @@ type bpfSqlRequestTrace struct {
 	EndMonotimeNs   uint64
 	Sql             [500]uint8
 	Status          uint16
+	_               [1]byte
+	Conn            bpfConnectionInfoT
 	Tp              struct {
 		TraceId  [16]uint8
 		SpanId   [8]uint8

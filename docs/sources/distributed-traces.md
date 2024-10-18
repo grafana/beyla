@@ -2,7 +2,7 @@
 title: Distributed traces with Beyla
 menuTitle: Distributed traces
 description: Learn about Beyla's distributed traces support.
-weight: 5
+weight: 22
 keywords:
   - Beyla
   - eBPF

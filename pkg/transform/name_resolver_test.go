@@ -90,9 +90,9 @@ func TestResolvePodsFromK8s(t *testing.T) {
 
 	nr.resolveNames(&clientSpan)
 
-	assert.Equal(t, "pod1", clientSpan.PeerName)
+	assert.Equal(t, "pod1.something", clientSpan.PeerName)
 	assert.Equal(t, "", clientSpan.ServiceID.Namespace)
-	assert.Equal(t, "pod2", clientSpan.HostName)
+	assert.Equal(t, "pod2.something", clientSpan.HostName)
 	assert.Equal(t, "something", clientSpan.OtherNamespace)
 
 	nr.resolveNames(&serverSpan)
@@ -161,9 +161,9 @@ func TestResolveServiceFromK8s(t *testing.T) {
 
 	nr.resolveNames(&clientSpan)
 
-	assert.Equal(t, "pod1", clientSpan.PeerName)
+	assert.Equal(t, "pod1.something", clientSpan.PeerName)
 	assert.Equal(t, "", clientSpan.ServiceID.Namespace)
-	assert.Equal(t, "pod2", clientSpan.HostName)
+	assert.Equal(t, "pod2.something", clientSpan.HostName)
 	assert.Equal(t, "something", clientSpan.OtherNamespace)
 
 	nr.resolveNames(&serverSpan)
@@ -251,9 +251,9 @@ func TestResolveNodesFromK8s(t *testing.T) {
 
 	nr.resolveNames(&clientSpan)
 
-	assert.Equal(t, "node1", clientSpan.PeerName)
+	assert.Equal(t, "node1.something", clientSpan.PeerName)
 	assert.Equal(t, "", clientSpan.ServiceID.Namespace)
-	assert.Equal(t, "node2", clientSpan.HostName)
+	assert.Equal(t, "node2.something", clientSpan.HostName)
 	assert.Equal(t, "something", clientSpan.OtherNamespace)
 
 	nr.resolveNames(&serverSpan)

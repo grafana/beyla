@@ -2,7 +2,7 @@
 title: Beyla quickstart guides
 menuTitle: Quickstart
 description: Learn how to set up and run Beyla to instrument multiple languages.
-weight: 1
+weight: 2
 keywords:
   - Beyla
   - eBPF
@@ -20,7 +20,6 @@ This section shows how to quickly instrument your applications for different pro
 - [Quickstart: instrument a Rust service with Beyla]({{< relref "./rust.md" >}})
 - [Quickstart: instrument a Java service with Beyla]({{< relref "./java.md" >}})
 
-For more information about the different ways you can deploy Beyla (standalone Linux process, Docker container,
-Kubernetes Pod or DaemonSet), refer to the [Set up Beyla]({{< relref "../setup" >}}) section.
+For more information about the different ways you can deploy Beyla refer to the [set up]({{< relref "../setup" >}}) documentation.
 
-For information on configuration options and data export modes, see the [Configure Beyla]({{< relref "../configure/_index.md" >}}) documentation.
+For information on configuration options and data export modes, see the [configure Beyla]({{< relref "../configure/_index.md" >}}) documentation.

@@ -27,7 +27,7 @@ data:
           include: ["*"]
       kubernetes:
         enable: true
-        cluster_name: my-kube
+        cluster_name: beyla
     trace_printer: text
     log_level: debug
     discovery:

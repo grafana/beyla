@@ -16,6 +16,7 @@ data:
       kubernetes:
         enable: true
         cluster_name: my-kube
+    #    meta_cache_address: k8s-cache:8999
       select:
         "*":
           include: ["*"]
@@ -36,8 +37,6 @@ data:
     discovery:
       services:
         - k8s_deployment_name: (otherinstance|testserver)
-          # required for passing tests overriding namespace in service graph metrics (k8s.FeatureHTTPMetricsDecoration)
-          namespace: integration-test
         - k8s_pod_name: .*pinger.*
 ---
 apiVersion: apps/v1

@@ -57,11 +57,18 @@ func TestInformersCache_MetricsDecoration_AA_WaitForComponents(t *testing.T) {
 }
 
 func TestInformersCache_MetricsDecoration_HTTP(t *testing.T) {
-	cluster.TestEnv().Test(t, k8s.FeatureHTTPMetricsDecoration(k8s.UninstrumentedPingerManifest))
+	cluster.TestEnv().Test(t, k8s.FeatureHTTPMetricsDecoration(k8s.UninstrumentedPingerManifest,
+		map[string]string{
+			"server_service_namespace": "default",
+			"k8s_cluster_name":         "my-kube",
+		}))
 }
 
 func TestInformersCache_ProcessMetrics(t *testing.T) {
-	cluster.TestEnv().Test(t, k8s.FeatureProcessMetricsDecoration(nil))
+	cluster.TestEnv().Test(t, k8s.FeatureProcessMetricsDecoration(
+		map[string]string{
+			"k8s_cluster_name": "my-kube",
+		}))
 }
 
 func TestInformersCache_NetworkMetrics(t *testing.T) {

@@ -196,7 +196,7 @@ func (mp *MetadataProvider) initLocalInformers(ctx context.Context) (*meta.Infor
 // initRemoteInformerCacheClient connects via gRPC/Protobuf to a remote beyla-k8s-cache service, to avoid that
 // each Beyla instance connects to the Kube API informer on each node, which would overload the Kube API
 func (mp *MetadataProvider) initRemoteInformerCacheClient(ctx context.Context) *cacheSvcClient {
-	client := &cacheSvcClient{address: mp.cfg.MetaCacheAddr}
+	client := &cacheSvcClient{address: mp.cfg.MetaCacheAddr, BaseNotifier: meta.NewBaseNotifier()}
 	client.Start(ctx)
 	return client
 }

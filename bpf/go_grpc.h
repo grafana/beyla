@@ -42,26 +42,6 @@ typedef struct grpc_client_func_invocation {
     u64 flags;
 } grpc_client_func_invocation_t;
 
-typedef struct grpc_transports {
-    u8 type;
-    connection_info_t conn;
-} grpc_transports_t;
-
-// TODO: use go_addr_key_t as key
-struct {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, void *); // key: pointer to the transport pointer
-    __type(value, grpc_transports_t);
-    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
-} ongoing_grpc_transports SEC(".maps");
-
-struct {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, go_addr_key_t); // key: goroutine
-    __type(value, void *);      // the transport *
-    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
-} ongoing_grpc_operate_headers SEC(".maps");
-
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, go_addr_key_t); // key: pointer to the request goroutine
@@ -136,28 +116,6 @@ int uprobe_server_handleStream(struct pt_regs *ctx) {
 
     if (bpf_map_update_elem(&ongoing_grpc_server_requests, &g_key, &invocation, BPF_ANY)) {
         bpf_dbg_printk("can't update grpc map element");
-    }
-
-    return 0;
-}
-
-// Sets up the connection info to be grabbed and mapped over the transport to operateHeaders
-SEC("uprobe/netFdReadGRPC")
-int uprobe_netFdReadGRPC(struct pt_regs *ctx) {
-    void *goroutine_addr = GOROUTINE_PTR(ctx);
-    bpf_dbg_printk("=== uprobe/proc netFD read goroutine %lx === ", goroutine_addr);
-    go_addr_key_t g_key = {};
-    go_addr_key_from_id(&g_key, goroutine_addr);
-
-    void *tr = bpf_map_lookup_elem(&ongoing_grpc_operate_headers, &g_key);
-    bpf_dbg_printk("tr %llx", tr);
-    if (tr) {
-        grpc_transports_t *t = bpf_map_lookup_elem(&ongoing_grpc_transports, tr);
-        bpf_dbg_printk("t %llx", t);
-        if (t) {
-            void *fd_ptr = GO_PARAM1(ctx);
-            get_conn_info_from_fd(fd_ptr, &t->conn); // ok to not check the result, we leave it as 0
-        }
     }
 
     return 0;

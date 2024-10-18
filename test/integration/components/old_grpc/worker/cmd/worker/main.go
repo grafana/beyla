@@ -5,10 +5,9 @@ import (
 	"net"
 
 	"github.com/caarlos0/env/v7"
-	"google.golang.org/grpc"
-
 	"github.com/mariomac/distributed-service-example/worker/pkg/gprc"
 	"github.com/mariomac/distributed-service-example/worker/pkg/server"
+	"google.golang.org/grpc"
 )
 
 type Config struct {

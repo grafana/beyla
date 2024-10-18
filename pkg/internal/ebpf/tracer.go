@@ -46,6 +46,7 @@ type CommonTracer interface {
 	// AddCloser adds io.Closer instances that need to be invoked when the
 	// Run function ends.
 	AddCloser(c ...io.Closer)
+	AddModuleCloser(ino uint64, c ...io.Closer)
 	// BpfObjects that are created by the bpf2go compiler
 	BpfObjects() any
 	// Sets up any tail call tables if the BPF program has it
@@ -84,6 +85,7 @@ type Tracer interface {
 	// The argument is the OS file id
 	RecordInstrumentedLib(uint64)
 	AlreadyInstrumentedLib(uint64) bool
+	UnlinkInstrumentedLib(uint64)
 	RegisterOffsets(*exec.FileInfo, *goexec.Offsets)
 	// Run will do the action of listening for eBPF traces and forward them
 	// periodically to the output channel.
@@ -109,7 +111,6 @@ const (
 type ProcessTracer struct {
 	log      *slog.Logger //nolint:unused
 	Programs []Tracer
-	PinPath  string
 
 	SystemWide      bool
 	Type            ProcessTracerType

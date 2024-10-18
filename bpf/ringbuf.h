@@ -2,6 +2,7 @@
 #define RINGBUF_H
 
 #include "utils.h"
+#include "pin_internal.h"
 
 // These need to line up with some Go identifiers:
 // EventTypeHTTP, EventTypeGRPC, EventTypeHTTPClient, EventTypeGRPCClient, EventTypeSQLClient, EventTypeKHTTPRequest
@@ -28,7 +29,7 @@
 struct {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
     __uint(max_entries, 1 << 16);
-    __uint(pinning, LIBBPF_PIN_BY_NAME);
+    __uint(pinning, BEYLA_PIN_INTERNAL);
 } events SEC(".maps");
 
 // To be Injected from the user space during the eBPF program load & initialization

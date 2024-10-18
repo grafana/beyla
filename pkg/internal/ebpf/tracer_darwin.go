@@ -25,16 +25,16 @@ func (pt *ProcessTracer) Init() error {
 	return nil
 }
 
-func BuildPinPath(_ *beyla.Config) string {
-	return ""
+func (pt *ProcessTracer) NewExecutable(_ *link.Executable, _ *Instrumentable) error {
+	return nil
 }
 
-func (pt *ProcessTracer) NewExecutable(_ *link.Executable, _ *Instrumentable) error {
+func (pt *ProcessTracer) NewExecutableInstance(_ *Instrumentable) error {
 	return nil
 }
 
 func (pt *ProcessTracer) UnlinkExecutable(_ *exec.FileInfo) {}
 
-func RunUtilityTracer(_ UtilityTracer, _ string) error {
+func RunUtilityTracer(_ UtilityTracer) error {
 	return nil
 }

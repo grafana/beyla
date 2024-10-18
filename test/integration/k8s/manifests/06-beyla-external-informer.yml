@@ -4,22 +4,41 @@ metadata:
   name: beyla-config
 data:
   beyla-config.yml: |
+    prometheus_export:
+      port: 8999
+      features:
+        - application
+        - network
+        - application_process
+        - application_span
+        - application_service_graph
     attributes:
       kubernetes:
         enable: true
         cluster_name: my-kube
+      select:
+        "*":
+          include: ["*"]
+        beyla.network.flow.bytes:
+          include: ["*"]
+          exclude: ["src_port"]
+    network:
+      protocols:
+        - TCP
+      cidrs:
+        # default subnets of Kind Pods and services
+        - 10.244.0.0/16
+        - fd00:10:244::/56
+        - 10.96.0.0/16
+        - fd00:10:96::/112
     trace_printer: text
     log_level: debug
     discovery:
       services:
-        - open_ports: 8083
+        - k8s_deployment_name: (otherinstance|testserver)
+          # required for passing tests overriding namespace in service graph metrics (k8s.FeatureHTTPMetricsDecoration)
           namespace: integration-test
-    routes:
-      unmatched: heuristic
-    otel_metrics_export:
-      endpoint: http://otelcol:4318
-    otel_traces_export:
-      endpoint: http://jaeger:4318
+        - k8s_pod_name: .*pinger.*
 ---
 apiVersion: apps/v1
 kind: DaemonSet
@@ -37,7 +56,9 @@ spec:
         # kind, to force Beyla writing the coverage data
         teardown: delete
     spec:
-      hostPID: true  #important!
+      hostPID: true
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
       serviceAccountName: beyla
       volumes:
         - name: beyla-config
@@ -72,5 +93,19 @@ spec:
               value: "true"
             - name: BEYLA_METRICS_REPORT_PEER
               value: "true"
-            - name: BEYLA_NAME_RESOLVER_SOURCES
-              value: "dns,k8s"
+          ports:
+            - containerPort: 8999
+              name: prometheus
+              protocol: TCP
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: beyla-promscrape
+spec:
+  selector:
+    instrumentation: beyla
+  ports:
+    - port: 8999
+      name: prometheus
+      protocol: TCP

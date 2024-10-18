@@ -7,7 +7,7 @@ data:
     attributes:
       kubernetes:
         enable: true
-        cluster_name: beyla
+        cluster_name: my-kube
       select:
         process_*:
           include: ["*"]

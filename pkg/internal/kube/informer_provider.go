@@ -158,7 +158,9 @@ func (mp *MetadataProvider) CurrentNodeName(ctx context.Context) (string, error)
 		FieldSelector: "metadata.name=" + currentPod,
 	})
 	if err != nil || len(pods.Items) == 0 {
-		return "", fmt.Errorf("can't get pod %s/%s: %w", currentNamespace, currentPod, err)
+		log.Debug("attention: can't get Pod info. This is expected if the pod is using the host network. Will use the"+
+			" host name as node name", "nodeName", currentPod, "namespace", currentNamespace, "error", err)
+		return currentPod, nil
 	}
 	return pods.Items[0].Spec.NodeName, nil
 }

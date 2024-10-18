@@ -129,7 +129,7 @@ spec:
             - name: BEYLA_OTEL_METRICS_TTL
               value: "30m0s"
             - name: BEYLA_KUBE_CLUSTER_NAME
-              value: "beyla"
+              value: "my-kube"
             - name: BEYLA_NAME_RESOLVER_SOURCES
               value: "dns,k8s"
           ports:

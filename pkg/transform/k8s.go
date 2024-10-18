@@ -182,6 +182,7 @@ func OwnerLabelName(kind string) attr.Name {
 func KubeClusterName(ctx context.Context, cfg *KubernetesDecorator) string {
 	log := klog().With("func", "KubeClusterName")
 	if cfg.ClusterName != "" {
+		log.Debug("using cluster name from configuration", "cluster_name", cfg.ClusterName)
 		return cfg.ClusterName
 	}
 	retries := 0

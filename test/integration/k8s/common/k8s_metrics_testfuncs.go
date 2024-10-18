@@ -113,7 +113,7 @@ func FeatureHTTPMetricsDecoration(manifest string) features.Feature {
 				"k8s_node_name":      ".+-control-plane$",
 				"k8s_pod_uid":        UUIDRegex,
 				"k8s_pod_start_time": TimeRegex,
-				"k8s_cluster_name":   "^beyla$",
+				"k8s_cluster_name":   "^my-kube$",
 			}, "k8s_deployment_name")).
 		Assess("all the server metrics are properly decorated",
 			testMetricsDecoration(httpServerMetrics, `{url_path="/iping",k8s_pod_name=~"testserver-.*"}`, map[string]string{
@@ -124,11 +124,11 @@ func FeatureHTTPMetricsDecoration(manifest string) features.Feature {
 				"k8s_owner_name":      "^testserver$",
 				"k8s_deployment_name": "^testserver$",
 				"k8s_replicaset_name": "^testserver-",
-				"k8s_cluster_name":    "^beyla$",
+				"k8s_cluster_name":    "^my-kube$",
 			})).
 		Assess("all the span graph metrics exist",
 			testMetricsDecoration(spanGraphMetrics, `{server="testserver",client="internal-pinger"}`, map[string]string{
-				"server_service_namespace": "integration-test",
+				"server_service_namespace": "(integration-test|default)",
 				"source":                   "beyla",
 			})).
 		Assess("target_info metrics exist",
@@ -156,7 +156,7 @@ func FeatureGRPCMetricsDecoration(manifest string) features.Feature {
 				"k8s_node_name":      ".+-control-plane$",
 				"k8s_pod_uid":        UUIDRegex,
 				"k8s_pod_start_time": TimeRegex,
-				"k8s_cluster_name":   "^beyla$",
+				"k8s_cluster_name":   "^my-kube$",
 			}, "k8s_deployment_name")).
 		Assess("all the server metrics are properly decorated",
 			testMetricsDecoration(grpcServerMetrics, `{k8s_pod_name=~"testserver-.*"}`, map[string]string{
@@ -167,7 +167,7 @@ func FeatureGRPCMetricsDecoration(manifest string) features.Feature {
 				"k8s_owner_name":      "^testserver$",
 				"k8s_deployment_name": "^testserver$",
 				"k8s_replicaset_name": "^testserver-",
-				"k8s_cluster_name":    "^beyla$",
+				"k8s_cluster_name":    "^my-kube$",
 			})).
 		Assess("target_info metrics exist",
 			testMetricsDecoration([]string{"target_info"}, `{job=~".*testserver"}`, map[string]string{
@@ -186,7 +186,7 @@ func FeatureProcessMetricsDecoration(overrideProperties map[string]string) featu
 		"k8s_pod_start_time":  TimeRegex,
 		"k8s_deployment_name": "^testserver$",
 		"k8s_replicaset_name": "^testserver-",
-		"k8s_cluster_name":    "^beyla$",
+		"k8s_cluster_name":    "^my-kube$",
 	}
 	for k, v := range overrideProperties {
 		properties[k] = v
@@ -218,7 +218,7 @@ func FeatureDisableInformersAppMetricsDecoration() features.Feature {
 					"k8s_pod_start_time":  TimeRegex,
 					"k8s_deployment_name": "^testserver$",
 					"k8s_replicaset_name": "^testserver-.*",
-					"k8s_cluster_name":    "^beyla$",
+					"k8s_cluster_name":    "^my-kube$",
 				})).Feature()
 }
 

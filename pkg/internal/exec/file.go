@@ -8,6 +8,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/grafana/beyla/pkg/export/attributes"
 	"github.com/grafana/beyla/pkg/internal/svc"
 	"github.com/grafana/beyla/pkg/services"
 )
@@ -25,7 +26,9 @@ type FileInfo struct {
 }
 
 const (
-	envServiceName = "OTEL_SERVICE_NAME"
+	envServiceName   = "OTEL_SERVICE_NAME"
+	envResourceAttrs = "OTEL_RESOURCE_ATTRIBUTES"
+	serviceNameKey   = "service.name"
 )
 
 func (fi *FileInfo) ExecutableName() string {
@@ -73,6 +76,17 @@ func FindExecELF(p *services.ProcessInfo, svcID svc.ID) (*FileInfo, error) {
 	file.Service.EnvVars = envVars
 	if svcName, ok := file.Service.EnvVars[envServiceName]; ok {
 		file.Service.Name = svcName
+	} else {
+		if resourceAttrs, ok := file.Service.EnvVars[envResourceAttrs]; ok {
+			allVars := map[string]string{}
+			collect := func(k string, v string) {
+				allVars[k] = v
+			}
+			attributes.ParseOTELResourceVariable(resourceAttrs, collect)
+			if result, ok := allVars[serviceNameKey]; ok {
+				file.Service.Name = result
+			}
+		}
 	}
 
 	return &file, nil

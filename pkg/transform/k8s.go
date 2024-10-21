@@ -98,11 +98,11 @@ func (md *metadataDecorator) do(span *request.Span) {
 		span.ServiceID.Metadata = map[attr.Name]string{}
 	}
 	// override the peer and host names from Kubernetes metadata, if found
-	if ip := md.db.ObjectMetaByIP(span.Host); ip != nil {
-		span.HostName = ip.Name
+	if name, _ := md.db.ServiceNameNamespaceForIP(span.Host); name != "" {
+		span.HostName = name
 	}
-	if ip := md.db.ObjectMetaByIP(span.Peer); ip != nil {
-		span.PeerName = ip.Name
+	if name, _ := md.db.ServiceNameNamespaceForIP(span.Peer); name != "" {
+		span.PeerName = name
 	}
 }
 

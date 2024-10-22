@@ -117,8 +117,7 @@ func (wk *watcherKubeEnricher) enrichPodEvent(podEvent Event[*informer.ObjectMet
 	switch podEvent.Type {
 	case EventCreated:
 		wk.log.Debug("Pod added",
-			"namespace", podEvent.Obj.Namespace, "name", podEvent.Obj.Name,
-			"containers", podEvent.Obj.Pod.ContainerIds)
+			"namespace", podEvent.Obj.Namespace, "name", podEvent.Obj.Name)
 		if events := wk.onNewPod(podEvent.Obj); len(events) > 0 {
 			out <- events
 		}
@@ -184,8 +183,8 @@ func (wk *watcherKubeEnricher) onNewPod(pod *informer.ObjectMeta) []Event[proces
 	wk.mt.RLock()
 	defer wk.mt.RUnlock()
 	var events []Event[processAttrs]
-	for _, containerID := range pod.Pod.ContainerIds {
-		if procInfo, ok := wk.processByContainer[containerID]; ok {
+	for _, cnt := range pod.Pod.Containers {
+		if procInfo, ok := wk.processByContainer[cnt.Id]; ok {
 			events = append(events, Event[processAttrs]{
 				Type: EventCreated,
 				Obj:  withMetadata(procInfo, pod),
@@ -198,11 +197,11 @@ func (wk *watcherKubeEnricher) onNewPod(pod *informer.ObjectMeta) []Event[proces
 func (wk *watcherKubeEnricher) onDeletedPod(pod *informer.ObjectMeta) {
 	wk.mt.Lock()
 	defer wk.mt.Unlock()
-	for _, containerID := range pod.Pod.ContainerIds {
-		if pbc, ok := wk.processByContainer[containerID]; ok {
+	for _, cnt := range pod.Pod.Containers {
+		if pbc, ok := wk.processByContainer[cnt.Id]; ok {
 			delete(wk.containerByPID, pbc.pid)
 		}
-		delete(wk.processByContainer, containerID)
+		delete(wk.processByContainer, cnt.Id)
 	}
 }
 

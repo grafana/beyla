@@ -116,12 +116,12 @@ func (s *Store) updateNewObjectMetaByIPIndex(meta *informer.ObjectMeta) {
 		s.ipInfos[ip] = meta
 	}
 	if meta.Pod != nil {
-		s.log.Debug("adding pod to store",
-			"ips", meta.Ips, "pod", meta.Name, "namespace", meta.Namespace, "containerIDs", meta.Pod.ContainerIds)
-		for _, cid := range meta.Pod.ContainerIds {
-			s.podsByContainer[cid] = meta
+		s.log.Debug(
+			"adding pod to store", "ips", meta.Ips, "pod", meta.Name, "namespace", meta.Namespace)
+		for _, cnt := range meta.Pod.Containers {
+			s.podsByContainer[cnt.Id] = meta
 			// TODO: make sure we can handle when the containerIDs is set after this function is triggered
-			info, ok := s.containerIDs[cid]
+			info, ok := s.containerIDs[cnt.Id]
 			if ok {
 				s.namespaces[info.PIDNamespace] = info
 			}
@@ -137,11 +137,11 @@ func (s *Store) updateDeletedObjectMetaByIPIndex(meta *informer.ObjectMeta) {
 	}
 	if meta.Pod != nil {
 		s.log.Debug("deleting pod from store",
-			"ips", meta.Ips, "pod", meta.Name, "namespace", meta.Namespace, "containerIDs", meta.Pod.ContainerIds)
-		for _, cid := range meta.Pod.ContainerIds {
-			info, ok := s.containerIDs[cid]
+			"ips", meta.Ips, "pod", meta.Name, "namespace", meta.Namespace)
+		for _, cnt := range meta.Pod.Containers {
+			info, ok := s.containerIDs[cnt.Id]
 			if ok {
-				delete(s.containerIDs, cid)
+				delete(s.containerIDs, cnt.Id)
 				delete(s.namespaces, info.PIDNamespace)
 			}
 		}

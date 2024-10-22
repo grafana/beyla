@@ -144,21 +144,33 @@ func (inf *Informers) initPodInformer(informerFactory informers.SharedInformerFa
 			}
 			return nil, fmt.Errorf("was expecting a *v1.Pod. Got: %T", i)
 		}
-		containerIDs := make([]string, 0,
+		containers := make([]*informer.ContainerInfo, 0,
 			len(pod.Status.ContainerStatuses)+
 				len(pod.Status.InitContainerStatuses)+
 				len(pod.Status.EphemeralContainerStatuses))
 		for i := range pod.Status.ContainerStatuses {
-			containerIDs = append(containerIDs,
-				rmContainerIDSchema(pod.Status.ContainerStatuses[i].ContainerID))
+			containers = append(containers,
+				&informer.ContainerInfo{
+					Id:  rmContainerIDSchema(pod.Status.ContainerStatuses[i].ContainerID),
+					Env: envToMap(pod.Spec.Containers[i].Env),
+				},
+			)
 		}
 		for i := range pod.Status.InitContainerStatuses {
-			containerIDs = append(containerIDs,
-				rmContainerIDSchema(pod.Status.InitContainerStatuses[i].ContainerID))
+			containers = append(containers,
+				&informer.ContainerInfo{
+					Id:  rmContainerIDSchema(pod.Status.InitContainerStatuses[i].ContainerID),
+					Env: envToMap(pod.Spec.InitContainers[i].Env),
+				},
+			)
 		}
 		for i := range pod.Status.EphemeralContainerStatuses {
-			containerIDs = append(containerIDs,
-				rmContainerIDSchema(pod.Status.EphemeralContainerStatuses[i].ContainerID))
+			containers = append(containers,
+				&informer.ContainerInfo{
+					Id:  rmContainerIDSchema(pod.Status.EphemeralContainerStatuses[i].ContainerID),
+					Env: envToMap(pod.Spec.EphemeralContainers[i].Env),
+				},
+			)
 		}
 
 		ips := make([]string, 0, len(pod.Status.PodIPs))
@@ -173,7 +185,7 @@ func (inf *Informers) initPodInformer(informerFactory informers.SharedInformerFa
 		startTime := pod.GetCreationTimestamp().String()
 		if inf.log.Enabled(context.TODO(), slog.LevelDebug) {
 			inf.log.Debug("inserting pod", "name", pod.Name, "namespace", pod.Namespace, "uid", pod.UID,
-				"node", pod.Spec.NodeName, "startTime", startTime, "containerIDs", containerIDs)
+				"node", pod.Spec.NodeName, "startTime", startTime, "containers", containers)
 		}
 
 		return &indexableEntity{
@@ -188,7 +200,7 @@ func (inf *Informers) initPodInformer(informerFactory informers.SharedInformerFa
 					Uid:          string(pod.UID),
 					NodeName:     pod.Spec.NodeName,
 					StartTimeStr: startTime,
-					ContainerIds: containerIDs,
+					Containers:   containers,
 					Owners:       ownersFrom(&pod.ObjectMeta),
 					HostIp:       pod.Status.HostIP,
 				},
@@ -226,6 +238,15 @@ func (inf *Informers) initPodInformer(informerFactory informers.SharedInformerFa
 
 	inf.pods = pods
 	return nil
+}
+
+func envToMap(env []v1.EnvVar) map[string]string {
+	envMap := map[string]string{}
+	for _, envV := range env {
+		envMap[envV.Name] = envV.Value
+	}
+
+	return envMap
 }
 
 // rmContainerIDSchema extracts the hex ID of a container ID that is provided in the form:

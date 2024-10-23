@@ -2,6 +2,7 @@ package kube
 
 import (
 	"log/slog"
+	"strings"
 	"sync"
 
 	"github.com/grafana/beyla-k8s-cache/pkg/informer"
@@ -284,15 +285,19 @@ func (s *Store) nameFromResourceAttrs(variable string, c *informer.ContainerInfo
 	return "", false
 }
 
+func isValidServiceName(name string) bool {
+	return name != "" && !strings.HasPrefix(name, "$(")
+}
+
 func (s *Store) serviceNameFromEnv(ownerKey string) (string, bool) {
 	if containers, ok := s.containersByOwner[ownerKey]; ok {
 		for _, c := range containers {
 			if serviceName, ok := c.Env[envServiceName]; ok {
-				return serviceName, true
+				return serviceName, isValidServiceName(serviceName)
 			}
 
 			if serviceName, ok := s.nameFromResourceAttrs(serviceNameKey, c); ok {
-				return serviceName, true
+				return serviceName, isValidServiceName(serviceName)
 			}
 		}
 	}
@@ -303,7 +308,7 @@ func (s *Store) serviceNamespaceFromEnv(ownerKey string) (string, bool) {
 	if containers, ok := s.containersByOwner[ownerKey]; ok {
 		for _, c := range containers {
 			if namespace, ok := s.nameFromResourceAttrs(serviceNamespaceKey, c); ok {
-				return namespace, true
+				return namespace, isValidServiceName(namespace)
 			}
 		}
 	}

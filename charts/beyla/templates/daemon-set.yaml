@@ -25,9 +25,6 @@ spec:
         {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-        {{- if not (.Values.privileged) }}
-        container.apparmor.security.beta.kubernetes.io/beyla: "unconfined"
-        {{- end }}
       labels:
         {{- include "beyla.labels" . | nindent 8 }}
         app.kubernetes.io/component: workload

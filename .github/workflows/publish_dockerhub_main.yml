@@ -1,5 +1,5 @@
 # TODO: trigger only if testing or any other checks previously succeeded
-name: Push to DockerHub
+name: Push to DockerHub (main)
 on:
   push:
     branches:

@@ -8,15 +8,13 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"unsafe"
 
 	"github.com/cilium/ebpf/ringbuf"
-	"go.opentelemetry.io/otel/trace"
 
 	"github.com/grafana/beyla/pkg/internal/request"
-	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
+// misses serviceID
 func httpInfoToSpan(info *HTTPInfo) request.Span {
 	return request.Span{
 		Type:          request.EventType(info.Type),
@@ -31,10 +29,9 @@ func httpInfoToSpan(info *HTTPInfo) request.Span {
 		Start:         int64(info.StartMonotimeNs),
 		End:           int64(info.EndMonotimeNs),
 		Status:        int(info.Status),
-		ServiceID:     info.Service,
-		TraceID:       trace.TraceID(info.Tp.TraceId),
-		SpanID:        trace.SpanID(info.Tp.SpanId),
-		ParentSpanID:  trace.SpanID(info.Tp.ParentId),
+		TraceID:       info.Tp.TraceId,
+		SpanID:        info.Tp.SpanId,
+		ParentSpanID:  info.Tp.ParentId,
 		Flags:         info.Tp.Flags,
 		Pid: request.PidInfo{
 			HostPID:   info.Pid.HostPid,
@@ -54,11 +51,10 @@ func removeQuery(url string) string {
 
 type HTTPInfo struct {
 	BPFHTTPInfo
-	Method  string
-	URL     string
-	Host    string
-	Peer    string
-	Service svc.ID
+	Method string
+	URL    string
+	Host   string
+	Peer   string
 }
 
 func ReadHTTPInfoIntoSpan(record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {
@@ -82,7 +78,7 @@ func HTTPInfoEventToSpan(event BPFHTTPInfo) (request.Span, bool, error) {
 	// When we can't find the connection info, we signal that through making the
 	// source and destination ports equal to max short. E.g. async SSL
 	if event.ConnInfo.S_port != 0 || event.ConnInfo.D_port != 0 {
-		source, target := (*BPFConnInfo)(unsafe.Pointer(&event.ConnInfo)).reqHostInfo()
+		source, target := (*BPFConnInfo)(&event.ConnInfo).reqHostInfo()
 		result.Host = target
 		result.Peer = source
 	} else {

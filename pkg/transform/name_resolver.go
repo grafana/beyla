@@ -121,7 +121,7 @@ func (nr *NameResolver) resolveNames(span *request.Span) {
 		pn, span.OtherNamespace = nr.resolve(&span.ServiceID, span.Peer)
 		hn, ns = nr.resolve(&span.ServiceID, span.Host)
 	}
-	if span.ServiceID.Namespace != "" && ns != "" {
+	if span.ServiceID.Namespace == "" && ns != "" {
 		span.ServiceID.Namespace = ns
 	}
 	// don't set names if the peer and host names have been already decorated

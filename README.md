@@ -4,7 +4,7 @@
 
 Open source zero-code automatic instrumentation with eBPF and OpenTelemetry.
 
-[![Build Status](https://drone.grafana.net/api/badges/grafana/beyla/status.svg?ref=refs/heads/main)](https://drone.grafana.net/grafana/beyla)
+![status badge](https://github.com/grafana/beyla/actions/workflows/publish_dockerhub.yml/badge.svg)
 
 ## Introduction
 

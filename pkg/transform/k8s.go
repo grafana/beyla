@@ -116,20 +116,15 @@ func (md *metadataDecorator) appendMetadata(span *request.Span, meta *informer.O
 		return
 	}
 	topOwner := kube.TopOwner(meta.Pod)
+	name, namespace := md.db.ServiceNameNamespaceForMetadata(meta)
 	// If the user has not defined criteria values for the reported
 	// service name and namespace, we will automatically set it from
 	// the kubernetes metadata
 	if span.ServiceID.AutoName() {
-		// By contract, we expect that our custom Informer cache (beyla-k8s-cache) returns the top owner name for a Pod
-		// (this is, instead of the ReplicaSet name, the Deployment name)
-		if topOwner != nil {
-			span.ServiceID.Name = topOwner.Name
-		} else {
-			span.ServiceID.Name = meta.Name
-		}
+		span.ServiceID.Name = name
 	}
 	if span.ServiceID.Namespace == "" {
-		span.ServiceID.Namespace = meta.Namespace
+		span.ServiceID.Namespace = namespace
 	}
 	// overriding the UID here will avoid reusing the OTEL resource reporter
 	// if the application/process was discovered and reported information

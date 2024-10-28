@@ -11,6 +11,9 @@ spec:
     - port: 8080
       name: http0
       targetPort: http0
+    - port: 5051
+      name: grpc
+      targetPort: grpc
 ---
 apiVersion: v1
 kind: Service
@@ -49,6 +52,9 @@ spec:
             - containerPort: 8080
               hostPort: 8080
               name: http0
+            - containerPort: 5051
+              hostPort: 5051
+              name: grpc
           env:
             - name: LOG_LEVEL
               value: "DEBUG"

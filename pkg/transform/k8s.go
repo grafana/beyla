@@ -47,6 +47,9 @@ type KubernetesDecorator struct {
 	// Pods informer can't be disabled. For that purpose, you should disable the whole
 	// kubernetes metadata decoration.
 	DisableInformers []string `yaml:"disable_informers" env:"BEYLA_KUBE_DISABLE_INFORMERS"`
+
+	// MetaCacheAddress is the host:port address of the beyla-k8s-cache service instance
+	MetaCacheAddress string `yaml:"meta_cache_address" env:"BEYLA_KUBE_META_CACHE_ADDRESS"`
 }
 
 const (
@@ -179,6 +182,7 @@ func OwnerLabelName(kind string) attr.Name {
 func KubeClusterName(ctx context.Context, cfg *KubernetesDecorator) string {
 	log := klog().With("func", "KubeClusterName")
 	if cfg.ClusterName != "" {
+		log.Debug("using cluster name from configuration", "cluster_name", cfg.ClusterName)
 		return cfg.ClusterName
 	}
 	retries := 0

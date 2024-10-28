@@ -122,7 +122,8 @@ func (ta *TraceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 		return false
 	}
 
-	ta.log.Info("instrumenting process", "cmd", ie.FileInfo.CmdExePath, "pid", ie.FileInfo.Pid, "ino", ie.FileInfo.Ino)
+	ta.log.Info("instrumenting process",
+		"cmd", ie.FileInfo.CmdExePath, "pid", ie.FileInfo.Pid, "ino", ie.FileInfo.Ino, "type", ie.Type)
 	ta.Metrics.InstrumentProcess(ie.FileInfo.ExecutableName())
 
 	// builds a tracer for that executable
@@ -188,7 +189,8 @@ func (ta *TraceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 	ta.log.Debug("new executable for discovered process",
 		"pid", ie.FileInfo.Pid,
 		"child", ie.ChildPids,
-		"exec", ie.FileInfo.CmdExePath)
+		"exec", ie.FileInfo.CmdExePath,
+		"type", ie.Type)
 	// allowing the tracer to forward traces from the discovered PID and its children processes
 	ta.monitorPIDs(tracer, ie)
 	ta.existingTracers[ie.FileInfo.Ino] = tracer
@@ -231,7 +233,8 @@ func (ta *TraceAttacher) reuseTracer(tracer *ebpf.ProcessTracer, ie *ebpf.Instru
 	ta.log.Debug("reusing Generic tracer for",
 		"pid", ie.FileInfo.Pid,
 		"child", ie.ChildPids,
-		"exec", ie.FileInfo.CmdExePath)
+		"exec", ie.FileInfo.CmdExePath,
+		"language", ie.Type)
 
 	ta.monitorPIDs(tracer, ie)
 	ta.existingTracers[ie.FileInfo.Ino] = tracer
@@ -247,7 +250,8 @@ func (ta *TraceAttacher) updateTracerProbes(tracer *ebpf.ProcessTracer, ie *ebpf
 	ta.log.Debug("reusing Generic tracer for",
 		"pid", ie.FileInfo.Pid,
 		"child", ie.ChildPids,
-		"exec", ie.FileInfo.CmdExePath)
+		"exec", ie.FileInfo.CmdExePath,
+		"language", ie.Type)
 
 	ta.monitorPIDs(tracer, ie)
 

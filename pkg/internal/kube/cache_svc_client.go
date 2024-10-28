@@ -9,8 +9,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/grafana/beyla-k8s-cache/pkg/informer"
-	"github.com/grafana/beyla-k8s-cache/pkg/meta"
+	"github.com/grafana/beyla/pkg/kubecache/informer"
+	"github.com/grafana/beyla/pkg/kubecache/meta"
 )
 
 func cslog() *slog.Logger {

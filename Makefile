@@ -1,8 +1,15 @@
 # Main binary configuration
 CMD ?= beyla
 MAIN_GO_FILE ?= cmd/$(CMD)/main.go
+
+CACHE_CMD ?= k8s-cache
+CACHE_MAIN_GO_FILE ?= cmd/$(CACHE_CMD)/main.go
+
 GOOS ?= linux
 GOARCH ?= amd64
+
+# todo: upload to a grafana artifact
+PROTOC_IMAGE = docker.io/mariomac/protoc-go:latest
 
 # DRONE_TAG is set from Drone. Required for building container images.
 RELEASE_VERSION := $(if $(DRONE_TAG),$(DRONE_TAG),$(shell git describe --tags --always))
@@ -34,7 +41,7 @@ CFLAGS := -O2 -g -Wall -Werror $(CFLAGS)
 CLANG_TIDY ?= clang-tidy
 
 # regular expressions for excluded file patterns
-EXCLUDE_COVERAGE_FILES="(_bpfel.go)|(/pingserver/)|(/grafana/beyla/test/)|(integration/components)|(/grafana/beyla/docs/)|(/grafana/beyla/configs/)|(/grafana/beyla/examples/)"
+EXCLUDE_COVERAGE_FILES="(_bpfel.go)|(/pingserver/)|(/grafana/beyla/test/)|(integration/components)|(/grafana/beyla/docs/)|(/grafana/beyla/configs/)|(/grafana/beyla/examples/)|(.pb.go)"
 
 .DEFAULT_GOAL := all
 
@@ -91,6 +98,16 @@ KIND = $(TOOLS_DIR)/kind
 DASHBOARD_LINTER = $(TOOLS_DIR)/dashboard-linter
 GINKGO = $(TOOLS_DIR)/ginkgo
 
+# Required for k8s-cache unit tests
+ENVTEST = $(TOOLS_DIR)/setup-envtest
+ENVTEST_K8S_VERSION = 1.30.0
+
+# Setting SHELL to bash allows bash commands to be executed by recipes.
+# This is a requirement for 'setup-envtest.sh' in the test target.
+# Options are set to exit when a recipe line exits non-zero or a piped command fails.
+SHELL = /usr/bin/env bash -o pipefail
+.SHELLFLAGS = -ec
+
 GOIMPORTS_REVISER_ARGS = -company-prefixes github.com/grafana -project-name github.com/grafana/beyla/
 
 define check_format
@@ -118,6 +135,7 @@ prereqs: install-hooks
 	$(call go-install-tool,$(GO_LICENSES),github.com/google/go-licenses,v1.6.0)
 	$(call go-install-tool,$(KIND),sigs.k8s.io/kind,v0.20.0)
 	$(call go-install-tool,$(DASHBOARD_LINTER),github.com/grafana/dashboard-linter,latest)
+	$(call go-install-tool,$(ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest,latest)
 
 .PHONY: fmt
 fmt: prereqs
@@ -179,29 +197,36 @@ build: verify compile
 .PHONY: all
 all: generate build
 
-.PHONY: compile
+.PHONY: compile compile-cache
 compile:
-	@echo "### Compiling project"
+	@echo "### Compiling Beyla"
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -ldflags="-X '$(BUILDINFO_PKG).Version=$(RELEASE_VERSION)' -X '$(BUILDINFO_PKG).Revision=$(RELEASE_REVISION)'" -a -o bin/$(CMD) $(MAIN_GO_FILE)
+compile-cache:
+	@echo "### Compiling Beyla K8s cache"
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -ldflags="-X '$(BUILDINFO_PKG).Version=$(RELEASE_VERSION)' -X '$(BUILDINFO_PKG).Revision=$(RELEASE_REVISION)'" -a -o bin/$(CACHE_CMD) $(CACHE_MAIN_GO_FILE)
+
 
 .PHONY: dev
 dev: prereqs generate compile-for-coverage
 
 # Generated binary can provide coverage stats according to https://go.dev/blog/integration-test-coverage
-.PHONY: compile-for-coverage
+.PHONY: compile-for-coverage compile-cache-for-coverage
 compile-for-coverage:
 	@echo "### Compiling project to generate coverage profiles"
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -cover -a -o bin/$(CMD) $(MAIN_GO_FILE)
+compile-cache-for-coverage:
+	@echo "### Compiling K8s cache service to generate coverage profiles"
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -cover -a -o bin/$(CACHE_CMD) $(CACHE_MAIN_GO_FILE)
 
 .PHONY: test
 test:
 	@echo "### Testing code"
-	go test -race -mod vendor -a ./... -coverpkg=./... -coverprofile $(TEST_OUTPUT)/cover.all.txt
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test -race -mod vendor -a ./... -coverpkg=./... -coverprofile $(TEST_OUTPUT)/cover.all.txt
 
 .PHONY: test-privileged
 test-privileged:
 	@echo "### Testing code with privileged tests enabled"
-	PRIVILEGED_TESTS=true go test -race -mod vendor -a ./... -coverpkg=./... -coverprofile $(TEST_OUTPUT)/cover.all.txt
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" PRIVILEGED_TESTS=true go test -race -mod vendor -a ./... -coverpkg=./... -coverprofile $(TEST_OUTPUT)/cover.all.txt
 
 .PHONY: cov-exclude-generated
 cov-exclude-generated:
@@ -363,3 +388,7 @@ check-ebpf-integrity: docker-generate
 .PHONY: clang-tidy
 clang-tidy:
 	cd bpf && $(CLANG_TIDY) *.c *.h
+
+.PHONY: protoc-gen
+protoc-gen:
+	docker run --rm -v $(PWD):/work -w /work $(PROTOC_IMAGE) protoc --go_out=pkg/kubecache --go-grpc_out=pkg/kubecache proto/informer.proto

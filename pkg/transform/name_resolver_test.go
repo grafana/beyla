@@ -7,12 +7,11 @@ import (
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/grafana/beyla-k8s-cache/pkg/informer"
-
 	attr "github.com/grafana/beyla/pkg/export/attributes/names"
 	kube2 "github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
+	"github.com/grafana/beyla/pkg/kubecache/informer"
 )
 
 func TestSuffixPrefix(t *testing.T) {

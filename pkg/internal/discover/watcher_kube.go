@@ -8,10 +8,9 @@ import (
 
 	"github.com/mariomac/pipes/pipe"
 
-	"github.com/grafana/beyla-k8s-cache/pkg/informer"
-
 	"github.com/grafana/beyla/pkg/internal/helpers/container"
 	"github.com/grafana/beyla/pkg/internal/kube"
+	"github.com/grafana/beyla/pkg/kubecache/informer"
 	"github.com/grafana/beyla/pkg/services"
 	"github.com/grafana/beyla/pkg/transform"
 )
@@ -73,7 +72,7 @@ func (wk *watcherKubeEnricher) ID() string { return "unique-watcher-kube-enriche
 // handling in the enrich main loop
 func (wk *watcherKubeEnricher) On(event *informer.Event) {
 	// ignoring updates on non-pod resources
-	if event.Resource.Pod == nil {
+	if event.GetResource().GetPod() == nil {
 		return
 	}
 	switch event.Type {

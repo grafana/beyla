@@ -4,9 +4,10 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/grafana/beyla-k8s-cache/pkg/informer"
 	"github.com/grafana/beyla-k8s-cache/pkg/meta"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestContainerInfo(t *testing.T) {
@@ -47,7 +48,7 @@ func TestContainerInfo(t *testing.T) {
 		},
 	}
 
-	podMetaA_1 := informer.ObjectMeta{
+	podMetaA1 := informer.ObjectMeta{
 		Name:      "podA_1",
 		Namespace: "namespaceA",
 		Ips:       []string{"3.1.1.1", "3.2.2.2"},
@@ -92,17 +93,17 @@ func TestContainerInfo(t *testing.T) {
 
 	store.updateNewObjectMetaByIPIndex(&service)
 	store.updateNewObjectMetaByIPIndex(&podMetaA)
-	store.updateNewObjectMetaByIPIndex(&podMetaA_1)
+	store.updateNewObjectMetaByIPIndex(&podMetaA1)
 	store.updateNewObjectMetaByIPIndex(&podMetaB)
 
 	assert.Equal(t, 2, len(store.containersByOwner))
 
-	serviceKey := ownerId(podMetaA.Namespace, service.Name)
+	serviceKey := ownerID(podMetaA.Namespace, service.Name)
 	serviceContainers, ok := store.containersByOwner[serviceKey]
 	assert.True(t, ok)
 	assert.Equal(t, 4, len(serviceContainers))
 
-	replicaSetKey := ownerId(podMetaB.Namespace, replicaSet.Name)
+	replicaSetKey := ownerID(podMetaB.Namespace, replicaSet.Name)
 	replicaSetContainers, ok := store.containersByOwner[replicaSetKey]
 	assert.True(t, ok)
 	assert.Equal(t, 2, len(replicaSetContainers))
@@ -125,7 +126,7 @@ func TestContainerInfo(t *testing.T) {
 	// otherwise there will be stale data left
 	assert.Equal(t, 0, len(store.otelServiceInfoByIP))
 
-	serviceKey = ownerId(podMetaA.Namespace, service.Name)
+	serviceKey = ownerID(podMetaA.Namespace, service.Name)
 	serviceContainers, ok = store.containersByOwner[serviceKey]
 	assert.True(t, ok)
 	assert.Equal(t, 2, len(serviceContainers))
@@ -157,17 +158,17 @@ func TestContainerInfo(t *testing.T) {
 
 	assert.Equal(t, 5, len(store.otelServiceInfoByIP))
 
-	store.updateDeletedObjectMetaByIPIndex(&podMetaA_1)
+	store.updateDeletedObjectMetaByIPIndex(&podMetaA1)
 	store.updateDeletedObjectMetaByIPIndex(&podMetaB)
 
 	assert.Equal(t, 0, len(store.otelServiceInfoByIP))
 
 	// No containers left
-	replicaSetKey = ownerId(podMetaB.Namespace, replicaSet.Name)
+	replicaSetKey = ownerID(podMetaB.Namespace, replicaSet.Name)
 	_, ok = store.containersByOwner[replicaSetKey]
 	assert.False(t, ok)
 
-	serviceKey = ownerId(podMetaA.Namespace, service.Name)
+	serviceKey = ownerID(podMetaA.Namespace, service.Name)
 	_, ok = store.containersByOwner[serviceKey]
 	assert.False(t, ok)
 

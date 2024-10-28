@@ -145,13 +145,13 @@ func (s *Store) updateNewObjectMetaByIPIndex(meta *informer.ObjectMeta) {
 			}
 		}
 		if owner := TopOwner(meta.Pod); owner != nil {
-			ownerId := ownerId(meta.Namespace, owner.Name)
-			containers, ok := s.containersByOwner[ownerId]
+			oID := ownerID(meta.Namespace, owner.Name)
+			containers, ok := s.containersByOwner[oID]
 			if !ok {
 				containers = []*informer.ContainerInfo{}
 			}
 			containers = append(containers, meta.Pod.Containers...)
-			s.containersByOwner[ownerId] = containers
+			s.containersByOwner[oID] = containers
 		}
 	}
 }
@@ -182,8 +182,8 @@ func (s *Store) updateDeletedObjectMetaByIPIndex(meta *informer.ObjectMeta) {
 
 		// clean up the owner to container map
 		if owner := TopOwner(meta.Pod); owner != nil {
-			ownerId := ownerId(meta.Namespace, owner.Name)
-			if containers, ok := s.containersByOwner[ownerId]; ok {
+			oID := ownerID(meta.Namespace, owner.Name)
+			if containers, ok := s.containersByOwner[oID]; ok {
 				withoutPod := []*informer.ContainerInfo{}
 				// filter out all containers owned by this pod
 				for _, c := range containers {
@@ -193,9 +193,9 @@ func (s *Store) updateDeletedObjectMetaByIPIndex(meta *informer.ObjectMeta) {
 				}
 				// update the owner to container mapping or remove if empty
 				if len(withoutPod) > 0 {
-					s.containersByOwner[ownerId] = withoutPod
+					s.containersByOwner[oID] = withoutPod
 				} else {
-					delete(s.containersByOwner, ownerId)
+					delete(s.containersByOwner, oID)
 				}
 			}
 		}
@@ -247,16 +247,16 @@ func (s *Store) ServiceNameNamespaceForIP(ip string) (string, string) {
 }
 
 func (s *Store) serviceNameNamespaceForOwner(om *informer.ObjectMeta) (string, string) {
-	ownerKey := ownerId(om.Namespace, om.Name)
-	return s.serviceNameNamespaceOwnerId(ownerKey, om.Name, om.Namespace)
+	ownerKey := ownerID(om.Namespace, om.Name)
+	return s.serviceNameNamespaceOwnerID(ownerKey, om.Name, om.Namespace)
 }
 
 func (s *Store) serviceNameNamespaceForPod(om *informer.ObjectMeta, owner *informer.Owner) (string, string) {
-	ownerKey := ownerId(om.Namespace, owner.Name)
-	return s.serviceNameNamespaceOwnerId(ownerKey, owner.Name, om.Namespace)
+	ownerKey := ownerID(om.Namespace, owner.Name)
+	return s.serviceNameNamespaceOwnerID(ownerKey, owner.Name, om.Namespace)
 }
 
-func (s *Store) serviceNameNamespaceOwnerId(ownerKey, name, namespace string) (string, string) {
+func (s *Store) serviceNameNamespaceOwnerID(ownerKey, name, namespace string) (string, string) {
 	serviceName := name
 	serviceNamespace := namespace
 
@@ -315,7 +315,7 @@ func (s *Store) serviceNamespaceFromEnv(ownerKey string) (string, bool) {
 	return "", false
 }
 
-func ownerId(namespace, name string) string {
+func ownerID(namespace, name string) string {
 	return namespace + "." + name
 }
 

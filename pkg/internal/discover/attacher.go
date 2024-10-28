@@ -270,6 +270,8 @@ func (ta *TraceAttacher) monitorPIDs(tracer *ebpf.ProcessTracer, ie *ebpf.Instru
 		ie.FileInfo.Service.SetAutoName()
 	}
 
+	ie.FileInfo.Service.SDKLanguage = ie.Type
+
 	// allowing the tracer to forward traces from the discovered PID and its children processes
 	tracer.AllowPID(uint32(ie.FileInfo.Pid), ie.FileInfo.Ns, &ie.FileInfo.Service)
 	for _, pid := range ie.ChildPids {

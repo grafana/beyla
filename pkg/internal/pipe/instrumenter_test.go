@@ -647,7 +647,7 @@ func newRequest(serviceName string, method, path, peer string, status int) []req
 		Start:        2,
 		RequestStart: 1,
 		End:          3,
-		ServiceID:    svc.ID{HostName: "the-host", Namespace: "ns", Name: serviceName},
+		ServiceID:    svc.ID{HostName: "the-host", Namespace: "ns", Name: serviceName, SDKLanguage: svc.InstrumentableGolang},
 	}}
 }
 
@@ -663,7 +663,7 @@ func newRequestWithTiming(svcName string, kind request.EventType, method, path, 
 		RequestStart: int64(goStart),
 		Start:        int64(start),
 		End:          int64(end),
-		ServiceID:    svc.ID{HostName: "the-host", Name: svcName},
+		ServiceID:    svc.ID{HostName: "the-host", Name: svcName, SDKLanguage: svc.InstrumentableGolang},
 	}}
 }
 
@@ -678,7 +678,7 @@ func newGRPCRequest(svcName string, path string, status int) []request.Span {
 		Start:        2,
 		RequestStart: 1,
 		End:          3,
-		ServiceID:    svc.ID{HostName: "the-host", Name: svcName},
+		ServiceID:    svc.ID{HostName: "the-host", Name: svcName, SDKLanguage: svc.InstrumentableGolang},
 	}}
 }
 
@@ -807,7 +807,7 @@ func newHTTPInfo(method, path, peer string, status int) []request.Span {
 		Start:        2,
 		RequestStart: 2,
 		End:          3,
-		ServiceID:    svc.ID{HostName: "the-host", Name: "comm"},
+		ServiceID:    svc.ID{HostName: "the-host", Name: "comm", SDKLanguage: svc.InstrumentableGolang},
 	}}
 }
 

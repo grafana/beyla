@@ -1,0 +1,35 @@
+# TODO: trigger only if testing or any other checks previously succeeded
+name: Push to DockerHub (release)
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - id: checkout
+        uses: actions/checkout@v4
+
+      - id: push-to-dockerhub
+        uses: grafana/shared-workflows/actions/build-push-to-dockerhub@main
+        with:
+          repository: grafana/beyla
+          context: .
+          # cache image layers from/to github actions internal cache, for faster building
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: |-
+            "linux/amd64"
+            "linux/arm64"
+          tags: |-
+            "type=semver,pattern={{major}}"
+            "type=semver,pattern={{major}}.{{minor}}"
+            "type=semver,pattern={{major}}.{{minor}}.{{patch}}"
+          push: true

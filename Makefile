@@ -4,8 +4,8 @@ MAIN_GO_FILE ?= cmd/$(CMD)/main.go
 GOOS ?= linux
 GOARCH ?= amd64
 
-# DRONE_TAG is set from Drone. Required for building container images.
-RELEASE_VERSION := $(if $(DRONE_TAG),$(DRONE_TAG),$(shell git describe --tags --always))
+# RELEASE_VERSION will contain the tag name, or the branch name if current commit is not a tag
+RELEASE_VERSION := $(shell git describe --all | cut -d/ -f2)
 RELEASE_REVISION := $(shell git rev-parse --short HEAD )
 BUILDINFO_PKG ?= github.com/grafana/beyla/pkg/buildinfo
 TEST_OUTPUT ?= ./testoutput
@@ -25,7 +25,6 @@ GEN_IMG ?= ghcr.io/grafana/beyla-generator:main
 COMPOSE_ARGS ?= -f test/integration/docker-compose.yml
 
 OCI_BIN ?= docker
-DRONE ?= drone
 
 # BPF code generator dependencies
 CLANG ?= clang
@@ -325,18 +324,6 @@ oats-test: oats-test-sql oats-test-redis oats-test-kafka
 .PHONY: oats-test-debug
 oats-test-debug: oats-prereq
 	cd test/oats/kafka && TESTCASE_BASE_PATH=./yaml TESTCASE_MANUAL_DEBUG=true TESTCASE_TIMEOUT=1h $(GINKGO) -v -r
-
-.PHONY: drone
-drone:
-	@echo "### Regenerating and signing .drone/drone.yml"
-	drone jsonnet --format --stream --source .drone/drone.jsonnet --target .drone/drone.yml
-	drone lint .drone/drone.yml
-	drone sign --save grafana/beyla .drone/drone.yml || echo "You must set DRONE_SERVER and DRONE_TOKEN. These values can be found on your [drone account](http://drone.grafana.net/account) page."
-
-.PHONY: check-drone-drift
-check-drone-drift:
-	@echo "### checking that Drone.yml is up-to-date"
-	./scripts/check-drone-drift.sh
 
 .PHONY: update-licenses
 update-licenses: prereqs

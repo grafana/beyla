@@ -32,6 +32,20 @@ struct {
 
 enum bpf_func_id___x { BPF_FUNC_snprintf___x = 42 /* avoid zero */ };
 
+#ifdef BPF_DEBUG_TC
+#define bpf_dbg_helper(fmt, args...)                                                               \
+    {                                                                                              \
+        log_info_t *__trace__ = bpf_ringbuf_reserve(&debug_events, sizeof(log_info_t), 0);         \
+        if (__trace__) {                                                                           \
+            if (bpf_core_enum_value_exists(enum bpf_func_id___x, BPF_FUNC_snprintf___x)) {         \
+                BPF_SNPRINTF(__trace__->log, sizeof(__trace__->log), fmt, ##args);                 \
+            } else {                                                                               \
+                __builtin_memcpy(__trace__->log, fmt, sizeof(__trace__->log));                     \
+            }                                                                                      \
+            bpf_ringbuf_submit(__trace__, 0);                                                      \
+        }                                                                                          \
+    }
+#else // BPF_DEBUG_TC
 #define bpf_dbg_helper(fmt, args...)                                                               \
     {                                                                                              \
         log_info_t *__trace__ = bpf_ringbuf_reserve(&debug_events, sizeof(log_info_t), 0);         \
@@ -47,6 +61,7 @@ enum bpf_func_id___x { BPF_FUNC_snprintf___x = 42 /* avoid zero */ };
             bpf_ringbuf_submit(__trace__, 0);                                                      \
         }                                                                                          \
     }
+#endif // BPF_DEBUG_TC
 
 #define bpf_dbg_printk(fmt, args...)                                                               \
     {                                                                                              \

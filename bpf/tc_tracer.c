@@ -54,7 +54,7 @@ static __always_inline void encode_data_in_ip_options(struct __sk_buff *skb,
     // Handling IPv4
     // We only do this if the IP header doesn't have any options, this can be improved if needed
     if (tcp->h_proto == ETH_P_IP && tcp->ip_len == MIN_IP_LEN) {
-        bpf_printk("Adding the trace_id in the IP Options");
+        bpf_dbg_printk("Adding the trace_id in the IP Options");
 
         if (inject_tc_ip_options_ipv4(skb, conn, tcp, tp)) {
             update_outgoing_request_span_id(conn, tcp, tp);
@@ -62,7 +62,7 @@ static __always_inline void encode_data_in_ip_options(struct __sk_buff *skb,
 
         bpf_map_delete_elem(&outgoing_trace_map, conn);
     } else if (tcp->h_proto == ETH_P_IPV6 && tcp->l4_proto == IPPROTO_TCP) { // Handling IPv6
-        bpf_printk("Found IPv6 header");
+        bpf_dbg_printk("Found IPv6 header");
 
         if (inject_tc_ip_options_ipv6(skb, conn, tcp, tp)) {
             update_outgoing_request_span_id(conn, tcp, tp);
@@ -88,8 +88,8 @@ int app_egress(struct __sk_buff *skb) {
     tp_info_pid_t *tp = bpf_map_lookup_elem(&outgoing_trace_map, &conn);
 
     if (tp) {
-        bpf_printk("egress flags %x, sequence %x", tcp.flags, tcp.seq);
-        print_http_connection_info(&conn);
+        bpf_dbg_printk("egress flags %x, sequence %x", tcp.flags, tcp.seq);
+        dbg_print_http_connection_info(&conn);
 
         encode_data_in_ip_options(skb, &conn, &tcp, tp);
     }

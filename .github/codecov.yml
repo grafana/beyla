@@ -1,5 +1,8 @@
 codecov:
   require_ci_to_pass: yes
+  status:
+    patch: false
+    changes: false
   notify:
     wait_for_ci: yes
 github_checks: false

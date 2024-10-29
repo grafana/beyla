@@ -117,6 +117,9 @@ metadata:
   namespace: default
   labels:
     app: k8s-cache
+    # this label will trigger a deletion of beyla pods before tearing down
+    # kind, to force Beyla writing the coverage data
+    teardown: delete
 spec:
   replicas: 1
   selector:
@@ -130,13 +133,22 @@ spec:
     spec:
       # required to let the service accessing the K8s API
       serviceAccountName: beyla
+      volumes:
+        - name: testoutput
+          persistentVolumeClaim:
+            claimName: testoutput
       containers:
         - name: k8s-cache
-          image: docker.io/grafana/beyla-k8s-cache:main
+          image: beyla-k8s-cache:dev
           imagePullPolicy: Never # loaded into Kind from localhost
           env:
             - name: BEYLA_K8S_CACHE_PORT
               value: "50055"
+            - name: GOCOVERDIR
+              value: "/testoutput"
+          volumeMounts:
+            - mountPath: /testoutput
+              name: testoutput
           ports:
             - containerPort: 50055
               name: grpc

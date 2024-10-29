@@ -132,6 +132,9 @@ func (s *Store) updateNewObjectMetaByIPIndex(meta *informer.ObjectMeta) {
 	for _, ip := range meta.Ips {
 		s.ipInfos[ip] = meta
 	}
+
+	s.otelServiceInfoByIP = map[string]OTelServiceNamePair{}
+
 	if meta.Pod != nil {
 		s.log.Debug("adding pod to store",
 			"ips", meta.Ips, "pod", meta.Name, "namespace", meta.Namespace, "containers", meta.Pod.Containers)
@@ -246,6 +249,7 @@ func (s *Store) ServiceNameNamespaceForIP(ip string) (string, string) {
 		return name, namespace
 	}
 
+	s.otelServiceInfoByIP[ip] = OTelServiceNamePair{Name: "", Namespace: ""}
 	return "", ""
 }
 

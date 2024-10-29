@@ -17,10 +17,28 @@ jobs:
       - id: checkout
         uses: actions/checkout@v4
 
-      - id: push-to-dockerhub
+      - id: push-beyla-to-dockerhub
         uses: grafana/shared-workflows/actions/build-push-to-dockerhub@main
         with:
           repository: grafana/beyla
+          context: .
+          # cache image layers from/to github actions internal cache, for faster building
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: |-
+            "linux/amd64"
+            "linux/arm64"
+          tags: |-
+            "type=semver,pattern={{major}}"
+            "type=semver,pattern={{major}}.{{minor}}"
+            "type=semver,pattern={{major}}.{{minor}}.{{patch}}"
+          push: true
+
+      - id: push-beyla-k8s-cache-to-dockerhub
+        uses: grafana/shared-workflows/actions/build-push-to-dockerhub@main
+        with:
+          repository: grafana/beyla-k8s-cache
+          file: k8scache.Dockerfile
           context: .
           # cache image layers from/to github actions internal cache, for faster building
           cache-from: type=gha

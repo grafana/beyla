@@ -162,13 +162,7 @@ func TestHTTPGoOTelInstrumentedApp(t *testing.T) {
 		testForHTTPGoOTelLibrary(t, "/rolldice", "integration-test")
 	})
 
-	t.Run("BPF pinning folders mounted", func(t *testing.T) {
-		// 1 beyla pinned map folder for all processes
-		testBPFPinningMounted(t)
-	})
-
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
 func otelWaitForTestComponents(t *testing.T, url, subpath string) {
@@ -209,13 +203,7 @@ func TestHTTPGoOTelAvoidsInstrumentedApp(t *testing.T) {
 		testInstrumentationMissing(t, "/rolldice", "integration-test")
 	})
 
-	t.Run("BPF pinning folders mounted", func(t *testing.T) {
-		// 1 beyla pinned map folder for all processes
-		testBPFPinningMounted(t)
-	})
-
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
 func TestHTTPGoOTelDisabledOptInstrumentedApp(t *testing.T) {
@@ -245,13 +233,7 @@ func TestHTTPGoOTelDisabledOptInstrumentedApp(t *testing.T) {
 		testForHTTPGoOTelLibrary(t, "/rolldice", "integration-test")
 	})
 
-	t.Run("BPF pinning folders mounted", func(t *testing.T) {
-		// 1 beyla pinned map folder for all processes
-		testBPFPinningMounted(t)
-	})
-
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
 func TestHTTPGoOTelInstrumentedAppGRPC(t *testing.T) {
@@ -272,13 +254,7 @@ func TestHTTPGoOTelInstrumentedAppGRPC(t *testing.T) {
 		testForHTTPGoOTelLibrary(t, "/rolldice", "integration-test")
 	})
 
-	t.Run("BPF pinning folders mounted", func(t *testing.T) {
-		// 1 beyla pinned map folder for all processes
-		testBPFPinningMounted(t)
-	})
-
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
 func otelWaitForTestComponentsTraces(t *testing.T, url, subpath string) {
@@ -322,11 +298,5 @@ func TestHTTPGoOTelAvoidsInstrumentedAppGRPC(t *testing.T) {
 		testInstrumentationMissing(t, "/rolldice", "integration-test")
 	})
 
-	t.Run("BPF pinning folders mounted", func(t *testing.T) {
-		// 1 beyla pinned map folder for all processes
-		testBPFPinningMounted(t)
-	})
-
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }

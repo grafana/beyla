@@ -9,22 +9,6 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// prerequisite: the testoutput/run folder was empty before starting the tests
-func testBPFPinningMountedWithCount(_ *testing.T, _ int) {
-}
-
-func testBPFPinningMounted(t *testing.T) {
-	testBPFPinningMountedWithCount(t, 1)
-}
-
-// to be invoked after docker compose down
-func testBPFPinningUnmounted(t *testing.T) {
-	// Convenient hook for monitoring/managing image storage space:
-	// PrintDockerStorage(t)
-	// DockerPrune(t)
-	PrintFreeStorage(t)
-}
-
 func PrintFreeStorage(t *testing.T) {
 	var stat unix.Statfs_t
 	wd, err := os.Getwd()

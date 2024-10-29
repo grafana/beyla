@@ -353,7 +353,7 @@ oats-test-debug: oats-prereq
 .PHONY: update-licenses check-license
 update-licenses: prereqs
 	@echo "### Updating third_party_licenses.csv"
-	$(GO_LICENSES) report --include_tests ./... > third_party_licenses.csv
+	GOOS=linux GOARCH=amd64 $(GO_LICENSES) report --include_tests ./... > third_party_licenses.csv
 
 check-licenses: update-licenses
 	@echo "### Checking third party licenses"

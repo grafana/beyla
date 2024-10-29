@@ -77,11 +77,13 @@ github.com/prometheus/common,https://github.com/grafana/beyla/blob/HEAD/vendor/g
 github.com/prometheus/procfs,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/prometheus/procfs/LICENSE,Apache-2.0
 github.com/rs/cors,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/rs/cors/LICENSE,MIT
 github.com/shirou/gopsutil/v3,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/shirou/gopsutil/v3/LICENSE,BSD-3-Clause
-github.com/shoenig/go-m1cpu,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/shoenig/go-m1cpu/LICENSE,MPL-2.0
 github.com/spf13/pflag,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/spf13/pflag/LICENSE,BSD-3-Clause
 github.com/stretchr/testify,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/stretchr/testify/LICENSE,MIT
 github.com/tklauser/go-sysconf,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/tklauser/go-sysconf/LICENSE,BSD-3-Clause
+github.com/tklauser/numcpus,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/tklauser/numcpus/LICENSE,Apache-2.0
 github.com/ugorji/go/codec,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/ugorji/go/codec/LICENSE,MIT
+github.com/vishvananda/netlink,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/vishvananda/netlink/LICENSE,Apache-2.0
+github.com/vishvananda/netns,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/vishvananda/netns/LICENSE,Apache-2.0
 github.com/vladimirvivien/gexe,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/vladimirvivien/gexe/LICENSE,MIT
 github.com/x448/float16,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/x448/float16/LICENSE,MIT
 github.com/xwb1989/sqlparser,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/xwb1989/sqlparser/LICENSE.md,Apache-2.0
@@ -129,7 +131,7 @@ go.opentelemetry.io/otel/trace,https://github.com/grafana/beyla/blob/HEAD/vendor
 go.opentelemetry.io/proto/otlp,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/proto/otlp/LICENSE,Apache-2.0
 go.uber.org/multierr,https://github.com/grafana/beyla/blob/HEAD/vendor/go.uber.org/multierr/LICENSE.txt,MIT
 go.uber.org/zap,https://github.com/grafana/beyla/blob/HEAD/vendor/go.uber.org/zap/LICENSE,MIT
-golang.org/x/arch/arm64/arm64asm,https://github.com/grafana/beyla/blob/HEAD/vendor/golang.org/x/arch/LICENSE,BSD-3-Clause
+golang.org/x/arch/x86/x86asm,https://github.com/grafana/beyla/blob/HEAD/vendor/golang.org/x/arch/LICENSE,BSD-3-Clause
 golang.org/x/crypto/sha3,https://github.com/grafana/beyla/blob/HEAD/vendor/golang.org/x/crypto/LICENSE,BSD-3-Clause
 golang.org/x/exp,https://github.com/grafana/beyla/blob/HEAD/vendor/golang.org/x/exp/LICENSE,BSD-3-Clause
 golang.org/x/mod/semver,https://github.com/grafana/beyla/blob/HEAD/vendor/golang.org/x/mod/LICENSE,BSD-3-Clause

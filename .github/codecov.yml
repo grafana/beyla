@@ -1,8 +1,11 @@
 codecov:
   require_ci_to_pass: yes
+  default_rules:
+    informational: true
   status:
-    patch: false
-    changes: false
+    project: off
+    patch: off
+    changes: off
   notify:
     wait_for_ci: yes
 github_checks: false

@@ -46,10 +46,20 @@ func (ic *InformersCache) Run(ctx context.Context, opts ...meta.InformerOption) 
 	informer.RegisterEventStreamServiceServer(s, ic)
 
 	ic.log.Info("server listening", "port", ic.Port)
-	if err := s.Serve(lis); err != nil {
-		return fmt.Errorf("failed to serve: %w", err)
+
+	errs := make(chan error, 1)
+	go func() {
+		if err := s.Serve(lis); err != nil {
+			errs <- fmt.Errorf("failed to serve: %w", err)
+		}
+		close(errs)
+	}()
+	select {
+	case <-ctx.Done():
+		return nil
+	case err := <-errs:
+		return err
 	}
-	return nil
 }
 
 // Subscribe method of the generated protobuf definition

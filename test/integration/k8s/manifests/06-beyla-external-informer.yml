@@ -117,9 +117,6 @@ metadata:
   namespace: default
   labels:
     app: k8s-cache
-    # this label will trigger a deletion of beyla pods before tearing down
-    # kind, to force Beyla writing the coverage data
-    teardown: delete
 spec:
   replicas: 1
   selector:
@@ -130,6 +127,9 @@ spec:
       name: k8s-cache
       labels:
         app: k8s-cache
+        # this label will trigger a deletion of beyla pods before tearing down
+        # kind, to force Beyla writing the coverage data
+        teardown: delete
     spec:
       # required to let the service accessing the K8s API
       serviceAccountName: beyla

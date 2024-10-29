@@ -246,7 +246,6 @@ func (s *Store) ServiceNameNamespaceForIP(ip string) (string, string) {
 		return name, namespace
 	}
 
-	s.otelServiceInfoByIP[ip] = OTelServiceNamePair{Name: "", Namespace: ""}
 	return "", ""
 }
 

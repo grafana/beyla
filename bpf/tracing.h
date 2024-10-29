@@ -34,7 +34,7 @@ struct {
     __uint(pinning, BEYLA_PIN_INTERNAL);
 } outgoing_trace_map SEC(".maps");
 
-static __always_inline void make_tp_string(unsigned char *buf, tp_info_t *tp) {
+static __always_inline void make_tp_string(unsigned char *buf, const tp_info_t *tp) {
     // Version
     *buf++ = '0';
     *buf++ = '0';

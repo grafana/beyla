@@ -350,10 +350,17 @@ oats-test: oats-test-sql oats-test-redis oats-test-kafka
 oats-test-debug: oats-prereq
 	cd test/oats/kafka && TESTCASE_BASE_PATH=./yaml TESTCASE_MANUAL_DEBUG=true TESTCASE_TIMEOUT=1h $(GINKGO) -v -r
 
-.PHONY: update-licenses
+.PHONY: update-licenses check-license
 update-licenses: prereqs
 	@echo "### Updating third_party_licenses.csv"
-	$(GO_LICENSES) report --include_tests ./... > third_party_licenses.csv
+	GOOS=linux GOARCH=amd64 $(GO_LICENSES) report --include_tests ./... > third_party_licenses.csv
+
+check-licenses: update-licenses
+	@echo "### Checking third party licenses"
+	@if [ "$(strip $(shell git diff HEAD third_party_licenses.csv))" != "" ]; then \
+		echo "ERROR: third_party_licenses.csv is not up to date. Run 'make update-licenses' and push the changes to your PR"; \
+		exit 1; \
+	fi
 
 .PHONY: artifact
 artifact: compile

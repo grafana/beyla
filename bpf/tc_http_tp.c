@@ -4,6 +4,10 @@
 #include <bpf_helpers.h>
 #include <bpf_tracing.h>
 
+#include "http_types.h"
+#include "tcp_info.h"
+#include "tracing.h"
+
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
 enum { TC_ACT_OK = 0 };
@@ -17,7 +21,7 @@ struct seq_offset_map {
     __uint(max_entries, 10240);
 } seq_offset_map SEC(".maps");
 
-const char TP[] = "Beyla-TP: ABCDEF\r\n";
+const char TP[] = "Traceparent: 00-0123456789ABCDEFGHIJKLMNOPQRSTUV-0123456789ABCDEF-XX\r\n";
 const __u32 EXTEND_SIZE = sizeof(TP) - 1;
 
 struct datasum_loop_ctx {
@@ -122,6 +126,82 @@ calculate_datasum_inline(const unsigned char *b, const unsigned char *e, __u32 *
     while (*sum >> 16) {
         *sum = (*sum & 0xFFFF) + (*sum >> 16);
     }
+}
+
+static __always_inline void
+encode_hex_skb(unsigned char *dst, const unsigned char *src, __u32 src_len) {
+
+#pragma clang loop unroll(full)
+    for (__u32 i = 0, j = 0; i < src_len; i++) {
+        unsigned char p = src[i];
+
+        dst[j++] = hex[(p >> 4) & 0xff];
+        dst[j++] = hex[p & 0x0f];
+    }
+}
+
+// this "beauty" ensures we hold pkt in the same register being range
+// validated
+static __always_inline unsigned char *
+check_pkt_access(unsigned char *buf, __u32 offset, const unsigned char *end) {
+    unsigned char *ret;
+
+    asm goto("r4 = %[buf]\n"
+             "r4 += %[offset]\n"
+             "if r4 > %[end] goto %l[error]\n"
+             "%[ret] = %[buf]"
+             : [ret] "=r"(ret)
+             : [buf] "r"(buf), [end] "r"(end), [offset] "i"(offset)
+             : "r4"
+             : error);
+
+    return ret;
+error:
+    return NULL;
+}
+
+static __always_inline void
+make_tp_string_skb(unsigned char *buf, const tp_info_t *tp, const unsigned char *end) {
+    buf = check_pkt_access(buf, EXTEND_SIZE, end);
+
+    if (!buf)
+        return;
+
+    *buf++ = 'T';
+    *buf++ = 'r';
+    *buf++ = 'a';
+    *buf++ = 'c';
+    *buf++ = 'e';
+    *buf++ = 'p';
+    *buf++ = 'a';
+    *buf++ = 'r';
+    *buf++ = 'e';
+    *buf++ = 'n';
+    *buf++ = 't';
+    *buf++ = ':';
+    *buf++ = ' ';
+
+    // Version
+    *buf++ = '0';
+    *buf++ = '0';
+    *buf++ = '-';
+
+    // Trace ID
+    encode_hex_skb(buf, tp->trace_id, TRACE_ID_SIZE_BYTES);
+    buf += TRACE_ID_CHAR_LEN;
+
+    *buf++ = '-';
+
+    // SpanID
+    encode_hex_skb(buf, tp->span_id, SPAN_ID_SIZE_BYTES);
+    buf += SPAN_ID_CHAR_LEN;
+
+    *buf++ = '-';
+
+    *buf++ = '0';
+    *buf++ = (tp->flags == 0) ? '0' : '1';
+    *buf++ = '\r';
+    *buf++ = '\n';
 }
 
 static __always_inline void *ctx_data(struct __sk_buff *ctx) {
@@ -271,21 +351,21 @@ static __always_inline int is_http_request(struct __sk_buff *ctx) {
         return 0;
     }
 
-    return req_buf[0] == 'G' && req_buf[1] == 'E' && req_buf[2] == 'T' && req_buf[3] == ' ' &&
-               req_buf[4] == '/' ||
-           req_buf[0] == 'P' && req_buf[1] == 'O' && req_buf[2] == 'S' && req_buf[3] == 'T' &&
-               req_buf[4] == ' ' && req_buf[5] == '/' ||
-           req_buf[0] == 'P' && req_buf[1] == 'U' && req_buf[2] == 'T' && req_buf[3] == ' ' &&
-               req_buf[4] == '/' ||
-           req_buf[0] == 'P' && req_buf[1] == 'A' && req_buf[2] == 'T' && req_buf[3] == 'C' &&
-               req_buf[4] == 'H' && req_buf[5] == ' ' && req_buf[5] == '/' ||
-           req_buf[0] == 'D' && req_buf[1] == 'E' && req_buf[2] == 'L' && req_buf[3] == 'E' &&
-               req_buf[4] == 'T' && req_buf[5] == 'E' && req_buf[6] == ' ' && req_buf[7] == '/' ||
-           req_buf[0] == 'H' && req_buf[1] == 'E' && req_buf[2] == 'A' && req_buf[3] == 'D' &&
-               req_buf[4] == ' ' && req_buf[5] == '/' ||
-           req_buf[0] == 'O' && req_buf[1] == 'P' && req_buf[1] == 'T' && req_buf[1] == 'I' &&
-               req_buf[1] == 'O' && req_buf[1] == 'N' && req_buf[1] == 'S' && req_buf[1] == ' ' &&
-               req_buf[1] == '/';
+    return (req_buf[0] == 'G' && req_buf[1] == 'E' && req_buf[2] == 'T' && req_buf[3] == ' ' &&
+            req_buf[4] == '/') ||
+           (req_buf[0] == 'P' && req_buf[1] == 'O' && req_buf[2] == 'S' && req_buf[3] == 'T' &&
+            req_buf[4] == ' ' && req_buf[5] == '/') ||
+           (req_buf[0] == 'P' && req_buf[1] == 'U' && req_buf[2] == 'T' && req_buf[3] == ' ' &&
+            req_buf[4] == '/') ||
+           (req_buf[0] == 'P' && req_buf[1] == 'A' && req_buf[2] == 'T' && req_buf[3] == 'C' &&
+            req_buf[4] == 'H' && req_buf[5] == ' ' && req_buf[5] == '/') ||
+           (req_buf[0] == 'D' && req_buf[1] == 'E' && req_buf[2] == 'L' && req_buf[3] == 'E' &&
+            req_buf[4] == 'T' && req_buf[5] == 'E' && req_buf[6] == ' ' && req_buf[7] == '/') ||
+           (req_buf[0] == 'H' && req_buf[1] == 'E' && req_buf[2] == 'A' && req_buf[3] == 'D' &&
+            req_buf[4] == ' ' && req_buf[5] == '/') ||
+           (req_buf[0] == 'O' && req_buf[1] == 'P' && req_buf[1] == 'T' && req_buf[1] == 'I' &&
+            req_buf[1] == 'O' && req_buf[1] == 'N' && req_buf[1] == 'S' && req_buf[1] == ' ' &&
+            req_buf[1] == '/');
 }
 
 static __always_inline unsigned char *
@@ -352,7 +432,7 @@ find_first_of(unsigned char *begin, unsigned char *end, char ch) {
     return memchar(begin, ch, end, MAX_INLINE_LEN);
 }
 
-static __always_inline int extend_skb(struct __sk_buff *ctx) {
+static __always_inline int extend_skb(struct __sk_buff *ctx, const tp_info_t *tp) {
     bpf_skb_pull_data(ctx, ctx->len);
 
     // find first \n
@@ -386,8 +466,6 @@ static __always_inline int extend_skb(struct __sk_buff *ctx) {
 
     const unsigned char *end = ctx_data_end(ctx);
 
-    //bpf_printk("copy size: %u\n", copy_size);
-
     unsigned char *src = payload + nl_offset + 1;
     unsigned char *dest = src + EXTEND_SIZE;
 
@@ -397,11 +475,7 @@ static __always_inline int extend_skb(struct __sk_buff *ctx) {
 
     move_data(dest, src, end, copy_size);
 
-    if (src + sizeof(TP) - 1 > end) {
-        return 0;
-    }
-
-    __builtin_memcpy(src, TP, sizeof(TP) - 1);
+    make_tp_string_skb(src, tp, end);
 
     payload = tcp_payload(ctx);
 
@@ -447,21 +521,32 @@ int tc_http_egress(struct __sk_buff *ctx) {
     }
 
     const __u16 src_port = bpf_ntohs(tcp->source);
-    const __u16 dst_port = bpf_ntohs(tcp->dest);
-
-    if (dst_port != 8080 && dst_port != 80) {
-        return TC_ACT_OK;
-    }
+    //const __u16 dst_port = bpf_ntohs(tcp->dest);
 
     __u32 extra_bytes = extra_xmited_bytes(src_port);
 
     update_tcp_seq(ctx, extra_bytes);
 
+    protocol_info_t tcp_info = {};
+    connection_info_t conn = {};
+
+    if (!read_sk_buff(ctx, &tcp_info, &conn)) {
+        return TC_ACT_OK;
+    }
+
+    sort_connection_info(&conn);
+
+    tp_info_pid_t *tp_info_pid = bpf_map_lookup_elem(&outgoing_trace_map, &conn);
+
+    if (!tp_info_pid) {
+        return TC_ACT_OK;
+    }
+
     if (!is_http_request(ctx)) {
         return TC_ACT_OK;
     }
 
-    if (!extend_skb(ctx)) {
+    if (!extend_skb(ctx, &tp_info_pid->tp)) {
         return TC_ACT_OK;
     }
 

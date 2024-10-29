@@ -72,7 +72,7 @@ func (wk *watcherKubeEnricher) ID() string { return "unique-watcher-kube-enriche
 // handling in the enrich main loop
 func (wk *watcherKubeEnricher) On(event *informer.Event) {
 	// ignoring updates on non-pod resources
-	if event == nil || event.GetResource() == nil || event.GetResource().GetPod() == nil {
+	if event.GetResource().GetPod() == nil {
 		return
 	}
 	switch event.Type {

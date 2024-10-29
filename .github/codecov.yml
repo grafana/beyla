@@ -2,3 +2,4 @@ codecov:
   require_ci_to_pass: yes
   notify:
     wait_for_ci: yes
+github_checks: false

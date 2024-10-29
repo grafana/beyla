@@ -25,11 +25,6 @@
 #include "hpack.h"
 #include "ringbuf.h"
 
-typedef struct http_func_invocation {
-    u64 start_monotime_ns;
-    tp_info_t tp;
-} http_func_invocation_t;
-
 typedef struct http_client_data {
     u8 method[METHOD_MAX_LEN];
     u8 path[PATH_MAX_LEN];
@@ -37,13 +32,6 @@ typedef struct http_client_data {
 
     pid_info pid;
 } http_client_data_t;
-
-struct {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, go_addr_key_t); // key: pointer to the request goroutine
-    __type(value, http_func_invocation_t);
-    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
-} ongoing_http_client_requests SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
@@ -450,6 +438,13 @@ int uprobe_roundTripReturn(struct pt_regs *ctx) {
     connection_info_t *info = bpf_map_lookup_elem(&ongoing_client_connections, &g_key);
     if (info) {
         __builtin_memcpy(&trace->conn, info, sizeof(connection_info_t));
+
+        pid_connection_info_t p_conn = {};
+        __builtin_memcpy(&p_conn.conn, info, sizeof(connection_info_t));
+        u64 pid_tid = bpf_get_current_pid_tgid();
+        p_conn.pid = pid_from_pid_tgid(pid_tid);
+
+        bpf_map_delete_elem(&ongoing_go_http, &p_conn);
     } else {
         __builtin_memset(&trace->conn, 0, sizeof(connection_info_t));
     }
@@ -1023,6 +1018,17 @@ int uprobe_persistConnRoundTrip(struct pt_regs *ctx) {
                 // info always.
                 sort_connection_info(&conn);
                 set_trace_info_for_connection(&conn, &tp_p);
+
+                // Setup information for the TC context propagation.
+                // We need the PID id to be able to query ongoing_http and update
+                // the span id with the SEQ/ACK pair.
+                bpf_map_update_elem(&outgoing_trace_map, &conn, &tp_p, BPF_ANY);
+
+                pid_connection_info_t p_conn = {};
+                __builtin_memcpy(&p_conn.conn, &conn, sizeof(connection_info_t));
+                p_conn.pid = tp_p.pid;
+
+                bpf_map_update_elem(&ongoing_go_http, &p_conn, &g_key, BPF_ANY);
             }
         }
     }

@@ -16,6 +16,7 @@
 #include "utils.h"
 #include "map_sizing.h"
 #include "bpf_dbg.h"
+#include "go_shared.h"
 #include "tracer_common.h"
 #include "tracing.h"
 #include "trace_util.h"
@@ -32,11 +33,6 @@ char __license[] SEC("license") = "Dual MIT/GPL";
 // This element is created in the function start probe and stored in the ongoing_http_requests hashmaps.
 // Then it is retrieved in the return uprobes and used to know the HTTP call duration as well as its
 // attributes (method, path, and status code).
-
-typedef struct go_addr_key {
-    u64 pid;  // PID of the process
-    u64 addr; // Address of the goroutine
-} go_addr_key_t;
 
 typedef struct goroutine_metadata_t {
     go_addr_key_t parent;

@@ -4,6 +4,7 @@
 
 #include "http_maps.h"
 #include "http_types.h"
+#include "go_shared.h"
 #include "tc_ip.h"
 #include "tcp_info.h"
 
@@ -41,9 +42,23 @@ update_outgoing_request_span_id(connection_info_t *conn, protocol_info_t *tcp, t
 
     http_info_t *h_info = bpf_map_lookup_elem(&ongoing_http, &p_conn);
     if (h_info && tp->valid) {
-        bpf_printk("Found HTTP info, resetting the span id to %x%x", tcp->seq, tcp->ack);
+        bpf_dbg_printk("Found HTTP info, resetting the span id to %x%x", tcp->seq, tcp->ack);
         *((u32 *)(&h_info->tp.span_id[0])) = tcp->seq;
         *((u32 *)(&h_info->tp.span_id[4])) = tcp->ack;
+    }
+
+    go_addr_key_t *g_key = bpf_map_lookup_elem(&ongoing_go_http, &p_conn);
+    if (g_key) {
+        bpf_dbg_printk("Found Go HTTP info, trying to find the span id");
+        http_func_invocation_t *invocation =
+            bpf_map_lookup_elem(&ongoing_http_client_requests, g_key);
+        if (invocation) {
+            bpf_dbg_printk(
+                "Found Go HTTP invocation, resetting the span id to %x%x", tcp->seq, tcp->ack);
+
+            *((u32 *)(&invocation->tp.span_id[0])) = tcp->seq;
+            *((u32 *)(&invocation->tp.span_id[4])) = tcp->ack;
+        }
     }
 }
 

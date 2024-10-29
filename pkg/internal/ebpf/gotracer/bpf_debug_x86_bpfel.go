@@ -103,6 +103,11 @@ type bpf_debugNewFuncInvocationT struct{ Parent uint64 }
 
 type bpf_debugOffTableT struct{ Table [43]uint64 }
 
+type bpf_debugPidConnectionInfoT struct {
+	Conn bpf_debugConnectionInfoT
+	Pid  uint32
+}
+
 type bpf_debugProduceReqT struct {
 	MsgPtr          uint64
 	ConnPtr         uint64
@@ -275,6 +280,7 @@ type bpf_debugMapSpecs struct {
 	KafkaRequests                 *ebpf.MapSpec `ebpf:"kafka_requests"`
 	Newproc1                      *ebpf.MapSpec `ebpf:"newproc1"`
 	OngoingClientConnections      *ebpf.MapSpec `ebpf:"ongoing_client_connections"`
+	OngoingGoHttp                 *ebpf.MapSpec `ebpf:"ongoing_go_http"`
 	OngoingGoroutines             *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
 	OngoingGrpcClientRequests     *ebpf.MapSpec `ebpf:"ongoing_grpc_client_requests"`
 	OngoingGrpcHeaderWrites       *ebpf.MapSpec `ebpf:"ongoing_grpc_header_writes"`
@@ -328,6 +334,7 @@ type bpf_debugMaps struct {
 	KafkaRequests                 *ebpf.Map `ebpf:"kafka_requests"`
 	Newproc1                      *ebpf.Map `ebpf:"newproc1"`
 	OngoingClientConnections      *ebpf.Map `ebpf:"ongoing_client_connections"`
+	OngoingGoHttp                 *ebpf.Map `ebpf:"ongoing_go_http"`
 	OngoingGoroutines             *ebpf.Map `ebpf:"ongoing_goroutines"`
 	OngoingGrpcClientRequests     *ebpf.Map `ebpf:"ongoing_grpc_client_requests"`
 	OngoingGrpcHeaderWrites       *ebpf.Map `ebpf:"ongoing_grpc_header_writes"`
@@ -364,6 +371,7 @@ func (m *bpf_debugMaps) Close() error {
 		m.KafkaRequests,
 		m.Newproc1,
 		m.OngoingClientConnections,
+		m.OngoingGoHttp,
 		m.OngoingGoroutines,
 		m.OngoingGrpcClientRequests,
 		m.OngoingGrpcHeaderWrites,

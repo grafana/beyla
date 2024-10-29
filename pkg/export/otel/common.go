@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -20,6 +19,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 	"google.golang.org/grpc/credentials"
 
+	"github.com/grafana/beyla/pkg/export/attributes"
 	"github.com/grafana/beyla/pkg/export/expire"
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
@@ -345,14 +345,12 @@ func headersFromEnv(varName string) map[string]string {
 	return headers
 }
 
-type varHandler func(k string, v string)
-
 // parseOTELEnvVar parses a comma separated group of variables
 // in the format specified by OTEL_EXPORTER_OTLP_*HEADERS or
 // OTEL_RESOURCE_ATTRIBUTES, i.e. a comma-separated list of
 // key=values. For example: api-key=key,other-config-value=value
 // The values are passed as parameters to the handler function
-func parseOTELEnvVar(svc *svc.ID, varName string, handler varHandler) {
+func parseOTELEnvVar(svc *svc.ID, varName string, handler attributes.VarHandler) {
 	var envVar string
 	ok := false
 
@@ -368,24 +366,7 @@ func parseOTELEnvVar(svc *svc.ID, varName string, handler varHandler) {
 		return
 	}
 
-	// split all the comma-separated key=value entries
-	for _, entry := range strings.Split(envVar, ",") {
-		// split only by the first '=' appearance, as values might
-		// have base64 '=' padding symbols
-		keyVal := strings.SplitN(entry, "=", 2)
-		if len(keyVal) < 2 {
-			continue
-		}
-
-		k := strings.TrimSpace(keyVal[0])
-		v := strings.TrimSpace(keyVal[1])
-
-		if k == "" || v == "" {
-			continue
-		}
-
-		handler(strings.TrimSpace(keyVal[0]), strings.TrimSpace(keyVal[1]))
-	}
+	attributes.ParseOTELResourceVariable(envVar, handler)
 }
 
 func ResourceAttrsFromEnv(svc *svc.ID) []attribute.KeyValue {

@@ -116,7 +116,8 @@ func (wk *watcherKubeEnricher) enrichPodEvent(podEvent Event[*informer.ObjectMet
 	switch podEvent.Type {
 	case EventCreated:
 		wk.log.Debug("Pod added",
-			"namespace", podEvent.Obj.Namespace, "name", podEvent.Obj.Name)
+			"namespace", podEvent.Obj.Namespace, "name", podEvent.Obj.Name,
+			"containers", podEvent.Obj.Pod.Containers)
 		if events := wk.onNewPod(podEvent.Obj); len(events) > 0 {
 			out <- events
 		}

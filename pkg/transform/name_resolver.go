@@ -113,13 +113,16 @@ func trimPrefixIgnoreCase(s, prefix string) string {
 }
 
 func (nr *NameResolver) resolveNames(span *request.Span) {
-	var hn, pn string
+	var hn, pn, ns string
 	if span.IsClientSpan() {
 		hn, span.OtherNamespace = nr.resolve(&span.ServiceID, span.Host)
-		pn, _ = nr.resolve(&span.ServiceID, span.Peer)
+		pn, ns = nr.resolve(&span.ServiceID, span.Peer)
 	} else {
 		pn, span.OtherNamespace = nr.resolve(&span.ServiceID, span.Peer)
-		hn, _ = nr.resolve(&span.ServiceID, span.Host)
+		hn, ns = nr.resolve(&span.ServiceID, span.Host)
+	}
+	if span.ServiceID.Namespace == "" && ns != "" {
+		span.ServiceID.Namespace = ns
 	}
 	// don't set names if the peer and host names have been already decorated
 	// in a previous stage (e.g. Kubernetes decorator)

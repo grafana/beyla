@@ -1022,7 +1022,7 @@ int uprobe_persistConnRoundTrip(struct pt_regs *ctx) {
                 // Must sort the connection info, this map is shared with kprobes which use sorted connection
                 // info always.
                 sort_connection_info(&conn);
-                bpf_map_update_elem(&trace_map, &conn, &tp_p, BPF_ANY);
+                set_trace_info_for_connection(&conn, &tp_p);
             }
         }
     }

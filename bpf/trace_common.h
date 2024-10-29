@@ -270,7 +270,7 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
             } else {
                 existing_tp = trace_info_for_connection(conn);
 
-                if (correlated_requests(tp_p, existing_tp)) {
+                if (!disable_black_box_cp && correlated_requests(tp_p, existing_tp)) {
                     found_tp = 1;
                     bpf_dbg_printk("Found existing correlated tp for server request");
                     __builtin_memcpy(
@@ -298,7 +298,7 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
     // The below buffer scan can be expensive on high volume of requests. We make it optional
     // for customers to enable it. Off by default.
     if (!capture_header_buffer) {
-        bpf_map_update_elem(&trace_map, conn, tp_p, BPF_ANY);
+        set_trace_info_for_connection(conn, tp_p);
         server_or_client_trace(meta, conn, tp_p);
         return;
     }
@@ -332,7 +332,7 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
     }
 #endif
 
-    bpf_map_update_elem(&trace_map, conn, tp_p, BPF_ANY);
+    set_trace_info_for_connection(conn, tp_p);
     server_or_client_trace(meta, conn, tp_p);
 }
 

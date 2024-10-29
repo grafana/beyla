@@ -622,7 +622,7 @@ int socket__http_filter(struct __sk_buff *skb) {
                             //bpf_dbg_printk("Found trace info on another interface, setting it up for this connection");
                             tp_info_pid_t other_info = {0};
                             __builtin_memcpy(&other_info, trace_info, sizeof(tp_info_pid_t));
-                            bpf_map_update_elem(&trace_map, &conn, &other_info, BPF_ANY);
+                            set_trace_info_for_connection(&conn, &other_info);
                         }
                     }
                 }

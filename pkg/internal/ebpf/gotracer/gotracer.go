@@ -89,8 +89,14 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 func (p *Tracer) SetupTailCalls() {}
 
 func (p *Tracer) Constants() map[string]any {
+	blackBoxCP := uint32(0)
+	if p.cfg.DisableBlackBoxCP {
+		blackBoxCP = uint32(1)
+	}
+
 	return map[string]any{
-		"wakeup_data_bytes": uint32(p.cfg.WakeupLen) * uint32(unsafe.Sizeof(ebpfcommon.HTTPRequestTrace{})),
+		"wakeup_data_bytes":    uint32(p.cfg.WakeupLen) * uint32(unsafe.Sizeof(ebpfcommon.HTTPRequestTrace{})),
+		"disable_black_box_cp": blackBoxCP,
 	}
 }
 

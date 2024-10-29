@@ -1,7 +1,7 @@
 package kube
 
 import (
-	"github.com/grafana/beyla-k8s-cache/pkg/informer"
+	"github.com/grafana/beyla/pkg/kubecache/informer"
 )
 
 // TopOwner assumes that the owners slice as returned by the informers' cache library,

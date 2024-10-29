@@ -12,6 +12,7 @@ var (
 
 	DockerfileTestServer       = path.Join(PathComponents, "testserver", "Dockerfile")
 	DockerfileBeyla            = path.Join(PathComponents, "beyla", "Dockerfile")
+	DockerfileBeylaK8sCache    = path.Join(PathComponents, "beyla-k8s-cache", "Dockerfile")
 	DockerfilePinger           = path.Join(PathComponents, "grpcpinger", "Dockerfile")
 	DockerfilePythonTestServer = path.Join(PathComponents, "pythonserver", "Dockerfile_8083")
 	DockerfileHTTPPinger       = path.Join(PathComponents, "httppinger", "Dockerfile")

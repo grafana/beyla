@@ -191,6 +191,7 @@ config:
   name: ""
   # -- default value of beyla configuration
   data:
+    # profile_port: 6060
     # open_port: 8443
     # routes:
     #   unmatched: heuristic

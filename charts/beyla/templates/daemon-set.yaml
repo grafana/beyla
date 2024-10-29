@@ -107,6 +107,11 @@ spec:
             containerPort: {{ .Values.service.internalMetrics.targetPort | default .Values.config.data.internal_metrics.prometheus.port }}
             protocol: TCP
           {{- end }}
+          {{- if .Values.config.data.profile_port }}
+          - name: profile
+            containerPort: {{ .Values.config.data.profile_port }}
+            protocol: TCP
+          {{- end }}
           {{- with .Values.resources }}
           resources:
             {{- toYaml . | nindent 12 }}

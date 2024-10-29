@@ -5,11 +5,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/grafana/beyla-k8s-cache/pkg/informer"
-	"github.com/grafana/beyla-k8s-cache/pkg/meta"
-
 	"github.com/grafana/beyla/pkg/export/attributes"
 	"github.com/grafana/beyla/pkg/internal/helpers/container"
+	"github.com/grafana/beyla/pkg/kubecache/informer"
+	"github.com/grafana/beyla/pkg/kubecache/meta"
 )
 
 func dblog() *slog.Logger {

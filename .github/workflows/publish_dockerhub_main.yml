@@ -36,7 +36,7 @@ jobs:
         uses: grafana/shared-workflows/actions/build-push-to-dockerhub@main
         with:
           repository: grafana/beyla-k8s-cache
-          file: k8scache.DockerFile
+          file: k8scache.Dockerfile
           context: .
           # cache image layers from/to github actions internal cache, for faster building
           cache-from: type=gha

@@ -7,8 +7,6 @@ import (
 	"os"
 	"testing"
 
-	"sigs.k8s.io/e2e-framework/pkg/features"
-
 	"github.com/grafana/beyla/test/integration/components/docker"
 	"github.com/grafana/beyla/test/integration/components/kube"
 	k8s "github.com/grafana/beyla/test/integration/k8s/common"
@@ -49,17 +47,5 @@ func TestMain(m *testing.M) {
 }
 
 func TestNetworkFlowBytes_Prom(t *testing.T) {
-	pinger := kube.Template[k8s.Pinger]{
-		TemplateFile: k8s.UninstrumentedPingerManifest,
-		Data: k8s.Pinger{
-			PodName:   "internal-pinger",
-			TargetURL: "http://testserver:8080/iping",
-		},
-	}
-	cluster.TestEnv().Test(t, features.New("network flow bytes").
-		Setup(pinger.Deploy()).
-		Teardown(pinger.Delete()).
-		Assess("catches network metrics between connected pods", otel.DoTestNetFlowBytesForExistingConnections).
-		Feature(),
-	)
+	cluster.TestEnv().Test(t, otel.FeatureNetworkFlowBytes())
 }

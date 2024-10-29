@@ -7,8 +7,6 @@ import (
 	"os"
 	"testing"
 
-	"sigs.k8s.io/e2e-framework/pkg/features"
-
 	"github.com/grafana/beyla/test/integration/components/docker"
 	"github.com/grafana/beyla/test/integration/components/kube"
 	k8s "github.com/grafana/beyla/test/integration/k8s/common"
@@ -23,7 +21,6 @@ func TestMain(m *testing.M) {
 		docker.ImageBuild{Tag: "beyla:dev", Dockerfile: k8s.DockerfileBeyla},
 		docker.ImageBuild{Tag: "testserver:dev", Dockerfile: k8s.DockerfileTestServer},
 		docker.ImageBuild{Tag: "httppinger:dev", Dockerfile: k8s.DockerfileHTTPPinger},
-		docker.ImageBuild{Tag: "grpcpinger:dev", Dockerfile: k8s.DockerfilePinger},
 		docker.ImageBuild{Tag: "beyla-k8s-cache:dev", Dockerfile: k8s.DockerfileBeylaK8sCache},
 		docker.ImageBuild{Tag: "quay.io/prometheus/prometheus:v2.53.0"},
 	); err != nil {
@@ -36,7 +33,6 @@ func TestMain(m *testing.M) {
 		kube.KindConfig(k8s.PathManifests+"/00-kind.yml"),
 		kube.LocalImage("beyla:dev"),
 		kube.LocalImage("testserver:dev"),
-		kube.LocalImage("grpcpinger:dev"),
 		kube.LocalImage("httppinger:dev"),
 		kube.LocalImage("beyla-k8s-cache:dev"),
 		kube.LocalImage("quay.io/prometheus/prometheus:v2.53.0"),
@@ -72,10 +68,5 @@ func TestInformersCache_ProcessMetrics(t *testing.T) {
 }
 
 func TestInformersCache_NetworkMetrics(t *testing.T) {
-	// we don't deploy any pinger
-	// it will reuse internal-pinger from MetricsDecoration_HTTP test
-	cluster.TestEnv().Test(t, features.New("network flow bytes").
-		Assess("catches network metrics between connected pods", otel.DoTestNetFlowBytesForExistingConnections).
-		Feature(),
-	)
+	cluster.TestEnv().Test(t, otel.FeatureNetworkFlowBytes())
 }

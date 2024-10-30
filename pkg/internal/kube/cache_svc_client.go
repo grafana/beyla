@@ -22,6 +22,7 @@ type cacheSvcClient struct {
 	address string
 	log     *slog.Logger
 
+	ctx                    context.Context
 	syncTimeout            time.Duration
 	waitForSubscription    chan struct{}
 	waitForSynchronization chan struct{}
@@ -31,6 +32,7 @@ func (sc *cacheSvcClient) Start(ctx context.Context) {
 	sc.log = cslog()
 	sc.waitForSubscription = make(chan struct{})
 	sc.waitForSynchronization = make(chan struct{})
+	sc.ctx = ctx
 	go func() {
 		select {
 		case <-ctx.Done():
@@ -56,17 +58,6 @@ func (sc *cacheSvcClient) Start(ctx context.Context) {
 			}
 		}
 	}()
-	sc.log.Info("waiting for K8s metadata synchronization", "timeout", sc.syncTimeout)
-	select {
-	case <-sc.waitForSynchronization:
-		sc.log.Debug("K8s metadata cache service synchronized")
-	case <-ctx.Done():
-		sc.log.Debug("context done. Nothing to do")
-	case <-time.After(sc.syncTimeout):
-		sc.log.Warn("timed out while waiting for K8s metadata synchronization. Some metadata might be temporarily missing." +
-			" If this is expected due to the size of your cluster, you might want to increase the timeout via" +
-			" the BEYLA_KUBE_INFORMERS_SYNC_TIMEOUT configuration option")
-	}
 }
 
 func (sc *cacheSvcClient) connect(ctx context.Context) error {
@@ -106,5 +97,20 @@ func (sc *cacheSvcClient) connect(ctx context.Context) error {
 
 func (sc *cacheSvcClient) Subscribe(observer meta.Observer) {
 	sc.BaseNotifier.Subscribe(observer)
+
 	close(sc.waitForSubscription)
+
+	// after the subscription is done, we temporarily pause the execution until the
+	// cache is fully loaded
+	sc.log.Info("waiting for K8s metadata synchronization", "timeout", sc.syncTimeout)
+	select {
+	case <-sc.waitForSynchronization:
+		sc.log.Debug("K8s metadata cache service synchronized")
+	case <-sc.ctx.Done():
+		sc.log.Debug("context done. Nothing to do")
+	case <-time.After(sc.syncTimeout):
+		sc.log.Warn("timed out while waiting for K8s metadata synchronization. Some metadata might be temporarily missing." +
+			" If this is expected due to the size of your cluster, you might want to increase the timeout via" +
+			" the BEYLA_KUBE_INFORMERS_SYNC_TIMEOUT configuration option")
+	}
 }

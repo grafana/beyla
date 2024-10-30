@@ -5,6 +5,7 @@ FROM golang:1.23-rc-alpine
 ARG target=run-integration-test-vm
 
 RUN apk update
+RUN apk add --no-cache bash
 RUN apk add --no-cache openrc
 RUN apk add --no-cache docker
 RUN apk add --no-cache docker-compose

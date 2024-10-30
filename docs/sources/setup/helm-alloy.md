@@ -209,7 +209,7 @@ With this configuration Beyla instruments the services running in the Kubernetes
 
 The `attributes > kubernetes > enable` enables Kubernetes decoration for metrics and traces, which adds the metadata of the Kubernetes entities running the automatically instrumented services.
 
-The argument `discovery > services > kubernetes` specifies the selection of services based ton Kubernetes metadata. In this example, Beyla instruments all deployments in namespace "default".
+The argument `discovery > services > kubernetes` specifies the selection of services based on Kubernetes metadata. In this example, Beyla instruments all deployments in namespace "default".
 
 The `prometheus.scrape` section configures the Prometheus scrape configuration to collect the metrics from Beyla. The `prometheus.remote_write` section configures the remote write to send the metrics to Grafana Cloud Prometheus.
 

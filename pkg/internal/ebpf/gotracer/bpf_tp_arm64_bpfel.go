@@ -19,6 +19,11 @@ type bpf_tpConnectionInfoT struct {
 	D_port uint16
 }
 
+type bpf_tpEgressKeyT struct {
+	S_port uint16
+	D_port uint16
+}
+
 type bpf_tpFramerFuncInvocationT struct {
 	FramerPtr uint64
 	Tp        bpf_tpTpInfoT
@@ -114,11 +119,6 @@ type bpf_tpKafkaGoReqT struct {
 type bpf_tpNewFuncInvocationT struct{ Parent uint64 }
 
 type bpf_tpOffTableT struct{ Table [43]uint64 }
-
-type bpf_tpPidConnectionInfoT struct {
-	Conn bpf_tpConnectionInfoT
-	Pid  uint32
-}
 
 type bpf_tpProduceReqT struct {
 	MsgPtr          uint64

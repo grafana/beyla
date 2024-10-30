@@ -19,6 +19,11 @@ type bpfConnectionInfoT struct {
 	D_port uint16
 }
 
+type bpfEgressKeyT struct {
+	S_port uint16
+	D_port uint16
+}
+
 type bpfGoAddrKeyT struct {
 	Pid  uint64
 	Addr uint64

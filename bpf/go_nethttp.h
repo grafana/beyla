@@ -439,12 +439,12 @@ int uprobe_roundTripReturn(struct pt_regs *ctx) {
     if (info) {
         __builtin_memcpy(&trace->conn, info, sizeof(connection_info_t));
 
-        pid_connection_info_t p_conn = {};
-        __builtin_memcpy(&p_conn.conn, info, sizeof(connection_info_t));
-        u64 pid_tid = bpf_get_current_pid_tgid();
-        p_conn.pid = pid_from_pid_tgid(pid_tid);
-
-        bpf_map_delete_elem(&ongoing_go_http, &p_conn);
+        egress_key_t e_key = {
+            .d_port = info->d_port,
+            .s_port = info->s_port,
+        };
+        bpf_map_delete_elem(&outgoing_trace_map, &e_key);
+        bpf_map_delete_elem(&ongoing_go_http, &e_key);
     } else {
         __builtin_memset(&trace->conn, 0, sizeof(connection_info_t));
     }
@@ -1022,13 +1022,14 @@ int uprobe_persistConnRoundTrip(struct pt_regs *ctx) {
                 // Setup information for the TC context propagation.
                 // We need the PID id to be able to query ongoing_http and update
                 // the span id with the SEQ/ACK pair.
-                bpf_map_update_elem(&outgoing_trace_map, &conn, &tp_p, BPF_ANY);
 
-                pid_connection_info_t p_conn = {};
-                __builtin_memcpy(&p_conn.conn, &conn, sizeof(connection_info_t));
-                p_conn.pid = tp_p.pid;
+                egress_key_t e_key = {
+                    .d_port = conn.d_port,
+                    .s_port = conn.s_port,
+                };
 
-                bpf_map_update_elem(&ongoing_go_http, &p_conn, &g_key, BPF_ANY);
+                bpf_map_update_elem(&outgoing_trace_map, &e_key, &tp_p, BPF_ANY);
+                bpf_map_update_elem(&ongoing_go_http, &e_key, &g_key, BPF_ANY);
             }
         }
     }

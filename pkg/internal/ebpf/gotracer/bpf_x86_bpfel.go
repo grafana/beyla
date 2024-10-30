@@ -19,6 +19,11 @@ type bpfConnectionInfoT struct {
 	D_port uint16
 }
 
+type bpfEgressKeyT struct {
+	S_port uint16
+	D_port uint16
+}
+
 type bpfGoAddrKeyT struct {
 	Pid  uint64
 	Addr uint64
@@ -102,11 +107,6 @@ type bpfKafkaGoReqT struct {
 type bpfNewFuncInvocationT struct{ Parent uint64 }
 
 type bpfOffTableT struct{ Table [43]uint64 }
-
-type bpfPidConnectionInfoT struct {
-	Conn bpfConnectionInfoT
-	Pid  uint32
-}
 
 type bpfProduceReqT struct {
 	MsgPtr          uint64

@@ -19,6 +19,11 @@ type bpf_tp_debugConnectionInfoT struct {
 	D_port uint16
 }
 
+type bpf_tp_debugEgressKeyT struct {
+	S_port uint16
+	D_port uint16
+}
+
 type bpf_tp_debugFramerFuncInvocationT struct {
 	FramerPtr uint64
 	Tp        bpf_tp_debugTpInfoT
@@ -114,11 +119,6 @@ type bpf_tp_debugKafkaGoReqT struct {
 type bpf_tp_debugNewFuncInvocationT struct{ Parent uint64 }
 
 type bpf_tp_debugOffTableT struct{ Table [43]uint64 }
-
-type bpf_tp_debugPidConnectionInfoT struct {
-	Conn bpf_tp_debugConnectionInfoT
-	Pid  uint32
-}
 
 type bpf_tp_debugProduceReqT struct {
 	MsgPtr          uint64

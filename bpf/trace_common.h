@@ -174,7 +174,11 @@ static __always_inline void delete_client_trace_info(pid_connection_info_t *pid_
     dbg_print_http_connection_info(&pid_conn->conn);
 
     bpf_map_delete_elem(&trace_map, &pid_conn->conn);
-    bpf_map_delete_elem(&outgoing_trace_map, &pid_conn->conn);
+    egress_key_t e_key = {
+        .d_port = pid_conn->conn.d_port,
+        .s_port = pid_conn->conn.s_port,
+    };
+    bpf_map_delete_elem(&outgoing_trace_map, &e_key);
     bpf_map_delete_elem(&client_connect_info, pid_conn);
 }
 
@@ -214,7 +218,12 @@ static __always_inline void server_or_client_trace(http_connection_metadata_t *m
         // the span id with the SEQ/ACK pair.
         u64 id = bpf_get_current_pid_tgid();
         tp_p->pid = pid_from_pid_tgid(id);
-        bpf_map_update_elem(&outgoing_trace_map, conn, tp_p, BPF_ANY);
+        egress_key_t e_key = {
+            .d_port = conn->d_port,
+            .s_port = conn->s_port,
+        };
+
+        bpf_map_update_elem(&outgoing_trace_map, &e_key, tp_p, BPF_ANY);
     }
 }
 

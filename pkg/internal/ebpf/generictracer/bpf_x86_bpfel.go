@@ -31,6 +31,11 @@ type bpfConnectionInfoT struct {
 	D_port uint16
 }
 
+type bpfEgressKeyT struct {
+	S_port uint16
+	D_port uint16
+}
+
 type bpfHttp2ConnStreamT struct {
 	PidConn  bpfPidConnectionInfoT
 	StreamId uint32

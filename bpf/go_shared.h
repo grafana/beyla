@@ -24,7 +24,7 @@ struct {
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, pid_connection_info_t); // key: pointer to the connection info
+    __type(key, egress_key_t); // key: pointer to the connection info
     __type(value, go_addr_key_t);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
     __uint(pinning, BEYLA_PIN_INTERNAL);

@@ -547,11 +547,6 @@ int socket__http_filter(struct __sk_buff *skb) {
         return 0;
     }
 
-    // ignore ACK packets
-    if (tcp_ack(&tcp)) {
-        return 0;
-    }
-
     // ignore empty packets, unless it's TCP FIN or TCP RST
     if (!tcp_close(&tcp) && tcp_empty(&tcp, skb)) {
         return 0;

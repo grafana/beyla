@@ -10,7 +10,7 @@
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
-enum { TC_ACT_OK = 0 };
+enum { TC_ACT_OK = 0, TC_ACT_RECLASSIFY = 1, TC_ACT_SHOT = 2 };
 enum { MAX_IP_PACKET_SIZE = 0x7fff };
 enum { MAX_INLINE_LEN = 0x7ff };
 
@@ -143,7 +143,9 @@ encode_hex_skb(unsigned char *dst, const unsigned char *src, __u32 src_len) {
 // this "beauty" ensures we hold pkt in the same register being range
 // validated
 static __always_inline unsigned char *
-check_pkt_access(unsigned char *buf, __u32 offset, const unsigned char *end) {
+check_pkt_access(unsigned char *buf, //NOLINT(readability-non-const-parameter)
+                 __u32 offset,
+                 const unsigned char *end) {
     unsigned char *ret;
 
     asm goto("r4 = %[buf]\n"
@@ -164,8 +166,9 @@ static __always_inline void
 make_tp_string_skb(unsigned char *buf, const tp_info_t *tp, const unsigned char *end) {
     buf = check_pkt_access(buf, EXTEND_SIZE, end);
 
-    if (!buf)
+    if (!buf) {
         return;
+    }
 
     *buf++ = 'T';
     *buf++ = 'r';
@@ -369,7 +372,7 @@ static __always_inline int is_http_request(struct __sk_buff *ctx) {
 }
 
 static __always_inline unsigned char *
-memchar(unsigned char *haystack, char needle, unsigned char *end, __u32 size) {
+memchar(unsigned char *haystack, char needle, const unsigned char *end, __u32 size) {
     for (__u32 i = 0; i < size; ++i) {
         if (&haystack[i] >= end) {
             break;
@@ -547,7 +550,7 @@ int tc_http_egress(struct __sk_buff *ctx) {
     }
 
     if (!extend_skb(ctx, &tp_info_pid->tp)) {
-        return TC_ACT_OK;
+        return TC_ACT_SHOT;
     }
 
     const __u32 key = src_port;
@@ -559,7 +562,7 @@ int tc_http_egress(struct __sk_buff *ctx) {
         return TC_ACT_OK;
     }
 
-    return TC_ACT_OK;
+    return TC_ACT_RECLASSIFY;
 }
 
 SEC("tc_ingress")

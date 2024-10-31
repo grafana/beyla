@@ -10,35 +10,7 @@ permissions:
   id-token: write
 
 jobs:
-  build-x86:
-    runs-on: ubuntu-latest
-
-    steps:
-      - id: checkout
-        uses: actions/checkout@v4
-
-      - id: push-beyla-to-dockerhub
-        uses: grafana/shared-workflows/actions/build-push-to-dockerhub@main
-        with:
-          skip-qemu: true
-          repository: grafana/beyla
-          context: .
-          tags: |-
-            "main"
-          push: true
-
-      - id: push-beyla-k8s-cache-to-dockerhub
-        uses: grafana/shared-workflows/actions/build-push-to-dockerhub@main
-        with:
-          skip-qemu: true
-          repository: grafana/beyla-k8s-cache
-          file: k8scache.Dockerfile
-          context: .
-          tags: |-
-            "main"
-          push: true
-
-  build-arm64:
+  build-multiarch:
     runs-on: github-hosted-ubuntu-arm64
 
     steps:
@@ -48,9 +20,11 @@ jobs:
       - id: push-beyla-to-dockerhub
         uses: grafana/shared-workflows/actions/build-push-to-dockerhub@main
         with:
-          skip-qemu: true
           repository: grafana/beyla
           context: .
+          platforms: |-
+            "linux/amd64"
+            "linux/arm64"
           tags: |-
             "main"
           push: true
@@ -58,10 +32,12 @@ jobs:
       - id: push-beyla-k8s-cache-to-dockerhub
         uses: grafana/shared-workflows/actions/build-push-to-dockerhub@main
         with:
-          skip-qemu: true
           repository: grafana/beyla-k8s-cache
           file: k8scache.Dockerfile
           context: .
+          platforms: |-
+            "linux/amd64"
+            "linux/arm64"
           tags: |-
             "main"
           push: true

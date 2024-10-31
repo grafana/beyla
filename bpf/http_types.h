@@ -51,6 +51,11 @@ typedef struct http_connection_info {
     u16 d_port;
 } connection_info_t;
 
+typedef struct egress_key {
+    u16 s_port;
+    u16 d_port;
+} egress_key_t;
+
 typedef struct http_partial_connection_info {
     u8 s_addr[IP_V6_ADDR_LEN];
     u16 s_port;
@@ -198,17 +203,6 @@ static __always_inline void dbg_print_http_connection_info(connection_info_t *in
 static __always_inline void dbg_print_http_connection_info(connection_info_t *info) {
 }
 #endif
-
-static __always_inline void print_http_connection_info(connection_info_t *info) {
-    bpf_printk("[conn] s_h = %llx, s_l = %llx, s_port=%d",
-               *(u64 *)(&info->s_addr),
-               *(u64 *)(&info->s_addr[8]),
-               info->s_port);
-    bpf_printk("[conn] d_h = %llx, d_l = %llx, d_port=%d",
-               *(u64 *)(&info->d_addr),
-               *(u64 *)(&info->d_addr[8]),
-               info->d_port);
-}
 
 static __always_inline bool likely_ephemeral_port(u16 port) {
     return port >= EPHEMERAL_PORT_MIN;

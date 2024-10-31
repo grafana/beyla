@@ -92,15 +92,19 @@ func (pf *ProcessFinder) Start() (<-chan *ebpf.Instrumentable, <-chan *ebpf.Inst
 // auxiliary functions to instantiate the go and non-go tracers on diverse steps of the
 // discovery pipeline
 
+// the common tracer group should get loaded for any tracer group, only once
+func newCommonTracersGroup(cfg *beyla.Config) []ebpf.Tracer {
+	if cfg.EBPF.UseTCForCP {
+		return []ebpf.Tracer{tctracer.New(cfg)}
+	}
+
+	return nil
+}
+
 func newGoTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Tracer {
-	// Each program is an eBPF source: net/http, grpc...
 	return []ebpf.Tracer{gotracer.New(cfg, metrics)}
 }
 
 func newGenericTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Tracer {
-	if cfg.EBPF.UseLinuxTC {
-		return []ebpf.Tracer{generictracer.New(cfg, metrics), tctracer.New(cfg)}
-	}
-
 	return []ebpf.Tracer{generictracer.New(cfg, metrics)}
 }

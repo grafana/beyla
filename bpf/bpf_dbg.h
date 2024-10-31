@@ -32,6 +32,23 @@ struct {
 
 enum bpf_func_id___x { BPF_FUNC_snprintf___x = 42 /* avoid zero */ };
 
+// When DEBUG_TC is enabled through build options it means we are compiling the Traffic Control TC
+// BPF program. In TC we can't use the current comm or current_pid_tgid helpers. We could use
+// get_current_task and extract the PID, but it's usually not the right PID anyway.
+#ifdef BPF_DEBUG_TC
+#define bpf_dbg_helper(fmt, args...)                                                               \
+    {                                                                                              \
+        log_info_t *__trace__ = bpf_ringbuf_reserve(&debug_events, sizeof(log_info_t), 0);         \
+        if (__trace__) {                                                                           \
+            if (bpf_core_enum_value_exists(enum bpf_func_id___x, BPF_FUNC_snprintf___x)) {         \
+                BPF_SNPRINTF(__trace__->log, sizeof(__trace__->log), fmt, ##args);                 \
+            } else {                                                                               \
+                __builtin_memcpy(__trace__->log, fmt, sizeof(__trace__->log));                     \
+            }                                                                                      \
+            bpf_ringbuf_submit(__trace__, 0);                                                      \
+        }                                                                                          \
+    }
+#else // BPF_DEBUG_TC
 #define bpf_dbg_helper(fmt, args...)                                                               \
     {                                                                                              \
         log_info_t *__trace__ = bpf_ringbuf_reserve(&debug_events, sizeof(log_info_t), 0);         \
@@ -47,6 +64,7 @@ enum bpf_func_id___x { BPF_FUNC_snprintf___x = 42 /* avoid zero */ };
             bpf_ringbuf_submit(__trace__, 0);                                                      \
         }                                                                                          \
     }
+#endif // BPF_DEBUG_TC
 
 #define bpf_dbg_printk(fmt, args...)                                                               \
     {                                                                                              \

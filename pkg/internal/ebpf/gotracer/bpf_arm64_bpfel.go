@@ -19,6 +19,11 @@ type bpfConnectionInfoT struct {
 	D_port uint16
 }
 
+type bpfEgressKeyT struct {
+	S_port uint16
+	D_port uint16
+}
+
 type bpfGoAddrKeyT struct {
 	Pid  uint64
 	Addr uint64
@@ -274,6 +279,7 @@ type bpfMapSpecs struct {
 	KafkaRequests                 *ebpf.MapSpec `ebpf:"kafka_requests"`
 	Newproc1                      *ebpf.MapSpec `ebpf:"newproc1"`
 	OngoingClientConnections      *ebpf.MapSpec `ebpf:"ongoing_client_connections"`
+	OngoingGoHttp                 *ebpf.MapSpec `ebpf:"ongoing_go_http"`
 	OngoingGoroutines             *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
 	OngoingGrpcClientRequests     *ebpf.MapSpec `ebpf:"ongoing_grpc_client_requests"`
 	OngoingGrpcHeaderWrites       *ebpf.MapSpec `ebpf:"ongoing_grpc_header_writes"`
@@ -326,6 +332,7 @@ type bpfMaps struct {
 	KafkaRequests                 *ebpf.Map `ebpf:"kafka_requests"`
 	Newproc1                      *ebpf.Map `ebpf:"newproc1"`
 	OngoingClientConnections      *ebpf.Map `ebpf:"ongoing_client_connections"`
+	OngoingGoHttp                 *ebpf.Map `ebpf:"ongoing_go_http"`
 	OngoingGoroutines             *ebpf.Map `ebpf:"ongoing_goroutines"`
 	OngoingGrpcClientRequests     *ebpf.Map `ebpf:"ongoing_grpc_client_requests"`
 	OngoingGrpcHeaderWrites       *ebpf.Map `ebpf:"ongoing_grpc_header_writes"`
@@ -361,6 +368,7 @@ func (m *bpfMaps) Close() error {
 		m.KafkaRequests,
 		m.Newproc1,
 		m.OngoingClientConnections,
+		m.OngoingGoHttp,
 		m.OngoingGoroutines,
 		m.OngoingGrpcClientRequests,
 		m.OngoingGrpcHeaderWrites,

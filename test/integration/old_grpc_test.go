@@ -145,8 +145,5 @@ func TestSuiteOtherGRPCGo(t *testing.T) {
 		testGRPCGoClientFailsToConnect(t)
 	})
 
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
-
 }

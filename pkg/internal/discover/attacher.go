@@ -34,9 +34,10 @@ type TraceAttacher struct {
 	processInstances maps.MultiCounter[uint64]
 
 	// keeps a copy of all the tracers for a given executable path
-	existingTracers  map[uint64]*ebpf.ProcessTracer
-	reusableTracer   *ebpf.ProcessTracer
-	reusableGoTracer *ebpf.ProcessTracer
+	existingTracers     map[uint64]*ebpf.ProcessTracer
+	reusableTracer      *ebpf.ProcessTracer
+	reusableGoTracer    *ebpf.ProcessTracer
+	commonTracersLoaded bool
 
 	// Usually, only ebpf.Tracer implementations will send spans data to the read decorator.
 	// But on each new process, we will send a "process alive" span type to the read decorator, whose
@@ -142,20 +143,20 @@ func (ta *TraceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 				// instance of the executable has different DLLs loaded, e.g. libssl.so.
 				return ta.reuseTracer(ta.reusableTracer, ie)
 			} else {
-				programs = newGenericTracersGroup(ta.Cfg, ta.Metrics)
+				programs = ta.withCommonTracersGroup(newGenericTracersGroup(ta.Cfg, ta.Metrics))
 			}
 		} else {
 			if ta.reusableGoTracer != nil {
 				return ta.reuseTracer(ta.reusableGoTracer, ie)
 			}
 			tracerType = ebpf.Go
-			programs = newGoTracersGroup(ta.Cfg, ta.Metrics)
+			programs = ta.withCommonTracersGroup(newGoTracersGroup(ta.Cfg, ta.Metrics))
 		}
 	case svc.InstrumentableNodejs, svc.InstrumentableJava, svc.InstrumentableRuby, svc.InstrumentablePython, svc.InstrumentableDotnet, svc.InstrumentableGeneric, svc.InstrumentableRust, svc.InstrumentablePHP:
 		if ta.reusableTracer != nil {
 			return ta.reuseTracer(ta.reusableTracer, ie)
 		}
-		programs = newGenericTracersGroup(ta.Cfg, ta.Metrics)
+		programs = ta.withCommonTracersGroup(newGenericTracersGroup(ta.Cfg, ta.Metrics))
 	default:
 		ta.log.Warn("unexpected instrumentable type. This is basically a bug", "type", ie.Type)
 	}
@@ -205,6 +206,17 @@ func (ta *TraceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 	}
 	ta.log.Debug(".done")
 	return true
+}
+
+func (ta *TraceAttacher) withCommonTracersGroup(tracers []ebpf.Tracer) []ebpf.Tracer {
+	if ta.commonTracersLoaded {
+		return tracers
+	}
+
+	ta.commonTracersLoaded = true
+	tracers = append(tracers, newCommonTracersGroup(ta.Cfg)...)
+
+	return tracers
 }
 
 func (ta *TraceAttacher) loadExecutable(ie *ebpf.Instrumentable) (*link.Executable, bool) {

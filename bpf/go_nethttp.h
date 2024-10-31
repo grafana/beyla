@@ -25,11 +25,6 @@
 #include "hpack.h"
 #include "ringbuf.h"
 
-typedef struct http_func_invocation {
-    u64 start_monotime_ns;
-    tp_info_t tp;
-} http_func_invocation_t;
-
 typedef struct http_client_data {
     u8 method[METHOD_MAX_LEN];
     u8 path[PATH_MAX_LEN];
@@ -37,13 +32,6 @@ typedef struct http_client_data {
 
     pid_info pid;
 } http_client_data_t;
-
-struct {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, go_addr_key_t); // key: pointer to the request goroutine
-    __type(value, http_func_invocation_t);
-    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
-} ongoing_http_client_requests SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
@@ -450,6 +438,13 @@ int uprobe_roundTripReturn(struct pt_regs *ctx) {
     connection_info_t *info = bpf_map_lookup_elem(&ongoing_client_connections, &g_key);
     if (info) {
         __builtin_memcpy(&trace->conn, info, sizeof(connection_info_t));
+
+        egress_key_t e_key = {
+            .d_port = info->d_port,
+            .s_port = info->s_port,
+        };
+        bpf_map_delete_elem(&outgoing_trace_map, &e_key);
+        bpf_map_delete_elem(&ongoing_go_http, &e_key);
     } else {
         __builtin_memset(&trace->conn, 0, sizeof(connection_info_t));
     }
@@ -1022,7 +1017,19 @@ int uprobe_persistConnRoundTrip(struct pt_regs *ctx) {
                 // Must sort the connection info, this map is shared with kprobes which use sorted connection
                 // info always.
                 sort_connection_info(&conn);
-                bpf_map_update_elem(&trace_map, &conn, &tp_p, BPF_ANY);
+                set_trace_info_for_connection(&conn, &tp_p);
+
+                // Setup information for the TC context propagation.
+                // We need the PID id to be able to query ongoing_http and update
+                // the span id with the SEQ/ACK pair.
+
+                egress_key_t e_key = {
+                    .d_port = conn.d_port,
+                    .s_port = conn.s_port,
+                };
+
+                bpf_map_update_elem(&outgoing_trace_map, &e_key, &tp_p, BPF_ANY);
+                bpf_map_update_elem(&ongoing_go_http, &e_key, &g_key, BPF_ANY);
             }
         }
     }

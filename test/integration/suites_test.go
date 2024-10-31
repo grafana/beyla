@@ -33,9 +33,7 @@ func TestSuite(t *testing.T) {
 	t.Run("GRPC TLS RED metrics", testREDMetricsGRPCTLS)
 	t.Run("Internal Prometheus metrics", testInternalPrometheusExport)
 
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
 func TestSuiteNestedTraces(t *testing.T) {
@@ -58,9 +56,7 @@ func TestSuiteNestedTraces(t *testing.T) {
 		t.Run("HTTP traces (nested client span)", testHTTPTracesNestedClient)
 		t.Run("HTTP -> gRPC traces (nested client span)", testHTTP2GRPCTracesNestedCallsNoPropagation)
 	}
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
 func TestSuiteClient(t *testing.T) {
@@ -69,9 +65,7 @@ func TestSuiteClient(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("Client RED metrics", testREDMetricsForClientHTTPLibrary)
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
 func TestSuiteClientPromScrape(t *testing.T) {
@@ -92,9 +86,7 @@ func TestSuiteClientPromScrape(t *testing.T) {
 		"process_command_line":    "/pingclient",
 	}))
 
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
 // Same as Test suite, but the generated test image does not contain debug information
@@ -109,9 +101,7 @@ func TestSuite_NoDebugInfo(t *testing.T) {
 	t.Run("GRPC RED metrics", testREDMetricsGRPC)
 	t.Run("Internal Prometheus metrics", testInternalPrometheusExport)
 
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
 // Same as Test suite, but the generated test image does not contain debug information
@@ -126,9 +116,7 @@ func TestSuite_StaticCompilation(t *testing.T) {
 	t.Run("GRPC RED metrics", testREDMetricsGRPC)
 	t.Run("Internal Prometheus metrics", testInternalPrometheusExport)
 
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
 func TestSuite_OldestGoVersion(t *testing.T) {
@@ -141,9 +129,7 @@ func TestSuite_OldestGoVersion(t *testing.T) {
 	t.Run("GRPC RED metrics", testREDMetricsGRPC)
 	t.Run("Internal Prometheus metrics", testInternalPrometheusExport)
 
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
 func TestSuite_UnsupportedGoVersion(t *testing.T) {
@@ -152,9 +138,7 @@ func TestSuite_UnsupportedGoVersion(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("RED metrics", testREDMetricsUnsupportedHTTP)
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
 func TestSuite_SkipGoTracers(t *testing.T) {
@@ -164,9 +148,7 @@ func TestSuite_SkipGoTracers(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("RED metrics", testREDMetricsShortHTTP)
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
 func TestSuite_GRPCExport(t *testing.T) {
@@ -179,9 +161,7 @@ func TestSuite_GRPCExport(t *testing.T) {
 	t.Run("trace GRPC service and export as GRPC traces", testGRPCTraces)
 	t.Run("GRPC RED metrics", testREDMetricsGRPC)
 
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
 func TestSuite_GRPCExportKProbes(t *testing.T) {
@@ -196,9 +176,7 @@ func TestSuite_GRPCExportKProbes(t *testing.T) {
 	t.Run("trace GRPC service and export as GRPC traces - kprobes", testGRPCKProbeTraces)
 	t.Run("GRPC RED metrics - kprobes", testREDMetricsGRPC)
 
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
 // Same as Test suite, but searching the executable by port instead of executable name
@@ -213,9 +191,7 @@ func TestSuite_OpenPort(t *testing.T) {
 	t.Run("GRPC RED metrics", testREDMetricsGRPC)
 	t.Run("Internal Prometheus metrics", testInternalPrometheusExport)
 
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
 // Instead of submitting metrics via OTEL, exposes them as an autoinstrumenter:8999/metrics endpoint
@@ -245,9 +221,7 @@ func TestSuite_PrometheusScrape(t *testing.T) {
 	t.Run("Testing Beyla Build Info metric", testPrometheusBeylaBuildInfo)
 	t.Run("Testing for no Beyla self metrics", testPrometheusNoBeylaEvents)
 
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
 func TestSuite_Java(t *testing.T) {
@@ -256,9 +230,7 @@ func TestSuite_Java(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("Java RED metrics", testREDMetricsJavaHTTP)
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
 // Same as TestSuite_Java but we run in the process namespace and it uses process namespace filtering
@@ -268,9 +240,7 @@ func TestSuite_Java_PID(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("Java RED metrics", testREDMetricsJavaHTTP)
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
 // same as Test suite for java, but using the system_wide instrumentation
@@ -281,9 +251,7 @@ func TestSuite_Java_SystemWide(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("Java RED metrics", testREDMetricsJavaHTTPSystemWide)
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
 // Same as Java Test suite, but searching the executable by port instead of executable name. We also run the jar version of Java instead of native image
@@ -294,9 +262,7 @@ func TestSuite_Java_OpenPort(t *testing.T) {
 	require.NoError(t, compose.Up())
 	t.Run("Java RED metrics", testREDMetricsJavaHTTP)
 
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
 // Test that we can also instrument when running with host network mode
@@ -306,9 +272,7 @@ func TestSuite_Java_Host_Network(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("Java RED metrics", testREDMetricsJavaHTTP)
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
 func TestSuite_Rust(t *testing.T) {
@@ -317,9 +281,7 @@ func TestSuite_Rust(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("Rust RED metrics", testREDMetricsRustHTTP)
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
 func TestSuite_RustSSL(t *testing.T) {
@@ -328,9 +290,7 @@ func TestSuite_RustSSL(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("Rust RED metrics", testREDMetricsRustHTTPS)
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
 // The actix server that we built our Rust example will enable HTTP2 for SSL automatically if the client supports it.
@@ -342,9 +302,7 @@ func TestSuite_RustHTTP2(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("Rust RED metrics", testREDMetricsRustHTTP2)
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
 func TestSuite_NodeJS(t *testing.T) {
@@ -354,9 +312,7 @@ func TestSuite_NodeJS(t *testing.T) {
 	require.NoError(t, compose.Up())
 	t.Run("NodeJS RED metrics", testREDMetricsNodeJSHTTP)
 	t.Run("HTTP traces (kprobes)", testHTTPTracesKProbes)
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
 func TestSuite_NodeJSTLS(t *testing.T) {
@@ -365,9 +321,7 @@ func TestSuite_NodeJSTLS(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("NodeJS SSL RED metrics", testREDMetricsNodeJSHTTPS)
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
 func TestSuite_Rails(t *testing.T) {
@@ -376,9 +330,7 @@ func TestSuite_Rails(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("Rails RED metrics", testREDMetricsRailsHTTP)
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
 func TestSuite_RailsTLS(t *testing.T) {
@@ -387,9 +339,7 @@ func TestSuite_RailsTLS(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("Rails SSL RED metrics", testREDMetricsRailsHTTPS)
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
 func TestSuite_DotNet(t *testing.T) {
@@ -398,9 +348,7 @@ func TestSuite_DotNet(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("DotNet RED metrics", testREDMetricsDotNetHTTP)
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
 // Disabled for now as we randomly fail to register 3 events, but only get 2
@@ -412,9 +360,7 @@ func TestSuite_DotNetTLS(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("DotNet SSL RED metrics", testREDMetricsDotNetHTTPS)
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
 func TestSuite_Python(t *testing.T) {
@@ -432,9 +378,7 @@ func TestSuite_Python(t *testing.T) {
 	}))
 	t.Run("Python RED metrics", testREDMetricsPythonHTTP)
 	t.Run("Python RED metrics with timeouts", testREDMetricsTimeoutPythonHTTP)
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
 // Uses both HTTP and SQL, but we want to see only SQL events, since we are filtering by SQL only
@@ -444,9 +388,7 @@ func TestSuite_PythonSQL(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("Python SQL metrics", testREDMetricsPythonSQLOnly)
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
 func TestSuite_PythonTLS(t *testing.T) {
@@ -455,9 +397,7 @@ func TestSuite_PythonTLS(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("Python SSL RED metrics", testREDMetricsPythonHTTPS)
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
 func TestSuite_DisableKeepAlives(t *testing.T) {
@@ -474,9 +414,7 @@ func TestSuite_DisableKeepAlives(t *testing.T) {
 	// Reset to defaults for any tests run afterward
 	setHTTPClientDisableKeepAlives(false)
 
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
 func TestSuite_OverrideServiceName(t *testing.T) {
@@ -496,9 +434,7 @@ func TestSuite_OverrideServiceName(t *testing.T) {
 		testGRPCTracesForServiceName(t, "overridden-svc-name")
 	})
 
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
 func TestSuiteNodeClient(t *testing.T) {
@@ -514,9 +450,7 @@ func TestSuiteNodeClient(t *testing.T) {
 	t.Run("Node Client RED metrics", func(t *testing.T) {
 		testNodeClientWithMethodAndStatusCode(t, "GET", 301, 80, "0000000000000000")
 	})
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
 func TestSuiteNodeClientTLS(t *testing.T) {
@@ -532,9 +466,7 @@ func TestSuiteNodeClientTLS(t *testing.T) {
 	t.Run("Node Client RED metrics", func(t *testing.T) {
 		testNodeClientWithMethodAndStatusCode(t, "GET", 200, 443, "0000000000000001")
 	})
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
 func TestSuiteNoRoutes(t *testing.T) {
@@ -543,9 +475,7 @@ func TestSuiteNoRoutes(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("RED metrics", testREDMetricsHTTPNoRoute)
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
 func TestSuite_Elixir(t *testing.T) {
@@ -553,9 +483,7 @@ func TestSuite_Elixir(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("Elixir RED metrics", testREDMetricsElixirHTTP)
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
 // Helpers

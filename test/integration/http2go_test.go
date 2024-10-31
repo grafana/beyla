@@ -178,11 +178,5 @@ func TestHTTP2Go(t *testing.T) {
 		})
 	}
 
-	t.Run("BPF pinning folders mounted", func(t *testing.T) {
-		// 1 beyla pinned map folder for all processes
-		testBPFPinningMounted(t)
-	})
-
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }

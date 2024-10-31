@@ -24,7 +24,7 @@ import (
 )
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/tc_tracer.c -- -I../../../../bpf/headers
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../../bpf/tc_tracer.c -- -I../../../../bpf/headers -DBPF_DEBUG
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../../bpf/tc_tracer.c -- -I../../../../bpf/headers -DBPF_DEBUG -DBPF_DEBUG_TC
 
 type Tracer struct {
 	cfg            *beyla.Config
@@ -106,7 +106,7 @@ func (p *Tracer) AlreadyInstrumentedLib(uint64) bool {
 }
 
 func (p *Tracer) SetupTC() {
-	if !p.cfg.EBPF.UseLinuxTC {
+	if !p.cfg.EBPF.UseTCForCP {
 		return
 	}
 

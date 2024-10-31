@@ -16,6 +16,8 @@ jobs:
     steps:
       - id: checkout
         uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - id: push-beyla-to-dockerhub
         uses: grafana/shared-workflows/actions/build-push-to-dockerhub@main

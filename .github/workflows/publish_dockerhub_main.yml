@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   build-multiarch:
-    runs-on: github-hosted-ubuntu-arm64
+    runs-on: ubuntu-latest-8-cores
 
     steps:
       - id: checkout

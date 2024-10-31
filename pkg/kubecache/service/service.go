@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/peer"
 
+	"github.com/grafana/beyla/pkg/kubecache"
 	"github.com/grafana/beyla/pkg/kubecache/informer"
 	"github.com/grafana/beyla/pkg/kubecache/meta"
 )
@@ -19,7 +20,7 @@ import (
 type InformersCache struct {
 	informer.UnimplementedEventStreamServiceServer
 
-	Port int
+	Config *kubecache.Config
 
 	started   atomic.Bool
 	informers *meta.Informers
@@ -32,7 +33,7 @@ func (ic *InformersCache) Run(ctx context.Context, opts ...meta.InformerOption) 
 	}
 	ic.log = slog.With("component", "server.InformersCache")
 
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", ic.Port))
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", ic.Config.Port))
 	if err != nil {
 		return fmt.Errorf("starting TCP connection: %w", err)
 	}
@@ -42,10 +43,13 @@ func (ic *InformersCache) Run(ctx context.Context, opts ...meta.InformerOption) 
 		return fmt.Errorf("initializing informers: %w", err)
 	}
 
-	s := grpc.NewServer()
+	s := grpc.NewServer(
+		// TODO: configure other aspects (e.g. secure connections)
+		grpc.MaxConcurrentStreams(uint32(ic.Config.MaxConnections)),
+	)
 	informer.RegisterEventStreamServiceServer(s, ic)
 
-	ic.log.Info("server listening", "port", ic.Port)
+	ic.log.Info("server listening", "port", ic.Config.Port)
 
 	errs := make(chan error, 1)
 	go func() {

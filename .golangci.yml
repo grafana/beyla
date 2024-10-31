@@ -19,7 +19,6 @@ linters:
     - errorlint
     - cyclop
     - errname
-    - exportloopref
     - gocritic
     - goimports
     - gosimple

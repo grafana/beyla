@@ -21,6 +21,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
+	"github.com/grafana/beyla/pkg/kubecache"
 	"github.com/grafana/beyla/pkg/kubecache/informer"
 	"github.com/grafana/beyla/pkg/kubecache/meta"
 	"github.com/grafana/beyla/pkg/kubecache/service"
@@ -33,6 +34,8 @@ var (
 )
 
 const timeout = 10 * time.Second
+
+var freePort int
 
 func TestMain(m *testing.M) {
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{AddSource: true, Level: slog.LevelDebug})))
@@ -64,6 +67,11 @@ func TestMain(m *testing.M) {
 		slog.Error("creating K8s manager client", "error", err)
 		os.Exit(1)
 	}
+	freePort, err = test.FreeTCPPort()
+	if err != nil {
+		slog.Error("getting a free TCP port", "error", err)
+		os.Exit(1)
+	}
 	go func() {
 		if err := k8sManager.Start(ctx); err != nil {
 			slog.Error("starting manager", "error", err)
@@ -78,12 +86,12 @@ func TestMain(m *testing.M) {
 	}()
 
 	// Create and start informers client cache
-	svc := service.InformersCache{
-		Port: 50055, // TODO: get a free port automatically to not collide with other tests
-	}
+	iConfig := kubecache.DefaultConfig
+	iConfig.Port = freePort
+	svc := service.InformersCache{Config: &iConfig}
 	go func() {
 		if err := svc.Run(ctx,
-			meta.WithResyncPeriod(30*time.Minute),
+			meta.WithResyncPeriod(iConfig.InformerResyncPeriod),
 			meta.WithKubeClient(theClient),
 		); err != nil {
 			slog.Error("running service", "error", err)
@@ -95,7 +103,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestAPIs(t *testing.T) {
-	svcClient := serviceClient{ID: "first-pod", Address: "127.0.0.1:50055"}
+	svcClient := serviceClient{ID: "first-pod", Address: fmt.Sprintf("127.0.0.1:%d", freePort)}
 	// client
 	require.Eventually(t, func() bool {
 		return svcClient.Start(ctx) == nil

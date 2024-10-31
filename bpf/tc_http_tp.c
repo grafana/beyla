@@ -515,6 +515,16 @@ static __always_inline void update_tcp_seq(struct __sk_buff *ctx, __u32 extra_by
     tcp->seq = bpf_htonl(seq);
 }
 
+static __always_inline void print_http_payload(struct __sk_buff *ctx) {
+    const unsigned char *p = tcp_payload(ctx);
+
+    if (p) {
+        bpf_printk("EGRESS payload: '%s'", p);
+    } else {
+        bpf_printk("EGRESS no payload");
+    }
+}
+
 SEC("tc_egress")
 int tc_http_egress(struct __sk_buff *ctx) {
     struct tcphdr *tcp = tcp_header(ctx);
@@ -526,6 +536,7 @@ int tc_http_egress(struct __sk_buff *ctx) {
     const __u16 src_port = bpf_ntohs(tcp->source);
     //const __u16 dst_port = bpf_ntohs(tcp->dest);
 
+    //bpf_printk("EGRESS src port: %u", src_port);
     __u32 extra_bytes = extra_xmited_bytes(src_port);
 
     update_tcp_seq(ctx, extra_bytes);
@@ -537,6 +548,7 @@ int tc_http_egress(struct __sk_buff *ctx) {
         return TC_ACT_OK;
     }
 
+    //bpf_printk("EGRESS found connection");
     sort_connection_info(&conn);
 
     tp_info_pid_t *tp_info_pid = bpf_map_lookup_elem(&outgoing_trace_map, &conn);
@@ -545,13 +557,16 @@ int tc_http_egress(struct __sk_buff *ctx) {
         return TC_ACT_OK;
     }
 
+    //bpf_printk("EGRESS found tp_info_t");
     if (!is_http_request(ctx)) {
         return TC_ACT_OK;
     }
 
+    bpf_printk("EGRESS is http src_port: %u", src_port);
     if (!extend_skb(ctx, &tp_info_pid->tp)) {
         return TC_ACT_SHOT;
     }
+    bpf_printk("EGRESS skb extended");
 
     const __u32 key = src_port;
 
@@ -562,7 +577,9 @@ int tc_http_egress(struct __sk_buff *ctx) {
         return TC_ACT_OK;
     }
 
-    return TC_ACT_RECLASSIFY;
+    print_http_payload(ctx);
+
+    return TC_ACT_OK;
 }
 
 SEC("tc_ingress")

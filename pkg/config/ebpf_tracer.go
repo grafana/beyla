@@ -26,7 +26,7 @@ type EPPFTracer struct {
 	HTTPRequestTimeout time.Duration `yaml:"http_request_timeout" env:"BEYLA_BPF_HTTP_REQUEST_TIMEOUT"`
 
 	// Enables Linux Traffic Control probes for context propagation
-	UseLinuxTC bool `yaml:"enable_traffic_control" env:"BEYLA_BPF_TC"`
+	UseTCForCP bool `yaml:"traffic_control_context_propagation" env:"BEYLA_BPF_TC_CP"`
 
 	// Disables Beyla black-box context propagation. Used for testing purposes only.
 	DisableBlackBoxCP bool `yaml:"disable_black_box_cp" env:"BEYLA_BPF_DISABLE_BLACK_BOX_CP"`

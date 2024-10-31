@@ -118,3 +118,23 @@ func SpanPeer(span *Span) string {
 
 	return span.Peer
 }
+
+func HostAsServer(span *Span) string {
+	if span.OtherNamespace != "" && span.OtherNamespace != span.ServiceID.Namespace {
+		if span.IsClientSpan() {
+			return SpanHost(span) + "." + span.OtherNamespace
+		}
+	}
+
+	return SpanHost(span)
+}
+
+func PeerAsClient(span *Span) string {
+	if span.OtherNamespace != "" && span.OtherNamespace != span.ServiceID.Namespace {
+		if !span.IsClientSpan() {
+			return SpanPeer(span) + "." + span.OtherNamespace
+		}
+	}
+
+	return SpanPeer(span)
+}

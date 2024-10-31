@@ -562,22 +562,13 @@ func (tr *tracesOTELReceiver) acceptSpan(span *request.Span) bool {
 func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) []attribute.KeyValue {
 	var attrs []attribute.KeyValue
 
-	// add namespace to server and peer name across namespaces
-	if span.OtherNamespace != "" && span.OtherNamespace != span.ServiceID.Namespace {
-		if span.IsClientSpan() {
-			span.HostName = request.SpanHost(span) + "." + span.OtherNamespace
-		} else {
-			span.PeerName = request.SpanPeer(span) + "." + span.OtherNamespace
-		}
-	}
-
 	switch span.Type {
 	case request.EventTypeHTTP:
 		attrs = []attribute.KeyValue{
 			request.HTTPRequestMethod(span.Method),
 			request.HTTPResponseStatusCode(span.Status),
 			request.HTTPUrlPath(span.Path),
-			request.ClientAddr(request.SpanPeer(span)),
+			request.ClientAddr(request.PeerAsClient(span)),
 			request.ServerAddr(request.SpanHost(span)),
 			request.ServerPort(span.HostPort),
 			request.HTTPRequestBodySize(int(span.RequestLength())),
@@ -590,7 +581,7 @@ func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 			semconv.RPCMethod(span.Path),
 			semconv.RPCSystemGRPC,
 			semconv.RPCGRPCStatusCodeKey.Int(span.Status),
-			request.ClientAddr(request.SpanPeer(span)),
+			request.ClientAddr(request.PeerAsClient(span)),
 			request.ServerAddr(request.SpanHost(span)),
 			request.ServerPort(span.HostPort),
 		}
@@ -599,7 +590,7 @@ func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 			request.HTTPRequestMethod(span.Method),
 			request.HTTPResponseStatusCode(span.Status),
 			request.HTTPUrlFull(span.Path),
-			request.ServerAddr(request.SpanHost(span)),
+			request.ServerAddr(request.HostAsServer(span)),
 			request.ServerPort(span.HostPort),
 			request.HTTPRequestBodySize(int(span.RequestLength())),
 		}
@@ -608,12 +599,12 @@ func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 			semconv.RPCMethod(span.Path),
 			semconv.RPCSystemGRPC,
 			semconv.RPCGRPCStatusCodeKey.Int(span.Status),
-			request.ServerAddr(request.SpanHost(span)),
+			request.ServerAddr(request.HostAsServer(span)),
 			request.ServerPort(span.HostPort),
 		}
 	case request.EventTypeSQLClient:
 		attrs = []attribute.KeyValue{
-			request.ServerAddr(request.SpanHost(span)),
+			request.ServerAddr(request.HostAsServer(span)),
 			request.ServerPort(span.HostPort),
 			semconv.DBSystemOtherSQL, // We can distinguish in the future for MySQL, Postgres etc
 		}
@@ -630,7 +621,7 @@ func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 		}
 	case request.EventTypeRedisServer, request.EventTypeRedisClient:
 		attrs = []attribute.KeyValue{
-			request.ServerAddr(request.SpanHost(span)),
+			request.ServerAddr(request.HostAsServer(span)),
 			request.ServerPort(span.HostPort),
 			semconv.DBSystemRedis,
 		}
@@ -647,7 +638,7 @@ func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 	case request.EventTypeKafkaServer, request.EventTypeKafkaClient:
 		operation := request.MessagingOperationType(span.Method)
 		attrs = []attribute.KeyValue{
-			request.ServerAddr(request.SpanHost(span)),
+			request.ServerAddr(request.HostAsServer(span)),
 			request.ServerPort(span.HostPort),
 			semconv.MessagingSystemKafka,
 			semconv.MessagingDestinationName(span.Path),

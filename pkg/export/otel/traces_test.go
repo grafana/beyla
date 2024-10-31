@@ -1263,6 +1263,133 @@ func TestTraces_GRPCStatus(t *testing.T) {
 	})
 }
 
+func TestHostPeerAttributes(t *testing.T) {
+	// Metrics
+	tests := []struct {
+		name   string
+		span   request.Span
+		client string
+		server string
+	}{
+		{
+			name:   "Same namespaces HTTP",
+			span:   request.Span{Type: request.EventTypeHTTP, PeerName: "client", HostName: "server", OtherNamespace: "same", ServiceID: svc.ID{Namespace: "same"}},
+			client: "client",
+			server: "server",
+		},
+		{
+			name:   "Client in different namespace",
+			span:   request.Span{Type: request.EventTypeHTTP, PeerName: "client", HostName: "server", OtherNamespace: "far", ServiceID: svc.ID{Namespace: "same"}},
+			client: "client.far",
+			server: "server",
+		},
+		{
+			name:   "Same namespaces for HTTP client",
+			span:   request.Span{Type: request.EventTypeHTTPClient, PeerName: "client", HostName: "server", OtherNamespace: "same", ServiceID: svc.ID{Namespace: "same"}},
+			client: "client",
+			server: "server",
+		},
+		{
+			name:   "Server in different namespace ",
+			span:   request.Span{Type: request.EventTypeHTTPClient, PeerName: "client", HostName: "server", OtherNamespace: "far", ServiceID: svc.ID{Namespace: "same"}},
+			client: "client",
+			server: "server.far",
+		},
+		{
+			name:   "Same namespaces GRPC",
+			span:   request.Span{Type: request.EventTypeGRPC, PeerName: "client", HostName: "server", OtherNamespace: "same", ServiceID: svc.ID{Namespace: "same"}},
+			client: "client",
+			server: "server",
+		},
+		{
+			name:   "Client in different namespace GRPC",
+			span:   request.Span{Type: request.EventTypeGRPC, PeerName: "client", HostName: "server", OtherNamespace: "far", ServiceID: svc.ID{Namespace: "same"}},
+			client: "client.far",
+			server: "server",
+		},
+		{
+			name:   "Same namespaces for GRPC client",
+			span:   request.Span{Type: request.EventTypeGRPCClient, PeerName: "client", HostName: "server", OtherNamespace: "same", ServiceID: svc.ID{Namespace: "same"}},
+			client: "client",
+			server: "server",
+		},
+		{
+			name:   "Server in different namespace GRPC",
+			span:   request.Span{Type: request.EventTypeGRPCClient, PeerName: "client", HostName: "server", OtherNamespace: "far", ServiceID: svc.ID{Namespace: "same"}},
+			client: "client",
+			server: "server.far",
+		},
+		{
+			name:   "Same namespaces for SQL client",
+			span:   request.Span{Type: request.EventTypeSQLClient, PeerName: "client", HostName: "server", OtherNamespace: "same", ServiceID: svc.ID{Namespace: "same"}},
+			client: "",
+			server: "server",
+		},
+		{
+			name:   "Server in different namespace SQL",
+			span:   request.Span{Type: request.EventTypeSQLClient, PeerName: "client", HostName: "server", OtherNamespace: "far", ServiceID: svc.ID{Namespace: "same"}},
+			client: "",
+			server: "server.far",
+		},
+		{
+			name:   "Same namespaces for Redis client",
+			span:   request.Span{Type: request.EventTypeRedisClient, PeerName: "client", HostName: "server", OtherNamespace: "same", ServiceID: svc.ID{Namespace: "same"}},
+			client: "",
+			server: "server",
+		},
+		{
+			name:   "Server in different namespace Redis",
+			span:   request.Span{Type: request.EventTypeRedisClient, PeerName: "client", HostName: "server", OtherNamespace: "far", ServiceID: svc.ID{Namespace: "same"}},
+			client: "",
+			server: "server.far",
+		},
+		{
+			name:   "Client in different namespace Redis",
+			span:   request.Span{Type: request.EventTypeRedisServer, PeerName: "client", HostName: "server", OtherNamespace: "far", ServiceID: svc.ID{Namespace: "same"}},
+			client: "",
+			server: "server",
+		},
+		{
+			name:   "Server in different namespace Kafka",
+			span:   request.Span{Type: request.EventTypeKafkaClient, PeerName: "client", HostName: "server", OtherNamespace: "far", ServiceID: svc.ID{Namespace: "same"}},
+			client: "",
+			server: "server.far",
+		},
+		{
+			name:   "Client in different namespace Kafka",
+			span:   request.Span{Type: request.EventTypeKafkaServer, PeerName: "client", HostName: "server", OtherNamespace: "far", ServiceID: svc.ID{Namespace: "same"}},
+			client: "",
+			server: "server",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			attrs := traceAttributes(&tt.span, nil)
+			if tt.server != "" {
+				var found attribute.KeyValue
+				for _, a := range attrs {
+					if a.Key == attribute.Key(attr.ServerAddr) {
+						found = a
+						assert.Equal(t, tt.server, a.Value.AsString())
+					}
+				}
+				assert.NotNil(t, found)
+			}
+			if tt.client != "" {
+				var found attribute.KeyValue
+				for _, a := range attrs {
+					if a.Key == attribute.Key(attr.ClientAddr) {
+						found = a
+						assert.Equal(t, tt.client, a.Value.AsString())
+					}
+				}
+				assert.NotNil(t, found)
+			}
+		})
+	}
+}
+
 func makeSQLRequestSpan(sql string) request.Span {
 	method, path := sqlprune.SQLParseOperationAndTable(sql)
 	return request.Span{Type: request.EventTypeSQLClient, Method: method, Path: path, Statement: sql}

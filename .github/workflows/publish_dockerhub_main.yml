@@ -21,10 +21,8 @@ jobs:
         uses: mariomac/shared-workflows/actions/build-push-to-dockerhub@skip-qemu
         with:
           skip-qemu: true
+          repository: grafana/beyla
           context: .
-          # cache image layers from/to github actions internal cache, for faster building
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
           platforms: |-
             "linux/amd64"
             "linux/arm64"
@@ -36,11 +34,9 @@ jobs:
         uses: mariomac/shared-workflows/actions/build-push-to-dockerhub@skip-qemu
         with:
           skip-qemu: true
+          repository: grafana/beyla-k8s-cache
           file: k8scache.Dockerfile
           context: .
-          # cache image layers from/to github actions internal cache, for faster building
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
           platforms: |-
             "linux/amd64"
             "linux/arm64"

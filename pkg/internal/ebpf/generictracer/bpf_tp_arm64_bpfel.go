@@ -244,7 +244,6 @@ type bpf_tpSpecs struct {
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_tpProgramSpecs struct {
 	AsyncReset              *ebpf.ProgramSpec `ebpf:"async_reset"`
-	AsyncResetRet           *ebpf.ProgramSpec `ebpf:"async_reset_ret"`
 	EmitAsyncInit           *ebpf.ProgramSpec `ebpf:"emit_async_init"`
 	KprobeSysExit           *ebpf.ProgramSpec `ebpf:"kprobe_sys_exit"`
 	KprobeTcpCleanupRbuf    *ebpf.ProgramSpec `ebpf:"kprobe_tcp_cleanup_rbuf"`
@@ -430,7 +429,6 @@ func (m *bpf_tpMaps) Close() error {
 // It can be passed to loadBpf_tpObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_tpPrograms struct {
 	AsyncReset              *ebpf.Program `ebpf:"async_reset"`
-	AsyncResetRet           *ebpf.Program `ebpf:"async_reset_ret"`
 	EmitAsyncInit           *ebpf.Program `ebpf:"emit_async_init"`
 	KprobeSysExit           *ebpf.Program `ebpf:"kprobe_sys_exit"`
 	KprobeTcpCleanupRbuf    *ebpf.Program `ebpf:"kprobe_tcp_cleanup_rbuf"`
@@ -465,7 +463,6 @@ type bpf_tpPrograms struct {
 func (p *bpf_tpPrograms) Close() error {
 	return _Bpf_tpClose(
 		p.AsyncReset,
-		p.AsyncResetRet,
 		p.EmitAsyncInit,
 		p.KprobeSysExit,
 		p.KprobeTcpCleanupRbuf,

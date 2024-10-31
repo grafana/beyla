@@ -95,15 +95,17 @@ func (pf *ProcessFinder) Start() (<-chan *ebpf.Instrumentable, <-chan *ebpf.Inst
 
 // the common tracer group should get loaded for any tracer group, only once
 func newCommonTracersGroup(cfg *beyla.Config) []ebpf.Tracer {
+	tracers := []ebpf.Tracer{}
+
 	if cfg.EBPF.UseTCForCP {
-		return []ebpf.Tracer{tctracer.New(cfg)}
+		tracers = append(tracers, tctracer.New(cfg))
 	}
 
 	if cfg.EBPF.UseTCForL7CP {
-		return []ebpf.Tracer{httptracer.New(cfg)}
+		tracers = append(tracers, httptracer.New(cfg))
 	}
 
-	return nil
+	return tracers
 }
 
 func newGoTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Tracer {

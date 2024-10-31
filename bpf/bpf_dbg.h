@@ -32,6 +32,9 @@ struct {
 
 enum bpf_func_id___x { BPF_FUNC_snprintf___x = 42 /* avoid zero */ };
 
+// When DEBUG_TC is enabled through build options it means we are compiling the Traffic Control TC
+// BPF program. In TC we can't use the current comm or current_pid_tgid helpers. We could use
+// get_current_task and extract the PID, but it's usually not the right PID anyway.
 #ifdef BPF_DEBUG_TC
 #define bpf_dbg_helper(fmt, args...)                                                               \
     {                                                                                              \

@@ -204,13 +204,25 @@ server_trace_parent(void *goroutine_addr, tp_info_t *tp, void *req_header) {
             connection_info_t conn = *info;
             // Must sort here, Go connection info retains the original ordering.
             sort_connection_info(&conn);
-            bpf_dbg_printk("Looking up traceparent for connection info");
-            tp_info_pid_t *tp_p = trace_info_for_connection(&conn);
-            if (!disable_black_box_cp && tp_p) {
-                if (correlated_request_with_current(tp_p)) {
-                    bpf_dbg_printk("Found traceparent from trace map, another process.");
-                    found_info = 1;
-                    tp_from_parent(tp, &tp_p->tp);
+
+            // First we look-up if we have information passed down to us from
+            // TCP/IP context propagation.
+            tp_info_pid_t *existing_tp = bpf_map_lookup_elem(&incoming_trace_map, &conn);
+            if (existing_tp) {
+                bpf_dbg_printk("Found incoming (TCP) tp for server request");
+                found_info = 1;
+                tp_from_parent(tp, &existing_tp->tp);
+                bpf_map_delete_elem(&incoming_trace_map, &conn);
+            } else {
+                // If not, we then look up the information in the black-box context map - same node.
+                bpf_dbg_printk("Looking up traceparent for connection info");
+                tp_info_pid_t *tp_p = trace_info_for_connection(&conn);
+                if (!disable_black_box_cp && tp_p) {
+                    if (correlated_request_with_current(tp_p)) {
+                        bpf_dbg_printk("Found traceparent from trace map, another process.");
+                        found_info = 1;
+                        tp_from_parent(tp, &tp_p->tp);
+                    }
                 }
             }
         }

@@ -99,6 +99,10 @@ func newCommonTracersGroup(cfg *beyla.Config) []ebpf.Tracer {
 		return []ebpf.Tracer{tctracer.New(cfg)}
 	}
 
+	if cfg.EBPF.UseTCForL7CP {
+		return []ebpf.Tracer{httptracer.New(cfg)}
+	}
+
 	return nil
 }
 

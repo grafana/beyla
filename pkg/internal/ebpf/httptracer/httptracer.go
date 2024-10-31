@@ -106,7 +106,7 @@ func (p *Tracer) AlreadyInstrumentedLib(uint64) bool {
 }
 
 func (p *Tracer) SetupTC() {
-	if !p.cfg.EBPF.UseLinuxTC {
+	if !p.cfg.EBPF.UseTCForL7CP {
 		return
 	}
 

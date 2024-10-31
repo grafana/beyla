@@ -28,6 +28,9 @@ type EPPFTracer struct {
 	// Enables Linux Traffic Control probes for context propagation
 	UseTCForCP bool `yaml:"traffic_control_context_propagation" env:"BEYLA_BPF_TC_CP"`
 
+	// Enables Linux Traffic Control probes for context propagation
+	UseTCForL7CP bool `yaml:"traffic_control_l7_context_propagation" env:"BEYLA_BPF_TC_L7_CP"`
+
 	// Disables Beyla black-box context propagation. Used for testing purposes only.
 	DisableBlackBoxCP bool `yaml:"disable_black_box_cp" env:"BEYLA_BPF_DISABLE_BLACK_BOX_CP"`
 

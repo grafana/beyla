@@ -52,20 +52,6 @@ int async_reset(struct pt_regs *ctx) {
     return 0;
 }
 
-SEC("uretprobe/node:AsyncReset")
-int async_reset_ret(struct pt_regs *ctx) {
-    u64 id = bpf_get_current_pid_tgid();
-
-    if (!valid_pid(id)) {
-        return 0;
-    }
-
-    bpf_dbg_printk("=== uprobe AsyncReset returns id=%d ===", id);
-    bpf_map_delete_elem(&async_reset_args, &id);
-
-    return 0;
-}
-
 SEC("uprobe/node:EmitAsyncInit")
 int emit_async_init(struct pt_regs *ctx) {
     u64 id = bpf_get_current_pid_tgid();

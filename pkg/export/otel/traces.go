@@ -563,9 +563,7 @@ func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 	var attrs []attribute.KeyValue
 
 	// add namespace to server and peer name across namespaces
-	if span.OtherNamespace != "" && span.OtherNamespace != span.ServiceID.Namespace &&
-		// in Kafka events we never get the client, so we hijack the OtherNamespace for the clientId
-		span.Type != request.EventTypeKafkaServer && span.Type != request.EventTypeKafkaClient {
+	if span.OtherNamespace != "" && span.OtherNamespace != span.ServiceID.Namespace {
 		if span.IsClientSpan() {
 			span.HostName = request.SpanHost(span) + "." + span.OtherNamespace
 		} else {
@@ -653,7 +651,7 @@ func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 			request.ServerPort(span.HostPort),
 			semconv.MessagingSystemKafka,
 			semconv.MessagingDestinationName(span.Path),
-			semconv.MessagingClientID(span.OtherNamespace),
+			semconv.MessagingClientID(span.Statement),
 			operation,
 		}
 	}

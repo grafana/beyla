@@ -573,7 +573,7 @@ func TestGenerateTracesAttributes(t *testing.T) {
 		ensureTraceStrAttr(t, attrs, attribute.Key(attr.DBQueryText), "SELECT password FROM credentials WHERE username=\"bill\"")
 	})
 	t.Run("test Kafka trace generation", func(t *testing.T) {
-		span := request.Span{Type: request.EventTypeKafkaClient, Method: "process", Path: "important-topic", OtherNamespace: "test"}
+		span := request.Span{Type: request.EventTypeKafkaClient, Method: "process", Path: "important-topic", Statement: "test"}
 		traces := GenerateTraces(&span, "host-id", map[attr.Name]struct{}{}, []attribute.KeyValue{})
 
 		assert.Equal(t, 1, traces.ResourceSpans().Len())
@@ -1008,8 +1008,8 @@ func TestTracesInstrumentations(t *testing.T) {
 		makeSQLRequestSpan("SELECT password FROM credentials WHERE username=\"bill\""),
 		{ServiceID: svc.ID{UID: "foo"}, Type: request.EventTypeRedisClient, Method: "SET", Path: "redis_db", RequestStart: 150, End: 175},
 		{ServiceID: svc.ID{UID: "foo"}, Type: request.EventTypeRedisServer, Method: "GET", Path: "redis_db", RequestStart: 150, End: 175},
-		{Type: request.EventTypeKafkaClient, Method: "process", Path: "important-topic", OtherNamespace: "test"},
-		{Type: request.EventTypeKafkaServer, Method: "publish", Path: "important-topic", OtherNamespace: "test"},
+		{Type: request.EventTypeKafkaClient, Method: "process", Path: "important-topic", Statement: "test"},
+		{Type: request.EventTypeKafkaServer, Method: "publish", Path: "important-topic", Statement: "test"},
 	}
 
 	for _, tt := range tests {

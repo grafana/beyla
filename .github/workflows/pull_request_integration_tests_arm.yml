@@ -42,4 +42,4 @@ jobs:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         with:
           file: ./testoutput/itest-covdata.txt
-          flags: integration-test
+          flags: integration-test-arm

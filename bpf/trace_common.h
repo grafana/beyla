@@ -93,11 +93,10 @@ static __always_inline unsigned char *bpf_strstr_tp_loop(unsigned char *buf, int
     bpf_loop(nr_loops, tp_match, &data, 0);
 
     if (data.pos) {
-        u32 pos = (data.pos > (TRACE_BUF_SIZE - TRACE_PARENT_HEADER_LEN)) ? 0 : data.pos;
-        return &(buf[pos]);
+        return (data.pos > (TRACE_BUF_SIZE - TRACE_PARENT_HEADER_LEN)) ? NULL : &(buf[data.pos]);
     }
 
-    return 0;
+    return NULL;
 }
 #endif
 

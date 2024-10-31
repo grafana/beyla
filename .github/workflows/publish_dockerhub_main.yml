@@ -10,21 +10,20 @@ permissions:
   id-token: write
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  build-multiarch:
+    runs-on: ubuntu-latest-8-cores
 
     steps:
       - id: checkout
         uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - id: push-beyla-to-dockerhub
         uses: grafana/shared-workflows/actions/build-push-to-dockerhub@main
         with:
           repository: grafana/beyla
           context: .
-          # cache image layers from/to github actions internal cache, for faster building
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
           platforms: |-
             "linux/amd64"
             "linux/arm64"
@@ -38,9 +37,6 @@ jobs:
           repository: grafana/beyla-k8s-cache
           file: k8scache.Dockerfile
           context: .
-          # cache image layers from/to github actions internal cache, for faster building
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
           platforms: |-
             "linux/amd64"
             "linux/arm64"

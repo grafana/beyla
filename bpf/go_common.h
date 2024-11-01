@@ -265,10 +265,19 @@ static __always_inline u8 client_trace_parent(void *goroutine_addr,
         }
     }
 
+    go_addr_key_t g_key = {};
+    go_addr_key_from_id(&g_key, goroutine_addr);
+
+    if (!found_trace_id) {
+        sql_func_invocation_t *invocation = bpf_map_lookup_elem(&ongoing_sql_queries, &g_key);
+        if (invocation) {
+            tp_from_parent(tp_i, &invocation->tp);
+            found_trace_id = 1;
+        }
+    }
+
     if (!found_trace_id) {
         tp_info_t *tp = 0;
-        go_addr_key_t g_key = {};
-        go_addr_key_from_id(&g_key, goroutine_addr);
 
         u64 parent_id = find_parent_goroutine(&g_key);
         go_addr_key_t p_key = {};

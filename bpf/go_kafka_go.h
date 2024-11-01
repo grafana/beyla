@@ -89,13 +89,21 @@ int uprobe_writer_produce(struct pt_regs *ctx) {
     go_addr_key_from_id(&g_key, goroutine_addr);
 
     void *w_ptr = (void *)GO_PARAM1(ctx);
+    void *topic_ptr = (void *)GO_PARAM2(ctx);
+    u64 topic_len = (u64)GO_PARAM3(ctx);
     off_table_t *ot = get_offsets_table();
 
     if (w_ptr) {
-        void *topic_ptr = 0;
-        bpf_probe_read_user(&topic_ptr,
-                            sizeof(void *),
-                            w_ptr + go_offset_of(ot, (go_offset){.v = _kafka_go_writer_topic_pos}));
+
+        if (topic_len == 0) {
+            topic_ptr = 0;
+            topic_len = MAX_TOPIC_NAME_LEN - 1;
+            bpf_probe_read_user(&topic_ptr,
+                                sizeof(void *),
+                                w_ptr +
+                                    go_offset_of(ot, (go_offset){.v = _kafka_go_writer_topic_pos}));
+        }
+        bpf_clamp_umax(topic_len, MAX_TOPIC_NAME_LEN - 1);
 
         bpf_dbg_printk("topic_ptr %llx", topic_ptr);
         go_addr_key_t p_key = {};
@@ -111,7 +119,8 @@ int uprobe_writer_produce(struct pt_regs *ctx) {
                 urand_bytes(topic.tp.span_id, SPAN_ID_SIZE_BYTES);
             }
 
-            bpf_probe_read_user(&topic.name, sizeof(topic.name), topic_ptr);
+            bpf_probe_read_user(&topic.name, topic_len, topic_ptr);
+            topic.name[topic_len] = '\0';
             bpf_map_update_elem(&ongoing_produce_topics, &g_key, &topic, BPF_ANY);
         }
         bpf_map_delete_elem(&produce_traceparents, &p_key);

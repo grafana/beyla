@@ -31,11 +31,40 @@ func producerHandler(kafkaWriter *kafka.Writer) func(http.ResponseWriter, *http.
 	})
 }
 
+func producerHandlerWithTopic(kafkaWriter *kafka.Writer, topic string) func(http.ResponseWriter, *http.Request) {
+	return http.HandlerFunc(func(wrt http.ResponseWriter, req *http.Request) {
+		body, err := ioutil.ReadAll(req.Body)
+		if err != nil {
+			log.Fatalln(err)
+		}
+		msg := kafka.Message{
+			Key:   []byte(fmt.Sprintf("address-%s", req.RemoteAddr)),
+			Value: body,
+			Topic: topic,
+		}
+		err = kafkaWriter.WriteMessages(req.Context(), msg)
+
+		if err != nil {
+			fmt.Printf("error %v\n", err)
+		}
+	})
+}
+
 func getKafkaWriter(kafkaURL, topic string) *kafka.Writer {
 	return &kafka.Writer{
 		Addr:     kafka.TCP(kafkaURL),
 		Topic:    topic,
 		Balancer: &kafka.LeastBytes{},
+	}
+}
+
+func getKafkaWriterNoTopic(kafkaURL string) *kafka.Writer {
+	return &kafka.Writer{
+		Addr:         kafka.TCP(kafkaURL),
+		Balancer:     &kafka.LeastBytes{},
+		BatchSize:    1,
+		BatchTimeout: 1,
+		Async:        true,
 	}
 }
 
@@ -70,6 +99,9 @@ func main() {
 	kafkaWriter := getKafkaWriter(kafkaURL, topic)
 	defer kafkaWriter.Close()
 
+	kafkaWriter2 := getKafkaWriterNoTopic(kafkaURL)
+	defer kafkaWriter2.Close()
+
 	groupID := os.Getenv("groupID")
 
 	reader := getKafkaReader(kafkaURL, topic, groupID)
@@ -87,7 +119,8 @@ func main() {
 	}()
 
 	// Add handle func for producer.
-	http.HandleFunc("/", producerHandler(kafkaWriter))
+	http.HandleFunc("/ping", producerHandler(kafkaWriter))
+	http.HandleFunc("/withTopic", producerHandlerWithTopic(kafkaWriter2, topic))
 
 	// Run the web server.
 	fmt.Println("started test server on port 8080 ...")

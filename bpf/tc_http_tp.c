@@ -14,12 +14,19 @@ enum { TC_ACT_OK = 0, TC_ACT_RECLASSIFY = 1, TC_ACT_SHOT = 2 };
 enum { MAX_IP_PACKET_SIZE = 0x7fff };
 enum { MAX_INLINE_LEN = 0x7ff };
 
-struct seq_offset_map {
+enum connection_state : __u8 { ESTABLISHED, FIN_WAIT_1, FIN_WAIT_2, CLOSING, CLOSE_WAIT, LAST_ACK };
+
+struct tc_http_ctx {
+    __u32 xtra_bytes;
+    __u8 state;
+} __attribute__((packed));
+
+struct tc_http_ctx_map {
     __uint(type, BPF_MAP_TYPE_HASH);
     __type(key, __u32);
-    __type(value, __u32);
+    __type(value, struct tc_http_ctx);
     __uint(max_entries, 10240);
-} seq_offset_map SEC(".maps");
+} tc_http_ctx_map SEC(".maps");
 
 const char TP[] = "Traceparent: 00-0123456789ABCDEFGHIJKLMNOPQRSTUV-0123456789ABCDEF-XX\r\n";
 const __u32 EXTEND_SIZE = sizeof(TP) - 1;
@@ -333,12 +340,6 @@ static __always_inline long update_ip_csum(struct __sk_buff *ctx) {
         ctx, ip_csum_off, ip_tot_len_old, ip_tot_len_new, sizeof(ip_tot_len_new));
 }
 
-static __always_inline __u32 extra_xmited_bytes(__u32 key) {
-    const __u32 *seq = bpf_map_lookup_elem(&seq_offset_map, &key);
-
-    return seq ? *seq : 0;
-}
-
 static __always_inline int is_http_request(struct __sk_buff *ctx) {
     unsigned char *payload = tcp_payload(ctx);
 
@@ -512,16 +513,74 @@ static __always_inline void update_tcp_seq(struct __sk_buff *ctx, __u32 extra_by
 
     __u32 seq = bpf_ntohl(tcp->seq);
     seq += extra_bytes;
+
     tcp->seq = bpf_htonl(seq);
 }
 
-static __always_inline void print_http_payload(struct __sk_buff *ctx) {
-    const unsigned char *p = tcp_payload(ctx);
+static __always_inline void
+get_extra_xmited_bytes(__u32 key, __u32 *extra_bytes, struct tc_http_ctx **http_ctx) {
+    struct tc_http_ctx *ctx = bpf_map_lookup_elem(&tc_http_ctx_map, &key);
 
-    if (p) {
-        bpf_printk("EGRESS payload: '%s'", p);
+    if (ctx) {
+        *extra_bytes = ctx->xtra_bytes;
+        *http_ctx = ctx;
     } else {
-        bpf_printk("EGRESS no payload");
+        *extra_bytes = 0;
+        *http_ctx = NULL;
+    }
+}
+
+static __always_inline void delete_http_ctx(__u32 key) {
+    bpf_map_delete_elem(&tc_http_ctx_map, &key);
+}
+
+static __always_inline void
+update_conn_state_egress(struct tcphdr *tcp, struct tc_http_ctx *http_ctx, __u32 key) {
+    // this is a new connection, reset any existing metatada
+    if (tcp->fin) {
+        if (http_ctx->state == ESTABLISHED) {
+            // we've initiated a connection shutdown
+            http_ctx->state = FIN_WAIT_1;
+        } else if (http_ctx->state == CLOSE_WAIT) {
+            // the peer has previously initiated a connection shutdown, we are
+            // now sending our FIN and will wait for the last ACK from the
+            // peer
+            http_ctx->state = LAST_ACK;
+        }
+    }
+}
+
+static __always_inline void
+update_conn_state_ingress(struct tcphdr *tcp, struct tc_http_ctx *http_ctx, __u32 key) {
+    if (tcp->rst) {
+        delete_http_ctx(key);
+        return;
+    }
+
+    // we have previously initiated a connection shutdown
+    if (http_ctx->state == FIN_WAIT_1) {
+        if (tcp->fin && tcp->ack) {
+            // we've entered TIME_WAIT - connection is closed
+            delete_http_ctx(key);
+        } else if (tcp->fin) {
+            // we've only received FIN, but not ACK yet, wait for it
+            http_ctx->state = CLOSING;
+        } else if (tcp->ack) {
+            // we've only received ACK, but no FIN, wait for it
+            http_ctx->state = FIN_WAIT_2;
+        }
+    } else if (http_ctx->state == CLOSING && tcp->ack) {
+        // we've entered TIME_WAIT - connection is closed
+        delete_http_ctx(key);
+    } else if (http_ctx->state == LAST_ACK && tcp->ack) {
+        // we've entered TIME_WAIT - connection is closed
+        delete_http_ctx(key);
+    } else if (http_ctx->state == FIN_WAIT_2 && tcp->fin) {
+        // we've entered TIME_WAIT - connection is closed
+        delete_http_ctx(key);
+    } else if (tcp->fin && http_ctx->state == ESTABLISHED) {
+        // the peeer has initiated closing the connection
+        http_ctx->state = CLOSE_WAIT;
     }
 }
 
@@ -534,25 +593,34 @@ int tc_http_egress(struct __sk_buff *ctx) {
     }
 
     const __u16 src_port = bpf_ntohs(tcp->source);
+    const __u16 dst_port = bpf_ntohs(tcp->dest);
+    const __u32 key = src_port;
 
-    //bpf_printk("EGRESS src port: %u", src_port);
-    __u32 extra_bytes = extra_xmited_bytes(src_port);
+    __u32 extra_bytes = 0;
+    struct tc_http_ctx *http_ctx = NULL;
+
+    get_extra_xmited_bytes(src_port, &extra_bytes, &http_ctx);
+
+    if (http_ctx) {
+        // this is a new connection, reset any existing metatada
+        if (tcp->syn) {
+            http_ctx->xtra_bytes = 0;
+            http_ctx->state = ESTABLISHED;
+            extra_bytes = 0;
+        } else if (tcp->rst) {
+            // we are aborting, dispatch the packet and call it a day
+            delete_http_ctx(key);
+            return TC_ACT_OK;
+        } else {
+            update_conn_state_egress(tcp, http_ctx, key);
+        }
+    }
 
     update_tcp_seq(ctx, extra_bytes);
 
-    protocol_info_t tcp_info = {};
-    connection_info_t conn = {};
-
-    if (!read_sk_buff(ctx, &tcp_info, &conn)) {
-        return TC_ACT_OK;
-    }
-
-    sort_connection_info(&conn);
-    bpf_printk("EGRESS found connection %u (%u:%u)", src_port, conn.s_port, conn.d_port);
-
     const egress_key_t e_key = {
-        .d_port = conn.d_port,
-        .s_port = conn.s_port,
+        .d_port = dst_port,
+        .s_port = src_port,
     };
 
     tp_info_pid_t *tp_info_pid = bpf_map_lookup_elem(&outgoing_trace_map, &e_key);
@@ -561,27 +629,26 @@ int tc_http_egress(struct __sk_buff *ctx) {
         return TC_ACT_OK;
     }
 
-    bpf_printk("EGRESS found tp_info_t port: %u", src_port);
     if (!is_http_request(ctx)) {
         return TC_ACT_OK;
     }
 
-    bpf_printk("EGRESS is http src_port: %u", src_port);
     if (!extend_skb(ctx, &tp_info_pid->tp)) {
         return TC_ACT_SHOT;
     }
-    bpf_printk("EGRESS skb extended");
-
-    const __u32 key = src_port;
 
     extra_bytes += EXTEND_SIZE;
 
-    if (bpf_map_update_elem(&seq_offset_map, &key, &extra_bytes, BPF_ANY) != 0) {
-        bpf_printk("failed to update map with value %u", extra_bytes);
-        return TC_ACT_OK;
-    }
+    if (http_ctx) {
+        http_ctx->xtra_bytes = extra_bytes;
+    } else {
+        const struct tc_http_ctx htx = {.xtra_bytes = extra_bytes, .state = ESTABLISHED};
 
-    print_http_payload(ctx);
+        if (bpf_map_update_elem(&tc_http_ctx_map, &key, &htx, BPF_ANY) != 0) {
+            bpf_printk("failed to update map with value %u", extra_bytes);
+            return TC_ACT_OK;
+        }
+    }
 
     return TC_ACT_OK;
 }
@@ -595,18 +662,20 @@ int tc_http_ingress(struct __sk_buff *ctx) {
     }
 
     const __u16 dst_port = bpf_ntohs(tcp->dest);
-
     const __u32 key = dst_port;
-    const __u32 *seq = bpf_map_lookup_elem(&seq_offset_map, &key);
 
-    if (!seq) {
+    struct tc_http_ctx *http_ctx = bpf_map_lookup_elem(&tc_http_ctx_map, &key);
+
+    if (!http_ctx) {
         return TC_ACT_OK;
     }
 
     __u32 ack_seq = bpf_ntohl(tcp->ack_seq);
-    ack_seq -= *seq;
+    ack_seq -= http_ctx->xtra_bytes;
 
     tcp->ack_seq = bpf_htonl(ack_seq);
+
+    update_conn_state_ingress(tcp, http_ctx, key);
 
     return TC_ACT_OK;
 }

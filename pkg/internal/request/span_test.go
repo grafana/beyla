@@ -404,6 +404,12 @@ func TestHostPeerClientServer(t *testing.T) {
 			server: "server",
 		},
 		{
+			name:   "Client in different namespace",
+			span:   Span{Type: EventTypeHTTP, Peer: "1.1.1.1", HostName: "server", OtherNamespace: "far", ServiceID: svc.ID{Namespace: "same"}},
+			client: "1.1.1.1",
+			server: "server",
+		},
+		{
 			name:   "Same namespaces for HTTP client",
 			span:   Span{Type: EventTypeHTTPClient, PeerName: "client", HostName: "server", OtherNamespace: "same", ServiceID: svc.ID{Namespace: "same"}},
 			client: "client",
@@ -414,6 +420,12 @@ func TestHostPeerClientServer(t *testing.T) {
 			span:   Span{Type: EventTypeHTTPClient, PeerName: "client", HostName: "server", OtherNamespace: "far", ServiceID: svc.ID{Namespace: "same"}},
 			client: "client",
 			server: "server.far",
+		},
+		{
+			name:   "Server in different namespace ",
+			span:   Span{Type: EventTypeHTTPClient, PeerName: "client", Host: "2.2.2.2", OtherNamespace: "far", ServiceID: svc.ID{Namespace: "same"}},
+			client: "client",
+			server: "2.2.2.2",
 		},
 		{
 			name:   "Same namespaces GRPC",

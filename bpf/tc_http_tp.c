@@ -547,8 +547,8 @@ int tc_http_egress(struct __sk_buff *ctx) {
         return TC_ACT_OK;
     }
 
-    //bpf_printk("EGRESS found connection");
     sort_connection_info(&conn);
+    bpf_printk("EGRESS found connection %u (%u:%u)", src_port, conn.s_port, conn.d_port);
 
     const egress_key_t e_key = {
         .d_port = conn.d_port,
@@ -561,12 +561,12 @@ int tc_http_egress(struct __sk_buff *ctx) {
         return TC_ACT_OK;
     }
 
-    //bpf_printk("EGRESS found tp_info_t port: %u", src_port);
+    bpf_printk("EGRESS found tp_info_t port: %u", src_port);
     if (!is_http_request(ctx)) {
         return TC_ACT_OK;
     }
 
-    //bpf_printk("EGRESS is http src_port: %u", src_port);
+    bpf_printk("EGRESS is http src_port: %u", src_port);
     if (!extend_skb(ctx, &tp_info_pid->tp)) {
         return TC_ACT_SHOT;
     }

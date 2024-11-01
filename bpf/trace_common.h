@@ -222,6 +222,7 @@ static __always_inline void server_or_client_trace(http_connection_metadata_t *m
             .s_port = conn->s_port,
         };
 
+        bpf_printk("adding %u->%u to outgoing_trace_map", e_key.s_port, e_key.d_port);
         bpf_map_update_elem(&outgoing_trace_map, &e_key, tp_p, BPF_ANY);
     }
 }

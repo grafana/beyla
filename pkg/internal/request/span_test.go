@@ -382,3 +382,111 @@ func TestSelfReferencingSpan(t *testing.T) {
 		})
 	}
 }
+
+func TestHostPeerClientServer(t *testing.T) {
+	// Metrics
+	tests := []struct {
+		name   string
+		span   Span
+		client string
+		server string
+	}{
+		{
+			name:   "Same namespaces HTTP",
+			span:   Span{Type: EventTypeHTTP, PeerName: "client", HostName: "server", OtherNamespace: "same", ServiceID: svc.ID{Namespace: "same"}},
+			client: "client",
+			server: "server",
+		},
+		{
+			name:   "Client in different namespace",
+			span:   Span{Type: EventTypeHTTP, PeerName: "client", HostName: "server", OtherNamespace: "far", ServiceID: svc.ID{Namespace: "same"}},
+			client: "client.far",
+			server: "server",
+		},
+		{
+			name:   "Client in different namespace",
+			span:   Span{Type: EventTypeHTTP, Peer: "1.1.1.1", HostName: "server", OtherNamespace: "far", ServiceID: svc.ID{Namespace: "same"}},
+			client: "1.1.1.1",
+			server: "server",
+		},
+		{
+			name:   "Same namespaces for HTTP client",
+			span:   Span{Type: EventTypeHTTPClient, PeerName: "client", HostName: "server", OtherNamespace: "same", ServiceID: svc.ID{Namespace: "same"}},
+			client: "client",
+			server: "server",
+		},
+		{
+			name:   "Server in different namespace ",
+			span:   Span{Type: EventTypeHTTPClient, PeerName: "client", HostName: "server", OtherNamespace: "far", ServiceID: svc.ID{Namespace: "same"}},
+			client: "client",
+			server: "server.far",
+		},
+		{
+			name:   "Server in different namespace ",
+			span:   Span{Type: EventTypeHTTPClient, PeerName: "client", Host: "2.2.2.2", OtherNamespace: "far", ServiceID: svc.ID{Namespace: "same"}},
+			client: "client",
+			server: "2.2.2.2",
+		},
+		{
+			name:   "Same namespaces GRPC",
+			span:   Span{Type: EventTypeGRPC, PeerName: "client", HostName: "server", OtherNamespace: "same", ServiceID: svc.ID{Namespace: "same"}},
+			client: "client",
+			server: "server",
+		},
+		{
+			name:   "Client in different namespace GRPC",
+			span:   Span{Type: EventTypeGRPC, PeerName: "client", HostName: "server", OtherNamespace: "far", ServiceID: svc.ID{Namespace: "same"}},
+			client: "client.far",
+			server: "server",
+		},
+		{
+			name:   "Same namespaces for GRPC client",
+			span:   Span{Type: EventTypeGRPCClient, PeerName: "client", HostName: "server", OtherNamespace: "same", ServiceID: svc.ID{Namespace: "same"}},
+			client: "client",
+			server: "server",
+		},
+		{
+			name:   "Server in different namespace GRPC",
+			span:   Span{Type: EventTypeGRPCClient, PeerName: "client", HostName: "server", OtherNamespace: "far", ServiceID: svc.ID{Namespace: "same"}},
+			client: "client",
+			server: "server.far",
+		},
+		{
+			name:   "Same namespaces for SQL client",
+			span:   Span{Type: EventTypeSQLClient, PeerName: "client", HostName: "server", OtherNamespace: "same", ServiceID: svc.ID{Namespace: "same"}},
+			client: "client",
+			server: "server",
+		},
+		{
+			name:   "Server in different namespace SQL",
+			span:   Span{Type: EventTypeSQLClient, PeerName: "client", HostName: "server", OtherNamespace: "far", ServiceID: svc.ID{Namespace: "same"}},
+			client: "client",
+			server: "server.far",
+		},
+		{
+			name:   "Same namespaces for Redis client",
+			span:   Span{Type: EventTypeRedisClient, PeerName: "client", HostName: "server", OtherNamespace: "same", ServiceID: svc.ID{Namespace: "same"}},
+			client: "client",
+			server: "server",
+		},
+		{
+			name:   "Server in different namespace Redis",
+			span:   Span{Type: EventTypeRedisClient, PeerName: "client", HostName: "server", OtherNamespace: "far", ServiceID: svc.ID{Namespace: "same"}},
+			client: "client",
+			server: "server.far",
+		},
+		{
+			name:   "Client in different namespace Redis",
+			span:   Span{Type: EventTypeRedisServer, PeerName: "client", HostName: "server", OtherNamespace: "far", ServiceID: svc.ID{Namespace: "same"}},
+			client: "client.far",
+			server: "server",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.client, PeerAsClient(&tt.span))
+			assert.Equal(t, tt.server, HostAsServer(&tt.span))
+		})
+	}
+}

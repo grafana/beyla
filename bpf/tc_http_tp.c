@@ -536,7 +536,6 @@ static __always_inline void delete_http_ctx(__u32 key) {
 
 static __always_inline void
 update_conn_state_egress(struct tcphdr *tcp, struct tc_http_ctx *http_ctx, __u32 key) {
-    // this is a new connection, reset any existing metatada
     if (tcp->fin) {
         if (http_ctx->state == ESTABLISHED) {
             // we've initiated a connection shutdown

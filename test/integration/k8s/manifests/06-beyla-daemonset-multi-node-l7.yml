@@ -91,4 +91,6 @@ spec:
               value: "true"
             - name: BEYLA_BPF_DEBUG
               value: "true"
+            - name: BEYLA_BPF_DISABLE_BLACK_BOX_CP
+              value: "true"
 

@@ -268,6 +268,8 @@ static __always_inline u8 client_trace_parent(void *goroutine_addr,
     go_addr_key_t g_key = {};
     go_addr_key_from_id(&g_key, goroutine_addr);
 
+    // We first check for Cloud web databases (like snowflake), which wrap HTTP calls with SQL
+    // statements.
     if (!found_trace_id) {
         sql_func_invocation_t *invocation = bpf_map_lookup_elem(&ongoing_sql_queries, &g_key);
         if (invocation) {

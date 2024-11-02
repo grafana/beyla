@@ -119,7 +119,7 @@ services:
       context: ../..
       dockerfile: ./test/integration/components/beyla/Dockerfile
     command:
-      - --config=/configs/instrumenter-config-multiexec.yml
+      - --config=/configs/instrumenter-config-multiexec-host.yml
     volumes:
       - ./configs/:/configs
       - ./system/sys/kernel/security:/sys/kernel/security
@@ -127,6 +127,7 @@ services:
       - ../../testoutput/run-multi:/var/run/beyla
     image: hatest-autoinstrumenter
     privileged: true # in some environments (not GH Pull Requests) you can set it to false and then cap_add: [ SYS_ADMIN ]
+    network_mode: "host"
     pid: "host"
     environment:
       GOCOVERDIR: "/coverage"
@@ -134,7 +135,7 @@ services:
       BEYLA_TRACE_PRINTER: "text"
       BEYLA_METRICS_INTERVAL: "10ms"
       BEYLA_BPF_BATCH_TIMEOUT: "10ms"
-      BEYLA_LOG_LEVEL: "DEBUG"
+      BEYLA_LOG_LEVEL: "INFO"
       BEYLA_BPF_DEBUG: "TRUE"
       BEYLA_METRICS_REPORT_TARGET: "true"
       BEYLA_METRICS_REPORT_PEER: "true"
@@ -146,7 +147,7 @@ services:
       BEYLA_BPF_TC_L7_CP: "${BEYLA_BPF_TC_L7_CP}"
       BEYLA_BPF_TRACK_REQUEST_HEADERS: "${BEYLA_BPF_TRACK_REQUEST_HEADERS}"
     ports:
-      - "8999:8999"      
+      - "8999:8999"
 
   # OpenTelemetry Collector
   otelcol:

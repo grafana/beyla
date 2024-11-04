@@ -29,6 +29,7 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	metric2 "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.25.0"
@@ -269,7 +270,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 		}
 		slog.Debug("getTracesExporter: confighttp.ClientConfig created", "endpoint", config.ClientConfig.Endpoint)
 		set := getTraceSettings(ctxInfo, cfg, t)
-		return factory.CreateTracesExporter(ctx, set, config)
+		return factory.CreateTraces(ctx, set, config)
 	case ProtocolGRPC:
 		slog.Debug("instantiating GRPC TracesReporter", "protocol", proto)
 		var t trace.SpanExporter
@@ -300,7 +301,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 			},
 		}
 		set := getTraceSettings(ctxInfo, cfg, t)
-		return factory.CreateTracesExporter(ctx, set, config)
+		return factory.CreateTraces(ctx, set, config)
 	default:
 		slog.Error(fmt.Sprintf("invalid protocol value: %q. Accepted values are: %s, %s, %s",
 			proto, ProtocolGRPC, ProtocolHTTPJSON, ProtocolHTTPProtobuf))
@@ -364,14 +365,23 @@ func getTraceSettings(ctxInfo *global.ContextInfo, cfg TracesConfig, in trace.Sp
 		traceProvider = traceProviderWithInternalMetrics(ctxInfo, cfg, in)
 	}
 
+	meterProvider := metric.NewMeterProvider()
 	telemetrySettings := component.TelemetrySettings{
-		Logger:         zap.NewNop(),
-		MeterProvider:  metric.NewMeterProvider(),
+		Logger:        zap.NewNop(),
+		MeterProvider: meterProvider,
+		LeveledMeterProvider: func(_ configtelemetry.Level) metric2.MeterProvider {
+			return meterProvider
+		},
 		TracerProvider: traceProvider,
 		MetricsLevel:   telemetryLevel,
 	}
+
+	// component.DataTypeMetrics was removed in collector API v0.112.0 but its value is still required here
+	// dataTypeMetrics variable hardcodes the previous value for the removed constant
+	// TODO: replace legacy API
+	dataTypeMetrics := component.MustNewType("metrics")
 	return exporter.Settings{
-		ID:                component.NewIDWithName(component.DataTypeMetrics, "beyla"),
+		ID:                component.NewIDWithName(dataTypeMetrics, "beyla"),
 		TelemetrySettings: telemetrySettings,
 	}
 }

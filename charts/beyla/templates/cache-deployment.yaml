@@ -24,7 +24,6 @@ spec:
         {{- tpl (toYaml . | nindent 8) $root }}
       {{- end }}
       labels:
-        {{- include "beyla.labels" . | nindent 8 }}
         app.kubernetes.io/name: {{ .Values.k8sCache.service.name }}
     spec:
       {{- if .Values.serviceAccount.create }}

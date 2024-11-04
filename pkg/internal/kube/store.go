@@ -180,6 +180,7 @@ func (s *Store) updateDeletedObjectMetaByIPIndex(meta *informer.ObjectMeta) {
 				delete(s.containerIDs, c.Id)
 				delete(s.namespaces, info.PIDNamespace)
 			}
+			delete(s.podsByContainer, c.Id)
 		}
 
 		// clean up the owner to container map

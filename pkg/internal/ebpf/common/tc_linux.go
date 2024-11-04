@@ -9,9 +9,10 @@ import (
 	"io/fs"
 	"log/slog"
 
-	"github.com/grafana/beyla/pkg/internal/netolly/ifaces"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
+
+	"github.com/grafana/beyla/pkg/internal/netolly/ifaces"
 )
 
 type TCLinks struct {

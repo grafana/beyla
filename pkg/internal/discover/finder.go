@@ -10,6 +10,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/ebpf"
 	"github.com/grafana/beyla/pkg/internal/ebpf/generictracer"
 	"github.com/grafana/beyla/pkg/internal/ebpf/gotracer"
+	"github.com/grafana/beyla/pkg/internal/ebpf/httptracer"
 	"github.com/grafana/beyla/pkg/internal/ebpf/tctracer"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
@@ -94,11 +95,17 @@ func (pf *ProcessFinder) Start() (<-chan *ebpf.Instrumentable, <-chan *ebpf.Inst
 
 // the common tracer group should get loaded for any tracer group, only once
 func newCommonTracersGroup(cfg *beyla.Config) []ebpf.Tracer {
+	tracers := []ebpf.Tracer{}
+
 	if cfg.EBPF.UseTCForCP {
-		return []ebpf.Tracer{tctracer.New(cfg)}
+		tracers = append(tracers, tctracer.New(cfg))
 	}
 
-	return nil
+	if cfg.EBPF.UseTCForL7CP {
+		tracers = append(tracers, httptracer.New(cfg))
+	}
+
+	return tracers
 }
 
 func newGoTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Tracer {

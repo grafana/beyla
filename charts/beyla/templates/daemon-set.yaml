@@ -119,6 +119,10 @@ spec:
           env:
             - name: BEYLA_CONFIG_PATH
               value: "/etc/beyla/config/beyla-config.yml"
+          {{- if .Values.k8sCache.replicas }}
+            - name: BEYLA_KUBE_META_CACHE_ADDRESS
+              value: {{ .Values.k8sCache.service.name }}:{{ .Values.k8sCache.service.port }}
+          {{- end }}
           {{- if not (.Values.privileged) }}
             - name: KUBE_NAMESPACE
               valueFrom:

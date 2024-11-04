@@ -92,3 +92,20 @@ Calculate name of image ID to use for "beyla".
 {{- printf ":%s" .Chart.AppVersion }}
 {{- end }}
 {{- end }}
+
+{{/*
+Calculate name of image ID to use for "beyla-cache".
+*/}}
+{{- define "beyla.k8sCache.imageId" -}}
+{{- if .Values.k8sCache.image.digest }}
+{{- $digest := .Values.k8sCache.image.digest }}
+{{- if not (hasPrefix "sha256:" $digest) }}
+{{- $digest = printf "sha256:%s" $digest }}
+{{- end }}
+{{- printf "@%s" $digest }}
+{{- else if .Values.k8sCache.image.tag }}
+{{- printf ":%s" .Values.k8sCache.image.tag }}
+{{- else }}
+{{- printf ":%s" .Chart.AppVersion }}
+{{- end }}
+{{- end }}

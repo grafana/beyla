@@ -227,6 +227,8 @@ func (s *Store) ObjectMetaByIP(ip string) *informer.ObjectMeta {
 }
 
 func (s *Store) ServiceNameNamespaceForMetadata(om *informer.ObjectMeta) (string, string) {
+	s.access.RLock()
+	defer s.access.RUnlock()
 	var name string
 	var namespace string
 	if owner := TopOwner(om.Pod); owner != nil {
@@ -240,6 +242,8 @@ func (s *Store) ServiceNameNamespaceForMetadata(om *informer.ObjectMeta) (string
 // ServiceNameNamespaceForIP returns the service name and namespace for a given IP address
 // This means that, for a given Pod, we will not return the Pod Name, but the Pod Owner Name
 func (s *Store) ServiceNameNamespaceForIP(ip string) (string, string) {
+	s.access.RLock()
+	defer s.access.RUnlock()
 	if serviceInfo, ok := s.otelServiceInfoByIP[ip]; ok {
 		return serviceInfo.Name, serviceInfo.Namespace
 	}

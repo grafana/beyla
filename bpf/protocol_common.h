@@ -8,10 +8,6 @@
 #include "bpf_dbg.h"
 #include "pin_internal.h"
 
-#define MIN_HTTP_SIZE 12      // HTTP/1.1 CCC is the smallest valid request we can have
-#define RESPONSE_STATUS_POS 9 // HTTP/1.1 <--
-#define MAX_HTTP_STATUS 599
-
 #define PACKET_TYPE_REQUEST 1
 #define PACKET_TYPE_RESPONSE 2
 

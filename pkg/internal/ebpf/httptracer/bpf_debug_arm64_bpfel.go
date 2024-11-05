@@ -29,6 +29,19 @@ type bpf_debugTcHttpCtx struct {
 	State     uint8
 }
 
+type bpf_debugTcL7ArgsT struct {
+	Tp struct {
+		TraceId  [16]uint8
+		SpanId   [8]uint8
+		ParentId [8]uint8
+		Ts       uint64
+		Flags    uint8
+		_        [7]byte
+	}
+	ExtraBytes uint32
+	Key        uint32
+}
+
 type bpf_debugTpInfoPidT struct {
 	Tp struct {
 		TraceId  [16]uint8
@@ -84,6 +97,7 @@ type bpf_debugSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_debugProgramSpecs struct {
+	ExtendSkb     *ebpf.ProgramSpec `ebpf:"extend_skb"`
 	TcHttpEgress  *ebpf.ProgramSpec `ebpf:"tc_http_egress"`
 	TcHttpIngress *ebpf.ProgramSpec `ebpf:"tc_http_ingress"`
 }
@@ -96,6 +110,8 @@ type bpf_debugMapSpecs struct {
 	IncomingTraceMap *ebpf.MapSpec `ebpf:"incoming_trace_map"`
 	OutgoingTraceMap *ebpf.MapSpec `ebpf:"outgoing_trace_map"`
 	TcHttpCtxMap     *ebpf.MapSpec `ebpf:"tc_http_ctx_map"`
+	TcL7ArgsMem      *ebpf.MapSpec `ebpf:"tc_l7_args_mem"`
+	TcL7JumpTable    *ebpf.MapSpec `ebpf:"tc_l7_jump_table"`
 	TraceMap         *ebpf.MapSpec `ebpf:"trace_map"`
 }
 
@@ -122,6 +138,8 @@ type bpf_debugMaps struct {
 	IncomingTraceMap *ebpf.Map `ebpf:"incoming_trace_map"`
 	OutgoingTraceMap *ebpf.Map `ebpf:"outgoing_trace_map"`
 	TcHttpCtxMap     *ebpf.Map `ebpf:"tc_http_ctx_map"`
+	TcL7ArgsMem      *ebpf.Map `ebpf:"tc_l7_args_mem"`
+	TcL7JumpTable    *ebpf.Map `ebpf:"tc_l7_jump_table"`
 	TraceMap         *ebpf.Map `ebpf:"trace_map"`
 }
 
@@ -131,6 +149,8 @@ func (m *bpf_debugMaps) Close() error {
 		m.IncomingTraceMap,
 		m.OutgoingTraceMap,
 		m.TcHttpCtxMap,
+		m.TcL7ArgsMem,
+		m.TcL7JumpTable,
 		m.TraceMap,
 	)
 }
@@ -139,12 +159,14 @@ func (m *bpf_debugMaps) Close() error {
 //
 // It can be passed to loadBpf_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_debugPrograms struct {
+	ExtendSkb     *ebpf.Program `ebpf:"extend_skb"`
 	TcHttpEgress  *ebpf.Program `ebpf:"tc_http_egress"`
 	TcHttpIngress *ebpf.Program `ebpf:"tc_http_ingress"`
 }
 
 func (p *bpf_debugPrograms) Close() error {
 	return _Bpf_debugClose(
+		p.ExtendSkb,
 		p.TcHttpEgress,
 		p.TcHttpIngress,
 	)

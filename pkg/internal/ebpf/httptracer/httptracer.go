@@ -55,7 +55,23 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 	return loadBpf()
 }
 
-func (p *Tracer) SetupTailCalls() {}
+func (p *Tracer) SetupTailCalls() {
+	for _, tc := range []struct {
+		index int
+		prog  *ebpf.Program
+	}{
+		{
+			index: 0,
+			prog:  p.bpfObjects.ExtendSkb,
+		},
+	} {
+		err := p.bpfObjects.TcL7JumpTable.Update(uint32(tc.index), uint32(tc.prog.FD()), ebpf.UpdateAny)
+
+		if err != nil {
+			p.log.Error("error loading info tail call jump table", "error", err)
+		}
+	}
+}
 
 func (p *Tracer) Constants() map[string]any {
 	return map[string]any{}
@@ -106,6 +122,10 @@ func (p *Tracer) SetupTC() {
 		return
 	}
 	p.log.Info("enabling L7 context-propagation with Linux Traffic Control")
+
+	if !ebpfcommon.SupportsEBPFLoops() {
+		p.log.Error("cannot enable L7 context-propagation, kernel 5.17 or newer required")
+	}
 
 	ebpfcommon.WatchAndRegisterTC(context.Background(), p.cfg.ChannelBufferLen, p.registerTC, p.log)
 }

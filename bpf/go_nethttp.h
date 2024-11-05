@@ -944,6 +944,16 @@ int uprobe_netFdRead(struct pt_regs *ctx) {
                               &sql_conn->conn); // ok to not check the result, we leave it as 0
     }
 
+    http_func_invocation_t *invocation = bpf_map_lookup_elem(&ongoing_http_client_requests, &g_key);
+    bpf_dbg_printk("http client conn %llx", invocation);
+    if (invocation) {
+        connection_info_t c_conn = {0};
+        void *fd_ptr = GO_PARAM1(ctx);
+        get_conn_info_from_fd(fd_ptr,
+                              &c_conn); // ok to not check the result, we leave it as 0
+        bpf_map_update_elem(&ongoing_client_connections, &g_key, &c_conn, BPF_NOEXIST);
+    }
+
     return 0;
 }
 

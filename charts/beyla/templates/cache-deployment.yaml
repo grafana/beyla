@@ -24,7 +24,6 @@ spec:
         {{- tpl (toYaml . | nindent 8) $root }}
       {{- end }}
       labels:
-        {{- include "beyla.labels" . | nindent 8 }}
         app.kubernetes.io/name: {{ .Values.k8sCache.service.name }}
     spec:
       {{- if .Values.serviceAccount.create }}
@@ -45,4 +44,7 @@ spec:
             - containerPort: {{ .Values.k8sCache.service.port }}
               protocol: TCP
               name: grpc
+          env:
+            - name: BEYLA_K8S_CACHE_PORT
+              value: "{{ .Values.k8sCache.service.port }}"
 {{- end }}

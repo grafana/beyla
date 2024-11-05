@@ -180,6 +180,7 @@ func (s *Store) updateDeletedObjectMetaByIPIndex(meta *informer.ObjectMeta) {
 				delete(s.containerIDs, c.Id)
 				delete(s.namespaces, info.PIDNamespace)
 			}
+			delete(s.podsByContainer, c.Id)
 		}
 
 		// clean up the owner to container map
@@ -222,10 +223,20 @@ func (s *Store) PodByPIDNs(pidns uint32) *informer.ObjectMeta {
 func (s *Store) ObjectMetaByIP(ip string) *informer.ObjectMeta {
 	s.access.RLock()
 	defer s.access.RUnlock()
+	return s.objectMetaByIP(ip)
+}
+
+func (s *Store) objectMetaByIP(ip string) *informer.ObjectMeta {
 	return s.ipInfos[ip]
 }
 
 func (s *Store) ServiceNameNamespaceForMetadata(om *informer.ObjectMeta) (string, string) {
+	s.access.RLock()
+	defer s.access.RUnlock()
+	return s.serviceNameNamespaceForMetadata(om)
+}
+
+func (s *Store) serviceNameNamespaceForMetadata(om *informer.ObjectMeta) (string, string) {
 	var name string
 	var namespace string
 	if owner := TopOwner(om.Pod); owner != nil {
@@ -239,12 +250,14 @@ func (s *Store) ServiceNameNamespaceForMetadata(om *informer.ObjectMeta) (string
 // ServiceNameNamespaceForIP returns the service name and namespace for a given IP address
 // This means that, for a given Pod, we will not return the Pod Name, but the Pod Owner Name
 func (s *Store) ServiceNameNamespaceForIP(ip string) (string, string) {
+	s.access.RLock()
+	defer s.access.RUnlock()
 	if serviceInfo, ok := s.otelServiceInfoByIP[ip]; ok {
 		return serviceInfo.Name, serviceInfo.Namespace
 	}
 
-	if om := s.ObjectMetaByIP(ip); om != nil {
-		name, namespace := s.ServiceNameNamespaceForMetadata(om)
+	if om := s.objectMetaByIP(ip); om != nil {
+		name, namespace := s.serviceNameNamespaceForMetadata(om)
 		s.otelServiceInfoByIP[ip] = OTelServiceNamePair{Name: name, Namespace: namespace}
 		return name, namespace
 	}

@@ -177,6 +177,106 @@ func TestContainerInfo(t *testing.T) {
 	assert.Equal(t, "namespaceA", namespace)
 }
 
+func TestMemoryCleanedUp(t *testing.T) {
+	deployment := informer.Owner{
+		Name: "service",
+		Kind: "Deployment",
+	}
+
+	replicaSet := informer.Owner{
+		Name: "serviceB",
+		Kind: "ReplicaSet",
+	}
+
+	service := informer.ObjectMeta{
+		Name:      "service",
+		Namespace: "namespaceA",
+		Ips:       []string{"169.0.0.1", "169.0.0.2"},
+		Kind:      "Service",
+	}
+
+	podMetaA := informer.ObjectMeta{
+		Name:      "podA",
+		Namespace: "namespaceA",
+		Ips:       []string{"1.1.1.1", "2.2.2.2"},
+		Kind:      "Pod",
+		Pod: &informer.PodInfo{
+			Owners: []*informer.Owner{&deployment},
+			Containers: []*informer.ContainerInfo{
+				{
+					Id:  "container1",
+					Env: map[string]string{"OTEL_SERVICE_NAME": "customName"},
+				},
+				{
+					Id:  "container2",
+					Env: map[string]string{"OTEL_RESOURCE_ATTRIBUTES": "service.namespace=boo,other.attr=goo"},
+				},
+			},
+		},
+	}
+
+	podMetaA1 := informer.ObjectMeta{
+		Name:      "podA_1",
+		Namespace: "namespaceA",
+		Ips:       []string{"3.1.1.1", "3.2.2.2"},
+		Kind:      "Pod",
+		Pod: &informer.PodInfo{
+			Owners: []*informer.Owner{&deployment},
+			Containers: []*informer.ContainerInfo{
+				{
+					Id:  "container5",
+					Env: map[string]string{"OTEL_SERVICE_NAME_NOT_EXIST": "customName"},
+				},
+				{
+					Id:  "container6",
+					Env: map[string]string{"OTEL_RESOURCE_ATTRIBUTES": "service.namespace1=boo,other.attr=goo"},
+				},
+			},
+		},
+	}
+
+	podMetaB := informer.ObjectMeta{
+		Name:      "podB",
+		Namespace: "namespaceB",
+		Ips:       []string{"1.2.1.2", "2.1.2.1"},
+		Kind:      "Pod",
+		Pod: &informer.PodInfo{
+			Owners: []*informer.Owner{&replicaSet},
+			Containers: []*informer.ContainerInfo{
+				{
+					Id: "container3",
+				},
+				{
+					Id:  "container4",
+					Env: map[string]string{"OTEL_RESOURCE_ATTRIBUTES": "service.namespace=boo,other.attr=goo"},
+				},
+			},
+		},
+	}
+
+	fInformer := &fakeInformer{}
+
+	store := NewStore(fInformer)
+
+	store.updateNewObjectMetaByIPIndex(&service)
+	store.updateNewObjectMetaByIPIndex(&podMetaA)
+	store.updateNewObjectMetaByIPIndex(&podMetaA1)
+	store.updateNewObjectMetaByIPIndex(&podMetaB)
+
+	store.updateDeletedObjectMetaByIPIndex(&podMetaA1)
+	store.updateDeletedObjectMetaByIPIndex(&podMetaA)
+	store.updateDeletedObjectMetaByIPIndex(&podMetaB)
+	store.updateDeletedObjectMetaByIPIndex(&service)
+
+	assert.Equal(t, 0, len(store.containerIDs))
+	assert.Equal(t, 0, len(store.containerByPID))
+	assert.Equal(t, 0, len(store.namespaces))
+	assert.Equal(t, 0, len(store.podsByContainer))
+	assert.Equal(t, 0, len(store.containersByOwner))
+	assert.Equal(t, 0, len(store.ipInfos))
+	assert.Equal(t, 0, len(store.otelServiceInfoByIP))
+}
+
 type fakeInformer struct {
 	mt        sync.Mutex
 	observers map[string]meta.Observer

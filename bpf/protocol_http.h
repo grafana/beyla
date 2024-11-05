@@ -34,7 +34,7 @@ static __always_inline http_info_t *empty_http_info() {
     return value;
 }
 
-static __always_inline u8 is_http(unsigned char *p, u32 len, u8 *packet_type) {
+static __always_inline u8 is_http(const unsigned char *p, u32 len, u8 *packet_type) {
     if (len < MIN_HTTP_SIZE) {
         return 0;
     }

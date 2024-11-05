@@ -223,12 +223,20 @@ func (s *Store) PodByPIDNs(pidns uint32) *informer.ObjectMeta {
 func (s *Store) ObjectMetaByIP(ip string) *informer.ObjectMeta {
 	s.access.RLock()
 	defer s.access.RUnlock()
+	return s.objectMetaByIP(ip)
+}
+
+func (s *Store) objectMetaByIP(ip string) *informer.ObjectMeta {
 	return s.ipInfos[ip]
 }
 
 func (s *Store) ServiceNameNamespaceForMetadata(om *informer.ObjectMeta) (string, string) {
 	s.access.RLock()
 	defer s.access.RUnlock()
+	return s.serviceNameNamespaceForMetadata(om)
+}
+
+func (s *Store) serviceNameNamespaceForMetadata(om *informer.ObjectMeta) (string, string) {
 	var name string
 	var namespace string
 	if owner := TopOwner(om.Pod); owner != nil {
@@ -248,8 +256,8 @@ func (s *Store) ServiceNameNamespaceForIP(ip string) (string, string) {
 		return serviceInfo.Name, serviceInfo.Namespace
 	}
 
-	if om := s.ObjectMetaByIP(ip); om != nil {
-		name, namespace := s.ServiceNameNamespaceForMetadata(om)
+	if om := s.objectMetaByIP(ip); om != nil {
+		name, namespace := s.serviceNameNamespaceForMetadata(om)
 		s.otelServiceInfoByIP[ip] = OTelServiceNamePair{Name: name, Namespace: namespace}
 		return name, namespace
 	}

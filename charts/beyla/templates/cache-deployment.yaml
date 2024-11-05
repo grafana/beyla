@@ -44,4 +44,7 @@ spec:
             - containerPort: {{ .Values.k8sCache.service.port }}
               protocol: TCP
               name: grpc
+          env:
+            - name: BEYLA_K8S_CACHE_PORT
+              value: "{{ .Values.k8sCache.service.port }}"
 {{- end }}

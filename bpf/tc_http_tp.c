@@ -8,7 +8,7 @@
 #include "tcp_info.h"
 #include "tracing.h"
 
-char LICENSE[] SEC("license") = "Dual BSD/GPL";
+char __license[] SEC("license") = "Dual MIT/GPL";
 
 enum { TC_ACT_OK = 0, TC_ACT_RECLASSIFY = 1, TC_ACT_SHOT = 2 };
 enum { MAX_IP_PACKET_SIZE = 0x7fff };

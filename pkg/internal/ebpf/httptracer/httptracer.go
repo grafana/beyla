@@ -107,6 +107,10 @@ func (p *Tracer) SetupTC() {
 	}
 	p.log.Info("enabling L7 context-propagation with Linux Traffic Control")
 
+	if !ebpfcommon.SupportsEBPFLoops() {
+		p.log.Error("cannot enable L7 context-propagation, kernel 5.17 or newer required")
+	}
+
 	ebpfcommon.WatchAndRegisterTC(context.Background(), p.cfg.ChannelBufferLen, p.registerTC, p.log)
 }
 

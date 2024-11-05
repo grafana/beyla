@@ -12,7 +12,7 @@ char __license[] SEC("license") = "Dual MIT/GPL";
 
 enum { TC_ACT_OK = 0, TC_ACT_RECLASSIFY = 1, TC_ACT_SHOT = 2 };
 enum { MAX_IP_PACKET_SIZE = 0x7fff };
-enum { MAX_INLINE_LEN = 0x7ff };
+enum { MAX_INLINE_LEN = 0x3ff };
 
 enum connection_state { ESTABLISHED, FIN_WAIT_1, FIN_WAIT_2, CLOSING, CLOSE_WAIT, LAST_ACK };
 

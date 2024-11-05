@@ -16,8 +16,8 @@ Beyla can be configured via environment variables or via
 a YAML configuration file that is passed either with the `-config` command-line
 argument or the `BEYLA_CONFIG_PATH` environment variable.
 Environment variables have priority over the properties in the
-configuration file. For example, in the following command line, the BEYLA_OPEN_PORT option,
-is used to override any open_port settings inside the config.yaml file:
+configuration file. For example, in the following command line, the `BEYLA_OPEN_PORT` option,
+is used to override any `open_port` settings inside the config.yaml file:
 
 ```
 $ BEYLA_OPEN_PORT=8080 beyla -config /path/to/config.yaml

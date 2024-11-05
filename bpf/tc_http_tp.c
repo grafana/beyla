@@ -16,6 +16,28 @@ enum { MAX_INLINE_LEN = 0x7ff };
 
 enum connection_state { ESTABLISHED, FIN_WAIT_1, FIN_WAIT_2, CLOSING, CLOSE_WAIT, LAST_ACK };
 
+typedef struct tc_l7_args {
+    tp_info_t tp;
+    u32 extra_bytes;
+    u32 key;
+} tc_l7_args_t;
+
+struct {
+    __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+    __type(key, int);
+    __type(value, tc_l7_args_t);
+    __uint(max_entries, 1);
+} tc_l7_args_mem SEC(".maps");
+
+struct bpf_map_def SEC("maps") tc_l7_jump_table = {
+    .type = BPF_MAP_TYPE_PROG_ARRAY,
+    .key_size = sizeof(__u32),
+    .value_size = sizeof(__u32),
+    .max_entries = 8,
+};
+
+#define L7_TC_TAIL_PROTOCOL_HTTP 0
+
 struct tc_http_ctx {
     u32 xtra_bytes;
     u8 state;
@@ -36,6 +58,11 @@ struct datasum_loop_ctx {
     const unsigned char *e;
     u32 *sum;
 };
+
+static __always_inline tc_l7_args_t *l7_args() {
+    int zero = 0;
+    return bpf_map_lookup_elem(&tc_l7_args_mem, &zero);
+}
 
 static long calculate_datasum_loop(u32 index, void *ctx) {
     if (index % 2 == 1) {
@@ -355,7 +382,7 @@ static __always_inline int is_http_request(struct __sk_buff *ctx) {
         return 0;
     }
 
-    return is_http_request_buf(req_buf, 9);
+    return is_http_request_buf(req_buf);
 }
 
 static __always_inline unsigned char *
@@ -422,7 +449,24 @@ find_first_of(unsigned char *begin, unsigned char *end, char ch) {
     return memchar(begin, ch, end, MAX_INLINE_LEN);
 }
 
-static __always_inline int extend_skb(struct __sk_buff *ctx, const tp_info_t *tp) {
+// TAIL_PROTOCOL_HTTP
+SEC("tc/http")
+void extend_skb(struct __sk_buff *ctx) {
+    tc_l7_args_t *args = l7_args();
+
+    if (!args) {
+        return;
+    }
+
+    //struct __sk_buff *ctx = (struct __sk_buff *)args->ctx;
+
+    if (!ctx) {
+        return;
+    }
+
+    const tp_info_t *tp = &args->tp;
+    u32 extra_bytes = args->extra_bytes;
+
     bpf_skb_pull_data(ctx, ctx->len);
 
     // find first \n
@@ -430,20 +474,20 @@ static __always_inline int extend_skb(struct __sk_buff *ctx, const tp_info_t *tp
     unsigned char *payload = tcp_payload(ctx);
 
     if (!payload) {
-        return 0;
+        return;
     }
 
     const unsigned char *newline = find_first_of(payload, ctx_data_end(ctx), '\n');
 
     if (!newline) {
-        return 0;
+        return;
     }
 
     const u32 copy_size = ((unsigned char *)ctx_data_end(ctx) - newline - 1) & MAX_IP_PACKET_SIZE;
     const u32 nl_offset = newline - payload;
 
     if (bpf_skb_change_tail(ctx, ctx->len + EXTEND_SIZE, 0) != 0) {
-        return 0;
+        return;
     }
 
     bpf_skb_pull_data(ctx, ctx->len);
@@ -451,7 +495,7 @@ static __always_inline int extend_skb(struct __sk_buff *ctx, const tp_info_t *tp
     payload = tcp_payload(ctx);
 
     if (!payload) {
-        return 0;
+        return;
     }
 
     const unsigned char *end = ctx_data_end(ctx);
@@ -460,7 +504,7 @@ static __always_inline int extend_skb(struct __sk_buff *ctx, const tp_info_t *tp
     unsigned char *dest = src + EXTEND_SIZE;
 
     if (dest + copy_size > end) {
-        return 0;
+        return;
     }
 
     move_data(dest, src, end, copy_size);
@@ -470,7 +514,7 @@ static __always_inline int extend_skb(struct __sk_buff *ctx, const tp_info_t *tp
     payload = tcp_payload(ctx);
 
     if ((void *)payload > ctx_data_end(ctx)) {
-        return 0;
+        return;
     }
 
     update_ip_csum(ctx);
@@ -478,12 +522,27 @@ static __always_inline int extend_skb(struct __sk_buff *ctx, const tp_info_t *tp
     struct iphdr *iph = ip_header(ctx);
 
     if (!iph) {
-        return 0;
+        return;
     }
 
     iph->tot_len = bpf_htons(bpf_ntohs(iph->tot_len) + EXTEND_SIZE);
 
-    return update_tcp_csum(ctx);
+    if (update_tcp_csum(ctx)) {
+        extra_bytes += EXTEND_SIZE;
+        u32 key = args->key;
+
+        struct tc_http_ctx *http_ctx = bpf_map_lookup_elem(&tc_http_ctx_map, &key);
+
+        if (http_ctx) {
+            http_ctx->xtra_bytes = extra_bytes;
+        } else {
+            const struct tc_http_ctx htx = {.xtra_bytes = extra_bytes, .state = ESTABLISHED};
+
+            if (bpf_map_update_elem(&tc_http_ctx_map, &key, &htx, BPF_ANY) != 0) {
+                bpf_printk("failed to update map with value %u", extra_bytes);
+            }
+        }
+    }
 }
 
 static __always_inline void update_tcp_seq(struct __sk_buff *ctx, u32 extra_bytes) {
@@ -614,21 +673,13 @@ int tc_http_egress(struct __sk_buff *ctx) {
         return TC_ACT_OK;
     }
 
-    if (!extend_skb(ctx, &tp_info_pid->tp)) {
-        return TC_ACT_SHOT;
-    }
+    tc_l7_args_t *args = l7_args();
+    if (args) {
+        args->extra_bytes = extra_bytes;
+        args->key = key;
+        __builtin_memcpy(&args->tp, &tp_info_pid->tp, sizeof(args->tp));
 
-    extra_bytes += EXTEND_SIZE;
-
-    if (http_ctx) {
-        http_ctx->xtra_bytes = extra_bytes;
-    } else {
-        const struct tc_http_ctx htx = {.xtra_bytes = extra_bytes, .state = ESTABLISHED};
-
-        if (bpf_map_update_elem(&tc_http_ctx_map, &key, &htx, BPF_ANY) != 0) {
-            bpf_printk("failed to update map with value %u", extra_bytes);
-            return TC_ACT_OK;
-        }
+        bpf_tail_call(ctx, &tc_l7_jump_table, L7_TC_TAIL_PROTOCOL_HTTP);
     }
 
     return TC_ACT_OK;

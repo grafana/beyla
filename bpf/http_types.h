@@ -248,10 +248,7 @@ static __always_inline bool client_call(connection_info_t *info) {
     return likely_ephemeral_port(info->s_port) && !likely_ephemeral_port(info->d_port);
 }
 
-static __always_inline u8 is_http_request_buf(const unsigned char *p, u32 len) {
-    if (len < MIN_HTTP_REQ_SIZE) {
-        return 0;
-    }
+static __always_inline u8 is_http_request_buf(const unsigned char *p) {
     //HTTP/1.x
     return (((p[0] == 'G') && (p[1] == 'E') && (p[2] == 'T') && (p[3] == ' ') &&
              (p[4] == '/')) || // GET

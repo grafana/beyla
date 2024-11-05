@@ -43,7 +43,7 @@ static __always_inline u8 is_http(const unsigned char *p, u32 len, u8 *packet_ty
         (p[5] == '1') && (p[6] == '.')) {
         *packet_type = PACKET_TYPE_RESPONSE;
         return 1;
-    } else if (is_http_request_buf(p, len)) {
+    } else if (is_http_request_buf(p)) {
         *packet_type = PACKET_TYPE_REQUEST;
         return 1;
     }

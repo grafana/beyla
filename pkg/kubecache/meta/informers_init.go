@@ -31,6 +31,8 @@ const (
 	defaultResyncTime     = 30 * time.Minute
 )
 
+var usefulEnvVars = map[string]struct{}{"OTEL_SERVICE_NAME": {}, "OTEL_RESOURCE_ATTRIBUTES": {}}
+
 type informersConfig struct {
 	kubeConfigPath  string
 	resyncPeriod    time.Duration
@@ -266,7 +268,9 @@ func (inf *Informers) initPodInformer(informerFactory informers.SharedInformerFa
 func envToMap(env []v1.EnvVar) map[string]string {
 	envMap := map[string]string{}
 	for _, envV := range env {
-		envMap[envV.Name] = envV.Value
+		if _, ok := usefulEnvVars[envV.Name]; ok {
+			envMap[envV.Name] = envV.Value
+		}
 	}
 
 	return envMap

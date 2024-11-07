@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"google.golang.org/protobuf/testing/protocmp"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
@@ -37,6 +39,9 @@ type informersConfig struct {
 
 	kubeClient kubernetes.Interface
 }
+
+// global object used for comparing protobuf messages in the informers event handlers
+var protoCmpTransform = protocmp.Transform()
 
 type InformerOption func(*informersConfig)
 
@@ -228,7 +233,14 @@ func (inf *Informers) initPodInformer(informerFactory informers.SharedInformerFa
 				Resource: obj.(*indexableEntity).EncodedMeta,
 			})
 		},
-		UpdateFunc: func(_, newObj interface{}) {
+		UpdateFunc: func(oldObj, newObj interface{}) {
+			if cmp.Equal(
+				oldObj.(*indexableEntity).EncodedMeta,
+				newObj.(*indexableEntity).EncodedMeta,
+				protoCmpTransform,
+			) {
+				return
+			}
 			inf.Notify(&informer.Event{
 				Type:     informer.EventType_UPDATED,
 				Resource: newObj.(*indexableEntity).EncodedMeta,
@@ -366,7 +378,14 @@ func (inf *Informers) ipInfoEventHandler() *cache.ResourceEventHandlerFuncs {
 				Resource: obj.(*indexableEntity).EncodedMeta,
 			})
 		},
-		UpdateFunc: func(_, newObj interface{}) {
+		UpdateFunc: func(oldObj, newObj interface{}) {
+			if cmp.Equal(
+				oldObj.(*indexableEntity).EncodedMeta,
+				newObj.(*indexableEntity).EncodedMeta,
+				protoCmpTransform,
+			) {
+				return
+			}
 			inf.Notify(&informer.Event{
 				Type:     informer.EventType_UPDATED,
 				Resource: newObj.(*indexableEntity).EncodedMeta,

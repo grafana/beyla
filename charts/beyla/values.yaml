@@ -277,6 +277,21 @@ serviceMonitor:
 k8sCache:
   # -- Number of replicas for the Kubernetes metadata chache service. 0 disables the service.
   replicas: 0
+  # -- Enables the profile port for the Beyla cache
+  profile_port: 0
+  ## Env variables that will override configmap values
+  ## For example:
+  ##   BEYLA_K8S_CACHE_LOG_LEVEL: "debug"
+  # -- extra environment variables
+  env: {}
+    # BEYLA_K8S_CACHE_LOG_LEVEL: "debug"
+
+  # -- extra environment variables to be set from resources such as k8s configMaps/secrets
+  envValueFrom: {}
+    #  ENV_NAME:
+    #    secretKeyRef:
+    #      name: secret-name
+    #      key: value_key
   image:
     # -- K8s Cache image registry (defaults to docker.io)
     registry: "docker.io"

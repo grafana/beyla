@@ -8,6 +8,8 @@ import (
 	osexec "os/exec"
 	"strings"
 	"time"
+
+	"github.com/vladimirvivien/gexe/vars"
 )
 
 // Proc stores process info when running a process
@@ -21,6 +23,7 @@ type Proc struct {
 	inputPipe  io.WriteCloser
 	cmd        *osexec.Cmd
 	process    *os.Process
+	vars       *vars.Variables
 }
 
 // NewProc sets up command string to be started as an OS process, however
@@ -34,7 +37,6 @@ func NewProc(cmdStr string) *Proc {
 	command := osexec.Command(words[0], words[1:]...)
 	pipeout, outerr := command.StdoutPipe()
 	pipeerr, errerr := command.StderrPipe()
-	//output := io.MultiReader(pipeout, pipeerr)
 
 	if outerr != nil || errerr != nil {
 		return &Proc{err: fmt.Errorf("combinedOutput pipe: %s; %s", outerr, errerr)}
@@ -51,7 +53,15 @@ func NewProc(cmdStr string) *Proc {
 		errorPipe:  pipeerr,
 		inputPipe:  pipein,
 		result:     new(bytes.Buffer),
+		vars:       &vars.Variables{},
 	}
+}
+
+// NewProcWithVars sets up new command string and session variables for a new proc
+func NewProcWithVars(cmdStr string, variables *vars.Variables) *Proc {
+	p := NewProc(variables.Eval(cmdStr))
+	p.vars = variables
+	return p
 }
 
 // StartProc starts an OS process (setup a combined output of stdout, stderr) and does not wait for
@@ -67,6 +77,13 @@ func StartProc(cmdStr string) *Proc {
 	return proc.Start()
 }
 
+// StartProcWithVars sets session variables and calls StartProc
+func StartProcWithVars(cmdStr string, variables *vars.Variables) *Proc {
+	proc := StartProc(variables.Eval(cmdStr))
+	proc.vars = variables
+	return proc
+}
+
 // RunProc starts a new process and waits for its completion. Use Proc.Out() or Proc.Result()
 // to access the combined result from stdout and stderr.
 func RunProc(cmdStr string) *Proc {
@@ -78,10 +95,28 @@ func RunProc(cmdStr string) *Proc {
 	return proc
 }
 
+// RunProcWithVars sets session variables and calls RunProc
+func RunProcWithVars(cmdStr string, variables *vars.Variables) *Proc {
+	proc := RunProc(variables.Eval(cmdStr))
+	proc.vars = variables
+	return proc
+}
+
 // Run creates and runs a process and waits for its result (combined stdin,stderr) returned as a string value.
 // This is equivalent to calling Proc.RunProc() followed by Proc.Result().
 func Run(cmdStr string) (result string) {
 	return RunProc(cmdStr).Result()
+}
+
+// RunWithVars sets session variables and call Run
+func RunWithVars(cmdStr string, variables *vars.Variables) string {
+	return RunProcWithVars(cmdStr, variables).Result()
+}
+
+// SetVars sets session variables for Proc
+func (p *Proc) SetVars(variables *vars.Variables) *Proc {
+	p.vars = variables
+	return p
 }
 
 // Start starts the associated command as an OS process and does not wait for its result.
@@ -279,4 +314,9 @@ func (p *Proc) GetErrorPipe() io.Reader {
 
 func (p *Proc) hasStarted() bool {
 	return (p.cmd.Process != nil && p.cmd.Process.Pid != 0)
+}
+
+// Parse parses the command string and returns its tokens
+func Parse(cmd string) ([]string, error) {
+	return parse(cmd)
 }

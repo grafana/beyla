@@ -45,7 +45,7 @@ func main() {
 	if config.ProfilePort != 0 {
 		go func() {
 			slog.Info("starting PProf HTTP listener", "port", config.ProfilePort)
-			err := http.ListenAndServe(fmt.Sprintf(":%d", config.ProfilePort), nil)
+			err := http.ListenAndServe(fmt.Sprintf(":%d", config.ProfilePort), http.DefaultServeMux)
 			slog.Error("PProf HTTP listener stopped working", "error", err)
 		}()
 	}

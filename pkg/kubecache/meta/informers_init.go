@@ -29,9 +29,11 @@ const (
 	typePod               = "Pod"
 	typeService           = "Service"
 	defaultResyncTime     = 30 * time.Minute
+	EnvServiceName        = "OTEL_SERVICE_NAME"
+	EnvResourceAttrs      = "OTEL_RESOURCE_ATTRIBUTES"
 )
 
-var usefulEnvVars = map[string]struct{}{"OTEL_SERVICE_NAME": {}, "OTEL_RESOURCE_ATTRIBUTES": {}}
+var usefulEnvVars = map[string]struct{}{EnvServiceName: {}, EnvResourceAttrs: {}}
 
 type informersConfig struct {
 	kubeConfigPath  string

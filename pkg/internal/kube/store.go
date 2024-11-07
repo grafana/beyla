@@ -16,8 +16,6 @@ func dblog() *slog.Logger {
 }
 
 const (
-	envServiceName      = "OTEL_SERVICE_NAME"
-	envResourceAttrs    = "OTEL_RESOURCE_ATTRIBUTES"
 	serviceNameKey      = "service.name"
 	serviceNamespaceKey = "service.namespace"
 )
@@ -294,7 +292,7 @@ func (s *Store) serviceNameNamespaceOwnerID(ownerKey, name, namespace string) (s
 }
 
 func (s *Store) nameFromResourceAttrs(variable string, c *informer.ContainerInfo) (string, bool) {
-	if resourceVars, ok := c.Env[envResourceAttrs]; ok {
+	if resourceVars, ok := c.Env[meta.EnvResourceAttrs]; ok {
 		allVars := map[string]string{}
 		collect := func(k string, v string) {
 			allVars[k] = v
@@ -315,7 +313,7 @@ func isValidServiceName(name string) bool {
 func (s *Store) serviceNameFromEnv(ownerKey string) (string, bool) {
 	if containers, ok := s.containersByOwner[ownerKey]; ok {
 		for _, c := range containers {
-			if serviceName, ok := c.Env[envServiceName]; ok {
+			if serviceName, ok := c.Env[meta.EnvServiceName]; ok {
 				return serviceName, isValidServiceName(serviceName)
 			}
 

@@ -1,7 +1,10 @@
 package exec
 
 import (
+	"fmt"
 	"sync"
+
+	"github.com/vladimirvivien/gexe/vars"
 )
 
 type CommandPolicy byte
@@ -19,29 +22,75 @@ type CommandResult struct {
 	errProcs []*Proc
 }
 
+// Procs return all executed processes
 func (cr *CommandResult) Procs() []*Proc {
 	cr.mu.RLock()
 	defer cr.mu.RUnlock()
 	return cr.procs
 }
+
+// ErrProcs returns errored processes
 func (cr *CommandResult) ErrProcs() []*Proc {
 	cr.mu.RLock()
 	defer cr.mu.RUnlock()
 	return cr.errProcs
 }
 
+// Errs returns all errors
+func (cr *CommandResult) Errs() (errs []error) {
+	cr.mu.RLock()
+	defer cr.mu.RUnlock()
+
+	for _, proc := range cr.errProcs {
+		errs = append(errs, fmt.Errorf("%s: %s", proc.Err(), proc.Result()))
+	}
+	return
+}
+
+// ErrStrings returns errors as []string
+func (cr *CommandResult) ErrStrings() (errStrings []string) {
+	errs := cr.Errs()
+	for _, err := range errs {
+		errStrings = append(errStrings, err.Error())
+	}
+	return
+}
+
+// PipedCommandResult stores results of piped commands
 type PipedCommandResult struct {
 	procs    []*Proc
 	errProcs []*Proc
 	lastProc *Proc
 }
 
+// Procs return all executed processes in pipe
 func (cr *PipedCommandResult) Procs() []*Proc {
 	return cr.procs
 }
+
+// ErrProcs returns errored piped processes
 func (cr *PipedCommandResult) ErrProcs() []*Proc {
 	return cr.errProcs
 }
+
+// Errs returns all errors
+func (cr *PipedCommandResult) Errs() (errs []error) {
+	for _, proc := range cr.errProcs {
+		errs = append(errs, fmt.Errorf("%s: %s", proc.Err(), proc.Result()))
+	}
+	return
+}
+
+// ErrStrings returns errors as []string
+func (cr *PipedCommandResult) ErrStrings() (errStrings []string) {
+	errs := cr.Errs()
+	for _, err := range errs {
+		errStrings = append(errStrings, err.Error())
+	}
+	return
+}
+
+// LastProc executes last executed process
 func (cr *PipedCommandResult) LastProc() *Proc {
 	procLen := len(cr.procs)
 	if procLen == 0 {
@@ -50,17 +99,30 @@ func (cr *PipedCommandResult) LastProc() *Proc {
 	return cr.procs[procLen-1]
 }
 
+// CommandBuilder is a batch command builder that
+// can execute commands using different execution policies (i.e. serial, piped, concurrent)
 type CommandBuilder struct {
 	cmdPolicy CommandPolicy
 	procs     []*Proc
+	vars      *vars.Variables
 }
 
 // Commands creates a *CommandBuilder used to collect
 // command strings to be executed.
 func Commands(cmds ...string) *CommandBuilder {
 	cb := new(CommandBuilder)
+	cb.vars = &vars.Variables{}
 	for _, cmd := range cmds {
 		cb.procs = append(cb.procs, NewProc(cmd))
+	}
+	return cb
+}
+
+// CommandsWithVars creates a new CommandBuilder and sets session varialbes for it
+func CommandsWithVars(variables *vars.Variables, cmds ...string) *CommandBuilder {
+	cb := &CommandBuilder{vars: variables}
+	for _, cmd := range cmds {
+		cb.procs = append(cb.procs, NewProc(variables.Eval(cmd)))
 	}
 	return cb
 }
@@ -74,7 +136,7 @@ func (cb *CommandBuilder) WithPolicy(policyMask CommandPolicy) *CommandBuilder {
 // Add adds a new command string to the builder
 func (cb *CommandBuilder) Add(cmds ...string) *CommandBuilder {
 	for _, cmd := range cmds {
-		cb.procs = append(cb.procs, NewProc(cmd))
+		cb.procs = append(cb.procs, NewProc(cb.vars.Eval(cmd)))
 	}
 	return cb
 }

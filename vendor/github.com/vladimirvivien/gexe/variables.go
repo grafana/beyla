@@ -52,6 +52,13 @@ func (e *Echo) SetVar(name, value string) *Echo {
 	return e
 }
 
+// UnsetVar removes a session variable.
+func (e *Echo) UnsetVar(name string) *Echo {
+	vars := e.vars.UnsetVar(name)
+	e.err = vars.Err()
+	return e
+}
+
 // Val retrieves a session or environment variable
 func (e *Echo) Val(name string) string {
 	return e.vars.Val(name)

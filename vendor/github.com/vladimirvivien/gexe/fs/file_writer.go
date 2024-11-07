@@ -3,21 +3,22 @@ package fs
 import (
 	"io"
 	"os"
+
+	"github.com/vladimirvivien/gexe/vars"
 )
 
-type fileWriter struct {
+type FileWriter struct {
 	path  string
 	err   error
 	finfo os.FileInfo
 	mode  os.FileMode
 	flags int
+	vars  *vars.Variables
 }
 
-// Write creates a new file,or truncates an existing one,
-// using the path provided and sets it up for write operations.
-// Operation error is returned by FileWriter.Err().
-func Write(path string) FileWriter {
-	fw := &fileWriter{path: path, flags: os.O_CREATE | os.O_TRUNC | os.O_WRONLY, mode: 0644}
+// Write creates a new FileWriter with flags os.O_CREATE | os.O_TRUNC | os.O_WRONLY  and mode 0644.
+func Write(path string) *FileWriter {
+	fw := &FileWriter{path: path, flags: os.O_CREATE | os.O_TRUNC | os.O_WRONLY, mode: 0644, vars: &vars.Variables{}}
 	info, err := os.Stat(fw.path)
 	if err == nil {
 		fw.finfo = info
@@ -25,11 +26,16 @@ func Write(path string) FileWriter {
 	return fw
 }
 
-// Append creates a new file, or append to an existing one,
-// using the path provided and sets it up for write operation only.
-// Any error generated is returned by FileWriter.Err().
-func Append(path string) FileWriter {
-	fw := &fileWriter{path: path, flags: os.O_CREATE | os.O_APPEND | os.O_WRONLY, mode: 0644}
+// WriteWithVars creates a new FileWriter and sets sessions variables
+func WriteWithVars(path string, variables *vars.Variables) *FileWriter {
+	fw := Write(variables.Eval(path))
+	fw.vars = variables
+	return fw
+}
+
+// Append creates a new FileWriter with flags os.O_CREATE | os.O_APPEND | os.O_WRONLY and mode 0644
+func Append(path string) *FileWriter {
+	fw := &FileWriter{path: path, flags: os.O_CREATE | os.O_APPEND | os.O_WRONLY, mode: 0644}
 	info, err := os.Stat(fw.path)
 	if err == nil {
 		fw.finfo = info
@@ -38,19 +44,39 @@ func Append(path string) FileWriter {
 	return fw
 }
 
-// Err returns an error during execution
-func (fw *fileWriter) Err() error {
+// AppendWithVars creates a new FileWriter and sets session variables
+func AppendWitVars(path string, variables *vars.Variables) *FileWriter {
+	fw := Append(variables.Eval(path))
+	fw.vars = variables
+	return fw
+}
+
+// SetVars sets session variables for FileWriter
+func (fw *FileWriter) SetVars(variables *vars.Variables) *FileWriter {
+	if variables != nil {
+		fw.vars = variables
+	}
+	return fw
+}
+
+func (fw *FileWriter) WithMode(mode os.FileMode) *FileWriter {
+	fw.mode = mode
+	return fw
+}
+
+// Err returns FileWriter error during execution
+func (fw *FileWriter) Err() error {
 	return fw.err
 }
 
 // Info returns the os.FileInfo for the associated file
-func (fw *fileWriter) Info() os.FileInfo {
+func (fw *FileWriter) Info() os.FileInfo {
 	return fw.finfo
 }
 
 // String writes the provided str into the file. Any
 // error that occurs can be accessed with FileWriter.Err().
-func (fw *fileWriter) String(str string) FileWriter {
+func (fw *FileWriter) String(str string) *FileWriter {
 	file, err := os.OpenFile(fw.path, fw.flags, fw.mode)
 	if err != nil {
 		fw.err = err
@@ -69,7 +95,7 @@ func (fw *fileWriter) String(str string) FileWriter {
 
 // Lines writes the slice of strings into the file.
 // Any error will be captured and returned via FileWriter.Err().
-func (fw *fileWriter) Lines(lines []string) FileWriter {
+func (fw *FileWriter) Lines(lines []string) *FileWriter {
 	file, err := os.OpenFile(fw.path, fw.flags, fw.mode)
 	if err != nil {
 		fw.err = err
@@ -98,7 +124,7 @@ func (fw *fileWriter) Lines(lines []string) FileWriter {
 
 // Bytes writes the []bytre provided into the file.
 // Any error can be accessed using FileWriter.Err().
-func (fw *fileWriter) Bytes(data []byte) FileWriter {
+func (fw *FileWriter) Bytes(data []byte) *FileWriter {
 	file, err := os.OpenFile(fw.path, fw.flags, fw.mode)
 	if err != nil {
 		fw.err = err
@@ -118,7 +144,7 @@ func (fw *fileWriter) Bytes(data []byte) FileWriter {
 // From streams bytes from the provided io.Reader r and
 // writes them to the file. Any error will be captured
 // and returned by fw.Err().
-func (fw *fileWriter) From(r io.Reader) FileWriter {
+func (fw *FileWriter) From(r io.Reader) *FileWriter {
 	file, err := os.OpenFile(fw.path, fw.flags, fw.mode)
 	if err != nil {
 		fw.err = err

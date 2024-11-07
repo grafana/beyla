@@ -5,54 +5,40 @@ import (
 	"bytes"
 	"io"
 	"os"
-
-	"github.com/vladimirvivien/gexe/vars"
 )
 
-type FileReader struct {
-	err  error
-	path string
-	info os.FileInfo
-	mode os.FileMode
-	vars *vars.Variables
+type fileReader struct {
+	err   error
+	path  string
+	finfo os.FileInfo
 }
 
-// Read creates a new FileReader using the provided path.
+// Read creates a FileReader using the provided path.
 // A non-nil FileReader.Err() is returned if file does not exist
 // or another error is generated.
-func Read(path string) *FileReader {
-	info, err := os.Stat(path)
+func Read(path string) FileReader {
+	fr := &fileReader{path: path}
+	info, err := os.Stat(fr.path)
 	if err != nil {
-		return &FileReader{err: err, path: path}
+		fr.err = err
+		return fr
 	}
-	return &FileReader{path: path, info: info, mode: info.Mode()}
-}
-
-// ReadWithVars creates a new FileReader and sets the reader's session variables
-func ReadWithVars(path string, variables *vars.Variables) *FileReader {
-	reader := Read(variables.Eval(path))
-	reader.vars = variables
-	return reader
-}
-
-// SetVars sets the FileReader's session variables
-func (fr *FileReader) SetVars(variables *vars.Variables) *FileReader {
-	fr.vars = variables
+	fr.finfo = info
 	return fr
 }
 
 // Err returns an operation error during file read.
-func (fr *FileReader) Err() error {
+func (fr *fileReader) Err() error {
 	return fr.err
 }
 
 // Info surfaces the os.FileInfo for the associated file
-func (fr *FileReader) Info() os.FileInfo {
-	return fr.info
+func (fr *fileReader) Info() os.FileInfo {
+	return fr.finfo
 }
 
 // String returns the content of the file as a string value
-func (fr *FileReader) String() string {
+func (fr *fileReader) String() string {
 	file, err := os.Open(fr.path)
 	if err != nil {
 		fr.err = err
@@ -70,7 +56,7 @@ func (fr *FileReader) String() string {
 }
 
 // Lines returns the content of the file as slice of string
-func (fr *FileReader) Lines() []string {
+func (fr *fileReader) Lines() []string {
 	file, err := os.Open(fr.path)
 	if err != nil {
 		fr.err = err
@@ -92,7 +78,7 @@ func (fr *FileReader) Lines() []string {
 }
 
 // Bytes returns the content of the file as []byte
-func (fr *FileReader) Bytes() []byte {
+func (fr *fileReader) Bytes() []byte {
 	file, err := os.Open(fr.path)
 	if err != nil {
 		fr.err = err
@@ -112,7 +98,7 @@ func (fr *FileReader) Bytes() []byte {
 
 // Into reads the content of the file and writes
 // it into the specified Writer
-func (fr *FileReader) Into(w io.Writer) *FileReader {
+func (fr *fileReader) Into(w io.Writer) FileReader {
 	file, err := os.Open(fr.path)
 	if err != nil {
 		fr.err = err

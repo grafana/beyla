@@ -25,13 +25,13 @@ import (
 )
 
 // EnvFunc represents a user-defined operation that
-// can be used to customize the behavior of the
+// can be used to customized the behavior of the
 // environment. Changes to context are expected to surface
 // to caller.
 type EnvFunc func(context.Context, *envconf.Config) (context.Context, error)
 
 // FeatureEnvFunc represents a user-defined operation that
-// can be used to customize the behavior of the
+// can be used to customized the behavior of the
 // environment. Changes to context are expected to surface
 // to caller. Meant for use with before/after feature hooks.
 // *testing.T is provided in order to provide pass/fail context to
@@ -39,7 +39,7 @@ type EnvFunc func(context.Context, *envconf.Config) (context.Context, error)
 type FeatureEnvFunc func(context.Context, *envconf.Config, *testing.T, Feature) (context.Context, error)
 
 // TestEnvFunc represents a user-defined operation that
-// can be used to customize the behavior of the
+// can be used to customized the behavior of the
 // environment. Changes to context are expected to surface
 // to caller. Meant for use with before/after test hooks.
 type TestEnvFunc func(context.Context, *envconf.Config, *testing.T) (context.Context, error)
@@ -85,9 +85,6 @@ type Environment interface {
 
 	// Run Launches the test suite from within a TestMain
 	Run(*testing.M) int
-
-	// EnvConf returns the test environment's environment configuration
-	EnvConf() *envconf.Config
 }
 
 type Labels = flags.LabelsMap

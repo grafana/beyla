@@ -62,7 +62,6 @@ func (p *Info) Name() string {
 }
 
 // Avail returns full path of binary name if available
-// Deprecated: use echo.ProgAvail or gexe.ProgAvail
 func (p *Info) Avail(progName string) string {
 	path, err := exec.LookPath(progName)
 	if err != nil {

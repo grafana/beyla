@@ -81,6 +81,7 @@ func CreateClusterWithConfig(p support.E2EClusterProvider, clusterName, configFi
 			return ctx, err
 		}
 
+		cfg.Client().RESTConfig()
 		// update envconfig  with kubeconfig
 		cfg.WithKubeconfigFile(kubecfg)
 

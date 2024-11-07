@@ -110,14 +110,17 @@ func (k *Cluster) WithOpts(opts ...support.ClusterOpts) support.E2EClusterProvid
 func (k *Cluster) getKubeconfig() (string, error) {
 	kubecfg := fmt.Sprintf("%s-kubecfg", k.name)
 
-	var stdout, stderr bytes.Buffer
-	err := utils.RunCommandWithSeperatedOutput(fmt.Sprintf(`%s get kubeconfig --name %s`, k.path, k.name), &stdout, &stderr)
-	if err != nil {
-		return "", fmt.Errorf("kind get kubeconfig: stderr: %s: %w", stderr.String(), err)
+	p := utils.RunCommand(fmt.Sprintf(`%s get kubeconfig --name %s`, k.path, k.name))
+	if p.Err() != nil {
+		return "", fmt.Errorf("kind get kubeconfig: %w", p.Err())
 	}
-	log.V(4).Info("kind get kubeconfig stderr \n", stderr.String())
 
-	file, err := os.CreateTemp("", fmt.Sprintf("kind-cluster-%s", kubecfg))
+	var stdout bytes.Buffer
+	if _, err := stdout.ReadFrom(p.Out()); err != nil {
+		return "", fmt.Errorf("kind kubeconfig stdout bytes: %w", err)
+	}
+
+	file, err := os.CreateTemp("", fmt.Sprintf("kind-cluser-%s", kubecfg))
 	if err != nil {
 		return "", fmt.Errorf("kind kubeconfig file: %w", err)
 	}
@@ -125,7 +128,7 @@ func (k *Cluster) getKubeconfig() (string, error) {
 
 	k.kubecfgFile = file.Name()
 
-	if n, err := io.WriteString(file, stdout.String()); n == 0 || err != nil {
+	if n, err := io.Copy(file, &stdout); n == 0 || err != nil {
 		return "", fmt.Errorf("kind kubecfg file: bytes copied: %d: %w]", n, err)
 	}
 
@@ -143,9 +146,9 @@ func (k *Cluster) clusterExists(name string) (string, bool) {
 }
 
 func (k *Cluster) CreateWithConfig(ctx context.Context, kindConfigFile string) (string, error) {
-	var args []string
-	if kindConfigFile != "" {
-		args = append(args, "--config", kindConfigFile)
+	args := []string{"--config", kindConfigFile}
+	if k.image != "" {
+		args = append(args, "--image", k.image)
 	}
 	return k.Create(ctx, args...)
 }
@@ -158,15 +161,7 @@ func (k *Cluster) Create(ctx context.Context, args ...string) (string, error) {
 
 	if _, ok := k.clusterExists(k.name); ok {
 		log.V(4).Info("Skipping Kind Cluster.Create: cluster already created: ", k.name)
-		kConfig, err := k.getKubeconfig()
-		if err != nil {
-			return "", err
-		}
-		return kConfig, k.initKubernetesAccessClients()
-	}
-
-	if k.image != "" {
-		args = append(args, "--image", k.image)
+		return k.getKubeconfig()
 	}
 
 	command := fmt.Sprintf(`%s create cluster --name %s`, k.path, k.name)
@@ -176,11 +171,14 @@ func (k *Cluster) Create(ctx context.Context, args ...string) (string, error) {
 	log.V(4).Info("Launching:", command)
 	p := utils.RunCommand(command)
 	if p.Err() != nil {
-		outBytes, err := io.ReadAll(p.Out())
+		// Print the output data as well so that it can be useful to debug cluster bringup failures
+		var data []byte
+		b := bytes.NewBuffer(data)
+		_, err := io.Copy(b, p.Out())
 		if err != nil {
 			log.ErrorS(err, "failed to read data from the kind create process output due to an error")
 		}
-		return "", fmt.Errorf("kind: failed to create cluster %q: %s: %s: %s", k.name, p.Err(), p.Result(), string(outBytes))
+		return "", fmt.Errorf("failed to create kind cluster: %s : %s: %s", p.Err(), p.Result(), b.String())
 	}
 	clusters, ok := k.clusterExists(k.name)
 	if !ok {
@@ -235,11 +233,7 @@ func (k *Cluster) Destroy(ctx context.Context) error {
 
 	p := utils.RunCommand(fmt.Sprintf(`%s delete cluster --name %s`, k.path, k.name))
 	if p.Err() != nil {
-		outBytes, err := io.ReadAll(p.Out())
-		if err != nil {
-			log.ErrorS(err, "failed to read data from the kind delete process output due to an error")
-		}
-		return fmt.Errorf("kind: failed to delete cluster %q: %s: %s: %s", k.name, p.Err(), p.Result(), string(outBytes))
+		return fmt.Errorf("kind: delete cluster %v failed: %s: %s", k.name, p.Err(), p.Result())
 	}
 
 	log.V(4).Info("Removing kubeconfig file ", k.kubecfgFile)

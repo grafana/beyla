@@ -20,15 +20,13 @@ import (
 	"fmt"
 )
 
-type TableRow struct {
+// Table provides a structure for table-driven tests.
+// Each entry in the table represents an executable assessment.
+type Table []struct {
 	Name        string
 	Description string
 	Assessment  Func
 }
-
-// Table provides a structure for table-driven tests.
-// Each entry in the table represents an executable assessment.
-type Table []TableRow
 
 // Build converts the defined test steps in the table
 // into a FeatureBuilder which can be used to add additional attributes

@@ -67,27 +67,27 @@ func FindExecELF(p *services.ProcessInfo, svcID svc.ID, k8sEnabled bool) (*FileI
 		return nil, err
 	}
 
-	// If Kubernetes is enabled we use the K8S metadata as the source of truth
-	if !k8sEnabled {
-		envVars, err := EnvVars(p.Pid)
+	envVars, err := EnvVars(p.Pid)
 
-		if err != nil {
-			return nil, err
-		}
+	if err != nil {
+		return nil, err
+	}
 
-		file.Service.EnvVars = envVars
-		if svcName, ok := file.Service.EnvVars[envServiceName]; ok {
+	file.Service.EnvVars = envVars
+	if svcName, ok := file.Service.EnvVars[envServiceName]; ok {
+		// If Kubernetes is enabled we use the K8S metadata as the source of truth
+		if !k8sEnabled {
 			file.Service.Name = svcName
-		} else {
-			if resourceAttrs, ok := file.Service.EnvVars[envResourceAttrs]; ok {
-				allVars := map[string]string{}
-				collect := func(k string, v string) {
-					allVars[k] = v
-				}
-				attributes.ParseOTELResourceVariable(resourceAttrs, collect)
-				if result, ok := allVars[serviceNameKey]; ok {
-					file.Service.Name = result
-				}
+		}
+	} else {
+		if resourceAttrs, ok := file.Service.EnvVars[envResourceAttrs]; ok {
+			allVars := map[string]string{}
+			collect := func(k string, v string) {
+				allVars[k] = v
+			}
+			attributes.ParseOTELResourceVariable(resourceAttrs, collect)
+			if result, ok := allVars[serviceNameKey]; ok {
+				file.Service.Name = result
 			}
 		}
 	}

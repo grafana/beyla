@@ -29,6 +29,8 @@ data:
     discovery:
       services:
         - k8s_namespace: .
+      exclude_services:
+        - exe_path: ".*alloy.*|.*otelcol.*|.*beyla.*"
     {{- end }}
     {{- end }}
   {{- toYaml .Values.config.data | nindent 4}}

@@ -19,7 +19,7 @@ package features
 import (
 	"regexp"
 
-	"sigs.k8s.io/e2e-framework/pkg/internal/types"
+	"sigs.k8s.io/e2e-framework/pkg/types"
 )
 
 type (
@@ -28,6 +28,15 @@ type (
 	Step    = types.Step
 	Func    = types.StepFunc
 	Level   = types.Level
+)
+
+const (
+	// LevelSetup when doing the setup phase
+	LevelSetup = types.LevelSetup
+	// LevelAssess when doing the assess phase
+	LevelAssess = types.LevelAssess
+	// LevelTeardown when doing the teardown phase
+	LevelTeardown = types.LevelTeardown
 )
 
 type defaultFeature struct {

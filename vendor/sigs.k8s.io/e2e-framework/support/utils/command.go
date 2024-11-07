@@ -18,6 +18,7 @@ package utils
 
 import (
 	"fmt"
+	"io"
 
 	"github.com/vladimirvivien/gexe"
 	"github.com/vladimirvivien/gexe/exec"
@@ -50,7 +51,7 @@ func FindOrInstallGoBasedProvider(pPath, provider, module, version string) (stri
 	}
 
 	if providerPath := commandRunner.Prog().Avail(provider); providerPath != "" {
-		log.V(4).Infof("Installed %s at", pPath, providerPath)
+		log.V(4).Infof("Installed %s at %s", pPath, providerPath)
 		return provider, nil
 	}
 
@@ -68,17 +69,30 @@ func FindOrInstallGoBasedProvider(pPath, provider, module, version string) (stri
 	commandRunner.SetEnv("PATH", p.Result())
 
 	if providerPath := commandRunner.Prog().Avail(provider); providerPath != "" {
-		log.V(4).Infof("Installed %s at", pPath, providerPath)
+		log.V(4).Infof("Installed %s at %s", pPath, providerPath)
 		return provider, nil
 	}
 
 	return "", fmt.Errorf("%s not available even after installation", provider)
 }
 
+// RunCommand run command and returns an *exec.Proc with information about the executed process.
 func RunCommand(command string) *exec.Proc {
 	return commandRunner.RunProc(command)
 }
 
+// RunCommandWithSeperatedOutput run command and returns the results to the provided
+// stdout and stderr io.Writer.
+func RunCommandWithSeperatedOutput(command string, stdout, stderr io.Writer) error {
+	p := commandRunner.NewProc(command)
+	p.SetStdout(stdout)
+	p.SetStderr(stderr)
+	result := p.Run()
+
+	return result.Err()
+}
+
+// FetchCommandOutput run command and returns the combined stderr and stdout output.
 func FetchCommandOutput(command string) string {
 	return commandRunner.Run(command)
 }

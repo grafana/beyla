@@ -19,7 +19,7 @@ package features
 import (
 	"fmt"
 
-	"sigs.k8s.io/e2e-framework/pkg/internal/types"
+	"sigs.k8s.io/e2e-framework/pkg/types"
 )
 
 // FeatureBuilder represents is a type to define a
@@ -61,7 +61,7 @@ func (b *FeatureBuilder) Setup(fn Func) *FeatureBuilder {
 // WithSetup adds a new setup step with a pre-defined setup name instead of automating
 // the setup name generation. This can make tests more readable.
 func (b *FeatureBuilder) WithSetup(name string, fn Func) *FeatureBuilder {
-	return b.WithStep(name, types.LevelSetup, fn)
+	return b.WithStep(name, LevelSetup, fn)
 }
 
 // Teardown adds a new teardown step that will be applied after feature test.
@@ -72,16 +72,16 @@ func (b *FeatureBuilder) Teardown(fn Func) *FeatureBuilder {
 // WithTeardown adds a new teardown step with a pre-defined name instead of an
 // auto-generated one
 func (b *FeatureBuilder) WithTeardown(name string, fn Func) *FeatureBuilder {
-	return b.WithStep(name, types.LevelTeardown, fn)
+	return b.WithStep(name, LevelTeardown, fn)
 }
 
 // Assess adds an assessment step to the feature test.
 func (b *FeatureBuilder) Assess(desc string, fn Func) *FeatureBuilder {
-	return b.WithStep(desc, types.LevelAssess, fn)
+	return b.WithStep(desc, LevelAssess, fn)
 }
 
 func (b *FeatureBuilder) AssessWithDescription(name, description string, fn Func) *FeatureBuilder {
-	return b.WithStepDescription(name, description, types.LevelAssess, fn)
+	return b.WithStepDescription(name, description, LevelAssess, fn)
 }
 
 // Feature returns a feature configured by builder.

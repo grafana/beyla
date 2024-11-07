@@ -44,7 +44,25 @@ spec:
             - containerPort: {{ .Values.k8sCache.service.port }}
               protocol: TCP
               name: grpc
+          {{- if .Values.k8sCache.profile_port }}
+            - name: profile
+              containerPort: {{ .Values.k8sCache.profile_port }}
+              protocol: TCP
+          {{- end }}
           env:
             - name: BEYLA_K8S_CACHE_PORT
               value: "{{ .Values.k8sCache.service.port }}"
+          {{- if .Values.k8sCache.profile_port }}
+            - name: BEYLA_K8S_CACHE_PROFILE_PORT
+              value: "{{ .Values.k8sCache.profile_port }}"
+          {{- end }}
+          {{- range $key, $value := .Values.k8sCache.env }}
+            - name: {{ $key }}
+              value: "{{ $value }}"
+          {{- end }}
+          {{- range $key, $value := .Values.k8sCache.envValueFrom }}
+            - name: {{ $key | quote }}
+              valueFrom:
+          {{- tpl (toYaml $value) $ | nindent 16 }}
+          {{- end }}
 {{- end }}

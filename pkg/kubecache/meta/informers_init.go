@@ -275,7 +275,7 @@ func envToMap(kc kubernetes.Interface, objMeta metav1.ObjectMeta, c *v1.Containe
 			if envV.Value != "" {
 				envMap[envV.Name] = envV.Value
 			} else if envV.ValueFrom != nil {
-				if v, err := GetEnvVarRefValue(kc, objMeta.Namespace, envV.ValueFrom, objMeta, c); err == nil {
+				if v, err := GetEnvVarRefValue(kc, objMeta.Namespace, envV.ValueFrom, objMeta); err == nil {
 					if v != "" {
 						envMap[envV.Name] = v
 					}

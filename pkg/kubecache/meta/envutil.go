@@ -103,7 +103,7 @@ func getSecretRefValue(client kubernetes.Interface, namespace string, secretSele
 }
 
 // Code adopted from https://github.com/kubernetes/kubectl/blob/master/pkg/cmd/set/env/env_resolve.go#L248
-func GetEnvVarRefValue(kc kubernetes.Interface, ns string, from *v1.EnvVarSource, obj metav1.ObjectMeta, c *v1.Container) (string, error) {
+func GetEnvVarRefValue(kc kubernetes.Interface, ns string, from *v1.EnvVarSource, obj metav1.ObjectMeta) (string, error) {
 	if from.SecretKeyRef != nil {
 		return getSecretRefValue(kc, ns, from.SecretKeyRef)
 	}

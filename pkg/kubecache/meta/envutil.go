@@ -102,6 +102,7 @@ func getSecretRefValue(client kubernetes.Interface, namespace string, secretSele
 	return "", fmt.Errorf("key %s not found in secret %s", secretSelector.Key, secretSelector.Name)
 }
 
+// Code adopted from https://github.com/kubernetes/kubectl/blob/master/pkg/cmd/set/env/env_resolve.go#L248
 func GetEnvVarRefValue(kc kubernetes.Interface, ns string, from *v1.EnvVarSource, obj metav1.ObjectMeta, c *v1.Container) (string, error) {
 	if from.SecretKeyRef != nil {
 		return getSecretRefValue(kc, ns, from.SecretKeyRef)

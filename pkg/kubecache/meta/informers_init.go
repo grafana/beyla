@@ -173,7 +173,7 @@ func (inf *Informers) initPodInformer(informerFactory informers.SharedInformerFa
 			containers = append(containers,
 				&informer.ContainerInfo{
 					Id:  rmContainerIDSchema(pod.Status.ContainerStatuses[i].ContainerID),
-					Env: envToMap(inf.config.kubeClient, pod.ObjectMeta, &pod.Spec.Containers[i]),
+					Env: envToMap(inf.config.kubeClient, pod.ObjectMeta, pod.Spec.Containers[i].Env),
 				},
 			)
 		}
@@ -181,7 +181,7 @@ func (inf *Informers) initPodInformer(informerFactory informers.SharedInformerFa
 			containers = append(containers,
 				&informer.ContainerInfo{
 					Id:  rmContainerIDSchema(pod.Status.InitContainerStatuses[i].ContainerID),
-					Env: envToMap(inf.config.kubeClient, pod.ObjectMeta, &pod.Spec.Containers[i]),
+					Env: envToMap(inf.config.kubeClient, pod.ObjectMeta, pod.Spec.InitContainers[i].Env),
 				},
 			)
 		}
@@ -189,7 +189,7 @@ func (inf *Informers) initPodInformer(informerFactory informers.SharedInformerFa
 			containers = append(containers,
 				&informer.ContainerInfo{
 					Id:  rmContainerIDSchema(pod.Status.EphemeralContainerStatuses[i].ContainerID),
-					Env: envToMap(inf.config.kubeClient, pod.ObjectMeta, &pod.Spec.Containers[i]),
+					Env: envToMap(inf.config.kubeClient, pod.ObjectMeta, pod.Spec.EphemeralContainers[i].Env),
 				},
 			)
 		}
@@ -268,9 +268,9 @@ func (inf *Informers) initPodInformer(informerFactory informers.SharedInformerFa
 	return nil
 }
 
-func envToMap(kc kubernetes.Interface, objMeta metav1.ObjectMeta, c *v1.Container) map[string]string {
+func envToMap(kc kubernetes.Interface, objMeta metav1.ObjectMeta, containerEnv []v1.EnvVar) map[string]string {
 	envMap := map[string]string{}
-	for _, envV := range c.Env {
+	for _, envV := range containerEnv {
 		if _, ok := usefulEnvVars[envV.Name]; ok {
 			if envV.Value != "" {
 				envMap[envV.Name] = envV.Value

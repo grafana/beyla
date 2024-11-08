@@ -34,7 +34,6 @@ limitations under the License.
 package log
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -57,15 +56,7 @@ func eventuallyFulfillRoot() {
 	}
 	if time.Since(rootLogCreated).Seconds() >= 30 {
 		if logFullfilled.CompareAndSwap(false, true) {
-			stack := debug.Stack()
-			stackLines := bytes.Count(stack, []byte{'\n'})
-			sep := []byte{'\n', '\t', '>', ' ', ' '}
-
-			fmt.Fprintf(os.Stderr,
-				"[controller-runtime] log.SetLogger(...) was never called; logs will not be displayed.\nDetected at:%s%s", sep,
-				// prefix every line, so it's clear this is a stack trace related to the above message
-				bytes.Replace(stack, []byte{'\n'}, sep, stackLines-1),
-			)
+			fmt.Fprintf(os.Stderr, "[controller-runtime] log.SetLogger(...) was never called, logs will not be displayed:\n%s", debug.Stack())
 			SetLogger(logr.New(NullLogSink{}))
 		}
 	}

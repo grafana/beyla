@@ -13,6 +13,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/protobuf/testing/protocmp"
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -29,7 +30,11 @@ const (
 	typePod               = "Pod"
 	typeService           = "Service"
 	defaultResyncTime     = 30 * time.Minute
+	EnvServiceName        = "OTEL_SERVICE_NAME"
+	EnvResourceAttrs      = "OTEL_RESOURCE_ATTRIBUTES"
 )
+
+var usefulEnvVars = map[string]struct{}{EnvServiceName: {}, EnvResourceAttrs: {}}
 
 type informersConfig struct {
 	kubeConfigPath  string
@@ -168,7 +173,7 @@ func (inf *Informers) initPodInformer(informerFactory informers.SharedInformerFa
 			containers = append(containers,
 				&informer.ContainerInfo{
 					Id:  rmContainerIDSchema(pod.Status.ContainerStatuses[i].ContainerID),
-					Env: envToMap(pod.Spec.Containers[i].Env),
+					Env: envToMap(inf.config.kubeClient, pod.ObjectMeta, &pod.Spec.Containers[i]),
 				},
 			)
 		}
@@ -176,7 +181,7 @@ func (inf *Informers) initPodInformer(informerFactory informers.SharedInformerFa
 			containers = append(containers,
 				&informer.ContainerInfo{
 					Id:  rmContainerIDSchema(pod.Status.InitContainerStatuses[i].ContainerID),
-					Env: envToMap(pod.Spec.InitContainers[i].Env),
+					Env: envToMap(inf.config.kubeClient, pod.ObjectMeta, &pod.Spec.Containers[i]),
 				},
 			)
 		}
@@ -184,7 +189,7 @@ func (inf *Informers) initPodInformer(informerFactory informers.SharedInformerFa
 			containers = append(containers,
 				&informer.ContainerInfo{
 					Id:  rmContainerIDSchema(pod.Status.EphemeralContainerStatuses[i].ContainerID),
-					Env: envToMap(pod.Spec.EphemeralContainers[i].Env),
+					Env: envToMap(inf.config.kubeClient, pod.ObjectMeta, &pod.Spec.Containers[i]),
 				},
 			)
 		}
@@ -263,10 +268,20 @@ func (inf *Informers) initPodInformer(informerFactory informers.SharedInformerFa
 	return nil
 }
 
-func envToMap(env []v1.EnvVar) map[string]string {
+func envToMap(kc kubernetes.Interface, objMeta metav1.ObjectMeta, c *v1.Container) map[string]string {
 	envMap := map[string]string{}
-	for _, envV := range env {
-		envMap[envV.Name] = envV.Value
+	for _, envV := range c.Env {
+		if _, ok := usefulEnvVars[envV.Name]; ok {
+			if envV.Value != "" {
+				envMap[envV.Name] = envV.Value
+			} else if envV.ValueFrom != nil {
+				if v, err := GetEnvVarRefValue(kc, objMeta.Namespace, envV.ValueFrom, objMeta); err == nil {
+					if v != "" {
+						envMap[envV.Name] = v
+					}
+				}
+			}
+		}
 	}
 
 	return envMap

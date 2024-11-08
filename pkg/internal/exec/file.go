@@ -36,7 +36,7 @@ func (fi *FileInfo) ExecutableName() string {
 	return parts[len(parts)-1]
 }
 
-func FindExecELF(p *services.ProcessInfo, svcID svc.ID) (*FileInfo, error) {
+func FindExecELF(p *services.ProcessInfo, svcID svc.ID, k8sEnabled bool) (*FileInfo, error) {
 	// In container environments or K8s, we can't just open the executable exe path, because it might
 	// be in the volume of another pod/container. We need to access it through the /proc/<pid>/exe symbolic link
 	ns, err := FindNamespace(p.Pid)
@@ -75,7 +75,10 @@ func FindExecELF(p *services.ProcessInfo, svcID svc.ID) (*FileInfo, error) {
 
 	file.Service.EnvVars = envVars
 	if svcName, ok := file.Service.EnvVars[envServiceName]; ok {
-		file.Service.Name = svcName
+		// If Kubernetes is enabled we use the K8S metadata as the source of truth
+		if !k8sEnabled {
+			file.Service.Name = svcName
+		}
 	} else {
 		if resourceAttrs, ok := file.Service.EnvVars[envResourceAttrs]; ok {
 			allVars := map[string]string{}

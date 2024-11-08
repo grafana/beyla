@@ -26,6 +26,7 @@ type cacheSvcClient struct {
 	syncTimeout            time.Duration
 	waitForSubscription    chan struct{}
 	waitForSynchronization chan struct{}
+	waitForSyncClosed      bool
 }
 
 func (sc *cacheSvcClient) Start(ctx context.Context) {
@@ -78,7 +79,6 @@ func (sc *cacheSvcClient) connect(ctx context.Context) error {
 		return fmt.Errorf("could not subscribe: %w", err)
 	}
 
-	unsynced := true
 	// Receive and print messages.
 	for {
 		event, err := stream.Recv()
@@ -87,9 +87,9 @@ func (sc *cacheSvcClient) connect(ctx context.Context) error {
 		}
 		// send a notification about the client being synced with the K8s metadata service
 		// so Beyla can start processing/decorating the received flows and traces
-		if event.GetType() == informer.EventType_SYNC_FINISHED && unsynced {
+		if event.GetType() == informer.EventType_SYNC_FINISHED && !sc.waitForSyncClosed {
 			close(sc.waitForSynchronization)
-			unsynced = false
+			sc.waitForSyncClosed = true
 		}
 		sc.BaseNotifier.Notify(event)
 	}

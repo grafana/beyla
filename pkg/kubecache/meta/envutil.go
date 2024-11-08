@@ -80,8 +80,7 @@ func getFieldRef(accessor metav1.ObjectMeta, from *v1.EnvVarSource) (string, err
 	return extractFieldPathAsString(accessor, from.FieldRef.FieldPath)
 }
 
-func getConfigMapRefValue(client kubernetes.Interface, namespace string, configMapSelector *v1.ConfigMapKeySelector) (string, error) {
-	configMap, err := client.CoreV1().ConfigMaps(namespace).Get(context.TODO(), configMapSelector.Name, metav1.GetOptions{})
+func extractConfigMapRefValue(configMap *v1.ConfigMap, err error, configMapSelector *v1.ConfigMapKeySelector) (string, error) {
 	if err != nil {
 		return "", err
 	}
@@ -91,8 +90,12 @@ func getConfigMapRefValue(client kubernetes.Interface, namespace string, configM
 	return "", fmt.Errorf("key %s not found in config map %s", configMapSelector.Key, configMapSelector.Name)
 }
 
-func getSecretRefValue(client kubernetes.Interface, namespace string, secretSelector *v1.SecretKeySelector) (string, error) {
-	secret, err := client.CoreV1().Secrets(namespace).Get(context.TODO(), secretSelector.Name, metav1.GetOptions{})
+func getConfigMapRefValue(client kubernetes.Interface, namespace string, configMapSelector *v1.ConfigMapKeySelector) (string, error) {
+	configMap, err := client.CoreV1().ConfigMaps(namespace).Get(context.TODO(), configMapSelector.Name, metav1.GetOptions{})
+	return extractConfigMapRefValue(configMap, err, configMapSelector)
+}
+
+func extractSecretRefValue(secret *v1.Secret, err error, secretSelector *v1.SecretKeySelector) (string, error) {
 	if err != nil {
 		return "", err
 	}
@@ -100,6 +103,11 @@ func getSecretRefValue(client kubernetes.Interface, namespace string, secretSele
 		return string(data), nil
 	}
 	return "", fmt.Errorf("key %s not found in secret %s", secretSelector.Key, secretSelector.Name)
+}
+
+func getSecretRefValue(client kubernetes.Interface, namespace string, secretSelector *v1.SecretKeySelector) (string, error) {
+	secret, err := client.CoreV1().Secrets(namespace).Get(context.TODO(), secretSelector.Name, metav1.GetOptions{})
+	return extractSecretRefValue(secret, err, secretSelector)
 }
 
 // Code adopted from https://github.com/kubernetes/kubectl/blob/master/pkg/cmd/set/env/env_resolve.go#L248

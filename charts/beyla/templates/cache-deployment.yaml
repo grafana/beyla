@@ -40,6 +40,7 @@ spec:
       containers:
         - name: beyla-cache
           image: {{ .Values.global.image.registry | default .Values.k8sCache.image.registry }}/{{ .Values.k8sCache.image.repository }}{{ include "beyla.k8sCache.imageId" . }}
+          imagePullPolicy: {{ .Values.k8sCache.image.pullPolicy }}
           ports:
             - containerPort: {{ .Values.k8sCache.service.port }}
               protocol: TCP

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/pkg/kubecache/informer"
 	"github.com/grafana/beyla/pkg/kubecache/meta"
@@ -91,10 +92,10 @@ func TestContainerInfo(t *testing.T) {
 
 	store := NewStore(fInformer)
 
-	store.updateNewObjectMetaByIPIndex(&service)
-	store.updateNewObjectMetaByIPIndex(&podMetaA)
-	store.updateNewObjectMetaByIPIndex(&podMetaA1)
-	store.updateNewObjectMetaByIPIndex(&podMetaB)
+	store.On(&informer.Event{Type: informer.EventType_CREATED, Resource: &service})
+	store.On(&informer.Event{Type: informer.EventType_CREATED, Resource: &podMetaA})
+	store.On(&informer.Event{Type: informer.EventType_CREATED, Resource: &podMetaA1})
+	store.On(&informer.Event{Type: informer.EventType_CREATED, Resource: &podMetaB})
 
 	assert.Equal(t, 2, len(store.containersByOwner))
 
@@ -121,7 +122,7 @@ func TestContainerInfo(t *testing.T) {
 	assert.Equal(t, 3, len(store.otelServiceInfoByIP))
 	// Delete the pod which had good definition for the OTel variables.
 	// We expect much different service names now
-	store.updateDeletedObjectMetaByIPIndex(&podMetaA)
+	store.On(&informer.Event{Type: informer.EventType_DELETED, Resource: &podMetaA})
 	// We cleaned up the cache for service IPs. We must clean all of it
 	// otherwise there will be stale data left
 	assert.Equal(t, 0, len(store.otelServiceInfoByIP))
@@ -158,8 +159,8 @@ func TestContainerInfo(t *testing.T) {
 
 	assert.Equal(t, 5, len(store.otelServiceInfoByIP))
 
-	store.updateDeletedObjectMetaByIPIndex(&podMetaA1)
-	store.updateDeletedObjectMetaByIPIndex(&podMetaB)
+	store.On(&informer.Event{Type: informer.EventType_DELETED, Resource: &podMetaA1})
+	store.On(&informer.Event{Type: informer.EventType_DELETED, Resource: &podMetaB})
 
 	assert.Equal(t, 0, len(store.otelServiceInfoByIP))
 
@@ -258,23 +259,70 @@ func TestMemoryCleanedUp(t *testing.T) {
 
 	store := NewStore(fInformer)
 
-	store.updateNewObjectMetaByIPIndex(&service)
-	store.updateNewObjectMetaByIPIndex(&podMetaA)
-	store.updateNewObjectMetaByIPIndex(&podMetaA1)
-	store.updateNewObjectMetaByIPIndex(&podMetaB)
+	store.On(&informer.Event{Type: informer.EventType_CREATED, Resource: &service})
+	store.On(&informer.Event{Type: informer.EventType_CREATED, Resource: &podMetaA})
+	store.On(&informer.Event{Type: informer.EventType_CREATED, Resource: &podMetaA1})
+	store.On(&informer.Event{Type: informer.EventType_CREATED, Resource: &podMetaB})
 
-	store.updateDeletedObjectMetaByIPIndex(&podMetaA1)
-	store.updateDeletedObjectMetaByIPIndex(&podMetaA)
-	store.updateDeletedObjectMetaByIPIndex(&podMetaB)
-	store.updateDeletedObjectMetaByIPIndex(&service)
+	store.On(&informer.Event{Type: informer.EventType_DELETED, Resource: &podMetaA1})
+	store.On(&informer.Event{Type: informer.EventType_DELETED, Resource: &podMetaA})
+	store.On(&informer.Event{Type: informer.EventType_DELETED, Resource: &podMetaB})
+	store.On(&informer.Event{Type: informer.EventType_DELETED, Resource: &service})
 
 	assert.Equal(t, 0, len(store.containerIDs))
 	assert.Equal(t, 0, len(store.containerByPID))
 	assert.Equal(t, 0, len(store.namespaces))
 	assert.Equal(t, 0, len(store.podsByContainer))
 	assert.Equal(t, 0, len(store.containersByOwner))
-	assert.Equal(t, 0, len(store.ipInfos))
+	assert.Equal(t, 0, len(store.objectMetaByIP))
 	assert.Equal(t, 0, len(store.otelServiceInfoByIP))
+}
+
+// Fixes a memory leak in the store where the objectMetaByIP map was not cleaned up
+func TestMetaByIPEntryRemovedIfIPGroupChanges(t *testing.T) {
+	// GIVEN a store with
+	store := NewStore(&fakeInformer{})
+	// WHEN an object is created with several IPs
+	store.On(&informer.Event{
+		Type: informer.EventType_CREATED,
+		Resource: &informer.ObjectMeta{
+			Name:      "object_1",
+			Namespace: "namespaceA",
+			Ips:       []string{"3.1.1.1", "3.2.2.2"},
+			Kind:      "Service",
+		},
+	})
+	// THEN the object is only accessible through all its IPs
+	assert.Nil(t, store.ObjectMetaByIP("1.2.3.4"))
+	om := store.ObjectMetaByIP("3.1.1.1")
+	require.NotNil(t, om)
+	assert.Equal(t, "object_1", om.Name)
+	assert.Equal(t, []string{"3.1.1.1", "3.2.2.2"}, om.Ips)
+	om = store.ObjectMetaByIP("3.2.2.2")
+	require.NotNil(t, om)
+	assert.Equal(t, "object_1", om.Name)
+	assert.Equal(t, []string{"3.1.1.1", "3.2.2.2"}, om.Ips)
+
+	// AND WHEN an object is updated with a different set of IPs
+	store.On(&informer.Event{
+		Type: informer.EventType_UPDATED,
+		Resource: &informer.ObjectMeta{
+			Name:      "object_1",
+			Namespace: "namespaceA",
+			Ips:       []string{"3.2.2.2", "3.3.3.3"},
+			Kind:      "Service",
+		},
+	})
+	// THEN the object is only accessible through all its new IPs, but not the old ones
+	assert.Nil(t, store.ObjectMetaByIP("3.1.1.1"))
+	om = store.ObjectMetaByIP("3.3.3.3")
+	require.NotNil(t, om)
+	assert.Equal(t, "object_1", om.Name)
+	assert.Equal(t, []string{"3.2.2.2", "3.3.3.3"}, om.Ips)
+	om = store.ObjectMetaByIP("3.2.2.2")
+	require.NotNil(t, om)
+	assert.Equal(t, "object_1", om.Name)
+	assert.Equal(t, []string{"3.2.2.2", "3.3.3.3"}, om.Ips)
 }
 
 type fakeInformer struct {

@@ -2,6 +2,7 @@ package kube
 
 import (
 	"log/slog"
+	"slices"
 	"strings"
 	"sync"
 
@@ -25,6 +26,12 @@ const (
 type OTelServiceNamePair struct {
 	Name      string
 	Namespace string
+}
+
+type qualifiedName struct {
+	name      string
+	namespace string
+	kind      string
 }
 
 // Store aggregates Kubernetes information from multiple sources:
@@ -52,7 +59,10 @@ type Store struct {
 	containersByOwner map[string][]*informer.ContainerInfo
 
 	// ip to generic IP info (Node, Service, *including* Pods)
-	ipInfos             map[string]*informer.ObjectMeta
+	objectMetaByIP map[string]*informer.ObjectMeta
+	// used to track the changed/removed IPs of a given object
+	// and remove them from objectMetaByIP on update or deletion
+	objectIPsByName     map[qualifiedName][]string
 	otelServiceInfoByIP map[string]OTelServiceNamePair
 
 	// Instead of subscribing to the informer directly, the rest of components
@@ -68,7 +78,8 @@ func NewStore(kubeMetadata meta.Notifier) *Store {
 		namespaces:          map[uint32]*container.Info{},
 		podsByContainer:     map[string]*informer.ObjectMeta{},
 		containerByPID:      map[uint32]*container.Info{},
-		ipInfos:             map[string]*informer.ObjectMeta{},
+		objectMetaByIP:      map[string]*informer.ObjectMeta{},
+		objectIPsByName:     map[qualifiedName][]string{},
 		containersByOwner:   map[string][]*informer.ContainerInfo{},
 		otelServiceInfoByIP: map[string]OTelServiceNamePair{},
 		metadataNotifier:    kubeMetadata,
@@ -84,13 +95,12 @@ func (s *Store) ID() string { return "unique-metadata-observer" }
 // It will forward the notification to all the Stroe subscribers
 func (s *Store) On(event *informer.Event) {
 	switch event.Type {
-	case informer.EventType_CREATED, informer.EventType_UPDATED:
-		s.updateNewObjectMetaByIPIndex(event.Resource)
-		// TODO: if the updated message lacks an IP that was previously present in the pod
-		// this might cause a memory leak, as we are not removing old entries
-		// this is very unlikely and the IP could be reused by another pod later
+	case informer.EventType_CREATED:
+		s.addObjectMeta(event.Resource)
+	case informer.EventType_UPDATED:
+		s.updateObjectMeta(event.Resource)
 	case informer.EventType_DELETED:
-		s.updateDeletedObjectMetaByIPIndex(event.Resource)
+		s.deleteObjectMeta(event.Resource)
 	}
 	s.BaseNotifier.Notify(event)
 }
@@ -126,11 +136,43 @@ func (s *Store) DeleteProcess(pid uint32) {
 	delete(s.containerIDs, info.ContainerID)
 }
 
-func (s *Store) updateNewObjectMetaByIPIndex(meta *informer.ObjectMeta) {
+func (s *Store) addObjectMeta(meta *informer.ObjectMeta) {
 	s.access.Lock()
 	defer s.access.Unlock()
+
+	s.unlockedAddObjectMeta(qualifiedName{
+		name: meta.Name, namespace: meta.Namespace, kind: meta.Kind,
+	}, meta)
+}
+
+func (s *Store) updateObjectMeta(meta *informer.ObjectMeta) {
+	s.access.Lock()
+	defer s.access.Unlock()
+
+	// if the update removes IPs from the original object meta,
+	// we remove them from the indexes
+	qn := qualifiedName{name: meta.Name, namespace: meta.Namespace, kind: meta.Kind}
+	if ips, ok := s.objectIPsByName[qn]; ok {
+		for _, ip := range ips {
+			// theoretically, linear search into a list is not efficient and we should first build a map
+			// with all the IPs
+			// however, the IPs slice is expected to have a small size (few entries), so
+			// it's more efficient, also in terms of memory generation, to keep it as a slice
+			// and avoid generating temporary maps
+			if !slices.Contains(meta.Ips, ip) {
+				delete(s.objectMetaByIP, ip)
+			}
+		}
+	}
+
+	s.unlockedAddObjectMeta(qn, meta)
+}
+
+func (s *Store) unlockedAddObjectMeta(qn qualifiedName, meta *informer.ObjectMeta) {
+	s.objectIPsByName[qn] = meta.Ips
+
 	for _, ip := range meta.Ips {
-		s.ipInfos[ip] = meta
+		s.objectMetaByIP[ip] = meta
 	}
 
 	s.otelServiceInfoByIP = map[string]OTelServiceNamePair{}
@@ -158,15 +200,18 @@ func (s *Store) updateNewObjectMetaByIPIndex(meta *informer.ObjectMeta) {
 	}
 }
 
-func (s *Store) updateDeletedObjectMetaByIPIndex(meta *informer.ObjectMeta) {
+func (s *Store) deleteObjectMeta(meta *informer.ObjectMeta) {
 	s.access.Lock()
 	defer s.access.Unlock()
 	// clean up the IP to service cache, we have to clean everything since
 	// Otel variables on specific pods can change the outcome.
 	s.otelServiceInfoByIP = map[string]OTelServiceNamePair{}
 
+	delete(s.objectIPsByName, qualifiedName{
+		name: meta.Name, namespace: meta.Namespace, kind: meta.Kind,
+	})
 	for _, ip := range meta.Ips {
-		delete(s.ipInfos, ip)
+		delete(s.objectMetaByIP, ip)
 	}
 	if meta.Pod != nil {
 		s.log.Debug("deleting pod from store",
@@ -223,11 +268,7 @@ func (s *Store) PodByPIDNs(pidns uint32) *informer.ObjectMeta {
 func (s *Store) ObjectMetaByIP(ip string) *informer.ObjectMeta {
 	s.access.RLock()
 	defer s.access.RUnlock()
-	return s.objectMetaByIP(ip)
-}
-
-func (s *Store) objectMetaByIP(ip string) *informer.ObjectMeta {
-	return s.ipInfos[ip]
+	return s.objectMetaByIP[ip]
 }
 
 func (s *Store) ServiceNameNamespaceForMetadata(om *informer.ObjectMeta) (string, string) {
@@ -257,7 +298,7 @@ func (s *Store) ServiceNameNamespaceForIP(ip string) (string, string) {
 	}
 
 	name, namespace := "", ""
-	if om := s.objectMetaByIP(ip); om != nil {
+	if om, ok := s.objectMetaByIP[ip]; ok {
 		name, namespace = s.serviceNameNamespaceForMetadata(om)
 	}
 	s.access.RUnlock()
@@ -354,7 +395,7 @@ func (s *Store) Subscribe(observer meta.Observer) {
 	// the IPInfos could contain IPInfo data from Pods already sent in the previous loop
 	// is the subscriber the one that should decide whether to ignore such duplicates or
 	// incomplete info
-	for _, ips := range s.ipInfos {
+	for _, ips := range s.objectMetaByIP {
 		observer.On(&informer.Event{Type: informer.EventType_CREATED, Resource: ips})
 	}
 }

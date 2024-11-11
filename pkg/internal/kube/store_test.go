@@ -92,10 +92,10 @@ func TestContainerInfo(t *testing.T) {
 
 	store := NewStore(fInformer)
 
-	store.On(&informer.Event{Type: informer.EventType_CREATED, Resource: &service})
-	store.On(&informer.Event{Type: informer.EventType_CREATED, Resource: &podMetaA})
-	store.On(&informer.Event{Type: informer.EventType_CREATED, Resource: &podMetaA1})
-	store.On(&informer.Event{Type: informer.EventType_CREATED, Resource: &podMetaB})
+	_ = store.On(&informer.Event{Type: informer.EventType_CREATED, Resource: &service})
+	_ = store.On(&informer.Event{Type: informer.EventType_CREATED, Resource: &podMetaA})
+	_ = store.On(&informer.Event{Type: informer.EventType_CREATED, Resource: &podMetaA1})
+	_ = store.On(&informer.Event{Type: informer.EventType_CREATED, Resource: &podMetaB})
 
 	assert.Equal(t, 2, len(store.containersByOwner))
 
@@ -122,7 +122,7 @@ func TestContainerInfo(t *testing.T) {
 	assert.Equal(t, 3, len(store.otelServiceInfoByIP))
 	// Delete the pod which had good definition for the OTel variables.
 	// We expect much different service names now
-	store.On(&informer.Event{Type: informer.EventType_DELETED, Resource: &podMetaA})
+	_ = store.On(&informer.Event{Type: informer.EventType_DELETED, Resource: &podMetaA})
 	// We cleaned up the cache for service IPs. We must clean all of it
 	// otherwise there will be stale data left
 	assert.Equal(t, 0, len(store.otelServiceInfoByIP))
@@ -159,8 +159,8 @@ func TestContainerInfo(t *testing.T) {
 
 	assert.Equal(t, 5, len(store.otelServiceInfoByIP))
 
-	store.On(&informer.Event{Type: informer.EventType_DELETED, Resource: &podMetaA1})
-	store.On(&informer.Event{Type: informer.EventType_DELETED, Resource: &podMetaB})
+	_ = store.On(&informer.Event{Type: informer.EventType_DELETED, Resource: &podMetaA1})
+	_ = store.On(&informer.Event{Type: informer.EventType_DELETED, Resource: &podMetaB})
 
 	assert.Equal(t, 0, len(store.otelServiceInfoByIP))
 
@@ -259,15 +259,15 @@ func TestMemoryCleanedUp(t *testing.T) {
 
 	store := NewStore(fInformer)
 
-	store.On(&informer.Event{Type: informer.EventType_CREATED, Resource: &service})
-	store.On(&informer.Event{Type: informer.EventType_CREATED, Resource: &podMetaA})
-	store.On(&informer.Event{Type: informer.EventType_CREATED, Resource: &podMetaA1})
-	store.On(&informer.Event{Type: informer.EventType_CREATED, Resource: &podMetaB})
+	_ = store.On(&informer.Event{Type: informer.EventType_CREATED, Resource: &service})
+	_ = store.On(&informer.Event{Type: informer.EventType_CREATED, Resource: &podMetaA})
+	_ = store.On(&informer.Event{Type: informer.EventType_CREATED, Resource: &podMetaA1})
+	_ = store.On(&informer.Event{Type: informer.EventType_CREATED, Resource: &podMetaB})
 
-	store.On(&informer.Event{Type: informer.EventType_DELETED, Resource: &podMetaA1})
-	store.On(&informer.Event{Type: informer.EventType_DELETED, Resource: &podMetaA})
-	store.On(&informer.Event{Type: informer.EventType_DELETED, Resource: &podMetaB})
-	store.On(&informer.Event{Type: informer.EventType_DELETED, Resource: &service})
+	_ = store.On(&informer.Event{Type: informer.EventType_DELETED, Resource: &podMetaA1})
+	_ = store.On(&informer.Event{Type: informer.EventType_DELETED, Resource: &podMetaA})
+	_ = store.On(&informer.Event{Type: informer.EventType_DELETED, Resource: &podMetaB})
+	_ = store.On(&informer.Event{Type: informer.EventType_DELETED, Resource: &service})
 
 	assert.Equal(t, 0, len(store.containerIDs))
 	assert.Equal(t, 0, len(store.containerByPID))
@@ -283,7 +283,7 @@ func TestMetaByIPEntryRemovedIfIPGroupChanges(t *testing.T) {
 	// GIVEN a store with
 	store := NewStore(&fakeInformer{})
 	// WHEN an object is created with several IPs
-	store.On(&informer.Event{
+	_ = store.On(&informer.Event{
 		Type: informer.EventType_CREATED,
 		Resource: &informer.ObjectMeta{
 			Name:      "object_1",
@@ -304,7 +304,7 @@ func TestMetaByIPEntryRemovedIfIPGroupChanges(t *testing.T) {
 	assert.Equal(t, []string{"3.1.1.1", "3.2.2.2"}, om.Ips)
 
 	// AND WHEN an object is updated with a different set of IPs
-	store.On(&informer.Event{
+	_ = store.On(&informer.Event{
 		Type: informer.EventType_UPDATED,
 		Resource: &informer.ObjectMeta{
 			Name:      "object_1",
@@ -349,6 +349,6 @@ func (f *fakeInformer) Notify(event *informer.Event) {
 	f.mt.Lock()
 	defer f.mt.Unlock()
 	for _, observer := range f.observers {
-		observer.On(event)
+		_ = observer.On(event)
 	}
 }

@@ -176,6 +176,6 @@ func (f *fakeInformer) Unsubscribe(observer meta.Observer) {
 
 func (f *fakeInformer) Notify(event *informer.Event) {
 	for _, observer := range f.observers {
-		observer.On(event)
+		_ = observer.On(event)
 	}
 }

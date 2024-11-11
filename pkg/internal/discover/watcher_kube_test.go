@@ -302,6 +302,6 @@ func (f *fakeInformer) Notify(event *informer.Event) {
 	f.mt.Lock()
 	defer f.mt.Unlock()
 	for _, observer := range f.observers {
-		observer.On(event)
+		_ = observer.On(event)
 	}
 }

@@ -197,7 +197,7 @@ func (mp *MetadataProvider) initLocalInformers(ctx context.Context) (*meta.Infor
 func (mp *MetadataProvider) initRemoteInformerCacheClient(ctx context.Context) *cacheSvcClient {
 	client := &cacheSvcClient{
 		address:      mp.cfg.MetaCacheAddr,
-		BaseNotifier: meta.NewBaseNotifier(),
+		BaseNotifier: meta.NewBaseNotifier(klog()),
 		syncTimeout:  mp.cfg.SyncTimeout,
 	}
 	client.Start(ctx)

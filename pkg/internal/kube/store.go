@@ -70,8 +70,9 @@ type Store struct {
 }
 
 func NewStore(kubeMetadata meta.Notifier) *Store {
+	log := dblog()
 	db := &Store{
-		log:                 dblog(),
+		log:                 log,
 		containerIDs:        map[string]*container.Info{},
 		namespaces:          map[uint32]*container.Info{},
 		podsByContainer:     map[string]*informer.ObjectMeta{},
@@ -81,7 +82,7 @@ func NewStore(kubeMetadata meta.Notifier) *Store {
 		containersByOwner:   map[string][]*informer.ContainerInfo{},
 		otelServiceInfoByIP: map[string]OTelServiceNamePair{},
 		metadataNotifier:    kubeMetadata,
-		BaseNotifier:        meta.NewBaseNotifier(),
+		BaseNotifier:        meta.NewBaseNotifier(log),
 	}
 	kubeMetadata.Subscribe(db)
 	return db
@@ -90,8 +91,8 @@ func NewStore(kubeMetadata meta.Notifier) *Store {
 func (s *Store) ID() string { return "unique-metadata-observer" }
 
 // On is invoked by the informer when a new Kube object is created, updated or deleted.
-// It will forward the notification to all the Stroe subscribers
-func (s *Store) On(event *informer.Event) {
+// It will forward the notification to all the Store subscribers
+func (s *Store) On(event *informer.Event) error {
 	switch event.Type {
 	case informer.EventType_CREATED:
 		s.addObjectMeta(event.Resource)
@@ -101,6 +102,7 @@ func (s *Store) On(event *informer.Event) {
 		s.deleteObjectMeta(event.Resource)
 	}
 	s.BaseNotifier.Notify(event)
+	return nil
 }
 
 // InfoForPID is an injectable dependency for system-independent testing
@@ -388,12 +390,20 @@ func (s *Store) Subscribe(observer meta.Observer) {
 	defer s.access.RUnlock()
 	s.BaseNotifier.Subscribe(observer)
 	for _, pod := range s.podsByContainer {
-		observer.On(&informer.Event{Type: informer.EventType_CREATED, Resource: pod})
+		if err := observer.On(&informer.Event{Type: informer.EventType_CREATED, Resource: pod}); err != nil {
+			s.log.Debug("observer failed sending Pod info. Unsubscribing it", "observer", observer.ID(), "error", err)
+			s.BaseNotifier.Unsubscribe(observer)
+			return
+		}
 	}
 	// the IPInfos could contain IPInfo data from Pods already sent in the previous loop
 	// is the subscriber the one that should decide whether to ignore such duplicates or
 	// incomplete info
 	for _, ips := range s.objectMetaByIP {
-		observer.On(&informer.Event{Type: informer.EventType_CREATED, Resource: ips})
+		if err := observer.On(&informer.Event{Type: informer.EventType_CREATED, Resource: ips}); err != nil {
+			s.log.Debug("observer failed sending Object Meta. Unsubscribing it", "observer", observer.ID(), "error", err)
+			s.BaseNotifier.Unsubscribe(observer)
+			return
+		}
 	}
 }

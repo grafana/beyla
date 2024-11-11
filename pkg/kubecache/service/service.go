@@ -73,11 +73,12 @@ func (ic *InformersCache) Subscribe(_ *informer.SubscribeMessage, server informe
 	if !ok {
 		return fmt.Errorf("failed to extract peer information")
 	}
-	o := &connection{id: p.Addr.String(), server: server}
+	connCtx, cancel := context.WithCancel(server.Context())
+	o := &connection{cancel: cancel, id: p.Addr.String(), server: server}
 	ic.log.Debug("subscribed component", "id", o.ID())
 	ic.informers.Subscribe(o)
 	// Keep the connection open
-	<-server.Context().Done()
+	<-connCtx.Done()
 	ic.log.Debug("client disconnected", "id", o.ID())
 	ic.informers.Unsubscribe(o)
 	return nil
@@ -86,6 +87,7 @@ func (ic *InformersCache) Subscribe(_ *informer.SubscribeMessage, server informe
 // connection implements the meta.Observer pattern to store the handle to
 // each client connection subscription
 type connection struct {
+	cancel func()
 	id     string
 	server grpc.ServerStreamingServer[informer.Event]
 }
@@ -94,8 +96,11 @@ func (o *connection) ID() string {
 	return o.id
 }
 
-func (o *connection) On(event *informer.Event) {
+func (o *connection) On(event *informer.Event) error {
 	if err := o.server.Send(event); err != nil {
-		slog.Error("sending message", "clientID", o.ID(), "error", err)
+		slog.Error("sending message. Unsubscribing and retrying connection", "clientID", o.ID(), "error", err)
+		o.cancel()
+		return err
 	}
+	return nil
 }

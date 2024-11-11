@@ -70,10 +70,10 @@ func (wk *watcherKubeEnricher) ID() string { return "unique-watcher-kube-enriche
 // On is invoked every time an object metadata instance is stored or deleted in the
 // kube.Store. It will just forward the event via the channel for proper asynchronous
 // handling in the enrich main loop
-func (wk *watcherKubeEnricher) On(event *informer.Event) {
+func (wk *watcherKubeEnricher) On(event *informer.Event) error {
 	// ignoring updates on non-pod resources
 	if event.GetResource().GetPod() == nil {
-		return
+		return nil
 	}
 	switch event.Type {
 	case informer.EventType_CREATED, informer.EventType_UPDATED:
@@ -83,6 +83,7 @@ func (wk *watcherKubeEnricher) On(event *informer.Event) {
 	default:
 		wk.log.Debug("ignoring unknown event type", "event", event)
 	}
+	return nil
 }
 
 // enrich listens for any potential instrumentable process from three asyncronous sources:

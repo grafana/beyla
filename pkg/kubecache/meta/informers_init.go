@@ -86,7 +86,7 @@ func InitInformers(ctx context.Context, opts ...InformerOption) (*Informers, err
 		opt(config)
 	}
 	log := slog.With("component", "kube.Informers")
-	k := &Informers{log: log, config: config, BaseNotifier: NewBaseNotifier()}
+	k := &Informers{log: log, config: config, BaseNotifier: NewBaseNotifier(log)}
 
 	if config.kubeClient == nil {
 		kubeCfg, err := loadKubeconfig(config.kubeConfigPath)

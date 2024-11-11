@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/grafana/beyla/pkg/config"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
@@ -32,9 +33,9 @@ func TestForwardRingbuf_CapacityFull(t *testing.T) {
 	metrics := &metricsReporter{}
 	forwardedMessages := make(chan []request.Span, 100)
 	fltr := TestPidsFilter{services: map[uint32]svc.ID{}}
-	fltr.AllowPID(1, 1, svc.ID{Name: "myService"}, PIDTypeGo, nil)
+	fltr.AllowPID(1, 1, &svc.ID{Name: "myService"}, PIDTypeGo, nil)
 	go ForwardRingbuf(
-		&TracerConfig{BatchLength: 10},
+		&config.EPPFTracer{BatchLength: 10},
 		nil, // the source ring buffer can be null
 		&fltr,
 		ReadBPFTraceAsSpan,
@@ -84,9 +85,9 @@ func TestForwardRingbuf_Deadline(t *testing.T) {
 	metrics := &metricsReporter{}
 	forwardedMessages := make(chan []request.Span, 100)
 	fltr := TestPidsFilter{services: map[uint32]svc.ID{}}
-	fltr.AllowPID(1, 1, svc.ID{Name: "myService"}, PIDTypeGo, nil)
+	fltr.AllowPID(1, 1, &svc.ID{Name: "myService"}, PIDTypeGo, nil)
 	go ForwardRingbuf(
-		&TracerConfig{BatchLength: 10, BatchTimeout: 20 * time.Millisecond},
+		&config.EPPFTracer{BatchLength: 10, BatchTimeout: 20 * time.Millisecond},
 		nil,   // the source ring buffer can be null
 		&fltr, // change fltr to a pointer
 		ReadBPFTraceAsSpan,
@@ -126,7 +127,7 @@ func TestForwardRingbuf_Close(t *testing.T) {
 	metrics := &metricsReporter{}
 	closable := closableObject{}
 	go ForwardRingbuf(
-		&TracerConfig{BatchLength: 10},
+		&config.EPPFTracer{BatchLength: 10},
 		nil, // the source ring buffer can be null
 		(&IdentityPidsFilter{}),
 		ReadBPFTraceAsSpan,
@@ -220,8 +221,8 @@ type TestPidsFilter struct {
 	services map[uint32]svc.ID
 }
 
-func (pf *TestPidsFilter) AllowPID(p uint32, _ uint32, s svc.ID, _ PIDType, _ *gosym.Table) {
-	pf.services[p] = s
+func (pf *TestPidsFilter) AllowPID(p uint32, _ uint32, s *svc.ID, _ PIDType, _ *gosym.Table) {
+	pf.services[p] = *s
 }
 
 func (pf *TestPidsFilter) BlockPID(p uint32, _ uint32) {

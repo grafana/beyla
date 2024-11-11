@@ -1,20 +1,29 @@
-logging {
-	level  = "debug"
-	format = "logfmt"
-}
-
 beyla.ebpf "default" {
+	// Enable Kubernetes decoration
 	attributes {
 		kubernetes {
 			enable = "true"
 		}
 	}
 
+	// Enable debug mode
+	debug = true
+
+	// Discovery all deployments in the default namespace
 	discovery {
 		services {
-			exe_path   = "http"
-			open_ports = "80"
+			kubernetes {
+				namespace       = "default"
+				deployment_name = "."
+			}
 		}
+	}
+
+	// Enable all metrics features for Prometheus
+	metrics {
+		features = [
+			"application",
+		]
 	}
 
 	output {
@@ -29,8 +38,9 @@ otelcol.exporter.logging "traces" {
 }
 
 prometheus.scrape "beyla" {
-	targets    = beyla.ebpf.default.targets
-	forward_to = [prometheus.remote_write.rw.receiver]
+	targets      = beyla.ebpf.default.targets
+	honor_labels = true
+	forward_to   = [prometheus.remote_write.rw.receiver]
 }
 
 prometheus.remote_write "rw" {

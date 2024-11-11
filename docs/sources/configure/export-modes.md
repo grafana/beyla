@@ -30,9 +30,7 @@ Beyla can export data in two modes:
 
 ## Running in Direct mode
 
-You can follow our [getting started tutorial]({{< relref "../tutorial/getting-started.md" >}}) for a quick introduction
-to auto-instrumentation in Direct mode, by using OpenTelemetry. The OTLP endpoint authentication credentials are provided
-by using the following environment variables:
+The OTLP endpoint authentication credentials are provided by using the following environment variables:
 
 - `OTEL_EXPORTER_OTLP_ENDPOINT`
 - `OTEL_EXPORTER_OTLP_HEADERS`
@@ -58,7 +56,7 @@ Configure the [Alloy](/docs/alloy/) pipeline and specify the following nodes:
 
 ![Beyla nodes](https://grafana.com/media/docs/grafana-cloud/beyla/nodes-2.png)
 
-Download the [example River configuration file](/docs/beyla/latest/configure/resources/alloy-config.river) used in this article.
+Download the [example River configuration file](https://github.com/grafana/beyla/blob/main/docs/sources/configure/resources/alloy-config.river) used in this article.
 
 Alloy needs to expose an **OpenTelemetry receiver** endpoint, such that the auto-instrumentation tool can forward both metrics and traces.
 The Alloy configuration file needs to include the following entry:
@@ -158,7 +156,7 @@ a configuration YAML file, which is what we will use in this example.
 Please refer to the complete [Configuration documentation]({{< relref "./options.md" >}}) for
 more detailed description of each configuration option.
 
-You can download the whole [example configuration file](/docs/beyla/latest/configure/resources/instrumenter-config.yml),
+You can download the whole [example configuration file](https://github.com/grafana/beyla/blob/main/docs/sources/configure/resources/instrumenter-config.yml),
 which we will explain in the rest of this section.
 
 First, you will need to specify the executable to instrument. If, for example,

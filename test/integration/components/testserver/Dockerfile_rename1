@@ -1,6 +1,6 @@
 # Build the testserver binary
 # Docker command must be invoked from the projec root directory
-FROM golang:1.22 as builder
+FROM golang:1.23 AS builder
 
 ARG TARGETARCH
 
@@ -21,6 +21,9 @@ RUN go build -o testserver ./test/integration/components/testserver/testserver.g
 FROM debian:bookworm-slim
 
 WORKDIR /
+RUN mkdir -p x509
+COPY --from=builder /src/test/integration/components/testserver/x509/server_test_cert.pem x509
+COPY --from=builder /src/test/integration/components/testserver/x509/server_test_key.pem x509
 COPY --from=builder /src/testserver /rename1
 USER 0:0
 

@@ -61,8 +61,8 @@ spec:
           value: "/testoutput"
         - name: BEYLA_DISCOVERY_POLL_INTERVAL
           value: "500ms"
-        - name: BEYLA_PRINT_TRACES
-          value: "true"
+        - name: BEYLA_TRACE_PRINTER
+          value: "counter"
         - name: BEYLA_EXECUTABLE_NAME
           value: "grpcpinger"
         - name: BEYLA_METRICS_INTERVAL
@@ -79,3 +79,5 @@ spec:
           value: "true"
         - name: BEYLA_KUBE_METADATA_ENABLE
           value: "true"
+        - name: BEYLA_NAME_RESOLVER_SOURCES
+          value: "dns,k8s"

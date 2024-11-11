@@ -1,16 +1,18 @@
 package global
 
 import (
+	"github.com/grafana/beyla/pkg/export/attributes"
 	"github.com/grafana/beyla/pkg/internal/connector"
-	"github.com/grafana/beyla/pkg/internal/export/attributes"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	kube2 "github.com/grafana/beyla/pkg/internal/kube"
-	"github.com/grafana/beyla/pkg/internal/transform/kube"
 )
 
 // ContextInfo stores some context information that must be shared across some nodes of the
 // processing graph.
 type ContextInfo struct {
+	// HostID of the host running Beyla. Unless testing environments, this value must be
+	// automatically set after invoking FetchHostID
+	HostID string
 	// AppO11y stores context information that is only required for application observability.
 	// Its values must be initialized by the App O11y code and shouldn't be accessed from the
 	// NetO11y part.
@@ -30,6 +32,4 @@ type ContextInfo struct {
 type AppO11y struct {
 	// ReportRoutes sets whether the metrics should set the http.route attribute
 	ReportRoutes bool
-	// K8sDatabase provides access to shared kubernetes metadata
-	K8sDatabase *kube.Database
 }

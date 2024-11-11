@@ -12,18 +12,11 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go: [ '1.22' ]
+        go: [ '1.23' ]
     steps:
       - uses: actions/checkout@v3
-# TODO:
-#      - name: Check Drone.yml is up-to-date
-#        uses: chrislennon/action-drone@v1
-#        with:
-#          version: 1.7.0
-#      - run:  make check-drone-drift
-#        env:
-#          DRONE_SERVER: ${{ secrets.DRONE_SERVER }}
-#          DRONE_TOKEN: ${{ secrets.DRONE_TOKEN }}
+        with:
+          lfs: true
       - name: Set up Go
         uses: actions/setup-go@v3
         with:

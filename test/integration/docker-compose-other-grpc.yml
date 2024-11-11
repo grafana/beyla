@@ -40,13 +40,13 @@ services:
       - ./configs/:/configs
       - ./system/sys/kernel/security${SECURITY_CONFIG_SUFFIX}:/sys/kernel/security
       - ../../testoutput:/coverage
-      - ../../testoutput/run:/var/run/beyla
+      - ../../testoutput/run-other-grpc:/var/run/beyla
     image: hatest-autoinstrumenter
     privileged: true # in some environments (not GH Pull Requests) you can set it to false and then cap_add: [ SYS_ADMIN ]
     pid: "host"
     environment:
       GOCOVERDIR: "/coverage"
-      BEYLA_PRINT_TRACES: "true"
+      BEYLA_TRACE_PRINTER: "text"
       BEYLA_OTEL_METRICS_FEATURES: "application,application_span"
       BEYLA_PROMETHEUS_FEATURES: "application,application_span"
       BEYLA_DISCOVERY_POLL_INTERVAL: 500ms

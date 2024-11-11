@@ -12,6 +12,10 @@
 #ifndef BPF_DBG_H
 #define BPF_DBG_H
 
+#include "vmlinux.h"
+#include "bpf_core_read.h"
+#include "pin_internal.h"
+
 #ifdef BPF_DEBUG
 
 typedef struct log_info {
@@ -23,31 +27,52 @@ typedef struct log_info {
 struct {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
     __uint(max_entries, 1 << 12);
-    __uint(pinning, LIBBPF_PIN_BY_NAME);    
+    __uint(pinning, BEYLA_PIN_INTERNAL);
 } debug_events SEC(".maps");
 
 enum bpf_func_id___x { BPF_FUNC_snprintf___x = 42 /* avoid zero */ };
 
-#define bpf_dbg_helper(fmt, args...) { \
-    if(bpf_core_enum_value_exists(enum bpf_func_id___x, BPF_FUNC_snprintf___x)) { \
-        log_info_t *__trace__ = bpf_ringbuf_reserve(&debug_events, sizeof(log_info_t), 0); \
-        if (__trace__) { \
-            BPF_SNPRINTF(__trace__->log, sizeof(__trace__->log), fmt, ##args); \
-            u64 id = bpf_get_current_pid_tgid(); \
-            bpf_get_current_comm(&__trace__->comm, sizeof(__trace__->comm)); \
-            __trace__->pid = id >> 32; \
-            bpf_ringbuf_submit(__trace__, 0); \
-        } \
-    } \
-}
+// When DEBUG_TC is enabled through build options it means we are compiling the Traffic Control TC
+// BPF program. In TC we can't use the current comm or current_pid_tgid helpers. We could use
+// get_current_task and extract the PID, but it's usually not the right PID anyway.
+#ifdef BPF_DEBUG_TC
+#define bpf_dbg_helper(fmt, args...)                                                               \
+    {                                                                                              \
+        log_info_t *__trace__ = bpf_ringbuf_reserve(&debug_events, sizeof(log_info_t), 0);         \
+        if (__trace__) {                                                                           \
+            if (bpf_core_enum_value_exists(enum bpf_func_id___x, BPF_FUNC_snprintf___x)) {         \
+                BPF_SNPRINTF(__trace__->log, sizeof(__trace__->log), fmt, ##args);                 \
+            } else {                                                                               \
+                __builtin_memcpy(__trace__->log, fmt, sizeof(__trace__->log));                     \
+            }                                                                                      \
+            bpf_ringbuf_submit(__trace__, 0);                                                      \
+        }                                                                                          \
+    }
+#else // BPF_DEBUG_TC
+#define bpf_dbg_helper(fmt, args...)                                                               \
+    {                                                                                              \
+        log_info_t *__trace__ = bpf_ringbuf_reserve(&debug_events, sizeof(log_info_t), 0);         \
+        if (__trace__) {                                                                           \
+            if (bpf_core_enum_value_exists(enum bpf_func_id___x, BPF_FUNC_snprintf___x)) {         \
+                BPF_SNPRINTF(__trace__->log, sizeof(__trace__->log), fmt, ##args);                 \
+            } else {                                                                               \
+                __builtin_memcpy(__trace__->log, fmt, sizeof(__trace__->log));                     \
+            }                                                                                      \
+            u64 id = bpf_get_current_pid_tgid();                                                   \
+            bpf_get_current_comm(&__trace__->comm, sizeof(__trace__->comm));                       \
+            __trace__->pid = id >> 32;                                                             \
+            bpf_ringbuf_submit(__trace__, 0);                                                      \
+        }                                                                                          \
+    }
+#endif // BPF_DEBUG_TC
 
-#define bpf_dbg_printk(fmt, args...) { \
-    bpf_printk(fmt, ##args); \
-    bpf_dbg_helper(fmt, ##args); \
-}
+#define bpf_dbg_printk(fmt, args...)                                                               \
+    {                                                                                              \
+        bpf_printk(fmt, ##args);                                                                   \
+        bpf_dbg_helper(fmt, ##args);                                                               \
+    }
 #else
 #define bpf_dbg_printk(fmt, args...)
 #endif
 
 #endif
-

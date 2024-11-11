@@ -342,8 +342,8 @@ func (e *expoHistogram[N]) remove(ctx context.Context, fltrAttr attribute.Set) {
 
 	key := fltrAttr.Equivalent()
 
-	if val, ok := e.values[key]; ok {
-		e.stale[key] = val
+	if _, ok := e.values[key]; ok {
+		//e.stale[key] = val
 		delete(e.values, key)
 	}
 }

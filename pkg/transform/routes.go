@@ -83,13 +83,13 @@ func (rn *routerNode) provideRoutes() (pipe.MiddleFunc[[]request.Span, []request
 
 	return func(in <-chan []request.Span, out chan<- []request.Span) {
 		for spans := range in {
-			filtered := make([]request.Span, 0, len(spans))
 			for i := range spans {
 				s := &spans[i]
 				if ignoreEnabled {
 					if discarder.Find(s.Path) != "" {
 						if ignoreMode == IgnoreAll {
-							continue
+							s.SetIgnoreMetrics()
+							s.SetIgnoreTraces()
 						}
 						// we can't discard it here, ignoring is selective (metrics | traces)
 						setSpanIgnoreMode(ignoreMode, s)
@@ -99,11 +99,8 @@ func (rn *routerNode) provideRoutes() (pipe.MiddleFunc[[]request.Span, []request
 					s.Route = matcher.Find(s.Path)
 				}
 				unmatchAction(s)
-				filtered = append(filtered, *s)
 			}
-			if len(filtered) > 0 {
-				out <- filtered
-			}
+			out <- spans
 		}
 	}, nil
 }
@@ -168,8 +165,8 @@ func classifyFromPath(s *request.Span) {
 func setSpanIgnoreMode(mode IgnoreMode, s *request.Span) {
 	switch mode {
 	case IgnoreMetrics:
-		s.IgnoreSpan = request.IgnoreMetrics
+		s.SetIgnoreMetrics()
 	case IgnoreTraces:
-		s.IgnoreSpan = request.IgnoreTraces
+		s.SetIgnoreTraces()
 	}
 }

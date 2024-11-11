@@ -16,8 +16,8 @@ Beyla can be configured via environment variables or via
 a YAML configuration file that is passed either with the `-config` command-line
 argument or the `BEYLA_CONFIG_PATH` environment variable.
 Environment variables have priority over the properties in the
-configuration file. For example, in the following command line, the BEYLA_OPEN_PORT option,
-is used to override any open_port settings inside the config.yaml file:
+configuration file. For example, in the following command line, the `BEYLA_OPEN_PORT` option,
+is used to override any `open_port` settings inside the config.yaml file:
 
 ```
 $ BEYLA_OPEN_PORT=8080 beyla -config /path/to/config.yaml
@@ -171,13 +171,35 @@ Sets the verbosity level of the process standard output logger.
 Valid log level values are: `DEBUG`, `INFO`, `WARN` and `ERROR`.
 `DEBUG` being the most verbose and `ERROR` the least verbose.
 
-| YAML           | Environment variable              | Type    | Default |
-| -------------- | -------------------- | ------- | ------- |
-| `print_traces` | `BEYLA_PRINT_TRACES` | boolean | `false` |
+| YAML            | Environment variable  | Type    | Default    |
+| --------------  | --------------------- | ------- | ---------- |
+| `trace_printer` | `BEYLA_TRACE_PRINTER` | string  | `disabled` |
 
 <a id="printer"></a>
 
-If `true`, prints any instrumented trace on the standard output (stdout).
+Prints any instrumented trace on the standard output. The value of
+this option specify the format to be used when printing the trace. Valid
+formats are:
+
+| Value         | Description                    |
+|---------------|--------------------------------|
+| `disabled`    | disables the printer           |
+| `text`        | prints a concise line of text  |
+| `json`        | prints a compact JSON object   |
+| `json_indent` | prints an indented JSON object |
+
+| YAML               | Environment variable     | Type     | Default    |
+| -----------------  | ------------------------ | -------- | ---------- |
+| `enforce_sys_caps` | `BEYLA_ENFORCE_SYS_CAPS` | boolean  | `true`     |
+
+<a id="caps"></a>
+
+If you have set the `enforce_sys_caps` to true, if the required system
+capabilities are not present Beyla aborts its startup and logs a list of the
+missing capabilities.
+
+If you have set the configuration option to `false`, Beyla logs a list of the
+missing capabilities only.
 
 ## Service discovery
 
@@ -203,12 +225,36 @@ namespace.
 For more details about this section, go to the [discovery services section](#discovery-services-section)
 of this document.
 
-| YAML                       | Environment variable                          | Type    | Default |
+| YAML               | Environment variable | Type            | Default |
+| ------------------ | ------- | --------------- | ------- |
+| `exclude_services` | N/A     | list of objects | (unset) |
+
+This section allows for specifying selection criteria for excluding services from 
+being instrumented. It follows the same definition format as described in the 
+[discovery services section](#discovery-services-section) of this document.
+
+This option is useful for avoiding instrumentation of services which are typically
+found in observability environments. For example, use this option to exclude instrumenting
+Prometheus, the OpenTelemetry collector or Grafana Alloy.
+
+| YAML                       | Environment variable             | Type    | Default |
 | -------------------------- | -------------------------------- | ------- | ------- |
 | `skip_go_specific_tracers` | `BEYLA_SKIP_GO_SPECIFIC_TRACERS` | boolean | false   |
 
-Disables the detection of Go specifics when ebpf tracer inspects executables to be instrumented.
+Disables the detection of Go specifics when the **ebpf** tracer inspects executables to be instrumented.
 The tracer will fallback to using generic instrumentation, which will generally be less efficient.
+
+| YAML                                 | Environment variable                       | Type    | Default |
+| ------------------------------------ | ------------------------------------------ | ------- | ------- |
+| `exclude_otel_instrumented_services` | `BEYLA_EXCLUDE_OTEL_INSTRUMENTED_SERVICES` | boolean | true    |
+
+Disables Beyla instrumentation of services which are already instrumented with OpenTelemetry. Since Beyla
+is often deployed to monitor all services in a Kubernetes cluster, monitoring already instrumented services
+can lead to duplicate telemetry data, unless the instrumentation selection (or exclusion) criteria is 
+carefully crafted. To avoid unnecessary configuration overhead, Beyla monitors for the OpenTelemetry SDK calls
+to publish metrics and traces, and automatically turns off instrumentation of services which publish their own
+telemetry data. Turn this option off if your application generated telemetry data doesn't conflict with the
+Beyla generated metrics and traces.
 
 ### Discovery services section
 
@@ -247,23 +293,23 @@ Each `services` entry is a map where the properties can be grouped according to 
 | `name` | --      | string | (see description) |
 
 Defines a name for the matching instrumented service. It will be used to populate the `service.name`
-OTEL property and/or the `service_name` prometheus property in the exported metrics/traces.
+OTEL property and the `service_name` Prometheus property in the exported metrics/traces.
 
 If the property is not set, it will default to any of the following properties, in order of
 precedence:
 
 - If Kubernetes is enabled:
   1. The name of the Deployment that runs the instrumented process, if any.
-  2. The name of the ReplicaSet that runs the instrumented process, if any.
+  2. The name of the ReplicaSet/DaemonSet/StatefulSet that runs the instrumented process, if any.
   3. The name of the Pod that runs the instrumented process.
-- If kubernetes is not enabled:
+- If Kubernetes is not enabled:
   1. The name of the process executable file.
 
 If multiple processes match the service selection criteria described below,
 the metrics and traces for all the instances might share the same service name;
 for example, when multiple instrumented processes run under the same Deployment,
-or have the same executable name. In that case, the reported `instance.id` (OTEL) or
-`target_instance` (Prometheus) would allow differentiating the different instances
+or have the same executable name. In that case, the reported `instance` attribute
+would allow differentiating the different instances
 of the service.
 
 | YAML        | Environment variable | Type   | Default                  |
@@ -460,6 +506,14 @@ Configures the time interval after which an HTTP request is considered as a time
 This option allows Beyla to report HTTP transactions which timeout and never return.
 To disable the automatic HTTP request timeout feature, set this option to zero, i.e. "0ms".
 
+| YAML                    | Environment variable               | Type     | Default |
+| ----------------------- | ---------------------------------- | -------- | ------- |
+| `high_request_volume`   | `BEYLA_BPF_HIGH_REQUEST_VOLUME`    | boolean  | (false) |
+
+Configures the HTTP tracer heuristic to send telemetry events as soon as a response is detected. 
+Setting this option reduces the accuracy of timings for requests with large responses, however,
+in high request volume scenarios this option will reduce the number of dropped trace events.
+
 ## Configuration of metrics and traces attributes
 
 Grafana Beyla allows configuring how some attributes for metrics and traces
@@ -542,7 +596,7 @@ attributes:
     dns: false
 ```
 
-| YAML  | Environment variable                         | Type    | Default |
+| YAML  | Environment variable            | Type    | Default |
 | ----- | ------------------------------- | ------- | ------- |
 | `dns` | `BEYLA_HOSTNAME_DNS_RESOLUTION` | boolean | `true`  |
 
@@ -557,14 +611,6 @@ If set, the host part of the Instance ID will use the provided string
 instead of trying to automatically resolve the host name.
 
 This option takes precedence over `dns`.
-
-| YAML                   | Environment variable             | Type   | Default |
-| ---------------------- | ------------------- | ------ | ------- |
-| `override_instance_id` | `BEYLA_INSTANCE_ID` | string | (unset) |
-
-If set, Beyla will use this value directly as instance ID of any instrumented
-process. If you are managing multiple processes from a single Beyla instance,
-all the processes will have the same instance ID.
 
 ### Kubernetes decorator
 
@@ -595,7 +641,7 @@ It is IMPORTANT to consider that enabling this feature requires a previous step 
 providing some extra permissions to the Beyla Pod. Consult the
 ["Configuring Kubernetes metadata decoration section" in the "Running Beyla in Kubernetes"]({{< relref "../setup/kubernetes.md" >}}) page.
 
-| YAML     | Environment variable                      | Type    | Default |
+| YAML     | Environment variable         | Type    | Default |
 | -------- | ---------------------------- | ------- | ------- |
 | `enable` | `BEYLA_KUBE_METADATA_ENABLE` | boolean | `false` |
 
@@ -615,6 +661,44 @@ to tell Beyla where to find the Kubernetes configuration in order to try to
 establish communication with the Kubernetes Cluster.
 
 Usually you won't need to change this value.
+
+| YAML                | Environment variable           | Type   | Default |
+|---------------------|--------------------------------|--------|---------|
+| `disable_informers` | `BEYLA_KUBE_DISABLE_INFORMERS` | string | (empty) |
+
+The accepted value is a list that might contain `node` and `service`.
+
+This option allows you to selectively disable some Kubernetes informers, which are continuously
+listening to the Kubernetes API to obtain the metadata that is required for decorating
+network metrics or application metrics and traces.
+
+When Beyla is deployed as a DaemonSet in very large clusters, all the Beyla instances
+creating multiple informers might end up overloading the Kubernetes API.
+
+Disabling some informers would cause reported metadata to be incomplete, but
+reduces the load of the Kubernetes API.
+
+The Pods informer can't be disabled. For that purpose, you should disable the whole
+Kubernetes metadata decoration.
+
+| YAML                     | Environment variable                | Type     | Default |
+|--------------------------|-------------------------------------|----------|---------|
+| `informers_sync_timeout` | `BEYLA_KUBE_INFORMERS_SYNC_TIMEOUT` | Duration | 30s     |
+
+Maximum time that Beyla waits for getting all the Kubernetes metadata before starting
+to decorate metrics and traces. If this timeout is reached, Beyla starts normally but
+the metadata attributes might be incomplete until all the Kubernetes metadata is locally
+updated in background.
+
+| YAML                      | Environment variable                 | Type     | Default |
+|---------------------------|--------------------------------------|----------|---------|
+| `informers_resync_period` | `BEYLA_KUBE_INFORMERS_RESYNC_PERIOD` | Duration | 30m     |
+
+Beyla is subscribed to immediately receive any update on resources' metadata. In addition,
+Beyla periodically resynchronizes the whole Kubernetes metadata at the frequency specified
+by this property.
+
+Higher values reduce the load on the Kubernetes API service.
 
 ## Routes decorator
 
@@ -808,9 +892,9 @@ If this property is not provided, Beyla will guess it according to the following
 - Beyla will guess `http/protobuf` if the port ends in `4318` (`4318`, `14318`, `24318`, ...),
   as `4318` is the usual Port number for the OTEL HTTP collector.
 
-| YAML                   | Environment variable                           | Type | Default |
-| ---------------------- | --------------------------------- | ---- | ------- |
-| `insecure_skip_verify` | `BEYLA_OTEL_INSECURE_SKIP_VERIFY` | bool | `false` |
+| YAML                   | Environment variable              | Type | Default |
+| ---------------------- | --------------------------------- | ------- | ------- |
+| `insecure_skip_verify` | `BEYLA_OTEL_INSECURE_SKIP_VERIFY` | boolean | `false` |
 
 Controls whether the OTEL client verifies the server's certificate chain and host name.
 If set to `true`, the OTEL client accepts any certificate presented by the server
@@ -822,16 +906,6 @@ attacks. This option should be used only for testing and development purposes.
 | `interval` | `BEYLA_METRICS_INTERVAL` | Duration | `5s`    |
 
 Configures the intervening time between exports.
-
-
-| YAML  | Environment variable     | Type     | Default |
-|-------|--------------------------|----------|---------|
-| `ttl` | `BEYLA_OTEL_METRICS_TTL` | Duration | `5m`    |
-
-The group of attributes for a metric instance is not reported anymore if the time since
-the last update is greater than this Time-To-Leave (TTL) value.
-
-The purpose of this value is to avoid reporting indefinitely finished application instances.
 
 | YAML       | Environment variable          | Type            | Default                      |
 |------------|-------------------------------|-----------------|------------------------------|
@@ -852,13 +926,23 @@ of Beyla: application-level metrics or network metrics.
   For best experience with generating service graph metrics, use a DNS for service discovery and make sure the DNS names match
   the OpenTelemetry service names used in Beyla. In Kubernetes environments, the OpenTelemetry service name set by the service name
   discovery is the best choice for service graph metrics.
+- If the list contains `application_process`, the Beyla OpenTelemetry exporter exports metrics about the processes that
+  run the instrumented application.
 - If the list contains `network`, the Beyla OpenTelemetry exporter exports network-level
   metrics; but only if there is an OpenTelemetry endpoint defined. For network-level metrics options visit the
   [network metrics]({{< relref "../network" >}}) configuration documentation.
 
-Usually you do not need to change this configuration option, unless, for example, a Beyla instance
-instruments both network and applications, and you want to disable application-level metrics because
-you only care about application traces, but still want Beyla to send network metrics.
+| YAML                                  | Environment variable                             | Type     | Default |
+|---------------------------------------|--------------------------------------------------|----------|---------|
+| `allow_service_graph_self_references` | `BEYLA_OTEL_ALLOW_SERVICE_GRAPH_SELF_REFERENCES` | boolean  | `false` |
+
+This option affects the behaviour of the generation of application-level service graph metrics, which can be enabled 
+by adding `application_service_graph` to the list of OpenTelemetry metric export features. By default, Beyla does not
+report application-level service graph metrics which are considered to be self-referencing. For example, self-references
+can be calls from local node metric scrape tools, or a service making an HTTP call to itself. Self-references
+not useful for the purpose of showing service graphs, while at the same time they increase the cardinality and the
+overall metric storage cost. To allow generation of application-level service graph metrics which also include 
+self-references, change this option value to `true`.
 
 | YAML               | Environment variable                  | Type            | Default                      |
 |--------------------|---------------------------------------|-----------------|------------------------------|
@@ -1019,9 +1103,9 @@ If this property is not provided, Beyla will guess it according to the following
 - Beyla will guess `http/protobuf` if the port ends in `4318` (`4318`, `14318`, `24318`, ...),
   as `4318` is the usual Port number for the OTEL HTTP collector.
 
-| YAML                   | Environment variable                           | Type | Default |
-| ---------------------- | --------------------------------- | ---- | ------- |
-| `insecure_skip_verify` | `BEYLA_OTEL_INSECURE_SKIP_VERIFY` | bool | `false` |
+| YAML                   | Environment variable              | Type    | Default |
+| ---------------------- | --------------------------------- | ------- | ------- |
+| `insecure_skip_verify` | `BEYLA_OTEL_INSECURE_SKIP_VERIFY` | boolean | `false` |
 
 Controls whether the OTEL client verifies the server's certificate chain and host name.
 If set to `true`, the OTEL client accepts any certificate presented by the server
@@ -1177,6 +1261,12 @@ API key of your Grafana Cloud account.
 
 ## Prometheus HTTP endpoint
 
+> ℹ️ The Prometheus scraper might override the values of the `instance` and `job` labels.
+> To keep the original values as set by Beyla, make sure to configure the
+> Prometheus scraper to set the `honor_labels` option to `true`.
+> 
+> ([How to set `honor_labels` in Grafana Alloy](/docs/alloy/latest/reference/components/prometheus/prometheus.scrape/)).
+
 YAML section `prometheus_export`.
 
 This component opens an HTTP endpoint in the auto-instrumentation tool
@@ -1231,13 +1321,24 @@ of Beyla: application-level metrics or network metrics.
   For best experience with generating service graph metrics, use a DNS for service discovery and make sure the DNS names match
   the OpenTelemetry service names used in Beyla. In Kubernetes environments, the OpenTelemetry service name set by the service name
   discovery is the best choice for service graph metrics.
+- If the list contains `application_process`, the Beyla Prometheus exporter exports metrics about the processes that
+  run the instrumented application.
 - If the list contains `network`, the Beyla Prometheus exporter exports network-level
   metrics; but only if the Prometheus `port` property is defined. For network-level metrics options visit the
   [network metrics]({{< relref "../network" >}}) configuration documentation.
 
-Usually you do not need to change this configuration option, unless, for example, a Beyla instance
-instruments both network and applications, and you want to disable application-level metrics because
-you only care about application traces, but still want Beyla to send network metrics.
+| YAML                                  | Environment variable                                   | Type     | Default |
+|---------------------------------------|--------------------------------------------------------|----------|---------|
+| `allow_service_graph_self_references` | `BEYLA_PROMETHEUS_ALLOW_SERVICE_GRAPH_SELF_REFERENCES` | boolean  | `false` |
+
+This option affects the behaviour of the generation of application-level service graph metrics, which can be enabled 
+by adding `application_service_graph` to the list of Prometheus metric export features. By default, Beyla does not
+report application-level service graph metrics which are considered to be self-referencing. For example, self-references
+can be calls from local node metric scrape tools, or a service making an HTTP call to itself. Self-references
+not useful for the purpose of showing service graphs, while at the same time they increase the cardinality and the
+overall metric storage cost. To allow generation of application-level service graph metrics which also include 
+self-references, change this option value to `true`.
+
 
 | YAML               | Environment variable                  | Type            | Default                      |
 |--------------------|---------------------------------------|-----------------|------------------------------|

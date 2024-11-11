@@ -34,7 +34,7 @@ type PrometheusReporter struct {
 	beylaInfo             prometheus.Gauge
 }
 
-func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusManager) *PrometheusReporter {
+func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusManager, registry *prometheus.Registry) *PrometheusReporter {
 	pr := &PrometheusReporter{
 		connector: manager,
 		tracerFlushes: prometheus.NewHistogram(prometheus.HistogramOpts{
@@ -70,7 +70,7 @@ func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusM
 			Help: "Instrumented processes by Beyla",
 		}, []string{"process_name"}),
 		beylaInfo: prometheus.NewGauge(prometheus.GaugeOpts{
-			Name: "beyla_build_info",
+			Name: "beyla_internal_build_info",
 			Help: "A metric with a constant '1' value labeled by version, revision, branch, " +
 				"goversion from which Beyla was built, the goos and goarch for the build.",
 			ConstLabels: map[string]string{
@@ -82,21 +82,34 @@ func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusM
 			},
 		}),
 	}
-	manager.Register(cfg.Port, cfg.Path,
-		pr.tracerFlushes,
-		pr.otelMetricExports,
-		pr.otelMetricExportErrs,
-		pr.otelTraceExports,
-		pr.otelTraceExportErrs,
-		pr.prometheusRequests,
-		pr.instrumentedProcesses,
-		pr.beylaInfo)
+	if registry != nil {
+		registry.MustRegister(pr.tracerFlushes,
+			pr.otelMetricExports,
+			pr.otelMetricExportErrs,
+			pr.otelTraceExports,
+			pr.otelTraceExportErrs,
+			pr.prometheusRequests,
+			pr.instrumentedProcesses,
+			pr.beylaInfo)
+	} else {
+		manager.Register(cfg.Port, cfg.Path,
+			pr.tracerFlushes,
+			pr.otelMetricExports,
+			pr.otelMetricExportErrs,
+			pr.otelTraceExports,
+			pr.otelTraceExportErrs,
+			pr.prometheusRequests,
+			pr.instrumentedProcesses,
+			pr.beylaInfo)
+	}
 
 	return pr
 }
 
 func (p *PrometheusReporter) Start(ctx context.Context) {
-	p.connector.StartHTTP(ctx)
+	if p.connector != nil {
+		p.connector.StartHTTP(ctx)
+	}
 	p.beylaInfo.Set(1)
 }
 

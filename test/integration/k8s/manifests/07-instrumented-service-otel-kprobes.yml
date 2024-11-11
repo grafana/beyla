@@ -85,6 +85,8 @@ spec:
       env:
         - name: LOG_LEVEL
           value: "DEBUG"
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: "service.name=mypythonapp"          
     - name: beyla
       image: beyla:dev
       imagePullPolicy: Never # loaded into Kind from localhost
@@ -99,8 +101,8 @@ spec:
       env:
         - name: GOCOVERDIR
           value: "/testoutput"
-        - name: BEYLA_PRINT_TRACES
-          value: "true"
+        - name: BEYLA_TRACE_PRINTER
+          value: "json"
         - name: BEYLA_OPEN_PORT
           value: "8080"
         - name: BEYLA_DISCOVERY_POLL_INTERVAL
@@ -123,3 +125,5 @@ spec:
           value: "8999"
         - name: BEYLA_KUBE_METADATA_ENABLE
           value: "autodetect"
+        - name: BEYLA_NAME_RESOLVER_SOURCES
+          value: "dns,k8s"

@@ -7,9 +7,9 @@ import (
 	"sync"
 
 	"github.com/grafana/beyla/pkg/beyla"
+	"github.com/grafana/beyla/pkg/export/attributes"
 	"github.com/grafana/beyla/pkg/internal/appolly"
 	"github.com/grafana/beyla/pkg/internal/connector"
-	"github.com/grafana/beyla/pkg/internal/export/attributes"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/netolly/agent"
@@ -20,7 +20,7 @@ import (
 // RunBeyla in the foreground process. This is a blocking function and won't exit
 // until both the AppO11y and NetO11y components end
 func RunBeyla(ctx context.Context, cfg *beyla.Config) error {
-	ctxInfo := buildCommonContextInfo(cfg)
+	ctxInfo := buildCommonContextInfo(ctx, cfg)
 
 	wg := sync.WaitGroup{}
 	app := cfg.Enabled(beyla.FeatureAppO11y)
@@ -60,13 +60,12 @@ func RunBeyla(ctx context.Context, cfg *beyla.Config) error {
 
 func setupAppO11y(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config) error {
 	slog.Info("starting Beyla in Application Observability mode")
-	// TODO: when we split Beyla in two processes with different permissions, this code can be split:
-	// in two parts:
-	// 1st process (privileged) - Invoke FindTarget, which also mounts the BPF maps
-	// 2nd executable (unprivileged) - Invoke ReadAndForward, receiving the BPF map mountpoint as argument
+
+	wg := sync.WaitGroup{}
+	defer wg.Wait()
 
 	instr := appolly.New(ctx, ctxInfo, config)
-	if err := instr.FindAndInstrument(); err != nil {
+	if err := instr.FindAndInstrument(&wg); err != nil {
 		return fmt.Errorf("can't find target process: %w", err)
 	}
 	if err := instr.ReadAndForward(); err != nil {
@@ -102,30 +101,42 @@ func mustSkip(cfg *beyla.Config) string {
 // BuildContextInfo populates some globally shared components and properties
 // from the user-provided configuration
 func buildCommonContextInfo(
-	config *beyla.Config,
+	ctx context.Context, config *beyla.Config,
 ) *global.ContextInfo {
 	promMgr := &connector.PrometheusManager{}
 	ctxInfo := &global.ContextInfo{
 		Prometheus: promMgr,
-		K8sInformer: kube.NewMetadataProvider(
-			config.Attributes.Kubernetes.Enable,
-			config.Attributes.Kubernetes.DisableInformers,
-			config.Attributes.Kubernetes.KubeconfigPath,
-			config.Attributes.Kubernetes.InformersSyncTimeout,
-		),
+		K8sInformer: kube.NewMetadataProvider(kube.MetadataConfig{
+			Enable:            config.Attributes.Kubernetes.Enable,
+			KubeConfigPath:    config.Attributes.Kubernetes.KubeconfigPath,
+			SyncTimeout:       config.Attributes.Kubernetes.InformersSyncTimeout,
+			ResyncPeriod:      config.Attributes.Kubernetes.InformersResyncPeriod,
+			DisabledInformers: config.Attributes.Kubernetes.DisableInformers,
+			MetaCacheAddr:     config.Attributes.Kubernetes.MetaCacheAddress,
+		}),
 	}
-	if config.InternalMetrics.Prometheus.Port != 0 {
+	switch {
+	case config.InternalMetrics.Prometheus.Port != 0:
 		slog.Debug("reporting internal metrics as Prometheus")
-		ctxInfo.Metrics = imetrics.NewPrometheusReporter(&config.InternalMetrics.Prometheus, promMgr)
+		ctxInfo.Metrics = imetrics.NewPrometheusReporter(&config.InternalMetrics.Prometheus, promMgr, nil)
 		// Prometheus manager also has its own internal metrics, so we need to pass the imetrics reporter
 		// TODO: remove this dependency cycle and let prommgr to create and return the PrometheusReporter
 		promMgr.InstrumentWith(ctxInfo.Metrics)
-	} else {
+	case config.Prometheus.Registry != nil:
+		slog.Debug("reporting internal metrics with Prometheus Registry")
+		ctxInfo.Metrics = imetrics.NewPrometheusReporter(&config.InternalMetrics.Prometheus, nil, config.Prometheus.Registry)
+	default:
 		slog.Debug("not reporting internal metrics")
 		ctxInfo.Metrics = imetrics.NoopReporter{}
 	}
 
 	attributeGroups(config, ctxInfo)
+
+	if config.Attributes.HostID.Override == "" {
+		ctxInfo.FetchHostID(ctx, config.Attributes.HostID.FetchTimeout)
+	} else {
+		ctxInfo.HostID = config.Attributes.HostID.Override
+	}
 
 	return ctxInfo
 }

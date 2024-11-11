@@ -1,0 +1,25 @@
+Checks:
+  - '-*'
+  - 'readability-*'
+  - 'clang-diagnostic-error'
+  - 'misc-misplaced_const'
+  - 'misc-*'
+  - '-bugprone-*'
+  - 'bugprone-switch-missing-default-case'
+  - '-bugprone-multi-level-implicit-pointer-conversion' #TODO enable this
+  - '-bugprone-reserved-identifier'
+  - '-bugprone-easily-swappable-parameters'
+  - '-bugprone-narrowing-conversions' #TODO this needs to be checked/enabled
+  - '-misc-unused-parameters'
+  - '-misc-misplaced-const'
+  - '-misc-include-cleaner'
+  - '-readability-else-after-return'
+  - '-readability-identifier-length'
+  - '-readability-function-cognitive-complexity'
+  - '-readability-magic-numbers'
+
+WarningsAsErrors: '*'
+HeaderFilterRegex: ''
+FormatStyle: none
+ExtraArgs: ['--target=bpf', '-Iheaders', '-D__TARGET_ARCH_x86', '-DBPF_DEBUG', '-DBPF_TRACEPARENT']
+

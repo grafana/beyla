@@ -34,7 +34,7 @@ func TestPythonBasicTracing(t *testing.T) {
 					require.NoError(t, err)
 					require.Equal(t, http.StatusOK, resp.StatusCode)
 
-					resp, err = http.Get(jaegerQueryURL + "?service=pytestserver&operation=GET%20%2Fgreeting")
+					resp, err = http.Get(jaegerQueryURL + "?service=mypythonapp&operation=GET%20%2Fgreeting")
 					require.NoError(t, err)
 					if resp == nil {
 						return
@@ -89,7 +89,7 @@ func TestPythonBasicTracing(t *testing.T) {
 					require.NoError(t, err)
 					require.Equal(t, http.StatusOK, resp.StatusCode)
 
-					resp, err = http.Get(jaegerQueryURL + "?service=pytestserver&operation=GET%20%2Fsmoke")
+					resp, err = http.Get(jaegerQueryURL + "?service=mypythonapp&operation=GET%20%2Fsmoke")
 					require.NoError(t, err)
 					if resp == nil {
 						return

@@ -2,6 +2,7 @@ package transform
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"strings"
 	"time"
@@ -9,14 +10,31 @@ import (
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/mariomac/pipes/pipe"
 
-	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
+	attr "github.com/grafana/beyla/pkg/export/attributes/names"
+	"github.com/grafana/beyla/pkg/internal/helpers/maps"
+	kube2 "github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
-	kube2 "github.com/grafana/beyla/pkg/internal/transform/kube"
 )
 
+const (
+	ResolverDNS = maps.Bits(1 << iota)
+	ResolverK8s
+)
+
+func resolverSources(str []string) maps.Bits {
+	return maps.MappedBits(str, map[string]maps.Bits{
+		"dns":        ResolverDNS,
+		"k8s":        ResolverK8s,
+		"kube":       ResolverK8s,
+		"kubernetes": ResolverK8s,
+	}, maps.WithTransform(strings.ToLower))
+}
+
 type NameResolverConfig struct {
+	// Sources for name resolving. Accepted values: dns, k8s
+	Sources []string `yaml:"sources" env:"BEYLA_NAME_RESOLVER_SOURCES" envSeparator:"," envDefault:"k8s"`
 	// CacheLen specifies the max size of the LRU cache that is checked before
 	// performing the name lookup. Default: 256
 	CacheLen int `yaml:"cache_len" env:"BEYLA_NAME_RESOLVER_CACHE_LEN"`
@@ -29,23 +47,44 @@ type NameResolverConfig struct {
 type NameResolver struct {
 	cache *expirable.LRU[string, string]
 	cfg   *NameResolverConfig
-	db    *kube2.Database
+	db    *kube2.Store
+
+	sources maps.Bits
 }
 
-func NameResolutionProvider(ctxInfo *global.ContextInfo, cfg *NameResolverConfig) pipe.MiddleProvider[[]request.Span, []request.Span] {
+func NameResolutionProvider(ctx context.Context, ctxInfo *global.ContextInfo, cfg *NameResolverConfig) pipe.MiddleProvider[[]request.Span, []request.Span] {
 	return func() (pipe.MiddleFunc[[]request.Span, []request.Span], error) {
-		if cfg == nil {
+		if cfg == nil || len(cfg.Sources) == 0 {
 			return pipe.Bypass[[]request.Span](), nil
 		}
-		return nameResolver(ctxInfo, cfg)
+		return nameResolver(ctx, ctxInfo, cfg)
 	}
 }
 
-func nameResolver(ctxInfo *global.ContextInfo, cfg *NameResolverConfig) (pipe.MiddleFunc[[]request.Span, []request.Span], error) {
+func nameResolver(ctx context.Context, ctxInfo *global.ContextInfo, cfg *NameResolverConfig) (pipe.MiddleFunc[[]request.Span, []request.Span], error) {
+	sources := resolverSources(cfg.Sources)
+
+	var kubeStore *kube2.Store
+	if ctxInfo.K8sInformer.IsKubeEnabled() {
+		var err error
+		kubeStore, err = ctxInfo.K8sInformer.Get(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("initializing NameResolutionProvider: %w", err)
+		}
+	} else {
+		sources &= ^ResolverK8s
+	}
+	// after potentially remove k8s resolver, check again if
+	// this node needs to be bypassed
+	if sources == 0 {
+		return pipe.Bypass[[]request.Span](), nil
+	}
+
 	nr := NameResolver{
-		cfg:   cfg,
-		db:    ctxInfo.AppO11y.K8sDatabase,
-		cache: expirable.NewLRU[string, string](cfg.CacheLen, nil, cfg.CacheTTL),
+		cfg:     cfg,
+		db:      kubeStore,
+		cache:   expirable.NewLRU[string, string](cfg.CacheLen, nil, cfg.CacheTTL),
+		sources: sources,
 	}
 
 	return func(in <-chan []request.Span, out chan<- []request.Span) {
@@ -74,13 +113,16 @@ func trimPrefixIgnoreCase(s, prefix string) string {
 }
 
 func (nr *NameResolver) resolveNames(span *request.Span) {
-	var hn, pn string
+	var hn, pn, ns string
 	if span.IsClientSpan() {
 		hn, span.OtherNamespace = nr.resolve(&span.ServiceID, span.Host)
-		pn, _ = nr.resolve(&span.ServiceID, span.Peer)
+		pn, ns = nr.resolve(&span.ServiceID, span.Peer)
 	} else {
 		pn, span.OtherNamespace = nr.resolve(&span.ServiceID, span.Peer)
-		hn, _ = nr.resolve(&span.ServiceID, span.Host)
+		hn, ns = nr.resolve(&span.ServiceID, span.Host)
+	}
+	if span.ServiceID.Namespace == "" && ns != "" {
+		span.ServiceID.Namespace = ns
 	}
 	// don't set names if the peer and host names have been already decorated
 	// in a previous stage (e.g. Kubernetes decorator)
@@ -129,7 +171,7 @@ func (nr *NameResolver) dnsResolve(svc *svc.ID, ip string) (string, string) {
 		return "", ""
 	}
 
-	if nr.db != nil {
+	if nr.sources.Has(ResolverK8s) && nr.db != nil {
 		ipAddr := net.ParseIP(ip)
 
 		if ipAddr != nil && !ipAddr.IsLoopback() {
@@ -141,27 +183,19 @@ func (nr *NameResolver) dnsResolve(svc *svc.ID, ip string) (string, string) {
 		}
 	}
 
-	n := nr.resolveIP(ip)
-	if n == ip {
+	if nr.sources.Has(ResolverDNS) {
+		n := nr.resolveIP(ip)
+		if n == ip {
+			return n, svc.Namespace
+		}
+		n = nr.cleanName(svc, ip, n)
 		return n, svc.Namespace
 	}
-
-	n = nr.cleanName(svc, ip, n)
-
-	return n, svc.Namespace
+	return "", ""
 }
 
 func (nr *NameResolver) resolveFromK8s(ip string) (string, string) {
-	svcInfo := nr.db.ServiceInfoForIP(ip)
-	if svcInfo == nil {
-		podInfo := nr.db.PodInfoForIP(ip)
-		if podInfo == nil {
-			return "", ""
-		}
-		return podInfo.ServiceName(), podInfo.Namespace
-	}
-
-	return svcInfo.Name, svcInfo.Namespace
+	return nr.db.ServiceNameNamespaceForIP(ip)
 }
 
 func (nr *NameResolver) resolveIP(ip string) string {

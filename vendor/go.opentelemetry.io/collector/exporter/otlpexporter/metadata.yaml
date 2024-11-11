@@ -1,10 +1,12 @@
 type: otlp
+github_project: open-telemetry/opentelemetry-collector
 
 status:
   class: exporter
   stability:
     stable: [traces, metrics]
     beta: [logs]
+    development: [profiles]
   distributions: [core, contrib, k8s]
 
 tests:

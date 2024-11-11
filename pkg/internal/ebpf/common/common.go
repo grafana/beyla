@@ -9,7 +9,6 @@ import (
 	"net"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/ringbuf"
@@ -18,7 +17,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/request"
 )
 
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 -type http_request_trace -type sql_request_trace -type http_info_t -type connection_info_t -type http2_grpc_request_t -type tcp_req_t -type kafka_client_req_t -type kafka_go_req_t  -type redis_client_req_t bpf ../../../../bpf/http_trace.c -- -I../../../../bpf/headers
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 -type http_request_trace -type sql_request_trace -type http_info_t -type connection_info_t -type http2_grpc_request_t -type tcp_req_t -type kafka_client_req_t -type kafka_go_req_t  -type redis_client_req_t bpf ../../../../bpf/tracer_common.c -- -I../../../../bpf/headers
 
 // HTTPRequestTrace contains information from an HTTP request as directly received from the
 // eBPF layer. This contains low-level C structures for accurate binary read from ring buffer.
@@ -42,38 +41,6 @@ const EventTypeGoKafkaGo = 11 // Kafka-Go client from Segment-io
 var IntegrityModeOverride = false
 
 var ActiveNamespaces = make(map[uint32]uint32)
-
-// TracerConfig configuration for eBPF programs
-type TracerConfig struct {
-	BpfDebug bool `yaml:"bpf_debug" env:"BEYLA_BPF_DEBUG"`
-
-	// WakeupLen specifies how many messages need to be accumulated in the eBPF ringbuffer
-	// before sending a wakeup request.
-	// High values of WakeupLen could add a noticeable metric delay in services with low
-	// requests/second.
-	// TODO: see if there is a way to force eBPF to wakeup userspace on timeout
-	WakeupLen int `yaml:"wakeup_len" env:"BEYLA_BPF_WAKEUP_LEN"`
-	// BatchLength allows specifying how many traces will be batched at the initial
-	// stage before being forwarded to the next stage
-	BatchLength int `yaml:"batch_length" env:"BEYLA_BPF_BATCH_LENGTH"`
-	// BatchTimeout specifies the timeout to forward the data batch if it didn't
-	// reach the BatchLength size
-	BatchTimeout time.Duration `yaml:"batch_timeout" env:"BEYLA_BPF_BATCH_TIMEOUT"`
-
-	// BpfBaseDir specifies the base directory where the BPF pinned maps will be mounted.
-	// By default, it will be /var/run/beyla
-	BpfBaseDir string `yaml:"bpf_fs_base_dir" env:"BEYLA_BPF_FS_BASE_DIR"`
-
-	// BpfPath specifies the path in the base directory where the BPF pinned maps will be mounted.
-	// By default, it will be beyla-<pid>.
-	BpfPath string `yaml:"bpf_fs_path" env:"BEYLA_BPF_FS_PATH"`
-
-	// If enabled, the kprobes based HTTP request tracking will start tracking the request
-	// headers to process any 'Traceparent' fields.
-	TrackRequestHeaders bool `yaml:"track_request_headers" env:"BEYLA_BPF_TRACK_REQUEST_HEADERS"`
-
-	HTTPRequestTimeout time.Duration `yaml:"http_request_timeout" env:"BEYLA_BPF_HTTP_REQUEST_TIMEOUT"`
-}
 
 // Probe holds the information of the instrumentation points of a given function: its start and end offsets and
 // eBPF programs
@@ -164,6 +131,13 @@ func SupportsContextPropagation(log *slog.Logger) bool {
 	if kernelMajor < 5 || (kernelMajor == 5 && kernelMinor < 10) {
 		log.Debug("Found Linux kernel earlier than 5.10, trace context propagation is supported", "major", kernelMajor, "minor", kernelMinor)
 		return true
+	}
+
+	// bpf_probe_write_user(), used to inject the context, requires CAP_SYS_ADMIN
+
+	if !hasCapSysAdmin() {
+		log.Info("trace context propagation disabled due to missing capability CAP_SYS_ADMIN")
+		return false
 	}
 
 	lockdown := KernelLockdownMode()

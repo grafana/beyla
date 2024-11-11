@@ -6,13 +6,12 @@ import (
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/stretchr/testify/assert"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
+	attr "github.com/grafana/beyla/pkg/export/attributes/names"
 	kube2 "github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
-	"github.com/grafana/beyla/pkg/internal/transform/kube"
+	"github.com/grafana/beyla/pkg/kubecache/informer"
 )
 
 func TestSuffixPrefix(t *testing.T) {
@@ -32,38 +31,28 @@ func TestSuffixPrefix(t *testing.T) {
 }
 
 func TestResolvePodsFromK8s(t *testing.T) {
-	db := kube.CreateDatabase(nil)
+	inf := &fakeInformer{}
+	db := kube2.NewStore(inf)
+	pod1 := &informer.ObjectMeta{Name: "pod1", Kind: "Pod", Ips: []string{"10.0.0.1", "10.1.0.1"}}
+	pod2 := &informer.ObjectMeta{Name: "pod2", Namespace: "something", Kind: "Pod", Ips: []string{"10.0.0.2", "10.1.0.2"}}
+	pod3 := &informer.ObjectMeta{Name: "pod3", Kind: "Pod", Ips: []string{"10.0.0.3", "10.1.0.3"}}
+	inf.Notify(&informer.Event{Type: informer.EventType_CREATED, Resource: pod1})
+	inf.Notify(&informer.Event{Type: informer.EventType_CREATED, Resource: pod2})
+	inf.Notify(&informer.Event{Type: informer.EventType_CREATED, Resource: pod3})
 
-	pod1 := kube2.PodInfo{
-		ObjectMeta: metav1.ObjectMeta{Name: "pod1"},
-		IPInfo:     kube2.IPInfo{IPs: []string{"10.0.0.1", "10.1.0.1"}},
-	}
+	assert.Equal(t, pod1, db.ObjectMetaByIP("10.0.0.1"))
+	assert.Equal(t, pod1, db.ObjectMetaByIP("10.1.0.1"))
+	assert.Equal(t, pod2, db.ObjectMetaByIP("10.0.0.2"))
+	assert.Equal(t, pod2, db.ObjectMetaByIP("10.1.0.2"))
+	assert.Equal(t, pod3, db.ObjectMetaByIP("10.1.0.3"))
 
-	pod2 := kube2.PodInfo{
-		ObjectMeta: metav1.ObjectMeta{Name: "pod2", Namespace: "something"},
-		IPInfo:     kube2.IPInfo{IPs: []string{"10.0.0.2", "10.1.0.2"}},
-	}
-
-	pod3 := kube2.PodInfo{
-		ObjectMeta: metav1.ObjectMeta{Name: "pod3"},
-		IPInfo:     kube2.IPInfo{IPs: []string{"10.0.0.3", "10.1.0.3"}},
-	}
-
-	db.UpdateNewPodsByIPIndex(&pod1)
-	db.UpdateNewPodsByIPIndex(&pod2)
-	db.UpdateNewPodsByIPIndex(&pod3)
-
-	assert.Equal(t, &pod1, db.PodInfoForIP("10.0.0.1"))
-	assert.Equal(t, &pod1, db.PodInfoForIP("10.1.0.1"))
-	assert.Equal(t, &pod2, db.PodInfoForIP("10.0.0.2"))
-	assert.Equal(t, &pod2, db.PodInfoForIP("10.1.0.2"))
-	assert.Equal(t, &pod3, db.PodInfoForIP("10.1.0.3"))
-	db.UpdateDeletedPodsByIPIndex(&pod3)
-	assert.Nil(t, db.PodInfoForIP("10.1.0.3"))
+	inf.Notify(&informer.Event{Type: informer.EventType_DELETED, Resource: pod3})
+	assert.Nil(t, db.ObjectMetaByIP("10.1.0.3"))
 
 	nr := NameResolver{
-		db:    &db,
-		cache: expirable.NewLRU[string, string](10, nil, 5*time.Hour),
+		db:      db,
+		cache:   expirable.NewLRU[string, string](10, nil, 5*time.Hour),
+		sources: resolverSources([]string{"dns", "k8s"}),
 	}
 
 	name, namespace := nr.resolveFromK8s("10.0.0.1")
@@ -114,38 +103,27 @@ func TestResolvePodsFromK8s(t *testing.T) {
 }
 
 func TestResolveServiceFromK8s(t *testing.T) {
-	db := kube.CreateDatabase(nil)
+	inf := &fakeInformer{}
+	db := kube2.NewStore(inf)
+	pod1 := &informer.ObjectMeta{Name: "pod1", Kind: "Service", Ips: []string{"10.0.0.1", "10.1.0.1"}}
+	pod2 := &informer.ObjectMeta{Name: "pod2", Namespace: "something", Kind: "Service", Ips: []string{"10.0.0.2", "10.1.0.2"}}
+	pod3 := &informer.ObjectMeta{Name: "pod3", Kind: "Service", Ips: []string{"10.0.0.3", "10.1.0.3"}}
+	inf.Notify(&informer.Event{Type: informer.EventType_CREATED, Resource: pod1})
+	inf.Notify(&informer.Event{Type: informer.EventType_CREATED, Resource: pod2})
+	inf.Notify(&informer.Event{Type: informer.EventType_CREATED, Resource: pod3})
 
-	svc1 := kube2.ServiceInfo{
-		ObjectMeta: metav1.ObjectMeta{Name: "pod1"},
-		IPInfo:     kube2.IPInfo{IPs: []string{"10.0.0.1", "10.1.0.1"}},
-	}
-
-	svc2 := kube2.ServiceInfo{
-		ObjectMeta: metav1.ObjectMeta{Name: "pod2", Namespace: "something"},
-		IPInfo:     kube2.IPInfo{IPs: []string{"10.0.0.2", "10.1.0.2"}},
-	}
-
-	svc3 := kube2.ServiceInfo{
-		ObjectMeta: metav1.ObjectMeta{Name: "pod3"},
-		IPInfo:     kube2.IPInfo{IPs: []string{"10.0.0.3", "10.1.0.3"}},
-	}
-
-	db.UpdateNewServicesByIPIndex(&svc1)
-	db.UpdateNewServicesByIPIndex(&svc2)
-	db.UpdateNewServicesByIPIndex(&svc3)
-
-	assert.Equal(t, &svc1, db.ServiceInfoForIP("10.0.0.1"))
-	assert.Equal(t, &svc1, db.ServiceInfoForIP("10.1.0.1"))
-	assert.Equal(t, &svc2, db.ServiceInfoForIP("10.0.0.2"))
-	assert.Equal(t, &svc2, db.ServiceInfoForIP("10.1.0.2"))
-	assert.Equal(t, &svc3, db.ServiceInfoForIP("10.1.0.3"))
-	db.UpdateDeletedServicesByIPIndex(&svc3)
-	assert.Nil(t, db.PodInfoForIP("10.1.0.3"))
+	assert.Equal(t, pod1, db.ObjectMetaByIP("10.0.0.1"))
+	assert.Equal(t, pod1, db.ObjectMetaByIP("10.1.0.1"))
+	assert.Equal(t, pod2, db.ObjectMetaByIP("10.0.0.2"))
+	assert.Equal(t, pod2, db.ObjectMetaByIP("10.1.0.2"))
+	assert.Equal(t, pod3, db.ObjectMetaByIP("10.1.0.3"))
+	inf.Notify(&informer.Event{Type: informer.EventType_DELETED, Resource: pod3})
+	assert.Nil(t, db.ObjectMetaByIP("10.1.0.3"))
 
 	nr := NameResolver{
-		db:    &db,
-		cache: expirable.NewLRU[string, string](10, nil, 5*time.Hour),
+		db:      db,
+		cache:   expirable.NewLRU[string, string](10, nil, 5*time.Hour),
+		sources: resolverSources([]string{"dns", "k8s"}),
 	}
 
 	name, namespace := nr.resolveFromK8s("10.0.0.1")
@@ -212,4 +190,75 @@ func TestCleanName(t *testing.T) {
 	assert.Equal(t, "service", nr.cleanName(&s, "127.0.0.1", "service.svc.cluster.local."))
 	assert.Equal(t, "service", nr.cleanName(&s, "127.0.0.1", "service.special.namespace.svc.cluster.local."))
 	assert.Equal(t, "service", nr.cleanName(&s, "127.0.0.1", "service.k8snamespace.svc.cluster.local."))
+}
+
+func TestResolveNodesFromK8s(t *testing.T) {
+	inf := &fakeInformer{}
+	db := kube2.NewStore(inf)
+	node1 := &informer.ObjectMeta{Name: "node1", Kind: "Node", Ips: []string{"10.0.0.1", "10.1.0.1"}}
+	node2 := &informer.ObjectMeta{Name: "node2", Namespace: "something", Kind: "Node", Ips: []string{"10.0.0.2", "10.1.0.2"}}
+	node3 := &informer.ObjectMeta{Name: "node3", Kind: "Node", Ips: []string{"10.0.0.3", "10.1.0.3"}}
+	inf.Notify(&informer.Event{Type: informer.EventType_CREATED, Resource: node1})
+	inf.Notify(&informer.Event{Type: informer.EventType_CREATED, Resource: node2})
+	inf.Notify(&informer.Event{Type: informer.EventType_CREATED, Resource: node3})
+
+	assert.Equal(t, node1, db.ObjectMetaByIP("10.0.0.1"))
+	assert.Equal(t, node1, db.ObjectMetaByIP("10.1.0.1"))
+	assert.Equal(t, node2, db.ObjectMetaByIP("10.0.0.2"))
+	assert.Equal(t, node2, db.ObjectMetaByIP("10.1.0.2"))
+	assert.Equal(t, node3, db.ObjectMetaByIP("10.1.0.3"))
+	inf.Notify(&informer.Event{Type: informer.EventType_DELETED, Resource: node3})
+	assert.Nil(t, db.ObjectMetaByIP("10.1.0.3"))
+
+	nr := NameResolver{
+		db:      db,
+		cache:   expirable.NewLRU[string, string](10, nil, 5*time.Hour),
+		sources: resolverSources([]string{"dns", "k8s"}),
+	}
+
+	name, namespace := nr.resolveFromK8s("10.0.0.1")
+	assert.Equal(t, "node1", name)
+	assert.Equal(t, "", namespace)
+
+	name, namespace = nr.resolveFromK8s("10.0.0.2")
+	assert.Equal(t, "node2", name)
+	assert.Equal(t, "something", namespace)
+
+	name, namespace = nr.resolveFromK8s("10.0.0.3")
+	assert.Equal(t, "", name)
+	assert.Equal(t, "", namespace)
+
+	clientSpan := request.Span{
+		Type: request.EventTypeHTTPClient,
+		Peer: "10.0.0.1",
+		Host: "10.0.0.2",
+		ServiceID: svc.ID{
+			Name:      "node1",
+			Namespace: "",
+		},
+	}
+
+	serverSpan := request.Span{
+		Type: request.EventTypeHTTP,
+		Peer: "10.0.0.1",
+		Host: "10.0.0.2",
+		ServiceID: svc.ID{
+			Name:      "node2",
+			Namespace: "something",
+		},
+	}
+
+	nr.resolveNames(&clientSpan)
+
+	assert.Equal(t, "node1", clientSpan.PeerName)
+	assert.Equal(t, "", clientSpan.ServiceID.Namespace)
+	assert.Equal(t, "node2", clientSpan.HostName)
+	assert.Equal(t, "something", clientSpan.OtherNamespace)
+
+	nr.resolveNames(&serverSpan)
+
+	assert.Equal(t, "node1", serverSpan.PeerName)
+	assert.Equal(t, "", serverSpan.OtherNamespace)
+	assert.Equal(t, "node2", serverSpan.HostName)
+	assert.Equal(t, "something", serverSpan.ServiceID.Namespace)
 }

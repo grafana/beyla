@@ -69,14 +69,13 @@ func TestGoOffsetsFromDwarf(t *testing.T) {
 	offsets, _ := structMemberOffsetsFromDwarf(debugData)
 	// this test might fail if a future Go version updates the internal structure of the used structs.
 	mustMatch(t, FieldOffsets{
-		"url_ptr_pos":           uint64(16),
-		"path_ptr_pos":          uint64(56),
-		"conn_fd_pos":           uint64(0),
-		"fd_laddr_pos":          uint64(96),
-		"method_ptr_pos":        uint64(0),
-		"status_ptr_pos":        uint64(120),
-		"tcp_addr_ip_ptr_pos":   uint64(0),
-		"tcp_addr_port_ptr_pos": uint64(24),
+		URLPtrPos:         uint64(16),
+		PathPtrPos:        uint64(56),
+		ConnFdPos:         uint64(0),
+		FdLaddrPos:        uint64(96),
+		MethodPtrPos:      uint64(0),
+		TCPAddrIPPtrPos:   uint64(0),
+		TCPAddrPortPtrPos: uint64(24),
 	}, offsets)
 }
 
@@ -84,12 +83,12 @@ func TestGrpcOffsetsFromDwarf(t *testing.T) {
 	offsets, _ := structMemberOffsetsFromDwarf(grpcElf)
 	// this test might fail if a future Go gRPC version updates the internal structure of the used structs.
 	mustMatch(t, FieldOffsets{
-		"grpc_stream_st_ptr_pos":     uint64(8),
-		"grpc_stream_method_ptr_pos": uint64(80),
-		"grpc_status_s_pos":          uint64(0),
-		"conn_fd_pos":                uint64(0),
-		"fd_laddr_pos":               uint64(96),
-		"grpc_status_code_ptr_pos":   uint64(40),
+		GrpcStreamStPtrPos:     uint64(8),
+		GrpcStreamMethodPtrPos: uint64(88),
+		GrpcStatusSPos:         uint64(0),
+		ConnFdPos:              uint64(0),
+		FdLaddrPos:             uint64(96),
+		GrpcStatusCodePtrPos:   uint64(40),
 	}, offsets)
 }
 
@@ -98,12 +97,11 @@ func TestGoOffsetsWithoutDwarf(t *testing.T) {
 	require.NoError(t, err)
 	// this test might fail if a future Go version updates the internal structure of the used structs.
 	mustMatch(t, FieldOffsets{
-		"url_ptr_pos":    uint64(16),
-		"path_ptr_pos":   uint64(56),
-		"conn_fd_pos":    uint64(0),
-		"fd_laddr_pos":   uint64(96),
-		"method_ptr_pos": uint64(0),
-		"status_ptr_pos": uint64(120),
+		URLPtrPos:    uint64(16),
+		PathPtrPos:   uint64(56),
+		ConnFdPos:    uint64(0),
+		FdLaddrPos:   uint64(96),
+		MethodPtrPos: uint64(0),
 	}, offsets)
 }
 
@@ -111,24 +109,24 @@ func TestGrpcOffsetsWithoutDwarf(t *testing.T) {
 	offsets, _ := structMemberOffsets(smallGRPCElf)
 	// this test might fail if a future Go gRPC version updates the internal structure of the used structs.
 	mustMatch(t, FieldOffsets{
-		"grpc_stream_st_ptr_pos":     uint64(8),
-		"grpc_stream_method_ptr_pos": uint64(80),
-		"grpc_status_s_pos":          uint64(0),
-		"grpc_status_code_ptr_pos":   uint64(40),
-		"conn_fd_pos":                uint64(0),
-		"fd_laddr_pos":               uint64(96),
+		GrpcStreamStPtrPos:     uint64(8),
+		GrpcStreamMethodPtrPos: uint64(88),
+		GrpcStatusSPos:         uint64(0),
+		GrpcStatusCodePtrPos:   uint64(40),
+		ConnFdPos:              uint64(0),
+		FdLaddrPos:             uint64(96),
 	}, offsets)
 }
 
 func TestGoOffsetsFromDwarf_ErrorIfConstantNotFound(t *testing.T) {
 	structMembers["net/http.response"] = structInfo{
 		lib: "go",
-		fields: map[string]string{
-			"tralara": "tralara",
+		fields: map[string]GoOffset{
+			"tralara": 123456,
 		},
 	}
 	_, missing := structMemberOffsetsFromDwarf(debugData)
-	assert.Contains(t, missing, "tralara")
+	assert.Contains(t, missing, GoOffset(123456))
 }
 
 func TestReadMembers_UnsupportedLocationType(t *testing.T) {
@@ -147,20 +145,20 @@ func TestReadMembers_UnsupportedLocationType(t *testing.T) {
 			}},
 		},
 	}
-	notFoundFields := map[string]struct{}{
-		"supported_loc":   {},
-		"unsupported_loc": {},
+	notFoundFields := map[GoOffset]struct{}{
+		123456: {},
+		234567: {},
 	}
 	// Must return an error if there is a field with unsupported location type
-	require.Error(t, readMembers(fdr, map[string]string{
-		"supported_loc":   "supported_loc",
-		"unsupported_loc": "unsupported_loc",
+	require.Error(t, readMembers(fdr, map[string]GoOffset{
+		"supported_loc":   123456,
+		"unsupported_loc": 234567,
 	}, notFoundFields, FieldOffsets{}))
 	// And this field will be kept in the "expectedFields" map, so Beyla will
 	// later know that it didn't manage to get that information from dwarf
 	// and will try to look for it in the precompiled offsets DB
-	assert.Equal(t, map[string]struct{}{
-		"unsupported_loc": {},
+	assert.Equal(t, map[GoOffset]struct{}{
+		234567: {},
 	}, notFoundFields)
 }
 

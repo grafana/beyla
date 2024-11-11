@@ -11,17 +11,19 @@ data:
       select:
         process_*:
           include: ["*"]
-    print_traces: true
+    trace_printer: text
     log_level: debug
     discovery:
       services:
-        # testing that K8s discovery only picks the "otherinstance"
-        # deployment (ignoring the "testserver" in the other pod)
         # name and namespace will be automatically set from the K8s metadata
-        - k8s_deployment_name: otherinstance
+        - k8s_deployment_name: (otherinstance|testserver)
         # used in the k8s_owners_*_test.go
         - k8s_statefulset_name: statefulservice
         - k8s_daemonset_name: dsservice
+      exclude_services:
+        # testing service exclusion, by expecting that K8s discovery only picks the "otherinstance"
+        # deployment (ignoring the "testserver" in the other pod)
+        - k8s_deployment_name: testserver        
     routes:
       patterns:
         - /pingpong
@@ -88,3 +90,5 @@ spec:
               value: "30m0s"
             - name: BEYLA_OTEL_METRICS_FEATURES
               value: "application,application_process"
+            - name: BEYLA_NAME_RESOLVER_SOURCES
+              value: "dns,k8s"

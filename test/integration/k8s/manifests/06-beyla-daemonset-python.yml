@@ -8,7 +8,7 @@ data:
       kubernetes:
         enable: true
         cluster_name: beyla
-    print_traces: true
+    trace_printer: text
     log_level: debug
     discovery:
       services:
@@ -72,3 +72,5 @@ spec:
               value: "true"
             - name: BEYLA_METRICS_REPORT_PEER
               value: "true"
+            - name: BEYLA_NAME_RESOLVER_SOURCES
+              value: "dns,k8s"

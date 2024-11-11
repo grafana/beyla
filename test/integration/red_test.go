@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -23,6 +24,7 @@ const (
 	instrumentedServiceGorillaURL     = "http://localhost:8082"
 	instrumentedServiceGorillaMidURL  = "http://localhost:8083"
 	instrumentedServiceGorillaMid2URL = "http://localhost:8087"
+	instrumentedServiceStdTLSURL      = "https://localhost:8383"
 	prometheusHostPort                = "localhost:9090"
 	jaegerQueryURL                    = "http://localhost:16686/api/traces"
 
@@ -48,11 +50,13 @@ func testREDMetricsHTTP(t *testing.T) {
 		instrumentedServiceGinURL,
 		instrumentedServiceGorillaMidURL,
 		instrumentedServiceGorillaMid2URL,
+		instrumentedServiceStdTLSURL,
 	} {
 		t.Run(testCaseURL, func(t *testing.T) {
 			waitForTestComponents(t, testCaseURL)
 			testREDMetricsForHTTPLibrary(t, testCaseURL, "testserver", "integration-test")
 			testSpanMetricsForHTTPLibrary(t, "testserver", "integration-test")
+			testServiceGraphMetricsForHTTPLibrary(t, "integration-test")
 		})
 	}
 }
@@ -138,8 +142,54 @@ func testSpanMetricsForHTTPLibrary(t *testing.T, svcName, svcNs string) {
 	})
 }
 
+// **IMPORTANT** Tests must first call -> func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
+func testServiceGraphMetricsForHTTPLibrary(t *testing.T, svcNs string) {
+	pq := prom.Client{HostPort: prometheusHostPort}
+	var results []prom.Result
+
+	// Test span metrics
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		var err error
+		results, err = pq.Query(`traces_service_graph_request_server_seconds_count{` +
+			`service_namespace="` + svcNs + `"` +
+			`} or traces_service_graph_request_server_seconds_count{` +
+			`server_service_namespace="` + svcNs + `"}`)
+		require.NoError(t, err)
+		// check span metric latency exists
+		enoughPromResults(t, results)
+		val := totalPromCount(t, results)
+		assert.LessOrEqual(t, 3, val)
+	})
+
+	var err error
+	results, err = pq.Query(`traces_service_graph_request_server_seconds_count{` +
+		`client="127.0.0.1",` +
+		`server="127.0.0.1"` +
+		`}`)
+	require.NoError(t, err)
+	// check calls total to 0, no self references
+	val := totalPromCount(t, results)
+	assert.Equal(t, 0, val)
+
+	results, err = pq.Query(`traces_service_graph_request_server_seconds_count{` +
+		`client="::1",` +
+		`server="::1"` +
+		`}`)
+	require.NoError(t, err)
+	// check calls total to 0, no self references
+	val = totalPromCount(t, results)
+	assert.Equal(t, 0, val)
+}
+
 func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 	path := "/basic/" + rndStr()
+
+	parts := strings.Split(url, ":")
+	assert.LessOrEqual(t, 3, len(parts))
+
+	lastPart := parts[len(parts)-1]
+	parts = strings.Split(lastPart, "/")
+	serverPort := parts[0]
 
 	// Call 3 times the instrumented service, forcing it to:
 	// - take at least 30ms to respond
@@ -163,6 +213,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 			`http_response_status_code="404",` +
 			`service_namespace="` + svcNs + `",` +
 			`service_name="` + svcName + `",` +
+			`server_port="` + serverPort + `",` +
 			`http_route="/basic/:rnd",` +
 			`url_path="` + path + `"}`)
 		require.NoError(t, err)
@@ -174,6 +225,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 			res := results[0]
 			addr := res.Metric["client_address"]
 			assert.NotNil(t, addr)
+			assert.NotNil(t, res.Metric["server_port"])
 		}
 	})
 
@@ -350,11 +402,19 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 }
 
 func testREDMetricsGRPC(t *testing.T) {
+	testREDMetricsGRPCInternal(t, nil, "5051")
+}
+
+func testREDMetricsGRPCTLS(t *testing.T) {
+	testREDMetricsGRPCInternal(t, []grpcclient.PingOption{grpcclient.WithSSL(), grpcclient.WithServerAddr("localhost:50051")}, "50051")
+}
+
+func testREDMetricsGRPCInternal(t *testing.T, opts []grpcclient.PingOption, serverPort string) {
 	// Call 300 times the instrumented service, an overkill to make sure
 	// we get some of the metrics to be visible in Prometheus. This test is
 	// currently the last one that runs.
 	for i := 0; i < 300; i++ {
-		err := grpcclient.Ping()
+		err := grpcclient.Ping(opts...)
 		require.NoError(t, err)
 	}
 
@@ -368,6 +428,7 @@ func testREDMetricsGRPC(t *testing.T) {
 			`service_namespace="integration-test",` +
 			`client_address!="127.0.0.1",` + // discard the metrics from testREDMetricsForHTTPLibrary/GorillaURL
 			`service_name="testserver",` +
+			`server_port="` + serverPort + `",` +
 			`rpc_method="/routeguide.RouteGuide/GetFeature"}`)
 		require.NoError(t, err)
 		// check duration_count has at least 3 calls and all the arguments
@@ -378,6 +439,7 @@ func testREDMetricsGRPC(t *testing.T) {
 			res := results[0]
 			addr := res.Metric["client_address"]
 			assert.NotNil(t, addr)
+			assert.NotNil(t, res.Metric["server_port"])
 		}
 	})
 }
@@ -661,5 +723,16 @@ func testPrometheusBeylaBuildInfo(t *testing.T) {
 		results, err = pq.Query(`beyla_build_info{target_lang="go"}`)
 		require.NoError(t, err)
 		require.NotEmpty(t, results)
+	})
+}
+
+func testPrometheusNoBeylaEvents(t *testing.T) {
+	pq := prom.Client{HostPort: prometheusHostPort}
+	var results []prom.Result
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		var err error
+		results, err = pq.Query(`http_server_request_duration_seconds_count{service_name="beyla"}`)
+		require.NoError(t, err)
+		require.Equal(t, 0, len(results))
 	})
 }

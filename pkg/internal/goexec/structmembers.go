@@ -16,6 +16,62 @@ func log() *slog.Logger {
 	return slog.With("component", "goexec.structMemberOffsets")
 }
 
+// this const table must match what's in go_offsets.h
+type GoOffset uint32
+
+const GoOffsetsTableSize = 30
+
+const (
+	// go common
+	ConnFdPos GoOffset = iota + 1 // start at 1, must match what's in go_offsets.h
+	FdLaddrPos
+	FdRaddrPos
+	TCPAddrPortPtrPos
+	TCPAddrIPPtrPos
+	// http
+	URLPtrPos
+	PathPtrPos
+	MethodPtrPos
+	StatusCodePtrPos
+	ContentLengthPtrPos
+	ReqHeaderPtrPos
+	IoWriterBufPtrPos
+	IoWriterNPos
+	CcNextStreamIDPos
+	FramerWPos
+	PcConnPos
+	PcTLSPos
+	NetConnPos
+	CcTconnPos
+	ScConnPos
+	CRwcPos
+	CTlsPos
+	// grpc
+	GrpcStreamStPtrPos
+	GrpcStreamMethodPtrPos
+	GrpcStatusSPos
+	GrpcStatusCodePtrPos
+	GrpcStreamCtxPtrPos
+	ValueContextValPtrPos
+	GrpcStConnPos
+	GrpcTConnPos
+	GrpcTSchemePos
+	HTTP2ClientNextIDPos
+	GrpcTransportBufWriterBufPos
+	GrpcTransportBufWriterOffsetPos
+	// redis
+	RedisConnBwPos
+	// kafka go
+	KafkaGoWriterTopicPos
+	KafkaGoProtocolConnPos
+	KafkaGoReaderTopicPos
+	// kafka sarama
+	SaramaBrokerCorrIDPos
+	SaramaResponseCorrIDPos
+	SaramaBrokerConnPos
+	SaramaBufconnConnPos
+)
+
 //go:embed offsets.json
 var prefetchedOffsets string
 
@@ -24,7 +80,7 @@ type structInfo struct {
 	// "go" for the standar library or e.g. "google.golang.org/grpc"
 	lib string
 	// fields of the struct as key, and the name of the constant defined in the eBPF code as value
-	fields map[string]string
+	fields map[string]GoOffset
 }
 
 // level-1 key = Struct type name and its containing library
@@ -33,210 +89,200 @@ type structInfo struct {
 var structMembers = map[string]structInfo{
 	"net/http.Request": {
 		lib: "go",
-		fields: map[string]string{
-			"URL":           "url_ptr_pos",
-			"Method":        "method_ptr_pos",
-			"ContentLength": "content_length_ptr_pos",
-			"Header":        "req_header_ptr_pos",
+		fields: map[string]GoOffset{
+			"URL":           URLPtrPos,
+			"Method":        MethodPtrPos,
+			"ContentLength": ContentLengthPtrPos,
+			"Header":        ReqHeaderPtrPos,
 		},
 	},
 	"net/url.URL": {
 		lib: "go",
-		fields: map[string]string{
-			"Path": "path_ptr_pos",
-		},
-	},
-	"net/http.response": {
-		lib: "go",
-		fields: map[string]string{
-			"status": "status_ptr_pos",
+		fields: map[string]GoOffset{
+			"Path": PathPtrPos,
 		},
 	},
 	"net/http.Response": {
 		lib: "go",
-		fields: map[string]string{
-			"StatusCode": "status_code_ptr_pos",
+		fields: map[string]GoOffset{
+			"StatusCode": StatusCodePtrPos,
 		},
 	},
 	"google.golang.org/grpc/internal/transport.Stream": {
 		lib: "google.golang.org/grpc",
-		fields: map[string]string{
-			"st":     "grpc_stream_st_ptr_pos",
-			"method": "grpc_stream_method_ptr_pos",
-			"ctx":    "grpc_stream_ctx_ptr_pos",
+		fields: map[string]GoOffset{
+			"st":     GrpcStreamStPtrPos,
+			"method": GrpcStreamMethodPtrPos,
+			"ctx":    GrpcStreamCtxPtrPos,
 		},
 	},
 	"google.golang.org/grpc/internal/status.Status": {
 		lib: "google.golang.org/grpc",
-		fields: map[string]string{
-			"s": "grpc_status_s_pos",
+		fields: map[string]GoOffset{
+			"s": GrpcStatusSPos,
 		},
 	},
 	"google.golang.org/genproto/googleapis/rpc/status.Status": {
 		lib: "google.golang.org/genproto",
-		fields: map[string]string{
-			"Code": "grpc_status_code_ptr_pos",
+		fields: map[string]GoOffset{
+			"Code": GrpcStatusCodePtrPos,
 		},
 	},
 	"google.golang.org/grpc/internal/transport.http2Server": {
 		lib: "google.golang.org/grpc",
-		fields: map[string]string{
-			"conn": "grpc_st_conn_pos",
+		fields: map[string]GoOffset{
+			"conn": GrpcStConnPos,
 		},
 	},
 	"net.TCPAddr": {
 		lib: "go",
-		fields: map[string]string{
-			"IP":   "tcp_addr_ip_ptr_pos",
-			"Port": "tcp_addr_port_ptr_pos",
+		fields: map[string]GoOffset{
+			"IP":   TCPAddrIPPtrPos,
+			"Port": TCPAddrPortPtrPos,
 		},
 	},
 	"bufio.Writer": {
 		lib: "go",
-		fields: map[string]string{
-			"buf": "io_writer_buf_ptr_pos",
-			"n":   "io_writer_n_pos",
+		fields: map[string]GoOffset{
+			"buf": IoWriterBufPtrPos,
+			"n":   IoWriterNPos,
 		},
 	},
 	"context.valueCtx": {
 		lib: "go",
-		fields: map[string]string{
-			"val": "value_context_val_ptr_pos",
+		fields: map[string]GoOffset{
+			"val": ValueContextValPtrPos,
 		},
 	},
 	"google.golang.org/grpc/internal/transport.http2Client": {
 		lib: "google.golang.org/grpc",
-		fields: map[string]string{
-			"nextID": "http2_client_next_id_pos",
-			"conn":   "grpc_t_conn_pos",
-		},
-	},
-	"golang.org/x/net/http2.responseWriterState": {
-		lib: "golang.org/x/net",
-		fields: map[string]string{
-			"status": "rws_status_pos",
-			"conn":   "rws_conn_pos",
-		},
-	},
-	"golang.org/x/net/http2.serverConn": {
-		lib: "golang.org/x/net",
-		fields: map[string]string{
-			"conn": "http2_server_conn_pos",
+		fields: map[string]GoOffset{
+			"nextID": HTTP2ClientNextIDPos,
+			"conn":   GrpcTConnPos,
+			"scheme": GrpcTSchemePos,
 		},
 	},
 	"golang.org/x/net/http2.ClientConn": {
 		lib: "golang.org/x/net",
-		fields: map[string]string{
-			"nextStreamID": "cc_next_stream_id_pos",
-			"tconn":        "cc_tconn_pos",
+		fields: map[string]GoOffset{
+			"nextStreamID": CcNextStreamIDPos,
+			"tconn":        CcTconnPos,
 		},
 	},
 	"golang.org/x/net/http2.Framer": {
 		lib: "golang.org/x/net",
-		fields: map[string]string{
-			"w": "framer_w_pos",
+		fields: map[string]GoOffset{
+			"w": FramerWPos,
 		},
 	},
-	"net/http.conn": {
-		lib: "go",
-		fields: map[string]string{
-			"rwc": "c_rwc_pos",
+	"golang.org/x/net/http2.serverConn": {
+		lib: "golang.org/x/net",
+		fields: map[string]GoOffset{
+			"conn": ScConnPos,
 		},
 	},
 	"net.TCPConn": {
 		lib: "go",
-		fields: map[string]string{
-			"conn": "rwc_conn_pos",
+		fields: map[string]GoOffset{
+			"conn": NetConnPos,
 		},
 	},
 	"net.conn": {
 		lib: "go",
-		fields: map[string]string{
-			"fd": "conn_fd_pos",
+		fields: map[string]GoOffset{
+			"fd": ConnFdPos,
 		},
 	},
 	"net.netFD": {
 		lib: "go",
-		fields: map[string]string{
-			"laddr": "fd_laddr_pos",
-			"raddr": "fd_raddr_pos",
+		fields: map[string]GoOffset{
+			"laddr": FdLaddrPos,
+			"raddr": FdRaddrPos,
 		},
 	},
 	"net/http.persistConn": {
 		lib: "go",
-		fields: map[string]string{
-			"conn": "pc_conn_pos",
+		fields: map[string]GoOffset{
+			"conn":     PcConnPos,
+			"tlsState": PcTLSPos,
+		},
+	},
+	"net/http.conn": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"rwc":      CRwcPos,
+			"tlsState": CTlsPos,
 		},
 	},
 	"google.golang.org/grpc/internal/transport.bufWriter": {
 		lib: "google.golang.org/grpc",
-		fields: map[string]string{
-			"buf":    "grpc_transport_buf_writer_buf_pos",
-			"offset": "grpc_transport_buf_writer_offset_pos",
+		fields: map[string]GoOffset{
+			"buf":    GrpcTransportBufWriterBufPos,
+			"offset": GrpcTransportBufWriterOffsetPos,
 		},
 	},
 	"github.com/IBM/sarama.Broker": {
 		lib: "github.com/IBM/sarama",
-		fields: map[string]string{
-			"correlationID": "sarama_broker_corr_id_pos",
-			"conn":          "sarama_broker_conn_pos",
+		fields: map[string]GoOffset{
+			"correlationID": SaramaBrokerCorrIDPos,
+			"conn":          SaramaBrokerConnPos,
 		},
 	},
 	"github.com/IBM/sarama.responsePromise": {
 		lib: "github.com/IBM/sarama",
-		fields: map[string]string{
-			"correlationID": "sarama_response_corr_id_pos",
+		fields: map[string]GoOffset{
+			"correlationID": SaramaResponseCorrIDPos,
 		},
 	},
 	"github.com/IBM/sarama.bufConn": {
 		lib: "github.com/IBM/sarama",
-		fields: map[string]string{
-			"Conn": "sarama_bufconn_conn_pos",
+		fields: map[string]GoOffset{
+			"Conn": SaramaBufconnConnPos,
 		},
 	},
 	// These are duplicate because the Sarama library changed orgs,
 	// from Shopify to IBM at version 1.40
 	"github.com/Shopify/sarama.Broker": {
 		lib: "github.com/IBM/sarama",
-		fields: map[string]string{
-			"correlationID": "sarama_broker_corr_id_pos",
-			"conn":          "sarama_broker_conn_pos",
+		fields: map[string]GoOffset{
+			"correlationID": SaramaBrokerCorrIDPos,
+			"conn":          SaramaBrokerConnPos,
 		},
 	},
 	"github.com/Shopify/sarama.responsePromise": {
 		lib: "github.com/IBM/sarama",
-		fields: map[string]string{
-			"correlationID": "sarama_response_corr_id_pos",
+		fields: map[string]GoOffset{
+			"correlationID": SaramaResponseCorrIDPos,
 		},
 	},
 	"github.com/Shopify/sarama.bufConn": {
 		lib: "github.com/IBM/sarama",
-		fields: map[string]string{
-			"Conn": "sarama_bufconn_conn_pos",
+		fields: map[string]GoOffset{
+			"Conn": SaramaBufconnConnPos,
 		},
 	},
 	"github.com/redis/go-redis/v9/internal/pool.Conn": {
 		lib: "github.com/redis/go-redis/v9",
-		fields: map[string]string{
-			"bw": "redis_conn_bw_pos",
+		fields: map[string]GoOffset{
+			"bw": RedisConnBwPos,
 		},
 	},
 	"github.com/segmentio/kafka-go.Writer": {
 		lib: "github.com/segmentio/kafka-go",
-		fields: map[string]string{
-			"Topic": "kafka_go_writer_topic_pos",
+		fields: map[string]GoOffset{
+			"Topic": KafkaGoWriterTopicPos,
 		},
 	},
 	"github.com/segmentio/kafka-go/protocol.Conn": {
 		lib: "github.com/segmentio/kafka-go",
-		fields: map[string]string{
-			"conn": "kafka_go_protocol_conn_pos",
+		fields: map[string]GoOffset{
+			"conn": KafkaGoProtocolConnPos,
 		},
 	},
 	"github.com/segmentio/kafka-go.reader": {
 		lib: "github.com/segmentio/kafka-go",
-		fields: map[string]string{
-			"topic": "kafka_go_reader_topic_pos",
+		fields: map[string]GoOffset{
+			"topic": KafkaGoReaderTopicPos,
 		},
 	},
 }
@@ -244,7 +290,7 @@ var structMembers = map[string]structInfo{
 func structMemberOffsets(elfFile *elf.File) (FieldOffsets, error) {
 	// first, try to read offsets from DWARF debug info
 	var offs FieldOffsets
-	var expected map[string]struct{}
+	var expected map[GoOffset]struct{}
 	dwarfData, err := elfFile.DWARF()
 	if err == nil {
 		offs, expected = structMemberOffsetsFromDwarf(dwarfData)
@@ -307,9 +353,9 @@ func structMemberPreFetchedOffsets(elfFile *elf.File, fieldOffsets FieldOffsets)
 
 // structMemberOffsetsFromDwarf reads the executable dwarf information to get
 // the offsets specified in the structMembers map
-func structMemberOffsetsFromDwarf(data *dwarf.Data) (FieldOffsets, map[string]struct{}) {
+func structMemberOffsetsFromDwarf(data *dwarf.Data) (FieldOffsets, map[GoOffset]struct{}) {
 	log := log().With("function", "structMemberOffsetsFromDwarf")
-	expectedReturns := map[string]struct{}{}
+	expectedReturns := map[GoOffset]struct{}{}
 	for _, str := range structMembers {
 		for _, ctName := range str.fields {
 			expectedReturns[ctName] = struct{}{}
@@ -356,8 +402,8 @@ type dwarfReader interface {
 
 func readMembers(
 	reader dwarfReader,
-	fields map[string]string,
-	expectedReturns map[string]struct{},
+	fields map[string]GoOffset,
+	expectedReturns map[GoOffset]struct{},
 	offsets FieldOffsets,
 ) error {
 	log := log()

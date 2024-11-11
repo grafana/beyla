@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/dotnet/sdk:7.0 as builder
+FROM mcr.microsoft.com/dotnet/sdk:7.0 AS builder
 
 # Set the working directory to /build
 WORKDIR /build

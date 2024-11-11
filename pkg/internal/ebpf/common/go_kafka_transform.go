@@ -3,7 +3,6 @@ package ebpfcommon
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"unsafe"
 
 	"github.com/cilium/ebpf/ringbuf"
@@ -19,8 +18,6 @@ func ReadGoSaramaRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, er
 	if err != nil {
 		return request.Span{}, true, err
 	}
-
-	fmt.Printf("Event %v\n", event)
 
 	info, err := ProcessKafkaRequest(event.Buf[:])
 
@@ -42,19 +39,19 @@ func GoKafkaSaramaToSpan(event *GoSaramaClientInfo, data *KafkaInfo) request.Spa
 	}
 
 	return request.Span{
-		Type:           request.EventTypeKafkaClient,
-		Method:         data.Operation.String(),
-		OtherNamespace: data.ClientID,
-		Path:           data.Topic,
-		Peer:           peer,
-		PeerPort:       int(event.Conn.S_port),
-		Host:           hostname,
-		HostPort:       hostPort,
-		ContentLength:  0,
-		RequestStart:   int64(event.StartMonotimeNs),
-		Start:          int64(event.StartMonotimeNs),
-		End:            int64(event.EndMonotimeNs),
-		Status:         0,
+		Type:          request.EventTypeKafkaClient,
+		Method:        data.Operation.String(),
+		Statement:     data.ClientID,
+		Path:          data.Topic,
+		Peer:          peer,
+		PeerPort:      int(event.Conn.S_port),
+		Host:          hostname,
+		HostPort:      hostPort,
+		ContentLength: 0,
+		RequestStart:  int64(event.StartMonotimeNs),
+		Start:         int64(event.StartMonotimeNs),
+		End:           int64(event.EndMonotimeNs),
+		Status:        0,
 		Pid: request.PidInfo{
 			HostPID:   event.Pid.HostPid,
 			UserPID:   event.Pid.UserPid,
@@ -86,22 +83,22 @@ func ReadGoKafkaGoRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, e
 	}
 
 	return request.Span{
-		Type:           request.EventTypeKafkaClient,
-		Method:         op.String(),
-		OtherNamespace: "github.com/segmentio/kafka-go",
-		Path:           cstr(event.Topic[:]),
-		Peer:           peer,
-		PeerPort:       int(event.Conn.S_port),
-		Host:           hostname,
-		HostPort:       hostPort,
-		ContentLength:  0,
-		RequestStart:   int64(event.StartMonotimeNs),
-		Start:          int64(event.StartMonotimeNs),
-		End:            int64(event.EndMonotimeNs),
-		TraceID:        trace.TraceID(event.Tp.TraceId),
-		SpanID:         trace.SpanID(event.Tp.SpanId),
-		ParentSpanID:   trace.SpanID(event.Tp.ParentId),
-		Status:         0,
+		Type:          request.EventTypeKafkaClient,
+		Method:        op.String(),
+		Statement:     "github.com/segmentio/kafka-go",
+		Path:          cstr(event.Topic[:]),
+		Peer:          peer,
+		PeerPort:      int(event.Conn.S_port),
+		Host:          hostname,
+		HostPort:      hostPort,
+		ContentLength: 0,
+		RequestStart:  int64(event.StartMonotimeNs),
+		Start:         int64(event.StartMonotimeNs),
+		End:           int64(event.EndMonotimeNs),
+		TraceID:       trace.TraceID(event.Tp.TraceId),
+		SpanID:        trace.SpanID(event.Tp.SpanId),
+		ParentSpanID:  trace.SpanID(event.Tp.ParentId),
+		Status:        0,
 		Pid: request.PidInfo{
 			HostPID:   event.Pid.HostPid,
 			UserPID:   event.Pid.UserPid,

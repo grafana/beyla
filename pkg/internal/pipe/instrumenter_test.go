@@ -16,10 +16,10 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
 	"github.com/grafana/beyla/pkg/beyla"
-	"github.com/grafana/beyla/pkg/internal/export/attributes"
-	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
-	"github.com/grafana/beyla/pkg/internal/export/instrumentations"
-	"github.com/grafana/beyla/pkg/internal/export/otel"
+	"github.com/grafana/beyla/pkg/export/attributes"
+	attr "github.com/grafana/beyla/pkg/export/attributes/names"
+	"github.com/grafana/beyla/pkg/export/instrumentations"
+	"github.com/grafana/beyla/pkg/export/otel"
 	"github.com/grafana/beyla/pkg/internal/filter"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/kube"
@@ -28,6 +28,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/svc"
 	"github.com/grafana/beyla/pkg/internal/testutil"
 	"github.com/grafana/beyla/pkg/internal/traces"
+	"github.com/grafana/beyla/pkg/kubeflags"
 	"github.com/grafana/beyla/pkg/transform"
 	"github.com/grafana/beyla/test/collector"
 	"github.com/grafana/beyla/test/consumer"
@@ -39,7 +40,8 @@ func gctx(groups attributes.AttrGroups) *global.ContextInfo {
 	return &global.ContextInfo{
 		Metrics:               imetrics.NoopReporter{},
 		MetricAttributeGroups: groups,
-		K8sInformer:           kube.NewMetadataProvider(kube.EnabledFalse, nil, "", 0),
+		K8sInformer:           kube.NewMetadataProvider(kube.MetadataConfig{Enable: kubeflags.EnabledFalse}),
+		HostID:                "host-id",
 	}
 }
 
@@ -103,8 +105,11 @@ func TestBasicPipeline(t *testing.T) {
 			string(attr.ClientAddr):             "1.1.1.1",
 			string(semconv.ServiceNameKey):      "foo-svc",
 			string(semconv.ServiceNamespaceKey): "ns",
+			string(attr.ServerPort):             "8080",
+			string(attr.ServerAddr):             event.Attributes["server.address"],
 		},
 		ResourceAttributes: map[string]string{
+			string(semconv.HostIDKey):               "host-id",
 			string(semconv.HostNameKey):             "the-host",
 			string(semconv.ServiceNameKey):          "foo-svc",
 			string(semconv.ServiceNamespaceKey):     "ns",
@@ -113,6 +118,7 @@ func TestBasicPipeline(t *testing.T) {
 		},
 		Type:     pmetric.MetricTypeHistogram,
 		FloatVal: 2 / float64(time.Second),
+		Count:    1,
 	}, event)
 
 }
@@ -307,8 +313,11 @@ func TestRouteConsolidation(t *testing.T) {
 			string(attr.HTTPRequestMethod):      "GET",
 			string(attr.HTTPResponseStatusCode): "200",
 			string(semconv.HTTPRouteKey):        "/user/{id}",
+			string(attr.ServerPort):             "8080",
+			string(attr.ServerAddr):             events["/user/{id}"].Attributes["server.address"],
 		},
 		ResourceAttributes: map[string]string{
+			string(semconv.HostIDKey):               "host-id",
 			string(semconv.HostNameKey):             "the-host",
 			string(semconv.ServiceNameKey):          "svc-1",
 			string(semconv.ServiceNamespaceKey):     "ns",
@@ -317,6 +326,7 @@ func TestRouteConsolidation(t *testing.T) {
 		},
 		Type:     pmetric.MetricTypeHistogram,
 		FloatVal: 2 / float64(time.Second),
+		Count:    1,
 	}, events["/user/{id}"])
 
 	assert.Equal(t, collector.MetricRecord{
@@ -328,8 +338,11 @@ func TestRouteConsolidation(t *testing.T) {
 			string(attr.HTTPRequestMethod):      "GET",
 			string(attr.HTTPResponseStatusCode): "200",
 			string(semconv.HTTPRouteKey):        "/products/{id}/push",
+			string(attr.ServerPort):             "8080",
+			string(attr.ServerAddr):             events["/products/{id}/push"].Attributes["server.address"],
 		},
 		ResourceAttributes: map[string]string{
+			string(semconv.HostIDKey):               "host-id",
 			string(semconv.HostNameKey):             "the-host",
 			string(semconv.ServiceNameKey):          "svc-1",
 			string(semconv.ServiceNamespaceKey):     "ns",
@@ -338,6 +351,7 @@ func TestRouteConsolidation(t *testing.T) {
 		},
 		Type:     pmetric.MetricTypeHistogram,
 		FloatVal: 2 / float64(time.Second),
+		Count:    1,
 	}, events["/products/{id}/push"])
 
 	assert.Equal(t, collector.MetricRecord{
@@ -349,8 +363,11 @@ func TestRouteConsolidation(t *testing.T) {
 			string(attr.HTTPRequestMethod):      "GET",
 			string(attr.HTTPResponseStatusCode): "200",
 			string(semconv.HTTPRouteKey):        "/**",
+			string(attr.ServerPort):             "8080",
+			string(attr.ServerAddr):             events["/**"].Attributes["server.address"],
 		},
 		ResourceAttributes: map[string]string{
+			string(semconv.HostIDKey):               "host-id",
 			string(semconv.HostNameKey):             "the-host",
 			string(semconv.ServiceNameKey):          "svc-1",
 			string(semconv.ServiceNamespaceKey):     "ns",
@@ -359,6 +376,7 @@ func TestRouteConsolidation(t *testing.T) {
 		},
 		Type:     pmetric.MetricTypeHistogram,
 		FloatVal: 2 / float64(time.Second),
+		Count:    1,
 	}, events["/**"])
 }
 
@@ -407,8 +425,11 @@ func TestGRPCPipeline(t *testing.T) {
 			string(semconv.RPCGRPCStatusCodeKey): "3",
 			string(semconv.RPCMethodKey):         "/foo/bar",
 			string(attr.ClientAddr):              "1.1.1.1",
+			string(attr.ServerPort):              "8080",
+			string(attr.ServerAddr):              event.Attributes["server.address"],
 		},
 		ResourceAttributes: map[string]string{
+			string(semconv.HostIDKey):               "host-id",
 			string(semconv.HostNameKey):             "the-host",
 			string(semconv.ServiceNameKey):          "grpc-svc",
 			string(semconv.TelemetrySDKLanguageKey): "go",
@@ -416,6 +437,7 @@ func TestGRPCPipeline(t *testing.T) {
 		},
 		Type:     pmetric.MetricTypeHistogram,
 		FloatVal: 2 / float64(time.Second),
+		Count:    1,
 	}, event)
 }
 
@@ -497,8 +519,11 @@ func TestBasicPipelineInfo(t *testing.T) {
 			string(attr.ClientAddr):             "1.1.1.1",
 			string(semconv.ServiceNameKey):      "comm",
 			string(semconv.ServiceNamespaceKey): "",
+			string(attr.ServerPort):             "8080",
+			string(attr.ServerAddr):             event.Attributes["server.address"],
 		},
 		ResourceAttributes: map[string]string{
+			string(semconv.HostIDKey):               "host-id",
 			string(semconv.HostNameKey):             "the-host",
 			string(semconv.ServiceNameKey):          "comm",
 			string(semconv.TelemetrySDKLanguageKey): "go",
@@ -506,6 +531,7 @@ func TestBasicPipelineInfo(t *testing.T) {
 		},
 		Type:     pmetric.MetricTypeHistogram,
 		FloatVal: 1 / float64(time.Second),
+		Count:    1,
 	}, event)
 }
 
@@ -593,6 +619,8 @@ func TestSpanAttributeFilterNode(t *testing.T) {
 			string(attr.HTTPRequestMethod):      "GET",
 			string(attr.HTTPResponseStatusCode): "201",
 			string(attr.HTTPUrlPath):            "/user/1234",
+			string(attr.ServerPort):             "8080",
+			string(attr.ServerAddr):             events["/user/1234"]["server.address"],
 		},
 		"/user/4321": {
 			string(semconv.ServiceNameKey):      "svc-3",
@@ -601,6 +629,8 @@ func TestSpanAttributeFilterNode(t *testing.T) {
 			string(attr.HTTPRequestMethod):      "GET",
 			string(attr.HTTPResponseStatusCode): "203",
 			string(attr.HTTPUrlPath):            "/user/4321",
+			string(attr.ServerPort):             "8080",
+			string(attr.ServerAddr):             events["/user/1234"]["server.address"],
 		},
 	}, events)
 }
@@ -617,7 +647,7 @@ func newRequest(serviceName string, method, path, peer string, status int) []req
 		Start:        2,
 		RequestStart: 1,
 		End:          3,
-		ServiceID:    svc.ID{HostName: "the-host", Namespace: "ns", Name: serviceName},
+		ServiceID:    svc.ID{HostName: "the-host", Namespace: "ns", Name: serviceName, SDKLanguage: svc.InstrumentableGolang},
 	}}
 }
 
@@ -633,7 +663,7 @@ func newRequestWithTiming(svcName string, kind request.EventType, method, path, 
 		RequestStart: int64(goStart),
 		Start:        int64(start),
 		End:          int64(end),
-		ServiceID:    svc.ID{HostName: "the-host", Name: svcName},
+		ServiceID:    svc.ID{HostName: "the-host", Name: svcName, SDKLanguage: svc.InstrumentableGolang},
 	}}
 }
 
@@ -648,7 +678,7 @@ func newGRPCRequest(svcName string, path string, status int) []request.Span {
 		Start:        2,
 		RequestStart: 1,
 		End:          3,
-		ServiceID:    svc.ID{HostName: "the-host", Name: svcName},
+		ServiceID:    svc.ID{HostName: "the-host", Name: svcName, SDKLanguage: svc.InstrumentableGolang},
 	}}
 }
 
@@ -676,6 +706,7 @@ func matchTraceEvent(t require.TestingT, name string, event collector.TraceRecor
 			"parent_span_id":                    event.Attributes["parent_span_id"],
 		},
 		ResourceAttributes: map[string]string{
+			string(semconv.HostIDKey):               "host-id",
 			string(semconv.HostNameKey):             "the-host",
 			string(semconv.ServiceNameKey):          "bar-svc",
 			string(semconv.ServiceNamespaceKey):     "ns",
@@ -696,6 +727,7 @@ func matchInnerTraceEvent(t require.TestingT, name string, event collector.Trace
 			"parent_span_id": event.Attributes["parent_span_id"],
 		},
 		ResourceAttributes: map[string]string{
+			string(semconv.HostIDKey):               "host-id",
 			string(semconv.HostNameKey):             "the-host",
 			string(semconv.ServiceNameKey):          "bar-svc",
 			string(semconv.ServiceNamespaceKey):     "ns",
@@ -721,6 +753,7 @@ func matchGRPCTraceEvent(t *testing.T, name string, event collector.TraceRecord)
 			"parent_span_id":                     event.Attributes["parent_span_id"],
 		},
 		ResourceAttributes: map[string]string{
+			string(semconv.HostIDKey):               "host-id",
 			string(semconv.HostNameKey):             "the-host",
 			string(semconv.ServiceNameKey):          "svc",
 			string(semconv.TelemetrySDKLanguageKey): "go",
@@ -739,6 +772,7 @@ func matchInnerGRPCTraceEvent(t *testing.T, name string, event collector.TraceRe
 			"parent_span_id": event.Attributes["parent_span_id"],
 		},
 		ResourceAttributes: map[string]string{
+			string(semconv.HostIDKey):               "host-id",
 			string(semconv.HostNameKey):             "the-host",
 			string(semconv.ServiceNameKey):          "svc",
 			string(semconv.TelemetrySDKLanguageKey): "go",
@@ -773,7 +807,7 @@ func newHTTPInfo(method, path, peer string, status int) []request.Span {
 		Start:        2,
 		RequestStart: 2,
 		End:          3,
-		ServiceID:    svc.ID{HostName: "the-host", Name: "comm"},
+		ServiceID:    svc.ID{HostName: "the-host", Name: "comm", SDKLanguage: svc.InstrumentableGolang},
 	}}
 }
 
@@ -792,6 +826,7 @@ func matchInfoEvent(t *testing.T, name string, event collector.TraceRecord) {
 			"parent_span_id":                    "",
 		},
 		ResourceAttributes: map[string]string{
+			string(semconv.HostIDKey):               "host-id",
 			string(semconv.HostNameKey):             "the-host",
 			string(semconv.ServiceNameKey):          "comm",
 			string(semconv.TelemetrySDKLanguageKey): "go",

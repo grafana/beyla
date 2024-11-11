@@ -8,8 +8,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
+	attr "github.com/grafana/beyla/pkg/export/attributes/names"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
+	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/testutil"
 )
 
@@ -97,4 +98,50 @@ func TestAttributeFilter_VerificationError(t *testing.T) {
 			assert.Error(t, err)
 		})
 	}
+}
+
+func TestAttributeFilter_SpanMetrics(t *testing.T) {
+	// if the attributes are not existing, we should just ignore them
+	filterFunc, err := ByAttribute[*request.Span](AttributeFamilyConfig{
+		"client": MatchDefinition{NotMatch: "filtered"},
+		"server": MatchDefinition{NotMatch: "filtered"},
+	}, request.SpanPromGetters)()
+	require.NoError(t, err)
+
+	in := make(chan []*request.Span, 10)
+	defer close(in)
+	out := make(chan []*request.Span, 10)
+	go filterFunc(in, out)
+
+	// will drop filtered events
+	in <- []*request.Span{
+		{Type: request.EventTypeHTTP, PeerName: "someclient", Host: "filtered"},
+		{Type: request.EventTypeHTTPClient, PeerName: "filtered", Host: "someserver"},
+		{Type: request.EventTypeHTTPClient, PeerName: "aserver", Host: "aclient"},
+	}
+
+	// no record will be dropped
+	in <- []*request.Span{
+		{Type: request.EventTypeHTTP, PeerName: "client", Host: "server"},
+		{Type: request.EventTypeHTTPClient, PeerName: "server", Host: "client"},
+	}
+
+	filtered := testutil.ReadChannel(t, out, timeout)
+	assert.Equal(t, []*request.Span{
+		{Type: request.EventTypeHTTPClient, PeerName: "aserver", Host: "aclient"},
+	}, filtered)
+
+	filtered = testutil.ReadChannel(t, out, timeout)
+	assert.Equal(t, []*request.Span{
+		{Type: request.EventTypeHTTP, PeerName: "client", Host: "server"},
+		{Type: request.EventTypeHTTPClient, PeerName: "server", Host: "client"},
+	}, filtered)
+
+	select {
+	case batch := <-out:
+		assert.Failf(t, "not expecting more output batches", "%#v", batch)
+	default:
+		// ok!!
+	}
+
 }

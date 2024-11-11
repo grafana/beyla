@@ -3,9 +3,14 @@ package ebpf
 import (
 	"go.opentelemetry.io/otel/attribute"
 
-	"github.com/grafana/beyla/pkg/internal/export/attributes"
-	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
+	"github.com/grafana/beyla/pkg/export/attributes"
+	attr "github.com/grafana/beyla/pkg/export/attributes/names"
 	"github.com/grafana/beyla/pkg/internal/netolly/flow/transport"
+)
+
+const (
+	DirectionRequest  = "request"
+	DirectionResponse = "response"
 )
 
 // RecordGetters returns the attributes.Getter function that returns the string value of a given
@@ -36,9 +41,9 @@ func RecordGetters(name attr.Name) (attributes.Getter[*Record, attribute.KeyValu
 		getter = func(r *Record) attribute.KeyValue { return attribute.String(string(attr.SrcName), r.Attrs.SrcName) }
 	case attr.DstName:
 		getter = func(r *Record) attribute.KeyValue { return attribute.String(string(attr.DstName), r.Attrs.DstName) }
-	case attr.Direction:
+	case attr.IfaceDirection:
 		getter = func(r *Record) attribute.KeyValue {
-			return attribute.String(string(attr.Direction), directionStr(r.Metrics.Direction))
+			return attribute.String(string(attr.IfaceDirection), ifaceDirectionStr(r.Metrics.IfaceDirection))
 		}
 	case attr.Iface:
 		getter = func(r *Record) attribute.KeyValue { return attribute.String(string(attr.Iface), r.Attrs.Interface) }
@@ -55,6 +60,24 @@ func RecordGetters(name attr.Name) (attributes.Getter[*Record, attribute.KeyValu
 				clientPort = max(r.Id.DstPort, r.Id.SrcPort)
 			}
 			return attribute.Int(string(attr.ClientPort), int(clientPort))
+		}
+	case attr.Direction:
+		getter = func(r *Record) attribute.KeyValue {
+			var direction string
+			switch r.Metrics.Initiator {
+			case InitiatorDst:
+				direction = DirectionResponse
+			case InitiatorSrc:
+				direction = DirectionRequest
+			default:
+				// guess it, assuming that ephemeral ports for clients would be usually higher
+				if r.Id.SrcPort > r.Id.DstPort {
+					direction = DirectionRequest
+				} else {
+					direction = DirectionResponse
+				}
+			}
+			return attribute.String(string(attr.Direction), direction)
 		}
 	case attr.ServerPort:
 		getter = func(r *Record) attribute.KeyValue {
@@ -83,7 +106,7 @@ func RecordStringGetters(name attr.Name) (attributes.Getter[*Record, string], bo
 	return nil, false
 }
 
-func directionStr(direction uint8) string {
+func ifaceDirectionStr(direction uint8) string {
 	switch direction {
 	case DirectionIngress:
 		return "ingress"

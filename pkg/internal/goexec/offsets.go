@@ -5,8 +5,8 @@ import (
 	"debug/gosym"
 	"fmt"
 
+	"github.com/grafana/beyla/pkg/export/otel"
 	"github.com/grafana/beyla/pkg/internal/exec"
-	"github.com/grafana/beyla/pkg/internal/export/otel"
 )
 
 type Offsets struct {
@@ -21,7 +21,7 @@ type FuncOffsets struct {
 	Returns []uint64
 }
 
-type FieldOffsets map[string]any
+type FieldOffsets map[GoOffset]any
 
 // InspectOffsets gets the memory addresses/offsets of the instrumenting function, as well as the required
 // parameters fields to be read from the eBPF code

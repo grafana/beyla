@@ -206,7 +206,7 @@ func getTopicName(pkt []byte, offset int, op Operation, apiVersion int16) (strin
 	}
 
 	offset += 4
-	if offset > len(pkt) {
+	if offset >= len(pkt) {
 		return "", errors.New("invalid buffer length")
 	}
 	topicNameSize, err := getTopicNameSize(pkt, offset, op, apiVersion)
@@ -215,7 +215,7 @@ func getTopicName(pkt []byte, offset int, op Operation, apiVersion int16) (strin
 	}
 	offset += 2
 
-	if offset > len(pkt) {
+	if offset >= len(pkt) {
 		return "", nil
 	}
 	maxLen := offset + topicNameSize
@@ -253,7 +253,7 @@ func getTopicNameSize(pkt []byte, offset int, op Operation, apiVersion int16) (i
 		if err != nil {
 			return 0, err
 		}
-	} else {
+	} else if offset < (len(pkt) - 1) { // we need at least 2 bytes to read uint16
 		topicNameSize = int(binary.BigEndian.Uint16(pkt[offset:]))
 	}
 	if topicNameSize <= 0 {
@@ -358,23 +358,23 @@ func TCPToKafkaToSpan(trace *TCPRequestInfo, data *KafkaInfo) request.Span {
 	}
 
 	return request.Span{
-		Type:           reqType,
-		Method:         data.Operation.String(),
-		OtherNamespace: data.ClientID,
-		Path:           data.Topic,
-		Peer:           peer,
-		PeerPort:       int(trace.ConnInfo.S_port),
-		Host:           hostname,
-		HostPort:       hostPort,
-		ContentLength:  0,
-		RequestStart:   int64(trace.StartMonotimeNs),
-		Start:          int64(trace.StartMonotimeNs),
-		End:            int64(trace.EndMonotimeNs),
-		Status:         0,
-		TraceID:        trace2.TraceID(trace.Tp.TraceId),
-		SpanID:         trace2.SpanID(trace.Tp.SpanId),
-		ParentSpanID:   trace2.SpanID(trace.Tp.ParentId),
-		Flags:          trace.Tp.Flags,
+		Type:          reqType,
+		Method:        data.Operation.String(),
+		Statement:     data.ClientID,
+		Path:          data.Topic,
+		Peer:          peer,
+		PeerPort:      int(trace.ConnInfo.S_port),
+		Host:          hostname,
+		HostPort:      hostPort,
+		ContentLength: 0,
+		RequestStart:  int64(trace.StartMonotimeNs),
+		Start:         int64(trace.StartMonotimeNs),
+		End:           int64(trace.EndMonotimeNs),
+		Status:        0,
+		TraceID:       trace2.TraceID(trace.Tp.TraceId),
+		SpanID:        trace2.SpanID(trace.Tp.SpanId),
+		ParentSpanID:  trace2.SpanID(trace.Tp.ParentId),
+		Flags:         trace.Tp.Flags,
 		Pid: request.PidInfo{
 			HostPID:   trace.Pid.HostPid,
 			UserPID:   trace.Pid.UserPid,

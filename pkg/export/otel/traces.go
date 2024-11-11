@@ -34,7 +34,6 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.25.0"
 	trace2 "go.opentelemetry.io/otel/trace"
-	tracenoop "go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/zap"
 
 	"github.com/grafana/beyla/pkg/export/attributes"
@@ -332,7 +331,7 @@ func instrumentTraceExporter(in trace.SpanExporter, internalMetrics imetrics.Rep
 	}
 }
 
-func traceProviderWithInternalMetrics(ctxInfo *global.ContextInfo, cfg TracesConfig, in trace.SpanExporter) trace2.TracerProvider {
+func newTraceProvider(cfg *TracesConfig, in trace.SpanExporter) trace2.TracerProvider {
 	var opts []trace.BatchSpanProcessorOption
 	if cfg.MaxExportBatchSize > 0 {
 		opts = append(opts, trace.WithMaxExportBatchSize(cfg.MaxExportBatchSize))
@@ -346,8 +345,7 @@ func traceProviderWithInternalMetrics(ctxInfo *global.ContextInfo, cfg TracesCon
 	if cfg.ExportTimeout > 0 {
 		opts = append(opts, trace.WithExportTimeout(cfg.ExportTimeout))
 	}
-	tracer := instrumentTraceExporter(in, ctxInfo.Metrics)
-	bsp := trace.NewBatchSpanProcessor(tracer, opts...)
+	bsp := trace.NewBatchSpanProcessor(in, opts...)
 	return trace.NewTracerProvider(
 		trace.WithSpanProcessor(bsp),
 		trace.WithSampler(cfg.Sampler.Implementation()),
@@ -355,16 +353,14 @@ func traceProviderWithInternalMetrics(ctxInfo *global.ContextInfo, cfg TracesCon
 }
 
 func getTraceSettings(ctxInfo *global.ContextInfo, cfg TracesConfig, in trace.SpanExporter) exporter.Settings {
-	var traceProvider trace2.TracerProvider
-
 	telemetryLevel := configtelemetry.LevelNone
-	traceProvider = tracenoop.NewTracerProvider()
 
 	if internalMetricsEnabled(ctxInfo) {
 		telemetryLevel = configtelemetry.LevelBasic
-		traceProvider = traceProviderWithInternalMetrics(ctxInfo, cfg, in)
+		in = instrumentTraceExporter(in, ctxInfo.Metrics)
 	}
 
+	traceProvider := newTraceProvider(&cfg, in)
 	meterProvider := metric.NewMeterProvider()
 	telemetrySettings := component.TelemetrySettings{
 		Logger:        zap.NewNop(),

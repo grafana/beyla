@@ -391,7 +391,7 @@ func (s *Store) Subscribe(observer meta.Observer) {
 	s.BaseNotifier.Subscribe(observer)
 	for _, pod := range s.podsByContainer {
 		if err := observer.On(&informer.Event{Type: informer.EventType_CREATED, Resource: pod}); err != nil {
-			s.log.Debug("observer failed. Unsubscribing it", "observer", observer.ID(), "error", err)
+			s.log.Debug("observer failed sending Pod info. Unsubscribing it", "observer", observer.ID(), "error", err)
 			s.BaseNotifier.Unsubscribe(observer)
 			return
 		}
@@ -401,7 +401,7 @@ func (s *Store) Subscribe(observer meta.Observer) {
 	// incomplete info
 	for _, ips := range s.objectMetaByIP {
 		if err := observer.On(&informer.Event{Type: informer.EventType_CREATED, Resource: ips}); err != nil {
-			s.log.Debug("observer failed. Unsubscribing it", "observer", observer.ID(), "error", err)
+			s.log.Debug("observer failed sending Object Meta. Unsubscribing it", "observer", observer.ID(), "error", err)
 			s.BaseNotifier.Unsubscribe(observer)
 			return
 		}

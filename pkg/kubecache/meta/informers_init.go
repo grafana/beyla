@@ -204,11 +204,6 @@ func (inf *Informers) initPodInformer(informerFactory informers.SharedInformerFa
 		}
 
 		startTime := pod.GetCreationTimestamp().String()
-		if inf.log.Enabled(context.TODO(), slog.LevelDebug) {
-			inf.log.Debug("inserting pod", "name", pod.Name, "namespace", pod.Namespace, "uid", pod.UID,
-				"node", pod.Spec.NodeName, "startTime", startTime, "containers", containers)
-		}
-
 		return &indexableEntity{
 			ObjectMeta: pod.ObjectMeta,
 			EncodedMeta: &informer.ObjectMeta{

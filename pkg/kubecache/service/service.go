@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"sync/atomic"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/peer"
@@ -15,6 +16,9 @@ import (
 	"github.com/grafana/beyla/pkg/kubecache/informer"
 	"github.com/grafana/beyla/pkg/kubecache/meta"
 )
+
+// TODO: make configurable
+const sendTimeout = 5 * time.Second
 
 // InformersCache configures and starts the gRPC service
 type InformersCache struct {
@@ -75,11 +79,11 @@ func (ic *InformersCache) Subscribe(_ *informer.SubscribeMessage, server informe
 	}
 	connCtx, cancel := context.WithCancel(server.Context())
 	o := &connection{cancel: cancel, id: p.Addr.String(), server: server}
-	ic.log.Debug("subscribed component", "id", o.ID())
+	ic.log.Info("client subscribed", "id", o.ID())
 	ic.informers.Subscribe(o)
 	// Keep the connection open
 	<-connCtx.Done()
-	ic.log.Debug("client disconnected", "id", o.ID())
+	ic.log.Info("client disconnected", "id", o.ID())
 	ic.informers.Unsubscribe(o)
 	return nil
 }
@@ -97,10 +101,24 @@ func (o *connection) ID() string {
 }
 
 func (o *connection) On(event *informer.Event) error {
-	if err := o.server.Send(event); err != nil {
-		slog.Error("sending message. Unsubscribing and retrying connection", "clientID", o.ID(), "error", err)
-		o.cancel()
+	// Theoretically Go is ready to run hundreds of thousands of parallel goroutines
+	// TODO: if one goroutine per message is too much CPU, find another formula to cancel if a client is not responding
+	done := make(chan error, 1)
+	go func() {
+		if err := o.server.Send(event); err != nil {
+			slog.Debug("sending message. Closing client connection", "clientID", o.ID(), "error", err)
+			o.cancel()
+			done <- err
+		}
+		close(done)
+	}()
+	timeout := time.After(sendTimeout)
+	select {
+	case err := <-done:
+		// might be just nil if the connection succeeded
 		return err
+	case <-timeout:
+		o.cancel()
+		return errors.New("timeout sending message to client. Closing connection " + o.ID())
 	}
-	return nil
 }

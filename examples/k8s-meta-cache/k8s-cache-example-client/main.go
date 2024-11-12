@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -46,6 +45,5 @@ func main() {
 			break
 		}
 		fmt.Printf("Received event: %v\n", event)
-		time.Sleep(24 * time.Hour)
 	}
 }

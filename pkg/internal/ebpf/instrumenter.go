@@ -17,6 +17,7 @@ import (
 	"github.com/prometheus/procfs"
 	"golang.org/x/sys/unix"
 
+	v2 "github.com/containers/common/pkg/cgroupv2"
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/exec"
 )

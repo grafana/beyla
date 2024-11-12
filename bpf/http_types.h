@@ -50,8 +50,14 @@
 // h = high word, l = low word
 // used as hashmap key, must be 4 byte aligned?
 typedef struct http_connection_info {
-    u8 s_addr[IP_V6_ADDR_LEN];
-    u8 d_addr[IP_V6_ADDR_LEN];
+    union {
+        u8 s_addr[IP_V6_ADDR_LEN];
+        u32 s_ip[IP_V6_ADDR_LEN_WORDS];
+    };
+    union {
+        u8 d_addr[IP_V6_ADDR_LEN];
+        u32 d_ip[IP_V6_ADDR_LEN_WORDS];
+    };
     u16 s_port;
     u16 d_port;
 } connection_info_t;

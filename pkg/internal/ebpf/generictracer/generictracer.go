@@ -353,6 +353,10 @@ func (p *Tracer) SocketFilters() []*ebpf.Program {
 	return []*ebpf.Program{p.bpfObjects.SocketHttpFilter}
 }
 
+func (p *Tracer) SockMsgs() []ebpfcommon.SockMsg { return nil }
+
+func (p *Tracer) SockOps() []ebpfcommon.SockOps { return nil }
+
 func (p *Tracer) RecordInstrumentedLib(id uint64) {
 	libsMux.Lock()
 	defer libsMux.Unlock()

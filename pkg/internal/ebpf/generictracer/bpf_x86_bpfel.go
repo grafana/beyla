@@ -43,14 +43,13 @@ type bpfHttp2ConnStreamT struct {
 
 type bpfHttp2GrpcRequestT struct {
 	Flags           uint8
-	_               [1]byte
+	_               [3]byte
 	ConnInfo        bpfConnectionInfoT
 	Data            [256]uint8
 	RetData         [64]uint8
 	Type            uint8
-	_               [1]byte
+	_               [3]byte
 	Len             int32
-	_               [4]byte
 	StartMonotimeNs uint64
 	EndMonotimeNs   uint64
 	Pid             struct {
@@ -81,9 +80,8 @@ type bpfHttpConnectionMetadataT struct {
 
 type bpfHttpInfoT struct {
 	Flags           uint8
-	_               [1]byte
+	_               [3]byte
 	ConnInfo        bpfConnectionInfoT
-	_               [2]byte
 	StartMonotimeNs uint64
 	EndMonotimeNs   uint64
 	Buf             [192]uint8
@@ -156,9 +154,8 @@ type bpfSslPidConnectionInfoT struct {
 
 type bpfTcpReqT struct {
 	Flags           uint8
-	_               [1]byte
+	_               [3]byte
 	ConnInfo        bpfConnectionInfoT
-	_               [2]byte
 	StartMonotimeNs uint64
 	EndMonotimeNs   uint64
 	Buf             [256]uint8

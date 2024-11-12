@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"unsafe"
@@ -291,6 +292,48 @@ func attachSocketFilter(filter *ebpf.Program) (int, error) {
 	return -1, err
 }
 
+func (i *instrumenter) sockmsgs(p Tracer) error {
+	for _, sockmsg := range p.SockMsgs() {
+		err := link.RawAttachProgram(link.RawAttachProgramOptions{
+			Target:  sockmsg.MapFD,
+			Program: sockmsg.Program,
+			Attach:  sockmsg.AttachAs,
+		})
+
+		if err != nil {
+			return fmt.Errorf("attaching sock_msg program: %w", err)
+		}
+
+		p.AddCloser(&sockmsg)
+	}
+
+	return nil
+}
+
+func (i *instrumenter) sockops(p Tracer) error {
+	for _, sockops := range p.SockOps() {
+		cgroupPath, err := getCgroupPath()
+
+		if err != nil {
+			return fmt.Errorf("error getting cgroup path for sockops: %w", err)
+		}
+
+		sockops.SockopsCgroup, err = link.AttachCgroup(link.CgroupOptions{
+			Path:    cgroupPath,
+			Attach:  sockops.AttachAs,
+			Program: sockops.Program,
+		})
+
+		if err != nil {
+			return fmt.Errorf("attaching sockops program: %w", err)
+		}
+
+		p.AddCloser(&sockops)
+	}
+
+	return nil
+}
+
 func (i *instrumenter) tracepoints(p KprobesTracer) error {
 	for sfunc, sprobes := range p.Tracepoints() {
 		slog.Debug("going to add syscall", "function", sfunc, "probes", sprobes)
@@ -348,4 +391,15 @@ func htons(a uint16) uint16 {
 
 func processMaps(pid int32) ([]*procfs.ProcMap, error) {
 	return exec.FindLibMaps(pid)
+}
+
+func getCgroupPath() (string, error) {
+	var err error = nil
+	cgroupPath := "/sys/fs/cgroup"
+
+	enabled, err := v2.Enabled()
+	if !enabled {
+		cgroupPath = filepath.Join(cgroupPath, "unified")
+	}
+	return cgroupPath, err
 }

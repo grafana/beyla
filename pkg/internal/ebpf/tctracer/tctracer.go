@@ -91,6 +91,25 @@ func (p *Tracer) SocketFilters() []*ebpf.Program {
 	return nil
 }
 
+func (p *Tracer) SockMsgs() []ebpfcommon.SockMsg {
+	return []ebpfcommon.SockMsg{
+		{
+			Program:  p.bpfObjects.PacketExtender,
+			MapFD:    p.bpfObjects.bpfMaps.SockDir.FD(),
+			AttachAs: ebpf.AttachSkMsgVerdict,
+		},
+	}
+}
+
+func (p *Tracer) SockOps() []ebpfcommon.SockOps {
+	return []ebpfcommon.SockOps{
+		{
+			Program:  p.bpfObjects.SockmapTracker,
+			AttachAs: ebpf.AttachCGroupSockOps,
+		},
+	}
+}
+
 func (p *Tracer) RecordInstrumentedLib(uint64) {}
 
 func (p *Tracer) UnlinkInstrumentedLib(uint64) {}

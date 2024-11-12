@@ -43,14 +43,13 @@ type bpf_tp_debugHttp2ConnStreamT struct {
 
 type bpf_tp_debugHttp2GrpcRequestT struct {
 	Flags           uint8
-	_               [1]byte
+	_               [3]byte
 	ConnInfo        bpf_tp_debugConnectionInfoT
 	Data            [256]uint8
 	RetData         [64]uint8
 	Type            uint8
-	_               [1]byte
+	_               [3]byte
 	Len             int32
-	_               [4]byte
 	StartMonotimeNs uint64
 	EndMonotimeNs   uint64
 	Pid             struct {
@@ -81,9 +80,8 @@ type bpf_tp_debugHttpConnectionMetadataT struct {
 
 type bpf_tp_debugHttpInfoT struct {
 	Flags           uint8
-	_               [1]byte
+	_               [3]byte
 	ConnInfo        bpf_tp_debugConnectionInfoT
-	_               [2]byte
 	StartMonotimeNs uint64
 	EndMonotimeNs   uint64
 	Buf             [192]uint8
@@ -156,9 +154,8 @@ type bpf_tp_debugSslPidConnectionInfoT struct {
 
 type bpf_tp_debugTcpReqT struct {
 	Flags           uint8
-	_               [1]byte
+	_               [3]byte
 	ConnInfo        bpf_tp_debugConnectionInfoT
-	_               [2]byte
 	StartMonotimeNs uint64
 	EndMonotimeNs   uint64
 	Buf             [256]uint8

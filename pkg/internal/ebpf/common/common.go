@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
 
 	"github.com/grafana/beyla/pkg/internal/goexec"
@@ -60,6 +61,20 @@ type FunctionPrograms struct {
 type Filter struct {
 	io.Closer
 	Fd int
+}
+
+type SockOps struct {
+	io.Closer
+	Program       *ebpf.Program
+	AttachAs      ebpf.AttachType
+	SockopsCgroup link.Link
+}
+
+type SockMsg struct {
+	io.Closer
+	Program  *ebpf.Program
+	MapFD    int
+	AttachAs ebpf.AttachType
 }
 
 type MisclassifiedEvent struct {

@@ -32,6 +32,8 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.FunctionPrograms            { r
 func (p *Tracer) UProbes() map[string]map[string]ebpfcommon.FunctionPrograms { return nil }
 func (p *Tracer) Tracepoints() map[string]ebpfcommon.FunctionPrograms        { return nil }
 func (p *Tracer) SocketFilters() []*ebpf.Program                             { return nil }
+func (p *Tracer) SockMsgs() []ebpfcommon.SockMsg                             { return nil }
+func (p *Tracer) SockOps() []ebpfcommon.SockOps                              { return nil }
 func (p *Tracer) RecordInstrumentedLib(_ uint64)                             {}
 func (p *Tracer) UnlinkInstrumentedLib(_ uint64)                             {}
 func (p *Tracer) AlreadyInstrumentedLib(_ uint64) bool                       { return false }

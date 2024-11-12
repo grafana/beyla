@@ -78,8 +78,17 @@ type Tracer interface {
 	// SocketFilters  returns a list of programs that need to be loaded as a
 	// generic eBPF socket filter
 	SocketFilters() []*ebpf.Program
+	// SockMsgs returns a list of programs that need to be loaded as a
+	// BPF_PROG_TYPE_SK_MSG eBPF programs
+	SockMsgs() []ebpfcommon.SockMsg
+	// SockOps returns a list of programs that need to be loaded as a
+	// BPF_PROG_TYPE_SOCK_OPS eBPF programs
+	SockOps() []ebpfcommon.SockOps
 	// Sets up Linux traffic control egress/ingress
 	SetupTC()
+	// SockOps returns a list of programs that need to be loaded as a
+	// sockops BPF programs
+	SocOps() []*ebpf.Program
 	// Probes can potentially instrument a shared library among multiple executables
 	// These two functions alow programs to remember this and avoid duplicated instrumentations
 	// The argument is the OS file id

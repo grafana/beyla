@@ -43,9 +43,8 @@ type bpf_debugHttpFuncInvocationT struct {
 
 type bpf_debugHttpInfoT struct {
 	Flags           uint8
-	_               [1]byte
+	_               [3]byte
 	ConnInfo        bpf_debugConnectionInfoT
-	_               [2]byte
 	StartMonotimeNs uint64
 	EndMonotimeNs   uint64
 	Buf             [192]uint8
@@ -72,9 +71,17 @@ type bpf_debugHttpInfoT struct {
 	_       [4]byte
 }
 
+type bpf_debugMsgDataT struct{ Buf [1024]uint8 }
+
 type bpf_debugPidConnectionInfoT struct {
 	Conn bpf_debugConnectionInfoT
 	Pid  uint32
+}
+
+type bpf_debugTcHttpCtx struct {
+	Offset uint32
+	Seen   uint32
+	Size   uint32
 }
 
 type bpf_debugTpInfoPidT struct {
@@ -132,14 +139,17 @@ type bpf_debugSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_debugProgramSpecs struct {
-	AppEgress  *ebpf.ProgramSpec `ebpf:"app_egress"`
-	AppIngress *ebpf.ProgramSpec `ebpf:"app_ingress"`
+	AppEgress      *ebpf.ProgramSpec `ebpf:"app_egress"`
+	AppIngress     *ebpf.ProgramSpec `ebpf:"app_ingress"`
+	PacketExtender *ebpf.ProgramSpec `ebpf:"packet_extender"`
+	SockmapTracker *ebpf.ProgramSpec `ebpf:"sockmap_tracker"`
 }
 
 // bpf_debugMapSpecs contains maps before they are loaded into the kernel.
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_debugMapSpecs struct {
+	BufMem                    *ebpf.MapSpec `ebpf:"buf_mem"`
 	DebugEvents               *ebpf.MapSpec `ebpf:"debug_events"`
 	IncomingTraceMap          *ebpf.MapSpec `ebpf:"incoming_trace_map"`
 	OngoingGoHttp             *ebpf.MapSpec `ebpf:"ongoing_go_http"`
@@ -147,6 +157,8 @@ type bpf_debugMapSpecs struct {
 	OngoingHttpClientRequests *ebpf.MapSpec `ebpf:"ongoing_http_client_requests"`
 	OngoingHttpFallback       *ebpf.MapSpec `ebpf:"ongoing_http_fallback"`
 	OutgoingTraceMap          *ebpf.MapSpec `ebpf:"outgoing_trace_map"`
+	SockDir                   *ebpf.MapSpec `ebpf:"sock_dir"`
+	TcHttpCtxMap              *ebpf.MapSpec `ebpf:"tc_http_ctx_map"`
 	TraceMap                  *ebpf.MapSpec `ebpf:"trace_map"`
 }
 
@@ -169,6 +181,7 @@ func (o *bpf_debugObjects) Close() error {
 //
 // It can be passed to loadBpf_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_debugMaps struct {
+	BufMem                    *ebpf.Map `ebpf:"buf_mem"`
 	DebugEvents               *ebpf.Map `ebpf:"debug_events"`
 	IncomingTraceMap          *ebpf.Map `ebpf:"incoming_trace_map"`
 	OngoingGoHttp             *ebpf.Map `ebpf:"ongoing_go_http"`
@@ -176,11 +189,14 @@ type bpf_debugMaps struct {
 	OngoingHttpClientRequests *ebpf.Map `ebpf:"ongoing_http_client_requests"`
 	OngoingHttpFallback       *ebpf.Map `ebpf:"ongoing_http_fallback"`
 	OutgoingTraceMap          *ebpf.Map `ebpf:"outgoing_trace_map"`
+	SockDir                   *ebpf.Map `ebpf:"sock_dir"`
+	TcHttpCtxMap              *ebpf.Map `ebpf:"tc_http_ctx_map"`
 	TraceMap                  *ebpf.Map `ebpf:"trace_map"`
 }
 
 func (m *bpf_debugMaps) Close() error {
 	return _Bpf_debugClose(
+		m.BufMem,
 		m.DebugEvents,
 		m.IncomingTraceMap,
 		m.OngoingGoHttp,
@@ -188,6 +204,8 @@ func (m *bpf_debugMaps) Close() error {
 		m.OngoingHttpClientRequests,
 		m.OngoingHttpFallback,
 		m.OutgoingTraceMap,
+		m.SockDir,
+		m.TcHttpCtxMap,
 		m.TraceMap,
 	)
 }
@@ -196,14 +214,18 @@ func (m *bpf_debugMaps) Close() error {
 //
 // It can be passed to loadBpf_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_debugPrograms struct {
-	AppEgress  *ebpf.Program `ebpf:"app_egress"`
-	AppIngress *ebpf.Program `ebpf:"app_ingress"`
+	AppEgress      *ebpf.Program `ebpf:"app_egress"`
+	AppIngress     *ebpf.Program `ebpf:"app_ingress"`
+	PacketExtender *ebpf.Program `ebpf:"packet_extender"`
+	SockmapTracker *ebpf.Program `ebpf:"sockmap_tracker"`
 }
 
 func (p *bpf_debugPrograms) Close() error {
 	return _Bpf_debugClose(
 		p.AppEgress,
 		p.AppIngress,
+		p.PacketExtender,
+		p.SockmapTracker,
 	)
 }
 

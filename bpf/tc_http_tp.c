@@ -7,12 +7,12 @@
 #include "http_types.h"
 #include "tcp_info.h"
 #include "tracing.h"
+#include "tc_common.h"
 
 char __license[] SEC("license") = "Dual MIT/GPL";
 
 enum { TC_ACT_OK = 0, TC_ACT_RECLASSIFY = 1, TC_ACT_SHOT = 2 };
 enum { MAX_IP_PACKET_SIZE = 0x7fff };
-enum { MAX_INLINE_LEN = 0x3ff };
 
 enum connection_state { ESTABLISHED, FIN_WAIT_1, FIN_WAIT_2, CLOSING, CLOSE_WAIT, LAST_ACK };
 
@@ -385,21 +385,6 @@ static __always_inline int is_http_request(struct __sk_buff *ctx) {
     return is_http_request_buf(req_buf);
 }
 
-static __always_inline unsigned char *
-memchar(unsigned char *haystack, char needle, const unsigned char *end, u32 size) {
-    for (u32 i = 0; i < size; ++i) {
-        if (&haystack[i] >= end) {
-            break;
-        }
-
-        if (haystack[i] == needle) {
-            return &haystack[i];
-        }
-    }
-
-    return NULL;
-}
-
 struct memmove_loop_ctx {
     unsigned char *dst;
     unsigned char *src;
@@ -442,11 +427,6 @@ move_data(unsigned char *dst, unsigned char *src, const unsigned char *end, u32 
     struct memmove_loop_ctx memmove_loop_ctx = {dst, src, end, size};
 
     bpf_loop(size, memmove_loop, &memmove_loop_ctx, 0);
-}
-
-static __always_inline unsigned char *
-find_first_of(unsigned char *begin, unsigned char *end, char ch) {
-    return memchar(begin, ch, end, MAX_INLINE_LEN);
 }
 
 // TAIL_PROTOCOL_HTTP

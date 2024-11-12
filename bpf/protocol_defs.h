@@ -6,6 +6,7 @@
 #define AF_INET6 10 /* IP version 6			    */
 
 #define IP_V6_ADDR_LEN 16
+#define IP_V6_ADDR_LEN_WORDS 4
 
 // Most Linux distros use 32768 to 61000 for the ephemeral ports, so we look up from 32768
 // IANA suggests that the range should be 49152-65535, which is what Windows uses

@@ -7,6 +7,7 @@
 #include "go_shared.h"
 #include "tc_ip.h"
 #include "tcp_info.h"
+#include "tc_sock.h"
 
 char __license[] SEC("license") = "Dual MIT/GPL";
 

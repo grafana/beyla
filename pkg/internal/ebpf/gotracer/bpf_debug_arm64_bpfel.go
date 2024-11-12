@@ -51,7 +51,7 @@ type bpf_debugGrpcSrvFuncInvocationT struct {
 
 type bpf_debugGrpcTransportsT struct {
 	Type uint8
-	_    [1]byte
+	_    [3]byte
 	Conn bpf_debugConnectionInfoT
 }
 

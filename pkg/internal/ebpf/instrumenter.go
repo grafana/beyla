@@ -295,6 +295,7 @@ func attachSocketFilter(filter *ebpf.Program) (int, error) {
 
 func (i *instrumenter) sockmsgs(p Tracer) error {
 	for _, sockmsg := range p.SockMsgs() {
+		slog.Info("Attaching sock msgs")
 		err := link.RawAttachProgram(link.RawAttachProgramOptions{
 			Target:  sockmsg.MapFD,
 			Program: sockmsg.Program,
@@ -318,6 +319,8 @@ func (i *instrumenter) sockops(p Tracer) error {
 		if err != nil {
 			return fmt.Errorf("error getting cgroup path for sockops: %w", err)
 		}
+
+		slog.Info("Attaching sock ops", "path", cgroupPath)
 
 		sockops.SockopsCgroup, err = link.AttachCgroup(link.CgroupOptions{
 			Path:    cgroupPath,

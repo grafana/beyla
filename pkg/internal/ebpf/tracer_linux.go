@@ -187,6 +187,12 @@ func (pt *ProcessTracer) loadTracer(p Tracer, log *slog.Logger) error {
 		return err
 	}
 
+	// Sockops support
+	if err := i.sockops(p); err != nil {
+		printVerifierErrorInfo(err)
+		return err
+	}
+
 	return nil
 }
 

@@ -40,7 +40,6 @@ import (
 	"github.com/grafana/beyla/pkg/export/attributes"
 	attr "github.com/grafana/beyla/pkg/export/attributes/names"
 	"github.com/grafana/beyla/pkg/export/instrumentations"
-	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
@@ -76,7 +75,7 @@ type TracesConfig struct {
 	BatchTimeout       time.Duration `yaml:"batch_timeout" env:"BEYLA_OTLP_TRACES_BATCH_TIMEOUT"`
 	ExportTimeout      time.Duration `yaml:"export_timeout" env:"BEYLA_OTLP_TRACES_EXPORT_TIMEOUT"`
 
-	// Configuration optiosn for BackOffConfig of the traces exporter.
+	// Configuration options for BackOffConfig of the traces exporter.
 	// See https://github.com/open-telemetry/opentelemetry-collector/blob/main/config/configretry/backoff.go
 	// BackOffInitialInterval the time to wait after the first failure before retrying.
 	BackOffInitialInterval time.Duration `yaml:"backoff_initial_interval" env:"BEYLA_BACKOFF_INITIAL_INTERVAL"`
@@ -258,7 +257,12 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 		}
 		factory := otlphttpexporter.NewFactory()
 		config := factory.CreateDefaultConfig().(*otlphttpexporter.Config)
-		config.QueueConfig.Enabled = false
+		// For OTLP HTTP there's not baching API, so we use QueueConfig
+		// See: https://github.com/open-telemetry/opentelemetry-collector/issues/8122
+		if cfg.MaxQueueSize > 0 {
+			config.QueueConfig.Enabled = true
+			config.QueueConfig.QueueSize = cfg.MaxQueueSize
+		}
 		config.RetryConfig = getRetrySettings(cfg)
 		config.ClientConfig = confighttp.ClientConfig{
 			Endpoint: opts.Scheme + "://" + opts.Endpoint + opts.BaseURLPath,
@@ -291,7 +295,15 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 		}
 		factory := otlpexporter.NewFactory()
 		config := factory.CreateDefaultConfig().(*otlpexporter.Config)
-		config.QueueConfig.Enabled = false
+		// Experimental API for batching
+		// See: https://github.com/open-telemetry/opentelemetry-collector/issues/8122
+		if cfg.MaxExportBatchSize > 0 {
+			config.BatcherConfig.Enabled = true
+			config.BatcherConfig.MaxSizeConfig.MaxSizeItems = cfg.MaxExportBatchSize
+			if cfg.BatchTimeout > 0 {
+				config.BatcherConfig.FlushTimeout = cfg.BatchTimeout
+			}
+		}
 		config.RetryConfig = getRetrySettings(cfg)
 		config.ClientConfig = configgrpc.ClientConfig{
 			Endpoint: endpoint.String(),
@@ -310,60 +322,9 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 
 }
 
-func internalMetricsEnabled(ctxInfo *global.ContextInfo) bool {
-	internalMetrics := ctxInfo.Metrics
-	if internalMetrics == nil {
-		return false
-	}
-	_, ok := internalMetrics.(imetrics.NoopReporter)
-
-	return !ok
-}
-
-func instrumentTraceExporter(in trace.SpanExporter, internalMetrics imetrics.Reporter) trace.SpanExporter {
-	// avoid wrapping the instrumented exporter if we don't have
-	// internal instrumentation (NoopReporter)
-	if _, ok := internalMetrics.(imetrics.NoopReporter); ok || internalMetrics == nil {
-		return in
-	}
-	return &instrumentedTracesExporter{
-		SpanExporter: in,
-		internal:     internalMetrics,
-	}
-}
-
-func traceProviderWithInternalMetrics(ctxInfo *global.ContextInfo, cfg TracesConfig, in trace.SpanExporter) trace2.TracerProvider {
-	var opts []trace.BatchSpanProcessorOption
-	if cfg.MaxExportBatchSize > 0 {
-		opts = append(opts, trace.WithMaxExportBatchSize(cfg.MaxExportBatchSize))
-	}
-	if cfg.MaxQueueSize > 0 {
-		opts = append(opts, trace.WithMaxQueueSize(cfg.MaxQueueSize))
-	}
-	if cfg.BatchTimeout > 0 {
-		opts = append(opts, trace.WithBatchTimeout(cfg.BatchTimeout))
-	}
-	if cfg.ExportTimeout > 0 {
-		opts = append(opts, trace.WithExportTimeout(cfg.ExportTimeout))
-	}
-	tracer := instrumentTraceExporter(in, ctxInfo.Metrics)
-	bsp := trace.NewBatchSpanProcessor(tracer, opts...)
-	return trace.NewTracerProvider(
-		trace.WithSpanProcessor(bsp),
-		trace.WithSampler(cfg.Sampler.Implementation()),
-	)
-}
-
 func getTraceSettings(ctxInfo *global.ContextInfo, cfg TracesConfig, in trace.SpanExporter) exporter.Settings {
-	var traceProvider trace2.TracerProvider
-
 	telemetryLevel := configtelemetry.LevelNone
-	traceProvider = tracenoop.NewTracerProvider()
-
-	if internalMetricsEnabled(ctxInfo) {
-		telemetryLevel = configtelemetry.LevelBasic
-		traceProvider = traceProviderWithInternalMetrics(ctxInfo, cfg, in)
-	}
+	traceProvider := tracenoop.NewTracerProvider()
 
 	meterProvider := metric.NewMeterProvider()
 	telemetrySettings := component.TelemetrySettings{

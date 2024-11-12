@@ -2,6 +2,7 @@ package discover
 
 import (
 	"context"
+	"debug/gosym"
 	"log/slog"
 	"os"
 
@@ -285,9 +286,13 @@ func (ta *TraceAttacher) monitorPIDs(tracer *ebpf.ProcessTracer, ie *ebpf.Instru
 	ie.FileInfo.Service.SDKLanguage = ie.Type
 
 	// allowing the tracer to forward traces from the discovered PID and its children processes
-	tracer.AllowPID(uint32(ie.FileInfo.Pid), ie.FileInfo.Ns, &ie.FileInfo.Service, ie.Offsets.SymTab)
+	var symTab *gosym.Table
+	if ie.Offsets != nil && ie.Offsets.SymTab != nil {
+		symTab = ie.Offsets.SymTab
+	}
+	tracer.AllowPID(uint32(ie.FileInfo.Pid), ie.FileInfo.Ns, &ie.FileInfo.Service, symTab)
 	for _, pid := range ie.ChildPids {
-		tracer.AllowPID(pid, ie.FileInfo.Ns, &ie.FileInfo.Service, ie.Offsets.SymTab)
+		tracer.AllowPID(pid, ie.FileInfo.Ns, &ie.FileInfo.Service, symTab)
 	}
 	if ta.SpanSignalsShortcut != nil {
 		spans := make([]request.Span, 0, len(ie.ChildPids)+1)

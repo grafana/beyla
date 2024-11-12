@@ -267,9 +267,9 @@ int uprobe_ServeHTTPReturns(struct pt_regs *ctx) {
     trace->type = EVENT_HTTP_REQUEST;
     trace->start_monotime_ns = invocation->start_monotime_ns;
     trace->end_monotime_ns = bpf_ktime_get_ns();
-    if (error)
+    if (error) {
         trace->error = *error;
-
+    }
     goroutine_metadata *g_metadata = bpf_map_lookup_elem(&ongoing_goroutines, &g_key);
     if (g_metadata) {
         trace->go_start_monotime_ns = g_metadata->timestamp;
@@ -503,8 +503,9 @@ int uprobe_error(struct pt_regs *ctx) {
         .cpu_id = cpu_id,
     };
 
-    if (bpf_get_current_comm(event.comm, sizeof(event.comm)))
+    if (bpf_get_current_comm(event.comm, sizeof(event.comm))) {
         event.comm[0] = 0;
+    }
 
     // Read the stack trace
     event.ustack_sz = bpf_get_stack(ctx, event.ustack, sizeof(event.ustack), BPF_F_USER_STACK);

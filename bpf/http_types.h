@@ -250,6 +250,17 @@ static __always_inline void sort_connection_info(connection_info_t *info) {
     }
 }
 
+static __always_inline void sort_egress_key(egress_key_t *info) {
+    if (likely_ephemeral_port(info->s_port) && !likely_ephemeral_port(info->d_port)) {
+        return;
+    }
+
+    if ((likely_ephemeral_port(info->d_port) && !likely_ephemeral_port(info->s_port)) ||
+        (info->d_port > info->s_port)) {
+        __SWAP(u16, info->s_port, info->d_port);
+    }
+}
+
 static __always_inline bool client_call(connection_info_t *info) {
     return likely_ephemeral_port(info->s_port) && !likely_ephemeral_port(info->d_port);
 }

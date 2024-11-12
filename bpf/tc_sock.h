@@ -30,7 +30,6 @@ struct tc_http_ctx_map {
     __type(key, u32);
     __type(value, struct tc_http_ctx);
     __uint(max_entries, 10240);
-    __uint(pinning, LIBBPF_PIN_BY_NAME);
 } tc_http_ctx_map SEC(".maps");
 
 typedef struct msg_data {
@@ -56,8 +55,8 @@ static __always_inline void sk_ops_extract_key_ip4(struct bpf_sock_ops *ops,
 }
 
 // I couldn't break this up into functions, ended up running into a verifier error about ctx already written
-static __always_inline void sk_ops_extract_key_ip6(struct bpf_sock_ops *ops,
-                                                   connection_info_t *conn) {
+__attribute__((unused)) static __always_inline void
+sk_ops_extract_key_ip6(struct bpf_sock_ops *ops, connection_info_t *conn) {
     conn->s_ip[0] = ops->local_ip6[0];
     conn->s_ip[1] = ops->local_ip6[1];
     conn->s_ip[2] = ops->local_ip6[2];
@@ -81,7 +80,8 @@ static __always_inline void sk_msg_extract_key_ip4(struct sk_msg_md *msg, connec
     conn->d_port = bpf_ntohl(msg->remote_port);
 }
 
-static __always_inline void sk_msg_extract_key_ip6(struct sk_msg_md *msg, connection_info_t *conn) {
+__attribute__((unused)) static __always_inline void
+sk_msg_extract_key_ip6(struct sk_msg_md *msg, connection_info_t *conn) {
     conn->s_ip[0] = msg->local_ip6[0];
     conn->s_ip[1] = msg->local_ip6[1];
     conn->s_ip[2] = msg->local_ip6[2];
@@ -98,11 +98,11 @@ static __always_inline void sk_msg_extract_key_ip6(struct sk_msg_md *msg, connec
 static __always_inline void bpf_sock_ops_establish_cb(struct bpf_sock_ops *skops) {
     connection_info_t conn = {};
 
-    if (skops->family == AF_INET6) {
-        sk_ops_extract_key_ip6(skops, &conn);
-    } else {
-        sk_ops_extract_key_ip4(skops, &conn);
-    }
+    // if (skops->family == AF_INET6) {
+    //     sk_ops_extract_key_ip6(skops, &conn);
+    // } else {
+    sk_ops_extract_key_ip4(skops, &conn);
+    // }
 
     bpf_printk("SET %d:%d -> %d:%d", conn.s_ip[3], conn.s_port, conn.d_ip[3], conn.d_port);
     bpf_sock_hash_update(skops, &sock_dir, &conn, BPF_ANY);
@@ -128,18 +128,36 @@ static __always_inline msg_data_t *buffer() {
     return (msg_data_t *)bpf_map_lookup_elem(&buf_mem, &zero);
 }
 
+static __always_inline u8 is_tracked(connection_info_t *conn) {
+    egress_key_t e_key = {
+        .d_port = conn->d_port,
+        .s_port = conn->s_port,
+    };
+
+    sort_egress_key(&e_key);
+
+    tp_info_pid_t *tp = bpf_map_lookup_elem(&outgoing_trace_map, &e_key);
+    return tp != 0;
+}
+
 SEC("sk_msg")
 int packet_extender(struct sk_msg_md *msg) {
     u64 len = (u64)msg->data_end - (u64)msg->data;
     connection_info_t conn = {};
 
-    if (msg->family == AF_INET6) {
-        sk_msg_extract_key_ip6(msg, &conn);
-    } else {
-        sk_msg_extract_key_ip4(msg, &conn);
-    }
+    // if (msg->family == AF_INET6) {
+    //     sk_msg_extract_key_ip6(msg, &conn);
+    // } else {
+    sk_msg_extract_key_ip4(msg, &conn);
+    // }
 
     bpf_printk("MSG %d:%d -> %d:%d", conn.s_ip[3], conn.s_port, conn.d_ip[3], conn.d_port);
+
+    u8 tracked = is_tracked(&conn);
+
+    if (tracked) {
+        bpf_printk("*tracked*");
+    }
 
     if (len > 32) {
         msg_data_t *msg_data = buffer();

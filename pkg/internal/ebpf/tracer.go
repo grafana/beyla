@@ -86,9 +86,6 @@ type Tracer interface {
 	SockOps() []ebpfcommon.SockOps
 	// Sets up Linux traffic control egress/ingress
 	SetupTC()
-	// SockOps returns a list of programs that need to be loaded as a
-	// sockops BPF programs
-	SocOps() []*ebpf.Program
 	// Probes can potentially instrument a shared library among multiple executables
 	// These two functions alow programs to remember this and avoid duplicated instrumentations
 	// The argument is the OS file id

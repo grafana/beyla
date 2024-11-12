@@ -78,7 +78,7 @@ func (ic *InformersCache) Subscribe(_ *informer.SubscribeMessage, server informe
 		return fmt.Errorf("failed to extract peer information")
 	}
 	connCtx, cancel := context.WithCancel(server.Context())
-	o := &connection{ctx: connCtx, cancel: cancel, id: p.Addr.String(), server: server}
+	o := &connection{cancel: cancel, id: p.Addr.String(), server: server}
 	ic.log.Info("client subscribed", "id", o.ID())
 	ic.informers.Subscribe(o)
 	// Keep the connection open
@@ -91,7 +91,6 @@ func (ic *InformersCache) Subscribe(_ *informer.SubscribeMessage, server informe
 // connection implements the meta.Observer pattern to store the handle to
 // each client connection subscription
 type connection struct {
-	ctx    context.Context
 	cancel func()
 	id     string
 	server grpc.ServerStreamingServer[informer.Event]
@@ -102,12 +101,6 @@ func (o *connection) ID() string {
 }
 
 func (o *connection) On(event *informer.Event) error {
-	select {
-	case <-o.ctx.Done():
-		return errors.New("connection closed")
-	default:
-		// continue
-	}
 	// Theoretically Go is ready to run hundreds of thousands of parallel goroutines
 	// TODO: if one goroutine per message is too much CPU, find another formula to cancel if a client is not responding
 	done := make(chan error, 1)

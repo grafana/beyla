@@ -116,7 +116,10 @@ func (ic *InformersCache) Subscribe(_ *informer.SubscribeMessage, server informe
 	if !ok {
 		return fmt.Errorf("failed to extract peer information")
 	}
+	ctx, cancel := context.WithCancel(server.Context())
 	o := &connection{
+		ctx:         ctx,
+		cancel:      cancel,
 		id:          p.Addr.String(),
 		server:      server,
 		sendTimeout: ic.SendTimeout,
@@ -138,6 +141,9 @@ func (ic *InformersCache) Subscribe(_ *informer.SubscribeMessage, server informe
 // connection implements the meta.Observer pattern to store the handle to
 // each client connection subscription
 type connection struct {
+	ctx    context.Context
+	cancel context.CancelFunc
+
 	id     string
 	server grpc.ServerStreamingServer[informer.Event]
 
@@ -157,7 +163,7 @@ func (o *connection) watchForActiveConnection() {
 	for {
 		// wait for On(...) to be called
 		select {
-		case <-o.server.Context().Done():
+		case <-o.ctx.Done():
 			// client disconnected. Exiting
 			return
 		case <-o.barrier:
@@ -166,7 +172,7 @@ func (o *connection) watchForActiveConnection() {
 
 		// wait for On(...) to finish, or a timeout
 		select {
-		case <-o.server.Context().Done():
+		case <-o.ctx.Done():
 			// client disconnected. Exiting
 			return
 		case <-time.After(o.sendTimeout):
@@ -183,6 +189,7 @@ func (o *connection) On(event *informer.Event) error {
 	err := o.server.Send(event)
 	if err != nil {
 		slog.Debug("sending message. Closing client connection", "clientID", o.ID(), "error", err)
+		o.cancel()
 		return err
 	}
 	o.barrier <- struct{}{}

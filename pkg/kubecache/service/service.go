@@ -35,7 +35,7 @@ type InformersCache struct {
 	// TODO: allow configuring by user
 	SendTimeout time.Duration
 
-	ssi *connectionInterceptor
+	connections *connectionInterceptor
 }
 
 // connection interceptor hooks into the credentials negotiation
@@ -84,11 +84,11 @@ func (ic *InformersCache) Run(ctx context.Context, opts ...meta.InformerOption) 
 	}
 
 	// TODO: allow configuring credentials
-	ic.ssi = &connectionInterceptor{TransportCredentials: insecure.NewCredentials(), log: ic.log}
+	ic.connections = &connectionInterceptor{TransportCredentials: insecure.NewCredentials(), log: ic.log}
 	s := grpc.NewServer(
 		// TODO: configure other aspects (e.g. secure connections)
 		grpc.MaxConcurrentStreams(uint32(ic.Config.MaxConnections)),
-		grpc.Creds(ic.ssi),
+		grpc.Creds(ic.connections),
 	)
 	informer.RegisterEventStreamServiceServer(s, ic)
 
@@ -129,7 +129,7 @@ func (ic *InformersCache) Subscribe(_ *informer.SubscribeMessage, server informe
 	o.watchForActiveConnection()
 
 	// canceling the context in case the client disconnected due to timeout
-	ic.ssi.closeConnection(o.ID())
+	ic.connections.closeConnection(o.ID())
 	ic.log.Info("client disconnected", "id", o.ID())
 	ic.informers.Unsubscribe(o)
 	return nil

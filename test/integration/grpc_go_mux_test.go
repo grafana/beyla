@@ -50,13 +50,7 @@ func TestGRPCMux(t *testing.T) {
 		testREDMetricsForGRPCMuxLibrary(t, "/grpc.health.v1.Health/Check", "grpc-http2-go", "8080")
 	})
 
-	t.Run("BPF pinning folders mounted", func(t *testing.T) {
-		// 1 beyla pinned map folder for all processes
-		testBPFPinningMounted(t)
-	})
-
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
 func TestGRPCMuxTLS(t *testing.T) {
@@ -70,11 +64,5 @@ func TestGRPCMuxTLS(t *testing.T) {
 		testREDMetricsForGRPCMuxLibrary(t, "/grpc.health.v1.Health/Check", "grpc-http2-go", "8383")
 	})
 
-	t.Run("BPF pinning folders mounted", func(t *testing.T) {
-		// 1 beyla pinned map folder for all processes
-		testBPFPinningMounted(t)
-	})
-
 	require.NoError(t, compose.Close())
-	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }

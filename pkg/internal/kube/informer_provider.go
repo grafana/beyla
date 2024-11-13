@@ -15,8 +15,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/grafana/beyla-k8s-cache/pkg/meta"
-
+	"github.com/grafana/beyla/pkg/kubecache/meta"
 	"github.com/grafana/beyla/pkg/kubeflags"
 )
 
@@ -36,13 +35,14 @@ type MetadataConfig struct {
 	KubeConfigPath    string
 	SyncTimeout       time.Duration
 	ResyncPeriod      time.Duration
+	MetaCacheAddr     string
 }
 
 type MetadataProvider struct {
 	mt sync.Mutex
 
 	metadata *Store
-	informer *meta.Informers
+	informer meta.Notifier
 
 	cfg *MetadataConfig
 }
@@ -117,14 +117,18 @@ func (mp *MetadataProvider) Get(ctx context.Context) (*Store, error) {
 	return mp.metadata, nil
 }
 
-func (mp *MetadataProvider) getInformer(ctx context.Context) (*meta.Informers, error) {
+func (mp *MetadataProvider) getInformer(ctx context.Context) (meta.Notifier, error) {
 	if mp.informer != nil {
 		return mp.informer, nil
 	}
-	var err error
-	mp.informer, err = mp.initInformers(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("can't get informer: %w", err)
+	if mp.cfg.MetaCacheAddr != "" {
+		mp.informer = mp.initRemoteInformerCacheClient(ctx)
+	} else {
+		var err error
+		mp.informer, err = mp.initLocalInformers(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("can't get informer: %w", err)
+		}
 	}
 	return mp.informer, nil
 }
@@ -153,12 +157,16 @@ func (mp *MetadataProvider) CurrentNodeName(ctx context.Context) (string, error)
 		FieldSelector: "metadata.name=" + currentPod,
 	})
 	if err != nil || len(pods.Items) == 0 {
-		return "", fmt.Errorf("can't get pod %s/%s: %w", currentNamespace, currentPod, err)
+		log.Debug("attention: can't get Pod info. This is expected if the pod is using the host network. Will use the"+
+			" host name as node name", "nodeName", currentPod, "namespace", currentNamespace, "error", err)
+		return currentPod, nil
 	}
 	return pods.Items[0].Spec.NodeName, nil
 }
 
-func (mp *MetadataProvider) initInformers(ctx context.Context) (*meta.Informers, error) {
+// initLocalInformers initializes an informer client that directly connects to the Node Kube API
+// for getting informer data
+func (mp *MetadataProvider) initLocalInformers(ctx context.Context) (*meta.Informers, error) {
 	done := make(chan error)
 	var informers *meta.Informers
 	go func() {
@@ -182,6 +190,18 @@ func (mp *MetadataProvider) initInformers(ctx context.Context) (*meta.Informers,
 		}
 	}
 	return informers, nil
+}
+
+// initRemoteInformerCacheClient connects via gRPC/Protobuf to a remote beyla-k8s-cache service, to avoid that
+// each Beyla instance connects to the Kube API informer on each node, which would overload the Kube API
+func (mp *MetadataProvider) initRemoteInformerCacheClient(ctx context.Context) *cacheSvcClient {
+	client := &cacheSvcClient{
+		address:      mp.cfg.MetaCacheAddr,
+		BaseNotifier: meta.NewBaseNotifier(klog()),
+		syncTimeout:  mp.cfg.SyncTimeout,
+	}
+	client.Start(ctx)
+	return client
 }
 
 func loadKubeConfig(kubeConfigPath string) (*rest.Config, error) {

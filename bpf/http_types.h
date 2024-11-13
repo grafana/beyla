@@ -8,14 +8,19 @@
 #include "pid_types.h"
 #include "bpf_dbg.h"
 
-#define FULL_BUF_SIZE                                                                              \
-    192 // should be enough for most URLs, we may need to extend it if not. Must be multiple of 16 for the copy to work.
+#define MIN_HTTP_SIZE 12      // HTTP/1.1 CCC is the smallest valid request we can have
+#define MIN_HTTP_REQ_SIZE 9   // OPTIONS / is the largest
+#define RESPONSE_STATUS_POS 9 // HTTP/1.1 <--
+#define MAX_HTTP_STATUS 599
+
+// should be enough for most URLs, we may need to extend it if not. Must be multiple of 16 for the copy to work.
+#define FULL_BUF_SIZE 192
 #define TRACE_BUF_SIZE 1024 // must be power of 2, we do an & to limit the buffer size
 #define KPROBES_HTTP2_BUF_SIZE 256
 #define KPROBES_HTTP2_RET_BUF_SIZE 64
 
-#define KPROBES_LARGE_RESPONSE_LEN                                                                 \
-    100000 // 100K and above we try to track the response actual time with kretprobes
+// 100K and above we try to track the response actual time with kretprobes
+#define KPROBES_LARGE_RESPONSE_LEN 100000
 
 #define K_TCP_MAX_LEN 256
 #define K_TCP_RES_LEN 128
@@ -37,8 +42,8 @@
 #define NO_SSL 0
 #define WITH_SSL 1
 
-#define MIN_HTTP2_SIZE                                                                             \
-    24 // Preface PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n https://datatracker.ietf.org/doc/html/rfc7540#section-3.5
+// Preface PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n https://datatracker.ietf.org/doc/html/rfc7540#section-3.5
+#define MIN_HTTP2_SIZE 24
 
 // Struct to keep information on the connections in flight
 // s = source, d = destination
@@ -50,6 +55,11 @@ typedef struct http_connection_info {
     u16 s_port;
     u16 d_port;
 } connection_info_t;
+
+typedef struct egress_key {
+    u16 s_port;
+    u16 d_port;
+} egress_key_t;
 
 typedef struct http_partial_connection_info {
     u8 s_addr[IP_V6_ADDR_LEN];
@@ -199,17 +209,6 @@ static __always_inline void dbg_print_http_connection_info(connection_info_t *in
 }
 #endif
 
-static __always_inline void print_http_connection_info(connection_info_t *info) {
-    bpf_printk("[conn] s_h = %llx, s_l = %llx, s_port=%d",
-               *(u64 *)(&info->s_addr),
-               *(u64 *)(&info->s_addr[8]),
-               info->s_port);
-    bpf_printk("[conn] d_h = %llx, d_l = %llx, d_port=%d",
-               *(u64 *)(&info->d_addr),
-               *(u64 *)(&info->d_addr[8]),
-               info->d_port);
-}
-
 static __always_inline bool likely_ephemeral_port(u16 port) {
     return port >= EPHEMERAL_PORT_MIN;
 }
@@ -247,6 +246,25 @@ static __always_inline void sort_connection_info(connection_info_t *info) {
 
 static __always_inline bool client_call(connection_info_t *info) {
     return likely_ephemeral_port(info->s_port) && !likely_ephemeral_port(info->d_port);
+}
+
+static __always_inline u8 is_http_request_buf(const unsigned char *p) {
+    //HTTP/1.x
+    return (((p[0] == 'G') && (p[1] == 'E') && (p[2] == 'T') && (p[3] == ' ') &&
+             (p[4] == '/')) || // GET
+            ((p[0] == 'P') && (p[1] == 'O') && (p[2] == 'S') && (p[3] == 'T') && (p[4] == ' ') &&
+             (p[5] == '/')) || // POST
+            ((p[0] == 'P') && (p[1] == 'U') && (p[2] == 'T') && (p[3] == ' ') &&
+             (p[4] == '/')) || // PUT
+            ((p[0] == 'P') && (p[1] == 'A') && (p[2] == 'T') && (p[3] == 'C') && (p[4] == 'H') &&
+             (p[5] == ' ') && (p[6] == '/')) || // PATCH
+            ((p[0] == 'D') && (p[1] == 'E') && (p[2] == 'L') && (p[3] == 'E') && (p[4] == 'T') &&
+             (p[5] == 'E') && (p[6] == ' ') && (p[7] == '/')) || // DELETE
+            ((p[0] == 'H') && (p[1] == 'E') && (p[2] == 'A') && (p[3] == 'D') && (p[4] == ' ') &&
+             (p[5] == '/')) || // HEAD
+            ((p[0] == 'O') && (p[1] == 'P') && (p[2] == 'T') && (p[3] == 'I') && (p[4] == 'O') &&
+             (p[5] == 'N') && (p[6] == 'S') && (p[7] == ' ') && (p[8] == '/')) // OPTIONS
+    );
 }
 
 #endif

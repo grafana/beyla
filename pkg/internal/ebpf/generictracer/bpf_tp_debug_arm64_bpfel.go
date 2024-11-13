@@ -31,6 +31,11 @@ type bpf_tp_debugConnectionInfoT struct {
 	D_port uint16
 }
 
+type bpf_tp_debugEgressKeyT struct {
+	S_port uint16
+	D_port uint16
+}
+
 type bpf_tp_debugHttp2ConnStreamT struct {
 	PidConn  bpf_tp_debugPidConnectionInfoT
 	StreamId uint32
@@ -239,7 +244,6 @@ type bpf_tp_debugSpecs struct {
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_tp_debugProgramSpecs struct {
 	AsyncReset              *ebpf.ProgramSpec `ebpf:"async_reset"`
-	AsyncResetRet           *ebpf.ProgramSpec `ebpf:"async_reset_ret"`
 	EmitAsyncInit           *ebpf.ProgramSpec `ebpf:"emit_async_init"`
 	KprobeSysExit           *ebpf.ProgramSpec `ebpf:"kprobe_sys_exit"`
 	KprobeTcpCleanupRbuf    *ebpf.ProgramSpec `ebpf:"kprobe_tcp_cleanup_rbuf"`
@@ -428,7 +432,6 @@ func (m *bpf_tp_debugMaps) Close() error {
 // It can be passed to loadBpf_tp_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_tp_debugPrograms struct {
 	AsyncReset              *ebpf.Program `ebpf:"async_reset"`
-	AsyncResetRet           *ebpf.Program `ebpf:"async_reset_ret"`
 	EmitAsyncInit           *ebpf.Program `ebpf:"emit_async_init"`
 	KprobeSysExit           *ebpf.Program `ebpf:"kprobe_sys_exit"`
 	KprobeTcpCleanupRbuf    *ebpf.Program `ebpf:"kprobe_tcp_cleanup_rbuf"`
@@ -463,7 +466,6 @@ type bpf_tp_debugPrograms struct {
 func (p *bpf_tp_debugPrograms) Close() error {
 	return _Bpf_tp_debugClose(
 		p.AsyncReset,
-		p.AsyncResetRet,
 		p.EmitAsyncInit,
 		p.KprobeSysExit,
 		p.KprobeTcpCleanupRbuf,

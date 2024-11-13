@@ -127,8 +127,8 @@ func (k *Kind) Run(m *testing.M) {
 	log.Info("starting kind setup")
 	code := k.testEnv.Setup(funcs...).
 		Finish(
-			k.deleteLabeled(),
 			k.exportLogs(),
+			k.deleteLabeled(),
 			envfuncs.DestroyCluster(k.clusterName),
 		).Run(m)
 	log.With("returnCode", code).Info("tests finished run")

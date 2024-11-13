@@ -12,13 +12,12 @@ import (
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
-	"github.com/grafana/beyla-k8s-cache/pkg/informer"
-	"github.com/grafana/beyla-k8s-cache/pkg/meta"
-
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/helpers/container"
 	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/testutil"
+	"github.com/grafana/beyla/pkg/kubecache/informer"
+	"github.com/grafana/beyla/pkg/kubecache/meta"
 	"github.com/grafana/beyla/pkg/services"
 )
 
@@ -236,7 +235,7 @@ func deployPod(fInformer meta.Notifier, ns, name, containerID string, labels map
 			Name: name, Namespace: ns, Labels: labels,
 			Kind: "Pod",
 			Pod: &informer.PodInfo{
-				ContainerIds: []string{containerID},
+				Containers: []*informer.ContainerInfo{{Id: containerID}},
 			},
 		},
 	})
@@ -249,7 +248,7 @@ func deployOwnedPod(fInformer meta.Notifier, ns, name, replicaSetName, deploymen
 			Name: name, Namespace: ns,
 			Kind: "Pod",
 			Pod: &informer.PodInfo{
-				ContainerIds: []string{containerID},
+				Containers: []*informer.ContainerInfo{{Id: containerID}},
 				Owners: []*informer.Owner{{Name: replicaSetName, Kind: "ReplicaSet"},
 					{Name: deploymentName, Kind: "Deployment"}},
 			},
@@ -303,6 +302,6 @@ func (f *fakeInformer) Notify(event *informer.Event) {
 	f.mt.Lock()
 	defer f.mt.Unlock()
 	for _, observer := range f.observers {
-		observer.On(event)
+		_ = observer.On(event)
 	}
 }

@@ -78,6 +78,26 @@ func textPrinter(input <-chan []request.Span) {
 	for spans := range input {
 		for i := range spans {
 			t := spans[i].Timings()
+
+			pn := ""
+			hn := ""
+
+			if spans[i].IsClientSpan() {
+				if spans[i].ServiceID.Namespace != "" {
+					pn = "." + spans[i].ServiceID.Namespace
+				}
+				if spans[i].OtherNamespace != "" {
+					hn = "." + spans[i].OtherNamespace
+				}
+			} else {
+				if spans[i].OtherNamespace != "" {
+					pn = "." + spans[i].OtherNamespace
+				}
+				if spans[i].ServiceID.Namespace != "" {
+					hn = "." + spans[i].ServiceID.Namespace
+				}
+			}
+
 			fmt.Printf("%s (%s[%s]) %s %v %s %s [%s:%d]->[%s:%d] size:%dB svc=[%s %s] traceparent=[%s]\n",
 				t.Start.Format("2006-01-02 15:04:05.12345"),
 				t.End.Sub(t.RequestStart),
@@ -86,9 +106,9 @@ func textPrinter(input <-chan []request.Span) {
 				spans[i].Status,
 				spans[i].Method,
 				spans[i].Path,
-				spans[i].Peer+" as "+spans[i].PeerName,
+				spans[i].Peer+" as "+request.SpanPeer(&spans[i])+pn,
 				spans[i].PeerPort,
-				spans[i].Host+" as "+spans[i].HostName,
+				spans[i].Host+" as "+request.SpanHost(&spans[i])+hn,
 				spans[i].HostPort,
 				spans[i].ContentLength,
 				&spans[i].ServiceID,

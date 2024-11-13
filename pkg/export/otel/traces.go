@@ -29,6 +29,7 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	metric2 "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.25.0"
@@ -269,7 +270,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 		}
 		slog.Debug("getTracesExporter: confighttp.ClientConfig created", "endpoint", config.ClientConfig.Endpoint)
 		set := getTraceSettings(ctxInfo, cfg, t)
-		return factory.CreateTracesExporter(ctx, set, config)
+		return factory.CreateTraces(ctx, set, config)
 	case ProtocolGRPC:
 		slog.Debug("instantiating GRPC TracesReporter", "protocol", proto)
 		var t trace.SpanExporter
@@ -300,7 +301,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 			},
 		}
 		set := getTraceSettings(ctxInfo, cfg, t)
-		return factory.CreateTracesExporter(ctx, set, config)
+		return factory.CreateTraces(ctx, set, config)
 	default:
 		slog.Error(fmt.Sprintf("invalid protocol value: %q. Accepted values are: %s, %s, %s",
 			proto, ProtocolGRPC, ProtocolHTTPJSON, ProtocolHTTPProtobuf))
@@ -364,14 +365,23 @@ func getTraceSettings(ctxInfo *global.ContextInfo, cfg TracesConfig, in trace.Sp
 		traceProvider = traceProviderWithInternalMetrics(ctxInfo, cfg, in)
 	}
 
+	meterProvider := metric.NewMeterProvider()
 	telemetrySettings := component.TelemetrySettings{
-		Logger:         zap.NewNop(),
-		MeterProvider:  metric.NewMeterProvider(),
+		Logger:        zap.NewNop(),
+		MeterProvider: meterProvider,
+		LeveledMeterProvider: func(_ configtelemetry.Level) metric2.MeterProvider {
+			return meterProvider
+		},
 		TracerProvider: traceProvider,
 		MetricsLevel:   telemetryLevel,
 	}
+
+	// component.DataTypeMetrics was removed in collector API v0.112.0 but its value is still required here
+	// dataTypeMetrics variable hardcodes the previous value for the removed constant
+	// TODO: replace legacy API
+	dataTypeMetrics := component.MustNewType("metrics")
 	return exporter.Settings{
-		ID:                component.NewIDWithName(component.DataTypeMetrics, "beyla"),
+		ID:                component.NewIDWithName(dataTypeMetrics, "beyla"),
 		TelemetrySettings: telemetrySettings,
 	}
 }
@@ -568,7 +578,7 @@ func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 			request.HTTPRequestMethod(span.Method),
 			request.HTTPResponseStatusCode(span.Status),
 			request.HTTPUrlPath(span.Path),
-			request.ClientAddr(request.SpanPeer(span)),
+			request.ClientAddr(request.PeerAsClient(span)),
 			request.ServerAddr(request.SpanHost(span)),
 			request.ServerPort(span.HostPort),
 			request.HTTPRequestBodySize(int(span.RequestLength())),
@@ -581,7 +591,7 @@ func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 			semconv.RPCMethod(span.Path),
 			semconv.RPCSystemGRPC,
 			semconv.RPCGRPCStatusCodeKey.Int(span.Status),
-			request.ClientAddr(request.SpanPeer(span)),
+			request.ClientAddr(request.PeerAsClient(span)),
 			request.ServerAddr(request.SpanHost(span)),
 			request.ServerPort(span.HostPort),
 		}
@@ -590,7 +600,7 @@ func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 			request.HTTPRequestMethod(span.Method),
 			request.HTTPResponseStatusCode(span.Status),
 			request.HTTPUrlFull(span.Path),
-			request.ServerAddr(request.SpanHost(span)),
+			request.ServerAddr(request.HostAsServer(span)),
 			request.ServerPort(span.HostPort),
 			request.HTTPRequestBodySize(int(span.RequestLength())),
 		}
@@ -599,12 +609,12 @@ func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 			semconv.RPCMethod(span.Path),
 			semconv.RPCSystemGRPC,
 			semconv.RPCGRPCStatusCodeKey.Int(span.Status),
-			request.ServerAddr(request.SpanHost(span)),
+			request.ServerAddr(request.HostAsServer(span)),
 			request.ServerPort(span.HostPort),
 		}
 	case request.EventTypeSQLClient:
 		attrs = []attribute.KeyValue{
-			request.ServerAddr(request.SpanHost(span)),
+			request.ServerAddr(request.HostAsServer(span)),
 			request.ServerPort(span.HostPort),
 			semconv.DBSystemOtherSQL, // We can distinguish in the future for MySQL, Postgres etc
 		}
@@ -621,7 +631,7 @@ func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 		}
 	case request.EventTypeRedisServer, request.EventTypeRedisClient:
 		attrs = []attribute.KeyValue{
-			request.ServerAddr(request.SpanHost(span)),
+			request.ServerAddr(request.HostAsServer(span)),
 			request.ServerPort(span.HostPort),
 			semconv.DBSystemRedis,
 		}
@@ -638,11 +648,11 @@ func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 	case request.EventTypeKafkaServer, request.EventTypeKafkaClient:
 		operation := request.MessagingOperationType(span.Method)
 		attrs = []attribute.KeyValue{
-			request.ServerAddr(request.SpanHost(span)),
+			request.ServerAddr(request.HostAsServer(span)),
 			request.ServerPort(span.HostPort),
 			semconv.MessagingSystemKafka,
 			semconv.MessagingDestinationName(span.Path),
-			semconv.MessagingClientID(span.OtherNamespace),
+			semconv.MessagingClientID(span.Statement),
 			operation,
 		}
 	}

@@ -79,6 +79,11 @@ spec:
             containerPort: {{ .Values.service.internalMetrics.targetPort | default .Values.config.data.internal_metrics.prometheus.port }}
             protocol: TCP
           {{- end }}
+          {{- if .Values.config.data.profile_port }}
+          - name: profile
+            containerPort: {{ .Values.config.data.profile_port }}
+            protocol: TCP
+          {{- end }}
           {{- with .Values.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
@@ -86,6 +91,10 @@ spec:
           env:
             - name: BEYLA_CONFIG_PATH
               value: "/etc/beyla/config/beyla-config.yml"
+          {{- if .Values.k8sCache.replicas }}
+            - name: BEYLA_KUBE_META_CACHE_ADDRESS
+              value: {{ .Values.k8sCache.service.name }}:{{ .Values.k8sCache.service.port }}
+          {{- end }}
           {{- range $key, $value := .Values.env }}
             - name: {{ $key }}
               value: "{{ $value }}"

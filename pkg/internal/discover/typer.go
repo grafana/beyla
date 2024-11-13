@@ -12,6 +12,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/exec"
 	"github.com/grafana/beyla/pkg/internal/goexec"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
+	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
@@ -26,10 +27,11 @@ type InstrumentedExecutable struct {
 // ExecTyperProvider classifies the discovered executables according to the
 // executable type (Go, generic...), and filters these executables
 // that are not instrumentable.
-func ExecTyperProvider(cfg *beyla.Config, metrics imetrics.Reporter) pipe.MiddleProvider[[]Event[ProcessMatch], []Event[ebpf.Instrumentable]] {
+func ExecTyperProvider(cfg *beyla.Config, metrics imetrics.Reporter, k8sInformer *kube.MetadataProvider) pipe.MiddleProvider[[]Event[ProcessMatch], []Event[ebpf.Instrumentable]] {
 	t := typer{
 		cfg:         cfg,
 		metrics:     metrics,
+		k8sInformer: k8sInformer,
 		log:         slog.With("component", "discover.ExecTyper"),
 		currentPids: map[int32]*exec.FileInfo{},
 	}
@@ -49,6 +51,7 @@ func ExecTyperProvider(cfg *beyla.Config, metrics imetrics.Reporter) pipe.Middle
 type typer struct {
 	cfg            *beyla.Config
 	metrics        imetrics.Reporter
+	k8sInformer    *kube.MetadataProvider
 	log            *slog.Logger
 	currentPids    map[int32]*exec.FileInfo
 	allGoFunctions []string
@@ -72,7 +75,7 @@ func (t *typer) FilterClassify(evs []Event[ProcessMatch]) []Event[ebpf.Instrumen
 				Namespace: ev.Obj.Criteria.Namespace,
 				ProcPID:   ev.Obj.Process.Pid,
 			}
-			if elfFile, err := exec.FindExecELF(ev.Obj.Process, svcID); err != nil {
+			if elfFile, err := exec.FindExecELF(ev.Obj.Process, svcID, t.k8sInformer.IsKubeEnabled()); err != nil {
 				t.log.Warn("error finding process ELF. Ignoring", "error", err)
 			} else {
 				t.currentPids[ev.Obj.Process.Pid] = elfFile

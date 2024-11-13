@@ -34,9 +34,10 @@ type TraceAttacher struct {
 	processInstances maps.MultiCounter[uint64]
 
 	// keeps a copy of all the tracers for a given executable path
-	existingTracers  map[uint64]*ebpf.ProcessTracer
-	reusableTracer   *ebpf.ProcessTracer
-	reusableGoTracer *ebpf.ProcessTracer
+	existingTracers     map[uint64]*ebpf.ProcessTracer
+	reusableTracer      *ebpf.ProcessTracer
+	reusableGoTracer    *ebpf.ProcessTracer
+	commonTracersLoaded bool
 
 	// Usually, only ebpf.Tracer implementations will send spans data to the read decorator.
 	// But on each new process, we will send a "process alive" span type to the read decorator, whose
@@ -122,7 +123,8 @@ func (ta *TraceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 		return false
 	}
 
-	ta.log.Info("instrumenting process", "cmd", ie.FileInfo.CmdExePath, "pid", ie.FileInfo.Pid, "ino", ie.FileInfo.Ino)
+	ta.log.Info("instrumenting process",
+		"cmd", ie.FileInfo.CmdExePath, "pid", ie.FileInfo.Pid, "ino", ie.FileInfo.Ino, "type", ie.Type)
 	ta.Metrics.InstrumentProcess(ie.FileInfo.ExecutableName())
 
 	// builds a tracer for that executable
@@ -141,20 +143,20 @@ func (ta *TraceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 				// instance of the executable has different DLLs loaded, e.g. libssl.so.
 				return ta.reuseTracer(ta.reusableTracer, ie)
 			} else {
-				programs = newGenericTracersGroup(ta.Cfg, ta.Metrics)
+				programs = ta.withCommonTracersGroup(newGenericTracersGroup(ta.Cfg, ta.Metrics))
 			}
 		} else {
 			if ta.reusableGoTracer != nil {
 				return ta.reuseTracer(ta.reusableGoTracer, ie)
 			}
 			tracerType = ebpf.Go
-			programs = newGoTracersGroup(ta.Cfg, ta.Metrics)
+			programs = ta.withCommonTracersGroup(newGoTracersGroup(ta.Cfg, ta.Metrics))
 		}
 	case svc.InstrumentableNodejs, svc.InstrumentableJava, svc.InstrumentableRuby, svc.InstrumentablePython, svc.InstrumentableDotnet, svc.InstrumentableGeneric, svc.InstrumentableRust, svc.InstrumentablePHP:
 		if ta.reusableTracer != nil {
 			return ta.reuseTracer(ta.reusableTracer, ie)
 		}
-		programs = newGenericTracersGroup(ta.Cfg, ta.Metrics)
+		programs = ta.withCommonTracersGroup(newGenericTracersGroup(ta.Cfg, ta.Metrics))
 	default:
 		ta.log.Warn("unexpected instrumentable type. This is basically a bug", "type", ie.Type)
 	}
@@ -188,7 +190,8 @@ func (ta *TraceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 	ta.log.Debug("new executable for discovered process",
 		"pid", ie.FileInfo.Pid,
 		"child", ie.ChildPids,
-		"exec", ie.FileInfo.CmdExePath)
+		"exec", ie.FileInfo.CmdExePath,
+		"type", ie.Type)
 	// allowing the tracer to forward traces from the discovered PID and its children processes
 	ta.monitorPIDs(tracer, ie)
 	ta.existingTracers[ie.FileInfo.Ino] = tracer
@@ -203,6 +206,17 @@ func (ta *TraceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 	}
 	ta.log.Debug(".done")
 	return true
+}
+
+func (ta *TraceAttacher) withCommonTracersGroup(tracers []ebpf.Tracer) []ebpf.Tracer {
+	if ta.commonTracersLoaded {
+		return tracers
+	}
+
+	ta.commonTracersLoaded = true
+	tracers = append(tracers, newCommonTracersGroup(ta.Cfg)...)
+
+	return tracers
 }
 
 func (ta *TraceAttacher) loadExecutable(ie *ebpf.Instrumentable) (*link.Executable, bool) {
@@ -231,7 +245,8 @@ func (ta *TraceAttacher) reuseTracer(tracer *ebpf.ProcessTracer, ie *ebpf.Instru
 	ta.log.Debug("reusing Generic tracer for",
 		"pid", ie.FileInfo.Pid,
 		"child", ie.ChildPids,
-		"exec", ie.FileInfo.CmdExePath)
+		"exec", ie.FileInfo.CmdExePath,
+		"language", ie.Type)
 
 	ta.monitorPIDs(tracer, ie)
 	ta.existingTracers[ie.FileInfo.Ino] = tracer
@@ -247,7 +262,8 @@ func (ta *TraceAttacher) updateTracerProbes(tracer *ebpf.ProcessTracer, ie *ebpf
 	ta.log.Debug("reusing Generic tracer for",
 		"pid", ie.FileInfo.Pid,
 		"child", ie.ChildPids,
-		"exec", ie.FileInfo.CmdExePath)
+		"exec", ie.FileInfo.CmdExePath,
+		"language", ie.Type)
 
 	ta.monitorPIDs(tracer, ie)
 
@@ -265,6 +281,8 @@ func (ta *TraceAttacher) monitorPIDs(tracer *ebpf.ProcessTracer, ie *ebpf.Instru
 		// in later stages of the pipeline, for better automatic service name
 		ie.FileInfo.Service.SetAutoName()
 	}
+
+	ie.FileInfo.Service.SDKLanguage = ie.Type
 
 	// allowing the tracer to forward traces from the discovered PID and its children processes
 	tracer.AllowPID(uint32(ie.FileInfo.Pid), ie.FileInfo.Ns, &ie.FileInfo.Service)

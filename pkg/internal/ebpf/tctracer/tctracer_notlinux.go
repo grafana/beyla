@@ -14,14 +14,13 @@ import (
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/exec"
 	"github.com/grafana/beyla/pkg/internal/goexec"
-	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
 type Tracer struct{}
 
-func New(_ *beyla.Config, _ imetrics.Reporter) *Tracer                       { return nil }
+func New(_ *beyla.Config) *Tracer                                            { return nil }
 func (p *Tracer) AllowPID(_, _ uint32, _ *svc.ID)                            {}
 func (p *Tracer) BlockPID(_, _ uint32)                                       {}
 func (p *Tracer) Load() (*ebpf.CollectionSpec, error)                        { return nil, nil }
@@ -40,3 +39,4 @@ func (p *Tracer) Constants() map[string]any                                  { r
 func (p *Tracer) SetupTC()                                                   {}
 func (p *Tracer) SetupTailCalls()                                            {}
 func (p *Tracer) RegisterOffsets(_ *exec.FileInfo, _ *goexec.Offsets)        {}
+func (p *Tracer) AddModuleCloser(uint64, ...io.Closer)                       {}

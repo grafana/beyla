@@ -8,13 +8,12 @@ import (
 
 	"github.com/mariomac/pipes/pipe"
 
-	"github.com/grafana/beyla-k8s-cache/pkg/informer"
-
 	attr "github.com/grafana/beyla/pkg/export/attributes/names"
 	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
+	"github.com/grafana/beyla/pkg/kubecache/informer"
 	"github.com/grafana/beyla/pkg/kubeflags"
 )
 
@@ -47,6 +46,9 @@ type KubernetesDecorator struct {
 	// Pods informer can't be disabled. For that purpose, you should disable the whole
 	// kubernetes metadata decoration.
 	DisableInformers []string `yaml:"disable_informers" env:"BEYLA_KUBE_DISABLE_INFORMERS"`
+
+	// MetaCacheAddress is the host:port address of the beyla-k8s-cache service instance
+	MetaCacheAddress string `yaml:"meta_cache_address" env:"BEYLA_KUBE_META_CACHE_ADDRESS"`
 }
 
 const (
@@ -98,11 +100,11 @@ func (md *metadataDecorator) do(span *request.Span) {
 		span.ServiceID.Metadata = map[attr.Name]string{}
 	}
 	// override the peer and host names from Kubernetes metadata, if found
-	if ip := md.db.ObjectMetaByIP(span.Host); ip != nil {
-		span.HostName = ip.Name
+	if name, _ := md.db.ServiceNameNamespaceForIP(span.Host); name != "" {
+		span.HostName = name
 	}
-	if ip := md.db.ObjectMetaByIP(span.Peer); ip != nil {
-		span.PeerName = ip.Name
+	if name, _ := md.db.ServiceNameNamespaceForIP(span.Peer); name != "" {
+		span.PeerName = name
 	}
 }
 
@@ -113,20 +115,15 @@ func (md *metadataDecorator) appendMetadata(span *request.Span, meta *informer.O
 		return
 	}
 	topOwner := kube.TopOwner(meta.Pod)
+	name, namespace := md.db.ServiceNameNamespaceForMetadata(meta)
 	// If the user has not defined criteria values for the reported
 	// service name and namespace, we will automatically set it from
 	// the kubernetes metadata
 	if span.ServiceID.AutoName() {
-		// By contract, we expect that our custom Informer cache (beyla-k8s-cache) returns the top owner name for a Pod
-		// (this is, instead of the ReplicaSet name, the Deployment name)
-		if topOwner != nil {
-			span.ServiceID.Name = topOwner.Name
-		} else {
-			span.ServiceID.Name = meta.Name
-		}
+		span.ServiceID.Name = name
 	}
 	if span.ServiceID.Namespace == "" {
-		span.ServiceID.Namespace = meta.Namespace
+		span.ServiceID.Namespace = namespace
 	}
 	// overriding the UID here will avoid reusing the OTEL resource reporter
 	// if the application/process was discovered and reported information
@@ -179,6 +176,7 @@ func OwnerLabelName(kind string) attr.Name {
 func KubeClusterName(ctx context.Context, cfg *KubernetesDecorator) string {
 	log := klog().With("func", "KubeClusterName")
 	if cfg.ClusterName != "" {
+		log.Debug("using cluster name from configuration", "cluster_name", cfg.ClusterName)
 		return cfg.ClusterName
 	}
 	retries := 0

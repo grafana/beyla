@@ -9,7 +9,7 @@ import (
 type InstrumentableType int
 
 const (
-	InstrumentableGolang = InstrumentableType(iota)
+	InstrumentableGolang InstrumentableType = iota + 1
 	InstrumentableJava
 	InstrumentableDotnet
 	InstrumentablePython
@@ -41,7 +41,8 @@ func (it InstrumentableType) String() string {
 	case InstrumentableGeneric:
 		return "generic"
 	default:
-		return "unknown(bug!)"
+		// if this appears, it's a bug!!
+		return "unknown"
 	}
 }
 

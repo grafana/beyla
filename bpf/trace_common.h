@@ -93,11 +93,10 @@ static __always_inline unsigned char *bpf_strstr_tp_loop(unsigned char *buf, int
     bpf_loop(nr_loops, tp_match, &data, 0);
 
     if (data.pos) {
-        u32 pos = (data.pos > (TRACE_BUF_SIZE - TRACE_PARENT_HEADER_LEN)) ? 0 : data.pos;
-        return &(buf[pos]);
+        return (data.pos > (TRACE_BUF_SIZE - TRACE_PARENT_HEADER_LEN)) ? NULL : &(buf[data.pos]);
     }
 
-    return 0;
+    return NULL;
 }
 #endif
 
@@ -174,7 +173,11 @@ static __always_inline void delete_client_trace_info(pid_connection_info_t *pid_
     dbg_print_http_connection_info(&pid_conn->conn);
 
     bpf_map_delete_elem(&trace_map, &pid_conn->conn);
-    bpf_map_delete_elem(&outgoing_trace_map, &pid_conn->conn);
+    egress_key_t e_key = {
+        .d_port = pid_conn->conn.d_port,
+        .s_port = pid_conn->conn.s_port,
+    };
+    bpf_map_delete_elem(&outgoing_trace_map, &e_key);
     bpf_map_delete_elem(&client_connect_info, pid_conn);
 }
 
@@ -214,7 +217,12 @@ static __always_inline void server_or_client_trace(http_connection_metadata_t *m
         // the span id with the SEQ/ACK pair.
         u64 id = bpf_get_current_pid_tgid();
         tp_p->pid = pid_from_pid_tgid(id);
-        bpf_map_update_elem(&outgoing_trace_map, conn, tp_p, BPF_ANY);
+        egress_key_t e_key = {
+            .d_port = conn->d_port,
+            .s_port = conn->s_port,
+        };
+
+        bpf_map_update_elem(&outgoing_trace_map, &e_key, tp_p, BPF_ANY);
     }
 }
 
@@ -270,7 +278,7 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
             } else {
                 existing_tp = trace_info_for_connection(conn);
 
-                if (correlated_requests(tp_p, existing_tp)) {
+                if (!disable_black_box_cp && correlated_requests(tp_p, existing_tp)) {
                     found_tp = 1;
                     bpf_dbg_printk("Found existing correlated tp for server request");
                     __builtin_memcpy(
@@ -298,7 +306,7 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
     // The below buffer scan can be expensive on high volume of requests. We make it optional
     // for customers to enable it. Off by default.
     if (!capture_header_buffer) {
-        bpf_map_update_elem(&trace_map, conn, tp_p, BPF_ANY);
+        set_trace_info_for_connection(conn, tp_p);
         server_or_client_trace(meta, conn, tp_p);
         return;
     }
@@ -332,7 +340,7 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
     }
 #endif
 
-    bpf_map_update_elem(&trace_map, conn, tp_p, BPF_ANY);
+    set_trace_info_for_connection(conn, tp_p);
     server_or_client_trace(meta, conn, tp_p);
 }
 

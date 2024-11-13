@@ -1,6 +1,6 @@
 # beyla
 
-![Version: 1.4.3](https://img.shields.io/badge/Version-1.4.3-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 1.8.4](https://img.shields.io/badge/AppVersion-1.8.4-informational?style=flat-square)
+![Version: 1.4.11](https://img.shields.io/badge/Version-1.4.11-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 1.8.6](https://img.shields.io/badge/AppVersion-1.8.6-informational?style=flat-square)
 
 eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network metrics.
 
@@ -13,6 +13,7 @@ eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network
 | mariomac |  | <https://github.com/mariomac> |
 | grcevski |  | <https://github.com/grcevski> |
 | marctc |  | <https://github.com/marctc> |
+| rafaelroquetto |  | <https://github.com/rafaelroquetto> |
 
 ## Source Code
 
@@ -40,6 +41,21 @@ eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network
 | image.registry | string | `"docker.io"` | Beyla image registry (defaults to docker.io) |
 | image.repository | string | `"grafana/beyla"` | Beyla image repository. |
 | image.tag | string | `nil` | Beyla image tag. When empty, the Chart's appVersion is used. |
+| k8sCache | object | `{"env":{},"envValueFrom":{},"image":{"digest":null,"pullPolicy":"IfNotPresent","pullSecrets":[],"registry":"docker.io","repository":"grafana/beyla-k8s-cache","tag":null},"profile_port":0,"replicas":0,"resources":{},"service":{"annotations":{},"labels":{},"name":"beyla-k8s-cache","port":50055}}` | Options to deploy the Kubernetes metadata cache as a separate service |
+| k8sCache.env | object | `{}` | extra environment variables |
+| k8sCache.envValueFrom | object | `{}` | extra environment variables to be set from resources such as k8s configMaps/secrets |
+| k8sCache.image.digest | string | `nil` | K8s Cache image's SHA256 digest (either in format "sha256:XYZ" or "XYZ"). When set, will override `image.tag`. |
+| k8sCache.image.pullPolicy | string | `"IfNotPresent"` | K8s Cache image pull policy. |
+| k8sCache.image.pullSecrets | list | `[]` | Optional set of image pull secrets. |
+| k8sCache.image.registry | string | `"docker.io"` | K8s Cache image registry (defaults to docker.io) |
+| k8sCache.image.repository | string | `"grafana/beyla-k8s-cache"` | K8s Cache image repository. |
+| k8sCache.image.tag | string | `nil` | K8s Cache image tag. When empty, the Chart's appVersion is used. |
+| k8sCache.profile_port | int | `0` | Enables the profile port for the Beyla cache |
+| k8sCache.replicas | int | `0` | Number of replicas for the Kubernetes metadata chache service. 0 disables the service. |
+| k8sCache.service.annotations | object | `{}` | Service annotations. |
+| k8sCache.service.labels | object | `{}` | Service labels. |
+| k8sCache.service.name | string | `"beyla-k8s-cache"` | Name of both the Service and Deployment |
+| k8sCache.service.port | int | `50055` | Port of the Kubernetes metadata cache service. |
 | nameOverride | string | `""` | Overrides the chart's name |
 | namespaceOverride | string | `""` | Override the deployment namespace |
 | nodeSelector | object | `{}` | The nodeSelector field allows user to constrain which nodes your DaemonSet pods are scheduled to based on labels on the node |

@@ -5,6 +5,7 @@
 #include "bpf_helpers.h"
 #include "tcp_info.h"
 #include "tracing.h"
+#include "bpf_dbg.h"
 
 enum { MIN_IP_LEN = 20, MAX_TC_TP_LEN = 20, TC_TP_ID = 0x1488, MAX_IPV6_OPTS_LEN = 24 };
 
@@ -16,10 +17,12 @@ static __always_inline void populate_span_id_from_tcp_info(tp_info_pid_t *new_tp
 }
 
 static __always_inline void print_tp(tp_info_pid_t *new_tp) {
+#ifdef BPF_DEBUG
     unsigned char tp_buf[TP_MAX_VAL_LENGTH];
 
     make_tp_string(tp_buf, &new_tp->tp);
-    bpf_printk("tp: %s", tp_buf);
+    bpf_dbg_printk("tp: %s", tp_buf);
+#endif
 }
 
 static __always_inline void
@@ -27,16 +30,16 @@ parse_ip_options_ipv4(struct __sk_buff *skb, connection_info_t *conn, protocol_i
     u16 key = 0;
     int ip_off = MIN_IP_LEN + ETH_HLEN;
 
-    print_http_connection_info(conn);
+    dbg_print_http_connection_info(conn);
 
     sort_connection_info(conn);
     bpf_skb_load_bytes(skb, ip_off, &key, sizeof(key));
-    bpf_printk("options %llx, len = %d", key, tcp->ip_len);
+    bpf_dbg_printk("options %llx, len = %d", key, tcp->ip_len);
     if (key == TC_TP_ID) {
         tp_info_pid_t *existing_tp =
             (tp_info_pid_t *)bpf_map_lookup_elem(&incoming_trace_map, conn);
         if (!existing_tp) {
-            bpf_printk("Found tp context in opts! ihl = %d", tcp->ip_len);
+            bpf_dbg_printk("Found tp context in opts! ihl = %d", tcp->ip_len);
             tp_info_pid_t new_tp = {.pid = 0, .valid = 1};
             populate_span_id_from_tcp_info(&new_tp, tcp);
 
@@ -45,17 +48,18 @@ parse_ip_options_ipv4(struct __sk_buff *skb, connection_info_t *conn, protocol_i
                 skb, ip_off + sizeof(key), &new_tp.tp.trace_id[0], sizeof(new_tp.tp.trace_id));
 
             print_tp(&new_tp);
+
             bpf_map_update_elem(&incoming_trace_map, conn, &new_tp, BPF_ANY);
         } else {
-            bpf_printk("ignoring existing tp");
+            bpf_dbg_printk("ignoring existing tp");
         }
     }
 }
 
 static __always_inline void
 parse_ip_options_ipv6(struct __sk_buff *skb, connection_info_t *conn, protocol_info_t *tcp) {
-    bpf_printk("IPv6 ingress");
-    print_http_connection_info(conn);
+    bpf_dbg_printk("IPv6 ingress");
+    dbg_print_http_connection_info(conn);
 
     sort_connection_info(conn);
     tp_info_pid_t *existing_tp = (tp_info_pid_t *)bpf_map_lookup_elem(&incoming_trace_map, conn);
@@ -101,7 +105,7 @@ static __always_inline u8 inject_tc_ip_options_ipv4(struct __sk_buff *skb,
         new_hdr_len += (MAX_TC_TP_LEN / 4); // IHL is a number of 32bit words
         new_hdr_len |= hdr_ver & 0xf0;
 
-        bpf_printk(
+        bpf_dbg_printk(
             "prev h_len %d, new_h_len %d, new_tot_len %d", hdr_len, new_hdr_len, new_tot_len);
 
         bpf_skb_store_bytes(skb, offset_ip_tot_len, &new_tot_len, sizeof(u16), 0);

@@ -19,6 +19,28 @@ type bpf_debugConnectionInfoT struct {
 	D_port uint16
 }
 
+type bpf_debugEgressKeyT struct {
+	S_port uint16
+	D_port uint16
+}
+
+type bpf_debugGoAddrKeyT struct {
+	Pid  uint64
+	Addr uint64
+}
+
+type bpf_debugHttpFuncInvocationT struct {
+	StartMonotimeNs uint64
+	Tp              struct {
+		TraceId  [16]uint8
+		SpanId   [8]uint8
+		ParentId [8]uint8
+		Ts       uint64
+		Flags    uint8
+		_        [7]byte
+	}
+}
+
 type bpf_debugHttpInfoT struct {
 	Flags           uint8
 	_               [1]byte
@@ -118,12 +140,14 @@ type bpf_debugProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_debugMapSpecs struct {
-	DebugEvents         *ebpf.MapSpec `ebpf:"debug_events"`
-	IncomingTraceMap    *ebpf.MapSpec `ebpf:"incoming_trace_map"`
-	OngoingHttp         *ebpf.MapSpec `ebpf:"ongoing_http"`
-	OngoingHttpFallback *ebpf.MapSpec `ebpf:"ongoing_http_fallback"`
-	OutgoingTraceMap    *ebpf.MapSpec `ebpf:"outgoing_trace_map"`
-	TraceMap            *ebpf.MapSpec `ebpf:"trace_map"`
+	DebugEvents               *ebpf.MapSpec `ebpf:"debug_events"`
+	IncomingTraceMap          *ebpf.MapSpec `ebpf:"incoming_trace_map"`
+	OngoingGoHttp             *ebpf.MapSpec `ebpf:"ongoing_go_http"`
+	OngoingHttp               *ebpf.MapSpec `ebpf:"ongoing_http"`
+	OngoingHttpClientRequests *ebpf.MapSpec `ebpf:"ongoing_http_client_requests"`
+	OngoingHttpFallback       *ebpf.MapSpec `ebpf:"ongoing_http_fallback"`
+	OutgoingTraceMap          *ebpf.MapSpec `ebpf:"outgoing_trace_map"`
+	TraceMap                  *ebpf.MapSpec `ebpf:"trace_map"`
 }
 
 // bpf_debugObjects contains all objects after they have been loaded into the kernel.
@@ -145,19 +169,23 @@ func (o *bpf_debugObjects) Close() error {
 //
 // It can be passed to loadBpf_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_debugMaps struct {
-	DebugEvents         *ebpf.Map `ebpf:"debug_events"`
-	IncomingTraceMap    *ebpf.Map `ebpf:"incoming_trace_map"`
-	OngoingHttp         *ebpf.Map `ebpf:"ongoing_http"`
-	OngoingHttpFallback *ebpf.Map `ebpf:"ongoing_http_fallback"`
-	OutgoingTraceMap    *ebpf.Map `ebpf:"outgoing_trace_map"`
-	TraceMap            *ebpf.Map `ebpf:"trace_map"`
+	DebugEvents               *ebpf.Map `ebpf:"debug_events"`
+	IncomingTraceMap          *ebpf.Map `ebpf:"incoming_trace_map"`
+	OngoingGoHttp             *ebpf.Map `ebpf:"ongoing_go_http"`
+	OngoingHttp               *ebpf.Map `ebpf:"ongoing_http"`
+	OngoingHttpClientRequests *ebpf.Map `ebpf:"ongoing_http_client_requests"`
+	OngoingHttpFallback       *ebpf.Map `ebpf:"ongoing_http_fallback"`
+	OutgoingTraceMap          *ebpf.Map `ebpf:"outgoing_trace_map"`
+	TraceMap                  *ebpf.Map `ebpf:"trace_map"`
 }
 
 func (m *bpf_debugMaps) Close() error {
 	return _Bpf_debugClose(
 		m.DebugEvents,
 		m.IncomingTraceMap,
+		m.OngoingGoHttp,
 		m.OngoingHttp,
+		m.OngoingHttpClientRequests,
 		m.OngoingHttpFallback,
 		m.OutgoingTraceMap,
 		m.TraceMap,

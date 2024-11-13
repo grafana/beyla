@@ -130,7 +130,7 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 		loader = loadBpf_debug
 	}
 
-	if p.cfg.EBPF.TrackRequestHeaders {
+	if p.cfg.EBPF.TrackRequestHeaders || p.cfg.EBPF.UseTCForL7CP {
 		if ebpfcommon.SupportsEBPFLoops() {
 			p.log.Info("Found Linux kernel later than 5.17, enabling trace information parsing")
 			loader = loadBpf_tp
@@ -172,6 +172,8 @@ func (p *Tracer) SetupTailCalls() {
 func (p *Tracer) Constants() map[string]any {
 	m := make(map[string]any, 2)
 
+	m["wakeup_data_bytes"] = uint32(p.cfg.EBPF.WakeupLen) * uint32(unsafe.Sizeof(ebpfcommon.HTTPRequestTrace{}))
+
 	// The eBPF side does some basic filtering of events that do not belong to
 	// processes which we monitor. We filter more accurately in the userspace, but
 	// for performance reasons we enable the PID based filtering in eBPF.
@@ -182,7 +184,7 @@ func (p *Tracer) Constants() map[string]any {
 		m["filter_pids"] = int32(0)
 	}
 
-	if p.cfg.EBPF.TrackRequestHeaders {
+	if p.cfg.EBPF.TrackRequestHeaders || p.cfg.EBPF.UseTCForL7CP {
 		m["capture_header_buffer"] = int32(1)
 	} else {
 		m["capture_header_buffer"] = int32(0)
@@ -190,6 +192,14 @@ func (p *Tracer) Constants() map[string]any {
 
 	if p.cfg.EBPF.HighRequestVolume {
 		m["high_request_volume"] = uint32(1)
+	} else {
+		m["high_request_volume"] = uint32(0)
+	}
+
+	if p.cfg.EBPF.DisableBlackBoxCP {
+		m["disable_black_box_cp"] = uint32(1)
+	} else {
+		m["disable_black_box_cp"] = uint32(0)
 	}
 
 	// TODO: These need to be moved to RegisterOffsets if they change position
@@ -330,12 +340,10 @@ func (p *Tracer) UProbes() map[string]map[string]ebpfcommon.FunctionPrograms {
 			"_ZN4node9AsyncWrap10AsyncResetEN2v85LocalINS1_6ObjectEEEdb": {
 				Required: false,
 				Start:    p.bpfObjects.AsyncReset,
-				End:      p.bpfObjects.AsyncResetRet,
 			},
 			"_ZN4node9AsyncWrap10AsyncResetERKN2v820FunctionCallbackInfoINS1_5ValueEEE": {
 				Required: false,
 				Start:    p.bpfObjects.AsyncReset,
-				End:      p.bpfObjects.AsyncResetRet,
 			},
 		},
 	}

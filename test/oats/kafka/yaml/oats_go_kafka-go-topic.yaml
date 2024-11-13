@@ -1,0 +1,39 @@
+docker-compose:
+  generator: generic
+  files:
+    - ../docker-compose-beyla-go-kafka-go.yml
+input:
+  - path: '/withTopic'
+
+interval: 500ms
+expected:
+  traces:
+    - traceql: '{ .messaging.operation.type = "publish" && .messaging.destination.name="logging"}'
+      spans:
+        - name: 'logging publish'
+          attributes:
+            messaging.destination.name: logging
+            messaging.operation.type: publish
+            messaging.system: kafka
+            server.port: "9092"
+    - traceql: '{ .messaging.operation.type = "process" && .messaging.destination.name="logging"}'
+      spans:
+        - name: 'logging process'
+          attributes:
+            messaging.destination.name: logging
+            messaging.operation.type: process
+            messaging.system: kafka
+            server.port: "9092"
+  metrics:
+    - promql: 'messaging_publish_duration_count{messaging_system="kafka", messaging_destination_name="logging"}'
+      value: "> 0"
+    - promql: 'messaging_publish_duration_bucket{le="0"}'
+      value: "== 0"
+    - promql: 'messaging_publish_duration_bucket{le="10"}'
+      value: "> 0"
+    - promql: 'messaging_process_duration_count{messaging_system="kafka", messaging_destination_name="logging"}'
+      value: "> 0"
+    - promql: 'messaging_process_duration_bucket{le="0"}'
+      value: "== 0"
+    - promql: 'messaging_process_duration_bucket{le="10"}'
+      value: "> 0"

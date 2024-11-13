@@ -19,6 +19,11 @@ type bpf_tp_debugConnectionInfoT struct {
 	D_port uint16
 }
 
+type bpf_tp_debugEgressKeyT struct {
+	S_port uint16
+	D_port uint16
+}
+
 type bpf_tp_debugFramerFuncInvocationT struct {
 	FramerPtr uint64
 	Tp        bpf_tp_debugTpInfoT
@@ -291,6 +296,7 @@ type bpf_tp_debugMapSpecs struct {
 	KafkaRequests                 *ebpf.MapSpec `ebpf:"kafka_requests"`
 	Newproc1                      *ebpf.MapSpec `ebpf:"newproc1"`
 	OngoingClientConnections      *ebpf.MapSpec `ebpf:"ongoing_client_connections"`
+	OngoingGoHttp                 *ebpf.MapSpec `ebpf:"ongoing_go_http"`
 	OngoingGoroutines             *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
 	OngoingGrpcClientRequests     *ebpf.MapSpec `ebpf:"ongoing_grpc_client_requests"`
 	OngoingGrpcHeaderWrites       *ebpf.MapSpec `ebpf:"ongoing_grpc_header_writes"`
@@ -348,6 +354,7 @@ type bpf_tp_debugMaps struct {
 	KafkaRequests                 *ebpf.Map `ebpf:"kafka_requests"`
 	Newproc1                      *ebpf.Map `ebpf:"newproc1"`
 	OngoingClientConnections      *ebpf.Map `ebpf:"ongoing_client_connections"`
+	OngoingGoHttp                 *ebpf.Map `ebpf:"ongoing_go_http"`
 	OngoingGoroutines             *ebpf.Map `ebpf:"ongoing_goroutines"`
 	OngoingGrpcClientRequests     *ebpf.Map `ebpf:"ongoing_grpc_client_requests"`
 	OngoingGrpcHeaderWrites       *ebpf.Map `ebpf:"ongoing_grpc_header_writes"`
@@ -388,6 +395,7 @@ func (m *bpf_tp_debugMaps) Close() error {
 		m.KafkaRequests,
 		m.Newproc1,
 		m.OngoingClientConnections,
+		m.OngoingGoHttp,
 		m.OngoingGoroutines,
 		m.OngoingGrpcClientRequests,
 		m.OngoingGrpcHeaderWrites,

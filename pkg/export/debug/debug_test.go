@@ -11,6 +11,7 @@ import (
 	trace2 "go.opentelemetry.io/otel/trace"
 
 	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
 func TestTracePrinterValidEnabled(t *testing.T) {
@@ -39,6 +40,7 @@ func TestTracePrinterValidEnabled(t *testing.T) {
 
 func traceFuncHelper(t *testing.T, tracePrinter TracePrinter) string {
 	fakeSpan := request.Span{
+		ServiceID:      svc.ID{Name: "bar", Namespace: "foo", SDKLanguage: svc.InstrumentableGolang},
 		Type:           request.EventTypeHTTP,
 		Method:         "method",
 		Path:           "path",
@@ -94,8 +96,8 @@ func traceFuncHelper(t *testing.T, tracePrinter TracePrinter) string {
 }
 
 func TestTracePrinterResolve_PrinterText(t *testing.T) {
-	expected := "(25µs[20µs]) HTTP 200 method path [peer as peername:1234]->" +
-		"[host as hostname:5678] size:1024B svc=[ go]" +
+	expected := "(25µs[20µs]) HTTP 200 method path [peer as peername.otherns:1234]->" +
+		"[host as hostname.foo:5678] size:1024B svc=[foo/bar go]" +
 		" traceparent=[00-01020300000000000000000000000000-0102030000000000[0102040000000000]-01]\n"
 
 	actual := traceFuncHelper(t, TracePrinterText)

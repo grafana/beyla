@@ -185,13 +185,25 @@ func (o *connection) watchForActiveConnection() {
 }
 
 func (o *connection) On(event *informer.Event) error {
-	o.barrier <- struct{}{}
+	if err := o.unlockBarrier("BEFORE"); err != nil {
+		return err
+	}
 	err := o.server.Send(event)
 	if err != nil {
 		slog.Debug("sending message. Closing client connection", "clientID", o.ID(), "error", err)
 		o.cancel()
 		return err
 	}
-	o.barrier <- struct{}{}
-	return nil
+	return o.unlockBarrier("AFTER")
+}
+
+// TODO: remove this method and use directly o.barrier <- struct{}{}
+// after we verify the execution is not blocked here
+func (o *connection) unlockBarrier(position string) error {
+	select {
+	case o.barrier <- struct{}{}:
+		return nil
+	case <-time.After(o.sendTimeout):
+		return fmt.Errorf("barrier blocked %s server.Send. This mostly looks as a bug", position)
+	}
 }

@@ -185,14 +185,17 @@ func TestBlockedClients(t *testing.T) {
 	}()
 
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		// verify that some clients are disconnected after blocked for a given timeout
-		// unblocking the rest of clients
-		require.GreaterOrEqual(t, never1.readMessages.Load(), int32(createdPods))
-		require.GreaterOrEqual(t, never2.readMessages.Load(), int32(createdPods))
-		require.GreaterOrEqual(t, never3.readMessages.Load(), int32(createdPods))
+		// the clients that got stalled, just received the expected number of messages
+		// before they got blocked
 		require.EqualValues(t, 5, stall5.readMessages.Load())
 		require.EqualValues(t, 10, stall10.readMessages.Load())
 		require.EqualValues(t, 15, stall15.readMessages.Load())
+
+		// but that did not block the rest of clients, which got all the expected messages
+		require.GreaterOrEqual(t, never1.readMessages.Load(), int32(createdPods))
+		require.GreaterOrEqual(t, never2.readMessages.Load(), int32(createdPods))
+		require.GreaterOrEqual(t, never3.readMessages.Load(), int32(createdPods))
+
 	})
 
 	// we don't exit until all the pods have been created, to avoid failing the
@@ -275,7 +278,8 @@ func (csc *countingStallingClient) Start(ctx context.Context, t *testing.T, port
 	// Receive messages
 	for {
 		if csc.stallAfterMessages == csc.readMessages.Load() {
-			// just block without reading anything. Expecting that the connection is closed
+			// just block without doing any connection activity
+			// nor closing/releasing the connection
 			<-stream.Context().Done()
 			return
 		}

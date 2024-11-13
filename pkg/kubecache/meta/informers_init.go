@@ -81,7 +81,7 @@ func WithKubeClient(client kubernetes.Interface) InformerOption {
 }
 
 func InitInformers(ctx context.Context, opts ...InformerOption) (*Informers, error) {
-	config := &informersConfig{resyncPeriod: 30 * time.Minute}
+	config := &informersConfig{resyncPeriod: defaultResyncTime}
 	for _, opt := range opts {
 		opt(config)
 	}

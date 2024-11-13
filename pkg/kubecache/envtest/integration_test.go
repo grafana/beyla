@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -88,7 +89,7 @@ func TestMain(m *testing.M) {
 	// Create and start informers client cache
 	iConfig := kubecache.DefaultConfig
 	iConfig.Port = freePort
-	svc := service.InformersCache{Config: &iConfig}
+	svc := service.InformersCache{Config: &iConfig, SendTimeout: 150 * time.Millisecond}
 	go func() {
 		if err := svc.Run(ctx,
 			meta.WithResyncPeriod(iConfig.InformerResyncPeriod),
@@ -143,6 +144,62 @@ func TestAPIs(t *testing.T) {
 	})
 }
 
+func TestBlockedClients(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	// a varied number of cache clients connect concurrently. Some of them are blocked
+	// after a while, and they don't release the connection
+	never1 := &countingStallingClient{stallAfterMessages: 1000000}
+	never2 := &countingStallingClient{stallAfterMessages: 1000000}
+	never3 := &countingStallingClient{stallAfterMessages: 1000000}
+	stall5 := &countingStallingClient{stallAfterMessages: 5}
+	stall10 := &countingStallingClient{stallAfterMessages: 10}
+	stall15 := &countingStallingClient{stallAfterMessages: 15}
+	go stall15.Start(ctx, t, freePort)
+	go never1.Start(ctx, t, freePort)
+	go stall5.Start(ctx, t, freePort)
+	go never2.Start(ctx, t, freePort)
+	go stall10.Start(ctx, t, freePort)
+	go never3.Start(ctx, t, freePort)
+
+	// generating a large number of notifications until the gRPC buffer of the
+	// server-to-client connections is full, so the "Send" operation is blocked
+	allSent := make(chan struct{})
+	const createdPods = 1500
+	go func() {
+		for n := 0; n < createdPods; n++ {
+			require.NoError(t, k8sClient.Create(ctx, &corev1.Pod{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      fmt.Sprintf("pod-%02d", n),
+					Namespace: "default",
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{Name: "test-container", Image: "nginx"},
+					},
+				},
+			}))
+		}
+		close(allSent)
+	}()
+
+	test.Eventually(t, timeout, func(t require.TestingT) {
+		// verify that some clients are disconnected after blocked for a given timeout
+		// unblocking the rest of clients
+		require.GreaterOrEqual(t, never1.readMessages.Load(), int32(createdPods))
+		require.GreaterOrEqual(t, never2.readMessages.Load(), int32(createdPods))
+		require.GreaterOrEqual(t, never3.readMessages.Load(), int32(createdPods))
+		require.EqualValues(t, 5, stall5.readMessages.Load())
+		require.EqualValues(t, 10, stall10.readMessages.Load())
+		require.EqualValues(t, 15, stall15.readMessages.Load())
+	})
+
+	// we don't exit until all the pods have been created, to avoid failing the
+	// tests because the client.Create operation fails due to premature context cancellation
+	ReadChannel(t, allSent, timeout)
+}
+
 func ReadChannel[T any](t require.TestingT, inCh <-chan T, timeout time.Duration) T {
 	var item T
 	select {
@@ -192,4 +249,39 @@ func (sc *serviceClient) Start(ctx context.Context) error {
 
 	}()
 	return nil
+}
+
+// a fake client that counts the received messages and gets blocked (without closing the connection)
+// after a defined number of messages
+type countingStallingClient struct {
+	readMessages       atomic.Int32
+	stallAfterMessages int32
+}
+
+func (csc *countingStallingClient) Start(ctx context.Context, t *testing.T, port int) {
+	// Set up a connection to the server.
+	address := fmt.Sprintf("127.0.0.1:%d", port)
+	conn, err := grpc.NewClient(address,
+		grpc.WithTransportCredentials(insecure.NewCredentials()))
+	// nolint:staticcheck
+	defer conn.Close()
+	require.NoError(t, err)
+	client := informer.NewEventStreamServiceClient(conn)
+
+	// Subscribe to the event stream.
+	stream, err := client.Subscribe(ctx, &informer.SubscribeMessage{})
+	require.NoError(t, err)
+
+	// Receive messages
+	for {
+		if csc.stallAfterMessages == csc.readMessages.Load() {
+			// just block without reading anything. Expecting that the connection is closed
+			<-stream.Context().Done()
+			return
+		}
+		if _, err := stream.Recv(); err == nil {
+			csc.readMessages.Add(1)
+		}
+		// discarding event
+	}
 }

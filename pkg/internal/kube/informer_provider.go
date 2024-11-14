@@ -158,7 +158,6 @@ func (mp *MetadataProvider) CurrentNodeName(ctx context.Context) (string, error)
 // initLocalInformers initializes an informer client that directly connects to the Node Kube API
 // for getting informer data
 func (mp *MetadataProvider) initLocalInformers(ctx context.Context) (*meta.Informers, error) {
-	done := make(chan error)
 	opts := append(disabledInformerOpts(mp.cfg.DisabledInformers),
 		meta.WithResyncPeriod(mp.cfg.ResyncPeriod),
 		meta.WithKubeConfigPath(mp.cfg.KubeConfigPath),
@@ -167,12 +166,7 @@ func (mp *MetadataProvider) initLocalInformers(ctx context.Context) (*meta.Infor
 		meta.WaitForCacheSync(),
 		meta.WithCacheSyncTimeout(mp.cfg.SyncTimeout),
 	)
-	informers, err := meta.InitInformers(ctx, opts...)
-	if err != nil {
-		done <- err
-	}
-	close(done)
-	return informers, nil
+	return meta.InitInformers(ctx, opts...)
 }
 
 // initRemoteInformerCacheClient connects via gRPC/Protobuf to a remote beyla-k8s-cache service, to avoid that

@@ -43,6 +43,7 @@ import (
 	"github.com/grafana/beyla/pkg/export/attributes"
 	attr "github.com/grafana/beyla/pkg/export/attributes/names"
 	"github.com/grafana/beyla/pkg/export/instrumentations"
+	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
@@ -341,10 +342,37 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 
 }
 
-func getTraceSettings(ctxInfo *global.ContextInfo, cfg TracesConfig, in trace.SpanExporter) exporter.Settings {
-	telemetryLevel := configtelemetry.LevelNone
-	traceProvider := tracenoop.NewTracerProvider()
+func internalMetricsEnabled(ctxInfo *global.ContextInfo) bool {
+	internalMetrics := ctxInfo.Metrics
+	if internalMetrics == nil {
+		return false
+	}
+	_, ok := internalMetrics.(imetrics.NoopReporter)
 
+	return !ok
+}
+
+func instrumentTraceExporter(in trace.SpanExporter, internalMetrics imetrics.Reporter) trace.SpanExporter {
+	// avoid wrapping the instrumented exporter if we don't have
+	// internal instrumentation (NoopReporter)
+	if _, ok := internalMetrics.(imetrics.NoopReporter); ok || internalMetrics == nil {
+		return in
+	}
+	return &instrumentedTracesExporter{
+		SpanExporter: in,
+		internal:     internalMetrics,
+	}
+}
+
+func getTraceSettings(ctxInfo *global.ContextInfo, cfg TracesConfig, in trace.SpanExporter) exporter.Settings {
+	var traceProvider trace2.TracerProvider
+	telemetryLevel := configtelemetry.LevelNone
+	traceProvider = tracenoop.NewTracerProvider()
+	if internalMetricsEnabled(ctxInfo) {
+		telemetryLevel = configtelemetry.LevelBasic
+		spanExporter := instrumentTraceExporter(in, ctxInfo.Metrics)
+		traceProvider = trace.NewTracerProvider(trace.WithBatcher(spanExporter))
+	}
 	meterProvider := metric.NewMeterProvider()
 	telemetrySettings := component.TelemetrySettings{
 		Logger:        zap.NewNop(),

@@ -19,7 +19,10 @@ import (
 	"go.opentelemetry.io/collector/config/configretry"
 	"go.opentelemetry.io/collector/config/configtelemetry"
 	"go.opentelemetry.io/collector/config/configtls"
+	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/exporter"
+	"go.opentelemetry.io/collector/exporter/exporterbatcher"
+	"go.opentelemetry.io/collector/exporter/exporterhelper"
 	"go.opentelemetry.io/collector/exporter/otlpexporter"
 	"go.opentelemetry.io/collector/exporter/otlphttpexporter"
 	"go.opentelemetry.io/collector/pdata/pcommon"
@@ -257,11 +260,14 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 		}
 		factory := otlphttpexporter.NewFactory()
 		config := factory.CreateDefaultConfig().(*otlphttpexporter.Config)
-		// For OTLP HTTP there's not baching API, so we use QueueConfig
+		// Experimental API for batching
 		// See: https://github.com/open-telemetry/opentelemetry-collector/issues/8122
+		batchCfg := exporterbatcher.NewDefaultConfig()
 		if cfg.MaxQueueSize > 0 {
-			config.QueueConfig.Enabled = true
-			config.QueueConfig.QueueSize = cfg.MaxQueueSize
+			batchCfg.MaxSizeConfig.MaxSizeItems = cfg.MaxExportBatchSize
+			if cfg.BatchTimeout > 0 {
+				batchCfg.FlushTimeout = cfg.BatchTimeout
+			}
 		}
 		config.RetryConfig = getRetrySettings(cfg)
 		config.ClientConfig = confighttp.ClientConfig{
@@ -274,7 +280,20 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 		}
 		slog.Debug("getTracesExporter: confighttp.ClientConfig created", "endpoint", config.ClientConfig.Endpoint)
 		set := getTraceSettings(ctxInfo, cfg, t)
-		return factory.CreateTraces(ctx, set, config)
+		exporter, err := factory.CreateTraces(ctx, set, config)
+		if err != nil {
+			slog.Error("can't create OTLP HTTP traces exporter", "error", err)
+			return nil, err
+		}
+		// TODO: remove this once the batcher helper is added to otlphttpexporter
+		return exporterhelper.NewTraces(ctx, set, cfg,
+			exporter.ConsumeTraces,
+			exporterhelper.WithStart(exporter.Start),
+			exporterhelper.WithShutdown(exporter.Shutdown),
+			exporterhelper.WithCapabilities(consumer.Capabilities{MutatesData: false}),
+			exporterhelper.WithQueue(config.QueueConfig),
+			exporterhelper.WithBatcher(batchCfg),
+			exporterhelper.WithRetry(config.RetryConfig))
 	case ProtocolGRPC:
 		slog.Debug("instantiating GRPC TracesReporter", "protocol", proto)
 		var t trace.SpanExporter

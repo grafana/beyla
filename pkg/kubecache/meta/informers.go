@@ -18,6 +18,8 @@ type Informers struct {
 	pods     cache.SharedIndexInformer
 	nodes    cache.SharedIndexInformer
 	services cache.SharedIndexInformer
+
+	waitForSync chan struct{}
 }
 
 func (inf *Informers) Subscribe(observer Observer) {
@@ -57,6 +59,10 @@ func (inf *Informers) Subscribe(observer Observer) {
 			}
 		}
 	}
+
+	// until the informer waitForSync, we won't send the sync_finished event to remote beyla clients
+	<-inf.waitForSync
+
 	// notify the end of synchronization, so the client knows that already has a snapshot
 	// of all the existing resources
 	if err := observer.On(&informer.Event{

@@ -243,6 +243,7 @@ func (tr *tracesOTELReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], err
 	}, nil
 }
 
+// nolint:cyclop
 func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.ContextInfo) (exporter.Traces, error) {
 	switch proto := cfg.getProtocol(); proto {
 	case ProtocolHTTPJSON, ProtocolHTTPProtobuf, "": // zero value defaults to HTTP for backwards-compatibility
@@ -280,7 +281,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 			Headers: convertHeaders(opts.HTTPHeaders),
 		}
 		slog.Debug("getTracesExporter: confighttp.ClientConfig created", "endpoint", config.ClientConfig.Endpoint)
-		set := getTraceSettings(ctxInfo, cfg, t)
+		set := getTraceSettings(ctxInfo, t)
 		exporter, err := factory.CreateTraces(ctx, set, config)
 		if err != nil {
 			slog.Error("can't create OTLP HTTP traces exporter", "error", err)
@@ -332,7 +333,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 				InsecureSkipVerify: cfg.InsecureSkipVerify,
 			},
 		}
-		set := getTraceSettings(ctxInfo, cfg, t)
+		set := getTraceSettings(ctxInfo, t)
 		return factory.CreateTraces(ctx, set, config)
 	default:
 		slog.Error(fmt.Sprintf("invalid protocol value: %q. Accepted values are: %s, %s, %s",
@@ -364,7 +365,7 @@ func instrumentTraceExporter(in trace.SpanExporter, internalMetrics imetrics.Rep
 	}
 }
 
-func getTraceSettings(ctxInfo *global.ContextInfo, cfg TracesConfig, in trace.SpanExporter) exporter.Settings {
+func getTraceSettings(ctxInfo *global.ContextInfo, in trace.SpanExporter) exporter.Settings {
 	var traceProvider trace2.TracerProvider
 	telemetryLevel := configtelemetry.LevelNone
 	traceProvider = tracenoop.NewTracerProvider()

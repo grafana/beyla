@@ -32,6 +32,10 @@ type qualifiedName struct {
 	kind      string
 }
 
+func qName(om *informer.ObjectMeta) qualifiedName {
+	return qualifiedName{name: om.Name, namespace: om.Namespace, kind: om.Kind}
+}
+
 // Store aggregates Kubernetes information from multiple sources:
 // - the informer that keep an indexed copy of the existing pods and replicasets.
 // - the inspected container.Info objects, indexed either by container ID and PID namespace
@@ -60,7 +64,7 @@ type Store struct {
 	objectMetaByIP map[string]*informer.ObjectMeta
 	// used to track the changed/removed IPs of a given object
 	// and remove them from objectMetaByIP on update or deletion
-	objectIPsByName     map[qualifiedName][]string
+	objectMetaByQName   map[qualifiedName]*informer.ObjectMeta
 	otelServiceInfoByIP map[string]OTelServiceNamePair
 
 	// Instead of subscribing to the informer directly, the rest of components
@@ -78,7 +82,7 @@ func NewStore(kubeMetadata meta.Notifier) *Store {
 		podsByContainer:     map[string]*informer.ObjectMeta{},
 		containerByPID:      map[uint32]*container.Info{},
 		objectMetaByIP:      map[string]*informer.ObjectMeta{},
-		objectIPsByName:     map[qualifiedName][]string{},
+		objectMetaByQName:   map[qualifiedName]*informer.ObjectMeta{},
 		containersByOwner:   map[string][]*informer.ContainerInfo{},
 		otelServiceInfoByIP: map[string]OTelServiceNamePair{},
 		metadataNotifier:    kubeMetadata,
@@ -140,9 +144,7 @@ func (s *Store) addObjectMeta(meta *informer.ObjectMeta) {
 	s.access.Lock()
 	defer s.access.Unlock()
 
-	s.unlockedAddObjectMeta(qualifiedName{
-		name: meta.Name, namespace: meta.Namespace, kind: meta.Kind,
-	}, meta)
+	s.unlockedAddObjectMeta(qName(meta), meta)
 }
 
 func (s *Store) updateObjectMeta(meta *informer.ObjectMeta) {
@@ -151,9 +153,9 @@ func (s *Store) updateObjectMeta(meta *informer.ObjectMeta) {
 
 	// if the update removes IPs from the original object meta,
 	// we remove them from the indexes
-	qn := qualifiedName{name: meta.Name, namespace: meta.Namespace, kind: meta.Kind}
-	if ips, ok := s.objectIPsByName[qn]; ok {
-		for _, ip := range ips {
+	qn := qName(meta)
+	if om, ok := s.objectMetaByQName[qn]; ok {
+		for _, ip := range om.Ips {
 			// theoretically, linear search into a list is not efficient and we should first build a map
 			// with all the IPs
 			// however, the IPs slice is expected to have a small size (few entries), so
@@ -169,7 +171,7 @@ func (s *Store) updateObjectMeta(meta *informer.ObjectMeta) {
 }
 
 func (s *Store) unlockedAddObjectMeta(qn qualifiedName, meta *informer.ObjectMeta) {
-	s.objectIPsByName[qn] = meta.Ips
+	s.objectMetaByQName[qn] = meta
 
 	for _, ip := range meta.Ips {
 		s.objectMetaByIP[ip] = meta
@@ -207,9 +209,18 @@ func (s *Store) deleteObjectMeta(meta *informer.ObjectMeta) {
 	// Otel variables on specific pods can change the outcome.
 	s.otelServiceInfoByIP = map[string]OTelServiceNamePair{}
 
-	delete(s.objectIPsByName, qualifiedName{
-		name: meta.Name, namespace: meta.Namespace, kind: meta.Kind,
-	})
+	// cleanup both the objectMeta information from the received event
+	// as well as from any previous snapshot in the system whose IPs and/or
+	// containers could have been removed in the last snapshot
+
+	if previousObject, ok := s.objectMetaByQName[qName(meta)]; ok {
+		s.unlockedDeleteObjectMeta(previousObject)
+	}
+	s.unlockedDeleteObjectMeta(meta)
+}
+
+func (s *Store) unlockedDeleteObjectMeta(meta *informer.ObjectMeta) {
+	delete(s.objectMetaByQName, qName(meta))
 	for _, ip := range meta.Ips {
 		delete(s.objectMetaByIP, ip)
 	}

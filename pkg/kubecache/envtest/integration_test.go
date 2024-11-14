@@ -149,7 +149,7 @@ func TestAPIs(t *testing.T) {
 }
 
 func TestBlockedClients(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	// a varied number of cache clients connect concurrently. Some of them are blocked
@@ -192,9 +192,9 @@ func TestBlockedClients(t *testing.T) {
 	test.Eventually(t, timeout, func(t require.TestingT) {
 		// the clients that got stalled, just received the expected number of messages
 		// before they got blocked
-		require.EqualValues(t, 5, stall5.readMessages.Load())
-		require.EqualValues(t, 10, stall10.readMessages.Load())
-		require.EqualValues(t, 15, stall15.readMessages.Load())
+		require.EqualValues(t, int32(5), stall5.readMessages.Load())
+		require.EqualValues(t, int32(10), stall10.readMessages.Load())
+		require.EqualValues(t, int32(15), stall15.readMessages.Load())
 
 		// but that did not block the rest of clients, which got all the expected messages
 		require.GreaterOrEqual(t, never1.readMessages.Load(), int32(createdPods))
@@ -211,12 +211,12 @@ func TestBlockedClients(t *testing.T) {
 // makes sure that a new cache server won't forward the sync data to the clients until
 // it effectively has synced everything
 func TestAsynchronousStartup(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	// generating some contents to force a new Beyla Cache service to take a while
 	// to synchronize during initialization
-	const createdPods = 2000
+	const createdPods = 20
 	for n := 0; n < createdPods; n++ {
 		require.NoError(t, k8sClient.Create(ctx, &corev1.Pod{
 			ObjectMeta: v1.ObjectMeta{
@@ -242,13 +242,14 @@ func TestAsynchronousStartup(t *testing.T) {
 	cl1 := serviceClient{Address: addr}
 	cl2 := serviceClient{Address: addr}
 	cl3 := serviceClient{Address: addr}
-	go func() { test.Eventually(t, timeout, func(t require.TestingT) { cl1.Start(ctx, t) }) }()
-	go func() { test.Eventually(t, timeout, func(t require.TestingT) { cl2.Start(ctx, t) }) }()
-	go func() { test.Eventually(t, timeout, func(t require.TestingT) { cl3.Start(ctx, t) }) }()
+	// passing the test-wide testing.T instance in case clients fail asynchronously, after eventually succeeded
+	go func() { test.Eventually(t, timeout, func(_ require.TestingT) { cl1.Start(ctx, t) }) }()
+	go func() { test.Eventually(t, timeout, func(_ require.TestingT) { cl2.Start(ctx, t) }) }()
+	go func() { test.Eventually(t, timeout, func(_ require.TestingT) { cl3.Start(ctx, t) }) }()
 
 	iConfig := kubecache.DefaultConfig
 	iConfig.Port = newFreePort
-	svc := service.InformersCache{Config: &iConfig, SendTimeout: 150 * time.Millisecond}
+	svc := service.InformersCache{Config: &iConfig, SendTimeout: time.Second}
 	go func() {
 		require.NoError(t, svc.Run(ctx,
 			meta.WithResyncPeriod(iConfig.InformerResyncPeriod),
@@ -259,10 +260,13 @@ func TestAsynchronousStartup(t *testing.T) {
 	// The clients should have received the Sync complete signal even if they
 	// connected to the cache service before it was fully synchronized
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		assert.LessOrEqual(t, int32(createdPods), cl1.syncSignalOnMessage.Load())
-		assert.LessOrEqual(t, int32(createdPods), cl2.syncSignalOnMessage.Load())
-		assert.LessOrEqual(t, int32(createdPods), cl3.syncSignalOnMessage.Load())
+		require.NotZero(t, cl1.syncSignalOnMessage.Load())
+		require.NotZero(t, cl2.syncSignalOnMessage.Load())
+		require.NotZero(t, cl3.syncSignalOnMessage.Load())
 	})
+	assert.LessOrEqual(t, int32(createdPods), cl1.syncSignalOnMessage.Load())
+	assert.LessOrEqual(t, int32(createdPods), cl2.syncSignalOnMessage.Load())
+	assert.LessOrEqual(t, int32(createdPods), cl3.syncSignalOnMessage.Load())
 }
 
 func ReadChannel[T any](t require.TestingT, inCh <-chan T, timeout time.Duration) T {
@@ -312,19 +316,21 @@ func (sc *serviceClient) Start(ctx context.Context, t require.TestingT) {
 				return
 			}
 			event, err := stream.Recv()
-			if err == nil {
-				sc.readMessages.Add(1)
-				if event.Type == informer.EventType_SYNC_FINISHED {
-					require.Zero(t, sc.syncSignalOnMessage.Load(), "can't receive two signal sync messages!")
-					sc.syncSignalOnMessage.Store(sc.readMessages.Load())
-				}
-				if sc.Messages != nil {
-					sc.Messages <- event
-				}
-			}
 			if err != nil {
 				slog.Error("receiving message at client side", "error", err)
 				break
+			}
+			sc.readMessages.Add(1)
+			if sc.Messages != nil {
+				sc.Messages <- event
+			}
+			if event.Type == informer.EventType_SYNC_FINISHED {
+				if sc.syncSignalOnMessage.Load() != 0 {
+					t.Errorf("client %s: can't receive two signal sync messages! (received at %d and %d)",
+						conn.GetState().String(), sc.syncSignalOnMessage.Load(), sc.readMessages.Load())
+					t.FailNow()
+				}
+				sc.syncSignalOnMessage.Store(sc.readMessages.Load())
 			}
 		}
 

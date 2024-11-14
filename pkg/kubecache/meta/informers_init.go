@@ -134,22 +134,26 @@ func InitInformers(ctx context.Context, opts ...InformerOption) (*Informers, err
 		}
 	}
 
-	svc.log.Debug("starting kubernetes informers, waiting for syncronization")
+	svc.log.Debug("starting kubernetes informers")
 	informerFactory.Start(ctx.Done())
 	go func() {
+		svc.log.Debug("waiting for informers' syncronization")
 		informerFactory.WaitForCacheSync(ctx.Done())
+		svc.log.Debug("informers synchronized")
 		close(svc.waitForSync)
 	}()
 	if config.waitCacheSync {
 		select {
 		case <-svc.waitForSync:
-			svc.log.Debug("kubernetes informers started")
+			// continue
 		case <-time.After(config.cacheSyncTimeout):
 			svc.log.Warn("Kubernetes cache has not been synced after timeout."+
 				" The Kubernetes attributes might be incomplete during an initial period."+
 				" Consider increasing the BEYLA_KUBE_INFORMERS_SYNC_TIMEOUT value", "timeout", config.cacheSyncTimeout)
 		}
 	}
+	svc.log.Debug("kubernetes informers started")
+
 	return svc, nil
 
 }

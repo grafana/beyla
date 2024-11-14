@@ -21,8 +21,6 @@ import (
 
 const (
 	kubeConfigEnvVariable = "KUBECONFIG"
-	defaultResyncTime     = 30 * time.Minute
-	defaultSyncTimeout    = 60 * time.Second
 )
 
 func klog() *slog.Logger {
@@ -48,14 +46,7 @@ type MetadataProvider struct {
 }
 
 func NewMetadataProvider(config MetadataConfig) *MetadataProvider {
-	if config.SyncTimeout == 0 {
-		config.SyncTimeout = defaultSyncTimeout
-	}
-	if config.ResyncPeriod == 0 {
-		config.ResyncPeriod = defaultResyncTime
-	}
-	mp := &MetadataProvider{cfg: &config}
-	return mp
+	return &MetadataProvider{cfg: &config}
 }
 
 func (mp *MetadataProvider) IsKubeEnabled() bool {
@@ -167,29 +158,15 @@ func (mp *MetadataProvider) CurrentNodeName(ctx context.Context) (string, error)
 // initLocalInformers initializes an informer client that directly connects to the Node Kube API
 // for getting informer data
 func (mp *MetadataProvider) initLocalInformers(ctx context.Context) (*meta.Informers, error) {
-	done := make(chan error)
-	var informers *meta.Informers
-	go func() {
-		var err error
-		opts := append(disabledInformerOpts(mp.cfg.DisabledInformers),
-			meta.WithResyncPeriod(mp.cfg.ResyncPeriod),
-			meta.WithKubeConfigPath(mp.cfg.KubeConfigPath))
-		if informers, err = meta.InitInformers(ctx, opts...); err != nil {
-			done <- err
-		}
-		close(done)
-	}()
-
-	select {
-	case <-time.After(mp.cfg.SyncTimeout):
-		klog().Warn("kubernetes cache has not been synced after timeout. The kubernetes attributes might be incomplete."+
-			" Consider increasing the BEYLA_KUBE_INFORMERS_SYNC_TIMEOUT value", "timeout", mp.cfg.SyncTimeout)
-	case err, ok := <-done:
-		if ok {
-			return nil, fmt.Errorf("failed to initialize Kubernetes informers: %w", err)
-		}
-	}
-	return informers, nil
+	opts := append(disabledInformerOpts(mp.cfg.DisabledInformers),
+		meta.WithResyncPeriod(mp.cfg.ResyncPeriod),
+		meta.WithKubeConfigPath(mp.cfg.KubeConfigPath),
+		// we don't want that the informer starts decorating spans and flows
+		// before getting all the existing K8s metadata
+		meta.WaitForCacheSync(),
+		meta.WithCacheSyncTimeout(mp.cfg.SyncTimeout),
+	)
+	return meta.InitInformers(ctx, opts...)
 }
 
 // initRemoteInformerCacheClient connects via gRPC/Protobuf to a remote beyla-k8s-cache service, to avoid that

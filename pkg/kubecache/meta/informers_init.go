@@ -32,6 +32,7 @@ const (
 	defaultResyncTime     = 30 * time.Minute
 	EnvServiceName        = "OTEL_SERVICE_NAME"
 	EnvResourceAttrs      = "OTEL_RESOURCE_ATTRIBUTES"
+	defaultSyncTimeout    = 60 * time.Second
 )
 
 var usefulEnvVars = map[string]struct{}{EnvServiceName: {}, EnvResourceAttrs: {}}
@@ -41,6 +42,10 @@ type informersConfig struct {
 	resyncPeriod    time.Duration
 	disableNodes    bool
 	disableServices bool
+
+	// waits for cache synchronization at start
+	waitCacheSync    bool
+	cacheSyncTimeout time.Duration
 
 	kubeClient kubernetes.Interface
 }
@@ -80,13 +85,27 @@ func WithKubeClient(client kubernetes.Interface) InformerOption {
 	}
 }
 
-func InitInformers(ctx context.Context, opts ...InformerOption) (*Informers, error) {
-	config := &informersConfig{resyncPeriod: defaultResyncTime}
-	for _, opt := range opts {
-		opt(config)
+func WaitForCacheSync() InformerOption {
+	return func(c *informersConfig) {
+		c.waitCacheSync = true
 	}
+}
+
+func WithCacheSyncTimeout(to time.Duration) InformerOption {
+	return func(config *informersConfig) {
+		config.cacheSyncTimeout = to
+	}
+}
+
+func InitInformers(ctx context.Context, opts ...InformerOption) (*Informers, error) {
+	config := initConfigOpts(opts)
 	log := slog.With("component", "kube.Informers")
-	k := &Informers{log: log, config: config, BaseNotifier: NewBaseNotifier(log)}
+	svc := &Informers{
+		log:          log,
+		config:       config,
+		BaseNotifier: NewBaseNotifier(log),
+		waitForSync:  make(chan struct{}),
+	}
 
 	if config.kubeClient == nil {
 		kubeCfg, err := loadKubeconfig(config.kubeConfigPath)
@@ -99,28 +118,58 @@ func InitInformers(ctx context.Context, opts ...InformerOption) (*Informers, err
 		}
 	}
 
-	informerFactory := informers.NewSharedInformerFactory(config.kubeClient, config.resyncPeriod)
+	informerFactory := informers.NewSharedInformerFactory(svc.config.kubeClient, svc.config.resyncPeriod)
 
-	if err := k.initPodInformer(informerFactory); err != nil {
+	if err := svc.initPodInformer(informerFactory); err != nil {
 		return nil, err
 	}
-	if !config.disableNodes {
-		if err := k.initNodeIPInformer(informerFactory); err != nil {
+	if !svc.config.disableNodes {
+		if err := svc.initNodeIPInformer(informerFactory); err != nil {
 			return nil, err
 		}
 	}
-	if !config.disableServices {
-		if err := k.initServiceIPInformer(informerFactory); err != nil {
+	if !svc.config.disableServices {
+		if err := svc.initServiceIPInformer(informerFactory); err != nil {
 			return nil, err
 		}
 	}
 
-	k.log.Debug("starting kubernetes informers, waiting for syncronization")
+	svc.log.Debug("starting kubernetes informers")
 	informerFactory.Start(ctx.Done())
-	informerFactory.WaitForCacheSync(ctx.Done())
-	k.log.Debug("kubernetes informers started")
-	return k, nil
+	go func() {
+		svc.log.Debug("waiting for informers' syncronization")
+		informerFactory.WaitForCacheSync(ctx.Done())
+		svc.log.Debug("informers synchronized")
+		close(svc.waitForSync)
+	}()
+	if config.waitCacheSync {
+		select {
+		case <-svc.waitForSync:
+			// continue
+		case <-time.After(config.cacheSyncTimeout):
+			svc.log.Warn("Kubernetes cache has not been synced after timeout."+
+				" The Kubernetes attributes might be incomplete during an initial period."+
+				" Consider increasing the BEYLA_KUBE_INFORMERS_SYNC_TIMEOUT value", "timeout", config.cacheSyncTimeout)
+		}
+	}
+	svc.log.Debug("kubernetes informers started")
 
+	return svc, nil
+
+}
+
+func initConfigOpts(opts []InformerOption) *informersConfig {
+	config := &informersConfig{}
+	for _, opt := range opts {
+		opt(config)
+	}
+	if config.cacheSyncTimeout == 0 {
+		config.cacheSyncTimeout = defaultSyncTimeout
+	}
+	if config.resyncPeriod == 0 {
+		config.resyncPeriod = defaultResyncTime
+	}
+	return config
 }
 
 func loadKubeconfig(kubeConfigPath string) (*rest.Config, error) {

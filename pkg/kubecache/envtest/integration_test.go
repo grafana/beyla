@@ -32,6 +32,8 @@ var (
 	ctx       context.Context
 	k8sClient client.Client
 	testEnv   *envtest.Environment
+
+	kubeAPIIface kubernetes.Interface
 )
 
 const timeout = 10 * time.Second
@@ -58,7 +60,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 	config := k8sManager.GetConfig()
-	theClient, err := kubernetes.NewForConfig(config)
+	kubeAPIIface, err = kubernetes.NewForConfig(config)
 	if err != nil {
 		slog.Error("creating kube API client", "error", err)
 		os.Exit(1)
@@ -93,7 +95,7 @@ func TestMain(m *testing.M) {
 	go func() {
 		if err := svc.Run(ctx,
 			meta.WithResyncPeriod(iConfig.InformerResyncPeriod),
-			meta.WithKubeClient(theClient),
+			meta.WithKubeClient(kubeAPIIface),
 		); err != nil {
 			slog.Error("running service", "error", err)
 			os.Exit(1)
@@ -104,11 +106,13 @@ func TestMain(m *testing.M) {
 }
 
 func TestAPIs(t *testing.T) {
-	svcClient := serviceClient{ID: "first-pod", Address: fmt.Sprintf("127.0.0.1:%d", freePort)}
-	// client
-	require.Eventually(t, func() bool {
-		return svcClient.Start(ctx) == nil
-	}, timeout, 100*time.Millisecond)
+	svcClient := serviceClient{
+		Address:  fmt.Sprintf("127.0.0.1:%d", freePort),
+		Messages: make(chan *informer.Event, 10),
+	}
+	test.Eventually(t, timeout, func(t require.TestingT) {
+		svcClient.Start(ctx, t)
+	})
 
 	// wait for the service to have sent the initial snapshot of entities
 	// (at the end, will send the "SYNC_FINISHED" event)
@@ -145,23 +149,24 @@ func TestAPIs(t *testing.T) {
 }
 
 func TestBlockedClients(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	// a varied number of cache clients connect concurrently. Some of them are blocked
 	// after a while, and they don't release the connection
-	never1 := &countingStallingClient{stallAfterMessages: 1000000}
-	never2 := &countingStallingClient{stallAfterMessages: 1000000}
-	never3 := &countingStallingClient{stallAfterMessages: 1000000}
-	stall5 := &countingStallingClient{stallAfterMessages: 5}
-	stall10 := &countingStallingClient{stallAfterMessages: 10}
-	stall15 := &countingStallingClient{stallAfterMessages: 15}
-	go stall15.Start(ctx, t, freePort)
-	go never1.Start(ctx, t, freePort)
-	go stall5.Start(ctx, t, freePort)
-	go never2.Start(ctx, t, freePort)
-	go stall10.Start(ctx, t, freePort)
-	go never3.Start(ctx, t, freePort)
+	addr := fmt.Sprintf("127.0.0.1:%d", freePort)
+	never1 := &serviceClient{Address: addr, stallAfterMessages: 1000000}
+	never2 := &serviceClient{Address: addr, stallAfterMessages: 1000000}
+	never3 := &serviceClient{Address: addr, stallAfterMessages: 1000000}
+	stall5 := &serviceClient{Address: addr, stallAfterMessages: 5}
+	stall10 := &serviceClient{Address: addr, stallAfterMessages: 10}
+	stall15 := &serviceClient{Address: addr, stallAfterMessages: 15}
+	go stall15.Start(ctx, t)
+	go never1.Start(ctx, t)
+	go stall5.Start(ctx, t)
+	go never2.Start(ctx, t)
+	go stall10.Start(ctx, t)
+	go never3.Start(ctx, t)
 
 	// generating a large number of notifications until the gRPC buffer of the
 	// server-to-client connections is full, so the "Send" operation is blocked
@@ -187,9 +192,9 @@ func TestBlockedClients(t *testing.T) {
 	test.Eventually(t, timeout, func(t require.TestingT) {
 		// the clients that got stalled, just received the expected number of messages
 		// before they got blocked
-		require.EqualValues(t, 5, stall5.readMessages.Load())
-		require.EqualValues(t, 10, stall10.readMessages.Load())
-		require.EqualValues(t, 15, stall15.readMessages.Load())
+		require.EqualValues(t, int32(5), stall5.readMessages.Load())
+		require.EqualValues(t, int32(10), stall10.readMessages.Load())
+		require.EqualValues(t, int32(15), stall15.readMessages.Load())
 
 		// but that did not block the rest of clients, which got all the expected messages
 		require.GreaterOrEqual(t, never1.readMessages.Load(), int32(createdPods))
@@ -201,6 +206,67 @@ func TestBlockedClients(t *testing.T) {
 	// we don't exit until all the pods have been created, to avoid failing the
 	// tests because the client.Create operation fails due to premature context cancellation
 	ReadChannel(t, allSent, timeout)
+}
+
+// makes sure that a new cache server won't forward the sync data to the clients until
+// it effectively has synced everything
+func TestAsynchronousStartup(t *testing.T) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	// generating some contents to force a new Beyla Cache service to take a while
+	// to synchronize during initialization
+	const createdPods = 20
+	for n := 0; n < createdPods; n++ {
+		require.NoError(t, k8sClient.Create(ctx, &corev1.Pod{
+			ObjectMeta: v1.ObjectMeta{
+				Name:      fmt.Sprintf("async-pod-%02d", n),
+				Namespace: "default",
+			},
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{Name: "test-container", Image: "nginx"},
+				},
+			},
+		}))
+	}
+
+	// creating a new Beyla cache service instance that will start synchronizing with
+	// the previously generated amount of data (also from previous tests)
+	newFreePort, err := test.FreeTCPPort()
+	require.NoError(t, err)
+
+	// create few clients that start trying to connect and sync
+	// even before the new cache service starts
+	addr := fmt.Sprintf("127.0.0.1:%d", newFreePort)
+	cl1 := serviceClient{Address: addr}
+	cl2 := serviceClient{Address: addr}
+	cl3 := serviceClient{Address: addr}
+	// passing the test-wide testing.T instance in case clients fail asynchronously, after eventually succeeded
+	go func() { test.Eventually(t, timeout, func(_ require.TestingT) { cl1.Start(ctx, t) }) }()
+	go func() { test.Eventually(t, timeout, func(_ require.TestingT) { cl2.Start(ctx, t) }) }()
+	go func() { test.Eventually(t, timeout, func(_ require.TestingT) { cl3.Start(ctx, t) }) }()
+
+	iConfig := kubecache.DefaultConfig
+	iConfig.Port = newFreePort
+	svc := service.InformersCache{Config: &iConfig, SendTimeout: time.Second}
+	go func() {
+		require.NoError(t, svc.Run(ctx,
+			meta.WithResyncPeriod(iConfig.InformerResyncPeriod),
+			meta.WithKubeClient(kubeAPIIface),
+		))
+	}()
+
+	// The clients should have received the Sync complete signal even if they
+	// connected to the cache service before it was fully synchronized
+	test.Eventually(t, timeout, func(t require.TestingT) {
+		require.NotZero(t, cl1.syncSignalOnMessage.Load())
+		require.NotZero(t, cl2.syncSignalOnMessage.Load())
+		require.NotZero(t, cl3.syncSignalOnMessage.Load())
+	})
+	assert.LessOrEqual(t, int32(createdPods), cl1.syncSignalOnMessage.Load())
+	assert.LessOrEqual(t, int32(createdPods), cl2.syncSignalOnMessage.Load())
+	assert.LessOrEqual(t, int32(createdPods), cl3.syncSignalOnMessage.Load())
 }
 
 func ReadChannel[T any](t require.TestingT, inCh <-chan T, timeout time.Duration) T {
@@ -216,76 +282,57 @@ func ReadChannel[T any](t require.TestingT, inCh <-chan T, timeout time.Duration
 }
 
 type serviceClient struct {
-	ID       string
-	Address  string
+	// Address of the cache service
+	Address string
+	// Messages to be forwarded on read. If nil, the client won't forward anything
 	Messages chan *informer.Event
+	// counter of read messages
+	readMessages atomic.Int32
+	// if != 0, the client will be blocked when the count of read messages reach stallAfterMessages
+	stallAfterMessages int32
+	// stores at which message number the signal is synced
+	syncSignalOnMessage atomic.Int32
 }
 
-func (sc *serviceClient) Start(ctx context.Context) error {
-	sc.Messages = make(chan *informer.Event, 10)
-
+func (sc *serviceClient) Start(ctx context.Context, t require.TestingT) {
 	conn, err := grpc.NewClient(sc.Address,
 		grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		return fmt.Errorf("can't connect client: %w", err)
-	}
+	require.NoError(t, err)
 
 	eventsClient := informer.NewEventStreamServiceClient(conn)
 
 	// Subscribe to the event stream.
 	stream, err := eventsClient.Subscribe(ctx, &informer.SubscribeMessage{})
-	if err != nil {
-		return fmt.Errorf("subscribing: %w", err)
-	}
+	require.NoError(t, err)
 
 	// Receive and print messages.
 	go func() {
 		defer conn.Close()
 		for {
+			if sc.stallAfterMessages != 0 && sc.stallAfterMessages == sc.readMessages.Load() {
+				// just block without doing any connection activity
+				// nor closing/releasing the connection
+				<-stream.Context().Done()
+				return
+			}
 			event, err := stream.Recv()
 			if err != nil {
 				slog.Error("receiving message at client side", "error", err)
 				break
 			}
-			sc.Messages <- event
+			sc.readMessages.Add(1)
+			if sc.Messages != nil {
+				sc.Messages <- event
+			}
+			if event.Type == informer.EventType_SYNC_FINISHED {
+				if sc.syncSignalOnMessage.Load() != 0 {
+					t.Errorf("client %s: can't receive two signal sync messages! (received at %d and %d)",
+						conn.GetState().String(), sc.syncSignalOnMessage.Load(), sc.readMessages.Load())
+					t.FailNow()
+				}
+				sc.syncSignalOnMessage.Store(sc.readMessages.Load())
+			}
 		}
 
 	}()
-	return nil
-}
-
-// a fake client that counts the received messages and gets blocked (without closing the connection)
-// after a defined number of messages
-type countingStallingClient struct {
-	readMessages       atomic.Int32
-	stallAfterMessages int32
-}
-
-func (csc *countingStallingClient) Start(ctx context.Context, t *testing.T, port int) {
-	// Set up a connection to the server.
-	address := fmt.Sprintf("127.0.0.1:%d", port)
-	conn, err := grpc.NewClient(address,
-		grpc.WithTransportCredentials(insecure.NewCredentials()))
-	// nolint:staticcheck
-	defer conn.Close()
-	require.NoError(t, err)
-	client := informer.NewEventStreamServiceClient(conn)
-
-	// Subscribe to the event stream.
-	stream, err := client.Subscribe(ctx, &informer.SubscribeMessage{})
-	require.NoError(t, err)
-
-	// Receive messages
-	for {
-		if csc.stallAfterMessages == csc.readMessages.Load() {
-			// just block without doing any connection activity
-			// nor closing/releasing the connection
-			<-stream.Context().Done()
-			return
-		}
-		if _, err := stream.Recv(); err == nil {
-			csc.readMessages.Add(1)
-		}
-		// discarding event
-	}
 }

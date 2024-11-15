@@ -199,6 +199,18 @@ func loadKubeconfig(kubeConfigPath string) (*rest.Config, error) {
 	return config, nil
 }
 
+// the transformed objects that are stored in the Informers' cache require to embed an ObjectMeta
+// instances. Since the informer's cache is only used to list the stored objects, we just need
+// something that is unique. We can get rid of many fields for memory saving in big clusters with
+// millions of pods
+func minimalIndex(om *metav1.ObjectMeta) metav1.ObjectMeta {
+	return metav1.ObjectMeta{
+		Name:      om.Name,
+		Namespace: om.Namespace,
+		UID:       om.UID,
+	}
+}
+
 func (inf *Informers) initPodInformer(informerFactory informers.SharedInformerFactory) error {
 	pods := informerFactory.Core().V1().Pods().Informer()
 
@@ -254,7 +266,7 @@ func (inf *Informers) initPodInformer(informerFactory informers.SharedInformerFa
 
 		startTime := pod.GetCreationTimestamp().String()
 		return &indexableEntity{
-			ObjectMeta: pod.ObjectMeta,
+			ObjectMeta: minimalIndex(&pod.ObjectMeta),
 			EncodedMeta: &informer.ObjectMeta{
 				Name:      pod.Name,
 				Namespace: pod.Namespace,
@@ -275,33 +287,7 @@ func (inf *Informers) initPodInformer(informerFactory informers.SharedInformerFa
 		return fmt.Errorf("can't set pods transform: %w", err)
 	}
 
-	_, err := pods.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			inf.Notify(&informer.Event{
-				Type:     informer.EventType_CREATED,
-				Resource: obj.(*indexableEntity).EncodedMeta,
-			})
-		},
-		UpdateFunc: func(oldObj, newObj interface{}) {
-			if cmp.Equal(
-				oldObj.(*indexableEntity).EncodedMeta,
-				newObj.(*indexableEntity).EncodedMeta,
-				protoCmpTransform,
-			) {
-				return
-			}
-			inf.Notify(&informer.Event{
-				Type:     informer.EventType_UPDATED,
-				Resource: newObj.(*indexableEntity).EncodedMeta,
-			})
-		},
-		DeleteFunc: func(obj interface{}) {
-			inf.Notify(&informer.Event{
-				Type:     informer.EventType_DELETED,
-				Resource: obj.(*indexableEntity).EncodedMeta,
-			})
-		},
-	})
+	_, err := pods.AddEventHandler(inf.ipInfoEventHandler())
 	if err != nil {
 		return fmt.Errorf("can't register Pod event handler in the K8s informer: %w", err)
 	}
@@ -365,7 +351,7 @@ func (inf *Informers) initNodeIPInformer(informerFactory informers.SharedInforme
 		ips = cni.AddOvnIPs(ips, node)
 
 		return &indexableEntity{
-			ObjectMeta: node.ObjectMeta,
+			ObjectMeta: minimalIndex(&node.ObjectMeta),
 			EncodedMeta: &informer.ObjectMeta{
 				Name:      node.Name,
 				Namespace: node.Namespace,
@@ -401,18 +387,17 @@ func (inf *Informers) initServiceIPInformer(informerFactory informers.SharedInfo
 			}
 			return nil, fmt.Errorf("was expecting a *v1.Service. Got: %T", i)
 		}
-		if svc.Spec.ClusterIP == v1.ClusterIPNone {
-			// this will be normal for headless services
-			inf.log.Debug("Service doesn't have any ClusterIP. Beyla won't decorate their flows",
-				"namespace", svc.Namespace, "name", svc.Name)
+		var ips []string
+		if svc.Spec.ClusterIP != v1.ClusterIPNone {
+			ips = svc.Spec.ClusterIPs
 		}
 		return &indexableEntity{
-			ObjectMeta: svc.ObjectMeta,
+			ObjectMeta: minimalIndex(&svc.ObjectMeta),
 			EncodedMeta: &informer.ObjectMeta{
 				Name:      svc.Name,
 				Namespace: svc.Namespace,
 				Labels:    svc.Labels,
-				Ips:       svc.Spec.ClusterIPs,
+				Ips:       ips,
 				Kind:      typeService,
 			},
 		}, nil
@@ -429,15 +414,28 @@ func (inf *Informers) initServiceIPInformer(informerFactory informers.SharedInfo
 	return nil
 }
 
+func headlessService(om *informer.ObjectMeta) bool {
+	return len(om.Ips) == 0 && om.Kind == "Service"
+}
+
 func (inf *Informers) ipInfoEventHandler() *cache.ResourceEventHandlerFuncs {
 	return &cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
+			// ignore headless services from being added
+			if headlessService(obj.(*indexableEntity).EncodedMeta) {
+				return
+			}
 			inf.Notify(&informer.Event{
 				Type:     informer.EventType_CREATED,
 				Resource: obj.(*indexableEntity).EncodedMeta,
 			})
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
+			// ignore headless services from being added
+			if headlessService(newObj.(*indexableEntity).EncodedMeta) &&
+				headlessService(oldObj.(*indexableEntity).EncodedMeta) {
+				return
+			}
 			if cmp.Equal(
 				oldObj.(*indexableEntity).EncodedMeta,
 				newObj.(*indexableEntity).EncodedMeta,

@@ -269,6 +269,64 @@ func TestAsynchronousStartup(t *testing.T) {
 	assert.LessOrEqual(t, int32(createdPods), cl3.syncSignalOnMessage.Load())
 }
 
+func TestIgnoreHeadlessServices(t *testing.T) {
+	svcClient := serviceClient{
+		Address:  fmt.Sprintf("127.0.0.1:%d", freePort),
+		Messages: make(chan *informer.Event, 10),
+	}
+	test.Eventually(t, timeout, func(t require.TestingT) {
+		svcClient.Start(ctx, t)
+	})
+	// wait for the service to have sent the initial snapshot of entities
+	// (at the end, will send the "SYNC_FINISHED" event)
+	test.Eventually(t, timeout, func(t require.TestingT) {
+		event := ReadChannel(t, svcClient.Messages, timeout)
+		require.Equal(t, informer.EventType_SYNC_FINISHED, event.Type)
+	})
+
+	// WHEN services are created
+	require.NoError(t, k8sClient.Create(ctx, &corev1.Service{
+		ObjectMeta: v1.ObjectMeta{Name: "service1", Namespace: "default"},
+		Spec: corev1.ServiceSpec{
+			Ports:     []corev1.ServicePort{{Name: "foo", Port: 8080}},
+			ClusterIP: "10.0.0.101", ClusterIPs: []string{"10.0.0.101"},
+		},
+	}))
+	require.NoError(t, k8sClient.Create(ctx, &corev1.Service{
+		ObjectMeta: v1.ObjectMeta{Name: "headless", Namespace: "default"},
+		Spec: corev1.ServiceSpec{
+			Ports:     []corev1.ServicePort{{Name: "foo", Port: 8080}},
+			ClusterIP: "None",
+		},
+	}))
+	require.NoError(t, k8sClient.Create(ctx, &corev1.Service{
+		ObjectMeta: v1.ObjectMeta{Name: "service2", Namespace: "default"},
+		Spec: corev1.ServiceSpec{
+			Ports:     []corev1.ServicePort{{Name: "foo", Port: 8080}},
+			ClusterIP: "10.0.0.102", ClusterIPs: []string{"10.0.0.102"},
+		},
+	}))
+
+	// THEN the informer cache receives the services with an IP
+	// AND ignores headless services (without ClusterIP)
+	event := ReadChannel(t, svcClient.Messages, timeout)
+	require.NotNil(t, event.Resource)
+	assert.Equal(t, "service1", event.Resource.Name)
+	assert.NotEmpty(t, event.Resource.Ips)
+
+	event = ReadChannel(t, svcClient.Messages, timeout)
+	require.NotNil(t, event.Resource)
+	assert.Equal(t, "service2", event.Resource.Name)
+	assert.NotEmpty(t, event.Resource.Ips)
+
+	select {
+	case event := <-svcClient.Messages:
+		assert.Failf(t, "did not expect more informer updates. Got %s", event.String())
+	default:
+		// ok!
+	}
+}
+
 func ReadChannel[T any](t require.TestingT, inCh <-chan T, timeout time.Duration) T {
 	var item T
 	select {

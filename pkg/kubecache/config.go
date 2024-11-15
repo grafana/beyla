@@ -7,6 +7,8 @@ import (
 
 	"github.com/caarlos0/env/v9"
 	"gopkg.in/yaml.v3"
+
+	"github.com/grafana/beyla/pkg/kubecache/instrument"
 )
 
 // Config options of the Kubernetes Cache service. Check the "DefaultConfig" variable for a view of the default values.
@@ -21,6 +23,8 @@ type Config struct {
 	ProfilePort int `yaml:"profile_port" env:"BEYLA_K8S_CACHE_PROFILE_PORT"`
 	// InformerResyncPeriod is the time interval between complete resyncs of the informers
 	InformerResyncPeriod time.Duration `yaml:"informer_resync_period" env:"BEYLA_K8S_CACHE_INFORMER_RESYNC_PERIOD"`
+
+	InternalMetrics instrument.InternalMetricsConfig `yaml:"internal_metrics"`
 }
 
 var DefaultConfig = Config{

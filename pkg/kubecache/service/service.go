@@ -21,6 +21,7 @@ import (
 )
 
 const defaultSendTimeout = 10 * time.Second
+const barrierBufferLen = 10
 
 // InformersCache configures and starts the gRPC service
 type InformersCache struct {
@@ -125,7 +126,7 @@ func (ic *InformersCache) Subscribe(_ *informer.SubscribeMessage, server informe
 		id:          connectionID,
 		server:      server,
 		sendTimeout: ic.SendTimeout,
-		barrier:     make(chan struct{}, 1),
+		barrier:     make(chan struct{}, barrierBufferLen),
 	}
 	o.log.Info("client subscribed")
 

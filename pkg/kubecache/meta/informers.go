@@ -50,6 +50,10 @@ func (inf *Informers) Subscribe(observer Observer) {
 	}
 	if !inf.config.disableServices {
 		for _, service := range inf.services.GetStore().List() {
+			// ignore headless services from being added
+			if headlessService(service.(*indexableEntity).EncodedMeta) {
+				return
+			}
 			if err := observer.On(&informer.Event{
 				Type:     informer.EventType_CREATED,
 				Resource: service.(*indexableEntity).EncodedMeta,

@@ -14,6 +14,7 @@ import (
 
 	"github.com/grafana/beyla/pkg/kubecache"
 	"github.com/grafana/beyla/pkg/kubecache/informer"
+	"github.com/grafana/beyla/pkg/kubecache/instrument"
 	"github.com/grafana/beyla/pkg/kubecache/meta"
 )
 
@@ -31,6 +32,8 @@ type InformersCache struct {
 
 	// TODO: allow configuring by user
 	SendTimeout time.Duration
+
+	metrics instrument.InternalMetrics
 }
 
 func (ic *InformersCache) Run(ctx context.Context, opts ...meta.InformerOption) error {
@@ -40,6 +43,7 @@ func (ic *InformersCache) Run(ctx context.Context, opts ...meta.InformerOption) 
 	if ic.started.Swap(true) {
 		return errors.New("server already started")
 	}
+	ic.metrics = instrument.FromContext(ctx)
 	ic.log = slog.With("component", "server.InformersCache")
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", ic.Config.Port))
@@ -82,17 +86,20 @@ func (ic *InformersCache) Subscribe(_ *informer.SubscribeMessage, server informe
 	if !ok {
 		return fmt.Errorf("failed to extract peer information")
 	}
+	ic.metrics.ClientConnect()
 	connCtx, cancel := context.WithCancel(server.Context())
 	o := &connection{
 		cancel:      cancel,
 		id:          p.Addr.String(),
 		server:      server,
 		sendTimeout: ic.SendTimeout,
+		metrics:     ic.metrics,
 	}
 	ic.log.Info("client subscribed", "id", o.ID())
 	ic.informers.Subscribe(o)
 	// Keep the connection open
 	<-connCtx.Done()
+	ic.metrics.ClientDisconnect()
 	ic.log.Info("client disconnected", "id", o.ID())
 	ic.informers.Unsubscribe(o)
 	return nil
@@ -107,6 +114,8 @@ type connection struct {
 	server grpc.ServerStreamingServer[informer.Event]
 
 	sendTimeout time.Duration
+
+	metrics instrument.InternalMetrics
 }
 
 func (o *connection) ID() string {
@@ -116,6 +125,7 @@ func (o *connection) ID() string {
 func (o *connection) On(event *informer.Event) error {
 	// Theoretically Go is ready to run hundreds of thousands of parallel goroutines
 	done := make(chan error, 1)
+	o.metrics.MessageSubmit()
 	go func() {
 		if err := o.server.Send(event); err != nil {
 			slog.Debug("sending message. Closing client connection", "clientID", o.ID(), "error", err)
@@ -127,9 +137,14 @@ func (o *connection) On(event *informer.Event) error {
 	timeout := time.After(o.sendTimeout)
 	select {
 	case err := <-done:
-		// might be just nil if the connection succeeded
+		if err == nil {
+			o.metrics.MessageSucceed()
+		} else {
+			o.metrics.MessageError()
+		}
 		return err
 	case <-timeout:
+		o.metrics.MessageTimeout()
 		o.cancel()
 		return errors.New("timeout sending message to client. Closing connection " + o.ID())
 	}

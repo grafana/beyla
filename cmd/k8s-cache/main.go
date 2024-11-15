@@ -15,6 +15,7 @@ import (
 
 	"github.com/grafana/beyla/pkg/buildinfo"
 	"github.com/grafana/beyla/pkg/kubecache"
+	"github.com/grafana/beyla/pkg/kubecache/instrument"
 	"github.com/grafana/beyla/pkg/kubecache/meta"
 	"github.com/grafana/beyla/pkg/kubecache/service"
 )
@@ -54,6 +55,9 @@ func main() {
 
 	// Adding shutdown hook for graceful stop.
 	ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+
+	// add the internal metrics to the context
+	ctx = instrument.Start(ctx, &config.InternalMetrics)
 
 	if err := ic.Run(ctx,
 		meta.WithResyncPeriod(config.InformerResyncPeriod)); err != nil {

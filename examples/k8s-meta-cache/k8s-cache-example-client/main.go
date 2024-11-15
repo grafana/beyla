@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -44,6 +45,7 @@ func main() {
 			slog.Error("receiving message", "error", err)
 			break
 		}
+		time.Sleep(time.Hour)
 		fmt.Printf("Received event: %v\n", event)
 	}
 }

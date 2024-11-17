@@ -8,6 +8,7 @@
 #include "tc_ip.h"
 #include "tcp_info.h"
 #include "tc_sock.h"
+#include "tc_tracer_l7.h"
 
 char __license[] SEC("license") = "Dual MIT/GPL";
 
@@ -61,11 +62,12 @@ static __always_inline void update_outgoing_request_span_id(connection_info_t *c
     }
 }
 
-static __always_inline void encode_data_in_ip_options(struct __sk_buff *skb,
-                                                      connection_info_t *conn,
-                                                      protocol_info_t *tcp,
-                                                      tp_info_pid_t *tp,
-                                                      egress_key_t *e_key) {
+__attribute__((unused)) static __always_inline void
+encode_data_in_ip_options(struct __sk_buff *skb,
+                          connection_info_t *conn,
+                          protocol_info_t *tcp,
+                          tp_info_pid_t *tp,
+                          egress_key_t *e_key) {
     // Handling IPv4
     // We only do this if the IP header doesn't have any options, this can be improved if needed
     if (tcp->h_proto == ETH_P_IP && tcp->ip_len == MIN_IP_LEN) {
@@ -98,11 +100,11 @@ int app_egress(struct __sk_buff *skb) {
         return 0;
     }
 
-    sort_connection_info(&conn);
     egress_key_t e_key = {
         .d_port = conn.d_port,
         .s_port = conn.s_port,
     };
+    sort_egress_key(&e_key);
 
     tp_info_pid_t *tp = bpf_map_lookup_elem(&outgoing_trace_map, &e_key);
 
@@ -110,7 +112,9 @@ int app_egress(struct __sk_buff *skb) {
         bpf_dbg_printk("egress flags %x, sequence %x", tcp.flags, tcp.seq);
         dbg_print_http_connection_info(&conn);
 
-        encode_data_in_ip_options(skb, &conn, &tcp, tp, &e_key);
+        l7_app_egress(skb, &conn, &tcp);
+        //encode_data_in_ip_options(skb, &conn, &tcp, tp, &e_key);
+        //bpf_map_delete_elem(&outgoing_trace_map, &e_key);
     }
 
     return 0;

@@ -25,7 +25,7 @@ static __always_inline void print_tp(tp_info_pid_t *new_tp) {
 #endif
 }
 
-static __always_inline void
+__attribute__((unused)) static __always_inline void
 parse_ip_options_ipv4(struct __sk_buff *skb, connection_info_t *conn, protocol_info_t *tcp) {
     u16 key = 0;
     int ip_off = MIN_IP_LEN + ETH_HLEN;
@@ -56,7 +56,7 @@ parse_ip_options_ipv4(struct __sk_buff *skb, connection_info_t *conn, protocol_i
     }
 }
 
-static __always_inline void
+__attribute__((unused)) static __always_inline void
 parse_ip_options_ipv6(struct __sk_buff *skb, connection_info_t *conn, protocol_info_t *tcp) {
     bpf_dbg_printk("IPv6 ingress");
     dbg_print_http_connection_info(conn);

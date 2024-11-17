@@ -96,7 +96,6 @@ read_sk_buff(struct __sk_buff *skb, protocol_info_t *tcp, connection_info_t *con
             u8 hdr_len = 0;
             bpf_skb_load_bytes(skb, tcp->ip_len + 1, &hdr_len, sizeof(hdr_len));
             tcp->hdr_len += (hdr_len + 1) * 8;
-        } else {
         }
     }
 

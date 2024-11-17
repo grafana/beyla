@@ -9,9 +9,6 @@
 
 #define SOCKOPS_MAP_SIZE 65535
 
-const char TP[] = "Traceparent: 00-0123456789ABCDEFGHIJKLMNOPQRSTUV-0123456789ABCDEF-XX\r\n";
-const u32 EXTEND_SIZE = sizeof(TP) - 1;
-
 struct {
     __uint(type, BPF_MAP_TYPE_SOCKHASH);
     __uint(max_entries, SOCKOPS_MAP_SIZE);
@@ -22,7 +19,7 @@ struct {
 typedef struct tc_http_ctx {
     u32 offset;
     u32 seen;
-    u32 size;
+    u32 written;
 } __attribute__((packed)) tc_http_ctx_t;
 
 struct tc_http_ctx_map {
@@ -104,7 +101,7 @@ static __always_inline void bpf_sock_ops_establish_cb(struct bpf_sock_ops *skops
     sk_ops_extract_key_ip4(skops, &conn);
     // }
 
-    bpf_printk("SET %d:%d -> %d:%d", conn.s_ip[3], conn.s_port, conn.d_ip[3], conn.d_port);
+    bpf_printk("SET %llx:%d -> %llx:%d", conn.s_ip[3], conn.s_port, conn.d_ip[3], conn.d_port);
     bpf_sock_hash_update(skops, &sock_dir, &conn, BPF_ANY);
 }
 
@@ -145,13 +142,16 @@ int packet_extender(struct sk_msg_md *msg) {
     u64 len = (u64)msg->data_end - (u64)msg->data;
     connection_info_t conn = {};
 
+    if (msg->family == AF_INET6) {
+        return 0;
+    }
     // if (msg->family == AF_INET6) {
     //     sk_msg_extract_key_ip6(msg, &conn);
     // } else {
     sk_msg_extract_key_ip4(msg, &conn);
     // }
 
-    bpf_printk("MSG %d:%d -> %d:%d", conn.s_ip[3], conn.s_port, conn.d_ip[3], conn.d_port);
+    bpf_printk("MSG %llx:%d -> %llx:%d", conn.s_ip[3], conn.s_port, conn.d_ip[3], conn.d_port);
 
     u8 tracked = is_tracked(&conn);
 
@@ -159,7 +159,7 @@ int packet_extender(struct sk_msg_md *msg) {
         bpf_printk("*tracked*");
     }
 
-    if (len > 32) {
+    if (tracked && len > 32) {
         msg_data_t *msg_data = buffer();
         if (msg_data) {
             bpf_msg_pull_data(msg, 0, 1024, 0);
@@ -171,11 +171,11 @@ int packet_extender(struct sk_msg_md *msg) {
 
                 if (newline_pos >= 0) {
                     newline_pos++;
-                    if (!bpf_msg_push_data(msg, newline_pos, 0 /*EXTEND_SIZE*/, 0)) {
+                    if (!bpf_msg_push_data(msg, newline_pos, EXTEND_SIZE, 0)) {
                         tc_http_ctx_t ctx = {
                             .offset = newline_pos,
                             .seen = 0,
-                            .size = 0, //EXTEND_SIZE,
+                            .written = 0,
                         };
                         u32 port = msg->local_port;
 

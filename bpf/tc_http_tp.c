@@ -50,9 +50,6 @@ struct tc_http_ctx_map {
     __uint(max_entries, 10240);
 } tc_http_ctx_map SEC(".maps");
 
-const char TP[] = "Traceparent: 00-0123456789ABCDEFGHIJKLMNOPQRSTUV-0123456789ABCDEF-XX\r\n";
-const u32 EXTEND_SIZE = sizeof(TP) - 1;
-
 struct datasum_loop_ctx {
     const unsigned char *b;
     const unsigned char *e;
@@ -239,26 +236,6 @@ make_tp_string_skb(unsigned char *buf, const tp_info_t *tp, const unsigned char 
     *buf++ = (tp->flags == 0) ? '0' : '1';
     *buf++ = '\r';
     *buf++ = '\n';
-}
-
-static __always_inline void *ctx_data(struct __sk_buff *ctx) {
-    void *data;
-
-    asm("%[res] = *(u32 *)(%[base] + %[offset])"
-        : [res] "=r"(data)
-        : [base] "r"(ctx), [offset] "i"(offsetof(struct __sk_buff, data)), "m"(*ctx));
-
-    return data;
-}
-
-static __always_inline void *ctx_data_end(struct __sk_buff *ctx) {
-    void *data_end;
-
-    asm("%[res] = *(u32 *)(%[base] + %[offset])"
-        : [res] "=r"(data_end)
-        : [base] "r"(ctx), [offset] "i"(offsetof(struct __sk_buff, data_end)), "m"(*ctx));
-
-    return data_end;
 }
 
 __attribute__((unused)) static __always_inline struct ethhdr *eth_header(struct __sk_buff *ctx) {

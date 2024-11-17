@@ -79,9 +79,9 @@ type bpfPidConnectionInfoT struct {
 }
 
 type bpfTcHttpCtx struct {
-	Offset uint32
-	Seen   uint32
-	Size   uint32
+	Offset  uint32
+	Seen    uint32
+	Written uint32
 }
 
 type bpfTpInfoPidT struct {

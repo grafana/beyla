@@ -143,7 +143,7 @@ int packet_extender(struct sk_msg_md *msg) {
     connection_info_t conn = {};
 
     if (msg->family == AF_INET6) {
-        return 0;
+        return SK_PASS;
     }
     // if (msg->family == AF_INET6) {
     //     sk_msg_extract_key_ip6(msg, &conn);

@@ -14,10 +14,10 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
+	v2 "github.com/containers/common/pkg/cgroupv2"
 	"github.com/prometheus/procfs"
 	"golang.org/x/sys/unix"
 
-	v2 "github.com/containers/common/pkg/cgroupv2"
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/exec"
 )
@@ -398,7 +398,6 @@ func processMaps(pid int32) ([]*procfs.ProcMap, error) {
 }
 
 func getCgroupPath() (string, error) {
-	var err error = nil
 	cgroupPath := "/sys/fs/cgroup"
 
 	enabled, err := v2.Enabled()

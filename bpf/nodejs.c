@@ -12,8 +12,8 @@ volatile const s32 async_wrap_trigger_async_id_off = 0;
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, u64);   // the pid_tid 
-    __type(value, u64); // the last AsyncWrap *
+    __type(key, u64);          // the pid_tid
+    __type(value, u64);        // the last AsyncWrap *
     __uint(max_entries, 1000); // 1000 nodejs services, small number, nodejs is single threaded
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } async_reset_args SEC(".maps");
@@ -30,20 +30,6 @@ int async_reset(struct pt_regs *ctx) {
 
     bpf_dbg_printk("=== uprobe AsyncReset id=%d wrap=%llx ===", id, wrap);
     bpf_map_update_elem(&async_reset_args, &id, &wrap, BPF_ANY);
-
-    return 0;
-}
-
-SEC("uretprobe/node:AsyncReset")
-int async_reset_ret(struct pt_regs *ctx) {
-    u64 id = bpf_get_current_pid_tgid();
-
-    if (!valid_pid(id)) {
-        return 0;
-    }
-    
-    bpf_dbg_printk("=== uprobe AsyncReset returns id=%d ===", id);
-    bpf_map_delete_elem(&async_reset_args, &id);
 
     return 0;
 }
@@ -69,13 +55,15 @@ int emit_async_init(struct pt_regs *ctx) {
             u64 trigger_async_id = 0;
 
             bpf_probe_read_user(&async_id, sizeof(u64), ((void *)wrap) + async_wrap_async_id_off);
-            bpf_probe_read_user(&trigger_async_id, sizeof(u64), ((void *)wrap) + async_wrap_trigger_async_id_off);
+            bpf_probe_read_user(
+                &trigger_async_id, sizeof(u64), ((void *)wrap) + async_wrap_trigger_async_id_off);
 
             if (async_id) {
                 bpf_map_update_elem(&active_nodejs_ids, &id, &async_id, BPF_ANY);
                 if (trigger_async_id) {
                     bpf_map_update_elem(&nodejs_parent_map, &async_id, &trigger_async_id, BPF_ANY);
-                    bpf_dbg_printk("async_id = %llx, trigger_async_id = %llx", async_id, trigger_async_id);
+                    bpf_dbg_printk(
+                        "async_id = %llx, trigger_async_id = %llx", async_id, trigger_async_id);
                 } else {
                     bpf_dbg_printk("No trigger async id");
                 }

@@ -54,7 +54,6 @@ type bpf_debugSpecs struct {
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_debugProgramSpecs struct {
 	AsyncReset    *ebpf.ProgramSpec `ebpf:"async_reset"`
-	AsyncResetRet *ebpf.ProgramSpec `ebpf:"async_reset_ret"`
 	EmitAsyncInit *ebpf.ProgramSpec `ebpf:"emit_async_init"`
 }
 
@@ -116,14 +115,12 @@ func (m *bpf_debugMaps) Close() error {
 // It can be passed to loadBpf_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_debugPrograms struct {
 	AsyncReset    *ebpf.Program `ebpf:"async_reset"`
-	AsyncResetRet *ebpf.Program `ebpf:"async_reset_ret"`
 	EmitAsyncInit *ebpf.Program `ebpf:"emit_async_init"`
 }
 
 func (p *bpf_debugPrograms) Close() error {
 	return _Bpf_debugClose(
 		p.AsyncReset,
-		p.AsyncResetRet,
 		p.EmitAsyncInit,
 	)
 }

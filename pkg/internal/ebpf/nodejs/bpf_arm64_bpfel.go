@@ -54,7 +54,6 @@ type bpfSpecs struct {
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfProgramSpecs struct {
 	AsyncReset    *ebpf.ProgramSpec `ebpf:"async_reset"`
-	AsyncResetRet *ebpf.ProgramSpec `ebpf:"async_reset_ret"`
 	EmitAsyncInit *ebpf.ProgramSpec `ebpf:"emit_async_init"`
 }
 
@@ -113,14 +112,12 @@ func (m *bpfMaps) Close() error {
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfPrograms struct {
 	AsyncReset    *ebpf.Program `ebpf:"async_reset"`
-	AsyncResetRet *ebpf.Program `ebpf:"async_reset_ret"`
 	EmitAsyncInit *ebpf.Program `ebpf:"emit_async_init"`
 }
 
 func (p *bpfPrograms) Close() error {
 	return _BpfClose(
 		p.AsyncReset,
-		p.AsyncResetRet,
 		p.EmitAsyncInit,
 	)
 }

@@ -6,6 +6,7 @@
 #include "bpf_endian.h"
 #include "http_types.h"
 #include "tc_common.h"
+#include "bpf_dbg.h"
 
 #define SOCKOPS_MAP_SIZE 65535
 
@@ -151,13 +152,10 @@ int packet_extender(struct sk_msg_md *msg) {
     sk_msg_extract_key_ip4(msg, &conn);
     // }
 
-    bpf_printk("MSG %llx:%d -> %llx:%d", conn.s_ip[3], conn.s_port, conn.d_ip[3], conn.d_port);
+    bpf_dbg_printk("MSG %llx:%d ->", conn.s_ip[3], conn.s_port);
+    bpf_dbg_printk("MSG TO %llx:%d", conn.d_ip[3], conn.d_port);
 
     u8 tracked = is_tracked(&conn);
-
-    if (tracked) {
-        bpf_printk("*tracked*");
-    }
 
     if (tracked && len > 32) {
         msg_data_t *msg_data = buffer();
@@ -165,7 +163,7 @@ int packet_extender(struct sk_msg_md *msg) {
             bpf_msg_pull_data(msg, 0, 1024, 0);
             bpf_probe_read_kernel(msg_data->buf, 1024, msg->data);
             if (is_http_request_buf(msg_data->buf)) {
-                bpf_printk("len %d, s_port %d, buf: %s", len, msg->local_port, msg_data->buf);
+                bpf_dbg_printk("len %d, s_port %d, buf: %s", len, msg->local_port, msg_data->buf);
 
                 int newline_pos = find_first_pos_of(msg_data->buf, &msg_data->buf[1023], '\n');
 
@@ -181,8 +179,7 @@ int packet_extender(struct sk_msg_md *msg) {
 
                         bpf_map_update_elem(&tc_http_ctx_map, &port, &ctx, BPF_ANY);
                     }
-                    bpf_msg_pull_data(msg, 0, 1024, 0);
-                    bpf_printk("offset %d, new data: %s", newline_pos, (char *)msg->data);
+                    bpf_dbg_printk("offset to split %d", newline_pos);
                 }
             }
         }

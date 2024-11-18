@@ -6,8 +6,10 @@
 
 enum { MAX_INLINE_LEN = 0x3ff };
 
-const char TP[] = "Traceparent: 00-0123456789ABCDEFGHIJKLMNOPQRSTUV-0123456789ABCDEF-XX\r\n";
+const char TP[] = "Traceparent: 00-00000000000000000000000000000000-0000000000000000-01\r\n";
 const u32 EXTEND_SIZE = sizeof(TP) - 1;
+const char TP_PREFIX[] = "Traceparent: ";
+const u32 TP_PREFIX_SIZE = sizeof(TP_PREFIX) - 1;
 
 static __always_inline unsigned char *
 memchar(unsigned char *haystack, char needle, const unsigned char *end, u32 size) {

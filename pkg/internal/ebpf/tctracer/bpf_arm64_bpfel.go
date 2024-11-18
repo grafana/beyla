@@ -84,6 +84,8 @@ type bpfTcHttpCtx struct {
 	Written uint32
 }
 
+type bpfTpBufDataT struct{ Buf [256]uint8 }
+
 type bpfTpInfoPidT struct {
 	Tp struct {
 		TraceId  [16]uint8
@@ -158,6 +160,7 @@ type bpfMapSpecs struct {
 	OutgoingTraceMap          *ebpf.MapSpec `ebpf:"outgoing_trace_map"`
 	SockDir                   *ebpf.MapSpec `ebpf:"sock_dir"`
 	TcHttpCtxMap              *ebpf.MapSpec `ebpf:"tc_http_ctx_map"`
+	TpBufMemory               *ebpf.MapSpec `ebpf:"tp_buf_memory"`
 	TraceMap                  *ebpf.MapSpec `ebpf:"trace_map"`
 }
 
@@ -189,6 +192,7 @@ type bpfMaps struct {
 	OutgoingTraceMap          *ebpf.Map `ebpf:"outgoing_trace_map"`
 	SockDir                   *ebpf.Map `ebpf:"sock_dir"`
 	TcHttpCtxMap              *ebpf.Map `ebpf:"tc_http_ctx_map"`
+	TpBufMemory               *ebpf.Map `ebpf:"tp_buf_memory"`
 	TraceMap                  *ebpf.Map `ebpf:"trace_map"`
 }
 
@@ -203,6 +207,7 @@ func (m *bpfMaps) Close() error {
 		m.OutgoingTraceMap,
 		m.SockDir,
 		m.TcHttpCtxMap,
+		m.TpBufMemory,
 		m.TraceMap,
 	)
 }

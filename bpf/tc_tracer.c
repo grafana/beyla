@@ -43,8 +43,7 @@ static __always_inline void update_outgoing_request_span_id(connection_info_t *c
     http_info_t *h_info = bpf_map_lookup_elem(&ongoing_http, e_key);
     if (h_info && tp->valid) {
         bpf_dbg_printk("Found HTTP info, resetting the span id to %x%x", tcp->seq, tcp->ack);
-        *((u32 *)(&h_info->tp.span_id[0])) = tcp->seq;
-        *((u32 *)(&h_info->tp.span_id[4])) = tcp->ack;
+        populate_span_id_from_tcp_info(&h_info->tp, tcp);
     }
 
     go_addr_key_t *g_key = bpf_map_lookup_elem(&ongoing_go_http, e_key);
@@ -55,44 +54,34 @@ static __always_inline void update_outgoing_request_span_id(connection_info_t *c
         if (invocation) {
             bpf_dbg_printk(
                 "Found Go HTTP invocation, resetting the span id to %x%x", tcp->seq, tcp->ack);
-
-            *((u32 *)(&invocation->tp.span_id[0])) = tcp->seq;
-            *((u32 *)(&invocation->tp.span_id[4])) = tcp->ack;
+            populate_span_id_from_tcp_info(&invocation->tp, tcp);
         }
     }
 }
 
-__attribute__((unused)) static __always_inline void
-encode_data_in_ip_options(struct __sk_buff *skb,
-                          connection_info_t *conn,
-                          protocol_info_t *tcp,
-                          tp_info_pid_t *tp,
-                          egress_key_t *e_key) {
+static __always_inline void encode_data_in_ip_options(struct __sk_buff *skb,
+                                                      connection_info_t *conn,
+                                                      protocol_info_t *tcp,
+                                                      tp_info_pid_t *tp,
+                                                      egress_key_t *e_key) {
     // Handling IPv4
     // We only do this if the IP header doesn't have any options, this can be improved if needed
     if (tcp->h_proto == ETH_P_IP && tcp->ip_len == MIN_IP_LEN) {
         bpf_dbg_printk("Adding the trace_id in the IP Options");
 
-        if (inject_tc_ip_options_ipv4(skb, conn, tcp, tp)) {
-            update_outgoing_request_span_id(conn, tcp, tp, e_key);
-        }
-
-        bpf_map_delete_elem(&outgoing_trace_map, e_key);
+        inject_tc_ip_options_ipv4(skb, conn, tcp, tp);
+        tp->valid = 0;
     } else if (tcp->h_proto == ETH_P_IPV6 && tcp->l4_proto == IPPROTO_TCP) { // Handling IPv6
         bpf_dbg_printk("Found IPv6 header");
 
-        if (inject_tc_ip_options_ipv6(skb, conn, tcp, tp)) {
-            update_outgoing_request_span_id(conn, tcp, tp, e_key);
-        }
-
-        bpf_map_delete_elem(&outgoing_trace_map, e_key);
+        inject_tc_ip_options_ipv6(skb, conn, tcp, tp);
+        tp->valid = 0;
     }
 }
 
 SEC("tc_egress")
 int app_egress(struct __sk_buff *skb) {
     //bpf_printk("egress");
-
     protocol_info_t tcp = {};
     connection_info_t conn = {};
 
@@ -112,9 +101,15 @@ int app_egress(struct __sk_buff *skb) {
         bpf_dbg_printk("egress flags %x, sequence %x", tcp.flags, tcp.seq);
         dbg_print_http_connection_info(&conn);
 
-        l7_app_egress(skb, &conn, &tcp);
-        //encode_data_in_ip_options(skb, &conn, &tcp, tp, &e_key);
-        //bpf_map_delete_elem(&outgoing_trace_map, &e_key);
+        if (tp->valid == 1) {
+            populate_span_id_from_tcp_info(&tp->tp, &tcp);
+            update_outgoing_request_span_id(&conn, &tcp, tp, &e_key);
+            tp->valid = 2;
+        }
+        l7_app_egress(skb, tp, &conn, &tcp);
+        if (tp->valid) {
+            encode_data_in_ip_options(skb, &conn, &tcp, tp, &e_key);
+        }
     }
 
     return 0;

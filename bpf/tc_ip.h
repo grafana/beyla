@@ -9,11 +9,10 @@
 
 enum { MIN_IP_LEN = 20, MAX_TC_TP_LEN = 20, TC_TP_ID = 0x1488, MAX_IPV6_OPTS_LEN = 24 };
 
-static __always_inline void populate_span_id_from_tcp_info(tp_info_pid_t *new_tp,
-                                                           protocol_info_t *tcp) {
+static __always_inline void populate_span_id_from_tcp_info(tp_info_t *tp, protocol_info_t *tcp) {
     // We use a combination of the TCP sequence + TCP ack as a SpanID
-    *((u32 *)(&new_tp->tp.span_id[0])) = tcp->seq;
-    *((u32 *)(&new_tp->tp.span_id[4])) = tcp->ack;
+    *((u32 *)(&tp->span_id[0])) = tcp->seq;
+    *((u32 *)(&tp->span_id[4])) = tcp->ack;
 }
 
 static __always_inline void print_tp(tp_info_pid_t *new_tp) {
@@ -25,7 +24,7 @@ static __always_inline void print_tp(tp_info_pid_t *new_tp) {
 #endif
 }
 
-__attribute__((unused)) static __always_inline void
+static __always_inline void
 parse_ip_options_ipv4(struct __sk_buff *skb, connection_info_t *conn, protocol_info_t *tcp) {
     u16 key = 0;
     int ip_off = MIN_IP_LEN + ETH_HLEN;
@@ -41,7 +40,7 @@ parse_ip_options_ipv4(struct __sk_buff *skb, connection_info_t *conn, protocol_i
         if (!existing_tp) {
             bpf_dbg_printk("Found tp context in opts! ihl = %d", tcp->ip_len);
             tp_info_pid_t new_tp = {.pid = 0, .valid = 1};
-            populate_span_id_from_tcp_info(&new_tp, tcp);
+            populate_span_id_from_tcp_info(&new_tp.tp, tcp);
 
             // We load the TraceID from the IP options field. We skip two bytes for the key 0x88 + len (2 bytes)
             bpf_skb_load_bytes(
@@ -56,7 +55,7 @@ parse_ip_options_ipv4(struct __sk_buff *skb, connection_info_t *conn, protocol_i
     }
 }
 
-__attribute__((unused)) static __always_inline void
+static __always_inline void
 parse_ip_options_ipv6(struct __sk_buff *skb, connection_info_t *conn, protocol_info_t *tcp) {
     bpf_dbg_printk("IPv6 ingress");
     dbg_print_http_connection_info(conn);
@@ -65,7 +64,7 @@ parse_ip_options_ipv6(struct __sk_buff *skb, connection_info_t *conn, protocol_i
     tp_info_pid_t *existing_tp = (tp_info_pid_t *)bpf_map_lookup_elem(&incoming_trace_map, conn);
     if (!existing_tp) {
         tp_info_pid_t new_tp = {.pid = 0, .valid = 1};
-        populate_span_id_from_tcp_info(&new_tp, tcp);
+        populate_span_id_from_tcp_info(&new_tp.tp, tcp);
 
         // Skip the first 4 bytes (next header, len, dest option, dest len)
         int ip_off = tcp->ip_len + 4;

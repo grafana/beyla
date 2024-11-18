@@ -7,6 +7,7 @@
 #include "http_types.h"
 #include "tc_common.h"
 #include "bpf_dbg.h"
+#include "tracing.h"
 
 #define SOCKOPS_MAP_SIZE 65535
 

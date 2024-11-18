@@ -32,7 +32,7 @@ find_first_of(unsigned char *begin, unsigned char *end, char ch) {
 }
 
 static __always_inline int
-memchar_pos(unsigned char *haystack, char needle, const unsigned char *end, u32 size) {
+memchar_pos(unsigned const char *haystack, char needle, const unsigned char *end, u32 size) {
     for (u32 i = 0; i < size; ++i) {
         if (&haystack[i] >= end) {
             break;

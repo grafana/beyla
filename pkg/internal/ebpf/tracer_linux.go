@@ -39,13 +39,33 @@ type instrumenter struct {
 	modules   map[uint64]struct{}
 }
 
-func resolveInternalMaps(spec *ebpf.CollectionSpec) (*ebpf.CollectionOptions, error) {
+func roundToNearestMultiple(x, n uint32) uint32 {
+	return (x + n/2) / n * n
+}
+
+// RingBuf map types must be a multiple of os.Getpagesize()
+func setupRingBufMaxEntries(m *ebpf.MapSpec) {
+	if m.Type != ebpf.RingBuf {
+		return
+	}
+
+	pageSize := uint32(os.Getpagesize())
+
+	if m.MaxEntries%pageSize != 0 {
+		m.MaxEntries = roundToNearestMultiple(m.MaxEntries, pageSize)
+	}
+}
+
+// sets up internal maps and ensures sane max entries values
+func resolveMaps(spec *ebpf.CollectionSpec) (*ebpf.CollectionOptions, error) {
 	collOpts := ebpf.CollectionOptions{MapReplacements: map[string]*ebpf.Map{}}
 
 	internalMapsMux.Lock()
 	defer internalMapsMux.Unlock()
 
 	for k, v := range spec.Maps {
+		setupRingBufMaxEntries(v)
+
 		if v.Pinning != PinInternal {
 			continue
 		}
@@ -122,7 +142,7 @@ func (pt *ProcessTracer) loadAndAssign(p Tracer) error {
 		return err
 	}
 
-	collOpts, err := resolveInternalMaps(spec)
+	collOpts, err := resolveMaps(spec)
 
 	if err != nil {
 		return err
@@ -283,7 +303,7 @@ func RunUtilityTracer(p UtilityTracer) error {
 		return fmt.Errorf("loading eBPF program: %w", err)
 	}
 
-	collOpts, err := resolveInternalMaps(spec)
+	collOpts, err := resolveMaps(spec)
 	if err != nil {
 		return err
 	}

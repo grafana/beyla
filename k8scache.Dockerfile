@@ -22,7 +22,7 @@ COPY .git/ .git/
 RUN make compile-cache
 
 # Create final image from minimal + built binary
-FROM debian:bookworm-slim
+FROM scratch
 
 LABEL maintainer="Grafana Labs <hello@grafana.com>"
 
@@ -32,7 +32,5 @@ COPY --from=builder /opt/app-root/bin/k8s-cache .
 COPY --from=builder /opt/app-root/LICENSE .
 COPY --from=builder /opt/app-root/NOTICE .
 COPY --from=builder /opt/app-root/third_party_licenses.csv .
-
-USER 0:0
 
 ENTRYPOINT [ "/k8s-cache" ]

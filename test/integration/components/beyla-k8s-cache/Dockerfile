@@ -23,10 +23,9 @@ COPY Makefile Makefile
 RUN make compile-cache-for-coverage
 
 # Create final image from minimal + built binary
-FROM debian:bookworm-slim
+FROM scratch
 
 WORKDIR /
 COPY --from=builder /src/bin/k8s-cache .
-USER 0:0
 
 ENTRYPOINT [ "/k8s-cache" ]

@@ -3,15 +3,25 @@
 package informer_cache
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
+	"strconv"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/test/integration/components/docker"
 	"github.com/grafana/beyla/test/integration/components/kube"
+	"github.com/grafana/beyla/test/integration/components/prom"
 	k8s "github.com/grafana/beyla/test/integration/k8s/common"
 	otel "github.com/grafana/beyla/test/integration/k8s/netolly"
 	"github.com/grafana/beyla/test/tools"
+)
+
+const (
+	prometheusHostPort = "localhost:39090"
 )
 
 var cluster *kube.Kind
@@ -69,4 +79,24 @@ func TestInformersCache_ProcessMetrics(t *testing.T) {
 
 func TestInformersCache_NetworkMetrics(t *testing.T) {
 	cluster.TestEnv().Test(t, otel.FeatureNetworkFlowBytes())
+}
+
+func TestInformersCache_InternalMetrics(t *testing.T) {
+	require.NotZero(t, metricVal(t, "beyla_kube_cache_client_message_submits"))
+	require.NotZero(t, metricVal(t, "beyla_kube_cache_connected_clients"))
+	require.NotZero(t, metricVal(t, "beyla_kube_cache_informer_new"))
+	require.NotZero(t, metricVal(t, "beyla_kube_cache_informer_update"))
+	require.NotZero(t, metricVal(t, "beyla_kube_cache_internal_build_info"))
+}
+
+func metricVal(t *testing.T, promQLQuery string) int {
+	pq := prom.Client{HostPort: prometheusHostPort}
+
+	results, err := pq.Query(promQLQuery)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	require.Len(t, results[0].Value, 2)
+	n, err := strconv.Atoi(fmt.Sprint(results[0].Value[1]))
+	require.NoError(t, err)
+	return n
 }

@@ -45,14 +45,8 @@ func roundToNearestMultiple(x, n uint32) uint32 {
 
 // RingBuf map types must be a multiple of os.Getpagesize()
 func setupRingBufMaxEntries(m *ebpf.MapSpec) {
-	if m.Type != ebpf.RingBuf {
-		return
-	}
-
-	pageSize := uint32(os.Getpagesize())
-
-	if m.MaxEntries%pageSize != 0 {
-		m.MaxEntries = roundToNearestMultiple(m.MaxEntries, pageSize)
+	if m.Type == ebpf.RingBuf {
+		m.MaxEntries = roundToNearestMultiple(m.MaxEntries, uint32(os.Getpagesize()))
 	}
 }
 

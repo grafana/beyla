@@ -44,7 +44,7 @@ func roundToNearestMultiple(x, n uint32) uint32 {
 }
 
 // RingBuf map types must be a multiple of os.Getpagesize()
-func setupRingBufMaxEntries(m *ebpf.MapSpec) {
+func adjustRingBufMaxEntries(m *ebpf.MapSpec) {
 	if m.Type == ebpf.RingBuf {
 		m.MaxEntries = roundToNearestMultiple(m.MaxEntries, uint32(os.Getpagesize()))
 	}
@@ -58,7 +58,7 @@ func resolveMaps(spec *ebpf.CollectionSpec) (*ebpf.CollectionOptions, error) {
 	defer internalMapsMux.Unlock()
 
 	for k, v := range spec.Maps {
-		setupRingBufMaxEntries(v)
+		adjustRingBufMaxEntries(v)
 
 		if v.Pinning != PinInternal {
 			continue

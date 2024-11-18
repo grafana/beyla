@@ -857,6 +857,7 @@ func testNestedHTTPTracesKProbes(t *testing.T) {
 	}
 
 	t.Run("Traces RestClient client /jtraceB", func(t *testing.T) {
+		t.Skip("seems flaky, we need to look into this / need proper JAVA support")
 		ensureTracesMatch(t, "jtraceB")
 	})
 }

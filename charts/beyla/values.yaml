@@ -334,7 +334,7 @@ k8sCache:
     #     port: 6060
     #     path: /metrics
   # -- Deployment annotations.
-  annotations: { }
+  annotations: {}
   # -- Adds custom annotations to the Beyla Kube Cache Pods.
   podAnnotations: {}
   # -- Adds custom labels to the Beyla Kube Cache Pods.

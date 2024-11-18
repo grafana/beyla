@@ -56,15 +56,15 @@ func prometheusInternalMetrics(
 	pr := &promInternalMetrics{
 		connector: manager,
 		informerNew: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "beyla_kube_cache_informer_new",
+			Name: "beyla_kube_cache_informer_new_total",
 			Help: "How many 'new' metadata events has the informer received",
 		}),
 		informerUpdate: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "beyla_kube_cache_informer_update",
+			Name: "beyla_kube_cache_informer_update_total",
 			Help: "How many 'update' metadata events has the informer received",
 		}),
 		informerDelete: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "beyla_kube_cache_informer_delete",
+			Name: "beyla_kube_cache_informer_delete_total",
 			Help: "How many 'delete' metadata events has the informer received",
 		}),
 		connectedClients: prometheus.NewGauge(prometheus.GaugeOpts{
@@ -72,20 +72,20 @@ func prometheusInternalMetrics(
 			Help: "How many concurrent Beyla instances are connected to this cache service",
 		}),
 		messageSubmit: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "beyla_kube_cache_client_message_submits",
+			Name: "beyla_kube_cache_client_message_submits_total",
 			Help: "How many notifications have been started to be submitted to" +
 				" the subscriber client. This includes messages not yet received or failed",
 		}),
 		messageSucceed: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "beyla_kube_cache_client_message_successes",
+			Name: "beyla_kube_cache_client_message_successes_total",
 			Help: "How many notifications have been successfully submitted to the subscriber client",
 		}),
 		messageError: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "beyla_kube_cache_client_message_errors",
+			Name: "beyla_kube_cache_client_message_errors_total",
 			Help: "How many notifications couldn't be submitted to the subscriber client due to an error",
 		}),
 		messageTimeout: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "beyla_kube_cache_client_message_timeouts",
+			Name: "beyla_kube_cache_client_message_timeouts_total",
 			Help: "How many notifications timed out before finish its submission to the subscriber client",
 		}),
 		beylaCacheInfo: prometheus.NewGauge(prometheus.GaugeOpts{

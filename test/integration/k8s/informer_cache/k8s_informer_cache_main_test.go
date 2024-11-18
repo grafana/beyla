@@ -8,7 +8,6 @@ import (
 	"os"
 	"strconv"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -82,10 +81,10 @@ func TestInformersCache_NetworkMetrics(t *testing.T) {
 }
 
 func TestInformersCache_InternalMetrics(t *testing.T) {
-	require.NotZero(t, metricVal(t, "beyla_kube_cache_client_message_submits"))
+	require.NotZero(t, metricVal(t, "beyla_kube_cache_client_message_submits_total"))
 	require.NotZero(t, metricVal(t, "beyla_kube_cache_connected_clients"))
-	require.NotZero(t, metricVal(t, "beyla_kube_cache_informer_new"))
-	require.NotZero(t, metricVal(t, "beyla_kube_cache_informer_update"))
+	require.NotZero(t, metricVal(t, "beyla_kube_cache_informer_new_total"))
+	require.NotZero(t, metricVal(t, "beyla_kube_cache_informer_update_total"))
 	require.NotZero(t, metricVal(t, "beyla_kube_cache_internal_build_info"))
 }
 

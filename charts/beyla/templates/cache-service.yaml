@@ -20,6 +20,13 @@ spec:
     - port: {{ .Values.k8sCache.service.port }}
       protocol: TCP
       targetPort: grpc
+      name: grpc
+{{ if .Values.k8sCache.internalMetrics.port }}
+    - port: {{ .Values.k8sCache.internalMetrics.port }}
+      targetPort: {{ .Values.k8sCache.internalMetrics.portName }}
+      name: {{ .Values.k8sCache.internalMetrics.portName }}
+      protocol: TCP
+{{- end }}
   selector:
     app.kubernetes.io/name: {{ .Values.k8sCache.service.name }}
 {{- end }}

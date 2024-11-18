@@ -21,6 +21,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/grafana/beyla/pkg/kubecache/informer"
+	"github.com/grafana/beyla/pkg/kubecache/instrument"
 	"github.com/grafana/beyla/pkg/kubecache/meta/cni"
 )
 
@@ -120,16 +121,16 @@ func InitInformers(ctx context.Context, opts ...InformerOption) (*Informers, err
 
 	informerFactory := informers.NewSharedInformerFactory(svc.config.kubeClient, svc.config.resyncPeriod)
 
-	if err := svc.initPodInformer(informerFactory); err != nil {
+	if err := svc.initPodInformer(ctx, informerFactory); err != nil {
 		return nil, err
 	}
 	if !svc.config.disableNodes {
-		if err := svc.initNodeIPInformer(informerFactory); err != nil {
+		if err := svc.initNodeIPInformer(ctx, informerFactory); err != nil {
 			return nil, err
 		}
 	}
 	if !svc.config.disableServices {
-		if err := svc.initServiceIPInformer(informerFactory); err != nil {
+		if err := svc.initServiceIPInformer(ctx, informerFactory); err != nil {
 			return nil, err
 		}
 	}
@@ -211,7 +212,7 @@ func minimalIndex(om *metav1.ObjectMeta) metav1.ObjectMeta {
 	}
 }
 
-func (inf *Informers) initPodInformer(informerFactory informers.SharedInformerFactory) error {
+func (inf *Informers) initPodInformer(ctx context.Context, informerFactory informers.SharedInformerFactory) error {
 	pods := informerFactory.Core().V1().Pods().Informer()
 
 	// Transform any *v1.Pod instance into a *PodInfo instance to save space
@@ -287,7 +288,7 @@ func (inf *Informers) initPodInformer(informerFactory informers.SharedInformerFa
 		return fmt.Errorf("can't set pods transform: %w", err)
 	}
 
-	_, err := pods.AddEventHandler(inf.ipInfoEventHandler())
+	_, err := pods.AddEventHandler(inf.ipInfoEventHandler(ctx))
 	if err != nil {
 		return fmt.Errorf("can't register Pod event handler in the K8s informer: %w", err)
 	}
@@ -326,7 +327,7 @@ func rmContainerIDSchema(containerID string) string {
 	return containerID
 }
 
-func (inf *Informers) initNodeIPInformer(informerFactory informers.SharedInformerFactory) error {
+func (inf *Informers) initNodeIPInformer(ctx context.Context, informerFactory informers.SharedInformerFactory) error {
 	nodes := informerFactory.Core().V1().Nodes().Informer()
 	// Transform any *v1.Node instance into an *indexableEntity instance to save space
 	// in the informer's cache
@@ -364,7 +365,7 @@ func (inf *Informers) initNodeIPInformer(informerFactory informers.SharedInforme
 		return fmt.Errorf("can't set nodes transform: %w", err)
 	}
 
-	if _, err := nodes.AddEventHandler(inf.ipInfoEventHandler()); err != nil {
+	if _, err := nodes.AddEventHandler(inf.ipInfoEventHandler(ctx)); err != nil {
 		return fmt.Errorf("can't register Node event handler in the K8s informer: %w", err)
 	}
 	inf.log.Debug("registered Node event handler in the K8s informer")
@@ -373,7 +374,7 @@ func (inf *Informers) initNodeIPInformer(informerFactory informers.SharedInforme
 	return nil
 }
 
-func (inf *Informers) initServiceIPInformer(informerFactory informers.SharedInformerFactory) error {
+func (inf *Informers) initServiceIPInformer(ctx context.Context, informerFactory informers.SharedInformerFactory) error {
 	services := informerFactory.Core().V1().Services().Informer()
 	// Transform any *v1.Service instance into a *indexableEntity instance to save space
 	// in the informer's cache
@@ -405,7 +406,7 @@ func (inf *Informers) initServiceIPInformer(informerFactory informers.SharedInfo
 		return fmt.Errorf("can't set services transform: %w", err)
 	}
 
-	if _, err := services.AddEventHandler(inf.ipInfoEventHandler()); err != nil {
+	if _, err := services.AddEventHandler(inf.ipInfoEventHandler(ctx)); err != nil {
 		return fmt.Errorf("can't register Service event handler in the K8s informer: %w", err)
 	}
 	inf.log.Debug("registered Service event handler in the K8s informer")
@@ -418,9 +419,11 @@ func headlessService(om *informer.ObjectMeta) bool {
 	return len(om.Ips) == 0 && om.Kind == "Service"
 }
 
-func (inf *Informers) ipInfoEventHandler() *cache.ResourceEventHandlerFuncs {
+func (inf *Informers) ipInfoEventHandler(ctx context.Context) *cache.ResourceEventHandlerFuncs {
+	metrics := instrument.FromContext(ctx)
 	return &cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
+			metrics.InformerNew()
 			// ignore headless services from being added
 			if headlessService(obj.(*indexableEntity).EncodedMeta) {
 				return
@@ -431,6 +434,7 @@ func (inf *Informers) ipInfoEventHandler() *cache.ResourceEventHandlerFuncs {
 			})
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
+			metrics.InformerUpdate()
 			// ignore headless services from being added
 			if headlessService(newObj.(*indexableEntity).EncodedMeta) &&
 				headlessService(oldObj.(*indexableEntity).EncodedMeta) {
@@ -449,6 +453,7 @@ func (inf *Informers) ipInfoEventHandler() *cache.ResourceEventHandlerFuncs {
 			})
 		},
 		DeleteFunc: func(obj interface{}) {
+			metrics.InformerDelete()
 			inf.Notify(&informer.Event{
 				Type:     informer.EventType_DELETED,
 				Resource: obj.(*indexableEntity).EncodedMeta,

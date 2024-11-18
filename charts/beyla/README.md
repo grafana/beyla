@@ -1,6 +1,6 @@
 # beyla
 
-![Version: 1.4.11](https://img.shields.io/badge/Version-1.4.11-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 1.8.6](https://img.shields.io/badge/AppVersion-1.8.6-informational?style=flat-square)
+![Version: 1.4.12](https://img.shields.io/badge/Version-1.4.12-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 1.8.6](https://img.shields.io/badge/AppVersion-1.8.6-informational?style=flat-square)
 
 eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network metrics.
 
@@ -41,7 +41,8 @@ eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network
 | image.registry | string | `"docker.io"` | Beyla image registry (defaults to docker.io) |
 | image.repository | string | `"grafana/beyla"` | Beyla image repository. |
 | image.tag | string | `nil` | Beyla image tag. When empty, the Chart's appVersion is used. |
-| k8sCache | object | `{"env":{},"envValueFrom":{},"image":{"digest":null,"pullPolicy":"IfNotPresent","pullSecrets":[],"registry":"docker.io","repository":"grafana/beyla-k8s-cache","tag":null},"profile_port":0,"replicas":0,"resources":{},"service":{"annotations":{},"labels":{},"name":"beyla-k8s-cache","port":50055}}` | Options to deploy the Kubernetes metadata cache as a separate service |
+| k8sCache | object | `{"annotations":{},"env":{},"envValueFrom":{},"image":{"digest":null,"pullPolicy":"IfNotPresent","pullSecrets":[],"registry":"docker.io","repository":"grafana/beyla-k8s-cache","tag":null},"internalMetrics":{"path":"/metrics","port":0,"portName":"metrics"},"podAnnotations":{},"podLabels":{},"profilePort":0,"replicas":0,"resources":{},"service":{"annotations":{},"labels":{},"name":"beyla-k8s-cache","port":50055}}` | Options to deploy the Kubernetes metadata cache as a separate service |
+| k8sCache.annotations | object | `{}` | Deployment annotations. |
 | k8sCache.env | object | `{}` | extra environment variables |
 | k8sCache.envValueFrom | object | `{}` | extra environment variables to be set from resources such as k8s configMaps/secrets |
 | k8sCache.image.digest | string | `nil` | K8s Cache image's SHA256 digest (either in format "sha256:XYZ" or "XYZ"). When set, will override `image.tag`. |
@@ -50,7 +51,9 @@ eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network
 | k8sCache.image.registry | string | `"docker.io"` | K8s Cache image registry (defaults to docker.io) |
 | k8sCache.image.repository | string | `"grafana/beyla-k8s-cache"` | K8s Cache image repository. |
 | k8sCache.image.tag | string | `nil` | K8s Cache image tag. When empty, the Chart's appVersion is used. |
-| k8sCache.profile_port | int | `0` | Enables the profile port for the Beyla cache |
+| k8sCache.podAnnotations | object | `{}` | Adds custom annotations to the Beyla Kube Cache Pods. |
+| k8sCache.podLabels | object | `{}` | Adds custom labels to the Beyla Kube Cache Pods. |
+| k8sCache.profilePort | int | `0` | Enables the profile port for the Beyla cache |
 | k8sCache.replicas | int | `0` | Number of replicas for the Kubernetes metadata chache service. 0 disables the service. |
 | k8sCache.service.annotations | object | `{}` | Service annotations. |
 | k8sCache.service.labels | object | `{}` | Service labels. |

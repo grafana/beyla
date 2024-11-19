@@ -242,10 +242,9 @@ func TestAsynchronousStartup(t *testing.T) {
 	cl1 := serviceClient{Address: addr}
 	cl2 := serviceClient{Address: addr}
 	cl3 := serviceClient{Address: addr}
-	// passing the test-wide testing.T instance in case clients fail asynchronously, after eventually succeeded
-	go func() { test.Eventually(t, timeout, func(_ require.TestingT) { cl1.Start(ctx, t) }) }()
-	go func() { test.Eventually(t, timeout, func(_ require.TestingT) { cl2.Start(ctx, t) }) }()
-	go func() { test.Eventually(t, timeout, func(_ require.TestingT) { cl3.Start(ctx, t) }) }()
+	go func() { test.Eventually(t, timeout, func(t require.TestingT) { cl1.Start(ctx, t) }) }()
+	go func() { test.Eventually(t, timeout, func(t require.TestingT) { cl2.Start(ctx, t) }) }()
+	go func() { test.Eventually(t, timeout, func(t require.TestingT) { cl3.Start(ctx, t) }) }()
 
 	iConfig := kubecache.DefaultConfig
 	iConfig.Port = newFreePort
@@ -384,13 +383,12 @@ func (sc *serviceClient) Start(ctx context.Context, t require.TestingT) {
 			}
 			if event.Type == informer.EventType_SYNC_FINISHED {
 				if sc.syncSignalOnMessage.Load() != 0 {
-					t.Errorf("client %s: can't receive two signal sync messages! (received at %d and %d)",
-						conn.GetState().String(), sc.syncSignalOnMessage.Load(), sc.readMessages.Load())
-					t.FailNow()
+					slog.Error(fmt.Sprintf("client %s: can't receive two signal sync messages! (received at %d and %d)",
+						conn.GetState().String(), sc.syncSignalOnMessage.Load(), sc.readMessages.Load()))
+					return
 				}
 				sc.syncSignalOnMessage.Store(sc.readMessages.Load())
 			}
 		}
-
 	}()
 }

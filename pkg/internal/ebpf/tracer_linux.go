@@ -40,6 +40,10 @@ type instrumenter struct {
 }
 
 func roundToNearestMultiple(x, n uint32) uint32 {
+	if x < n {
+		return n
+	}
+
 	return (x + n/2) / n * n
 }
 

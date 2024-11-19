@@ -1,6 +1,6 @@
 # beyla
 
-![Version: 1.4.13](https://img.shields.io/badge/Version-1.4.13-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 1.8.8](https://img.shields.io/badge/AppVersion-1.8.8-informational?style=flat-square)
+![Version: 1.4.14](https://img.shields.io/badge/Version-1.4.14-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 1.8.8](https://img.shields.io/badge/AppVersion-1.8.8-informational?style=flat-square)
 
 eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network metrics.
 

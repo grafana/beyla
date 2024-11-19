@@ -32,18 +32,3 @@ jobs:
             "type=semver,pattern={{major}}.{{minor}}"
             "type=semver,pattern={{major}}.{{minor}}.{{patch}}"
           push: true
-
-      - id: push-beyla-k8s-cache-to-dockerhub
-        uses: grafana/shared-workflows/actions/build-push-to-dockerhub@main
-        with:
-          repository: grafana/beyla-k8s-cache
-          file: k8scache.Dockerfile
-          context: .
-          platforms: |-
-            "linux/amd64"
-            "linux/arm64"
-          tags: |-
-            "type=semver,pattern={{major}}"
-            "type=semver,pattern={{major}}.{{minor}}"
-            "type=semver,pattern={{major}}.{{minor}}.{{patch}}"
-          push: true

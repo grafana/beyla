@@ -81,11 +81,11 @@ func TestInformersCache_NetworkMetrics(t *testing.T) {
 }
 
 func TestInformersCache_InternalMetrics(t *testing.T) {
-	require.NotZero(t, metricVal(t, "beyla_kube_cache_client_message_submits_total"))
-	require.NotZero(t, metricVal(t, "beyla_kube_cache_connected_clients"))
-	require.NotZero(t, metricVal(t, "beyla_kube_cache_informer_new_total"))
-	require.NotZero(t, metricVal(t, "beyla_kube_cache_informer_update_total"))
-	require.NotZero(t, metricVal(t, "beyla_kube_cache_internal_build_info"))
+	require.NotZero(t, metricVal(t, `beyla_kube_cache_client_messages_total{status="submit"}`))
+	require.NotZero(t, metricVal(t, `beyla_kube_cache_connected_clients`))
+	require.NotZero(t, metricVal(t, `beyla_kube_cache_informer_events_total{type="new"}`))
+	require.NotZero(t, metricVal(t, `beyla_kube_cache_informer_events_total{type="update"}`))
+	require.NotZero(t, metricVal(t, `beyla_kube_cache_internal_build_info`))
 }
 
 func metricVal(t *testing.T, promQLQuery string) int {

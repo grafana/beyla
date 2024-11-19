@@ -258,7 +258,7 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.FunctionPrograms {
 			Required: true,
 			Start:    p.bpfObjects.KprobeTcpClose,
 		},
-		"tcp_sendmsg": {
+		"tcp_sendmsg_locked": {
 			Required: true,
 			Start:    p.bpfObjects.KprobeTcpSendmsg,
 			End:      p.bpfObjects.KretprobeTcpSendmsg,

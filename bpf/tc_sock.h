@@ -8,6 +8,8 @@
 #include "tc_common.h"
 #include "bpf_dbg.h"
 #include "tracing.h"
+#include "http_ssl_defs.h"
+#include "k_tracer_defs.h"
 
 #define SOCKOPS_MAP_SIZE 65535
 
@@ -139,6 +141,56 @@ static __always_inline u8 is_tracked(connection_info_t *conn) {
     return tp != 0;
 }
 
+static __always_inline void
+protocol_detector(struct sk_msg_md *msg, connection_info_t *conn, u8 *buf) {
+    u64 id = bpf_get_current_pid_tgid();
+
+    if (!valid_pid(id)) {
+        return;
+    }
+
+    bpf_dbg_printk("=== [protocol detector] %d size %d===", id, msg->size);
+
+    send_args_t s_args = {.size = msg->size};
+    __builtin_memcpy(&s_args.p_conn.conn, conn, sizeof(connection_info_t));
+
+    u16 orig_dport = s_args.p_conn.conn.d_port;
+    dbg_print_http_connection_info(&s_args.p_conn.conn);
+    sort_connection_info(&s_args.p_conn.conn);
+    s_args.p_conn.pid = pid_from_pid_tgid(id);
+
+    void *ssl = is_ssl_connection(id);
+    if (s_args.size > 0) {
+        if (!ssl) {
+            void *active_ssl = is_active_ssl(&s_args.p_conn);
+            if (!active_ssl) {
+                handle_buf_msg(&s_args, buf, s_args.size, NO_SSL, TCP_SEND, orig_dport);
+            } else {
+                bpf_dbg_printk("ignoring protocol detector for SSL message...");
+            }
+        } else {
+            bpf_dbg_printk("ignoring protocol detector for SSL message...");
+        }
+    }
+
+    finish_possible_delayed_http_request(&s_args.p_conn);
+
+    if (!ssl) {
+        return;
+    }
+
+    bpf_dbg_printk("=== [protocol detector] SSL %d ssl=%llx ===", id, ssl);
+    ssl_pid_connection_info_t *s_conn = bpf_map_lookup_elem(&ssl_to_conn, &ssl);
+    if (s_conn) {
+        finish_possible_delayed_tls_http_request(&s_conn->p_conn, ssl);
+    }
+    ssl_pid_connection_info_t ssl_conn = {
+        .orig_dport = orig_dport,
+    };
+    __builtin_memcpy(&ssl_conn.p_conn, &s_args.p_conn, sizeof(pid_connection_info_t));
+    bpf_map_update_elem(&ssl_to_conn, &ssl, &ssl_conn, BPF_ANY);
+}
+
 SEC("sk_msg")
 int packet_extender(struct sk_msg_md *msg) {
     u64 len = (u64)msg->data_end - (u64)msg->data;
@@ -156,32 +208,35 @@ int packet_extender(struct sk_msg_md *msg) {
     bpf_dbg_printk("MSG %llx:%d ->", conn.s_ip[3], conn.s_port);
     bpf_dbg_printk("MSG TO %llx:%d", conn.d_ip[3], conn.d_port);
 
+    msg_data_t *msg_data = buffer();
+    if (!msg_data) {
+        return SK_PASS;
+    }
+    bpf_msg_pull_data(msg, 0, 1024, 0);
+    bpf_probe_read_kernel(msg_data->buf, 1024, msg->data);
+
+    protocol_detector(msg, &conn, msg_data->buf);
     u8 tracked = is_tracked(&conn);
 
-    if (tracked && len > 32) {
-        msg_data_t *msg_data = buffer();
-        if (msg_data) {
-            bpf_msg_pull_data(msg, 0, 1024, 0);
-            bpf_probe_read_kernel(msg_data->buf, 1024, msg->data);
-            if (is_http_request_buf(msg_data->buf)) {
-                bpf_dbg_printk("len %d, s_port %d, buf: %s", len, msg->local_port, msg_data->buf);
+    if (tracked && len > MIN_HTTP_SIZE) {
+        if (is_http_request_buf(msg_data->buf)) {
+            bpf_dbg_printk("len %d, s_port %d, buf: %s", len, msg->local_port, msg_data->buf);
 
-                int newline_pos = find_first_pos_of(msg_data->buf, &msg_data->buf[1023], '\n');
+            int newline_pos = find_first_pos_of(msg_data->buf, &msg_data->buf[1023], '\n');
 
-                if (newline_pos >= 0) {
-                    newline_pos++;
-                    if (!bpf_msg_push_data(msg, newline_pos, EXTEND_SIZE, 0)) {
-                        tc_http_ctx_t ctx = {
-                            .offset = newline_pos,
-                            .seen = 0,
-                            .written = 0,
-                        };
-                        u32 port = msg->local_port;
+            if (newline_pos >= 0) {
+                newline_pos++;
+                if (!bpf_msg_push_data(msg, newline_pos, EXTEND_SIZE, 0)) {
+                    tc_http_ctx_t ctx = {
+                        .offset = newline_pos,
+                        .seen = 0,
+                        .written = 0,
+                    };
+                    u32 port = msg->local_port;
 
-                        bpf_map_update_elem(&tc_http_ctx_map, &port, &ctx, BPF_ANY);
-                    }
-                    bpf_dbg_printk("offset to split %d", newline_pos);
+                    bpf_map_update_elem(&tc_http_ctx_map, &port, &ctx, BPF_ANY);
                 }
+                bpf_dbg_printk("offset to split %d", newline_pos);
             }
         }
     }

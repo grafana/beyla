@@ -203,6 +203,113 @@ static __always_inline void handle_http_response(unsigned char *small_buf,
     bpf_map_delete_elem(&active_ssl_connections, pid_conn);
 }
 
+static __always_inline http_info_t *http_info_from_args(pid_connection_info_t *pid_conn,
+                                                        int bytes_len,
+                                                        u8 ssl,
+                                                        u8 direction,
+                                                        u8 packet_type,
+                                                        u8 *fallback) {
+    http_info_t *in = empty_http_info();
+    if (!in) {
+        bpf_dbg_printk("Error allocating http info from per CPU map");
+        return 0;
+    }
+
+    __builtin_memcpy(&in->conn_info, &pid_conn->conn, sizeof(connection_info_t));
+    in->ssl = ssl;
+
+    http_info_t *info = get_or_set_http_info(in, pid_conn, packet_type);
+    *fallback = 0;
+    if (!info) {
+        bpf_dbg_printk("No info, pid =%d?, looking for fallback...", pid_conn->pid);
+        info = (http_info_t *)bpf_map_lookup_elem(&ongoing_http_fallback, &pid_conn->conn);
+        if (!info) {
+            bpf_dbg_printk("No fallback either, giving up");
+            //dbg_print_http_connection_info(&pid_conn->conn); // commented out since GitHub CI doesn't like this call
+            return 0;
+        }
+        *fallback = 1;
+        task_pid(&info->pid);
+        if (direction == TCP_RECV) {
+            info->type = EVENT_HTTP_CLIENT;
+        } else {
+            info->type = EVENT_HTTP_REQUEST;
+        }
+    }
+
+    bpf_dbg_printk("=== http_buffer_event len=%d pid=%d still_reading=%d ===",
+                   bytes_len,
+                   pid_from_pid_tgid(bpf_get_current_pid_tgid()),
+                   still_reading(info));
+
+    return info;
+}
+
+static __always_inline int protocol_http_epilogue(http_info_t *info,
+                                                  u8 fallback,
+                                                  pid_connection_info_t *pid_conn,
+                                                  u8 *buf,
+                                                  int bytes_len,
+                                                  u8 ssl,
+                                                  u8 direction,
+                                                  u8 packet_type) {
+    if ((packet_type == PACKET_TYPE_RESPONSE) && (info->status == 0)) {
+        handle_http_response(buf, pid_conn, info, bytes_len, direction, ssl);
+        if (fallback) {
+            finish_http(info, pid_conn);
+        }
+    } else if (still_reading(info)) {
+        info->len += bytes_len;
+    }
+
+    bpf_map_delete_elem(&ongoing_http_fallback, &pid_conn->conn);
+
+    return 0;
+}
+
+static __always_inline int protocol_http_inline(pid_connection_info_t *pid_conn,
+                                                u8 *buf,
+                                                int bytes_len,
+                                                u8 ssl,
+                                                u8 direction,
+                                                u16 orig_dport,
+                                                u8 packet_type) {
+    u8 fallback = 0;
+    http_info_t *info =
+        http_info_from_args(pid_conn, bytes_len, ssl, direction, packet_type, &fallback);
+
+    if (!info) {
+        return 0;
+    }
+
+    if (packet_type == PACKET_TYPE_REQUEST && (info->status == 0) &&
+        (info->start_monotime_ns == 0)) {
+        http_connection_metadata_t *meta =
+            connection_meta_by_direction(pid_conn, direction, PACKET_TYPE_REQUEST);
+
+        get_or_create_trace_info_with_buf(
+            meta, pid_conn->pid, &pid_conn->conn, buf, bytes_len, capture_header_buffer);
+
+        if (meta) {
+            tp_info_pid_t *tp_p = trace_info_for_connection(&pid_conn->conn);
+            if (tp_p) {
+                info->tp = tp_p->tp;
+            } else {
+                bpf_dbg_printk("Can't find trace info, this is a bug!");
+            }
+        } else {
+            bpf_dbg_printk("No META!");
+        }
+
+        // we copy some small part of the buffer to the info trace event, so that we can process an event even with
+        // incomplete trace info in user space.
+        process_http_request(info, bytes_len, meta, direction, orig_dport);
+    }
+
+    return protocol_http_epilogue(
+        info, fallback, pid_conn, buf, bytes_len, ssl, direction, packet_type);
+}
+
 // TAIL_PROTOCOL_HTTP
 SEC("kprobe/http")
 int protocol_http(void *ctx) {
@@ -212,38 +319,13 @@ int protocol_http(void *ctx) {
         return 0;
     }
 
-    http_info_t *in = empty_http_info();
-    if (!in) {
-        bpf_dbg_printk("Error allocating http info from per CPU map");
+    u8 fallback = 0;
+    http_info_t *info = http_info_from_args(
+        &args->pid_conn, args->bytes_len, args->ssl, args->direction, args->packet_type, &fallback);
+
+    if (!info) {
         return 0;
     }
-
-    __builtin_memcpy(&in->conn_info, &args->pid_conn.conn, sizeof(connection_info_t));
-    in->ssl = args->ssl;
-
-    http_info_t *info = get_or_set_http_info(in, &args->pid_conn, args->packet_type);
-    u8 fallback = 0;
-    if (!info) {
-        bpf_dbg_printk("No info, pid =%d?, looking for fallback...", args->pid_conn.pid);
-        info = (http_info_t *)bpf_map_lookup_elem(&ongoing_http_fallback, &args->pid_conn.conn);
-        if (!info) {
-            bpf_dbg_printk("No fallback either, giving up");
-            //dbg_print_http_connection_info(&pid_conn->conn); // commented out since GitHub CI doesn't like this call
-            return 0;
-        }
-        fallback = 1;
-        task_pid(&info->pid);
-        if (args->direction == TCP_RECV) {
-            info->type = EVENT_HTTP_CLIENT;
-        } else {
-            info->type = EVENT_HTTP_REQUEST;
-        }
-    }
-
-    bpf_dbg_printk("=== http_buffer_event len=%d pid=%d still_reading=%d ===",
-                   args->bytes_len,
-                   pid_from_pid_tgid(bpf_get_current_pid_tgid()),
-                   still_reading(info));
 
     if (args->packet_type == PACKET_TYPE_REQUEST && (info->status == 0) &&
         (info->start_monotime_ns == 0)) {
@@ -272,19 +354,16 @@ int protocol_http(void *ctx) {
         // incomplete trace info in user space.
         bpf_probe_read(info->buf, FULL_BUF_SIZE, (void *)args->u_buf);
         process_http_request(info, args->bytes_len, meta, args->direction, args->orig_dport);
-    } else if ((args->packet_type == PACKET_TYPE_RESPONSE) && (info->status == 0)) {
-        handle_http_response(
-            args->small_buf, &args->pid_conn, info, args->bytes_len, args->direction, args->ssl);
-        if (fallback) {
-            finish_http(info, &args->pid_conn);
-        }
-    } else if (still_reading(info)) {
-        info->len += args->bytes_len;
     }
 
-    bpf_map_delete_elem(&ongoing_http_fallback, &args->pid_conn.conn);
-
-    return 0;
+    return protocol_http_epilogue(info,
+                                  fallback,
+                                  &args->pid_conn,
+                                  args->small_buf,
+                                  args->bytes_len,
+                                  args->ssl,
+                                  args->direction,
+                                  args->packet_type);
 }
 
 #endif

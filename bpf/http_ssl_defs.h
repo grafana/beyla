@@ -215,4 +215,27 @@ handle_ssl_buf(void *ctx, u64 id, ssl_args_t *args, int bytes_len, u8 direction)
     }
 }
 
+static __always_inline void *is_ssl_connection(u64 id) {
+    void *ssl = 0;
+    // Checks if it's sandwitched between active SSL handshake, read or write uprobe/uretprobe
+    void **s = bpf_map_lookup_elem(&active_ssl_handshakes, &id);
+    if (s) {
+        ssl = *s;
+    } else {
+        ssl_args_t *ssl_args = bpf_map_lookup_elem(&active_ssl_read_args, &id);
+        if (!ssl_args) {
+            ssl_args = bpf_map_lookup_elem(&active_ssl_write_args, &id);
+        }
+        if (ssl_args) {
+            ssl = (void *)ssl_args->ssl;
+        }
+    }
+
+    return ssl;
+}
+
+static __always_inline void *is_active_ssl(pid_connection_info_t *conn) {
+    return bpf_map_lookup_elem(&active_ssl_connections, conn);
+}
+
 #endif

@@ -12,6 +12,11 @@
 #include "protocol_http2.h"
 #include "protocol_tcp.h"
 
+typedef struct send_args {
+    pid_connection_info_t p_conn;
+    u64 size;
+} send_args_t;
+
 struct bpf_map_def SEC("maps") jump_table = {
     .type = BPF_MAP_TYPE_PROG_ARRAY,
     .key_size = sizeof(__u32),
@@ -71,6 +76,41 @@ make_protocol_args(void *u_buf, int bytes_len, u8 ssl, u8 direction, u16 orig_dp
     args->u_buf = (u64)u_buf;
 
     return args;
+}
+
+static __always_inline void
+handle_buf_msg(send_args_t *args, u8 *buf, int bytes_len, u8 ssl, u8 direction, u16 orig_dport) {
+    bpf_dbg_printk("buf=[%s], pid=%d, len=%d", buf, args->p_conn.pid, bytes_len);
+
+    u8 packet_type = 0;
+
+    if (is_http(buf, MIN_HTTP_SIZE, &packet_type)) {
+        protocol_http_inline(
+            &args->p_conn, buf, bytes_len, ssl, direction, orig_dport, packet_type);
+    }
+    // } else if (is_http2_or_grpc(buf, MIN_HTTP2_SIZE)) {
+    //     bpf_dbg_printk("Found HTTP2 or gRPC connection");
+    //     u8 is_ssl = ssl;
+    //     bpf_map_update_elem(&ongoing_http2_connections, &args->p_conn, &is_ssl, BPF_ANY);
+    // } else {
+    //     u8 *h2g = bpf_map_lookup_elem(&ongoing_http2_connections, &args->p_conn);
+    //     if (h2g && *h2g == ssl) {
+    //         bpf_tail_call(ctx, &jump_table, TAIL_PROTOCOL_HTTP2);
+    //     } else { // large request tracking
+    //         http_info_t *info = bpf_map_lookup_elem(&ongoing_http, &args->p_conn);
+
+    //         if (info && still_responding(info)) {
+    //             info->end_monotime_ns = bpf_ktime_get_ns();
+    //         } else if (!info) {
+    //             // SSL requests will see both TCP traffic and text traffic, ignore the TCP if
+    //             // we are processing SSL request. HTTP2 is already checked in handle_buf_with_connection.
+    //             http_info_t *http_info = bpf_map_lookup_elem(&ongoing_http, &args->p_conn);
+    //             if (!http_info) {
+    //                 bpf_tail_call(ctx, &jump_table, TAIL_PROTOCOL_TCP);
+    //             }
+    //         }
+    //     }
+    // }
 }
 
 static __always_inline void handle_buf_with_connection(void *ctx,

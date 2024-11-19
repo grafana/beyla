@@ -177,6 +177,9 @@ static __always_inline void delete_client_trace_info(pid_connection_info_t *pid_
         .d_port = pid_conn->conn.d_port,
         .s_port = pid_conn->conn.s_port,
     };
+
+    bpf_dbg_printk("Deleting outgoing trace key %d:%d", e_key.s_port, e_key.d_port);
+
     bpf_map_delete_elem(&outgoing_trace_map, &e_key);
     bpf_map_delete_elem(&client_connect_info, pid_conn);
 }
@@ -221,23 +224,18 @@ static __always_inline void server_or_client_trace(http_connection_metadata_t *m
             .d_port = conn->d_port,
             .s_port = conn->s_port,
         };
+        sort_egress_key(&e_key);
+
+        bpf_dbg_printk("Setting outgoing trace key %d:%d", e_key.s_port, e_key.d_port);
 
         bpf_map_update_elem(&outgoing_trace_map, &e_key, tp_p, BPF_ANY);
     }
 }
 
-static __always_inline void get_or_create_trace_info(http_connection_metadata_t *meta,
-                                                     u32 pid,
-                                                     connection_info_t *conn,
-                                                     void *u_buf,
-                                                     int bytes_len,
-                                                     s32 capture_header_buffer) {
-    tp_info_pid_t *tp_p = tp_buf();
-
-    if (!tp_p) {
-        return;
-    }
-
+static __always_inline void establish_trace_info(tp_info_pid_t *tp_p,
+                                                 http_connection_metadata_t *meta,
+                                                 u32 pid,
+                                                 connection_info_t *conn) {
     tp_p->tp.ts = bpf_ktime_get_ns();
     tp_p->tp.flags = 1;
     tp_p->valid = 1;
@@ -301,6 +299,21 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
     //unsigned char tp_buf[TP_MAX_VAL_LENGTH];
     //make_tp_string(tp_buf, &tp_p->tp);
     //bpf_dbg_printk("tp: %s", tp_buf);
+}
+
+static __always_inline void get_or_create_trace_info(http_connection_metadata_t *meta,
+                                                     u32 pid,
+                                                     connection_info_t *conn,
+                                                     void *u_buf,
+                                                     int bytes_len,
+                                                     s32 capture_header_buffer) {
+    tp_info_pid_t *tp_p = tp_buf();
+
+    if (!tp_p) {
+        return;
+    }
+
+    establish_trace_info(tp_p, meta, pid, conn);
 
 #ifdef BPF_TRACEPARENT
     // The below buffer scan can be expensive on high volume of requests. We make it optional
@@ -344,4 +357,52 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
     server_or_client_trace(meta, conn, tp_p);
 }
 
+static __always_inline void get_or_create_trace_info_with_buf(http_connection_metadata_t *meta,
+                                                              u32 pid,
+                                                              connection_info_t *conn,
+                                                              u8 *buf,
+                                                              int bytes_len,
+                                                              s32 capture_header_buffer) {
+    tp_info_pid_t *tp_p = tp_buf();
+
+    if (!tp_p) {
+        return;
+    }
+
+    establish_trace_info(tp_p, meta, pid, conn);
+
+#ifdef BPF_TRACEPARENT
+    // The below buffer scan can be expensive on high volume of requests. We make it optional
+    // for customers to enable it. Off by default.
+    if (!capture_header_buffer) {
+        set_trace_info_for_connection(conn, tp_p);
+        server_or_client_trace(meta, conn, tp_p);
+        return;
+    }
+
+    int buf_len = bytes_len;
+    bpf_clamp_umax(buf_len, TRACE_BUF_SIZE - 1);
+    unsigned char *res = bpf_strstr_tp_loop(buf, buf_len);
+
+    if (res) {
+        bpf_dbg_printk("Found traceparent %s", res);
+        unsigned char *t_id = extract_trace_id(res);
+        unsigned char *s_id = extract_span_id(res);
+        unsigned char *f_id = extract_flags(res);
+
+        decode_hex(tp_p->tp.trace_id, t_id, TRACE_ID_CHAR_LEN);
+        decode_hex((unsigned char *)&tp_p->tp.flags, f_id, FLAGS_CHAR_LEN);
+        if (meta && meta->type == EVENT_HTTP_CLIENT) {
+            decode_hex(tp_p->tp.span_id, s_id, SPAN_ID_CHAR_LEN);
+        } else {
+            decode_hex(tp_p->tp.parent_id, s_id, SPAN_ID_CHAR_LEN);
+        }
+    } else {
+        bpf_dbg_printk("No traceparent, making a new trace_id", res);
+    }
+#endif
+
+    set_trace_info_for_connection(conn, tp_p);
+    server_or_client_trace(meta, conn, tp_p);
+}
 #endif

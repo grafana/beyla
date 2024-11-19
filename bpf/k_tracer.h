@@ -38,11 +38,6 @@ struct {
     __type(value, recv_args_t);
 } active_recv_args SEC(".maps");
 
-typedef struct send_args {
-    pid_connection_info_t p_conn;
-    u64 size;
-} send_args_t;
-
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
@@ -255,29 +250,6 @@ cleanup:
 }
 
 // Main HTTP read and write operations are handled with tcp_sendmsg and tcp_recvmsg
-
-static __always_inline void *is_ssl_connection(u64 id) {
-    void *ssl = 0;
-    // Checks if it's sandwitched between active SSL handshake, read or write uprobe/uretprobe
-    void **s = bpf_map_lookup_elem(&active_ssl_handshakes, &id);
-    if (s) {
-        ssl = *s;
-    } else {
-        ssl_args_t *ssl_args = bpf_map_lookup_elem(&active_ssl_read_args, &id);
-        if (!ssl_args) {
-            ssl_args = bpf_map_lookup_elem(&active_ssl_write_args, &id);
-        }
-        if (ssl_args) {
-            ssl = (void *)ssl_args->ssl;
-        }
-    }
-
-    return ssl;
-}
-
-static __always_inline void *is_active_ssl(pid_connection_info_t *conn) {
-    return bpf_map_lookup_elem(&active_ssl_connections, conn);
-}
 
 // The size argument here will be always the total response size.
 // However, the return value of tcp_sendmsg tells us how much it sent. When the

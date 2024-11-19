@@ -44,6 +44,10 @@ func roundToNearestMultiple(x, n uint32) uint32 {
 		return n
 	}
 
+	if x%n == 0 {
+		return x
+	}
+
 	return (x + n/2) / n * n
 }
 

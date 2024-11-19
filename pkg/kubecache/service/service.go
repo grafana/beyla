@@ -61,9 +61,10 @@ func (ci *connectionInterceptor) ServerHandshake(conn net.Conn) (net.Conn, crede
 }
 
 func (ci *connectionInterceptor) closeConnection(id string) {
+	ci.log.Debug("closing connection", "id", id)
 	if conn, ok := ci.conns.LoadAndDelete(id); ok {
 		if err := conn.(net.Conn).Close(); err != nil {
-			ci.log.Debug("error closing connection", "error", err)
+			ci.log.Debug("error closing connection", "id", id, "error", err)
 		}
 	}
 }
@@ -126,7 +127,7 @@ func (ic *InformersCache) Subscribe(_ *informer.SubscribeMessage, server informe
 	connCtx, cancel := context.WithCancel(server.Context())
 	o := &connection{
 		log:         ic.log.With("connectionID", connectionID),
-		ctx:         ctx,
+		ctx:         connCtx,
 		cancel:      cancel,
 		id:          connectionID,
 		server:      server,
@@ -161,7 +162,7 @@ type connection struct {
 	sendTimeout time.Duration
 
 	metrics instrument.InternalMetrics
-	barrier     chan struct{}
+	barrier chan struct{}
 }
 
 func (o *connection) ID() string {

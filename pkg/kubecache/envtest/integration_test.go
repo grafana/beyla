@@ -208,6 +208,67 @@ func TestBlockedClients(t *testing.T) {
 	ReadChannel(t, allSent, timeout)
 }
 
+// TestBlockedClients_OnStartup differs from TestBlockedClients because here the clients
+// are directly blocked during startup, instead of during the operation of the pod
+func TestBlockedClients_OnStartup(t *testing.T) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	// generating a large number of notifications until the gRPC buffer of the
+	// server-to-client connections is full, so the "Send" operation is blocked
+	allSent := make(chan struct{})
+	const createdPods = 1500
+
+	for n := 0; n < createdPods; n++ {
+		require.NoError(t, k8sClient.Create(ctx, &corev1.Pod{
+			ObjectMeta: v1.ObjectMeta{
+				Name:      fmt.Sprintf("npod-%02d", n),
+				Namespace: "default",
+			},
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{Name: "test-container", Image: "nginx"},
+				},
+			},
+		}))
+	}
+	close(allSent)
+
+	// a varied number of cache clients connect concurrently. Some of them are blocked
+	// after a while, and they don't release the connection
+	addr := fmt.Sprintf("127.0.0.1:%d", freePort)
+	never1 := &serviceClient{Address: addr, stallAfterMessages: 1000000}
+	never2 := &serviceClient{Address: addr, stallAfterMessages: 1000000}
+	never3 := &serviceClient{Address: addr, stallAfterMessages: 1000000}
+	stall5 := &serviceClient{Address: addr, stallAfterMessages: 5}
+	stall10 := &serviceClient{Address: addr, stallAfterMessages: 10}
+	stall15 := &serviceClient{Address: addr, stallAfterMessages: 15}
+	go stall15.Start(ctx, t)
+	go never1.Start(ctx, t)
+	go stall5.Start(ctx, t)
+	go never2.Start(ctx, t)
+	go stall10.Start(ctx, t)
+	go never3.Start(ctx, t)
+
+	test.Eventually(t, timeout, func(t require.TestingT) {
+		// the clients that got stalled, just received the expected number of messages
+		// before they got blocked
+		require.EqualValues(t, int32(5), stall5.readMessages.Load())
+		require.EqualValues(t, int32(10), stall10.readMessages.Load())
+		require.EqualValues(t, int32(15), stall15.readMessages.Load())
+
+		// but that did not block the rest of clients, which got all the expected messages
+		require.GreaterOrEqual(t, never1.readMessages.Load(), int32(createdPods))
+		require.GreaterOrEqual(t, never2.readMessages.Load(), int32(createdPods))
+		require.GreaterOrEqual(t, never3.readMessages.Load(), int32(createdPods))
+
+	})
+
+	// we don't exit until all the pods have been created, to avoid failing the
+	// tests because the client.Create operation fails due to premature context cancellation
+	ReadChannel(t, allSent, timeout)
+}
+
 // makes sure that a new cache server won't forward the sync data to the clients until
 // it effectively has synced everything
 func TestAsynchronousStartup(t *testing.T) {

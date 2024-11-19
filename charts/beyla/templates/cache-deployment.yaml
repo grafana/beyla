@@ -25,7 +25,6 @@ spec:
       {{- end }}
       labels:
         {{- include "beyla.cache.labels" . | nindent 8 }}
-        app.kubernetes.io/name: {{ .Values.k8sCache.service.name }}
     spec:
       {{- if .Values.serviceAccount.create }}
       serviceAccountName: {{ include "beyla.serviceAccountName" . }}

@@ -102,7 +102,7 @@ func (n *promInternalMetrics) ClientDisconnect() {
 	n.connectedClients.Dec()
 }
 func (n *promInternalMetrics) MessageSubmit() {
-	n.clientMessages.WithLabelValues("submit")
+	n.clientMessages.WithLabelValues("submit").Inc()
 }
 func (n *promInternalMetrics) MessageSucceed() {
 	n.clientMessages.WithLabelValues("success").Inc()

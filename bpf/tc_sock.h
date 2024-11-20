@@ -153,7 +153,6 @@ static __always_inline u8 protocol_detector(struct sk_msg_md *msg,
     send_args_t s_args = {.size = msg->size};
     __builtin_memcpy(&s_args.p_conn.conn, conn, sizeof(connection_info_t));
 
-    //u16 orig_dport = s_args.p_conn.conn.d_port;
     dbg_print_http_connection_info(&s_args.p_conn.conn);
     sort_connection_info(&s_args.p_conn.conn);
     s_args.p_conn.pid = pid_from_pid_tgid(id);

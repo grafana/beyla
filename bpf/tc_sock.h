@@ -115,7 +115,6 @@ int sockmap_tracker(struct bpf_sock_ops *skops) {
 
     switch (op) {
     case BPF_SOCK_OPS_ACTIVE_ESTABLISHED_CB:
-    case BPF_SOCK_OPS_PASSIVE_ESTABLISHED_CB:
         bpf_sock_ops_establish_cb(skops);
         break;
     default:
@@ -165,30 +164,9 @@ protocol_detector(struct sk_msg_md *msg, connection_info_t *conn, u8 *buf) {
             void *active_ssl = is_active_ssl(&s_args.p_conn);
             if (!active_ssl) {
                 handle_buf_msg(msg, &s_args, buf, s_args.size, NO_SSL, TCP_SEND, orig_dport);
-            } else {
-                bpf_dbg_printk("ignoring protocol detector for SSL message...");
             }
-        } else {
-            bpf_dbg_printk("ignoring protocol detector for SSL message...");
         }
     }
-
-    finish_possible_delayed_http_request(&s_args.p_conn);
-
-    if (!ssl) {
-        return;
-    }
-
-    bpf_dbg_printk("=== [protocol detector] SSL %d ssl=%llx ===", id, ssl);
-    ssl_pid_connection_info_t *s_conn = bpf_map_lookup_elem(&ssl_to_conn, &ssl);
-    if (s_conn) {
-        finish_possible_delayed_tls_http_request(&s_conn->p_conn, ssl);
-    }
-    ssl_pid_connection_info_t ssl_conn = {
-        .orig_dport = orig_dport,
-    };
-    __builtin_memcpy(&ssl_conn.p_conn, &s_args.p_conn, sizeof(pid_connection_info_t));
-    bpf_map_update_elem(&ssl_to_conn, &ssl, &ssl_conn, BPF_ANY);
 }
 
 SEC("sk_msg")

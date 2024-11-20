@@ -164,7 +164,7 @@ protocol_detector(struct sk_msg_md *msg, connection_info_t *conn, u8 *buf) {
         if (!ssl) {
             void *active_ssl = is_active_ssl(&s_args.p_conn);
             if (!active_ssl) {
-                handle_buf_msg(&s_args, buf, s_args.size, NO_SSL, TCP_SEND, orig_dport);
+                handle_buf_msg(msg, &s_args, buf, s_args.size, NO_SSL, TCP_SEND, orig_dport);
             } else {
                 bpf_dbg_printk("ignoring protocol detector for SSL message...");
             }

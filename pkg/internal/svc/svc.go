@@ -6,6 +6,10 @@ import (
 	attr "github.com/grafana/beyla/pkg/export/attributes/names"
 )
 
+// UID uniquely identifies a service instance.
+// The triplet service name/namespace/instanceID must be unique.
+type UID string
+
 type InstrumentableType int
 
 const (
@@ -57,9 +61,9 @@ const (
 // ID stores the metadata attributes of a service/resource
 // TODO: rename to svc.Attributes
 type ID struct {
-	// UID uniquely identifies a service instance. It is not exported
+	// Instance uniquely identifies a service instance. It is not exported
 	// in the metrics or traces, but it is used to compose the InstanceID
-	UID UID
+	Instance UID
 
 	Name string
 	// AutoName is true if the Name has been automatically set by Beyla (e.g. executable name when
@@ -84,8 +88,8 @@ type ID struct {
 	flags idFlags
 }
 
-func (i *ID) GetUID() UID {
-	return i.UID
+func (i *ID) GetInstanceID() UID {
+	return i.Instance
 }
 
 func (i *ID) String() string {

@@ -93,8 +93,8 @@ func (md *metadataDecorator) nodeLoop(in <-chan []request.Span, out chan<- []req
 }
 
 func (md *metadataDecorator) do(span *request.Span) {
-	if objectMeta := md.db.PodByPIDNs(span.Pid.Namespace); objectMeta != nil {
-		md.appendMetadata(span, objectMeta)
+	if podMeta, containerName := md.db.PodContainerByPIDNs(span.Pid.Namespace); podMeta != nil {
+		md.appendMetadata(span, podMeta, containerName)
 	} else {
 		// do not leave the service attributes map as nil
 		span.ServiceID.Metadata = map[attr.Name]string{}
@@ -108,7 +108,7 @@ func (md *metadataDecorator) do(span *request.Span) {
 	}
 }
 
-func (md *metadataDecorator) appendMetadata(span *request.Span, meta *informer.ObjectMeta) {
+func (md *metadataDecorator) appendMetadata(span *request.Span, meta *informer.ObjectMeta, containerName string) {
 	if meta.Pod == nil {
 		// if this message happen, there is a bug
 		klog().Debug("pod metadata for is nil. Ignoring decoration", "meta", meta)
@@ -125,11 +125,15 @@ func (md *metadataDecorator) appendMetadata(span *request.Span, meta *informer.O
 	if span.ServiceID.Namespace == "" {
 		span.ServiceID.Namespace = namespace
 	}
-	// overriding the UID here will avoid reusing the OTEL resource reporter
+	// overriding the Instance here will avoid reusing the OTEL resource reporter
 	// if the application/process was discovered and reported information
 	// before the kubernetes metadata was available
 	// (related issue: https://github.com/grafana/beyla/issues/1124)
-	span.ServiceID.UID = svc.NewUID(meta.Pod.Uid)
+	if containerName == "" {
+		span.ServiceID.Instance = svc.UID(meta.Pod.Uid)
+	} else {
+		span.ServiceID.Instance = svc.UID(containerName)
+	}
 
 	// if, in the future, other pipeline steps modify the service metadata, we should
 	// replace the map literal by individual entry insertions

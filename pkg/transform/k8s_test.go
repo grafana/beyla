@@ -31,7 +31,7 @@ func TestDecoration(t *testing.T) {
 			StartTimeStr: "2020-01-02 12:12:56",
 			Uid:          "uid-12",
 			Owners:       []*informer.Owner{{Kind: "Deployment", Name: "deployment-12"}},
-			Containers:   []*informer.ContainerInfo{{Id: "container-12"}},
+			Containers:   []*informer.ContainerInfo{{Name: "a-container", Id: "container-12"}},
 		},
 	}})
 	inf.Notify(&informer.Event{Type: informer.EventType_CREATED, Resource: &informer.ObjectMeta{
@@ -41,7 +41,7 @@ func TestDecoration(t *testing.T) {
 			StartTimeStr: "2020-01-02 12:34:56",
 			Uid:          "uid-34",
 			Owners:       []*informer.Owner{{Kind: "ReplicaSet", Name: "rs"}},
-			Containers:   []*informer.ContainerInfo{{Id: "container-34"}},
+			Containers:   []*informer.ContainerInfo{{Name: "a-container", Id: "container-34"}},
 		},
 	}})
 	inf.Notify(&informer.Event{Type: informer.EventType_CREATED, Resource: &informer.ObjectMeta{
@@ -50,7 +50,20 @@ func TestDecoration(t *testing.T) {
 			NodeName:     "the-node",
 			Uid:          "uid-56",
 			StartTimeStr: "2020-01-02 12:56:56",
-			Containers:   []*informer.ContainerInfo{{Id: "container-56"}},
+			Containers:   []*informer.ContainerInfo{{Name: "a-container", Id: "container-56"}},
+		},
+	}})
+	inf.Notify(&informer.Event{Type: informer.EventType_CREATED, Resource: &informer.ObjectMeta{
+		Name: "overridden-meta", Namespace: "the-ns", Kind: "Pod",
+		Labels: map[string]string{
+			"app.kubernetes.io/name":    "a-cool-name",
+			"app.kubernetes.io/part-of": "a-cool-namespace",
+		},
+		Pod: &informer.PodInfo{
+			NodeName:     "the-node",
+			Uid:          "uid-78",
+			StartTimeStr: "2020-01-02 12:56:56",
+			Containers:   []*informer.ContainerInfo{{Name: "a-container", Id: "container-78"}},
 		},
 	}})
 	kube.InfoForPID = func(pid uint32) (container.Info, error) {
@@ -62,6 +75,7 @@ func TestDecoration(t *testing.T) {
 	store.AddProcess(12)
 	store.AddProcess(34)
 	store.AddProcess(56)
+	store.AddProcess(78)
 
 	dec := metadataDecorator{db: store, clusterName: "the-cluster"}
 	inputCh, outputhCh := make(chan []request.Span, 10), make(chan []request.Span, 10)
@@ -79,6 +93,7 @@ func TestDecoration(t *testing.T) {
 		require.Len(t, deco, 1)
 		assert.Equal(t, "the-ns", deco[0].ServiceID.Namespace)
 		assert.Equal(t, "deployment-12", deco[0].ServiceID.Name)
+		assert.EqualValues(t, "a-container", deco[0].ServiceID.Instance)
 		assert.Equal(t, map[attr.Name]string{
 			"k8s.node.name":       "the-node",
 			"k8s.namespace.name":  "the-ns",
@@ -98,6 +113,7 @@ func TestDecoration(t *testing.T) {
 		require.Len(t, deco, 1)
 		assert.Equal(t, "the-ns", deco[0].ServiceID.Namespace)
 		assert.Equal(t, "rs", deco[0].ServiceID.Name)
+		assert.EqualValues(t, "a-container", deco[0].ServiceID.Instance)
 		assert.Equal(t, map[attr.Name]string{
 			"k8s.node.name":       "the-node",
 			"k8s.namespace.name":  "the-ns",
@@ -117,6 +133,7 @@ func TestDecoration(t *testing.T) {
 		require.Len(t, deco, 1)
 		assert.Equal(t, "the-ns", deco[0].ServiceID.Namespace)
 		assert.Equal(t, "the-pod", deco[0].ServiceID.Name)
+		assert.EqualValues(t, "a-container", deco[0].ServiceID.Instance)
 		assert.Equal(t, map[attr.Name]string{
 			"k8s.node.name":      "the-node",
 			"k8s.namespace.name": "the-ns",
@@ -126,11 +143,29 @@ func TestDecoration(t *testing.T) {
 			"k8s.cluster.name":   "the-cluster",
 		}, deco[0].ServiceID.Metadata)
 	})
+	t.Run("user can override service name and annotations via labels", func(t *testing.T) {
+		inputCh <- []request.Span{{
+			Pid: request.PidInfo{Namespace: 1078}, ServiceID: autoNameSvc,
+		}}
+		deco := testutil.ReadChannel(t, outputhCh, timeout)
+		require.Len(t, deco, 1)
+		assert.Equal(t, "a-cool-namespace", deco[0].ServiceID.Namespace)
+		assert.Equal(t, "a-cool-name", deco[0].ServiceID.Name)
+		assert.EqualValues(t, "a-container", deco[0].ServiceID.Instance)
+		assert.Equal(t, map[attr.Name]string{
+			"k8s.node.name":      "the-node",
+			"k8s.namespace.name": "the-ns",
+			"k8s.pod.name":       "overridden-meta",
+			"k8s.pod.uid":        "uid-78",
+			"k8s.pod.start_time": "2020-01-02 12:56:56",
+			"k8s.cluster.name":   "the-cluster",
+		}, deco[0].ServiceID.Metadata)
+	})
 	t.Run("process without pod Info won't be decorated", func(t *testing.T) {
 		svc := svc.ID{Name: "exec"}
 		svc.SetAutoName()
 		inputCh <- []request.Span{{
-			Pid: request.PidInfo{Namespace: 1078}, ServiceID: svc,
+			Pid: request.PidInfo{Namespace: 1099}, ServiceID: svc,
 		}}
 		deco := testutil.ReadChannel(t, outputhCh, timeout)
 		require.Len(t, deco, 1)
@@ -146,6 +181,7 @@ func TestDecoration(t *testing.T) {
 		require.Len(t, deco, 1)
 		assert.Equal(t, "tralara", deco[0].ServiceID.Namespace)
 		assert.Equal(t, "tralari", deco[0].ServiceID.Name)
+		assert.EqualValues(t, "a-container", deco[0].ServiceID.Instance)
 		assert.Equal(t, map[attr.Name]string{
 			"k8s.node.name":       "the-node",
 			"k8s.namespace.name":  "the-ns",

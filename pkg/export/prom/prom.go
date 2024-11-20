@@ -653,9 +653,9 @@ func (r *metricsReporter) observe(span *request.Span) {
 		r.spanMetricsCallsTotal.WithLabelValues(lv...).metric.Add(1)
 		r.spanMetricsSizeTotal.WithLabelValues(lv...).metric.Add(float64(span.RequestLength()))
 
-		_, ok := r.serviceCache.Get(span.ServiceID.UID)
+		_, ok := r.serviceCache.Get(span.ServiceID.Instance)
 		if !ok {
-			r.serviceCache.Add(span.ServiceID.UID, span.ServiceID)
+			r.serviceCache.Add(span.ServiceID.Instance, span.ServiceID)
 			r.tracesTargetInfo.WithLabelValues(targetInfoLabelValues...).metric.Add(1)
 		}
 	}
@@ -710,7 +710,7 @@ func (r *metricsReporter) labelValuesSpans(span *request.Span) []string {
 		span.TraceName(),
 		strconv.Itoa(int(request.SpanStatusCode(span))),
 		span.ServiceGraphKind(),
-		string(span.ServiceID.UID), // app instance ID
+		string(span.ServiceID.Instance), // app instance ID
 		span.ServiceID.Job(),
 		"beyla",
 	}
@@ -732,7 +732,7 @@ func (r *metricsReporter) labelValuesTargetInfo(service svc.ID) []string {
 		service.HostName,
 		service.Name,
 		service.Namespace,
-		string(service.UID), // app instance ID
+		string(service.Instance), // app instance ID
 		service.Job(),
 		service.SDKLanguage.String(),
 		"beyla",

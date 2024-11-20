@@ -841,13 +841,13 @@ func TestTracesInstrumentations(t *testing.T) {
 	}
 
 	spans := []request.Span{
-		{ServiceID: svc.ID{UID: "foo"}, Type: request.EventTypeHTTP, Method: "GET", Route: "/foo", RequestStart: 100, End: 200},
-		{ServiceID: svc.ID{UID: "foo"}, Type: request.EventTypeHTTPClient, Method: "PUT", Route: "/bar", RequestStart: 150, End: 175},
-		{ServiceID: svc.ID{UID: "foo"}, Type: request.EventTypeGRPC, Path: "/grpcFoo", RequestStart: 100, End: 200},
-		{ServiceID: svc.ID{UID: "foo"}, Type: request.EventTypeGRPCClient, Path: "/grpcGoo", RequestStart: 150, End: 175},
+		{ServiceID: svc.ID{Instance: "foo"}, Type: request.EventTypeHTTP, Method: "GET", Route: "/foo", RequestStart: 100, End: 200},
+		{ServiceID: svc.ID{Instance: "foo"}, Type: request.EventTypeHTTPClient, Method: "PUT", Route: "/bar", RequestStart: 150, End: 175},
+		{ServiceID: svc.ID{Instance: "foo"}, Type: request.EventTypeGRPC, Path: "/grpcFoo", RequestStart: 100, End: 200},
+		{ServiceID: svc.ID{Instance: "foo"}, Type: request.EventTypeGRPCClient, Path: "/grpcGoo", RequestStart: 150, End: 175},
 		makeSQLRequestSpan("SELECT password FROM credentials WHERE username=\"bill\""),
-		{ServiceID: svc.ID{UID: "foo"}, Type: request.EventTypeRedisClient, Method: "SET", Path: "redis_db", RequestStart: 150, End: 175},
-		{ServiceID: svc.ID{UID: "foo"}, Type: request.EventTypeRedisServer, Method: "GET", Path: "redis_db", RequestStart: 150, End: 175},
+		{ServiceID: svc.ID{Instance: "foo"}, Type: request.EventTypeRedisClient, Method: "SET", Path: "redis_db", RequestStart: 150, End: 175},
+		{ServiceID: svc.ID{Instance: "foo"}, Type: request.EventTypeRedisServer, Method: "GET", Path: "redis_db", RequestStart: 150, End: 175},
 		{Type: request.EventTypeKafkaClient, Method: "process", Path: "important-topic", Statement: "test"},
 		{Type: request.EventTypeKafkaServer, Method: "publish", Path: "important-topic", Statement: "test"},
 	}
@@ -976,12 +976,12 @@ func TestTracesAttrReuse(t *testing.T) {
 		same bool
 	}{
 		{
-			name: "Reuses the trace attributes, with svc.UID defined",
-			span: request.Span{ServiceID: svc.ID{UID: "foo"}, Type: request.EventTypeHTTP, Method: "GET", Route: "/foo", RequestStart: 100, End: 200},
+			name: "Reuses the trace attributes, with svc.Instance defined",
+			span: request.Span{ServiceID: svc.ID{Instance: "foo"}, Type: request.EventTypeHTTP, Method: "GET", Route: "/foo", RequestStart: 100, End: 200},
 			same: true,
 		},
 		{
-			name: "No UID, no caching of trace attributes",
+			name: "No Instance, no caching of trace attributes",
 			span: request.Span{ServiceID: svc.ID{}, Type: request.EventTypeHTTP, Method: "GET", Route: "/foo", RequestStart: 100, End: 200},
 			same: false,
 		},

@@ -410,16 +410,16 @@ func getRetrySettings(cfg TracesConfig) configretry.BackOffConfig {
 }
 
 func traceAppResourceAttrs(hostID string, service *svc.ID) []attribute.KeyValue {
-	if service.UID == "" {
+	if service.Instance == "" {
 		return getAppResourceAttrs(hostID, service)
 	}
 
-	attrs, ok := serviceAttrCache.Get(service.UID)
+	attrs, ok := serviceAttrCache.Get(service.Instance)
 	if ok {
 		return attrs
 	}
 	attrs = getAppResourceAttrs(hostID, service)
-	serviceAttrCache.Add(service.UID, attrs)
+	serviceAttrCache.Add(service.Instance, attrs)
 
 	return attrs
 }

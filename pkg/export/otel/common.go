@@ -62,7 +62,7 @@ var DefaultBuckets = Buckets{
 
 func getAppResourceAttrs(hostID string, service *svc.ID) []attribute.KeyValue {
 	return append(getResourceAttrs(hostID, service),
-		semconv.ServiceInstanceID(string(service.UID)),
+		semconv.ServiceInstanceID(string(service.Instance)),
 	)
 }
 
@@ -91,13 +91,13 @@ func getResourceAttrs(hostID string, service *svc.ID) []attribute.KeyValue {
 }
 
 // ReporterPool keeps an LRU cache of different OTEL reporters given a service name.
-type ReporterPool[K uidGetter, T any] struct {
+type ReporterPool[K instanceGetter, T any] struct {
 	pool *simplelru.LRU[svc.UID, *expirable[T]]
 
 	itemConstructor func(getter K) (T, error)
 
 	lastReporter   *expirable[T]
-	lastService    uidGetter
+	lastService    instanceGetter
 	lastServiceUID svc.UID
 
 	// TODO: use cacheable clock for efficiency
@@ -113,15 +113,15 @@ type expirable[T any] struct {
 	value      T
 }
 
-type uidGetter interface {
-	GetUID() svc.UID
+type instanceGetter interface {
+	GetInstanceID() svc.UID
 }
 
 // NewReporterPool creates a ReporterPool instance given a cache length,
 // an eviction callback to be invoked each time an element is removed
 // from the cache, and a constructor function that will specify how to
 // instantiate the generic OTEL metrics/traces reporter.
-func NewReporterPool[K uidGetter, T any](
+func NewReporterPool[K instanceGetter, T any](
 	cacheLen int,
 	ttl time.Duration,
 	clock expire.Clock,
@@ -153,8 +153,8 @@ func (rp *ReporterPool[K, T]) For(service K) (T, error) {
 	// only a single instrumented process.
 	// In multi-process tracing, this is likely to happen as most
 	// tracers group traces belonging to the same service in the same slice.
-	svcUID := service.GetUID()
-	if rp.lastServiceUID == "" || svcUID != rp.lastService.GetUID() {
+	svcUID := service.GetInstanceID()
+	if rp.lastServiceUID == "" || svcUID != rp.lastService.GetInstanceID() {
 		lm, err := rp.get(svcUID, service)
 		if err != nil {
 			var t T

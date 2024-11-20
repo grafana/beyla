@@ -35,7 +35,7 @@ type ID struct {
 	ExecPath        string
 }
 
-func (i *ID) GetUID() svc.UID {
+func (i *ID) GetInstanceID() svc.UID {
 	return i.UID
 }
 
@@ -77,7 +77,7 @@ func NewStatus(pid int32, svcID *svc.ID) *Status {
 	return &Status{ID: ID{
 		ProcessID: pid,
 		Service:   svcID,
-		UID:       svcID.UID.AppendUint32(uint32(pid)),
+		UID:       svcID.Instance + "-" + svc.UID(strconv.Itoa(int(pid))),
 	}}
 }
 

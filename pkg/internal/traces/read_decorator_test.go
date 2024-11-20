@@ -33,16 +33,16 @@ func TestReadDecorator(t *testing.T) {
 	for _, tc := range []testCase{{
 		desc:        "dns",
 		cfg:         ReadDecorator{InstanceID: InstanceIDConfig{HostnameDNSResolution: true}},
-		expectedUID: svc.NewUID(dnsHostname).AppendUint32(1234),
+		expectedUID: svc.UID(dnsHostname + "-1234"),
 		expectedHN:  dnsHostname,
 	}, {
 		desc:        "no-dns",
-		expectedUID: svc.NewUID(localHostname).AppendUint32(1234),
+		expectedUID: svc.UID(localHostname + "-1234"),
 		expectedHN:  localHostname,
 	}, {
 		desc:        "override hostname",
 		cfg:         ReadDecorator{InstanceID: InstanceIDConfig{OverrideHostname: "foooo"}},
-		expectedUID: svc.NewUID("foooo").AppendUint32(1234),
+		expectedUID: "foooo-1234",
 		expectedHN:  "foooo",
 	}} {
 		t.Run(tc.desc, func(t *testing.T) {
@@ -60,9 +60,9 @@ func TestReadDecorator(t *testing.T) {
 			}
 			outSpans := testutil.ReadChannel(t, decoratedOutput, testTimeout)
 			assert.Equal(t, []request.Span{
-				{ServiceID: svc.ID{UID: tc.expectedUID, HostName: tc.expectedHN},
+				{ServiceID: svc.ID{Instance: tc.expectedUID, HostName: tc.expectedHN},
 					Path: "/foo", Pid: request.PidInfo{HostPID: 1234}},
-				{ServiceID: svc.ID{UID: tc.expectedUID, HostName: tc.expectedHN},
+				{ServiceID: svc.ID{Instance: tc.expectedUID, HostName: tc.expectedHN},
 					Path: "/bar", Pid: request.PidInfo{HostPID: 1234}},
 			}, outSpans)
 		})

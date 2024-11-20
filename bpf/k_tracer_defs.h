@@ -29,8 +29,6 @@ struct bpf_map_def SEC("maps") jump_table = {
 #define TAIL_PROTOCOL_TCP 2
 
 static __always_inline void handle_buf_with_args(void *ctx, call_protocol_args_t *args) {
-    bpf_probe_read(args->small_buf, MIN_HTTP2_SIZE, (void *)args->u_buf);
-
     bpf_dbg_printk(
         "buf=[%s], pid=%d, len=%d", args->small_buf, args->pid_conn.pid, args->bytes_len);
 
@@ -78,64 +76,6 @@ make_protocol_args(void *u_buf, int bytes_len, u8 ssl, u8 direction, u16 orig_dp
     return args;
 }
 
-static __always_inline void handle_buf_msg(struct sk_msg_md *msg,
-                                           send_args_t *args,
-                                           u8 *buf,
-                                           int bytes_len,
-                                           u8 ssl,
-                                           u8 direction,
-                                           u16 orig_dport) {
-    bpf_dbg_printk("buf=[%s], pid=%d, len=%d", buf, args->p_conn.pid, bytes_len);
-
-    u8 packet_type = 0;
-
-    if (is_http(buf, MIN_HTTP_SIZE, &packet_type)) {
-        protocol_http_inline(
-            &args->p_conn, buf, bytes_len, ssl, direction, orig_dport, packet_type);
-    } else if (is_http2_or_grpc(buf, MIN_HTTP2_SIZE)) {
-        bpf_dbg_printk("Found HTTP2 or gRPC connection");
-        u8 is_ssl = ssl;
-        bpf_map_update_elem(&ongoing_http2_connections, &args->p_conn, &is_ssl, BPF_ANY);
-    } else {
-        u8 *h2g = bpf_map_lookup_elem(&ongoing_http2_connections, &args->p_conn);
-        if (h2g && *h2g == ssl) {
-            call_protocol_args_t *c_args =
-                make_protocol_args(buf, bytes_len, ssl, direction, orig_dport);
-
-            if (!c_args) {
-                return;
-            }
-
-            __builtin_memcpy(&c_args->pid_conn, &args->p_conn, sizeof(pid_connection_info_t));
-
-            bpf_tail_call(msg, &jump_table, TAIL_PROTOCOL_HTTP2);
-        } else { // large request tracking
-            http_info_t *info = bpf_map_lookup_elem(&ongoing_http, &args->p_conn);
-
-            if (info && still_responding(info)) {
-                info->end_monotime_ns = bpf_ktime_get_ns();
-            } else if (!info) {
-                // SSL requests will see both TCP traffic and text traffic, ignore the TCP if
-                // we are processing SSL request. HTTP2 is already checked in handle_buf_with_connection.
-                http_info_t *http_info = bpf_map_lookup_elem(&ongoing_http, &args->p_conn);
-                if (!http_info) {
-                    call_protocol_args_t *c_args =
-                        make_protocol_args(buf, bytes_len, ssl, direction, orig_dport);
-
-                    if (!c_args) {
-                        return;
-                    }
-
-                    __builtin_memcpy(
-                        &c_args->pid_conn, &args->p_conn, sizeof(pid_connection_info_t));
-
-                    bpf_tail_call(msg, &jump_table, TAIL_PROTOCOL_TCP);
-                }
-            }
-        }
-    }
-}
-
 static __always_inline void handle_buf_with_connection(void *ctx,
                                                        pid_connection_info_t *pid_conn,
                                                        void *u_buf,
@@ -150,7 +90,7 @@ static __always_inline void handle_buf_with_connection(void *ctx,
     }
 
     __builtin_memcpy(&args->pid_conn, pid_conn, sizeof(pid_connection_info_t));
-
+    bpf_probe_read(args->small_buf, MIN_HTTP2_SIZE, (void *)args->u_buf);
     handle_buf_with_args(ctx, args);
 }
 

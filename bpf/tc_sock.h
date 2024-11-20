@@ -140,14 +140,9 @@ static __always_inline u8 is_tracked(connection_info_t *conn) {
     return tp != 0;
 }
 
-static __always_inline void
-protocol_detector(struct sk_msg_md *msg, connection_info_t *conn, u8 *buf) {
-    u64 id = bpf_get_current_pid_tgid();
-
-    if (!valid_pid(id)) {
-        return;
-    }
-
+static __always_inline u8 protocol_detector(struct sk_msg_md *msg,
+                                            u64 id,
+                                            connection_info_t *conn) {
     bpf_dbg_printk("=== [protocol detector] %d size %d===", id, msg->size);
 
     send_args_t s_args = {.size = msg->size};
@@ -163,15 +158,33 @@ protocol_detector(struct sk_msg_md *msg, connection_info_t *conn, u8 *buf) {
         if (!ssl) {
             void *active_ssl = is_active_ssl(&s_args.p_conn);
             if (!active_ssl) {
-                handle_buf_msg(msg, &s_args, buf, s_args.size, NO_SSL, TCP_SEND, orig_dport);
+                call_protocol_args_t *args =
+                    make_protocol_args(msg->data, s_args.size, NO_SSL, TCP_SEND, orig_dport);
+                if (args) {
+                    bpf_dbg_printk("Setting up buffer for send msg");
+                    __builtin_memcpy(
+                        &args->pid_conn, &s_args.p_conn, sizeof(pid_connection_info_t));
+                    bpf_probe_read_kernel(args->small_buf, MIN_HTTP2_SIZE, (void *)msg->data);
+                    if (is_http_request_buf(args->small_buf)) {
+                        bpf_dbg_printk("Setting up request to be extended");
+                        return 1;
+                    }
+                }
             }
         }
     }
+
+    return 0;
 }
 
 SEC("sk_msg")
 int packet_extender(struct sk_msg_md *msg) {
-    u64 len = (u64)msg->data_end - (u64)msg->data;
+    u64 id = bpf_get_current_pid_tgid();
+
+    if (!valid_pid(id)) {
+        return SK_PASS;
+    }
+
     connection_info_t conn = {};
 
     if (msg->family == AF_INET6) {
@@ -191,31 +204,32 @@ int packet_extender(struct sk_msg_md *msg) {
         return SK_PASS;
     }
     bpf_msg_pull_data(msg, 0, 1024, 0);
-    bpf_probe_read_kernel(msg_data->buf, 1024, msg->data);
 
-    protocol_detector(msg, &conn, msg_data->buf);
-    u8 tracked = is_tracked(&conn);
+    u8 tracked = protocol_detector(msg, id, &conn);
+    if (!tracked) {
+        tracked = is_tracked(&conn);
+    }
 
+    u64 len = (u64)msg->data_end - (u64)msg->data;
     if (tracked && len > MIN_HTTP_SIZE) {
-        if (is_http_request_buf(msg_data->buf)) {
-            bpf_dbg_printk("len %d, s_port %d, buf: %s", len, msg->local_port, msg_data->buf);
+        bpf_probe_read_kernel(msg_data->buf, 1024, msg->data);
+        bpf_dbg_printk("len %d, s_port %d, buf: %s", len, msg->local_port, msg_data->buf);
 
-            int newline_pos = find_first_pos_of(msg_data->buf, &msg_data->buf[1023], '\n');
+        int newline_pos = find_first_pos_of(msg_data->buf, &msg_data->buf[1023], '\n');
 
-            if (newline_pos >= 0) {
-                newline_pos++;
-                if (!bpf_msg_push_data(msg, newline_pos, EXTEND_SIZE, 0)) {
-                    tc_http_ctx_t ctx = {
-                        .offset = newline_pos,
-                        .seen = 0,
-                        .written = 0,
-                    };
-                    u32 port = msg->local_port;
+        if (newline_pos >= 0) {
+            newline_pos++;
+            if (!bpf_msg_push_data(msg, newline_pos, EXTEND_SIZE, 0)) {
+                tc_http_ctx_t ctx = {
+                    .offset = newline_pos,
+                    .seen = 0,
+                    .written = 0,
+                };
+                u32 port = msg->local_port;
 
-                    bpf_map_update_elem(&tc_http_ctx_map, &port, &ctx, BPF_ANY);
-                }
-                bpf_dbg_printk("offset to split %d", newline_pos);
+                bpf_map_update_elem(&tc_http_ctx_map, &port, &ctx, BPF_ANY);
             }
+            bpf_dbg_printk("offset to split %d", newline_pos);
         }
     }
 

@@ -44,6 +44,14 @@ struct {
     __uint(pinning, BEYLA_PIN_INTERNAL);
 } active_ssl_connections SEC(".maps");
 
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, egress_key_t);
+    __type(value, msg_buffer_t);
+    __uint(max_entries, 1000);
+    __uint(pinning, BEYLA_PIN_INTERNAL);
+} msg_buffers SEC(".maps");
+
 static __always_inline http_connection_metadata_t *empty_connection_meta() {
     int zero = 0;
     return bpf_map_lookup_elem(&connection_meta_mem, &zero);
@@ -139,14 +147,14 @@ static __always_inline int read_iovec_ctx(iovec_iter_ctx *ctx, u8 *buf, size_t m
     bpf_dbg_printk("iter_type=%u", ctx->iter_type);
     bpf_dbg_printk("nr_segs=%lu, iov=%p, ubuf=%p", ctx->nr_segs, ctx->iov, ctx->ubuf);
 
-    const int iter_bvec = bpf_core_enum_value(enum iter_type, ITER_BVEC);
+    // const int iter_bvec = bpf_core_enum_value(enum iter_type, ITER_BVEC);
 
-    if (ctx->iter_type == iter_bvec) {
-        call_protocol_args_t *args = protocol_args();
-        if (args) {
-            return args->u_buf;
-        }
-    }
+    // if (ctx->iter_type == iter_bvec) {
+    //     call_protocol_args_t *args = protocol_args();
+    //     if (args) {
+    //         return args->u_buf;
+    //     }
+    // }
 
     // ITER_UBUF only exists in kernels >= 6.0 - earlier kernels use ITER_IOVEC
     if (bpf_core_enum_value_exists(enum iter_type___dummy, ITER_UBUF)) {

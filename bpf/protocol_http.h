@@ -67,11 +67,7 @@ static __always_inline u8 http_will_complete(http_info_t *info, unsigned char *b
     if (info->start_monotime_ns != 0) {
         u8 packet_type;
         unsigned char small_buf[MIN_HTTP2_SIZE];
-        if (bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_probe_read)) {
-            bpf_probe_read(small_buf, MIN_HTTP2_SIZE, (void *)buf);
-        } else {
-            bpf_probe_read_kernel(small_buf, MIN_HTTP2_SIZE, (void *)buf);
-        }
+        bpf_probe_read(small_buf, MIN_HTTP2_SIZE, (void *)buf);
         if (is_http(small_buf, len, &packet_type)) {
             return packet_type == PACKET_TYPE_RESPONSE;
         }
@@ -275,11 +271,7 @@ int protocol_http(void *ctx) {
 
         // we copy some small part of the buffer to the info trace event, so that we can process an event even with
         // incomplete trace info in user space.
-        if (bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_probe_read)) {
-            bpf_probe_read(info->buf, FULL_BUF_SIZE, (void *)args->u_buf);
-        } else {
-            bpf_probe_read_kernel(info->buf, FULL_BUF_SIZE, (void *)args->u_buf);
-        }
+        bpf_probe_read(info->buf, FULL_BUF_SIZE, (void *)args->u_buf);
         process_http_request(info, args->bytes_len, meta, args->direction, args->orig_dport);
     } else if ((args->packet_type == PACKET_TYPE_RESPONSE) && (info->status == 0)) {
         handle_http_response(

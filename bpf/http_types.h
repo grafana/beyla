@@ -193,6 +193,11 @@ typedef struct http2_grpc_request {
     tp_info_t tp;
 } http2_grpc_request_t;
 
+typedef struct msg_buffer {
+    u8 buf[KPROBES_HTTP2_BUF_SIZE];
+    u16 pos;
+} msg_buffer_t;
+
 // Force emitting struct http_request_trace into the ELF for automatic creation of Golang struct
 const http_info_t *unused __attribute__((unused));
 const http2_grpc_request_t *unused_http2 __attribute__((unused));

@@ -274,6 +274,10 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
         u16 orig_dport = s_args.p_conn.conn.d_port;
         dbg_print_http_connection_info(
             &s_args.p_conn.conn); // commented out since GitHub CI doesn't like this call
+        egress_key_t e_key = {
+            .d_port = s_args.p_conn.conn.d_port,
+            .s_port = s_args.p_conn.conn.s_port,
+        };
         sort_connection_info(&s_args.p_conn.conn);
         s_args.p_conn.pid = pid_from_pid_tgid(id);
 
@@ -285,6 +289,23 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
                     u8 *buf = iovec_memory();
                     if (buf) {
                         size = read_msghdr_buf(msg, buf, size);
+                        if (!size) {
+                            msg_buffer_t *m_buf = bpf_map_lookup_elem(&msg_buffers, &e_key);
+                            bpf_dbg_printk("No size, m_buf[%llx]", m_buf);
+                            if (m_buf) {
+                                buf = m_buf->buf + m_buf->pos;
+                                if (sizeof(m_buf->buf) > m_buf->pos) {
+                                    size = sizeof(m_buf->buf) - m_buf->pos;
+                                } else {
+                                    size = 0;
+                                }
+                                m_buf->pos += s_args.size;
+                                if (m_buf->pos > sizeof(m_buf->buf)) {
+                                    m_buf->pos = sizeof(m_buf->buf);
+                                }
+                                bpf_dbg_printk("size %d, buf[%s]", size, buf);
+                            }
+                        }
                         if (size) {
                             u64 sock_p = (u64)sk;
                             bpf_map_update_elem(&active_send_args, &id, &s_args, BPF_ANY);

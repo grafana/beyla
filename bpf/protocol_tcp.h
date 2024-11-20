@@ -76,11 +76,7 @@ static __always_inline void handle_unknown_tcp_connection(pid_connection_info_t 
                 "Sending TCP trace %lx, response length %d", existing, existing->resp_len);
 
             __builtin_memcpy(trace, existing, sizeof(tcp_req_t));
-            if (bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_probe_read)) {
-                bpf_probe_read(trace->rbuf, K_TCP_RES_LEN, u_buf);
-            } else {
-                bpf_probe_read_kernel(trace->rbuf, K_TCP_RES_LEN, u_buf);
-            }
+            bpf_probe_read(trace->rbuf, K_TCP_RES_LEN, u_buf);
             bpf_ringbuf_submit(trace, get_flags());
         }
         bpf_map_delete_elem(&ongoing_tcp_req, pid_conn);
@@ -92,11 +88,7 @@ static __always_inline void handle_unknown_tcp_connection(pid_connection_info_t 
         // the next event has an RST frame prepended.
         u32 off = existing->len;
         bpf_clamp_umax(off, (K_TCP_MAX_LEN / 2));
-        if (bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_probe_read)) {
-            bpf_probe_read(existing->buf + off, (K_TCP_MAX_LEN / 2), u_buf);
-        } else {
-            bpf_probe_read_kernel(existing->buf + off, (K_TCP_MAX_LEN / 2), u_buf);
-        }
+        bpf_probe_read(existing->buf + off, (K_TCP_MAX_LEN / 2), u_buf);
 
         existing->len += bytes_len;
     }

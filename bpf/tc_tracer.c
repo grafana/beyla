@@ -36,11 +36,11 @@ int app_ingress(struct __sk_buff *skb) {
     return 0;
 }
 
-static __always_inline void update_outgoing_request_span_id(connection_info_t *conn,
+static __always_inline void update_outgoing_request_span_id(pid_connection_info_t *p_conn,
                                                             protocol_info_t *tcp,
                                                             tp_info_pid_t *tp,
                                                             egress_key_t *e_key) {
-    http_info_t *h_info = bpf_map_lookup_elem(&ongoing_http, e_key);
+    http_info_t *h_info = bpf_map_lookup_elem(&ongoing_http, p_conn);
     if (h_info && tp->valid) {
         bpf_dbg_printk("Found HTTP info, resetting the span id to %x%x", tcp->seq, tcp->ack);
         populate_span_id_from_tcp_info(&h_info->tp, tcp);
@@ -84,26 +84,30 @@ int app_egress(struct __sk_buff *skb) {
     //bpf_printk("egress");
     protocol_info_t tcp = {};
     connection_info_t conn = {};
+    pid_connection_info_t p_conn = {};
 
     if (!read_sk_buff(skb, &tcp, &conn)) {
         return 0;
     }
 
+    __builtin_memcpy(&p_conn.conn, &conn, sizeof(connection_info_t));
+    sort_connection_info(&p_conn.conn);
+
     egress_key_t e_key = {
         .d_port = conn.d_port,
         .s_port = conn.s_port,
     };
-    sort_egress_key(&e_key);
 
     tp_info_pid_t *tp = bpf_map_lookup_elem(&outgoing_trace_map, &e_key);
 
     if (tp) {
-        bpf_dbg_printk("egress flags %x, sequence %x", tcp.flags, tcp.seq);
+        p_conn.pid = tp->pid;
+        bpf_dbg_printk("egress flags %x, sequence %x, valid %d", tcp.flags, tcp.seq, tp->valid);
         dbg_print_http_connection_info(&conn);
 
         if (tp->valid == 1) {
             populate_span_id_from_tcp_info(&tp->tp, &tcp);
-            update_outgoing_request_span_id(&conn, &tcp, tp, &e_key);
+            update_outgoing_request_span_id(&p_conn, &tcp, tp, &e_key);
             tp->valid = 2;
         }
         l7_app_egress(skb, tp, &conn, &tcp);

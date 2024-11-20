@@ -70,11 +70,7 @@ static __always_inline void http2_grpc_start(
         }
         fixup_connection_info(
             &h2g_info->conn_info, h2g_info->type == EVENT_HTTP_CLIENT, orig_dport);
-        if (bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_probe_read)) {
-            bpf_probe_read(h2g_info->data, KPROBES_HTTP2_BUF_SIZE, u_buf);
-        } else {
-            bpf_probe_read_kernel(h2g_info->data, KPROBES_HTTP2_BUF_SIZE, u_buf);
-        }
+        bpf_probe_read(h2g_info->data, KPROBES_HTTP2_BUF_SIZE, u_buf);
 
         bpf_map_update_elem(&ongoing_http2_grpc, s_key, h2g_info, BPF_ANY);
     }
@@ -90,11 +86,7 @@ http2_grpc_end(http2_conn_stream_t *stream, http2_grpc_request_t *prev_info, voi
 
         http2_grpc_request_t *trace = bpf_ringbuf_reserve(&events, sizeof(http2_grpc_request_t), 0);
         if (trace) {
-            if (bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_probe_read)) {
-                bpf_probe_read(prev_info->ret_data, KPROBES_HTTP2_RET_BUF_SIZE, u_buf);
-            } else {
-                bpf_probe_read_kernel(prev_info->ret_data, KPROBES_HTTP2_RET_BUF_SIZE, u_buf);
-            }
+            bpf_probe_read(prev_info->ret_data, KPROBES_HTTP2_RET_BUF_SIZE, u_buf);
             __builtin_memcpy(trace, prev_info, sizeof(http2_grpc_request_t));
             bpf_ringbuf_submit(trace, get_flags());
         }
@@ -127,11 +119,7 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
             break;
         }
 
-        if (bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_probe_read)) {
-            bpf_probe_read(&frame_buf, FRAME_HEADER_LEN, (void *)((u8 *)u_buf + pos));
-        } else {
-            bpf_probe_read_kernel(&frame_buf, FRAME_HEADER_LEN, (void *)((u8 *)u_buf + pos));
-        }
+        bpf_probe_read(&frame_buf, FRAME_HEADER_LEN, (void *)((u8 *)u_buf + pos));
 
         read_http2_grpc_frame_header(&frame, frame_buf, FRAME_HEADER_LEN);
         //bpf_dbg_printk("http2 frame type = %d, len = %d, stream_id = %d, flags = %d", frame.type, frame.length, frame.stream_id, frame.flags);

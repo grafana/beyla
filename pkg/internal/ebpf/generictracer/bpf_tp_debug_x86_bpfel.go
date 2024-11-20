@@ -108,6 +108,11 @@ type bpf_tp_debugHttpInfoT struct {
 	_       [4]byte
 }
 
+type bpf_tp_debugMsgBufferT struct {
+	Buf [256]uint8
+	Pos uint16
+}
+
 type bpf_tp_debugPartialConnectionInfoT struct {
 	S_addr [16]uint8
 	S_port uint16
@@ -297,6 +302,7 @@ type bpf_tp_debugMapSpecs struct {
 	IncomingTraceMap        *ebpf.MapSpec `ebpf:"incoming_trace_map"`
 	IovecMem                *ebpf.MapSpec `ebpf:"iovec_mem"`
 	JumpTable               *ebpf.MapSpec `ebpf:"jump_table"`
+	MsgBuffers              *ebpf.MapSpec `ebpf:"msg_buffers"`
 	NodejsParentMap         *ebpf.MapSpec `ebpf:"nodejs_parent_map"`
 	OngoingHttp             *ebpf.MapSpec `ebpf:"ongoing_http"`
 	OngoingHttp2Connections *ebpf.MapSpec `ebpf:"ongoing_http2_connections"`
@@ -358,6 +364,7 @@ type bpf_tp_debugMaps struct {
 	IncomingTraceMap        *ebpf.Map `ebpf:"incoming_trace_map"`
 	IovecMem                *ebpf.Map `ebpf:"iovec_mem"`
 	JumpTable               *ebpf.Map `ebpf:"jump_table"`
+	MsgBuffers              *ebpf.Map `ebpf:"msg_buffers"`
 	NodejsParentMap         *ebpf.Map `ebpf:"nodejs_parent_map"`
 	OngoingHttp             *ebpf.Map `ebpf:"ongoing_http"`
 	OngoingHttp2Connections *ebpf.Map `ebpf:"ongoing_http2_connections"`
@@ -402,6 +409,7 @@ func (m *bpf_tp_debugMaps) Close() error {
 		m.IncomingTraceMap,
 		m.IovecMem,
 		m.JumpTable,
+		m.MsgBuffers,
 		m.NodejsParentMap,
 		m.OngoingHttp,
 		m.OngoingHttp2Connections,

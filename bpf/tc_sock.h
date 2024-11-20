@@ -105,7 +105,7 @@ static __always_inline void bpf_sock_ops_establish_cb(struct bpf_sock_ops *skops
     sk_ops_extract_key_ip4(skops, &conn);
     // }
 
-    bpf_printk("SET %llx:%d -> %llx:%d", conn.s_ip[3], conn.s_port, conn.d_ip[3], conn.d_port);
+    //bpf_printk("SET %llx:%d -> %llx:%d", conn.s_ip[3], conn.s_port, conn.d_ip[3], conn.d_port);
     bpf_sock_hash_update(skops, &sock_dir, &conn, BPF_ANY);
 }
 
@@ -145,10 +145,15 @@ static __always_inline u8 protocol_detector(struct sk_msg_md *msg,
                                             connection_info_t *conn) {
     bpf_dbg_printk("=== [protocol detector] %d size %d===", id, msg->size);
 
+    egress_key_t e_key = {
+        .d_port = conn->d_port,
+        .s_port = conn->s_port,
+    };
+
     send_args_t s_args = {.size = msg->size};
     __builtin_memcpy(&s_args.p_conn.conn, conn, sizeof(connection_info_t));
 
-    u16 orig_dport = s_args.p_conn.conn.d_port;
+    //u16 orig_dport = s_args.p_conn.conn.d_port;
     dbg_print_http_connection_info(&s_args.p_conn.conn);
     sort_connection_info(&s_args.p_conn.conn);
     s_args.p_conn.pid = pid_from_pid_tgid(id);
@@ -158,17 +163,15 @@ static __always_inline u8 protocol_detector(struct sk_msg_md *msg,
         if (!ssl) {
             void *active_ssl = is_active_ssl(&s_args.p_conn);
             if (!active_ssl) {
-                call_protocol_args_t *args =
-                    make_protocol_args(msg->data, s_args.size, NO_SSL, TCP_SEND, orig_dport);
-                if (args) {
-                    bpf_dbg_printk("Setting up buffer for send msg");
-                    __builtin_memcpy(
-                        &args->pid_conn, &s_args.p_conn, sizeof(pid_connection_info_t));
-                    bpf_probe_read_kernel(args->small_buf, MIN_HTTP2_SIZE, (void *)msg->data);
-                    if (is_http_request_buf(args->small_buf)) {
-                        bpf_dbg_printk("Setting up request to be extended");
-                        return 1;
-                    }
+                msg_buffer_t msg_buf = {
+                    .pos = 0,
+                };
+                bpf_probe_read_kernel(msg_buf.buf, FULL_BUF_SIZE, (void *)msg->data);
+                if (is_http_request_buf((const unsigned char *)msg_buf.buf)) {
+                    bpf_dbg_printk("Setting up request to be extended");
+                    bpf_map_update_elem(&msg_buffers, &e_key, &msg_buf, BPF_ANY);
+
+                    return 1;
                 }
             }
         }

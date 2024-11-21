@@ -293,17 +293,14 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
                             msg_buffer_t *m_buf = bpf_map_lookup_elem(&msg_buffers, &e_key);
                             bpf_dbg_printk("No size, m_buf[%llx]", m_buf);
                             if (m_buf) {
-                                buf = m_buf->buf + m_buf->pos;
-                                if (sizeof(m_buf->buf) > m_buf->pos) {
-                                    size = sizeof(m_buf->buf) - m_buf->pos;
+                                buf = m_buf->buf;
+                                if (!m_buf->pos) {
+                                    size = sizeof(m_buf->buf);
+                                    m_buf->pos = size;
+                                    bpf_dbg_printk("msg_buffer: size %d, buf[%s]", size, buf);
                                 } else {
                                     size = 0;
                                 }
-                                m_buf->pos += s_args.size;
-                                if (m_buf->pos > sizeof(m_buf->buf)) {
-                                    m_buf->pos = sizeof(m_buf->buf);
-                                }
-                                bpf_dbg_printk("size %d, buf[%s]", size, buf);
                             }
                         }
                         if (size) {

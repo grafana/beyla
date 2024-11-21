@@ -91,13 +91,13 @@ func getResourceAttrs(hostID string, service *svc.ID) []attribute.KeyValue {
 }
 
 // ReporterPool keeps an LRU cache of different OTEL reporters given a service name.
-type ReporterPool[K instanceGetter, T any] struct {
+type ReporterPool[K uidGetter, T any] struct {
 	pool *simplelru.LRU[svc.UID, *expirable[T]]
 
 	itemConstructor func(getter K) (T, error)
 
 	lastReporter   *expirable[T]
-	lastService    instanceGetter
+	lastService    uidGetter
 	lastServiceUID svc.UID
 
 	// TODO: use cacheable clock for efficiency
@@ -113,7 +113,7 @@ type expirable[T any] struct {
 	value      T
 }
 
-type instanceGetter interface {
+type uidGetter interface {
 	GetUID() svc.UID
 }
 
@@ -121,7 +121,7 @@ type instanceGetter interface {
 // an eviction callback to be invoked each time an element is removed
 // from the cache, and a constructor function that will specify how to
 // instantiate the generic OTEL metrics/traces reporter.
-func NewReporterPool[K instanceGetter, T any](
+func NewReporterPool[K uidGetter, T any](
 	cacheLen int,
 	ttl time.Duration,
 	clock expire.Clock,

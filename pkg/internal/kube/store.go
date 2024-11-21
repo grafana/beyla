@@ -2,7 +2,6 @@ package kube
 
 import (
 	"log/slog"
-	"slices"
 	"strings"
 	"sync"
 
@@ -155,33 +154,27 @@ func (s *Store) addObjectMeta(meta *informer.ObjectMeta) {
 	s.access.Lock()
 	defer s.access.Unlock()
 
-	s.unlockedAddObjectMeta(qName(meta), meta)
+	s.unlockedAddObjectMeta(meta)
 }
 
 func (s *Store) updateObjectMeta(meta *informer.ObjectMeta) {
 	s.access.Lock()
 	defer s.access.Unlock()
 
-	// if the update removes IPs from the original object meta,
-	// we remove them from the indexes
-	qn := qName(meta)
-	if om, ok := s.objectMetaByQName[qn]; ok {
-		for _, ip := range om.Ips {
-			// theoretically, linear search into a list is not efficient and we should first build a map
-			// with all the IPs
-			// however, the IPs slice is expected to have a small size (few entries), so
-			// it's more efficient, also in terms of memory generation, to keep it as a slice
-			// and avoid generating temporary maps
-			if !slices.Contains(meta.Ips, ip) {
-				delete(s.objectMetaByIP, ip)
-			}
-		}
+	// atomically remove the previously stored version of the updated object
+	// then re-adding it
+	// this will avoid to leak some IPs and containers that exist in the
+	// stored snapshot but not in the updated snapshot
+	if previousObject, ok := s.objectMetaByQName[qName(meta)]; ok {
+		s.unlockedDeleteObjectMeta(previousObject)
 	}
-
-	s.unlockedAddObjectMeta(qn, meta)
+	s.unlockedAddObjectMeta(meta)
 }
 
-func (s *Store) unlockedAddObjectMeta(qn qualifiedName, meta *informer.ObjectMeta) {
+// it's important to make sure that any element added here is removed when
+// calling unlockedDeleteObjectMeta with the same ObjectMeta
+func (s *Store) unlockedAddObjectMeta(meta *informer.ObjectMeta) {
+	qn := qName(meta)
 	s.objectMetaByQName[qn] = meta
 
 	for _, ip := range meta.Ips {
@@ -191,6 +184,7 @@ func (s *Store) unlockedAddObjectMeta(qn qualifiedName, meta *informer.ObjectMet
 	s.otelServiceInfoByIP = map[string]OTelServiceNamePair{}
 
 	if meta.Pod != nil {
+		oID := fetchOwnerID(meta)
 		s.log.Debug("adding pod to store",
 			"ips", meta.Ips, "pod", meta.Name, "namespace", meta.Namespace, "containers", meta.Pod.Containers)
 		for _, c := range meta.Pod.Containers {
@@ -200,10 +194,7 @@ func (s *Store) unlockedAddObjectMeta(qn qualifiedName, meta *informer.ObjectMet
 			if ok {
 				s.namespaces[info.PIDNamespace] = info
 			}
-		}
-		oID := fetchOwnerID(meta)
-		for _, cnt := range meta.Pod.Containers {
-			s.containersByOwner.Put(oID, cnt.Id, cnt)
+			s.containersByOwner.Put(oID, c.Id, c)
 		}
 	}
 }

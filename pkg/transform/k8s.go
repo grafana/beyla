@@ -129,11 +129,7 @@ func (md *metadataDecorator) appendMetadata(span *request.Span, meta *informer.O
 	// if the application/process was discovered and reported information
 	// before the kubernetes metadata was available
 	// (related issue: https://github.com/grafana/beyla/issues/1124)
-	if containerName == "" {
-		span.ServiceID.Instance = svc.UID(meta.Pod.Uid)
-	} else {
-		span.ServiceID.Instance = svc.UID(containerName)
-	}
+	span.ServiceID.Instance = svc.UID(meta.Name + ":" + containerName)
 
 	// if, in the future, other pipeline steps modify the service metadata, we should
 	// replace the map literal by individual entry insertions

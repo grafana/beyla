@@ -93,7 +93,7 @@ func TestDecoration(t *testing.T) {
 		require.Len(t, deco, 1)
 		assert.Equal(t, "the-ns", deco[0].ServiceID.Namespace)
 		assert.Equal(t, "deployment-12", deco[0].ServiceID.Name)
-		assert.EqualValues(t, "a-container", deco[0].ServiceID.Instance)
+		assert.EqualValues(t, "pod-12:a-container", deco[0].ServiceID.Instance)
 		assert.Equal(t, map[attr.Name]string{
 			"k8s.node.name":       "the-node",
 			"k8s.namespace.name":  "the-ns",
@@ -113,7 +113,7 @@ func TestDecoration(t *testing.T) {
 		require.Len(t, deco, 1)
 		assert.Equal(t, "the-ns", deco[0].ServiceID.Namespace)
 		assert.Equal(t, "rs", deco[0].ServiceID.Name)
-		assert.EqualValues(t, "a-container", deco[0].ServiceID.Instance)
+		assert.EqualValues(t, "pod-34:a-container", deco[0].ServiceID.Instance)
 		assert.Equal(t, map[attr.Name]string{
 			"k8s.node.name":       "the-node",
 			"k8s.namespace.name":  "the-ns",
@@ -133,7 +133,7 @@ func TestDecoration(t *testing.T) {
 		require.Len(t, deco, 1)
 		assert.Equal(t, "the-ns", deco[0].ServiceID.Namespace)
 		assert.Equal(t, "the-pod", deco[0].ServiceID.Name)
-		assert.EqualValues(t, "a-container", deco[0].ServiceID.Instance)
+		assert.EqualValues(t, "the-pod:a-container", deco[0].ServiceID.Instance)
 		assert.Equal(t, map[attr.Name]string{
 			"k8s.node.name":      "the-node",
 			"k8s.namespace.name": "the-ns",
@@ -151,7 +151,7 @@ func TestDecoration(t *testing.T) {
 		require.Len(t, deco, 1)
 		assert.Equal(t, "a-cool-namespace", deco[0].ServiceID.Namespace)
 		assert.Equal(t, "a-cool-name", deco[0].ServiceID.Name)
-		assert.EqualValues(t, "a-container", deco[0].ServiceID.Instance)
+		assert.EqualValues(t, "overridden-meta:a-container", deco[0].ServiceID.Instance)
 		assert.Equal(t, map[attr.Name]string{
 			"k8s.node.name":      "the-node",
 			"k8s.namespace.name": "the-ns",
@@ -181,7 +181,7 @@ func TestDecoration(t *testing.T) {
 		require.Len(t, deco, 1)
 		assert.Equal(t, "tralara", deco[0].ServiceID.Namespace)
 		assert.Equal(t, "tralari", deco[0].ServiceID.Name)
-		assert.EqualValues(t, "a-container", deco[0].ServiceID.Instance)
+		assert.EqualValues(t, "pod-12:a-container", deco[0].ServiceID.Instance)
 		assert.Equal(t, map[attr.Name]string{
 			"k8s.node.name":       "the-node",
 			"k8s.namespace.name":  "the-ns",

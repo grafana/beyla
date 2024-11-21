@@ -25,25 +25,25 @@ func TestReadDecorator(t *testing.T) {
 	require.NotEmpty(t, dnsHostname)
 
 	type testCase struct {
-		desc        string
-		cfg         ReadDecorator
-		expectedUID svc.UID
-		expectedHN  string
+		desc             string
+		cfg              ReadDecorator
+		expectedInstance string
+		expectedHN       string
 	}
 	for _, tc := range []testCase{{
-		desc:        "dns",
-		cfg:         ReadDecorator{InstanceID: InstanceIDConfig{HostnameDNSResolution: true}},
-		expectedUID: svc.UID(dnsHostname + ":1234"),
-		expectedHN:  dnsHostname,
+		desc:             "dns",
+		cfg:              ReadDecorator{InstanceID: InstanceIDConfig{HostnameDNSResolution: true}},
+		expectedInstance: dnsHostname + ":1234",
+		expectedHN:       dnsHostname,
 	}, {
-		desc:        "no-dns",
-		expectedUID: svc.UID(localHostname + ":1234"),
-		expectedHN:  localHostname,
+		desc:             "no-dns",
+		expectedInstance: localHostname + ":1234",
+		expectedHN:       localHostname,
 	}, {
-		desc:        "override hostname",
-		cfg:         ReadDecorator{InstanceID: InstanceIDConfig{OverrideHostname: "foooo"}},
-		expectedUID: "foooo:1234",
-		expectedHN:  "foooo",
+		desc:             "override hostname",
+		cfg:              ReadDecorator{InstanceID: InstanceIDConfig{OverrideHostname: "foooo"}},
+		expectedInstance: "foooo:1234",
+		expectedHN:       "foooo",
 	}} {
 		t.Run(tc.desc, func(t *testing.T) {
 			cfg := tc.cfg
@@ -60,9 +60,9 @@ func TestReadDecorator(t *testing.T) {
 			}
 			outSpans := testutil.ReadChannel(t, decoratedOutput, testTimeout)
 			assert.Equal(t, []request.Span{
-				{ServiceID: svc.ID{Instance: tc.expectedUID, HostName: tc.expectedHN},
+				{ServiceID: svc.ID{UID: svc.UID{Instance: tc.expectedInstance}, HostName: tc.expectedHN},
 					Path: "/foo", Pid: request.PidInfo{HostPID: 1234}},
-				{ServiceID: svc.ID{Instance: tc.expectedUID, HostName: tc.expectedHN},
+				{ServiceID: svc.ID{UID: svc.UID{Instance: tc.expectedInstance}, HostName: tc.expectedHN},
 					Path: "/bar", Pid: request.PidInfo{HostPID: 1234}},
 			}, outSpans)
 		})

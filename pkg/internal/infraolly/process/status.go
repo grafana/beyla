@@ -35,7 +35,7 @@ type ID struct {
 	ExecPath        string
 }
 
-func (i *ID) GetInstanceID() svc.UID {
+func (i *ID) GetUID() svc.UID {
 	return i.UID
 }
 
@@ -77,7 +77,11 @@ func NewStatus(pid int32, svcID *svc.ID) *Status {
 	return &Status{ID: ID{
 		ProcessID: pid,
 		Service:   svcID,
-		UID:       svcID.Instance + "-" + svc.UID(strconv.Itoa(int(pid))),
+		UID: svc.UID{
+			Name:      svcID.UID.Name,
+			Namespace: svcID.UID.Namespace,
+			Instance:  svcID.UID.Instance + ":" + strconv.Itoa(int(pid)),
+		},
 	}}
 }
 
@@ -120,7 +124,7 @@ func PromGetters(name attr.Name) (attributes.Getter[*Status, string], bool) {
 		// the attributes are handled explicitly by the prometheus exporter, but we need to
 		// ignore them to avoid that the default case tries to report them from service metadata
 	case attr.Instance:
-		g = func(s *Status) string { return string(s.ID.UID) }
+		g = func(s *Status) string { return s.ID.UID.Instance }
 	case attr.Job:
 		g = func(s *Status) string { return s.ID.Service.Job() }
 	default:

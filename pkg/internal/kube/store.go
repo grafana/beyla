@@ -13,14 +13,6 @@ import (
 	"github.com/grafana/beyla/pkg/kubecache/meta"
 )
 
-// some Pod labels that can be used to override the ServiceID metadata
-// Values taken from: https://kubernetes.io/docs/concepts/overview/working-with-objects/common-labels/
-// As interpreted by the OTEL operator: https://github.com/open-telemetry/opentelemetry-operator/issues/3112
-const (
-	LblOverrideServiceName     = "app.kubernetes.io/name"
-	LblOverrideSeviceNamespace = "app.kubernetes.io/part-of"
-)
-
 func dblog() *slog.Logger {
 	return slog.With("component", "kube.Store")
 }
@@ -43,6 +35,12 @@ type qualifiedName struct {
 
 func qName(om *informer.ObjectMeta) qualifiedName {
 	return qualifiedName{name: om.Name, namespace: om.Namespace, kind: om.Kind}
+}
+
+// MetaSourceLabels allow overriding some metadata from kubernetes labels
+type MetaSourceLabels struct {
+	ServiceName      string `yaml:"service_name" env:"BEYLA_KUBE_META_SOURCE_LABEL_SERVICE_NAME"`
+	ServiceNamespace string `yaml:"service_namespace" env:"BEYLA_KUBE_META_SOURCE_LABEL_SERVICE_NAMESPACE"`
 }
 
 // Store aggregates Kubernetes information from multiple sources:
@@ -81,9 +79,11 @@ type Store struct {
 	// will subscribe to this store, to make sure that any "new object" notification
 	// they receive is already present in the store
 	meta.BaseNotifier
+
+	sourceLabels MetaSourceLabels
 }
 
-func NewStore(kubeMetadata meta.Notifier) *Store {
+func NewStore(kubeMetadata meta.Notifier, sourceLabels MetaSourceLabels) *Store {
 	log := dblog()
 	db := &Store{
 		log:                 log,
@@ -97,6 +97,7 @@ func NewStore(kubeMetadata meta.Notifier) *Store {
 		otelServiceInfoByIP: map[string]OTelServiceNamePair{},
 		metadataNotifier:    kubeMetadata,
 		BaseNotifier:        meta.NewBaseNotifier(log),
+		sourceLabels:        sourceLabels,
 	}
 	kubeMetadata.Subscribe(db)
 	return db
@@ -297,11 +298,15 @@ func (s *Store) serviceNameNamespaceForMetadata(om *informer.ObjectMeta) (string
 	} else {
 		name, namespace = s.serviceNameNamespaceForOwner(om)
 	}
-	if on, ok := om.Labels[LblOverrideServiceName]; ok {
-		name = on
+	if s.sourceLabels.ServiceName != "" {
+		if on, ok := om.Labels[s.sourceLabels.ServiceName]; ok {
+			name = on
+		}
 	}
-	if ons, ok := om.Labels[LblOverrideSeviceNamespace]; ok {
-		namespace = ons
+	if s.sourceLabels.ServiceNamespace != "" {
+		if ons, ok := om.Labels[s.sourceLabels.ServiceNamespace]; ok {
+			namespace = ons
+		}
 	}
 	return name, namespace
 }

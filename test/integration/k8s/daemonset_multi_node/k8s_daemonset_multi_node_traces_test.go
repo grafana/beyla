@@ -61,10 +61,10 @@ func TestMultiNodeTracing(t *testing.T) {
 					parent := res[0]
 					require.NotEmpty(t, parent.TraceID)
 					traceID = parent.TraceID
-					sd := jaeger.Diff([]jaeger.Tag{
-						{Key: "service.namespace", Type: "string", Value: "integration-test"},
-						{Key: "telemetry.sdk.language", Type: "string", Value: "go"},
-						{Key: "service.instance.id", Type: "string", Value: "^testserver-.+:testserver"},
+					sd := jaeger.DiffAsRegexp([]jaeger.Tag{
+						{Key: "service.namespace", Type: "string", Value: "^integration-test$"},
+						{Key: "telemetry.sdk.language", Type: "string", Value: "^go$"},
+						{Key: "service.instance.id", Type: "string", Value: "^testserver-.+:testserver$"},
 					}, trace.Processes[parent.ProcessID].Tags)
 					require.Empty(t, sd, sd.String())
 

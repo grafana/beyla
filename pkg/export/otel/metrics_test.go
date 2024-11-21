@@ -492,15 +492,15 @@ func TestAppMetrics_ByInstrumentation(t *testing.T) {
 			*/
 			// WHEN it receives metrics
 			metrics <- []request.Span{
-				{ServiceID: svc.ID{Instance: "foo"}, Type: request.EventTypeHTTP, Path: "/foo", RequestStart: 100, End: 200},
-				{ServiceID: svc.ID{Instance: "foo"}, Type: request.EventTypeHTTPClient, Path: "/bar", RequestStart: 150, End: 175},
-				{ServiceID: svc.ID{Instance: "foo"}, Type: request.EventTypeGRPC, Path: "/foo", RequestStart: 100, End: 200},
-				{ServiceID: svc.ID{Instance: "foo"}, Type: request.EventTypeGRPCClient, Path: "/bar", RequestStart: 150, End: 175},
-				{ServiceID: svc.ID{Instance: "foo"}, Type: request.EventTypeSQLClient, Path: "SELECT", RequestStart: 150, End: 175},
-				{ServiceID: svc.ID{Instance: "foo"}, Type: request.EventTypeRedisClient, Method: "SET", RequestStart: 150, End: 175},
-				{ServiceID: svc.ID{Instance: "foo"}, Type: request.EventTypeRedisServer, Method: "GET", RequestStart: 150, End: 175},
-				{ServiceID: svc.ID{Instance: "foo"}, Type: request.EventTypeKafkaClient, Method: "publish", RequestStart: 150, End: 175},
-				{ServiceID: svc.ID{Instance: "foo"}, Type: request.EventTypeKafkaServer, Method: "process", RequestStart: 150, End: 175},
+				{ServiceID: svc.ID{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeHTTP, Path: "/foo", RequestStart: 100, End: 200},
+				{ServiceID: svc.ID{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeHTTPClient, Path: "/bar", RequestStart: 150, End: 175},
+				{ServiceID: svc.ID{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeGRPC, Path: "/foo", RequestStart: 100, End: 200},
+				{ServiceID: svc.ID{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeGRPCClient, Path: "/bar", RequestStart: 150, End: 175},
+				{ServiceID: svc.ID{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeSQLClient, Path: "SELECT", RequestStart: 150, End: 175},
+				{ServiceID: svc.ID{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeRedisClient, Method: "SET", RequestStart: 150, End: 175},
+				{ServiceID: svc.ID{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeRedisServer, Method: "GET", RequestStart: 150, End: 175},
+				{ServiceID: svc.ID{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeKafkaClient, Method: "publish", RequestStart: 150, End: 175},
+				{ServiceID: svc.ID{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeKafkaServer, Method: "process", RequestStart: 150, End: 175},
 			}
 
 			// Read the exported metrics, add +extraColl for HTTP size metrics
@@ -545,7 +545,7 @@ func TestAppMetrics_ResourceAttributes(t *testing.T) {
 	go otelExporter(metrics)
 
 	metrics <- []request.Span{
-		{ServiceID: svc.ID{Instance: "foo"}, Type: request.EventTypeHTTP, Path: "/foo", RequestStart: 100, End: 200},
+		{ServiceID: svc.ID{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeHTTP, Path: "/foo", RequestStart: 100, End: 200},
 	}
 
 	res := readNChan(t, otlp.Records(), 1, timeout)

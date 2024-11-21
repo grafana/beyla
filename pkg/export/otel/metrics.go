@@ -709,9 +709,9 @@ func otelHistogramConfig(metricName string, buckets []float64, useExponentialHis
 
 func (mr *MetricsReporter) metricResourceAttributes(service *svc.ID) attribute.Set {
 	attrs := []attribute.KeyValue{
-		request.ServiceMetric(service.Name),
-		semconv.ServiceInstanceID(string(service.Instance)),
-		semconv.ServiceNamespace(service.Namespace),
+		request.ServiceMetric(service.UID.Name),
+		semconv.ServiceInstanceID(service.UID.Instance),
+		semconv.ServiceNamespace(service.UID.Namespace),
 		semconv.TelemetrySDKLanguageKey.String(service.SDKLanguage.String()),
 		semconv.TelemetrySDKNameKey.String("beyla"),
 		request.SourceMetric("beyla"),

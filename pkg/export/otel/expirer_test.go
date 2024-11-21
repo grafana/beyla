@@ -165,8 +165,8 @@ func TestAppMetricsExpiration_ByMetricAttrs(t *testing.T) {
 
 	// WHEN it receives metrics
 	metrics <- []request.Span{
-		{ServiceID: svc.ID{Instance: "foo"}, Type: request.EventTypeHTTP, Path: "/foo", RequestStart: 100, End: 200},
-		{ServiceID: svc.ID{Instance: "foo"}, Type: request.EventTypeHTTP, Path: "/bar", RequestStart: 150, End: 175},
+		{ServiceID: svc.ID{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeHTTP, Path: "/foo", RequestStart: 100, End: 200},
+		{ServiceID: svc.ID{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeHTTP, Path: "/bar", RequestStart: 150, End: 175},
 	}
 
 	// THEN the metrics are exported
@@ -189,7 +189,7 @@ func TestAppMetricsExpiration_ByMetricAttrs(t *testing.T) {
 	// AND WHEN it keeps receiving a subset of the initial metrics during the TTL
 	now.Advance(2 * time.Minute)
 	metrics <- []request.Span{
-		{ServiceID: svc.ID{Instance: "foo"}, Type: request.EventTypeHTTP, Path: "/foo", RequestStart: 250, End: 280},
+		{ServiceID: svc.ID{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeHTTP, Path: "/foo", RequestStart: 250, End: 280},
 	}
 
 	// THEN THE metrics that have been received during the TTL period are still visible
@@ -203,7 +203,7 @@ func TestAppMetricsExpiration_ByMetricAttrs(t *testing.T) {
 
 	now.Advance(2 * time.Minute)
 	metrics <- []request.Span{
-		{ServiceID: svc.ID{Instance: "foo"}, Type: request.EventTypeHTTP, Path: "/foo", RequestStart: 300, End: 310},
+		{ServiceID: svc.ID{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeHTTP, Path: "/foo", RequestStart: 300, End: 310},
 	}
 
 	// makes sure that the records channel is emptied and any remaining
@@ -231,7 +231,7 @@ func TestAppMetricsExpiration_ByMetricAttrs(t *testing.T) {
 	// AND WHEN the metrics labels that disappeared are received again
 	now.Advance(2 * time.Minute)
 	metrics <- []request.Span{
-		{ServiceID: svc.ID{Instance: "foo"}, Type: request.EventTypeHTTP, Path: "/bar", RequestStart: 450, End: 520},
+		{ServiceID: svc.ID{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeHTTP, Path: "/bar", RequestStart: 450, End: 520},
 	}
 
 	// THEN they are reported again, starting from zero in the case of counters
@@ -284,8 +284,8 @@ func TestAppMetricsExpiration_BySvcID(t *testing.T) {
 
 	// WHEN it receives metrics
 	metrics <- []request.Span{
-		{ServiceID: svc.ID{Instance: "foo"}, Type: request.EventTypeHTTP, Path: "/foo", RequestStart: 100, End: 200},
-		{ServiceID: svc.ID{Instance: "bar"}, Type: request.EventTypeHTTP, Path: "/bar", RequestStart: 150, End: 175},
+		{ServiceID: svc.ID{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeHTTP, Path: "/foo", RequestStart: 100, End: 200},
+		{ServiceID: svc.ID{UID: svc.UID{Instance: "bar"}}, Type: request.EventTypeHTTP, Path: "/bar", RequestStart: 150, End: 175},
 	}
 
 	// THEN the metrics are exported
@@ -308,7 +308,7 @@ func TestAppMetricsExpiration_BySvcID(t *testing.T) {
 	// AND WHEN it keeps receiving a subset of the initial metrics during the TTL
 	now.Advance(2 * time.Minute)
 	metrics <- []request.Span{
-		{ServiceID: svc.ID{Instance: "foo"}, Type: request.EventTypeHTTP, Path: "/foo", RequestStart: 250, End: 280},
+		{ServiceID: svc.ID{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeHTTP, Path: "/foo", RequestStart: 250, End: 280},
 	}
 
 	// THEN THE metrics that have been received during the TTL period are still visible
@@ -322,7 +322,7 @@ func TestAppMetricsExpiration_BySvcID(t *testing.T) {
 
 	now.Advance(2 * time.Minute)
 	metrics <- []request.Span{
-		{ServiceID: svc.ID{Instance: "foo"}, Type: request.EventTypeHTTP, Path: "/foo", RequestStart: 300, End: 310},
+		{ServiceID: svc.ID{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeHTTP, Path: "/foo", RequestStart: 300, End: 310},
 	}
 
 	// BUT not the metrics that haven't been received during that time.
@@ -351,7 +351,7 @@ func TestAppMetricsExpiration_BySvcID(t *testing.T) {
 	// AND WHEN the metrics labels that disappeared are received again
 	now.Advance(2 * time.Minute)
 	metrics <- []request.Span{
-		{ServiceID: svc.ID{Instance: "bar"}, Type: request.EventTypeHTTP, Path: "/bar", RequestStart: 450, End: 520},
+		{ServiceID: svc.ID{UID: svc.UID{Instance: "bar"}}, Type: request.EventTypeHTTP, Path: "/bar", RequestStart: 450, End: 520},
 	}
 
 	// THEN they are reported again, starting from zero in the case of counters

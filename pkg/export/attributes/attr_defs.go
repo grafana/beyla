@@ -48,7 +48,7 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 			attr.ServiceNamespace: true,
 		},
 	}
-	// ServiceName and ServiceNamespace are reported both as resource and metric attributes, as
+	// Name and Namespace are reported both as resource and metric attributes, as
 	// the OTEL definition requires that it is reported as resource attribute,
 	// but Grafana Cloud takes it from the metric
 	var appAttributes = AttrReportGroup{

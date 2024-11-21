@@ -22,7 +22,10 @@ const timeout = 5 * time.Second
 
 func TestDecoration(t *testing.T) {
 	inf := &fakeInformer{}
-	store := kube.NewStore(inf)
+	store := kube.NewStore(inf, kube.MetaSourceLabels{
+		ServiceName:      "app.kubernetes.io/name",
+		ServiceNamespace: "app.kubernetes.io/part-of",
+	})
 	// pre-populated kubernetes metadata database
 	inf.Notify(&informer.Event{Type: informer.EventType_CREATED, Resource: &informer.ObjectMeta{
 		Name: "pod-12", Namespace: "the-ns", Kind: "Pod",
@@ -91,9 +94,9 @@ func TestDecoration(t *testing.T) {
 		}}
 		deco := testutil.ReadChannel(t, outputhCh, timeout)
 		require.Len(t, deco, 1)
-		assert.Equal(t, "the-ns", deco[0].ServiceID.Namespace)
-		assert.Equal(t, "deployment-12", deco[0].ServiceID.Name)
-		assert.EqualValues(t, "pod-12:a-container", deco[0].ServiceID.Instance)
+		assert.Equal(t, "the-ns", deco[0].ServiceID.UID.Namespace)
+		assert.Equal(t, "deployment-12", deco[0].ServiceID.UID.Name)
+		assert.EqualValues(t, "pod-12:a-container", deco[0].ServiceID.UID.Instance)
 		assert.Equal(t, map[attr.Name]string{
 			"k8s.node.name":       "the-node",
 			"k8s.namespace.name":  "the-ns",
@@ -111,9 +114,9 @@ func TestDecoration(t *testing.T) {
 		}}
 		deco := testutil.ReadChannel(t, outputhCh, timeout)
 		require.Len(t, deco, 1)
-		assert.Equal(t, "the-ns", deco[0].ServiceID.Namespace)
-		assert.Equal(t, "rs", deco[0].ServiceID.Name)
-		assert.EqualValues(t, "pod-34:a-container", deco[0].ServiceID.Instance)
+		assert.Equal(t, "the-ns", deco[0].ServiceID.UID.Namespace)
+		assert.Equal(t, "rs", deco[0].ServiceID.UID.Name)
+		assert.EqualValues(t, "pod-34:a-container", deco[0].ServiceID.UID.Instance)
 		assert.Equal(t, map[attr.Name]string{
 			"k8s.node.name":       "the-node",
 			"k8s.namespace.name":  "the-ns",
@@ -131,9 +134,9 @@ func TestDecoration(t *testing.T) {
 		}}
 		deco := testutil.ReadChannel(t, outputhCh, timeout)
 		require.Len(t, deco, 1)
-		assert.Equal(t, "the-ns", deco[0].ServiceID.Namespace)
-		assert.Equal(t, "the-pod", deco[0].ServiceID.Name)
-		assert.EqualValues(t, "the-pod:a-container", deco[0].ServiceID.Instance)
+		assert.Equal(t, "the-ns", deco[0].ServiceID.UID.Namespace)
+		assert.Equal(t, "the-pod", deco[0].ServiceID.UID.Name)
+		assert.EqualValues(t, "the-pod:a-container", deco[0].ServiceID.UID.Instance)
 		assert.Equal(t, map[attr.Name]string{
 			"k8s.node.name":      "the-node",
 			"k8s.namespace.name": "the-ns",
@@ -149,9 +152,9 @@ func TestDecoration(t *testing.T) {
 		}}
 		deco := testutil.ReadChannel(t, outputhCh, timeout)
 		require.Len(t, deco, 1)
-		assert.Equal(t, "a-cool-namespace", deco[0].ServiceID.Namespace)
-		assert.Equal(t, "a-cool-name", deco[0].ServiceID.Name)
-		assert.EqualValues(t, "overridden-meta:a-container", deco[0].ServiceID.Instance)
+		assert.Equal(t, "a-cool-namespace", deco[0].ServiceID.UID.Namespace)
+		assert.Equal(t, "a-cool-name", deco[0].ServiceID.UID.Name)
+		assert.EqualValues(t, "overridden-meta:a-container", deco[0].ServiceID.UID.Instance)
 		assert.Equal(t, map[attr.Name]string{
 			"k8s.node.name":      "the-node",
 			"k8s.namespace.name": "the-ns",
@@ -162,26 +165,26 @@ func TestDecoration(t *testing.T) {
 		}, deco[0].ServiceID.Metadata)
 	})
 	t.Run("process without pod Info won't be decorated", func(t *testing.T) {
-		svc := svc.ID{Name: "exec"}
+		svc := svc.ID{UID: svc.UID{Name: "exec"}}
 		svc.SetAutoName()
 		inputCh <- []request.Span{{
 			Pid: request.PidInfo{Namespace: 1099}, ServiceID: svc,
 		}}
 		deco := testutil.ReadChannel(t, outputhCh, timeout)
 		require.Len(t, deco, 1)
-		assert.Empty(t, deco[0].ServiceID.Namespace)
-		assert.Equal(t, "exec", deco[0].ServiceID.Name)
+		assert.Empty(t, deco[0].ServiceID.UID.Namespace)
+		assert.Equal(t, "exec", deco[0].ServiceID.UID.Name)
 		assert.Empty(t, deco[0].ServiceID.Metadata)
 	})
 	t.Run("if service name or namespace are manually specified, don't override them", func(t *testing.T) {
 		inputCh <- []request.Span{{
-			Pid: request.PidInfo{Namespace: 1012}, ServiceID: svc.ID{Name: "tralari", Namespace: "tralara"},
+			Pid: request.PidInfo{Namespace: 1012}, ServiceID: svc.ID{UID: svc.UID{Name: "tralari", Namespace: "tralara"}},
 		}}
 		deco := testutil.ReadChannel(t, outputhCh, timeout)
 		require.Len(t, deco, 1)
-		assert.Equal(t, "tralara", deco[0].ServiceID.Namespace)
-		assert.Equal(t, "tralari", deco[0].ServiceID.Name)
-		assert.EqualValues(t, "pod-12:a-container", deco[0].ServiceID.Instance)
+		assert.Equal(t, "tralara", deco[0].ServiceID.UID.Namespace)
+		assert.Equal(t, "tralari", deco[0].ServiceID.UID.Name)
+		assert.EqualValues(t, "pod-12:a-container", deco[0].ServiceID.UID.Instance)
 		assert.Equal(t, map[attr.Name]string{
 			"k8s.node.name":       "the-node",
 			"k8s.namespace.name":  "the-ns",

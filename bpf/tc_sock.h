@@ -181,22 +181,23 @@ static __always_inline u8 protocol_detector(struct sk_msg_md *msg,
 
 SEC("sk_msg")
 int packet_extender(struct sk_msg_md *msg) {
-    u64 id = bpf_get_current_pid_tgid();
-
-    if (!valid_pid(id)) {
-        return SK_PASS;
-    }
-
-    connection_info_t conn = {};
-
     if (msg->family == AF_INET6) {
         return SK_PASS;
     }
+
+    u64 id = bpf_get_current_pid_tgid();
+    connection_info_t conn = {};
+
     // if (msg->family == AF_INET6) {
     //     sk_msg_extract_key_ip6(msg, &conn);
     // } else {
     sk_msg_extract_key_ip4(msg, &conn);
     // }
+    u8 tracked = is_tracked(&conn);
+
+    if (!valid_pid(id) && !tracked) {
+        return SK_PASS;
+    }
 
     bpf_dbg_printk("MSG %llx:%d ->", conn.s_ip[3], conn.s_port);
     bpf_dbg_printk("MSG TO %llx:%d", conn.d_ip[3], conn.d_port);
@@ -207,9 +208,8 @@ int packet_extender(struct sk_msg_md *msg) {
     }
     bpf_msg_pull_data(msg, 0, 1024, 0);
 
-    u8 tracked = protocol_detector(msg, id, &conn);
     if (!tracked) {
-        tracked = is_tracked(&conn);
+        tracked = protocol_detector(msg, id, &conn);
     }
 
     u64 len = (u64)msg->data_end - (u64)msg->data;

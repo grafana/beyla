@@ -109,6 +109,11 @@ static __always_inline unsigned char *tp_buf_mem(tp_info_t *tp) {
     return val->buf;
 }
 
+static __always_inline void l7_app_ctx_cleanup(egress_key_t *e_key) {
+    bpf_map_delete_elem(&tc_http_ctx_map, &e_key->s_port);
+    bpf_map_delete_elem(&outgoing_trace_map, e_key);
+}
+
 // This function does two things:
 //   1. It adds sockets in the socket hash map which have already been
 //      established and we see them for the first time in Traffic Control, i.e
@@ -118,13 +123,14 @@ static __always_inline unsigned char *tp_buf_mem(tp_info_t *tp) {
 static __always_inline int l7_app_egress(struct __sk_buff *skb,
                                          tp_info_pid_t *tp,
                                          connection_info_t *conn,
-                                         protocol_info_t *tcp) {
+                                         protocol_info_t *tcp,
+                                         egress_key_t *e_key) {
     bpf_skb_pull_data(skb, skb->len);
 
     void *data_end = ctx_data_end(skb);
     void *data = ctx_data(skb);
 
-    u32 s_port = conn->s_port;
+    u32 s_port = e_key->s_port;
     tc_http_ctx_t *ctx = (tc_http_ctx_t *)bpf_map_lookup_elem(&tc_http_ctx_map, &s_port);
 
     if (!ctx) {
@@ -150,12 +156,9 @@ static __always_inline int l7_app_egress(struct __sk_buff *skb,
                            data_end);
         } else {
             if (ipv4 && (u64)((u8 *)tuple + sizeof(tuple->ipv4)) < (u64)data_end) {
-                struct bpf_sock_tuple tup = {};
-                __builtin_memcpy(&tup, tuple, sizeof(tup.ipv4));
-
                 // Lookup to see if you can find a socket for this tuple in the
                 // kernel socket tracking. We look up in all namespaces (-1).
-                sk = bpf_sk_lookup_tcp(skb, &tup, sizeof(tup.ipv4), BPF_F_CURRENT_NETNS, 0);
+                sk = bpf_sk_lookup_tcp(skb, tuple, sizeof(tuple->ipv4), BPF_F_CURRENT_NETNS, 0);
                 bpf_dbg_printk("sk=%d\n", sk ? 1 : 0);
                 if (sk) {
                     bpf_dbg_printk("LOOKUP %llx:%d ->", conn->s_ip[3], conn->s_port);
@@ -237,7 +240,7 @@ static __always_inline int l7_app_egress(struct __sk_buff *skb,
                     if ((start + EXTEND_SIZE) <= ctx_data_end(skb)) {
                         __builtin_memcpy(start, tp_buf, EXTEND_SIZE);
                         bpf_dbg_printk("Set the string fast_path!");
-                        bpf_map_delete_elem(&tc_http_ctx_map, &s_port);
+                        l7_app_ctx_cleanup(e_key);
                         return 0;
                     }
                 }
@@ -253,7 +256,7 @@ static __always_inline int l7_app_egress(struct __sk_buff *skb,
                     }
                 } else {
                     // We've written everything already, just clean up
-                    bpf_map_delete_elem(&tc_http_ctx_map, &s_port);
+                    l7_app_ctx_cleanup(e_key);
                     return 0;
                 }
             }
@@ -273,7 +276,7 @@ static __always_inline int l7_app_egress(struct __sk_buff *skb,
                 // If we've written the full string this time around
                 // cleanup the metadata.
                 if (ctx->written >= EXTEND_SIZE) {
-                    bpf_map_delete_elem(&tc_http_ctx_map, &s_port);
+                    l7_app_ctx_cleanup(e_key);
                 }
             }
         }

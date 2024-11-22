@@ -125,7 +125,7 @@ int app_egress(struct __sk_buff *skb) {
         }
         // L7 app egress runs on every packet, the packets will be split so
         // it needs to do work across all packets that go out for this request
-        l7_app_egress(skb, tp, &conn, &tcp);
+        l7_app_egress(skb, tp, &conn, &tcp, &e_key);
 
         // The following code sets up the context information in L4 and it
         // does it only once. If it successfully injected the information it

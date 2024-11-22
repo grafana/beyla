@@ -165,7 +165,7 @@ static __always_inline u8 protocol_detector(struct sk_msg_md *msg,
                 msg_buffer_t msg_buf = {
                     .pos = 0,
                 };
-                bpf_probe_read_kernel(msg_buf.buf, FULL_BUF_SIZE, (void *)msg->data);
+                bpf_probe_read_kernel(msg_buf.buf, FULL_BUF_SIZE, msg->data);
                 if (is_http_request_buf((const unsigned char *)msg_buf.buf)) {
                     bpf_dbg_printk("Setting up request to be extended");
                     bpf_map_update_elem(&msg_buffers, &e_key, &msg_buf, BPF_ANY);

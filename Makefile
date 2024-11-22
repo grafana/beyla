@@ -151,6 +151,10 @@ checkfmt:
 		exit 1; \
 	fi
 
+.PHONY: clang-tidy
+clang-tidy:
+	cd bpf && $(CLANG_TIDY) *.c *.h
+
 .PHONY: lint-dashboard
 lint-dashboard: prereqs
 	@echo "### Linting dashboard";
@@ -163,7 +167,7 @@ lint-dashboard: prereqs
 	fi
 
 .PHONY: lint
-lint: prereqs checkfmt
+lint: prereqs checkfmt clang-tidy
 	@echo "### Linting code"
 	$(GOLANGCI_LINT) run ./... --timeout=6m
 
@@ -378,10 +382,6 @@ clean-testoutput:
 .PHONY: check-ebpf-integrity
 check-ebpf-integrity: docker-generate
 	git diff --name-status --exit-code || (echo "Run make docker-generate locally and commit the code changes" && false)
-
-.PHONY: clang-tidy
-clang-tidy:
-	cd bpf && $(CLANG_TIDY) *.c *.h
 
 .PHONY: protoc-gen
 protoc-gen:

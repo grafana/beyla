@@ -114,6 +114,21 @@ static __always_inline void l7_app_ctx_cleanup(egress_key_t *e_key) {
     bpf_map_delete_elem(&outgoing_trace_map, e_key);
 }
 
+static __always_inline struct bpf_sock *lookup_sock_from_tuple(struct __sk_buff *skb,
+                                                               struct bpf_sock_tuple *tuple,
+                                                               bool ipv4,
+                                                               void *data_end) {
+    if (ipv4 && (u64)((u8 *)tuple + sizeof(tuple->ipv4)) < (u64)data_end) {
+        // Lookup to see if you can find a socket for this tuple in the
+        // kernel socket tracking. We look up in all namespaces (-1).
+        return bpf_sk_lookup_tcp(skb, tuple, sizeof(tuple->ipv4), BPF_F_CURRENT_NETNS, 0);
+    } else if (!ipv4 && (u64)((u8 *)tuple + sizeof(tuple->ipv6)) < (u64)data_end) {
+        return bpf_sk_lookup_tcp(skb, tuple, sizeof(tuple->ipv6), BPF_F_CURRENT_NETNS, 0);
+    }
+
+    return 0;
+}
+
 // This function does two things:
 //   1. It adds sockets in the socket hash map which have already been
 //      established and we see them for the first time in Traffic Control, i.e
@@ -135,8 +150,6 @@ static __always_inline int l7_app_egress(struct __sk_buff *skb,
 
     if (!ctx) {
         struct ethhdr *eth = (struct ethhdr *)(data);
-        struct bpf_sock_tuple *tuple;
-        struct bpf_sock *sk;
         bool ipv4;
 
         if ((void *)(eth + 1) > data_end) {
@@ -146,7 +159,7 @@ static __always_inline int l7_app_egress(struct __sk_buff *skb,
 
         // Get the bpf_sock_tuple value so we can look up and see if we don't have
         // this socket yet in our map.
-        tuple = get_tuple(data, sizeof(*eth), data_end, eth->h_proto, &ipv4);
+        struct bpf_sock_tuple *tuple = get_tuple(data, sizeof(*eth), data_end, eth->h_proto, &ipv4);
         //bpf_printk("tuple %llx, next %llx, data end %llx", tuple, (void *)((u8 *)tuple + sizeof(*tuple)), data_end);
 
         if (!tuple) {
@@ -155,34 +168,28 @@ static __always_inline int l7_app_egress(struct __sk_buff *skb,
                            (void *)(tuple + sizeof(struct bpf_sock_tuple)),
                            data_end);
         } else {
-            if (ipv4 && (u64)((u8 *)tuple + sizeof(tuple->ipv4)) < (u64)data_end) {
-                // Lookup to see if you can find a socket for this tuple in the
-                // kernel socket tracking. We look up in all namespaces (-1).
-                sk = bpf_sk_lookup_tcp(skb, tuple, sizeof(tuple->ipv4), BPF_F_CURRENT_NETNS, 0);
-                bpf_dbg_printk("sk=%d\n", sk ? 1 : 0);
-                if (sk) {
-                    bpf_dbg_printk("LOOKUP %llx:%d ->", conn->s_ip[3], conn->s_port);
-                    bpf_dbg_printk("LOOKUP TO %llx:%d", conn->d_ip[3], conn->d_port);
+            struct bpf_sock *sk = lookup_sock_from_tuple(skb, tuple, ipv4, data_end);
+            bpf_dbg_printk("sk=%d\n", sk ? 1 : 0);
+            if (sk) {
+                bpf_dbg_printk("LOOKUP %llx:%d ->", conn->s_ip[3], conn->s_port);
+                bpf_dbg_printk("LOOKUP TO %llx:%d", conn->d_ip[3], conn->d_port);
 
-                    // Query the socket map to see if have added this socket.
-                    struct bpf_sock *sk1 = (struct bpf_sock *)bpf_map_lookup_elem(&sock_dir, conn);
+                // Query the socket map to see if have added this socket.
+                struct bpf_sock *sk1 = (struct bpf_sock *)bpf_map_lookup_elem(&sock_dir, conn);
 
-                    // We found the socket, all good it was caught by the sock_ops,
-                    // just release it.
-                    if (sk1) {
-                        bpf_dbg_printk("Found sk1 %llx", sk1);
-                        bpf_sk_release(sk1);
-                    } else {
-                        // First time we see a socket, add it to the map, it will
-                        // get tracked on the next request
-                        bpf_map_update_elem(&sock_dir, conn, sk, BPF_NOEXIST);
-                    }
-
-                    // We must release the reference to the original socket we looked up.
-                    bpf_sk_release(sk);
+                // We found the socket, all good it was caught by the sock_ops,
+                // just release it.
+                if (sk1) {
+                    bpf_dbg_printk("Found sk1 %llx", sk1);
+                    bpf_sk_release(sk1);
+                } else {
+                    // First time we see a socket, add it to the map, it will
+                    // get tracked on the next request
+                    bpf_map_update_elem(&sock_dir, conn, sk, BPF_NOEXIST);
                 }
-            } else {
-                bpf_dbg_printk("ipv6");
+
+                // We must release the reference to the original socket we looked up.
+                bpf_sk_release(sk);
             }
         }
     }

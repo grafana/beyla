@@ -61,7 +61,7 @@ func TestPythonBasicTracing(t *testing.T) {
 					// check the process information
 					sd = jaeger.DiffAsRegexp([]jaeger.Tag{
 						{Key: "k8s.pod.name", Type: "string", Value: "^pytestserver-.*"},
-						{Key: "k8s.container.name", Type: "string", Value: "^pytestserver-.*"},
+						{Key: "k8s.container.name", Type: "string", Value: "pytestserver"},
 						{Key: "k8s.node.name", Type: "string", Value: ".+-control-plane$"},
 						{Key: "k8s.pod.uid", Type: "string", Value: k8s.UUIDRegex},
 						{Key: "k8s.pod.start_time", Type: "string", Value: k8s.TimeRegex},
@@ -119,7 +119,7 @@ func TestPythonBasicTracing(t *testing.T) {
 					// check the process information
 					sd = jaeger.DiffAsRegexp([]jaeger.Tag{
 						{Key: "k8s.pod.name", Type: "string", Value: "^pytestserver-.*"},
-						{Key: "k8s.container.name", Type: "string", Value: "^pytestserver-.*"},
+						{Key: "k8s.container.name", Type: "string", Value: "pytestserver"},
 						{Key: "k8s.node.name", Type: "string", Value: ".+-control-plane$"},
 						{Key: "k8s.pod.uid", Type: "string", Value: k8s.UUIDRegex},
 						{Key: "k8s.pod.start_time", Type: "string", Value: k8s.TimeRegex},

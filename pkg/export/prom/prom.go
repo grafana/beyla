@@ -687,6 +687,7 @@ func appendK8sLabelValuesService(values []string, service svc.ID) []string {
 	values = append(values,
 		service.Metadata[(attr.K8sNamespaceName)],
 		service.Metadata[(attr.K8sPodName)],
+		service.Metadata[(attr.K8sContainerName)],
 		service.Metadata[(attr.K8sNodeName)],
 		service.Metadata[(attr.K8sPodUID)],
 		service.Metadata[(attr.K8sPodStartTime)],

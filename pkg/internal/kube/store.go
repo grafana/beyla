@@ -276,6 +276,15 @@ func (s *Store) PodByPIDNs(pidns uint32) *informer.ObjectMeta {
 	return nil
 }
 
+func (s *Store) ContainerByPIDNs(pidns uint32) *container.Info {
+	s.access.RLock()
+	defer s.access.RUnlock()
+	if info, ok := s.namespaces[pidns]; ok {
+		return info
+	}
+	return nil
+}
+
 func (s *Store) ObjectMetaByIP(ip string) *informer.ObjectMeta {
 	s.access.RLock()
 	defer s.access.RUnlock()

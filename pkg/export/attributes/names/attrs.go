@@ -56,6 +56,7 @@ const (
 
 	K8sNamespaceName   = Name("k8s.namespace.name")
 	K8sPodName         = Name("k8s.pod.name")
+	K8sContainerName   = Name("k8s.container.name")
 	K8sDeploymentName  = Name("k8s.deployment.name")
 	K8sReplicaSetName  = Name("k8s.replicaset.name")
 	K8sDaemonSetName   = Name("k8s.daemonset.name")

@@ -106,6 +106,9 @@ func (md *metadataDecorator) do(span *request.Span) {
 	if name, _ := md.db.ServiceNameNamespaceForIP(span.Peer); name != "" {
 		span.PeerName = name
 	}
+	if info := md.db.ContainerByPIDNs(span.Pid.Namespace); info.ContainerID != "" {
+		span.ServiceID.Metadata[attr.K8sContainerName] = info.ContainerID
+	}
 }
 
 func (md *metadataDecorator) appendMetadata(span *request.Span, meta *informer.ObjectMeta) {

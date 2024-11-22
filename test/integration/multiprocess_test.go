@@ -106,7 +106,7 @@ func TestMultiProcess(t *testing.T) {
 }
 
 func TestMultiProcessAppTC(t *testing.T) {
-	//t.Skip("doesn't work yet, we need a different approach")
+	// t.Skip("doesn't work yet, we need a different approach")
 
 	compose, err := docker.ComposeSuite("docker-compose-multiexec-host.yml", path.Join(pathOutput, "test-suite-multiexec-tc.log"))
 	// we are going to setup discovery directly in the configuration file

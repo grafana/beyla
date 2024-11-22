@@ -2,12 +2,12 @@ package kube
 
 import (
 	"log/slog"
-	"slices"
 	"strings"
 	"sync"
 
 	"github.com/grafana/beyla/pkg/export/attributes"
 	"github.com/grafana/beyla/pkg/internal/helpers/container"
+	"github.com/grafana/beyla/pkg/internal/helpers/maps"
 	"github.com/grafana/beyla/pkg/kubecache/informer"
 	"github.com/grafana/beyla/pkg/kubecache/meta"
 )
@@ -32,6 +32,16 @@ type qualifiedName struct {
 	kind      string
 }
 
+func qName(om *informer.ObjectMeta) qualifiedName {
+	return qualifiedName{name: om.Name, namespace: om.Namespace, kind: om.Kind}
+}
+
+// MetaSourceLabels allow overriding some metadata from kubernetes labels
+type MetaSourceLabels struct {
+	ServiceName      string `yaml:"service_name" env:"BEYLA_KUBE_META_SOURCE_LABEL_SERVICE_NAME"`
+	ServiceNamespace string `yaml:"service_namespace" env:"BEYLA_KUBE_META_SOURCE_LABEL_SERVICE_NAMESPACE"`
+}
+
 // Store aggregates Kubernetes information from multiple sources:
 // - the informer that keep an indexed copy of the existing pods and replicasets.
 // - the inspected container.Info objects, indexed either by container ID and PID namespace
@@ -53,23 +63,26 @@ type Store struct {
 	namespaces map[uint32]*container.Info
 
 	// container ID to pod matcher
-	podsByContainer   map[string]*informer.ObjectMeta
-	containersByOwner map[string][]*informer.ContainerInfo
+	podsByContainer map[string]*informer.ObjectMeta
+	// first key: pod owner ID, second key: container ID
+	containersByOwner maps.Map2[string, string, *informer.ContainerInfo]
 
 	// ip to generic IP info (Node, Service, *including* Pods)
 	objectMetaByIP map[string]*informer.ObjectMeta
 	// used to track the changed/removed IPs of a given object
 	// and remove them from objectMetaByIP on update or deletion
-	objectIPsByName     map[qualifiedName][]string
+	objectMetaByQName   map[qualifiedName]*informer.ObjectMeta
 	otelServiceInfoByIP map[string]OTelServiceNamePair
 
 	// Instead of subscribing to the informer directly, the rest of components
 	// will subscribe to this store, to make sure that any "new object" notification
 	// they receive is already present in the store
 	meta.BaseNotifier
+
+	sourceLabels MetaSourceLabels
 }
 
-func NewStore(kubeMetadata meta.Notifier) *Store {
+func NewStore(kubeMetadata meta.Notifier, sourceLabels MetaSourceLabels) *Store {
 	log := dblog()
 	db := &Store{
 		log:                 log,
@@ -78,11 +91,12 @@ func NewStore(kubeMetadata meta.Notifier) *Store {
 		podsByContainer:     map[string]*informer.ObjectMeta{},
 		containerByPID:      map[uint32]*container.Info{},
 		objectMetaByIP:      map[string]*informer.ObjectMeta{},
-		objectIPsByName:     map[qualifiedName][]string{},
-		containersByOwner:   map[string][]*informer.ContainerInfo{},
+		objectMetaByQName:   map[qualifiedName]*informer.ObjectMeta{},
+		containersByOwner:   maps.Map2[string, string, *informer.ContainerInfo]{},
 		otelServiceInfoByIP: map[string]OTelServiceNamePair{},
 		metadataNotifier:    kubeMetadata,
 		BaseNotifier:        meta.NewBaseNotifier(log),
+		sourceLabels:        sourceLabels,
 	}
 	kubeMetadata.Subscribe(db)
 	return db
@@ -140,36 +154,28 @@ func (s *Store) addObjectMeta(meta *informer.ObjectMeta) {
 	s.access.Lock()
 	defer s.access.Unlock()
 
-	s.unlockedAddObjectMeta(qualifiedName{
-		name: meta.Name, namespace: meta.Namespace, kind: meta.Kind,
-	}, meta)
+	s.unlockedAddObjectMeta(meta)
 }
 
 func (s *Store) updateObjectMeta(meta *informer.ObjectMeta) {
 	s.access.Lock()
 	defer s.access.Unlock()
 
-	// if the update removes IPs from the original object meta,
-	// we remove them from the indexes
-	qn := qualifiedName{name: meta.Name, namespace: meta.Namespace, kind: meta.Kind}
-	if ips, ok := s.objectIPsByName[qn]; ok {
-		for _, ip := range ips {
-			// theoretically, linear search into a list is not efficient and we should first build a map
-			// with all the IPs
-			// however, the IPs slice is expected to have a small size (few entries), so
-			// it's more efficient, also in terms of memory generation, to keep it as a slice
-			// and avoid generating temporary maps
-			if !slices.Contains(meta.Ips, ip) {
-				delete(s.objectMetaByIP, ip)
-			}
-		}
+	// atomically remove the previously stored version of the updated object
+	// then re-adding it
+	// this will avoid to leak some IPs and containers that exist in the
+	// stored snapshot but not in the updated snapshot
+	if previousObject, ok := s.objectMetaByQName[qName(meta)]; ok {
+		s.unlockedDeleteObjectMeta(previousObject)
 	}
-
-	s.unlockedAddObjectMeta(qn, meta)
+	s.unlockedAddObjectMeta(meta)
 }
 
-func (s *Store) unlockedAddObjectMeta(qn qualifiedName, meta *informer.ObjectMeta) {
-	s.objectIPsByName[qn] = meta.Ips
+// it's important to make sure that any element added here is removed when
+// calling unlockedDeleteObjectMeta with the same ObjectMeta
+func (s *Store) unlockedAddObjectMeta(meta *informer.ObjectMeta) {
+	qn := qName(meta)
+	s.objectMetaByQName[qn] = meta
 
 	for _, ip := range meta.Ips {
 		s.objectMetaByIP[ip] = meta
@@ -178,6 +184,7 @@ func (s *Store) unlockedAddObjectMeta(qn qualifiedName, meta *informer.ObjectMet
 	s.otelServiceInfoByIP = map[string]OTelServiceNamePair{}
 
 	if meta.Pod != nil {
+		oID := fetchOwnerID(meta)
 		s.log.Debug("adding pod to store",
 			"ips", meta.Ips, "pod", meta.Name, "namespace", meta.Namespace, "containers", meta.Pod.Containers)
 		for _, c := range meta.Pod.Containers {
@@ -187,15 +194,7 @@ func (s *Store) unlockedAddObjectMeta(qn qualifiedName, meta *informer.ObjectMet
 			if ok {
 				s.namespaces[info.PIDNamespace] = info
 			}
-		}
-		if owner := TopOwner(meta.Pod); owner != nil {
-			oID := ownerID(meta.Namespace, owner.Name)
-			containers, ok := s.containersByOwner[oID]
-			if !ok {
-				containers = []*informer.ContainerInfo{}
-			}
-			containers = append(containers, meta.Pod.Containers...)
-			s.containersByOwner[oID] = containers
+			s.containersByOwner.Put(oID, c.Id, c)
 		}
 	}
 }
@@ -207,47 +206,44 @@ func (s *Store) deleteObjectMeta(meta *informer.ObjectMeta) {
 	// Otel variables on specific pods can change the outcome.
 	s.otelServiceInfoByIP = map[string]OTelServiceNamePair{}
 
-	delete(s.objectIPsByName, qualifiedName{
-		name: meta.Name, namespace: meta.Namespace, kind: meta.Kind,
-	})
+	// cleanup both the objectMeta information from the received event
+	// as well as from any previous snapshot in the system whose IPs and/or
+	// containers could have been removed in the last snapshot
+
+	if previousObject, ok := s.objectMetaByQName[qName(meta)]; ok {
+		s.unlockedDeleteObjectMeta(previousObject)
+	}
+	s.unlockedDeleteObjectMeta(meta)
+}
+
+func (s *Store) unlockedDeleteObjectMeta(meta *informer.ObjectMeta) {
+	delete(s.objectMetaByQName, qName(meta))
 	for _, ip := range meta.Ips {
 		delete(s.objectMetaByIP, ip)
 	}
 	if meta.Pod != nil {
+		oID := fetchOwnerID(meta)
 		s.log.Debug("deleting pod from store",
 			"ips", meta.Ips, "pod", meta.Name, "namespace", meta.Namespace, "containers", meta.Pod.Containers)
-		toRemove := map[string]struct{}{}
 		for _, c := range meta.Pod.Containers {
-			toRemove[c.Id] = struct{}{}
-
 			info, ok := s.containerIDs[c.Id]
 			if ok {
 				delete(s.containerIDs, c.Id)
 				delete(s.namespaces, info.PIDNamespace)
 			}
 			delete(s.podsByContainer, c.Id)
-		}
-
-		// clean up the owner to container map
-		if owner := TopOwner(meta.Pod); owner != nil {
-			oID := ownerID(meta.Namespace, owner.Name)
-			if containers, ok := s.containersByOwner[oID]; ok {
-				withoutPod := []*informer.ContainerInfo{}
-				// filter out all containers owned by this pod
-				for _, c := range containers {
-					if _, ok := toRemove[c.Id]; !ok {
-						withoutPod = append(withoutPod, c)
-					}
-				}
-				// update the owner to container mapping or remove if empty
-				if len(withoutPod) > 0 {
-					s.containersByOwner[oID] = withoutPod
-				} else {
-					delete(s.containersByOwner, oID)
-				}
-			}
+			s.containersByOwner.Delete(oID, c.Id)
 		}
 	}
+}
+
+func fetchOwnerID(meta *informer.ObjectMeta) string {
+	ownerName := meta.Name
+	if owner := TopOwner(meta.Pod); owner != nil {
+		ownerName = owner.Name
+	}
+	oID := ownerID(meta.Namespace, ownerName)
+	return oID
 }
 
 func (s *Store) PodByContainerID(cid string) *informer.ObjectMeta {
@@ -256,13 +252,21 @@ func (s *Store) PodByContainerID(cid string) *informer.ObjectMeta {
 	return s.podsByContainer[cid]
 }
 
-func (s *Store) PodByPIDNs(pidns uint32) *informer.ObjectMeta {
+// PodContainerByPIDNs second return value: container Name
+func (s *Store) PodContainerByPIDNs(pidns uint32) (*informer.ObjectMeta, string) {
 	s.access.RLock()
 	defer s.access.RUnlock()
 	if info, ok := s.namespaces[pidns]; ok {
-		return s.podsByContainer[info.ContainerID]
+		if om, ok := s.podsByContainer[info.ContainerID]; ok {
+			oID := fetchOwnerID(om)
+			containerName := ""
+			if containerInfo, ok := s.containersByOwner.Get(oID, info.ContainerID); ok {
+				containerName = containerInfo.Name
+			}
+			return om, containerName
+		}
 	}
-	return nil
+	return nil, ""
 }
 
 func (s *Store) ObjectMetaByIP(ip string) *informer.ObjectMeta {
@@ -284,6 +288,16 @@ func (s *Store) serviceNameNamespaceForMetadata(om *informer.ObjectMeta) (string
 		name, namespace = s.serviceNameNamespaceForPod(om, owner)
 	} else {
 		name, namespace = s.serviceNameNamespaceForOwner(om)
+	}
+	if s.sourceLabels.ServiceName != "" {
+		if on, ok := om.Labels[s.sourceLabels.ServiceName]; ok {
+			name = on
+		}
+	}
+	if s.sourceLabels.ServiceNamespace != "" {
+		if ons, ok := om.Labels[s.sourceLabels.ServiceNamespace]; ok {
+			namespace = ons
+		}
 	}
 	return name, namespace
 }

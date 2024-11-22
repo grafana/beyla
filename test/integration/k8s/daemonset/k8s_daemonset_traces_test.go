@@ -57,6 +57,7 @@ func TestBasicTracing(t *testing.T) {
 					for _, proc := range trace.Processes {
 						sd := jaeger.DiffAsRegexp([]jaeger.Tag{
 							{Key: "service.namespace", Type: "string", Value: "^default$"},
+							{Key: "service.instance.id", Type: "string", Value: "^otherinstance-.+:otherinstance"},
 						}, proc.Tags)
 						require.Empty(t, sd)
 					}
@@ -131,6 +132,7 @@ func TestBasicTracing(t *testing.T) {
 					for _, proc := range trace.Processes {
 						sd := jaeger.DiffAsRegexp([]jaeger.Tag{
 							{Key: "service.namespace", Type: "string", Value: "^default$"},
+							{Key: "service.instance.id", Type: "string", Value: "^otherinstance-.+:otherinstance"},
 						}, proc.Tags)
 						require.Empty(t, sd)
 					}

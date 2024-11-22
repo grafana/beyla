@@ -278,7 +278,7 @@ k8sCache:
   # -- Number of replicas for the Kubernetes metadata chache service. 0 disables the service.
   replicas: 0
   # -- Enables the profile port for the Beyla cache
-  profile_port: 0
+  profilePort: 0
   ## Env variables that will override configmap values
   ## For example:
   ##   BEYLA_K8S_CACHE_LOG_LEVEL: "debug"
@@ -325,3 +325,17 @@ k8sCache:
     annotations: {}
     # -- Service labels.
     labels: {}
+  internalMetrics:
+    # 0: disabled by default
+    port: 0
+    path: /metrics
+    portName: metrics
+    #  prometheus:
+    #     port: 6060
+    #     path: /metrics
+  # -- Deployment annotations.
+  annotations: {}
+  # -- Adds custom annotations to the Beyla Kube Cache Pods.
+  podAnnotations: {}
+  # -- Adds custom labels to the Beyla Kube Cache Pods.
+  podLabels: {}

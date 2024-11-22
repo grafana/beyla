@@ -6,7 +6,7 @@ metadata:
   name: {{ .Values.k8sCache.service.name }}
   namespace: {{ include "beyla.namespace" .}}
   labels:
-    {{- include "beyla.labels" . | nindent 4 }}
+    {{- include "beyla.cache.labels" . | nindent 4 }}
     app.kubernetes.io/component: networking
     {{- with .Values.k8sCache.service.labels }}
     {{- toYaml . | nindent 4 }}
@@ -20,6 +20,7 @@ spec:
     - port: {{ .Values.k8sCache.service.port }}
       protocol: TCP
       targetPort: grpc
+      name: grpc
   selector:
     app.kubernetes.io/name: {{ .Values.k8sCache.service.name }}
 {{- end }}

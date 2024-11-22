@@ -3,15 +3,24 @@
 package informer_cache
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
+	"strconv"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/test/integration/components/docker"
 	"github.com/grafana/beyla/test/integration/components/kube"
+	"github.com/grafana/beyla/test/integration/components/prom"
 	k8s "github.com/grafana/beyla/test/integration/k8s/common"
 	otel "github.com/grafana/beyla/test/integration/k8s/netolly"
 	"github.com/grafana/beyla/test/tools"
+)
+
+const (
+	prometheusHostPort = "localhost:39090"
 )
 
 var cluster *kube.Kind
@@ -57,6 +66,9 @@ func TestInformersCache_MetricsDecoration_HTTP(t *testing.T) {
 		map[string]string{
 			"server_service_namespace": "default",
 			"k8s_cluster_name":         "my-kube",
+			"service_name":             "overridden-testserver-name",
+			"service_namespace":        "overridden-testserver-namespace",
+			"service_instance_id":      "testserver-.+:testserver",
 		}))
 }
 
@@ -64,9 +76,30 @@ func TestInformersCache_ProcessMetrics(t *testing.T) {
 	cluster.TestEnv().Test(t, k8s.FeatureProcessMetricsDecoration(
 		map[string]string{
 			"k8s_cluster_name": "my-kube",
+			"instance":         "testserver-.+:testserver",
 		}))
 }
 
 func TestInformersCache_NetworkMetrics(t *testing.T) {
 	cluster.TestEnv().Test(t, otel.FeatureNetworkFlowBytes())
+}
+
+func TestInformersCache_InternalMetrics(t *testing.T) {
+	require.NotZero(t, metricVal(t, `beyla_kube_cache_client_messages_total{status="submit"}`))
+	require.NotZero(t, metricVal(t, `beyla_kube_cache_connected_clients`))
+	require.NotZero(t, metricVal(t, `beyla_kube_cache_informer_events_total{type="new"}`))
+	require.NotZero(t, metricVal(t, `beyla_kube_cache_informer_events_total{type="update"}`))
+	require.NotZero(t, metricVal(t, `beyla_kube_cache_internal_build_info`))
+}
+
+func metricVal(t *testing.T, promQLQuery string) int {
+	pq := prom.Client{HostPort: prometheusHostPort}
+
+	results, err := pq.Query(promQLQuery)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	require.Len(t, results[0].Value, 2)
+	n, err := strconv.Atoi(fmt.Sprint(results[0].Value[1]))
+	require.NoError(t, err)
+	return n
 }

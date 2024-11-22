@@ -121,8 +121,8 @@ func (nr *NameResolver) resolveNames(span *request.Span) {
 		pn, span.OtherNamespace = nr.resolve(&span.ServiceID, span.Peer)
 		hn, ns = nr.resolve(&span.ServiceID, span.Host)
 	}
-	if span.ServiceID.Namespace == "" && ns != "" {
-		span.ServiceID.Namespace = ns
+	if span.ServiceID.UID.Namespace == "" && ns != "" {
+		span.ServiceID.UID.Namespace = ns
 	}
 	// don't set names if the peer and host names have been already decorated
 	// in a previous stage (e.g. Kubernetes decorator)
@@ -153,10 +153,10 @@ func (nr *NameResolver) resolve(svc *svc.ID, ip string) (string, string) {
 func (nr *NameResolver) cleanName(svc *svc.ID, ip, n string) string {
 	n = strings.TrimSuffix(n, ".")
 	n = trimSuffixIgnoreCase(n, ".svc.cluster.local")
-	n = trimSuffixIgnoreCase(n, "."+svc.Namespace)
+	n = trimSuffixIgnoreCase(n, "."+svc.UID.Namespace)
 
 	kubeNamespace, ok := svc.Metadata[attr.K8sNamespaceName]
-	if ok && kubeNamespace != "" && kubeNamespace != svc.Namespace {
+	if ok && kubeNamespace != "" && kubeNamespace != svc.UID.Namespace {
 		n = trimSuffixIgnoreCase(n, "."+kubeNamespace)
 	}
 
@@ -186,10 +186,10 @@ func (nr *NameResolver) dnsResolve(svc *svc.ID, ip string) (string, string) {
 	if nr.sources.Has(ResolverDNS) {
 		n := nr.resolveIP(ip)
 		if n == ip {
-			return n, svc.Namespace
+			return n, svc.UID.Namespace
 		}
 		n = nr.cleanName(svc, ip, n)
-		return n, svc.Namespace
+		return n, svc.UID.Namespace
 	}
 	return "", ""
 }

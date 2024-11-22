@@ -7,14 +7,18 @@ import (
 	"log/slog"
 	"net"
 	"sync/atomic"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/peer"
 
 	"github.com/grafana/beyla/pkg/kubecache"
 	"github.com/grafana/beyla/pkg/kubecache/informer"
+	"github.com/grafana/beyla/pkg/kubecache/instrument"
 	"github.com/grafana/beyla/pkg/kubecache/meta"
 )
+
+const defaultSendTimeout = 10 * time.Second
 
 // InformersCache configures and starts the gRPC service
 type InformersCache struct {
@@ -25,12 +29,21 @@ type InformersCache struct {
 	started   atomic.Bool
 	informers *meta.Informers
 	log       *slog.Logger
+
+	// TODO: allow configuring by user
+	SendTimeout time.Duration
+
+	metrics instrument.InternalMetrics
 }
 
 func (ic *InformersCache) Run(ctx context.Context, opts ...meta.InformerOption) error {
+	if ic.SendTimeout == 0 {
+		ic.SendTimeout = defaultSendTimeout
+	}
 	if ic.started.Swap(true) {
 		return errors.New("server already started")
 	}
+	ic.metrics = instrument.FromContext(ctx)
 	ic.log = slog.With("component", "server.InformersCache")
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", ic.Config.Port))
@@ -73,13 +86,21 @@ func (ic *InformersCache) Subscribe(_ *informer.SubscribeMessage, server informe
 	if !ok {
 		return fmt.Errorf("failed to extract peer information")
 	}
+	ic.metrics.ClientConnect()
 	connCtx, cancel := context.WithCancel(server.Context())
-	o := &connection{cancel: cancel, id: p.Addr.String(), server: server}
-	ic.log.Debug("subscribed component", "id", o.ID())
+	o := &connection{
+		cancel:      cancel,
+		id:          p.Addr.String(),
+		server:      server,
+		sendTimeout: ic.SendTimeout,
+		metrics:     ic.metrics,
+	}
+	ic.log.Info("client subscribed", "id", o.ID())
 	ic.informers.Subscribe(o)
 	// Keep the connection open
 	<-connCtx.Done()
-	ic.log.Debug("client disconnected", "id", o.ID())
+	ic.metrics.ClientDisconnect()
+	ic.log.Info("client disconnected", "id", o.ID())
 	ic.informers.Unsubscribe(o)
 	return nil
 }
@@ -88,8 +109,13 @@ func (ic *InformersCache) Subscribe(_ *informer.SubscribeMessage, server informe
 // each client connection subscription
 type connection struct {
 	cancel func()
+
 	id     string
 	server grpc.ServerStreamingServer[informer.Event]
+
+	sendTimeout time.Duration
+
+	metrics instrument.InternalMetrics
 }
 
 func (o *connection) ID() string {
@@ -97,10 +123,29 @@ func (o *connection) ID() string {
 }
 
 func (o *connection) On(event *informer.Event) error {
-	if err := o.server.Send(event); err != nil {
-		slog.Error("sending message. Unsubscribing and retrying connection", "clientID", o.ID(), "error", err)
-		o.cancel()
+	// Theoretically Go is ready to run hundreds of thousands of parallel goroutines
+	done := make(chan error, 1)
+	o.metrics.MessageSubmit()
+	go func() {
+		if err := o.server.Send(event); err != nil {
+			slog.Debug("sending message. Closing client connection", "clientID", o.ID(), "error", err)
+			o.cancel()
+			done <- err
+		}
+		close(done)
+	}()
+	timeout := time.After(o.sendTimeout)
+	select {
+	case err := <-done:
+		if err == nil {
+			o.metrics.MessageSucceed()
+		} else {
+			o.metrics.MessageError()
+		}
 		return err
+	case <-timeout:
+		o.metrics.MessageTimeout()
+		o.cancel()
+		return errors.New("timeout sending message to client. Closing connection " + o.ID())
 	}
-	return nil
 }

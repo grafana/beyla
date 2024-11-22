@@ -44,14 +44,6 @@ struct {
     __uint(pinning, BEYLA_PIN_INTERNAL);
 } active_ssl_connections SEC(".maps");
 
-struct {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, egress_key_t);
-    __type(value, msg_buffer_t);
-    __uint(max_entries, 1000);
-    __uint(pinning, BEYLA_PIN_INTERNAL);
-} msg_buffers SEC(".maps");
-
 static __always_inline http_connection_metadata_t *empty_connection_meta() {
     int zero = 0;
     return bpf_map_lookup_elem(&connection_meta_mem, &zero);

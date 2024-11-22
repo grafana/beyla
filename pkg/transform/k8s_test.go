@@ -31,7 +31,7 @@ func TestDecoration(t *testing.T) {
 			StartTimeStr: "2020-01-02 12:12:56",
 			Uid:          "uid-12",
 			Owners:       []*informer.Owner{{Kind: "Deployment", Name: "deployment-12"}},
-			Containers:   []*informer.ContainerInfo{{Id: "container-12"}},
+			Containers:   []*informer.ContainerInfo{{Id: "container-12", Name: "container-12"}},
 		},
 	}})
 	inf.Notify(&informer.Event{Type: informer.EventType_CREATED, Resource: &informer.ObjectMeta{
@@ -41,7 +41,7 @@ func TestDecoration(t *testing.T) {
 			StartTimeStr: "2020-01-02 12:34:56",
 			Uid:          "uid-34",
 			Owners:       []*informer.Owner{{Kind: "ReplicaSet", Name: "rs"}},
-			Containers:   []*informer.ContainerInfo{{Id: "container-34"}},
+			Containers:   []*informer.ContainerInfo{{Id: "container-34", Name: "container-34"}},
 		},
 	}})
 	inf.Notify(&informer.Event{Type: informer.EventType_CREATED, Resource: &informer.ObjectMeta{
@@ -50,7 +50,7 @@ func TestDecoration(t *testing.T) {
 			NodeName:     "the-node",
 			Uid:          "uid-56",
 			StartTimeStr: "2020-01-02 12:56:56",
-			Containers:   []*informer.ContainerInfo{{Id: "container-56"}},
+			Containers:   []*informer.ContainerInfo{{Id: "container-56", Name: "container-56"}},
 		},
 	}})
 	kube.InfoForPID = func(pid uint32) (container.Info, error) {

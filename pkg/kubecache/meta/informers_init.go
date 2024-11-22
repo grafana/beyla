@@ -233,8 +233,9 @@ func (inf *Informers) initPodInformer(informerFactory informers.SharedInformerFa
 		for i := range pod.Status.ContainerStatuses {
 			containers = append(containers,
 				&informer.ContainerInfo{
-					Id:  rmContainerIDSchema(pod.Status.ContainerStatuses[i].ContainerID),
-					Env: envToMap(inf.config.kubeClient, pod.ObjectMeta, pod.Spec.Containers[i].Env),
+					Id:   rmContainerIDSchema(pod.Status.ContainerStatuses[i].ContainerID),
+					Env:  envToMap(inf.config.kubeClient, pod.ObjectMeta, pod.Spec.Containers[i].Env),
+					Name: pod.Status.ContainerStatuses[i].Name,
 				},
 			)
 		}

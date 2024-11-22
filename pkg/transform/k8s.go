@@ -93,8 +93,12 @@ func (md *metadataDecorator) nodeLoop(in <-chan []request.Span, out chan<- []req
 }
 
 func (md *metadataDecorator) do(span *request.Span) {
+	containerId := ""
+	if info := md.db.ContainerByPIDNs(span.Pid.Namespace); info != nil {
+		containerId = info.ContainerID
+	}
 	if objectMeta := md.db.PodByPIDNs(span.Pid.Namespace); objectMeta != nil {
-		md.appendMetadata(span, objectMeta)
+		md.appendMetadata(span, objectMeta, containerId)
 	} else {
 		// do not leave the service attributes map as nil
 		span.ServiceID.Metadata = map[attr.Name]string{}
@@ -106,12 +110,9 @@ func (md *metadataDecorator) do(span *request.Span) {
 	if name, _ := md.db.ServiceNameNamespaceForIP(span.Peer); name != "" {
 		span.PeerName = name
 	}
-	if info := md.db.ContainerByPIDNs(span.Pid.Namespace); info != nil {
-		span.ServiceID.Metadata[attr.K8sContainerName] = info.ContainerID
-	}
 }
 
-func (md *metadataDecorator) appendMetadata(span *request.Span, meta *informer.ObjectMeta) {
+func (md *metadataDecorator) appendMetadata(span *request.Span, meta *informer.ObjectMeta, containerId string) {
 	if meta.Pod == nil {
 		// if this message happen, there is a bug
 		klog().Debug("pod metadata for is nil. Ignoring decoration", "meta", meta)
@@ -143,6 +144,16 @@ func (md *metadataDecorator) appendMetadata(span *request.Span, meta *informer.O
 		attr.K8sPodUID:        meta.Pod.Uid,
 		attr.K8sPodStartTime:  meta.Pod.StartTimeStr,
 		attr.K8sClusterName:   md.clusterName,
+	}
+
+	// get container name from the container ID
+	if containerId != "" {
+		for _, container := range meta.Pod.Containers {
+			if container.Id == containerId {
+				span.ServiceID.Metadata[attr.K8sContainerName] = container.Name
+				break
+			}
+		}
 	}
 
 	// ownerKind could be also "Pod", but we won't insert it as "owner" label to avoid

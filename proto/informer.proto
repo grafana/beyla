@@ -35,6 +35,7 @@ message PodInfo {
 message ContainerInfo {
   string id = 1;
   map<string,string> env = 2;
+  string name = 3;
 }
 
 message Owner {

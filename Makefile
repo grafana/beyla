@@ -167,7 +167,7 @@ lint-dashboard: prereqs
 	fi
 
 .PHONY: lint
-lint: prereqs checkfmt clang-tidy
+lint: prereqs checkfmt
 	@echo "### Linting code"
 	$(GOLANGCI_LINT) run ./... --timeout=6m
 

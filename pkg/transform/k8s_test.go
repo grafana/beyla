@@ -85,18 +85,18 @@ func TestDecoration(t *testing.T) {
 	defer close(inputCh)
 	go dec.nodeLoop(inputCh, outputhCh)
 
-	autoNameSvc := svc.ID{}
+	autoNameSvc := svc.Attrs{}
 	autoNameSvc.SetAutoName()
 
 	t.Run("complete pod info should set deployment as name", func(t *testing.T) {
 		inputCh <- []request.Span{{
-			Pid: request.PidInfo{Namespace: 1012}, ServiceID: autoNameSvc,
+			Pid: request.PidInfo{Namespace: 1012}, Service: autoNameSvc,
 		}}
 		deco := testutil.ReadChannel(t, outputhCh, timeout)
 		require.Len(t, deco, 1)
-		assert.Equal(t, "the-ns", deco[0].ServiceID.UID.Namespace)
-		assert.Equal(t, "deployment-12", deco[0].ServiceID.UID.Name)
-		assert.EqualValues(t, "pod-12:a-container", deco[0].ServiceID.UID.Instance)
+		assert.Equal(t, "the-ns", deco[0].Service.UID.Namespace)
+		assert.Equal(t, "deployment-12", deco[0].Service.UID.Name)
+		assert.EqualValues(t, "pod-12:a-container", deco[0].Service.UID.Instance)
 		assert.Equal(t, map[attr.Name]string{
 			"k8s.node.name":       "the-node",
 			"k8s.namespace.name":  "the-ns",
@@ -106,17 +106,17 @@ func TestDecoration(t *testing.T) {
 			"k8s.owner.name":      "deployment-12",
 			"k8s.pod.start_time":  "2020-01-02 12:12:56",
 			"k8s.cluster.name":    "the-cluster",
-		}, deco[0].ServiceID.Metadata)
+		}, deco[0].Service.Metadata)
 	})
 	t.Run("pod info whose replicaset did not have an Owner should set the replicaSet name", func(t *testing.T) {
 		inputCh <- []request.Span{{
-			Pid: request.PidInfo{Namespace: 1034}, ServiceID: autoNameSvc,
+			Pid: request.PidInfo{Namespace: 1034}, Service: autoNameSvc,
 		}}
 		deco := testutil.ReadChannel(t, outputhCh, timeout)
 		require.Len(t, deco, 1)
-		assert.Equal(t, "the-ns", deco[0].ServiceID.UID.Namespace)
-		assert.Equal(t, "rs", deco[0].ServiceID.UID.Name)
-		assert.EqualValues(t, "pod-34:a-container", deco[0].ServiceID.UID.Instance)
+		assert.Equal(t, "the-ns", deco[0].Service.UID.Namespace)
+		assert.Equal(t, "rs", deco[0].Service.UID.Name)
+		assert.EqualValues(t, "pod-34:a-container", deco[0].Service.UID.Instance)
 		assert.Equal(t, map[attr.Name]string{
 			"k8s.node.name":       "the-node",
 			"k8s.namespace.name":  "the-ns",
@@ -126,17 +126,17 @@ func TestDecoration(t *testing.T) {
 			"k8s.pod.uid":         "uid-34",
 			"k8s.pod.start_time":  "2020-01-02 12:34:56",
 			"k8s.cluster.name":    "the-cluster",
-		}, deco[0].ServiceID.Metadata)
+		}, deco[0].Service.Metadata)
 	})
 	t.Run("pod info with only pod name should set pod name as name", func(t *testing.T) {
 		inputCh <- []request.Span{{
-			Pid: request.PidInfo{Namespace: 1056}, ServiceID: autoNameSvc,
+			Pid: request.PidInfo{Namespace: 1056}, Service: autoNameSvc,
 		}}
 		deco := testutil.ReadChannel(t, outputhCh, timeout)
 		require.Len(t, deco, 1)
-		assert.Equal(t, "the-ns", deco[0].ServiceID.UID.Namespace)
-		assert.Equal(t, "the-pod", deco[0].ServiceID.UID.Name)
-		assert.EqualValues(t, "the-pod:a-container", deco[0].ServiceID.UID.Instance)
+		assert.Equal(t, "the-ns", deco[0].Service.UID.Namespace)
+		assert.Equal(t, "the-pod", deco[0].Service.UID.Name)
+		assert.EqualValues(t, "the-pod:a-container", deco[0].Service.UID.Instance)
 		assert.Equal(t, map[attr.Name]string{
 			"k8s.node.name":      "the-node",
 			"k8s.namespace.name": "the-ns",
@@ -144,17 +144,17 @@ func TestDecoration(t *testing.T) {
 			"k8s.pod.uid":        "uid-56",
 			"k8s.pod.start_time": "2020-01-02 12:56:56",
 			"k8s.cluster.name":   "the-cluster",
-		}, deco[0].ServiceID.Metadata)
+		}, deco[0].Service.Metadata)
 	})
 	t.Run("user can override service name and annotations via labels", func(t *testing.T) {
 		inputCh <- []request.Span{{
-			Pid: request.PidInfo{Namespace: 1078}, ServiceID: autoNameSvc,
+			Pid: request.PidInfo{Namespace: 1078}, Service: autoNameSvc,
 		}}
 		deco := testutil.ReadChannel(t, outputhCh, timeout)
 		require.Len(t, deco, 1)
-		assert.Equal(t, "a-cool-namespace", deco[0].ServiceID.UID.Namespace)
-		assert.Equal(t, "a-cool-name", deco[0].ServiceID.UID.Name)
-		assert.EqualValues(t, "overridden-meta:a-container", deco[0].ServiceID.UID.Instance)
+		assert.Equal(t, "a-cool-namespace", deco[0].Service.UID.Namespace)
+		assert.Equal(t, "a-cool-name", deco[0].Service.UID.Name)
+		assert.EqualValues(t, "overridden-meta:a-container", deco[0].Service.UID.Instance)
 		assert.Equal(t, map[attr.Name]string{
 			"k8s.node.name":      "the-node",
 			"k8s.namespace.name": "the-ns",
@@ -162,29 +162,29 @@ func TestDecoration(t *testing.T) {
 			"k8s.pod.uid":        "uid-78",
 			"k8s.pod.start_time": "2020-01-02 12:56:56",
 			"k8s.cluster.name":   "the-cluster",
-		}, deco[0].ServiceID.Metadata)
+		}, deco[0].Service.Metadata)
 	})
 	t.Run("process without pod Info won't be decorated", func(t *testing.T) {
-		svc := svc.ID{UID: svc.UID{Name: "exec"}}
+		svc := svc.Attrs{UID: svc.UID{Name: "exec"}}
 		svc.SetAutoName()
 		inputCh <- []request.Span{{
-			Pid: request.PidInfo{Namespace: 1099}, ServiceID: svc,
+			Pid: request.PidInfo{Namespace: 1099}, Service: svc,
 		}}
 		deco := testutil.ReadChannel(t, outputhCh, timeout)
 		require.Len(t, deco, 1)
-		assert.Empty(t, deco[0].ServiceID.UID.Namespace)
-		assert.Equal(t, "exec", deco[0].ServiceID.UID.Name)
-		assert.Empty(t, deco[0].ServiceID.Metadata)
+		assert.Empty(t, deco[0].Service.UID.Namespace)
+		assert.Equal(t, "exec", deco[0].Service.UID.Name)
+		assert.Empty(t, deco[0].Service.Metadata)
 	})
 	t.Run("if service name or namespace are manually specified, don't override them", func(t *testing.T) {
 		inputCh <- []request.Span{{
-			Pid: request.PidInfo{Namespace: 1012}, ServiceID: svc.ID{UID: svc.UID{Name: "tralari", Namespace: "tralara"}},
+			Pid: request.PidInfo{Namespace: 1012}, Service: svc.Attrs{UID: svc.UID{Name: "tralari", Namespace: "tralara"}},
 		}}
 		deco := testutil.ReadChannel(t, outputhCh, timeout)
 		require.Len(t, deco, 1)
-		assert.Equal(t, "tralara", deco[0].ServiceID.UID.Namespace)
-		assert.Equal(t, "tralari", deco[0].ServiceID.UID.Name)
-		assert.EqualValues(t, "pod-12:a-container", deco[0].ServiceID.UID.Instance)
+		assert.Equal(t, "tralara", deco[0].Service.UID.Namespace)
+		assert.Equal(t, "tralari", deco[0].Service.UID.Name)
+		assert.EqualValues(t, "pod-12:a-container", deco[0].Service.UID.Instance)
 		assert.Equal(t, map[attr.Name]string{
 			"k8s.node.name":       "the-node",
 			"k8s.namespace.name":  "the-ns",
@@ -194,7 +194,7 @@ func TestDecoration(t *testing.T) {
 			"k8s.owner.name":      "deployment-12",
 			"k8s.pod.start_time":  "2020-01-02 12:12:56",
 			"k8s.cluster.name":    "the-cluster",
-		}, deco[0].ServiceID.Metadata)
+		}, deco[0].Service.Metadata)
 	})
 }
 

@@ -60,9 +60,9 @@ func TestReadDecorator(t *testing.T) {
 			}
 			outSpans := testutil.ReadChannel(t, decoratedOutput, testTimeout)
 			assert.Equal(t, []request.Span{
-				{ServiceID: svc.ID{UID: svc.UID{Instance: tc.expectedInstance}, HostName: tc.expectedHN},
+				{Service: svc.Attrs{UID: svc.UID{Instance: tc.expectedInstance}, HostName: tc.expectedHN},
 					Path: "/foo", Pid: request.PidInfo{HostPID: 1234}},
-				{ServiceID: svc.ID{UID: svc.UID{Instance: tc.expectedInstance}, HostName: tc.expectedHN},
+				{Service: svc.Attrs{UID: svc.UID{Instance: tc.expectedInstance}, HostName: tc.expectedHN},
 					Path: "/bar", Pid: request.PidInfo{HostPID: 1234}},
 			}, outSpans)
 		})

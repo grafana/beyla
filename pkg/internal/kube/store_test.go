@@ -325,6 +325,96 @@ func TestMetaByIPEntryRemovedIfIPGroupChanges(t *testing.T) {
 	assert.Equal(t, []string{"3.2.2.2", "3.3.3.3"}, om.Ips)
 }
 
+func TestNoLeakOnUpdateOrDeletion(t *testing.T) {
+	store := NewStore(&fakeInformer{}, MetaSourceLabels{})
+	topOwner := &informer.Owner{Name: "foo", Kind: "Deployment"}
+	require.NoError(t, store.On(&informer.Event{
+		Type: informer.EventType_CREATED,
+		Resource: &informer.ObjectMeta{
+			Name:      "pod-foo-1",
+			Namespace: "namespaceA",
+			Ips:       []string{"1.1.1.1", "2.2.2.2"},
+			Kind:      "Pod",
+			Pod: &informer.PodInfo{
+				Owners: []*informer.Owner{topOwner},
+				Containers: []*informer.ContainerInfo{
+					{Id: "container1-1"},
+					{Id: "container1-2"},
+				},
+			},
+		}}))
+	require.NoError(t, store.On(&informer.Event{
+		Type: informer.EventType_CREATED,
+		Resource: &informer.ObjectMeta{
+			Name:      "pod-foo-2",
+			Namespace: "namespaceA",
+			Ips:       []string{"4.4.4.4", "5.5.5.5"},
+			Kind:      "Pod",
+			Pod: &informer.PodInfo{
+				Owners: []*informer.Owner{topOwner},
+				Containers: []*informer.ContainerInfo{
+					{Id: "container2-1"},
+					{Id: "container2-2"},
+				},
+			},
+		}}))
+	require.NoError(t, store.On(&informer.Event{
+		Type: informer.EventType_UPDATED,
+		Resource: &informer.ObjectMeta{
+			Name:      "pod-foo-1",
+			Namespace: "namespaceA",
+			Ips:       []string{"1.1.1.1", "3.3.3.3"},
+			Kind:      "Pod",
+			Pod: &informer.PodInfo{
+				Owners: []*informer.Owner{topOwner},
+				Containers: []*informer.ContainerInfo{
+					{Id: "container1-1"},
+					{Id: "container1-3"},
+				},
+			}}}))
+	require.NoError(t, store.On(&informer.Event{
+		Type: informer.EventType_DELETED,
+		Resource: &informer.ObjectMeta{
+			Name:      "pod-foo-1",
+			Namespace: "namespaceA",
+			Ips:       []string{"1.1.1.1", "3.3.3.3"},
+			Kind:      "Pod",
+			Pod: &informer.PodInfo{
+				Owners: []*informer.Owner{topOwner},
+				Containers: []*informer.ContainerInfo{
+					{Id: "container1"},
+					{Id: "container3"},
+				},
+			}}}))
+	require.NoError(t, store.On(&informer.Event{
+		Type: informer.EventType_DELETED,
+		Resource: &informer.ObjectMeta{
+			Name:      "foo",
+			Namespace: "namespaceA",
+		}}))
+	require.NoError(t, store.On(&informer.Event{
+		Type: informer.EventType_DELETED,
+		Resource: &informer.ObjectMeta{
+			Name:      "pod-foo-2",
+			Namespace: "namespaceA",
+			Ips:       []string{"4.4.4.4", "5.5.5.5"},
+			Kind:      "Pod",
+			Pod: &informer.PodInfo{
+				Containers: []*informer.ContainerInfo{
+					{Id: "container2-1"},
+					{Id: "container2-3"},
+				},
+			}}}))
+
+	assert.Empty(t, store.objectMetaByQName)
+	assert.Empty(t, store.objectMetaByIP)
+	assert.Empty(t, store.containerIDs)
+	assert.Empty(t, store.namespaces)
+	assert.Empty(t, store.namespaces)
+	assert.Empty(t, store.podsByContainer)
+	assert.Empty(t, store.containersByOwner)
+}
+
 type fakeInformer struct {
 	mt        sync.Mutex
 	observers map[string]meta.Observer

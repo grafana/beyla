@@ -72,7 +72,7 @@ func TestSQLDetectionFails(t *testing.T) {
 
 // Test making sure that issue https://github.com/grafana/beyla/issues/854 is fixed
 func TestReadTCPRequestIntoSpan_Overflow(t *testing.T) {
-	fltr := TestPidsFilter{services: map[uint32]svc.ID{}}
+	fltr := TestPidsFilter{services: map[uint32]svc.Attrs{}}
 
 	tri := TCPRequestInfo{
 		Len: 340,

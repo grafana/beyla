@@ -70,7 +70,7 @@ func (t *typer) FilterClassify(evs []Event[ProcessMatch]) []Event[ebpf.Instrumen
 		ev := &evs[i]
 		switch evs[i].Type {
 		case EventCreated:
-			svcID := svc.ID{
+			svcID := svc.Attrs{
 				UID: svc.UID{
 					Name:      ev.Obj.Criteria.Name,
 					Namespace: ev.Obj.Criteria.Namespace,

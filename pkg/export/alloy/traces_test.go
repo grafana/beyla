@@ -16,12 +16,12 @@ import (
 )
 
 func TestTracesSkipsInstrumented(t *testing.T) {
-	svcNoExport := svc.ID{}
+	svcNoExport := svc.Attrs{}
 
-	svcNoExportTraces := svc.ID{}
+	svcNoExportTraces := svc.Attrs{}
 	svcNoExportTraces.SetExportsOTelMetrics()
 
-	svcExportTraces := svc.ID{}
+	svcExportTraces := svc.Attrs{}
 	svcExportTraces.SetExportsOTelTraces()
 
 	tests := []struct {
@@ -31,17 +31,17 @@ func TestTracesSkipsInstrumented(t *testing.T) {
 	}{
 		{
 			name:     "Foo span is not filtered",
-			spans:    []request.Span{{ServiceID: svcNoExport, Type: request.EventTypeHTTPClient, Method: "GET", Route: "/foo", RequestStart: 100, End: 200}},
+			spans:    []request.Span{{Service: svcNoExport, Type: request.EventTypeHTTPClient, Method: "GET", Route: "/foo", RequestStart: 100, End: 200}},
 			filtered: false,
 		},
 		{
 			name:     "/v1/metrics span is not filtered",
-			spans:    []request.Span{{ServiceID: svcNoExportTraces, Type: request.EventTypeHTTPClient, Method: "GET", Route: "/v1/metrics", RequestStart: 100, End: 200}},
+			spans:    []request.Span{{Service: svcNoExportTraces, Type: request.EventTypeHTTPClient, Method: "GET", Route: "/v1/metrics", RequestStart: 100, End: 200}},
 			filtered: false,
 		},
 		{
 			name:     "/v1/traces span is filtered",
-			spans:    []request.Span{{ServiceID: svcExportTraces, Type: request.EventTypeHTTPClient, Method: "GET", Route: "/v1/traces", RequestStart: 100, End: 200}},
+			spans:    []request.Span{{Service: svcExportTraces, Type: request.EventTypeHTTPClient, Method: "GET", Route: "/v1/traces", RequestStart: 100, End: 200}},
 			filtered: true,
 		},
 	}

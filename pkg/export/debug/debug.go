@@ -83,8 +83,8 @@ func textPrinter(input <-chan []request.Span) {
 			hn := ""
 
 			if spans[i].IsClientSpan() {
-				if spans[i].ServiceID.UID.Namespace != "" {
-					pn = "." + spans[i].ServiceID.UID.Namespace
+				if spans[i].Service.UID.Namespace != "" {
+					pn = "." + spans[i].Service.UID.Namespace
 				}
 				if spans[i].OtherNamespace != "" {
 					hn = "." + spans[i].OtherNamespace
@@ -93,8 +93,8 @@ func textPrinter(input <-chan []request.Span) {
 				if spans[i].OtherNamespace != "" {
 					pn = "." + spans[i].OtherNamespace
 				}
-				if spans[i].ServiceID.UID.Namespace != "" {
-					hn = "." + spans[i].ServiceID.UID.Namespace
+				if spans[i].Service.UID.Namespace != "" {
+					hn = "." + spans[i].Service.UID.Namespace
 				}
 			}
 
@@ -111,8 +111,8 @@ func textPrinter(input <-chan []request.Span) {
 				spans[i].Host+" as "+request.SpanHost(&spans[i])+hn,
 				spans[i].HostPort,
 				spans[i].ContentLength,
-				&spans[i].ServiceID,
-				spans[i].ServiceID.SDKLanguage.String(),
+				&spans[i].Service,
+				spans[i].Service.SDKLanguage.String(),
 				traceparent(&spans[i]),
 			)
 		}

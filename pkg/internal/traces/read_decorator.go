@@ -77,8 +77,8 @@ func hostNamePIDDecorator(cfg *InstanceIDConfig) decorator {
 	// caching instance ID composition for speed and saving memory generation
 	return func(spans []request.Span) {
 		for i := range spans {
-			spans[i].ServiceID.UID.Instance = fullHostName + ":" + strconv.Itoa(int(spans[i].Pid.HostPID))
-			spans[i].ServiceID.HostName = fullHostName
+			spans[i].Service.UID.Instance = fullHostName + ":" + strconv.Itoa(int(spans[i].Pid.HostPID))
+			spans[i].Service.HostName = fullHostName
 		}
 	}
 }

@@ -168,7 +168,7 @@ func TestParseOTELEnvVarPerService(t *testing.T) {
 				actual[k] = v
 			}
 
-			parseOTELEnvVar(&svc.ID{EnvVars: map[string]string{dummyVar: tc.envVar}}, dummyVar, apply)
+			parseOTELEnvVar(&svc.Attrs{EnvVars: map[string]string{dummyVar: tc.envVar}}, dummyVar, apply)
 
 			assert.True(t, reflect.DeepEqual(actual, tc.expected))
 		})

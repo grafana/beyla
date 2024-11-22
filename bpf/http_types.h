@@ -193,6 +193,9 @@ typedef struct http2_grpc_request {
     tp_info_t tp;
 } http2_grpc_request_t;
 
+// When sock_msg is installed it disables the kprobes attached to tcp_sendmsg.
+// We use this data structure to provide the buffer to the tcp_sendmsg logic,
+// because we can't read the bvec physical pages.
 typedef struct msg_buffer {
     u8 buf[KPROBES_HTTP2_BUF_SIZE];
     u16 pos;
@@ -255,6 +258,8 @@ static __always_inline void sort_connection_info(connection_info_t *info) {
     }
 }
 
+// Equivalent to sort_connection_info, but works only with the ports key (egress_key_t),
+// which we use for egress connection tracking
 static __always_inline void sort_egress_key(egress_key_t *info) {
     if (likely_ephemeral_port(info->s_port) && !likely_ephemeral_port(info->d_port)) {
         return;

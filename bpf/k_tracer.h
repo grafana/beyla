@@ -274,6 +274,7 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
         u16 orig_dport = s_args.p_conn.conn.d_port;
         dbg_print_http_connection_info(
             &s_args.p_conn.conn); // commented out since GitHub CI doesn't like this call
+        // Create the egress key before we sort the connection info.
         egress_key_t e_key = {
             .d_port = s_args.p_conn.conn.d_port,
             .s_port = s_args.p_conn.conn.s_port,
@@ -289,11 +290,24 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
                     u8 *buf = iovec_memory();
                     if (buf) {
                         size = read_msghdr_buf(msg, buf, size);
+                        // If a sock_msg program is installed, this kprobe will fail to
+                        // read anything, because the data is in bvec physical pages. However,
+                        // the sock_msg will setup a buffer for us if this is the case. We
+                        // look up this buffer and use it instead of what we'd get from
+                        // calling read_msghdr_buf.
                         if (!size) {
                             msg_buffer_t *m_buf = bpf_map_lookup_elem(&msg_buffers, &e_key);
                             bpf_dbg_printk("No size, m_buf[%llx]", m_buf);
                             if (m_buf) {
                                 buf = m_buf->buf;
+                                // The buffer setup for us by a sock_msg program is always the
+                                // full buffer, but when we extend a packet to be able to inject
+                                // a Traceparent field, it will actually be split in 3 chunks:
+                                // [before the injected header],[70 bytes for 'Traceparent...'],[the rest].
+                                // We don't want the handle_buf_with_connection logic to run more than
+                                // once on the same data, so if we find a buf we send all of it to the
+                                // handle_buf_with_connection logic and then mark it as seen by making
+                                // m_buf->pos be the size of the buffer.
                                 if (!m_buf->pos) {
                                     size = sizeof(m_buf->buf);
                                     m_buf->pos = size;

@@ -100,17 +100,36 @@ int app_egress(struct __sk_buff *skb) {
 
     tp_info_pid_t *tp = bpf_map_lookup_elem(&outgoing_trace_map, &e_key);
 
+    // We look up metadata setup by the Go uprobes or the kprobes on
+    // a transaction we consider outgoing HTTP request. We will extend this in
+    // the future for other protocols, e.g. gRPC/HTTP2.
+    // The metadata always comes setup with the state field valid = 1, which
+    // means we haven't seen this request yet.
     if (tp) {
         p_conn.pid = tp->pid;
         bpf_dbg_printk("egress flags %x, sequence %x, valid %d", tcp.flags, tcp.seq, tp->valid);
         dbg_print_http_connection_info(&conn);
 
+        // If it's the fist packet of an request:
+        // We set the span information to match our TCP information. This
+        // is done for L4 context propagation, where we use the SEQ/ACK
+        // numbers for the Span ID. Since this is the first time we see
+        // these SEQ,ACK ids, we update the random Span ID the metadata has
+        // to match what we send over the wire.
         if (tp->valid == 1) {
             populate_span_id_from_tcp_info(&tp->tp, &tcp);
             update_outgoing_request_span_id(&p_conn, &tcp, tp, &e_key);
+            // We set valid to 2, so we only run this once, the later packets
+            // will have different SEQ/ACK.
             tp->valid = 2;
         }
+        // L7 app egress runs on every packet, the packets will be split so
+        // it needs to do work across all packets that go out for this request
         l7_app_egress(skb, tp, &conn, &tcp);
+
+        // The following code sets up the context information in L4 and it
+        // does it only once. If it successfully injected the information it
+        // will set valid to 0 so that we only run the L7 part from now on.
         if (tp->valid) {
             encode_data_in_ip_options(skb, &conn, &tcp, tp, &e_key);
         }

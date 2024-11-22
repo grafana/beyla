@@ -120,7 +120,6 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
         }
 
         bpf_probe_read(&frame_buf, FRAME_HEADER_LEN, (void *)((u8 *)u_buf + pos));
-
         read_http2_grpc_frame_header(&frame, frame_buf, FRAME_HEADER_LEN);
         //bpf_dbg_printk("http2 frame type = %d, len = %d, stream_id = %d, flags = %d", frame.type, frame.length, frame.stream_id, frame.flags);
 

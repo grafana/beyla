@@ -12,9 +12,11 @@
 
 #define BPF_F_CURRENT_NETNS (-1)
 
+// Temporary memory we'll use to make the 'Traceparent: ...' value.
 typedef struct tp_buf_data {
     u8 buf[256];
 } tp_buf_data_t;
+
 struct {
     __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
     __type(key, int);
@@ -22,7 +24,11 @@ struct {
     __uint(max_entries, 1);
 } tp_buf_memory SEC(".maps");
 
-static struct bpf_sock_tuple *
+// We use this helper to read in the connection tuple information in the
+// bpf_sock_tuple format. We use this struct to add sockets which are
+// established before we launched Beyla, since we'll not see them in the
+// sock_ops program which tracks them.
+static __always_inline struct bpf_sock_tuple *
 get_tuple(void *data, __u64 nh_off, void *data_end, __u16 eth_proto, bool *ipv4) {
     struct bpf_sock_tuple *result;
     __u64 ihl_len = 0;
@@ -59,8 +65,10 @@ get_tuple(void *data, __u64 nh_off, void *data_end, __u16 eth_proto, bool *ipv4)
     return result;
 }
 
+// A version of __builtin_memcpy which works with a variable size
 static __always_inline int buf_memcpy(char *dest, char *src, s32 size, void *end) {
     u32 rem = size;
+    // Copy 8 bytes at a time while you can
     for (int i = 0; (i < ((EXTEND_SIZE / 8) + 1)) && (rem >= 8); i++) {
         if ((void *)(dest + 8) <= end) {
             *(u64 *)(dest) = *(u64 *)(src);
@@ -72,6 +80,7 @@ static __always_inline int buf_memcpy(char *dest, char *src, s32 size, void *end
         src += 8;
     }
 
+    // Finish the remainder one by one
     for (int i = 0; (i < 8) && (rem > 0); i++) {
         if ((void *)(dest + 1) <= end) {
             *dest = *src;
@@ -100,6 +109,12 @@ static __always_inline unsigned char *tp_buf_mem(tp_info_t *tp) {
     return val->buf;
 }
 
+// This function does two things:
+//   1. It adds sockets in the socket hash map which have already been
+//      established and we see them for the first time in Traffic Control, i.e
+//      we are using them, but they weren't seen by the sock_ops.
+//   2. It writes the 'Traceparent: ...' value setup as space for us by
+//      the sock_msg program.
 static __always_inline int l7_app_egress(struct __sk_buff *skb,
                                          tp_info_pid_t *tp,
                                          connection_info_t *conn,
@@ -108,48 +123,64 @@ static __always_inline int l7_app_egress(struct __sk_buff *skb,
 
     void *data_end = ctx_data_end(skb);
     void *data = ctx_data(skb);
-    struct ethhdr *eth = (struct ethhdr *)(data);
-    struct bpf_sock_tuple *tuple;
-    struct bpf_sock *sk;
-    bool ipv4;
 
-    if ((void *)(eth + 1) > data_end) {
-        bpf_dbg_printk("bad size");
-        return 0;
-    }
+    u32 s_port = conn->s_port;
+    tc_http_ctx_t *ctx = (tc_http_ctx_t *)bpf_map_lookup_elem(&tc_http_ctx_map, &s_port);
 
-    tuple = get_tuple(data, sizeof(*eth), data_end, eth->h_proto, &ipv4);
-    //bpf_printk("tuple %llx, next %llx, data end %llx", tuple, (void *)((u8 *)tuple + sizeof(*tuple)), data_end);
+    if (!ctx) {
+        struct ethhdr *eth = (struct ethhdr *)(data);
+        struct bpf_sock_tuple *tuple;
+        struct bpf_sock *sk;
+        bool ipv4;
 
-    if (!tuple) {
-        bpf_dbg_printk("bad tuple %llx, next %llx, data end %llx",
-                       tuple,
-                       (void *)(tuple + sizeof(struct bpf_sock_tuple)),
-                       data_end);
-    } else {
-        if (ipv4 && (u64)((u8 *)tuple + sizeof(tuple->ipv4)) < (u64)data_end) {
-            struct bpf_sock_tuple tup = {};
-            __builtin_memcpy(&tup, tuple, sizeof(tup.ipv4));
+        if ((void *)(eth + 1) > data_end) {
+            bpf_dbg_printk("bad size");
+            return 0;
+        }
 
-            sk = bpf_sk_lookup_tcp(skb, &tup, sizeof(tup.ipv4), BPF_F_CURRENT_NETNS, 0);
-            bpf_dbg_printk("sk=%d\n", sk ? 1 : 0);
-            if (sk) {
-                bpf_dbg_printk("LOOKUP %llx:%d ->", conn->s_ip[3], conn->s_port);
-                bpf_dbg_printk("LOOKUP TO %llx:%d", conn->d_ip[3], conn->d_port);
+        // Get the bpf_sock_tuple value so we can look up and see if we don't have
+        // this socket yet in our map.
+        tuple = get_tuple(data, sizeof(*eth), data_end, eth->h_proto, &ipv4);
+        //bpf_printk("tuple %llx, next %llx, data end %llx", tuple, (void *)((u8 *)tuple + sizeof(*tuple)), data_end);
 
-                struct bpf_sock *sk1 = (struct bpf_sock *)bpf_map_lookup_elem(&sock_dir, conn);
-
-                if (sk1) {
-                    bpf_dbg_printk("Found sk1 %llx", sk1);
-                    bpf_sk_release(sk1);
-                } else {
-                    bpf_map_update_elem(&sock_dir, conn, sk, BPF_NOEXIST);
-                }
-
-                bpf_sk_release(sk);
-            }
+        if (!tuple) {
+            bpf_dbg_printk("bad tuple %llx, next %llx, data end %llx",
+                           tuple,
+                           (void *)(tuple + sizeof(struct bpf_sock_tuple)),
+                           data_end);
         } else {
-            bpf_dbg_printk("ipv6");
+            if (ipv4 && (u64)((u8 *)tuple + sizeof(tuple->ipv4)) < (u64)data_end) {
+                struct bpf_sock_tuple tup = {};
+                __builtin_memcpy(&tup, tuple, sizeof(tup.ipv4));
+
+                // Lookup to see if you can find a socket for this tuple in the
+                // kernel socket tracking. We look up in all namespaces (-1).
+                sk = bpf_sk_lookup_tcp(skb, &tup, sizeof(tup.ipv4), BPF_F_CURRENT_NETNS, 0);
+                bpf_dbg_printk("sk=%d\n", sk ? 1 : 0);
+                if (sk) {
+                    bpf_dbg_printk("LOOKUP %llx:%d ->", conn->s_ip[3], conn->s_port);
+                    bpf_dbg_printk("LOOKUP TO %llx:%d", conn->d_ip[3], conn->d_port);
+
+                    // Query the socket map to see if have added this socket.
+                    struct bpf_sock *sk1 = (struct bpf_sock *)bpf_map_lookup_elem(&sock_dir, conn);
+
+                    // We found the socket, all good it was caught by the sock_ops,
+                    // just release it.
+                    if (sk1) {
+                        bpf_dbg_printk("Found sk1 %llx", sk1);
+                        bpf_sk_release(sk1);
+                    } else {
+                        // First time we see a socket, add it to the map, it will
+                        // get tracked on the next request
+                        bpf_map_update_elem(&sock_dir, conn, sk, BPF_NOEXIST);
+                    }
+
+                    // We must release the reference to the original socket we looked up.
+                    bpf_sk_release(sk);
+                }
+            } else {
+                bpf_dbg_printk("ipv6");
+            }
         }
     }
 
@@ -163,8 +194,12 @@ static __always_inline int l7_app_egress(struct __sk_buff *skb,
         tp_buf = (unsigned char *)TP;
     }
 
-    u32 s_port = conn->s_port;
-    tc_http_ctx_t *ctx = (tc_http_ctx_t *)bpf_map_lookup_elem(&tc_http_ctx_map, &s_port);
+    // This is where the writing of the 'Traceparent: ...' field happens at L7.
+    // Our packets are split by sock_msg like this:
+    // [before the injected header],[70 bytes for 'Traceparent...'],[the rest]
+    // This how it always looks when I tested, but I'm not sure if it's always
+    // the case, seems plausible, but then the code below tries to handle any
+    // split. The 'fast path' handles the exact split as above.
     if (ctx) {
         u32 packet_size = tot_len - tcp->hdr_len;
         bpf_dbg_printk("Found it! packet_size %d, offset %d", packet_size, ctx->offset);
@@ -177,17 +212,27 @@ static __always_inline int l7_app_egress(struct __sk_buff *skb,
             bpf_clamp_umax(off, 128);
             void *start = ctx_data(skb) + off;
 
+            // We haven't seen enough bytes coming through from the start
+            // until we did the split (at ctx->offset is where we injected)
+            // the empty space.
             if (ctx->seen < ctx->offset) {
+                // Diff = How much more before we cross offset
                 u32 diff = ctx->offset - ctx->seen;
+                // We received less or equal bytes to what we want to
+                // reach ctx->offset, i.e the split point.
                 if (diff <= packet_size) {
                     ctx->seen += packet_size;
                     return 0;
                 } else {
+                    // We went over the split point, calculate how much can we
+                    // write, but cap it to the max size = 70 bytes.
                     len = packet_size - diff;
                     bpf_clamp_umax(len, EXTEND_SIZE);
                 }
             } else {
-                // Fast path
+                // Fast path. We are exactly at the offset, we've written
+                // nothing of the 'Traceparent: ...' text yet and the packet
+                // is exactly 70 bytes.
                 if (ctx->written == 0 && packet_size == EXTEND_SIZE) {
                     if ((start + EXTEND_SIZE) <= ctx_data_end(skb)) {
                         __builtin_memcpy(start, tp_buf, EXTEND_SIZE);
@@ -197,7 +242,9 @@ static __always_inline int l7_app_egress(struct __sk_buff *skb,
                     }
                 }
 
-                if (ctx->written <= EXTEND_SIZE) {
+                // Nope, we've written some bytes in another packet and we
+                // are not done writing yet.
+                if (ctx->written < EXTEND_SIZE) {
                     len = EXTEND_SIZE - ctx->written;
                     bpf_clamp_umax(len, EXTEND_SIZE);
 
@@ -205,6 +252,7 @@ static __always_inline int l7_app_egress(struct __sk_buff *skb,
                         len = packet_size;
                     }
                 } else {
+                    // We've written everything already, just clean up
                     bpf_map_delete_elem(&tc_http_ctx_map, &s_port);
                     return 0;
                 }
@@ -212,6 +260,7 @@ static __always_inline int l7_app_egress(struct __sk_buff *skb,
 
             if (len > 0) {
                 u32 tp_off = ctx->written;
+                // Keeps verifier happy
                 bpf_clamp_umax(tp_off, EXTEND_SIZE);
                 bpf_clamp_umax(len, EXTEND_SIZE);
 
@@ -221,6 +270,8 @@ static __always_inline int l7_app_egress(struct __sk_buff *skb,
                 }
 
                 ctx->written += len;
+                // If we've written the full string this time around
+                // cleanup the metadata.
                 if (ctx->written >= EXTEND_SIZE) {
                     bpf_map_delete_elem(&tc_http_ctx_map, &s_port);
                 }

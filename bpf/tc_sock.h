@@ -13,6 +13,9 @@
 
 #define SOCKOPS_MAP_SIZE 65535
 
+// A map of sockets which we track with sock_ops. The sock_msg
+// program subscribes to this map and runs for each new socket
+// activity
 struct {
     __uint(type, BPF_MAP_TYPE_SOCKHASH);
     __uint(max_entries, SOCKOPS_MAP_SIZE);
@@ -20,12 +23,17 @@ struct {
     __uint(value_size, sizeof(uint32_t));
 } sock_dir SEC(".maps");
 
+// When we split a packet with the sock_msg program to inject
+// the Traceparent field, we need to keep track of what's
+// written by the Traffic Control probes.
 typedef struct tc_http_ctx {
-    u32 offset;
-    u32 seen;
-    u32 written;
+    u32 offset;  // where inside the original packet we saw '\n`
+    u32 seen;    // how many bytes we've seen before the offset
+    u32 written; // how many of the Traceparent field we've written
 } __attribute__((packed)) tc_http_ctx_t;
 
+// A map that keeps all the HTTP packets we've extended with
+// the sock_msg program and that Traffic Control needs to write to.
 struct tc_http_ctx_map {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, u32);
@@ -33,6 +41,9 @@ struct tc_http_ctx_map {
     __uint(max_entries, 10240);
 } tc_http_ctx_map SEC(".maps");
 
+// Memory buffer and a map bellow as temporary storage for
+// the sock_msg buffer which we use to look for the first '\n'
+// in the request header
 typedef struct msg_data {
     u8 buf[1024];
 } msg_data_t;
@@ -44,6 +55,8 @@ struct {
     __uint(max_entries, 1);
 } buf_mem SEC(".maps");
 
+// Extracts what we need for connection_info_t from bpf_sock_ops if the
+// communication is IPv4
 static __always_inline void sk_ops_extract_key_ip4(struct bpf_sock_ops *ops,
                                                    connection_info_t *conn) {
     __builtin_memcpy(conn->s_addr, ip4ip6_prefix, sizeof(ip4ip6_prefix));
@@ -55,6 +68,8 @@ static __always_inline void sk_ops_extract_key_ip4(struct bpf_sock_ops *ops,
     conn->d_port = bpf_ntohl(ops->remote_port);
 }
 
+// Extracts what we need for connection_info_t from bpf_sock_ops if the
+// communication is IPv6
 // I couldn't break this up into functions, ended up running into a verifier error about ctx already written
 __attribute__((unused)) static __always_inline void
 sk_ops_extract_key_ip6(struct bpf_sock_ops *ops, connection_info_t *conn) {
@@ -71,6 +86,8 @@ sk_ops_extract_key_ip6(struct bpf_sock_ops *ops, connection_info_t *conn) {
     conn->d_port = bpf_ntohl(ops->remote_port);
 }
 
+// Extracts what we need for connection_info_t from sk_msg_md if the
+// communication is IPv4
 static __always_inline void sk_msg_extract_key_ip4(struct sk_msg_md *msg, connection_info_t *conn) {
     __builtin_memcpy(conn->s_addr, ip4ip6_prefix, sizeof(ip4ip6_prefix));
     conn->s_ip[3] = msg->local_ip4;
@@ -81,6 +98,8 @@ static __always_inline void sk_msg_extract_key_ip4(struct sk_msg_md *msg, connec
     conn->d_port = bpf_ntohl(msg->remote_port);
 }
 
+// Extracts what we need for connection_info_t from sk_msg_md if the
+// communication is IPv6
 __attribute__((unused)) static __always_inline void
 sk_msg_extract_key_ip6(struct sk_msg_md *msg, connection_info_t *conn) {
     conn->s_ip[0] = msg->local_ip6[0];
@@ -96,6 +115,7 @@ sk_msg_extract_key_ip6(struct sk_msg_md *msg, connection_info_t *conn) {
     conn->d_port = bpf_ntohl(msg->remote_port);
 }
 
+// Helper that writes in the sock map for a sock_ops program
 static __always_inline void bpf_sock_ops_establish_cb(struct bpf_sock_ops *skops) {
     connection_info_t conn = {};
 
@@ -109,6 +129,8 @@ static __always_inline void bpf_sock_ops_establish_cb(struct bpf_sock_ops *skops
     bpf_sock_hash_update(skops, &sock_dir, &conn, BPF_ANY);
 }
 
+// Tracks all outgoing sockets (BPF_SOCK_OPS_ACTIVE_ESTABLISHED_CB)
+// We don't track incoming, those would be BPF_SOCK_OPS_PASSIVE_ESTABLISHED_CB
 SEC("sockops")
 int sockmap_tracker(struct bpf_sock_ops *skops) {
     u32 op = skops->op;
@@ -123,11 +145,18 @@ int sockmap_tracker(struct bpf_sock_ops *skops) {
     return 0;
 }
 
+// Just a buffer
 static __always_inline msg_data_t *buffer() {
     int zero = 0;
     return (msg_data_t *)bpf_map_lookup_elem(&buf_mem, &zero);
 }
 
+// This is setup here for Go tracking. Essentially, when the Go userspace
+// probes activate for an outgoing HTTP request they setup this
+// outgoing_trace_map for us. We then know this is a connection we should
+// be injecting the Traceparent in. Another place which sets up this map is
+// the kprobe on tcp_sendmsg, however that happens after the sock_msg runs,
+// so we have a different detection for that - protocol_detector.
 static __always_inline u8 is_tracked(connection_info_t *conn) {
     egress_key_t e_key = {
         .d_port = conn->d_port,
@@ -140,6 +169,14 @@ static __always_inline u8 is_tracked(connection_info_t *conn) {
     return tp != 0;
 }
 
+// This code is copied from the kprobe on tcp_sendmsg and it's called from
+// the sock_msg program, which does the packet extension for injecting the
+// Traceparent. Since the sock_msg runs before the kprobe on tcp_sendmsg, we
+// need to extend the packet before we'll have the opportunity to setup the
+// outgoing_trace_map metadata. We can directly perhaps run the same code that
+// the kprobe on tcp_sendmsg does, but it's complicated, no tail calls from
+// sock_msg programs and inlining will eventually hit us with the instruction
+// limit when we eventually add HTTP2/gRPC support.
 static __always_inline u8 protocol_detector(struct sk_msg_md *msg,
                                             u64 id,
                                             connection_info_t *conn) {
@@ -166,6 +203,11 @@ static __always_inline u8 protocol_detector(struct sk_msg_md *msg,
                     .pos = 0,
                 };
                 bpf_probe_read_kernel(msg_buf.buf, FULL_BUF_SIZE, msg->data);
+                // We setup any call that looks like HTTP request to be extended.
+                // This must match exactly to what the decision will be for
+                // the kprobe program on tcp_sendmsg, which sets up the
+                // outgoing_trace_map data used by Traffic Control to write the
+                // actual 'Traceparent:...' string.
                 if (is_http_request_buf((const unsigned char *)msg_buf.buf)) {
                     bpf_dbg_printk("Setting up request to be extended");
                     bpf_map_update_elem(&msg_buffers, &e_key, &msg_buf, BPF_ANY);
@@ -179,6 +221,9 @@ static __always_inline u8 protocol_detector(struct sk_msg_md *msg,
     return 0;
 }
 
+// Sock_msg program which detects packets where it should add space for
+// the 'Traceparent' string. It doesn't write the value, only spaces the packet
+// for Traffic Control to do the writing.
 SEC("sk_msg")
 int packet_extender(struct sk_msg_md *msg) {
     // if (msg->family == AF_INET6) {
@@ -195,6 +240,10 @@ int packet_extender(struct sk_msg_md *msg) {
     // }
     u8 tracked = is_tracked(&conn);
 
+    // We need two types of checks here. Valid PID only works for kprobes since
+    // Go programs don't add their PIDs to the PID map (we instrument the
+    // binaries). Tracked means that we have metadata setup by the Go uprobes
+    // telling us we should extend this packet.
     if (!valid_pid(id) && !tracked) {
         return SK_PASS;
     }
@@ -209,6 +258,8 @@ int packet_extender(struct sk_msg_md *msg) {
     bpf_msg_pull_data(msg, 0, 1024, 0);
 
     if (!tracked) {
+        // If we didn't have metadata (sock_msg runs before the kprobe),
+        // we ensure to mark it for any packet we want to extend.
         tracked = protocol_detector(msg, id, &conn);
     }
 
@@ -221,6 +272,8 @@ int packet_extender(struct sk_msg_md *msg) {
 
         if (newline_pos >= 0) {
             newline_pos++;
+            // Push extends the packet with empty space and sets up the
+            // metadata for Traffic Control to finish the writing
             if (!bpf_msg_push_data(msg, newline_pos, EXTEND_SIZE, 0)) {
                 tc_http_ctx_t ctx = {
                     .offset = newline_pos,

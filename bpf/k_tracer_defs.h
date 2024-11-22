@@ -47,9 +47,18 @@ static __always_inline void handle_buf_with_args(void *ctx, call_protocol_args_t
             http_info_t *info = bpf_map_lookup_elem(&ongoing_http, &args->pid_conn);
 
             if (info) {
+                // Still reading checks if we are processing buffers of a HTTP request
+                // that has started, but we haven't seen a response yet.
                 if (still_reading(info)) {
                     // Packets are split into chunks if Beyla injected the Traceparent
-                    // Make sure you look for split packets containing the real Traceparent
+                    // Make sure you look for split packets containing the real Traceparent.
+                    // Essentially, when a packet is extended by our sock_msg program and
+                    // passed down another service, the receiving side may reassemble the
+                    // packets into one buffer or not. If they are reassembled, then the
+                    // call to bpf_tail_call(ctx, &jump_table, TAIL_PROTOCOL_HTTP); will
+                    // scan for the incoming 'Traceparent' header. If they are not reassembled
+                    // we'll see something like this:
+                    // [before the injected header],[70 bytes for 'Traceparent...'],[the rest].
                     if (is_traceparent(args->small_buf)) {
                         unsigned char *buf = tp_char_buf();
                         if (buf) {

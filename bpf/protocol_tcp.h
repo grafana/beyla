@@ -89,7 +89,6 @@ static __always_inline void handle_unknown_tcp_connection(pid_connection_info_t 
         u32 off = existing->len;
         bpf_clamp_umax(off, (K_TCP_MAX_LEN / 2));
         bpf_probe_read(existing->buf + off, (K_TCP_MAX_LEN / 2), u_buf);
-
         existing->len += bytes_len;
     }
 }

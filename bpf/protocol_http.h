@@ -209,7 +209,6 @@ int protocol_http(void *ctx) {
     call_protocol_args_t *args = protocol_args();
 
     if (!args) {
-        bpf_printk("No args!");
         return 0;
     }
 

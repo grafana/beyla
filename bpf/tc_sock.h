@@ -105,7 +105,7 @@ static __always_inline void bpf_sock_ops_establish_cb(struct bpf_sock_ops *skops
     sk_ops_extract_key_ip4(skops, &conn);
     // }
 
-    //bpf_printk("SET %llx:%d -> %llx:%d", conn.s_ip[3], conn.s_port, conn.d_ip[3], conn.d_port);
+    bpf_printk("SET %llx:%d -> %llx:%d", conn.s_ip[3], conn.s_port, conn.d_ip[3], conn.d_port);
     bpf_sock_hash_update(skops, &sock_dir, &conn, BPF_ANY);
 }
 
@@ -181,9 +181,9 @@ static __always_inline u8 protocol_detector(struct sk_msg_md *msg,
 
 SEC("sk_msg")
 int packet_extender(struct sk_msg_md *msg) {
-    if (msg->family == AF_INET6) {
-        return SK_PASS;
-    }
+    // if (msg->family == AF_INET6) {
+    //     return SK_PASS;
+    // }
 
     u64 id = bpf_get_current_pid_tgid();
     connection_info_t conn = {};

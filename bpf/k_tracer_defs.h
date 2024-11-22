@@ -11,6 +11,7 @@
 #include "protocol_http.h"
 #include "protocol_http2.h"
 #include "protocol_tcp.h"
+#include "tc_common.h"
 
 typedef struct send_args {
     pid_connection_info_t p_conn;
@@ -45,8 +46,39 @@ static __always_inline void handle_buf_with_args(void *ctx, call_protocol_args_t
         } else { // large request tracking
             http_info_t *info = bpf_map_lookup_elem(&ongoing_http, &args->pid_conn);
 
-            if (info && still_responding(info)) {
-                info->end_monotime_ns = bpf_ktime_get_ns();
+            if (info) {
+                if (still_reading(info)) {
+                    // Packets are split into chunks if Beyla injected the Traceparent
+                    // Make sure you look for split packets containing the real Traceparent
+                    if (is_traceparent(args->small_buf)) {
+                        unsigned char *buf = tp_char_buf();
+                        if (buf) {
+                            bpf_probe_read(buf, EXTEND_SIZE, (u8 *)args->u_buf);
+                            bpf_dbg_printk("Found traceparent %s", buf);
+                            unsigned char *t_id = extract_trace_id(buf);
+                            unsigned char *s_id = extract_span_id(buf);
+                            unsigned char *f_id = extract_flags(buf);
+
+                            decode_hex(info->tp.trace_id, t_id, TRACE_ID_CHAR_LEN);
+                            decode_hex((unsigned char *)&info->tp.flags, f_id, FLAGS_CHAR_LEN);
+                            decode_hex(info->tp.parent_id, s_id, SPAN_ID_CHAR_LEN);
+
+                            trace_key_t t_key = {0};
+                            task_tid(&t_key.p_key);
+                            t_key.extra_id = extra_runtime_id();
+
+                            tp_info_pid_t *existing = bpf_map_lookup_elem(&server_traces, &t_key);
+                            if (existing) {
+                                __builtin_memcpy(&existing->tp, &info->tp, sizeof(tp_info_t));
+                                set_trace_info_for_connection(&args->pid_conn.conn, existing);
+                            } else {
+                                bpf_dbg_printk("Didn't find existing trace, this might be a bug!");
+                            }
+                        }
+                    }
+                } else if (still_responding(info)) {
+                    info->end_monotime_ns = bpf_ktime_get_ns();
+                }
             } else if (!info) {
                 // SSL requests will see both TCP traffic and text traffic, ignore the TCP if
                 // we are processing SSL request. HTTP2 is already checked in handle_buf_with_connection.

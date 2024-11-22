@@ -147,15 +147,6 @@ static __always_inline int read_iovec_ctx(iovec_iter_ctx *ctx, u8 *buf, size_t m
     bpf_dbg_printk("iter_type=%u", ctx->iter_type);
     bpf_dbg_printk("nr_segs=%lu, iov=%p, ubuf=%p", ctx->nr_segs, ctx->iov, ctx->ubuf);
 
-    // const int iter_bvec = bpf_core_enum_value(enum iter_type, ITER_BVEC);
-
-    // if (ctx->iter_type == iter_bvec) {
-    //     call_protocol_args_t *args = protocol_args();
-    //     if (args) {
-    //         return args->u_buf;
-    //     }
-    // }
-
     // ITER_UBUF only exists in kernels >= 6.0 - earlier kernels use ITER_IOVEC
     if (bpf_core_enum_value_exists(enum iter_type___dummy, ITER_UBUF)) {
         const int iter_ubuf = bpf_core_enum_value(enum iter_type___dummy, ITER_UBUF);

@@ -538,6 +538,19 @@ int uprobe_writeSubset(struct pt_regs *ctx) {
             (void *)(io_writer_addr + go_offset_of(ot, (go_offset){.v = _io_writer_n_pos})),
             &len,
             sizeof(len));
+
+        connection_info_t *info = bpf_map_lookup_elem(&ongoing_client_connections, &g_key);
+        if (info) {
+            egress_key_t e_key = {
+                .d_port = info->d_port,
+                .s_port = info->s_port,
+            };
+            bpf_map_delete_elem(&outgoing_trace_map, &e_key);
+            bpf_dbg_printk(
+                "wrote traceparent using bpf_probe_write_user, removing outgoing trace map %d:%d",
+                e_key.s_port,
+                e_key.d_port);
+        }
     }
 
 done:

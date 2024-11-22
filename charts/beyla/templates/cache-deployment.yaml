@@ -6,9 +6,9 @@ metadata:
   name: {{ .Values.k8sCache.service.name }}
   namespace: {{ include "beyla.namespace" .}}
   labels:
-    {{- include "beyla.labels" . | nindent 4 }}
+    {{- include "beyla.cache.labels" . | nindent 4 }}
     app.kubernetes.io/component: workload
-  {{- with .Values.k8sCache.service.annotations }}
+  {{- with .Values.k8sCache.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
   {{- end }}
@@ -19,12 +19,12 @@ spec:
       app.kubernetes.io/name: {{ .Values.k8sCache.service.name }}
   template:
     metadata:
-      {{- with .Values.podAnnotations }}
+      {{- with .Values.k8sCache.podAnnotations }}
       annotations:
         {{- tpl (toYaml . | nindent 8) $root }}
       {{- end }}
       labels:
-        app.kubernetes.io/name: {{ .Values.k8sCache.service.name }}
+        {{- include "beyla.cache.labels" . | nindent 8 }}
     spec:
       {{- if .Values.serviceAccount.create }}
       serviceAccountName: {{ include "beyla.serviceAccountName" . }}
@@ -45,9 +45,14 @@ spec:
             - containerPort: {{ .Values.k8sCache.service.port }}
               protocol: TCP
               name: grpc
-          {{- if .Values.k8sCache.profile_port }}
+          {{- if .Values.k8sCache.profilePort }}
             - name: profile
-              containerPort: {{ .Values.k8sCache.profile_port }}
+              containerPort: {{ .Values.k8sCache.profilePort }}
+              protocol: TCP
+          {{- end }}
+          {{- if .Values.k8sCache.internalMetrics.port }}
+            - name: {{ .Values.k8sCache.internalMetrics.portName }}
+              containerPort: {{ .Values.k8sCache.internalMetrics.port }}
               protocol: TCP
           {{- end }}
           {{- with .Values.k8sCache.resources }}
@@ -57,9 +62,13 @@ spec:
           env:
             - name: BEYLA_K8S_CACHE_PORT
               value: "{{ .Values.k8sCache.service.port }}"
-          {{- if .Values.k8sCache.profile_port }}
+          {{- if .Values.k8sCache.profilePort }}
             - name: BEYLA_K8S_CACHE_PROFILE_PORT
-              value: "{{ .Values.k8sCache.profile_port }}"
+              value: "{{ .Values.k8sCache.profilePort }}"
+          {{- end }}
+          {{- if .Values.k8sCache.internalMetrics.port }}
+            - name: BEYLA_K8S_CACHE_INTERNAL_METRICS_PROMETHEUS_PORT
+              value: "{{ .Values.k8sCache.internalMetrics.port }}"
           {{- end }}
           {{- range $key, $value := .Values.k8sCache.env }}
             - name: {{ $key }}

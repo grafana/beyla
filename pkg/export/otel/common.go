@@ -62,13 +62,13 @@ var DefaultBuckets = Buckets{
 
 func getAppResourceAttrs(hostID string, service *svc.ID) []attribute.KeyValue {
 	return append(getResourceAttrs(hostID, service),
-		semconv.ServiceInstanceID(string(service.UID)),
+		semconv.ServiceInstanceID(service.UID.Instance),
 	)
 }
 
 func getResourceAttrs(hostID string, service *svc.ID) []attribute.KeyValue {
 	attrs := []attribute.KeyValue{
-		semconv.ServiceName(service.Name),
+		semconv.ServiceName(service.UID.Name),
 		// SpanMetrics requires an extra attribute besides service name
 		// to generate the traces_target_info metric,
 		// so the service is visible in the ServicesList
@@ -80,8 +80,8 @@ func getResourceAttrs(hostID string, service *svc.ID) []attribute.KeyValue {
 		semconv.HostID(hostID),
 	}
 
-	if service.Namespace != "" {
-		attrs = append(attrs, semconv.ServiceNamespace(service.Namespace))
+	if service.UID.Namespace != "" {
+		attrs = append(attrs, semconv.ServiceNamespace(service.UID.Namespace))
 	}
 
 	for k, v := range service.Metadata {
@@ -142,6 +142,8 @@ func NewReporterPool[K uidGetter, T any](
 	}
 }
 
+var emptyUID = svc.UID{}
+
 // For retrieves the associated item for the given service name, or
 // creates a new one if it does not exist
 func (rp *ReporterPool[K, T]) For(service K) (T, error) {
@@ -154,7 +156,7 @@ func (rp *ReporterPool[K, T]) For(service K) (T, error) {
 	// In multi-process tracing, this is likely to happen as most
 	// tracers group traces belonging to the same service in the same slice.
 	svcUID := service.GetUID()
-	if rp.lastServiceUID == "" || svcUID != rp.lastService.GetUID() {
+	if rp.lastServiceUID == emptyUID || svcUID != rp.lastService.GetUID() {
 		lm, err := rp.get(svcUID, service)
 		if err != nil {
 			var t T

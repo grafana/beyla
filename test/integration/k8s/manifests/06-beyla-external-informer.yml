@@ -17,6 +17,9 @@ data:
         enable: true
         cluster_name: my-kube
         meta_cache_address: k8s-cache:50055
+        meta_source_labels:
+          service_name:      "app.kubernetes.io/name"
+          service_namespace: "app.kubernetes.io/part-of"
       select:
         "*":
           include: [ "*" ]
@@ -144,6 +147,8 @@ spec:
           env:
             - name: BEYLA_K8S_CACHE_PORT
               value: "50055"
+            - name: BEYLA_K8S_CACHE_INTERNAL_METRICS_PROMETHEUS_PORT
+              value: "8999"
             - name: GOCOVERDIR
               value: "/testoutput"
           volumeMounts:
@@ -152,6 +157,8 @@ spec:
           ports:
             - containerPort: 50055
               name: grpc
+            - containerPort: 8999
+              name: internalprom
 ---
 kind: Service
 apiVersion: v1
@@ -164,4 +171,7 @@ spec:
   ports:
     - port: 50055
       name: grpc
+      protocol: TCP
+    - name: internalprom
+      port: 8999
       protocol: TCP

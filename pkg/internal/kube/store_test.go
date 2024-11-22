@@ -90,7 +90,7 @@ func TestContainerInfo(t *testing.T) {
 
 	fInformer := &fakeInformer{}
 
-	store := NewStore(fInformer)
+	store := NewStore(fInformer, MetaSourceLabels{})
 
 	_ = store.On(&informer.Event{Type: informer.EventType_CREATED, Resource: &service})
 	_ = store.On(&informer.Event{Type: informer.EventType_CREATED, Resource: &podMetaA})
@@ -257,7 +257,7 @@ func TestMemoryCleanedUp(t *testing.T) {
 
 	fInformer := &fakeInformer{}
 
-	store := NewStore(fInformer)
+	store := NewStore(fInformer, MetaSourceLabels{})
 
 	_ = store.On(&informer.Event{Type: informer.EventType_CREATED, Resource: &service})
 	_ = store.On(&informer.Event{Type: informer.EventType_CREATED, Resource: &podMetaA})
@@ -281,7 +281,7 @@ func TestMemoryCleanedUp(t *testing.T) {
 // Fixes a memory leak in the store where the objectMetaByIP map was not cleaned up
 func TestMetaByIPEntryRemovedIfIPGroupChanges(t *testing.T) {
 	// GIVEN a store with
-	store := NewStore(&fakeInformer{})
+	store := NewStore(&fakeInformer{}, MetaSourceLabels{})
 	// WHEN an object is created with several IPs
 	_ = store.On(&informer.Event{
 		Type: informer.EventType_CREATED,

@@ -113,6 +113,7 @@ func buildCommonContextInfo(
 			ResyncPeriod:      config.Attributes.Kubernetes.InformersResyncPeriod,
 			DisabledInformers: config.Attributes.Kubernetes.DisableInformers,
 			MetaCacheAddr:     config.Attributes.Kubernetes.MetaCacheAddress,
+			MetaSourceLabels:  config.Attributes.Kubernetes.MetaSourceLabels,
 		}),
 	}
 	switch {

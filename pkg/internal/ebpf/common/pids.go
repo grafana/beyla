@@ -227,7 +227,7 @@ func serviceInfo(pid uint32) *svc.ID {
 
 	name := commName(pid)
 	lang := exec.FindProcLanguage(int32(pid), nil, name)
-	result := svc.ID{Name: name, SDKLanguage: lang, ProcPID: int32(pid)}
+	result := svc.ID{UID: svc.UID{Name: name}, SDKLanguage: lang, ProcPID: int32(pid)}
 
 	activePids.Add(pid, &result)
 

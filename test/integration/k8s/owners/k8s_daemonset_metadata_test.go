@@ -51,6 +51,7 @@ func TestDaemonSetMetadata(t *testing.T) {
 					for _, proc := range trace.Processes {
 						sd := jaeger.DiffAsRegexp([]jaeger.Tag{
 							{Key: "service.namespace", Type: "string", Value: "^default$"},
+							{Key: "service.instance.id", Type: "string", Value: "^dsservice-.+:dsservice"},
 						}, proc.Tags)
 						require.Empty(t, sd)
 					}
@@ -68,6 +69,8 @@ func TestDaemonSetMetadata(t *testing.T) {
 						{Key: "k8s.daemonset.name", Type: "string", Value: "^dsservice$"},
 						{Key: "k8s.namespace.name", Type: "string", Value: "^default$"},
 						{Key: "k8s.cluster.name", Type: "string", Value: "^beyla$"},
+						{Key: "service.namespace", Type: "string", Value: "^default$"},
+						{Key: "service.instance.id", Type: "string", Value: "^dsservice-.+:dsservice"},
 					}, trace.Processes[parent.ProcessID].Tags)
 					require.Empty(t, sd)
 

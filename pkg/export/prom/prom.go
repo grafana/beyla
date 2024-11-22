@@ -706,12 +706,12 @@ func labelNamesSpans() []string {
 
 func (r *metricsReporter) labelValuesSpans(span *request.Span) []string {
 	return []string{
-		span.ServiceID.Name,
-		span.ServiceID.Namespace,
+		span.ServiceID.UID.Name,
+		span.ServiceID.UID.Namespace,
 		span.TraceName(),
 		strconv.Itoa(int(request.SpanStatusCode(span))),
 		span.ServiceGraphKind(),
-		string(span.ServiceID.UID), // app instance ID
+		string(span.ServiceID.UID.Instance), // app instance ID
 		span.ServiceID.Job(),
 		"beyla",
 	}
@@ -731,9 +731,9 @@ func (r *metricsReporter) labelValuesTargetInfo(service svc.ID) []string {
 	values := []string{
 		r.hostID,
 		service.HostName,
-		service.Name,
-		service.Namespace,
-		string(service.UID), // app instance ID
+		service.UID.Name,
+		service.UID.Namespace,
+		service.UID.Instance, // app instance ID
 		service.Job(),
 		service.SDKLanguage.String(),
 		"beyla",
@@ -755,7 +755,7 @@ func (r *metricsReporter) labelValuesServiceGraph(span *request.Span) []string {
 	if span.IsClientSpan() {
 		return []string{
 			request.SpanPeer(span),
-			span.ServiceID.Namespace,
+			span.ServiceID.UID.Namespace,
 			request.SpanHost(span),
 			span.OtherNamespace,
 			"beyla",
@@ -765,7 +765,7 @@ func (r *metricsReporter) labelValuesServiceGraph(span *request.Span) []string {
 		request.SpanPeer(span),
 		span.OtherNamespace,
 		request.SpanHost(span),
-		span.ServiceID.Namespace,
+		span.ServiceID.UID.Namespace,
 		"beyla",
 	}
 }

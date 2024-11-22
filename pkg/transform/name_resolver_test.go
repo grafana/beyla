@@ -32,7 +32,7 @@ func TestSuffixPrefix(t *testing.T) {
 
 func TestResolvePodsFromK8s(t *testing.T) {
 	inf := &fakeInformer{}
-	db := kube2.NewStore(inf)
+	db := kube2.NewStore(inf, kube2.MetaSourceLabels{})
 	pod1 := &informer.ObjectMeta{Name: "pod1", Kind: "Pod", Ips: []string{"10.0.0.1", "10.1.0.1"}}
 	pod2 := &informer.ObjectMeta{Name: "pod2", Namespace: "something", Kind: "Pod", Ips: []string{"10.0.0.2", "10.1.0.2"}}
 	pod3 := &informer.ObjectMeta{Name: "pod3", Kind: "Pod", Ips: []string{"10.0.0.3", "10.1.0.3"}}
@@ -71,26 +71,26 @@ func TestResolvePodsFromK8s(t *testing.T) {
 		Type: request.EventTypeHTTPClient,
 		Peer: "10.0.0.1",
 		Host: "10.0.0.2",
-		ServiceID: svc.ID{
+		ServiceID: svc.ID{UID: svc.UID{
 			Name:      "pod1",
 			Namespace: "",
-		},
+		}},
 	}
 
 	serverSpan := request.Span{
 		Type: request.EventTypeHTTP,
 		Peer: "10.0.0.1",
 		Host: "10.0.0.2",
-		ServiceID: svc.ID{
+		ServiceID: svc.ID{UID: svc.UID{
 			Name:      "pod2",
 			Namespace: "something",
-		},
+		}},
 	}
 
 	nr.resolveNames(&clientSpan)
 
 	assert.Equal(t, "pod1", clientSpan.PeerName)
-	assert.Equal(t, "", clientSpan.ServiceID.Namespace)
+	assert.Equal(t, "", clientSpan.ServiceID.UID.Namespace)
 	assert.Equal(t, "pod2", clientSpan.HostName)
 	assert.Equal(t, "something", clientSpan.OtherNamespace)
 
@@ -99,12 +99,12 @@ func TestResolvePodsFromK8s(t *testing.T) {
 	assert.Equal(t, "pod1", serverSpan.PeerName)
 	assert.Equal(t, "", serverSpan.OtherNamespace)
 	assert.Equal(t, "pod2", serverSpan.HostName)
-	assert.Equal(t, "something", serverSpan.ServiceID.Namespace)
+	assert.Equal(t, "something", serverSpan.ServiceID.UID.Namespace)
 }
 
 func TestResolveServiceFromK8s(t *testing.T) {
 	inf := &fakeInformer{}
-	db := kube2.NewStore(inf)
+	db := kube2.NewStore(inf, kube2.MetaSourceLabels{})
 	pod1 := &informer.ObjectMeta{Name: "pod1", Kind: "Service", Ips: []string{"10.0.0.1", "10.1.0.1"}}
 	pod2 := &informer.ObjectMeta{Name: "pod2", Namespace: "something", Kind: "Service", Ips: []string{"10.0.0.2", "10.1.0.2"}}
 	pod3 := &informer.ObjectMeta{Name: "pod3", Kind: "Service", Ips: []string{"10.0.0.3", "10.1.0.3"}}
@@ -142,26 +142,26 @@ func TestResolveServiceFromK8s(t *testing.T) {
 		Type: request.EventTypeHTTPClient,
 		Peer: "10.0.0.1",
 		Host: "10.0.0.2",
-		ServiceID: svc.ID{
+		ServiceID: svc.ID{UID: svc.UID{
 			Name:      "pod1",
 			Namespace: "",
-		},
+		}},
 	}
 
 	serverSpan := request.Span{
 		Type: request.EventTypeHTTP,
 		Peer: "10.0.0.1",
 		Host: "10.0.0.2",
-		ServiceID: svc.ID{
+		ServiceID: svc.ID{UID: svc.UID{
 			Name:      "pod2",
 			Namespace: "something",
-		},
+		}},
 	}
 
 	nr.resolveNames(&clientSpan)
 
 	assert.Equal(t, "pod1", clientSpan.PeerName)
-	assert.Equal(t, "", clientSpan.ServiceID.Namespace)
+	assert.Equal(t, "", clientSpan.ServiceID.UID.Namespace)
 	assert.Equal(t, "pod2", clientSpan.HostName)
 	assert.Equal(t, "something", clientSpan.OtherNamespace)
 
@@ -170,13 +170,15 @@ func TestResolveServiceFromK8s(t *testing.T) {
 	assert.Equal(t, "pod1", serverSpan.PeerName)
 	assert.Equal(t, "", serverSpan.OtherNamespace)
 	assert.Equal(t, "pod2", serverSpan.HostName)
-	assert.Equal(t, "something", serverSpan.ServiceID.Namespace)
+	assert.Equal(t, "something", serverSpan.ServiceID.UID.Namespace)
 }
 
 func TestCleanName(t *testing.T) {
 	s := svc.ID{
-		Name:      "service",
-		Namespace: "special.namespace",
+		UID: svc.UID{
+			Name:      "service",
+			Namespace: "special.namespace",
+		},
 		Metadata: map[attr.Name]string{
 			attr.K8sNamespaceName: "k8snamespace",
 		},
@@ -194,7 +196,7 @@ func TestCleanName(t *testing.T) {
 
 func TestResolveNodesFromK8s(t *testing.T) {
 	inf := &fakeInformer{}
-	db := kube2.NewStore(inf)
+	db := kube2.NewStore(inf, kube2.MetaSourceLabels{})
 	node1 := &informer.ObjectMeta{Name: "node1", Kind: "Node", Ips: []string{"10.0.0.1", "10.1.0.1"}}
 	node2 := &informer.ObjectMeta{Name: "node2", Namespace: "something", Kind: "Node", Ips: []string{"10.0.0.2", "10.1.0.2"}}
 	node3 := &informer.ObjectMeta{Name: "node3", Kind: "Node", Ips: []string{"10.0.0.3", "10.1.0.3"}}
@@ -232,26 +234,26 @@ func TestResolveNodesFromK8s(t *testing.T) {
 		Type: request.EventTypeHTTPClient,
 		Peer: "10.0.0.1",
 		Host: "10.0.0.2",
-		ServiceID: svc.ID{
+		ServiceID: svc.ID{UID: svc.UID{
 			Name:      "node1",
 			Namespace: "",
-		},
+		}},
 	}
 
 	serverSpan := request.Span{
 		Type: request.EventTypeHTTP,
 		Peer: "10.0.0.1",
 		Host: "10.0.0.2",
-		ServiceID: svc.ID{
+		ServiceID: svc.ID{UID: svc.UID{
 			Name:      "node2",
 			Namespace: "something",
-		},
+		}},
 	}
 
 	nr.resolveNames(&clientSpan)
 
 	assert.Equal(t, "node1", clientSpan.PeerName)
-	assert.Equal(t, "", clientSpan.ServiceID.Namespace)
+	assert.Equal(t, "", clientSpan.ServiceID.UID.Namespace)
 	assert.Equal(t, "node2", clientSpan.HostName)
 	assert.Equal(t, "something", clientSpan.OtherNamespace)
 
@@ -260,5 +262,5 @@ func TestResolveNodesFromK8s(t *testing.T) {
 	assert.Equal(t, "node1", serverSpan.PeerName)
 	assert.Equal(t, "", serverSpan.OtherNamespace)
 	assert.Equal(t, "node2", serverSpan.HostName)
-	assert.Equal(t, "something", serverSpan.ServiceID.Namespace)
+	assert.Equal(t, "something", serverSpan.ServiceID.UID.Namespace)
 }

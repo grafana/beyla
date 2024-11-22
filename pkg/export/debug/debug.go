@@ -83,8 +83,8 @@ func textPrinter(input <-chan []request.Span) {
 			hn := ""
 
 			if spans[i].IsClientSpan() {
-				if spans[i].ServiceID.Namespace != "" {
-					pn = "." + spans[i].ServiceID.Namespace
+				if spans[i].ServiceID.UID.Namespace != "" {
+					pn = "." + spans[i].ServiceID.UID.Namespace
 				}
 				if spans[i].OtherNamespace != "" {
 					hn = "." + spans[i].OtherNamespace
@@ -93,8 +93,8 @@ func textPrinter(input <-chan []request.Span) {
 				if spans[i].OtherNamespace != "" {
 					pn = "." + spans[i].OtherNamespace
 				}
-				if spans[i].ServiceID.Namespace != "" {
-					hn = "." + spans[i].ServiceID.Namespace
+				if spans[i].ServiceID.UID.Namespace != "" {
+					hn = "." + spans[i].ServiceID.UID.Namespace
 				}
 			}
 

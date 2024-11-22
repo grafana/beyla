@@ -234,24 +234,27 @@ func (inf *Informers) initPodInformer(ctx context.Context, informerFactory infor
 		for i := range pod.Status.ContainerStatuses {
 			containers = append(containers,
 				&informer.ContainerInfo{
-					Id:  rmContainerIDSchema(pod.Status.ContainerStatuses[i].ContainerID),
-					Env: envToMap(inf.config.kubeClient, pod.ObjectMeta, pod.Spec.Containers[i].Env),
+					Name: pod.Spec.Containers[i].Name,
+					Id:   rmContainerIDSchema(pod.Status.ContainerStatuses[i].ContainerID),
+					Env:  envToMap(inf.config.kubeClient, pod.ObjectMeta, pod.Spec.Containers[i].Env),
 				},
 			)
 		}
 		for i := range pod.Status.InitContainerStatuses {
 			containers = append(containers,
 				&informer.ContainerInfo{
-					Id:  rmContainerIDSchema(pod.Status.InitContainerStatuses[i].ContainerID),
-					Env: envToMap(inf.config.kubeClient, pod.ObjectMeta, pod.Spec.InitContainers[i].Env),
+					Name: pod.Spec.InitContainers[i].Name,
+					Id:   rmContainerIDSchema(pod.Status.InitContainerStatuses[i].ContainerID),
+					Env:  envToMap(inf.config.kubeClient, pod.ObjectMeta, pod.Spec.InitContainers[i].Env),
 				},
 			)
 		}
 		for i := range pod.Status.EphemeralContainerStatuses {
 			containers = append(containers,
 				&informer.ContainerInfo{
-					Id:  rmContainerIDSchema(pod.Status.EphemeralContainerStatuses[i].ContainerID),
-					Env: envToMap(inf.config.kubeClient, pod.ObjectMeta, pod.Spec.EphemeralContainers[i].Env),
+					Name: pod.Spec.EphemeralContainers[i].Name,
+					Id:   rmContainerIDSchema(pod.Status.EphemeralContainerStatuses[i].ContainerID),
+					Env:  envToMap(inf.config.kubeClient, pod.ObjectMeta, pod.Spec.EphemeralContainers[i].Env),
 				},
 			)
 		}

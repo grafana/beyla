@@ -36,7 +36,6 @@ message ContainerInfo {
   string id = 1;
   string name = 3;
   map<string,string> env = 2;
-  string name = 3;
 }
 
 message Owner {

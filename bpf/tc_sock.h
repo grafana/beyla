@@ -70,20 +70,22 @@ static __always_inline void sk_ops_extract_key_ip4(struct bpf_sock_ops *ops,
 
 // Extracts what we need for connection_info_t from bpf_sock_ops if the
 // communication is IPv6
-// I couldn't break this up into functions, ended up running into a verifier error about ctx already written
-__attribute__((unused)) static __always_inline void
-sk_ops_extract_key_ip6(struct bpf_sock_ops *ops, connection_info_t *conn) {
-    conn->s_ip[0] = ops->local_ip6[0];
-    conn->s_ip[1] = ops->local_ip6[1];
-    conn->s_ip[2] = ops->local_ip6[2];
-    conn->s_ip[3] = ops->local_ip6[3];
+// The order of copying the data from bpf_sock_ops matters and must match how
+// the struct is laid in vmlinux.h, otherwise the verifier thinks we are modifying
+// the context twice.
+static __always_inline void sk_ops_extract_key_ip6(struct bpf_sock_ops *ops,
+                                                   connection_info_t *conn) {
     conn->d_ip[0] = ops->remote_ip6[0];
     conn->d_ip[1] = ops->remote_ip6[1];
     conn->d_ip[2] = ops->remote_ip6[2];
     conn->d_ip[3] = ops->remote_ip6[3];
+    conn->s_ip[0] = ops->local_ip6[0];
+    conn->s_ip[1] = ops->local_ip6[1];
+    conn->s_ip[2] = ops->local_ip6[2];
+    conn->s_ip[3] = ops->local_ip6[3];
 
-    conn->s_port = ops->local_port;
     conn->d_port = bpf_ntohl(ops->remote_port);
+    conn->s_port = ops->local_port;
 }
 
 // Extracts what we need for connection_info_t from sk_msg_md if the
@@ -100,30 +102,33 @@ static __always_inline void sk_msg_extract_key_ip4(struct sk_msg_md *msg, connec
 
 // Extracts what we need for connection_info_t from sk_msg_md if the
 // communication is IPv6
-__attribute__((unused)) static __always_inline void
+// The order of copying the data from bpf_sock_ops matters and must match how
+// the struct is laid in vmlinux.h, otherwise the verifier thinks we are modifying
+// the context twice.
+__attribute__((__unused__)) static __always_inline void
 sk_msg_extract_key_ip6(struct sk_msg_md *msg, connection_info_t *conn) {
-    conn->s_ip[0] = msg->local_ip6[0];
-    conn->s_ip[1] = msg->local_ip6[1];
-    conn->s_ip[2] = msg->local_ip6[2];
-    conn->s_ip[3] = msg->local_ip6[3];
     conn->d_ip[0] = msg->remote_ip6[0];
     conn->d_ip[1] = msg->remote_ip6[1];
     conn->d_ip[2] = msg->remote_ip6[2];
     conn->d_ip[3] = msg->remote_ip6[3];
+    conn->s_ip[0] = msg->local_ip6[0];
+    conn->s_ip[1] = msg->local_ip6[1];
+    conn->s_ip[2] = msg->local_ip6[2];
+    conn->s_ip[3] = msg->local_ip6[3];
 
-    conn->s_port = msg->local_port;
     conn->d_port = bpf_ntohl(msg->remote_port);
+    conn->s_port = msg->local_port;
 }
 
 // Helper that writes in the sock map for a sock_ops program
 static __always_inline void bpf_sock_ops_establish_cb(struct bpf_sock_ops *skops) {
     connection_info_t conn = {};
 
-    // if (skops->family == AF_INET6) {
-    //     sk_ops_extract_key_ip6(skops, &conn);
-    // } else {
-    sk_ops_extract_key_ip4(skops, &conn);
-    // }
+    if (skops->family == AF_INET6) {
+        sk_ops_extract_key_ip6(skops, &conn);
+    } else {
+        sk_ops_extract_key_ip4(skops, &conn);
+    }
 
     bpf_printk("SET %llx:%d -> %llx:%d", conn.s_ip[3], conn.s_port, conn.d_ip[3], conn.d_port);
     bpf_sock_hash_update(skops, &sock_dir, &conn, BPF_ANY);
@@ -226,10 +231,6 @@ static __always_inline u8 protocol_detector(struct sk_msg_md *msg,
 // for Traffic Control to do the writing.
 SEC("sk_msg")
 int packet_extender(struct sk_msg_md *msg) {
-    // if (msg->family == AF_INET6) {
-    //     return SK_PASS;
-    // }
-
     u64 id = bpf_get_current_pid_tgid();
     connection_info_t conn = {};
 

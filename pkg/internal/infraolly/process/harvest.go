@@ -75,7 +75,7 @@ func newHarvester(cfg *CollectConfig, cache *simplelru.LRU[int32, *linuxProcess]
 // Harvest returns a status of a process whose PID is passed as argument. The 'elapsedSeconds' argument represents the
 // time since this process was statusd for the last time. If the process has been statusd for the first time, this value
 // will be ignored
-func (ps *Harvester) Harvest(svcID *svc.ID) (*Status, error) {
+func (ps *Harvester) Harvest(svcID *svc.Attrs) (*Status, error) {
 	pid := svcID.ProcPID
 	// Reuses process information that does not vary
 	cached, hasCachedEntry := ps.cache.Get(pid)

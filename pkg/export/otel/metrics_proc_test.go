@@ -55,13 +55,13 @@ func TestProcMetrics_Aggregated(t *testing.T) {
 
 	// WHEN it receives process metrics
 	metrics <- []*process.Status{
-		{ID: process.ID{Command: "foo", Service: &svc.ID{}, UID: svc.UID{Instance: "foo"}},
+		{ID: process.ID{Command: "foo", Service: &svc.Attrs{}, UID: svc.UID{Instance: "foo"}},
 			CPUUtilisationWait: 3, CPUUtilisationSystem: 2, CPUUtilisationUser: 1,
 			CPUTimeUserDelta: 30, CPUTimeWaitDelta: 20, CPUTimeSystemDelta: 10,
 			IOReadBytesDelta: 123, IOWriteBytesDelta: 456,
 			NetRcvBytesDelta: 11, NetTxBytesDelta: 22,
 		},
-		{ID: process.ID{Command: "bar", Service: &svc.ID{}, UID: svc.UID{Instance: "bar"}},
+		{ID: process.ID{Command: "bar", Service: &svc.Attrs{}, UID: svc.UID{Instance: "bar"}},
 			CPUUtilisationWait: 31, CPUUtilisationSystem: 21, CPUUtilisationUser: 11,
 			CPUTimeUserDelta: 301, CPUTimeWaitDelta: 201, CPUTimeSystemDelta: 101,
 			IOReadBytesDelta: 321, IOWriteBytesDelta: 654,
@@ -129,7 +129,7 @@ func TestProcMetrics_Aggregated(t *testing.T) {
 
 	// AND WHEN new metrics are received
 	metrics <- []*process.Status{
-		{ID: process.ID{Command: "foo", Service: &svc.ID{}, UID: svc.UID{Instance: "foo"}},
+		{ID: process.ID{Command: "foo", Service: &svc.Attrs{}, UID: svc.UID{Instance: "foo"}},
 			CPUUtilisationWait: 4, CPUUtilisationSystem: 1, CPUUtilisationUser: 2,
 			CPUTimeUserDelta: 3, CPUTimeWaitDelta: 2, CPUTimeSystemDelta: 1,
 			IOReadBytesDelta: 1, IOWriteBytesDelta: 2,
@@ -220,7 +220,7 @@ func TestProcMetrics_Disaggregated(t *testing.T) {
 
 	// WHEN it receives process metrics
 	metrics <- []*process.Status{
-		{ID: process.ID{Command: "foo", Service: &svc.ID{}, UID: svc.UID{Instance: "foo"}},
+		{ID: process.ID{Command: "foo", Service: &svc.Attrs{}, UID: svc.UID{Instance: "foo"}},
 			CPUUtilisationWait: 3, CPUUtilisationSystem: 2, CPUUtilisationUser: 1,
 			CPUTimeUserDelta: 30, CPUTimeWaitDelta: 20, CPUTimeSystemDelta: 10,
 			IOReadBytesDelta: 123, IOWriteBytesDelta: 456,

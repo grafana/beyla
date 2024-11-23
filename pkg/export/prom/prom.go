@@ -196,7 +196,7 @@ type metricsReporter struct {
 	kubeEnabled bool
 	hostID      string
 
-	serviceCache *expirable.LRU[svc.UID, svc.ID]
+	serviceCache *expirable.LRU[svc.UID, svc.Attrs]
 }
 
 func PrometheusEndpoint(
@@ -467,7 +467,7 @@ func newReporter(
 	}
 
 	if cfg.SpanMetricsEnabled() {
-		mr.serviceCache = expirable.NewLRU(cfg.SpanMetricsServiceCacheSize, func(_ svc.UID, v svc.ID) {
+		mr.serviceCache = expirable.NewLRU(cfg.SpanMetricsServiceCacheSize, func(_ svc.UID, v svc.Attrs) {
 			lv := mr.labelValuesTargetInfo(v)
 			mr.tracesTargetInfo.WithLabelValues(lv...).metric.Sub(1)
 		}, cfg.TTL)
@@ -578,7 +578,7 @@ func (r *metricsReporter) collectMetrics(input <-chan []request.Span) {
 }
 
 func (r *metricsReporter) otelSpanObserved(span *request.Span) bool {
-	return r.cfg.OTelMetricsEnabled() && !span.ServiceID.ExportsOTelMetrics()
+	return r.cfg.OTelMetricsEnabled() && !span.Service.ExportsOTelMetrics()
 }
 
 // nolint:cyclop
@@ -587,10 +587,10 @@ func (r *metricsReporter) observe(span *request.Span) {
 		return
 	}
 	t := span.Timings()
-	r.beylaInfo.WithLabelValues(span.ServiceID.SDKLanguage.String()).metric.Set(1.0)
+	r.beylaInfo.WithLabelValues(span.Service.SDKLanguage.String()).metric.Set(1.0)
 	duration := t.End.Sub(t.RequestStart).Seconds()
 
-	targetInfoLabelValues := r.labelValuesTargetInfo(span.ServiceID)
+	targetInfoLabelValues := r.labelValuesTargetInfo(span.Service)
 	r.targetInfo.WithLabelValues(targetInfoLabelValues...).metric.Set(1)
 
 	if r.otelSpanObserved(span) {
@@ -653,9 +653,9 @@ func (r *metricsReporter) observe(span *request.Span) {
 		r.spanMetricsCallsTotal.WithLabelValues(lv...).metric.Add(1)
 		r.spanMetricsSizeTotal.WithLabelValues(lv...).metric.Add(float64(span.RequestLength()))
 
-		_, ok := r.serviceCache.Get(span.ServiceID.UID)
+		_, ok := r.serviceCache.Get(span.Service.UID)
 		if !ok {
-			r.serviceCache.Add(span.ServiceID.UID, span.ServiceID)
+			r.serviceCache.Add(span.Service.UID, span.Service)
 			r.tracesTargetInfo.WithLabelValues(targetInfoLabelValues...).metric.Add(1)
 		}
 	}
@@ -682,7 +682,7 @@ func appendK8sLabelNames(names []string) []string {
 	return names
 }
 
-func appendK8sLabelValuesService(values []string, service svc.ID) []string {
+func appendK8sLabelValuesService(values []string, service svc.Attrs) []string {
 	// must follow the order in appendK8sLabelNames
 	values = append(values,
 		service.Metadata[(attr.K8sNamespaceName)],
@@ -705,13 +705,13 @@ func labelNamesSpans() []string {
 
 func (r *metricsReporter) labelValuesSpans(span *request.Span) []string {
 	return []string{
-		span.ServiceID.UID.Name,
-		span.ServiceID.UID.Namespace,
+		span.Service.UID.Name,
+		span.Service.UID.Namespace,
 		span.TraceName(),
 		strconv.Itoa(int(request.SpanStatusCode(span))),
 		span.ServiceGraphKind(),
-		string(span.ServiceID.UID.Instance), // app instance ID
-		span.ServiceID.Job(),
+		span.Service.UID.Instance, // app instance ID
+		span.Service.Job(),
 		"beyla",
 	}
 }
@@ -726,7 +726,7 @@ func labelNamesTargetInfo(kubeEnabled bool) []string {
 	return names
 }
 
-func (r *metricsReporter) labelValuesTargetInfo(service svc.ID) []string {
+func (r *metricsReporter) labelValuesTargetInfo(service svc.Attrs) []string {
 	values := []string{
 		r.hostID,
 		service.HostName,
@@ -754,7 +754,7 @@ func (r *metricsReporter) labelValuesServiceGraph(span *request.Span) []string {
 	if span.IsClientSpan() {
 		return []string{
 			request.SpanPeer(span),
-			span.ServiceID.UID.Namespace,
+			span.Service.UID.Namespace,
 			request.SpanHost(span),
 			span.OtherNamespace,
 			"beyla",
@@ -764,7 +764,7 @@ func (r *metricsReporter) labelValuesServiceGraph(span *request.Span) []string {
 		request.SpanPeer(span),
 		span.OtherNamespace,
 		request.SpanHost(span),
-		span.ServiceID.UID.Namespace,
+		span.Service.UID.Namespace,
 		"beyla",
 	}
 }

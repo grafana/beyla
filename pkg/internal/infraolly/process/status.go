@@ -17,7 +17,7 @@ func pslog() *slog.Logger {
 }
 
 type ID struct {
-	Service *svc.ID
+	Service *svc.Attrs
 
 	// UID for a process. Even if the Service field has its own UID,
 	// a service might have multiple processes, so Application and Process
@@ -73,7 +73,7 @@ type Status struct {
 	NetRcvBytesDelta int64
 }
 
-func NewStatus(pid int32, svcID *svc.ID) *Status {
+func NewStatus(pid int32, svcID *svc.Attrs) *Status {
 	return &Status{ID: ID{
 		ProcessID: pid,
 		Service:   svcID,

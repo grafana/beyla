@@ -70,8 +70,8 @@ func NewCollectorProvider(ctx context.Context, input *<-chan []request.Span, cfg
 }
 
 func (ps *Collector) Run(out chan<- []*Status) {
-	// TODO: set app metadata as key for later decoration? (e.g. K8s metadata, svc.ID)
-	pids := map[int32]*svc.ID{}
+	// TODO: set app metadata as key for later decoration? (e.g. K8s metadata, svc.Attrs)
+	pids := map[int32]*svc.Attrs{}
 	collectTicker := time.NewTicker(ps.cfg.Interval)
 	defer collectTicker.Stop()
 	newPids := *ps.newPids
@@ -82,7 +82,7 @@ func (ps *Collector) Run(out chan<- []*Status) {
 		case spans := <-newPids:
 			// updating PIDs map with spans information
 			for i := range spans {
-				pids[spans[i].ServiceID.ProcPID] = &spans[i].ServiceID
+				pids[spans[i].Service.ProcPID] = &spans[i].Service
 			}
 		case <-collectTicker.C:
 			procs, removed := ps.Collect(pids)
@@ -96,7 +96,7 @@ func (ps *Collector) Run(out chan<- []*Status) {
 
 // Collect returns the status for all the running processes, decorated with Docker runtime information, if applies.
 // It also returns the PIDs that have to be removed from the map, as they do not exist anymore
-func (ps *Collector) Collect(pids map[int32]*svc.ID) ([]*Status, []int32) {
+func (ps *Collector) Collect(pids map[int32]*svc.Attrs) ([]*Status, []int32) {
 	results := make([]*Status, 0, len(pids))
 
 	var removed []int32

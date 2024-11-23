@@ -31,7 +31,7 @@ type tracesReceiver struct {
 }
 
 func (tr *tracesReceiver) spanDiscarded(span *request.Span) bool {
-	return span.IgnoreTraces() || span.ServiceID.ExportsOTelTraces()
+	return span.IgnoreTraces() || span.Service.ExportsOTelTraces()
 }
 
 func (tr *tracesReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], error) {
@@ -51,7 +51,7 @@ func (tr *tracesReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], error) 
 				if tr.spanDiscarded(span) {
 					continue
 				}
-				envResourceAttrs := otel.ResourceAttrsFromEnv(&span.ServiceID)
+				envResourceAttrs := otel.ResourceAttrsFromEnv(&span.Service)
 
 				for _, tc := range tr.cfg.Traces {
 					traces := otel.GenerateTraces(span, tr.hostID, traceAttrs, envResourceAttrs)

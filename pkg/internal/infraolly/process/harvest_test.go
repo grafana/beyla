@@ -49,7 +49,7 @@ func TestLinuxHarvester_IsPrivileged(t *testing.T) {
 			h := newHarvester(&CollectConfig{RunMode: c.mode}, cache)
 
 			// If not privileged, it is expected to not report neither FDs nor IO counters
-			status, err := h.Harvest(&svc.ID{ProcPID: int32(os.Getpid())})
+			status, err := h.Harvest(&svc.Attrs{ProcPID: int32(os.Getpid())})
 			require.NoError(t, err)
 			if c.privileged {
 				assert.NotZero(t, status.FdCount)
@@ -68,7 +68,7 @@ func TestLinuxHarvester_Harvest(t *testing.T) {
 	h := newHarvester(&CollectConfig{}, cache)
 
 	// When retrieving for a given process status (e.g. the current testing executable)
-	status, err := h.Harvest(&svc.ID{ProcPID: int32(os.Getpid())})
+	status, err := h.Harvest(&svc.Attrs{ProcPID: int32(os.Getpid())})
 
 	// It returns the corresponding process status with valid data
 	require.NoError(t, err)
@@ -99,7 +99,7 @@ func TestLinuxHarvester_Harvest_FullCommandLine(t *testing.T) {
 		h := newHarvester(&CollectConfig{}, cache)
 
 		// When retrieving for a given process status (e.g. the current testing executable)
-		status, err := h.Harvest(&svc.ID{ProcPID: int32(cmd.Process.Pid)})
+		status, err := h.Harvest(&svc.Attrs{ProcPID: int32(cmd.Process.Pid)})
 
 		// It returns the corresponding Command line without stripping arguments
 		require.NoError(t, err)
@@ -123,7 +123,7 @@ func TestLinuxHarvester_Do_InvalidateCache_DifferentCmd(t *testing.T) {
 	h := newHarvester(&CollectConfig{}, cache)
 
 	// When the process is harvested
-	status, err := h.Harvest(&svc.ID{ProcPID: currentPid})
+	status, err := h.Harvest(&svc.Attrs{ProcPID: currentPid})
 	require.NoError(t, err)
 
 	// The status is updated
@@ -141,7 +141,7 @@ func TestLinuxHarvester_Do_InvalidateCache_DifferentPid(t *testing.T) {
 	h := newHarvester(&CollectConfig{}, cache)
 
 	// When the process is harvested
-	status, err := h.Harvest(&svc.ID{ProcPID: currentPid})
+	status, err := h.Harvest(&svc.Attrs{ProcPID: currentPid})
 	require.NoError(t, err)
 
 	// The status is updated

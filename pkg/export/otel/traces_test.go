@@ -594,7 +594,7 @@ func TestGenerateTracesAttributes(t *testing.T) {
 		defer restoreEnvAfterExecution()()
 		require.NoError(t, os.Setenv(envResourceAttrs, "deployment.environment=productions,source.upstream=beyla"))
 		span := request.Span{Type: request.EventTypeHTTP, Method: "GET", Route: "/test", Status: 200}
-		traces := GenerateTraces(&span, "host-id", map[attr.Name]struct{}{}, ResourceAttrsFromEnv(&span.ServiceID))
+		traces := GenerateTraces(&span, "host-id", map[attr.Name]struct{}{}, ResourceAttrsFromEnv(&span.Service))
 
 		assert.Equal(t, 1, traces.ResourceSpans().Len())
 		rs := traces.ResourceSpans().At(0)
@@ -615,7 +615,7 @@ func TestTraceSampling(t *testing.T) {
 			Method:       "GET",
 			Route:        "/test" + strconv.Itoa(i),
 			Status:       200,
-			ServiceID:    svc.ID{},
+			Service:      svc.Attrs{},
 			TraceID:      randomTraceID(),
 		}
 		spans = append(spans, span)
@@ -841,13 +841,13 @@ func TestTracesInstrumentations(t *testing.T) {
 	}
 
 	spans := []request.Span{
-		{ServiceID: svc.ID{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeHTTP, Method: "GET", Route: "/foo", RequestStart: 100, End: 200},
-		{ServiceID: svc.ID{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeHTTPClient, Method: "PUT", Route: "/bar", RequestStart: 150, End: 175},
-		{ServiceID: svc.ID{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeGRPC, Path: "/grpcFoo", RequestStart: 100, End: 200},
-		{ServiceID: svc.ID{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeGRPCClient, Path: "/grpcGoo", RequestStart: 150, End: 175},
+		{Service: svc.Attrs{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeHTTP, Method: "GET", Route: "/foo", RequestStart: 100, End: 200},
+		{Service: svc.Attrs{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeHTTPClient, Method: "PUT", Route: "/bar", RequestStart: 150, End: 175},
+		{Service: svc.Attrs{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeGRPC, Path: "/grpcFoo", RequestStart: 100, End: 200},
+		{Service: svc.Attrs{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeGRPCClient, Path: "/grpcGoo", RequestStart: 150, End: 175},
 		makeSQLRequestSpan("SELECT password FROM credentials WHERE username=\"bill\""),
-		{ServiceID: svc.ID{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeRedisClient, Method: "SET", Path: "redis_db", RequestStart: 150, End: 175},
-		{ServiceID: svc.ID{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeRedisServer, Method: "GET", Path: "redis_db", RequestStart: 150, End: 175},
+		{Service: svc.Attrs{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeRedisClient, Method: "SET", Path: "redis_db", RequestStart: 150, End: 175},
+		{Service: svc.Attrs{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeRedisServer, Method: "GET", Path: "redis_db", RequestStart: 150, End: 175},
 		{Type: request.EventTypeKafkaClient, Method: "process", Path: "important-topic", Statement: "test"},
 		{Type: request.EventTypeKafkaServer, Method: "publish", Path: "important-topic", Statement: "test"},
 	}
@@ -977,16 +977,16 @@ func TestTracesAttrReuse(t *testing.T) {
 	}{
 		{
 			name: "Reuses the trace attributes, with svc.Instance defined",
-			span: request.Span{ServiceID: svc.ID{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeHTTP, Method: "GET", Route: "/foo", RequestStart: 100, End: 200},
+			span: request.Span{Service: svc.Attrs{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeHTTP, Method: "GET", Route: "/foo", RequestStart: 100, End: 200},
 			same: true,
 		},
 		{
 			name: "No Instance, no caching of trace attributes",
-			span: request.Span{ServiceID: svc.ID{}, Type: request.EventTypeHTTP, Method: "GET", Route: "/foo", RequestStart: 100, End: 200},
+			span: request.Span{Service: svc.Attrs{}, Type: request.EventTypeHTTP, Method: "GET", Route: "/foo", RequestStart: 100, End: 200},
 			same: false,
 		},
 		{
-			name: "No ServiceID, no caching of trace attributes",
+			name: "No Service, no caching of trace attributes",
 			span: request.Span{Type: request.EventTypeHTTP, Method: "GET", Route: "/foo", RequestStart: 100, End: 200},
 			same: false,
 		},
@@ -994,20 +994,20 @@ func TestTracesAttrReuse(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			attr1 := traceAppResourceAttrs("123", &tt.span.ServiceID)
-			attr2 := traceAppResourceAttrs("123", &tt.span.ServiceID)
+			attr1 := traceAppResourceAttrs("123", &tt.span.Service)
+			attr2 := traceAppResourceAttrs("123", &tt.span.Service)
 			assert.Equal(t, tt.same, &attr1[0] == &attr2[0], tt.name)
 		})
 	}
 }
 
 func TestTracesSkipsInstrumented(t *testing.T) {
-	svcNoExport := svc.ID{}
+	svcNoExport := svc.Attrs{}
 
-	svcNoExportTraces := svc.ID{}
+	svcNoExportTraces := svc.Attrs{}
 	svcNoExportTraces.SetExportsOTelMetrics()
 
-	svcExportTraces := svc.ID{}
+	svcExportTraces := svc.Attrs{}
 	svcExportTraces.SetExportsOTelTraces()
 
 	tests := []struct {
@@ -1017,17 +1017,17 @@ func TestTracesSkipsInstrumented(t *testing.T) {
 	}{
 		{
 			name:     "Foo span is not filtered",
-			spans:    []request.Span{{ServiceID: svcNoExport, Type: request.EventTypeHTTPClient, Method: "GET", Route: "/foo", RequestStart: 100, End: 200}},
+			spans:    []request.Span{{Service: svcNoExport, Type: request.EventTypeHTTPClient, Method: "GET", Route: "/foo", RequestStart: 100, End: 200}},
 			filtered: false,
 		},
 		{
 			name:     "/v1/metrics span is not filtered",
-			spans:    []request.Span{{ServiceID: svcNoExportTraces, Type: request.EventTypeHTTPClient, Method: "GET", Route: "/v1/metrics", RequestStart: 100, End: 200}},
+			spans:    []request.Span{{Service: svcNoExportTraces, Type: request.EventTypeHTTPClient, Method: "GET", Route: "/v1/metrics", RequestStart: 100, End: 200}},
 			filtered: false,
 		},
 		{
 			name:     "/v1/traces span is filtered",
-			spans:    []request.Span{{ServiceID: svcExportTraces, Type: request.EventTypeHTTPClient, Method: "GET", Route: "/v1/traces", RequestStart: 100, End: 200}},
+			spans:    []request.Span{{Service: svcExportTraces, Type: request.EventTypeHTTPClient, Method: "GET", Route: "/v1/traces", RequestStart: 100, End: 200}},
 			filtered: true,
 		},
 	}
@@ -1210,91 +1210,91 @@ func TestHostPeerAttributes(t *testing.T) {
 	}{
 		{
 			name:   "Same namespaces HTTP",
-			span:   request.Span{Type: request.EventTypeHTTP, PeerName: "client", HostName: "server", OtherNamespace: "same", ServiceID: svc.ID{UID: svc.UID{Namespace: "same"}}},
+			span:   request.Span{Type: request.EventTypeHTTP, PeerName: "client", HostName: "server", OtherNamespace: "same", Service: svc.Attrs{UID: svc.UID{Namespace: "same"}}},
 			client: "client",
 			server: "server",
 		},
 		{
 			name:   "Client in different namespace",
-			span:   request.Span{Type: request.EventTypeHTTP, PeerName: "client", HostName: "server", OtherNamespace: "far", ServiceID: svc.ID{UID: svc.UID{Namespace: "same"}}},
+			span:   request.Span{Type: request.EventTypeHTTP, PeerName: "client", HostName: "server", OtherNamespace: "far", Service: svc.Attrs{UID: svc.UID{Namespace: "same"}}},
 			client: "client.far",
 			server: "server",
 		},
 		{
 			name:   "Same namespaces for HTTP client",
-			span:   request.Span{Type: request.EventTypeHTTPClient, PeerName: "client", HostName: "server", OtherNamespace: "same", ServiceID: svc.ID{UID: svc.UID{Namespace: "same"}}},
+			span:   request.Span{Type: request.EventTypeHTTPClient, PeerName: "client", HostName: "server", OtherNamespace: "same", Service: svc.Attrs{UID: svc.UID{Namespace: "same"}}},
 			client: "client",
 			server: "server",
 		},
 		{
 			name:   "Server in different namespace ",
-			span:   request.Span{Type: request.EventTypeHTTPClient, PeerName: "client", HostName: "server", OtherNamespace: "far", ServiceID: svc.ID{UID: svc.UID{Namespace: "same"}}},
+			span:   request.Span{Type: request.EventTypeHTTPClient, PeerName: "client", HostName: "server", OtherNamespace: "far", Service: svc.Attrs{UID: svc.UID{Namespace: "same"}}},
 			client: "client",
 			server: "server.far",
 		},
 		{
 			name:   "Same namespaces GRPC",
-			span:   request.Span{Type: request.EventTypeGRPC, PeerName: "client", HostName: "server", OtherNamespace: "same", ServiceID: svc.ID{UID: svc.UID{Namespace: "same"}}},
+			span:   request.Span{Type: request.EventTypeGRPC, PeerName: "client", HostName: "server", OtherNamespace: "same", Service: svc.Attrs{UID: svc.UID{Namespace: "same"}}},
 			client: "client",
 			server: "server",
 		},
 		{
 			name:   "Client in different namespace GRPC",
-			span:   request.Span{Type: request.EventTypeGRPC, PeerName: "client", HostName: "server", OtherNamespace: "far", ServiceID: svc.ID{UID: svc.UID{Namespace: "same"}}},
+			span:   request.Span{Type: request.EventTypeGRPC, PeerName: "client", HostName: "server", OtherNamespace: "far", Service: svc.Attrs{UID: svc.UID{Namespace: "same"}}},
 			client: "client.far",
 			server: "server",
 		},
 		{
 			name:   "Same namespaces for GRPC client",
-			span:   request.Span{Type: request.EventTypeGRPCClient, PeerName: "client", HostName: "server", OtherNamespace: "same", ServiceID: svc.ID{UID: svc.UID{Namespace: "same"}}},
+			span:   request.Span{Type: request.EventTypeGRPCClient, PeerName: "client", HostName: "server", OtherNamespace: "same", Service: svc.Attrs{UID: svc.UID{Namespace: "same"}}},
 			client: "client",
 			server: "server",
 		},
 		{
 			name:   "Server in different namespace GRPC",
-			span:   request.Span{Type: request.EventTypeGRPCClient, PeerName: "client", HostName: "server", OtherNamespace: "far", ServiceID: svc.ID{UID: svc.UID{Namespace: "same"}}},
+			span:   request.Span{Type: request.EventTypeGRPCClient, PeerName: "client", HostName: "server", OtherNamespace: "far", Service: svc.Attrs{UID: svc.UID{Namespace: "same"}}},
 			client: "client",
 			server: "server.far",
 		},
 		{
 			name:   "Same namespaces for SQL client",
-			span:   request.Span{Type: request.EventTypeSQLClient, PeerName: "client", HostName: "server", OtherNamespace: "same", ServiceID: svc.ID{UID: svc.UID{Namespace: "same"}}},
+			span:   request.Span{Type: request.EventTypeSQLClient, PeerName: "client", HostName: "server", OtherNamespace: "same", Service: svc.Attrs{UID: svc.UID{Namespace: "same"}}},
 			client: "",
 			server: "server",
 		},
 		{
 			name:   "Server in different namespace SQL",
-			span:   request.Span{Type: request.EventTypeSQLClient, PeerName: "client", HostName: "server", OtherNamespace: "far", ServiceID: svc.ID{UID: svc.UID{Namespace: "same"}}},
+			span:   request.Span{Type: request.EventTypeSQLClient, PeerName: "client", HostName: "server", OtherNamespace: "far", Service: svc.Attrs{UID: svc.UID{Namespace: "same"}}},
 			client: "",
 			server: "server.far",
 		},
 		{
 			name:   "Same namespaces for Redis client",
-			span:   request.Span{Type: request.EventTypeRedisClient, PeerName: "client", HostName: "server", OtherNamespace: "same", ServiceID: svc.ID{UID: svc.UID{Namespace: "same"}}},
+			span:   request.Span{Type: request.EventTypeRedisClient, PeerName: "client", HostName: "server", OtherNamespace: "same", Service: svc.Attrs{UID: svc.UID{Namespace: "same"}}},
 			client: "",
 			server: "server",
 		},
 		{
 			name:   "Server in different namespace Redis",
-			span:   request.Span{Type: request.EventTypeRedisClient, PeerName: "client", HostName: "server", OtherNamespace: "far", ServiceID: svc.ID{UID: svc.UID{Namespace: "same"}}},
+			span:   request.Span{Type: request.EventTypeRedisClient, PeerName: "client", HostName: "server", OtherNamespace: "far", Service: svc.Attrs{UID: svc.UID{Namespace: "same"}}},
 			client: "",
 			server: "server.far",
 		},
 		{
 			name:   "Client in different namespace Redis",
-			span:   request.Span{Type: request.EventTypeRedisServer, PeerName: "client", HostName: "server", OtherNamespace: "far", ServiceID: svc.ID{UID: svc.UID{Namespace: "same"}}},
+			span:   request.Span{Type: request.EventTypeRedisServer, PeerName: "client", HostName: "server", OtherNamespace: "far", Service: svc.Attrs{UID: svc.UID{Namespace: "same"}}},
 			client: "",
 			server: "server",
 		},
 		{
 			name:   "Server in different namespace Kafka",
-			span:   request.Span{Type: request.EventTypeKafkaClient, PeerName: "client", HostName: "server", OtherNamespace: "far", ServiceID: svc.ID{UID: svc.UID{Namespace: "same"}}},
+			span:   request.Span{Type: request.EventTypeKafkaClient, PeerName: "client", HostName: "server", OtherNamespace: "far", Service: svc.Attrs{UID: svc.UID{Namespace: "same"}}},
 			client: "",
 			server: "server.far",
 		},
 		{
 			name:   "Client in different namespace Kafka",
-			span:   request.Span{Type: request.EventTypeKafkaServer, PeerName: "client", HostName: "server", OtherNamespace: "far", ServiceID: svc.ID{UID: svc.UID{Namespace: "same"}}},
+			span:   request.Span{Type: request.EventTypeKafkaServer, PeerName: "client", HostName: "server", OtherNamespace: "far", Service: svc.Attrs{UID: svc.UID{Namespace: "same"}}},
 			client: "",
 			server: "server",
 		},

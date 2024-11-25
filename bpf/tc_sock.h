@@ -107,17 +107,11 @@ static __always_inline void sk_msg_extract_key_ip4(struct sk_msg_md *msg, connec
 // the context twice.
 __attribute__((__unused__)) static __always_inline void
 sk_msg_extract_key_ip6(struct sk_msg_md *msg, connection_info_t *conn) {
-    conn->d_ip[0] = msg->remote_ip6[0];
-    conn->d_ip[1] = msg->remote_ip6[1];
-    conn->d_ip[2] = msg->remote_ip6[2];
-    conn->d_ip[3] = msg->remote_ip6[3];
-    conn->s_ip[0] = msg->local_ip6[0];
-    conn->s_ip[1] = msg->local_ip6[1];
-    conn->s_ip[2] = msg->local_ip6[2];
-    conn->s_ip[3] = msg->local_ip6[3];
+    sk_msg_read_remote_ip6(msg, conn->d_ip);
+    sk_msg_read_local_ip6(msg, conn->s_ip);
 
-    conn->d_port = bpf_ntohl(msg->remote_port);
-    conn->s_port = msg->local_port;
+    conn->d_port = bpf_ntohl(sk_msg_remote_port(msg));
+    conn->s_port = sk_msg_local_port(msg);
 }
 
 // Helper that writes in the sock map for a sock_ops program
@@ -234,11 +228,11 @@ int packet_extender(struct sk_msg_md *msg) {
     u64 id = bpf_get_current_pid_tgid();
     connection_info_t conn = {};
 
-    // if (msg->family == AF_INET6) {
-    //     sk_msg_extract_key_ip6(msg, &conn);
-    // } else {
-    sk_msg_extract_key_ip4(msg, &conn);
-    // }
+    if (msg->family == AF_INET6) {
+        sk_msg_extract_key_ip6(msg, &conn);
+    } else {
+        sk_msg_extract_key_ip4(msg, &conn);
+    }
     u8 tracked = is_tracked(&conn);
 
     // We need two types of checks here. Valid PID only works for kprobes since

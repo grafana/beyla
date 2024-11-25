@@ -187,7 +187,7 @@ func (m *SockFlowFetcher) LookupAndDeleteMap() map[NetFlowId][]NetFlowMetrics {
 	// TODO: detect whether LookupAndDelete is supported (Kernel>=4.20) and use it selectively
 	for iterator.Next(&id, &metrics) {
 		if err := flowMap.Delete(id); err != nil {
-			tlog().Warn("couldn't delete flow entry", "flowId", id)
+			tlog().Debug("couldn't delete flow entry", "flowId", id, "error", err)
 		}
 		// We observed that eBFP PerCPU map might insert multiple times the same key in the map
 		// (probably due to race conditions) so we need to re-join metrics again at userspace

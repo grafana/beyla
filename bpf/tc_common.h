@@ -70,7 +70,8 @@ static __always_inline void *ctx_data_end(struct __sk_buff *ctx) {
     return data_end;
 }
 
-static __always_inline void sk_msg_read_remote_ip6(struct sk_msg_md *ctx, u32 *res) {
+static __always_inline void
+sk_msg_read_remote_ip6(struct sk_msg_md *ctx, u32 *res) { //NOLINT(readability-non-const-parameter)
     asm("%[res0] = *(u32 *)(%[base] + %[offset] + 0)\n"
         "%[res1] = *(u32 *)(%[base] + %[offset] + 4)\n"
         "%[res2] = *(u32 *)(%[base] + %[offset] + 8)\n"
@@ -79,7 +80,8 @@ static __always_inline void sk_msg_read_remote_ip6(struct sk_msg_md *ctx, u32 *r
         : [base] "r"(ctx), [offset] "i"(offsetof(struct sk_msg_md, remote_ip6)), "m"(*ctx));
 }
 
-static __always_inline void sk_msg_read_local_ip6(struct sk_msg_md *ctx, u32 *res) {
+static __always_inline void
+sk_msg_read_local_ip6(struct sk_msg_md *ctx, u32 *res) { //NOLINT(readability-non-const-parameter)
     asm("%[res0] = *(u32 *)(%[base] + %[offset] + 0)\n"
         "%[res1] = *(u32 *)(%[base] + %[offset] + 4)\n"
         "%[res2] = *(u32 *)(%[base] + %[offset] + 8)\n"

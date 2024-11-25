@@ -170,7 +170,7 @@ func GetUserSelectedAttributes(attrs attributes.Selection) (map[attr.Name]struct
 }
 
 func (tr *tracesOTELReceiver) spanDiscarded(span *request.Span) bool {
-	return span.IgnoreTraces() || span.ServiceID.ExportsOTelTraces() || !tr.acceptSpan(span)
+	return span.IgnoreTraces() || span.Service.ExportsOTelTraces() || !tr.acceptSpan(span)
 }
 
 func (tr *tracesOTELReceiver) processSpans(exp exporter.Traces, spans []request.Span, traceAttrs map[attr.Name]struct{}, sampler trace.Sampler) {
@@ -197,7 +197,7 @@ func (tr *tracesOTELReceiver) processSpans(exp exporter.Traces, spans []request.
 			continue
 		}
 
-		envResourceAttrs := ResourceAttrsFromEnv(&span.ServiceID)
+		envResourceAttrs := ResourceAttrsFromEnv(&span.Service)
 		traces := GenerateTracesWithAttributes(span, tr.ctxInfo.HostID, finalAttrs, envResourceAttrs)
 		err := exp.ConsumeTraces(tr.ctx, traces)
 		if err != nil {
@@ -409,8 +409,9 @@ func getRetrySettings(cfg TracesConfig) configretry.BackOffConfig {
 	return backOffCfg
 }
 
-func traceAppResourceAttrs(hostID string, service *svc.ID) []attribute.KeyValue {
-	if service.UID == "" {
+func traceAppResourceAttrs(hostID string, service *svc.Attrs) []attribute.KeyValue {
+	// TODO: remove?
+	if service.UID == emptyUID {
 		return getAppResourceAttrs(hostID, service)
 	}
 
@@ -431,7 +432,7 @@ func GenerateTracesWithAttributes(span *request.Span, hostID string, attrs []att
 	traces := ptrace.NewTraces()
 	rs := traces.ResourceSpans().AppendEmpty()
 	ss := rs.ScopeSpans().AppendEmpty()
-	resourceAttrs := traceAppResourceAttrs(hostID, &span.ServiceID)
+	resourceAttrs := traceAppResourceAttrs(hostID, &span.Service)
 	resourceAttrs = append(resourceAttrs, envResourceAttrs...)
 	resourceAttrsMap := attrsToMap(resourceAttrs)
 	resourceAttrsMap.PutStr(string(semconv.OTelLibraryNameKey), reporterName)

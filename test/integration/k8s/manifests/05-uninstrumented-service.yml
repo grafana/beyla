@@ -33,6 +33,8 @@ metadata:
   name: testserver
   labels:
     app: testserver
+    app.kubernetes.io/name: 'overridden-testserver-name'
+    app.kubernetes.io/part-of: 'overridden-testserver-namespace'
 spec:
   replicas: 1
   selector:

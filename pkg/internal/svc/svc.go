@@ -54,18 +54,20 @@ const (
 	exportsOTelTraces  idFlags = 0x4
 )
 
-// ID stores the metadata attributes of a service/resource
-// TODO: rename to svc.Attributes
-type ID struct {
-	// UID uniquely identifies a service instance. It is not exported
-	// in the metrics or traces, but it is used to compose the InstanceID
+// UID uniquely identifies a service instance across the whole system
+// according to the OpenTelemetry specification: (name, namespace, instance)
+type UID struct {
+	Name      string
+	Namespace string
+	Instance  string
+}
+
+// Attrs stores the metadata attributes of a service/resource
+type Attrs struct {
+	// Instance uniquely identifies a service instance. It is not exported
+	// in the metrics or traces, but it is used to compose the Instance
 	UID UID
 
-	Name string
-	// AutoName is true if the Name has been automatically set by Beyla (e.g. executable name when
-	// the Name is empty). This will allow later refinement of the Name value (e.g. to override it
-	// again with Kubernetes metadata).
-	Namespace   string
 	SDKLanguage InstrumentableType
 
 	Metadata map[attr.Name]string
@@ -84,49 +86,49 @@ type ID struct {
 	flags idFlags
 }
 
-func (i *ID) GetUID() UID {
+func (i *Attrs) GetUID() UID {
 	return i.UID
 }
 
-func (i *ID) String() string {
+func (i *Attrs) String() string {
 	return i.Job()
 }
 
-func (i *ID) Job() string {
-	if i.Namespace != "" {
-		return i.Namespace + "/" + i.Name
+func (i *Attrs) Job() string {
+	if i.UID.Namespace != "" {
+		return i.UID.Namespace + "/" + i.UID.Name
 	}
-	return i.Name
+	return i.UID.Name
 }
 
-func (i *ID) setFlag(flag idFlags) {
+func (i *Attrs) setFlag(flag idFlags) {
 	i.flags |= flag
 }
 
-func (i *ID) getFlag(flag idFlags) bool {
+func (i *Attrs) getFlag(flag idFlags) bool {
 	return (i.flags & flag) == flag
 }
 
-func (i *ID) SetAutoName() {
+func (i *Attrs) SetAutoName() {
 	i.setFlag(autoName)
 }
 
-func (i *ID) AutoName() bool {
+func (i *Attrs) AutoName() bool {
 	return i.getFlag(autoName)
 }
 
-func (i *ID) SetExportsOTelMetrics() {
+func (i *Attrs) SetExportsOTelMetrics() {
 	i.setFlag(exportsOTelMetrics)
 }
 
-func (i *ID) ExportsOTelMetrics() bool {
+func (i *Attrs) ExportsOTelMetrics() bool {
 	return i.getFlag(exportsOTelMetrics)
 }
 
-func (i *ID) SetExportsOTelTraces() {
+func (i *Attrs) SetExportsOTelTraces() {
 	i.setFlag(exportsOTelTraces)
 }
 
-func (i *ID) ExportsOTelTraces() bool {
+func (i *Attrs) ExportsOTelTraces() bool {
 	return i.getFlag(exportsOTelTraces)
 }

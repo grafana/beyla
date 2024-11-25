@@ -1068,7 +1068,7 @@ property to use exactly the provided URL without any addition.
 
 | YAML               | Environment variable                  | Type            | Default                      |
 |--------------------|---------------------------------------|-----------------|------------------------------|
-| `instrumentations` | `BEYLA_PROMETHEUS_INSTRUMENTATIONS`   | list of strings | `["*"]` |
+| `instrumentations` | `BEYLA_OTEL_TRACES_INSTRUMENTATIONS`   | list of strings | `["*"]` |
 
 A list of available **instrumentations** which are enabled, defined a comma separated list of strings. 
 By default all available **instrumentations** are enabled, and you can choose to enable only some. 

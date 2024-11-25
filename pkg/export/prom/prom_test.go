@@ -274,15 +274,15 @@ func TestAppMetrics_ByInstrumentation(t *testing.T) {
 			go exporter(metrics)
 
 			metrics <- []request.Span{
-				{ServiceID: svc.ID{UID: "foo"}, Type: request.EventTypeHTTP, Path: "/foo", RequestStart: 100, End: 200},
-				{ServiceID: svc.ID{UID: "foo"}, Type: request.EventTypeHTTPClient, Path: "/bar", RequestStart: 150, End: 175},
-				{ServiceID: svc.ID{UID: "foo"}, Type: request.EventTypeGRPC, Path: "/foo", RequestStart: 100, End: 200},
-				{ServiceID: svc.ID{UID: "foo"}, Type: request.EventTypeGRPCClient, Path: "/bar", RequestStart: 150, End: 175},
-				{ServiceID: svc.ID{UID: "foo"}, Type: request.EventTypeSQLClient, Path: "SELECT", RequestStart: 150, End: 175},
-				{ServiceID: svc.ID{UID: "foo"}, Type: request.EventTypeRedisClient, Method: "SET", RequestStart: 150, End: 175},
-				{ServiceID: svc.ID{UID: "foo"}, Type: request.EventTypeRedisServer, Method: "GET", RequestStart: 150, End: 175},
-				{ServiceID: svc.ID{UID: "foo"}, Type: request.EventTypeKafkaClient, Method: "publish", RequestStart: 150, End: 175},
-				{ServiceID: svc.ID{UID: "foo"}, Type: request.EventTypeKafkaServer, Method: "process", RequestStart: 150, End: 175},
+				{Service: svc.Attrs{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeHTTP, Path: "/foo", RequestStart: 100, End: 200},
+				{Service: svc.Attrs{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeHTTPClient, Path: "/bar", RequestStart: 150, End: 175},
+				{Service: svc.Attrs{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeGRPC, Path: "/foo", RequestStart: 100, End: 200},
+				{Service: svc.Attrs{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeGRPCClient, Path: "/bar", RequestStart: 150, End: 175},
+				{Service: svc.Attrs{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeSQLClient, Path: "SELECT", RequestStart: 150, End: 175},
+				{Service: svc.Attrs{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeRedisClient, Method: "SET", RequestStart: 150, End: 175},
+				{Service: svc.Attrs{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeRedisServer, Method: "GET", RequestStart: 150, End: 175},
+				{Service: svc.Attrs{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeKafkaClient, Method: "publish", RequestStart: 150, End: 175},
+				{Service: svc.Attrs{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeKafkaServer, Method: "process", RequestStart: 150, End: 175},
 			}
 
 			var exported string
@@ -308,12 +308,12 @@ func TestSpanMetricsDiscarded(t *testing.T) {
 		cfg: &mc,
 	}
 
-	svcNoExport := svc.ID{}
+	svcNoExport := svc.Attrs{}
 
-	svcExportMetrics := svc.ID{}
+	svcExportMetrics := svc.Attrs{}
 	svcExportMetrics.SetExportsOTelMetrics()
 
-	svcExportTraces := svc.ID{}
+	svcExportTraces := svc.Attrs{}
 	svcExportTraces.SetExportsOTelTraces()
 
 	tests := []struct {
@@ -323,17 +323,17 @@ func TestSpanMetricsDiscarded(t *testing.T) {
 	}{
 		{
 			name:      "Foo span is not filtered",
-			span:      request.Span{ServiceID: svcNoExport, Type: request.EventTypeHTTPClient, Method: "GET", Route: "/foo", RequestStart: 100, End: 200},
+			span:      request.Span{Service: svcNoExport, Type: request.EventTypeHTTPClient, Method: "GET", Route: "/foo", RequestStart: 100, End: 200},
 			discarded: false,
 		},
 		{
 			name:      "/v1/metrics span is filtered",
-			span:      request.Span{ServiceID: svcExportMetrics, Type: request.EventTypeHTTPClient, Method: "GET", Route: "/v1/metrics", RequestStart: 100, End: 200},
+			span:      request.Span{Service: svcExportMetrics, Type: request.EventTypeHTTPClient, Method: "GET", Route: "/v1/metrics", RequestStart: 100, End: 200},
 			discarded: true,
 		},
 		{
 			name:      "/v1/traces span is not filtered",
-			span:      request.Span{ServiceID: svcExportTraces, Type: request.EventTypeHTTPClient, Method: "GET", Route: "/v1/traces", RequestStart: 100, End: 200},
+			span:      request.Span{Service: svcExportTraces, Type: request.EventTypeHTTPClient, Method: "GET", Route: "/v1/traces", RequestStart: 100, End: 200},
 			discarded: false,
 		},
 	}

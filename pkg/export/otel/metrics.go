@@ -171,7 +171,7 @@ type MetricsReporter struct {
 	hostID     string
 	attributes *attributes.AttrSelector
 	exporter   metric.Exporter
-	reporters  ReporterPool[*svc.ID, *Metrics]
+	reporters  ReporterPool[*svc.Attrs, *Metrics]
 	is         instrumentations.InstrumentationSelection
 
 	// user-selected fields for each of the reported metrics
@@ -190,7 +190,7 @@ type MetricsReporter struct {
 // There is a Metrics instance for each service/process instrumented by Beyla.
 type Metrics struct {
 	ctx      context.Context
-	service  *svc.ID
+	service  *svc.Attrs
 	provider *metric.MeterProvider
 
 	// IMPORTANT! Don't forget to clean each Expirer in cleanupAllMetricsInstances method
@@ -286,7 +286,7 @@ func newMetricsReporter(
 			request.SpanOTELGetters, mr.attributes.For(attributes.MessagingProcessDuration))
 	}
 
-	mr.reporters = NewReporterPool[*svc.ID, *Metrics](cfg.ReportersCacheLen, cfg.TTL, timeNow,
+	mr.reporters = NewReporterPool[*svc.Attrs, *Metrics](cfg.ReportersCacheLen, cfg.TTL, timeNow,
 		func(id svc.UID, v *expirable[*Metrics]) {
 			if mr.cfg.SpanMetricsEnabled() {
 				attrOpt := instrument.WithAttributeSet(mr.metricResourceAttributes(v.value.service))
@@ -542,7 +542,7 @@ func (mr *MetricsReporter) setupGraphMeters(m *Metrics, meter instrument.Meter) 
 	return nil
 }
 
-func (mr *MetricsReporter) newMetricSet(service *svc.ID) (*Metrics, error) {
+func (mr *MetricsReporter) newMetricSet(service *svc.Attrs) (*Metrics, error) {
 	mlog := mlog().With("service", service)
 	mlog.Debug("creating new Metrics reporter")
 	resourceAttributes := append(getAppResourceAttrs(mr.hostID, service), ResourceAttrsFromEnv(service)...)
@@ -707,11 +707,11 @@ func otelHistogramConfig(metricName string, buckets []float64, useExponentialHis
 
 }
 
-func (mr *MetricsReporter) metricResourceAttributes(service *svc.ID) attribute.Set {
+func (mr *MetricsReporter) metricResourceAttributes(service *svc.Attrs) attribute.Set {
 	attrs := []attribute.KeyValue{
-		request.ServiceMetric(service.Name),
-		semconv.ServiceInstanceID(string(service.UID)),
-		semconv.ServiceNamespace(service.Namespace),
+		request.ServiceMetric(service.UID.Name),
+		semconv.ServiceInstanceID(service.UID.Instance),
+		semconv.ServiceNamespace(service.UID.Namespace),
 		semconv.TelemetrySDKLanguageKey.String(service.SDKLanguage.String()),
 		semconv.TelemetrySDKNameKey.String("beyla"),
 		request.SourceMetric("beyla"),
@@ -759,7 +759,7 @@ func (mr *MetricsReporter) serviceGraphAttributes() []attributes.Field[*request.
 }
 
 func otelSpanAccepted(span *request.Span, mr *MetricsReporter) bool {
-	return mr.cfg.OTelMetricsEnabled() && !span.ServiceID.ExportsOTelMetrics()
+	return mr.cfg.OTelMetricsEnabled() && !span.Service.ExportsOTelMetrics()
 }
 
 // nolint:cyclop
@@ -855,10 +855,10 @@ func (mr *MetricsReporter) reportMetrics(input <-chan []request.Span) {
 			if s.IgnoreMetrics() {
 				continue
 			}
-			reporter, err := mr.reporters.For(&s.ServiceID)
+			reporter, err := mr.reporters.For(&s.Service)
 			if err != nil {
 				mlog().Error("unexpected error creating OTEL resource. Ignoring metric",
-					"error", err, "service", s.ServiceID)
+					"error", err, "service", s.Service)
 				continue
 			}
 			reporter.record(s, mr)

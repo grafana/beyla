@@ -22,7 +22,7 @@ import (
 type Tracer struct{}
 
 func New(_ *beyla.Config, _ imetrics.Reporter) *Tracer                       { return nil }
-func (p *Tracer) AllowPID(_, _ uint32, _ *svc.ID)                            {}
+func (p *Tracer) AllowPID(_, _ uint32, _ *svc.Attrs)                         {}
 func (p *Tracer) BlockPID(_, _ uint32)                                       {}
 func (p *Tracer) Load() (*ebpf.CollectionSpec, error)                        { return nil, nil }
 func (p *Tracer) BpfObjects() any                                            { return nil }

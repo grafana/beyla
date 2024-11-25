@@ -114,7 +114,7 @@ func (p *Tracer) rebuildValidPids() {
 	}
 }
 
-func (p *Tracer) AllowPID(pid, ns uint32, svc *svc.ID) {
+func (p *Tracer) AllowPID(pid, ns uint32, svc *svc.Attrs) {
 	p.pidsFilter.AllowPID(pid, ns, svc, ebpfcommon.PIDTypeKProbes)
 	p.rebuildValidPids()
 }

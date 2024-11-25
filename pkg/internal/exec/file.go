@@ -14,7 +14,7 @@ import (
 )
 
 type FileInfo struct {
-	Service svc.ID
+	Service svc.Attrs
 
 	CmdExePath     string
 	ProExeLinkPath string
@@ -36,7 +36,7 @@ func (fi *FileInfo) ExecutableName() string {
 	return parts[len(parts)-1]
 }
 
-func FindExecELF(p *services.ProcessInfo, svcID svc.ID, k8sEnabled bool) (*FileInfo, error) {
+func FindExecELF(p *services.ProcessInfo, svcID svc.Attrs, k8sEnabled bool) (*FileInfo, error) {
 	// In container environments or K8s, we can't just open the executable exe path, because it might
 	// be in the volume of another pod/container. We need to access it through the /proc/<pid>/exe symbolic link
 	ns, err := FindNamespace(p.Pid)
@@ -77,7 +77,7 @@ func FindExecELF(p *services.ProcessInfo, svcID svc.ID, k8sEnabled bool) (*FileI
 	if svcName, ok := file.Service.EnvVars[envServiceName]; ok {
 		// If Kubernetes is enabled we use the K8S metadata as the source of truth
 		if !k8sEnabled {
-			file.Service.Name = svcName
+			file.Service.UID.Name = svcName
 		}
 	} else {
 		if resourceAttrs, ok := file.Service.EnvVars[envResourceAttrs]; ok {
@@ -87,7 +87,7 @@ func FindExecELF(p *services.ProcessInfo, svcID svc.ID, k8sEnabled bool) (*FileI
 			}
 			attributes.ParseOTELResourceVariable(resourceAttrs, collect)
 			if result, ok := allVars[serviceNameKey]; ok {
-				file.Service.Name = result
+				file.Service.UID.Name = result
 			}
 		}
 	}

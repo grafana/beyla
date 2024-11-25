@@ -43,7 +43,7 @@ func New(cfg *beyla.Config) *Tracer {
 	}
 }
 
-func (p *Tracer) AllowPID(uint32, uint32, *svc.ID) {}
+func (p *Tracer) AllowPID(uint32, uint32, *svc.Attrs) {}
 
 func (p *Tracer) BlockPID(uint32, uint32) {}
 

@@ -275,8 +275,8 @@ func (ta *TraceAttacher) monitorPIDs(tracer *ebpf.ProcessTracer, ie *ebpf.Instru
 	// the service name is the name of the found executable
 	// Unless the case of system-wide tracing, where the name of the
 	// executable will be dynamically set for each traced http request call.
-	if ie.FileInfo.Service.Name == "" {
-		ie.FileInfo.Service.Name = ie.FileInfo.ExecutableName()
+	if ie.FileInfo.Service.UID.Name == "" {
+		ie.FileInfo.Service.UID.Name = ie.FileInfo.ExecutableName()
 		// we mark the service ID as automatically named in case we want to look,
 		// in later stages of the pipeline, for better automatic service name
 		ie.FileInfo.Service.SetAutoName()
@@ -292,20 +292,20 @@ func (ta *TraceAttacher) monitorPIDs(tracer *ebpf.ProcessTracer, ie *ebpf.Instru
 	if ta.SpanSignalsShortcut != nil {
 		spans := make([]request.Span, 0, len(ie.ChildPids)+1)
 		// the forwarded signal must include
-		// - ServiceID, which includes several metadata about the process
+		// - Service, which includes several metadata about the process
 		// - PID namespace, to allow further kubernetes decoration
 		spans = append(spans, request.Span{
-			Type:      request.EventTypeProcessAlive,
-			ServiceID: ie.FileInfo.Service,
-			Pid:       request.PidInfo{Namespace: ie.FileInfo.Ns},
+			Type:    request.EventTypeProcessAlive,
+			Service: ie.FileInfo.Service,
+			Pid:     request.PidInfo{Namespace: ie.FileInfo.Ns},
 		})
 		for _, pid := range ie.ChildPids {
 			service := ie.FileInfo.Service
 			service.ProcPID = int32(pid)
 			spans = append(spans, request.Span{
-				Type:      request.EventTypeProcessAlive,
-				ServiceID: service,
-				Pid:       request.PidInfo{Namespace: ie.FileInfo.Ns},
+				Type:    request.EventTypeProcessAlive,
+				Service: service,
+				Pid:     request.PidInfo{Namespace: ie.FileInfo.Ns},
 			})
 		}
 		ta.SpanSignalsShortcut <- spans

@@ -51,9 +51,10 @@ func TestPythonBasicTracing(t *testing.T) {
 					res := trace.FindByOperationName("GET /greeting")
 					require.Len(t, res, 1)
 					parent := res[0]
-					sd := jaeger.Diff([]jaeger.Tag{
-						{Key: "service.namespace", Type: "string", Value: "integration-test"},
-						{Key: "telemetry.sdk.language", Type: "string", Value: "python"},
+					sd := jaeger.DiffAsRegexp([]jaeger.Tag{
+						{Key: "service.namespace", Type: "string", Value: "^integration-test$"},
+						{Key: "telemetry.sdk.language", Type: "string", Value: "^python$"},
+						{Key: "service.instance.id", Type: "string", Value: "^pytestserver-.+:pytestserver$"},
 					}, trace.Processes[parent.ProcessID].Tags)
 					require.Empty(t, sd, sd.String())
 
@@ -65,6 +66,7 @@ func TestPythonBasicTracing(t *testing.T) {
 						{Key: "k8s.pod.start_time", Type: "string", Value: k8s.TimeRegex},
 						{Key: "k8s.namespace.name", Type: "string", Value: "^default$"},
 						{Key: "k8s.cluster.name", Type: "string", Value: "^beyla$"},
+						{Key: "service.instance.id", Type: "string", Value: "^pytestserver-.+:pytestserver"},
 					}, trace.Processes[parent.ProcessID].Tags)
 					require.Empty(t, sd, sd.String())
 
@@ -106,9 +108,10 @@ func TestPythonBasicTracing(t *testing.T) {
 					res := trace.FindByOperationName("GET /smoke")
 					require.Len(t, res, 1)
 					parent := res[0]
-					sd := jaeger.Diff([]jaeger.Tag{
-						{Key: "service.namespace", Type: "string", Value: "integration-test"},
-						{Key: "telemetry.sdk.language", Type: "string", Value: "python"},
+					sd := jaeger.DiffAsRegexp([]jaeger.Tag{
+						{Key: "service.namespace", Type: "string", Value: "^integration-test$"},
+						{Key: "telemetry.sdk.language", Type: "string", Value: "^python$"},
+						{Key: "service.instance.id", Type: "string", Value: "^pytestserver-.+:pytestserver$"},
 					}, trace.Processes[parent.ProcessID].Tags)
 					require.Empty(t, sd, sd.String())
 
@@ -120,6 +123,7 @@ func TestPythonBasicTracing(t *testing.T) {
 						{Key: "k8s.pod.start_time", Type: "string", Value: k8s.TimeRegex},
 						{Key: "k8s.namespace.name", Type: "string", Value: "^default$"},
 						{Key: "k8s.cluster.name", Type: "string", Value: "^beyla$"},
+						{Key: "service.instance.id", Type: "string", Value: "^pytestserver-.+:pytestserver"},
 					}, trace.Processes[parent.ProcessID].Tags)
 					require.Empty(t, sd, sd.String())
 

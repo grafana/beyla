@@ -66,6 +66,9 @@ func TestInformersCache_MetricsDecoration_HTTP(t *testing.T) {
 		map[string]string{
 			"server_service_namespace": "default",
 			"k8s_cluster_name":         "my-kube",
+			"service_name":             "overridden-testserver-name",
+			"service_namespace":        "overridden-testserver-namespace",
+			"service_instance_id":      "testserver-.+:testserver",
 		}))
 }
 
@@ -73,6 +76,7 @@ func TestInformersCache_ProcessMetrics(t *testing.T) {
 	cluster.TestEnv().Test(t, k8s.FeatureProcessMetricsDecoration(
 		map[string]string{
 			"k8s_cluster_name": "my-kube",
+			"instance":         "testserver-.+:testserver",
 		}))
 }
 
@@ -81,11 +85,11 @@ func TestInformersCache_NetworkMetrics(t *testing.T) {
 }
 
 func TestInformersCache_InternalMetrics(t *testing.T) {
-	require.NotZero(t, metricVal(t, "beyla_kube_cache_client_message_submits_total"))
-	require.NotZero(t, metricVal(t, "beyla_kube_cache_connected_clients"))
-	require.NotZero(t, metricVal(t, "beyla_kube_cache_informer_new_total"))
-	require.NotZero(t, metricVal(t, "beyla_kube_cache_informer_update_total"))
-	require.NotZero(t, metricVal(t, "beyla_kube_cache_internal_build_info"))
+	require.NotZero(t, metricVal(t, `beyla_kube_cache_client_messages_total{status="submit"}`))
+	require.NotZero(t, metricVal(t, `beyla_kube_cache_connected_clients`))
+	require.NotZero(t, metricVal(t, `beyla_kube_cache_informer_events_total{type="new"}`))
+	require.NotZero(t, metricVal(t, `beyla_kube_cache_informer_events_total{type="update"}`))
+	require.NotZero(t, metricVal(t, `beyla_kube_cache_internal_build_info`))
 }
 
 func metricVal(t *testing.T, promQLQuery string) int {

@@ -12,7 +12,6 @@ import (
 	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
-	"github.com/grafana/beyla/pkg/internal/svc"
 	"github.com/grafana/beyla/pkg/kubecache/informer"
 	"github.com/grafana/beyla/pkg/kubeflags"
 )
@@ -49,6 +48,13 @@ type KubernetesDecorator struct {
 
 	// MetaCacheAddress is the host:port address of the beyla-k8s-cache service instance
 	MetaCacheAddress string `yaml:"meta_cache_address" env:"BEYLA_KUBE_META_CACHE_ADDRESS"`
+
+	// MetaSourceLabels allows Beyla overriding the service name and namespace of an application from
+	// the given labels.
+	// TODO Beyla 2.0. Consider defaulting to (and report as a breaking change):
+	// 		Name:      "app.kubernetes.io/name",
+	//		Namespace: "app.kubernetes.io/part-of",
+	MetaSourceLabels kube.MetaSourceLabels `yaml:"meta_source_labels"`
 }
 
 const (
@@ -93,11 +99,11 @@ func (md *metadataDecorator) nodeLoop(in <-chan []request.Span, out chan<- []req
 }
 
 func (md *metadataDecorator) do(span *request.Span) {
-	if objectMeta := md.db.PodByPIDNs(span.Pid.Namespace); objectMeta != nil {
-		md.appendMetadata(span, objectMeta)
+	if podMeta, containerName := md.db.PodContainerByPIDNs(span.Pid.Namespace); podMeta != nil {
+		md.appendMetadata(span, podMeta, containerName)
 	} else {
 		// do not leave the service attributes map as nil
-		span.ServiceID.Metadata = map[attr.Name]string{}
+		span.Service.Metadata = map[attr.Name]string{}
 	}
 	// override the peer and host names from Kubernetes metadata, if found
 	if name, _ := md.db.ServiceNameNamespaceForIP(span.Host); name != "" {
@@ -108,7 +114,7 @@ func (md *metadataDecorator) do(span *request.Span) {
 	}
 }
 
-func (md *metadataDecorator) appendMetadata(span *request.Span, meta *informer.ObjectMeta) {
+func (md *metadataDecorator) appendMetadata(span *request.Span, meta *informer.ObjectMeta, containerName string) {
 	if meta.Pod == nil {
 		// if this message happen, there is a bug
 		klog().Debug("pod metadata for is nil. Ignoring decoration", "meta", meta)
@@ -119,21 +125,21 @@ func (md *metadataDecorator) appendMetadata(span *request.Span, meta *informer.O
 	// If the user has not defined criteria values for the reported
 	// service name and namespace, we will automatically set it from
 	// the kubernetes metadata
-	if span.ServiceID.AutoName() {
-		span.ServiceID.Name = name
+	if span.Service.AutoName() {
+		span.Service.UID.Name = name
 	}
-	if span.ServiceID.Namespace == "" {
-		span.ServiceID.Namespace = namespace
+	if span.Service.UID.Namespace == "" {
+		span.Service.UID.Namespace = namespace
 	}
-	// overriding the UID here will avoid reusing the OTEL resource reporter
+	// overriding the Instance here will avoid reusing the OTEL resource reporter
 	// if the application/process was discovered and reported information
 	// before the kubernetes metadata was available
 	// (related issue: https://github.com/grafana/beyla/issues/1124)
-	span.ServiceID.UID = svc.NewUID(meta.Pod.Uid)
+	span.Service.UID.Instance = meta.Name + ":" + containerName
 
 	// if, in the future, other pipeline steps modify the service metadata, we should
 	// replace the map literal by individual entry insertions
-	span.ServiceID.Metadata = map[attr.Name]string{
+	span.Service.Metadata = map[attr.Name]string{
 		attr.K8sNamespaceName: meta.Namespace,
 		attr.K8sPodName:       meta.Name,
 		attr.K8sNodeName:      meta.Pod.NodeName,
@@ -145,17 +151,17 @@ func (md *metadataDecorator) appendMetadata(span *request.Span, meta *informer.O
 	// ownerKind could be also "Pod", but we won't insert it as "owner" label to avoid
 	// growing cardinality
 	if topOwner != nil {
-		span.ServiceID.Metadata[attr.K8sOwnerName] = topOwner.Name
+		span.Service.Metadata[attr.K8sOwnerName] = topOwner.Name
 	}
 
 	for _, owner := range meta.Pod.Owners {
 		if kindLabel := OwnerLabelName(owner.Kind); kindLabel != "" {
-			span.ServiceID.Metadata[kindLabel] = owner.Name
+			span.Service.Metadata[kindLabel] = owner.Name
 		}
 	}
 
 	// override hostname by the Pod name
-	span.ServiceID.HostName = meta.Name
+	span.Service.HostName = meta.Name
 }
 
 func OwnerLabelName(kind string) attr.Name {

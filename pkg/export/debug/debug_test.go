@@ -40,7 +40,7 @@ func TestTracePrinterValidEnabled(t *testing.T) {
 
 func traceFuncHelper(t *testing.T, tracePrinter TracePrinter) string {
 	fakeSpan := request.Span{
-		ServiceID:      svc.ID{Name: "bar", Namespace: "foo", SDKLanguage: svc.InstrumentableGolang},
+		Service:        svc.Attrs{UID: svc.UID{Name: "bar", Namespace: "foo"}, SDKLanguage: svc.InstrumentableGolang},
 		Type:           request.EventTypeHTTP,
 		Method:         "method",
 		Path:           "path",

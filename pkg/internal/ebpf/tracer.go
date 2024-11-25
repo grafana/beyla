@@ -31,9 +31,9 @@ type PIDsAccounter interface {
 	// AllowPID notifies the tracer to accept traces from the process with the
 	// provided PID. Unless system-wide instrumentation, the Tracer should discard
 	// traces from processes whose PID has not been allowed before
-	// We must use a pointer for svc.ID so that all child processes share the same
+	// We must use a pointer for svc.Attrs so that all child processes share the same
 	// object. This is important when we tag a service as exporting traces or metrics.
-	AllowPID(uint32, uint32, *svc.ID)
+	AllowPID(uint32, uint32, *svc.Attrs)
 	// BlockPID notifies the tracer to stop accepting traces from the process
 	// with the provided PID. After receiving them via ringbuffer, it should
 	// discard them.
@@ -117,7 +117,7 @@ type ProcessTracer struct {
 	Instrumentables map[uint64]*instrumenter
 }
 
-func (pt *ProcessTracer) AllowPID(pid, ns uint32, svc *svc.ID) {
+func (pt *ProcessTracer) AllowPID(pid, ns uint32, svc *svc.Attrs) {
 	for i := range pt.Programs {
 		pt.Programs[i].AllowPID(pid, ns, svc)
 	}

@@ -138,7 +138,7 @@ type Span struct {
 	RequestStart   int64          `json:"-"`
 	Start          int64          `json:"-"`
 	End            int64          `json:"-"`
-	ServiceID      svc.ID         `json:"-"` // TODO: rename to Service or ResourceAttrs
+	Service        svc.Attrs      `json:"-"`
 	TraceID        trace2.TraceID `json:"traceID"`
 	SpanID         trace2.SpanID  `json:"spanID"`
 	ParentSpanID   trace2.SpanID  `json:"parentSpanID"`
@@ -495,5 +495,5 @@ func (s *Span) IsExportTracesSpan() bool {
 }
 
 func (s *Span) IsSelfReferenceSpan() bool {
-	return s.Peer == s.Host && (s.ServiceID.Namespace == s.OtherNamespace || s.OtherNamespace == "")
+	return s.Peer == s.Host && (s.Service.UID.Namespace == s.OtherNamespace || s.OtherNamespace == "")
 }

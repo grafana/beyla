@@ -17,7 +17,7 @@ func pslog() *slog.Logger {
 }
 
 type ID struct {
-	Service *svc.ID
+	Service *svc.Attrs
 
 	// UID for a process. Even if the Service field has its own UID,
 	// a service might have multiple processes, so Application and Process
@@ -73,11 +73,15 @@ type Status struct {
 	NetRcvBytesDelta int64
 }
 
-func NewStatus(pid int32, svcID *svc.ID) *Status {
+func NewStatus(pid int32, svcID *svc.Attrs) *Status {
 	return &Status{ID: ID{
 		ProcessID: pid,
 		Service:   svcID,
-		UID:       svcID.UID.AppendUint32(uint32(pid)),
+		UID: svc.UID{
+			Name:      svcID.UID.Name,
+			Namespace: svcID.UID.Namespace,
+			Instance:  svcID.UID.Instance + ":" + strconv.Itoa(int(pid)),
+		},
 	}}
 }
 
@@ -120,7 +124,7 @@ func PromGetters(name attr.Name) (attributes.Getter[*Status, string], bool) {
 		// the attributes are handled explicitly by the prometheus exporter, but we need to
 		// ignore them to avoid that the default case tries to report them from service metadata
 	case attr.Instance:
-		g = func(s *Status) string { return string(s.ID.UID) }
+		g = func(s *Status) string { return s.ID.UID.Instance }
 	case attr.Job:
 		g = func(s *Status) string { return s.ID.Service.Job() }
 	default:

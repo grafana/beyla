@@ -60,15 +60,15 @@ var DefaultBuckets = Buckets{
 	RequestSizeHistogram: []float64{0, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192},
 }
 
-func getAppResourceAttrs(hostID string, service *svc.ID) []attribute.KeyValue {
+func getAppResourceAttrs(hostID string, service *svc.Attrs) []attribute.KeyValue {
 	return append(getResourceAttrs(hostID, service),
-		semconv.ServiceInstanceID(string(service.UID)),
+		semconv.ServiceInstanceID(service.UID.Instance),
 	)
 }
 
-func getResourceAttrs(hostID string, service *svc.ID) []attribute.KeyValue {
+func getResourceAttrs(hostID string, service *svc.Attrs) []attribute.KeyValue {
 	attrs := []attribute.KeyValue{
-		semconv.ServiceName(service.Name),
+		semconv.ServiceName(service.UID.Name),
 		// SpanMetrics requires an extra attribute besides service name
 		// to generate the traces_target_info metric,
 		// so the service is visible in the ServicesList
@@ -80,8 +80,8 @@ func getResourceAttrs(hostID string, service *svc.ID) []attribute.KeyValue {
 		semconv.HostID(hostID),
 	}
 
-	if service.Namespace != "" {
-		attrs = append(attrs, semconv.ServiceNamespace(service.Namespace))
+	if service.UID.Namespace != "" {
+		attrs = append(attrs, semconv.ServiceNamespace(service.UID.Namespace))
 	}
 
 	for k, v := range service.Metadata {
@@ -142,6 +142,8 @@ func NewReporterPool[K uidGetter, T any](
 	}
 }
 
+var emptyUID = svc.UID{}
+
 // For retrieves the associated item for the given service name, or
 // creates a new one if it does not exist
 func (rp *ReporterPool[K, T]) For(service K) (T, error) {
@@ -154,7 +156,7 @@ func (rp *ReporterPool[K, T]) For(service K) (T, error) {
 	// In multi-process tracing, this is likely to happen as most
 	// tracers group traces belonging to the same service in the same slice.
 	svcUID := service.GetUID()
-	if rp.lastServiceUID == "" || svcUID != rp.lastService.GetUID() {
+	if rp.lastServiceUID == emptyUID || svcUID != rp.lastService.GetUID() {
 		lm, err := rp.get(svcUID, service)
 		if err != nil {
 			var t T
@@ -350,7 +352,7 @@ func headersFromEnv(varName string) map[string]string {
 // OTEL_RESOURCE_ATTRIBUTES, i.e. a comma-separated list of
 // key=values. For example: api-key=key,other-config-value=value
 // The values are passed as parameters to the handler function
-func parseOTELEnvVar(svc *svc.ID, varName string, handler attributes.VarHandler) {
+func parseOTELEnvVar(svc *svc.Attrs, varName string, handler attributes.VarHandler) {
 	var envVar string
 	ok := false
 
@@ -369,7 +371,7 @@ func parseOTELEnvVar(svc *svc.ID, varName string, handler attributes.VarHandler)
 	attributes.ParseOTELResourceVariable(envVar, handler)
 }
 
-func ResourceAttrsFromEnv(svc *svc.ID) []attribute.KeyValue {
+func ResourceAttrsFromEnv(svc *svc.Attrs) []attribute.KeyValue {
 	var otelResourceAttrs []attribute.KeyValue
 	apply := func(k string, v string) {
 		otelResourceAttrs = append(otelResourceAttrs, attribute.String(k, v))

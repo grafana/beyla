@@ -70,10 +70,12 @@ func (t *typer) FilterClassify(evs []Event[ProcessMatch]) []Event[ebpf.Instrumen
 		ev := &evs[i]
 		switch evs[i].Type {
 		case EventCreated:
-			svcID := svc.ID{
-				Name:      ev.Obj.Criteria.Name,
-				Namespace: ev.Obj.Criteria.Namespace,
-				ProcPID:   ev.Obj.Process.Pid,
+			svcID := svc.Attrs{
+				UID: svc.UID{
+					Name:      ev.Obj.Criteria.Name,
+					Namespace: ev.Obj.Criteria.Namespace,
+				},
+				ProcPID: ev.Obj.Process.Pid,
 			}
 			if elfFile, err := exec.FindExecELF(ev.Obj.Process, svcID, t.k8sInformer.IsKubeEnabled()); err != nil {
 				t.log.Warn("error finding process ELF. Ignoring", "error", err)

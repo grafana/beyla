@@ -38,14 +38,9 @@ func (n noopMetrics) MessageError()     {}
 
 type promInternalMetrics struct {
 	connector        *connector.PrometheusManager
-	informerNew      prometheus.Counter
-	informerUpdate   prometheus.Counter
-	informerDelete   prometheus.Counter
+	informerEvents   *prometheus.CounterVec
 	connectedClients prometheus.Gauge
-	messageSubmit    prometheus.Counter
-	messageSucceed   prometheus.Counter
-	messageError     prometheus.Counter
-	messageTimeout   prometheus.Counter
+	clientMessages   *prometheus.CounterVec
 	beylaCacheInfo   prometheus.Gauge
 }
 
@@ -55,39 +50,19 @@ func prometheusInternalMetrics(
 ) *promInternalMetrics {
 	pr := &promInternalMetrics{
 		connector: manager,
-		informerNew: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "beyla_kube_cache_informer_new_total",
-			Help: "How many 'new' metadata events has the informer received",
-		}),
-		informerUpdate: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "beyla_kube_cache_informer_update_total",
-			Help: "How many 'update' metadata events has the informer received",
-		}),
-		informerDelete: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "beyla_kube_cache_informer_delete_total",
-			Help: "How many 'delete' metadata events has the informer received",
-		}),
+		informerEvents: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "beyla_kube_cache_informer_events_total",
+			Help: "How many metadata events has the informer received",
+		}, []string{"type"}),
 		connectedClients: prometheus.NewGauge(prometheus.GaugeOpts{
 			Name: "beyla_kube_cache_connected_clients",
 			Help: "How many concurrent Beyla instances are connected to this cache service",
 		}),
-		messageSubmit: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "beyla_kube_cache_client_message_submits_total",
+		clientMessages: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "beyla_kube_cache_client_messages_total",
 			Help: "How many notifications have been started to be submitted to" +
-				" the subscriber client. This includes messages not yet received or failed",
-		}),
-		messageSucceed: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "beyla_kube_cache_client_message_successes_total",
-			Help: "How many notifications have been successfully submitted to the subscriber client",
-		}),
-		messageError: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "beyla_kube_cache_client_message_errors_total",
-			Help: "How many notifications couldn't be submitted to the subscriber client due to an error",
-		}),
-		messageTimeout: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "beyla_kube_cache_client_message_timeouts_total",
-			Help: "How many notifications timed out before finish its submission to the subscriber client",
-		}),
+				" the subscriber client",
+		}, []string{"status"}),
 		beylaCacheInfo: prometheus.NewGauge(prometheus.GaugeOpts{
 			Name: "beyla_kube_cache_internal_build_info",
 			Help: "A metric with a constant '1' value labeled by version, revision, branch, " +
@@ -103,27 +78,22 @@ func prometheusInternalMetrics(
 	}
 	pr.beylaCacheInfo.Set(1)
 	manager.Register(cfg.Port, cfg.Path,
-		pr.informerNew,
-		pr.informerUpdate,
-		pr.informerDelete,
+		pr.informerEvents,
 		pr.connectedClients,
-		pr.messageSubmit,
-		pr.messageSucceed,
-		pr.messageError,
-		pr.messageTimeout,
+		pr.clientMessages,
 		pr.beylaCacheInfo)
 
 	return pr
 }
 
 func (n *promInternalMetrics) InformerNew() {
-	n.informerNew.Inc()
+	n.informerEvents.WithLabelValues("new").Inc()
 }
 func (n *promInternalMetrics) InformerUpdate() {
-	n.informerUpdate.Inc()
+	n.informerEvents.WithLabelValues("update").Inc()
 }
 func (n *promInternalMetrics) InformerDelete() {
-	n.informerDelete.Inc()
+	n.informerEvents.WithLabelValues("delete").Inc()
 }
 func (n *promInternalMetrics) ClientConnect() {
 	n.connectedClients.Inc()
@@ -132,14 +102,14 @@ func (n *promInternalMetrics) ClientDisconnect() {
 	n.connectedClients.Dec()
 }
 func (n *promInternalMetrics) MessageSubmit() {
-	n.messageSubmit.Inc()
+	n.clientMessages.WithLabelValues("submit").Inc()
 }
 func (n *promInternalMetrics) MessageSucceed() {
-	n.messageSucceed.Inc()
+	n.clientMessages.WithLabelValues("success").Inc()
 }
 func (n *promInternalMetrics) MessageTimeout() {
-	n.messageTimeout.Inc()
+	n.clientMessages.WithLabelValues("timeout").Inc()
 }
 func (n *promInternalMetrics) MessageError() {
-	n.messageError.Inc()
+	n.clientMessages.WithLabelValues("error").Inc()
 }

@@ -72,8 +72,7 @@ int uprobe_writer_write_messages(struct pt_regs *ctx) {
 
     tp_info_t tp = {};
 
-    // We don't look up in the headers, no http/grpc request, therefore 0 as last argument
-    client_trace_parent(goroutine_addr, &tp, 0);
+    client_trace_parent(goroutine_addr, &tp);
     go_addr_key_t p_key = {};
     go_addr_key_from_id(&p_key, w_ptr);
 

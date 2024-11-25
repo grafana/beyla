@@ -80,6 +80,7 @@ struct {
 typedef struct grpc_transports {
     u8 type;
     connection_info_t conn;
+    tp_info_t tp;
 } grpc_transports_t;
 
 // TODO: use go_addr_key_t as key
@@ -178,24 +179,14 @@ static __always_inline void tp_clone(tp_info_t *dest, tp_info_t *src) {
 }
 
 static __always_inline void
-server_trace_parent(void *goroutine_addr, tp_info_t *tp, void *req_header) {
+server_trace_parent(void *goroutine_addr, tp_info_t *tp, tp_info_t *found_tp) {
     // May get overriden when decoding existing traceparent, but otherwise we set sample ON
     tp->flags = 1;
-    // Get traceparent from the Request.Header
-    void *traceparent_ptr = extract_traceparent_from_req_headers(req_header);
     go_addr_key_t g_key = {};
     go_addr_key_from_id(&g_key, goroutine_addr);
-    if (traceparent_ptr != NULL) {
-        unsigned char buf[TP_MAX_VAL_LENGTH];
-        long res = bpf_probe_read(buf, sizeof(buf), traceparent_ptr);
-        if (res < 0) {
-            bpf_dbg_printk("can't copy traceparent header");
-            urand_bytes(tp->trace_id, TRACE_ID_SIZE_BYTES);
-            *((u64 *)tp->parent_id) = 0;
-        } else {
-            bpf_dbg_printk("Decoding traceparent from headers %s", buf);
-            decode_go_traceparent(buf, tp->trace_id, tp->parent_id, &tp->flags);
-        }
+    if (found_tp) {
+        bpf_dbg_printk("Decoded from existing traceparent");
+        __builtin_memcpy(tp, found_tp, sizeof(tp_info_t));
     } else {
         connection_info_t *info = bpf_map_lookup_elem(&ongoing_server_connections, &g_key);
         u8 found_info = 0;
@@ -242,28 +233,11 @@ server_trace_parent(void *goroutine_addr, tp_info_t *tp, void *req_header) {
     bpf_dbg_printk("tp: %s", tp_buf);
 }
 
-static __always_inline u8 client_trace_parent(void *goroutine_addr,
-                                              tp_info_t *tp_i,
-                                              void *req_header) {
-    // Get traceparent from the Request.Header
+static __always_inline u8 client_trace_parent(void *goroutine_addr, tp_info_t *tp_i) {
     u8 found_trace_id = 0;
 
     // May get overriden when decoding existing traceparent or finding a server span, but otherwise we set sample ON
     tp_i->flags = 1;
-
-    if (req_header) {
-        void *traceparent_ptr = extract_traceparent_from_req_headers(req_header);
-        if (traceparent_ptr != NULL) {
-            unsigned char buf[TP_MAX_VAL_LENGTH];
-            long res = bpf_probe_read(buf, sizeof(buf), traceparent_ptr);
-            if (res < 0) {
-                bpf_dbg_printk("can't copy traceparent header");
-            } else {
-                found_trace_id = 1;
-                decode_go_traceparent(buf, tp_i->trace_id, tp_i->span_id, &tp_i->flags);
-            }
-        }
-    }
 
     go_addr_key_t g_key = {};
     go_addr_key_from_id(&g_key, goroutine_addr);

@@ -193,6 +193,9 @@ func (p *Tracer) GoProbes() map[string][]ebpfcommon.FunctionPrograms {
 			Start: p.bpfObjects.UprobeReadRequestStart,
 			End:   p.bpfObjects.UprobeReadRequestReturns,
 		}},
+		"net/textproto.(*Reader).readContinuedLineSlice": {{
+			End: p.bpfObjects.UprobeReadContinuedLineSliceReturns,
+		}},
 		"net/http.(*Transport).roundTrip": {{ // HTTP client, works with Client.Do as well as using the RoundTripper directly
 			Start: p.bpfObjects.UprobeRoundTrip,
 			End:   p.bpfObjects.UprobeRoundTripReturn,

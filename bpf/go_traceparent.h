@@ -77,6 +77,10 @@ static __always_inline int bpf_memicmp(const char *s1, const char *s2, s32 size)
     return 0;
 }
 
+static __always_inline u8 valid_trace(const unsigned char *trace_id) {
+    return *((u64 *)trace_id) != 0 || *((u64 *)(trace_id + 8)) != 0;
+}
+
 static __always_inline void *extract_traceparent_from_req_headers(void *headers_ptr_ptr) {
     void *headers_ptr;
     long res;

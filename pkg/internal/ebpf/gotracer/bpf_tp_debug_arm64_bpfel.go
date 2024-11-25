@@ -65,6 +65,8 @@ type bpf_tp_debugGrpcTransportsT struct {
 	Type uint8
 	_    [1]byte
 	Conn bpf_tp_debugConnectionInfoT
+	_    [2]byte
+	Tp   bpf_tp_debugTpInfoT
 }
 
 type bpf_tp_debugHttpClientDataT struct {
@@ -254,6 +256,7 @@ type bpf_tp_debugProgramSpecs struct {
 	UprobeProtocolRoundtripRet                *ebpf.ProgramSpec `ebpf:"uprobe_protocol_roundtrip_ret"`
 	UprobeQueryDC                             *ebpf.ProgramSpec `ebpf:"uprobe_queryDC"`
 	UprobeQueryReturn                         *ebpf.ProgramSpec `ebpf:"uprobe_queryReturn"`
+	UprobeReadContinuedLineSliceReturns       *ebpf.ProgramSpec `ebpf:"uprobe_readContinuedLineSliceReturns"`
 	UprobeReadRequestReturns                  *ebpf.ProgramSpec `ebpf:"uprobe_readRequestReturns"`
 	UprobeReadRequestStart                    *ebpf.ProgramSpec `ebpf:"uprobe_readRequestStart"`
 	UprobeReaderRead                          *ebpf.ProgramSpec `ebpf:"uprobe_reader_read"`
@@ -454,6 +457,7 @@ type bpf_tp_debugPrograms struct {
 	UprobeProtocolRoundtripRet                *ebpf.Program `ebpf:"uprobe_protocol_roundtrip_ret"`
 	UprobeQueryDC                             *ebpf.Program `ebpf:"uprobe_queryDC"`
 	UprobeQueryReturn                         *ebpf.Program `ebpf:"uprobe_queryReturn"`
+	UprobeReadContinuedLineSliceReturns       *ebpf.Program `ebpf:"uprobe_readContinuedLineSliceReturns"`
 	UprobeReadRequestReturns                  *ebpf.Program `ebpf:"uprobe_readRequestReturns"`
 	UprobeReadRequestStart                    *ebpf.Program `ebpf:"uprobe_readRequestStart"`
 	UprobeReaderRead                          *ebpf.Program `ebpf:"uprobe_reader_read"`
@@ -509,6 +513,7 @@ func (p *bpf_tp_debugPrograms) Close() error {
 		p.UprobeProtocolRoundtripRet,
 		p.UprobeQueryDC,
 		p.UprobeQueryReturn,
+		p.UprobeReadContinuedLineSliceReturns,
 		p.UprobeReadRequestReturns,
 		p.UprobeReadRequestStart,
 		p.UprobeReaderRead,

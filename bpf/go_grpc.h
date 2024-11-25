@@ -73,6 +73,14 @@ struct {
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_grpc_header_writes SEC(".maps");
 
+typedef struct grpc_header_field {
+    u8 *key_ptr;
+    u64 key_len;
+    u8 *val_ptr;
+    u64 val_len;
+    u64 sensitive;
+} grpc_header_field_t;
+
 #define TRANSPORT_HTTP2 1
 #define TRANSPORT_HANDLER 2
 
@@ -97,21 +105,29 @@ int uprobe_server_handleStream(struct pt_regs *ctx) {
     };
 
     if (stream_ptr) {
-        void *ctx_ptr = 0;
-        // Read the embedded context object ptr
-        bpf_probe_read(&ctx_ptr,
-                       sizeof(ctx_ptr),
+        void *st_ptr = 0;
+        void *tp_ptr = 0;
+        // Read the embedded object ptr
+        bpf_probe_read(&st_ptr,
+                       sizeof(st_ptr),
                        (void *)(stream_ptr +
-                                go_offset_of(ot, (go_offset){.v = _grpc_stream_ctx_ptr_pos}) +
+                                go_offset_of(ot, (go_offset){.v = _grpc_stream_st_ptr_pos}) +
                                 sizeof(void *)));
 
-        if (ctx_ptr) {
-            server_trace_parent(
-                goroutine_addr,
-                &invocation.tp,
-                (void *)(ctx_ptr + go_offset_of(ot, (go_offset){.v = _value_context_val_ptr_pos}) +
-                         sizeof(void *)));
+        bpf_dbg_printk("st_ptr %llx", st_ptr);
+        if (st_ptr) {
+            grpc_transports_t *t = bpf_map_lookup_elem(&ongoing_grpc_transports, &st_ptr);
+
+            bpf_dbg_printk("found t %llx", t);
+            if (t) {
+                bpf_dbg_printk("reading the traceparent from frame headers");
+                if (valid_trace(t->tp.trace_id)) {
+                    tp_ptr = &t->tp;
+                }
+            }
         }
+
+        server_trace_parent(goroutine_addr, &invocation.tp, tp_ptr);
     }
 
     if (bpf_map_update_elem(&ongoing_grpc_server_requests, &g_key, &invocation, BPF_ANY)) {
@@ -126,6 +142,7 @@ SEC("uprobe/http2Server_operateHeaders")
 int uprobe_http2Server_operateHeaders(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     void *tr = GO_PARAM1(ctx);
+    void *frame = GO_PARAM4(ctx);
     bpf_dbg_printk(
         "=== uprobe/http2Server_operateHeaders tr %llx goroutine %lx === ", tr, goroutine_addr);
     go_addr_key_t g_key = {};
@@ -134,7 +151,39 @@ int uprobe_http2Server_operateHeaders(struct pt_regs *ctx) {
     grpc_transports_t t = {
         .type = TRANSPORT_HTTP2,
         .conn = {0},
+        .tp = {0},
     };
+
+    if (frame) {
+        void *fields = 0;
+        bpf_probe_read(&fields, sizeof(fields), (void *)(frame + 8));
+        u64 fields_len = 0;
+        bpf_probe_read(&fields_len, sizeof(fields_len), (void *)(frame + 8 + 8));
+        bpf_dbg_printk("fields ptr %llx, len %d", fields, fields_len);
+        if (fields && fields_len > 0) {
+            for (int i = 0; i < 16; i++) {
+                if (i >= fields_len) {
+                    break;
+                }
+                void *field_ptr = fields + i * sizeof(grpc_header_field_t);
+                bpf_dbg_printk("field_ptr %llx", field_ptr);
+                grpc_header_field_t field = {};
+                bpf_probe_read(&field, sizeof(grpc_header_field_t), field_ptr);
+                bpf_dbg_printk("grpc header %s:%s", field.key_ptr, field.val_ptr);
+                bpf_dbg_printk("grpc sizes %d:%d", field.key_len, field.val_len);
+                if (field.key_len == W3C_KEY_LENGTH && field.val_len == W3C_VAL_LENGTH) {
+                    u8 temp[W3C_VAL_LENGTH];
+
+                    bpf_probe_read(&temp, W3C_KEY_LENGTH, field.key_ptr);
+                    if (!bpf_memicmp((const char *)temp, "traceparent", W3C_KEY_LENGTH)) {
+                        bpf_dbg_printk("found grpc traceparent header");
+                        bpf_probe_read(&temp, W3C_VAL_LENGTH, field.val_ptr);
+                        decode_go_traceparent(temp, t.tp.trace_id, t.tp.parent_id, &t.tp.flags);
+                    }
+                }
+            }
+        }
+    }
 
     bpf_map_update_elem(&ongoing_grpc_operate_headers, &g_key, &tr, BPF_ANY);
     bpf_map_update_elem(&ongoing_grpc_transports, &tr, &t, BPF_ANY);
@@ -337,7 +386,7 @@ static __always_inline void clientConnStart(
                                 go_offset_of(ot, (go_offset){.v = _value_context_val_ptr_pos}) +
                                 sizeof(void *)));
 
-        invocation.flags = client_trace_parent(goroutine_addr, &invocation.tp, val_ptr);
+        invocation.flags = client_trace_parent(goroutine_addr, &invocation.tp);
     } else {
         // it's OK sending empty tp for a client, the userspace id generator will make random trace_id, span_id
         bpf_dbg_printk("No ctx_ptr %llx", ctx_ptr);

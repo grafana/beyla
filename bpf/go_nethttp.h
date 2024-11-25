@@ -74,6 +74,14 @@ int uprobe_ServeHTTP(struct pt_regs *ctx) {
 
     off_table_t *ot = get_offsets_table();
 
+    // Lookup any traceparent information setup for us by readContinuedLineSlice
+    server_http_func_invocation_t *tp_inv =
+        bpf_map_lookup_elem(&ongoing_http_server_requests, &g_key);
+    tp_info_t *decoded_tp = 0;
+    if (tp_inv) {
+        decoded_tp = &tp_inv->tp;
+    }
+
     server_http_func_invocation_t invocation = {
         .start_monotime_ns = bpf_ktime_get_ns(),
         .tp = {0},
@@ -85,10 +93,7 @@ int uprobe_ServeHTTP(struct pt_regs *ctx) {
     invocation.path[0] = 0;
 
     if (req) {
-        server_trace_parent(
-            goroutine_addr,
-            &invocation.tp,
-            (void *)(req + go_offset_of(ot, (go_offset){.v = _req_header_ptr_pos})));
+        server_trace_parent(goroutine_addr, &invocation.tp, decoded_tp);
         // TODO: if context propagation is supported, overwrite the header value in the map with the
         // new span context and the same thread id.
 
@@ -214,6 +219,36 @@ int uprobe_readRequestReturns(struct pt_regs *ctx) {
     return 0;
 }
 
+SEC("uprobe/readContinuedLineSlice")
+int uprobe_readContinuedLineSliceReturns(struct pt_regs *ctx) {
+    bpf_dbg_printk("=== uprobe/proc readContinuedLineSlice returns === ");
+
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    u64 len = (u64)GO_PARAM2(ctx);
+    u8 *buf = (u8 *)GO_PARAM1(ctx);
+
+    if (len >= 68) {
+        u8 temp[W3C_KEY_LENGTH + W3C_VAL_LENGTH + 2];
+        bpf_probe_read(temp, sizeof(temp), buf);
+        bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
+        go_addr_key_t g_key = {};
+        go_addr_key_from_id(&g_key, goroutine_addr);
+
+        connection_info_t *existing = bpf_map_lookup_elem(&ongoing_server_connections, &g_key);
+        if (existing) {
+            if (!bpf_memicmp((const char *)temp, "Traceparent: ", W3C_KEY_LENGTH + 2)) {
+                server_http_func_invocation_t inv = {};
+                decode_go_traceparent(
+                    temp + W3C_KEY_LENGTH + 2, inv.tp.trace_id, inv.tp.parent_id, &inv.tp.flags);
+                bpf_dbg_printk("Found traceparent in header %s", temp);
+                bpf_map_update_elem(&ongoing_http_server_requests, &g_key, &inv, BPF_ANY);
+            }
+        }
+    }
+
+    return 0;
+}
+
 SEC("uprobe/ServeHTTP_ret")
 int uprobe_ServeHTTPReturns(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/ServeHTTP returns === ");
@@ -324,10 +359,8 @@ static __always_inline void roundTripStartHelper(struct pt_regs *ctx) {
 
     http_func_invocation_t invocation = {.start_monotime_ns = bpf_ktime_get_ns(), .tp = {0}};
 
-    __attribute__((__unused__)) u8 existing_tp = client_trace_parent(
-        goroutine_addr,
-        &invocation.tp,
-        (void *)(req + go_offset_of(ot, (go_offset){.v = _req_header_ptr_pos})));
+    __attribute__((__unused__)) u8 existing_tp =
+        client_trace_parent(goroutine_addr, &invocation.tp);
 
     http_client_data_t trace = {0};
 

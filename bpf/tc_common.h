@@ -69,4 +69,42 @@ static __always_inline void *ctx_data_end(struct __sk_buff *ctx) {
 
     return data_end;
 }
+
+static __always_inline void sk_msg_read_remote_ip6(struct sk_msg_md *ctx, u32 *res) {
+    asm("%[res0] = *(u32 *)(%[base] + %[offset] + 0)\n"
+        "%[res1] = *(u32 *)(%[base] + %[offset] + 4)\n"
+        "%[res2] = *(u32 *)(%[base] + %[offset] + 8)\n"
+        "%[res3] = *(u32 *)(%[base] + %[offset] + 12)\n"
+        : [res0] "=r"(res[0]), [res1] "=r"(res[1]), [res2] "=r"(res[2]), [res3] "=r"(res[3])
+        : [base] "r"(ctx), [offset] "i"(offsetof(struct sk_msg_md, remote_ip6)), "m"(*ctx));
+}
+
+static __always_inline void sk_msg_read_local_ip6(struct sk_msg_md *ctx, u32 *res) {
+    asm("%[res0] = *(u32 *)(%[base] + %[offset] + 0)\n"
+        "%[res1] = *(u32 *)(%[base] + %[offset] + 4)\n"
+        "%[res2] = *(u32 *)(%[base] + %[offset] + 8)\n"
+        "%[res3] = *(u32 *)(%[base] + %[offset] + 12)\n"
+        : [res0] "=r"(res[0]), [res1] "=r"(res[1]), [res2] "=r"(res[2]), [res3] "=r"(res[3])
+        : [base] "r"(ctx), [offset] "i"(offsetof(struct sk_msg_md, local_ip6)), "m"(*ctx));
+}
+
+static __always_inline u32 sk_msg_remote_port(struct sk_msg_md *ctx) {
+    u32 data;
+
+    asm("%[res] = *(u32 *)(%[base] + %[offset])"
+        : [res] "=r"(data)
+        : [base] "r"(ctx), [offset] "i"(offsetof(struct sk_msg_md, remote_port)), "m"(*ctx));
+
+    return data;
+}
+
+static __always_inline u32 sk_msg_local_port(struct sk_msg_md *ctx) {
+    u32 data;
+
+    asm("%[res] = *(u32 *)(%[base] + %[offset])"
+        : [res] "=r"(data)
+        : [base] "r"(ctx), [offset] "i"(offsetof(struct sk_msg_md, local_port)), "m"(*ctx));
+
+    return data;
+}
 #endif

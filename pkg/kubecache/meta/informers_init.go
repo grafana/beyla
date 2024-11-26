@@ -231,7 +231,8 @@ func (inf *Informers) initPodInformer(ctx context.Context, informerFactory infor
 			len(pod.Status.ContainerStatuses)+
 				len(pod.Status.InitContainerStatuses)+
 				len(pod.Status.EphemeralContainerStatuses))
-		for _, cs := range pod.Status.ContainerStatuses {
+		for i := range pod.Status.ContainerStatuses {
+			cs := &pod.Status.ContainerStatuses[i]
 			envs := envsFromContainerSpec(cs.Name, pod.Spec.Containers)
 			containers = append(containers,
 				&informer.ContainerInfo{
@@ -241,7 +242,8 @@ func (inf *Informers) initPodInformer(ctx context.Context, informerFactory infor
 				},
 			)
 		}
-		for _, ics := range pod.Status.InitContainerStatuses {
+		for i := range pod.Status.InitContainerStatuses {
+			ics := &pod.Status.InitContainerStatuses[i]
 			envs := envsFromContainerSpec(ics.Name, pod.Spec.InitContainers)
 			containers = append(containers,
 				&informer.ContainerInfo{
@@ -251,9 +253,11 @@ func (inf *Informers) initPodInformer(ctx context.Context, informerFactory infor
 				},
 			)
 		}
-		for _, ecs := range pod.Status.EphemeralContainerStatuses {
+		for i := range pod.Status.EphemeralContainerStatuses {
+			ecs := &pod.Status.EphemeralContainerStatuses[i]
 			envs := []v1.EnvVar{}
-			for _, c := range pod.Spec.EphemeralContainers {
+			for i := range pod.Spec.EphemeralContainers {
+				c := &pod.Spec.EphemeralContainers[i]
 				if c.Name == ecs.Name {
 					envs = c.Env
 					break
@@ -332,7 +336,8 @@ func envToMap(kc kubernetes.Interface, objMeta metav1.ObjectMeta, containerEnv [
 
 func envsFromContainerSpec(containerName string, containers []v1.Container) []v1.EnvVar {
 	envs := []v1.EnvVar{}
-	for _, c := range containers {
+	for i := range containers {
+		c := &containers[i]
 		if c.Name == containerName {
 			envs = c.Env
 			break

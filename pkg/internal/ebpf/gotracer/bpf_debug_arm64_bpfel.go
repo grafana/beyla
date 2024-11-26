@@ -53,7 +53,6 @@ type bpf_debugGrpcTransportsT struct {
 	Type uint8
 	_    [3]byte
 	Conn bpf_debugConnectionInfoT
-	_    [2]byte
 	Tp   bpf_debugTpInfoT
 }
 

@@ -65,7 +65,6 @@ type bpf_tpGrpcTransportsT struct {
 	Type uint8
 	_    [3]byte
 	Conn bpf_tpConnectionInfoT
-	_    [2]byte
 	Tp   bpf_tpTpInfoT
 }
 

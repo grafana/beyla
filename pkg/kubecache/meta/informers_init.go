@@ -234,7 +234,7 @@ func (inf *Informers) initPodInformer(ctx context.Context, informerFactory infor
 		for i := range pod.Status.ContainerStatuses {
 			containers = append(containers,
 				&informer.ContainerInfo{
-					Name: pod.Spec.Containers[i].Name,
+					Name: pod.Status.ContainerStatuses[i].Name,
 					Id:   rmContainerIDSchema(pod.Status.ContainerStatuses[i].ContainerID),
 					Env:  envToMap(inf.config.kubeClient, pod.ObjectMeta, pod.Spec.Containers[i].Env),
 				},

@@ -414,7 +414,7 @@ static __always_inline void process_meta_frame_headers(void *frame, tp_info_t *t
         bpf_probe_read(&fields_len, sizeof(fields_len), (void *)(frame + fields_off + 8));
         bpf_dbg_printk("fields ptr %llx, len %d", fields, fields_len);
         if (fields && fields_len > 0) {
-            for (int i = 0; i < 16; i++) {
+            for (u8 i = 0; i < 16; i++) {
                 if (i >= fields_len) {
                     break;
                 }

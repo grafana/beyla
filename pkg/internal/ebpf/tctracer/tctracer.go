@@ -6,6 +6,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"unsafe"
 
 	"github.com/cilium/ebpf"
 	"github.com/vishvananda/netlink"
@@ -58,7 +59,21 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 func (p *Tracer) SetupTailCalls() {}
 
 func (p *Tracer) Constants() map[string]any {
-	return map[string]any{}
+	m := make(map[string]any, 2)
+
+	m["wakeup_data_bytes"] = uint32(p.cfg.EBPF.WakeupLen) * uint32(unsafe.Sizeof(ebpfcommon.HTTPRequestTrace{}))
+
+	// The eBPF side does some basic filtering of events that do not belong to
+	// processes which we monitor. We filter more accurately in the userspace, but
+	// for performance reasons we enable the PID based filtering in eBPF.
+	// This must match httpfltr.go, otherwise we get partial events in userspace.
+	if !p.cfg.Discovery.SystemWide && !p.cfg.Discovery.BPFPidFilterOff {
+		m["filter_pids"] = int32(1)
+	} else {
+		m["filter_pids"] = int32(0)
+	}
+
+	return m
 }
 
 func (p *Tracer) RegisterOffsets(_ *exec.FileInfo, _ *goexec.Offsets) {}
@@ -89,6 +104,25 @@ func (p *Tracer) UProbes() map[string]map[string]ebpfcommon.FunctionPrograms {
 
 func (p *Tracer) SocketFilters() []*ebpf.Program {
 	return nil
+}
+
+func (p *Tracer) SockMsgs() []ebpfcommon.SockMsg {
+	return []ebpfcommon.SockMsg{
+		{
+			Program:  p.bpfObjects.PacketExtender,
+			MapFD:    p.bpfObjects.bpfMaps.SockDir.FD(),
+			AttachAs: ebpf.AttachSkMsgVerdict,
+		},
+	}
+}
+
+func (p *Tracer) SockOps() []ebpfcommon.SockOps {
+	return []ebpfcommon.SockOps{
+		{
+			Program:  p.bpfObjects.SockmapTracker,
+			AttachAs: ebpf.AttachCGroupSockOps,
+		},
+	}
 }
 
 func (p *Tracer) RecordInstrumentedLib(uint64) {}

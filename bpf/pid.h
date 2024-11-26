@@ -34,9 +34,8 @@ static __always_inline u8 pid_matches(pid_key_t *p) {
     u64 k =
         (((u64)p->ns) << 32) | p->pid; // combine the namespace id and the pid into one single u64
 
-    u32 h =
-        (u32)(k %
-              PRIME_HASH); // divide with prime number lower than max pids * 64, modulo with primes gives good hash functions
+    // divide with prime number lower than max pids * 64, modulo with primes gives good hash functions
+    u32 h = (u32)(k % PRIME_HASH);
     u32 segment = h / 64; // divide by the segment size (8 bytes) to find the segment
     u32 bit = h & 63;     // lowest 64 bits gives us the placement inside the segment
 

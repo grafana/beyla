@@ -123,6 +123,7 @@ services:
     volumes:
       - ./configs/:/configs
       - ./system/sys/kernel/security:/sys/kernel/security
+      - /sys/fs/cgroup:/sys/fs/cgroup
       - ../../testoutput:/coverage
       - ../../testoutput/run-multi:/var/run/beyla
     image: hatest-autoinstrumenter

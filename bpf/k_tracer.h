@@ -38,11 +38,6 @@ struct {
     __type(value, recv_args_t);
 } active_recv_args SEC(".maps");
 
-typedef struct send_args {
-    pid_connection_info_t p_conn;
-    u64 size;
-} send_args_t;
-
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
@@ -256,29 +251,6 @@ cleanup:
 
 // Main HTTP read and write operations are handled with tcp_sendmsg and tcp_recvmsg
 
-static __always_inline void *is_ssl_connection(u64 id) {
-    void *ssl = 0;
-    // Checks if it's sandwitched between active SSL handshake, read or write uprobe/uretprobe
-    void **s = bpf_map_lookup_elem(&active_ssl_handshakes, &id);
-    if (s) {
-        ssl = *s;
-    } else {
-        ssl_args_t *ssl_args = bpf_map_lookup_elem(&active_ssl_read_args, &id);
-        if (!ssl_args) {
-            ssl_args = bpf_map_lookup_elem(&active_ssl_write_args, &id);
-        }
-        if (ssl_args) {
-            ssl = (void *)ssl_args->ssl;
-        }
-    }
-
-    return ssl;
-}
-
-static __always_inline void *is_active_ssl(pid_connection_info_t *conn) {
-    return bpf_map_lookup_elem(&active_ssl_connections, conn);
-}
-
 // The size argument here will be always the total response size.
 // However, the return value of tcp_sendmsg tells us how much it sent. When the
 // response is large it will get chunked, so we have to use a kretprobe to
@@ -302,6 +274,11 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
         u16 orig_dport = s_args.p_conn.conn.d_port;
         dbg_print_http_connection_info(
             &s_args.p_conn.conn); // commented out since GitHub CI doesn't like this call
+        // Create the egress key before we sort the connection info.
+        egress_key_t e_key = {
+            .d_port = s_args.p_conn.conn.d_port,
+            .s_port = s_args.p_conn.conn.s_port,
+        };
         sort_connection_info(&s_args.p_conn.conn);
         s_args.p_conn.pid = pid_from_pid_tgid(id);
 
@@ -313,6 +290,33 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
                     u8 *buf = iovec_memory();
                     if (buf) {
                         size = read_msghdr_buf(msg, buf, size);
+                        // If a sock_msg program is installed, this kprobe will fail to
+                        // read anything, because the data is in bvec physical pages. However,
+                        // the sock_msg will setup a buffer for us if this is the case. We
+                        // look up this buffer and use it instead of what we'd get from
+                        // calling read_msghdr_buf.
+                        if (!size) {
+                            msg_buffer_t *m_buf = bpf_map_lookup_elem(&msg_buffers, &e_key);
+                            bpf_dbg_printk("No size, m_buf[%llx]", m_buf);
+                            if (m_buf) {
+                                buf = m_buf->buf;
+                                // The buffer setup for us by a sock_msg program is always the
+                                // full buffer, but when we extend a packet to be able to inject
+                                // a Traceparent field, it will actually be split in 3 chunks:
+                                // [before the injected header],[70 bytes for 'Traceparent...'],[the rest].
+                                // We don't want the handle_buf_with_connection logic to run more than
+                                // once on the same data, so if we find a buf we send all of it to the
+                                // handle_buf_with_connection logic and then mark it as seen by making
+                                // m_buf->pos be the size of the buffer.
+                                if (!m_buf->pos) {
+                                    size = sizeof(m_buf->buf);
+                                    m_buf->pos = size;
+                                    bpf_dbg_printk("msg_buffer: size %d, buf[%s]", size, buf);
+                                } else {
+                                    size = 0;
+                                }
+                            }
+                        }
                         if (size) {
                             u64 sock_p = (u64)sk;
                             bpf_map_update_elem(&active_send_args, &id, &s_args, BPF_ANY);

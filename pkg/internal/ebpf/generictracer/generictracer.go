@@ -130,7 +130,7 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 		loader = loadBpf_debug
 	}
 
-	if p.cfg.EBPF.TrackRequestHeaders || p.cfg.EBPF.UseTCForL7CP {
+	if p.cfg.EBPF.TrackRequestHeaders || p.cfg.EBPF.UseTCForL7CP || p.cfg.EBPF.UseTCForCP {
 		if ebpfcommon.SupportsEBPFLoops() {
 			p.log.Info("Found Linux kernel later than 5.17, enabling trace information parsing")
 			loader = loadBpf_tp
@@ -184,7 +184,7 @@ func (p *Tracer) Constants() map[string]any {
 		m["filter_pids"] = int32(0)
 	}
 
-	if p.cfg.EBPF.TrackRequestHeaders || p.cfg.EBPF.UseTCForL7CP {
+	if p.cfg.EBPF.TrackRequestHeaders || p.cfg.EBPF.UseTCForL7CP || p.cfg.EBPF.UseTCForCP {
 		m["capture_header_buffer"] = int32(1)
 	} else {
 		m["capture_header_buffer"] = int32(0)
@@ -258,7 +258,7 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.FunctionPrograms {
 			Required: true,
 			Start:    p.bpfObjects.KprobeTcpClose,
 		},
-		"tcp_sendmsg": {
+		"tcp_sendmsg_locked": {
 			Required: true,
 			Start:    p.bpfObjects.KprobeTcpSendmsg,
 			End:      p.bpfObjects.KretprobeTcpSendmsg,
@@ -352,6 +352,10 @@ func (p *Tracer) UProbes() map[string]map[string]ebpfcommon.FunctionPrograms {
 func (p *Tracer) SocketFilters() []*ebpf.Program {
 	return []*ebpf.Program{p.bpfObjects.SocketHttpFilter}
 }
+
+func (p *Tracer) SockMsgs() []ebpfcommon.SockMsg { return nil }
+
+func (p *Tracer) SockOps() []ebpfcommon.SockOps { return nil }
 
 func (p *Tracer) RecordInstrumentedLib(id uint64) {
 	libsMux.Lock()

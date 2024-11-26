@@ -108,7 +108,10 @@ github.com/cilium/ebpf/internal/unix
 github.com/cilium/ebpf/link
 github.com/cilium/ebpf/ringbuf
 github.com/cilium/ebpf/rlimit
-# github.com/davecgh/go-spew v1.1.1
+# github.com/containers/common v0.61.0
+## explicit; go 1.22.6
+github.com/containers/common/pkg/cgroupv2
+# github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 ## explicit
 github.com/davecgh/go-spew/spew
 # github.com/emicklei/go-restful/v3 v3.12.1
@@ -121,9 +124,10 @@ github.com/evanphx/json-patch/v5
 # github.com/felixge/httpsnoop v1.0.4
 ## explicit; go 1.13
 github.com/felixge/httpsnoop
-# github.com/fsnotify/fsnotify v1.7.0
+# github.com/fsnotify/fsnotify v1.8.0
 ## explicit; go 1.17
 github.com/fsnotify/fsnotify
+github.com/fsnotify/fsnotify/internal
 # github.com/gabriel-vasile/mimetype v1.4.2
 ## explicit; go 1.20
 github.com/gabriel-vasile/mimetype
@@ -347,7 +351,7 @@ github.com/pierrec/lz4/v4/internal/xxh32
 # github.com/pkg/errors v0.9.1
 ## explicit
 github.com/pkg/errors
-# github.com/pmezard/go-difflib v1.0.0
+# github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
 ## explicit
 github.com/pmezard/go-difflib/difflib
 # github.com/power-devops/perfstat v0.0.0-20210106213030-5aafc221ea8c
@@ -423,12 +427,12 @@ github.com/twitchyliquid64/golang-asm/unsafeheader
 # github.com/ugorji/go/codec v1.2.11
 ## explicit; go 1.11
 github.com/ugorji/go/codec
-# github.com/vishvananda/netlink v1.1.0
+# github.com/vishvananda/netlink v1.3.0
 ## explicit; go 1.12
 github.com/vishvananda/netlink
 github.com/vishvananda/netlink/nl
-# github.com/vishvananda/netns v0.0.0-20191106174202-0a2b9b5464df
-## explicit; go 1.12
+# github.com/vishvananda/netns v0.0.4
+## explicit; go 1.17
 github.com/vishvananda/netns
 # github.com/vladimirvivien/gexe v0.3.0
 ## explicit; go 1.22
@@ -699,14 +703,14 @@ go.uber.org/zap/zapcore
 ## explicit; go 1.18
 golang.org/x/arch/arm64/arm64asm
 golang.org/x/arch/x86/x86asm
-# golang.org/x/crypto v0.28.0
+# golang.org/x/crypto v0.29.0
 ## explicit; go 1.20
 golang.org/x/crypto/sha3
-# golang.org/x/exp v0.0.0-20230224173230-c95f2b4c22f2
-## explicit; go 1.18
+# golang.org/x/exp v0.0.0-20241009180824-f66d83c29e7c
+## explicit; go 1.22.0
 golang.org/x/exp/constraints
-# golang.org/x/mod v0.20.0
-## explicit; go 1.18
+# golang.org/x/mod v0.21.0
+## explicit; go 1.22.0
 golang.org/x/mod/semver
 # golang.org/x/net v0.30.0
 ## explicit; go 1.18
@@ -726,17 +730,17 @@ golang.org/x/net/trace
 ## explicit; go 1.18
 golang.org/x/oauth2
 golang.org/x/oauth2/internal
-# golang.org/x/sys v0.26.0
+# golang.org/x/sys v0.27.0
 ## explicit; go 1.18
 golang.org/x/sys/cpu
 golang.org/x/sys/plan9
 golang.org/x/sys/unix
 golang.org/x/sys/windows
 golang.org/x/sys/windows/registry
-# golang.org/x/term v0.25.0
+# golang.org/x/term v0.26.0
 ## explicit; go 1.18
 golang.org/x/term
-# golang.org/x/text v0.19.0
+# golang.org/x/text v0.20.0
 ## explicit; go 1.18
 golang.org/x/text/internal/language
 golang.org/x/text/internal/language/compact

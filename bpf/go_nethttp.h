@@ -538,6 +538,25 @@ int uprobe_writeSubset(struct pt_regs *ctx) {
             (void *)(io_writer_addr + go_offset_of(ot, (go_offset){.v = _io_writer_n_pos})),
             &len,
             sizeof(len));
+
+        // For Go we support two types of HTTP context propagation for now.
+        //   1. The one that this code does, which uses the locked down bpf_probe_write_user.
+        //   2. By using a sock_msg program that will extend the packet.
+        // If this code ran, we should ensure that the second part doesn't run, therefore
+        // we remove the metadata setup in uprobe_persistConnRoundTrip(struct pt_regs *ctx), so
+        // that approach 2. skips this packet.
+        connection_info_t *info = bpf_map_lookup_elem(&ongoing_client_connections, &g_key);
+        if (info) {
+            egress_key_t e_key = {
+                .d_port = info->d_port,
+                .s_port = info->s_port,
+            };
+            bpf_map_delete_elem(&outgoing_trace_map, &e_key);
+            bpf_dbg_printk(
+                "wrote traceparent using bpf_probe_write_user, removing outgoing trace map %d:%d",
+                e_key.s_port,
+                e_key.d_port);
+        }
     }
 
 done:

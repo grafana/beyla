@@ -50,8 +50,14 @@
 // h = high word, l = low word
 // used as hashmap key, must be 4 byte aligned?
 typedef struct http_connection_info {
-    u8 s_addr[IP_V6_ADDR_LEN];
-    u8 d_addr[IP_V6_ADDR_LEN];
+    union {
+        u8 s_addr[IP_V6_ADDR_LEN];
+        u32 s_ip[IP_V6_ADDR_LEN_WORDS];
+    };
+    union {
+        u8 d_addr[IP_V6_ADDR_LEN];
+        u32 d_ip[IP_V6_ADDR_LEN_WORDS];
+    };
     u16 s_port;
     u16 d_port;
 } connection_info_t;
@@ -187,6 +193,14 @@ typedef struct http2_grpc_request {
     tp_info_t tp;
 } http2_grpc_request_t;
 
+// When sock_msg is installed it disables the kprobes attached to tcp_sendmsg.
+// We use this data structure to provide the buffer to the tcp_sendmsg logic,
+// because we can't read the bvec physical pages.
+typedef struct msg_buffer {
+    u8 buf[KPROBES_HTTP2_BUF_SIZE];
+    u16 pos;
+} msg_buffer_t;
+
 // Force emitting struct http_request_trace into the ELF for automatic creation of Golang struct
 const http_info_t *unused __attribute__((unused));
 const http2_grpc_request_t *unused_http2 __attribute__((unused));
@@ -241,6 +255,19 @@ static __always_inline void sort_connection_info(connection_info_t *info) {
         // Only sort if they are explicitly reversed, otherwise always sort source to be the larger
         // of the two ports
         swap_connection_info_order(info);
+    }
+}
+
+// Equivalent to sort_connection_info, but works only with the ports key (egress_key_t),
+// which we use for egress connection tracking
+static __always_inline void sort_egress_key(egress_key_t *info) {
+    if (likely_ephemeral_port(info->s_port) && !likely_ephemeral_port(info->d_port)) {
+        return;
+    }
+
+    if ((likely_ephemeral_port(info->d_port) && !likely_ephemeral_port(info->s_port)) ||
+        (info->d_port > info->s_port)) {
+        __SWAP(u16, info->s_port, info->d_port);
     }
 }
 

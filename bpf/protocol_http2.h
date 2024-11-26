@@ -110,6 +110,7 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
     int saved_buf_pos = 0;
     u8 found_data_frame = 0;
     http2_conn_stream_t stream = {0};
+    stream.pid_conn = *pid_conn;
 
     unsigned char frame_buf[FRAME_HEADER_LEN];
     frame_header_t frame = {0};
@@ -124,7 +125,6 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
         //bpf_dbg_printk("http2 frame type = %d, len = %d, stream_id = %d, flags = %d", frame.type, frame.length, frame.stream_id, frame.flags);
 
         if (is_headers_frame(&frame)) {
-            stream.pid_conn = *pid_conn;
             stream.stream_id = frame.stream_id;
             if (!prev_info) {
                 prev_info = bpf_map_lookup_elem(&ongoing_http2_grpc, &stream);

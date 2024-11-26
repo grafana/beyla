@@ -107,6 +107,10 @@ func (p *Tracer) SocketFilters() []*ebpf.Program {
 	return nil
 }
 
+func (p *Tracer) SockMsgs() []ebpfcommon.SockMsg { return nil }
+
+func (p *Tracer) SockOps() []ebpfcommon.SockOps { return nil }
+
 func (p *Tracer) RecordInstrumentedLib(uint64) {}
 
 func (p *Tracer) UnlinkInstrumentedLib(uint64) {}

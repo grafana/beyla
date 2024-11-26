@@ -413,7 +413,7 @@ static __always_inline void process_meta_frame_headers(void *frame, tp_info_t *t
                 if (i >= fields_len) {
                     break;
                 }
-                void *field_ptr = fields + i * sizeof(grpc_header_field_t);
+                void *field_ptr = fields + (i * sizeof(grpc_header_field_t));
                 bpf_dbg_printk("field_ptr %llx", field_ptr);
                 grpc_header_field_t field = {};
                 bpf_probe_read(&field, sizeof(grpc_header_field_t), field_ptr);

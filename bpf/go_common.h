@@ -21,10 +21,12 @@
 #include "tracing.h"
 #include "trace_util.h"
 #include "go_offsets.h"
-#include "go_traceparent.h"
 #include "pin_internal.h"
 
 char __license[] SEC("license") = "Dual MIT/GPL";
+
+#define W3C_KEY_LENGTH 11
+#define W3C_VAL_LENGTH 55
 
 // Temporary information about a function invocation. It stores the invocation time of a function
 // as well as the value of registers at the invocation time. This way we can retrieve them at the
@@ -113,6 +115,22 @@ typedef struct grpc_header_field {
     u64 val_len;
     u64 sensitive;
 } grpc_header_field_t;
+
+// assumes s2 is all lowercase
+static __always_inline int bpf_memicmp(const char *s1, const char *s2, s32 size) {
+    for (int i = 0; i < size; i++) {
+        if (s1[i] != s2[i] && s1[i] != (s2[i] - 32)) // compare with each uppercase character
+        {
+            return i + 1;
+        }
+    }
+
+    return 0;
+}
+
+static __always_inline u8 valid_trace(const unsigned char *trace_id) {
+    return *((u64 *)trace_id) != 0 || *((u64 *)(trace_id + 8)) != 0;
+}
 
 static __always_inline void go_addr_key_from_id(go_addr_key_t *current, void *addr) {
     u64 pid_tid = bpf_get_current_pid_tgid();

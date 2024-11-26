@@ -16,7 +16,6 @@
 #include "go_byte_arr.h"
 #include "bpf_dbg.h"
 #include "go_common.h"
-#include "go_traceparent.h"
 #include "hpack.h"
 #include "ringbuf.h"
 

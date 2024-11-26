@@ -292,7 +292,6 @@ type bpf_tp_debugMapSpecs struct {
 	FramerInvocationMap           *ebpf.MapSpec `ebpf:"framer_invocation_map"`
 	GoOffsetsMap                  *ebpf.MapSpec `ebpf:"go_offsets_map"`
 	GoTraceMap                    *ebpf.MapSpec `ebpf:"go_trace_map"`
-	GolangMapbucketStorageMap     *ebpf.MapSpec `ebpf:"golang_mapbucket_storage_map"`
 	GrpcFramerInvocationMap       *ebpf.MapSpec `ebpf:"grpc_framer_invocation_map"`
 	HeaderReqMap                  *ebpf.MapSpec `ebpf:"header_req_map"`
 	Http2ReqMap                   *ebpf.MapSpec `ebpf:"http2_req_map"`
@@ -351,7 +350,6 @@ type bpf_tp_debugMaps struct {
 	FramerInvocationMap           *ebpf.Map `ebpf:"framer_invocation_map"`
 	GoOffsetsMap                  *ebpf.Map `ebpf:"go_offsets_map"`
 	GoTraceMap                    *ebpf.Map `ebpf:"go_trace_map"`
-	GolangMapbucketStorageMap     *ebpf.Map `ebpf:"golang_mapbucket_storage_map"`
 	GrpcFramerInvocationMap       *ebpf.Map `ebpf:"grpc_framer_invocation_map"`
 	HeaderReqMap                  *ebpf.Map `ebpf:"header_req_map"`
 	Http2ReqMap                   *ebpf.Map `ebpf:"http2_req_map"`
@@ -393,7 +391,6 @@ func (m *bpf_tp_debugMaps) Close() error {
 		m.FramerInvocationMap,
 		m.GoOffsetsMap,
 		m.GoTraceMap,
-		m.GolangMapbucketStorageMap,
 		m.GrpcFramerInvocationMap,
 		m.HeaderReqMap,
 		m.Http2ReqMap,

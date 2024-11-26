@@ -278,7 +278,6 @@ type bpfMapSpecs struct {
 	FetchRequests                 *ebpf.MapSpec `ebpf:"fetch_requests"`
 	GoOffsetsMap                  *ebpf.MapSpec `ebpf:"go_offsets_map"`
 	GoTraceMap                    *ebpf.MapSpec `ebpf:"go_trace_map"`
-	GolangMapbucketStorageMap     *ebpf.MapSpec `ebpf:"golang_mapbucket_storage_map"`
 	Http2ServerRequestsTp         *ebpf.MapSpec `ebpf:"http2_server_requests_tp"`
 	IncomingTraceMap              *ebpf.MapSpec `ebpf:"incoming_trace_map"`
 	KafkaRequests                 *ebpf.MapSpec `ebpf:"kafka_requests"`
@@ -332,7 +331,6 @@ type bpfMaps struct {
 	FetchRequests                 *ebpf.Map `ebpf:"fetch_requests"`
 	GoOffsetsMap                  *ebpf.Map `ebpf:"go_offsets_map"`
 	GoTraceMap                    *ebpf.Map `ebpf:"go_trace_map"`
-	GolangMapbucketStorageMap     *ebpf.Map `ebpf:"golang_mapbucket_storage_map"`
 	Http2ServerRequestsTp         *ebpf.Map `ebpf:"http2_server_requests_tp"`
 	IncomingTraceMap              *ebpf.Map `ebpf:"incoming_trace_map"`
 	KafkaRequests                 *ebpf.Map `ebpf:"kafka_requests"`
@@ -369,7 +367,6 @@ func (m *bpfMaps) Close() error {
 		m.FetchRequests,
 		m.GoOffsetsMap,
 		m.GoTraceMap,
-		m.GolangMapbucketStorageMap,
 		m.Http2ServerRequestsTp,
 		m.IncomingTraceMap,
 		m.KafkaRequests,

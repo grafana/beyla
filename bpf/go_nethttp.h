@@ -19,7 +19,6 @@
 #include "go_byte_arr.h"
 #include "bpf_dbg.h"
 #include "go_common.h"
-#include "go_traceparent.h"
 #include "http_types.h"
 #include "tracing.h"
 #include "hpack.h"

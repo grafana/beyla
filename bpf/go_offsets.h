@@ -37,7 +37,7 @@ typedef enum {
     _grpc_stream_method_ptr_pos,
     _grpc_status_s_pos,
     _grpc_status_code_ptr_pos,
-    _grpc_stream_ctx_ptr_pos,
+    _meta_headers_frame_fields_ptr_pos,
     _value_context_val_ptr_pos,
     _grpc_st_conn_pos,
     _grpc_t_conn_pos,

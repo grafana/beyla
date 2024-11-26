@@ -260,6 +260,20 @@
         ]
       }
     },
+    "golang.org/x/net/http2.MetaHeadersFrame": {
+      "Fields": {
+        "versions": {
+          "oldest": "0.12.0",
+          "newest": "0.31.0"
+        },
+        "offsets": [
+          {
+            "offset": 8,
+            "since": "0.12.0"
+          }
+        ]
+      }
+    },
     "golang.org/x/net/http2.serverConn": {
       "conn": {
         "versions": {
@@ -317,22 +331,6 @@
       }
     },
     "google.golang.org/grpc/internal/transport.Stream": {
-      "ctx": {
-        "versions": {
-          "oldest": "1.40.0",
-          "newest": "1.68.0"
-        },
-        "offsets": [
-          {
-            "offset": 32,
-            "since": "1.40.0"
-          },
-          {
-            "offset": 40,
-            "since": "1.66.0"
-          }
-        ]
-      },
       "method": {
         "versions": {
           "oldest": "1.40.0",

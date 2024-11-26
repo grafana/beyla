@@ -131,7 +131,7 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 		goexec.GrpcStreamMethodPtrPos,
 		goexec.GrpcStatusSPos,
 		goexec.GrpcStatusCodePtrPos,
-		goexec.GrpcStreamCtxPtrPos,
+		goexec.MetaHeadersFrameFieldsPtrPos,
 		goexec.ValueContextValPtrPos,
 		goexec.GrpcStConnPos,
 		goexec.GrpcTConnPos,

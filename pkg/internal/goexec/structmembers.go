@@ -51,7 +51,7 @@ const (
 	GrpcStreamMethodPtrPos
 	GrpcStatusSPos
 	GrpcStatusCodePtrPos
-	GrpcStreamCtxPtrPos
+	MetaHeadersFrameFieldsPtrPos
 	ValueContextValPtrPos
 	GrpcStConnPos
 	GrpcTConnPos
@@ -113,7 +113,6 @@ var structMembers = map[string]structInfo{
 		fields: map[string]GoOffset{
 			"st":     GrpcStreamStPtrPos,
 			"method": GrpcStreamMethodPtrPos,
-			"ctx":    GrpcStreamCtxPtrPos,
 		},
 	},
 	"google.golang.org/grpc/internal/status.Status": {
@@ -173,6 +172,12 @@ var structMembers = map[string]structInfo{
 		lib: "golang.org/x/net",
 		fields: map[string]GoOffset{
 			"w": FramerWPos,
+		},
+	},
+	"golang.org/x/net/http2.MetaHeadersFrame": {
+		lib: "golang.org/x/net",
+		fields: map[string]GoOffset{
+			"Fields": MetaHeadersFrameFieldsPtrPos,
 		},
 	},
 	"golang.org/x/net/http2.serverConn": {

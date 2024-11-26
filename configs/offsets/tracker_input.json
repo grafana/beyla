@@ -65,6 +65,9 @@
       ],
       "golang.org/x/net/http2.serverConn": [
         "conn"
+      ],
+      "golang.org/x/net/http2.MetaHeadersFrame": [
+        "Fields"
       ]
     }
   },  
@@ -73,8 +76,7 @@
     "fields": {
       "google.golang.org/grpc/internal/transport.Stream": [
         "method",
-        "st",
-        "ctx"
+        "st"
       ],
       "google.golang.org/grpc/internal/status.Status": [
         "s"

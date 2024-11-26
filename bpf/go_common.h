@@ -403,10 +403,13 @@ static __always_inline void *unwrap_tls_conn_info(void *conn_ptr, void *tls_stat
 
 static __always_inline void process_meta_frame_headers(void *frame, tp_info_t *tp) {
     if (frame) {
+        off_table_t *ot = get_offsets_table();
+
         void *fields = 0;
-        bpf_probe_read(&fields, sizeof(fields), (void *)(frame + 8));
+        u64 fields_off = go_offset_of(ot, (go_offset){.v = _meta_headers_frame_fields_ptr_pos});
+        bpf_probe_read(&fields, sizeof(fields), (void *)(frame + fields_off));
         u64 fields_len = 0;
-        bpf_probe_read(&fields_len, sizeof(fields_len), (void *)(frame + 8 + 8));
+        bpf_probe_read(&fields_len, sizeof(fields_len), (void *)(frame + fields_off + 8));
         bpf_dbg_printk("fields ptr %llx, len %d", fields, fields_len);
         if (fields && fields_len > 0) {
             for (int i = 0; i < 16; i++) {

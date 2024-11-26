@@ -227,6 +227,12 @@ func (p *Tracer) GoProbes() map[string][]ebpfcommon.FunctionPrograms {
 		"net/http.(*http2serverConn).runHandler": {{
 			Start: p.bpfObjects.UprobeHttp2serverConnRunHandler, // http2 server connection tracking, vendored in go
 		}},
+		"golang.org/x/net/http2.(*serverConn).processHeaders": {{
+			Start: p.bpfObjects.UprobeHttp2ServerProcessHeaders, // http2 server request header parsing
+		}},
+		"net/http.(*http2serverConn).processHeaders": {{
+			Start: p.bpfObjects.UprobeHttp2ServerProcessHeaders, // http2 server request header parsing, vendored in go
+		}},
 		// tracking of tcp connections for black-box propagation
 		"net/http.(*conn).serve": {{ // http server
 			Start: p.bpfObjects.UprobeConnServe,

@@ -234,6 +234,7 @@ type bpf_debugProgramSpecs struct {
 	UprobeHttp2ResponseWriterStateWriteHeader *ebpf.ProgramSpec `ebpf:"uprobe_http2ResponseWriterStateWriteHeader"`
 	UprobeHttp2RoundTrip                      *ebpf.ProgramSpec `ebpf:"uprobe_http2RoundTrip"`
 	UprobeHttp2ServerOperateHeaders           *ebpf.ProgramSpec `ebpf:"uprobe_http2Server_operateHeaders"`
+	UprobeHttp2ServerProcessHeaders           *ebpf.ProgramSpec `ebpf:"uprobe_http2Server_processHeaders"`
 	UprobeHttp2serverConnRunHandler           *ebpf.ProgramSpec `ebpf:"uprobe_http2serverConn_runHandler"`
 	UprobeNetFdRead                           *ebpf.ProgramSpec `ebpf:"uprobe_netFdRead"`
 	UprobePersistConnRoundTrip                *ebpf.ProgramSpec `ebpf:"uprobe_persistConnRoundTrip"`
@@ -279,6 +280,7 @@ type bpf_debugMapSpecs struct {
 	GoOffsetsMap                  *ebpf.MapSpec `ebpf:"go_offsets_map"`
 	GoTraceMap                    *ebpf.MapSpec `ebpf:"go_trace_map"`
 	GolangMapbucketStorageMap     *ebpf.MapSpec `ebpf:"golang_mapbucket_storage_map"`
+	Http2ServerRequestsTp         *ebpf.MapSpec `ebpf:"http2_server_requests_tp"`
 	IncomingTraceMap              *ebpf.MapSpec `ebpf:"incoming_trace_map"`
 	KafkaRequests                 *ebpf.MapSpec `ebpf:"kafka_requests"`
 	Newproc1                      *ebpf.MapSpec `ebpf:"newproc1"`
@@ -333,6 +335,7 @@ type bpf_debugMaps struct {
 	GoOffsetsMap                  *ebpf.Map `ebpf:"go_offsets_map"`
 	GoTraceMap                    *ebpf.Map `ebpf:"go_trace_map"`
 	GolangMapbucketStorageMap     *ebpf.Map `ebpf:"golang_mapbucket_storage_map"`
+	Http2ServerRequestsTp         *ebpf.Map `ebpf:"http2_server_requests_tp"`
 	IncomingTraceMap              *ebpf.Map `ebpf:"incoming_trace_map"`
 	KafkaRequests                 *ebpf.Map `ebpf:"kafka_requests"`
 	Newproc1                      *ebpf.Map `ebpf:"newproc1"`
@@ -370,6 +373,7 @@ func (m *bpf_debugMaps) Close() error {
 		m.GoOffsetsMap,
 		m.GoTraceMap,
 		m.GolangMapbucketStorageMap,
+		m.Http2ServerRequestsTp,
 		m.IncomingTraceMap,
 		m.KafkaRequests,
 		m.Newproc1,
@@ -423,6 +427,7 @@ type bpf_debugPrograms struct {
 	UprobeHttp2ResponseWriterStateWriteHeader *ebpf.Program `ebpf:"uprobe_http2ResponseWriterStateWriteHeader"`
 	UprobeHttp2RoundTrip                      *ebpf.Program `ebpf:"uprobe_http2RoundTrip"`
 	UprobeHttp2ServerOperateHeaders           *ebpf.Program `ebpf:"uprobe_http2Server_operateHeaders"`
+	UprobeHttp2ServerProcessHeaders           *ebpf.Program `ebpf:"uprobe_http2Server_processHeaders"`
 	UprobeHttp2serverConnRunHandler           *ebpf.Program `ebpf:"uprobe_http2serverConn_runHandler"`
 	UprobeNetFdRead                           *ebpf.Program `ebpf:"uprobe_netFdRead"`
 	UprobePersistConnRoundTrip                *ebpf.Program `ebpf:"uprobe_persistConnRoundTrip"`
@@ -479,6 +484,7 @@ func (p *bpf_debugPrograms) Close() error {
 		p.UprobeHttp2ResponseWriterStateWriteHeader,
 		p.UprobeHttp2RoundTrip,
 		p.UprobeHttp2ServerOperateHeaders,
+		p.UprobeHttp2ServerProcessHeaders,
 		p.UprobeHttp2serverConnRunHandler,
 		p.UprobeNetFdRead,
 		p.UprobePersistConnRoundTrip,

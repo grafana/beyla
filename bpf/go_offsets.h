@@ -56,6 +56,8 @@ typedef enum {
     _sarama_response_corr_id_pos,
     _sarama_broker_conn_pos,
     _sarama_bufconn_conn_pos,
+    // grpc versioning
+    _operate_headers_new,
     _last_go_offset,
 } go_offset_const;
 

@@ -133,10 +133,21 @@ SEC("uprobe/http2Server_operateHeaders")
 int uprobe_http2Server_operateHeaders(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     void *tr = GO_PARAM1(ctx);
-    void *frame = GO_PARAM4(ctx);
-    bpf_dbg_printk("=== uprobe/GRPC http2Server_operateHeaders tr %llx goroutine %lx === ",
+    void *frame = GO_PARAM2(ctx);
+    off_table_t *ot = get_offsets_table();
+
+    u64 new_offset_version = go_offset_of(ot, (go_offset){.v = _operate_headers_new});
+
+    // After grpc version 1.60, they added extra context argument to the
+    // function call, which adds two extra arguments.
+    if (new_offset_version) {
+        frame = GO_PARAM4(ctx);
+    }
+
+    bpf_dbg_printk("=== uprobe/GRPC http2Server_operateHeaders tr %llx goroutine %lx, new %d === ",
                    tr,
-                   goroutine_addr);
+                   goroutine_addr,
+                   new_offset_version);
     go_addr_key_t g_key = {};
     go_addr_key_from_id(&g_key, goroutine_addr);
 

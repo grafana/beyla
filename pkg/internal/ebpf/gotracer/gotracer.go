@@ -150,6 +150,8 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 		goexec.SaramaResponseCorrIDPos,
 		goexec.SaramaBrokerConnPos,
 		goexec.SaramaBufconnConnPos,
+		// grpc versioning
+		goexec.OperateHeadersNew,
 	} {
 		if val, ok := offsets.Field[field].(uint64); ok {
 			offTable.Table[field] = val

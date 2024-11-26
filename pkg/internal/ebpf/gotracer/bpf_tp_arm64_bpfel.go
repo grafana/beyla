@@ -62,10 +62,11 @@ type bpf_tpGrpcSrvFuncInvocationT struct {
 }
 
 type bpf_tpGrpcTransportsT struct {
-	Type uint8
-	_    [3]byte
 	Conn bpf_tpConnectionInfoT
+	_    [4]byte
 	Tp   bpf_tpTpInfoT
+	Type uint8
+	_    [7]byte
 }
 
 type bpf_tpHttpClientDataT struct {

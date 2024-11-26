@@ -254,7 +254,7 @@ int uprobe_readContinuedLineSliceReturns(struct pt_regs *ctx) {
     u64 len = (u64)GO_PARAM2(ctx);
     u8 *buf = (u8 *)GO_PARAM1(ctx);
 
-    if (len >= 68) {
+    if (len >= (W3C_KEY_LENGTH + W3C_VAL_LENGTH + 2)) {
         u8 temp[W3C_KEY_LENGTH + W3C_VAL_LENGTH + 2];
         bpf_probe_read(temp, sizeof(temp), buf);
         bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
@@ -263,7 +263,7 @@ int uprobe_readContinuedLineSliceReturns(struct pt_regs *ctx) {
 
         connection_info_t *existing = bpf_map_lookup_elem(&ongoing_server_connections, &g_key);
         if (existing) {
-            if (!bpf_memicmp((const char *)temp, "Traceparent: ", W3C_KEY_LENGTH + 2)) {
+            if (!bpf_memicmp((const char *)temp, "traceparent: ", W3C_KEY_LENGTH + 2)) {
                 server_http_func_invocation_t inv = {};
                 decode_go_traceparent(
                     temp + W3C_KEY_LENGTH + 2, inv.tp.trace_id, inv.tp.parent_id, &inv.tp.flags);
@@ -386,8 +386,7 @@ static __always_inline void roundTripStartHelper(struct pt_regs *ctx) {
 
     http_func_invocation_t invocation = {.start_monotime_ns = bpf_ktime_get_ns(), .tp = {0}};
 
-    __attribute__((__unused__)) u8 existing_tp =
-        client_trace_parent(goroutine_addr, &invocation.tp);
+    client_trace_parent(goroutine_addr, &invocation.tp);
 
     http_client_data_t trace = {0};
 
@@ -430,7 +429,6 @@ static __always_inline void roundTripStartHelper(struct pt_regs *ctx) {
     bpf_map_update_elem(&ongoing_http_client_requests_data, &g_key, &trace, BPF_ANY);
 
 #ifndef NO_HEADER_PROPAGATION
-    //if (!existing_tp) {
     void *headers_ptr = 0;
     bpf_probe_read(&headers_ptr,
                    sizeof(headers_ptr),
@@ -441,7 +439,6 @@ static __always_inline void roundTripStartHelper(struct pt_regs *ctx) {
     if (headers_ptr) {
         bpf_map_update_elem(&header_req_map, &headers_ptr, &goroutine_addr, BPF_ANY);
     }
-    //}
 #endif
 }
 

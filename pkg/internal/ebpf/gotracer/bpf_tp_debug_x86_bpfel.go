@@ -62,10 +62,11 @@ type bpf_tp_debugGrpcSrvFuncInvocationT struct {
 }
 
 type bpf_tp_debugGrpcTransportsT struct {
-	Type uint8
-	_    [3]byte
 	Conn bpf_tp_debugConnectionInfoT
+	_    [4]byte
 	Tp   bpf_tp_debugTpInfoT
+	Type uint8
+	_    [7]byte
 }
 
 type bpf_tp_debugHttpClientDataT struct {

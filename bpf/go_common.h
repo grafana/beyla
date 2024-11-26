@@ -25,10 +25,7 @@
 
 char __license[] SEC("license") = "Dual MIT/GPL";
 
-enum : u8 {
-  W3C_KEY_LENGTH = 11u,
-  W3C_VAL_LENGTH = 55u
-};
+enum { W3C_KEY_LENGTH = 11, W3C_VAL_LENGTH = 55 };
 
 // Temporary information about a function invocation. It stores the invocation time of a function
 // as well as the value of registers at the invocation time. This way we can retrieve them at the
@@ -82,9 +79,9 @@ struct {
 } ongoing_grpc_operate_headers SEC(".maps");
 
 typedef struct grpc_transports {
-    u8 type;
     connection_info_t conn;
     tp_info_t tp;
+    u8 type;
 } grpc_transports_t;
 
 // TODO: use go_addr_key_t as key
@@ -404,35 +401,38 @@ static __always_inline void *unwrap_tls_conn_info(void *conn_ptr, void *tls_stat
 }
 
 static __always_inline void process_meta_frame_headers(void *frame, tp_info_t *tp) {
-    if (frame) {
-        off_table_t *ot = get_offsets_table();
+    if (!frame) {
+        return;
+    }
 
-        void *fields = 0;
-        u64 fields_off = go_offset_of(ot, (go_offset){.v = _meta_headers_frame_fields_ptr_pos});
-        bpf_probe_read(&fields, sizeof(fields), (void *)(frame + fields_off));
-        u64 fields_len = 0;
-        bpf_probe_read(&fields_len, sizeof(fields_len), (void *)(frame + fields_off + 8));
-        bpf_dbg_printk("fields ptr %llx, len %d", fields, fields_len);
-        if (fields && fields_len > 0) {
-            for (u8 i = 0; i < 16; i++) {
-                if (i >= fields_len) {
+    off_table_t *ot = get_offsets_table();
+
+    void *fields = 0;
+    u64 fields_off = go_offset_of(ot, (go_offset){.v = _meta_headers_frame_fields_ptr_pos});
+    bpf_probe_read(&fields, sizeof(fields), (void *)(frame + fields_off));
+    u64 fields_len = 0;
+    bpf_probe_read(&fields_len, sizeof(fields_len), (void *)(frame + fields_off + 8));
+    bpf_dbg_printk("fields ptr %llx, len %d", fields, fields_len);
+    if (fields && fields_len > 0) {
+        for (u8 i = 0; i < 16; i++) {
+            if (i >= fields_len) {
+                break;
+            }
+            void *field_ptr = fields + (i * sizeof(grpc_header_field_t));
+            bpf_dbg_printk("field_ptr %llx", field_ptr);
+            grpc_header_field_t field = {};
+            bpf_probe_read(&field, sizeof(grpc_header_field_t), field_ptr);
+            bpf_dbg_printk("grpc header %s:%s", field.key_ptr, field.val_ptr);
+            bpf_dbg_printk("grpc sizes %d:%d", field.key_len, field.val_len);
+            if (field.key_len == W3C_KEY_LENGTH && field.val_len == W3C_VAL_LENGTH) {
+                u8 temp[W3C_VAL_LENGTH];
+
+                bpf_probe_read(&temp, W3C_KEY_LENGTH, field.key_ptr);
+                if (!bpf_memicmp((const char *)temp, "traceparent", W3C_KEY_LENGTH)) {
+                    bpf_dbg_printk("found grpc traceparent header");
+                    bpf_probe_read(&temp, W3C_VAL_LENGTH, field.val_ptr);
+                    decode_go_traceparent(temp, tp->trace_id, tp->parent_id, &tp->flags);
                     break;
-                }
-                void *field_ptr = fields + (i * sizeof(grpc_header_field_t));
-                bpf_dbg_printk("field_ptr %llx", field_ptr);
-                grpc_header_field_t field = {};
-                bpf_probe_read(&field, sizeof(grpc_header_field_t), field_ptr);
-                bpf_dbg_printk("grpc header %s:%s", field.key_ptr, field.val_ptr);
-                bpf_dbg_printk("grpc sizes %d:%d", field.key_len, field.val_len);
-                if (field.key_len == W3C_KEY_LENGTH && field.val_len == W3C_VAL_LENGTH) {
-                    u8 temp[W3C_VAL_LENGTH];
-
-                    bpf_probe_read(&temp, W3C_KEY_LENGTH, field.key_ptr);
-                    if (!bpf_memicmp((const char *)temp, "traceparent", W3C_KEY_LENGTH)) {
-                        bpf_dbg_printk("found grpc traceparent header");
-                        bpf_probe_read(&temp, W3C_VAL_LENGTH, field.val_ptr);
-                        decode_go_traceparent(temp, tp->trace_id, tp->parent_id, &tp->flags);
-                    }
                 }
             }
         }

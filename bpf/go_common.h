@@ -25,8 +25,10 @@
 
 char __license[] SEC("license") = "Dual MIT/GPL";
 
-#define W3C_KEY_LENGTH 11
-#define W3C_VAL_LENGTH 55
+enum : u8 {
+  W3C_KEY_LENGTH = 11u,
+  W3C_VAL_LENGTH = 55u
+};
 
 // Temporary information about a function invocation. It stores the invocation time of a function
 // as well as the value of registers at the invocation time. This way we can retrieve them at the

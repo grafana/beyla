@@ -106,21 +106,15 @@ func TestMultiProcess(t *testing.T) {
 }
 
 func TestMultiProcessAppTC(t *testing.T) {
-	t.Skip("doesn't work yet, we need a different approach")
-
-	compose, err := docker.ComposeSuite("docker-compose-multiexec.yml", path.Join(pathOutput, "test-suite-multiexec-tc.log"))
+	compose, err := docker.ComposeSuite("docker-compose-multiexec-host.yml", path.Join(pathOutput, "test-suite-multiexec-tc.log"))
 	// we are going to setup discovery directly in the configuration file
-	compose.Env = append(compose.Env, `BEYLA_BPF_DISABLE_BLACK_BOX_CP=1`, `BEYLA_BPF_TC_CP=1`)
+	compose.Env = append(compose.Env, `BEYLA_BPF_DISABLE_BLACK_BOX_CP=1`, `BEYLA_BPF_TC_CP=1`, `BEYLA_BPF_TRACK_REQUEST_HEADERS=1`)
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 
 	if kprobeTracesEnabled() {
 		t.Run("Nested traces with kprobes: rust -> java -> node -> go -> python -> rails", func(t *testing.T) {
 			testNestedHTTPTracesKProbes(t)
-		})
-
-		t.Run("Nested traces with kprobes: SSL node python rails", func(t *testing.T) {
-			testNestedHTTPSTracesKProbes(t)
 		})
 	}
 	require.NoError(t, compose.Close())

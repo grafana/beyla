@@ -80,8 +80,7 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 			loader = loadBpf_tp_debug
 		}
 	} else {
-		p.log.Info("Kernel in lockdown mode or missing CAP_SYS_ADMIN," +
-			" trace info propagation in HTTP headers is disabled.")
+		p.log.Info("Kernel in lockdown mode or missing CAP_SYS_ADMIN.")
 	}
 	return loader()
 }
@@ -386,6 +385,10 @@ func (p *Tracer) Tracepoints() map[string]ebpfcommon.FunctionPrograms {
 func (p *Tracer) SocketFilters() []*ebpf.Program {
 	return nil
 }
+
+func (p *Tracer) SockMsgs() []ebpfcommon.SockMsg { return nil }
+
+func (p *Tracer) SockOps() []ebpfcommon.SockOps { return nil }
 
 func (p *Tracer) RecordInstrumentedLib(_ uint64) {}
 

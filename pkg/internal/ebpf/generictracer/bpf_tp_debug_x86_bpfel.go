@@ -43,14 +43,13 @@ type bpf_tp_debugHttp2ConnStreamT struct {
 
 type bpf_tp_debugHttp2GrpcRequestT struct {
 	Flags           uint8
-	_               [1]byte
+	_               [3]byte
 	ConnInfo        bpf_tp_debugConnectionInfoT
 	Data            [256]uint8
 	RetData         [64]uint8
 	Type            uint8
-	_               [1]byte
+	_               [3]byte
 	Len             int32
-	_               [4]byte
 	StartMonotimeNs uint64
 	EndMonotimeNs   uint64
 	Pid             struct {
@@ -81,9 +80,8 @@ type bpf_tp_debugHttpConnectionMetadataT struct {
 
 type bpf_tp_debugHttpInfoT struct {
 	Flags           uint8
-	_               [1]byte
+	_               [3]byte
 	ConnInfo        bpf_tp_debugConnectionInfoT
-	_               [2]byte
 	StartMonotimeNs uint64
 	EndMonotimeNs   uint64
 	Buf             [192]uint8
@@ -108,6 +106,11 @@ type bpf_tp_debugHttpInfoT struct {
 	ExtraId uint64
 	TaskTid uint32
 	_       [4]byte
+}
+
+type bpf_tp_debugMsgBufferT struct {
+	Buf [256]uint8
+	Pos uint16
 }
 
 type bpf_tp_debugPartialConnectionInfoT struct {
@@ -156,9 +159,8 @@ type bpf_tp_debugSslPidConnectionInfoT struct {
 
 type bpf_tp_debugTcpReqT struct {
 	Flags           uint8
-	_               [1]byte
+	_               [3]byte
 	ConnInfo        bpf_tp_debugConnectionInfoT
-	_               [2]byte
 	StartMonotimeNs uint64
 	EndMonotimeNs   uint64
 	Buf             [256]uint8
@@ -300,6 +302,7 @@ type bpf_tp_debugMapSpecs struct {
 	IncomingTraceMap        *ebpf.MapSpec `ebpf:"incoming_trace_map"`
 	IovecMem                *ebpf.MapSpec `ebpf:"iovec_mem"`
 	JumpTable               *ebpf.MapSpec `ebpf:"jump_table"`
+	MsgBuffers              *ebpf.MapSpec `ebpf:"msg_buffers"`
 	NodejsParentMap         *ebpf.MapSpec `ebpf:"nodejs_parent_map"`
 	OngoingHttp             *ebpf.MapSpec `ebpf:"ongoing_http"`
 	OngoingHttp2Connections *ebpf.MapSpec `ebpf:"ongoing_http2_connections"`
@@ -361,6 +364,7 @@ type bpf_tp_debugMaps struct {
 	IncomingTraceMap        *ebpf.Map `ebpf:"incoming_trace_map"`
 	IovecMem                *ebpf.Map `ebpf:"iovec_mem"`
 	JumpTable               *ebpf.Map `ebpf:"jump_table"`
+	MsgBuffers              *ebpf.Map `ebpf:"msg_buffers"`
 	NodejsParentMap         *ebpf.Map `ebpf:"nodejs_parent_map"`
 	OngoingHttp             *ebpf.Map `ebpf:"ongoing_http"`
 	OngoingHttp2Connections *ebpf.Map `ebpf:"ongoing_http2_connections"`
@@ -405,6 +409,7 @@ func (m *bpf_tp_debugMaps) Close() error {
 		m.IncomingTraceMap,
 		m.IovecMem,
 		m.JumpTable,
+		m.MsgBuffers,
 		m.NodejsParentMap,
 		m.OngoingHttp,
 		m.OngoingHttp2Connections,

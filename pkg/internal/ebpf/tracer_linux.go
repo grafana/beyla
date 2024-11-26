@@ -203,6 +203,18 @@ func (pt *ProcessTracer) loadTracer(p Tracer, log *slog.Logger) error {
 		return err
 	}
 
+	// Sock_msg support
+	if err := i.sockmsgs(p); err != nil {
+		printVerifierErrorInfo(err)
+		return err
+	}
+
+	// Sockops support
+	if err := i.sockops(p); err != nil {
+		printVerifierErrorInfo(err)
+		return err
+	}
+
 	return nil
 }
 

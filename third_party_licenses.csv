@@ -8,6 +8,7 @@ github.com/caarlos0/env/v9,https://github.com/grafana/beyla/blob/HEAD/vendor/git
 github.com/cenkalti/backoff/v4,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/cenkalti/backoff/v4/LICENSE,MIT
 github.com/cespare/xxhash/v2,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/cespare/xxhash/v2/LICENSE.txt,MIT
 github.com/cilium/ebpf,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/cilium/ebpf/LICENSE,MIT
+github.com/containers/common/pkg/cgroupv2,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/containers/common/LICENSE,Apache-2.0
 github.com/davecgh/go-spew/spew,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/davecgh/go-spew/LICENSE,ISC
 github.com/emicklei/go-restful/v3,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/emicklei/go-restful/v3/LICENSE,MIT
 github.com/evanphx/json-patch/v5,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/evanphx/json-patch/v5/LICENSE,BSD-3-Clause

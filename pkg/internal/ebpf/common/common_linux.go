@@ -3,6 +3,7 @@ package ebpfcommon
 import (
 	"syscall"
 
+	"github.com/cilium/ebpf/link"
 	"golang.org/x/sys/unix"
 
 	"github.com/grafana/beyla/pkg/internal/helpers"
@@ -10,6 +11,18 @@ import (
 
 func (f *Filter) Close() error {
 	return syscall.SetsockoptInt(f.Fd, unix.SOL_SOCKET, unix.SO_DETACH_BPF, 0)
+}
+
+func (s *SockMsg) Close() error {
+	return link.RawDetachProgram(link.RawDetachProgramOptions{
+		Target:  s.MapFD,
+		Program: s.Program,
+		Attach:  s.AttachAs,
+	})
+}
+
+func (s *SockOps) Close() error {
+	return s.SockopsCgroup.Close()
 }
 
 // Copied from https://github.com/golang/go/blob/go1.21.3/src/internal/syscall/unix/kernel_version_linux.go

@@ -11,6 +11,12 @@
 #include "protocol_http.h"
 #include "protocol_http2.h"
 #include "protocol_tcp.h"
+#include "tc_common.h"
+
+typedef struct send_args {
+    pid_connection_info_t p_conn;
+    u64 size;
+} send_args_t;
 
 struct bpf_map_def SEC("maps") jump_table = {
     .type = BPF_MAP_TYPE_PROG_ARRAY,
@@ -19,13 +25,19 @@ struct bpf_map_def SEC("maps") jump_table = {
     .max_entries = 8,
 };
 
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, egress_key_t);
+    __type(value, msg_buffer_t);
+    __uint(max_entries, 1000);
+    __uint(pinning, BEYLA_PIN_INTERNAL);
+} msg_buffers SEC(".maps");
+
 #define TAIL_PROTOCOL_HTTP 0
 #define TAIL_PROTOCOL_HTTP2 1
 #define TAIL_PROTOCOL_TCP 2
 
 static __always_inline void handle_buf_with_args(void *ctx, call_protocol_args_t *args) {
-    bpf_probe_read(args->small_buf, MIN_HTTP2_SIZE, (void *)args->u_buf);
-
     bpf_dbg_printk(
         "buf=[%s], pid=%d, len=%d", args->small_buf, args->pid_conn.pid, args->bytes_len);
 
@@ -42,8 +54,48 @@ static __always_inline void handle_buf_with_args(void *ctx, call_protocol_args_t
         } else { // large request tracking
             http_info_t *info = bpf_map_lookup_elem(&ongoing_http, &args->pid_conn);
 
-            if (info && still_responding(info)) {
-                info->end_monotime_ns = bpf_ktime_get_ns();
+            if (info) {
+                // Still reading checks if we are processing buffers of a HTTP request
+                // that has started, but we haven't seen a response yet.
+                if (still_reading(info)) {
+                    // Packets are split into chunks if Beyla injected the Traceparent
+                    // Make sure you look for split packets containing the real Traceparent.
+                    // Essentially, when a packet is extended by our sock_msg program and
+                    // passed down another service, the receiving side may reassemble the
+                    // packets into one buffer or not. If they are reassembled, then the
+                    // call to bpf_tail_call(ctx, &jump_table, TAIL_PROTOCOL_HTTP); will
+                    // scan for the incoming 'Traceparent' header. If they are not reassembled
+                    // we'll see something like this:
+                    // [before the injected header],[70 bytes for 'Traceparent...'],[the rest].
+                    if (is_traceparent(args->small_buf)) {
+                        unsigned char *buf = tp_char_buf();
+                        if (buf) {
+                            bpf_probe_read(buf, EXTEND_SIZE, (u8 *)args->u_buf);
+                            bpf_dbg_printk("Found traceparent %s", buf);
+                            unsigned char *t_id = extract_trace_id(buf);
+                            unsigned char *s_id = extract_span_id(buf);
+                            unsigned char *f_id = extract_flags(buf);
+
+                            decode_hex(info->tp.trace_id, t_id, TRACE_ID_CHAR_LEN);
+                            decode_hex((unsigned char *)&info->tp.flags, f_id, FLAGS_CHAR_LEN);
+                            decode_hex(info->tp.parent_id, s_id, SPAN_ID_CHAR_LEN);
+
+                            trace_key_t t_key = {0};
+                            task_tid(&t_key.p_key);
+                            t_key.extra_id = extra_runtime_id();
+
+                            tp_info_pid_t *existing = bpf_map_lookup_elem(&server_traces, &t_key);
+                            if (existing) {
+                                __builtin_memcpy(&existing->tp, &info->tp, sizeof(tp_info_t));
+                                set_trace_info_for_connection(&args->pid_conn.conn, existing);
+                            } else {
+                                bpf_dbg_printk("Didn't find existing trace, this might be a bug!");
+                            }
+                        }
+                    }
+                } else if (still_responding(info)) {
+                    info->end_monotime_ns = bpf_ktime_get_ns();
+                }
             } else if (!info) {
                 // SSL requests will see both TCP traffic and text traffic, ignore the TCP if
                 // we are processing SSL request. HTTP2 is already checked in handle_buf_with_connection.
@@ -87,7 +139,7 @@ static __always_inline void handle_buf_with_connection(void *ctx,
     }
 
     __builtin_memcpy(&args->pid_conn, pid_conn, sizeof(pid_connection_info_t));
-
+    bpf_probe_read(args->small_buf, MIN_HTTP2_SIZE, (void *)args->u_buf);
     handle_buf_with_args(ctx, args);
 }
 

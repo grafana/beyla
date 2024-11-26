@@ -7,12 +7,12 @@
 #include "http_types.h"
 #include "tcp_info.h"
 #include "tracing.h"
+#include "tc_common.h"
 
 char __license[] SEC("license") = "Dual MIT/GPL";
 
 enum { TC_ACT_OK = 0, TC_ACT_RECLASSIFY = 1, TC_ACT_SHOT = 2 };
 enum { MAX_IP_PACKET_SIZE = 0x7fff };
-enum { MAX_INLINE_LEN = 0x3ff };
 
 enum connection_state { ESTABLISHED, FIN_WAIT_1, FIN_WAIT_2, CLOSING, CLOSE_WAIT, LAST_ACK };
 
@@ -49,9 +49,6 @@ struct tc_http_ctx_map {
     __type(value, struct tc_http_ctx);
     __uint(max_entries, 10240);
 } tc_http_ctx_map SEC(".maps");
-
-const char TP[] = "Traceparent: 00-0123456789ABCDEFGHIJKLMNOPQRSTUV-0123456789ABCDEF-XX\r\n";
-const u32 EXTEND_SIZE = sizeof(TP) - 1;
 
 struct datasum_loop_ctx {
     const unsigned char *b;
@@ -241,26 +238,6 @@ make_tp_string_skb(unsigned char *buf, const tp_info_t *tp, const unsigned char 
     *buf++ = '\n';
 }
 
-static __always_inline void *ctx_data(struct __sk_buff *ctx) {
-    void *data;
-
-    asm("%[res] = *(u32 *)(%[base] + %[offset])"
-        : [res] "=r"(data)
-        : [base] "r"(ctx), [offset] "i"(offsetof(struct __sk_buff, data)), "m"(*ctx));
-
-    return data;
-}
-
-static __always_inline void *ctx_data_end(struct __sk_buff *ctx) {
-    void *data_end;
-
-    asm("%[res] = *(u32 *)(%[base] + %[offset])"
-        : [res] "=r"(data_end)
-        : [base] "r"(ctx), [offset] "i"(offsetof(struct __sk_buff, data_end)), "m"(*ctx));
-
-    return data_end;
-}
-
 __attribute__((unused)) static __always_inline struct ethhdr *eth_header(struct __sk_buff *ctx) {
     void *data = ctx_data(ctx);
 
@@ -385,21 +362,6 @@ static __always_inline int is_http_request(struct __sk_buff *ctx) {
     return is_http_request_buf(req_buf);
 }
 
-static __always_inline unsigned char *
-memchar(unsigned char *haystack, char needle, const unsigned char *end, u32 size) {
-    for (u32 i = 0; i < size; ++i) {
-        if (&haystack[i] >= end) {
-            break;
-        }
-
-        if (haystack[i] == needle) {
-            return &haystack[i];
-        }
-    }
-
-    return NULL;
-}
-
 struct memmove_loop_ctx {
     unsigned char *dst;
     unsigned char *src;
@@ -442,11 +404,6 @@ move_data(unsigned char *dst, unsigned char *src, const unsigned char *end, u32 
     struct memmove_loop_ctx memmove_loop_ctx = {dst, src, end, size};
 
     bpf_loop(size, memmove_loop, &memmove_loop_ctx, 0);
-}
-
-static __always_inline unsigned char *
-find_first_of(unsigned char *begin, unsigned char *end, char ch) {
-    return memchar(begin, ch, end, MAX_INLINE_LEN);
 }
 
 // TAIL_PROTOCOL_HTTP

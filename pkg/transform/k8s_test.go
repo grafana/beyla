@@ -22,9 +22,11 @@ const timeout = 5 * time.Second
 
 func TestDecoration(t *testing.T) {
 	inf := &fakeInformer{}
-	store := kube.NewStore(inf, kube.MetaSourceLabels{
-		ServiceName:      "app.kubernetes.io/name",
-		ServiceNamespace: "app.kubernetes.io/part-of",
+	store := kube.NewStore(inf, kube.MetadataSources{
+		ServiceNameAnnotations:      []string{"resource.opentelemetry.io/service.name"},
+		ServiceNamespaceAnnotations: []string{"resource.opentelemetry.io/service.namespace"},
+		ServiceNameLabels:           []string{"app.kubernetes.io/name"},
+		ServiceNamespaceLabels:      []string{"app.kubernetes.io/part-of"},
 	})
 	// pre-populated kubernetes metadata database
 	inf.Notify(&informer.Event{Type: informer.EventType_CREATED, Resource: &informer.ObjectMeta{
@@ -69,6 +71,23 @@ func TestDecoration(t *testing.T) {
 			Containers:   []*informer.ContainerInfo{{Name: "a-container", Id: "container-78"}},
 		},
 	}})
+	inf.Notify(&informer.Event{Type: informer.EventType_CREATED, Resource: &informer.ObjectMeta{
+		Name: "overridden-meta-annots", Namespace: "the-ns", Kind: "Pod",
+		Annotations: map[string]string{
+			"resource.opentelemetry.io/service.name":      "otel-override-name",
+			"resource.opentelemetry.io/service.namespace": "otel-override-ns",
+		},
+		Labels: map[string]string{
+			"app.kubernetes.io/name":    "a-cool-name",
+			"app.kubernetes.io/part-of": "a-cool-namespace",
+		},
+		Pod: &informer.PodInfo{
+			NodeName:     "the-node",
+			Uid:          "uid-33",
+			StartTimeStr: "2020-01-02 12:56:56",
+			Containers:   []*informer.ContainerInfo{{Name: "a-container", Id: "container-33"}},
+		},
+	}})
 	kube.InfoForPID = func(pid uint32) (container.Info, error) {
 		return container.Info{
 			ContainerID:  fmt.Sprintf("container-%d", pid),
@@ -79,6 +98,7 @@ func TestDecoration(t *testing.T) {
 	store.AddProcess(34)
 	store.AddProcess(56)
 	store.AddProcess(78)
+	store.AddProcess(33)
 
 	dec := metadataDecorator{db: store, clusterName: "the-cluster"}
 	inputCh, outputhCh := make(chan []request.Span, 10), make(chan []request.Span, 10)
@@ -149,7 +169,7 @@ func TestDecoration(t *testing.T) {
 			"k8s.cluster.name":   "the-cluster",
 		}, deco[0].Service.Metadata)
 	})
-	t.Run("user can override service name and annotations via labels", func(t *testing.T) {
+	t.Run("user can override service name and ns via labels", func(t *testing.T) {
 		inputCh <- []request.Span{{
 			Pid: request.PidInfo{Namespace: 1078}, Service: autoNameSvc,
 		}}
@@ -164,6 +184,25 @@ func TestDecoration(t *testing.T) {
 			"k8s.pod.name":       "overridden-meta",
 			"k8s.container.name": "a-container",
 			"k8s.pod.uid":        "uid-78",
+			"k8s.pod.start_time": "2020-01-02 12:56:56",
+			"k8s.cluster.name":   "the-cluster",
+		}, deco[0].Service.Metadata)
+	})
+	t.Run("user can override service name and ns via annotations", func(t *testing.T) {
+		inputCh <- []request.Span{{
+			Pid: request.PidInfo{Namespace: 1033}, Service: autoNameSvc,
+		}}
+		deco := testutil.ReadChannel(t, outputhCh, timeout)
+		require.Len(t, deco, 1)
+		assert.Equal(t, "otel-override-ns", deco[0].Service.UID.Namespace)
+		assert.Equal(t, "otel-override-name", deco[0].Service.UID.Name)
+		assert.EqualValues(t, "overridden-meta-annots:a-container", deco[0].Service.UID.Instance)
+		assert.Equal(t, map[attr.Name]string{
+			"k8s.node.name":      "the-node",
+			"k8s.namespace.name": "the-ns",
+			"k8s.pod.name":       "overridden-meta-annots",
+			"k8s.container.name": "a-container",
+			"k8s.pod.uid":        "uid-33",
 			"k8s.pod.start_time": "2020-01-02 12:56:56",
 			"k8s.cluster.name":   "the-cluster",
 		}, deco[0].Service.Metadata)

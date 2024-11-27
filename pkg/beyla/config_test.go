@@ -22,6 +22,7 @@ import (
 	"github.com/grafana/beyla/pkg/export/prom"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/infraolly/process"
+	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/netolly/transform/cidr"
 	"github.com/grafana/beyla/pkg/internal/traces"
 	"github.com/grafana/beyla/pkg/kubeflags"
@@ -53,6 +54,8 @@ attributes:
     kubeconfig_path: /foo/bar
     enable: true
     informers_sync_timeout: 30s
+    meta_naming_sources:
+      service_name_labels: ["titi.com/lala"]
   instance_id:
     dns: true
   host_id:
@@ -100,6 +103,9 @@ network:
 	nc.Enable = true
 	nc.AgentIP = "1.2.3.4"
 	nc.CIDRs = cidr.Definitions{"10.244.0.0/16"}
+
+	metaSources := kube.DefaultMetadataSources
+	metaSources.ServiceNameLabels = []string{"titi.com/lala"}
 
 	assert.Equal(t, &Config{
 		Exec:             cfg.Exec,
@@ -176,6 +182,7 @@ network:
 				Enable:                kubeflags.EnabledTrue,
 				InformersSyncTimeout:  30 * time.Second,
 				InformersResyncPeriod: 30 * time.Minute,
+				MetadataSources:       metaSources,
 			},
 			HostID: HostIDConfig{
 				Override:     "the-host-id",

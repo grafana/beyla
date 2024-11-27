@@ -34,7 +34,7 @@ type MetadataConfig struct {
 	SyncTimeout       time.Duration
 	ResyncPeriod      time.Duration
 	MetaCacheAddr     string
-	MetaSourceLabels  MetaSourceLabels
+	MetaSourceLabels  MetadataSources
 }
 
 type MetadataProvider struct {

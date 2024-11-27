@@ -36,10 +36,29 @@ func qName(om *informer.ObjectMeta) qualifiedName {
 	return qualifiedName{name: om.Name, namespace: om.Namespace, kind: om.Kind}
 }
 
-// MetaSourceLabels allow overriding some metadata from kubernetes labels
-type MetaSourceLabels struct {
-	ServiceName      string `yaml:"service_name" env:"BEYLA_KUBE_META_SOURCE_LABEL_SERVICE_NAME"`
-	ServiceNamespace string `yaml:"service_namespace" env:"BEYLA_KUBE_META_SOURCE_LABEL_SERVICE_NAMESPACE"`
+// MetadataSources allow overriding some metadata from kubernetes labels and annotations
+type MetadataSources struct {
+	ServiceNameAnnotations      []string `yaml:"service_name_annotations" env:"BEYLA_KUBE_ANNOTATION_SERVICE_NAME" envSeparator:","`
+	ServiceNamespaceAnnotations []string `yaml:"service_namespace_annotations" env:"BEYLA_KUBE_ANNOTATION_SERVICE_NAMESPACE" envSeparator:","`
+	ServiceNameLabels           []string `yaml:"service_name_labels" env:"BEYLA_KUBE_LABEL_SERVICE_NAME" envSeparator:","`
+	ServiceNamespaceLabels      []string `yaml:"service_namespace_labels" env:"BEYLA_KUBE_LABEL_SERVICE_NAMESPACE" envSeparator:","`
+}
+
+var DefaultMetadataSources = MetadataSources{
+	ServiceNameAnnotations: []string{
+		"resource.opentelemetry.io/service.name",
+	},
+	ServiceNamespaceAnnotations: []string{
+		"resource.opentelemetry.io/service.namespace",
+	},
+	// default by empty. If the OTEL operator Instrumentation CRD sets useLabelsForResourceAttributes: true,
+	// the values below should be populated so:
+	//   - `app.kubernetes.io/name` becomes `service.name`
+	//	 - `app.kubernetes.io/version` becomes `service.version`
+	//	 - `app.kubernetes.io/part-of` becomes `service.namespace`
+	//	 - `app.kubernetes.io/instance` becomes `service.instance.id`
+	ServiceNameLabels:      nil,
+	ServiceNamespaceLabels: nil,
 }
 
 // Store aggregates Kubernetes information from multiple sources:
@@ -79,10 +98,10 @@ type Store struct {
 	// they receive is already present in the store
 	meta.BaseNotifier
 
-	sourceLabels MetaSourceLabels
+	metadataSources MetadataSources
 }
 
-func NewStore(kubeMetadata meta.Notifier, sourceLabels MetaSourceLabels) *Store {
+func NewStore(kubeMetadata meta.Notifier, metadataSources MetadataSources) *Store {
 	log := dblog()
 	db := &Store{
 		log:                 log,
@@ -96,7 +115,7 @@ func NewStore(kubeMetadata meta.Notifier, sourceLabels MetaSourceLabels) *Store 
 		otelServiceInfoByIP: map[string]OTelServiceNamePair{},
 		metadataNotifier:    kubeMetadata,
 		BaseNotifier:        meta.NewBaseNotifier(log),
-		sourceLabels:        sourceLabels,
+		metadataSources:     metadataSources,
 	}
 	kubeMetadata.Subscribe(db)
 	return db
@@ -289,17 +308,36 @@ func (s *Store) serviceNameNamespaceForMetadata(om *informer.ObjectMeta) (string
 	} else {
 		name, namespace = s.serviceNameNamespaceForOwner(om)
 	}
-	if s.sourceLabels.ServiceName != "" {
-		if on, ok := om.Labels[s.sourceLabels.ServiceName]; ok {
-			name = on
-		}
+	if nameFromMeta := s.valueFromMetadata(om,
+		s.metadataSources.ServiceNameAnnotations,
+		s.metadataSources.ServiceNameLabels,
+	); nameFromMeta != "" {
+		name = nameFromMeta
 	}
-	if s.sourceLabels.ServiceNamespace != "" {
-		if ons, ok := om.Labels[s.sourceLabels.ServiceNamespace]; ok {
-			namespace = ons
-		}
+	if nsFromMeta := s.valueFromMetadata(om,
+		s.metadataSources.ServiceNamespaceAnnotations,
+		s.metadataSources.ServiceNamespaceLabels,
+	); nsFromMeta != "" {
+		namespace = nsFromMeta
 	}
 	return name, namespace
+}
+
+// function implemented to provide consistent service metadata naming across multiple
+// OTEL implementations: OTEL operator, Loki and Beyla
+// https://github.com/grafana/k8s-monitoring-helm/issues/942
+func (s *Store) valueFromMetadata(om *informer.ObjectMeta, annotationNames, labelNames []string) string {
+	for _, key := range annotationNames {
+		if val, ok := om.Annotations[key]; ok {
+			return val
+		}
+	}
+	for _, key := range labelNames {
+		if val, ok := om.Labels[key]; ok {
+			return val
+		}
+	}
+	return ""
 }
 
 // ServiceNameNamespaceForIP returns the service name and namespace for a given IP address

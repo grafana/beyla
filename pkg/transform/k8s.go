@@ -49,12 +49,9 @@ type KubernetesDecorator struct {
 	// MetaCacheAddress is the host:port address of the beyla-k8s-cache service instance
 	MetaCacheAddress string `yaml:"meta_cache_address" env:"BEYLA_KUBE_META_CACHE_ADDRESS"`
 
-	// MetaSourceLabels allows Beyla overriding the service name and namespace of an application from
+	// MetadataSources allows Beyla overriding the service name and namespace of an application from
 	// the given labels.
-	// TODO Beyla 2.0. Consider defaulting to (and report as a breaking change):
-	// 		Name:      "app.kubernetes.io/name",
-	//		Namespace: "app.kubernetes.io/part-of",
-	MetaSourceLabels kube.MetaSourceLabels `yaml:"meta_source_labels"`
+	MetadataSources kube.MetadataSources `yaml:"meta_naming_sources"`
 }
 
 const (

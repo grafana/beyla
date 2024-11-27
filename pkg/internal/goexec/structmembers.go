@@ -328,8 +328,7 @@ func structMemberOffsets(elfFile *elf.File) (FieldOffsets, error) {
 
 func offsetsForLibVersions(fieldOffsets FieldOffsets, libVersions map[string]string, log *slog.Logger) FieldOffsets {
 	for lib, ver := range libVersions {
-		switch lib {
-		case "google.golang.org/grpc":
+		if lib == "google.golang.org/grpc" {
 			ver = cleanLibVersion(ver, true, lib, log)
 
 			if v, err := version.NewVersion(ver); err == nil {

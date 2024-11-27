@@ -51,12 +51,10 @@ var DefaultMetadataSources = MetadataSources{
 	ServiceNamespaceAnnotations: []string{
 		"resource.opentelemetry.io/service.namespace",
 	},
-	// default by empty. If the OTEL operator Instrumentation CRD sets useLabelsForResourceAttributes: true,
+	// empty by default. If a user sets useLabelsForResourceAttributes: true it its OTEL operator, also
 	// the values below should be populated so:
 	//   - `app.kubernetes.io/name` becomes `service.name`
-	//	 - `app.kubernetes.io/version` becomes `service.version`
-	//	 - `app.kubernetes.io/part-of` becomes `service.namespace`
-	//	 - `app.kubernetes.io/instance` becomes `service.instance.id`
+	//   - `app.kubernetes.io/part-of` becomes `service.namespace`
 	ServiceNameLabels:      nil,
 	ServiceNamespaceLabels: nil,
 }

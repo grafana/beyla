@@ -419,17 +419,17 @@ static __always_inline void process_meta_frame_headers(void *frame, tp_info_t *t
                 break;
             }
             void *field_ptr = fields + (i * sizeof(grpc_header_field_t));
-            bpf_dbg_printk("field_ptr %llx", field_ptr);
+            //bpf_dbg_printk("field_ptr %llx", field_ptr);
             grpc_header_field_t field = {};
             bpf_probe_read(&field, sizeof(grpc_header_field_t), field_ptr);
-            bpf_dbg_printk("grpc header %s:%s", field.key_ptr, field.val_ptr);
-            bpf_dbg_printk("grpc sizes %d:%d", field.key_len, field.val_len);
+            //bpf_dbg_printk("grpc header %s:%s", field.key_ptr, field.val_ptr);
+            //bpf_dbg_printk("grpc sizes %d:%d", field.key_len, field.val_len);
             if (field.key_len == W3C_KEY_LENGTH && field.val_len == W3C_VAL_LENGTH) {
                 u8 temp[W3C_VAL_LENGTH];
 
                 bpf_probe_read(&temp, W3C_KEY_LENGTH, field.key_ptr);
                 if (!bpf_memicmp((const char *)temp, "traceparent", W3C_KEY_LENGTH)) {
-                    bpf_dbg_printk("found grpc traceparent header");
+                    //bpf_dbg_printk("found grpc traceparent header");
                     bpf_probe_read(&temp, W3C_VAL_LENGTH, field.val_ptr);
                     decode_go_traceparent(temp, tp->trace_id, tp->parent_id, &tp->flags);
                     break;

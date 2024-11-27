@@ -349,7 +349,7 @@ func cleanLibVersion(version string, found bool, lib string, log *slog.Logger) s
 		log.Debug("can't find version for library. Assuming 0.0.0", "lib", lib)
 		// unversioned libraries are accounted as "0.0.0" in offsets.json file
 		// https://github.com/grafana/go-offsets-tracker/blob/main/pkg/writer/writer.go#L108-L110
-		version = "0.0.0"
+		return "0.0.0"
 	}
 
 	dash := strings.Index(version, "-")

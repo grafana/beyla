@@ -9,6 +9,8 @@ import (
 	"log/slog"
 	"strings"
 
+	"github.com/hashicorp/go-version"
+
 	"github.com/grafana/go-offsets-tracker/pkg/offsets"
 )
 
@@ -20,6 +22,8 @@ func log() *slog.Logger {
 type GoOffset uint32
 
 const GoOffsetsTableSize = 30
+
+var operateHeadersNew = version.Must(version.NewVersion("1.60.0"))
 
 const (
 	// go common
@@ -51,7 +55,7 @@ const (
 	GrpcStreamMethodPtrPos
 	GrpcStatusSPos
 	GrpcStatusCodePtrPos
-	GrpcStreamCtxPtrPos
+	MetaHeadersFrameFieldsPtrPos
 	ValueContextValPtrPos
 	GrpcStConnPos
 	GrpcTConnPos
@@ -70,6 +74,8 @@ const (
 	SaramaResponseCorrIDPos
 	SaramaBrokerConnPos
 	SaramaBufconnConnPos
+	// grpc versioning
+	OperateHeadersNew
 )
 
 //go:embed offsets.json
@@ -113,7 +119,6 @@ var structMembers = map[string]structInfo{
 		fields: map[string]GoOffset{
 			"st":     GrpcStreamStPtrPos,
 			"method": GrpcStreamMethodPtrPos,
-			"ctx":    GrpcStreamCtxPtrPos,
 		},
 	},
 	"google.golang.org/grpc/internal/status.Status": {
@@ -173,6 +178,12 @@ var structMembers = map[string]structInfo{
 		lib: "golang.org/x/net",
 		fields: map[string]GoOffset{
 			"w": FramerWPos,
+		},
+	},
+	"golang.org/x/net/http2.MetaHeadersFrame": {
+		lib: "golang.org/x/net",
+		fields: map[string]GoOffset{
+			"Fields": MetaHeadersFrameFieldsPtrPos,
 		},
 	},
 	"golang.org/x/net/http2.serverConn": {
@@ -297,6 +308,11 @@ func structMemberOffsets(elfFile *elf.File) (FieldOffsets, error) {
 		if len(expected) > 0 {
 			log().Debug("Fields not found in the DWARF file", "fields", expected)
 		} else {
+			libVersions, err := findLibraryVersions(elfFile)
+			if err != nil {
+				return nil, fmt.Errorf("searching for library versions: %w", err)
+			}
+			offs = offsetsForLibVersions(offs, libVersions, log())
 			return offs, nil
 		}
 	} else {
@@ -310,6 +326,39 @@ func structMemberOffsets(elfFile *elf.File) (FieldOffsets, error) {
 	return structMemberPreFetchedOffsets(elfFile, offs)
 }
 
+func offsetsForLibVersions(fieldOffsets FieldOffsets, libVersions map[string]string, log *slog.Logger) FieldOffsets {
+	for lib, ver := range libVersions {
+		if lib == "google.golang.org/grpc" {
+			ver = cleanLibVersion(ver, true, lib, log)
+
+			if v, err := version.NewVersion(ver); err == nil {
+				if v.GreaterThanOrEqual(operateHeadersNew) {
+					fieldOffsets[OperateHeadersNew] = uint64(1)
+				}
+			} else {
+				log.Debug("can't parse version for", "library", lib)
+			}
+		}
+	}
+
+	return fieldOffsets
+}
+
+func cleanLibVersion(version string, found bool, lib string, log *slog.Logger) string {
+	if !found {
+		log.Debug("can't find version for library. Assuming 0.0.0", "lib", lib)
+		// unversioned libraries are accounted as "0.0.0" in offsets.json file
+		// https://github.com/grafana/go-offsets-tracker/blob/main/pkg/writer/writer.go#L108-L110
+		return "0.0.0"
+	}
+
+	dash := strings.Index(version, "-")
+	if dash > 0 {
+		version = version[:dash]
+	}
+	return version
+}
+
 func structMemberPreFetchedOffsets(elfFile *elf.File, fieldOffsets FieldOffsets) (FieldOffsets, error) {
 	log := log().With("function", "structMemberPreFetchedOffsets")
 	offs, err := offsets.Read(bytes.NewBufferString(prefetchedOffsets))
@@ -320,22 +369,12 @@ func structMemberPreFetchedOffsets(elfFile *elf.File, fieldOffsets FieldOffsets)
 	if err != nil {
 		return nil, fmt.Errorf("searching for library versions: %w", err)
 	}
+	fieldOffsets = offsetsForLibVersions(fieldOffsets, libVersions, log)
 	// after putting the offsets.json in a Go structure, we search all the
 	// structMembers elements on it, to get the annotated offsets
 	for strName, strInfo := range structMembers {
 		version, ok := libVersions[strInfo.lib]
-		if !ok {
-			log.Debug("can't find version for library. Assuming 0.0.0", "lib", strInfo.lib)
-			// unversioned libraries are accounted as "0.0.0" in offsets.json file
-			// https://github.com/grafana/go-offsets-tracker/blob/main/pkg/writer/writer.go#L108-L110
-			version = "0.0.0"
-		}
-
-		dash := strings.Index(version, "-")
-		if dash > 0 {
-			version = version[:dash]
-		}
-
+		version = cleanLibVersion(version, ok, strInfo.lib, log)
 		for fieldName, constantName := range strInfo.fields {
 			// look the version of the required field in the offsets.json memory copy
 			offset, ok := offs.Find(strName, fieldName, version)

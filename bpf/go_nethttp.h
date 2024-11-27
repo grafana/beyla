@@ -19,7 +19,6 @@
 #include "go_byte_arr.h"
 #include "bpf_dbg.h"
 #include "go_common.h"
-#include "go_traceparent.h"
 #include "http_types.h"
 #include "tracing.h"
 #include "hpack.h"
@@ -39,6 +38,13 @@ struct {
     __type(value, http_client_data_t);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_http_client_requests_data SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, go_addr_key_t); // key: pointer to the request goroutine
+    __type(value, tp_info_t);
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+} http2_server_requests_tp SEC(".maps");
 
 typedef struct server_http_func_invocation {
     u64 start_monotime_ns;
@@ -74,6 +80,14 @@ int uprobe_ServeHTTP(struct pt_regs *ctx) {
 
     off_table_t *ot = get_offsets_table();
 
+    // Lookup any traceparent information setup for us by readContinuedLineSlice
+    server_http_func_invocation_t *tp_inv =
+        bpf_map_lookup_elem(&ongoing_http_server_requests, &g_key);
+    tp_info_t *decoded_tp = 0;
+    if (tp_inv && valid_trace(tp_inv->tp.trace_id)) {
+        decoded_tp = &tp_inv->tp;
+    }
+
     server_http_func_invocation_t invocation = {
         .start_monotime_ns = bpf_ktime_get_ns(),
         .tp = {0},
@@ -85,10 +99,7 @@ int uprobe_ServeHTTP(struct pt_regs *ctx) {
     invocation.path[0] = 0;
 
     if (req) {
-        server_trace_parent(
-            goroutine_addr,
-            &invocation.tp,
-            (void *)(req + go_offset_of(ot, (go_offset){.v = _req_header_ptr_pos})));
+        server_trace_parent(goroutine_addr, &invocation.tp, decoded_tp);
         // TODO: if context propagation is supported, overwrite the header value in the map with the
         // new span context and the same thread id.
 
@@ -214,6 +225,57 @@ int uprobe_readRequestReturns(struct pt_regs *ctx) {
     return 0;
 }
 
+// Handles finding the connection information for http2 servers in grpc
+SEC("uprobe/http2Server_processHeaders")
+int uprobe_http2Server_processHeaders(struct pt_regs *ctx) {
+    void *sc_ptr = GO_PARAM1(ctx);
+    void *frame = GO_PARAM2(ctx);
+    bpf_dbg_printk("=== uprobe/http2Server_processHeaders sc %lx === ", sc_ptr);
+    go_addr_key_t g_key = {};
+    go_addr_key_from_id(&g_key, sc_ptr);
+
+    tp_info_t tp = {0};
+
+    process_meta_frame_headers(frame, &tp);
+
+    if (valid_trace(tp.trace_id)) {
+        bpf_dbg_printk("found valid traceparent in http2 headers");
+        bpf_map_update_elem(&http2_server_requests_tp, &g_key, &tp, BPF_ANY);
+    }
+
+    return 0;
+}
+
+SEC("uprobe/readContinuedLineSlice")
+int uprobe_readContinuedLineSliceReturns(struct pt_regs *ctx) {
+    bpf_dbg_printk("=== uprobe/proc readContinuedLineSlice returns === ");
+
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    u64 len = (u64)GO_PARAM2(ctx);
+    u8 *buf = (u8 *)GO_PARAM1(ctx);
+
+    if (len >= (W3C_KEY_LENGTH + W3C_VAL_LENGTH + 2)) {
+        u8 temp[W3C_KEY_LENGTH + W3C_VAL_LENGTH + 2];
+        bpf_probe_read(temp, sizeof(temp), buf);
+        bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
+        go_addr_key_t g_key = {};
+        go_addr_key_from_id(&g_key, goroutine_addr);
+
+        connection_info_t *existing = bpf_map_lookup_elem(&ongoing_server_connections, &g_key);
+        if (existing) {
+            if (!bpf_memicmp((const char *)temp, "traceparent: ", W3C_KEY_LENGTH + 2)) {
+                server_http_func_invocation_t inv = {};
+                decode_go_traceparent(
+                    temp + W3C_KEY_LENGTH + 2, inv.tp.trace_id, inv.tp.parent_id, &inv.tp.flags);
+                bpf_dbg_printk("Found traceparent in header %s", temp);
+                bpf_map_update_elem(&ongoing_http_server_requests, &g_key, &inv, BPF_ANY);
+            }
+        }
+    }
+
+    return 0;
+}
+
 SEC("uprobe/ServeHTTP_ret")
 int uprobe_ServeHTTPReturns(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/ServeHTTP returns === ");
@@ -324,10 +386,7 @@ static __always_inline void roundTripStartHelper(struct pt_regs *ctx) {
 
     http_func_invocation_t invocation = {.start_monotime_ns = bpf_ktime_get_ns(), .tp = {0}};
 
-    __attribute__((__unused__)) u8 existing_tp = client_trace_parent(
-        goroutine_addr,
-        &invocation.tp,
-        (void *)(req + go_offset_of(ot, (go_offset){.v = _req_header_ptr_pos})));
+    client_trace_parent(goroutine_addr, &invocation.tp);
 
     http_client_data_t trace = {0};
 
@@ -370,7 +429,6 @@ static __always_inline void roundTripStartHelper(struct pt_regs *ctx) {
     bpf_map_update_elem(&ongoing_http_client_requests_data, &g_key, &trace, BPF_ANY);
 
 #ifndef NO_HEADER_PROPAGATION
-    //if (!existing_tp) {
     void *headers_ptr = 0;
     bpf_probe_read(&headers_ptr,
                    sizeof(headers_ptr),
@@ -381,7 +439,6 @@ static __always_inline void roundTripStartHelper(struct pt_regs *ctx) {
     if (headers_ptr) {
         bpf_map_update_elem(&header_req_map, &headers_ptr, &goroutine_addr, BPF_ANY);
     }
-    //}
 #endif
 }
 
@@ -632,6 +689,20 @@ int uprobe_http2serverConn_runHandler(struct pt_regs *ctx) {
                 get_conn_info(conn_conn_ptr, &conn);
                 bpf_map_update_elem(&ongoing_server_connections, &g_key, &conn, BPF_ANY);
             }
+        }
+
+        go_addr_key_t sc_key = {};
+        go_addr_key_from_id(&sc_key, sc);
+
+        tp_info_t *tp = bpf_map_lookup_elem(&http2_server_requests_tp, &sc_key);
+        bpf_dbg_printk("looked up tp %llx", tp);
+
+        if (tp) {
+            server_http_func_invocation_t inv = {};
+            __builtin_memcpy(&inv.tp, tp, sizeof(tp_info_t));
+            bpf_dbg_printk("Found traceparent in HTTP2 headers");
+            bpf_map_update_elem(&ongoing_http_server_requests, &g_key, &inv, BPF_ANY);
+            bpf_map_delete_elem(&http2_server_requests_tp, &sc_key);
         }
     }
 

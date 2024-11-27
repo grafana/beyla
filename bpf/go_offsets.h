@@ -37,7 +37,7 @@ typedef enum {
     _grpc_stream_method_ptr_pos,
     _grpc_status_s_pos,
     _grpc_status_code_ptr_pos,
-    _grpc_stream_ctx_ptr_pos,
+    _meta_headers_frame_fields_ptr_pos,
     _value_context_val_ptr_pos,
     _grpc_st_conn_pos,
     _grpc_t_conn_pos,
@@ -56,6 +56,8 @@ typedef enum {
     _sarama_response_corr_id_pos,
     _sarama_broker_conn_pos,
     _sarama_bufconn_conn_pos,
+    // grpc versioning
+    _operate_headers_new,
     _last_go_offset,
 } go_offset_const;
 

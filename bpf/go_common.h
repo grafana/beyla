@@ -21,10 +21,11 @@
 #include "tracing.h"
 #include "trace_util.h"
 #include "go_offsets.h"
-#include "go_traceparent.h"
 #include "pin_internal.h"
 
 char __license[] SEC("license") = "Dual MIT/GPL";
+
+enum { W3C_KEY_LENGTH = 11, W3C_VAL_LENGTH = 55 };
 
 // Temporary information about a function invocation. It stores the invocation time of a function
 // as well as the value of registers at the invocation time. This way we can retrieve them at the
@@ -78,8 +79,9 @@ struct {
 } ongoing_grpc_operate_headers SEC(".maps");
 
 typedef struct grpc_transports {
-    u8 type;
     connection_info_t conn;
+    tp_info_t tp;
+    u8 type;
 } grpc_transports_t;
 
 // TODO: use go_addr_key_t as key
@@ -104,6 +106,30 @@ struct {
     __type(value, sql_func_invocation_t);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_sql_queries SEC(".maps");
+
+typedef struct grpc_header_field {
+    u8 *key_ptr;
+    u64 key_len;
+    u8 *val_ptr;
+    u64 val_len;
+    u64 sensitive;
+} grpc_header_field_t;
+
+// assumes s2 is all lowercase
+static __always_inline int bpf_memicmp(const char *s1, const char *s2, s32 size) {
+    for (int i = 0; i < size; i++) {
+        if (s1[i] != s2[i] && s1[i] != (s2[i] - 32)) // compare with each uppercase character
+        {
+            return i + 1;
+        }
+    }
+
+    return 0;
+}
+
+static __always_inline u8 valid_trace(const unsigned char *trace_id) {
+    return *((u64 *)trace_id) != 0 || *((u64 *)(trace_id + 8)) != 0;
+}
 
 static __always_inline void go_addr_key_from_id(go_addr_key_t *current, void *addr) {
     u64 pid_tid = bpf_get_current_pid_tgid();
@@ -178,24 +204,14 @@ static __always_inline void tp_clone(tp_info_t *dest, tp_info_t *src) {
 }
 
 static __always_inline void
-server_trace_parent(void *goroutine_addr, tp_info_t *tp, void *req_header) {
+server_trace_parent(void *goroutine_addr, tp_info_t *tp, tp_info_t *found_tp) {
     // May get overriden when decoding existing traceparent, but otherwise we set sample ON
     tp->flags = 1;
-    // Get traceparent from the Request.Header
-    void *traceparent_ptr = extract_traceparent_from_req_headers(req_header);
     go_addr_key_t g_key = {};
     go_addr_key_from_id(&g_key, goroutine_addr);
-    if (traceparent_ptr != NULL) {
-        unsigned char buf[TP_MAX_VAL_LENGTH];
-        long res = bpf_probe_read(buf, sizeof(buf), traceparent_ptr);
-        if (res < 0) {
-            bpf_dbg_printk("can't copy traceparent header");
-            urand_bytes(tp->trace_id, TRACE_ID_SIZE_BYTES);
-            *((u64 *)tp->parent_id) = 0;
-        } else {
-            bpf_dbg_printk("Decoding traceparent from headers %s", buf);
-            decode_go_traceparent(buf, tp->trace_id, tp->parent_id, &tp->flags);
-        }
+    if (found_tp) {
+        bpf_dbg_printk("Decoded from existing traceparent");
+        __builtin_memcpy(tp, found_tp, sizeof(tp_info_t));
     } else {
         connection_info_t *info = bpf_map_lookup_elem(&ongoing_server_connections, &g_key);
         u8 found_info = 0;
@@ -242,28 +258,11 @@ server_trace_parent(void *goroutine_addr, tp_info_t *tp, void *req_header) {
     bpf_dbg_printk("tp: %s", tp_buf);
 }
 
-static __always_inline u8 client_trace_parent(void *goroutine_addr,
-                                              tp_info_t *tp_i,
-                                              void *req_header) {
-    // Get traceparent from the Request.Header
+static __always_inline u8 client_trace_parent(void *goroutine_addr, tp_info_t *tp_i) {
     u8 found_trace_id = 0;
 
     // May get overriden when decoding existing traceparent or finding a server span, but otherwise we set sample ON
     tp_i->flags = 1;
-
-    if (req_header) {
-        void *traceparent_ptr = extract_traceparent_from_req_headers(req_header);
-        if (traceparent_ptr != NULL) {
-            unsigned char buf[TP_MAX_VAL_LENGTH];
-            long res = bpf_probe_read(buf, sizeof(buf), traceparent_ptr);
-            if (res < 0) {
-                bpf_dbg_printk("can't copy traceparent header");
-            } else {
-                found_trace_id = 1;
-                decode_go_traceparent(buf, tp_i->trace_id, tp_i->span_id, &tp_i->flags);
-            }
-        }
-    }
 
     go_addr_key_t g_key = {};
     go_addr_key_from_id(&g_key, goroutine_addr);
@@ -399,6 +398,45 @@ static __always_inline void *unwrap_tls_conn_info(void *conn_ptr, void *tls_stat
     }
 
     return conn_ptr;
+}
+
+static __always_inline void process_meta_frame_headers(void *frame, tp_info_t *tp) {
+    if (!frame) {
+        return;
+    }
+
+    off_table_t *ot = get_offsets_table();
+
+    void *fields = 0;
+    u64 fields_off = go_offset_of(ot, (go_offset){.v = _meta_headers_frame_fields_ptr_pos});
+    bpf_probe_read(&fields, sizeof(fields), (void *)(frame + fields_off));
+    u64 fields_len = 0;
+    bpf_probe_read(&fields_len, sizeof(fields_len), (void *)(frame + fields_off + 8));
+    bpf_dbg_printk("fields ptr %llx, len %d", fields, fields_len);
+    if (fields && fields_len > 0) {
+        for (u8 i = 0; i < 16; i++) {
+            if (i >= fields_len) {
+                break;
+            }
+            void *field_ptr = fields + (i * sizeof(grpc_header_field_t));
+            //bpf_dbg_printk("field_ptr %llx", field_ptr);
+            grpc_header_field_t field = {};
+            bpf_probe_read(&field, sizeof(grpc_header_field_t), field_ptr);
+            //bpf_dbg_printk("grpc header %s:%s", field.key_ptr, field.val_ptr);
+            //bpf_dbg_printk("grpc sizes %d:%d", field.key_len, field.val_len);
+            if (field.key_len == W3C_KEY_LENGTH && field.val_len == W3C_VAL_LENGTH) {
+                u8 temp[W3C_VAL_LENGTH];
+
+                bpf_probe_read(&temp, W3C_KEY_LENGTH, field.key_ptr);
+                if (!bpf_memicmp((const char *)temp, "traceparent", W3C_KEY_LENGTH)) {
+                    //bpf_dbg_printk("found grpc traceparent header");
+                    bpf_probe_read(&temp, W3C_VAL_LENGTH, field.val_ptr);
+                    decode_go_traceparent(temp, tp->trace_id, tp->parent_id, &tp->flags);
+                    break;
+                }
+            }
+        }
+    }
 }
 
 #endif // GO_COMMON_H

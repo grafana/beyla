@@ -37,8 +37,7 @@ static __always_inline void setup_request(void *goroutine_addr) {
     go_addr_key_t g_key = {};
     go_addr_key_from_id(&g_key, goroutine_addr);
 
-    // We don't look up in the headers, no http/grpc request, therefore 0 as last argument
-    client_trace_parent(goroutine_addr, &req.tp, 0);
+    client_trace_parent(goroutine_addr, &req.tp);
 
     bpf_map_update_elem(&ongoing_redis_requests, &g_key, &req, BPF_ANY);
 }

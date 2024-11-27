@@ -131,7 +131,7 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 		goexec.GrpcStreamMethodPtrPos,
 		goexec.GrpcStatusSPos,
 		goexec.GrpcStatusCodePtrPos,
-		goexec.GrpcStreamCtxPtrPos,
+		goexec.MetaHeadersFrameFieldsPtrPos,
 		goexec.ValueContextValPtrPos,
 		goexec.GrpcStConnPos,
 		goexec.GrpcTConnPos,
@@ -150,6 +150,8 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 		goexec.SaramaResponseCorrIDPos,
 		goexec.SaramaBrokerConnPos,
 		goexec.SaramaBufconnConnPos,
+		// grpc versioning
+		goexec.OperateHeadersNew,
 	} {
 		if val, ok := offsets.Field[field].(uint64); ok {
 			offTable.Table[field] = val
@@ -192,6 +194,9 @@ func (p *Tracer) GoProbes() map[string][]ebpfcommon.FunctionPrograms {
 			Start: p.bpfObjects.UprobeReadRequestStart,
 			End:   p.bpfObjects.UprobeReadRequestReturns,
 		}},
+		"net/textproto.(*Reader).readContinuedLineSlice": {{
+			End: p.bpfObjects.UprobeReadContinuedLineSliceReturns,
+		}},
 		"net/http.(*Transport).roundTrip": {{ // HTTP client, works with Client.Do as well as using the RoundTripper directly
 			Start: p.bpfObjects.UprobeRoundTrip,
 			End:   p.bpfObjects.UprobeRoundTripReturn,
@@ -222,6 +227,12 @@ func (p *Tracer) GoProbes() map[string][]ebpfcommon.FunctionPrograms {
 		}},
 		"net/http.(*http2serverConn).runHandler": {{
 			Start: p.bpfObjects.UprobeHttp2serverConnRunHandler, // http2 server connection tracking, vendored in go
+		}},
+		"golang.org/x/net/http2.(*serverConn).processHeaders": {{
+			Start: p.bpfObjects.UprobeHttp2ServerProcessHeaders, // http2 server request header parsing
+		}},
+		"net/http.(*http2serverConn).processHeaders": {{
+			Start: p.bpfObjects.UprobeHttp2ServerProcessHeaders, // http2 server request header parsing, vendored in go
 		}},
 		// tracking of tcp connections for black-box propagation
 		"net/http.(*conn).serve": {{ // http server

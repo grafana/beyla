@@ -16,7 +16,6 @@
 #include "go_byte_arr.h"
 #include "bpf_dbg.h"
 #include "go_common.h"
-#include "go_traceparent.h"
 #include "hpack.h"
 #include "ringbuf.h"
 
@@ -97,21 +96,29 @@ int uprobe_server_handleStream(struct pt_regs *ctx) {
     };
 
     if (stream_ptr) {
-        void *ctx_ptr = 0;
-        // Read the embedded context object ptr
-        bpf_probe_read(&ctx_ptr,
-                       sizeof(ctx_ptr),
+        void *st_ptr = 0;
+        void *tp_ptr = 0;
+        // Read the embedded object ptr
+        bpf_probe_read(&st_ptr,
+                       sizeof(st_ptr),
                        (void *)(stream_ptr +
-                                go_offset_of(ot, (go_offset){.v = _grpc_stream_ctx_ptr_pos}) +
+                                go_offset_of(ot, (go_offset){.v = _grpc_stream_st_ptr_pos}) +
                                 sizeof(void *)));
 
-        if (ctx_ptr) {
-            server_trace_parent(
-                goroutine_addr,
-                &invocation.tp,
-                (void *)(ctx_ptr + go_offset_of(ot, (go_offset){.v = _value_context_val_ptr_pos}) +
-                         sizeof(void *)));
+        bpf_dbg_printk("st_ptr %llx", st_ptr);
+        if (st_ptr) {
+            grpc_transports_t *t = bpf_map_lookup_elem(&ongoing_grpc_transports, &st_ptr);
+
+            bpf_dbg_printk("found t %llx", t);
+            if (t) {
+                bpf_dbg_printk("reading the traceparent from frame headers");
+                if (valid_trace(t->tp.trace_id)) {
+                    tp_ptr = &t->tp;
+                }
+            }
         }
+
+        server_trace_parent(goroutine_addr, &invocation.tp, tp_ptr);
     }
 
     if (bpf_map_update_elem(&ongoing_grpc_server_requests, &g_key, &invocation, BPF_ANY)) {
@@ -126,15 +133,31 @@ SEC("uprobe/http2Server_operateHeaders")
 int uprobe_http2Server_operateHeaders(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     void *tr = GO_PARAM1(ctx);
-    bpf_dbg_printk(
-        "=== uprobe/http2Server_operateHeaders tr %llx goroutine %lx === ", tr, goroutine_addr);
+    void *frame = GO_PARAM2(ctx);
+    off_table_t *ot = get_offsets_table();
+
+    u64 new_offset_version = go_offset_of(ot, (go_offset){.v = _operate_headers_new});
+
+    // After grpc version 1.60, they added extra context argument to the
+    // function call, which adds two extra arguments.
+    if (new_offset_version) {
+        frame = GO_PARAM4(ctx);
+    }
+
+    bpf_dbg_printk("=== uprobe/GRPC http2Server_operateHeaders tr %llx goroutine %lx, new %d === ",
+                   tr,
+                   goroutine_addr,
+                   new_offset_version);
     go_addr_key_t g_key = {};
     go_addr_key_from_id(&g_key, goroutine_addr);
 
     grpc_transports_t t = {
         .type = TRANSPORT_HTTP2,
         .conn = {0},
+        .tp = {0},
     };
+
+    process_meta_frame_headers(frame, &t.tp);
 
     bpf_map_update_elem(&ongoing_grpc_operate_headers, &g_key, &tr, BPF_ANY);
     bpf_map_update_elem(&ongoing_grpc_transports, &tr, &t, BPF_ANY);
@@ -337,7 +360,7 @@ static __always_inline void clientConnStart(
                                 go_offset_of(ot, (go_offset){.v = _value_context_val_ptr_pos}) +
                                 sizeof(void *)));
 
-        invocation.flags = client_trace_parent(goroutine_addr, &invocation.tp, val_ptr);
+        invocation.flags = client_trace_parent(goroutine_addr, &invocation.tp);
     } else {
         // it's OK sending empty tp for a client, the userspace id generator will make random trace_id, span_id
         bpf_dbg_printk("No ctx_ptr %llx", ctx_ptr);

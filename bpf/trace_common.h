@@ -186,7 +186,7 @@ static __always_inline u8 valid_span(const unsigned char *span_id) {
 }
 
 static __always_inline u8 valid_trace(const unsigned char *trace_id) {
-    return *((u64 *)trace_id) != 0 && *((u64 *)(trace_id + 8)) != 0;
+    return *((u64 *)trace_id) != 0 || *((u64 *)(trace_id + 8)) != 0;
 }
 
 static __always_inline void server_or_client_trace(http_connection_metadata_t *meta,

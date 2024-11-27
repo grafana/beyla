@@ -33,8 +33,7 @@ static __always_inline void set_sql_info(void *goroutine_addr, void *sql_param, 
                                         .conn = {0},
                                         .tp = {0}};
 
-    // We don't look up in the headers, no http/grpc request, therefore 0 as last argument
-    client_trace_parent(goroutine_addr, &invocation.tp, 0);
+    client_trace_parent(goroutine_addr, &invocation.tp);
     go_addr_key_t g_key = {};
     go_addr_key_from_id(&g_key, goroutine_addr);
 

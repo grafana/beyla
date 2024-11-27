@@ -38,10 +38,10 @@ func qName(om *informer.ObjectMeta) qualifiedName {
 
 // MetadataSources allow overriding some metadata from kubernetes labels and annotations
 type MetadataSources struct {
-	ServiceNameAnnotations      []string `yaml:"service_name_annotations" env:"BEYLA_KUBE_ANNOTATION_SERVICE_NAME" envSeparator:","`
-	ServiceNamespaceAnnotations []string `yaml:"service_namespace_annotations" env:"BEYLA_KUBE_ANNOTATION_SERVICE_NAMESPACE" envSeparator:","`
-	ServiceNameLabels           []string `yaml:"service_name_labels" env:"BEYLA_KUBE_LABEL_SERVICE_NAME" envSeparator:","`
-	ServiceNamespaceLabels      []string `yaml:"service_namespace_labels" env:"BEYLA_KUBE_LABEL_SERVICE_NAMESPACE" envSeparator:","`
+	ServiceNameAnnotations      []string `yaml:"service_name_annotations" env:"BEYLA_KUBE_ANNOTATIONS_SERVICE_NAME" envSeparator:","`
+	ServiceNamespaceAnnotations []string `yaml:"service_namespace_annotations" env:"BEYLA_KUBE_ANNOTATIONS_SERVICE_NAMESPACE" envSeparator:","`
+	ServiceNameLabels           []string `yaml:"service_name_labels" env:"BEYLA_KUBE_LABELS_SERVICE_NAME" envSeparator:","`
+	ServiceNamespaceLabels      []string `yaml:"service_namespace_labels" env:"BEYLA_KUBE_LABELS_SERVICE_NAMESPACE" envSeparator:","`
 }
 
 var DefaultMetadataSources = MetadataSources{

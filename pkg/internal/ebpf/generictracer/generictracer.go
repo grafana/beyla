@@ -301,59 +301,75 @@ func (p *Tracer) Tracepoints() map[string]ebpfcommon.FunctionPrograms {
 	return nil
 }
 
-func (p *Tracer) UProbes() map[string]map[string]ebpfcommon.FunctionPrograms {
-	return map[string]map[string]ebpfcommon.FunctionPrograms{
+func (p *Tracer) UProbes() map[string][]ebpfcommon.FunctionPrograms {
+	return map[string][]ebpfcommon.FunctionPrograms{
 		"libssl.so": {
-			"SSL_read": {
-				Required: false,
-				Start:    p.bpfObjects.UprobeSslRead,
-				End:      p.bpfObjects.UretprobeSslRead,
+			{
+				SymbolName:      "SSL_read",
+				Required:        false,
+				AttachToOffsets: true,
+				Start:           p.bpfObjects.UprobeSslRead,
+				End:             p.bpfObjects.UretprobeSslRead,
 			},
-			"SSL_write": {
-				Required: false,
-				Start:    p.bpfObjects.UprobeSslWrite,
-				End:      p.bpfObjects.UretprobeSslWrite,
+			{
+				SymbolName:      "SSL_write",
+				Required:        false,
+				AttachToOffsets: true,
+				Start:           p.bpfObjects.UprobeSslWrite,
+				End:             p.bpfObjects.UretprobeSslWrite,
 			},
-			"SSL_read_ex": {
-				Required: false,
-				Start:    p.bpfObjects.UprobeSslReadEx,
-				End:      p.bpfObjects.UretprobeSslReadEx,
+			{
+				SymbolName:      "SSL_read_ex",
+				Required:        false,
+				AttachToOffsets: true,
+				Start:           p.bpfObjects.UprobeSslReadEx,
+				End:             p.bpfObjects.UretprobeSslReadEx,
 			},
-			"SSL_write_ex": {
-				Required: false,
-				Start:    p.bpfObjects.UprobeSslWriteEx,
-				End:      p.bpfObjects.UretprobeSslWriteEx,
+			{
+				SymbolName:      "SSL_write_ex",
+				Required:        false,
+				AttachToOffsets: true,
+				Start:           p.bpfObjects.UprobeSslWriteEx,
+				End:             p.bpfObjects.UretprobeSslWriteEx,
 			},
-			"SSL_do_handshake": {
-				Required: false,
-				Start:    p.bpfObjects.UprobeSslDoHandshake,
-				End:      p.bpfObjects.UretprobeSslDoHandshake,
+			{
+				SymbolName:      "SSL_do_handshake",
+				Required:        false,
+				AttachToOffsets: true,
+				Start:           p.bpfObjects.UprobeSslDoHandshake,
+				End:             p.bpfObjects.UretprobeSslDoHandshake,
 			},
-			"SSL_shutdown": {
-				Required: false,
-				Start:    p.bpfObjects.UprobeSslShutdown,
+			{
+				SymbolName: "SSL_shutdown",
+				Required:   false,
+				Start:      p.bpfObjects.UprobeSslShutdown,
 			},
 		},
 		"node": {
-			"_ZN4node9AsyncWrap13EmitAsyncInitEPNS_11EnvironmentEN2v85LocalINS3_6ObjectEEENS4_INS3_6StringEEEdd": {
-				Required: false,
-				Start:    p.bpfObjects.EmitAsyncInit,
+			{
+				SymbolName: "_ZN4node9AsyncWrap13EmitAsyncInitEPNS_11EnvironmentEN2v85LocalINS3_6ObjectEEENS4_INS3_6StringEEEdd",
+				Required:   false,
+				Start:      p.bpfObjects.EmitAsyncInit,
 			},
-			"_ZN4node13EmitAsyncInitEPN2v87IsolateENS0_5LocalINS0_6ObjectEEENS3_INS0_6StringEEEd": {
-				Required: false,
-				Start:    p.bpfObjects.EmitAsyncInit,
+			{
+				SymbolName: "_ZN4node13EmitAsyncInitEPN2v87IsolateENS0_5LocalINS0_6ObjectEEENS3_INS0_6StringEEEd",
+				Required:   false,
+				Start:      p.bpfObjects.EmitAsyncInit,
 			},
-			"_ZN4node13EmitAsyncInitEPN2v87IsolateENS0_5LocalINS0_6ObjectEEEPKcd": {
-				Required: false,
-				Start:    p.bpfObjects.EmitAsyncInit,
+			{
+				SymbolName: "_ZN4node13EmitAsyncInitEPN2v87IsolateENS0_5LocalINS0_6ObjectEEEPKcd",
+				Required:   false,
+				Start:      p.bpfObjects.EmitAsyncInit,
 			},
-			"_ZN4node9AsyncWrap10AsyncResetEN2v85LocalINS1_6ObjectEEEdb": {
-				Required: false,
-				Start:    p.bpfObjects.AsyncReset,
+			{
+				SymbolName: "_ZN4node9AsyncWrap10AsyncResetEN2v85LocalINS1_6ObjectEEEdb",
+				Required:   false,
+				Start:      p.bpfObjects.AsyncReset,
 			},
-			"_ZN4node9AsyncWrap10AsyncResetERKN2v820FunctionCallbackInfoINS1_5ValueEEE": {
-				Required: false,
-				Start:    p.bpfObjects.AsyncReset,
+			{
+				SymbolName: "_ZN4node9AsyncWrap10AsyncResetERKN2v820FunctionCallbackInfoINS1_5ValueEEE",
+				Required:   false,
+				Start:      p.bpfObjects.AsyncReset,
 			},
 		},
 	}

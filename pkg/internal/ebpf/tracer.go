@@ -74,7 +74,7 @@ type Tracer interface {
 	GoProbes() map[string][]ebpfcommon.FunctionPrograms
 	// UProbes returns a map with the module name mapping to the uprobes that need to be
 	// tapped into. Start matches uprobe, End matches uretprobe
-	UProbes() map[string]map[string]ebpfcommon.FunctionPrograms
+	UProbes() map[string][]ebpfcommon.FunctionPrograms
 	// SocketFilters  returns a list of programs that need to be loaded as a
 	// generic eBPF socket filter
 	SocketFilters() []*ebpf.Program

@@ -52,11 +52,25 @@ type Probe struct {
 }
 
 type FunctionPrograms struct {
+	SymbolName string
+
 	// Required, if true, will cancel the execution of the eBPF Tracer
 	// if the function has not been found in the executable
 	Required bool
-	Start    *ebpf.Program
-	End      *ebpf.Program
+
+	// When AttachToOffsets is true, the specified Start program will be
+	// attached to the computed offset for 'SymbolName', and the specified End
+	// program will be attached as a regular uprobe (rather than a uretprobe)
+	// to the offset of every RET instruction computed for 'SymbolName'.
+	// This is used for the cases in which the stack is moved and uretprobes
+	// cannot be used. Be careful though, as RET may not always be present in
+	// the target code, as a result of compiler optimisations
+	AttachToOffsets bool
+	Start           *ebpf.Program
+	End             *ebpf.Program
+
+	StartOffset   uint64
+	ReturnOffsets []uint64
 }
 
 type Filter struct {

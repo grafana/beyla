@@ -376,7 +376,7 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.FunctionPrograms {
 	return nil
 }
 
-func (p *Tracer) UProbes() map[string]map[string]ebpfcommon.FunctionPrograms {
+func (p *Tracer) UProbes() map[string][]ebpfcommon.FunctionPrograms {
 	return nil
 }
 

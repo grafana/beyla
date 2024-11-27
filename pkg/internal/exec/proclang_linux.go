@@ -59,13 +59,23 @@ func findLanguageFromElf(elfF *elf.File) svc.InstrumentableType {
 	return matchExeSymbols(elfF)
 }
 
-func collectSymbols(f *elf.File, syms []elf.Symbol, addresses map[string]Sym, lookup map[string]struct{}) {
+func contains(slice []string, value string) bool {
+	for _, v := range slice {
+		if v == value {
+			return true
+		}
+	}
+
+	return false
+}
+
+func collectSymbols(f *elf.File, syms []elf.Symbol, addresses map[string]Sym, symbolNames []string) {
 	for _, s := range syms {
 		if elf.ST_TYPE(s.Info) != elf.STT_FUNC {
 			// Symbol not associated with a function or other executable code.
 			continue
 		}
-		if _, ok := lookup[s.Name]; !ok {
+		if !contains(symbolNames, s.Name) {
 			continue
 		}
 		address := s.Value
@@ -88,21 +98,21 @@ func collectSymbols(f *elf.File, syms []elf.Symbol, addresses map[string]Sym, lo
 	}
 }
 
-func FindExeSymbols(f *elf.File, lookup map[string]struct{}) (map[string]Sym, error) {
+func FindExeSymbols(f *elf.File, symbolNames []string) (map[string]Sym, error) {
 	addresses := map[string]Sym{}
 	syms, err := f.Symbols()
 	if err != nil && !errors.Is(err, elf.ErrNoSymbols) {
 		return nil, err
 	}
 
-	collectSymbols(f, syms, addresses, lookup)
+	collectSymbols(f, syms, addresses, symbolNames)
 
 	dynsyms, err := f.DynamicSymbols()
 	if err != nil && !errors.Is(err, elf.ErrNoSymbols) {
 		return nil, err
 	}
 
-	collectSymbols(f, dynsyms, addresses, lookup)
+	collectSymbols(f, dynsyms, addresses, symbolNames)
 
 	return addresses, nil
 }

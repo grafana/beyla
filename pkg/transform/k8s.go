@@ -132,7 +132,9 @@ func (md *metadataDecorator) appendMetadata(span *request.Span, meta *informer.O
 	// if the application/process was discovered and reported information
 	// before the kubernetes metadata was available
 	// (related issue: https://github.com/grafana/beyla/issues/1124)
-	span.Service.UID.Instance = meta.Name + ":" + containerName
+	// Service Instance ID is set according to OTEL collector conventions:
+	// (related issue: https://github.com/grafana/k8s-monitoring-helm/issues/942)
+	span.Service.UID.Instance = meta.Namespace + "." + meta.Name + "." + containerName
 
 	// if, in the future, other pipeline steps modify the service metadata, we should
 	// replace the map literal by individual entry insertions

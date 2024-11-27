@@ -624,6 +624,7 @@ and metrics with the Standard OpenTelemetry labels:
 - `k8s.daemonset.name`
 - `k8s.node.name`
 - `k8s.pod.name`
+- `k8s.container.name`
 - `k8s.pod.uid`
 - `k8s.pod.start_time`
 - `k8s.cluster.name`

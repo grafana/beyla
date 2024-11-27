@@ -142,6 +142,7 @@ func (md *metadataDecorator) appendMetadata(span *request.Span, meta *informer.O
 	span.Service.Metadata = map[attr.Name]string{
 		attr.K8sNamespaceName: meta.Namespace,
 		attr.K8sPodName:       meta.Name,
+		attr.K8sContainerName: containerName,
 		attr.K8sNodeName:      meta.Pod.NodeName,
 		attr.K8sPodUID:        meta.Pod.Uid,
 		attr.K8sPodStartTime:  meta.Pod.StartTimeStr,

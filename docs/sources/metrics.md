@@ -56,6 +56,7 @@ In order to configure which attributes to show or which attributes to hide, chec
 | Application (all)              | `k8s.node.name`              | shown if Kubernetes metadata is enabled           |
 | Application (all)              | `k8s.owner.name`             | shown if Kubernetes metadata is enabled           |
 | Application (all)              | `k8s.pod.name`               | shown if Kubernetes metadata is enabled           |
+| Application (all)              | `k8s.container.name`         | shown if Kubernetes metadata is enabled           |
 | Application (all)              | `k8s.pod.start_time`         | shown if Kubernetes metadata is enabled           |
 | Application (all)              | `k8s.pod.uid`                | shown if Kubernetes metadata is enabled           |
 | Application (all)              | `k8s.replicaset.name`        | shown if Kubernetes metadata is enabled           |

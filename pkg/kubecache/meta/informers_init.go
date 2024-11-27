@@ -232,29 +232,42 @@ func (inf *Informers) initPodInformer(ctx context.Context, informerFactory infor
 				len(pod.Status.InitContainerStatuses)+
 				len(pod.Status.EphemeralContainerStatuses))
 		for i := range pod.Status.ContainerStatuses {
+			cs := &pod.Status.ContainerStatuses[i]
+			envs := envsFromContainerSpec(cs.Name, pod.Spec.Containers)
 			containers = append(containers,
 				&informer.ContainerInfo{
-					Name: pod.Spec.Containers[i].Name,
-					Id:   rmContainerIDSchema(pod.Status.ContainerStatuses[i].ContainerID),
-					Env:  envToMap(inf.config.kubeClient, pod.ObjectMeta, pod.Spec.Containers[i].Env),
+					Name: cs.Name,
+					Id:   rmContainerIDSchema(cs.ContainerID),
+					Env:  envToMap(inf.config.kubeClient, pod.ObjectMeta, envs),
 				},
 			)
 		}
 		for i := range pod.Status.InitContainerStatuses {
+			ics := &pod.Status.InitContainerStatuses[i]
+			envs := envsFromContainerSpec(ics.Name, pod.Spec.InitContainers)
 			containers = append(containers,
 				&informer.ContainerInfo{
-					Name: pod.Spec.InitContainers[i].Name,
-					Id:   rmContainerIDSchema(pod.Status.InitContainerStatuses[i].ContainerID),
-					Env:  envToMap(inf.config.kubeClient, pod.ObjectMeta, pod.Spec.InitContainers[i].Env),
+					Name: ics.Name,
+					Id:   rmContainerIDSchema(ics.ContainerID),
+					Env:  envToMap(inf.config.kubeClient, pod.ObjectMeta, envs),
 				},
 			)
 		}
 		for i := range pod.Status.EphemeralContainerStatuses {
+			ecs := &pod.Status.EphemeralContainerStatuses[i]
+			envs := []v1.EnvVar{}
+			for i := range pod.Spec.EphemeralContainers {
+				c := &pod.Spec.EphemeralContainers[i]
+				if c.Name == ecs.Name {
+					envs = c.Env
+					break
+				}
+			}
 			containers = append(containers,
 				&informer.ContainerInfo{
-					Name: pod.Spec.EphemeralContainers[i].Name,
-					Id:   rmContainerIDSchema(pod.Status.EphemeralContainerStatuses[i].ContainerID),
-					Env:  envToMap(inf.config.kubeClient, pod.ObjectMeta, pod.Spec.EphemeralContainers[i].Env),
+					Name: ecs.Name,
+					Id:   rmContainerIDSchema(ecs.ContainerID),
+					Env:  envToMap(inf.config.kubeClient, pod.ObjectMeta, envs),
 				},
 			)
 		}
@@ -319,6 +332,18 @@ func envToMap(kc kubernetes.Interface, objMeta metav1.ObjectMeta, containerEnv [
 	}
 
 	return envMap
+}
+
+func envsFromContainerSpec(containerName string, containers []v1.Container) []v1.EnvVar {
+	envs := []v1.EnvVar{}
+	for i := range containers {
+		c := &containers[i]
+		if c.Name == containerName {
+			envs = c.Env
+			break
+		}
+	}
+	return envs
 }
 
 // rmContainerIDSchema extracts the hex ID of a container ID that is provided in the form:

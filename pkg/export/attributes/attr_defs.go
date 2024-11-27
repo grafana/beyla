@@ -99,6 +99,7 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 		Attributes: map[attr.Name]Default{
 			attr.K8sNamespaceName:   true,
 			attr.K8sPodName:         true,
+			attr.K8sContainerName:   true,
 			attr.K8sDeploymentName:  true,
 			attr.K8sReplicaSetName:  true,
 			attr.K8sDaemonSetName:   true,

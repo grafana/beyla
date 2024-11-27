@@ -61,11 +61,11 @@ func ClusterPath(path string) string {
 		if c == '/' {
 			nSegments++
 			if skip {
-				p[sPos] = '*'
+				p[sPos] = '#'
 				sPos++
 			} else if sFwd > sPos {
 				if !okWord(string(p[sPos:sFwd])) {
-					p[sPos] = '*'
+					p[sPos] = '#'
 					sPos++
 				} else {
 					sPos = sFwd
@@ -95,11 +95,11 @@ func ClusterPath(path string) string {
 	}
 
 	if skip {
-		p[sPos] = '*'
+		p[sPos] = '#'
 		sPos++
 	} else if sFwd > sPos {
 		if !okWord(string(p[sPos:sFwd])) {
-			p[sPos] = '*'
+			p[sPos] = '#'
 			sPos++
 		} else {
 			sPos = sFwd

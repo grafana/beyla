@@ -2,6 +2,7 @@ package ebpfcommon
 
 import (
 	"bytes"
+	"fmt"
 	"unsafe"
 
 	trace2 "go.opentelemetry.io/otel/trace"
@@ -34,12 +35,12 @@ func parseCGITable(b []byte) map[string]string {
 
 		b = b[2:]
 
-		if keyLen > 0 && len(b) > keyLen {
+		if keyLen > 0 && len(b) >= keyLen {
 			key = string(b[:keyLen])
 			b = b[keyLen:]
 		}
 
-		if valLen > 0 && len(b) > valLen {
+		if valLen > 0 && len(b) >= valLen {
 			val = string(b[:valLen])
 			b = b[valLen:]
 		}
@@ -53,6 +54,7 @@ func parseCGITable(b []byte) map[string]string {
 }
 
 func maybeFastCGI(b []byte) bool {
+	fmt.Printf("b: %v", b)
 	if len(b) <= fastCGIRequestHeaderLen {
 		return false
 	}

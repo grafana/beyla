@@ -18,9 +18,11 @@ data:
         cluster_name: my-kube
         meta_cache_address: k8s-cache:50055
         meta_naming_sources:
-          service_name_annotations: [ "my.custom/name" ]
-          service_name_labels: [ "app.kubernetes.io/name" ]
-          service_namespace_labels: [ "app.kubernetes.io/part-of" ]
+          annotations:
+            service_name: [ "my.custom/name" ]
+          labels:
+            service_name: [ "app.kubernetes.io/name" ]
+            service_namespace: [ "app.kubernetes.io/part-of" ]
       select:
         "*":
           include: [ "*" ]

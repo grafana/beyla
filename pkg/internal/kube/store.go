@@ -307,21 +307,9 @@ func (s *Store) serviceNameNamespaceForMetadata(om *informer.ObjectMeta) (string
 	var name string
 	var namespace string
 	if owner := TopOwner(om.Pod); owner != nil {
-		name, namespace = s.serviceNameNamespaceForPod(om, owner)
+		name, namespace = s.serviceNameNamespaceOwnerID(om, owner.Name)
 	} else {
-		name, namespace = s.serviceNameNamespaceForOwner(om)
-	}
-	if nameFromMeta := s.valueFromMetadata(om,
-		s.metadataSources.Annotations.ServiceName,
-		s.metadataSources.Labels.ServiceName,
-	); nameFromMeta != "" {
-		name = nameFromMeta
-	}
-	if nsFromMeta := s.valueFromMetadata(om,
-		s.metadataSources.Annotations.ServiceNamespace,
-		s.metadataSources.Labels.ServiceNamespace,
-	); nsFromMeta != "" {
-		namespace = nsFromMeta
+		name, namespace = s.serviceNameNamespaceOwnerID(om, om.Name)
 	}
 	return name, namespace
 }
@@ -365,25 +353,29 @@ func (s *Store) ServiceNameNamespaceForIP(ip string) (string, string) {
 	return name, namespace
 }
 
-func (s *Store) serviceNameNamespaceForOwner(om *informer.ObjectMeta) (string, string) {
-	ownerKey := ownerID(om.Namespace, om.Name)
-	return s.serviceNameNamespaceOwnerID(ownerKey, om.Name, om.Namespace)
-}
+func (s *Store) serviceNameNamespaceOwnerID(om *informer.ObjectMeta, ownerName string) (string, string) {
+	// ownerName can be the top Owner name, or om.Name in case it's a pod without owner
+	serviceName := ownerName
+	serviceNamespace := om.Namespace
+	ownerKey := ownerID(serviceNamespace, serviceName)
 
-func (s *Store) serviceNameNamespaceForPod(om *informer.ObjectMeta, owner *informer.Owner) (string, string) {
-	ownerKey := ownerID(om.Namespace, owner.Name)
-	return s.serviceNameNamespaceOwnerID(ownerKey, owner.Name, om.Namespace)
-}
-
-func (s *Store) serviceNameNamespaceOwnerID(ownerKey, name, namespace string) (string, string) {
-	serviceName := name
-	serviceNamespace := namespace
-
+	// OTEL_SERVICE_NAME and OTEL_SERVICE_NAMESPACE variables take precedence over user-configured annotations
+	// and labels
 	if envName, ok := s.serviceNameFromEnv(ownerKey); ok {
 		serviceName = envName
+	} else if nameFromMeta := s.valueFromMetadata(om,
+		s.metadataSources.Annotations.ServiceName,
+		s.metadataSources.Labels.ServiceName,
+	); nameFromMeta != "" {
+		serviceName = nameFromMeta
 	}
 	if envName, ok := s.serviceNamespaceFromEnv(ownerKey); ok {
 		serviceNamespace = envName
+	} else if nsFromMeta := s.valueFromMetadata(om,
+		s.metadataSources.Annotations.ServiceNamespace,
+		s.metadataSources.Labels.ServiceNamespace,
+	); nsFromMeta != "" {
+		serviceNamespace = nsFromMeta
 	}
 
 	return serviceName, serviceNamespace

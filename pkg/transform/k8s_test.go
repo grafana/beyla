@@ -92,17 +92,39 @@ func TestDecoration(t *testing.T) {
 			Containers:   []*informer.ContainerInfo{{Name: "a-container", Id: "container-33"}},
 		},
 	}})
+	inf.Notify(&informer.Event{Type: informer.EventType_CREATED, Resource: &informer.ObjectMeta{
+		Name: "env-var-takes-precedence", Namespace: "the-ns", Kind: "Pod",
+		Annotations: map[string]string{
+			"resource.opentelemetry.io/service.name":      "otel-override-name",
+			"resource.opentelemetry.io/service.namespace": "otel-override-ns",
+		},
+		Labels: map[string]string{
+			"app.kubernetes.io/name":    "a-cool-name",
+			"app.kubernetes.io/part-of": "a-cool-namespace",
+		},
+		Pod: &informer.PodInfo{
+			NodeName:     "the-node",
+			Uid:          "uid-66",
+			StartTimeStr: "2020-01-02 12:56:56",
+			Containers: []*informer.ContainerInfo{{
+				Name: "a-container", Id: "container-66",
+				Env: map[string]string{
+					"OTEL_RESOURCE_ATTRIBUTES": "service.name=env-svc-name,service.namespace=env-svc-ns",
+				},
+			}},
+		},
+	}})
+	// we need to add PID metadata for all the pod/containers above
+	// by convention, the mocked pid namespace will be PID+1000
 	kube.InfoForPID = func(pid uint32) (container.Info, error) {
 		return container.Info{
 			ContainerID:  fmt.Sprintf("container-%d", pid),
 			PIDNamespace: 1000 + pid,
 		}, nil
 	}
-	store.AddProcess(12)
-	store.AddProcess(34)
-	store.AddProcess(56)
-	store.AddProcess(78)
-	store.AddProcess(33)
+	for _, pid := range []uint32{12, 34, 56, 78, 33, 66} {
+		store.AddProcess(pid)
+	}
 
 	dec := metadataDecorator{db: store, clusterName: "the-cluster"}
 	inputCh, outputhCh := make(chan []request.Span, 10), make(chan []request.Span, 10)
@@ -207,6 +229,25 @@ func TestDecoration(t *testing.T) {
 			"k8s.pod.name":       "overridden-meta-annots",
 			"k8s.container.name": "a-container",
 			"k8s.pod.uid":        "uid-33",
+			"k8s.pod.start_time": "2020-01-02 12:56:56",
+			"k8s.cluster.name":   "the-cluster",
+		}, deco[0].Service.Metadata)
+	})
+	t.Run("user can override service name and ns via env vars, taking precedence over any other criteria", func(t *testing.T) {
+		inputCh <- []request.Span{{
+			Pid: request.PidInfo{Namespace: 1066}, Service: autoNameSvc,
+		}}
+		deco := testutil.ReadChannel(t, outputhCh, timeout)
+		require.Len(t, deco, 1)
+		assert.Equal(t, "env-svc-ns", deco[0].Service.UID.Namespace)
+		assert.Equal(t, "env-svc-name", deco[0].Service.UID.Name)
+		assert.EqualValues(t, "the-ns.env-var-takes-precedence.a-container", deco[0].Service.UID.Instance)
+		assert.Equal(t, map[attr.Name]string{
+			"k8s.node.name":      "the-node",
+			"k8s.namespace.name": "the-ns",
+			"k8s.pod.name":       "env-var-takes-precedence",
+			"k8s.container.name": "a-container",
+			"k8s.pod.uid":        "uid-66",
 			"k8s.pod.start_time": "2020-01-02 12:56:56",
 			"k8s.cluster.name":   "the-cluster",
 		}, deco[0].Service.Metadata)

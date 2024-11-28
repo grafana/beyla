@@ -171,11 +171,11 @@ type bpf_tp_debugTopicT struct {
 }
 
 type bpf_tp_debugTpInfoPidT struct {
-	Tp    bpf_tp_debugTpInfoT
-	Pid   uint32
-	Valid uint8
-	Type  uint8
-	_     [2]byte
+	Tp      bpf_tp_debugTpInfoT
+	Pid     uint32
+	Valid   uint8
+	ReqType uint8
+	_       [2]byte
 }
 
 type bpf_tp_debugTpInfoT struct {
@@ -185,6 +185,11 @@ type bpf_tp_debugTpInfoT struct {
 	Ts       uint64
 	Flags    uint8
 	_        [7]byte
+}
+
+type bpf_tp_debugTraceMapKeyT struct {
+	Conn bpf_tp_debugConnectionInfoT
+	Type uint32
 }
 
 // loadBpf_tp_debug returns the embedded CollectionSpec for bpf_tp_debug.

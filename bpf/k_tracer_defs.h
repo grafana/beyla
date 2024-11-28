@@ -87,7 +87,8 @@ static __always_inline void handle_buf_with_args(void *ctx, call_protocol_args_t
                             tp_info_pid_t *existing = bpf_map_lookup_elem(&server_traces, &t_key);
                             if (existing) {
                                 __builtin_memcpy(&existing->tp, &info->tp, sizeof(tp_info_t));
-                                set_trace_info_for_connection(&args->pid_conn.conn, existing);
+                                set_trace_info_for_connection(
+                                    &args->pid_conn.conn, TRACE_TYPE_SERVER, existing);
                             } else {
                                 bpf_dbg_printk("Didn't find existing trace, this might be a bug!");
                             }

@@ -27,7 +27,7 @@ def ping():
 
 @app.route("/tracemetoo")
 def traceme():
-    response = requests.get("https://utestserverssl:3043/users", verify=False)
+    response = requests.get("https://localhost:3043/users", verify=False)
     if response.status_code == 200:
         return response.json()
     return "PONG!"

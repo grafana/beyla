@@ -40,7 +40,7 @@ static __always_inline void init_new_trace(tp_info_t *tp) {
 }
 
 static __always_inline void
-set_tcp_trace_info(u8 type, connection_info_t *conn, tp_info_t *tp, u32 pid) {
+set_tcp_trace_info(u32 type, connection_info_t *conn, tp_info_t *tp, u32 pid) {
     tp_info_pid_t *tp_p = tp_buf();
 
     if (!tp_p) {
@@ -51,13 +51,37 @@ set_tcp_trace_info(u8 type, connection_info_t *conn, tp_info_t *tp, u32 pid) {
     tp_p->tp.flags = 1;
     tp_p->valid = 1;
     tp_p->pid = pid; // used for avoiding finding stale server requests with client port reuse
-    tp_p->type = type;
+    tp_p->req_type = EVENT_TCP_REQUEST;
 
-    set_trace_info_for_connection(conn, tp_p);
+    set_trace_info_for_connection(conn, type, tp_p);
     bpf_dbg_printk("Set traceinfo for conn");
     dbg_print_http_connection_info(conn);
 
     server_or_client_trace(type, conn, tp_p);
+}
+
+static __always_inline void tcp_get_or_set_trace_info(tcp_req_t *req,
+                                                      pid_connection_info_t *pid_conn) {
+    if (req->direction == TCP_SEND) { // Client
+        u8 found = find_trace_for_client_request(pid_conn, &req->tp);
+        bpf_dbg_printk("Looking up client trace info, found %d", found);
+        if (found) {
+            urand_bytes(req->tp.span_id, SPAN_ID_SIZE_BYTES);
+        } else {
+            init_new_trace(&req->tp);
+        }
+
+        set_tcp_trace_info(TRACE_TYPE_CLIENT, &pid_conn->conn, &req->tp, pid_conn->pid);
+    } else { // Server
+        u8 found = find_trace_for_server_request(&pid_conn->conn, &req->tp);
+        bpf_dbg_printk("Looking up server trace info, found %d", found);
+        if (found) {
+            urand_bytes(req->tp.span_id, SPAN_ID_SIZE_BYTES);
+        } else {
+            init_new_trace(&req->tp);
+        }
+        set_tcp_trace_info(TRACE_TYPE_SERVER, &pid_conn->conn, &req->tp, pid_conn->pid);
+    }
 }
 
 static __always_inline void handle_unknown_tcp_connection(pid_connection_info_t *pid_conn,
@@ -84,27 +108,7 @@ static __always_inline void handle_unknown_tcp_connection(pid_connection_info_t 
 
             bpf_dbg_printk("TCP request start, direction = %d, ssl = %d", direction, ssl);
 
-            if (direction == TCP_SEND) { // Client
-                u8 found = find_trace_for_client_request(pid_conn, &req->tp);
-                bpf_dbg_printk("Looking up client trace info, found %d", found);
-                if (found) {
-                    urand_bytes(req->tp.span_id, SPAN_ID_SIZE_BYTES);
-                } else {
-                    init_new_trace(&req->tp);
-                }
-
-                set_tcp_trace_info(EVENT_HTTP_CLIENT, &pid_conn->conn, &req->tp, pid_conn->pid);
-            } else { // Server
-                u8 found = find_trace_for_server_request(
-                    &pid_conn->conn, &req->tp, pid_conn->pid, EVENT_HTTP_REQUEST);
-                bpf_dbg_printk("Looking up server trace info, found %d", found);
-                if (found) {
-                    urand_bytes(req->tp.span_id, SPAN_ID_SIZE_BYTES);
-                } else {
-                    init_new_trace(&req->tp);
-                }
-                set_tcp_trace_info(EVENT_HTTP_REQUEST, &pid_conn->conn, &req->tp, pid_conn->pid);
-            }
+            tcp_get_or_set_trace_info(req, pid_conn);
 
             bpf_map_update_elem(&ongoing_tcp_req, pid_conn, req, BPF_ANY);
         }

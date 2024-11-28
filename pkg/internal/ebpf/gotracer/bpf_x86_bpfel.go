@@ -159,11 +159,11 @@ type bpfTopicT struct {
 }
 
 type bpfTpInfoPidT struct {
-	Tp    bpfTpInfoT
-	Pid   uint32
-	Valid uint8
-	Type  uint8
-	_     [2]byte
+	Tp      bpfTpInfoT
+	Pid     uint32
+	Valid   uint8
+	ReqType uint8
+	_       [2]byte
 }
 
 type bpfTpInfoT struct {
@@ -173,6 +173,11 @@ type bpfTpInfoT struct {
 	Ts       uint64
 	Flags    uint8
 	_        [7]byte
+}
+
+type bpfTraceMapKeyT struct {
+	Conn bpfConnectionInfoT
+	Type uint32
 }
 
 // loadBpf returns the embedded CollectionSpec for bpf.

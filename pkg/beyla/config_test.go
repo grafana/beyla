@@ -55,7 +55,10 @@ attributes:
     enable: true
     informers_sync_timeout: 30s
     meta_naming_sources:
-      service_name_labels: ["titi.com/lala"]
+      annotations:
+        service_namespace: ["huha.com/yeah"]
+      labels:
+        service_name: ["titi.com/lala"]
   instance_id:
     dns: true
   host_id:
@@ -105,7 +108,8 @@ network:
 	nc.CIDRs = cidr.Definitions{"10.244.0.0/16"}
 
 	metaSources := kube.DefaultMetadataSources
-	metaSources.ServiceNameLabels = []string{"titi.com/lala"}
+	metaSources.Annotations.ServiceNamespace = []string{"huha.com/yeah"}
+	metaSources.Labels.ServiceName = []string{"titi.com/lala"}
 
 	assert.Equal(t, &Config{
 		Exec:             cfg.Exec,

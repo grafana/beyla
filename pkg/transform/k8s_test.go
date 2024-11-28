@@ -23,10 +23,14 @@ const timeout = 5 * time.Second
 func TestDecoration(t *testing.T) {
 	inf := &fakeInformer{}
 	store := kube.NewStore(inf, kube.MetadataSources{
-		ServiceNameAnnotations:      []string{"resource.opentelemetry.io/service.name"},
-		ServiceNamespaceAnnotations: []string{"resource.opentelemetry.io/service.namespace"},
-		ServiceNameLabels:           []string{"app.kubernetes.io/name"},
-		ServiceNamespaceLabels:      []string{"app.kubernetes.io/part-of"},
+		Annotations: kube.AnnotationSources{
+			ServiceName:      []string{"resource.opentelemetry.io/service.name"},
+			ServiceNamespace: []string{"resource.opentelemetry.io/service.namespace"},
+		},
+		Labels: kube.LabelSources{
+			ServiceName:      []string{"app.kubernetes.io/name"},
+			ServiceNamespace: []string{"app.kubernetes.io/part-of"},
+		},
 	})
 	// pre-populated kubernetes metadata database
 	inf.Notify(&informer.Event{Type: informer.EventType_CREATED, Resource: &informer.ObjectMeta{

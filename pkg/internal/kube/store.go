@@ -38,25 +38,30 @@ func qName(om *informer.ObjectMeta) qualifiedName {
 
 // MetadataSources allow overriding some metadata from kubernetes labels and annotations
 type MetadataSources struct {
-	ServiceNameAnnotations      []string `yaml:"service_name_annotations" env:"BEYLA_KUBE_ANNOTATIONS_SERVICE_NAME" envSeparator:","`
-	ServiceNamespaceAnnotations []string `yaml:"service_namespace_annotations" env:"BEYLA_KUBE_ANNOTATIONS_SERVICE_NAMESPACE" envSeparator:","`
-	ServiceNameLabels           []string `yaml:"service_name_labels" env:"BEYLA_KUBE_LABELS_SERVICE_NAME" envSeparator:","`
-	ServiceNamespaceLabels      []string `yaml:"service_namespace_labels" env:"BEYLA_KUBE_LABELS_SERVICE_NAMESPACE" envSeparator:","`
+	Annotations AnnotationSources `yaml:"annotations"`
+	Labels      LabelSources      `yaml:"labels"`
+}
+
+type LabelSources struct {
+	ServiceName      []string `yaml:"service_name" env:"BEYLA_KUBE_LABELS_SERVICE_NAME" envSeparator:","`
+	ServiceNamespace []string `yaml:"service_namespace" env:"BEYLA_KUBE_LABELS_SERVICE_NAMESPACE" envSeparator:","`
+}
+
+type AnnotationSources struct {
+	ServiceName      []string `yaml:"service_name" env:"BEYLA_KUBE_ANNOTATIONS_SERVICE_NAME" envSeparator:","`
+	ServiceNamespace []string `yaml:"service_namespace" env:"BEYLA_KUBE_ANNOTATIONS_SERVICE_NAMESPACE" envSeparator:","`
 }
 
 var DefaultMetadataSources = MetadataSources{
-	ServiceNameAnnotations: []string{
-		"resource.opentelemetry.io/service.name",
-	},
-	ServiceNamespaceAnnotations: []string{
-		"resource.opentelemetry.io/service.namespace",
+	Annotations: AnnotationSources{
+		ServiceName:      []string{"resource.opentelemetry.io/service.name"},
+		ServiceNamespace: []string{"resource.opentelemetry.io/service.namespace"},
 	},
 	// empty by default. If a user sets useLabelsForResourceAttributes: true it its OTEL operator, also
 	// the values below should be populated so:
 	//   - `app.kubernetes.io/name` becomes `service.name`
 	//   - `app.kubernetes.io/part-of` becomes `service.namespace`
-	ServiceNameLabels:      nil,
-	ServiceNamespaceLabels: nil,
+	Labels: LabelSources{},
 }
 
 // Store aggregates Kubernetes information from multiple sources:
@@ -307,14 +312,14 @@ func (s *Store) serviceNameNamespaceForMetadata(om *informer.ObjectMeta) (string
 		name, namespace = s.serviceNameNamespaceForOwner(om)
 	}
 	if nameFromMeta := s.valueFromMetadata(om,
-		s.metadataSources.ServiceNameAnnotations,
-		s.metadataSources.ServiceNameLabels,
+		s.metadataSources.Annotations.ServiceName,
+		s.metadataSources.Labels.ServiceName,
 	); nameFromMeta != "" {
 		name = nameFromMeta
 	}
 	if nsFromMeta := s.valueFromMetadata(om,
-		s.metadataSources.ServiceNamespaceAnnotations,
-		s.metadataSources.ServiceNamespaceLabels,
+		s.metadataSources.Annotations.ServiceNamespace,
+		s.metadataSources.Labels.ServiceNamespace,
 	); nsFromMeta != "" {
 		namespace = nsFromMeta
 	}

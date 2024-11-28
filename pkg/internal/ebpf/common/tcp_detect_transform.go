@@ -36,9 +36,18 @@ func ReadTCPRequestIntoSpan(record *ringbuf.Record, filter ServiceFilter) (reque
 
 	// Check if we have a SQL statement
 	op, table, sql := detectSQLBytes(b)
-	switch {
-	case validSQL(op, table):
+	if validSQL(op, table) {
 		return TCPToSQLToSpan(&event, op, table, sql), false, nil
+	}
+
+	if maybeFastCGI(b) {
+		op, uri, status := detectFastCGI(b, event.Rbuf[:rl])
+		if status >= 0 {
+			return TCPToFastCGIToSpan(&event, op, uri, status), false, nil
+		}
+	}
+
+	switch {
 	case isRedis(b) && isRedis(event.Rbuf[:rl]):
 		op, text, ok := parseRedisRequest(string(b))
 

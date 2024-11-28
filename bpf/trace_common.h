@@ -189,13 +189,9 @@ static __always_inline u8 valid_trace(const unsigned char *trace_id) {
     return *((u64 *)trace_id) != 0 || *((u64 *)(trace_id + 8)) != 0;
 }
 
-static __always_inline void server_or_client_trace(http_connection_metadata_t *meta,
-                                                   connection_info_t *conn,
-                                                   tp_info_pid_t *tp_p) {
-    if (!meta) {
-        return;
-    }
-    if (meta->type == EVENT_HTTP_REQUEST) {
+static __always_inline void
+server_or_client_trace(u8 type, connection_info_t *conn, tp_info_pid_t *tp_p) {
+    if (type == EVENT_HTTP_REQUEST) {
         trace_key_t t_key = {0};
         task_tid(&t_key.p_key);
         t_key.extra_id = extra_runtime_id();
@@ -226,6 +222,52 @@ static __always_inline void server_or_client_trace(http_connection_metadata_t *m
     }
 }
 
+static __always_inline u8 find_trace_for_server_request(connection_info_t *conn,
+                                                        tp_info_t *tp,
+                                                        u32 current_pid,
+                                                        u8 current_type) {
+    u8 found_tp = 0;
+    tp_info_pid_t *existing_tp = bpf_map_lookup_elem(&incoming_trace_map, conn);
+    if (existing_tp) {
+        found_tp = 1;
+        bpf_dbg_printk("Found incoming (TCP) tp for server request");
+        __builtin_memcpy(tp->trace_id, existing_tp->tp.trace_id, sizeof(tp->trace_id));
+        __builtin_memcpy(tp->parent_id, existing_tp->tp.span_id, sizeof(tp->parent_id));
+        bpf_map_delete_elem(&incoming_trace_map, conn);
+    } else {
+        bpf_dbg_printk("Looking up tracemap for");
+        dbg_print_http_connection_info(conn);
+
+        existing_tp = trace_info_for_connection(conn);
+
+        bpf_dbg_printk("existing_tp %llx", existing_tp);
+
+        if (!disable_black_box_cp &&
+            correlated_requests(tp, current_pid, current_type, existing_tp)) {
+            found_tp = 1;
+            bpf_dbg_printk("Found existing correlated tp for server request");
+            __builtin_memcpy(tp->trace_id, existing_tp->tp.trace_id, sizeof(tp->trace_id));
+            __builtin_memcpy(tp->parent_id, existing_tp->tp.span_id, sizeof(tp->parent_id));
+        }
+    }
+
+    return found_tp;
+}
+
+static __always_inline u8 find_trace_for_client_request(pid_connection_info_t *p_conn,
+                                                        tp_info_t *tp) {
+    u8 found_tp = 0;
+    tp_info_pid_t *server_tp = find_parent_trace(p_conn);
+    if (server_tp && server_tp->valid && valid_trace(server_tp->tp.trace_id)) {
+        found_tp = 1;
+        bpf_dbg_printk("Found existing server tp for client call");
+        __builtin_memcpy(tp->trace_id, server_tp->tp.trace_id, sizeof(tp->trace_id));
+        __builtin_memcpy(tp->parent_id, server_tp->tp.span_id, sizeof(tp->parent_id));
+    }
+
+    return found_tp;
+}
+
 static __always_inline void get_or_create_trace_info(http_connection_metadata_t *meta,
                                                      u32 pid,
                                                      connection_info_t *conn,
@@ -248,45 +290,17 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
     u8 found_tp = 0;
 
     if (meta) {
+        tp_p->type = meta->type;
         if (meta->type == EVENT_HTTP_CLIENT) {
             pid_connection_info_t p_conn = {.pid = pid};
             __builtin_memcpy(&p_conn.conn, conn, sizeof(connection_info_t));
-            tp_info_pid_t *server_tp = find_parent_trace(&p_conn);
-
-            if (server_tp && server_tp->valid && valid_trace(server_tp->tp.trace_id)) {
-                found_tp = 1;
-                bpf_dbg_printk("Found existing server tp for client call");
-                __builtin_memcpy(
-                    tp_p->tp.trace_id, server_tp->tp.trace_id, sizeof(tp_p->tp.trace_id));
-                __builtin_memcpy(
-                    tp_p->tp.parent_id, server_tp->tp.span_id, sizeof(tp_p->tp.parent_id));
-            }
+            found_tp = find_trace_for_client_request(&p_conn, &tp_p->tp);
         } else {
             //bpf_dbg_printk("Looking up existing trace for connection");
             //dbg_print_http_connection_info(conn);
 
             // For server requests, we first look for TCP info (setup by TC ingress) and then we fall back to black-box info.
-            tp_info_pid_t *existing_tp = bpf_map_lookup_elem(&incoming_trace_map, conn);
-            if (existing_tp) {
-                found_tp = 1;
-                bpf_dbg_printk("Found incoming (TCP) tp for server request");
-                __builtin_memcpy(
-                    tp_p->tp.trace_id, existing_tp->tp.trace_id, sizeof(tp_p->tp.trace_id));
-                __builtin_memcpy(
-                    tp_p->tp.parent_id, existing_tp->tp.span_id, sizeof(tp_p->tp.parent_id));
-                bpf_map_delete_elem(&incoming_trace_map, conn);
-            } else {
-                existing_tp = trace_info_for_connection(conn);
-
-                if (!disable_black_box_cp && correlated_requests(tp_p, existing_tp)) {
-                    found_tp = 1;
-                    bpf_dbg_printk("Found existing correlated tp for server request");
-                    __builtin_memcpy(
-                        tp_p->tp.trace_id, existing_tp->tp.trace_id, sizeof(tp_p->tp.trace_id));
-                    __builtin_memcpy(
-                        tp_p->tp.parent_id, existing_tp->tp.span_id, sizeof(tp_p->tp.parent_id));
-                }
-            }
+            found_tp = find_trace_for_server_request(conn, &tp_p->tp, tp_p->pid, tp_p->type);
         }
     }
 
@@ -307,7 +321,9 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
     // for customers to enable it. Off by default.
     if (!capture_header_buffer) {
         set_trace_info_for_connection(conn, tp_p);
-        server_or_client_trace(meta, conn, tp_p);
+        if (meta) {
+            server_or_client_trace(meta->type, conn, tp_p);
+        }
         return;
     }
 
@@ -341,7 +357,9 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
 #endif
 
     set_trace_info_for_connection(conn, tp_p);
-    server_or_client_trace(meta, conn, tp_p);
+    if (meta) {
+        server_or_client_trace(meta->type, conn, tp_p);
+    }
 }
 
 #endif

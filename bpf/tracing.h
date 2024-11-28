@@ -74,16 +74,21 @@ static __always_inline u64 current_immediate_epoch(u64 ts) {
     return temp * NANOSECONDS_PER_IMM_EPOCH;
 }
 
-static __always_inline u8 correlated_requests(tp_info_pid_t *tp, tp_info_pid_t *existing_tp) {
+static __always_inline u8 correlated_requests(tp_info_t *tp,
+                                              u32 current_pid,
+                                              u8 current_type,
+                                              tp_info_pid_t *existing_tp) {
     if (!existing_tp) {
         return 0;
     }
 
     // We check for correlated requests which are in order, but from different PIDs
-    // Same PID means that we had client port reuse, which might falsely match prior
+    // Same PID means that we had client port reuse (*unless one was client and the other
+    // was a server request, i.e. the type check), which might falsely match prior
     // transaction if it happened during the same epoch.
-    if ((tp->tp.ts >= existing_tp->tp.ts) && (tp->pid != existing_tp->pid)) {
-        return current_epoch(tp->tp.ts) == current_epoch(existing_tp->tp.ts);
+    if ((tp->ts >= existing_tp->tp.ts) &&
+        ((current_pid != existing_tp->pid) || (current_type != existing_tp->type))) {
+        return current_epoch(tp->ts) == current_epoch(existing_tp->tp.ts);
     }
 
     return 0;

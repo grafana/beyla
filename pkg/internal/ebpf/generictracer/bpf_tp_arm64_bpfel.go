@@ -196,7 +196,8 @@ type bpf_tpTpInfoPidT struct {
 	}
 	Pid   uint32
 	Valid uint8
-	_     [3]byte
+	Type  uint8
+	_     [2]byte
 }
 
 type bpf_tpTraceKeyT struct {

@@ -2,7 +2,7 @@ package ebpfcommon
 
 import (
 	"bytes"
-	"fmt"
+	"strconv"
 	"unsafe"
 
 	trace2 "go.opentelemetry.io/otel/trace"
@@ -15,6 +15,7 @@ const requestMethodKey = "REQUEST_METHOD"
 const requestURIKey = "REQUEST_URI"
 const scriptNameKey = "SCRIPT_NAME"
 const responseError = 7 // FCGI_STDERR
+const responseStatusKey = "Status: "
 
 func parseCGITable(b []byte) map[string]string {
 	res := map[string]string{}
@@ -54,7 +55,6 @@ func parseCGITable(b []byte) map[string]string {
 }
 
 func maybeFastCGI(b []byte) bool {
-	fmt.Printf("b: %v", b)
 	if len(b) <= fastCGIRequestHeaderLen {
 		return false
 	}
@@ -86,6 +86,18 @@ func detectFastCGI(b, rb []byte) (string, string, int) {
 		if len(rb) >= 2 {
 			if rb[1] == responseError {
 				status = 500
+			}
+
+			statusPos := bytes.Index(rb, []byte(responseStatusKey))
+			if statusPos >= 0 {
+				rb = rb[statusPos+len(responseStatusKey):]
+				nextSpace := bytes.Index(rb, []byte(" "))
+				if nextSpace > 0 {
+					statusStr := string(rb[:nextSpace])
+					if parsed, err := strconv.ParseInt(statusStr, 10, 32); err == nil {
+						status = int(parsed)
+					}
+				}
 			}
 		}
 

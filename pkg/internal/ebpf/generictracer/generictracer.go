@@ -35,7 +35,8 @@ type libModule struct {
 }
 
 // Hold onto Linux inode numbers of files that are already instrumented, e.g. libssl.so.3
-var instrumentedLibs = make(map[uint64]libModule)
+type instrumentedLibs_t map[uint64]*libModule
+var instrumentedLibs = make(instrumentedLibs_t)
 var libsMux sync.Mutex
 
 type Tracer struct {
@@ -48,6 +49,27 @@ type Tracer struct {
 	qdiscs         map[ifaces.Interface]*netlink.GenericQdisc
 	egressFilters  map[ifaces.Interface]*netlink.BpfFilter
 	ingressFilters map[ifaces.Interface]*netlink.BpfFilter
+}
+
+func (libs instrumentedLibs_t) at(id uint64) *libModule {
+	module, ok := libs[id]
+
+	if !ok {
+		module = &libModule{}
+		libs[id] = module
+	}
+
+	return module
+}
+
+func (libs instrumentedLibs_t) find(id uint64) *libModule {
+	module, ok := libs[id]
+
+	if ok {
+		return module
+	}
+
+	return nil
 }
 
 func New(cfg *beyla.Config, metrics imetrics.Reporter) *Tracer {
@@ -387,24 +409,20 @@ func (p *Tracer) RecordInstrumentedLib(id uint64) {
 	libsMux.Lock()
 	defer libsMux.Unlock()
 
-	module, ok := instrumentedLibs[id]
-	if ok {
-		instrumentedLibs[id] = libModule{closers: module.closers, references: module.references + 1}
-		p.log.Debug("Recorded instrumented Lib", "ino", id, "module", module)
-	} else {
-		module = libModule{references: 1}
-		instrumentedLibs[id] = module
-		p.log.Debug("Recorded instrumented Lib", "ino", id, "module", module)
-	}
+	module := instrumentedLibs.at(id)
+	module.references++
+
+	p.log.Debug("Recorded instrumented Lib", "ino", id, "module", module)
 }
 
 func (p *Tracer) UnlinkInstrumentedLib(id uint64) {
 	libsMux.Lock()
 	defer libsMux.Unlock()
-	if module, ok := instrumentedLibs[id]; ok {
+
+	if module := instrumentedLibs.find(id); module != nil {
 		p.log.Debug("Unlinking instrumented Lib - before state", "ino", id, "module", module)
 		if module.references > 1 {
-			instrumentedLibs[id] = libModule{closers: module.closers, references: module.references - 1}
+			module.references--
 		} else {
 			for _, c := range module.closers {
 				p.log.Debug("Closing", "closable", c)
@@ -420,27 +438,21 @@ func (p *Tracer) UnlinkInstrumentedLib(id uint64) {
 func (p *Tracer) AddModuleCloser(id uint64, c ...io.Closer) {
 	libsMux.Lock()
 	defer libsMux.Unlock()
-	module, ok := instrumentedLibs[id]
-	if !ok {
-		instrumentedLibs[id] = libModule{closers: c, references: 0}
-		p.log.Debug("added new module closer", "ino", id, "module", module)
-	} else {
-		closers := module.closers
-		closers = append(closers, c...)
-		mod := libModule{closers: closers, references: module.references}
-		instrumentedLibs[id] = mod
-		p.log.Debug("added module closer", "ino", id, "module", module)
-	}
+	module := instrumentedLibs.at(id)
+
+	module.closers = append(module.closers, c...)
+
+	p.log.Debug("added module closer", "ino", id, "module", module)
 }
 
 func (p *Tracer) AlreadyInstrumentedLib(id uint64) bool {
 	libsMux.Lock()
 	defer libsMux.Unlock()
 
-	module, ok := instrumentedLibs[id]
+	module := instrumentedLibs.find(id)
 
 	p.log.Debug("checking already instrumented Lib", "ino", id, "module", module)
-	return ok
+	return module != nil
 }
 
 func (p *Tracer) SetupTC() {

@@ -57,11 +57,11 @@ func (p *BPFLogger) AddCloser(c ...io.Closer) {
 
 func (p *BPFLogger) AddModuleCloser(_ uint64, _ ...io.Closer) {}
 
-func (p *BPFLogger) KProbes() map[string]ebpfcommon.FunctionPrograms {
+func (p *BPFLogger) KProbes() map[string]ebpfcommon.ProbeDesc {
 	return nil
 }
 
-func (p *BPFLogger) Tracepoints() map[string]ebpfcommon.FunctionPrograms {
+func (p *BPFLogger) Tracepoints() map[string]ebpfcommon.ProbeDesc {
 	return nil
 }
 

@@ -31,52 +31,27 @@ func ilog() *slog.Logger {
 func (i *instrumenter) goprobes(p Tracer) error {
 	log := ilog().With("probes", "goprobes")
 	// TODO: not running program if it does not find the required probes
-	for funcName, funcPrograms := range p.GoProbes() {
-		offs, ok := i.offsets.Funcs[funcName]
-		for _, funcProgram := range funcPrograms {
-			if !ok {
-				// the program function is not in the detected offsets. Ignoring
-				log.Debug("ignoring function", "function", funcName)
-				continue
-			}
-			log.Debug("going to instrument function", "function", funcName, "offsets", offs, "programs", funcProgram)
-			if err := i.goprobe(ebpfcommon.Probe{
-				Offsets:  offs,
-				Programs: funcProgram,
-			}); err != nil {
-				return fmt.Errorf("instrumenting function %q: %w", funcName, err)
-			}
-			p.AddCloser(i.closables...)
-		}
-	}
+	for _, funcProgram := range p.GoProbes() {
 
-	return nil
-}
+		offs, ok := i.offsets.Funcs[funcProgram.SymbolName]
 
-func (i *instrumenter) goprobe(probe ebpfcommon.Probe) error {
-	// Attach BPF programs as start and return probes
-	if probe.Programs.Start != nil {
-		up, err := i.exe.Uprobe("", probe.Programs.Start, &link.UprobeOptions{
-			Address: probe.Offsets.Start,
-		})
-		if err != nil {
-			return fmt.Errorf("setting uprobe: %w", err)
+		if !ok {
+			// the program function is not in the detected offsets. Ignoring
+			log.Debug("ignoring function", "function", funcProgram.SymbolName)
+			continue
 		}
-		i.closables = append(i.closables, up)
-	}
 
-	if probe.Programs.End != nil {
-		// Go won't work with Uretprobes because of the way Go manages the stack. We need to set uprobes just before the return
-		// values: https://github.com/iovisor/bcc/issues/1320
-		for _, ret := range probe.Offsets.Returns {
-			urp, err := i.exe.Uprobe("", probe.Programs.End, &link.UprobeOptions{
-				Address: ret,
-			})
-			if err != nil {
-				return fmt.Errorf("setting uretprobe: %w", err)
-			}
-			i.closables = append(i.closables, urp)
+		funcProgram.StartOffset = offs.Start
+		funcProgram.ReturnOffsets = offs.Returns
+		funcProgram.AttachToOffsets = true
+
+		log.Debug("going to instrument function", "function", funcProgram.SymbolName, "offsets", offs, "programs", funcProgram)
+
+		if err := i.attachToGoOffsets(&funcProgram); err != nil {
+			return fmt.Errorf("instrumenting function %q: %w", funcProgram.SymbolName, err)
 		}
+
+		p.AddCloser(i.closables...)
 	}
 
 	return nil
@@ -100,7 +75,7 @@ func (i *instrumenter) kprobes(p KprobesTracer) error {
 	return nil
 }
 
-func (i *instrumenter) kprobe(funcName string, programs ebpfcommon.FunctionPrograms) error {
+func (i *instrumenter) kprobe(funcName string, programs ebpfcommon.ProbeDesc) error {
 	if programs.Start != nil {
 		kp, err := link.Kprobe(funcName, programs.Start, nil)
 		if err != nil {
@@ -125,7 +100,7 @@ func (i *instrumenter) kprobe(funcName string, programs ebpfcommon.FunctionProgr
 type uprobeModule struct {
 	lib       string
 	instrPath string
-	probes    []ebpfcommon.FunctionPrograms
+	probes    []ebpfcommon.ProbeDesc
 }
 
 func (i *instrumenter) uprobeModules(p Tracer, pid int32, maps []*procfs.ProcMap, exePath string, exeIno uint64, log *slog.Logger) map[uint64]*uprobeModule {
@@ -264,7 +239,43 @@ func (i *instrumenter) uprobes(pid int32, p Tracer) error {
 	return nil
 }
 
-func attachToOffsets(p Tracer, instrumentedIno uint64, exe *link.Executable, probe *ebpfcommon.FunctionPrograms) error {
+// FIXME generalise closables and merge with attachToOffsets
+func (i *instrumenter) attachToGoOffsets(probe *ebpfcommon.ProbeDesc) error {
+	if probe.Start != nil {
+		up, err := i.exe.Uprobe("", probe.Start, &link.UprobeOptions{
+			Address: probe.StartOffset,
+		})
+
+		if err != nil {
+			return fmt.Errorf("setting uprobe: %w", err)
+		}
+
+		i.closables = append(i.closables, up)
+	}
+
+	if probe.End != nil {
+		if len(probe.ReturnOffsets) == 0 {
+			return fmt.Errorf("setting uretprobe (attaching to offset): missing return offsets")
+		}
+		// Go won't work with Uretprobes because of the way Go manages the stack. We need to set uprobes just before the return
+		// values: https://github.com/iovisor/bcc/issues/1320
+		for _, offset := range probe.ReturnOffsets {
+			urp, err := i.exe.Uprobe("", probe.End, &link.UprobeOptions{
+				Address: offset,
+			})
+
+			if err != nil {
+				return fmt.Errorf("setting uretprobe: %w", err)
+			}
+
+			i.closables = append(i.closables, urp)
+		}
+	}
+
+	return nil
+}
+
+func attachToOffsets(p Tracer, instrumentedIno uint64, exe *link.Executable, probe *ebpfcommon.ProbeDesc) error {
 	if probe.Start != nil {
 		up, err := exe.Uprobe("", probe.Start, &link.UprobeOptions{
 			Address: probe.StartOffset,
@@ -298,7 +309,7 @@ func attachToOffsets(p Tracer, instrumentedIno uint64, exe *link.Executable, pro
 	return nil
 }
 
-func attachToSymbolName(p Tracer, instrumentedIno uint64, exe *link.Executable, probe *ebpfcommon.FunctionPrograms) error {
+func attachToSymbolName(p Tracer, instrumentedIno uint64, exe *link.Executable, probe *ebpfcommon.ProbeDesc) error {
 	if probe.Start != nil {
 		up, err := exe.Uprobe(probe.SymbolName, probe.Start, nil)
 
@@ -322,7 +333,7 @@ func attachToSymbolName(p Tracer, instrumentedIno uint64, exe *link.Executable, 
 	return nil
 }
 
-func (i *instrumenter) uprobe(p Tracer, instrumentedIno uint64, exe *link.Executable, probe *ebpfcommon.FunctionPrograms) error {
+func (i *instrumenter) uprobe(p Tracer, instrumentedIno uint64, exe *link.Executable, probe *ebpfcommon.ProbeDesc) error {
 	if probe.AttachToOffsets {
 		return attachToOffsets(p, instrumentedIno, exe, probe)
 	}
@@ -414,7 +425,7 @@ func (i *instrumenter) tracepoints(p KprobesTracer) error {
 	return nil
 }
 
-func (i *instrumenter) tracepoint(funcName string, programs ebpfcommon.FunctionPrograms) error {
+func (i *instrumenter) tracepoint(funcName string, programs ebpfcommon.ProbeDesc) error {
 	if programs.Start != nil {
 		if !strings.Contains(funcName, "/") {
 			return fmt.Errorf("invalid tracepoint type, must contain / in the name to separate the type and function name")
@@ -470,7 +481,7 @@ func getCgroupPath() (string, error) {
 	return cgroupPath, err
 }
 
-func symbolNames(m []ebpfcommon.FunctionPrograms) []string {
+func symbolNames(m []ebpfcommon.ProbeDesc) []string {
 	keys := make([]string, 0, len(m))
 
 	for i := range m {
@@ -482,7 +493,7 @@ func symbolNames(m []ebpfcommon.FunctionPrograms) []string {
 	return keys
 }
 
-func gatherOffsets(instrPath string, probes []ebpfcommon.FunctionPrograms, log *slog.Logger) error {
+func gatherOffsets(instrPath string, probes []ebpfcommon.ProbeDesc, log *slog.Logger) error {
 	elfFile, err := elf.Open(instrPath)
 
 	if err != nil {

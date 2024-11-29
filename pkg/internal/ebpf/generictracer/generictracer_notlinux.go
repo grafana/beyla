@@ -27,10 +27,10 @@ func (p *Tracer) BlockPID(_, _ uint32)                                {}
 func (p *Tracer) Load() (*ebpf.CollectionSpec, error)                 { return nil, nil }
 func (p *Tracer) BpfObjects() any                                     { return nil }
 func (p *Tracer) AddCloser(_ ...io.Closer)                            {}
-func (p *Tracer) GoProbes() map[string][]ebpfcommon.FunctionPrograms  { return nil }
-func (p *Tracer) KProbes() map[string]ebpfcommon.FunctionPrograms     { return nil }
-func (p *Tracer) UProbes() map[string][]ebpfcommon.FunctionPrograms   { return nil }
-func (p *Tracer) Tracepoints() map[string]ebpfcommon.FunctionPrograms { return nil }
+func (p *Tracer) GoProbes() []ebpfcommon.ProbeDesc                    { return nil }
+func (p *Tracer) KProbes() map[string]ebpfcommon.ProbeDesc            { return nil }
+func (p *Tracer) UProbes() map[string][]ebpfcommon.ProbeDesc          { return nil }
+func (p *Tracer) Tracepoints() map[string]ebpfcommon.ProbeDesc        { return nil }
 func (p *Tracer) SocketFilters() []*ebpf.Program                      { return nil }
 func (p *Tracer) SockMsgs() []ebpfcommon.SockMsg                      { return nil }
 func (p *Tracer) SockOps() []ebpfcommon.SockOps                       { return nil }

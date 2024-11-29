@@ -175,212 +175,265 @@ func (p *Tracer) AddModuleCloser(_ uint64, _ ...io.Closer) {
 	p.log.Warn("add module closer not implemented for Go")
 }
 
-func (p *Tracer) GoProbes() map[string][]ebpfcommon.FunctionPrograms {
-	m := map[string][]ebpfcommon.FunctionPrograms{
+func (p *Tracer) GoProbes() []ebpfcommon.ProbeDesc {
+	m := []ebpfcommon.ProbeDesc{
 		// Go runtime
-		"runtime.newproc1": {{
-			Start: p.bpfObjects.UprobeProcNewproc1,
-			End:   p.bpfObjects.UprobeProcNewproc1Ret,
-		}},
-		"runtime.goexit1": {{
-			Start: p.bpfObjects.UprobeProcGoexit1,
-		}},
-		// Go net/http
-		"net/http.serverHandler.ServeHTTP": {{
-			Start: p.bpfObjects.UprobeServeHTTP,
-			End:   p.bpfObjects.UprobeServeHTTPReturns,
-		}},
-		"net/http.(*conn).readRequest": {{
-			Start: p.bpfObjects.UprobeReadRequestStart,
-			End:   p.bpfObjects.UprobeReadRequestReturns,
-		}},
-		"net/textproto.(*Reader).readContinuedLineSlice": {{
-			End: p.bpfObjects.UprobeReadContinuedLineSliceReturns,
-		}},
-		"net/http.(*Transport).roundTrip": {{ // HTTP client, works with Client.Do as well as using the RoundTripper directly
-			Start: p.bpfObjects.UprobeRoundTrip,
-			End:   p.bpfObjects.UprobeRoundTripReturn,
-		}},
-		"golang.org/x/net/http2.(*ClientConn).roundTrip": {{ // http2 client after 0.22
-			Start: p.bpfObjects.UprobeHttp2RoundTrip,
-			End:   p.bpfObjects.UprobeRoundTripReturn, // return is the same as for http 1.1
-		}},
-		"golang.org/x/net/http2.(*ClientConn).RoundTrip": {{ // http2 client
-			Start: p.bpfObjects.UprobeHttp2RoundTrip,
-			End:   p.bpfObjects.UprobeRoundTripReturn, // return is the same as for http 1.1
-		}},
-		"net/http.(*http2ClientConn).RoundTrip": {{ // http2 client vendored in Go
-			Start: p.bpfObjects.UprobeHttp2RoundTrip,
-			End:   p.bpfObjects.UprobeRoundTripReturn, // return is the same as for http 1.1
-		}},
-		"golang.org/x/net/http2.(*responseWriterState).writeHeader": {{ // http2 server request done, capture the response code
-			Start: p.bpfObjects.UprobeHttp2ResponseWriterStateWriteHeader,
-		}},
-		"net/http.(*http2responseWriterState).writeHeader": {{ // same as above, vendored in go
-			Start: p.bpfObjects.UprobeHttp2ResponseWriterStateWriteHeader,
-		}},
-		"net/http.(*response).WriteHeader": {{
-			Start: p.bpfObjects.UprobeHttp2ResponseWriterStateWriteHeader, // http response code capture
-		}},
-		"golang.org/x/net/http2.(*serverConn).runHandler": {{
-			Start: p.bpfObjects.UprobeHttp2serverConnRunHandler, // http2 server connection tracking
-		}},
-		"net/http.(*http2serverConn).runHandler": {{
-			Start: p.bpfObjects.UprobeHttp2serverConnRunHandler, // http2 server connection tracking, vendored in go
-		}},
-		"golang.org/x/net/http2.(*serverConn).processHeaders": {{
-			Start: p.bpfObjects.UprobeHttp2ServerProcessHeaders, // http2 server request header parsing
-		}},
-		"net/http.(*http2serverConn).processHeaders": {{
-			Start: p.bpfObjects.UprobeHttp2ServerProcessHeaders, // http2 server request header parsing, vendored in go
-		}},
-		// tracking of tcp connections for black-box propagation
-		"net/http.(*conn).serve": {{ // http server
-			Start: p.bpfObjects.UprobeConnServe,
-			End:   p.bpfObjects.UprobeConnServeRet,
-		}},
-		"net.(*netFD).Read": {
-			{
-				Start: p.bpfObjects.UprobeNetFdRead,
-			},
+		{
+			SymbolName: "runtime.newproc1",
+			Start:      p.bpfObjects.UprobeProcNewproc1,
+			End:        p.bpfObjects.UprobeProcNewproc1Ret,
 		},
-		"net/http.(*persistConn).roundTrip": {{ // http client
-			Start: p.bpfObjects.UprobePersistConnRoundTrip,
-		}},
+		{
+			SymbolName: "runtime.goexit1",
+			Start:      p.bpfObjects.UprobeProcGoexit1,
+		},
+		// Go net/http
+		{
+			SymbolName: "net/http.serverHandler.ServeHTTP",
+			Start:      p.bpfObjects.UprobeServeHTTP,
+			End:        p.bpfObjects.UprobeServeHTTPReturns,
+		},
+		{
+			SymbolName: "net/http.(*conn).readRequest",
+			Start:      p.bpfObjects.UprobeReadRequestStart,
+			End:        p.bpfObjects.UprobeReadRequestReturns,
+		},
+		{
+			SymbolName: "net/textproto.(*Reader).readContinuedLineSlice",
+			End:        p.bpfObjects.UprobeReadContinuedLineSliceReturns,
+		},
+		{
+			SymbolName: "net/http.(*Transport).roundTrip", // HTTP client, works with Client.Do as well as using the RoundTripper directly
+			Start:      p.bpfObjects.UprobeRoundTrip,
+			End:        p.bpfObjects.UprobeRoundTripReturn,
+		},
+		{
+			SymbolName: "golang.org/x/net/http2.(*ClientConn).roundTrip", // http2 client after 0.22
+			Start:      p.bpfObjects.UprobeHttp2RoundTrip,
+			End:        p.bpfObjects.UprobeRoundTripReturn, // return is the same as for http 1.1
+		},
+		{
+			SymbolName: "golang.org/x/net/http2.(*ClientConn).RoundTrip", // http2 client
+			Start:      p.bpfObjects.UprobeHttp2RoundTrip,
+			End:        p.bpfObjects.UprobeRoundTripReturn, // return is the same as for http 1.1
+		},
+		{
+			SymbolName: "net/http.(*http2ClientConn).RoundTrip", // http2 client vendored in Go
+			Start:      p.bpfObjects.UprobeHttp2RoundTrip,
+			End:        p.bpfObjects.UprobeRoundTripReturn, // return is the same as for http 1.1
+		},
+		{
+			SymbolName: "golang.org/x/net/http2.(*responseWriterState).writeHeader", // http2 server request done, capture the response code
+			Start:      p.bpfObjects.UprobeHttp2ResponseWriterStateWriteHeader,
+		},
+		{
+			SymbolName: "net/http.(*http2responseWriterState).writeHeader", // same as above, vendored in go
+			Start:      p.bpfObjects.UprobeHttp2ResponseWriterStateWriteHeader,
+		},
+		{
+			SymbolName: "net/http.(*response).WriteHeader",
+			Start:      p.bpfObjects.UprobeHttp2ResponseWriterStateWriteHeader, // http response code capture
+		},
+		{
+			SymbolName: "golang.org/x/net/http2.(*serverConn).runHandler",
+			Start:      p.bpfObjects.UprobeHttp2serverConnRunHandler, // http2 server connection tracking
+		},
+		{
+			SymbolName: "net/http.(*http2serverConn).runHandler",
+			Start:      p.bpfObjects.UprobeHttp2serverConnRunHandler, // http2 server connection tracking, vendored in go
+		},
+		{
+			SymbolName: "golang.org/x/net/http2.(*serverConn).processHeaders",
+			Start:      p.bpfObjects.UprobeHttp2ServerProcessHeaders, // http2 server request header parsing
+		},
+		{
+			SymbolName: "net/http.(*http2serverConn).processHeaders",
+			Start:      p.bpfObjects.UprobeHttp2ServerProcessHeaders, // http2 server request header parsing, vendored in go
+		},
+		// tracking of tcp connections for black-box propagation
+		{
+			SymbolName: "net/http.(*conn).serve", // http server
+			Start:      p.bpfObjects.UprobeConnServe,
+			End:        p.bpfObjects.UprobeConnServeRet,
+		},
+		{
+			SymbolName: "net.(*netFD).Read",
+			Start:      p.bpfObjects.UprobeNetFdRead,
+		},
+		{
+			SymbolName: "net/http.(*persistConn).roundTrip", // http client
+			Start:      p.bpfObjects.UprobePersistConnRoundTrip,
+		},
 		// sql
-		"database/sql.(*DB).queryDC": {{
-			Start: p.bpfObjects.UprobeQueryDC,
-			End:   p.bpfObjects.UprobeQueryReturn,
-		}},
-		"database/sql.(*DB).execDC": {{
-			Start: p.bpfObjects.UprobeExecDC,
-			End:   p.bpfObjects.UprobeQueryReturn,
-		}},
+		{
+			SymbolName: "database/sql.(*DB).queryDC",
+			Start:      p.bpfObjects.UprobeQueryDC,
+			End:        p.bpfObjects.UprobeQueryReturn,
+		},
+		{
+			SymbolName: "database/sql.(*DB).execDC",
+			Start:      p.bpfObjects.UprobeExecDC,
+			End:        p.bpfObjects.UprobeQueryReturn,
+		},
 		// Go gRPC
-		"google.golang.org/grpc.(*Server).handleStream": {{
-			Start: p.bpfObjects.UprobeServerHandleStream,
-			End:   p.bpfObjects.UprobeServerHandleStreamReturn,
-		}},
-		"google.golang.org/grpc/internal/transport.(*http2Server).WriteStatus": {{
-			Start: p.bpfObjects.UprobeTransportWriteStatus,
-		}},
-		"google.golang.org/grpc.(*ClientConn).Invoke": {{
-			Start: p.bpfObjects.UprobeClientConnInvoke,
-			End:   p.bpfObjects.UprobeClientConnInvokeReturn,
-		}},
-		"google.golang.org/grpc.(*ClientConn).NewStream": {{
-			Start: p.bpfObjects.UprobeClientConnNewStream,
-			End:   p.bpfObjects.UprobeServerHandleStreamReturn,
-		}},
-		"google.golang.org/grpc.(*ClientConn).Close": {{
-			Start: p.bpfObjects.UprobeClientConnClose,
-		}},
-		"google.golang.org/grpc.(*clientStream).RecvMsg": {{
-			End: p.bpfObjects.UprobeClientStreamRecvMsgReturn,
-		}},
-		"google.golang.org/grpc.(*clientStream).CloseSend": {{
-			End: p.bpfObjects.UprobeClientConnInvokeReturn,
-		}},
-		"google.golang.org/grpc/internal/transport.(*http2Client).NewStream": {{
-			Start: p.bpfObjects.UprobeTransportHttp2ClientNewStream,
-		}},
-		"google.golang.org/grpc/internal/transport.(*http2Server).operateHeaders": {{
-			Start: p.bpfObjects.UprobeHttp2ServerOperateHeaders,
-		}},
-		"google.golang.org/grpc/internal/transport.(*serverHandlerTransport).HandleStreams": {{
-			Start: p.bpfObjects.UprobeServerHandlerTransportHandleStreams,
-		}},
+		{
+			SymbolName: "google.golang.org/grpc.(*Server).handleStream",
+			Start:      p.bpfObjects.UprobeServerHandleStream,
+			End:        p.bpfObjects.UprobeServerHandleStreamReturn,
+		},
+		{
+			SymbolName: "google.golang.org/grpc/internal/transport.(*http2Server).WriteStatus",
+			Start:      p.bpfObjects.UprobeTransportWriteStatus,
+		},
+		{
+			SymbolName: "google.golang.org/grpc.(*ClientConn).Invoke",
+			Start:      p.bpfObjects.UprobeClientConnInvoke,
+			End:        p.bpfObjects.UprobeClientConnInvokeReturn,
+		},
+		{
+			SymbolName: "google.golang.org/grpc.(*ClientConn).NewStream",
+			Start:      p.bpfObjects.UprobeClientConnNewStream,
+			End:        p.bpfObjects.UprobeServerHandleStreamReturn,
+		},
+		{
+			SymbolName: "google.golang.org/grpc.(*ClientConn).Close",
+			Start:      p.bpfObjects.UprobeClientConnClose,
+		},
+		{
+			SymbolName: "google.golang.org/grpc.(*clientStream).RecvMsg",
+			End:        p.bpfObjects.UprobeClientStreamRecvMsgReturn,
+		},
+		{
+			SymbolName: "google.golang.org/grpc.(*clientStream).CloseSend",
+			End:        p.bpfObjects.UprobeClientConnInvokeReturn,
+		},
+		{
+			SymbolName: "google.golang.org/grpc/internal/transport.(*http2Client).NewStream",
+			Start:      p.bpfObjects.UprobeTransportHttp2ClientNewStream,
+		},
+		{
+			SymbolName: "google.golang.org/grpc/internal/transport.(*http2Server).operateHeaders",
+			Start:      p.bpfObjects.UprobeHttp2ServerOperateHeaders,
+		},
+		{
+			SymbolName: "google.golang.org/grpc/internal/transport.(*serverHandlerTransport).HandleStreams",
+			Start:      p.bpfObjects.UprobeServerHandlerTransportHandleStreams,
+		},
 		// Redis
-		"github.com/redis/go-redis/v9/internal/pool.(*Conn).WithWriter": {{
-			Start: p.bpfObjects.UprobeRedisWithWriter,
-			End:   p.bpfObjects.UprobeRedisWithWriterRet,
-		}},
-		"github.com/redis/go-redis/v9.(*baseClient)._process": {{
-			Start: p.bpfObjects.UprobeRedisProcess,
-			End:   p.bpfObjects.UprobeRedisProcessRet,
-		}},
-		"github.com/redis/go-redis/v9.(*baseClient).pipelineProcessCmds": {{
-			Start: p.bpfObjects.UprobeRedisProcess,
-			End:   p.bpfObjects.UprobeRedisProcessRet,
-		}},
-		"github.com/redis/go-redis/v9.(*baseClient).txPipelineProcessCmds": {{
-			Start: p.bpfObjects.UprobeRedisProcess,
-			End:   p.bpfObjects.UprobeRedisProcessRet,
-		}},
+		{
+			SymbolName: "github.com/redis/go-redis/v9/internal/pool.(*Conn).WithWriter",
+			Start:      p.bpfObjects.UprobeRedisWithWriter,
+			End:        p.bpfObjects.UprobeRedisWithWriterRet,
+		},
+		{
+			SymbolName: "github.com/redis/go-redis/v9.(*baseClient)._process",
+			Start:      p.bpfObjects.UprobeRedisProcess,
+			End:        p.bpfObjects.UprobeRedisProcessRet,
+		},
+		{
+			SymbolName: "github.com/redis/go-redis/v9.(*baseClient).pipelineProcessCmds",
+			Start:      p.bpfObjects.UprobeRedisProcess,
+			End:        p.bpfObjects.UprobeRedisProcessRet,
+		},
+		{
+			SymbolName: "github.com/redis/go-redis/v9.(*baseClient).txPipelineProcessCmds",
+			Start:      p.bpfObjects.UprobeRedisProcess,
+			End:        p.bpfObjects.UprobeRedisProcessRet,
+		},
 		// Kafka Go
-		"github.com/segmentio/kafka-go.(*Writer).WriteMessages": {{ // runs on the same gorountine as other requests, finds traceparent info
-			Start: p.bpfObjects.UprobeWriterWriteMessages,
-		}},
-		"github.com/segmentio/kafka-go.(*Writer).produce": {{ // stores the current topic
-			Start: p.bpfObjects.UprobeWriterProduce,
-		}},
-		"github.com/segmentio/kafka-go.(*Client).roundTrip": {{ // has the goroutine connection with (*Writer).produce and msg* connection with protocol.RoundTrip
-			Start: p.bpfObjects.UprobeClientRoundTrip,
-		}},
-		"github.com/segmentio/kafka-go/protocol.RoundTrip": {{ // used for collecting the connection information
-			Start: p.bpfObjects.UprobeProtocolRoundtrip,
-			End:   p.bpfObjects.UprobeProtocolRoundtripRet,
-		}},
-		"github.com/segmentio/kafka-go.(*reader).read": {{ // used for capturing the info for the fetch operations
-			Start: p.bpfObjects.UprobeReaderRead,
-			End:   p.bpfObjects.UprobeReaderReadRet,
-		}},
-		"github.com/segmentio/kafka-go.(*reader).sendMessage": {{ // to accurately measure the start time
-			Start: p.bpfObjects.UprobeReaderSendMessage,
-		}},
+		{
+			SymbolName: "github.com/segmentio/kafka-go.(*Writer).WriteMessages", // runs on the same gorountine as other requests, finds traceparent info
+			Start:      p.bpfObjects.UprobeWriterWriteMessages,
+		},
+		{
+			SymbolName: "github.com/segmentio/kafka-go.(*Writer).produce", // stores the current topic
+			Start:      p.bpfObjects.UprobeWriterProduce,
+		},
+		{
+			SymbolName: "github.com/segmentio/kafka-go.(*Client).roundTrip", // has the goroutine connection with (*Writer).produce and msg* connection with protocol.RoundTrip
+			Start:      p.bpfObjects.UprobeClientRoundTrip,
+		},
+		{
+			SymbolName: "github.com/segmentio/kafka-go/protocol.RoundTrip", // used for collecting the connection information
+			Start:      p.bpfObjects.UprobeProtocolRoundtrip,
+			End:        p.bpfObjects.UprobeProtocolRoundtripRet,
+		},
+		{
+			SymbolName: "github.com/segmentio/kafka-go.(*reader).read", // used for capturing the info for the fetch operations
+			Start:      p.bpfObjects.UprobeReaderRead,
+			End:        p.bpfObjects.UprobeReaderReadRet,
+		},
+		{
+			SymbolName: "github.com/segmentio/kafka-go.(*reader).sendMessage", // to accurately measure the start time
+			Start:      p.bpfObjects.UprobeReaderSendMessage,
+		},
 		// Kafka sarama
-		"github.com/IBM/sarama.(*Broker).write": {{
-			Start: p.bpfObjects.UprobeSaramaBrokerWrite,
-		}},
-		"github.com/IBM/sarama.(*responsePromise).handle": {{
-			Start: p.bpfObjects.UprobeSaramaResponsePromiseHandle,
-		}},
-		"github.com/IBM/sarama.(*Broker).sendInternal": {{
-			Start: p.bpfObjects.UprobeSaramaSendInternal,
-		}},
-		"github.com/Shopify/sarama.(*Broker).write": {{
-			Start: p.bpfObjects.UprobeSaramaBrokerWrite,
-		}},
-		"github.com/Shopify/sarama.(*responsePromise).handle": {{
-			Start: p.bpfObjects.UprobeSaramaResponsePromiseHandle,
-		}},
-		"github.com/Shopify/sarama.(*Broker).sendInternal": {{
-			Start: p.bpfObjects.UprobeSaramaSendInternal,
-		}},
+		{
+			SymbolName: "github.com/IBM/sarama.(*Broker).write",
+			Start:      p.bpfObjects.UprobeSaramaBrokerWrite,
+		},
+		{
+			SymbolName: "github.com/IBM/sarama.(*responsePromise).handle",
+			Start:      p.bpfObjects.UprobeSaramaResponsePromiseHandle,
+		},
+		{
+			SymbolName: "github.com/IBM/sarama.(*Broker).sendInternal",
+			Start:      p.bpfObjects.UprobeSaramaSendInternal,
+		},
+		{
+			SymbolName: "github.com/Shopify/sarama.(*Broker).write",
+			Start:      p.bpfObjects.UprobeSaramaBrokerWrite,
+		},
+		{
+			SymbolName: "github.com/Shopify/sarama.(*responsePromise).handle",
+			Start:      p.bpfObjects.UprobeSaramaResponsePromiseHandle,
+		},
+		{
+			SymbolName: "github.com/Shopify/sarama.(*Broker).sendInternal",
+			Start:      p.bpfObjects.UprobeSaramaSendInternal,
+		},
 	}
 
 	if p.supportsContextPropagation() {
-		m["net/http.Header.writeSubset"] = []ebpfcommon.FunctionPrograms{{
-			Start: p.bpfObjects.UprobeWriteSubset, // http 1.x context propagation
-		}}
-		m["golang.org/x/net/http2.(*Framer).WriteHeaders"] = []ebpfcommon.FunctionPrograms{
-			{ // http2 context propagation
-				Start: p.bpfObjects.UprobeHttp2FramerWriteHeaders,
-				End:   p.bpfObjects.UprobeHttp2FramerWriteHeadersReturns,
-			},
-			{ // for grpc
-				Start: p.bpfObjects.UprobeGrpcFramerWriteHeaders,
-				End:   p.bpfObjects.UprobeGrpcFramerWriteHeadersReturns,
-			},
-		}
-		m["net/http.(*http2Framer).WriteHeaders"] = []ebpfcommon.FunctionPrograms{{ // http2 context propagation
-			Start: p.bpfObjects.UprobeHttp2FramerWriteHeaders,
-			End:   p.bpfObjects.UprobeHttp2FramerWriteHeadersReturns,
-		}}
+		m = append(m, ebpfcommon.ProbeDesc{
+			SymbolName: "net/http.Header.writeSubset",
+			Start:      p.bpfObjects.UprobeWriteSubset, // http 1.x context propagation
+		})
+
+		m = append(m, ebpfcommon.ProbeDesc{
+			// http2 context propagation
+			SymbolName: "golang.org/x/net/http2.(*Framer).WriteHeaders",
+			Start:      p.bpfObjects.UprobeHttp2FramerWriteHeaders,
+			End:        p.bpfObjects.UprobeHttp2FramerWriteHeadersReturns,
+		})
+
+		m = append(m, ebpfcommon.ProbeDesc{
+			// for grpc
+			SymbolName: "golang.org/x/net/http2.(*Framer).WriteHeaders",
+			Start:      p.bpfObjects.UprobeGrpcFramerWriteHeaders,
+			End:        p.bpfObjects.UprobeGrpcFramerWriteHeadersReturns,
+		})
+
+		m = append(m, ebpfcommon.ProbeDesc{
+			// http2 context propagation
+			SymbolName: "net/http.(*http2Framer).WriteHeaders",
+			Start:      p.bpfObjects.UprobeHttp2FramerWriteHeaders,
+			End:        p.bpfObjects.UprobeHttp2FramerWriteHeadersReturns,
+		})
 	}
 
 	return m
 }
 
-func (p *Tracer) KProbes() map[string]ebpfcommon.FunctionPrograms {
+func (p *Tracer) KProbes() map[string]ebpfcommon.ProbeDesc {
 	return nil
 }
 
-func (p *Tracer) UProbes() map[string][]ebpfcommon.FunctionPrograms {
+func (p *Tracer) UProbes() map[string][]ebpfcommon.ProbeDesc {
 	return nil
 }
 
-func (p *Tracer) Tracepoints() map[string]ebpfcommon.FunctionPrograms {
+func (p *Tracer) Tracepoints() map[string]ebpfcommon.ProbeDesc {
 	return nil
 }
 

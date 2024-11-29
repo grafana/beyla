@@ -69,8 +69,8 @@ func (p *Watcher) AddCloser(c ...io.Closer) {
 
 func (p *Watcher) AddModuleCloser(_ uint64, _ ...io.Closer) {}
 
-func (p *Watcher) KProbes() map[string]ebpfcommon.FunctionPrograms {
-	kprobes := map[string]ebpfcommon.FunctionPrograms{
+func (p *Watcher) KProbes() map[string]ebpfcommon.ProbeDesc {
+	kprobes := map[string]ebpfcommon.ProbeDesc{
 		"sys_bind": {
 			Required: true,
 			Start:    p.bpfObjects.KprobeSysBind,
@@ -80,7 +80,7 @@ func (p *Watcher) KProbes() map[string]ebpfcommon.FunctionPrograms {
 	return kprobes
 }
 
-func (p *Watcher) Tracepoints() map[string]ebpfcommon.FunctionPrograms {
+func (p *Watcher) Tracepoints() map[string]ebpfcommon.ProbeDesc {
 	return nil
 }
 

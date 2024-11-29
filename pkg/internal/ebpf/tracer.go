@@ -57,8 +57,8 @@ type KprobesTracer interface {
 	CommonTracer
 	// KProbes returns a map with the name of the kernel probes that need to be
 	// tapped into. Start matches kprobe, End matches kretprobe
-	KProbes() map[string]ebpfcommon.FunctionPrograms
-	Tracepoints() map[string]ebpfcommon.FunctionPrograms
+	KProbes() map[string]ebpfcommon.ProbeDesc
+	Tracepoints() map[string]ebpfcommon.ProbeDesc
 }
 
 // Tracer is an individual eBPF program (e.g. the net/http or the grpc tracers)
@@ -68,13 +68,13 @@ type Tracer interface {
 	// Constants returns a map of constants to be overriden into the eBPF program.
 	// The key is the constant name and the value is the value to overwrite.
 	Constants() map[string]any
-	// GoProbes returns a map with the name of Go functions that need to be inspected
+	// GoProbes returns a slice with the name of Go functions that need to be inspected
 	// in the executable, as well as the eBPF programs that optionally need to be
 	// inserted as the Go function start and end probes
-	GoProbes() map[string][]ebpfcommon.FunctionPrograms
+	GoProbes() []ebpfcommon.ProbeDesc
 	// UProbes returns a map with the module name mapping to the uprobes that need to be
 	// tapped into. Start matches uprobe, End matches uretprobe
-	UProbes() map[string][]ebpfcommon.FunctionPrograms
+	UProbes() map[string][]ebpfcommon.ProbeDesc
 	// SocketFilters  returns a list of programs that need to be loaded as a
 	// generic eBPF socket filter
 	SocketFilters() []*ebpf.Program

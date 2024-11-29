@@ -6,6 +6,7 @@ import (
 	"debug/elf"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -26,6 +27,12 @@ import (
 
 func ilog() *slog.Logger {
 	return slog.With("component", "ebpf.Instrumenter")
+}
+
+func closeAll(closers []io.Closer) {
+	for i := range closers {
+		closers[i].Close()
+	}
 }
 
 func (i *instrumenter) goprobes(p Tracer) error {
@@ -197,8 +204,8 @@ func (i *instrumenter) uprobes(pid int32, p Tracer) error {
 		// Check if this is a library used by multiple executables. For example, a shared libssl.so between multiple executables.
 		if p.AlreadyInstrumentedLib(instrumentedIno) {
 			log.Debug("module already instrumented by other processes, incrementing reference count", "lib", m.lib, "path", m.instrPath, "ino", instrumentedIno)
-			i.addModule(instrumentedIno)             // remember this mapping for linking/unlinking for this executable instance
-			p.RecordInstrumentedLib(instrumentedIno) // record one more use of this shared library
+			i.addModule(instrumentedIno)                  // remember this mapping for linking/unlinking for this executable instance
+			p.RecordInstrumentedLib(instrumentedIno, nil) // record one more use of this shared library
 			continue
 		}
 
@@ -212,27 +219,35 @@ func (i *instrumenter) uprobes(pid int32, p Tracer) error {
 			return err
 		}
 
+		var closers []io.Closer
+
 		for j := range m.probes {
 			probe := &m.probes[j]
 
 			log.Debug("going to instrument function", "function", probe.SymbolName, "programs", probe)
 
-			err := i.uprobe(p, instrumentedIno, libExe, probe)
+			err, cls := i.uprobe(p, libExe, probe)
 
 			if err != nil {
+				closeAll(cls)
+
 				if probe.Required {
+					closeAll(closers)
+
 					return fmt.Errorf("instrumenting function %q: %w", probe.SymbolName, err)
 				}
 
 				// error will be common here since this could be no openssl loaded
 				log.Debug("error instrumenting uprobe", "function", probe.SymbolName, "error", err)
+			} else {
+				closers = append(closers, cls...)
 			}
 		}
 
 		log.Debug("adding module for instrumenter and incrementing reference count", "path", m.instrPath, "ino", instrumentedIno)
 
 		// We bump the count of uses of the underlying shared library with a new executable
-		p.RecordInstrumentedLib(instrumentedIno)
+		p.RecordInstrumentedLib(instrumentedIno, closers)
 		i.addModule(instrumentedIno)
 	}
 
@@ -275,22 +290,24 @@ func (i *instrumenter) attachToGoOffsets(probe *ebpfcommon.ProbeDesc) error {
 	return nil
 }
 
-func attachToOffsets(p Tracer, instrumentedIno uint64, exe *link.Executable, probe *ebpfcommon.ProbeDesc) error {
+func attachToOffsets(p Tracer, exe *link.Executable, probe *ebpfcommon.ProbeDesc) (error, []io.Closer) {
+	var closers []io.Closer
+
 	if probe.Start != nil {
 		up, err := exe.Uprobe("", probe.Start, &link.UprobeOptions{
 			Address: probe.StartOffset,
 		})
 
 		if err != nil {
-			return fmt.Errorf("setting uprobe (offset): %w", err)
+			return fmt.Errorf("setting uprobe (offset): %w", err), closers
 		}
 
-		p.AddModuleCloser(instrumentedIno, up)
+		closers = append(closers, up)
 	}
 
 	if probe.End != nil {
 		if len(probe.ReturnOffsets) == 0 {
-			return fmt.Errorf("setting uretprobe (attaching to offset): missing return offsets")
+			return fmt.Errorf("setting uretprobe (attaching to offset): missing return offsets"), closers
 		}
 
 		for _, offset := range probe.ReturnOffsets {
@@ -299,25 +316,27 @@ func attachToOffsets(p Tracer, instrumentedIno uint64, exe *link.Executable, pro
 			})
 
 			if err != nil {
-				return fmt.Errorf("setting uretprobe (attaching to offset): %w", err)
+				return fmt.Errorf("setting uretprobe (attaching to offset): %w", err), closers
 			}
 
-			p.AddModuleCloser(instrumentedIno, up)
+			closers = append(closers, up)
 		}
 	}
 
-	return nil
+	return nil, closers
 }
 
-func attachToSymbolName(p Tracer, instrumentedIno uint64, exe *link.Executable, probe *ebpfcommon.ProbeDesc) error {
+func attachToSymbolName(p Tracer, exe *link.Executable, probe *ebpfcommon.ProbeDesc) (error, []io.Closer) {
+	var closers []io.Closer
+
 	if probe.Start != nil {
 		up, err := exe.Uprobe(probe.SymbolName, probe.Start, nil)
 
 		if err != nil {
-			return fmt.Errorf("setting uprobe: %w", err)
+			return fmt.Errorf("setting uprobe: %w", err), closers
 		}
 
-		p.AddModuleCloser(instrumentedIno, up)
+		closers = append(closers, up)
 	}
 
 	if probe.End != nil {
@@ -325,20 +344,21 @@ func attachToSymbolName(p Tracer, instrumentedIno uint64, exe *link.Executable, 
 		up, err := exe.Uretprobe(probe.SymbolName, probe.End, nil)
 
 		if err != nil {
-			return fmt.Errorf("setting uretprobe: %w", err)
+			return fmt.Errorf("setting uretprobe: %w", err), closers
 		}
-		p.AddModuleCloser(instrumentedIno, up)
+
+		closers = append(closers, up)
 	}
 
-	return nil
+	return nil, closers
 }
 
-func (i *instrumenter) uprobe(p Tracer, instrumentedIno uint64, exe *link.Executable, probe *ebpfcommon.ProbeDesc) error {
+func (i *instrumenter) uprobe(p Tracer, exe *link.Executable, probe *ebpfcommon.ProbeDesc) (error, []io.Closer) {
 	if probe.AttachToOffsets {
-		return attachToOffsets(p, instrumentedIno, exe, probe)
+		return attachToOffsets(p, exe, probe)
 	}
 
-	return attachToSymbolName(p, instrumentedIno, exe, probe)
+	return attachToSymbolName(p, exe, probe)
 }
 
 func (i *instrumenter) sockfilters(p Tracer) error {

@@ -33,7 +33,7 @@ func (p *Tracer) Tracepoints() map[string]ebpfcommon.ProbeDesc        { return n
 func (p *Tracer) SocketFilters() []*ebpf.Program                      { return nil }
 func (p *Tracer) SockMsgs() []ebpfcommon.SockMsg                      { return nil }
 func (p *Tracer) SockOps() []ebpfcommon.SockOps                       { return nil }
-func (p *Tracer) RecordInstrumentedLib(_ uint64)                      {}
+func (p *Tracer) RecordInstrumentedLib(_ uint64, _ []io.Closer)       {}
 func (p *Tracer) UnlinkInstrumentedLib(_ uint64)                      {}
 func (p *Tracer) AlreadyInstrumentedLib(_ uint64) bool                { return false }
 func (p *Tracer) Run(_ context.Context, _ chan<- []request.Span)      {}
@@ -41,4 +41,3 @@ func (p *Tracer) Constants() map[string]any                           { return n
 func (p *Tracer) SetupTC()                                            {}
 func (p *Tracer) SetupTailCalls()                                     {}
 func (p *Tracer) RegisterOffsets(_ *exec.FileInfo, _ *goexec.Offsets) {}
-func (p *Tracer) AddModuleCloser(uint64, ...io.Closer)                {}

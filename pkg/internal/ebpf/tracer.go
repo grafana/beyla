@@ -46,7 +46,6 @@ type CommonTracer interface {
 	// AddCloser adds io.Closer instances that need to be invoked when the
 	// Run function ends.
 	AddCloser(c ...io.Closer)
-	AddModuleCloser(ino uint64, c ...io.Closer)
 	// BpfObjects that are created by the bpf2go compiler
 	BpfObjects() any
 	// Sets up any tail call tables if the BPF program has it
@@ -89,7 +88,9 @@ type Tracer interface {
 	// Probes can potentially instrument a shared library among multiple executables
 	// These two functions alow programs to remember this and avoid duplicated instrumentations
 	// The argument is the OS file id
-	RecordInstrumentedLib(uint64)
+	// Closers are the associated closable resources to this lib, that may be
+	// closed when UnlinkInstrumentedLib() is called
+	RecordInstrumentedLib(uint64, []io.Closer)
 	AlreadyInstrumentedLib(uint64) bool
 	UnlinkInstrumentedLib(uint64)
 	RegisterOffsets(*exec.FileInfo, *goexec.Offsets)

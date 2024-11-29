@@ -55,8 +55,6 @@ func (p *BPFLogger) AddCloser(c ...io.Closer) {
 	p.closers = append(p.closers, c...)
 }
 
-func (p *BPFLogger) AddModuleCloser(_ uint64, _ ...io.Closer) {}
-
 func (p *BPFLogger) KProbes() map[string]ebpfcommon.ProbeDesc {
 	return nil
 }

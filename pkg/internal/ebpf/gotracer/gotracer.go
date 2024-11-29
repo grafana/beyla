@@ -171,10 +171,6 @@ func (p *Tracer) AddCloser(c ...io.Closer) {
 	p.closers = append(p.closers, c...)
 }
 
-func (p *Tracer) AddModuleCloser(_ uint64, _ ...io.Closer) {
-	p.log.Warn("add module closer not implemented for Go")
-}
-
 func (p *Tracer) GoProbes() []ebpfcommon.ProbeDesc {
 	m := []ebpfcommon.ProbeDesc{
 		// Go runtime
@@ -445,7 +441,7 @@ func (p *Tracer) SockMsgs() []ebpfcommon.SockMsg { return nil }
 
 func (p *Tracer) SockOps() []ebpfcommon.SockOps { return nil }
 
-func (p *Tracer) RecordInstrumentedLib(_ uint64) {}
+func (p *Tracer) RecordInstrumentedLib(_ uint64, _ []io.Closer) {}
 
 func (p *Tracer) UnlinkInstrumentedLib(_ uint64) {}
 

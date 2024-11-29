@@ -125,11 +125,9 @@ func (p *Tracer) SockOps() []ebpfcommon.SockOps {
 	}
 }
 
-func (p *Tracer) RecordInstrumentedLib(uint64) {}
+func (p *Tracer) RecordInstrumentedLib(uint64, []io.Closer) {}
 
 func (p *Tracer) UnlinkInstrumentedLib(uint64) {}
-
-func (p *Tracer) AddModuleCloser(uint64, ...io.Closer) {}
 
 func (p *Tracer) AlreadyInstrumentedLib(uint64) bool {
 	return false

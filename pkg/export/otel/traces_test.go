@@ -668,9 +668,10 @@ func TestTraceSampling(t *testing.T) {
 		}
 
 		receiver.processSpans(exporter, spans, attrs, sampler)
-		// The result is likely 0,1,2 with 1/10th, but we don't want
-		// to maybe fail if it accidentally it randomly becomes 3
-		assert.GreaterOrEqual(t, 3, len(tr))
+		// The result is likely 0,1,2 with 1/10th, but since sampling
+		// it's a probabilistic matter, we don't want this test to become
+		// flaky as some of them could report even 4-5 samples
+		assert.GreaterOrEqual(t, 6, len(tr))
 	})
 }
 

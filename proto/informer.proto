@@ -16,6 +16,7 @@ message ObjectMeta {
   string name = 1;
   string namespace = 2;
   map<string,string> labels = 3;
+  map<string,string> annotations = 8;
   repeated string ips = 4;
   string kind = 5;
 

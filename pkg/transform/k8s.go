@@ -49,12 +49,9 @@ type KubernetesDecorator struct {
 	// MetaCacheAddress is the host:port address of the beyla-k8s-cache service instance
 	MetaCacheAddress string `yaml:"meta_cache_address" env:"BEYLA_KUBE_META_CACHE_ADDRESS"`
 
-	// MetaSourceLabels allows Beyla overriding the service name and namespace of an application from
+	// MetadataSources allows Beyla overriding the service name and namespace of an application from
 	// the given labels.
-	// TODO Beyla 2.0. Consider defaulting to (and report as a breaking change):
-	// 		Name:      "app.kubernetes.io/name",
-	//		Namespace: "app.kubernetes.io/part-of",
-	MetaSourceLabels kube.MetaSourceLabels `yaml:"meta_source_labels"`
+	MetadataSources kube.MetadataSources `yaml:"meta_naming_sources"`
 }
 
 const (
@@ -135,7 +132,9 @@ func (md *metadataDecorator) appendMetadata(span *request.Span, meta *informer.O
 	// if the application/process was discovered and reported information
 	// before the kubernetes metadata was available
 	// (related issue: https://github.com/grafana/beyla/issues/1124)
-	span.Service.UID.Instance = meta.Name + ":" + containerName
+	// Service Instance ID is set according to OTEL collector conventions:
+	// (related issue: https://github.com/grafana/k8s-monitoring-helm/issues/942)
+	span.Service.UID.Instance = meta.Namespace + "." + meta.Name + "." + containerName
 
 	// if, in the future, other pipeline steps modify the service metadata, we should
 	// replace the map literal by individual entry insertions

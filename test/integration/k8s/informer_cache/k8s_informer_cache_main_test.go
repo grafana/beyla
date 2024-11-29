@@ -68,7 +68,7 @@ func TestInformersCache_MetricsDecoration_HTTP(t *testing.T) {
 			"k8s_cluster_name":         "my-kube",
 			"service_name":             "overridden-testserver-name",
 			"service_namespace":        "overridden-testserver-namespace",
-			"service_instance_id":      "testserver-.+:testserver",
+			"service_instance_id":      "default.testserver-.+\\.testserver",
 		}))
 }
 
@@ -76,7 +76,7 @@ func TestInformersCache_ProcessMetrics(t *testing.T) {
 	cluster.TestEnv().Test(t, k8s.FeatureProcessMetricsDecoration(
 		map[string]string{
 			"k8s_cluster_name": "my-kube",
-			"instance":         "testserver-.+:testserver",
+			"instance":         "default\\.testserver-.+\\.testserver",
 		}))
 }
 

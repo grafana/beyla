@@ -255,7 +255,7 @@ func (inf *Informers) initPodInformer(ctx context.Context, informerFactory infor
 		}
 		for i := range pod.Status.EphemeralContainerStatuses {
 			ecs := &pod.Status.EphemeralContainerStatuses[i]
-			envs := []v1.EnvVar{}
+			var envs []v1.EnvVar
 			for i := range pod.Spec.EphemeralContainers {
 				c := &pod.Spec.EphemeralContainers[i]
 				if c.Name == ecs.Name {
@@ -285,11 +285,12 @@ func (inf *Informers) initPodInformer(ctx context.Context, informerFactory infor
 		return &indexableEntity{
 			ObjectMeta: minimalIndex(&pod.ObjectMeta),
 			EncodedMeta: &informer.ObjectMeta{
-				Name:      pod.Name,
-				Namespace: pod.Namespace,
-				Labels:    pod.Labels,
-				Ips:       ips,
-				Kind:      typePod,
+				Name:        pod.Name,
+				Namespace:   pod.Namespace,
+				Labels:      pod.Labels,
+				Annotations: pod.Annotations,
+				Ips:         ips,
+				Kind:        typePod,
 				Pod: &informer.PodInfo{
 					Uid:          string(pod.UID),
 					NodeName:     pod.Spec.NodeName,
@@ -335,7 +336,7 @@ func envToMap(kc kubernetes.Interface, objMeta metav1.ObjectMeta, containerEnv [
 }
 
 func envsFromContainerSpec(containerName string, containers []v1.Container) []v1.EnvVar {
-	envs := []v1.EnvVar{}
+	var envs []v1.EnvVar
 	for i := range containers {
 		c := &containers[i]
 		if c.Name == containerName {

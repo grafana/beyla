@@ -19,6 +19,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/filter"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/infraolly/process"
+	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/traces"
 	"github.com/grafana/beyla/pkg/kubeflags"
 	"github.com/grafana/beyla/pkg/services"
@@ -110,6 +111,7 @@ var DefaultConfig = Config{
 			Enable:                kubeflags.EnabledDefault,
 			InformersSyncTimeout:  30 * time.Second,
 			InformersResyncPeriod: 30 * time.Minute,
+			MetadataSources:       kube.DefaultMetadataSources,
 		},
 		HostID: HostIDConfig{
 			FetchTimeout: 500 * time.Millisecond,

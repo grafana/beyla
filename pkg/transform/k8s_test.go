@@ -22,9 +22,15 @@ const timeout = 5 * time.Second
 
 func TestDecoration(t *testing.T) {
 	inf := &fakeInformer{}
-	store := kube.NewStore(inf, kube.MetaSourceLabels{
-		ServiceName:      "app.kubernetes.io/name",
-		ServiceNamespace: "app.kubernetes.io/part-of",
+	store := kube.NewStore(inf, kube.MetadataSources{
+		Annotations: kube.AnnotationSources{
+			ServiceName:      []string{"resource.opentelemetry.io/service.name"},
+			ServiceNamespace: []string{"resource.opentelemetry.io/service.namespace"},
+		},
+		Labels: kube.LabelSources{
+			ServiceName:      []string{"app.kubernetes.io/name"},
+			ServiceNamespace: []string{"app.kubernetes.io/part-of"},
+		},
 	})
 	// pre-populated kubernetes metadata database
 	inf.Notify(&informer.Event{Type: informer.EventType_CREATED, Resource: &informer.ObjectMeta{
@@ -69,16 +75,56 @@ func TestDecoration(t *testing.T) {
 			Containers:   []*informer.ContainerInfo{{Name: "a-container", Id: "container-78"}},
 		},
 	}})
+	inf.Notify(&informer.Event{Type: informer.EventType_CREATED, Resource: &informer.ObjectMeta{
+		Name: "overridden-meta-annots", Namespace: "the-ns", Kind: "Pod",
+		Annotations: map[string]string{
+			"resource.opentelemetry.io/service.name":      "otel-override-name",
+			"resource.opentelemetry.io/service.namespace": "otel-override-ns",
+		},
+		Labels: map[string]string{
+			"app.kubernetes.io/name":    "a-cool-name",
+			"app.kubernetes.io/part-of": "a-cool-namespace",
+		},
+		Pod: &informer.PodInfo{
+			NodeName:     "the-node",
+			Uid:          "uid-33",
+			StartTimeStr: "2020-01-02 12:56:56",
+			Containers:   []*informer.ContainerInfo{{Name: "a-container", Id: "container-33"}},
+		},
+	}})
+	inf.Notify(&informer.Event{Type: informer.EventType_CREATED, Resource: &informer.ObjectMeta{
+		Name: "env-var-takes-precedence", Namespace: "the-ns", Kind: "Pod",
+		Annotations: map[string]string{
+			"resource.opentelemetry.io/service.name":      "otel-override-name",
+			"resource.opentelemetry.io/service.namespace": "otel-override-ns",
+		},
+		Labels: map[string]string{
+			"app.kubernetes.io/name":    "a-cool-name",
+			"app.kubernetes.io/part-of": "a-cool-namespace",
+		},
+		Pod: &informer.PodInfo{
+			NodeName:     "the-node",
+			Uid:          "uid-66",
+			StartTimeStr: "2020-01-02 12:56:56",
+			Containers: []*informer.ContainerInfo{{
+				Name: "a-container", Id: "container-66",
+				Env: map[string]string{
+					"OTEL_RESOURCE_ATTRIBUTES": "service.name=env-svc-name,service.namespace=env-svc-ns",
+				},
+			}},
+		},
+	}})
+	// we need to add PID metadata for all the pod/containers above
+	// by convention, the mocked pid namespace will be PID+1000
 	kube.InfoForPID = func(pid uint32) (container.Info, error) {
 		return container.Info{
 			ContainerID:  fmt.Sprintf("container-%d", pid),
 			PIDNamespace: 1000 + pid,
 		}, nil
 	}
-	store.AddProcess(12)
-	store.AddProcess(34)
-	store.AddProcess(56)
-	store.AddProcess(78)
+	for _, pid := range []uint32{12, 34, 56, 78, 33, 66} {
+		store.AddProcess(pid)
+	}
 
 	dec := metadataDecorator{db: store, clusterName: "the-cluster"}
 	inputCh, outputhCh := make(chan []request.Span, 10), make(chan []request.Span, 10)
@@ -96,7 +142,7 @@ func TestDecoration(t *testing.T) {
 		require.Len(t, deco, 1)
 		assert.Equal(t, "the-ns", deco[0].Service.UID.Namespace)
 		assert.Equal(t, "deployment-12", deco[0].Service.UID.Name)
-		assert.EqualValues(t, "pod-12:a-container", deco[0].Service.UID.Instance)
+		assert.EqualValues(t, "the-ns.pod-12.a-container", deco[0].Service.UID.Instance)
 		assert.Equal(t, map[attr.Name]string{
 			"k8s.node.name":       "the-node",
 			"k8s.namespace.name":  "the-ns",
@@ -117,7 +163,7 @@ func TestDecoration(t *testing.T) {
 		require.Len(t, deco, 1)
 		assert.Equal(t, "the-ns", deco[0].Service.UID.Namespace)
 		assert.Equal(t, "rs", deco[0].Service.UID.Name)
-		assert.EqualValues(t, "pod-34:a-container", deco[0].Service.UID.Instance)
+		assert.EqualValues(t, "the-ns.pod-34.a-container", deco[0].Service.UID.Instance)
 		assert.Equal(t, map[attr.Name]string{
 			"k8s.node.name":       "the-node",
 			"k8s.namespace.name":  "the-ns",
@@ -138,7 +184,7 @@ func TestDecoration(t *testing.T) {
 		require.Len(t, deco, 1)
 		assert.Equal(t, "the-ns", deco[0].Service.UID.Namespace)
 		assert.Equal(t, "the-pod", deco[0].Service.UID.Name)
-		assert.EqualValues(t, "the-pod:a-container", deco[0].Service.UID.Instance)
+		assert.EqualValues(t, "the-ns.the-pod.a-container", deco[0].Service.UID.Instance)
 		assert.Equal(t, map[attr.Name]string{
 			"k8s.node.name":      "the-node",
 			"k8s.namespace.name": "the-ns",
@@ -149,7 +195,7 @@ func TestDecoration(t *testing.T) {
 			"k8s.cluster.name":   "the-cluster",
 		}, deco[0].Service.Metadata)
 	})
-	t.Run("user can override service name and annotations via labels", func(t *testing.T) {
+	t.Run("user can override service name and ns via labels", func(t *testing.T) {
 		inputCh <- []request.Span{{
 			Pid: request.PidInfo{Namespace: 1078}, Service: autoNameSvc,
 		}}
@@ -157,13 +203,51 @@ func TestDecoration(t *testing.T) {
 		require.Len(t, deco, 1)
 		assert.Equal(t, "a-cool-namespace", deco[0].Service.UID.Namespace)
 		assert.Equal(t, "a-cool-name", deco[0].Service.UID.Name)
-		assert.EqualValues(t, "overridden-meta:a-container", deco[0].Service.UID.Instance)
+		assert.EqualValues(t, "the-ns.overridden-meta.a-container", deco[0].Service.UID.Instance)
 		assert.Equal(t, map[attr.Name]string{
 			"k8s.node.name":      "the-node",
 			"k8s.namespace.name": "the-ns",
 			"k8s.pod.name":       "overridden-meta",
 			"k8s.container.name": "a-container",
 			"k8s.pod.uid":        "uid-78",
+			"k8s.pod.start_time": "2020-01-02 12:56:56",
+			"k8s.cluster.name":   "the-cluster",
+		}, deco[0].Service.Metadata)
+	})
+	t.Run("user can override service name and ns via annotations", func(t *testing.T) {
+		inputCh <- []request.Span{{
+			Pid: request.PidInfo{Namespace: 1033}, Service: autoNameSvc,
+		}}
+		deco := testutil.ReadChannel(t, outputhCh, timeout)
+		require.Len(t, deco, 1)
+		assert.Equal(t, "otel-override-ns", deco[0].Service.UID.Namespace)
+		assert.Equal(t, "otel-override-name", deco[0].Service.UID.Name)
+		assert.EqualValues(t, "the-ns.overridden-meta-annots.a-container", deco[0].Service.UID.Instance)
+		assert.Equal(t, map[attr.Name]string{
+			"k8s.node.name":      "the-node",
+			"k8s.namespace.name": "the-ns",
+			"k8s.pod.name":       "overridden-meta-annots",
+			"k8s.container.name": "a-container",
+			"k8s.pod.uid":        "uid-33",
+			"k8s.pod.start_time": "2020-01-02 12:56:56",
+			"k8s.cluster.name":   "the-cluster",
+		}, deco[0].Service.Metadata)
+	})
+	t.Run("user can override service name and ns via env vars, taking precedence over any other criteria", func(t *testing.T) {
+		inputCh <- []request.Span{{
+			Pid: request.PidInfo{Namespace: 1066}, Service: autoNameSvc,
+		}}
+		deco := testutil.ReadChannel(t, outputhCh, timeout)
+		require.Len(t, deco, 1)
+		assert.Equal(t, "env-svc-ns", deco[0].Service.UID.Namespace)
+		assert.Equal(t, "env-svc-name", deco[0].Service.UID.Name)
+		assert.EqualValues(t, "the-ns.env-var-takes-precedence.a-container", deco[0].Service.UID.Instance)
+		assert.Equal(t, map[attr.Name]string{
+			"k8s.node.name":      "the-node",
+			"k8s.namespace.name": "the-ns",
+			"k8s.pod.name":       "env-var-takes-precedence",
+			"k8s.container.name": "a-container",
+			"k8s.pod.uid":        "uid-66",
 			"k8s.pod.start_time": "2020-01-02 12:56:56",
 			"k8s.cluster.name":   "the-cluster",
 		}, deco[0].Service.Metadata)
@@ -188,7 +272,7 @@ func TestDecoration(t *testing.T) {
 		require.Len(t, deco, 1)
 		assert.Equal(t, "tralara", deco[0].Service.UID.Namespace)
 		assert.Equal(t, "tralari", deco[0].Service.UID.Name)
-		assert.EqualValues(t, "pod-12:a-container", deco[0].Service.UID.Instance)
+		assert.EqualValues(t, "the-ns.pod-12.a-container", deco[0].Service.UID.Instance)
 		assert.Equal(t, map[attr.Name]string{
 			"k8s.node.name":       "the-node",
 			"k8s.namespace.name":  "the-ns",

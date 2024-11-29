@@ -31,9 +31,11 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: testserver
+  annotations:
+    my.custom/name: 'overridden-testserver-name'
   labels:
     app: testserver
-    app.kubernetes.io/name: 'overridden-testserver-name'
+    app.kubernetes.io/name: 'ignored-testserver-name'
     app.kubernetes.io/part-of: 'overridden-testserver-namespace'
 spec:
   replicas: 1

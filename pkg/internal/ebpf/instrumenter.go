@@ -63,7 +63,7 @@ func (i *instrumenter) instrumentProbes(exe *link.Executable, probes []ebpfcommo
 
 		log.Debug("going to instrument function", "function", probe.SymbolName, "programs", probe)
 
-		err, cls := uprobe(exe, probe)
+		cls, err := uprobe(exe, probe)
 
 		if err != nil {
 			closeAll(cls)
@@ -255,7 +255,7 @@ func (i *instrumenter) uprobes(pid int32, p Tracer) error {
 	return nil
 }
 
-func uprobe(exe *link.Executable, probe *ebpfcommon.ProbeDesc) (error, []io.Closer) {
+func uprobe(exe *link.Executable, probe *ebpfcommon.ProbeDesc) ([]io.Closer, error) {
 	var closers []io.Closer
 
 	if probe.Start != nil {
@@ -264,7 +264,7 @@ func uprobe(exe *link.Executable, probe *ebpfcommon.ProbeDesc) (error, []io.Clos
 		})
 
 		if err != nil {
-			return fmt.Errorf("setting uprobe (offset): %w", err), closers
+			return closers, fmt.Errorf("setting uprobe (offset): %w", err)
 		}
 
 		closers = append(closers, up)
@@ -272,7 +272,7 @@ func uprobe(exe *link.Executable, probe *ebpfcommon.ProbeDesc) (error, []io.Clos
 
 	if probe.End != nil {
 		if len(probe.ReturnOffsets) == 0 {
-			return fmt.Errorf("setting uretprobe (attaching to offset): missing return offsets"), closers
+			return closers, fmt.Errorf("setting uretprobe (attaching to offset): missing return offsets")
 		}
 
 		for _, offset := range probe.ReturnOffsets {
@@ -281,14 +281,14 @@ func uprobe(exe *link.Executable, probe *ebpfcommon.ProbeDesc) (error, []io.Clos
 			})
 
 			if err != nil {
-				return fmt.Errorf("setting uretprobe (attaching to offset): %w", err), closers
+				return closers, fmt.Errorf("setting uretprobe (attaching to offset): %w", err)
 			}
 
 			closers = append(closers, up)
 		}
 	}
 
-	return nil, closers
+	return closers, nil
 }
 
 func (i *instrumenter) sockfilters(p Tracer) error {

@@ -36,9 +36,9 @@ type libModule struct {
 }
 
 // Hold onto Linux inode numbers of files that are already instrumented, e.g. libssl.so.3
-type instrumentedLibs_t map[uint64]*libModule
+type instrumentedLibsT map[uint64]*libModule
 
-var instrumentedLibs = make(instrumentedLibs_t)
+var instrumentedLibs = make(instrumentedLibsT)
 var libsMux sync.Mutex
 
 type Tracer struct {
@@ -53,7 +53,7 @@ type Tracer struct {
 	ingressFilters map[ifaces.Interface]*netlink.BpfFilter
 }
 
-func (libs instrumentedLibs_t) at(id uint64) *libModule {
+func (libs instrumentedLibsT) at(id uint64) *libModule {
 	module, ok := libs[id]
 
 	if !ok {
@@ -64,7 +64,7 @@ func (libs instrumentedLibs_t) at(id uint64) *libModule {
 	return module
 }
 
-func (libs instrumentedLibs_t) find(id uint64) *libModule {
+func (libs instrumentedLibsT) find(id uint64) *libModule {
 	module, ok := libs[id]
 
 	if ok {
@@ -74,14 +74,14 @@ func (libs instrumentedLibs_t) find(id uint64) *libModule {
 	return nil
 }
 
-func (libs instrumentedLibs_t) addRef(id uint64) *libModule {
+func (libs instrumentedLibsT) addRef(id uint64) *libModule {
 	module := libs.at(id)
 	module.references++
 
 	return module
 }
 
-func (libs instrumentedLibs_t) removeRef(id uint64) (*libModule, error) {
+func (libs instrumentedLibsT) removeRef(id uint64) (*libModule, error) {
 	module := libs.find(id)
 
 	if module == nil {
@@ -94,10 +94,12 @@ func (libs instrumentedLibs_t) removeRef(id uint64) (*libModule, error) {
 
 	module.references--
 
+	log := tlog().With("instrumentedLibs", "removeRef")
+
 	if module.references == 0 {
-		for i := range module.closers {
-			if err := module.closers[i].Close(); err != nil {
-				//FIXME log
+		for _, closer := range module.closers {
+			if err := closer.Close(); err != nil {
+				log.Debug("failed to close resource", "closer", closer, "error", err)
 			}
 		}
 
@@ -107,10 +109,13 @@ func (libs instrumentedLibs_t) removeRef(id uint64) (*libModule, error) {
 	return module, nil
 }
 
+func tlog() *slog.Logger {
+	return slog.With("component", "generic.Tracer")
+}
+
 func New(cfg *beyla.Config, metrics imetrics.Reporter) *Tracer {
-	log := slog.With("component", "generic.Tracer")
 	return &Tracer{
-		log:            log,
+		log:            tlog(),
 		cfg:            cfg,
 		metrics:        metrics,
 		pidsFilter:     ebpfcommon.CommonPIDsFilter(&cfg.Discovery),

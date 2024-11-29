@@ -41,11 +41,11 @@ func TestMaybeFastCGI(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			len := len(tt.input)
-			if len > tt.inputLen {
-				len = tt.inputLen
+			ilen := len(tt.input)
+			if ilen > tt.inputLen {
+				ilen = tt.inputLen
 			}
-			res := maybeFastCGI(tt.input[0:len])
+			res := maybeFastCGI(tt.input[0:ilen])
 			assert.Equal(t, tt.expected, res)
 		})
 	}
@@ -99,11 +99,11 @@ func TestParseCGITable(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			len := len(tt.input)
-			if len > tt.inputLen {
-				len = tt.inputLen
+			ilen := len(tt.input)
+			if ilen > tt.inputLen {
+				ilen = tt.inputLen
 			}
-			res := parseCGITable(tt.input[0:len])
+			res := parseCGITable(tt.input[0:ilen])
 			assert.Equal(t, tt.expected, res)
 		})
 	}

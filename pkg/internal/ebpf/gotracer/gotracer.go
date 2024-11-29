@@ -443,6 +443,8 @@ func (p *Tracer) SockOps() []ebpfcommon.SockOps { return nil }
 
 func (p *Tracer) RecordInstrumentedLib(_ uint64, _ []io.Closer) {}
 
+func (p *Tracer) AddInstrumentedLibRef(_ uint64) {}
+
 func (p *Tracer) UnlinkInstrumentedLib(_ uint64) {}
 
 func (p *Tracer) AlreadyInstrumentedLib(_ uint64) bool {

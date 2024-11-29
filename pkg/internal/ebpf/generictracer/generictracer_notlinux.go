@@ -35,6 +35,7 @@ func (p *Tracer) SocketFilters() []*ebpf.Program                      { return n
 func (p *Tracer) SockMsgs() []ebpfcommon.SockMsg                      { return nil }
 func (p *Tracer) SockOps() []ebpfcommon.SockOps                       { return nil }
 func (p *Tracer) RecordInstrumentedLib(_ uint64, _ []io.Closer)       {}
+func (p *Tracer) AddInstrumentedLibRef(_ uint64)                      {}
 func (p *Tracer) UnlinkInstrumentedLib(_ uint64)                      {}
 func (p *Tracer) AlreadyInstrumentedLib(_ uint64) bool                { return false }
 func (p *Tracer) Run(_ context.Context, _ chan<- []request.Span)      {}

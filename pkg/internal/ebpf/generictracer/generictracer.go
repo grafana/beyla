@@ -362,39 +362,34 @@ func (p *Tracer) UProbes() map[string][]ebpfcommon.ProbeDesc {
 	return map[string][]ebpfcommon.ProbeDesc{
 		"libssl.so": {
 			{
-				SymbolName:      "SSL_read",
-				Required:        false,
-				AttachToOffsets: true,
-				Start:           p.bpfObjects.UprobeSslRead,
-				End:             p.bpfObjects.UretprobeSslRead,
+				SymbolName: "SSL_read",
+				Required:   false,
+				Start:      p.bpfObjects.UprobeSslRead,
+				End:        p.bpfObjects.UretprobeSslRead,
 			},
 			{
-				SymbolName:      "SSL_write",
-				Required:        false,
-				AttachToOffsets: true,
-				Start:           p.bpfObjects.UprobeSslWrite,
-				End:             p.bpfObjects.UretprobeSslWrite,
+				SymbolName: "SSL_write",
+				Required:   false,
+				Start:      p.bpfObjects.UprobeSslWrite,
+				End:        p.bpfObjects.UretprobeSslWrite,
 			},
 			{
-				SymbolName:      "SSL_read_ex",
-				Required:        false,
-				AttachToOffsets: true,
-				Start:           p.bpfObjects.UprobeSslReadEx,
-				End:             p.bpfObjects.UretprobeSslReadEx,
+				SymbolName: "SSL_read_ex",
+				Required:   false,
+				Start:      p.bpfObjects.UprobeSslReadEx,
+				End:        p.bpfObjects.UretprobeSslReadEx,
 			},
 			{
-				SymbolName:      "SSL_write_ex",
-				Required:        false,
-				AttachToOffsets: true,
-				Start:           p.bpfObjects.UprobeSslWriteEx,
-				End:             p.bpfObjects.UretprobeSslWriteEx,
+				SymbolName: "SSL_write_ex",
+				Required:   false,
+				Start:      p.bpfObjects.UprobeSslWriteEx,
+				End:        p.bpfObjects.UretprobeSslWriteEx,
 			},
 			{
-				SymbolName:      "SSL_do_handshake",
-				Required:        false,
-				AttachToOffsets: true,
-				Start:           p.bpfObjects.UprobeSslDoHandshake,
-				End:             p.bpfObjects.UretprobeSslDoHandshake,
+				SymbolName: "SSL_do_handshake",
+				Required:   false,
+				Start:      p.bpfObjects.UprobeSslDoHandshake,
+				End:        p.bpfObjects.UretprobeSslDoHandshake,
 			},
 			{
 				SymbolName: "SSL_shutdown",
@@ -451,6 +446,10 @@ func (p *Tracer) RecordInstrumentedLib(id uint64, closers []io.Closer) {
 	}
 
 	p.log.Debug("Recorded instrumented Lib", "ino", id, "module", module)
+}
+
+func (p *Tracer) AddInstrumentedLibRef(id uint64) {
+	p.RecordInstrumentedLib(id, nil)
 }
 
 func (p *Tracer) UnlinkInstrumentedLib(id uint64) {

@@ -53,15 +53,6 @@ type ProbeDesc struct {
 	// if the function has not been found in the executable
 	Required bool
 
-	// When AttachToOffsets is true, the specified Start program will be
-	// attached to the computed offset for 'SymbolName', and the specified End
-	// program will be attached as a regular uprobe (rather than a uretprobe)
-	// to the offset of every RET instruction computed for 'SymbolName'.
-	// This is used for the cases in which the stack is moved and uretprobes
-	// cannot be used. Be careful though, as RET may not always be present in
-	// the target code, as a result of compiler optimisations
-	AttachToOffsets bool
-
 	// The eBPF program to attach to the symbol as a uprobe (either to the
 	// symbol name or to StartOffset)
 	Start *ebpf.Program

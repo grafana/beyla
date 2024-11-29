@@ -91,6 +91,7 @@ type Tracer interface {
 	// Closers are the associated closable resources to this lib, that may be
 	// closed when UnlinkInstrumentedLib() is called
 	RecordInstrumentedLib(uint64, []io.Closer)
+	AddInstrumentedLibRef(uint64)
 	AlreadyInstrumentedLib(uint64) bool
 	UnlinkInstrumentedLib(uint64)
 	RegisterOffsets(*exec.FileInfo, *goexec.Offsets)

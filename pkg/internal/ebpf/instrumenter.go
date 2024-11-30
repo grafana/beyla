@@ -53,31 +53,31 @@ func (i *instrumenter) goprobes(p Tracer) error {
 	return nil
 }
 
-func (i *instrumenter) instrumentProbes(exe *link.Executable, probes []ebpfcommon.ProbeDesc) ([]io.Closer, error) {
+func (i *instrumenter) instrumentProbes(exe *link.Executable, probes map[string][]*ebpfcommon.ProbeDesc) ([]io.Closer, error) {
 	log := ilog().With("probes", "instrumentProbes")
 
 	var closers []io.Closer
 
-	for j := range probes {
-		probe := &probes[j]
+	for symbolName, probeArray := range probes {
+		for _, probe := range probeArray {
+			log.Debug("going to instrument function", "function", symbolName, "programs", probe)
 
-		log.Debug("going to instrument function", "function", probe.SymbolName, "programs", probe)
+			cls, err := uprobe(exe, probe)
 
-		cls, err := uprobe(exe, probe)
+			if err != nil {
+				closeAll(cls)
 
-		if err != nil {
-			closeAll(cls)
+				if probe.Required {
+					closeAll(closers)
 
-			if probe.Required {
-				closeAll(closers)
+					return nil, fmt.Errorf("instrumenting function %q: %w", symbolName, err)
+				}
 
-				return nil, fmt.Errorf("instrumenting function %q: %w", probe.SymbolName, err)
+				// error will be common here since this could be no openssl loaded
+				log.Debug("error instrumenting uprobe", "function", symbolName, "error", err)
+			} else {
+				closers = append(closers, cls...)
 			}
-
-			// error will be common here since this could be no openssl loaded
-			log.Debug("error instrumenting uprobe", "function", probe.SymbolName, "error", err)
-		} else {
-			closers = append(closers, cls...)
 		}
 	}
 
@@ -127,13 +127,13 @@ func (i *instrumenter) kprobe(funcName string, programs ebpfcommon.ProbeDesc) er
 type uprobeModule struct {
 	lib       string
 	instrPath string
-	probes    []ebpfcommon.ProbeDesc
+	probes    []map[string][]*ebpfcommon.ProbeDesc
 }
 
 func (i *instrumenter) uprobeModules(p Tracer, pid int32, maps []*procfs.ProcMap, exePath string, exeIno uint64, log *slog.Logger) map[uint64]*uprobeModule {
 	modules := map[uint64]*uprobeModule{}
 
-	for lib, pArray := range p.UProbes() {
+	for lib, pMap := range p.UProbes() {
 		log.Debug("finding library", "lib", lib)
 		libMap := exec.LibPath(lib, maps)
 		instrPath := exePath
@@ -166,9 +166,9 @@ func (i *instrumenter) uprobeModules(p Tracer, pid int32, maps []*procfs.ProcMap
 
 		mod, ok := modules[instrumentedIno]
 		if ok {
-			mod.probes = append(mod.probes, pArray...)
+			mod.probes = append(mod.probes, pMap)
 		} else {
-			modules[instrumentedIno] = &uprobeModule{lib: lib, instrPath: instrPath, probes: pArray}
+			modules[instrumentedIno] = &uprobeModule{lib: lib, instrPath: instrPath, probes: []map[string][]*ebpfcommon.ProbeDesc{pMap}}
 		}
 	}
 
@@ -229,27 +229,31 @@ func (i *instrumenter) uprobes(pid int32, p Tracer) error {
 			continue
 		}
 
-		if err := gatherOffsets(m.instrPath, m.probes, log); err != nil {
-			return err
-		}
-
 		libExe, err := link.OpenExecutable(m.instrPath)
 
 		if err != nil {
 			return err
 		}
 
-		closers, err := i.instrumentProbes(libExe, m.probes)
+		for j := range m.probes {
+			if err := gatherOffsets(m.instrPath, m.probes[j], log); err != nil {
+				log.Debug("error gathering offsets", "error", err)
+				continue
+			}
 
-		if err != nil {
-			return err
+			closers, err := i.instrumentProbes(libExe, m.probes[j])
+
+			if err != nil {
+				log.Debug("error instrumenting probes", "error", err)
+				continue
+			}
+
+			log.Debug("adding module for instrumenter and incrementing reference count", "path", m.instrPath, "ino", instrumentedIno)
+
+			// We bump the count of uses of the underlying shared library with a new executable
+			p.RecordInstrumentedLib(instrumentedIno, closers)
+			i.addModule(instrumentedIno)
 		}
-
-		log.Debug("adding module for instrumenter and incrementing reference count", "path", m.instrPath, "ino", instrumentedIno)
-
-		// We bump the count of uses of the underlying shared library with a new executable
-		p.RecordInstrumentedLib(instrumentedIno, closers)
-		i.addModule(instrumentedIno)
 	}
 
 	return nil
@@ -431,17 +435,17 @@ func getCgroupPath() (string, error) {
 	return cgroupPath, err
 }
 
-func symbolNames(m []ebpfcommon.ProbeDesc) []string {
+func symbolNames(m map[string][]*ebpfcommon.ProbeDesc) []string {
 	keys := make([]string, 0, len(m))
 
-	for i := range m {
-		keys = append(keys, m[i].SymbolName)
+	for name := range m {
+		keys = append(keys, name)
 	}
 
 	return keys
 }
 
-func gatherOffsets(instrPath string, probes []ebpfcommon.ProbeDesc, log *slog.Logger) error {
+func gatherOffsets(instrPath string, probes map[string][]*ebpfcommon.ProbeDesc, log *slog.Logger) error {
 	elfFile, err := elf.Open(instrPath)
 
 	if err != nil {
@@ -456,51 +460,51 @@ func gatherOffsets(instrPath string, probes []ebpfcommon.ProbeDesc, log *slog.Lo
 		return fmt.Errorf("failed to lookup symbols for %s: %w", instrPath, err)
 	}
 
-	for i := range probes {
-		probe := &probes[i]
+	for symbolName, probeArray := range probes {
+		for _, probe := range probeArray {
+			sym, ok := syms[symbolName]
 
-		sym, ok := syms[probe.SymbolName]
+			if !ok {
+				continue
+			}
 
-		if !ok {
-			continue
+			progData := readSymbolData(&sym)
+
+			if progData == nil {
+				return fmt.Errorf("error reading symbol data for %s (%s)", symbolName, instrPath)
+			}
+
+			returns, err := goexec.FindReturnOffssets(sym.Off, progData)
+
+			if err != nil {
+				log.Debug("Error finding return offsets", "symbol", sym)
+				continue
+			}
+
+			probe.StartOffset = sym.Off
+			probe.ReturnOffsets = returns
 		}
-
-		progData := readSymbolData(&sym)
-
-		if progData == nil {
-			return fmt.Errorf("error reading symbol data for %s (%s)", probe.SymbolName, instrPath)
-		}
-
-		returns, err := goexec.FindReturnOffssets(sym.Off, progData)
-
-		if err != nil {
-			log.Debug("Error finding return offsets", "symbol", sym)
-			continue
-		}
-
-		probe.StartOffset = sym.Off
-		probe.ReturnOffsets = returns
 	}
 
 	return nil
 }
 
-func (i *instrumenter) gatherGoOffsets(goProbes []ebpfcommon.ProbeDesc) {
+func (i *instrumenter) gatherGoOffsets(goProbes map[string][]*ebpfcommon.ProbeDesc) {
 	log := ilog().With("probes", "gatherGoOffsets")
 
-	for j := range goProbes {
-		probe := &goProbes[j]
-
-		offs, ok := i.offsets.Funcs[probe.SymbolName]
+	for symbolName, descs := range goProbes {
+		offs, ok := i.offsets.Funcs[symbolName]
 
 		if !ok {
 			// the program function is not in the detected offsets. Ignoring
-			log.Debug("ignoring function", "function", probe.SymbolName)
+			log.Debug("ignoring function", "function", symbolName)
 			continue
 		}
 
-		probe.StartOffset = offs.Start
-		probe.ReturnOffsets = offs.Returns
+		for _, probe := range descs {
+			probe.StartOffset = offs.Start
+			probe.ReturnOffsets = offs.Returns
+		}
 	}
 }
 

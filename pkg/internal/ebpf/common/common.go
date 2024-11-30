@@ -46,9 +46,6 @@ var ActiveNamespaces = make(map[uint32]uint32)
 // ProbeDesc holds the information of the instrumentation points of a given
 // function/symbol
 type ProbeDesc struct {
-	// The symbol being instrumented
-	SymbolName string // The symbol being instrumented
-
 	// Required, if true, will cancel the execution of the eBPF Tracer
 	// if the function has not been found in the executable
 	Required bool

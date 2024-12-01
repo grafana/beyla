@@ -599,17 +599,14 @@ func TestSpanAttributeFilterNode(t *testing.T) {
 
 	// expect to receive only the records matching the Filters criteria
 	events := map[string]map[string]string{}
-	var event collector.MetricRecord
-	test.Eventually(t, testTimeout, func(tt require.TestingT) {
-		event = testutil.ReadChannel(t, tc.Records(), testTimeout)
-		require.Equal(tt, "http.server.request.duration", event.Name)
-	})
-	events[event.Attributes["url.path"]] = event.Attributes
-	test.Eventually(t, testTimeout, func(tt require.TestingT) {
-		event = testutil.ReadChannel(t, tc.Records(), testTimeout)
-		require.Equal(tt, "http.server.request.duration", event.Name)
-	})
-	events[event.Attributes["url.path"]] = event.Attributes
+	for i := 0; i < 10; i++ {
+		var event collector.MetricRecord
+		test.Eventually(t, testTimeout, func(tt require.TestingT) {
+			event = testutil.ReadChannel(t, tc.Records(), testTimeout)
+			require.Equal(tt, "http.server.request.duration", event.Name)
+		})
+		events[event.Attributes["url.path"]] = event.Attributes
+	}
 
 	assert.Equal(t, map[string]map[string]string{
 		"/user/1234": {

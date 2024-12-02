@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/grafana/beyla/pkg/config"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
@@ -97,9 +98,12 @@ func TestReadTCPRequestIntoSpan_Overflow(t *testing.T) {
 			169, 193, 172, 206, 225, 219, 112, 52, 115, 32, 147, 192, 127, 211, 129, 241,
 		},
 	}
+
+	cfg := config.EPPFTracer{HeuristicSQLDetect: true}
+
 	binaryRecord := bytes.Buffer{}
 	require.NoError(t, binary.Write(&binaryRecord, binary.LittleEndian, tri))
-	span, ignore, err := ReadTCPRequestIntoSpan(&ringbuf.Record{RawSample: binaryRecord.Bytes()}, &fltr)
+	span, ignore, err := ReadTCPRequestIntoSpan(&cfg, &ringbuf.Record{RawSample: binaryRecord.Bytes()}, &fltr)
 	require.NoError(t, err)
 	require.False(t, ignore)
 

@@ -160,7 +160,12 @@ func TestPostgresQueryParsing(t *testing.T) {
 		},
 	} {
 		t.Run(ts.name, func(t *testing.T) {
-			op, table, sql := detectSQLBytes(ts.bytes)
+			op, table, sql := detectSQLPayload(false, ts.bytes)
+			assert.Equal(t, ts.op, op)
+			assert.Equal(t, ts.table, table)
+			assert.Equal(t, ts.sql, sql)
+
+			op, table, sql = detectSQLPayload(true, ts.bytes)
 			assert.Equal(t, ts.op, op)
 			assert.Equal(t, ts.table, table)
 			assert.Equal(t, ts.sql, sql)

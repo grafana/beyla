@@ -6,11 +6,12 @@ import (
 
 	"github.com/cilium/ebpf/ringbuf"
 
+	"github.com/grafana/beyla/pkg/config"
 	"github.com/grafana/beyla/pkg/internal/request"
 )
 
 // nolint:cyclop
-func ReadTCPRequestIntoSpan(record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {
+func ReadTCPRequestIntoSpan(cfg *config.EPPFTracer, record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {
 	var event TCPRequestInfo
 
 	err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
@@ -35,7 +36,7 @@ func ReadTCPRequestIntoSpan(record *ringbuf.Record, filter ServiceFilter) (reque
 	b := event.Buf[:l]
 
 	// Check if we have a SQL statement
-	op, table, sql := detectSQLBytes(b)
+	op, table, sql := detectSQLPayload(cfg.HeuristicSQLDetect, b)
 	if validSQL(op, table) {
 		return TCPToSQLToSpan(&event, op, table, sql), false, nil
 	}

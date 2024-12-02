@@ -38,7 +38,7 @@ type ringBufForwarder struct {
 	spansLen   int
 	access     sync.Mutex
 	ticker     *time.Ticker
-	reader     func(*ringbuf.Record, ServiceFilter) (request.Span, bool, error)
+	reader     func(*config.EPPFTracer, *ringbuf.Record, ServiceFilter) (request.Span, bool, error)
 	// filter the input spans, eliminating these from processes whose PID
 	// belong to a process that does not match the discovery policies
 	filter  ServiceFilter
@@ -78,7 +78,7 @@ func ForwardRingbuf(
 	cfg *config.EPPFTracer,
 	ringbuffer *ebpf.Map,
 	filter ServiceFilter,
-	reader func(*ringbuf.Record, ServiceFilter) (request.Span, bool, error),
+	reader func(*config.EPPFTracer, *ringbuf.Record, ServiceFilter) (request.Span, bool, error),
 	logger *slog.Logger,
 	metrics imetrics.Reporter,
 	closers ...io.Closer,
@@ -171,7 +171,7 @@ func (rbf *ringBufForwarder) alreadyForwarded(ctx context.Context, _ []io.Closer
 func (rbf *ringBufForwarder) processAndForward(record ringbuf.Record, spansChan chan<- []request.Span) {
 	rbf.access.Lock()
 	defer rbf.access.Unlock()
-	s, ignore, err := rbf.reader(&record, rbf.filter)
+	s, ignore, err := rbf.reader(rbf.cfg, &record, rbf.filter)
 	if err != nil {
 		rbf.logger.Error("error parsing perf event", "error", err)
 		return

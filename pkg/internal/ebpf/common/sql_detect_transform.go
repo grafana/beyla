@@ -1,8 +1,6 @@
 package ebpfcommon
 
 import (
-	"encoding/binary"
-	"errors"
 	"fmt"
 	"strings"
 	"unsafe"
@@ -45,7 +43,12 @@ func isASCII(s string) bool {
 	return true
 }
 
-func detectSQLBytes(b []byte) (string, string, string) {
+func detectSQLPayload(useHeuristics bool, b []byte) (string, string, string) {
+	if !useHeuristics {
+		if !isPostgres(b) || !isMySQL(b) {
+			return "", "", ""
+		}
+	}
 	op, table, sql := detectSQL(string(b))
 	if !validSQL(op, table) {
 		if isPostgresBindCommand(b) {
@@ -91,120 +94,6 @@ func detectSQL(buf string) (string, string, string) {
 	}
 
 	return "", "", ""
-}
-
-func isPostgresBindCommand(b []byte) bool {
-	return isPostgresCommand('B', b)
-}
-
-func isPostgresQueryCommand(b []byte) bool {
-	return isPostgresCommand('Q', b)
-}
-
-func isPostgresCommand(lookup byte, b []byte) bool {
-	if len(b) < 5 {
-		return false
-	}
-
-	if b[0] == lookup {
-		size := int32(binary.BigEndian.Uint32(b[1:5]))
-		if size < 0 || size > 1000 {
-			return false
-		}
-		return true
-	}
-
-	return false
-}
-
-// nolint:cyclop
-func parsePostgresBindCommand(buf []byte) (string, string, []string, error) {
-	statement := []byte{}
-	portal := []byte{}
-	args := []string{}
-
-	size := int(binary.BigEndian.Uint32(buf[1:5]))
-	if size > len(buf) {
-		size = len(buf)
-	}
-	ptr := 5
-
-	// parse statement, zero terminated string
-	for {
-		if ptr >= size {
-			return string(statement), string(portal), args, errors.New("too short, while parsing statement")
-		}
-		b := buf[ptr]
-		ptr++
-
-		if b == 0 {
-			break
-		}
-		statement = append(statement, b)
-	}
-
-	// parse portal, zero terminated string
-	for {
-		if ptr >= size {
-			return string(statement), string(portal), args, errors.New("too short, while parsing portal")
-		}
-		b := buf[ptr]
-		ptr++
-
-		if b == 0 {
-			break
-		}
-		portal = append(portal, b)
-	}
-
-	if ptr+2 >= size {
-		return string(statement), string(portal), args, errors.New("too short, while parsing format codes")
-	}
-
-	formats := int16(binary.BigEndian.Uint16(buf[ptr : ptr+2]))
-	ptr += 2
-	for i := 0; i < int(formats); i++ {
-		// ignore format codes
-		if ptr+2 >= size {
-			return string(statement), string(portal), args, errors.New("too short, while parsing format codes")
-		}
-		ptr += 2
-	}
-
-	params := int16(binary.BigEndian.Uint16(buf[ptr : ptr+2]))
-	ptr += 2
-	for i := 0; i < int(params); i++ {
-		if ptr+4 >= size {
-			return string(statement), string(portal), args, errors.New("too short, while parsing params")
-		}
-		argLen := int(binary.BigEndian.Uint32(buf[ptr : ptr+4]))
-		ptr += 4
-		arg := []byte{}
-		for j := 0; j < int(argLen); j++ {
-			if ptr >= size {
-				break
-			}
-			arg = append(arg, buf[ptr])
-			ptr++
-		}
-		args = append(args, string(arg))
-	}
-
-	return string(statement), string(portal), args, nil
-}
-
-func parsePosgresQueryCommand(buf []byte) (string, error) {
-	size := int(binary.BigEndian.Uint32(buf[1:5]))
-	if size > len(buf) {
-		size = len(buf)
-	}
-	ptr := 5
-
-	if ptr > size {
-		return "", errors.New("too short")
-	}
-
-	return string(buf[ptr:size]), nil
 }
 
 func TCPToSQLToSpan(trace *TCPRequestInfo, op, table, sql string) request.Span {

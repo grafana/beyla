@@ -11,6 +11,7 @@ import (
 	"github.com/cilium/ebpf/ringbuf"
 
 	"github.com/grafana/beyla/pkg/beyla"
+	"github.com/grafana/beyla/pkg/config"
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/request"
 )
@@ -98,7 +99,7 @@ func (p *Watcher) Run(ctx context.Context) {
 	)(ctx, nil)
 }
 
-func (p *Watcher) processWatchEvent(record *ringbuf.Record, _ ebpfcommon.ServiceFilter) (request.Span, bool, error) {
+func (p *Watcher) processWatchEvent(_ *config.EPPFTracer, record *ringbuf.Record, _ ebpfcommon.ServiceFilter) (request.Span, bool, error) {
 	var flags uint64
 	var event BPFWatchInfo
 

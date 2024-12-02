@@ -36,4 +36,8 @@ type EPPFTracer struct {
 
 	// Optimises for getting requests information immediately when request response is seen
 	HighRequestVolume bool `yaml:"high_request_volume" env:"BEYLA_BPF_HIGH_REQUEST_VOLUME"`
+
+	// Enables the heuristic based detection of SQL requests. This can be used to detect
+	// talking to databases other than the ones we recognize in Beyla, like Postgres and MySQL
+	HeuristicSQLDetect bool `yaml:"heuristic_sql_detect" env:"BEYLA_HEURISTIC_SQL_DETECT"`
 }

@@ -1444,9 +1444,9 @@ or the same (both metric families are listed in the same scrape endpoint).
 
 | YAML        | Environment variable                                  | Type | Default |
 | ----------- | ---------------------------------------- | ---- | ------- |
-| `otel_metrics`      | `BEYLA_INTERNAL_METRICS_OTEL` | bool | `false` |
+| `otel_metrics`      | `BEYLA_INTERNAL_METRICS_OTEL` | boolean | `false` |
 
-Specifies whether to enable the internal metrics exporter for OpenTelemetry metrics. If set to `true`, the internal metrics will be exported to the OpenTelemetry endpoint specified in the `otel_metrics_export` section or `grafana.otlp` section.
+Specifies whether to enable the internal metrics exporter for OpenTelemetry metrics. If set to `true`, the internal metrics are exported to the OpenTelemetry endpoint specified in the `otel_metrics_export` section or `grafana.otlp` section.
 
 ## YAML file example
 

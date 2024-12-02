@@ -8,7 +8,7 @@ import (
 // Config options for the different metrics exporters
 type Config struct {
 	Prometheus  PrometheusConfig `yaml:"prometheus,omitempty"`
-	OTELMetrics bool             `yaml:"otel_metrics,omitempty" env:"BEYLA_INTERNAL_METRICS_OTEL_METRICS"`
+	OTELMetrics bool             `yaml:"otel_metrics,omitempty" env:"BEYLA_INTERNAL_OTEL_METRICS"`
 }
 
 // Reporter of internal metrics

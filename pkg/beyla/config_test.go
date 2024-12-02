@@ -243,7 +243,7 @@ func TestConfigValidate(t *testing.T) {
 		{"BEYLA_TRACE_PRINTER": "json_indent", "BEYLA_EXECUTABLE_NAME": "foo"},
 		{"BEYLA_TRACE_PRINTER": "counter", "BEYLA_EXECUTABLE_NAME": "foo"},
 		{"BEYLA_PROMETHEUS_PORT": "8080", "BEYLA_EXECUTABLE_NAME": "foo", "INSTRUMENT_FUNC_NAME": "bar"},
-		{"BEYLA_INTERNAL_METRICS_OTEL_METRICS": "true", "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT": "localhost:1234", "BEYLA_EXECUTABLE_NAME": "foo"},
+		{"BEYLA_INTERNAL_OTEL_METRICS": "true", "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT": "localhost:1234", "BEYLA_EXECUTABLE_NAME": "foo"},
 	}
 	for n, tc := range testCases {
 		t.Run(fmt.Sprint("case", n), func(t *testing.T) {

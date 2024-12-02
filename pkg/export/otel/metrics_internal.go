@@ -25,7 +25,6 @@ type InternalMetricsReporter struct {
 	otelMetricExportErrs  instrument.Float64Counter
 	otelTraceExports      instrument.Float64Counter
 	otelTraceExportErrs   instrument.Float64Counter
-	prometheusRequests    instrument.Float64Counter
 	instrumentedProcesses instrument.Int64UpDownCounter
 	beylaInfo             instrument.Int64Gauge
 }
@@ -153,7 +152,7 @@ func (p *InternalMetricsReporter) OTELMetricExport(len int) {
 }
 
 func (p *InternalMetricsReporter) OTELMetricExportError(err error) {
-	p.otelMetricExportErrs.Add(p.ctx, 1)
+	p.otelMetricExportErrs.Add(p.ctx, 1, instrument.WithAttributes(attribute.String("error", err.Error())))
 }
 
 func (p *InternalMetricsReporter) OTELTraceExport(len int) {
@@ -161,10 +160,10 @@ func (p *InternalMetricsReporter) OTELTraceExport(len int) {
 }
 
 func (p *InternalMetricsReporter) OTELTraceExportError(err error) {
-	p.otelTraceExportErrs.Add(p.ctx, 1)
+	p.otelTraceExportErrs.Add(p.ctx, 1, instrument.WithAttributes(attribute.String("error", err.Error())))
 }
 
-func (p *InternalMetricsReporter) PrometheusRequest(port, path string) {
+func (p *InternalMetricsReporter) PrometheusRequest(_, _ string) {
 }
 
 func (p *InternalMetricsReporter) InstrumentProcess(processName string) {

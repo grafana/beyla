@@ -1,6 +1,6 @@
 apiVersion: v2
 name: beyla
-version: 1.6.1
+version: 1.6.2
 appVersion: 1.9.7
 description: eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network metrics.
 home: https://grafana.com/oss/beyla-ebpf/

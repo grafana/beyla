@@ -8,6 +8,7 @@ import (
 
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/export/attributes"
+	"github.com/grafana/beyla/pkg/export/otel"
 	"github.com/grafana/beyla/pkg/internal/appolly"
 	"github.com/grafana/beyla/pkg/internal/connector"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
@@ -20,7 +21,10 @@ import (
 // RunBeyla in the foreground process. This is a blocking function and won't exit
 // until both the AppO11y and NetO11y components end
 func RunBeyla(ctx context.Context, cfg *beyla.Config) error {
-	ctxInfo := buildCommonContextInfo(ctx, cfg)
+	ctxInfo, err := buildCommonContextInfo(ctx, cfg)
+	if err != nil {
+		return fmt.Errorf("can't build common context info: %w", err)
+	}
 
 	wg := sync.WaitGroup{}
 	app := cfg.Enabled(beyla.FeatureAppO11y)
@@ -111,7 +115,7 @@ func mustSkip(cfg *beyla.Config) string {
 // from the user-provided configuration
 func buildCommonContextInfo(
 	ctx context.Context, config *beyla.Config,
-) *global.ContextInfo {
+) (*global.ContextInfo, error) {
 	promMgr := &connector.PrometheusManager{}
 	ctxInfo := &global.ContextInfo{
 		Prometheus: promMgr,
@@ -126,7 +130,20 @@ func buildCommonContextInfo(
 			RestrictLocalNode: config.Attributes.Kubernetes.MetaRestrictLocalNode,
 		}),
 	}
+	if config.Attributes.HostID.Override == "" {
+		ctxInfo.FetchHostID(ctx, config.Attributes.HostID.FetchTimeout)
+	} else {
+		ctxInfo.HostID = config.Attributes.HostID.Override
+	}
 	switch {
+	case config.InternalMetrics.OTELMetrics:
+		var err error
+		config.Metrics.Grafana = &config.Grafana.OTLP
+		slog.Debug("reporting internal metrics as OpenTelemetry")
+		ctxInfo.Metrics, err = otel.NewInternalMetricsReporter(ctx, ctxInfo, &config.Metrics)
+		if err != nil {
+			return nil, fmt.Errorf("can't start OpenTelemetry metrics: %w", err)
+		}
 	case config.InternalMetrics.Prometheus.Port != 0:
 		slog.Debug("reporting internal metrics as Prometheus")
 		ctxInfo.Metrics = imetrics.NewPrometheusReporter(&config.InternalMetrics.Prometheus, promMgr, nil)
@@ -143,13 +160,7 @@ func buildCommonContextInfo(
 
 	attributeGroups(config, ctxInfo)
 
-	if config.Attributes.HostID.Override == "" {
-		ctxInfo.FetchHostID(ctx, config.Attributes.HostID.FetchTimeout)
-	} else {
-		ctxInfo.HostID = config.Attributes.HostID.Override
-	}
-
-	return ctxInfo
+	return ctxInfo, nil
 }
 
 // attributeGroups specifies, based in the provided configuration, which groups of attributes

@@ -40,13 +40,13 @@ func ReadTCPRequestIntoSpan(cfg *config.EPPFTracer, record *ringbuf.Record, filt
 	fmt.Printf("rb: %v\n", event.Rbuf[:rl])
 
 	// Check if we have a SQL statement
-	op, table, sql := detectSQLPayload(cfg.HeuristicSQLDetect, b)
+	op, table, sql, kind := detectSQLPayload(cfg.HeuristicSQLDetect, b)
 	if validSQL(op, table) {
-		return TCPToSQLToSpan(&event, op, table, sql), false, nil
+		return TCPToSQLToSpan(&event, op, table, sql, kind), false, nil
 	} else {
-		op, table, sql = detectSQLPayload(cfg.HeuristicSQLDetect, event.Rbuf[:rl])
+		op, table, sql, kind = detectSQLPayload(cfg.HeuristicSQLDetect, event.Rbuf[:rl])
 		if validSQL(op, table) {
-			return TCPToSQLToSpan(&event, op, table, sql), false, nil
+			return TCPToSQLToSpan(&event, op, table, sql, kind), false, nil
 		}
 	}
 

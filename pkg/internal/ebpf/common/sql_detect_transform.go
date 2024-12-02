@@ -10,6 +10,16 @@ import (
 	"github.com/grafana/beyla/pkg/internal/sqlprune"
 )
 
+func sqlKind(b []byte) request.SQLKind {
+	if isPostgres(b) {
+		return request.DBPostgres
+	} else if isMySQL(b) {
+		return request.DBMySQL
+	}
+
+	return request.DBGeneric
+}
+
 func validSQL(op, table string) bool {
 	return op != "" && table != ""
 }
@@ -42,22 +52,24 @@ func isASCII(s string) bool {
 	return true
 }
 
-func detectSQLPayload(useHeuristics bool, b []byte) (string, string, string) {
+func detectSQLPayload(useHeuristics bool, b []byte) (string, string, string, request.SQLKind) {
+	sqlKind := sqlKind(b)
 	if !useHeuristics {
-		if !isPostgres(b) && !isMySQL(b) {
-			return "", "", ""
+		if sqlKind == request.DBGeneric {
+			return "", "", "", sqlKind
 		}
 	}
 	op, table, sql := detectSQL(string(b))
 	if !validSQL(op, table) {
-		if isPostgres(b) {
+		switch sqlKind {
+		case request.DBPostgres:
 			op, table, sql = postgresPreparedStatements(b)
-		} else if isMySQL(b) {
+		case request.DBMySQL:
 			op, table, sql = mysqlPreparedStatements(b)
 		}
 	}
 
-	return op, table, sql
+	return op, table, sql, sqlKind
 }
 
 func detectSQL(buf string) (string, string, string) {
@@ -75,7 +87,7 @@ func detectSQL(buf string) (string, string, string) {
 	return "", "", ""
 }
 
-func TCPToSQLToSpan(trace *TCPRequestInfo, op, table, sql string) request.Span {
+func TCPToSQLToSpan(trace *TCPRequestInfo, op, table, sql string, kind request.SQLKind) request.Span {
 	peer := ""
 	peerPort := 0
 	hostname := ""
@@ -95,7 +107,7 @@ func TCPToSQLToSpan(trace *TCPRequestInfo, op, table, sql string) request.Span {
 		PeerPort:      peerPort,
 		Host:          hostname,
 		HostPort:      hostPort,
-		ContentLength: 0,
+		ContentLength: int64(trace.Len),
 		RequestStart:  int64(trace.StartMonotimeNs),
 		Start:         int64(trace.StartMonotimeNs),
 		End:           int64(trace.EndMonotimeNs),
@@ -110,5 +122,6 @@ func TCPToSQLToSpan(trace *TCPRequestInfo, op, table, sql string) request.Span {
 			Namespace: trace.Pid.Ns,
 		},
 		Statement: sql,
+		SubType:   int(kind),
 	}
 }

@@ -168,7 +168,7 @@ func waitForSQLTestComponents(t *testing.T, url, subpath string) {
 		// now, verify that the metric has been reported.
 		// we don't really care that this metric could be from a previous
 		// test. Once one it is visible, it means that Otel and Prometheus are healthy
-		results, err := pq.Query(`db_client_operation_duration_seconds_count{db_system="other_sql"}`)
+		results, err := pq.Query(`db_client_operation_duration_seconds_count{db_system="postgresql"}`)
 		require.NoError(t, err)
 		require.NotEmpty(t, results)
 	}, test.Interval(time.Second))

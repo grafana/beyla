@@ -1107,7 +1107,7 @@ int uprobe_persistConnRoundTrip(struct pt_regs *ctx) {
                 // Must sort the connection info, this map is shared with kprobes which use sorted connection
                 // info always.
                 sort_connection_info(&conn);
-                set_trace_info_for_connection(&conn, &tp_p);
+                set_trace_info_for_connection(&conn, TRACE_TYPE_CLIENT, &tp_p);
 
                 // Setup information for the TC context propagation.
                 // We need the PID id to be able to query ongoing_http and update

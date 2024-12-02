@@ -605,7 +605,7 @@ int socket__http_filter(struct __sk_buff *skb) {
             partial->tcp_seq = tcp.seq;
             __builtin_memcpy(partial->s_addr, conn.s_addr, sizeof(partial->s_addr));
 
-            tp_info_pid_t *trace_info = trace_info_for_connection(&conn);
+            tp_info_pid_t *trace_info = trace_info_for_connection(&conn, TRACE_TYPE_CLIENT);
             if (trace_info) {
                 if (cookie) { // we have an actual socket associated
                     bpf_map_update_elem(&tcp_connection_map, partial, &conn, BPF_ANY);
@@ -614,14 +614,15 @@ int socket__http_filter(struct __sk_buff *skb) {
                 connection_info_t *prev_conn = bpf_map_lookup_elem(&tcp_connection_map, partial);
 
                 if (prev_conn) {
-                    tp_info_pid_t *trace_info = trace_info_for_connection(prev_conn);
+                    tp_info_pid_t *trace_info =
+                        trace_info_for_connection(prev_conn, TRACE_TYPE_CLIENT);
                     if (trace_info) {
                         if (current_immediate_epoch(trace_info->tp.ts) ==
                             current_immediate_epoch(bpf_ktime_get_ns())) {
                             //bpf_dbg_printk("Found trace info on another interface, setting it up for this connection");
                             tp_info_pid_t other_info = {0};
                             __builtin_memcpy(&other_info, trace_info, sizeof(tp_info_pid_t));
-                            set_trace_info_for_connection(&conn, &other_info);
+                            set_trace_info_for_connection(&conn, TRACE_TYPE_CLIENT, &other_info);
                         }
                     }
                 }

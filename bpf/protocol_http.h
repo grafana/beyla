@@ -34,6 +34,110 @@ static __always_inline http_info_t *empty_http_info() {
     return value;
 }
 
+static __always_inline u32 trace_type_from_meta(http_connection_metadata_t *meta) {
+    if (meta->type == EVENT_HTTP_CLIENT) {
+        return TRACE_TYPE_CLIENT;
+    }
+
+    return TRACE_TYPE_SERVER;
+}
+
+static __always_inline void http_get_or_create_trace_info(http_connection_metadata_t *meta,
+                                                          u32 pid,
+                                                          connection_info_t *conn,
+                                                          void *u_buf,
+                                                          int bytes_len,
+                                                          s32 capture_header_buffer) {
+    tp_info_pid_t *tp_p = tp_buf();
+
+    if (!tp_p) {
+        return;
+    }
+
+    tp_p->tp.ts = bpf_ktime_get_ns();
+    tp_p->tp.flags = 1;
+    tp_p->valid = 1;
+    tp_p->pid = pid; // used for avoiding finding stale server requests with client port reuse
+    tp_p->req_type = (meta) ? meta->type : 0;
+
+    urand_bytes(tp_p->tp.span_id, SPAN_ID_SIZE_BYTES);
+
+    u8 found_tp = 0;
+
+    if (meta) {
+        if (meta->type == EVENT_HTTP_CLIENT) {
+            pid_connection_info_t p_conn = {.pid = pid};
+            __builtin_memcpy(&p_conn.conn, conn, sizeof(connection_info_t));
+            found_tp = find_trace_for_client_request(&p_conn, &tp_p->tp);
+        } else {
+            //bpf_dbg_printk("Looking up existing trace for connection");
+            //dbg_print_http_connection_info(conn);
+
+            // For server requests, we first look for TCP info (setup by TC ingress) and then we fall back to black-box info.
+            found_tp = find_trace_for_server_request(conn, &tp_p->tp);
+        }
+    }
+
+    if (!found_tp) {
+        bpf_dbg_printk("Generating new traceparent id");
+        new_trace_id(&tp_p->tp);
+        __builtin_memset(tp_p->tp.parent_id, 0, sizeof(tp_p->tp.span_id));
+    } else {
+        bpf_dbg_printk("Using old traceparent id");
+    }
+
+    //unsigned char tp_buf[TP_MAX_VAL_LENGTH];
+    //make_tp_string(tp_buf, &tp_p->tp);
+    //bpf_dbg_printk("tp: %s", tp_buf);
+
+#ifdef BPF_TRACEPARENT
+    // The below buffer scan can be expensive on high volume of requests. We make it optional
+    // for customers to enable it. Off by default.
+    if (!capture_header_buffer) {
+        if (meta) {
+            u32 type = trace_type_from_meta(meta);
+            set_trace_info_for_connection(conn, type, tp_p);
+            server_or_client_trace(meta->type, conn, tp_p);
+        }
+        return;
+    }
+
+    unsigned char *buf = tp_char_buf();
+    if (buf) {
+        int buf_len = bytes_len;
+        bpf_clamp_umax(buf_len, TRACE_BUF_SIZE - 1);
+
+        bpf_probe_read(buf, buf_len, u_buf);
+        unsigned char *res = bpf_strstr_tp_loop(buf, buf_len);
+
+        if (res) {
+            bpf_dbg_printk("Found traceparent %s", res);
+            unsigned char *t_id = extract_trace_id(res);
+            unsigned char *s_id = extract_span_id(res);
+            unsigned char *f_id = extract_flags(res);
+
+            decode_hex(tp_p->tp.trace_id, t_id, TRACE_ID_CHAR_LEN);
+            decode_hex((unsigned char *)&tp_p->tp.flags, f_id, FLAGS_CHAR_LEN);
+            if (meta && meta->type == EVENT_HTTP_CLIENT) {
+                decode_hex(tp_p->tp.span_id, s_id, SPAN_ID_CHAR_LEN);
+            } else {
+                decode_hex(tp_p->tp.parent_id, s_id, SPAN_ID_CHAR_LEN);
+            }
+        } else {
+            bpf_dbg_printk("No traceparent, making a new trace_id", res);
+        }
+    } else {
+        return;
+    }
+#endif
+
+    if (meta) {
+        u32 type = trace_type_from_meta(meta);
+        set_trace_info_for_connection(conn, type, tp_p);
+        server_or_client_trace(meta->type, conn, tp_p);
+    }
+}
+
 static __always_inline u8 is_http(const unsigned char *p, u32 len, u8 *packet_type) {
     if (len < MIN_HTTP_SIZE) {
         return 0;
@@ -250,15 +354,16 @@ int protocol_http(void *ctx) {
         http_connection_metadata_t *meta =
             connection_meta_by_direction(&args->pid_conn, args->direction, PACKET_TYPE_REQUEST);
 
-        get_or_create_trace_info(meta,
-                                 args->pid_conn.pid,
-                                 &args->pid_conn.conn,
-                                 (void *)args->u_buf,
-                                 args->bytes_len,
-                                 capture_header_buffer);
+        http_get_or_create_trace_info(meta,
+                                      args->pid_conn.pid,
+                                      &args->pid_conn.conn,
+                                      (void *)args->u_buf,
+                                      args->bytes_len,
+                                      capture_header_buffer);
 
         if (meta) {
-            tp_info_pid_t *tp_p = trace_info_for_connection(&args->pid_conn.conn);
+            u32 type = trace_type_from_meta(meta);
+            tp_info_pid_t *tp_p = trace_info_for_connection(&args->pid_conn.conn, type);
             if (tp_p) {
                 info->tp = tp_p->tp;
             } else {

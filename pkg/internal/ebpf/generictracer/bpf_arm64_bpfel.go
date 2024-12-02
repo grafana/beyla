@@ -194,14 +194,20 @@ type bpfTpInfoPidT struct {
 		Flags    uint8
 		_        [7]byte
 	}
-	Pid   uint32
-	Valid uint8
-	_     [3]byte
+	Pid     uint32
+	Valid   uint8
+	ReqType uint8
+	_       [2]byte
 }
 
 type bpfTraceKeyT struct {
 	P_key   bpfPidKeyT
 	ExtraId uint64
+}
+
+type bpfTraceMapKeyT struct {
+	Conn bpfConnectionInfoT
+	Type uint32
 }
 
 // loadBpf returns the embedded CollectionSpec for bpf.

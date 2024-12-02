@@ -172,7 +172,8 @@ static __always_inline void delete_client_trace_info(pid_connection_info_t *pid_
     bpf_dbg_printk("Deleting client trace map for connection");
     dbg_print_http_connection_info(&pid_conn->conn);
 
-    bpf_map_delete_elem(&trace_map, &pid_conn->conn);
+    delete_trace_info_for_connection(&pid_conn->conn, TRACE_TYPE_CLIENT);
+
     egress_key_t e_key = {
         .d_port = pid_conn->conn.d_port,
         .s_port = pid_conn->conn.s_port,
@@ -189,20 +190,20 @@ static __always_inline u8 valid_trace(const unsigned char *trace_id) {
     return *((u64 *)trace_id) != 0 || *((u64 *)(trace_id + 8)) != 0;
 }
 
-static __always_inline void server_or_client_trace(http_connection_metadata_t *meta,
-                                                   connection_info_t *conn,
-                                                   tp_info_pid_t *tp_p) {
-    if (!meta) {
-        return;
-    }
-    if (meta->type == EVENT_HTTP_REQUEST) {
+static __always_inline void
+server_or_client_trace(u8 type, connection_info_t *conn, tp_info_pid_t *tp_p) {
+    if (type == EVENT_HTTP_REQUEST) {
         trace_key_t t_key = {0};
         task_tid(&t_key.p_key);
         t_key.extra_id = extra_runtime_id();
 
         tp_info_pid_t *existing = bpf_map_lookup_elem(&server_traces, &t_key);
-        // we have a conflict, mark this invalid and do nothing
-        if (existing) {
+        // We have a conflict, mark this invalid and do nothing
+        // We look for conflicts on HTTP requests only and only with other HTTP requests,
+        // since TCP requests can come one after another and with SSL we can have a mix
+        // of TCP and HTTP requests.
+        if (existing && (existing->req_type == tp_p->req_type) &&
+            (tp_p->req_type == EVENT_HTTP_REQUEST)) {
             bpf_dbg_printk("Found conflicting server span, marking as invalid, id=%llx",
                            bpf_get_current_pid_tgid());
             existing->valid = 0;
@@ -226,122 +227,46 @@ static __always_inline void server_or_client_trace(http_connection_metadata_t *m
     }
 }
 
-static __always_inline void get_or_create_trace_info(http_connection_metadata_t *meta,
-                                                     u32 pid,
-                                                     connection_info_t *conn,
-                                                     void *u_buf,
-                                                     int bytes_len,
-                                                     s32 capture_header_buffer) {
-    tp_info_pid_t *tp_p = tp_buf();
-
-    if (!tp_p) {
-        return;
-    }
-
-    tp_p->tp.ts = bpf_ktime_get_ns();
-    tp_p->tp.flags = 1;
-    tp_p->valid = 1;
-    tp_p->pid = pid; // used for avoiding finding stale server requests with client port reuse
-
-    urand_bytes(tp_p->tp.span_id, SPAN_ID_SIZE_BYTES);
-
+static __always_inline u8 find_trace_for_server_request(connection_info_t *conn, tp_info_t *tp) {
     u8 found_tp = 0;
+    tp_info_pid_t *existing_tp = bpf_map_lookup_elem(&incoming_trace_map, conn);
+    if (existing_tp) {
+        found_tp = 1;
+        bpf_dbg_printk("Found incoming (TCP) tp for server request");
+        __builtin_memcpy(tp->trace_id, existing_tp->tp.trace_id, sizeof(tp->trace_id));
+        __builtin_memcpy(tp->parent_id, existing_tp->tp.span_id, sizeof(tp->parent_id));
+        bpf_map_delete_elem(&incoming_trace_map, conn);
+    } else {
+        bpf_dbg_printk("Looking up tracemap for");
+        dbg_print_http_connection_info(conn);
 
-    if (meta) {
-        if (meta->type == EVENT_HTTP_CLIENT) {
-            pid_connection_info_t p_conn = {.pid = pid};
-            __builtin_memcpy(&p_conn.conn, conn, sizeof(connection_info_t));
-            tp_info_pid_t *server_tp = find_parent_trace(&p_conn);
+        existing_tp = trace_info_for_connection(conn, TRACE_TYPE_CLIENT);
 
-            if (server_tp && server_tp->valid && valid_trace(server_tp->tp.trace_id)) {
-                found_tp = 1;
-                bpf_dbg_printk("Found existing server tp for client call");
-                __builtin_memcpy(
-                    tp_p->tp.trace_id, server_tp->tp.trace_id, sizeof(tp_p->tp.trace_id));
-                __builtin_memcpy(
-                    tp_p->tp.parent_id, server_tp->tp.span_id, sizeof(tp_p->tp.parent_id));
-            }
-        } else {
-            //bpf_dbg_printk("Looking up existing trace for connection");
-            //dbg_print_http_connection_info(conn);
+        bpf_dbg_printk("existing_tp %llx", existing_tp);
 
-            // For server requests, we first look for TCP info (setup by TC ingress) and then we fall back to black-box info.
-            tp_info_pid_t *existing_tp = bpf_map_lookup_elem(&incoming_trace_map, conn);
-            if (existing_tp) {
-                found_tp = 1;
-                bpf_dbg_printk("Found incoming (TCP) tp for server request");
-                __builtin_memcpy(
-                    tp_p->tp.trace_id, existing_tp->tp.trace_id, sizeof(tp_p->tp.trace_id));
-                __builtin_memcpy(
-                    tp_p->tp.parent_id, existing_tp->tp.span_id, sizeof(tp_p->tp.parent_id));
-                bpf_map_delete_elem(&incoming_trace_map, conn);
-            } else {
-                existing_tp = trace_info_for_connection(conn);
-
-                if (!disable_black_box_cp && correlated_requests(tp_p, existing_tp)) {
-                    found_tp = 1;
-                    bpf_dbg_printk("Found existing correlated tp for server request");
-                    __builtin_memcpy(
-                        tp_p->tp.trace_id, existing_tp->tp.trace_id, sizeof(tp_p->tp.trace_id));
-                    __builtin_memcpy(
-                        tp_p->tp.parent_id, existing_tp->tp.span_id, sizeof(tp_p->tp.parent_id));
-                }
-            }
+        if (!disable_black_box_cp && correlated_requests(tp, existing_tp)) {
+            found_tp = 1;
+            bpf_dbg_printk("Found existing correlated tp for server request");
+            __builtin_memcpy(tp->trace_id, existing_tp->tp.trace_id, sizeof(tp->trace_id));
+            __builtin_memcpy(tp->parent_id, existing_tp->tp.span_id, sizeof(tp->parent_id));
         }
     }
 
-    if (!found_tp) {
-        bpf_dbg_printk("Generating new traceparent id");
-        new_trace_id(&tp_p->tp);
-        __builtin_memset(tp_p->tp.parent_id, 0, sizeof(tp_p->tp.span_id));
-    } else {
-        bpf_dbg_printk("Using old traceparent id");
+    return found_tp;
+}
+
+static __always_inline u8 find_trace_for_client_request(pid_connection_info_t *p_conn,
+                                                        tp_info_t *tp) {
+    u8 found_tp = 0;
+    tp_info_pid_t *server_tp = find_parent_trace(p_conn);
+    if (server_tp && server_tp->valid && valid_trace(server_tp->tp.trace_id)) {
+        found_tp = 1;
+        bpf_dbg_printk("Found existing server tp for client call");
+        __builtin_memcpy(tp->trace_id, server_tp->tp.trace_id, sizeof(tp->trace_id));
+        __builtin_memcpy(tp->parent_id, server_tp->tp.span_id, sizeof(tp->parent_id));
     }
 
-    //unsigned char tp_buf[TP_MAX_VAL_LENGTH];
-    //make_tp_string(tp_buf, &tp_p->tp);
-    //bpf_dbg_printk("tp: %s", tp_buf);
-
-#ifdef BPF_TRACEPARENT
-    // The below buffer scan can be expensive on high volume of requests. We make it optional
-    // for customers to enable it. Off by default.
-    if (!capture_header_buffer) {
-        set_trace_info_for_connection(conn, tp_p);
-        server_or_client_trace(meta, conn, tp_p);
-        return;
-    }
-
-    unsigned char *buf = tp_char_buf();
-    if (buf) {
-        int buf_len = bytes_len;
-        bpf_clamp_umax(buf_len, TRACE_BUF_SIZE - 1);
-
-        bpf_probe_read(buf, buf_len, u_buf);
-        unsigned char *res = bpf_strstr_tp_loop(buf, buf_len);
-
-        if (res) {
-            bpf_dbg_printk("Found traceparent %s", res);
-            unsigned char *t_id = extract_trace_id(res);
-            unsigned char *s_id = extract_span_id(res);
-            unsigned char *f_id = extract_flags(res);
-
-            decode_hex(tp_p->tp.trace_id, t_id, TRACE_ID_CHAR_LEN);
-            decode_hex((unsigned char *)&tp_p->tp.flags, f_id, FLAGS_CHAR_LEN);
-            if (meta && meta->type == EVENT_HTTP_CLIENT) {
-                decode_hex(tp_p->tp.span_id, s_id, SPAN_ID_CHAR_LEN);
-            } else {
-                decode_hex(tp_p->tp.parent_id, s_id, SPAN_ID_CHAR_LEN);
-            }
-        } else {
-            bpf_dbg_printk("No traceparent, making a new trace_id", res);
-        }
-    } else {
-        return;
-    }
-#endif
-
-    set_trace_info_for_connection(conn, tp_p);
-    server_or_client_trace(meta, conn, tp_p);
+    return found_tp;
 }
 
 #endif

@@ -1,7 +1,6 @@
 package ebpfcommon
 
 import (
-	"fmt"
 	"strings"
 	"unsafe"
 
@@ -45,37 +44,13 @@ func isASCII(s string) bool {
 
 func detectSQLPayload(useHeuristics bool, b []byte) (string, string, string) {
 	if !useHeuristics {
-		if !isPostgres(b) || !isMySQL(b) {
+		if !isPostgres(b) && !isMySQL(b) {
 			return "", "", ""
 		}
 	}
 	op, table, sql := detectSQL(string(b))
 	if !validSQL(op, table) {
-		if isPostgresBindCommand(b) {
-			statement, portal, args, err := parsePostgresBindCommand(b)
-			if err == nil {
-				op = "BIND"
-				table = fmt.Sprintf("%s.%s", statement, portal)
-				for _, arg := range args {
-					if isASCII(arg) {
-						sql += arg + " "
-					}
-				}
-			}
-		} else if isPostgresQueryCommand(b) {
-			text, err := parsePosgresQueryCommand(b)
-			if err == nil {
-				query := asciiToUpper(text)
-				if strings.HasPrefix(query, "EXECUTE ") {
-					parts := strings.Split(text, " ")
-					op = parts[0]
-					if len(parts) > 1 {
-						table = parts[1]
-					}
-					sql = text
-				}
-			}
-		}
+		op, table, sql = postgresPreparedStatements(b)
 	}
 
 	return op, table, sql

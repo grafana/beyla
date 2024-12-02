@@ -3,11 +3,13 @@ package ebpfcommon
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
+	"strings"
 )
 
-const kPostgresBind = 'B'
-const kPostgresQuery = 'Q'
-const kPostgresCommand = 'C'
+const kPostgresBind = byte('B')
+const kPostgresQuery = byte('Q')
+const kPostgresCommand = byte('C')
 
 func isPostgres(b []byte) bool {
 	op, ok := isValidPostgresPayload(b)
@@ -129,4 +131,35 @@ func parsePosgresQueryCommand(buf []byte) (string, error) {
 	}
 
 	return string(buf[ptr:size]), nil
+}
+
+func postgresPreparedStatements(b []byte) (string, string, string) {
+	var op, table, sql string
+	if isPostgresBindCommand(b) {
+		statement, portal, args, err := parsePostgresBindCommand(b)
+		if err == nil {
+			op = "PREPARED STATEMENT"
+			table = fmt.Sprintf("%s.%s", statement, portal)
+			for _, arg := range args {
+				if isASCII(arg) {
+					sql += arg + " "
+				}
+			}
+		}
+	} else if isPostgresQueryCommand(b) {
+		text, err := parsePosgresQueryCommand(b)
+		if err == nil {
+			query := asciiToUpper(text)
+			if strings.HasPrefix(query, "EXECUTE ") {
+				parts := strings.Split(text, " ")
+				op = parts[0]
+				if len(parts) > 1 {
+					table = parts[1]
+				}
+				sql = text
+			}
+		}
+	}
+
+	return op, table, sql
 }

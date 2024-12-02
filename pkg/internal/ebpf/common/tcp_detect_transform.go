@@ -3,6 +3,7 @@ package ebpfcommon
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 
 	"github.com/cilium/ebpf/ringbuf"
 
@@ -35,10 +36,18 @@ func ReadTCPRequestIntoSpan(cfg *config.EPPFTracer, record *ringbuf.Record, filt
 
 	b := event.Buf[:l]
 
+	fmt.Printf("b: %v\n", b)
+	fmt.Printf("rb: %v\n", event.Rbuf[:rl])
+
 	// Check if we have a SQL statement
 	op, table, sql := detectSQLPayload(cfg.HeuristicSQLDetect, b)
 	if validSQL(op, table) {
 		return TCPToSQLToSpan(&event, op, table, sql), false, nil
+	} else {
+		op, table, sql = detectSQLPayload(cfg.HeuristicSQLDetect, event.Rbuf[:rl])
+		if validSQL(op, table) {
+			return TCPToSQLToSpan(&event, op, table, sql), false, nil
+		}
 	}
 
 	if maybeFastCGI(b) {

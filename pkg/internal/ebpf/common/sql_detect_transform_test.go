@@ -158,6 +158,13 @@ func TestPostgresQueryParsing(t *testing.T) {
 			table: "",
 			sql:   "",
 		},
+		{
+			name:  "MySQL prepared statement",
+			bytes: []byte{36, 0, 0, 0, 3, 0, 1, 69, 88, 69, 67, 85, 84, 69, 32, 109, 121, 95, 97, 99, 116, 111, 114, 115, 32, 85, 83, 73, 78, 71, 32, 64, 97, 99, 116, 111, 114, 95, 105, 100},
+			op:    "EXECUTE",
+			table: "my_actors",
+			sql:   "EXECUTE my_actors USING @actor_id",
+		},
 	} {
 		t.Run(ts.name, func(t *testing.T) {
 			op, table, sql := detectSQLPayload(false, ts.bytes)

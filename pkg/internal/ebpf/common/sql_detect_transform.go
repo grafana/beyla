@@ -50,7 +50,11 @@ func detectSQLPayload(useHeuristics bool, b []byte) (string, string, string) {
 	}
 	op, table, sql := detectSQL(string(b))
 	if !validSQL(op, table) {
-		op, table, sql = postgresPreparedStatements(b)
+		if isPostgres(b) {
+			op, table, sql = postgresPreparedStatements(b)
+		} else if isMySQL(b) {
+			op, table, sql = mysqlPreparedStatements(b)
+		}
 	}
 
 	return op, table, sql

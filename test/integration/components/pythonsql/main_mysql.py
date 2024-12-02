@@ -15,7 +15,7 @@ async def root():
             database="sakila",
             user="sakila",
             password="p_ssW0rd",
-            host="localhost",
+            host="sqlserver",
             port="3306"
         )
 
@@ -34,7 +34,7 @@ async def root():
             database="sakila",
             user="sakila",
             password="p_ssW0rd",
-            host="localhost",
+            host="sqlserver",
             port="3306"
         )
 
@@ -52,21 +52,21 @@ async def root():
     global conn
     global gCurr
     if conn is None:
-        conn = psycopg2.connect(
-            dbname="sqltest",
-            user="postgres",
-            password="postgres",
+        conn = mysql.connector.connect(
+            database="sakila",
+            user="sakila",
+            password="p_ssW0rd",
             host="sqlserver",
-            port="5432"
+            port="3306"
         )
 
     if gCurr is None:
         gCurr = conn.cursor()
         gCurr.execute(
-            "prepare my_contacts as "
-            "SELECT * from accounting.contacts WHERE id = $1")
-    
-    gCurr.execute("execute my_contacts (%s)", (1,))
+            "PREPARE my_actors FROM 'SELECT * FROM actor WHERE actor_id = ?'"
+        )    
+
+    gCurr.execute("EXECUTE my_actors USING @actor_id", {'actor_id': 1})
 
     row = gCurr.fetchone()
 

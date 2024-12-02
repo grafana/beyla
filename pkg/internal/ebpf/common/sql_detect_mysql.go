@@ -2,6 +2,7 @@ package ebpfcommon
 
 import (
 	"encoding/binary"
+	"strings"
 )
 
 type mySQLHdr struct {
@@ -48,4 +49,29 @@ func isValidMySQLPayload(b []byte) bool {
 	}
 
 	return hdr.command == kMySQLQuery || hdr.command == kMySQLPrepare || hdr.command == kMySQLExecute
+}
+
+func mysqlPreparedStatements(b []byte) (string, string, string) {
+	text := string(b)
+	query := asciiToUpper(text)
+	execIdx := strings.Index(query, "EXECUTE ")
+	if execIdx < 0 {
+		return "", "", ""
+	}
+
+	if execIdx >= len(text) {
+		return "", "", ""
+	}
+
+	text = text[execIdx:]
+
+	parts := strings.Split(text, " ")
+	op := parts[0]
+	var table string
+	if len(parts) > 1 {
+		table = parts[1]
+	}
+	sql := text
+
+	return op, table, sql
 }

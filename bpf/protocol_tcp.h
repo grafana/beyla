@@ -91,6 +91,12 @@ static __always_inline void handle_unknown_tcp_connection(pid_connection_info_t 
                                                           u8 ssl,
                                                           u16 orig_dport) {
     tcp_req_t *existing = bpf_map_lookup_elem(&ongoing_tcp_req, pid_conn);
+    if (existing) {
+        if (existing->direction == direction && existing->end_monotime_ns != 0) {
+            bpf_map_delete_elem(&ongoing_tcp_req, pid_conn);
+            existing = 0;
+        }
+    }
     if (!existing) {
         tcp_req_t *req = empty_tcp_req();
         if (req) {
@@ -100,6 +106,8 @@ static __always_inline void handle_unknown_tcp_connection(pid_connection_info_t 
             req->ssl = ssl;
             req->direction = direction;
             req->start_monotime_ns = bpf_ktime_get_ns();
+            req->end_monotime_ns = 0;
+            req->resp_len = 0;
             req->len = bytes_len;
             task_pid(&req->pid);
             bpf_probe_read(req->buf, K_TCP_MAX_LEN, u_buf);
@@ -113,18 +121,19 @@ static __always_inline void handle_unknown_tcp_connection(pid_connection_info_t 
             bpf_map_update_elem(&ongoing_tcp_req, pid_conn, req, BPF_ANY);
         }
     } else if (existing->direction != direction) {
-        existing->end_monotime_ns = bpf_ktime_get_ns();
-        existing->resp_len = bytes_len;
-        tcp_req_t *trace = bpf_ringbuf_reserve(&events, sizeof(tcp_req_t), 0);
-        if (trace) {
-            bpf_dbg_printk(
-                "Sending TCP trace %lx, response length %d", existing, existing->resp_len);
+        if (existing->end_monotime_ns == 0) {
+            existing->end_monotime_ns = bpf_ktime_get_ns();
+            existing->resp_len = bytes_len;
+            tcp_req_t *trace = bpf_ringbuf_reserve(&events, sizeof(tcp_req_t), 0);
+            if (trace) {
+                bpf_dbg_printk(
+                    "Sending TCP trace %lx, response length %d", existing, existing->resp_len);
 
-            __builtin_memcpy(trace, existing, sizeof(tcp_req_t));
-            bpf_probe_read(trace->rbuf, K_TCP_RES_LEN, u_buf);
-            bpf_ringbuf_submit(trace, get_flags());
+                __builtin_memcpy(trace, existing, sizeof(tcp_req_t));
+                bpf_probe_read(trace->rbuf, K_TCP_RES_LEN, u_buf);
+                bpf_ringbuf_submit(trace, get_flags());
+            }
         }
-        bpf_map_delete_elem(&ongoing_tcp_req, pid_conn);
     } else if (existing->len > 0 && existing->len < (K_TCP_MAX_LEN / 2)) {
         // Attempt to append one more packet. I couldn't convince the verifier
         // to use a variable (K_TCP_MAX_LEN-existing->len). If needed we may need

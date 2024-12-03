@@ -173,11 +173,10 @@ int BPF_UPROBE(uprobe_ssl_write, void *ssl, const void *buf, int num) {
     ssl_args_t args = {};
     args.buf = (u64)buf;
     args.ssl = (u64)ssl;
+    args.len_ptr = num;
 
     bpf_map_update_elem(&active_ssl_write_args, &id, &args, BPF_ANY);
 
-    // must be last in the function, doesn't return
-    handle_ssl_buf(ctx, id, &args, num, TCP_SEND);
     return 0;
 }
 
@@ -189,9 +188,17 @@ int BPF_URETPROBE(uretprobe_ssl_write, int ret) {
         return 0;
     }
 
-    bpf_dbg_printk("=== uretprobe SSL_write id=%d ===", id);
+    ssl_args_t *args = bpf_map_lookup_elem(&active_ssl_write_args, &id);
 
-    bpf_map_delete_elem(&active_ssl_write_args, &id);
+    bpf_dbg_printk("=== uretprobe SSL_write id=%d args %llx ===", id, args);
+
+    if (args) {
+        ssl_args_t saved = {};
+        __builtin_memcpy(&saved, args, sizeof(ssl_args_t));
+        bpf_map_delete_elem(&active_ssl_write_args, &id);
+        // must be last in the function, doesn't return
+        handle_ssl_buf(ctx, id, &saved, saved.len_ptr, TCP_SEND);
+    }
 
     return 0;
 }
@@ -209,11 +216,9 @@ int BPF_UPROBE(uprobe_ssl_write_ex, void *ssl, const void *buf, int num, size_t 
     ssl_args_t args = {};
     args.buf = (u64)buf;
     args.ssl = (u64)ssl;
+    args.len_ptr = num;
 
     bpf_map_update_elem(&active_ssl_write_args, &id, &args, BPF_ANY);
-
-    // must be last in the function, doesn't return
-    handle_ssl_buf(ctx, id, &args, num, TCP_SEND);
 
     return 0;
 }
@@ -226,9 +231,17 @@ int BPF_URETPROBE(uretprobe_ssl_write_ex, int ret) {
         return 0;
     }
 
-    bpf_dbg_printk("=== uretprobe SSL_write_ex id=%d ===", id);
+    ssl_args_t *args = bpf_map_lookup_elem(&active_ssl_write_args, &id);
 
-    bpf_map_delete_elem(&active_ssl_write_args, &id);
+    bpf_dbg_printk("=== uretprobe SSL_write_ex id=%d args %llx ===", id, args);
+
+    if (args) {
+        ssl_args_t saved = {};
+        __builtin_memcpy(&saved, args, sizeof(ssl_args_t));
+        bpf_map_delete_elem(&active_ssl_write_args, &id);
+        // must be last in the function, doesn't return
+        handle_ssl_buf(ctx, id, &saved, saved.len_ptr, TCP_SEND);
+    }
 
     return 0;
 }

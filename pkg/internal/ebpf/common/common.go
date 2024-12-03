@@ -14,6 +14,7 @@ import (
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
 
+	"github.com/grafana/beyla/pkg/config"
 	"github.com/grafana/beyla/pkg/internal/goexec"
 	"github.com/grafana/beyla/pkg/internal/request"
 )
@@ -86,7 +87,7 @@ var MisclassifiedEvents = make(chan MisclassifiedEvent)
 
 func ptlog() *slog.Logger { return slog.With("component", "ebpf.ProcessTracer") }
 
-func ReadBPFTraceAsSpan(record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {
+func ReadBPFTraceAsSpan(cfg *config.EPPFTracer, record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {
 	var eventType uint8
 
 	// we read the type first, depending on the type we decide what kind of record we have
@@ -103,7 +104,7 @@ func ReadBPFTraceAsSpan(record *ringbuf.Record, filter ServiceFilter) (request.S
 	case EventTypeKHTTP2:
 		return ReadHTTP2InfoIntoSpan(record, filter)
 	case EventTypeTCP:
-		return ReadTCPRequestIntoSpan(record, filter)
+		return ReadTCPRequestIntoSpan(cfg, record, filter)
 	case EventTypeGoSarama:
 		return ReadGoSaramaRequestIntoSpan(record)
 	case EventTypeGoRedis:

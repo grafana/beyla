@@ -12,6 +12,7 @@ import (
 	"github.com/cilium/ebpf/ringbuf"
 
 	"github.com/grafana/beyla/pkg/beyla"
+	"github.com/grafana/beyla/pkg/config"
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/request"
 )
@@ -78,7 +79,7 @@ func (p *BPFLogger) Run(ctx context.Context) {
 	)(ctx, nil)
 }
 
-func (p *BPFLogger) processLogEvent(record *ringbuf.Record, _ ebpfcommon.ServiceFilter) (request.Span, bool, error) {
+func (p *BPFLogger) processLogEvent(_ *config.EPPFTracer, record *ringbuf.Record, _ ebpfcommon.ServiceFilter) (request.Span, bool, error) {
 	var event BPFLogInfo
 
 	err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)

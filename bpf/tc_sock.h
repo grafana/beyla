@@ -193,26 +193,23 @@ static __always_inline u8 protocol_detector(struct sk_msg_md *msg,
     sort_connection_info(&s_args.p_conn.conn);
     s_args.p_conn.pid = pid_from_pid_tgid(id);
 
-    void *ssl = is_ssl_connection(id);
+    void *ssl = is_ssl_connection(id, &s_args.p_conn);
     if (s_args.size > 0) {
         if (!ssl) {
-            void *active_ssl = is_active_ssl(&s_args.p_conn);
-            if (!active_ssl) {
-                msg_buffer_t msg_buf = {
-                    .pos = 0,
-                };
-                bpf_probe_read_kernel(msg_buf.buf, FULL_BUF_SIZE, msg->data);
-                // We setup any call that looks like HTTP request to be extended.
-                // This must match exactly to what the decision will be for
-                // the kprobe program on tcp_sendmsg, which sets up the
-                // outgoing_trace_map data used by Traffic Control to write the
-                // actual 'Traceparent:...' string.
-                if (is_http_request_buf((const unsigned char *)msg_buf.buf)) {
-                    bpf_dbg_printk("Setting up request to be extended");
-                    bpf_map_update_elem(&msg_buffers, &e_key, &msg_buf, BPF_ANY);
+            msg_buffer_t msg_buf = {
+                .pos = 0,
+            };
+            bpf_probe_read_kernel(msg_buf.buf, FULL_BUF_SIZE, msg->data);
+            // We setup any call that looks like HTTP request to be extended.
+            // This must match exactly to what the decision will be for
+            // the kprobe program on tcp_sendmsg, which sets up the
+            // outgoing_trace_map data used by Traffic Control to write the
+            // actual 'Traceparent:...' string.
+            if (is_http_request_buf((const unsigned char *)msg_buf.buf)) {
+                bpf_dbg_printk("Setting up request to be extended");
+                bpf_map_update_elem(&msg_buffers, &e_key, &msg_buf, BPF_ANY);
 
-                    return 1;
-                }
+                return 1;
             }
         }
     }

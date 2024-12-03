@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/gavv/monotime"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 	trace2 "go.opentelemetry.io/otel/trace"
@@ -39,6 +40,14 @@ const (
 	grpcMetricsDetectPattern = "/opentelemetry.proto.collector.metrics.v1.MetricsService/Export"
 	tracesDetectPattern      = "/v1/traces"
 	grpcTracesDetectPattern  = "/opentelemetry.proto.collector.trace.v1.TraceService/Export"
+)
+
+type SQLKind uint8
+
+const (
+	DBGeneric SQLKind = iota + 1
+	DBPostgres
+	DBMySQL
 )
 
 func (t EventType) String() string {
@@ -148,6 +157,7 @@ type Span struct {
 	HostName       string         `json:"hostName"`
 	OtherNamespace string         `json:"-"`
 	Statement      string         `json:"-"`
+	SubType        int            `json:"-"`
 }
 
 func (s *Span) Inside(parent *Span) bool {
@@ -496,4 +506,17 @@ func (s *Span) IsExportTracesSpan() bool {
 
 func (s *Span) IsSelfReferenceSpan() bool {
 	return s.Peer == s.Host && (s.Service.UID.Namespace == s.OtherNamespace || s.OtherNamespace == "")
+}
+
+func (s *Span) DBSystem() attribute.KeyValue {
+	if s.Type == EventTypeSQLClient {
+		switch s.SubType {
+		case int(DBPostgres):
+			return semconv.DBSystemPostgreSQL
+		case int(DBMySQL):
+			return semconv.DBSystemMySQL
+		}
+	}
+
+	return semconv.DBSystemOtherSQL
 }

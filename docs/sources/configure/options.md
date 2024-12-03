@@ -504,7 +504,8 @@ generation of Beyla metrics.
 
 Configures the time interval after which an HTTP request is considered as a timeout.
 This option allows Beyla to report HTTP transactions which timeout and never return.
-To disable the automatic HTTP request timeout feature, set this option to zero, i.e. "0ms".
+To disable the automatic HTTP request timeout feature, set this option to zero, 
+that is "0ms".
 
 | YAML                    | Environment variable               | Type     | Default |
 | ----------------------- | ---------------------------------- | -------- | ------- |
@@ -513,6 +514,19 @@ To disable the automatic HTTP request timeout feature, set this option to zero, 
 Configures the HTTP tracer heuristic to send telemetry events as soon as a response is detected. 
 Setting this option reduces the accuracy of timings for requests with large responses, however,
 in high request volume scenarios this option will reduce the number of dropped trace events.
+
+| YAML                    | Environment variable               | Type     | Default |
+| ----------------------- | ---------------------------------- | -------- | ------- |
+| `heuristic_sql_detect`   | `BEYLA_HEURISTIC_SQL_DETECT`      | boolean  | (false) |
+
+By default, Beyla detects various SQL client requests through detection of their
+particular binary protocol format. However, oftentimes SQL database clients send their
+queries in a format where Beyla can detect the query statement without knowing
+the exact binary protocol. If you are using a database technology not directly supported
+by Beyla, you can enable this option to get database client telemetry. The option is
+not enabled by default, because it can create false positives, for example, an application
+sending SQL text for logging purposes through a TCP connection. Currently supported
+protocols where this option isn't needed are the Postgres and MySQL binary protocols.
 
 ## Configuration of metrics and traces attributes
 

@@ -282,55 +282,50 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
         sort_connection_info(&s_args.p_conn.conn);
         s_args.p_conn.pid = pid_from_pid_tgid(id);
 
-        void *ssl = is_ssl_connection(id);
+        void *ssl = is_ssl_connection(id, &s_args.p_conn);
         if (size > 0) {
             if (!ssl) {
-                void *active_ssl = is_active_ssl(&s_args.p_conn);
-                if (!active_ssl) {
-                    u8 *buf = iovec_memory();
-                    if (buf) {
-                        size = read_msghdr_buf(msg, buf, size);
-                        // If a sock_msg program is installed, this kprobe will fail to
-                        // read anything, because the data is in bvec physical pages. However,
-                        // the sock_msg will setup a buffer for us if this is the case. We
-                        // look up this buffer and use it instead of what we'd get from
-                        // calling read_msghdr_buf.
-                        if (!size) {
-                            msg_buffer_t *m_buf = bpf_map_lookup_elem(&msg_buffers, &e_key);
-                            bpf_dbg_printk("No size, m_buf[%llx]", m_buf);
-                            if (m_buf) {
-                                buf = m_buf->buf;
-                                // The buffer setup for us by a sock_msg program is always the
-                                // full buffer, but when we extend a packet to be able to inject
-                                // a Traceparent field, it will actually be split in 3 chunks:
-                                // [before the injected header],[70 bytes for 'Traceparent...'],[the rest].
-                                // We don't want the handle_buf_with_connection logic to run more than
-                                // once on the same data, so if we find a buf we send all of it to the
-                                // handle_buf_with_connection logic and then mark it as seen by making
-                                // m_buf->pos be the size of the buffer.
-                                if (!m_buf->pos) {
-                                    size = sizeof(m_buf->buf);
-                                    m_buf->pos = size;
-                                    bpf_dbg_printk("msg_buffer: size %d, buf[%s]", size, buf);
-                                } else {
-                                    size = 0;
-                                }
+                u8 *buf = iovec_memory();
+                if (buf) {
+                    size = read_msghdr_buf(msg, buf, size);
+                    // If a sock_msg program is installed, this kprobe will fail to
+                    // read anything, because the data is in bvec physical pages. However,
+                    // the sock_msg will setup a buffer for us if this is the case. We
+                    // look up this buffer and use it instead of what we'd get from
+                    // calling read_msghdr_buf.
+                    if (!size) {
+                        msg_buffer_t *m_buf = bpf_map_lookup_elem(&msg_buffers, &e_key);
+                        bpf_dbg_printk("No size, m_buf[%llx]", m_buf);
+                        if (m_buf) {
+                            buf = m_buf->buf;
+                            // The buffer setup for us by a sock_msg program is always the
+                            // full buffer, but when we extend a packet to be able to inject
+                            // a Traceparent field, it will actually be split in 3 chunks:
+                            // [before the injected header],[70 bytes for 'Traceparent...'],[the rest].
+                            // We don't want the handle_buf_with_connection logic to run more than
+                            // once on the same data, so if we find a buf we send all of it to the
+                            // handle_buf_with_connection logic and then mark it as seen by making
+                            // m_buf->pos be the size of the buffer.
+                            if (!m_buf->pos) {
+                                size = sizeof(m_buf->buf);
+                                m_buf->pos = size;
+                                bpf_dbg_printk("msg_buffer: size %d, buf[%s]", size, buf);
+                            } else {
+                                size = 0;
                             }
                         }
-                        if (size) {
-                            u64 sock_p = (u64)sk;
-                            bpf_map_update_elem(&active_send_args, &id, &s_args, BPF_ANY);
-                            bpf_map_update_elem(&active_send_sock_args, &sock_p, &s_args, BPF_ANY);
-
-                            // Logically last for !ssl.
-                            handle_buf_with_connection(
-                                ctx, &s_args.p_conn, buf, size, NO_SSL, TCP_SEND, orig_dport);
-                        } else {
-                            bpf_dbg_printk("can't find iovec ptr in msghdr, not tracking sendmsg");
-                        }
                     }
-                } else {
-                    bpf_dbg_printk("tcp_sendmsg for identified SSL connection, ignoring...");
+                    if (size) {
+                        u64 sock_p = (u64)sk;
+                        bpf_map_update_elem(&active_send_args, &id, &s_args, BPF_ANY);
+                        bpf_map_update_elem(&active_send_sock_args, &sock_p, &s_args, BPF_ANY);
+
+                        // Logically last for !ssl.
+                        handle_buf_with_connection(
+                            ctx, &s_args.p_conn, buf, size, NO_SSL, TCP_SEND, orig_dport);
+                    } else {
+                        bpf_dbg_printk("can't find iovec ptr in msghdr, not tracking sendmsg");
+                    }
                 }
             } else {
                 bpf_dbg_printk("tcp_sendmsg for identified SSL connection, ignoring...");
@@ -487,24 +482,19 @@ static __always_inline int return_recvmsg(void *ctx, u64 id, int copied_len) {
         sort_connection_info(&info.conn);
         info.pid = pid_from_pid_tgid(id);
 
-        void *ssl = is_ssl_connection(id);
+        void *ssl = is_ssl_connection(id, &info);
 
         if (!ssl) {
-            void *active_ssl = is_active_ssl(&info);
-            if (!active_ssl) {
-                u8 *buf = iovec_memory();
-                if (buf) {
-                    copied_len = read_iovec_ctx(iov_ctx, buf, copied_len);
-                    if (copied_len) {
-                        // doesn't return must be logically last statement
-                        handle_buf_with_connection(
-                            ctx, &info, buf, copied_len, NO_SSL, TCP_RECV, orig_dport);
-                    } else {
-                        bpf_dbg_printk("Not copied anything");
-                    }
+            u8 *buf = iovec_memory();
+            if (buf) {
+                copied_len = read_iovec_ctx(iov_ctx, buf, copied_len);
+                if (copied_len) {
+                    // doesn't return must be logically last statement
+                    handle_buf_with_connection(
+                        ctx, &info, buf, copied_len, NO_SSL, TCP_RECV, orig_dport);
+                } else {
+                    bpf_dbg_printk("Not copied anything");
                 }
-            } else {
-                bpf_dbg_printk("tcp_recvmsg for an identified SSL connection, ignoring...");
             }
         } else {
             bpf_dbg_printk("tcp_recvmsg for an identified SSL connection, ignoring...");
@@ -680,7 +670,6 @@ int BPF_KPROBE(kprobe_sys_exit, int status) {
     if (s_args) {
         bpf_dbg_printk("Checking if we need to finish the request per thread id");
         finish_possible_delayed_http_request(&s_args->p_conn);
-        bpf_map_delete_elem(&active_ssl_connections, &s_args->p_conn);
     }
 
     bpf_map_delete_elem(&clone_map, &task.p_key);

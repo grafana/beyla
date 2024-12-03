@@ -11,6 +11,7 @@ expected:
     - traceql: '{ .messaging.operation.type = "process" }'
       spans:
         - name: 'my-topic process'
+          allow-duplicates: true
           attributes:
             messaging.destination.name: my-topic
             messaging.operation.type: process

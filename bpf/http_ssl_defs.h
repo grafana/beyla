@@ -187,15 +187,14 @@ handle_ssl_buf(void *ctx, u64 id, ssl_args_t *args, int bytes_len, u8 direction)
         }
 
         if (conn) {
-            // bpf_dbg_printk("conn pid %d", conn.pid);
-            // dbg_print_http_connection_info(&conn->p_conn.conn);
+            bpf_dbg_printk("SSL conn");
+            dbg_print_http_connection_info(&conn->p_conn.conn);
 
             // unsigned char buf[48];
             // bpf_probe_read(buf, 48, (void *)args->buf);
             // for (int i=0; i < 48; i++) {
             //     bpf_dbg_printk("%x ", buf[i]);
             // }
-            bpf_map_update_elem(&active_ssl_connections, &conn->p_conn, &ssl_ptr, BPF_ANY);
 
             // We should attempt to clean up the server trace immediately. The cleanup information
             // is keyed of the *ssl, so when it's delayed we might have different *ssl on the same
@@ -215,7 +214,11 @@ handle_ssl_buf(void *ctx, u64 id, ssl_args_t *args, int bytes_len, u8 direction)
     }
 }
 
-static __always_inline void *is_ssl_connection(u64 id) {
+static __always_inline void set_active_ssl_connection(pid_connection_info_t *conn, void *ssl) {
+    bpf_map_update_elem(&active_ssl_connections, conn, &ssl, BPF_ANY);
+}
+
+static __always_inline void *is_ssl_connection(u64 id, pid_connection_info_t *conn) {
     void *ssl = 0;
     // Checks if it's sandwitched between active SSL handshake, read or write uprobe/uretprobe
     void **s = bpf_map_lookup_elem(&active_ssl_handshakes, &id);
@@ -231,11 +234,13 @@ static __always_inline void *is_ssl_connection(u64 id) {
         }
     }
 
-    return ssl;
-}
+    if (!ssl) {
+        return bpf_map_lookup_elem(&active_ssl_connections, conn);
+    } else {
+        set_active_ssl_connection(conn, ssl);
+    }
 
-static __always_inline void *is_active_ssl(pid_connection_info_t *conn) {
-    return bpf_map_lookup_elem(&active_ssl_connections, conn);
+    return ssl;
 }
 
 #endif

@@ -1,4 +1,4 @@
-FROM ubuntu:latest AS base
+FROM ubuntu:oracular AS base
 
 ARG GOVERSION="1.23.3"
 
@@ -10,16 +10,6 @@ RUN echo "using TARGETARCH: $TARGETARCH"
 RUN apt update -y
 RUN apt install -y curl git linux-headers-generic make llvm clang unzip libbpf-dev libbpf-tools linux-libc-dev linux-bpf-dev
 RUN apt clean
-
-# fix some arch-dependant missing include files
-FROM base AS base-arm64
-RUN ln -s /usr/include/aarch64-linux-gnu/asm /usr/include/asm
-
-FROM base AS base-amd64
-RUN ln -s /usr/include/x86_64-linux-gnu/asm /usr/include/asm
-
-# keeps going by picking up the arch-specific base
-FROM base-$TARGETARCH AS builder
 
 VOLUME ["/src"]
 
@@ -46,6 +36,16 @@ COPY go.mod go.mod
 RUN make bpf2go
 
 WORKDIR /src
+
+# fix some arch-dependant missing include files
+FROM base AS base-arm64
+ENV C_INCLUDE_PATH=/usr/include/aarch64-linux-gnu
+
+FROM base AS base-amd64
+ENV C_INCLUDE_PATH=/usr/include/x86_64-linux-gnu
+
+# Picks up the arch-specific base
+FROM base-$TARGETARCH AS builder
 
 ENTRYPOINT ["make", "generate"]
 

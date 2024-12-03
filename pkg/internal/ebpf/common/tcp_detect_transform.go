@@ -3,7 +3,6 @@ package ebpfcommon
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 
 	"github.com/cilium/ebpf/ringbuf"
 
@@ -35,9 +34,6 @@ func ReadTCPRequestIntoSpan(cfg *config.EPPFTracer, record *ringbuf.Record, filt
 	}
 
 	b := event.Buf[:l]
-
-	fmt.Printf("b: %v\n", b)
-	fmt.Printf("rb: %v\n", event.Rbuf[:rl])
 
 	// Check if we have a SQL statement
 	op, table, sql, kind := detectSQLPayload(cfg.HeuristicSQLDetect, b)

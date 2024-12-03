@@ -136,7 +136,7 @@ func buildCommonContextInfo(
 		ctxInfo.HostID = config.Attributes.HostID.Override
 	}
 	switch {
-	case config.InternalMetrics.OTELMetrics:
+	case config.InternalMetrics.Exporter == imetrics.InternalMetricsExporterOTEL:
 		var err error
 		config.Metrics.Grafana = &config.Grafana.OTLP
 		slog.Debug("reporting internal metrics as OpenTelemetry")
@@ -144,7 +144,7 @@ func buildCommonContextInfo(
 		if err != nil {
 			return nil, fmt.Errorf("can't start OpenTelemetry metrics: %w", err)
 		}
-	case config.InternalMetrics.Prometheus.Port != 0:
+	case config.InternalMetrics.Exporter == imetrics.InternalMetricsExporterPrometheus || config.InternalMetrics.Prometheus.Port != 0:
 		slog.Debug("reporting internal metrics as Prometheus")
 		ctxInfo.Metrics = imetrics.NewPrometheusReporter(&config.InternalMetrics.Prometheus, promMgr, nil)
 		// Prometheus manager also has its own internal metrics, so we need to pass the imetrics reporter

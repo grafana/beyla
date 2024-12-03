@@ -174,6 +174,7 @@ network:
 				RequestSizeHistogram: []float64{0, 10, 20, 22},
 			}},
 		InternalMetrics: imetrics.Config{
+			Exporter: imetrics.InternalMetricsExporterPrometheus,
 			Prometheus: imetrics.PrometheusConfig{
 				Port: 3210,
 				Path: "/internal/metrics",

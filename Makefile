@@ -123,12 +123,15 @@ install-hooks:
 		echo "Pre-commit hook installed."; \
 	fi
 
+.PHONY: bpf2go
+bpf2go:
+	$(call go-install-tool,$(BPF2GO),github.com/cilium/ebpf/cmd/bpf2go,$(call gomod-version,cilium/ebpf))
+
 .PHONY: prereqs
-prereqs: install-hooks
+prereqs: install-hooks bpf2go
 	@echo "### Check if prerequisites are met, and installing missing dependencies"
 	mkdir -p $(TEST_OUTPUT)/run
 	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint,v1.61.0)
-	$(call go-install-tool,$(BPF2GO),github.com/cilium/ebpf/cmd/bpf2go,$(call gomod-version,cilium/ebpf))
 	$(call go-install-tool,$(GO_OFFSETS_TRACKER),github.com/grafana/go-offsets-tracker/cmd/go-offsets-tracker,$(call gomod-version,grafana/go-offsets-tracker))
 	$(call go-install-tool,$(GOIMPORTS_REVISER),github.com/incu6us/goimports-reviser/v3,v3.6.4)
 	$(call go-install-tool,$(GO_LICENSES),github.com/google/go-licenses,v1.6.0)
@@ -183,7 +186,7 @@ update-offsets: prereqs
 generate: export BPF_CLANG := $(CLANG)
 generate: export BPF_CFLAGS := $(CFLAGS)
 generate: export BPF2GO := $(BPF2GO)
-generate: prereqs
+generate: bpf2go
 	@echo "### Generating BPF Go bindings"
 	go generate ./pkg/...
 

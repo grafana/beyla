@@ -8,7 +8,7 @@ RUN echo "using TARGETARCH: $TARGETARCH"
 
 # Installs dependencies that are required to compile eBPF programs
 RUN apt update -y
-RUN apt install -y curl git linux-headers-generic make llvm clang unzip libbpf-dev libbpf-tools
+RUN apt install -y curl git linux-headers-generic make llvm clang unzip libbpf-dev libbpf-tools linux-libc-dev linux-bpf-dev
 RUN apt clean
 
 # fix some arch-dependant missing include files
@@ -43,7 +43,7 @@ WORKDIR /tmp
 COPY Makefile Makefile
 COPY go.mod go.mod
 
-RUN make prereqs
+RUN make bpf2go
 
 WORKDIR /src
 

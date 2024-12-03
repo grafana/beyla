@@ -1,6 +1,6 @@
-FROM ubuntu:latest
+FROM ubuntu:latest AS base
 
-ARG GOVERSION="1.23.0"
+ARG GOVERSION="1.23.3"
 
 ARG TARGETARCH
 
@@ -8,8 +8,18 @@ RUN echo "using TARGETARCH: $TARGETARCH"
 
 # Installs dependencies that are required to compile eBPF programs
 RUN apt update -y
-RUN apt install -y curl git linux-headers-generic make llvm clang unzip
+RUN apt install -y curl git linux-headers-generic make llvm clang unzip libbpf-dev libbpf-tools
 RUN apt clean
+
+# fix some arch-dependant missing include files
+FROM base AS base-arm64
+RUN ln -s /usr/include/aarch64-linux-gnu/asm /usr/include/asm
+
+FROM base AS base-amd64
+RUN ln -s /usr/include/x86_64-linux-gnu/asm /usr/include/asm
+
+# keeps going by picking up the arch-specific base
+FROM base-$TARGETARCH AS builder
 
 VOLUME ["/src"]
 

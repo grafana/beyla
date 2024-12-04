@@ -706,7 +706,7 @@ Higher values reduce the load on the Kubernetes API service.
 YAML section `routes`.
 
 This section can be only configured via the YAML file. If no `routes` section is provided in
-the YAML file, a default routes' pipeline stage will be created and filtered with the `wildcard`
+the YAML file, a default routes' pipeline stage will be created and filtered with the `heuristic`
 routes decorator.
 
 | YAML       | Environment variable | Type            | Default |

@@ -133,6 +133,8 @@ type bpfPidKeyT struct {
 type bpfRecvArgsT struct {
 	SockPtr  uint64
 	IovecCtx [40]uint8
+	Type     uint8
+	_        [7]byte
 }
 
 type bpfSendArgsT struct {
@@ -253,13 +255,22 @@ type bpfSpecs struct {
 type bpfProgramSpecs struct {
 	AsyncReset              *ebpf.ProgramSpec `ebpf:"async_reset"`
 	EmitAsyncInit           *ebpf.ProgramSpec `ebpf:"emit_async_init"`
+	KprobeCreateUnixSocket  *ebpf.ProgramSpec `ebpf:"kprobe_create_unix_socket"`
+	KprobeDoWritev          *ebpf.ProgramSpec `ebpf:"kprobe_do_writev"`
+	KprobeKsysRead          *ebpf.ProgramSpec `ebpf:"kprobe_ksys_read"`
+	KprobeKsysWrite         *ebpf.ProgramSpec `ebpf:"kprobe_ksys_write"`
+	KprobeSysAccept4        *ebpf.ProgramSpec `ebpf:"kprobe_sys_accept4"`
+	KprobeSysClose          *ebpf.ProgramSpec `ebpf:"kprobe_sys_close"`
+	KprobeSysConnect        *ebpf.ProgramSpec `ebpf:"kprobe_sys_connect"`
 	KprobeSysExit           *ebpf.ProgramSpec `ebpf:"kprobe_sys_exit"`
+	KprobeSysSocketCreate   *ebpf.ProgramSpec `ebpf:"kprobe_sys_socket_create"`
 	KprobeTcpCleanupRbuf    *ebpf.ProgramSpec `ebpf:"kprobe_tcp_cleanup_rbuf"`
 	KprobeTcpClose          *ebpf.ProgramSpec `ebpf:"kprobe_tcp_close"`
 	KprobeTcpConnect        *ebpf.ProgramSpec `ebpf:"kprobe_tcp_connect"`
 	KprobeTcpRcvEstablished *ebpf.ProgramSpec `ebpf:"kprobe_tcp_rcv_established"`
 	KprobeTcpRecvmsg        *ebpf.ProgramSpec `ebpf:"kprobe_tcp_recvmsg"`
 	KprobeTcpSendmsg        *ebpf.ProgramSpec `ebpf:"kprobe_tcp_sendmsg"`
+	KretprobeKsysRead       *ebpf.ProgramSpec `ebpf:"kretprobe_ksys_read"`
 	KretprobeSockAlloc      *ebpf.ProgramSpec `ebpf:"kretprobe_sock_alloc"`
 	KretprobeSysAccept4     *ebpf.ProgramSpec `ebpf:"kretprobe_sys_accept4"`
 	KretprobeSysClone       *ebpf.ProgramSpec `ebpf:"kretprobe_sys_clone"`
@@ -287,6 +298,7 @@ type bpfProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfMapSpecs struct {
+	AcceptUnixFds           *ebpf.MapSpec `ebpf:"accept_unix_fds"`
 	ActiveAcceptArgs        *ebpf.MapSpec `ebpf:"active_accept_args"`
 	ActiveConnectArgs       *ebpf.MapSpec `ebpf:"active_connect_args"`
 	ActiveNodejsIds         *ebpf.MapSpec `ebpf:"active_nodejs_ids"`
@@ -326,6 +338,7 @@ type bpfMapSpecs struct {
 	TpCharBufMem            *ebpf.MapSpec `ebpf:"tp_char_buf_mem"`
 	TpInfoMem               *ebpf.MapSpec `ebpf:"tp_info_mem"`
 	TraceMap                *ebpf.MapSpec `ebpf:"trace_map"`
+	UnixFds                 *ebpf.MapSpec `ebpf:"unix_fds"`
 	ValidPids               *ebpf.MapSpec `ebpf:"valid_pids"`
 }
 
@@ -348,6 +361,7 @@ func (o *bpfObjects) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfMaps struct {
+	AcceptUnixFds           *ebpf.Map `ebpf:"accept_unix_fds"`
 	ActiveAcceptArgs        *ebpf.Map `ebpf:"active_accept_args"`
 	ActiveConnectArgs       *ebpf.Map `ebpf:"active_connect_args"`
 	ActiveNodejsIds         *ebpf.Map `ebpf:"active_nodejs_ids"`
@@ -387,11 +401,13 @@ type bpfMaps struct {
 	TpCharBufMem            *ebpf.Map `ebpf:"tp_char_buf_mem"`
 	TpInfoMem               *ebpf.Map `ebpf:"tp_info_mem"`
 	TraceMap                *ebpf.Map `ebpf:"trace_map"`
+	UnixFds                 *ebpf.Map `ebpf:"unix_fds"`
 	ValidPids               *ebpf.Map `ebpf:"valid_pids"`
 }
 
 func (m *bpfMaps) Close() error {
 	return _BpfClose(
+		m.AcceptUnixFds,
 		m.ActiveAcceptArgs,
 		m.ActiveConnectArgs,
 		m.ActiveNodejsIds,
@@ -431,6 +447,7 @@ func (m *bpfMaps) Close() error {
 		m.TpCharBufMem,
 		m.TpInfoMem,
 		m.TraceMap,
+		m.UnixFds,
 		m.ValidPids,
 	)
 }
@@ -441,13 +458,22 @@ func (m *bpfMaps) Close() error {
 type bpfPrograms struct {
 	AsyncReset              *ebpf.Program `ebpf:"async_reset"`
 	EmitAsyncInit           *ebpf.Program `ebpf:"emit_async_init"`
+	KprobeCreateUnixSocket  *ebpf.Program `ebpf:"kprobe_create_unix_socket"`
+	KprobeDoWritev          *ebpf.Program `ebpf:"kprobe_do_writev"`
+	KprobeKsysRead          *ebpf.Program `ebpf:"kprobe_ksys_read"`
+	KprobeKsysWrite         *ebpf.Program `ebpf:"kprobe_ksys_write"`
+	KprobeSysAccept4        *ebpf.Program `ebpf:"kprobe_sys_accept4"`
+	KprobeSysClose          *ebpf.Program `ebpf:"kprobe_sys_close"`
+	KprobeSysConnect        *ebpf.Program `ebpf:"kprobe_sys_connect"`
 	KprobeSysExit           *ebpf.Program `ebpf:"kprobe_sys_exit"`
+	KprobeSysSocketCreate   *ebpf.Program `ebpf:"kprobe_sys_socket_create"`
 	KprobeTcpCleanupRbuf    *ebpf.Program `ebpf:"kprobe_tcp_cleanup_rbuf"`
 	KprobeTcpClose          *ebpf.Program `ebpf:"kprobe_tcp_close"`
 	KprobeTcpConnect        *ebpf.Program `ebpf:"kprobe_tcp_connect"`
 	KprobeTcpRcvEstablished *ebpf.Program `ebpf:"kprobe_tcp_rcv_established"`
 	KprobeTcpRecvmsg        *ebpf.Program `ebpf:"kprobe_tcp_recvmsg"`
 	KprobeTcpSendmsg        *ebpf.Program `ebpf:"kprobe_tcp_sendmsg"`
+	KretprobeKsysRead       *ebpf.Program `ebpf:"kretprobe_ksys_read"`
 	KretprobeSockAlloc      *ebpf.Program `ebpf:"kretprobe_sock_alloc"`
 	KretprobeSysAccept4     *ebpf.Program `ebpf:"kretprobe_sys_accept4"`
 	KretprobeSysClone       *ebpf.Program `ebpf:"kretprobe_sys_clone"`
@@ -475,13 +501,22 @@ func (p *bpfPrograms) Close() error {
 	return _BpfClose(
 		p.AsyncReset,
 		p.EmitAsyncInit,
+		p.KprobeCreateUnixSocket,
+		p.KprobeDoWritev,
+		p.KprobeKsysRead,
+		p.KprobeKsysWrite,
+		p.KprobeSysAccept4,
+		p.KprobeSysClose,
+		p.KprobeSysConnect,
 		p.KprobeSysExit,
+		p.KprobeSysSocketCreate,
 		p.KprobeTcpCleanupRbuf,
 		p.KprobeTcpClose,
 		p.KprobeTcpConnect,
 		p.KprobeTcpRcvEstablished,
 		p.KprobeTcpRecvmsg,
 		p.KprobeTcpSendmsg,
+		p.KretprobeKsysRead,
 		p.KretprobeSockAlloc,
 		p.KretprobeSysAccept4,
 		p.KretprobeSysClone,

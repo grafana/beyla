@@ -8,6 +8,8 @@
 #include "k_tracer_defs.h"
 #include "http_ssl_defs.h"
 #include "pin_internal.h"
+#include "k_send_receive.h"
+#include "k_unix_sock.h"
 
 // Temporary tracking of accept arguments
 struct {
@@ -25,34 +27,6 @@ struct {
     __type(value, sock_args_t);
 } active_connect_args SEC(".maps");
 
-// Temporary tracking of tcp_recvmsg arguments
-typedef struct recv_args {
-    u64 sock_ptr; // linux sock or socket address
-    u8 iovec_ctx[sizeof(iovec_iter_ctx)];
-    u8 type;
-} recv_args_t;
-
-struct {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
-    __type(key, u64);
-    __type(value, recv_args_t);
-} active_recv_args SEC(".maps");
-
-struct {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
-    __type(key, u64);           // pid_tid
-    __type(value, send_args_t); // size to be sent
-} active_send_args SEC(".maps");
-
-struct {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
-    __type(key, u64);           // *sock
-    __type(value, send_args_t); // size to be sent
-} active_send_sock_args SEC(".maps");
-
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(
@@ -62,24 +36,6 @@ struct {
     __uint(max_entries, 1024);
     __uint(pinning, BEYLA_PIN_INTERNAL);
 } tcp_connection_map SEC(".maps");
-
-struct {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
-    __type(key, u64);
-    __type(value, int);
-} accept_unix_fds SEC(".maps");
-
-struct {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
-    __type(key, int);
-    __type(value, int);
-} unix_fds SEC(".maps");
-
-static __always_inline void print_sa_data(char *sa_data) {
-    bpf_printk("%llx:%llx", *((u64 *)sa_data), *((u64 *)(sa_data + 8)));
-}
 
 // Used by accept to grab the sock details
 SEC("kretprobe/sock_alloc")
@@ -187,20 +143,6 @@ int BPF_KRETPROBE(kretprobe_sys_accept4, uint fd) {
 
         bpf_map_update_elem(
             &pid_tid_to_conn, &id, &info, BPF_ANY); // to support SSL on missing handshake
-    } else {
-        bpf_dbg_printk("Unix socket?");
-
-        struct sockaddr *addr = (struct sockaddr *)args->addr;
-
-        short unsigned int sa_family;
-
-        bpf_probe_read(&sa_family, sizeof(short unsigned int), &addr->sa_family);
-
-        bpf_printk("=== connect 4 sock_family=%d fd %d===", sa_family, fd);
-
-        char sa_data[16];
-        bpf_probe_read(&sa_data, sizeof(sa_data), addr->sa_data);
-        print_sa_data(sa_data);
     }
 
 cleanup:
@@ -275,20 +217,6 @@ int BPF_KRETPROBE(kretprobe_sys_connect, int fd) {
 
         bpf_map_update_elem(
             &client_connect_info, &info.p_conn, &t_key, BPF_ANY); // Support connection thread pools
-    } else {
-        bpf_dbg_printk("Connect unix socket?");
-
-        struct sockaddr *addr = (struct sockaddr *)args->addr;
-
-        short unsigned int sa_family;
-
-        bpf_probe_read(&sa_family, sizeof(short unsigned int), &addr->sa_family);
-
-        bpf_printk("=== connect 4 sock_family=%d fd %d===", sa_family, fd);
-
-        char sa_data[16];
-        bpf_probe_read(&sa_data, sizeof(sa_data), addr->sa_data);
-        print_sa_data(sa_data);
     }
 
 cleanup:
@@ -425,22 +353,6 @@ int BPF_KRETPROBE(kretprobe_tcp_sendmsg, int sent_len) {
     return 0;
 }
 
-static __always_inline void ensure_sent_event(u64 id, u64 *sock_p) {
-    if (high_request_volume) {
-        return;
-    }
-    send_args_t *s_args = bpf_map_lookup_elem(&active_send_args, &id);
-    if (s_args) {
-        bpf_dbg_printk("Checking if we need to finish the request per thread id");
-        finish_possible_delayed_http_request(&s_args->p_conn);
-    } // see if we match on another thread, but same sock *
-    s_args = bpf_map_lookup_elem(&active_send_sock_args, sock_p);
-    if (s_args) {
-        bpf_dbg_printk("Checking if we need to finish the request per socket");
-        finish_possible_delayed_http_request(&s_args->p_conn);
-    }
-}
-
 SEC("kprobe/tcp_close")
 int BPF_KPROBE(kprobe_tcp_close, struct sock *sk, long timeout) {
     u64 id = bpf_get_current_pid_tgid();
@@ -490,7 +402,6 @@ int BPF_KPROBE(
 
     recv_args_t args = {
         .sock_ptr = (u64)sk,
-        .type = AF_INET,
     };
 
     get_iovec_ctx((iovec_iter_ctx *)&args.iovec_ctx, msg);
@@ -724,217 +635,6 @@ int BPF_KPROBE(kprobe_sys_exit, int status) {
     // This won't delete trace ids for traces with extra_id, like NodeJS. But,
     // we expect that it doesn't matter, since NodeJS main thread won't exit.
     bpf_map_delete_elem(&server_traces, &task);
-
-    return 0;
-}
-
-SEC("kprobe/__sys_accept4")
-int BPF_KPROBE(kprobe_sys_accept4, uint fd, struct sockaddr *addr) {
-    u64 id = bpf_get_current_pid_tgid();
-
-    if (!valid_pid(id)) {
-        return 0;
-    }
-
-    bpf_dbg_printk("=== accept 4 %d ===", id);
-
-    sock_args_t args = {};
-
-    args.addr = (u64)addr;
-    args.accept_time = bpf_ktime_get_ns();
-
-    // The socket->sock is not valid until accept finishes, therefore
-    // we don't extract ->sock here, we remember the address of socket
-    // and parse in sys_accept
-    bpf_map_update_elem(&active_accept_args, &id, &args, BPF_ANY);
-
-    return 0;
-}
-
-SEC("kprobe/sys_connect")
-int kprobe_sys_connect(struct pt_regs *ctx) {
-    u64 id = bpf_get_current_pid_tgid();
-
-    if (!valid_pid(id)) {
-        return 0;
-    }
-
-    struct pt_regs *__ctx = (struct pt_regs *)PT_REGS_PARM1(ctx);
-    struct sockaddr *addr;
-    bpf_probe_read(&addr, sizeof(void *), (void *)&PT_REGS_PARM2(__ctx));
-    int fd = 0;
-    bpf_probe_read(&fd, sizeof(int), (void *)&PT_REGS_PARM1(__ctx));
-
-    if (!addr) {
-        return 0;
-    }
-
-    bpf_dbg_printk("=== sys_connect %d, pid=%d ===", fd, id);
-
-    sock_args_t args = {};
-
-    args.addr = (u64)addr;
-    args.accept_time = bpf_ktime_get_ns();
-
-    bpf_map_update_elem(&active_connect_args, &id, &args, BPF_ANY);
-
-    return 0;
-}
-
-SEC("kprobe/sys_close")
-int kprobe_sys_close(struct pt_regs *ctx) {
-    u64 id = bpf_get_current_pid_tgid();
-
-    if (!valid_pid(id)) {
-        return 0;
-    }
-
-    struct pt_regs *__ctx = (struct pt_regs *)PT_REGS_PARM1(ctx);
-    int fd = 0;
-    bpf_probe_read(&fd, sizeof(int), (void *)&PT_REGS_PARM1(__ctx));
-
-    bpf_dbg_printk("=== sys_close %d, pid=%d ===", fd, id);
-    bpf_map_delete_elem(&unix_fds, &fd);
-
-    return 0;
-}
-
-SEC("kprobe/ksys_read")
-int BPF_KPROBE(kprobe_ksys_read, uint fd, char *buf, size_t count) {
-    u64 id = bpf_get_current_pid_tgid();
-
-    if (!valid_pid(id)) {
-        return 0;
-    }
-
-    // if (!bpf_map_lookup_elem(&unix_fds, &fd)) {
-    //     // Bail early if we aren't tracking this fd.
-    //     return 0;
-    // }
-
-    bpf_dbg_printk("=== unix socket read fd %d ===", fd);
-
-    recv_args_t args = {
-        .sock_ptr = (u64)buf,
-        .type = AF_UNIX,
-    };
-
-    bpf_map_update_elem(&active_recv_args, &id, &args, BPF_ANY);
-
-    return 0;
-}
-
-SEC("kretprobe/ksys_read")
-int BPF_KRETPROBE(kretprobe_ksys_read, size_t count) {
-    u64 id = bpf_get_current_pid_tgid();
-
-    if (!valid_pid(id)) {
-        return 0;
-    }
-
-    bpf_dbg_printk("=== read end size %d ===", count);
-
-    u8 *buf = 0;
-
-    if (((int)count) > 0) {
-        recv_args_t *args = bpf_map_lookup_elem(&active_recv_args, &id);
-        if (!args || args->type != AF_UNIX) {
-            return 0;
-        }
-
-        buf = (u8 *)args->sock_ptr;
-    }
-
-    bpf_map_delete_elem(&active_recv_args, &id);
-
-    if (buf) {
-        pid_connection_info_t conn = {
-            .conn = {0},
-            .pid = pid_from_pid_tgid(id),
-        };
-        handle_buf_with_connection(ctx, &conn, (void *)buf, count, NO_SSL, TCP_RECV, 0);
-    }
-
-    return 0;
-}
-
-SEC("kprobe/ksys_write")
-int BPF_KPROBE(kprobe_ksys_write, uint fd, const char *buf, size_t count) {
-    u64 id = bpf_get_current_pid_tgid();
-
-    if (!valid_pid(id)) {
-        return 0;
-    }
-
-    bpf_dbg_printk("=== write fd=%d size %d ===", fd, count);
-
-    if (buf) {
-        pid_connection_info_t conn = {
-            .conn = {0},
-            .pid = pid_from_pid_tgid(id),
-        };
-        handle_buf_with_connection(ctx, &conn, (void *)buf, count, NO_SSL, TCP_SEND, 0);
-    }
-
-    return 0;
-}
-
-SEC("kprobe/do_writev")
-int BPF_KPROBE(kprobe_do_writev, uint fd, const struct iovec *vec, u64 vlen, u32 flags) {
-    u64 id = bpf_get_current_pid_tgid();
-
-    if (!valid_pid(id)) {
-        return 0;
-    }
-
-    bpf_dbg_printk("=== write_v fd=%d size %d ===", fd, vlen);
-
-    struct iovec vec_cpy = {};
-    bpf_probe_read(&vec_cpy, sizeof(struct iovec), vec);
-
-    int size = vec_cpy.iov_len;
-
-    bpf_dbg_printk("read iovec, size = %d\n", size)
-
-        if (size) {
-        pid_connection_info_t conn = {
-            .conn = {0},
-            .pid = pid_from_pid_tgid(id),
-        };
-        handle_buf_with_connection(ctx, &conn, (void *)vec_cpy.iov_base, size, NO_SSL, TCP_SEND, 0);
-    }
-
-    return 0;
-}
-
-SEC("kprobe/security_socket_post_create")
-int BPF_KPROBE(kprobe_sys_socket_create, struct socket *socket) {
-    u64 id = bpf_get_current_pid_tgid();
-
-    if (!valid_pid(id)) {
-        return 0;
-    }
-
-    bpf_dbg_printk("=== sys socket create %d ===", id);
-
-    if (socket) {
-        unsigned long inode_number;
-        BPF_CORE_READ_INTO(&inode_number, socket, sk, sk_socket, file, f_inode, i_ino);
-        bpf_printk("***** ino %d *****", inode_number);
-    }
-
-    return 0;
-}
-
-SEC("kprobe/os_create_unix_socket")
-int BPF_KPROBE(kprobe_create_unix_socket) {
-    u64 id = bpf_get_current_pid_tgid();
-
-    if (!valid_pid(id)) {
-        return 0;
-    }
-
-    bpf_printk("=== create UNIX socket %d ===", id);
 
     return 0;
 }

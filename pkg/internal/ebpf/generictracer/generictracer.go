@@ -229,16 +229,14 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.FunctionPrograms {
 		// Both sys accept probes use the same kretprobe.
 		// We could tap into __sys_accept4, but we might be more prone to
 		// issues with the internal kernel code changing.
-		"__sys_accept4": {
+		"sys_accept": {
 			Required: true,
-			Start:    p.bpfObjects.KprobeSysAccept4,
 			End:      p.bpfObjects.KretprobeSysAccept4,
 		},
-		// "sys_accept4": {
-		// 	Required: true,
-		// 	Start:    p.bpfObjects.KprobeSysAccept4,
-		// 	End:      p.bpfObjects.KretprobeSysAccept4,
-		// },
+		"sys_accept4": {
+			Required: true,
+			End:      p.bpfObjects.KretprobeSysAccept4,
+		},
 		"sock_alloc": {
 			Required: true,
 			End:      p.bpfObjects.KretprobeSockAlloc,
@@ -250,7 +248,6 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.FunctionPrograms {
 		// Tracking of HTTP client calls, by tapping into connect
 		"sys_connect": {
 			Required: true,
-			Start:    p.bpfObjects.KprobeSysConnect,
 			End:      p.bpfObjects.KretprobeSysConnect,
 		},
 		"tcp_connect": {
@@ -287,35 +284,15 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.FunctionPrograms {
 			Required: true,
 			Start:    p.bpfObjects.KprobeSysExit,
 		},
-		"sys_close": {
+		"unix_stream_recvmsg": {
 			Required: true,
-			Start:    p.bpfObjects.KprobeSysClose,
+			Start:    p.bpfObjects.KprobeUnixStreamRecvmsg,
+			End:      p.bpfObjects.KretprobeUnixStreamRecvmsg,
 		},
-		"ksys_read": {
+		"unix_stream_sendmsg": {
 			Required: true,
-			Start:    p.bpfObjects.KprobeKsysRead,
-			End:      p.bpfObjects.KretprobeKsysRead,
-		},
-		"__sys_recvfrom": {
-			Required: true,
-			Start:    p.bpfObjects.KprobeKsysRead,
-			End:      p.bpfObjects.KretprobeKsysRead,
-		},
-		"ksys_write": {
-			Required: true,
-			Start:    p.bpfObjects.KprobeKsysWrite,
-		},
-		"__sys_sendto": {
-			Required: true,
-			Start:    p.bpfObjects.KprobeKsysWrite,
-		},
-		"do_writev": {
-			Required: true,
-			Start:    p.bpfObjects.KprobeDoWritev,
-		},
-		"do_sock_getsockopt": {
-			Required: true,
-			Start:    p.bpfObjects.KprobeSysSocketCreate,
+			Start:    p.bpfObjects.KprobeUnixStreamSendmsg,
+			End:      p.bpfObjects.KretprobeUnixStreamSendmsg,
 		},
 	}
 }

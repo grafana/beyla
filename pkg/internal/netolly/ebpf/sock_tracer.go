@@ -43,6 +43,7 @@ import (
 // and to flows that are forwarded by the kernel via ringbuffer because could not be aggregated
 // in the map
 type SockFlowFetcher struct {
+	log           *slog.Logger
 	objects       *NetSkObjects
 	ringbufReader *ringbuf.Reader
 	cacheMaxSize  int
@@ -101,6 +102,7 @@ func NewSockFlowFetcher(
 		return nil, fmt.Errorf("accessing to ringbuffer: %w", err)
 	}
 	return &SockFlowFetcher{
+		log:           tlog,
 		objects:       &objects,
 		ringbufReader: flows,
 		cacheMaxSize:  cacheMaxSize,
@@ -121,8 +123,7 @@ func (m *SockFlowFetcher) Register(_ ifaces.Interface) error {
 
 // Close any resources that are taken up by the socket filter, the filter itself and some maps.
 func (m *SockFlowFetcher) Close() error {
-	log := tlog()
-	log.Debug("unregistering eBPF objects")
+	m.log.Debug("unregistering eBPF objects")
 
 	var errs []error
 	// m.ringbufReader.Read is a blocking operation, so we need to close the ring buffer
@@ -187,7 +188,7 @@ func (m *SockFlowFetcher) LookupAndDeleteMap() map[NetFlowId][]NetFlowMetrics {
 	// TODO: detect whether LookupAndDelete is supported (Kernel>=4.20) and use it selectively
 	for iterator.Next(&id, &metrics) {
 		if err := flowMap.Delete(id); err != nil {
-			tlog().Debug("couldn't delete flow entry", "flowId", id, "error", err)
+			m.log.Debug("couldn't delete flow entry", "flowId", id, "error", err)
 		}
 		// We observed that eBFP PerCPU map might insert multiple times the same key in the map
 		// (probably due to race conditions) so we need to re-join metrics again at userspace

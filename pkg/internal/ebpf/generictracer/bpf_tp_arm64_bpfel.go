@@ -136,8 +136,9 @@ type bpf_tpRecvArgsT struct {
 }
 
 type bpf_tpSendArgsT struct {
-	P_conn bpf_tpPidConnectionInfoT
-	Size   uint64
+	P_conn  bpf_tpPidConnectionInfoT
+	Size    uint64
+	SockPtr uint64
 }
 
 type bpf_tpSockArgsT struct {
@@ -183,6 +184,7 @@ type bpf_tpTcpReqT struct {
 		Flags    uint8
 		_        [7]byte
 	}
+	ExtraId uint64
 }
 
 type bpf_tpTpInfoPidT struct {
@@ -301,6 +303,7 @@ type bpf_tpMapSpecs struct {
 	ActiveSslHandshakes     *ebpf.MapSpec `ebpf:"active_ssl_handshakes"`
 	ActiveSslReadArgs       *ebpf.MapSpec `ebpf:"active_ssl_read_args"`
 	ActiveSslWriteArgs      *ebpf.MapSpec `ebpf:"active_ssl_write_args"`
+	ActiveUnixSocks         *ebpf.MapSpec `ebpf:"active_unix_socks"`
 	AsyncResetArgs          *ebpf.MapSpec `ebpf:"async_reset_args"`
 	ClientConnectInfo       *ebpf.MapSpec `ebpf:"client_connect_info"`
 	CloneMap                *ebpf.MapSpec `ebpf:"clone_map"`
@@ -362,6 +365,7 @@ type bpf_tpMaps struct {
 	ActiveSslHandshakes     *ebpf.Map `ebpf:"active_ssl_handshakes"`
 	ActiveSslReadArgs       *ebpf.Map `ebpf:"active_ssl_read_args"`
 	ActiveSslWriteArgs      *ebpf.Map `ebpf:"active_ssl_write_args"`
+	ActiveUnixSocks         *ebpf.Map `ebpf:"active_unix_socks"`
 	AsyncResetArgs          *ebpf.Map `ebpf:"async_reset_args"`
 	ClientConnectInfo       *ebpf.Map `ebpf:"client_connect_info"`
 	CloneMap                *ebpf.Map `ebpf:"clone_map"`
@@ -406,6 +410,7 @@ func (m *bpf_tpMaps) Close() error {
 		m.ActiveSslHandshakes,
 		m.ActiveSslReadArgs,
 		m.ActiveSslWriteArgs,
+		m.ActiveUnixSocks,
 		m.AsyncResetArgs,
 		m.ClientConnectInfo,
 		m.CloneMap,

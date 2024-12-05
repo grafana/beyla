@@ -140,6 +140,7 @@ typedef struct tcp_req {
     // with other instrumented processes
     pid_info pid;
     tp_info_t tp;
+    u64 extra_id;
 } tcp_req_t;
 
 typedef struct call_protocol_args {

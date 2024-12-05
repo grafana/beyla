@@ -11,6 +11,7 @@
 #include "k_send_receive.h"
 #include "protocol_http.h"
 #include "protocol_tcp.h"
+#include "k_unix_sock_tracker.h"
 
 static __always_inline struct unix_sock *unix_sock_from_socket(struct socket *sock) {
     struct sock *sk;
@@ -235,7 +236,7 @@ int BPF_KPROBE(kprobe_unix_stream_sendmsg, struct socket *sock, struct msghdr *m
     }
     bpf_dbg_printk("ino %d, peer ino %d", inode_number, peer_inode_number);
 
-    send_args_t s_args = {.size = size, .p_conn = {.conn = {0}}};
+    send_args_t s_args = {.size = size, .p_conn = {.conn = {0}}, .sock_ptr = (u64)sk};
 
     pid_connection_info_for_inode(id, &s_args.p_conn, inode_number, peer_inode_number);
 
@@ -271,6 +272,17 @@ int BPF_KRETPROBE(kretprobe_unix_stream_sendmsg, int sent_len) {
 
     send_args_t *s_args = (send_args_t *)bpf_map_lookup_elem(&active_send_args, &id);
     if (s_args) {
+
+        if (s_args->sock_ptr) {
+            struct sock *sk = (struct sock *)s_args->sock_ptr;
+            unsigned long inode_number;
+            BPF_CORE_READ_INTO(&inode_number, sk, sk_socket, file, f_inode, i_ino);
+
+            if (inode_number) {
+                bpf_map_update_elem(&active_unix_socks, &id, &inode_number, BPF_ANY);
+            }
+        }
+
         if (sent_len > 0) {
             update_http_sent_len(&s_args->p_conn, sent_len);
         }

@@ -215,6 +215,7 @@ type bpfTcpReqT struct {
 		Flags    uint8
 		_        [7]byte
 	}
+	ExtraId uint64
 }
 
 // loadBpf returns the embedded CollectionSpec for bpf.

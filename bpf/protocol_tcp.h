@@ -36,6 +36,7 @@ static __always_inline tcp_req_t *empty_tcp_req() {
 
 static __always_inline void init_new_trace(tp_info_t *tp) {
     new_trace_id(tp);
+    urand_bytes(tp->span_id, SPAN_ID_SIZE_BYTES);
     __builtin_memset(tp->parent_id, 0, sizeof(tp->span_id));
 }
 
@@ -84,6 +85,18 @@ static __always_inline void tcp_get_or_set_trace_info(tcp_req_t *req,
     }
 }
 
+static __always_inline void cleanup_trace_info(tcp_req_t *tcp, pid_connection_info_t *pid_conn) {
+    if (tcp->direction == TCP_RECV) {
+        trace_key_t t_key = {0};
+        task_tid(&t_key.p_key);
+        t_key.extra_id = tcp->extra_id;
+
+        delete_server_trace(&t_key);
+    } else {
+        delete_client_trace_info(pid_conn);
+    }
+}
+
 static __always_inline void handle_unknown_tcp_connection(pid_connection_info_t *pid_conn,
                                                           void *u_buf,
                                                           int bytes_len,
@@ -109,6 +122,7 @@ static __always_inline void handle_unknown_tcp_connection(pid_connection_info_t 
             req->end_monotime_ns = 0;
             req->resp_len = 0;
             req->len = bytes_len;
+            req->extra_id = extra_runtime_id();
             task_pid(&req->pid);
             bpf_probe_read(req->buf, K_TCP_MAX_LEN, u_buf);
 
@@ -133,6 +147,7 @@ static __always_inline void handle_unknown_tcp_connection(pid_connection_info_t 
                 bpf_probe_read(trace->rbuf, K_TCP_RES_LEN, u_buf);
                 bpf_ringbuf_submit(trace, get_flags());
             }
+            cleanup_trace_info(existing, pid_conn);
         }
     } else if (existing->len > 0 && existing->len < (K_TCP_MAX_LEN / 2)) {
         // Attempt to append one more packet. I couldn't convince the verifier

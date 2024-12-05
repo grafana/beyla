@@ -272,7 +272,11 @@ int BPF_KRETPROBE(kretprobe_unix_stream_sendmsg, int sent_len) {
 
     send_args_t *s_args = (send_args_t *)bpf_map_lookup_elem(&active_send_args, &id);
     if (s_args) {
-
+        // Unix socket calls can be interleaved, so for black-box context propagation,
+        // we need to differentiate them. We setup here the last sent active ino,
+        // which serves as the extra_runtime id. This is enough to differentiate the
+        // various requests, because we communicate this extra id to the receiving side
+        // and is able to correlate the incoming request.
         if (s_args->sock_ptr) {
             struct sock *sk = (struct sock *)s_args->sock_ptr;
             unsigned long inode_number;
@@ -286,8 +290,9 @@ int BPF_KRETPROBE(kretprobe_unix_stream_sendmsg, int sent_len) {
         if (sent_len > 0) {
             update_http_sent_len(&s_args->p_conn, sent_len);
         }
-        if (sent_len <
-            MIN_HTTP_SIZE) { // Sometimes app servers don't send close, but small responses back
+
+        // Sometimes app servers don't send close, but small responses back
+        if (sent_len < MIN_HTTP_SIZE) {
             finish_possible_delayed_http_request(&s_args->p_conn);
         }
     }

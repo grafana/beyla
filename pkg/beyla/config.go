@@ -115,7 +115,7 @@ var DefaultConfig = Config{
 			FetchTimeout: 500 * time.Millisecond,
 		},
 	},
-	Routes:       &transform.RoutesConfig{Unmatch: transform.UnmatchHeuristic},
+	Routes:       &transform.RoutesConfig{Unmatch: transform.UnmatchDefault},
 	NetworkFlows: defaultNetworkConfig,
 	Processes: process.CollectConfig{
 		RunMode:  process.RunModePrivileged,

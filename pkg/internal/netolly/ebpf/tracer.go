@@ -58,6 +58,7 @@ func tlog() *slog.Logger {
 // and to flows that are forwarded by the kernel via ringbuffer because could not be aggregated
 // in the map
 type FlowFetcher struct {
+	log            *slog.Logger
 	objects        *NetObjects
 	qdiscs         map[ifaces.Interface]*netlink.GenericQdisc
 	egressFilters  map[ifaces.Interface]*netlink.BpfFilter
@@ -109,6 +110,7 @@ func NewFlowFetcher(
 		return nil, fmt.Errorf("accessing to ringbuffer: %w", err)
 	}
 	return &FlowFetcher{
+		log:            tlog,
 		objects:        &objects,
 		ringbufReader:  flows,
 		egressFilters:  map[ifaces.Interface]*netlink.BpfFilter{},
@@ -123,7 +125,7 @@ func NewFlowFetcher(
 // Register and links the eBPF fetcher into the system. The program should invoke Unregister
 // before exiting.
 func (m *FlowFetcher) Register(iface ifaces.Interface) error {
-	ilog := tlog().With("interface", iface)
+	ilog := m.log.With("interface", iface)
 	// Load pre-compiled programs and maps into the kernel, and rewrites the configuration
 	ipvlan, err := netlink.LinkByIndex(iface.Index)
 	if err != nil {
@@ -159,7 +161,7 @@ func (m *FlowFetcher) Register(iface ifaces.Interface) error {
 }
 
 func (m *FlowFetcher) registerEgress(iface ifaces.Interface, ipvlan netlink.Link) error {
-	ilog := tlog().With("interface", iface)
+	ilog := m.log.With("interface", iface)
 	if !m.enableEgress {
 		ilog.Debug("ignoring egress traffic, according to user configuration")
 		return nil
@@ -193,7 +195,7 @@ func (m *FlowFetcher) registerEgress(iface ifaces.Interface, ipvlan netlink.Link
 }
 
 func (m *FlowFetcher) registerIngress(iface ifaces.Interface, ipvlan netlink.Link) error {
-	ilog := tlog().With("interface", iface)
+	ilog := m.log.With("interface", iface)
 	if !m.enableIngress {
 		ilog.Debug("ignoring ingress traffic, according to user configuration")
 		return nil
@@ -343,7 +345,7 @@ func (m *FlowFetcher) LookupAndDeleteMap() map[NetFlowId][]NetFlowMetrics {
 	// TODO: detect whether LookupAndDelete is supported (Kernel>=4.20) and use it selectively
 	for iterator.Next(&id, &metrics) {
 		if err := flowMap.Delete(id); err != nil {
-			tlog().Debug("couldn't delete flow entry", "flowId", id, "error", err)
+			m.log.Debug("couldn't delete flow entry", "flowId", id, "error", err)
 		}
 		// We observed that eBFP PerCPU map might insert multiple times the same key in the map
 		// (probably due to race conditions) so we need to re-join metrics again at userspace

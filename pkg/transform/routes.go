@@ -23,7 +23,7 @@ const (
 	// UnmatchHeuristic detects the route field using a heuristic
 	UnmatchHeuristic = UnmatchType("heuristic")
 
-	UnmatchDefault = UnmatchWildcard
+	UnmatchDefault = UnmatchHeuristic
 )
 
 type IgnoreMode string

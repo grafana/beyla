@@ -23,7 +23,7 @@ type testCase struct {
 func makeProbeDescMap(cases map[string]testCase) probeDescMap {
 	m := make(probeDescMap)
 
-	for probe, _ := range cases {
+	for probe := range cases {
 		m[probe] = []*ebpfcommon.ProbeDesc{{}}
 	}
 
@@ -31,7 +31,7 @@ func makeProbeDescMap(cases map[string]testCase) probeDescMap {
 }
 
 func TestGatherOffsets(t *testing.T) {
-	reader := bytes.NewReader(_usr_lib_libbsd_so_0_12_2)
+	reader := bytes.NewReader(libbsd_so_0_12_2)
 	assert.NotNil(t, reader)
 
 	testCases := map[string]testCase{
@@ -60,9 +60,8 @@ func TestGatherOffsets(t *testing.T) {
 	probes := makeProbeDescMap(testCases)
 
 	elfFile, err := elf.NewFile(reader)
-	defer elfFile.Close()
-
 	assert.NoError(t, err)
+	defer elfFile.Close()
 
 	err = gatherOffsetsImpl(elfFile, probes, "libbsd.so", slog.Default())
 	assert.NoError(t, err)
@@ -77,7 +76,8 @@ func TestGatherOffsets(t *testing.T) {
 	}
 }
 
-var _usr_lib_libbsd_so_0_12_2 []byte = []byte{
+// nolint: stylecheck,revive
+var libbsd_so_0_12_2 = []byte{
 	0x7f, 0x45, 0x4c, 0x46, 0x02, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0x00, 0x00, 0x03, 0x00, 0x3e, 0x00, 0x01, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00,

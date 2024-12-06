@@ -454,6 +454,11 @@ func gatherOffsets(instrPath string, probes map[string][]*ebpfcommon.ProbeDesc, 
 
 	defer elfFile.Close()
 
+	return gatherOffsetsImpl(elfFile, probes, instrPath, log)
+}
+
+func gatherOffsetsImpl(elfFile *elf.File, probes map[string][]*ebpfcommon.ProbeDesc,
+	instrPath string, log *slog.Logger) error {
 	syms, err := exec.FindExeSymbols(elfFile, symbolNames(probes))
 
 	if err != nil {

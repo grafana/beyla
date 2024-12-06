@@ -37,7 +37,7 @@ func (d *dummyCloser) Close() error {
 	return nil
 }
 
-func TestInstrumetedLibsT(t* testing.T) {
+func TestInstrumetedLibsT(t *testing.T) {
 	libs := make(instrumentedLibsT)
 
 	const id = uint64(10)

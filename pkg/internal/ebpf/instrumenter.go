@@ -479,7 +479,7 @@ func gatherOffsetsImpl(elfFile *elf.File, probes map[string][]*ebpfcommon.ProbeD
 				return fmt.Errorf("error reading symbol data for %s (%s)", symbolName, instrPath)
 			}
 
-			returns, err := goexec.FindReturnOffssets(sym.Off, progData)
+			returns, err := goexec.FindReturnOffsets(sym.Off, progData)
 
 			if err != nil {
 				log.Debug("Error finding return offsets", "symbol", sym)

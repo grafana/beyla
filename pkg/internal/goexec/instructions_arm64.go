@@ -8,7 +8,7 @@ const (
 	armInstructionSize = 4
 )
 
-func findReturnOffssets(baseOffset uint64, data []byte) ([]uint64, error) {
+func FindReturnOffsets(baseOffset uint64, data []byte) ([]uint64, error) {
 	var returnOffsets []uint64
 	index := 0
 	for index < len(data) {

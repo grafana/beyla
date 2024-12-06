@@ -19,7 +19,7 @@ func isENDBRXX(data []uint8) bool {
 		(data[3] == 0xFA || data[3] == 0xFB)
 }
 
-func findReturnOffssets(baseOffset uint64, data []byte) ([]uint64, error) {
+func FindReturnOffsets(baseOffset uint64, data []byte) ([]uint64, error) {
 	var returnOffsets []uint64
 	index := 0
 	for index < len(data) {

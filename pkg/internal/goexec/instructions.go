@@ -97,7 +97,7 @@ func handleStaticSymbol(fName string, allOffsets map[string]FuncOffsets, allSyms
 			return
 		}
 
-		returns, err := findReturnOffssets(s.Off, data)
+		returns, err := FindReturnOffsets(s.Off, data)
 		if err != nil {
 			ilog.Error("error finding returns for symbol", "symbol", fName, "offset", s.Off-s.Prog.Off, "size", s.Len, "error", err)
 			return
@@ -126,7 +126,7 @@ func findFuncOffset(f *gosym.Func, elfF *elf.File) (FuncOffsets, bool, error) {
 				return FuncOffsets{}, false, fmt.Errorf("finding function return: %w", err)
 			}
 
-			returns, err := findReturnOffssets(off, data)
+			returns, err := FindReturnOffsets(off, data)
 			if err != nil {
 				return FuncOffsets{}, false, fmt.Errorf("finding function return: %w", err)
 			}
@@ -159,8 +159,4 @@ func findGoSymbolTable(elfF *elf.File) (*gosym.Table, error) {
 		return nil, fmt.Errorf("creating go symbol table: %w", err)
 	}
 	return symTab, nil
-}
-
-func FindReturnOffssets(baseOffset uint64, data []byte) ([]uint64, error) {
-	return findReturnOffssets(baseOffset, data)
 }

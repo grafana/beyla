@@ -141,43 +141,43 @@ func testHTTPTracesPHP(t *testing.T) {
 		traces := tq.FindBySpan(jaeger.Tag{Key: "url.path", Type: "string", Value: "/"})
 		require.GreaterOrEqual(t, len(traces), 1)
 		trace = traces[0]
+
+		// Check the information of the parent span
+		res := trace.FindByOperationNameAndService("GET /", "nginx")
+		require.Len(t, res, 1)
+		parent := res[0]
+		require.NotEmpty(t, parent.TraceID)
+		traceID := parent.TraceID
+		require.NotEmpty(t, parent.SpanID)
+		// check duration is at least 2us
+		assert.Less(t, (2 * time.Microsecond).Microseconds(), parent.Duration)
+		// check span attributes
+		sd := parent.Diff(
+			jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
+			jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(200)},
+			jaeger.Tag{Key: "url.path", Type: "string", Value: "/"},
+			jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(80)},
+			jaeger.Tag{Key: "http.route", Type: "string", Value: "/"},
+			jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
+		)
+		assert.Empty(t, sd, sd.String())
+
+		res = trace.FindByOperationNameAndService("GET /", "php-fpm")
+		require.Len(t, res, 1)
+
+		parent = res[0]
+		require.NotEmpty(t, parent.TraceID)
+		require.Equal(t, traceID, parent.TraceID)
+		require.NotEmpty(t, parent.SpanID)
+
+		res = trace.FindByOperationNameAndService("SELECT accounts", "php-fpm")
+		require.Len(t, res, 1)
+
+		parent = res[0]
+		require.NotEmpty(t, parent.TraceID)
+		require.Equal(t, traceID, parent.TraceID)
+		require.NotEmpty(t, parent.SpanID)
 	}, test.Interval(100*time.Millisecond))
-
-	// Check the information of the parent span
-	res := trace.FindByOperationNameAndService("GET /", "nginx")
-	require.Len(t, res, 1)
-	parent := res[0]
-	require.NotEmpty(t, parent.TraceID)
-	traceID := parent.TraceID
-	require.NotEmpty(t, parent.SpanID)
-	// check duration is at least 2us
-	assert.Less(t, (2 * time.Microsecond).Microseconds(), parent.Duration)
-	// check span attributes
-	sd := parent.Diff(
-		jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
-		jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(200)},
-		jaeger.Tag{Key: "url.path", Type: "string", Value: "/"},
-		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(80)},
-		jaeger.Tag{Key: "http.route", Type: "string", Value: "/"},
-		jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
-	)
-	assert.Empty(t, sd, sd.String())
-
-	res = trace.FindByOperationNameAndService("GET /", "php-fpm")
-	require.Len(t, res, 1)
-
-	parent = res[0]
-	require.NotEmpty(t, parent.TraceID)
-	require.Equal(t, traceID, parent.TraceID)
-	require.NotEmpty(t, parent.SpanID)
-
-	res = trace.FindByOperationNameAndService("SELECT accounts", "php-fpm")
-	require.Len(t, res, 1)
-
-	parent = res[0]
-	require.NotEmpty(t, parent.TraceID)
-	require.Equal(t, traceID, parent.TraceID)
-	require.NotEmpty(t, parent.SpanID)
 }
 
 func testTracesPHPFPM(t *testing.T) {

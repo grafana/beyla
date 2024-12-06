@@ -135,7 +135,7 @@ func waitForTestComponentsSub(t *testing.T, url, subpath string) {
 }
 
 func waitForTestComponentsSubStatus(t *testing.T, url, subpath string, status int) {
-	waitForTestComponentsSubWithTimeAndCode(t, url, subpath, 404, 1)
+	waitForTestComponentsSubWithTimeAndCode(t, url, subpath, status, 1)
 }
 
 // does a smoke test to verify that all the components that started

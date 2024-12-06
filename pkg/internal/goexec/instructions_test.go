@@ -48,7 +48,7 @@ var prog = []uint8{
 }
 
 func TestFindReturnOffsets(t *testing.T) {
-	offsets, err := findReturnOffssets(0, prog)
+	offsets, err := FindReturnOffsets(0, prog)
 	require.NoError(t, err)
 	require.Contains(t, offsets, uint64(0x46))
 }

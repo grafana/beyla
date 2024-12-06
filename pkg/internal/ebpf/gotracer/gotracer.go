@@ -171,12 +171,8 @@ func (p *Tracer) AddCloser(c ...io.Closer) {
 	p.closers = append(p.closers, c...)
 }
 
-func (p *Tracer) AddModuleCloser(_ uint64, _ ...io.Closer) {
-	p.log.Warn("add module closer not implemented for Go")
-}
-
-func (p *Tracer) GoProbes() map[string][]ebpfcommon.FunctionPrograms {
-	m := map[string][]ebpfcommon.FunctionPrograms{
+func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
+	m := map[string][]*ebpfcommon.ProbeDesc{
 		// Go runtime
 		"runtime.newproc1": {{
 			Start: p.bpfObjects.UprobeProcNewproc1,
@@ -350,10 +346,10 @@ func (p *Tracer) GoProbes() map[string][]ebpfcommon.FunctionPrograms {
 	}
 
 	if p.supportsContextPropagation() {
-		m["net/http.Header.writeSubset"] = []ebpfcommon.FunctionPrograms{{
+		m["net/http.Header.writeSubset"] = []*ebpfcommon.ProbeDesc{{
 			Start: p.bpfObjects.UprobeWriteSubset, // http 1.x context propagation
 		}}
-		m["golang.org/x/net/http2.(*Framer).WriteHeaders"] = []ebpfcommon.FunctionPrograms{
+		m["golang.org/x/net/http2.(*Framer).WriteHeaders"] = []*ebpfcommon.ProbeDesc{
 			{ // http2 context propagation
 				Start: p.bpfObjects.UprobeHttp2FramerWriteHeaders,
 				End:   p.bpfObjects.UprobeHttp2FramerWriteHeadersReturns,
@@ -363,7 +359,7 @@ func (p *Tracer) GoProbes() map[string][]ebpfcommon.FunctionPrograms {
 				End:   p.bpfObjects.UprobeGrpcFramerWriteHeadersReturns,
 			},
 		}
-		m["net/http.(*http2Framer).WriteHeaders"] = []ebpfcommon.FunctionPrograms{{ // http2 context propagation
+		m["net/http.(*http2Framer).WriteHeaders"] = []*ebpfcommon.ProbeDesc{{ // http2 context propagation
 			Start: p.bpfObjects.UprobeHttp2FramerWriteHeaders,
 			End:   p.bpfObjects.UprobeHttp2FramerWriteHeadersReturns,
 		}}
@@ -372,15 +368,15 @@ func (p *Tracer) GoProbes() map[string][]ebpfcommon.FunctionPrograms {
 	return m
 }
 
-func (p *Tracer) KProbes() map[string]ebpfcommon.FunctionPrograms {
+func (p *Tracer) KProbes() map[string]ebpfcommon.ProbeDesc {
 	return nil
 }
 
-func (p *Tracer) UProbes() map[string]map[string]ebpfcommon.FunctionPrograms {
+func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 	return nil
 }
 
-func (p *Tracer) Tracepoints() map[string]ebpfcommon.FunctionPrograms {
+func (p *Tracer) Tracepoints() map[string]ebpfcommon.ProbeDesc {
 	return nil
 }
 
@@ -392,7 +388,9 @@ func (p *Tracer) SockMsgs() []ebpfcommon.SockMsg { return nil }
 
 func (p *Tracer) SockOps() []ebpfcommon.SockOps { return nil }
 
-func (p *Tracer) RecordInstrumentedLib(_ uint64) {}
+func (p *Tracer) RecordInstrumentedLib(_ uint64, _ []io.Closer) {}
+
+func (p *Tracer) AddInstrumentedLibRef(_ uint64) {}
 
 func (p *Tracer) UnlinkInstrumentedLib(_ uint64) {}
 

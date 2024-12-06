@@ -3,8 +3,10 @@
 package ebpf
 
 import (
+	"debug/elf"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -20,64 +22,66 @@ import (
 
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/exec"
+	"github.com/grafana/beyla/pkg/internal/goexec"
 )
 
 func ilog() *slog.Logger {
 	return slog.With("component", "ebpf.Instrumenter")
 }
 
-func (i *instrumenter) goprobes(p Tracer) error {
-	log := ilog().With("probes", "goprobes")
-	// TODO: not running program if it does not find the required probes
-	for funcName, funcPrograms := range p.GoProbes() {
-		for _, funcProgram := range funcPrograms {
-			offs, ok := i.offsets.Funcs[funcName]
-			if !ok {
-				// the program function is not in the detected offsets. Ignoring
-				log.Debug("ignoring function", "function", funcName)
-				continue
-			}
-			log.Debug("going to instrument function", "function", funcName, "offsets", offs, "programs", funcProgram)
-			if err := i.goprobe(ebpfcommon.Probe{
-				Offsets:  offs,
-				Programs: funcProgram,
-			}); err != nil {
-				return fmt.Errorf("instrumenting function %q: %w", funcName, err)
-			}
-			p.AddCloser(i.closables...)
-		}
+func closeAll(closers []io.Closer) {
+	for i := range closers {
+		closers[i].Close()
 	}
+}
+
+func (i *instrumenter) goprobes(p Tracer) error {
+	// TODO: not running program if it does not find the required probes
+	goProbes := p.GoProbes()
+
+	i.gatherGoOffsets(goProbes)
+
+	closers, err := i.instrumentProbes(i.exe, goProbes)
+
+	if err != nil {
+		return err
+	}
+
+	i.closables = append(i.closables, closers...)
+	p.AddCloser(i.closables...)
 
 	return nil
 }
 
-func (i *instrumenter) goprobe(probe ebpfcommon.Probe) error {
-	// Attach BPF programs as start and return probes
-	if probe.Programs.Start != nil {
-		up, err := i.exe.Uprobe("", probe.Programs.Start, &link.UprobeOptions{
-			Address: probe.Offsets.Start,
-		})
-		if err != nil {
-			return fmt.Errorf("setting uprobe: %w", err)
-		}
-		i.closables = append(i.closables, up)
-	}
+func (i *instrumenter) instrumentProbes(exe *link.Executable, probes map[string][]*ebpfcommon.ProbeDesc) ([]io.Closer, error) {
+	log := ilog().With("probes", "instrumentProbes")
 
-	if probe.Programs.End != nil {
-		// Go won't work with Uretprobes because of the way Go manages the stack. We need to set uprobes just before the return
-		// values: https://github.com/iovisor/bcc/issues/1320
-		for _, ret := range probe.Offsets.Returns {
-			urp, err := i.exe.Uprobe("", probe.Programs.End, &link.UprobeOptions{
-				Address: ret,
-			})
+	var closers []io.Closer
+
+	for symbolName, probeArray := range probes {
+		for _, probe := range probeArray {
+			log.Debug("going to instrument function", "function", symbolName, "programs", probe)
+
+			cls, err := uprobe(exe, probe)
+
 			if err != nil {
-				return fmt.Errorf("setting uretprobe: %w", err)
+				closeAll(cls)
+
+				if probe.Required {
+					closeAll(closers)
+
+					return nil, fmt.Errorf("instrumenting function %q: %w", symbolName, err)
+				}
+
+				// error will be common here since this could be no openssl loaded
+				log.Debug("error instrumenting uprobe", "function", symbolName, "error", err)
+			} else {
+				closers = append(closers, cls...)
 			}
-			i.closables = append(i.closables, urp)
 		}
 	}
 
-	return nil
+	return closers, nil
 }
 
 func (i *instrumenter) kprobes(p KprobesTracer) error {
@@ -98,7 +102,7 @@ func (i *instrumenter) kprobes(p KprobesTracer) error {
 	return nil
 }
 
-func (i *instrumenter) kprobe(funcName string, programs ebpfcommon.FunctionPrograms) error {
+func (i *instrumenter) kprobe(funcName string, programs ebpfcommon.ProbeDesc) error {
 	if programs.Start != nil {
 		kp, err := link.Kprobe(funcName, programs.Start, nil)
 		if err != nil {
@@ -123,7 +127,7 @@ func (i *instrumenter) kprobe(funcName string, programs ebpfcommon.FunctionProgr
 type uprobeModule struct {
 	lib       string
 	instrPath string
-	probes    []map[string]ebpfcommon.FunctionPrograms
+	probes    []map[string][]*ebpfcommon.ProbeDesc
 }
 
 func (i *instrumenter) uprobeModules(p Tracer, pid int32, maps []*procfs.ProcMap, exePath string, exeIno uint64, log *slog.Logger) map[uint64]*uprobeModule {
@@ -164,14 +168,31 @@ func (i *instrumenter) uprobeModules(p Tracer, pid int32, maps []*procfs.ProcMap
 		if ok {
 			mod.probes = append(mod.probes, pMap)
 		} else {
-			modules[instrumentedIno] = &uprobeModule{lib: lib, instrPath: instrPath, probes: []map[string]ebpfcommon.FunctionPrograms{pMap}}
+			modules[instrumentedIno] = &uprobeModule{lib: lib, instrPath: instrPath, probes: []map[string][]*ebpfcommon.ProbeDesc{pMap}}
 		}
 	}
 
 	return modules
 }
 
-//nolint:cyclop
+func resolveExePath(pid int32) (string, uint64, error) {
+	exePath := fmt.Sprintf("/proc/%d/exe", pid)
+
+	info, err := os.Stat(exePath)
+
+	if err != nil {
+		return "", 0, err
+	}
+
+	stat, ok := info.Sys().(*syscall.Stat_t)
+
+	if !ok {
+		return "", 0, fmt.Errorf("can't extract executable stats")
+	}
+
+	return exePath, stat.Ino, nil
+}
+
 func (i *instrumenter) uprobes(pid int32, p Tracer) error {
 	maps, err := processMaps(pid)
 	if err != nil {
@@ -183,18 +204,9 @@ func (i *instrumenter) uprobes(pid int32, p Tracer) error {
 		return nil
 	}
 
-	exePath := fmt.Sprintf("/proc/%d/exe", pid)
-	exeIno := uint64(0)
+	exePath, exeIno, err := resolveExePath(pid)
 
-	info, err := os.Stat(exePath)
-	if err == nil {
-		stat, ok := info.Sys().(*syscall.Stat_t)
-		if ok {
-			exeIno = stat.Ino
-		} else {
-			return fmt.Errorf("can't extract executable stats")
-		}
-	} else {
+	if err != nil {
 		return err
 	}
 
@@ -213,7 +225,7 @@ func (i *instrumenter) uprobes(pid int32, p Tracer) error {
 		if p.AlreadyInstrumentedLib(instrumentedIno) {
 			log.Debug("module already instrumented by other processes, incrementing reference count", "lib", m.lib, "path", m.instrPath, "ino", instrumentedIno)
 			i.addModule(instrumentedIno)             // remember this mapping for linking/unlinking for this executable instance
-			p.RecordInstrumentedLib(instrumentedIno) // record one more use of this shared library
+			p.AddInstrumentedLibRef(instrumentedIno) // record one more use of this shared library
 			continue
 		}
 
@@ -223,48 +235,64 @@ func (i *instrumenter) uprobes(pid int32, p Tracer) error {
 			return err
 		}
 
-		for _, pMap := range m.probes {
-			for funcName, funcPrograms := range pMap {
-				log.Debug("going to instrument function", "function", funcName, "programs", funcPrograms)
-				if err := i.uprobe(p, instrumentedIno, funcName, libExe, funcPrograms); err != nil {
-					if funcPrograms.Required {
-						return fmt.Errorf("instrumenting function %q: %w", funcName, err)
-					}
-
-					// error will be common here since this could be no openssl loaded
-					log.Debug("error instrumenting uprobe", "function", funcName, "error", err)
-				}
+		for j := range m.probes {
+			if err := gatherOffsets(m.instrPath, m.probes[j], log); err != nil {
+				log.Debug("error gathering offsets", "error", err)
+				continue
 			}
+
+			closers, err := i.instrumentProbes(libExe, m.probes[j])
+
+			if err != nil {
+				log.Debug("error instrumenting probes", "error", err)
+				continue
+			}
+
+			log.Debug("adding module for instrumenter and incrementing reference count", "path", m.instrPath, "ino", instrumentedIno)
+
+			// We bump the count of uses of the underlying shared library with a new executable
+			p.RecordInstrumentedLib(instrumentedIno, closers)
+			i.addModule(instrumentedIno)
 		}
-
-		log.Debug("adding module for instrumenter and incrementing reference count", "path", m.instrPath, "ino", instrumentedIno)
-
-		// We bump the count of uses of the underlying shared library with a new executable
-		p.RecordInstrumentedLib(instrumentedIno)
-		i.addModule(instrumentedIno)
 	}
 
 	return nil
 }
 
-func (i *instrumenter) uprobe(p Tracer, instrumentedIno uint64, funcName string, exe *link.Executable, probe ebpfcommon.FunctionPrograms) error {
+func uprobe(exe *link.Executable, probe *ebpfcommon.ProbeDesc) ([]io.Closer, error) {
+	var closers []io.Closer
+
 	if probe.Start != nil {
-		up, err := exe.Uprobe(funcName, probe.Start, nil)
+		up, err := exe.Uprobe("", probe.Start, &link.UprobeOptions{
+			Address: probe.StartOffset,
+		})
+
 		if err != nil {
-			return fmt.Errorf("setting uprobe: %w", err)
+			return closers, fmt.Errorf("setting uprobe (offset): %w", err)
 		}
-		p.AddModuleCloser(instrumentedIno, up)
+
+		closers = append(closers, up)
 	}
 
 	if probe.End != nil {
-		up, err := exe.Uretprobe(funcName, probe.End, nil)
-		if err != nil {
-			return fmt.Errorf("setting uretprobe: %w", err)
+		if len(probe.ReturnOffsets) == 0 {
+			return closers, fmt.Errorf("setting uretprobe (attaching to offset): missing return offsets")
 		}
-		p.AddModuleCloser(instrumentedIno, up)
+
+		for _, offset := range probe.ReturnOffsets {
+			up, err := exe.Uprobe("", probe.End, &link.UprobeOptions{
+				Address: offset,
+			})
+
+			if err != nil {
+				return closers, fmt.Errorf("setting uretprobe (attaching to offset): %w", err)
+			}
+
+			closers = append(closers, up)
+		}
 	}
 
-	return nil
+	return closers, nil
 }
 
 func (i *instrumenter) sockfilters(p Tracer) error {
@@ -351,7 +379,7 @@ func (i *instrumenter) tracepoints(p KprobesTracer) error {
 	return nil
 }
 
-func (i *instrumenter) tracepoint(funcName string, programs ebpfcommon.FunctionPrograms) error {
+func (i *instrumenter) tracepoint(funcName string, programs ebpfcommon.ProbeDesc) error {
 	if programs.Start != nil {
 		if !strings.Contains(funcName, "/") {
 			return fmt.Errorf("invalid tracepoint type, must contain / in the name to separate the type and function name")
@@ -405,4 +433,99 @@ func getCgroupPath() (string, error) {
 		cgroupPath = filepath.Join(cgroupPath, "unified")
 	}
 	return cgroupPath, err
+}
+
+func symbolNames(m map[string][]*ebpfcommon.ProbeDesc) []string {
+	keys := make([]string, 0, len(m))
+
+	for name := range m {
+		keys = append(keys, name)
+	}
+
+	return keys
+}
+
+func gatherOffsets(instrPath string, probes map[string][]*ebpfcommon.ProbeDesc, log *slog.Logger) error {
+	elfFile, err := elf.Open(instrPath)
+
+	if err != nil {
+		return fmt.Errorf("failed to open elf file %s: %w", instrPath, err)
+	}
+
+	defer elfFile.Close()
+
+	return gatherOffsetsImpl(elfFile, probes, instrPath, log)
+}
+
+func gatherOffsetsImpl(elfFile *elf.File, probes map[string][]*ebpfcommon.ProbeDesc,
+	instrPath string, log *slog.Logger) error {
+	syms, err := exec.FindExeSymbols(elfFile, symbolNames(probes))
+
+	if err != nil {
+		return fmt.Errorf("failed to lookup symbols for %s: %w", instrPath, err)
+	}
+
+	for symbolName, probeArray := range probes {
+		for _, probe := range probeArray {
+			sym, ok := syms[symbolName]
+
+			if !ok {
+				continue
+			}
+
+			progData := readSymbolData(&sym)
+
+			if progData == nil {
+				return fmt.Errorf("error reading symbol data for %s (%s)", symbolName, instrPath)
+			}
+
+			returns, err := goexec.FindReturnOffsets(sym.Off, progData)
+
+			if err != nil {
+				log.Debug("Error finding return offsets", "symbol", sym)
+				continue
+			}
+
+			probe.StartOffset = sym.Off
+			probe.ReturnOffsets = returns
+		}
+	}
+
+	return nil
+}
+
+func (i *instrumenter) gatherGoOffsets(goProbes map[string][]*ebpfcommon.ProbeDesc) {
+	log := ilog().With("probes", "gatherGoOffsets")
+
+	for symbolName, descs := range goProbes {
+		offs, ok := i.offsets.Funcs[symbolName]
+
+		if !ok {
+			// the program function is not in the detected offsets. Ignoring
+			log.Debug("ignoring function", "function", symbolName)
+			continue
+		}
+
+		for _, probe := range descs {
+			probe.StartOffset = offs.Start
+			probe.ReturnOffsets = offs.Returns
+		}
+	}
+}
+
+func readSymbolData(sym *exec.Sym) []byte {
+	if sym.Prog == nil {
+		return nil
+	}
+
+	data := make([]byte, sym.Len)
+
+	_, err := sym.Prog.ReadAt(data, int64(sym.Off-sym.Prog.Off))
+
+	if err != nil {
+		fmt.Printf("Error loading symbol data: %v\n", err)
+		return nil
+	}
+
+	return data
 }

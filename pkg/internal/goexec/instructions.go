@@ -10,6 +10,16 @@ import (
 	"github.com/grafana/beyla/pkg/internal/exec"
 )
 
+func isSupportedGoBinary(elfF *elf.File) error {
+	goVersion, _, err := getGoDetails(elfF)
+
+	if err == nil && !supportedGoVersion(goVersion) {
+		return fmt.Errorf("unsupported Go version: %v. Minimum supported version is %v", goVersion, minGoVersion)
+	}
+
+	return nil
+}
+
 // instrumentationPoints loads the provided executable and looks for the addresses
 // where the start and return probes must be inserted.
 //
@@ -26,9 +36,8 @@ func instrumentationPoints(elfF *elf.File, funcNames []string) (map[string]FuncO
 		return nil, err
 	}
 
-	goVersion, _, err := getGoDetails(elfF)
-	if err == nil && !supportedGoVersion(goVersion) {
-		return nil, fmt.Errorf("unsupported Go version: %v. Minimum supported version is %v", goVersion, minGoVersion)
+	if err = isSupportedGoBinary(elfF); err != nil {
+		return nil, err
 	}
 
 	gosyms := elfF.Section(".gosymtab")
@@ -38,7 +47,7 @@ func instrumentationPoints(elfF *elf.File, funcNames []string) (map[string]FuncO
 	// no go symbols in the executable, maybe it's statically linked
 	// find regular elf symbols
 	if gosyms == nil {
-		allSyms, err = exec.FindExeSymbols(elfF, functions)
+		allSyms, err = exec.FindExeSymbols(elfF, funcNames)
 		if err != nil {
 			return nil, err
 		}
@@ -88,7 +97,7 @@ func handleStaticSymbol(fName string, allOffsets map[string]FuncOffsets, allSyms
 			return
 		}
 
-		returns, err := findReturnOffssets(s.Off, data)
+		returns, err := FindReturnOffsets(s.Off, data)
 		if err != nil {
 			ilog.Error("error finding returns for symbol", "symbol", fName, "offset", s.Off-s.Prog.Off, "size", s.Len, "error", err)
 			return
@@ -117,7 +126,7 @@ func findFuncOffset(f *gosym.Func, elfF *elf.File) (FuncOffsets, bool, error) {
 				return FuncOffsets{}, false, fmt.Errorf("finding function return: %w", err)
 			}
 
-			returns, err := findReturnOffssets(off, data)
+			returns, err := FindReturnOffsets(off, data)
 			if err != nil {
 				return FuncOffsets{}, false, fmt.Errorf("finding function return: %w", err)
 			}

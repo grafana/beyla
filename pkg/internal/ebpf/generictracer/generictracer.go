@@ -4,6 +4,7 @@ package generictracer
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"sync"
@@ -35,7 +36,9 @@ type libModule struct {
 }
 
 // Hold onto Linux inode numbers of files that are already instrumented, e.g. libssl.so.3
-var instrumentedLibs = make(map[uint64]libModule)
+type instrumentedLibsT map[uint64]*libModule
+
+var instrumentedLibs = make(instrumentedLibsT)
 var libsMux sync.Mutex
 
 type Tracer struct {
@@ -50,10 +53,69 @@ type Tracer struct {
 	ingressFilters map[ifaces.Interface]*netlink.BpfFilter
 }
 
+func (libs instrumentedLibsT) at(id uint64) *libModule {
+	module, ok := libs[id]
+
+	if !ok {
+		module = &libModule{references: 0}
+		libs[id] = module
+	}
+
+	return module
+}
+
+func (libs instrumentedLibsT) find(id uint64) *libModule {
+	module, ok := libs[id]
+
+	if ok {
+		return module
+	}
+
+	return nil
+}
+
+func (libs instrumentedLibsT) addRef(id uint64) *libModule {
+	module := libs.at(id)
+	module.references++
+
+	return module
+}
+
+func (libs instrumentedLibsT) removeRef(id uint64) (*libModule, error) {
+	module := libs.find(id)
+
+	if module == nil {
+		return nil, fmt.Errorf("attempt to remove reference of unknown module: %d", id)
+	}
+
+	if module.references == 0 {
+		return module, fmt.Errorf("attempt to remove reference of unreferenced module: %d", id)
+	}
+
+	module.references--
+
+	log := tlog().With("instrumentedLibs", "removeRef")
+
+	if module.references == 0 {
+		for _, closer := range module.closers {
+			if err := closer.Close(); err != nil {
+				log.Debug("failed to close resource", "closer", closer, "error", err)
+			}
+		}
+
+		delete(libs, id)
+	}
+
+	return module, nil
+}
+
+func tlog() *slog.Logger {
+	return slog.With("component", "generic.Tracer")
+}
+
 func New(cfg *beyla.Config, metrics imetrics.Reporter) *Tracer {
-	log := slog.With("component", "generic.Tracer")
 	return &Tracer{
-		log:            log,
+		log:            tlog(),
 		cfg:            cfg,
 		metrics:        metrics,
 		pidsFilter:     ebpfcommon.CommonPIDsFilter(&cfg.Discovery),
@@ -220,12 +282,12 @@ func (p *Tracer) AddCloser(c ...io.Closer) {
 	p.closers = append(p.closers, c...)
 }
 
-func (p *Tracer) GoProbes() map[string][]ebpfcommon.FunctionPrograms {
+func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 	return nil
 }
 
-func (p *Tracer) KProbes() map[string]ebpfcommon.FunctionPrograms {
-	return map[string]ebpfcommon.FunctionPrograms{
+func (p *Tracer) KProbes() map[string]ebpfcommon.ProbeDesc {
+	return map[string]ebpfcommon.ProbeDesc{
 		// Both sys accept probes use the same kretprobe.
 		// We could tap into __sys_accept4, but we might be more prone to
 		// issues with the internal kernel code changing.
@@ -297,64 +359,64 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.FunctionPrograms {
 	}
 }
 
-func (p *Tracer) Tracepoints() map[string]ebpfcommon.FunctionPrograms {
+func (p *Tracer) Tracepoints() map[string]ebpfcommon.ProbeDesc {
 	return nil
 }
 
-func (p *Tracer) UProbes() map[string]map[string]ebpfcommon.FunctionPrograms {
-	return map[string]map[string]ebpfcommon.FunctionPrograms{
+func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
+	return map[string]map[string][]*ebpfcommon.ProbeDesc{
 		"libssl.so": {
-			"SSL_read": {
+			"SSL_read": {{
 				Required: false,
 				Start:    p.bpfObjects.UprobeSslRead,
 				End:      p.bpfObjects.UretprobeSslRead,
-			},
-			"SSL_write": {
+			}},
+			"SSL_write": {{
 				Required: false,
 				Start:    p.bpfObjects.UprobeSslWrite,
 				End:      p.bpfObjects.UretprobeSslWrite,
-			},
-			"SSL_read_ex": {
+			}},
+			"SSL_read_ex": {{
 				Required: false,
 				Start:    p.bpfObjects.UprobeSslReadEx,
 				End:      p.bpfObjects.UretprobeSslReadEx,
-			},
-			"SSL_write_ex": {
+			}},
+			"SSL_write_ex": {{
 				Required: false,
 				Start:    p.bpfObjects.UprobeSslWriteEx,
 				End:      p.bpfObjects.UretprobeSslWriteEx,
-			},
-			"SSL_do_handshake": {
+			}},
+			"SSL_do_handshake": {{
 				Required: false,
 				Start:    p.bpfObjects.UprobeSslDoHandshake,
 				End:      p.bpfObjects.UretprobeSslDoHandshake,
-			},
-			"SSL_shutdown": {
+			}},
+			"SSL_shutdown": {{
 				Required: false,
 				Start:    p.bpfObjects.UprobeSslShutdown,
-			},
+			}},
 		},
 		"node": {
-			"_ZN4node9AsyncWrap13EmitAsyncInitEPNS_11EnvironmentEN2v85LocalINS3_6ObjectEEENS4_INS3_6StringEEEdd": {
+			"_ZN4node9AsyncWrap13EmitAsyncInitEPNS_11EnvironmentEN2v85LocalINS3_6ObjectEEENS4_INS3_6StringEEEdd": {{
 				Required: false,
 				Start:    p.bpfObjects.EmitAsyncInit,
-			},
-			"_ZN4node13EmitAsyncInitEPN2v87IsolateENS0_5LocalINS0_6ObjectEEENS3_INS0_6StringEEEd": {
+			}},
+			"_ZN4node13EmitAsyncInitEPN2v87IsolateENS0_5LocalINS0_6ObjectEEENS3_INS0_6StringEEEd": {{
 				Required: false,
 				Start:    p.bpfObjects.EmitAsyncInit,
-			},
-			"_ZN4node13EmitAsyncInitEPN2v87IsolateENS0_5LocalINS0_6ObjectEEEPKcd": {
+			}},
+			"_ZN4node13EmitAsyncInitEPN2v87IsolateENS0_5LocalINS0_6ObjectEEEPKcd": {{
 				Required: false,
 				Start:    p.bpfObjects.EmitAsyncInit,
-			},
-			"_ZN4node9AsyncWrap10AsyncResetEN2v85LocalINS1_6ObjectEEEdb": {
+			}},
+			"_ZN4node9AsyncWrap10AsyncResetEN2v85LocalINS1_6ObjectEEEdb": {{
 				Required: false,
 				Start:    p.bpfObjects.AsyncReset,
-			},
-			"_ZN4node9AsyncWrap10AsyncResetERKN2v820FunctionCallbackInfoINS1_5ValueEEE": {
+			}},
+			"_ZN4node9AsyncWrap10AsyncResetERKN2v820FunctionCallbackInfoINS1_5ValueEEE": {{
 				Required: false,
 				Start:    p.bpfObjects.AsyncReset,
-			},
+			}},
 		},
 	}
 }
@@ -367,53 +429,33 @@ func (p *Tracer) SockMsgs() []ebpfcommon.SockMsg { return nil }
 
 func (p *Tracer) SockOps() []ebpfcommon.SockOps { return nil }
 
-func (p *Tracer) RecordInstrumentedLib(id uint64) {
+func (p *Tracer) RecordInstrumentedLib(id uint64, closers []io.Closer) {
 	libsMux.Lock()
 	defer libsMux.Unlock()
 
-	module, ok := instrumentedLibs[id]
-	if ok {
-		instrumentedLibs[id] = libModule{closers: module.closers, references: module.references + 1}
-		p.log.Debug("Recorded instrumented Lib", "ino", id, "module", module)
-	} else {
-		module = libModule{references: 1}
-		instrumentedLibs[id] = module
-		p.log.Debug("Recorded instrumented Lib", "ino", id, "module", module)
+	module := instrumentedLibs.addRef(id)
+
+	if len(closers) > 0 {
+		module.closers = append(module.closers, closers...)
 	}
+
+	p.log.Debug("Recorded instrumented Lib", "ino", id, "module", module)
+}
+
+func (p *Tracer) AddInstrumentedLibRef(id uint64) {
+	p.RecordInstrumentedLib(id, nil)
 }
 
 func (p *Tracer) UnlinkInstrumentedLib(id uint64) {
 	libsMux.Lock()
 	defer libsMux.Unlock()
-	if module, ok := instrumentedLibs[id]; ok {
-		p.log.Debug("Unlinking instrumented Lib - before state", "ino", id, "module", module)
-		if module.references > 1 {
-			instrumentedLibs[id] = libModule{closers: module.closers, references: module.references - 1}
-		} else {
-			for _, c := range module.closers {
-				p.log.Debug("Closing", "closable", c)
-				if err := c.Close(); err != nil {
-					p.log.Debug("Unable to close on unlink", "closable", c)
-				}
-			}
-			delete(instrumentedLibs, id)
-		}
-	}
-}
 
-func (p *Tracer) AddModuleCloser(id uint64, c ...io.Closer) {
-	libsMux.Lock()
-	defer libsMux.Unlock()
-	module, ok := instrumentedLibs[id]
-	if !ok {
-		instrumentedLibs[id] = libModule{closers: c, references: 0}
-		p.log.Debug("added new module closer", "ino", id, "module", module)
-	} else {
-		closers := module.closers
-		closers = append(closers, c...)
-		mod := libModule{closers: closers, references: module.references}
-		instrumentedLibs[id] = mod
-		p.log.Debug("added module closer", "ino", id, "module", module)
+	module, err := instrumentedLibs.removeRef(id)
+
+	p.log.Debug("Unlinking instrumented lib - before state", "ino", id, "module", module)
+
+	if err != nil {
+		p.log.Debug("Error unlinking instrumented lib", "ino", id, "error", err)
 	}
 }
 
@@ -421,10 +463,10 @@ func (p *Tracer) AlreadyInstrumentedLib(id uint64) bool {
 	libsMux.Lock()
 	defer libsMux.Unlock()
 
-	module, ok := instrumentedLibs[id]
+	module := instrumentedLibs.find(id)
 
 	p.log.Debug("checking already instrumented Lib", "ino", id, "module", module)
-	return ok
+	return module != nil
 }
 
 func (p *Tracer) SetupTC() {

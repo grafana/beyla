@@ -46,7 +46,6 @@ type CommonTracer interface {
 	// AddCloser adds io.Closer instances that need to be invoked when the
 	// Run function ends.
 	AddCloser(c ...io.Closer)
-	AddModuleCloser(ino uint64, c ...io.Closer)
 	// BpfObjects that are created by the bpf2go compiler
 	BpfObjects() any
 	// Sets up any tail call tables if the BPF program has it
@@ -57,8 +56,8 @@ type KprobesTracer interface {
 	CommonTracer
 	// KProbes returns a map with the name of the kernel probes that need to be
 	// tapped into. Start matches kprobe, End matches kretprobe
-	KProbes() map[string]ebpfcommon.FunctionPrograms
-	Tracepoints() map[string]ebpfcommon.FunctionPrograms
+	KProbes() map[string]ebpfcommon.ProbeDesc
+	Tracepoints() map[string]ebpfcommon.ProbeDesc
 }
 
 // Tracer is an individual eBPF program (e.g. the net/http or the grpc tracers)
@@ -68,13 +67,13 @@ type Tracer interface {
 	// Constants returns a map of constants to be overriden into the eBPF program.
 	// The key is the constant name and the value is the value to overwrite.
 	Constants() map[string]any
-	// GoProbes returns a map with the name of Go functions that need to be inspected
+	// GoProbes returns a slice with the name of Go functions that need to be inspected
 	// in the executable, as well as the eBPF programs that optionally need to be
 	// inserted as the Go function start and end probes
-	GoProbes() map[string][]ebpfcommon.FunctionPrograms
+	GoProbes() map[string][]*ebpfcommon.ProbeDesc
 	// UProbes returns a map with the module name mapping to the uprobes that need to be
 	// tapped into. Start matches uprobe, End matches uretprobe
-	UProbes() map[string]map[string]ebpfcommon.FunctionPrograms
+	UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc
 	// SocketFilters  returns a list of programs that need to be loaded as a
 	// generic eBPF socket filter
 	SocketFilters() []*ebpf.Program
@@ -89,7 +88,10 @@ type Tracer interface {
 	// Probes can potentially instrument a shared library among multiple executables
 	// These two functions alow programs to remember this and avoid duplicated instrumentations
 	// The argument is the OS file id
-	RecordInstrumentedLib(uint64)
+	// Closers are the associated closable resources to this lib, that may be
+	// closed when UnlinkInstrumentedLib() is called
+	RecordInstrumentedLib(uint64, []io.Closer)
+	AddInstrumentedLibRef(uint64)
 	AlreadyInstrumentedLib(uint64) bool
 	UnlinkInstrumentedLib(uint64)
 	RegisterOffsets(*exec.FileInfo, *goexec.Offsets)

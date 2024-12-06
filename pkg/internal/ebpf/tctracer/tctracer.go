@@ -86,19 +86,19 @@ func (p *Tracer) AddCloser(c ...io.Closer) {
 	p.closers = append(p.closers, c...)
 }
 
-func (p *Tracer) GoProbes() map[string][]ebpfcommon.FunctionPrograms {
+func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 	return nil
 }
 
-func (p *Tracer) KProbes() map[string]ebpfcommon.FunctionPrograms {
+func (p *Tracer) KProbes() map[string]ebpfcommon.ProbeDesc {
 	return nil
 }
 
-func (p *Tracer) Tracepoints() map[string]ebpfcommon.FunctionPrograms {
+func (p *Tracer) Tracepoints() map[string]ebpfcommon.ProbeDesc {
 	return nil
 }
 
-func (p *Tracer) UProbes() map[string]map[string]ebpfcommon.FunctionPrograms {
+func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 	return nil
 }
 
@@ -125,11 +125,11 @@ func (p *Tracer) SockOps() []ebpfcommon.SockOps {
 	}
 }
 
-func (p *Tracer) RecordInstrumentedLib(uint64) {}
+func (p *Tracer) RecordInstrumentedLib(uint64, []io.Closer) {}
+
+func (p *Tracer) AddInstrumentedLibRef(uint64) {}
 
 func (p *Tracer) UnlinkInstrumentedLib(uint64) {}
-
-func (p *Tracer) AddModuleCloser(uint64, ...io.Closer) {}
 
 func (p *Tracer) AlreadyInstrumentedLib(uint64) bool {
 	return false

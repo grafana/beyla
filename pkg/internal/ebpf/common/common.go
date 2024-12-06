@@ -15,7 +15,6 @@ import (
 	"github.com/cilium/ebpf/ringbuf"
 
 	"github.com/grafana/beyla/pkg/config"
-	"github.com/grafana/beyla/pkg/internal/goexec"
 	"github.com/grafana/beyla/pkg/internal/request"
 )
 
@@ -44,19 +43,26 @@ var IntegrityModeOverride = false
 
 var ActiveNamespaces = make(map[uint32]uint32)
 
-// Probe holds the information of the instrumentation points of a given function: its start and end offsets and
-// eBPF programs
-type Probe struct {
-	Offsets  goexec.FuncOffsets
-	Programs FunctionPrograms
-}
-
-type FunctionPrograms struct {
+// ProbeDesc holds the information of the instrumentation points of a given
+// function/symbol
+type ProbeDesc struct {
 	// Required, if true, will cancel the execution of the eBPF Tracer
 	// if the function has not been found in the executable
 	Required bool
-	Start    *ebpf.Program
-	End      *ebpf.Program
+
+	// The eBPF program to attach to the symbol as a uprobe (either to the
+	// symbol name or to StartOffset)
+	Start *ebpf.Program
+
+	// The eBPF program to attach to the symbol either as a uretprobe or as a
+	// uprobe to ReturnOffsets
+	End *ebpf.Program
+
+	// Optional offset to the start of the symbol
+	StartOffset uint64
+
+	// Optional list of the offsets of every RET instruction in the symbol
+	ReturnOffsets []uint64
 }
 
 type Filter struct {

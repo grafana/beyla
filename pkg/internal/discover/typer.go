@@ -186,11 +186,11 @@ func (t *typer) loadAllGoFunctionNames() {
 	uniqueFunctions := map[string]struct{}{}
 	t.allGoFunctions = nil
 	for _, p := range newGoTracersGroup(t.cfg, t.metrics) {
-		for funcName := range p.GoProbes() {
+		for symbolName := range p.GoProbes() {
 			// avoid duplicating function names
-			if _, ok := uniqueFunctions[funcName]; !ok {
-				uniqueFunctions[funcName] = struct{}{}
-				t.allGoFunctions = append(t.allGoFunctions, funcName)
+			if _, ok := uniqueFunctions[symbolName]; !ok {
+				uniqueFunctions[symbolName] = struct{}{}
+				t.allGoFunctions = append(t.allGoFunctions, symbolName)
 			}
 		}
 	}

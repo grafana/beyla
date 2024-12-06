@@ -111,6 +111,14 @@ static __always_inline void handle_unknown_tcp_connection(pid_connection_info_t 
         }
     }
     if (!existing) {
+        if (direction == TCP_RECV) {
+            trace_key_t *tk = bpf_map_lookup_elem(&client_connect_info, pid_conn);
+            if (tk) {
+                bpf_dbg_printk("Got receive as first operation for client connection, ignoring...");
+                return;
+            }
+        }
+
         tcp_req_t *req = empty_tcp_req();
         if (req) {
             req->flags = EVENT_TCP_REQUEST;

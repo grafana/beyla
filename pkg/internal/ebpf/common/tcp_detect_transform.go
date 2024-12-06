@@ -42,6 +42,8 @@ func ReadTCPRequestIntoSpan(cfg *config.EPPFTracer, record *ringbuf.Record, filt
 	} else {
 		op, table, sql, kind = detectSQLPayload(cfg.HeuristicSQLDetect, event.Rbuf[:rl])
 		if validSQL(op, table) {
+			reverseTCPEvent(&event)
+
 			return TCPToSQLToSpan(&event, op, table, sql, kind), false, nil
 		}
 	}

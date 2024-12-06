@@ -16,7 +16,14 @@
 typedef struct send_args {
     pid_connection_info_t p_conn;
     u64 size;
+    u64 sock_ptr;
 } send_args_t;
+
+// Temporary tracking of tcp_recvmsg arguments
+typedef struct recv_args {
+    u64 sock_ptr; // linux sock or socket address
+    u8 iovec_ctx[sizeof(iovec_iter_ctx)];
+} recv_args_t;
 
 struct bpf_map_def SEC("maps") jump_table = {
     .type = BPF_MAP_TYPE_PROG_ARRAY,

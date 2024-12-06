@@ -3,15 +3,19 @@
 package integration
 
 import (
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"path"
 	"testing"
+	"time"
 
 	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/test/integration/components/docker"
+	"github.com/grafana/beyla/test/integration/components/jaeger"
 	"github.com/grafana/beyla/test/integration/components/prom"
 )
 
@@ -19,6 +23,11 @@ import (
 // asynchronously for the Elixir test are up and communicating properly
 func waitForPHPTestComponents(t *testing.T, url string) {
 	waitForTestComponentsSub(t, url, "/status")
+}
+
+func waitForPHPTraceTestComponents(t *testing.T, url string) {
+	waitForTestComponentsSubStatus(t, url, "/hello", 404)
+	waitForSQLTestComponentsMySQL(t, url, "/")
 }
 
 func testREDMetricsForPHPHTTPLibrary(t *testing.T, url string, nginx, php string) {
@@ -110,6 +119,86 @@ func TestPHPFM(t *testing.T) {
 	require.NoError(t, compose.Up())
 
 	t.Run("PHP-FM RED metrics", testREDMetricsPHPFPM)
+
+	require.NoError(t, compose.Close())
+}
+
+func testHTTPTracesPHP(t *testing.T) {
+	for i := 0; i < 4; i++ {
+		doHTTPGet(t, "http://localhost:8080/", 200)
+	}
+
+	var trace jaeger.Trace
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		resp, err := http.Get(jaegerQueryURL + "?service=nginx&operation=GET%20%2F")
+		require.NoError(t, err)
+		if resp == nil {
+			return
+		}
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		var tq jaeger.TracesQuery
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
+		traces := tq.FindBySpan(jaeger.Tag{Key: "url.path", Type: "string", Value: "/"})
+		require.GreaterOrEqual(t, len(traces), 1)
+		trace = traces[len(traces)-1]
+
+		// Check the information of the parent span
+		res := trace.FindByOperationNameAndService("GET /", "nginx")
+		require.Len(t, res, 1)
+		parent := res[0]
+		require.NotEmpty(t, parent.TraceID)
+		traceID := parent.TraceID
+		require.NotEmpty(t, parent.SpanID)
+		// check duration is at least 2us
+		assert.Less(t, (2 * time.Microsecond).Microseconds(), parent.Duration)
+		// check span attributes
+		sd := parent.Diff(
+			jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
+			jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(200)},
+			jaeger.Tag{Key: "url.path", Type: "string", Value: "/"},
+			jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(80)},
+			jaeger.Tag{Key: "http.route", Type: "string", Value: "/"},
+			jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
+		)
+		assert.Empty(t, sd, sd.String())
+
+		res = trace.FindByOperationNameAndService("GET /", "php-fpm")
+		require.Len(t, res, 1)
+
+		parent = res[0]
+		require.NotEmpty(t, parent.TraceID)
+		require.Equal(t, traceID, parent.TraceID)
+		require.NotEmpty(t, parent.SpanID)
+
+		res = trace.FindByOperationNameAndService("SELECT accounts", "php-fpm")
+		require.Len(t, res, 1)
+
+		parent = res[0]
+		require.NotEmpty(t, parent.TraceID)
+		require.Equal(t, traceID, parent.TraceID)
+		require.NotEmpty(t, parent.SpanID)
+	}, test.Interval(100*time.Millisecond))
+}
+
+func testTracesPHPFPM(t *testing.T) {
+	for _, testCaseURL := range []string{
+		"http://localhost:8080",
+	} {
+		t.Run(testCaseURL, func(t *testing.T) {
+			waitForPHPTraceTestComponents(t, testCaseURL)
+			testHTTPTracesPHP(t)
+		})
+	}
+}
+
+func TestPHPFMUnixSock(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-php-fpm-sock.yml", path.Join(pathOutput, "test-suite-php-fpm-sock.log"))
+	// we are going to setup discovery directly in the configuration file
+	compose.Env = append(compose.Env, `BEYLA_EXECUTABLE_NAME=`, `BEYLA_OPEN_PORT=`)
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+
+	t.Run("PHP-FM RED metrics", testTracesPHPFPM)
 
 	require.NoError(t, compose.Close())
 }

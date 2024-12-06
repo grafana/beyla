@@ -8,6 +8,8 @@
 #include "k_tracer_defs.h"
 #include "http_ssl_defs.h"
 #include "pin_internal.h"
+#include "k_send_receive.h"
+#include "k_unix_sock.h"
 
 // Temporary tracking of accept arguments
 struct {
@@ -24,33 +26,6 @@ struct {
     __type(key, u64);
     __type(value, sock_args_t);
 } active_connect_args SEC(".maps");
-
-// Temporary tracking of tcp_recvmsg arguments
-typedef struct recv_args {
-    u64 sock_ptr; // linux sock or socket address
-    u8 iovec_ctx[sizeof(iovec_iter_ctx)];
-} recv_args_t;
-
-struct {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
-    __type(key, u64);
-    __type(value, recv_args_t);
-} active_recv_args SEC(".maps");
-
-struct {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
-    __type(key, u64);           // pid_tid
-    __type(value, send_args_t); // size to be sent
-} active_send_args SEC(".maps");
-
-struct {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
-    __type(key, u64);           // *sock
-    __type(value, send_args_t); // size to be sent
-} active_send_sock_args SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
@@ -143,6 +118,8 @@ int BPF_KRETPROBE(kretprobe_sys_accept4, uint fd) {
 
     //bpf_dbg_printk("=== accept 4 ret id=%d ===", id);
 
+    bpf_dbg_printk("=== accept 4 ret id=%d, fd=%d ===", id, fd);
+
     // The file descriptor is the value returned from the accept4 syscall.
     // If we got a negative file descriptor we don't have a connection
     if ((int)fd < 0) {
@@ -151,11 +128,9 @@ int BPF_KRETPROBE(kretprobe_sys_accept4, uint fd) {
 
     sock_args_t *args = bpf_map_lookup_elem(&active_accept_args, &id);
     if (!args) {
-        //bpf_dbg_printk("No sock info %d", id);
+        bpf_dbg_printk("No accept sock info %d", id);
         goto cleanup;
     }
-
-    bpf_dbg_printk("=== accept 4 ret id=%d, sock=%llx, fd=%d ===", id, args->addr, fd);
 
     ssl_pid_connection_info_t info = {};
 
@@ -376,22 +351,6 @@ int BPF_KRETPROBE(kretprobe_tcp_sendmsg, int sent_len) {
     }
 
     return 0;
-}
-
-static __always_inline void ensure_sent_event(u64 id, u64 *sock_p) {
-    if (high_request_volume) {
-        return;
-    }
-    send_args_t *s_args = bpf_map_lookup_elem(&active_send_args, &id);
-    if (s_args) {
-        bpf_dbg_printk("Checking if we need to finish the request per thread id");
-        finish_possible_delayed_http_request(&s_args->p_conn);
-    } // see if we match on another thread, but same sock *
-    s_args = bpf_map_lookup_elem(&active_send_sock_args, sock_p);
-    if (s_args) {
-        bpf_dbg_printk("Checking if we need to finish the request per socket");
-        finish_possible_delayed_http_request(&s_args->p_conn);
-    }
 }
 
 SEC("kprobe/tcp_close")

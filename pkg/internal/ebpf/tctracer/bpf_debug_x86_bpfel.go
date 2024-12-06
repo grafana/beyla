@@ -186,6 +186,7 @@ type bpf_debugTcpReqT struct {
 		Flags    uint8
 		_        [7]byte
 	}
+	ExtraId uint64
 }
 
 type bpf_debugTpBufDataT struct{ Buf [256]uint8 }
@@ -276,6 +277,7 @@ type bpf_debugMapSpecs struct {
 	ActiveSslHandshakes       *ebpf.MapSpec `ebpf:"active_ssl_handshakes"`
 	ActiveSslReadArgs         *ebpf.MapSpec `ebpf:"active_ssl_read_args"`
 	ActiveSslWriteArgs        *ebpf.MapSpec `ebpf:"active_ssl_write_args"`
+	ActiveUnixSocks           *ebpf.MapSpec `ebpf:"active_unix_socks"`
 	AsyncResetArgs            *ebpf.MapSpec `ebpf:"async_reset_args"`
 	BufMem                    *ebpf.MapSpec `ebpf:"buf_mem"`
 	ClientConnectInfo         *ebpf.MapSpec `ebpf:"client_connect_info"`
@@ -338,6 +340,7 @@ type bpf_debugMaps struct {
 	ActiveSslHandshakes       *ebpf.Map `ebpf:"active_ssl_handshakes"`
 	ActiveSslReadArgs         *ebpf.Map `ebpf:"active_ssl_read_args"`
 	ActiveSslWriteArgs        *ebpf.Map `ebpf:"active_ssl_write_args"`
+	ActiveUnixSocks           *ebpf.Map `ebpf:"active_unix_socks"`
 	AsyncResetArgs            *ebpf.Map `ebpf:"async_reset_args"`
 	BufMem                    *ebpf.Map `ebpf:"buf_mem"`
 	ClientConnectInfo         *ebpf.Map `ebpf:"client_connect_info"`
@@ -383,6 +386,7 @@ func (m *bpf_debugMaps) Close() error {
 		m.ActiveSslHandshakes,
 		m.ActiveSslReadArgs,
 		m.ActiveSslWriteArgs,
+		m.ActiveUnixSocks,
 		m.AsyncResetArgs,
 		m.BufMem,
 		m.ClientConnectInfo,

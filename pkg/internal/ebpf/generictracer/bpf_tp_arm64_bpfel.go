@@ -136,8 +136,9 @@ type bpf_tpRecvArgsT struct {
 }
 
 type bpf_tpSendArgsT struct {
-	P_conn bpf_tpPidConnectionInfoT
-	Size   uint64
+	P_conn  bpf_tpPidConnectionInfoT
+	Size    uint64
+	SockPtr uint64
 }
 
 type bpf_tpSockArgsT struct {
@@ -183,6 +184,7 @@ type bpf_tpTcpReqT struct {
 		Flags    uint8
 		_        [7]byte
 	}
+	ExtraId uint64
 }
 
 type bpf_tpTpInfoPidT struct {
@@ -251,36 +253,40 @@ type bpf_tpSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_tpProgramSpecs struct {
-	AsyncReset              *ebpf.ProgramSpec `ebpf:"async_reset"`
-	EmitAsyncInit           *ebpf.ProgramSpec `ebpf:"emit_async_init"`
-	KprobeSysExit           *ebpf.ProgramSpec `ebpf:"kprobe_sys_exit"`
-	KprobeTcpCleanupRbuf    *ebpf.ProgramSpec `ebpf:"kprobe_tcp_cleanup_rbuf"`
-	KprobeTcpClose          *ebpf.ProgramSpec `ebpf:"kprobe_tcp_close"`
-	KprobeTcpConnect        *ebpf.ProgramSpec `ebpf:"kprobe_tcp_connect"`
-	KprobeTcpRcvEstablished *ebpf.ProgramSpec `ebpf:"kprobe_tcp_rcv_established"`
-	KprobeTcpRecvmsg        *ebpf.ProgramSpec `ebpf:"kprobe_tcp_recvmsg"`
-	KprobeTcpSendmsg        *ebpf.ProgramSpec `ebpf:"kprobe_tcp_sendmsg"`
-	KretprobeSockAlloc      *ebpf.ProgramSpec `ebpf:"kretprobe_sock_alloc"`
-	KretprobeSysAccept4     *ebpf.ProgramSpec `ebpf:"kretprobe_sys_accept4"`
-	KretprobeSysClone       *ebpf.ProgramSpec `ebpf:"kretprobe_sys_clone"`
-	KretprobeSysConnect     *ebpf.ProgramSpec `ebpf:"kretprobe_sys_connect"`
-	KretprobeTcpRecvmsg     *ebpf.ProgramSpec `ebpf:"kretprobe_tcp_recvmsg"`
-	KretprobeTcpSendmsg     *ebpf.ProgramSpec `ebpf:"kretprobe_tcp_sendmsg"`
-	ProtocolHttp            *ebpf.ProgramSpec `ebpf:"protocol_http"`
-	ProtocolHttp2           *ebpf.ProgramSpec `ebpf:"protocol_http2"`
-	ProtocolTcp             *ebpf.ProgramSpec `ebpf:"protocol_tcp"`
-	SocketHttpFilter        *ebpf.ProgramSpec `ebpf:"socket__http_filter"`
-	UprobeSslDoHandshake    *ebpf.ProgramSpec `ebpf:"uprobe_ssl_do_handshake"`
-	UprobeSslRead           *ebpf.ProgramSpec `ebpf:"uprobe_ssl_read"`
-	UprobeSslReadEx         *ebpf.ProgramSpec `ebpf:"uprobe_ssl_read_ex"`
-	UprobeSslShutdown       *ebpf.ProgramSpec `ebpf:"uprobe_ssl_shutdown"`
-	UprobeSslWrite          *ebpf.ProgramSpec `ebpf:"uprobe_ssl_write"`
-	UprobeSslWriteEx        *ebpf.ProgramSpec `ebpf:"uprobe_ssl_write_ex"`
-	UretprobeSslDoHandshake *ebpf.ProgramSpec `ebpf:"uretprobe_ssl_do_handshake"`
-	UretprobeSslRead        *ebpf.ProgramSpec `ebpf:"uretprobe_ssl_read"`
-	UretprobeSslReadEx      *ebpf.ProgramSpec `ebpf:"uretprobe_ssl_read_ex"`
-	UretprobeSslWrite       *ebpf.ProgramSpec `ebpf:"uretprobe_ssl_write"`
-	UretprobeSslWriteEx     *ebpf.ProgramSpec `ebpf:"uretprobe_ssl_write_ex"`
+	AsyncReset                 *ebpf.ProgramSpec `ebpf:"async_reset"`
+	EmitAsyncInit              *ebpf.ProgramSpec `ebpf:"emit_async_init"`
+	KprobeSysExit              *ebpf.ProgramSpec `ebpf:"kprobe_sys_exit"`
+	KprobeTcpCleanupRbuf       *ebpf.ProgramSpec `ebpf:"kprobe_tcp_cleanup_rbuf"`
+	KprobeTcpClose             *ebpf.ProgramSpec `ebpf:"kprobe_tcp_close"`
+	KprobeTcpConnect           *ebpf.ProgramSpec `ebpf:"kprobe_tcp_connect"`
+	KprobeTcpRcvEstablished    *ebpf.ProgramSpec `ebpf:"kprobe_tcp_rcv_established"`
+	KprobeTcpRecvmsg           *ebpf.ProgramSpec `ebpf:"kprobe_tcp_recvmsg"`
+	KprobeTcpSendmsg           *ebpf.ProgramSpec `ebpf:"kprobe_tcp_sendmsg"`
+	KprobeUnixStreamRecvmsg    *ebpf.ProgramSpec `ebpf:"kprobe_unix_stream_recvmsg"`
+	KprobeUnixStreamSendmsg    *ebpf.ProgramSpec `ebpf:"kprobe_unix_stream_sendmsg"`
+	KretprobeSockAlloc         *ebpf.ProgramSpec `ebpf:"kretprobe_sock_alloc"`
+	KretprobeSysAccept4        *ebpf.ProgramSpec `ebpf:"kretprobe_sys_accept4"`
+	KretprobeSysClone          *ebpf.ProgramSpec `ebpf:"kretprobe_sys_clone"`
+	KretprobeSysConnect        *ebpf.ProgramSpec `ebpf:"kretprobe_sys_connect"`
+	KretprobeTcpRecvmsg        *ebpf.ProgramSpec `ebpf:"kretprobe_tcp_recvmsg"`
+	KretprobeTcpSendmsg        *ebpf.ProgramSpec `ebpf:"kretprobe_tcp_sendmsg"`
+	KretprobeUnixStreamRecvmsg *ebpf.ProgramSpec `ebpf:"kretprobe_unix_stream_recvmsg"`
+	KretprobeUnixStreamSendmsg *ebpf.ProgramSpec `ebpf:"kretprobe_unix_stream_sendmsg"`
+	ProtocolHttp               *ebpf.ProgramSpec `ebpf:"protocol_http"`
+	ProtocolHttp2              *ebpf.ProgramSpec `ebpf:"protocol_http2"`
+	ProtocolTcp                *ebpf.ProgramSpec `ebpf:"protocol_tcp"`
+	SocketHttpFilter           *ebpf.ProgramSpec `ebpf:"socket__http_filter"`
+	UprobeSslDoHandshake       *ebpf.ProgramSpec `ebpf:"uprobe_ssl_do_handshake"`
+	UprobeSslRead              *ebpf.ProgramSpec `ebpf:"uprobe_ssl_read"`
+	UprobeSslReadEx            *ebpf.ProgramSpec `ebpf:"uprobe_ssl_read_ex"`
+	UprobeSslShutdown          *ebpf.ProgramSpec `ebpf:"uprobe_ssl_shutdown"`
+	UprobeSslWrite             *ebpf.ProgramSpec `ebpf:"uprobe_ssl_write"`
+	UprobeSslWriteEx           *ebpf.ProgramSpec `ebpf:"uprobe_ssl_write_ex"`
+	UretprobeSslDoHandshake    *ebpf.ProgramSpec `ebpf:"uretprobe_ssl_do_handshake"`
+	UretprobeSslRead           *ebpf.ProgramSpec `ebpf:"uretprobe_ssl_read"`
+	UretprobeSslReadEx         *ebpf.ProgramSpec `ebpf:"uretprobe_ssl_read_ex"`
+	UretprobeSslWrite          *ebpf.ProgramSpec `ebpf:"uretprobe_ssl_write"`
+	UretprobeSslWriteEx        *ebpf.ProgramSpec `ebpf:"uretprobe_ssl_write_ex"`
 }
 
 // bpf_tpMapSpecs contains maps before they are loaded into the kernel.
@@ -297,6 +303,7 @@ type bpf_tpMapSpecs struct {
 	ActiveSslHandshakes     *ebpf.MapSpec `ebpf:"active_ssl_handshakes"`
 	ActiveSslReadArgs       *ebpf.MapSpec `ebpf:"active_ssl_read_args"`
 	ActiveSslWriteArgs      *ebpf.MapSpec `ebpf:"active_ssl_write_args"`
+	ActiveUnixSocks         *ebpf.MapSpec `ebpf:"active_unix_socks"`
 	AsyncResetArgs          *ebpf.MapSpec `ebpf:"async_reset_args"`
 	ClientConnectInfo       *ebpf.MapSpec `ebpf:"client_connect_info"`
 	CloneMap                *ebpf.MapSpec `ebpf:"clone_map"`
@@ -358,6 +365,7 @@ type bpf_tpMaps struct {
 	ActiveSslHandshakes     *ebpf.Map `ebpf:"active_ssl_handshakes"`
 	ActiveSslReadArgs       *ebpf.Map `ebpf:"active_ssl_read_args"`
 	ActiveSslWriteArgs      *ebpf.Map `ebpf:"active_ssl_write_args"`
+	ActiveUnixSocks         *ebpf.Map `ebpf:"active_unix_socks"`
 	AsyncResetArgs          *ebpf.Map `ebpf:"async_reset_args"`
 	ClientConnectInfo       *ebpf.Map `ebpf:"client_connect_info"`
 	CloneMap                *ebpf.Map `ebpf:"clone_map"`
@@ -402,6 +410,7 @@ func (m *bpf_tpMaps) Close() error {
 		m.ActiveSslHandshakes,
 		m.ActiveSslReadArgs,
 		m.ActiveSslWriteArgs,
+		m.ActiveUnixSocks,
 		m.AsyncResetArgs,
 		m.ClientConnectInfo,
 		m.CloneMap,
@@ -439,36 +448,40 @@ func (m *bpf_tpMaps) Close() error {
 //
 // It can be passed to loadBpf_tpObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_tpPrograms struct {
-	AsyncReset              *ebpf.Program `ebpf:"async_reset"`
-	EmitAsyncInit           *ebpf.Program `ebpf:"emit_async_init"`
-	KprobeSysExit           *ebpf.Program `ebpf:"kprobe_sys_exit"`
-	KprobeTcpCleanupRbuf    *ebpf.Program `ebpf:"kprobe_tcp_cleanup_rbuf"`
-	KprobeTcpClose          *ebpf.Program `ebpf:"kprobe_tcp_close"`
-	KprobeTcpConnect        *ebpf.Program `ebpf:"kprobe_tcp_connect"`
-	KprobeTcpRcvEstablished *ebpf.Program `ebpf:"kprobe_tcp_rcv_established"`
-	KprobeTcpRecvmsg        *ebpf.Program `ebpf:"kprobe_tcp_recvmsg"`
-	KprobeTcpSendmsg        *ebpf.Program `ebpf:"kprobe_tcp_sendmsg"`
-	KretprobeSockAlloc      *ebpf.Program `ebpf:"kretprobe_sock_alloc"`
-	KretprobeSysAccept4     *ebpf.Program `ebpf:"kretprobe_sys_accept4"`
-	KretprobeSysClone       *ebpf.Program `ebpf:"kretprobe_sys_clone"`
-	KretprobeSysConnect     *ebpf.Program `ebpf:"kretprobe_sys_connect"`
-	KretprobeTcpRecvmsg     *ebpf.Program `ebpf:"kretprobe_tcp_recvmsg"`
-	KretprobeTcpSendmsg     *ebpf.Program `ebpf:"kretprobe_tcp_sendmsg"`
-	ProtocolHttp            *ebpf.Program `ebpf:"protocol_http"`
-	ProtocolHttp2           *ebpf.Program `ebpf:"protocol_http2"`
-	ProtocolTcp             *ebpf.Program `ebpf:"protocol_tcp"`
-	SocketHttpFilter        *ebpf.Program `ebpf:"socket__http_filter"`
-	UprobeSslDoHandshake    *ebpf.Program `ebpf:"uprobe_ssl_do_handshake"`
-	UprobeSslRead           *ebpf.Program `ebpf:"uprobe_ssl_read"`
-	UprobeSslReadEx         *ebpf.Program `ebpf:"uprobe_ssl_read_ex"`
-	UprobeSslShutdown       *ebpf.Program `ebpf:"uprobe_ssl_shutdown"`
-	UprobeSslWrite          *ebpf.Program `ebpf:"uprobe_ssl_write"`
-	UprobeSslWriteEx        *ebpf.Program `ebpf:"uprobe_ssl_write_ex"`
-	UretprobeSslDoHandshake *ebpf.Program `ebpf:"uretprobe_ssl_do_handshake"`
-	UretprobeSslRead        *ebpf.Program `ebpf:"uretprobe_ssl_read"`
-	UretprobeSslReadEx      *ebpf.Program `ebpf:"uretprobe_ssl_read_ex"`
-	UretprobeSslWrite       *ebpf.Program `ebpf:"uretprobe_ssl_write"`
-	UretprobeSslWriteEx     *ebpf.Program `ebpf:"uretprobe_ssl_write_ex"`
+	AsyncReset                 *ebpf.Program `ebpf:"async_reset"`
+	EmitAsyncInit              *ebpf.Program `ebpf:"emit_async_init"`
+	KprobeSysExit              *ebpf.Program `ebpf:"kprobe_sys_exit"`
+	KprobeTcpCleanupRbuf       *ebpf.Program `ebpf:"kprobe_tcp_cleanup_rbuf"`
+	KprobeTcpClose             *ebpf.Program `ebpf:"kprobe_tcp_close"`
+	KprobeTcpConnect           *ebpf.Program `ebpf:"kprobe_tcp_connect"`
+	KprobeTcpRcvEstablished    *ebpf.Program `ebpf:"kprobe_tcp_rcv_established"`
+	KprobeTcpRecvmsg           *ebpf.Program `ebpf:"kprobe_tcp_recvmsg"`
+	KprobeTcpSendmsg           *ebpf.Program `ebpf:"kprobe_tcp_sendmsg"`
+	KprobeUnixStreamRecvmsg    *ebpf.Program `ebpf:"kprobe_unix_stream_recvmsg"`
+	KprobeUnixStreamSendmsg    *ebpf.Program `ebpf:"kprobe_unix_stream_sendmsg"`
+	KretprobeSockAlloc         *ebpf.Program `ebpf:"kretprobe_sock_alloc"`
+	KretprobeSysAccept4        *ebpf.Program `ebpf:"kretprobe_sys_accept4"`
+	KretprobeSysClone          *ebpf.Program `ebpf:"kretprobe_sys_clone"`
+	KretprobeSysConnect        *ebpf.Program `ebpf:"kretprobe_sys_connect"`
+	KretprobeTcpRecvmsg        *ebpf.Program `ebpf:"kretprobe_tcp_recvmsg"`
+	KretprobeTcpSendmsg        *ebpf.Program `ebpf:"kretprobe_tcp_sendmsg"`
+	KretprobeUnixStreamRecvmsg *ebpf.Program `ebpf:"kretprobe_unix_stream_recvmsg"`
+	KretprobeUnixStreamSendmsg *ebpf.Program `ebpf:"kretprobe_unix_stream_sendmsg"`
+	ProtocolHttp               *ebpf.Program `ebpf:"protocol_http"`
+	ProtocolHttp2              *ebpf.Program `ebpf:"protocol_http2"`
+	ProtocolTcp                *ebpf.Program `ebpf:"protocol_tcp"`
+	SocketHttpFilter           *ebpf.Program `ebpf:"socket__http_filter"`
+	UprobeSslDoHandshake       *ebpf.Program `ebpf:"uprobe_ssl_do_handshake"`
+	UprobeSslRead              *ebpf.Program `ebpf:"uprobe_ssl_read"`
+	UprobeSslReadEx            *ebpf.Program `ebpf:"uprobe_ssl_read_ex"`
+	UprobeSslShutdown          *ebpf.Program `ebpf:"uprobe_ssl_shutdown"`
+	UprobeSslWrite             *ebpf.Program `ebpf:"uprobe_ssl_write"`
+	UprobeSslWriteEx           *ebpf.Program `ebpf:"uprobe_ssl_write_ex"`
+	UretprobeSslDoHandshake    *ebpf.Program `ebpf:"uretprobe_ssl_do_handshake"`
+	UretprobeSslRead           *ebpf.Program `ebpf:"uretprobe_ssl_read"`
+	UretprobeSslReadEx         *ebpf.Program `ebpf:"uretprobe_ssl_read_ex"`
+	UretprobeSslWrite          *ebpf.Program `ebpf:"uretprobe_ssl_write"`
+	UretprobeSslWriteEx        *ebpf.Program `ebpf:"uretprobe_ssl_write_ex"`
 }
 
 func (p *bpf_tpPrograms) Close() error {
@@ -482,12 +495,16 @@ func (p *bpf_tpPrograms) Close() error {
 		p.KprobeTcpRcvEstablished,
 		p.KprobeTcpRecvmsg,
 		p.KprobeTcpSendmsg,
+		p.KprobeUnixStreamRecvmsg,
+		p.KprobeUnixStreamSendmsg,
 		p.KretprobeSockAlloc,
 		p.KretprobeSysAccept4,
 		p.KretprobeSysClone,
 		p.KretprobeSysConnect,
 		p.KretprobeTcpRecvmsg,
 		p.KretprobeTcpSendmsg,
+		p.KretprobeUnixStreamRecvmsg,
+		p.KretprobeUnixStreamSendmsg,
 		p.ProtocolHttp,
 		p.ProtocolHttp2,
 		p.ProtocolTcp,

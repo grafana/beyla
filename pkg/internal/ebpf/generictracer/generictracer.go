@@ -284,6 +284,16 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.FunctionPrograms {
 			Required: true,
 			Start:    p.bpfObjects.KprobeSysExit,
 		},
+		"unix_stream_recvmsg": {
+			Required: true,
+			Start:    p.bpfObjects.KprobeUnixStreamRecvmsg,
+			End:      p.bpfObjects.KretprobeUnixStreamRecvmsg,
+		},
+		"unix_stream_sendmsg": {
+			Required: true,
+			Start:    p.bpfObjects.KprobeUnixStreamSendmsg,
+			End:      p.bpfObjects.KretprobeUnixStreamSendmsg,
+		},
 	}
 }
 

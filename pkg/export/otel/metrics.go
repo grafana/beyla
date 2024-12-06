@@ -59,6 +59,7 @@ const (
 	FeatureSpan        = "application_span"
 	FeatureGraph       = "application_service_graph"
 	FeatureProcess     = "application_process"
+	FeatureEBPF        = "ebpf"
 )
 
 type MetricsConfig struct {

@@ -139,6 +139,10 @@ func (p *PrometheusConfig) NetworkMetricsEnabled() bool {
 	return slices.Contains(p.Features, otel.FeatureNetwork)
 }
 
+func (p *PrometheusConfig) EBPFEnabled() bool {
+	return slices.Contains(p.Features, otel.FeatureEBPF)
+}
+
 func (p *PrometheusConfig) EndpointEnabled() bool {
 	return p.Port != 0 || p.Registry != nil
 }

@@ -103,7 +103,7 @@ func (libs instrumentedLibsT) removeRef(id uint64) (*libModule, error) {
 			}
 		}
 
-		delete(instrumentedLibs, id)
+		delete(libs, id)
 	}
 
 	return module, nil

@@ -17,14 +17,7 @@ static __always_inline struct unix_sock *unix_sock_from_socket(struct socket *so
     struct sock *sk;
     BPF_CORE_READ_INTO(&sk, sock, sk);
 
-    if (!sk) {
-        return 0;
-    }
-
-    struct unix_sock *usock;
-    BPF_CORE_READ_INTO(&usock, sock, sk);
-
-    return usock;
+    return (struct unix_sock *)sk;
 }
 
 static __always_inline struct unix_sock *unix_sock_from_sk(struct sock *sk) {
@@ -187,10 +180,12 @@ static __always_inline int return_unix_recvmsg(void *ctx, u64 id, int copied_len
 
     u8 *buf = iovec_memory();
     if (buf) {
-        copied_len = read_iovec_ctx(iov_ctx, buf, copied_len);
-        if (copied_len) {
+        // We may read less than copied_len, iovec iterators are limited
+        // to const iterations in our BPF code.
+        int read_len = read_iovec_ctx(iov_ctx, buf, copied_len);
+        if (read_len) {
             // doesn't return must be logically last statement
-            handle_buf_with_connection(ctx, &p_conn, buf, copied_len, NO_SSL, TCP_RECV, 0);
+            handle_buf_with_connection(ctx, &p_conn, buf, read_len, NO_SSL, TCP_RECV, 0);
         } else {
             bpf_dbg_printk("Not copied anything");
         }
@@ -229,7 +224,7 @@ int BPF_KPROBE(kprobe_unix_stream_sendmsg, struct socket *sock, struct msghdr *m
     unsigned long peer_inode_number = 0;
     BPF_CORE_READ_INTO(&inode_number, sock, sk, sk_socket, file, f_inode, i_ino);
 
-    struct unix_sock *usock = unix_sock_from_socket(sock);
+    struct unix_sock *usock = unix_sock_from_sk(sk);
 
     if (usock) {
         BPF_CORE_READ_INTO(&peer_inode_number, usock, peer, sk_socket, file, f_inode, i_ino);

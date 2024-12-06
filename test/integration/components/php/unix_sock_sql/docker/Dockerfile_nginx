@@ -1,0 +1,41 @@
+FROM nginx:latest
+
+SHELL ["/bin/bash", "-c"]
+
+RUN chmod 1777 /tmp
+RUN  apt-get update -y && apt-get install -y procps 
+
+RUN groupadd -f www-data && \
+    (id -u www-data &> /dev/null || useradd -G www-data www-data -D)
+
+RUN usermod -u 1000 www-data
+RUN groupmod -g 1000 www-data
+RUN usermod -aG adm www-data
+
+RUN mkdir /etc/nginx/sites-available && mkdir /etc/nginx/sites-enabled
+
+COPY test/integration/components/php/unix_sock_sql/config/nginx/nginx.conf /etc/nginx/nginx.conf
+COPY test/integration/components/php/unix_sock_sql/config/nginx/sites-available /etc/nginx/sites-available
+COPY --chown=www-data:www-data test/integration/components/php/unix_sock_sql/src/ /var/www/html/
+ 
+RUN  ln -s /etc/nginx/sites-available/default.conf /etc/nginx/sites-enabled/  
+
+EXPOSE 80/tcp
+
+RUN unlink /var/log/nginx/access.log
+RUN unlink /var/log/nginx/error.log
+
+RUN chown -R www-data:www-data /var/log/nginx && \
+    chown -R www-data:www-data /etc/nginx && \
+    chown -R www-data:www-data /var/cache/nginx && \
+    chown -R www-data:www-data /var/www && \
+    install -o www-data -g www-data /dev/null /var/run/nginx.pid
+
+WORKDIR /var/www/html    
+
+RUN rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+USER www-data
+
+CMD ["/usr/sbin/nginx", "-g", "daemon off;"] 
+

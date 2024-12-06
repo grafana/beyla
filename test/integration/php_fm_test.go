@@ -140,7 +140,7 @@ func testHTTPTracesPHP(t *testing.T) {
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
 		traces := tq.FindBySpan(jaeger.Tag{Key: "url.path", Type: "string", Value: "/"})
 		require.GreaterOrEqual(t, len(traces), 1)
-		trace = traces[0]
+		trace = traces[len(traces)-1]
 
 		// Check the information of the parent span
 		res := trace.FindByOperationNameAndService("GET /", "nginx")

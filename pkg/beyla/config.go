@@ -98,6 +98,7 @@ var DefaultConfig = Config{
 	Printer:      false, // Deprecated: use TracePrinter instead
 	TracePrinter: debug.TracePrinterDisabled,
 	InternalMetrics: imetrics.Config{
+		OTELMetrics: false, // disabled by default
 		Prometheus: imetrics.PrometheusConfig{
 			Port: 0, // disabled by default
 			Path: "/internal/metrics",
@@ -273,6 +274,13 @@ func (c *Config) Validate() error {
 		!c.Prometheus.Enabled() && !c.TracePrinter.Enabled() {
 		return ConfigError("you need to define at least one exporter: trace_printer," +
 			" grafana, otel_metrics_export, otel_traces_export or prometheus_export")
+	}
+
+	if c.InternalMetrics.OTELMetrics && c.InternalMetrics.Prometheus.Port != 0 {
+		return ConfigError("you can't enable both OTEL and Prometheus internal metrics")
+	}
+	if c.InternalMetrics.OTELMetrics && !c.Metrics.Enabled() && !c.Grafana.OTLP.MetricsEnabled() {
+		return ConfigError("you can't enable OTEL internal metrics without enabling OTEL metrics")
 	}
 
 	return nil

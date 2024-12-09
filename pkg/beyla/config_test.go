@@ -200,7 +200,8 @@ network:
 			},
 		},
 		Routes: &transform.RoutesConfig{
-			Unmatch: transform.UnmatchHeuristic,
+			Unmatch:      transform.UnmatchHeuristic,
+			WildcardChar: "*",
 		},
 		NameResolver: &transform.NameResolverConfig{
 			Sources:  []string{"k8s", "dns"},

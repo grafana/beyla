@@ -49,6 +49,8 @@ type RoutesConfig struct {
 	Patterns       []string   `yaml:"patterns"`
 	IgnorePatterns []string   `yaml:"ignored_patterns"`
 	IgnoredEvents  IgnoreMode `yaml:"ignore_mode"`
+	// Character that will be used to replace route segments
+	WildcardChar string `yaml:"wildcard_char"`
 }
 
 func RoutesProvider(rc *RoutesConfig) pipe.MiddleProvider[[]request.Span, []request.Span] {
@@ -98,15 +100,15 @@ func (rn *routerNode) provideRoutes() (pipe.MiddleFunc[[]request.Span, []request
 				if routesEnabled {
 					s.Route = matcher.Find(s.Path)
 				}
-				unmatchAction(s)
+				unmatchAction(rc, s)
 			}
 			out <- spans
 		}
 	}, nil
 }
 
-func chooseUnmatchPolicy(rc *RoutesConfig) (func(span *request.Span), error) {
-	var unmatchAction func(span *request.Span)
+func chooseUnmatchPolicy(rc *RoutesConfig) (func(rc *RoutesConfig, span *request.Span), error) {
+	var unmatchAction func(rc *RoutesConfig, span *request.Span)
 
 	switch rc.Unmatch {
 	case UnmatchWildcard, "":
@@ -142,23 +144,23 @@ func chooseUnmatchPolicy(rc *RoutesConfig) (func(span *request.Span), error) {
 	return unmatchAction, nil
 }
 
-func leaveUnmatchEmpty(_ *request.Span) {}
+func leaveUnmatchEmpty(rc *RoutesConfig, _ *request.Span) {}
 
-func setUnmatchToWildcard(str *request.Span) {
+func setUnmatchToWildcard(rc *RoutesConfig, str *request.Span) {
 	if str.Route == "" {
 		str.Route = wildCard
 	}
 }
 
-func setUnmatchToPath(str *request.Span) {
+func setUnmatchToPath(rc *RoutesConfig, str *request.Span) {
 	if str.Route == "" {
 		str.Route = str.Path
 	}
 }
 
-func classifyFromPath(s *request.Span) {
+func classifyFromPath(rc *RoutesConfig, s *request.Span) {
 	if s.Route == "" && (s.Type == request.EventTypeHTTP || s.Type == request.EventTypeHTTPClient) {
-		s.Route = route.ClusterPath(s.Path)
+		s.Route = route.ClusterPath(s.Path, rc.WildcardChar)
 	}
 }
 

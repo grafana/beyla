@@ -92,13 +92,13 @@ func TestUnmatchedAuto(t *testing.T) {
 			in <- []request.Span{{Path: "/customer/1/job/2", Type: request.EventTypeHTTP}}
 			assert.Equal(t, []request.Span{{
 				Path:  "/customer/1/job/2",
-				Route: "/customer/#/job/#",
+				Route: "/customer/*/job/*",
 				Type:  request.EventTypeHTTP,
 			}}, testutil.ReadChannel(t, out, testTimeout))
 			in <- []request.Span{{Path: "/customer/lfdsjd/job/erwejre", Type: request.EventTypeHTTPClient}}
 			assert.Equal(t, []request.Span{{
 				Path:  "/customer/lfdsjd/job/erwejre",
-				Route: "/customer/#/job/#",
+				Route: "/customer/*/job/*",
 				Type:  request.EventTypeHTTPClient,
 			}}, testutil.ReadChannel(t, out, testTimeout))
 		})

@@ -45,7 +45,7 @@ func InitAutoClassifier() error {
 }
 
 //nolint:cyclop
-func ClusterPath(path string) string {
+func ClusterPath(path string, replacement string) string {
 	if path == "" {
 		return path
 	}
@@ -61,11 +61,11 @@ func ClusterPath(path string) string {
 		if c == '/' {
 			nSegments++
 			if skip {
-				p[sPos] = '#'
+				p[sPos] = replacement[0]
 				sPos++
 			} else if sFwd > sPos {
 				if !okWord(string(p[sPos:sFwd])) {
-					p[sPos] = '#'
+					p[sPos] = replacement[0]
 					sPos++
 				} else {
 					sPos = sFwd
@@ -95,11 +95,11 @@ func ClusterPath(path string) string {
 	}
 
 	if skip {
-		p[sPos] = '#'
+		p[sPos] = replacement[0]
 		sPos++
 	} else if sFwd > sPos {
 		if !okWord(string(p[sPos:sFwd])) {
-			p[sPos] = '#'
+			p[sPos] = replacement[0]
 			sPos++
 		} else {
 			sPos = sFwd

@@ -1,6 +1,7 @@
 package route
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -8,30 +9,32 @@ import (
 
 func TestURLClustering(t *testing.T) {
 	err := InitAutoClassifier()
-
-	wildCard := "*"
-
 	assert.NoError(t, err)
-	assert.Equal(t, "", ClusterPath("", wildCard))
-	assert.Equal(t, "/", ClusterPath("/", wildCard))
-	assert.Equal(t, "/users/*/j4elk/*/job/*", ClusterPath("/users/fdklsd/j4elk/23993/job/2", wildCard))
-	assert.Equal(t, "*", ClusterPath("123", wildCard))
-	assert.Equal(t, "/*", ClusterPath("/123", wildCard))
-	assert.Equal(t, "*/", ClusterPath("123/", wildCard))
-	assert.Equal(t, "*/*", ClusterPath("123/ljgdflgjf", wildCard))
-	assert.Equal(t, "/*", ClusterPath("/**", wildCard))
-	assert.Equal(t, "/u/*", ClusterPath("/u/2", wildCard))
-	assert.Equal(t, "/v1/products/*", ClusterPath("/v1/products/2", wildCard))
-	assert.Equal(t, "/v1/products/*", ClusterPath("/v1/products/22", wildCard))
-	assert.Equal(t, "/v1/products/*", ClusterPath("/v1/products/22j", wildCard))
-	assert.Equal(t, "/products/*/org/*", ClusterPath("/products/1/org/3", wildCard))
-	assert.Equal(t, "/products//org/*", ClusterPath("/products//org/3", wildCard))
-	assert.Equal(t, "/v1/k6-test-runs/*", ClusterPath("/v1/k6-test-runs/1", wildCard))
-	assert.Equal(t, "/attach", ClusterPath("/attach", wildCard))
-	assert.Equal(t, "/usuarios/*/j4elk/*/trabajo/*", ClusterPath("/usuarios/fdklsd/j4elk/23993/trabajo/2", wildCard))
-	assert.Equal(t, "/Benutzer/*/j4elk/*/Arbeit/*", ClusterPath("/Benutzer/fdklsd/j4elk/23993/Arbeit/2", wildCard))
-	assert.Equal(t, "/utilisateurs/*/j4elk/*/tache/*", ClusterPath("/utilisateurs/fdklsd/j4elk/23993/tache/2", wildCard))
-	assert.Equal(t, "/products/", ClusterPath("/products/", wildCard))
-	assert.Equal(t, "/user-space/", ClusterPath("/user-space/", wildCard))
-	assert.Equal(t, "/user_space/", ClusterPath("/user_space/", wildCard))
+
+	for _, tc := range []string{"*", "#", "_", "-"} {
+		t.Run(string(tc), func(t *testing.T) {
+			assert.Equal(t, "", ClusterPath("", tc))
+			assert.Equal(t, "/", ClusterPath("/", tc))
+			assert.Equal(t, fmt.Sprintf("/users/%[1]s/j4elk/%[1]s/job/%[1]s", tc), ClusterPath("/users/fdklsd/j4elk/23993/job/2", tc))
+			assert.Equal(t, tc, ClusterPath("123", tc))
+			assert.Equal(t, fmt.Sprintf("/%s", tc), ClusterPath("/123", tc))
+			assert.Equal(t, fmt.Sprintf("%s/", tc), ClusterPath("123/", tc))
+			assert.Equal(t, fmt.Sprintf("%[1]s/%[1]s", tc), ClusterPath("123/ljgdflgjf", tc))
+			assert.Equal(t, fmt.Sprintf("/%s", tc), ClusterPath("/**", tc))
+			assert.Equal(t, fmt.Sprintf("/u/%s", tc), ClusterPath("/u/2", tc))
+			assert.Equal(t, fmt.Sprintf("/v1/products/%s", tc), ClusterPath("/v1/products/2", tc))
+			assert.Equal(t, fmt.Sprintf("/v1/products/%s", tc), ClusterPath("/v1/products/22", tc))
+			assert.Equal(t, fmt.Sprintf("/v1/products/%s", tc), ClusterPath("/v1/products/22j", tc))
+			assert.Equal(t, fmt.Sprintf("/products/%[1]s/org/%[1]s", tc), ClusterPath("/products/1/org/3", tc))
+			assert.Equal(t, fmt.Sprintf("/products//org/%s", tc), ClusterPath("/products//org/3", tc))
+			assert.Equal(t, fmt.Sprintf("/v1/k6-test-runs/%s", tc), ClusterPath("/v1/k6-test-runs/1", tc))
+			assert.Equal(t, "/attach", ClusterPath("/attach", tc))
+			assert.Equal(t, fmt.Sprintf("/usuarios/%[1]s/j4elk/%[1]s/trabajo/%[1]s", tc), ClusterPath("/usuarios/fdklsd/j4elk/23993/trabajo/2", tc))
+			assert.Equal(t, fmt.Sprintf("/Benutzer/%[1]s/j4elk/%[1]s/Arbeit/%[1]s", tc), ClusterPath("/Benutzer/fdklsd/j4elk/23993/Arbeit/2", tc))
+			assert.Equal(t, fmt.Sprintf("/utilisateurs/%[1]s/j4elk/%[1]s/tache/%[1]s", tc), ClusterPath("/utilisateurs/fdklsd/j4elk/23993/tache/2", tc))
+			assert.Equal(t, "/products/", ClusterPath("/products/", tc))
+			assert.Equal(t, "/user-space/", ClusterPath("/user-space/", tc))
+			assert.Equal(t, "/user_space/", ClusterPath("/user_space/", tc))
+		})
+	}
 }

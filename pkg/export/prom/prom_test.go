@@ -316,31 +316,45 @@ func TestSpanMetricsDiscarded(t *testing.T) {
 	svcExportTraces := svc.ID{}
 	svcExportTraces.SetExportsOTelTraces()
 
+	ignoredSpan := request.Span{ServiceID: svcExportTraces, Type: request.EventTypeHTTPClient, Method: "GET", Route: "/v1/traces", RequestStart: 100, End: 200}
+	ignoredSpan.SetIgnoreMetrics()
+
 	tests := []struct {
 		name      string
 		span      request.Span
 		discarded bool
+		filtered  bool
 	}{
 		{
 			name:      "Foo span is not filtered",
 			span:      request.Span{ServiceID: svcNoExport, Type: request.EventTypeHTTPClient, Method: "GET", Route: "/foo", RequestStart: 100, End: 200},
 			discarded: false,
+			filtered:  false,
 		},
 		{
 			name:      "/v1/metrics span is filtered",
 			span:      request.Span{ServiceID: svcExportMetrics, Type: request.EventTypeHTTPClient, Method: "GET", Route: "/v1/metrics", RequestStart: 100, End: 200},
 			discarded: true,
+			filtered:  false,
+		},
+		{
+			name:      "/v1/traces span is filtered because we ignore this span",
+			span:      ignoredSpan,
+			discarded: false,
+			filtered:  true,
 		},
 		{
 			name:      "/v1/traces span is not filtered",
 			span:      request.Span{ServiceID: svcExportTraces, Type: request.EventTypeHTTPClient, Method: "GET", Route: "/v1/traces", RequestStart: 100, End: 200},
 			discarded: false,
+			filtered:  false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.discarded, !mr.otelSpanObserved(&tt.span), tt.name)
+			assert.Equal(t, tt.filtered, mr.otelSpanFiltered(&tt.span), tt.name)
 		})
 	}
 }

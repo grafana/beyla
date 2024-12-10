@@ -50,7 +50,7 @@ type RoutesConfig struct {
 	IgnorePatterns []string   `yaml:"ignored_patterns"`
 	IgnoredEvents  IgnoreMode `yaml:"ignore_mode"`
 	// Character that will be used to replace route segments
-	WildcardChar string `yaml:"wildcard_char"`
+	WildcardChar string `yaml:"wildcard_char,omitempty"`
 }
 
 func RoutesProvider(rc *RoutesConfig) pipe.MiddleProvider[[]request.Span, []request.Span] {

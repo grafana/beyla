@@ -44,6 +44,8 @@ type informersConfig struct {
 	disableNodes    bool
 	disableServices bool
 
+	restrictNode string
+
 	// waits for cache synchronization at start
 	waitCacheSync    bool
 	cacheSyncTimeout time.Duration
@@ -77,6 +79,12 @@ func WithoutNodes() InformerOption {
 func WithoutServices() InformerOption {
 	return func(c *informersConfig) {
 		c.disableServices = true
+	}
+}
+
+func RestrictNode(nodeName string) InformerOption {
+	return func(c *informersConfig) {
+		c.restrictNode = nodeName
 	}
 }
 
@@ -119,20 +127,9 @@ func InitInformers(ctx context.Context, opts ...InformerOption) (*Informers, err
 		}
 	}
 
-	informerFactory := informers.NewSharedInformerFactory(svc.config.kubeClient, svc.config.resyncPeriod)
-
-	if err := svc.initPodInformer(ctx, informerFactory); err != nil {
+	informerFactory, err := svc.initInformers(ctx, config)
+	if err != nil {
 		return nil, err
-	}
-	if !svc.config.disableNodes {
-		if err := svc.initNodeIPInformer(ctx, informerFactory); err != nil {
-			return nil, err
-		}
-	}
-	if !svc.config.disableServices {
-		if err := svc.initServiceIPInformer(ctx, informerFactory); err != nil {
-			return nil, err
-		}
 	}
 
 	svc.log.Debug("starting kubernetes informers")
@@ -157,6 +154,44 @@ func InitInformers(ctx context.Context, opts ...InformerOption) (*Informers, err
 
 	return svc, nil
 
+}
+
+func (inf *Informers) initInformers(ctx context.Context, config *informersConfig) (informers.SharedInformerFactory, error) {
+	var informerFactory informers.SharedInformerFactory
+	if config.restrictNode == "" {
+		informerFactory = informers.NewSharedInformerFactory(inf.config.kubeClient, inf.config.resyncPeriod)
+	} else {
+		informerFactory = informers.NewSharedInformerFactoryWithOptions(inf.config.kubeClient, inf.config.resyncPeriod,
+			informers.WithTweakListOptions(func(options *metav1.ListOptions) {
+				options.FieldSelector = "nodeName=" + config.restrictNode
+			}))
+	}
+	if err := inf.initPodInformer(ctx, informerFactory); err != nil {
+		return nil, err
+	}
+
+	if !inf.config.disableNodes {
+		if config.restrictNode != "" {
+			informerFactory = informers.NewSharedInformerFactoryWithOptions(inf.config.kubeClient, inf.config.resyncPeriod,
+				informers.WithTweakListOptions(func(options *metav1.ListOptions) {
+					options.FieldSelector = "metadata.name=" + config.restrictNode
+				}))
+		} // else: use default, unfiltered informerFactory instance
+		if err := inf.initNodeIPInformer(ctx, informerFactory); err != nil {
+			return nil, err
+		}
+	}
+	if !inf.config.disableServices {
+		if config.restrictNode != "" {
+			// informerFactory will be initially set to a "spec.nodeName"-filtered instance, so we need
+			// to create an unfiltered one for global services
+			informerFactory = informers.NewSharedInformerFactory(inf.config.kubeClient, inf.config.resyncPeriod)
+		}
+		if err := inf.initServiceIPInformer(ctx, informerFactory); err != nil {
+			return nil, err
+		}
+	}
+	return informerFactory, nil
 }
 
 func initConfigOpts(opts []InformerOption) *informersConfig {

@@ -584,7 +584,7 @@ func (r *metricsReporter) otelSpanObserved(span *request.Span) bool {
 
 // nolint:cyclop
 func (r *metricsReporter) observe(span *request.Span) {
-	if span.InternalSignal() {
+	if span.InternalSignal() || span.IgnoreMetrics() {
 		return
 	}
 	t := span.Timings()

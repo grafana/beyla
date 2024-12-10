@@ -124,7 +124,9 @@ static __always_inline void bpf_sock_ops_establish_cb(struct bpf_sock_ops *skops
         sk_ops_extract_key_ip4(skops, &conn);
     }
 
-    bpf_printk("SET %llx:%d -> %llx:%d", conn.s_ip[3], conn.s_port, conn.d_ip[3], conn.d_port);
+    bpf_printk("SET s_ip[3]: %llx s_port: %d", conn.s_ip[3], conn.s_port);
+    bpf_printk("SET d_ip[3]: %llx d_port: %d", conn.d_ip[3], conn.d_port);
+
     bpf_sock_hash_update(skops, &sock_dir, &conn, BPF_ANY);
 }
 

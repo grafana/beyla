@@ -581,9 +581,13 @@ func (r *metricsReporter) otelSpanObserved(span *request.Span) bool {
 	return r.cfg.OTelMetricsEnabled() && !span.Service.ExportsOTelMetrics()
 }
 
+func (r *metricsReporter) otelSpanFiltered(span *request.Span) bool {
+	return span.InternalSignal() || span.IgnoreMetrics()
+}
+
 // nolint:cyclop
 func (r *metricsReporter) observe(span *request.Span) {
-	if span.InternalSignal() {
+	if r.otelSpanFiltered(span) {
 		return
 	}
 	t := span.Timings()

@@ -160,7 +160,7 @@ func setUnmatchToPath(rc *RoutesConfig, str *request.Span) {
 
 func classifyFromPath(rc *RoutesConfig, s *request.Span) {
 	if s.Route == "" && (s.Type == request.EventTypeHTTP || s.Type == request.EventTypeHTTPClient) {
-		s.Route = route.ClusterPath(s.Path, rc.WildcardChar)
+		s.Route = route.ClusterPath(s.Path, rc.WildcardChar[0])
 	}
 }
 

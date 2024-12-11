@@ -144,15 +144,15 @@ func chooseUnmatchPolicy(rc *RoutesConfig) (func(rc *RoutesConfig, span *request
 	return unmatchAction, nil
 }
 
-func leaveUnmatchEmpty(rc *RoutesConfig, _ *request.Span) {}
+func leaveUnmatchEmpty(_ *RoutesConfig, _ *request.Span) {}
 
-func setUnmatchToWildcard(rc *RoutesConfig, str *request.Span) {
+func setUnmatchToWildcard(_ *RoutesConfig, str *request.Span) {
 	if str.Route == "" {
 		str.Route = wildCard
 	}
 }
 
-func setUnmatchToPath(rc *RoutesConfig, str *request.Span) {
+func setUnmatchToPath(_ *RoutesConfig, str *request.Span) {
 	if str.Route == "" {
 		str.Route = str.Path
 	}

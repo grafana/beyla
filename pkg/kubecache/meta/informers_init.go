@@ -8,12 +8,14 @@ import (
 	"os"
 	"path"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/protobuf/testing/protocmp"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -127,16 +129,25 @@ func InitInformers(ctx context.Context, opts ...InformerOption) (*Informers, err
 		}
 	}
 
-	informerFactory, err := svc.initInformers(ctx, config)
+	createdFactories, err := svc.initInformers(ctx, config)
 	if err != nil {
 		return nil, err
 	}
 
 	svc.log.Debug("starting kubernetes informers")
-	informerFactory.Start(ctx.Done())
+	allSynced := sync.WaitGroup{}
+	allSynced.Add(len(createdFactories))
+	for _, factory := range createdFactories {
+		factory.Start(ctx.Done())
+		go func() {
+			factory.WaitForCacheSync(ctx.Done())
+			allSynced.Done()
+		}()
+	}
+
 	go func() {
-		svc.log.Debug("waiting for informers' syncronization")
-		informerFactory.WaitForCacheSync(ctx.Done())
+		svc.log.Debug("waiting for informers' synchronization")
+		allSynced.Wait()
 		svc.log.Debug("informers synchronized")
 		close(svc.waitForSync)
 	}()
@@ -156,42 +167,47 @@ func InitInformers(ctx context.Context, opts ...InformerOption) (*Informers, err
 
 }
 
-func (inf *Informers) initInformers(ctx context.Context, config *informersConfig) (informers.SharedInformerFactory, error) {
+func (inf *Informers) initInformers(ctx context.Context, config *informersConfig) ([]informers.SharedInformerFactory, error) {
 	var informerFactory informers.SharedInformerFactory
 	if config.restrictNode == "" {
 		informerFactory = informers.NewSharedInformerFactory(inf.config.kubeClient, inf.config.resyncPeriod)
 	} else {
 		informerFactory = informers.NewSharedInformerFactoryWithOptions(inf.config.kubeClient, inf.config.resyncPeriod,
 			informers.WithTweakListOptions(func(options *metav1.ListOptions) {
-				options.FieldSelector = "nodeName=" + config.restrictNode
+				options.FieldSelector = fields.Set{"spec.nodeName": config.restrictNode}.String()
 			}))
 	}
+	createdFactories := []informers.SharedInformerFactory{informerFactory}
 	if err := inf.initPodInformer(ctx, informerFactory); err != nil {
 		return nil, err
 	}
 
 	if !inf.config.disableNodes {
+		nodeIFactory := informerFactory
 		if config.restrictNode != "" {
-			informerFactory = informers.NewSharedInformerFactoryWithOptions(inf.config.kubeClient, inf.config.resyncPeriod,
+			nodeIFactory = informers.NewSharedInformerFactoryWithOptions(inf.config.kubeClient, inf.config.resyncPeriod,
 				informers.WithTweakListOptions(func(options *metav1.ListOptions) {
-					options.FieldSelector = "metadata.name=" + config.restrictNode
+					options.FieldSelector = fields.Set{"metadata.name": config.restrictNode}.String()
 				}))
+			createdFactories = append(createdFactories, nodeIFactory)
 		} // else: use default, unfiltered informerFactory instance
-		if err := inf.initNodeIPInformer(ctx, informerFactory); err != nil {
+		if err := inf.initNodeIPInformer(ctx, nodeIFactory); err != nil {
 			return nil, err
 		}
 	}
 	if !inf.config.disableServices {
+		svcIFactory := informerFactory
 		if config.restrictNode != "" {
 			// informerFactory will be initially set to a "spec.nodeName"-filtered instance, so we need
 			// to create an unfiltered one for global services
-			informerFactory = informers.NewSharedInformerFactory(inf.config.kubeClient, inf.config.resyncPeriod)
+			svcIFactory = informers.NewSharedInformerFactory(inf.config.kubeClient, inf.config.resyncPeriod)
+			createdFactories = append(createdFactories, svcIFactory)
 		}
-		if err := inf.initServiceIPInformer(ctx, informerFactory); err != nil {
+		if err := inf.initServiceIPInformer(ctx, svcIFactory); err != nil {
 			return nil, err
 		}
 	}
-	return informerFactory, nil
+	return createdFactories, nil
 }
 
 func initConfigOpts(opts []InformerOption) *informersConfig {
@@ -505,6 +521,10 @@ func (inf *Informers) ipInfoEventHandler(ctx context.Context) *cache.ResourceEve
 	return &cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			metrics.InformerNew()
+			em := obj.(*indexableEntity).EncodedMeta
+			for _, ip := range em.Ips {
+				fmt.Println("******* " + ip + " -> " + em.Kind + "/" + em.Name)
+			}
 			// ignore headless services from being added
 			if headlessService(obj.(*indexableEntity).EncodedMeta) {
 				return

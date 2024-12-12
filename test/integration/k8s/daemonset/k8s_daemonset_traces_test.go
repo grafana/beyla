@@ -126,7 +126,9 @@ func TestBasicTracing(t *testing.T) {
 					require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
 					traces := tq.FindBySpan(jaeger.Tag{Key: "url.path", Type: "string", Value: "/pingpongtoo"})
 					require.NotEmpty(t, traces)
-					trace := traces[0]
+					// get the last trace, to avoid that the old instance captured any request
+					// before being restarted
+					trace := traces[len(traces)-1]
 					require.NotEmpty(t, trace.Spans)
 
 					// Check that the service.namespace is set from the K8s namespace
@@ -155,7 +157,7 @@ func TestBasicTracing(t *testing.T) {
 					}, trace.Processes[parent.ProcessID].Tags)
 					require.Empty(t, sd)
 
-					// ensure the pod really restarted
+					// ensure the pod really restarted, comparing the current uid with the previous pod uid
 					tag, found := jaeger.FindIn(trace.Processes[parent.ProcessID].Tags, "k8s.pod.uid")
 					assert.True(t, found)
 

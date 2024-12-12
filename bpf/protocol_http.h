@@ -307,7 +307,7 @@ static __always_inline void handle_http_response(unsigned char *small_buf,
     bpf_map_delete_elem(&active_ssl_connections, pid_conn);
 }
 
-// TAIL_PROTOCOL_HTTP
+// k_tail_protocol_http
 SEC("kprobe/http")
 int protocol_http(void *ctx) {
     call_protocol_args_t *args = protocol_args();

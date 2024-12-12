@@ -8,10 +8,6 @@
 
 #define HTTP2_GRPC_PREFACE "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
 
-#define FRAME_HEADER_LEN 9
-
-#define FLAG_DATA_END_STREAM 0x1
-
 typedef enum {
     FrameData = 0x0,
     FrameHeaders = 0x1,
@@ -33,10 +29,14 @@ typedef struct frame_header {
     u32 stream_id : 31;
 } __attribute__((packed)) frame_header_t;
 
+enum { k_flag_data_end_stream = 0x1, k_frame_header_len = 9 };
+
+_Static_assert(sizeof(frame_header_t) == k_frame_header_len, "frame_header_t size mismatch");
+
 static __always_inline u8 read_http2_grpc_frame_header(frame_header_t *frame,
                                                        const unsigned char *p,
                                                        u32 len) {
-    if (len < FRAME_HEADER_LEN) {
+    if (len < k_frame_header_len) {
         return 0;
     }
 
@@ -61,7 +61,7 @@ static __always_inline u8 is_settings_frame(unsigned char *p, u32 len) {
     return frame.type == FrameSettings && !frame.stream_id;
 }
 
-static __always_inline u8 is_headers_frame(frame_header_t *frame) {
+static __always_inline u8 is_headers_frame(const frame_header_t *frame) {
     return frame->type == FrameHeaders && frame->stream_id;
 }
 
@@ -87,20 +87,20 @@ static __always_inline u8 is_http2_or_grpc(unsigned char *p, u32 len) {
     return has_preface(p, len) || is_settings_frame(p, len);
 }
 
-static __always_inline u8 http_grpc_stream_ended(frame_header_t *frame) {
+static __always_inline u8 http_grpc_stream_ended(const frame_header_t *frame) {
     return is_headers_frame(frame) &&
-           ((frame->flags & FLAG_DATA_END_STREAM) == FLAG_DATA_END_STREAM);
+           ((frame->flags & k_flag_data_end_stream) == k_flag_data_end_stream);
 }
 
-static __always_inline u8 is_invalid_frame(frame_header_t *frame) {
+static __always_inline u8 is_invalid_frame(const frame_header_t *frame) {
     return frame->length == 0 && frame->type == FrameData;
 }
 
-static __always_inline u8 is_data_frame(frame_header_t *frame) {
+static __always_inline u8 is_data_frame(const frame_header_t *frame) {
     return frame->length && frame->type == FrameData;
 }
 
-static __always_inline u8 is_flags_only_frame(frame_header_t *frame) {
+static __always_inline u8 is_flags_only_frame(const frame_header_t *frame) {
     return frame->length <= 2;
 }
 

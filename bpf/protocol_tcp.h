@@ -172,7 +172,7 @@ static __always_inline void handle_unknown_tcp_connection(pid_connection_info_t 
     }
 }
 
-// TAIL_PROTOCOL_TCP
+// k_tail_protocol_tcp
 SEC("kprobe/tcp")
 int protocol_tcp(void *ctx) {
     call_protocol_args_t *args = protocol_args();

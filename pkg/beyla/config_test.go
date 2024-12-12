@@ -200,7 +200,8 @@ network:
 			},
 		},
 		Routes: &transform.RoutesConfig{
-			Unmatch: transform.UnmatchHeuristic,
+			Unmatch:      transform.UnmatchHeuristic,
+			WildcardChar: "*",
 		},
 		NameResolver: &transform.NameResolverConfig{
 			Sources:  []string{"k8s", "dns"},
@@ -363,6 +364,42 @@ func TestConfigValidate_TracePrinterFallback(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, cfg.Printer.Enabled())
 	assert.Equal(t, cfg.TracePrinter, debug.TracePrinterText)
+}
+
+func TestConfigValidateRoutes(t *testing.T) {
+	userConfig := bytes.NewBufferString(`executable_name: foo
+trace_printer: text
+routes:
+  unmatched: heuristic
+  wildcard_char: "*"
+`)
+	cfg, err := LoadConfig(userConfig)
+	require.NoError(t, err)
+	require.NoError(t, cfg.Validate())
+}
+
+func TestConfigValidateRoutes_Errors(t *testing.T) {
+	for _, tc := range []string{
+		`executable_name: foo
+trace_printer: text
+routes:
+  unmatched: heuristic
+  wildcard_char: "##"
+`, `executable_name: foo
+trace_printer: text
+routes:
+  unmatched: heuristic
+  wildcard_char: "random"
+`,
+	} {
+		testCaseName := regexp.MustCompile("wildcard_char: (.+)\n").FindStringSubmatch(tc)[1]
+		t.Run(testCaseName, func(t *testing.T) {
+			userConfig := bytes.NewBufferString(tc)
+			cfg, err := LoadConfig(userConfig)
+			require.NoError(t, err)
+			require.Error(t, cfg.Validate())
+		})
+	}
 }
 
 func TestConfig_OtelGoAutoEnv(t *testing.T) {

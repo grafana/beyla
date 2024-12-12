@@ -92,7 +92,3 @@ spec:
               value: "application,application_process"
             - name: BEYLA_NAME_RESOLVER_SOURCES
               value: "dns,k8s"
-            # should have no effect as we are running this in a single node
-            # just testing that we don't screw up local node info retrieval
-            - name: BEYLA_KUBE_META_RESTRICT_LOCAL_NODE
-              value: "true"

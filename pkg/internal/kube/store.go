@@ -310,16 +310,17 @@ func (s *Store) ServiceNameNamespaceForIP(ip string) (string, string) {
 		s.access.RUnlock()
 		return serviceInfo.Name, serviceInfo.Namespace
 	}
+	s.access.RUnlock()
+
+	s.access.Lock()
+	defer s.access.Unlock()
 
 	name, namespace := "", ""
 	if om, ok := s.objectMetaByIP[ip]; ok {
 		name, namespace = s.serviceNameNamespaceForMetadata(om)
 	}
-	s.access.RUnlock()
 
-	s.access.Lock()
 	s.otelServiceInfoByIP[ip] = OTelServiceNamePair{Name: name, Namespace: namespace}
-	s.access.Unlock()
 
 	return name, namespace
 }

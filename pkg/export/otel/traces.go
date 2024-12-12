@@ -672,11 +672,11 @@ func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 
 func spanKind(span *request.Span) trace2.SpanKind {
 	switch span.Type {
-	case request.EventTypeHTTP, request.EventTypeGRPC, request.EventTypeRedisServer:
+	case request.EventTypeHTTP, request.EventTypeGRPC, request.EventTypeRedisServer, request.EventTypeKafkaServer:
 		return trace2.SpanKindServer
 	case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient, request.EventTypeRedisClient:
 		return trace2.SpanKindClient
-	case request.EventTypeKafkaClient, request.EventTypeKafkaServer:
+	case request.EventTypeKafkaClient:
 		switch span.Method {
 		case request.MessagingPublish:
 			return trace2.SpanKindProducer

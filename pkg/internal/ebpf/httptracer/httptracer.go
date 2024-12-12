@@ -62,7 +62,7 @@ func (p *Tracer) SetupTailCalls() {
 	}{
 		{
 			index: 0,
-			prog:  p.bpfObjects.ExtendSkb,
+			prog:  p.bpfObjects.BeylaExtendSkb,
 		},
 	} {
 		err := p.bpfObjects.TcL7JumpTable.Update(uint32(tc.index), uint32(tc.prog.FD()), ebpf.UpdateAny)
@@ -143,7 +143,7 @@ func (p *Tracer) Run(ctx context.Context, _ chan<- []request.Span) {
 }
 
 func (p *Tracer) registerTC(iface ifaces.Interface) {
-	links := ebpfcommon.RegisterTC(iface, p.bpfObjects.TcHttpEgress.FD(), p.bpfObjects.TcHttpIngress.FD(), p.log)
+	links := ebpfcommon.RegisterTC(iface, p.bpfObjects.BeylaTcHttpEgress.FD(), p.bpfObjects.BeylaTcHttpIngress.FD(), p.log)
 	if links == nil {
 		return
 	}
@@ -156,8 +156,8 @@ func (p *Tracer) registerTC(iface ifaces.Interface) {
 func (p *Tracer) closeTC() {
 	p.log.Info("removing traffic control probes")
 
-	p.bpfObjects.TcHttpEgress.Close()
-	p.bpfObjects.TcHttpIngress.Close()
+	p.bpfObjects.BeylaTcHttpEgress.Close()
+	p.bpfObjects.BeylaTcHttpIngress.Close()
 
 	ebpfcommon.CloseTCLinks(p.qdiscs, p.egressFilters, p.ingressFilters, p.log)
 

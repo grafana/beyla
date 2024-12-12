@@ -179,7 +179,7 @@ static __always_inline bool same_ip(const u8 *ip1, const u8 *ip2) {
 }
 
 SEC("socket/http_filter")
-int socket__http_filter(struct __sk_buff *skb) {
+int beyla_socket__http_filter(struct __sk_buff *skb) {
     // If sampling is defined, will only parse 1 out of "sampling" flows
     if (sampling != 0 && (bpf_get_prandom_u32() % sampling) != 0) {
         return TC_ACT_OK;

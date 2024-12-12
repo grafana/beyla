@@ -13,7 +13,7 @@
 char __license[] SEC("license") = "Dual MIT/GPL";
 
 SEC("tc_ingress")
-int app_ingress(struct __sk_buff *skb) {
+int beyla_app_ingress(struct __sk_buff *skb) {
     //bpf_printk("ingress");
 
     protocol_info_t tcp = {};
@@ -80,7 +80,7 @@ static __always_inline void encode_data_in_ip_options(struct __sk_buff *skb,
 }
 
 SEC("tc_egress")
-int app_egress(struct __sk_buff *skb) {
+int beyla_app_egress(struct __sk_buff *skb) {
     //bpf_printk("egress");
     protocol_info_t tcp = {};
     connection_info_t conn = {};

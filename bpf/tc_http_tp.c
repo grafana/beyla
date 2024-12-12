@@ -408,7 +408,7 @@ move_data(unsigned char *dst, unsigned char *src, const unsigned char *end, u32 
 
 // TAIL_PROTOCOL_HTTP
 SEC("tc/http")
-void extend_skb(struct __sk_buff *ctx) {
+void beyla_extend_skb(struct __sk_buff *ctx) {
     tc_l7_args_t *args = l7_args();
 
     if (!args) {
@@ -582,7 +582,7 @@ update_conn_state_ingress(struct tcphdr *tcp, struct tc_http_ctx *http_ctx, u32 
 }
 
 SEC("tc_egress")
-int tc_http_egress(struct __sk_buff *ctx) {
+int beyla_tc_http_egress(struct __sk_buff *ctx) {
     struct tcphdr *tcp = tcp_header(ctx);
 
     if (!tcp) {
@@ -643,7 +643,7 @@ int tc_http_egress(struct __sk_buff *ctx) {
 }
 
 SEC("tc_ingress")
-int tc_http_ingress(struct __sk_buff *ctx) {
+int beyla_tc_http_ingress(struct __sk_buff *ctx) {
     struct tcphdr *tcp = tcp_header(ctx);
 
     if (!tcp) {

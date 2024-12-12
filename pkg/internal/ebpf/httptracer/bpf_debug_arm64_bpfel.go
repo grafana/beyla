@@ -103,9 +103,9 @@ type bpf_debugSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_debugProgramSpecs struct {
-	ExtendSkb     *ebpf.ProgramSpec `ebpf:"extend_skb"`
-	TcHttpEgress  *ebpf.ProgramSpec `ebpf:"tc_http_egress"`
-	TcHttpIngress *ebpf.ProgramSpec `ebpf:"tc_http_ingress"`
+	BeylaExtendSkb     *ebpf.ProgramSpec `ebpf:"beyla_extend_skb"`
+	BeylaTcHttpEgress  *ebpf.ProgramSpec `ebpf:"beyla_tc_http_egress"`
+	BeylaTcHttpIngress *ebpf.ProgramSpec `ebpf:"beyla_tc_http_ingress"`
 }
 
 // bpf_debugMapSpecs contains maps before they are loaded into the kernel.
@@ -165,16 +165,16 @@ func (m *bpf_debugMaps) Close() error {
 //
 // It can be passed to loadBpf_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_debugPrograms struct {
-	ExtendSkb     *ebpf.Program `ebpf:"extend_skb"`
-	TcHttpEgress  *ebpf.Program `ebpf:"tc_http_egress"`
-	TcHttpIngress *ebpf.Program `ebpf:"tc_http_ingress"`
+	BeylaExtendSkb     *ebpf.Program `ebpf:"beyla_extend_skb"`
+	BeylaTcHttpEgress  *ebpf.Program `ebpf:"beyla_tc_http_egress"`
+	BeylaTcHttpIngress *ebpf.Program `ebpf:"beyla_tc_http_ingress"`
 }
 
 func (p *bpf_debugPrograms) Close() error {
 	return _Bpf_debugClose(
-		p.ExtendSkb,
-		p.TcHttpEgress,
-		p.TcHttpIngress,
+		p.BeylaExtendSkb,
+		p.BeylaTcHttpEgress,
+		p.BeylaTcHttpIngress,
 	)
 }
 

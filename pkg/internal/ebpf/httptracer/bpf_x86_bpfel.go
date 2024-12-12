@@ -103,9 +103,9 @@ type bpfSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfProgramSpecs struct {
-	ExtendSkb     *ebpf.ProgramSpec `ebpf:"extend_skb"`
-	TcHttpEgress  *ebpf.ProgramSpec `ebpf:"tc_http_egress"`
-	TcHttpIngress *ebpf.ProgramSpec `ebpf:"tc_http_ingress"`
+	BeylaExtendSkb     *ebpf.ProgramSpec `ebpf:"beyla_extend_skb"`
+	BeylaTcHttpEgress  *ebpf.ProgramSpec `ebpf:"beyla_tc_http_egress"`
+	BeylaTcHttpIngress *ebpf.ProgramSpec `ebpf:"beyla_tc_http_ingress"`
 }
 
 // bpfMapSpecs contains maps before they are loaded into the kernel.
@@ -162,16 +162,16 @@ func (m *bpfMaps) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfPrograms struct {
-	ExtendSkb     *ebpf.Program `ebpf:"extend_skb"`
-	TcHttpEgress  *ebpf.Program `ebpf:"tc_http_egress"`
-	TcHttpIngress *ebpf.Program `ebpf:"tc_http_ingress"`
+	BeylaExtendSkb     *ebpf.Program `ebpf:"beyla_extend_skb"`
+	BeylaTcHttpEgress  *ebpf.Program `ebpf:"beyla_tc_http_egress"`
+	BeylaTcHttpIngress *ebpf.Program `ebpf:"beyla_tc_http_ingress"`
 }
 
 func (p *bpfPrograms) Close() error {
 	return _BpfClose(
-		p.ExtendSkb,
-		p.TcHttpEgress,
-		p.TcHttpIngress,
+		p.BeylaExtendSkb,
+		p.BeylaTcHttpEgress,
+		p.BeylaTcHttpIngress,
 	)
 }
 

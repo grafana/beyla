@@ -211,7 +211,7 @@ static __always_inline void handle_data_frame(void *ctx, grpc_frames_ctx_t *g_ct
 
 // k_tail_protocol_http2_grpc_handle_start_frame
 SEC("kprobe/http2")
-int protocol_http2_grpc_handle_start_frame(void *ctx) {
+int beyla_protocol_http2_grpc_handle_start_frame(void *ctx) {
     (void)ctx;
 
     grpc_frames_ctx_t *g_ctx = grpc_ctx();
@@ -232,7 +232,7 @@ int protocol_http2_grpc_handle_start_frame(void *ctx) {
 
 // k_tail_protocol_http2_grpc_handle_end_frame
 SEC("kprobe/http2")
-int protocol_http2_grpc_handle_end_frame(void *ctx) {
+int beyla_protocol_http2_grpc_handle_end_frame(void *ctx) {
     (void)ctx;
 
     grpc_frames_ctx_t *g_ctx = grpc_ctx();
@@ -271,7 +271,7 @@ int protocol_http2_grpc_handle_end_frame(void *ctx) {
 // information to evaluate whether the parsed data is potentially a GRPC
 // frame, and if so, we ship it to userspace for further processing.
 SEC("kprobe/http2")
-int protocol_http2_grpc_frames(void *ctx) {
+int beyla_protocol_http2_grpc_frames(void *ctx) {
     const u8 k_max_loop_iterations = 4; // the maximum number of the for loop iterations
     const u8 k_loop_count = 3;          // the number of times we will retry the loop
     const u8 k_iterations = k_max_loop_iterations * k_loop_count;
@@ -342,7 +342,7 @@ int protocol_http2_grpc_frames(void *ctx) {
 
 // k_tail_protocol_http2
 SEC("kprobe/http2")
-int protocol_http2(void *ctx) {
+int beyla_protocol_http2(void *ctx) {
     call_protocol_args_t *args = protocol_args();
 
     if (!args) {

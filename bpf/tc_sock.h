@@ -133,7 +133,7 @@ static __always_inline void bpf_sock_ops_establish_cb(struct bpf_sock_ops *skops
 // Tracks all outgoing sockets (BPF_SOCK_OPS_ACTIVE_ESTABLISHED_CB)
 // We don't track incoming, those would be BPF_SOCK_OPS_PASSIVE_ESTABLISHED_CB
 SEC("sockops")
-int sockmap_tracker(struct bpf_sock_ops *skops) {
+int beyla_sockmap_tracker(struct bpf_sock_ops *skops) {
     u32 op = skops->op;
 
     switch (op) {
@@ -223,7 +223,7 @@ static __always_inline u8 protocol_detector(struct sk_msg_md *msg,
 // the 'Traceparent' string. It doesn't write the value, only spaces the packet
 // for Traffic Control to do the writing.
 SEC("sk_msg")
-int packet_extender(struct sk_msg_md *msg) {
+int beyla_packet_extender(struct sk_msg_md *msg) {
     u64 id = bpf_get_current_pid_tgid();
     connection_info_t conn = {};
 

@@ -176,7 +176,7 @@ func (m *FlowFetcher) registerEgress(iface ifaces.Interface, ipvlan netlink.Link
 	}
 	egressFilter := &netlink.BpfFilter{
 		FilterAttrs:  egressAttrs,
-		Fd:           m.objects.EgressFlowParse.FD(),
+		Fd:           m.objects.BeylaEgressFlowParse.FD(),
 		Name:         "tc/egress_flow_parse",
 		DirectAction: true,
 	}
@@ -210,7 +210,7 @@ func (m *FlowFetcher) registerIngress(iface ifaces.Interface, ipvlan netlink.Lin
 	}
 	ingressFilter := &netlink.BpfFilter{
 		FilterAttrs:  ingressAttrs,
-		Fd:           m.objects.IngressFlowParse.FD(),
+		Fd:           m.objects.BeylaIngressFlowParse.FD(),
 		Name:         "tc/ingress_flow_parse",
 		DirectAction: true,
 	}
@@ -281,10 +281,10 @@ func (m *FlowFetcher) Close() error {
 
 func (m *FlowFetcher) closeObjects() []error {
 	var errs []error
-	if err := m.objects.EgressFlowParse.Close(); err != nil {
+	if err := m.objects.BeylaEgressFlowParse.Close(); err != nil {
 		errs = append(errs, err)
 	}
-	if err := m.objects.IngressFlowParse.Close(); err != nil {
+	if err := m.objects.BeylaIngressFlowParse.Close(); err != nil {
 		errs = append(errs, err)
 	}
 	if err := m.objects.AggregatedFlows.Close(); err != nil {

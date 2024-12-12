@@ -27,6 +27,7 @@ func TestBasicTracing(t *testing.T) {
 	feat := features.New("Beyla is able to instrument an arbitrary process").
 		Assess("it sends traces for that service",
 			func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
+				defer k8s.DumpTracesAfterFail(t, jaegerHost)
 				var podID string
 				test.Eventually(t, testTimeout, func(t require.TestingT) {
 					// Invoking both service instances, but we will expect that only one

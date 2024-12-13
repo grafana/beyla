@@ -672,6 +672,66 @@
         ]
       }
     },
+    "net/http.http2ClientConn": {
+      "nextStreamID": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.23.4"
+        },
+        "offsets": [
+          {
+            "offset": 168,
+            "since": "1.17.0"
+          },
+          {
+            "offset": 176,
+            "since": "1.17.3"
+          },
+          {
+            "offset": 184,
+            "since": "1.20.0"
+          },
+          {
+            "offset": 176,
+            "since": "1.21.0"
+          },
+          {
+            "offset": 168,
+            "since": "1.22.0"
+          },
+          {
+            "offset": 176,
+            "since": "1.23.0"
+          }
+        ]
+      },
+      "tconn": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.23.4"
+        },
+        "offsets": [
+          {
+            "offset": 8,
+            "since": "1.17.0"
+          }
+        ]
+      }
+    },
+    "net/http.http2serverConn": {
+      "conn": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.23.4"
+        },
+        "offsets": [
+          {
+            "offset": 16,
+            "since": "1.17.0"
+          }
+        ]
+      }
+    },
     "net/http.persistConn": {
       "conn": {
         "versions": {

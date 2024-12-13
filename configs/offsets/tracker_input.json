@@ -46,6 +46,13 @@
       "net/http.conn": [
         "rwc",
         "tlsState"
+      ],
+      "net/http.http2ClientConn": [
+        "nextStreamID",
+        "tconn"
+      ],
+      "net/http.http2serverConn": [
+        "conn"
       ]
     }
   },

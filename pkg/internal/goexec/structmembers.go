@@ -192,6 +192,19 @@ var structMembers = map[string]structInfo{
 			"conn": ScConnPos,
 		},
 	},
+	"net/http.http2ClientConn": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"nextStreamID": CcNextStreamIDPos,
+			"tconn":        CcTconnPos,
+		},
+	},
+	"net/http.http2serverConn": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"conn": ScConnPos,
+		},
+	},
 	"net.TCPConn": {
 		lib: "go",
 		fields: map[string]GoOffset{

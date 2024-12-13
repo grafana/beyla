@@ -696,6 +696,17 @@ reduces the load of the Kubernetes API.
 The Pods informer can't be disabled. For that purpose, you should disable the whole
 Kubernetes metadata decoration.
 
+| YAML                       | Environment variable                  | Type    | Default |
+|----------------------------|---------------------------------------|---------|---------|
+| `meta_restrict_local_node` | `BEYLA_KUBE_META_RESTRICT_LOCAL_NODE` | boolean | false   |
+
+If true, Beyla stores Pod and Node metadata only from the node where the Beyla instance is running.
+
+This option decreases the memory used to store the metadata, but some metrics
+(such as network bytes or service graph metrics) would miss the metadata from destination
+pods that are located in a different node.
+
+
 | YAML                     | Environment variable                | Type     | Default |
 |--------------------------|-------------------------------------|----------|---------|
 | `informers_sync_timeout` | `BEYLA_KUBE_INFORMERS_SYNC_TIMEOUT` | Duration | 30s     |

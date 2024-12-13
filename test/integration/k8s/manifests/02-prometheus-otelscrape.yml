@@ -25,7 +25,7 @@ spec:
     - name: prometheus
       image: quay.io/prometheus/prometheus:v2.53.0
       args:
-        - --storage.tsdb.retention.time=1m
+        - --storage.tsdb.retention.time=10m
         - --config.file=/etc/prometheus/prometheus-config.yml
         - --storage.tsdb.path=/prometheus
         - --web.enable-lifecycle

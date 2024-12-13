@@ -721,13 +721,7 @@ struct {
 } http2_req_map SEC(".maps");
 #endif
 
-SEC("uprobe/http2RoundTrip")
-int uprobe_http2RoundTrip(struct pt_regs *ctx) {
-    // we use the usual start helper, just like for normal http calls, but we later save
-    // more context, like the streamID
-    roundTripStartHelper(ctx);
-
-    void *cc_ptr = GO_PARAM1(ctx);
+static __always_inline void setup_http2_client_conn(void *goroutine_addr, void *cc_ptr) {
     off_table_t *ot = get_offsets_table();
 
     if (cc_ptr) {
@@ -746,7 +740,6 @@ int uprobe_http2RoundTrip(struct pt_regs *ctx) {
             u8 ok = get_conn_info(tconn_conn, &conn);
 
             if (ok) {
-                void *goroutine_addr = GOROUTINE_PTR(ctx);
                 bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
                 go_addr_key_t g_key = {};
                 go_addr_key_from_id(&g_key, goroutine_addr);
@@ -764,13 +757,34 @@ int uprobe_http2RoundTrip(struct pt_regs *ctx) {
 
         bpf_dbg_printk("cc_ptr = %llx, nextStreamID=%d", cc_ptr, stream_id);
         if (stream_id) {
-            void *goroutine_addr = GOROUTINE_PTR(ctx);
             go_addr_key_t s_key = {};
             go_addr_key_from_id(&s_key, (void *)(uintptr_t)stream_id);
             bpf_map_update_elem(&http2_req_map, &s_key, &goroutine_addr, BPF_ANY);
         }
 #endif
     }
+}
+
+SEC("uprobe/http2RoundTrip")
+int uprobe_http2RoundTrip(struct pt_regs *ctx) {
+    // we use the usual start helper, just like for normal http calls, but we later save
+    // more context, like the streamID
+    roundTripStartHelper(ctx);
+
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    void *cc_ptr = GO_PARAM1(ctx);
+
+    setup_http2_client_conn(goroutine_addr, cc_ptr);
+
+    return 0;
+}
+
+SEC("uprobe/http2RoundTripConn")
+int uprobe_http2RoundTripConn(struct pt_regs *ctx) {
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    void *cc_ptr = GO_PARAM1(ctx);
+
+    setup_http2_client_conn(goroutine_addr, cc_ptr);
 
     return 0;
 }

@@ -209,6 +209,9 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 			Start: p.bpfObjects.UprobeHttp2RoundTrip,
 			End:   p.bpfObjects.UprobeRoundTripReturn, // return is the same as for http 1.1
 		}},
+		"net/http.(*http2ClientConn).roundTrip": {{ // http2 client vendored in Go
+			Start: p.bpfObjects.UprobeHttp2RoundTripConn,
+		}},
 		"golang.org/x/net/http2.(*responseWriterState).writeHeader": {{ // http2 server request done, capture the response code
 			Start: p.bpfObjects.UprobeHttp2ResponseWriterStateWriteHeader,
 		}},

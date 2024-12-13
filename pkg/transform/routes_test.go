@@ -73,7 +73,7 @@ func TestUnmatchedEmpty(t *testing.T) {
 func TestUnmatchedAuto(t *testing.T) {
 	for _, tc := range []UnmatchType{UnmatchHeuristic} {
 		t.Run(string(tc), func(t *testing.T) {
-			router, err := RoutesProvider(&RoutesConfig{Unmatch: tc, Patterns: []string{"/user/:id"}})()
+			router, err := RoutesProvider(&RoutesConfig{Unmatch: tc, Patterns: []string{"/user/:id"}, WildcardChar: "*"})()
 			require.NoError(t, err)
 			in, out := make(chan []request.Span, 10), make(chan []request.Span, 10)
 			defer close(in)

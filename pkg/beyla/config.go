@@ -117,7 +117,10 @@ var DefaultConfig = Config{
 			FetchTimeout: 500 * time.Millisecond,
 		},
 	},
-	Routes:       &transform.RoutesConfig{Unmatch: transform.UnmatchDefault},
+	Routes: &transform.RoutesConfig{
+		Unmatch:      transform.UnmatchDefault,
+		WildcardChar: "*",
+	},
 	NetworkFlows: defaultNetworkConfig,
 	Processes: process.CollectConfig{
 		RunMode:  process.RunModePrivileged,
@@ -273,6 +276,10 @@ func (c *Config) Validate() error {
 		!c.Prometheus.Enabled() && !c.TracePrinter.Enabled() {
 		return ConfigError("you need to define at least one exporter: trace_printer," +
 			" grafana, otel_metrics_export, otel_traces_export or prometheus_export")
+	}
+
+	if len(c.Routes.WildcardChar) > 1 {
+		return ConfigError("wildcard_char can only be a single character, multiple characters are not allowed")
 	}
 
 	return nil

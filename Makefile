@@ -211,6 +211,9 @@ compile-cache:
 	@echo "### Compiling Beyla K8s cache"
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -ldflags="-X '$(BUILDINFO_PKG).Version=$(RELEASE_VERSION)' -X '$(BUILDINFO_PKG).Revision=$(RELEASE_REVISION)'" -a -o bin/$(CACHE_CMD) $(CACHE_MAIN_GO_FILE)
 
+.PHONY: debug
+debug:
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -gcflags "-N -l" -ldflags="-X '$(BUILDINFO_PKG).Version=$(RELEASE_VERSION)' -X '$(BUILDINFO_PKG).Revision=$(RELEASE_REVISION)'" -a -o bin/$(CMD) $(MAIN_GO_FILE)
 
 .PHONY: dev
 dev: prereqs generate compile-for-coverage

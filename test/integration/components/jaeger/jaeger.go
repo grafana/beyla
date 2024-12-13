@@ -9,6 +9,10 @@ import (
 	"strings"
 )
 
+type Services struct {
+	Data []string `json:"data"`
+}
+
 type TracesQuery struct {
 	Data []Trace `json:"data"`
 }

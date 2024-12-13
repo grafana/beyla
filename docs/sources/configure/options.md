@@ -839,8 +839,14 @@ Possible values for the `unmatched` property are:
   - 🚨 Caution: this option could lead to cardinality explosion at the ingester side.
 - `wildcard` will set the `http.route` field property to a generic asterisk based `/**` value.
 - `heuristic` will automatically derive the `http.route` field property from the path value, based on the following rules:
-  - Any path components which have numbers or characters outside of the ASCII alphabet (or `-` and `_`), will be replaced by an asterisk `*`.
-  - Any alphabetical components which don't look like words, will be replaced by an asterisk `*`.
+  - Any path components which have numbers or characters outside of the ASCII alphabet (or `-` and `_`), are replaced by `wildcard_char`.
+  - Any alphabetical components which don't look like words, are replaced by `wildcard_char`.
+
+| YAML        | Environment variable | Type   | Default    |
+| ----------- | ------- | ------ | ---------- |
+| `wildcard_char` | --      | string | `'*'` |
+
+Can be used together with `unmatched: heuristic` to choose what character the path components identified by the heuristic mode are replaced by. By default, an asterisk (`'*'`) is used. The value should be quoted and must be a single character.
 
 ### Special considerations when using the `heuristic` route decorator mode
 
@@ -859,7 +865,7 @@ document/d/CfMkAGbE_aivhFydEpaRafPuGWbmHfG/edit (no numbers in the ID)
 document/d/C2fMkAGb3E_aivhFyd5EpaRafP123uGWbmHfG/edit
 ```
 
-will be converted to a low cardinality route:
+are converted to a low cardinality route (using the default `wildcard_char`):
 
 ```
 document/d/*/edit

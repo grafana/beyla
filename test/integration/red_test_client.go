@@ -68,7 +68,7 @@ func testClientWithMethodAndStatusCode(t *testing.T, method string, statusCode i
 		trace = traces[0]
 	}, test.Interval(100*time.Millisecond))
 
-	res := trace.FindByOperationName("GET")
+	res := trace.FindByOperationName(method)
 	require.Len(t, res, 1)
 	parent := res[0]
 
@@ -78,7 +78,7 @@ func testClientWithMethodAndStatusCode(t *testing.T, method string, statusCode i
 
 	addr, ok = jaeger.FindIn(parent.Tags, "server.port")
 	assert.True(t, ok)
-	assert.Equal(t, 443, addr.Value)
+	assert.Equal(t, float64(443), addr.Value)
 }
 
 func testREDMetricsForClientHTTPLibrary(t *testing.T) {

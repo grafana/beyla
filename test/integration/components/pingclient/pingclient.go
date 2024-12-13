@@ -10,7 +10,8 @@ import (
 )
 
 var tr = &http.Transport{
-	TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	TLSClientConfig:   &tls.Config{InsecureSkipVerify: true},
+	ForceAttemptHTTP2: true,
 }
 var testHTTPClient = &http.Client{Transport: tr}
 

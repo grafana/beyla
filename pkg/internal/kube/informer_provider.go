@@ -35,6 +35,7 @@ type MetadataConfig struct {
 	ResyncPeriod      time.Duration
 	MetaCacheAddr     string
 	MetaSourceLabels  MetaSourceLabels
+	RestrictLocalNode bool
 }
 
 type MetadataProvider struct {
@@ -42,6 +43,8 @@ type MetadataProvider struct {
 
 	metadata *Store
 	informer meta.Notifier
+
+	localNodeName string
 
 	cfg *MetadataConfig
 }
@@ -126,6 +129,9 @@ func (mp *MetadataProvider) getInformer(ctx context.Context) (meta.Notifier, err
 }
 
 func (mp *MetadataProvider) CurrentNodeName(ctx context.Context) (string, error) {
+	if mp.localNodeName != "" {
+		return mp.localNodeName, nil
+	}
 	log := klog().With("func", "NodeName")
 	kubeClient, err := mp.KubeClient()
 	if err != nil {
@@ -153,7 +159,8 @@ func (mp *MetadataProvider) CurrentNodeName(ctx context.Context) (string, error)
 			" host name as node name", "nodeName", currentPod, "namespace", currentNamespace, "error", err)
 		return currentPod, nil
 	}
-	return pods.Items[0].Spec.NodeName, nil
+	mp.localNodeName = pods.Items[0].Spec.NodeName
+	return mp.localNodeName, nil
 }
 
 // initLocalInformers initializes an informer client that directly connects to the Node Kube API
@@ -167,6 +174,13 @@ func (mp *MetadataProvider) initLocalInformers(ctx context.Context) (*meta.Infor
 		meta.WaitForCacheSync(),
 		meta.WithCacheSyncTimeout(mp.cfg.SyncTimeout),
 	)
+	if mp.cfg.RestrictLocalNode {
+		localNode, err := mp.CurrentNodeName(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("getting local node name: %w", err)
+		}
+		opts = append(opts, meta.RestrictNode(localNode))
+	}
 	return meta.InitInformers(ctx, opts...)
 }
 

@@ -8,12 +8,14 @@ import (
 	"os"
 	"path"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/protobuf/testing/protocmp"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -43,6 +45,8 @@ type informersConfig struct {
 	resyncPeriod    time.Duration
 	disableNodes    bool
 	disableServices bool
+
+	restrictNode string
 
 	// waits for cache synchronization at start
 	waitCacheSync    bool
@@ -77,6 +81,12 @@ func WithoutNodes() InformerOption {
 func WithoutServices() InformerOption {
 	return func(c *informersConfig) {
 		c.disableServices = true
+	}
+}
+
+func RestrictNode(nodeName string) InformerOption {
+	return func(c *informersConfig) {
+		c.restrictNode = nodeName
 	}
 }
 
@@ -119,27 +129,25 @@ func InitInformers(ctx context.Context, opts ...InformerOption) (*Informers, err
 		}
 	}
 
-	informerFactory := informers.NewSharedInformerFactory(svc.config.kubeClient, svc.config.resyncPeriod)
-
-	if err := svc.initPodInformer(ctx, informerFactory); err != nil {
+	createdFactories, err := svc.initInformers(ctx, config)
+	if err != nil {
 		return nil, err
-	}
-	if !svc.config.disableNodes {
-		if err := svc.initNodeIPInformer(ctx, informerFactory); err != nil {
-			return nil, err
-		}
-	}
-	if !svc.config.disableServices {
-		if err := svc.initServiceIPInformer(ctx, informerFactory); err != nil {
-			return nil, err
-		}
 	}
 
 	svc.log.Debug("starting kubernetes informers")
-	informerFactory.Start(ctx.Done())
+	allSynced := sync.WaitGroup{}
+	allSynced.Add(len(createdFactories))
+	for _, factory := range createdFactories {
+		factory.Start(ctx.Done())
+		go func() {
+			factory.WaitForCacheSync(ctx.Done())
+			allSynced.Done()
+		}()
+	}
+
 	go func() {
-		svc.log.Debug("waiting for informers' syncronization")
-		informerFactory.WaitForCacheSync(ctx.Done())
+		svc.log.Debug("waiting for informers' synchronization")
+		allSynced.Wait()
 		svc.log.Debug("informers synchronized")
 		close(svc.waitForSync)
 	}()
@@ -157,6 +165,49 @@ func InitInformers(ctx context.Context, opts ...InformerOption) (*Informers, err
 
 	return svc, nil
 
+}
+
+func (inf *Informers) initInformers(ctx context.Context, config *informersConfig) ([]informers.SharedInformerFactory, error) {
+	var informerFactory informers.SharedInformerFactory
+	if config.restrictNode == "" {
+		informerFactory = informers.NewSharedInformerFactory(inf.config.kubeClient, inf.config.resyncPeriod)
+	} else {
+		informerFactory = informers.NewSharedInformerFactoryWithOptions(inf.config.kubeClient, inf.config.resyncPeriod,
+			informers.WithTweakListOptions(func(options *metav1.ListOptions) {
+				options.FieldSelector = fields.Set{"spec.nodeName": config.restrictNode}.String()
+			}))
+	}
+	createdFactories := []informers.SharedInformerFactory{informerFactory}
+	if err := inf.initPodInformer(ctx, informerFactory); err != nil {
+		return nil, err
+	}
+
+	if !inf.config.disableNodes {
+		nodeIFactory := informerFactory
+		if config.restrictNode != "" {
+			nodeIFactory = informers.NewSharedInformerFactoryWithOptions(inf.config.kubeClient, inf.config.resyncPeriod,
+				informers.WithTweakListOptions(func(options *metav1.ListOptions) {
+					options.FieldSelector = fields.Set{"metadata.name": config.restrictNode}.String()
+				}))
+			createdFactories = append(createdFactories, nodeIFactory)
+		} // else: use default, unfiltered informerFactory instance
+		if err := inf.initNodeIPInformer(ctx, nodeIFactory); err != nil {
+			return nil, err
+		}
+	}
+	if !inf.config.disableServices {
+		svcIFactory := informerFactory
+		if config.restrictNode != "" {
+			// informerFactory will be initially set to a "spec.nodeName"-filtered instance, so we need
+			// to create an unfiltered one for global services
+			svcIFactory = informers.NewSharedInformerFactory(inf.config.kubeClient, inf.config.resyncPeriod)
+			createdFactories = append(createdFactories, svcIFactory)
+		}
+		if err := inf.initServiceIPInformer(ctx, svcIFactory); err != nil {
+			return nil, err
+		}
+	}
+	return createdFactories, nil
 }
 
 func initConfigOpts(opts []InformerOption) *informersConfig {
@@ -466,32 +517,34 @@ func headlessService(om *informer.ObjectMeta) bool {
 
 func (inf *Informers) ipInfoEventHandler(ctx context.Context) *cache.ResourceEventHandlerFuncs {
 	metrics := instrument.FromContext(ctx)
+	log := inf.log.With("func", "ipInfoEventHandler")
 	return &cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			metrics.InformerNew()
+			em := obj.(*indexableEntity).EncodedMeta
+			log.Debug("AddFunc", "kind", em.Kind, "name", em.Name, "ips", em.Ips)
 			// ignore headless services from being added
 			if headlessService(obj.(*indexableEntity).EncodedMeta) {
 				return
 			}
 			inf.Notify(&informer.Event{
 				Type:     informer.EventType_CREATED,
-				Resource: obj.(*indexableEntity).EncodedMeta,
+				Resource: em,
 			})
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			metrics.InformerUpdate()
+			newEM := newObj.(*indexableEntity).EncodedMeta
+			oldEM := oldObj.(*indexableEntity).EncodedMeta
 			// ignore headless services from being added
-			if headlessService(newObj.(*indexableEntity).EncodedMeta) &&
-				headlessService(oldObj.(*indexableEntity).EncodedMeta) {
+			if headlessService(newEM) && headlessService(oldEM) {
 				return
 			}
-			if cmp.Equal(
-				oldObj.(*indexableEntity).EncodedMeta,
-				newObj.(*indexableEntity).EncodedMeta,
-				protoCmpTransform,
-			) {
+			if cmp.Equal(oldEM, newEM, protoCmpTransform) {
 				return
 			}
+			log.Debug("UpdateFunc", "kind", newEM.Kind, "name", newEM.Name,
+				"ips", newEM.Ips, "oldIps", oldEM.Ips)
 			inf.Notify(&informer.Event{
 				Type:     informer.EventType_UPDATED,
 				Resource: newObj.(*indexableEntity).EncodedMeta,
@@ -511,6 +564,8 @@ func (inf *Informers) ipInfoEventHandler(ctx context.Context) *cache.ResourceEve
 					return
 				}
 			}
+			em := obj.(*indexableEntity).EncodedMeta
+			log.Debug("DeleteFunc", "kind", em.Kind, "name", em.Name, "ips", em.Ips)
 
 			metrics.InformerDelete()
 			inf.Notify(&informer.Event{

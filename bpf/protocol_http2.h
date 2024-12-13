@@ -3,11 +3,12 @@
 
 #include "vmlinux.h"
 #include "bpf_helpers.h"
-#include "http_types.h"
-#include "ringbuf.h"
-#include "protocol_common.h"
 #include "http2_grpc.h"
+#include "http_types.h"
+#include "k_tracer_tailcall.h"
 #include "pin_internal.h"
+#include "protocol_common.h"
+#include "ringbuf.h"
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
@@ -24,6 +25,30 @@ struct {
     __uint(pinning, BEYLA_PIN_INTERNAL);
 } ongoing_http2_grpc SEC(".maps");
 
+typedef struct grpc_frames_ctx {
+    http2_grpc_request_t prev_info;
+    u8 has_prev_info;
+
+    int pos; //FIXME should be size_t equivalent
+    int saved_buf_pos;
+    u32 saved_stream_id;
+
+    u8 found_data_frame;
+    u8 iterations;
+    u8 terminate_search;
+
+    http2_conn_stream_t stream;
+
+    call_protocol_args_t args;
+} grpc_frames_ctx_t;
+
+struct {
+    __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+    __type(key, int);
+    __type(value, grpc_frames_ctx_t);
+    __uint(max_entries, 1);
+} grpc_frames_ctx_mem SEC(".maps");
+
 // We want to be able to collect larger amount of data for the grpc/http headers
 struct {
     __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
@@ -31,6 +56,11 @@ struct {
     __type(value, http2_grpc_request_t);
     __uint(max_entries, 1);
 } http2_info_mem SEC(".maps");
+
+static __always_inline grpc_frames_ctx_t *grpc_ctx() {
+    int zero = 0;
+    return bpf_map_lookup_elem(&grpc_frames_ctx_mem, &zero);
+}
 
 static __always_inline http2_grpc_request_t *empty_http2_info() {
     int zero = 0;
@@ -95,113 +125,222 @@ http2_grpc_end(http2_conn_stream_t *stream, http2_grpc_request_t *prev_info, voi
     bpf_map_delete_elem(&ongoing_http2_grpc, stream);
 }
 
-static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid_conn,
-                                                      void *u_buf,
-                                                      int bytes_len,
-                                                      u8 direction,
-                                                      u8 ssl,
-                                                      u16 orig_dport) {
-    int pos = 0;
-    u8 found_start_frame = 0;
-    u8 found_end_frame = 0;
+static __always_inline frame_header_t next_frame(const grpc_frames_ctx_t *g_ctx) {
+    // read next frame
+    const void *offset = (u8 *)g_ctx->args.u_buf + g_ctx->pos;
 
-    http2_grpc_request_t *prev_info = 0;
-    u32 saved_stream_id = 0;
-    int saved_buf_pos = 0;
-    u8 found_data_frame = 0;
-    http2_conn_stream_t stream = {0};
-    stream.pid_conn = *pid_conn;
+    frame_header_t header;
 
-    unsigned char frame_buf[FRAME_HEADER_LEN];
-    frame_header_t frame = {0};
+    if (bpf_probe_read(&header, sizeof(header), offset) != 0) {
+        bpf_dbg_printk("failed to read frame header");
+        return header; // the caller will deal with an invalid header
+    }
 
-    for (int i = 0; i < 8; i++) {
-        if (pos >= bytes_len) {
+    if (header.length == 0 || header.type > FrameContinuation) {
+        return header; // the caller will deal with an invalid header
+    }
+
+    header.length = bpf_ntohl(header.length << 8);
+    header.stream_id = bpf_ntohl(header.stream_id << 1);
+
+    //bpf_dbg_printk("http2 frame type = %u, len = %u", header.type, header.length);
+    //bpf_dbg_printk("http2 frame stream_id = %u, flags = %u", header.stream_id, header.flags);
+
+    return header;
+}
+
+static __always_inline void update_prev_info(grpc_frames_ctx_t *g_ctx) {
+    if (g_ctx->has_prev_info) {
+        return;
+    }
+
+    const http2_grpc_request_t *prev_info =
+        bpf_map_lookup_elem(&ongoing_http2_grpc, &g_ctx->stream);
+
+    if (prev_info) {
+        g_ctx->prev_info = *prev_info;
+        g_ctx->has_prev_info = 1;
+    }
+}
+
+static __always_inline int
+handle_headers_frame(void *ctx, grpc_frames_ctx_t *g_ctx, const frame_header_t *frame) {
+    g_ctx->stream.stream_id = frame->stream_id;
+
+    // if we don't have prev_info, try looking it up...
+    update_prev_info(g_ctx);
+
+    if (g_ctx->has_prev_info) {
+        g_ctx->saved_stream_id = g_ctx->stream.stream_id;
+        g_ctx->saved_buf_pos = g_ctx->pos;
+
+        if (http_grpc_stream_ended(frame)) {
+            bpf_tail_call(ctx, &jump_table, k_tail_protocol_http2_grpc_handle_end_frame);
+            return 0; // normally unrechable
+        }
+    } else {
+        // Not starting new grpc request, found end frame in a start, likely
+        // just terminating prev connection
+        if (!(is_flags_only_frame(frame) && http_grpc_stream_ended(frame))) {
+            bpf_tail_call(ctx, &jump_table, k_tail_protocol_http2_grpc_handle_start_frame);
+            return 0; // normally unrechable
+        }
+    }
+
+    return 1;
+}
+
+static __always_inline void handle_data_frame(void *ctx, grpc_frames_ctx_t *g_ctx) {
+    if (!g_ctx->has_prev_info || !g_ctx->saved_stream_id) {
+        // we haven't found anything useful...
+        return;
+    }
+
+    const u8 type = g_ctx->prev_info.type;
+    const u8 direction = g_ctx->args.direction;
+
+    if (g_ctx->found_data_frame || ((type == EVENT_HTTP_REQUEST) && (direction == TCP_SEND)) ||
+        ((type == EVENT_HTTP_CLIENT) && (direction == TCP_RECV))) {
+
+        g_ctx->stream.pid_conn = g_ctx->args.pid_conn;
+        g_ctx->stream.stream_id = g_ctx->saved_stream_id;
+
+        bpf_tail_call(ctx, &jump_table, k_tail_protocol_http2_grpc_handle_end_frame);
+    }
+}
+
+// k_tail_protocol_http2_grpc_handle_start_frame
+SEC("kprobe/http2")
+int protocol_http2_grpc_handle_start_frame(void *ctx) {
+    (void)ctx;
+
+    grpc_frames_ctx_t *g_ctx = grpc_ctx();
+
+    if (!g_ctx) {
+        return 0;
+    }
+
+    const call_protocol_args_t *args = &g_ctx->args;
+
+    void *offset = (u8 *)args->u_buf + g_ctx->pos;
+
+    http2_grpc_start(
+        &g_ctx->stream, offset, args->bytes_len, args->direction, args->ssl, args->orig_dport);
+
+    return 0;
+}
+
+// k_tail_protocol_http2_grpc_handle_end_frame
+SEC("kprobe/http2")
+int protocol_http2_grpc_handle_end_frame(void *ctx) {
+    (void)ctx;
+
+    grpc_frames_ctx_t *g_ctx = grpc_ctx();
+
+    if (!g_ctx) {
+        return 0;
+    }
+
+    const u8 req_type = request_type_by_direction(g_ctx->args.direction, PACKET_TYPE_RESPONSE);
+
+    if (req_type == g_ctx->prev_info.type) {
+        u32 buf_pos = g_ctx->saved_buf_pos;
+
+        bpf_clamp_umax(buf_pos, IO_VEC_MAX_LEN);
+
+        void *offset = (u8 *)g_ctx->args.u_buf + buf_pos;
+        http2_grpc_end(&g_ctx->stream, &g_ctx->prev_info, offset);
+
+        bpf_map_delete_elem(&active_ssl_connections, &g_ctx->args.pid_conn);
+    } else {
+        bpf_dbg_printk("grpc request/response mismatch, req_type %d, prev_info->type %d",
+                       req_type,
+                       g_ctx->prev_info.type);
+        bpf_map_delete_elem(&ongoing_http2_grpc, &g_ctx->stream);
+    }
+
+    return 0;
+}
+
+// k_tail_protocol_http2_grpc_frames
+// this function scans a raw buffer and tries to find GRPC frames on it
+// (represented by 'frame_header_t'). We care about 3 kinds of frames: start
+// frames, end frames and data frames. Start and end frames are used as anchor
+// points to determine the lifespan of a GRPC connection, and the data frames
+// are used as a fallback mechanism in case those are found. We use that
+// information to evaluate whether the parsed data is potentially a GRPC
+// frame, and if so, we ship it to userspace for further processing.
+SEC("kprobe/http2")
+int protocol_http2_grpc_frames(void *ctx) {
+    const u8 k_max_loop_iterations = 4; // the maximum number of the for loop iterations
+    const u8 k_loop_count = 3;          // the number of times we will retry the loop
+    const u8 k_iterations = k_max_loop_iterations * k_loop_count;
+
+    grpc_frames_ctx_t *g_ctx = grpc_ctx();
+
+    if (!g_ctx) {
+        return 0;
+    }
+
+    // this loop will effectively run for k_iterations, split between the
+    // unrolled for loop and the tail call (see comment after the loop)
+    for (u8 i = 0; i < k_max_loop_iterations; ++i) {
+        g_ctx->iterations++;
+
+        if (g_ctx->pos >= g_ctx->args.bytes_len) {
             break;
         }
 
-        bpf_probe_read(&frame_buf, FRAME_HEADER_LEN, (void *)((u8 *)u_buf + pos));
-        read_http2_grpc_frame_header(&frame, frame_buf, FRAME_HEADER_LEN);
-        //bpf_dbg_printk("http2 frame type = %d, len = %d, stream_id = %d, flags = %d", frame.type, frame.length, frame.stream_id, frame.flags);
+        const frame_header_t frame = next_frame(g_ctx);
 
-        if (is_headers_frame(&frame)) {
-            stream.stream_id = frame.stream_id;
-            if (!prev_info) {
-                prev_info = bpf_map_lookup_elem(&ongoing_http2_grpc, &stream);
-            }
-
-            if (prev_info) {
-                saved_stream_id = stream.stream_id;
-                saved_buf_pos = pos;
-                if (http_grpc_stream_ended(&frame)) {
-                    found_end_frame = 1;
-                    break;
-                }
-            } else {
-                // Not starting new grpc request, found end frame in a start, likely just terminating prev connection
-                if (!(is_flags_only_frame(&frame) && http_grpc_stream_ended(&frame))) {
-                    found_start_frame = 1;
-                    break;
-                }
-            }
+        // if handle_headers_frame returns 0, it means bpf_tail_call has
+        // failed and something is very wrong, so we just bail...
+        if (is_headers_frame(&frame) && !handle_headers_frame(ctx, g_ctx, &frame)) {
+            //bpf_dbg_printk("http2 bpf_tail_call failed");
+            return 0;
         }
 
         if (is_data_frame(&frame)) {
-            found_data_frame = 1;
+            g_ctx->found_data_frame = 1;
         }
 
         if (is_invalid_frame(&frame)) {
+            g_ctx->terminate_search = 1;
             //bpf_dbg_printk("Invalid frame, terminating search");
             break;
         }
 
-        if (frame.length + FRAME_HEADER_LEN >= bytes_len) {
+        if (frame.length + k_frame_header_len >= g_ctx->args.bytes_len) {
+            g_ctx->terminate_search = 1;
             //bpf_dbg_printk("Frame length bigger than bytes len");
             break;
         }
 
-        if (pos < (bytes_len - (frame.length + FRAME_HEADER_LEN))) {
-            pos += (frame.length + FRAME_HEADER_LEN);
-            //bpf_dbg_printk("New buf read pos = %d", pos);
+        if (g_ctx->pos < (g_ctx->args.bytes_len - (frame.length + k_frame_header_len))) {
+            g_ctx->pos += (frame.length + k_frame_header_len);
+            //bpf_dbg_printk("New buf read g_ctx.pos = %d", g_ctx->pos);
         }
     }
 
-    if (found_start_frame) {
-        http2_grpc_start(
-            &stream, (void *)((u8 *)u_buf + pos), bytes_len, direction, ssl, orig_dport);
-    } else {
-        // We only loop 6 times looking for the stream termination. If the data packed is large we'll miss the
-        // frame saying the stream closed. In that case we try this backup path.
-        if (!found_end_frame && prev_info && saved_stream_id) {
-            if (found_data_frame ||
-                ((prev_info->type == EVENT_HTTP_REQUEST) && (direction == TCP_SEND)) ||
-                ((prev_info->type == EVENT_HTTP_CLIENT) && (direction == TCP_RECV))) {
-                stream.pid_conn = *pid_conn;
-                stream.stream_id = saved_stream_id;
-                found_end_frame = 1;
-            }
-        }
-        if (found_end_frame) {
-            u8 req_type = request_type_by_direction(direction, PACKET_TYPE_RESPONSE);
-            if (prev_info) {
-                if (req_type == prev_info->type) {
-                    u32 buf_pos = saved_buf_pos;
-                    bpf_clamp_umax(buf_pos, IO_VEC_MAX_LEN);
-                    http2_grpc_end(&stream, prev_info, (void *)((u8 *)u_buf + buf_pos));
-                    bpf_map_delete_elem(&active_ssl_connections, pid_conn);
-                } else {
-                    bpf_dbg_printk(
-                        "grpc request/response mismatch, req_type %d, prev_info->type %d",
-                        req_type,
-                        prev_info->type);
-                    bpf_map_delete_elem(&ongoing_http2_grpc, &stream);
-                }
-            }
-        }
+    // this is a weird recursion - we can't loop many times above because the
+    // verifier will reject this program as too complex, we don't want to use
+    // bpf_loop() as we need to support kernels < 5.17, and finally we don't
+    // want to abuse bpf_tail_call as things can get slow (and limited), so we
+    // use this mirror-cracking hybrid approach
+    if (!g_ctx->terminate_search && g_ctx->iterations < k_iterations) {
+        bpf_tail_call(ctx, &jump_table, k_tail_protocol_http2_grpc_frames);
+        return 0; // unreachable, but bail safely if bpf_tail_call fails
     }
+
+    // We only loop N times looking for the stream termination. If the data
+    // packed is large we'll miss the frame saying the stream closed. In that
+    // case we try this backup path, which will tail call on success.
+    handle_data_frame(ctx, g_ctx);
+
+    return 0;
 }
 
-// TAIL_PROTOCOL_HTTP2
+// k_tail_protocol_http2
 SEC("kprobe/http2")
 int protocol_http2(void *ctx) {
     call_protocol_args_t *args = protocol_args();
@@ -210,12 +349,17 @@ int protocol_http2(void *ctx) {
         return 0;
     }
 
-    process_http2_grpc_frames(&args->pid_conn,
-                              (void *)args->u_buf,
-                              args->bytes_len,
-                              args->direction,
-                              args->ssl,
-                              args->orig_dport);
+    grpc_frames_ctx_t *g_ctx = grpc_ctx();
+
+    if (!g_ctx) {
+        return 0;
+    }
+
+    __builtin_memset(g_ctx, 0, sizeof(*g_ctx));
+    g_ctx->args = *args;
+    g_ctx->stream.pid_conn = args->pid_conn;
+
+    bpf_tail_call(ctx, &jump_table, k_tail_protocol_http2_grpc_frames);
 
     return 0;
 }

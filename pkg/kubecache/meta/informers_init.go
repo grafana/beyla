@@ -518,36 +518,34 @@ func headlessService(om *informer.ObjectMeta) bool {
 
 func (inf *Informers) ipInfoEventHandler(ctx context.Context) *cache.ResourceEventHandlerFuncs {
 	metrics := instrument.FromContext(ctx)
+	log := inf.log.With("func", "ipInfoEventHandler")
 	return &cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			metrics.InformerNew()
 			em := obj.(*indexableEntity).EncodedMeta
-			for _, ip := range em.Ips {
-				fmt.Println("******* " + ip + " -> " + em.Kind + "/" + em.Name)
-			}
+			log.Debug("AddFunc", "kind", em.Kind, "name", em.Name, "ips", em.Ips)
 			// ignore headless services from being added
 			if headlessService(obj.(*indexableEntity).EncodedMeta) {
 				return
 			}
 			inf.Notify(&informer.Event{
 				Type:     informer.EventType_CREATED,
-				Resource: obj.(*indexableEntity).EncodedMeta,
+				Resource: em,
 			})
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			metrics.InformerUpdate()
+			newEM := newObj.(*indexableEntity).EncodedMeta
+			oldEM := oldObj.(*indexableEntity).EncodedMeta
 			// ignore headless services from being added
-			if headlessService(newObj.(*indexableEntity).EncodedMeta) &&
-				headlessService(oldObj.(*indexableEntity).EncodedMeta) {
+			if headlessService(newEM) && headlessService(oldEM) {
 				return
 			}
-			if cmp.Equal(
-				oldObj.(*indexableEntity).EncodedMeta,
-				newObj.(*indexableEntity).EncodedMeta,
-				protoCmpTransform,
-			) {
+			if cmp.Equal(oldEM, newEM, protoCmpTransform) {
 				return
 			}
+			log.Debug("UpdateFunc", "kind", newEM.Kind, "name", newEM.Name,
+				"ips", newEM.Ips, "oldIps", oldEM.Ips)
 			inf.Notify(&informer.Event{
 				Type:     informer.EventType_UPDATED,
 				Resource: newObj.(*indexableEntity).EncodedMeta,
@@ -567,6 +565,8 @@ func (inf *Informers) ipInfoEventHandler(ctx context.Context) *cache.ResourceEve
 					return
 				}
 			}
+			em := obj.(*indexableEntity).EncodedMeta
+			log.Debug("DeleteFunc", "kind", em.Kind, "name", em.Name, "ips", em.Ips)
 
 			metrics.InformerDelete()
 			inf.Notify(&informer.Event{

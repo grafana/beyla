@@ -41,6 +41,21 @@ type bpf_debugGoAddrKeyT struct {
 	Addr uint64
 }
 
+type bpf_debugGrpcFramesCtxT struct {
+	PrevInfo        bpf_debugHttp2GrpcRequestT
+	HasPrevInfo     uint8
+	_               [3]byte
+	Pos             int32
+	SavedBufPos     int32
+	SavedStreamId   uint32
+	FoundDataFrame  uint8
+	Iterations      uint8
+	TerminateSearch uint8
+	_               [1]byte
+	Stream          bpf_debugHttp2ConnStreamT
+	Args            bpf_debugCallProtocolArgsT
+}
+
 type bpf_debugHttp2ConnStreamT struct {
 	PidConn  bpf_debugPidConnectionInfoT
 	StreamId uint32
@@ -257,15 +272,18 @@ type bpf_debugSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_debugProgramSpecs struct {
-	AppEgress      *ebpf.ProgramSpec `ebpf:"app_egress"`
-	AppIngress     *ebpf.ProgramSpec `ebpf:"app_ingress"`
-	AsyncReset     *ebpf.ProgramSpec `ebpf:"async_reset"`
-	EmitAsyncInit  *ebpf.ProgramSpec `ebpf:"emit_async_init"`
-	PacketExtender *ebpf.ProgramSpec `ebpf:"packet_extender"`
-	ProtocolHttp   *ebpf.ProgramSpec `ebpf:"protocol_http"`
-	ProtocolHttp2  *ebpf.ProgramSpec `ebpf:"protocol_http2"`
-	ProtocolTcp    *ebpf.ProgramSpec `ebpf:"protocol_tcp"`
-	SockmapTracker *ebpf.ProgramSpec `ebpf:"sockmap_tracker"`
+	AppEgress                         *ebpf.ProgramSpec `ebpf:"app_egress"`
+	AppIngress                        *ebpf.ProgramSpec `ebpf:"app_ingress"`
+	AsyncReset                        *ebpf.ProgramSpec `ebpf:"async_reset"`
+	EmitAsyncInit                     *ebpf.ProgramSpec `ebpf:"emit_async_init"`
+	PacketExtender                    *ebpf.ProgramSpec `ebpf:"packet_extender"`
+	ProtocolHttp                      *ebpf.ProgramSpec `ebpf:"protocol_http"`
+	ProtocolHttp2                     *ebpf.ProgramSpec `ebpf:"protocol_http2"`
+	ProtocolHttp2GrpcFrames           *ebpf.ProgramSpec `ebpf:"protocol_http2_grpc_frames"`
+	ProtocolHttp2GrpcHandleEndFrame   *ebpf.ProgramSpec `ebpf:"protocol_http2_grpc_handle_end_frame"`
+	ProtocolHttp2GrpcHandleStartFrame *ebpf.ProgramSpec `ebpf:"protocol_http2_grpc_handle_start_frame"`
+	ProtocolTcp                       *ebpf.ProgramSpec `ebpf:"protocol_tcp"`
+	SockmapTracker                    *ebpf.ProgramSpec `ebpf:"sockmap_tracker"`
 }
 
 // bpf_debugMapSpecs contains maps before they are loaded into the kernel.
@@ -285,6 +303,7 @@ type bpf_debugMapSpecs struct {
 	ConnectionMetaMem         *ebpf.MapSpec `ebpf:"connection_meta_mem"`
 	DebugEvents               *ebpf.MapSpec `ebpf:"debug_events"`
 	Events                    *ebpf.MapSpec `ebpf:"events"`
+	GrpcFramesCtxMem          *ebpf.MapSpec `ebpf:"grpc_frames_ctx_mem"`
 	Http2InfoMem              *ebpf.MapSpec `ebpf:"http2_info_mem"`
 	HttpInfoMem               *ebpf.MapSpec `ebpf:"http_info_mem"`
 	IncomingTraceMap          *ebpf.MapSpec `ebpf:"incoming_trace_map"`
@@ -348,6 +367,7 @@ type bpf_debugMaps struct {
 	ConnectionMetaMem         *ebpf.Map `ebpf:"connection_meta_mem"`
 	DebugEvents               *ebpf.Map `ebpf:"debug_events"`
 	Events                    *ebpf.Map `ebpf:"events"`
+	GrpcFramesCtxMem          *ebpf.Map `ebpf:"grpc_frames_ctx_mem"`
 	Http2InfoMem              *ebpf.Map `ebpf:"http2_info_mem"`
 	HttpInfoMem               *ebpf.Map `ebpf:"http_info_mem"`
 	IncomingTraceMap          *ebpf.Map `ebpf:"incoming_trace_map"`
@@ -394,6 +414,7 @@ func (m *bpf_debugMaps) Close() error {
 		m.ConnectionMetaMem,
 		m.DebugEvents,
 		m.Events,
+		m.GrpcFramesCtxMem,
 		m.Http2InfoMem,
 		m.HttpInfoMem,
 		m.IncomingTraceMap,
@@ -430,15 +451,18 @@ func (m *bpf_debugMaps) Close() error {
 //
 // It can be passed to loadBpf_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_debugPrograms struct {
-	AppEgress      *ebpf.Program `ebpf:"app_egress"`
-	AppIngress     *ebpf.Program `ebpf:"app_ingress"`
-	AsyncReset     *ebpf.Program `ebpf:"async_reset"`
-	EmitAsyncInit  *ebpf.Program `ebpf:"emit_async_init"`
-	PacketExtender *ebpf.Program `ebpf:"packet_extender"`
-	ProtocolHttp   *ebpf.Program `ebpf:"protocol_http"`
-	ProtocolHttp2  *ebpf.Program `ebpf:"protocol_http2"`
-	ProtocolTcp    *ebpf.Program `ebpf:"protocol_tcp"`
-	SockmapTracker *ebpf.Program `ebpf:"sockmap_tracker"`
+	AppEgress                         *ebpf.Program `ebpf:"app_egress"`
+	AppIngress                        *ebpf.Program `ebpf:"app_ingress"`
+	AsyncReset                        *ebpf.Program `ebpf:"async_reset"`
+	EmitAsyncInit                     *ebpf.Program `ebpf:"emit_async_init"`
+	PacketExtender                    *ebpf.Program `ebpf:"packet_extender"`
+	ProtocolHttp                      *ebpf.Program `ebpf:"protocol_http"`
+	ProtocolHttp2                     *ebpf.Program `ebpf:"protocol_http2"`
+	ProtocolHttp2GrpcFrames           *ebpf.Program `ebpf:"protocol_http2_grpc_frames"`
+	ProtocolHttp2GrpcHandleEndFrame   *ebpf.Program `ebpf:"protocol_http2_grpc_handle_end_frame"`
+	ProtocolHttp2GrpcHandleStartFrame *ebpf.Program `ebpf:"protocol_http2_grpc_handle_start_frame"`
+	ProtocolTcp                       *ebpf.Program `ebpf:"protocol_tcp"`
+	SockmapTracker                    *ebpf.Program `ebpf:"sockmap_tracker"`
 }
 
 func (p *bpf_debugPrograms) Close() error {
@@ -450,6 +474,9 @@ func (p *bpf_debugPrograms) Close() error {
 		p.PacketExtender,
 		p.ProtocolHttp,
 		p.ProtocolHttp2,
+		p.ProtocolHttp2GrpcFrames,
+		p.ProtocolHttp2GrpcHandleEndFrame,
+		p.ProtocolHttp2GrpcHandleStartFrame,
 		p.ProtocolTcp,
 		p.SockmapTracker,
 	)

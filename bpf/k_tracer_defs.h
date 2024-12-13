@@ -4,6 +4,7 @@
 #include "vmlinux.h"
 #include "bpf_helpers.h"
 #include "http_types.h"
+#include "k_tracer_tailcall.h"
 #include "ringbuf.h"
 #include "pid.h"
 #include "trace_common.h"
@@ -25,13 +26,6 @@ typedef struct recv_args {
     u8 iovec_ctx[sizeof(iovec_iter_ctx)];
 } recv_args_t;
 
-struct bpf_map_def SEC("maps") jump_table = {
-    .type = BPF_MAP_TYPE_PROG_ARRAY,
-    .key_size = sizeof(__u32),
-    .value_size = sizeof(__u32),
-    .max_entries = 8,
-};
-
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, egress_key_t);
@@ -40,16 +34,12 @@ struct {
     __uint(pinning, BEYLA_PIN_INTERNAL);
 } msg_buffers SEC(".maps");
 
-#define TAIL_PROTOCOL_HTTP 0
-#define TAIL_PROTOCOL_HTTP2 1
-#define TAIL_PROTOCOL_TCP 2
-
 static __always_inline void handle_buf_with_args(void *ctx, call_protocol_args_t *args) {
     bpf_dbg_printk(
         "buf=[%s], pid=%d, len=%d", args->small_buf, args->pid_conn.pid, args->bytes_len);
 
     if (is_http(args->small_buf, MIN_HTTP_SIZE, &args->packet_type)) {
-        bpf_tail_call(ctx, &jump_table, TAIL_PROTOCOL_HTTP);
+        bpf_tail_call(ctx, &jump_table, k_tail_protocol_http);
     } else if (is_http2_or_grpc(args->small_buf, MIN_HTTP2_SIZE)) {
         bpf_dbg_printk("Found HTTP2 or gRPC connection");
         u8 is_ssl = args->ssl;
@@ -57,7 +47,7 @@ static __always_inline void handle_buf_with_args(void *ctx, call_protocol_args_t
     } else {
         u8 *h2g = bpf_map_lookup_elem(&ongoing_http2_connections, &args->pid_conn);
         if (h2g && *h2g == args->ssl) {
-            bpf_tail_call(ctx, &jump_table, TAIL_PROTOCOL_HTTP2);
+            bpf_tail_call(ctx, &jump_table, k_tail_protocol_http2);
         } else { // large request tracking
             http_info_t *info = bpf_map_lookup_elem(&ongoing_http, &args->pid_conn);
 
@@ -70,7 +60,7 @@ static __always_inline void handle_buf_with_args(void *ctx, call_protocol_args_t
                     // Essentially, when a packet is extended by our sock_msg program and
                     // passed down another service, the receiving side may reassemble the
                     // packets into one buffer or not. If they are reassembled, then the
-                    // call to bpf_tail_call(ctx, &jump_table, TAIL_PROTOCOL_HTTP); will
+                    // call to bpf_tail_call(ctx, &jump_table, k_tail_protocol_http); will
                     // scan for the incoming 'Traceparent' header. If they are not reassembled
                     // we'll see something like this:
                     // [before the injected header],[70 bytes for 'Traceparent...'],[the rest].
@@ -109,7 +99,7 @@ static __always_inline void handle_buf_with_args(void *ctx, call_protocol_args_t
                 // we are processing SSL request. HTTP2 is already checked in handle_buf_with_connection.
                 http_info_t *http_info = bpf_map_lookup_elem(&ongoing_http, &args->pid_conn);
                 if (!http_info) {
-                    bpf_tail_call(ctx, &jump_table, TAIL_PROTOCOL_TCP);
+                    bpf_tail_call(ctx, &jump_table, k_tail_protocol_tcp);
                 }
             }
         }

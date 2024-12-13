@@ -222,6 +222,18 @@ func (p *Tracer) SetupTailCalls() {
 			index: 2,
 			prog:  p.bpfObjects.ProtocolTcp,
 		},
+		{
+			index: 3,
+			prog:  p.bpfObjects.ProtocolHttp2GrpcFrames,
+		},
+		{
+			index: 4,
+			prog:  p.bpfObjects.ProtocolHttp2GrpcHandleStartFrame,
+		},
+		{
+			index: 5,
+			prog:  p.bpfObjects.ProtocolHttp2GrpcHandleEndFrame,
+		},
 	} {
 		err := p.bpfObjects.JumpTable.Update(uint32(tc.index), uint32(tc.prog.FD()), ebpf.UpdateAny)
 

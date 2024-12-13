@@ -49,6 +49,10 @@ type KubernetesDecorator struct {
 	// MetaCacheAddress is the host:port address of the beyla-k8s-cache service instance
 	MetaCacheAddress string `yaml:"meta_cache_address" env:"BEYLA_KUBE_META_CACHE_ADDRESS"`
 
+	// MetaRestrictLocalNode will download only the metadata from the Pods that are located in the same
+	// node as the Beyla instance. It will also restrict the Node information to the local node.
+	MetaRestrictLocalNode bool `yaml:"meta_restrict_local_node" env:"BEYLA_KUBE_META_RESTRICT_LOCAL_NODE"`
+
 	// MetaSourceLabels allows Beyla overriding the service name and namespace of an application from
 	// the given labels.
 	// TODO Beyla 2.0. Consider defaulting to (and report as a breaking change):

@@ -114,6 +114,7 @@ func buildCommonContextInfo(
 			DisabledInformers: config.Attributes.Kubernetes.DisableInformers,
 			MetaCacheAddr:     config.Attributes.Kubernetes.MetaCacheAddress,
 			MetaSourceLabels:  config.Attributes.Kubernetes.MetaSourceLabels,
+			RestrictLocalNode: config.Attributes.Kubernetes.MetaRestrictLocalNode,
 		}),
 	}
 	switch {

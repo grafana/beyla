@@ -17,7 +17,8 @@ import (
 const (
 	testTimeout = 3 * time.Minute
 
-	jaegerQueryURL = "http://localhost:36686/api/traces"
+	jaegerHost     = "http://localhost:36686"
+	jaegerQueryURL = jaegerHost + "/api/traces"
 )
 
 var cluster *kube.Kind

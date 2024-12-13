@@ -76,9 +76,7 @@ services:
     image: quay.io/prometheus/prometheus:v2.53.0
     container_name: prometheus
     command:
-      - --storage.tsdb.retention.time=1m
       - --config.file=/etc/prometheus/prometheus-config-promscrape.yml
-      - --storage.tsdb.path=/prometheus
       - --web.enable-lifecycle
       - --web.route-prefix=/
     volumes:

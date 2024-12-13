@@ -80,3 +80,7 @@ spec:
               value: "10ms"
             - name: BEYLA_BPF_BATCH_TIMEOUT
               value: "10ms"
+            # in tests not running on multi-node Kind setups, this property
+            # should have no effect
+            - name: BEYLA_KUBE_META_RESTRICT_LOCAL_NODE
+              value: "true"

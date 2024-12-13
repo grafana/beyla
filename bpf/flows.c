@@ -147,7 +147,7 @@ static inline int fill_ethhdr(struct ethhdr *eth, void *data_end, flow_id *id, u
 static inline int flow_monitor(struct __sk_buff *skb) {
     // If sampling is defined, will only parse 1 out of "sampling" flows
     if (sampling != 0 && (bpf_get_prandom_u32() % sampling) != 0) {
-        return TC_ACT_OK;
+        return TC_ACT_UNSPEC;
     }
     void *data_end = (void *)(long)skb->data_end;
     void *data = (void *)(long)skb->data;
@@ -157,7 +157,7 @@ static inline int flow_monitor(struct __sk_buff *skb) {
     struct ethhdr *eth = (struct ethhdr *)data;
     u16 flags = 0;
     if (fill_ethhdr(eth, data_end, &id, &flags) == DISCARD) {
-        return TC_ACT_OK;
+        return TC_ACT_UNSPEC;
     }
     id.if_index = skb->ifindex;
 
@@ -261,7 +261,7 @@ cleanup:
     if (flags & FIN_FLAG || flags & RST_FLAG || flags & FIN_ACK_FLAG || flags & RST_ACK_FLAG) {
         bpf_map_delete_elem(&flow_directions, &id);
     }
-    return TC_ACT_OK;
+    return TC_ACT_UNSPEC;
 }
 
 SEC("tc_ingress")

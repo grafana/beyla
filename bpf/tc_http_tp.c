@@ -7,11 +7,11 @@
 #include "http_types.h"
 #include "tcp_info.h"
 #include "tracing.h"
+#include "tc_act.h"
 #include "tc_common.h"
 
 char __license[] SEC("license") = "Dual MIT/GPL";
 
-enum { TC_ACT_OK = 0, TC_ACT_RECLASSIFY = 1, TC_ACT_SHOT = 2 };
 enum { MAX_IP_PACKET_SIZE = 0x7fff };
 
 enum connection_state { ESTABLISHED, FIN_WAIT_1, FIN_WAIT_2, CLOSING, CLOSE_WAIT, LAST_ACK };
@@ -586,7 +586,7 @@ int beyla_tc_http_egress(struct __sk_buff *ctx) {
     struct tcphdr *tcp = tcp_header(ctx);
 
     if (!tcp) {
-        return TC_ACT_OK;
+        return TC_ACT_UNSPEC;
     }
 
     const u16 src_port = bpf_ntohs(tcp->source);
@@ -607,7 +607,7 @@ int beyla_tc_http_egress(struct __sk_buff *ctx) {
         } else if (tcp->rst) {
             // we are aborting, dispatch the packet and call it a day
             delete_http_ctx(key);
-            return TC_ACT_OK;
+            return TC_ACT_UNSPEC;
         } else {
             update_conn_state_egress(tcp, http_ctx, key);
         }
@@ -623,11 +623,11 @@ int beyla_tc_http_egress(struct __sk_buff *ctx) {
     tp_info_pid_t *tp_info_pid = bpf_map_lookup_elem(&outgoing_trace_map, &e_key);
 
     if (!tp_info_pid) {
-        return TC_ACT_OK;
+        return TC_ACT_UNSPEC;
     }
 
     if (!is_http_request(ctx)) {
-        return TC_ACT_OK;
+        return TC_ACT_UNSPEC;
     }
 
     tc_l7_args_t *args = l7_args();
@@ -639,7 +639,7 @@ int beyla_tc_http_egress(struct __sk_buff *ctx) {
         bpf_tail_call(ctx, &tc_l7_jump_table, L7_TC_TAIL_PROTOCOL_HTTP);
     }
 
-    return TC_ACT_OK;
+    return TC_ACT_UNSPEC;
 }
 
 SEC("tc_ingress")
@@ -647,7 +647,7 @@ int beyla_tc_http_ingress(struct __sk_buff *ctx) {
     struct tcphdr *tcp = tcp_header(ctx);
 
     if (!tcp) {
-        return TC_ACT_OK;
+        return TC_ACT_UNSPEC;
     }
 
     const u16 dst_port = bpf_ntohs(tcp->dest);
@@ -656,7 +656,7 @@ int beyla_tc_http_ingress(struct __sk_buff *ctx) {
     struct tc_http_ctx *http_ctx = bpf_map_lookup_elem(&tc_http_ctx_map, &key);
 
     if (!http_ctx) {
-        return TC_ACT_OK;
+        return TC_ACT_UNSPEC;
     }
 
     u32 ack_seq = bpf_ntohl(tcp->ack_seq);
@@ -666,5 +666,5 @@ int beyla_tc_http_ingress(struct __sk_buff *ctx) {
 
     update_conn_state_ingress(tcp, http_ctx, key);
 
-    return TC_ACT_OK;
+    return TC_ACT_UNSPEC;
 }

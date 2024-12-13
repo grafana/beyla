@@ -20,9 +20,8 @@
 #define __FLOW_H__
 
 #include "vmlinux.h"
+#include "tc_act.h"
 
-#define TC_ACT_OK 0
-#define TC_ACT_SHOT 2
 #define IP_MAX_LEN 16
 
 #define ETH_ALEN 6 /* Octets in one ethernet addr   */

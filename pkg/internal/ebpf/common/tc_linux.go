@@ -72,9 +72,6 @@ func RegisterTC(iface ifaces.Interface, egressFD, ingressFD int, log *slog.Logge
 		QdiscAttrs: qdiscAttrs,
 		QdiscType:  "clsact",
 	}
-	if err := netlink.QdiscDel(qdisc); err == nil {
-		log.Warn("qdisc clsact already existed. Deleted it")
-	}
 	if err := netlink.QdiscAdd(qdisc); err != nil {
 		if errors.Is(err, fs.ErrExist) {
 			log.Warn("qdisc clsact already exists. Ignoring", "error", err)
@@ -106,7 +103,7 @@ func registerEgress(ipvlan netlink.Link, egressFD int) (*netlink.BpfFilter, erro
 		LinkIndex: ipvlan.Attrs().Index,
 		Parent:    netlink.HANDLE_MIN_EGRESS,
 		Handle:    netlink.MakeHandle(0, 1),
-		Protocol:  3,
+		Protocol:  unix.ETH_P_ALL,
 		Priority:  1,
 	}
 	egressFilter := &netlink.BpfFilter{
@@ -181,33 +178,58 @@ func doIgnoreNoDev[T any](sysCall func(T) error, dev T) error {
 	return nil
 }
 
+func ifaceHasFilters(iface ifaces.Interface, parent uint32) bool {
+	ipvlan, err := netlink.LinkByIndex(iface.Index)
+
+	if err != nil {
+		return true // be conservative assume we have filters if we can't detect them
+	}
+
+	filters, err := netlink.FilterList(ipvlan, parent)
+
+	if err != nil {
+		return true // be conservative assume we have filters if we can't detect them
+	}
+
+	return len(filters) > 0
+}
+
+func cleanupQdiscs(qdiscs map[ifaces.Interface]*netlink.GenericQdisc) {
+	for iface, qd := range qdiscs {
+		hasEgressFilters := ifaceHasFilters(iface, netlink.HANDLE_MIN_EGRESS)
+		hasIngressFilters := ifaceHasFilters(iface, netlink.HANDLE_MIN_INGRESS)
+
+		if hasEgressFilters || hasIngressFilters {
+			log.Debug("not deleting Qdisc as it still has children", "interface", iface)
+		} else {
+			log.Debug("deleting Qdisc", "interface", iface)
+
+			if err := doIgnoreNoDev(netlink.QdiscDel, netlink.Qdisc(qd)); err != nil {
+				log.Error("deleting qdisc", "error", err)
+			}
+		}
+	}
+}
+
+func cleanupFilters(filters map[ifaces.Interface]*netlink.BpfFilter, kind string) {
+	for iface, ef := range filters {
+		log.Debug(fmt.Sprintf("deleting %s filter", kind), "interface", iface)
+		if err := doIgnoreNoDev(netlink.FilterDel, netlink.Filter(ef)); err != nil {
+			log.Error(fmt.Sprintf("deleting %s filter", kind), "error", err)
+		}
+	}
+}
+
 func CloseTCLinks(qdiscs map[ifaces.Interface]*netlink.GenericQdisc,
 	egressFilters map[ifaces.Interface]*netlink.BpfFilter,
 	ingressFilters map[ifaces.Interface]*netlink.BpfFilter,
 	log *slog.Logger) {
 	log.Info("removing traffic control probes")
 
-	// cleanup egress
-	for iface, ef := range egressFilters {
-		log.Debug("deleting egress filter", "interface", iface)
-		if err := doIgnoreNoDev(netlink.FilterDel, netlink.Filter(ef)); err != nil {
-			log.Error("deleting egress filter", "error", err)
-		}
-	}
+	cleanupFilters(egressFilters, "egress")
+	cleanupFilters(ingressFilters, "ingress")
 
-	// cleanup ingress
-	for iface, igf := range ingressFilters {
-		log.Debug("deleting ingress filter", "interface", iface)
-		if err := doIgnoreNoDev(netlink.FilterDel, netlink.Filter(igf)); err != nil {
-			log.Error("deleting ingress filter", "error", err)
-		}
-	}
-
-	// cleanup qdiscs
-	for iface, qd := range qdiscs {
-		log.Debug("deleting Qdisc", "interface", iface)
-		if err := doIgnoreNoDev(netlink.QdiscDel, netlink.Qdisc(qd)); err != nil {
-			log.Error("deleting qdisc", "error", err)
-		}
-	}
+	// make sure this happens only after cleaning up filters, so that we don't
+	// remove 3rdparty filters
+	cleanupQdiscs(qdiscs)
 }

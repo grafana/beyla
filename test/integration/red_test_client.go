@@ -53,6 +53,7 @@ func testClientWithMethodAndStatusCode(t *testing.T, method string, statusCode i
 		return
 	}
 
+	var trace jaeger.Trace
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		resp, err := http.Get(jaegerQueryURL + fmt.Sprintf("?service=pingclient&operation=%s", method))
 		require.NoError(t, err)
@@ -64,7 +65,20 @@ func testClientWithMethodAndStatusCode(t *testing.T, method string, statusCode i
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
 		traces := tq.FindBySpan(jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(statusCode)})
 		require.GreaterOrEqual(t, len(traces), 1)
+		trace = traces[0]
 	}, test.Interval(100*time.Millisecond))
+
+	res := trace.FindByOperationName("GET")
+	require.Len(t, res, 1)
+	parent := res[0]
+
+	addr, ok := jaeger.FindIn(parent.Tags, "server.address")
+	assert.True(t, ok)
+	assert.NotEqual(t, "", addr.Value)
+
+	addr, ok = jaeger.FindIn(parent.Tags, "server.port")
+	assert.True(t, ok)
+	assert.Equal(t, 443, addr.Value)
 }
 
 func testREDMetricsForClientHTTPLibrary(t *testing.T) {

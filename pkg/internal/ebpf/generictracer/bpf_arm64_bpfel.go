@@ -268,43 +268,43 @@ type bpfSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfProgramSpecs struct {
-	AsyncReset                        *ebpf.ProgramSpec `ebpf:"async_reset"`
-	EmitAsyncInit                     *ebpf.ProgramSpec `ebpf:"emit_async_init"`
-	KprobeSysExit                     *ebpf.ProgramSpec `ebpf:"kprobe_sys_exit"`
-	KprobeTcpCleanupRbuf              *ebpf.ProgramSpec `ebpf:"kprobe_tcp_cleanup_rbuf"`
-	KprobeTcpClose                    *ebpf.ProgramSpec `ebpf:"kprobe_tcp_close"`
-	KprobeTcpConnect                  *ebpf.ProgramSpec `ebpf:"kprobe_tcp_connect"`
-	KprobeTcpRcvEstablished           *ebpf.ProgramSpec `ebpf:"kprobe_tcp_rcv_established"`
-	KprobeTcpRecvmsg                  *ebpf.ProgramSpec `ebpf:"kprobe_tcp_recvmsg"`
-	KprobeTcpSendmsg                  *ebpf.ProgramSpec `ebpf:"kprobe_tcp_sendmsg"`
-	KprobeUnixStreamRecvmsg           *ebpf.ProgramSpec `ebpf:"kprobe_unix_stream_recvmsg"`
-	KprobeUnixStreamSendmsg           *ebpf.ProgramSpec `ebpf:"kprobe_unix_stream_sendmsg"`
-	KretprobeSockAlloc                *ebpf.ProgramSpec `ebpf:"kretprobe_sock_alloc"`
-	KretprobeSysAccept4               *ebpf.ProgramSpec `ebpf:"kretprobe_sys_accept4"`
-	KretprobeSysClone                 *ebpf.ProgramSpec `ebpf:"kretprobe_sys_clone"`
-	KretprobeSysConnect               *ebpf.ProgramSpec `ebpf:"kretprobe_sys_connect"`
-	KretprobeTcpRecvmsg               *ebpf.ProgramSpec `ebpf:"kretprobe_tcp_recvmsg"`
-	KretprobeTcpSendmsg               *ebpf.ProgramSpec `ebpf:"kretprobe_tcp_sendmsg"`
-	KretprobeUnixStreamRecvmsg        *ebpf.ProgramSpec `ebpf:"kretprobe_unix_stream_recvmsg"`
-	KretprobeUnixStreamSendmsg        *ebpf.ProgramSpec `ebpf:"kretprobe_unix_stream_sendmsg"`
-	ProtocolHttp                      *ebpf.ProgramSpec `ebpf:"protocol_http"`
-	ProtocolHttp2                     *ebpf.ProgramSpec `ebpf:"protocol_http2"`
-	ProtocolHttp2GrpcFrames           *ebpf.ProgramSpec `ebpf:"protocol_http2_grpc_frames"`
-	ProtocolHttp2GrpcHandleEndFrame   *ebpf.ProgramSpec `ebpf:"protocol_http2_grpc_handle_end_frame"`
-	ProtocolHttp2GrpcHandleStartFrame *ebpf.ProgramSpec `ebpf:"protocol_http2_grpc_handle_start_frame"`
-	ProtocolTcp                       *ebpf.ProgramSpec `ebpf:"protocol_tcp"`
-	SocketHttpFilter                  *ebpf.ProgramSpec `ebpf:"socket__http_filter"`
-	UprobeSslDoHandshake              *ebpf.ProgramSpec `ebpf:"uprobe_ssl_do_handshake"`
-	UprobeSslRead                     *ebpf.ProgramSpec `ebpf:"uprobe_ssl_read"`
-	UprobeSslReadEx                   *ebpf.ProgramSpec `ebpf:"uprobe_ssl_read_ex"`
-	UprobeSslShutdown                 *ebpf.ProgramSpec `ebpf:"uprobe_ssl_shutdown"`
-	UprobeSslWrite                    *ebpf.ProgramSpec `ebpf:"uprobe_ssl_write"`
-	UprobeSslWriteEx                  *ebpf.ProgramSpec `ebpf:"uprobe_ssl_write_ex"`
-	UretprobeSslDoHandshake           *ebpf.ProgramSpec `ebpf:"uretprobe_ssl_do_handshake"`
-	UretprobeSslRead                  *ebpf.ProgramSpec `ebpf:"uretprobe_ssl_read"`
-	UretprobeSslReadEx                *ebpf.ProgramSpec `ebpf:"uretprobe_ssl_read_ex"`
-	UretprobeSslWrite                 *ebpf.ProgramSpec `ebpf:"uretprobe_ssl_write"`
-	UretprobeSslWriteEx               *ebpf.ProgramSpec `ebpf:"uretprobe_ssl_write_ex"`
+	BeylaAsyncReset                        *ebpf.ProgramSpec `ebpf:"beyla_async_reset"`
+	BeylaEmitAsyncInit                     *ebpf.ProgramSpec `ebpf:"beyla_emit_async_init"`
+	BeylaKprobeSysExit                     *ebpf.ProgramSpec `ebpf:"beyla_kprobe_sys_exit"`
+	BeylaKprobeTcpCleanupRbuf              *ebpf.ProgramSpec `ebpf:"beyla_kprobe_tcp_cleanup_rbuf"`
+	BeylaKprobeTcpClose                    *ebpf.ProgramSpec `ebpf:"beyla_kprobe_tcp_close"`
+	BeylaKprobeTcpConnect                  *ebpf.ProgramSpec `ebpf:"beyla_kprobe_tcp_connect"`
+	BeylaKprobeTcpRcvEstablished           *ebpf.ProgramSpec `ebpf:"beyla_kprobe_tcp_rcv_established"`
+	BeylaKprobeTcpRecvmsg                  *ebpf.ProgramSpec `ebpf:"beyla_kprobe_tcp_recvmsg"`
+	BeylaKprobeTcpSendmsg                  *ebpf.ProgramSpec `ebpf:"beyla_kprobe_tcp_sendmsg"`
+	BeylaKprobeUnixStreamRecvmsg           *ebpf.ProgramSpec `ebpf:"beyla_kprobe_unix_stream_recvmsg"`
+	BeylaKprobeUnixStreamSendmsg           *ebpf.ProgramSpec `ebpf:"beyla_kprobe_unix_stream_sendmsg"`
+	BeylaKretprobeSockAlloc                *ebpf.ProgramSpec `ebpf:"beyla_kretprobe_sock_alloc"`
+	BeylaKretprobeSysAccept4               *ebpf.ProgramSpec `ebpf:"beyla_kretprobe_sys_accept4"`
+	BeylaKretprobeSysClone                 *ebpf.ProgramSpec `ebpf:"beyla_kretprobe_sys_clone"`
+	BeylaKretprobeSysConnect               *ebpf.ProgramSpec `ebpf:"beyla_kretprobe_sys_connect"`
+	BeylaKretprobeTcpRecvmsg               *ebpf.ProgramSpec `ebpf:"beyla_kretprobe_tcp_recvmsg"`
+	BeylaKretprobeTcpSendmsg               *ebpf.ProgramSpec `ebpf:"beyla_kretprobe_tcp_sendmsg"`
+	BeylaKretprobeUnixStreamRecvmsg        *ebpf.ProgramSpec `ebpf:"beyla_kretprobe_unix_stream_recvmsg"`
+	BeylaKretprobeUnixStreamSendmsg        *ebpf.ProgramSpec `ebpf:"beyla_kretprobe_unix_stream_sendmsg"`
+	BeylaProtocolHttp                      *ebpf.ProgramSpec `ebpf:"beyla_protocol_http"`
+	BeylaProtocolHttp2                     *ebpf.ProgramSpec `ebpf:"beyla_protocol_http2"`
+	BeylaProtocolHttp2GrpcFrames           *ebpf.ProgramSpec `ebpf:"beyla_protocol_http2_grpc_frames"`
+	BeylaProtocolHttp2GrpcHandleEndFrame   *ebpf.ProgramSpec `ebpf:"beyla_protocol_http2_grpc_handle_end_frame"`
+	BeylaProtocolHttp2GrpcHandleStartFrame *ebpf.ProgramSpec `ebpf:"beyla_protocol_http2_grpc_handle_start_frame"`
+	BeylaProtocolTcp                       *ebpf.ProgramSpec `ebpf:"beyla_protocol_tcp"`
+	BeylaSocketHttpFilter                  *ebpf.ProgramSpec `ebpf:"beyla_socket__http_filter"`
+	BeylaUprobeSslDoHandshake              *ebpf.ProgramSpec `ebpf:"beyla_uprobe_ssl_do_handshake"`
+	BeylaUprobeSslRead                     *ebpf.ProgramSpec `ebpf:"beyla_uprobe_ssl_read"`
+	BeylaUprobeSslReadEx                   *ebpf.ProgramSpec `ebpf:"beyla_uprobe_ssl_read_ex"`
+	BeylaUprobeSslShutdown                 *ebpf.ProgramSpec `ebpf:"beyla_uprobe_ssl_shutdown"`
+	BeylaUprobeSslWrite                    *ebpf.ProgramSpec `ebpf:"beyla_uprobe_ssl_write"`
+	BeylaUprobeSslWriteEx                  *ebpf.ProgramSpec `ebpf:"beyla_uprobe_ssl_write_ex"`
+	BeylaUretprobeSslDoHandshake           *ebpf.ProgramSpec `ebpf:"beyla_uretprobe_ssl_do_handshake"`
+	BeylaUretprobeSslRead                  *ebpf.ProgramSpec `ebpf:"beyla_uretprobe_ssl_read"`
+	BeylaUretprobeSslReadEx                *ebpf.ProgramSpec `ebpf:"beyla_uretprobe_ssl_read_ex"`
+	BeylaUretprobeSslWrite                 *ebpf.ProgramSpec `ebpf:"beyla_uretprobe_ssl_write"`
+	BeylaUretprobeSslWriteEx               *ebpf.ProgramSpec `ebpf:"beyla_uretprobe_ssl_write_ex"`
 }
 
 // bpfMapSpecs contains maps before they are loaded into the kernel.
@@ -469,84 +469,84 @@ func (m *bpfMaps) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfPrograms struct {
-	AsyncReset                        *ebpf.Program `ebpf:"async_reset"`
-	EmitAsyncInit                     *ebpf.Program `ebpf:"emit_async_init"`
-	KprobeSysExit                     *ebpf.Program `ebpf:"kprobe_sys_exit"`
-	KprobeTcpCleanupRbuf              *ebpf.Program `ebpf:"kprobe_tcp_cleanup_rbuf"`
-	KprobeTcpClose                    *ebpf.Program `ebpf:"kprobe_tcp_close"`
-	KprobeTcpConnect                  *ebpf.Program `ebpf:"kprobe_tcp_connect"`
-	KprobeTcpRcvEstablished           *ebpf.Program `ebpf:"kprobe_tcp_rcv_established"`
-	KprobeTcpRecvmsg                  *ebpf.Program `ebpf:"kprobe_tcp_recvmsg"`
-	KprobeTcpSendmsg                  *ebpf.Program `ebpf:"kprobe_tcp_sendmsg"`
-	KprobeUnixStreamRecvmsg           *ebpf.Program `ebpf:"kprobe_unix_stream_recvmsg"`
-	KprobeUnixStreamSendmsg           *ebpf.Program `ebpf:"kprobe_unix_stream_sendmsg"`
-	KretprobeSockAlloc                *ebpf.Program `ebpf:"kretprobe_sock_alloc"`
-	KretprobeSysAccept4               *ebpf.Program `ebpf:"kretprobe_sys_accept4"`
-	KretprobeSysClone                 *ebpf.Program `ebpf:"kretprobe_sys_clone"`
-	KretprobeSysConnect               *ebpf.Program `ebpf:"kretprobe_sys_connect"`
-	KretprobeTcpRecvmsg               *ebpf.Program `ebpf:"kretprobe_tcp_recvmsg"`
-	KretprobeTcpSendmsg               *ebpf.Program `ebpf:"kretprobe_tcp_sendmsg"`
-	KretprobeUnixStreamRecvmsg        *ebpf.Program `ebpf:"kretprobe_unix_stream_recvmsg"`
-	KretprobeUnixStreamSendmsg        *ebpf.Program `ebpf:"kretprobe_unix_stream_sendmsg"`
-	ProtocolHttp                      *ebpf.Program `ebpf:"protocol_http"`
-	ProtocolHttp2                     *ebpf.Program `ebpf:"protocol_http2"`
-	ProtocolHttp2GrpcFrames           *ebpf.Program `ebpf:"protocol_http2_grpc_frames"`
-	ProtocolHttp2GrpcHandleEndFrame   *ebpf.Program `ebpf:"protocol_http2_grpc_handle_end_frame"`
-	ProtocolHttp2GrpcHandleStartFrame *ebpf.Program `ebpf:"protocol_http2_grpc_handle_start_frame"`
-	ProtocolTcp                       *ebpf.Program `ebpf:"protocol_tcp"`
-	SocketHttpFilter                  *ebpf.Program `ebpf:"socket__http_filter"`
-	UprobeSslDoHandshake              *ebpf.Program `ebpf:"uprobe_ssl_do_handshake"`
-	UprobeSslRead                     *ebpf.Program `ebpf:"uprobe_ssl_read"`
-	UprobeSslReadEx                   *ebpf.Program `ebpf:"uprobe_ssl_read_ex"`
-	UprobeSslShutdown                 *ebpf.Program `ebpf:"uprobe_ssl_shutdown"`
-	UprobeSslWrite                    *ebpf.Program `ebpf:"uprobe_ssl_write"`
-	UprobeSslWriteEx                  *ebpf.Program `ebpf:"uprobe_ssl_write_ex"`
-	UretprobeSslDoHandshake           *ebpf.Program `ebpf:"uretprobe_ssl_do_handshake"`
-	UretprobeSslRead                  *ebpf.Program `ebpf:"uretprobe_ssl_read"`
-	UretprobeSslReadEx                *ebpf.Program `ebpf:"uretprobe_ssl_read_ex"`
-	UretprobeSslWrite                 *ebpf.Program `ebpf:"uretprobe_ssl_write"`
-	UretprobeSslWriteEx               *ebpf.Program `ebpf:"uretprobe_ssl_write_ex"`
+	BeylaAsyncReset                        *ebpf.Program `ebpf:"beyla_async_reset"`
+	BeylaEmitAsyncInit                     *ebpf.Program `ebpf:"beyla_emit_async_init"`
+	BeylaKprobeSysExit                     *ebpf.Program `ebpf:"beyla_kprobe_sys_exit"`
+	BeylaKprobeTcpCleanupRbuf              *ebpf.Program `ebpf:"beyla_kprobe_tcp_cleanup_rbuf"`
+	BeylaKprobeTcpClose                    *ebpf.Program `ebpf:"beyla_kprobe_tcp_close"`
+	BeylaKprobeTcpConnect                  *ebpf.Program `ebpf:"beyla_kprobe_tcp_connect"`
+	BeylaKprobeTcpRcvEstablished           *ebpf.Program `ebpf:"beyla_kprobe_tcp_rcv_established"`
+	BeylaKprobeTcpRecvmsg                  *ebpf.Program `ebpf:"beyla_kprobe_tcp_recvmsg"`
+	BeylaKprobeTcpSendmsg                  *ebpf.Program `ebpf:"beyla_kprobe_tcp_sendmsg"`
+	BeylaKprobeUnixStreamRecvmsg           *ebpf.Program `ebpf:"beyla_kprobe_unix_stream_recvmsg"`
+	BeylaKprobeUnixStreamSendmsg           *ebpf.Program `ebpf:"beyla_kprobe_unix_stream_sendmsg"`
+	BeylaKretprobeSockAlloc                *ebpf.Program `ebpf:"beyla_kretprobe_sock_alloc"`
+	BeylaKretprobeSysAccept4               *ebpf.Program `ebpf:"beyla_kretprobe_sys_accept4"`
+	BeylaKretprobeSysClone                 *ebpf.Program `ebpf:"beyla_kretprobe_sys_clone"`
+	BeylaKretprobeSysConnect               *ebpf.Program `ebpf:"beyla_kretprobe_sys_connect"`
+	BeylaKretprobeTcpRecvmsg               *ebpf.Program `ebpf:"beyla_kretprobe_tcp_recvmsg"`
+	BeylaKretprobeTcpSendmsg               *ebpf.Program `ebpf:"beyla_kretprobe_tcp_sendmsg"`
+	BeylaKretprobeUnixStreamRecvmsg        *ebpf.Program `ebpf:"beyla_kretprobe_unix_stream_recvmsg"`
+	BeylaKretprobeUnixStreamSendmsg        *ebpf.Program `ebpf:"beyla_kretprobe_unix_stream_sendmsg"`
+	BeylaProtocolHttp                      *ebpf.Program `ebpf:"beyla_protocol_http"`
+	BeylaProtocolHttp2                     *ebpf.Program `ebpf:"beyla_protocol_http2"`
+	BeylaProtocolHttp2GrpcFrames           *ebpf.Program `ebpf:"beyla_protocol_http2_grpc_frames"`
+	BeylaProtocolHttp2GrpcHandleEndFrame   *ebpf.Program `ebpf:"beyla_protocol_http2_grpc_handle_end_frame"`
+	BeylaProtocolHttp2GrpcHandleStartFrame *ebpf.Program `ebpf:"beyla_protocol_http2_grpc_handle_start_frame"`
+	BeylaProtocolTcp                       *ebpf.Program `ebpf:"beyla_protocol_tcp"`
+	BeylaSocketHttpFilter                  *ebpf.Program `ebpf:"beyla_socket__http_filter"`
+	BeylaUprobeSslDoHandshake              *ebpf.Program `ebpf:"beyla_uprobe_ssl_do_handshake"`
+	BeylaUprobeSslRead                     *ebpf.Program `ebpf:"beyla_uprobe_ssl_read"`
+	BeylaUprobeSslReadEx                   *ebpf.Program `ebpf:"beyla_uprobe_ssl_read_ex"`
+	BeylaUprobeSslShutdown                 *ebpf.Program `ebpf:"beyla_uprobe_ssl_shutdown"`
+	BeylaUprobeSslWrite                    *ebpf.Program `ebpf:"beyla_uprobe_ssl_write"`
+	BeylaUprobeSslWriteEx                  *ebpf.Program `ebpf:"beyla_uprobe_ssl_write_ex"`
+	BeylaUretprobeSslDoHandshake           *ebpf.Program `ebpf:"beyla_uretprobe_ssl_do_handshake"`
+	BeylaUretprobeSslRead                  *ebpf.Program `ebpf:"beyla_uretprobe_ssl_read"`
+	BeylaUretprobeSslReadEx                *ebpf.Program `ebpf:"beyla_uretprobe_ssl_read_ex"`
+	BeylaUretprobeSslWrite                 *ebpf.Program `ebpf:"beyla_uretprobe_ssl_write"`
+	BeylaUretprobeSslWriteEx               *ebpf.Program `ebpf:"beyla_uretprobe_ssl_write_ex"`
 }
 
 func (p *bpfPrograms) Close() error {
 	return _BpfClose(
-		p.AsyncReset,
-		p.EmitAsyncInit,
-		p.KprobeSysExit,
-		p.KprobeTcpCleanupRbuf,
-		p.KprobeTcpClose,
-		p.KprobeTcpConnect,
-		p.KprobeTcpRcvEstablished,
-		p.KprobeTcpRecvmsg,
-		p.KprobeTcpSendmsg,
-		p.KprobeUnixStreamRecvmsg,
-		p.KprobeUnixStreamSendmsg,
-		p.KretprobeSockAlloc,
-		p.KretprobeSysAccept4,
-		p.KretprobeSysClone,
-		p.KretprobeSysConnect,
-		p.KretprobeTcpRecvmsg,
-		p.KretprobeTcpSendmsg,
-		p.KretprobeUnixStreamRecvmsg,
-		p.KretprobeUnixStreamSendmsg,
-		p.ProtocolHttp,
-		p.ProtocolHttp2,
-		p.ProtocolHttp2GrpcFrames,
-		p.ProtocolHttp2GrpcHandleEndFrame,
-		p.ProtocolHttp2GrpcHandleStartFrame,
-		p.ProtocolTcp,
-		p.SocketHttpFilter,
-		p.UprobeSslDoHandshake,
-		p.UprobeSslRead,
-		p.UprobeSslReadEx,
-		p.UprobeSslShutdown,
-		p.UprobeSslWrite,
-		p.UprobeSslWriteEx,
-		p.UretprobeSslDoHandshake,
-		p.UretprobeSslRead,
-		p.UretprobeSslReadEx,
-		p.UretprobeSslWrite,
-		p.UretprobeSslWriteEx,
+		p.BeylaAsyncReset,
+		p.BeylaEmitAsyncInit,
+		p.BeylaKprobeSysExit,
+		p.BeylaKprobeTcpCleanupRbuf,
+		p.BeylaKprobeTcpClose,
+		p.BeylaKprobeTcpConnect,
+		p.BeylaKprobeTcpRcvEstablished,
+		p.BeylaKprobeTcpRecvmsg,
+		p.BeylaKprobeTcpSendmsg,
+		p.BeylaKprobeUnixStreamRecvmsg,
+		p.BeylaKprobeUnixStreamSendmsg,
+		p.BeylaKretprobeSockAlloc,
+		p.BeylaKretprobeSysAccept4,
+		p.BeylaKretprobeSysClone,
+		p.BeylaKretprobeSysConnect,
+		p.BeylaKretprobeTcpRecvmsg,
+		p.BeylaKretprobeTcpSendmsg,
+		p.BeylaKretprobeUnixStreamRecvmsg,
+		p.BeylaKretprobeUnixStreamSendmsg,
+		p.BeylaProtocolHttp,
+		p.BeylaProtocolHttp2,
+		p.BeylaProtocolHttp2GrpcFrames,
+		p.BeylaProtocolHttp2GrpcHandleEndFrame,
+		p.BeylaProtocolHttp2GrpcHandleStartFrame,
+		p.BeylaProtocolTcp,
+		p.BeylaSocketHttpFilter,
+		p.BeylaUprobeSslDoHandshake,
+		p.BeylaUprobeSslRead,
+		p.BeylaUprobeSslReadEx,
+		p.BeylaUprobeSslShutdown,
+		p.BeylaUprobeSslWrite,
+		p.BeylaUprobeSslWriteEx,
+		p.BeylaUretprobeSslDoHandshake,
+		p.BeylaUretprobeSslRead,
+		p.BeylaUretprobeSslReadEx,
+		p.BeylaUretprobeSslWrite,
+		p.BeylaUretprobeSslWriteEx,
 	)
 }
 

@@ -37,7 +37,7 @@ struct {
 } async_reset_args SEC(".maps");
 
 SEC("uprobe/node:AsyncReset")
-int async_reset(struct pt_regs *ctx) {
+int beyla_async_reset(struct pt_regs *ctx) {
     u64 id = bpf_get_current_pid_tgid();
 
     if (!valid_pid(id)) {
@@ -53,7 +53,7 @@ int async_reset(struct pt_regs *ctx) {
 }
 
 SEC("uprobe/node:EmitAsyncInit")
-int emit_async_init(struct pt_regs *ctx) {
+int beyla_emit_async_init(struct pt_regs *ctx) {
     u64 id = bpf_get_current_pid_tgid();
 
     if (!valid_pid(id)) {

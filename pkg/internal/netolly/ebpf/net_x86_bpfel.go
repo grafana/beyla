@@ -90,8 +90,8 @@ type NetSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type NetProgramSpecs struct {
-	EgressFlowParse  *ebpf.ProgramSpec `ebpf:"egress_flow_parse"`
-	IngressFlowParse *ebpf.ProgramSpec `ebpf:"ingress_flow_parse"`
+	BeylaEgressFlowParse  *ebpf.ProgramSpec `ebpf:"beyla_egress_flow_parse"`
+	BeylaIngressFlowParse *ebpf.ProgramSpec `ebpf:"beyla_ingress_flow_parse"`
 }
 
 // NetMapSpecs contains maps before they are loaded into the kernel.
@@ -142,14 +142,14 @@ func (m *NetMaps) Close() error {
 //
 // It can be passed to LoadNetObjects or ebpf.CollectionSpec.LoadAndAssign.
 type NetPrograms struct {
-	EgressFlowParse  *ebpf.Program `ebpf:"egress_flow_parse"`
-	IngressFlowParse *ebpf.Program `ebpf:"ingress_flow_parse"`
+	BeylaEgressFlowParse  *ebpf.Program `ebpf:"beyla_egress_flow_parse"`
+	BeylaIngressFlowParse *ebpf.Program `ebpf:"beyla_ingress_flow_parse"`
 }
 
 func (p *NetPrograms) Close() error {
 	return _NetClose(
-		p.EgressFlowParse,
-		p.IngressFlowParse,
+		p.BeylaEgressFlowParse,
+		p.BeylaIngressFlowParse,
 	)
 }
 

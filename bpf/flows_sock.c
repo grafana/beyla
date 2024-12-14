@@ -179,22 +179,22 @@ static __always_inline bool same_ip(const u8 *ip1, const u8 *ip2) {
 }
 
 SEC("socket/http_filter")
-int socket__http_filter(struct __sk_buff *skb) {
+int beyla_socket__http_filter(struct __sk_buff *skb) {
     // If sampling is defined, will only parse 1 out of "sampling" flows
     if (sampling != 0 && (bpf_get_prandom_u32() % sampling) != 0) {
-        return TC_ACT_OK;
+        return TC_ACT_UNSPEC;
     }
 
     u16 flags = 0;
     flow_id id;
     __builtin_memset(&id, 0, sizeof(id));
     if (!read_sk_buff(skb, &id, &flags)) {
-        return TC_ACT_OK;
+        return TC_ACT_UNSPEC;
     }
 
     // ignore traffic that's not egress or ingress
     if (same_ip(id.src_ip.s6_addr, id.dst_ip.s6_addr)) {
-        return TC_ACT_OK;
+        return TC_ACT_UNSPEC;
     }
 
     u64 current_time = bpf_ktime_get_ns();
@@ -296,7 +296,7 @@ cleanup:
     if (flags & FIN_FLAG || flags & RST_FLAG) {
         bpf_map_delete_elem(&flow_directions, &id);
     }
-    return TC_ACT_OK;
+    return TC_ACT_UNSPEC;
 }
 
 // Force emitting structs into the ELF for automatic creation of Golang struct

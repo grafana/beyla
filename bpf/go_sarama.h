@@ -31,7 +31,7 @@ struct {
 } ongoing_kafka_requests SEC(".maps");
 
 SEC("uprobe/sarama_sendInternal")
-int uprobe_sarama_sendInternal(struct pt_regs *ctx) {
+int beyla_uprobe_sarama_sendInternal(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/sarama_sendInternal === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     void *b_ptr = GO_PARAM1(ctx);
@@ -61,7 +61,7 @@ int uprobe_sarama_sendInternal(struct pt_regs *ctx) {
 }
 
 SEC("uprobe/sarama_broker_write")
-int uprobe_sarama_broker_write(struct pt_regs *ctx) {
+int beyla_uprobe_sarama_broker_write(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/sarama_broker write === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
 
@@ -133,7 +133,7 @@ int uprobe_sarama_broker_write(struct pt_regs *ctx) {
 }
 
 SEC("uprobe/sarama_response_promise_handle")
-int uprobe_sarama_response_promise_handle(struct pt_regs *ctx) {
+int beyla_uprobe_sarama_response_promise_handle(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/sarama_response_promise_handle === ");
 
     void *p = GO_PARAM1(ctx);

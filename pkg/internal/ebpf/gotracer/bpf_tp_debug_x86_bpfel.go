@@ -233,59 +233,59 @@ type bpf_tp_debugSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_tp_debugProgramSpecs struct {
-	UprobeClientConnClose                     *ebpf.ProgramSpec `ebpf:"uprobe_ClientConn_Close"`
-	UprobeClientConnInvoke                    *ebpf.ProgramSpec `ebpf:"uprobe_ClientConn_Invoke"`
-	UprobeClientConnInvokeReturn              *ebpf.ProgramSpec `ebpf:"uprobe_ClientConn_Invoke_return"`
-	UprobeClientConnNewStream                 *ebpf.ProgramSpec `ebpf:"uprobe_ClientConn_NewStream"`
-	UprobeClientConnNewStreamReturn           *ebpf.ProgramSpec `ebpf:"uprobe_ClientConn_NewStream_return"`
-	UprobeServeHTTP                           *ebpf.ProgramSpec `ebpf:"uprobe_ServeHTTP"`
-	UprobeServeHTTPReturns                    *ebpf.ProgramSpec `ebpf:"uprobe_ServeHTTPReturns"`
-	UprobeClientStreamRecvMsgReturn           *ebpf.ProgramSpec `ebpf:"uprobe_clientStream_RecvMsg_return"`
-	UprobeClientRoundTrip                     *ebpf.ProgramSpec `ebpf:"uprobe_client_roundTrip"`
-	UprobeConnServe                           *ebpf.ProgramSpec `ebpf:"uprobe_connServe"`
-	UprobeConnServeRet                        *ebpf.ProgramSpec `ebpf:"uprobe_connServeRet"`
-	UprobeExecDC                              *ebpf.ProgramSpec `ebpf:"uprobe_execDC"`
-	UprobeGrpcFramerWriteHeaders              *ebpf.ProgramSpec `ebpf:"uprobe_grpcFramerWriteHeaders"`
-	UprobeGrpcFramerWriteHeadersReturns       *ebpf.ProgramSpec `ebpf:"uprobe_grpcFramerWriteHeaders_returns"`
-	UprobeHttp2FramerWriteHeaders             *ebpf.ProgramSpec `ebpf:"uprobe_http2FramerWriteHeaders"`
-	UprobeHttp2FramerWriteHeadersReturns      *ebpf.ProgramSpec `ebpf:"uprobe_http2FramerWriteHeaders_returns"`
-	UprobeHttp2ResponseWriterStateWriteHeader *ebpf.ProgramSpec `ebpf:"uprobe_http2ResponseWriterStateWriteHeader"`
-	UprobeHttp2RoundTrip                      *ebpf.ProgramSpec `ebpf:"uprobe_http2RoundTrip"`
-	UprobeHttp2ServerOperateHeaders           *ebpf.ProgramSpec `ebpf:"uprobe_http2Server_operateHeaders"`
-	UprobeHttp2ServerProcessHeaders           *ebpf.ProgramSpec `ebpf:"uprobe_http2Server_processHeaders"`
-	UprobeHttp2serverConnRunHandler           *ebpf.ProgramSpec `ebpf:"uprobe_http2serverConn_runHandler"`
-	UprobeNetFdRead                           *ebpf.ProgramSpec `ebpf:"uprobe_netFdRead"`
-	UprobePersistConnRoundTrip                *ebpf.ProgramSpec `ebpf:"uprobe_persistConnRoundTrip"`
-	UprobeProcGoexit1                         *ebpf.ProgramSpec `ebpf:"uprobe_proc_goexit1"`
-	UprobeProcNewproc1                        *ebpf.ProgramSpec `ebpf:"uprobe_proc_newproc1"`
-	UprobeProcNewproc1Ret                     *ebpf.ProgramSpec `ebpf:"uprobe_proc_newproc1_ret"`
-	UprobeProtocolRoundtrip                   *ebpf.ProgramSpec `ebpf:"uprobe_protocol_roundtrip"`
-	UprobeProtocolRoundtripRet                *ebpf.ProgramSpec `ebpf:"uprobe_protocol_roundtrip_ret"`
-	UprobeQueryDC                             *ebpf.ProgramSpec `ebpf:"uprobe_queryDC"`
-	UprobeQueryReturn                         *ebpf.ProgramSpec `ebpf:"uprobe_queryReturn"`
-	UprobeReadContinuedLineSliceReturns       *ebpf.ProgramSpec `ebpf:"uprobe_readContinuedLineSliceReturns"`
-	UprobeReadRequestReturns                  *ebpf.ProgramSpec `ebpf:"uprobe_readRequestReturns"`
-	UprobeReadRequestStart                    *ebpf.ProgramSpec `ebpf:"uprobe_readRequestStart"`
-	UprobeReaderRead                          *ebpf.ProgramSpec `ebpf:"uprobe_reader_read"`
-	UprobeReaderReadRet                       *ebpf.ProgramSpec `ebpf:"uprobe_reader_read_ret"`
-	UprobeReaderSendMessage                   *ebpf.ProgramSpec `ebpf:"uprobe_reader_send_message"`
-	UprobeRedisProcess                        *ebpf.ProgramSpec `ebpf:"uprobe_redis_process"`
-	UprobeRedisProcessRet                     *ebpf.ProgramSpec `ebpf:"uprobe_redis_process_ret"`
-	UprobeRedisWithWriter                     *ebpf.ProgramSpec `ebpf:"uprobe_redis_with_writer"`
-	UprobeRedisWithWriterRet                  *ebpf.ProgramSpec `ebpf:"uprobe_redis_with_writer_ret"`
-	UprobeRoundTrip                           *ebpf.ProgramSpec `ebpf:"uprobe_roundTrip"`
-	UprobeRoundTripReturn                     *ebpf.ProgramSpec `ebpf:"uprobe_roundTripReturn"`
-	UprobeSaramaBrokerWrite                   *ebpf.ProgramSpec `ebpf:"uprobe_sarama_broker_write"`
-	UprobeSaramaResponsePromiseHandle         *ebpf.ProgramSpec `ebpf:"uprobe_sarama_response_promise_handle"`
-	UprobeSaramaSendInternal                  *ebpf.ProgramSpec `ebpf:"uprobe_sarama_sendInternal"`
-	UprobeServerHandleStream                  *ebpf.ProgramSpec `ebpf:"uprobe_server_handleStream"`
-	UprobeServerHandleStreamReturn            *ebpf.ProgramSpec `ebpf:"uprobe_server_handleStream_return"`
-	UprobeServerHandlerTransportHandleStreams *ebpf.ProgramSpec `ebpf:"uprobe_server_handler_transport_handle_streams"`
-	UprobeTransportHttp2ClientNewStream       *ebpf.ProgramSpec `ebpf:"uprobe_transport_http2Client_NewStream"`
-	UprobeTransportWriteStatus                *ebpf.ProgramSpec `ebpf:"uprobe_transport_writeStatus"`
-	UprobeWriteSubset                         *ebpf.ProgramSpec `ebpf:"uprobe_writeSubset"`
-	UprobeWriterProduce                       *ebpf.ProgramSpec `ebpf:"uprobe_writer_produce"`
-	UprobeWriterWriteMessages                 *ebpf.ProgramSpec `ebpf:"uprobe_writer_write_messages"`
+	BeylaUprobeClientConnClose                     *ebpf.ProgramSpec `ebpf:"beyla_uprobe_ClientConn_Close"`
+	BeylaUprobeClientConnInvoke                    *ebpf.ProgramSpec `ebpf:"beyla_uprobe_ClientConn_Invoke"`
+	BeylaUprobeClientConnInvokeReturn              *ebpf.ProgramSpec `ebpf:"beyla_uprobe_ClientConn_Invoke_return"`
+	BeylaUprobeClientConnNewStream                 *ebpf.ProgramSpec `ebpf:"beyla_uprobe_ClientConn_NewStream"`
+	BeylaUprobeClientConnNewStreamReturn           *ebpf.ProgramSpec `ebpf:"beyla_uprobe_ClientConn_NewStream_return"`
+	BeylaUprobeServeHTTP                           *ebpf.ProgramSpec `ebpf:"beyla_uprobe_ServeHTTP"`
+	BeylaUprobeServeHTTPReturns                    *ebpf.ProgramSpec `ebpf:"beyla_uprobe_ServeHTTPReturns"`
+	BeylaUprobeClientStreamRecvMsgReturn           *ebpf.ProgramSpec `ebpf:"beyla_uprobe_clientStream_RecvMsg_return"`
+	BeylaUprobeClientRoundTrip                     *ebpf.ProgramSpec `ebpf:"beyla_uprobe_client_roundTrip"`
+	BeylaUprobeConnServe                           *ebpf.ProgramSpec `ebpf:"beyla_uprobe_connServe"`
+	BeylaUprobeConnServeRet                        *ebpf.ProgramSpec `ebpf:"beyla_uprobe_connServeRet"`
+	BeylaUprobeExecDC                              *ebpf.ProgramSpec `ebpf:"beyla_uprobe_execDC"`
+	BeylaUprobeGrpcFramerWriteHeaders              *ebpf.ProgramSpec `ebpf:"beyla_uprobe_grpcFramerWriteHeaders"`
+	BeylaUprobeGrpcFramerWriteHeadersReturns       *ebpf.ProgramSpec `ebpf:"beyla_uprobe_grpcFramerWriteHeaders_returns"`
+	BeylaUprobeHttp2FramerWriteHeaders             *ebpf.ProgramSpec `ebpf:"beyla_uprobe_http2FramerWriteHeaders"`
+	BeylaUprobeHttp2FramerWriteHeadersReturns      *ebpf.ProgramSpec `ebpf:"beyla_uprobe_http2FramerWriteHeaders_returns"`
+	BeylaUprobeHttp2ResponseWriterStateWriteHeader *ebpf.ProgramSpec `ebpf:"beyla_uprobe_http2ResponseWriterStateWriteHeader"`
+	BeylaUprobeHttp2RoundTrip                      *ebpf.ProgramSpec `ebpf:"beyla_uprobe_http2RoundTrip"`
+	BeylaUprobeHttp2ServerOperateHeaders           *ebpf.ProgramSpec `ebpf:"beyla_uprobe_http2Server_operateHeaders"`
+	BeylaUprobeHttp2ServerProcessHeaders           *ebpf.ProgramSpec `ebpf:"beyla_uprobe_http2Server_processHeaders"`
+	BeylaUprobeHttp2serverConnRunHandler           *ebpf.ProgramSpec `ebpf:"beyla_uprobe_http2serverConn_runHandler"`
+	BeylaUprobeNetFdRead                           *ebpf.ProgramSpec `ebpf:"beyla_uprobe_netFdRead"`
+	BeylaUprobePersistConnRoundTrip                *ebpf.ProgramSpec `ebpf:"beyla_uprobe_persistConnRoundTrip"`
+	BeylaUprobeProcGoexit1                         *ebpf.ProgramSpec `ebpf:"beyla_uprobe_proc_goexit1"`
+	BeylaUprobeProcNewproc1                        *ebpf.ProgramSpec `ebpf:"beyla_uprobe_proc_newproc1"`
+	BeylaUprobeProcNewproc1Ret                     *ebpf.ProgramSpec `ebpf:"beyla_uprobe_proc_newproc1_ret"`
+	BeylaUprobeProtocolRoundtrip                   *ebpf.ProgramSpec `ebpf:"beyla_uprobe_protocol_roundtrip"`
+	BeylaUprobeProtocolRoundtripRet                *ebpf.ProgramSpec `ebpf:"beyla_uprobe_protocol_roundtrip_ret"`
+	BeylaUprobeQueryDC                             *ebpf.ProgramSpec `ebpf:"beyla_uprobe_queryDC"`
+	BeylaUprobeQueryReturn                         *ebpf.ProgramSpec `ebpf:"beyla_uprobe_queryReturn"`
+	BeylaUprobeReadContinuedLineSliceReturns       *ebpf.ProgramSpec `ebpf:"beyla_uprobe_readContinuedLineSliceReturns"`
+	BeylaUprobeReadRequestReturns                  *ebpf.ProgramSpec `ebpf:"beyla_uprobe_readRequestReturns"`
+	BeylaUprobeReadRequestStart                    *ebpf.ProgramSpec `ebpf:"beyla_uprobe_readRequestStart"`
+	BeylaUprobeReaderRead                          *ebpf.ProgramSpec `ebpf:"beyla_uprobe_reader_read"`
+	BeylaUprobeReaderReadRet                       *ebpf.ProgramSpec `ebpf:"beyla_uprobe_reader_read_ret"`
+	BeylaUprobeReaderSendMessage                   *ebpf.ProgramSpec `ebpf:"beyla_uprobe_reader_send_message"`
+	BeylaUprobeRedisProcess                        *ebpf.ProgramSpec `ebpf:"beyla_uprobe_redis_process"`
+	BeylaUprobeRedisProcessRet                     *ebpf.ProgramSpec `ebpf:"beyla_uprobe_redis_process_ret"`
+	BeylaUprobeRedisWithWriter                     *ebpf.ProgramSpec `ebpf:"beyla_uprobe_redis_with_writer"`
+	BeylaUprobeRedisWithWriterRet                  *ebpf.ProgramSpec `ebpf:"beyla_uprobe_redis_with_writer_ret"`
+	BeylaUprobeRoundTrip                           *ebpf.ProgramSpec `ebpf:"beyla_uprobe_roundTrip"`
+	BeylaUprobeRoundTripReturn                     *ebpf.ProgramSpec `ebpf:"beyla_uprobe_roundTripReturn"`
+	BeylaUprobeSaramaBrokerWrite                   *ebpf.ProgramSpec `ebpf:"beyla_uprobe_sarama_broker_write"`
+	BeylaUprobeSaramaResponsePromiseHandle         *ebpf.ProgramSpec `ebpf:"beyla_uprobe_sarama_response_promise_handle"`
+	BeylaUprobeSaramaSendInternal                  *ebpf.ProgramSpec `ebpf:"beyla_uprobe_sarama_sendInternal"`
+	BeylaUprobeServerHandleStream                  *ebpf.ProgramSpec `ebpf:"beyla_uprobe_server_handleStream"`
+	BeylaUprobeServerHandleStreamReturn            *ebpf.ProgramSpec `ebpf:"beyla_uprobe_server_handleStream_return"`
+	BeylaUprobeServerHandlerTransportHandleStreams *ebpf.ProgramSpec `ebpf:"beyla_uprobe_server_handler_transport_handle_streams"`
+	BeylaUprobeTransportHttp2ClientNewStream       *ebpf.ProgramSpec `ebpf:"beyla_uprobe_transport_http2Client_NewStream"`
+	BeylaUprobeTransportWriteStatus                *ebpf.ProgramSpec `ebpf:"beyla_uprobe_transport_writeStatus"`
+	BeylaUprobeWriteSubset                         *ebpf.ProgramSpec `ebpf:"beyla_uprobe_writeSubset"`
+	BeylaUprobeWriterProduce                       *ebpf.ProgramSpec `ebpf:"beyla_uprobe_writer_produce"`
+	BeylaUprobeWriterWriteMessages                 *ebpf.ProgramSpec `ebpf:"beyla_uprobe_writer_write_messages"`
 }
 
 // bpf_tp_debugMapSpecs contains maps before they are loaded into the kernel.
@@ -435,116 +435,116 @@ func (m *bpf_tp_debugMaps) Close() error {
 //
 // It can be passed to loadBpf_tp_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_tp_debugPrograms struct {
-	UprobeClientConnClose                     *ebpf.Program `ebpf:"uprobe_ClientConn_Close"`
-	UprobeClientConnInvoke                    *ebpf.Program `ebpf:"uprobe_ClientConn_Invoke"`
-	UprobeClientConnInvokeReturn              *ebpf.Program `ebpf:"uprobe_ClientConn_Invoke_return"`
-	UprobeClientConnNewStream                 *ebpf.Program `ebpf:"uprobe_ClientConn_NewStream"`
-	UprobeClientConnNewStreamReturn           *ebpf.Program `ebpf:"uprobe_ClientConn_NewStream_return"`
-	UprobeServeHTTP                           *ebpf.Program `ebpf:"uprobe_ServeHTTP"`
-	UprobeServeHTTPReturns                    *ebpf.Program `ebpf:"uprobe_ServeHTTPReturns"`
-	UprobeClientStreamRecvMsgReturn           *ebpf.Program `ebpf:"uprobe_clientStream_RecvMsg_return"`
-	UprobeClientRoundTrip                     *ebpf.Program `ebpf:"uprobe_client_roundTrip"`
-	UprobeConnServe                           *ebpf.Program `ebpf:"uprobe_connServe"`
-	UprobeConnServeRet                        *ebpf.Program `ebpf:"uprobe_connServeRet"`
-	UprobeExecDC                              *ebpf.Program `ebpf:"uprobe_execDC"`
-	UprobeGrpcFramerWriteHeaders              *ebpf.Program `ebpf:"uprobe_grpcFramerWriteHeaders"`
-	UprobeGrpcFramerWriteHeadersReturns       *ebpf.Program `ebpf:"uprobe_grpcFramerWriteHeaders_returns"`
-	UprobeHttp2FramerWriteHeaders             *ebpf.Program `ebpf:"uprobe_http2FramerWriteHeaders"`
-	UprobeHttp2FramerWriteHeadersReturns      *ebpf.Program `ebpf:"uprobe_http2FramerWriteHeaders_returns"`
-	UprobeHttp2ResponseWriterStateWriteHeader *ebpf.Program `ebpf:"uprobe_http2ResponseWriterStateWriteHeader"`
-	UprobeHttp2RoundTrip                      *ebpf.Program `ebpf:"uprobe_http2RoundTrip"`
-	UprobeHttp2ServerOperateHeaders           *ebpf.Program `ebpf:"uprobe_http2Server_operateHeaders"`
-	UprobeHttp2ServerProcessHeaders           *ebpf.Program `ebpf:"uprobe_http2Server_processHeaders"`
-	UprobeHttp2serverConnRunHandler           *ebpf.Program `ebpf:"uprobe_http2serverConn_runHandler"`
-	UprobeNetFdRead                           *ebpf.Program `ebpf:"uprobe_netFdRead"`
-	UprobePersistConnRoundTrip                *ebpf.Program `ebpf:"uprobe_persistConnRoundTrip"`
-	UprobeProcGoexit1                         *ebpf.Program `ebpf:"uprobe_proc_goexit1"`
-	UprobeProcNewproc1                        *ebpf.Program `ebpf:"uprobe_proc_newproc1"`
-	UprobeProcNewproc1Ret                     *ebpf.Program `ebpf:"uprobe_proc_newproc1_ret"`
-	UprobeProtocolRoundtrip                   *ebpf.Program `ebpf:"uprobe_protocol_roundtrip"`
-	UprobeProtocolRoundtripRet                *ebpf.Program `ebpf:"uprobe_protocol_roundtrip_ret"`
-	UprobeQueryDC                             *ebpf.Program `ebpf:"uprobe_queryDC"`
-	UprobeQueryReturn                         *ebpf.Program `ebpf:"uprobe_queryReturn"`
-	UprobeReadContinuedLineSliceReturns       *ebpf.Program `ebpf:"uprobe_readContinuedLineSliceReturns"`
-	UprobeReadRequestReturns                  *ebpf.Program `ebpf:"uprobe_readRequestReturns"`
-	UprobeReadRequestStart                    *ebpf.Program `ebpf:"uprobe_readRequestStart"`
-	UprobeReaderRead                          *ebpf.Program `ebpf:"uprobe_reader_read"`
-	UprobeReaderReadRet                       *ebpf.Program `ebpf:"uprobe_reader_read_ret"`
-	UprobeReaderSendMessage                   *ebpf.Program `ebpf:"uprobe_reader_send_message"`
-	UprobeRedisProcess                        *ebpf.Program `ebpf:"uprobe_redis_process"`
-	UprobeRedisProcessRet                     *ebpf.Program `ebpf:"uprobe_redis_process_ret"`
-	UprobeRedisWithWriter                     *ebpf.Program `ebpf:"uprobe_redis_with_writer"`
-	UprobeRedisWithWriterRet                  *ebpf.Program `ebpf:"uprobe_redis_with_writer_ret"`
-	UprobeRoundTrip                           *ebpf.Program `ebpf:"uprobe_roundTrip"`
-	UprobeRoundTripReturn                     *ebpf.Program `ebpf:"uprobe_roundTripReturn"`
-	UprobeSaramaBrokerWrite                   *ebpf.Program `ebpf:"uprobe_sarama_broker_write"`
-	UprobeSaramaResponsePromiseHandle         *ebpf.Program `ebpf:"uprobe_sarama_response_promise_handle"`
-	UprobeSaramaSendInternal                  *ebpf.Program `ebpf:"uprobe_sarama_sendInternal"`
-	UprobeServerHandleStream                  *ebpf.Program `ebpf:"uprobe_server_handleStream"`
-	UprobeServerHandleStreamReturn            *ebpf.Program `ebpf:"uprobe_server_handleStream_return"`
-	UprobeServerHandlerTransportHandleStreams *ebpf.Program `ebpf:"uprobe_server_handler_transport_handle_streams"`
-	UprobeTransportHttp2ClientNewStream       *ebpf.Program `ebpf:"uprobe_transport_http2Client_NewStream"`
-	UprobeTransportWriteStatus                *ebpf.Program `ebpf:"uprobe_transport_writeStatus"`
-	UprobeWriteSubset                         *ebpf.Program `ebpf:"uprobe_writeSubset"`
-	UprobeWriterProduce                       *ebpf.Program `ebpf:"uprobe_writer_produce"`
-	UprobeWriterWriteMessages                 *ebpf.Program `ebpf:"uprobe_writer_write_messages"`
+	BeylaUprobeClientConnClose                     *ebpf.Program `ebpf:"beyla_uprobe_ClientConn_Close"`
+	BeylaUprobeClientConnInvoke                    *ebpf.Program `ebpf:"beyla_uprobe_ClientConn_Invoke"`
+	BeylaUprobeClientConnInvokeReturn              *ebpf.Program `ebpf:"beyla_uprobe_ClientConn_Invoke_return"`
+	BeylaUprobeClientConnNewStream                 *ebpf.Program `ebpf:"beyla_uprobe_ClientConn_NewStream"`
+	BeylaUprobeClientConnNewStreamReturn           *ebpf.Program `ebpf:"beyla_uprobe_ClientConn_NewStream_return"`
+	BeylaUprobeServeHTTP                           *ebpf.Program `ebpf:"beyla_uprobe_ServeHTTP"`
+	BeylaUprobeServeHTTPReturns                    *ebpf.Program `ebpf:"beyla_uprobe_ServeHTTPReturns"`
+	BeylaUprobeClientStreamRecvMsgReturn           *ebpf.Program `ebpf:"beyla_uprobe_clientStream_RecvMsg_return"`
+	BeylaUprobeClientRoundTrip                     *ebpf.Program `ebpf:"beyla_uprobe_client_roundTrip"`
+	BeylaUprobeConnServe                           *ebpf.Program `ebpf:"beyla_uprobe_connServe"`
+	BeylaUprobeConnServeRet                        *ebpf.Program `ebpf:"beyla_uprobe_connServeRet"`
+	BeylaUprobeExecDC                              *ebpf.Program `ebpf:"beyla_uprobe_execDC"`
+	BeylaUprobeGrpcFramerWriteHeaders              *ebpf.Program `ebpf:"beyla_uprobe_grpcFramerWriteHeaders"`
+	BeylaUprobeGrpcFramerWriteHeadersReturns       *ebpf.Program `ebpf:"beyla_uprobe_grpcFramerWriteHeaders_returns"`
+	BeylaUprobeHttp2FramerWriteHeaders             *ebpf.Program `ebpf:"beyla_uprobe_http2FramerWriteHeaders"`
+	BeylaUprobeHttp2FramerWriteHeadersReturns      *ebpf.Program `ebpf:"beyla_uprobe_http2FramerWriteHeaders_returns"`
+	BeylaUprobeHttp2ResponseWriterStateWriteHeader *ebpf.Program `ebpf:"beyla_uprobe_http2ResponseWriterStateWriteHeader"`
+	BeylaUprobeHttp2RoundTrip                      *ebpf.Program `ebpf:"beyla_uprobe_http2RoundTrip"`
+	BeylaUprobeHttp2ServerOperateHeaders           *ebpf.Program `ebpf:"beyla_uprobe_http2Server_operateHeaders"`
+	BeylaUprobeHttp2ServerProcessHeaders           *ebpf.Program `ebpf:"beyla_uprobe_http2Server_processHeaders"`
+	BeylaUprobeHttp2serverConnRunHandler           *ebpf.Program `ebpf:"beyla_uprobe_http2serverConn_runHandler"`
+	BeylaUprobeNetFdRead                           *ebpf.Program `ebpf:"beyla_uprobe_netFdRead"`
+	BeylaUprobePersistConnRoundTrip                *ebpf.Program `ebpf:"beyla_uprobe_persistConnRoundTrip"`
+	BeylaUprobeProcGoexit1                         *ebpf.Program `ebpf:"beyla_uprobe_proc_goexit1"`
+	BeylaUprobeProcNewproc1                        *ebpf.Program `ebpf:"beyla_uprobe_proc_newproc1"`
+	BeylaUprobeProcNewproc1Ret                     *ebpf.Program `ebpf:"beyla_uprobe_proc_newproc1_ret"`
+	BeylaUprobeProtocolRoundtrip                   *ebpf.Program `ebpf:"beyla_uprobe_protocol_roundtrip"`
+	BeylaUprobeProtocolRoundtripRet                *ebpf.Program `ebpf:"beyla_uprobe_protocol_roundtrip_ret"`
+	BeylaUprobeQueryDC                             *ebpf.Program `ebpf:"beyla_uprobe_queryDC"`
+	BeylaUprobeQueryReturn                         *ebpf.Program `ebpf:"beyla_uprobe_queryReturn"`
+	BeylaUprobeReadContinuedLineSliceReturns       *ebpf.Program `ebpf:"beyla_uprobe_readContinuedLineSliceReturns"`
+	BeylaUprobeReadRequestReturns                  *ebpf.Program `ebpf:"beyla_uprobe_readRequestReturns"`
+	BeylaUprobeReadRequestStart                    *ebpf.Program `ebpf:"beyla_uprobe_readRequestStart"`
+	BeylaUprobeReaderRead                          *ebpf.Program `ebpf:"beyla_uprobe_reader_read"`
+	BeylaUprobeReaderReadRet                       *ebpf.Program `ebpf:"beyla_uprobe_reader_read_ret"`
+	BeylaUprobeReaderSendMessage                   *ebpf.Program `ebpf:"beyla_uprobe_reader_send_message"`
+	BeylaUprobeRedisProcess                        *ebpf.Program `ebpf:"beyla_uprobe_redis_process"`
+	BeylaUprobeRedisProcessRet                     *ebpf.Program `ebpf:"beyla_uprobe_redis_process_ret"`
+	BeylaUprobeRedisWithWriter                     *ebpf.Program `ebpf:"beyla_uprobe_redis_with_writer"`
+	BeylaUprobeRedisWithWriterRet                  *ebpf.Program `ebpf:"beyla_uprobe_redis_with_writer_ret"`
+	BeylaUprobeRoundTrip                           *ebpf.Program `ebpf:"beyla_uprobe_roundTrip"`
+	BeylaUprobeRoundTripReturn                     *ebpf.Program `ebpf:"beyla_uprobe_roundTripReturn"`
+	BeylaUprobeSaramaBrokerWrite                   *ebpf.Program `ebpf:"beyla_uprobe_sarama_broker_write"`
+	BeylaUprobeSaramaResponsePromiseHandle         *ebpf.Program `ebpf:"beyla_uprobe_sarama_response_promise_handle"`
+	BeylaUprobeSaramaSendInternal                  *ebpf.Program `ebpf:"beyla_uprobe_sarama_sendInternal"`
+	BeylaUprobeServerHandleStream                  *ebpf.Program `ebpf:"beyla_uprobe_server_handleStream"`
+	BeylaUprobeServerHandleStreamReturn            *ebpf.Program `ebpf:"beyla_uprobe_server_handleStream_return"`
+	BeylaUprobeServerHandlerTransportHandleStreams *ebpf.Program `ebpf:"beyla_uprobe_server_handler_transport_handle_streams"`
+	BeylaUprobeTransportHttp2ClientNewStream       *ebpf.Program `ebpf:"beyla_uprobe_transport_http2Client_NewStream"`
+	BeylaUprobeTransportWriteStatus                *ebpf.Program `ebpf:"beyla_uprobe_transport_writeStatus"`
+	BeylaUprobeWriteSubset                         *ebpf.Program `ebpf:"beyla_uprobe_writeSubset"`
+	BeylaUprobeWriterProduce                       *ebpf.Program `ebpf:"beyla_uprobe_writer_produce"`
+	BeylaUprobeWriterWriteMessages                 *ebpf.Program `ebpf:"beyla_uprobe_writer_write_messages"`
 }
 
 func (p *bpf_tp_debugPrograms) Close() error {
 	return _Bpf_tp_debugClose(
-		p.UprobeClientConnClose,
-		p.UprobeClientConnInvoke,
-		p.UprobeClientConnInvokeReturn,
-		p.UprobeClientConnNewStream,
-		p.UprobeClientConnNewStreamReturn,
-		p.UprobeServeHTTP,
-		p.UprobeServeHTTPReturns,
-		p.UprobeClientStreamRecvMsgReturn,
-		p.UprobeClientRoundTrip,
-		p.UprobeConnServe,
-		p.UprobeConnServeRet,
-		p.UprobeExecDC,
-		p.UprobeGrpcFramerWriteHeaders,
-		p.UprobeGrpcFramerWriteHeadersReturns,
-		p.UprobeHttp2FramerWriteHeaders,
-		p.UprobeHttp2FramerWriteHeadersReturns,
-		p.UprobeHttp2ResponseWriterStateWriteHeader,
-		p.UprobeHttp2RoundTrip,
-		p.UprobeHttp2ServerOperateHeaders,
-		p.UprobeHttp2ServerProcessHeaders,
-		p.UprobeHttp2serverConnRunHandler,
-		p.UprobeNetFdRead,
-		p.UprobePersistConnRoundTrip,
-		p.UprobeProcGoexit1,
-		p.UprobeProcNewproc1,
-		p.UprobeProcNewproc1Ret,
-		p.UprobeProtocolRoundtrip,
-		p.UprobeProtocolRoundtripRet,
-		p.UprobeQueryDC,
-		p.UprobeQueryReturn,
-		p.UprobeReadContinuedLineSliceReturns,
-		p.UprobeReadRequestReturns,
-		p.UprobeReadRequestStart,
-		p.UprobeReaderRead,
-		p.UprobeReaderReadRet,
-		p.UprobeReaderSendMessage,
-		p.UprobeRedisProcess,
-		p.UprobeRedisProcessRet,
-		p.UprobeRedisWithWriter,
-		p.UprobeRedisWithWriterRet,
-		p.UprobeRoundTrip,
-		p.UprobeRoundTripReturn,
-		p.UprobeSaramaBrokerWrite,
-		p.UprobeSaramaResponsePromiseHandle,
-		p.UprobeSaramaSendInternal,
-		p.UprobeServerHandleStream,
-		p.UprobeServerHandleStreamReturn,
-		p.UprobeServerHandlerTransportHandleStreams,
-		p.UprobeTransportHttp2ClientNewStream,
-		p.UprobeTransportWriteStatus,
-		p.UprobeWriteSubset,
-		p.UprobeWriterProduce,
-		p.UprobeWriterWriteMessages,
+		p.BeylaUprobeClientConnClose,
+		p.BeylaUprobeClientConnInvoke,
+		p.BeylaUprobeClientConnInvokeReturn,
+		p.BeylaUprobeClientConnNewStream,
+		p.BeylaUprobeClientConnNewStreamReturn,
+		p.BeylaUprobeServeHTTP,
+		p.BeylaUprobeServeHTTPReturns,
+		p.BeylaUprobeClientStreamRecvMsgReturn,
+		p.BeylaUprobeClientRoundTrip,
+		p.BeylaUprobeConnServe,
+		p.BeylaUprobeConnServeRet,
+		p.BeylaUprobeExecDC,
+		p.BeylaUprobeGrpcFramerWriteHeaders,
+		p.BeylaUprobeGrpcFramerWriteHeadersReturns,
+		p.BeylaUprobeHttp2FramerWriteHeaders,
+		p.BeylaUprobeHttp2FramerWriteHeadersReturns,
+		p.BeylaUprobeHttp2ResponseWriterStateWriteHeader,
+		p.BeylaUprobeHttp2RoundTrip,
+		p.BeylaUprobeHttp2ServerOperateHeaders,
+		p.BeylaUprobeHttp2ServerProcessHeaders,
+		p.BeylaUprobeHttp2serverConnRunHandler,
+		p.BeylaUprobeNetFdRead,
+		p.BeylaUprobePersistConnRoundTrip,
+		p.BeylaUprobeProcGoexit1,
+		p.BeylaUprobeProcNewproc1,
+		p.BeylaUprobeProcNewproc1Ret,
+		p.BeylaUprobeProtocolRoundtrip,
+		p.BeylaUprobeProtocolRoundtripRet,
+		p.BeylaUprobeQueryDC,
+		p.BeylaUprobeQueryReturn,
+		p.BeylaUprobeReadContinuedLineSliceReturns,
+		p.BeylaUprobeReadRequestReturns,
+		p.BeylaUprobeReadRequestStart,
+		p.BeylaUprobeReaderRead,
+		p.BeylaUprobeReaderReadRet,
+		p.BeylaUprobeReaderSendMessage,
+		p.BeylaUprobeRedisProcess,
+		p.BeylaUprobeRedisProcessRet,
+		p.BeylaUprobeRedisWithWriter,
+		p.BeylaUprobeRedisWithWriterRet,
+		p.BeylaUprobeRoundTrip,
+		p.BeylaUprobeRoundTripReturn,
+		p.BeylaUprobeSaramaBrokerWrite,
+		p.BeylaUprobeSaramaResponsePromiseHandle,
+		p.BeylaUprobeSaramaSendInternal,
+		p.BeylaUprobeServerHandleStream,
+		p.BeylaUprobeServerHandleStreamReturn,
+		p.BeylaUprobeServerHandlerTransportHandleStreams,
+		p.BeylaUprobeTransportHttp2ClientNewStream,
+		p.BeylaUprobeTransportWriteStatus,
+		p.BeylaUprobeWriteSubset,
+		p.BeylaUprobeWriterProduce,
+		p.BeylaUprobeWriterWriteMessages,
 	)
 }
 

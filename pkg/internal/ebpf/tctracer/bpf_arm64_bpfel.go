@@ -272,18 +272,18 @@ type bpfSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfProgramSpecs struct {
-	AppEgress                         *ebpf.ProgramSpec `ebpf:"app_egress"`
-	AppIngress                        *ebpf.ProgramSpec `ebpf:"app_ingress"`
-	AsyncReset                        *ebpf.ProgramSpec `ebpf:"async_reset"`
-	EmitAsyncInit                     *ebpf.ProgramSpec `ebpf:"emit_async_init"`
-	PacketExtender                    *ebpf.ProgramSpec `ebpf:"packet_extender"`
-	ProtocolHttp                      *ebpf.ProgramSpec `ebpf:"protocol_http"`
-	ProtocolHttp2                     *ebpf.ProgramSpec `ebpf:"protocol_http2"`
-	ProtocolHttp2GrpcFrames           *ebpf.ProgramSpec `ebpf:"protocol_http2_grpc_frames"`
-	ProtocolHttp2GrpcHandleEndFrame   *ebpf.ProgramSpec `ebpf:"protocol_http2_grpc_handle_end_frame"`
-	ProtocolHttp2GrpcHandleStartFrame *ebpf.ProgramSpec `ebpf:"protocol_http2_grpc_handle_start_frame"`
-	ProtocolTcp                       *ebpf.ProgramSpec `ebpf:"protocol_tcp"`
-	SockmapTracker                    *ebpf.ProgramSpec `ebpf:"sockmap_tracker"`
+	BeylaAppEgress                         *ebpf.ProgramSpec `ebpf:"beyla_app_egress"`
+	BeylaAppIngress                        *ebpf.ProgramSpec `ebpf:"beyla_app_ingress"`
+	BeylaAsyncReset                        *ebpf.ProgramSpec `ebpf:"beyla_async_reset"`
+	BeylaEmitAsyncInit                     *ebpf.ProgramSpec `ebpf:"beyla_emit_async_init"`
+	BeylaPacketExtender                    *ebpf.ProgramSpec `ebpf:"beyla_packet_extender"`
+	BeylaProtocolHttp                      *ebpf.ProgramSpec `ebpf:"beyla_protocol_http"`
+	BeylaProtocolHttp2                     *ebpf.ProgramSpec `ebpf:"beyla_protocol_http2"`
+	BeylaProtocolHttp2GrpcFrames           *ebpf.ProgramSpec `ebpf:"beyla_protocol_http2_grpc_frames"`
+	BeylaProtocolHttp2GrpcHandleEndFrame   *ebpf.ProgramSpec `ebpf:"beyla_protocol_http2_grpc_handle_end_frame"`
+	BeylaProtocolHttp2GrpcHandleStartFrame *ebpf.ProgramSpec `ebpf:"beyla_protocol_http2_grpc_handle_start_frame"`
+	BeylaProtocolTcp                       *ebpf.ProgramSpec `ebpf:"beyla_protocol_tcp"`
+	BeylaSockmapTracker                    *ebpf.ProgramSpec `ebpf:"beyla_sockmap_tracker"`
 }
 
 // bpfMapSpecs contains maps before they are loaded into the kernel.
@@ -448,34 +448,34 @@ func (m *bpfMaps) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfPrograms struct {
-	AppEgress                         *ebpf.Program `ebpf:"app_egress"`
-	AppIngress                        *ebpf.Program `ebpf:"app_ingress"`
-	AsyncReset                        *ebpf.Program `ebpf:"async_reset"`
-	EmitAsyncInit                     *ebpf.Program `ebpf:"emit_async_init"`
-	PacketExtender                    *ebpf.Program `ebpf:"packet_extender"`
-	ProtocolHttp                      *ebpf.Program `ebpf:"protocol_http"`
-	ProtocolHttp2                     *ebpf.Program `ebpf:"protocol_http2"`
-	ProtocolHttp2GrpcFrames           *ebpf.Program `ebpf:"protocol_http2_grpc_frames"`
-	ProtocolHttp2GrpcHandleEndFrame   *ebpf.Program `ebpf:"protocol_http2_grpc_handle_end_frame"`
-	ProtocolHttp2GrpcHandleStartFrame *ebpf.Program `ebpf:"protocol_http2_grpc_handle_start_frame"`
-	ProtocolTcp                       *ebpf.Program `ebpf:"protocol_tcp"`
-	SockmapTracker                    *ebpf.Program `ebpf:"sockmap_tracker"`
+	BeylaAppEgress                         *ebpf.Program `ebpf:"beyla_app_egress"`
+	BeylaAppIngress                        *ebpf.Program `ebpf:"beyla_app_ingress"`
+	BeylaAsyncReset                        *ebpf.Program `ebpf:"beyla_async_reset"`
+	BeylaEmitAsyncInit                     *ebpf.Program `ebpf:"beyla_emit_async_init"`
+	BeylaPacketExtender                    *ebpf.Program `ebpf:"beyla_packet_extender"`
+	BeylaProtocolHttp                      *ebpf.Program `ebpf:"beyla_protocol_http"`
+	BeylaProtocolHttp2                     *ebpf.Program `ebpf:"beyla_protocol_http2"`
+	BeylaProtocolHttp2GrpcFrames           *ebpf.Program `ebpf:"beyla_protocol_http2_grpc_frames"`
+	BeylaProtocolHttp2GrpcHandleEndFrame   *ebpf.Program `ebpf:"beyla_protocol_http2_grpc_handle_end_frame"`
+	BeylaProtocolHttp2GrpcHandleStartFrame *ebpf.Program `ebpf:"beyla_protocol_http2_grpc_handle_start_frame"`
+	BeylaProtocolTcp                       *ebpf.Program `ebpf:"beyla_protocol_tcp"`
+	BeylaSockmapTracker                    *ebpf.Program `ebpf:"beyla_sockmap_tracker"`
 }
 
 func (p *bpfPrograms) Close() error {
 	return _BpfClose(
-		p.AppEgress,
-		p.AppIngress,
-		p.AsyncReset,
-		p.EmitAsyncInit,
-		p.PacketExtender,
-		p.ProtocolHttp,
-		p.ProtocolHttp2,
-		p.ProtocolHttp2GrpcFrames,
-		p.ProtocolHttp2GrpcHandleEndFrame,
-		p.ProtocolHttp2GrpcHandleStartFrame,
-		p.ProtocolTcp,
-		p.SockmapTracker,
+		p.BeylaAppEgress,
+		p.BeylaAppIngress,
+		p.BeylaAsyncReset,
+		p.BeylaEmitAsyncInit,
+		p.BeylaPacketExtender,
+		p.BeylaProtocolHttp,
+		p.BeylaProtocolHttp2,
+		p.BeylaProtocolHttp2GrpcFrames,
+		p.BeylaProtocolHttp2GrpcHandleEndFrame,
+		p.BeylaProtocolHttp2GrpcHandleStartFrame,
+		p.BeylaProtocolTcp,
+		p.BeylaSockmapTracker,
 	)
 }
 

@@ -44,7 +44,7 @@ static __always_inline void set_sql_info(void *goroutine_addr, void *sql_param, 
 }
 
 SEC("uprobe/queryDC")
-int uprobe_queryDC(struct pt_regs *ctx) {
+int beyla_uprobe_queryDC(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/queryDC === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
@@ -57,7 +57,7 @@ int uprobe_queryDC(struct pt_regs *ctx) {
 }
 
 SEC("uprobe/execDC")
-int uprobe_execDC(struct pt_regs *ctx) {
+int beyla_uprobe_execDC(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/execDC === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
@@ -69,7 +69,7 @@ int uprobe_execDC(struct pt_regs *ctx) {
 }
 
 SEC("uprobe/queryDC")
-int uprobe_queryReturn(struct pt_regs *ctx) {
+int beyla_uprobe_queryReturn(struct pt_regs *ctx) {
 
     bpf_dbg_printk("=== uprobe/query return === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);

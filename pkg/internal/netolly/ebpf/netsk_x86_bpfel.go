@@ -90,7 +90,7 @@ type NetSkSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type NetSkProgramSpecs struct {
-	SocketHttpFilter *ebpf.ProgramSpec `ebpf:"socket__http_filter"`
+	BeylaSocketHttpFilter *ebpf.ProgramSpec `ebpf:"beyla_socket__http_filter"`
 }
 
 // NetSkMapSpecs contains maps before they are loaded into the kernel.
@@ -141,12 +141,12 @@ func (m *NetSkMaps) Close() error {
 //
 // It can be passed to LoadNetSkObjects or ebpf.CollectionSpec.LoadAndAssign.
 type NetSkPrograms struct {
-	SocketHttpFilter *ebpf.Program `ebpf:"socket__http_filter"`
+	BeylaSocketHttpFilter *ebpf.Program `ebpf:"beyla_socket__http_filter"`
 }
 
 func (p *NetSkPrograms) Close() error {
 	return _NetSkClose(
-		p.SocketHttpFilter,
+		p.BeylaSocketHttpFilter,
 	)
 }
 

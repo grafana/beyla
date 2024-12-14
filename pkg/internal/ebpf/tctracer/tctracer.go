@@ -109,7 +109,7 @@ func (p *Tracer) SocketFilters() []*ebpf.Program {
 func (p *Tracer) SockMsgs() []ebpfcommon.SockMsg {
 	return []ebpfcommon.SockMsg{
 		{
-			Program:  p.bpfObjects.PacketExtender,
+			Program:  p.bpfObjects.BeylaPacketExtender,
 			MapFD:    p.bpfObjects.bpfMaps.SockDir.FD(),
 			AttachAs: ebpf.AttachSkMsgVerdict,
 		},
@@ -119,7 +119,7 @@ func (p *Tracer) SockMsgs() []ebpfcommon.SockMsg {
 func (p *Tracer) SockOps() []ebpfcommon.SockOps {
 	return []ebpfcommon.SockOps{
 		{
-			Program:  p.bpfObjects.SockmapTracker,
+			Program:  p.bpfObjects.BeylaSockmapTracker,
 			AttachAs: ebpf.AttachCGroupSockOps,
 		},
 	}
@@ -154,7 +154,7 @@ func (p *Tracer) Run(ctx context.Context, _ chan<- []request.Span) {
 }
 
 func (p *Tracer) registerTC(iface ifaces.Interface) {
-	links := ebpfcommon.RegisterTC(iface, p.bpfObjects.AppEgress.FD(), p.bpfObjects.AppIngress.FD(), p.log)
+	links := ebpfcommon.RegisterTC(iface, p.bpfObjects.BeylaAppEgress.FD(), p.bpfObjects.BeylaAppIngress.FD(), p.log)
 	if links == nil {
 		return
 	}
@@ -167,8 +167,8 @@ func (p *Tracer) registerTC(iface ifaces.Interface) {
 func (p *Tracer) closeTC() {
 	p.log.Info("removing traffic control probes")
 
-	p.bpfObjects.AppEgress.Close()
-	p.bpfObjects.AppIngress.Close()
+	p.bpfObjects.BeylaAppEgress.Close()
+	p.bpfObjects.BeylaAppIngress.Close()
 
 	ebpfcommon.CloseTCLinks(p.qdiscs, p.egressFilters, p.ingressFilters, p.log)
 

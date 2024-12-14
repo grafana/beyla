@@ -10,6 +10,12 @@
 #include "ringbuf.h"
 #include "pin_internal.h"
 
+#ifdef BPF_TRACEPARENT
+enum { k_bpf_traceparent_enabled = 1 };
+#else
+enum { k_bpf_traceparent_enabled = 0 };
+#endif
+
 typedef struct trace_key {
     pid_key_t p_key; // pid key as seen by the userspace (for example, inside its container)
     u64 extra_id;    // pids namespace for the process
@@ -68,8 +74,11 @@ struct callback_ctx {
     u32 pos;
 };
 
-#ifdef BPF_TRACEPARENT
 static int tp_match(u32 index, void *data) {
+    if (!k_bpf_traceparent_enabled) {
+        return 0;
+    }
+
     if (index >= (TRACE_BUF_SIZE - TRACE_PARENT_HEADER_LEN)) {
         return 1;
     }
@@ -86,6 +95,10 @@ static int tp_match(u32 index, void *data) {
 }
 
 static __always_inline unsigned char *bpf_strstr_tp_loop(unsigned char *buf, int buf_len) {
+    if (!k_bpf_traceparent_enabled) {
+        return NULL;
+    }
+
     struct callback_ctx data = {.buf = buf, .pos = 0};
 
     u32 nr_loops = (u32)buf_len;
@@ -98,7 +111,6 @@ static __always_inline unsigned char *bpf_strstr_tp_loop(unsigned char *buf, int
 
     return NULL;
 }
-#endif
 
 static __always_inline tp_info_pid_t *find_parent_trace(pid_connection_info_t *p_conn) {
     trace_key_t t_key = {0};

@@ -90,46 +90,46 @@ static __always_inline void http_get_or_create_trace_info(http_connection_metada
     //make_tp_string(tp_buf, &tp_p->tp);
     //bpf_dbg_printk("tp: %s", tp_buf);
 
-#ifdef BPF_TRACEPARENT
-    // The below buffer scan can be expensive on high volume of requests. We make it optional
-    // for customers to enable it. Off by default.
-    if (!capture_header_buffer) {
-        if (meta) {
-            u32 type = trace_type_from_meta(meta);
-            set_trace_info_for_connection(conn, type, tp_p);
-            server_or_client_trace(meta->type, conn, tp_p);
+    if (k_bpf_traceparent_enabled) {
+        // The below buffer scan can be expensive on high volume of requests. We make it optional
+        // for customers to enable it. Off by default.
+        if (!capture_header_buffer) {
+            if (meta) {
+                u32 type = trace_type_from_meta(meta);
+                set_trace_info_for_connection(conn, type, tp_p);
+                server_or_client_trace(meta->type, conn, tp_p);
+            }
+            return;
         }
-        return;
-    }
 
-    unsigned char *buf = tp_char_buf();
-    if (buf) {
-        int buf_len = bytes_len;
-        bpf_clamp_umax(buf_len, TRACE_BUF_SIZE - 1);
+        unsigned char *buf = tp_char_buf();
+        if (buf) {
+            int buf_len = bytes_len;
+            bpf_clamp_umax(buf_len, TRACE_BUF_SIZE - 1);
 
-        bpf_probe_read(buf, buf_len, u_buf);
-        unsigned char *res = bpf_strstr_tp_loop(buf, buf_len);
+            bpf_probe_read(buf, buf_len, u_buf);
+            unsigned char *res = bpf_strstr_tp_loop(buf, buf_len);
 
-        if (res) {
-            bpf_dbg_printk("Found traceparent %s", res);
-            unsigned char *t_id = extract_trace_id(res);
-            unsigned char *s_id = extract_span_id(res);
-            unsigned char *f_id = extract_flags(res);
+            if (res) {
+                bpf_dbg_printk("Found traceparent %s", res);
+                unsigned char *t_id = extract_trace_id(res);
+                unsigned char *s_id = extract_span_id(res);
+                unsigned char *f_id = extract_flags(res);
 
-            decode_hex(tp_p->tp.trace_id, t_id, TRACE_ID_CHAR_LEN);
-            decode_hex((unsigned char *)&tp_p->tp.flags, f_id, FLAGS_CHAR_LEN);
-            if (meta && meta->type == EVENT_HTTP_CLIENT) {
-                decode_hex(tp_p->tp.span_id, s_id, SPAN_ID_CHAR_LEN);
+                decode_hex(tp_p->tp.trace_id, t_id, TRACE_ID_CHAR_LEN);
+                decode_hex((unsigned char *)&tp_p->tp.flags, f_id, FLAGS_CHAR_LEN);
+                if (meta && meta->type == EVENT_HTTP_CLIENT) {
+                    decode_hex(tp_p->tp.span_id, s_id, SPAN_ID_CHAR_LEN);
+                } else {
+                    decode_hex(tp_p->tp.parent_id, s_id, SPAN_ID_CHAR_LEN);
+                }
             } else {
-                decode_hex(tp_p->tp.parent_id, s_id, SPAN_ID_CHAR_LEN);
+                bpf_dbg_printk("No traceparent, making a new trace_id", res);
             }
         } else {
-            bpf_dbg_printk("No traceparent, making a new trace_id", res);
+            return;
         }
-    } else {
-        return;
     }
-#endif
 
     if (meta) {
         u32 type = trace_type_from_meta(meta);

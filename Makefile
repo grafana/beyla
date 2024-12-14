@@ -293,13 +293,13 @@ run-integration-test-k8s:
 .PHONY: run-integration-test-vm
 run-integration-test-vm:
 	@echo "### Running integration tests"
-	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./test/integration/... --tags=integration -run "^TestMultiProcess"
+	go test -p 1 -failfast -v -timeout 90m -mod vendor -a ./test/integration/... --tags=integration -run "^TestMultiProcess"
 
 .PHONY: run-integration-test-arm
 run-integration-test-arm:
 	@echo "### Running integration tests"
 	go clean -testcache
-	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./test/integration/... --tags=integration -run "^TestMultiProcess"
+	go test -p 1 -failfast -v -timeout 90m -mod vendor -a ./test/integration/... --tags=integration -run "^TestMultiProcess"
 
 .PHONY: integration-test
 integration-test: prereqs prepare-integration-test

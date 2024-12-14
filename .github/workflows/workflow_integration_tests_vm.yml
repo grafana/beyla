@@ -11,6 +11,11 @@ on:
         description: 'Kernel version to use when running the tests'
         required: true
         type: string
+      timeout-minutes:
+        description: 'Timeout in minutes before the test is terminated'
+        required: false
+        type: number
+        default: 60
 jobs:
   test:
     name: test
@@ -33,7 +38,7 @@ jobs:
       - name: Run VM integration tests
         run: |
           sudo make -C test/vm KERNEL_VER=${{ inputs.kernel-version }} ARCH=${{ inputs.arch }} && [ -f testoutput/success ]
-        timeout-minutes: 60
+        timeout-minutes: ${{ inputs.timeout-minutes }}
       - name: Upload integration test logs
         uses: actions/upload-artifact@v4
         if: always()

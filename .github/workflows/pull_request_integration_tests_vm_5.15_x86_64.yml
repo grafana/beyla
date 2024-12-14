@@ -14,3 +14,4 @@ jobs:
     with:
       arch: x86_64
       kernel-version: 5.15.152
+      timeout-minutes: 90

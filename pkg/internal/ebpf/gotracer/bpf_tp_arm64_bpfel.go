@@ -251,6 +251,7 @@ type bpf_tpProgramSpecs struct {
 	BeylaUprobeHttp2FramerWriteHeadersReturns      *ebpf.ProgramSpec `ebpf:"beyla_uprobe_http2FramerWriteHeaders_returns"`
 	BeylaUprobeHttp2ResponseWriterStateWriteHeader *ebpf.ProgramSpec `ebpf:"beyla_uprobe_http2ResponseWriterStateWriteHeader"`
 	BeylaUprobeHttp2RoundTrip                      *ebpf.ProgramSpec `ebpf:"beyla_uprobe_http2RoundTrip"`
+	BeylaUprobeHttp2RoundTripConn                  *ebpf.ProgramSpec `ebpf:"beyla_uprobe_http2RoundTripConn"`
 	BeylaUprobeHttp2ServerOperateHeaders           *ebpf.ProgramSpec `ebpf:"beyla_uprobe_http2Server_operateHeaders"`
 	BeylaUprobeHttp2ServerProcessHeaders           *ebpf.ProgramSpec `ebpf:"beyla_uprobe_http2Server_processHeaders"`
 	BeylaUprobeHttp2serverConnRunHandler           *ebpf.ProgramSpec `ebpf:"beyla_uprobe_http2serverConn_runHandler"`
@@ -450,6 +451,7 @@ type bpf_tpPrograms struct {
 	BeylaUprobeHttp2FramerWriteHeadersReturns      *ebpf.Program `ebpf:"beyla_uprobe_http2FramerWriteHeaders_returns"`
 	BeylaUprobeHttp2ResponseWriterStateWriteHeader *ebpf.Program `ebpf:"beyla_uprobe_http2ResponseWriterStateWriteHeader"`
 	BeylaUprobeHttp2RoundTrip                      *ebpf.Program `ebpf:"beyla_uprobe_http2RoundTrip"`
+	BeylaUprobeHttp2RoundTripConn                  *ebpf.Program `ebpf:"beyla_uprobe_http2RoundTripConn"`
 	BeylaUprobeHttp2ServerOperateHeaders           *ebpf.Program `ebpf:"beyla_uprobe_http2Server_operateHeaders"`
 	BeylaUprobeHttp2ServerProcessHeaders           *ebpf.Program `ebpf:"beyla_uprobe_http2Server_processHeaders"`
 	BeylaUprobeHttp2serverConnRunHandler           *ebpf.Program `ebpf:"beyla_uprobe_http2serverConn_runHandler"`
@@ -507,6 +509,7 @@ func (p *bpf_tpPrograms) Close() error {
 		p.BeylaUprobeHttp2FramerWriteHeadersReturns,
 		p.BeylaUprobeHttp2ResponseWriterStateWriteHeader,
 		p.BeylaUprobeHttp2RoundTrip,
+		p.BeylaUprobeHttp2RoundTripConn,
 		p.BeylaUprobeHttp2ServerOperateHeaders,
 		p.BeylaUprobeHttp2ServerProcessHeaders,
 		p.BeylaUprobeHttp2serverConnRunHandler,

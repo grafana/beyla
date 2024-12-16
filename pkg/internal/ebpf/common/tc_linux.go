@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"time"
 
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
@@ -21,10 +22,7 @@ type TCLinks struct {
 	IngressFilter *netlink.BpfFilter
 }
 
-func WatchAndRegisterTC(ctx context.Context, channelBufferLen int, register func(iface ifaces.Interface), log *slog.Logger) {
-	informer := ifaces.NewWatcher(channelBufferLen)
-	registerer := ifaces.NewRegisterer(informer, channelBufferLen)
-
+func StartTCMonitorLoop(ctx context.Context, registerer *ifaces.Registerer, channelBufferLen int, register func(iface ifaces.Interface), log *slog.Logger) {
 	log.Debug("subscribing for network interface events")
 	ifaceEvents, err := registerer.Subscribe(ctx)
 	if err != nil {
@@ -52,6 +50,24 @@ func WatchAndRegisterTC(ctx context.Context, channelBufferLen int, register func
 			}
 		}
 	}()
+}
+
+// Convenience function
+func WatchAndRegisterTC(ctx context.Context, channelBufferLen int, register func(iface ifaces.Interface), log *slog.Logger) {
+	log.Debug("listening for new interfaces: use watching")
+
+	informer := ifaces.NewWatcher(channelBufferLen)
+	registerer := ifaces.NewRegisterer(informer, channelBufferLen)
+	StartTCMonitorLoop(ctx, registerer, channelBufferLen, register, log)
+}
+
+// Convenience function
+func PollAndRegisterTC(ctx context.Context, channelBufferLen int, register func(iface ifaces.Interface), period time.Duration, log *slog.Logger) {
+	log.Debug("listening for new interfaces: use polling", "period", period)
+
+	informer := ifaces.NewPoller(period, channelBufferLen)
+	registerer := ifaces.NewRegisterer(informer, channelBufferLen)
+	StartTCMonitorLoop(ctx, registerer, channelBufferLen, register, log)
 }
 
 func RegisterTC(iface ifaces.Interface, egressFD, ingressFD int, log *slog.Logger) *TCLinks {

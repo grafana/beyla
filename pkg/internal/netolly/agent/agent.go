@@ -28,7 +28,7 @@ import (
 	"github.com/cilium/ebpf/ringbuf"
 
 	"github.com/grafana/beyla/pkg/beyla"
-	"github.com/grafana/beyla/pkg/internal/ebpf/common"
+	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/netolly/flow"
 	"github.com/grafana/beyla/pkg/internal/netolly/ifaces"
@@ -260,8 +260,7 @@ func (f *Flows) Status() Status {
 func (f *Flows) interfacesManager(ctx context.Context) error {
 	slog := alog().With("function", "interfacesManager")
 
-	ebpfcommon.StartTCMonitorLoop(ctx, f.registerer, f.cfg.ChannelBufferLen,
-		f.onInterfaceAdded, slog)
+	ebpfcommon.StartTCMonitorLoop(ctx, f.registerer, f.onInterfaceAdded, slog)
 
 	return nil
 }

@@ -28,6 +28,7 @@ import (
 	"github.com/cilium/ebpf/ringbuf"
 
 	"github.com/grafana/beyla/pkg/beyla"
+	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/netolly/flow"
 	"github.com/grafana/beyla/pkg/internal/netolly/ifaces"
@@ -89,7 +90,7 @@ type Flows struct {
 	ctxInfo *global.ContextInfo
 
 	// input data providers
-	interfaces ifaces.Informer
+	registerer *ifaces.Registerer
 	filter     interfaceFilter
 	ebpf       ebpfFlowFetcher
 
@@ -193,7 +194,7 @@ func flowsAgent(
 	return &Flows{
 		ctxInfo:        ctxInfo,
 		ebpf:           fetcher,
-		interfaces:     registerer,
+		registerer:     registerer,
 		filter:         filter,
 		cfg:            cfg,
 		mapTracer:      mapTracer,
@@ -259,32 +260,7 @@ func (f *Flows) Status() Status {
 func (f *Flows) interfacesManager(ctx context.Context) error {
 	slog := alog().With("function", "interfacesManager")
 
-	slog.Debug("subscribing for network interface events")
-	ifaceEvents, err := f.interfaces.Subscribe(ctx)
-	if err != nil {
-		return fmt.Errorf("instantiating interfaces' informer: %w", err)
-	}
-
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				slog.Debug("stopping interfaces' listener")
-				return
-			case event := <-ifaceEvents:
-				slog.Debug("received event", "event", event)
-				switch event.Type {
-				case ifaces.EventAdded:
-					f.onInterfaceAdded(event.Interface)
-				case ifaces.EventDeleted:
-					// qdiscs, ingress and egress filters are automatically deleted so we don't need to
-					// specifically detach them from the ebpfFetcher
-				default:
-					slog.Warn("unknown event type", "event", event)
-				}
-			}
-		}
-	}()
+	ebpfcommon.StartTCMonitorLoop(ctx, f.registerer, f.onInterfaceAdded, slog)
 
 	return nil
 }

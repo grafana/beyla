@@ -56,7 +56,7 @@ func TestFilter(t *testing.T) {
 				},
 			}},
 		},
-		interfaces:     fakeInterfacesInformer{},
+		registerer:     ifaces.NewRegisterer(fakeInterfacesInformer{}, 10),
 		interfaceNamer: func(_ int) string { return "fakeiface" },
 	}
 

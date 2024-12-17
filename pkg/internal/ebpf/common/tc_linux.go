@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"time"
 
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
@@ -21,10 +22,7 @@ type TCLinks struct {
 	IngressFilter *netlink.BpfFilter
 }
 
-func WatchAndRegisterTC(ctx context.Context, channelBufferLen int, register func(iface ifaces.Interface), log *slog.Logger) {
-	informer := ifaces.NewWatcher(channelBufferLen)
-	registerer := ifaces.NewRegisterer(informer, channelBufferLen)
-
+func StartTCMonitorLoop(ctx context.Context, registerer *ifaces.Registerer, register func(iface ifaces.Interface), log *slog.Logger) {
 	log.Debug("subscribing for network interface events")
 	ifaceEvents, err := registerer.Subscribe(ctx)
 	if err != nil {
@@ -54,10 +52,25 @@ func WatchAndRegisterTC(ctx context.Context, channelBufferLen int, register func
 	}()
 }
 
-func RegisterTC(iface ifaces.Interface, egressFD, ingressFD int, log *slog.Logger) *TCLinks {
-	links := TCLinks{}
+// Convenience function
+func WatchAndRegisterTC(ctx context.Context, channelBufferLen int, register func(iface ifaces.Interface), log *slog.Logger) {
+	log.Debug("listening for new interfaces: use watching")
 
-	// Load pre-compiled programs and maps into the kernel, and rewrites the configuration
+	informer := ifaces.NewWatcher(channelBufferLen)
+	registerer := ifaces.NewRegisterer(informer, channelBufferLen)
+	StartTCMonitorLoop(ctx, registerer, register, log)
+}
+
+// Convenience function
+func PollAndRegisterTC(ctx context.Context, channelBufferLen int, register func(iface ifaces.Interface), period time.Duration, log *slog.Logger) {
+	log.Debug("listening for new interfaces: use polling", "period", period)
+
+	informer := ifaces.NewPoller(period, channelBufferLen)
+	registerer := ifaces.NewRegisterer(informer, channelBufferLen)
+	StartTCMonitorLoop(ctx, registerer, register, log)
+}
+
+func GetClsactQdisc(iface ifaces.Interface, log *slog.Logger) *netlink.GenericQdisc {
 	ipvlan, err := netlink.LinkByIndex(iface.Index)
 	if err != nil {
 		log.Error("failed to lookup ipvlan device", "index", iface.Index, "name", iface.Name, "error", err)
@@ -80,15 +93,29 @@ func RegisterTC(iface ifaces.Interface, egressFD, ingressFD int, log *slog.Logge
 			return nil
 		}
 	}
-	links.Qdisc = qdisc
 
-	egressFilter, err := registerEgress(ipvlan, egressFD)
+	return qdisc
+}
+
+func RegisterTC(iface ifaces.Interface, egressFD int, egressHandle uint32, egressName string,
+	ingressFD int, ingressHandle uint32, ingressName string, log *slog.Logger) *TCLinks {
+	links := TCLinks{
+		Qdisc: GetClsactQdisc(iface, log),
+	}
+
+	if links.Qdisc == nil {
+		return nil
+	}
+
+	linkIndex := links.Qdisc.QdiscAttrs.LinkIndex
+
+	egressFilter, err := RegisterEgress(linkIndex, egressFD, egressHandle, egressName)
 	if err != nil {
 		log.Error("failed to install egress filters", "error", err)
 	}
 	links.EgressFilter = egressFilter
 
-	ingressFilter, err := registerIngress(ipvlan, ingressFD)
+	ingressFilter, err := RegisterIngress(linkIndex, ingressFD, ingressHandle, ingressName)
 	if err != nil {
 		log.Error("failed to install ingres filters", "error", err)
 	}
@@ -97,62 +124,44 @@ func RegisterTC(iface ifaces.Interface, egressFD, ingressFD int, log *slog.Logge
 	return &links
 }
 
-func registerEgress(ipvlan netlink.Link, egressFD int) (*netlink.BpfFilter, error) {
-	// Fetch events on egress
-	egressAttrs := netlink.FilterAttrs{
-		LinkIndex: ipvlan.Attrs().Index,
-		Parent:    netlink.HANDLE_MIN_EGRESS,
-		Handle:    netlink.MakeHandle(0, 1),
-		Protocol:  unix.ETH_P_ALL,
-		Priority:  1,
-	}
-	egressFilter := &netlink.BpfFilter{
-		FilterAttrs:  egressAttrs,
-		Fd:           egressFD,
-		Name:         "tc/tc_http_egress",
-		DirectAction: true,
-	}
-	if err := netlink.FilterDel(egressFilter); err == nil {
-		log.Warn("egress filter already existed. Deleted it")
-	}
-	if err := netlink.FilterAdd(egressFilter); err != nil {
-		if errors.Is(err, fs.ErrExist) {
-			log.Warn("egress filter already exists. Ignoring", "error", err)
-		} else {
-			return nil, fmt.Errorf("failed to create egress filter: %w", err)
-		}
-	}
-
-	return egressFilter, nil
+func RegisterEgress(linkIndex int, egressFD int, handle uint32, name string) (*netlink.BpfFilter, error) {
+	return registerFilter(linkIndex, egressFD, handle, netlink.HANDLE_MIN_EGRESS, name)
 }
 
-func registerIngress(ipvlan netlink.Link, ingressFD int) (*netlink.BpfFilter, error) {
+func RegisterIngress(linkIndex int, ingressFD int, handle uint32, name string) (*netlink.BpfFilter, error) {
+	return registerFilter(linkIndex, ingressFD, handle, netlink.HANDLE_MIN_INGRESS, name)
+}
+
+func registerFilter(linkIndex int, fd int, handle uint32, parent uint32, name string) (*netlink.BpfFilter, error) {
 	// Fetch events on ingress
-	ingressAttrs := netlink.FilterAttrs{
-		LinkIndex: ipvlan.Attrs().Index,
-		Parent:    netlink.HANDLE_MIN_INGRESS,
-		Handle:    netlink.MakeHandle(0, 1),
+	attrs := netlink.FilterAttrs{
+		LinkIndex: linkIndex,
+		Parent:    parent,
+		Handle:    handle,
 		Protocol:  unix.ETH_P_ALL,
 		Priority:  1,
 	}
-	ingressFilter := &netlink.BpfFilter{
-		FilterAttrs:  ingressAttrs,
-		Fd:           ingressFD,
-		Name:         "tc/tc_http_ingress",
+
+	filter := &netlink.BpfFilter{
+		FilterAttrs:  attrs,
+		Fd:           fd,
+		Name:         name,
 		DirectAction: true,
 	}
-	if err := netlink.FilterDel(ingressFilter); err == nil {
-		log.Warn("ingress filter already existed. Deleted it")
+
+	if err := netlink.FilterDel(filter); err == nil {
+		log.Warn("filter already existed. Deleted it", "filter", name, "iface", linkIndex)
 	}
-	if err := netlink.FilterAdd(ingressFilter); err != nil {
+
+	if err := netlink.FilterAdd(filter); err != nil {
 		if errors.Is(err, fs.ErrExist) {
-			log.Warn("ingress filter already exists. Ignoring", "error", err)
+			log.Warn("filter already exists. Ignoring", "error", err)
 		} else {
-			return nil, fmt.Errorf("failed to create ingress filter: %w", err)
+			return nil, fmt.Errorf("failed to create filter: %w", err)
 		}
 	}
 
-	return ingressFilter, nil
+	return filter, nil
 }
 
 // doIgnoreNoDev runs the provided syscall over the provided device and ignores the error

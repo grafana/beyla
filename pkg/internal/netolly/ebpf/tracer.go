@@ -45,7 +45,6 @@ const (
 	aggregatedFlowsMap = "aggregated_flows"
 	connInitiatorsMap  = "conn_initiators"
 	flowDirectionsMap  = "flow_directions"
-	netollyTCHandle    = 0xb310
 )
 
 func tlog() *slog.Logger {
@@ -143,7 +142,7 @@ func (m *FlowFetcher) Register(iface ifaces.Interface) error {
 
 	if m.enableEgress {
 		filter, err := ebpfcommon.RegisterEgress(linkIndex,
-			m.objects.BeylaEgressFlowParse.FD(), netollyTCHandle, "tc/egress_flow_parse")
+			m.objects.BeylaEgressFlowParse.FD(), ebpfcommon.NetollyTCHandle, "tc/egress_flow_parse")
 
 		if err != nil {
 			return fmt.Errorf("failed to install egress filters: %w", err)
@@ -156,7 +155,7 @@ func (m *FlowFetcher) Register(iface ifaces.Interface) error {
 
 	if m.enableIngress {
 		filter, err := ebpfcommon.RegisterIngress(linkIndex,
-			m.objects.BeylaIngressFlowParse.FD(), netollyTCHandle, "tc/ingress_flow_parse")
+			m.objects.BeylaIngressFlowParse.FD(), ebpfcommon.NetollyTCHandle, "tc/ingress_flow_parse")
 
 		if err != nil {
 			return fmt.Errorf("failed to install ingress filters: %w", err)

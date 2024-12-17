@@ -22,10 +22,6 @@ import (
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/tc_http_tp.c -- -I../../../../bpf/headers
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../../bpf/tc_http_tp.c -- -I../../../../bpf/headers -DBPF_DEBUG
 
-const (
-	httpTracerTCHandle = 0xb311
-)
-
 type Tracer struct {
 	cfg            *beyla.Config
 	bpfObjects     bpfObjects
@@ -148,8 +144,8 @@ func (p *Tracer) Run(ctx context.Context, _ chan<- []request.Span) {
 
 func (p *Tracer) registerTC(iface ifaces.Interface) {
 	links := ebpfcommon.RegisterTC(iface,
-		p.bpfObjects.BeylaTcHttpEgress.FD(), httpTracerTCHandle, "tc/tc_http_egress",
-		p.bpfObjects.BeylaTcHttpIngress.FD(), httpTracerTCHandle, "tc/tc_http_ingress",
+		p.bpfObjects.BeylaTcHttpEgress.FD(), ebpfcommon.HTTPTracerTCHandle, "tc/tc_http_egress",
+		p.bpfObjects.BeylaTcHttpIngress.FD(), ebpfcommon.HTTPTracerTCHandle, "tc/tc_http_ingress",
 		p.log)
 
 	if links == nil {

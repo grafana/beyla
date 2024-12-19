@@ -3,6 +3,7 @@ package global
 import (
 	"github.com/grafana/beyla/pkg/export/attributes"
 	"github.com/grafana/beyla/pkg/internal/connector"
+	"github.com/grafana/beyla/pkg/internal/ebpf/tcmanager"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	kube2 "github.com/grafana/beyla/pkg/internal/kube"
 )
@@ -26,6 +27,8 @@ type ContextInfo struct {
 	MetricAttributeGroups attributes.AttrGroups
 	// K8sInformer enables direct access to the Kubernetes API
 	K8sInformer *kube2.MetadataProvider
+	// TCManager manages the attachment of traffic control eBPF programs
+	TCManager tcmanager.TCManager
 }
 
 // AppO11y stores context information that is only required for application observability.

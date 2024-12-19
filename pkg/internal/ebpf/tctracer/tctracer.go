@@ -155,8 +155,8 @@ func (p *Tracer) Run(ctx context.Context, _ chan<- []request.Span) {
 
 func (p *Tracer) registerTC(iface ifaces.Interface) {
 	links := ebpfcommon.RegisterTC(iface,
-		p.bpfObjects.BeylaAppEgress.FD(), ebpfcommon.TCTracerTCHandle, "tc/tc_egress",
-		p.bpfObjects.BeylaAppIngress.FD(), ebpfcommon.TCTracerTCHandle, "tc/tc_ingress",
+		p.bpfObjects.BeylaAppEgress, ebpfcommon.TCTracerTCHandle, "tc/tc_egress",
+		p.bpfObjects.BeylaAppIngress, ebpfcommon.TCTracerTCHandle, "tc/tc_ingress",
 		p.log)
 
 	if links == nil {

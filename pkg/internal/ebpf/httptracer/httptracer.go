@@ -144,8 +144,8 @@ func (p *Tracer) Run(ctx context.Context, _ chan<- []request.Span) {
 
 func (p *Tracer) registerTC(iface ifaces.Interface) {
 	links := ebpfcommon.RegisterTC(iface,
-		p.bpfObjects.BeylaTcHttpEgress.FD(), ebpfcommon.HTTPTracerTCHandle, "tc/tc_http_egress",
-		p.bpfObjects.BeylaTcHttpIngress.FD(), ebpfcommon.HTTPTracerTCHandle, "tc/tc_http_ingress",
+		p.bpfObjects.BeylaTcHttpEgress, ebpfcommon.HTTPTracerTCHandle, "tc/tc_http_egress",
+		p.bpfObjects.BeylaTcHttpIngress, ebpfcommon.HTTPTracerTCHandle, "tc/tc_http_ingress",
 		p.log)
 
 	if links == nil {

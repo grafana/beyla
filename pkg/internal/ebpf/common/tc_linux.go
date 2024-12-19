@@ -10,6 +10,8 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/link"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 
@@ -97,8 +99,8 @@ func GetClsactQdisc(iface ifaces.Interface, log *slog.Logger) *netlink.GenericQd
 	return qdisc
 }
 
-func RegisterTC(iface ifaces.Interface, egressFD int, egressHandle uint32, egressName string,
-	ingressFD int, ingressHandle uint32, ingressName string, log *slog.Logger) *TCLinks {
+func RegisterTC(iface ifaces.Interface, egressProg *ebpf.Program, egressHandle uint32, egressName string,
+	ingressProg *ebpf.Program, ingressHandle uint32, ingressName string, log *slog.Logger) *TCLinks {
 	links := TCLinks{
 		Qdisc: GetClsactQdisc(iface, log),
 	}
@@ -109,13 +111,13 @@ func RegisterTC(iface ifaces.Interface, egressFD int, egressHandle uint32, egres
 
 	linkIndex := links.Qdisc.QdiscAttrs.LinkIndex
 
-	egressFilter, err := RegisterEgress(linkIndex, egressFD, egressHandle, egressName)
+	egressFilter, err := RegisterEgress(linkIndex, egressProg, egressHandle, egressName)
 	if err != nil {
 		log.Error("failed to install egress filters", "error", err)
 	}
 	links.EgressFilter = egressFilter
 
-	ingressFilter, err := RegisterIngress(linkIndex, ingressFD, ingressHandle, ingressName)
+	ingressFilter, err := RegisterIngress(linkIndex, ingressProg, ingressHandle, ingressName)
 	if err != nil {
 		log.Error("failed to install ingres filters", "error", err)
 	}
@@ -124,12 +126,12 @@ func RegisterTC(iface ifaces.Interface, egressFD int, egressHandle uint32, egres
 	return &links
 }
 
-func RegisterEgress(linkIndex int, egressFD int, handle uint32, name string) (*netlink.BpfFilter, error) {
-	return registerFilter(linkIndex, egressFD, handle, netlink.HANDLE_MIN_EGRESS, name)
+func RegisterEgress(linkIndex int, egressProg *ebpf.Program, handle uint32, name string) (*netlink.BpfFilter, error) {
+	return registerFilter(linkIndex, egressProg.FD(), handle, netlink.HANDLE_MIN_EGRESS, name)
 }
 
-func RegisterIngress(linkIndex int, ingressFD int, handle uint32, name string) (*netlink.BpfFilter, error) {
-	return registerFilter(linkIndex, ingressFD, handle, netlink.HANDLE_MIN_INGRESS, name)
+func RegisterIngress(linkIndex int, ingressProg *ebpf.Program, handle uint32, name string) (*netlink.BpfFilter, error) {
+	return registerFilter(linkIndex, ingressProg.FD(), handle, netlink.HANDLE_MIN_INGRESS, name)
 }
 
 func registerFilter(linkIndex int, fd int, handle uint32, parent uint32, name string) (*netlink.BpfFilter, error) {
@@ -162,6 +164,21 @@ func registerFilter(linkIndex int, fd int, handle uint32, parent uint32, name st
 	}
 
 	return filter, nil
+}
+
+func registerFilterTCX(linkIndex int, prog *ebpf.Program, attachType ebpf.AttachType, name string) (link.Link, error) {
+	l, err := link.AttachTCX(link.TCXOptions{
+		Program:   prog,
+		Attach:    attachType,
+		Interface: linkIndex,
+		Anchor:    link.Head(),
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("attaching tcx: %w", err)
+	}
+
+	return l, nil
 }
 
 // doIgnoreNoDev runs the provided syscall over the provided device and ignores the error

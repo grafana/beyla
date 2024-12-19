@@ -10,6 +10,7 @@ import (
 	"github.com/grafana/beyla/pkg/export/attributes"
 	"github.com/grafana/beyla/pkg/internal/appolly"
 	"github.com/grafana/beyla/pkg/internal/connector"
+	"github.com/grafana/beyla/pkg/internal/ebpf/tcmanager"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/netolly/agent"
@@ -31,6 +32,9 @@ func RunBeyla(ctx context.Context, cfg *beyla.Config) error {
 	if net {
 		wg.Add(1)
 	}
+
+	ctxInfo.TCManager = tcmanager.NewNetlinkManager()
+	ctxInfo.TCManager.Init(ctx)
 
 	errs := make(chan error, 2)
 	if app {

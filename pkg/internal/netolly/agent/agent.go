@@ -28,7 +28,8 @@ import (
 	"github.com/cilium/ebpf/ringbuf"
 
 	"github.com/grafana/beyla/pkg/beyla"
-	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
+	//ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
+	"github.com/grafana/beyla/pkg/internal/ebpf/tcmanager"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/netolly/flow"
 	"github.com/grafana/beyla/pkg/internal/netolly/ifaces"
@@ -154,7 +155,7 @@ func FlowsAgent(ctxInfo *global.ContextInfo, cfg *beyla.Config) (*Flows, error) 
 	case beyla.EbpfSourceTC:
 		alog.Info("using kernel Traffic Control for collecting network events")
 		ingress, egress := flowDirections(&cfg.NetworkFlows)
-		fetcher, err = ebpf.NewFlowFetcher(cfg.NetworkFlows.Sampling, cfg.NetworkFlows.CacheMaxFlows, ingress, egress)
+		fetcher, err = ebpf.NewFlowFetcher(cfg.NetworkFlows.Sampling, cfg.NetworkFlows.CacheMaxFlows, ingress, egress, ctxInfo.TCManager)
 		if err != nil {
 			return nil, err
 		}
@@ -179,10 +180,17 @@ func flowsAgent(
 		return nil, fmt.Errorf("configuring interface filters: %w", err)
 	}
 
+	filter2, err := tcmanager.NewInterfaceFilter(cfg.NetworkFlows.Interfaces, cfg.NetworkFlows.ExcludeInterfaces)
+	if err != nil {
+		return nil, fmt.Errorf("configuring interface filters: %w", err)
+	}
+
+	ctxInfo.TCManager.SetInterfaceFilter(filter2)
+
 	registerer := ifaces.NewRegisterer(informer, cfg.ChannelBufferLen)
 
 	interfaceNamer := func(ifIndex int) string {
-		iface, ok := registerer.IfaceNameForIndex(ifIndex)
+		iface, ok := ctxInfo.TCManager.InterfaceName(ifIndex)
 		if !ok {
 			return "unknown"
 		}
@@ -258,9 +266,10 @@ func (f *Flows) Status() Status {
 // interface, it registers a flow ebpfFetcher that will forward new flows to the returned channel
 // TODO: consider move this method and "onInterfaceAdded" to another type
 func (f *Flows) interfacesManager(ctx context.Context) error {
-	slog := alog().With("function", "interfacesManager")
+	//slog := alog().With("function", "interfacesManager")
 
-	ebpfcommon.StartTCMonitorLoop(ctx, f.registerer, f.onInterfaceAdded, slog)
+	//TC_CLEANUP
+	//ebpfcommon.StartTCMonitorLoop(ctx, f.registerer, f.onInterfaceAdded, slog)
 
 	return nil
 }

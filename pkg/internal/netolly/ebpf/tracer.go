@@ -32,6 +32,7 @@ import (
 	"github.com/vishvananda/netlink"
 
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
+	"github.com/grafana/beyla/pkg/internal/ebpf/tcmanager"
 	"github.com/grafana/beyla/pkg/internal/netolly/ifaces"
 )
 
@@ -70,6 +71,7 @@ type FlowFetcher struct {
 func NewFlowFetcher(
 	sampling, cacheMaxSize int,
 	ingress, egress bool,
+	tcManager tcmanager.TCManager,
 ) (*FlowFetcher, error) {
 	tlog := tlog()
 	if err := rlimit.RemoveMemlock(); err != nil {
@@ -107,6 +109,15 @@ func NewFlowFetcher(
 	if err != nil {
 		return nil, fmt.Errorf("accessing to ringbuffer: %w", err)
 	}
+
+	if egress {
+		tcManager.AddProgram("tc/egress_flow_parse", objects.BeylaEgressFlowParse, tcmanager.AttachmentEgress)
+	}
+
+	if ingress {
+		tcManager.AddProgram("tc/ingress_flow_parse", objects.BeylaIngressFlowParse, tcmanager.AttachmentIngress)
+	}
+
 	return &FlowFetcher{
 		log:            tlog,
 		objects:        &objects,
@@ -142,7 +153,7 @@ func (m *FlowFetcher) Register(iface ifaces.Interface) error {
 
 	if m.enableEgress {
 		filter, err := ebpfcommon.RegisterEgress(linkIndex,
-			m.objects.BeylaEgressFlowParse.FD(), ebpfcommon.NetollyTCHandle, "tc/egress_flow_parse")
+			m.objects.BeylaEgressFlowParse, ebpfcommon.NetollyTCHandle, "tc/egress_flow_parse")
 
 		if err != nil {
 			return fmt.Errorf("failed to install egress filters: %w", err)
@@ -155,7 +166,7 @@ func (m *FlowFetcher) Register(iface ifaces.Interface) error {
 
 	if m.enableIngress {
 		filter, err := ebpfcommon.RegisterIngress(linkIndex,
-			m.objects.BeylaIngressFlowParse.FD(), ebpfcommon.NetollyTCHandle, "tc/ingress_flow_parse")
+			m.objects.BeylaIngressFlowParse, ebpfcommon.NetollyTCHandle, "tc/ingress_flow_parse")
 
 		if err != nil {
 			return fmt.Errorf("failed to install ingress filters: %w", err)

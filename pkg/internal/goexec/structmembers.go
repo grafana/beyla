@@ -443,7 +443,7 @@ func structMemberOffsetsFromDwarf(data *dwarf.Data) (FieldOffsets, map[GoOffset]
 		log.Debug("inspecting fields for struct type", "type", typeName)
 		if err := readMembers(reader, structMember.fields, expectedReturns, fieldOffsets); err != nil {
 			log.Debug("error reading DWARF info", "type", typeName, "error", err)
-			return nil, expectedReturns
+			return fieldOffsets, expectedReturns
 		}
 	}
 }

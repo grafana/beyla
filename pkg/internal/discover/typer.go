@@ -1,6 +1,7 @@
 package discover
 
 import (
+	"fmt"
 	"log/slog"
 	"strings"
 
@@ -145,6 +146,13 @@ func (t *typer) asInstrumentable(execElf *exec.FileInfo) ebpf.Instrumentable {
 	}
 
 	detectedType := exec.FindProcLanguage(execElf.Pid, execElf.ELF, execElf.CmdExePath)
+
+	if detectedType == svc.InstrumentableGolang && err == nil {
+		log.Warn("ELF binary appears to be a Go program, but no offsets were found",
+			"comm", execElf.CmdExePath, "pid", execElf.Pid)
+
+		err = fmt.Errorf("could not find any Go offsets in Go binary %s", execElf.CmdExePath)
+	}
 
 	log.Debug("instrumented", "comm", execElf.CmdExePath, "pid", execElf.Pid,
 		"child", child, "language", detectedType.String())

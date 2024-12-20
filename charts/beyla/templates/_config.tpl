@@ -38,5 +38,5 @@ Merge default configuration with user configuration from values.
 */}}
 {{- define "beyla.config" }}
 {{- $defaultConfig := fromYaml (include "beyla.defaultConfig" . ) }}
-{{- mergeOverwrite $defaultConfig .Values.config.data | default $defaultConfig  | toYaml | nindent 4}}
+{{- mergeOverwrite $defaultConfig .Values.config.data | default $defaultConfig | toYaml | nindent 4 }}
 {{- end }}

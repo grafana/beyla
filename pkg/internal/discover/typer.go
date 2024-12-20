@@ -1,6 +1,7 @@
 package discover
 
 import (
+	"fmt"
 	"log/slog"
 	"strings"
 
@@ -124,6 +125,11 @@ func (t *typer) asInstrumentable(execElf *exec.FileInfo) ebpf.Instrumentable {
 			instrumentableCache.Add(execElf.Ino, InstrumentedExecutable{Type: svc.InstrumentableGolang, Offsets: offsets})
 			return ebpf.Instrumentable{Type: svc.InstrumentableGolang, FileInfo: execElf, Offsets: offsets}
 		}
+
+		if err == nil {
+			err = fmt.Errorf("identified as a Go proxy")
+		}
+
 		log.Debug("identified as a Go proxy")
 	} else {
 		log.Debug("identified as a generic, non-Go executable")
@@ -146,12 +152,19 @@ func (t *typer) asInstrumentable(execElf *exec.FileInfo) ebpf.Instrumentable {
 
 	detectedType := exec.FindProcLanguage(execElf.Pid, execElf.ELF, execElf.CmdExePath)
 
+	if detectedType == svc.InstrumentableGolang && err == nil {
+		log.Warn("ELF binary appears to be a Go program, but no offsets were found",
+			"comm", execElf.CmdExePath, "pid", execElf.Pid)
+
+		err = fmt.Errorf("could not find any Go offsets in Go binary %s", execElf.CmdExePath)
+	}
+
 	log.Debug("instrumented", "comm", execElf.CmdExePath, "pid", execElf.Pid,
 		"child", child, "language", detectedType.String())
 	// Return the instrumentable without offsets, as it is identified as a generic
 	// (or non-instrumentable Go proxy) executable
-	instrumentableCache.Add(execElf.Ino, InstrumentedExecutable{Type: detectedType, Offsets: offsets, InstrumentationError: err})
-	return ebpf.Instrumentable{Type: detectedType, FileInfo: execElf, ChildPids: child, InstrumentationError: err}
+	instrumentableCache.Add(execElf.Ino, InstrumentedExecutable{Type: detectedType, Offsets: nil, InstrumentationError: err})
+	return ebpf.Instrumentable{Type: detectedType, Offsets: nil, FileInfo: execElf, ChildPids: child, InstrumentationError: err}
 }
 
 func (t *typer) inspectOffsets(execElf *exec.FileInfo) (*goexec.Offsets, bool, error) {

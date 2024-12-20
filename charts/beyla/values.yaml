@@ -190,7 +190,7 @@ config:
   ## If empty, default configuration from _config.tpl is used.
   name: ""
   # -- default value of beyla configuration
-  data:
+  data: {}
     # profile_port: 6060
     # open_port: 8443
     # routes:

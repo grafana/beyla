@@ -182,12 +182,12 @@ dnsPolicy: ClusterFirstWithHostNet
 config:
   # -- set to true, to skip the check around the ConfigMap creation
   skipConfigMapCheck: false
-  # -- set to true, to use the below default configurations
+  # -- set to true, to use default configurations
   create: true
   ## -- Provide the name of the external configmap containing the beyla configuration.
   ## To create configmap from configuration file, user can use the below command. Note: The name 'beyla-config.yaml' is important.
   ## `kubectl create cm --from-file=beyla-config.yaml=<name-of-config-file> -n <namespace>`
-  ## If empty, default configuration below is used.
+  ## If empty, default configuration from _config.tpl is used.
   name: ""
   # -- default value of beyla configuration
   data:
@@ -204,27 +204,27 @@ config:
     #     cloud_zone: prod-eu-west-0
     #     cloud_instance_id: 123456
     #     cloud_api_key:
-    attributes:
-      kubernetes:
-        enable: true
-      select:
-        beyla_network_flow_bytes:
-          include:
-            - 'k8s.src.owner.type'
-            - 'k8s.dst.owner.type'
-            - 'direction'
-    filter:
-      network:
-        k8s_dst_owner_name:
-          not_match: '{kube*,*jaeger-agent*,*prometheus*,*promtail*,*grafana-agent*}'
-        k8s_src_owner_name:
-          not_match: '{kube*,*jaeger-agent*,*prometheus*,*promtail*,*grafana-agent*}'
+    # attributes:
+    #   kubernetes:
+    #     enable: true
+    #   select:
+    #     beyla_network_flow_bytes:
+    #       include:
+    #         - 'k8s.src.owner.type'
+    #         - 'k8s.dst.owner.type'
+    #         - 'direction'
+    # filter:
+    #   network:
+    #     k8s_dst_owner_name:
+    #       not_match: '{kube*,*jaeger-agent*,*prometheus*,*promtail*,*grafana-agent*}'
+    #     k8s_src_owner_name:
+    #       not_match: '{kube*,*jaeger-agent*,*prometheus*,*promtail*,*grafana-agent*}'
     # to enable network metrics
     # network:
     #   enable: true
-    prometheus_export:
-      port: 9090
-      path: /metrics
+    # prometheus_export:
+    #   port: 9090
+    #   path: /metrics
     # to enable internal metrics
     # internal_metrics:
     #   prometheus:

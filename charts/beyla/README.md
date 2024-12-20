@@ -25,7 +25,7 @@ eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network
 |-----|------|---------|-------------|
 | affinity | object | `{}` | used for scheduling of pods based on affinity rules |
 | config.create | bool | `true` | set to true, to use default configurations |
-| config.data | string | `nil` | default value of beyla configuration |
+| config.data | object | `{}` | default value of beyla configuration |
 | config.name | string | `""` |  |
 | config.skipConfigMapCheck | bool | `false` | set to true, to skip the check around the ConfigMap creation |
 | dnsPolicy | string | `"ClusterFirstWithHostNet"` | Determines how DNS resolution is handled for that pod. If `.Values.preset` is set to `network` or `.Values.config.data.network` is enabled, Beyla requires `hostNetwork` access, causing cluster service DNS resolution to fail. It is recommended not to change this if Beyla sends traces and metrics to Grafana components via k8s service. |

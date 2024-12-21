@@ -180,9 +180,6 @@ func (pt *ProcessTracer) loadTracer(p Tracer, log *slog.Logger) error {
 	// Setup any tail call jump tables
 	p.SetupTailCalls()
 
-	// Setup any traffic control probes
-	p.SetupTC()
-
 	i := instrumenter{} // dummy instrumenter to setup the kprobes, socket filters and tracepoint probes
 
 	// Kprobes to be used for native instrumentation points

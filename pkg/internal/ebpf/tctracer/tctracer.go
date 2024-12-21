@@ -9,13 +9,12 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf"
-	"github.com/vishvananda/netlink"
 
 	"github.com/grafana/beyla/pkg/beyla"
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
+	"github.com/grafana/beyla/pkg/internal/ebpf/tcmanager"
 	"github.com/grafana/beyla/pkg/internal/exec"
 	"github.com/grafana/beyla/pkg/internal/goexec"
-	"github.com/grafana/beyla/pkg/internal/netolly/ifaces"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
@@ -24,23 +23,19 @@ import (
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../../bpf/tc_tracer.c -- -I../../../../bpf/headers -DBPF_DEBUG -DBPF_DEBUG_TC
 
 type Tracer struct {
-	cfg            *beyla.Config
-	bpfObjects     bpfObjects
-	closers        []io.Closer
-	log            *slog.Logger
-	qdiscs         map[ifaces.Interface]*netlink.GenericQdisc
-	egressFilters  map[ifaces.Interface]*netlink.BpfFilter
-	ingressFilters map[ifaces.Interface]*netlink.BpfFilter
+	cfg        *beyla.Config
+	bpfObjects bpfObjects
+	closers    []io.Closer
+	log        *slog.Logger
+	tcManager  tcmanager.TCManager
 }
 
 func New(cfg *beyla.Config) *Tracer {
 	log := slog.With("component", "tc.Tracer")
+
 	return &Tracer{
-		log:            log,
-		cfg:            cfg,
-		qdiscs:         map[ifaces.Interface]*netlink.GenericQdisc{},
-		egressFilters:  map[ifaces.Interface]*netlink.BpfFilter{},
-		ingressFilters: map[ifaces.Interface]*netlink.BpfFilter{},
+		log: log,
+		cfg: cfg,
 	}
 }
 
@@ -135,48 +130,36 @@ func (p *Tracer) AlreadyInstrumentedLib(uint64) bool {
 	return false
 }
 
-func (p *Tracer) SetupTC() {
+func (p *Tracer) startTC(ctx context.Context) {
+	if p.tcManager != nil {
+		return
+	}
+
 	if !p.cfg.EBPF.UseTCForCP {
 		return
 	}
 
 	p.log.Info("enabling L4 context-propagation with Linux Traffic Control")
 
-	ebpfcommon.WatchAndRegisterTC(context.Background(), p.cfg.ChannelBufferLen, p.registerTC, p.log)
+	p.tcManager = tcmanager.NewNetlinkManager()
+	p.tcManager.AddProgram("tc/tc_egress", p.bpfObjects.BeylaAppEgress, tcmanager.AttachmentEgress)
+	p.tcManager.AddProgram("tc/tc_ingress", p.bpfObjects.BeylaAppIngress, tcmanager.AttachmentIngress)
+	p.tcManager.Start(ctx)
 }
 
 func (p *Tracer) Run(ctx context.Context, _ chan<- []request.Span) {
+	p.startTC(ctx)
+
 	<-ctx.Done()
 
 	p.bpfObjects.Close()
 
-	p.closeTC()
+	p.stopTC()
 }
 
-func (p *Tracer) registerTC(iface ifaces.Interface) {
-	links := ebpfcommon.RegisterTC(iface,
-		p.bpfObjects.BeylaAppEgress.FD(), ebpfcommon.TCTracerTCHandle, "tc/tc_egress",
-		p.bpfObjects.BeylaAppIngress.FD(), ebpfcommon.TCTracerTCHandle, "tc/tc_ingress",
-		p.log)
-
-	if links == nil {
-		return
-	}
-
-	p.qdiscs[iface] = links.Qdisc
-	p.ingressFilters[iface] = links.IngressFilter
-	p.egressFilters[iface] = links.EgressFilter
-}
-
-func (p *Tracer) closeTC() {
+func (p *Tracer) stopTC() {
 	p.log.Info("removing traffic control probes")
 
-	p.bpfObjects.BeylaAppEgress.Close()
-	p.bpfObjects.BeylaAppIngress.Close()
-
-	ebpfcommon.CloseTCLinks(p.qdiscs, p.egressFilters, p.ingressFilters, p.log)
-
-	p.egressFilters = map[ifaces.Interface]*netlink.BpfFilter{}
-	p.ingressFilters = map[ifaces.Interface]*netlink.BpfFilter{}
-	p.qdiscs = map[ifaces.Interface]*netlink.GenericQdisc{}
+	p.tcManager.Stop()
+	p.tcManager = nil
 }

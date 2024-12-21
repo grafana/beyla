@@ -8,13 +8,12 @@ import (
 	"log/slog"
 
 	"github.com/cilium/ebpf"
-	"github.com/vishvananda/netlink"
 
 	"github.com/grafana/beyla/pkg/beyla"
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
+	"github.com/grafana/beyla/pkg/internal/ebpf/tcmanager"
 	"github.com/grafana/beyla/pkg/internal/exec"
 	"github.com/grafana/beyla/pkg/internal/goexec"
-	"github.com/grafana/beyla/pkg/internal/netolly/ifaces"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
@@ -23,23 +22,19 @@ import (
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../../bpf/tc_http_tp.c -- -I../../../../bpf/headers -DBPF_DEBUG
 
 type Tracer struct {
-	cfg            *beyla.Config
-	bpfObjects     bpfObjects
-	closers        []io.Closer
-	log            *slog.Logger
-	qdiscs         map[ifaces.Interface]*netlink.GenericQdisc
-	egressFilters  map[ifaces.Interface]*netlink.BpfFilter
-	ingressFilters map[ifaces.Interface]*netlink.BpfFilter
+	cfg        *beyla.Config
+	bpfObjects bpfObjects
+	closers    []io.Closer
+	log        *slog.Logger
+	tcManager  tcmanager.TCManager
 }
 
 func New(cfg *beyla.Config) *Tracer {
 	log := slog.With("component", "tc_http.Tracer")
+
 	return &Tracer{
-		log:            log,
-		cfg:            cfg,
-		qdiscs:         map[ifaces.Interface]*netlink.GenericQdisc{},
-		egressFilters:  map[ifaces.Interface]*netlink.BpfFilter{},
-		ingressFilters: map[ifaces.Interface]*netlink.BpfFilter{},
+		log: log,
+		cfg: cfg,
 	}
 }
 
@@ -121,7 +116,11 @@ func (p *Tracer) AlreadyInstrumentedLib(uint64) bool {
 	return false
 }
 
-func (p *Tracer) SetupTC() {
+func (p *Tracer) startTC(ctx context.Context) {
+	if p.tcManager != nil {
+		return
+	}
+
 	if !p.cfg.EBPF.UseTCForL7CP {
 		return
 	}
@@ -131,41 +130,29 @@ func (p *Tracer) SetupTC() {
 		p.log.Error("cannot enable L7 context-propagation, kernel 5.17 or newer required")
 	}
 
-	ebpfcommon.WatchAndRegisterTC(context.Background(), p.cfg.ChannelBufferLen, p.registerTC, p.log)
+	p.tcManager = tcmanager.NewNetlinkManager()
+	p.tcManager.AddProgram("tc/tc_http_egress", p.bpfObjects.BeylaTcHttpEgress, tcmanager.AttachmentEgress)
+	p.tcManager.AddProgram("tc/tc_http_ingress", p.bpfObjects.BeylaTcHttpIngress, tcmanager.AttachmentIngress)
+	p.tcManager.Start(ctx)
 }
 
 func (p *Tracer) Run(ctx context.Context, _ chan<- []request.Span) {
+	p.startTC(ctx)
+
 	<-ctx.Done()
 
 	p.bpfObjects.Close()
 
-	p.closeTC()
+	p.stopTC()
 }
 
-func (p *Tracer) registerTC(iface ifaces.Interface) {
-	links := ebpfcommon.RegisterTC(iface,
-		p.bpfObjects.BeylaTcHttpEgress.FD(), ebpfcommon.HTTPTracerTCHandle, "tc/tc_http_egress",
-		p.bpfObjects.BeylaTcHttpIngress.FD(), ebpfcommon.HTTPTracerTCHandle, "tc/tc_http_ingress",
-		p.log)
-
-	if links == nil {
+func (p *Tracer) stopTC() {
+	if p.tcManager == nil {
 		return
 	}
 
-	p.qdiscs[iface] = links.Qdisc
-	p.ingressFilters[iface] = links.IngressFilter
-	p.egressFilters[iface] = links.EgressFilter
-}
-
-func (p *Tracer) closeTC() {
 	p.log.Info("removing traffic control probes")
 
-	p.bpfObjects.BeylaTcHttpEgress.Close()
-	p.bpfObjects.BeylaTcHttpIngress.Close()
-
-	ebpfcommon.CloseTCLinks(p.qdiscs, p.egressFilters, p.ingressFilters, p.log)
-
-	p.egressFilters = map[ifaces.Interface]*netlink.BpfFilter{}
-	p.ingressFilters = map[ifaces.Interface]*netlink.BpfFilter{}
-	p.qdiscs = map[ifaces.Interface]*netlink.GenericQdisc{}
+	p.tcManager.Stop()
+	p.tcManager = nil
 }

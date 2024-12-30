@@ -32,7 +32,6 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
-	metric2 "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.25.0"
@@ -376,11 +375,8 @@ func getTraceSettings(ctxInfo *global.ContextInfo, in trace.SpanExporter) export
 	}
 	meterProvider := metric.NewMeterProvider()
 	telemetrySettings := component.TelemetrySettings{
-		Logger:        zap.NewNop(),
-		MeterProvider: meterProvider,
-		LeveledMeterProvider: func(_ configtelemetry.Level) metric2.MeterProvider {
-			return meterProvider
-		},
+		Logger:         zap.NewNop(),
+		MeterProvider:  meterProvider,
 		TracerProvider: traceProvider,
 		MetricsLevel:   telemetryLevel,
 	}

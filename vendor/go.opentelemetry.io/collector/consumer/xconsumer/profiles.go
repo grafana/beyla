@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package consumerprofiles // import "go.opentelemetry.io/collector/consumer/consumerprofiles"
+package xconsumer // import "go.opentelemetry.io/collector/consumer/xconsumer"
 
 import (
 	"context"

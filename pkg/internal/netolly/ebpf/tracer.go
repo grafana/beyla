@@ -29,10 +29,9 @@ import (
 
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
-	"github.com/vishvananda/netlink"
 
-	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
-	"github.com/grafana/beyla/pkg/internal/netolly/ifaces"
+	"github.com/grafana/beyla/pkg/internal/ebpf/tcmanager"
+	"github.com/grafana/beyla/pkg/internal/netolly/ifaces" // FIXME remove
 )
 
 // $BPF_CLANG and $BPF_CFLAGS are set by the Makefile.
@@ -56,20 +55,18 @@ func tlog() *slog.Logger {
 // and to flows that are forwarded by the kernel via ringbuffer because could not be aggregated
 // in the map
 type FlowFetcher struct {
-	log            *slog.Logger
-	objects        *NetObjects
-	qdiscs         map[ifaces.Interface]*netlink.GenericQdisc
-	egressFilters  map[ifaces.Interface]*netlink.BpfFilter
-	ingressFilters map[ifaces.Interface]*netlink.BpfFilter
-	ringbufReader  *ringbuf.Reader
-	cacheMaxSize   int
-	enableIngress  bool
-	enableEgress   bool
+	log           *slog.Logger
+	objects       *NetObjects
+	ringbufReader *ringbuf.Reader
+	cacheMaxSize  int
+	enableIngress bool
+	enableEgress  bool
 }
 
 func NewFlowFetcher(
 	sampling, cacheMaxSize int,
 	ingress, egress bool,
+	tcManager tcmanager.TCManager,
 ) (*FlowFetcher, error) {
 	tlog := tlog()
 	if err := rlimit.RemoveMemlock(); err != nil {
@@ -107,65 +104,27 @@ func NewFlowFetcher(
 	if err != nil {
 		return nil, fmt.Errorf("accessing to ringbuffer: %w", err)
 	}
+
+	if egress {
+		tcManager.AddProgram("tc/egress_flow_parse", objects.BeylaEgressFlowParse, tcmanager.AttachmentEgress)
+	}
+
+	if ingress {
+		tcManager.AddProgram("tc/ingress_flow_parse", objects.BeylaIngressFlowParse, tcmanager.AttachmentIngress)
+	}
+
 	return &FlowFetcher{
-		log:            tlog,
-		objects:        &objects,
-		ringbufReader:  flows,
-		egressFilters:  map[ifaces.Interface]*netlink.BpfFilter{},
-		ingressFilters: map[ifaces.Interface]*netlink.BpfFilter{},
-		qdiscs:         map[ifaces.Interface]*netlink.GenericQdisc{},
-		cacheMaxSize:   cacheMaxSize,
-		enableIngress:  ingress,
-		enableEgress:   egress,
+		log:           tlog,
+		objects:       &objects,
+		ringbufReader: flows,
+		cacheMaxSize:  cacheMaxSize,
+		enableIngress: ingress,
+		enableEgress:  egress,
 	}, nil
 }
 
-// Register and links the eBPF fetcher into the system. The program should invoke Unregister
-// before exiting.
-func (m *FlowFetcher) Register(iface ifaces.Interface) error {
-	ilog := m.log.With("interface", iface)
-
-	if !m.enableEgress && !m.enableIngress {
-		ilog.Debug("both egress and ingress have been disabled in the configuration, skipping")
-		return nil
-	}
-
-	qdisc := ebpfcommon.GetClsactQdisc(iface, ilog)
-
-	if qdisc == nil {
-		return fmt.Errorf("failed to obtain a clsact qdisc")
-	}
-
-	m.qdiscs[iface] = qdisc
-
-	linkIndex := qdisc.QdiscAttrs.LinkIndex
-
-	if m.enableEgress {
-		filter, err := ebpfcommon.RegisterEgress(linkIndex,
-			m.objects.BeylaEgressFlowParse.FD(), ebpfcommon.NetollyTCHandle, "tc/egress_flow_parse")
-
-		if err != nil {
-			return fmt.Errorf("failed to install egress filters: %w", err)
-		}
-
-		m.egressFilters[iface] = filter
-	} else {
-		ilog.Debug("ignoring egress traffic, according to user configuration")
-	}
-
-	if m.enableIngress {
-		filter, err := ebpfcommon.RegisterIngress(linkIndex,
-			m.objects.BeylaIngressFlowParse.FD(), ebpfcommon.NetollyTCHandle, "tc/ingress_flow_parse")
-
-		if err != nil {
-			return fmt.Errorf("failed to install ingress filters: %w", err)
-		}
-
-		m.ingressFilters[iface] = filter
-	} else {
-		ilog.Debug("ignoring ingress traffic, according to user configuration")
-	}
-
+// FIXME remove
+func (m *FlowFetcher) Register(_ ifaces.Interface) error {
 	return nil
 }
 
@@ -175,12 +134,6 @@ func (m *FlowFetcher) Register(iface ifaces.Interface) error {
 func (m *FlowFetcher) Close() error {
 	log := tlog()
 	log.Debug("unregistering eBPF objects")
-
-	ebpfcommon.CloseTCLinks(m.qdiscs, m.egressFilters, m.ingressFilters, log)
-
-	m.egressFilters = map[ifaces.Interface]*netlink.BpfFilter{}
-	m.ingressFilters = map[ifaces.Interface]*netlink.BpfFilter{}
-	m.qdiscs = map[ifaces.Interface]*netlink.GenericQdisc{}
 
 	var errs []error
 	// m.ringbufReader.Read is a blocking operation, so we need to close the ring buffer

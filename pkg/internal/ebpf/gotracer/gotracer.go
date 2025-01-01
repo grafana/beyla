@@ -401,8 +401,6 @@ func (p *Tracer) AlreadyInstrumentedLib(_ uint64) bool {
 	return false
 }
 
-func (p *Tracer) SetupTC() {}
-
 func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span) {
 	ebpfcommon.SharedRingbuf(
 		p.cfg,

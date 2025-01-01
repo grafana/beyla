@@ -28,7 +28,7 @@ import (
 	"github.com/cilium/ebpf/ringbuf"
 
 	"github.com/grafana/beyla/pkg/beyla"
-	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
+	"github.com/grafana/beyla/pkg/internal/ebpf/tcmanager"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/netolly/flow"
 	"github.com/grafana/beyla/pkg/internal/netolly/ifaces"
@@ -90,9 +90,8 @@ type Flows struct {
 	ctxInfo *global.ContextInfo
 
 	// input data providers
-	registerer *ifaces.Registerer
-	filter     interfaceFilter
-	ebpf       ebpfFlowFetcher
+	tcManager tcmanager.TCManager
+	ebpf      ebpfFlowFetcher
 
 	// processing nodes to be wired in the buildPipeline method
 	mapTracer *flow.MapTracer
@@ -119,70 +118,85 @@ func FlowsAgent(ctxInfo *global.ContextInfo, cfg *beyla.Config) (*Flows, error) 
 	alog := alog()
 	alog.Info("initializing Flows agent")
 
-	// configure informer for new interfaces
-	var informer ifaces.Informer
+	tcManager := tcmanager.NewNetlinkManager()
+	tcManager.SetChannelBufferLen(cfg.ChannelBufferLen)
+	tcManager.SetPollPeriod(cfg.NetworkFlows.ListenPollPeriod)
+	tcManager.SetMonitorMode(monitorMode(cfg, alog))
+
+	alog.Debug("acquiring Agent IP")
+
+	agentIP, err := fetchAgentIP(&cfg.NetworkFlows)
+
+	if err != nil {
+		return nil, fmt.Errorf("acquiring Agent IP: %w", err)
+	}
+
+	alog.Debug("agent IP: " + agentIP.String())
+
+	fetcher, err := newFetcher(cfg, tcManager, alog)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return flowsAgent(ctxInfo, cfg, fetcher, agentIP, tcManager)
+}
+
+func newFetcher(cfg *beyla.Config, tcManager tcmanager.TCManager,
+	alog *slog.Logger) (ebpfFlowFetcher, error) {
+	switch cfg.NetworkFlows.Source {
+	case beyla.EbpfSourceSock:
+		alog.Info("using socket filter for collecting network events")
+
+		return ebpf.NewSockFlowFetcher(cfg.NetworkFlows.Sampling, cfg.NetworkFlows.CacheMaxFlows)
+	case beyla.EbpfSourceTC:
+		alog.Info("using kernel Traffic Control for collecting network events")
+		ingress, egress := flowDirections(&cfg.NetworkFlows)
+
+		return ebpf.NewFlowFetcher(cfg.NetworkFlows.Sampling,
+			cfg.NetworkFlows.CacheMaxFlows, ingress, egress, tcManager)
+	}
+
+	return nil, fmt.Errorf("unknown network configuration eBPF source specified, allowed options are [tc, socket_filter]")
+}
+
+func monitorMode(cfg *beyla.Config, alog *slog.Logger) tcmanager.MonitorMode {
 	switch cfg.NetworkFlows.ListenInterfaces {
 	case listenPoll:
 		alog.Debug("listening for new interfaces: use polling",
 			"period", cfg.NetworkFlows.ListenPollPeriod)
-		informer = ifaces.NewPoller(cfg.NetworkFlows.ListenPollPeriod, cfg.ChannelBufferLen)
+
+		return tcmanager.MonitorPoll
 	case listenWatch:
 		alog.Debug("listening for new interfaces: use watching")
-		informer = ifaces.NewWatcher(cfg.ChannelBufferLen)
-	default:
-		alog.Warn("wrong interface listen method. Using file watcher as default",
-			"providedValue", cfg.NetworkFlows.ListenInterfaces)
-		informer = ifaces.NewWatcher(cfg.ChannelBufferLen)
+
+		return tcmanager.MonitorWatch
 	}
 
-	alog.Debug("acquiring Agent IP")
-	agentIP, err := fetchAgentIP(&cfg.NetworkFlows)
-	if err != nil {
-		return nil, fmt.Errorf("acquiring Agent IP: %w", err)
-	}
-	alog.Debug("agent IP: " + agentIP.String())
+	alog.Warn("wrong interface listen method. Using file watcher as default",
+		"providedValue", cfg.NetworkFlows.ListenInterfaces)
 
-	var fetcher ebpfFlowFetcher
-
-	switch cfg.NetworkFlows.Source {
-	case beyla.EbpfSourceSock:
-		alog.Info("using socket filter for collecting network events")
-		fetcher, err = ebpf.NewSockFlowFetcher(cfg.NetworkFlows.Sampling, cfg.NetworkFlows.CacheMaxFlows)
-		if err != nil {
-			return nil, err
-		}
-	case beyla.EbpfSourceTC:
-		alog.Info("using kernel Traffic Control for collecting network events")
-		ingress, egress := flowDirections(&cfg.NetworkFlows)
-		fetcher, err = ebpf.NewFlowFetcher(cfg.NetworkFlows.Sampling, cfg.NetworkFlows.CacheMaxFlows, ingress, egress)
-		if err != nil {
-			return nil, err
-		}
-	default:
-		return nil, fmt.Errorf("unknown network configuration eBPF source specified, allowed options are [tc, socket_filter]")
-	}
-
-	return flowsAgent(ctxInfo, cfg, informer, fetcher, agentIP)
+	return tcmanager.MonitorWatch
 }
 
 // flowsAgent is a private constructor with injectable dependencies, usable for tests
 func flowsAgent(
 	ctxInfo *global.ContextInfo,
 	cfg *beyla.Config,
-	informer ifaces.Informer,
 	fetcher ebpfFlowFetcher,
 	agentIP net.IP,
+	tcManager tcmanager.TCManager,
 ) (*Flows, error) {
 	// configure allow/deny interfaces filter
-	filter, err := initInterfaceFilter(cfg.NetworkFlows.Interfaces, cfg.NetworkFlows.ExcludeInterfaces)
+	filter, err := tcmanager.NewInterfaceFilter(cfg.NetworkFlows.Interfaces, cfg.NetworkFlows.ExcludeInterfaces)
 	if err != nil {
 		return nil, fmt.Errorf("configuring interface filters: %w", err)
 	}
 
-	registerer := ifaces.NewRegisterer(informer, cfg.ChannelBufferLen)
+	tcManager.SetInterfaceFilter(filter)
 
 	interfaceNamer := func(ifIndex int) string {
-		iface, ok := registerer.IfaceNameForIndex(ifIndex)
+		iface, ok := tcManager.InterfaceName(ifIndex)
 		if !ok {
 			return "unknown"
 		}
@@ -191,11 +205,11 @@ func flowsAgent(
 
 	mapTracer := flow.NewMapTracer(fetcher, cfg.NetworkFlows.CacheActiveTimeout)
 	rbTracer := flow.NewRingBufTracer(fetcher, mapTracer, cfg.NetworkFlows.CacheActiveTimeout)
+
 	return &Flows{
 		ctxInfo:        ctxInfo,
 		ebpf:           fetcher,
-		registerer:     registerer,
-		filter:         filter,
+		tcManager:      tcManager,
 		cfg:            cfg,
 		mapTracer:      mapTracer,
 		rbTracer:       rbTracer,
@@ -230,6 +244,8 @@ func (f *Flows) Run(ctx context.Context) error {
 		return fmt.Errorf("starting processing graph: %w", err)
 	}
 
+	f.tcManager.Start(ctx)
+
 	graph.Start()
 
 	f.status = StatusStarted
@@ -243,6 +259,9 @@ func (f *Flows) Run(ctx context.Context) error {
 	}
 
 	alog.Debug("waiting for all nodes to finish their pending work")
+
+	f.tcManager.Stop()
+
 	<-graph.Done()
 
 	f.status = StatusStopped
@@ -252,29 +271,4 @@ func (f *Flows) Run(ctx context.Context) error {
 
 func (f *Flows) Status() Status {
 	return f.status
-}
-
-// interfacesManager uses an informer to check new/deleted network interfaces. For each running
-// interface, it registers a flow ebpfFetcher that will forward new flows to the returned channel
-// TODO: consider move this method and "onInterfaceAdded" to another type
-func (f *Flows) interfacesManager(ctx context.Context) error {
-	slog := alog().With("function", "interfacesManager")
-
-	ebpfcommon.StartTCMonitorLoop(ctx, f.registerer, f.onInterfaceAdded, slog)
-
-	return nil
-}
-
-func (f *Flows) onInterfaceAdded(iface ifaces.Interface) {
-	alog := alog().With("interface", iface)
-	// ignore interfaces that do not match the user configuration acceptance/exclusion lists
-	if !f.filter.Allowed(iface.Name) {
-		alog.Debug("interface does not match the allow/exclusion filters. Ignoring")
-		return
-	}
-	alog.Info("interface detected. Registering flow ebpfFetcher")
-	if err := f.ebpf.Register(iface); err != nil {
-		alog.Warn("can't register flow ebpfFetcher. Ignoring", "error", err)
-		return
-	}
 }

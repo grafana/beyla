@@ -117,7 +117,7 @@ service:
     # from the Beyla configuration file.
     targetPort: null
     # -- name of the port for internal metrics.
-    portName: internal-metrics
+    portName: int-metrics
     # -- Adds the appProtocol field to the service. This allows to work with istio protocol selection. Ex: "http" or "tcp"
     appProtocol: ""
 

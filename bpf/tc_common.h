@@ -11,6 +11,11 @@ const u32 EXTEND_SIZE = sizeof(TP) - 1;
 const char TP_PREFIX[] = "Traceparent: ";
 const u32 TP_PREFIX_SIZE = sizeof(TP_PREFIX) - 1;
 
+const char CKR[] = "ck-route: 00000000000000000000000000000000\r\n";
+const u32 CKR_EXTEND_SIZE = sizeof(CKR) - 1;
+const char CKR_PREFIX[] = "ck-route: ";
+const u32 CKR_PREFIX_SIZE = sizeof(CKR_PREFIX) - 1;
+
 static __always_inline unsigned char *
 memchar(unsigned char *haystack, char needle, const unsigned char *end, u32 size) {
     for (u32 i = 0; i < size; ++i) {

@@ -25,7 +25,7 @@
 
 char __license[] SEC("license") = "Dual MIT/GPL";
 
-enum { W3C_KEY_LENGTH = 11, W3C_VAL_LENGTH = 55 };
+enum { W3C_KEY_LENGTH = 11, W3C_VAL_LENGTH = 55, CKR_KEY_LENGTH = 8, CKR_VAL_LENGTH = 32 };
 
 // Temporary information about a function invocation. It stores the invocation time of a function
 // as well as the value of registers at the invocation time. This way we can retrieve them at the
@@ -186,6 +186,12 @@ static __always_inline void decode_go_traceparent(unsigned char *buf,
     decode_hex(trace_id, t_id, TRACE_ID_CHAR_LEN);
     decode_hex(span_id, s_id, SPAN_ID_CHAR_LEN);
     decode_hex(flags, f_id, FLAGS_CHAR_LEN);
+}
+
+static __always_inline void decode_go_ckroute(unsigned char *buf,
+                                                  unsigned char *ckroute_id) {
+    unsigned char *t_id = buf;
+    decode_hex(ckroute_id, t_id, CKROUTE_ID_CHAR_LEN);
 }
 
 static __always_inline void tp_from_parent(tp_info_t *tp, tp_info_t *parent) {

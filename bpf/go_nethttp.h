@@ -884,6 +884,8 @@ int beyla_uprobe_http2FramerWriteHeaders(struct pt_regs *ctx) {
 #ifndef NO_HEADER_PROPAGATION
 #define HTTP2_ENCODED_HEADER_LEN                                                                   \
     66 // 1 + 1 + 8 + 1 + 55 = type byte + hpack_len_as_byte("traceparent") + strlen(hpack("traceparent")) + len_as_byte(55) + generated traceparent id
+#define HTTP2_ENCODED_CKR_HEADER_LEN                                                                   \
+    43 // 1 + 1 + 8 + 1 + 32 = type byte + hpack_len_as_byte("ck-route") + strlen(hpack("ck-route")) + len_as_byte(32) + generated ck-route id
 
 SEC("uprobe/http2FramerWriteHeaders_returns")
 int beyla_uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {

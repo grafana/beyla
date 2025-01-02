@@ -884,8 +884,10 @@ int beyla_uprobe_http2FramerWriteHeaders(struct pt_regs *ctx) {
 #ifndef NO_HEADER_PROPAGATION
 #define HTTP2_ENCODED_HEADER_LEN                                                                   \
     66 // 1 + 1 + 8 + 1 + 55 = type byte + hpack_len_as_byte("traceparent") + strlen(hpack("traceparent")) + len_as_byte(55) + generated traceparent id
+#define TEMP_HTTP2_ENCODED_HEADER_LEN                                                                   \
+    65 // 1 + 1 + 7 + 1 + 55 = type byte + hpack_len_as_byte("ck-route") + strlen(hpack("ck-route")) + len_as_byte(55) + generated traceparent id
 #define HTTP2_ENCODED_CKR_HEADER_LEN                                                                   \
-    43 // 1 + 1 + 8 + 1 + 32 = type byte + hpack_len_as_byte("ck-route") + strlen(hpack("ck-route")) + len_as_byte(32) + generated ck-route id
+    42 // 1 + 1 + 7 + 1 + 32 = type byte + hpack_len_as_byte("ck-route") + strlen(hpack("ck-route")) + len_as_byte(32) + generated ck-route id
 
 SEC("uprobe/http2FramerWriteHeaders_returns")
 int beyla_uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
@@ -926,11 +928,11 @@ int beyla_uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
             bpf_clamp_umax(initial_n, MAX_W_PTR_N);
 
             //bpf_dbg_printk("Found f_info, this is the place to write to w = %llx, buf=%llx, n=%lld, size=%lld", w_ptr, buf_arr, n, cap);
-            if (buf_arr && n < (cap - HTTP2_ENCODED_HEADER_LEN)) {
+            if (buf_arr && n < (cap - TEMP_HTTP2_ENCODED_HEADER_LEN)) {
                 uint8_t tp_str[TP_MAX_VAL_LENGTH];
 
                 u8 type_byte = 0;
-                u8 key_len = TP_ENCODED_LEN | 0x80; // high tagged to signify hpack encoded value
+                u8 key_len = CKR_ENCODED_LEN | 0x80; // high tagged to signify hpack encoded value
                 u8 val_len = TP_MAX_VAL_LENGTH;
 
                 // We don't hpack encode the value of the traceparent field, because that will require that
@@ -940,13 +942,13 @@ int beyla_uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
 
                 bpf_probe_write_user(buf_arr + (n & 0x0ffff), &type_byte, sizeof(type_byte));
                 n++;
-                // Write the length of the key = 8
+                // Write the length of the key = 7
                 bpf_probe_write_user(buf_arr + (n & 0x0ffff), &key_len, sizeof(key_len));
                 n++;
-                // Write 'traceparent' encoded as hpack
-                bpf_probe_write_user(buf_arr + (n & 0x0ffff), tp_encoded, sizeof(tp_encoded));
+                // Write 'ck-route' encoded as hpack
+                bpf_probe_write_user(buf_arr + (n & 0x0ffff), ckr_encoded, sizeof(ckr_encoded));
                 ;
-                n += TP_ENCODED_LEN;
+                n += CKR_ENCODED_LEN;
                 // Write the length of the hpack encoded traceparent field
                 bpf_probe_write_user(buf_arr + (n & 0x0ffff), &val_len, sizeof(val_len));
                 n++;
@@ -967,7 +969,7 @@ int beyla_uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
                 bpf_dbg_printk("size 1:%x, 2:%x, 3:%x", size_1, size_2, size_3);
 
                 u32 original_size = ((u32)(size_1) << 16) | ((u32)(size_2) << 8) | size_3;
-                u32 new_size = original_size + HTTP2_ENCODED_HEADER_LEN;
+                u32 new_size = original_size + TEMP_HTTP2_ENCODED_HEADER_LEN;
 
                 bpf_dbg_printk("Changing size from %d to %d", original_size, new_size);
                 size_1 = (u8)(new_size >> 16);

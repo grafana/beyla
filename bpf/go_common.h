@@ -189,9 +189,12 @@ static __always_inline void decode_go_traceparent(unsigned char *buf,
 }
 
 static __always_inline void decode_go_ckroute(unsigned char *buf,
-                                                  unsigned char *ckroute_id) {
+                                                  unsigned char *ckroute_id,
+                                                  unsigned char *span_id,
+                                                  unsigned char *flags) {
     unsigned char *t_id = buf;
     decode_hex(ckroute_id, t_id, CKROUTE_ID_CHAR_LEN);
+    *((u64 *)span_id) = 0;
 }
 
 static __always_inline void tp_from_parent(tp_info_t *tp, tp_info_t *parent) {
@@ -430,14 +433,14 @@ static __always_inline void process_meta_frame_headers(void *frame, tp_info_t *t
             bpf_probe_read(&field, sizeof(grpc_header_field_t), field_ptr);
             //bpf_dbg_printk("grpc header %s:%s", field.key_ptr, field.val_ptr);
             //bpf_dbg_printk("grpc sizes %d:%d", field.key_len, field.val_len);
-            if (field.key_len == W3C_KEY_LENGTH && field.val_len == W3C_VAL_LENGTH) {
-                u8 temp[W3C_VAL_LENGTH];
+            if (field.key_len == CKR_KEY_LENGTH && field.val_len == CKR_VAL_LENGTH) {
+                u8 temp[CKR_VAL_LENGTH];
 
-                bpf_probe_read(&temp, W3C_KEY_LENGTH, field.key_ptr);
-                if (!bpf_memicmp((const char *)temp, "traceparent", W3C_KEY_LENGTH)) {
+                bpf_probe_read(&temp, CKR_KEY_LENGTH, field.key_ptr);
+                if (!bpf_memicmp((const char *)temp, "ck-route", CKR_KEY_LENGTH)) {
                     //bpf_dbg_printk("found grpc traceparent header");
-                    bpf_probe_read(&temp, W3C_VAL_LENGTH, field.val_ptr);
-                    decode_go_traceparent(temp, tp->trace_id, tp->parent_id, &tp->flags);
+                    bpf_probe_read(&temp, CKR_VAL_LENGTH, field.val_ptr);
+                    decode_go_ckroute(temp, tp->trace_id, tp->parent_id, &tp->flags);
                     break;
                 }
             }

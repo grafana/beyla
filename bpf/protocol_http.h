@@ -50,6 +50,8 @@ static __always_inline void http_get_or_create_trace_info(http_connection_metada
                                                           s32 capture_header_buffer) {
     tp_info_pid_t *tp_p = tp_buf();
 
+    bpf_dbg_printk("checking if http_get_or_create_trace_info");
+
     if (!tp_p) {
         return;
     }

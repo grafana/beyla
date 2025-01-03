@@ -79,6 +79,7 @@ static int tp_match(u32 index, void *data) {
         return 0;
     }
 
+    bpf_dbg_printk("checking if tp_match");
     if (index >= (TRACE_BUF_SIZE - TRACE_PARENT_HEADER_LEN)) {
         return 1;
     }

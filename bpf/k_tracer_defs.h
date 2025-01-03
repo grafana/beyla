@@ -130,6 +130,8 @@ static __always_inline void handle_buf_with_connection(void *ctx,
                                                        u8 ssl,
                                                        u8 direction,
                                                        u16 orig_dport) {
+
+    bpf_dbg_printk("checking if handle_buf_with_connection");
     call_protocol_args_t *args = make_protocol_args(u_buf, bytes_len, ssl, direction, orig_dport);
 
     if (!args) {

@@ -224,6 +224,7 @@ static __always_inline u8 protocol_detector(struct sk_msg_md *msg,
 // for Traffic Control to do the writing.
 SEC("sk_msg")
 int beyla_packet_extender(struct sk_msg_md *msg) {
+    bpf_dbg_printk("checking if beyla_packet_extender");
     u64 id = bpf_get_current_pid_tgid();
     connection_info_t conn = {};
 

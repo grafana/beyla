@@ -140,6 +140,8 @@ static __always_inline int l7_app_egress(struct __sk_buff *skb,
                                          connection_info_t *conn,
                                          protocol_info_t *tcp,
                                          egress_key_t *e_key) {
+    
+    bpf_dbg_printk("checking if l7_app_egress");
     bpf_skb_pull_data(skb, skb->len);
 
     void *data_end = ctx_data_end(skb);

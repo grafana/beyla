@@ -312,6 +312,8 @@ SEC("kprobe/http")
 int beyla_protocol_http(void *ctx) {
     call_protocol_args_t *args = protocol_args();
 
+    bpf_dbg_printk(" ==== Kprobe : beyla_protocol_http ====");
+
     if (!args) {
         return 0;
     }

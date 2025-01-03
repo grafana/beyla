@@ -175,6 +175,7 @@ static __always_inline void handle_unknown_tcp_connection(pid_connection_info_t 
 // k_tail_protocol_tcp
 SEC("kprobe/tcp")
 int beyla_protocol_tcp(void *ctx) {
+    bpf_dbg_printk(" ==== Kprobe : beyla_protocol_tcp ====");
     call_protocol_args_t *args = protocol_args();
 
     if (!args) {

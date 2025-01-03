@@ -618,6 +618,8 @@ SEC("kprobe/sys_exit")
 int BPF_KPROBE(beyla_kprobe_sys_exit, int status) {
     u64 id = bpf_get_current_pid_tgid();
 
+    bpf_dbg_printk(" ==== Kprobe : beyla_kprobe_sys_exit ====");
+
     if (!valid_pid(id)) {
         return 0;
     }

@@ -214,6 +214,8 @@ SEC("kprobe/http2")
 int beyla_protocol_http2_grpc_handle_start_frame(void *ctx) {
     (void)ctx;
 
+    bpf_dbg_printk(" ==== Kprobe : beyla_protocol_http2_grpc_handle_start_frame ====");
+
     grpc_frames_ctx_t *g_ctx = grpc_ctx();
 
     if (!g_ctx) {
@@ -234,6 +236,7 @@ int beyla_protocol_http2_grpc_handle_start_frame(void *ctx) {
 SEC("kprobe/http2")
 int beyla_protocol_http2_grpc_handle_end_frame(void *ctx) {
     (void)ctx;
+    bpf_dbg_printk(" ==== Kprobe : beyla_protocol_http2_grpc_handle_end_frame ====");
 
     grpc_frames_ctx_t *g_ctx = grpc_ctx();
 
@@ -275,6 +278,8 @@ int beyla_protocol_http2_grpc_frames(void *ctx) {
     const u8 k_max_loop_iterations = 4; // the maximum number of the for loop iterations
     const u8 k_loop_count = 3;          // the number of times we will retry the loop
     const u8 k_iterations = k_max_loop_iterations * k_loop_count;
+
+    bpf_dbg_printk(" ==== Kprobe : beyla_protocol_http2_grpc_frames ====");
 
     grpc_frames_ctx_t *g_ctx = grpc_ctx();
 
@@ -343,6 +348,7 @@ int beyla_protocol_http2_grpc_frames(void *ctx) {
 // k_tail_protocol_http2
 SEC("kprobe/http2")
 int beyla_protocol_http2(void *ctx) {
+    bpf_dbg_printk(" ==== Kprobe : beyla_protocol_http2 ====");
     call_protocol_args_t *args = protocol_args();
 
     if (!args) {

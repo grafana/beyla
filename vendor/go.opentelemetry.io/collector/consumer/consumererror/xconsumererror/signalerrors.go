@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package consumererrorprofiles // import "go.opentelemetry.io/collector/consumer/consumererror/consumererrorprofiles"
+package xconsumererror // import "go.opentelemetry.io/collector/consumer/consumererror/xconsumererror"
 
 import (
 	"go.opentelemetry.io/collector/consumer/consumererror/internal"

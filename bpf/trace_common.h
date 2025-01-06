@@ -24,7 +24,7 @@ typedef struct trace_key {
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, trace_key_t);     // key: pid_tid
-    __type(value, tp_info_pid_t); // value: traceparent info
+    __type(value, tp_info_pid_t); // value: ck-route info
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
     __uint(pinning, BEYLA_PIN_INTERNAL);
 } server_traces SEC(".maps");
@@ -160,7 +160,7 @@ static __always_inline tp_info_pid_t *find_parent_trace(pid_connection_info_t *p
     return 0;
 }
 
-// Traceparent format: ck-route: ver (2 chars) - trace_id (32 chars) - span_id (16 chars) - flags (2 chars)
+// ck-route format: ck-route: ver (2 chars) - trace_id (32 chars) - span_id (16 chars) - flags (2 chars)
 static __always_inline unsigned char *extract_trace_id(unsigned char *tp_start) {
     return tp_start + (CKR_MAX_KEY_LENGTH + 2) + 2 + 1; // strlen("ck-route: ") + strlen(ver) + strlen('-')
 }

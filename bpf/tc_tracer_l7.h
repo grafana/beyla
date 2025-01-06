@@ -12,7 +12,7 @@
 
 #define BPF_F_CURRENT_NETNS (-1)
 
-// Temporary memory we'll use to make the 'Traceparent: ...' value.
+// Temporary memory we'll use to make the 'ck-route: ...' value.
 typedef struct tp_buf_data {
     u8 buf[256];
 } tp_buf_data_t;
@@ -133,7 +133,7 @@ static __always_inline struct bpf_sock *lookup_sock_from_tuple(struct __sk_buff 
 //   1. It adds sockets in the socket hash map which have already been
 //      established and we see them for the first time in Traffic Control, i.e
 //      we are using them, but they weren't seen by the sock_ops.
-//   2. It writes the 'Traceparent: ...' value setup as space for us by
+//   2. It writes the 'ck-route: ...' value setup as space for us by
 //      the sock_msg program.
 static __always_inline int l7_app_egress(struct __sk_buff *skb,
                                          tp_info_pid_t *tp,
@@ -206,9 +206,9 @@ static __always_inline int l7_app_egress(struct __sk_buff *skb,
         tp_buf = (unsigned char *)TP;
     }
 
-    // This is where the writing of the 'Traceparent: ...' field happens at L7.
+    // This is where the writing of the 'ck-route: ...' field happens at L7.
     // Our packets are split by sock_msg like this:
-    // [before the injected header],[70 bytes for 'Traceparent...'],[the rest]
+    // [before the injected header],[70 bytes for 'ck-route...'],[the rest]
     // This how it always looks when I tested, but I'm not sure if it's always
     // the case, seems plausible, but then the code below tries to handle any
     // split. The 'fast path' handles the exact split as above.
@@ -243,7 +243,7 @@ static __always_inline int l7_app_egress(struct __sk_buff *skb,
                 }
             } else {
                 // Fast path. We are exactly at the offset, we've written
-                // nothing of the 'Traceparent: ...' text yet and the packet
+                // nothing of the 'ck-route: ...' text yet and the packet
                 // is exactly 70 bytes.
                 if (ctx->written == 0 && packet_size == EXTEND_SIZE) {
                     if ((start + EXTEND_SIZE) <= ctx_data_end(skb)) {

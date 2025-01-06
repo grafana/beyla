@@ -30,7 +30,7 @@ typedef struct topic {
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, go_addr_key_t); // w_ptr
-    __type(value, tp_info_t);   // traceparent
+    __type(value, tp_info_t);   // ck-route
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } produce_traceparents SEC(".maps");
 
@@ -111,7 +111,7 @@ int beyla_uprobe_writer_produce(struct pt_regs *ctx) {
             topic_t topic = {};
             tp_info_t *tp = bpf_map_lookup_elem(&produce_traceparents, &p_key);
             if (tp) {
-                bpf_dbg_printk("found existing traceparent %llx", tp);
+                bpf_dbg_printk("found existing ck-route %llx", tp);
                 __builtin_memcpy(&topic.tp, tp, sizeof(tp_info_t));
             } else {
                 urand_bytes(topic.tp.trace_id, TRACE_ID_SIZE_BYTES);

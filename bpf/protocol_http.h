@@ -81,11 +81,11 @@ static __always_inline void http_get_or_create_trace_info(http_connection_metada
     }
 
     if (!found_tp) {
-        bpf_dbg_printk("Generating new traceparent id");
+        bpf_dbg_printk("Generating new ck-route id");
         new_trace_id(&tp_p->tp);
         __builtin_memset(tp_p->tp.parent_id, 0, sizeof(tp_p->tp.span_id));
     } else {
-        bpf_dbg_printk("Using old traceparent id");
+        bpf_dbg_printk("Using old ck-route id");
     }
 
     //unsigned char tp_buf[TP_MAX_VAL_LENGTH];
@@ -113,7 +113,7 @@ static __always_inline void http_get_or_create_trace_info(http_connection_metada
             unsigned char *res = bpf_strstr_tp_loop(buf, buf_len);
 
             if (res) {
-                bpf_dbg_printk("Found traceparent %s", res);
+                bpf_dbg_printk("Found ck-route %s", res);
                 unsigned char *t_id = extract_trace_id(res);
                 unsigned char *s_id = extract_span_id(res);
                 unsigned char *f_id = extract_flags(res);
@@ -126,7 +126,7 @@ static __always_inline void http_get_or_create_trace_info(http_connection_metada
                     decode_hex(tp_p->tp.parent_id, s_id, SPAN_ID_CHAR_LEN);
                 }
             } else {
-                bpf_dbg_printk("No traceparent, making a new trace_id", res);
+                bpf_dbg_printk("No ck-route, making a new trace_id", res);
             }
         } else {
             return;

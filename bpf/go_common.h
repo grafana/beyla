@@ -66,7 +66,7 @@ struct {
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, go_addr_key_t); // key: pointer to the goroutine
-    __type(value, tp_info_t);   // value: traceparent info
+    __type(value, tp_info_t);   // value: ck-route info
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
     __uint(pinning, BEYLA_PIN_INTERNAL);
 } go_trace_map SEC(".maps");
@@ -214,12 +214,12 @@ static __always_inline void tp_clone(tp_info_t *dest, tp_info_t *src) {
 
 static __always_inline void
 server_trace_parent(void *goroutine_addr, tp_info_t *tp, tp_info_t *found_tp) {
-    // May get overriden when decoding existing traceparent, but otherwise we set sample ON
+    // May get overriden when decoding existing ck-route, but otherwise we set sample ON
     tp->flags = 1;
     go_addr_key_t g_key = {};
     go_addr_key_from_id(&g_key, goroutine_addr);
     if (found_tp) {
-        bpf_dbg_printk("Decoded from existing traceparent");
+        bpf_dbg_printk("Decoded from existing ck-route");
         __builtin_memcpy(tp, found_tp, sizeof(tp_info_t));
     } else {
         connection_info_t *info = bpf_map_lookup_elem(&ongoing_server_connections, &g_key);
@@ -240,11 +240,11 @@ server_trace_parent(void *goroutine_addr, tp_info_t *tp, tp_info_t *found_tp) {
                 bpf_map_delete_elem(&incoming_trace_map, &conn);
             } else {
                 // If not, we then look up the information in the black-box context map - same node.
-                bpf_dbg_printk("Looking up traceparent for connection info");
+                bpf_dbg_printk("Looking up ck-route for connection info");
                 tp_info_pid_t *tp_p = trace_info_for_connection(&conn, TRACE_TYPE_CLIENT);
                 if (!disable_black_box_cp && tp_p) {
                     if (correlated_request_with_current(tp_p)) {
-                        bpf_dbg_printk("Found traceparent from trace map, another process.");
+                        bpf_dbg_printk("Found ck-route from trace map, another process.");
                         found_info = 1;
                         tp_from_parent(tp, &tp_p->tp);
                     }
@@ -253,7 +253,7 @@ server_trace_parent(void *goroutine_addr, tp_info_t *tp, tp_info_t *found_tp) {
         }
 
         if (!found_info) {
-            bpf_dbg_printk("No traceparent in headers, generating");
+            bpf_dbg_printk("No ck-route in headers, generating");
             urand_bytes(tp->trace_id, TRACE_ID_SIZE_BYTES);
             *((u64 *)tp->parent_id) = 0;
         }
@@ -270,7 +270,7 @@ server_trace_parent(void *goroutine_addr, tp_info_t *tp, tp_info_t *found_tp) {
 static __always_inline u8 client_trace_parent(void *goroutine_addr, tp_info_t *tp_i) {
     u8 found_trace_id = 0;
 
-    // May get overriden when decoding existing traceparent or finding a server span, but otherwise we set sample ON
+    // May get overriden when decoding existing ck-route or finding a server span, but otherwise we set sample ON
     tp_i->flags = 1;
 
     go_addr_key_t g_key = {};
@@ -438,7 +438,7 @@ static __always_inline void process_meta_frame_headers(void *frame, tp_info_t *t
 
                 bpf_probe_read(&temp, CKR_KEY_LENGTH, field.key_ptr);
                 if (!bpf_memicmp((const char *)temp, "ck-route", CKR_KEY_LENGTH)) {
-                    //bpf_dbg_printk("found grpc traceparent header");
+                    //bpf_dbg_printk("found grpc ck-route header");
                     bpf_probe_read(&temp, CKR_VAL_LENGTH, field.val_ptr);
                     decode_go_ckroute(temp, tp->trace_id, tp->parent_id, &tp->flags);
                     break;

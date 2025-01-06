@@ -24,12 +24,12 @@ struct {
 } sock_dir SEC(".maps");
 
 // When we split a packet with the sock_msg program to inject
-// the Traceparent field, we need to keep track of what's
+// the ck-route field, we need to keep track of what's
 // written by the Traffic Control probes.
 typedef struct tc_http_ctx {
     u32 offset;  // where inside the original packet we saw '\n`
     u32 seen;    // how many bytes we've seen before the offset
-    u32 written; // how many of the Traceparent field we've written
+    u32 written; // how many of the ck-route field we've written
 } __attribute__((packed)) tc_http_ctx_t;
 
 // A map that keeps all the HTTP packets we've extended with
@@ -155,7 +155,7 @@ static __always_inline msg_data_t *buffer() {
 // This is setup here for Go tracking. Essentially, when the Go userspace
 // probes activate for an outgoing HTTP request they setup this
 // outgoing_trace_map for us. We then know this is a connection we should
-// be injecting the Traceparent in. Another place which sets up this map is
+// be injecting the ck-route in. Another place which sets up this map is
 // the kprobe on tcp_sendmsg, however that happens after the sock_msg runs,
 // so we have a different detection for that - protocol_detector.
 static __always_inline u8 is_tracked(connection_info_t *conn) {
@@ -172,7 +172,7 @@ static __always_inline u8 is_tracked(connection_info_t *conn) {
 
 // This code is copied from the kprobe on tcp_sendmsg and it's called from
 // the sock_msg program, which does the packet extension for injecting the
-// Traceparent. Since the sock_msg runs before the kprobe on tcp_sendmsg, we
+// ck-route. Since the sock_msg runs before the kprobe on tcp_sendmsg, we
 // need to extend the packet before we'll have the opportunity to setup the
 // outgoing_trace_map metadata. We can directly perhaps run the same code that
 // the kprobe on tcp_sendmsg does, but it's complicated, no tail calls from
@@ -206,7 +206,7 @@ static __always_inline u8 protocol_detector(struct sk_msg_md *msg,
             // This must match exactly to what the decision will be for
             // the kprobe program on tcp_sendmsg, which sets up the
             // outgoing_trace_map data used by Traffic Control to write the
-            // actual 'Traceparent:...' string.
+            // actual 'ck-route:...' string.
             if (is_http_request_buf((const unsigned char *)msg_buf.buf)) {
                 bpf_dbg_printk("Setting up request to be extended");
                 bpf_map_update_elem(&msg_buffers, &e_key, &msg_buf, BPF_ANY);
@@ -220,7 +220,7 @@ static __always_inline u8 protocol_detector(struct sk_msg_md *msg,
 }
 
 // Sock_msg program which detects packets where it should add space for
-// the 'Traceparent' string. It doesn't write the value, only spaces the packet
+// the 'ck-route' string. It doesn't write the value, only spaces the packet
 // for Traffic Control to do the writing.
 SEC("sk_msg")
 int beyla_packet_extender(struct sk_msg_md *msg) {

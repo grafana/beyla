@@ -55,20 +55,20 @@ static __always_inline void handle_buf_with_args(void *ctx, call_protocol_args_t
                 // Still reading checks if we are processing buffers of a HTTP request
                 // that has started, but we haven't seen a response yet.
                 if (still_reading(info)) {
-                    // Packets are split into chunks if Beyla injected the Traceparent
-                    // Make sure you look for split packets containing the real Traceparent.
+                    // Packets are split into chunks if Beyla injected the ck-route
+                    // Make sure you look for split packets containing the real ck-route.
                     // Essentially, when a packet is extended by our sock_msg program and
                     // passed down another service, the receiving side may reassemble the
                     // packets into one buffer or not. If they are reassembled, then the
                     // call to bpf_tail_call(ctx, &jump_table, k_tail_protocol_http); will
-                    // scan for the incoming 'Traceparent' header. If they are not reassembled
+                    // scan for the incoming 'ck-route' header. If they are not reassembled
                     // we'll see something like this:
-                    // [before the injected header],[70 bytes for 'Traceparent...'],[the rest].
+                    // [before the injected header],[70 bytes for 'ck-route...'],[the rest].
                     if (is_ckroute(args->small_buf)) {
                         unsigned char *buf = tp_char_buf();
                         if (buf) {
                             bpf_probe_read(buf, EXTEND_SIZE, (u8 *)args->u_buf);
-                            bpf_dbg_printk("Found traceparent %s", buf);
+                            bpf_dbg_printk("Found ck-route %s", buf);
                             unsigned char *t_id = extract_trace_id(buf);
                             unsigned char *s_id = extract_span_id(buf);
                             unsigned char *f_id = extract_flags(buf);

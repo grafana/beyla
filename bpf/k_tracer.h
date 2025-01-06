@@ -32,7 +32,7 @@ struct {
     __type(
         key,
         partial_connection_info_t); // key: the connection info without the destination address, but with the tcp sequence
-    __type(value, connection_info_t); // value: traceparent info
+    __type(value, connection_info_t); // value: ck-route info
     __uint(max_entries, 1024);
     __uint(pinning, BEYLA_PIN_INTERNAL);
 } tcp_connection_map SEC(".maps");
@@ -275,8 +275,8 @@ int BPF_KPROBE(beyla_kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, si
                             buf = m_buf->buf;
                             // The buffer setup for us by a sock_msg program is always the
                             // full buffer, but when we extend a packet to be able to inject
-                            // a Traceparent field, it will actually be split in 3 chunks:
-                            // [before the injected header],[70 bytes for 'Traceparent...'],[the rest].
+                            // a ck-route field, it will actually be split in 3 chunks:
+                            // [before the injected header],[70 bytes for 'ck-route...'],[the rest].
                             // We don't want the handle_buf_with_connection logic to run more than
                             // once on the same data, so if we find a buf we send all of it to the
                             // handle_buf_with_connection logic and then mark it as seen by making

@@ -89,7 +89,7 @@ read_sk_buff(struct __sk_buff *skb, protocol_info_t *tcp, connection_info_t *con
 
     tcp->l4_proto = proto;
 
-    // Handle Destination Options extra header for propagating the traceparent
+    // Handle Destination Options extra header for propagating the ck-route
     if (proto == IP_V6_DEST_OPTS && h_proto == ETH_P_IPV6) {
         bpf_skb_load_bytes(skb, tcp->ip_len, &proto, sizeof(proto));
         if (proto == IPPROTO_TCP) {

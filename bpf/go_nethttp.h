@@ -80,7 +80,7 @@ int beyla_uprobe_ServeHTTP(struct pt_regs *ctx) {
 
     off_table_t *ot = get_offsets_table();
 
-    // Lookup any traceparent information setup for us by readContinuedLineSlice
+    // Lookup any ck-route information setup for us by readContinuedLineSlice
     server_http_func_invocation_t *tp_inv =
         bpf_map_lookup_elem(&ongoing_http_server_requests, &g_key);
     tp_info_t *decoded_tp = 0;
@@ -239,7 +239,7 @@ int beyla_uprobe_http2Server_processHeaders(struct pt_regs *ctx) {
     process_meta_frame_headers(frame, &tp);
 
     if (valid_trace(tp.trace_id)) {
-        bpf_dbg_printk("found valid traceparent in http2 headers");
+        bpf_dbg_printk("found valid ck-route in http2 headers");
         bpf_map_update_elem(&http2_server_requests_tp, &g_key, &tp, BPF_ANY);
     }
 
@@ -267,7 +267,7 @@ int beyla_uprobe_readContinuedLineSliceReturns(struct pt_regs *ctx) {
                 server_http_func_invocation_t inv = {};
                 decode_go_traceparent(
                     temp + CKR_KEY_LENGTH + 2, inv.tp.trace_id, inv.tp.parent_id, &inv.tp.flags);
-                bpf_dbg_printk("Found traceparent in header %s", temp);
+                bpf_dbg_printk("Found ck-route in header %s", temp);
                 bpf_map_update_elem(&ongoing_http_server_requests, &g_key, &inv, BPF_ANY);
             }
         }
@@ -610,7 +610,7 @@ int beyla_uprobe_writeSubset(struct pt_regs *ctx) {
             };
             bpf_map_delete_elem(&outgoing_trace_map, &e_key);
             bpf_dbg_printk(
-                "wrote traceparent using bpf_probe_write_user, removing outgoing trace map %d:%d",
+                "wrote ck-route using bpf_probe_write_user, removing outgoing trace map %d:%d",
                 e_key.s_port,
                 e_key.d_port);
         }
@@ -700,7 +700,7 @@ int beyla_uprobe_http2serverConn_runHandler(struct pt_regs *ctx) {
         if (tp) {
             server_http_func_invocation_t inv = {};
             __builtin_memcpy(&inv.tp, tp, sizeof(tp_info_t));
-            bpf_dbg_printk("Found traceparent in HTTP2 headers");
+            bpf_dbg_printk("Found ck-route in HTTP2 headers");
             bpf_map_update_elem(&ongoing_http_server_requests, &g_key, &inv, BPF_ANY);
             bpf_map_delete_elem(&http2_server_requests_tp, &sc_key);
         }
@@ -716,7 +716,7 @@ struct {
     __type(key, go_addr_key_t); // key: stream id
     __type(
         value,
-        u64); // the goroutine of the round trip request, which is the key for our traceparent info
+        u64); // the goroutine of the round trip request, which is the key for our ck-route info
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } http2_req_map SEC(".maps");
 #endif
@@ -803,7 +803,7 @@ struct {
     __type(key, go_addr_key_t); // key: go routine doing framer write headers
     __type(
         value,
-        framer_func_invocation_t); // the goroutine of the round trip request, which is the key for our traceparent info
+        framer_func_invocation_t); // the goroutine of the round trip request, which is the key for our ck-route info
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } framer_invocation_map SEC(".maps");
 
@@ -885,7 +885,7 @@ int beyla_uprobe_http2FramerWriteHeaders(struct pt_regs *ctx) {
 #define HTTP2_ENCODED_HEADER_LEN                                                                   \
     66 // 1 + 1 + 8 + 1 + 55 = type byte + hpack_len_as_byte("traceparent") + strlen(hpack("traceparent")) + len_as_byte(55) + generated traceparent id
 #define HTTP2_ENCODED_CKR_HEADER_LEN                                                                   \
-    42 // 1 + 1 + 7 + 1 + 32 = type byte + hpack_len_as_byte("ck-route") + strlen(hpack("ck-route")) + len_as_byte(32) + generated ck-route id
+    66 // 1 + 1 + 8 + 1 + 55 = type byte + hpack_len_as_byte("ck-route") + strlen(hpack("ck-route")) + len_as_byte(32) + generated ck-route id
 
 SEC("uprobe/http2FramerWriteHeaders_returns")
 int beyla_uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
@@ -933,7 +933,7 @@ int beyla_uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
                 u8 key_len = TP_ENCODED_LEN | 0x80; // high tagged to signify hpack encoded value
                 u8 val_len = TP_MAX_VAL_LENGTH;
 
-                // We don't hpack encode the value of the traceparent field, because that will require that
+                // We don't hpack encode the value of the ck-route field, because that will require that
                 // we use bpf_loop, which in turn increases the kernel requirement to 5.17+.
                 make_tp_string(tp_str, &f_info->tp);
                 //bpf_dbg_printk("Will write %s, type = %d, key_len = %d, val_len = %d", tp_str, type_byte, key_len, val_len);
@@ -943,11 +943,11 @@ int beyla_uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
                 // Write the length of the key = 8
                 bpf_probe_write_user(buf_arr + (n & 0x0ffff), &key_len, sizeof(key_len));
                 n++;
-                // Write 'traceparent' encoded as hpack
-                bpf_probe_write_user(buf_arr + (n & 0x0ffff), tp_encoded, sizeof(tp_encoded));
+                // Write 'ck-route' encoded as hpack
+                bpf_probe_write_user(buf_arr + (n & 0x0ffff), ckr_encoded, sizeof(ckr_encoded));
                 ;
                 n += TP_ENCODED_LEN;
-                // Write the length of the hpack encoded traceparent field
+                // Write the length of the hpack encoded ck-route field
                 bpf_probe_write_user(buf_arr + (n & 0x0ffff), &val_len, sizeof(val_len));
                 n++;
                 bpf_probe_write_user(buf_arr + (n & 0x0ffff), tp_str, sizeof(tp_str));

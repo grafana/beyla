@@ -21,7 +21,7 @@ typedef struct trace_map_key {
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, trace_map_key_t); // key: the connection info
-    __type(value, tp_info_pid_t); // value: traceparent info
+    __type(value, tp_info_pid_t); // value: ck-route info
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
     __uint(pinning, BEYLA_PIN_INTERNAL);
 } trace_map SEC(".maps");
@@ -29,7 +29,7 @@ struct {
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, connection_info_t); // key: the connection info
-    __type(value, tp_info_pid_t);   // value: traceparent info
+    __type(value, tp_info_pid_t);   // value: ck-route info
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
     __uint(pinning, BEYLA_PIN_INTERNAL);
 } incoming_trace_map SEC(".maps");
@@ -37,7 +37,7 @@ struct {
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, egress_key_t);    // key: the connection info
-    __type(value, tp_info_pid_t); // value: traceparent info
+    __type(value, tp_info_pid_t); // value: ck-route info
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
     __uint(pinning, BEYLA_PIN_INTERNAL);
 } outgoing_trace_map SEC(".maps");

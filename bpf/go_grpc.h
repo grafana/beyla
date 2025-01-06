@@ -111,7 +111,7 @@ int beyla_uprobe_server_handleStream(struct pt_regs *ctx) {
 
             bpf_dbg_printk("found t %llx", t);
             if (t) {
-                bpf_dbg_printk("reading the traceparent from frame headers");
+                bpf_dbg_printk("reading the ck-route from frame headers");
                 if (valid_trace(t->tp.trace_id)) {
                     tp_ptr = &t->tp;
                 }
@@ -614,7 +614,7 @@ struct {
     __type(key, go_addr_key_t); // key: go routine doing framer write headers
     __type(
         value,
-        grpc_framer_func_invocation_t); // the goroutine of the round trip request, which is the key for our traceparent info
+        grpc_framer_func_invocation_t); // the goroutine of the round trip request, which is the key for our ck-route info
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } grpc_framer_invocation_map SEC(".maps");
 
@@ -691,7 +691,7 @@ int beyla_uprobe_grpcFramerWriteHeaders(struct pt_regs *ctx) {
 #define HTTP2_ENCODED_HEADER_LEN                                                                   \
     66 // 1 + 1 + 8 + 1 + 55 = type byte + hpack_len_as_byte("traceparent") + strlen(hpack("traceparent")) + len_as_byte(55) + generated traceparent id
 #define HTTP2_ENCODED_CKR_HEADER_LEN                                                                   \
-    42 // 1 + 1 + 7 + 1 + 32 = type byte + hpack_len_as_byte("ck-route") + strlen(hpack("ck-route")) + len_as_byte(32) + generated ck-route id
+    66 // 1 + 1 + 8 + 1 + 55 = type byte + hpack_len_as_byte("ck-route") + strlen(hpack("ck-route")) + len_as_byte(32) + generated ck-route id
 
 SEC("uprobe/grpcFramerWriteHeaders_returns")
 int beyla_uprobe_grpcFramerWriteHeaders_returns(struct pt_regs *ctx) {
@@ -751,7 +751,7 @@ int beyla_uprobe_grpcFramerWriteHeaders_returns(struct pt_regs *ctx) {
                 u8 key_len = TP_ENCODED_LEN | 0x80; // high tagged to signify hpack encoded value
                 u8 val_len = TP_MAX_VAL_LENGTH;
 
-                // We don't hpack encode the value of the traceparent field, because that will require that
+                // We don't hpack encode the value of the ck-route field, because that will require that
                 // we use bpf_loop, which in turn increases the kernel requirement to 5.17+.
                 make_tp_string(tp_str, &f_info->tp);
                 //bpf_dbg_printk("Will write %s, type = %d, key_len = %d, val_len = %d", tp_str, type_byte, key_len, val_len);
@@ -761,11 +761,11 @@ int beyla_uprobe_grpcFramerWriteHeaders_returns(struct pt_regs *ctx) {
                 // Write the length of the key = 8
                 bpf_probe_write_user(buf_arr + (n & 0x0ffff), &key_len, sizeof(key_len));
                 n++;
-                // Write 'traceparent' encoded as hpack
+                // Write 'ck-route' encoded as hpack
                 bpf_probe_write_user(buf_arr + (n & 0x0ffff), tp_encoded, sizeof(tp_encoded));
                 ;
                 n += TP_ENCODED_LEN;
-                // Write the length of the hpack encoded traceparent field
+                // Write the length of the hpack encoded ck-route field
                 bpf_probe_write_user(buf_arr + (n & 0x0ffff), &val_len, sizeof(val_len));
                 n++;
                 bpf_probe_write_user(buf_arr + (n & 0x0ffff), tp_str, sizeof(tp_str));

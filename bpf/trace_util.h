@@ -6,6 +6,7 @@
 
 // 55+13
 #define TRACE_PARENT_HEADER_LEN 68
+#define CKROUTE_ID_HEADER_LEN 65
 
 static unsigned char *hex = (unsigned char *)"0123456789abcdef";
 static unsigned char *reverse_hex =
@@ -65,5 +66,16 @@ static __always_inline bool is_traceparent(const unsigned char *p) {
 
     return false;
 }
+
+static __always_inline bool is_ckroute(const unsigned char *p) {
+    bpf_dbg_printk("checking if is_ckroute");
+    if ((p[0] == 'c') && (p[1] == 'k') && (p[2] == '-') && (p[3] == 'r') &&
+        (p[4] == 'o') && (p[5] == 'u') && (p[6] == 't') && (p[7] == 'e') &&
+        (p[8] == ':') && (p[9] == ' ')) {
+        return true;
+    }
+    return false;
+}
+
 
 #endif

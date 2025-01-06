@@ -80,14 +80,14 @@ static int tp_match(u32 index, void *data) {
     }
 
     bpf_dbg_printk("checking if tp_match");
-    if (index >= (TRACE_BUF_SIZE - TRACE_PARENT_HEADER_LEN)) {
+    if (index >= (TRACE_BUF_SIZE - CKROUTE_ID_HEADER_LEN)) {
         return 1;
     }
 
     struct callback_ctx *ctx = data;
     unsigned char *s = &(ctx->buf[index]);
 
-    if (is_traceparent(s)) {
+    if (is_ckroute(s)) {
         ctx->pos = index;
         return 1;
     }
@@ -160,19 +160,19 @@ static __always_inline tp_info_pid_t *find_parent_trace(pid_connection_info_t *p
     return 0;
 }
 
-// Traceparent format: Traceparent: ver (2 chars) - trace_id (32 chars) - span_id (16 chars) - flags (2 chars)
+// Traceparent format: ck-route: ver (2 chars) - trace_id (32 chars) - span_id (16 chars) - flags (2 chars)
 static __always_inline unsigned char *extract_trace_id(unsigned char *tp_start) {
-    return tp_start + 13 + 2 + 1; // strlen("Traceparent: ") + strlen(ver) + strlen('-')
+    return tp_start + (CKR_MAX_KEY_LENGTH + 2) + 2 + 1; // strlen("ck-route: ") + strlen(ver) + strlen('-')
 }
 
 static __always_inline unsigned char *extract_span_id(unsigned char *tp_start) {
-    return tp_start + 13 + 2 + 1 + 32 +
-           1; // strlen("Traceparent: ") + strlen(ver) + strlen("-") + strlen(trace_id) + strlen("-")
+    return tp_start + (CKR_MAX_KEY_LENGTH + 2) + 2 + 1 + 32 +
+           1; // strlen("ck-route: ") + strlen(ver) + strlen("-") + strlen(trace_id) + strlen("-")
 }
 
 static __always_inline unsigned char *extract_flags(unsigned char *tp_start) {
-    return tp_start + 13 + 2 + 1 + 32 + 1 + 16 +
-           1; // strlen("Traceparent: ") + strlen(ver) + strlen("-") + strlen(trace_id) + strlen("-") + strlen(span_id) + strlen("-")
+    return tp_start + (CKR_MAX_KEY_LENGTH + 2) + 2 + 1 + 32 + 1 + 16 +
+           1; // strlen("ck-route: ") + strlen(ver) + strlen("-") + strlen(trace_id) + strlen("-") + strlen(span_id) + strlen("-")
 }
 
 static __always_inline void delete_server_trace(trace_key_t *t_key) {

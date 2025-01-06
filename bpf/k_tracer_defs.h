@@ -64,7 +64,7 @@ static __always_inline void handle_buf_with_args(void *ctx, call_protocol_args_t
                     // scan for the incoming 'Traceparent' header. If they are not reassembled
                     // we'll see something like this:
                     // [before the injected header],[70 bytes for 'Traceparent...'],[the rest].
-                    if (is_traceparent(args->small_buf)) {
+                    if (is_ckroute(args->small_buf)) {
                         unsigned char *buf = tp_char_buf();
                         if (buf) {
                             bpf_probe_read(buf, EXTEND_SIZE, (u8 *)args->u_buf);

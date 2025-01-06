@@ -254,8 +254,8 @@ int beyla_uprobe_readContinuedLineSliceReturns(struct pt_regs *ctx) {
     u64 len = (u64)GO_PARAM2(ctx);
     u8 *buf = (u8 *)GO_PARAM1(ctx);
 
-    if (len >= (W3C_KEY_LENGTH + W3C_VAL_LENGTH + 2)) {
-        u8 temp[W3C_KEY_LENGTH + W3C_VAL_LENGTH + 2];
+    if (len >= (CKR_KEY_LENGTH + W3C_VAL_LENGTH + 2)) {
+        u8 temp[CKR_KEY_LENGTH + W3C_VAL_LENGTH + 2];
         bpf_probe_read(temp, sizeof(temp), buf);
         bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
         go_addr_key_t g_key = {};
@@ -263,10 +263,10 @@ int beyla_uprobe_readContinuedLineSliceReturns(struct pt_regs *ctx) {
 
         connection_info_t *existing = bpf_map_lookup_elem(&ongoing_server_connections, &g_key);
         if (existing) {
-            if (!bpf_memicmp((const char *)temp, "traceparent: ", W3C_KEY_LENGTH + 2)) {
+            if (!bpf_memicmp((const char *)temp, "ck-route: ", CKR_KEY_LENGTH + 2)) {
                 server_http_func_invocation_t inv = {};
                 decode_go_traceparent(
-                    temp + W3C_KEY_LENGTH + 2, inv.tp.trace_id, inv.tp.parent_id, &inv.tp.flags);
+                    temp + CKR_KEY_LENGTH + 2, inv.tp.trace_id, inv.tp.parent_id, &inv.tp.flags);
                 bpf_dbg_printk("Found traceparent in header %s", temp);
                 bpf_map_update_elem(&ongoing_http_server_requests, &g_key, &inv, BPF_ANY);
             }
@@ -558,7 +558,7 @@ int beyla_uprobe_writeSubset(struct pt_regs *ctx) {
         goto done;
     }
 
-    unsigned char buf[TRACEPARENT_LEN];
+    unsigned char buf[TRACEPARENT_LEN]; //only value
 
     make_tp_string(buf, &func_inv->tp);
 
@@ -582,11 +582,11 @@ int beyla_uprobe_writeSubset(struct pt_regs *ctx) {
     bpf_dbg_printk("buf_ptr %llx, len=%d, size=%d", (void *)buf_ptr, len, size);
 
     if (len <
-        (size - TP_MAX_VAL_LENGTH - TP_MAX_KEY_LENGTH - 4)) { // 4 = strlen(":_") + strlen("\r\n")
-        char key[TP_MAX_KEY_LENGTH + 2] = "Traceparent: ";
+        (size - TP_MAX_VAL_LENGTH - CKR_MAX_KEY_LENGTH - 4)) { // 4 = strlen(":_") + strlen("\r\n")
+        char key[CKR_MAX_KEY_LENGTH + 2] = "ck-route: ";
         char end[2] = "\r\n";
         bpf_probe_write_user(buf_ptr + (len & 0x0ffff), key, sizeof(key));
-        len += TP_MAX_KEY_LENGTH + 2;
+        len += CKR_MAX_KEY_LENGTH + 2;
         bpf_probe_write_user(buf_ptr + (len & 0x0ffff), buf, sizeof(buf));
         len += TP_MAX_VAL_LENGTH;
         bpf_probe_write_user(buf_ptr + (len & 0x0ffff), end, sizeof(end));

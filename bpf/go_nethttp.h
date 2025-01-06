@@ -944,7 +944,7 @@ int beyla_uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
                 bpf_probe_write_user(buf_arr + (n & 0x0ffff), &key_len, sizeof(key_len));
                 n++;
                 // Write 'ck-route' encoded as hpack
-                bpf_probe_write_user(buf_arr + (n & 0x0ffff), ckr_encoded, sizeof(ckr_encoded));
+                bpf_probe_write_user(buf_arr + (n & 0x0ffff), tp_encoded, sizeof(tp_encoded));
                 ;
                 n += CKR_ENCODED_LEN;
                 // Write the length of the hpack encoded ck-route field

@@ -434,11 +434,12 @@ static __always_inline void process_meta_frame_headers(void *frame, tp_info_t *t
             //bpf_dbg_printk("grpc header %s:%s", field.key_ptr, field.val_ptr);
             //bpf_dbg_printk("grpc sizes %d:%d", field.key_len, field.val_len);
             if (field.key_len == CKR_KEY_LENGTH && field.val_len == W3C_VAL_LENGTH) {
+                bpf_dbg_printk("ck-route header length match in process_meta_frame_headers");
                 u8 temp[W3C_VAL_LENGTH];
 
                 bpf_probe_read(&temp, CKR_KEY_LENGTH, field.key_ptr);
                 if (!bpf_memicmp((const char *)temp, "ck-route", CKR_KEY_LENGTH)) {
-                    //bpf_dbg_printk("found grpc ck-route header");
+                    bpf_dbg_printk("found actual ck-route header");
                     bpf_probe_read(&temp, W3C_VAL_LENGTH, field.val_ptr);
                     decode_go_traceparent(temp, tp->trace_id, tp->parent_id, &tp->flags);
                     break;

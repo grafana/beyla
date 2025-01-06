@@ -11,7 +11,7 @@ const u32 EXTEND_SIZE = sizeof(TP) - 1;
 const char TP_PREFIX[] = "Traceparent: ";
 const u32 TP_PREFIX_SIZE = sizeof(TP_PREFIX) - 1;
 
-const char CKR[] = "ck-route: 00000000000000000000000000000000\r\n";
+const char CKR[] = "ck-route: 00-00000000000000000000000000000000-0000000000000000-01\r\n";
 const u32 CKR_EXTEND_SIZE = sizeof(CKR) - 1;
 const char CKR_PREFIX[] = "ck-route: ";
 const u32 CKR_PREFIX_SIZE = sizeof(CKR_PREFIX) - 1;

@@ -195,23 +195,20 @@ error:
 
 static __always_inline void
 make_tp_string_skb(unsigned char *buf, const tp_info_t *tp, const unsigned char *end) {
-    buf = check_pkt_access(buf, EXTEND_SIZE, end);
+    buf = check_pkt_access(buf, CKR_EXTEND_SIZE, end);
 
     if (!buf) {
         return;
     }
 
-    *buf++ = 'T';
-    *buf++ = 'r';
-    *buf++ = 'a';
     *buf++ = 'c';
-    *buf++ = 'e';
-    *buf++ = 'p';
-    *buf++ = 'a';
+    *buf++ = 'k';
+    *buf++ = '-';
     *buf++ = 'r';
-    *buf++ = 'e';
-    *buf++ = 'n';
+    *buf++ = 'o';
+    *buf++ = 'u';
     *buf++ = 't';
+    *buf++ = 'e';
     *buf++ = ':';
     *buf++ = ' ';
 
@@ -334,7 +331,7 @@ static __always_inline long update_ip_csum(struct __sk_buff *ctx) {
         return -1;
     }
 
-    const u16 new_total_len = bpf_ntohs(iph->tot_len) + EXTEND_SIZE;
+    const u16 new_total_len = bpf_ntohs(iph->tot_len) + CKR_EXTEND_SIZE;
     const __be16 ip_tot_len_old = iph->tot_len;
     const __be16 ip_tot_len_new = bpf_htons(new_total_len);
 
@@ -443,7 +440,7 @@ void beyla_extend_skb(struct __sk_buff *ctx) {
     const u32 copy_size = ((unsigned char *)ctx_data_end(ctx) - newline - 1) & MAX_IP_PACKET_SIZE;
     const u32 nl_offset = newline - payload;
 
-    if (bpf_skb_change_tail(ctx, ctx->len + EXTEND_SIZE, 0) != 0) {
+    if (bpf_skb_change_tail(ctx, ctx->len + CKR_EXTEND_SIZE, 0) != 0) {
         return;
     }
 
@@ -458,7 +455,7 @@ void beyla_extend_skb(struct __sk_buff *ctx) {
     const unsigned char *end = ctx_data_end(ctx);
 
     unsigned char *src = payload + nl_offset + 1;
-    unsigned char *dest = src + EXTEND_SIZE;
+    unsigned char *dest = src + CKR_EXTEND_SIZE;
 
     if (dest + copy_size > end) {
         return;
@@ -482,10 +479,10 @@ void beyla_extend_skb(struct __sk_buff *ctx) {
         return;
     }
 
-    iph->tot_len = bpf_htons(bpf_ntohs(iph->tot_len) + EXTEND_SIZE);
+    iph->tot_len = bpf_htons(bpf_ntohs(iph->tot_len) + CKR_EXTEND_SIZE);
 
     if (update_tcp_csum(ctx)) {
-        extra_bytes += EXTEND_SIZE;
+        extra_bytes += CKR_EXTEND_SIZE;
         u32 key = args->key;
 
         struct tc_http_ctx *http_ctx = bpf_map_lookup_elem(&tc_http_ctx_map, &key);

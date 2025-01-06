@@ -67,7 +67,7 @@ static __always_inline void handle_buf_with_args(void *ctx, call_protocol_args_t
                     if (is_ckroute(args->small_buf)) {
                         unsigned char *buf = tp_char_buf();
                         if (buf) {
-                            bpf_probe_read(buf, EXTEND_SIZE, (u8 *)args->u_buf);
+                            bpf_probe_read(buf, CKR_EXTEND_SIZE, (u8 *)args->u_buf);
                             bpf_dbg_printk("Found ck-route %s", buf);
                             unsigned char *t_id = extract_trace_id(buf);
                             unsigned char *s_id = extract_span_id(buf);

@@ -69,7 +69,7 @@ get_tuple(void *data, __u64 nh_off, void *data_end, __u16 eth_proto, bool *ipv4)
 static __always_inline int buf_memcpy(char *dest, char *src, s32 size, void *end) {
     u32 rem = size;
     // Copy 8 bytes at a time while you can
-    for (int i = 0; (i < ((EXTEND_SIZE / 8) + 1)) && (rem >= 8); i++) {
+    for (int i = 0; (i < ((CKR_EXTEND_SIZE / 8) + 1)) && (rem >= 8); i++) {
         if ((void *)(dest + 8) <= end) {
             *(u64 *)(dest) = *(u64 *)(src);
         } else {
@@ -103,8 +103,8 @@ static __always_inline unsigned char *tp_buf_mem(tp_info_t *tp) {
         return 0;
     }
 
-    __builtin_memcpy(val->buf, TP, EXTEND_SIZE);
-    make_tp_string(val->buf + TP_PREFIX_SIZE, tp);
+    __builtin_memcpy(val->buf, CKR, CKR_EXTEND_SIZE);
+    make_tp_string(val->buf + CKR_PREFIX_SIZE, tp);
 
     return val->buf;
 }
@@ -203,7 +203,7 @@ static __always_inline int l7_app_egress(struct __sk_buff *skb,
     unsigned char *tp_buf = tp_buf_mem(&tp->tp);
 
     if (!tp_buf) {
-        tp_buf = (unsigned char *)TP;
+        tp_buf = (unsigned char *)CKR;
     }
 
     // This is where the writing of the 'ck-route: ...' field happens at L7.
@@ -239,15 +239,15 @@ static __always_inline int l7_app_egress(struct __sk_buff *skb,
                     // We went over the split point, calculate how much can we
                     // write, but cap it to the max size = 70 bytes.
                     len = packet_size - diff;
-                    bpf_clamp_umax(len, EXTEND_SIZE);
+                    bpf_clamp_umax(len, CKR_EXTEND_SIZE);
                 }
             } else {
                 // Fast path. We are exactly at the offset, we've written
                 // nothing of the 'ck-route: ...' text yet and the packet
                 // is exactly 70 bytes.
-                if (ctx->written == 0 && packet_size == EXTEND_SIZE) {
-                    if ((start + EXTEND_SIZE) <= ctx_data_end(skb)) {
-                        __builtin_memcpy(start, tp_buf, EXTEND_SIZE);
+                if (ctx->written == 0 && packet_size == CKR_EXTEND_SIZE) {
+                    if ((start + CKR_EXTEND_SIZE) <= ctx_data_end(skb)) {
+                        __builtin_memcpy(start, tp_buf, CKR_EXTEND_SIZE);
                         bpf_dbg_printk("Set the string fast_path!");
                         l7_app_ctx_cleanup(e_key);
                         return 0;
@@ -256,9 +256,9 @@ static __always_inline int l7_app_egress(struct __sk_buff *skb,
 
                 // Nope, we've written some bytes in another packet and we
                 // are not done writing yet.
-                if (ctx->written < EXTEND_SIZE) {
-                    len = EXTEND_SIZE - ctx->written;
-                    bpf_clamp_umax(len, EXTEND_SIZE);
+                if (ctx->written < CKR_EXTEND_SIZE) {
+                    len = CKR_EXTEND_SIZE - ctx->written;
+                    bpf_clamp_umax(len, CKR_EXTEND_SIZE);
 
                     if (len > packet_size) {
                         len = packet_size;
@@ -273,8 +273,8 @@ static __always_inline int l7_app_egress(struct __sk_buff *skb,
             if (len > 0) {
                 u32 tp_off = ctx->written;
                 // Keeps verifier happy
-                bpf_clamp_umax(tp_off, EXTEND_SIZE);
-                bpf_clamp_umax(len, EXTEND_SIZE);
+                bpf_clamp_umax(tp_off, CKR_EXTEND_SIZE);
+                bpf_clamp_umax(len, CKR_EXTEND_SIZE);
 
                 if ((start + len) <= ctx_data_end(skb)) {
                     buf_memcpy((char *)start, (char *)tp_buf + tp_off, len, ctx_data_end(skb));
@@ -284,7 +284,7 @@ static __always_inline int l7_app_egress(struct __sk_buff *skb,
                 ctx->written += len;
                 // If we've written the full string this time around
                 // cleanup the metadata.
-                if (ctx->written >= EXTEND_SIZE) {
+                if (ctx->written >= CKR_EXTEND_SIZE) {
                     l7_app_ctx_cleanup(e_key);
                 }
             }

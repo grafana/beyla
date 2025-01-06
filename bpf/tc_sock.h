@@ -269,7 +269,7 @@ int beyla_packet_extender(struct sk_msg_md *msg) {
             newline_pos++;
             // Push extends the packet with empty space and sets up the
             // metadata for Traffic Control to finish the writing
-            if (!bpf_msg_push_data(msg, newline_pos, EXTEND_SIZE, 0)) {
+            if (!bpf_msg_push_data(msg, newline_pos, CKR_EXTEND_SIZE, 0)) {
                 tc_http_ctx_t ctx = {
                     .offset = newline_pos,
                     .seen = 0,

@@ -40,7 +40,7 @@ import (
 type Tracer struct {
 	log        *slog.Logger
 	pidsFilter ebpfcommon.ServiceFilter
-	cfg        *config.EPPFTracer
+	cfg        *config.EBPFTracer
 	metrics    imetrics.Reporter
 	bpfObjects bpfObjects
 	closers    []io.Closer

@@ -2,8 +2,8 @@ package config
 
 import "time"
 
-// EPPFTracer configuration for eBPF programs
-type EPPFTracer struct {
+// EBPFTracer configuration for eBPF programs
+type EBPFTracer struct {
 	BpfDebug bool `yaml:"bpf_debug" env:"BEYLA_BPF_DEBUG"`
 
 	// WakeupLen specifies how many messages need to be accumulated in the eBPF ringbuffer

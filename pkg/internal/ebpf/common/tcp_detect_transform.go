@@ -11,7 +11,7 @@ import (
 )
 
 // nolint:cyclop
-func ReadTCPRequestIntoSpan(cfg *config.EPPFTracer, record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {
+func ReadTCPRequestIntoSpan(cfg *config.EBPFTracer, record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {
 	var event TCPRequestInfo
 
 	err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)

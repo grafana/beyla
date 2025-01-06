@@ -120,7 +120,7 @@ network:
 		EnforceSysCaps:   false,
 		Printer:          false,
 		TracePrinter:     "json",
-		EBPF: config.EPPFTracer{
+		EBPF: config.EBPFTracer{
 			BatchLength:        100,
 			BatchTimeout:       time.Second,
 			HTTPRequestTimeout: 30 * time.Second,
@@ -458,7 +458,7 @@ time=\S+ level=DEBUG msg=debug arg=debug$`),
 		tracing: true,
 		expectedCfg: Config{
 			TracePrinter: debug.TracePrinterText,
-			EBPF:         config.EPPFTracer{BpfDebug: true},
+			EBPF:         config.EBPFTracer{BpfDebug: true},
 		},
 	}, {
 		name: "debug log with network flows",
@@ -472,7 +472,7 @@ time=\S+ level=DEBUG msg=debug arg=debug$`),
 		tracing: true,
 		expectedCfg: Config{
 			TracePrinter: debug.TracePrinterText,
-			EBPF:         config.EPPFTracer{BpfDebug: true},
+			EBPF:         config.EBPFTracer{BpfDebug: true},
 			NetworkFlows: NetworkConfig{Enable: true, Print: true},
 		},
 	}} {

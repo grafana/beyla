@@ -265,7 +265,7 @@ int beyla_uprobe_readContinuedLineSliceReturns(struct pt_regs *ctx) {
         if (existing) {
             if (!bpf_memicmp((const char *)temp, "ck-route: ", CKR_KEY_LENGTH + 2)) {
                 server_http_func_invocation_t inv = {};
-                decode_go_traceparent(
+                decode_go_ckroute(
                     temp + CKR_KEY_LENGTH + 2, inv.tp.trace_id, inv.tp.parent_id, &inv.tp.flags);
                 bpf_dbg_printk("Found ck-route in header %s", temp);
                 bpf_map_update_elem(&ongoing_http_server_requests, &g_key, &inv, BPF_ANY);
@@ -885,7 +885,7 @@ int beyla_uprobe_http2FramerWriteHeaders(struct pt_regs *ctx) {
 #define HTTP2_ENCODED_HEADER_LEN                                                                   \
     66 // 1 + 1 + 8 + 1 + 55 = type byte + hpack_len_as_byte("traceparent") + strlen(hpack("traceparent")) + len_as_byte(55) + generated traceparent id
 #define HTTP2_ENCODED_CKR_HEADER_LEN                                                                   \
-    64 // 1 + 1 + 6 + 1 + 55 = type byte + hpack_len_as_byte("ck-route") + strlen(hpack("ck-route")) + len_as_byte(32) + generated ck-route id
+    41 // 1 + 1 + 6 + 1 + 32 = type byte + hpack_len_as_byte("ck-route") + strlen(hpack("ck-route")) + len_as_byte(32) + generated ck-route id
 
 SEC("uprobe/http2FramerWriteHeaders_returns")
 int beyla_uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
@@ -927,15 +927,15 @@ int beyla_uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
 
             //bpf_dbg_printk("Found f_info, this is the place to write to w = %llx, buf=%llx, n=%lld, size=%lld", w_ptr, buf_arr, n, cap);
             if (buf_arr && n < (cap - HTTP2_ENCODED_CKR_HEADER_LEN)) {
-                uint8_t tp_str[TP_MAX_VAL_LENGTH];
+                uint8_t tp_str[CKR_MAX_VAL_LENGTH];
 
                 u8 type_byte = 0;
                 u8 key_len = CKR_ENCODED_LEN | 0x80; // high tagged to signify hpack encoded value
-                u8 val_len = TP_MAX_VAL_LENGTH;
+                u8 val_len = CKR_MAX_VAL_LENGTH;
 
                 // We don't hpack encode the value of the ck-route field, because that will require that
                 // we use bpf_loop, which in turn increases the kernel requirement to 5.17+.
-                make_tp_string(tp_str, &f_info->tp);
+                make_ckr_string(tp_str, &f_info->tp);
                 //bpf_dbg_printk("Will write %s, type = %d, key_len = %d, val_len = %d", tp_str, type_byte, key_len, val_len);
 
                 bpf_probe_write_user(buf_arr + (n & 0x0ffff), &type_byte, sizeof(type_byte));
@@ -951,7 +951,7 @@ int beyla_uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
                 bpf_probe_write_user(buf_arr + (n & 0x0ffff), &val_len, sizeof(val_len));
                 n++;
                 bpf_probe_write_user(buf_arr + (n & 0x0ffff), tp_str, sizeof(tp_str));
-                n += TP_MAX_VAL_LENGTH;
+                n += CKR_MAX_VAL_LENGTH;
                 // Update the value of n in w to reflect the new size
                 bpf_probe_write_user((void *)(w_ptr + io_writer_n_pos), &n, sizeof(n));
 

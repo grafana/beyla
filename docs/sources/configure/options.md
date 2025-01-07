@@ -1410,7 +1410,7 @@ gRPC application metrics, while the rest of the **instrumentations** are be disa
 YAML section `internal_metrics`.
 
 This component reports certain internal metrics about the behavior
-of the auto-instrumentation tool. Currently, both [Prometheus](https://prometheus.io/) and [OTEL](https://opentelemetry.io/) metrics export are supported. Prometheus export is enabled if the `internal_metrics` section has the `exporter` set to `prometheus` and contains a `prometheus` subsection with the `port` property set. OTEL metrics export is enabled if the `internal_metrics` section has the `exporter` set to `otel` using the endpoint specified in the `otel_metrics_export` section or `grafana.otlp` section.
+of the auto-instrumentation tool. [Prometheus](https://prometheus.io/) and [OTEL](https://opentelemetry.io/) metrics export are supported. Prometheus export is enabled if the `internal_metrics` section has the `exporter` set to `prometheus` and contains a `prometheus` subsection with the `port` property set. OTEL metrics export is enabled if the `internal_metrics` section has the `exporter` set to `otel` using the endpoint specified in the `otel_metrics_export` section or `grafana.otlp` section.
 
 Example:
 

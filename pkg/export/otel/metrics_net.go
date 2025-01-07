@@ -85,14 +85,14 @@ func newMetricsExporter(ctx context.Context, ctxInfo *global.ContextInfo, cfg *N
 	log.Debug("instantiating network metrics exporter provider")
 	exporter, err := InstantiateMetricsExporter(context.Background(), cfg.Metrics, log)
 	if err != nil {
-		log.Error("", "error", err)
+		log.Error("can't instantiate metrics exporter", "error", err)
 		return nil, err
 	}
 
 	provider, err := newMeterProvider(newResource(ctxInfo.HostID), &exporter, cfg.Metrics.Interval)
 
 	if err != nil {
-		log.Error("", "error", err)
+		log.Error("can't instantiate meter provider", "error", err)
 		return nil, err
 	}
 

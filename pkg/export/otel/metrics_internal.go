@@ -38,6 +38,7 @@ func NewInternalMetricsReporter(ctx context.Context, ctxInfo *global.ContextInfo
 	log.Debug("instantiating internal metrics exporter provider")
 	exporter, err := InstantiateMetricsExporter(context.Background(), metrics, log)
 	if err != nil {
+		log.Error("can't instantiate metrics exporter", "error", err)
 		return nil, err
 	}
 
@@ -46,7 +47,7 @@ func NewInternalMetricsReporter(ctx context.Context, ctxInfo *global.ContextInfo
 	meter := provider.Meter("beyla_internal")
 
 	if err != nil {
-		log.Error("", "error", err)
+		log.Error("can't instantiate meter provider", "error", err)
 		return nil, err
 	}
 	tracerFlushes, err := meter.Float64Histogram(

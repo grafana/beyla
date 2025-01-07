@@ -99,7 +99,7 @@ func TestReadTCPRequestIntoSpan_Overflow(t *testing.T) {
 		},
 	}
 
-	cfg := config.EPPFTracer{HeuristicSQLDetect: true}
+	cfg := config.EBPFTracer{HeuristicSQLDetect: true}
 
 	binaryRecord := bytes.Buffer{}
 	require.NoError(t, binary.Write(&binaryRecord, binary.LittleEndian, tri))

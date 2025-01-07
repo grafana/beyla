@@ -30,7 +30,7 @@ var readerFactory = func(rb *ebpf.Map) (ringBufReader, error) {
 }
 
 type ringBufForwarder struct {
-	cfg        *config.EPPFTracer
+	cfg        *config.EBPFTracer
 	logger     *slog.Logger
 	ringbuffer *ebpf.Map
 	closers    []io.Closer
@@ -38,7 +38,7 @@ type ringBufForwarder struct {
 	spansLen   int
 	access     sync.Mutex
 	ticker     *time.Ticker
-	reader     func(*config.EPPFTracer, *ringbuf.Record, ServiceFilter) (request.Span, bool, error)
+	reader     func(*config.EBPFTracer, *ringbuf.Record, ServiceFilter) (request.Span, bool, error)
 	// filter the input spans, eliminating these from processes whose PID
 	// belong to a process that does not match the discovery policies
 	filter  ServiceFilter
@@ -52,7 +52,7 @@ var singleRbfLock sync.Mutex
 // internal buffer, and forwards them to an output events channel, previously converted to request.Span
 // instances.
 func SharedRingbuf(
-	cfg *config.EPPFTracer,
+	cfg *config.EBPFTracer,
 	filter ServiceFilter,
 	ringbuffer *ebpf.Map,
 	metrics imetrics.Reporter,
@@ -75,10 +75,10 @@ func SharedRingbuf(
 }
 
 func ForwardRingbuf(
-	cfg *config.EPPFTracer,
+	cfg *config.EBPFTracer,
 	ringbuffer *ebpf.Map,
 	filter ServiceFilter,
-	reader func(*config.EPPFTracer, *ringbuf.Record, ServiceFilter) (request.Span, bool, error),
+	reader func(*config.EBPFTracer, *ringbuf.Record, ServiceFilter) (request.Span, bool, error),
 	logger *slog.Logger,
 	metrics imetrics.Reporter,
 	closers ...io.Closer,

@@ -44,7 +44,7 @@ var DefaultConfig = Config{
 	ChannelBufferLen: 10,
 	LogLevel:         "INFO",
 	EnforceSysCaps:   false,
-	EBPF: config.EPPFTracer{
+	EBPF: config.EBPFTracer{
 		BatchLength:        100,
 		BatchTimeout:       time.Second,
 		HTTPRequestTimeout: 30 * time.Second,
@@ -132,7 +132,7 @@ var DefaultConfig = Config{
 }
 
 type Config struct {
-	EBPF config.EPPFTracer `yaml:"ebpf"`
+	EBPF config.EBPFTracer `yaml:"ebpf"`
 
 	// NetworkFlows configuration for Network Observability feature
 	NetworkFlows NetworkConfig `yaml:"network"`

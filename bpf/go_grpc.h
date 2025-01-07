@@ -143,9 +143,9 @@ int beyla_uprobe_http2Server_operateHeaders(struct pt_regs *ctx) {
     if (new_offset_version) {
         frame = GO_PARAM4(ctx);
     }
-    char comm[16] ;
+    unsigned char comm[16] ;
     bpf_get_current_comm(comm, sizeof(comm)-1);// Get the current command name
-    comm[16] = 0; 
+    comm[15] = 0; 
 
     bpf_dbg_printk("=== uprobe/GRPC http2Server_operateHeaders tr %llx goroutine %lx, new %d , comm %s === ",
                    tr,

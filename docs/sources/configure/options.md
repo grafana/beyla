@@ -1410,16 +1410,23 @@ gRPC application metrics, while the rest of the **instrumentations** are be disa
 YAML section `internal_metrics`.
 
 This component reports certain internal metrics about the behavior
-of the auto-instrumentation tool. Currently, both [Prometheus](https://prometheus.io/) and [OTEL](https://opentelemetry.io/) metrics export are supported. Prometheus export is enabled if the `internal_metrics` section contains a `prometheus` subsection with the `port` property set. OTEL metrics export is enabled if the `internal_metrics` section contains an `otel_metrics` property set to `true`.
+of the auto-instrumentation tool. Currently, both [Prometheus](https://prometheus.io/) and [OTEL](https://opentelemetry.io/) metrics export are supported. Prometheus export is enabled if the `internal_metrics` section has the `exporter` set to `prometheus` and contains a `prometheus` subsection with the `port` property set. OTEL metrics export is enabled if the `internal_metrics` section has the `exporter` set to `otel` using the endpoint specified in the `otel_metrics_export` section or `grafana.otlp` section.
 
 Example:
 
 ```yaml
 internal_metrics:
+  exporter: prometheus
   prometheus:
     port: 6060
     path: /internal/metrics
 ```
+
+| YAML        | Environment variable                                  | Type | Default |
+| ----------- | ---------------------------------------- | ---- | ------- |
+| `exporter`      | `BEYLA_INTERNAL_METRICS_EXPORTER` | string | `disabled` |
+
+Specifies the internal metrics exporter. Accepted values are `disabled`, `prometheus` and `otel`.
 
 | YAML   | Environment variable                                  | Type | Default |
 | ------ | ---------------------------------------- | ---- | ------- |
@@ -1442,11 +1449,6 @@ same values, this `internal_metrics.prometheus.path` value can be
 different from `prometheus_export.path`, to keep both metric families separated,
 or the same (both metric families are listed in the same scrape endpoint).
 
-| YAML        | Environment variable                                  | Type | Default |
-| ----------- | ---------------------------------------- | ---- | ------- |
-| `otel_metrics`      | `BEYLA_INTERNAL_METRICS_OTEL` | boolean | `false` |
-
-Specifies whether to enable the internal metrics exporter for OpenTelemetry metrics. If set to `true`, the internal metrics are exported to the OpenTelemetry endpoint specified in the `otel_metrics_export` section or `grafana.otlp` section.
 
 ## YAML file example
 

@@ -143,11 +143,15 @@ int beyla_uprobe_http2Server_operateHeaders(struct pt_regs *ctx) {
     if (new_offset_version) {
         frame = GO_PARAM4(ctx);
     }
+    char comm[16] ;
+    bpf_get_current_comm(comm, sizeof(comm)-1);// Get the current command name
+    comm[16] = 0; 
 
-    bpf_dbg_printk("=== uprobe/GRPC http2Server_operateHeaders tr %llx goroutine %lx, new %d === ",
+    bpf_dbg_printk("=== uprobe/GRPC http2Server_operateHeaders tr %llx goroutine %lx, new %d , comm %s === ",
                    tr,
                    goroutine_addr,
-                   new_offset_version);
+                   new_offset_version,
+                   comm);
     go_addr_key_t g_key = {};
     go_addr_key_from_id(&g_key, goroutine_addr);
 

@@ -232,7 +232,8 @@ func (i *instrumenter) uprobes(pid int32, p Tracer) error {
 		libExe, err := link.OpenExecutable(m.instrPath)
 
 		if err != nil {
-			return err
+			log.Debug("can't open executable for inspection", "error", err)
+			continue
 		}
 
 		for j := range m.probes {

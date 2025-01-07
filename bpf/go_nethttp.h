@@ -885,7 +885,7 @@ int beyla_uprobe_http2FramerWriteHeaders(struct pt_regs *ctx) {
 #define HTTP2_ENCODED_HEADER_LEN                                                                   \
     66 // 1 + 1 + 8 + 1 + 55 = type byte + hpack_len_as_byte("traceparent") + strlen(hpack("traceparent")) + len_as_byte(55) + generated traceparent id
 #define HTTP2_ENCODED_CKR_HEADER_LEN                                                                   \
-    66 // 1 + 1 + 8 + 1 + 55 = type byte + hpack_len_as_byte("ck-route") + strlen(hpack("ck-route")) + len_as_byte(32) + generated ck-route id
+    64 // 1 + 1 + 6 + 1 + 55 = type byte + hpack_len_as_byte("ck-route") + strlen(hpack("ck-route")) + len_as_byte(32) + generated ck-route id
 
 SEC("uprobe/http2FramerWriteHeaders_returns")
 int beyla_uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
@@ -940,11 +940,11 @@ int beyla_uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
 
                 bpf_probe_write_user(buf_arr + (n & 0x0ffff), &type_byte, sizeof(type_byte));
                 n++;
-                // Write the length of the key = 8
+                // Write the length of the key = 6
                 bpf_probe_write_user(buf_arr + (n & 0x0ffff), &key_len, sizeof(key_len));
                 n++;
                 // Write 'ck-route' encoded as hpack
-                bpf_probe_write_user(buf_arr + (n & 0x0ffff), tp_encoded, sizeof(tp_encoded));
+                bpf_probe_write_user(buf_arr + (n & 0x0ffff), ckr_encoded, sizeof(ckr_encoded));
                 ;
                 n += CKR_ENCODED_LEN;
                 // Write the length of the hpack encoded ck-route field

@@ -59,15 +59,15 @@ uint8_t huffman_code_len[256] = {
 #define EOS_PAD_BYTE (EOS_CODE >> (EOS_N_BITS - 8))
 
 #define TP_ENCODED_LEN 8
-#define CKR_ENCODED_LEN 8
+#define CKR_ENCODED_LEN 6
 
 static unsigned char tp_encoded[TP_ENCODED_LEN] = {
     0x4d, 0x83, 0x21, 0x6b, 0x1d, 0x85, 0xa9, 0x3f
 }; // hpack encoded "traceparent"
 
-//0xC9, 0xAA, 0xDE, 0x6F, 0xEB, 0xD3, 0x97 - recent
+
 static unsigned char ckr_encoded[CKR_ENCODED_LEN] = {
-    0x01, 0x43, 0xF8, 0x3F, 0x3F, 0x3F, 0x3F, 0xFF //cursor formed
+    0x27, 0x55, 0xac, 0x3d, 0xa9, 0x2f
 }; // hpack encoded "ck-route"
 
 struct hpack_ctx {

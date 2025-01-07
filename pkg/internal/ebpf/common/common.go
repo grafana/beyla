@@ -43,16 +43,6 @@ var IntegrityModeOverride = false
 
 var ActiveNamespaces = make(map[uint32]uint32)
 
-// These represent unique traffic control (tc) handles to be supplied as
-// arguments to RegisterIngress, RegisterEgress or RegisterTC. They all start
-// from the 0xb310 offset in simplistic attempt to avoid collisions with
-// 3rdparty handles.
-const (
-	NetollyTCHandle = 0xb310 + iota
-	HTTPTracerTCHandle
-	TCTracerTCHandle
-)
-
 // ProbeDesc holds the information of the instrumentation points of a given
 // function/symbol
 type ProbeDesc struct {

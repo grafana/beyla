@@ -31,8 +31,6 @@ import (
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
 	"golang.org/x/sys/unix"
-
-	"github.com/grafana/beyla/pkg/internal/netolly/ifaces"
 )
 
 // $BPF_CLANG and $BPF_CFLAGS are set by the Makefile.
@@ -114,11 +112,6 @@ func printVerifierErrorInfo(err error) {
 	if errors.As(err, &ve) {
 		_, _ = fmt.Fprintf(os.Stderr, "Error Log:\n %v\n", strings.Join(ve.Log, "\n"))
 	}
-}
-
-// Noop because socket filters don't require special registration for different network interfaces
-func (m *SockFlowFetcher) Register(_ ifaces.Interface) error {
-	return nil
 }
 
 // Close any resources that are taken up by the socket filter, the filter itself and some maps.

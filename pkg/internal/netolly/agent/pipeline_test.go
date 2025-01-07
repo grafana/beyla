@@ -20,7 +20,6 @@ import (
 	"github.com/grafana/beyla/pkg/internal/filter"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/netolly/flow/transport"
-	"github.com/grafana/beyla/pkg/internal/netolly/ifaces"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	prom2 "github.com/grafana/beyla/test/integration/components/prom"
 )
@@ -56,7 +55,6 @@ func TestFilter(t *testing.T) {
 				},
 			}},
 		},
-		registerer:     ifaces.NewRegisterer(fakeInterfacesInformer{}, 10),
 		interfaceNamer: func(_ int) string { return "fakeiface" },
 	}
 
@@ -113,10 +111,4 @@ func fakeRecord(protocol transport.Protocol, srcPort, dstPort uint16) *ebpf.Reco
 			SrcPort: srcPort, DstPort: dstPort, TransportProtocol: uint8(protocol),
 		},
 	}}
-}
-
-type fakeInterfacesInformer struct{}
-
-func (f fakeInterfacesInformer) Subscribe(_ context.Context) (<-chan ifaces.Event, error) {
-	return make(<-chan ifaces.Event), nil
 }

@@ -77,11 +77,6 @@ func (f *Flows) buildPipeline(ctx context.Context) (*pipe.Runner, error) {
 
 func (f *Flows) pipelineBuilder(ctx context.Context) (*pipe.Builder[*FlowsPipeline], error) {
 	alog := alog()
-	alog.Debug("registering interfaces' listener in background")
-	err := f.interfacesManager(ctx)
-	if err != nil {
-		return nil, err
-	}
 
 	alog.Debug("creating flows' processing graph")
 	pb := pipe.NewBuilder(&FlowsPipeline{}, pipe.ChannelBufferLen(f.cfg.ChannelBufferLen))

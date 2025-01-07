@@ -16,6 +16,7 @@ import (
 	"github.com/grafana/beyla/pkg/export/instrumentations"
 	"github.com/grafana/beyla/pkg/export/otel"
 	"github.com/grafana/beyla/pkg/export/prom"
+	"github.com/grafana/beyla/pkg/internal/ebpf/tcmanager"
 	"github.com/grafana/beyla/pkg/internal/filter"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/infraolly/process"
@@ -48,6 +49,7 @@ var DefaultConfig = Config{
 		BatchLength:        100,
 		BatchTimeout:       time.Second,
 		HTTPRequestTimeout: 30 * time.Second,
+		TCBackend:          tcmanager.TCBackendTC,
 	},
 	Grafana: otel.GrafanaConfig{
 		OTLP: otel.GrafanaOTLP{
@@ -243,6 +245,10 @@ func (c *Config) Validate() error {
 	if c.EBPF.BatchLength == 0 {
 		return ConfigError("BEYLA_BPF_BATCH_LENGTH must be at least 1")
 	}
+	if !c.EBPF.TCBackend.Valid() {
+		return ConfigError("Invalid BEYLA_BPF_TC_BACKEND value")
+	}
+
 	if c.Attributes.Kubernetes.InformersSyncTimeout == 0 {
 		return ConfigError("BEYLA_KUBE_INFORMERS_SYNC_TIMEOUT duration must be greater than 0s")
 	}

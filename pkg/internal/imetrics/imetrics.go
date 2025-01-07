@@ -3,7 +3,6 @@ package imetrics
 
 import (
 	"context"
-	"log/slog"
 )
 
 type InternalMetricsExporter string
@@ -13,10 +12,6 @@ const (
 	InternalMetricsExporterPrometheus = InternalMetricsExporter("prometheus")
 	InternalMetricsExporterOTEL       = InternalMetricsExporter("otel")
 )
-
-func mlog() *slog.Logger {
-	return slog.With("component", "debug.TracePrinter")
-}
 
 func (t InternalMetricsExporter) Valid() bool {
 	switch t {

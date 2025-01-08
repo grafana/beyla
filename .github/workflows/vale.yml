@@ -14,7 +14,7 @@ jobs:
       - name: Run Vale
         run: |
           (cd /etc/vale && vale sync)
-          vale --output=/etc/vale/rdjsonl.tmpl docs/sources/_index.md | \
+          vale --output=/etc/vale/rdjsonl.tmpl docs/sources | \
             /bin/reviewdog \
             --conf=/etc/vale/.reviewdog.yml \
             --fail-on-error \

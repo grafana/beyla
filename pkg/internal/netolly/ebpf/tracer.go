@@ -57,6 +57,7 @@ type FlowFetcher struct {
 	log           *slog.Logger
 	objects       *NetObjects
 	ringbufReader *ringbuf.Reader
+	tcManager     tcmanager.TCManager
 	cacheMaxSize  int
 	enableIngress bool
 	enableEgress  bool
@@ -65,7 +66,8 @@ type FlowFetcher struct {
 func NewFlowFetcher(
 	sampling, cacheMaxSize int,
 	ingress, egress bool,
-	tcManager tcmanager.TCManager,
+	ifaceManager *tcmanager.InterfaceManager,
+	tcBackend tcmanager.TCBackend,
 ) (*FlowFetcher, error) {
 	tlog := tlog()
 	if err := rlimit.RemoveMemlock(); err != nil {
@@ -104,6 +106,9 @@ func NewFlowFetcher(
 		return nil, fmt.Errorf("accessing to ringbuffer: %w", err)
 	}
 
+	tcManager := tcmanager.NewTCManager(tcBackend)
+	tcManager.SetInterfaceManager(ifaceManager)
+
 	if egress {
 		tcManager.AddProgram("tc/egress_flow_parse", objects.BeylaEgressFlowParse, tcmanager.AttachmentEgress)
 	}
@@ -116,6 +121,7 @@ func NewFlowFetcher(
 		log:           tlog,
 		objects:       &objects,
 		ringbufReader: flows,
+		tcManager:     tcManager,
 		cacheMaxSize:  cacheMaxSize,
 		enableIngress: ingress,
 		enableEgress:  egress,
@@ -128,6 +134,8 @@ func NewFlowFetcher(
 func (m *FlowFetcher) Close() error {
 	log := tlog()
 	log.Debug("unregistering eBPF objects")
+
+	m.tcManager.Shutdown()
 
 	var errs []error
 	// m.ringbufReader.Read is a blocking operation, so we need to close the ring buffer

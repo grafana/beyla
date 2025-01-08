@@ -138,12 +138,14 @@ func TestTCXManagerAddRemove(t *testing.T) {
 
 	progs := loadProgs(t)
 
+	ifaceManager := NewInterfaceManager()
 	tcx := NewTCXManager()
+	tcx.SetInterfaceManager(ifaceManager)
 	assert.NotNil(t, tcx)
 
 	ctx := context.Background()
 
-	tcx.Start(ctx)
+	ifaceManager.Start(ctx)
 
 	test := func(progName string, prog *ebpf.Program, attachType AttachmentType) {
 		tcx.AddProgram(progName, prog, attachType)
@@ -232,14 +234,16 @@ func TestNetlinkManagerAddRemove(t *testing.T) {
 
 	progs := loadProgs(t)
 
+	ifaceManager := NewInterfaceManager()
 	tc := NewNetlinkManager()
+	tc.SetInterfaceManager(ifaceManager)
 	assert.NotNil(t, tc)
 
 	netManager := tc.(*netlinkManager)
 
 	ctx := context.Background()
 
-	tc.Start(ctx)
+	ifaceManager.Start(ctx)
 
 	test := func(progName string, prog *ebpf.Program, attachType AttachmentType) {
 		tc.AddProgram(progName, prog, attachType)
@@ -269,7 +273,7 @@ func TestNetlinkManagerAddRemove(t *testing.T) {
 	test("beyla_ingress", progs.Ingress, AttachmentIngress)
 	test("beyla_egress", progs.Egress, AttachmentEgress)
 
-	netManager.shutdown()
+	netManager.Shutdown()
 }
 
 /*

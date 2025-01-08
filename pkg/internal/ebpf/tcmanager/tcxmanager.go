@@ -3,9 +3,9 @@
 package tcmanager
 
 import (
-	"context"
 	"fmt"
-	"time"
+	"log/slog"
+	"sync"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
@@ -25,22 +25,41 @@ type ifaceLink struct {
 	iface    int
 }
 
-type tcxInterfaceMap map[int]ifaces.Interface
-
 type tcxManager struct {
-	tcManagerBase
-	interfaces tcxInterfaceMap
-	programs   []*attachedProg
-	links      []*ifaceLink
+	ifaceManager      *InterfaceManager
+	programs          []*attachedProg
+	links             []*ifaceLink
+	log               *slog.Logger
+	mutex             sync.Mutex
+	addedCallbackID   uint64
+	removedCallbackID uint64
 }
 
 func NewTCXManager() TCManager {
 	return &tcxManager{
-		tcManagerBase: newTCManagerBase("tcx_manager"),
-		interfaces:    tcxInterfaceMap{},
-		programs:      []*attachedProg{},
-		links:         []*ifaceLink{},
+		ifaceManager: nil,
+		programs:     []*attachedProg{},
+		links:        []*ifaceLink{},
+		log:          slog.With("component", "tcx_manager"),
+		mutex:        sync.Mutex{},
 	}
+}
+
+func (tcx *tcxManager) SetInterfaceManager(im *InterfaceManager) {
+	tcx.mutex.Lock()
+	defer tcx.mutex.Unlock()
+
+	if tcx.ifaceManager != nil {
+		tcx.ifaceManager.RemoveCallback(tcx.addedCallbackID)
+		tcx.ifaceManager.RemoveCallback(tcx.removedCallbackID)
+	}
+
+	if im != nil {
+		tcx.addedCallbackID = im.AddInterfaceAddedCallback(func(i *ifaces.Interface) { tcx.onInterfaceAdded(i) })
+		tcx.removedCallbackID = im.AddInterfaceRemovedCallback(func(i *ifaces.Interface) { tcx.onInterfaceRemoved(i) })
+	}
+
+	tcx.ifaceManager = im
 }
 
 func tcxAttachType(attachment AttachmentType) (ebpf.AttachType, error) {
@@ -54,63 +73,18 @@ func tcxAttachType(attachment AttachmentType) (ebpf.AttachType, error) {
 	return 0, fmt.Errorf("invalid attachment type: %d", attachment)
 }
 
-func (tcx *tcxManager) Start(ctx context.Context) {
-	if tcx.registerer != nil {
-		return
-	}
-
-	informer := ifaces.NewWatcher(tcx.channelBufferLen)
-	registerer := ifaces.NewRegisterer(informer, tcx.channelBufferLen)
-
-	ifaceEvents, err := registerer.Subscribe(ctx)
-
-	if err != nil {
-		tcx.log.Error("instantiating interfaces' informer", "error", err)
-		return
-	}
-
-	tcx.registerer = registerer
-
-	tcx.wg.Add(1)
-
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				tcx.shutdown()
-				tcx.wg.Done()
-				return
-			case event := <-ifaceEvents:
-				tcx.log.Debug("received event", "event", event)
-				switch event.Type {
-				case ifaces.EventAdded:
-					tcx.onInterfaceAdded(event.Interface)
-				case ifaces.EventDeleted:
-					tcx.onInterfaceRemoved(event.Interface)
-				default:
-					tcx.log.Warn("unknown event type", "event", event)
-				}
-			}
-		}
-	}()
-}
-
-func (tcx *tcxManager) Stop() {
-	tcx.wg.Wait()
-}
-
-func (tcx *tcxManager) shutdown() {
+func (tcx *tcxManager) Shutdown() {
 	tcx.log.Debug("TCX initiated shutdown")
 
 	tcx.mutex.Lock()
 	defer tcx.mutex.Unlock()
 
-	for _, iface := range tcx.interfaces {
-		tcx.removeInterfaceLocked(iface)
+	if tcx.ifaceManager != nil {
+		for _, iface := range tcx.ifaceManager.Interfaces() {
+			tcx.closeLinksLocked(iface)
+		}
 	}
 
-	tcx.registerer = nil
-	tcx.interfaces = tcxInterfaceMap{}
 	tcx.programs = []*attachedProg{}
 	tcx.links = []*ifaceLink{}
 
@@ -132,7 +106,11 @@ func (tcx *tcxManager) AddProgram(name string, prog *ebpf.Program, attachment At
 }
 
 func (tcx *tcxManager) attachProgramLocked(prog *attachedProg) {
-	for iface := range tcx.interfaces {
+	if tcx.ifaceManager == nil {
+		return
+	}
+
+	for iface := range tcx.ifaceManager.Interfaces() {
 		tcx.attachProgramToIfaceLocked(prog, iface)
 	}
 }
@@ -202,36 +180,23 @@ func (tcx *tcxManager) attachProgramToIfaceLocked(prog *attachedProg, iface int)
 	tcx.links = append(tcx.links, &ifaceLink{Link: link, progName: prog.name, iface: iface})
 }
 
-func (tcx *tcxManager) onInterfaceAdded(iface ifaces.Interface) {
+func (tcx *tcxManager) onInterfaceAdded(iface *ifaces.Interface) {
 	tcx.mutex.Lock()
 	defer tcx.mutex.Unlock()
-
-	if tcx.filter != nil && !tcx.filter.IsAllowed(iface.Name) {
-		tcx.log.Debug("Interface now allowed", "interface", iface.Name)
-		return
-	}
-
-	tcx.interfaces[iface.Index] = iface
 
 	for _, prog := range tcx.programs {
 		tcx.attachProgramToIfaceLocked(prog, iface.Index)
 	}
 }
 
-func (tcx *tcxManager) onInterfaceRemoved(iface ifaces.Interface) {
+func (tcx *tcxManager) onInterfaceRemoved(iface *ifaces.Interface) {
 	tcx.mutex.Lock()
 	defer tcx.mutex.Unlock()
 
-	tcx.removeInterfaceLocked(iface)
-}
-
-func (tcx *tcxManager) removeInterfaceLocked(iface ifaces.Interface) {
 	tcx.closeLinksLocked(iface)
-
-	delete(tcx.interfaces, iface.Index)
 }
 
-func (tcx *tcxManager) closeLinksLocked(iface ifaces.Interface) {
+func (tcx *tcxManager) closeLinksLocked(iface *ifaces.Interface) {
 	closeLinks := func(link *ifaceLink) {
 		if link.iface == iface.Index {
 			link.Close()
@@ -240,43 +205,4 @@ func (tcx *tcxManager) closeLinksLocked(iface ifaces.Interface) {
 
 	apply(tcx.links, closeLinks)
 	tcx.links = removeIf(tcx.links, func(l *ifaceLink) bool { return l.iface == iface.Index })
-}
-
-func (tcx *tcxManager) InterfaceName(ifaceIndex int) (string, bool) {
-	tcx.mutex.Lock()
-	defer tcx.mutex.Unlock()
-
-	if iface, ok := tcx.interfaces[ifaceIndex]; ok {
-		return iface.Name, true
-	}
-
-	return "", false
-}
-
-func (tcx *tcxManager) SetInterfaceFilter(filter *InterfaceFilter) {
-	tcx.mutex.Lock()
-	defer tcx.mutex.Unlock()
-
-	tcx.filter = filter
-}
-
-func (tcx *tcxManager) SetMonitorMode(mode MonitorMode) {
-	tcx.mutex.Lock()
-	defer tcx.mutex.Unlock()
-
-	tcx.monitorMode = mode
-}
-
-func (tcx *tcxManager) SetChannelBufferLen(channelBufferLen int) {
-	tcx.mutex.Lock()
-	defer tcx.mutex.Unlock()
-
-	tcx.channelBufferLen = channelBufferLen
-}
-
-func (tcx *tcxManager) SetPollPeriod(period time.Duration) {
-	tcx.mutex.Lock()
-	defer tcx.mutex.Unlock()
-
-	tcx.pollPeriod = period
 }

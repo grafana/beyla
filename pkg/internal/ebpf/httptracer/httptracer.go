@@ -22,11 +22,12 @@ import (
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../../bpf/tc_http_tp.c -- -I../../../../bpf/headers -DBPF_DEBUG
 
 type Tracer struct {
-	cfg        *beyla.Config
-	bpfObjects bpfObjects
-	closers    []io.Closer
-	log        *slog.Logger
-	tcManager  tcmanager.TCManager
+	cfg          *beyla.Config
+	bpfObjects   bpfObjects
+	closers      []io.Closer
+	log          *slog.Logger
+	ifaceManager *tcmanager.InterfaceManager
+	tcManager    tcmanager.TCManager
 }
 
 func New(cfg *beyla.Config) *Tracer {
@@ -130,10 +131,12 @@ func (p *Tracer) startTC(ctx context.Context) {
 		p.log.Error("cannot enable L7 context-propagation, kernel 5.17 or newer required")
 	}
 
+	p.ifaceManager = tcmanager.NewInterfaceManager()
 	p.tcManager = tcmanager.NewTCManager(p.cfg.EBPF.TCBackend)
+	p.tcManager.SetInterfaceManager(p.ifaceManager)
 	p.tcManager.AddProgram("tc/tc_http_egress", p.bpfObjects.BeylaTcHttpEgress, tcmanager.AttachmentEgress)
 	p.tcManager.AddProgram("tc/tc_http_ingress", p.bpfObjects.BeylaTcHttpIngress, tcmanager.AttachmentIngress)
-	p.tcManager.Start(ctx)
+	p.ifaceManager.Start(ctx)
 }
 
 func (p *Tracer) Run(ctx context.Context, _ chan<- []request.Span) {
@@ -153,6 +156,9 @@ func (p *Tracer) stopTC() {
 
 	p.log.Info("removing traffic control probes")
 
-	p.tcManager.Stop()
+	p.ifaceManager.Wait()
+	p.ifaceManager = nil
+
+	p.tcManager.Shutdown()
 	p.tcManager = nil
 }

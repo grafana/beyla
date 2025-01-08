@@ -3,13 +3,12 @@
 package tcmanager
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/cilium/ebpf"
 	"github.com/vishvananda/netlink"
@@ -33,7 +32,7 @@ type netlinkProg struct {
 }
 
 type netlinkIface struct {
-	ifaces.Interface
+	*ifaces.Interface
 	qdisc   *netlink.GenericQdisc
 	filters []*netlink.BpfFilter
 }
@@ -41,9 +40,13 @@ type netlinkIface struct {
 type netlinkIfaceMap map[int]*netlinkIface
 
 type netlinkManager struct {
-	tcManagerBase
-	interfaces netlinkIfaceMap
-	programs   []*netlinkProg
+	ifaceManager      *InterfaceManager
+	interfaces        netlinkIfaceMap
+	programs          []*netlinkProg
+	log               *slog.Logger
+	mutex             sync.Mutex
+	addedCallbackID   uint64
+	removedCallbackID uint64
 }
 
 func netlinkAttachType(attachment AttachmentType) (uint32, error) {
@@ -59,65 +62,32 @@ func netlinkAttachType(attachment AttachmentType) (uint32, error) {
 
 func NewNetlinkManager() TCManager {
 	return &netlinkManager{
-		tcManagerBase: newTCManagerBase("tc_manager_netlink"),
-		interfaces:    netlinkIfaceMap{},
-		programs:      []*netlinkProg{},
+		ifaceManager: nil,
+		interfaces:   netlinkIfaceMap{},
+		programs:     []*netlinkProg{},
+		log:          slog.With("component", "tc_manager_netlink"),
+		mutex:        sync.Mutex{},
 	}
 }
 
-func (tc *netlinkManager) Start(ctx context.Context) {
-	if tc.registerer != nil {
-		return
+func (tc *netlinkManager) SetInterfaceManager(im *InterfaceManager) {
+	tc.mutex.Lock()
+	defer tc.mutex.Unlock()
+
+	if tc.ifaceManager != nil {
+		tc.ifaceManager.RemoveCallback(tc.addedCallbackID)
+		tc.ifaceManager.RemoveCallback(tc.removedCallbackID)
 	}
 
-	var informer ifaces.Informer
-
-	if tc.monitorMode == MonitorPoll {
-		informer = ifaces.NewPoller(tc.pollPeriod, tc.channelBufferLen)
-	} else {
-		informer = ifaces.NewWatcher(tc.channelBufferLen)
+	if im != nil {
+		tc.addedCallbackID = im.AddInterfaceAddedCallback(func(i *ifaces.Interface) { tc.onInterfaceAdded(i) })
+		tc.removedCallbackID = im.AddInterfaceRemovedCallback(func(i *ifaces.Interface) { tc.onInterfaceRemoved(i) })
 	}
 
-	registerer := ifaces.NewRegisterer(informer, tc.channelBufferLen)
-
-	ifaceEvents, err := registerer.Subscribe(ctx)
-
-	if err != nil {
-		tc.log.Error("instantiating interfaces' informer", "error", err)
-		return
-	}
-
-	tc.registerer = registerer
-
-	tc.wg.Add(1)
-
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				tc.shutdown()
-				tc.wg.Done()
-				return
-			case event := <-ifaceEvents:
-				tc.log.Debug("received event", "event", event)
-				switch event.Type {
-				case ifaces.EventAdded:
-					tc.onInterfaceAdded(event.Interface)
-				case ifaces.EventDeleted:
-					tc.onInterfaceRemoved(event.Interface)
-				default:
-					tc.log.Warn("unknown event type", "event", event)
-				}
-			}
-		}
-	}()
+	tc.ifaceManager = im
 }
 
-func (tc *netlinkManager) Stop() {
-	tc.wg.Wait()
-}
-
-func (tc *netlinkManager) shutdown() {
+func (tc *netlinkManager) Shutdown() {
 	tc.log.Debug("TC initiated shutdown")
 
 	tc.mutex.Lock()
@@ -125,8 +95,6 @@ func (tc *netlinkManager) shutdown() {
 
 	tc.cleanupInterfacesLocked()
 	tc.cleanupProgsLocked()
-
-	tc.registerer = nil
 
 	tc.log.Debug("TC completed shutdown")
 }
@@ -239,14 +207,9 @@ func (tc *netlinkManager) removeProgramLocked(name string) {
 	tc.programs = removeIf(tc.programs, func(prog *netlinkProg) bool { return prog.name == name })
 }
 
-func (tc *netlinkManager) onInterfaceAdded(i ifaces.Interface) {
+func (tc *netlinkManager) onInterfaceAdded(i *ifaces.Interface) {
 	tc.mutex.Lock()
 	defer tc.mutex.Unlock()
-
-	if tc.filter != nil && !tc.filter.IsAllowed(i.Name) {
-		tc.log.Debug("Interface now allowed", "interface", i.Name)
-		return
-	}
 
 	qdisc := tc.installQdisc(i)
 
@@ -263,7 +226,7 @@ func (tc *netlinkManager) onInterfaceAdded(i ifaces.Interface) {
 	}
 }
 
-func (tc *netlinkManager) onInterfaceRemoved(iface ifaces.Interface) {
+func (tc *netlinkManager) onInterfaceRemoved(iface *ifaces.Interface) {
 	tc.mutex.Lock()
 	defer tc.mutex.Unlock()
 
@@ -272,25 +235,7 @@ func (tc *netlinkManager) onInterfaceRemoved(iface ifaces.Interface) {
 	delete(tc.interfaces, iface.Index)
 }
 
-func (tc *netlinkManager) InterfaceName(ifaceIndex int) (string, bool) {
-	tc.mutex.Lock()
-	defer tc.mutex.Unlock()
-
-	if iface, ok := tc.interfaces[ifaceIndex]; ok {
-		return iface.Name, true
-	}
-
-	return "", false
-}
-
-func (tc *netlinkManager) SetInterfaceFilter(filter *InterfaceFilter) {
-	tc.mutex.Lock()
-	defer tc.mutex.Unlock()
-
-	tc.filter = filter
-}
-
-func (tc *netlinkManager) installQdisc(iface ifaces.Interface) *netlink.GenericQdisc {
+func (tc *netlinkManager) installQdisc(iface *ifaces.Interface) *netlink.GenericQdisc {
 	link, err := netlink.LinkByIndex(iface.Index)
 
 	if err != nil {
@@ -412,25 +357,4 @@ func doIgnoreNoDev[T any](sysCall func(T) error, dev T) error {
 		}
 	}
 	return nil
-}
-
-func (tc *netlinkManager) SetMonitorMode(mode MonitorMode) {
-	tc.mutex.Lock()
-	defer tc.mutex.Unlock()
-
-	tc.monitorMode = mode
-}
-
-func (tc *netlinkManager) SetChannelBufferLen(channelBufferLen int) {
-	tc.mutex.Lock()
-	defer tc.mutex.Unlock()
-
-	tc.channelBufferLen = channelBufferLen
-}
-
-func (tc *netlinkManager) SetPollPeriod(period time.Duration) {
-	tc.mutex.Lock()
-	defer tc.mutex.Unlock()
-
-	tc.pollPeriod = period
 }

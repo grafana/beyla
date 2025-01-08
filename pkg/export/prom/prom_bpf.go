@@ -110,7 +110,10 @@ func (bc *BPFCollector) Collect(ch chan<- prometheus.Metric) {
 }
 
 func (bc *BPFCollector) collectProbesMetrics(ch chan<- prometheus.Metric) {
-	ebpf.EnableStats(unix.BPF_STATS_RUN_TIME)
+	_, err := ebpf.EnableStats(unix.BPF_STATS_RUN_TIME)
+	if err != nil {
+		bc.log.Error("failed to enable runtime stats", "error", err)
+	}
 
 	// Iterate over all eBPF programs
 	ids, err := ebpf.ProgramGetNextID(0)

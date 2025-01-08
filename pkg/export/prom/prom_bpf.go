@@ -95,7 +95,7 @@ func newBPFCollector(ctx context.Context, ctxInfo *global.ContextInfo, cfg *Prom
 	return c
 }
 
-func (bc *BPFCollector) reportMetrics(input <-chan []request.Span) {
+func (bc *BPFCollector) reportMetrics(_ <-chan []request.Span) {
 	go bc.promConnect.StartHTTP(bc.bgCtx)
 }
 
@@ -110,7 +110,7 @@ func (bc *BPFCollector) Collect(ch chan<- prometheus.Metric) {
 }
 
 func (bc *BPFCollector) collectProbesMetrics(ch chan<- prometheus.Metric) {
-	_, err := ebpf.EnableStats(unix.BPF_STATS_RUN_TIME)
+	ebpf.EnableStats(unix.BPF_STATS_RUN_TIME)
 
 	// Iterate over all eBPF programs
 	ids, err := ebpf.ProgramGetNextID(0)
@@ -168,7 +168,7 @@ func (bc *BPFCollector) collectProbesMetrics(ch chan<- prometheus.Metric) {
 		)
 
 		// Get the next program ID
-		ids, err = ebpf.ProgramGetNextID(ids)
+		ids, _ = ebpf.ProgramGetNextID(ids)
 	}
 }
 
@@ -218,7 +218,7 @@ func (bc *BPFCollector) collectMapMetrics(ch chan<- prometheus.Metric) {
 		}
 
 		// Get the next map ID
-		ids, err = ebpf.MapGetNextID(ids)
+		ids, _ = ebpf.MapGetNextID(ids)
 	}
 }
 

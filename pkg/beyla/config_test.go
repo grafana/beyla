@@ -20,6 +20,7 @@ import (
 	"github.com/grafana/beyla/pkg/export/instrumentations"
 	"github.com/grafana/beyla/pkg/export/otel"
 	"github.com/grafana/beyla/pkg/export/prom"
+	"github.com/grafana/beyla/pkg/internal/ebpf/tcmanager"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/infraolly/process"
 	"github.com/grafana/beyla/pkg/internal/kube"
@@ -124,6 +125,7 @@ network:
 			BatchLength:        100,
 			BatchTimeout:       time.Second,
 			HTTPRequestTimeout: 30 * time.Second,
+			TCBackend:          tcmanager.TCBackendTC,
 		},
 		Grafana: otel.GrafanaConfig{
 			OTLP: otel.GrafanaOTLP{

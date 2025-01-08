@@ -15,10 +15,6 @@ func NewFlowFetcher(_, _ int, _, _ bool) (*FlowFetcher, error) {
 	return nil, nil
 }
 
-func (m *FlowFetcher) Register(_ ifaces.Interface) error {
-	return nil
-}
-
 func (m *FlowFetcher) Close() error {
 	return nil
 }

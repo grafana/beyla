@@ -1,6 +1,10 @@
 package config
 
-import "time"
+import (
+	"time"
+
+	"github.com/grafana/beyla/pkg/internal/ebpf/tcmanager"
+)
 
 // EBPFTracer configuration for eBPF programs
 type EBPFTracer struct {
@@ -30,6 +34,10 @@ type EBPFTracer struct {
 
 	// Enables Linux Traffic Control probes for context propagation
 	UseTCForL7CP bool `yaml:"traffic_control_l7_context_propagation" env:"BEYLA_BPF_TC_L7_CP"`
+
+	// Select the TC attachment backend: accepted values are 'tc' (netlink),
+	// and 'tcx'
+	TCBackend tcmanager.TCBackend `yaml:"traffic_control_backend" env:"BEYLA_BPF_TC_BACKEND"`
 
 	// Disables Beyla black-box context propagation. Used for testing purposes only.
 	DisableBlackBoxCP bool `yaml:"disable_black_box_cp" env:"BEYLA_BPF_DISABLE_BLACK_BOX_CP"`

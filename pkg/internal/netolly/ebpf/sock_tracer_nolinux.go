@@ -14,10 +14,6 @@ func (s *SockFlowFetcher) Close() error {
 	panic("this is never going to be executed")
 }
 
-func (s *SockFlowFetcher) Register(_ ifaces.Interface) error {
-	panic("this is never going to be executed")
-}
-
 func (s *SockFlowFetcher) LookupAndDeleteMap() map[NetFlowId][]NetFlowMetrics {
 	panic("this is never going to be executed")
 }

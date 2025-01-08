@@ -498,6 +498,20 @@ Enabling this option may increase the performance overhead in high request volum
 This option is only useful when generating Beyla traces, it does not affect
 generation of Beyla metrics.
 
+| YAML                      | Environment variable              | Type    | Default |
+| ------------------------- | --------------------------------- | ------- | ------- |
+| `traffic_control_backend` | `BEYLA_BPF_TC_BACKEND`            | string  |  `tc`   |
+
+Chooses which backend to use for the attachment of traffic control probes.
+Linux 6.6 has added support for a file-descriptor based traffic control
+attachment called TCX, providing a more robust way of attaching traffic
+control probes (it does not require explicit qdisc management, and provides a
+deterministic way to chain probes). We recommend the usage of the `tcx`
+backend for kernels >= 6.6 for this reason.
+
+The accepted backends are `tc` and `tcx`. An empty or unset value defaults to
+`tc`.
+
 | YAML                    | Environment variable               | Type    | Default |
 | ----------------------- | ---------------------------------- | ------- | ------- |
 | `http_request_timeout`  | `BEYLA_BPF_HTTP_REQUEST_TIMEOUT`   | string  | (30s)   |

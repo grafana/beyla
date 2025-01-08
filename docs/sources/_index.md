@@ -60,7 +60,7 @@ The eBPF code is loaded from ordinary applications running in user space. The ke
   You can check if your kernel has BTF enabled by verifying if `/sys/kernel/btf/vmlinux` exists on your system.
   If you need to recompile your kernel to enable BTF, the configuration option `CONFIG_DEBUG_INFO_BTF=y` must be
   set.
-- Beyla also supports RedHat-based distributions: RHEL8, Centos 8, Rocky8, AlmaLinux8, and others, which ship a Kernel 4.18 that backports eBPF-related patches.
+- Test: Beyla also supports RedHat-based distributions: RHEL8, Centos 8, Rocky8, AlmaLinux8, and others, which ship a Kernel 4.18 that backports eBPF-related patches.
 - eBPF enabled in the host.
 - For instrumenting Go programs, compile with at least Go 1.17. Beyla support Go applications built with a major **Go version no earlier than 3 versions** behind the current stable major release.
 - Administrative access rights to execute Beyla.

@@ -241,7 +241,7 @@ func (ta *TraceAttacher) reuseTracer(tracer *ebpf.ProcessTracer, ie *ebpf.Instru
 	}
 
 	if err := tracer.NewExecutable(exe, ie); err != nil {
-		return false
+		ta.log.Debug("Failed to attach uprobes for new executable", "pid", ie.FileInfo.Pid, "error", err)
 	}
 
 	ta.log.Debug("reusing Generic tracer for",
@@ -258,7 +258,7 @@ func (ta *TraceAttacher) reuseTracer(tracer *ebpf.ProcessTracer, ie *ebpf.Instru
 
 func (ta *TraceAttacher) updateTracerProbes(tracer *ebpf.ProcessTracer, ie *ebpf.Instrumentable) bool {
 	if err := tracer.NewExecutableInstance(ie); err != nil {
-		return false
+		ta.log.Debug("Failed to attach uprobes", "pid", ie.FileInfo.Pid, "error", err)
 	}
 
 	ta.log.Debug("reusing Generic tracer for",

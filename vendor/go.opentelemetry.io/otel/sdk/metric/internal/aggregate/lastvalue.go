@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/sdk/metric/internal/exemplar"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 )
 
@@ -17,15 +16,14 @@ import (
 type datapoint[N int64 | float64] struct {
 	attrs attribute.Set
 	value N
-	res   exemplar.FilteredReservoir[N]
+	res   FilteredExemplarReservoir[N]
 }
 
-func newLastValue[N int64 | float64](limit int, r func() exemplar.FilteredReservoir[N]) *lastValue[N] {
+func newLastValue[N int64 | float64](limit int, r func(attribute.Set) FilteredExemplarReservoir[N]) *lastValue[N] {
 	return &lastValue[N]{
 		newRes: r,
 		limit:  newLimiter[datapoint[N]](limit),
 		values: make(map[attribute.Distinct]datapoint[N]),
-		stale:  make(map[attribute.Distinct]datapoint[N]),
 		start:  now(),
 	}
 }
@@ -34,10 +32,9 @@ func newLastValue[N int64 | float64](limit int, r func() exemplar.FilteredReserv
 type lastValue[N int64 | float64] struct {
 	sync.Mutex
 
-	newRes func() exemplar.FilteredReservoir[N]
+	newRes func(attribute.Set) FilteredExemplarReservoir[N]
 	limit  limiter[datapoint[N]]
 	values map[attribute.Distinct]datapoint[N]
-	stale  map[attribute.Distinct]datapoint[N]
 	start  time.Time
 }
 
@@ -48,7 +45,7 @@ func (s *lastValue[N]) measure(ctx context.Context, value N, fltrAttr attribute.
 	attr := s.limit.Attributes(fltrAttr, s.values)
 	d, ok := s.values[attr.Equivalent()]
 	if !ok {
-		d.res = s.newRes()
+		d.res = s.newRes(attr)
 	}
 
 	d.attrs = attr
@@ -56,18 +53,6 @@ func (s *lastValue[N]) measure(ctx context.Context, value N, fltrAttr attribute.
 	d.res.Offer(ctx, value, droppedAttr)
 
 	s.values[attr.Equivalent()] = d
-}
-
-func (s *lastValue[N]) remove(ctx context.Context, fltrAttr attribute.Set) {
-	s.Lock()
-	defer s.Unlock()
-
-	key := fltrAttr.Equivalent()
-
-	if _, ok := s.values[key]; ok {
-		//s.stale[key] = val
-		delete(s.values, key)
-	}
 }
 
 func (s *lastValue[N]) delta(dest *metricdata.Aggregation) int {
@@ -82,7 +67,6 @@ func (s *lastValue[N]) delta(dest *metricdata.Aggregation) int {
 	n := s.copyDpts(&gData.DataPoints, t)
 	// Do not report stale values.
 	clear(s.values)
-	clear(s.stale)
 	// Update start time for delta temporality.
 	s.start = t
 
@@ -100,16 +84,12 @@ func (s *lastValue[N]) cumulative(dest *metricdata.Aggregation) int {
 	s.Lock()
 	defer s.Unlock()
 
-	n := s.copyDptsWithStale(&gData.DataPoints, t)
+	n := s.copyDpts(&gData.DataPoints, t)
 	// TODO (#3006): This will use an unbounded amount of memory if there
 	// are unbounded number of attribute sets being aggregated. Attribute
 	// sets that become "stale" need to be forgotten so this will not
 	// overload the system.
 	*dest = gData
-
-	// Stale attribute sets for which a no-record marker was emitted are not
-	// reported anymore.
-	clear(s.stale)
 
 	return n
 }
@@ -118,7 +98,6 @@ func (s *lastValue[N]) cumulative(dest *metricdata.Aggregation) int {
 // copied is returned.
 func (s *lastValue[N]) copyDpts(dest *[]metricdata.DataPoint[N], t time.Time) int {
 	n := len(s.values)
-
 	*dest = reset(*dest, n, n)
 
 	var i int
@@ -130,39 +109,12 @@ func (s *lastValue[N]) copyDpts(dest *[]metricdata.DataPoint[N], t time.Time) in
 		collectExemplars(&(*dest)[i].Exemplars, v.res.Collect)
 		i++
 	}
-
-	return n
-}
-
-func (s *lastValue[N]) copyDptsWithStale(dest *[]metricdata.DataPoint[N], t time.Time) int {
-	n := len(s.values) + len(s.stale)
-
-	*dest = reset(*dest, n, n)
-
-	var i int
-	for _, v := range s.values {
-		(*dest)[i].Attributes = v.attrs
-		(*dest)[i].StartTime = s.start
-		(*dest)[i].Time = t
-		(*dest)[i].Value = v.value
-		collectExemplars(&(*dest)[i].Exemplars, v.res.Collect)
-		i++
-	}
-
-	for _, v := range s.stale {
-		(*dest)[i].Attributes = v.attrs
-		(*dest)[i].StartTime = s.start
-		(*dest)[i].Time = t
-		(*dest)[i].NoRecordedValue = true
-		i++
-	}
-
 	return n
 }
 
 // newPrecomputedLastValue returns an aggregator that summarizes a set of
 // observations as the last one made.
-func newPrecomputedLastValue[N int64 | float64](limit int, r func() exemplar.FilteredReservoir[N]) *precomputedLastValue[N] {
+func newPrecomputedLastValue[N int64 | float64](limit int, r func(attribute.Set) FilteredExemplarReservoir[N]) *precomputedLastValue[N] {
 	return &precomputedLastValue[N]{lastValue: newLastValue[N](limit, r)}
 }
 
@@ -183,7 +135,6 @@ func (s *precomputedLastValue[N]) delta(dest *metricdata.Aggregation) int {
 	n := s.copyDpts(&gData.DataPoints, t)
 	// Do not report stale values.
 	clear(s.values)
-	clear(s.stale)
 	// Update start time for delta temporality.
 	s.start = t
 
@@ -201,10 +152,9 @@ func (s *precomputedLastValue[N]) cumulative(dest *metricdata.Aggregation) int {
 	s.Lock()
 	defer s.Unlock()
 
-	n := s.copyDptsWithStale(&gData.DataPoints, t)
+	n := s.copyDpts(&gData.DataPoints, t)
 	// Do not report stale values.
 	clear(s.values)
-	clear(s.stale)
 	*dest = gData
 
 	return n

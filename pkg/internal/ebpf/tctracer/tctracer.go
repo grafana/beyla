@@ -23,11 +23,12 @@ import (
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../../bpf/tc_tracer.c -- -I../../../../bpf/headers -DBPF_DEBUG -DBPF_DEBUG_TC
 
 type Tracer struct {
-	cfg        *beyla.Config
-	bpfObjects bpfObjects
-	closers    []io.Closer
-	log        *slog.Logger
-	tcManager  tcmanager.TCManager
+	cfg          *beyla.Config
+	bpfObjects   bpfObjects
+	closers      []io.Closer
+	log          *slog.Logger
+	ifaceManager *tcmanager.InterfaceManager
+	tcManager    tcmanager.TCManager
 }
 
 func New(cfg *beyla.Config) *Tracer {
@@ -141,10 +142,12 @@ func (p *Tracer) startTC(ctx context.Context) {
 
 	p.log.Info("enabling L4 context-propagation with Linux Traffic Control")
 
+	p.ifaceManager = tcmanager.NewInterfaceManager()
 	p.tcManager = tcmanager.NewTCManager(p.cfg.EBPF.TCBackend)
+	p.tcManager.SetInterfaceManager(p.ifaceManager)
 	p.tcManager.AddProgram("tc/tc_egress", p.bpfObjects.BeylaAppEgress, tcmanager.AttachmentEgress)
 	p.tcManager.AddProgram("tc/tc_ingress", p.bpfObjects.BeylaAppIngress, tcmanager.AttachmentIngress)
-	p.tcManager.Start(ctx)
+	p.ifaceManager.Start(ctx)
 }
 
 func (p *Tracer) Run(ctx context.Context, _ chan<- []request.Span) {
@@ -160,6 +163,9 @@ func (p *Tracer) Run(ctx context.Context, _ chan<- []request.Span) {
 func (p *Tracer) stopTC() {
 	p.log.Info("removing traffic control probes")
 
-	p.tcManager.Stop()
+	p.ifaceManager.Wait()
+	p.ifaceManager = nil
+
+	p.tcManager.Shutdown()
 	p.tcManager = nil
 }

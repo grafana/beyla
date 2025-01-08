@@ -89,8 +89,8 @@ type Flows struct {
 	ctxInfo *global.ContextInfo
 
 	// input data providers
-	tcManager tcmanager.TCManager
-	ebpf      ebpfFlowFetcher
+	ifaceManager *tcmanager.InterfaceManager
+	ebpf         ebpfFlowFetcher
 
 	// processing nodes to be wired in the buildPipeline method
 	mapTracer *flow.MapTracer
@@ -116,10 +116,10 @@ func FlowsAgent(ctxInfo *global.ContextInfo, cfg *beyla.Config) (*Flows, error) 
 	alog := alog()
 	alog.Info("initializing Flows agent")
 
-	tcManager := tcmanager.NewTCManager(cfg.EBPF.TCBackend)
-	tcManager.SetChannelBufferLen(cfg.ChannelBufferLen)
-	tcManager.SetPollPeriod(cfg.NetworkFlows.ListenPollPeriod)
-	tcManager.SetMonitorMode(monitorMode(cfg, alog))
+	ifaceManager := tcmanager.NewInterfaceManager()
+	ifaceManager.SetChannelBufferLen(cfg.ChannelBufferLen)
+	ifaceManager.SetPollPeriod(cfg.NetworkFlows.ListenPollPeriod)
+	ifaceManager.SetMonitorMode(monitorMode(cfg, alog))
 
 	alog.Debug("acquiring Agent IP")
 
@@ -131,17 +131,16 @@ func FlowsAgent(ctxInfo *global.ContextInfo, cfg *beyla.Config) (*Flows, error) 
 
 	alog.Debug("agent IP: " + agentIP.String())
 
-	fetcher, err := newFetcher(cfg, tcManager, alog)
+	fetcher, err := newFetcher(cfg, alog, ifaceManager)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return flowsAgent(ctxInfo, cfg, fetcher, agentIP, tcManager)
+	return flowsAgent(ctxInfo, cfg, fetcher, agentIP, ifaceManager)
 }
 
-func newFetcher(cfg *beyla.Config, tcManager tcmanager.TCManager,
-	alog *slog.Logger) (ebpfFlowFetcher, error) {
+func newFetcher(cfg *beyla.Config, alog *slog.Logger, ifaceManager *tcmanager.InterfaceManager) (ebpfFlowFetcher, error) {
 	switch cfg.NetworkFlows.Source {
 	case beyla.EbpfSourceSock:
 		alog.Info("using socket filter for collecting network events")
@@ -151,8 +150,8 @@ func newFetcher(cfg *beyla.Config, tcManager tcmanager.TCManager,
 		alog.Info("using kernel Traffic Control for collecting network events")
 		ingress, egress := flowDirections(&cfg.NetworkFlows)
 
-		return ebpf.NewFlowFetcher(cfg.NetworkFlows.Sampling,
-			cfg.NetworkFlows.CacheMaxFlows, ingress, egress, tcManager)
+		return ebpf.NewFlowFetcher(cfg.NetworkFlows.Sampling, cfg.NetworkFlows.CacheMaxFlows,
+			ingress, egress, ifaceManager, cfg.EBPF.TCBackend)
 	}
 
 	return nil, fmt.Errorf("unknown network configuration eBPF source specified, allowed options are [tc, socket_filter]")
@@ -183,7 +182,7 @@ func flowsAgent(
 	cfg *beyla.Config,
 	fetcher ebpfFlowFetcher,
 	agentIP net.IP,
-	tcManager tcmanager.TCManager,
+	ifaceManager *tcmanager.InterfaceManager,
 ) (*Flows, error) {
 	// configure allow/deny interfaces filter
 	filter, err := tcmanager.NewInterfaceFilter(cfg.NetworkFlows.Interfaces, cfg.NetworkFlows.ExcludeInterfaces)
@@ -191,10 +190,10 @@ func flowsAgent(
 		return nil, fmt.Errorf("configuring interface filters: %w", err)
 	}
 
-	tcManager.SetInterfaceFilter(filter)
+	ifaceManager.SetInterfaceFilter(filter)
 
 	interfaceNamer := func(ifIndex int) string {
-		iface, ok := tcManager.InterfaceName(ifIndex)
+		iface, ok := ifaceManager.InterfaceName(ifIndex)
 		if !ok {
 			return "unknown"
 		}
@@ -207,7 +206,7 @@ func flowsAgent(
 	return &Flows{
 		ctxInfo:        ctxInfo,
 		ebpf:           fetcher,
-		tcManager:      tcManager,
+		ifaceManager:   ifaceManager,
 		cfg:            cfg,
 		mapTracer:      mapTracer,
 		rbTracer:       rbTracer,
@@ -242,7 +241,7 @@ func (f *Flows) Run(ctx context.Context) error {
 		return fmt.Errorf("starting processing graph: %w", err)
 	}
 
-	f.tcManager.Start(ctx)
+	f.ifaceManager.Start(ctx)
 
 	graph.Start()
 
@@ -258,7 +257,7 @@ func (f *Flows) Run(ctx context.Context) error {
 
 	alog.Debug("waiting for all nodes to finish their pending work")
 
-	f.tcManager.Stop()
+	f.ifaceManager.Wait()
 
 	<-graph.Done()
 

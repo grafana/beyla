@@ -9,10 +9,6 @@ keywords:
   - Network
 ---
 
-{{% admonition type="warning" %}}
-Network metrics is an [experimental](/docs/release-life-cycle/) under development feature, expect breaking changes.
-{{% /admonition %}}
-
 # Beyla Network Metrics configuration options
 
 Network metrics are configured under the `network` property of the [Beyla Configuration YAML file]({{< relref "../configure/options" >}}) or with a set of environment variables prefixed as `BEYLA_NETWORK_`.

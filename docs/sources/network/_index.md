@@ -9,10 +9,6 @@ keywords:
   - Network
 ---
 
-{{% admonition type="warning" %}}
-Network metrics is an [experimental](/docs/release-life-cycle/) under development feature, expect breaking changes.
-{{% /admonition %}}
-
 # Network metrics
 
 Grafana Beyla can be configured to provide network metrics between different endpoints. For example, between physical nodes, containers, Kubernetes pods, services, etc.

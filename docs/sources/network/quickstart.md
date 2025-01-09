@@ -9,18 +9,14 @@ keywords:
   - Network
 ---
 
-{{% admonition type="warning" %}}
-Network metrics is an [experimental](/docs/release-life-cycle/) under development feature, expect breaking changes.
-{{% /admonition %}}
+# Beyla network metrics quickstart
+
+Beyla can generate network metrics in any environment (physical host, virtual host, or container). It's recommended to use a Kubernetes environment, as Beyla is able to decorate each metric with the metadata of the source and destination Kubernetes entities.
 
 {{% admonition type="note" %}}
 This tutorial describes how to deploy Beyla in Kubernetes from scratch.
 To use Helm, consult the [Deploy Beyla in Kubernetes with Helm]({{< relref "../setup/kubernetes-helm" >}}) documentation.
 {{% /admonition %}}
-
-# Beyla network metrics quickstart
-
-Beyla can generate network metrics in any environment (physical host, virtual host, or container). While the feature is in experimental development, it is recommended to use a Kubernetes environment, as Beyla is able to decorate each metric with the metadata of the source and destination Kubernetes entities.
 
 ## Deploy Beyla with network metrics
 

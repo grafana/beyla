@@ -26,9 +26,9 @@ Beyla can export data in two modes:
 
 ![Beyla architecture alloy vs direct](https://grafana.com/media/docs/grafana-cloud/beyla/alloy-vs-direct.png)
 
-<center><i>Beyla running in Alloy mode (left) vs. Direct mode (right)</i></center>
+*On the left, Beyla running in Alloy mode versus Direct mode on the right.*
 
-## Running in Direct mode
+## Direct mode
 
 The OTLP endpoint authentication credentials are provided by using the following environment variables:
 
@@ -38,7 +38,7 @@ The OTLP endpoint authentication credentials are provided by using the following
 To run in Direct mode by using the Prometheus scrape endpoint, please refer to the
 [configuration documentation]({{< relref "./options.md" >}}).
 
-## Running in Alloy mode
+## Alloy mode
 
 > ℹ️ This tutorial assumes that both Alloy and the auto-instrumentation tool are installed
 > as local Linux OS executables. For further examples on downloading and running the
@@ -50,7 +50,7 @@ First, locally install and configure [Grafana Alloy, according to the latest doc
 Alloy facilitates the ingestion of OpenTelemetry metrics and traces from the auto-instrumentation tool,
 and process and forward to the different Grafana product endpoints (Mimir and/or Tempo).
 
-### Configuring Alloy pipeline
+### Configure Alloy pipeline
 
 Configure the [Alloy](/docs/alloy/) pipeline and specify the following nodes:
 

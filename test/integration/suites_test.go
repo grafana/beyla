@@ -220,6 +220,7 @@ func TestSuite_PrometheusScrape(t *testing.T) {
 	t.Run("Internal Prometheus metrics", testInternalPrometheusExport)
 	t.Run("Testing Beyla Build Info metric", testPrometheusBeylaBuildInfo)
 	t.Run("Testing for no Beyla self metrics", testPrometheusNoBeylaEvents)
+	t.Run("Testing BPF metrics", testPrometheusBPFMetrics)
 
 	require.NoError(t, compose.Close())
 }

@@ -13,7 +13,7 @@ import (
 
 // unwrapper unwraps to return the underlying instrument implementation.
 type unwrapper interface {
-	Unwrap() metric.Observable
+	unwrap() metric.Observable
 }
 
 type afCounter struct {
@@ -40,7 +40,7 @@ func (i *afCounter) setDelegate(m metric.Meter) {
 	i.delegate.Store(ctr)
 }
 
-func (i *afCounter) Unwrap() metric.Observable {
+func (i *afCounter) unwrap() metric.Observable {
 	if ctr := i.delegate.Load(); ctr != nil {
 		return ctr.(metric.Float64ObservableCounter)
 	}
@@ -71,7 +71,7 @@ func (i *afUpDownCounter) setDelegate(m metric.Meter) {
 	i.delegate.Store(ctr)
 }
 
-func (i *afUpDownCounter) Unwrap() metric.Observable {
+func (i *afUpDownCounter) unwrap() metric.Observable {
 	if ctr := i.delegate.Load(); ctr != nil {
 		return ctr.(metric.Float64ObservableUpDownCounter)
 	}
@@ -102,7 +102,7 @@ func (i *afGauge) setDelegate(m metric.Meter) {
 	i.delegate.Store(ctr)
 }
 
-func (i *afGauge) Unwrap() metric.Observable {
+func (i *afGauge) unwrap() metric.Observable {
 	if ctr := i.delegate.Load(); ctr != nil {
 		return ctr.(metric.Float64ObservableGauge)
 	}
@@ -133,7 +133,7 @@ func (i *aiCounter) setDelegate(m metric.Meter) {
 	i.delegate.Store(ctr)
 }
 
-func (i *aiCounter) Unwrap() metric.Observable {
+func (i *aiCounter) unwrap() metric.Observable {
 	if ctr := i.delegate.Load(); ctr != nil {
 		return ctr.(metric.Int64ObservableCounter)
 	}
@@ -164,7 +164,7 @@ func (i *aiUpDownCounter) setDelegate(m metric.Meter) {
 	i.delegate.Store(ctr)
 }
 
-func (i *aiUpDownCounter) Unwrap() metric.Observable {
+func (i *aiUpDownCounter) unwrap() metric.Observable {
 	if ctr := i.delegate.Load(); ctr != nil {
 		return ctr.(metric.Int64ObservableUpDownCounter)
 	}
@@ -195,7 +195,7 @@ func (i *aiGauge) setDelegate(m metric.Meter) {
 	i.delegate.Store(ctr)
 }
 
-func (i *aiGauge) Unwrap() metric.Observable {
+func (i *aiGauge) unwrap() metric.Observable {
 	if ctr := i.delegate.Load(); ctr != nil {
 		return ctr.(metric.Int64ObservableGauge)
 	}
@@ -229,12 +229,6 @@ func (i *sfCounter) Add(ctx context.Context, incr float64, opts ...metric.AddOpt
 	}
 }
 
-func (i *sfCounter) Remove(ctx context.Context, opts ...metric.RemoveOption) {
-	if ctr := i.delegate.Load(); ctr != nil {
-		ctr.(metric.Float64Counter).Remove(ctx, opts...)
-	}
-}
-
 type sfUpDownCounter struct {
 	embedded.Float64UpDownCounter
 
@@ -258,12 +252,6 @@ func (i *sfUpDownCounter) setDelegate(m metric.Meter) {
 func (i *sfUpDownCounter) Add(ctx context.Context, incr float64, opts ...metric.AddOption) {
 	if ctr := i.delegate.Load(); ctr != nil {
 		ctr.(metric.Float64UpDownCounter).Add(ctx, incr, opts...)
-	}
-}
-
-func (i *sfUpDownCounter) Remove(ctx context.Context, opts ...metric.RemoveOption) {
-	if ctr := i.delegate.Load(); ctr != nil {
-		ctr.(metric.Float64UpDownCounter).Remove(ctx, opts...)
 	}
 }
 
@@ -293,12 +281,6 @@ func (i *sfHistogram) Record(ctx context.Context, x float64, opts ...metric.Reco
 	}
 }
 
-func (i *sfHistogram) Remove(ctx context.Context, opts ...metric.RemoveOption) {
-	if ctr := i.delegate.Load(); ctr != nil {
-		ctr.(metric.Float64Histogram).Remove(ctx, opts...)
-	}
-}
-
 type sfGauge struct {
 	embedded.Float64Gauge
 
@@ -322,12 +304,6 @@ func (i *sfGauge) setDelegate(m metric.Meter) {
 func (i *sfGauge) Record(ctx context.Context, x float64, opts ...metric.RecordOption) {
 	if ctr := i.delegate.Load(); ctr != nil {
 		ctr.(metric.Float64Gauge).Record(ctx, x, opts...)
-	}
-}
-
-func (i *sfGauge) Remove(ctx context.Context, opts ...metric.RemoveOption) {
-	if ctr := i.delegate.Load(); ctr != nil {
-		ctr.(metric.Float64Gauge).Remove(ctx, opts...)
 	}
 }
 
@@ -357,12 +333,6 @@ func (i *siCounter) Add(ctx context.Context, x int64, opts ...metric.AddOption) 
 	}
 }
 
-func (i *siCounter) Remove(ctx context.Context, opts ...metric.RemoveOption) {
-	if ctr := i.delegate.Load(); ctr != nil {
-		ctr.(metric.Int64Counter).Remove(ctx, opts...)
-	}
-}
-
 type siUpDownCounter struct {
 	embedded.Int64UpDownCounter
 
@@ -386,12 +356,6 @@ func (i *siUpDownCounter) setDelegate(m metric.Meter) {
 func (i *siUpDownCounter) Add(ctx context.Context, x int64, opts ...metric.AddOption) {
 	if ctr := i.delegate.Load(); ctr != nil {
 		ctr.(metric.Int64UpDownCounter).Add(ctx, x, opts...)
-	}
-}
-
-func (i *siUpDownCounter) Remove(ctx context.Context, opts ...metric.RemoveOption) {
-	if ctr := i.delegate.Load(); ctr != nil {
-		ctr.(metric.Int64UpDownCounter).Remove(ctx, opts...)
 	}
 }
 
@@ -421,12 +385,6 @@ func (i *siHistogram) Record(ctx context.Context, x int64, opts ...metric.Record
 	}
 }
 
-func (i *siHistogram) Remove(ctx context.Context, opts ...metric.RemoveOption) {
-	if ctr := i.delegate.Load(); ctr != nil {
-		ctr.(metric.Int64Histogram).Remove(ctx, opts...)
-	}
-}
-
 type siGauge struct {
 	embedded.Int64Gauge
 
@@ -450,11 +408,5 @@ func (i *siGauge) setDelegate(m metric.Meter) {
 func (i *siGauge) Record(ctx context.Context, x int64, opts ...metric.RecordOption) {
 	if ctr := i.delegate.Load(); ctr != nil {
 		ctr.(metric.Int64Gauge).Record(ctx, x, opts...)
-	}
-}
-
-func (i *siGauge) Remove(ctx context.Context, opts ...metric.RemoveOption) {
-	if ctr := i.delegate.Load(); ctr != nil {
-		ctr.(metric.Int64Gauge).Remove(ctx, opts...)
 	}
 }

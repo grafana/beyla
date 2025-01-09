@@ -10,14 +10,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/grafana/beyla/pkg/export/otel/metric"
+	instrument "github.com/grafana/beyla/pkg/export/otel/metric/api/metric"
 	"github.com/mariomac/pipes/pipe"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
-	instrument "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/sdk/instrumentation"
-	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
@@ -28,6 +28,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 )
 
 func mlog() *slog.Logger {
@@ -170,7 +171,7 @@ type MetricsReporter struct {
 	cfg        *MetricsConfig
 	hostID     string
 	attributes *attributes.AttrSelector
-	exporter   metric.Exporter
+	exporter   sdkmetric.Exporter
 	reporters  ReporterPool[*svc.Attrs, *Metrics]
 	is         instrumentations.InstrumentationSelection
 
@@ -613,9 +614,9 @@ func isExponentialAggregation(mc *MetricsConfig, mlog *slog.Logger) bool {
 }
 
 // TODO: restore as private
-func InstantiateMetricsExporter(ctx context.Context, cfg *MetricsConfig, log *slog.Logger) (metric.Exporter, error) {
+func InstantiateMetricsExporter(ctx context.Context, cfg *MetricsConfig, log *slog.Logger) (sdkmetric.Exporter, error) {
 	var err error
-	var exporter metric.Exporter
+	var exporter sdkmetric.Exporter
 	switch proto := cfg.GetProtocol(); proto {
 	case ProtocolHTTPJSON, ProtocolHTTPProtobuf, "": // zero value defaults to HTTP for backwards-compatibility
 		log.Debug("instantiating HTTP MetricsReporter", "protocol", proto)
@@ -634,7 +635,7 @@ func InstantiateMetricsExporter(ctx context.Context, cfg *MetricsConfig, log *sl
 	return exporter, nil
 }
 
-func httpMetricsExporter(ctx context.Context, cfg *MetricsConfig) (metric.Exporter, error) {
+func httpMetricsExporter(ctx context.Context, cfg *MetricsConfig) (sdkmetric.Exporter, error) {
 	opts, err := getHTTPMetricEndpointOptions(cfg)
 	if err != nil {
 		return nil, err
@@ -646,7 +647,7 @@ func httpMetricsExporter(ctx context.Context, cfg *MetricsConfig) (metric.Export
 	return mexp, nil
 }
 
-func grpcMetricsExporter(ctx context.Context, cfg *MetricsConfig) (metric.Exporter, error) {
+func grpcMetricsExporter(ctx context.Context, cfg *MetricsConfig) (sdkmetric.Exporter, error) {
 	opts, err := getGRPCMetricEndpointOptions(cfg)
 	if err != nil {
 		return nil, err
@@ -666,7 +667,7 @@ func (mr *MetricsReporter) close() {
 
 // instrumentMetricsExporter checks whether the context is configured to report internal metrics and,
 // in this case, wraps the passed metrics exporter inside an instrumented exporter
-func instrumentMetricsExporter(internalMetrics imetrics.Reporter, in metric.Exporter) metric.Exporter {
+func instrumentMetricsExporter(internalMetrics imetrics.Reporter, in sdkmetric.Exporter) sdkmetric.Exporter {
 	// avoid wrapping the instrumented exporter if we don't have
 	// internal instrumentation (NoopReporter)
 	if _, ok := internalMetrics.(imetrics.NoopReporter); ok || internalMetrics == nil {
@@ -687,7 +688,7 @@ func otelHistogramConfig(metricName string, buckets []float64, useExponentialHis
 			},
 			metric.Stream{
 				Name: metricName,
-				Aggregation: metric.AggregationBase2ExponentialHistogram{
+				Aggregation: sdkmetric.AggregationBase2ExponentialHistogram{
 					MaxScale: 20,
 					MaxSize:  160,
 				},
@@ -700,7 +701,7 @@ func otelHistogramConfig(metricName string, buckets []float64, useExponentialHis
 		},
 		metric.Stream{
 			Name: metricName,
-			Aggregation: metric.AggregationExplicitBucketHistogram{
+			Aggregation: sdkmetric.AggregationExplicitBucketHistogram{
 				Boundaries: buckets,
 			},
 		})

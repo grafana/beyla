@@ -11,10 +11,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/grafana/beyla/pkg/export/otel/metric/global"
 	"go.opentelemetry.io/otel"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	sdkmetricdata "go.opentelemetry.io/otel/sdk/metric/metricdata"
+
+	"github.com/grafana/beyla/pkg/export/otel/metric/global"
 )
 
 // Default periodic reader timing.

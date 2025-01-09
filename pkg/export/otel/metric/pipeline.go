@@ -12,16 +12,17 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/grafana/beyla/pkg/export/otel/metric/global"
-	"github.com/grafana/beyla/pkg/export/otel/metric/internal"
-	"github.com/grafana/beyla/pkg/export/otel/metric/internal/aggregate"
-	"github.com/grafana/beyla/pkg/export/otel/metric/internal/x"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/metric/embedded"
 	"go.opentelemetry.io/otel/sdk/instrumentation"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	sdkmetricdata "go.opentelemetry.io/otel/sdk/metric/metricdata"
 	"go.opentelemetry.io/otel/sdk/resource"
+
+	"github.com/grafana/beyla/pkg/export/otel/metric/global"
+	"github.com/grafana/beyla/pkg/export/otel/metric/internal"
+	"github.com/grafana/beyla/pkg/export/otel/metric/internal/aggregate"
+	"github.com/grafana/beyla/pkg/export/otel/metric/internal/x"
 )
 
 var (
@@ -437,6 +438,7 @@ func (i *inserter[N]) instID(kind InstrumentKind, stream Stream) instID {
 // aggregateFunc returns new aggregate functions matching agg, kind, and
 // monotonic. If the agg is unknown or temporality is invalid, an error is
 // returned.
+// nolint:cyclop
 func (i *inserter[N]) aggregateFunc(b aggregate.Builder[N], agg sdkmetric.Aggregation, kind InstrumentKind) (meas aggregate.Measure[N], remove aggregate.Remove, comp aggregate.ComputeAggregation, err error) {
 	switch a := agg.(type) {
 	case sdkmetric.AggregationDefault:

@@ -8,11 +8,11 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/grafana/beyla/pkg/export/otel/metric/api/metric"
-	"github.com/grafana/beyla/pkg/export/otel/metric/global"
 	"go.opentelemetry.io/otel/metric/embedded"
 	"go.opentelemetry.io/otel/sdk/instrumentation"
 
+	"github.com/grafana/beyla/pkg/export/otel/metric/api/metric"
+	"github.com/grafana/beyla/pkg/export/otel/metric/global"
 	"github.com/grafana/beyla/pkg/export/otel/metric/internal/aggregate"
 )
 

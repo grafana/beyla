@@ -10,25 +10,25 @@ import (
 	"strings"
 	"time"
 
-	"github.com/grafana/beyla/pkg/export/otel/metric"
-	instrument "github.com/grafana/beyla/pkg/export/otel/metric/api/metric"
 	"github.com/mariomac/pipes/pipe"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	"go.opentelemetry.io/otel/sdk/instrumentation"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
 	"github.com/grafana/beyla/pkg/export/attributes"
 	attr "github.com/grafana/beyla/pkg/export/attributes/names"
 	"github.com/grafana/beyla/pkg/export/instrumentations"
+	"github.com/grafana/beyla/pkg/export/otel/metric"
+	instrument "github.com/grafana/beyla/pkg/export/otel/metric/api/metric"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
-	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 )
 
 func mlog() *slog.Logger {

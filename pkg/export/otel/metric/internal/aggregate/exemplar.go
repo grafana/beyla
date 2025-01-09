@@ -6,8 +6,9 @@ package aggregate
 import (
 	"sync"
 
-	"github.com/grafana/beyla/pkg/export/otel/metric/internal/exemplar"
 	sdkmetricdata "go.opentelemetry.io/otel/sdk/metric/metricdata"
+
+	"github.com/grafana/beyla/pkg/export/otel/metric/internal/exemplar"
 )
 
 var exemplarPool = sync.Pool{

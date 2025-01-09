@@ -10,9 +10,10 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/grafana/beyla/pkg/export/otel/metric/global"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	sdkmetricdata "go.opentelemetry.io/otel/sdk/metric/metricdata"
+
+	"github.com/grafana/beyla/pkg/export/otel/metric/global"
 )
 
 // ManualReader is a simple Reader that allows an application to
@@ -129,17 +130,17 @@ func (mr *ManualReader) Collect(ctx context.Context, rm *sdkmetricdata.ResourceM
 }
 
 // MarshalLog returns logging data about the ManualReader.
-func (r *ManualReader) MarshalLog() interface{} {
-	r.mu.Lock()
-	down := r.isShutdown
-	r.mu.Unlock()
+func (mr *ManualReader) MarshalLog() interface{} {
+	mr.mu.Lock()
+	down := mr.isShutdown
+	mr.mu.Unlock()
 	return struct {
 		Type       string
 		Registered bool
 		Shutdown   bool
 	}{
 		Type:       "ManualReader",
-		Registered: r.sdkProducer.Load() != nil,
+		Registered: mr.sdkProducer.Load() != nil,
 		Shutdown:   down,
 	}
 }

@@ -3,11 +3,11 @@ package otel
 import (
 	"context"
 
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	"go.opentelemetry.io/otel/sdk/trace"
 
 	"github.com/grafana/beyla/pkg/internal/imetrics"
-	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 )
 
 // instrumentedMetricsExporter wraps an otel metrics exporter to account some internal metrics

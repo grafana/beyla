@@ -8,9 +8,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/grafana/beyla/pkg/export/otel/metric/internal/exemplar"
 	"go.opentelemetry.io/otel/attribute"
 	sdkmetricdata "go.opentelemetry.io/otel/sdk/metric/metricdata"
+
+	"github.com/grafana/beyla/pkg/export/otel/metric/internal/exemplar"
 )
 
 // datapoint is timestamped measurement data.
@@ -56,15 +57,13 @@ func (s *lastValue[N]) measure(ctx context.Context, value N, fltrAttr attribute.
 	s.values[attr.Equivalent()] = d
 }
 
-func (s *lastValue[N]) remove(ctx context.Context, fltrAttr attribute.Set) {
+func (s *lastValue[N]) remove(_ context.Context, fltrAttr attribute.Set) {
 	s.Lock()
 	defer s.Unlock()
 
 	key := fltrAttr.Equivalent()
 
-	if _, ok := s.values[key]; ok {
-		delete(s.values, key)
-	}
+	delete(s.values, key)
 }
 
 func (s *lastValue[N]) delta(dest *sdkmetricdata.Aggregation) int {

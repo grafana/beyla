@@ -10,9 +10,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/grafana/beyla/pkg/export/otel/metric/internal/exemplar"
 	"go.opentelemetry.io/otel/attribute"
 	sdkmetricdata "go.opentelemetry.io/otel/sdk/metric/metricdata"
+
+	"github.com/grafana/beyla/pkg/export/otel/metric/internal/exemplar"
 )
 
 type buckets[N int64 | float64] struct {
@@ -107,15 +108,13 @@ func (s *histValues[N]) measure(ctx context.Context, value N, fltrAttr attribute
 	b.res.Offer(ctx, value, droppedAttr)
 }
 
-func (s *histValues[N]) remove(ctx context.Context, fltrAttr attribute.Set) {
+func (s *histValues[N]) remove(_ context.Context, fltrAttr attribute.Set) {
 	s.valuesMu.Lock()
 	defer s.valuesMu.Unlock()
 
 	key := fltrAttr.Equivalent()
 
-	if _, ok := s.values[key]; ok {
-		delete(s.values, key)
-	}
+	delete(s.values, key)
 }
 
 // newHistogram returns an Aggregator that summarizes a set of measurements as

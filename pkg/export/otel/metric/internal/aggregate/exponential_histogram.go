@@ -10,17 +10,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/grafana/beyla/pkg/export/otel/metric/internal/exemplar"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	sdkmetricdata "go.opentelemetry.io/otel/sdk/metric/metricdata"
+
+	"github.com/grafana/beyla/pkg/export/otel/metric/internal/exemplar"
 )
 
 const (
 	expoMaxScale = 20
 	expoMinScale = -10
-
-	smallestNonZeroNormalFloat64 = 0x1p-1022
 
 	// These redefine the Math constants with a type, so the compiler won't coerce
 	// them into an int on 32 bit platforms.
@@ -177,8 +176,8 @@ func (p *expoHistogramDataPoint[N]) scaleChange(bin, startBin, length int) int {
 
 	count := 0
 	for high-low >= p.maxSize {
-		low = low >> 1
-		high = high >> 1
+		low >>= 1
+		high >>= 1
 		count++
 		if count > expoMaxScale-expoMinScale {
 			return count
@@ -219,7 +218,7 @@ func (b *expoBuckets) record(bin int) {
 			b.counts = append(b.counts, make([]uint64, newLength-len(b.counts))...)
 		}
 
-		copy(b.counts[shift:origLen+shift], b.counts[:])
+		copy(b.counts[shift:origLen+shift], b.counts)
 		b.counts = b.counts[:newLength]
 		for i := 1; i < shift; i++ {
 			b.counts[i] = 0
@@ -258,7 +257,7 @@ func (b *expoBuckets) downscale(delta int) {
 	// new Counts: [4, 14, 30, 10]
 
 	if len(b.counts) <= 1 || delta < 1 {
-		b.startBin = b.startBin >> delta
+		b.startBin >>= delta
 		return
 	}
 
@@ -276,7 +275,7 @@ func (b *expoBuckets) downscale(delta int) {
 
 	lastIdx := (len(b.counts) - 1 + offset) / steps
 	b.counts = b.counts[:lastIdx+1]
-	b.startBin = b.startBin >> delta
+	b.startBin >>= delta
 }
 
 // newExponentialHistogram returns an Aggregator that summarizes a set of
@@ -334,15 +333,13 @@ func (e *expoHistogram[N]) measure(ctx context.Context, value N, fltrAttr attrib
 	v.res.Offer(ctx, value, droppedAttr)
 }
 
-func (e *expoHistogram[N]) remove(ctx context.Context, fltrAttr attribute.Set) {
+func (e *expoHistogram[N]) remove(_ context.Context, fltrAttr attribute.Set) {
 	e.valuesMu.Lock()
 	defer e.valuesMu.Unlock()
 
 	key := fltrAttr.Equivalent()
 
-	if _, ok := e.values[key]; ok {
-		delete(e.values, key)
-	}
+	delete(e.values, key)
 }
 
 func (e *expoHistogram[N]) delta(dest *sdkmetricdata.Aggregation) int {

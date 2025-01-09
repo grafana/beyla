@@ -8,9 +8,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/grafana/beyla/pkg/export/otel/metric/internal/exemplar"
 	"go.opentelemetry.io/otel/attribute"
 	sdkmetricdata "go.opentelemetry.io/otel/sdk/metric/metricdata"
+
+	"github.com/grafana/beyla/pkg/export/otel/metric/internal/exemplar"
 )
 
 type sumValue[N int64 | float64] struct {
@@ -52,15 +53,13 @@ func (s *valueMap[N]) measure(ctx context.Context, value N, fltrAttr attribute.S
 	s.values[attr.Equivalent()] = v
 }
 
-func (s *valueMap[N]) remove(ctx context.Context, fltrAttr attribute.Set) {
+func (s *valueMap[N]) remove(_ context.Context, fltrAttr attribute.Set) {
 	s.Lock()
 	defer s.Unlock()
 
 	key := fltrAttr.Equivalent()
 
-	if _, ok := s.values[key]; ok {
-		delete(s.values, key)
-	}
+	delete(s.values, key)
 }
 
 // newSum returns an aggregator that summarizes a set of measurements as their

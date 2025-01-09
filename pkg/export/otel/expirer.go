@@ -6,11 +6,11 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/grafana/beyla/pkg/export/otel/metric/api/metric"
 	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/grafana/beyla/pkg/export/attributes"
 	"github.com/grafana/beyla/pkg/export/expire"
+	"github.com/grafana/beyla/pkg/export/otel/metric/api/metric"
 )
 
 var timeNow = time.Now

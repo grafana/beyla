@@ -8,8 +8,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/grafana/beyla/pkg/export/otel/metric/global"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+
+	"github.com/grafana/beyla/pkg/export/otel/metric/global"
 )
 
 var (

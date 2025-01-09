@@ -11,12 +11,13 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/grafana/beyla/pkg/export/otel/metric/api/metric"
-	"github.com/grafana/beyla/pkg/export/otel/metric/internal/aggregate"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric/embedded"
 	"go.opentelemetry.io/otel/sdk/instrumentation"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+
+	"github.com/grafana/beyla/pkg/export/otel/metric/api/metric"
+	"github.com/grafana/beyla/pkg/export/otel/metric/internal/aggregate"
 )
 
 var zeroScope instrumentation.Scope

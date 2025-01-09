@@ -726,7 +726,7 @@ func testPrometheusBeylaBuildInfo(t *testing.T) {
 	})
 }
 
-test testPrometheusBPFMetrics(t *testing.T) {
+func testPrometheusBPFMetrics(t *testing.T) {
 	pq := prom.Client{HostPort: prometheusHostPort}
 	var results []prom.Result
 	test.Eventually(t, testTimeout, func(t require.TestingT) {

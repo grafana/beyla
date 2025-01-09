@@ -66,9 +66,11 @@ func setupAppO11y(ctx context.Context, ctxInfo *global.ContextInfo, config *beyl
 
 	instr := appolly.New(ctx, ctxInfo, config)
 	if err := instr.FindAndInstrument(&wg); err != nil {
+		slog.Error("can't find  target process", "error", err)
 		return fmt.Errorf("can't find target process: %w", err)
 	}
 	if err := instr.ReadAndForward(); err != nil {
+		slog.Error("can't start read and forwarding", "error", err)
 		return fmt.Errorf("can't start read and forwarding: %w", err)
 	}
 	return nil
@@ -82,9 +84,11 @@ func setupNetO11y(ctx context.Context, ctxInfo *global.ContextInfo, cfg *beyla.C
 	slog.Info("starting Beyla in Network metrics mode")
 	flowsAgent, err := agent.FlowsAgent(ctxInfo, cfg)
 	if err != nil {
+		slog.Error("can't start network metrics capture", "error", err)
 		return fmt.Errorf("can't start network metrics capture: %w", err)
 	}
 	if err := flowsAgent.Run(ctx); err != nil {
+		slog.Error("can't start network metrics capture", "error", err)
 		return fmt.Errorf("can't start network metrics capture: %w", err)
 	}
 	return nil

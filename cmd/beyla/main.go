@@ -75,7 +75,7 @@ func main() {
 	ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
 	if err := components.RunBeyla(ctx, config); err != nil {
-		slog.Error("Beyla can't start", "error", err)
+		slog.Error("Beyla ran with errors", "error", err)
 		os.Exit(-1)
 	}
 

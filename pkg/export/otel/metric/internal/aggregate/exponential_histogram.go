@@ -292,7 +292,6 @@ func newExponentialHistogram[N int64 | float64](maxSize, maxScale int32, noMinMa
 		newRes: r,
 		limit:  newLimiter[*expoHistogramDataPoint[N]](limit),
 		values: make(map[attribute.Distinct]*expoHistogramDataPoint[N]),
-		stale:  make(map[attribute.Distinct]*expoHistogramDataPoint[N]),
 
 		start: now(),
 	}
@@ -309,7 +308,6 @@ type expoHistogram[N int64 | float64] struct {
 	newRes   func() exemplar.FilteredReservoir[N]
 	limit    limiter[*expoHistogramDataPoint[N]]
 	values   map[attribute.Distinct]*expoHistogramDataPoint[N]
-	stale    map[attribute.Distinct]*expoHistogramDataPoint[N]
 	valuesMu sync.Mutex
 
 	start time.Time
@@ -343,7 +341,6 @@ func (e *expoHistogram[N]) remove(ctx context.Context, fltrAttr attribute.Set) {
 	key := fltrAttr.Equivalent()
 
 	if _, ok := e.values[key]; ok {
-		//e.stale[key] = val
 		delete(e.values, key)
 	}
 }
@@ -394,7 +391,6 @@ func (e *expoHistogram[N]) delta(dest *sdkmetricdata.Aggregation) int {
 	}
 	// Unused attribute sets do not report.
 	clear(e.values)
-	clear(e.stale)
 
 	e.start = t
 	h.DataPoints = hDPts
@@ -413,7 +409,7 @@ func (e *expoHistogram[N]) cumulative(dest *sdkmetricdata.Aggregation) int {
 	e.valuesMu.Lock()
 	defer e.valuesMu.Unlock()
 
-	n := len(e.values) + len(e.stale)
+	n := len(e.values)
 	hDPts := reset(h.DataPoints, n, n)
 
 	var i int
@@ -450,16 +446,6 @@ func (e *expoHistogram[N]) cumulative(dest *sdkmetricdata.Aggregation) int {
 		// sets that become "stale" need to be forgotten so this will not
 		// overload the system.
 	}
-	for _, val := range e.stale {
-		hDPts[i].Attributes = val.attrs
-		hDPts[i].StartTime = e.start
-		hDPts[i].Time = t
-		i++
-	}
-
-	// Stale attribute sets for which a no-record marker was emitted are not
-	// reported anymore.
-	clear(e.stale)
 
 	h.DataPoints = hDPts
 	*dest = h

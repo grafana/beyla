@@ -735,7 +735,7 @@ func testPrometheusBPFMetrics(t *testing.T) {
 			`probe_name="uprobe_proc_new"}`)
 		require.NoError(t, err)
 		require.NotEmpty(t, results)
-	}
+	})
 
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
@@ -743,7 +743,7 @@ func testPrometheusBPFMetrics(t *testing.T) {
 			`map_name="ongoing_server_"}`)
 		require.NoError(t, err)
 		require.NotEmpty(t, results)
-	}
+	})
 }
 
 func testPrometheusNoBeylaEvents(t *testing.T) {

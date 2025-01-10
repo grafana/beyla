@@ -1,42 +1,49 @@
 {{/*
-Define the default configuration.
+Define the default configuration for discovery configuration.
 */}}
-{{- define "beyla.defaultConfig" }}
-{{- if eq .Values.preset "network" }}
-network:
-  enable: true
-{{- end }}
-{{- if eq .Values.preset "application" }}
-discovery:
-  services:
-    - k8s_namespace: .
-  exclude_services:
-    - exe_path: ".*alloy.*|.*otelcol.*|.*beyla.*"
-{{- end }}
-prometheus_export:
-  port: 9090
-  path: /metrics
-attributes:
-  kubernetes:
-    enable: true
-  select:
-    beyla_network_flow_bytes:
-      include:
-        - 'k8s.src.owner.type'
-        - 'k8s.dst.owner.type'
-        - 'direction'
-filter:
-  network:
-    k8s_dst_owner_name:
-      not_match: '{kube*,*jaeger-agent*,*prometheus*,*promtail*,*grafana-agent*}'
-    k8s_src_owner_name:
-      not_match: '{kube*,*jaeger-agent*,*prometheus*,*promtail*,*grafana-agent*}'
+{{- define "beyla.discoveryDefault" }}
+services:
+  - k8s_namespace: .
 {{- end }}
 
 {{/*
-Merge default configuration with user configuration from values.
+Define the default exclusion for discovery configuration.
+*/}}
+{{- define "beyla.discoveryDefaultExclude" }}
+exclude_services:
+  - exe_path: ".*alloy.*|.*otelcol.*|.*beyla.*"
+{{- end }}
+
+{{/*
+Define the discovery configuration.
+*/}}
+{{- define "beyla.discoveryConfig" }}
+{{- $defaultDiscovery := fromYaml (include "beyla.discoveryDefault" . ) }}
+{{- $defaultExclude := fromYaml (include "beyla.discoveryDefaultExclude" . )}}
+{{- if not .Values.config.data.discovery }}
+  {{- if .Values.config.discoveryExcludeDefault }}
+    {{- mergeOverwrite $defaultDiscovery $defaultExclude | toYaml }}
+  {{- else }}
+    {{- $defaultDiscovery | toYaml }}
+  {{- end }}
+{{- else if .Values.config.discoveryExcludeDefault }}
+  {{- $userDiscovery := .Values.config.data.discovery }}
+  {{- merge $userDiscovery $defaultExclude | toYaml }}
+{{- else }}
+  {{- with .Values.config.data.discovery }}
+    {{- toYaml . }}
+  {{- end }}
+{{- end }}
+{{- end }}
+
+{{/*
+Define the rest of the configuration.
 */}}
 {{- define "beyla.config" }}
-{{- $defaultConfig := fromYaml (include "beyla.defaultConfig" . ) }}
-{{- mergeOverwrite $defaultConfig .Values.config.data | default $defaultConfig | toYaml | nindent 4 }}
+{{- $userConfig := .Values.config.data }}
+{{- if .Values.config.data.discovery }}
+  {{- omit $userConfig "discovery" | toYaml }}
+{{- else }}
+  {{- $userConfig | toYaml }}
+{{- end }}
 {{- end }}

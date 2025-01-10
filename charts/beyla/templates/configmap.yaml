@@ -18,5 +18,15 @@ metadata:
   {{- end }}
 data:
   beyla-config.yml: |
-    {{- include "beyla.config" . }}
+    {{- if eq .Values.preset "network" }}
+    {{- if not .Values.config.data.network }}
+    network:
+      enable: true
+    {{- end }}
+    {{- end }}
+    {{- if eq .Values.preset "application" }}
+    discovery:
+    {{- include "beyla.discoveryConfig" . | nindent 6 }}
+    {{- end }}
+    {{- include "beyla.config" . | nindent 4 }}
 {{- end }}

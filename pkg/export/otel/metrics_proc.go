@@ -9,14 +9,15 @@ import (
 
 	"github.com/mariomac/pipes/pipe"
 	"go.opentelemetry.io/otel/attribute"
-	metric2 "go.opentelemetry.io/otel/metric"
-	"go.opentelemetry.io/otel/sdk/metric"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
 	"github.com/grafana/beyla/pkg/export/attributes"
 	attr2 "github.com/grafana/beyla/pkg/export/attributes/names"
 	"github.com/grafana/beyla/pkg/export/expire"
+	"github.com/grafana/beyla/pkg/export/otel/metric"
+	metric2 "github.com/grafana/beyla/pkg/export/otel/metric/api/metric"
 	"github.com/grafana/beyla/pkg/internal/infraolly/process"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/svc"
@@ -56,7 +57,7 @@ type procMetricsExporter struct {
 
 	hostID string
 
-	exporter  metric.Exporter
+	exporter  sdkmetric.Exporter
 	reporters ReporterPool[*process.ID, *procMetrics]
 
 	log *slog.Logger

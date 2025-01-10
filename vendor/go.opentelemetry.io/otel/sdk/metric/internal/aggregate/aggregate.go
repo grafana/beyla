@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/sdk/metric/internal/exemplar"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 )
 
@@ -18,9 +17,6 @@ var now = time.Now
 
 // Measure receives measurements to be aggregated.
 type Measure[N int64 | float64] func(context.Context, N, attribute.Set)
-
-// Remove receives a time series to be deleted.
-type Remove func(context.Context, attribute.Set)
 
 // ComputeAggregation stores the aggregate of measurements into dest and
 // returns the number of aggregate data-points output.
@@ -41,8 +37,8 @@ type Builder[N int64 | float64] struct {
 	// create new exemplar reservoirs for a new seen attribute set.
 	//
 	// If this is not provided a default factory function that returns an
-	// exemplar.Drop reservoir will be used.
-	ReservoirFunc func() exemplar.FilteredReservoir[N]
+	// dropReservoir reservoir will be used.
+	ReservoirFunc func(attribute.Set) FilteredExemplarReservoir[N]
 	// AggregationLimit is the cardinality limit of measurement attributes. Any
 	// measurement for new attributes once the limit has been reached will be
 	// aggregated into a single aggregate for the "otel.metric.overflow"
@@ -53,12 +49,12 @@ type Builder[N int64 | float64] struct {
 	AggregationLimit int
 }
 
-func (b Builder[N]) resFunc() func() exemplar.FilteredReservoir[N] {
+func (b Builder[N]) resFunc() func(attribute.Set) FilteredExemplarReservoir[N] {
 	if b.ReservoirFunc != nil {
 		return b.ReservoirFunc
 	}
 
-	return exemplar.Drop
+	return dropReservoir
 }
 
 type fltrMeasure[N int64 | float64] func(ctx context.Context, value N, fltrAttr attribute.Set, droppedAttr []attribute.KeyValue)
@@ -77,73 +73,73 @@ func (b Builder[N]) filter(f fltrMeasure[N]) Measure[N] {
 }
 
 // LastValue returns a last-value aggregate function input and output.
-func (b Builder[N]) LastValue() (Measure[N], Remove, ComputeAggregation) {
+func (b Builder[N]) LastValue() (Measure[N], ComputeAggregation) {
 	lv := newLastValue[N](b.AggregationLimit, b.resFunc())
 	switch b.Temporality {
 	case metricdata.DeltaTemporality:
-		return b.filter(lv.measure), lv.remove, lv.delta
+		return b.filter(lv.measure), lv.delta
 	default:
-		return b.filter(lv.measure), lv.remove, lv.cumulative
+		return b.filter(lv.measure), lv.cumulative
 	}
 }
 
 // PrecomputedLastValue returns a last-value aggregate function input and
 // output. The aggregation returned from the returned ComputeAggregation
 // function will always only return values from the previous collection cycle.
-func (b Builder[N]) PrecomputedLastValue() (Measure[N], Remove, ComputeAggregation) {
+func (b Builder[N]) PrecomputedLastValue() (Measure[N], ComputeAggregation) {
 	lv := newPrecomputedLastValue[N](b.AggregationLimit, b.resFunc())
 	switch b.Temporality {
 	case metricdata.DeltaTemporality:
-		return b.filter(lv.measure), lv.remove, lv.delta
+		return b.filter(lv.measure), lv.delta
 	default:
-		return b.filter(lv.measure), lv.remove, lv.cumulative
+		return b.filter(lv.measure), lv.cumulative
 	}
 }
 
 // PrecomputedSum returns a sum aggregate function input and output. The
 // arguments passed to the input are expected to be the precomputed sum values.
-func (b Builder[N]) PrecomputedSum(monotonic bool) (Measure[N], Remove, ComputeAggregation) {
+func (b Builder[N]) PrecomputedSum(monotonic bool) (Measure[N], ComputeAggregation) {
 	s := newPrecomputedSum[N](monotonic, b.AggregationLimit, b.resFunc())
 	switch b.Temporality {
 	case metricdata.DeltaTemporality:
-		return b.filter(s.measure), s.remove, s.delta
+		return b.filter(s.measure), s.delta
 	default:
-		return b.filter(s.measure), s.remove, s.cumulative
+		return b.filter(s.measure), s.cumulative
 	}
 }
 
 // Sum returns a sum aggregate function input and output.
-func (b Builder[N]) Sum(monotonic bool) (Measure[N], Remove, ComputeAggregation) {
+func (b Builder[N]) Sum(monotonic bool) (Measure[N], ComputeAggregation) {
 	s := newSum[N](monotonic, b.AggregationLimit, b.resFunc())
 	switch b.Temporality {
 	case metricdata.DeltaTemporality:
-		return b.filter(s.measure), s.remove, s.delta
+		return b.filter(s.measure), s.delta
 	default:
-		return b.filter(s.measure), s.remove, s.cumulative
+		return b.filter(s.measure), s.cumulative
 	}
 }
 
 // ExplicitBucketHistogram returns a histogram aggregate function input and
 // output.
-func (b Builder[N]) ExplicitBucketHistogram(boundaries []float64, noMinMax, noSum bool) (Measure[N], Remove, ComputeAggregation) {
+func (b Builder[N]) ExplicitBucketHistogram(boundaries []float64, noMinMax, noSum bool) (Measure[N], ComputeAggregation) {
 	h := newHistogram[N](boundaries, noMinMax, noSum, b.AggregationLimit, b.resFunc())
 	switch b.Temporality {
 	case metricdata.DeltaTemporality:
-		return b.filter(h.measure), h.remove, h.delta
+		return b.filter(h.measure), h.delta
 	default:
-		return b.filter(h.measure), h.remove, h.cumulative
+		return b.filter(h.measure), h.cumulative
 	}
 }
 
 // ExponentialBucketHistogram returns a histogram aggregate function input and
 // output.
-func (b Builder[N]) ExponentialBucketHistogram(maxSize, maxScale int32, noMinMax, noSum bool) (Measure[N], Remove, ComputeAggregation) {
+func (b Builder[N]) ExponentialBucketHistogram(maxSize, maxScale int32, noMinMax, noSum bool) (Measure[N], ComputeAggregation) {
 	h := newExponentialHistogram[N](maxSize, maxScale, noMinMax, noSum, b.AggregationLimit, b.resFunc())
 	switch b.Temporality {
 	case metricdata.DeltaTemporality:
-		return b.filter(h.measure), h.remove, h.delta
+		return b.filter(h.measure), h.delta
 	default:
-		return b.filter(h.measure), h.remove, h.cumulative
+		return b.filter(h.measure), h.cumulative
 	}
 }
 

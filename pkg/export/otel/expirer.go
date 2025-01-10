@@ -7,10 +7,10 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/metric"
 
 	"github.com/grafana/beyla/pkg/export/attributes"
 	"github.com/grafana/beyla/pkg/export/expire"
+	"github.com/grafana/beyla/pkg/export/otel/metric/api/metric"
 )
 
 var timeNow = time.Now

@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package exemplar // import "go.opentelemetry.io/otel/sdk/metric/internal/exemplar"
+package exemplar
 
 import (
 	"context"
@@ -24,6 +24,6 @@ func SampledFilter(ctx context.Context) bool {
 }
 
 // AlwaysOnFilter is a [Filter] that always offers measurements.
-func AlwaysOnFilter(ctx context.Context) bool {
+func AlwaysOnFilter(_ context.Context) bool {
 	return true
 }

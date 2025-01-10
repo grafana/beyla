@@ -616,6 +616,19 @@ func TestSpanMetricsDiscarded(t *testing.T) {
 	}
 }
 
+func TestMetricsInterval(t *testing.T) {
+	cfg := MetricsConfig{
+		OTELIntervalMS: 60_000,
+	}
+	t.Run("If only OTEL is defined, it uses that value", func(t *testing.T) {
+		assert.Equal(t, 60*time.Second, cfg.GetInterval())
+	})
+	cfg.Interval = 5 * time.Second
+	t.Run("Beyla interval takes precedence over OTEL", func(t *testing.T) {
+		assert.Equal(t, 5*time.Second, cfg.GetInterval())
+	})
+}
+
 func (f *fakeInternalMetrics) OTELMetricExport(len int) {
 	fakeMux.Lock()
 	defer fakeMux.Unlock()

@@ -134,7 +134,7 @@ network:
 		},
 		NetworkFlows: nc,
 		Metrics: otel.MetricsConfig{
-			Interval:          5 * time.Second,
+			OTELIntervalMS:    60_000,
 			CommonEndpoint:    "localhost:3131",
 			MetricsEndpoint:   "localhost:3030",
 			Protocol:          otel.ProtocolUnset,

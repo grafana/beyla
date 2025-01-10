@@ -1,3 +1,5 @@
+// line below avoids linter errors on Mac
+// nolint:unused
 package tcmanager
 
 import (

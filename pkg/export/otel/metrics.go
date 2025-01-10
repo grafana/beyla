@@ -63,6 +63,9 @@ const (
 
 type MetricsConfig struct {
 	Interval time.Duration `yaml:"interval" env:"BEYLA_METRICS_INTERVAL"`
+	// OTELIntervalMS supports metric intervals as specified by the standard OTEL definition.
+	// BEYLA_METRICS_INTERVAL takes precedence over it.
+	OTELIntervalMS int `env:"OTEL_METRIC_EXPORT_INTERVAL"`
 
 	CommonEndpoint  string `yaml:"-" env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
 	MetricsEndpoint string `yaml:"endpoint" env:"OTEL_EXPORTER_OTLP_METRICS_ENDPOINT"`
@@ -115,6 +118,13 @@ func (m *MetricsConfig) GetProtocol() Protocol {
 		return m.Protocol
 	}
 	return m.GuessProtocol()
+}
+
+func (m *MetricsConfig) GetInterval() time.Duration {
+	if m.Interval == 0 {
+		return time.Duration(m.OTELIntervalMS) * time.Millisecond
+	}
+	return m.Interval
 }
 
 func (m *MetricsConfig) GuessProtocol() Protocol {

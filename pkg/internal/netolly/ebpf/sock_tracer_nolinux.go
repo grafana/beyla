@@ -4,8 +4,6 @@ package ebpf
 
 import (
 	"github.com/cilium/ebpf/ringbuf"
-
-	"github.com/grafana/beyla/pkg/internal/netolly/ifaces"
 )
 
 type SockFlowFetcher struct{}

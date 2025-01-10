@@ -63,9 +63,10 @@ var DefaultConfig = Config{
 		CacheTTL: 5 * time.Minute,
 	},
 	Metrics: otel.MetricsConfig{
-		Protocol:             otel.ProtocolUnset,
-		MetricsProtocol:      otel.ProtocolUnset,
-		Interval:             5 * time.Second,
+		Protocol:        otel.ProtocolUnset,
+		MetricsProtocol: otel.ProtocolUnset,
+		// Matches Alloy and Grafana recommended scrape interval
+		OTELIntervalMS:       60_000,
 		Buckets:              otel.DefaultBuckets,
 		ReportersCacheLen:    ReporterLRUSize,
 		HistogramAggregation: otel.AggregationExplicit,

@@ -1,3 +1,5 @@
+//go:build linux
+
 package tcmanager
 
 func removeIf[T any](s []T, pred func(T) bool) []T {

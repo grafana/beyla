@@ -948,10 +948,11 @@ and any host name in that certificate. In this mode, TLS is susceptible to a man
 attacks. This option should be used only for testing and development purposes.
 
 | YAML       | Environment variable                  | Type     | Default |
-| ---------- | ------------------------ | -------- | ------- |
-| `interval` | `BEYLA_METRICS_INTERVAL` | Duration | `5s`    |
+| ---------- | ------------------------ | -------- |---------|
+| `interval` | `BEYLA_METRICS_INTERVAL` | Duration | `60s`   |
 
-Configures the intervening time between exports.
+Configures the intervening time between metric exports. This value overrides the `OTEL_METRIC_EXPORT_INTERVAL`
+configuration from the OpenTelemetry specification, which is also supported.
 
 | YAML       | Environment variable          | Type            | Default                      |
 |------------|-------------------------------|-----------------|------------------------------|

@@ -39,7 +39,7 @@ func pingHandler(rw http.ResponseWriter, req *http.Request) {
 	rw.WriteHeader(http.StatusOK)
 	b, err := rw.Write([]byte(ret))
 	if err != nil {
-		slog.Error("writing response", err, "url", req.URL)
+		slog.Error("writing response", "error", err, "url", req.URL)
 		return
 	}
 	slog.Debug(fmt.Sprintf("%T", rw))
@@ -56,7 +56,7 @@ func main() {
 	if ok {
 		err := lvl.UnmarshalText([]byte(lvlEnv))
 		if err != nil {
-			slog.Error("unknown log level specified, choises are [DEBUG, INFO, WARN, ERROR]", errors.New(lvlEnv))
+			slog.Error("unknown log level specified, choises are [DEBUG, INFO, WARN, ERROR]", "error", errors.New(lvlEnv))
 			os.Exit(-1)
 		}
 	}
@@ -69,7 +69,7 @@ func main() {
 	if ps, ok := os.LookupEnv(envPort); ok {
 		var err error
 		if port, err = strconv.Atoi(ps); err != nil {
-			slog.Error("parsing port", err, "value", ps)
+			slog.Error("parsing port", "error", err, "value", ps)
 			os.Exit(-1)
 		}
 	}

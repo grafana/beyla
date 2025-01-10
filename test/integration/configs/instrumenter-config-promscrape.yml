@@ -11,10 +11,10 @@ attributes:
   select:
     process_cpu_utilization:
       include: ["*"]
-      exclude: ["process_cpu_state"]
+      exclude: ["cpu_mode"]
     process_cpu_time:
       include: ["*"]
-      exclude: ["process_cpu_state"]
+      exclude: ["cpu_mode"]
     process_memory_usage:
       include: ["*"]
     process_memory_virtual:
@@ -23,3 +23,5 @@ attributes:
       include: ["*"]
     process_network_io:
       include: ["*"]
+  kubernetes:
+    cluster_name: beyla

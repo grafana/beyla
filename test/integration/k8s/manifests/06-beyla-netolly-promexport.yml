@@ -24,6 +24,7 @@ data:
         beyla.network.flow.bytes:
           # assured cardinality explosion. Don't try in production!
           include: ["*"]
+          exclude: ["src_port"]
 ---
 kind: Service
 apiVersion: v1
@@ -85,8 +86,8 @@ spec:
               value: "/testoutput"
             - name: BEYLA_CONFIG_PATH
               value: /config/beyla-config.yml
-            - name: BEYLA_NETWORK_METRICS
-              value: "true"
+            - name: BEYLA_PROMETHEUS_FEATURES # implicitly enabling network metrics for Prometheus scrape
+              value: "network"
             - name: BEYLA_NETWORK_CACHE_ACTIVE_TIMEOUT
               value: "100ms"
             - name: BEYLA_NETWORK_CACHE_MAX_FLOWS

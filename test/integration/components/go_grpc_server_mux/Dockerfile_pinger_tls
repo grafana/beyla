@@ -1,0 +1,10 @@
+# Build the testserver binary
+# Docker command must be invoked from the projec root directory
+FROM fullstorydev/grpcurl:latest-alpine AS builder
+
+WORKDIR /
+
+# Copy the run script
+COPY test/integration/components/go_grpc_server_mux/ping_tls.sh .
+
+ENTRYPOINT [ "/bin/sh", "/ping_tls.sh" ]

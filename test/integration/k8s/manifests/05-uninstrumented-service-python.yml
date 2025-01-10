@@ -16,6 +16,8 @@ metadata:
   name: pytestserver
   labels:
     app: pytestserver
+  annotations:
+    resource.opentelemetry.io/service.name: 'this-will-be-ignored-due-to-otel-attrs-env'
 spec:
   replicas: 1
   selector:
@@ -38,3 +40,5 @@ spec:
           env:
             - name: LOG_LEVEL
               value: "DEBUG"
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "service.name=mypythonapp"

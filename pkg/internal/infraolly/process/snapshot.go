@@ -34,6 +34,8 @@ import (
 	"github.com/grafana/beyla/pkg/internal/helpers"
 )
 
+const unknown string = "-"
+
 // CPUInfo represents CPU usage statistics at a given point
 type CPUInfo struct {
 	// User time of CPU, in seconds
@@ -52,10 +54,10 @@ type linuxProcess struct {
 
 	measureTime time.Time
 	stats       procStats
+	prevStats   procStats
 	process     *process.Process
 
 	// used to calculate CPU utilization ratios
-	previousCPUStats    CPUInfo
 	previousMeasureTime time.Time
 	previousIOCounters  *process.IOCountersStat
 	previousNetRx       int64
@@ -131,13 +133,11 @@ func getLinuxProcess(cachedCopy *linuxProcess, procFSRoot string, pid int32, pri
 			stats:               currentStats,
 			measureTime:         measureTime,
 			previousMeasureTime: measureTime,
-			previousCPUStats:    currentStats.cpu,
 			procFSRoot:          procFSRoot,
 		}, nil
 	}
 
 	// Otherwise, instead of creating a new process snapshot, we just reuse the cachedCopy one, with updated data
-	cachedCopy.previousCPUStats = cachedCopy.stats.cpu
 	cachedCopy.previousMeasureTime = cachedCopy.measureTime
 	cachedCopy.stats = currentStats
 	cachedCopy.measureTime = measureTime
@@ -155,19 +155,24 @@ func (pw *linuxProcess) Username() (string, error) {
 		// try to get it from gopsutil and return it if ok
 		pw.user, err = pw.process.Username()
 		if err == nil {
+			if pw.user == "" {
+				pw.user = unknown
+			}
 			return pw.user, nil
 		}
 
 		// get the uid to be retrieved from getent
 		uid, err := pw.uid()
 		if err != nil {
-			return "", err
+			pw.user = unknown
+			return pw.user, err
 		}
 
 		// try to get it using getent
 		pw.user, err = usernameFromGetent(uid)
 		if err != nil {
-			return "", err
+			pw.user = unknown
+			return pw.user, err
 		}
 	}
 	return pw.user, nil

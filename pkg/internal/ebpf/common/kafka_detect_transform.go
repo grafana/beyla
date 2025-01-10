@@ -45,15 +45,21 @@ func (k Operation) String() string {
 }
 
 const KafkaMinLength = 14
+const KafkaMaxPayload = 20 * 1024 * 1024 // 20 MB max, 1MB is default for most Kafka installations
 
 var topicRegex = regexp.MustCompile("\x02\t(.*)\x02")
 
 // ProcessKafkaRequest processes a TCP packet and returns error if the packet is not a valid Kafka request.
 // Otherwise, return kafka.Info with the processed data.
-func ProcessPossibleKafkaEvent(pkt []byte, rpkt []byte) (*KafkaInfo, error) {
+func ProcessPossibleKafkaEvent(event *TCPRequestInfo, pkt []byte, rpkt []byte) (*KafkaInfo, error) {
 	k, err := ProcessKafkaRequest(pkt)
 	if err != nil {
+		// If we are getting the information in the response buffer, the event
+		// must be reversed and that's how we captured it.
 		k, err = ProcessKafkaRequest(rpkt)
+		if err == nil {
+			reverseTCPEvent(event)
+		}
 	}
 	return k, err
 }
@@ -111,6 +117,11 @@ func isValidKafkaHeader(header *Header) bool {
 	if header.MessageSize < int32(KafkaMinLength) || header.APIVersion < 0 {
 		return false
 	}
+
+	if header.MessageSize > KafkaMaxPayload {
+		return false
+	}
+
 	switch Operation(header.APIKey) {
 	case Fetch:
 		if header.APIVersion > 16 { // latest: Fetch Request (Version: 16)
@@ -154,7 +165,11 @@ func processKafkaOperation(header *Header, pkt []byte, k *KafkaInfo, offset *int
 		k.Operation = Produce
 		k.TopicOffset = *offset
 	case Fetch:
-		*offset += getTopicOffsetFromFetchOperation(header)
+		to, err := getTopicOffsetFromFetchOperation(pkt, *offset, header)
+		if err != nil {
+			return err
+		}
+		*offset += to
 		k.Operation = Fetch
 		k.TopicOffset = *offset
 	default:
@@ -191,7 +206,7 @@ func getTopicName(pkt []byte, offset int, op Operation, apiVersion int16) (strin
 	}
 
 	offset += 4
-	if offset > len(pkt) {
+	if offset >= len(pkt) {
 		return "", errors.New("invalid buffer length")
 	}
 	topicNameSize, err := getTopicNameSize(pkt, offset, op, apiVersion)
@@ -200,7 +215,7 @@ func getTopicName(pkt []byte, offset int, op Operation, apiVersion int16) (strin
 	}
 	offset += 2
 
-	if offset > len(pkt) {
+	if offset >= len(pkt) {
 		return "", nil
 	}
 	maxLen := offset + topicNameSize
@@ -213,6 +228,9 @@ func getTopicName(pkt []byte, offset int, op Operation, apiVersion int16) (strin
 		topicName = []byte(extractTopic(string(topicName)))
 	}
 	if isValidKafkaString(topicName, len(topicName), int(topicNameSize), false) {
+		if op == Fetch && apiVersion <= 11 && len(topicName) == 0 {
+			return "", errors.New("topic name must not be empty for api version <= 11")
+		}
 		return string(topicName), nil
 	}
 	return "", errors.New("invalid topic name")
@@ -235,7 +253,7 @@ func getTopicNameSize(pkt []byte, offset int, op Operation, apiVersion int16) (i
 		if err != nil {
 			return 0, err
 		}
-	} else {
+	} else if offset < (len(pkt) - 1) { // we need at least 2 bytes to read uint16
 		topicNameSize = int(binary.BigEndian.Uint16(pkt[offset:]))
 	}
 	if topicNameSize <= 0 {
@@ -279,7 +297,7 @@ func getTopicOffsetFromProduceOperation(header *Header, pkt []byte, offset *int)
 	return true, nil
 }
 
-func getTopicOffsetFromFetchOperation(header *Header) int {
+func getTopicOffsetFromFetchOperation(pkt []byte, origOffset int, header *Header) (int, error) {
 	offset := 3 * 4 // 3 * sizeof(int32)
 
 	if header.APIVersion >= 15 {
@@ -289,6 +307,13 @@ func getTopicOffsetFromFetchOperation(header *Header) int {
 	if header.APIVersion >= 3 {
 		offset += 4 // max_bytes
 		if header.APIVersion >= 4 {
+			if origOffset+offset >= len(pkt) {
+				return 0, errors.New("packet too small")
+			}
+			isolation := pkt[origOffset+offset]
+			if isolation > 1 {
+				return 0, errors.New("wrong isolation level")
+			}
 			offset++ // isolation_level
 			if header.APIVersion >= 7 {
 				offset += 2 * 4 // session_id + session_epoch
@@ -296,7 +321,7 @@ func getTopicOffsetFromFetchOperation(header *Header) int {
 		}
 	}
 
-	return offset
+	return offset, nil
 }
 
 func readUnsignedVarint(data []byte) (int, error) {
@@ -326,24 +351,30 @@ func TCPToKafkaToSpan(trace *TCPRequestInfo, data *KafkaInfo) request.Span {
 		peer, hostname = (*BPFConnInfo)(unsafe.Pointer(&trace.ConnInfo)).reqHostInfo()
 		hostPort = int(trace.ConnInfo.D_port)
 	}
+
+	reqType := request.EventTypeKafkaClient
+	if trace.Direction == 0 {
+		reqType = request.EventTypeKafkaServer
+	}
+
 	return request.Span{
-		Type:           request.EventTypeKafkaClient,
-		Method:         data.Operation.String(),
-		OtherNamespace: data.ClientID,
-		Path:           data.Topic,
-		Peer:           peer,
-		PeerPort:       int(trace.ConnInfo.S_port),
-		Host:           hostname,
-		HostPort:       hostPort,
-		ContentLength:  0,
-		RequestStart:   int64(trace.StartMonotimeNs),
-		Start:          int64(trace.StartMonotimeNs),
-		End:            int64(trace.EndMonotimeNs),
-		Status:         0,
-		TraceID:        trace2.TraceID(trace.Tp.TraceId),
-		SpanID:         trace2.SpanID(trace.Tp.SpanId),
-		ParentSpanID:   trace2.SpanID(trace.Tp.ParentId),
-		Flags:          trace.Tp.Flags,
+		Type:          reqType,
+		Method:        data.Operation.String(),
+		Statement:     data.ClientID,
+		Path:          data.Topic,
+		Peer:          peer,
+		PeerPort:      int(trace.ConnInfo.S_port),
+		Host:          hostname,
+		HostPort:      hostPort,
+		ContentLength: 0,
+		RequestStart:  int64(trace.StartMonotimeNs),
+		Start:         int64(trace.StartMonotimeNs),
+		End:           int64(trace.EndMonotimeNs),
+		Status:        0,
+		TraceID:       trace2.TraceID(trace.Tp.TraceId),
+		SpanID:        trace2.SpanID(trace.Tp.SpanId),
+		ParentSpanID:  trace2.SpanID(trace.Tp.ParentId),
+		Flags:         trace.Tp.Flags,
 		Pid: request.PidInfo{
 			HostPID:   trace.Pid.HostPid,
 			UserPID:   trace.Pid.UserPid,

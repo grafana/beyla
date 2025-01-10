@@ -1,0 +1,57 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: otelcol
+spec:
+  selector:
+    app: otelcol
+  ports:
+    - port: 4317
+      name: otlp-grpc
+      targetPort: otlp-grpc
+    - port: 4318
+      name: otlp-http
+      targetPort: otlp-http
+    - port: 9464
+      name: prometheus
+      targetPort: prometheus
+    - port: 8888
+      name: metrics
+      targetPort: metrics
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: otelcol
+  labels:
+    app: otelcol
+spec:
+  volumes:
+    - name: configs
+      persistentVolumeClaim:
+        claimName: configs
+  affinity:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+          - matchExpressions:
+            - key: deployment/zone
+              operator: In
+              values:
+              - otel
+  containers:
+    - name: otelcol
+      image: otel/opentelemetry-collector-contrib:0.104.0
+      args: [ "--config=/etc/otelcol-config/otelcol-config.yml" ]
+      volumeMounts:
+        - mountPath: /etc/otelcol-config
+          name: configs
+      ports:
+        - containerPort: 4317
+          name: otlp-grpc
+        - containerPort: 4318
+          name: otlp-http
+        - containerPort: 9464
+          name: prometheus
+        - containerPort: 8888
+          name: metrics

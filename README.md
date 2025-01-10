@@ -4,7 +4,7 @@
 
 Open source zero-code automatic instrumentation with eBPF and OpenTelemetry.
 
-[![Build Status](https://drone.grafana.net/api/badges/grafana/beyla/status.svg?ref=refs/heads/main)](https://drone.grafana.net/grafana/beyla)
+![status badge](https://github.com/grafana/beyla/actions/workflows/publish_dockerhub.yml/badge.svg)
 
 ## Introduction
 
@@ -63,26 +63,42 @@ See [Documentation](https://grafana.com/docs/beyla/) and the [tutorials](https:/
 ## Requirements
 
 - Linux with Kernel 5.8 or higher with [BTF](https://www.kernel.org/doc/html/latest/bpf/btf.html)
-  enabled. BTF became enabled by default on most Linux distributions with kernel 5.14 or higher. 
+  enabled, or Linux distributions running RedHat Enterprise Linux 4.18 kernels build 348 and above as they have the required kernel backports. These include CentOS, AlmaLinux, and Oracle Linux. BTF became enabled by default on most Linux distributions with kernel 5.14 or higher.
   You can check if your kernel has BTF enabled by verifying if `/sys/kernel/btf/vmlinux` exists on your system.
   If you need to recompile your kernel to enable BTF, the configuration option `CONFIG_DEBUG_INFO_BTF=y` must be
-  set. 
-- eBPF enabled in the host
+  set.
+- eBPF enabled on the host.
 - For instrumenting Go programs, they must have been compiled with at least Go 1.17. We currently
   support Go applications built with a major **Go version no earlier than 3 versions** behind the current
-  stable major release.  
-- Administrative access to execute the instrumenter
-    - Or execute it from a user enabling the `SYS_ADMIN` capability. This might not work in some
-      container environments.
+  stable major release.
+- Some level of elevated permissions to execute the instrumenter:
+    - On host systems, running Beyla requires `sudo`.
+    - For Kubernetes we have detailed configuration example on how to run with minimum
+      required capabilities in the [examples/k8s/unprivileged.yaml](./examples/k8s/unprivileged.yaml) file.
+    - For docker compose, you need to setup Beyla as `privileged` container or grand the `SYS_ADMIN` capability.
 
-| Library                                       | Working  |
-|-----------------------------------------------|----------|
-| Kernel-level HTTP calls                       | ✅       |
-| OpenSSL library                               | ✅       |
-| Standard Go `net/http`                        | ✅       |
-| [Gorilla Mux](https://github.com/gorilla/mux) | ✅       |
-| [Gin](https://gin-gonic.com/)                 | ✅       |
-| [gRPC-Go](https://github.com/grpc/grpc-go)    | ✅       |
+| Available Instrumentations                    | Supported  |
+|-----------------------------------------------|------------|
+| HTTP/HTTPS/HTTP2                              | ✅         |
+| gRPC                                          | ✅         |
+| SQL                                           | ✅         |
+| Redis                                         | ✅         |
+| Kafka                                         | ✅         |
+
+The Go instrumentation is limited to certain specific libraries.
+
+| Available Go Instrumentations                       | Supported  |
+|-----------------------------------------------------|------------|
+| Standard Go `net/http`                              | ✅         |
+| [Gorilla Mux](https://github.com/gorilla/mux)       | ✅         |
+| [Gin](https://gin-gonic.com/)                       | ✅         |
+| [gRPC-Go](https://github.com/grpc/grpc-go)          | ✅         |
+| [Go x/net/http2](https://golang.org/x/net/http2)    | ✅         |
+| [Go-Redis v9](github.com/redis/go-redis)            | ✅         |
+| [Sarama Kafka](github.com/IBM/sarama)               | ✅         |
+| [kafka-Go](https://github.com/segmentio/kafka-go)   | ✅         |
+
+HTTPS instrumentation is limited to Go programs and libraries/languages using libssl3.
 
 ## Kubernetes
 
@@ -132,6 +148,71 @@ make generate
 ```
 
 Tested in Fedora 35, 38 and Red Hat Enterprise Linux 8.
+
+## Building Beyla from scratch
+
+### Development environment requirements
+
+- go 1.23
+- llvm >= 18
+- clang >= 18
+- clang-tidy >= 18
+- clang-format >= 18
+-  git-lfs
+- GNU make
+
+> [!IMPORTANT]
+>  You need to run `git lfs install` _once_ after installing the _git-lfs_ package to deploy its global configuration
+
+#### Common `Makefile` targets
+
+Beyla's `Makefile` provides several specific-purpose build targets. The most common ones are:
+- `prereqs` - install the build pre-requisites
+- `generate` - regenerates the eBPF binaries
+- `compile` - compiles the `beyla` binary (but does not automatically regenerates the eBPF binaries)
+- `dev` - equivalent to `make prereqs && make generate && make compile`
+- `test` - runs unit tests
+- `integration-tests` - runs integration tests - may require `sudo`
+
+####  Quickstart: cloning the repository and building Beyla
+
+```
+$ git clone https://github.com/grafana/beyla.git
+$ cd beyla/
+$ make dev
+```
+
+As described in the previous section, `make dev` takes care of setting up the build pre-requisites, including deploying a `clang-format` pre-commit hook.
+
+After a successful compilation, binaries can be found in the `bin/` subdirectory.
+
+#### Formatting and linting code
+
+Beyla uses linters to enforce our coding style and best practices:
+- `golangci-lint` for Go code
+- `clang-format` for formatting C code
+- `clang-tidy` for static analysis of the C code
+
+All of them are enforced on pull requests as part of the Beyla github workflows. Additionally, you can invoke the linters manually:
+
+- `make lint` invokes `golangci-lint` on the Go code
+- `make clang-tidy` invokes `clang-tidy` on the C/eBPF code
+
+`clang-format` is invoked automatically as a `pre-commit` git hook, so there is no explicit `Makefile` target for it.
+
+#### Running VM tests
+
+In addition to the `test` and `integration-test` `Makefile` targets, Beyla also runs select tests on QEMU virtual machines in order to be able to test different kernel versions. These tests are also part of our GitHub workflow, but it is also possible to run them manually using the following command:
+
+```
+$ sudo make -C test/vm KERNEL_VER=...
+```
+
+where `KERNEL_VER` is one of the supported kernel versions located in `test/vm/kernels`. For example, to run tests against kernel version 5.15.152, simply do:
+
+```
+$ sudo make -C test/vm KERNEL_VER=5.15.152
+```
 
 ## Credits
 

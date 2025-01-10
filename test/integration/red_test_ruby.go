@@ -48,6 +48,18 @@ func testREDMetricsForRubyHTTPLibrary(t *testing.T, url string, comm string) {
 		}
 	})
 
+	// check that the resource attributes we passed made it for the service
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		var err error
+		results, err = pq.Query(`target_info{` +
+			`data_center="ca",` +
+			`deployment_zone="to"}`)
+		require.NoError(t, err)
+		enoughPromResults(t, results)
+		val := totalPromCount(t, results)
+		assert.LessOrEqual(t, 1, val)
+	})
+
 	// Call 4 times the instrumented service, forcing it to:
 	// - process multiple calls in a row with, one more than we might need
 	// - returning a 200 code
@@ -83,7 +95,7 @@ func testREDMetricsRailsHTTP(t *testing.T) {
 	} {
 		t.Run(testCaseURL, func(t *testing.T) {
 			waitForRubyTestComponents(t, testCaseURL)
-			testREDMetricsForRubyHTTPLibrary(t, testCaseURL, "ruby")
+			testREDMetricsForRubyHTTPLibrary(t, testCaseURL, "my-ruby-app")
 		})
 	}
 }
@@ -94,7 +106,7 @@ func testREDMetricsRailsHTTPS(t *testing.T) {
 	} {
 		t.Run(testCaseURL, func(t *testing.T) {
 			waitForRubyTestComponents(t, testCaseURL)
-			testREDMetricsForRubyHTTPLibrary(t, testCaseURL, "ruby")
+			testREDMetricsForRubyHTTPLibrary(t, testCaseURL, "my-ruby-app")
 		})
 	}
 }

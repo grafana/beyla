@@ -1,0 +1,17 @@
+name: Pull request integration tests on VM 5.15 x86_64
+
+on:
+  push:
+    branches: [ 'main', 'release-*' ]
+    paths: [ 'bpf/**' ]
+  pull_request:
+    branches: [ 'main', 'release-*' ]
+    paths: [ 'bpf/**' ]
+
+jobs:
+  test:
+    uses: ./.github/workflows/workflow_integration_tests_vm.yml
+    with:
+      arch: x86_64
+      kernel-version: 5.15.152
+      timeout-minutes: 90

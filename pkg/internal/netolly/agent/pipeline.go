@@ -5,8 +5,8 @@ import (
 
 	"github.com/mariomac/pipes/pipe"
 
-	"github.com/grafana/beyla/pkg/internal/export/otel"
-	"github.com/grafana/beyla/pkg/internal/export/prom"
+	"github.com/grafana/beyla/pkg/export/otel"
+	"github.com/grafana/beyla/pkg/export/prom"
 	"github.com/grafana/beyla/pkg/internal/filter"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/netolly/export"
@@ -77,11 +77,6 @@ func (f *Flows) buildPipeline(ctx context.Context) (*pipe.Runner, error) {
 
 func (f *Flows) pipelineBuilder(ctx context.Context) (*pipe.Builder[*FlowsPipeline], error) {
 	alog := alog()
-	alog.Debug("registering interfaces' listener in background")
-	err := f.interfacesManager(ctx)
-	if err != nil {
-		return nil, err
-	}
 
 	alog.Debug("creating flows' processing graph")
 	pb := pipe.NewBuilder(&FlowsPipeline{}, pipe.ChannelBufferLen(f.cfg.ChannelBufferLen))
@@ -121,7 +116,7 @@ func (f *Flows) pipelineBuilder(ctx context.Context) (*pipe.Builder[*FlowsPipeli
 		return cidr.DecoratorProvider(f.cfg.NetworkFlows.CIDRs)
 	})
 	pipe.AddMiddleProvider(pb, kube, func() (pipe.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
-		return k8s.MetadataDecoratorProvider(ctx, &f.cfg.Attributes.Kubernetes)
+		return k8s.MetadataDecoratorProvider(ctx, &f.cfg.Attributes.Kubernetes, f.ctxInfo.K8sInformer)
 	})
 	pipe.AddMiddleProvider(pb, rdns, func() (pipe.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
 		return flow.ReverseDNSProvider(&f.cfg.NetworkFlows.ReverseDNS)
@@ -136,12 +131,14 @@ func (f *Flows) pipelineBuilder(ctx context.Context) (*pipe.Builder[*FlowsPipeli
 		return otel.NetMetricsExporterProvider(ctx, f.ctxInfo, &otel.NetMetricsConfig{
 			Metrics:            &f.cfg.Metrics,
 			AttributeSelectors: f.cfg.Attributes.Select,
+			GloballyEnabled:    f.cfg.NetworkFlows.Enable,
 		})
 	})
 	pipe.AddFinalProvider(pb, promExport, func() (pipe.FinalFunc[[]*ebpf.Record], error) {
 		return prom.NetPrometheusEndpoint(ctx, f.ctxInfo, &prom.NetPrometheusConfig{
 			Config:             &f.cfg.Prometheus,
 			AttributeSelectors: f.cfg.Attributes.Select,
+			GloballyEnabled:    f.cfg.NetworkFlows.Enable,
 		})
 	})
 	pipe.AddFinalProvider(pb, printer, func() (pipe.FinalFunc[[]*ebpf.Record], error) {

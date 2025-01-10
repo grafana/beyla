@@ -104,8 +104,8 @@ spec:
               value: "/testoutput"
             - name: BEYLA_DISCOVERY_POLL_INTERVAL
               value: "500ms"
-            - name: BEYLA_PRINT_TRACES
-              value: "true"
+            - name: BEYLA_TRACE_PRINTER
+              value: "text"
             - name: BEYLA_OPEN_PORT
               value: "8080"
             - name: BEYLA_SERVICE_NAMESPACE
@@ -128,6 +128,10 @@ spec:
               value: "application,application_span,application_service_graph,application_process"
             - name: BEYLA_OTEL_METRICS_TTL
               value: "30m0s"
+            - name: BEYLA_KUBE_CLUSTER_NAME
+              value: "beyla"
+            - name: BEYLA_NAME_RESOLVER_SOURCES
+              value: "dns,k8s"
           ports:
             - containerPort: 8999
               hostPort: 8999

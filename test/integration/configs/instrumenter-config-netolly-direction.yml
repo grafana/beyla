@@ -1,0 +1,20 @@
+attributes:
+  select:
+    beyla_network_flow_bytes:
+      include:
+      - beyla.ip
+      - src.address
+      - dst.address
+      - src.port
+      - dst.port
+      - src.name
+      - dst.name
+      - src.namespace
+      - dst.namespace
+      - src.cidr
+      - dst.cidr
+      - iface
+      - iface_direction
+      - direction
+      - client.port
+      - server.port

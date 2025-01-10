@@ -32,7 +32,7 @@ spec:
         claimName: configs
   containers:
     - name: otelcol
-      image: otel/opentelemetry-collector-contrib:0.85.0
+      image: otel/opentelemetry-collector-contrib:0.104.0
       args: [ "--config=/etc/otelcol-config/otelcol-config.yml" ]
       volumeMounts:
         - mountPath: /etc/otelcol-config

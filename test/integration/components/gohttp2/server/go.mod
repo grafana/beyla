@@ -1,6 +1,6 @@
 module http2srv
 
-go 1.22
+go 1.23
 
 require (
 	golang.org/x/net v0.20.0 // indirect

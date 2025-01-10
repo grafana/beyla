@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/grafana/beyla/pkg/config"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
@@ -30,13 +31,13 @@ func TestForwardRingbuf_CapacityFull(t *testing.T) {
 	defer restore()
 	metrics := &metricsReporter{}
 	forwardedMessages := make(chan []request.Span, 100)
-	fltr := TestPidsFilter{services: map[uint32]svc.ID{}}
-	fltr.AllowPID(1, 1, svc.ID{Name: "myService"}, PIDTypeGo)
+	fltr := TestPidsFilter{services: map[uint32]svc.Attrs{}}
+	fltr.AllowPID(1, 1, &svc.Attrs{UID: svc.UID{Name: "myService"}}, PIDTypeGo)
 	go ForwardRingbuf(
-		&TracerConfig{BatchLength: 10},
+		&config.EBPFTracer{BatchLength: 10},
 		nil, // the source ring buffer can be null
 		&fltr,
-		ReadHTTPRequestTraceAsSpan,
+		ReadBPFTraceAsSpan,
 		slog.With("test", "TestForwardRingbuf_CapacityFull"),
 		metrics,
 		nil,
@@ -54,13 +55,13 @@ func TestForwardRingbuf_CapacityFull(t *testing.T) {
 	batch := testutil.ReadChannel(t, forwardedMessages, testTimeout)
 	require.Len(t, batch, 10)
 	for i := range batch {
-		assert.Equal(t, request.Span{Type: 1, Method: "GET", ContentLength: int64(i), ServiceID: svc.ID{Name: "myService"}, Pid: request.PidInfo{HostPID: 1}}, batch[i])
+		assert.Equal(t, request.Span{Type: 1, Method: "GET", ContentLength: int64(i), Service: svc.Attrs{UID: svc.UID{Name: "myService"}}, Pid: request.PidInfo{HostPID: 1}}, batch[i])
 	}
 
 	batch = testutil.ReadChannel(t, forwardedMessages, testTimeout)
 	require.Len(t, batch, 10)
 	for i := range batch {
-		assert.Equal(t, request.Span{Type: 1, Method: "GET", ContentLength: int64(10 + i), ServiceID: svc.ID{Name: "myService"}, Pid: request.PidInfo{HostPID: 1}}, batch[i])
+		assert.Equal(t, request.Span{Type: 1, Method: "GET", ContentLength: int64(10 + i), Service: svc.Attrs{UID: svc.UID{Name: "myService"}}, Pid: request.PidInfo{HostPID: 1}}, batch[i])
 	}
 	// AND metrics are properly updated
 	assert.Equal(t, 2, metrics.flushes)
@@ -82,13 +83,13 @@ func TestForwardRingbuf_Deadline(t *testing.T) {
 
 	metrics := &metricsReporter{}
 	forwardedMessages := make(chan []request.Span, 100)
-	fltr := TestPidsFilter{services: map[uint32]svc.ID{}}
-	fltr.AllowPID(1, 1, svc.ID{Name: "myService"}, PIDTypeGo)
+	fltr := TestPidsFilter{services: map[uint32]svc.Attrs{}}
+	fltr.AllowPID(1, 1, &svc.Attrs{UID: svc.UID{Name: "myService"}}, PIDTypeGo)
 	go ForwardRingbuf(
-		&TracerConfig{BatchLength: 10, BatchTimeout: 20 * time.Millisecond},
+		&config.EBPFTracer{BatchLength: 10, BatchTimeout: 20 * time.Millisecond},
 		nil,   // the source ring buffer can be null
 		&fltr, // change fltr to a pointer
-		ReadHTTPRequestTraceAsSpan,
+		ReadBPFTraceAsSpan,
 		slog.With("test", "TestForwardRingbuf_Deadline"),
 		metrics,
 	)(context.Background(), forwardedMessages)
@@ -109,7 +110,7 @@ func TestForwardRingbuf_Deadline(t *testing.T) {
 	}
 	require.Len(t, batch, 7)
 	for i := range batch {
-		assert.Equal(t, request.Span{Type: 1, Method: "GET", ContentLength: int64(i), ServiceID: svc.ID{Name: "myService"}, Pid: request.PidInfo{HostPID: 1}}, batch[i])
+		assert.Equal(t, request.Span{Type: 1, Method: "GET", ContentLength: int64(i), Service: svc.Attrs{UID: svc.UID{Name: "myService"}}, Pid: request.PidInfo{HostPID: 1}}, batch[i])
 	}
 
 	// AND metrics are properly updated
@@ -125,10 +126,10 @@ func TestForwardRingbuf_Close(t *testing.T) {
 	metrics := &metricsReporter{}
 	closable := closableObject{}
 	go ForwardRingbuf(
-		&TracerConfig{BatchLength: 10},
+		&config.EBPFTracer{BatchLength: 10},
 		nil, // the source ring buffer can be null
 		(&IdentityPidsFilter{}),
-		ReadHTTPRequestTraceAsSpan,
+		ReadBPFTraceAsSpan,
 		slog.With("test", "TestForwardRingbuf_Close"),
 		metrics,
 		&closable,
@@ -216,11 +217,11 @@ func (m *metricsReporter) TracerFlush(len int) {
 }
 
 type TestPidsFilter struct {
-	services map[uint32]svc.ID
+	services map[uint32]svc.Attrs
 }
 
-func (pf *TestPidsFilter) AllowPID(p uint32, _ uint32, s svc.ID, _ PIDType) {
-	pf.services[p] = s
+func (pf *TestPidsFilter) AllowPID(p uint32, _ uint32, s *svc.Attrs, _ PIDType) {
+	pf.services[p] = *s
 }
 
 func (pf *TestPidsFilter) BlockPID(p uint32, _ uint32) {
@@ -231,14 +232,14 @@ func (pf *TestPidsFilter) ValidPID(_ uint32, _ uint32, _ PIDType) bool {
 	return true
 }
 
-func (pf *TestPidsFilter) CurrentPIDs(_ PIDType) map[uint32]map[uint32]svc.ID {
+func (pf *TestPidsFilter) CurrentPIDs(_ PIDType) map[uint32]map[uint32]svc.Attrs {
 	return nil
 }
 
 func (pf *TestPidsFilter) Filter(inputSpans []request.Span) []request.Span {
 	for i := range inputSpans {
 		s := &inputSpans[i]
-		s.ServiceID = pf.services[s.Pid.HostPID]
+		s.Service = pf.services[s.Pid.HostPID]
 	}
 	return inputSpans
 }

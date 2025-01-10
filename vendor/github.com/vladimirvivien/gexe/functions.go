@@ -1,10 +1,13 @@
 package gexe
 
 import (
+	"os"
+
 	"github.com/vladimirvivien/gexe/exec"
 	"github.com/vladimirvivien/gexe/fs"
 	"github.com/vladimirvivien/gexe/http"
 	"github.com/vladimirvivien/gexe/prog"
+	"github.com/vladimirvivien/gexe/str"
 	"github.com/vladimirvivien/gexe/vars"
 )
 
@@ -123,16 +126,40 @@ func Pipe(cmdStrs ...string) *exec.PipedCommandResult {
 	return DefaultEcho.Pipe(cmdStrs...)
 }
 
-// Read creates an fs.FileReader that
-// can be used to read content from files.
-func Read(path string) fs.FileReader {
-	return DefaultEcho.Read(path)
+// PathExists returns true if specified path exists.
+// Any error will cause it to return false.
+func PathExists(path string) bool {
+	return DefaultEcho.PathExists(path)
 }
 
-// Write creates an fs.FileWriter that
-// can be used to write content to files
-func Write(path string) fs.FileWriter {
-	return DefaultEcho.Write(path)
+// PathInfo returns information for specified path (i.e. size, etc)
+func PathInfo(path string) *fs.FSInfo {
+	return DefaultEcho.PathInfo(path)
+}
+
+// MkDirs creates one or more directories along the specified path
+func MkDirs(path string, mode os.FileMode) *fs.FSInfo {
+	return DefaultEcho.MkDir(path, mode)
+}
+
+// MkDir creates a directory with default mode 0744
+func MkDir(path string) *fs.FSInfo {
+	return DefaultEcho.MkDir(path, 0744)
+}
+
+// RmPath removes files or directories along specified path
+func RmPath(path string) *fs.FSInfo {
+	return DefaultEcho.RmPath(path)
+}
+
+// FileRead provides methods to read file content from path
+func FileRead(path string) *fs.FileReader {
+	return DefaultEcho.FileRead(path)
+}
+
+// FileWrite provides methods to write file content to path
+func FileWrite(path string) *fs.FileWriter {
+	return DefaultEcho.FileWrite(path)
 }
 
 // GetUrl creates a *http.ResourceReader to retrieve HTTP content
@@ -148,4 +175,23 @@ func PostUrl(url string) *http.ResourceWriter {
 // Prog returns program information via *prog.Info
 func Prog() *prog.Info {
 	return DefaultEcho.Prog()
+}
+
+// ProgAvail returns the full path of the program if available.
+func ProgAvail(program string) string {
+	return DefaultEcho.ProgAvail(program)
+}
+
+// Workdir returns the current program's working directory
+func Workdir() string {
+	return DefaultEcho.Workdir()
+}
+
+// AddExecPath adds an executable path to PATH
+func AddExecPath(execPath string) {
+	DefaultEcho.AddExecPath(execPath)
+}
+
+func String(s string) *str.Str {
+	return DefaultEcho.String(s)
 }

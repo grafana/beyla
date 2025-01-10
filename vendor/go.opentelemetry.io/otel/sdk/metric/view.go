@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package metric // import "go.opentelemetry.io/otel/sdk/metric"
+package metric
 
 import (
 	"errors"
@@ -43,7 +43,7 @@ type View func(Instrument) (Stream, bool)
 // of the default. If you need to zero out an Stream field returned from a
 // View, create a View directly.
 func NewView(criteria Instrument, mask Stream) View {
-	if criteria.empty() {
+	if criteria.IsEmpty() {
 		global.Error(
 			errEmptyView, "dropping view",
 			"mask", mask,
@@ -96,11 +96,12 @@ func NewView(criteria Instrument, mask Stream) View {
 	return func(i Instrument) (Stream, bool) {
 		if matchFunc(i) {
 			return Stream{
-				Name:            nonZero(mask.Name, i.Name),
-				Description:     nonZero(mask.Description, i.Description),
-				Unit:            nonZero(mask.Unit, i.Unit),
-				Aggregation:     agg,
-				AttributeFilter: mask.AttributeFilter,
+				Name:                              nonZero(mask.Name, i.Name),
+				Description:                       nonZero(mask.Description, i.Description),
+				Unit:                              nonZero(mask.Unit, i.Unit),
+				Aggregation:                       agg,
+				AttributeFilter:                   mask.AttributeFilter,
+				ExemplarReservoirProviderSelector: mask.ExemplarReservoirProviderSelector,
 			}, true
 		}
 		return Stream{}, false

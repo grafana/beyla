@@ -31,8 +31,6 @@ import (
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
 	"golang.org/x/sys/unix"
-
-	"github.com/grafana/beyla/pkg/internal/netolly/ifaces"
 )
 
 // $BPF_CLANG and $BPF_CFLAGS are set by the Makefile.
@@ -43,6 +41,7 @@ import (
 // and to flows that are forwarded by the kernel via ringbuffer because could not be aggregated
 // in the map
 type SockFlowFetcher struct {
+	log           *slog.Logger
 	objects       *NetSkObjects
 	ringbufReader *ringbuf.Reader
 	cacheMaxSize  int
@@ -63,8 +62,10 @@ func NewSockFlowFetcher(
 		return nil, fmt.Errorf("loading BPF data: %w", err)
 	}
 
-	// Resize aggregated flows map according to user-provided configuration
+	// Resize aggregated flows and flow directions maps according to user-provided configuration
 	spec.Maps[aggregatedFlowsMap].MaxEntries = uint32(cacheMaxSize)
+	spec.Maps[flowDirectionsMap].MaxEntries = uint32(cacheMaxSize)
+	spec.Maps[connInitiatorsMap].MaxEntries = uint32(cacheMaxSize)
 
 	traceMsgs := 0
 	if tlog.Enabled(context.TODO(), slog.LevelDebug) {
@@ -85,7 +86,7 @@ func NewSockFlowFetcher(
 
 	fd, err := unix.Socket(unix.AF_PACKET, unix.SOCK_RAW, int(htons(unix.ETH_P_ALL)))
 	if err == nil {
-		ssoErr := syscall.SetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_ATTACH_BPF, objects.SocketHttpFilter.FD())
+		ssoErr := syscall.SetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_ATTACH_BPF, objects.BeylaSocketHttpFilter.FD())
 		if ssoErr != nil {
 			return nil, fmt.Errorf("loading and assigning BPF objects: %w", ssoErr)
 		}
@@ -99,6 +100,7 @@ func NewSockFlowFetcher(
 		return nil, fmt.Errorf("accessing to ringbuffer: %w", err)
 	}
 	return &SockFlowFetcher{
+		log:           tlog,
 		objects:       &objects,
 		ringbufReader: flows,
 		cacheMaxSize:  cacheMaxSize,
@@ -112,15 +114,9 @@ func printVerifierErrorInfo(err error) {
 	}
 }
 
-// Noop because socket filters don't require special registration for different network interfaces
-func (m *SockFlowFetcher) Register(_ ifaces.Interface) error {
-	return nil
-}
-
 // Close any resources that are taken up by the socket filter, the filter itself and some maps.
 func (m *SockFlowFetcher) Close() error {
-	log := tlog()
-	log.Debug("unregistering eBPF objects")
+	m.log.Debug("unregistering eBPF objects")
 
 	var errs []error
 	// m.ringbufReader.Read is a blocking operation, so we need to close the ring buffer
@@ -147,7 +143,7 @@ func (m *SockFlowFetcher) Close() error {
 
 func (m *SockFlowFetcher) closeObjects() []error {
 	var errs []error
-	if err := m.objects.SocketHttpFilter.Close(); err != nil {
+	if err := m.objects.BeylaSocketHttpFilter.Close(); err != nil {
 		errs = append(errs, err)
 	}
 	if err := m.objects.AggregatedFlows.Close(); err != nil {
@@ -185,7 +181,7 @@ func (m *SockFlowFetcher) LookupAndDeleteMap() map[NetFlowId][]NetFlowMetrics {
 	// TODO: detect whether LookupAndDelete is supported (Kernel>=4.20) and use it selectively
 	for iterator.Next(&id, &metrics) {
 		if err := flowMap.Delete(id); err != nil {
-			tlog().Warn("couldn't delete flow entry", "flowId", id)
+			m.log.Debug("couldn't delete flow entry", "flowId", id, "error", err)
 		}
 		// We observed that eBFP PerCPU map might insert multiple times the same key in the map
 		// (probably due to race conditions) so we need to re-join metrics again at userspace

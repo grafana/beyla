@@ -1,4 +1,4 @@
-name: Lint prose with Vale
+name: Documentation CI
 on:
   pull_request:
     paths: ["docs/sources/**"]
@@ -11,23 +11,15 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      - name: Run linter
-        run: >
-          cp /etc/vale/.vale.ini ./.vale.ini
-          &&
-          cp -R /etc/vale/dictionaries dictionaries
-          &&
-          vale
-          '--glob=*.md'
-          --minAlertLevel=warning
-          --output=/etc/vale/rdjsonl.tmpl
-          docs/sources
-          |
-          /bin/reviewdog
-          --conf=/etc/vale/.reviewdog.yml
-          --fail-on-error
-          --f=rdjsonl
-          --name=vale
-          --reporter=github-pr-review
+      - name: Run Vale
+        run: |
+          (cd /etc/vale && vale sync)
+          vale --output=/etc/vale/rdjsonl.tmpl docs/sources | \
+            /bin/reviewdog \
+            --conf=/etc/vale/.reviewdog.yml \
+            --fail-on-error \
+            --f=rdjsonl \
+            --name=vale \
+            --reporter=github-pr-review
         env:
           REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}

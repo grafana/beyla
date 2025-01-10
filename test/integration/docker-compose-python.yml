@@ -20,7 +20,7 @@ services:
       - ./configs/:/configs
       - ./system/sys/kernel/security:/sys/kernel/security
       - ../../testoutput:/coverage
-      - ../../testoutput/run:/var/run/beyla
+      - ../../testoutput/run-python:/var/run/beyla
     image: hatest-autoinstrumenter
     privileged: true # in some environments (not GH Pull Requests) you can set it to false and then cap_add: [ SYS_ADMIN ]
     network_mode: "service:testserver"
@@ -28,7 +28,7 @@ services:
     environment:
       BEYLA_CONFIG_PATH: "/configs/instrumenter-config-java.yml"
       GOCOVERDIR: "/coverage"
-      BEYLA_PRINT_TRACES: "true"
+      BEYLA_TRACE_PRINTER: "text"
       BEYLA_OPEN_PORT: "${BEYLA_OPEN_PORT}"
       BEYLA_DISCOVERY_POLL_INTERVAL: 500ms
       BEYLA_EXECUTABLE_NAME: "${BEYLA_EXECUTABLE_NAME}"
@@ -42,14 +42,14 @@ services:
       BEYLA_HOSTNAME: "beyla"
       BEYLA_BPF_HTTP_REQUEST_TIMEOUT: "5s"
       BEYLA_PROCESSES_INTERVAL: "100ms"
-      BEYLA_OTEL_METRICS_FEATURES: "application,application_process"
+      BEYLA_OTEL_METRICS_FEATURES: "application,application_process,application_span,application_service_graph"
     depends_on:
       testserver:
         condition: service_started
 
   # OpenTelemetry Collector
   otelcol:
-    image: otel/opentelemetry-collector-contrib:0.85.0
+    image: otel/opentelemetry-collector-contrib:0.104.0
     container_name: otel-col
     deploy:
       resources:
@@ -70,12 +70,10 @@ services:
 
   # Prometheus
   prometheus:
-    image: quay.io/prometheus/prometheus:v2.46.0
+    image: quay.io/prometheus/prometheus:v2.53.0
     container_name: prometheus
     command:
-      - --storage.tsdb.retention.time=1m
       - --config.file=/etc/prometheus/prometheus-config.yml
-      - --storage.tsdb.path=/prometheus
       - --web.enable-lifecycle
       - --web.route-prefix=/
     volumes:

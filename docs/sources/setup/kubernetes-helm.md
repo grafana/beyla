@@ -1,6 +1,6 @@
 ---
 title: Deploy Beyla in Kubernetes with Helm
-menuTitle: Deploy in Kubernetes with Helm
+menuTitle: Helm chart
 description: Learn how to deploy Beyla as a Helm chart in Kubernetes.
 weight: 3
 keywords:
@@ -19,9 +19,6 @@ For more details about the diverse Helm configuration options, check out the
 [Beyla Helm chart options](https://github.com/grafana/beyla/blob/main/charts/beyla/README.md)
 document.
 {{% /admonition %}}
-
-For a step-by-step walkthrough by the basics for Beyla and Kubernetes, you can also
-follow the [Beyla and Kubernetes walkthrough tutorial]({{< relref "../tutorial/k8s-walkthrough.md" >}}).
 
 Contents:
 

@@ -6,7 +6,6 @@ import (
 	"log/slog"
 
 	"github.com/cilium/ebpf"
-	"github.com/cilium/ebpf/link"
 
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/exec"
@@ -15,11 +14,26 @@ import (
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
+type Instrumentable struct {
+	Type                 svc.InstrumentableType
+	InstrumentationError error
+
+	// in some runtimes, like python gunicorn, we need to allow
+	// tracing both the parent pid and all of its children pid
+	ChildPids []uint32
+
+	FileInfo *exec.FileInfo
+	Offsets  *goexec.Offsets
+	Tracer   *ProcessTracer
+}
+
 type PIDsAccounter interface {
 	// AllowPID notifies the tracer to accept traces from the process with the
 	// provided PID. Unless system-wide instrumentation, the Tracer should discard
 	// traces from processes whose PID has not been allowed before
-	AllowPID(uint32, uint32, svc.ID)
+	// We must use a pointer for svc.Attrs so that all child processes share the same
+	// object. This is important when we tag a service as exporting traces or metrics.
+	AllowPID(uint32, uint32, *svc.Attrs)
 	// BlockPID notifies the tracer to stop accepting traces from the process
 	// with the provided PID. After receiving them via ringbuffer, it should
 	// discard them.
@@ -34,14 +48,16 @@ type CommonTracer interface {
 	AddCloser(c ...io.Closer)
 	// BpfObjects that are created by the bpf2go compiler
 	BpfObjects() any
+	// Sets up any tail call tables if the BPF program has it
+	SetupTailCalls()
 }
 
 type KprobesTracer interface {
 	CommonTracer
 	// KProbes returns a map with the name of the kernel probes that need to be
 	// tapped into. Start matches kprobe, End matches kretprobe
-	KProbes() map[string]ebpfcommon.FunctionPrograms
-	Tracepoints() map[string]ebpfcommon.FunctionPrograms
+	KProbes() map[string]ebpfcommon.ProbeDesc
+	Tracepoints() map[string]ebpfcommon.ProbeDesc
 }
 
 // Tracer is an individual eBPF program (e.g. the net/http or the grpc tracers)
@@ -50,22 +66,33 @@ type Tracer interface {
 	KprobesTracer
 	// Constants returns a map of constants to be overriden into the eBPF program.
 	// The key is the constant name and the value is the value to overwrite.
-	Constants(*exec.FileInfo, *goexec.Offsets) map[string]any
-	// GoProbes returns a map with the name of Go functions that need to be inspected
+	Constants() map[string]any
+	// GoProbes returns a slice with the name of Go functions that need to be inspected
 	// in the executable, as well as the eBPF programs that optionally need to be
 	// inserted as the Go function start and end probes
-	GoProbes() map[string]ebpfcommon.FunctionPrograms
+	GoProbes() map[string][]*ebpfcommon.ProbeDesc
 	// UProbes returns a map with the module name mapping to the uprobes that need to be
 	// tapped into. Start matches uprobe, End matches uretprobe
-	UProbes() map[string]map[string]ebpfcommon.FunctionPrograms
+	UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc
 	// SocketFilters  returns a list of programs that need to be loaded as a
 	// generic eBPF socket filter
 	SocketFilters() []*ebpf.Program
+	// SockMsgs returns a list of programs that need to be loaded as a
+	// BPF_PROG_TYPE_SK_MSG eBPF programs
+	SockMsgs() []ebpfcommon.SockMsg
+	// SockOps returns a list of programs that need to be loaded as a
+	// BPF_PROG_TYPE_SOCK_OPS eBPF programs
+	SockOps() []ebpfcommon.SockOps
 	// Probes can potentially instrument a shared library among multiple executables
 	// These two functions alow programs to remember this and avoid duplicated instrumentations
 	// The argument is the OS file id
-	RecordInstrumentedLib(uint64)
+	// Closers are the associated closable resources to this lib, that may be
+	// closed when UnlinkInstrumentedLib() is called
+	RecordInstrumentedLib(uint64, []io.Closer)
+	AddInstrumentedLibRef(uint64)
 	AlreadyInstrumentedLib(uint64) bool
+	UnlinkInstrumentedLib(uint64)
+	RegisterOffsets(*exec.FileInfo, *goexec.Offsets)
 	// Run will do the action of listening for eBPF traces and forward them
 	// periodically to the output channel.
 	Run(context.Context, chan<- []request.Span)
@@ -93,16 +120,13 @@ const (
 type ProcessTracer struct {
 	log      *slog.Logger //nolint:unused
 	Programs []Tracer
-	ELFInfo  *exec.FileInfo
-	Goffsets *goexec.Offsets
-	Exe      *link.Executable
-	PinPath  string
 
-	SystemWide bool
-	Type       ProcessTracerType
+	SystemWide      bool
+	Type            ProcessTracerType
+	Instrumentables map[uint64]*instrumenter
 }
 
-func (pt *ProcessTracer) AllowPID(pid, ns uint32, svc svc.ID) {
+func (pt *ProcessTracer) AllowPID(pid, ns uint32, svc *svc.Attrs) {
 	for i := range pt.Programs {
 		pt.Programs[i].AllowPID(pid, ns, svc)
 	}

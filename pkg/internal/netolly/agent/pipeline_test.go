@@ -13,14 +13,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/pkg/beyla"
+	"github.com/grafana/beyla/pkg/export/attributes"
+	"github.com/grafana/beyla/pkg/export/otel"
+	"github.com/grafana/beyla/pkg/export/prom"
 	"github.com/grafana/beyla/pkg/internal/connector"
-	"github.com/grafana/beyla/pkg/internal/export/attributes"
-	"github.com/grafana/beyla/pkg/internal/export/otel"
-	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/filter"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/netolly/flow/transport"
-	"github.com/grafana/beyla/pkg/internal/netolly/ifaces"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	prom2 "github.com/grafana/beyla/test/integration/components/prom"
 )
@@ -52,11 +51,10 @@ func TestFilter(t *testing.T) {
 			},
 			Attributes: beyla.Attributes{Select: attributes.Selection{
 				attributes.BeylaNetworkFlow.Section: attributes.InclusionLists{
-					Include: []string{"beyla_ip", "direction", "dst_port", "iface", "src_port", "transport"},
+					Include: []string{"beyla_ip", "iface.direction", "dst_port", "iface", "src_port", "transport"},
 				},
 			}},
 		},
-		interfaces:     fakeInterfacesInformer{},
 		interfaceNamer: func(_ int) string { return "fakeiface" },
 	}
 
@@ -94,10 +92,10 @@ func TestFilter(t *testing.T) {
 		// assuming metrics returned alphabetically ordered
 		assert.Equal(t, []prom2.ScrapedMetric{
 			{Name: "beyla_network_flow_bytes_total", Labels: map[string]string{
-				"beyla_ip": "1.2.3.4", "direction": "ingress", "dst_port": "1011", "iface": "fakeiface", "src_port": "789", "transport": "TCP",
+				"beyla_ip": "1.2.3.4", "iface_direction": "ingress", "dst_port": "1011", "iface": "fakeiface", "src_port": "789", "transport": "TCP",
 			}},
 			{Name: "beyla_network_flow_bytes_total", Labels: map[string]string{
-				"beyla_ip": "1.2.3.4", "direction": "ingress", "dst_port": "1415", "iface": "fakeiface", "src_port": "1213", "transport": "TCP",
+				"beyla_ip": "1.2.3.4", "iface_direction": "ingress", "dst_port": "1415", "iface": "fakeiface", "src_port": "1213", "transport": "TCP",
 			}},
 			// standard prometheus metrics. Leaving them here to simplify test verification
 			{Name: "promhttp_metric_handler_errors_total", Labels: map[string]string{"cause": "encoding"}},
@@ -113,10 +111,4 @@ func fakeRecord(protocol transport.Protocol, srcPort, dstPort uint16) *ebpf.Reco
 			SrcPort: srcPort, DstPort: dstPort, TransportProtocol: uint8(protocol),
 		},
 	}}
-}
-
-type fakeInterfacesInformer struct{}
-
-func (f fakeInterfacesInformer) Subscribe(_ context.Context) (<-chan ifaces.Event, error) {
-	return make(<-chan ifaces.Event), nil
 }

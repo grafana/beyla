@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# Format all staged C/C++ files
+files=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(c|cpp|h)$')
+
+if [ -n "$files" ]; then
+    echo "Running clang-format on:"
+    echo "$files"
+
+    # Run clang-format on the staged files
+    for file in $files; do
+        clang-format -i "$file"
+        git add "$file"  # Re-add formatted files to staging
+    done
+fi

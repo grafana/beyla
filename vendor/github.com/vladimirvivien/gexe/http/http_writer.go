@@ -6,6 +6,9 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
+
+	"github.com/vladimirvivien/gexe/vars"
 )
 
 // ResourceWriter represents types and methods used to post resource data to an HTTP server
@@ -16,11 +19,31 @@ type ResourceWriter struct {
 	headers http.Header
 	data    io.Reader
 	res     *Response
+	vars    *vars.Variables
 }
 
 // Post starts a "POST" HTTP operation to the provided resource.
 func Post(resource string) *ResourceWriter {
-	return &ResourceWriter{url: resource, client: &http.Client{}, headers: make(http.Header)}
+	return &ResourceWriter{url: resource, client: &http.Client{}, headers: make(http.Header), vars: &vars.Variables{}}
+}
+
+// PostWithVars sets up a "POST" operation and sets its session variables
+func PostWithVars(resource string, variables *vars.Variables) *ResourceWriter {
+	w := Post(variables.Eval(resource))
+	w.vars = variables
+	return w
+}
+
+// SetVars sets session variables for the ResourceWriter
+func (w *ResourceWriter) SetVars(variables *vars.Variables) *ResourceWriter {
+	w.vars = variables
+	return w
+}
+
+// WithTimeout sets the HTTP client's timeout
+func (w *ResourceWriter) WithTimeout(to time.Duration) *ResourceWriter {
+	w.client.Timeout = to
+	return w
 }
 
 // Err returns the last known error for the post operation
@@ -61,19 +84,19 @@ func (w *ResourceWriter) WithHeaders(h http.Header) *ResourceWriter {
 
 // AddHeader is a convenience method to add a single header
 func (w *ResourceWriter) AddHeader(key, value string) *ResourceWriter {
-	w.headers.Add(key, value)
+	w.headers.Add(w.vars.Eval(key), w.vars.Eval(value))
 	return w
 }
 
 // SetHeader is a convenience method to sets a specific header
 func (w *ResourceWriter) SetHeader(key, value string) *ResourceWriter {
-	w.headers.Set(key, value)
+	w.headers.Set(w.vars.Eval(key), w.vars.Eval(value))
 	return w
 }
 
 // String posts the string value as content to the server
 func (w *ResourceWriter) String(val string) *ResourceWriter {
-	w.data = strings.NewReader(val)
+	w.data = strings.NewReader(w.vars.Eval(val))
 	return w.Do()
 }
 

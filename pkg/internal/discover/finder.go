@@ -8,23 +8,20 @@ import (
 
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/ebpf"
-	"github.com/grafana/beyla/pkg/internal/ebpf/gokafka"
-	"github.com/grafana/beyla/pkg/internal/ebpf/goredis"
-	"github.com/grafana/beyla/pkg/internal/ebpf/goruntime"
-	"github.com/grafana/beyla/pkg/internal/ebpf/gpuevent"
-	"github.com/grafana/beyla/pkg/internal/ebpf/grpc"
-	"github.com/grafana/beyla/pkg/internal/ebpf/httpfltr"
-	"github.com/grafana/beyla/pkg/internal/ebpf/httpssl"
-	"github.com/grafana/beyla/pkg/internal/ebpf/nethttp"
-	"github.com/grafana/beyla/pkg/internal/exec"
+	"github.com/grafana/beyla/pkg/internal/ebpf/generictracer"
+	"github.com/grafana/beyla/pkg/internal/ebpf/gotracer"
+	"github.com/grafana/beyla/pkg/internal/ebpf/httptracer"
+	"github.com/grafana/beyla/pkg/internal/ebpf/tctracer"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
+	"github.com/grafana/beyla/pkg/internal/request"
 )
 
 type ProcessFinder struct {
-	ctx     context.Context
-	cfg     *beyla.Config
-	ctxInfo *global.ContextInfo
+	ctx         context.Context
+	cfg         *beyla.Config
+	ctxInfo     *global.ContextInfo
+	tracesInput chan<- []request.Span
 }
 
 // nodesMap stores ProcessFinder pipeline architecture
@@ -32,9 +29,9 @@ type nodesMap struct {
 	ProcessWatcher      pipe.Start[[]Event[processAttrs]]
 	WatcherKubeEnricher pipe.Middle[[]Event[processAttrs], []Event[processAttrs]]
 	CriteriaMatcher     pipe.Middle[[]Event[processAttrs], []Event[ProcessMatch]]
-	ExecTyper           pipe.Middle[[]Event[ProcessMatch], []Event[Instrumentable]]
-	ContainerDBUpdater  pipe.Middle[[]Event[Instrumentable], []Event[Instrumentable]]
-	TraceAttacher       pipe.Final[[]Event[Instrumentable]]
+	ExecTyper           pipe.Middle[[]Event[ProcessMatch], []Event[ebpf.Instrumentable]]
+	ContainerDBUpdater  pipe.Middle[[]Event[ebpf.Instrumentable], []Event[ebpf.Instrumentable]]
+	TraceAttacher       pipe.Final[[]Event[ebpf.Instrumentable]]
 }
 
 func (pf *nodesMap) Connect() {
@@ -52,38 +49,38 @@ func ptrWatcherKubeEnricher(pf *nodesMap) *pipe.Middle[[]Event[processAttrs], []
 func criteriaMatcher(pf *nodesMap) *pipe.Middle[[]Event[processAttrs], []Event[ProcessMatch]] {
 	return &pf.CriteriaMatcher
 }
-func execTyper(pf *nodesMap) *pipe.Middle[[]Event[ProcessMatch], []Event[Instrumentable]] {
+func execTyper(pf *nodesMap) *pipe.Middle[[]Event[ProcessMatch], []Event[ebpf.Instrumentable]] {
 	return &pf.ExecTyper
 }
-func containerDBUpdater(pf *nodesMap) *pipe.Middle[[]Event[Instrumentable], []Event[Instrumentable]] {
+func containerDBUpdater(pf *nodesMap) *pipe.Middle[[]Event[ebpf.Instrumentable], []Event[ebpf.Instrumentable]] {
 	return &pf.ContainerDBUpdater
 }
-func traceAttacher(pf *nodesMap) *pipe.Final[[]Event[Instrumentable]] { return &pf.TraceAttacher }
+func traceAttacher(pf *nodesMap) *pipe.Final[[]Event[ebpf.Instrumentable]] { return &pf.TraceAttacher }
 
-func NewProcessFinder(ctx context.Context, cfg *beyla.Config, ctxInfo *global.ContextInfo) *ProcessFinder {
-	return &ProcessFinder{ctx: ctx, cfg: cfg, ctxInfo: ctxInfo}
+func NewProcessFinder(ctx context.Context, cfg *beyla.Config, ctxInfo *global.ContextInfo, tracesInput chan<- []request.Span) *ProcessFinder {
+	return &ProcessFinder{ctx: ctx, cfg: cfg, ctxInfo: ctxInfo, tracesInput: tracesInput}
 }
 
 // Start the ProcessFinder pipeline in background. It returns a channel where each new discovered
 // ebpf.ProcessTracer will be notified.
-func (pf *ProcessFinder) Start() (<-chan *ebpf.ProcessTracer, <-chan *Instrumentable, error) {
+func (pf *ProcessFinder) Start() (<-chan *ebpf.Instrumentable, <-chan *ebpf.Instrumentable, error) {
 
-	discoveredTracers, deleteTracers := make(chan *ebpf.ProcessTracer), make(chan *Instrumentable)
+	discoveredTracers, deleteTracers := make(chan *ebpf.Instrumentable), make(chan *ebpf.Instrumentable)
 
 	gb := pipe.NewBuilder(&nodesMap{}, pipe.ChannelBufferLen(pf.cfg.ChannelBufferLen))
 	pipe.AddStart(gb, processWatcher, ProcessWatcherFunc(pf.ctx, pf.cfg))
 	pipe.AddMiddleProvider(gb, ptrWatcherKubeEnricher,
-		WatcherKubeEnricherProvider(pf.ctxInfo.K8sEnabled, pf.ctxInfo.AppO11y.K8sInformer))
+		WatcherKubeEnricherProvider(pf.ctx, pf.ctxInfo.K8sInformer))
 	pipe.AddMiddleProvider(gb, criteriaMatcher, CriteriaMatcherProvider(pf.cfg))
-	pipe.AddMiddleProvider(gb, execTyper, ExecTyperProvider(pf.cfg, pf.ctxInfo.Metrics))
-	pipe.AddMiddleProvider(gb, containerDBUpdater,
-		ContainerDBUpdaterProvider(pf.ctxInfo.K8sEnabled, pf.ctxInfo.AppO11y.K8sDatabase))
+	pipe.AddMiddleProvider(gb, execTyper, ExecTyperProvider(pf.cfg, pf.ctxInfo.Metrics, pf.ctxInfo.K8sInformer))
+	pipe.AddMiddleProvider(gb, containerDBUpdater, ContainerDBUpdaterProvider(pf.ctx, pf.ctxInfo.K8sInformer))
 	pipe.AddFinalProvider(gb, traceAttacher, TraceAttacherProvider(&TraceAttacher{
-		Cfg:               pf.cfg,
-		Ctx:               pf.ctx,
-		DiscoveredTracers: discoveredTracers,
-		DeleteTracers:     deleteTracers,
-		Metrics:           pf.ctxInfo.Metrics,
+		Cfg:                 pf.cfg,
+		Ctx:                 pf.ctx,
+		DiscoveredTracers:   discoveredTracers,
+		DeleteTracers:       deleteTracers,
+		Metrics:             pf.ctxInfo.Metrics,
+		SpanSignalsShortcut: pf.tracesInput,
 	}))
 	pipeline, err := gb.Build()
 	if err != nil {
@@ -96,22 +93,25 @@ func (pf *ProcessFinder) Start() (<-chan *ebpf.ProcessTracer, <-chan *Instrument
 // auxiliary functions to instantiate the go and non-go tracers on diverse steps of the
 // discovery pipeline
 
-func newGoTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Tracer {
-	// Each program is an eBPF source: net/http, grpc...
-	return []ebpf.Tracer{
-		nethttp.New(cfg, metrics),
-		grpc.New(cfg, metrics),
-		goruntime.New(cfg, metrics),
-		gokafka.New(cfg, metrics),
-		&gokafka.ShopifyKafkaTracer{Tracer: *gokafka.New(cfg, metrics)},
-		goredis.New(cfg, metrics),
+// the common tracer group should get loaded for any tracer group, only once
+func newCommonTracersGroup(cfg *beyla.Config) []ebpf.Tracer {
+	tracers := []ebpf.Tracer{}
+
+	if cfg.EBPF.UseTCForCP {
+		tracers = append(tracers, tctracer.New(cfg))
 	}
+
+	if cfg.EBPF.UseTCForL7CP {
+		tracers = append(tracers, httptracer.New(cfg))
+	}
+
+	return tracers
 }
 
-func newNonGoTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter, fileInfo *exec.FileInfo) []ebpf.Tracer {
-	return []ebpf.Tracer{httpfltr.New(cfg, metrics), httpssl.New(cfg, metrics), gpuevent.New(cfg, metrics, fileInfo)}
+func newGoTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Tracer {
+	return []ebpf.Tracer{gotracer.New(cfg, metrics)}
 }
 
-func newNonGoTracersGroupUProbes(cfg *beyla.Config, metrics imetrics.Reporter, fileInfo *exec.FileInfo) []ebpf.Tracer {
-	return []ebpf.Tracer{httpssl.New(cfg, metrics), gpuevent.New(cfg, metrics, fileInfo)}
+func newGenericTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Tracer {
+	return []ebpf.Tracer{generictracer.New(cfg, metrics)}
 }

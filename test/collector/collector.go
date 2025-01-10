@@ -45,7 +45,7 @@ func Start(ctx context.Context) (*TestCollector, error) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		body, err := io.ReadAll(request.Body)
 		if err != nil {
-			log.Error("reading request body", err)
+			log.Error("reading request body", "error", err)
 			writer.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -79,7 +79,7 @@ func Start(ctx context.Context) (*TestCollector, error) {
 func (tc *TestCollector) traceEvent(writer http.ResponseWriter, body []byte) {
 	req := ptraceotlp.NewExportRequest()
 	if err := req.UnmarshalProto(body); err != nil {
-		log.Error("unmarshalling protobuf event", err)
+		log.Error("unmarshalling protobuf event", "error", err)
 		writer.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -138,7 +138,7 @@ func (tc *TestCollector) TraceRecords() chan TraceRecord {
 func (tc *TestCollector) metricEvent(writer http.ResponseWriter, body []byte) {
 	req := pmetricotlp.NewExportRequest()
 	if err := req.UnmarshalProto(body); err != nil {
-		log.Error("unmarshalling protobuf event", err)
+		log.Error("unmarshalling protobuf event", "error", err)
 		writer.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -184,6 +184,7 @@ func (tc *TestCollector) metricEvent(writer http.ResponseWriter, body []byte) {
 							Unit:               m.Unit(),
 							Type:               m.Type(),
 							FloatVal:           hdp.Sum(),
+							Count:              int(hdp.Count()),
 							Attributes:         map[string]string{},
 							ResourceAttributes: resourceAttrs,
 						}
@@ -227,6 +228,7 @@ type MetricRecord struct {
 	Type               pmetric.MetricType
 	IntVal             int64
 	FloatVal           float64
+	Count              int
 }
 
 type TraceRecord struct {

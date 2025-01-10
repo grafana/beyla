@@ -2,15 +2,16 @@ package components
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
-	"os"
 	"sync"
 
 	"github.com/grafana/beyla/pkg/beyla"
+	"github.com/grafana/beyla/pkg/export/attributes"
 	"github.com/grafana/beyla/pkg/internal/appolly"
 	"github.com/grafana/beyla/pkg/internal/connector"
-	"github.com/grafana/beyla/pkg/internal/export/attributes"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
+	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/netolly/agent"
 	"github.com/grafana/beyla/pkg/internal/netolly/flow"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
@@ -18,8 +19,8 @@ import (
 
 // RunBeyla in the foreground process. This is a blocking function and won't exit
 // until both the AppO11y and NetO11y components end
-func RunBeyla(ctx context.Context, cfg *beyla.Config) {
-	ctxInfo := buildCommonContextInfo(cfg)
+func RunBeyla(ctx context.Context, cfg *beyla.Config) error {
+	ctxInfo := buildCommonContextInfo(ctx, cfg)
 
 	wg := sync.WaitGroup{}
 	app := cfg.Enabled(beyla.FeatureAppO11y)
@@ -31,74 +32,117 @@ func RunBeyla(ctx context.Context, cfg *beyla.Config) {
 		wg.Add(1)
 	}
 
+	errs := make(chan error, 2)
 	if app {
 		go func() {
 			defer wg.Done()
-			setupAppO11y(ctx, ctxInfo, cfg)
+			if err := setupAppO11y(ctx, ctxInfo, cfg); err != nil {
+				errs <- err
+			}
 		}()
 	}
 	if net {
 		go func() {
 			defer wg.Done()
-			setupNetO11y(ctx, ctxInfo, cfg)
+			if err := setupNetO11y(ctx, ctxInfo, cfg); err != nil {
+				errs <- err
+			}
 		}()
 	}
 	wg.Wait()
+	select {
+	case err := <-errs:
+		return err
+	default:
+		return nil
+	}
 }
 
-func setupAppO11y(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config) {
+func setupAppO11y(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config) error {
 	slog.Info("starting Beyla in Application Observability mode")
-	// TODO: when we split Beyla in two processes with different permissions, this code can be split:
-	// in two parts:
-	// 1st process (privileged) - Invoke FindTarget, which also mounts the BPF maps
-	// 2nd executable (unprivileged) - Invoke ReadAndForward, receiving the BPF map mountpoint as argument
+
+	wg := sync.WaitGroup{}
+	defer wg.Wait()
 
 	instr := appolly.New(ctx, ctxInfo, config)
-	if err := instr.FindAndInstrument(); err != nil {
-		slog.Error("Beyla couldn't find target process", "error", err)
-		os.Exit(-1)
+	if err := instr.FindAndInstrument(&wg); err != nil {
+		slog.Error("can't find  target process", "error", err)
+		return fmt.Errorf("can't find target process: %w", err)
 	}
 	if err := instr.ReadAndForward(); err != nil {
-		slog.Error("Beyla couldn't start read and forwarding", "error", err)
-		os.Exit(-1)
+		slog.Error("can't start read and forwarding", "error", err)
+		return fmt.Errorf("can't start read and forwarding: %w", err)
 	}
+	return nil
 }
 
-func setupNetO11y(ctx context.Context, ctxInfo *global.ContextInfo, cfg *beyla.Config) {
+func setupNetO11y(ctx context.Context, ctxInfo *global.ContextInfo, cfg *beyla.Config) error {
+	if msg := mustSkip(cfg); msg != "" {
+		slog.Warn(msg + ". Skipping Network metrics component")
+		return nil
+	}
 	slog.Info("starting Beyla in Network metrics mode")
 	flowsAgent, err := agent.FlowsAgent(ctxInfo, cfg)
 	if err != nil {
 		slog.Error("can't start network metrics capture", "error", err)
-		os.Exit(-1)
+		return fmt.Errorf("can't start network metrics capture: %w", err)
 	}
 	if err := flowsAgent.Run(ctx); err != nil {
 		slog.Error("can't start network metrics capture", "error", err)
-		os.Exit(-1)
+		return fmt.Errorf("can't start network metrics capture: %w", err)
 	}
+	return nil
+}
+
+func mustSkip(cfg *beyla.Config) string {
+	enabled := cfg.Enabled(beyla.FeatureNetO11y)
+	if !enabled {
+		return "network not present neither in BEYLA_PROMETHEUS_FEATURES nor BEYLA_OTEL_METRICS_FEATURES"
+	}
+	return ""
 }
 
 // BuildContextInfo populates some globally shared components and properties
 // from the user-provided configuration
 func buildCommonContextInfo(
-	config *beyla.Config,
+	ctx context.Context, config *beyla.Config,
 ) *global.ContextInfo {
 	promMgr := &connector.PrometheusManager{}
 	ctxInfo := &global.ContextInfo{
 		Prometheus: promMgr,
-		K8sEnabled: config.Attributes.Kubernetes.Enabled(),
+		K8sInformer: kube.NewMetadataProvider(kube.MetadataConfig{
+			Enable:            config.Attributes.Kubernetes.Enable,
+			KubeConfigPath:    config.Attributes.Kubernetes.KubeconfigPath,
+			SyncTimeout:       config.Attributes.Kubernetes.InformersSyncTimeout,
+			ResyncPeriod:      config.Attributes.Kubernetes.InformersResyncPeriod,
+			DisabledInformers: config.Attributes.Kubernetes.DisableInformers,
+			MetaCacheAddr:     config.Attributes.Kubernetes.MetaCacheAddress,
+			MetadataSources:   config.Attributes.Kubernetes.MetadataSources,
+			RestrictLocalNode: config.Attributes.Kubernetes.MetaRestrictLocalNode,
+		}),
 	}
-	if config.InternalMetrics.Prometheus.Port != 0 {
+	switch {
+	case config.InternalMetrics.Prometheus.Port != 0:
 		slog.Debug("reporting internal metrics as Prometheus")
-		ctxInfo.Metrics = imetrics.NewPrometheusReporter(&config.InternalMetrics.Prometheus, promMgr)
+		ctxInfo.Metrics = imetrics.NewPrometheusReporter(&config.InternalMetrics.Prometheus, promMgr, nil)
 		// Prometheus manager also has its own internal metrics, so we need to pass the imetrics reporter
 		// TODO: remove this dependency cycle and let prommgr to create and return the PrometheusReporter
 		promMgr.InstrumentWith(ctxInfo.Metrics)
-	} else {
+	case config.Prometheus.Registry != nil:
+		slog.Debug("reporting internal metrics with Prometheus Registry")
+		ctxInfo.Metrics = imetrics.NewPrometheusReporter(&config.InternalMetrics.Prometheus, nil, config.Prometheus.Registry)
+	default:
 		slog.Debug("not reporting internal metrics")
 		ctxInfo.Metrics = imetrics.NoopReporter{}
 	}
 
 	attributeGroups(config, ctxInfo)
+
+	if config.Attributes.HostID.Override == "" {
+		ctxInfo.FetchHostID(ctx, config.Attributes.HostID.FetchTimeout)
+	} else {
+		ctxInfo.HostID = config.Attributes.HostID.Override
+	}
 
 	return ctxInfo
 }
@@ -106,7 +150,7 @@ func buildCommonContextInfo(
 // attributeGroups specifies, based in the provided configuration, which groups of attributes
 // need to be enabled by default for the diverse metrics
 func attributeGroups(config *beyla.Config, ctxInfo *global.ContextInfo) {
-	if ctxInfo.K8sEnabled {
+	if ctxInfo.K8sInformer.IsKubeEnabled() {
 		ctxInfo.MetricAttributeGroups.Add(attributes.GroupKubernetes)
 	}
 	if config.Routes != nil {

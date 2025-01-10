@@ -43,8 +43,8 @@ rules:
   verbs: ["get", "watch", "list"]
 - apiGroups: [""]
   resources: ["services"]
-  # list services is needed by network-policy beyla.
-  verbs: ["list"]
+  # list and watch services are needed by network-policy beyla.
+  verbs: ["list", "watch"]
 - apiGroups: ["*"]
   resources: ["deployments", "replicasets", "statefulsets", "daemonsets", "jobs", "cronjobs", "replicationcontrollers"]
   # Required to retrieve the owner references used by the seccomp beyla.
@@ -82,53 +82,16 @@ spec:
     metadata:
       labels:
         k8s-app: beyla
-      annotations:
-        # We need to set beyla container as unconfined so it is able to write
-        # the BPF file system.
-        # Otherwise, we can have error like:
-        # "failed to create server failed to create or mount folder for pinning bpf maps: can't mount BPF filesystem: permission denied""
-        # 
-        # Default rules can be found here: https://github.com/moby/moby/blob/master/profiles/apparmor/template.go
-        # Both 'mount' and access to /sys/fs/bpf are denied by default.
-        #
-        # Instead of 'unconfined', you can define a more refined policy which allows Beyla to use 'mount' 
-        container.apparmor.security.beta.kubernetes.io/beyla: "unconfined" # <-- Important
     spec:
       serviceAccount: beyla
       hostPID: true           # <-- Important. Required in Daemonset mode so Beyla can discover all monitored processes 
-      initContainers:
-        - name: mount-bpf-fs
-          image: grafana/beyla:latest
-          args:
-          # Create the directory and mount the BPF filesystem.
-          - 'mkdir -p /sys/fs/bpf/$BEYLA_BPF_FS_PATH && mount -t bpf bpf /sys/fs/bpf/$BEYLA_BPF_FS_PATH'
-          command:
-          - /bin/bash
-          - -c
-          - --
-          securityContext:
-            # The init container is privileged so that it can use bidirectional mount propagation
-            privileged: true
-          volumeMounts:
-          - name: bpffs
-            mountPath: /sys/fs/bpf
-            # Make sure the mount is propagated back to the host so it can be used by the Beyla container
-            mountPropagation: Bidirectional
-          env:
-            - name: KUBE_NAMESPACE
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.namespace
-              # Use a unique path for each namespace to prevent collisions with other namespaces.
-            - name: BEYLA_BPF_FS_PATH
-              value: beyla-$(KUBE_NAMESPACE)
       containers:
       - name: beyla
         terminationMessagePolicy: FallbackToLogsOnError
         image: grafana/beyla:latest
         env:
-          - name: BEYLA_PRINT_TRACES
-            value: "true"
+          - name: BEYLA_TRACE_PRINTER
+            value: "text"
           - name: BEYLA_EXECUTABLE_NAME
             value: "greetings"
           - name: BEYLA_SERVICE_NAMESPACE
@@ -143,11 +106,6 @@ spec:
             valueFrom:
               fieldRef:
                 fieldPath: metadata.namespace
-            # Use a unique path for each namespace to prevent collisions with other namespaces.
-          - name: BEYLA_BPF_FS_PATH
-            value: beyla-$(KUBE_NAMESPACE)
-          - name: BEYLA_BPF_FS_BASE_DIR
-            value: /sys/fs/bpf
         securityContext:
           runAsUser: 0
           readOnlyRootFilesystem: true
@@ -168,9 +126,6 @@ spec:
           mountPath: /var/run/beyla
         - name: cgroup
           mountPath: /sys/fs/cgroup
-        - name: bpffs
-          mountPath: /sys/fs/bpf
-          mountPropagation: HostToContainer # <-- Important. Allows Beyla to see the BPF mount from the init container
       tolerations:
       - effect: NoSchedule
         operator: Exists
@@ -182,9 +137,6 @@ spec:
       - name: cgroup
         hostPath:
           path: /sys/fs/cgroup
-      - name: bpffs
-        hostPath:
-          path: /sys/fs/bpf
 ---
 apiVersion: apps/v1
 kind: Deployment

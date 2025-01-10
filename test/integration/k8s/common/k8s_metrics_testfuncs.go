@@ -4,7 +4,11 @@ package k8s
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
+	"os"
+	"slices"
 	"testing"
 	"time"
 
@@ -14,6 +18,7 @@ import (
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
 	"sigs.k8s.io/e2e-framework/pkg/features"
 
+	"github.com/grafana/beyla/test/integration/components/jaeger"
 	"github.com/grafana/beyla/test/integration/components/kube"
 	"github.com/grafana/beyla/test/integration/components/prom"
 )
@@ -24,8 +29,9 @@ const (
 	testTimeout        = 2 * time.Minute
 	prometheusHostPort = "localhost:39090"
 
-	UUIDRegex = `^[0-9A-Fa-f]{8}-([0-9A-Fa-f]{4}-){3}[0-9A-Fa-f]{12}$`
-	TimeRegex = `^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d`
+	HostIDRegex = `^[0-9A-Fa-f\-]+$`
+	UUIDRegex   = `^[0-9A-Fa-f]{8}-([0-9A-Fa-f]{4}-){3}[0-9A-Fa-f]{12}$`
+	TimeRegex   = `^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d`
 )
 
 var (
@@ -93,7 +99,7 @@ func DoWaitForComponentsAvailable(t *testing.T) {
 	}, test.Interval(time.Second))
 }
 
-func FeatureHTTPMetricsDecoration(manifest string) features.Feature {
+func FeatureHTTPMetricsDecoration(manifest string, overrideAttrs map[string]string) features.Feature {
 	pinger := kube.Template[Pinger]{
 		TemplateFile: manifest,
 		Data: Pinger{
@@ -102,31 +108,75 @@ func FeatureHTTPMetricsDecoration(manifest string) features.Feature {
 		},
 	}
 
+	allAttributes := map[string]string{
+		"k8s_namespace_name":       "^default$",
+		"k8s_node_name":            ".+-control-plane$",
+		"k8s_pod_uid":              UUIDRegex,
+		"k8s_pod_start_time":       TimeRegex,
+		"k8s_owner_name":           "^testserver$",
+		"k8s_deployment_name":      "^testserver$",
+		"k8s_replicaset_name":      "^testserver-",
+		"k8s_cluster_name":         "^beyla$",
+		"server_service_namespace": "integration-test",
+		"source":                   "beyla",
+		"host_name":                "testserver",
+		"host_id":                  HostIDRegex,
+	}
+
 	return features.New("Decoration of Pod-to-Service communications").
 		Setup(pinger.Deploy()).
 		Teardown(pinger.Delete()).
 		Assess("all the client metrics are properly decorated",
-			testMetricsDecoration(httpClientMetrics, `{k8s_pod_name="internal-pinger"}`, map[string]string{
-				"k8s_namespace_name": "^default$",
-				"k8s_node_name":      ".+-control-plane$",
-				"k8s_pod_uid":        UUIDRegex,
-				"k8s_pod_start_time": TimeRegex,
-			}, "k8s_deployment_name")).
+			testMetricsDecoration(httpClientMetrics, `{k8s_pod_name="internal-pinger"}`,
+				attributeMap(allAttributes, overrideAttrs,
+					"k8s_namespace_name",
+					"k8s_node_name",
+					"k8s_pod_uid",
+					"k8s_pod_start_time",
+					"k8s_cluster_name",
+				), "k8s_deployment_name")).
 		Assess("all the server metrics are properly decorated",
-			testMetricsDecoration(httpServerMetrics, `{url_path="/iping",k8s_pod_name=~"testserver-.*"}`, map[string]string{
-				"k8s_namespace_name":  "^default$",
-				"k8s_node_name":       ".+-control-plane$",
-				"k8s_pod_uid":         UUIDRegex,
-				"k8s_pod_start_time":  TimeRegex,
-				"k8s_deployment_name": "^testserver$",
-				"k8s_replicaset_name": "^testserver-",
-			})).
+			testMetricsDecoration(httpServerMetrics, `{url_path="/iping",k8s_pod_name=~"testserver-.*"}`,
+				attributeMap(allAttributes, overrideAttrs,
+					"k8s_namespace_name",
+					"k8s_node_name",
+					"k8s_pod_uid",
+					"k8s_pod_start_time",
+					"k8s_owner_name",
+					"k8s_deployment_name",
+					"k8s_replicaset_name",
+					"k8s_cluster_name",
+				))).
 		Assess("all the span graph metrics exist",
-			testMetricsDecoration(spanGraphMetrics, `{connection_type="virtual_node",server="testserver"}`, map[string]string{
-				"server_service_namespace": "integration-test",
-				"source":                   "beyla",
-			}),
-		).Feature()
+			testMetricsDecoration(spanGraphMetrics, `{server="testserver",client="internal-pinger"}`,
+				attributeMap(allAttributes, overrideAttrs,
+					"server_service_namespace",
+					"source",
+				))).Assess("target_info metrics exist",
+		testMetricsDecoration([]string{"target_info"}, `{job=~".*testserver"}`,
+			attributeMap(allAttributes, overrideAttrs,
+				"host_name",
+				"host_id",
+			)),
+	).Feature()
+}
+
+func attributeMap(original, override map[string]string, fields ...string) map[string]string {
+	result := make(map[string]string, len(original))
+	for _, f := range fields {
+		if v, ok := original[f]; ok {
+			result[f] = v
+		}
+	}
+	if override == nil {
+		return result
+	}
+	for _, f := range fields {
+		if v, ok := override[f]; ok {
+			result[f] = v
+		}
+	}
+	return result
 }
 
 func FeatureGRPCMetricsDecoration(manifest string) features.Feature {
@@ -146,6 +196,7 @@ func FeatureGRPCMetricsDecoration(manifest string) features.Feature {
 				"k8s_node_name":      ".+-control-plane$",
 				"k8s_pod_uid":        UUIDRegex,
 				"k8s_pod_start_time": TimeRegex,
+				"k8s_cluster_name":   "^beyla$",
 			}, "k8s_deployment_name")).
 		Assess("all the server metrics are properly decorated",
 			testMetricsDecoration(grpcServerMetrics, `{k8s_pod_name=~"testserver-.*"}`, map[string]string{
@@ -153,23 +204,62 @@ func FeatureGRPCMetricsDecoration(manifest string) features.Feature {
 				"k8s_node_name":       ".+-control-plane$",
 				"k8s_pod_uid":         UUIDRegex,
 				"k8s_pod_start_time":  TimeRegex,
+				"k8s_owner_name":      "^testserver$",
 				"k8s_deployment_name": "^testserver$",
 				"k8s_replicaset_name": "^testserver-",
+				"k8s_cluster_name":    "^beyla$",
+			})).
+		Assess("target_info metrics exist",
+			testMetricsDecoration([]string{"target_info"}, `{job=~".*testserver"}`, map[string]string{
+				"host_name": "testserver",
+				"host_id":   HostIDRegex,
 			}),
 		).Feature()
 }
 
-func FeatureProcessMetricsDecoration() features.Feature {
+func FeatureProcessMetricsDecoration(overrideProperties map[string]string) features.Feature {
+	properties := map[string]string{
+		"k8s_namespace_name":  "^default$",
+		"k8s_node_name":       ".+-control-plane$",
+		"k8s_pod_name":        "^testserver-.*",
+		"k8s_pod_uid":         UUIDRegex,
+		"k8s_pod_start_time":  TimeRegex,
+		"k8s_deployment_name": "^testserver$",
+		"k8s_replicaset_name": "^testserver-",
+		"k8s_cluster_name":    "^beyla$",
+	}
+	for k, v := range overrideProperties {
+		properties[k] = v
+	}
 	return features.New("Decoration of process metrics").
 		Assess("all the process metrics from currently instrumented services are properly decorated",
-			testMetricsDecoration(processMetrics, `{k8s_pod_name=~"testserver-.*"}`, map[string]string{
-				"k8s_namespace_name":  "^default$",
-				"k8s_node_name":       ".+-control-plane$",
-				"k8s_pod_uid":         UUIDRegex,
-				"k8s_pod_start_time":  TimeRegex,
-				"k8s_deployment_name": "^testserver$",
-				"k8s_replicaset_name": "^testserver-",
-			})).Feature()
+			testMetricsDecoration(processMetrics, `{k8s_pod_name=~"`+properties["k8s_pod_name"]+`"}`, properties),
+		).Feature()
+}
+
+func FeatureDisableInformersAppMetricsDecoration() features.Feature {
+	pinger := kube.Template[Pinger]{
+		TemplateFile: PingerManifest,
+		Data: Pinger{
+			PodName:   "internal-pinger",
+			TargetURL: "http://testserver:8080/iping",
+		},
+	}
+	return features.New("Disabled informers for App metrics").
+		Setup(pinger.Deploy()).
+		Teardown(pinger.Delete()).
+		Assess("Application metrics miss the attributes coming from the disabled informers",
+			testMetricsDecoration(slices.Concat(processMetrics, httpServerMetrics),
+				`{k8s_pod_name=~"^testserver-.*"}`, map[string]string{
+					"k8s_namespace_name":  "^default$",
+					"k8s_node_name":       ".+-control-plane$",
+					"k8s_pod_name":        "^testserver-.*",
+					"k8s_pod_uid":         UUIDRegex,
+					"k8s_pod_start_time":  TimeRegex,
+					"k8s_deployment_name": "^testserver$",
+					"k8s_replicaset_name": "^testserver-.*",
+					"k8s_cluster_name":    "^beyla$",
+				})).Feature()
 }
 
 func testMetricsDecoration(
@@ -199,5 +289,68 @@ func testMetricsDecoration(
 			})
 		}
 		return ctx
+	}
+}
+
+func DumpMetricsAfterFail(t *testing.T, queryURL string) {
+	if !t.Failed() {
+		return
+	}
+	fmt.Printf("===== Dumping metrics from %s ====\n", queryURL)
+	pq := prom.Client{HostPort: queryURL}
+	results, err := pq.Query(`{__name__!=""}`)
+	if err != nil {
+		fmt.Printf("ERROR: %s\n", err)
+		return
+	}
+	for _, res := range results {
+		fmt.Printf(res.Metric["__name__"])
+		fmt.Printf("{")
+		for k, v := range res.Metric {
+			if k == "__name__" {
+				continue
+			}
+			fmt.Printf(`%s="%s",`, k, v)
+		}
+		fmt.Print("} ")
+		for _, v := range res.Value {
+			fmt.Printf("%s ", v)
+		}
+		fmt.Println()
+	}
+}
+
+func DumpTracesAfterFail(t *testing.T, hostURL string) {
+	if !t.Failed() {
+		return
+	}
+	fmt.Printf("===== Dumping traces from %s ====\n", hostURL)
+	// get services
+	res, err := http.Get(hostURL + "/api/services")
+	if err != nil {
+		fmt.Println("ERROR getting services:", err)
+		return
+	}
+	svcs := jaeger.Services{}
+	if err := json.NewDecoder(res.Body).Decode(&svcs); err != nil {
+		fmt.Println("ERROR decoding services:", err)
+		return
+	}
+	for _, svcName := range svcs.Data {
+		fmt.Printf("---- Service: %s ----\n", svcName)
+		res, err := http.Get(hostURL + "/api/traces?service=" + svcName)
+		if err != nil {
+			fmt.Println("ERROR getting service:", err)
+			return
+		}
+		tq := jaeger.TracesQuery{}
+		if err := json.NewDecoder(res.Body).Decode(&tq); err != nil {
+			fmt.Println("ERROR decoding service:", err)
+			continue
+		}
+		for _, trace := range tq.Data {
+			json.NewEncoder(os.Stdout).Encode(trace)
+			fmt.Println()
+		}
 	}
 }

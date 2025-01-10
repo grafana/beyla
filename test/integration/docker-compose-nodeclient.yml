@@ -25,14 +25,14 @@ services:
       - ./configs/:/configs
       - ./system/sys/kernel/security:/sys/kernel/security
       - ../../testoutput:/coverage
-      - ../../testoutput/run:/var/run/beyla
+      - ../../testoutput/run-nodeclient:/var/run/beyla
     image: hatest-autoinstrumenter
     privileged: true # in some environments (not GH Pull Requests) you can set it to false and then cap_add: [ SYS_ADMIN ]
     network_mode: "service:nodeclient"
     pid: "service:nodeclient"
     environment:
       GOCOVERDIR: "/coverage"
-      BEYLA_PRINT_TRACES: "true"
+      BEYLA_TRACE_PRINTER: "text"
       BEYLA_EXECUTABLE_NAME: "${BEYLA_EXECUTABLE_NAME}"
       BEYLA_SERVICE_NAMESPACE: "integration-test"
       BEYLA_DISCOVERY_POLL_INTERVAL: 500ms
@@ -51,7 +51,7 @@ services:
 
   # OpenTelemetry Collector for Metrics. For Traces, we use directly Jaeger
   otelcol:
-    image: otel/opentelemetry-collector-contrib:0.85.0
+    image: otel/opentelemetry-collector-contrib:0.104.0
     container_name: otel-col
     deploy:
       resources:
@@ -74,12 +74,10 @@ services:
 
   # Prometheus
   prometheus:
-    image: quay.io/prometheus/prometheus:v2.46.0
+    image: quay.io/prometheus/prometheus:v2.53.0
     container_name: prometheus
     command:
-      - --storage.tsdb.retention.time=1m
       - --config.file=/etc/prometheus/prometheus-config${PROM_CONFIG_SUFFIX}.yml
-      - --storage.tsdb.path=/prometheus
       - --web.enable-lifecycle
       - --web.route-prefix=/
     volumes:
@@ -88,7 +86,7 @@ services:
       - "9090:9090"
 
   jaeger:
-    image: jaegertracing/all-in-one:latest
+    image: jaegertracing/all-in-one:1.57
     ports:
       - "16686:16686" # Query frontend
       - "4317"        # OTEL GRPC traces collector

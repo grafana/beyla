@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"testing"
+	"unsafe"
 
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/stretchr/testify/assert"
@@ -12,7 +13,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
-const bufSize = 160
+const bufSize = 192
 
 func TestURL(t *testing.T) {
 	event := BPFHTTPInfo{
@@ -41,7 +42,7 @@ func TestHostInfo(t *testing.T) {
 		},
 	}
 
-	source, target := event.hostInfo()
+	source, target := (*BPFConnInfo)(unsafe.Pointer(&event.ConnInfo)).reqHostInfo()
 
 	assert.Equal(t, "192.168.0.1", source)
 	assert.Equal(t, "8.8.8.8", target)
@@ -53,7 +54,7 @@ func TestHostInfo(t *testing.T) {
 		},
 	}
 
-	source, target = event.hostInfo()
+	source, target = (*BPFConnInfo)(unsafe.Pointer(&event.ConnInfo)).reqHostInfo()
 
 	assert.Equal(t, "100::ffff:c0a8:1", source)
 	assert.Equal(t, "100::ffff:808:808", target)
@@ -62,10 +63,10 @@ func TestHostInfo(t *testing.T) {
 		ConnInfo: bpfConnectionInfoT{},
 	}
 
-	source, target = event.hostInfo()
+	source, target = (*BPFConnInfo)(unsafe.Pointer(&event.ConnInfo)).reqHostInfo()
 
-	assert.Equal(t, "::", source)
-	assert.Equal(t, "::", target)
+	assert.Equal(t, "", source)
+	assert.Equal(t, "", target)
 }
 
 func TestCstr(t *testing.T) {
@@ -86,7 +87,7 @@ func TestCstr(t *testing.T) {
 }
 
 func TestToRequestTrace(t *testing.T) {
-	fltr := TestPidsFilter{services: map[uint32]svc.ID{}}
+	fltr := TestPidsFilter{services: map[uint32]svc.Attrs{}}
 
 	var record BPFHTTPInfo
 	record.Type = 1
@@ -116,13 +117,13 @@ func TestToRequestTrace(t *testing.T) {
 		Start:        123456,
 		End:          789012,
 		HostPort:     1,
-		ServiceID:    svc.ID{SDKLanguage: svc.InstrumentableGeneric},
+		Service:      svc.Attrs{},
 	}
 	assert.Equal(t, expected, result)
 }
 
 func TestToRequestTraceNoConnection(t *testing.T) {
-	fltr := TestPidsFilter{services: map[uint32]svc.ID{}}
+	fltr := TestPidsFilter{services: map[uint32]svc.Attrs{}}
 
 	var record BPFHTTPInfo
 	record.Type = 1
@@ -152,13 +153,13 @@ func TestToRequestTraceNoConnection(t *testing.T) {
 		End:          789012,
 		Status:       200,
 		HostPort:     7033,
-		ServiceID:    svc.ID{SDKLanguage: svc.InstrumentableGeneric},
+		Service:      svc.Attrs{},
 	}
 	assert.Equal(t, expected, result)
 }
 
 func TestToRequestTrace_BadHost(t *testing.T) {
-	fltr := TestPidsFilter{services: map[uint32]svc.ID{}}
+	fltr := TestPidsFilter{services: map[uint32]svc.Attrs{}}
 
 	var record BPFHTTPInfo
 	record.Type = 1
@@ -189,7 +190,7 @@ func TestToRequestTrace_BadHost(t *testing.T) {
 		Start:        123456,
 		End:          789012,
 		HostPort:     0,
-		ServiceID:    svc.ID{SDKLanguage: svc.InstrumentableGeneric},
+		Service:      svc.Attrs{},
 	}
 	assert.Equal(t, expected, result)
 

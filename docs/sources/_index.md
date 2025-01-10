@@ -13,6 +13,9 @@ keywords:
   - instrumentation
 aliases:
   - /docs/grafana-cloud/monitor-applications/beyla/
+  - /docs/beyla/latest/tutorial/getting-started/
+  - /docs/grafana-cloud/monitor-applications/beyla/stability/
+  - /docs/beyla/latest/stability/
 ---
 
 # Grafana Beyla
@@ -38,6 +41,18 @@ Beyla offers the following features:
 - listen to the Kubernetes API to decorate metrics and traces with Pods and Services metadata
 - simple setup for Grafana customers already using Grafana Alloy
 
+## eBPF overview
+
+eBPF allows you to attach applications to different points of the Linux Kernel. eBPF applications run in privileged mode and allow you to specify the runtime information of the Linux Kernel: system calls, network stack, as well as inserting probes in user space applications.
+
+The eBPF applications are safe and compiled for their own [Virtual Machine instruction set](https://docs.kernel.org/bpf/standardization/instruction-set.html) and run in a sandboxed environment that verifies each loaded eBPF program for memory access safety and finite execution time. Unlike previous technologies, such as natively compiled kernel modules, there is no chance that a poorly programmed probe can cause the Linux Kernel to hang.
+
+eBPF binaries get verified and compiled with a Just-In-Time (JIT) compiler for the native host architecture such as x86-64 or ARM64 for efficient and fast execution.
+
+The eBPF code is loaded from ordinary applications running in user space. The kernel and the user space applications can share information through a set of well defined communication mechanisms, which are provided by the eBPF specification. For example: ring buffers, arrays, hash maps, etc.
+
+![Beyla eBPF architecture](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/ebpf-arch.svg)
+
 ## Requirements
 
 - Linux with Kernel 5.8 or higher with BPF Type Format [(BTF)](https://www.kernel.org/doc/html/latest/bpf/btf.html)
@@ -45,21 +60,30 @@ Beyla offers the following features:
   You can check if your kernel has BTF enabled by verifying if `/sys/kernel/btf/vmlinux` exists on your system.
   If you need to recompile your kernel to enable BTF, the configuration option `CONFIG_DEBUG_INFO_BTF=y` must be
   set.
+- Beyla also supports RedHat-based distributions: RHEL8, CentOS 8, Rocky8, AlmaLinux8, and others, which ship a Kernel 4.18 that backports eBPF-related patches.
 - eBPF enabled in the host.
-- For instrumenting Go programs, they must have been compiled with at least Go 1.17. We currently
-  support Go applications built with a major **Go version no earlier than 3 versions** behind the current
-  stable major release.
+- For instrumenting Go programs, compile with at least Go 1.17. Beyla support Go applications built with a major **Go version no earlier than 3 versions** behind the current stable major release.
 - Administrative access rights to execute Beyla.
+
+## Limitations
+
+Beyla has its limitations too. It only provides generic metrics and transaction level trace span information. Language agents and manual instrumentation is still recommended, so that you can specify the granularity of each part of the code to be instrumented, putting the focus on your critical operations.
+
+While most eBPF programs require elevated privileges, Beyla allow you to specify finer grained permissions to run with minimum required permissions, such as: `CAP_DAC_READ_SEARCH`, `CAP_SYS_PTRACE`, `CAP_PERFMON`, `CAP_BPF`, `CAP_CHECKPOINT_RESTORE`, and `CAP_NET_RAW`.
+
+Some Beyla functionality requires further permissions, for example using the network observability probes with Linux Traffic Control requires `CAP_NET_ADMIN`, but it's a feature you have to optionally enable.
+
+`CAP_SYS_ADMIN` is only required to enable context propagation in Go across multiple nodes, however if this permission
+isn't granted Beyla gracefully degrades its functionality to support only partial traces.
+
+Distributed tracing is only supported for Go services, while other programming language support remains on the road-map. Distributed tracing for other programming languages works on the same node, but not across different nodes.
 
 ## Get started
 
+- Follow the [setup]({{< relref "./setup/_index.md" >}}) documentation to get started with Beyla either with Docker or Kubernetes.
+
 - Follow the [language quickstart guides]({{< relref "./quickstart" >}}) for quick instructions
   about how to set up Beyla to instrument applications written in a particular language.
-
-- Follow the [setup]({{< relref "./setup/_index.md" >}}) documentation to get started with Beyla either as a standalone
-  service, with Docker or with Kubernetes.
-
-- Follow the [tutorials]({{< relref "./tutorial/_index.md" >}}) to get a complete guide to instrument an application with Beyla and data to Grafana Cloud.
 
 ## Learn more about Grafana Beyla
 

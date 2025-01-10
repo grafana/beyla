@@ -1,0 +1,38 @@
+name: Clang Format Check
+
+on:
+  push:
+    branches: [ 'main', 'release-*' ]
+  pull_request:
+    branches: [ 'main', 'release-*' ]
+
+jobs:
+  clang-format:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          lfs: true
+
+      - name: Install Clang-Format
+        run: sudo apt-get install clang-format
+
+      - name: Check Clang Format
+        run: |
+          # Check for modified C/C++ files
+          files=$(git diff --name-status origin/main...HEAD | awk '$1 != "D" && /\.(c|cpp|h)$/ { print $2 }' || true)
+          if [ -z "$files" ]; then
+            echo "No C/C++ files modified."
+            exit 0
+          fi
+
+          # Run clang-format and check for changes
+          clang-format -i $files
+          if ! git diff --exit-code $files; then
+            echo "Error: Some files are not formatted correctly. Please run clang-format on the modified files or use the provided pre-commit hook."
+            exit 1
+          fi
+

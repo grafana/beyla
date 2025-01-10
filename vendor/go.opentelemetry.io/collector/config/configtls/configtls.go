@@ -86,11 +86,9 @@ type ClientConfig struct {
 
 	// These are config options specific to client connections.
 
-	// In gRPC when set to true, this is used to disable the client transport security.
-	// See https://godoc.org/google.golang.org/grpc#WithInsecure.
-	// In HTTP, this disables verifying the server's certificate chain and host name
-	// (InsecureSkipVerify in the tls Config). Please refer to
-	// https://godoc.org/crypto/tls#Config for more information.
+	// In gRPC and HTTP when set to true, this is used to disable the client transport security.
+	// See https://godoc.org/google.golang.org/grpc#WithInsecure for gRPC.
+	// Please refer to https://godoc.org/crypto/tls#Config for more information.
 	// (optional, default false)
 	Insecure bool `mapstructure:"insecure"`
 	// InsecureSkipVerify will enable TLS but not verify the certificate.
@@ -181,7 +179,7 @@ func (r *certReloader) GetCertificate() (*tls.Certificate, error) {
 
 func (c Config) Validate() error {
 	if c.hasCAFile() && c.hasCAPem() {
-		return fmt.Errorf("provide either a CA file or the PEM-encoded string, but not both")
+		return errors.New("provide either a CA file or the PEM-encoded string, but not both")
 	}
 
 	minTLS, err := convertVersion(c.MinVersion, defaultMinTLSVersion)
@@ -271,7 +269,7 @@ func (c Config) loadCACertPool() (*x509.CertPool, error) {
 
 	switch {
 	case c.hasCAFile() && c.hasCAPem():
-		return nil, fmt.Errorf("failed to load CA CertPool: provide either a CA file or the PEM-encoded string, but not both")
+		return nil, errors.New("failed to load CA CertPool: provide either a CA file or the PEM-encoded string, but not both")
 	case c.hasCAFile():
 		// Set up user specified truststore from file
 		certPool, err = c.loadCertFile(c.CAFile)
@@ -310,7 +308,7 @@ func (c Config) loadCertPem(certPem []byte) (*x509.CertPool, error) {
 		}
 	}
 	if !certPool.AppendCertsFromPEM(certPem) {
-		return nil, fmt.Errorf("failed to parse cert")
+		return nil, errors.New("failed to parse cert")
 	}
 	return certPool, nil
 }
@@ -318,13 +316,13 @@ func (c Config) loadCertPem(certPem []byte) (*x509.CertPool, error) {
 func (c Config) loadCertificate() (tls.Certificate, error) {
 	switch {
 	case c.hasCert() != c.hasKey():
-		return tls.Certificate{}, fmt.Errorf("for auth via TLS, provide both certificate and key, or neither")
+		return tls.Certificate{}, errors.New("for auth via TLS, provide both certificate and key, or neither")
 	case !c.hasCert() && !c.hasKey():
 		return tls.Certificate{}, nil
 	case c.hasCertFile() && c.hasCertPem():
-		return tls.Certificate{}, fmt.Errorf("for auth via TLS, provide either a certificate or the PEM-encoded string, but not both")
+		return tls.Certificate{}, errors.New("for auth via TLS, provide either a certificate or the PEM-encoded string, but not both")
 	case c.hasKeyFile() && c.hasKeyPem():
-		return tls.Certificate{}, fmt.Errorf("for auth via TLS, provide either a key or the PEM-encoded string, but not both")
+		return tls.Certificate{}, errors.New("for auth via TLS, provide either a key or the PEM-encoded string, but not both")
 	}
 
 	var certPem, keyPem []byte

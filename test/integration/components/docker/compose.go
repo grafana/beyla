@@ -48,7 +48,7 @@ func (c *Compose) Stop() error {
 }
 
 func (c *Compose) Remove() error {
-	return c.command("rm", "-f")
+	return c.command("rm", "-f", "-v")
 }
 
 func (c *Compose) command(args ...string) error {

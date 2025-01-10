@@ -48,15 +48,24 @@ func main() {
 	}
 
 	if err := lvl.UnmarshalText([]byte(config.LogLevel)); err != nil {
-		slog.Error("unknown log level specified, choices are [DEBUG, INFO, WARN, ERROR]", err)
+		slog.Error("unknown log level specified, choices are [DEBUG, INFO, WARN, ERROR]", "error", err)
 		os.Exit(-1)
+	}
+
+	if err := beyla.CheckOSCapabilities(config); err != nil {
+		if config.EnforceSysCaps {
+			slog.Error("can't start Beyla", "error", err)
+			os.Exit(-1)
+		}
+
+		slog.Warn("Required system capabilities not present, Beyla may malfunction", "error", err)
 	}
 
 	if config.ProfilePort != 0 {
 		go func() {
 			slog.Info("starting PProf HTTP listener", "port", config.ProfilePort)
 			err := http.ListenAndServe(fmt.Sprintf(":%d", config.ProfilePort), nil)
-			slog.Error("PProf HTTP listener stopped working", err)
+			slog.Error("PProf HTTP listener stopped working", "error", err)
 		}()
 	}
 
@@ -65,7 +74,10 @@ func main() {
 	// child process isn't found.
 	ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
-	components.RunBeyla(ctx, config)
+	if err := components.RunBeyla(ctx, config); err != nil {
+		slog.Error("Beyla ran with errors", "error", err)
+		os.Exit(-1)
+	}
 
 	if gc := os.Getenv("GOCOVERDIR"); gc != "" {
 		slog.Info("Waiting 1s to collect coverage data...")
@@ -78,14 +90,14 @@ func loadConfig(configPath *string) *beyla.Config {
 	if configPath != nil && *configPath != "" {
 		var err error
 		if configReader, err = os.Open(*configPath); err != nil {
-			slog.Error("can't open "+*configPath, err)
+			slog.Error("can't open "+*configPath, "error", err)
 			os.Exit(-1)
 		}
 		defer configReader.Close()
 	}
 	config, err := beyla.LoadConfig(configReader)
 	if err != nil {
-		slog.Error("wrong configuration", err)
+		slog.Error("wrong configuration", "error", err)
 		// nolint:gocritic
 		os.Exit(-1)
 	}

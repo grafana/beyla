@@ -2,20 +2,22 @@
 #define RINGBUF_H
 
 #include "utils.h"
+#include "pin_internal.h"
 
 // These need to line up with some Go identifiers:
 // EventTypeHTTP, EventTypeGRPC, EventTypeHTTPClient, EventTypeGRPCClient, EventTypeSQLClient, EventTypeKHTTPRequest
-#define EVENT_HTTP_REQUEST       1
-#define EVENT_GRPC_REQUEST       2
-#define EVENT_HTTP_CLIENT        3
-#define EVENT_GRPC_CLIENT        4
-#define EVENT_SQL_CLIENT         5
-#define EVENT_K_HTTP_REQUEST     6
-#define EVENT_K_HTTP2_REQUEST    7
-#define EVENT_TCP_REQUEST        8
-#define EVENT_GO_KAFKA           9
-#define EVENT_GO_REDIS           10
-#define EVENT_GPU_KERNEL_LAUNCH  11
+#define EVENT_HTTP_REQUEST 1
+#define EVENT_GRPC_REQUEST 2
+#define EVENT_HTTP_CLIENT 3
+#define EVENT_GRPC_CLIENT 4
+#define EVENT_SQL_CLIENT 5
+#define EVENT_K_HTTP_REQUEST 6
+#define EVENT_K_HTTP2_REQUEST 7
+#define EVENT_TCP_REQUEST 8
+#define EVENT_GO_KAFKA 9
+#define EVENT_GO_REDIS 10
+#define EVENT_GO_KAFKA_SEG 11 // the segment-io version (kafka-go) has different format
+#define EVENT_GPU_KERNEL_LAUNCH 12
 
 // setting here the following map definitions without pinning them to a global namespace
 // would lead that services running both HTTP and GRPC server would duplicate
@@ -28,7 +30,7 @@
 struct {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
     __uint(max_entries, 1 << 16);
-    __uint(pinning, LIBBPF_PIN_BY_NAME);
+    __uint(pinning, BEYLA_PIN_INTERNAL);
 } events SEC(".maps");
 
 // To be Injected from the user space during the eBPF program load & initialization
@@ -37,15 +39,15 @@ volatile const u32 wakeup_data_bytes;
 // get_flags prevents waking the userspace process up on each ringbuf message.
 // If wakeup_data_bytes > 0, it will wait until wakeup_data_bytes are accumulated
 // into the buffer before waking the userspace.
-static __always_inline long get_flags()
-{
-	long sz;
+static __always_inline long get_flags() {
+    long sz;
 
-	if (!wakeup_data_bytes)
-		return 0;
+    if (!wakeup_data_bytes) {
+        return 0;
+    }
 
-	sz = bpf_ringbuf_query(&events, BPF_RB_AVAIL_DATA);
-	return sz >= wakeup_data_bytes ? BPF_RB_FORCE_WAKEUP : BPF_RB_NO_WAKEUP;
+    sz = bpf_ringbuf_query(&events, BPF_RB_AVAIL_DATA);
+    return sz >= wakeup_data_bytes ? BPF_RB_FORCE_WAKEUP : BPF_RB_NO_WAKEUP;
 }
 
 #endif

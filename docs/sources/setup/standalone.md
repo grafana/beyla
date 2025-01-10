@@ -2,6 +2,7 @@
 title: Run Beyla as a standalone process
 menuTitle: Standalone
 description: Learn how to setup and run Beyla as a standalone Linux process.
+Draft: true
 weight: 1
 keywords:
   - Beyla
@@ -15,8 +16,6 @@ aliases:
 # Run Beyla as a standalone process
 
 Beyla can run as a standalone Linux OS process with elevated privileges that can inspect other running processes.
-
-For a complete introduction tutorial on how to collect and visualize the instrumented data, follow the [getting started tutorial]({{< relref "../tutorial/getting-started.md" >}}).
 
 ## Download and install
 

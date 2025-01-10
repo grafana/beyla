@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"unsafe"
 
+	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
@@ -55,7 +56,6 @@ func (ring *ringbufEventRing) Close() {
 type ringReader struct {
 	// These point into mmap'ed memory and must be accessed atomically.
 	prod_pos, cons_pos *uint64
-	cons               uint64
 	mask               uint64
 	ring               []byte
 }
@@ -64,64 +64,74 @@ func newRingReader(cons_ptr, prod_ptr *uint64, ring []byte) *ringReader {
 	return &ringReader{
 		prod_pos: prod_ptr,
 		cons_pos: cons_ptr,
-		cons:     atomic.LoadUint64(cons_ptr),
 		// cap is always a power of two
 		mask: uint64(cap(ring)/2 - 1),
 		ring: ring,
 	}
 }
 
-func (rr *ringReader) loadConsumer() {
-	rr.cons = atomic.LoadUint64(rr.cons_pos)
-}
-
-func (rr *ringReader) storeConsumer() {
-	atomic.StoreUint64(rr.cons_pos, rr.cons)
-}
-
-// clamp delta to 'end' if 'start+delta' is beyond 'end'
-func clamp(start, end, delta uint64) uint64 {
-	if remainder := end - start; delta > remainder {
-		return remainder
-	}
-	return delta
-}
-
-func (rr *ringReader) skipRead(skipBytes uint64) {
-	rr.cons += clamp(rr.cons, atomic.LoadUint64(rr.prod_pos), skipBytes)
-}
-
-func (rr *ringReader) isEmpty() bool {
-	cons := atomic.LoadUint64(rr.cons_pos)
-	prod := atomic.LoadUint64(rr.prod_pos)
-
-	return prod == cons
-}
-
+// To be able to wrap around data, data pages in ring buffers are mapped twice in
+// a single contiguous virtual region.
+// Therefore the returned usable size is half the size of the mmaped region.
 func (rr *ringReader) size() int {
-	return cap(rr.ring)
+	return cap(rr.ring) / 2
 }
 
-func (rr *ringReader) remaining() int {
+// Read a record from an event ring.
+func (rr *ringReader) readRecord(rec *Record) error {
+	prod := atomic.LoadUint64(rr.prod_pos)
 	cons := atomic.LoadUint64(rr.cons_pos)
-	prod := atomic.LoadUint64(rr.prod_pos)
 
-	return int((prod - cons) & rr.mask)
-}
+	for {
+		if remaining := prod - cons; remaining == 0 {
+			return errEOR
+		} else if remaining < unix.BPF_RINGBUF_HDR_SZ {
+			return fmt.Errorf("read record header: %w", io.ErrUnexpectedEOF)
+		}
 
-func (rr *ringReader) Read(p []byte) (int, error) {
-	prod := atomic.LoadUint64(rr.prod_pos)
+		// read the len field of the header atomically to ensure a happens before
+		// relationship with the xchg in the kernel. Without this we may see len
+		// without BPF_RINGBUF_BUSY_BIT before the written data is visible.
+		// See https://github.com/torvalds/linux/blob/v6.8/kernel/bpf/ringbuf.c#L484
+		start := cons & rr.mask
+		len := atomic.LoadUint32((*uint32)((unsafe.Pointer)(&rr.ring[start])))
+		header := ringbufHeader{Len: len}
 
-	n := clamp(rr.cons, prod, uint64(len(p)))
+		if header.isBusy() {
+			// the next sample in the ring is not committed yet so we
+			// exit without storing the reader/consumer position
+			// and start again from the same position.
+			return errBusy
+		}
 
-	start := rr.cons & rr.mask
+		cons += unix.BPF_RINGBUF_HDR_SZ
 
-	copy(p, rr.ring[start:start+n])
-	rr.cons += n
+		// Data is always padded to 8 byte alignment.
+		dataLenAligned := uint64(internal.Align(header.dataLen(), 8))
+		if remaining := prod - cons; remaining < dataLenAligned {
+			return fmt.Errorf("read sample data: %w", io.ErrUnexpectedEOF)
+		}
 
-	if prod == rr.cons {
-		return int(n), io.EOF
+		start = cons & rr.mask
+		cons += dataLenAligned
+
+		if header.isDiscard() {
+			// when the record header indicates that the data should be
+			// discarded, we skip it by just updating the consumer position
+			// to the next record.
+			atomic.StoreUint64(rr.cons_pos, cons)
+			continue
+		}
+
+		if n := header.dataLen(); cap(rec.RawSample) < n {
+			rec.RawSample = make([]byte, n)
+		} else {
+			rec.RawSample = rec.RawSample[:n]
+		}
+
+		copy(rec.RawSample, rr.ring[start:])
+		rec.Remaining = int(prod - cons)
+		atomic.StoreUint64(rr.cons_pos, cons)
+		return nil
 	}
-
-	return int(n), nil
 }

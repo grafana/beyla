@@ -21,19 +21,19 @@
 
 #include "bpf_helpers.h"
 #include "bpf_endian.h"
-
+#include "bpf_dbg.h"
 #include "flows_common.h"
 
 // sets the TCP header flags for connection information
 static inline void set_flags(struct tcphdr *th, u16 *flags) {
-    //If both ACK and SYN are set, then it is server -> client communication during 3-way handshake. 
+    //If both ACK and SYN are set, then it is server -> client communication during 3-way handshake.
     if (th->ack && th->syn) {
         *flags |= SYN_ACK_FLAG;
-    } else if (th->ack && th->fin ) {
+    } else if (th->ack && th->fin) {
         // If both ACK and FIN are set, then it is graceful termination from server.
         *flags |= FIN_ACK_FLAG;
-    } else if (th->ack && th->rst ) {
-        // If both ACK and RST are set, then it is abrupt connection termination. 
+    } else if (th->ack && th->rst) {
+        // If both ACK and RST are set, then it is abrupt connection termination.
         *flags |= RST_ACK_FLAG;
     } else if (th->fin) {
         *flags |= FIN_FLAG;
@@ -144,10 +144,10 @@ static inline int fill_ethhdr(struct ethhdr *eth, void *data_end, flow_id *id, u
     return SUBMIT;
 }
 
-static inline int flow_monitor(struct __sk_buff *skb, u8 direction) {
+static inline int flow_monitor(struct __sk_buff *skb) {
     // If sampling is defined, will only parse 1 out of "sampling" flows
     if (sampling != 0 && (bpf_get_prandom_u32() % sampling) != 0) {
-        return TC_ACT_OK;
+        return TC_ACT_UNSPEC;
     }
     void *data_end = (void *)(long)skb->data_end;
     void *data = (void *)(long)skb->data;
@@ -157,13 +157,11 @@ static inline int flow_monitor(struct __sk_buff *skb, u8 direction) {
     struct ethhdr *eth = (struct ethhdr *)data;
     u16 flags = 0;
     if (fill_ethhdr(eth, data_end, &id, &flags) == DISCARD) {
-        return TC_ACT_OK;
+        return TC_ACT_UNSPEC;
     }
     id.if_index = skb->ifindex;
 
     u64 current_time = bpf_ktime_get_ns();
-    //Set extra fields    
-    id.direction = direction;
 
     // TODO: we need to add spinlock here when we deprecate versions prior to 5.1, or provide
     // a spinlocked alternative version and use it selectively https://lwn.net/Articles/779120/
@@ -186,7 +184,7 @@ static inline int flow_monitor(struct __sk_buff *skb, u8 direction) {
             // a duplicated UNION of flows (two different flows with partial aggregation of the same packets),
             // which can't be deduplicated.
             // other possible values https://chromium.googlesource.com/chromiumos/docs/+/master/constants/errnos.md
-            bpf_printk("error updating flow %d\n", ret);
+            bpf_dbg_printk("error updating flow %d\n", ret);
         }
     } else {
         // Key does not exist in the map, and will need to create a new entry.
@@ -195,8 +193,40 @@ static inline int flow_monitor(struct __sk_buff *skb, u8 direction) {
             .bytes = skb->len,
             .start_mono_time_ns = current_time,
             .end_mono_time_ns = current_time,
-            .flags = flags, 
+            .flags = flags,
+            .iface_direction = UNKNOWN,
+            .initiator = INITIATOR_UNKNOWN,
         };
+
+        u8 *direction = (u8 *)bpf_map_lookup_elem(&flow_directions, &id);
+        if (direction == NULL) {
+            // Calculate direction based on first flag received
+            // SYN and ACK mean someone else initiated the connection and this is the INGRESS direction
+            if ((flags & SYN_ACK_FLAG) == SYN_ACK_FLAG) {
+                new_flow.iface_direction = INGRESS;
+            }
+            // SYN only means we initiated the connection and this is the EGRESS direction
+            else if ((flags & SYN_FLAG) == SYN_FLAG) {
+                new_flow.iface_direction = EGRESS;
+            }
+            // save, when direction was calculated based on TCP flag
+            if (new_flow.iface_direction != UNKNOWN) {
+                // errors are intentionally omitted
+                bpf_map_update_elem(&flow_directions, &id, &new_flow.iface_direction, BPF_NOEXIST);
+            }
+            // fallback for lost or already started connections and UDP
+            else {
+                new_flow.iface_direction = INGRESS;
+                if (id.src_port > id.dst_port) {
+                    new_flow.iface_direction = EGRESS;
+                }
+            }
+        } else {
+            // get direction from saved flow
+            new_flow.iface_direction = *direction;
+        }
+
+        new_flow.initiator = get_connection_initiator(&id, flags);
 
         // even if we know that the entry is new, another CPU might be concurrently inserting a flow
         // so we need to specify BPF_ANY
@@ -205,19 +235,20 @@ static inline int flow_monitor(struct __sk_buff *skb, u8 direction) {
             // usually error -16 (-EBUSY) or -7 (E2BIG) is printed here.
             // In this case, we send the single-packet flow via ringbuffer as in the worst case we can have
             // a repeated INTERSECTION of flows (different flows aggregating different packets),
-            // which can be re-aggregated at userpace.
+            // which can be re-aggregated at userspace.
             // other possible values https://chromium.googlesource.com/chromiumos/docs/+/master/constants/errnos.md
             if (trace_messages) {
-                bpf_printk("error adding flow %d\n", ret);
+                bpf_dbg_printk("error adding flow %d\n", ret);
             }
 
             new_flow.errno = -ret;
-            flow_record *record = (flow_record *)bpf_ringbuf_reserve(&direct_flows, sizeof(flow_record), 0);
+            flow_record *record =
+                (flow_record *)bpf_ringbuf_reserve(&direct_flows, sizeof(flow_record), 0);
             if (!record) {
                 if (trace_messages) {
-                    bpf_printk("couldn't reserve space in the ringbuf. Dropping flow");
+                    bpf_dbg_printk("couldn't reserve space in the ringbuf. Dropping flow");
                 }
-                return TC_ACT_OK;
+                goto cleanup;
             }
             record->id = id;
             record->metrics = new_flow;
@@ -225,17 +256,22 @@ static inline int flow_monitor(struct __sk_buff *skb, u8 direction) {
         }
     }
 
-    return TC_ACT_OK;
+cleanup:
+    // finally, when flow receives FIN or RST, clean flow_directions
+    if (flags & FIN_FLAG || flags & RST_FLAG || flags & FIN_ACK_FLAG || flags & RST_ACK_FLAG) {
+        bpf_map_delete_elem(&flow_directions, &id);
+    }
+    return TC_ACT_UNSPEC;
 }
 
 SEC("tc_ingress")
-int ingress_flow_parse(struct __sk_buff *skb) {
-    return flow_monitor(skb, INGRESS);
+int beyla_ingress_flow_parse(struct __sk_buff *skb) {
+    return flow_monitor(skb);
 }
 
 SEC("tc_egress")
-int egress_flow_parse(struct __sk_buff *skb) {
-    return flow_monitor(skb, EGRESS);
+int beyla_egress_flow_parse(struct __sk_buff *skb) {
+    return flow_monitor(skb);
 }
 
 // Force emitting structs into the ELF for automatic creation of Golang struct

@@ -6,19 +6,20 @@
 #include "bpf_core_read.h"
 
 typedef struct pid_key {
-    u32 pid;        // pid as seen by the userspace (for example, inside its container)
+    u32 pid; // pid as seen by the userspace (for example, inside its container)
     u32 ns;  // pids namespace for the process
 } __attribute__((packed)) pid_key_t;
 
 typedef struct pid_info_t {
-    u32 host_pid;   // pid as seen by the root cgroup (and by BPF)
-    u32 user_pid;   // pid as seen by the userspace (for example, inside its container)
-    u32 ns;  // pids namespace for the process
+    u32 host_pid; // pid as seen by the root cgroup (and by BPF)
+    u32 user_pid; // pid as seen by the userspace (for example, inside its container)
+    u32 ns;       // pids namespace for the process
 } __attribute__((packed)) pid_info;
 
 // Good resource on this: https://mozillazg.com/2022/05/ebpf-libbpfgo-get-process-info-en.html
 // Using bpf_get_ns_current_pid_tgid is too restrictive for us
-static __always_inline void ns_pid_ppid(struct task_struct *task, int *pid, int *ppid, u32 *pid_ns_id) {
+static __always_inline void
+ns_pid_ppid(struct task_struct *task, int *pid, int *ppid, u32 *pid_ns_id) {
     struct upid upid;
 
     unsigned int level = BPF_CORE_READ(task, nsproxy, pid_ns_for_children, level);
@@ -53,6 +54,19 @@ static __always_inline void task_pid(pid_info *pid) {
     // set PIDs namespace
     struct ns_common ns = BPF_CORE_READ(task, nsproxy, pid_ns_for_children, ns);
     pid->ns = (u32)ns.inum;
+}
+
+static __always_inline u32 get_task_tid() {
+    struct upid upid;
+    struct task_struct *task = (struct task_struct *)bpf_get_current_task();
+
+    // https://github.com/torvalds/linux/blob/556e2d17cae620d549c5474b1ece053430cd50bc/kernel/pid.c#L324 (type is )
+    // set user-side PID
+    unsigned int level = BPF_CORE_READ(task, nsproxy, pid_ns_for_children, level);
+    struct pid *ns_pid = (struct pid *)BPF_CORE_READ(task, thread_pid);
+    bpf_probe_read_kernel(&upid, sizeof(upid), &ns_pid->numbers[level]);
+
+    return (u32)upid.nr;
 }
 
 static __always_inline void task_tid(pid_key_t *tid) {

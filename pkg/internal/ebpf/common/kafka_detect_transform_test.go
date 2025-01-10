@@ -14,6 +14,24 @@ func TestProcessKafkaRequest(t *testing.T) {
 		expected *KafkaInfo
 	}{
 		{
+			name:  "Fetch request (v11) truncated - 1",
+			input: []byte{0, 0, 0, 94, 0, 1, 0, 11, 0, 0, 0, 224, 0, 6, 115, 97, 114, 97, 109, 97, 255, 255, 255, 255, 0, 0, 1, 244, 0, 0, 0, 1, 6, 64, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 255, 0, 0, 0, 1, 0},
+			expected: &KafkaInfo{
+				ClientID:    "sarama",
+				Operation:   Fetch,
+				TopicOffset: 45,
+			},
+		},
+		{
+			name:  "Fetch request (v11) truncated",
+			input: []byte{0, 0, 0, 94, 0, 1, 0, 11, 0, 0, 0, 224, 0, 6, 115, 97, 114, 97, 109, 97, 255, 255, 255, 255, 0, 0, 1, 244, 0, 0, 0, 1, 6, 64, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 255, 0, 0, 0, 1},
+			expected: &KafkaInfo{
+				ClientID:    "sarama",
+				Operation:   Fetch,
+				TopicOffset: 45,
+			},
+		},
+		{
 			name:  "Fetch request (v11)",
 			input: []byte{0, 0, 0, 94, 0, 1, 0, 11, 0, 0, 0, 224, 0, 6, 115, 97, 114, 97, 109, 97, 255, 255, 255, 255, 0, 0, 1, 244, 0, 0, 0, 1, 6, 64, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 255, 0, 0, 0, 1, 0, 9, 105, 109, 112, 111, 114, 116, 97, 110, 116, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 19, 0, 0, 0, 0, 0, 0, 0, 0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 0},
 			expected: &KafkaInfo{
@@ -68,6 +86,21 @@ func TestProcessKafkaRequest(t *testing.T) {
 			input:    []byte{0, 0, 0, 1, 0, 0, 0, 7, 0, 0, 0, 2, 0, 6, 115, 97, 114, 97, 109, 97, 255, 255, 255, 255, 0, 0, 39, 16, 0, 0, 0, 1, 0, 9, 105, 109, 112, 111, 114, 116, 97, 110, 116, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 72},
 			expected: &KafkaInfo{},
 		},
+		{
+			name:     "Redis request",
+			input:    []byte{42, 51, 13, 10, 36, 52, 13, 10, 72, 71, 69, 84, 13, 10, 36, 51, 54, 13, 10, 56, 97, 100, 48, 101, 56, 99, 97, 45, 101, 97, 49, 57, 45, 52, 50, 97, 57, 45, 98, 51, 55, 48, 45, 98, 99, 97, 102, 102, 50, 55, 54, 55, 98, 56, 54, 13, 10, 36, 52, 13, 10, 99, 97, 114, 116, 13, 10, 103, 58, 32, 34, 51, 49, 117, 50, 107, 97, 100, 98, 108, 113, 53, 106, 34, 13, 10, 99, 111, 110, 116, 101, 110, 116, 45, 108, 101, 110, 103, 116, 104, 58, 32, 49, 57, 57, 13, 10, 118, 97, 114, 121, 58, 32, 65, 99, 99, 101, 112, 116, 45, 69, 110, 99, 111, 100, 105, 110, 103, 13, 10, 100, 97, 116, 101, 58, 32, 87, 101, 100, 44, 32, 48, 51, 32, 74, 117, 108, 32, 50, 48, 50, 52, 32, 49, 55, 58, 52, 54, 58, 49, 55, 32, 71, 77, 84, 13, 10, 120, 45, 101, 110, 118, 111, 121, 45, 117, 112, 115, 116, 114, 101, 97, 109, 45, 115, 101, 114, 118, 105, 99, 101, 45, 116, 105, 109, 101, 58, 32, 51, 13, 10, 115, 101, 114, 118, 101, 114, 58, 32, 101, 110, 118, 111, 121, 13, 10, 13, 10, 91, 34, 90, 65, 82, 34, 44, 34, 73, 83, 75, 34, 44, 34, 73, 76, 83, 34, 44, 34, 82, 79, 78, 34, 44, 34, 71, 66, 80, 34, 44, 34, 66, 82, 76, 34, 44, 34},
+			expected: &KafkaInfo{},
+		},
+		{
+			name:     "Redis request 2",
+			input:    []byte{36, 45, 49, 13, 10, 1, 0, 15, 0, 3, 89, 130, 0, 32, 99, 111, 110, 115, 117, 109, 101, 114, 45, 102, 114, 97, 117, 100, 100, 101, 116, 101, 99, 116, 105, 111, 110, 115, 101, 114, 118, 105, 99, 101, 45, 49, 0, 0, 0, 1, 244, 0, 0, 0, 1, 3, 32, 0, 0, 0, 17, 170, 173, 222, 0, 0, 141, 2, 1, 1, 1, 0, 101, 112, 116, 45, 114, 97, 110, 103, 101, 115, 58, 32, 98, 121, 116, 101, 115, 13, 10, 108, 97, 115, 116, 45, 109, 111, 100, 105, 102, 105, 101, 100, 58, 32, 70, 114, 105, 44, 32, 48, 55, 32, 74, 117, 110, 32, 50, 48, 50, 52, 32, 48, 48, 58, 53, 55}[:5],
+			expected: &KafkaInfo{},
+		},
+		{
+			name:     "Redis request 2, mixed up data",
+			input:    []byte{36, 45, 49, 13, 10, 1, 0, 15, 0, 3, 89, 130, 0, 32, 99, 111, 110, 115, 117, 109, 101, 114, 45, 102, 114, 97, 117, 100, 100, 101, 116, 101, 99, 116, 105, 111, 110, 115, 101, 114, 118, 105, 99, 101, 45, 49, 0, 0, 0, 1, 244, 0, 0, 0, 1, 3, 32, 0, 0, 0, 17, 170, 173, 222, 0, 0, 141, 2, 1, 1, 1, 0, 101, 112, 116, 45, 114, 97, 110, 103, 101, 115, 58, 32, 98, 121, 116, 101, 115, 13, 10, 108, 97, 115, 116, 45, 109, 111, 100, 105, 102, 105, 101, 100, 58, 32, 70, 114, 105, 44, 32, 48, 55, 32, 74, 117, 110, 32, 50, 48, 50, 52, 32, 48, 48, 58, 53, 55}[:20],
+			expected: &KafkaInfo{},
+		},
 	}
 
 	for _, tt := range tests {
@@ -116,24 +149,33 @@ func TestGetTopicOffsetFromFetchOperation(t *testing.T) {
 		APIVersion: 3,
 	}
 
-	offset := getTopicOffsetFromFetchOperation(header)
+	to, err := getTopicOffsetFromFetchOperation([]byte{}, 0, header)
+	assert.NoError(t, err)
 	expectedOffset := 3*4 + 4
-	assert.Equal(t, expectedOffset, offset)
+	assert.Equal(t, expectedOffset, to)
 
 	header.APIVersion = 4
-	offset = getTopicOffsetFromFetchOperation(header)
+	to, err = getTopicOffsetFromFetchOperation([]byte{0x00, 0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x01}, 0, header)
+	assert.NoError(t, err)
 	expectedOffset = 3*4 + 5
-	assert.Equal(t, expectedOffset, offset)
+	assert.Equal(t, expectedOffset, to)
 
 	header.APIVersion = 7
-	offset = getTopicOffsetFromFetchOperation(header)
+	to, err = getTopicOffsetFromFetchOperation([]byte{0x00, 0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x01}, 0, header)
+	assert.NoError(t, err)
 	expectedOffset = 3*4 + 4 + 1 + 2*4
-	assert.Equal(t, expectedOffset, offset)
+	assert.Equal(t, expectedOffset, to)
 
 	header.APIVersion = 2
-	offset = getTopicOffsetFromFetchOperation(header)
+	to, err = getTopicOffsetFromFetchOperation([]byte{0x00, 0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x01}, 0, header)
+	assert.NoError(t, err)
 	expectedOffset = 3 * 4
-	assert.Equal(t, expectedOffset, offset)
+	assert.Equal(t, expectedOffset, to)
+
+	// Isolation level is the last byte in the sequence, it can only be 0 and 1, nothing else.
+	header.APIVersion = 7
+	_, err = getTopicOffsetFromFetchOperation([]byte{0x00, 0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x02}, 0, header)
+	assert.Error(t, err)
 }
 
 func TestIsValidKafkaHeader(t *testing.T) {

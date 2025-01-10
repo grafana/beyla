@@ -4,7 +4,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
-	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
+	attr "github.com/grafana/beyla/pkg/export/attributes/names"
 )
 
 func HTTPRequestMethod(val string) attribute.KeyValue {
@@ -117,4 +117,24 @@ func SpanPeer(span *Span) string {
 	}
 
 	return span.Peer
+}
+
+func HostAsServer(span *Span) string {
+	if span.OtherNamespace != "" && span.OtherNamespace != span.Service.UID.Namespace && span.HostName != "" {
+		if span.IsClientSpan() {
+			return SpanHost(span) + "." + span.OtherNamespace
+		}
+	}
+
+	return SpanHost(span)
+}
+
+func PeerAsClient(span *Span) string {
+	if span.OtherNamespace != "" && span.OtherNamespace != span.Service.UID.Namespace && span.PeerName != "" {
+		if !span.IsClientSpan() {
+			return SpanPeer(span) + "." + span.OtherNamespace
+		}
+	}
+
+	return SpanPeer(span)
 }

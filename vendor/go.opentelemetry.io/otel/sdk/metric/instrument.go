@@ -3,7 +3,7 @@
 
 //go:generate stringer -type=InstrumentKind -trimprefix=InstrumentKind
 
-package metric // import "go.opentelemetry.io/otel/sdk/metric"
+package metric
 
 import (
 	"context"
@@ -18,10 +18,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric/internal/aggregate"
 )
 
-var (
-	zeroInstrumentKind InstrumentKind
-	zeroScope          instrumentation.Scope
-)
+var zeroScope instrumentation.Scope
 
 // InstrumentKind is the identifier of a group of instruments that all
 // performing the same function.
@@ -77,11 +74,11 @@ type Instrument struct {
 	nonComparable // nolint: unused
 }
 
-// empty returns if all fields of i are their zero-value.
-func (i Instrument) empty() bool {
+// IsEmpty returns if all Instrument fields are their zero-value.
+func (i Instrument) IsEmpty() bool {
 	return i.Name == "" &&
 		i.Description == "" &&
-		i.Kind == zeroInstrumentKind &&
+		i.Kind == instrumentKindUndefined &&
 		i.Unit == "" &&
 		i.Scope == zeroScope
 }
@@ -112,7 +109,7 @@ func (i Instrument) matchesDescription(other Instrument) bool {
 // matchesKind returns true if the Kind of i is its zero-value or it equals the
 // Kind of other, otherwise false.
 func (i Instrument) matchesKind(other Instrument) bool {
-	return i.Kind == zeroInstrumentKind || i.Kind == other.Kind
+	return i.Kind == instrumentKindUndefined || i.Kind == other.Kind
 }
 
 // matchesUnit returns true if the Unit of i is its zero-value or it equals the
@@ -147,6 +144,12 @@ type Stream struct {
 	// Use NewAllowKeysFilter from "go.opentelemetry.io/otel/attribute" to
 	// provide an allow-list of attribute keys here.
 	AttributeFilter attribute.Filter
+	// ExemplarReservoirProvider selects the
+	// [go.opentelemetry.io/otel/sdk/metric/exemplar.ReservoirProvider] based
+	// on the [Aggregation].
+	//
+	// If unspecified, [DefaultExemplarReservoirProviderSelector] is used.
+	ExemplarReservoirProviderSelector ExemplarReservoirProviderSelector
 }
 
 // instID are the identifying properties of a instrument.
@@ -175,7 +178,6 @@ func (i instID) normalize() instID {
 
 type int64Inst struct {
 	measures []aggregate.Measure[int64]
-	removers []aggregate.Remove
 
 	embedded.Int64Counter
 	embedded.Int64UpDownCounter
@@ -200,14 +202,6 @@ func (i *int64Inst) Record(ctx context.Context, val int64, opts ...metric.Record
 	i.aggregate(ctx, val, c.Attributes())
 }
 
-func (i *int64Inst) Remove(ctx context.Context, opts ...metric.RemoveOption) {
-	c := metric.NewRemoveConfig(opts)
-
-	for _, rem := range i.removers {
-		rem(ctx, c.Attributes())
-	}
-}
-
 func (i *int64Inst) aggregate(ctx context.Context, val int64, s attribute.Set) { // nolint:revive  // okay to shadow pkg with method.
 	for _, in := range i.measures {
 		in(ctx, val, s)
@@ -216,7 +210,6 @@ func (i *int64Inst) aggregate(ctx context.Context, val int64, s attribute.Set) {
 
 type float64Inst struct {
 	measures []aggregate.Measure[float64]
-	removers []aggregate.Remove
 
 	embedded.Float64Counter
 	embedded.Float64UpDownCounter
@@ -241,22 +234,14 @@ func (i *float64Inst) Record(ctx context.Context, val float64, opts ...metric.Re
 	i.aggregate(ctx, val, c.Attributes())
 }
 
-func (i *float64Inst) Remove(ctx context.Context, opts ...metric.RemoveOption) {
-	c := metric.NewRemoveConfig(opts)
-
-	for _, rem := range i.removers {
-		rem(ctx, c.Attributes())
-	}
-}
-
 func (i *float64Inst) aggregate(ctx context.Context, val float64, s attribute.Set) {
 	for _, in := range i.measures {
 		in(ctx, val, s)
 	}
 }
 
-// observablID is a comparable unique identifier of an observable.
-type observablID[N int64 | float64] struct {
+// observableID is a comparable unique identifier of an observable.
+type observableID[N int64 | float64] struct {
 	name        string
 	description string
 	kind        InstrumentKind
@@ -308,7 +293,7 @@ func newInt64Observable(m *meter, kind InstrumentKind, name, desc, u string) int
 
 type observable[N int64 | float64] struct {
 	metric.Observable
-	observablID[N]
+	observableID[N]
 
 	meter           *meter
 	measures        measures[N]
@@ -317,7 +302,7 @@ type observable[N int64 | float64] struct {
 
 func newObservable[N int64 | float64](m *meter, kind InstrumentKind, name, desc, u string) *observable[N] {
 	return &observable[N]{
-		observablID: observablID[N]{
+		observableID: observableID[N]{
 			name:        name,
 			description: desc,
 			kind:        kind,
@@ -337,10 +322,7 @@ func (o *observable[N]) appendMeasures(meas []aggregate.Measure[N]) {
 	o.measures = append(o.measures, meas...)
 }
 
-type (
-	measures[N int64 | float64] []aggregate.Measure[N]
-	removers                    []aggregate.Remove
-)
+type measures[N int64 | float64] []aggregate.Measure[N]
 
 // observe records the val for the set of attrs.
 func (m measures[N]) observe(val N, s attribute.Set) {

@@ -6,8 +6,8 @@ import (
 	"github.com/gobwas/glob"
 	"github.com/mariomac/pipes/pipe"
 
-	"github.com/grafana/beyla/pkg/internal/export/attributes"
-	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
+	"github.com/grafana/beyla/pkg/export/attributes"
+	attr "github.com/grafana/beyla/pkg/export/attributes/names"
 )
 
 // AttributesConfig stores the user-provided section for filtering either Application or Network

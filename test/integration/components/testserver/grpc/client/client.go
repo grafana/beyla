@@ -64,7 +64,7 @@ func printFeature(ctx context.Context, client pb.RouteGuideClient, point *pb.Poi
 	defer cancel()
 	feature, err := client.GetFeature(ctx, point)
 	if err != nil {
-		logs.Error("client.GetFeature failed", err)
+		logs.Error("client.GetFeature failed", "error", err)
 		// nolint:gocritic
 		return err
 	}
@@ -88,7 +88,7 @@ func newClient(po *pingOpts) (pb.RouteGuideClient, io.Closer, error) {
 
 	conn, err := grpc.NewClient(po.serverAddr, opts...)
 	if err != nil {
-		logs.Error("fail to dial", err)
+		logs.Error("fail to dial", "error", err)
 		return nil, conn, err
 	}
 	return pb.NewRouteGuideClient(conn), conn, nil
@@ -151,7 +151,7 @@ func printFeatures(client pb.RouteGuideClient, rect *pb.Rectangle) {
 
 	stream, err := client.ListFeatures(ctx, rect)
 	if err != nil {
-		slog.Error("client.ListFeatures failed", err)
+		slog.Error("client.ListFeatures failed", "error", err)
 		// nolint:gocritic
 		os.Exit(-1)
 	}
@@ -161,7 +161,7 @@ func printFeatures(client pb.RouteGuideClient, rect *pb.Rectangle) {
 			break
 		}
 		if err != nil {
-			slog.Error("client.ListFeatures failed", err)
+			slog.Error("client.ListFeatures failed", "error", err)
 			os.Exit(-1)
 		}
 		slog.Debug("Feature: ", "name", feature.GetName(),

@@ -10,12 +10,11 @@ import (
 	"strings"
 
 	"github.com/cilium/ebpf/ringbuf"
-	"go.opentelemetry.io/otel/trace"
 
 	"github.com/grafana/beyla/pkg/internal/request"
-	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
+// misses serviceID
 func httpInfoToSpan(info *HTTPInfo) request.Span {
 	return request.Span{
 		Type:          request.EventType(info.Type),
@@ -30,10 +29,9 @@ func httpInfoToSpan(info *HTTPInfo) request.Span {
 		Start:         int64(info.StartMonotimeNs),
 		End:           int64(info.EndMonotimeNs),
 		Status:        int(info.Status),
-		ServiceID:     info.Service,
-		TraceID:       trace.TraceID(info.Tp.TraceId),
-		SpanID:        trace.SpanID(info.Tp.SpanId),
-		ParentSpanID:  trace.SpanID(info.Tp.ParentId),
+		TraceID:       info.Tp.TraceId,
+		SpanID:        info.Tp.SpanId,
+		ParentSpanID:  info.Tp.ParentId,
 		Flags:         info.Tp.Flags,
 		Pid: request.PidInfo{
 			HostPID:   info.Pid.HostPid,
@@ -53,11 +51,10 @@ func removeQuery(url string) string {
 
 type HTTPInfo struct {
 	BPFHTTPInfo
-	Method  string
-	URL     string
-	Host    string
-	Peer    string
-	Service svc.ID
+	Method string
+	URL    string
+	Host   string
+	Peer   string
 }
 
 func ReadHTTPInfoIntoSpan(record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {
@@ -81,7 +78,7 @@ func HTTPInfoEventToSpan(event BPFHTTPInfo) (request.Span, bool, error) {
 	// When we can't find the connection info, we signal that through making the
 	// source and destination ports equal to max short. E.g. async SSL
 	if event.ConnInfo.S_port != 0 || event.ConnInfo.D_port != 0 {
-		source, target := event.hostInfo()
+		source, target := (*BPFConnInfo)(&event.ConnInfo).reqHostInfo()
 		result.Host = target
 		result.Peer = source
 	} else {
@@ -94,8 +91,6 @@ func HTTPInfoEventToSpan(event BPFHTTPInfo) (request.Span, bool, error) {
 	}
 	result.URL = event.url()
 	result.Method = event.method()
-	// set generic service to be overwritten later by the PID filters
-	result.Service = svc.ID{SDKLanguage: svc.InstrumentableGeneric}
 
 	return httpInfoToSpan(&result), false, nil
 }
@@ -166,15 +161,6 @@ func (event *BPFHTTPInfo) hostFromBuf() (string, int) {
 	port, _ := strconv.Atoi(portStr)
 
 	return host, port
-}
-
-func (event *BPFHTTPInfo) hostInfo() (source, target string) {
-	src := make(net.IP, net.IPv6len)
-	dst := make(net.IP, net.IPv6len)
-	copy(src, event.ConnInfo.S_addr[:])
-	copy(dst, event.ConnInfo.D_addr[:])
-
-	return src.String(), dst.String()
 }
 
 func commName(pid uint32) string {

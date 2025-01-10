@@ -22,9 +22,9 @@ struct {
 } watch_events SEC(".maps");
 
 SEC("kprobe/sys_bind")
-int kprobe_sys_bind(struct pt_regs *ctx) {    
+int beyla_kprobe_sys_bind(struct pt_regs *ctx) {
     // unwrap the args because it's a sys call
-    struct pt_regs * __ctx = (struct pt_regs *)PT_REGS_PARM1(ctx);
+    struct pt_regs *__ctx = (struct pt_regs *)PT_REGS_PARM1(ctx);
     void *addr;
     bpf_probe_read(&addr, sizeof(void *), (void *)&PT_REGS_PARM2(__ctx));
 
@@ -41,7 +41,7 @@ int kprobe_sys_bind(struct pt_regs *ctx) {
     watch_info_t *trace = bpf_ringbuf_reserve(&watch_events, sizeof(watch_info_t), 0);
     if (trace) {
         trace->flags = WATCH_BIND;
-        trace->payload = port; 
+        trace->payload = port;
         bpf_dbg_printk("New port bound %d", trace->payload);
 
         bpf_ringbuf_submit(trace, 0);

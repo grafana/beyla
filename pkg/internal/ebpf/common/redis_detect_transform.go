@@ -38,7 +38,7 @@ func isRedisOp(buf []uint8) bool {
 		return isRedisError(buf[1:])
 	case ':', '$', '*':
 		return crlfTerminatedMatch(buf[1:], func(c uint8) bool {
-			return (c >= '0' && c <= '9')
+			return (c >= '0' && c <= '9') || c == '-'
 		})
 	}
 
@@ -131,6 +131,15 @@ func parseRedisRequest(buf string) (string, string, bool) {
 	return op, text, true
 }
 
+func redisStatus(buf []byte) int {
+	status := 0
+	if isErr := isRedisError(buf); isErr {
+		status = 1
+	}
+
+	return status
+}
+
 func TCPToRedisToSpan(trace *TCPRequestInfo, op, text string, status int) request.Span {
 	peer := ""
 	hostname := ""
@@ -141,8 +150,13 @@ func TCPToRedisToSpan(trace *TCPRequestInfo, op, text string, status int) reques
 		hostPort = int(trace.ConnInfo.D_port)
 	}
 
+	reqType := request.EventTypeRedisClient
+	if trace.Direction == 0 {
+		reqType = request.EventTypeRedisServer
+	}
+
 	return request.Span{
-		Type:          request.EventTypeRedisClient,
+		Type:          reqType,
 		Method:        op,
 		Path:          text,
 		Peer:          peer,
@@ -191,7 +205,7 @@ func ReadGoRedisRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, err
 	}
 
 	return request.Span{
-		Type:          request.EventTypeRedisClient,
+		Type:          request.EventTypeRedisClient, // always client for Go
 		Method:        op,
 		Path:          text,
 		Peer:          peer,

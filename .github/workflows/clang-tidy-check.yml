@@ -1,0 +1,30 @@
+name: Clang Tidy Check
+
+on:
+  push:
+    branches: [ 'main', 'release-*' ]
+  pull_request:
+    branches: [ 'main', 'release-*' ]
+
+jobs:
+  clang-tidy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          lfs: true
+
+      - name: Install clang-tidy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget lsb-release software-properties-common gnupg
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
+          sudo add-apt-repository -y 'deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy main'
+          sudo apt-get install -y clang-tidy-20
+
+      - name: Check Clang Tidy
+        run: |
+          CLANG_TIDY=clang-tidy-20 make clang-tidy
+

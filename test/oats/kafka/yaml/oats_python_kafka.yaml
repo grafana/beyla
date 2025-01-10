@@ -11,10 +11,12 @@ expected:
     - traceql: '{ .messaging.operation.type = "process" }'
       spans:
         - name: 'my-topic process'
+          allow-duplicates: true
           attributes:
             messaging.destination.name: my-topic
             messaging.operation.type: process
             messaging.system: kafka
+            server.port: "9092"
     - traceql: '{ .messaging.operation.type = "publish" }'
       spans:
         - name: 'my-topic publish'
@@ -22,6 +24,7 @@ expected:
             messaging.destination.name: my-topic
             messaging.operation.type: publish
             messaging.system: kafka
+            server.port: "9092"
   metrics:
     - promql: 'messaging_publish_duration_count{messaging_system="kafka", messaging_destination_name="my-topic"}'
       value: "> 0"

@@ -7,8 +7,6 @@ import (
 	"os"
 	"testing"
 
-	"sigs.k8s.io/e2e-framework/pkg/features"
-
 	"github.com/grafana/beyla/test/integration/components/docker"
 	"github.com/grafana/beyla/test/integration/components/kube"
 	k8s "github.com/grafana/beyla/test/integration/k8s/common"
@@ -22,10 +20,10 @@ func TestMain(m *testing.M) {
 		docker.ImageBuild{Tag: "testserver:dev", Dockerfile: k8s.DockerfileTestServer},
 		docker.ImageBuild{Tag: "beyla:dev", Dockerfile: k8s.DockerfileBeyla},
 		docker.ImageBuild{Tag: "httppinger:dev", Dockerfile: k8s.DockerfileHTTPPinger},
-		docker.ImageBuild{Tag: "quay.io/prometheus/prometheus:v2.46.0"},
-		docker.ImageBuild{Tag: "otel/opentelemetry-collector-contrib:0.85.0"},
+		docker.ImageBuild{Tag: "quay.io/prometheus/prometheus:v2.53.0"},
+		docker.ImageBuild{Tag: "otel/opentelemetry-collector-contrib:0.103.0"},
 	); err != nil {
-		slog.Error("can't build docker images", err)
+		slog.Error("can't build docker images", "error", err)
 		os.Exit(-1)
 	}
 
@@ -35,8 +33,8 @@ func TestMain(m *testing.M) {
 		kube.LocalImage("testserver:dev"),
 		kube.LocalImage("beyla:dev"),
 		kube.LocalImage("httppinger:dev"),
-		kube.LocalImage("quay.io/prometheus/prometheus:v2.46.0"),
-		kube.LocalImage("otel/opentelemetry-collector-contrib:0.85.0"),
+		kube.LocalImage("quay.io/prometheus/prometheus:v2.53.0"),
+		kube.LocalImage("otel/opentelemetry-collector-contrib:0.103.0"),
 		kube.Deploy(k8s.PathManifests+"/01-volumes.yml"),
 		kube.Deploy(k8s.PathManifests+"/01-serviceaccount.yml"),
 		kube.Deploy(k8s.PathManifests+"/02-prometheus-otelscrape.yml"),
@@ -49,18 +47,5 @@ func TestMain(m *testing.M) {
 }
 
 func TestNetworkFlowBytes(t *testing.T) {
-	pinger := kube.Template[k8s.Pinger]{
-		TemplateFile: k8s.UninstrumentedPingerManifest,
-		Data: k8s.Pinger{
-			PodName:   "internal-pinger",
-			TargetURL: "http://testserver:8080/iping",
-		},
-	}
-	cluster.TestEnv().Test(t, features.New("network flow bytes").
-		Setup(pinger.Deploy()).
-		Teardown(pinger.Delete()).
-		Assess("catches network metrics between connected pods", DoTestNetFlowBytesForExistingConnections).
-		Assess("catches external traffic", testNetFlowBytesForExternalTraffic).
-		Feature(),
-	)
+	cluster.TestEnv().Test(t, FeatureNetworkFlowBytes())
 }

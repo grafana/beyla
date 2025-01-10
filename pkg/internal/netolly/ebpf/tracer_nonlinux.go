@@ -5,18 +5,14 @@ package ebpf
 import (
 	"github.com/cilium/ebpf/ringbuf"
 
-	"github.com/grafana/beyla/pkg/internal/netolly/ifaces"
+	"github.com/grafana/beyla/pkg/internal/ebpf/tcmanager"
 )
 
 type FlowFetcher struct {
 }
 
-func NewFlowFetcher(_, _ int, _, _ bool) (*FlowFetcher, error) {
+func NewFlowFetcher(_, _ int, _, _ bool, _ tcmanager.TCManager) (*FlowFetcher, error) {
 	return nil, nil
-}
-
-func (m *FlowFetcher) Register(_ ifaces.Interface) error {
-	return nil
 }
 
 func (m *FlowFetcher) Close() error {

@@ -9,6 +9,10 @@ import (
 	"strings"
 )
 
+type Services struct {
+	Data []string `json:"data"`
+}
+
 type TracesQuery struct {
 	Data []Trace `json:"data"`
 }
@@ -65,6 +69,20 @@ func (t *Trace) FindByOperationName(operationName string) []Span {
 	for _, s := range t.Spans {
 		if s.OperationName == operationName {
 			matches = append(matches, s)
+		}
+	}
+	return matches
+}
+
+func (t *Trace) FindByOperationNameAndService(operationName, service string) []Span {
+	var matches []Span
+	for _, s := range t.Spans {
+		if s.OperationName == operationName {
+			if p, ok := t.Processes[s.ProcessID]; ok {
+				if p.ServiceName == service {
+					matches = append(matches, s)
+				}
+			}
 		}
 	}
 	return matches

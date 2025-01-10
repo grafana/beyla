@@ -2,16 +2,12 @@
 title: Network metrics
 menuTitle: Network
 description: Configuring Beyla to observe point-to-point network metrics.
-weight: 1
+weight: 3
 keywords:
   - Beyla
   - eBPF
   - Network
 ---
-
-{{% admonition type="warning" %}}
-Network metrics is an [experimental](/docs/release-life-cycle/) under development feature, expect breaking changes.
-{{% /admonition %}}
 
 # Network metrics
 
@@ -37,7 +33,7 @@ By default, only the following attributes are reported: `k8s.src.owner.name`, `k
 | `beyla.ip` / `beyla_ip`                     | Local IP address of the Beyla instance that emitted the metric                                                                                                                      |
 | `transport`                                 | L4 Transport protocol (for example, `TCP` or `UDP`)                                                                                                                                 |
 | `src.address` / `src_address`               | Source IP address of Network flow                                                                                                                                                   |
-| `dst.address` / `dst_address`               | Destination IP address of Network flow                                                                                                                                              
+| `dst.address` / `dst_address`               | Destination IP address of Network flow
 | `src.port` / `src_port`                     | Source port of Network flow                                                                                                                                                         |
 | `dst.port` / `dst_port`                     | Destination port of Network flow                                                                                                                                                    |
 | `src.name` / `src_name`                     | Name of Network flow source: Kubernetes name, host name, or IP address                                                                                                              |
@@ -76,7 +72,7 @@ attributes:
     enable: true
   select:
     beyla_network_flow_bytes:
-      include:  
+      include:
         - k8s.src.owner.name
         - k8s.src.namespace
         - k8s.dst.owner.name

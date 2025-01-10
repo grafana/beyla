@@ -50,7 +50,9 @@ The current team members are, in alphabetical order:
 
 - Marc Tudurí - [@marctc](https://github.com/marctc) ([Grafana Labs](https://grafana.com/))
 - Mario Macías - [@mariomac](https://github.com/mariomac) ([Grafana Labs](https://grafana.com/))
+- Martijn Evers - [@marevers](https://github.com/marevers) ([GK Software SE](https://www.gk-software.com/de/))
 - Nikola Grcevski - [@grcevski](https://github.com/grcevski) ([Grafana Labs](https://grafana.com/))
+- Rafael Roquetto - [@rafaelroquetto]((https://github.com/rafaelroquetto)) ([Grafana Labs](https://grafana.com/))
 
 ### Maintainers
 

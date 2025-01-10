@@ -90,8 +90,8 @@ spec:
               value: "/configs/instrumenter-config.yml"
             - name: GOCOVERDIR
               value: "/testoutput"
-            - name: BEYLA_PRINT_TRACES
-              value: "true"
+            - name: BEYLA_TRACE_PRINTER
+              value: "text"
             - name: BEYLA_OPEN_PORT
               value: "8080"
             - name: BEYLA_DISCOVERY_POLL_INTERVAL
@@ -116,4 +116,7 @@ spec:
               value: "autodetect"
             - name: BEYLA_OTEL_METRIC_FEATURES 
               value: "application,application_span,application_service_graph,application_process"
-
+            - name: BEYLA_KUBE_CLUSTER_NAME
+              value: "beyla"
+            - name: BEYLA_NAME_RESOLVER_SOURCES
+              value: "dns,k8s"

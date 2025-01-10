@@ -95,6 +95,14 @@ func (v *Variables) SetVar(name, value string) *Variables {
 	return v
 }
 
+// UnsetVar removes a previously set local variable.
+func (v *Variables) UnsetVar(name string) *Variables {
+	v.Lock()
+	defer v.Unlock()
+	delete(v.vars, name)
+	return v
+}
+
 // Val searches for a Var with provided key, if not found
 // searches for environment var, for running process, with same key
 func (v *Variables) Val(name string) string {

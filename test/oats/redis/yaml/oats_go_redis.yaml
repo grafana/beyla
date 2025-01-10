@@ -14,6 +14,7 @@ expected:
           attributes:
             db.operation.name: set
             db.system: redis
+            server.port: 6379
             db.query.text: "set beyla rocks "
   metrics:
     - promql: 'db_client_operation_duration_sum{db_operation_name="get", db_system="redis"}'

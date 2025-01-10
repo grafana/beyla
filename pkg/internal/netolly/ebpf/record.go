@@ -23,7 +23,7 @@ import (
 	"io"
 	"net"
 
-	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
+	attr "github.com/grafana/beyla/pkg/export/attributes/names"
 )
 
 // IPAddr encodes v4 and v6 IPs with a fixed length.
@@ -73,6 +73,9 @@ func (fm *NetFlowMetrics) Accumulate(src *NetFlowMetrics) {
 	// time == 0 if the value has not been yet set
 	if fm.StartMonoTimeNs == 0 || fm.StartMonoTimeNs > src.StartMonoTimeNs {
 		fm.StartMonoTimeNs = src.StartMonoTimeNs
+		// set IfaceDirection here, because the correct value is in the first packet only
+		fm.IfaceDirection = src.IfaceDirection
+		fm.Initiator = src.Initiator
 	}
 	if fm.EndMonoTimeNs == 0 || fm.EndMonoTimeNs < src.EndMonoTimeNs {
 		fm.EndMonoTimeNs = src.EndMonoTimeNs

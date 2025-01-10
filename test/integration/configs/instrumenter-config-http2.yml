@@ -1,9 +1,12 @@
 routes:
   unmatched: path
-otel_metrics_export:
-  endpoint: http://127.0.0.1:4018
+prometheus_export:
+  port: 8999
+  features:
+    - application
+    - application_process
 otel_traces_export:
-  endpoint: http://127.0.0.1:4318
+  endpoint: http://jaeger:4318
 discovery:
   services:
     - namespace: http2-go

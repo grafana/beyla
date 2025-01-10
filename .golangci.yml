@@ -10,7 +10,7 @@ issues:
         - revive
       text: indent-error-flow
 run:
-  go: "1.22"
+  go: "1.23"
   build-tags:
     - integration
 linters:
@@ -19,7 +19,6 @@ linters:
     - errorlint
     - cyclop
     - errname
-    - exportloopref
     - gocritic
     - goimports
     - gosimple
@@ -38,6 +37,7 @@ linters-settings:
       - rangeExprCopy
       - rangeValCopy
       - indexAlloc
+      - commentedOutCode
   cyclop:
     max-complexity: 12
 

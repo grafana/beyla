@@ -1,5 +1,5 @@
 # Build the autoinstrumenter binary
-FROM golang:1.22 as builder
+FROM golang:1.23 AS builder
 
 # TODO: embed software version in executable
 
@@ -29,7 +29,7 @@ COPY third_party_licenses.csv third_party_licenses.csv
 RUN make compile
 
 # Create final image from minimal + built binary
-FROM debian:bookworm-slim
+FROM scratch
 
 LABEL maintainer="Grafana Labs <hello@grafana.com>"
 
@@ -41,7 +41,5 @@ COPY --from=builder /opt/app-root/NOTICE .
 COPY --from=builder /opt/app-root/third_party_licenses.csv .
 
 COPY --from=builder /etc/ssl/certs /etc/ssl/certs
-
-USER 0:0
 
 ENTRYPOINT [ "/beyla" ]

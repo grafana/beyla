@@ -1,6 +1,6 @@
-FROM ubuntu:latest
+FROM ubuntu:oracular AS base
 
-ARG GOVERSION="1.22.2"
+ARG GOVERSION="1.23.3"
 
 ARG TARGETARCH
 
@@ -8,7 +8,7 @@ RUN echo "using TARGETARCH: $TARGETARCH"
 
 # Installs dependencies that are required to compile eBPF programs
 RUN apt update -y
-RUN apt install -y curl git linux-headers-generic make llvm clang unzip
+RUN apt install -y curl git linux-headers-generic make llvm clang unzip libbpf-dev libbpf-tools linux-libc-dev linux-bpf-dev
 RUN apt clean
 
 VOLUME ["/src"]
@@ -33,9 +33,19 @@ WORKDIR /tmp
 COPY Makefile Makefile
 COPY go.mod go.mod
 
-RUN make prereqs
+RUN make bpf2go
 
 WORKDIR /src
+
+# fix some arch-dependant missing include files
+FROM base AS base-arm64
+ENV C_INCLUDE_PATH=/usr/include/aarch64-linux-gnu
+
+FROM base AS base-amd64
+ENV C_INCLUDE_PATH=/usr/include/x86_64-linux-gnu
+
+# Picks up the arch-specific base
+FROM base-$TARGETARCH AS builder
 
 ENTRYPOINT ["make", "generate"]
 

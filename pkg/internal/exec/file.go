@@ -8,12 +8,13 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/grafana/beyla/pkg/export/attributes"
 	"github.com/grafana/beyla/pkg/internal/svc"
 	"github.com/grafana/beyla/pkg/services"
 )
 
 type FileInfo struct {
-	Service svc.ID
+	Service svc.Attrs
 
 	CmdExePath     string
 	ProExeLinkPath string
@@ -24,12 +25,18 @@ type FileInfo struct {
 	Ns             uint32
 }
 
+const (
+	envServiceName   = "OTEL_SERVICE_NAME"
+	envResourceAttrs = "OTEL_RESOURCE_ATTRIBUTES"
+	serviceNameKey   = "service.name"
+)
+
 func (fi *FileInfo) ExecutableName() string {
 	parts := strings.Split(fi.CmdExePath, "/")
 	return parts[len(parts)-1]
 }
 
-func FindExecELF(p *services.ProcessInfo, svcID svc.ID) (*FileInfo, error) {
+func FindExecELF(p *services.ProcessInfo, svcID svc.Attrs, k8sEnabled bool) (*FileInfo, error) {
 	// In container environments or K8s, we can't just open the executable exe path, because it might
 	// be in the volume of another pod/container. We need to access it through the /proc/<pid>/exe symbolic link
 	ns, err := FindNamespace(p.Pid)
@@ -59,5 +66,31 @@ func FindExecELF(p *services.ProcessInfo, svcID svc.ID) (*FileInfo, error) {
 	} else {
 		return nil, err
 	}
+
+	envVars, err := EnvVars(p.Pid)
+
+	if err != nil {
+		return nil, err
+	}
+
+	file.Service.EnvVars = envVars
+	if svcName, ok := file.Service.EnvVars[envServiceName]; ok {
+		// If Kubernetes is enabled we use the K8S metadata as the source of truth
+		if !k8sEnabled {
+			file.Service.UID.Name = svcName
+		}
+	} else {
+		if resourceAttrs, ok := file.Service.EnvVars[envResourceAttrs]; ok {
+			allVars := map[string]string{}
+			collect := func(k string, v string) {
+				allVars[k] = v
+			}
+			attributes.ParseOTELResourceVariable(resourceAttrs, collect)
+			if result, ok := allVars[serviceNameKey]; ok {
+				file.Service.UID.Name = result
+			}
+		}
+	}
+
 	return &file, nil
 }

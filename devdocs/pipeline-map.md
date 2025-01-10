@@ -41,6 +41,13 @@ flowchart TD
     KDB(KubeDatabase):::optional <-.- | Aggregated & indexed Pod info | KD
     IF("Informer<br/>(Kube API)"):::optional -.-> |Pods & ReplicaSets status| KDB
     IF -.-> |new Kube objects| KWE
+    AF ---> PC
+    subgraph process metrics pipeline
+        PC("process.Collector"):::optional --> POTEL
+        PC --> PPROM
+        POTEL("OTEL exporter"):::optional
+        PPROM("Prometheus exporter"):::optional
+    end
 ```
 
 ## Network metrics pipeline

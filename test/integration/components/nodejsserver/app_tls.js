@@ -20,7 +20,7 @@ app.get("/smoke", (req, res, next) => {
 });
 
 app.get("/traceme", (req, res, next) => {
-    https.get('https://localhost:8380/tracemetoo', {rejectUnauthorized: false}, (r) => {
+    https.get('https://pytestserverssl:8380/tracemetoo', {rejectUnauthorized: false}, (r) => {
         if (r.statusCode !== 200) {
           console.error(`Did not get an OK from the server. Code: ${r.statusCode}`);
           res.sendStatus(500)

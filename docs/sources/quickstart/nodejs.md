@@ -53,7 +53,7 @@ To run Beyla, first set the following environment variables:
   (for example, `80` or `443`). If using the example service in the
   first section of this guide, set this variable to `8080`.
 
-To facilitate local testing, set the `BEYLA_PRINT_TRACES=true` environment variable. This will cause Beyla to print traces to standard output.
+To facilitate local testing, set the `BEYLA_TRACE_PRINTER=text` environment variable. When this option is set, Beyla prints traces in text format to the standard output.
 
 Also set the `BEYLA_SERVICE_NAME=quickstart` to override the reported service
 name in the traces and metrics. If it is not set, Beyla would automatically
@@ -64,7 +64,7 @@ Notice: Beyla requires administrative (sudo) privileges, or at least it needs to
 ```sh
 export BEYLA_SERVICE_NAME=quickstart
 export BEYLA_OPEN_PORT=8080
-export BEYLA_PRINT_TRACES=true
+export BEYLA_TRACE_PRINTER=text
 export OTEL_EXPORTER_OTLP_PROTOCOL="http/protobuf"
 export OTEL_EXPORTER_OTLP_ENDPOINT="https://otlp-gateway-prod-eu-west-0.grafana.net/otlp"
 export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Basic ...your-encoded-credentials..."

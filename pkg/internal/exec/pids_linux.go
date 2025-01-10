@@ -27,7 +27,7 @@ func FindNamespace(pid int32) (uint32, error) {
 		return 0, fmt.Errorf("failed to read symlink(/proc/%d/ns/pid): %w", pid, err)
 	}
 
-	logger := slog.With("component", "httpfltr.Tracer")
+	logger := slog.With("component", "pids.Tracer")
 
 	nsPid := string(buf[:n])
 	// extract u32 from the format pid:[nnnnn]

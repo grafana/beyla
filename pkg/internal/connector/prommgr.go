@@ -8,8 +8,10 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"strconv"
 	"sync/atomic"
+	"syscall"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -109,9 +111,13 @@ func (pm *PrometheusManager) listenAndServe(ctx context.Context, port int, handl
 	go func() {
 		err := server.ListenAndServe()
 		if errors.Is(err, http.ErrServerClosed) {
-			log.Debug("HTTP server was closed", "err", err)
+			log.Debug("Prometheus endpoint server was closed", "error", err)
 		} else {
-			log.Error("HTTP service ended unexpectedly", err)
+			log.Error("Prometheus endpoint service ended unexpectedly", "error", err)
+			err = syscall.Kill(os.Getpid(), syscall.SIGINT) // interrupt for graceful shutdown, instead of os.Exit
+			if err != nil {
+				log.Error("unable to terminate Beyla", "error", err)
+			}
 		}
 	}()
 	go func() {

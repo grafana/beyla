@@ -84,7 +84,7 @@ func testREDMetricsForRustHTTPLibrary(t *testing.T, url, comm, namespace string,
 	require.Len(t, res, 1)
 	parent := res[0]
 	require.NotEmpty(t, parent.TraceID)
-	if kprobeTraces {
+	if kprobeTracesEnabled() {
 		require.Equal(t, traceID, parent.TraceID)
 		// Validate that "parent" is a CHILD_OF the traceparent's "parent-id"
 		childOfPID := trace.ChildrenOf(parentID)
@@ -108,7 +108,7 @@ func testREDMetricsForRustHTTPLibrary(t *testing.T, url, comm, namespace string,
 	assert.Equal(t, comm, process.ServiceName)
 	serviceInstance, ok := jaeger.FindIn(process.Tags, "service.instance.id")
 	require.Truef(t, ok, "service.instance.id not found in tags: %v", process.Tags)
-	assert.Regexp(t, `^beyla-\d+$`, serviceInstance.Value)
+	assert.Regexp(t, `^beyla:\d+$$`, serviceInstance.Value)
 	sd = jaeger.Diff([]jaeger.Tag{
 		{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		{Key: "telemetry.sdk.language", Type: "string", Value: "rust"},

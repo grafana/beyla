@@ -27,6 +27,7 @@ func TestBasicTracing(t *testing.T) {
 	feat := features.New("Beyla is able to instrument an arbitrary process").
 		Assess("it sends traces for that service",
 			func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
+				defer k8s.DumpTracesAfterFail(t, jaegerHost)
 				var podID string
 				test.Eventually(t, testTimeout, func(t require.TestingT) {
 					// Invoking both service instances, but we will expect that only one
@@ -57,6 +58,7 @@ func TestBasicTracing(t *testing.T) {
 					for _, proc := range trace.Processes {
 						sd := jaeger.DiffAsRegexp([]jaeger.Tag{
 							{Key: "service.namespace", Type: "string", Value: "^default$"},
+							{Key: "service.instance.id", Type: "string", Value: "^default\\.otherinstance-.+\\.otherinstance"},
 						}, proc.Tags)
 						require.Empty(t, sd)
 					}
@@ -67,11 +69,14 @@ func TestBasicTracing(t *testing.T) {
 					parent := res[0]
 					sd := jaeger.DiffAsRegexp([]jaeger.Tag{
 						{Key: "k8s.pod.name", Type: "string", Value: "^otherinstance-.*"},
+						{Key: "k8s.container.name", Type: "string", Value: "otherinstance"},
 						{Key: "k8s.node.name", Type: "string", Value: ".+-control-plane$"},
 						{Key: "k8s.pod.uid", Type: "string", Value: k8s.UUIDRegex},
 						{Key: "k8s.pod.start_time", Type: "string", Value: k8s.TimeRegex},
-						{Key: "k8s.deployment.name", Type: "string", Value: "^otherinstance"},
+						{Key: "k8s.owner.name", Type: "string", Value: "^otherinstance$"},
+						{Key: "k8s.deployment.name", Type: "string", Value: "^otherinstance$"},
 						{Key: "k8s.namespace.name", Type: "string", Value: "^default$"},
+						{Key: "k8s.cluster.name", Type: "string", Value: "^beyla$"},
 					}, trace.Processes[parent.ProcessID].Tags)
 					require.Empty(t, sd)
 
@@ -121,7 +126,9 @@ func TestBasicTracing(t *testing.T) {
 					require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
 					traces := tq.FindBySpan(jaeger.Tag{Key: "url.path", Type: "string", Value: "/pingpongtoo"})
 					require.NotEmpty(t, traces)
-					trace := traces[0]
+					// get the last trace, to avoid that the old instance captured any request
+					// before being restarted
+					trace := traces[len(traces)-1]
 					require.NotEmpty(t, trace.Spans)
 
 					// Check that the service.namespace is set from the K8s namespace
@@ -129,6 +136,7 @@ func TestBasicTracing(t *testing.T) {
 					for _, proc := range trace.Processes {
 						sd := jaeger.DiffAsRegexp([]jaeger.Tag{
 							{Key: "service.namespace", Type: "string", Value: "^default$"},
+							{Key: "service.instance.id", Type: "string", Value: "^default\\.otherinstance-.+\\.otherinstance"},
 						}, proc.Tags)
 						require.Empty(t, sd)
 					}
@@ -139,15 +147,17 @@ func TestBasicTracing(t *testing.T) {
 					parent := res[0]
 					sd := jaeger.DiffAsRegexp([]jaeger.Tag{
 						{Key: "k8s.pod.name", Type: "string", Value: "^otherinstance-.*"},
+						{Key: "k8s.container.name", Type: "string", Value: "otherinstance"},
 						{Key: "k8s.node.name", Type: "string", Value: ".+-control-plane$"},
 						{Key: "k8s.pod.uid", Type: "string", Value: k8s.UUIDRegex},
 						{Key: "k8s.pod.start_time", Type: "string", Value: k8s.TimeRegex},
 						{Key: "k8s.deployment.name", Type: "string", Value: "^otherinstance"},
 						{Key: "k8s.namespace.name", Type: "string", Value: "^default$"},
+						{Key: "k8s.cluster.name", Type: "string", Value: "^beyla$"},
 					}, trace.Processes[parent.ProcessID].Tags)
 					require.Empty(t, sd)
 
-					// ensure the pod really restarted
+					// ensure the pod really restarted, comparing the current uid with the previous pod uid
 					tag, found := jaeger.FindIn(trace.Processes[parent.ProcessID].Tags, "k8s.pod.uid")
 					assert.True(t, found)
 

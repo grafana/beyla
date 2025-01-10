@@ -24,7 +24,7 @@ services:
       - ./configs/:/configs
       - ./system/sys/kernel/security:/sys/kernel/security
       - ../../testoutput:/coverage
-      - ../../testoutput/run:/var/run/beyla
+      - ../../testoutput/run-netolly:/var/run/beyla
     image: hatest-autoinstrumenter
     privileged: true
     network_mode: service:testserver
@@ -32,7 +32,7 @@ services:
       BEYLA_CONFIG_PATH: /configs/instrumenter-config-netolly${BEYLA_CONFIG_SUFFIX}.yml
       GOCOVERDIR: "/coverage"
       BEYLA_NETWORK_SOURCE: ${BEYLA_NETWORK_SOURCE}
-      BEYLA_NETWORK_METRICS: "true"
+      BEYLA_NETWORK_METRICS: "true" # explicitly enabling network metrics
       BEYLA_NETWORK_PRINT_FLOWS: "true"
       BEYLA_NETWORK_DEDUPER: ${BEYLA_NETWORK_DEDUPER}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otelcol:4318
@@ -42,7 +42,7 @@ services:
 
   # OpenTelemetry Collector for Metrics. For Traces, we use directly Jaeger
   otelcol:
-    image: otel/opentelemetry-collector-contrib:0.85.0
+    image: otel/opentelemetry-collector-contrib:0.104.0
     container_name: otel-col
     deploy:
       resources:
@@ -63,12 +63,10 @@ services:
 
   # Prometheus
   prometheus:
-    image: quay.io/prometheus/prometheus:v2.46.0
+    image: quay.io/prometheus/prometheus:v2.53.0
     container_name: prometheus
     command:
-      - --storage.tsdb.retention.time=1m
       - --config.file=/etc/prometheus/prometheus-config${PROM_CONFIG_SUFFIX}.yml
-      - --storage.tsdb.path=/prometheus
       - --web.enable-lifecycle
       - --web.route-prefix=/
     volumes:

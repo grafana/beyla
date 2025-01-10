@@ -4,17 +4,11 @@ package ebpf
 
 import (
 	"github.com/cilium/ebpf/ringbuf"
-
-	"github.com/grafana/beyla/pkg/internal/netolly/ifaces"
 )
 
 type SockFlowFetcher struct{}
 
 func (s *SockFlowFetcher) Close() error {
-	panic("this is never going to be executed")
-}
-
-func (s *SockFlowFetcher) Register(_ ifaces.Interface) error {
 	panic("this is never going to be executed")
 }
 

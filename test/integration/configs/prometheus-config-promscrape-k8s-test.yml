@@ -11,3 +11,5 @@ scrape_configs:
           - 'beyla-testserver:8999'
           - 'beyla-pinger:8999'
           - 'beyla-netolly:8999'
+          - 'beyla-promscrape:8999'
+          - 'k8s-cache:8999'

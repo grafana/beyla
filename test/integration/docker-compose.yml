@@ -12,7 +12,9 @@ services:
       - "8082:8082"
       - "8083:8083"
       - "8087:8087"
+      - "8383:8383"
       - "5051:5051"
+      - "50051:50051"
     environment:
       LOG_LEVEL: DEBUG
 
@@ -26,16 +28,16 @@ services:
       - ./configs/:/configs
       - ./system/sys/kernel/security${SECURITY_CONFIG_SUFFIX}:/sys/kernel/security
       - ../../testoutput:/coverage
-      - ../../testoutput/run:/var/run/beyla
+      - ../../testoutput/run-base${TESTSERVER_DOCKERFILE_SUFFIX}:/var/run/beyla
     image: hatest-autoinstrumenter
     privileged: true # in some environments (not GH Pull Requests) you can set it to false and then cap_add: [ SYS_ADMIN ]
     pid: "service:testserver"
     environment:
       GOCOVERDIR: "/coverage"
-      BEYLA_PRINT_TRACES: "true"
+      BEYLA_TRACE_PRINTER: "json"
       BEYLA_OPEN_PORT: "${BEYLA_OPEN_PORT}"
-      BEYLA_OTEL_METRICS_FEATURES: "application,application_span,application_process"
-      BEYLA_PROMETHEUS_FEATURES: "application,application_span,application_process"
+      BEYLA_OTEL_METRICS_FEATURES: "application,application_span,application_process,application_service_graph"
+      BEYLA_PROMETHEUS_FEATURES: "application,application_span,application_process,application_service_graph"
       BEYLA_DISCOVERY_POLL_INTERVAL: 500ms
       BEYLA_EXECUTABLE_NAME: "${BEYLA_EXECUTABLE_NAME}"
       BEYLA_SKIP_GO_SPECIFIC_TRACERS: "${BEYLA_SKIP_GO_SPECIFIC_TRACERS}"
@@ -54,7 +56,7 @@ services:
 
   # OpenTelemetry Collector for Metrics. For Traces, we use directly Jaeger
   otelcol:
-    image: otel/opentelemetry-collector-contrib:0.85.0
+    image: otel/opentelemetry-collector-contrib:0.104.0
     container_name: otel-col
     deploy:
       resources:
@@ -77,12 +79,10 @@ services:
 
   # Prometheus
   prometheus:
-    image: quay.io/prometheus/prometheus:v2.46.0
+    image: quay.io/prometheus/prometheus:v2.53.0
     container_name: prometheus
     command:
-      - --storage.tsdb.retention.time=1m
       - --config.file=/etc/prometheus/prometheus-config${PROM_CONFIG_SUFFIX}.yml
-      - --storage.tsdb.path=/prometheus
       - --web.enable-lifecycle
       - --web.route-prefix=/
     volumes:
@@ -91,7 +91,7 @@ services:
       - "9090:9090"
 
   jaeger:
-    image: jaegertracing/all-in-one:latest
+    image: jaegertracing/all-in-one:1.57
     ports:
       - "16686:16686" # Query frontend
       - "4317"        # OTEL GRPC traces collector

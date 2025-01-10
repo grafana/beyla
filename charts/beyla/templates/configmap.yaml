@@ -1,5 +1,7 @@
+{{- if not .Values.config.skipConfigMapCheck }}
 {{- if and (not .Values.config.create) (eq .Values.config.name "") }}
   {{- fail "if .Values.config.name is not set, then .Values.config.create should be set to true to use default configuration" }}
+{{- end }}
 {{- end }}
 {{- if and (.Values.config.create) (eq .Values.config.name "") }}
 apiVersion: v1
@@ -27,6 +29,8 @@ data:
     discovery:
       services:
         - k8s_namespace: .
+      exclude_services:
+        - exe_path: ".*alloy.*|.*otelcol.*|.*beyla.*"
     {{- end }}
     {{- end }}
   {{- toYaml .Values.config.data | nindent 4}}

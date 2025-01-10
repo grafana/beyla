@@ -11,6 +11,7 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/ringbuf"
 
+	"github.com/grafana/beyla/pkg/config"
 	"github.com/grafana/beyla/pkg/internal/exec"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/request"
@@ -30,7 +31,7 @@ var readerFactory = func(rb *ebpf.Map) (ringBufReader, error) {
 }
 
 type ringBufForwarder struct {
-	cfg        *TracerConfig
+	cfg        *config.EBPFTracer
 	logger     *slog.Logger
 	ringbuffer *ebpf.Map
 	closers    []io.Closer
@@ -38,8 +39,7 @@ type ringBufForwarder struct {
 	spansLen   int
 	access     sync.Mutex
 	ticker     *time.Ticker
-	fileInfo   *exec.FileInfo
-	reader     func(*ringbuf.Record, ServiceFilter, *exec.FileInfo) (request.Span, bool, error)
+	reader     func(*config.EBPFTracer, *ringbuf.Record, ServiceFilter) (request.Span, bool, error)
 	// filter the input spans, eliminating these from processes whose PID
 	// belong to a process that does not match the discovery policies
 	filter  ServiceFilter
@@ -53,7 +53,7 @@ var singleRbfLock sync.Mutex
 // internal buffer, and forwards them to an output events channel, previously converted to request.Span
 // instances.
 func SharedRingbuf(
-	cfg *TracerConfig,
+	cfg *config.EBPFTracer,
 	filter ServiceFilter,
 	ringbuffer *ebpf.Map,
 	metrics imetrics.Reporter,
@@ -68,8 +68,8 @@ func SharedRingbuf(
 
 	log := slog.With("component", "ringbuf.Tracer")
 	rbf := ringBufForwarder{
-		cfg: cfg, logger: log, ringbuffer: ringbuffer, fileInfo: fileInfo,
-		closers: nil, reader: ReadHTTPRequestTraceAsSpan,
+		cfg: cfg, logger: log, ringbuffer: ringbuffer,
+		closers: nil, reader: ReadBPFTraceAsSpan,
 		filter: filter, metrics: metrics,
 	}
 	singleRbf = &rbf
@@ -77,10 +77,10 @@ func SharedRingbuf(
 }
 
 func ForwardRingbuf(
-	cfg *TracerConfig,
+	cfg *config.EBPFTracer,
 	ringbuffer *ebpf.Map,
 	filter ServiceFilter,
-	reader func(*ringbuf.Record, ServiceFilter, *exec.FileInfo) (request.Span, bool, error),
+	reader func(*config.EBPFTracer, *ringbuf.Record, ServiceFilter) (request.Span, bool, error),
 	logger *slog.Logger,
 	metrics imetrics.Reporter,
 	closers ...io.Closer,
@@ -99,14 +99,14 @@ func (rbf *ringBufForwarder) sharedReadAndForward(ctx context.Context, closers [
 	// user space.
 	eventsReader, err := readerFactory(rbf.ringbuffer)
 	if err != nil {
-		rbf.logger.Error("creating perf reader. Exiting", err)
+		rbf.logger.Error("creating perf reader. Exiting", "error", err)
 		return
 	}
 	rbf.spans = make([]request.Span, rbf.cfg.BatchLength)
 	rbf.spansLen = 0
 
 	// If the underlying context is closed, it closes the objects we have allocated for this bpf program
-	go rbf.bgListenSharedContextCancelation(ctx, closers)
+	go rbf.bgListenSharedContextCancelation(ctx, closers, eventsReader)
 	rbf.readAndForwardInner(eventsReader, spansChan)
 }
 
@@ -116,7 +116,7 @@ func (rbf *ringBufForwarder) readAndForward(ctx context.Context, spansChan chan<
 	// user space.
 	eventsReader, err := readerFactory(rbf.ringbuffer)
 	if err != nil {
-		rbf.logger.Error("creating perf reader. Exiting", err)
+		rbf.logger.Error("creating perf reader. Exiting", "error", err)
 		return
 	}
 	rbf.closers = append(rbf.closers, eventsReader)
@@ -156,7 +156,7 @@ func (rbf *ringBufForwarder) readAndForwardInner(eventsReader ringBufReader, spa
 				rbf.logger.Debug("ring buffer is closed")
 				return
 			}
-			rbf.logger.Error("error reading from perf reader", err)
+			rbf.logger.Error("error reading from perf reader", "error", err)
 			continue
 		}
 		rbf.processAndForward(record, spansChan)
@@ -173,9 +173,9 @@ func (rbf *ringBufForwarder) alreadyForwarded(ctx context.Context, _ []io.Closer
 func (rbf *ringBufForwarder) processAndForward(record ringbuf.Record, spansChan chan<- []request.Span) {
 	rbf.access.Lock()
 	defer rbf.access.Unlock()
-	s, ignore, err := rbf.reader(&record, rbf.filter, rbf.fileInfo)
+	s, ignore, err := rbf.reader(rbf.cfg, &record, rbf.filter)
 	if err != nil {
-		rbf.logger.Error("error parsing perf event", err)
+		rbf.logger.Error("error parsing perf event", "error", err)
 		return
 	}
 	if ignore {
@@ -223,12 +223,13 @@ func (rbf *ringBufForwarder) bgListenContextCancelation(ctx context.Context, eve
 	_ = eventsReader.Close()
 }
 
-func (rbf *ringBufForwarder) bgListenSharedContextCancelation(ctx context.Context, closers []io.Closer) {
+func (rbf *ringBufForwarder) bgListenSharedContextCancelation(ctx context.Context, closers []io.Closer, eventsReader ringBufReader) {
 	<-ctx.Done()
 	rbf.logger.Debug("context is cancelled. Closing eBPF resources")
 	for _, c := range closers {
 		_ = c.Close()
 	}
+	_ = eventsReader.Close()
 }
 
 func (rbf *ringBufForwarder) closeAllResources() {

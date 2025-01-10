@@ -134,6 +134,10 @@ func waitForTestComponentsSub(t *testing.T, url, subpath string) {
 	waitForTestComponentsSubWithTime(t, url, subpath, 1)
 }
 
+func waitForTestComponentsSubStatus(t *testing.T, url, subpath string, status int) {
+	waitForTestComponentsSubWithTimeAndCode(t, url, subpath, status, 1)
+}
+
 // does a smoke test to verify that all the components that started
 // asynchronously are up and communicating properly
 func waitForTestComponentsSubWithTime(t *testing.T, url, subpath string, minutes int) {
@@ -150,6 +154,52 @@ func waitForTestComponentsSubWithTime(t *testing.T, url, subpath string, minutes
 		// we don't really care that this metric could be from a previous
 		// test. Once one it is visible, it means that Otel and Prometheus are healthy
 		results, err := pq.Query(`http_server_request_duration_seconds_count{url_path="` + subpath + `"}`)
+		require.NoError(t, err)
+		require.NotEmpty(t, results)
+	}, test.Interval(time.Second))
+}
+
+func waitForTestComponentsSubWithTimeAndCode(t *testing.T, url, subpath string, status, minutes int) {
+	pq := prom.Client{HostPort: prometheusHostPort}
+	test.Eventually(t, time.Duration(minutes)*time.Minute, func(t require.TestingT) {
+		// first, verify that the test service endpoint is healthy
+		req, err := http.NewRequest("GET", url+subpath, nil)
+		require.NoError(t, err)
+		r, err := testHTTPClient.Do(req)
+		require.NoError(t, err)
+		require.Equal(t, status, r.StatusCode)
+
+		// now, verify that the metric has been reported.
+		// we don't really care that this metric could be from a previous
+		// test. Once one it is visible, it means that Otel and Prometheus are healthy
+		results, err := pq.Query(`http_server_request_duration_seconds_count{url_path="` + subpath + `"}`)
+		require.NoError(t, err)
+		require.NotEmpty(t, results)
+	}, test.Interval(time.Second))
+}
+
+func waitForSQLTestComponents(t *testing.T, url, subpath string) {
+	waitForSQLTestComponentsWithDB(t, url, subpath, "postgresql")
+}
+
+func waitForSQLTestComponentsMySQL(t *testing.T, url, subpath string) {
+	waitForSQLTestComponentsWithDB(t, url, subpath, "mysql")
+}
+
+func waitForSQLTestComponentsWithDB(t *testing.T, url, subpath, db string) {
+	pq := prom.Client{HostPort: prometheusHostPort}
+	test.Eventually(t, 1*time.Minute, func(t require.TestingT) {
+		// first, verify that the test service endpoint is healthy
+		req, err := http.NewRequest("GET", url+subpath, nil)
+		require.NoError(t, err)
+		r, err := testHTTPClient.Do(req)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, r.StatusCode)
+
+		// now, verify that the metric has been reported.
+		// we don't really care that this metric could be from a previous
+		// test. Once one it is visible, it means that Otel and Prometheus are healthy
+		results, err := pq.Query(`db_client_operation_duration_seconds_count{db_system="` + db + `"}`)
 		require.NoError(t, err)
 		require.NotEmpty(t, results)
 	}, test.Interval(time.Second))

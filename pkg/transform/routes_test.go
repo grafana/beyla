@@ -73,7 +73,7 @@ func TestUnmatchedEmpty(t *testing.T) {
 func TestUnmatchedAuto(t *testing.T) {
 	for _, tc := range []UnmatchType{UnmatchHeuristic} {
 		t.Run(string(tc), func(t *testing.T) {
-			router, err := RoutesProvider(&RoutesConfig{Unmatch: tc, Patterns: []string{"/user/:id"}})()
+			router, err := RoutesProvider(&RoutesConfig{Unmatch: tc, Patterns: []string{"/user/:id"}, WildcardChar: "*"})()
 			require.NoError(t, err)
 			in, out := make(chan []request.Span, 10), make(chan []request.Span, 10)
 			defer close(in)
@@ -121,19 +121,19 @@ func TestIgnoreRoutes(t *testing.T) {
 	assert.Equal(t, []request.Span{{
 		Path:  "/user/1234",
 		Route: "/user/:id",
-	}}, testutil.ReadChannel(t, out, testTimeout))
+	}}, filterIgnored(func() []request.Span { return testutil.ReadChannel(t, out, testTimeout) }))
 	assert.Equal(t, []request.Span{{
 		Path:  "/some/path",
 		Route: "/some/path",
-	}}, testutil.ReadChannel(t, out, testTimeout))
+	}}, filterIgnored(func() []request.Span { return testutil.ReadChannel(t, out, testTimeout) }))
 }
 
 func TestIgnoreMode(t *testing.T) {
 	s := request.Span{Path: "/user/1234"}
 	setSpanIgnoreMode(IgnoreTraces, &s)
-	assert.Equal(t, request.IgnoreTraces, s.IgnoreSpan)
+	assert.True(t, s.IgnoreTraces())
 	setSpanIgnoreMode(IgnoreMetrics, &s)
-	assert.Equal(t, request.IgnoreMetrics, s.IgnoreSpan)
+	assert.True(t, s.IgnoreMetrics())
 }
 
 func BenchmarkRoutesProvider_Wildcard(b *testing.B) {
@@ -165,5 +165,29 @@ func benchProvider(b *testing.B, unmatch UnmatchType) {
 	for i := 0; i < b.N; i++ {
 		inCh <- benchmarkInput
 		<-outCh
+	}
+}
+
+func filterIgnored(reader func() []request.Span) []request.Span {
+	for {
+		input := reader()
+		output := make([]request.Span, 0, len(input))
+		for i := range input {
+			s := &input[i]
+
+			if s.IgnoreMetrics() {
+				continue
+			}
+
+			if s.IgnoreTraces() {
+				continue
+			}
+
+			output = append(output, *s)
+		}
+
+		if len(output) > 0 {
+			return output
+		}
 	}
 }

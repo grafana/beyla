@@ -24,5 +24,5 @@ func Setup(port, stdPort int) {
 	address := fmt.Sprintf(":%d", port)
 	log.Info("starting HTTP server with middleware", "address", address)
 	err := http.ListenAndServe(address, h)
-	log.Error("HTTP server has unexpectedly stopped", err)
+	log.Error("HTTP server has unexpectedly stopped", "error", err)
 }

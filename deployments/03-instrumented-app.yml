@@ -68,8 +68,8 @@ spec:
               value: "/config/beyla-config.yml"
             - name: BEYLA_SERVICE_NAME
               value: "goblog"
-            - name: BEYLA_PRINT_TRACES
-              value: "true"
+            - name: BEYLA_TRACE_PRINTER
+              value: "text"
             - name: BEYLA_OPEN_PORT
               value: "8443"
             - name: OTEL_EXPORTER_OTLP_ENDPOINT

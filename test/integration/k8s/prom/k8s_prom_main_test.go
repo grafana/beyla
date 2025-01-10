@@ -23,9 +23,9 @@ func TestMain(m *testing.M) {
 		docker.ImageBuild{Tag: "beyla:dev", Dockerfile: k8s.DockerfileBeyla},
 		docker.ImageBuild{Tag: "grpcpinger:dev", Dockerfile: k8s.DockerfilePinger},
 		docker.ImageBuild{Tag: "httppinger:dev", Dockerfile: k8s.DockerfileHTTPPinger},
-		docker.ImageBuild{Tag: "quay.io/prometheus/prometheus:v2.46.0"},
+		docker.ImageBuild{Tag: "quay.io/prometheus/prometheus:v2.53.0"},
 	); err != nil {
-		slog.Error("can't build docker images", err)
+		slog.Error("can't build docker images", "error", err)
 		os.Exit(-1)
 	}
 
@@ -36,7 +36,7 @@ func TestMain(m *testing.M) {
 		kube.LocalImage("beyla:dev"),
 		kube.LocalImage("grpcpinger:dev"),
 		kube.LocalImage("httppinger:dev"),
-		kube.LocalImage("quay.io/prometheus/prometheus:v2.46.0"),
+		kube.LocalImage("quay.io/prometheus/prometheus:v2.53.0"),
 		kube.Deploy(k8s.PathManifests+"/01-volumes.yml"),
 		kube.Deploy(k8s.PathManifests+"/01-serviceaccount.yml"),
 		kube.Deploy(k8s.PathManifests+"/02-prometheus-promscrape.yml"),

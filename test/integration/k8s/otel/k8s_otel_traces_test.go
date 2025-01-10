@@ -57,11 +57,13 @@ func TestTracesDecoration(t *testing.T) {
 					require.NotEmpty(t, trace.Spans)
 					sd := jaeger.DiffAsRegexp([]jaeger.Tag{
 						{Key: "k8s.pod.name", Type: "string", Value: "^testserver-.*"},
+						{Key: "k8s.container.name", Type: "string", Value: "testserver"},
 						{Key: "k8s.node.name", Type: "string", Value: ".+-control-plane$"},
 						{Key: "k8s.pod.uid", Type: "string", Value: k8s.UUIDRegex},
 						{Key: "k8s.pod.start_time", Type: "string", Value: k8s.TimeRegex},
 						{Key: "k8s.namespace.name", Type: "string", Value: "^default$"},
 						{Key: "k8s.deployment.name", Type: "string", Value: "^testserver$"},
+						{Key: "k8s.cluster.name", Type: "string", Value: "^beyla$"},
 					}, trace.Processes[parent.ProcessID].Tags)
 					require.Empty(t, sd, sd.String())
 				}, test.Interval(100*time.Millisecond))

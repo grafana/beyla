@@ -19,16 +19,17 @@
 #ifndef __FLOW_H__
 #define __FLOW_H__
 
-#define TC_ACT_OK 0
-#define TC_ACT_SHOT 2
+#include "vmlinux.h"
+#include "tc_act.h"
+
 #define IP_MAX_LEN 16
 
-#define ETH_ALEN        6               /* Octets in one ethernet addr   */
+#define ETH_ALEN 6 /* Octets in one ethernet addr   */
 
-#define s6_addr			in6_u.u6_addr8
-#define ETH_P_IP	0x0800		/* Internet Protocol packet	*/
+#define s6_addr in6_u.u6_addr8
+#define ETH_P_IP 0x0800 /* Internet Protocol packet	*/
 // ETH_P_IPV6 value as defined in IEEE 802: https://www.iana.org/assignments/ieee-802-numbers/ieee-802-numbers.xhtml
-#define ETH_P_IPV6	0x86DD		/* IPv6 over bluebook		*/
+#define ETH_P_IPV6 0x86DD /* IPv6 over bluebook		*/
 typedef __u8 u8;
 typedef __u16 u16;
 typedef __u32 u32;
@@ -44,6 +45,10 @@ typedef struct flow_metrics_t {
     u64 end_mono_time_ns;
     // TCP Flags from https://www.ietf.org/rfc/rfc793.txt
     u16 flags;
+    // direction of the flow EGRESS / INGRESS
+    u8 iface_direction;
+    // who initiated of the connection: INITIATOR_SRC or INITIATOR_DST
+    u8 initiator;
     // The positive errno of a failed map insertion that caused a flow
     // to be sent via ringbuffer.
     // 0 otherwise
@@ -60,7 +65,6 @@ typedef struct flow_id_t {
     struct in6_addr src_ip; // keep these aligned
     struct in6_addr dst_ip;
     u16 eth_protocol;
-    u8 direction;
     // L4 transport layer
     u16 src_port;
     u16 dst_port;

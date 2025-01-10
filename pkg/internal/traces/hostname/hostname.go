@@ -126,7 +126,7 @@ type fallbackResolver struct {
 // This implementation assumes the full host name may fail since it can depend on an external
 // service (e.g. a DNS server). If the full name resolution fails, it considers the following
 // fallback actions (in priority):
-// 1 - return the previous successful full name resolution resolution
+// 1 - return the previous successful full name resolution
 // 2 - ask for the full hostname to the OS (and consider the returned value as successful)
 // 3 - The short host name if it has never been successfully resolved.
 func (r *fallbackResolver) Query() (string, string, error) {

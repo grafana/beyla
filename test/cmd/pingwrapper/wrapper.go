@@ -45,7 +45,7 @@ func pingAsync(rw http.ResponseWriter, req *http.Request) {
 	duration, err := time.ParseDuration("10s")
 
 	if err != nil {
-		slog.Error("can't parse duration", err)
+		slog.Error("can't parse duration", "error", err)
 		os.Exit(-1)
 	}
 
@@ -96,11 +96,11 @@ func pingHandler(rw http.ResponseWriter, req *http.Request) {
 	if res.StatusCode == http.StatusOK {
 		bodyBytes, err := io.ReadAll(res.Body)
 		if err != nil {
-			slog.Error("reading response", err, "url", req.URL)
+			slog.Error("reading response", "error", err, "url", req.URL)
 		}
 		b, err := rw.Write(bodyBytes)
 		if err != nil {
-			slog.Error("writing response", err, "url", req.URL)
+			slog.Error("writing response", "error", err, "url", req.URL)
 			return
 		}
 		slog.Debug(fmt.Sprintf("%T", rw))
@@ -112,7 +112,7 @@ func gpingHandler(rw http.ResponseWriter, _ *http.Request) {
 	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
 	conn, err := grpc.NewClient("localhost:5051", opts...)
 	if err != nil {
-		slog.Error("fail to dial", err)
+		slog.Error("fail to dial", "error", err)
 		os.Exit(-1)
 	}
 	defer conn.Close()
@@ -125,7 +125,7 @@ func gpingHandler(rw http.ResponseWriter, _ *http.Request) {
 	defer cancel()
 	feature, err := client.GetFeature(ctx, point)
 	if err != nil {
-		slog.Error("client.GetFeature failed", err)
+		slog.Error("client.GetFeature failed", "error", err)
 		// nolint:gocritic
 		os.Exit(-1)
 	}
@@ -144,7 +144,7 @@ func main() {
 	if ok {
 		err := lvl.UnmarshalText([]byte(lvlEnv))
 		if err != nil {
-			slog.Error("unknown log level specified, choises are [DEBUG, INFO, WARN, ERROR]", errors.New(lvlEnv))
+			slog.Error("unknown log level specified, choises are [DEBUG, INFO, WARN, ERROR]", "error", errors.New(lvlEnv))
 			os.Exit(-1)
 		}
 	}
@@ -157,7 +157,7 @@ func main() {
 	if ps, ok := os.LookupEnv(envPort); ok {
 		var err error
 		if port, err = strconv.Atoi(ps); err != nil {
-			slog.Error("parsing port", err, "value", ps)
+			slog.Error("parsing port", "error", err, "value", ps)
 			os.Exit(-1)
 		}
 	}

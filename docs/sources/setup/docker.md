@@ -40,7 +40,7 @@ The above command runs a simple HTTPS application. The process opens the contain
 Set environment variables to configure Beyla to print to stdout and listen to a port (container) to inspect the executable:
 
 ```sh
-export BEYLA_PRINT_TRACES=true
+export BEYLA_TRACE_PRINTER=text
 export BEYLA_OPEN_PORT=8443
 ```
 
@@ -53,7 +53,7 @@ Beyla needs to be run with the following settings:
 ```sh
 docker run --rm \
   -e BEYLA_OPEN_PORT=8443 \
-  -e BEYLA_PRINT_TRACES=true \
+  -e BEYLA_TRACE_PRINTER=text \
   --pid="container:goblog" \
   --privileged \
   grafana/beyla:latest
@@ -73,7 +73,7 @@ time=2023-05-22T14:03:42.526Z level=INFO msg="Starting main node"
 
 Now that Beyla is tracing the the target HTTP service, configure it to send metrics and traces to an OpenTelemetry endpoint, or have metrics scraped by Prometheus.
 
-For information on how to export traces and metrics, see the [getting started tutorial]({{< relref "../tutorial/getting-started.md" >}}) and the [configuration options]({{< relref "../configure/options.md" >}}) documentation.
+For information on how to export traces and metrics, refer to the [configuration options]({{< relref "../configure/options.md" >}}) documentation.
 
 ## Docker Compose example
 
@@ -96,7 +96,7 @@ services:
     pid: "service:goblog"
     privileged: true
     environment:
-      BEYLA_PRINT_TRACES: true
+      BEYLA_TRACE_PRINTER: text
       BEYLA_OPEN_PORT: 8443
 ```
 

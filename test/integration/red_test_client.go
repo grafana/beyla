@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 	"testing"
 	"time"
 
@@ -18,7 +17,7 @@ import (
 	"github.com/grafana/beyla/test/integration/components/prom"
 )
 
-func testClientWithMethodAndStatusCode(t *testing.T, method string, statusCode int, traces bool, traceIDLookup string) {
+func testClientWithMethodAndStatusCode(t *testing.T, method string, statusCode int, traces bool) {
 	// Eventually, Prometheus would make this query visible
 	pq := prom.Client{HostPort: prometheusHostPort}
 	var results []prom.Result
@@ -69,29 +68,25 @@ func testClientWithMethodAndStatusCode(t *testing.T, method string, statusCode i
 		trace = traces[0]
 	}, test.Interval(100*time.Millisecond))
 
-	spans := trace.FindByOperationName(method)
-	require.Len(t, spans, 1)
-	span := spans[0]
+	res := trace.FindByOperationName(method)
+	require.Len(t, res, 1)
+	parent := res[0]
 
-	/*
-	 The code in pingclient.go generates spans like these:
-	 00-000000000000038b0000000000000000-000000000000038b-01
+	addr, ok := jaeger.FindIn(parent.Tags, "server.address")
+	assert.True(t, ok)
+	assert.NotEqual(t, "", addr.Value)
 
-	 The traceID and spanID increase by one in tandem and it loops forever.
-	 We check that the traceID has that 16 character 0 suffix and then we
-	 use the first 16 characters for looking up by Parent span.
-	*/
-	require.True(t, span.TraceID != "")
-	require.True(t, strings.HasSuffix(span.TraceID, traceIDLookup))
-	require.True(t, strings.HasPrefix(span.SpanID, "00"))
+	addr, ok = jaeger.FindIn(parent.Tags, "server.port")
+	assert.True(t, ok)
+	assert.Equal(t, float64(443), addr.Value)
 }
 
 func testREDMetricsForClientHTTPLibrary(t *testing.T) {
-	testClientWithMethodAndStatusCode(t, "GET", 200, true, "0000000000000000")
-	testClientWithMethodAndStatusCode(t, "OPTIONS", 204, true, "0000000000000001")
+	testClientWithMethodAndStatusCode(t, "GET", 200, true)
+	testClientWithMethodAndStatusCode(t, "OPTIONS", 204, true)
 }
 
 func testREDMetricsForClientHTTPLibraryNoTraces(t *testing.T) {
-	testClientWithMethodAndStatusCode(t, "GET", 200, false, "0000000000000000")
-	testClientWithMethodAndStatusCode(t, "OPTIONS", 204, false, "0000000000000001")
+	testClientWithMethodAndStatusCode(t, "GET", 200, false)
+	testClientWithMethodAndStatusCode(t, "OPTIONS", 204, false)
 }

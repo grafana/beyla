@@ -30,11 +30,13 @@ public class Kafka {
 
             Thread producerThread = new Thread(() -> {
                 KafkaProducer<String, String> producer = new KafkaProducer<>(producerProps);
-                for (int i = 0; i < 100; i++) {
-                    producer.send(new ProducerRecord<>("my-topic", "key", "value" + i));
-                    System.out.println("Produced message: " + "value" + i);
+                for (;;) {
+                    producer.send(new ProducerRecord<>("my-topic", "key", "value"));
+                    System.out.println("Produced message");
+                    try {
+                        Thread.sleep(500);
+                    } catch (Exception ignore) {}
                 }
-                producer.close();
             });
 
             // Consumer

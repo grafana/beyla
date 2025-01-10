@@ -1,0 +1,87 @@
+VIRTUAL MACHINE TESTS
+=====================
+
+Virtual Machine Tests (VM tests) enables Beyla to be tested under different
+kernel versions and architectures. This works by exposing the path to the
+Beyla source code (i.e. this git repository) to the guest by means of mounting
+it to the '/build' directory. This allows Makefile targets to be invoked from
+within the guest, in particular those tied to integration tests. Analogous to
+a Docker container, changes to the '/build' directory are volatile and are
+neither reflected on the host nor preserved once the VM terminates.
+
+The supported pre-compiled kernels can be found in the 'kernels/$arch/'
+subdirectory, alongside their respective kernel config files.
+
+USAGE
+=====
+
+Simply run 'make' to get started. This will build a new rootfs image and
+launch the VM using the default kernel specified in the Makefile. To select a
+different kernel version. The following environment variables can be used to
+specify the kernel version or architecture to run:
+
+  - ARCH: the target architecture (currently only x86_64 is supported)
+
+  - KERNEL_VER: the kernel version to use OR;
+
+  - KERNEL: path the kernel image to use
+
+  - TARGET_TEST: the target to pass to Beyla's toplevel Makefile (defaults to
+    run-integration-test-vm). When set to empty, the VM will drop onto an
+    interactive shell
+
+For debugging purposes, the VM also exposes an SSH endpoint at port 2222. The
+access credentials are 'root:root'.
+
+EXAMPLES
+========
+
+Running tests against kernel 6.10.6
+
+    KERNEL_VER=6.10.6 make
+
+Running tests against a custom kernel
+
+    KERNEL=/tmp/bzImage make
+
+Running tests against kernel 6.10.6 invoking a custom target
+
+    TARGET_TEST=test KERNEL_VER=6.10.6 make
+
+Running an interactive shell
+
+    TARGET_TEST= make
+
+ADDING A NEW KERNEL VERSION
+===========================
+
+In order to add a new kernel version, you will need to download the
+corresponding sources from https://cdn.kernel.org/pub/linux/kernel/ and
+configure it accordingly. Each kernel version requires slightly different
+config flags to be set. All kernel features should be compiled as part of the
+kernel - the VM DOES NOT support kernel modules at this time.
+
+In order to test whether your newly compiled kernel works, simply run
+
+    KERNEL=path/linux-x.x.x/arch/<arch>/boot/bzImage make
+
+After verifying the kernel works, copy its '.config' file to
+'kernels/<arch>/linux-x.y.z.config' and the resulting 'bzImage' to
+'kernels/<arch>/vmlinuz-linux-x.y.z'.
+
+
+TECHNICAL NOTES
+===============
+
+    - The VM relies on an Alpine root filesystem containing the minimal
+      dependencies to run the 'run-integration-test-vm' target.
+
+    - The Beyla sources are mounted using an 9p filesystem to /beyla
+
+    - For backwards compatibility, $BEYLA_REPO_ROOT/testoutput is mounted
+      using an 9p filesystem to /overlay/upper/testoutput - as such, the test
+      outputs are available back to the host in the respective directory
+
+    - The final work directory from which tests are run is an overlay of
+      /beyla and /overlay/upper mounted using overlayfs to /build
+

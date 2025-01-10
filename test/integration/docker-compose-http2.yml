@@ -19,6 +19,11 @@ services:
     image: hatest-server
     ports:
       - "7373:7373"
+    depends_on:
+      prometheus:
+        condition: service_started
+      jaeger:
+        condition: service_started
       
   autoinstrumenter:
     build:
@@ -30,14 +35,13 @@ services:
       - ./configs/:/configs
       - ./system/sys/kernel/security${SECURITY_CONFIG_SUFFIX}:/sys/kernel/security
       - ../../testoutput:/coverage
-      - ../../testoutput/run:/var/run/beyla
+      - ../../testoutput/run-http2:/var/run/beyla
     image: hatest-autoinstrumenter
     privileged: true # in some environments (not GH Pull Requests) you can set it to false and then cap_add: [ SYS_ADMIN ]
     pid: "host"
-    network_mode: "host"
     environment:
       GOCOVERDIR: "/coverage"
-      BEYLA_PRINT_TRACES: "true"
+      BEYLA_TRACE_PRINTER: "text"
       BEYLA_METRICS_INTERVAL: "10ms"
       BEYLA_BPF_BATCH_TIMEOUT: "10ms"
       BEYLA_LOG_LEVEL: "DEBUG"
@@ -49,35 +53,46 @@ services:
       testclient:
         condition: service_started
 
+  # otelcol:
+  #   image: grafana/agent
+  #   container_name: demo-agent
+  #   command:
+  #     - run
+  #     - /etc/agent/agent-config.river
+  #   volumes:
+  #     - ./configs/:/etc/agent
+  #   environment:
+  #     AGENT_MODE: "flow"
+  #   ports:
+  #     - "4017:4017"
+  #     - "4018:4018"
+  #   depends_on:
+  #     prometheus:
+  #       condition: service_started
+
   # OpenTelemetry Collector
-  otelcol:
-    image: otel/opentelemetry-collector-contrib:0.85.0
-    container_name: otel-col
-    deploy:
-      resources:
-        limits:
-          memory: 125M
-    restart: unless-stopped
-    command: [ "--config=/etc/otelcol-config/otelcol-config-4017.yml" ]
-    volumes:
-      - ./configs/:/etc/otelcol-config
-    ports:
-      - "4017"          # OTLP over gRPC receiver
-      - "4018:4018"     # OTLP over HTTP receiver
-      - "9464"          # Prometheus exporter
-      - "8888"          # metrics endpoint
-    depends_on:
-      prometheus:
-        condition: service_started
+  # otelcol:
+  #   image: otel/opentelemetry-collector-contrib:0.103.0
+  #   container_name: otel-col
+  #   restart: unless-stopped
+  #   command: [ "--config=/etc/otelcol-config/otelcol-config-4017.yml" ]
+  #   volumes:
+  #     - ./configs/:/etc/otelcol-config
+  #   ports:
+  #     - "4017"          # OTLP over gRPC receiver
+  #     - "4018:4018"     # OTLP over HTTP receiver
+  #     - "9464"          # Prometheus exporter
+  #     - "8888"          # metrics endpoint
+  #   depends_on:
+  #     prometheus:
+  #       condition: service_started
 
   # Prometheus
   prometheus:
-    image: quay.io/prometheus/prometheus:v2.46.0
+    image: quay.io/prometheus/prometheus:v2.53.0
     container_name: prometheus
     command:
-      - --storage.tsdb.retention.time=1m
-      - --config.file=/etc/prometheus/prometheus-config.yml
-      - --storage.tsdb.path=/prometheus
+      - --config.file=/etc/prometheus/prometheus-config-promscrape.yml
       - --web.enable-lifecycle
       - --web.route-prefix=/
     volumes:
@@ -86,7 +101,7 @@ services:
       - "9090:9090"
 
   jaeger:
-    image: jaegertracing/all-in-one:latest
+    image: jaegertracing/all-in-one:1.57
     ports:
       - "16686:16686" # Query frontend
       - "4317:4317"   # OTEL GRPC traces collector

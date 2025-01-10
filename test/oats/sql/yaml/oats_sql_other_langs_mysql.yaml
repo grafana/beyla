@@ -1,0 +1,27 @@
+docker-compose:
+  generator: generic
+  files:
+    - ../docker-compose-beyla-mysql.yml
+input:
+  - path: '/query'
+
+interval: 500ms
+expected:
+  traces:
+    - traceql: '{ .db.operation.name = "SELECT" && .db.system = "mysql"}'
+      spans:
+        - name: 'SELECT actor'
+          attributes:
+            db.operation.name: SELECT
+            db.collection.name: actor
+            db.system: mysql
+            db.query.text: "SELECT * from actor WHERE actor_id=1"
+  metrics:
+    - promql: 'db_client_operation_duration_sum{db_system="mysql"}'
+      value: "> 0"
+    - promql: 'db_client_operation_duration_bucket{le="0", db_system="mysql"}'
+      value: "== 0"
+    - promql: 'db_client_operation_duration_bucket{le="10", db_system="mysql"}'
+      value: "> 0"
+    - promql: 'db_client_operation_duration_count{db_system="mysql"}'
+      value: "> 0"

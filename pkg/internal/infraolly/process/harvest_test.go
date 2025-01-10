@@ -49,7 +49,7 @@ func TestLinuxHarvester_IsPrivileged(t *testing.T) {
 			h := newHarvester(&CollectConfig{RunMode: c.mode}, cache)
 
 			// If not privileged, it is expected to not report neither FDs nor IO counters
-			status, err := h.Harvest(&svc.ID{ProcPID: int32(os.Getpid())})
+			status, err := h.Harvest(&svc.Attrs{ProcPID: int32(os.Getpid())})
 			require.NoError(t, err)
 			if c.privileged {
 				assert.NotZero(t, status.FdCount)
@@ -68,21 +68,21 @@ func TestLinuxHarvester_Harvest(t *testing.T) {
 	h := newHarvester(&CollectConfig{}, cache)
 
 	// When retrieving for a given process status (e.g. the current testing executable)
-	status, err := h.Harvest(&svc.ID{ProcPID: int32(os.Getpid())})
+	status, err := h.Harvest(&svc.Attrs{ProcPID: int32(os.Getpid())})
 
 	// It returns the corresponding process status with valid data
 	require.NoError(t, err)
 	require.NotNil(t, status)
 
-	assert.Equal(t, int32(os.Getpid()), status.ProcessID)
-	assert.Equal(t, "process.test", status.Command)
-	assert.Contains(t, status.CommandLine, os.Args[0])
-	assert.NotEmpty(t, status.User)
+	assert.Equal(t, int32(os.Getpid()), status.ID.ProcessID)
+	assert.Equal(t, "process.test", status.ID.Command)
+	assert.Contains(t, status.ID.CommandLine, os.Args[0])
+	assert.NotEmpty(t, status.ID.User)
 	assert.Contains(t, "RSD", status.Status,
 		"process status must be R (running), S (interruptible sleep) or D (uninterruptible sleep)")
 	assert.NotZero(t, status.MemoryVMSBytes)
 	assert.NotZero(t, status.MemoryRSSBytes)
-	assert.NotZero(t, status.ParentProcessID)
+	assert.NotZero(t, status.ID.ParentProcessID)
 	assert.NotZero(t, status.ThreadCount)
 }
 
@@ -99,17 +99,17 @@ func TestLinuxHarvester_Harvest_FullCommandLine(t *testing.T) {
 		h := newHarvester(&CollectConfig{}, cache)
 
 		// When retrieving for a given process status (e.g. the current testing executable)
-		status, err := h.Harvest(&svc.ID{ProcPID: int32(cmd.Process.Pid)})
+		status, err := h.Harvest(&svc.Attrs{ProcPID: int32(cmd.Process.Pid)})
 
 		// It returns the corresponding Command line without stripping arguments
 		require.NoError(t, err)
 		require.NotNil(t, status)
 
-		assert.Equal(t, "sleep", status.ExecName)
-		assert.Equal(t, "/bin/sleep", status.ExecPath)
-		assert.Equal(t, "/bin/sleep 1m", status.CommandLine)
-		assert.Equal(t, "sleep", status.Command)
-		assert.Equal(t, []string{"1m"}, status.CommandArgs)
+		assert.Equal(t, "sleep", status.ID.ExecName)
+		assert.Equal(t, "/bin/sleep", status.ID.ExecPath)
+		assert.Equal(t, "/bin/sleep 1m", status.ID.CommandLine)
+		assert.Equal(t, "sleep", status.ID.Command)
+		assert.Equal(t, []string{"1m"}, status.ID.CommandArgs)
 	})
 }
 
@@ -123,12 +123,12 @@ func TestLinuxHarvester_Do_InvalidateCache_DifferentCmd(t *testing.T) {
 	h := newHarvester(&CollectConfig{}, cache)
 
 	// When the process is harvested
-	status, err := h.Harvest(&svc.ID{ProcPID: currentPid})
+	status, err := h.Harvest(&svc.Attrs{ProcPID: currentPid})
 	require.NoError(t, err)
 
 	// The status is updated
-	assert.NotEmpty(t, status.Command)
-	assert.NotEqual(t, "something old", status.Command)
+	assert.NotEmpty(t, status.ID.Command)
+	assert.NotEqual(t, "something old", status.ID.Command)
 }
 
 func TestLinuxHarvester_Do_InvalidateCache_DifferentPid(t *testing.T) {
@@ -141,9 +141,9 @@ func TestLinuxHarvester_Do_InvalidateCache_DifferentPid(t *testing.T) {
 	h := newHarvester(&CollectConfig{}, cache)
 
 	// When the process is harvested
-	status, err := h.Harvest(&svc.ID{ProcPID: currentPid})
+	status, err := h.Harvest(&svc.Attrs{ProcPID: currentPid})
 	require.NoError(t, err)
 
 	// The status is updated
-	assert.NotEqual(t, -1, status.ParentProcessID)
+	assert.NotEqual(t, -1, status.ID.ParentProcessID)
 }

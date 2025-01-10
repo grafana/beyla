@@ -7,8 +7,8 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
-	"github.com/grafana/beyla/pkg/internal/export/attributes"
-	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
+	"github.com/grafana/beyla/pkg/export/attributes"
+	attr "github.com/grafana/beyla/pkg/export/attributes/names"
 )
 
 // SpanOTELGetters returns the attributes.Getter function that returns the
@@ -17,6 +17,15 @@ import (
 func SpanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValue], bool) {
 	var getter attributes.Getter[*Span, attribute.KeyValue]
 	switch name {
+	case attr.Client:
+		getter = func(s *Span) attribute.KeyValue { return ClientMetric(SpanPeer(s)) }
+	case attr.ClientNamespace:
+		getter = func(s *Span) attribute.KeyValue {
+			if s.IsClientSpan() {
+				return ClientNamespaceMetric(s.Service.UID.Namespace)
+			}
+			return ClientNamespaceMetric(s.OtherNamespace)
+		}
 	case attr.HTTPRequestMethod:
 		getter = func(s *Span) attribute.KeyValue { return HTTPRequestMethod(s.Method) }
 	case attr.HTTPResponseStatusCode:
@@ -26,9 +35,9 @@ func SpanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 	case attr.HTTPUrlPath:
 		getter = func(s *Span) attribute.KeyValue { return HTTPUrlPath(s.Path) }
 	case attr.ClientAddr:
-		getter = func(s *Span) attribute.KeyValue { return ClientAddr(SpanPeer(s)) }
+		getter = func(s *Span) attribute.KeyValue { return ClientAddr(PeerAsClient(s)) }
 	case attr.ServerAddr:
-		getter = func(s *Span) attribute.KeyValue { return ServerAddr(SpanHost(s)) }
+		getter = func(s *Span) attribute.KeyValue { return ServerAddr(HostAsServer(s)) }
 	case attr.ServerPort:
 		getter = func(s *Span) attribute.KeyValue { return ServerPort(s.HostPort) }
 	case attr.RPCMethod:
@@ -37,16 +46,39 @@ func SpanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 		getter = func(_ *Span) attribute.KeyValue { return semconv.RPCSystemGRPC }
 	case attr.RPCGRPCStatusCode:
 		getter = func(s *Span) attribute.KeyValue { return semconv.RPCGRPCStatusCodeKey.Int(s.Status) }
+	case attr.Server:
+		getter = func(s *Span) attribute.KeyValue { return ServerMetric(SpanHost(s)) }
+	case attr.ServerNamespace:
+		getter = func(s *Span) attribute.KeyValue {
+			if s.IsClientSpan() {
+				return ServerNamespaceMetric(s.OtherNamespace)
+			}
+			return ServerNamespaceMetric(s.Service.UID.Namespace)
+		}
+	case attr.Service:
+		getter = func(s *Span) attribute.KeyValue { return ServiceMetric(s.Service.UID.Name) }
+	case attr.ServiceInstanceID:
+		getter = func(s *Span) attribute.KeyValue { return semconv.ServiceInstanceID(string(s.Service.UID.Instance)) }
 	case attr.ServiceName:
-		getter = func(s *Span) attribute.KeyValue { return semconv.ServiceName(s.ServiceID.Name) }
+		getter = func(s *Span) attribute.KeyValue { return semconv.ServiceName(s.Service.UID.Name) }
+	case attr.ServiceNamespace:
+		getter = func(s *Span) attribute.KeyValue { return semconv.ServiceNamespace(s.Service.UID.Namespace) }
+	case attr.SpanKind:
+		getter = func(s *Span) attribute.KeyValue { return SpanKindMetric(s.ServiceGraphKind()) }
+	case attr.SpanName:
+		getter = func(s *Span) attribute.KeyValue { return SpanNameMetric(s.TraceName()) }
+	case attr.Source:
+		getter = func(_ *Span) attribute.KeyValue { return SourceMetric("beyla") }
+	case attr.StatusCode:
+		getter = func(s *Span) attribute.KeyValue { return StatusCodeMetric(int(SpanStatusCode(s))) }
 	case attr.DBOperation:
 		getter = func(span *Span) attribute.KeyValue { return DBOperationName(span.Method) }
 	case attr.DBSystem:
 		getter = func(span *Span) attribute.KeyValue {
 			switch span.Type {
 			case EventTypeSQLClient:
-				return DBSystem(semconv.DBSystemOtherSQL.Value.AsString())
-			case EventTypeRedisClient:
+				return DBSystem(span.DBSystem().Value.AsString())
+			case EventTypeRedisClient, EventTypeRedisServer:
 				return DBSystem(semconv.DBSystemRedis.Value.AsString())
 			}
 			return DBSystem("unknown")
@@ -60,14 +92,14 @@ func SpanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 		}
 	case attr.MessagingSystem:
 		getter = func(span *Span) attribute.KeyValue {
-			if span.Type == EventTypeKafkaClient {
+			if span.Type == EventTypeKafkaClient || span.Type == EventTypeKafkaServer {
 				return semconv.MessagingSystem("kafka")
 			}
 			return semconv.MessagingSystem("unknown")
 		}
 	case attr.MessagingDestination:
 		getter = func(span *Span) attribute.KeyValue {
-			if span.Type == EventTypeKafkaClient {
+			if span.Type == EventTypeKafkaClient || span.Type == EventTypeKafkaServer {
 				return semconv.MessagingDestinationName(span.Path)
 			}
 			return semconv.MessagingDestinationName("")
@@ -92,10 +124,10 @@ func SpanPromGetters(attrName attr.Name) (attributes.Getter[*Span, string], bool
 		getter = func(s *Span) string { return s.Route }
 	case attr.HTTPUrlPath:
 		getter = func(s *Span) string { return s.Path }
-	case attr.ClientAddr:
-		getter = SpanPeer
-	case attr.ServerAddr:
-		getter = SpanHost
+	case attr.Client, attr.ClientAddr:
+		getter = PeerAsClient
+	case attr.Server, attr.ServerAddr:
+		getter = HostAsServer
 	case attr.ServerPort:
 		getter = func(s *Span) string { return strconv.Itoa(s.HostPort) }
 	case attr.RPCMethod:
@@ -117,8 +149,8 @@ func SpanPromGetters(attrName attr.Name) (attributes.Getter[*Span, string], bool
 		getter = func(span *Span) string {
 			switch span.Type {
 			case EventTypeSQLClient:
-				return semconv.DBSystemOtherSQL.Value.AsString()
-			case EventTypeRedisClient:
+				return span.DBSystem().Value.AsString()
+			case EventTypeRedisClient, EventTypeRedisServer:
 				return semconv.DBSystemRedis.Value.AsString()
 			}
 			return "unknown"
@@ -126,32 +158,38 @@ func SpanPromGetters(attrName attr.Name) (attributes.Getter[*Span, string], bool
 	case attr.DBCollectionName:
 		getter = func(span *Span) string {
 			if span.Type == EventTypeSQLClient {
-				return semconv.DBSystemOtherSQL.Value.AsString()
+				return span.DBSystem().Value.AsString()
 			}
 			return ""
 		}
 	case attr.MessagingSystem:
 		getter = func(span *Span) string {
-			if span.Type == EventTypeKafkaClient {
+			if span.Type == EventTypeKafkaClient || span.Type == EventTypeKafkaServer {
 				return "kafka"
 			}
 			return "unknown"
 		}
 	case attr.MessagingDestination:
 		getter = func(span *Span) string {
-			if span.Type == EventTypeKafkaClient {
+			if span.Type == EventTypeKafkaClient || span.Type == EventTypeKafkaServer {
 				return span.Path
 			}
 			return ""
 		}
+	case attr.ServiceInstanceID:
+		getter = func(s *Span) string { return s.Service.UID.Instance }
 	// resource metadata values below. Unlike OTEL, they are included here because they
 	// belong to the metric, instead of the Resource
+	case attr.Instance:
+		getter = func(s *Span) string { return s.Service.UID.Instance }
+	case attr.Job:
+		getter = func(s *Span) string { return s.Service.Job() }
 	case attr.ServiceName:
-		getter = func(s *Span) string { return s.ServiceID.Name }
+		getter = func(s *Span) string { return s.Service.UID.Name }
 	case attr.ServiceNamespace:
-		getter = func(s *Span) string { return s.ServiceID.Namespace }
+		getter = func(s *Span) string { return s.Service.UID.Namespace }
 	default:
-		getter = func(s *Span) string { return s.ServiceID.Metadata[attrName] }
+		getter = func(s *Span) string { return s.Service.Metadata[attrName] }
 	}
 	return getter, getter != nil
 }

@@ -23,7 +23,7 @@ const (
 	// UnmatchHeuristic detects the route field using a heuristic
 	UnmatchHeuristic = UnmatchType("heuristic")
 
-	UnmatchDefault = UnmatchWildcard
+	UnmatchDefault = UnmatchHeuristic
 )
 
 type IgnoreMode string
@@ -49,6 +49,8 @@ type RoutesConfig struct {
 	Patterns       []string   `yaml:"patterns"`
 	IgnorePatterns []string   `yaml:"ignored_patterns"`
 	IgnoredEvents  IgnoreMode `yaml:"ignore_mode"`
+	// Character that will be used to replace route segments
+	WildcardChar string `yaml:"wildcard_char,omitempty"`
 }
 
 func RoutesProvider(rc *RoutesConfig) pipe.MiddleProvider[[]request.Span, []request.Span] {
@@ -83,13 +85,13 @@ func (rn *routerNode) provideRoutes() (pipe.MiddleFunc[[]request.Span, []request
 
 	return func(in <-chan []request.Span, out chan<- []request.Span) {
 		for spans := range in {
-			filtered := make([]request.Span, 0, len(spans))
 			for i := range spans {
 				s := &spans[i]
 				if ignoreEnabled {
 					if discarder.Find(s.Path) != "" {
 						if ignoreMode == IgnoreAll {
-							continue
+							s.SetIgnoreMetrics()
+							s.SetIgnoreTraces()
 						}
 						// we can't discard it here, ignoring is selective (metrics | traces)
 						setSpanIgnoreMode(ignoreMode, s)
@@ -98,18 +100,15 @@ func (rn *routerNode) provideRoutes() (pipe.MiddleFunc[[]request.Span, []request
 				if routesEnabled {
 					s.Route = matcher.Find(s.Path)
 				}
-				unmatchAction(s)
-				filtered = append(filtered, *s)
+				unmatchAction(rc, s)
 			}
-			if len(filtered) > 0 {
-				out <- filtered
-			}
+			out <- spans
 		}
 	}, nil
 }
 
-func chooseUnmatchPolicy(rc *RoutesConfig) (func(span *request.Span), error) {
-	var unmatchAction func(span *request.Span)
+func chooseUnmatchPolicy(rc *RoutesConfig) (func(rc *RoutesConfig, span *request.Span), error) {
+	var unmatchAction func(rc *RoutesConfig, span *request.Span)
 
 	switch rc.Unmatch {
 	case UnmatchWildcard, "":
@@ -122,7 +121,7 @@ func chooseUnmatchPolicy(rc *RoutesConfig) (func(span *request.Span), error) {
 					"route for trace span names. For optimal experience, please define your application " +
 					"HTTP route patterns or enable the route 'heuristic' mode. " +
 					"For more information please see the documentation at: " +
-					"https://grafana.com/docs/beyla/latest/configure/options/#routes-decorator . " +
+					"https://grafana.com/docs/beyla/latest/configure/options/#routes-decorator. " +
 					"If your application is only using gRPC you can ignore this warning.")
 		}
 	case UnmatchUnset:
@@ -145,31 +144,31 @@ func chooseUnmatchPolicy(rc *RoutesConfig) (func(span *request.Span), error) {
 	return unmatchAction, nil
 }
 
-func leaveUnmatchEmpty(_ *request.Span) {}
+func leaveUnmatchEmpty(_ *RoutesConfig, _ *request.Span) {}
 
-func setUnmatchToWildcard(str *request.Span) {
+func setUnmatchToWildcard(_ *RoutesConfig, str *request.Span) {
 	if str.Route == "" {
 		str.Route = wildCard
 	}
 }
 
-func setUnmatchToPath(str *request.Span) {
+func setUnmatchToPath(_ *RoutesConfig, str *request.Span) {
 	if str.Route == "" {
 		str.Route = str.Path
 	}
 }
 
-func classifyFromPath(s *request.Span) {
+func classifyFromPath(rc *RoutesConfig, s *request.Span) {
 	if s.Route == "" && (s.Type == request.EventTypeHTTP || s.Type == request.EventTypeHTTPClient) {
-		s.Route = route.ClusterPath(s.Path)
+		s.Route = route.ClusterPath(s.Path, rc.WildcardChar[0])
 	}
 }
 
 func setSpanIgnoreMode(mode IgnoreMode, s *request.Span) {
 	switch mode {
 	case IgnoreMetrics:
-		s.IgnoreSpan = request.IgnoreMetrics
+		s.SetIgnoreMetrics()
 	case IgnoreTraces:
-		s.IgnoreSpan = request.IgnoreTraces
+		s.SetIgnoreTraces()
 	}
 }

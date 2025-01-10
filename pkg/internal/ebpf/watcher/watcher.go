@@ -11,8 +11,8 @@ import (
 	"github.com/cilium/ebpf/ringbuf"
 
 	"github.com/grafana/beyla/pkg/beyla"
+	"github.com/grafana/beyla/pkg/config"
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
-	"github.com/grafana/beyla/pkg/internal/exec"
 	"github.com/grafana/beyla/pkg/internal/request"
 )
 
@@ -67,20 +67,22 @@ func (p *Watcher) AddCloser(c ...io.Closer) {
 	p.closers = append(p.closers, c...)
 }
 
-func (p *Watcher) KProbes() map[string]ebpfcommon.FunctionPrograms {
-	kprobes := map[string]ebpfcommon.FunctionPrograms{
+func (p *Watcher) KProbes() map[string]ebpfcommon.ProbeDesc {
+	kprobes := map[string]ebpfcommon.ProbeDesc{
 		"sys_bind": {
 			Required: true,
-			Start:    p.bpfObjects.KprobeSysBind,
+			Start:    p.bpfObjects.BeylaKprobeSysBind,
 		},
 	}
 
 	return kprobes
 }
 
-func (p *Watcher) Tracepoints() map[string]ebpfcommon.FunctionPrograms {
+func (p *Watcher) Tracepoints() map[string]ebpfcommon.ProbeDesc {
 	return nil
 }
+
+func (p *Watcher) SetupTailCalls() {}
 
 func (p *Watcher) Run(ctx context.Context) {
 	p.events <- Event{Type: Ready}
@@ -95,7 +97,7 @@ func (p *Watcher) Run(ctx context.Context) {
 	)(ctx, nil)
 }
 
-func (p *Watcher) processWatchEvent(record *ringbuf.Record, _ ebpfcommon.ServiceFilter, _ *exec.FileInfo) (request.Span, bool, error) {
+func (p *Watcher) processWatchEvent(_ *config.EBPFTracer, record *ringbuf.Record, _ ebpfcommon.ServiceFilter) (request.Span, bool, error) {
 	var flags uint64
 	var event BPFWatchInfo
 

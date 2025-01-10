@@ -40,3 +40,15 @@ func TestSymbolDetection(t *testing.T) {
 	assert.Equal(t, svc.InstrumentableGeneric, instrumentableFromSymbolName("graal"))
 	assert.Equal(t, svc.InstrumentableGeneric, instrumentableFromSymbolName("rust"))
 }
+
+func TestEnvironDetection(t *testing.T) {
+	assert.Equal(t, svc.InstrumentableDotnet, instrumentableFromEnviron("ASPNETCORE_HTTP_PORTS=8080"))
+	assert.Equal(t, svc.InstrumentableDotnet, instrumentableFromEnviron("DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=true"))
+	assert.Equal(t, svc.InstrumentableGeneric, instrumentableFromEnviron("SOME_ENV_VAR=123"))
+	assert.Equal(t, svc.InstrumentableGeneric, instrumentableFromEnviron("DOT=1"))
+}
+
+func TestPathDetection(t *testing.T) {
+	assert.Equal(t, svc.InstrumentablePHP, instrumentableFromPath("php"))
+	assert.Equal(t, svc.InstrumentableGeneric, instrumentableFromPath("python"))
+}

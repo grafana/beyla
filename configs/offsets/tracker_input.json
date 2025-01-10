@@ -12,10 +12,6 @@
       "net/url.URL": [
         "Path"
       ],
-      "net/http.response": [
-        "status",
-        "req"
-      ],
       "net/http.Response": [
         "StatusCode"
       ],
@@ -33,9 +29,6 @@
       "vendor/golang.org/x/net/http2/hpack.Encoder": [
         "w"
       ],
-      "net/http.conn": [
-        "rwc" 
-      ],
       "net.TCPConn": [
         "conn" 
       ],
@@ -47,6 +40,18 @@
         "raddr"
       ],
       "net/http.persistConn": [
+        "conn",
+        "tlsState"
+      ],
+      "net/http.conn": [
+        "rwc",
+        "tlsState"
+      ],
+      "net/http.http2ClientConn": [
+        "nextStreamID",
+        "tconn"
+      ],
+      "net/http.http2serverConn": [
         "conn"
       ]
     }
@@ -55,14 +60,6 @@
     "inspect": "./configs/offsets/http2/inspect.go",
     "versions": ">= 0.12.0",
     "fields": {
-      "golang.org/x/net/http2.responseWriterState": [
-        "req",
-        "status",
-        "conn"
-      ],
-      "golang.org/x/net/http2.serverConn": [
-        "conn"
-      ],
       "golang.org/x/net/http2/hpack.Encoder": [
         "w"
       ],
@@ -72,6 +69,12 @@
       ],
       "golang.org/x/net/http2.Framer": [
         "w"
+      ],
+      "golang.org/x/net/http2.serverConn": [
+        "conn"
+      ],
+      "golang.org/x/net/http2.MetaHeadersFrame": [
+        "Fields"
       ]
     }
   },  
@@ -80,8 +83,7 @@
     "fields": {
       "google.golang.org/grpc/internal/transport.Stream": [
         "method",
-        "st",
-        "ctx"
+        "st"
       ],
       "google.golang.org/grpc/internal/status.Status": [
         "s"
@@ -91,7 +93,8 @@
       ],
       "google.golang.org/grpc/internal/transport.http2Client": [
         "nextID",
-        "conn"
+        "conn",
+        "scheme"
       ],
       "google.golang.org/grpc/internal/transport.bufWriter": [
         "buf",
@@ -150,5 +153,20 @@
         "bw"
       ]
     }
-  }    
+  },
+  "github.com/segmentio/kafka-go": {
+    "inspect": "./configs/offsets/kafkago/inspect.go",
+    "versions": ">= v0.4.11",
+    "fields": {
+      "github.com/segmentio/kafka-go.Writer": [
+        "Topic"
+      ],
+      "github.com/segmentio/kafka-go/protocol.Conn": [
+        "conn"
+      ],
+      "github.com/segmentio/kafka-go.reader": [
+        "topic"
+      ]
+    }
+  }
 }

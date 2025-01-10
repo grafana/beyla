@@ -17,7 +17,6 @@ import (
 const (
 	// FilesystemType superblock magic numbers for filesystems,
 	// to be used for IsMountFS.
-	FilesystemTypeBPFFS   = unix.BPF_FS_MAGIC
 	FilesystemTypeCgroup2 = unix.CGROUP2_SUPER_MAGIC
 )
 

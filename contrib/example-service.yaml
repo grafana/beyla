@@ -1,6 +1,6 @@
 open_port: 8000
 service_name: my-django-app
-print_traces: true
+trace_printer: text
 
 ebpf:
   wakeup_len: 100

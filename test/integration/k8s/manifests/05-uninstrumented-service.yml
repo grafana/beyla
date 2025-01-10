@@ -11,6 +11,9 @@ spec:
     - port: 8080
       name: http0
       targetPort: http0
+    - port: 5051
+      name: grpc
+      targetPort: grpc
 ---
 apiVersion: v1
 kind: Service
@@ -28,8 +31,12 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: testserver
+  annotations:
+    my.custom/name: 'overridden-testserver-name'
   labels:
     app: testserver
+    app.kubernetes.io/name: 'ignored-testserver-name'
+    app.kubernetes.io/part-of: 'overridden-testserver-namespace'
 spec:
   replicas: 1
   selector:
@@ -49,6 +56,9 @@ spec:
             - containerPort: 8080
               hostPort: 8080
               name: http0
+            - containerPort: 5051
+              hostPort: 5051
+              name: grpc
           env:
             - name: LOG_LEVEL
               value: "DEBUG"

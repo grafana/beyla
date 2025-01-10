@@ -11,13 +11,12 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/sdk/metric/internal/exemplar"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 )
 
 type buckets[N int64 | float64] struct {
 	attrs attribute.Set
-	res   exemplar.Reservoir
+	res   FilteredExemplarReservoir[N]
 
 	counts   []uint64
 	count    uint64
@@ -48,14 +47,13 @@ type histValues[N int64 | float64] struct {
 	noSum  bool
 	bounds []float64
 
-	newRes   func() exemplar.Reservoir
+	newRes   func(attribute.Set) FilteredExemplarReservoir[N]
 	limit    limiter[*buckets[N]]
 	values   map[attribute.Distinct]*buckets[N]
-	stale    map[attribute.Distinct]*buckets[N]
 	valuesMu sync.Mutex
 }
 
-func newHistValues[N int64 | float64](bounds []float64, noSum bool, limit int, r func() exemplar.Reservoir) *histValues[N] {
+func newHistValues[N int64 | float64](bounds []float64, noSum bool, limit int, r func(attribute.Set) FilteredExemplarReservoir[N]) *histValues[N] {
 	// The responsibility of keeping all buckets correctly associated with the
 	// passed boundaries is ultimately this type's responsibility. Make a copy
 	// here so we can always guarantee this. Or, in the case of failure, have
@@ -68,7 +66,6 @@ func newHistValues[N int64 | float64](bounds []float64, noSum bool, limit int, r
 		newRes: r,
 		limit:  newLimiter[*buckets[N]](limit),
 		values: make(map[attribute.Distinct]*buckets[N]),
-		stale:  make(map[attribute.Distinct]*buckets[N]),
 	}
 }
 
@@ -81,8 +78,6 @@ func (s *histValues[N]) measure(ctx context.Context, value N, fltrAttr attribute
 	// is len(s.bounds)+1, with the last bucket representing:
 	// (s.bounds[len(s.bounds)-1], +∞).
 	idx := sort.SearchFloat64s(s.bounds, float64(value))
-
-	t := now()
 
 	s.valuesMu.Lock()
 	defer s.valuesMu.Unlock()
@@ -98,7 +93,7 @@ func (s *histValues[N]) measure(ctx context.Context, value N, fltrAttr attribute
 		//
 		//   buckets = (-∞, 0], (0, 5.0], (5.0, 10.0], (10.0, +∞)
 		b = newBuckets[N](attr, len(s.bounds)+1)
-		b.res = s.newRes()
+		b.res = s.newRes(attr)
 
 		// Ensure min and max are recorded values (not zero), for new buckets.
 		b.min, b.max = value, value
@@ -108,24 +103,12 @@ func (s *histValues[N]) measure(ctx context.Context, value N, fltrAttr attribute
 	if !s.noSum {
 		b.sum(value)
 	}
-	b.res.Offer(ctx, t, exemplar.NewValue(value), droppedAttr)
-}
-
-func (s *histValues[N]) remove(ctx context.Context, fltrAttr attribute.Set) {
-	s.valuesMu.Lock()
-	defer s.valuesMu.Unlock()
-
-	key := fltrAttr.Equivalent()
-
-	if val, ok := s.values[key]; ok {
-		s.stale[key] = val
-		delete(s.values, key)
-	}
+	b.res.Offer(ctx, value, droppedAttr)
 }
 
 // newHistogram returns an Aggregator that summarizes a set of measurements as
 // an histogram.
-func newHistogram[N int64 | float64](boundaries []float64, noMinMax, noSum bool, limit int, r func() exemplar.Reservoir) *histogram[N] {
+func newHistogram[N int64 | float64](boundaries []float64, noMinMax, noSum bool, limit int, r func(attribute.Set) FilteredExemplarReservoir[N]) *histogram[N] {
 	return &histogram[N]{
 		histValues: newHistValues[N](boundaries, noSum, limit, r),
 		noMinMax:   noMinMax,
@@ -183,7 +166,6 @@ func (s *histogram[N]) delta(dest *metricdata.Aggregation) int {
 	}
 	// Unused attribute sets do not report.
 	clear(s.values)
-	clear(s.stale)
 	// The delta collection cycle resets.
 	s.start = t
 
@@ -207,7 +189,7 @@ func (s *histogram[N]) cumulative(dest *metricdata.Aggregation) int {
 	// Do not allow modification of our copy of bounds.
 	bounds := slices.Clone(s.bounds)
 
-	n := len(s.values) + len(s.stale)
+	n := len(s.values)
 	hDPts := reset(h.DataPoints, n, n)
 
 	var i int
@@ -242,17 +224,6 @@ func (s *histogram[N]) cumulative(dest *metricdata.Aggregation) int {
 		// sets that become "stale" need to be forgotten so this will not
 		// overload the system.
 	}
-	for _, val := range s.stale {
-		hDPts[i].Attributes = val.attrs
-		hDPts[i].StartTime = s.start
-		hDPts[i].Time = t
-		hDPts[i].NoRecordedValue = true
-		i++
-	}
-
-	// Stale attribute sets for which a no-record marker was emitted are not
-	// reported anymore.
-	clear(s.stale)
 
 	h.DataPoints = hDPts
 	*dest = h

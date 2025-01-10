@@ -24,27 +24,25 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/fs"
 	"log/slog"
 	"strings"
 
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
-	"github.com/vishvananda/netlink"
-	"golang.org/x/sys/unix"
 
-	"github.com/grafana/beyla/pkg/internal/netolly/ifaces"
+	"github.com/grafana/beyla/pkg/internal/ebpf/tcmanager"
 )
 
 // $BPF_CLANG and $BPF_CFLAGS are set by the Makefile.
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type flow_metrics_t -type flow_id_t  -type flow_record_t -target amd64,arm64 Net ../../../../bpf/flows.c -- -I../../../../bpf/headers
 
 const (
-	qdiscType = "clsact"
 	// constants defined in flows.c as "volatile const"
 	constSampling      = "sampling"
 	constTraceMessages = "trace_messages"
 	aggregatedFlowsMap = "aggregated_flows"
+	connInitiatorsMap  = "conn_initiators"
+	flowDirectionsMap  = "flow_directions"
 )
 
 func tlog() *slog.Logger {
@@ -56,19 +54,20 @@ func tlog() *slog.Logger {
 // and to flows that are forwarded by the kernel via ringbuffer because could not be aggregated
 // in the map
 type FlowFetcher struct {
-	objects        *NetObjects
-	qdiscs         map[ifaces.Interface]*netlink.GenericQdisc
-	egressFilters  map[ifaces.Interface]*netlink.BpfFilter
-	ingressFilters map[ifaces.Interface]*netlink.BpfFilter
-	ringbufReader  *ringbuf.Reader
-	cacheMaxSize   int
-	enableIngress  bool
-	enableEgress   bool
+	log           *slog.Logger
+	objects       *NetObjects
+	ringbufReader *ringbuf.Reader
+	tcManager     tcmanager.TCManager
+	cacheMaxSize  int
+	enableIngress bool
+	enableEgress  bool
 }
 
 func NewFlowFetcher(
 	sampling, cacheMaxSize int,
 	ingress, egress bool,
+	ifaceManager *tcmanager.InterfaceManager,
+	tcBackend tcmanager.TCBackend,
 ) (*FlowFetcher, error) {
 	tlog := tlog()
 	if err := rlimit.RemoveMemlock(); err != nil {
@@ -82,8 +81,10 @@ func NewFlowFetcher(
 		return nil, fmt.Errorf("loading BPF data: %w", err)
 	}
 
-	// Resize aggregated flows map according to user-provided configuration
+	// Resize aggregated flows and flow directions maps according to user-provided configuration
 	spec.Maps[aggregatedFlowsMap].MaxEntries = uint32(cacheMaxSize)
+	spec.Maps[flowDirectionsMap].MaxEntries = uint32(cacheMaxSize)
+	spec.Maps[connInitiatorsMap].MaxEntries = uint32(cacheMaxSize)
 
 	traceMsgs := 0
 	if tlog.Enabled(context.TODO(), slog.LevelDebug) {
@@ -104,122 +105,27 @@ func NewFlowFetcher(
 	if err != nil {
 		return nil, fmt.Errorf("accessing to ringbuffer: %w", err)
 	}
+
+	tcManager := tcmanager.NewTCManager(tcBackend)
+	tcManager.SetInterfaceManager(ifaceManager)
+
+	if egress {
+		tcManager.AddProgram("tc/egress_flow_parse", objects.BeylaEgressFlowParse, tcmanager.AttachmentEgress)
+	}
+
+	if ingress {
+		tcManager.AddProgram("tc/ingress_flow_parse", objects.BeylaIngressFlowParse, tcmanager.AttachmentIngress)
+	}
+
 	return &FlowFetcher{
-		objects:        &objects,
-		ringbufReader:  flows,
-		egressFilters:  map[ifaces.Interface]*netlink.BpfFilter{},
-		ingressFilters: map[ifaces.Interface]*netlink.BpfFilter{},
-		qdiscs:         map[ifaces.Interface]*netlink.GenericQdisc{},
-		cacheMaxSize:   cacheMaxSize,
-		enableIngress:  ingress,
-		enableEgress:   egress,
+		log:           tlog,
+		objects:       &objects,
+		ringbufReader: flows,
+		tcManager:     tcManager,
+		cacheMaxSize:  cacheMaxSize,
+		enableIngress: ingress,
+		enableEgress:  egress,
 	}, nil
-}
-
-// Register and links the eBPF fetcher into the system. The program should invoke Unregister
-// before exiting.
-func (m *FlowFetcher) Register(iface ifaces.Interface) error {
-	ilog := tlog().With("interface", iface)
-	// Load pre-compiled programs and maps into the kernel, and rewrites the configuration
-	ipvlan, err := netlink.LinkByIndex(iface.Index)
-	if err != nil {
-		return fmt.Errorf("failed to lookup ipvlan device %d (%s): %w", iface.Index, iface.Name, err)
-	}
-	qdiscAttrs := netlink.QdiscAttrs{
-		LinkIndex: ipvlan.Attrs().Index,
-		Handle:    netlink.MakeHandle(0xffff, 0),
-		Parent:    netlink.HANDLE_CLSACT,
-	}
-	qdisc := &netlink.GenericQdisc{
-		QdiscAttrs: qdiscAttrs,
-		QdiscType:  qdiscType,
-	}
-	if err := netlink.QdiscDel(qdisc); err == nil {
-		ilog.Warn("qdisc clsact already existed. Deleted it")
-	}
-	if err := netlink.QdiscAdd(qdisc); err != nil {
-		if errors.Is(err, fs.ErrExist) {
-			ilog.Warn("qdisc clsact already exists. Ignoring", "error", err)
-		} else {
-			// nolint:errorlint
-			return fmt.Errorf("failed to create clsact qdisc on %d (%s): %T %w", iface.Index, iface.Name, err, err)
-		}
-	}
-	m.qdiscs[iface] = qdisc
-
-	if err := m.registerEgress(iface, ipvlan); err != nil {
-		return err
-	}
-
-	return m.registerIngress(iface, ipvlan)
-}
-
-func (m *FlowFetcher) registerEgress(iface ifaces.Interface, ipvlan netlink.Link) error {
-	ilog := tlog().With("interface", iface)
-	if !m.enableEgress {
-		ilog.Debug("ignoring egress traffic, according to user configuration")
-		return nil
-	}
-	// Fetch events on egress
-	egressAttrs := netlink.FilterAttrs{
-		LinkIndex: ipvlan.Attrs().Index,
-		Parent:    netlink.HANDLE_MIN_EGRESS,
-		Handle:    netlink.MakeHandle(0, 1),
-		Protocol:  3,
-		Priority:  1,
-	}
-	egressFilter := &netlink.BpfFilter{
-		FilterAttrs:  egressAttrs,
-		Fd:           m.objects.EgressFlowParse.FD(),
-		Name:         "tc/egress_flow_parse",
-		DirectAction: true,
-	}
-	if err := netlink.FilterDel(egressFilter); err == nil {
-		ilog.Warn("egress filter already existed. Deleted it")
-	}
-	if err := netlink.FilterAdd(egressFilter); err != nil {
-		if errors.Is(err, fs.ErrExist) {
-			ilog.Warn("egress filter already exists. Ignoring", "error", err)
-		} else {
-			return fmt.Errorf("failed to create egress filter: %w", err)
-		}
-	}
-	m.egressFilters[iface] = egressFilter
-	return nil
-}
-
-func (m *FlowFetcher) registerIngress(iface ifaces.Interface, ipvlan netlink.Link) error {
-	ilog := tlog().With("interface", iface)
-	if !m.enableIngress {
-		ilog.Debug("ignoring ingress traffic, according to user configuration")
-		return nil
-	}
-	// Fetch events on ingress
-	ingressAttrs := netlink.FilterAttrs{
-		LinkIndex: ipvlan.Attrs().Index,
-		Parent:    netlink.HANDLE_MIN_INGRESS,
-		Handle:    netlink.MakeHandle(0, 1),
-		Protocol:  unix.ETH_P_ALL,
-		Priority:  1,
-	}
-	ingressFilter := &netlink.BpfFilter{
-		FilterAttrs:  ingressAttrs,
-		Fd:           m.objects.IngressFlowParse.FD(),
-		Name:         "tc/ingress_flow_parse",
-		DirectAction: true,
-	}
-	if err := netlink.FilterDel(ingressFilter); err == nil {
-		ilog.Warn("ingress filter already existed. Deleted it")
-	}
-	if err := netlink.FilterAdd(ingressFilter); err != nil {
-		if errors.Is(err, fs.ErrExist) {
-			ilog.Warn("ingress filter already exists. Ignoring", "error", err)
-		} else {
-			return fmt.Errorf("failed to create ingress filter: %w", err)
-		}
-	}
-	m.ingressFilters[iface] = ingressFilter
-	return nil
 }
 
 // Close the eBPF fetcher from the system.
@@ -228,6 +134,8 @@ func (m *FlowFetcher) registerIngress(iface ifaces.Interface, ipvlan netlink.Lin
 func (m *FlowFetcher) Close() error {
 	log := tlog()
 	log.Debug("unregistering eBPF objects")
+
+	m.tcManager.Shutdown()
 
 	var errs []error
 	// m.ringbufReader.Read is a blocking operation, so we need to close the ring buffer
@@ -238,47 +146,29 @@ func (m *FlowFetcher) Close() error {
 			errs = append(errs, err)
 		}
 	}
+
 	if m.objects != nil {
 		errs = append(errs, m.closeObjects()...)
-	}
-	for iface, ef := range m.egressFilters {
-		log.Debug("deleting egress filter", "interface", iface)
-		if err := doIgnoreNoDev(netlink.FilterDel, netlink.Filter(ef)); err != nil {
-			errs = append(errs, fmt.Errorf("deleting egress filter: %w", err))
-		}
-	}
-	m.egressFilters = map[ifaces.Interface]*netlink.BpfFilter{}
-	for iface, igf := range m.ingressFilters {
-		log.Debug("deleting ingress filter", "interface", iface)
-		if err := doIgnoreNoDev(netlink.FilterDel, netlink.Filter(igf)); err != nil {
-			errs = append(errs, fmt.Errorf("deleting ingress filter: %w", err))
-		}
-	}
-	m.ingressFilters = map[ifaces.Interface]*netlink.BpfFilter{}
-	for iface, qd := range m.qdiscs {
-		log.Debug("deleting Qdisc", "interface", iface)
-		if err := doIgnoreNoDev(netlink.QdiscDel, netlink.Qdisc(qd)); err != nil {
-			errs = append(errs, fmt.Errorf("deleting qdisc: %w", err))
-		}
-	}
-	m.qdiscs = map[ifaces.Interface]*netlink.GenericQdisc{}
-	if len(errs) == 0 {
-		return nil
 	}
 
 	var errStrings []string
 	for _, err := range errs {
 		errStrings = append(errStrings, err.Error())
 	}
-	return errors.New(`errors: "` + strings.Join(errStrings, `", "`) + `"`)
+
+	if len(errs) > 0 {
+		return errors.New(`errors: "` + strings.Join(errStrings, `", "`) + `"`)
+	}
+
+	return nil
 }
 
 func (m *FlowFetcher) closeObjects() []error {
 	var errs []error
-	if err := m.objects.EgressFlowParse.Close(); err != nil {
+	if err := m.objects.BeylaEgressFlowParse.Close(); err != nil {
 		errs = append(errs, err)
 	}
-	if err := m.objects.IngressFlowParse.Close(); err != nil {
+	if err := m.objects.BeylaIngressFlowParse.Close(); err != nil {
 		errs = append(errs, err)
 	}
 	if err := m.objects.AggregatedFlows.Close(); err != nil {
@@ -289,29 +179,6 @@ func (m *FlowFetcher) closeObjects() []error {
 	}
 	m.objects = nil
 	return errs
-}
-
-// doIgnoreNoDev runs the provided syscall over the provided device and ignores the error
-// if the cause is a non-existing device (just logs the error as debug).
-// If the agent is deployed as part of the Network Metrics pipeline, normally
-// undeploying the FlowCollector could cause the agent to try to remove resources
-// from Pods that have been removed immediately before (e.g. flowlogs-pipeline or the
-// console plugin), so we avoid logging some errors that would unnecessarily raise the
-// user's attention.
-// This function uses generics because the set of provided functions accept different argument
-// types.
-func doIgnoreNoDev[T any](sysCall func(T) error, dev T) error {
-	if err := sysCall(dev); err != nil {
-		if errors.Is(err, unix.ENODEV) {
-			tlog().Error("can't delete. Ignore this error if other pods or interfaces "+
-				" are also being deleted at this moment. For example, if you are undeploying "+
-				" a FlowCollector or Deployment where this agent is part of",
-				"error", err)
-		} else {
-			return err
-		}
-	}
-	return nil
 }
 
 func (m *FlowFetcher) ReadRingBuf() (ringbuf.Record, error) {
@@ -339,7 +206,7 @@ func (m *FlowFetcher) LookupAndDeleteMap() map[NetFlowId][]NetFlowMetrics {
 	// TODO: detect whether LookupAndDelete is supported (Kernel>=4.20) and use it selectively
 	for iterator.Next(&id, &metrics) {
 		if err := flowMap.Delete(id); err != nil {
-			tlog().Warn("couldn't delete flow entry", "flowId", id)
+			m.log.Debug("couldn't delete flow entry", "flowId", id, "error", err)
 		}
 		// We observed that eBFP PerCPU map might insert multiple times the same key in the map
 		// (probably due to race conditions) so we need to re-join metrics again at userspace

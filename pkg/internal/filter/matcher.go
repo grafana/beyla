@@ -5,7 +5,7 @@ import (
 
 	"github.com/gobwas/glob"
 
-	"github.com/grafana/beyla/pkg/internal/export/attributes"
+	"github.com/grafana/beyla/pkg/export/attributes"
 )
 
 // Matcher condition for a given field of the record type T.

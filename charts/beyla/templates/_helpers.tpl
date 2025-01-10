@@ -92,3 +92,44 @@ Calculate name of image ID to use for "beyla".
 {{- printf ":%s" .Chart.AppVersion }}
 {{- end }}
 {{- end }}
+
+{{/*
+Calculate name of image ID to use for "beyla-cache".
+*/}}
+{{- define "beyla.k8sCache.imageId" -}}
+{{- if .Values.k8sCache.image.digest }}
+{{- $digest := .Values.k8sCache.image.digest }}
+{{- if not (hasPrefix "sha256:" $digest) }}
+{{- $digest = printf "sha256:%s" $digest }}
+{{- end }}
+{{- printf "@%s" $digest }}
+{{- else if .Values.k8sCache.image.tag }}
+{{- printf ":%s" .Values.k8sCache.image.tag }}
+{{- else }}
+{{- printf ":%s" .Chart.AppVersion }}
+{{- end }}
+{{- end }}
+
+{{/*
+Common kube cache labels
+*/}}
+{{- define "beyla.cache.labels" -}}
+helm.sh/chart: {{ include "beyla.chart" . }}
+{{ include "beyla.cache.selectorLabels" . }}
+{{- if .Chart.AppVersion }}
+app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+{{- end }}
+app.kubernetes.io/managed-by: {{ .Release.Service }}
+app.kubernetes.io/part-of: beyla
+{{- end }}
+
+{{/*
+Selector (pod) labels
+*/}}
+{{- define "beyla.cache.selectorLabels" -}}
+app.kubernetes.io/name: {{ .Values.k8sCache.service.name }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+{{- with .Values.k8sCache.podLabels }}
+{{ toYaml . }}
+{{- end }}
+{{- end }}

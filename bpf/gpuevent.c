@@ -9,84 +9,90 @@
 #include "bpf_helpers.h"
 #include "bpf_tracing.h"
 #include "ringbuf.h"
+#include "bpf_dbg.h"
+#include "pid.h"
 
 #include "gpuevent.h"
 
+char LICENSE[] SEC("license") = "Dual MIT/GPL";
+
+const gpu_kernel_launch_t *unused_gpu __attribute__((unused));
+
 struct {
-  __uint(type, BPF_MAP_TYPE_RINGBUF);
+    __uint(type, BPF_MAP_TYPE_RINGBUF);
 } rb SEC(".maps");
 
 const volatile struct {
-  bool debug;
-  bool capture_args;
-  bool capture_stack;
+    bool capture_args;
+    bool capture_stack;
 } prog_cfg = {
     // These defaults will be overridden from user space
-    .debug = true,
     .capture_args = true,
     .capture_stack = true,
 };
-
-#define bpf_printk_debug(fmt, ...)    \
-  ({                                  \
-    if (prog_cfg.debug)               \
-      bpf_printk(fmt, ##__VA_ARGS__); \
-  })
 
 // The caller uses registers to pass the first 6 arguments to the callee.  Given
 // the arguments in left-to-right order, the order of registers used is: %rdi,
 // %rsi, %rdx, %rcx, %r8, and %r9. Any remaining arguments are passed on the
 // stack in reverse order so that they can be popped off the stack in order.
-#define SP_OFFSET(offset) (void*)PT_REGS_SP(ctx) + offset * 8
+#define SP_OFFSET(offset) (void *)PT_REGS_SP(ctx) + offset * 8
 
 SEC("uprobe")
-int BPF_KPROBE(handle_cuda_launch, u64 func_off, u64 grid_xy, u64 grid_z, u64 block_xy, u64 block_z, uintptr_t argv) {
-  gpu_kernel_launch_t* e = bpf_ringbuf_reserve(&rb, sizeof(*e), 0);
-  if (!e) {
-    bpf_printk_debug("Failed to allocate ringbuf entry");
-    return 0;
-  }
+int BPF_KPROBE(handle_cuda_launch,
+               u64 func_off,
+               u64 grid_xy,
+               u64 grid_z,
+               u64 block_xy,
+               u64 block_z,
+               uintptr_t argv) {
+    u64 id = bpf_get_current_pid_tgid();
 
-  struct task_struct* task = (struct task_struct*)bpf_get_current_task();
-
-  e->flags = EVENT_GPU_KERNEL_LAUNCH;
-  e->pid = bpf_get_current_pid_tgid() >> 32;
-  e->ppid = BPF_CORE_READ(task, real_parent, tgid);
-  bpf_get_current_comm(&e->comm, sizeof(e->comm));
-
-  e->kern_func_off = func_off;
-  e->grid_x = (u32)grid_xy;
-  e->grid_y = (u32)(grid_xy >> 32);
-  e->grid_z = (u32)grid_z;
-  e->block_x = (u32)block_xy;
-  e->block_y = (u32)(block_xy >> 32);
-  e->block_z = (u32)block_z;
-
-  bpf_probe_read_user(&e->stream, sizeof(uintptr_t), SP_OFFSET(2));
-
-  if (prog_cfg.capture_args) {
-    // Read the Cuda Kernel Launch Arguments
-    for (int i = 0; i < MAX_GPUKERN_ARGS; i++) {
-      const void* arg_addr;
-      // We don't know how many argument this kernel has until we parse the
-      // signature, so we always attemps to read the maximum number of args,
-      // even if some of these arg values are not valid.
-      bpf_probe_read_user(
-          &arg_addr, sizeof(u64), (const void*)(argv + i * sizeof(u64)));
-
-      bpf_probe_read_user(&e->args[i], sizeof(arg_addr), arg_addr);
+    if (!valid_pid(id)) {
+        return 0;
     }
-  }
 
-  if (prog_cfg.capture_stack) {
-    // Read the Cuda Kernel Launch Stack
-    e->ustack_sz =
-        bpf_get_stack(ctx, e->ustack, sizeof(e->ustack), BPF_F_USER_STACK) /
-        sizeof(uint64_t);
-  }
+    gpu_kernel_launch_t *e = bpf_ringbuf_reserve(&rb, sizeof(*e), 0);
+    if (!e) {
+        bpf_dbg_printk("Failed to allocate ringbuf entry");
+        return 0;
+    }
 
-  bpf_ringbuf_submit(e, 0);
-  return 0;
+    struct task_struct *task = (struct task_struct *)bpf_get_current_task();
+
+    e->flags = EVENT_GPU_KERNEL_LAUNCH;
+    e->pid = bpf_get_current_pid_tgid() >> 32;
+    e->ppid = BPF_CORE_READ(task, real_parent, tgid);
+    bpf_get_current_comm(&e->comm, sizeof(e->comm));
+
+    e->kern_func_off = func_off;
+    e->grid_x = (u32)grid_xy;
+    e->grid_y = (u32)(grid_xy >> 32);
+    e->grid_z = (u32)grid_z;
+    e->block_x = (u32)block_xy;
+    e->block_y = (u32)(block_xy >> 32);
+    e->block_z = (u32)block_z;
+
+    bpf_probe_read_user(&e->stream, sizeof(uintptr_t), SP_OFFSET(2));
+
+    if (prog_cfg.capture_args) {
+        // Read the Cuda Kernel Launch Arguments
+        for (int i = 0; i < MAX_GPUKERN_ARGS; i++) {
+            const void *arg_addr;
+            // We don't know how many argument this kernel has until we parse the
+            // signature, so we always attemps to read the maximum number of args,
+            // even if some of these arg values are not valid.
+            bpf_probe_read_user(&arg_addr, sizeof(u64), (const void *)(argv + i * sizeof(u64)));
+
+            bpf_probe_read_user(&e->args[i], sizeof(arg_addr), arg_addr);
+        }
+    }
+
+    if (prog_cfg.capture_stack) {
+        // Read the Cuda Kernel Launch Stack
+        e->ustack_sz =
+            bpf_get_stack(ctx, e->ustack, sizeof(e->ustack), BPF_F_USER_STACK) / sizeof(uint64_t);
+    }
+
+    bpf_ringbuf_submit(e, 0);
+    return 0;
 }
-
-char LICENSE[] SEC("license") = "Dual MIT/GPL";

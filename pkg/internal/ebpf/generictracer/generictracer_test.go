@@ -5,6 +5,7 @@ package generictracer
 import (
 	"testing"
 
+	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -38,43 +39,43 @@ func (d *dummyCloser) Close() error {
 }
 
 func TestInstrumetedLibsT(t *testing.T) {
-	libs := make(instrumentedLibsT)
+	libs := make(ebpfcommon.InstrumentedLibsT)
 
 	const id = uint64(10)
 
-	assert.Nil(t, libs.find(id))
+	assert.Nil(t, libs.Find(id))
 
-	module := libs.at(id)
+	module := libs.At(id)
 
 	assert.NotNil(t, module)
 
 	closer := &dummyCloser{closed: false}
-	module.closers = append(module.closers, closer)
+	module.Closers = append(module.Closers, closer)
 
-	removeRef := func(id uint64) *libModule {
-		m, _ := libs.removeRef(id)
+	removeRef := func(id uint64) *ebpfcommon.LibModule {
+		m, _ := libs.RemoveRef(id)
 		return m
 	}
 
-	assert.NotNil(t, libs.find(id))
+	assert.NotNil(t, libs.Find(id))
 
-	assert.Equal(t, uint64(0), module.references)
+	assert.Equal(t, uint64(0), module.References)
 
-	assert.Equal(t, module, libs.addRef(id))
-	assert.Equal(t, uint64(1), module.references)
+	assert.Equal(t, module, libs.AddRef(id))
+	assert.Equal(t, uint64(1), module.References)
 
-	assert.Equal(t, module, libs.addRef(id))
-	assert.Equal(t, uint64(2), module.references)
+	assert.Equal(t, module, libs.AddRef(id))
+	assert.Equal(t, uint64(2), module.References)
 
-	assert.Equal(t, module, libs.find(id))
+	assert.Equal(t, module, libs.Find(id))
 
 	assert.Equal(t, module, removeRef(id))
-	assert.Equal(t, uint64(1), module.references)
+	assert.Equal(t, uint64(1), module.References)
 	assert.False(t, closer.closed)
 
 	assert.Equal(t, module, removeRef(id))
-	assert.Equal(t, uint64(0), module.references)
+	assert.Equal(t, uint64(0), module.References)
 	assert.True(t, closer.closed)
 
-	assert.Nil(t, libs.find(id))
+	assert.Nil(t, libs.Find(id))
 }

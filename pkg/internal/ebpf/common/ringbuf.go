@@ -12,7 +12,6 @@ import (
 	"github.com/cilium/ebpf/ringbuf"
 
 	"github.com/grafana/beyla/pkg/config"
-	"github.com/grafana/beyla/pkg/internal/exec"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/request"
 )
@@ -57,7 +56,6 @@ func SharedRingbuf(
 	filter ServiceFilter,
 	ringbuffer *ebpf.Map,
 	metrics imetrics.Reporter,
-	fileInfo *exec.FileInfo,
 ) func(context.Context, []io.Closer, chan<- []request.Span) {
 	singleRbfLock.Lock()
 	defer singleRbfLock.Unlock()

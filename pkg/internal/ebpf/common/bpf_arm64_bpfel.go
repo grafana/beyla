@@ -19,24 +19,6 @@ type bpfConnectionInfoT struct {
 	D_port uint16
 }
 
-type bpfGpuKernelLaunchT struct {
-	Flags       uint8
-	Pid         int32
-	Ppid        int32
-	Comm        [16]int8
-	KernFuncOff uint64
-	GridX       int32
-	GridY       int32
-	GridZ       int32
-	BlockX      int32
-	BlockY      int32
-	BlockZ      int32
-	Stream      uint64
-	Args        [16]uint64
-	UstackSz    uint64
-	Ustack      [128]uint64
-}
-
 type bpfHttp2GrpcRequestT struct {
 	Flags           uint8
 	_               [3]byte

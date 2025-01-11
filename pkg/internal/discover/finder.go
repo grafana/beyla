@@ -10,6 +10,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/ebpf"
 	"github.com/grafana/beyla/pkg/internal/ebpf/generictracer"
 	"github.com/grafana/beyla/pkg/internal/ebpf/gotracer"
+	"github.com/grafana/beyla/pkg/internal/ebpf/gpuevent"
 	"github.com/grafana/beyla/pkg/internal/ebpf/httptracer"
 	"github.com/grafana/beyla/pkg/internal/ebpf/tctracer"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
@@ -112,6 +113,6 @@ func newGoTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Trac
 	return []ebpf.Tracer{gotracer.New(cfg, metrics)}
 }
 
-func newGenericTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Tracer {
-	return []ebpf.Tracer{generictracer.New(cfg, metrics)}
+func newGenericTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter, ie *ebpf.Instrumentable) []ebpf.Tracer {
+	return []ebpf.Tracer{generictracer.New(cfg, metrics), gpuevent.New(cfg, metrics, ie.FileInfo)}
 }

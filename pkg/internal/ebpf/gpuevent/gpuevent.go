@@ -229,7 +229,7 @@ func ReadGPUKernelLaunchIntoSpan(record *ringbuf.Record) (request.Span, bool, er
 	return request.Span{
 		Type:   request.EventTypeGPUKernelLaunch,
 		Method: symToName(symbol),
-		Path: callStack(&event),
+		Path:   callStack(&event),
 	}, false, nil
 }
 

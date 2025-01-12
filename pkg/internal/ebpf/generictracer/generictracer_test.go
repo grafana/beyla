@@ -5,8 +5,9 @@ package generictracer
 import (
 	"testing"
 
-	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/stretchr/testify/assert"
+
+	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 )
 
 func TestBitPositionCalculation(t *testing.T) {

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"strings"
 	"sync"
 
 	"github.com/cilium/ebpf"
@@ -131,11 +132,8 @@ func (p *Tracer) Tracepoints() map[string]ebpfcommon.ProbeDesc {
 
 func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 	return map[string]map[string][]*ebpfcommon.ProbeDesc{
-		"libcuda.so": {
+		"libcudart.so": {
 			"cudaLaunchKernel": {{
-				Start: p.bpfObjects.HandleCudaLaunch,
-			}},
-			"cuLaunchKernel": {{
 				Start: p.bpfObjects.HandleCudaLaunch,
 			}},
 		},
@@ -199,9 +197,9 @@ func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span) {
 		&ebpfcommon.IdentityPidsFilter{},
 		p.processCudaEvent,
 		p.log,
-		nil,
+		p.metrics,
 		append(p.closers, &p.bpfObjects)...,
-	)(ctx, nil)
+	)(ctx, eventsChan)
 }
 
 func (p *Tracer) processCudaEvent(_ *config.EBPFTracer, record *ringbuf.Record, _ ebpfcommon.ServiceFilter) (request.Span, bool, error) {
@@ -223,12 +221,37 @@ func ReadGPUKernelLaunchIntoSpan(record *ringbuf.Record) (request.Span, bool, er
 		return request.Span{}, true, fmt.Errorf("failed to find symbol for kernel launch at address %d", event.KernFuncOff)
 	}
 
-	slog.Info("GPU event", "cudaKernel", symToName(symbol))
+	//slog.Info("GPU event", "cudaKernel", symToName(symbol))
 
 	return request.Span{
 		Type:   request.EventTypeGPUKernelLaunch,
-		Method: symbol,
+		Method: symToName(symbol),
+		Path: callStack(&event),
 	}, false, nil
+}
+
+func callStack(event *GPUKernelLaunchInfo) string {
+	if event.UstackSz > 1 {
+		cs := []string{}
+
+		for i := 1; i < int(event.UstackSz); i++ {
+			addr := event.Ustack[i]
+			if addr != 0 {
+				symbol, ok := symForAddr(int32(event.PidInfo.UserPid), event.PidInfo.Ns, event.KernFuncOff)
+				if !ok {
+					symbol = "<unknown>"
+				} else {
+					symbol = symToName(symbol)
+				}
+
+				cs = append(cs, symbol)
+			}
+		}
+
+		return strings.Join(cs, " <- ")
+	}
+
+	return ""
 }
 
 func ProcessCudaFileInfo(info *exec.FileInfo) {
@@ -348,8 +371,6 @@ func symForAddr(pid int32, ns uint32, off uint64) (string, bool) {
 		return "", false
 	}
 
-	fmt.Printf("base: %x, addr: %x, offset: %x", base, off, int64(off)-int64(base))
-
 	sym, ok := syms[int64(off)-int64(base)]
 	return sym, ok
 }
@@ -362,7 +383,7 @@ func collectSymbols(f *elf.File, syms []elf.Symbol, addressToName map[int64]stri
 		}
 
 		address := int64(s.Value)
-		fmt.Printf("Name: %s, address: %d\n", s.Name, address)
+		//fmt.Printf("Name: %s, address: %d\n", s.Name, address)
 		// Loop over ELF segments.
 		for _, prog := range f.Progs {
 			// Skip uninteresting segments.
@@ -372,7 +393,7 @@ func collectSymbols(f *elf.File, syms []elf.Symbol, addressToName map[int64]stri
 
 			if prog.Vaddr <= s.Value && s.Value < (prog.Vaddr+prog.Memsz) {
 				address = int64(s.Value) - int64(prog.Vaddr)
-				fmt.Printf("\t->Name: %s, address: %d, vaddr: %d\n", s.Name, address, prog.Vaddr)
+				//fmt.Printf("\t->Name: %s, address: %d, vaddr: %d\n", s.Name, address, prog.Vaddr)
 				break
 			}
 		}

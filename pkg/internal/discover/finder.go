@@ -113,6 +113,6 @@ func newGoTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Trac
 	return []ebpf.Tracer{gotracer.New(cfg, metrics)}
 }
 
-func newGenericTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter, ie *ebpf.Instrumentable) []ebpf.Tracer {
-	return []ebpf.Tracer{generictracer.New(cfg, metrics), gpuevent.New(cfg, metrics, ie.FileInfo)}
+func newGenericTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Tracer {
+	return []ebpf.Tracer{generictracer.New(cfg, metrics), gpuevent.New(cfg, metrics)}
 }

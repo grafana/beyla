@@ -93,6 +93,7 @@ type Tracer interface {
 	AlreadyInstrumentedLib(uint64) bool
 	UnlinkInstrumentedLib(uint64)
 	RegisterOffsets(*exec.FileInfo, *goexec.Offsets)
+	ProcessBinary(*exec.FileInfo)
 	// Run will do the action of listening for eBPF traces and forward them
 	// periodically to the output channel.
 	Run(context.Context, chan<- []request.Span)

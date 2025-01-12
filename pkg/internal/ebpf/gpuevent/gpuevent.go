@@ -15,6 +15,7 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/ianlancetaylor/demangle"
+	"github.com/prometheus/procfs"
 
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/config"
@@ -55,24 +56,16 @@ type Tracer struct {
 	bpfObjects bpfObjects
 	closers    []io.Closer
 	log        *slog.Logger
-	FileInfo   *exec.FileInfo
 }
 
-func New(cfg *beyla.Config, metrics imetrics.Reporter, fileInfo *exec.FileInfo) *Tracer {
+func New(cfg *beyla.Config, metrics imetrics.Reporter) *Tracer {
 	log := slog.With("component", "gpuevent.Tracer")
-
-	if fileInfo == nil || fileInfo.ELF == nil {
-		log.Error("Empty fileinfo for Cuda")
-	} else {
-		ProcessCudaFileInfo(fileInfo)
-	}
 
 	return &Tracer{
 		log:        log,
 		cfg:        cfg,
 		metrics:    metrics,
 		pidsFilter: ebpfcommon.CommonPIDsFilter(&cfg.Discovery),
-		FileInfo:   fileInfo,
 	}
 }
 
@@ -108,7 +101,17 @@ func (p *Tracer) Constants() map[string]any {
 	return m
 }
 
-func (p *Tracer) RegisterOffsets(_ *exec.FileInfo, _ *goexec.Offsets) {}
+func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, _ *goexec.Offsets) {
+	p.ProcessBinary(fileInfo)
+}
+
+func (p *Tracer) ProcessBinary(fileInfo *exec.FileInfo) {
+	if fileInfo == nil || fileInfo.ELF == nil {
+		p.log.Error("Empty fileinfo for Cuda")
+	} else {
+		ProcessCudaFileInfo(fileInfo)
+	}
+}
 
 func (p *Tracer) BpfObjects() any {
 	return &p.bpfObjects
@@ -254,8 +257,34 @@ func callStack(event *GPUKernelLaunchInfo) string {
 	return ""
 }
 
+func ProcessCudaLibFileInfo(info *exec.FileInfo, lib string, maps []*procfs.ProcMap) (map[int64]string, bool) {
+	cudaMap := exec.LibExecPath(lib, maps)
+
+	if cudaMap == nil {
+		return nil, false
+	}
+
+	instrPath := fmt.Sprintf("/proc/%d/map_files/%x-%x", info.Pid, cudaMap.StartAddr, cudaMap.EndAddr)
+
+	var ELF *elf.File
+	var err error
+
+	if ELF, err = elf.Open(instrPath); err != nil {
+		slog.Error("can't open ELF file in", "file", instrPath, "error", err)
+	}
+
+	symAddr, err := FindSymbolAddresses(ELF)
+	if err != nil {
+		slog.Error("failed to find symbol addresses", "error", err)
+		return nil, false
+	}
+
+	return symAddr, true
+}
+
 func ProcessCudaFileInfo(info *exec.FileInfo) {
 	if _, ok := symbolsMap[info.Ino]; ok {
+		EstablishCudaPID(uint32(info.Pid), info)
 		return
 	}
 
@@ -265,28 +294,12 @@ func ProcessCudaFileInfo(info *exec.FileInfo) {
 		return
 	}
 
-	var symAddr map[int64]string
+	symAddr, ok := ProcessCudaLibFileInfo(info, "libtorch_cuda.so", maps)
 
-	cudaMap := exec.LibExecPath("libtorch_cuda.so", maps)
+	if !ok {
+		symAddr, ok = ProcessCudaLibFileInfo(info, "libcudart.so", maps)
 
-	if cudaMap != nil {
-		instrPath := fmt.Sprintf("/proc/%d/map_files/%x-%x", info.Pid, cudaMap.StartAddr, cudaMap.EndAddr)
-
-		var ELF *elf.File
-
-		if ELF, err = elf.Open(instrPath); err != nil {
-			slog.Error("can't open ELF file in", "file", instrPath, "error", err)
-		}
-
-		symAddr, err = FindSymbolAddresses(ELF)
-		if err != nil {
-			slog.Error("failed to find symbol addresses", "error", err)
-			return
-		}
-	} else {
-		symAddr, err = FindSymbolAddresses(info.ELF)
-		if err != nil {
-			slog.Error("failed to find symbol addresses", "error", err)
+		if !ok {
 			return
 		}
 	}

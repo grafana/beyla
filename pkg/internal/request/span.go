@@ -73,6 +73,8 @@ func (t EventType) String() string {
 		return "RedisServer"
 	case EventTypeKafkaServer:
 		return "KafkaServer"
+	case EventTypeGPUKernelLaunch:
+		return "CUDALaunch"
 	default:
 		return fmt.Sprintf("UNKNOWN (%d)", t)
 	}
@@ -233,6 +235,11 @@ func spanAttributes(s *Span) SpanAttributes {
 			"serverPort": strconv.Itoa(s.HostPort),
 			"operation":  s.Method,
 			"clientId":   s.OtherNamespace,
+		}
+	case EventTypeGPUKernelLaunch:
+		return SpanAttributes{
+			"function":  s.Method,
+			"callStack": s.Path,
 		}
 	}
 

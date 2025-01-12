@@ -267,6 +267,9 @@ github.com/hashicorp/golang-lru/v2
 github.com/hashicorp/golang-lru/v2/expirable
 github.com/hashicorp/golang-lru/v2/internal
 github.com/hashicorp/golang-lru/v2/simplelru
+# github.com/ianlancetaylor/demangle v0.0.0-20240912202439-0a2b6291aafd
+## explicit; go 1.13
+github.com/ianlancetaylor/demangle
 # github.com/imdario/mergo v0.3.15
 ## explicit; go 1.13
 github.com/imdario/mergo

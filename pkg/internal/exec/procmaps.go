@@ -26,3 +26,13 @@ func LibPath(name string, maps []*procfs.ProcMap) *procfs.ProcMap {
 
 	return nil
 }
+
+func LibExecPath(name string, maps []*procfs.ProcMap) *procfs.ProcMap {
+	for _, m := range maps {
+		if strings.Contains(m.Pathname, name) && m.Perms.Execute {
+			return m
+		}
+	}
+
+	return nil
+}

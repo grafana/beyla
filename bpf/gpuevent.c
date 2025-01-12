@@ -9,9 +9,8 @@
 #include "bpf_helpers.h"
 #include "bpf_tracing.h"
 #include "ringbuf.h"
-#include "bpf_dbg.h"
 #include "pid.h"
-
+#include "bpf_dbg.h"
 #include "gpuevent.h"
 
 char LICENSE[] SEC("license") = "Dual MIT/GPL";
@@ -23,6 +22,7 @@ struct {
 } rb SEC(".maps");
 
 const volatile struct {
+    bool debug;
     bool capture_args;
     bool capture_stack;
 } prog_cfg = {
@@ -37,7 +37,7 @@ const volatile struct {
 // stack in reverse order so that they can be popped off the stack in order.
 #define SP_OFFSET(offset) (void *)PT_REGS_SP(ctx) + offset * 8
 
-SEC("uprobe")
+SEC("uprobe/cudaLaunchKernel")
 int BPF_KPROBE(handle_cuda_launch,
                u64 func_off,
                u64 grid_xy,
@@ -51,17 +51,16 @@ int BPF_KPROBE(handle_cuda_launch,
         return 0;
     }
 
+    bpf_dbg_printk("=== cudaLaunchKernel %llx ===", id);
+
     gpu_kernel_launch_t *e = bpf_ringbuf_reserve(&rb, sizeof(*e), 0);
     if (!e) {
         bpf_dbg_printk("Failed to allocate ringbuf entry");
         return 0;
     }
 
-    struct task_struct *task = (struct task_struct *)bpf_get_current_task();
-
     e->flags = EVENT_GPU_KERNEL_LAUNCH;
-    e->pid = bpf_get_current_pid_tgid() >> 32;
-    e->ppid = BPF_CORE_READ(task, real_parent, tgid);
+    task_pid(&e->pid_info);
     bpf_get_current_comm(&e->comm, sizeof(e->comm));
 
     e->kern_func_off = func_off;

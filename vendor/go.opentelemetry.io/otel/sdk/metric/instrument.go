@@ -3,7 +3,7 @@
 
 //go:generate stringer -type=InstrumentKind -trimprefix=InstrumentKind
 
-package metric
+package metric // import "go.opentelemetry.io/otel/sdk/metric"
 
 import (
 	"context"

@@ -13,9 +13,12 @@ import (
 )
 
 type bpf_debugGpuKernelLaunchT struct {
-	Flags       uint8
-	Pid         int32
-	Ppid        int32
+	Flags   uint8
+	PidInfo struct {
+		HostPid uint32
+		UserPid uint32
+		Ns      uint32
+	}
 	Comm        [16]int8
 	KernFuncOff uint64
 	GridX       int32

@@ -13,6 +13,7 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/ringbuf"
+	"github.com/ianlancetaylor/demangle"
 
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/config"
@@ -30,6 +31,15 @@ import (
 // Hold onto Linux inode numbers of files that are already instrumented, e.g. libssl.so.3
 var instrumentedLibs = make(ebpfcommon.InstrumentedLibsT)
 var libsMux sync.Mutex
+
+type pidKey struct {
+	Pid int32
+	Ns  uint32
+}
+
+var pidMap = map[pidKey]uint64{}
+var symbolsMap = map[uint64]map[int64]string{}
+var baseMap = map[pidKey]uint64{}
 
 type GPUKernelLaunchInfo bpfGpuKernelLaunchT
 
@@ -49,6 +59,13 @@ type Tracer struct {
 
 func New(cfg *beyla.Config, metrics imetrics.Reporter, fileInfo *exec.FileInfo) *Tracer {
 	log := slog.With("component", "gpuevent.Tracer")
+
+	if fileInfo == nil || fileInfo.ELF == nil {
+		log.Error("Empty fileinfo for Cuda")
+	} else {
+		ProcessCudaFileInfo(fileInfo)
+	}
+
 	return &Tracer{
 		log:        log,
 		cfg:        cfg,
@@ -116,8 +133,10 @@ func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 	return map[string]map[string][]*ebpfcommon.ProbeDesc{
 		"libcuda.so": {
 			"cudaLaunchKernel": {{
-				Required: true,
-				Start:    p.bpfObjects.HandleCudaLaunch,
+				Start: p.bpfObjects.HandleCudaLaunch,
+			}},
+			"cuLaunchKernel": {{
+				Start: p.bpfObjects.HandleCudaLaunch,
 			}},
 		},
 	}
@@ -186,10 +205,10 @@ func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span) {
 }
 
 func (p *Tracer) processCudaEvent(_ *config.EBPFTracer, record *ringbuf.Record, _ ebpfcommon.ServiceFilter) (request.Span, bool, error) {
-	return ReadGPUKernelLaunchIntoSpan(record, p.FileInfo)
+	return ReadGPUKernelLaunchIntoSpan(record)
 }
 
-func ReadGPUKernelLaunchIntoSpan(record *ringbuf.Record, fileInfo *exec.FileInfo) (request.Span, bool, error) {
+func ReadGPUKernelLaunchIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
 	var event GPUKernelLaunchInfo
 	if err := binary.Read(bytes.NewReader(record.RawSample), binary.LittleEndian, &event); err != nil {
 		return request.Span{}, true, err
@@ -198,20 +217,13 @@ func ReadGPUKernelLaunchIntoSpan(record *ringbuf.Record, fileInfo *exec.FileInfo
 	// Log the GPU Kernel Launch event
 	slog.Debug("GPU Kernel Launch", "event", event)
 
-	if fileInfo == nil || fileInfo.ELF == nil {
-		return request.Span{}, true, errors.New("no ELF file information available")
-	}
-
-	symAddr, err := FindSymbolAddresses(fileInfo.ELF)
-	if err != nil {
-		return request.Span{}, true, fmt.Errorf("failed to find symbol addresses: %w", err)
-	}
-
 	// Find the symbol for the kernel launch
-	symbol, ok := symAddr[event.KernFuncOff]
+	symbol, ok := symForAddr(int32(event.PidInfo.UserPid), event.PidInfo.Ns, event.KernFuncOff)
 	if !ok {
 		return request.Span{}, true, fmt.Errorf("failed to find symbol for kernel launch at address %d", event.KernFuncOff)
 	}
+
+	slog.Info("GPU event", "cudaKernel", symToName(symbol))
 
 	return request.Span{
 		Type:   request.EventTypeGPUKernelLaunch,
@@ -219,14 +231,138 @@ func ReadGPUKernelLaunchIntoSpan(record *ringbuf.Record, fileInfo *exec.FileInfo
 	}, false, nil
 }
 
-func collectSymbols(f *elf.File, syms []elf.Symbol, addressToName map[uint64]string) {
+func ProcessCudaFileInfo(info *exec.FileInfo) {
+	if _, ok := symbolsMap[info.Ino]; ok {
+		return
+	}
+
+	maps, err := exec.FindLibMaps(int32(info.Pid))
+	if err != nil {
+		slog.Error("failed to find pid maps", "error", err)
+		return
+	}
+
+	var symAddr map[int64]string
+
+	cudaMap := exec.LibExecPath("libtorch_cuda.so", maps)
+
+	if cudaMap != nil {
+		instrPath := fmt.Sprintf("/proc/%d/map_files/%x-%x", info.Pid, cudaMap.StartAddr, cudaMap.EndAddr)
+
+		var ELF *elf.File
+
+		if ELF, err = elf.Open(instrPath); err != nil {
+			slog.Error("can't open ELF file in", "file", instrPath, "error", err)
+		}
+
+		symAddr, err = FindSymbolAddresses(ELF)
+		if err != nil {
+			slog.Error("failed to find symbol addresses", "error", err)
+			return
+		}
+	} else {
+		symAddr, err = FindSymbolAddresses(info.ELF)
+		if err != nil {
+			slog.Error("failed to find symbol addresses", "error", err)
+			return
+		}
+	}
+
+	slog.Info("Processing cuda symbol map for", "inode", info.Ino)
+
+	symbolsMap[info.Ino] = symAddr
+	EstablishCudaPID(uint32(info.Pid), info)
+}
+
+func EstablishCudaPID(pid uint32, fi *exec.FileInfo) {
+	base, err := execBase(pid, fi)
+	if err != nil {
+		slog.Error("Error finding base map image", "error", err)
+		return
+	}
+
+	allPids, err := exec.FindNamespacedPids(int32(pid))
+
+	if err != nil {
+		slog.Error("Error finding namespaced pids", "error", err)
+		return
+	}
+
+	for _, p := range allPids {
+		k := pidKey{Pid: int32(p), Ns: fi.Ns}
+		baseMap[k] = base
+		pidMap[k] = fi.Ino
+		slog.Info("Setting pid map", "pid", pid, "base", base)
+	}
+}
+
+func RemoveCudaPID(pid uint32, fi *exec.FileInfo) {
+	k := pidKey{Pid: int32(pid), Ns: fi.Ns}
+	delete(baseMap, k)
+	delete(pidMap, k)
+}
+
+func symToName(sym string) string {
+	if cleanName, err := demangle.ToString(sym); err == nil {
+		return cleanName
+	}
+
+	return sym
+}
+
+func execBase(pid uint32, fi *exec.FileInfo) (uint64, error) {
+	maps, err := exec.FindLibMaps(int32(pid))
+	if err != nil {
+		return 0, err
+	}
+
+	baseMap := exec.LibExecPath("libtorch_cuda.so", maps)
+	if baseMap == nil {
+		slog.Info("can't find libtorch_cuda.so in maps")
+		baseMap = exec.LibExecPath(fi.CmdExePath, maps)
+		if baseMap == nil {
+			return 0, errors.New("can't find executable in maps, this is a bug")
+		}
+	}
+
+	return uint64(baseMap.StartAddr), nil
+}
+
+func symForAddr(pid int32, ns uint32, off uint64) (string, bool) {
+	k := pidKey{Pid: pid, Ns: ns}
+
+	fInfo, ok := pidMap[k]
+	if !ok {
+		slog.Warn("Can't find pid info for cuda", "pid", pid, "ns", ns)
+		return "", false
+	}
+	syms, ok := symbolsMap[fInfo]
+	if !ok {
+		slog.Warn("Can't find symbols for ino", "ino", fInfo)
+		return "", false
+	}
+
+	base, ok := baseMap[k]
+	if !ok {
+		slog.Warn("Can't find basemap")
+		return "", false
+	}
+
+	fmt.Printf("base: %x, addr: %x, offset: %x", base, off, int64(off)-int64(base))
+
+	sym, ok := syms[int64(off)-int64(base)]
+	return sym, ok
+}
+
+func collectSymbols(f *elf.File, syms []elf.Symbol, addressToName map[int64]string) {
 	for _, s := range syms {
 		if elf.ST_TYPE(s.Info) != elf.STT_FUNC {
 			// Symbol not associated with a function or other executable code.
 			continue
 		}
 
-		address := s.Value
+		address := int64(s.Value)
+		fmt.Printf("Name: %s, address: %d\n", s.Name, address)
 		// Loop over ELF segments.
 		for _, prog := range f.Progs {
 			// Skip uninteresting segments.
@@ -235,7 +371,8 @@ func collectSymbols(f *elf.File, syms []elf.Symbol, addressToName map[uint64]str
 			}
 
 			if prog.Vaddr <= s.Value && s.Value < (prog.Vaddr+prog.Memsz) {
-				address = s.Value - prog.Vaddr + prog.Off
+				address = int64(s.Value) - int64(prog.Vaddr)
+				fmt.Printf("\t->Name: %s, address: %d, vaddr: %d\n", s.Name, address, prog.Vaddr)
 				break
 			}
 		}
@@ -244,8 +381,8 @@ func collectSymbols(f *elf.File, syms []elf.Symbol, addressToName map[uint64]str
 }
 
 // returns a map of symbol addresses to names
-func FindSymbolAddresses(f *elf.File) (map[uint64]string, error) {
-	addressToName := map[uint64]string{}
+func FindSymbolAddresses(f *elf.File) (map[int64]string, error) {
+	addressToName := map[int64]string{}
 	syms, err := f.Symbols()
 	if err != nil && !errors.Is(err, elf.ErrNoSymbols) {
 		return nil, err

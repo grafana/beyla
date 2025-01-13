@@ -51,6 +51,7 @@ const (
 	DBMySQL
 )
 
+//nolint:cyclop
 func (t EventType) String() string {
 	switch t {
 	case EventTypeProcessAlive:

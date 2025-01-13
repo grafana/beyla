@@ -227,8 +227,6 @@ func ReadGPUKernelLaunchIntoSpan(record *ringbuf.Record) (request.Span, bool, er
 		return request.Span{}, true, fmt.Errorf("failed to find symbol for kernel launch at address %d", event.KernFuncOff)
 	}
 
-	//slog.Info("GPU event", "cudaKernel", symToName(symbol))
-
 	return request.Span{
 		Type:   request.EventTypeGPUKernelLaunch,
 		Method: symToName(symbol),
@@ -399,7 +397,6 @@ func collectSymbols(f *elf.File, syms []elf.Symbol, addressToName map[int64]stri
 		}
 
 		address := int64(s.Value)
-		//fmt.Printf("Name: %s, address: %d\n", s.Name, address)
 		// Loop over ELF segments.
 		for _, prog := range f.Progs {
 			// Skip uninteresting segments.
@@ -409,7 +406,6 @@ func collectSymbols(f *elf.File, syms []elf.Symbol, addressToName map[int64]stri
 
 			if prog.Vaddr <= s.Value && s.Value < (prog.Vaddr+prog.Memsz) {
 				address = int64(s.Value) - int64(prog.Vaddr)
-				//fmt.Printf("\t->Name: %s, address: %d, vaddr: %d\n", s.Name, address, prog.Vaddr)
 				break
 			}
 		}

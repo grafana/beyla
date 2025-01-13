@@ -195,6 +195,7 @@ type MetricsReporter struct {
 	attrMessagingProcess      []attributes.Field[*request.Span, attribute.KeyValue]
 	attrHTTPRequestSize       []attributes.Field[*request.Span, attribute.KeyValue]
 	attrHTTPClientRequestSize []attributes.Field[*request.Span, attribute.KeyValue]
+	attrGPUKernelCalls        []attributes.Field[*request.Span, attribute.KeyValue]
 }
 
 // Metrics is a set of metrics associated to a given OTEL MeterProvider.
@@ -223,6 +224,7 @@ type Metrics struct {
 	serviceGraphFailed    *Expirer[*request.Span, instrument.Int64Counter, int64]
 	serviceGraphTotal     *Expirer[*request.Span, instrument.Int64Counter, int64]
 	tracesTargetInfo      instrument.Int64UpDownCounter
+	gpuKernelCallsTotal   *Expirer[*request.Span, instrument.Int64Counter, int64]
 }
 
 func ReportMetrics(
@@ -295,6 +297,11 @@ func newMetricsReporter(
 			request.SpanOTELGetters, mr.attributes.For(attributes.MessagingPublishDuration))
 		mr.attrMessagingProcess = attributes.OpenTelemetryGetters(
 			request.SpanOTELGetters, mr.attributes.For(attributes.MessagingProcessDuration))
+	}
+
+	if is.GPUEnabled() {
+		mr.attrGPUKernelCalls = attributes.OpenTelemetryGetters(
+			request.SpanOTELGetters, mr.attributes.For(attributes.GPUKernelLaunchCalls))
 	}
 
 	mr.reporters = NewReporterPool[*svc.Attrs, *Metrics](cfg.ReportersCacheLen, cfg.TTL, timeNow,
@@ -463,6 +470,15 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 		}
 		m.msgProcessDuration = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
 			m.ctx, msgProcessDuration, mr.attrMessagingProcess, timeNow, mr.cfg.TTL)
+	}
+
+	if mr.is.GPUEnabled() {
+		gpuKernelCallsTotal, err := meter.Int64Counter(attributes.GPUKernelLaunchCalls.OTEL)
+		if err != nil {
+			return fmt.Errorf("creating gpu kernel calls total: %w", err)
+		}
+		m.gpuKernelCallsTotal = NewExpirer[*request.Span, instrument.Int64Counter, int64](
+			m.ctx, gpuKernelCallsTotal, mr.attrGPUKernelCalls, timeNow, mr.cfg.TTL)
 	}
 
 	return nil
@@ -822,6 +838,11 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 					msgProcessDuration.Record(r.ctx, duration, instrument.WithAttributeSet(attrs))
 				}
 			}
+		case request.EventTypeGPUKernelLaunch:
+			if mr.is.GPUEnabled() {
+				gcalls, attrs := r.gpuKernelCallsTotal.ForRecord(span)
+				gcalls.Add(r.ctx, 1, instrument.WithAttributeSet(attrs))
+			}
 		}
 	}
 
@@ -996,6 +1017,18 @@ func cleanupMetrics(ctx context.Context, m *Expirer[*request.Span, instrument.Fl
 	}
 }
 
+func cleanupCounterMetrics(ctx context.Context, m *Expirer[*request.Span, instrument.Int64Counter, int64]) {
+	if m != nil {
+		m.RemoveAllMetrics(ctx)
+	}
+}
+
+func cleanupFloatCounterMetrics(ctx context.Context, m *Expirer[*request.Span, instrument.Float64Counter, float64]) {
+	if m != nil {
+		m.RemoveAllMetrics(ctx)
+	}
+}
+
 func (r *Metrics) cleanupAllMetricsInstances() {
 	cleanupMetrics(r.ctx, r.httpDuration)
 	cleanupMetrics(r.ctx, r.httpClientDuration)
@@ -1006,4 +1039,12 @@ func (r *Metrics) cleanupAllMetricsInstances() {
 	cleanupMetrics(r.ctx, r.msgProcessDuration)
 	cleanupMetrics(r.ctx, r.httpRequestSize)
 	cleanupMetrics(r.ctx, r.httpClientRequestSize)
+	cleanupMetrics(r.ctx, r.spanMetricsLatency)
+	cleanupCounterMetrics(r.ctx, r.spanMetricsCallsTotal)
+	cleanupFloatCounterMetrics(r.ctx, r.spanMetricsSizeTotal)
+	cleanupMetrics(r.ctx, r.serviceGraphClient)
+	cleanupMetrics(r.ctx, r.serviceGraphServer)
+	cleanupCounterMetrics(r.ctx, r.serviceGraphFailed)
+	cleanupCounterMetrics(r.ctx, r.serviceGraphTotal)
+	cleanupCounterMetrics(r.ctx, r.gpuKernelCallsTotal)
 }

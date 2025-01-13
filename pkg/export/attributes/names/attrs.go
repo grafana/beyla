@@ -150,3 +150,9 @@ const (
 	// SQL
 	DBQueryText = Name("db.query.text")
 )
+
+// Beyla specific GPU events
+const (
+	// GPU/Cuda related attributes
+	CudaKernelName = Name("cuda.kernel.name")
+)

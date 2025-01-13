@@ -101,6 +101,11 @@ var (
 		Prom:    "messaging_process_duration_seconds",
 		OTEL:    "messaging.process.duration",
 	}
+	GPUKernelLaunchCalls = Name{
+		Section: "gpu.kernel.launch.calls",
+		Prom:    "gpu_kernel_launch_calls_total",
+		OTEL:    "gpu.kernel.launch.calls",
+	}
 )
 
 // normalizeMetric will facilitate the user-input in the attributes.enable section.

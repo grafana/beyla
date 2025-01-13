@@ -173,6 +173,7 @@ type metricsReporter struct {
 	attrMsgProcessDuration    []attributes.Field[*request.Span, string]
 	attrHTTPRequestSize       []attributes.Field[*request.Span, string]
 	attrHTTPClientRequestSize []attributes.Field[*request.Span, string]
+	attrGPUKernelCalls        []attributes.Field[*request.Span, string]
 
 	// trace span metrics
 	spanMetricsLatency    *Expirer[prometheus.Histogram]
@@ -185,6 +186,9 @@ type metricsReporter struct {
 	serviceGraphServer *Expirer[prometheus.Histogram]
 	serviceGraphFailed *Expirer[prometheus.Counter]
 	serviceGraphTotal  *Expirer[prometheus.Counter]
+
+	// gpu related metrics
+	gpuKernelCallsTotal *Expirer[prometheus.Counter]
 
 	promConnect *connector.PrometheusManager
 
@@ -276,6 +280,12 @@ func newReporter(
 			attrsProvider.For(attributes.MessagingProcessDuration))
 	}
 
+	var attrGPUKernelLaunchCalls []attributes.Field[*request.Span, string]
+	if is.GPUEnabled() {
+		attrGPUKernelLaunchCalls = attributes.PrometheusGetters(request.SpanPromGetters,
+			attrsProvider.For(attributes.GPUKernelLaunchCalls))
+	}
+
 	clock := expire.NewCachedClock(timeNow)
 	kubeEnabled := ctxInfo.K8sInformer.IsKubeEnabled()
 	// If service name is not explicitly set, we take the service name as set by the
@@ -298,6 +308,7 @@ func newReporter(
 		attrMsgProcessDuration:    attrMessagingProcessDuration,
 		attrHTTPRequestSize:       attrHTTPRequestSize,
 		attrHTTPClientRequestSize: attrHTTPClientRequestSize,
+		attrGPUKernelCalls:        attrGPUKernelLaunchCalls,
 		beylaInfo: NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: BeylaBuildInfo,
 			Help: "A metric with a constant '1' value labeled by version, revision, branch, " +
@@ -465,6 +476,12 @@ func newReporter(
 			Name: TargetInfo,
 			Help: "attributes associated to a given monitored entity",
 		}, labelNamesTargetInfo(kubeEnabled)).MetricVec, clock.Time, cfg.TTL),
+		gpuKernelCallsTotal: optionalCounterProvider(is.GPUEnabled(), func() *Expirer[prometheus.Counter] {
+			return NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
+				Name: attributes.GPUKernelLaunchCalls.Prom,
+				Help: "number of GPU kernel launches",
+			}, labelNames(attrGPUKernelLaunchCalls)).MetricVec, clock.Time, cfg.TTL)
+		}),
 	}
 
 	if cfg.SpanMetricsEnabled() {
@@ -526,6 +543,12 @@ func newReporter(
 			mr.serviceGraphServer,
 			mr.serviceGraphFailed,
 			mr.serviceGraphTotal,
+		)
+	}
+
+	if is.GPUEnabled() {
+		registeredMetrics = append(registeredMetrics,
+			mr.gpuKernelCallsTotal,
 		)
 	}
 
@@ -648,6 +671,12 @@ func (r *metricsReporter) observe(span *request.Span) {
 						labelValues(span, r.attrMsgProcessDuration)...,
 					).metric.Observe(duration)
 				}
+			}
+		case request.EventTypeGPUKernelLaunch:
+			if r.is.GPUEnabled() {
+				r.gpuKernelCallsTotal.WithLabelValues(
+					labelValues(span, r.attrGPUKernelCalls)...,
+				).metric.Add(1)
 			}
 		}
 	}

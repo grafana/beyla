@@ -15,6 +15,7 @@ import (
 	"github.com/grafana/beyla/test/integration/components/kube"
 	"github.com/grafana/beyla/test/integration/components/prom"
 	k8s "github.com/grafana/beyla/test/integration/k8s/common"
+	"github.com/grafana/beyla/test/integration/k8s/common/testpath"
 	"github.com/grafana/beyla/test/tools"
 )
 
@@ -38,19 +39,18 @@ func TestMain(m *testing.M) {
 	}
 
 	cluster = kube.NewKind("test-kind-cluster-otel-multi",
-		kube.ExportLogs(k8s.PathKindLogs),
-		kube.KindConfig(k8s.PathManifests+"/00-kind-multi-node.yml"),
+		kube.KindConfig(testpath.Manifests+"/00-kind-multi-node.yml"),
 		kube.LocalImage("testserver:dev"),
 		kube.LocalImage("httppinger:dev"),
 		kube.LocalImage("beyla:dev"),
 		kube.LocalImage("quay.io/prometheus/prometheus:v2.53.0"),
 		kube.LocalImage("otel/opentelemetry-collector-contrib:0.103.0"),
-		kube.Deploy(k8s.PathManifests+"/01-volumes.yml"),
-		kube.Deploy(k8s.PathManifests+"/01-serviceaccount.yml"),
-		kube.Deploy(k8s.PathManifests+"/02-prometheus-otelscrape-multi-node.yml"),
-		kube.Deploy(k8s.PathManifests+"/03-otelcol.yml"),
-		kube.Deploy(k8s.PathManifests+"/05-uninstrumented-server-client-different-nodes.yml"),
-		kube.Deploy(k8s.PathManifests+"/06-beyla-netolly.yml"),
+		kube.Deploy(testpath.Manifests+"/01-volumes.yml"),
+		kube.Deploy(testpath.Manifests+"/01-serviceaccount.yml"),
+		kube.Deploy(testpath.Manifests+"/02-prometheus-otelscrape-multi-node.yml"),
+		kube.Deploy(testpath.Manifests+"/03-otelcol.yml"),
+		kube.Deploy(testpath.Manifests+"/05-uninstrumented-server-client-different-nodes.yml"),
+		kube.Deploy(testpath.Manifests+"/06-beyla-netolly.yml"),
 	)
 
 	cluster.Run(m)

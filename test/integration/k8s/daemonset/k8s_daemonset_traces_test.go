@@ -18,6 +18,7 @@ import (
 	"github.com/grafana/beyla/test/integration/components/jaeger"
 	"github.com/grafana/beyla/test/integration/components/kube"
 	k8s "github.com/grafana/beyla/test/integration/k8s/common"
+	"github.com/grafana/beyla/test/integration/k8s/common/testpath"
 )
 
 // For the DaemonSet scenario, we only check that Beyla is able to instrument any
@@ -27,7 +28,6 @@ func TestBasicTracing(t *testing.T) {
 	feat := features.New("Beyla is able to instrument an arbitrary process").
 		Assess("it sends traces for that service",
 			func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-				defer k8s.DumpTracesAfterFail(t, jaegerHost)
 				var podID string
 				test.Eventually(t, testTimeout, func(t require.TestingT) {
 					// Invoking both service instances, but we will expect that only one
@@ -97,10 +97,10 @@ func TestBasicTracing(t *testing.T) {
 				assert.Empty(t, tq.Data)
 
 				// Let's take down our services, keeping Beyla alive and then redeploy them
-				err = kube.DeleteExistingManifestFile(cfg, k8s.PathManifests+"/05-uninstrumented-service.yml")
+				err = kube.DeleteExistingManifestFile(cfg, testpath.Manifests+"/05-uninstrumented-service.yml")
 				assert.NoError(t, err, "we should see no error when deleting the uninstrumented service manifest file")
 
-				err = kube.DeployManifestFile(cfg, k8s.PathManifests+"/05-uninstrumented-service.yml")
+				err = kube.DeployManifestFile(cfg, testpath.Manifests+"/05-uninstrumented-service.yml")
 				assert.NoError(t, err, "we should see no error when re-deploying the uninstrumented service manifest file")
 
 				// We now use a different API, this ensures that after undeploying and redeploying the application we

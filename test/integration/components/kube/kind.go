@@ -3,11 +3,14 @@ package kube
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"os"
+	"path"
 	"strings"
 	"testing"
 	"time"
@@ -26,6 +29,10 @@ import (
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
 	"sigs.k8s.io/e2e-framework/pkg/envfuncs"
 	"sigs.k8s.io/e2e-framework/support/kind"
+
+	"github.com/grafana/beyla/test/integration/components/jaeger"
+	"github.com/grafana/beyla/test/integration/components/prom"
+	"github.com/grafana/beyla/test/integration/k8s/common/testpath"
 )
 
 const (
@@ -47,6 +54,8 @@ type Kind struct {
 	deployManifests []string
 	localImages     []string
 	logsDir         string
+	promEndpoint    string
+	jaegerEndpoint  string
 }
 
 // Option that can be passed to the NewKind function in order to change the configuration
@@ -68,9 +77,26 @@ func KindConfig(filePath string) Option {
 }
 
 // ExportLogs can be passed to NewKind to specify the folder where the kubernetes logs will be exported after the tests.
+// Default: k8s.KindLogs
 func ExportLogs(folder string) Option {
 	return func(k *Kind) {
 		k.logsDir = folder
+	}
+}
+
+// ExportPrometheus overrides the prometheus host:port, where all the stored metrics will be collected from
+// before the Kind cluster is shut down. Default: localhost:39090
+func ExportPrometheus(hostPort string) Option {
+	return func(k *Kind) {
+		k.promEndpoint = hostPort
+	}
+}
+
+// ExportJaeger overrides a jaeger host:port, where all the stored traces will be collected from
+// before the Kind cluster is shut down. Default: localhost:36686
+func ExportJaeger(hostPort string) Option {
+	return func(k *Kind) {
+		k.jaegerEndpoint = hostPort
 	}
 }
 
@@ -91,9 +117,12 @@ func LocalImage(nameTag string) Option {
 // NewKind creates a kind cluster given a name and set of Option instances.
 func NewKind(kindClusterName string, options ...Option) *Kind {
 	k := &Kind{
-		testEnv:     env.New(),
-		clusterName: kindClusterName,
-		timeout:     2 * time.Minute,
+		testEnv:        env.New(),
+		clusterName:    kindClusterName,
+		timeout:        2 * time.Minute,
+		promEndpoint:   "localhost:39090",
+		jaegerEndpoint: "localhost:36686",
+		logsDir:        testpath.KindLogs,
 	}
 	for _, option := range options {
 		option(k)
@@ -128,6 +157,8 @@ func (k *Kind) Run(m *testing.M) {
 	code := k.testEnv.Setup(funcs...).
 		Finish(
 			k.exportLogs(),
+			k.exportAllMetrics(),
+			k.exportAllTraces(),
 			k.deleteLabeled(),
 			envfuncs.DestroyCluster(k.clusterName),
 		).Run(m)
@@ -145,6 +176,46 @@ func (k *Kind) exportLogs() env.Func {
 		exe := gexe.New()
 		out := exe.Run("kind export logs " + k.logsDir + " --name " + k.clusterName)
 		log.With("out", out).Info("exported cluster logs")
+		return ctx, nil
+	}
+}
+
+func (k *Kind) exportAllMetrics() env.Func {
+	return func(ctx context.Context, _ *envconf.Config) (context.Context, error) {
+		if k.promEndpoint == "" {
+			return ctx, nil
+		}
+		_ = os.MkdirAll(path.Join(k.logsDir, k.clusterName), 0755)
+		out, err := os.Create(path.Join(k.logsDir, k.clusterName, "prometheus_metrics.txt"))
+		defer out.Close()
+		if err != nil {
+			log().Error("creating prometheus export file", "error", err)
+			return ctx, nil
+		}
+		if err := DumpMetrics(out, k.promEndpoint); err != nil {
+			log().Error("dumping prometheus metrics", "error", err)
+			return ctx, nil
+		}
+		return ctx, nil
+	}
+}
+
+func (k *Kind) exportAllTraces() env.Func {
+	return func(ctx context.Context, _ *envconf.Config) (context.Context, error) {
+		if k.promEndpoint == "" {
+			return ctx, nil
+		}
+		_ = os.MkdirAll(path.Join(k.logsDir, k.clusterName), 0755)
+		out, err := os.Create(path.Join(k.logsDir, k.clusterName, "jaeger_traces.txt"))
+		defer out.Close()
+		if err != nil {
+			log().Error("creating jaeger export file", "error", err)
+			return ctx, nil
+		}
+		if err := DumpTraces(out, k.jaegerEndpoint); err != nil {
+			log().Error("dumping jaeger traces", "error", err)
+			return ctx, nil
+		}
 		return ctx, nil
 	}
 }
@@ -342,4 +413,67 @@ func (k *Kind) loadLocalImage(tag string) env.Func {
 		}
 		return ctx, fmt.Errorf("couldn't load image %q from local registry: %w", tag, err)
 	}
+}
+
+func DumpMetrics(out io.Writer, promHostPort string) error {
+	if _, err := fmt.Fprintf(out, "===== Dumping metrics from %s ====\n", promHostPort); err != nil {
+		return err
+	}
+	pq := prom.Client{HostPort: promHostPort}
+	results, err := pq.Query(`{__name__!=""}`)
+	if err != nil {
+		return err
+	}
+	for _, res := range results {
+		_, _ = fmt.Fprintf(out, res.Metric["__name__"])
+		_, _ = fmt.Fprintf(out, "{")
+		for k, v := range res.Metric {
+			if k == "__name__" {
+				continue
+			}
+			_, _ = fmt.Fprintf(out, `%s="%s",`, k, v)
+		}
+		_, _ = fmt.Fprintf(out, "} ")
+		for _, v := range res.Value {
+			_, _ = fmt.Fprintf(out, "%v ", v)
+		}
+		_, _ = fmt.Fprintln(out)
+	}
+	return nil
+}
+
+func DumpTraces(out io.Writer, jaegerHostPort string) error {
+	if !strings.HasPrefix(jaegerHostPort, "http") {
+		jaegerHostPort = "http://" + jaegerHostPort
+	}
+	if _, err := fmt.Fprintf(out, "===== Dumping traces from %s ====\n", jaegerHostPort); err != nil {
+		return fmt.Errorf("writing output: %w", err)
+	}
+	// get services
+	res, err := http.Get(jaegerHostPort + "/api/services")
+	if err != nil {
+		return fmt.Errorf("getting services: %w", err)
+	}
+	svcs := jaeger.Services{}
+	if err := json.NewDecoder(res.Body).Decode(&svcs); err != nil {
+		return fmt.Errorf("decoding services: %w", err)
+	}
+	for _, svcName := range svcs.Data {
+		_, _ = fmt.Fprintf(out, "---- Service: %s ----\n", svcName)
+		res, err := http.Get(jaegerHostPort + "/api/traces?service=" + svcName)
+		if err != nil {
+			fmt.Fprintln(out, "! ERROR getting trace:", err)
+			continue
+		}
+		tq := jaeger.TracesQuery{}
+		if err := json.NewDecoder(res.Body).Decode(&tq); err != nil {
+			fmt.Fprintln(out, "! ERROR decoding trace:", err)
+			continue
+		}
+		for _, trace := range tq.Data {
+			json.NewEncoder(out).Encode(trace)
+			fmt.Fprintln(out)
+		}
+	}
+	return nil
 }

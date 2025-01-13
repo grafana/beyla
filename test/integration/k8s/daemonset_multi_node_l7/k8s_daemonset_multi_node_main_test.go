@@ -11,6 +11,7 @@ import (
 	"github.com/grafana/beyla/test/integration/components/docker"
 	"github.com/grafana/beyla/test/integration/components/kube"
 	k8s "github.com/grafana/beyla/test/integration/k8s/common"
+	"github.com/grafana/beyla/test/integration/k8s/common/testpath"
 	"github.com/grafana/beyla/test/tools"
 )
 
@@ -36,20 +37,19 @@ func TestMain(m *testing.M) {
 	}
 
 	cluster = kube.NewKind("test-kind-cluster-otel-multi",
-		kube.ExportLogs(k8s.PathKindLogs),
-		kube.KindConfig(k8s.PathManifests+"/00-kind-multi-node.yml"),
+		kube.KindConfig(testpath.Manifests+"/00-kind-multi-node.yml"),
 		kube.LocalImage("testserver:dev"),
 		kube.LocalImage("pythontestserver:dev"),
 		kube.LocalImage("beyla:dev"),
 		kube.LocalImage("quay.io/prometheus/prometheus:v2.53.0"),
 		kube.LocalImage("otel/opentelemetry-collector-contrib:0.103.0"),
 		kube.LocalImage("jaegertracing/all-in-one:1.57"),
-		kube.Deploy(k8s.PathManifests+"/01-volumes.yml"),
-		kube.Deploy(k8s.PathManifests+"/01-serviceaccount.yml"),
-		kube.Deploy(k8s.PathManifests+"/03-otelcol-multi-node.yml"),
-		kube.Deploy(k8s.PathManifests+"/04-jaeger-multi-node.yml"),
-		kube.Deploy(k8s.PathManifests+"/05-uninstrumented-few-services.yml"),
-		kube.Deploy(k8s.PathManifests+"/06-beyla-daemonset-multi-node-l7.yml"),
+		kube.Deploy(testpath.Manifests+"/01-volumes.yml"),
+		kube.Deploy(testpath.Manifests+"/01-serviceaccount.yml"),
+		kube.Deploy(testpath.Manifests+"/03-otelcol-multi-node.yml"),
+		kube.Deploy(testpath.Manifests+"/04-jaeger-multi-node.yml"),
+		kube.Deploy(testpath.Manifests+"/05-uninstrumented-few-services.yml"),
+		kube.Deploy(testpath.Manifests+"/06-beyla-daemonset-multi-node-l7.yml"),
 	)
 
 	cluster.Run(m)

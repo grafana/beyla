@@ -4,10 +4,7 @@ package k8s
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"net/http"
-	"os"
 	"slices"
 	"testing"
 	"time"
@@ -18,7 +15,6 @@ import (
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
 	"sigs.k8s.io/e2e-framework/pkg/features"
 
-	"github.com/grafana/beyla/test/integration/components/jaeger"
 	"github.com/grafana/beyla/test/integration/components/kube"
 	"github.com/grafana/beyla/test/integration/components/prom"
 )
@@ -289,68 +285,5 @@ func testMetricsDecoration(
 			})
 		}
 		return ctx
-	}
-}
-
-func DumpMetricsAfterFail(t *testing.T, queryURL string) {
-	if !t.Failed() {
-		return
-	}
-	fmt.Printf("===== Dumping metrics from %s ====\n", queryURL)
-	pq := prom.Client{HostPort: queryURL}
-	results, err := pq.Query(`{__name__!=""}`)
-	if err != nil {
-		fmt.Printf("ERROR: %s\n", err)
-		return
-	}
-	for _, res := range results {
-		fmt.Printf(res.Metric["__name__"])
-		fmt.Printf("{")
-		for k, v := range res.Metric {
-			if k == "__name__" {
-				continue
-			}
-			fmt.Printf(`%s="%s",`, k, v)
-		}
-		fmt.Print("} ")
-		for _, v := range res.Value {
-			fmt.Printf("%s ", v)
-		}
-		fmt.Println()
-	}
-}
-
-func DumpTracesAfterFail(t *testing.T, hostURL string) {
-	if !t.Failed() {
-		return
-	}
-	fmt.Printf("===== Dumping traces from %s ====\n", hostURL)
-	// get services
-	res, err := http.Get(hostURL + "/api/services")
-	if err != nil {
-		fmt.Println("ERROR getting services:", err)
-		return
-	}
-	svcs := jaeger.Services{}
-	if err := json.NewDecoder(res.Body).Decode(&svcs); err != nil {
-		fmt.Println("ERROR decoding services:", err)
-		return
-	}
-	for _, svcName := range svcs.Data {
-		fmt.Printf("---- Service: %s ----\n", svcName)
-		res, err := http.Get(hostURL + "/api/traces?service=" + svcName)
-		if err != nil {
-			fmt.Println("ERROR getting service:", err)
-			return
-		}
-		tq := jaeger.TracesQuery{}
-		if err := json.NewDecoder(res.Body).Decode(&tq); err != nil {
-			fmt.Println("ERROR decoding service:", err)
-			continue
-		}
-		for _, trace := range tq.Data {
-			json.NewEncoder(os.Stdout).Encode(trace)
-			fmt.Println()
-		}
 	}
 }

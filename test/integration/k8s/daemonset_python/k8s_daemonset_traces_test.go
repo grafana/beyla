@@ -18,6 +18,7 @@ import (
 	"github.com/grafana/beyla/test/integration/components/jaeger"
 	"github.com/grafana/beyla/test/integration/components/kube"
 	k8s "github.com/grafana/beyla/test/integration/k8s/common"
+	"github.com/grafana/beyla/test/integration/k8s/common/testpath"
 )
 
 // For the DaemonSet scenario, we only check that Beyla is able to instrument any
@@ -80,10 +81,10 @@ func TestPythonBasicTracing(t *testing.T) {
 				}, test.Interval(100*time.Millisecond))
 
 				// Let's take down our services, keeping Beyla alive and then redeploy them
-				err := kube.DeleteExistingManifestFile(cfg, k8s.PathManifests+"/05-uninstrumented-service-python.yml")
+				err := kube.DeleteExistingManifestFile(cfg, testpath.Manifests+"/05-uninstrumented-service-python.yml")
 				assert.NoError(t, err, "we should see no error when deleting the uninstrumented service manifest file")
 
-				err = kube.DeployManifestFile(cfg, k8s.PathManifests+"/05-uninstrumented-service-python.yml")
+				err = kube.DeployManifestFile(cfg, testpath.Manifests+"/05-uninstrumented-service-python.yml")
 				assert.NoError(t, err, "we should see no error when re-deploying the uninstrumented service manifest file")
 
 				// We now use /smoke instead of /greeting to ensure we see those APIs after a restart

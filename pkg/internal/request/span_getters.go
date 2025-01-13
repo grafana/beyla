@@ -104,6 +104,8 @@ func SpanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 			}
 			return semconv.MessagingDestinationName("")
 		}
+	case attr.CudaKernelName:
+		getter = func(span *Span) attribute.KeyValue { return CudaKernel(span.Method) }
 	}
 	// default: unlike the Prometheus getters, we don't check here for service name nor k8s metadata
 	// because they are already attributes of the Resource instead of the attributes.

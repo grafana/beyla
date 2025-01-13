@@ -111,11 +111,14 @@ func (pa *pollAccounter) Run(out chan<- []Event[processAttrs]) {
 	bpfWatchEvents := make(chan watcher.Event, 100)
 	if err := pa.loadBPFWatcher(pa.cfg, bpfWatchEvents); err != nil {
 		log.Error("Unable to load eBPF watcher for process events", "error", err)
+		// will stop pipeline in cascade
+		return
 	}
 
 	if pa.cfg.EBPF.BpfDebug {
 		if err := pa.loadBPFLogger(pa.cfg); err != nil {
 			log.Error("Unable to load eBPF logger for process events", "error", err)
+			// keep running without logs
 		}
 	}
 

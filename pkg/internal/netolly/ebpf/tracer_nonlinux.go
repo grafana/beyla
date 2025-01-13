@@ -11,7 +11,7 @@ import (
 type FlowFetcher struct {
 }
 
-func NewFlowFetcher(_, _ int, _, _ bool, _ tcmanager.TCManager) (*FlowFetcher, error) {
+func NewFlowFetcher(_, _ int, _, _ bool, _ *tcmanager.InterfaceManager, _ tcmanager.TCBackend) (*FlowFetcher, error) {
 	return nil, nil
 }
 

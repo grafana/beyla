@@ -71,7 +71,6 @@
 #define PT_REGS_PARM3(x) ((x)->dx)
 #define PT_REGS_PARM4(x) ((x)->cx)
 #define PT_REGS_PARM5(x) ((x)->r8)
-#define PT_REGS_PARM6(x) ((x)->r9)
 #define PT_REGS_RET(x) ((x)->sp)
 #define PT_REGS_FP(x) ((x)->bp)
 #define PT_REGS_RC(x) ((x)->ax)
@@ -83,7 +82,6 @@
 #define PT_REGS_PARM3_CORE(x) BPF_CORE_READ((x), dx)
 #define PT_REGS_PARM4_CORE(x) BPF_CORE_READ((x), cx)
 #define PT_REGS_PARM5_CORE(x) BPF_CORE_READ((x), r8)
-#define PT_REGS_PARM6_CORE(x) BPF_CORE_READ((x), r9)
 #define PT_REGS_RET_CORE(x) BPF_CORE_READ((x), sp)
 #define PT_REGS_FP_CORE(x) BPF_CORE_READ((x), bp)
 #define PT_REGS_RC_CORE(x) BPF_CORE_READ((x), ax)
@@ -99,7 +97,6 @@
 #define PT_REGS_PARM3(x) ((x)->ecx)
 #define PT_REGS_PARM4(x) 0
 #define PT_REGS_PARM5(x) 0
-#define PT_REGS_PARM6(x) 0
 #define PT_REGS_RET(x) ((x)->esp)
 #define PT_REGS_FP(x) ((x)->ebp)
 #define PT_REGS_RC(x) ((x)->eax)
@@ -111,7 +108,6 @@
 #define PT_REGS_PARM3_CORE(x) BPF_CORE_READ((x), ecx)
 #define PT_REGS_PARM4_CORE(x) 0
 #define PT_REGS_PARM5_CORE(x) 0
-#define PT_REGS_PARM6_CORE(x) 0
 #define PT_REGS_RET_CORE(x) BPF_CORE_READ((x), esp)
 #define PT_REGS_FP_CORE(x) BPF_CORE_READ((x), ebp)
 #define PT_REGS_RC_CORE(x) BPF_CORE_READ((x), eax)
@@ -125,7 +121,6 @@
 #define PT_REGS_PARM3(x) ((x)->rdx)
 #define PT_REGS_PARM4(x) ((x)->rcx)
 #define PT_REGS_PARM5(x) ((x)->r8)
-#define PT_REGS_PARM6(x) ((x)->r9)
 #define PT_REGS_RET(x) ((x)->rsp)
 #define PT_REGS_FP(x) ((x)->rbp)
 #define PT_REGS_RC(x) ((x)->rax)
@@ -137,7 +132,6 @@
 #define PT_REGS_PARM3_CORE(x) BPF_CORE_READ((x), rdx)
 #define PT_REGS_PARM4_CORE(x) BPF_CORE_READ((x), rcx)
 #define PT_REGS_PARM5_CORE(x) BPF_CORE_READ((x), r8)
-#define PT_REGS_PARM6_CORE(x) BPF_CORE_READ((x), r9)
 #define PT_REGS_RET_CORE(x) BPF_CORE_READ((x), rsp)
 #define PT_REGS_FP_CORE(x) BPF_CORE_READ((x), rbp)
 #define PT_REGS_RC_CORE(x) BPF_CORE_READ((x), rax)
@@ -182,7 +176,6 @@ struct pt_regs;
 #define PT_REGS_PARM3(x) ((x)->uregs[2])
 #define PT_REGS_PARM4(x) ((x)->uregs[3])
 #define PT_REGS_PARM5(x) ((x)->uregs[4])
-#define PT_REGS_PARM6(x) ((x)->uregs[5])
 #define PT_REGS_RET(x) ((x)->uregs[14])
 #define PT_REGS_FP(x) ((x)->uregs[11]) /* Works only with CONFIG_FRAME_POINTER */
 #define PT_REGS_RC(x) ((x)->uregs[0])
@@ -194,7 +187,6 @@ struct pt_regs;
 #define PT_REGS_PARM3_CORE(x) BPF_CORE_READ((x), uregs[2])
 #define PT_REGS_PARM4_CORE(x) BPF_CORE_READ((x), uregs[3])
 #define PT_REGS_PARM5_CORE(x) BPF_CORE_READ((x), uregs[4])
-#define PT_REGS_PARM6_CORE(x) BPF_CORE_READ((x), uregs[5])
 #define PT_REGS_RET_CORE(x) BPF_CORE_READ((x), uregs[14])
 #define PT_REGS_FP_CORE(x) BPF_CORE_READ((x), uregs[11])
 #define PT_REGS_RC_CORE(x) BPF_CORE_READ((x), uregs[0])
@@ -211,7 +203,6 @@ struct pt_regs;
 #define PT_REGS_PARM3(x) (((PT_REGS_ARM64 *)(x))->regs[2])
 #define PT_REGS_PARM4(x) (((PT_REGS_ARM64 *)(x))->regs[3])
 #define PT_REGS_PARM5(x) (((PT_REGS_ARM64 *)(x))->regs[4])
-#define PT_REGS_PARM6(x) (((PT_REGS_ARM64 *)(x))->regs[5])
 #define PT_REGS_RET(x) (((PT_REGS_ARM64 *)(x))->regs[30])
 /* Works only with CONFIG_FRAME_POINTER */
 #define PT_REGS_FP(x) (((PT_REGS_ARM64 *)(x))->regs[29])
@@ -224,7 +215,6 @@ struct pt_regs;
 #define PT_REGS_PARM3_CORE(x) BPF_CORE_READ((PT_REGS_ARM64 *)(x), regs[2])
 #define PT_REGS_PARM4_CORE(x) BPF_CORE_READ((PT_REGS_ARM64 *)(x), regs[3])
 #define PT_REGS_PARM5_CORE(x) BPF_CORE_READ((PT_REGS_ARM64 *)(x), regs[4])
-#define PT_REGS_PARM6_CORE(x) BPF_CORE_READ((PT_REGS_ARM64 *)(x), regs[5])
 #define PT_REGS_RET_CORE(x) BPF_CORE_READ((PT_REGS_ARM64 *)(x), regs[30])
 #define PT_REGS_FP_CORE(x) BPF_CORE_READ((PT_REGS_ARM64 *)(x), regs[29])
 #define PT_REGS_RC_CORE(x) BPF_CORE_READ((PT_REGS_ARM64 *)(x), regs[0])
@@ -526,7 +516,6 @@ struct pt_regs;
 #define ___bpf_kprobe_args3(x, args...) ___bpf_kprobe_args2(args), (void *)PT_REGS_PARM3(ctx)
 #define ___bpf_kprobe_args4(x, args...) ___bpf_kprobe_args3(args), (void *)PT_REGS_PARM4(ctx)
 #define ___bpf_kprobe_args5(x, args...) ___bpf_kprobe_args4(args), (void *)PT_REGS_PARM5(ctx)
-#define ___bpf_kprobe_args6(x, args...) ___bpf_kprobe_args5(args), (void *)PT_REGS_PARM6(ctx)
 #define ___bpf_kprobe_args(args...) ___bpf_apply(___bpf_kprobe_args, ___bpf_narg(args))(args)
 
 /*

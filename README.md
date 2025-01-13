@@ -198,7 +198,7 @@ All of them are enforced on pull requests as part of the Beyla github workflows.
 - `make lint` invokes `golangci-lint` on the Go code
 - `make clang-tidy` invokes `clang-tidy` on the C/eBPF code
 
-`clang-format` is invoked automatically as a `pre-commit` git hook, so there is no explicit `Makefile` target for it.
+`clang-format` is invoked automatically as a `pre-commit` git hook, you can run it directly by using the `Makefile` `clang-format` target.
 
 #### Running VM tests
 

@@ -34,7 +34,7 @@ const volatile struct {
 // the arguments in left-to-right order, the order of registers used is: %rdi,
 // %rsi, %rdx, %rcx, %r8, and %r9. Any remaining arguments are passed on the
 // stack in reverse order so that they can be popped off the stack in order.
-#define SP_OFFSET(offset) (void *)PT_REGS_SP(ctx) + offset * 8
+#define SP_OFFSET(offset) (void *)PT_REGS_SP(ctx) + (offset * 8)
 
 SEC("uprobe/cudaLaunchKernel")
 int BPF_KPROBE(handle_cuda_launch,
@@ -79,7 +79,7 @@ int BPF_KPROBE(handle_cuda_launch,
             // We don't know how many argument this kernel has until we parse the
             // signature, so we always attemps to read the maximum number of args,
             // even if some of these arg values are not valid.
-            bpf_probe_read_user(&arg_addr, sizeof(u64), (const void *)(argv + i * sizeof(u64)));
+            bpf_probe_read_user(&arg_addr, sizeof(u64), (const void *)(argv + (i * sizeof(u64))));
 
             bpf_probe_read_user(&e->args[i], sizeof(arg_addr), arg_addr);
         }

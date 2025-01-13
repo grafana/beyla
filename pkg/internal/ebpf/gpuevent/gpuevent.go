@@ -355,7 +355,7 @@ func execBase(pid uint32, fi *exec.FileInfo) (uint64, error) {
 
 	baseMap := exec.LibExecPath("libtorch_cuda.so", maps)
 	if baseMap == nil {
-		slog.Info("can't find libtorch_cuda.so in maps")
+		slog.Debug("can't find libtorch_cuda.so in maps")
 		baseMap = exec.LibExecPath(fi.CmdExePath, maps)
 		if baseMap == nil {
 			return 0, errors.New("can't find executable in maps, this is a bug")

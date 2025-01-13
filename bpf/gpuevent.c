@@ -22,7 +22,6 @@ struct {
 } rb SEC(".maps");
 
 const volatile struct {
-    bool debug;
     bool capture_args;
     bool capture_stack;
 } prog_cfg = {

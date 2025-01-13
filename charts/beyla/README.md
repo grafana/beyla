@@ -1,6 +1,6 @@
 # beyla
 
-![Version: 1.5.0](https://img.shields.io/badge/Version-1.5.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 1.9.0](https://img.shields.io/badge/AppVersion-1.9.0-informational?style=flat-square)
+![Version: 1.6.0](https://img.shields.io/badge/Version-1.6.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 1.9.6](https://img.shields.io/badge/AppVersion-1.9.6-informational?style=flat-square)
 
 eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network metrics.
 
@@ -78,7 +78,7 @@ eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network
 | service.enabled | bool | `false` | whether to create a service for metrics |
 | service.internalMetrics.appProtocol | string | `""` | Adds the appProtocol field to the service. This allows to work with istio protocol selection. Ex: "http" or "tcp" |
 | service.internalMetrics.port | int | `8080` | internal metrics service port |
-| service.internalMetrics.portName | string | `"internal-metrics"` | name of the port for internal metrics. |
+| service.internalMetrics.portName | string | `"int-metrics"` | name of the port for internal metrics. |
 | service.internalMetrics.targetPort | string | `nil` | targetPort overrides the internal metrics port. It defaults to the value of `internal_metrics.prometheus.port` from the Beyla configuration file. |
 | service.labels | object | `{}` | Service labels. |
 | service.loadBalancerClass | string | `""` | loadbalancer class name |

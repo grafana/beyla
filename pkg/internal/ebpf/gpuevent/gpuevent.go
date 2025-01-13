@@ -75,6 +75,7 @@ func (p *Tracer) AllowPID(pid, ns uint32, svc *svc.Attrs) {
 
 func (p *Tracer) BlockPID(pid, ns uint32) {
 	p.pidsFilter.BlockPID(pid, ns)
+	removeCudaPID(pid, ns)
 }
 
 func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
@@ -173,6 +174,8 @@ func (p *Tracer) AddInstrumentedLibRef(id uint64) {
 func (p *Tracer) UnlinkInstrumentedLib(id uint64) {
 	libsMux.Lock()
 	defer libsMux.Unlock()
+
+	delete(symbolsMap, id)
 
 	module, err := instrumentedLibs.RemoveRef(id)
 
@@ -284,7 +287,7 @@ func ProcessCudaLibFileInfo(info *exec.FileInfo, lib string, maps []*procfs.Proc
 
 func ProcessCudaFileInfo(info *exec.FileInfo) {
 	if _, ok := symbolsMap[info.Ino]; ok {
-		EstablishCudaPID(uint32(info.Pid), info)
+		establishCudaPID(uint32(info.Pid), info)
 		return
 	}
 
@@ -307,10 +310,10 @@ func ProcessCudaFileInfo(info *exec.FileInfo) {
 	slog.Info("Processing cuda symbol map for", "inode", info.Ino)
 
 	symbolsMap[info.Ino] = symAddr
-	EstablishCudaPID(uint32(info.Pid), info)
+	establishCudaPID(uint32(info.Pid), info)
 }
 
-func EstablishCudaPID(pid uint32, fi *exec.FileInfo) {
+func establishCudaPID(pid uint32, fi *exec.FileInfo) {
 	base, err := execBase(pid, fi)
 	if err != nil {
 		slog.Error("Error finding base map image", "error", err)
@@ -332,8 +335,8 @@ func EstablishCudaPID(pid uint32, fi *exec.FileInfo) {
 	}
 }
 
-func RemoveCudaPID(pid uint32, fi *exec.FileInfo) {
-	k := pidKey{Pid: int32(pid), Ns: fi.Ns}
+func removeCudaPID(pid uint32, ns uint32) {
+	k := pidKey{Pid: int32(pid), Ns: ns}
 	delete(baseMap, k)
 	delete(pidMap, k)
 }

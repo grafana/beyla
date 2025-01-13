@@ -15,6 +15,7 @@ import (
 	"github.com/grafana/beyla/test/integration/components/kube"
 	"github.com/grafana/beyla/test/integration/components/prom"
 	k8s "github.com/grafana/beyla/test/integration/k8s/common"
+	"github.com/grafana/beyla/test/integration/k8s/common/testpath"
 	otel "github.com/grafana/beyla/test/integration/k8s/netolly"
 	"github.com/grafana/beyla/test/tools"
 )
@@ -38,18 +39,17 @@ func TestMain(m *testing.M) {
 	}
 
 	cluster = kube.NewKind("test-kind-cluster-external-cache",
-		kube.ExportLogs(k8s.PathKindLogs),
-		kube.KindConfig(k8s.PathManifests+"/00-kind.yml"),
+		kube.KindConfig(testpath.Manifests+"/00-kind.yml"),
 		kube.LocalImage("beyla:dev"),
 		kube.LocalImage("testserver:dev"),
 		kube.LocalImage("httppinger:dev"),
 		kube.LocalImage("beyla-k8s-cache:dev"),
 		kube.LocalImage("quay.io/prometheus/prometheus:v2.53.0"),
-		kube.Deploy(k8s.PathManifests+"/01-volumes.yml"),
-		kube.Deploy(k8s.PathManifests+"/01-serviceaccount.yml"),
-		kube.Deploy(k8s.PathManifests+"/02-prometheus-promscrape.yml"),
-		kube.Deploy(k8s.PathManifests+"/05-uninstrumented-service.yml"),
-		kube.Deploy(k8s.PathManifests+"/06-beyla-external-informer.yml"),
+		kube.Deploy(testpath.Manifests+"/01-volumes.yml"),
+		kube.Deploy(testpath.Manifests+"/01-serviceaccount.yml"),
+		kube.Deploy(testpath.Manifests+"/02-prometheus-promscrape.yml"),
+		kube.Deploy(testpath.Manifests+"/05-uninstrumented-service.yml"),
+		kube.Deploy(testpath.Manifests+"/06-beyla-external-informer.yml"),
 	)
 
 	cluster.Run(m)

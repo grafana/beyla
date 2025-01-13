@@ -46,8 +46,6 @@ func FeatureNetworkFlowBytes() features.Feature {
 }
 
 func testNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
-	defer k8s.DumpMetricsAfterFail(t, prometheusHostPort)
-
 	pq := prom.Client{HostPort: prometheusHostPort}
 	// testing request flows (to testserver as Service)
 	test.Eventually(t, testTimeout, func(t require.TestingT) {

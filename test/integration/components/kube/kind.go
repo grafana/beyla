@@ -187,11 +187,11 @@ func (k *Kind) exportAllMetrics() env.Func {
 		}
 		_ = os.MkdirAll(path.Join(k.logsDir, k.clusterName), 0755)
 		out, err := os.Create(path.Join(k.logsDir, k.clusterName, "prometheus_metrics.txt"))
-		defer out.Close()
 		if err != nil {
 			log().Error("creating prometheus export file", "error", err)
 			return ctx, nil
 		}
+		defer out.Close()
 		if err := DumpMetrics(out, k.promEndpoint); err != nil {
 			log().Error("dumping prometheus metrics", "error", err)
 			return ctx, nil
@@ -207,11 +207,11 @@ func (k *Kind) exportAllTraces() env.Func {
 		}
 		_ = os.MkdirAll(path.Join(k.logsDir, k.clusterName), 0755)
 		out, err := os.Create(path.Join(k.logsDir, k.clusterName, "jaeger_traces.txt"))
-		defer out.Close()
 		if err != nil {
 			log().Error("creating jaeger export file", "error", err)
 			return ctx, nil
 		}
+		defer out.Close()
 		if err := DumpTraces(out, k.jaegerEndpoint); err != nil {
 			log().Error("dumping jaeger traces", "error", err)
 			return ctx, nil
@@ -425,19 +425,19 @@ func DumpMetrics(out io.Writer, promHostPort string) error {
 		return err
 	}
 	for _, res := range results {
-		_, _ = fmt.Fprintf(out, res.Metric["__name__"])
-		_, _ = fmt.Fprintf(out, "{")
+		fmt.Fprint(out, res.Metric["__name__"])
+		fmt.Fprint(out, "{")
 		for k, v := range res.Metric {
 			if k == "__name__" {
 				continue
 			}
-			_, _ = fmt.Fprintf(out, `%s="%s",`, k, v)
+			fmt.Fprintf(out, `%s="%s",`, k, v)
 		}
-		_, _ = fmt.Fprintf(out, "} ")
+		fmt.Fprintf(out, "} ")
 		for _, v := range res.Value {
-			_, _ = fmt.Fprintf(out, "%v ", v)
+			fmt.Fprintf(out, "%v ", v)
 		}
-		_, _ = fmt.Fprintln(out)
+		fmt.Fprintln(out)
 	}
 	return nil
 }
@@ -459,7 +459,7 @@ func DumpTraces(out io.Writer, jaegerHostPort string) error {
 		return fmt.Errorf("decoding services: %w", err)
 	}
 	for _, svcName := range svcs.Data {
-		_, _ = fmt.Fprintf(out, "---- Service: %s ----\n", svcName)
+		fmt.Fprintf(out, "---- Service: %s ----\n", svcName)
 		res, err := http.Get(jaegerHostPort + "/api/traces?service=" + svcName)
 		if err != nil {
 			fmt.Fprintln(out, "! ERROR getting trace:", err)
@@ -471,8 +471,9 @@ func DumpTraces(out io.Writer, jaegerHostPort string) error {
 			continue
 		}
 		for _, trace := range tq.Data {
-			json.NewEncoder(out).Encode(trace)
-			fmt.Fprintln(out)
+			if err := json.NewEncoder(out).Encode(trace); err != nil {
+				fmt.Fprintln(out, "! ERROR encoding trace:", err)
+			}
 		}
 	}
 	return nil

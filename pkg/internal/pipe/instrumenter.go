@@ -39,6 +39,7 @@ type nodesMap struct {
 	Metrics     pipe.Final[[]request.Span]
 	Traces      pipe.Final[[]request.Span]
 	Prometheus  pipe.Final[[]request.Span]
+	BpfMetrics  pipe.Final[[]request.Span]
 	Printer     pipe.Final[[]request.Span]
 
 	ProcessReport pipe.Final[[]request.Span]
@@ -66,7 +67,9 @@ func otelMetrics(n *nodesMap) *pipe.Final[[]request.Span]                   { re
 func otelTraces(n *nodesMap) *pipe.Final[[]request.Span]                    { return &n.Traces }
 func printer(n *nodesMap) *pipe.Final[[]request.Span]                       { return &n.Printer }
 func prometheus(n *nodesMap) *pipe.Final[[]request.Span]                    { return &n.Prometheus }
-func processReport(n *nodesMap) *pipe.Final[[]request.Span]                 { return &n.ProcessReport }
+func bpfMetrics(n *nodesMap) *pipe.Final[[]request.Span]                    { return &n.BpfMetrics }
+
+func processReport(n *nodesMap) *pipe.Final[[]request.Span] { return &n.ProcessReport }
 
 // builder with injectable instantiators for unit testing
 type graphFunctions struct {
@@ -115,6 +118,7 @@ func newGraphBuilder(ctx context.Context, config *beyla.Config, ctxInfo *global.
 	config.Traces.Grafana = &gb.config.Grafana.OTLP
 	pipe.AddFinalProvider(gnb, otelTraces, otel.TracesReceiver(ctx, config.Traces, gb.ctxInfo, config.Attributes.Select))
 	pipe.AddFinalProvider(gnb, prometheus, prom.PrometheusEndpoint(ctx, gb.ctxInfo, &config.Prometheus, config.Attributes.Select))
+	pipe.AddFinalProvider(gnb, bpfMetrics, prom.BPFMetrics(ctx, gb.ctxInfo, &config.Prometheus))
 	pipe.AddFinalProvider(gnb, alloyTraces, alloy.TracesReceiver(ctx, gb.ctxInfo, &config.TracesReceiver, config.Attributes.Select))
 
 	pipe.AddFinalProvider(gnb, printer, debug.PrinterNode(config.TracePrinter))

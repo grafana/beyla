@@ -726,6 +726,25 @@ func testPrometheusBeylaBuildInfo(t *testing.T) {
 	})
 }
 
+func testPrometheusBPFMetrics(t *testing.T) {
+	t.Skip("BPF metrics are not available in the test environment")
+	pq := prom.Client{HostPort: prometheusHostPort}
+	var results []prom.Result
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		var err error
+		results, err = pq.Query(`bpf_probe_latency_seconds_count{probe_name=~"uprobe_.*"}`)
+		require.NoError(t, err)
+		require.NotEmpty(t, results)
+	})
+
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		var err error
+		results, err = pq.Query(`bpf_map_entries_total{map_name="ongoing_server_"}`)
+		require.NoError(t, err)
+		require.NotEmpty(t, results)
+	})
+}
+
 func testPrometheusNoBeylaEvents(t *testing.T) {
 	pq := prom.Client{HostPort: prometheusHostPort}
 	var results []prom.Result

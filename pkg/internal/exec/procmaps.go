@@ -19,17 +19,7 @@ func FindLibMaps(pid int32) ([]*procfs.ProcMap, error) {
 
 func LibPath(name string, maps []*procfs.ProcMap) *procfs.ProcMap {
 	for _, m := range maps {
-		if strings.Contains(m.Pathname, string(filepath.Separator)+name) {
-			return m
-		}
-	}
-
-	return nil
-}
-
-func LibExecPath(name string, maps []*procfs.ProcMap) *procfs.ProcMap {
-	for _, m := range maps {
-		if strings.Contains(m.Pathname, name) && m.Perms.Execute {
+		if strings.Contains(m.Pathname, string(filepath.Separator)+name) && m.Perms.Execute {
 			return m
 		}
 	}

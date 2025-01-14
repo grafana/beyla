@@ -298,7 +298,7 @@ func callStack(event *GPUKernelLaunchInfo) string {
 }
 
 func ProcessCudaLibFileInfo(info *exec.FileInfo, lib string, maps []*procfs.ProcMap) (map[int64]string, bool) {
-	cudaMap := exec.LibExecPath(lib, maps)
+	cudaMap := exec.LibPath(lib, maps)
 
 	if cudaMap == nil {
 		return nil, false
@@ -392,10 +392,10 @@ func execBase(pid uint32, fi *exec.FileInfo) (uint64, error) {
 		return 0, err
 	}
 
-	baseMap := exec.LibExecPath("libtorch_cuda.so", maps)
+	baseMap := exec.LibPath("libtorch_cuda.so", maps)
 	if baseMap == nil {
 		slog.Debug("can't find libtorch_cuda.so in maps")
-		baseMap = exec.LibExecPath(fi.CmdExePath, maps)
+		baseMap = exec.LibPath(fi.CmdExePath, maps)
 		if baseMap == nil {
 			return 0, errors.New("can't find executable in maps, this is a bug")
 		}

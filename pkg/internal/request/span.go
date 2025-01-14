@@ -33,6 +33,8 @@ const (
 	EventTypeKafkaClient
 	EventTypeRedisServer
 	EventTypeKafkaServer
+	EventTypeGPUKernelLaunch
+	EventTypeGPUMalloc
 )
 
 const (
@@ -50,6 +52,7 @@ const (
 	DBMySQL
 )
 
+//nolint:cyclop
 func (t EventType) String() string {
 	switch t {
 	case EventTypeProcessAlive:
@@ -72,6 +75,10 @@ func (t EventType) String() string {
 		return "RedisServer"
 	case EventTypeKafkaServer:
 		return "KafkaServer"
+	case EventTypeGPUKernelLaunch:
+		return "CUDALaunch"
+	case EventTypeGPUMalloc:
+		return "CUDAMalloc"
 	default:
 		return fmt.Sprintf("UNKNOWN (%d)", t)
 	}
@@ -232,6 +239,15 @@ func spanAttributes(s *Span) SpanAttributes {
 			"serverPort": strconv.Itoa(s.HostPort),
 			"operation":  s.Method,
 			"clientId":   s.OtherNamespace,
+		}
+	case EventTypeGPUKernelLaunch:
+		return SpanAttributes{
+			"function":  s.Method,
+			"callStack": s.Path,
+		}
+	case EventTypeGPUMalloc:
+		return SpanAttributes{
+			"size": strconv.FormatInt(s.ContentLength, 10),
 		}
 	}
 

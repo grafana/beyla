@@ -138,3 +138,7 @@ func PeerAsClient(span *Span) string {
 
 	return SpanPeer(span)
 }
+
+func CudaKernel(val string) attribute.KeyValue {
+	return attribute.Key(attr.CudaKernelName).String(val)
+}

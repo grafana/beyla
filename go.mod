@@ -19,6 +19,7 @@ require (
 	github.com/grafana/go-offsets-tracker v0.1.7
 	github.com/hashicorp/go-version v1.7.0
 	github.com/hashicorp/golang-lru/v2 v2.0.7
+	github.com/ianlancetaylor/demangle v0.0.0-20240912202439-0a2b6291aafd
 	github.com/mariomac/guara v0.0.0-20230621100729-42bd7716e524
 	github.com/mariomac/pipes v0.10.0
 	github.com/pkg/errors v0.9.1

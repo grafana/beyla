@@ -239,6 +239,7 @@ func (pt *ProcessTracer) Init() error {
 func (pt *ProcessTracer) NewExecutableInstance(ie *Instrumentable) error {
 	if i, ok := pt.Instrumentables[ie.FileInfo.Ino]; ok {
 		for _, p := range pt.Programs {
+			p.ProcessBinary(ie.FileInfo)
 			// Uprobes to be used for native module instrumentation points
 			if err := i.uprobes(ie.FileInfo.Pid, p); err != nil {
 				printVerifierErrorInfo(err)

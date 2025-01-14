@@ -24,7 +24,7 @@ func makeProcFSMaps(paths []string) []*procfs.ProcMap {
 	res := []*procfs.ProcMap{}
 
 	for _, path := range paths {
-		p := procfs.ProcMap{Pathname: path}
+		p := procfs.ProcMap{Pathname: path, Perms: &procfs.ProcMapPermissions{Execute: true}}
 		res = append(res, &p)
 	}
 
@@ -32,5 +32,5 @@ func makeProcFSMaps(paths []string) []*procfs.ProcMap {
 }
 
 func procPSFromPath(path string) *procfs.ProcMap {
-	return &procfs.ProcMap{Pathname: path}
+	return &procfs.ProcMap{Pathname: path, Perms: &procfs.ProcMapPermissions{Execute: true}}
 }

@@ -392,3 +392,8 @@ check-ebpf-integrity: docker-generate
 .PHONY: protoc-gen
 protoc-gen:
 	docker run --rm -v $(PWD):/work -w /work $(PROTOC_IMAGE) protoc --go_out=pkg/kubecache --go-grpc_out=pkg/kubecache proto/informer.proto
+
+.PHONY: clang-format
+clang-format:
+	find ./bpf -type f -name "*.c" | xargs clang-format -i
+	find ./bpf -type f -name "*.h" | xargs clang-format -i

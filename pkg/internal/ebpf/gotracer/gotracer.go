@@ -163,6 +163,8 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 	}
 }
 
+func (p *Tracer) ProcessBinary(_ *exec.FileInfo) {}
+
 func (p *Tracer) BpfObjects() any {
 	return &p.bpfObjects
 }

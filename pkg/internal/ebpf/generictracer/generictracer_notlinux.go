@@ -42,3 +42,4 @@ func (p *Tracer) Run(_ context.Context, _ chan<- []request.Span)         {}
 func (p *Tracer) Constants() map[string]any                              { return nil }
 func (p *Tracer) SetupTailCalls()                                        {}
 func (p *Tracer) RegisterOffsets(_ *exec.FileInfo, _ *goexec.Offsets)    {}
+func (p *Tracer) ProcessBinary(_ *exec.FileInfo)                         {}

@@ -271,6 +271,16 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 		ProcessMemoryVirtual.Section:  {SubGroups: []*AttrReportGroup{&processAttributes}},
 		ProcessDiskIO.Section:         {SubGroups: []*AttrReportGroup{&processAttributes}},
 		ProcessNetIO.Section:          {SubGroups: []*AttrReportGroup{&processAttributes}},
+		GPUKernelLaunchCalls.Section: {
+			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes},
+			Attributes: map[attr.Name]Default{
+				attr.CudaKernelName: true,
+			},
+		},
+		GPUMemoryAllocations.Section: {
+			SubGroups:  []*AttrReportGroup{&appAttributes, &appKubeAttributes},
+			Attributes: map[attr.Name]Default{},
+		},
 		// span and service graph metrics don't yet implement attribute selection,
 		// but their values can still be filtered, so we list them here just to
 		// make the filter recognize its attributes

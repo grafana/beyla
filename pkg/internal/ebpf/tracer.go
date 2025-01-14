@@ -93,6 +93,7 @@ type Tracer interface {
 	AlreadyInstrumentedLib(uint64) bool
 	UnlinkInstrumentedLib(uint64)
 	RegisterOffsets(*exec.FileInfo, *goexec.Offsets)
+	ProcessBinary(*exec.FileInfo)
 	// Run will do the action of listening for eBPF traces and forward them
 	// periodically to the output channel.
 	Run(context.Context, chan<- []request.Span)
@@ -114,6 +115,9 @@ const (
 
 // ProcessTracer instruments an executable with eBPF and provides the eBPF readers
 // that will forward the traces to later stages in the pipeline
+// TODO: We need to pass the ELFInfo from this ProcessTracker to inside a Tracer
+// so that the GPU kernel event listener can find symbols names from addresses
+// in the ELF file.
 type ProcessTracer struct {
 	log      *slog.Logger //nolint:unused
 	Programs []Tracer

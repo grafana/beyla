@@ -4,7 +4,6 @@ package generictracer
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"log/slog"
 	"sync"
@@ -30,15 +29,7 @@ import (
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../../bpf/generic_tracer.c -- -I../../../../bpf/headers -DBPF_DEBUG
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_tp_debug ../../../../bpf/generic_tracer.c -- -I../../../../bpf/headers -DBPF_DEBUG -DBPF_TRACEPARENT
 
-type libModule struct {
-	references uint64
-	closers    []io.Closer
-}
-
-// Hold onto Linux inode numbers of files that are already instrumented, e.g. libssl.so.3
-type instrumentedLibsT map[uint64]*libModule
-
-var instrumentedLibs = make(instrumentedLibsT)
+var instrumentedLibs = make(ebpfcommon.InstrumentedLibsT)
 var libsMux sync.Mutex
 
 type Tracer struct {
@@ -51,62 +42,6 @@ type Tracer struct {
 	qdiscs         map[ifaces.Interface]*netlink.GenericQdisc
 	egressFilters  map[ifaces.Interface]*netlink.BpfFilter
 	ingressFilters map[ifaces.Interface]*netlink.BpfFilter
-}
-
-func (libs instrumentedLibsT) at(id uint64) *libModule {
-	module, ok := libs[id]
-
-	if !ok {
-		module = &libModule{references: 0}
-		libs[id] = module
-	}
-
-	return module
-}
-
-func (libs instrumentedLibsT) find(id uint64) *libModule {
-	module, ok := libs[id]
-
-	if ok {
-		return module
-	}
-
-	return nil
-}
-
-func (libs instrumentedLibsT) addRef(id uint64) *libModule {
-	module := libs.at(id)
-	module.references++
-
-	return module
-}
-
-func (libs instrumentedLibsT) removeRef(id uint64) (*libModule, error) {
-	module := libs.find(id)
-
-	if module == nil {
-		return nil, fmt.Errorf("attempt to remove reference of unknown module: %d", id)
-	}
-
-	if module.references == 0 {
-		return module, fmt.Errorf("attempt to remove reference of unreferenced module: %d", id)
-	}
-
-	module.references--
-
-	log := tlog().With("instrumentedLibs", "removeRef")
-
-	if module.references == 0 {
-		for _, closer := range module.closers {
-			if err := closer.Close(); err != nil {
-				log.Debug("failed to close resource", "closer", closer, "error", err)
-			}
-		}
-
-		delete(libs, id)
-	}
-
-	return module, nil
 }
 
 func tlog() *slog.Logger {
@@ -286,6 +221,8 @@ func (p *Tracer) Constants() map[string]any {
 
 func (p *Tracer) RegisterOffsets(_ *exec.FileInfo, _ *goexec.Offsets) {}
 
+func (p *Tracer) ProcessBinary(_ *exec.FileInfo) {}
+
 func (p *Tracer) BpfObjects() any {
 	return &p.bpfObjects
 }
@@ -445,10 +382,10 @@ func (p *Tracer) RecordInstrumentedLib(id uint64, closers []io.Closer) {
 	libsMux.Lock()
 	defer libsMux.Unlock()
 
-	module := instrumentedLibs.addRef(id)
+	module := instrumentedLibs.AddRef(id)
 
 	if len(closers) > 0 {
-		module.closers = append(module.closers, closers...)
+		module.Closers = append(module.Closers, closers...)
 	}
 
 	p.log.Debug("Recorded instrumented Lib", "ino", id, "module", module)
@@ -462,7 +399,7 @@ func (p *Tracer) UnlinkInstrumentedLib(id uint64) {
 	libsMux.Lock()
 	defer libsMux.Unlock()
 
-	module, err := instrumentedLibs.removeRef(id)
+	module, err := instrumentedLibs.RemoveRef(id)
 
 	p.log.Debug("Unlinking instrumented lib - before state", "ino", id, "module", module)
 
@@ -475,7 +412,7 @@ func (p *Tracer) AlreadyInstrumentedLib(id uint64) bool {
 	libsMux.Lock()
 	defer libsMux.Unlock()
 
-	module := instrumentedLibs.find(id)
+	module := instrumentedLibs.Find(id)
 
 	p.log.Debug("checking already instrumented Lib", "ino", id, "module", module)
 	return module != nil

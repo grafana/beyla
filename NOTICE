@@ -35,6 +35,10 @@ The Initial Developer of some parts of the product, which are copied from, deriv
 inspired by the New Relic Infrastructure Agent (https://github.com/newrelic/infrastructure-agent).
 Copyright New Relic.
 
+The Initial Developer of some parts of the product, which are copied from, derived from, or
+inspired by Meta strobelight (https://github.com/facebookincubator/strobelight).
+Copyright Meta.
+
 Grafana Beyla uses third-party libraries or other resources that may be
 distributed under licenses different than the Grafana Beyla software. The licenses for 
 these third-party libraries are listed in the attached third_party_licenses.csv file 

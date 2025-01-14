@@ -48,4 +48,7 @@ type EBPFTracer struct {
 	// Enables the heuristic based detection of SQL requests. This can be used to detect
 	// talking to databases other than the ones we recognize in Beyla, like Postgres and MySQL
 	HeuristicSQLDetect bool `yaml:"heuristic_sql_detect" env:"BEYLA_HEURISTIC_SQL_DETECT"`
+
+	// Enables GPU instrumentation for CUDA kernel launches and allocations
+	InstrumentGPU bool `yaml:"instrument_gpu" env:"BEYLA_INSTRUMENT_GPU"`
 }

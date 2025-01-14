@@ -10,7 +10,6 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/mariomac/pipes/pipe"
 	"github.com/prometheus/client_golang/prometheus"
-	"golang.org/x/sys/unix"
 
 	"github.com/grafana/beyla/pkg/internal/connector"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
@@ -110,10 +109,7 @@ func (bc *BPFCollector) Collect(ch chan<- prometheus.Metric) {
 }
 
 func (bc *BPFCollector) collectProbesMetrics(ch chan<- prometheus.Metric) {
-	_, err := ebpf.EnableStats(unix.BPF_STATS_RUN_TIME)
-	if err != nil {
-		bc.log.Error("failed to enable runtime stats", "error", err)
-	}
+	bc.enableBPFStatsRuntime()
 
 	// Iterate over all eBPF programs
 	ids, err := ebpf.ProgramGetNextID(0)

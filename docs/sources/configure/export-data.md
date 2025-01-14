@@ -1,149 +1,79 @@
+---
+title: Export OpenTelemetry data
+description: Learn how to configure the  OpenTelemetry metrics exporter.
+weight: 1
+keywords:
+  - Beyla
+  - eBPF
+---
 
-## OTEL metrics exporter
+# Export OpenTelemetry data
 
-> ℹ️ If you plan to use Beyla to send metrics to Grafana Cloud,
-> consult the [Grafana Cloud OTEL exporter for metrics and traces](#using-the-grafana-cloud-otel-endpoint-to-ingest-metrics-and-traces)
-> section for easier configuration.
+Beyla can export OpenTelemetry metrics and traces to a OTLP endpoint.
 
-YAML section `otel_metrics_export`.
+If you want to send metrics directly to the Grafana Cloud OpenTelemetry endpoint, see the [Grafana Cloud OTLP endpoint configuration](#grafana-cloud-otlp-endpoint).
 
-This component exports OpenTelemetry metrics to a given endpoint. It will be enabled if
-its `endpoint` attribute is set (either via an YAML configuration file or via environment variables).
+## Enable metrics export
 
-In addition to the properties exposed in this section, this component implicitly supports
-the environment variables from the [standard OTEL exporter configuration](https://opentelemetry.io/docs/concepts/sdk-configuration/otlp-exporter-configuration/).
+To enable the  OpenTelemetry metrics export component, set the endpoint attribute in your configuration file or via an environment variable, refer to [metric export configuration options](#metrics-export-configuration-options).
 
-| YAML       | Environment variable                                                                    | Type | Default |
-| ---------- | -------------------------------------------------------------------------- | ---- | ------- |
-| `endpoint` | `OTEL_EXPORTER_OTLP_ENDPOINT` or<br/>`OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` | URL  | (unset) |
+### Metrics export configuration options
 
-Specifies the OpenTelemetry endpoint where metrics will be sent. If you plan to send the
-metrics directly to the Grafana Cloud OpenTelemetry endpoint, you might prefer to use the
-configuration options in the
-[Using the Grafana Cloud OTEL endpoint to ingest metrics and traces](#using-the-grafana-cloud-otel-endpoint-to-ingest-metrics-and-traces)
-section.
+You can configure the component under the `otel_metrics_export` section of your YAML configuration or via environment variables.
 
-The `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable sets a common endpoint for both the metrics and the
-[traces](#otel-traces-exporter) exporters. The `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` environment variable,
-or the `endpoint` YAML, property will set the endpoint only for the metrics exporter node,
-such that the traces' exporter won't be activated unless explicitly specified.
+In addition to the configuration documented in this article, the component supports the environment variables from the [standard OpenTelemetry exporter configuration](https://opentelemetry.io/docs/concepts/sdk-configuration/otlp-exporter-configuration/).
 
-According to the OpenTelemetry standard, if you set the endpoint via the `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable,
-the OpenTelemetry exporter will automatically add the `/v1/metrics` path to the URL. If you want to avoid this
-addition, you can use either the `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` environment variable or the `environment` YAML
-property to use exactly the provided URL without any addition.
+Beyla uses lowercase fields for YAML configuration and uppercase names for environment variable configuation.
 
-| YAML       | Environment variable                                                                    | Type   | Default   |
-| ---------- | -------------------------------------------------------------------------- | ------ | --------- |
-| `protocol` | `OTEL_EXPORTER_OTLP_PROTOCOL` or<br/>`OTEL_EXPORTER_OTLP_METRICS_PROTOCOL` | string | (guessed) |
+| Lowercase YAML option<br>Uppercase environment variable option                            | Description                                                                                                                                                                                                                                                                                                                                                    | Type            | Default                     |
+| ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- | --------------------------- |
+| `endpoint`<br>`OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`                                       | The endpoint Beyla sends metrics to.                                                                                                                                                                                                                                                                                                                           | URL             |                             |
+| `OTEL_EXPORTER_OTLP_ENDPOINT`                                                             | The shared endpoint for metrics and traces exporters. Beyla follows the OpenTelemetry standard and automatically adds `/v1/metrics` path to the URL when sending metrics. If you don't want this to happen, use the metrics specific setting.                                                                                                                  | URL             |                             |
+| `protocol`<br>`OTEL_EXPORTER_OTLP_METRICS_PROTOCOL`                                       | The protocol transport/encoding of the OpenTelemetry endpoint, refer to [metrics export protocol](#metrics-export-protocol). [Accepted values](https://opentelemetry.io/docs/concepts/sdk-configuration/otlp-exporter-configuration/#otel_exporter_otlp_protocol) `http/json`, `http/protobuf`, and `grpc`.                                                    | string          | Inferred from port usage    |
+| `OTEL_EXPORTER_OTLP_PROTOCOL`                                                             | Similar to the shared endpoint, the protocol for metrics and traces.                                                                                                                                                                                                                                                                                           | string          | Inferred from port usage    |
+| `insecure_skip_verify`<br>`BEYLA_OTEL_INSECURE_SKIP_VERIFY`                               | If `true`, Beyla skips verifying and accepts any server certificate. Only override this setting for non-production environments.                                                                                                                                                                                                                               | boolean         | `false`                     |
+| `interval`<br>`BEYLA_METRICS_INTERVAL`                                                    | The duration between exports.                                                                                                                                                                                                                                                                                                                                  | Duration        | `5s`                        |
+| `features`<br>`BEYLA_OTEL_METRICS_FEATURES`                                               | The list of metric groups Beyla exports data for, refer to [metrics export features](#metrics-export-features). Accepted values `application`, `application_span`, `application_service_graph`, `application_process`, and `network`.                                                                                                                          | list of strings | `["application"]`           |
+| `allow_service_graph_self_references`<br>`BEYLA_OTEL_ALLOW_SERVICE_GRAPH_SELF_REFERENCES` | Does Beyla include self-referencing service in service graph generation, for example a service that calls itself. Self referencing isn't useful service graphs and increases data cardinality.                                                                                                                                                                 | boolean         | `false`                     |
+| `instrumentations`<br>`BEYLA_OTEL_METRICS_INSTRUMENTATIONS`                               | The list of metrics instrumentation Beyla collects data for, refer to [metrics instrumentation](#metrics-instrumentation)  section.                                                                                                                                                                                                                            | list of strings | `["*"]`                     |
+| `buckets`                                                                                 | Sets how you can override bucket boundaries of diverse histograms, refer to [override histogram buckets](#override-histogram-buckets).                                                                                                                                                                                                                         | (n/a)           | Object                      |
+| `histogram_aggregation`<br>`OTEL_EXPORTER_OTLP_METRICS_DEFAULT_HISTOGRAM_AGGREGATION`     | Sets the default aggregation Beyla uses for histogram instruments. Accepted values [`explicit_bucket_histogram`](https://opentelemetry.io/docs/specs/otel/metrics/sdk/#explicit-bucket-histogram-aggregation) or [`base2_exponential_bucket_histogram`](https://opentelemetry.io/docs/specs/otel/metrics/sdk/#base2-exponential-bucket-histogram-aggregation). | `string`        | `explicit_bucket_histogram` |
 
-Specifies the transport/encoding protocol of the OpenTelemetry endpoint.
+### Metrics export protocol
 
-The accepted values, as defined by the [OTLP Exporter Configuration document](https://opentelemetry.io/docs/concepts/sdk-configuration/otlp-exporter-configuration/#otel_exporter_otlp_protocol) are `http/json`, `http/protobuf` and `grpc`.
+If you don't set a protocol Beyla sets the protocol as follows:
 
-The `OTEL_EXPORTER_OTLP_PROTOCOL` environment variable sets a common protocol for both the metrics and
-[traces](#otel-traces-exporter) exporters. The `OTEL_EXPORTER_OTLP_METRICS_PROTOCOL` environment variable,
-or the `protocol` YAML property, will set the protocol only for the metrics exporter node.
+- `grpc`: if the port ends in `4317`, for example `4317`, `14317`, or `24317`.
+- `http/protobuf`: if the port ends in `4318`, for example `4318`, `14318`, or `24318`.
 
-If this property is not provided, Beyla will guess it according to the following rules:
+### Metrics export features
 
-- Beyla will guess `grpc` if the port ends in `4317` (`4317`, `14317`, `24317`, ...),
-  as `4317` is the usual Port number for the OTEL GRPC collector.
-- Beyla will guess `http/protobuf` if the port ends in `4318` (`4318`, `14318`, `24318`, ...),
-  as `4318` is the usual Port number for the OTEL HTTP collector.
+The Beyla metrics exporter can export the following metrics data groups for processes matching entries in the [metrics discovery](#metrics-discovery) configuration.
 
-| YAML                   | Environment variable              | Type | Default |
-| ---------------------- | --------------------------------- | ------- | ------- |
-| `insecure_skip_verify` | `BEYLA_OTEL_INSECURE_SKIP_VERIFY` | boolean | `false` |
+- `application`: Application-level metrics
+- `application_span` Application-level trace span metrics
+- `application_service_graph`: Application-level service graph metrics.
+    It's recommended to use a DNS for service discovery and to ensure the DNS names match the OpenTelemetry service names Beyla uses.
+    In Kubernetes environments, the OpenTelemetry service name set by the service name discovery is the best choice for service graph metrics.
+- `application_process`: Metrics about the processes that runs the instrumented application
+- `network`:  Network-level metrics, refer to the [network metrics](/docs/beyla/latest/network/) configuration documentation to learn more
 
-Controls whether the OTEL client verifies the server's certificate chain and host name.
-If set to `true`, the OTEL client accepts any certificate presented by the server
-and any host name in that certificate. In this mode, TLS is susceptible to a man-in-the-middle
-attacks. This option should be used only for testing and development purposes.
+### Metrics instrumentation
 
-| YAML       | Environment variable                  | Type     | Default |
-| ---------- | ------------------------ | -------- | ------- |
-| `interval` | `BEYLA_METRICS_INTERVAL` | Duration | `5s`    |
+The list of instrumentation areas Beyla can collection data from:
 
-Configures the intervening time between exports.
+- `*`: all instrumentation, if `*` is present Beyla ignores other values
+- `http`: HTTP/HTTPS/HTTP2 application metrics
+- `grpc`: gRPC application metrics
+- `sql`: SQL database client call metrics
+- `redis`: Redis client/server database metrics
+- `kafka`: Kafka client/server message queue metrics
 
-| YAML       | Environment variable          | Type            | Default                      |
-|------------|-------------------------------|-----------------|------------------------------|
-| `features` | `BEYLA_OTEL_METRICS_FEATURES` | list of strings | `["application"]` |
+For example, setting the `instrumentations` option to: `http,grpc` enables the collection of `HTTP/HTTPS/HTTP2` and `gRPC` application metrics, and disables other instrumentation.
 
-A list of metric groups which are allowed to be exported. Each group belongs to a different feature
-of Beyla: application-level metrics or network metrics.
+### Override histogram buckets
 
-- If the list contains `application`, the Beyla OpenTelemetry exporter exports application-level metrics;
-  but only if there is defined an OpenTelemetry endpoint, and Beyla was able to discover any
-  process matching the entries in the `discovery` section.
-- If the list contains `application_span`, the Beyla OpenTelemetry exporter exports application-level trace span metrics;
-  but only if there is defined an OpenTelemetry endpoint, and Beyla was able to discover any
-  process matching the entries in the `discovery` section.
-- If the list contains `application_service_graph`, the Beyla OpenTelemetry exporter exports application-level service graph metrics;
-  but only if there is defined an OpenTelemetry endpoint, and Beyla was able to discover any
-  process matching the entries in the `discovery` section.
-  For best experience with generating service graph metrics, use a DNS for service discovery and make sure the DNS names match
-  the OpenTelemetry service names used in Beyla. In Kubernetes environments, the OpenTelemetry service name set by the service name
-  discovery is the best choice for service graph metrics.
-- If the list contains `application_process`, the Beyla OpenTelemetry exporter exports metrics about the processes that
-  run the instrumented application.
-- If the list contains `network`, the Beyla OpenTelemetry exporter exports network-level
-  metrics; but only if there is an OpenTelemetry endpoint defined. For network-level metrics options visit the
-  [network metrics]({{< relref "../network" >}}) configuration documentation.
-
-| YAML                                  | Environment variable                             | Type     | Default |
-|---------------------------------------|--------------------------------------------------|----------|---------|
-| `allow_service_graph_self_references` | `BEYLA_OTEL_ALLOW_SERVICE_GRAPH_SELF_REFERENCES` | boolean  | `false` |
-
-This option affects the behaviour of the generation of application-level service graph metrics, which can be enabled
-by adding `application_service_graph` to the list of OpenTelemetry metric export features. By default, Beyla does not
-report application-level service graph metrics which are considered to be self-referencing. For example, self-references
-can be calls from local node metric scrape tools, or a service making an HTTP call to itself. Self-references
-not useful for the purpose of showing service graphs, while at the same time they increase the cardinality and the
-overall metric storage cost. To allow generation of application-level service graph metrics which also include
-self-references, change this option value to `true`.
-
-| YAML               | Environment variable                  | Type            | Default                      |
-|--------------------|---------------------------------------|-----------------|------------------------------|
-| `instrumentations` | `BEYLA_OTEL_METRICS_INSTRUMENTATIONS` | list of strings | `["*"]` |
-
-A list of available **instrumentations** which are enabled, defined a comma separated list of strings.
-By default all available **instrumentations** are enabled, and you can choose to enable only some.
-The available **instrumentations** are as follows:
-
-- `*` enables all **instrumentations**. If `*` is present in the list, the other values are simply ignored.
-- `http` enables the collection of HTTP/HTTPS/HTTP2 application metrics.
-- `grpc` enables the collection of gRPC application metrics.
-- `sql` enables the collection of SQL database client call metrics.
-- `redis` enables the collection of Redis client/server database metrics.
-- `kafka` enables the collection of Kafka client/server message queue metrics.
-
-For example, setting the `instrumentations` option to: `http,grpc` enables the collection of HTTP/HTTPS/HTTP2 and
-gRPC application metrics, while the rest of the **instrumentations** are be disabled.
-
-| YAML      | Environment variable | Type   |
-| --------- | ------- | ------ |
-| `buckets` | (n/a)   | Object |
-
-The `buckets` object allows overriding the bucket boundaries of diverse histograms. See
-[Overriding histogram buckets](#overriding-histogram-buckets) section for more details.
-
-| YAML                    | Environment variable                                       | Type     | Default                     |
-|-------------------------|------------------------------------------------------------|----------|-----------------------------|
-| `histogram_aggregation` | `OTEL_EXPORTER_OTLP_METRICS_DEFAULT_HISTOGRAM_AGGREGATION` | `string` | `explicit_bucket_histogram` |
-
-Specifies the default aggregation to use for histogram instruments.
-
-Accepted values are:
-
-* `explicit_bucket_histogram` (default): use [Explicit Bucket Histogram Aggregation](https://opentelemetry.io/docs/specs/otel/metrics/sdk/#explicit-bucket-histogram-aggregation).
-* `base2_exponential_bucket_histogram`: use [Base2 Exponential Bucket Histogram Aggregation](https://opentelemetry.io/docs/specs/otel/metrics/sdk/#base2-exponential-bucket-histogram-aggregation).
-
-### Overriding histogram buckets
-
-For both OpenTelemetry and Prometheus metrics exporters, you can override the histogram bucket
-boundaries via a configuration file (see `buckets` YAML section of your metrics exporter configuration).
+You can override the histogram bucket boundaries for OpenTelemetry and Prometheus metrics exporters by setting the `buckets` YAML configuration option:
 
 | YAML                 | Type        |
 | -------------------- | ----------- |
@@ -192,7 +122,7 @@ for the predefined histograms instead of defining the buckets manually. You need
 environment variable. See the `histogram_aggregation` section in the [OTEL metrics exporter](#otel-metrics-exporter) section
 for more information.
 
-## OTEL traces exporter
+## OpenTelemetry traces exporter component
 
 > ℹ️ If you plan to use Beyla to send metrics to Grafana Cloud,
 > consult the [Grafana Cloud OTEL exporter for metrics and traces](#using-the-grafana-cloud-otel-endpoint-to-ingest-metrics-and-traces)
@@ -206,7 +136,7 @@ its `endpoint` attribute is set (either via an YAML configuration file or via en
 In addition to the properties exposed in this section, this component implicitly supports
 the environment variables from the [standard OTEL exporter configuration](https://opentelemetry.io/docs/concepts/sdk-configuration/otlp-exporter-configuration/).
 
-| YAML       | Environment variable                                                                   | Type | Default |
+| YAML       | Environment variable                                                      | Type | Default |
 | ---------- | ------------------------------------------------------------------------- | ---- | ------- |
 | `endpoint` | `OTEL_EXPORTER_OTLP_ENDPOINT` or<br/>`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | URL  | (unset) |
 
@@ -226,9 +156,9 @@ the OpenTelemetry exporter will automatically add the `/v1/traces` path to the U
 addition, you can use either the `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` environment variable or the `environment` YAML
 property to use exactly the provided URL without any addition.
 
-| YAML               | Environment variable                  | Type            | Default                      |
-|--------------------|---------------------------------------|-----------------|------------------------------|
-| `instrumentations` | `BEYLA_OTEL_TRACES_INSTRUMENTATIONS`   | list of strings | `["*"]` |
+| YAML               | Environment variable                 | Type            | Default |
+| ------------------ | ------------------------------------ | --------------- | ------- |
+| `instrumentations` | `BEYLA_OTEL_TRACES_INSTRUMENTATIONS` | list of strings | `["*"]` |
 
 A list of available **instrumentations** which are enabled, defined a comma separated list of strings.
 By default all available **instrumentations** are enabled, and you can choose to enable only some.
@@ -244,7 +174,7 @@ The available **instrumentations** are as follows:
 For example, setting the `instrumentations` option to: `http,grpc` enables the collection of HTTP/HTTPS/HTTP2 and
 gRPC application traces, while the rest of the **instrumentations** are be disabled.
 
-| YAML       | Environment variable                                                                   | Type   | Default   |
+| YAML       | Environment variable                                                      | Type   | Default   |
 | ---------- | ------------------------------------------------------------------------- | ------ | --------- |
 | `protocol` | `OTEL_EXPORTER_OTLP_PROTOCOL` or<br/>`OTEL_EXPORTER_OTLP_TRACES_PROTOCOL` | string | (guessed) |
 
@@ -290,7 +220,7 @@ otel_traces_export:
 If you are using the Grafana Alloy as your OTEL collector, you can configure the sampling
 policy at that level instead.
 
-| YAML   | Environment variable               | Type   | Default                 |
+| YAML   | Environment variable  | Type   | Default                 |
 | ------ | --------------------- | ------ | ----------------------- |
 | `name` | `OTEL_TRACES_SAMPLER` | string | `parentbased_always_on` |
 
@@ -318,7 +248,7 @@ parent of the traced span. If the span has no parent, the root sampler is used t
 make sampling decision. If the span has a parent, the sampling configuration
 would depend on the sampling parent.
 
-| YAML  | Environment variable                   | Type   | Default |
+| YAML  | Environment variable      | Type   | Default |
 | ----- | ------------------------- | ------ | ------- |
 | `arg` | `OTEL_TRACES_SAMPLER_ARG` | string | (unset) |
 
@@ -343,21 +273,21 @@ This component opens an HTTP endpoint in the auto-instrumentation tool
 that allows any external scraper to pull metrics in [Prometheus](https://prometheus.io/)
 format. It is enabled if the `port` property is set.
 
-| YAML   | Environment variable                 | Type | Default |
+| YAML   | Environment variable    | Type | Default |
 | ------ | ----------------------- | ---- | ------- |
 | `port` | `BEYLA_PROMETHEUS_PORT` | int  | (unset) |
 
 Specifies the HTTP port for the Prometheus scrape endpoint. If unset or 0,
 no Prometheus endpoint is open.
 
-| YAML   | Environment variable                 | Type   | Default    |
+| YAML   | Environment variable    | Type   | Default    |
 | ------ | ----------------------- | ------ | ---------- |
 | `path` | `BEYLA_PROMETHEUS_PATH` | string | `/metrics` |
 
 Specifies the HTTP query path to fetch the list of Prometheus metrics.
 
 | YAML  | Environment variable   | Type     | Default |
-|-------|------------------------|----------|---------|
+| ----- | ---------------------- | -------- | ------- |
 | `ttl` | `BEYLA_PROMETHEUS_TTL` | Duration | `5m`    |
 
 The group of attributes for a metric instance is not reported anymore if the time since
@@ -366,14 +296,14 @@ the last update is greater than this Time-To-Leave (TTL) value.
 The purpose of this value is to avoid reporting indefinitely finished application instances.
 
 | YAML      | Environment variable | Type   |
-| --------- | ------- | ------ |
-| `buckets` | (n/a)   | Object |
+| --------- | -------------------- | ------ |
+| `buckets` | (n/a)                | Object |
 
 The `buckets` object allows overriding the bucket boundaries of diverse histograms. See
 [Overriding histogram buckets](#overriding-histogram-buckets) section for more details.
 
-| YAML       | Environment variable        | Type            | Default                      |
-|------------|-----------------------------|-----------------|------------------------------|
+| YAML       | Environment variable        | Type            | Default           |
+| ---------- | --------------------------- | --------------- | ----------------- |
 | `features` | `BEYLA_PROMETHEUS_FEATURES` | list of strings | `["application"]` |
 
 A list of metric groups that are allowed to be exported. Each group belongs to a different feature
@@ -397,9 +327,9 @@ of Beyla: application-level metrics or network metrics.
   metrics; but only if the Prometheus `port` property is defined. For network-level metrics options visit the
   [network metrics]({{< relref "../network" >}}) configuration documentation.
 
-| YAML                                  | Environment variable                                   | Type     | Default |
-|---------------------------------------|--------------------------------------------------------|----------|---------|
-| `allow_service_graph_self_references` | `BEYLA_PROMETHEUS_ALLOW_SERVICE_GRAPH_SELF_REFERENCES` | boolean  | `false` |
+| YAML                                  | Environment variable                                   | Type    | Default |
+| ------------------------------------- | ------------------------------------------------------ | ------- | ------- |
+| `allow_service_graph_self_references` | `BEYLA_PROMETHEUS_ALLOW_SERVICE_GRAPH_SELF_REFERENCES` | boolean | `false` |
 
 This option affects the behaviour of the generation of application-level service graph metrics, which can be enabled
 by adding `application_service_graph` to the list of Prometheus metric export features. By default, Beyla does not
@@ -410,9 +340,9 @@ overall metric storage cost. To allow generation of application-level service gr
 self-references, change this option value to `true`.
 
 
-| YAML               | Environment variable                  | Type            | Default                      |
-|--------------------|---------------------------------------|-----------------|------------------------------|
-| `instrumentations` | `BEYLA_PROMETHEUS_INSTRUMENTATIONS`   | list of strings | `["*"]` |
+| YAML               | Environment variable                | Type            | Default |
+| ------------------ | ----------------------------------- | --------------- | ------- |
+| `instrumentations` | `BEYLA_PROMETHEUS_INSTRUMENTATIONS` | list of strings | `["*"]` |
 
 A list of available **instrumentations** which are enabled, defined a comma separated list of strings.
 By default all available **instrumentations** are enabled, and you can choose to enable only some.
@@ -428,7 +358,7 @@ The available **instrumentations** are as follows:
 For example, setting the `instrumentations` option to: `http,grpc` enables the collection of HTTP/HTTPS/HTTP2 and
 gRPC application metrics, while the rest of the **instrumentations** are be disabled.
 
-## Using the Grafana Cloud OTEL endpoint to ingest metrics and traces
+## Grafana Cloud OTLP endpoint
 
 You can use the standard OpenTelemetry variables to submit the metrics and
 traces to any standard OpenTelemetry endpoint, including Grafana Cloud.
@@ -447,14 +377,14 @@ grafana:
     cloud_instance_id: 123456
 ```
 
-| YAML           | Environment variable                | Type     | Default  |
+| YAML           | Environment variable   | Type     | Default  |
 | -------------- | ---------------------- | -------- | -------- |
 | `cloud_submit` | `GRAFANA_CLOUD_SUBMIT` | []string | `traces` |
 
 Accepts a list of strings with the kind of data that will be submitted to the
 OTLP endpoint. It accepts `metrics` and/or `traces` as values.
 
-| YAML         | Environment variable              | Type   | Default |
+| YAML         | Environment variable | Type   | Default |
 | ------------ | -------------------- | ------ | ------- |
 | `cloud_zone` | `GRAFANA_CLOUD_ZONE` | string | (unset) |
 
@@ -467,14 +397,14 @@ or `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` variables are defined, they will
 override the destination endpoint, so the `cloud_zone` configuration option
 will be ignored.
 
-| YAML                | Environment variable                     | Type   | Default |
+| YAML                | Environment variable        | Type   | Default |
 | ------------------- | --------------------------- | ------ | ------- |
 | `cloud_instance_id` | `GRAFANA_CLOUD_INSTANCE_ID` | string | (unset) |
 
 Your Grafana user name. It is usually a number but it must be set as a
 string inside the YAML file.
 
-| YAML            | Environment variable                 | Type   | Default |
+| YAML            | Environment variable    | Type   | Default |
 | --------------- | ----------------------- | ------ | ------- |
 | `cloud_api_key` | `GRAFANA_CLOUD_API_KEY` | string | (unset) |
 

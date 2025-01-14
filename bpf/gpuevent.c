@@ -8,7 +8,6 @@
 #include "bpf_core_read.h"
 #include "bpf_helpers.h"
 #include "bpf_tracing.h"
-#include "ringbuf.h"
 #include "pid.h"
 #include "bpf_dbg.h"
 #include "gpuevent.h"
@@ -16,6 +15,10 @@
 char LICENSE[] SEC("license") = "Dual MIT/GPL";
 
 const gpu_kernel_launch_t *unused_gpu __attribute__((unused));
+const gpu_malloc_t *unused_gpu1 __attribute__((unused));
+
+#define EVENT_GPU_KERNEL_LAUNCH 1
+#define EVENT_GPU_MALLOC 2
 
 struct {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
@@ -60,7 +63,6 @@ int BPF_KPROBE(handle_cuda_launch,
 
     e->flags = EVENT_GPU_KERNEL_LAUNCH;
     task_pid(&e->pid_info);
-    bpf_get_current_comm(&e->comm, sizeof(e->comm));
 
     e->kern_func_off = func_off;
     e->grid_x = (u32)grid_xy;
@@ -90,6 +92,30 @@ int BPF_KPROBE(handle_cuda_launch,
         e->ustack_sz =
             bpf_get_stack(ctx, e->ustack, sizeof(e->ustack), BPF_F_USER_STACK) / sizeof(uint64_t);
     }
+
+    bpf_ringbuf_submit(e, 0);
+    return 0;
+}
+
+SEC("uprobe/cudaMalloc")
+int BPF_KPROBE(handle_cuda_malloc, void **devPtr, size_t size) {
+    u64 id = bpf_get_current_pid_tgid();
+
+    if (!valid_pid(id)) {
+        return 0;
+    }
+
+    bpf_dbg_printk("=== cudaMalloc %llx ===", id);
+
+    gpu_malloc_t *e = bpf_ringbuf_reserve(&rb, sizeof(*e), 0);
+    if (!e) {
+        bpf_dbg_printk("Failed to allocate ringbuf entry");
+        return 0;
+    }
+
+    e->flags = EVENT_GPU_MALLOC;
+    task_pid(&e->pid_info);
+    e->size = (u64)size;
 
     bpf_ringbuf_submit(e, 0);
     return 0;

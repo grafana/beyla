@@ -19,7 +19,6 @@ type bpf_debugGpuKernelLaunchT struct {
 		UserPid uint32
 		Ns      uint32
 	}
-	Comm        [16]int8
 	KernFuncOff uint64
 	GridX       int32
 	GridY       int32
@@ -31,6 +30,16 @@ type bpf_debugGpuKernelLaunchT struct {
 	Args        [16]uint64
 	UstackSz    uint64
 	Ustack      [128]uint64
+}
+
+type bpf_debugGpuMallocT struct {
+	Flags   uint8
+	Size    uint64
+	PidInfo struct {
+		HostPid uint32
+		UserPid uint32
+		Ns      uint32
+	}
 }
 
 // loadBpf_debug returns the embedded CollectionSpec for bpf_debug.
@@ -75,6 +84,7 @@ type bpf_debugSpecs struct {
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_debugProgramSpecs struct {
 	HandleCudaLaunch *ebpf.ProgramSpec `ebpf:"handle_cuda_launch"`
+	HandleCudaMalloc *ebpf.ProgramSpec `ebpf:"handle_cuda_malloc"`
 }
 
 // bpf_debugMapSpecs contains maps before they are loaded into the kernel.
@@ -82,7 +92,6 @@ type bpf_debugProgramSpecs struct {
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_debugMapSpecs struct {
 	DebugEvents *ebpf.MapSpec `ebpf:"debug_events"`
-	Events      *ebpf.MapSpec `ebpf:"events"`
 	PidCache    *ebpf.MapSpec `ebpf:"pid_cache"`
 	Rb          *ebpf.MapSpec `ebpf:"rb"`
 	ValidPids   *ebpf.MapSpec `ebpf:"valid_pids"`
@@ -108,7 +117,6 @@ func (o *bpf_debugObjects) Close() error {
 // It can be passed to loadBpf_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_debugMaps struct {
 	DebugEvents *ebpf.Map `ebpf:"debug_events"`
-	Events      *ebpf.Map `ebpf:"events"`
 	PidCache    *ebpf.Map `ebpf:"pid_cache"`
 	Rb          *ebpf.Map `ebpf:"rb"`
 	ValidPids   *ebpf.Map `ebpf:"valid_pids"`
@@ -117,7 +125,6 @@ type bpf_debugMaps struct {
 func (m *bpf_debugMaps) Close() error {
 	return _Bpf_debugClose(
 		m.DebugEvents,
-		m.Events,
 		m.PidCache,
 		m.Rb,
 		m.ValidPids,
@@ -129,11 +136,13 @@ func (m *bpf_debugMaps) Close() error {
 // It can be passed to loadBpf_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_debugPrograms struct {
 	HandleCudaLaunch *ebpf.Program `ebpf:"handle_cuda_launch"`
+	HandleCudaMalloc *ebpf.Program `ebpf:"handle_cuda_malloc"`
 }
 
 func (p *bpf_debugPrograms) Close() error {
 	return _Bpf_debugClose(
 		p.HandleCudaLaunch,
+		p.HandleCudaMalloc,
 	)
 }
 

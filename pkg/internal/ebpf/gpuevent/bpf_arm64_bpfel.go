@@ -19,7 +19,6 @@ type bpfGpuKernelLaunchT struct {
 		UserPid uint32
 		Ns      uint32
 	}
-	Comm        [16]int8
 	KernFuncOff uint64
 	GridX       int32
 	GridY       int32
@@ -31,6 +30,16 @@ type bpfGpuKernelLaunchT struct {
 	Args        [16]uint64
 	UstackSz    uint64
 	Ustack      [128]uint64
+}
+
+type bpfGpuMallocT struct {
+	Flags   uint8
+	Size    uint64
+	PidInfo struct {
+		HostPid uint32
+		UserPid uint32
+		Ns      uint32
+	}
 }
 
 // loadBpf returns the embedded CollectionSpec for bpf.
@@ -75,13 +84,13 @@ type bpfSpecs struct {
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfProgramSpecs struct {
 	HandleCudaLaunch *ebpf.ProgramSpec `ebpf:"handle_cuda_launch"`
+	HandleCudaMalloc *ebpf.ProgramSpec `ebpf:"handle_cuda_malloc"`
 }
 
 // bpfMapSpecs contains maps before they are loaded into the kernel.
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfMapSpecs struct {
-	Events    *ebpf.MapSpec `ebpf:"events"`
 	PidCache  *ebpf.MapSpec `ebpf:"pid_cache"`
 	Rb        *ebpf.MapSpec `ebpf:"rb"`
 	ValidPids *ebpf.MapSpec `ebpf:"valid_pids"`
@@ -106,7 +115,6 @@ func (o *bpfObjects) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfMaps struct {
-	Events    *ebpf.Map `ebpf:"events"`
 	PidCache  *ebpf.Map `ebpf:"pid_cache"`
 	Rb        *ebpf.Map `ebpf:"rb"`
 	ValidPids *ebpf.Map `ebpf:"valid_pids"`
@@ -114,7 +122,6 @@ type bpfMaps struct {
 
 func (m *bpfMaps) Close() error {
 	return _BpfClose(
-		m.Events,
 		m.PidCache,
 		m.Rb,
 		m.ValidPids,
@@ -126,11 +133,13 @@ func (m *bpfMaps) Close() error {
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfPrograms struct {
 	HandleCudaLaunch *ebpf.Program `ebpf:"handle_cuda_launch"`
+	HandleCudaMalloc *ebpf.Program `ebpf:"handle_cuda_malloc"`
 }
 
 func (p *bpfPrograms) Close() error {
 	return _BpfClose(
 		p.HandleCudaLaunch,
+		p.HandleCudaMalloc,
 	)
 }
 

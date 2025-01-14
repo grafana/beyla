@@ -22,7 +22,6 @@ typedef uint64_t stack_trace_t[MAX_STACK_DEPTH];
 typedef struct gpu_kernel_launch {
     u8 flags; // Must be first, we use it to tell what kind of packet we have on the ring buffer
     pid_info pid_info;
-    char comm[TASK_COMM_LEN];
     uint64_t kern_func_off;
     int grid_x, grid_y, grid_z;
     int block_x, block_y, block_z;
@@ -31,5 +30,11 @@ typedef struct gpu_kernel_launch {
     size_t ustack_sz;
     stack_trace_t ustack;
 } __attribute__((packed)) gpu_kernel_launch_t;
+
+typedef struct gpu_malloc {
+    u8 flags; // Must be first, we use it to tell what kind of packet we have on the ring buffer
+    u64 size;
+    pid_info pid_info;
+} __attribute__((packed)) gpu_malloc_t;
 
 #endif

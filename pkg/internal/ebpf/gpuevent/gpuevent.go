@@ -27,12 +27,15 @@ import (
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type gpu_kernel_launch_t -target amd64,arm64 bpf ../../../../bpf/gpuevent.c -- -I../../../../bpf/headers
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type gpu_kernel_launch_t -target amd64,arm64 bpf_debug ../../../../bpf/gpuevent.c -- -I../../../../bpf/headers -DBPF_DEBUG
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type gpu_kernel_launch_t -type gpu_malloc_t -target amd64,arm64 bpf ../../../../bpf/gpuevent.c -- -I../../../../bpf/headers
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type gpu_kernel_launch_t -type gpu_malloc_t -target amd64,arm64 bpf_debug ../../../../bpf/gpuevent.c -- -I../../../../bpf/headers -DBPF_DEBUG
 
 // Hold onto Linux inode numbers of files that are already instrumented, e.g. libssl.so.3
 var instrumentedLibs = make(ebpfcommon.InstrumentedLibsT)
 var libsMux sync.Mutex
+
+const EventTypeKernelLaunch = 1 // EVENT_GPU_KERNEL_LAUNCH
+const EventTypeMalloc = 2       // EVENT_GPU_MALLOC
 
 type pidKey struct {
 	Pid int32
@@ -44,6 +47,7 @@ var symbolsMap = map[uint64]map[int64]string{}
 var baseMap = map[pidKey]uint64{}
 
 type GPUKernelLaunchInfo bpfGpuKernelLaunchT
+type GPUMallocInfo bpfGpuMallocT
 
 // TODO: We have a way to bring ELF file information to this Tracer struct
 // via the newNonGoTracersGroup / newNonGoTracersGroupUProbes functions. Now,
@@ -140,6 +144,9 @@ func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 			"cudaLaunchKernel": {{
 				Start: p.bpfObjects.HandleCudaLaunch,
 			}},
+			"cudaMalloc": {{
+				Start: p.bpfObjects.HandleCudaMalloc,
+			}},
 		},
 	}
 }
@@ -209,7 +216,39 @@ func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span) {
 }
 
 func (p *Tracer) processCudaEvent(_ *config.EBPFTracer, record *ringbuf.Record, _ ebpfcommon.ServiceFilter) (request.Span, bool, error) {
-	return ReadGPUKernelLaunchIntoSpan(record)
+	var eventType uint8
+
+	// we read the type first, depending on the type we decide what kind of record we have
+	err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &eventType)
+	if err != nil {
+		return request.Span{}, true, err
+	}
+
+	switch eventType {
+	case EventTypeKernelLaunch:
+		return ReadGPUKernelLaunchIntoSpan(record)
+	case EventTypeMalloc:
+		return ReadGPUMallocIntoSpan(record)
+	default:
+		p.log.Error("unknown cuda event")
+	}
+
+	return request.Span{}, false, nil
+}
+
+func ReadGPUMallocIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
+	var event GPUMallocInfo
+	if err := binary.Read(bytes.NewReader(record.RawSample), binary.LittleEndian, &event); err != nil {
+		return request.Span{}, true, err
+	}
+
+	// Log the GPU Kernel Launch event
+	slog.Debug("GPU Malloc", "event", event)
+
+	return request.Span{
+		Type:          request.EventTypeGPUMalloc,
+		ContentLength: int64(event.Size),
+	}, false, nil
 }
 
 func ReadGPUKernelLaunchIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {

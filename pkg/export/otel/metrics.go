@@ -196,6 +196,7 @@ type MetricsReporter struct {
 	attrHTTPRequestSize       []attributes.Field[*request.Span, attribute.KeyValue]
 	attrHTTPClientRequestSize []attributes.Field[*request.Span, attribute.KeyValue]
 	attrGPUKernelCalls        []attributes.Field[*request.Span, attribute.KeyValue]
+	attrGPUMemoryAllocations  []attributes.Field[*request.Span, attribute.KeyValue]
 }
 
 // Metrics is a set of metrics associated to a given OTEL MeterProvider.
@@ -225,6 +226,7 @@ type Metrics struct {
 	serviceGraphTotal     *Expirer[*request.Span, instrument.Int64Counter, int64]
 	tracesTargetInfo      instrument.Int64UpDownCounter
 	gpuKernelCallsTotal   *Expirer[*request.Span, instrument.Int64Counter, int64]
+	gpuMemoryAllocsTotal  *Expirer[*request.Span, instrument.Int64Counter, int64]
 }
 
 func ReportMetrics(
@@ -302,6 +304,8 @@ func newMetricsReporter(
 	if is.GPUEnabled() {
 		mr.attrGPUKernelCalls = attributes.OpenTelemetryGetters(
 			request.SpanOTELGetters, mr.attributes.For(attributes.GPUKernelLaunchCalls))
+		mr.attrGPUMemoryAllocations = attributes.OpenTelemetryGetters(
+			request.SpanOTELGetters, mr.attributes.For(attributes.GPUMemoryAllocations))
 	}
 
 	mr.reporters = NewReporterPool[*svc.Attrs, *Metrics](cfg.ReportersCacheLen, cfg.TTL, timeNow,
@@ -479,6 +483,13 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 		}
 		m.gpuKernelCallsTotal = NewExpirer[*request.Span, instrument.Int64Counter, int64](
 			m.ctx, gpuKernelCallsTotal, mr.attrGPUKernelCalls, timeNow, mr.cfg.TTL)
+
+		gpuMemoryAllocationsTotal, err := meter.Int64Counter(attributes.GPUMemoryAllocations.OTEL, instrument.WithUnit("By"))
+		if err != nil {
+			return fmt.Errorf("creating gpu memory allocations total: %w", err)
+		}
+		m.gpuMemoryAllocsTotal = NewExpirer[*request.Span, instrument.Int64Counter, int64](
+			m.ctx, gpuMemoryAllocationsTotal, mr.attrGPUMemoryAllocations, timeNow, mr.cfg.TTL)
 	}
 
 	return nil
@@ -842,6 +853,11 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 			if mr.is.GPUEnabled() {
 				gcalls, attrs := r.gpuKernelCallsTotal.ForRecord(span)
 				gcalls.Add(r.ctx, 1, instrument.WithAttributeSet(attrs))
+			}
+		case request.EventTypeGPUMalloc:
+			if mr.is.GPUEnabled() {
+				gmem, attrs := r.gpuMemoryAllocsTotal.ForRecord(span)
+				gmem.Add(r.ctx, span.ContentLength, instrument.WithAttributeSet(attrs))
 			}
 		}
 	}

@@ -34,6 +34,7 @@ const (
 	EventTypeRedisServer
 	EventTypeKafkaServer
 	EventTypeGPUKernelLaunch
+	EventTypeGPUMalloc
 )
 
 const (
@@ -76,6 +77,8 @@ func (t EventType) String() string {
 		return "KafkaServer"
 	case EventTypeGPUKernelLaunch:
 		return "CUDALaunch"
+	case EventTypeGPUMalloc:
+		return "CUDAMalloc"
 	default:
 		return fmt.Sprintf("UNKNOWN (%d)", t)
 	}
@@ -241,6 +244,10 @@ func spanAttributes(s *Span) SpanAttributes {
 		return SpanAttributes{
 			"function":  s.Method,
 			"callStack": s.Path,
+		}
+	case EventTypeGPUMalloc:
+		return SpanAttributes{
+			"size": strconv.FormatInt(s.ContentLength, 10),
 		}
 	}
 

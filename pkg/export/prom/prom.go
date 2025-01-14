@@ -174,6 +174,7 @@ type metricsReporter struct {
 	attrHTTPRequestSize       []attributes.Field[*request.Span, string]
 	attrHTTPClientRequestSize []attributes.Field[*request.Span, string]
 	attrGPUKernelCalls        []attributes.Field[*request.Span, string]
+	attrGPUMemoryAllocs       []attributes.Field[*request.Span, string]
 
 	// trace span metrics
 	spanMetricsLatency    *Expirer[prometheus.Histogram]
@@ -188,7 +189,8 @@ type metricsReporter struct {
 	serviceGraphTotal  *Expirer[prometheus.Counter]
 
 	// gpu related metrics
-	gpuKernelCallsTotal *Expirer[prometheus.Counter]
+	gpuKernelCallsTotal  *Expirer[prometheus.Counter]
+	gpuMemoryAllocsTotal *Expirer[prometheus.Counter]
 
 	promConnect *connector.PrometheusManager
 
@@ -281,9 +283,12 @@ func newReporter(
 	}
 
 	var attrGPUKernelLaunchCalls []attributes.Field[*request.Span, string]
+	var attrGPUMemoryAllocations []attributes.Field[*request.Span, string]
 	if is.GPUEnabled() {
 		attrGPUKernelLaunchCalls = attributes.PrometheusGetters(request.SpanPromGetters,
 			attrsProvider.For(attributes.GPUKernelLaunchCalls))
+		attrGPUMemoryAllocations = attributes.PrometheusGetters(request.SpanPromGetters,
+			attrsProvider.For(attributes.GPUMemoryAllocations))
 	}
 
 	clock := expire.NewCachedClock(timeNow)
@@ -309,6 +314,7 @@ func newReporter(
 		attrHTTPRequestSize:       attrHTTPRequestSize,
 		attrHTTPClientRequestSize: attrHTTPClientRequestSize,
 		attrGPUKernelCalls:        attrGPUKernelLaunchCalls,
+		attrGPUMemoryAllocs:       attrGPUMemoryAllocations,
 		beylaInfo: NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: BeylaBuildInfo,
 			Help: "A metric with a constant '1' value labeled by version, revision, branch, " +
@@ -482,6 +488,12 @@ func newReporter(
 				Help: "number of GPU kernel launches",
 			}, labelNames(attrGPUKernelLaunchCalls)).MetricVec, clock.Time, cfg.TTL)
 		}),
+		gpuMemoryAllocsTotal: optionalCounterProvider(is.GPUEnabled(), func() *Expirer[prometheus.Counter] {
+			return NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
+				Name: attributes.GPUMemoryAllocations.Prom,
+				Help: "amount of GPU allocated memory in bytes",
+			}, labelNames(attrGPUMemoryAllocations)).MetricVec, clock.Time, cfg.TTL)
+		}),
 	}
 
 	if cfg.SpanMetricsEnabled() {
@@ -549,6 +561,7 @@ func newReporter(
 	if is.GPUEnabled() {
 		registeredMetrics = append(registeredMetrics,
 			mr.gpuKernelCallsTotal,
+			mr.gpuMemoryAllocsTotal,
 		)
 	}
 
@@ -677,6 +690,12 @@ func (r *metricsReporter) observe(span *request.Span) {
 				r.gpuKernelCallsTotal.WithLabelValues(
 					labelValues(span, r.attrGPUKernelCalls)...,
 				).metric.Add(1)
+			}
+		case request.EventTypeGPUMalloc:
+			if r.is.GPUEnabled() {
+				r.gpuMemoryAllocsTotal.WithLabelValues(
+					labelValues(span, r.attrGPUMemoryAllocs)...,
+				).metric.Add(float64(span.ContentLength))
 			}
 		}
 	}

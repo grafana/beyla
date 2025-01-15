@@ -48,6 +48,8 @@ func NewInterfaceManager() *InterfaceManager {
 }
 
 func (im *InterfaceManager) Start(ctx context.Context) {
+	im.log.Debug("Starting InterfaceManager", "monitor_mode", im.monitorMode)
+
 	if im.registerer != nil {
 		return
 	}
@@ -61,6 +63,8 @@ func (im *InterfaceManager) Start(ctx context.Context) {
 	}
 
 	registerer := ifaces.NewRegisterer(informer, im.channelBufferLen)
+
+	im.log.Debug("Subscribing for events")
 
 	ifaceEvents, err := registerer.Subscribe(ctx)
 

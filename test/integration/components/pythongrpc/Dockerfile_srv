@@ -1,0 +1,11 @@
+# Dockerfile that will build a container that runs python with FastAPI and uvicorn on port 8080
+FROM python:3.12
+EXPOSE 50051
+RUN pip install grpcio grpcio_tools
+COPY route_guide_server.py /route_guide_server.py
+COPY route_guide_db.json /route_guide_db.json
+COPY route_guide_pb2_grpc.py /route_guide_pb2_grpc.py
+COPY route_guide_pb2.py /route_guide_pb2.py
+COPY route_guide_pb2.pyi /route_guide_pb2.pyi
+COPY route_guide_resources.py /route_guide_resources.py
+CMD ["python", "route_guide_server.py"]

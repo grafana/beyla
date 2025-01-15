@@ -95,7 +95,8 @@ type Decoder struct {
 	// to fully parse before. Unlike buf, we own this data.
 	saveBuf bytes.Buffer
 
-	firstField bool // processing the first field of the header block
+	firstField    bool // processing the first field of the header block
+	failedToIndex bool
 }
 
 // NewDecoder returns a new decoder with the provided maximum dynamic
@@ -103,9 +104,10 @@ type Decoder struct {
 // parsed, in the same goroutine as calls to Write, before Write returns.
 func NewDecoder(maxDynamicTableSize uint32, emitFunc func(f HeaderField)) *Decoder {
 	d := &Decoder{
-		emit:        emitFunc,
-		emitEnabled: true,
-		firstField:  true,
+		emit:          emitFunc,
+		emitEnabled:   true,
+		firstField:    true,
+		failedToIndex: false,
 	}
 	d.dynTab.table.init()
 	d.dynTab.allowedMaxSize = maxDynamicTableSize
@@ -345,7 +347,10 @@ func (d *Decoder) parseFieldIndexed() error {
 	}
 	hf, ok := d.at(idx)
 	d.buf = buf
+	// If we've failed once to find an index, don't allow us to find
+	// a value for index that's greater than the last successful one
 	if !ok {
+		d.failedToIndex = true
 		return d.callEmit(HeaderField{Name: "<BAD INDEX>", Value: ""})
 	}
 	return d.callEmit(HeaderField{Name: hf.Name, Value: hf.Value})
@@ -392,7 +397,7 @@ func (d *Decoder) parseFieldLiteral(n uint8, it indexType) error {
 		}
 	}
 	d.buf = buf
-	if it.indexed() {
+	if it.indexed() && !d.failedToIndex {
 		d.dynTab.add(hf)
 	}
 	hf.Sensitive = it.sensitive()

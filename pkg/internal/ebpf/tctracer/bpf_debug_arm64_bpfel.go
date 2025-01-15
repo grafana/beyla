@@ -77,9 +77,10 @@ type bpf_debugHttp2GrpcRequestT struct {
 		UserPid uint32
 		Ns      uint32
 	}
-	Ssl uint8
-	_   [3]byte
-	Tp  struct {
+	Ssl     uint8
+	NewConn uint8
+	_       [2]byte
+	Tp      struct {
 		TraceId  [16]uint8
 		SpanId   [8]uint8
 		ParentId [8]uint8

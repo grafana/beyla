@@ -27,6 +27,8 @@ const (
 	GRPC
 )
 
+const initialHeaderTableSize = 4096
+
 type h2Connection struct {
 	hdec     *bhpack.Decoder
 	hdecRet  *bhpack.Decoder
@@ -45,13 +47,18 @@ func byteFramer(data []uint8) *http2.Framer {
 	return fr
 }
 
-func getOrInitH2Conn(conn *BPFConnInfo) *h2Connection {
+func getOrInitH2Conn(conn *BPFConnInfo, newConn bool) *h2Connection {
 	v, ok := activeGRPCConnections.Get(*conn)
+
+	dynamicTableSize := initialHeaderTableSize
+	if !newConn {
+		dynamicTableSize = 0
+	}
 
 	if !ok {
 		h := h2Connection{
-			hdec:     bhpack.NewDecoder(0, nil),
-			hdecRet:  bhpack.NewDecoder(0, nil),
+			hdec:     bhpack.NewDecoder(uint32(dynamicTableSize), nil),
+			hdecRet:  bhpack.NewDecoder(uint32(dynamicTableSize), nil),
 			protocol: HTTP2,
 		}
 		activeGRPCConnections.Add(*conn, h)
@@ -64,8 +71,8 @@ func getOrInitH2Conn(conn *BPFConnInfo) *h2Connection {
 	return &v
 }
 
-func protocolIsGRPC(conn *BPFConnInfo) {
-	h2c := getOrInitH2Conn(conn)
+func protocolIsGRPC(conn *BPFConnInfo, newConn bool) {
+	h2c := getOrInitH2Conn(conn, newConn)
 	if h2c != nil {
 		h2c.protocol = GRPC
 	}
@@ -102,8 +109,8 @@ func knownFrameKeys(fr *http2.Framer, hf *http2.HeadersFrame) bool {
 	return known
 }
 
-func readMetaFrame(conn *BPFConnInfo, fr *http2.Framer, hf *http2.HeadersFrame) (string, string, string, bool) {
-	h2c := getOrInitH2Conn(conn)
+func readMetaFrame(conn *BPFConnInfo, newConn bool, fr *http2.Framer, hf *http2.HeadersFrame) (string, string, string, bool) {
+	h2c := getOrInitH2Conn(conn, newConn)
 
 	ok := false
 	method := ""
@@ -126,7 +133,7 @@ func readMetaFrame(conn *BPFConnInfo, fr *http2.Framer, hf *http2.HeadersFrame) 
 		case "content-type":
 			contentType = strings.ToLower(hf.Value)
 			if contentType == "application/grpc" {
-				protocolIsGRPC(conn)
+				protocolIsGRPC(conn, newConn)
 			}
 			ok = true
 		}
@@ -162,8 +169,8 @@ func http2grpcStatus(status int) int {
 	return 2 // Unknown
 }
 
-func readRetMetaFrame(conn *BPFConnInfo, fr *http2.Framer, hf *http2.HeadersFrame) (int, bool, bool) {
-	h2c := getOrInitH2Conn(conn)
+func readRetMetaFrame(conn *BPFConnInfo, newConn bool, fr *http2.Framer, hf *http2.HeadersFrame) (int, bool, bool) {
+	h2c := getOrInitH2Conn(conn, newConn)
 
 	ok := false
 	status := 0
@@ -184,7 +191,7 @@ func readRetMetaFrame(conn *BPFConnInfo, fr *http2.Framer, hf *http2.HeadersFram
 			ok = true
 		case "grpc-status":
 			status, _ = strconv.Atoi(hf.Value)
-			protocolIsGRPC(conn)
+			protocolIsGRPC(conn, newConn)
 			grpc = true
 			ok = true
 		}
@@ -276,6 +283,11 @@ func http2FromBuffers(event *BPFHTTP2Info) (request.Span, bool, error) {
 	status := 0
 	eventType := HTTP2
 
+	newConn := true
+	if event.NewConn == 0 {
+		newConn = false
+	}
+
 	for {
 		f, err := framer.ReadFrame()
 
@@ -285,7 +297,7 @@ func http2FromBuffers(event *BPFHTTP2Info) (request.Span, bool, error) {
 
 		if ff, ok := f.(*http2.HeadersFrame); ok {
 			rok := false
-			method, path, contentType, ok := readMetaFrame((*BPFConnInfo)(&event.ConnInfo), framer, ff)
+			method, path, contentType, ok := readMetaFrame((*BPFConnInfo)(&event.ConnInfo), newConn, framer, ff)
 
 			if path == "" {
 				path = "*"
@@ -301,7 +313,7 @@ func http2FromBuffers(event *BPFHTTP2Info) (request.Span, bool, error) {
 				}
 
 				if ff, ok := retF.(*http2.HeadersFrame); ok {
-					status, grpcInStatus, rok = readRetMetaFrame((*BPFConnInfo)(&event.ConnInfo), retFramer, ff)
+					status, grpcInStatus, rok = readRetMetaFrame((*BPFConnInfo)(&event.ConnInfo), newConn, retFramer, ff)
 					break
 				}
 			}

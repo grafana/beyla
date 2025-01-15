@@ -5,9 +5,27 @@ import (
 	"context"
 )
 
+type InternalMetricsExporter string
+
+const (
+	InternalMetricsExporterDisabled   = InternalMetricsExporter("disabled")
+	InternalMetricsExporterPrometheus = InternalMetricsExporter("prometheus")
+	InternalMetricsExporterOTEL       = InternalMetricsExporter("otel")
+)
+
+func (t InternalMetricsExporter) Valid() bool {
+	switch t {
+	case InternalMetricsExporterDisabled, InternalMetricsExporterPrometheus, InternalMetricsExporterOTEL:
+		return true
+	}
+
+	return false
+}
+
 // Config options for the different metrics exporters
 type Config struct {
-	Prometheus PrometheusConfig `yaml:"prometheus,omitempty"`
+	Prometheus PrometheusConfig        `yaml:"prometheus,omitempty"`
+	Exporter   InternalMetricsExporter `yaml:"exporter,omitempty" env:"BEYLA_INTERNAL_METRICS_EXPORTER"`
 }
 
 // Reporter of internal metrics

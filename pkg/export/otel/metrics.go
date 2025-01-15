@@ -651,7 +651,6 @@ func isExponentialAggregation(mc *MetricsConfig, mlog *slog.Logger) bool {
 	return false
 }
 
-// TODO: restore as private
 func InstantiateMetricsExporter(ctx context.Context, cfg *MetricsConfig, log *slog.Logger) (sdkmetric.Exporter, error) {
 	var err error
 	var exporter sdkmetric.Exporter

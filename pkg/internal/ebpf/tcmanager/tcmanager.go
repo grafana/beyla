@@ -4,10 +4,14 @@ package tcmanager
 
 import (
 	"fmt"
+	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/link"
 )
 
 type TCBackend uint8
@@ -15,6 +19,7 @@ type TCBackend uint8
 const (
 	TCBackendTC = TCBackend(iota + 1)
 	TCBackendTCX
+	TCBackendAuto
 )
 
 type AttachmentType uint8
@@ -42,15 +47,32 @@ type TCManager interface {
 	SetInterfaceManager(im *InterfaceManager)
 }
 
+func newTCManagerAuto() TCManager {
+	log := slog.With("component", "tc_manager")
+
+	log.Debug("Auto detecting TCX support")
+
+	if IsTCXSupported() {
+		log.Debug("TCX support detected")
+		return NewTCXManager()
+	}
+
+	log.Debug("TCX not supported, using netlink")
+
+	return NewNetlinkManager()
+}
+
 func NewTCManager(backend TCBackend) TCManager {
 	switch backend {
 	case TCBackendTC:
 		return NewNetlinkManager()
 	case TCBackendTCX:
 		return NewTCXManager()
+	case TCBackendAuto:
+		return newTCManagerAuto()
 	}
 
-	return NewNetlinkManager() // default
+	return newTCManagerAuto() // default
 }
 
 func (b *TCBackend) UnmarshalText(text []byte) error {
@@ -61,6 +83,9 @@ func (b *TCBackend) UnmarshalText(text []byte) error {
 	case "tcx":
 		*b = TCBackendTCX
 		return nil
+	case "auto":
+		*b = TCBackendAuto
+		return nil
 	}
 
 	return fmt.Errorf("invalid TCBakend value: '%s'", text)
@@ -68,9 +93,43 @@ func (b *TCBackend) UnmarshalText(text []byte) error {
 
 func (b TCBackend) Valid() bool {
 	switch b {
-	case TCBackendTC, TCBackendTCX:
+	case TCBackendTC, TCBackendTCX, TCBackendAuto:
 		return true
 	}
 
 	return false
 }
+
+var IsTCXSupported = sync.OnceValue(func() bool {
+	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
+		Type: ebpf.SchedCLS,
+		Instructions: asm.Instructions{
+			asm.Mov.Imm(asm.R0, 0),
+			asm.Return(),
+		},
+		License: "Apache-2.0",
+	})
+
+	if err != nil {
+		return false
+	}
+
+	defer prog.Close()
+
+	l, err := link.AttachTCX(link.TCXOptions{
+		Program:   prog,
+		Attach:    ebpf.AttachTCXIngress,
+		Interface: 1, // lo
+		Anchor:    link.Tail(),
+	})
+
+	if err != nil {
+		return false
+	}
+
+	if err := l.Close(); err != nil {
+		return false
+	}
+
+	return true
+})

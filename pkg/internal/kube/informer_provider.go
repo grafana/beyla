@@ -132,35 +132,85 @@ func (mp *MetadataProvider) CurrentNodeName(ctx context.Context) (string, error)
 	if mp.localNodeName != "" {
 		return mp.localNodeName, nil
 	}
-	log := klog().With("func", "NodeName")
+
+	if nn, err := mp.fetchNodeName(ctx); err != nil {
+		return "", err
+	} else {
+		mp.localNodeName = nn
+	}
+	return mp.localNodeName, nil
+}
+
+func (mp *MetadataProvider) fetchNodeName(ctx context.Context) (string, error) {
+	log := klog().With("func", "fetchNodeName")
 	kubeClient, err := mp.KubeClient()
 	if err != nil {
 		return "", fmt.Errorf("can't get kubernetes client: %w", err)
 	}
 	// fist: get the current pod name and namespace
-	currentPod, err := os.Hostname()
+	podHostName, err := os.Hostname()
 	if err != nil {
 		return "", fmt.Errorf("can't get hostname of current pod: %w", err)
 	}
-	var currentNamespace string
+	namespace := currentNamespace(log)
+	// second: get the node for the current Pod
+	// using List instead of Get because to not require extra serviceaccount permissions
+	pods, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
+		FieldSelector: "metadata.name=" + podHostName,
+	})
+	if err != nil || len(pods.Items) == 0 {
+		log.Debug("can't get Pod info. This is expected if the pod is using the host network",
+			"podHostName", podHostName, "namespace", namespace, "error", err)
+		return checkLocalHostNameWithNodeName(ctx, log, kubeClient, podHostName)
+	}
+	return pods.Items[0].Spec.NodeName, nil
+}
+
+func currentNamespace(log *slog.Logger) string {
 	if nsBytes, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace"); err != nil {
 		log.Warn("can't read service account namespace. Two Beyla pods with the same"+
 			" name could result in inaccuracies in the host.id attribute", "error", err)
+		return ""
 	} else {
-		currentNamespace = string(nsBytes)
+		return string(nsBytes)
 	}
-	// second: get the node for the current Pod
-	// using List instead of Get because to not require extra serviceaccount permissions
-	pods, err := kubeClient.CoreV1().Pods(currentNamespace).List(ctx, metav1.ListOptions{
-		FieldSelector: "metadata.name=" + currentPod,
-	})
-	if err != nil || len(pods.Items) == 0 {
-		log.Debug("attention: can't get Pod info. This is expected if the pod is using the host network. Will use the"+
-			" host name as node name", "nodeName", currentPod, "namespace", currentNamespace, "error", err)
-		return currentPod, nil
+}
+
+// it might happen that the fetched hostName is not fully qualified and misses the localdomain
+// suffix, so we will check either if it corresponds to a kubernetes node, or if there is a
+// unique cluster node that starts with the fetched hostName
+func checkLocalHostNameWithNodeName(
+	ctx context.Context, log *slog.Logger, kubeClient kubernetes.Interface, podHostName string,
+) (string, error) {
+	nodes, err := kubeClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return "", fmt.Errorf("fetching local host node name: %w", err)
 	}
-	mp.localNodeName = pods.Items[0].Spec.NodeName
-	return mp.localNodeName, nil
+	podHostName = strings.ToLower(podHostName)
+	var submatches []string
+	for i := range nodes.Items {
+		nodeName := strings.ToLower(nodes.Items[i].Name)
+		if nodeName == podHostName {
+			return podHostName, nil
+		}
+		if strings.HasPrefix(nodeName, podHostName) {
+			submatches = append(submatches, nodeName)
+		}
+	}
+	switch len(submatches) {
+	case 0:
+		log.Warn("could not get any node name corresponding to the Beyla pod."+
+			" This could involve missing or incorrect Kubernetes metadata", "hostName", podHostName)
+	case 1:
+		podHostName = submatches[0]
+	default:
+		podHostName = submatches[0]
+		log.Warn("multiple node matches for the Beyla pod name. "+
+			" This could involve missing or incorrect Kubernetes metadata",
+			"matches", submatches, "hostName", podHostName)
+	}
+
+	return podHostName, nil
 }
 
 // initLocalInformers initializes an informer client that directly connects to the Node Kube API

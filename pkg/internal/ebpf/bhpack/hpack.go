@@ -96,7 +96,6 @@ type Decoder struct {
 	saveBuf bytes.Buffer
 
 	firstField    bool // processing the first field of the header block
-	lastGoodIndex uint64
 	failedToIndex bool
 }
 
@@ -109,7 +108,6 @@ func NewDecoder(maxDynamicTableSize uint32, emitFunc func(f HeaderField)) *Decod
 		emitEnabled:   true,
 		firstField:    true,
 		failedToIndex: false,
-		lastGoodIndex: 0,
 	}
 	d.dynTab.table.init()
 	d.dynTab.allowedMaxSize = maxDynamicTableSize
@@ -351,12 +349,9 @@ func (d *Decoder) parseFieldIndexed() error {
 	d.buf = buf
 	// If we've failed once to find an index, don't allow us to find
 	// a value for index that's greater than the last successful one
-	if !ok || (d.failedToIndex && idx > d.lastGoodIndex) {
+	if !ok {
 		d.failedToIndex = true
 		return d.callEmit(HeaderField{Name: "<BAD INDEX>", Value: ""})
-	}
-	if idx > d.lastGoodIndex {
-		d.lastGoodIndex = idx
 	}
 	return d.callEmit(HeaderField{Name: hf.Name, Value: hf.Value})
 }
@@ -402,7 +397,7 @@ func (d *Decoder) parseFieldLiteral(n uint8, it indexType) error {
 		}
 	}
 	d.buf = buf
-	if it.indexed() {
+	if it.indexed() && !d.failedToIndex {
 		d.dynTab.add(hf)
 	}
 	hf.Sensitive = it.sensitive()

@@ -10,10 +10,13 @@
 #include "protocol_common.h"
 #include "ringbuf.h"
 
+// These are bit flags, if you add any use power of 2 values
+enum { http2_conn_flag_ssl = WITH_SSL, http2_conn_flag_new = 0x2 };
+
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, pid_connection_info_t);
-    __type(value, u8); // ssl or not
+    __type(value, u8); // flags
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_http2_connections SEC(".maps");
 
@@ -62,6 +65,14 @@ static __always_inline grpc_frames_ctx_t *grpc_ctx() {
     return bpf_map_lookup_elem(&grpc_frames_ctx_mem, &zero);
 }
 
+static __always_inline u8 http2_flag_ssl(u8 flags) {
+    return flags & http2_conn_flag_ssl;
+}
+
+static __always_inline u8 http2_flag_new(u8 flags) {
+    return flags & http2_conn_flag_new;
+}
+
 static __always_inline http2_grpc_request_t *empty_http2_info() {
     int zero = 0;
     http2_grpc_request_t *value = bpf_map_lookup_elem(&http2_info_mem, &zero);
@@ -98,6 +109,13 @@ static __always_inline void http2_grpc_start(
             h2g_info->pid = meta->pid;
             h2g_info->type = meta->type;
         }
+
+        h2g_info->new_conn = 0;
+        u8 *h2g = bpf_map_lookup_elem(&ongoing_http2_connections, &s_key->pid_conn);
+        if (h2g && http2_flag_new(*h2g)) {
+            h2g_info->new_conn = 1;
+        }
+
         fixup_connection_info(
             &h2g_info->conn_info, h2g_info->type == EVENT_HTTP_CLIENT, orig_dport);
         bpf_probe_read(h2g_info->data, KPROBES_HTTP2_BUF_SIZE, u_buf);

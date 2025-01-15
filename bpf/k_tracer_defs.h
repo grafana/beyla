@@ -42,11 +42,14 @@ static __always_inline void handle_buf_with_args(void *ctx, call_protocol_args_t
         bpf_tail_call(ctx, &jump_table, k_tail_protocol_http);
     } else if (is_http2_or_grpc(args->small_buf, MIN_HTTP2_SIZE)) {
         bpf_dbg_printk("Found HTTP2 or gRPC connection");
-        u8 is_ssl = args->ssl;
-        bpf_map_update_elem(&ongoing_http2_connections, &args->pid_conn, &is_ssl, BPF_ANY);
+        u8 flags = http2_conn_flag_new;
+        if (args->ssl) {
+            flags |= http2_conn_flag_ssl;
+        }
+        bpf_map_update_elem(&ongoing_http2_connections, &args->pid_conn, &flags, BPF_ANY);
     } else {
         u8 *h2g = bpf_map_lookup_elem(&ongoing_http2_connections, &args->pid_conn);
-        if (h2g && *h2g == args->ssl) {
+        if (h2g && (http2_flag_ssl(*h2g) == args->ssl)) {
             bpf_tail_call(ctx, &jump_table, k_tail_protocol_http2);
         } else { // large request tracking
             http_info_t *info = bpf_map_lookup_elem(&ongoing_http, &args->pid_conn);

@@ -499,7 +499,7 @@ func (p *Tracer) watchForMisclassifedEvents() {
 			if p.bpfObjects.OngoingHttp2Connections != nil {
 				err := p.bpfObjects.OngoingHttp2Connections.Put(
 					&bpfPidConnectionInfoT{Conn: bpfConnectionInfoT(e.TCPInfo.ConnInfo), Pid: e.TCPInfo.Pid.HostPid},
-					uint8(e.TCPInfo.Ssl),
+					uint8(e.TCPInfo.Ssl), // no new connection flag (0x3)
 				)
 				if err != nil {
 					p.log.Debug("error writing HTTP2/gRPC connection info", "error", err)

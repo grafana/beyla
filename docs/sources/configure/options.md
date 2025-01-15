@@ -510,8 +510,8 @@ deterministic way to chain probes). We recommend the usage of the tcx
 backend for kernels >= 6.6 for this reason. When set to `auto`, Beyla will
 pick the most suitable backend based on the underlying kernel.
 
-The accepted backends are `tc`, `tcx` and `auto. An empty or unset value
-defaults to `auto`.
+The accepted backends are `tc`, `tcx`, and `auto.
+An empty or unset value defaults to `auto`.
 
 | YAML                    | Environment variable               | Type    | Default |
 | ----------------------- | ---------------------------------- | ------- | ------- |

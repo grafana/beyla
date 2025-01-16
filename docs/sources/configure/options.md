@@ -243,7 +243,7 @@ Prometheus.
 
 Disables instrumentation of Beyla itself (self-instrumentation), as well as Grafana Alloy and the
 OpenTelemetry Collector. Set to false to allow Beyla to instrument itself as well as these other components.
-Note: in order to enable such self-instrumentation, it is still required to include them in the `services` section.
+Note: to enable such self-instrumentation, it is still required to include them in the `services` section.
 
 | YAML                       | Environment variable             | Type    | Default |
 | -------------------------- | -------------------------------- | ------- | ------- |

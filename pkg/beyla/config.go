@@ -132,6 +132,7 @@ var DefaultConfig = Config{
 	},
 	Discovery: services.DiscoveryConfig{
 		ExcludeOTelInstrumentedServices: true,
+		ExcludeSystemServices:           true,
 	},
 }
 

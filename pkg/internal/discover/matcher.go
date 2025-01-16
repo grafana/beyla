@@ -15,6 +15,8 @@ import (
 	"github.com/grafana/beyla/pkg/services"
 )
 
+var excludeSystemRegexp = regexp.MustCompile(`.*alloy.*|.*otelcol.*|.*beyla.*`)
+
 // CriteriaMatcherProvider filters the processes that match the discovery criteria.
 func CriteriaMatcherProvider(cfg *beyla.Config) pipe.MiddleProvider[[]Event[processAttrs], []Event[ProcessMatch]] {
 	return func() (pipe.MiddleFunc[[]Event[processAttrs], []Event[ProcessMatch]], error) {
@@ -24,6 +26,13 @@ func CriteriaMatcherProvider(cfg *beyla.Config) pipe.MiddleProvider[[]Event[proc
 			excludeCriteria: cfg.Discovery.ExcludeServices,
 			processHistory:  map[PID]*services.ProcessInfo{},
 		}
+
+		if cfg.Discovery.ExcludeSystemServices {
+			m.excludeCriteria = append(m.excludeCriteria, services.Attributes{
+				Path: services.NewPathRegexp(excludeSystemRegexp),
+			})
+		}
+
 		return m.run, nil
 	}
 }

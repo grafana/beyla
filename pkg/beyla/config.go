@@ -250,6 +250,9 @@ func (c *Config) Validate() error {
 	if !c.EBPF.TCBackend.Valid() {
 		return ConfigError("Invalid BEYLA_BPF_TC_BACKEND value")
 	}
+	if err := tcmanager.EnsureCiliumCompatibility(c.EBPF.TCBackend); err != nil {
+		return ConfigError(fmt.Sprintf("Cilium compatibility error: %s", err.Error()))
+	}
 
 	if c.Attributes.Kubernetes.InformersSyncTimeout == 0 {
 		return ConfigError("BEYLA_KUBE_INFORMERS_SYNC_TIMEOUT duration must be greater than 0s")

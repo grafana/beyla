@@ -28,8 +28,9 @@ import (
 //
 //	testserver [/gotracemetoo] -> Python server [/tracemetoo] -> Ruby server [/users]
 //
-// They should all have the same traceID. Across nodes the TCP context propagation (BEYLA_BPF_TC_CP) connects the dots,
-// while on the same node, the networking is optimized and we rely on black-box context propagation to connect the services.
+// They should all have the same traceID. Across nodes the TCP context propagation (BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION)
+// connects the dots, while on the same node, the networking is optimized and we rely on black-box context propagation to
+// connect the services.
 func TestMultiNodeTracingL7(t *testing.T) {
 	feat := features.New("Beyla is able to generate distributed traces go->python->ruby").
 		Assess("it sends connected traces for all services",

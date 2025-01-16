@@ -85,7 +85,7 @@ spec:
               value: "true"
             - name: BEYLA_NAME_RESOLVER_SOURCES
               value: "dns,k8s"
-            - name: BEYLA_BPF_TC_CP
+            - name: BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION
               value: "true"
             - name: BEYLA_BPF_DEBUG
               value: "true"

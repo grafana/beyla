@@ -138,7 +138,7 @@ func (p *Tracer) startTC(ctx context.Context) {
 		return
 	}
 
-	if !p.cfg.EBPF.UseTCForCP {
+	if !p.cfg.EBPF.ContextPropagationEnabled {
 		return
 	}
 

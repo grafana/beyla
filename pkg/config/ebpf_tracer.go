@@ -30,7 +30,7 @@ type EBPFTracer struct {
 	HTTPRequestTimeout time.Duration `yaml:"http_request_timeout" env:"BEYLA_BPF_HTTP_REQUEST_TIMEOUT"`
 
 	// Enables Linux Traffic Control probes for context propagation
-	UseTCForCP bool `yaml:"traffic_control_context_propagation" env:"BEYLA_BPF_TC_CP"`
+	ContextPropagationEnabled bool `yaml:"enable_context_propagation" env:"BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION"`
 
 	// Enables Linux Traffic Control probes for context propagation
 	UseTCForL7CP bool `yaml:"traffic_control_l7_context_propagation" env:"BEYLA_BPF_TC_L7_CP"`

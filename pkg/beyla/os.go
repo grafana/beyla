@@ -84,7 +84,7 @@ func checkCapabilitiesForSetOptions(config *Config, caps *helpers.OSCapabilities
 		testAndSet(caps, capError, unix.CAP_CHECKPOINT_RESTORE)
 		testAndSet(caps, capError, unix.CAP_SYS_PTRACE)
 
-		if config.EBPF.UseTCForCP || config.EBPF.UseTCForL7CP {
+		if config.EBPF.ContextPropagationEnabled || config.EBPF.UseTCForL7CP {
 			testAndSet(caps, capError, unix.CAP_NET_ADMIN)
 		}
 	}

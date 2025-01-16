@@ -98,7 +98,7 @@ func (pf *ProcessFinder) Start() (<-chan *ebpf.Instrumentable, <-chan *ebpf.Inst
 func newCommonTracersGroup(cfg *beyla.Config) []ebpf.Tracer {
 	tracers := []ebpf.Tracer{}
 
-	if cfg.EBPF.UseTCForCP {
+	if cfg.EBPF.ContextPropagationEnabled {
 		tracers = append(tracers, tctracer.New(cfg))
 	}
 

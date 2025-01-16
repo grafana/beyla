@@ -217,6 +217,7 @@ network:
 		},
 		Discovery: services.DiscoveryConfig{
 			ExcludeOTelInstrumentedServices: true,
+			ExcludeSystemServices:           true,
 		},
 	}, cfg)
 }

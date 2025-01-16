@@ -49,7 +49,7 @@ var DefaultConfig = Config{
 		BatchLength:        100,
 		BatchTimeout:       time.Second,
 		HTTPRequestTimeout: 30 * time.Second,
-		TCBackend:          tcmanager.TCBackendTC,
+		TCBackend:          tcmanager.TCBackendAuto,
 	},
 	Grafana: otel.GrafanaConfig{
 		OTLP: otel.GrafanaOTLP{

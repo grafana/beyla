@@ -237,12 +237,12 @@ This option is useful for avoiding instrumentation of services which are typical
 found in observability environments. For example, use this option to exclude instrumenting
 Prometheus.
 
-| YAML                      | Environment variable            | Type    | Default |
-| ------------------------- | ------------------------------- | ------- | ------- |
-| `exclude_system_services` | `BEYLA_EXCLUDE_SYSTEM_SERVICES` | boolean | true    |
+| YAML                      | Environment variable            | Type    | Default                           |
+| ------------------------- | ------------------------------- | ------- | --------------------------------- |
+| `exclude_system_services` | `BEYLA_EXCLUDE_SYSTEM_SERVICES` | string  | `.*alloy.*|.*otelcol.*|.*beyla.*` |
 
 Disables instrumentation of Beyla itself (self-instrumentation), as well as Grafana Alloy and the
-OpenTelemetry Collector. Set to false to allow Beyla to instrument itself as well as these other components.
+OpenTelemetry Collector. Set to empty to allow Beyla to instrument itself as well as these other components.
 Note: to enable such self-instrumentation, it is still required to include them in the `services` section.
 
 | YAML                       | Environment variable             | Type    | Default |

@@ -204,13 +204,6 @@ config:
     #     cloud_zone: prod-eu-west-0
     #     cloud_instance_id: 123456
     #     cloud_api_key:
-    ## when supplying a custom discovery configuration it is recommended to add
-    ## the below default excludes because they would be overwritten otherwise.
-    ## these default excludes prevent Beyla from instrumenting itself.
-    ## if omitted, self-instrumentation will be enabled.
-    # discovery:
-    #   exclude_services:
-    #     - exe_path: ".*alloy.*|.*otelcol.*|.*beyla.*"
     attributes:
       kubernetes:
         enable: true

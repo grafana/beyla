@@ -21,3 +21,5 @@ func (d *dummyManager) AddProgram(_ string, _ *ebpf.Program, _ AttachmentType) {
 func (d *dummyManager) RemoveProgram(_ string)                                 {}
 func (d *dummyManager) InterfaceName(_ int) (string, bool)                     { return "", false }
 func (d *dummyManager) SetInterfaceManager(_ *InterfaceManager)                {}
+
+func EnsureCiliumCompatibility(_ TCBackend) error { return nil }

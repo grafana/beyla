@@ -57,11 +57,12 @@ var DefaultMetadataSources = MetadataSources{
 		ServiceName:      []string{"resource.opentelemetry.io/service.name"},
 		ServiceNamespace: []string{"resource.opentelemetry.io/service.namespace"},
 	},
-	// empty by default. If a user sets useLabelsForResourceAttributes: true it its OTEL operator, also
-	// the values below should be populated so:
-	//   - `app.kubernetes.io/name` becomes `service.name`
-	//   - `app.kubernetes.io/part-of` becomes `service.namespace`
-	Labels: LabelSources{},
+	// If a user sets useLabelsForResourceAttributes: false it its OTEL operator, is the task of the
+	// OTEL operator to provide empty values for this.
+	Labels: LabelSources{
+		ServiceName:      []string{"app.kubernetes.io/name"},
+		ServiceNamespace: []string{"app.kubernetes.io/part-of"},
+	},
 }
 
 // Store aggregates Kubernetes information from multiple sources:

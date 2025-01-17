@@ -19,6 +19,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 	"google.golang.org/grpc/credentials"
 
+	"github.com/grafana/beyla/pkg/buildinfo"
 	"github.com/grafana/beyla/pkg/export/attributes"
 	"github.com/grafana/beyla/pkg/export/expire"
 	"github.com/grafana/beyla/pkg/internal/svc"
@@ -76,6 +77,7 @@ func getResourceAttrs(hostID string, service *svc.Attrs) []attribute.KeyValue {
 		semconv.TelemetrySDKLanguageKey.String(service.SDKLanguage.String()),
 		// We set the SDK name as Beyla, so we can distinguish beyla generated metrics from other SDKs
 		semconv.TelemetrySDKNameKey.String("beyla"),
+		semconv.TelemetrySDKVersion(buildinfo.Version),
 		semconv.HostName(service.HostName),
 		semconv.HostID(hostID),
 	}

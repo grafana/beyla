@@ -95,6 +95,9 @@ func TestBasicPipeline(t *testing.T) {
 	event := testutil.ReadChannel(t, tc.Records(), testTimeout)
 	assert.NotEmpty(t, event.ResourceAttributes, string(semconv.ServiceInstanceIDKey))
 	delete(event.ResourceAttributes, string(semconv.ServiceInstanceIDKey))
+	assert.NotEmpty(t, event.ResourceAttributes, string(semconv.TelemetrySDKVersionKey))
+	delete(event.ResourceAttributes, string(semconv.TelemetrySDKVersionKey))
+
 	assert.Equal(t, collector.MetricRecord{
 		Name: "http.server.request.duration",
 		Unit: "s",
@@ -303,6 +306,8 @@ func TestRouteConsolidation(t *testing.T) {
 	for _, event := range events {
 		assert.NotEmpty(t, event.ResourceAttributes, string(semconv.ServiceInstanceIDKey))
 		delete(event.ResourceAttributes, string(semconv.ServiceInstanceIDKey))
+		assert.NotEmpty(t, event.ResourceAttributes, string(semconv.TelemetrySDKVersionKey))
+		delete(event.ResourceAttributes, string(semconv.TelemetrySDKVersionKey))
 	}
 	assert.Equal(t, collector.MetricRecord{
 		Name: "http.server.request.duration",
@@ -415,6 +420,9 @@ func TestGRPCPipeline(t *testing.T) {
 	event := testutil.ReadChannel(t, tc.Records(), testTimeout)
 	assert.NotEmpty(t, event.ResourceAttributes, string(semconv.ServiceInstanceIDKey))
 	delete(event.ResourceAttributes, string(semconv.ServiceInstanceIDKey))
+	assert.NotEmpty(t, event.ResourceAttributes, string(semconv.TelemetrySDKVersionKey))
+	delete(event.ResourceAttributes, string(semconv.TelemetrySDKVersionKey))
+
 	assert.Equal(t, collector.MetricRecord{
 		Name: "rpc.server.duration",
 		Unit: "s",
@@ -509,6 +517,9 @@ func TestBasicPipelineInfo(t *testing.T) {
 	event := testutil.ReadChannel(t, tc.Records(), testTimeout)
 	assert.NotEmpty(t, event.ResourceAttributes, string(semconv.ServiceInstanceIDKey))
 	delete(event.ResourceAttributes, string(semconv.ServiceInstanceIDKey))
+	assert.NotEmpty(t, event.ResourceAttributes, string(semconv.TelemetrySDKVersionKey))
+	delete(event.ResourceAttributes, string(semconv.TelemetrySDKVersionKey))
+
 	assert.Equal(t, collector.MetricRecord{
 		Name: "http.server.request.duration",
 		Unit: "s",
@@ -688,6 +699,9 @@ func getHostname() string {
 }
 
 func matchTraceEvent(t require.TestingT, name string, event collector.TraceRecord) {
+	assert.NotEmpty(t, event.ResourceAttributes, string(semconv.TelemetrySDKVersionKey))
+	delete(event.ResourceAttributes, string(semconv.TelemetrySDKVersionKey))
+
 	assert.NotEmpty(t, event.Attributes["span_id"])
 	assert.Equal(t, collector.TraceRecord{
 		Name: name,
@@ -716,6 +730,9 @@ func matchTraceEvent(t require.TestingT, name string, event collector.TraceRecor
 }
 
 func matchInnerTraceEvent(t require.TestingT, name string, event collector.TraceRecord) {
+	assert.NotEmpty(t, event.ResourceAttributes, string(semconv.TelemetrySDKVersionKey))
+	delete(event.ResourceAttributes, string(semconv.TelemetrySDKVersionKey))
+
 	assert.NotEmpty(t, event.Attributes["span_id"])
 	assert.Equal(t, collector.TraceRecord{
 		Name: name,
@@ -737,6 +754,9 @@ func matchInnerTraceEvent(t require.TestingT, name string, event collector.Trace
 }
 
 func matchGRPCTraceEvent(t *testing.T, name string, event collector.TraceRecord) {
+	assert.NotEmpty(t, event.ResourceAttributes, string(semconv.TelemetrySDKVersionKey))
+	delete(event.ResourceAttributes, string(semconv.TelemetrySDKVersionKey))
+
 	assert.Equal(t, collector.TraceRecord{
 		Name: name,
 		Attributes: map[string]string{
@@ -762,6 +782,9 @@ func matchGRPCTraceEvent(t *testing.T, name string, event collector.TraceRecord)
 }
 
 func matchInnerGRPCTraceEvent(t *testing.T, name string, event collector.TraceRecord) {
+	assert.NotEmpty(t, event.ResourceAttributes, string(semconv.TelemetrySDKVersionKey))
+	delete(event.ResourceAttributes, string(semconv.TelemetrySDKVersionKey))
+
 	assert.Equal(t, collector.TraceRecord{
 		Name: name,
 		Attributes: map[string]string{
@@ -809,6 +832,9 @@ func newHTTPInfo(method, path, peer string, status int) []request.Span {
 }
 
 func matchInfoEvent(t *testing.T, name string, event collector.TraceRecord) {
+	assert.NotEmpty(t, event.ResourceAttributes, string(semconv.TelemetrySDKVersionKey))
+	delete(event.ResourceAttributes, string(semconv.TelemetrySDKVersionKey))
+
 	assert.Equal(t, collector.TraceRecord{
 		Name: name,
 		Attributes: map[string]string{

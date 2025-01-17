@@ -60,12 +60,16 @@ func BPFMetrics(
 	cfg *PrometheusConfig,
 ) pipe.FinalProvider[[]request.Span] {
 	return func() (pipe.FinalFunc[[]request.Span], error) {
-		if !cfg.EndpointEnabled() && !cfg.EBPFEnabled() {
+		if !bpfCollectorEnabled(cfg) {
 			return pipe.IgnoreFinal[[]request.Span](), nil
 		}
 		collector := newBPFCollector(ctx, ctxInfo, cfg)
 		return collector.reportMetrics, nil
 	}
+}
+
+func bpfCollectorEnabled(cfg *PrometheusConfig) bool {
+	return cfg.EndpointEnabled() && cfg.EBPFEnabled()
 }
 
 func newBPFCollector(ctx context.Context, ctxInfo *global.ContextInfo, cfg *PrometheusConfig) *BPFCollector {

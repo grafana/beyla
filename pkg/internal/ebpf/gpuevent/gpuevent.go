@@ -288,21 +288,18 @@ func (p *Tracer) callStack(event *GPUKernelLaunchInfo) string {
 	if event.UstackSz > 1 {
 		cs := []string{}
 
-		for i := 1; i < int(event.UstackSz); i++ {
+		for i := 0; i < int(event.UstackSz); i++ {
 			addr := event.Ustack[i]
 			if addr != 0 {
-				symbol, ok := p.symForAddr(int32(event.PidInfo.UserPid), event.PidInfo.Ns, event.KernFuncOff)
-				if !ok {
-					symbol = "<unknown>"
-				} else {
+				symbol, ok := p.symForAddr(int32(event.PidInfo.UserPid), event.PidInfo.Ns, addr)
+				if ok {
 					symbol = p.symToName(symbol)
+					cs = append(cs, symbol)
 				}
-
-				cs = append(cs, symbol)
 			}
 		}
 
-		return strings.Join(cs, " <- ")
+		return strings.Join(cs, ";")
 	}
 
 	return ""
@@ -375,6 +372,11 @@ func (p *Tracer) processCudaFileInfo(info *exec.FileInfo) {
 
 	for _, m := range maps {
 		if strings.Contains(m.Pathname, "/vllm") {
+			if mod := p.discoverModule(info, maps, symModules, m.Pathname); mod != nil {
+				disovered = append(disovered, mod)
+			}
+		}
+		if strings.Contains(m.Pathname, "/ggml") {
 			if mod := p.discoverModule(info, maps, symModules, m.Pathname); mod != nil {
 				disovered = append(disovered, mod)
 			}

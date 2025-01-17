@@ -4,7 +4,7 @@
       "buf": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.23.4"
+          "newest": "1.23.5"
         },
         "offsets": [
           {
@@ -16,7 +16,7 @@
       "n": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.23.4"
+          "newest": "1.23.5"
         },
         "offsets": [
           {
@@ -30,7 +30,7 @@
       "val": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.23.4"
+          "newest": "1.23.5"
         },
         "offsets": [
           {
@@ -506,7 +506,7 @@
       "IP": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.23.4"
+          "newest": "1.23.5"
         },
         "offsets": [
           {
@@ -518,7 +518,7 @@
       "Port": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.23.4"
+          "newest": "1.23.5"
         },
         "offsets": [
           {
@@ -532,7 +532,7 @@
       "conn": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.23.4"
+          "newest": "1.23.5"
         },
         "offsets": [
           {
@@ -546,7 +546,7 @@
       "fd": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.23.4"
+          "newest": "1.23.5"
         },
         "offsets": [
           {
@@ -560,7 +560,7 @@
       "laddr": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.23.4"
+          "newest": "1.23.5"
         },
         "offsets": [
           {
@@ -572,7 +572,7 @@
       "raddr": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.23.4"
+          "newest": "1.23.5"
         },
         "offsets": [
           {
@@ -586,7 +586,7 @@
       "ContentLength": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.23.4"
+          "newest": "1.23.5"
         },
         "offsets": [
           {
@@ -598,7 +598,7 @@
       "Header": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.23.4"
+          "newest": "1.23.5"
         },
         "offsets": [
           {
@@ -610,7 +610,7 @@
       "Method": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.23.4"
+          "newest": "1.23.5"
         },
         "offsets": [
           {
@@ -622,7 +622,7 @@
       "URL": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.23.4"
+          "newest": "1.23.5"
         },
         "offsets": [
           {
@@ -636,7 +636,7 @@
       "StatusCode": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.23.4"
+          "newest": "1.23.5"
         },
         "offsets": [
           {
@@ -650,7 +650,7 @@
       "rwc": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.23.4"
+          "newest": "1.23.5"
         },
         "offsets": [
           {
@@ -662,7 +662,7 @@
       "tlsState": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.23.4"
+          "newest": "1.23.5"
         },
         "offsets": [
           {
@@ -676,7 +676,7 @@
       "nextStreamID": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.23.4"
+          "newest": "1.23.5"
         },
         "offsets": [
           {
@@ -708,7 +708,7 @@
       "tconn": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.23.4"
+          "newest": "1.23.5"
         },
         "offsets": [
           {
@@ -722,7 +722,7 @@
       "conn": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.23.4"
+          "newest": "1.23.5"
         },
         "offsets": [
           {
@@ -736,7 +736,7 @@
       "conn": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.23.4"
+          "newest": "1.23.5"
         },
         "offsets": [
           {
@@ -748,7 +748,7 @@
       "tlsState": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.23.4"
+          "newest": "1.23.5"
         },
         "offsets": [
           {
@@ -762,7 +762,7 @@
       "Path": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.23.4"
+          "newest": "1.23.5"
         },
         "offsets": [
           {
@@ -776,7 +776,7 @@
       "w": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.23.4"
+          "newest": "1.23.5"
         },
         "offsets": [
           {

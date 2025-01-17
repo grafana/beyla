@@ -1,7 +1,18 @@
+---
+title: Configure Beyla performance
+menuTitle: Tune performance
+description: Configure how the eBPF tracer component instruments HTTP and GRPC services of external processes and creates traces to forward to the next stage of the pipeline.
+weight: 90
+keywords:
+  - Beyla
+  - eBPF
+---
 
-## EBPF tracer
+# Configure Beyla performance
 
-YAML section `ebpf`.
+You can use the eBPF tracer to fine-tune Beyla performance.
+
+You can configure the component under the `ebpf` section of your YAML configuration or via environment variables.
 
 | YAML         | Environment variable   | Type   | Default |
 | ------------ | ---------------------- | ------ | ------- |

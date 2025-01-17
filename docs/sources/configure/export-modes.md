@@ -1,8 +1,8 @@
 ---
-title: Beyla export modes
+title: Configure Beyla export modes
 menuTitle: Export modes
-description: Learn about the different export modes for Beyla.
-weight: 2
+description: Configure Beyla to export data either directly to an OTLP endpoint or through Alloy.
+weight: 1
 keywords:
   - Beyla
   - eBPF
@@ -10,7 +10,7 @@ aliases:
   - /docs/grafana-cloud/monitor-applications/beyla/configure/export-modes/
 ---
 
-# Beyla export modes
+# Configure Beyla export modes
 
 Beyla can export data in two modes:
 

@@ -1,5 +1,14 @@
+---
+title: Filter metrics and traces by attribute values
+menuTitle: Filter data
+description: Configure Beyla to filter metrics and traces by attribute values.
+weight: 40
+keywords:
+  - Beyla
+  - eBPF
+---
 
-## Filter metrics and traces by attribute values
+# Filter metrics and traces by attribute values
 
 You might want to restrict the reported metrics and traces to very concrete
 event types based on the values of the attributes (for example, filter network

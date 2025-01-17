@@ -1,7 +1,16 @@
+---
+title: Configure Beyla routes decorator
+menuTitle: Routes decorator
+description: Configure the routes decorator component before Beyla sends data to the next stage of the pipeline.
+weight: 50
+keywords:
+  - Beyla
+  - eBPF
+---
 
-## Routes decorator
+# Configure Beyla routes decorator
 
-YAML section `routes`.
+You can configure the component under the `routes` section of your YAML configuration or via environment variables.
 
 This section can be only configured via the YAML file. If no `routes` section is provided in
 the YAML file, a default routes' pipeline stage will be created and filtered with the `heuristic`

@@ -1,5 +1,14 @@
+---
+title: Configure Beyla service discovery
+menuTitle: Service discovery
+description: Configure how the Beyla service discovery component searches for processes to instrument.
+weight: 20
+keywords:
+  - Beyla
+  - eBPF
+---
 
-## Service discovery
+# Configure Beyla service discovery
 
 The `executable_name`, `open_port`, `service_name` and `service_namespace` are top-level
 properties that simplify the configuration of Beyla to instrument a single service, or

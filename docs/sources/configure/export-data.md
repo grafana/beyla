@@ -1,13 +1,14 @@
 ---
-title: Export OpenTelemetry data
-description: Learn how to configure the  OpenTelemetry metrics exporter.
-weight: 1
+title: Configure Beyla Prometheus and OpenTelemetry data export
+menuTitle: Export data
+description: Configure the Beyla components to export Prometheus and OpenTelemetry metrics and OpenTelemetry traces, including exporting to Grafana Cloud Prometheus and OTLP endpoints.
+weight: 10
 keywords:
   - Beyla
   - eBPF
 ---
 
-# Export OpenTelemetry data
+# Configure Beyla Prometheus and OpenTelemetry data export
 
 Beyla can export OpenTelemetry metrics and traces to a OTLP endpoint.
 
@@ -36,7 +37,7 @@ Beyla uses lowercase fields for YAML configuration and uppercase names for envir
 | `features`<br>`BEYLA_OTEL_METRICS_FEATURES`                                               | The list of metric groups Beyla exports data for, refer to [metrics export features](#metrics-export-features). Accepted values `application`, `application_span`, `application_service_graph`, `application_process`, and `network`.                                                                                                                          | list of strings | `["application"]`           |
 | `allow_service_graph_self_references`<br>`BEYLA_OTEL_ALLOW_SERVICE_GRAPH_SELF_REFERENCES` | Does Beyla include self-referencing service in service graph generation, for example a service that calls itself. Self referencing isn't useful service graphs and increases data cardinality.                                                                                                                                                                 | boolean         | `false`                     |
 | `instrumentations`<br>`BEYLA_OTEL_METRICS_INSTRUMENTATIONS`                               | The list of metrics instrumentation Beyla collects data for, refer to [metrics instrumentation](#metrics-instrumentation)  section.                                                                                                                                                                                                                            | list of strings | `["*"]`                     |
-| `buckets`                                                                                 | Sets how you can override bucket boundaries of diverse histograms, refer to [override histogram buckets](#override-histogram-buckets).                                                                                                                                                                                                                         | (n/a)           | Object                      |
+| `buckets`                                                                                 | Sets how you can override bucket boundaries of diverse histograms, refer to [override histogram buckets]({{< relref "./metrics-histograms.md" >}}).                                                                                                                                                                                                                         | (n/a)           | Object                      |
 | `histogram_aggregation`<br>`OTEL_EXPORTER_OTLP_METRICS_DEFAULT_HISTOGRAM_AGGREGATION`     | Sets the default aggregation Beyla uses for histogram instruments. Accepted values [`explicit_bucket_histogram`](https://opentelemetry.io/docs/specs/otel/metrics/sdk/#explicit-bucket-histogram-aggregation) or [`base2_exponential_bucket_histogram`](https://opentelemetry.io/docs/specs/otel/metrics/sdk/#base2-exponential-bucket-histogram-aggregation). | `string`        | `explicit_bucket_histogram` |
 
 ### Metrics export protocol
@@ -48,7 +49,7 @@ If you don't set a protocol Beyla sets the protocol as follows:
 
 ### Metrics export features
 
-The Beyla metrics exporter can export the following metrics data groups for processes matching entries in the [metrics discovery](#metrics-discovery) configuration.
+The Beyla metrics exporter can export the following metrics data groups for processes matching entries in the [metrics discovery]({{< relref "./export-data.md" >}}) configuration.
 
 - `application`: Application-level metrics
 - `application_span` Application-level trace span metrics
@@ -71,61 +72,10 @@ The list of instrumentation areas Beyla can collection data from:
 
 For example, setting the `instrumentations` option to: `http,grpc` enables the collection of `HTTP/HTTPS/HTTP2` and `gRPC` application metrics, and disables other instrumentation.
 
-### Override histogram buckets
-
-You can override the histogram bucket boundaries for OpenTelemetry and Prometheus metrics exporters by setting the `buckets` YAML configuration option:
-
-| YAML                 | Type        |
-| -------------------- | ----------- |
-| `duration_histogram` | `[]float64` |
-
-Sets the bucket boundaries for the metrics related to the request duration. Specifically:
-
-- `http.server.request.duration` (OTEL) / `http_server_request_duration_seconds` (Prometheus)
-- `http.client.request.duration` (OTEL) / `http_client_request_duration_seconds` (Prometheus)
-- `rpc.server.duration` (OTEL) / `rpc_server_duration_seconds` (Prometheus)
-- `rpc.client.duration` (OTEL) / `rpc_client_duration_seconds` (Prometheus)
-
-If the value is unset, the default bucket boundaries follow the
-[recommendation from the OpenTelemetry semantic conventions](https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/metrics/semantic_conventions/http-metrics.md)
-
-```
-0, 0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10
-```
-
-| YAML                     | Type        |
-| ------------------------ | ----------- |
-| `request_size_histogram` | `[]float64` |
-
-Sets the bucket boundaries for the metrics related to request sizes. This is:
-
-- `http.server.request.body.size` (OTEL) / `http_server_request_body_size_bytes` (Prometheus)
-- `http.client.request.body.size` (OTEL) / `http_client_request_body_size_bytes` (Prometheus)
-
-If the value is unset, the default bucket boundaries are:
-
-```
-0, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192
-```
-
-The default values are UNSTABLE and could change if Prometheus or OpenTelemetry semantic
-conventions recommend a different set of bucket boundaries.
-
-### Use native histograms and exponential histograms
-
-For Prometheus, [native histograms](https://prometheus.io/docs/concepts/metric_types/#histogram) are enabled if you
-[enable the `native-histograms` feature in your Prometheus collector](https://prometheus.io/docs/prometheus/latest/feature_flags/#native-histograms).
-
-For OpenTelemetry you can use [exponential histograms](https://opentelemetry.io/docs/specs/otel/metrics/data-model/#exponentialhistogram)
-for the predefined histograms instead of defining the buckets manually. You need to set up the standard
-[OTEL_EXPORTER_OTLP_METRICS_DEFAULT_HISTOGRAM_AGGREGATION](https://opentelemetry.io/docs/specs/otel/metrics/sdk_exporters/otlp/#additional-configuration)
-environment variable. See the `histogram_aggregation` section in the [OTEL metrics exporter](#otel-metrics-exporter) section
-for more information.
-
 ## OpenTelemetry traces exporter component
 
 > ℹ️ If you plan to use Beyla to send metrics to Grafana Cloud,
-> consult the [Grafana Cloud OTEL exporter for metrics and traces](#using-the-grafana-cloud-otel-endpoint-to-ingest-metrics-and-traces)
+> consult the [Grafana Cloud OTEL exporter for metrics and traces](#grafana-cloud-otlp-endpoint)
 > section for easier configuration.
 
 YAML section `otel_traces_export`.
@@ -143,11 +93,11 @@ the environment variables from the [standard OTEL exporter configuration](https:
 Specifies the OpenTelemetry endpoint where the traces will be sent. If you plan to send the
 metrics directly to the Grafana Cloud OpenTelemetry endpoint, you might prefer to use the
 configuration options in the
-[Using the Grafana Cloud OTEL endpoint to ingest metrics and traces](#using-the-grafana-cloud-otel-endpoint-to-ingest-metrics-and-traces)
+[Using the Grafana Cloud OTEL endpoint to ingest metrics and traces](#grafana-cloud-otlp-endpoint)
 section.
 
 The `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable sets a common endpoint for both the
-[metrics](#otel-metrics-exporter) and the traces exporters. The `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` environment variable
+[metrics](#metrics-export-configuration-options) and the traces exporters. The `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` environment variable
 or the `endpoint` YAML property, will set the endpoint only for the traces' exporter node,
 so the metrics exporter won't be activated unless explicitly specified.
 
@@ -183,7 +133,7 @@ Specifies the transport/encoding protocol of the OpenTelemetry traces endpoint.
 The accepted values, as defined by the [OTLP Exporter Configuration document](https://opentelemetry.io/docs/concepts/sdk-configuration/otlp-exporter-configuration/#otel_exporter_otlp_protocol) are `http/json`, `http/protobuf` and `grpc`.
 
 The `OTEL_EXPORTER_OTLP_PROTOCOL` environment variable sets a common protocol for both the metrics and
-the [traces](#otel-traces-exporter) exporters. The `OTEL_EXPORTER_OTLP_TRACES_PROTOCOL` environment variable,
+the [traces](#opentelemetry-traces-exporter-component) exporters. The `OTEL_EXPORTER_OTLP_TRACES_PROTOCOL` environment variable,
 or the `protocol` YAML property, will set the protocol only for the traces' exporter node.
 
 If this property is not provided, Beyla will guess it according to the following rules:
@@ -201,63 +151,6 @@ Controls whether the OTEL client verifies the server's certificate chain and hos
 If set to `true`, the OTEL client accepts any certificate presented by the server
 and any host name in that certificate. In this mode, TLS is susceptible to a man-in-the-middle
 attacks. This option should be used only for testing and development purposes.
-
-### Sampling policy
-
-Beyla accepts the standard OpenTelemetry environment variables to configure the
-sampling ratio of traces.
-
-In addition, you can configure the sampling under the `sampler` YAML subsection of the
-`otel_traces_export` section. For example:
-
-```yaml
-otel_traces_export:
-  sampler:
-    name: "traceidratio"
-    arg: "0.1"
-```
-
-If you are using the Grafana Alloy as your OTEL collector, you can configure the sampling
-policy at that level instead.
-
-| YAML   | Environment variable  | Type   | Default                 |
-| ------ | --------------------- | ------ | ----------------------- |
-| `name` | `OTEL_TRACES_SAMPLER` | string | `parentbased_always_on` |
-
-Specifies the name of the sampler. It accepts the following standard sampler
-names from the [OpenTelemetry specification](https://opentelemetry.io/docs/concepts/sdk-configuration/general-sdk-configuration/#otel_traces_sampler):
-
-- `always_on`: samples every trace. Be careful about using this sampler in an
-  application with significant traffic: a new trace will be started and exported
-  for every request.
-- `always_off`: samples no traces.
-- `traceidratio`: samples a given fraction of traces (specified by the `arg` property
-  that is explained below). The fraction must be a real value between 0 and 1.
-  For example, a value of `"0.5"` would sample 50% of the traces.
-  Fractions >= 1 will always sample. Fractions < 0 are treated as zero. To respect the
-  parent trace's sampling configuration, the `parentbased_traceidratio` sampler should be used.
-- `parentbased_always_on` (default): parent-based version of `always_on` sampler (see
-  explanation below).
-- `parentbased_always_off`: parent-based version of `always_off` sampler (see
-  explanation below).
-- `parentbased_traceidratio`: parent-based version of `traceidratio` sampler (see
-  explanation below).
-
-Parent-based samplers are composite samplers which behave differently based on the
-parent of the traced span. If the span has no parent, the root sampler is used to
-make sampling decision. If the span has a parent, the sampling configuration
-would depend on the sampling parent.
-
-| YAML  | Environment variable      | Type   | Default |
-| ----- | ------------------------- | ------ | ------- |
-| `arg` | `OTEL_TRACES_SAMPLER_ARG` | string | (unset) |
-
-Specifies the argument of the selected sampler. Currently, only `traceidratio`
-and `parentbased_traceidratio` require an argument.
-
-In YAML, this value MUST be provided as a string, so even if the value
-is numeric, make sure that it is enclosed between quotes in the YAML file,
-(for example, `arg: "0.25"`).
 
 ## Prometheus HTTP endpoint
 
@@ -300,7 +193,7 @@ The purpose of this value is to avoid reporting indefinitely finished applicatio
 | `buckets` | (n/a)                | Object |
 
 The `buckets` object allows overriding the bucket boundaries of diverse histograms. See
-[Overriding histogram buckets](#overriding-histogram-buckets) section for more details.
+[Overriding histogram buckets]({{< relref "./metrics-histograms.md" >}}) section for more details.
 
 | YAML       | Environment variable        | Type            | Default           |
 | ---------- | --------------------------- | --------------- | ----------------- |

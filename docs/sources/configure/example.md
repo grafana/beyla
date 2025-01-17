@@ -1,4 +1,16 @@
+---
+title: Beyla configuration YAML example
+menuTitle: YAML example
+description: Example Beyla configuration YAML example.
+weight: 100
+keywords:
+  - Beyla
+  - eBPF
+---
+
 ## YAML file example
+
+An example Beyla YAML configuration file to send OTLP data to Grafana Cloud OTLP endpoint:
 
 ```yaml
 open_port: 443

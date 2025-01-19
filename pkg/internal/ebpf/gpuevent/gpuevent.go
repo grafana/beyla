@@ -44,8 +44,7 @@ type modInfo struct {
 	ino  uint64
 }
 
-type offsetsMap map[int64]string
-type moduleOffsets map[uint64]offsetsMap
+type moduleOffsets map[uint64]*SymbolTree
 
 type GPUKernelLaunchInfo bpfGpuKernelLaunchT
 type GPUMallocInfo bpfGpuMallocT
@@ -269,7 +268,7 @@ func (p *Tracer) readGPUKernelLaunchIntoSpan(record *ringbuf.Record) (request.Sp
 	}
 
 	// Log the GPU Kernel Launch event
-	p.log.Debug("GPU Kernel Launch", "event", event)
+	p.log.Info("GPU Kernel Launch", "event", event)
 
 	// Find the symbol for the kernel launch
 	symbol, ok := p.symForAddr(int32(event.PidInfo.UserPid), event.PidInfo.Ns, event.KernFuncOff)
@@ -305,7 +304,7 @@ func (p *Tracer) callStack(event *GPUKernelLaunchInfo) string {
 	return ""
 }
 
-func (p *Tracer) processCudaLibFileInfo(info *exec.FileInfo, lib string, maps []*procfs.ProcMap, symMods moduleOffsets) (map[int64]string, *procfs.ProcMap, bool) {
+func (p *Tracer) processCudaLibFileInfo(info *exec.FileInfo, lib string, maps []*procfs.ProcMap, symMods moduleOffsets) (*SymbolTree, *procfs.ProcMap, bool) {
 	cudaMap := exec.LibPathPlain(lib, maps)
 
 	if cudaMap == nil {
@@ -477,8 +476,11 @@ func (p *Tracer) symForAddr(pid int32, ns uint32, off uint64) (string, bool) {
 		if off > m.base && off < m.end {
 			modSyms, ok := syms[m.ino]
 			if ok {
-				sym, ok := modSyms[int64(off)-int64(m.base)]
-				return sym, ok
+				res := modSyms.Search(off - m.base)
+				if len(res) > 0 {
+					return res[0].Symbol, true
+				}
+				return "", false
 			} else {
 				p.log.Warn("Can't find mod sym for", "ino", m.ino)
 			}
@@ -488,14 +490,14 @@ func (p *Tracer) symForAddr(pid int32, ns uint32, off uint64) (string, bool) {
 	return "", false
 }
 
-func (p *Tracer) collectSymbols(f *elf.File, syms []elf.Symbol, addressToName map[int64]string) {
+func (p *Tracer) collectSymbols(f *elf.File, syms []elf.Symbol, tree *SymbolTree) {
 	for _, s := range syms {
 		if elf.ST_TYPE(s.Info) != elf.STT_FUNC {
 			// Symbol not associated with a function or other executable code.
 			continue
 		}
 
-		address := int64(s.Value)
+		address := s.Value
 		// Loop over ELF segments.
 		for _, prog := range f.Progs {
 			// Skip uninteresting segments.
@@ -504,30 +506,32 @@ func (p *Tracer) collectSymbols(f *elf.File, syms []elf.Symbol, addressToName ma
 			}
 
 			if prog.Vaddr <= s.Value && s.Value < (prog.Vaddr+prog.Memsz) {
-				address = int64(s.Value) - int64(prog.Vaddr)
+				address = s.Value - prog.Vaddr
 				break
 			}
 		}
-		addressToName[address] = s.Name
+		if address != 0 {
+			tree.Insert(Symbol{Low: address, High: address + s.Size, Symbol: s.Name})
+		}
 	}
 }
 
 // returns a map of symbol addresses to names
-func (p *Tracer) findSymbolAddresses(f *elf.File) (map[int64]string, error) {
-	addressToName := map[int64]string{}
+func (p *Tracer) findSymbolAddresses(f *elf.File) (*SymbolTree, error) {
+	t := SymbolTree{}
 	syms, err := f.Symbols()
 	if err != nil && !errors.Is(err, elf.ErrNoSymbols) {
 		return nil, err
 	}
 
-	p.collectSymbols(f, syms, addressToName)
+	p.collectSymbols(f, syms, &t)
 
 	dynsyms, err := f.DynamicSymbols()
 	if err != nil && !errors.Is(err, elf.ErrNoSymbols) {
 		return nil, err
 	}
 
-	p.collectSymbols(f, dynsyms, addressToName)
+	p.collectSymbols(f, dynsyms, &t)
 
-	return addressToName, nil
+	return &t, nil
 }

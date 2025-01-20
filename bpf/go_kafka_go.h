@@ -64,7 +64,7 @@ struct {
 
 // Code for the produce messages path
 SEC("uprobe/writer_write_messages")
-int beyla_uprobe_writer_write_messages(struct pt_regs *ctx) {
+int be_u_WrtMsgStart(struct pt_regs *ctx) {
     void *goroutine_addr = (void *)GOROUTINE_PTR(ctx);
     void *w_ptr = (void *)GO_PARAM1(ctx);
     bpf_dbg_printk(
@@ -81,7 +81,7 @@ int beyla_uprobe_writer_write_messages(struct pt_regs *ctx) {
 }
 
 SEC("uprobe/writer_produce")
-int beyla_uprobe_writer_produce(struct pt_regs *ctx) {
+int be_u_WrtProduce(struct pt_regs *ctx) {
     void *goroutine_addr = (void *)GOROUTINE_PTR(ctx);
     bpf_dbg_printk("=== uprobe/kafka-go writer_produce %llx === ", goroutine_addr);
     go_addr_key_t g_key = {};
@@ -129,7 +129,7 @@ int beyla_uprobe_writer_produce(struct pt_regs *ctx) {
 }
 
 SEC("uprobe/client_roundTrip")
-int beyla_uprobe_client_roundTrip(struct pt_regs *ctx) {
+int be_u_CliRndTrip(struct pt_regs *ctx) {
     void *goroutine_addr = (void *)GOROUTINE_PTR(ctx);
     bpf_dbg_printk("=== uprobe/kafka-go client_roundTrip %llx === ", goroutine_addr);
     go_addr_key_t g_key = {};
@@ -154,7 +154,7 @@ int beyla_uprobe_client_roundTrip(struct pt_regs *ctx) {
 }
 
 SEC("uprobe/protocol_RoundTrip")
-int beyla_uprobe_protocol_roundtrip(struct pt_regs *ctx) {
+int be_u_ProtoRndTrip(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/kafka-go protocol_RoundTrip === ");
     void *goroutine_addr = (void *)GOROUTINE_PTR(ctx);
     void *rw_ptr = (void *)GO_PARAM2(ctx);
@@ -187,7 +187,7 @@ int beyla_uprobe_protocol_roundtrip(struct pt_regs *ctx) {
 }
 
 SEC("uprobe/protocol_RoundTrip_ret")
-int beyla_uprobe_protocol_roundtrip_ret(struct pt_regs *ctx) {
+int be_u_ProtoRndTrpRet(struct pt_regs *ctx) {
     void *goroutine_addr = (void *)GOROUTINE_PTR(ctx);
     bpf_dbg_printk("=== uprobe/protocol_RoundTrip ret %llx === ", goroutine_addr);
     go_addr_key_t g_key = {};
@@ -241,7 +241,7 @@ int beyla_uprobe_protocol_roundtrip_ret(struct pt_regs *ctx) {
 
 // Code for the fetch messages path
 SEC("uprobe/reader_read")
-int beyla_uprobe_reader_read(struct pt_regs *ctx) {
+int be_u_ReadStart(struct pt_regs *ctx) {
     void *goroutine_addr = (void *)GOROUTINE_PTR(ctx);
     void *r_ptr = (void *)GO_PARAM1(ctx);
     void *conn = (void *)GO_PARAM5(ctx);
@@ -287,7 +287,7 @@ int beyla_uprobe_reader_read(struct pt_regs *ctx) {
 }
 
 SEC("uprobe/reader_send_message")
-int beyla_uprobe_reader_send_message(struct pt_regs *ctx) {
+int be_u_ReadSendMsg(struct pt_regs *ctx) {
     void *goroutine_addr = (void *)GOROUTINE_PTR(ctx);
     bpf_dbg_printk("=== uprobe/kafka-go reader_send_message %llx === ", goroutine_addr);
     go_addr_key_t g_key = {};
@@ -304,7 +304,7 @@ int beyla_uprobe_reader_send_message(struct pt_regs *ctx) {
 }
 
 SEC("uprobe/reader_read")
-int beyla_uprobe_reader_read_ret(struct pt_regs *ctx) {
+int be_u_ReadRet(struct pt_regs *ctx) {
     void *goroutine_addr = (void *)GOROUTINE_PTR(ctx);
     bpf_dbg_printk("=== uprobe/kafka-go reader_read ret %llx === ", goroutine_addr);
     go_addr_key_t g_key = {};

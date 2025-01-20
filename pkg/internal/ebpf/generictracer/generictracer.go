@@ -242,68 +242,68 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.ProbeDesc {
 		// issues with the internal kernel code changing.
 		"sys_accept": {
 			Required: true,
-			End:      p.bpfObjects.BeylaKretprobeSysAccept4,
+			End:      p.bpfObjects.BeK_accept4Ret,
 		},
 		"sys_accept4": {
 			Required: true,
-			End:      p.bpfObjects.BeylaKretprobeSysAccept4,
+			End:      p.bpfObjects.BeK_accept4Ret,
 		},
 		"sock_alloc": {
 			Required: true,
-			End:      p.bpfObjects.BeylaKretprobeSockAlloc,
+			End:      p.bpfObjects.BeK_sockAllocRet,
 		},
 		"tcp_rcv_established": {
 			Required: true,
-			Start:    p.bpfObjects.BeylaKprobeTcpRcvEstablished,
+			Start:    p.bpfObjects.BeK_tcpRcvEst,
 		},
 		// Tracking of HTTP client calls, by tapping into connect
 		"sys_connect": {
 			Required: true,
-			End:      p.bpfObjects.BeylaKretprobeSysConnect,
+			End:      p.bpfObjects.BeK_connectRet,
 		},
 		"tcp_connect": {
 			Required: true,
-			Start:    p.bpfObjects.BeylaKprobeTcpConnect,
+			Start:    p.bpfObjects.BeK_tcpConnect,
 		},
 		"tcp_close": {
 			Required: true,
-			Start:    p.bpfObjects.BeylaKprobeTcpClose,
+			Start:    p.bpfObjects.BeK_tcpClose,
 		},
 		"tcp_sendmsg_locked": {
 			Required: true,
-			Start:    p.bpfObjects.BeylaKprobeTcpSendmsg,
+			Start:    p.bpfObjects.BeK_tcpSendmsg,
 			End:      p.bpfObjects.BeylaKretprobeTcpSendmsg,
 		},
 		// Reading more than 160 bytes
 		"tcp_recvmsg": {
 			Required: true,
-			Start:    p.bpfObjects.BeylaKprobeTcpRecvmsg,
-			End:      p.bpfObjects.BeylaKretprobeTcpRecvmsg,
+			Start:    p.bpfObjects.BeK_tcpRecvmsg,
+			End:      p.bpfObjects.BeK_tcpRecvmsgRet,
 		},
 		"tcp_cleanup_rbuf": {
-			Start: p.bpfObjects.BeylaKprobeTcpCleanupRbuf, // this kprobe runs the same code as recvmsg return, we use it because kretprobes can be unreliable.
+			Start: p.bpfObjects.BeK_tcpCleanupRbuf, // this kprobe runs the same code as recvmsg return, we use it because kretprobes can be unreliable.
 		},
 		"sys_clone": {
 			Required: true,
-			End:      p.bpfObjects.BeylaKretprobeSysClone,
+			End:      p.bpfObjects.BeK_cloneRet,
 		},
 		"sys_clone3": {
 			Required: false,
-			End:      p.bpfObjects.BeylaKretprobeSysClone,
+			End:      p.bpfObjects.BeK_cloneRet,
 		},
 		"sys_exit": {
 			Required: true,
-			Start:    p.bpfObjects.BeylaKprobeSysExit,
+			Start:    p.bpfObjects.BeK_sysExit,
 		},
 		"unix_stream_recvmsg": {
 			Required: true,
-			Start:    p.bpfObjects.BeylaKprobeUnixStreamRecvmsg,
-			End:      p.bpfObjects.BeylaKretprobeUnixStreamRecvmsg,
+			Start:    p.bpfObjects.BeK_unixRecvmsg,
+			End:      p.bpfObjects.BeK_unixRecvmsgRet,
 		},
 		"unix_stream_sendmsg": {
 			Required: true,
-			Start:    p.bpfObjects.BeylaKprobeUnixStreamSendmsg,
-			End:      p.bpfObjects.BeylaKretprobeUnixStreamSendmsg,
+			Start:    p.bpfObjects.BeK_unixSendmsg,
+			End:      p.bpfObjects.BeK_unixSendmsgRet,
 		},
 	}
 }
@@ -317,61 +317,61 @@ func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 		"libssl.so": {
 			"SSL_read": {{
 				Required: false,
-				Start:    p.bpfObjects.BeylaUprobeSslRead,
-				End:      p.bpfObjects.BeylaUretprobeSslRead,
+				Start:    p.bpfObjects.BeU_sslRead,
+				End:      p.bpfObjects.BeU_sslRdRet,
 			}},
 			"SSL_write": {{
 				Required: false,
-				Start:    p.bpfObjects.BeylaUprobeSslWrite,
-				End:      p.bpfObjects.BeylaUretprobeSslWrite,
+				Start:    p.bpfObjects.BeU_sslWrite,
+				End:      p.bpfObjects.BeU_sslWrtRet,
 			}},
 			"SSL_read_ex": {{
 				Required: false,
-				Start:    p.bpfObjects.BeylaUprobeSslReadEx,
-				End:      p.bpfObjects.BeylaUretprobeSslReadEx,
+				Start:    p.bpfObjects.BeU_sslRdx,
+				End:      p.bpfObjects.BeU_sslRdxRet,
 			}},
 			"SSL_write_ex": {{
 				Required: false,
-				Start:    p.bpfObjects.BeylaUprobeSslWriteEx,
-				End:      p.bpfObjects.BeylaUretprobeSslWriteEx,
+				Start:    p.bpfObjects.BeU_sslWrtEx,
+				End:      p.bpfObjects.BeU_sslWrtxRet,
 			}},
 			"SSL_do_handshake": {{
 				Required: false,
-				Start:    p.bpfObjects.BeylaUprobeSslDoHandshake,
-				End:      p.bpfObjects.BeylaUretprobeSslDoHandshake,
+				Start:    p.bpfObjects.BeU_sslHandshake,
+				End:      p.bpfObjects.BeU_sslHshkRet,
 			}},
 			"SSL_shutdown": {{
 				Required: false,
-				Start:    p.bpfObjects.BeylaUprobeSslShutdown,
+				Start:    p.bpfObjects.BeU_sslShutdwn,
 			}},
 		},
 		"node": {
 			"_ZN4node9AsyncWrap13EmitAsyncInitEPNS_11EnvironmentEN2v85LocalINS3_6ObjectEEENS4_INS3_6StringEEEdd": {{
 				Required: false,
-				Start:    p.bpfObjects.BeylaEmitAsyncInit,
+				Start:    p.bpfObjects.BeU_NodeAsyncInit,
 			}},
 			"_ZN4node13EmitAsyncInitEPN2v87IsolateENS0_5LocalINS0_6ObjectEEENS3_INS0_6StringEEEd": {{
 				Required: false,
-				Start:    p.bpfObjects.BeylaEmitAsyncInit,
+				Start:    p.bpfObjects.BeU_NodeAsyncInit,
 			}},
 			"_ZN4node13EmitAsyncInitEPN2v87IsolateENS0_5LocalINS0_6ObjectEEEPKcd": {{
 				Required: false,
-				Start:    p.bpfObjects.BeylaEmitAsyncInit,
+				Start:    p.bpfObjects.BeU_NodeAsyncInit,
 			}},
 			"_ZN4node9AsyncWrap10AsyncResetEN2v85LocalINS1_6ObjectEEEdb": {{
 				Required: false,
-				Start:    p.bpfObjects.BeylaAsyncReset,
+				Start:    p.bpfObjects.BeU_NodeAsyncRst,
 			}},
 			"_ZN4node9AsyncWrap10AsyncResetERKN2v820FunctionCallbackInfoINS1_5ValueEEE": {{
 				Required: false,
-				Start:    p.bpfObjects.BeylaAsyncReset,
+				Start:    p.bpfObjects.BeU_NodeAsyncRst,
 			}},
 		},
 	}
 }
 
 func (p *Tracer) SocketFilters() []*ebpf.Program {
-	return []*ebpf.Program{p.bpfObjects.BeylaSocketHttpFilter}
+	return []*ebpf.Program{p.bpfObjects.BeK_httpFilter}
 }
 
 func (p *Tracer) SockMsgs() []ebpfcommon.SockMsg { return nil }

@@ -43,11 +43,7 @@ pid_connection_info_for_inode(u64 id, pid_connection_info_t *p_conn, u32 inode, 
 }
 
 SEC("kprobe/unix_stream_recvmsg")
-int BPF_KPROBE(beyla_kprobe_unix_stream_recvmsg,
-               struct socket *sock,
-               struct msghdr *msg,
-               size_t size,
-               int flags) {
+int BPF_KPROBE(be_k_unix_recvmsg, struct socket *sock, struct msghdr *msg, size_t size, int flags) {
     u64 id = bpf_get_current_pid_tgid();
 
     if (!valid_pid(id)) {
@@ -198,7 +194,7 @@ static __always_inline int return_unix_recvmsg(void *ctx, u64 id, int copied_len
 }
 
 SEC("kretprobe/unix_stream_recvmsg")
-int BPF_KRETPROBE(beyla_kretprobe_unix_stream_recvmsg, size_t copied) {
+int BPF_KRETPROBE(be_k_unix_recvmsg_ret, size_t copied) {
     u64 id = bpf_get_current_pid_tgid();
 
     if (!valid_pid(id)) {
@@ -211,10 +207,7 @@ int BPF_KRETPROBE(beyla_kretprobe_unix_stream_recvmsg, size_t copied) {
 }
 
 SEC("kprobe/unix_stream_sendmsg")
-int BPF_KPROBE(beyla_kprobe_unix_stream_sendmsg,
-               struct socket *sock,
-               struct msghdr *msg,
-               size_t size) {
+int BPF_KPROBE(be_k_unix_sendmsg, struct socket *sock, struct msghdr *msg, size_t size) {
     u64 id = bpf_get_current_pid_tgid();
 
     if (!valid_pid(id)) {
@@ -262,7 +255,7 @@ int BPF_KPROBE(beyla_kprobe_unix_stream_sendmsg,
 }
 
 SEC("kretprobe/unix_stream_sendmsg")
-int BPF_KRETPROBE(beyla_kretprobe_unix_stream_sendmsg, int sent_len) {
+int BPF_KRETPROBE(be_k_unix_sendmsg_ret, int sent_len) {
     u64 id = bpf_get_current_pid_tgid();
 
     if (!valid_pid(id)) {

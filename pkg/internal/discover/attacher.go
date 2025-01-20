@@ -90,10 +90,6 @@ func (ta *TraceAttacher) attacherLoop() (pipe.FinalFunc[[]Event[ebpf.Instrumenta
 	}, nil
 }
 
-func (ta *TraceAttacher) skipSelfInstrumentation(ie *ebpf.Instrumentable) bool {
-	return ie.FileInfo.Pid == int32(ta.beylaPID) && !ta.Cfg.Discovery.AllowSelfInstrumentation
-}
-
 //nolint:cyclop
 func (ta *TraceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 	if tracer, ok := ta.existingTracers[ie.FileInfo.Ino]; ok {
@@ -116,11 +112,6 @@ func (ta *TraceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 		}
 		ta.log.Debug(".done", "success", ok)
 		return ok
-	}
-
-	if ta.skipSelfInstrumentation(ie) {
-		ta.log.Info("skipping self-instrumentation of Beyla process", "cmd", ie.FileInfo.CmdExePath, "pid", ie.FileInfo.Pid)
-		return false
 	}
 
 	ta.log.Info("instrumenting process",

@@ -24,6 +24,15 @@ func CriteriaMatcherProvider(cfg *beyla.Config) pipe.MiddleProvider[[]Event[proc
 			excludeCriteria: cfg.Discovery.ExcludeServices,
 			processHistory:  map[PID]*services.ProcessInfo{},
 		}
+
+		if cfg.Discovery.ExcludeSystemServices != "" {
+			r := regexp.MustCompile(cfg.Discovery.ExcludeSystemServices)
+
+			m.excludeCriteria = append(m.excludeCriteria, services.Attributes{
+				Path: services.NewPathRegexp(r),
+			})
+		}
+
 		return m.run, nil
 	}
 }

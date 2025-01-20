@@ -7,6 +7,7 @@
 #include "go_shared.h"
 #include "tc_ip.h"
 #include "tcp_info.h"
+#include "tc_act.h"
 #include "tc_sock.h"
 #include "tc_tracer_l7.h"
 
@@ -20,7 +21,7 @@ int beyla_app_ingress(struct __sk_buff *skb) {
     connection_info_t conn = {};
 
     if (!read_sk_buff(skb, &tcp, &conn)) {
-        return 0;
+        return TC_ACT_UNSPEC;
     }
 
     if (tcp_ack(&tcp)) { // ack field must be set, which means we are looking at non SYN packet
@@ -33,7 +34,7 @@ int beyla_app_ingress(struct __sk_buff *skb) {
         }
     }
 
-    return 0;
+    return TC_ACT_UNSPEC;
 }
 
 static __always_inline void update_outgoing_request_span_id(pid_connection_info_t *p_conn,
@@ -87,7 +88,7 @@ int beyla_app_egress(struct __sk_buff *skb) {
     pid_connection_info_t p_conn = {};
 
     if (!read_sk_buff(skb, &tcp, &conn)) {
-        return 0;
+        return TC_ACT_UNSPEC;
     }
 
     __builtin_memcpy(&p_conn.conn, &conn, sizeof(connection_info_t));
@@ -135,5 +136,5 @@ int beyla_app_egress(struct __sk_buff *skb) {
         }
     }
 
-    return 0;
+    return TC_ACT_UNSPEC;
 }

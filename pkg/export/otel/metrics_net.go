@@ -13,6 +13,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
+	"github.com/grafana/beyla/pkg/buildinfo"
 	"github.com/grafana/beyla/pkg/export/attributes"
 	"github.com/grafana/beyla/pkg/export/expire"
 	"github.com/grafana/beyla/pkg/export/otel/metric"
@@ -47,6 +48,7 @@ func newResource(hostID string) *resource.Resource {
 		semconv.TelemetrySDKLanguageKey.String(semconv.TelemetrySDKLanguageGo.Value.AsString()),
 		// We set the SDK name as Beyla, so we can distinguish beyla generated metrics from other SDKs
 		semconv.TelemetrySDKNameKey.String("beyla"),
+		semconv.TelemetrySDKVersion(buildinfo.Version),
 		semconv.HostID(hostID),
 	}
 

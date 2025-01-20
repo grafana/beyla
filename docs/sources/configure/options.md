@@ -239,7 +239,7 @@ Prometheus.
 
 | YAML                      | Environment variable            | Type    | Default                           |
 | ------------------------- | ------------------------------- | ------- | --------------------------------- |
-| `exclude_system_services` | `BEYLA_EXCLUDE_SYSTEM_SERVICES` | string  | `.*alloy.*|.*otelcol.*|.*beyla.*` |
+| `default_exclude_services` | N/A | list of objects  | Path: `(?:^\|\/)(beyla$\|alloy$\|otelcol[^\/]*$)` |
 
 Disables instrumentation of Beyla itself (self-instrumentation), as well as Grafana Alloy and the
 OpenTelemetry Collector. Set to empty to allow Beyla to instrument itself as well as these other components.

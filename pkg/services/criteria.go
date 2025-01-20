@@ -51,9 +51,9 @@ type DiscoveryConfig struct {
 	// even if they match the Services selection.
 	ExcludeServices DefinitionCriteria `yaml:"exclude_services"`
 
-	// ExcludeSystemServices by default prevents self-instrumentation of Beyla as well as related services (Alloy and OpenTelemetry collector)
+	// DefaultExcludeServices by default prevents self-instrumentation of Beyla as well as related services (Alloy and OpenTelemetry collector)
 	// It must be set to an empty string or a different value if self-instrumentation is desired.
-	ExcludeSystemServices string `yaml:"exclude_system_services" env:"BEYLA_EXCLUDE_SYSTEM_SERVICES"`
+	DefaultExcludeServices DefinitionCriteria `yaml:"default_exclude_services"`
 
 	// PollInterval specifies, for the poll service watcher, the interval time between
 	// process inspections

@@ -12,19 +12,28 @@ keywords:
 
 YAML section `internal_metrics`.
 
-This component reports certain internal metrics about the behavior
-of the auto-instrumentation tool. Currently, only [Prometheus](https://prometheus.io/) export
-is supported. It is enabled if the `internal_metrics` section
-contains a `prometheus` subsection with the `port` property set.
+This component reports certain internal metrics about the behavior of the auto-instrumentation tool.
+The component supports [Prometheus](https://prometheus.io/) and [OpenTelemetry](https://opentelemetry.io/) metrics export.
+
+To enable Prometheus metrics export, set `exporter` to `prometheus` in the `internal_metrics` section, and set `port` in the `prometheus` subsection.
+
+To enable OpenTelemetry metrics export, set `exporter` to `otel` in the `internal_metrics`, and set an endpoint in the `otel_metrics_export` section or `grafana.otlp` section.
 
 Example:
 
 ```yaml
 internal_metrics:
+  exporter: prometheus
   prometheus:
     port: 6060
     path: /internal/metrics
 ```
+
+| YAML        | Environment variable                                  | Type | Default |
+| ----------- | ---------------------------------------- | ---- | ------- |
+| `exporter`      | `BEYLA_INTERNAL_METRICS_EXPORTER` | string | `disabled` |
+
+Specifies the internal metrics exporter. Accepted values are `disabled`, `prometheus` and `otel`.
 
 | YAML   | Environment variable                                  | Type | Default |
 | ------ | ---------------------------------------- | ---- | ------- |

@@ -29,17 +29,18 @@ add a noticeable delay in the time the metrics are submitted and become external
 
 | YAML                      | Environment variable              | Type    | Default |
 | ------------------------- | --------------------------------- | ------- | ------- |
-| `traffic_control_backend` | `BEYLA_BPF_TC_BACKEND`            | string  |  `tc`   |
+| `traffic_control_backend` | `BEYLA_BPF_TC_BACKEND`            | string  |  `auto`   |
 
 Chooses which backend to use for the attachment of traffic control probes.
 Linux 6.6 has added support for a file-descriptor based traffic control
 attachment called TCX, providing a more robust way of attaching traffic
 control probes (it does not require explicit qdisc management, and provides a
-deterministic way to chain probes). We recommend the usage of the `tcx`
-backend for kernels >= 6.6 for this reason.
+deterministic way to chain probes).
+We recommend the usage of the `tcx` backend for kernels >= 6.6 for this reason.
+When set to `auto`, Beyla picks the most suitable backend based on the underlying kernel.
 
-The accepted backends are `tc` and `tcx`. An empty or unset value defaults to
-`tc`.
+The accepted backends are `tc`, `tcx`, and `auto.
+An empty or unset value defaults to `auto`.
 
 | YAML                    | Environment variable               | Type    | Default |
 | ----------------------- | ---------------------------------- | ------- | ------- |

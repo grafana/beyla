@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"regexp"
 	"time"
 
 	"github.com/caarlos0/env/v9"
@@ -132,7 +133,11 @@ var DefaultConfig = Config{
 	},
 	Discovery: services.DiscoveryConfig{
 		ExcludeOTelInstrumentedServices: true,
-		ExcludeSystemServices:           `.*alloy.*|.*otelcol.*|.*beyla.*`,
+		DefaultExcludeServices: services.DefinitionCriteria{
+			services.Attributes{
+				Path: services.NewPathRegexp(regexp.MustCompile("(?:^|/)(beyla$|alloy$|otelcol[^/]*$)")),
+			},
+		},
 	},
 }
 

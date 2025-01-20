@@ -153,10 +153,10 @@ func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 	return map[string]map[string][]*ebpfcommon.ProbeDesc{
 		"libcudart.so": {
 			"cudaLaunchKernel": {{
-				Start: p.bpfObjects.HandleCudaLaunch,
+				Start: p.bpfObjects.BeU_cudaLaunch,
 			}},
 			"cudaMalloc": {{
-				Start: p.bpfObjects.HandleCudaMalloc,
+				Start: p.bpfObjects.BeU_cudaMalloc,
 			}},
 		},
 	}

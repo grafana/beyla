@@ -204,6 +204,7 @@ func FeatureGRPCMetricsDecoration(manifest string) features.Feature {
 				"k8s_deployment_name": "^testserver$",
 				"k8s_replicaset_name": "^testserver-",
 				"k8s_cluster_name":    "^beyla$",
+				"service_instance_id": "^default\\.testserver-.+\\.testserver",
 			})).
 		Assess("target_info metrics exist",
 			testMetricsDecoration([]string{"target_info"}, `{job=~".*testserver"}`, map[string]string{
@@ -255,6 +256,7 @@ func FeatureDisableInformersAppMetricsDecoration() features.Feature {
 					"k8s_deployment_name": "^testserver$",
 					"k8s_replicaset_name": "^testserver-.*",
 					"k8s_cluster_name":    "^beyla$",
+					"service_instance_id": "^default\\.testserver-.+\\.testserver",
 				})).Feature()
 }
 

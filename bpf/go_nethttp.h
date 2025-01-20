@@ -69,7 +69,7 @@ struct {
 // func (mux *ServeMux) ServeHTTP(w ResponseWriter, r *Request)
 // or other functions sharing the same signature (e.g http.Handler.ServeHTTP)
 SEC("uprobe/ServeHTTP")
-int be_u_ServeHTTP(struct pt_regs *ctx) {
+int beyla_uprobe_ServeHTTP(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/ServeHTTP === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
 
@@ -153,7 +153,7 @@ done:
 }
 
 SEC("uprobe/readRequest")
-int be_u_ReadReqStart(struct pt_regs *ctx) {
+int beyla_uprobe_readRequestStart(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc readRequest === ");
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
@@ -199,7 +199,7 @@ int be_u_ReadReqStart(struct pt_regs *ctx) {
 }
 
 SEC("uprobe/readRequest")
-int be_u_ReadReqRet(struct pt_regs *ctx) {
+int beyla_uprobe_readRequestReturns(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc readRequest returns === ");
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
@@ -227,7 +227,7 @@ int be_u_ReadReqRet(struct pt_regs *ctx) {
 
 // Handles finding the connection information for http2 servers in grpc
 SEC("uprobe/http2Server_processHeaders")
-int be_u_HTTP2SrvHdr(struct pt_regs *ctx) {
+int beyla_uprobe_http2Server_processHeaders(struct pt_regs *ctx) {
     void *sc_ptr = GO_PARAM1(ctx);
     void *frame = GO_PARAM2(ctx);
     bpf_dbg_printk("=== uprobe/http2Server_processHeaders sc %lx === ", sc_ptr);
@@ -247,7 +247,7 @@ int be_u_HTTP2SrvHdr(struct pt_regs *ctx) {
 }
 
 SEC("uprobe/readContinuedLineSlice")
-int be_u_ReadContRet(struct pt_regs *ctx) {
+int beyla_uprobe_readContinuedLineSliceReturns(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc readContinuedLineSlice returns === ");
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
@@ -277,7 +277,7 @@ int be_u_ReadContRet(struct pt_regs *ctx) {
 }
 
 SEC("uprobe/ServeHTTP_ret")
-int be_u_ServeHTTPRet(struct pt_regs *ctx) {
+int beyla_uprobe_ServeHTTPReturns(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/ServeHTTP returns === ");
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
@@ -443,13 +443,13 @@ static __always_inline void roundTripStartHelper(struct pt_regs *ctx) {
 }
 
 SEC("uprobe/roundTrip")
-int be_u_RoundTrip(struct pt_regs *ctx) {
+int beyla_uprobe_roundTrip(struct pt_regs *ctx) {
     roundTripStartHelper(ctx);
     return 0;
 }
 
 SEC("uprobe/roundTrip_return")
-int be_u_RoundTripRet(struct pt_regs *ctx) {
+int beyla_uprobe_roundTripReturn(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc http roundTrip return === ");
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
@@ -533,7 +533,7 @@ done:
 #ifndef NO_HEADER_PROPAGATION
 // Context propagation through HTTP headers
 SEC("uprobe/header_writeSubset")
-int be_u_WriteSubset(struct pt_regs *ctx) {
+int beyla_uprobe_writeSubset(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc header writeSubset === ");
 
     void *header_addr = GO_PARAM1(ctx);
@@ -622,14 +622,14 @@ done:
 }
 #else
 SEC("uprobe/header_writeSubset")
-int be_u_WriteSubset(struct pt_regs *ctx) {
+int beyla_uprobe_writeSubset(struct pt_regs *ctx) {
     return 0;
 }
 #endif
 
 // HTTP 2.0 server support
 SEC("uprobe/http2ResponseWriterStateWriteHeader")
-int be_u_HTTP2WrtHdr(struct pt_regs *ctx) {
+int beyla_uprobe_http2ResponseWriterStateWriteHeader(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc (http response)/(http2 responseWriterState) writeHeader === ");
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
@@ -663,7 +663,7 @@ int be_u_HTTP2WrtHdr(struct pt_regs *ctx) {
 
 // HTTP 2.0 server support
 SEC("uprobe/http2serverConn_runHandler")
-int be_u_HTTP2ConnHdl(struct pt_regs *ctx) {
+int beyla_uprobe_http2serverConn_runHandler(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc http2serverConn_runHandler === ");
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
@@ -766,7 +766,7 @@ static __always_inline void setup_http2_client_conn(void *goroutine_addr, void *
 }
 
 SEC("uprobe/http2RoundTrip")
-int be_u_HTTP2RndTrip(struct pt_regs *ctx) {
+int beyla_uprobe_http2RoundTrip(struct pt_regs *ctx) {
     // we use the usual start helper, just like for normal http calls, but we later save
     // more context, like the streamID
     roundTripStartHelper(ctx);
@@ -780,7 +780,7 @@ int be_u_HTTP2RndTrip(struct pt_regs *ctx) {
 }
 
 SEC("uprobe/http2RoundTripConn")
-int be_u_HTTP2RTConn(struct pt_regs *ctx) {
+int beyla_uprobe_http2RoundTripConn(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     void *cc_ptr = GO_PARAM1(ctx);
 
@@ -808,7 +808,7 @@ struct {
 } framer_invocation_map SEC(".maps");
 
 SEC("uprobe/http2FramerWriteHeaders")
-int be_u_HTTP2FrmWrt(struct pt_regs *ctx) {
+int beyla_uprobe_http2FramerWriteHeaders(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc http2 Framer writeHeaders === ");
     void *framer = GO_PARAM1(ctx);
     u64 stream_id = (u64)GO_PARAM2(ctx);
@@ -876,7 +876,7 @@ int be_u_HTTP2FrmWrt(struct pt_regs *ctx) {
 }
 #else
 SEC("uprobe/http2FramerWriteHeaders")
-int be_u_HTTP2FrmWrt(struct pt_regs *ctx) {
+int beyla_uprobe_http2FramerWriteHeaders(struct pt_regs *ctx) {
     return 0;
 }
 #endif
@@ -886,7 +886,7 @@ int be_u_HTTP2FrmWrt(struct pt_regs *ctx) {
     66 // 1 + 1 + 8 + 1 + 55 = type byte + hpack_len_as_byte("traceparent") + strlen(hpack("traceparent")) + len_as_byte(55) + generated traceparent id
 
 SEC("uprobe/http2FramerWriteHeaders_returns")
-int be_u_HTTP2FrmRet(struct pt_regs *ctx) {
+int beyla_uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc http2 Framer writeHeaders returns === ");
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
@@ -984,13 +984,13 @@ int be_u_HTTP2FrmRet(struct pt_regs *ctx) {
 }
 #else
 SEC("uprobe/http2FramerWriteHeaders_returns")
-int be_u_HTTP2FrmRet(struct pt_regs *ctx) {
+int beyla_uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
     return 0;
 }
 #endif
 
 SEC("uprobe/connServe")
-int be_u_ConnServe(struct pt_regs *ctx) {
+int beyla_uprobe_connServe(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("=== uprobe/proc http conn serve goroutine %lx === ", goroutine_addr);
 
@@ -1004,7 +1004,7 @@ int be_u_ConnServe(struct pt_regs *ctx) {
 }
 
 SEC("uprobe/netFdRead")
-int be_u_NetFdRead(struct pt_regs *ctx) {
+int beyla_uprobe_netFdRead(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("=== uprobe/proc netFD read goroutine %lx === ", goroutine_addr);
 
@@ -1052,7 +1052,7 @@ int be_u_NetFdRead(struct pt_regs *ctx) {
 }
 
 SEC("uprobe/connServeRet")
-int be_u_ConnServeRet(struct pt_regs *ctx) {
+int beyla_uprobe_connServeRet(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc http conn serve ret === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
 
@@ -1065,7 +1065,7 @@ int be_u_ConnServeRet(struct pt_regs *ctx) {
 }
 
 SEC("uprobe/persistConnRoundTrip")
-int be_u_PerConnRndTrp(struct pt_regs *ctx) {
+int beyla_uprobe_persistConnRoundTrip(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc http persistConn roundTrip === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     off_table_t *ot = get_offsets_table();

@@ -273,10 +273,10 @@ type bpf_debugSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_debugProgramSpecs struct {
-	BeU_NodeAsyncInit                      *ebpf.ProgramSpec `ebpf:"be_u_NodeAsyncInit"`
-	BeU_NodeAsyncRst                       *ebpf.ProgramSpec `ebpf:"be_u_NodeAsyncRst"`
 	BeylaAppEgress                         *ebpf.ProgramSpec `ebpf:"beyla_app_egress"`
 	BeylaAppIngress                        *ebpf.ProgramSpec `ebpf:"beyla_app_ingress"`
+	BeylaAsyncReset                        *ebpf.ProgramSpec `ebpf:"beyla_async_reset"`
+	BeylaEmitAsyncInit                     *ebpf.ProgramSpec `ebpf:"beyla_emit_async_init"`
 	BeylaPacketExtender                    *ebpf.ProgramSpec `ebpf:"beyla_packet_extender"`
 	BeylaProtocolHttp                      *ebpf.ProgramSpec `ebpf:"beyla_protocol_http"`
 	BeylaProtocolHttp2                     *ebpf.ProgramSpec `ebpf:"beyla_protocol_http2"`
@@ -452,10 +452,10 @@ func (m *bpf_debugMaps) Close() error {
 //
 // It can be passed to loadBpf_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_debugPrograms struct {
-	BeU_NodeAsyncInit                      *ebpf.Program `ebpf:"be_u_NodeAsyncInit"`
-	BeU_NodeAsyncRst                       *ebpf.Program `ebpf:"be_u_NodeAsyncRst"`
 	BeylaAppEgress                         *ebpf.Program `ebpf:"beyla_app_egress"`
 	BeylaAppIngress                        *ebpf.Program `ebpf:"beyla_app_ingress"`
+	BeylaAsyncReset                        *ebpf.Program `ebpf:"beyla_async_reset"`
+	BeylaEmitAsyncInit                     *ebpf.Program `ebpf:"beyla_emit_async_init"`
 	BeylaPacketExtender                    *ebpf.Program `ebpf:"beyla_packet_extender"`
 	BeylaProtocolHttp                      *ebpf.Program `ebpf:"beyla_protocol_http"`
 	BeylaProtocolHttp2                     *ebpf.Program `ebpf:"beyla_protocol_http2"`
@@ -468,10 +468,10 @@ type bpf_debugPrograms struct {
 
 func (p *bpf_debugPrograms) Close() error {
 	return _Bpf_debugClose(
-		p.BeU_NodeAsyncInit,
-		p.BeU_NodeAsyncRst,
 		p.BeylaAppEgress,
 		p.BeylaAppIngress,
+		p.BeylaAsyncReset,
+		p.BeylaEmitAsyncInit,
 		p.BeylaPacketExtender,
 		p.BeylaProtocolHttp,
 		p.BeylaProtocolHttp2,

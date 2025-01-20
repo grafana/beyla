@@ -13,7 +13,7 @@
 // and match it with our SSL *. The sock * will give us the connection info that is
 // used by the generic HTTP filter.
 SEC("uprobe/libssl.so:SSL_do_handshake")
-int BPF_UPROBE(be_u_ssl_handshake, void *s) {
+int BPF_UPROBE(beyla_uprobe_ssl_do_handshake, void *s) {
     u64 id = bpf_get_current_pid_tgid();
 
     if (!valid_pid(id)) {
@@ -33,7 +33,7 @@ int BPF_UPROBE(be_u_ssl_handshake, void *s) {
 }
 
 SEC("uretprobe/libssl.so:SSL_do_handshake")
-int BPF_URETPROBE(be_u_ssl_hshk_ret, int ret) {
+int BPF_URETPROBE(beyla_uretprobe_ssl_do_handshake, int ret) {
     u64 id = bpf_get_current_pid_tgid();
 
     if (!valid_pid(id)) {
@@ -51,7 +51,7 @@ int BPF_URETPROBE(be_u_ssl_hshk_ret, int ret) {
 // SSL_read_ex sets an argument pointer with the number of bytes read, while SSL_read returns
 // the number of bytes read.
 SEC("uprobe/libssl.so:SSL_read")
-int BPF_UPROBE(be_u_ssl_read, void *ssl, const void *buf, int num) {
+int BPF_UPROBE(beyla_uprobe_ssl_read, void *ssl, const void *buf, int num) {
     u64 id = bpf_get_current_pid_tgid();
 
     if (!valid_pid(id)) {
@@ -80,7 +80,7 @@ int BPF_UPROBE(be_u_ssl_read, void *ssl, const void *buf, int num) {
 }
 
 SEC("uretprobe/libssl.so:SSL_read")
-int BPF_URETPROBE(be_u_ssl_rd_ret, int ret) {
+int BPF_URETPROBE(beyla_uretprobe_ssl_read, int ret) {
     u64 id = bpf_get_current_pid_tgid();
 
     if (!valid_pid(id)) {
@@ -99,7 +99,7 @@ int BPF_URETPROBE(be_u_ssl_rd_ret, int ret) {
 }
 
 SEC("uprobe/libssl.so:SSL_read_ex")
-int BPF_UPROBE(be_u_ssl_rdx,
+int BPF_UPROBE(beyla_uprobe_ssl_read_ex,
                void *ssl,
                const void *buf,
                int num,
@@ -132,7 +132,7 @@ int BPF_UPROBE(be_u_ssl_rdx,
 }
 
 SEC("uretprobe/libssl.so:SSL_read_ex")
-int BPF_URETPROBE(be_u_ssl_rdx_ret, int ret) {
+int BPF_URETPROBE(beyla_uretprobe_ssl_read_ex, int ret) {
     u64 id = bpf_get_current_pid_tgid();
 
     if (!valid_pid(id)) {
@@ -161,7 +161,7 @@ int BPF_URETPROBE(be_u_ssl_rdx_ret, int ret) {
 // SSL_write_ex sets an argument pointer with the number of bytes written, while SSL_write returns
 // the number of bytes written.
 SEC("uprobe/libssl.so:SSL_write")
-int BPF_UPROBE(be_u_ssl_write, void *ssl, const void *buf, int num) {
+int BPF_UPROBE(beyla_uprobe_ssl_write, void *ssl, const void *buf, int num) {
     u64 id = bpf_get_current_pid_tgid();
 
     if (!valid_pid(id)) {
@@ -181,7 +181,7 @@ int BPF_UPROBE(be_u_ssl_write, void *ssl, const void *buf, int num) {
 }
 
 SEC("uretprobe/libssl.so:SSL_write")
-int BPF_URETPROBE(be_u_ssl_wrt_ret, int ret) {
+int BPF_URETPROBE(beyla_uretprobe_ssl_write, int ret) {
     u64 id = bpf_get_current_pid_tgid();
 
     if (!valid_pid(id)) {
@@ -204,7 +204,7 @@ int BPF_URETPROBE(be_u_ssl_wrt_ret, int ret) {
 }
 
 SEC("uprobe/libssl.so:SSL_write_ex")
-int BPF_UPROBE(be_u_ssl_wrt_ex, void *ssl, const void *buf, int num, size_t *written) {
+int BPF_UPROBE(beyla_uprobe_ssl_write_ex, void *ssl, const void *buf, int num, size_t *written) {
     u64 id = bpf_get_current_pid_tgid();
 
     if (!valid_pid(id)) {
@@ -224,7 +224,7 @@ int BPF_UPROBE(be_u_ssl_wrt_ex, void *ssl, const void *buf, int num, size_t *wri
 }
 
 SEC("uretprobe/libssl.so:SSL_write_ex")
-int BPF_URETPROBE(be_u_ssl_wrtx_ret, int ret) {
+int BPF_URETPROBE(beyla_uretprobe_ssl_write_ex, int ret) {
     u64 id = bpf_get_current_pid_tgid();
 
     if (!valid_pid(id)) {
@@ -247,7 +247,7 @@ int BPF_URETPROBE(be_u_ssl_wrtx_ret, int ret) {
 }
 
 SEC("uprobe/libssl.so:SSL_shutdown")
-int BPF_UPROBE(be_u_ssl_shutdwn, void *s) {
+int BPF_UPROBE(beyla_uprobe_ssl_shutdown, void *s) {
     u64 id = bpf_get_current_pid_tgid();
 
     if (!valid_pid(id)) {

@@ -273,10 +273,10 @@ type bpfSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfProgramSpecs struct {
-	BeU_NodeAsyncInit                      *ebpf.ProgramSpec `ebpf:"be_u_NodeAsyncInit"`
-	BeU_NodeAsyncRst                       *ebpf.ProgramSpec `ebpf:"be_u_NodeAsyncRst"`
 	BeylaAppEgress                         *ebpf.ProgramSpec `ebpf:"beyla_app_egress"`
 	BeylaAppIngress                        *ebpf.ProgramSpec `ebpf:"beyla_app_ingress"`
+	BeylaAsyncReset                        *ebpf.ProgramSpec `ebpf:"beyla_async_reset"`
+	BeylaEmitAsyncInit                     *ebpf.ProgramSpec `ebpf:"beyla_emit_async_init"`
 	BeylaPacketExtender                    *ebpf.ProgramSpec `ebpf:"beyla_packet_extender"`
 	BeylaProtocolHttp                      *ebpf.ProgramSpec `ebpf:"beyla_protocol_http"`
 	BeylaProtocolHttp2                     *ebpf.ProgramSpec `ebpf:"beyla_protocol_http2"`
@@ -449,10 +449,10 @@ func (m *bpfMaps) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfPrograms struct {
-	BeU_NodeAsyncInit                      *ebpf.Program `ebpf:"be_u_NodeAsyncInit"`
-	BeU_NodeAsyncRst                       *ebpf.Program `ebpf:"be_u_NodeAsyncRst"`
 	BeylaAppEgress                         *ebpf.Program `ebpf:"beyla_app_egress"`
 	BeylaAppIngress                        *ebpf.Program `ebpf:"beyla_app_ingress"`
+	BeylaAsyncReset                        *ebpf.Program `ebpf:"beyla_async_reset"`
+	BeylaEmitAsyncInit                     *ebpf.Program `ebpf:"beyla_emit_async_init"`
 	BeylaPacketExtender                    *ebpf.Program `ebpf:"beyla_packet_extender"`
 	BeylaProtocolHttp                      *ebpf.Program `ebpf:"beyla_protocol_http"`
 	BeylaProtocolHttp2                     *ebpf.Program `ebpf:"beyla_protocol_http2"`
@@ -465,10 +465,10 @@ type bpfPrograms struct {
 
 func (p *bpfPrograms) Close() error {
 	return _BpfClose(
-		p.BeU_NodeAsyncInit,
-		p.BeU_NodeAsyncRst,
 		p.BeylaAppEgress,
 		p.BeylaAppIngress,
+		p.BeylaAsyncReset,
+		p.BeylaEmitAsyncInit,
 		p.BeylaPacketExtender,
 		p.BeylaProtocolHttp,
 		p.BeylaProtocolHttp2,

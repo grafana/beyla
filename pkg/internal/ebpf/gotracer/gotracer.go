@@ -217,7 +217,7 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 		"golang.org/x/net/http2.(*responseWriterState).writeHeader": {{ // http2 server request done, capture the response code
 			Start: p.bpfObjects.BeU_HTTP2WrtHdr,
 		}},
-		"net/http.(*http2responseWriterState).writeHeader": {{ // http response code capture, vendored in go
+		"net/http.(*http2responseWriterState).writeHeader": {{ // same as above, vendored in go
 			Start: p.bpfObjects.BeU_HTTP2WrtHdr,
 		}},
 		"net/http.(*response).WriteHeader": {{ // http response code capture
@@ -236,7 +236,7 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 			Start: p.bpfObjects.BeU_HTTP2SrvHdr,
 		}},
 		// tracking of tcp connections for black-box propagation
-		"net/http.(*conn).serve": {{
+		"net/http.(*conn).serve": {{ // http server
 			Start: p.bpfObjects.BeU_ConnServe,
 			End:   p.bpfObjects.BeU_ConnServeRet,
 		}},

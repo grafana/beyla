@@ -217,7 +217,7 @@ network:
 		},
 		Discovery: services.DiscoveryConfig{
 			ExcludeOTelInstrumentedServices: true,
-			ExcludeSystemServices:           `.*alloy.*|.*otelcol.*|.*beyla.*`,
+			ExcludeSystemServices:           `(?:^|\/)(beyla$|alloy$|otelcol[^\/]*$)`,
 		},
 	}, cfg)
 }

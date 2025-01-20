@@ -14,7 +14,7 @@ Grafana Beyla allows configuring how some attributes for metrics and traces
 are decorated. Under the `attributes` top YAML sections, you can enable
 other subsections configure how some attributes are set.
 
-The [Beyla exported metrics](../../metrics/) document lists the attributes
+The [Beyla exported metrics]({{< relref "../metrics.md" >}}) document lists the attributes
 that can be reported with each metric. Some of the attributes are reported by default while
 others are hidden to control the cardinality.
 

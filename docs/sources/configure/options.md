@@ -29,14 +29,14 @@ or
 $ BEYLA_OPEN_PORT=8080 BEYLA_CONFIG_PATH=/path/to/config.yaml beyla
 ```
 
-Refer to the [example YAML configuration file](../example/) for configuration file template.
+Refer to the [example YAML configuration file]({{< relref "./example.md" >}}) for configuration file template.
 
 Currently, Beyla consist of a pipeline of components which
 generate, transform, and export traces from HTTP and GRPC applications. In the
 YAML configuration, each component has its own first-level section.
 
 Optionally, Beyla also provides network-level metrics, which are documented in the
-[Network metrics section of the Beyla documentation](../../network/).
+[Network metrics section of the Beyla documentation]({{< relref "../network/_index.md" >}}).
 
 The following sections explain the global configuration properties, as well as
 the options for each component.
@@ -56,7 +56,7 @@ where the executable resides on the file system.
 
 This property is used to select a single process to instrument, or a group of processes of
 similar characteristics. For more fine-grained process selection and grouping, you can
-follow the instructions in the [service discovery section](#service-discovery).
+follow the instructions in the [service discovery section]({{< relref "./service-discovery.md" >}}).
 
 If the `open_port` property is set, the executable to be selected needs to match both properties.
 
@@ -94,7 +94,7 @@ Would make Beyla to select any executable that opens port 80, 443, or any of the
 
 This property is used to select a single process to instrument, or a group of processes of
 similar characteristics. For more fine-grained process selection and grouping, you can
-follow the instructions in the [service discovery section](#service-discovery).
+follow the instructions in the [service discovery section]({{< relref "./service-discovery.md" >}}).
 
 If the `executable_name` property is set, the executable to be selected needs to match both properties.
 
@@ -108,31 +108,31 @@ owning one of the ports in the range.
 
 | YAML           | Environment variable                                     | Type   | Default                                               |
 | -------------- | ------------------------------------------- | ------ | ----------------------------------------------------- |
-| `service_name` | `BEYLA_SERVICE_NAME` or `OTEL_SERVICE_NAME` | string | (see [service discovery](#service-discovery) section) |
+| `service_name` | `BEYLA_SERVICE_NAME` or `OTEL_SERVICE_NAME` | string | (see [service discovery]({{< relref "./service-discovery.md" >}}) section) |
 
 Overrides the name of the instrumented service to be reported by the metrics exporter.
 Defining this property is equivalent to add a `name` entry into the [`discovery.services` YAML
-section](#service-discovery).
+section]({{< relref "./service-discovery.md" >}}).
 
 If a single instance of Beyla is instrumenting multiple instances of different processes,
 they will share the same service name even if they are different. If you need that a
 single instance of Beyla report different service names, follow the instructions in the
-[service discovery section](#service-discovery).
+[service discovery section]({{< relref "./service-discovery.md" >}}).
 
 | YAML                | Environment variable                   | Type   | Default                                               |
 | ------------------- | ------------------------- | ------ | ----------------------------------------------------- |
-| `service_namespace` | `BEYLA_SERVICE_NAMESPACE` | string | (see [service discovery](#service-discovery) section) |
+| `service_namespace` | `BEYLA_SERVICE_NAMESPACE` | string | (see [service discovery]({{< relref "./service-discovery.md" >}}) section) |
 
 Optionally, allows assigning a namespace for the service selected from the `executable_name`
 or `open_port` properties.
 
 Defining this property is equivalent to add a `name` entry into the [`discovery.services` YAML
-section](#service-discovery).
+section]({{< relref "./service-discovery.md" >}}).
 
 This will assume a single namespace for all the services instrumented
 by Beyla. If you need that a single instance of Beyla groups multiple services
 into different namespaces, follow the instructions in the
-[service discovery section](#service-discovery).
+[service discovery section]({{< relref "./service-discovery.md" >}}).
 
 It is important to notice that this namespace is not a selector for Kubernetes namespaces. Its
 value will be use to set the value of standard telemetry attributes. For example, the

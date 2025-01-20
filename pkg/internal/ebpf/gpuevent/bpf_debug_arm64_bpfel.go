@@ -83,8 +83,8 @@ type bpf_debugSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_debugProgramSpecs struct {
-	HandleCudaLaunch *ebpf.ProgramSpec `ebpf:"handle_cuda_launch"`
-	HandleCudaMalloc *ebpf.ProgramSpec `ebpf:"handle_cuda_malloc"`
+	BeU_cudaLaunch *ebpf.ProgramSpec `ebpf:"be_u_cuda_launch"`
+	BeU_cudaMalloc *ebpf.ProgramSpec `ebpf:"be_u_cuda_malloc"`
 }
 
 // bpf_debugMapSpecs contains maps before they are loaded into the kernel.
@@ -135,14 +135,14 @@ func (m *bpf_debugMaps) Close() error {
 //
 // It can be passed to loadBpf_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_debugPrograms struct {
-	HandleCudaLaunch *ebpf.Program `ebpf:"handle_cuda_launch"`
-	HandleCudaMalloc *ebpf.Program `ebpf:"handle_cuda_malloc"`
+	BeU_cudaLaunch *ebpf.Program `ebpf:"be_u_cuda_launch"`
+	BeU_cudaMalloc *ebpf.Program `ebpf:"be_u_cuda_malloc"`
 }
 
 func (p *bpf_debugPrograms) Close() error {
 	return _Bpf_debugClose(
-		p.HandleCudaLaunch,
-		p.HandleCudaMalloc,
+		p.BeU_cudaLaunch,
+		p.BeU_cudaMalloc,
 	)
 }
 

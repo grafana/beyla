@@ -25,8 +25,8 @@ struct {
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } newproc1 SEC(".maps");
 
-SEC("uprobe/runtime_newproc1")
-int beyla_uprobe_proc_newproc1(struct pt_regs *ctx) {
+SEC("uprobe/newproc1")
+int be_u_NewProc1(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc newproc1 === ");
     void *creator_goroutine = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("creator_goroutine_addr %lx", creator_goroutine);
@@ -43,8 +43,8 @@ int beyla_uprobe_proc_newproc1(struct pt_regs *ctx) {
     return 0;
 }
 
-SEC("uprobe/runtime_newproc1_return")
-int beyla_uprobe_proc_newproc1_ret(struct pt_regs *ctx) {
+SEC("uprobe/newproc1_return")
+int be_u_NewProc1Ret(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc newproc1 returns === ");
     void *creator_goroutine = GOROUTINE_PTR(ctx);
     u64 pid_tid = bpf_get_current_pid_tgid();
@@ -86,8 +86,8 @@ done:
     return 0;
 }
 
-SEC("uprobe/runtime_goexit1")
-int beyla_uprobe_proc_goexit1(struct pt_regs *ctx) {
+SEC("uprobe/goexit0")
+int be_u_GoExit0(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc goexit1 === ");
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);

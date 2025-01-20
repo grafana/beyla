@@ -40,7 +40,7 @@ const volatile struct {
 #define SP_OFFSET(offset) (void *)PT_REGS_SP(ctx) + (offset * 8)
 
 SEC("uprobe/cudaLaunchKernel")
-int BPF_KPROBE(handle_cuda_launch,
+int BPF_KPROBE(be_u_cuda_launch,
                u64 func_off,
                u64 grid_xy,
                u64 grid_z,
@@ -98,7 +98,7 @@ int BPF_KPROBE(handle_cuda_launch,
 }
 
 SEC("uprobe/cudaMalloc")
-int BPF_KPROBE(handle_cuda_malloc, void **devPtr, size_t size) {
+int BPF_KPROBE(be_u_cuda_malloc, void **devPtr, size_t size) {
     u64 id = bpf_get_current_pid_tgid();
 
     if (!valid_pid(id)) {

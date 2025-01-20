@@ -83,8 +83,8 @@ type bpfSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfProgramSpecs struct {
-	HandleCudaLaunch *ebpf.ProgramSpec `ebpf:"handle_cuda_launch"`
-	HandleCudaMalloc *ebpf.ProgramSpec `ebpf:"handle_cuda_malloc"`
+	BeU_cudaLaunch *ebpf.ProgramSpec `ebpf:"be_u_cuda_launch"`
+	BeU_cudaMalloc *ebpf.ProgramSpec `ebpf:"be_u_cuda_malloc"`
 }
 
 // bpfMapSpecs contains maps before they are loaded into the kernel.
@@ -132,14 +132,14 @@ func (m *bpfMaps) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfPrograms struct {
-	HandleCudaLaunch *ebpf.Program `ebpf:"handle_cuda_launch"`
-	HandleCudaMalloc *ebpf.Program `ebpf:"handle_cuda_malloc"`
+	BeU_cudaLaunch *ebpf.Program `ebpf:"be_u_cuda_launch"`
+	BeU_cudaMalloc *ebpf.Program `ebpf:"be_u_cuda_malloc"`
 }
 
 func (p *bpfPrograms) Close() error {
 	return _BpfClose(
-		p.HandleCudaLaunch,
-		p.HandleCudaMalloc,
+		p.BeU_cudaLaunch,
+		p.BeU_cudaMalloc,
 	)
 }
 

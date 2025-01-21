@@ -115,8 +115,15 @@ Each `services` entry is a map where the properties can be grouped according to 
 | ------ | ------- | ------ | ----------------- |
 | `name` | --      | string | (see description) |
 
+**Deprecated**.
+
 Defines a name for the matching instrumented service. It will be used to populate the `service.name`
 OTEL property and the `service_name` Prometheus property in the exported metrics/traces.
+
+This option is deprecated, as multiple matches for the same `services` entry would involve
+multiple services sharing the same name.
+Check the [overriding service name and namespace](#overriding-service-name-and-namespace) section
+to enable automatic configuration of service name and namespace from diverse metadata sources. 
 
 If the property is not set, it will default to any of the following properties, in order of
 precedence:
@@ -139,10 +146,15 @@ of the service.
 | ----------- | ------- | ------ | ------------------------ |
 | `namespace` | --      | string | (empty or K8s namespace) |
 
+**Deprecated**.
+
 Defines a namespace for the matching instrumented service.
 If the property is not set, it will be defaulted to the Kubernetes namespace of
 that runs the instrumented process, if Kubernetes is available, or empty when
 Kubernetes is not available.
+
+This option is deprecated. Check the [overriding service name and namespace](#overriding-service-name-and-namespace) section
+to enable automatic configuration of service name and namespace from diverse metadata sources.
 
 It is important to notice that this namespace is not a selector for Kubernetes namespaces. Its
 value will be use to set the value of standard telemetry attributes. For example, the
@@ -288,3 +300,68 @@ discovery:
 
 The preceding example discovers all Pods in the `frontend` namespace that have a label
 `instrument` with a value that matches the regular expression `beyla`.
+
+## Overriding service name and namespace
+
+Either if the instrumentation data is exported via OpenTelemetry or via Prometheus, Beyla follows the
+[service naming conventions from the OpenTelemetry operator](https://github.com/open-telemetry/opentelemetry-operator/blob/main/README.md#how-resource-attributes-are-calculated-from-the-pods-metadata)
+to improve the interoperability of Beyla with other instrumentation solutions.
+
+The criteria that Beyla uses to automatically set the service name and namespace is, in order of precedence:
+
+1. Resource attributes set via `OTEL_RESOURCE_ATTRIBUTES` and `OTEL_SERVICE_NAME` environment variables of the
+   instrumented process or container.
+2. In Kubernetes, resource attributes set via the following Pod annotations:
+   * `resource.opentelemetry.io/service.name`
+   * `resource.opentelemetry.io/service.namespace`
+3. In Kubernetes, resource attributes set via the following Pod labels:
+  * `app.kubernetes.io/name` sets the service name
+  * `app.kubernetes.io/part-of` sets the service namespace
+4. In Kubernetes, resource attributes calculated from the Pod owner's metadata, in the following order (according to
+   their availability):
+  * `k8s.deployment.name`
+  * `k8s.replicaset.name`
+  * `k8s.statefulset.name`
+  * `k8s.daemonset.name`
+  * `k8s.cronjob.name`
+  * `k8s.job.name`
+  * `k8s.pod.name`
+  * `k8s.container.name`
+5. The executable name of the instrumented process.
+
+The Kubernetes annotations and labels from the previous bullets 2 and 3 can be overridden and via
+configuration.
+
+In YAML:
+```yaml
+kubernetes:
+  meta_naming_sources:
+      annotations:
+        service_name:
+          # gets service name from the first existing Pod annotation
+          - my.domain.com/override-service-name
+          - resource.opentelemetry.io/service.name
+        service_namespace:
+          # gets service namespace from the first existing Pod annotation
+          - my.domain.com/override-service-namespace
+          - resource.opentelemetry.io/service.namespace
+      labels:
+        service_name:
+          # gets service name from the first existing Pod label
+          - override-svc-name
+          - app.kubernetes.io/name
+        service_namespace:
+          # gets service namespace from the first existing Pod label
+          - override-svc-ns
+          - app.kubernetes.io/part-of
+```
+
+The equivalent environment variables for the labels and annotation overriding
+properties are:
+
+* `BEYLA_KUBE_ANNOTATIONS_SERVICE_NAME`
+* `BEYLA_KUBE_ANNOTATIONS_SERVICE_NAMESPACE`
+* `BEYLA_KUBE_LABELS_SERVICE_NAME`
+* `BEYLA_KUBE_LABELS_SERVICE_NAMESPACE`
+
+They accept a comma-separated list of annotation and label names.

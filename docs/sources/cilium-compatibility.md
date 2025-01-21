@@ -59,7 +59,7 @@ The following example demonstrates Beyla and Cilium working together to propagat
 
 ### Install Cilium
 
-Install Cilium to a **kind** hosted Kubernetes container as outlined in the [Cilium documentation](https://docs.cilium.io/en/stable/gettingstarted/k8s-install-default/).
+Install Cilium to a [kind](https://kind.sigs.k8s.io/) hosted Kubernetes container as outlined in the [Cilium documentation](https://docs.cilium.io/en/stable/gettingstarted/k8s-install-default/).
 
 If the kernel you deployed Cilium doesn't support TCX, configure Cilium to use priority 2 for its eBPF programs:
 

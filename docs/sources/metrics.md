@@ -118,7 +118,7 @@ In order to configure which attributes to show or which attributes to hide, chec
 
 ## Internal metrics
 
-Beyla can be [configured to report internal metrics]({{< relref "./configure/options.md#internal-metrics-reporter" >}}) in Prometheus Format.
+Beyla can be [configured to report internal metrics]({{< relref "./configure/internal-metrics-reporter.md" >}}) in Prometheus Format.
 
 | Name                                  | Type        | Description                                                                              |
 | ------------------------------------- | ----------- | ---------------------------------------------------------------------------------------- |

@@ -36,7 +36,7 @@ func qName(om *informer.ObjectMeta) qualifiedName {
 	return qualifiedName{name: om.Name, namespace: om.Namespace, kind: om.Kind}
 }
 
-// MetadataSources allow overriding some metadata from kubernetes labels and annotations
+// MetadataSources allow overriding some metadata from kubernetes Pod labels and annotations
 type MetadataSources struct {
 	Annotations AnnotationSources `yaml:"annotations"`
 	Labels      LabelSources      `yaml:"labels"`
@@ -319,6 +319,10 @@ func (s *Store) serviceNameNamespaceForMetadata(om *informer.ObjectMeta) (string
 // OTEL implementations: OTEL operator, Loki and Beyla
 // https://github.com/grafana/k8s-monitoring-helm/issues/942
 func (s *Store) valueFromMetadata(om *informer.ObjectMeta, annotationNames, labelNames []string) string {
+	// if this object meta is not a pod, we ignore the metadata
+	if om.Pod == nil {
+		return ""
+	}
 	for _, key := range annotationNames {
 		if val, ok := om.Annotations[key]; ok {
 			return val
@@ -355,6 +359,12 @@ func (s *Store) ServiceNameNamespaceForIP(ip string) (string, string) {
 	return name, namespace
 }
 
+// serviceNameNamespaceOwnerID takes service name and namespace from diverse sources according to the
+// OTEL specification: https://github.com/open-telemetry/opentelemetry-operator/blob/main/README.md
+// 1. Resource attributes set via OTEL_RESOURCE_ATTRIBUTES and OTEL_SERVICE_NAME environment variables
+// 2. Resource attributes set via annotations (with the resource.opentelemetry.io/ prefix)
+// 3. Resource attributes set via labels (e.g. app.kubernetes.io/name)
+// 4. Resource attributes calculated from the owner's metadata (e.g. k8s.deployment.name) or pod's metadata (e.g. k8s.pod.name)
 func (s *Store) serviceNameNamespaceOwnerID(om *informer.ObjectMeta, ownerName string) (string, string) {
 	// ownerName can be the top Owner name, or om.Name in case it's a pod without owner
 	serviceName := ownerName

@@ -114,6 +114,7 @@ func FeatureHTTPMetricsDecoration(manifest string, overrideAttrs map[string]stri
 		"k8s_replicaset_name":      "^testserver-",
 		"k8s_cluster_name":         "^beyla$",
 		"server_service_namespace": "integration-test",
+		"server":                   "testserver",
 		"source":                   "beyla",
 		"host_name":                "testserver",
 		"host_id":                  HostIDRegex,
@@ -124,6 +125,9 @@ func FeatureHTTPMetricsDecoration(manifest string, overrideAttrs map[string]stri
 			allAttributes["instance"] = sid
 		}
 	}
+	overriddenNameNS := attributeMap(allAttributes, overrideAttrs, "server", "server_service_namespace")
+	expectedServer := overriddenNameNS["server"]
+	expectedJob := overriddenNameNS["server_service_namespace"] + "/" + expectedServer
 
 	return features.New("Decoration of Pod-to-Service communications").
 		Setup(pinger.Deploy()).
@@ -150,12 +154,12 @@ func FeatureHTTPMetricsDecoration(manifest string, overrideAttrs map[string]stri
 					"k8s_cluster_name",
 				))).
 		Assess("all the span graph metrics exist",
-			testMetricsDecoration(spanGraphMetrics, `{server="testserver",client="internal-pinger"}`,
+			testMetricsDecoration(spanGraphMetrics, `{server="`+expectedServer+`",client="internal-pinger"}`,
 				attributeMap(allAttributes, overrideAttrs,
 					"server_service_namespace",
 					"source",
 				))).Assess("target_info metrics exist",
-		testMetricsDecoration([]string{"target_info"}, `{job=~".*testserver"}`,
+		testMetricsDecoration([]string{"target_info"}, `{job="`+expectedJob+`"}`,
 			attributeMap(allAttributes, overrideAttrs,
 				"host_name",
 				"host_id",

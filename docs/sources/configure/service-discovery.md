@@ -153,7 +153,7 @@ If the property is not set, it will be defaulted to the Kubernetes namespace of
 that runs the instrumented process, if Kubernetes is available, or empty when
 Kubernetes is not available.
 
-This option is deprecated. Check the [overriding service name and namespace](#overriding-service-name-and-namespace) section
+This option is deprecated. Check the [overriding service name and namespace](#override-service-name-and-namespace) section
 to enable automatic configuration of service name and namespace from diverse metadata sources.
 
 It is important to notice that this namespace is not a selector for Kubernetes namespaces. Its

@@ -13,59 +13,55 @@ aliases:
 
 # Cilium compatibility
 
-## Introduction
+[Cilium](https://cilium.io) is an open source cloud native solution for providing, securing, and observing network connectivity between workloads. In some cases the eBPF programs Cilium uses can conflict with the ePBF programs Beyla uses and lead to issues.
 
-[Cilium](https://cilium.io) is an open source cloud native solution for providing, securing, and observing network connectivity between workloads. In some cases the eBPF programs Cilium uses can conflict with the ePBF programs Beyla uses and lead to system disruptions and instability.
+Beyla and Cilium use eBPF traffic control classifier programs, `BPF_PROG_TYPE_SCHED_CLS`. These programs attach to the ingress and egress data paths of the kernel networking stack. Together they form a chain of packet filters. Each packet filter is able to inspect the contents of the packet and perform operations, for example redirect or discard the packet.
 
-Beyla and Cilium use eBPF traffic control classifier programs, `BPF_PROG_TYPE_SCHED_CLS`. These programs attach to the ingress and egress data paths of the kernel networking stack. Together they form a chain of _packet filters_. Each packet filter is able to inspect the contents of the packet and perform operations, for example redirect or discard the packet. Beyla programs never disrupt the flow of a packet, Cilium changes packet flow as part of its operation. If Cilium processes packets before Beyla it can affect its ability to visualize and process packets.
+Beyla programs never disrupt the flow of a packet, but Cilium changes packet flow as part of its operation. If Cilium processes packets before Beyla it can affect its ability to visualize and process packets.
 
-Beyla is capable of detecting whether Cilium is running and registers its traffic control programs at the head of the program chain ensuring they run before any other eBPF program. Beyla observes packets before handing them over to the next program in the chain, for example Cilium. If that isn't possible, Beyla exits with an appropriate error message.
+## Attachment modes
 
-## TCX and netlink attachments
+Beyla uses the Traffic Control eXpress (TCX) API or the netlink interface in the Linux Kernel to attach traffic control (TC) programs.
 
-Beyla uses the TCX (Traffic Control eXpress) API or the netlink interface in the Linux Kernel to attach traffic control (TC) programs. The TCX API is in kernel since version 6 and is the preferred method to attach TC programs. It provides a linked list mechanism to attach programs to the _head_, the _middle_, or the _tail_. Beyla and Cilium auto-detect if the kernel supports TCX and use it by default.
+The TCX API is in the kernel since version 6 and is the preferred method to attach TC programs. It provides a linked list mechanism to attach programs to the head, middle, or tail. Beyla and Cilium auto-detect if the kernel supports TCX and use it by default.
 
-When Beyla and Cilium uses TCX they can coexist without interfering. Beyla attaches its eBPF programs to the head of the list and Cilium to the tail. TCX is the preferred operation mode when possible.
+When Beyla and Cilium use TCX they don't interfere with each other. Beyla attaches its eBPF programs to the head of the list and Cilium to the tail. TCX is the preferred operation mode when possible.
 
-The legacy _netlink_ interface relies on _clsact_  [_qdiscs_](https://tldp.org/HOWTO/Traffic-Control-HOWTO/components.html) and a special type of tc filter (called bpf filter) to attach eBPF programs to network interfaces. Unlike TCX, there's no unique _linked list_ semantics (although filter chaining is possible), but in a simplistic manner, filters are executed according to their configured priority (the lower the priority number, the higher the priority, with 1 being the highest priority). If two filters have the same priority, then they follow a _LIFO_ approach in which the last attached filter runs first.
+The legacy netlink interface relies on `clsact`, [`qdiscs`](https://tldp.org/HOWTO/Traffic-Control-HOWTO/components.html), and a BPF TC filter to attach eBPF programs to network interfaces. The kernel executes filters in order of their priority, with lower numbers having higher priority, and 1 being the highest priority.
 
-When _TCX_ is not available, both Beyla and Cilium use `netlink` interface to install eBPF programs with a priority of 1, which can become problematic, specially if Cilium does that after Beyla. Therefore, a few precautions are due in this scenario.
+When TCX isn't available, both Beyla and Cilium use netlink interface to install eBPF programs. If Beyla detects Cilium runs programs with priority 1, Beyla exits and displays an error. You can resolve the error by configuring Cilium to use a priority greater than 1.
 
-## Deploy Beyla and Cilium using `netlink` attachments
+Beyla also refuses to run if it's configured to use netlink attachments and it detects Cilium uses TCX.
 
-A simple solution to ensure the healthy coexistence of Beyla and Cilium when the `netlink` interface is being used for traffic control program attachment is to configure Cilium to use a priority of _2_ for its traffic control eBPF programs. The priority is controlled via the `bpf-filter-priorty` configuration, and can be set like this:
+### Configure Cilium netlink priority
+
+You can configure Cilium netlink program priority via the `bpf-filter-priorty` configuration:
+
 ```
 cilium config set bpf-filter-priority 2
 ```
-This ensures that Beyla's programs always run before Cilium's.
 
-## Mixed TCX and netlink
+This ensures that Beyla programs always run before Cilium programs.
 
-In the very odd scenario in which both TCX and netlink attachments are being used, TCX programs _always_ run before those attached via the `netlink` interface.
+### Mixed TCX and netlink
 
-## Summary of the possible modes of operation
-
-When Beyla is using TCX, there's nothing to be done and it works out of the box, even if Cilium is using netlink.
-
-When both Beyla and Cilium are relying on netlink attachments, Beyla checks if Cilium's priority is greater than _1_ to avoid problems. If Beyla detects Cilium programs are running exclusively with priority _1_, Beyla refuses to run and displays an error message instead.
-
-Beyla also refuses to run if it is configured to use `netlink` attachments but it detects Cilium is using TCX.
+In the scenario in which the kernel uses both TCX and netlink attachments, TCX programs run before programs attached via the `netlink` interface.
 
 ## Beyla attachment mode configuration
 
-Beyla TC attachment mode can be configured using the `BEYLA_BPF_TC_BACKEND` configuration option [as described here.](https://grafana.com/docs/beyla/latest/configure/options/).
+Refer to the [configuration documentation](/docs/beyla/latest/configure/options/), to configure Beyla TC attachment mode using the `BEYLA_BPF_TC_BACKEND` configuration option.
 
-Cilium can be configured via the `enable-tcx` boolean configuration option.
+You can configure Cilium via its `enable-tcx` boolean configuration option, refer to the [Cilium documentation](https://docs.cilium.io/en/stable/). for more information.
 
-## Beyla and Cilium Trace Context Propagation Kubernetes Demo
+## Beyla and Cilium demo
 
-Here we present a minimalist demo showing Beyla and Cilium working together.
+The following example demonstrates Beyla and Cilium working together to propagate trace context in Kubernetes environments.
 
 ### Install Cilium
 
-Install Cilium to a **_kind_** hosted Kubernetes container as [described here](https://docs.cilium.io/en/stable/gettingstarted/k8s-install-default/).
+Install Cilium to a **kind** hosted Kubernetes container as outlined in the [Cilium documentation](https://docs.cilium.io/en/stable/gettingstarted/k8s-install-default/).
 
-If the kernel you deployed Cilium does not support TCX, configure Cilium to use priority 2 for its eBPF programs:
+If the kernel you deployed Cilium doesn't support TCX, configure Cilium to use priority 2 for its eBPF programs:
 
 ```
 cilium config set bpf-filter-priority 2
@@ -73,7 +69,7 @@ cilium config set bpf-filter-priority 2
 
 ### Deploy sample services
 
-Use the following definition to deploy the same services. These are very small toy services that talk to one another, allowing us to show Beyla working with trace-context propagation:
+Use the following definition to deploy the same services. These are small toy services that talk to one another and allow you to see Beyla working with trace-context propagation:
 
 ```yaml
 apiVersion: apps/v1
@@ -228,13 +224,13 @@ spec:
 
 ### Deploy Beyla
 
-#### Create the Beyla namespace
+Create the Beyla namespace:
 
 ```
 kubectl create namespace beyla
 ```
 
-#### Apply permissions
+Apply permissions:
 
 ```yaml
 apiVersion: v1
@@ -269,7 +265,7 @@ roleRef:
   name: beyla
 ```
 
-#### Deploy Beyla
+Deploy Beyla:
 
 ```yaml
 apiVersion: v1
@@ -338,20 +334,20 @@ spec:
           emptyDir: {}
 ```
 
-#### Forward a port to the host and trigger a request
+Forward a port to the host and trigger a request:
 
 ```
 kubectl port-forward services/node-service 30030:30030 &
 curl http://localhost:30030/traceme
 ```
 
-#### Check your Beyla Pod logs
+Finally check your Beyla Pod logs:
 
 ```
 for i in `kubectl get pods -n beyla -o name | cut -d '/' -f2`; do kubectl logs -n beyla $i | grep "GET " | sort; done
 ```
 
-You should obtain an output showing the requests detected by Beyla with trace-context propagation similar to this:
+You should see output that shows requests detected by Beyla with trace-context propagation similar to this:
 
 ```
 2025-01-17 21:42:18.11794218 (5.045099ms[5.045099ms]) HTTPClient 200 GET /tracemetoo [10.244.1.92 as go-deployment.default:37450]->[10.96.214.17 as pytestserver.default:8083] size:0B svc=[default/go-deployment go] traceparent=[00-14f07e11b5e57f14fd2da0541f0ddc2f-319fb03373427a41[cfa6d5d448e40b00]-01]

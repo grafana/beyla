@@ -194,11 +194,10 @@ func getFuncName(info *ebpf.ProgramInfo, ids ebpf.ProgramID, log *slog.Logger) s
 
 func (bc *BPFCollector) collectMapMetrics(ch chan<- prometheus.Metric) {
 	for id := ebpf.MapID(0); ; {
-		nextID, err := ebpf.MapGetNextID(id)
+		id, err := ebpf.MapGetNextID(id)
 		if err != nil {
 			break
 		}
-		id = nextID
 
 		m, err := ebpf.NewMapFromID(id)
 		if err != nil {

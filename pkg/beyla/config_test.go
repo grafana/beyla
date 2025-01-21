@@ -122,10 +122,11 @@ network:
 		Printer:          false,
 		TracePrinter:     "json",
 		EBPF: config.EBPFTracer{
-			BatchLength:        100,
-			BatchTimeout:       time.Second,
-			HTTPRequestTimeout: 30 * time.Second,
-			TCBackend:          tcmanager.TCBackendAuto,
+			BatchLength:               100,
+			BatchTimeout:              time.Second,
+			HTTPRequestTimeout:        30 * time.Second,
+			TCBackend:                 tcmanager.TCBackendAuto,
+			ContextPropagationEnabled: true,
 		},
 		Grafana: otel.GrafanaConfig{
 			OTLP: otel.GrafanaOTLP{

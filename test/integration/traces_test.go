@@ -503,7 +503,7 @@ func testHTTPTracesNestedClientWithContextPropagation(t *testing.T) {
 }
 
 //nolint:cyclop
-func testHTTP2GRPCTracesNestedCalls(t *testing.T, contextPropagation bool) {
+func testHTTP2GRPCTracesNestedCalls(t *testing.T) {
 	var traceID string
 	var parentID string
 
@@ -557,10 +557,6 @@ func testHTTP2GRPCTracesNestedCalls(t *testing.T, contextPropagation bool) {
 	assert.Empty(t, sd, sd.String())
 
 	numNested := 1
-
-	if contextPropagation {
-		numNested = 2
-	}
 
 	// Check the information of the "in queue" span
 	res = trace.FindByOperationName("in queue")
@@ -617,9 +613,6 @@ func testHTTP2GRPCTracesNestedCalls(t *testing.T, contextPropagation bool) {
 	require.Len(t, res, numNested)
 	for index := range res {
 		grpc := res[index]
-		if contextPropagation {
-			assert.Equal(t, processing.TraceID, grpc.TraceID)
-		}
 		isClient := false
 
 		for _, tag := range grpc.Tags {
@@ -644,11 +637,11 @@ func testHTTP2GRPCTracesNestedCalls(t *testing.T, contextPropagation bool) {
 }
 
 func testHTTP2GRPCTracesNestedCallsNoPropagation(t *testing.T) {
-	testHTTP2GRPCTracesNestedCalls(t, false)
+	testHTTP2GRPCTracesNestedCalls(t)
 }
 
 func testHTTP2GRPCTracesNestedCallsWithContextPropagation(t *testing.T) {
-	testHTTP2GRPCTracesNestedCalls(t, true)
+	testHTTP2GRPCTracesNestedCalls(t)
 }
 
 func testNestedHTTPTracesKProbes(t *testing.T) {

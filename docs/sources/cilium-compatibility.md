@@ -17,7 +17,7 @@ aliases:
 
 Beyla and Cilium use eBPF traffic control classifier programs, `BPF_PROG_TYPE_SCHED_CLS`. These programs attach to the ingress and egress data paths of the kernel networking stack. Together they form a chain of packet filters. Each packet filter is able to inspect the contents of the packet and perform operations, for example redirect or discard the packet.
 
-Beyla programs never disrupt the flow of a packet, but Cilium changes packet flow as part of its operation. If Cilium processes packets before Beyla it can affect its ability to visualize and process packets.
+Beyla programs never disrupt the flow of a packet, but Cilium changes packet flow as part of its operation. If Cilium processes packets before Beyla it can affect its ability to process packets.
 
 ## Attachment modes
 

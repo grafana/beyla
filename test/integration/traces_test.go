@@ -503,7 +503,7 @@ func testHTTPTracesNestedClientWithContextPropagation(t *testing.T) {
 }
 
 //nolint:cyclop
-func testHTTP2GRPCTracesNestedCalls(t *testing.T) {
+func testHTTP2GRPCTracesNestedCalls(t *testing.T, contextPropagation bool) {
 	var traceID string
 	var parentID string
 
@@ -608,11 +608,20 @@ func testHTTP2GRPCTracesNestedCalls(t *testing.T) {
 	)
 	assert.Empty(t, sd, sd.String())
 
+	numNestedGRPC := 1
+
+	if contextPropagation {
+		numNestedGRPC = 2
+	}
+
 	// Check the information of the "processing" span
 	res = trace.FindByOperationName("/routeguide.RouteGuide/GetFeature")
-	require.Len(t, res, numNested)
+	require.Len(t, res, numNestedGRPC)
 	for index := range res {
 		grpc := res[index]
+		if contextPropagation {
+			assert.Equal(t, processing.TraceID, grpc.TraceID)
+		}
 		isClient := false
 
 		for _, tag := range grpc.Tags {
@@ -637,11 +646,11 @@ func testHTTP2GRPCTracesNestedCalls(t *testing.T) {
 }
 
 func testHTTP2GRPCTracesNestedCallsNoPropagation(t *testing.T) {
-	testHTTP2GRPCTracesNestedCalls(t)
+	testHTTP2GRPCTracesNestedCalls(t, false)
 }
 
 func testHTTP2GRPCTracesNestedCallsWithContextPropagation(t *testing.T) {
-	testHTTP2GRPCTracesNestedCalls(t)
+	testHTTP2GRPCTracesNestedCalls(t, true)
 }
 
 func testNestedHTTPTracesKProbes(t *testing.T) {

@@ -122,7 +122,7 @@ OTEL property and the `service_name` Prometheus property in the exported metrics
 
 This option is deprecated, as multiple matches for the same `services` entry would involve
 multiple services sharing the same name.
-Check the [overriding service name and namespace](#overriding-service-name-and-namespace) section
+Check the [override service name and namespace](#override-service-name-and-namespace) section
 to enable automatic configuration of service name and namespace from diverse metadata sources. 
 
 If the property is not set, it will default to any of the following properties, in order of
@@ -301,7 +301,7 @@ discovery:
 The preceding example discovers all Pods in the `frontend` namespace that have a label
 `instrument` with a value that matches the regular expression `beyla`.
 
-## Overriding service name and namespace
+## Override service name and namespace
 
 Either if the instrumentation data is exported via OpenTelemetry or via Prometheus, Beyla follows the
 [service naming conventions from the OpenTelemetry operator](https://github.com/open-telemetry/opentelemetry-operator/blob/main/README.md#how-resource-attributes-are-calculated-from-the-pods-metadata)

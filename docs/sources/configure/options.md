@@ -106,9 +106,9 @@ restrict the instrumentation only to the methods exposed through a specific port
 If the specified port range is wide (e.g. `1-65535`) Beyla will try to execute all the processes
 owning one of the ports in the range.
 
-| YAML           | Environment variable                                     | Type   | Default                                               |
-|----------------| ------------------------------------------- | ------ | ----------------------------------------------------- |
-| `service_name` | `BEYLA_SERVICE_NAME` | string | (see [service discovery]({{< relref "./service-discovery.md" >}}) section) |
+| YAML           | Environment variable                                     | Type   | Default                                                                         |
+|----------------| ------------------------------------------- | ------ |---------------------------------------------------------------------------------|
+| `service_name` | `BEYLA_SERVICE_NAME` | string | (refer to [service discovery]({{< relref "./service-discovery.md" >}}) section) |
 
 **Deprecated**.
 
@@ -122,9 +122,9 @@ single instance of Beyla report different service names, follow the instructions
 [_overriding service name and namespace_ section of the service discovery documentation]({{< relref "./service-discovery.md" >}})
 to enable automatic configuration of service name and namespace from diverse metadata sources.
 
-| YAML                | Environment variable                   | Type   | Default                                               |
-| ------------------- | ------------------------- | ------ | ----------------------------------------------------- |
-| `service_namespace` | `BEYLA_SERVICE_NAMESPACE` | string | (see [service discovery]({{< relref "./service-discovery.md" >}}) section) |
+| YAML                | Environment variable                   | Type   | Default                                                                         |
+| ------------------- | ------------------------- | ------ |---------------------------------------------------------------------------------|
+| `service_namespace` | `BEYLA_SERVICE_NAMESPACE` | string | (refer to [service discovery]({{< relref "./service-discovery.md" >}}) section) |
 
 **Deprecated**.
 

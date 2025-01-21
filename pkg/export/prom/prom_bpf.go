@@ -177,7 +177,7 @@ func (bc *BPFCollector) collectProbesMetrics(ch chan<- prometheus.Metric) {
 	}
 }
 
-func getFuncName(info *ebpf.ProgramInfo, ids ebpf.ProgramID, log *slog.Logger) string {
+func getFuncName(info *ebpf.ProgramInfo, id ebpf.ProgramID, log *slog.Logger) string {
 	funcInfos, err := info.FuncInfos()
 	if err != nil {
 		log.Error("failed to get program func infos", "ID", id, "error", err)

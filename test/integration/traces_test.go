@@ -183,7 +183,7 @@ func testGRPCTracesForServiceName(t *testing.T, svcName string) {
 		traces := tq.FindBySpan(jaeger.Tag{Key: "rpc.method", Type: "string", Value: "/routeguide.RouteGuide/Debug"})
 		require.Len(t, traces, 1)
 		trace = traces[0]
-		require.Len(t, trace.Spans, 3) // parent - in queue - processing
+		require.Len(t, trace.Spans, 1) // parent
 	}, test.Interval(100*time.Millisecond))
 
 	// Check the information of the parent span
@@ -204,49 +204,8 @@ func testGRPCTracesForServiceName(t *testing.T, svcName string) {
 	)
 	assert.Empty(t, sd, sd.String())
 
-	// Check the information of the "in queue" span
-	res = trace.FindByOperationName("in queue")
-	require.Len(t, res, 1)
-	queue := res[0]
-	// Check parenthood
-	p, ok := trace.ParentOf(&queue)
-	require.True(t, ok)
-	assert.Equal(t, parent.TraceID, p.TraceID)
-	assert.Equal(t, parent.SpanID, p.SpanID)
-	// check reasonable start and end times
-	assert.GreaterOrEqual(t, queue.StartTime, parent.StartTime)
-	assert.LessOrEqual(t,
-		queue.StartTime+queue.Duration,
-		parent.StartTime+parent.Duration+1) // adding 1 to tolerate inaccuracies from rounding from ns to ms
-	// check span attributes
-	sd = queue.Diff(
-		jaeger.Tag{Key: "span.kind", Type: "string", Value: "internal"},
-	)
-	assert.Empty(t, sd, sd.String())
-
-	// Check the information of the "processing" span
-	res = trace.FindByOperationName("processing")
-	require.Len(t, res, 1)
-	processing := res[0]
-	// Check parenthood
-	p, ok = trace.ParentOf(&queue)
-	require.True(t, ok)
-	assert.Equal(t, parent.TraceID, p.TraceID)
-	require.False(t, strings.HasSuffix(parent.TraceID, "0000000000000000")) // the Debug call doesn't add any traceparent to the request header, the traceID is auto-generated won't look like this
-	assert.Equal(t, parent.SpanID, p.SpanID)
-	// check reasonable start and end times
-	assert.GreaterOrEqual(t, processing.StartTime, queue.StartTime+queue.Duration)
-	assert.LessOrEqual(t, processing.StartTime+processing.Duration, parent.StartTime+parent.Duration+1)
-	// check span attributes
-	sd = queue.Diff(
-		jaeger.Tag{Key: "span.kind", Type: "string", Value: "internal"},
-	)
-	assert.Empty(t, sd, sd.String())
-
 	// check process ID
 	require.Contains(t, trace.Processes, parent.ProcessID)
-	assert.Equal(t, parent.ProcessID, queue.ProcessID)
-	assert.Equal(t, parent.ProcessID, processing.ProcessID)
 	process := trace.Processes[parent.ProcessID]
 	assert.Equal(t, svcName, process.ServiceName)
 
@@ -599,10 +558,6 @@ func testHTTP2GRPCTracesNestedCalls(t *testing.T, contextPropagation bool) {
 
 	numNested := 1
 
-	if contextPropagation {
-		numNested = 2
-	}
-
 	// Check the information of the "in queue" span
 	res = trace.FindByOperationName("in queue")
 	require.Equal(t, len(res), numNested)
@@ -653,9 +608,15 @@ func testHTTP2GRPCTracesNestedCalls(t *testing.T, contextPropagation bool) {
 	)
 	assert.Empty(t, sd, sd.String())
 
+	numNestedGRPC := 1
+
+	if contextPropagation {
+		numNestedGRPC = 2
+	}
+
 	// Check the information of the "processing" span
 	res = trace.FindByOperationName("/routeguide.RouteGuide/GetFeature")
-	require.Len(t, res, numNested)
+	require.Len(t, res, numNestedGRPC)
 	for index := range res {
 		grpc := res[index]
 		if contextPropagation {

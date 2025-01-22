@@ -220,6 +220,8 @@ int beyla_uprobe_readRequestReturns(struct pt_regs *ctx) {
         if (bpf_map_update_elem(&ongoing_goroutines, &g_key, &metadata, BPF_ANY)) {
             bpf_dbg_printk("can't update active goroutine");
         }
+    } else {
+        g_metadata->timestamp = bpf_ktime_get_ns();
     }
 
     return 0;

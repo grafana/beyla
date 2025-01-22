@@ -238,14 +238,8 @@ int beyla_uprobe_server_handleStream_return(struct pt_regs *ctx) {
     trace->status = status;
     trace->content_length = 0;
     trace->method[0] = 0;
-
-    goroutine_metadata *g_metadata = bpf_map_lookup_elem(&ongoing_goroutines, &g_key);
-    if (g_metadata) {
-        trace->go_start_monotime_ns = g_metadata->timestamp;
-        bpf_map_delete_elem(&ongoing_goroutines, &g_key);
-    } else {
-        trace->go_start_monotime_ns = invocation->start_monotime_ns;
-    }
+    trace->go_start_monotime_ns = invocation->start_monotime_ns;
+    bpf_map_delete_elem(&ongoing_goroutines, &g_key);
 
     // Get method from transport.Stream.Method
     if (!read_go_str("grpc method",

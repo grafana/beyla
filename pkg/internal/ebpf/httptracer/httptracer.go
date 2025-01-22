@@ -127,6 +127,7 @@ func (p *Tracer) startTC(ctx context.Context) {
 	if !p.cfg.EBPF.UseTCForL7CP {
 		return
 	}
+
 	p.log.Info("enabling L7 context-propagation with Linux Traffic Control")
 
 	if !ebpfcommon.SupportsEBPFLoops() {

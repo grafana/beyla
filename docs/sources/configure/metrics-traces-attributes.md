@@ -72,7 +72,34 @@ The `http_client_*` and `http_server_*` sections would override the base configu
 
 When a metric name matches multiple definitions using wildcards, exact matches have higher precedence than wild card matches.
 
-## Other attributes
+## Distributed traces and context propagation
+
+| YAML                         | Environment variable                   | Type    | Default |
+| ---------------------------- | -------------------------------------- | ------- | ------- |
+| `enable_context_propagation` | `BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION` | boolean | (true)  |
+
+Enables injecting of the `Traceparent` header value for outgoing HTTP requests, allowing
+Beyla to propagate any incoming context to downstream services. This context propagation
+support works for any programming language and it's implemented by using Linux Traffic Control
+(TC). Because Linux Traffic Control is sometimes used by other eBPF programs, this option 
+requires that the other eBPF programs chain correctly with Beyla. For more information on 
+this topic, see our documentation related to [Cilium CNI]({{< relref "../cilium-compatibility.md" >}}).
+This context propagation support is fully compatible with any OpenTelemetry
+distributed tracing library.
+
+For TLS encrypted HTTP requests (HTTPS), the `Traceparent` header value is encoded
+at TCP/IP packet level, and requires that Beyla is present on both sides of the communication.
+
+For this option to correctly work in containerized environments (Kubernetes and Docker), the
+following configuration must be specified:
+- Beyla must be deployed as a `DaemonSet` with host network access (`hostNetwork: true`).
+- The `/sys/fs/cgroup` path from the host must be volume mounted as local `/sys/fs/cgroup` path.
+- The `CAP_NET_ADMIN` capability must be granted to the Beyla container.
+
+gRPC and HTTP2 are not supported at the moment.
+
+For an example of how to configure distributed traces in Kubernetes, see our 
+[Distributed traces with Beyla]({{< relref "../distributed-traces.md" >}}) guide.
 
 | YAML                    | Environment variable              | Type    | Default |
 | ----------------------- | --------------------------------- | ------- | ------- |
@@ -88,6 +115,8 @@ processed, without additional tracking of the request headers.
 Enabling this option may increase the performance overhead in high request volume scenarios.
 This option is only useful when generating Beyla traces, it does not affect
 generation of Beyla metrics.
+
+## Other attributes
 
 | YAML                    | Environment variable               | Type     | Default |
 | ----------------------- | ---------------------------------- | -------- | ------- |

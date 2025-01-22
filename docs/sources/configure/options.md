@@ -86,7 +86,7 @@ the selection criteria.
 
 For example, specifying the following property:
 
-```
+```yaml
 open_port: 80,443,8000-8999
 ```
 
@@ -110,7 +110,7 @@ owning one of the ports in the range.
 |----------------| ------------------------------------------- | ------ |---------------------------------------------------------------------------------|
 | `service_name` | `BEYLA_SERVICE_NAME` | string | (refer to [service discovery]({{< relref "./service-discovery.md" >}}) section) |
 
-**Deprecated**.
+**Deprecated**
 
 Overrides the name of the instrumented service to be reported by the metrics exporter.
 Defining this property is equivalent to add a `name` entry into the [`discovery.services` YAML
@@ -118,15 +118,15 @@ section]({{< relref "./service-discovery.md" >}}).
 
 This configuration option is deprecated. If a single instance of Beyla is instrumenting multiple instances of different processes,
 they will share the same service name even if they are different. If you need that a
-single instance of Beyla report different service names, follow the instructions in the
-[_overriding service name and namespace_ section of the service discovery documentation]({{< relref "./service-discovery.md" >}})
+single instance of Beyla report different service names, follow the instructions on how to
+[override the service name and namespace]({{< relref "./service-discovery.md" >}}) in the service discovery documentation
 to enable automatic configuration of service name and namespace from diverse metadata sources.
 
 | YAML                | Environment variable                   | Type   | Default                                                                         |
 | ------------------- | ------------------------- | ------ |---------------------------------------------------------------------------------|
 | `service_namespace` | `BEYLA_SERVICE_NAMESPACE` | string | (refer to [service discovery]({{< relref "./service-discovery.md" >}}) section) |
 
-**Deprecated**.
+**Deprecated**
 
 Optionally, allows assigning a namespace for the service selected from the `executable_name`
 or `open_port` properties.
@@ -136,8 +136,8 @@ section]({{< relref "./service-discovery.md" >}}).
 
 This configuration option is deprecated, as it assumes a single namespace for all the services instrumented
 by Beyla. If you need that a single instance of Beyla groups multiple services
-into different namespaces, follow the instructions in the
-[_overriding service name and namespace_ section of the service discovery documentation]({{< relref "./service-discovery.md" >}})
+into different namespaces, follow the instructions on how to
+[override the service name and namespace]({{< relref "./service-discovery.md" >}}) in the service discovery documentation
 to enable automatic configuration of service name and namespace from diverse metadata sources.
 
 | YAML        | Environment variable           | Type   | Default |

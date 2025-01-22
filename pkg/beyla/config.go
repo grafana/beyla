@@ -39,7 +39,7 @@ const (
 )
 
 const (
-	defaultMetricsTTL = 5 * time.Minute
+	defaultMetricsTTL = 70 * time.Minute
 )
 
 var DefaultConfig = Config{
@@ -75,8 +75,6 @@ var DefaultConfig = Config{
 		Instrumentations: []string{
 			instrumentations.InstrumentationALL,
 		},
-		// TODO: keep OTEL expiration disabled by default until we address
-		// this issue: https://github.com/grafana/beyla/issues/1065
 		TTL: defaultMetricsTTL,
 	},
 	Traces: otel.TracesConfig{

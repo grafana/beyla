@@ -148,7 +148,7 @@ network:
 				instrumentations.InstrumentationALL,
 			},
 			HistogramAggregation: "base2_exponential_bucket_histogram",
-			TTL:                  defaultMetricsTTL,
+			TTL:                  5 * time.Minute,
 		},
 		Traces: otel.TracesConfig{
 			Protocol:           otel.ProtocolUnset,

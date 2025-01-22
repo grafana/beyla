@@ -169,7 +169,7 @@ podLabels: {}
 
 ## https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/
 # -- Determines how DNS resolution is handled for that pod.
-# If `.Values.preset` is set to `network` or `.Values.config.data.network` is enabled, Beyla requires `hostNetwork` access, causing cluster service DNS resolution to fail.
+# If `.Values.preset` is set to `network`, `.Values.config.data.network` or context propagation is enabled, Beyla requires `hostNetwork` access, causing cluster service DNS resolution to fail.
 # It is recommended not to change this if Beyla sends traces and metrics to Grafana components via k8s service.
 dnsPolicy: ClusterFirstWithHostNet
 

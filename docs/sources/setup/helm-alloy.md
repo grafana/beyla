@@ -23,6 +23,11 @@ you instrument your infrastructure. It also provides a Helm chart to deploy Allo
 
 In this tutorial, you learn how to deploy Beyla in Kubernetes using Grafana Alloy Helm's chart.
 
+## Note on versioning 
+Since Alloy packages Beyla as a component, the version of Beyla shipped
+with Alloy will depend on the Alloy release used. The latest version of Alloy (v1.5.1) uses
+Beyla v1.8.7.
+
 ## Prerequisites
 
 - A Kubernetes cluster, you can use [kind](https://kind.sigs.k8s.io/) to create a local cluster
@@ -582,6 +587,7 @@ helm upgrade --namespace alloy alloy grafana/alloy -f values.yaml
 
 - To run in DaemonSet mode, Beyla requires to have access to all the
   processes in the node. Therefore set `hostPID: true` the `controller` section.
+- To enable Beyla context propagation or for Beyla network monitoring set `hostNetwork: true`.
 - The Beyla container needs to run with privileges as it requires
   to perform privileged actions such as loading BPF programs and creating
   BPF maps. Therefore set `privileged: true` in `securityContext` section. For running Beyla as `unprivileged` container, that's without the

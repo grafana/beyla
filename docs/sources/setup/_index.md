@@ -17,7 +17,7 @@ aliases:
 There are different options to set up and run Beyla:
 
 1. [With Docker to instrument a process running in a container]({{< relref "./docker.md" >}}).
-1. [As a Kubernetes DaemonSet using Helm]({{< relref "./kubernetes-helm.md" >}})
+1. [As a Kubernetes DaemonSet using Helm (Recommended)]({{< relref "./kubernetes-helm.md" >}})
 1. [As a Kubernetes DaemonSet the Grafana Alloy Helm chart]({{< relref "./helm-alloy.md" >}})
 1. [As a Kubernetes DaemonSet or as a sidecar container (manual process)]({{< relref "./kubernetes.md" >}})
 

@@ -35,10 +35,8 @@ spec:
       {{- if eq .Values.preset "application" }}
       hostPID: true
       {{- end }}
-      {{- if or (eq .Values.preset "network") .Values.config.data.network }}
       hostNetwork: true
       dnsPolicy: {{ .Values.dnsPolicy }}
-      {{- end }}
       {{- if .Values.priorityClassName }}
       priorityClassName: {{ .Values.priorityClassName }}
       {{- end }}
@@ -62,6 +60,7 @@ spec:
                 - CHECKPOINT_RESTORE
                 - DAC_READ_SEARCH
                 - PERFMON
+                - NET_ADMIN
               {{- with .Values.extraCapabilities }}
                 {{- toYaml . | nindent 16 }}
               {{- end }}
@@ -106,7 +105,9 @@ spec:
           {{- end }}
           volumeMounts:
             - mountPath: /etc/beyla/config
-              name: beyla-config
+              name: beyla-config        
+            - mountPath: /sys/fs/cgroup
+              name: cgroup
       {{- if or .Values.global.image.pullSecrets .Values.image.pullSecrets }}
       imagePullSecrets:
         {{- if .Values.global.image.pullSecrets }}
@@ -131,3 +132,6 @@ spec:
         - name: beyla-config
           configMap:
             name: {{ default (include "beyla.fullname" .) .Values.config.name }}
+        - name: cgroup
+          hostPath:
+            path: /sys/fs/cgroup

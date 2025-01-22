@@ -759,6 +759,18 @@
       }
     },
     "net/url.URL": {
+      "Host": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.23.5"
+        },
+        "offsets": [
+          {
+            "offset": 40,
+            "since": "1.17.0"
+          }
+        ]
+      },
       "Path": {
         "versions": {
           "oldest": "1.17.0",
@@ -767,6 +779,18 @@
         "offsets": [
           {
             "offset": 56,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "Scheme": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.23.5"
+        },
+        "offsets": [
+          {
+            "offset": 0,
             "since": "1.17.0"
           }
         ]

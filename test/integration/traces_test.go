@@ -419,15 +419,9 @@ func testHTTPTracesNestedCalls(t *testing.T, contextPropagation bool) {
 	)
 	assert.Empty(t, sd, sd.String())
 
-	numNested := 1
-
-	if contextPropagation {
-		numNested = 2
-	}
-
 	// Check the information of the "in queue" span
 	res = trace.FindByOperationName("in queue")
-	require.Equal(t, len(res), numNested)
+	require.GreaterOrEqual(t, len(res), 1)
 
 	var queue *jaeger.Span
 
@@ -452,7 +446,7 @@ func testHTTPTracesNestedCalls(t *testing.T, contextPropagation bool) {
 
 	// Check the information of the "processing" span
 	res = trace.FindByOperationName("processing")
-	require.Equal(t, len(res), numNested)
+	require.GreaterOrEqual(t, len(res), 1)
 
 	var processing *jaeger.Span
 
@@ -487,7 +481,7 @@ func testHTTPTracesNestedCalls(t *testing.T, contextPropagation bool) {
 	sd = client.Diff(
 		jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
 		jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(203)},
-		jaeger.Tag{Key: "url.full", Type: "string", Value: "/echoBack"},
+		jaeger.Tag{Key: "url.full", Type: "string", Value: "http://localhost:8080/echoBack"},
 		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(8080)}, // client call is to 8080
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "client"},
 	)

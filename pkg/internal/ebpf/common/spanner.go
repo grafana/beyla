@@ -1,8 +1,8 @@
 package ebpfcommon
 
 import (
-	"bytes"
 	"log/slog"
+	"strings"
 	"unsafe"
 
 	trace2 "go.opentelemetry.io/otel/trace"
@@ -15,16 +15,10 @@ var log = slog.With("component", "goexec.spanner")
 
 func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
 	// From C, assuming 0-ended strings
-	methodLen := bytes.IndexByte(trace.Method[:], 0)
-	if methodLen < 0 {
-		methodLen = len(trace.Method)
-	}
-	method := string(trace.Method[:methodLen])
-	pathLen := bytes.IndexByte(trace.Path[:], 0)
-	if pathLen < 0 {
-		pathLen = len(trace.Path)
-	}
-	path := string(trace.Path[:pathLen])
+	method := cstr(trace.Method[:])
+	path := cstr(trace.Path[:])
+	scheme := cstr(trace.Scheme[:])
+	origHost := cstr(trace.Host[:])
 
 	peer := ""
 	hostname := ""
@@ -58,6 +52,7 @@ func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
 			UserPID:   trace.Pid.UserPid,
 			Namespace: trace.Pid.Ns,
 		},
+		Statement: strings.Join([]string{scheme, origHost}, ";"),
 	}
 }
 
@@ -68,11 +63,7 @@ func SQLRequestTraceToSpan(trace *SQLRequestTrace) request.Span {
 	}
 
 	// From C, assuming 0-ended strings
-	sqlLen := bytes.IndexByte(trace.Sql[:], 0)
-	if sqlLen < 0 {
-		sqlLen = len(trace.Sql)
-	}
-	sql := string(trace.Sql[:sqlLen])
+	sql := cstr(trace.Sql[:])
 
 	method, path := sqlprune.SQLParseOperationAndTable(sql)
 

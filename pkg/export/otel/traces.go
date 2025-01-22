@@ -602,11 +602,16 @@ func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 			request.ServerPort(span.HostPort),
 		}
 	case request.EventTypeHTTPClient:
+		host := request.HTTPClientHost(span)
+		scheme := request.HTTPScheme(span)
+		url := request.URLFull(scheme, host, span.Path)
+
 		attrs = []attribute.KeyValue{
 			request.HTTPRequestMethod(span.Method),
 			request.HTTPResponseStatusCode(span.Status),
-			request.HTTPUrlFull(span.Path),
-			request.ServerAddr(request.HostAsServer(span)),
+			request.HTTPUrlFull(url),
+			semconv.HTTPScheme(scheme),
+			request.ServerAddr(host),
 			request.ServerPort(span.HostPort),
 			request.HTTPRequestBodySize(int(span.RequestLength())),
 		}

@@ -98,6 +98,9 @@ following configuration must be specified:
 
 gRPC and HTTP2 are not supported at the moment.
 
+For an example of how to configure distributed traces in Kubernetes, see our 
+[Distributed traces with Beyla]({{< relref "../distributed-traces.md" >}}) guide.
+
 | YAML                    | Environment variable              | Type    | Default |
 | ----------------------- | --------------------------------- | ------- | ------- |
 | `track_request_headers` | `BEYLA_BPF_TRACK_REQUEST_HEADERS` | boolean | (false) |

@@ -28,13 +28,17 @@ The trace context propagation is implemented in two different ways:
 2. By writing the header information at library level for Go
 
 Depending on the programming language your service is written in, Beyla uses one or both approaches of context propagation.
+We use these multiple approaches to implement context propagation, because writing memory with eBPF depends on the kernel
+configuration and the Linux system capabilities granted to Beyla. For more details on this topic, see our KubeCon NA 2024
+talk [So You Want to Write Memory with eBPF?](https://www.youtube.com/watch?v=TUiVX-44S9s).
 
 ### Context propagation at network level
 
 The context propagation at network level is implemented by writing the trace context information in the outgoing HTTP headers as well at the TCP/IP packet level.
 HTTP context propagation is fully compatible with any other OpenTelemetry based tracing library. This means that Beyla instrumented services correctly
-propagate the trace information, when sending to and receiving from services instrumented with the OpenTelemetry SDKs. We use Linux Traffic Control (TC) to 
-perform the adjustment of the network packets, which requires that other eBPF programs that use Linux Traffic Control chain properly with Beyla. For special considerations
+propagate the trace information, when sending to and receiving from services instrumented with the OpenTelemetry SDKs. We use 
+[Linux Traffic Control (TC)](https://en.wikipedia.org/wiki/Tc_(Linux)) to perform the adjustment of the network packets, which requires that other eBPF 
+programs that use Linux Traffic Control chain properly with Beyla. For special considerations
 regarding Cilium CNI, consult our [Cilium Compatibility]({{< relref "./cilium-compatibility.md" >}}) guide.
 
 For TLS encrypted traffic (HTTPS), Beyla is unable to inject the trace information in the outgoing HTTP headers and instead it injects the information

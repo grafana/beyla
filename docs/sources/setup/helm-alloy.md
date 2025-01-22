@@ -25,7 +25,7 @@ In this tutorial, you learn how to deploy Beyla in Kubernetes using Grafana Allo
 
 ## Note on versioning 
 Since Alloy packages Beyla as a component, the version of Beyla shipped
-with Alloy will depend on the Alloy release used. The latest version of Alloy (v1.5.1) uses
+with Alloy depends on the Alloy release used. The latest version of Alloy (v1.5.1) uses
 Beyla v1.8.7.
 
 ## Prerequisites

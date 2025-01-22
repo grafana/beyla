@@ -22,8 +22,8 @@ differentiation degree in the services that Beyla can instrument.
 For example, it will allow overriding the service name and namespace per service type.
 
 | YAML       | Environment variable | Type            | Default |
-| ---------- | ------- | --------------- | ------- |
-| `services` | N/A     | list of objects | (unset) |
+| ---------- | -------------------- | --------------- | ------- |
+| `services` | N/A                  | list of objects | (unset) |
 
 This section allows specifying different selection criteria for different services,
 as well as overriding some of their metadata, such as their reported name or
@@ -33,8 +33,8 @@ For more details about this section, go to the [discovery services section](#dis
 of this document.
 
 | YAML               | Environment variable | Type            | Default |
-| ------------------ | ------- | --------------- | ------- |
-| `exclude_services` | N/A     | list of objects | (unset) |
+| ------------------ | -------------------- | --------------- | ------- |
+| `exclude_services` | N/A                  | list of objects | (unset) |
 
 This section allows for specifying selection criteria for excluding services from
 being instrumented. It follows the same definition format as described in the
@@ -44,17 +44,9 @@ This option is useful for avoiding instrumentation of services which are typical
 found in observability environments. For example, use this option to exclude instrumenting
 Prometheus.
 
-| YAML                      | Environment variable            | Type    | Default                           |
-| ------------------------- | ------------------------------- | ------- | --------------------------------- |
-| `exclude_system_services` | `BEYLA_EXCLUDE_SYSTEM_SERVICES` | string  | `.*alloy.*|.*otelcol.*|.*beyla.*` |
-
-Disables instrumentation of Beyla itself (self-instrumentation), as well as Grafana Alloy and the
-OpenTelemetry Collector. Set to empty to allow Beyla to instrument itself as well as these other components.
-Note: to enable such self-instrumentation, it is still required to include them in the `services` section.
-
-| YAML                      | Environment variable            | Type    | Default                           |
-| ------------------------- | ------------------------------- | ------- | --------------------------------- |
-| `default_exclude_services` | N/A | list of objects  | Path: `(?:^\|\/)(beyla$\|alloy$\|otelcol[^\/]*$)` |
+| YAML                       | Environment variable  | Type              | Default                                           |
+| -------------------------- | --------------------- | ----------------- | ------------------------------------------------- |
+| `default_exclude_services` | N/A                   | list of objects   | Path: `(?:^\|\/)(beyla$\|alloy$\|otelcol[^\/]*$)` |
 
 Disables instrumentation of Beyla itself (self-instrumentation), as well as Grafana Alloy and the
 OpenTelemetry Collector. Set to empty to allow Beyla to instrument itself as well as these other components.

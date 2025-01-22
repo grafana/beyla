@@ -138,11 +138,16 @@ func (p *Tracer) startTC(ctx context.Context) {
 		return
 	}
 
+	if p.cfg.EBPF.UseTCForL7CP {
+		p.log.Info("L7 context-propagation with Linux Traffic Control enabled, not using the regular L4/L7 support.")
+		return
+	}
+
 	if !p.cfg.EBPF.ContextPropagationEnabled {
 		return
 	}
 
-	p.log.Info("enabling L4 context-propagation with Linux Traffic Control")
+	p.log.Info("enabling L4/L7 context-propagation with Linux Traffic Control")
 
 	p.ifaceManager = tcmanager.NewInterfaceManager()
 	p.tcManager = tcmanager.NewTCManager(p.cfg.EBPF.TCBackend)

@@ -112,6 +112,10 @@ The following YAML snippet shows an example Beyla deployment configuration:
 If `/sys/fs/cgroup` is not mounted as a local volume path for the Beyla `DaemonSet` some requests may not
 have their context propagated. We use this volume path to listen to newly created sockets.
 
+#### Kernel version limitations
+
+The network level context propagation incoming headers parsing requires kernel 5.17 or newer.
+
 ### Go context propagation by instrumenting at library level
 
 This type of context propagation is only supported for Go applications and uses eBPF user memory write support (`bpf_probe_write_user`).
@@ -120,7 +124,7 @@ the Beyla is granted `CAP_SYS_ADMIN` or it's configured to run as `privileged` c
 
 #### Kernel integrity mode limitations
 
-In order to write the `traceparent` value in outgoing HTTP/gRPC request headers, Beyla needs to write to the process memory using the [bpf_probe_write_user](https://www.man7.org/linux/man-pages/man7/bpf-helpers.7.html) eBPF helper. Since kernel 5.14 (with fixes backported to the 5.10 series) this helper is protected (and unavailable to BPF programs) if the Linux Kernel is running in `integrity` **lockdown** mode. Kernel integrity mode is typically enabled by default if the Kernel has [Secure Boot](https://wiki.debian.org/SecureBoot) enabled, but it can also be enabled manually.
+In order to write the `traceparent` value in outgoing HTTP/gRPC request headers, Beyla needs to write to the process memory using the [**bpf_probe_write_user**](https://www.man7.org/linux/man-pages/man7/bpf-helpers.7.html) eBPF helper. Since kernel 5.14 (with fixes backported to the 5.10 series) this helper is protected (and unavailable to BPF programs) if the Linux Kernel is running in `integrity` **lockdown** mode. Kernel integrity mode is typically enabled by default if the Kernel has [**Secure Boot**](https://wiki.debian.org/SecureBoot) enabled, but it can also be enabled manually.
 
 Beyla automatically checks if it can use the `bpf_probe_write_user` helper, and enables context propagation only if it's allowed by the kernel configuration. Verify the Linux Kernel **lockdown** mode by running the following command:
 

@@ -126,7 +126,7 @@ network:
 			BatchTimeout:              time.Second,
 			HTTPRequestTimeout:        30 * time.Second,
 			TCBackend:                 tcmanager.TCBackendAuto,
-			ContextPropagationEnabled: true,
+			ContextPropagationEnabled: false,
 		},
 		Grafana: otel.GrafanaConfig{
 			OTLP: otel.GrafanaOTLP{

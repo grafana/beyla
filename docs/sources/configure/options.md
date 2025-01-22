@@ -86,7 +86,7 @@ the selection criteria.
 
 For example, specifying the following property:
 
-```
+```yaml
 open_port: 80,443,8000-8999
 ```
 
@@ -106,22 +106,27 @@ restrict the instrumentation only to the methods exposed through a specific port
 If the specified port range is wide (e.g. `1-65535`) Beyla will try to execute all the processes
 owning one of the ports in the range.
 
-| YAML           | Environment variable                                     | Type   | Default                                               |
-| -------------- | ------------------------------------------- | ------ | ----------------------------------------------------- |
-| `service_name` | `BEYLA_SERVICE_NAME` or `OTEL_SERVICE_NAME` | string | (see [service discovery]({{< relref "./service-discovery.md" >}}) section) |
+| YAML           | Environment variable                                     | Type   | Default                                                                         |
+|----------------| ------------------------------------------- | ------ |---------------------------------------------------------------------------------|
+| `service_name` | `BEYLA_SERVICE_NAME` | string | (refer to [service discovery]({{< relref "./service-discovery.md" >}}) section) |
+
+**Deprecated**
 
 Overrides the name of the instrumented service to be reported by the metrics exporter.
 Defining this property is equivalent to add a `name` entry into the [`discovery.services` YAML
 section]({{< relref "./service-discovery.md" >}}).
 
-If a single instance of Beyla is instrumenting multiple instances of different processes,
+This configuration option is deprecated. If a single instance of Beyla is instrumenting multiple instances of different processes,
 they will share the same service name even if they are different. If you need that a
-single instance of Beyla report different service names, follow the instructions in the
-[service discovery section]({{< relref "./service-discovery.md" >}}).
+single instance of Beyla report different service names, follow the instructions on how to
+[override the service name and namespace]({{< relref "./service-discovery.md" >}}) in the service discovery documentation
+to enable automatic configuration of service name and namespace from diverse metadata sources.
 
-| YAML                | Environment variable                   | Type   | Default                                               |
-| ------------------- | ------------------------- | ------ | ----------------------------------------------------- |
-| `service_namespace` | `BEYLA_SERVICE_NAMESPACE` | string | (see [service discovery]({{< relref "./service-discovery.md" >}}) section) |
+| YAML                | Environment variable                   | Type   | Default                                                                         |
+| ------------------- | ------------------------- | ------ |---------------------------------------------------------------------------------|
+| `service_namespace` | `BEYLA_SERVICE_NAMESPACE` | string | (refer to [service discovery]({{< relref "./service-discovery.md" >}}) section) |
+
+**Deprecated**
 
 Optionally, allows assigning a namespace for the service selected from the `executable_name`
 or `open_port` properties.
@@ -129,14 +134,11 @@ or `open_port` properties.
 Defining this property is equivalent to add a `name` entry into the [`discovery.services` YAML
 section]({{< relref "./service-discovery.md" >}}).
 
-This will assume a single namespace for all the services instrumented
+This configuration option is deprecated, as it assumes a single namespace for all the services instrumented
 by Beyla. If you need that a single instance of Beyla groups multiple services
-into different namespaces, follow the instructions in the
-[service discovery section]({{< relref "./service-discovery.md" >}}).
-
-It is important to notice that this namespace is not a selector for Kubernetes namespaces. Its
-value will be use to set the value of standard telemetry attributes. For example, the
-[OpenTelemetry `service.namespace` attribute](https://opentelemetry.io/docs/specs/otel/common/attribute-naming/).
+into different namespaces, follow the instructions on how to
+[override the service name and namespace]({{< relref "./service-discovery.md" >}}) in the service discovery documentation
+to enable automatic configuration of service name and namespace from diverse metadata sources.
 
 | YAML        | Environment variable           | Type   | Default |
 | ----------- | ----------------- | ------ | ------- |

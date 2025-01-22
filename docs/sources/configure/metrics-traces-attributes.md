@@ -83,7 +83,7 @@ Beyla to propagate any incoming context to downstream services. This context pro
 support works for any programming language and it's implemented by using Linux Traffic Control
 (TC). Because Linux Traffic Control is sometimes used by other eBPF programs, this option 
 requires that the other eBPF programs chain correctly with Beyla. For more information on 
-this topic, please see our documentation related to [Cilium CNI]({{< relref "../../cilium-compatibility.md" >}}).
+this topic, see our documentation related to [Cilium CNI]({{< relref "../../cilium-compatibility.md" >}}).
 This context propagation support is fully compatible with any OpenTelemetry
 distributed tracing library.
 

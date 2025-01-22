@@ -90,6 +90,8 @@ static __always_inline void http_get_or_create_trace_info(http_connection_metada
     //make_tp_string(tp_buf, &tp_p->tp);
     //bpf_dbg_printk("tp: %s", tp_buf);
 
+    u8 tp_in_headers = false;
+
     if (k_bpf_traceparent_enabled) {
         // The below buffer scan can be expensive on high volume of requests. We make it optional
         // for customers to enable it. Off by default.
@@ -111,6 +113,7 @@ static __always_inline void http_get_or_create_trace_info(http_connection_metada
             unsigned char *res = bpf_strstr_tp_loop(buf, buf_len);
 
             if (res) {
+                tp_in_headers = true;
                 bpf_dbg_printk("Found traceparent %s", res);
                 unsigned char *t_id = extract_trace_id(res);
                 unsigned char *s_id = extract_span_id(res);
@@ -134,6 +137,11 @@ static __always_inline void http_get_or_create_trace_info(http_connection_metada
     if (meta) {
         u32 type = trace_type_from_meta(meta);
         set_trace_info_for_connection(conn, type, tp_p);
+        // If the user code setup traceparent manually, don't interfere and add
+        // something else with TC L7
+        if (meta->type == EVENT_HTTP_CLIENT && tp_in_headers) {
+            return;
+        }
         server_or_client_trace(meta->type, conn, tp_p);
     }
 }

@@ -163,6 +163,7 @@ static __always_inline int write_traceparent(struct __sk_buff *skb,
             } else {
                 // We went over the split point, calculate how much can we
                 // write, but cap it to the max size = 70 bytes.
+                bpf_clamp_umax(diff, 2048);
                 start += diff;
                 ctx->seen = ctx->offset;
                 len = packet_size - diff;

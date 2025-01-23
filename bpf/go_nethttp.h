@@ -322,8 +322,8 @@ int beyla_uprobe_ServeHTTPReturns(struct pt_regs *ctx) {
     trace->type = EVENT_HTTP_REQUEST;
     trace->start_monotime_ns = invocation->start_monotime_ns;
     trace->end_monotime_ns = bpf_ktime_get_ns();
-    trace->host[0] = 0;
-    trace->scheme[0] = 0;
+    trace->host[0] = '\0';
+    trace->scheme[0] = '\0';
 
     goroutine_metadata *g_metadata = bpf_map_lookup_elem(&ongoing_goroutines, &g_key);
     if (g_metadata) {
@@ -416,31 +416,33 @@ static __always_inline void roundTripStartHelper(struct pt_regs *ctx) {
                    sizeof(url_ptr),
                    (void *)(req + go_offset_of(ot, (go_offset){.v = _url_ptr_pos})));
 
-    if (!url_ptr || !read_go_str("path",
-                                 url_ptr,
-                                 go_offset_of(ot, (go_offset){.v = _path_ptr_pos}),
-                                 &trace.path,
-                                 sizeof(trace.path))) {
-        bpf_dbg_printk("can't read http Request.URL.Path");
-        return;
-    }
+    if (url_ptr) {
+        if (!read_go_str("path",
+                         url_ptr,
+                         go_offset_of(ot, (go_offset){.v = _path_ptr_pos}),
+                         &trace.path,
+                         sizeof(trace.path))) {
+            bpf_dbg_printk("can't read http Request.URL.Path");
+            return;
+        }
 
-    if (!url_ptr || !read_go_str("host",
-                                 url_ptr,
-                                 go_offset_of(ot, (go_offset){.v = _host_ptr_pos}),
-                                 &trace.host,
-                                 sizeof(trace.host))) {
-        bpf_dbg_printk("can't read http Request.URL.Host");
-        return;
-    }
+        if (!read_go_str("host",
+                         url_ptr,
+                         go_offset_of(ot, (go_offset){.v = _host_ptr_pos}),
+                         &trace.host,
+                         sizeof(trace.host))) {
+            bpf_dbg_printk("can't read http Request.URL.Host");
+            return;
+        }
 
-    if (!url_ptr || !read_go_str("scheme",
-                                 url_ptr,
-                                 go_offset_of(ot, (go_offset){.v = _scheme_ptr_pos}),
-                                 &trace.scheme,
-                                 sizeof(trace.scheme))) {
-        bpf_dbg_printk("can't read http Request.URL.Scheme");
-        return;
+        if (!read_go_str("scheme",
+                         url_ptr,
+                         go_offset_of(ot, (go_offset){.v = _scheme_ptr_pos}),
+                         &trace.scheme,
+                         sizeof(trace.scheme))) {
+            bpf_dbg_printk("can't read http Request.URL.Scheme");
+            return;
+        }
     }
 
     bpf_dbg_printk("path: %s", trace.path);

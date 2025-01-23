@@ -366,7 +366,7 @@ func testHTTPTracesKProbes(t *testing.T) {
 	assert.Empty(t, sd, sd.String())
 }
 
-func testHTTPTracesNestedCalls(t *testing.T, contextPropagation bool) {
+func testHTTPTracesNestedCalls(t *testing.T) {
 	var traceID string
 	var parentID string
 
@@ -489,11 +489,11 @@ func testHTTPTracesNestedCalls(t *testing.T, contextPropagation bool) {
 }
 
 func testHTTPTracesNestedClient(t *testing.T) {
-	testHTTPTracesNestedCalls(t, false)
+	testHTTPTracesNestedCalls(t)
 }
 
 func testHTTPTracesNestedClientWithContextPropagation(t *testing.T) {
-	testHTTPTracesNestedCalls(t, true)
+	testHTTPTracesNestedCalls(t)
 }
 
 //nolint:cyclop

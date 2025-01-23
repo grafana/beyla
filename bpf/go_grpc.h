@@ -237,7 +237,9 @@ int beyla_uprobe_server_handleStream_return(struct pt_regs *ctx) {
     trace->start_monotime_ns = invocation->start_monotime_ns;
     trace->status = status;
     trace->content_length = 0;
-    trace->method[0] = 0;
+    trace->method[0] = '\0';
+    trace->host[0] = '\0';
+    trace->scheme[0] = '\0';
     trace->go_start_monotime_ns = invocation->start_monotime_ns;
     bpf_map_delete_elem(&ongoing_goroutines, &g_key);
 
@@ -427,7 +429,9 @@ static __always_inline int grpc_connect_done(struct pt_regs *ctx, void *err) {
     trace->go_start_monotime_ns = invocation->start_monotime_ns;
     trace->end_monotime_ns = bpf_ktime_get_ns();
     trace->content_length = 0;
-    trace->method[0] = 0;
+    trace->method[0] = '\0';
+    trace->host[0] = '\0';
+    trace->scheme[0] = '\0';
 
     // Read arguments from the original set of registers
 

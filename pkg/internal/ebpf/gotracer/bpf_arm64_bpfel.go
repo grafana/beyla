@@ -60,7 +60,9 @@ type bpfGrpcTransportsT struct {
 type bpfHttpClientDataT struct {
 	Method        [7]uint8
 	Path          [100]uint8
-	_             [5]byte
+	Host          [100]uint8
+	Scheme        [10]uint8
+	_             [7]byte
 	ContentLength int64
 	Pid           struct {
 		HostPid uint32
@@ -108,7 +110,7 @@ type bpfKafkaGoReqT struct {
 
 type bpfNewFuncInvocationT struct{ Parent uint64 }
 
-type bpfOffTableT struct{ Table [44]uint64 }
+type bpfOffTableT struct{ Table [46]uint64 }
 
 type bpfProduceReqT struct {
 	MsgPtr          uint64

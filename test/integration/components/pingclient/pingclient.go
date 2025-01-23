@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/binary"
 	"encoding/hex"
@@ -13,7 +14,7 @@ var tr = &http.Transport{
 	TLSClientConfig:   &tls.Config{InsecureSkipVerify: true},
 	ForceAttemptHTTP2: true,
 }
-var testHTTPClient = &http.Client{Transport: tr}
+var testHTTPClient = &http.Client{Transport: tr, Timeout: 10 * time.Second}
 
 func regularGetRequest(url string, counter int) {
 	req, err := http.NewRequest("GET", url, nil)
@@ -42,6 +43,10 @@ func regularGetRequest(url string, counter int) {
 type MyRoundTripper struct{}
 
 func (rt *MyRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	ctx, cancel := context.WithTimeout(req.Context(), 10*time.Second)
+	defer cancel()
+
+	req = req.WithContext(ctx)
 	req.Header.Add("X-My-Header", "my-value")
 
 	// send the request using the custom transport

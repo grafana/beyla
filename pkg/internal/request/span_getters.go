@@ -37,7 +37,12 @@ func SpanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 	case attr.ClientAddr:
 		getter = func(s *Span) attribute.KeyValue { return ClientAddr(PeerAsClient(s)) }
 	case attr.ServerAddr:
-		getter = func(s *Span) attribute.KeyValue { return ServerAddr(HostAsServer(s)) }
+		getter = func(s *Span) attribute.KeyValue {
+			if s.Type == EventTypeHTTPClient {
+				return ServerAddr(HTTPClientHost(s))
+			}
+			return ServerAddr(HostAsServer(s))
+		}
 	case attr.ServerPort:
 		getter = func(s *Span) attribute.KeyValue { return ServerPort(s.HostPort) }
 	case attr.RPCMethod:
@@ -129,7 +134,12 @@ func SpanPromGetters(attrName attr.Name) (attributes.Getter[*Span, string], bool
 	case attr.Client, attr.ClientAddr:
 		getter = PeerAsClient
 	case attr.Server, attr.ServerAddr:
-		getter = HostAsServer
+		getter = func(s *Span) string {
+			if s.Type == EventTypeHTTPClient {
+				return HTTPClientHost(s)
+			}
+			return HostAsServer(s)
+		}
 	case attr.ServerPort:
 		getter = func(s *Span) string { return strconv.Itoa(s.HostPort) }
 	case attr.RPCMethod:

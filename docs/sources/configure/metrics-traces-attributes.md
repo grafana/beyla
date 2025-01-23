@@ -74,9 +74,9 @@ When a metric name matches multiple definitions using wildcards, exact matches h
 
 ## Distributed traces and context propagation
 
-| YAML                         | Environment variable                   | Type    | Default |
-| ---------------------------- | -------------------------------------- | ------- | ------- |
-| `enable_context_propagation` | `BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION` | boolean | (true)  |
+| YAML                         | Environment variable                   | Type    | Default  |
+| ---------------------------- | -------------------------------------- | ------- | -------- |
+| `enable_context_propagation` | `BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION` | boolean | (false)  |
 
 Enables injecting of the `Traceparent` header value for outgoing HTTP requests, allowing
 Beyla to propagate any incoming context to downstream services. This context propagation

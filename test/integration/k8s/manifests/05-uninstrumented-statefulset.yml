@@ -26,6 +26,8 @@ spec:
       name: statefulservice
       labels:
         app: statefulservice
+      annotations:
+        resource.opentelemetry.io/deployment.environment: 'integration-test'
     spec:
       containers:
         - name: statefulservice

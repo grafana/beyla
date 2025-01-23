@@ -28,6 +28,9 @@ spec:
       name: pytestserver
       labels:
         app: pytestserver
+        deployment.environment: 'integration-test'
+      annotations:
+        resource.opentelemetry.io/deployment.environment: 'to-be-ignored-in-favor-of-label'
     spec:
       containers:
         - name: pytestserver

@@ -25,6 +25,8 @@ spec:
       name: dsservice
       labels:
         app: dsservice
+      annotations:
+        resource.opentelemetry.io/deployment.environment: 'integration-test'
     spec:
       containers:
         - name: dsservice

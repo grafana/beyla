@@ -321,39 +321,20 @@ Beyla uses the following criteria in this order to automatically set the service
     - `k8s.container.name`
 5. The executable name of the instrumented process.
 
-The Kubernetes annotations and labels from the previous bullets 2 and 3 can be overridden and via
-configuration.
+The Kubernetes labels from the previous bullet 3 can be overridden via configuration.
 
 In YAML:
 ```yaml
 kubernetes:
-  meta_naming_sources:
-      annotations:
-        service_name:
-          # gets service name from the first existing Pod annotation
-          - my.domain.com/override-service-name
-          - resource.opentelemetry.io/service.name
-        service_namespace:
-          # gets service namespace from the first existing Pod annotation
-          - my.domain.com/override-service-namespace
-          - resource.opentelemetry.io/service.namespace
-      labels:
-        service_name:
-          # gets service name from the first existing Pod label
-          - override-svc-name
-          - app.kubernetes.io/name
-        service_namespace:
-          # gets service namespace from the first existing Pod label
-          - override-svc-ns
-          - app.kubernetes.io/part-of
+  resource_labels:
+    service.name:
+      # gets service name from the first existing Pod label
+      - override-svc-name
+      - app.kubernetes.io/name
+    service.namespace:
+      # gets service namespace from the first existing Pod label
+      - override-svc-ns
+      - app.kubernetes.io/part-of
 ```
-
-The equivalent environment variables for the labels and annotation overriding
-properties are:
-
-* `BEYLA_KUBE_ANNOTATIONS_SERVICE_NAME`
-* `BEYLA_KUBE_ANNOTATIONS_SERVICE_NAMESPACE`
-* `BEYLA_KUBE_LABELS_SERVICE_NAME`
-* `BEYLA_KUBE_LABELS_SERVICE_NAMESPACE`
 
 They accept a comma-separated list of annotation and label names.

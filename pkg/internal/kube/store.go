@@ -36,33 +36,26 @@ func qName(om *informer.ObjectMeta) qualifiedName {
 	return qualifiedName{name: om.Name, namespace: om.Namespace, kind: om.Kind}
 }
 
-// MetadataSources allow overriding some metadata from kubernetes Pod labels and annotations
-type MetadataSources struct {
-	Annotations AnnotationSources `yaml:"annotations"`
-	Labels      LabelSources      `yaml:"labels"`
+// MetaSourceLabels allow overriding some metadata from kubernetes labels
+// Deprecated. Left here for backwards-compatibility.
+type MetaSourceLabels struct {
+	ServiceName      string `yaml:"service_name" env:"BEYLA_KUBE_META_SOURCE_LABEL_SERVICE_NAME"`
+	ServiceNamespace string `yaml:"service_namespace" env:"BEYLA_KUBE_META_SOURCE_LABEL_SERVICE_NAMESPACE"`
 }
 
-type LabelSources struct {
-	ServiceName      []string `yaml:"service_name" env:"BEYLA_KUBE_LABELS_SERVICE_NAME" envSeparator:","`
-	ServiceNamespace []string `yaml:"service_namespace" env:"BEYLA_KUBE_LABELS_SERVICE_NAMESPACE" envSeparator:","`
-}
+type ResourceLabels map[string][]string
 
-type AnnotationSources struct {
-	ServiceName      []string `yaml:"service_name" env:"BEYLA_KUBE_ANNOTATIONS_SERVICE_NAME" envSeparator:","`
-	ServiceNamespace []string `yaml:"service_namespace" env:"BEYLA_KUBE_ANNOTATIONS_SERVICE_NAMESPACE" envSeparator:","`
-}
+const (
+	ResourceAttributesPrefix   = "resource.opentelemetry.io/"
+	ServiceNameAnnotation      = ResourceAttributesPrefix + "service.name"
+	ServiceNamespaceAnnotation = ResourceAttributesPrefix + "service.namespace"
+)
 
-var DefaultMetadataSources = MetadataSources{
-	Annotations: AnnotationSources{
-		ServiceName:      []string{"resource.opentelemetry.io/service.name"},
-		ServiceNamespace: []string{"resource.opentelemetry.io/service.namespace"},
-	},
-	// If a user sets useLabelsForResourceAttributes: false it its OTEL operator, is the task of the
+var DefaultResourceLabels = ResourceLabels{
+	// If a user sets useLabelsForResourceAttributes: false in its OTEL operator config, is the task of the
 	// OTEL operator to provide empty values for this.
-	Labels: LabelSources{
-		ServiceName:      []string{"app.kubernetes.io/name"},
-		ServiceNamespace: []string{"app.kubernetes.io/part-of"},
-	},
+	"service.name":      []string{"app.kubernetes.io/name"},
+	"service.namespace": []string{"app.kubernetes.io/part-of"},
 }
 
 // Store aggregates Kubernetes information from multiple sources:
@@ -102,10 +95,10 @@ type Store struct {
 	// they receive is already present in the store
 	meta.BaseNotifier
 
-	metadataSources MetadataSources
+	resourceLabels ResourceLabels
 }
 
-func NewStore(kubeMetadata meta.Notifier, metadataSources MetadataSources) *Store {
+func NewStore(kubeMetadata meta.Notifier, resourceLabels ResourceLabels) *Store {
 	log := dblog()
 	db := &Store{
 		log:                 log,
@@ -119,7 +112,7 @@ func NewStore(kubeMetadata meta.Notifier, metadataSources MetadataSources) *Stor
 		otelServiceInfoByIP: map[string]OTelServiceNamePair{},
 		metadataNotifier:    kubeMetadata,
 		BaseNotifier:        meta.NewBaseNotifier(log),
-		metadataSources:     metadataSources,
+		resourceLabels:      resourceLabels,
 	}
 	kubeMetadata.Subscribe(db)
 	return db
@@ -318,15 +311,13 @@ func (s *Store) serviceNameNamespaceForMetadata(om *informer.ObjectMeta) (string
 // function implemented to provide consistent service metadata naming across multiple
 // OTEL implementations: OTEL operator, Loki and Beyla
 // https://github.com/grafana/k8s-monitoring-helm/issues/942
-func (s *Store) valueFromMetadata(om *informer.ObjectMeta, annotationNames, labelNames []string) string {
+func (s *Store) valueFromMetadata(om *informer.ObjectMeta, annotationName string, labelNames []string) string {
 	// if this object meta is not a pod, we ignore the metadata
 	if om.Pod == nil {
 		return ""
 	}
-	for _, key := range annotationNames {
-		if val, ok := om.Annotations[key]; ok {
-			return val
-		}
+	if val, ok := om.Annotations[annotationName]; ok {
+		return val
 	}
 	for _, key := range labelNames {
 		if val, ok := om.Labels[key]; ok {
@@ -376,16 +367,16 @@ func (s *Store) serviceNameNamespaceOwnerID(om *informer.ObjectMeta, ownerName s
 	if envName, ok := s.serviceNameFromEnv(ownerKey); ok {
 		serviceName = envName
 	} else if nameFromMeta := s.valueFromMetadata(om,
-		s.metadataSources.Annotations.ServiceName,
-		s.metadataSources.Labels.ServiceName,
+		ServiceNameAnnotation,
+		s.resourceLabels["service.name"],
 	); nameFromMeta != "" {
 		serviceName = nameFromMeta
 	}
 	if envName, ok := s.serviceNamespaceFromEnv(ownerKey); ok {
 		serviceNamespace = envName
 	} else if nsFromMeta := s.valueFromMetadata(om,
-		s.metadataSources.Annotations.ServiceNamespace,
-		s.metadataSources.Labels.ServiceNamespace,
+		ServiceNamespaceAnnotation,
+		s.resourceLabels["service.namespace"],
 	); nsFromMeta != "" {
 		serviceNamespace = nsFromMeta
 	}

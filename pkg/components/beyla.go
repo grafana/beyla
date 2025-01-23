@@ -116,6 +116,26 @@ func mustSkip(cfg *beyla.Config) string {
 func buildCommonContextInfo(
 	ctx context.Context, config *beyla.Config,
 ) (*global.ContextInfo, error) {
+
+	// merging deprecated resource labels definition for backwards compatibility
+	resourceLabels := config.Attributes.Kubernetes.ResourceLabels
+	if resourceLabels == nil {
+		resourceLabels = map[string][]string{}
+	}
+	showDeprecation := sync.OnceFunc(func() {
+		slog.Warn("The meta_source_labels (BEYLA_KUBE_META_SOURCE_LABEL_* environment variables) is deprecated." +
+			" Check the documentation for more information about replacing it by the resource_labels kubernetes" +
+			" YAML property")
+	})
+	if svc := config.Attributes.Kubernetes.MetaSourceLabels.ServiceName; svc != "" {
+		resourceLabels["service.name"] = append([]string{svc}, resourceLabels["service.name"]...)
+		showDeprecation()
+	}
+	if ns := config.Attributes.Kubernetes.MetaSourceLabels.ServiceNamespace; ns != "" {
+		resourceLabels["service.namespace"] = append([]string{ns}, resourceLabels["service.namespace"]...)
+		showDeprecation()
+	}
+
 	promMgr := &connector.PrometheusManager{}
 	ctxInfo := &global.ContextInfo{
 		Prometheus: promMgr,
@@ -126,7 +146,7 @@ func buildCommonContextInfo(
 			ResyncPeriod:      config.Attributes.Kubernetes.InformersResyncPeriod,
 			DisabledInformers: config.Attributes.Kubernetes.DisableInformers,
 			MetaCacheAddr:     config.Attributes.Kubernetes.MetaCacheAddress,
-			MetadataSources:   config.Attributes.Kubernetes.MetadataSources,
+			ResourceLabels:    resourceLabels,
 			RestrictLocalNode: config.Attributes.Kubernetes.MetaRestrictLocalNode,
 		}),
 	}

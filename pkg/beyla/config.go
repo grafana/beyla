@@ -115,7 +115,7 @@ var DefaultConfig = Config{
 			Enable:                kubeflags.EnabledDefault,
 			InformersSyncTimeout:  30 * time.Second,
 			InformersResyncPeriod: 30 * time.Minute,
-			MetadataSources:       kube.DefaultMetadataSources,
+			ResourceLabels:        kube.DefaultResourceLabels,
 		},
 		HostID: HostIDConfig{
 			FetchTimeout: 500 * time.Millisecond,

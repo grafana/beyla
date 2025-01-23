@@ -30,7 +30,8 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: testserver
+  # this hostname will be ignored in favor of resource.opentelemetry.io/service.name
+  name: ignored-testserver
   labels:
     app: testserver
 spec:
@@ -42,7 +43,7 @@ spec:
     metadata:
       name: testserver
       annotations:
-        my.custom/name: 'overridden-testserver-name'
+        resource.opentelemetry.io/service.name: 'testserver'
       labels:
         app: testserver
         app.kubernetes.io/name: 'ignored-testserver-name'

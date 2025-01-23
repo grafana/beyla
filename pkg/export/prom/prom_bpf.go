@@ -134,9 +134,11 @@ func (bc *BPFCollector) collectProbesMetrics(ch chan<- prometheus.Metric) {
 			continue
 		}
 
-		// Only collect programs that are Kprobe
-		if info.Type != ebpf.Kprobe {
-			continue
+		switch info.Type {
+		case ebpf.Kprobe, ebpf.SocketFilter, ebpf.SchedCLS, ebpf.SkMsg, ebpf.SockOps:
+		// Supported program types
+		default:
+			continue // Skip unsupported program types
 		}
 
 		name := getFuncName(info, id, bc.log)

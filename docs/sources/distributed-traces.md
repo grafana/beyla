@@ -32,6 +32,15 @@ We use these multiple approaches to implement context propagation, because writi
 configuration and the Linux system capabilities granted to Beyla. For more details on this topic, see our KubeCon NA 2024
 talk [So You Want to Write Memory with eBPF?](https://www.youtube.com/watch?v=TUiVX-44S9s).
 
+The context propagation at **network level** is **disabled** by default and can be enabled by setting the environment variable
+`BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION=true` or by modifying the Beyla configuration file:
+
+```yaml
+ebpf:
+  enable_context_propagation: true
+
+```
+
 ### Context propagation at network level
 
 The context propagation at network level is implemented by writing the trace context information in the outgoing HTTP headers as well at the TCP/IP packet level.

@@ -193,6 +193,32 @@ func getFuncName(info *ebpf.ProgramInfo, id ebpf.ProgramID, log *slog.Logger) st
 	return info.Name
 }
 
+// updateBuckets update the histogram buckets for the given data based on previous data.
+func (bp *BPFProgram) updateBuckets() {
+	// Calculate the difference in runtime and run count
+	deltaTime := bp.runTime - bp.prevRunTime
+	deltaCount := bp.runCount - bp.prevRunCount
+
+	// Calculate the average latency
+	var avgLatency float64
+	if deltaCount > 0 {
+		avgLatency = deltaTime.Seconds() / float64(deltaCount)
+	} else {
+		avgLatency = 0
+	}
+
+	// Update the buckets
+	if bp.buckets == nil {
+		bp.buckets = make(map[float64]uint64)
+	}
+	for _, bucket := range bucketKeysSeconds {
+		if deltaCount > 0 && avgLatency <= bucket {
+			bp.buckets[bucket] += deltaCount
+			break
+		}
+	}
+}
+
 func (bc *BPFCollector) collectMapMetrics(ch chan<- prometheus.Metric) {
 	for id := ebpf.MapID(0); ; {
 		id, err := ebpf.MapGetNextID(id)
@@ -218,6 +244,8 @@ func (bc *BPFCollector) collectMapMetrics(ch chan<- prometheus.Metric) {
 			continue
 		}
 
+		// This snippet is copied from digitalocean-labs/ebpf_exporter
+		// https://github.com/digitalocean-labs/ebpf_exporter/blob/main/collectors/map.go
 		var count uint64
 		throwawayKey := discardEncoding{}
 		throwawayValues := make(sliceDiscardEncoding, 0)
@@ -235,32 +263,6 @@ func (bc *BPFCollector) collectMapMetrics(ch chan<- prometheus.Metric) {
 				info.Type.String(),
 				strconv.FormatUint(uint64(info.MaxEntries), 10),
 			)
-		}
-	}
-}
-
-// updateBuckets update the histogram buckets for the given data based on previous data.
-func (bp *BPFProgram) updateBuckets() {
-	// Calculate the difference in runtime and run count
-	deltaTime := bp.runTime - bp.prevRunTime
-	deltaCount := bp.runCount - bp.prevRunCount
-
-	// Calculate the average latency
-	var avgLatency float64
-	if deltaCount > 0 {
-		avgLatency = deltaTime.Seconds() / float64(deltaCount)
-	} else {
-		avgLatency = 0
-	}
-
-	// Update the buckets
-	if bp.buckets == nil {
-		bp.buckets = make(map[float64]uint64)
-	}
-	for _, bucket := range bucketKeysSeconds {
-		if deltaCount > 0 && avgLatency <= bucket {
-			bp.buckets[bucket] += deltaCount
-			break
 		}
 	}
 }

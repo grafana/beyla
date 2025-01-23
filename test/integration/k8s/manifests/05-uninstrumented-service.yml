@@ -42,7 +42,7 @@ spec:
     metadata:
       name: testserver
       annotations:
-        my.custom/name: 'overridden-testserver-name'
+        resource.opentelemetry.io/service.name: 'testserver'
       labels:
         app: testserver
         app.kubernetes.io/name: 'ignored-testserver-name'

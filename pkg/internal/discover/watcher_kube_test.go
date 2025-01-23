@@ -67,7 +67,7 @@ func TestWatcherKubeEnricher(t *testing.T) {
 
 			// Setup a fake K8s API connected to the watcherKubeEnricher
 			fInformer := &fakeInformer{}
-			store := kube.NewStore(fInformer, kube.MetadataSources{})
+			store := kube.NewStore(fInformer, kube.ResourceLabels{})
 			wkeNodeFunc, err := WatcherKubeEnricherProvider(context.TODO(), &fakeMetadataProvider{store: store})()
 			require.NoError(t, err)
 			inputCh, outputCh := make(chan []Event[processAttrs], 10), make(chan []Event[processAttrs], 10)
@@ -107,7 +107,7 @@ func TestWatcherKubeEnricherWithMatcher(t *testing.T) {
 	processInfo = fakeProcessInfo
 	// Setup a fake K8s API connected to the watcherKubeEnricher
 	fInformer := &fakeInformer{}
-	store := kube.NewStore(fInformer, kube.MetadataSources{})
+	store := kube.NewStore(fInformer, kube.ResourceLabels{})
 	wkeNodeFunc, err := WatcherKubeEnricherProvider(context.TODO(), &fakeMetadataProvider{store: store})()
 	require.NoError(t, err)
 	pipeConfig := beyla.Config{}

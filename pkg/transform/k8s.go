@@ -53,9 +53,13 @@ type KubernetesDecorator struct {
 	// node as the Beyla instance. It will also restrict the Node information to the local node.
 	MetaRestrictLocalNode bool `yaml:"meta_restrict_local_node" env:"BEYLA_KUBE_META_RESTRICT_LOCAL_NODE"`
 
-	// MetadataSources allows Beyla overriding the service name and namespace of an application from
+	// MetaSourceLabels allows Beyla overriding the service name and namespace of an application from
 	// the given labels.
-	MetadataSources kube.MetadataSources `yaml:"meta_naming_sources"`
+	// Deprecated: kept for backwards-compatibility with Beyla 1.9
+	MetaSourceLabels kube.MetaSourceLabels `yaml:"meta_source_labels"`
+
+	// ResourceLabels allows Beyla overriding the OTEL Resource attributes from a map of user-defined labels.
+	ResourceLabels kube.ResourceLabels `yaml:"resource_labels"`
 }
 
 const (

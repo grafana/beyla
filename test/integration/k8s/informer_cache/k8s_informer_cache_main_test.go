@@ -64,10 +64,8 @@ func TestInformersCache_MetricsDecoration_AA_WaitForComponents(t *testing.T) {
 func TestInformersCache_MetricsDecoration_HTTP(t *testing.T) {
 	cluster.TestEnv().Test(t, k8s.FeatureHTTPMetricsDecoration(k8s.UninstrumentedPingerManifest,
 		map[string]string{
-			"server":                   "overridden-testserver-name",
 			"server_service_namespace": "overridden-testserver-namespace",
 			"k8s_cluster_name":         "my-kube",
-			"service_name":             "overridden-testserver-name",
 			"service_namespace":        "overridden-testserver-namespace",
 			"service_instance_id":      "default.testserver-.+\\.testserver",
 		}))

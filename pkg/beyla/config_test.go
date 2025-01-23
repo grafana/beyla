@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"os"
 	"regexp"
 	"strings"
@@ -55,11 +56,8 @@ attributes:
     kubeconfig_path: /foo/bar
     enable: true
     informers_sync_timeout: 30s
-    meta_naming_sources:
-      annotations:
-        service_namespace: ["huha.com/yeah"]
-      labels:
-        service_name: ["titi.com/lala"]
+    resource_labels:
+      service.namespace: ["huha.com/yeah"]
   instance_id:
     dns: true
   host_id:
@@ -108,9 +106,8 @@ network:
 	nc.AgentIP = "1.2.3.4"
 	nc.CIDRs = cidr.Definitions{"10.244.0.0/16"}
 
-	metaSources := kube.DefaultMetadataSources
-	metaSources.Annotations.ServiceNamespace = []string{"huha.com/yeah"}
-	metaSources.Labels.ServiceName = []string{"titi.com/lala"}
+	metaSources := maps.Clone(kube.DefaultResourceLabels)
+	metaSources["service.namespace"] = []string{"huha.com/yeah"}
 
 	assert.Equal(t, &Config{
 		Exec:             cfg.Exec,
@@ -190,7 +187,7 @@ network:
 				Enable:                kubeflags.EnabledTrue,
 				InformersSyncTimeout:  30 * time.Second,
 				InformersResyncPeriod: 30 * time.Minute,
-				MetadataSources:       metaSources,
+				ResourceLabels:        metaSources,
 			},
 			HostID: HostIDConfig{
 				Override:     "the-host-id",

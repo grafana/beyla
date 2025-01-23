@@ -34,7 +34,7 @@ type MetadataConfig struct {
 	SyncTimeout       time.Duration
 	ResyncPeriod      time.Duration
 	MetaCacheAddr     string
-	MetadataSources   MetadataSources
+	ResourceLabels    ResourceLabels
 	RestrictLocalNode bool
 }
 
@@ -107,7 +107,7 @@ func (mp *MetadataProvider) Get(ctx context.Context) (*Store, error) {
 		return nil, err
 	}
 
-	mp.metadata = NewStore(informer, mp.cfg.MetadataSources)
+	mp.metadata = NewStore(informer, mp.cfg.ResourceLabels)
 
 	return mp.metadata, nil
 }

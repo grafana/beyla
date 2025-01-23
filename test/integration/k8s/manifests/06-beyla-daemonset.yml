@@ -82,10 +82,6 @@ spec:
               value: "10ms"
             - name: BEYLA_BPF_BATCH_TIMEOUT
               value: "10ms"
-            - name: BEYLA_METRICS_REPORT_TARGET
-              value: "true"
-            - name: BEYLA_METRICS_REPORT_PEER
-              value: "true"
             - name: BEYLA_OTEL_METRICS_TTL
               value: "30m0s"
             - name: BEYLA_OTEL_METRICS_FEATURES

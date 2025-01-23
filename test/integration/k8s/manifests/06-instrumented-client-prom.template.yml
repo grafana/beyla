@@ -72,10 +72,6 @@ spec:
           value: "DEBUG"
         - name: BEYLA_BPF_DEBUG
           value: "TRUE"
-        - name: BEYLA_METRICS_REPORT_TARGET
-          value: "true"
-        - name: BEYLA_METRICS_REPORT_PEER
-          value: "true"
         - name: BEYLA_KUBE_METADATA_ENABLE
           value: "true"
         - name: BEYLA_NAME_RESOLVER_SOURCES

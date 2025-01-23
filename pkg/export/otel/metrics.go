@@ -78,14 +78,6 @@ type MetricsConfig struct {
 	// InsecureSkipVerify is not standard, so we don't follow the same naming convention
 	InsecureSkipVerify bool `yaml:"insecure_skip_verify" env:"BEYLA_OTEL_INSECURE_SKIP_VERIFY"`
 
-	// ReportTarget specifies whether http.target should be submitted as a metric attribute. It is disabled by
-	// default to avoid cardinality explosion in paths with IDs. In that case, it is recommended to group these
-	// requests in the Routes node
-	// Deprecated. Going to be removed in Beyla 2.0. Use attributes.select instead
-	ReportTarget bool `yaml:"report_target" env:"BEYLA_METRICS_REPORT_TARGET"`
-	// Deprecated. Going to be removed in Beyla 2.0. Use attributes.select instead
-	ReportPeerInfo bool `yaml:"report_peer" env:"BEYLA_METRICS_REPORT_PEER"`
-
 	Buckets              Buckets `yaml:"buckets"`
 	HistogramAggregation string  `yaml:"histogram_aggregation" env:"OTEL_EXPORTER_OTLP_METRICS_DEFAULT_HISTOGRAM_AGGREGATION"`
 

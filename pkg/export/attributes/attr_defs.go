@@ -17,8 +17,6 @@ const (
 	GroupHTTPRoutes
 	GroupNetIfaceDirection
 	GroupNetCIDR
-	GroupPeerInfo // TODO Beyla 2.0: remove when we remove ReportPeerInfo configuration option
-	GroupTarget   // TODO Beyla 2.0: remove when we remove ReportTarget configuration option
 	GroupTraces
 )
 
@@ -36,7 +34,6 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 	kubeEnabled := groups.Has(GroupKubernetes)
 	promEnabled := groups.Has(GroupPrometheus)
 	ifaceDirEnabled := groups.Has(GroupNetIfaceDirection)
-	peerInfoEnabled := groups.Has(GroupPeerInfo)
 	cidrEnabled := groups.Has(GroupNetCIDR)
 
 	// attributes to be reported exclusively for prometheus exporters
@@ -121,7 +118,7 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 
 	var serverInfo = AttrReportGroup{
 		Attributes: map[attr.Name]Default{
-			attr.ClientAddr: Default(peerInfoEnabled),
+			attr.ClientAddr: false,
 			attr.ServerAddr: true,
 			attr.ServerPort: true,
 		},
@@ -138,18 +135,8 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 		},
 	}
 
-	// TODO Beyla 2.0 remove
-	// this just defaults the path as default when the target report is enabled
-	// via the deprecated BEYLA_METRICS_REPORT_TARGET config option
-	var deprecatedHTTPPath = AttrReportGroup{
-		Disabled: !groups.Has(GroupTarget),
-		Attributes: map[attr.Name]Default{
-			attr.HTTPUrlPath: true,
-		},
-	}
-
 	var httpCommon = AttrReportGroup{
-		SubGroups: []*AttrReportGroup{&httpRoutes, &deprecatedHTTPPath},
+		SubGroups: []*AttrReportGroup{&httpRoutes},
 		Attributes: map[attr.Name]Default{
 			attr.HTTPRequestMethod:      true,
 			attr.HTTPResponseStatusCode: true,

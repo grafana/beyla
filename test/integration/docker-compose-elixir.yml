@@ -37,8 +37,6 @@ services:
       BEYLA_BPF_BATCH_TIMEOUT: "10ms"
       BEYLA_LOG_LEVEL: "DEBUG"
       BEYLA_BPF_DEBUG: "TRUE"
-      BEYLA_METRICS_REPORT_TARGET: "true"
-      BEYLA_METRICS_REPORT_PEER: "true"
       BEYLA_HOSTNAME: "beyla"
     depends_on:
       testserver:

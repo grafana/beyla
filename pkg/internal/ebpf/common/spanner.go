@@ -30,6 +30,11 @@ func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
 		hostPort = int(trace.Conn.D_port)
 	}
 
+	schemeHost := ""
+	if scheme != "" || origHost != "" {
+		schemeHost = strings.Join([]string{scheme, origHost}, request.SchemeHostSeparator)
+	}
+
 	return request.Span{
 		Type:          request.EventType(trace.Type),
 		Method:        method,
@@ -52,7 +57,7 @@ func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
 			UserPID:   trace.Pid.UserPid,
 			Namespace: trace.Pid.Ns,
 		},
-		Statement: strings.Join([]string{scheme, origHost}, request.SchemeHostSeparator),
+		Statement: schemeHost,
 	}
 }
 

@@ -604,7 +604,10 @@ func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 	case request.EventTypeHTTPClient:
 		host := request.HTTPClientHost(span)
 		scheme := request.HTTPScheme(span)
-		url := request.URLFull(scheme, host, span.Path)
+		url := span.Path
+		if span.HasOriginalHost() {
+			url = request.URLFull(scheme, host, span.Path)
+		}
 
 		attrs = []attribute.KeyValue{
 			request.HTTPRequestMethod(span.Method),

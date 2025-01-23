@@ -52,7 +52,7 @@ func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
 			UserPID:   trace.Pid.UserPid,
 			Namespace: trace.Pid.Ns,
 		},
-		Statement: strings.Join([]string{scheme, origHost}, ";"),
+		Statement: strings.Join([]string{scheme, origHost}, request.SchemeHostSeparator),
 	}
 }
 

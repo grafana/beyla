@@ -122,8 +122,8 @@ func SpanPeer(span *Span) string {
 }
 
 func HTTPClientHost(span *Span) string {
-	if strings.Index(span.Statement, ";") > 0 {
-		schemeHost := strings.Split(span.Statement, ";")
+	if strings.Index(span.Statement, SchemeHostSeparator) > 0 {
+		schemeHost := strings.Split(span.Statement, SchemeHostSeparator)
 		if schemeHost[1] != "" {
 			return schemeHost[1]
 		}
@@ -133,8 +133,8 @@ func HTTPClientHost(span *Span) string {
 }
 
 func HTTPScheme(span *Span) string {
-	if strings.Index(span.Statement, ";") > 0 {
-		schemeHost := strings.Split(span.Statement, ";")
+	if strings.Index(span.Statement, SchemeHostSeparator) > 0 {
+		schemeHost := strings.Split(span.Statement, SchemeHostSeparator)
 		return schemeHost[0]
 	}
 

@@ -129,6 +129,95 @@ static __always_inline struct bpf_sock *lookup_sock_from_tuple(struct __sk_buff 
     return 0;
 }
 
+static __always_inline write_traceparent(struct __sk_buff *skb,
+                                         protocol_info_t *tcp,
+                                         egress_key_t *e_key,
+                                         tc_http_ctx_t *ctx,
+                                         unsigned char *tp_buf) {
+    u32 tot_len = (u64)ctx_data_end(skb) - (u64)ctx_data(skb);
+    u32 packet_size = tot_len - tcp->hdr_len;
+    bpf_dbg_printk("Writing traceparent packet_size %d, offset %d, tot_len %d",
+                   packet_size,
+                   ctx->offset,
+                   tot_len);
+    bpf_dbg_printk("seen %d, written %d", ctx->seen, ctx->written);
+
+    if (packet_size > 0) {
+        u32 len = 0;
+        u32 off = tcp->hdr_len;
+        // picked a value large enough to support TCP headers
+        bpf_clamp_umax(off, 128);
+        void *start = ctx_data(skb) + off;
+
+        // We haven't seen enough bytes coming through from the start
+        // until we did the split (at ctx->offset is where we injected)
+        // the empty space.
+        if (ctx->seen < ctx->offset) {
+            // Diff = How much more before we cross offset
+            u32 diff = ctx->offset - ctx->seen;
+            // We received less or equal bytes to what we want to
+            // reach ctx->offset, i.e the split point.
+            if (diff > packet_size) {
+                ctx->seen += packet_size;
+                return 0;
+            } else {
+                // We went over the split point, calculate how much can we
+                // write, but cap it to the max size = 70 bytes.
+                start += diff;
+                ctx->seen = ctx->offset;
+                len = packet_size - diff;
+                bpf_clamp_umax(len, EXTEND_SIZE);
+            }
+        } else {
+            // Fast path. We are exactly at the offset, we've written
+            // nothing of the 'Traceparent: ...' text yet and the packet
+            // is exactly 70 bytes.
+            if (ctx->written == 0 && packet_size == EXTEND_SIZE) {
+                if ((start + EXTEND_SIZE) <= ctx_data_end(skb)) {
+                    __builtin_memcpy(start, tp_buf, EXTEND_SIZE);
+                    bpf_dbg_printk("Set the string fast_path!");
+                    l7_app_ctx_cleanup(e_key);
+                    return 0;
+                }
+            }
+
+            // Nope, we've written some bytes in another packet and we
+            // are not done writing yet.
+            if (ctx->written < EXTEND_SIZE) {
+                len = EXTEND_SIZE - ctx->written;
+                bpf_clamp_umax(len, EXTEND_SIZE);
+
+                if (len > packet_size) {
+                    len = packet_size;
+                }
+            } else {
+                // We've written everything already, just clean up
+                l7_app_ctx_cleanup(e_key);
+                return 0;
+            }
+        }
+
+        if (len > 0) {
+            u32 tp_off = ctx->written;
+            // Keeps verifier happy
+            bpf_clamp_umax(tp_off, EXTEND_SIZE);
+            bpf_clamp_umax(len, EXTEND_SIZE);
+
+            if ((start + len) <= ctx_data_end(skb)) {
+                buf_memcpy((char *)start, (char *)tp_buf + tp_off, len, ctx_data_end(skb));
+                bpf_dbg_printk("Set the string off = %d, len = %d!", tp_off, len);
+            }
+
+            ctx->written += len;
+            // If we've written the full string this time around
+            // cleanup the metadata.
+            if (ctx->written >= EXTEND_SIZE) {
+                l7_app_ctx_cleanup(e_key);
+            }
+        }
+    }
+}
+
 // This function does two things:
 //   1. It adds sockets in the socket hash map which have already been
 //      established and we see them for the first time in Traffic Control, i.e
@@ -194,9 +283,7 @@ static __always_inline int l7_app_egress(struct __sk_buff *skb,
         }
     }
 
-    u32 tot_len = (u64)ctx_data_end(skb) - (u64)ctx_data(skb);
-    bpf_dbg_printk(
-        "egress, tot_len %d, s_port %d, data_start %d", tot_len, conn->s_port, tcp->hdr_len);
+    bpf_dbg_printk("egress, s_port %d, data_start %d", conn->s_port, tcp->hdr_len);
 
     unsigned char *tp_buf = tp_buf_mem(&tp->tp);
 
@@ -211,82 +298,7 @@ static __always_inline int l7_app_egress(struct __sk_buff *skb,
     // the case, seems plausible, but then the code below tries to handle any
     // split. The 'fast path' handles the exact split as above.
     if (ctx) {
-        u32 packet_size = tot_len - tcp->hdr_len;
-        bpf_dbg_printk("Found it! packet_size %d, offset %d", packet_size, ctx->offset);
-        bpf_dbg_printk("seen %d, written %d", ctx->seen, ctx->written);
-
-        if (packet_size > 0) {
-            u32 len = 0;
-            u32 off = tcp->hdr_len;
-            // picked a value large enough to support TCP headers
-            bpf_clamp_umax(off, 128);
-            void *start = ctx_data(skb) + off;
-
-            // We haven't seen enough bytes coming through from the start
-            // until we did the split (at ctx->offset is where we injected)
-            // the empty space.
-            if (ctx->seen < ctx->offset) {
-                // Diff = How much more before we cross offset
-                u32 diff = ctx->offset - ctx->seen;
-                // We received less or equal bytes to what we want to
-                // reach ctx->offset, i.e the split point.
-                if (diff <= packet_size) {
-                    ctx->seen += packet_size;
-                    return 0;
-                } else {
-                    // We went over the split point, calculate how much can we
-                    // write, but cap it to the max size = 70 bytes.
-                    len = packet_size - diff;
-                    bpf_clamp_umax(len, EXTEND_SIZE);
-                }
-            } else {
-                // Fast path. We are exactly at the offset, we've written
-                // nothing of the 'Traceparent: ...' text yet and the packet
-                // is exactly 70 bytes.
-                if (ctx->written == 0 && packet_size == EXTEND_SIZE) {
-                    if ((start + EXTEND_SIZE) <= ctx_data_end(skb)) {
-                        __builtin_memcpy(start, tp_buf, EXTEND_SIZE);
-                        bpf_dbg_printk("Set the string fast_path!");
-                        l7_app_ctx_cleanup(e_key);
-                        return 0;
-                    }
-                }
-
-                // Nope, we've written some bytes in another packet and we
-                // are not done writing yet.
-                if (ctx->written < EXTEND_SIZE) {
-                    len = EXTEND_SIZE - ctx->written;
-                    bpf_clamp_umax(len, EXTEND_SIZE);
-
-                    if (len > packet_size) {
-                        len = packet_size;
-                    }
-                } else {
-                    // We've written everything already, just clean up
-                    l7_app_ctx_cleanup(e_key);
-                    return 0;
-                }
-            }
-
-            if (len > 0) {
-                u32 tp_off = ctx->written;
-                // Keeps verifier happy
-                bpf_clamp_umax(tp_off, EXTEND_SIZE);
-                bpf_clamp_umax(len, EXTEND_SIZE);
-
-                if ((start + len) <= ctx_data_end(skb)) {
-                    buf_memcpy((char *)start, (char *)tp_buf + tp_off, len, ctx_data_end(skb));
-                    bpf_dbg_printk("Set the string off = %d, len = %d!", tp_off, len);
-                }
-
-                ctx->written += len;
-                // If we've written the full string this time around
-                // cleanup the metadata.
-                if (ctx->written >= EXTEND_SIZE) {
-                    l7_app_ctx_cleanup(e_key);
-                }
-            }
-        }
+        write_traceparent(skb, tcp, e_key, ctx, tp_buf);
     }
 
     return 0;

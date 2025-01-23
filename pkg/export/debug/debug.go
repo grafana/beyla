@@ -12,13 +12,6 @@ import (
 	"github.com/grafana/beyla/pkg/internal/request"
 )
 
-// TODO deprecated (REMOVE) - use TracePrinter instead
-type PrintEnabled bool
-
-func (p PrintEnabled) Enabled() bool {
-	return bool(p)
-}
-
 type TracePrinter string
 
 const (

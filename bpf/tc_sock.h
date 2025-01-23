@@ -300,12 +300,13 @@ int beyla_packet_extender(struct sk_msg_md *msg) {
                             bad_ctx->seen = bad_ctx->offset;
                         }
                     }
+                    bpf_dbg_printk("offset to split %d", newline_pos);
                 }
-                bpf_dbg_printk("offset to split %d", newline_pos);
             }
         }
-
-        return SK_PASS;
     }
+
+    return SK_PASS;
+}
 
 #endif

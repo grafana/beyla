@@ -129,11 +129,11 @@ static __always_inline struct bpf_sock *lookup_sock_from_tuple(struct __sk_buff 
     return 0;
 }
 
-static __always_inline write_traceparent(struct __sk_buff *skb,
-                                         protocol_info_t *tcp,
-                                         egress_key_t *e_key,
-                                         tc_http_ctx_t *ctx,
-                                         unsigned char *tp_buf) {
+static __always_inline int write_traceparent(struct __sk_buff *skb,
+                                             protocol_info_t *tcp,
+                                             egress_key_t *e_key,
+                                             tc_http_ctx_t *ctx,
+                                             unsigned char *tp_buf) {
     u32 tot_len = (u64)ctx_data_end(skb) - (u64)ctx_data(skb);
     u32 packet_size = tot_len - tcp->hdr_len;
     bpf_dbg_printk("Writing traceparent packet_size %d, offset %d, tot_len %d",
@@ -216,6 +216,8 @@ static __always_inline write_traceparent(struct __sk_buff *skb,
             }
         }
     }
+
+    return 0;
 }
 
 // This function does two things:
@@ -298,7 +300,7 @@ static __always_inline int l7_app_egress(struct __sk_buff *skb,
     // the case, seems plausible, but then the code below tries to handle any
     // split. The 'fast path' handles the exact split as above.
     if (ctx) {
-        write_traceparent(skb, tcp, e_key, ctx, tp_buf);
+        return write_traceparent(skb, tcp, e_key, ctx, tp_buf);
     }
 
     return 0;

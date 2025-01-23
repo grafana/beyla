@@ -30,8 +30,7 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  # this hostname will be ignored in favor of resource.opentelemetry.io/service.name
-  name: testserver-deployment
+  name: testserver
   labels:
     app: testserver
 spec:

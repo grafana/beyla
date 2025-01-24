@@ -192,12 +192,6 @@ func attributeGroups(config *beyla.Config, ctxInfo *global.ContextInfo) {
 	if config.Routes != nil {
 		ctxInfo.MetricAttributeGroups.Add(attributes.GroupHTTPRoutes)
 	}
-	if config.Metrics.ReportPeerInfo || config.Prometheus.ReportPeerInfo {
-		ctxInfo.MetricAttributeGroups.Add(attributes.GroupPeerInfo)
-	}
-	if config.Metrics.ReportTarget || config.Prometheus.ReportTarget {
-		ctxInfo.MetricAttributeGroups.Add(attributes.GroupTarget)
-	}
 	if config.NetworkFlows.Deduper == flow.DeduperNone {
 		ctxInfo.MetricAttributeGroups.Add(attributes.GroupNetIfaceDirection)
 	}

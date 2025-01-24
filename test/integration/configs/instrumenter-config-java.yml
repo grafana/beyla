@@ -10,3 +10,5 @@ attributes:
       include: ["*"]
     process_cpu_*:
       exclude: ["cpu_mode"]
+    "*":
+      include: ["*"]

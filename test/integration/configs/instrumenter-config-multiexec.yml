@@ -51,3 +51,5 @@ attributes:
   select:
     http_server_request_duration_seconds_count:
       exclude: ["server_address"]
+    "*":
+      include: ["*"]

@@ -11,3 +11,7 @@ otel_metrics_export:
 otel_traces_export:
   endpoint: http://jaeger:4317
   protocol: grpc
+attributes:
+  select:
+    "*":
+      include: ["*"]

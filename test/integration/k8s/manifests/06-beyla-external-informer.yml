@@ -91,10 +91,6 @@ spec:
               value: "10ms"
             - name: BEYLA_BPF_BATCH_TIMEOUT
               value: "10ms"
-            - name: BEYLA_METRICS_REPORT_TARGET
-              value: "true"
-            - name: BEYLA_METRICS_REPORT_PEER
-              value: "true"
           ports:
             - containerPort: 8999
               name: prometheus

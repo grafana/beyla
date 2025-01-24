@@ -97,11 +97,6 @@ type PrometheusConfig struct {
 	Port int    `yaml:"port" env:"BEYLA_PROMETHEUS_PORT"`
 	Path string `yaml:"path" env:"BEYLA_PROMETHEUS_PATH"`
 
-	// Deprecated. Going to be removed in Beyla 2.0. Use attributes.select instead
-	ReportTarget bool `yaml:"report_target" env:"BEYLA_METRICS_REPORT_TARGET"`
-	// Deprecated. Going to be removed in Beyla 2.0. Use attributes.select instead
-	ReportPeerInfo bool `yaml:"report_peer" env:"BEYLA_METRICS_REPORT_PEER"`
-
 	DisableBuildInfo bool `yaml:"disable_build_info" env:"BEYLA_PROMETHEUS_DISABLE_BUILD_INFO"`
 
 	// Features of metrics that are can be exported. Accepted values are "application" and "network".

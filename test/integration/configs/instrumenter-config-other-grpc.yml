@@ -20,4 +20,4 @@ otel_traces_export:
 attributes:
   select:
     "*":
-      include: ["url.path", "client.address"]
+      include: ["*"]

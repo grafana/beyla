@@ -52,4 +52,4 @@ attributes:
     http_server_request_duration_seconds_count:
       exclude: ["server_address"]
     "*":
-      include: ["url.path", "client.address"]
+      include: ["*"]

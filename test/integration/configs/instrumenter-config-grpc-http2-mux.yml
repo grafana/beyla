@@ -15,4 +15,4 @@ discovery:
 attributes:
   select:
     "*":
-      include: ["url.path", "client.address"]
+      include: ["*"]

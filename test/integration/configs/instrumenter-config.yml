@@ -16,4 +16,4 @@ attributes:
       deployment.environment: ["deployment.environment"]
   select:
     "*":
-      include: ["url.path", "client.address"]
+      include: ["*"]

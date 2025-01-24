@@ -7,4 +7,4 @@ otel_metrics_export:
 attributes:
   select:
     "*":
-      include: ["url.path", "client.address"]
+      include: ["*"]

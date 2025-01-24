@@ -24,6 +24,6 @@ attributes:
     process_network_io:
       include: ["*"]
     "*":
-      include: ["url.path", "client.address"]
+      include: ["*"]
   kubernetes:
     cluster_name: beyla

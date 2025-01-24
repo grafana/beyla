@@ -11,4 +11,4 @@ attributes:
     process_cpu_*:
       exclude: ["cpu_mode"]
     "*":
-      include: ["url.path", "client.address"]
+      include: ["*"]

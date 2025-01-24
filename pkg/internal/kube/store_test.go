@@ -296,12 +296,12 @@ func TestMetaByIPEntryRemovedIfIPGroupChanges(t *testing.T) {
 	assert.Nil(t, store.ObjectMetaByIP("1.2.3.4"))
 	om := store.ObjectMetaByIP("3.1.1.1")
 	require.NotNil(t, om)
-	assert.Equal(t, "object_1", om.Name)
-	assert.Equal(t, []string{"3.1.1.1", "3.2.2.2"}, om.Ips)
+	assert.Equal(t, "object_1", om.Meta.Name)
+	assert.Equal(t, []string{"3.1.1.1", "3.2.2.2"}, om.Meta.Ips)
 	om = store.ObjectMetaByIP("3.2.2.2")
 	require.NotNil(t, om)
-	assert.Equal(t, "object_1", om.Name)
-	assert.Equal(t, []string{"3.1.1.1", "3.2.2.2"}, om.Ips)
+	assert.Equal(t, "object_1", om.Meta.Name)
+	assert.Equal(t, []string{"3.1.1.1", "3.2.2.2"}, om.Meta.Ips)
 
 	// AND WHEN an object is updated with a different set of IPs
 	_ = store.On(&informer.Event{
@@ -317,12 +317,12 @@ func TestMetaByIPEntryRemovedIfIPGroupChanges(t *testing.T) {
 	assert.Nil(t, store.ObjectMetaByIP("3.1.1.1"))
 	om = store.ObjectMetaByIP("3.3.3.3")
 	require.NotNil(t, om)
-	assert.Equal(t, "object_1", om.Name)
-	assert.Equal(t, []string{"3.2.2.2", "3.3.3.3"}, om.Ips)
+	assert.Equal(t, "object_1", om.Meta.Name)
+	assert.Equal(t, []string{"3.2.2.2", "3.3.3.3"}, om.Meta.Ips)
 	om = store.ObjectMetaByIP("3.2.2.2")
 	require.NotNil(t, om)
-	assert.Equal(t, "object_1", om.Name)
-	assert.Equal(t, []string{"3.2.2.2", "3.3.3.3"}, om.Ips)
+	assert.Equal(t, "object_1", om.Meta.Name)
+	assert.Equal(t, []string{"3.2.2.2", "3.3.3.3"}, om.Meta.Ips)
 }
 
 func TestNoLeakOnUpdateOrDeletion(t *testing.T) {

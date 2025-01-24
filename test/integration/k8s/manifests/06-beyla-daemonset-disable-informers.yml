@@ -12,6 +12,8 @@ data:
           - replicaset
           - node
           - service
+        resource_labels:
+          deployment.environment: ["deployment.environment"]
       select:
         "*":
           include: ["*"]

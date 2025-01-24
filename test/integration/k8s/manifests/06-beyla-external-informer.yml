@@ -17,6 +17,8 @@ data:
         enable: true
         cluster_name: my-kube
         meta_cache_address: k8s-cache:50055
+        resource_labels:
+          deployment.environment: ["deployment.environment"]
       select:
         "*":
           include: [ "*" ]

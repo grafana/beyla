@@ -18,6 +18,8 @@ metadata:
   name: "{{.PodName}}"
   labels:
     component: pinger
+  annotations:
+    resource.opentelemetry.io/deployment.environment: 'to-be-ignored-in-favor-of-env-var'
 spec:
   shareProcessNamespace: true
   serviceAccountName: beyla
@@ -34,3 +36,5 @@ spec:
       env:
         - name: TARGET_URL
           value: "{{.TargetURL}}"
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: "deployment.environment=integration-test"

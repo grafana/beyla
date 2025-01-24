@@ -28,6 +28,8 @@ data:
       kubernetes:
         enable: true
         cluster_name: beyla
+        resource_labels:
+          deployment.environment: ["deployment.environment"]
     trace_printer: text
     log_level: debug
     discovery:

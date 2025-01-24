@@ -37,6 +37,8 @@ spec:
       env:
         - name: TARGET_URL
           value: "http://otherinstance:8080"
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: "deployment.environment=integration-test"
 ---
 apiVersion: v1
 kind: Service
@@ -110,3 +112,5 @@ spec:
           env:
             - name: LOG_LEVEL
               value: "DEBUG"
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "deployment.environment=integration-test"

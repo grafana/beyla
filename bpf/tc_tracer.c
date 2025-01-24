@@ -134,6 +134,14 @@ int beyla_app_egress(struct __sk_buff *skb) {
         if (tp->valid) {
             encode_data_in_ip_options(skb, &conn, &tcp, tp, &e_key);
         }
+    } else {
+        u32 s_port = e_key.s_port;
+        tc_http_ctx_t *ctx = (tc_http_ctx_t *)bpf_map_lookup_elem(&tc_http_ctx_map, &s_port);
+
+        if (ctx) {
+            bpf_dbg_printk("No trace-map info, filling up the hole setup by sk_msg");
+            write_traceparent(skb, &tcp, &e_key, ctx, (unsigned char *)INV_TP);
+        }
     }
 
     return TC_ACT_UNSPEC;

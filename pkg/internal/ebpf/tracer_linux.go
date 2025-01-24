@@ -162,10 +162,10 @@ func (pt *ProcessTracer) loadTracer(p Tracer, log *slog.Logger) error {
 	err := pt.loadAndAssign(p)
 
 	if err != nil && strings.Contains(err.Error(), "unknown func bpf_probe_write_user") {
-		plog.Warn("Failed to enable distributed tracing context-propagation on a " +
+		plog.Warn("Failed to enable Go write memory distributed tracing context-propagation on a " +
 			"Linux Kernel without write memory support. " +
 			"To avoid seeing this message, please ensure you have correctly mounted /sys/kernel/security. " +
-			"and ensure beyla has the SYS_ADMIN linux capability" +
+			"and ensure beyla has the SYS_ADMIN linux capability. " +
 			"For more details set BEYLA_LOG_LEVEL=DEBUG.")
 
 		common.IntegrityModeOverride = true

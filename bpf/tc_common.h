@@ -7,6 +7,7 @@
 enum { MAX_INLINE_LEN = 0x3ff };
 
 const char TP[] = "Traceparent: 00-00000000000000000000000000000000-0000000000000000-01\r\n";
+const char INV_TP[] = "W3C-BeylaID: 00-00000000000000000000000000000000-0000000000000000-01\r\n";
 const u32 EXTEND_SIZE = sizeof(TP) - 1;
 const char TP_PREFIX[] = "Traceparent: ";
 const u32 TP_PREFIX_SIZE = sizeof(TP_PREFIX) - 1;

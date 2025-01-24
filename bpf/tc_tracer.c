@@ -140,7 +140,8 @@ int beyla_app_egress(struct __sk_buff *skb) {
 
         if (ctx) {
             bpf_dbg_printk("No trace-map info, filling up the hole setup by sk_msg");
-            write_traceparent(skb, &tcp, &e_key, ctx, (unsigned char *)INV_TP);
+            bpf_skb_pull_data(skb, skb->len);
+            write_traceparent(skb, &tcp, &e_key, ctx, INV_TP);
         }
     }
 

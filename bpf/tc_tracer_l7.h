@@ -95,7 +95,7 @@ static __always_inline int buf_memcpy(char *dest, char *src, s32 size, void *end
     return 0;
 }
 
-static __always_inline unsigned char *tp_buf_mem(tp_info_t *tp) {
+static __always_inline const char *tp_buf_mem(tp_info_t *tp) {
     int zero = 0;
     tp_buf_data_t *val = (tp_buf_data_t *)bpf_map_lookup_elem(&tp_buf_memory, &zero);
 
@@ -106,7 +106,7 @@ static __always_inline unsigned char *tp_buf_mem(tp_info_t *tp) {
     __builtin_memcpy(val->buf, TP, EXTEND_SIZE);
     make_tp_string(val->buf + TP_PREFIX_SIZE, tp);
 
-    return val->buf;
+    return (const char *)val->buf;
 }
 
 static __always_inline void l7_app_ctx_cleanup(egress_key_t *e_key) {
@@ -134,7 +134,7 @@ static __always_inline int write_traceparent(struct __sk_buff *skb,
                                              protocol_info_t *tcp,
                                              egress_key_t *e_key,
                                              tc_http_ctx_t *ctx,
-                                             unsigned char *tp_buf) {
+                                             const char *tp_buf) {
     u32 tot_len = (u64)ctx_data_end(skb) - (u64)ctx_data(skb);
     u32 packet_size = tot_len - tcp->hdr_len;
     bpf_dbg_printk("Writing traceparent packet_size %d, offset %d, tot_len %d",
@@ -290,10 +290,10 @@ static __always_inline int l7_app_egress(struct __sk_buff *skb,
 
     bpf_dbg_printk("egress, s_port %d, data_start %d", conn->s_port, tcp->hdr_len);
 
-    unsigned char *tp_buf = tp_buf_mem(&tp->tp);
+    const char *tp_buf = tp_buf_mem(&tp->tp);
 
     if (!tp_buf) {
-        tp_buf = (unsigned char *)TP;
+        tp_buf = TP;
     }
 
     // This is where the writing of the 'Traceparent: ...' field happens at L7.

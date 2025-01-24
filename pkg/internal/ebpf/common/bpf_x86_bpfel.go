@@ -85,8 +85,10 @@ type bpfHttpRequestTrace struct {
 	EndMonotimeNs     uint64
 	Method            [7]uint8
 	Path              [100]uint8
+	Host              [100]uint8
+	Scheme            [10]uint8
 	Status            uint16
-	_                 [2]byte
+	_                 [4]byte
 	Conn              bpfConnectionInfoT
 	ContentLength     int64
 	Tp                struct {

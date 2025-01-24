@@ -16,6 +16,11 @@ import (
 
 // misses serviceID
 func httpInfoToSpan(info *HTTPInfo) request.Span {
+	scheme := "http"
+	if info.Ssl == 1 {
+		scheme = "https"
+	}
+
 	return request.Span{
 		Type:          request.EventType(info.Type),
 		Method:        info.Method,
@@ -38,6 +43,7 @@ func httpInfoToSpan(info *HTTPInfo) request.Span {
 			UserPID:   info.Pid.UserPid,
 			Namespace: info.Pid.Ns,
 		},
+		Statement: scheme + request.SchemeHostSeparator,
 	}
 }
 

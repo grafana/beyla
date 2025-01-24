@@ -27,6 +27,8 @@
 #define KAFKA_MAX_LEN 256
 #define REDIS_MAX_LEN 256
 #define MAX_TOPIC_NAME_LEN 64
+#define HOST_MAX_LEN 100
+#define SCHEME_MAX_LEN 10
 
 // Trace of an HTTP call invocation. It is instantiated by the return uprobe and forwarded to the
 // user space through the events ringbuffer.
@@ -37,6 +39,8 @@ typedef struct http_request_trace_t {
     u64 end_monotime_ns;
     u8 method[METHOD_MAX_LEN];
     u8 path[PATH_MAX_LEN];
+    u8 host[HOST_MAX_LEN];
+    u8 scheme[SCHEME_MAX_LEN];
     u16 status;
     connection_info_t conn __attribute__((aligned(8)));
     s64 content_length;

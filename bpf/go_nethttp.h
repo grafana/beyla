@@ -27,6 +27,8 @@
 typedef struct http_client_data {
     u8 method[METHOD_MAX_LEN];
     u8 path[PATH_MAX_LEN];
+    u8 host[HOST_MAX_LEN];
+    u8 scheme[SCHEME_MAX_LEN];
     s64 content_length;
 
     pid_info pid;
@@ -320,6 +322,8 @@ int beyla_uprobe_ServeHTTPReturns(struct pt_regs *ctx) {
     trace->type = EVENT_HTTP_REQUEST;
     trace->start_monotime_ns = invocation->start_monotime_ns;
     trace->end_monotime_ns = bpf_ktime_get_ns();
+    trace->host[0] = '\0';
+    trace->scheme[0] = '\0';
 
     goroutine_metadata *g_metadata = bpf_map_lookup_elem(&ongoing_goroutines, &g_key);
     if (g_metadata) {
@@ -412,16 +416,38 @@ static __always_inline void roundTripStartHelper(struct pt_regs *ctx) {
                    sizeof(url_ptr),
                    (void *)(req + go_offset_of(ot, (go_offset){.v = _url_ptr_pos})));
 
-    if (!url_ptr || !read_go_str("path",
-                                 url_ptr,
-                                 go_offset_of(ot, (go_offset){.v = _path_ptr_pos}),
-                                 &trace.path,
-                                 sizeof(trace.path))) {
-        bpf_dbg_printk("can't read http Request.URL.Path");
-        return;
+    if (url_ptr) {
+        if (!read_go_str("path",
+                         url_ptr,
+                         go_offset_of(ot, (go_offset){.v = _path_ptr_pos}),
+                         &trace.path,
+                         sizeof(trace.path))) {
+            bpf_dbg_printk("can't read http Request.URL.Path");
+            return;
+        }
+
+        if (!read_go_str("host",
+                         url_ptr,
+                         go_offset_of(ot, (go_offset){.v = _host_ptr_pos}),
+                         &trace.host,
+                         sizeof(trace.host))) {
+            bpf_dbg_printk("can't read http Request.URL.Host");
+            return;
+        }
+
+        if (!read_go_str("scheme",
+                         url_ptr,
+                         go_offset_of(ot, (go_offset){.v = _scheme_ptr_pos}),
+                         &trace.scheme,
+                         sizeof(trace.scheme))) {
+            bpf_dbg_printk("can't read http Request.URL.Scheme");
+            return;
+        }
     }
 
     bpf_dbg_printk("path: %s", trace.path);
+    bpf_dbg_printk("host: %s", trace.host);
+    bpf_dbg_printk("scheme: %s", trace.scheme);
 
     // Write event
     if (bpf_map_update_elem(&ongoing_http_client_requests, &g_key, &invocation, BPF_ANY)) {
@@ -488,6 +514,8 @@ int beyla_uprobe_roundTripReturn(struct pt_regs *ctx) {
     // Copy the values read on request start
     __builtin_memcpy(trace->method, data->method, sizeof(trace->method));
     __builtin_memcpy(trace->path, data->path, sizeof(trace->path));
+    __builtin_memcpy(trace->host, data->host, sizeof(trace->host));
+    __builtin_memcpy(trace->scheme, data->scheme, sizeof(trace->scheme));
     trace->content_length = data->content_length;
 
     // Get request/response struct

@@ -1,6 +1,8 @@
 package request
 
 import (
+	"strings"
+
 	"go.opentelemetry.io/otel/attribute"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
@@ -117,6 +119,38 @@ func SpanPeer(span *Span) string {
 	}
 
 	return span.Peer
+}
+
+func HTTPClientHost(span *Span) string {
+	if strings.Index(span.Statement, SchemeHostSeparator) > 0 {
+		schemeHost := strings.Split(span.Statement, SchemeHostSeparator)
+		if schemeHost[1] != "" {
+			return schemeHost[1]
+		}
+	}
+
+	return HostAsServer(span)
+}
+
+func HTTPScheme(span *Span) string {
+	if strings.Index(span.Statement, SchemeHostSeparator) > 0 {
+		schemeHost := strings.Split(span.Statement, SchemeHostSeparator)
+		return schemeHost[0]
+	}
+
+	return ""
+}
+
+func URLFull(scheme, host, path string) string {
+	url := path
+	if len(host) > 0 {
+		url = host + url
+		if len(scheme) > 0 {
+			url = scheme + "://" + url
+		}
+	}
+
+	return url
 }
 
 func HostAsServer(span *Span) string {

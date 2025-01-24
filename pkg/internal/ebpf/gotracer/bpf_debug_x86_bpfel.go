@@ -60,7 +60,9 @@ type bpf_debugGrpcTransportsT struct {
 type bpf_debugHttpClientDataT struct {
 	Method        [7]uint8
 	Path          [100]uint8
-	_             [5]byte
+	Host          [100]uint8
+	Scheme        [10]uint8
+	_             [7]byte
 	ContentLength int64
 	Pid           struct {
 		HostPid uint32
@@ -108,7 +110,7 @@ type bpf_debugKafkaGoReqT struct {
 
 type bpf_debugNewFuncInvocationT struct{ Parent uint64 }
 
-type bpf_debugOffTableT struct{ Table [44]uint64 }
+type bpf_debugOffTableT struct{ Table [46]uint64 }
 
 type bpf_debugProduceReqT struct {
 	MsgPtr          uint64

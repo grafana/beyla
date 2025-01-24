@@ -51,7 +51,7 @@ var DefaultConfig = Config{
 		BatchTimeout:              time.Second,
 		HTTPRequestTimeout:        30 * time.Second,
 		TCBackend:                 tcmanager.TCBackendAuto,
-		ContextPropagationEnabled: true,
+		ContextPropagationEnabled: false,
 	},
 	Grafana: otel.GrafanaConfig{
 		OTLP: otel.GrafanaOTLP{
@@ -98,7 +98,6 @@ var DefaultConfig = Config{
 		TTL:                         defaultMetricsTTL,
 		SpanMetricsServiceCacheSize: 10000,
 	},
-	Printer:      false, // Deprecated: use TracePrinter instead
 	TracePrinter: debug.TracePrinterDisabled,
 	InternalMetrics: imetrics.Config{
 		Exporter: imetrics.InternalMetricsExporterDisabled,
@@ -159,7 +158,6 @@ type Config struct {
 	Metrics      otel.MetricsConfig            `yaml:"otel_metrics_export"`
 	Traces       otel.TracesConfig             `yaml:"otel_traces_export"`
 	Prometheus   prom.PrometheusConfig         `yaml:"prometheus_export"`
-	Printer      debug.PrintEnabled            `yaml:"print_traces" env:"BEYLA_PRINT_TRACES"`
 	TracePrinter debug.TracePrinter            `yaml:"trace_printer" env:"BEYLA_TRACE_PRINTER"`
 
 	// Exec allows selecting the instrumented executable whose complete path contains the Exec value.
@@ -275,18 +273,7 @@ func (c *Config) Validate() error {
 		return ConfigError(fmt.Sprintf("invalid value for trace_printer: '%s'", c.TracePrinter))
 	}
 
-	if c.Printer.Enabled() && c.TracePrinter.Enabled() {
-		return ConfigError("print_traces and trace_printer are mutually exclusive, use trace_printer instead")
-	}
-
-	// TODO Printer is deprecated, remove
-	if c.Printer.Enabled() {
-		slog.Warn("'print_traces' configuration option has been deprecated and will be removed" +
-			" in the future - use 'trace_printer' instead")
-		c.TracePrinter = debug.TracePrinterText
-	}
-
-	if c.Enabled(FeatureAppO11y) && !c.Printer.Enabled() &&
+	if c.Enabled(FeatureAppO11y) && !c.TracePrinter.Enabled() &&
 		!c.Grafana.OTLP.MetricsEnabled() && !c.Grafana.OTLP.TracesEnabled() &&
 		!c.Metrics.Enabled() && !c.Traces.Enabled() &&
 		!c.Prometheus.Enabled() && !c.TracePrinter.Enabled() {

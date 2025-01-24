@@ -118,6 +118,7 @@ func TestToRequestTrace(t *testing.T) {
 		End:          789012,
 		HostPort:     1,
 		Service:      svc.Attrs{},
+		Statement:    "http;",
 	}
 	assert.Equal(t, expected, result)
 }
@@ -154,6 +155,7 @@ func TestToRequestTraceNoConnection(t *testing.T) {
 		Status:       200,
 		HostPort:     7033,
 		Service:      svc.Attrs{},
+		Statement:    "http;",
 	}
 	assert.Equal(t, expected, result)
 }
@@ -191,6 +193,7 @@ func TestToRequestTrace_BadHost(t *testing.T) {
 		End:          789012,
 		HostPort:     0,
 		Service:      svc.Attrs{},
+		Statement:    "http;",
 	}
 	assert.Equal(t, expected, result)
 

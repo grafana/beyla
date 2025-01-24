@@ -175,7 +175,7 @@ func (wk *watcherKubeEnricher) onNewProcess(procInfo processAttrs) (processAttrs
 	wk.processByContainer[containerInfo.ContainerID] = procInfo
 
 	if pod := wk.store.PodByContainerID(containerInfo.ContainerID); pod != nil {
-		procInfo = withMetadata(procInfo, pod)
+		procInfo = withMetadata(procInfo, pod.Meta)
 	}
 	return procInfo, true
 }

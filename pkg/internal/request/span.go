@@ -44,6 +44,10 @@ const (
 	grpcTracesDetectPattern  = "/opentelemetry.proto.collector.trace.v1.TraceService/Export"
 )
 
+const (
+	SchemeHostSeparator = ";"
+)
+
 type SQLKind uint8
 
 const (
@@ -535,4 +539,9 @@ func (s *Span) DBSystem() attribute.KeyValue {
 	}
 
 	return semconv.DBSystemOtherSQL
+}
+
+func (s *Span) HasOriginalHost() bool {
+	schemeHost := strings.Split(s.Statement, SchemeHostSeparator)
+	return len(schemeHost) > 1 && schemeHost[1] != ""
 }

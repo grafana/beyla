@@ -27,6 +27,7 @@ func testClientWithMethodAndStatusCode(t *testing.T, method string, statusCode i
 			fmt.Sprintf(`http_request_method="%s",`, method) +
 			fmt.Sprintf(`http_response_status_code="%d",`, statusCode) +
 			`http_route="/oss/",` +
+			`server_address="grafana.com",` +
 			`service_namespace="integration-test",` +
 			`service_name="pingclient"}`)
 		require.NoError(t, err)
@@ -41,6 +42,7 @@ func testClientWithMethodAndStatusCode(t *testing.T, method string, statusCode i
 			fmt.Sprintf(`http_request_method="%s",`, method) +
 			fmt.Sprintf(`http_response_status_code="%d",`, statusCode) +
 			`http_route="/oss/",` +
+			`server_address="grafana.com",` +
 			`service_namespace="integration-test",` +
 			`service_name="pingclient"}`)
 		require.NoError(t, err)
@@ -74,7 +76,7 @@ func testClientWithMethodAndStatusCode(t *testing.T, method string, statusCode i
 
 	addr, ok := jaeger.FindIn(parent.Tags, "server.address")
 	assert.True(t, ok)
-	assert.NotEqual(t, "", addr.Value)
+	assert.Equal(t, "grafana.com", addr.Value)
 
 	addr, ok = jaeger.FindIn(parent.Tags, "server.port")
 	assert.True(t, ok)

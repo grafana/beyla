@@ -10,7 +10,9 @@
         "Header"
       ],
       "net/url.URL": [
-        "Path"
+        "Path",
+        "Host",
+        "Scheme"
       ],
       "net/http.Response": [
         "StatusCode"

@@ -22,6 +22,9 @@ metadata:
     # this label will trigger a deletion of beyla pods before tearing down
     # kind, to force Beyla writing the coverage data
     teardown: delete
+    deployment.environment: integration-test
+  annotations:
+    resource.opentelemetry.io/deployment.environment: 'to-be-ignored-in-favor-of-annotation'
 spec:
   shareProcessNamespace: true
   serviceAccountName: beyla

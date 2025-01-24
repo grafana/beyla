@@ -74,6 +74,8 @@ spec:
           env:
             - name: LOG_LEVEL
               value: "DEBUG"
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "deployment.environment=integration-test"
         - name: beyla
           image: beyla:dev
           imagePullPolicy: Never # loaded into Kind from localhost

@@ -9,6 +9,8 @@ data:
         enable: true
         cluster_name: my-kube
         drop_external: true
+        resource_labels:
+          deployment.environment: ["deployment.environment"]
       select:
         beyla.network.flow.bytes:
           include:

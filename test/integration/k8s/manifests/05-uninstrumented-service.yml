@@ -62,6 +62,8 @@ spec:
           env:
             - name: LOG_LEVEL
               value: "DEBUG"
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "deployment.environment=integration-test"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -79,6 +81,8 @@ spec:
       name: otherinstance
       labels:
         app: otherinstance
+      annotations:
+        resource.opentelemetry.io/deployment.environment: 'to-be-ignored-in-favor-of-env-var'
     spec:
       containers:
         - name: otherinstance
@@ -91,3 +95,5 @@ spec:
           env:
             - name: LOG_LEVEL
               value: "DEBUG"
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "deployment.environment=integration-test"

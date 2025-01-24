@@ -25,6 +25,9 @@
 #define K_TCP_MAX_LEN 256
 #define K_TCP_RES_LEN 128
 
+// Max of HTTP, HTTP2/GRPC and TCP buffers. Used in sk_msg
+#define MAX_PROTOCOL_BUF_SIZE 256
+
 #define CONN_INFO_FLAG_TRACE 0x1
 
 #define TRACE_ID_SIZE_BYTES 16

@@ -274,6 +274,14 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.ProbeDesc {
 			Start:    p.bpfObjects.BeylaKprobeTcpSendmsg,
 			End:      p.bpfObjects.BeylaKretprobeTcpSendmsg,
 		},
+		"tcp_rate_check_app_limited": {
+			Required: false,
+			Start:    p.bpfObjects.BeylaKprobeTcpRateCheckAppLimited,
+		},
+		"tcp_sendmsg_fastopen": {
+			Required: false,
+			Start:    p.bpfObjects.BeylaKprobeTcpRateCheckAppLimited,
+		},
 		// Reading more than 160 bytes
 		"tcp_recvmsg": {
 			Required: true,

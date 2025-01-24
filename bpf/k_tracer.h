@@ -326,6 +326,60 @@ int BPF_KPROBE(beyla_kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, si
     return 0;
 }
 
+SEC("kprobe/tcp_rate_check_app_limited")
+int BPF_KPROBE(beyla_kprobe_tcp_rate_check_app_limited, struct sock *sk) {
+    u64 id = bpf_get_current_pid_tgid();
+
+    if (!valid_pid(id)) {
+        return 0;
+    }
+
+    bpf_dbg_printk("=== kprobe tcp_send_mss=%d sock=%llx ===", id, sk);
+
+    send_args_t s_args = {};
+
+    if (parse_sock_info(sk, &s_args.p_conn.conn)) {
+        u16 orig_dport = s_args.p_conn.conn.d_port;
+        dbg_print_http_connection_info(&s_args.p_conn.conn);
+        egress_key_t e_key = {
+            .d_port = s_args.p_conn.conn.d_port,
+            .s_port = s_args.p_conn.conn.s_port,
+        };
+
+        sort_connection_info(&s_args.p_conn.conn);
+        s_args.p_conn.pid = pid_from_pid_tgid(id);
+
+        msg_buffer_t *m_buf = bpf_map_lookup_elem(&msg_buffers, &e_key);
+        bpf_dbg_printk("No size, m_buf[%llx]", m_buf);
+        if (m_buf) {
+            u8 *buf = m_buf->buf;
+            // The buffer setup for us by a sock_msg program is always the
+            // full buffer, but when we extend a packet to be able to inject
+            // a Traceparent field, it will actually be split in 3 chunks:
+            // [before the injected header],[70 bytes for 'Traceparent...'],[the rest].
+            // We don't want the handle_buf_with_connection logic to run more than
+            // once on the same data, so if we find a buf we send all of it to the
+            // handle_buf_with_connection logic and then mark it as seen by making
+            // m_buf->pos be the size of the buffer.
+            if (!m_buf->pos) {
+                u16 size = sizeof(m_buf->buf);
+                m_buf->pos = size;
+                s_args.size = size;
+                bpf_dbg_printk("msg_buffer: size %d, buf[%s]", size, buf);
+                u64 sock_p = (u64)sk;
+                bpf_map_update_elem(&active_send_args, &id, &s_args, BPF_ANY);
+                bpf_map_update_elem(&active_send_sock_args, &sock_p, &s_args, BPF_ANY);
+
+                // Logically last for !ssl.
+                handle_buf_with_connection(
+                    ctx, &s_args.p_conn, buf, size, NO_SSL, TCP_SEND, orig_dport);
+            }
+        }
+    }
+
+    return 0;
+}
+
 // This is really a fallback for the kprobe to ensure we send a large request if it was
 // delayed. The code under the `if (size < KPROBES_LARGE_RESPONSE_LEN) {` block should do it
 // but it's possible that the kernel sends the data in smaller chunks.
@@ -540,7 +594,7 @@ int beyla_socket__http_filter(struct __sk_buff *skb) {
             }
             read_skb_bytes(skb, tcp.hdr_len, info->buf, full_len);
             u64 cookie = bpf_get_socket_cookie(skb);
-            //bpf_dbg_printk("=== http_filter cookie = %llx, tcp_seq=%d len=%d %s ===", cookie, tcp.seq, len, buf);
+            //bpf_printk("=== http_filter cookie = %llx, len=%d %s ===", cookie, len, buf);
             //dbg_print_http_connection_info(&conn);
             set_fallback_http_info(info, &conn, skb->len - tcp.hdr_len);
 

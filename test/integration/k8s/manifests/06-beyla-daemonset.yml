@@ -9,7 +9,7 @@ data:
         enable: true
         cluster_name: beyla
         resource_labels:
-          deployment.environment: "deployment.environment"
+          deployment.environment: ["deployment.environment"]
       select:
         process_*:
           include: ["*"]

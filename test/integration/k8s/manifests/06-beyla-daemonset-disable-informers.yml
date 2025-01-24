@@ -13,7 +13,7 @@ data:
           - node
           - service
         resource_labels:
-          deployment.environment: "deployment.environment"
+          deployment.environment: ["deployment.environment"]
       select:
         "*":
           include: ["*"]

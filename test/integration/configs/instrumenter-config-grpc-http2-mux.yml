@@ -12,3 +12,7 @@ discovery:
     - namespace: grpc-http2-go
       name: server
       exe_path: testserver
+attributes:
+  select:
+    "*":
+      include: ["url.path", "client.address"]

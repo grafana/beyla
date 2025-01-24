@@ -10,3 +10,6 @@ otel_traces_export:
 attributes:
   kubernetes:
     cluster_name: beyla
+  select:
+    "*":
+      include: ["url.path", "client.address"]

@@ -15,3 +15,7 @@ discovery:
     - namespace: http2-go
       name: server
       exe_path: http2srv
+attributes:
+  select:
+    "*":
+      include: ["url.path", "client.address"]

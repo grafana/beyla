@@ -110,7 +110,8 @@ static __always_inline unsigned char *tp_buf_mem(tp_info_t *tp) {
 }
 
 static __always_inline void l7_app_ctx_cleanup(egress_key_t *e_key) {
-    bpf_map_delete_elem(&tc_http_ctx_map, &e_key->s_port);
+    u32 s_port = e_key->s_port;
+    bpf_map_delete_elem(&tc_http_ctx_map, &s_port);
     bpf_map_delete_elem(&outgoing_trace_map, e_key);
 }
 
@@ -177,6 +178,7 @@ static __always_inline int write_traceparent(struct __sk_buff *skb,
                 if ((start + EXTEND_SIZE) <= ctx_data_end(skb)) {
                     __builtin_memcpy(start, tp_buf, EXTEND_SIZE);
                     bpf_dbg_printk("Set the string fast_path!");
+                    ctx->written = EXTEND_SIZE;
                     l7_app_ctx_cleanup(e_key);
                     return 0;
                 }

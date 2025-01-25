@@ -258,6 +258,8 @@ int beyla_packet_extender(struct sk_msg_md *msg) {
     }
     bpf_msg_pull_data(msg, 0, 1024, 0);
 
+    // TODO: execute the protocol handlers here with tail calls, don't
+    // rely on tcp_sendmsg to do it and record these message buffers.
     if (!tracked) {
         // If we didn't have metadata (sock_msg runs before the kprobe),
         // we ensure to mark it for any packet we want to extend.

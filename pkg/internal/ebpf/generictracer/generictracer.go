@@ -274,6 +274,9 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.ProbeDesc {
 			Start:    p.bpfObjects.BeylaKprobeTcpSendmsg,
 			End:      p.bpfObjects.BeylaKretprobeTcpSendmsg,
 		},
+		// tcp_rate_check_app_limited and tcp_sendmsg_fastopen are backup
+		// for tcp_sendmsg_locked which doesn't fire on certain kernels
+		// if sk_msg is attached.
 		"tcp_rate_check_app_limited": {
 			Required: false,
 			Start:    p.bpfObjects.BeylaKprobeTcpRateCheckAppLimited,

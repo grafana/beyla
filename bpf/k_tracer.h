@@ -224,6 +224,20 @@ cleanup:
     return 0;
 }
 
+static __always_inline void
+tcp_send_ssl_check(u64 id, void *ssl, pid_connection_info_t *p_conn, u16 orig_dport) {
+    bpf_dbg_printk("=== kprobe SSL tcp_sendmsg=%d ssl=%llx ===", id, ssl);
+    ssl_pid_connection_info_t *s_conn = bpf_map_lookup_elem(&ssl_to_conn, &ssl);
+    if (s_conn) {
+        finish_possible_delayed_tls_http_request(&s_conn->p_conn, ssl);
+    }
+    ssl_pid_connection_info_t ssl_conn = {
+        .orig_dport = orig_dport,
+    };
+    __builtin_memcpy(&ssl_conn.p_conn, p_conn, sizeof(pid_connection_info_t));
+    bpf_map_update_elem(&ssl_to_conn, &ssl, &ssl_conn, BPF_ANY);
+}
+
 // Main HTTP read and write operations are handled with tcp_sendmsg and tcp_recvmsg
 
 // The size argument here will be always the total response size.
@@ -311,21 +325,14 @@ int BPF_KPROBE(beyla_kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, si
             return 0;
         }
 
-        bpf_dbg_printk("=== kprobe SSL tcp_sendmsg=%d sock=%llx ssl=%llx ===", id, sk, ssl);
-        ssl_pid_connection_info_t *s_conn = bpf_map_lookup_elem(&ssl_to_conn, &ssl);
-        if (s_conn) {
-            finish_possible_delayed_tls_http_request(&s_conn->p_conn, ssl);
-        }
-        ssl_pid_connection_info_t ssl_conn = {
-            .orig_dport = orig_dport,
-        };
-        __builtin_memcpy(&ssl_conn.p_conn, &s_args.p_conn, sizeof(pid_connection_info_t));
-        bpf_map_update_elem(&ssl_to_conn, &ssl, &ssl_conn, BPF_ANY);
+        tcp_send_ssl_check(id, ssl, &s_args.p_conn, orig_dport);
     }
 
     return 0;
 }
 
+// This is a backup path kprobe in case tcp_sendmsg doesn't fire, which
+// happens on certain kernels if sk_msg is attached.
 SEC("kprobe/tcp_rate_check_app_limited")
 int BPF_KPROBE(beyla_kprobe_tcp_rate_check_app_limited, struct sock *sk) {
     u64 id = bpf_get_current_pid_tgid();
@@ -334,7 +341,7 @@ int BPF_KPROBE(beyla_kprobe_tcp_rate_check_app_limited, struct sock *sk) {
         return 0;
     }
 
-    bpf_dbg_printk("=== kprobe tcp_send_mss=%d sock=%llx ===", id, sk);
+    bpf_dbg_printk("=== kprobe tcp_rate_check_app_limited=%d sock=%llx ===", id, sk);
 
     send_args_t s_args = {};
 
@@ -350,7 +357,6 @@ int BPF_KPROBE(beyla_kprobe_tcp_rate_check_app_limited, struct sock *sk) {
         s_args.p_conn.pid = pid_from_pid_tgid(id);
 
         msg_buffer_t *m_buf = bpf_map_lookup_elem(&msg_buffers, &e_key);
-        bpf_dbg_printk("No size, m_buf[%llx]", m_buf);
         if (m_buf) {
             u8 *buf = m_buf->buf;
             // The buffer setup for us by a sock_msg program is always the
@@ -374,6 +380,11 @@ int BPF_KPROBE(beyla_kprobe_tcp_rate_check_app_limited, struct sock *sk) {
                 handle_buf_with_connection(
                     ctx, &s_args.p_conn, buf, size, NO_SSL, TCP_SEND, orig_dport);
             }
+        }
+
+        void *ssl = is_ssl_connection(id, &s_args.p_conn);
+        if (ssl) {
+            tcp_send_ssl_check(id, ssl, &s_args.p_conn, orig_dport);
         }
     }
 

@@ -205,18 +205,18 @@ static __always_inline u8 protocol_detector(struct sk_msg_md *msg,
             msg_buffer_t msg_buf = {
                 .pos = 0,
             };
-            bpf_probe_read_kernel(msg_buf.buf, FULL_BUF_SIZE, msg->data);
+            bpf_probe_read_kernel(msg_buf.buf, MAX_PROTOCOL_BUF_SIZE, msg->data);
             // We setup any call that looks like HTTP request to be extended.
             // This must match exactly to what the decision will be for
             // the kprobe program on tcp_sendmsg, which sets up the
             // outgoing_trace_map data used by Traffic Control to write the
             // actual 'Traceparent:...' string.
+            if (bpf_map_update_elem(&msg_buffers, &e_key, &msg_buf, BPF_ANY)) {
+                // fail if we can't setup a msg buffer
+                return 0;
+            }
             if (is_http_request_buf((const unsigned char *)msg_buf.buf)) {
                 bpf_dbg_printk("Setting up request to be extended");
-                if (bpf_map_update_elem(&msg_buffers, &e_key, &msg_buf, BPF_ANY)) {
-                    // fail if we can't setup a msg buffer
-                    return 0;
-                }
 
                 return 1;
             }
@@ -258,6 +258,8 @@ int beyla_packet_extender(struct sk_msg_md *msg) {
     }
     bpf_msg_pull_data(msg, 0, 1024, 0);
 
+    // TODO: execute the protocol handlers here with tail calls, don't
+    // rely on tcp_sendmsg to do it and record these message buffers.
     if (!tracked) {
         // If we didn't have metadata (sock_msg runs before the kprobe),
         // we ensure to mark it for any packet we want to extend.
@@ -300,6 +302,7 @@ int beyla_packet_extender(struct sk_msg_md *msg) {
                             bad_ctx->seen = bad_ctx->offset;
                         }
                     }
+                } else {
                     bpf_dbg_printk("offset to split %d", newline_pos);
                 }
             }

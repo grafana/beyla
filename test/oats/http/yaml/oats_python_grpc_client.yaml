@@ -1,0 +1,12 @@
+docker-compose:
+  generator: generic
+  files:
+    - ../docker-compose-beyla-python-grpc-client.yml
+input:
+  - path: '/query'
+
+interval: 500ms
+expected:
+  metrics:
+    - promql: 'rpc_client_duration_count{rpc_method="/routeguide.RouteGuide/GetFeature"}'
+      value: "> 5"

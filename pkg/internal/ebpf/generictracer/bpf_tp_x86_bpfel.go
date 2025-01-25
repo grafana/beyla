@@ -275,6 +275,7 @@ type bpf_tpProgramSpecs struct {
 	BeylaKprobeTcpCleanupRbuf              *ebpf.ProgramSpec `ebpf:"beyla_kprobe_tcp_cleanup_rbuf"`
 	BeylaKprobeTcpClose                    *ebpf.ProgramSpec `ebpf:"beyla_kprobe_tcp_close"`
 	BeylaKprobeTcpConnect                  *ebpf.ProgramSpec `ebpf:"beyla_kprobe_tcp_connect"`
+	BeylaKprobeTcpRateCheckAppLimited      *ebpf.ProgramSpec `ebpf:"beyla_kprobe_tcp_rate_check_app_limited"`
 	BeylaKprobeTcpRcvEstablished           *ebpf.ProgramSpec `ebpf:"beyla_kprobe_tcp_rcv_established"`
 	BeylaKprobeTcpRecvmsg                  *ebpf.ProgramSpec `ebpf:"beyla_kprobe_tcp_recvmsg"`
 	BeylaKprobeTcpSendmsg                  *ebpf.ProgramSpec `ebpf:"beyla_kprobe_tcp_sendmsg"`
@@ -476,6 +477,7 @@ type bpf_tpPrograms struct {
 	BeylaKprobeTcpCleanupRbuf              *ebpf.Program `ebpf:"beyla_kprobe_tcp_cleanup_rbuf"`
 	BeylaKprobeTcpClose                    *ebpf.Program `ebpf:"beyla_kprobe_tcp_close"`
 	BeylaKprobeTcpConnect                  *ebpf.Program `ebpf:"beyla_kprobe_tcp_connect"`
+	BeylaKprobeTcpRateCheckAppLimited      *ebpf.Program `ebpf:"beyla_kprobe_tcp_rate_check_app_limited"`
 	BeylaKprobeTcpRcvEstablished           *ebpf.Program `ebpf:"beyla_kprobe_tcp_rcv_established"`
 	BeylaKprobeTcpRecvmsg                  *ebpf.Program `ebpf:"beyla_kprobe_tcp_recvmsg"`
 	BeylaKprobeTcpSendmsg                  *ebpf.Program `ebpf:"beyla_kprobe_tcp_sendmsg"`
@@ -517,6 +519,7 @@ func (p *bpf_tpPrograms) Close() error {
 		p.BeylaKprobeTcpCleanupRbuf,
 		p.BeylaKprobeTcpClose,
 		p.BeylaKprobeTcpConnect,
+		p.BeylaKprobeTcpRateCheckAppLimited,
 		p.BeylaKprobeTcpRcvEstablished,
 		p.BeylaKprobeTcpRecvmsg,
 		p.BeylaKprobeTcpSendmsg,

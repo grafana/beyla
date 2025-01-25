@@ -224,6 +224,20 @@ cleanup:
     return 0;
 }
 
+static __always_inline void
+tcp_send_ssl_check(u64 id, void *ssl, pid_connection_info_t *p_conn, u16 orig_dport) {
+    bpf_dbg_printk("=== kprobe SSL tcp_sendmsg=%d ssl=%llx ===", id, ssl);
+    ssl_pid_connection_info_t *s_conn = bpf_map_lookup_elem(&ssl_to_conn, &ssl);
+    if (s_conn) {
+        finish_possible_delayed_tls_http_request(&s_conn->p_conn, ssl);
+    }
+    ssl_pid_connection_info_t ssl_conn = {
+        .orig_dport = orig_dport,
+    };
+    __builtin_memcpy(&ssl_conn.p_conn, p_conn, sizeof(pid_connection_info_t));
+    bpf_map_update_elem(&ssl_to_conn, &ssl, &ssl_conn, BPF_ANY);
+}
+
 // Main HTTP read and write operations are handled with tcp_sendmsg and tcp_recvmsg
 
 // The size argument here will be always the total response size.
@@ -311,16 +325,67 @@ int BPF_KPROBE(beyla_kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, si
             return 0;
         }
 
-        bpf_dbg_printk("=== kprobe SSL tcp_sendmsg=%d sock=%llx ssl=%llx ===", id, sk, ssl);
-        ssl_pid_connection_info_t *s_conn = bpf_map_lookup_elem(&ssl_to_conn, &ssl);
-        if (s_conn) {
-            finish_possible_delayed_tls_http_request(&s_conn->p_conn, ssl);
-        }
-        ssl_pid_connection_info_t ssl_conn = {
-            .orig_dport = orig_dport,
+        tcp_send_ssl_check(id, ssl, &s_args.p_conn, orig_dport);
+    }
+
+    return 0;
+}
+
+// This is a backup path kprobe in case tcp_sendmsg doesn't fire, which
+// happens on certain kernels if sk_msg is attached.
+SEC("kprobe/tcp_rate_check_app_limited")
+int BPF_KPROBE(beyla_kprobe_tcp_rate_check_app_limited, struct sock *sk) {
+    u64 id = bpf_get_current_pid_tgid();
+
+    if (!valid_pid(id)) {
+        return 0;
+    }
+
+    bpf_dbg_printk("=== kprobe tcp_rate_check_app_limited=%d sock=%llx ===", id, sk);
+
+    send_args_t s_args = {};
+
+    if (parse_sock_info(sk, &s_args.p_conn.conn)) {
+        u16 orig_dport = s_args.p_conn.conn.d_port;
+        dbg_print_http_connection_info(&s_args.p_conn.conn);
+        egress_key_t e_key = {
+            .d_port = s_args.p_conn.conn.d_port,
+            .s_port = s_args.p_conn.conn.s_port,
         };
-        __builtin_memcpy(&ssl_conn.p_conn, &s_args.p_conn, sizeof(pid_connection_info_t));
-        bpf_map_update_elem(&ssl_to_conn, &ssl, &ssl_conn, BPF_ANY);
+
+        sort_connection_info(&s_args.p_conn.conn);
+        s_args.p_conn.pid = pid_from_pid_tgid(id);
+
+        msg_buffer_t *m_buf = bpf_map_lookup_elem(&msg_buffers, &e_key);
+        if (m_buf) {
+            u8 *buf = m_buf->buf;
+            // The buffer setup for us by a sock_msg program is always the
+            // full buffer, but when we extend a packet to be able to inject
+            // a Traceparent field, it will actually be split in 3 chunks:
+            // [before the injected header],[70 bytes for 'Traceparent...'],[the rest].
+            // We don't want the handle_buf_with_connection logic to run more than
+            // once on the same data, so if we find a buf we send all of it to the
+            // handle_buf_with_connection logic and then mark it as seen by making
+            // m_buf->pos be the size of the buffer.
+            if (!m_buf->pos) {
+                u16 size = sizeof(m_buf->buf);
+                m_buf->pos = size;
+                s_args.size = size;
+                bpf_dbg_printk("msg_buffer: size %d, buf[%s]", size, buf);
+                u64 sock_p = (u64)sk;
+                bpf_map_update_elem(&active_send_args, &id, &s_args, BPF_ANY);
+                bpf_map_update_elem(&active_send_sock_args, &sock_p, &s_args, BPF_ANY);
+
+                // Logically last for !ssl.
+                handle_buf_with_connection(
+                    ctx, &s_args.p_conn, buf, size, NO_SSL, TCP_SEND, orig_dport);
+            }
+        }
+
+        void *ssl = is_ssl_connection(id, &s_args.p_conn);
+        if (ssl) {
+            tcp_send_ssl_check(id, ssl, &s_args.p_conn, orig_dport);
+        }
     }
 
     return 0;
@@ -540,7 +605,7 @@ int beyla_socket__http_filter(struct __sk_buff *skb) {
             }
             read_skb_bytes(skb, tcp.hdr_len, info->buf, full_len);
             u64 cookie = bpf_get_socket_cookie(skb);
-            //bpf_dbg_printk("=== http_filter cookie = %llx, tcp_seq=%d len=%d %s ===", cookie, tcp.seq, len, buf);
+            //bpf_printk("=== http_filter cookie = %llx, len=%d %s ===", cookie, len, buf);
             //dbg_print_http_connection_info(&conn);
             set_fallback_http_info(info, &conn, skb->len - tcp.hdr_len);
 

@@ -236,7 +236,7 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 }
 
 func (p *Tracer) KProbes() map[string]ebpfcommon.ProbeDesc {
-	return map[string]ebpfcommon.ProbeDesc{
+	kp := map[string]ebpfcommon.ProbeDesc{
 		// Both sys accept probes use the same kretprobe.
 		// We could tap into __sys_accept4, but we might be more prone to
 		// issues with the internal kernel code changing.
@@ -274,17 +274,6 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.ProbeDesc {
 			Start:    p.bpfObjects.BeylaKprobeTcpSendmsg,
 			End:      p.bpfObjects.BeylaKretprobeTcpSendmsg,
 		},
-		// tcp_rate_check_app_limited and tcp_sendmsg_fastopen are backup
-		// for tcp_sendmsg_locked which doesn't fire on certain kernels
-		// if sk_msg is attached.
-		"tcp_rate_check_app_limited": {
-			Required: false,
-			Start:    p.bpfObjects.BeylaKprobeTcpRateCheckAppLimited,
-		},
-		"tcp_sendmsg_fastopen": {
-			Required: false,
-			Start:    p.bpfObjects.BeylaKprobeTcpRateCheckAppLimited,
-		},
 		// Reading more than 160 bytes
 		"tcp_recvmsg": {
 			Required: true,
@@ -317,6 +306,22 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.ProbeDesc {
 			End:      p.bpfObjects.BeylaKretprobeUnixStreamSendmsg,
 		},
 	}
+
+	if p.cfg.EBPF.ContextPropagationEnabled {
+		// tcp_rate_check_app_limited and tcp_sendmsg_fastopen are backup
+		// for tcp_sendmsg_locked which doesn't fire on certain kernels
+		// if sk_msg is attached.
+		kp["tcp_rate_check_app_limited"] = ebpfcommon.ProbeDesc{
+			Required: false,
+			Start:    p.bpfObjects.BeylaKprobeTcpRateCheckAppLimited,
+		}
+		kp["tcp_sendmsg_fastopen"] = ebpfcommon.ProbeDesc{
+			Required: false,
+			Start:    p.bpfObjects.BeylaKprobeTcpRateCheckAppLimited,
+		}
+	}
+
+	return kp
 }
 
 func (p *Tracer) Tracepoints() map[string]ebpfcommon.ProbeDesc {

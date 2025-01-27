@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/export/attributes"
@@ -17,6 +18,8 @@ import (
 	"github.com/grafana/beyla/pkg/internal/netolly/flow"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 )
+
+const beylaStopTimeout = 10 * time.Second
 
 // RunBeyla in the foreground process. This is a blocking function and won't exit
 // until both the AppO11y and NetO11y components end
@@ -70,17 +73,27 @@ func RunBeyla(ctx context.Context, cfg *beyla.Config) error {
 func setupAppO11y(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config) error {
 	slog.Info("starting Beyla in Application Observability mode")
 
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	instr := appolly.New(ctx, ctxInfo, config)
-	finderDone, err := instr.FindAndInstrument()
-	if err != nil {
+	if finderDone, err := instr.FindAndInstrument(); err != nil {
 		slog.Debug("can't find  target process", "error", err)
 		return fmt.Errorf("can't find target process: %w", err)
+	} else {
+		defer func() {
+			select {
+			case <-finderDone:
+				// ok!! setupAppO11y function ends
+			case <-time.After(beylaStopTimeout):
+				slog.Warn("timeout waiting for FindAndInstrument to finish. Some eBPF probes might remain loaded")
+			}
+		}()
 	}
 	if err := instr.ReadAndForward(); err != nil {
+		cancel()
 		slog.Debug("can't start read and forwarding", "error", err)
 		return fmt.Errorf("can't start read and forwarding: %w", err)
 	}
-	<-finderDone
 	return nil
 }
 

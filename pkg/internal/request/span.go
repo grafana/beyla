@@ -14,6 +14,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 	trace2 "go.opentelemetry.io/otel/trace"
 
+	attr "github.com/grafana/beyla/pkg/export/attributes/names"
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
@@ -528,17 +529,25 @@ func (s *Span) IsSelfReferenceSpan() bool {
 	return s.Peer == s.Host && (s.Service.UID.Namespace == s.OtherNamespace || s.OtherNamespace == "")
 }
 
-func (s *Span) DBSystem() attribute.KeyValue {
+// TODO: replace by semconv.DBSystemPostgreSQL, semconv.DBSystemMySQL, semconv.DBSystemRedis when we
+// update semantic conventions library to 1.30.0
+var (
+	dbSystemPostgreSQL = attribute.String(string(attr.DBSystemName), semconv.DBSystemPostgreSQL.Value.AsString())
+	dbSystemMySQL      = attribute.String(string(attr.DBSystemName), semconv.DBSystemMySQL.Value.AsString())
+	dbSystemOtherSQL   = attribute.String(string(attr.DBSystemName), semconv.DBSystemOtherSQL.Value.AsString())
+)
+
+func (s *Span) DBSystemName() attribute.KeyValue {
 	if s.Type == EventTypeSQLClient {
 		switch s.SubType {
 		case int(DBPostgres):
-			return semconv.DBSystemPostgreSQL
+			return dbSystemPostgreSQL
 		case int(DBMySQL):
-			return semconv.DBSystemMySQL
+			return dbSystemMySQL
 		}
 	}
 
-	return semconv.DBSystemOtherSQL
+	return dbSystemOtherSQL
 }
 
 func (s *Span) HasOriginalHost() bool {

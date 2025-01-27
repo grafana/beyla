@@ -78,15 +78,15 @@ func SpanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 		getter = func(s *Span) attribute.KeyValue { return StatusCodeMetric(int(SpanStatusCode(s))) }
 	case attr.DBOperation:
 		getter = func(span *Span) attribute.KeyValue { return DBOperationName(span.Method) }
-	case attr.DBSystem:
+	case attr.DBSystemName:
 		getter = func(span *Span) attribute.KeyValue {
 			switch span.Type {
 			case EventTypeSQLClient:
-				return DBSystem(span.DBSystem().Value.AsString())
+				return DBSystemName(span.DBSystemName().Value.AsString())
 			case EventTypeRedisClient, EventTypeRedisServer:
-				return DBSystem(semconv.DBSystemRedis.Value.AsString())
+				return DBSystemName(semconv.DBSystemRedis.Value.AsString())
 			}
-			return DBSystem("unknown")
+			return DBSystemName("unknown")
 		}
 	case attr.ErrorType:
 		getter = func(span *Span) attribute.KeyValue {
@@ -157,11 +157,11 @@ func SpanPromGetters(attrName attr.Name) (attributes.Getter[*Span, string], bool
 			}
 			return ""
 		}
-	case attr.DBSystem:
+	case attr.DBSystemName:
 		getter = func(span *Span) string {
 			switch span.Type {
 			case EventTypeSQLClient:
-				return span.DBSystem().Value.AsString()
+				return span.DBSystemName().Value.AsString()
 			case EventTypeRedisClient, EventTypeRedisServer:
 				return semconv.DBSystemRedis.Value.AsString()
 			}
@@ -170,7 +170,7 @@ func SpanPromGetters(attrName attr.Name) (attributes.Getter[*Span, string], bool
 	case attr.DBCollectionName:
 		getter = func(span *Span) string {
 			if span.Type == EventTypeSQLClient {
-				return span.DBSystem().Value.AsString()
+				return span.DBSystemName().Value.AsString()
 			}
 			return ""
 		}

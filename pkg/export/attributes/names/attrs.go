@@ -44,7 +44,7 @@ const (
 	ConnectionType         = Name("connection_type")
 	DBOperation            = Name("db.operation.name")
 	DBCollectionName       = Name("db.collection.name")
-	DBSystem               = Name(semconv.DBSystemKey)
+	DBSystemName           = Name("db.system.name")
 	ErrorType              = Name("error.type")
 	RPCMethod              = Name(semconv.RPCMethodKey)
 	RPCSystem              = Name(semconv.RPCSystemKey)

@@ -11,20 +11,20 @@ expected:
   # It requires that a span name is unique, e.g. always expects the tempo response
   # to return one result only. 
   traces:
-    - traceql: '{ .db.system = "redis" }'
+    - traceql: '{ .db.system.name = "redis" }'
       spans:
         - name: 'REDIS'
           allow-duplicates: true
           status: '{Message: "", Code: 2}'
             
   metrics:
-    - promql: 'db_client_operation_duration_sum{error_type!="", db_system="redis"}'
+    - promql: 'db_client_operation_duration_sum{error_type!="", db_system_name="redis"}'
       value: "> 0"
-    - promql: 'db_client_operation_duration_bucket{le="0", error_type!="", db_system="redis"}'
+    - promql: 'db_client_operation_duration_bucket{le="0", error_type!="", db_system_name="redis"}'
       value: "== 0"
-    - promql: 'db_client_operation_duration_bucket{le="10", error_type!="", db_system="redis"}'
+    - promql: 'db_client_operation_duration_bucket{le="10", error_type!="", db_system_name="redis"}'
       value: "> 0"
-    - promql: 'db_client_operation_duration_count{error_type!="", db_system="redis"}'
+    - promql: 'db_client_operation_duration_count{error_type!="", db_system_name="redis"}'
       value: "> 0"
 
 

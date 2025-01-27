@@ -8,20 +8,20 @@ input:
 interval: 500ms
 expected:
   traces:
-    - traceql: '{ .db.operation.name = "SELECT" && .db.system = "postgresql"}'
+    - traceql: '{ .db.operation.name = "SELECT" && .db.system.name = "postgresql"}'
       spans:
         - name: 'SELECT accounting.contacts'
           attributes:
             db.operation.name: SELECT
             db.collection.name: accounting.contacts
-            db.system: postgresql
+            db.system.name: postgresql
             db.query.text: "SELECT * from accounting.contacts WHERE id=1"
   metrics:
-    - promql: 'db_client_operation_duration_sum{db_system="postgresql"}'
+    - promql: 'db_client_operation_duration_sum{db_system_name="postgresql"}'
       value: "> 0"
-    - promql: 'db_client_operation_duration_bucket{le="0", db_system="postgresql"}'
+    - promql: 'db_client_operation_duration_bucket{le="0", db_system_name="postgresql"}'
       value: "== 0"
-    - promql: 'db_client_operation_duration_bucket{le="10", db_system="postgresql"}'
+    - promql: 'db_client_operation_duration_bucket{le="10", db_system_name="postgresql"}'
       value: "> 0"
-    - promql: 'db_client_operation_duration_count{db_system="postgresql"}'
+    - promql: 'db_client_operation_duration_count{db_system_name="postgresql"}'
       value: "> 0"

@@ -574,6 +574,9 @@ func (tr *tracesOTELReceiver) acceptSpan(span *request.Span) bool {
 	return false
 }
 
+// TODO use semconv.DBSystemRedis when we update to OTEL semantic conventions library 1.30
+var dbSystemRedis = attribute.String(string(attr.DBSystemName), semconv.DBSystemRedis.Value.AsString())
+
 // nolint:cyclop
 func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) []attribute.KeyValue {
 	var attrs []attribute.KeyValue
@@ -630,7 +633,7 @@ func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 		attrs = []attribute.KeyValue{
 			request.ServerAddr(request.HostAsServer(span)),
 			request.ServerPort(span.HostPort),
-			span.DBSystem(), // We can distinguish in the future for MySQL, Postgres etc
+			span.DBSystemName(), // We can distinguish in the future for MySQL, Postgres etc
 		}
 		if _, ok := optionalAttrs[attr.DBQueryText]; ok {
 			attrs = append(attrs, request.DBQueryText(span.Statement))
@@ -647,7 +650,7 @@ func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 		attrs = []attribute.KeyValue{
 			request.ServerAddr(request.HostAsServer(span)),
 			request.ServerPort(span.HostPort),
-			semconv.DBSystemRedis,
+			dbSystemRedis,
 		}
 		operation := span.Method
 		if operation != "" {

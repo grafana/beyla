@@ -49,4 +49,4 @@ To measure the latency, we used the `ebpf` feature of Beyla to collect the laten
 
 ## Further reading
 
-* [Beyla performance calculation](https://grafana.com/media/pdf/beyla_performance_calculation.pdf). This document contains the raw data and graphs of the performance tests.
+* [Beyla performance calculation](/media/pdf/beyla_performance_calculation.pdf). This document contains the raw data and graphs of the performance tests.

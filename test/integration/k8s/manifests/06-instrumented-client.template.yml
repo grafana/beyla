@@ -23,6 +23,7 @@ metadata:
     teardown: delete
   annotations:
     resource.opentelemetry.io/deployment.environment: 'integration-test'
+    resource.opentelemetry.io/service.version: '3.2.1'
 spec:
   shareProcessNamespace: true
   serviceAccountName: beyla

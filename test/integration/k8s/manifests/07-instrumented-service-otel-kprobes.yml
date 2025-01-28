@@ -65,7 +65,7 @@ metadata:
     teardown: delete
     deployment.environment: integration-test
   annotations:
-    resource.opentelemetry.io/deployment.environment: 'to-be-ignored-in-favor-of-annotation'
+    resource.opentelemetry.io/deployment.environment: 'to-be-ignored-in-favor-of-env'
 spec:
   shareProcessNamespace: true
   serviceAccountName: beyla
@@ -89,7 +89,7 @@ spec:
         - name: LOG_LEVEL
           value: "DEBUG"
         - name: OTEL_RESOURCE_ATTRIBUTES
-          value: "service.name=mypythonapp"          
+          value: "service.name=mypythonapp,service.version=3.2.1"
     - name: beyla
       image: beyla:dev
       imagePullPolicy: Never # loaded into Kind from localhost

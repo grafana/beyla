@@ -23,6 +23,7 @@ metadata:
     # kind, to force Beyla writing the coverage data
     teardown: delete
     deployment.environment: integration-test
+    app.kubernetes.io/version: '3.2.1'
   annotations:
     resource.opentelemetry.io/deployment.environment: 'to-be-ignored-in-favor-of-annotation'
 spec:

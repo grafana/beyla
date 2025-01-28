@@ -119,6 +119,7 @@ func FeatureHTTPMetricsDecoration(manifest string, overrideAttrs map[string]stri
 		"host_name":                "testserver",
 		"host_id":                  HostIDRegex,
 		"deployment_environment":   "integration-test",
+		"service_version":          "3.2.1",
 	}
 	// if service_instance_id is overridden to be empty, we will check that value for target_info{instance} instead
 	if overrideAttrs != nil {
@@ -208,6 +209,7 @@ func FeatureGRPCMetricsDecoration(manifest string, overrideAttrs map[string]stri
 		"k8s_replicaset_name":    "^testserver-",
 		"service_instance_id":    "^default\\.testserver-.+\\.testserver",
 		"deployment_environment": "integration-test",
+		"service_version":        "3.2.1",
 	}
 	// if service_instance_id is overridden to be empty, we will check that value for target_info{instance} instead
 	targetInfoInstance := ""

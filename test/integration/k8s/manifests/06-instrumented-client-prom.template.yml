@@ -23,6 +23,7 @@ metadata:
     teardown: delete
   annotations:
     resource.opentelemetry.io/deployment.environment: 'integration-test'
+    resource.opentelemetry.io/service.version: '3.2.1'
 spec:
   shareProcessNamespace: true
   serviceAccountName: beyla
@@ -47,7 +48,7 @@ spec:
       imagePullPolicy: Never # loaded into Kind from localhost
       securityContext:
         privileged: true
-      args: ["--config=/configs/instrumenter-config-promscrape.yml" ]
+      args: [ "--config=/configs/instrumenter-config-promscrape.yml" ]
       ports:
         - containerPort: 8999
       volumeMounts:

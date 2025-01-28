@@ -37,4 +37,4 @@ spec:
         - name: TARGET_URL
           value: "{{.TargetURL}}"
         - name: OTEL_RESOURCE_ATTRIBUTES
-          value: "deployment.environment=integration-test"
+          value: "deployment.environment=integration-test,service.version=3.2.1"

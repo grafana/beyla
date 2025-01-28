@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
-	"time"
 
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/export/attributes"
@@ -18,8 +17,6 @@ import (
 	"github.com/grafana/beyla/pkg/internal/netolly/flow"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 )
-
-const beylaStopTimeout = 10 * time.Second
 
 // RunBeyla in the foreground process. This is a blocking function and won't exit
 // until both the AppO11y and NetO11y components end
@@ -81,12 +78,8 @@ func setupAppO11y(ctx context.Context, ctxInfo *global.ContextInfo, config *beyl
 		return fmt.Errorf("can't find target process: %w", err)
 	} else {
 		defer func() {
-			select {
-			case <-finderDone:
-				// ok!! setupAppO11y function ends
-			case <-time.After(beylaStopTimeout):
-				slog.Warn("timeout waiting for FindAndInstrument to finish. Some eBPF probes might remain loaded")
-			}
+			// before exiting, waits for all the resources to be freed
+			<-finderDone
 		}()
 	}
 	if err := instr.ReadAndForward(); err != nil {

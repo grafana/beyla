@@ -16,8 +16,6 @@ metadata:
   name: pytestserver
   labels:
     app: pytestserver
-  annotations:
-    resource.opentelemetry.io/service.name: 'this-will-be-ignored-due-to-otel-attrs-env'
 spec:
   replicas: 1
   selector:
@@ -28,9 +26,11 @@ spec:
       name: pytestserver
       labels:
         app: pytestserver
-        deployment.environment: 'integration-test'
+        deployment.environment: 'to-be-ignored-in-favor-of-annotatoin'
       annotations:
-        resource.opentelemetry.io/deployment.environment: 'to-be-ignored-in-favor-of-label'
+        resource.opentelemetry.io/service.name: 'this-will-be-ignored-due-to-otel-attrs-env'
+        resource.opentelemetry.io/deployment.environment: 'integration-test'
+        resource.opentelemetry.io/service.version: '3.2.1'
     spec:
       containers:
         - name: pytestserver

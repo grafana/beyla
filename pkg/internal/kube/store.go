@@ -61,6 +61,7 @@ var DefaultResourceLabels = ResourceLabels{
 	// OTEL operator to provide empty values for this.
 	"service.name":      []string{"app.kubernetes.io/name"},
 	"service.namespace": []string{"app.kubernetes.io/part-of"},
+	"service.version":   []string{"app.kubernetes.io/version"},
 }
 
 // Store aggregates Kubernetes information from multiple sources:

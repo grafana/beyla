@@ -43,10 +43,12 @@ spec:
       name: testserver
       annotations:
         resource.opentelemetry.io/service.name: 'testserver'
+        resource.opentelemetry.io/service.version: '3.2.1'
       labels:
         app: testserver
         app.kubernetes.io/name: 'ignored-testserver-name'
         app.kubernetes.io/part-of: 'overridden-testserver-namespace'
+        app.kubernetes.io/version: 'ignored-version'
     spec:
       containers:
         - name: testserver

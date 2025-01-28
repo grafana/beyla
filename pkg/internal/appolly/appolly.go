@@ -44,45 +44,37 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 
 // FindAndInstrument searches in background for any new executable matching the
 // selection criteria.
-func (i *Instrumenter) FindAndInstrument(wg *sync.WaitGroup) error {
+// Returns a channel that is closed when the Instrumenter completed all its tasks.
+// This is: when the context is cancelled, it has unloaded all the eBPF probes.
+func (i *Instrumenter) FindAndInstrument() (<-chan struct{}, error) {
 	finder := discover.NewProcessFinder(i.ctx, i.config, i.ctxInfo, i.tracesInput)
 	foundProcesses, deletedProcesses, err := finder.Start()
 	if err != nil {
-		return fmt.Errorf("couldn't start Process Finder: %w", err)
+		return nil, fmt.Errorf("couldn't start Process Finder: %w", err)
 	}
+
+	done := make(chan struct{})
 	// In background, listen indefinitely for each new process and run its
 	// associated ebpf.ProcessTracer once it is found.
-	wg.Add(1)
+	wg := sync.WaitGroup{}
 	go func() {
-		defer wg.Done()
 		log := log()
-		type cancelCtx struct {
-			ctx    context.Context
-			cancel func()
-		}
-		contexts := map[uint64]cancelCtx{}
 		for {
 			select {
 			case <-i.ctx.Done():
-				log.Debug("stopped searching for new processes to instrument")
-				for ino, ctx := range contexts {
-					log.Debug("cancelling context for", "ino", ino)
-					ctx.cancel()
-				}
+				log.Debug("stopped searching for new processes to instrument. Waiting for the eBPF tracers to be unloaded")
+				wg.Wait()
+				close(done)
+				log.Debug("tracers unloaded, exiting FindAndInstrument")
 				return
 			case pt := <-foundProcesses:
 				log.Debug("running tracer for new process",
 					"inode", pt.FileInfo.Ino, "pid", pt.FileInfo.Pid, "exec", pt.FileInfo.CmdExePath)
 				if pt.Tracer != nil {
-					cctx, ok := contexts[pt.FileInfo.Ino]
-					if !ok {
-						cctx.ctx, cctx.cancel = context.WithCancel(i.ctx)
-						contexts[pt.FileInfo.Ino] = cctx
-					}
 					wg.Add(1)
 					go func() {
 						defer wg.Done()
-						pt.Tracer.Run(cctx.ctx, i.tracesInput)
+						pt.Tracer.Run(i.ctx, i.tracesInput)
 					}()
 				}
 			case dp := <-deletedProcesses:
@@ -95,7 +87,7 @@ func (i *Instrumenter) FindAndInstrument(wg *sync.WaitGroup) error {
 		}
 	}()
 	// TODO: wait until all the resources have been freed/unmounted
-	return nil
+	return done, nil
 }
 
 // ReadAndForward keeps listening for traces in the BPF map, then reads,

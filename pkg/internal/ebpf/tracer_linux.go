@@ -115,8 +115,8 @@ func (pt *ProcessTracer) Run(ctx context.Context, out chan<- []request.Span) {
 	for _, t := range trcrs {
 		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			t.Run(ctx, out)
-			wg.Done()
 		}()
 	}
 

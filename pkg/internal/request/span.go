@@ -249,6 +249,8 @@ func spanAttributes(s *Span) SpanAttributes {
 		return SpanAttributes{
 			"function":  s.Method,
 			"callStack": s.Path,
+			"gridSize":  strconv.FormatInt(s.ContentLength, 10),
+			"blockSize": strconv.Itoa(s.SubType),
 		}
 	case EventTypeGPUMalloc:
 		return SpanAttributes{

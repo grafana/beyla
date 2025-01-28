@@ -174,6 +174,8 @@ type metricsReporter struct {
 	attrHTTPClientRequestSize []attributes.Field[*request.Span, string]
 	attrGPUKernelCalls        []attributes.Field[*request.Span, string]
 	attrGPUMemoryAllocs       []attributes.Field[*request.Span, string]
+	attrGPUKernelGridSize     []attributes.Field[*request.Span, string]
+	attrGPUKernelBlockSize    []attributes.Field[*request.Span, string]
 
 	// trace span metrics
 	spanMetricsLatency    *Expirer[prometheus.Histogram]
@@ -190,6 +192,8 @@ type metricsReporter struct {
 	// gpu related metrics
 	gpuKernelCallsTotal  *Expirer[prometheus.Counter]
 	gpuMemoryAllocsTotal *Expirer[prometheus.Counter]
+	gpuKernelGridSize    *Expirer[prometheus.Histogram]
+	gpuKernelBlockSize   *Expirer[prometheus.Histogram]
 
 	promConnect *connector.PrometheusManager
 
@@ -283,11 +287,18 @@ func newReporter(
 
 	var attrGPUKernelLaunchCalls []attributes.Field[*request.Span, string]
 	var attrGPUMemoryAllocations []attributes.Field[*request.Span, string]
+	var attrGPUKernelGridSize []attributes.Field[*request.Span, string]
+	var attrGPUKernelBlockSize []attributes.Field[*request.Span, string]
+
 	if is.GPUEnabled() {
 		attrGPUKernelLaunchCalls = attributes.PrometheusGetters(request.SpanPromGetters,
 			attrsProvider.For(attributes.GPUKernelLaunchCalls))
 		attrGPUMemoryAllocations = attributes.PrometheusGetters(request.SpanPromGetters,
 			attrsProvider.For(attributes.GPUMemoryAllocations))
+		attrGPUKernelGridSize = attributes.PrometheusGetters(request.SpanPromGetters,
+			attrsProvider.For(attributes.GPUKernelGridSize))
+		attrGPUKernelBlockSize = attributes.PrometheusGetters(request.SpanPromGetters,
+			attrsProvider.For(attributes.GPUKernelBlockSize))
 	}
 
 	clock := expire.NewCachedClock(timeNow)
@@ -493,6 +504,26 @@ func newReporter(
 				Help: "amount of GPU allocated memory in bytes",
 			}, labelNames(attrGPUMemoryAllocations)).MetricVec, clock.Time, cfg.TTL)
 		}),
+		gpuKernelGridSize: optionalHistogramProvider(is.GPUEnabled(), func() *Expirer[prometheus.Histogram] {
+			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
+				Name:                            attributes.GPUKernelGridSize.Prom,
+				Help:                            "number of blocks in the GPU kernel grid",
+				Buckets:                         cfg.Buckets.RequestSizeHistogram,
+				NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
+				NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
+				NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
+			}, labelNames(attrGPUKernelGridSize)).MetricVec, clock.Time, cfg.TTL)
+		}),
+		gpuKernelBlockSize: optionalHistogramProvider(is.GPUEnabled(), func() *Expirer[prometheus.Histogram] {
+			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
+				Name:                            attributes.GPUKernelBlockSize.Prom,
+				Help:                            "number of threads in the GPU kernel block",
+				Buckets:                         cfg.Buckets.RequestSizeHistogram,
+				NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
+				NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
+				NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
+			}, labelNames(attrGPUKernelBlockSize)).MetricVec, clock.Time, cfg.TTL)
+		}),
 	}
 
 	if cfg.SpanMetricsEnabled() {
@@ -561,6 +592,8 @@ func newReporter(
 		registeredMetrics = append(registeredMetrics,
 			mr.gpuKernelCallsTotal,
 			mr.gpuMemoryAllocsTotal,
+			mr.gpuKernelGridSize,
+			mr.gpuKernelBlockSize,
 		)
 	}
 
@@ -689,6 +722,12 @@ func (r *metricsReporter) observe(span *request.Span) {
 				r.gpuKernelCallsTotal.WithLabelValues(
 					labelValues(span, r.attrGPUKernelCalls)...,
 				).metric.Add(1)
+				r.gpuKernelGridSize.WithLabelValues(
+					labelValues(span, r.attrGPUKernelGridSize)...,
+				).metric.Observe(float64(span.ContentLength))
+				r.gpuKernelBlockSize.WithLabelValues(
+					labelValues(span, r.attrGPUKernelBlockSize)...,
+				).metric.Observe(float64(span.SubType))
 			}
 		case request.EventTypeGPUMalloc:
 			if r.is.GPUEnabled() {

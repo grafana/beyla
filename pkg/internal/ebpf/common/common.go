@@ -147,26 +147,26 @@ const (
 	KernelLockdownOther
 )
 
-func SupportsContextPropagation(log *slog.Logger) bool {
+func SupportsContextPropagationWithProbe(log *slog.Logger) bool {
 	kernelMajor, kernelMinor := KernelVersion()
 	log.Debug("Linux kernel version", "major", kernelMajor, "minor", kernelMinor)
 
 	if kernelMajor < 5 || (kernelMajor == 5 && kernelMinor < 10) {
-		log.Debug("Found Linux kernel earlier than 5.10, trace context propagation is supported", "major", kernelMajor, "minor", kernelMinor)
+		log.Debug("Found Linux kernel earlier than 5.10, Go trace context propagation at library level is supported", "major", kernelMajor, "minor", kernelMinor)
 		return true
 	}
 
 	// bpf_probe_write_user(), used to inject the context, requires CAP_SYS_ADMIN
 
 	if !hasCapSysAdmin() {
-		log.Info("trace context propagation disabled due to missing capability CAP_SYS_ADMIN")
+		log.Info("Go context propagation at library level disabled due to missing capability CAP_SYS_ADMIN")
 		return false
 	}
 
 	lockdown := KernelLockdownMode()
 
 	if lockdown == KernelLockdownNone {
-		log.Debug("Kernel not in lockdown mode, trace context propagation is supported.")
+		log.Debug("Kernel not in lockdown mode, Go trace context propagation at library level is supported.")
 		return true
 	}
 

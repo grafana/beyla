@@ -65,7 +65,7 @@ func (p *Tracer) BlockPID(pid, ns uint32) {
 }
 
 func (p *Tracer) supportsContextPropagation() bool {
-	return !ebpfcommon.IntegrityModeOverride && ebpfcommon.SupportsContextPropagation(p.log)
+	return !ebpfcommon.IntegrityModeOverride && ebpfcommon.SupportsContextPropagationWithProbe(p.log)
 }
 
 func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {

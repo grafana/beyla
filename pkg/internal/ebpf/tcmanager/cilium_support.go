@@ -165,5 +165,6 @@ func EnsureCiliumCompatibility(backend TCBackend) error {
 
 	// minPrio == maxPrio == 1 -> cilium should be reconfigured with
 	// bpf-filter-priority >= 2
-	return fmt.Errorf("detected Cilium TC with priority 1 - Cilium may clobber Beyla")
+	slog.Warn("Detected Cilium TC with with priority 1 - Cilium may clobber Beyla. Cilium should be reconfigured with bpf-filter-priority >= 2")
+	return nil
 }

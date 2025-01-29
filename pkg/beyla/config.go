@@ -253,8 +253,10 @@ func (c *Config) Validate() error {
 	if !c.EBPF.TCBackend.Valid() {
 		return ConfigError("Invalid BEYLA_BPF_TC_BACKEND value")
 	}
-	if err := tcmanager.EnsureCiliumCompatibility(c.EBPF.TCBackend); err != nil {
-		return ConfigError(fmt.Sprintf("Cilium compatibility error: %s", err.Error()))
+	if c.willUseTC() {
+		if err := tcmanager.EnsureCiliumCompatibility(c.EBPF.TCBackend); err != nil {
+			return ConfigError(fmt.Sprintf("Cilium compatibility error: %s", err.Error()))
+		}
 	}
 
 	if c.Attributes.Kubernetes.InformersSyncTimeout == 0 {
@@ -301,6 +303,10 @@ func (c *Config) promNetO11yEnabled() bool {
 
 func (c *Config) otelNetO11yEnabled() bool {
 	return (c.Metrics.Enabled() || c.Grafana.OTLP.MetricsEnabled()) && c.Metrics.NetworkMetricsEnabled()
+}
+
+func (c *Config) willUseTC() bool {
+	return c.EBPF.ContextPropagationEnabled || (c.Enabled(FeatureNetO11y) && c.NetworkFlows.Source == EbpfSourceTC)
 }
 
 // Enabled checks if a given Beyla feature is enabled according to the global configuration

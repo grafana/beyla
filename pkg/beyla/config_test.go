@@ -504,6 +504,24 @@ func TestDefaultExclusionFilter(t *testing.T) {
 	assert.True(t, c[0].Path.MatchString("/usr/bin/otelcol-contrib123"))
 }
 
+func TestWillUseTC(t *testing.T) {
+	env := envMap{"BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION": "true"}
+	cfg := loadConfig(t, env)
+	assert.True(t, cfg.willUseTC())
+
+	env = envMap{"BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION": "false"}
+	cfg = loadConfig(t, env)
+	assert.False(t, cfg.willUseTC())
+
+	env = envMap{"BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION": "false", "BEYLA_NETWORK_METRICS": "true"}
+	cfg = loadConfig(t, env)
+	assert.False(t, cfg.willUseTC())
+
+	env = envMap{"BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION": "false", "BEYLA_NETWORK_SOURCE": "tc", "BEYLA_NETWORK_METRICS": "true"}
+	cfg = loadConfig(t, env)
+	assert.True(t, cfg.willUseTC())
+}
+
 func loadConfig(t *testing.T, env envMap) *Config {
 	for k, v := range env {
 		require.NoError(t, os.Setenv(k, v))

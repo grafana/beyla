@@ -718,6 +718,38 @@
         ]
       }
     },
+    "net/http.http2Framer": {
+      "w": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.23.5"
+        },
+        "offsets": [
+          {
+            "offset": 112,
+            "since": "1.17.0"
+          },
+          {
+            "offset": 120,
+            "since": "1.18.0"
+          }
+        ]
+      }
+    },
+    "net/http.http2MetaHeadersFrame": {
+      "Fields": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.23.5"
+        },
+        "offsets": [
+          {
+            "offset": 8,
+            "since": "1.17.0"
+          }
+        ]
+      }
+    },
     "net/http.http2serverConn": {
       "conn": {
         "versions": {

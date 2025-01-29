@@ -758,7 +758,8 @@ int beyla_uprobe_grpcFramerWriteHeaders_returns(struct pt_regs *ctx) {
 
                 if (original_size > 0) {
                     u8 type_byte = 0;
-                    u8 key_len = TP_ENCODED_LEN | 0x80; // high tagged to signify hpack encoded value
+                    u8 key_len =
+                        TP_ENCODED_LEN | 0x80; // high tagged to signify hpack encoded value
                     u8 val_len = TP_MAX_VAL_LENGTH;
 
                     // We don't hpack encode the value of the traceparent field, because that will require that
@@ -783,8 +784,8 @@ int beyla_uprobe_grpcFramerWriteHeaders_returns(struct pt_regs *ctx) {
                     // Update the value of n in w to reflect the new size
                     bpf_probe_write_user(
                         (void *)(w_ptr +
-                                go_offset_of(ot,
-                                            (go_offset){.v = _grpc_transport_buf_writer_offset_pos})),
+                                 go_offset_of(
+                                     ot, (go_offset){.v = _grpc_transport_buf_writer_offset_pos})),
                         &n,
                         sizeof(n));
 

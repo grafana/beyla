@@ -933,7 +933,10 @@ int beyla_uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
             sizeof(w_ptr),
             (void *)(f_info->framer_ptr + go_offset_of(ot, (go_offset){.v = _framer_w_pos}) + 8));
 
-        bpf_dbg_printk("framer_ptr %llx, w_ptr %llx, w_pos %d", f_info->framer_ptr, w_ptr, go_offset_of(ot, (go_offset){.v = _framer_w_pos}) + 8);
+        bpf_dbg_printk("framer_ptr %llx, w_ptr %llx, w_pos %d",
+                       f_info->framer_ptr,
+                       w_ptr,
+                       go_offset_of(ot, (go_offset){.v = _framer_w_pos}) + 8);
 
         u64 io_writer_n_pos = go_offset_of(ot, (go_offset){.v = _io_writer_n_pos});
 
@@ -955,7 +958,8 @@ int beyla_uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
 
             bpf_clamp_umax(initial_n, MAX_W_PTR_N);
 
-            bpf_dbg_printk("Found f_info, this is the place to write to w = %llx, buf=%llx", w_ptr, buf_arr);
+            bpf_dbg_printk(
+                "Found f_info, this is the place to write to w = %llx, buf=%llx", w_ptr, buf_arr);
             bpf_dbg_printk("Found f_info, this is the place to write to n=%lld, size=%lld", n, cap);
             if (buf_arr && n < (cap - HTTP2_ENCODED_HEADER_LEN)) {
                 uint8_t tp_str[TP_MAX_VAL_LENGTH];
@@ -974,7 +978,8 @@ int beyla_uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
                 u32 original_size = ((u32)(size_1) << 16) | ((u32)(size_2) << 8) | size_3;
                 if (original_size > 0) {
                     u8 type_byte = 0;
-                    u8 key_len = TP_ENCODED_LEN | 0x80; // high tagged to signify hpack encoded value
+                    u8 key_len =
+                        TP_ENCODED_LEN | 0x80; // high tagged to signify hpack encoded value
                     u8 val_len = TP_MAX_VAL_LENGTH;
 
                     // We don't hpack encode the value of the traceparent field, because that will require that
@@ -1007,8 +1012,10 @@ int beyla_uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
                     size_3 = (u8)(new_size);
 
                     bpf_probe_write_user((void *)(buf_arr + initial_n), &size_1, sizeof(size_1));
-                    bpf_probe_write_user((void *)(buf_arr + initial_n + 1), &size_2, sizeof(size_2));
-                    bpf_probe_write_user((void *)(buf_arr + initial_n + 2), &size_3, sizeof(size_3));
+                    bpf_probe_write_user(
+                        (void *)(buf_arr + initial_n + 1), &size_2, sizeof(size_2));
+                    bpf_probe_write_user(
+                        (void *)(buf_arr + initial_n + 2), &size_3, sizeof(size_3));
                 }
             }
         }

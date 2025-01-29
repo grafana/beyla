@@ -55,6 +55,12 @@
       ],
       "net/http.http2serverConn": [
         "conn"
+      ],
+      "net/http.http2Framer": [
+        "w"
+      ],
+      "net/http.http2MetaHeadersFrame": [
+        "Fields"
       ]
     }
   },

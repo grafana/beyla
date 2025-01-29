@@ -178,6 +178,12 @@ var structMembers = map[string]structInfo{
 			"tconn":        CcTconnPos,
 		},
 	},
+	"net/http.http2Framer": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"w": FramerWPos,
+		},
+	},
 	"golang.org/x/net/http2.Framer": {
 		lib: "golang.org/x/net",
 		fields: map[string]GoOffset{
@@ -186,6 +192,12 @@ var structMembers = map[string]structInfo{
 	},
 	"golang.org/x/net/http2.MetaHeadersFrame": {
 		lib: "golang.org/x/net",
+		fields: map[string]GoOffset{
+			"Fields": MetaHeadersFrameFieldsPtrPos,
+		},
+	},
+	"net/http.http2MetaHeadersFrame": {
+		lib: "go",
 		fields: map[string]GoOffset{
 			"Fields": MetaHeadersFrameFieldsPtrPos,
 		},

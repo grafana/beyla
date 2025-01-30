@@ -93,6 +93,7 @@ In order to configure which attributes to show or which attributes to hide, chec
 | `beyla.network.flow.bytes`     | `dst.cidr`                   | shown if the `cidrs` configuration section exists |
 | `beyla.network.flow.bytes`     | `dst.name`                   | hidden                                            |
 | `beyla.network.flow.bytes`     | `dst.port`                   | hidden                                            |
+| `beyla.network.flow.bytes`     | `dst.zone` (only Kubernetes) | hidden                                            |
 | `beyla.network.flow.bytes`     | `iface`                      | hidden                                            |
 | `beyla.network.flow.bytes`     | `k8s.cluster.name`           | shown if network metrics are enabled              |
 | `beyla.network.flow.bytes`     | `k8s.dst.name`               | hidden                                            |
@@ -113,6 +114,7 @@ In order to configure which attributes to show or which attributes to hide, chec
 | `beyla.network.flow.bytes`     | `src.cidr`                   | shown if the `cidrs` configuration section exists |
 | `beyla.network.flow.bytes`     | `src.name`                   | hidden                                            |
 | `beyla.network.flow.bytes`     | `src.port`                   | hidden                                            |
+| `beyla.network.flow.bytes`     | `src.zone` (only Kubernetes) | hidden                                            |
 | `beyla.network.flow.bytes`     | `transport`                  | hidden                                            |
 | Traces (SQL, Redis)            | `db.query.text`              | hidden                                            |
 

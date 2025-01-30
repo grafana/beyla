@@ -29,6 +29,7 @@ import (
 	attr "github.com/grafana/beyla/pkg/export/attributes/names"
 	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
+	"github.com/grafana/beyla/pkg/kubecache/informer"
 	"github.com/grafana/beyla/pkg/transform"
 )
 
@@ -42,6 +43,8 @@ const (
 	attrSuffixOwnerType = ".owner.type"
 	attrSuffixHostIP    = ".node.ip"
 	attrSuffixHostName  = ".node.name"
+
+	cloudZoneLabel = "topology.kubernetes.io/zone"
 )
 
 const alreadyLoggedIPsCacheLen = 256
@@ -141,13 +144,9 @@ func (n *decorator) decorate(flow *ebpf.Record, prefix, ip string) bool {
 	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixType)] = meta.Kind
 	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixOwnerName)] = ownerName
 	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixOwnerType)] = ownerKind
-	// add any other ownership label (they might be several, e.g. replicaset and deployment)¡
-	if meta.Pod != nil && meta.Pod.HostIp != "" {
-		flow.Attrs.Metadata[attr.Name(prefix+attrSuffixHostIP)] = meta.Pod.HostIp
-		if host := n.kube.ObjectMetaByIP(meta.Pod.HostIp); host != nil {
-			flow.Attrs.Metadata[attr.Name(prefix+attrSuffixHostName)] = host.Meta.Name
-		}
-	}
+
+	n.nodeLabels(flow, prefix, meta)
+
 	// decorate other names from metadata, if required
 	if prefix == attrPrefixDst {
 		if flow.Attrs.DstName == "" {
@@ -159,6 +158,31 @@ func (n *decorator) decorate(flow *ebpf.Record, prefix, ip string) bool {
 		}
 	}
 	return true
+}
+
+func (n *decorator) nodeLabels(flow *ebpf.Record, prefix string, meta *informer.ObjectMeta) {
+	var nodeLabels map[string]string
+	// add any other ownership label (they might be several, e.g. replicaset and deployment)
+	if meta.Pod != nil && meta.Pod.HostIp != "" {
+		flow.Attrs.Metadata[attr.Name(prefix+attrSuffixHostIP)] = meta.Pod.HostIp
+		if host := n.kube.ObjectMetaByIP(meta.Pod.HostIp); host != nil {
+			flow.Attrs.Metadata[attr.Name(prefix+attrSuffixHostName)] = host.Meta.Name
+			nodeLabels = host.Meta.Labels
+		}
+	} else if meta.Kind == "Node" {
+		nodeLabels = meta.Labels
+	}
+	if nodeLabels != nil {
+		// this isn't strictly a Kubernetes attribute, but in Kubernetes
+		// clusters this information is inferred from Node annotations
+		if zone, ok := nodeLabels[cloudZoneLabel]; ok {
+			if prefix == attrPrefixDst {
+				flow.Attrs.DstZone = zone
+			} else {
+				flow.Attrs.SrcZone = zone
+			}
+		}
+	}
 }
 
 // newDecorator create a new transform

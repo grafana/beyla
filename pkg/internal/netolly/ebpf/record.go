@@ -51,6 +51,10 @@ type RecordAttrs struct {
 	SrcName string
 	DstName string
 
+	// SrcZone and DstZone represent the Cloud availability zones of the source and destination
+	SrcZone string
+	DstZone string
+
 	Interface string
 	// BeylaIP provides information about the source of the flow (the Agent that traced it)
 	BeylaIP  string

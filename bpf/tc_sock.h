@@ -171,7 +171,7 @@ static __always_inline u8 is_tracked(connection_info_t *conn) {
     sort_egress_key(&e_key);
 
     tp_info_pid_t *tp = bpf_map_lookup_elem(&outgoing_trace_map, &e_key);
-    return tp != 0;
+    return tp != 0 && tp->valid;
 }
 
 // This code is copied from the kprobe on tcp_sendmsg and it's called from

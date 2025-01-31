@@ -3,6 +3,7 @@ package goexec
 import (
 	"debug/elf"
 	"debug/gosym"
+	"encoding/binary"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -31,6 +32,7 @@ func instrumentationPoints(elfF *elf.File, funcNames []string) (map[string]FuncO
 	for _, fn := range funcNames {
 		functions[fn] = struct{}{}
 	}
+
 	symTab, err := findGoSymbolTable(elfF)
 	if err != nil {
 		return nil, err
@@ -47,10 +49,7 @@ func instrumentationPoints(elfF *elf.File, funcNames []string) (map[string]FuncO
 	// no go symbols in the executable, maybe it's statically linked
 	// find regular elf symbols
 	if gosyms == nil {
-		allSyms, err = exec.FindExeSymbols(elfF, funcNames)
-		if err != nil {
-			return nil, err
-		}
+		allSyms, _ = exec.FindExeSymbols(elfF, funcNames)
 	}
 
 	// check which functions in the symbol table correspond to any of the functions
@@ -67,7 +66,7 @@ func instrumentationPoints(elfF *elf.File, funcNames []string) (map[string]FuncO
 			// when we don't have a Go symbol table, the executable is statically linked, we don't look for offsets
 			// using the gosym tab, we lookup offsets just like a regular elf file.
 			// we still need to find the return statements, since go linkage is non-standard we can't use uretprobe
-			if gosyms == nil {
+			if gosyms == nil && len(allSyms) > 0 {
 				handleStaticSymbol(fName, allOffsets, allSyms, ilog)
 				continue
 			}
@@ -146,12 +145,21 @@ func findGoSymbolTable(elfF *elf.File) (*gosym.Table, error) {
 			return nil, fmt.Errorf("acquiring .gopclntab data: %w", err)
 		}
 	}
-	txtSection := elfF.Section(".text")
-	if txtSection == nil {
-		return nil, fmt.Errorf("can't find .text section in ELF file")
+
+	// Borrowed from OpenTelemetry Go Auto-Instrumentation
+	// we extract the `textStart` value based on the header of the pclntab,
+	// this is used to parse the line number table, and is not necessarily the start of the `.text` section.
+	// when a binary is build with C code, the value of `textStart` is not the same as the start of the `.text` section.
+	// https://github.com/golang/go/blob/master/src/runtime/symtab.go#L374
+	var runtimeText uint64
+	ptrSize := uint32(pclndat[7])
+	if ptrSize == 4 {
+		runtimeText = uint64(binary.LittleEndian.Uint32(pclndat[8+2*ptrSize:]))
+	} else {
+		runtimeText = binary.LittleEndian.Uint64(pclndat[8+2*ptrSize:])
 	}
 
-	pcln := gosym.NewLineTable(pclndat, txtSection.Addr)
+	pcln := gosym.NewLineTable(pclndat, runtimeText)
 	// First argument accepts the .gosymtab ELF section.
 	// Since Go 1.3, .gosymtab is empty so we just pass an nil slice
 	symTab, err := gosym.NewTable(nil, pcln)

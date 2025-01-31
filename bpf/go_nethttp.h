@@ -1174,7 +1174,10 @@ int beyla_uprobe_persistConnRoundTrip(struct pt_regs *ctx) {
                     .s_port = conn.s_port,
                 };
 
-                bpf_map_update_elem(&outgoing_trace_map, &e_key, &tp_p, BPF_ANY);
+                if (!tls_state) {
+                    bpf_map_update_elem(&outgoing_trace_map, &e_key, &tp_p, BPF_ANY);
+                }
+
                 bpf_map_update_elem(&ongoing_go_http, &e_key, &g_key, BPF_ANY);
             }
         }

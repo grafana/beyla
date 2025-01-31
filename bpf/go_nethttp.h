@@ -1174,7 +1174,14 @@ int beyla_uprobe_persistConnRoundTrip(struct pt_regs *ctx) {
                     .s_port = conn.s_port,
                 };
 
-                if (!tls_state) {
+                if (tls_state) {
+                    // Clone and mark it invalid for the purpose of storing it in the
+                    // outgoing trace map, if it's an SSL connection
+                    tp_info_pid_t tp_p_invalid = {0};
+                    __builtin_memcpy(&tp_p_invalid, &tp_p, sizeof(tp_p));
+                    tp_p_invalid.valid = 0;
+                    bpf_map_update_elem(&outgoing_trace_map, &e_key, &tp_p_invalid, BPF_ANY);
+                } else {
                     bpf_map_update_elem(&outgoing_trace_map, &e_key, &tp_p, BPF_ANY);
                 }
 

@@ -203,7 +203,7 @@ static __always_inline u8 valid_trace(const unsigned char *trace_id) {
 }
 
 static __always_inline void
-server_or_client_trace(u8 type, connection_info_t *conn, tp_info_pid_t *tp_p) {
+server_or_client_trace(u8 type, connection_info_t *conn, tp_info_pid_t *tp_p, u8 ssl) {
     if (type == EVENT_HTTP_REQUEST) {
         trace_key_t t_key = {0};
         task_tid(&t_key.p_key);
@@ -224,6 +224,27 @@ server_or_client_trace(u8 type, connection_info_t *conn, tp_info_pid_t *tp_p) {
 
         // bpf_dbg_printk("Saving server span for id=%llx, pid=%d, ns=%d, extra_id=%llx", bpf_get_current_pid_tgid(), t_key.p_key.pid, t_key.p_key.ns, t_key.extra_id);
         bpf_map_update_elem(&server_traces, &t_key, tp_p, BPF_ANY);
+    } else {
+        // Setup a pid, so that we can find it in TC.
+        // We need the PID id to be able to query ongoing_http and update
+        // the span id with the SEQ/ACK pair.
+        u64 id = bpf_get_current_pid_tgid();
+        tp_p->pid = pid_from_pid_tgid(id);
+        egress_key_t e_key = {
+            .d_port = conn->d_port,
+            .s_port = conn->s_port,
+        };
+
+        if (ssl) {
+            // Clone and mark it invalid for the purpose of storing it in the
+            // outgoing trace map, if it's an SSL connection
+            tp_info_pid_t tp_p_invalid = {0};
+            __builtin_memcpy(&tp_p_invalid, tp_p, sizeof(tp_p_invalid));
+            tp_p_invalid.valid = 0;
+            bpf_map_update_elem(&outgoing_trace_map, &e_key, &tp_p_invalid, BPF_ANY);
+        } else {
+            bpf_map_update_elem(&outgoing_trace_map, &e_key, tp_p, BPF_ANY);
+        }
     }
 }
 

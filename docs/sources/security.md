@@ -158,7 +158,7 @@ Beyla uses the following list of internal eBPF tracers with their required capab
 * `CAP_DAC_READ_SEARCH`: for access to `/proc/self/mem` to determine kernel version
 * `CAP_PERFMON`: for `BPF_PROG_TYPE_KPROBE`
 
-**Generic tracer:**
+**Support for languages other than Go:**
 
 * `CAP_BPF`
 * `CAP_DAC_READ_SEARCH`

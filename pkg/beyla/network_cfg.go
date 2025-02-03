@@ -33,7 +33,7 @@ const (
 type NetworkConfig struct {
 	// Enable network metrics.
 	// Default value is false (disabled)
-	// Deprecated: use BEYLA_OTEL_METRIC_FEATURES or BEYLA_PROMETHEUS_FEATURES
+	// Deprecated: add "network" to BEYLA_OTEL_METRIC_FEATURES or BEYLA_PROMETHEUS_FEATURES
 	// TODO Beyla 3.0: remove
 	Enable bool `yaml:"enable" env:"BEYLA_NETWORK_METRICS"`
 

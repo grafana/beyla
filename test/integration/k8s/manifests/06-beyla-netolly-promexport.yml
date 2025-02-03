@@ -28,18 +28,6 @@ data:
           include: ["*"]
           exclude: ["src_port"]
 ---
-kind: Service
-apiVersion: v1
-metadata:
-  name: beyla-netolly
-spec:
-  selector:
-    instrumentation: beyla
-  ports:
-    - port: 8999
-      name: prometheus
-      protocol: TCP
----
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -55,6 +43,10 @@ spec:
         # this label will trigger a deletion of beyla pods before tearing down
         # kind, to force Beyla writing the coverage data
         teardown: delete
+      annotations:
+        prometheus.io/scrape: 'true'
+        prometheus.io/path: '/metrics'
+        prometheus.io/port: '8999'
     spec:
       hostPID: true  #important for appo11y!
       hostNetwork: true #important for neto11y!
@@ -88,8 +80,9 @@ spec:
               value: "/testoutput"
             - name: BEYLA_CONFIG_PATH
               value: /config/beyla-config.yml
-            - name: BEYLA_PROMETHEUS_FEATURES # implicitly enabling network metrics for Prometheus scrape
-              value: "network"
+              # network_inter_zone won't have effect on non-multizone kind clusters
+            - name: BEYLA_PROMETHEUS_FEATURES
+              value: "network,network_inter_zone"
             - name: BEYLA_NETWORK_CACHE_ACTIVE_TIMEOUT
               value: "100ms"
             - name: BEYLA_NETWORK_CACHE_MAX_FLOWS

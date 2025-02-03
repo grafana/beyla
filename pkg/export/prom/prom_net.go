@@ -3,6 +3,7 @@ package prom
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/mariomac/pipes/pipe"
 	"github.com/prometheus/client_golang/prometheus"
@@ -78,7 +79,6 @@ func newNetReporter(
 	}
 
 	clock := expire.NewCachedClock(timeNow)
-
 	// If service name is not explicitly set, we take the service name as set by the
 	// executable inspector
 	mr := &netMetricsReporter{
@@ -88,40 +88,38 @@ func newNetReporter(
 		clock:       clock,
 	}
 
+	var register []prometheus.Collector
+	log := slog.With("component", "prom.NetworkEndpoint")
 	if mr.cfg.NetworkFlowBytesEnabled() {
+		log.Debug("registering network flow bytes metric")
 		mr.flowAttrs = attributes.PrometheusGetters(
 			ebpf.RecordStringGetters,
 			provider.For(attributes.BeylaNetworkFlow))
 
-		labelNames := make([]string, 0, len(mr.flowAttrs))
-		for _, label := range mr.flowAttrs {
-			labelNames = append(labelNames, label.ExposedName)
-		}
 		mr.flowBytes = NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: attributes.BeylaNetworkFlow.Prom,
 			Help: "bytes submitted from a source network endpoint to a destination network endpoint",
-		}, labelNames).MetricVec, clock.Time, cfg.Config.TTL)
+		}, labelNames(mr.flowAttrs)).MetricVec, clock.Time, cfg.Config.TTL)
+		register = append(register, mr.flowBytes)
 	}
 
 	if mr.cfg.NetworkInterzoneMetricsEnabled() {
+		log.Debug("registering network inter-zone metric")
 		mr.interZoneAttrs = attributes.PrometheusGetters(
 			ebpf.RecordStringGetters,
 			provider.For(attributes.BeylaNetworkInterZone))
 
-		labelNames := make([]string, 0, len(mr.interZoneAttrs))
-		for _, label := range mr.interZoneAttrs {
-			labelNames = append(labelNames, label.ExposedName)
-		}
 		mr.interZone = NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: attributes.BeylaNetworkInterZone.Prom,
 			Help: "bytes submitted between different cloud availability zones",
-		}, labelNames).MetricVec, clock.Time, cfg.Config.TTL)
+		}, labelNames (mr.interZoneAttrs)).MetricVec, clock.Time, cfg.Config.TTL)
+		register = append(register, mr.interZone)
 	}
 
 	if cfg.Config.Registry != nil {
-		cfg.Config.Registry.MustRegister(mr.flowBytes)
+		cfg.Config.Registry.MustRegister(register...)
 	} else {
-		mr.promConnect.Register(cfg.Config.Port, cfg.Config.Path, mr.flowBytes)
+		mr.promConnect.Register(cfg.Config.Port, cfg.Config.Path, register...)
 	}
 
 	return mr, nil
@@ -148,20 +146,14 @@ func (r *netMetricsReporter) observeFlowBytes(flow *ebpf.Record) {
 	if r.flowBytes == nil {
 		return
 	}
-	labelValues := make([]string, 0, len(r.flowAttrs))
-	for _, attr := range r.flowAttrs {
-		labelValues = append(labelValues, attr.Get(flow))
-	}
-	r.flowBytes.WithLabelValues(labelValues...).metric.Add(float64(flow.Metrics.Bytes))
+	r.flowBytes.WithLabelValues(labelValues(flow, r.flowAttrs)...).
+		metric.Add(float64(flow.Metrics.Bytes))
 }
 
 func (r *netMetricsReporter) observeInterZone(flow *ebpf.Record) {
-	if r.interZone == nil {
+	if r.interZone == nil || flow.Attrs.SrcZone == flow.Attrs.DstZone {
 		return
 	}
-	labelValues := make([]string, 0, len(r.interZoneAttrs))
-	for _, attr := range r.interZoneAttrs {
-		labelValues = append(labelValues, attr.Get(flow))
-	}
-	r.interZone.WithLabelValues(labelValues...).metric.Add(float64(flow.Metrics.Bytes))
+	r.interZone.WithLabelValues(labelValues(flow, r.interZoneAttrs)...).
+		metric.Add(float64(flow.Metrics.Bytes))
 }

@@ -103,9 +103,6 @@ func newMetricsExporter(ctx context.Context, ctxInfo *global.ContextInfo, cfg *N
 	if err != nil {
 		return nil, fmt.Errorf("network OTEL exporter attributes enable: %w", err)
 	}
-	attrs := attributes.OpenTelemetryGetters(
-		ebpf.RecordGetters,
-		attrProv.For(attributes.BeylaNetworkFlow))
 
 	clock := expire.NewCachedClock(timeNow)
 
@@ -128,6 +125,10 @@ func newMetricsExporter(ctx context.Context, ctxInfo *global.ContextInfo, cfg *N
 		}
 
 		log.Debug("restricting attributes not in this list", "attributes", cfg.AttributeSelectors)
+		attrs := attributes.OpenTelemetryGetters(
+			ebpf.RecordGetters,
+			attrProv.For(attributes.BeylaNetworkFlow))
+
 		nme.flowBytes = NewExpirer[*ebpf.Record, metric2.Int64Counter, float64](ctx, bytesMetric, attrs, clock.Time, cfg.Metrics.TTL)
 	}
 
@@ -141,8 +142,12 @@ func newMetricsExporter(ctx context.Context, ctxInfo *global.ContextInfo, cfg *N
 			log.Error("creating observable counter", "error", err)
 			return nil, err
 		}
-		nme.interZoneBytes = NewExpirer[*ebpf.Record, metric2.Int64Counter, float64](ctx, bytesMetric, attrs, clock.Time, cfg.Metrics.TTL)
 		log.Debug("restricting attributes not in this list", "attributes", cfg.AttributeSelectors)
+		attrs := attributes.OpenTelemetryGetters(
+			ebpf.RecordGetters,
+			attrProv.For(attributes.BeylaNetworkInterZone))
+
+		nme.interZoneBytes = NewExpirer[*ebpf.Record, metric2.Int64Counter, float64](ctx, bytesMetric, attrs, clock.Time, cfg.Metrics.TTL)
 	}
 
 	return nme, nil
@@ -157,7 +162,7 @@ func (me *netMetricsExporter) Do(in <-chan []*ebpf.Record) {
 				flowBytes.Add(me.ctx, int64(v.Metrics.Bytes), metric2.WithAttributeSet(attrs))
 			}
 			if me.interZoneBytes != nil && v.Attrs.SrcZone != v.Attrs.DstZone {
-				izBytes, attrs := me.flowBytes.ForRecord(v)
+				izBytes, attrs := me.interZoneBytes.ForRecord(v)
 				izBytes.Add(me.ctx, int64(v.Metrics.Bytes), metric2.WithAttributeSet(attrs))
 			}
 		}

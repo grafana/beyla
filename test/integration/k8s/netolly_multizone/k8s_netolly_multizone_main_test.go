@@ -61,8 +61,14 @@ func TestMain(m *testing.M) {
 }
 
 func TestMultizoneNetworkFlows(t *testing.T) {
-	cluster.TestEnv().Test(t, features.New("Multizone Network flows").
-		Assess("flows are decorated with zone", testFlowsDecoratedWithZone).Feature())
+	cluster.TestEnv().Test(t, FeatureMultizoneNetworkFlows())
+}
+
+func FeatureMultizoneNetworkFlows() features.Feature {
+	return features.New("Multizone Network flows").
+		Assess("flows are decorated with zone", testFlowsDecoratedWithZone).
+		Assess("interzone bytes are reported as their own metric", testInterZoneMetric).
+		Feature()
 }
 
 func testFlowsDecoratedWithZone(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
@@ -152,5 +158,38 @@ func testFlowsDecoratedWithZone(ctx context.Context, t *testing.T, _ *envconf.Co
 		// should have 2 exact metrics, measured from Beyla instances in both nodes
 		require.GreaterOrEqual(t, len(results), 2)
 	})
+	return ctx
+}
+
+func testInterZoneMetric(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
+	pq := prom.Client{HostPort: prometheusHostPort}
+
+	// inter-zone bytes are reported
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		results, err := pq.Query(`beyla_network_inter_zone_bytes_total{` +
+			`src_zone="client-zone", dst_zone="server-zone"}`)
+		require.NoError(t, err)
+		require.NotEmpty(t, results)
+	})
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		results, err := pq.Query(`beyla_network_inter_zone_bytes_total{` +
+			`dst_zone="client-zone", src_zone="server-zone"}`)
+		require.NoError(t, err)
+		require.NotEmpty(t, results)
+		// AND the reported attributes are different from the flow bytes attributes
+		require.NotContains(t, results, "k8s_src_type")
+		require.NotContains(t, results, "iface_direction")
+	})
+
+	// BUT same-zone bytes are not reported in this metric
+	results, err := pq.Query(`beyla_network_inter_zone_bytes_total{` +
+		`src_zone="client-zone", dst_zone="client-zone"}`)
+	require.NoError(t, err)
+	require.Empty(t, results)
+	results, err = pq.Query(`beyla_network_inter_zone_bytes_total{` +
+		`src_zone="server-zone", dst_zone="server-zone"}`)
+	require.NoError(t, err)
+	require.Empty(t, results)
+
 	return ctx
 }

@@ -47,10 +47,11 @@ func TestMetricAttributes(t *testing.T) {
 			Interval:          10 * time.Millisecond,
 			ReportersCacheLen: 100,
 			TTL:               5 * time.Minute,
+			Features:          []string{FeatureNetwork, FeatureNetworkInterZone},
 		}})
 	require.NoError(t, err)
 
-	_, reportedAttributes := me.metrics.ForRecord(in)
+	_, reportedAttributes := me.flowBytes.ForRecord(in)
 	for _, mustContain := range []attribute.KeyValue{
 		attribute.String("src.address", "12.34.56.78"),
 		attribute.String("dst.address", "33.22.11.1"),
@@ -106,10 +107,11 @@ func TestMetricAttributes_Filter(t *testing.T) {
 			MetricsEndpoint:   "http://foo",
 			Interval:          10 * time.Millisecond,
 			ReportersCacheLen: 100,
+			Features:          []string{FeatureNetwork, FeatureNetworkInterZone},
 		}})
 	require.NoError(t, err)
 
-	_, reportedAttributes := me.metrics.ForRecord(in)
+	_, reportedAttributes := me.flowBytes.ForRecord(in)
 	for _, mustContain := range []attribute.KeyValue{
 		attribute.String("src.address", "12.34.56.78"),
 		attribute.String("k8s.src.name", "srcname"),

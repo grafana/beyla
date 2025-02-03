@@ -112,7 +112,7 @@ func newNetReporter(
 		mr.interZone = NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: attributes.BeylaNetworkInterZone.Prom,
 			Help: "bytes submitted between different cloud availability zones",
-		}, labelNames (mr.interZoneAttrs)).MetricVec, clock.Time, cfg.Config.TTL)
+		}, labelNames(mr.interZoneAttrs)).MetricVec, clock.Time, cfg.Config.TTL)
 		register = append(register, mr.interZone)
 	}
 

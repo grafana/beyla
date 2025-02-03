@@ -113,6 +113,7 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 	// networkInterZone* supports the same attributes as
 	// network* counterpart, but all of them disabled by default, to keep cardinality low
 	networkInterZone := copyDisabled(networkAttributes)
+	networkInterZone.Attributes[attr.K8sClusterName] = true
 	networkInterZoneKube := copyDisabled(networkKubeAttributes)
 	networkInterZoneCIDR := copyDisabled(networkCIDR)
 	// only src and dst zone are enabled by default

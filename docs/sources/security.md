@@ -14,7 +14,7 @@ aliases:
 
 # Beyla security, permissions, and capabilities
 
-Beyla needs access to various Linux interfaces to instrument applications, such as reading from the `/proc` filesystem, loading eBPF programs, and managing network interface filters. Many of these operations require elevated permissions. The simplest solution is to run Beyla as `root`, however this might not work well in setups where full `root` access isn’t ideal. To address this, Beyla is designed to use only the specific Linux kernel capabilities needed for its current configuration.
+Beyla needs access to various Linux interfaces to instrument applications, such as reading from the `/proc` filesystem, loading eBPF programs, and managing network interface filters. Many of these operations require elevated permissions. The simplest solution is to run Beyla as root, however this might not work well in setups where full root access isn’t ideal. To address this, Beyla is designed to use only the specific Linux kernel capabilities needed for its current configuration.
 
 ## Linux kernel capabilities
 
@@ -22,7 +22,7 @@ Linux kernel capabilities are a fine-grained system for controlling access to pr
 
 Capabilities are assigned to processes and executable files. By using tools like `setcap`, administrators can assign specific capabilities to a binary, enabling it to perform only the operations it needs without running as root. For example:
 
-```bash
+```shell
 sudo setcap cap_net_admin,cap_net_raw+ep myprogram
 ```
 
@@ -36,7 +36,7 @@ Beyla can operate in two distinct modes: *application observability* and *networ
 
 Beyla reads its configuration and checks for the required capabilities, if any are missing it displays a warning, for example:
 
-```
+```shell
 time=2025-01-27T17:21:20.197-06:00 level=WARN msg="Required system capabilities not present, Beyla may malfunction" error="the following capabilities are required: CAP_DAC_READ_SEARCH, CAP_BPF, CAP_CHECKPOINT_RESTORE"
 ```
 
@@ -79,7 +79,7 @@ Required capabilities:
 
 Set the required capabilities and start Beyla:
 
-```bash
+```shell
 sudo setcap cap_bpf,cap_net_raw+ep ./bin/beyla
 BEYLA_NETWORK_METRICS=1 BEYLA_NETWORK_PRINT_FLOWS=1 bin/beyla
 ```
@@ -94,7 +94,7 @@ Required capabilities:
 
 Set the required capabilities and start Beyla:
 
-```bash
+```shell
 sudo setcap cap_bpf,cap_net_admin,cap_perfmon+ep ./bin/beyla
 BEYLA_NETWORK_METRICS=1 BEYLA_NETWORK_PRINT_FLOWS=1 BEYLA_NETWORK_SOURCE=tc bin/beyla
 ```
@@ -112,7 +112,7 @@ Required capabilities:
 
 Set the required capabilities and start Beyla:
 
-```bash
+```shell
 sudo setcap cap_bpf,cap_dac_read_search,cap_perfmon,cap_net_raw,cap_sys_ptrace+ep ./bin/beyla
 BEYLA_OPEN_PORT=8080 BEYLA_TRACE_PRINTER=text bin/beyla
 ```
@@ -131,7 +131,7 @@ Required capabilities:
 
 Set the required capabilities and start Beyla:
 
-```bash
+```shell
 sudo setcap cap_bpf,cap_dac_read_search,cap_perfmon,cap_net_raw,cap_sys_ptrace,cap_net_admin+ep ./bin/beyla
 BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION=1 BEYLA_OPEN_PORT=8080 BEYLA_TRACE_PRINTER=text bin/beyla
 ```

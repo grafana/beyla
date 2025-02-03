@@ -203,7 +203,7 @@ static __always_inline u8 valid_trace(const unsigned char *trace_id) {
 }
 
 static __always_inline void
-server_or_client_trace(u8 type, connection_info_t *conn, tp_info_pid_t *tp_p) {
+server_or_client_trace(u8 type, connection_info_t *conn, tp_info_pid_t *tp_p, u8 ssl) {
     if (type == EVENT_HTTP_REQUEST) {
         trace_key_t t_key = {0};
         task_tid(&t_key.p_key);
@@ -235,7 +235,16 @@ server_or_client_trace(u8 type, connection_info_t *conn, tp_info_pid_t *tp_p) {
             .s_port = conn->s_port,
         };
 
-        bpf_map_update_elem(&outgoing_trace_map, &e_key, tp_p, BPF_ANY);
+        if (ssl) {
+            // Clone and mark it invalid for the purpose of storing it in the
+            // outgoing trace map, if it's an SSL connection
+            tp_info_pid_t tp_p_invalid = {0};
+            __builtin_memcpy(&tp_p_invalid, tp_p, sizeof(tp_p_invalid));
+            tp_p_invalid.valid = 0;
+            bpf_map_update_elem(&outgoing_trace_map, &e_key, &tp_p_invalid, BPF_ANY);
+        } else {
+            bpf_map_update_elem(&outgoing_trace_map, &e_key, tp_p, BPF_ANY);
+        }
     }
 }
 

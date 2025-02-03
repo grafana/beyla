@@ -47,7 +47,8 @@ static __always_inline void http_get_or_create_trace_info(http_connection_metada
                                                           connection_info_t *conn,
                                                           void *u_buf,
                                                           int bytes_len,
-                                                          s32 capture_header_buffer) {
+                                                          s32 capture_header_buffer,
+                                                          u8 ssl) {
     tp_info_pid_t *tp_p = tp_buf();
 
     if (!tp_p) {
@@ -97,7 +98,7 @@ static __always_inline void http_get_or_create_trace_info(http_connection_metada
             if (meta) {
                 u32 type = trace_type_from_meta(meta);
                 set_trace_info_for_connection(conn, type, tp_p);
-                server_or_client_trace(meta->type, conn, tp_p);
+                server_or_client_trace(meta->type, conn, tp_p, ssl);
             }
             return;
         }
@@ -139,7 +140,7 @@ static __always_inline void http_get_or_create_trace_info(http_connection_metada
         // sock_msg program has already punched a hole in the HTTP headers and has made
         // the HTTP header invalid. We need to add more smarts there or pull the
         // sock msg information here and mark it so that we don't override the span_id.
-        server_or_client_trace(meta->type, conn, tp_p);
+        server_or_client_trace(meta->type, conn, tp_p, ssl);
     }
 }
 
@@ -364,7 +365,8 @@ int beyla_protocol_http(void *ctx) {
                                       &args->pid_conn.conn,
                                       (void *)args->u_buf,
                                       args->bytes_len,
-                                      capture_header_buffer);
+                                      capture_header_buffer,
+                                      args->ssl);
 
         if (meta) {
             u32 type = trace_type_from_meta(meta);

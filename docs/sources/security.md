@@ -167,7 +167,7 @@ Beyla uses the following list of internal eBPF tracers with their required capab
 * `CAP_NET_RAW`: to create `AF_PACKET` socket used by `beyla_socket__http_filter`
 * `CAP_SYS_PTRACE`: for access to `/proc/pid/exe` and other nodes in `/proc`
 
-**TC tracers:**
+**network monitoring in TC mode and context propagation:**
 
 * `CAP_BPF`
 * `CAP_DAC_READ_SEARCH`

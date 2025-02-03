@@ -44,7 +44,6 @@ func pullDockerfile(logger io.WriteCloser, ilog *slog.Logger, img ImageBuild) er
 		return err
 	}
 	return nil
-
 }
 
 func buildDockerfile(logger io.WriteCloser, rootPath string, ilog *slog.Logger, img ImageBuild) error {

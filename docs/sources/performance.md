@@ -1,7 +1,7 @@
 ---
 title: Beyla performance overhead
 menuTitle: Performance overhead
-description: Beyla runs alongside your applications and has a minimal performance impact. Find out about the methodology we used to measure the performance overhead.
+description: Beyla runs alongside your applications and has a minimal impact on performance. Find out about the methodology we used to measure the performance overhead.
 
 weight: 24
 keywords:
@@ -12,7 +12,7 @@ keywords:
 
 # Beyla performance overhead
 
-Beyla runs alongside your applications and has a minimal performance impact.
+Beyla runs alongside your applications and has a minimal impact on performance.
 We use the following methodology to measure the performance overhead:
 
 - Deploy Beyla as single-process in a local Kubernetes cluster using Kind and Helm chart

@@ -808,12 +808,11 @@ func testNestedHTTPTracesKProbes(t *testing.T) {
 
 	// test now with a different version of Java thread pool
 	for i := 0; i < 10; i++ {
-		doHTTPGet(t, "http://localhost:8086/jtraceB", 200)
+		doHTTPGet(t, "http://localhost:8086/jtraceA", 200)
 	}
 
-	t.Run("Traces RestClient client /jtraceB", func(t *testing.T) {
-		t.Skip("seems flaky, we need to look into this / need proper JAVA support")
-		ensureTracesMatch(t, "jtraceB")
+	t.Run("Traces RestClient client /jtraceA", func(t *testing.T) {
+		ensureTracesMatch(t, "jtraceA")
 	})
 }
 

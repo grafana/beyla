@@ -173,6 +173,22 @@ int BPF_KPROBE(beyla_kprobe_tcp_connect, struct sock *sk) {
     return 0;
 }
 
+// This helper sets up a map for tracking server to client calls, when
+// the connection between the two is unclear by just tracking the threads.
+// With thread pools, often times the connect call happens on the same thread
+// as the one serving the server request, and it's later delegated to another
+// thread to handle the client request.
+static __always_inline void setup_client_conn_info(pid_connection_info_t *p_conn) {
+    trace_key_t t_key = {0};
+
+    task_tid(&t_key.p_key);
+    u64 extra_id = extra_runtime_id();
+    t_key.extra_id = extra_id;
+
+    bpf_map_update_elem(
+        &client_connect_info, p_conn, &t_key, BPF_ANY); // Support connection thread pools
+}
+
 // We tap into sys_connect so we can track properly the processes doing
 // HTTP client calls
 SEC("kretprobe/sys_connect")
@@ -209,14 +225,7 @@ int BPF_KRETPROBE(beyla_kretprobe_sys_connect, int fd) {
 
         bpf_map_update_elem(&pid_tid_to_conn, &id, &info, BPF_ANY); // Support SSL lookup
 
-        trace_key_t t_key = {0};
-
-        task_tid(&t_key.p_key);
-        u64 extra_id = extra_runtime_id();
-        t_key.extra_id = extra_id;
-
-        bpf_map_update_elem(
-            &client_connect_info, &info.p_conn, &t_key, BPF_ANY); // Support connection thread pools
+        setup_client_conn_info(&info.p_conn);
     }
 
 cleanup:
@@ -485,7 +494,20 @@ static __always_inline int return_recvmsg(void *ctx, u64 id, int copied_len) {
 
     bpf_dbg_printk("=== return recvmsg id=%d args=%llx copied_len %d ===", id, args, copied_len);
 
-    if (!args || (copied_len <= 0)) {
+    pid_connection_info_t info = {};
+
+    if (!args) {
+        goto done;
+    }
+
+    void *sock_ptr = (void *)args->sock_ptr;
+
+    if (copied_len <= 0) {
+        if (parse_sock_info((struct sock *)sock_ptr, &info.conn)) {
+            sort_connection_info(&info.conn);
+            info.pid = pid_from_pid_tgid(id);
+            setup_client_conn_info(&info);
+        }
         goto done;
     }
 
@@ -497,10 +519,6 @@ static __always_inline int return_recvmsg(void *ctx, u64 id, int copied_len) {
 
         goto done;
     }
-
-    pid_connection_info_t info = {};
-
-    void *sock_ptr = (void *)args->sock_ptr;
 
     bpf_map_delete_elem(&active_recv_args, &id);
 

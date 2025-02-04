@@ -45,6 +45,6 @@ func TestMain(m *testing.M) {
 	cluster.Run(m)
 }
 
-func TestMultizoneNetworkFlows(t *testing.T) {
+func TestMultizoneNetworkFlows_Prom(t *testing.T) {
 	cluster.TestEnv().Test(t, otel.FeatureMultizoneNetworkFlows())
 }

@@ -55,12 +55,13 @@ const (
 	AggregationExplicit    = "explicit_bucket_histogram"
 	AggregationExponential = "base2_exponential_bucket_histogram"
 
-	FeatureNetwork     = "network"
-	FeatureApplication = "application"
-	FeatureSpan        = "application_span"
-	FeatureGraph       = "application_service_graph"
-	FeatureProcess     = "application_process"
-	FeatureEBPF        = "ebpf"
+	FeatureNetwork          = "network"
+	FeatureNetworkInterZone = "network_inter_zone"
+	FeatureApplication      = "application"
+	FeatureSpan             = "application_span"
+	FeatureGraph            = "application_service_graph"
+	FeatureProcess          = "application_process"
+	FeatureEBPF             = "ebpf"
 )
 
 type MetricsConfig struct {
@@ -160,7 +161,15 @@ func (m *MetricsConfig) OTelMetricsEnabled() bool {
 }
 
 func (m *MetricsConfig) NetworkMetricsEnabled() bool {
+	return m.NetworkFlowBytesEnabled() || m.NetworkInterzoneMetricsEnabled()
+}
+
+func (m *MetricsConfig) NetworkFlowBytesEnabled() bool {
 	return slices.Contains(m.Features, FeatureNetwork)
+}
+
+func (m *MetricsConfig) NetworkInterzoneMetricsEnabled() bool {
+	return slices.Contains(m.Features, FeatureNetworkInterZone)
 }
 
 func (m *MetricsConfig) Enabled() bool {

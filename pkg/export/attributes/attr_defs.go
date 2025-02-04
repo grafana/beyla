@@ -56,6 +56,27 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 		},
 	}
 
+	// network metrics attributes
+	networkAttributes := AttrReportGroup{
+		Attributes: map[attr.Name]Default{
+			attr.Direction:      true,
+			attr.BeylaIP:        false,
+			attr.Transport:      false,
+			attr.SrcAddress:     false,
+			attr.DstAddres:      false,
+			attr.SrcPort:        false,
+			attr.DstPort:        false,
+			attr.SrcName:        false,
+			attr.DstName:        false,
+			attr.ServerPort:     false,
+			attr.ClientPort:     false,
+			attr.SrcZone:        false,
+			attr.DstZone:        false,
+			attr.IfaceDirection: Default(ifaceDirEnabled),
+			attr.Iface:          Default(ifaceDirEnabled),
+		},
+	}
+
 	// attributes to be reported exclusively for network metrics when
 	// kubernetes metadata is enabled
 	var networkKubeAttributes = AttrReportGroup{
@@ -88,6 +109,16 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 			attr.SrcCIDR: true,
 		},
 	}
+
+	// networkInterZone* supports the same attributes as
+	// network* counterpart, but all of them disabled by default, to keep cardinality low
+	networkInterZone := copyDisabled(networkAttributes)
+	networkInterZone.Attributes[attr.K8sClusterName] = true
+	networkInterZoneKube := copyDisabled(networkKubeAttributes)
+	networkInterZoneCIDR := copyDisabled(networkCIDR)
+	// only src and dst zone are enabled by default
+	networkInterZone.Attributes[attr.SrcZone] = true
+	networkInterZone.Attributes[attr.DstZone] = true
 
 	// attributes to be reported exclusively for application metrics when
 	// kubernetes metadata is enabled
@@ -188,24 +219,10 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 
 	return map[Section]AttrReportGroup{
 		BeylaNetworkFlow.Section: {
-			SubGroups: []*AttrReportGroup{&networkCIDR, &networkKubeAttributes},
-			Attributes: map[attr.Name]Default{
-				attr.Direction:      true,
-				attr.BeylaIP:        false,
-				attr.Transport:      false,
-				attr.SrcAddress:     false,
-				attr.DstAddres:      false,
-				attr.SrcPort:        false,
-				attr.DstPort:        false,
-				attr.SrcName:        false,
-				attr.DstName:        false,
-				attr.ServerPort:     false,
-				attr.ClientPort:     false,
-				attr.SrcZone:        false,
-				attr.DstZone:        false,
-				attr.IfaceDirection: Default(ifaceDirEnabled),
-				attr.Iface:          Default(ifaceDirEnabled),
-			},
+			SubGroups: []*AttrReportGroup{&networkAttributes, &networkCIDR, &networkKubeAttributes},
+		},
+		BeylaNetworkInterZone.Section: {
+			SubGroups: []*AttrReportGroup{&networkInterZone, &networkInterZoneCIDR, &networkInterZoneKube},
 		},
 		HTTPServerDuration.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &httpCommon, &serverInfo},
@@ -290,6 +307,17 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 			},
 		},
 	}
+}
+
+func copyDisabled(src AttrReportGroup) AttrReportGroup {
+	var dst = AttrReportGroup{
+		Disabled:   src.Disabled,
+		Attributes: map[attr.Name]Default{},
+	}
+	for k := range src.Attributes {
+		dst.Attributes[k] = false
+	}
+	return dst
 }
 
 // AllAttributeNames returns a set with all the names in the attributes database

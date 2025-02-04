@@ -131,7 +131,15 @@ func (p *PrometheusConfig) ServiceGraphMetricsEnabled() bool {
 }
 
 func (p *PrometheusConfig) NetworkMetricsEnabled() bool {
+	return p.NetworkFlowBytesEnabled() || p.NetworkInterzoneMetricsEnabled()
+}
+
+func (p *PrometheusConfig) NetworkFlowBytesEnabled() bool {
 	return slices.Contains(p.Features, otel.FeatureNetwork)
+}
+
+func (p *PrometheusConfig) NetworkInterzoneMetricsEnabled() bool {
+	return slices.Contains(p.Features, otel.FeatureNetworkInterZone)
 }
 
 func (p *PrometheusConfig) EBPFEnabled() bool {

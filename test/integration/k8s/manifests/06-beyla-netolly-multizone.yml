@@ -7,6 +7,7 @@ data:
     log_level: debug
     otel_metrics_export:
       endpoint: http://otelcol.default:4317
+      features: ["network", "network_inter_zone"]
     network:
       protocols:
         - TCP

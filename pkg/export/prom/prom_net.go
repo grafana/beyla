@@ -21,6 +21,7 @@ import (
 type NetPrometheusConfig struct {
 	Config             *PrometheusConfig
 	AttributeSelectors attributes.Selection
+	// Deprecated: to be removed in Beyla 3.0 with BEYLA_NETWORK_METRICS bool flag
 	GloballyEnabled    bool
 }
 
@@ -90,7 +91,7 @@ func newNetReporter(
 
 	var register []prometheus.Collector
 	log := slog.With("component", "prom.NetworkEndpoint")
-	if mr.cfg.NetworkFlowBytesEnabled() {
+	if cfg.GloballyEnabled || mr.cfg.NetworkFlowBytesEnabled() {
 		log.Debug("registering network flow bytes metric")
 		mr.flowAttrs = attributes.PrometheusGetters(
 			ebpf.RecordStringGetters,

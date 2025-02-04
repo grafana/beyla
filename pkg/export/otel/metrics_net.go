@@ -26,6 +26,7 @@ import (
 type NetMetricsConfig struct {
 	Metrics            *MetricsConfig
 	AttributeSelectors attributes.Selection
+	// Deprecated: to be removed in Beyla 3.0 with BEYLA_NETWORK_METRICS bool flag
 	GloballyEnabled    bool
 }
 
@@ -113,7 +114,7 @@ func newMetricsExporter(ctx context.Context, ctxInfo *global.ContextInfo, cfg *N
 		clock:     clock,
 		expireTTL: cfg.Metrics.TTL,
 	}
-	if cfg.Metrics.NetworkFlowBytesEnabled() {
+	if cfg.GloballyEnabled || cfg.Metrics.NetworkFlowBytesEnabled() {
 		log := log.With("metricFamily", "FlowBytes")
 		bytesMetric, err := ebpfEvents.Int64Counter(attributes.BeylaNetworkFlow.OTEL,
 			metric2.WithDescription("total bytes_sent value of network flows observed by probe since its launch"),

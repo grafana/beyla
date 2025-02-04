@@ -53,10 +53,10 @@ configuration properties:
 * `network_inter_zone` enables `beyla_network_inter_zone_bytes` metric: the number of bytes between different
   availability zones in your Cloud cluster.
 
-{{% admonition type="caution" %}}
+{{< admonition type="caution" >}}
 The `beyla_network_inter_zone_bytes` specification is currently in experimental and only available for Kubernetes cluster.
 You might expect some breaking changes in future versions of Beyla.
-{{% /admonition %}}
+{{< /admonition >}}
 
 
 | YAML                 | Environment variable               | Type     | Default             |

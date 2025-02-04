@@ -119,10 +119,10 @@ In order to configure which attributes to show or which attributes to hide, chec
 | `beyla.network.flow.bytes`     | `transport`                  | hidden                                            |
 | Traces (SQL, Redis)            | `db.query.text`              | hidden                                            |
 
-{{% admonition type="note" %}}
+{{< admonition type="note" >}}
 The `beyla.network.inter.zone.bytes` metric supports the same set of attributes as `beyla.network.flow.bytes`,
 but all of them are hidden by default, except `k8s.cluster.name`, `src.zone` and `dst.zone`.
-{{% /admonition %}}
+{{< /admonition >}}
 
 ## Internal metrics
 

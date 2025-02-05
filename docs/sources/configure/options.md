@@ -167,7 +167,7 @@ formats are:
 
 | YAML               | Environment variable     | Type     | Default    |
 | -----------------  | ------------------------ | -------- | ---------- |
-| `enforce_sys_caps` | `BEYLA_ENFORCE_SYS_CAPS` | boolean  | `false`     |
+| `enforce_sys_caps` | `BEYLA_ENFORCE_SYS_CAPS` | boolean  | `false`    |
 
 <a id="caps"></a>
 

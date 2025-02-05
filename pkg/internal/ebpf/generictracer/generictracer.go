@@ -129,12 +129,13 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 
 	if p.cfg.EBPF.TrackRequestHeaders || p.cfg.EBPF.UseTCForL7CP || p.cfg.EBPF.ContextPropagationEnabled {
 		if ebpfcommon.SupportsEBPFLoops(p.log, p.cfg.EBPF.OverrideBPFLoopEnabled) {
-			p.log.Info("Found Linux kernel later than 5.17, enabling trace information parsing")
+			p.log.Info("Found compatible Linux kernel, enabling trace information parsing")
 			loader = loadBpf_tp
 			if p.cfg.EBPF.BpfDebug {
 				loader = loadBpf_tp_debug
 			}
 		}
+        p.log.Info("Found incompatible Linux kernel, disabling trace information parsing")
 	}
 
 	return loader()

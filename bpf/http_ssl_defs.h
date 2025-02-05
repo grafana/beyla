@@ -130,7 +130,10 @@ static __always_inline void cleanup_trace_info_for_delayed_trace(pid_connection_
 
 static __always_inline void
 handle_ssl_buf(void *ctx, u64 id, ssl_args_t *args, int bytes_len, u8 direction) {
-    if (args && bytes_len > 0) {
+    // We purposefully let SSL requests of 0 size to pass through the connection
+    // code, because we need to ensure we can correctly detect SSL requests that
+    // might've been previously detected as TCP requests and clean that up.
+    if (args) {
         void *ssl = ((void *)args->ssl);
         u64 ssl_ptr = (u64)ssl;
         bpf_dbg_printk("SSL_buf id=%d ssl=%llx", id, ssl);
@@ -182,11 +185,24 @@ handle_ssl_buf(void *ctx, u64 id, ssl_args_t *args, int bytes_len, u8 direction)
             p_c.p_conn.conn.d_port = p_c.p_conn.conn.s_port = p_c.orig_dport = 0;
             p_c.p_conn.pid = pid_from_pid_tgid(id);
 
-            bpf_map_update_elem(&ssl_to_conn, &ssl, &p_c, BPF_ANY);
-            conn = bpf_map_lookup_elem(&ssl_to_conn, &ssl);
+            // This is a fake connection info, we should store it as real info
+            // only if we have any buffer data, otherwise it might be SSL_read
+            // before we've hit the first tcp_recvmsg/tcp_sendmsg.
+            if (bytes_len > 0) {
+                bpf_map_update_elem(&ssl_to_conn, &ssl, &p_c, BPF_ANY);
+                conn = bpf_map_lookup_elem(&ssl_to_conn, &ssl);
+            }
+        } else {
+            // This code cleans up any TCP requests we might've started and
+            // now they've proven to be SSL wrapped requests.
+            bpf_printk("Setting SSL, deleting TCP, pid %d", conn->p_conn.pid);
+            dbg_print_http_connection_info(&conn->p_conn.conn);
+            set_active_ssl_connection(&conn->p_conn, &ssl);
+            bpf_map_delete_elem(&ongoing_tcp_req, &conn->p_conn);
         }
 
-        if (conn) {
+        // At this point, 0 bytes SSL requests have no use
+        if (conn && bytes_len > 0) {
             bpf_dbg_printk("SSL conn");
             dbg_print_http_connection_info(&conn->p_conn.conn);
 
@@ -208,14 +224,8 @@ handle_ssl_buf(void *ctx, u64 id, ssl_args_t *args, int bytes_len, u8 direction)
                                        WITH_SSL,
                                        direction,
                                        conn->orig_dport);
-        } else {
-            bpf_dbg_printk("No connection info! This is a bug.");
         }
     }
-}
-
-static __always_inline void set_active_ssl_connection(pid_connection_info_t *conn, void *ssl) {
-    bpf_map_update_elem(&active_ssl_connections, conn, &ssl, BPF_ANY);
 }
 
 static __always_inline void *is_ssl_connection(u64 id, pid_connection_info_t *conn) {

@@ -181,7 +181,7 @@ static __always_inline void delete_server_trace(trace_key_t *t_key) {
 }
 
 static __always_inline void delete_client_trace_info(pid_connection_info_t *pid_conn) {
-    bpf_dbg_printk("Deleting client trace map for connection");
+    bpf_dbg_printk("Deleting client trace map for connection, pid = %d", pid_conn->pid);
     dbg_print_http_connection_info(&pid_conn->conn);
 
     delete_trace_info_for_connection(&pid_conn->conn, TRACE_TYPE_CLIENT);

@@ -9,15 +9,6 @@
 #include "trace_common.h"
 #include "pin_internal.h"
 
-// Keeps track of tcp buffers for unknown protocols
-struct {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, pid_connection_info_t);
-    __type(value, tcp_req_t);
-    __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
-    __uint(pinning, BEYLA_PIN_INTERNAL);
-} ongoing_tcp_req SEC(".maps");
-
 struct {
     __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
     __type(key, int);

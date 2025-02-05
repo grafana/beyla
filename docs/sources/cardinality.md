@@ -87,11 +87,11 @@ Where `12` is the number of the above enumerated `#Metrics * #AttributeValues`.
 
 ## Application-level metrics
 
-For application-level metrics, we can’t follow a simple multiplication formula as we did for process-level metrics, as
-there are multiple factors that influence cardinality, but they aren’t linearly related.
+For application-level metrics, we can't follow a simple multiplication formula as we did for process-level metrics, as
+there are multiple factors that influence cardinality, but they aren't linearly related.
 
-For example, both the number of HTTP routes and Server addresses increase the cardinality, but we can’t just multiply
-them because not all the server instances will accept the same HTTP routes.
+For example, both the number of HTTP routes and Server addresses increase the cardinality, but we can't just multiply
+them because not all the server instances accept the same HTTP routes.
 
 The following formula could provide an extremely rough maximum limit, but in [our measurements](#case-study-measuring-cardinality-of-opentelemetry-demo), the actual
 cardinality was 2 orders of magnitude lower than the analytic calculation. For this reason we recommend a
@@ -100,7 +100,7 @@ measure-oriented approach rather than trying to calculate cardinality beforehand
 However, here is a list of factors that can influence the overall cardinality:
 
 * **Instances**: number of instrumented entities. They can be both services and clients.
-* **MetricNames**: number of application-level metric names. This will vary depending on the type of applications that 
+* **MetricNames**: number of application-level metric names. This varies depending on the type of applications that 
   Beyla instruments. Count one for each metric that is going to be reported.
 * Client-side metrics (when Beyla instruments applications that perform requests to other applications)
     * `http.client.request.duration`
@@ -136,15 +136,14 @@ The `Operations * Endpoints` quotient would multiply cardinality by 4. However, 
 is exclusive of service A, and the `/bar` route is exclusive of service B. In that case, the actual cardinality
 multiplier would be only 2.
 
-Whoever wants to calculate the cardinality needs to bound how optimistic or pessimistic the calculations will be
-Replacing scalars by fuzzy mathematics would help getting more accurate.
+Whoever wants to calculate the cardinality needs to bound how optimistic or pessimistic the calculations are.
 
-Let’s illustrate how we would calculate the cardinality of the following system. Both client and Backend are
+Let's illustrate how we would calculate the cardinality of the following system. Both client and Backend are
 instrumented by Beyla. The other components are external:
 
 ![Example architecture](/media/docs/beyla/cardinality/cardinality_example.png)
 
-The “pessimistic” calculation would be:
+The "pessimistic" calculation would be:
 
 ```
 #Instances * #MetricNames * #HistoBuckets * #Operations * #Endpoints * #ReturnCodes =
@@ -166,7 +165,7 @@ The numbers taken as reference:
 * 17 histogram metrics, as most metrics are duration-based.
 * 7 operations: RPC Add/List/Delete, HTTP PUT, SQL Insert/Select/Delete
 * 3 endpoints: backend, Identity provider, and DB
-* 7 Return codes: RPC Ok/Err, HTTP 200/401/500, SQL Ok/Err
+* 7 Return codes: RPC OK/Err, HTTP 200/401/500, SQL OK/Err
 
 We might consider that cardinality should not grow beyond 163. However this number is not realistic nor accurate at all, since some multipliers might not apply to the whole system. For example, SQL Methods should not multiply to the RPC and HTTP metrics.
 
@@ -174,17 +173,17 @@ In this simple scenario, we can manually count more the maximum cardinality to 3
 
 | #  | Instance | Metric                          | Endpoint      | Operation  | Code |
 |:---|:---------|:--------------------------------|:--------------|:-----------|:-----|
-| 1  | Client   | `rpc.client.duration`           | Backend       | Add        | Ok   |
+| 1  | Client   | `rpc.client.duration`           | Backend       | Add        | OK   |
 | 2  | Client   | `rpc.client.duration`           | Backend       | Add        | Err  |
-| 3  | Client   | `rpc.client.duration`           | Backend       | List       | Ok   |
+| 3  | Client   | `rpc.client.duration`           | Backend       | List       | OK   |
 | 4  | Client   | `rpc.client.duration`           | Backend       | List       | Err  |
-| 5  | Client   | `rpc.client.duration`           | Backend       | Delete     | Ok   |
+| 5  | Client   | `rpc.client.duration`           | Backend       | Delete     | OK   |
 | 6  | Client   | `rpc.client.duration`           | Backend       | Delete     | Err  |
-| 7  | Backend  | `rpc.server.duration`           |               | Add        | Ok   |
+| 7  | Backend  | `rpc.server.duration`           |               | Add        | OK   |
 | 8  | Backend  | `rpc.server.duration`           |               | Add        | Err  |
-| 9  | Backend  | `rpc.server.duration`           |               | List       | Ok   |
+| 9  | Backend  | `rpc.server.duration`           |               | List       | OK   |
 | 10 | Backend  | `rpc.server.duration`           |               | List       | Err  |
-| 11 | Backend  | `rpc.server.duration`           |               | Delete     | Ok   |
+| 11 | Backend  | `rpc.server.duration`           |               | Delete     | OK   |
 | 12 | Backend  | `rpc.server.duration`           |               | Delete     | Err  |
 | 13 | Backend  | `http.client.request.duration`  | Identity Prov | PUT /login | 200  |
 | 14 | Backend  | `http.client.request.duration`  | Identity Prov | PUT /login | 401  |
@@ -192,14 +191,14 @@ In this simple scenario, we can manually count more the maximum cardinality to 3
 | 16 | Backend  | `http.client.request.body.size` | Identity Prov | PUT /login | 200  |
 | 17 | Backend  | `http.client.request.body.size` | Identity Prov | PUT /login | 401  |
 | 18 | Backend  | `http.client.request.body.size` | Identity Prov | PUT /login | 500  |
-| 19 | Backend  | `sql.client.duration`           | DB            | Insert     | Ok   |
+| 19 | Backend  | `sql.client.duration`           | DB            | Insert     | OK   |
 | 20 | Backend  | `sql.client.duration`           | DB            | Insert     | Err  |
-| 21 | Backend  | `sql.client.duration`           | DB            | Select     | Ok   |
+| 21 | Backend  | `sql.client.duration`           | DB            | Select     | OK   |
 | 22 | Backend  | `sql.client.duration`           | DB            | Select     | Err  |
-| 23 | Backend  | `sql.client.duration`           | DB            | Delete     | Ok   |
+| 23 | Backend  | `sql.client.duration`           | DB            | Delete     | OK   |
 | 24 | Backend  | `sql.client.duration`           | DB            | Delete     | Err  |
 
-For the sake of brevity, we haven’t counted the histogram buckets. Now we should multiply the metrics instances by the
+For the sake of brevity, we haven't counted the histogram buckets. Now we should multiply the metrics instances by the
 histogram buckets (plus histogram `_count` and `_sum`):
 
 * 3 body-size metric instances x 13 = 39
@@ -207,7 +206,7 @@ histogram buckets (plus histogram `_count` and `_sum`):
 
 Total accounted cardinality: **396**
 
-The above example illustrates that it’s difficult to provide a “magic formula” to calculate the cardinality impact in
+The above example illustrates that it's difficult to provide a "magic formula" to calculate the cardinality impact in
 our customers. At the end, we have been able to count the exact cardinality of a very simple example, where we have
 exact knowledge. This exercise would have been impossible in a big Kubernetes cluster where we have little or no
 information about the applications and how they are interconnected.
@@ -215,23 +214,23 @@ information about the applications and how they are interconnected.
 ## Network-level metrics
 
 Network-level metrics calculation is simpler than application-level metrics, as Beyla only provides a single Counter:
-`beyla.network.flow.bytes`. However, its cardinality will also depend on how much your applications are interconnected.
+`beyla.network.flow.bytes`. However, its cardinality alsos depend on how much your applications are interconnected.
 
 The default attributes for `beyla.network.flow.bytes` are:
 
 * Direction (request/response)
 * Source and destination endpoint owners (in Kubernetes): `k8s_src_owner_name`, `k8s_dst_owner_name`,
   `k8s_src_owner_type`, `k8s_dst_owner_type`, `k8s_src_namespace`, `k8s_dst_namespace`
-* `k8s_cluster_name`: unique for each cluster. Will assume a single cluster, as for the rest of metrics.
+* `k8s_cluster_name`: unique for each cluster. We assume a single cluster, as for the rest of metrics.
 
-The simplified, “pessimistic” formula, would be:
+The simplified, "pessimistic" formula, would be:
 
 ```
 #Directions * #SourceOwners * #DestinationOwners
 ```
 
 However, this formula would assume that all the source owners are connected to all the destination owners. It
-would be more realistic to apply a “connection factor”. For example, a cluster with 100
+would be more realistic to apply a "connection factor". For example, a cluster with 100
 Deployments/DaemonSets/StatefulSets, where each owner is connected to 2 other owners on average, would have a
 cardinality of:
 
@@ -256,12 +255,12 @@ Each metric also has the following attributes:
 - `client` and `client_namespace`
 - `server` and `server_namespace`
 
-The calculation will be similar to network metrics, but with higher cardinality, because:
+The calculation is similar to network metrics, but with higher cardinality, because:
 
 * Instead of a single counter metric, we are reporting a set of metrics/histograms with an overall cardinality of 36
   (two 15+2 histograms + 2 counters)
 * Instead of aggregating by the owner of an instance (for example, Deployment), the client is the instance that submits a
-  request, while the server might be effectively the Owner, as it’s usually accessed through a single Service instance.
+  request, while the server might be effectively the Owner, as it's usually accessed through a single Service instance.
 
 ## Span metrics
 
@@ -293,7 +292,7 @@ actual instrumentation.
 
 ### Process-level metrics
 
-It’s difficult to determine the number of running processes unless you have a deep knowledge of the internals of your applications. We have experimentally measured that the OpenTelemetry demo runs around 140 processes.
+It's difficult to determine the number of running processes unless you have a deep knowledge of the internals of your applications. We have experimentally measured that the OpenTelemetry demo runs around 140 processes.
 
 Following the formula:  
 #Instances #Metrics #AttributeValues
@@ -309,7 +308,7 @@ Which is pretty close to our measured Cardinality value via PromQL:
 
 ### Application-level metrics
 
-As most instrumented instances are both client and services, we will ignore the #instances argument in the formula, for more accuracy.
+As most instrumented instances are both client and services, we ignore the #instances argument in the formula, for more accuracy.
 
 ```
 #MetricNames * (#HistoBuckets+2) * #Operations * #Endpoints * #ReturnCodes
@@ -377,7 +376,7 @@ The number of network metrics generated by the OTEL demo is 156 for the actual t
 Despite network metrics are often used to build service graphs, the actual Service graph metrics would have a different shape:
 
 * Instead of a single counter metric, we have 2 counter metrics and 2 more histogram metrics with 16+2 buckets.
-* Service Graph metrics will usually ignore internal Kubernetes traffic, or any traffic from instances that are not instrumented at an application level.
+* Service Graph metrics usually ignore internal Kubernetes traffic, or any traffic from instances that are not instrumented at an application level.
 
 The measured number is:
 

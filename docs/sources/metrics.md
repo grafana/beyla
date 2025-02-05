@@ -34,6 +34,7 @@ The following table describes the exported metrics in both OpenTelemetry and Pro
 | Application process | `process.disk.io`               | `process_disk_io_bytes_total`          | Counter       | bytes   | Disk bytes transferred                                                                                                               |
 | Application process | `process.network.io`            | `process_network_io_bytes_total`       | Counter       | bytes   | Network bytes transferred                                                                                                            |
 | Network             | `beyla.network.flow.bytes`      | `beyla_network_flow_bytes`             | Counter       | bytes   | Bytes submitted from a source network endpoint to a destination network endpoint                                                     |
+| Network             | `beyla.network.inter.zone.bytes`| `beyla_network_inter_zone_bytes`       | Counter       | bytes   | Bytes flowing between cloud availability zones in your cluster (Experimental, currently only available in Kubernetes)                |
 
 Beyla can also export [Span metrics](/docs/tempo/latest/metrics-generator/span_metrics/) and
 [Service graph metrics](/docs/tempo/latest/metrics-generator/service-graph-view/), which you can enable via the
@@ -95,18 +96,18 @@ In order to configure which attributes to show or which attributes to hide, chec
 | `beyla.network.flow.bytes`     | `dst.port`                   | hidden                                            |
 | `beyla.network.flow.bytes`     | `dst.zone` (only Kubernetes) | hidden                                            |
 | `beyla.network.flow.bytes`     | `iface`                      | hidden                                            |
-| `beyla.network.flow.bytes`     | `k8s.cluster.name`           | shown if network metrics are enabled              |
+| `beyla.network.flow.bytes`     | `k8s.cluster.name`           | shown if Kubernetes is enabled                    |
 | `beyla.network.flow.bytes`     | `k8s.dst.name`               | hidden                                            |
-| `beyla.network.flow.bytes`     | `k8s.dst.namespace`          | shown if network metrics are enabled              |
+| `beyla.network.flow.bytes`     | `k8s.dst.namespace`          | shown if Kubernetes is enabled                    |
 | `beyla.network.flow.bytes`     | `k8s.dst.node.ip`            | hidden                                            |
 | `beyla.network.flow.bytes`     | `k8s.dst.node.name`          | hidden                                            |
 | `beyla.network.flow.bytes`     | `k8s.dst.owner.type`         | hidden                                            |
 | `beyla.network.flow.bytes`     | `k8s.dst.type`               | hidden                                            |
-| `beyla.network.flow.bytes`     | `k8s.dst.owner.name`         | shown if network metrics are enabled              |
+| `beyla.network.flow.bytes`     | `k8s.dst.owner.name`         | shown if Kubernetes is enabled                    |
 | `beyla.network.flow.bytes`     | `k8s.src.name`               | hidden                                            |
-| `beyla.network.flow.bytes`     | `k8s.src.namespace`          | shown if network metrics are enabled              |
+| `beyla.network.flow.bytes`     | `k8s.src.namespace`          | shown if Kubernetes is enabled                    |
 | `beyla.network.flow.bytes`     | `k8s.src.node.ip`            | hidden                                            |
-| `beyla.network.flow.bytes`     | `k8s.src.owner.name`         | shown if network metrics are enabled              |
+| `beyla.network.flow.bytes`     | `k8s.src.owner.name`         | shown if Kubernetes is enabled                    |
 | `beyla.network.flow.bytes`     | `k8s.src.owner.type`         | hidden                                            |
 | `beyla.network.flow.bytes`     | `k8s.src.type`               | hidden                                            |
 | `beyla.network.flow.bytes`     | `server.port`                | hidden                                            |
@@ -117,6 +118,11 @@ In order to configure which attributes to show or which attributes to hide, chec
 | `beyla.network.flow.bytes`     | `src.zone` (only Kubernetes) | hidden                                            |
 | `beyla.network.flow.bytes`     | `transport`                  | hidden                                            |
 | Traces (SQL, Redis)            | `db.query.text`              | hidden                                            |
+
+{{< admonition type="note" >}}
+The `beyla.network.inter.zone.bytes` metric supports the same set of attributes as `beyla.network.flow.bytes`,
+but all of them are hidden by default, except `k8s.cluster.name`, `src.zone` and `dst.zone`.
+{{< /admonition >}}
 
 ## Internal metrics
 

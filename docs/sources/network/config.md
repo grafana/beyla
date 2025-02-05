@@ -44,13 +44,20 @@ network metrics (in the previous example, `otel_metrics_export`, but it also acc
 
 ## Network metrics configuration properties
 
-| YAML     | Environment variable    | Type    | Default |
-| -------- | ----------------------- | ------- | ------- |
-| `enable` | `BEYLA_NETWORK_METRICS` | boolean | `false` |
+To enable network metrics add one of the following `features` to either
+the [otel_metrics_export]({{< relref "../configure/export-data.md" >}}))
+or [prometheus_export]({{< relref "../configure/export-data.md#prometheus-http-endpoint" >}}))
+configuration properties:
 
-Explicitly enables network metrics reporting in Beyla. You can also enable network metrics reporting
-by adding `network` to the list of `features` for [otel_metrics_export]({{< relref "../configure/export-data.md" >}}))
-or [prometheus_export]({{< relref "../configure/export-data.md#prometheus-http-endpoint" >}})).
+* `network` enables the `beyla_network_flow_bytes` metric: the number of bytes between two endpoints of your cluster
+* `network_inter_zone` enables `beyla_network_inter_zone_bytes` metric: the number of bytes between different
+  availability zones in your Cloud cluster
+
+{{< admonition type="caution" >}}
+The `beyla_network_inter_zone_bytes` specification is currently in experimental and only available for Kubernetes cluster.
+The specification is not final and future version of Beyla may introduce breaking changes.
+{{< /admonition >}}
+
 
 | YAML                 | Environment variable               | Type     | Default             |
 | -------------------- | ---------------------------------- | -------- | ------------------- |

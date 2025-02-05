@@ -130,7 +130,7 @@ func (p *Tracer) startTC(ctx context.Context) {
 
 	p.log.Info("enabling L7 context-propagation with Linux Traffic Control")
 
-	if !ebpfcommon.SupportsEBPFLoops() {
+	if !ebpfcommon.SupportsEBPFLoops(p.log, p.cfg.EBPF.OverrideBPFLoopEnabled) {
 		p.log.Error("cannot enable L7 context-propagation, kernel 5.17 or newer required")
 	}
 

@@ -1,6 +1,6 @@
 ---
-title: Calculating the cardinality of Beyla Metrics
-menuTitle: Calculating the cardinality of Beyla Metrics
+title: Cardinality of Beyla Metrics
+menuTitle: Cardinality of Beyla Metrics
 
 description: Overview of how to calculate the cardinality of metrics produced by a default Beyla installation, considering the size and complexity of the instrumented environment
 
@@ -11,7 +11,7 @@ keywords:
   - cardinality
 ---
 
-# Calculating the cardinality of Beyla Metrics
+# Cardinality of Beyla Metrics
 
 The cardinality of [Beyla metrics]({{< relref "./metrics.md" >}}) highly depends on the size and complexity
 of the instrumented environment, so there is no way to provide a simple and accurate formula.
@@ -158,7 +158,7 @@ The numbers taken as reference:
         * `rpc.client.duration`
     * Backend (as a RPC server)
         * `rpc.server.duration`
-    * Backend (as a SQL and HTTP client)
+    * Backend (as an SQL and HTTP client)
         * `http.client.request.duration`
         * `http.client.request.body.size`
         * `sql.client.duration`
@@ -173,17 +173,17 @@ In this simple scenario, we can manually count more the maximum cardinality to 3
 
 | #  | Instance | Metric                          | Endpoint      | Operation  | Code |
 |:---|:---------|:--------------------------------|:--------------|:-----------|:-----|
-| 1  | Client   | `rpc.client.duration`           | Backend       | Add        | OK   |
+| 1  | Client   | `rpc.client.duration`           | Backend       | Add        | Okay |
 | 2  | Client   | `rpc.client.duration`           | Backend       | Add        | Err  |
-| 3  | Client   | `rpc.client.duration`           | Backend       | List       | OK   |
+| 3  | Client   | `rpc.client.duration`           | Backend       | List       | Okay |
 | 4  | Client   | `rpc.client.duration`           | Backend       | List       | Err  |
-| 5  | Client   | `rpc.client.duration`           | Backend       | Delete     | OK   |
+| 5  | Client   | `rpc.client.duration`           | Backend       | Delete     | Okay |
 | 6  | Client   | `rpc.client.duration`           | Backend       | Delete     | Err  |
-| 7  | Backend  | `rpc.server.duration`           |               | Add        | OK   |
+| 7  | Backend  | `rpc.server.duration`           |               | Add        | Okay |
 | 8  | Backend  | `rpc.server.duration`           |               | Add        | Err  |
-| 9  | Backend  | `rpc.server.duration`           |               | List       | OK   |
+| 9  | Backend  | `rpc.server.duration`           |               | List       | Okay |
 | 10 | Backend  | `rpc.server.duration`           |               | List       | Err  |
-| 11 | Backend  | `rpc.server.duration`           |               | Delete     | OK   |
+| 11 | Backend  | `rpc.server.duration`           |               | Delete     | Okay |
 | 12 | Backend  | `rpc.server.duration`           |               | Delete     | Err  |
 | 13 | Backend  | `http.client.request.duration`  | Identity Prov | PUT /login | 200  |
 | 14 | Backend  | `http.client.request.duration`  | Identity Prov | PUT /login | 401  |
@@ -191,11 +191,11 @@ In this simple scenario, we can manually count more the maximum cardinality to 3
 | 16 | Backend  | `http.client.request.body.size` | Identity Prov | PUT /login | 200  |
 | 17 | Backend  | `http.client.request.body.size` | Identity Prov | PUT /login | 401  |
 | 18 | Backend  | `http.client.request.body.size` | Identity Prov | PUT /login | 500  |
-| 19 | Backend  | `sql.client.duration`           | DB            | Insert     | OK   |
+| 19 | Backend  | `sql.client.duration`           | DB            | Insert     | Okay |
 | 20 | Backend  | `sql.client.duration`           | DB            | Insert     | Err  |
-| 21 | Backend  | `sql.client.duration`           | DB            | Select     | OK   |
+| 21 | Backend  | `sql.client.duration`           | DB            | Select     | Okay |
 | 22 | Backend  | `sql.client.duration`           | DB            | Select     | Err  |
-| 23 | Backend  | `sql.client.duration`           | DB            | Delete     | OK   |
+| 23 | Backend  | `sql.client.duration`           | DB            | Delete     | Okay |
 | 24 | Backend  | `sql.client.duration`           | DB            | Delete     | Err  |
 
 For the sake of brevity, we haven't counted the histogram buckets. Now we should multiply the metrics instances by the
@@ -214,7 +214,7 @@ information about the applications and how they are interconnected.
 ## Network-level metrics
 
 Network-level metrics calculation is simpler than application-level metrics, as Beyla only provides a single Counter:
-`beyla.network.flow.bytes`. However, its cardinality alsos depend on how much your applications are interconnected.
+`beyla.network.flow.bytes`. However, its cardinality also depend on how much your applications are interconnected.
 
 The default attributes for `beyla.network.flow.bytes` are:
 

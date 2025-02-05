@@ -24,6 +24,11 @@ type bpf_debugCallProtocolArgsT struct {
 	_          [7]byte
 }
 
+type bpf_debugClientTraceKeyT struct {
+	T_key      bpf_debugTraceKeyT
+	RealClient uint8
+}
+
 type bpf_debugConnectionInfoT struct {
 	S_addr [16]uint8
 	D_addr [16]uint8

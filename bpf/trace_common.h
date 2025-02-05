@@ -21,6 +21,12 @@ typedef struct trace_key {
     u64 extra_id;    // pids namespace for the process
 } __attribute__((packed)) trace_key_t;
 
+// Data structure to support context propagation for thread pools
+typedef struct cp_support_data {
+    trace_key_t t_key;
+    u8 real_client;
+} __attribute__((packed)) cp_support_data_t;
+
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, trace_key_t);     // key: pid_tid
@@ -54,10 +60,10 @@ struct {
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, pid_connection_info_t); // key: conn_info
-    __type(value, trace_key_t);         // value: tracekey to lookup in server_traces
+    __type(value, cp_support_data_t);   // value: tracekey to lookup in server_traces
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
     __uint(pinning, BEYLA_PIN_INTERNAL);
-} client_connect_info SEC(".maps");
+} cp_support_connect_info SEC(".maps");
 
 static __always_inline unsigned char *tp_char_buf() {
     int zero = 0;
@@ -150,10 +156,10 @@ static __always_inline tp_info_pid_t *find_parent_trace(pid_connection_info_t *p
         attempts++;
     } while (attempts < 3); // Up to 3 levels of thread nesting allowed
 
-    trace_key_t *conn_t_key = bpf_map_lookup_elem(&client_connect_info, p_conn);
+    cp_support_data_t *conn_t_key = bpf_map_lookup_elem(&cp_support_connect_info, p_conn);
 
     if (conn_t_key) {
-        return bpf_map_lookup_elem(&server_traces, conn_t_key);
+        return bpf_map_lookup_elem(&server_traces, &conn_t_key->t_key);
     }
 
     return 0;
@@ -191,7 +197,7 @@ static __always_inline void delete_client_trace_info(pid_connection_info_t *pid_
         .s_port = pid_conn->conn.s_port,
     };
     bpf_map_delete_elem(&outgoing_trace_map, &e_key);
-    bpf_map_delete_elem(&client_connect_info, pid_conn);
+    bpf_map_delete_elem(&cp_support_connect_info, pid_conn);
 }
 
 static __always_inline u8 valid_span(const unsigned char *span_id) {

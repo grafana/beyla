@@ -44,15 +44,6 @@ struct {
     __uint(pinning, BEYLA_PIN_INTERNAL);
 } active_ssl_connections SEC(".maps");
 
-// Keeps track of tcp buffers for unknown protocols
-struct {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, pid_connection_info_t);
-    __type(value, tcp_req_t);
-    __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
-    __uint(pinning, BEYLA_PIN_INTERNAL);
-} ongoing_tcp_req SEC(".maps");
-
 static __always_inline http_connection_metadata_t *empty_connection_meta() {
     int zero = 0;
     return bpf_map_lookup_elem(&connection_meta_mem, &zero);
@@ -236,10 +227,6 @@ fixup_connection_info(connection_info_t *conn_info, u8 client, u16 orig_dport) {
         swap_connection_info_order(conn_info);
         //dbg_print_http_connection_info(conn_info); // commented out since GitHub CI doesn't like this call
     }
-}
-
-static __always_inline void set_active_ssl_connection(pid_connection_info_t *conn, void *ssl) {
-    bpf_map_update_elem(&active_ssl_connections, conn, &ssl, BPF_ANY);
 }
 
 #endif

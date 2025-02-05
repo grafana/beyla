@@ -9,6 +9,15 @@
 #include "trace_common.h"
 #include "pin_internal.h"
 
+// Keeps track of tcp buffers for unknown protocols
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, pid_connection_info_t);
+    __type(value, tcp_req_t);
+    __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
+    __uint(pinning, BEYLA_PIN_INTERNAL);
+} ongoing_tcp_req SEC(".maps");
+
 struct {
     __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
     __type(key, int);
@@ -103,8 +112,8 @@ static __always_inline void handle_unknown_tcp_connection(pid_connection_info_t 
     }
     if (!existing) {
         if (direction == TCP_RECV) {
-            trace_key_t *tk = bpf_map_lookup_elem(&client_connect_info, pid_conn);
-            if (tk) {
+            cp_support_data_t *tk = bpf_map_lookup_elem(&cp_support_connect_info, pid_conn);
+            if (tk && tk->real_client) {
                 bpf_dbg_printk("Got receive as first operation for client connection, ignoring...");
                 return;
             }

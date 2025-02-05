@@ -24,6 +24,11 @@ type bpf_tpCallProtocolArgsT struct {
 	_          [7]byte
 }
 
+type bpf_tpClientTraceKeyT struct {
+	T_key      bpf_tpTraceKeyT
+	RealClient uint8
+}
+
 type bpf_tpConnectionInfoT struct {
 	S_addr [16]uint8
 	D_addr [16]uint8

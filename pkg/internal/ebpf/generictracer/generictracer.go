@@ -135,7 +135,7 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 				loader = loadBpf_tp_debug
 			}
 		}
-        p.log.Info("Found incompatible Linux kernel, disabling trace information parsing")
+		p.log.Info("Found incompatible Linux kernel, disabling trace information parsing")
 	}
 
 	return loader()

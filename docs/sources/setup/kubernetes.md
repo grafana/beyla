@@ -251,11 +251,7 @@ In all of the examples so far, `privileged:true` or the `SYS_ADMIN` Linux capabi
 
 The following guide is based on tests performed mainly by running `containerd` with `GKE`, `kubeadm`, `k3s`, `microk8s` and `kind`.
 
-To run Beyla unprivileged, you need to run a `privileged` init container which performs setup tasks which require elevated privileges. Then you need to replace the `privileged:true` setting with a set of Linux [capabilities](https://www.man7.org/linux/man-pages/man7/capabilities.7.html). A comprehensive list of capabilities required by Beyla can be found in [Security, permissions and capabilities]({{< relref "../security" >}}).
-
-In addition to these Linux capabilities, many Kubernetes versions include [AppArmour](https://kubernetes.io/docs/tutorials/security/apparmor/), which tough policies adds additional restrictions to unprivileged containers. By [default](https://github.com/moby/moby/blob/master/profiles/apparmor/template.go), the AppArmour policy restricts the use of `mount` and the access to `/sys/fs/` directories. Beyla requires access to `/sys/fs/cgroup/`.
-
-Because of the AppArmour restriction, to run Beyla as unprivileged container, you may need to set `container.apparmor.security.beta.kubernetes.io/beyla: "unconfined"` in your Kubernetes deployment files in case you run into issues.
+To run Beyla unprivileged, you need to replace the `privileged:true` setting with a set of Linux [capabilities](https://www.man7.org/linux/man-pages/man7/capabilities.7.html). A comprehensive list of capabilities required by Beyla can be found in [Security, permissions and capabilities]({{< relref "../security" >}}).
 
 **Note** Loading BPF programs requires that Beyla is able to read the Linux performance events, or at least be able to execute the Linux Kernel API `perf_event_open()`.
 

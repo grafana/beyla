@@ -85,6 +85,9 @@ Summarizing, the formula to calculate the cardinality of processes is:
 
 Where `12` is the number of the above enumerated `#Metrics * #AttributeValues`.
 
+<!-- we are referring to Ok as HTTP status but Vale still complains. Disabling it -->
+<!-- vale Grafana.OK = NO -->
+
 ## Application-level metrics
 
 For application-level metrics, we can't follow a simple multiplication formula as we did for process-level metrics, as
@@ -120,7 +123,7 @@ However, here is a list of factors that can influence the overall cardinality:
 * **Operations** is the equivalent to the functionality that is invoked. In HTTP services, it would group the HTTP
   Method and the HTTP route, in RPC, the RPC method name.
 * **Endpoints** is the count of server addresses and ports.
-* **ReturnCodes** is the number of possible results of the operation. Typically OK/Error in GRPC, or the HTTP Status
+* **ReturnCodes** is the number of possible results of the operation. Typically Ok/Err in GRPC, or the HTTP Status
   code.
 
 ### Example of calculation
@@ -173,17 +176,17 @@ In this simple scenario, we can manually count more the maximum cardinality to 3
 
 | #  | Instance | Metric                          | Endpoint      | Operation  | Code |
 |:---|:---------|:--------------------------------|:--------------|:-----------|:-----|
-| 1  | Client   | `rpc.client.duration`           | Backend       | Add        | Okay |
+| 1  | Client   | `rpc.client.duration`           | Backend       | Add        | Ok   |
 | 2  | Client   | `rpc.client.duration`           | Backend       | Add        | Err  |
-| 3  | Client   | `rpc.client.duration`           | Backend       | List       | Okay |
+| 3  | Client   | `rpc.client.duration`           | Backend       | List       | Ok   |
 | 4  | Client   | `rpc.client.duration`           | Backend       | List       | Err  |
-| 5  | Client   | `rpc.client.duration`           | Backend       | Delete     | Okay |
+| 5  | Client   | `rpc.client.duration`           | Backend       | Delete     | Ok   |
 | 6  | Client   | `rpc.client.duration`           | Backend       | Delete     | Err  |
-| 7  | Backend  | `rpc.server.duration`           |               | Add        | Okay |
+| 7  | Backend  | `rpc.server.duration`           |               | Add        | Ok   |
 | 8  | Backend  | `rpc.server.duration`           |               | Add        | Err  |
-| 9  | Backend  | `rpc.server.duration`           |               | List       | Okay |
+| 9  | Backend  | `rpc.server.duration`           |               | List       | Ok   |
 | 10 | Backend  | `rpc.server.duration`           |               | List       | Err  |
-| 11 | Backend  | `rpc.server.duration`           |               | Delete     | Okay |
+| 11 | Backend  | `rpc.server.duration`           |               | Delete     | Ok   |
 | 12 | Backend  | `rpc.server.duration`           |               | Delete     | Err  |
 | 13 | Backend  | `http.client.request.duration`  | Identity Prov | PUT /login | 200  |
 | 14 | Backend  | `http.client.request.duration`  | Identity Prov | PUT /login | 401  |
@@ -191,12 +194,14 @@ In this simple scenario, we can manually count more the maximum cardinality to 3
 | 16 | Backend  | `http.client.request.body.size` | Identity Prov | PUT /login | 200  |
 | 17 | Backend  | `http.client.request.body.size` | Identity Prov | PUT /login | 401  |
 | 18 | Backend  | `http.client.request.body.size` | Identity Prov | PUT /login | 500  |
-| 19 | Backend  | `sql.client.duration`           | DB            | Insert     | Okay |
+| 19 | Backend  | `sql.client.duration`           | DB            | Insert     | Ok   |
 | 20 | Backend  | `sql.client.duration`           | DB            | Insert     | Err  |
-| 21 | Backend  | `sql.client.duration`           | DB            | Select     | Okay |
+| 21 | Backend  | `sql.client.duration`           | DB            | Select     | Ok   |
 | 22 | Backend  | `sql.client.duration`           | DB            | Select     | Err  |
-| 23 | Backend  | `sql.client.duration`           | DB            | Delete     | Okay |
+| 23 | Backend  | `sql.client.duration`           | DB            | Delete     | Ok   |
 | 24 | Backend  | `sql.client.duration`           | DB            | Delete     | Err  |
+
+<!-- vale Grafana.OK = YES -->
 
 For the sake of brevity, we haven't counted the histogram buckets. Now we should multiply the metrics instances by the
 histogram buckets (plus histogram `_count` and `_sum`):

@@ -48,6 +48,8 @@ metadata:
   labels:
     app: prometheus
 spec:
+  nodeSelector:
+    deployment/zone: otel
   volumes:
     - name: configs
       persistentVolumeClaim:

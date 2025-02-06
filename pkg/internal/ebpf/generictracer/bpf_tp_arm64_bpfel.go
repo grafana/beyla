@@ -24,16 +24,16 @@ type bpf_tpCallProtocolArgsT struct {
 	_          [7]byte
 }
 
-type bpf_tpClientTraceKeyT struct {
-	T_key      bpf_tpTraceKeyT
-	RealClient uint8
-}
-
 type bpf_tpConnectionInfoT struct {
 	S_addr [16]uint8
 	D_addr [16]uint8
 	S_port uint16
 	D_port uint16
+}
+
+type bpf_tpCpSupportDataT struct {
+	T_key      bpf_tpTraceKeyT
+	RealClient uint8
 }
 
 type bpf_tpEgressKeyT struct {
@@ -330,9 +330,9 @@ type bpf_tpMapSpecs struct {
 	ActiveSslWriteArgs      *ebpf.MapSpec `ebpf:"active_ssl_write_args"`
 	ActiveUnixSocks         *ebpf.MapSpec `ebpf:"active_unix_socks"`
 	AsyncResetArgs          *ebpf.MapSpec `ebpf:"async_reset_args"`
-	ClientConnectInfo       *ebpf.MapSpec `ebpf:"client_connect_info"`
 	CloneMap                *ebpf.MapSpec `ebpf:"clone_map"`
 	ConnectionMetaMem       *ebpf.MapSpec `ebpf:"connection_meta_mem"`
+	CpSupportConnectInfo    *ebpf.MapSpec `ebpf:"cp_support_connect_info"`
 	Events                  *ebpf.MapSpec `ebpf:"events"`
 	GrpcFramesCtxMem        *ebpf.MapSpec `ebpf:"grpc_frames_ctx_mem"`
 	Http2InfoMem            *ebpf.MapSpec `ebpf:"http2_info_mem"`
@@ -393,9 +393,9 @@ type bpf_tpMaps struct {
 	ActiveSslWriteArgs      *ebpf.Map `ebpf:"active_ssl_write_args"`
 	ActiveUnixSocks         *ebpf.Map `ebpf:"active_unix_socks"`
 	AsyncResetArgs          *ebpf.Map `ebpf:"async_reset_args"`
-	ClientConnectInfo       *ebpf.Map `ebpf:"client_connect_info"`
 	CloneMap                *ebpf.Map `ebpf:"clone_map"`
 	ConnectionMetaMem       *ebpf.Map `ebpf:"connection_meta_mem"`
+	CpSupportConnectInfo    *ebpf.Map `ebpf:"cp_support_connect_info"`
 	Events                  *ebpf.Map `ebpf:"events"`
 	GrpcFramesCtxMem        *ebpf.Map `ebpf:"grpc_frames_ctx_mem"`
 	Http2InfoMem            *ebpf.Map `ebpf:"http2_info_mem"`
@@ -439,9 +439,9 @@ func (m *bpf_tpMaps) Close() error {
 		m.ActiveSslWriteArgs,
 		m.ActiveUnixSocks,
 		m.AsyncResetArgs,
-		m.ClientConnectInfo,
 		m.CloneMap,
 		m.ConnectionMetaMem,
+		m.CpSupportConnectInfo,
 		m.Events,
 		m.GrpcFramesCtxMem,
 		m.Http2InfoMem,

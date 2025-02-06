@@ -24,16 +24,16 @@ type bpf_debugCallProtocolArgsT struct {
 	_          [7]byte
 }
 
-type bpf_debugClientTraceKeyT struct {
-	T_key      bpf_debugTraceKeyT
-	RealClient uint8
-}
-
 type bpf_debugConnectionInfoT struct {
 	S_addr [16]uint8
 	D_addr [16]uint8
 	S_port uint16
 	D_port uint16
+}
+
+type bpf_debugCpSupportDataT struct {
+	T_key      bpf_debugTraceKeyT
+	RealClient uint8
 }
 
 type bpf_debugEgressKeyT struct {
@@ -304,9 +304,9 @@ type bpf_debugMapSpecs struct {
 	ActiveUnixSocks           *ebpf.MapSpec `ebpf:"active_unix_socks"`
 	AsyncResetArgs            *ebpf.MapSpec `ebpf:"async_reset_args"`
 	BufMem                    *ebpf.MapSpec `ebpf:"buf_mem"`
-	ClientConnectInfo         *ebpf.MapSpec `ebpf:"client_connect_info"`
 	CloneMap                  *ebpf.MapSpec `ebpf:"clone_map"`
 	ConnectionMetaMem         *ebpf.MapSpec `ebpf:"connection_meta_mem"`
+	CpSupportConnectInfo      *ebpf.MapSpec `ebpf:"cp_support_connect_info"`
 	DebugEvents               *ebpf.MapSpec `ebpf:"debug_events"`
 	Events                    *ebpf.MapSpec `ebpf:"events"`
 	GrpcFramesCtxMem          *ebpf.MapSpec `ebpf:"grpc_frames_ctx_mem"`
@@ -368,9 +368,9 @@ type bpf_debugMaps struct {
 	ActiveUnixSocks           *ebpf.Map `ebpf:"active_unix_socks"`
 	AsyncResetArgs            *ebpf.Map `ebpf:"async_reset_args"`
 	BufMem                    *ebpf.Map `ebpf:"buf_mem"`
-	ClientConnectInfo         *ebpf.Map `ebpf:"client_connect_info"`
 	CloneMap                  *ebpf.Map `ebpf:"clone_map"`
 	ConnectionMetaMem         *ebpf.Map `ebpf:"connection_meta_mem"`
+	CpSupportConnectInfo      *ebpf.Map `ebpf:"cp_support_connect_info"`
 	DebugEvents               *ebpf.Map `ebpf:"debug_events"`
 	Events                    *ebpf.Map `ebpf:"events"`
 	GrpcFramesCtxMem          *ebpf.Map `ebpf:"grpc_frames_ctx_mem"`
@@ -415,9 +415,9 @@ func (m *bpf_debugMaps) Close() error {
 		m.ActiveUnixSocks,
 		m.AsyncResetArgs,
 		m.BufMem,
-		m.ClientConnectInfo,
 		m.CloneMap,
 		m.ConnectionMetaMem,
+		m.CpSupportConnectInfo,
 		m.DebugEvents,
 		m.Events,
 		m.GrpcFramesCtxMem,

@@ -261,11 +261,6 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.ProbeDesc {
 			Required: true,
 			End:      p.bpfObjects.BeylaKretprobeSysConnect,
 		},
-		"sock_recvmsg": {
-			Required: true,
-			Start:    p.bpfObjects.BeylaKprobeSockRecvmsg,
-			End:      p.bpfObjects.BeylaKretprobeSockRecvmsg,
-		},
 		"tcp_connect": {
 			Required: true,
 			Start:    p.bpfObjects.BeylaKprobeTcpConnect,
@@ -280,9 +275,9 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.ProbeDesc {
 			End:      p.bpfObjects.BeylaKretprobeTcpSendmsg,
 		},
 		// Reading more than 160 bytes
-		"tcp_recvmsg": {
+		"sock_recvmsg": {
 			Required: true,
-			Start:    p.bpfObjects.BeylaKprobeTcpRecvmsg,
+			Start:    p.bpfObjects.BeylaKprobeSockRecvmsg,
 			End:      p.bpfObjects.BeylaKretprobeTcpRecvmsg,
 		},
 		"tcp_cleanup_rbuf": {

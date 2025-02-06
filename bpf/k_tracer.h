@@ -475,32 +475,6 @@ static __always_inline void setup_recvmsg(u64 id, struct sock *sk, struct msghdr
     bpf_map_update_elem(&active_recv_args, &id, &args, BPF_ANY);
 }
 
-//int tcp_recvmsg(struct sock *sk, struct msghdr *msg, size_t len, int flags, int *addr_len)
-SEC("kprobe/tcp_recvmsg")
-int BPF_KPROBE(beyla_kprobe_tcp_recvmsg,
-               struct sock *sk,
-               struct msghdr *msg,
-               size_t len,
-               int flags,
-               int *addr_len) {
-    u64 id = bpf_get_current_pid_tgid();
-
-    if (!valid_pid(id)) {
-        return 0;
-    }
-
-    bpf_dbg_printk("=== tcp_recvmsg id=%d sock=%llx ===", id, sk);
-
-    setup_recvmsg(id, sk, msg);
-
-    return 0;
-}
-
-// This is a duplicated setup functionality from tcp_recvmsg because when
-// the sock_msg filter is installed, the tcp_recvmsg doesn't trigger for
-// peek into socket channels. We need to track the peek so we can support
-// the context propagation. This probe happens before tcp_recvmsg and wraps it
-// so if tcp_recvmsg happens, it will overwrite the data in the args.
 SEC("kprobe/sock_recvmsg")
 int BPF_KPROBE(beyla_kprobe_sock_recvmsg, struct socket *sock, struct msghdr *msg, int flags) {
     u64 id = bpf_get_current_pid_tgid();
@@ -516,45 +490,6 @@ int BPF_KPROBE(beyla_kprobe_sock_recvmsg, struct socket *sock, struct msghdr *ms
     if (sk) {
         setup_recvmsg(id, sk, msg);
     }
-
-    return 0;
-}
-
-// This is a duplicated setup functionality from tcp_recvmsg because when
-// the sock_msg filter is installed, the tcp_recvmsg doesn't trigger for
-// peek into socket channels. We need to track the peek so we can support
-// the context propagation. When tcp_recvmsg happened, the args would be
-// cleaned up by that probe and this kprobe won't do anything.
-SEC("kretprobe/sock_recvmsg")
-int BPF_KRETPROBE(beyla_kretprobe_sock_recvmsg, int copied_len) {
-    u64 id = bpf_get_current_pid_tgid();
-
-    if (!valid_pid(id)) {
-        return 0;
-    }
-
-    recv_args_t *args = bpf_map_lookup_elem(&active_recv_args, &id);
-
-    bpf_dbg_printk(
-        "=== return sock_recvmsg id=%d args=%llx copied_len %d ===", id, args, copied_len);
-
-    if (!args) {
-        return 0;
-    }
-
-    pid_connection_info_t info = {};
-
-    void *sock_ptr = (void *)args->sock_ptr;
-
-    if (sock_ptr) {
-        if (parse_sock_info((struct sock *)sock_ptr, &info.conn)) {
-            sort_connection_info(&info.conn);
-            info.pid = pid_from_pid_tgid(id);
-            setup_cp_support_conn_info(&info, false);
-        }
-    }
-
-    bpf_map_delete_elem(&active_recv_args, &id);
 
     return 0;
 }

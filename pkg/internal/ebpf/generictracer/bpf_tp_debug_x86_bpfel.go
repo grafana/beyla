@@ -283,10 +283,12 @@ type bpf_tp_debugProgramSpecs struct {
 	BeylaKprobeTcpConnect                  *ebpf.ProgramSpec `ebpf:"beyla_kprobe_tcp_connect"`
 	BeylaKprobeTcpRateCheckAppLimited      *ebpf.ProgramSpec `ebpf:"beyla_kprobe_tcp_rate_check_app_limited"`
 	BeylaKprobeTcpRcvEstablished           *ebpf.ProgramSpec `ebpf:"beyla_kprobe_tcp_rcv_established"`
+	BeylaKprobeTcpRecvmsg                  *ebpf.ProgramSpec `ebpf:"beyla_kprobe_tcp_recvmsg"`
 	BeylaKprobeTcpSendmsg                  *ebpf.ProgramSpec `ebpf:"beyla_kprobe_tcp_sendmsg"`
 	BeylaKprobeUnixStreamRecvmsg           *ebpf.ProgramSpec `ebpf:"beyla_kprobe_unix_stream_recvmsg"`
 	BeylaKprobeUnixStreamSendmsg           *ebpf.ProgramSpec `ebpf:"beyla_kprobe_unix_stream_sendmsg"`
 	BeylaKretprobeSockAlloc                *ebpf.ProgramSpec `ebpf:"beyla_kretprobe_sock_alloc"`
+	BeylaKretprobeSockRecvmsg              *ebpf.ProgramSpec `ebpf:"beyla_kretprobe_sock_recvmsg"`
 	BeylaKretprobeSysAccept4               *ebpf.ProgramSpec `ebpf:"beyla_kretprobe_sys_accept4"`
 	BeylaKretprobeSysClone                 *ebpf.ProgramSpec `ebpf:"beyla_kretprobe_sys_clone"`
 	BeylaKretprobeSysConnect               *ebpf.ProgramSpec `ebpf:"beyla_kretprobe_sys_connect"`
@@ -488,10 +490,12 @@ type bpf_tp_debugPrograms struct {
 	BeylaKprobeTcpConnect                  *ebpf.Program `ebpf:"beyla_kprobe_tcp_connect"`
 	BeylaKprobeTcpRateCheckAppLimited      *ebpf.Program `ebpf:"beyla_kprobe_tcp_rate_check_app_limited"`
 	BeylaKprobeTcpRcvEstablished           *ebpf.Program `ebpf:"beyla_kprobe_tcp_rcv_established"`
+	BeylaKprobeTcpRecvmsg                  *ebpf.Program `ebpf:"beyla_kprobe_tcp_recvmsg"`
 	BeylaKprobeTcpSendmsg                  *ebpf.Program `ebpf:"beyla_kprobe_tcp_sendmsg"`
 	BeylaKprobeUnixStreamRecvmsg           *ebpf.Program `ebpf:"beyla_kprobe_unix_stream_recvmsg"`
 	BeylaKprobeUnixStreamSendmsg           *ebpf.Program `ebpf:"beyla_kprobe_unix_stream_sendmsg"`
 	BeylaKretprobeSockAlloc                *ebpf.Program `ebpf:"beyla_kretprobe_sock_alloc"`
+	BeylaKretprobeSockRecvmsg              *ebpf.Program `ebpf:"beyla_kretprobe_sock_recvmsg"`
 	BeylaKretprobeSysAccept4               *ebpf.Program `ebpf:"beyla_kretprobe_sys_accept4"`
 	BeylaKretprobeSysClone                 *ebpf.Program `ebpf:"beyla_kretprobe_sys_clone"`
 	BeylaKretprobeSysConnect               *ebpf.Program `ebpf:"beyla_kretprobe_sys_connect"`
@@ -530,10 +534,12 @@ func (p *bpf_tp_debugPrograms) Close() error {
 		p.BeylaKprobeTcpConnect,
 		p.BeylaKprobeTcpRateCheckAppLimited,
 		p.BeylaKprobeTcpRcvEstablished,
+		p.BeylaKprobeTcpRecvmsg,
 		p.BeylaKprobeTcpSendmsg,
 		p.BeylaKprobeUnixStreamRecvmsg,
 		p.BeylaKprobeUnixStreamSendmsg,
 		p.BeylaKretprobeSockAlloc,
+		p.BeylaKretprobeSockRecvmsg,
 		p.BeylaKretprobeSysAccept4,
 		p.BeylaKretprobeSysClone,
 		p.BeylaKretprobeSysConnect,

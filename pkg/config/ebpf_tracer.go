@@ -32,6 +32,10 @@ type EBPFTracer struct {
 	// Enables Linux Traffic Control probes for context propagation
 	ContextPropagationEnabled bool `yaml:"enable_context_propagation" env:"BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION"`
 
+	// Skips checking the kernel version for bpf_loop functionality. Some modified kernels have this
+	// backported prior to version 5.17.
+	OverrideBPFLoopEnabled bool `yaml:"override_bpfloop_enabled" env:"BEYLA_OVERRIDE_BPF_LOOP_ENABLED"`
+
 	// Enables Linux Traffic Control probes for context propagation
 	UseTCForL7CP bool `yaml:"traffic_control_l7_context_propagation" env:"BEYLA_BPF_TC_L7_CP"`
 

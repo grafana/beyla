@@ -1,3 +1,34 @@
+# allows Prometheus to get scrape annotations
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus
+rules:
+  - apiGroups: [""]
+    resources:
+      - pods
+      - nodes
+      - services
+      - endpoints
+      - namespaces
+    verbs:
+      - get
+      - list
+      - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prometheus
+subjects:
+  - kind: ServiceAccount
+    name: default
+    namespace: default
+---
 apiVersion: v1
 kind: Service
 metadata:
@@ -17,24 +48,17 @@ metadata:
   labels:
     app: prometheus
 spec:
+  nodeSelector:
+    deployment/zone: otel
   volumes:
     - name: configs
       persistentVolumeClaim:
         claimName: configs
-  affinity:
-      nodeAffinity:
-        requiredDuringSchedulingIgnoredDuringExecution:
-          nodeSelectorTerms:
-          - matchExpressions:
-            - key: deployment/zone
-              operator: In
-              values:
-              - otel
   containers:
     - name: prometheus
       image: quay.io/prometheus/prometheus:v2.55.1
       args:
-        - --config.file=/etc/prometheus/prometheus-config.yml
+        - --config.file=/etc/prometheus/prometheus-config-promscrape-k8s-test.yml
         - --web.enable-lifecycle
         - --web.route-prefix=/
       volumeMounts:

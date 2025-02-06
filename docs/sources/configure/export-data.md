@@ -58,6 +58,7 @@ The Beyla metrics exporter can export the following metrics data groups for proc
     In Kubernetes environments, the OpenTelemetry service name set by the service name discovery is the best choice for service graph metrics.
 - `application_process`: Metrics about the processes that runs the instrumented application
 - `network`:  Network-level metrics, refer to the [network metrics](/docs/beyla/latest/network/) configuration documentation to learn more
+- `network_inter_zone`: Network inter-zone metrics, refer to the [network metrics](/docs/beyla/latest/network/) configuration documentation to learn more
 
 ### Metrics instrumentation
 

@@ -48,7 +48,7 @@ You can set `BEYLA_ENFORCE_SYS_CAPS=1`, which causes Beyla to fail immediately i
 
 ## List of capabilities required by Beyla
 
-Beyla requires the following The following table Below is a list of capabilities and their usage in the context of Beyla
+Beyla requires the following list of capabilities for its functionality:
 
 | Capability               | Usage in Beyla                                                                                                                                                                                                                    |
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -140,7 +140,9 @@ BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION=1 BEYLA_OPEN_PORT=8080 BEYLA_TRACE_PRINTER=
 
 ## Internal eBPF tracer capability requirement reference
 
-The internal architecture of Beyla is made of different "tracers" - a set of eBPF programs that implement the underlying functionality used by Beyla. A tracer may load and use different kinds of eBPF programs, each requiring their own set of capabilities.
+Beyla uses *tracers*, a set of eBPF programs that implement the underlying functionality.
+A tracer may load and use different kinds of eBPF programs, each requiring their own set of capabilities.
+
 The list below maps each internal tracer to their required capabilities, intended to serve as a reference for developers, contributors, and those interested in the internals of Beyla:
 
 **(Network observability) Socket flow fetcher:**
@@ -177,7 +179,7 @@ The list below maps each internal tracer to their required capabilities, intende
 * `CAP_PERFMON`
 * `CAP_NET_ADMIN`: allows loading`BPF_PROG_TYPE_SCHED_CLS`, `BPF_PROG_TYPE_SOCK_OPS` and `BPF_PROG_TYPE_SK_MSG`, all used by trace context propagation and network monitoring
 
-**(Application observabilty) GO tracer:**
+**(Application observability) GO tracer:**
 
 * `CAP_BPF`
 * `CAP_DAC_READ_SEARCH`

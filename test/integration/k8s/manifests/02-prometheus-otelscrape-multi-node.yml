@@ -32,7 +32,7 @@ spec:
               - otel
   containers:
     - name: prometheus
-      image: quay.io/prometheus/prometheus:v2.53.0
+      image: quay.io/prometheus/prometheus:v2.55.1
       args:
         - --config.file=/etc/prometheus/prometheus-config.yml
         - --web.enable-lifecycle

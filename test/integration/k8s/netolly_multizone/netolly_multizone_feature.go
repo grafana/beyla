@@ -45,7 +45,7 @@ func testFlowsDecoratedWithZone(ctx context.Context, t *testing.T, _ *envconf.Co
 			assert.Equal(t, "client-zone", res.Metric["src_zone"])
 			assert.Equal(t, "server-zone", res.Metric["dst_zone"])
 		}
-	})
+	}, test.Interval(time.Second))
 	// checking pod-to-pod node communication (response)
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		results, err := pq.Query(`beyla_network_flow_bytes_total{` +
@@ -62,7 +62,7 @@ func testFlowsDecoratedWithZone(ctx context.Context, t *testing.T, _ *envconf.Co
 			assert.Equal(t, "server-zone", res.Metric["src_zone"])
 			assert.Equal(t, "client-zone", res.Metric["dst_zone"])
 		}
-	})
+	}, test.Interval(time.Second))
 
 	// checking node-to-node communication (e.g between control plane and workers)
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
@@ -76,7 +76,7 @@ func testFlowsDecoratedWithZone(ctx context.Context, t *testing.T, _ *envconf.Co
 		// check that the metrics are properly decorated
 		// should have 2 exact metrics, measured from Beyla instances in both nodes
 		require.GreaterOrEqual(t, len(results), 2)
-	})
+	}, test.Interval(time.Second))
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		results, err := pq.Query(`beyla_network_flow_bytes_total{` +
 			`dst_zone="server-zone",src_zone="control-plane-zone",` +
@@ -88,7 +88,7 @@ func testFlowsDecoratedWithZone(ctx context.Context, t *testing.T, _ *envconf.Co
 		// check that the metrics are properly decorated
 		// should have 2 exact metrics, measured from Beyla instances in both nodes
 		require.GreaterOrEqual(t, len(results), 2)
-	})
+	}, test.Interval(time.Second))
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		results, err := pq.Query(`beyla_network_flow_bytes_total{` +
 			`src_zone="client-zone",dst_zone="control-plane-zone",` +
@@ -100,7 +100,7 @@ func testFlowsDecoratedWithZone(ctx context.Context, t *testing.T, _ *envconf.Co
 		// check that the metrics are properly decorated
 		// should have 2 exact metrics, measured from Beyla instances in both nodes
 		require.GreaterOrEqual(t, len(results), 2)
-	})
+	}, test.Interval(time.Second))
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		results, err := pq.Query(`beyla_network_flow_bytes_total{` +
 			`dst_zone="client-zone",src_zone="control-plane-zone",` +
@@ -112,7 +112,7 @@ func testFlowsDecoratedWithZone(ctx context.Context, t *testing.T, _ *envconf.Co
 		// check that the metrics are properly decorated
 		// should have 2 exact metrics, measured from Beyla instances in both nodes
 		require.GreaterOrEqual(t, len(results), 2)
-	})
+	}, test.Interval(time.Second))
 	return ctx
 }
 
@@ -125,7 +125,7 @@ func testInterZoneMetric(ctx context.Context, t *testing.T, _ *envconf.Config) c
 			`src_zone="client-zone", dst_zone="server-zone"}`)
 		require.NoError(t, err)
 		require.NotEmpty(t, results)
-	})
+	}, test.Interval(time.Second))
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		results, err := pq.Query(`beyla_network_inter_zone_bytes_total{` +
 			`dst_zone="client-zone", src_zone="server-zone"}`)
@@ -134,7 +134,7 @@ func testInterZoneMetric(ctx context.Context, t *testing.T, _ *envconf.Config) c
 		// AND the reported attributes are different from the flow bytes attributes
 		require.NotContains(t, results, "k8s_src_type")
 		require.NotContains(t, results, "iface_direction")
-	})
+	}, test.Interval(time.Second))
 
 	// BUT same-zone bytes are not reported in this metric
 	results, err := pq.Query(`beyla_network_inter_zone_bytes_total{` +

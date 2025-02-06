@@ -31,6 +31,11 @@ type bpf_tpConnectionInfoT struct {
 	D_port uint16
 }
 
+type bpf_tpCpSupportDataT struct {
+	T_key      bpf_tpTraceKeyT
+	RealClient uint8
+}
+
 type bpf_tpEgressKeyT struct {
 	S_port uint16
 	D_port uint16
@@ -271,6 +276,7 @@ type bpf_tpSpecs struct {
 type bpf_tpProgramSpecs struct {
 	BeylaAsyncReset                        *ebpf.ProgramSpec `ebpf:"beyla_async_reset"`
 	BeylaEmitAsyncInit                     *ebpf.ProgramSpec `ebpf:"beyla_emit_async_init"`
+	BeylaKprobeSockRecvmsg                 *ebpf.ProgramSpec `ebpf:"beyla_kprobe_sock_recvmsg"`
 	BeylaKprobeSysExit                     *ebpf.ProgramSpec `ebpf:"beyla_kprobe_sys_exit"`
 	BeylaKprobeTcpCleanupRbuf              *ebpf.ProgramSpec `ebpf:"beyla_kprobe_tcp_cleanup_rbuf"`
 	BeylaKprobeTcpClose                    *ebpf.ProgramSpec `ebpf:"beyla_kprobe_tcp_close"`
@@ -282,6 +288,7 @@ type bpf_tpProgramSpecs struct {
 	BeylaKprobeUnixStreamRecvmsg           *ebpf.ProgramSpec `ebpf:"beyla_kprobe_unix_stream_recvmsg"`
 	BeylaKprobeUnixStreamSendmsg           *ebpf.ProgramSpec `ebpf:"beyla_kprobe_unix_stream_sendmsg"`
 	BeylaKretprobeSockAlloc                *ebpf.ProgramSpec `ebpf:"beyla_kretprobe_sock_alloc"`
+	BeylaKretprobeSockRecvmsg              *ebpf.ProgramSpec `ebpf:"beyla_kretprobe_sock_recvmsg"`
 	BeylaKretprobeSysAccept4               *ebpf.ProgramSpec `ebpf:"beyla_kretprobe_sys_accept4"`
 	BeylaKretprobeSysClone                 *ebpf.ProgramSpec `ebpf:"beyla_kretprobe_sys_clone"`
 	BeylaKretprobeSysConnect               *ebpf.ProgramSpec `ebpf:"beyla_kretprobe_sys_connect"`
@@ -325,9 +332,9 @@ type bpf_tpMapSpecs struct {
 	ActiveSslWriteArgs      *ebpf.MapSpec `ebpf:"active_ssl_write_args"`
 	ActiveUnixSocks         *ebpf.MapSpec `ebpf:"active_unix_socks"`
 	AsyncResetArgs          *ebpf.MapSpec `ebpf:"async_reset_args"`
-	ClientConnectInfo       *ebpf.MapSpec `ebpf:"client_connect_info"`
 	CloneMap                *ebpf.MapSpec `ebpf:"clone_map"`
 	ConnectionMetaMem       *ebpf.MapSpec `ebpf:"connection_meta_mem"`
+	CpSupportConnectInfo    *ebpf.MapSpec `ebpf:"cp_support_connect_info"`
 	Events                  *ebpf.MapSpec `ebpf:"events"`
 	GrpcFramesCtxMem        *ebpf.MapSpec `ebpf:"grpc_frames_ctx_mem"`
 	Http2InfoMem            *ebpf.MapSpec `ebpf:"http2_info_mem"`
@@ -388,9 +395,9 @@ type bpf_tpMaps struct {
 	ActiveSslWriteArgs      *ebpf.Map `ebpf:"active_ssl_write_args"`
 	ActiveUnixSocks         *ebpf.Map `ebpf:"active_unix_socks"`
 	AsyncResetArgs          *ebpf.Map `ebpf:"async_reset_args"`
-	ClientConnectInfo       *ebpf.Map `ebpf:"client_connect_info"`
 	CloneMap                *ebpf.Map `ebpf:"clone_map"`
 	ConnectionMetaMem       *ebpf.Map `ebpf:"connection_meta_mem"`
+	CpSupportConnectInfo    *ebpf.Map `ebpf:"cp_support_connect_info"`
 	Events                  *ebpf.Map `ebpf:"events"`
 	GrpcFramesCtxMem        *ebpf.Map `ebpf:"grpc_frames_ctx_mem"`
 	Http2InfoMem            *ebpf.Map `ebpf:"http2_info_mem"`
@@ -434,9 +441,9 @@ func (m *bpf_tpMaps) Close() error {
 		m.ActiveSslWriteArgs,
 		m.ActiveUnixSocks,
 		m.AsyncResetArgs,
-		m.ClientConnectInfo,
 		m.CloneMap,
 		m.ConnectionMetaMem,
+		m.CpSupportConnectInfo,
 		m.Events,
 		m.GrpcFramesCtxMem,
 		m.Http2InfoMem,
@@ -473,6 +480,7 @@ func (m *bpf_tpMaps) Close() error {
 type bpf_tpPrograms struct {
 	BeylaAsyncReset                        *ebpf.Program `ebpf:"beyla_async_reset"`
 	BeylaEmitAsyncInit                     *ebpf.Program `ebpf:"beyla_emit_async_init"`
+	BeylaKprobeSockRecvmsg                 *ebpf.Program `ebpf:"beyla_kprobe_sock_recvmsg"`
 	BeylaKprobeSysExit                     *ebpf.Program `ebpf:"beyla_kprobe_sys_exit"`
 	BeylaKprobeTcpCleanupRbuf              *ebpf.Program `ebpf:"beyla_kprobe_tcp_cleanup_rbuf"`
 	BeylaKprobeTcpClose                    *ebpf.Program `ebpf:"beyla_kprobe_tcp_close"`
@@ -484,6 +492,7 @@ type bpf_tpPrograms struct {
 	BeylaKprobeUnixStreamRecvmsg           *ebpf.Program `ebpf:"beyla_kprobe_unix_stream_recvmsg"`
 	BeylaKprobeUnixStreamSendmsg           *ebpf.Program `ebpf:"beyla_kprobe_unix_stream_sendmsg"`
 	BeylaKretprobeSockAlloc                *ebpf.Program `ebpf:"beyla_kretprobe_sock_alloc"`
+	BeylaKretprobeSockRecvmsg              *ebpf.Program `ebpf:"beyla_kretprobe_sock_recvmsg"`
 	BeylaKretprobeSysAccept4               *ebpf.Program `ebpf:"beyla_kretprobe_sys_accept4"`
 	BeylaKretprobeSysClone                 *ebpf.Program `ebpf:"beyla_kretprobe_sys_clone"`
 	BeylaKretprobeSysConnect               *ebpf.Program `ebpf:"beyla_kretprobe_sys_connect"`
@@ -515,6 +524,7 @@ func (p *bpf_tpPrograms) Close() error {
 	return _Bpf_tpClose(
 		p.BeylaAsyncReset,
 		p.BeylaEmitAsyncInit,
+		p.BeylaKprobeSockRecvmsg,
 		p.BeylaKprobeSysExit,
 		p.BeylaKprobeTcpCleanupRbuf,
 		p.BeylaKprobeTcpClose,
@@ -526,6 +536,7 @@ func (p *bpf_tpPrograms) Close() error {
 		p.BeylaKprobeUnixStreamRecvmsg,
 		p.BeylaKprobeUnixStreamSendmsg,
 		p.BeylaKretprobeSockAlloc,
+		p.BeylaKretprobeSockRecvmsg,
 		p.BeylaKretprobeSysAccept4,
 		p.BeylaKretprobeSysClone,
 		p.BeylaKretprobeSysConnect,

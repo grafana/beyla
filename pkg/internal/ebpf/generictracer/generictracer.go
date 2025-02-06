@@ -262,6 +262,11 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.ProbeDesc {
 			Required: true,
 			End:      p.bpfObjects.BeylaKretprobeSysConnect,
 		},
+		"sock_recvmsg": {
+			Required: true,
+			Start:    p.bpfObjects.BeylaKprobeSockRecvmsg,
+			End:      p.bpfObjects.BeylaKretprobeSockRecvmsg,
+		},
 		"tcp_connect": {
 			Required: true,
 			Start:    p.bpfObjects.BeylaKprobeTcpConnect,

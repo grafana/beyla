@@ -173,10 +173,29 @@ int BPF_KPROBE(beyla_kprobe_tcp_connect, struct sock *sk) {
     return 0;
 }
 
+// This helper sets up a map for tracking server to client calls, when
+// the connection between the two is unclear by just tracking the threads.
+// With thread pools, often times the connect call happens on the same thread
+// as the one serving the server request, and it's later delegated to another
+// thread to handle the client request.
+static __always_inline void setup_cp_support_conn_info(pid_connection_info_t *p_conn,
+                                                       u8 real_client) {
+    cp_support_data_t ct = {
+        .real_client = real_client,
+    };
+
+    task_tid(&ct.t_key.p_key);
+    u64 extra_id = extra_runtime_id();
+    ct.t_key.extra_id = extra_id;
+
+    // Support connection thread pools
+    bpf_map_update_elem(&cp_support_connect_info, p_conn, &ct, BPF_ANY);
+}
+
 // We tap into sys_connect so we can track properly the processes doing
 // HTTP client calls
 SEC("kretprobe/sys_connect")
-int BPF_KRETPROBE(beyla_kretprobe_sys_connect, int fd) {
+int BPF_KRETPROBE(beyla_kretprobe_sys_connect, int res) {
     u64 id = bpf_get_current_pid_tgid();
 
     if (!valid_pid(id)) {
@@ -187,7 +206,7 @@ int BPF_KRETPROBE(beyla_kretprobe_sys_connect, int fd) {
 
     // The file descriptor is the value returned from the connect syscall.
     // If we got a negative file descriptor we don't have a connection, unless we are in progress
-    if (fd < 0 && (fd != -EINPROGRESS)) {
+    if (res < 0 && (res != -EINPROGRESS)) {
         goto cleanup;
     }
 
@@ -209,14 +228,7 @@ int BPF_KRETPROBE(beyla_kretprobe_sys_connect, int fd) {
 
         bpf_map_update_elem(&pid_tid_to_conn, &id, &info, BPF_ANY); // Support SSL lookup
 
-        trace_key_t t_key = {0};
-
-        task_tid(&t_key.p_key);
-        u64 extra_id = extra_runtime_id();
-        t_key.extra_id = extra_id;
-
-        bpf_map_update_elem(
-            &client_connect_info, &info.p_conn, &t_key, BPF_ANY); // Support connection thread pools
+        setup_cp_support_conn_info(&info.p_conn, true);
     }
 
 cleanup:
@@ -447,6 +459,22 @@ int BPF_KPROBE(beyla_kprobe_tcp_close, struct sock *sk, long timeout) {
     return 0;
 }
 
+static __always_inline void setup_recvmsg(u64 id, struct sock *sk, struct msghdr *msg) {
+    // Make sure we don't have stale event from earlier socket connection if they are
+    // sent through the same socket. This mainly happens if the server overlays virtual
+    // threads in the runtime.
+    u64 sock_p = (u64)sk;
+    ensure_sent_event(id, &sock_p);
+
+    recv_args_t args = {
+        .sock_ptr = (u64)sk,
+    };
+
+    get_iovec_ctx((iovec_iter_ctx *)&args.iovec_ctx, msg);
+
+    bpf_map_update_elem(&active_recv_args, &id, &args, BPF_ANY);
+}
+
 //int tcp_recvmsg(struct sock *sk, struct msghdr *msg, size_t len, int flags, int *addr_len)
 SEC("kprobe/tcp_recvmsg")
 int BPF_KPROBE(beyla_kprobe_tcp_recvmsg,
@@ -463,19 +491,70 @@ int BPF_KPROBE(beyla_kprobe_tcp_recvmsg,
 
     bpf_dbg_printk("=== tcp_recvmsg id=%d sock=%llx ===", id, sk);
 
-    // Make sure we don't have stale event from earlier socket connection if they are
-    // sent through the same socket. This mainly happens if the server overlays virtual
-    // threads in the runtime.
-    u64 sock_p = (u64)sk;
-    ensure_sent_event(id, &sock_p);
+    setup_recvmsg(id, sk, msg);
 
-    recv_args_t args = {
-        .sock_ptr = (u64)sk,
-    };
+    return 0;
+}
 
-    get_iovec_ctx((iovec_iter_ctx *)&args.iovec_ctx, msg);
+// This is a duplicated setup functionality from tcp_recvmsg because when
+// the sock_msg filter is installed, the tcp_recvmsg doesn't trigger for
+// peek into socket channels. We need to track the peek so we can support
+// the context propagation. This probe happens before tcp_recvmsg and wraps it
+// so if tcp_recvmsg happens, it will overwrite the data in the args.
+SEC("kprobe/sock_recvmsg")
+int BPF_KPROBE(beyla_kprobe_sock_recvmsg, struct socket *sock, struct msghdr *msg, int flags) {
+    u64 id = bpf_get_current_pid_tgid();
 
-    bpf_map_update_elem(&active_recv_args, &id, &args, BPF_ANY);
+    if (!valid_pid(id)) {
+        return 0;
+    }
+
+    struct sock *sk = 0;
+    BPF_CORE_READ_INTO(&sk, sock, sk);
+
+    bpf_dbg_printk("+++ sock_recvmsg sock=%llx", sk);
+    if (sk) {
+        setup_recvmsg(id, sk, msg);
+    }
+
+    return 0;
+}
+
+// This is a duplicated setup functionality from tcp_recvmsg because when
+// the sock_msg filter is installed, the tcp_recvmsg doesn't trigger for
+// peek into socket channels. We need to track the peek so we can support
+// the context propagation. When tcp_recvmsg happened, the args would be
+// cleaned up by that probe and this kprobe won't do anything.
+SEC("kretprobe/sock_recvmsg")
+int BPF_KRETPROBE(beyla_kretprobe_sock_recvmsg, int copied_len) {
+    u64 id = bpf_get_current_pid_tgid();
+
+    if (!valid_pid(id)) {
+        return 0;
+    }
+
+    recv_args_t *args = bpf_map_lookup_elem(&active_recv_args, &id);
+
+    bpf_dbg_printk(
+        "=== return sock_recvmsg id=%d args=%llx copied_len %d ===", id, args, copied_len);
+
+    if (!args) {
+        return 0;
+    }
+
+    pid_connection_info_t info = {};
+
+    void *sock_ptr = (void *)args->sock_ptr;
+
+    if (sock_ptr) {
+        if (parse_sock_info((struct sock *)sock_ptr, &info.conn)) {
+            sort_connection_info(&info.conn);
+            info.pid = pid_from_pid_tgid(id);
+            setup_cp_support_conn_info(&info, false);
+        }
+    }
+
+    bpf_map_delete_elem(&active_recv_args, &id);
 
     return 0;
 }
@@ -485,7 +564,20 @@ static __always_inline int return_recvmsg(void *ctx, u64 id, int copied_len) {
 
     bpf_dbg_printk("=== return recvmsg id=%d args=%llx copied_len %d ===", id, args, copied_len);
 
-    if (!args || (copied_len <= 0)) {
+    pid_connection_info_t info = {};
+
+    if (!args) {
+        goto done;
+    }
+
+    void *sock_ptr = (void *)args->sock_ptr;
+
+    if (copied_len <= 0) {
+        if (parse_sock_info((struct sock *)sock_ptr, &info.conn)) {
+            sort_connection_info(&info.conn);
+            info.pid = pid_from_pid_tgid(id);
+            setup_cp_support_conn_info(&info, false);
+        }
         goto done;
     }
 
@@ -497,10 +589,6 @@ static __always_inline int return_recvmsg(void *ctx, u64 id, int copied_len) {
 
         goto done;
     }
-
-    pid_connection_info_t info = {};
-
-    void *sock_ptr = (void *)args->sock_ptr;
 
     bpf_map_delete_elem(&active_recv_args, &id);
 

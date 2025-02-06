@@ -224,8 +224,20 @@ static __always_inline void dbg_print_http_connection_info(connection_info_t *in
                    *(u64 *)(&info->d_addr[8]),
                    info->d_port);
 }
+static __always_inline void d_print_http_connection_info(connection_info_t *info) {
+    bpf_d_printk("[conn] s_h = %llx, s_l = %llx, s_port=%d",
+                 *(u64 *)(&info->s_addr),
+                 *(u64 *)(&info->s_addr[8]),
+                 info->s_port);
+    bpf_d_printk("[conn] d_h = %llx, d_l = %llx, d_port=%d",
+                 *(u64 *)(&info->d_addr),
+                 *(u64 *)(&info->d_addr[8]),
+                 info->d_port);
+}
 #else
 static __always_inline void dbg_print_http_connection_info(connection_info_t *info) {
+}
+static __always_inline void d_print_http_connection_info(connection_info_t *info) {
 }
 #endif
 

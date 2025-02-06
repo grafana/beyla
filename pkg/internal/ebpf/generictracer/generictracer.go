@@ -259,7 +259,6 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.ProbeDesc {
 		// Tracking of HTTP client calls, by tapping into connect
 		"sys_connect": {
 			Required: true,
-			Start:    p.bpfObjects.BeylaKprobeSysConnect,
 			End:      p.bpfObjects.BeylaKretprobeSysConnect,
 		},
 		"sock_recvmsg": {

@@ -192,23 +192,6 @@ static __always_inline void setup_cp_support_conn_info(pid_connection_info_t *p_
     bpf_map_update_elem(&cp_support_connect_info, p_conn, &ct, BPF_ANY);
 }
 
-SEC("kprobe/sys_connect")
-int beyla_kprobe_sys_connect(struct pt_regs *ctx) {
-    u64 id = bpf_get_current_pid_tgid();
-
-    if (!valid_pid(id)) {
-        return 0;
-    }
-
-    struct pt_regs *__ctx = (struct pt_regs *)PT_REGS_PARM1(ctx);
-    u32 fd;
-    bpf_probe_read(&fd, sizeof(void *), (void *)&PT_REGS_PARM1(__ctx));
-
-    bpf_printk("+++ sys_connect fd=%d", fd);
-
-    return 0;
-}
-
 // We tap into sys_connect so we can track properly the processes doing
 // HTTP client calls
 SEC("kretprobe/sys_connect")

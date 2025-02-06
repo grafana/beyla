@@ -277,7 +277,6 @@ type bpf_debugProgramSpecs struct {
 	BeylaAsyncReset                        *ebpf.ProgramSpec `ebpf:"beyla_async_reset"`
 	BeylaEmitAsyncInit                     *ebpf.ProgramSpec `ebpf:"beyla_emit_async_init"`
 	BeylaKprobeSockRecvmsg                 *ebpf.ProgramSpec `ebpf:"beyla_kprobe_sock_recvmsg"`
-	BeylaKprobeSysConnect                  *ebpf.ProgramSpec `ebpf:"beyla_kprobe_sys_connect"`
 	BeylaKprobeSysExit                     *ebpf.ProgramSpec `ebpf:"beyla_kprobe_sys_exit"`
 	BeylaKprobeTcpCleanupRbuf              *ebpf.ProgramSpec `ebpf:"beyla_kprobe_tcp_cleanup_rbuf"`
 	BeylaKprobeTcpClose                    *ebpf.ProgramSpec `ebpf:"beyla_kprobe_tcp_close"`
@@ -485,7 +484,6 @@ type bpf_debugPrograms struct {
 	BeylaAsyncReset                        *ebpf.Program `ebpf:"beyla_async_reset"`
 	BeylaEmitAsyncInit                     *ebpf.Program `ebpf:"beyla_emit_async_init"`
 	BeylaKprobeSockRecvmsg                 *ebpf.Program `ebpf:"beyla_kprobe_sock_recvmsg"`
-	BeylaKprobeSysConnect                  *ebpf.Program `ebpf:"beyla_kprobe_sys_connect"`
 	BeylaKprobeSysExit                     *ebpf.Program `ebpf:"beyla_kprobe_sys_exit"`
 	BeylaKprobeTcpCleanupRbuf              *ebpf.Program `ebpf:"beyla_kprobe_tcp_cleanup_rbuf"`
 	BeylaKprobeTcpClose                    *ebpf.Program `ebpf:"beyla_kprobe_tcp_close"`
@@ -530,7 +528,6 @@ func (p *bpf_debugPrograms) Close() error {
 		p.BeylaAsyncReset,
 		p.BeylaEmitAsyncInit,
 		p.BeylaKprobeSockRecvmsg,
-		p.BeylaKprobeSysConnect,
 		p.BeylaKprobeSysExit,
 		p.BeylaKprobeTcpCleanupRbuf,
 		p.BeylaKprobeTcpClose,

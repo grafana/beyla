@@ -129,7 +129,7 @@ have their context propagated. We use this volume path to listen to newly create
 
 The network level context propagation incoming headers parsing generally requires kernel 5.17 or newer for the addition and use of BPF loops.
 
-Some patched kernels, such as RHEL 9.2, may have this functionality ported back. Setting BEYLA_OVERRIDE_BPF_LOOP_ENABLED will skip kernel checks in the case your kernel includes the functionality but is lower than 5.17.
+Some patched kernels, such as RHEL 9.2, may have this functionality ported back. Setting BEYLA_OVERRIDE_BPF_LOOP_ENABLED skips kernel checks in the case your kernel includes the functionality but is lower than 5.17.
 
 ### Go context propagation by instrumenting at library level
 

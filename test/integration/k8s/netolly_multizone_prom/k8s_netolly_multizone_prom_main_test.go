@@ -23,13 +23,12 @@ func TestMain(m *testing.M) {
 		docker.ImageBuild{Tag: "beyla:dev", Dockerfile: k8s.DockerfileBeyla},
 		docker.ImageBuild{Tag: "httppinger:dev", Dockerfile: k8s.DockerfileHTTPPinger},
 		docker.ImageBuild{Tag: "quay.io/prometheus/prometheus:v2.53.0"},
-		docker.ImageBuild{Tag: "otel/opentelemetry-collector-contrib:0.103.0"},
 	); err != nil {
 		slog.Error("can't build docker images", "error", err)
 		os.Exit(-1)
 	}
 
-	cluster = kube.NewKind("test-kind-cluster-netolly-multizone",
+	cluster = kube.NewKind("test-kind-cluster-netolly-multizone-prom",
 		kube.KindConfig(testpath.Manifests+"/00-kind-multi-zone.yml"),
 		kube.LocalImage("testserver:dev"),
 		kube.LocalImage("beyla:dev"),

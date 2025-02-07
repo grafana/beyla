@@ -96,7 +96,7 @@ there are multiple factors that influence cardinality, but they aren't linearly 
 For example, both the number of HTTP routes and Server addresses increase the cardinality, but we can't just multiply
 them because not all the server instances accept the same HTTP routes.
 
-The following formula could provide an extremely rough maximum limit, but in [our measurements](#case-study-measuring-cardinality-of-opentelemetry-demo), the actual
+The following formula could provide an extremely rough maximum limit, but in [our measurements](#case-study-cardinality-of-opentelemetry-demo), the actual
 cardinality was 2 orders of magnitude lower than the calculation. For this reason we recommend a
 measure-oriented approach rather than trying to calculate cardinality beforehand.
 
@@ -284,7 +284,7 @@ Maximum cardinality could be roughly calculated as:
 19 metric buckets * 3 span kinds * #Instances * #Operations * #ReturnCodes
 ```
 
-As depicted in the [previous example of calculation for application metrics](#example-of-calculation),
+As depicted in the [previous example of calculation for application metrics](#example-calculation),
 we've made assumptions that the large number of HTTP return codes would only multiply to HTTP services,
 or that some groups of instances would have only a subset of the total routes.
 

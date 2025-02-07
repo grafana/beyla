@@ -430,7 +430,7 @@ func getCgroupPath() (string, error) {
 	cgroupPath := "/sys/fs/cgroup"
 
 	enabled, err := v2.Enabled()
-	if !enabled {
+	if enabled {
 		cgroupPath = filepath.Join(cgroupPath, "unified")
 	}
 	return cgroupPath, err

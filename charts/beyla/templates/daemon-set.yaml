@@ -95,14 +95,14 @@ spec:
             - name: BEYLA_KUBE_META_CACHE_ADDRESS
               value: {{ .Values.k8sCache.service.name }}:{{ .Values.k8sCache.service.port }}
           {{- end }}
-          {{- range $key, $value := .Values.env }}
-            - name: {{ $key }}
-              value: "{{ $value }}"
-          {{- end }}
           {{- range $key, $value := .Values.envValueFrom }}
             - name: {{ $key | quote }}
               valueFrom:
           {{- tpl (toYaml $value) $ | nindent 16 }}
+          {{- end }}
+          {{- range $key, $value := .Values.env }}
+            - name: {{ $key }}
+              value: "{{ $value }}"
           {{- end }}
           volumeMounts:
             - mountPath: /etc/beyla/config

@@ -28,7 +28,7 @@ nodes:
     labels:
       # faking a multi-zone cluster
       topology.kubernetes.io/zone: client-zone
-      # otel collector needs to be placed here, due to port mappings
+      # otel collector / prom scraper needs to be placed here, due to port mappings
       deployment/zone: otel
     extraMounts:
       # configuration files that need to be mounted in the host

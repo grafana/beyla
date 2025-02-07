@@ -73,10 +73,7 @@ While most eBPF programs require elevated privileges, Beyla allow you to specify
 
 Some Beyla functionality requires further permissions, for example using the network observability probes with Linux Traffic Control requires `CAP_NET_ADMIN`, but it's a feature you have to optionally enable.
 
-`CAP_SYS_ADMIN` is only required to enable context propagation in Go across multiple nodes, however if this permission
-isn't granted Beyla gracefully degrades its functionality to support only partial traces.
-
-Distributed tracing is only supported for Go services, while other programming language support remains on the road-map. Distributed tracing for other programming languages works on the same node, but not across different nodes.
+For a comprehensive list of capabilities required by Beyla, refer to [Security, permissions and capabilities]({{< relref "./security" >}}).
 
 ## Get started
 

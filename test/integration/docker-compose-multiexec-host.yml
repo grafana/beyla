@@ -136,7 +136,7 @@ services:
       BEYLA_TRACE_PRINTER: "text"
       BEYLA_METRICS_INTERVAL: "10ms"
       BEYLA_BPF_BATCH_TIMEOUT: "10ms"
-      BEYLA_LOG_LEVEL: "INFO"
+      BEYLA_LOG_LEVEL: "DEBUG"
       BEYLA_BPF_DEBUG: "TRUE"
       BEYLA_HOSTNAME: "beyla"
       BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT: 8999
@@ -145,6 +145,7 @@ services:
       BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION: "${BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION}"
       BEYLA_BPF_TC_L7_CP: "${BEYLA_BPF_TC_L7_CP}"
       BEYLA_BPF_TRACK_REQUEST_HEADERS: "${BEYLA_BPF_TRACK_REQUEST_HEADERS}"
+      BEYLA_BPF_HIGH_REQUEST_VOLUME: 1
     ports:
       - "8999:8999"
 
@@ -171,7 +172,7 @@ services:
 
   # Prometheus
   prometheus:
-    image: quay.io/prometheus/prometheus:v2.53.0
+    image: quay.io/prometheus/prometheus:v2.55.1
     container_name: prometheus
     command:
       - --config.file=/etc/prometheus/prometheus-config.yml

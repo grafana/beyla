@@ -357,11 +357,6 @@ func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 				Start:    p.bpfObjects.BeylaUprobeSslWriteEx,
 				End:      p.bpfObjects.BeylaUretprobeSslWriteEx,
 			}},
-			"SSL_do_handshake": {{
-				Required: false,
-				Start:    p.bpfObjects.BeylaUprobeSslDoHandshake,
-				End:      p.bpfObjects.BeylaUretprobeSslDoHandshake,
-			}},
 			"SSL_shutdown": {{
 				Required: false,
 				Start:    p.bpfObjects.BeylaUprobeSslShutdown,

@@ -60,10 +60,6 @@ func (tr *tracesReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], error) 
 			slog.Error("error fetching user defined attributes", "error", err)
 		}
 
-		if tr.spanMetricsEnabled {
-			traceAttrs[attr.SkipSpanMetrics] = struct{}{}
-		}
-
 		for spans := range in {
 			for i := range spans {
 				span := &spans[i]

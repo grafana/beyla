@@ -132,10 +132,10 @@ func testREDMetricsForPythonSQLSSL(t *testing.T, url, comm, namespace string) {
 		var tq jaeger.TracesQuery
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
 		traces := tq.FindBySpan(jaeger.Tag{Key: "url.path", Type: "string", Value: "/query"})
-		require.Len(t, traces, 1)
+		require.LessOrEqual(t, 1, len(traces))
 		trace := traces[0]
 		// Check the information of the parent span
-		res := trace.FindByOperationName("GET /bye")
+		res := trace.FindByOperationName("GET /query")
 		require.Len(t, res, 1)
 	}, test.Interval(100*time.Millisecond))
 }

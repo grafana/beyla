@@ -7,7 +7,7 @@ app = FastAPI()
 
 conn = None
 
-server = "localhost"
+server = "sqlserver"
 
 @app.get("/query")
 async def root():

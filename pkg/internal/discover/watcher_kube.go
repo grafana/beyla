@@ -175,6 +175,7 @@ func (wk *watcherKubeEnricher) onNewProcess(procInfo processAttrs) (processAttrs
 	wk.processByContainer[containerInfo.ContainerID] = procInfo
 
 	if pod := wk.store.PodByContainerID(containerInfo.ContainerID); pod != nil {
+		wk.log.Debug("matched process with running container", "pid", procInfo.pid, "container", containerInfo.ContainerID)
 		procInfo = withMetadata(procInfo, pod.Meta)
 	}
 	return procInfo, true

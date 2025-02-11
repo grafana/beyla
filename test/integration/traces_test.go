@@ -416,6 +416,7 @@ func testHTTPTracesNestedCalls(t *testing.T) {
 		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(8082)},
 		jaeger.Tag{Key: "http.route", Type: "string", Value: "/echo"},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
+		jaeger.Tag{Key: "span.metrics.skip", Type: "bool", Value: bool(true)},
 	)
 	assert.Empty(t, sd, sd.String())
 

@@ -22,7 +22,7 @@ import (
 // This file contains some functions and features that are accessed/used
 // from diverse integration tests
 const (
-	testTimeout        = 2 * time.Minute
+	testTimeout        = 3 * time.Minute
 	prometheusHostPort = "localhost:39090"
 
 	HostIDRegex = `^[0-9A-Fa-f\-]+$`

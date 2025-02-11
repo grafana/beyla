@@ -116,10 +116,10 @@ func newGraphBuilder(ctx context.Context, config *beyla.Config, ctxInfo *global.
 	config.Metrics.Grafana = &gb.config.Grafana.OTLP
 	pipe.AddFinalProvider(gnb, otelMetrics, otel.ReportMetrics(ctx, gb.ctxInfo, &config.Metrics, config.Attributes.Select))
 	config.Traces.Grafana = &gb.config.Grafana.OTLP
-	pipe.AddFinalProvider(gnb, otelTraces, otel.TracesReceiver(ctx, config.Traces, gb.ctxInfo, config.Attributes.Select))
+	pipe.AddFinalProvider(gnb, otelTraces, otel.TracesReceiver(ctx, config.Traces, config.Metrics.SpanMetricsEnabled(), gb.ctxInfo, config.Attributes.Select))
 	pipe.AddFinalProvider(gnb, prometheus, prom.PrometheusEndpoint(ctx, gb.ctxInfo, &config.Prometheus, config.Attributes.Select))
 	pipe.AddFinalProvider(gnb, bpfMetrics, prom.BPFMetrics(ctx, gb.ctxInfo, &config.Prometheus))
-	pipe.AddFinalProvider(gnb, alloyTraces, alloy.TracesReceiver(ctx, gb.ctxInfo, &config.TracesReceiver, config.Attributes.Select))
+	pipe.AddFinalProvider(gnb, alloyTraces, alloy.TracesReceiver(ctx, gb.ctxInfo, &config.TracesReceiver, config.Metrics.SpanMetricsEnabled(), config.Attributes.Select))
 
 	pipe.AddFinalProvider(gnb, printer, debug.PrinterNode(config.TracePrinter))
 

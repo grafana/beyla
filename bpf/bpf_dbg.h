@@ -71,8 +71,11 @@ enum bpf_func_id___x { BPF_FUNC_snprintf___x = 42 /* avoid zero */ };
         bpf_printk(fmt, ##args);                                                                   \
         bpf_dbg_helper(fmt, ##args);                                                               \
     }
+#define bpf_d_printk(fmt, args...)                                                                 \
+    { bpf_printk(fmt, ##args); }
 #else
 #define bpf_dbg_printk(fmt, args...)
+#define bpf_d_printk(fmt, args...)
 #endif
 
 #endif

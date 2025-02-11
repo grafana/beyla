@@ -10,16 +10,6 @@
 #include "tcp_info.h"
 #include "pin_internal.h"
 
-// We use this map to track ssl handshake enter/exit, it should be only
-// temporary
-struct {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, u64);   // the pid_tid
-    __type(value, u64); // the SSL struct pointer
-    __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
-    __uint(pinning, BEYLA_PIN_INTERNAL);
-} active_ssl_handshakes SEC(".maps");
-
 // LRU map, we don't clean-it up at the moment, which holds onto the mapping
 // of the SSL pointer and the current connection. It's setup by the tcp_sendmsg uprobe
 // when it's sandwitched between ssl_handshake entry/exit.
@@ -221,17 +211,12 @@ static __always_inline void set_active_ssl_connection(pid_connection_info_t *con
 static __always_inline void *is_ssl_connection(u64 id, pid_connection_info_t *conn) {
     void *ssl = 0;
     // Checks if it's sandwitched between active SSL handshake, read or write uprobe/uretprobe
-    void **s = bpf_map_lookup_elem(&active_ssl_handshakes, &id);
-    if (s) {
-        ssl = *s;
-    } else {
-        ssl_args_t *ssl_args = bpf_map_lookup_elem(&active_ssl_read_args, &id);
-        if (!ssl_args) {
-            ssl_args = bpf_map_lookup_elem(&active_ssl_write_args, &id);
-        }
-        if (ssl_args) {
-            ssl = (void *)ssl_args->ssl;
-        }
+    ssl_args_t *ssl_args = bpf_map_lookup_elem(&active_ssl_read_args, &id);
+    if (!ssl_args) {
+        ssl_args = bpf_map_lookup_elem(&active_ssl_write_args, &id);
+    }
+    if (ssl_args) {
+        ssl = (void *)ssl_args->ssl;
     }
 
     if (!ssl) {

@@ -50,8 +50,8 @@ func TestWatcher_Poll(t *testing.T) {
 				return map[PID]processAttrs{p5.pid: p5, p2.pid: p2, p3.pid: p3, p4.pid: p4}, nil
 			}
 		},
-		executableReady: func(PID) bool {
-			return true
+		executableReady: func(PID) (string, bool) {
+			return "", true
 		},
 		loadBPFWatcher: func(*beyla.Config, chan<- watcher.Event) error {
 			return nil
@@ -134,8 +134,8 @@ func TestProcessNotReady(t *testing.T) {
 		listProcesses: func(bool) (map[PID]processAttrs, error) {
 			return map[PID]processAttrs{p1.pid: p1, p5.pid: p5, p2.pid: p2, p3.pid: p3, p4.pid: p4}, nil
 		},
-		executableReady: func(pid PID) bool {
-			return pid >= 3
+		executableReady: func(pid PID) (string, bool) {
+			return "", pid >= 3
 		},
 		loadBPFWatcher: func(*beyla.Config, chan<- watcher.Event) error {
 			return nil
@@ -157,8 +157,8 @@ func TestProcessNotReady(t *testing.T) {
 	assert.Equal(t, 0, len(eventsNext)) // 0 new events
 	assert.Equal(t, 3, len(acc.pids))   // this should equal the first invocation of snapshot, no changes
 
-	acc.executableReady = func(pid PID) bool { // we change so that pid=1 becomes ready
-		return pid != 2
+	acc.executableReady = func(pid PID) (string, bool) { // we change so that pid=1 becomes ready
+		return "", pid != 2
 	}
 
 	eventsNextNext := acc.snapshot(procs)
@@ -186,8 +186,8 @@ func TestPortsFetchRequired(t *testing.T) {
 		listProcesses: func(bool) (map[PID]processAttrs, error) {
 			return nil, nil
 		},
-		executableReady: func(_ PID) bool {
-			return true
+		executableReady: func(_ PID) (string, bool) {
+			return "", true
 		},
 		loadBPFWatcher: func(_ *beyla.Config, events chan<- watcher.Event) error {
 			channelReturner <- events

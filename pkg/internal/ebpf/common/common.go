@@ -173,7 +173,11 @@ func SupportsContextPropagationWithProbe(log *slog.Logger) bool {
 	return false
 }
 
-func SupportsEBPFLoops() bool {
+func SupportsEBPFLoops(log *slog.Logger, overrideKernelVersion bool) bool {
+	if overrideKernelVersion {
+		log.Debug("Skipping kernel version check for bpf_loop functionality: user supplied confirmation of support")
+		return true
+	}
 	kernelMajor, kernelMinor := KernelVersion()
 	return kernelMajor > 5 || (kernelMajor == 5 && kernelMinor >= 17)
 }

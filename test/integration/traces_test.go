@@ -416,6 +416,7 @@ func testHTTPTracesNestedCalls(t *testing.T) {
 		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(8082)},
 		jaeger.Tag{Key: "http.route", Type: "string", Value: "/echo"},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
+		jaeger.Tag{Key: "span.metrics.skip", Type: "bool", Value: bool(true)},
 	)
 	assert.Empty(t, sd, sd.String())
 
@@ -647,7 +648,7 @@ func testHTTP2GRPCTracesNestedCallsWithContextPropagation(t *testing.T) {
 	testHTTP2GRPCTracesNestedCalls(t, true)
 }
 
-func testNestedHTTPTracesKProbes(t *testing.T) {
+func testNestedHTTPTracesKProbes(t *testing.T, extended bool) {
 	var traceID string
 
 	waitForTestComponents(t, "http://localhost:3031")                 // nodejs
@@ -806,15 +807,16 @@ func testNestedHTTPTracesKProbes(t *testing.T) {
 		assert.Empty(t, sd, sd.String())
 	}
 
-	// test now with a different version of Java thread pool
-	for i := 0; i < 10; i++ {
-		doHTTPGet(t, "http://localhost:8086/jtraceB", 200)
-	}
+	if extended {
+		// test now with a different version of Java thread pool
+		for i := 0; i < 10; i++ {
+			doHTTPGet(t, "http://localhost:8086/jtraceA", 200)
+		}
 
-	t.Run("Traces RestClient client /jtraceB", func(t *testing.T) {
-		t.Skip("seems flaky, we need to look into this / need proper JAVA support")
-		ensureTracesMatch(t, "jtraceB")
-	})
+		t.Run("Traces RestClient client /jtraceA", func(t *testing.T) {
+			ensureTracesMatch(t, "jtraceA")
+		})
+	}
 }
 
 func ensureTracesMatch(t *testing.T, urlPath string) {

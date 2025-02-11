@@ -10,8 +10,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/grafana/beyla/testserver_1.17/arg"
-	pb "github.com/grafana/beyla/testserver_1.17/grpc/routeguide"
+	"github.com/grafana/beyla/v2/testserver_1.17/arg"
+	pb "github.com/grafana/beyla/v2/testserver_1.17/grpc/routeguide"
 )
 
 func HTTPHandler(echoPort int) http.HandlerFunc {

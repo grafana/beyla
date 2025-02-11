@@ -10,7 +10,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	sdkmetricdata "go.opentelemetry.io/otel/sdk/metric/metricdata"
 
-	"github.com/grafana/beyla/pkg/export/otel/metric/internal/exemplar"
+	"github.com/grafana/beyla/v2/pkg/export/otel/metric/internal/exemplar"
 )
 
 // now is used to return the current local time while allowing tests to

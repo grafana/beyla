@@ -13,8 +13,8 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
-	"github.com/grafana/beyla/pkg/buildinfo"
-	"github.com/grafana/beyla/pkg/internal/pipe/global"
+	"github.com/grafana/beyla/v2/pkg/buildinfo"
+	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 )
 
 // InternalMetricsReporter is an internal metrics Reporter that exports to OTEL

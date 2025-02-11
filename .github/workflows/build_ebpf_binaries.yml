@@ -1,0 +1,45 @@
+name: Build and Commit eBPF Binaries
+
+on:
+  push:
+    branches: [ 'main', 'release-*' ]
+  pull_request:
+    branches: [ 'main', 'release-*' ]
+
+jobs:
+  build-ebpf:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Allow commits back to the repo
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Ensure full history for commits
+
+      - name: Prevent Manual Edits by Checking for Uncommitted `.o` Files
+        run: |
+          if git ls-files --error-unmatch ebpf_bin/*.o >/dev/null 2>&1; then
+            echo "ERROR: Manually committed .o files detected!"
+            exit 1
+          fi
+
+      - name: Install Dependencies
+        run: sudo apt-get install -y clang llvm libbpf-dev gcc-multilib
+
+      - name: Compile eBPF Programs
+        run: |
+          make docker-generate
+
+      - name: Get Current Branch Name
+        run: echo "BRANCH_NAME=$(echo ${GITHUB_REF#refs/heads/})" >> $GITHUB_ENV
+
+      - name: Commit Compiled eBPF Programs
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add ebpf_bin/*.o
+          git commit -m "CI: Auto-build eBPF binaries [skip ci]" || exit 0
+          git push origin ${{ env.BRANCH_NAME }}
+
+

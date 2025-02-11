@@ -11,7 +11,7 @@ jobs:
   test:
     name: test
     runs-on: ubuntu-latest-8-cores
-    #if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     strategy:
       matrix:
         go: [ '1.23' ]

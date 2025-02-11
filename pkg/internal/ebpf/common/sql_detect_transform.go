@@ -21,7 +21,7 @@ func sqlKind(b []byte) request.SQLKind {
 }
 
 func validSQL(op, table string) bool {
-	return op != "" && table != ""
+	return op != ""
 }
 
 // when the input string is invalid unicode (might happen with the ringbuffer

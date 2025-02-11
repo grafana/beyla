@@ -20,6 +20,10 @@ func sqlKind(b []byte) request.SQLKind {
 	return request.DBGeneric
 }
 
+// If we have already identified Postgres or MySQL, allow the SQL
+// command to be valid with just operation, e.g. we didn't find the
+// table. Otherwise, be more picky so that we don't misclassify easily
+// traffic that may have SQL like keywords as SQL.
 func validSQL(op, table string, sqlKind request.SQLKind) bool {
 	return op != "" && (sqlKind != request.DBGeneric || table != "")
 }

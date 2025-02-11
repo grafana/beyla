@@ -106,6 +106,7 @@ func knownFrameKeys(fr *http2.Framer, hf *http2.HeadersFrame) bool {
 		}
 	}
 
+	commonHDec.Close()
 	return known
 }
 
@@ -154,6 +155,8 @@ func readMetaFrame(conn *BPFConnInfo, newConn bool, fr *http2.Framer, hf *http2.
 			return method, path, contentType, ok
 		}
 	}
+
+	h2c.hdec.Close()
 
 	return method, path, contentType, ok
 }

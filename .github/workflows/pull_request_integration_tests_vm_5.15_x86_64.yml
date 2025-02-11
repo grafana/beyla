@@ -1,12 +1,7 @@
 name: Pull request integration tests on VM 5.15 x86_64
 
 on:
-  push:
-    branches: [ 'main', 'release-*' ]
-    paths: [ 'bpf/**' ]
-  pull_request:
-    branches: [ 'main', 'release-*' ]
-    paths: [ 'bpf/**' ]
+  workflow_call:
 
 jobs:
   test:

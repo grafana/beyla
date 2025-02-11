@@ -1,10 +1,7 @@
 name: Clang Tidy Check
 
 on:
-  push:
-    branches: [ 'main', 'release-*' ]
-  pull_request:
-    branches: [ 'main', 'release-*' ]
+  workflow_call:
 
 jobs:
   clang-tidy:

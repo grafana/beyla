@@ -55,4 +55,7 @@ type EBPFTracer struct {
 
 	// Enables GPU instrumentation for CUDA kernel launches and allocations
 	InstrumentGPU bool `yaml:"instrument_gpu" env:"BEYLA_INSTRUMENT_GPU"`
+
+	// Enables GPU instrumentation for CUDA kernel launches and allocations
+	ProtocolDebug bool `yaml:"protocol_debug_print" env:"BEYLA_PROTOCOL_DEBUG_PRINT"`
 }

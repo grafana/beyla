@@ -298,7 +298,6 @@ type bpfProgramSpecs struct {
 type bpfMapSpecs struct {
 	ActiveNodejsIds           *ebpf.MapSpec `ebpf:"active_nodejs_ids"`
 	ActiveSslConnections      *ebpf.MapSpec `ebpf:"active_ssl_connections"`
-	ActiveSslHandshakes       *ebpf.MapSpec `ebpf:"active_ssl_handshakes"`
 	ActiveSslReadArgs         *ebpf.MapSpec `ebpf:"active_ssl_read_args"`
 	ActiveSslWriteArgs        *ebpf.MapSpec `ebpf:"active_ssl_write_args"`
 	ActiveUnixSocks           *ebpf.MapSpec `ebpf:"active_unix_socks"`
@@ -361,7 +360,6 @@ func (o *bpfObjects) Close() error {
 type bpfMaps struct {
 	ActiveNodejsIds           *ebpf.Map `ebpf:"active_nodejs_ids"`
 	ActiveSslConnections      *ebpf.Map `ebpf:"active_ssl_connections"`
-	ActiveSslHandshakes       *ebpf.Map `ebpf:"active_ssl_handshakes"`
 	ActiveSslReadArgs         *ebpf.Map `ebpf:"active_ssl_read_args"`
 	ActiveSslWriteArgs        *ebpf.Map `ebpf:"active_ssl_write_args"`
 	ActiveUnixSocks           *ebpf.Map `ebpf:"active_unix_socks"`
@@ -407,7 +405,6 @@ func (m *bpfMaps) Close() error {
 	return _BpfClose(
 		m.ActiveNodejsIds,
 		m.ActiveSslConnections,
-		m.ActiveSslHandshakes,
 		m.ActiveSslReadArgs,
 		m.ActiveSslWriteArgs,
 		m.ActiveUnixSocks,

@@ -63,7 +63,7 @@ func SQLParseOperationAndTable(query string) (string, string) {
 			}
 		}
 
-		if tokenType == sqlparser.ID || tokenType == sqlparser.VALUE_ARG {
+		if tokenType == sqlparser.ID || tokenType == sqlparser.VALUE_ARG || tokenType == sqlparser.STRING {
 			if lastType == sqlparser.TABLE || lastType == sqlparser.FROM || lastType == sqlparser.INTO ||
 				lastType == sqlparser.UPDATE || lastType == sqlparser.JOIN || addMoreTables {
 				if tokenType == sqlparser.VALUE_ARG {

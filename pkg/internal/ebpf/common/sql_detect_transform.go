@@ -20,8 +20,8 @@ func sqlKind(b []byte) request.SQLKind {
 	return request.DBGeneric
 }
 
-func validSQL(op, table string) bool {
-	return op != ""
+func validSQL(op, table string, sqlKind request.SQLKind) bool {
+	return op != "" && (sqlKind != request.DBGeneric || table != "")
 }
 
 // when the input string is invalid unicode (might happen with the ringbuffer
@@ -60,7 +60,7 @@ func detectSQLPayload(useHeuristics bool, b []byte) (string, string, string, req
 		}
 	}
 	op, table, sql := detectSQL(string(b))
-	if !validSQL(op, table) {
+	if !validSQL(op, table, sqlKind) {
 		switch sqlKind {
 		case request.DBPostgres:
 			op, table, sql = postgresPreparedStatements(b)

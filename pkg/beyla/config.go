@@ -323,11 +323,12 @@ func (c *Config) Enabled(feature Feature) bool {
 // ExternalLogger sets the logging capabilities of Beyla.
 // Used for integrating Beyla with an external logging system (for example Alloy)
 // TODO: maybe this method has too many responsibilities, as it affects the global logger.
-func (c *Config) ExternalLogger(handler slog.Handler, tracing bool) {
+func (c *Config) ExternalLogger(handler slog.Handler, debugMode bool) {
 	slog.SetDefault(slog.New(handler))
-	if tracing {
+	if debugMode {
 		c.TracePrinter = debug.TracePrinterText
 		c.EBPF.BpfDebug = true
+		c.EBPF.ProtocolDebug = true
 		if c.NetworkFlows.Enable {
 			c.NetworkFlows.Print = true
 		}

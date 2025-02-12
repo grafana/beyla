@@ -145,6 +145,7 @@ const (
 	HostID   = Name(semconv.HostIDKey)
 
 	ServiceInstanceID = Name(semconv.ServiceInstanceIDKey)
+	SkipSpanMetrics   = Name("span.metrics.skip")
 )
 
 // traces related attributes

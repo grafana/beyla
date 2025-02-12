@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -675,6 +676,95 @@ func TestTraceSampling(t *testing.T) {
 	})
 }
 
+func TestTraceSkipSpanMetrics(t *testing.T) {
+	spans := []request.Span{}
+	start := time.Now()
+	for i := 0; i < 10; i++ {
+		span := request.Span{Type: request.EventTypeHTTP,
+			RequestStart: start.UnixNano(),
+			Start:        start.Add(time.Second).UnixNano(),
+			End:          start.Add(3 * time.Second).UnixNano(),
+			Method:       "GET",
+			Route:        "/test" + strconv.Itoa(i),
+			Status:       200,
+			Service:      svc.Attrs{},
+			TraceID:      randomTraceID(),
+		}
+		spans = append(spans, span)
+	}
+
+	t.Run("test with span metrics on", func(t *testing.T) {
+		receiver := makeTracesTestReceiverWithSpanMetrics([]string{"http"})
+
+		sampler := sdktrace.AlwaysSample()
+		attrs, err := receiver.getConstantAttributes()
+		assert.Nil(t, err)
+
+		tr := []ptrace.Traces{}
+
+		exporter := TestExporter{
+			collector: func(td ptrace.Traces) {
+				tr = append(tr, td)
+			},
+		}
+
+		receiver.processSpans(exporter, spans, attrs, sampler)
+		assert.Equal(t, 10, len(tr))
+
+		for _, ts := range tr {
+			for i := 0; i < ts.ResourceSpans().Len(); i++ {
+				rs := ts.ResourceSpans().At(i)
+				for j := 0; j < rs.ScopeSpans().Len(); j++ {
+					ss := rs.ScopeSpans().At(j)
+					for k := 0; k < ss.Spans().Len(); k++ {
+						span := ss.Spans().At(k)
+						if strings.HasPrefix(span.Name(), "GET /test") {
+							v, ok := span.Attributes().Get(string(attr.SkipSpanMetrics.OTEL()))
+							assert.True(t, ok)
+							assert.Equal(t, true, v.Bool())
+						}
+					}
+				}
+			}
+		}
+	})
+
+	t.Run("test with span metrics off", func(t *testing.T) {
+		receiver := makeTracesTestReceiver([]string{"http"})
+
+		sampler := sdktrace.AlwaysSample()
+		attrs, err := receiver.getConstantAttributes()
+		assert.Nil(t, err)
+
+		tr := []ptrace.Traces{}
+
+		exporter := TestExporter{
+			collector: func(td ptrace.Traces) {
+				tr = append(tr, td)
+			},
+		}
+
+		receiver.processSpans(exporter, spans, attrs, sampler)
+		assert.Equal(t, 10, len(tr))
+
+		for _, ts := range tr {
+			for i := 0; i < ts.ResourceSpans().Len(); i++ {
+				rs := ts.ResourceSpans().At(i)
+				for j := 0; j < rs.ScopeSpans().Len(); j++ {
+					ss := rs.ScopeSpans().At(j)
+					for k := 0; k < ss.Spans().Len(); k++ {
+						span := ss.Spans().At(k)
+						if strings.HasPrefix(span.Name(), "GET /test") {
+							_, ok := span.Attributes().Get(string(attr.SkipSpanMetrics.OTEL()))
+							assert.False(t, ok)
+						}
+					}
+				}
+			}
+		}
+	})
+}
+
 func TestAttrsToMap(t *testing.T) {
 	t.Run("test with string attribute", func(t *testing.T) {
 		attrs := []attribute.KeyValue{
@@ -908,6 +998,7 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 			ReportersCacheLen: 16,
 			Instrumentations:  []string{instrumentations.InstrumentationALL},
 		},
+		false,
 		&global.ContextInfo{
 			Metrics: internalTraces,
 		},
@@ -1352,6 +1443,21 @@ func makeTracesTestReceiver(instr []string) *tracesOTELReceiver {
 			ReportersCacheLen: 16,
 			Instrumentations:  instr,
 		},
+		false,
+		&global.ContextInfo{},
+		attributes.Selection{},
+	)
+}
+
+func makeTracesTestReceiverWithSpanMetrics(instr []string) *tracesOTELReceiver {
+	return makeTracesReceiver(context.Background(),
+		TracesConfig{
+			CommonEndpoint:    "http://something",
+			BatchTimeout:      10 * time.Millisecond,
+			ReportersCacheLen: 16,
+			Instrumentations:  instr,
+		},
+		true,
 		&global.ContextInfo{},
 		attributes.Selection{},
 	)

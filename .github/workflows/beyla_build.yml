@@ -1,0 +1,116 @@
+name: Beyla Build
+
+on:
+  push:
+    branches: [ 'main' ]
+  pull_request:
+    branches: [ 'main' ]
+
+jobs:
+  build-ebpf:
+    name: Build eBPF objects and run tests
+    runs-on: ubuntu-latest
+    outputs:
+      should_test: ${{ steps.commit.outputs.should_test }}
+    permissions:
+      contents: write  # Allow commits back to the repo
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          token: ${{ secrets.BEYLA_WORKFLOW_TOKEN }}
+
+      - name: commit-check
+        id: commit-check
+        run: |
+          LAST_COMMIT_MESSAGE=$(git log -1 --pretty=%B)
+
+          if echo "$LAST_COMMIT_MESSAGE" | grep -q '\[do-not-rebuild\]'
+          then
+            echo "should_build=false" >> $GITHUB_OUTPUT
+          else
+            echo "should_build=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Compile eBPF Programs
+        if: ${{ steps.commit-check.outputs.should_build == 'true' }}
+        run: |
+          make docker-generate
+
+      # NOTE: The user email is {user.id}+{user.login}@users.noreply.github.com.
+      # See users API: https://api.github.com/users/github-actions%5Bbot%5D
+      - name: Commit Compiled eBPF Programs
+        id: commit
+        if: ${{ steps.commit-check.outputs.should_build == 'true' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.BEYLA_WORKFLOW_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -u
+          git commit -m "CI: Auto-build eBPF binaries[do-not-rebuild]" || exit 0
+          git push
+          echo "should_test=false" >> $GITHUB_OUTPUT
+
+  run-integration-tests:
+    name: Pull request integration tests
+    uses: ./.github/workflows/pull_request_integration_tests.yml
+    needs: build-ebpf
+    if: needs.build-ebpf.outputs.should_test != 'false'
+
+  run-integration-tests-arm:
+    name: Pull request integration tests ARM
+    uses: ./.github/workflows/pull_request_integration_tests_arm.yml
+    needs: build-ebpf
+    if: needs.build-ebpf.outputs.should_test != 'false'
+
+  run-integration-tests-vm-5-15-x86-64:
+    name: Pull request integration tests on VM 5.15 x86_64
+    uses: ./.github/workflows/pull_request_integration_tests_vm_5.15_x86_64.yml
+    needs: build-ebpf
+    if: needs.build-ebpf.outputs.should_test != 'false'
+
+  run-integration-tests-vm-6-10-x86-64:
+    name: Pull request integration tests on VM 6.10 x86_64
+    uses: ./.github/workflows/pull_request_integration_tests_vm_6.10_x86_64.yml
+    needs: build-ebpf
+    if: needs.build-ebpf.outputs.should_test != 'false'
+
+  run-integration-tests-k8s:
+    name: Pull request K8s integration tests
+    uses: ./.github/workflows/pull_request_k8s_integration_tests.yml
+    needs: build-ebpf
+    if: needs.build-ebpf.outputs.should_test != 'false'
+
+  run-oats-tests:
+    name: PR OATS test
+    uses: ./.github/workflows/pull_request_oats_test.yml
+    needs: build-ebpf
+    if: needs.build-ebpf.outputs.should_test != 'false'
+
+  run-pr-checks:
+    name: Pull request checks
+    uses: ./.github/workflows/pull_request.yml
+    needs: build-ebpf
+    if: needs.build-ebpf.outputs.should_test != 'false'
+
+  clang-format-check:
+    name: Clang Format Check
+    uses: ./.github/workflows/clang-format-check.yml
+    needs: build-ebpf
+    if: needs.build-ebpf.outputs.should_test != 'false'
+
+  clang-tidy-check:
+    name: Clang Tidy Check
+    uses: ./.github/workflows/clang-tidy-check.yml
+    needs: build-ebpf
+    if: needs.build-ebpf.outputs.should_test != 'false'
+
+  git-lfs-check:
+    name: Check git-lfs files
+    uses: ./.github/workflows/git-lfs-check.yml
+    needs: build-ebpf
+    if: needs.build-ebpf.outputs.should_test != 'false'
+
+

@@ -7,46 +7,6 @@
 #include "tcp_info.h"
 #include "http_ssl_defs.h"
 
-// We start by looking when the SSL handshake is established. In between
-// the start and the end of the SSL handshake, we'll see at least one tcp_sendmsg
-// between the parties. Sandwitching this tcp_sendmsg allows us to grab the sock *
-// and match it with our SSL *. The sock * will give us the connection info that is
-// used by the generic HTTP filter.
-SEC("uprobe/libssl.so:SSL_do_handshake")
-int BPF_UPROBE(beyla_uprobe_ssl_do_handshake, void *s) {
-    u64 id = bpf_get_current_pid_tgid();
-
-    if (!valid_pid(id)) {
-        return 0;
-    }
-
-    bpf_dbg_printk("=== uprobe SSL_do_handshake=%d ssl=%llx===", id, s);
-
-    ssl_pid_connection_info_t *s_conn = bpf_map_lookup_elem(&ssl_to_conn, &s);
-    if (s_conn) {
-        finish_possible_delayed_tls_http_request(&s_conn->p_conn, s);
-    }
-
-    bpf_map_update_elem(&active_ssl_handshakes, &id, &s, BPF_ANY);
-
-    return 0;
-}
-
-SEC("uretprobe/libssl.so:SSL_do_handshake")
-int BPF_URETPROBE(beyla_uretprobe_ssl_do_handshake, int ret) {
-    u64 id = bpf_get_current_pid_tgid();
-
-    if (!valid_pid(id)) {
-        return 0;
-    }
-
-    bpf_dbg_printk("=== uretprobe SSL_do_handshake=%d", id);
-
-    bpf_map_delete_elem(&active_ssl_handshakes, &id);
-
-    return 0;
-}
-
 // SSL read and read_ex are more less the same, but some frameworks use one or the other.
 // SSL_read_ex sets an argument pointer with the number of bytes read, while SSL_read returns
 // the number of bytes read.

@@ -207,12 +207,6 @@ config:
     attributes:
       kubernetes:
         enable: true
-      select:
-        beyla_network_flow_bytes:
-          include:
-            - 'k8s.src.owner.type'
-            - 'k8s.dst.owner.type'
-            - 'direction'
     filter:
       network:
         k8s_dst_owner_name:

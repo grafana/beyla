@@ -1,10 +1,7 @@
 name: Pull request integration tests
 
 on:
-  push:
-    branches: [ 'main', 'release-*' ]
-  pull_request:
-    branches: [ 'main', 'release-*' ]
+  workflow_call:
 
 jobs:
   test:
@@ -32,7 +29,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Test Logs
+          name: Integration Test Logs
           path: |
             testoutput/*.log
             testoutput/kind

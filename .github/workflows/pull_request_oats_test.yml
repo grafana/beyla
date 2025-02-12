@@ -1,10 +1,7 @@
 name: PR OATS test
 
 on:
-  push:
-    branches: [ 'main', 'release-*' ]
-  pull_request:
-    branches: [ 'main', 'release-*' ]
+  workflow_call:
 
 jobs:
   test:

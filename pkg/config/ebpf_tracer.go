@@ -8,6 +8,7 @@ import (
 
 // EBPFTracer configuration for eBPF programs
 type EBPFTracer struct {
+	// Enables logging of eBPF program events
 	BpfDebug bool `yaml:"bpf_debug" env:"BEYLA_BPF_DEBUG"`
 
 	// WakeupLen specifies how many messages need to be accumulated in the eBPF ringbuffer
@@ -55,4 +56,7 @@ type EBPFTracer struct {
 
 	// Enables GPU instrumentation for CUDA kernel launches and allocations
 	InstrumentGPU bool `yaml:"instrument_gpu" env:"BEYLA_INSTRUMENT_GPU"`
+
+	// Enables debug printing of the protocol data
+	ProtocolDebug bool `yaml:"protocol_debug_print" env:"BEYLA_PROTOCOL_DEBUG_PRINT"`
 }

@@ -130,27 +130,29 @@ func (m *TracesConfig) guessProtocol() Protocol {
 	return ProtocolHTTPProtobuf
 }
 
-func makeTracesReceiver(ctx context.Context, cfg TracesConfig, ctxInfo *global.ContextInfo, userAttribSelection attributes.Selection) *tracesOTELReceiver {
+func makeTracesReceiver(ctx context.Context, cfg TracesConfig, spanMetricsEnabled bool, ctxInfo *global.ContextInfo, userAttribSelection attributes.Selection) *tracesOTELReceiver {
 	return &tracesOTELReceiver{
-		ctx:        ctx,
-		cfg:        cfg,
-		ctxInfo:    ctxInfo,
-		attributes: userAttribSelection,
-		is:         instrumentations.NewInstrumentationSelection(cfg.Instrumentations),
+		ctx:                ctx,
+		cfg:                cfg,
+		ctxInfo:            ctxInfo,
+		attributes:         userAttribSelection,
+		is:                 instrumentations.NewInstrumentationSelection(cfg.Instrumentations),
+		spanMetricsEnabled: spanMetricsEnabled,
 	}
 }
 
 // TracesReceiver creates a terminal node that consumes request.Spans and sends OpenTelemetry metrics to the configured consumers.
-func TracesReceiver(ctx context.Context, cfg TracesConfig, ctxInfo *global.ContextInfo, userAttribSelection attributes.Selection) pipe.FinalProvider[[]request.Span] {
-	return makeTracesReceiver(ctx, cfg, ctxInfo, userAttribSelection).provideLoop
+func TracesReceiver(ctx context.Context, cfg TracesConfig, spanMetricsEnabled bool, ctxInfo *global.ContextInfo, userAttribSelection attributes.Selection) pipe.FinalProvider[[]request.Span] {
+	return makeTracesReceiver(ctx, cfg, spanMetricsEnabled, ctxInfo, userAttribSelection).provideLoop
 }
 
 type tracesOTELReceiver struct {
-	ctx        context.Context
-	cfg        TracesConfig
-	ctxInfo    *global.ContextInfo
-	attributes attributes.Selection
-	is         instrumentations.InstrumentationSelection
+	ctx                context.Context
+	cfg                TracesConfig
+	ctxInfo            *global.ContextInfo
+	attributes         attributes.Selection
+	is                 instrumentations.InstrumentationSelection
+	spanMetricsEnabled bool
 }
 
 func GetUserSelectedAttributes(attrs attributes.Selection) (map[attr.Name]struct{}, error) {
@@ -166,6 +168,18 @@ func GetUserSelectedAttributes(attrs attributes.Selection) (map[attr.Name]struct
 	}
 
 	return traceAttrs, err
+}
+
+func (tr *tracesOTELReceiver) getConstantAttributes() (map[attr.Name]struct{}, error) {
+	traceAttrs, err := GetUserSelectedAttributes(tr.attributes)
+	if err != nil {
+		return nil, err
+	}
+
+	if tr.spanMetricsEnabled {
+		traceAttrs[attr.SkipSpanMetrics] = struct{}{}
+	}
+	return traceAttrs, nil
 }
 
 func (tr *tracesOTELReceiver) spanDiscarded(span *request.Span) bool {
@@ -228,10 +242,14 @@ func (tr *tracesOTELReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], err
 			return
 		}
 
-		traceAttrs, err := GetUserSelectedAttributes(tr.attributes)
+		traceAttrs, err := tr.getConstantAttributes()
 		if err != nil {
 			slog.Error("error selecting user trace attributes", "error", err)
 			return
+		}
+
+		if tr.spanMetricsEnabled {
+			traceAttrs[attr.SkipSpanMetrics] = struct{}{}
 		}
 
 		sampler := tr.cfg.Sampler.Implementation()
@@ -576,6 +594,7 @@ func (tr *tracesOTELReceiver) acceptSpan(span *request.Span) bool {
 
 // TODO use semconv.DBSystemRedis when we update to OTEL semantic conventions library 1.30
 var dbSystemRedis = attribute.String(string(attr.DBSystemName), semconv.DBSystemRedis.Value.AsString())
+var spanMetricsSkip = attribute.Bool(string(attr.SkipSpanMetrics), true)
 
 // nolint:cyclop
 func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) []attribute.KeyValue {
@@ -672,6 +691,10 @@ func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 			semconv.MessagingClientID(span.Statement),
 			operation,
 		}
+	}
+
+	if _, ok := optionalAttrs[attr.SkipSpanMetrics]; ok {
+		attrs = append(attrs, spanMetricsSkip)
 	}
 
 	return attrs

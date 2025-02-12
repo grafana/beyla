@@ -180,12 +180,6 @@ handle_ssl_buf(void *ctx, u64 id, ssl_args_t *args, int bytes_len, u8 direction)
             bpf_dbg_printk("SSL conn");
             dbg_print_http_connection_info(&conn->p_conn.conn);
 
-            // unsigned char buf[48];
-            // bpf_probe_read(buf, 48, (void *)args->buf);
-            // for (int i=0; i < 48; i++) {
-            //     bpf_dbg_printk("%x ", buf[i]);
-            // }
-
             // We should attempt to clean up the server trace immediately. The cleanup information
             // is keyed of the *ssl, so when it's delayed we might have different *ssl on the same
             // connection.

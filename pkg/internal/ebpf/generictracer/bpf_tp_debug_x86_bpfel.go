@@ -105,7 +105,7 @@ type bpf_tp_debugHttpInfoT struct {
 	ConnInfo        bpf_tp_debugConnectionInfoT
 	StartMonotimeNs uint64
 	EndMonotimeNs   uint64
-	Buf             [192]uint8
+	Buf             [256]uint8
 	Len             uint32
 	RespLen         uint32
 	Status          uint16

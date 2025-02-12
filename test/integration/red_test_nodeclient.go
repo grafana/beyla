@@ -79,11 +79,17 @@ func testNodeClientWithMethodAndStatusCode(t *testing.T, method string, statusCo
 	require.Len(t, spans, 1)
 	span := spans[0]
 
+	urlFull := "http://grafana.com/"
+	if port == 443 {
+		urlFull = "https://grafana.com/"
+	}
+
 	sd := span.Diff(
 		jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
 		jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(statusCode)},
-		jaeger.Tag{Key: "url.full", Type: "string", Value: "/"},
+		jaeger.Tag{Key: "url.full", Type: "string", Value: urlFull},
 		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(port)},
+		jaeger.Tag{Key: "server.address", Type: "string", Value: "grafana.com"},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "client"},
 	)
 	assert.Empty(t, sd, sd.String())

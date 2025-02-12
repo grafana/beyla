@@ -8,7 +8,7 @@ on:
 
 jobs:
   build-ebpf:
-    name: Build eBPF objects
+    name: Build eBPF objects and run tests
     runs-on: ubuntu-latest
     outputs:
       should_test: ${{ steps.commit.outputs.should_test }}

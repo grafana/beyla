@@ -91,6 +91,7 @@ func knownFrameKeys(fr *http2.Framer, hf *http2.HeadersFrame) bool {
 	})
 	// Lose reference to MetaHeadersFrame:
 	defer commonHDec.SetEmitFunc(func(_ bhpack.HeaderField) {})
+	defer commonHDec.Close()
 
 	for {
 		frag := hf.HeaderBlockFragment()
@@ -140,6 +141,7 @@ func readMetaFrame(conn *BPFConnInfo, newConn bool, fr *http2.Framer, hf *http2.
 	})
 	// Lose reference to MetaHeadersFrame:
 	defer h2c.hdec.SetEmitFunc(func(_ bhpack.HeaderField) {})
+	defer h2c.hdec.Close()
 
 	for {
 		frag := hf.HeaderBlockFragment()
@@ -198,6 +200,7 @@ func readRetMetaFrame(conn *BPFConnInfo, newConn bool, fr *http2.Framer, hf *htt
 	})
 	// Lose reference to MetaHeadersFrame:
 	defer h2c.hdecRet.SetEmitFunc(func(_ bhpack.HeaderField) {})
+	defer h2c.hdecRet.Close()
 
 	for {
 		frag := hf.HeaderBlockFragment()

@@ -17,9 +17,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref }}
-          token: ${{ secrets.BEYLA_WORKFLOW_TOKEN }}
+        #with:
+        #  ref: ${{ github.head_ref }}
 
       - name: commit-check
         id: commit-check
@@ -43,14 +42,14 @@ jobs:
       - name: Commit Compiled eBPF Programs
         id: commit
         if: ${{ steps.commit-check.outputs.should_build == 'true' }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.BEYLA_WORKFLOW_TOKEN }}
+        #env:
+        #  GITHUB_TOKEN: ${{ secrets.BEYLA_WORKFLOW_TOKEN }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -u
           git commit -m "CI: Auto-build eBPF binaries[do-not-rebuild]" || exit 0
-          git push
+          #git push origin HEAD:${{ github.head_ref }}
           echo "should_test=false" >> $GITHUB_OUTPUT
 
   run-integration-tests:

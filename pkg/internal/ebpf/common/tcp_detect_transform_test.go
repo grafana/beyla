@@ -64,10 +64,17 @@ func TestSQLDetection(t *testing.T) {
 func TestSQLDetectionFails(t *testing.T) {
 	for _, s := range []string{"SELECT", "UPDATES{}", "DELETE {} ", "INSERT// into accounts "} {
 		op, table, _ := detectSQL(s)
-		assert.False(t, validSQL(op, table))
+		assert.False(t, validSQL(op, table, request.DBGeneric))
 		surrounded := randomStringWithSub(s)
 		op, table, _ = detectSQL(surrounded)
-		assert.False(t, validSQL(op, table))
+		assert.False(t, validSQL(op, table, request.DBGeneric))
+	}
+}
+
+func TestSQLDetectionDoesntFailForDetectedKind(t *testing.T) {
+	for _, s := range []string{"SELECT", "DELETE {} "} {
+		op, table, _ := detectSQL(s)
+		assert.True(t, validSQL(op, table, request.DBPostgres))
 	}
 }
 

@@ -68,6 +68,72 @@ Access to `CAP_PERFMON` is subject to `perf_events` access controls governed by 
 
 Some Linux distributions define higher levels for `kernel.perf_event_paranoid`, for example Debian based distributions [also use](https://lwn.net/Articles/696216/) `kernel.perf_event_paranoid=3`, which disallows access to `perf_event_open()` without `CAP_SYS_ADMIN`. If you are running on a distribution with `kernel.perf_event_paranoid` setting higher than `2`, you can either modify your configuration to lower it to `2` or use `CAP_SYS_ADMIN` instead of `CAP_PERFMON`.
 
+### Deploy on AKS/EKS
+
+Both AKS and EKS environments come with kernels that have `sys.perf_event_paranoid > 1` set by default, which means Beyla needs `CAP_SYS_ADMIN` to work (see [[#Performance monitoring tasks]]). If you'd prefer to use just `CAP_PERFMON`, you can configure your node to set `kernel.perf_event_paranoid = 1`. Below, we’ve provided a few examples of how to do this. Keep in mind that your results may vary depending on your specific setup.
+
+#### AKS
+
+**Create a configuration file**
+
+```json
+{
+  "sysctls": {
+    "kernel.sys_paranoid": "1"
+  }
+}
+```
+
+**Create or update your AKS cluster**
+
+```sh
+az aks create --name myAKSCluster --resource-group myResourceGroup --linux-os-config ./linuxosconfig.json
+```
+
+For more information, see "[Customize node configuration for Azure Kubernetes Service (AKS) node pools](https://learn.microsoft.com/en-us/azure/aks/custom-node-configuration?tabs=linux-node-pools)"
+#### EKS (using EKS Anywhere Configuration)
+
+**Create a configuration file**
+
+```yaml
+apiVersion: anywhere.eks.amazonaws.com/v1alpha1
+kind: VSphereMachineConfig
+metadata:
+  name: machine-config
+spec:
+  hostOSConfiguration:
+    kernel:
+      sysctlSettings:
+        kernel.sys_paranoid: "1"
+```
+
+**Deploy or update your EKS Anywhere cluster**
+
+```sh
+eksctl create cluster --config-file hostosconfig.yaml
+```
+
+#### EKS (modifying node group settings)
+
+**Update the node group**
+
+```yaml
+apiVersion: eks.eks.amazonaws.com/v1beta1
+kind: ClusterConfig
+...
+nodeGroups:
+  - ...
+    os: Bottlerocket
+    eksconfig:
+      ...
+      sysctls:
+        kernel.sys_paranoid: "1"
+```
+
+Use the AWS Management Console, AWS CLI, or eksctl to apply the updated configuration to your EKS cluster.
+
+Fore more information see "[Operating system](https://anywhere.eks.amazonaws.com/docs/getting-started/optional/hostosconfig/)"
+
 ## Example scenarios
 
 The following example scenarios showcases how to run Beyla as a non-root user:

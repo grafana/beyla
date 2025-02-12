@@ -36,7 +36,6 @@ jobs:
       - name: Compile eBPF Programs
         if: ${{ steps.commit-check.outputs.should_build == 'true' }}
         run: |
-          echo COMMITS $${{ github.event.head_commit.message }}
           make docker-generate
 
       # NOTE: The user email is {user.id}+{user.login}@users.noreply.github.com.

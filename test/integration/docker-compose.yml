@@ -54,7 +54,7 @@ services:
 
   # OpenTelemetry Collector for Metrics. For Traces, we use directly Jaeger
   otelcol:
-    image: otel/opentelemetry-collector-contrib:0.104.0
+    image: otel/opentelemetry-collector-contrib:0.118.0
     container_name: otel-col
     deploy:
       resources:
@@ -82,6 +82,7 @@ services:
     command:
       - --config.file=/etc/prometheus/prometheus-config${PROM_CONFIG_SUFFIX}.yml
       - --web.enable-lifecycle
+      - --enable-feature=exemplar-storage
       - --web.route-prefix=/
     volumes:
       - ./configs/:/etc/prometheus

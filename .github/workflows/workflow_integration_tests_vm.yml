@@ -47,3 +47,10 @@ jobs:
           path: |
             testoutput/*.log
             testoutput/kind
+      - name: Report coverage
+        uses: codecov/codecov-action@v4
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        with:
+          file: ./testoutput/itest-covdata.txt
+          flags: integration-test-vm-${{ inputs.arch }}-${{ inputs.kernel-version }}

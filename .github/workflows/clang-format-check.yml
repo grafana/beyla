@@ -1,7 +1,10 @@
 name: Clang Format Check
 
 on:
-  workflow_call:
+  push:
+    branches: [ 'main', 'release-*' ]
+  pull_request:
+    branches: [ 'main', 'release-*' ]
 
 jobs:
   clang-format:

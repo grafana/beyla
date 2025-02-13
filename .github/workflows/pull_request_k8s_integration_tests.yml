@@ -1,7 +1,10 @@
 name: Pull request K8s integration tests
 
 on:
-  workflow_call:
+  push:
+    branches: [ 'main', 'release-*' ]
+  pull_request:
+    branches: [ 'main', 'release-*' ]
 
 jobs:
   test:

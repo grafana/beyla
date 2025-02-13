@@ -17,8 +17,6 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-        #with:
-        #  ref: ${{ github.head_ref }}
 
       - name: commit-check
         id: commit-check
@@ -42,8 +40,6 @@ jobs:
       - name: Commit Compiled eBPF Programs
         id: commit
         if: ${{ steps.commit-check.outputs.should_build == 'true' }}
-        #env:
-        #  GITHUB_TOKEN: ${{ secrets.BEYLA_WORKFLOW_TOKEN }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

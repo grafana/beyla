@@ -93,7 +93,7 @@ int beyla_uprobe_server_handleStream(struct pt_regs *ctx) {
 
     u64 st_offset = go_offset_of(ot, (go_offset){.v = _grpc_stream_st_ptr_pos});
 
-    u64 new_handle_stream = go_offset_of(ot, (go_offset){.v = _handle_stream_one_six_nine});
+    u64 new_handle_stream = go_offset_of(ot, (go_offset){.v = _grpc_one_six_nine});
     bpf_dbg_printk("stream pointer %llx, new_handle_stream %d", stream_ptr, new_handle_stream);
     if (new_handle_stream == 1) {
         // Read the embedded object ptr
@@ -155,7 +155,7 @@ int beyla_uprobe_http2Server_operateHeaders(struct pt_regs *ctx) {
     void *frame = GO_PARAM2(ctx);
     off_table_t *ot = get_offsets_table();
 
-    u64 new_offset_version = go_offset_of(ot, (go_offset){.v = _operate_headers_one_six_zero});
+    u64 new_offset_version = go_offset_of(ot, (go_offset){.v = _grpc_one_six_zero});
 
     // After grpc version 1.60, they added extra context argument to the
     // function call, which adds two extra arguments.

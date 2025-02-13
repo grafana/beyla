@@ -23,8 +23,8 @@ type GoOffset uint32
 
 const GoOffsetsTableSize = 30
 
-var operateHeadersOneSixZero = version.Must(version.NewVersion("1.60.0"))
-var handleStreamOneSixNine = version.Must(version.NewVersion("1.69.0"))
+var grpcOneSixZero = version.Must(version.NewVersion("1.60.0"))
+var grpcOneSixNine = version.Must(version.NewVersion("1.69.0"))
 
 const (
 	// go common
@@ -78,8 +78,8 @@ const (
 	SaramaBrokerConnPos
 	SaramaBufconnConnPos
 	// grpc versioning
-	OperateHeadersOneSixZero
-	HandleStreamOneSixNine
+	GrpcOneSixZero
+	GrpcOneSixNine
 	// grpc 1.69
 	GrpcServerStreamStream
 	GrpcServerStreamStPtr
@@ -373,15 +373,15 @@ func offsetsForLibVersions(fieldOffsets FieldOffsets, libVersions map[string]str
 			ver = cleanLibVersion(ver, true, lib, log)
 
 			if v, err := version.NewVersion(ver); err == nil {
-				if v.GreaterThanOrEqual(operateHeadersOneSixZero) {
-					fieldOffsets[OperateHeadersOneSixZero] = uint64(1)
+				if v.GreaterThanOrEqual(grpcOneSixZero) {
+					fieldOffsets[GrpcOneSixZero] = uint64(1)
 				} else {
-					fieldOffsets[OperateHeadersOneSixZero] = uint64(0)
+					fieldOffsets[GrpcOneSixZero] = uint64(0)
 				}
-				if v.GreaterThanOrEqual(handleStreamOneSixNine) {
-					fieldOffsets[HandleStreamOneSixNine] = uint64(1)
+				if v.GreaterThanOrEqual(grpcOneSixNine) {
+					fieldOffsets[GrpcOneSixNine] = uint64(1)
 				} else {
-					fieldOffsets[HandleStreamOneSixNine] = uint64(0)
+					fieldOffsets[GrpcOneSixNine] = uint64(0)
 				}
 			} else {
 				log.Debug("can't parse version for", "library", lib)

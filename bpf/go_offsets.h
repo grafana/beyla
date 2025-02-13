@@ -59,8 +59,8 @@ typedef enum {
     _sarama_broker_conn_pos,
     _sarama_bufconn_conn_pos,
     // grpc versioning
-    _operate_headers_one_six_zero,
-    _handle_stream_one_six_nine,
+    _grpc_one_six_zero,
+    _grpc_one_six_nine,
     // grpc 1.69
     _grpc_server_stream_stream,
     _grpc_server_stream_st_ptr_pos,

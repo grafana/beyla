@@ -29,6 +29,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
+	"go.opentelemetry.io/otel/trace"
 )
 
 func mlog() *slog.Logger {
@@ -806,88 +807,90 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 	t := span.Timings()
 	duration := t.End.Sub(t.RequestStart).Seconds()
 
+	ctx := trace.ContextWithSpanContext(r.ctx, trace.SpanContext{}.WithTraceID(span.TraceID).WithSpanID(span.SpanID).WithTraceFlags(trace.TraceFlags(span.Flags)))
+
 	if otelSpanAccepted(span, mr) {
 		switch span.Type {
 		case request.EventTypeHTTP:
 			if mr.is.HTTPEnabled() {
 				// TODO: for more accuracy, there must be a way to set the metric time from the actual span end time
 				httpDuration, attrs := r.httpDuration.ForRecord(span)
-				httpDuration.Record(r.ctx, duration, instrument.WithAttributeSet(attrs))
+				httpDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
 
 				httpRequestSize, attrs := r.httpRequestSize.ForRecord(span)
-				httpRequestSize.Record(r.ctx, float64(span.RequestLength()), instrument.WithAttributeSet(attrs))
+				httpRequestSize.Record(ctx, float64(span.RequestLength()), instrument.WithAttributeSet(attrs))
 			}
 		case request.EventTypeGRPC:
 			if mr.is.GRPCEnabled() {
 				grpcDuration, attrs := r.grpcDuration.ForRecord(span)
-				grpcDuration.Record(r.ctx, duration, instrument.WithAttributeSet(attrs))
+				grpcDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
 			}
 		case request.EventTypeGRPCClient:
 			if mr.is.GRPCEnabled() {
 				grpcClientDuration, attrs := r.grpcClientDuration.ForRecord(span)
-				grpcClientDuration.Record(r.ctx, duration, instrument.WithAttributeSet(attrs))
+				grpcClientDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
 			}
 		case request.EventTypeHTTPClient:
 			if mr.is.HTTPEnabled() {
 				httpClientDuration, attrs := r.httpClientDuration.ForRecord(span)
-				httpClientDuration.Record(r.ctx, duration, instrument.WithAttributeSet(attrs))
+				httpClientDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
 				httpClientRequestSize, attrs := r.httpClientRequestSize.ForRecord(span)
-				httpClientRequestSize.Record(r.ctx, float64(span.RequestLength()), instrument.WithAttributeSet(attrs))
+				httpClientRequestSize.Record(ctx, float64(span.RequestLength()), instrument.WithAttributeSet(attrs))
 			}
 		case request.EventTypeRedisServer, request.EventTypeRedisClient, request.EventTypeSQLClient:
 			if mr.is.DBEnabled() {
 				dbClientDuration, attrs := r.dbClientDuration.ForRecord(span)
-				dbClientDuration.Record(r.ctx, duration, instrument.WithAttributeSet(attrs))
+				dbClientDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
 			}
 		case request.EventTypeKafkaClient, request.EventTypeKafkaServer:
 			if mr.is.MQEnabled() {
 				switch span.Method {
 				case request.MessagingPublish:
 					msgPublishDuration, attrs := r.msgPublishDuration.ForRecord(span)
-					msgPublishDuration.Record(r.ctx, duration, instrument.WithAttributeSet(attrs))
+					msgPublishDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
 				case request.MessagingProcess:
 					msgProcessDuration, attrs := r.msgProcessDuration.ForRecord(span)
-					msgProcessDuration.Record(r.ctx, duration, instrument.WithAttributeSet(attrs))
+					msgProcessDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
 				}
 			}
 		case request.EventTypeGPUKernelLaunch:
 			if mr.is.GPUEnabled() {
 				gcalls, attrs := r.gpuKernelCallsTotal.ForRecord(span)
-				gcalls.Add(r.ctx, 1, instrument.WithAttributeSet(attrs))
+				gcalls.Add(ctx, 1, instrument.WithAttributeSet(attrs))
 			}
 		case request.EventTypeGPUMalloc:
 			if mr.is.GPUEnabled() {
 				gmem, attrs := r.gpuMemoryAllocsTotal.ForRecord(span)
-				gmem.Add(r.ctx, span.ContentLength, instrument.WithAttributeSet(attrs))
+				gmem.Add(ctx, span.ContentLength, instrument.WithAttributeSet(attrs))
 			}
 		}
 	}
 
 	if mr.cfg.SpanMetricsEnabled() {
 		sml, attrs := r.spanMetricsLatency.ForRecord(span)
-		sml.Record(r.ctx, duration, instrument.WithAttributeSet(attrs))
+		sml.Record(ctx, duration, instrument.WithAttributeSet(attrs))
 
 		smct, attrs := r.spanMetricsCallsTotal.ForRecord(span)
-		smct.Add(r.ctx, 1, instrument.WithAttributeSet(attrs))
+		smct.Add(ctx, 1, instrument.WithAttributeSet(attrs))
 
 		smst, attrs := r.spanMetricsSizeTotal.ForRecord(span)
-		smst.Add(r.ctx, float64(span.RequestLength()), instrument.WithAttributeSet(attrs))
+		smst.Add(ctx, float64(span.RequestLength()), instrument.WithAttributeSet(attrs))
 	}
 
 	if mr.cfg.ServiceGraphMetricsEnabled() {
 		if !span.IsSelfReferenceSpan() || mr.cfg.AllowServiceGraphSelfReferences {
 			if span.IsClientSpan() {
 				sgc, attrs := r.serviceGraphClient.ForRecord(span)
-				sgc.Record(r.ctx, duration, instrument.WithAttributeSet(attrs))
+				sgc.Record(ctx, duration, instrument.WithAttributeSet(attrs))
 			} else {
 				sgs, attrs := r.serviceGraphServer.ForRecord(span)
-				sgs.Record(r.ctx, duration, instrument.WithAttributeSet(attrs))
+				sgs.Record(ctx, duration, instrument.WithAttributeSet(attrs))
 			}
 			sgt, attrs := r.serviceGraphTotal.ForRecord(span)
-			sgt.Add(r.ctx, 1, instrument.WithAttributeSet(attrs))
+			sgt.Add(ctx, 1, instrument.WithAttributeSet(attrs))
 			if request.SpanStatusCode(span) == codes.Error {
 				sgf, attrs := r.serviceGraphFailed.ForRecord(span)
-				sgf.Add(r.ctx, 1, instrument.WithAttributeSet(attrs))
+				sgf.Add(ctx, 1, instrument.WithAttributeSet(attrs))
 			}
 		}
 	}

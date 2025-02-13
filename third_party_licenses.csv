@@ -83,6 +83,7 @@ github.com/vishvananda/netns,https://github.com/grafana/beyla/blob/HEAD/vendor/g
 github.com/vladimirvivien/gexe,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/vladimirvivien/gexe/LICENSE,MIT
 github.com/xwb1989/sqlparser,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/xwb1989/sqlparser/LICENSE.md,Apache-2.0
 github.com/yl2chen/cidranger,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/yl2chen/cidranger/LICENSE,MIT
+go.opentelemetry.io/auto/sdk,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/auto/sdk/LICENSE,Apache-2.0
 go.opentelemetry.io/collector/client,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/collector/client/LICENSE,Apache-2.0
 go.opentelemetry.io/collector/component,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/collector/component/LICENSE,Apache-2.0
 go.opentelemetry.io/collector/config/configauth,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/collector/config/configauth/LICENSE,Apache-2.0

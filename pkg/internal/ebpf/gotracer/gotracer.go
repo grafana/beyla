@@ -153,7 +153,10 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 		goexec.SaramaBrokerConnPos,
 		goexec.SaramaBufconnConnPos,
 		// grpc versioning
-		goexec.OperateHeadersNew,
+		goexec.GrpcOneSixZero,
+		goexec.GrpcOneSixNine,
+		goexec.GrpcServerStreamStream,
+		goexec.GrpcServerStreamStPtr,
 	} {
 		if val, ok := offsets.Field[field].(uint64); ok {
 			offTable.Table[field] = val
@@ -265,6 +268,10 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 			End:   p.bpfObjects.BeylaUprobeServerHandleStreamReturn,
 		}},
 		"google.golang.org/grpc/internal/transport.(*http2Server).WriteStatus": {{
+			Start: p.bpfObjects.BeylaUprobeTransportWriteStatus,
+		}},
+		// in grpc 1.69.0 they renamed the above WriteStatus to writeStatus lowecase
+		"google.golang.org/grpc/internal/transport.(*http2Server).writeStatus": {{
 			Start: p.bpfObjects.BeylaUprobeTransportWriteStatus,
 		}},
 		"google.golang.org/grpc.(*ClientConn).Invoke": {{

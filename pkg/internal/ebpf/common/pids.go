@@ -6,6 +6,7 @@ import (
 
 	lru "github.com/hashicorp/golang-lru/v2"
 
+	"github.com/grafana/beyla/pkg/export/otel"
 	"github.com/grafana/beyla/pkg/internal/exec"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
@@ -121,6 +122,16 @@ func (pf *PIDsFilter) CurrentPIDs(t PIDType) map[uint32]map[uint32]svc.Attrs {
 	return cp
 }
 
+func (pf *PIDsFilter) normalizeTraceContext(span *request.Span) {
+	if !span.TraceID.IsValid() {
+		span.TraceID = otel.RandomTraceID()
+		span.Flags = 1
+	}
+	if !span.SpanID.IsValid() {
+		span.SpanID = otel.RandomSpanID()
+	}
+}
+
 func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 	pf.mux.RLock()
 	defer pf.mux.RUnlock()
@@ -145,6 +156,7 @@ func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 				checkIfExportsOTel(info.service, span)
 			}
 			inputSpans[i].Service = *info.service
+			pf.normalizeTraceContext(&inputSpans[i])
 			outputSpans = append(outputSpans, inputSpans[i])
 		}
 	}

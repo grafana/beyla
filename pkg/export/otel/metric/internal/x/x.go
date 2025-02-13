@@ -10,23 +10,9 @@ package x
 import (
 	"os"
 	"strconv"
-	"strings"
 )
 
 var (
-	// Exemplars is an experimental feature flag that defines if exemplars
-	// should be recorded for metric data-points.
-	//
-	// To enable this feature set the OTEL_GO_X_EXEMPLAR environment variable
-	// to the case-insensitive string value of "true" (i.e. "True" and "TRUE"
-	// will also enable this).
-	Exemplars = newFeature("EXEMPLAR", func(v string) (string, bool) {
-		if strings.ToLower(v) == "true" {
-			return v, true
-		}
-		return "", false
-	})
-
 	// CardinalityLimit is an experimental feature flag that defines if
 	// cardinality limits should be applied to the recorded metric data-points.
 	//

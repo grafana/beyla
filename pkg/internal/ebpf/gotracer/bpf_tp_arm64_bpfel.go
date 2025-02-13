@@ -58,6 +58,7 @@ type bpf_tpGrpcFramerFuncInvocationT struct {
 type bpf_tpGrpcSrvFuncInvocationT struct {
 	StartMonotimeNs uint64
 	Stream          uint64
+	St              uint64
 	Tp              bpf_tpTpInfoT
 }
 
@@ -122,7 +123,7 @@ type bpf_tpKafkaGoReqT struct {
 
 type bpf_tpNewFuncInvocationT struct{ Parent uint64 }
 
-type bpf_tpOffTableT struct{ Table [46]uint64 }
+type bpf_tpOffTableT struct{ Table [49]uint64 }
 
 type bpf_tpProduceReqT struct {
 	MsgPtr          uint64

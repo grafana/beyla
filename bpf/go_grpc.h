@@ -22,6 +22,7 @@
 typedef struct grpc_srv_func_invocation {
     u64 start_monotime_ns;
     u64 stream;
+    u64 st;
     tp_info_t tp;
 } grpc_srv_func_invocation_t;
 
@@ -87,11 +88,32 @@ int beyla_uprobe_server_handleStream(struct pt_regs *ctx) {
     go_addr_key_from_id(&g_key, goroutine_addr);
 
     void *stream_ptr = GO_PARAM4(ctx);
+    void *stream_stream_ptr = stream_ptr;
     off_table_t *ot = get_offsets_table();
+
+    u64 st_offset = go_offset_of(ot, (go_offset){.v = _grpc_stream_st_ptr_pos});
+
+    u64 new_handle_stream = go_offset_of(ot, (go_offset){.v = _grpc_one_six_nine});
+    bpf_dbg_printk("stream pointer %llx, new_handle_stream %d", stream_ptr, new_handle_stream);
+    if (new_handle_stream == 1) {
+        // Read the embedded object ptr
+        bpf_probe_read(
+            &stream_stream_ptr,
+            sizeof(stream_stream_ptr),
+            (void *)(stream_ptr + go_offset_of(ot, (go_offset){.v = _grpc_server_stream_stream})));
+
+        bpf_dbg_printk("new stream pointer %llx", stream_stream_ptr);
+        if (!stream_stream_ptr) {
+            bpf_dbg_printk("Error loading embedded server stream pointer from %llx", stream_ptr);
+            return 0;
+        }
+        st_offset = go_offset_of(ot, (go_offset){.v = _grpc_server_stream_st_ptr_pos});
+    }
 
     grpc_srv_func_invocation_t invocation = {
         .start_monotime_ns = bpf_ktime_get_ns(),
-        .stream = (u64)stream_ptr,
+        .stream = (u64)stream_stream_ptr,
+        .st = 0,
         .tp = {0},
     };
 
@@ -99,13 +121,10 @@ int beyla_uprobe_server_handleStream(struct pt_regs *ctx) {
         void *st_ptr = 0;
         void *tp_ptr = 0;
         // Read the embedded object ptr
-        bpf_probe_read(&st_ptr,
-                       sizeof(st_ptr),
-                       (void *)(stream_ptr +
-                                go_offset_of(ot, (go_offset){.v = _grpc_stream_st_ptr_pos}) +
-                                sizeof(void *)));
+        bpf_probe_read(&st_ptr, sizeof(st_ptr), (void *)(stream_ptr + st_offset + sizeof(void *)));
 
         bpf_dbg_printk("st_ptr %llx", st_ptr);
+        invocation.st = (u64)st_ptr;
         if (st_ptr) {
             grpc_transports_t *t = bpf_map_lookup_elem(&ongoing_grpc_transports, &st_ptr);
 
@@ -136,7 +155,7 @@ int beyla_uprobe_http2Server_operateHeaders(struct pt_regs *ctx) {
     void *frame = GO_PARAM2(ctx);
     off_table_t *ot = get_offsets_table();
 
-    u64 new_offset_version = go_offset_of(ot, (go_offset){.v = _operate_headers_new});
+    u64 new_offset_version = go_offset_of(ot, (go_offset){.v = _grpc_one_six_zero});
 
     // After grpc version 1.60, they added extra context argument to the
     // function call, which adds two extra arguments.
@@ -223,9 +242,13 @@ int beyla_uprobe_server_handleStream_return(struct pt_regs *ctx) {
     }
 
     void *stream_ptr = (void *)invocation->stream;
+    void *st_ptr = (void *)invocation->st;
     u64 grpc_stream_method_ptr_pos =
         go_offset_of(ot, (go_offset){.v = _grpc_stream_method_ptr_pos});
-    bpf_dbg_printk("stream_ptr %lx, method pos %lx", stream_ptr, grpc_stream_method_ptr_pos);
+    bpf_dbg_printk("stream_ptr %lx, st_ptr %lx, method pos %lx",
+                   stream_ptr,
+                   st_ptr,
+                   grpc_stream_method_ptr_pos);
 
     http_request_trace *trace = bpf_ringbuf_reserve(&events, sizeof(http_request_trace), 0);
     if (!trace) {
@@ -254,16 +277,7 @@ int beyla_uprobe_server_handleStream_return(struct pt_regs *ctx) {
         goto done;
     }
 
-    void *st_ptr = 0;
     u8 found_conn = 0;
-    // Read the embedded object ptr
-    bpf_probe_read(&st_ptr,
-                   sizeof(st_ptr),
-                   (void *)(stream_ptr +
-                            go_offset_of(ot, (go_offset){.v = _grpc_stream_st_ptr_pos}) +
-                            sizeof(void *)));
-
-    bpf_dbg_printk("st_ptr %llx", st_ptr);
     if (st_ptr) {
         grpc_transports_t *t = bpf_map_lookup_elem(&ongoing_grpc_transports, &st_ptr);
 

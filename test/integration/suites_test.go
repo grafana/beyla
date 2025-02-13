@@ -32,6 +32,7 @@ func TestSuite(t *testing.T) {
 	t.Run("GRPC RED metrics", testREDMetricsGRPC)
 	t.Run("GRPC TLS RED metrics", testREDMetricsGRPCTLS)
 	t.Run("Internal Prometheus metrics", testInternalPrometheusExport)
+	t.Run("Exemplars exist", testExemplarsExist)
 
 	require.NoError(t, compose.Close())
 }

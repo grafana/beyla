@@ -454,6 +454,10 @@ func GenerateTracesWithAttributes(span *request.Span, hostID string, attrs []att
 
 	traceID := pcommon.TraceID(span.TraceID)
 	spanID := pcommon.SpanID(RandomSpanID())
+	// This should never happen
+	if traceID.IsEmpty() {
+		traceID = pcommon.TraceID(RandomTraceID())
+	}
 
 	if hasSubSpans {
 		createSubSpans(span, spanID, traceID, &ss, t)

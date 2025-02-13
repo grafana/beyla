@@ -267,15 +267,18 @@ func (pa *pollAccounter) checkNewProcessConnectionNotification(
 	if !existingConnection || !existingProcess {
 		// ...also if we haven't already reported the process in the last "snapshot" invocation
 		if _, ok := reportedProcs[pp.Pid]; !ok {
-			// avoid notifying multiple times the same process if it has multiple connections
-			reportedProcs[proc.pid] = struct{}{}
 			exec, ok := pa.executableReady(pp.Pid)
 			if ok {
+				// avoid notifying multiple times the same process if it has multiple connections
+				reportedProcs[proc.pid] = struct{}{}
 				wplog().Debug("Executable ready", "path", exec, "pid", pp.Pid, "port", port)
 				return true
 			}
-			notReadyProcs[pp.Pid] = struct{}{}
-			wplog().Debug("Executable not ready", "path", exec, "pid", pp.Pid, "port", port)
+			if _, ok := notReadyProcs[pp.Pid]; !ok {
+				// avoid notifying multiple times the same process if it has multiple connections
+				notReadyProcs[pp.Pid] = struct{}{}
+				wplog().Debug("Executable not ready", "path", exec, "pid", pp.Pid, "port", port)
+			}
 		}
 	}
 	return false
@@ -288,15 +291,17 @@ func (pa *pollAccounter) checkNewProcessNotification(pid PID, reportedProcs, not
 	if _, existingProcess := pa.pids[pid]; !existingProcess {
 		// ...also if we haven't already reported the process in the last "snapshot" invocation
 		if _, ok := reportedProcs[pid]; !ok {
-			// avoid notifying multiple times the same process if it has multiple connections
-			reportedProcs[pid] = struct{}{}
 			exec, ok := pa.executableReady(pid)
 			if ok {
+				// avoid notifying multiple times the same process if it has multiple connections
+				reportedProcs[pid] = struct{}{}
 				wplog().Debug("Executable ready", "path", exec, "pid", pid)
 				return true
 			}
-			notReadyProcs[pid] = struct{}{}
-			wplog().Debug("Executable not ready", "path", exec, "pid", pid)
+			if _, ok := notReadyProcs[pid]; !ok {
+				notReadyProcs[pid] = struct{}{}
+				wplog().Debug("Executable not ready", "path", exec, "pid", pid)
+			}
 		}
 	}
 	return false

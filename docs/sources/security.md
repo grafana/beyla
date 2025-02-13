@@ -70,7 +70,9 @@ Some Linux distributions define higher levels for `kernel.perf_event_paranoid`, 
 
 ### Deploy on AKS/EKS
 
-Both AKS and EKS environments come with kernels that have `sys.perf_event_paranoid > 1` set by default, which means Beyla needs `CAP_SYS_ADMIN` to work (see [[#Performance monitoring tasks]]). If you'd prefer to use just `CAP_PERFMON`, you can configure your node to set `kernel.perf_event_paranoid = 1`. Below, we’ve provided a few examples of how to do this. Keep in mind that your results may vary depending on your specific setup.
+Both AKS and EKS environments come with kernels that by default set `sys.perf_event_paranoid > 1`, which means Beyla needs `CAP_SYS_ADMIN` to work, refer to the section on how to [monitor task performance](#performance-monitoring-tasks) for further information. 
+
+If you prefer to use just `CAP_PERFMON`, you can configure your node to set `kernel.perf_event_paranoid = 1`. We've provided a few examples of how to do this, keep in mind that your results may vary depending on your specific setup.
 
 #### AKS
 

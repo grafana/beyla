@@ -36,7 +36,8 @@ jobs:
       - name: Compile eBPF Programs
         if: ${{ steps.commit-check.outputs.should_build == 'true' }}
         run: |
-          make docker-generate
+          #make docker-generate
+          echo foo >> ebpf/tc_ip.h
 
       # NOTE: The user email is {user.id}+{user.login}@users.noreply.github.com.
       # See users API: https://api.github.com/users/github-actions%5Bbot%5D

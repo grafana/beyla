@@ -92,8 +92,8 @@ github.com/cespare/xxhash/v2
 # github.com/chenzhuoyu/base64x v0.0.0-20221115062448-fe3a3abad311
 ## explicit; go 1.15
 github.com/chenzhuoyu/base64x
-# github.com/cilium/ebpf v0.16.0
-## explicit; go 1.21
+# github.com/cilium/ebpf v0.17.1
+## explicit; go 1.22
 github.com/cilium/ebpf
 github.com/cilium/ebpf/asm
 github.com/cilium/ebpf/btf
@@ -101,8 +101,10 @@ github.com/cilium/ebpf/internal
 github.com/cilium/ebpf/internal/epoll
 github.com/cilium/ebpf/internal/kallsyms
 github.com/cilium/ebpf/internal/kconfig
+github.com/cilium/ebpf/internal/linux
 github.com/cilium/ebpf/internal/sys
 github.com/cilium/ebpf/internal/sysenc
+github.com/cilium/ebpf/internal/testutils/fdtrace
 github.com/cilium/ebpf/internal/tracefs
 github.com/cilium/ebpf/internal/unix
 github.com/cilium/ebpf/link
@@ -714,9 +716,6 @@ golang.org/x/arch/x86/x86asm
 # golang.org/x/crypto v0.31.0
 ## explicit; go 1.20
 golang.org/x/crypto/sha3
-# golang.org/x/exp v0.0.0-20241009180824-f66d83c29e7c
-## explicit; go 1.22.0
-golang.org/x/exp/constraints
 # golang.org/x/mod v0.21.0
 ## explicit; go 1.22.0
 golang.org/x/mod/semver

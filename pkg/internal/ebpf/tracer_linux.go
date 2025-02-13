@@ -130,8 +130,11 @@ func (pt *ProcessTracer) loadSpec(p Tracer) (*ebpf.CollectionSpec, error) {
 	if err != nil {
 		return nil, fmt.Errorf("loading eBPF program: %w", err)
 	}
-	if err := spec.RewriteConstants(p.Constants()); err != nil {
-		return nil, fmt.Errorf("rewriting BPF constants definition: %w", err)
+	for name, value := range p.Constants() {
+		err = spec.Variables[name].Set(value)
+		if err != nil {
+			return nil, fmt.Errorf("setting constant %s: %w", name, err)
+		}
 	}
 
 	return spec, nil
@@ -150,7 +153,7 @@ func (pt *ProcessTracer) loadAndAssign(p Tracer) error {
 		return err
 	}
 
-	collOpts.Programs = ebpf.ProgramOptions{LogSize: 640 * 1024}
+	collOpts.Programs = ebpf.ProgramOptions{LogSizeStart: 640 * 1024}
 
 	return spec.LoadAndAssign(p.BpfObjects(), collOpts)
 }

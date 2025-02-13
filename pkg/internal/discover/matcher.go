@@ -123,6 +123,7 @@ func (m *matcher) filterDeleted(obj processAttrs) (Event[ProcessMatch], bool) {
 
 func (m *matcher) isExcluded(obj *processAttrs, proc *services.ProcessInfo) bool {
 	for i := range m.excludeCriteria {
+		m.log.Debug("checking exclusion criteria", "pid", proc.Pid, "comm", proc.ExePath)
 		if m.matchProcess(obj, proc, &m.excludeCriteria[i]) {
 			return true
 		}
@@ -131,13 +132,17 @@ func (m *matcher) isExcluded(obj *processAttrs, proc *services.ProcessInfo) bool
 }
 
 func (m *matcher) matchProcess(obj *processAttrs, p *services.ProcessInfo, a *services.Attributes) bool {
-	if !a.Path.IsSet() && a.OpenPorts.Len() == 0 && len(obj.metadata) == 0 && len(obj.metadata) == 0 {
+	log := m.log.With("pid", p.Pid, "exe", p.ExePath)
+	if !a.Path.IsSet() && a.OpenPorts.Len() == 0 && len(obj.metadata) == 0 {
+		log.Debug("no Kube metadata, no local selection criteria. Ignoring")
 		return false
 	}
 	if (a.Path.IsSet() || a.PathRegexp.IsSet()) && !m.matchByExecutable(p, a) {
+		log.Debug("executable path does not match", "path", a.Path, "pathregexp", a.PathRegexp)
 		return false
 	}
 	if a.OpenPorts.Len() > 0 && !m.matchByPort(p, a) {
+		log.Debug("open ports do not match", "openPorts", a.OpenPorts)
 		return false
 	}
 	// after matching by process basic information, we check if it matches
@@ -169,10 +174,11 @@ func (m *matcher) matchByAttributes(actual *processAttrs, required *services.Att
 	if actual == nil {
 		return false
 	}
-
+	log := m.log.With("pid", actual.pid)
 	// match metadata
 	for attrName, criteriaRegexp := range required.Metadata {
 		if attrValue, ok := actual.metadata[attrName]; !ok || !criteriaRegexp.MatchString(attrValue) {
+			log.Debug("metadata does not match", "attr", attrName, "value", attrValue)
 			return false
 		}
 	}
@@ -180,6 +186,7 @@ func (m *matcher) matchByAttributes(actual *processAttrs, required *services.Att
 	// match pod labels
 	for labelName, criteriaRegexp := range required.PodLabels {
 		if actualPodLabelValue, ok := actual.podLabels[labelName]; !ok || !criteriaRegexp.MatchString(actualPodLabelValue) {
+			log.Debug("pod label does not match", "label", labelName, "value", actualPodLabelValue)
 			return false
 		}
 	}

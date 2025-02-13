@@ -23,7 +23,8 @@ type GoOffset uint32
 
 const GoOffsetsTableSize = 30
 
-var operateHeadersNew = version.Must(version.NewVersion("1.60.0"))
+var operateHeadersOneSixZero = version.Must(version.NewVersion("1.60.0"))
+var handleStreamOneSixNine = version.Must(version.NewVersion("1.69.0"))
 
 const (
 	// go common
@@ -77,7 +78,11 @@ const (
 	SaramaBrokerConnPos
 	SaramaBufconnConnPos
 	// grpc versioning
-	OperateHeadersNew
+	OperateHeadersOneSixZero
+	HandleStreamOneSixNine
+	// grpc 1.69
+	GrpcServerStreamStream
+	GrpcServerStreamStPtr
 )
 
 //go:embed offsets.json
@@ -123,6 +128,13 @@ var structMembers = map[string]structInfo{
 		fields: map[string]GoOffset{
 			"st":     GrpcStreamStPtrPos,
 			"method": GrpcStreamMethodPtrPos,
+		},
+	},
+	"google.golang.org/grpc/internal/transport.ServerStream": {
+		lib: "google.golang.org/grpc",
+		fields: map[string]GoOffset{
+			"Stream": GrpcServerStreamStream,
+			"st":     GrpcServerStreamStPtr,
 		},
 	},
 	"google.golang.org/grpc/internal/status.Status": {
@@ -361,8 +373,15 @@ func offsetsForLibVersions(fieldOffsets FieldOffsets, libVersions map[string]str
 			ver = cleanLibVersion(ver, true, lib, log)
 
 			if v, err := version.NewVersion(ver); err == nil {
-				if v.GreaterThanOrEqual(operateHeadersNew) {
-					fieldOffsets[OperateHeadersNew] = uint64(1)
+				if v.GreaterThanOrEqual(operateHeadersOneSixZero) {
+					fieldOffsets[OperateHeadersOneSixZero] = uint64(1)
+				} else {
+					fieldOffsets[OperateHeadersOneSixZero] = uint64(0)
+				}
+				if v.GreaterThanOrEqual(handleStreamOneSixNine) {
+					fieldOffsets[HandleStreamOneSixNine] = uint64(1)
+				} else {
+					fieldOffsets[HandleStreamOneSixNine] = uint64(0)
 				}
 			} else {
 				log.Debug("can't parse version for", "library", lib)

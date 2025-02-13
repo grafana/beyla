@@ -58,6 +58,7 @@ type bpf_tp_debugGrpcFramerFuncInvocationT struct {
 type bpf_tp_debugGrpcSrvFuncInvocationT struct {
 	StartMonotimeNs uint64
 	Stream          uint64
+	St              uint64
 	Tp              bpf_tp_debugTpInfoT
 }
 
@@ -122,7 +123,7 @@ type bpf_tp_debugKafkaGoReqT struct {
 
 type bpf_tp_debugNewFuncInvocationT struct{ Parent uint64 }
 
-type bpf_tp_debugOffTableT struct{ Table [46]uint64 }
+type bpf_tp_debugOffTableT struct{ Table [49]uint64 }
 
 type bpf_tp_debugProduceReqT struct {
 	MsgPtr          uint64

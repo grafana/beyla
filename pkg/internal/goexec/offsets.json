@@ -334,6 +334,32 @@
         ]
       }
     },
+    "google.golang.org/grpc/internal/transport.ServerStream": {
+      "Stream": {
+        "versions": {
+          "oldest": "1.69.0",
+          "newest": "1.70.0"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.69.0"
+          }
+        ]
+      },
+      "st": {
+        "versions": {
+          "oldest": "1.69.0",
+          "newest": "1.70.0"
+        },
+        "offsets": [
+          {
+            "offset": 8,
+            "since": "1.69.0"
+          }
+        ]
+      }
+    },
     "google.golang.org/grpc/internal/transport.Stream": {
       "method": {
         "versions": {

@@ -134,7 +134,7 @@ nodeGroups:
 
 Use the AWS Management Console, AWS CLI, or eksctl to apply the updated configuration to your EKS cluster.
 
-Fore more information see "[Operating system](https://anywhere.eks.amazonaws.com/docs/getting-started/optional/hostosconfig/)"
+For more information refer to the [EKS host OS configuration documentation](https://anywhere.eks.amazonaws.com/docs/getting-started/optional/hostosconfig/).
 
 ## Example scenarios
 

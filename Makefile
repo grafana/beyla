@@ -179,9 +179,7 @@ update-offsets: prereqs
 	@echo "### Updating pkg/internal/goexec/offsets.json"
 	$(GO_OFFSETS_TRACKER) -i configs/offsets/tracker_input.json pkg/internal/goexec/offsets.json
 
-# As generated artifacts are part of the code repo (pkg/ebpf packages), you don't have
-# to run this target for each build. Only when you change the C code inside the bpf folder.
-# You might want to use the docker-generate target instead of this.
+# Prefer docker-generate instead, as it's able to perform a parallel build
 .PHONY: generate
 generate: export BPF_CLANG := $(CLANG)
 generate: export BPF_CFLAGS := $(CFLAGS)
@@ -198,10 +196,10 @@ docker-generate:
 verify: prereqs lint-dashboard lint test
 
 .PHONY: build
-build: verify compile
+build: docker-generate verify compile
 
 .PHONY: all
-all: generate build
+all: docker-generate build
 
 .PHONY: compile compile-cache
 compile:
@@ -216,7 +214,7 @@ debug:
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -gcflags "-N -l" -ldflags="-X '$(BUILDINFO_PKG).Version=$(RELEASE_VERSION)' -X '$(BUILDINFO_PKG).Revision=$(RELEASE_REVISION)'" -a -o bin/$(CMD) $(MAIN_GO_FILE)
 
 .PHONY: dev
-dev: prereqs generate compile-for-coverage
+dev: prereqs docker-generate compile-for-coverage
 
 # Generated binary can provide coverage stats according to https://go.dev/blog/integration-test-coverage
 .PHONY: compile-for-coverage compile-cache-for-coverage
@@ -334,7 +332,7 @@ bin/ginkgo:
 	$(call go-install-tool,$(GINKGO),github.com/onsi/ginkgo/v2/ginkgo,latest)
 
 .PHONY: oats-prereq
-oats-prereq: bin/ginkgo
+oats-prereq: bin/ginkgo docker-generate
 	mkdir -p $(TEST_OUTPUT)/run
 
 .PHONY: oats-test-sql
@@ -390,15 +388,11 @@ clean-testoutput:
 	@echo "### Cleaning ${TEST_OUTPUT} folder"
 	rm -rf ${TEST_OUTPUT}/*
 
-.PHONY: check-ebpf-integrity
-check-ebpf-integrity: docker-generate
-	git diff --name-status --exit-code || (echo "Run make docker-generate locally and commit the code changes" && false)
-
 .PHONY: protoc-gen
 protoc-gen:
 	docker run --rm -v $(PWD):/work -w /work $(PROTOC_IMAGE) protoc --go_out=pkg/kubecache --go-grpc_out=pkg/kubecache proto/informer.proto
 
 .PHONY: clang-format
 clang-format:
-	find ./bpf -type f -name "*.c" | xargs clang-format -i
-	find ./bpf -type f -name "*.h" | xargs clang-format -i
+	find ./bpf -type f -name "*.c" | xargs -P 0 -n 1 clang-format -i
+	find ./bpf -type f -name "*.h" | xargs -P 0 -n 1 clang-format -i

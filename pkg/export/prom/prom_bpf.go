@@ -11,9 +11,9 @@ import (
 	"github.com/mariomac/pipes/pipe"
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/grafana/beyla/pkg/internal/connector"
-	"github.com/grafana/beyla/pkg/internal/pipe/global"
-	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/internal/connector"
+	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
+	"github.com/grafana/beyla/v2/pkg/internal/request"
 )
 
 // BPFCollector implements prometheus.Collector for collecting metrics about currently loaded eBPF programs.

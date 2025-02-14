@@ -31,7 +31,7 @@ import (
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/mariomac/pipes/pipe"
 
-	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
+	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
 )
 
 func rtlog() *slog.Logger {

@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/grafana/beyla/pkg/export/otel/metric/global"
+	"github.com/grafana/beyla/v2/pkg/export/otel/metric/global"
 )
 
 // Environment variable names.

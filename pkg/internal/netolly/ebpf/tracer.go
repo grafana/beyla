@@ -30,7 +30,7 @@ import (
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
 
-	"github.com/grafana/beyla/pkg/internal/ebpf/tcmanager"
+	"github.com/grafana/beyla/v2/pkg/internal/ebpf/tcmanager"
 )
 
 // $BPF_CLANG and $BPF_CFLAGS are set by the Makefile.

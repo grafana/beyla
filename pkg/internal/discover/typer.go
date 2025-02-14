@@ -8,13 +8,13 @@ import (
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/mariomac/pipes/pipe"
 
-	"github.com/grafana/beyla/pkg/beyla"
-	"github.com/grafana/beyla/pkg/internal/ebpf"
-	"github.com/grafana/beyla/pkg/internal/exec"
-	"github.com/grafana/beyla/pkg/internal/goexec"
-	"github.com/grafana/beyla/pkg/internal/imetrics"
-	"github.com/grafana/beyla/pkg/internal/kube"
-	"github.com/grafana/beyla/pkg/internal/svc"
+	"github.com/grafana/beyla/v2/pkg/beyla"
+	"github.com/grafana/beyla/v2/pkg/internal/ebpf"
+	"github.com/grafana/beyla/v2/pkg/internal/exec"
+	"github.com/grafana/beyla/v2/pkg/internal/goexec"
+	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
+	"github.com/grafana/beyla/v2/pkg/internal/kube"
+	"github.com/grafana/beyla/v2/pkg/internal/svc"
 )
 
 var instrumentableCache, _ = lru.New[uint64, InstrumentedExecutable](100)

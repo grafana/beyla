@@ -4,7 +4,7 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/grafana/beyla/pkg/kubecache/informer"
+	"github.com/grafana/beyla/v2/pkg/kubecache/informer"
 )
 
 // Observer can be subscribed to a Notifier to receive events

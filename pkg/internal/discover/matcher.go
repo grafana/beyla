@@ -11,8 +11,8 @@ import (
 	"github.com/mariomac/pipes/pipe"
 	"github.com/shirou/gopsutil/v3/process"
 
-	"github.com/grafana/beyla/pkg/beyla"
-	"github.com/grafana/beyla/pkg/services"
+	"github.com/grafana/beyla/v2/pkg/beyla"
+	"github.com/grafana/beyla/v2/pkg/services"
 )
 
 // CriteriaMatcherProvider filters the processes that match the discovery criteria.

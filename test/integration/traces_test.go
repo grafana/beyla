@@ -14,8 +14,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/beyla/test/integration/components/jaeger"
-	grpcclient "github.com/grafana/beyla/test/integration/components/testserver/grpc/client"
+	"github.com/grafana/beyla/v2/test/integration/components/jaeger"
+	grpcclient "github.com/grafana/beyla/v2/test/integration/components/testserver/grpc/client"
 )
 
 func testHTTPTracesNoTraceID(t *testing.T) {

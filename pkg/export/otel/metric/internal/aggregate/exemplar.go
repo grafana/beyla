@@ -8,7 +8,7 @@ import (
 
 	sdkmetricdata "go.opentelemetry.io/otel/sdk/metric/metricdata"
 
-	"github.com/grafana/beyla/pkg/export/otel/metric/internal/exemplar"
+	"github.com/grafana/beyla/v2/pkg/export/otel/metric/internal/exemplar"
 )
 
 var exemplarPool = sync.Pool{

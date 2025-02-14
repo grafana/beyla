@@ -8,7 +8,7 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/grafana/beyla/pkg/internal/exec"
+	"github.com/grafana/beyla/v2/pkg/internal/exec"
 )
 
 func isSupportedGoBinary(elfF *elf.File) error {

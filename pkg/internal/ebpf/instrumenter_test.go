@@ -10,7 +10,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
+	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
 )
 
 type probeDescMap map[string][]*ebpfcommon.ProbeDesc

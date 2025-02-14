@@ -15,9 +15,9 @@ import (
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
 	"sigs.k8s.io/e2e-framework/pkg/features"
 
-	"github.com/grafana/beyla/test/integration/components/kube"
-	"github.com/grafana/beyla/test/integration/components/prom"
-	k8s "github.com/grafana/beyla/test/integration/k8s/common"
+	"github.com/grafana/beyla/v2/test/integration/components/kube"
+	"github.com/grafana/beyla/v2/test/integration/components/prom"
+	k8s "github.com/grafana/beyla/v2/test/integration/k8s/common"
 )
 
 const (

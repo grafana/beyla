@@ -11,9 +11,9 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/ringbuf"
 
-	"github.com/grafana/beyla/pkg/config"
-	"github.com/grafana/beyla/pkg/internal/imetrics"
-	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/config"
+	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
+	"github.com/grafana/beyla/v2/pkg/internal/request"
 )
 
 // ringBufReader interface extracts the used methods from ringbuf.Reader for proper

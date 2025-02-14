@@ -10,12 +10,12 @@ import (
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/mariomac/pipes/pipe"
 
-	attr "github.com/grafana/beyla/pkg/export/attributes/names"
-	"github.com/grafana/beyla/pkg/internal/helpers/maps"
-	kube2 "github.com/grafana/beyla/pkg/internal/kube"
-	"github.com/grafana/beyla/pkg/internal/pipe/global"
-	"github.com/grafana/beyla/pkg/internal/request"
-	"github.com/grafana/beyla/pkg/internal/svc"
+	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
+	"github.com/grafana/beyla/v2/pkg/internal/helpers/maps"
+	kube2 "github.com/grafana/beyla/v2/pkg/internal/kube"
+	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
+	"github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/internal/svc"
 )
 
 const (

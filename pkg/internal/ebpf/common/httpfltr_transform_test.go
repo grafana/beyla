@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/internal/request"
 )
 
 func TestHTTPInfoParsing(t *testing.T) {

@@ -9,7 +9,7 @@ import (
 	"github.com/cilium/ebpf/ringbuf"
 	trace2 "go.opentelemetry.io/otel/trace"
 
-	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/internal/request"
 )
 
 const minRedisFrameLen = 3

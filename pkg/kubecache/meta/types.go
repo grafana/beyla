@@ -5,7 +5,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/grafana/beyla/pkg/kubecache/informer"
+	"github.com/grafana/beyla/v2/pkg/kubecache/informer"
 )
 
 type indexableEntity struct {

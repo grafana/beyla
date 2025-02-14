@@ -8,9 +8,9 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/grafana/beyla/pkg/export/attributes"
-	"github.com/grafana/beyla/pkg/internal/svc"
-	"github.com/grafana/beyla/pkg/services"
+	"github.com/grafana/beyla/v2/pkg/export/attributes"
+	"github.com/grafana/beyla/v2/pkg/internal/svc"
+	"github.com/grafana/beyla/v2/pkg/services"
 )
 
 type FileInfo struct {

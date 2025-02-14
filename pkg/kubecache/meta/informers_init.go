@@ -22,9 +22,9 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/grafana/beyla/pkg/kubecache/informer"
-	"github.com/grafana/beyla/pkg/kubecache/instrument"
-	"github.com/grafana/beyla/pkg/kubecache/meta/cni"
+	"github.com/grafana/beyla/v2/pkg/kubecache/informer"
+	"github.com/grafana/beyla/v2/pkg/kubecache/instrument"
+	"github.com/grafana/beyla/v2/pkg/kubecache/meta/cni"
 )
 
 const (

@@ -7,7 +7,7 @@ import (
 
 	trace2 "go.opentelemetry.io/otel/trace"
 
-	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/internal/request"
 )
 
 const fastCGIRequestHeaderLen = 24

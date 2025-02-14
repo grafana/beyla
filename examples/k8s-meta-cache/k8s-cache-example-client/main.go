@@ -9,7 +9,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/grafana/beyla/pkg/kubecache/informer"
+	"github.com/grafana/beyla/v2/pkg/kubecache/informer"
 )
 
 const (

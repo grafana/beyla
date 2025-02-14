@@ -5,8 +5,8 @@ import (
 	"maps"
 	"slices"
 
-	attr "github.com/grafana/beyla/pkg/export/attributes/names"
-	maps2 "github.com/grafana/beyla/pkg/internal/helpers/maps"
+	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
+	maps2 "github.com/grafana/beyla/v2/pkg/internal/helpers/maps"
 )
 
 // Default is true if an attribute must be reported by default,

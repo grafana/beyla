@@ -21,7 +21,7 @@ package flow
 import (
 	"net"
 
-	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
+	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
 )
 
 type InterfaceNamer func(ifIndex int) string

@@ -5,8 +5,8 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/grafana/beyla/pkg/buildinfo"
-	"github.com/grafana/beyla/pkg/internal/connector"
+	"github.com/grafana/beyla/v2/pkg/buildinfo"
+	"github.com/grafana/beyla/v2/pkg/internal/connector"
 )
 
 // InternalMetrics accounts diverse events of the Beyla Cache service

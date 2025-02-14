@@ -27,7 +27,7 @@ import (
 	"github.com/gavv/monotime"
 	"github.com/mariomac/pipes/pipe"
 
-	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
+	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
 )
 
 func mtlog() *slog.Logger {

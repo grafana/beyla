@@ -14,8 +14,8 @@ import (
 	"go.opentelemetry.io/otel/sdk/instrumentation"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 
-	"github.com/grafana/beyla/pkg/export/otel/metric/api/metric"
-	"github.com/grafana/beyla/pkg/export/otel/metric/internal/aggregate"
+	"github.com/grafana/beyla/v2/pkg/export/otel/metric/api/metric"
+	"github.com/grafana/beyla/v2/pkg/export/otel/metric/internal/aggregate"
 )
 
 var zeroScope instrumentation.Scope

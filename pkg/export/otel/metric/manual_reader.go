@@ -13,7 +13,7 @@ import (
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	sdkmetricdata "go.opentelemetry.io/otel/sdk/metric/metricdata"
 
-	"github.com/grafana/beyla/pkg/export/otel/metric/global"
+	"github.com/grafana/beyla/v2/pkg/export/otel/metric/global"
 )
 
 // ManualReader is a simple Reader that allows an application to

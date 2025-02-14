@@ -29,7 +29,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/protobuf/proto"
 
-	pb "github.com/grafana/beyla/test/integration/components/testserver/grpc/routeguide"
+	pb "github.com/grafana/beyla/v2/test/integration/components/testserver/grpc/routeguide"
 )
 
 var (

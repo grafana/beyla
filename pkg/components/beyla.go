@@ -6,16 +6,16 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/grafana/beyla/pkg/beyla"
-	"github.com/grafana/beyla/pkg/export/attributes"
-	"github.com/grafana/beyla/pkg/export/otel"
-	"github.com/grafana/beyla/pkg/internal/appolly"
-	"github.com/grafana/beyla/pkg/internal/connector"
-	"github.com/grafana/beyla/pkg/internal/imetrics"
-	"github.com/grafana/beyla/pkg/internal/kube"
-	"github.com/grafana/beyla/pkg/internal/netolly/agent"
-	"github.com/grafana/beyla/pkg/internal/netolly/flow"
-	"github.com/grafana/beyla/pkg/internal/pipe/global"
+	"github.com/grafana/beyla/v2/pkg/beyla"
+	"github.com/grafana/beyla/v2/pkg/export/attributes"
+	"github.com/grafana/beyla/v2/pkg/export/otel"
+	"github.com/grafana/beyla/v2/pkg/internal/appolly"
+	"github.com/grafana/beyla/v2/pkg/internal/connector"
+	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
+	"github.com/grafana/beyla/v2/pkg/internal/kube"
+	"github.com/grafana/beyla/v2/pkg/internal/netolly/agent"
+	"github.com/grafana/beyla/v2/pkg/internal/netolly/flow"
+	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 )
 
 // RunBeyla in the foreground process. This is a blocking function and won't exit

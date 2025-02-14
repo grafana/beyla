@@ -7,8 +7,8 @@ import (
 
 	"github.com/mariomac/pipes/pipe"
 
-	"github.com/grafana/beyla/pkg/internal/request"
-	"github.com/grafana/beyla/pkg/internal/traces/hostname"
+	"github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/internal/traces/hostname"
 )
 
 func rlog() *slog.Logger {

@@ -10,11 +10,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/beyla/pkg/export/attributes"
-	"github.com/grafana/beyla/pkg/export/otel"
-	"github.com/grafana/beyla/pkg/internal/connector"
-	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
-	"github.com/grafana/beyla/pkg/internal/pipe/global"
+	"github.com/grafana/beyla/v2/pkg/export/attributes"
+	"github.com/grafana/beyla/v2/pkg/export/otel"
+	"github.com/grafana/beyla/v2/pkg/internal/connector"
+	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
+	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 )
 
 func TestMetricsExpiration(t *testing.T) {

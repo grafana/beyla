@@ -3,7 +3,7 @@ package config
 import (
 	"time"
 
-	"github.com/grafana/beyla/pkg/internal/ebpf/tcmanager"
+	"github.com/grafana/beyla/v2/pkg/internal/ebpf/tcmanager"
 )
 
 // EBPFTracer configuration for eBPF programs

@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	attr "github.com/grafana/beyla/pkg/export/attributes/names"
+	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
 )
 
 // Selection specifies which attributes are allowed for each metric.

@@ -3,7 +3,7 @@ package k8s
 import (
 	"path"
 
-	"github.com/grafana/beyla/test/integration/k8s/common/testpath"
+	"github.com/grafana/beyla/v2/test/integration/k8s/common/testpath"
 )
 
 var (

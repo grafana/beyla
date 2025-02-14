@@ -14,11 +14,11 @@ import (
 	"github.com/shirou/gopsutil/v3/net"
 	"github.com/shirou/gopsutil/v3/process"
 
-	"github.com/grafana/beyla/pkg/beyla"
-	"github.com/grafana/beyla/pkg/internal/ebpf"
-	"github.com/grafana/beyla/pkg/internal/ebpf/logger"
-	"github.com/grafana/beyla/pkg/internal/ebpf/watcher"
-	"github.com/grafana/beyla/pkg/services"
+	"github.com/grafana/beyla/v2/pkg/beyla"
+	"github.com/grafana/beyla/v2/pkg/internal/ebpf"
+	"github.com/grafana/beyla/v2/pkg/internal/ebpf/logger"
+	"github.com/grafana/beyla/v2/pkg/internal/ebpf/watcher"
+	"github.com/grafana/beyla/v2/pkg/services"
 )
 
 const (

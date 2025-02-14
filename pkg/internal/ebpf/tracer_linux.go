@@ -16,11 +16,11 @@ import (
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/link"
 
-	"github.com/grafana/beyla/pkg/beyla"
-	common "github.com/grafana/beyla/pkg/internal/ebpf/common"
-	"github.com/grafana/beyla/pkg/internal/exec"
-	"github.com/grafana/beyla/pkg/internal/goexec"
-	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/beyla"
+	common "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
+	"github.com/grafana/beyla/v2/pkg/internal/exec"
+	"github.com/grafana/beyla/v2/pkg/internal/goexec"
+	"github.com/grafana/beyla/v2/pkg/internal/request"
 )
 
 const PinInternal = ebpf.PinType(100)

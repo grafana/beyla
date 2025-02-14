@@ -8,11 +8,11 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/grafana/beyla/pkg/beyla"
-	"github.com/grafana/beyla/pkg/internal/discover"
-	"github.com/grafana/beyla/pkg/internal/pipe"
-	"github.com/grafana/beyla/pkg/internal/pipe/global"
-	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/beyla"
+	"github.com/grafana/beyla/v2/pkg/internal/discover"
+	"github.com/grafana/beyla/v2/pkg/internal/pipe"
+	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
+	"github.com/grafana/beyla/v2/pkg/internal/request"
 )
 
 func log() *slog.Logger {

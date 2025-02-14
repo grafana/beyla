@@ -8,8 +8,8 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
-	"github.com/grafana/beyla/pkg/internal/helpers"
+	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
+	"github.com/grafana/beyla/v2/pkg/internal/helpers"
 )
 
 // Minimum required Kernel version: 4.18

@@ -7,8 +7,8 @@ import (
 
 	trace2 "go.opentelemetry.io/otel/trace"
 
-	"github.com/grafana/beyla/pkg/internal/request"
-	"github.com/grafana/beyla/pkg/internal/sqlprune"
+	"github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/internal/sqlprune"
 )
 
 var log = slog.With("component", "goexec.spanner")

@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"strconv"
 
-	"github.com/grafana/beyla/pkg/internal/exec"
+	"github.com/grafana/beyla/v2/pkg/internal/exec"
 )
 
 // injectable values for testing

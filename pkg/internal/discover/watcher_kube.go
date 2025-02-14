@@ -8,11 +8,11 @@ import (
 
 	"github.com/mariomac/pipes/pipe"
 
-	"github.com/grafana/beyla/pkg/internal/helpers/container"
-	"github.com/grafana/beyla/pkg/internal/kube"
-	"github.com/grafana/beyla/pkg/kubecache/informer"
-	"github.com/grafana/beyla/pkg/services"
-	"github.com/grafana/beyla/pkg/transform"
+	"github.com/grafana/beyla/v2/pkg/internal/helpers/container"
+	"github.com/grafana/beyla/v2/pkg/internal/kube"
+	"github.com/grafana/beyla/v2/pkg/kubecache/informer"
+	"github.com/grafana/beyla/v2/pkg/services"
+	"github.com/grafana/beyla/v2/pkg/transform"
 )
 
 // injectable functions for testing

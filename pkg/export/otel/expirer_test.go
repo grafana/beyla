@@ -10,13 +10,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/beyla/pkg/export/attributes"
-	"github.com/grafana/beyla/pkg/export/instrumentations"
-	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
-	"github.com/grafana/beyla/pkg/internal/pipe/global"
-	"github.com/grafana/beyla/pkg/internal/request"
-	"github.com/grafana/beyla/pkg/internal/svc"
-	"github.com/grafana/beyla/test/collector"
+	"github.com/grafana/beyla/v2/pkg/export/attributes"
+	"github.com/grafana/beyla/v2/pkg/export/instrumentations"
+	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
+	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
+	"github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/internal/svc"
+	"github.com/grafana/beyla/v2/test/collector"
 )
 
 const timeout = 20 * time.Second

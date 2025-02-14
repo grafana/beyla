@@ -7,7 +7,7 @@ import (
 
 	"github.com/mariomac/pipes/pipe"
 
-	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
+	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
 )
 
 func FlowPrinterProvider(enabled bool) (pipe.FinalFunc[[]*ebpf.Record], error) {

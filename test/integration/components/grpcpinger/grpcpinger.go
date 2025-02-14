@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"time"
 
-	grpcclient "github.com/grafana/beyla/test/integration/components/testserver/grpc/client"
+	grpcclient "github.com/grafana/beyla/v2/test/integration/components/testserver/grpc/client"
 )
 
 func main() {

@@ -8,7 +8,7 @@ import (
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/mariomac/pipes/pipe"
 
-	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
+	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
 )
 
 const (

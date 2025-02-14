@@ -10,7 +10,7 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 
-	"github.com/grafana/beyla/pkg/internal/netolly/ifaces"
+	"github.com/grafana/beyla/v2/pkg/internal/netolly/ifaces"
 )
 
 type attachedProg struct {

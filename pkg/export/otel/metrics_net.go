@@ -13,13 +13,13 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
-	"github.com/grafana/beyla/pkg/buildinfo"
-	"github.com/grafana/beyla/pkg/export/attributes"
-	"github.com/grafana/beyla/pkg/export/expire"
-	"github.com/grafana/beyla/pkg/export/otel/metric"
-	metric2 "github.com/grafana/beyla/pkg/export/otel/metric/api/metric"
-	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
-	"github.com/grafana/beyla/pkg/internal/pipe/global"
+	"github.com/grafana/beyla/v2/pkg/buildinfo"
+	"github.com/grafana/beyla/v2/pkg/export/attributes"
+	"github.com/grafana/beyla/v2/pkg/export/expire"
+	"github.com/grafana/beyla/v2/pkg/export/otel/metric"
+	metric2 "github.com/grafana/beyla/v2/pkg/export/otel/metric/api/metric"
+	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
+	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 )
 
 // NetMetricsConfig extends MetricsConfig for Network Metrics

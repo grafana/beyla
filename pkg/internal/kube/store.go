@@ -5,12 +5,12 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/grafana/beyla/pkg/export/attributes"
-	attr "github.com/grafana/beyla/pkg/export/attributes/names"
-	"github.com/grafana/beyla/pkg/internal/helpers/container"
-	"github.com/grafana/beyla/pkg/internal/helpers/maps"
-	"github.com/grafana/beyla/pkg/kubecache/informer"
-	"github.com/grafana/beyla/pkg/kubecache/meta"
+	"github.com/grafana/beyla/v2/pkg/export/attributes"
+	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
+	"github.com/grafana/beyla/v2/pkg/internal/helpers/container"
+	"github.com/grafana/beyla/v2/pkg/internal/helpers/maps"
+	"github.com/grafana/beyla/v2/pkg/kubecache/informer"
+	"github.com/grafana/beyla/v2/pkg/kubecache/meta"
 )
 
 func dblog() *slog.Logger {

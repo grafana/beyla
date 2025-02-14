@@ -27,7 +27,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/beyla/pkg/beyla"
+	"github.com/grafana/beyla/v2/pkg/beyla"
 )
 
 var (

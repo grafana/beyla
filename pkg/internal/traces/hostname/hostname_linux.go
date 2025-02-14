@@ -7,7 +7,7 @@ import (
 	"net"
 	"strings"
 
-	"github.com/grafana/beyla/pkg/internal/helpers"
+	"github.com/grafana/beyla/v2/pkg/internal/helpers"
 )
 
 // attempts to determine the hostname, gracefully falling back until we

@@ -11,7 +11,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	sdkmetricdata "go.opentelemetry.io/otel/sdk/metric/metricdata"
 
-	"github.com/grafana/beyla/pkg/export/otel/metric/internal/exemplar"
+	"github.com/grafana/beyla/v2/pkg/export/otel/metric/internal/exemplar"
 )
 
 type sumValue[N int64 | float64] struct {

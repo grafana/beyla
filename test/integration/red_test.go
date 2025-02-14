@@ -3,8 +3,11 @@
 package integration
 
 import (
+	"crypto/tls"
 	"fmt"
+	"io"
 	"math/rand"
+	"net/http"
 	"strconv"
 	"strings"
 	"testing"
@@ -88,6 +91,31 @@ func testREDMetricsShortHTTP(t *testing.T) {
 			testSpanMetricsForHTTPLibrary(t, "testserver", "integration-test")
 		})
 	}
+}
+
+func testExemplarsExist(t *testing.T) {
+	url := "http://" + prometheusHostPort + "/api/v1/query_exemplars?query=http_server_request_duration_seconds_bucket"
+
+	var qtr = &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	var qClient = &http.Client{Transport: qtr}
+
+	req, err := http.NewRequest("GET", url, nil)
+	require.NoError(t, err)
+	r, err := qClient.Do(req)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, r.StatusCode)
+
+	// Read the response body
+	body, err := io.ReadAll(r.Body)
+	require.NoError(t, err)
+	defer r.Body.Close()
+
+	// Convert the body to a string
+	bodyStr := string(body)
+
+	assert.Contains(t, bodyStr, "exemplars", "The response body does not contain exemplars")
 }
 
 // **IMPORTANT** Tests must first call -> func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {

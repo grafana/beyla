@@ -617,7 +617,7 @@ func TestTraceSampling(t *testing.T) {
 			Route:        "/test" + strconv.Itoa(i),
 			Status:       200,
 			Service:      svc.Attrs{},
-			TraceID:      randomTraceID(),
+			TraceID:      RandomTraceID(),
 		}
 		spans = append(spans, span)
 	}
@@ -688,7 +688,7 @@ func TestTraceSkipSpanMetrics(t *testing.T) {
 			Route:        "/test" + strconv.Itoa(i),
 			Status:       200,
 			Service:      svc.Attrs{},
-			TraceID:      randomTraceID(),
+			TraceID:      RandomTraceID(),
 		}
 		spans = append(spans, span)
 	}

@@ -187,6 +187,7 @@ func (wk *watcherKubeEnricher) onNewPod(pod *informer.ObjectMeta) []Event[proces
 	var events []Event[processAttrs]
 	for _, cnt := range pod.Pod.Containers {
 		if procInfo, ok := wk.processByContainer[cnt.Id]; ok {
+			wk.log.Debug("matched pod with running process", "container", cnt.Id, "pid", procInfo.pid)
 			events = append(events, Event[processAttrs]{
 				Type: EventCreated,
 				Obj:  withMetadata(procInfo, pod),

@@ -453,9 +453,10 @@ func GenerateTracesWithAttributes(span *request.Span, hostID string, attrs []att
 	resourceAttrsMap.CopyTo(rs.Resource().Attributes())
 
 	traceID := pcommon.TraceID(span.TraceID)
-	spanID := pcommon.SpanID(randomSpanID())
+	spanID := pcommon.SpanID(RandomSpanID())
+	// This should never happen
 	if traceID.IsEmpty() {
-		traceID = pcommon.TraceID(randomTraceID())
+		traceID = pcommon.TraceID(RandomTraceID())
 	}
 
 	if hasSubSpans {
@@ -502,7 +503,7 @@ func createSubSpans(span *request.Span, parentSpanID pcommon.SpanID, traceID pco
 	spQ.SetKind(ptrace.SpanKindInternal)
 	spQ.SetEndTimestamp(pcommon.NewTimestampFromTime(t.Start))
 	spQ.SetTraceID(traceID)
-	spQ.SetSpanID(pcommon.SpanID(randomSpanID()))
+	spQ.SetSpanID(pcommon.SpanID(RandomSpanID()))
 	spQ.SetParentSpanID(parentSpanID)
 
 	// Create a child span showing the processing time
@@ -515,7 +516,7 @@ func createSubSpans(span *request.Span, parentSpanID pcommon.SpanID, traceID pco
 	if span.SpanID.IsValid() {
 		spP.SetSpanID(pcommon.SpanID(span.SpanID))
 	} else {
-		spP.SetSpanID(pcommon.SpanID(randomSpanID()))
+		spP.SetSpanID(pcommon.SpanID(RandomSpanID()))
 	}
 	spP.SetParentSpanID(parentSpanID)
 }

@@ -11,7 +11,6 @@ import (
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 
 	"github.com/grafana/beyla/pkg/export/otel/metric/internal/exemplar"
-	"github.com/grafana/beyla/pkg/export/otel/metric/internal/x"
 )
 
 // reservoirFunc returns the appropriately configured exemplar reservoir
@@ -22,9 +21,6 @@ import (
 // feature is enabled and the OTEL_METRICS_EXEMPLAR_FILTER environment variable
 // is not set to always_off.
 func reservoirFunc[N int64 | float64](agg sdkmetric.Aggregation) func() exemplar.FilteredReservoir[N] {
-	if !x.Exemplars.Enabled() {
-		return nil
-	}
 	// https://github.com/open-telemetry/opentelemetry-specification/blob/d4b241f451674e8f611bb589477680341006ad2b/specification/configuration/sdk-environment-variables.md#exemplar
 	const filterEnvKey = "OTEL_METRICS_EXEMPLAR_FILTER"
 

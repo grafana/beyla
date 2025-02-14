@@ -53,7 +53,7 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 
 	hostNet, err := ebpfcommon.HasHostNetworkAccess()
 	if err != nil {
-		return nil, fmt.Errorf("failed to check for host network access while enabling L4/L7 context-propagation, error:%v", err)
+		return nil, fmt.Errorf("failed to check for host network access while enabling L4/L7 context-propagation, error: %w", err)
 	}
 
 	if !hostNet {

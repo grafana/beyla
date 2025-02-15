@@ -7,3 +7,11 @@ func KernelVersion() (major, minor int) {
 func hasCapSysAdmin() bool {
 	return false
 }
+
+func HasHostPidAccess() bool {
+	return false
+}
+
+func HasHostNetworkAccess() (bool, error) {
+	return false, nil
+}

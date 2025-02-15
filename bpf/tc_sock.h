@@ -260,11 +260,10 @@ int beyla_packet_extender(struct sk_msg_md *msg) {
 
     // TODO: execute the protocol handlers here with tail calls, don't
     // rely on tcp_sendmsg to do it and record these message buffers.
-    if (!tracked) {
-        // If we didn't have metadata (sock_msg runs before the kprobe),
-        // we ensure to mark it for any packet we want to extend.
-        tracked = protocol_detector(msg, id, &conn);
-    }
+
+    // We must run the protocol detector always, the outgoing trace map
+    // might be setup for TCP traffic for L4 propagation.
+    tracked = protocol_detector(msg, id, &conn);
 
     u64 len = (u64)msg->data_end - (u64)msg->data;
     if (tracked && len > MIN_HTTP_SIZE) {

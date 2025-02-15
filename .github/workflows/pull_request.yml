@@ -15,14 +15,12 @@ jobs:
         go: [ '1.23' ]
     steps:
       - uses: actions/checkout@v3
-        with:
-          lfs: true
       - name: Set up Go
         uses: actions/setup-go@v3
         with:
           go-version: ${{ matrix.go }}
       - name: Run verification and unit tests
-        run: make verify cov-exclude-generated
+        run: make docker-generate verify cov-exclude-generated
       - name: Report coverage
         uses: codecov/codecov-action@v4
         env:

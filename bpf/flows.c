@@ -1,3 +1,4 @@
+//go:build beyla_bpf_ignore
 // Copyright Red Hat / IBM
 // Copyright Grafana Labs
 //

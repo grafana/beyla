@@ -5,8 +5,8 @@ import (
 
 	"github.com/mariomac/pipes/pipe"
 
-	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
-	"github.com/grafana/beyla/pkg/internal/netolly/flow/transport"
+	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
+	"github.com/grafana/beyla/v2/pkg/internal/netolly/flow/transport"
 )
 
 // ProtocolFilterProvider allows selecting which protocols are going to be instrumented.

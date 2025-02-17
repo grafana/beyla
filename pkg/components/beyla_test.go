@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/beyla/pkg/beyla"
+	"github.com/grafana/beyla/v2/pkg/beyla"
 )
 
 // Tests fix for https://github.com/grafana/beyla/issues/926

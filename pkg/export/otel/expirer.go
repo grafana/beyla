@@ -8,9 +8,9 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 
-	"github.com/grafana/beyla/pkg/export/attributes"
-	"github.com/grafana/beyla/pkg/export/expire"
-	"github.com/grafana/beyla/pkg/export/otel/metric/api/metric"
+	"github.com/grafana/beyla/v2/pkg/export/attributes"
+	"github.com/grafana/beyla/v2/pkg/export/expire"
+	"github.com/grafana/beyla/v2/pkg/export/otel/metric/api/metric"
 )
 
 var timeNow = time.Now

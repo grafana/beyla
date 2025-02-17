@@ -8,7 +8,7 @@ import (
 	"github.com/cilium/ebpf/link"
 	"golang.org/x/sys/unix"
 
-	"github.com/grafana/beyla/pkg/internal/helpers"
+	"github.com/grafana/beyla/v2/pkg/internal/helpers"
 )
 
 func (f *Filter) Close() error {

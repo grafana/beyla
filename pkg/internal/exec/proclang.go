@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/grafana/beyla/pkg/internal/svc"
+	"github.com/grafana/beyla/v2/pkg/internal/svc"
 )
 
 var rubyModule = regexp.MustCompile(`^(.*/)?ruby[\d.]*$`)

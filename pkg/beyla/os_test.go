@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/sys/unix"
 
-	"github.com/grafana/beyla/pkg/internal/helpers"
-	"github.com/grafana/beyla/pkg/services"
+	"github.com/grafana/beyla/v2/pkg/internal/helpers"
+	"github.com/grafana/beyla/v2/pkg/services"
 )
 
 type testCase struct {

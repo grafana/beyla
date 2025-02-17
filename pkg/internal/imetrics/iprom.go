@@ -7,8 +7,8 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/grafana/beyla/pkg/buildinfo"
-	"github.com/grafana/beyla/pkg/internal/connector"
+	"github.com/grafana/beyla/v2/pkg/buildinfo"
+	"github.com/grafana/beyla/v2/pkg/internal/connector"
 )
 
 // pipelineBufferLengths buckets for histogram metrics about the number of traces submitted from one stage to another

@@ -3,7 +3,7 @@ package integration
 import (
 	"path"
 
-	"github.com/grafana/beyla/test/tools"
+	"github.com/grafana/beyla/v2/test/tools"
 )
 
 var (

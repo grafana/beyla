@@ -9,12 +9,12 @@ import (
 	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/beyla/pkg/export/attributes"
-	"github.com/grafana/beyla/pkg/export/instrumentations"
-	"github.com/grafana/beyla/pkg/internal/infraolly/process"
-	"github.com/grafana/beyla/pkg/internal/pipe/global"
-	"github.com/grafana/beyla/pkg/internal/svc"
-	"github.com/grafana/beyla/test/collector"
+	"github.com/grafana/beyla/v2/pkg/export/attributes"
+	"github.com/grafana/beyla/v2/pkg/export/instrumentations"
+	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
+	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
+	"github.com/grafana/beyla/v2/pkg/internal/svc"
+	"github.com/grafana/beyla/v2/test/collector"
 )
 
 func TestProcMetrics_Aggregated(t *testing.T) {

@@ -3,7 +3,7 @@ package instrument
 import (
 	"context"
 
-	"github.com/grafana/beyla/pkg/internal/connector"
+	"github.com/grafana/beyla/v2/pkg/internal/connector"
 )
 
 const defaultMetricsPath = "/metrics"

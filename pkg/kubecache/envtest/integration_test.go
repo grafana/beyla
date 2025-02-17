@@ -22,10 +22,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
-	"github.com/grafana/beyla/pkg/kubecache"
-	"github.com/grafana/beyla/pkg/kubecache/informer"
-	"github.com/grafana/beyla/pkg/kubecache/meta"
-	"github.com/grafana/beyla/pkg/kubecache/service"
+	"github.com/grafana/beyla/v2/pkg/kubecache"
+	"github.com/grafana/beyla/v2/pkg/kubecache/informer"
+	"github.com/grafana/beyla/v2/pkg/kubecache/meta"
+	"github.com/grafana/beyla/v2/pkg/kubecache/service"
 )
 
 var (

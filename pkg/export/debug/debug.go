@@ -9,7 +9,7 @@ import (
 	"github.com/mariomac/pipes/pipe"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/internal/request"
 )
 
 type TracePrinter string

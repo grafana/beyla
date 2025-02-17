@@ -23,7 +23,7 @@ import (
 	"io"
 	"net"
 
-	attr "github.com/grafana/beyla/pkg/export/attributes/names"
+	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
 )
 
 // IPAddr encodes v4 and v6 IPs with a fixed length.

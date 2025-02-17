@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/grafana/beyla/pkg/internal/svc"
+	"github.com/grafana/beyla/v2/pkg/internal/svc"
 )
 
 func FindProcLanguage(pid int32, elfF *elf.File, path string) svc.InstrumentableType {

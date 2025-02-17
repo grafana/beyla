@@ -21,8 +21,8 @@ package beyla
 import (
 	"time"
 
-	"github.com/grafana/beyla/pkg/internal/netolly/flow"
-	"github.com/grafana/beyla/pkg/internal/netolly/transform/cidr"
+	"github.com/grafana/beyla/v2/pkg/internal/netolly/flow"
+	"github.com/grafana/beyla/v2/pkg/internal/netolly/transform/cidr"
 )
 
 const (

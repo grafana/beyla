@@ -12,8 +12,8 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/net/http2"
 
-	"github.com/grafana/beyla/pkg/internal/ebpf/bhpack"
-	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/internal/ebpf/bhpack"
+	"github.com/grafana/beyla/v2/pkg/internal/request"
 )
 
 type BPFHTTP2Info bpfHttp2GrpcRequestT

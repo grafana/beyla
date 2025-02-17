@@ -19,10 +19,10 @@ import (
 	sdkmetricdata "go.opentelemetry.io/otel/sdk/metric/metricdata"
 	"go.opentelemetry.io/otel/sdk/resource"
 
-	"github.com/grafana/beyla/pkg/export/otel/metric/global"
-	"github.com/grafana/beyla/pkg/export/otel/metric/internal"
-	"github.com/grafana/beyla/pkg/export/otel/metric/internal/aggregate"
-	"github.com/grafana/beyla/pkg/export/otel/metric/internal/x"
+	"github.com/grafana/beyla/v2/pkg/export/otel/metric/global"
+	"github.com/grafana/beyla/v2/pkg/export/otel/metric/internal"
+	"github.com/grafana/beyla/v2/pkg/export/otel/metric/internal/aggregate"
+	"github.com/grafana/beyla/v2/pkg/export/otel/metric/internal/x"
 )
 
 var (

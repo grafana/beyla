@@ -10,8 +10,8 @@ import (
 
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 
-	"github.com/grafana/beyla/pkg/export/otel/metric/internal/exemplar"
-	"github.com/grafana/beyla/pkg/export/otel/metric/internal/x"
+	"github.com/grafana/beyla/v2/pkg/export/otel/metric/internal/exemplar"
+	"github.com/grafana/beyla/v2/pkg/export/otel/metric/internal/x"
 )
 
 // reservoirFunc returns the appropriately configured exemplar reservoir

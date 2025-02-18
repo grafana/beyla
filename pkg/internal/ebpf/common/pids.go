@@ -28,8 +28,9 @@ var activePids, _ = lru.New[uint32, *svc.Attrs](1024)
 var readNamespacePIDs = exec.FindNamespacedPids
 
 type PIDInfo struct {
-	service *svc.Attrs
-	pidType PIDType
+	service        *svc.Attrs
+	pidType        PIDType
+	otherKnownPids []uint32
 }
 
 type ServiceFilter interface {
@@ -185,7 +186,7 @@ func (pf *PIDsFilter) addPID(pid, nsid uint32, s *svc.Attrs, t PIDType) {
 	}
 
 	for _, p := range allPids {
-		ns[p] = PIDInfo{service: s, pidType: t}
+		ns[p] = PIDInfo{service: s, pidType: t, otherKnownPids: allPids}
 	}
 }
 
@@ -193,6 +194,12 @@ func (pf *PIDsFilter) removePID(pid, nsid uint32) {
 	ns, nsExists := pf.current[nsid]
 	if !nsExists {
 		return
+	}
+
+	if pidInfo, pidExists := ns[pid]; pidExists {
+		for _, otherPid := range pidInfo.otherKnownPids {
+			delete(ns, otherPid)
+		}
 	}
 
 	delete(ns, pid)

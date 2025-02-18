@@ -38,5 +38,7 @@ func EnvVars(pid int32) (map[string]string, error) {
 		return nil, err
 	}
 
-	return envStrsToMap(varsStr), nil
+	m := envStrsToMap(varsStr)
+
+	return m, nil
 }

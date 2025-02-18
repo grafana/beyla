@@ -25,7 +25,7 @@ type NetPrometheusConfig struct {
 
 // nolint:gocritic
 func (p NetPrometheusConfig) Enabled() bool {
-	return p.Config != nil && p.Config.Port != 0 && (p.Config.NetworkMetricsEnabled() || p.GloballyEnabled)
+	return p.Config != nil && p.Config.EndpointEnabled() && (p.Config.NetworkMetricsEnabled() || p.GloballyEnabled)
 }
 
 type netMetricsReporter struct {

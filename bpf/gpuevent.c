@@ -1,3 +1,4 @@
+//go:build beyla_bpf_ignore
 // Copyright (c) Meta Platforms, Inc. and affiliates.
 // Copyright Grafana Labs
 //

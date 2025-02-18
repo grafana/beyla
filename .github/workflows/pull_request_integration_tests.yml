@@ -15,8 +15,6 @@ jobs:
         go: [ '1.23' ]
     steps:
       - uses: actions/checkout@v3
-        with:
-          lfs: true
       - name: Set up Go
         uses: actions/setup-go@v3
         with:
@@ -26,7 +24,7 @@ jobs:
           docker system prune -af
           docker volume prune -f
       - name: Run integration tests
-        run: make integration-test
+        run: make docker-generate integration-test
         timeout-minutes: 60
       - name: Upload integration test logs
         uses: actions/upload-artifact@v4

@@ -1,3 +1,4 @@
+//go:build beyla_bpf_ignore
 #include <vmlinux.h>
 
 #include <bpf_endian.h>

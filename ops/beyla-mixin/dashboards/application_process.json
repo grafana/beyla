@@ -141,7 +141,7 @@
             "uid": "${DS_GRAFANACLOUD_PROM}"
           },
           "editorMode": "code",
-          "expr": "sum(rate({__name__=~\"process_cpu_time.*\",process_pid=\"\"}[$__interval]) + on(instance) group_left(k8s_pod_name,k8s_namespace_name,process_command,process_pid) (0 * target_info{process_pid!=\"\"})) by(k8s_pod_name,k8s_namespace_name,process_command,process_pid)",
+          "expr": "sum(rate({__name__=~\"process_cpu_time.*\",process_pid=\"\"}[$__rate_interval]) + on(instance) group_left(k8s_pod_name,k8s_namespace_name,process_command,process_pid) (0 * target_info{process_pid!=\"\"})) by(k8s_pod_name,k8s_namespace_name,process_command,process_pid)",
           "legendFormat": "{{process_command}}/{{process_pid}} (Pod: {{k8s_namespace_name}}/{{k8s_pod_name}})",
           "range": true,
           "refId": "A"
@@ -152,7 +152,7 @@
             "uid": "${DS_GRAFANACLOUD_PROM}"
           },
           "editorMode": "code",
-          "expr": "sum(rate({__name__=~\"process_cpu_time.*\",process_pid!=\"\"}[$__interval])) by(k8s_pod_name,k8s_namespace_name,process_command,process_pid)",
+          "expr": "sum(rate({__name__=~\"process_cpu_time.*\",process_pid!=\"\"}[$__rate_interval])) by(k8s_pod_name,k8s_namespace_name,process_command,process_pid)",
           "hide": false,
           "instant": false,
           "legendFormat": "{{process_command}}/{{process_pid}} (Pod: {{k8s_namespace_name}}/{{k8s_pod_name}})",
@@ -469,7 +469,7 @@
             "uid": "${DS_GRAFANACLOUD_PROM}"
           },
           "editorMode": "code",
-          "expr": "sum(rate({__name__=~\"process_disk_io.*\",process_pid=\"\",disk_io_direction=\"read\"}[$__interval]) + on(instance) group_left(k8s_pod_name,k8s_namespace_name,process_command,process_pid) (0 * target_info{process_pid!=\"\"})) by(k8s_pod_name,k8s_namespace_name,process_command,process_pid)",
+          "expr": "sum(rate({__name__=~\"process_disk_io.*\",process_pid=\"\",disk_io_direction=\"read\"}[$__rate_interval]) + on(instance) group_left(k8s_pod_name,k8s_namespace_name,process_command,process_pid) (0 * target_info{process_pid!=\"\"})) by(k8s_pod_name,k8s_namespace_name,process_command,process_pid)",
           "legendFormat": "{{process_command}}/{{process_pid}} (Pod: {{k8s_namespace_name}}/{{k8s_pod_name}})",
           "range": true,
           "refId": "A"
@@ -480,7 +480,7 @@
             "uid": "${DS_GRAFANACLOUD_PROM}"
           },
           "editorMode": "code",
-          "expr": "sum(rate({__name__=~\"process_disk_io.*\",process_pid!=\"\",disk_io_direction=\"read\"}[$__interval])) by(k8s_pod_name,k8s_namespace_name,process_command,process_pid)",
+          "expr": "sum(rate({__name__=~\"process_disk_io.*\",process_pid!=\"\",disk_io_direction=\"read\"}[$__rate_interval])) by(k8s_pod_name,k8s_namespace_name,process_command,process_pid)",
           "hide": false,
           "legendFormat": "{{process_command}}/{{process_pid}} (Pod: {{k8s_namespace_name}}/{{k8s_pod_name}})",
           "range": true,
@@ -578,7 +578,7 @@
             "uid": "${DS_GRAFANACLOUD_PROM}"
           },
           "editorMode": "code",
-          "expr": "sum(rate({__name__=~\"process_disk_io.*\",process_pid=\"\",disk_io_direction=\"write\"}[$__interval]) + on(instance) group_left(k8s_pod_name,k8s_namespace_name,process_command,process_pid) (0 * target_info{process_pid!=\"\"})) by(k8s_pod_name,k8s_namespace_name,process_command,process_pid)",
+          "expr": "sum(rate({__name__=~\"process_disk_io.*\",process_pid=\"\",disk_io_direction=\"write\"}[$__rate_interval]) + on(instance) group_left(k8s_pod_name,k8s_namespace_name,process_command,process_pid) (0 * target_info{process_pid!=\"\"})) by(k8s_pod_name,k8s_namespace_name,process_command,process_pid)",
           "legendFormat": "{{process_command}}/{{process_pid}} (Pod: {{k8s_namespace_name}}/{{k8s_pod_name}})",
           "range": true,
           "refId": "A"
@@ -589,7 +589,7 @@
             "uid": "${DS_GRAFANACLOUD_PROM}"
           },
           "editorMode": "code",
-          "expr": "sum(rate({__name__=~\"process_disk_io.*\",process_pid!=\"\",disk_io_direction=\"write\"}[$__interval])) by(k8s_pod_name,k8s_namespace_name,process_command,process_pid)",
+          "expr": "sum(rate({__name__=~\"process_disk_io.*\",process_pid!=\"\",disk_io_direction=\"write\"}[$__rate_interval])) by(k8s_pod_name,k8s_namespace_name,process_command,process_pid)",
           "hide": false,
           "legendFormat": "{{process_command}}/{{process_pid}} (Pod: {{k8s_namespace_name}}/{{k8s_pod_name}})",
           "range": true,
@@ -687,7 +687,7 @@
             "uid": "${DS_GRAFANACLOUD_PROM}"
           },
           "editorMode": "code",
-          "expr": "sum(rate({__name__=~\"process_network_io.*\",process_pid=\"\",network_io_direction=\"receive\"}[$__interval]) + on(instance) group_left(k8s_pod_name,k8s_namespace_name,process_command,process_pid) (0 * target_info{process_pid!=\"\"})) by(k8s_pod_name,k8s_namespace_name,process_command,process_pid)",
+          "expr": "sum(rate({__name__=~\"process_network_io.*\",process_pid=\"\",network_io_direction=\"receive\"}[$__rate_interval]) + on(instance) group_left(k8s_pod_name,k8s_namespace_name,process_command,process_pid) (0 * target_info{process_pid!=\"\"})) by(k8s_pod_name,k8s_namespace_name,process_command,process_pid)",
           "legendFormat": "{{process_command}}/{{process_pid}} (Pod: {{k8s_namespace_name}}/{{k8s_pod_name}})",
           "range": true,
           "refId": "A"
@@ -698,7 +698,7 @@
             "uid": "${DS_GRAFANACLOUD_PROM}"
           },
           "editorMode": "code",
-          "expr": "sum(rate({__name__=~\"process_network_io.*\",process_pid!=\"\",network_io_direction=\"receive\"}[$__interval])) by(k8s_pod_name,k8s_namespace_name,process_command,process_pid)",
+          "expr": "sum(rate({__name__=~\"process_network_io.*\",process_pid!=\"\",network_io_direction=\"receive\"}[$__rate_interval])) by(k8s_pod_name,k8s_namespace_name,process_command,process_pid)",
           "hide": false,
           "legendFormat": "{{process_command}}/{{process_pid}} (Pod: {{k8s_namespace_name}}/{{k8s_pod_name}})",
           "range": true,
@@ -796,7 +796,7 @@
             "uid": "${DS_GRAFANACLOUD_PROM}"
           },
           "editorMode": "code",
-          "expr": "sum(rate({__name__=~\"process_network_io.*\",process_pid=\"\",network_io_direction=\"transmit\"}[$__interval]) + on(instance) group_left(k8s_pod_name,k8s_namespace_name,process_command,process_pid) (0 * target_info{process_pid!=\"\"})) by(k8s_pod_name,k8s_namespace_name,process_command,process_pid)",
+          "expr": "sum(rate({__name__=~\"process_network_io.*\",process_pid=\"\",network_io_direction=\"transmit\"}[$__rate_interval]) + on(instance) group_left(k8s_pod_name,k8s_namespace_name,process_command,process_pid) (0 * target_info{process_pid!=\"\"})) by(k8s_pod_name,k8s_namespace_name,process_command,process_pid)",
           "legendFormat": "{{process_command}}/{{process_pid}} (Pod: {{k8s_namespace_name}}/{{k8s_pod_name}})",
           "range": true,
           "refId": "A"
@@ -807,7 +807,7 @@
             "uid": "${DS_GRAFANACLOUD_PROM}"
           },
           "editorMode": "code",
-          "expr": "sum(rate({__name__=~\"process_network_io.*\",process_pid!=\"\",network_io_direction=\"transmit\"}[$__interval])) by(k8s_pod_name,k8s_namespace_name,process_command,process_pid)",
+          "expr": "sum(rate({__name__=~\"process_network_io.*\",process_pid!=\"\",network_io_direction=\"transmit\"}[$__rate_interval])) by(k8s_pod_name,k8s_namespace_name,process_command,process_pid)",
           "hide": false,
           "legendFormat": "{{process_command}}/{{process_pid}} (Pod: {{k8s_namespace_name}}/{{k8s_pod_name}})",
           "range": true,

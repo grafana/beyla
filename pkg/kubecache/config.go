@@ -8,7 +8,7 @@ import (
 	"github.com/caarlos0/env/v9"
 	"gopkg.in/yaml.v3"
 
-	"github.com/grafana/beyla/pkg/kubecache/instrument"
+	"github.com/grafana/beyla/v2/pkg/kubecache/instrument"
 )
 
 // Config options of the Kubernetes Cache service. Check the "DefaultConfig" variable for a view of the default values.

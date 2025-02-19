@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/grafana/beyla/pkg/internal/netolly/ifaces"
+	"github.com/grafana/beyla/v2/pkg/internal/netolly/ifaces"
 )
 
 type IMIfaceMap map[int]*ifaces.Interface

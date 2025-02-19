@@ -7,7 +7,7 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"github.com/grafana/beyla/test/integration/components/testserver/std"
+	"github.com/grafana/beyla/v2/test/integration/components/testserver/std"
 )
 
 func AuthMiddleware(next http.Handler) http.Handler {

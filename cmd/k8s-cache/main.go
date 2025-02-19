@@ -13,11 +13,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/grafana/beyla/pkg/buildinfo"
-	"github.com/grafana/beyla/pkg/kubecache"
-	"github.com/grafana/beyla/pkg/kubecache/instrument"
-	"github.com/grafana/beyla/pkg/kubecache/meta"
-	"github.com/grafana/beyla/pkg/kubecache/service"
+	"github.com/grafana/beyla/v2/pkg/buildinfo"
+	"github.com/grafana/beyla/v2/pkg/kubecache"
+	"github.com/grafana/beyla/v2/pkg/kubecache/instrument"
+	"github.com/grafana/beyla/v2/pkg/kubecache/meta"
+	"github.com/grafana/beyla/v2/pkg/kubecache/service"
 )
 
 // main code of te Kubernetes K8s informer's metadata cache service, when it runs as a separate service and not

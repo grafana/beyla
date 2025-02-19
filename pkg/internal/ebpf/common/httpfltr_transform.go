@@ -11,7 +11,7 @@ import (
 
 	"github.com/cilium/ebpf/ringbuf"
 
-	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/internal/request"
 )
 
 // misses serviceID

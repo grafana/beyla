@@ -146,7 +146,7 @@ volumes: []
 #     secretName: mysecret
 #     optional: false
 
-# -- Additional volumeMounts on the output Deployment definition.
+# -- Additional volumeMounts on the output daemonset definition.
 volumeMounts: []
 # - name: foo
 #   mountPath: "/etc/foo"

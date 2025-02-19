@@ -4,19 +4,20 @@ package tctracer
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"unsafe"
 
 	"github.com/cilium/ebpf"
 
-	"github.com/grafana/beyla/pkg/beyla"
-	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
-	"github.com/grafana/beyla/pkg/internal/ebpf/tcmanager"
-	"github.com/grafana/beyla/pkg/internal/exec"
-	"github.com/grafana/beyla/pkg/internal/goexec"
-	"github.com/grafana/beyla/pkg/internal/request"
-	"github.com/grafana/beyla/pkg/internal/svc"
+	"github.com/grafana/beyla/v2/pkg/beyla"
+	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
+	"github.com/grafana/beyla/v2/pkg/internal/ebpf/tcmanager"
+	"github.com/grafana/beyla/v2/pkg/internal/exec"
+	"github.com/grafana/beyla/v2/pkg/internal/goexec"
+	"github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/internal/svc"
 )
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/tc_tracer.c -- -I../../../../bpf/headers
@@ -45,6 +46,20 @@ func (p *Tracer) AllowPID(uint32, uint32, *svc.Attrs) {}
 func (p *Tracer) BlockPID(uint32, uint32) {}
 
 func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
+
+	if !ebpfcommon.HasHostPidAccess() {
+		return nil, fmt.Errorf("L4/L7 context-propagation requires host process ID access, e.g. hostPid:true")
+	}
+
+	hostNet, err := ebpfcommon.HasHostNetworkAccess()
+	if err != nil {
+		return nil, fmt.Errorf("failed to check for host network access while enabling L4/L7 context-propagation, error: %w", err)
+	}
+
+	if !hostNet {
+		return nil, fmt.Errorf("L4/L7 context-propagation requires host network access, e.g. hostNetwork:true")
+	}
+
 	if p.cfg.EBPF.BpfDebug {
 		return loadBpf_debug()
 	}

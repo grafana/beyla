@@ -430,7 +430,11 @@ func getCgroupPath() (string, error) {
 	cgroupPath := "/sys/fs/cgroup"
 
 	enabled, err := v2.Enabled()
-	if enabled {
+	if !enabled {
+        if _, pathErr := os.Stat(filepath.Join(cgroupPath, "unified")); pathErr != nil && os.IsNotExist(pathErr){
+            // Return the original error to the caller, pathErr is only required to set the Cgroup path.
+            return cgroupPath, err
+        }
 		cgroupPath = filepath.Join(cgroupPath, "unified")
 	}
 	return cgroupPath, err

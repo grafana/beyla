@@ -56,6 +56,12 @@ type bpf_tp_debugGrpcFramesCtxT struct {
 	Args            bpf_tp_debugCallProtocolArgsT
 }
 
+type bpf_tp_debugHttp2ConnInfoDataT struct {
+	Id    uint64
+	Flags uint8
+	_     [7]byte
+}
+
 type bpf_tp_debugHttp2ConnStreamT struct {
 	PidConn  bpf_tp_debugPidConnectionInfoT
 	StreamId uint32
@@ -77,10 +83,10 @@ type bpf_tp_debugHttp2GrpcRequestT struct {
 		UserPid uint32
 		Ns      uint32
 	}
-	Ssl     uint8
-	NewConn uint8
-	_       [2]byte
-	Tp      struct {
+	Ssl       uint8
+	_         [3]byte
+	NewConnId uint64
+	Tp        struct {
 		TraceId  [16]uint8
 		SpanId   [8]uint8
 		ParentId [8]uint8

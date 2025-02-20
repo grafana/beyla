@@ -118,8 +118,7 @@ func TestHTTP2Parsing(t *testing.T) {
 				}
 
 				if ff, ok := f.(*http2.HeadersFrame); ok {
-					connInfo := BPFConnInfo{}
-					method, path, contentType, _ := readMetaFrame(&connInfo, false, framer, ff)
+					method, path, contentType, _ := readMetaFrame(0, framer, ff)
 					assert.Equal(t, tt.method, method)
 					assert.Equal(t, tt.path, path)
 					assert.Equal(t, tt.contentType, contentType)
@@ -178,6 +177,11 @@ func TestDynamicTableUpdates(t *testing.T) {
 		inputLen int
 	}{
 		{
+			name:     "Full path, lots of headers, but cut off",
+			input:    []byte{0, 0, 222, 1, 4, 0, 0, 0, 1, 64, 5, 58, 112, 97, 116, 104, 33, 47, 114, 111, 117, 116, 101, 103, 117, 105, 100, 101, 46, 82, 111, 117, 116, 101, 71, 117, 105, 100, 101, 47, 71, 101, 116, 70, 101, 97, 116, 117, 114, 101, 64, 10, 58, 97, 117, 116, 104, 111, 114, 105, 116, 121, 15, 108, 111, 99, 97, 108, 104, 111, 115, 116, 58, 53, 48, 48, 53, 49, 131, 134, 64, 12, 99, 111, 110, 116, 101, 110, 116, 45, 116, 121, 112, 101, 16, 97, 112, 112, 108, 105, 99, 97, 116, 105, 111, 110, 47, 103, 114, 112, 99, 64, 2, 116, 101, 8, 116, 114, 97, 105, 108, 101, 114, 115, 64, 20, 103, 114, 112, 99, 45, 97, 99, 99, 101, 112, 116, 45, 101, 110, 99, 111, 100, 105, 110, 103},
+			inputLen: 146,
+		},
+		{
 			name:     "Full path, lots of headers",
 			input:    []byte{0, 0, 222, 1, 4, 0, 0, 0, 1, 64, 5, 58, 112, 97, 116, 104, 33, 47, 114, 111, 117, 116, 101, 103, 117, 105, 100, 101, 46, 82, 111, 117, 116, 101, 71, 117, 105, 100, 101, 47, 71, 101, 116, 70, 101, 97, 116, 117, 114, 101, 64, 10, 58, 97, 117, 116, 104, 111, 114, 105, 116, 121, 15, 108, 111, 99, 97, 108, 104, 111, 115, 116, 58, 53, 48, 48, 53, 49, 131, 134, 64, 12, 99, 111, 110, 116, 101, 110, 116, 45, 116, 121, 112, 101, 16, 97, 112, 112, 108, 105, 99, 97, 116, 105, 111, 110, 47, 103, 114, 112, 99, 64, 2, 116, 101, 8, 116, 114, 97, 105, 108, 101, 114, 115, 64, 20, 103, 114, 112, 99, 45, 97, 99, 99, 101, 112, 116, 45, 101, 110, 99, 111, 100, 105, 110, 103, 23, 105, 100, 101, 110, 116, 105, 116, 121, 44, 32, 100, 101, 102, 108, 97, 116, 101, 44, 32, 103, 122, 105, 112, 64, 10, 117, 115, 101, 114, 45, 97, 103, 101, 110, 116, 48, 103, 114, 112, 99, 45, 112, 121, 116, 104, 111, 110, 47, 49, 46, 54, 57, 46, 48, 32, 103, 114, 112, 99, 45, 99, 47, 52, 52, 46, 50, 46, 48, 32, 40, 108, 105, 110, 117, 120, 59, 32, 99, 104, 116, 116, 112, 50, 41, 0, 0, 4, 8, 0, 0, 0, 0, 1, 0, 0, 0, 5, 0, 0, 22, 0, 1, 0, 0, 0, 1, 0, 0, 0},
 			inputLen: 1024,
@@ -211,7 +215,7 @@ func TestDynamicTableUpdates(t *testing.T) {
 	s, ignore, _ := http2FromBuffers(&info)
 	assert.False(t, ignore)
 	assert.Equal(t, "POST", s.Method)
-	assert.Equal(t, "*", s.Path)
+	assert.Equal(t, "/routeguide.RouteGuide/GetFeature", s.Path)
 
 	nextIndex := 8 + 61 // 61 is the static table index size, 7 is how many entries we store in the dynamic table with that first request
 
@@ -250,7 +254,7 @@ func makeBPFHTTP2InfoNewRequest(buf, rbuf []byte, len int) BPFHTTP2Info {
 	info := makeBPFHTTP2Info(buf, rbuf, len)
 	info.ConnInfo.D_port = 1
 	info.ConnInfo.S_port = 1
-	info.NewConn = 1
+	info.NewConnId = 1
 
 	return info
 }

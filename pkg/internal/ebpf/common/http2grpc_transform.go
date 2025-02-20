@@ -3,6 +3,7 @@ package ebpfcommon
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"strconv"
 	"strings"
 	"unsafe"
@@ -38,7 +39,7 @@ type h2Connection struct {
 // not all requests for a given stream specify the protocol, but one must
 // we remember if we see grpc mentioned and tag the rest of the streams for
 // a given connection as grpc. default assumes plain HTTP2
-var activeGRPCConnections, _ = lru.New[BPFConnInfo, h2Connection](1024 * 10)
+var activeGRPCConnections, _ = lru.New[uint64, h2Connection](1024 * 10)
 
 func byteFramer(data []uint8) *http2.Framer {
 	buf := bytes.NewBuffer(data)
@@ -47,11 +48,11 @@ func byteFramer(data []uint8) *http2.Framer {
 	return fr
 }
 
-func getOrInitH2Conn(conn *BPFConnInfo, newConn bool) *h2Connection {
-	v, ok := activeGRPCConnections.Get(*conn)
+func getOrInitH2Conn(connID uint64) *h2Connection {
+	v, ok := activeGRPCConnections.Get(connID)
 
 	dynamicTableSize := initialHeaderTableSize
-	if !newConn {
+	if connID == 0 {
 		dynamicTableSize = 0
 	}
 
@@ -61,8 +62,8 @@ func getOrInitH2Conn(conn *BPFConnInfo, newConn bool) *h2Connection {
 			hdecRet:  bhpack.NewDecoder(uint32(dynamicTableSize), nil),
 			protocol: HTTP2,
 		}
-		activeGRPCConnections.Add(*conn, h)
-		v, ok = activeGRPCConnections.Get(*conn)
+		activeGRPCConnections.Add(connID, h)
+		v, ok = activeGRPCConnections.Get(connID)
 		if !ok {
 			return nil
 		}
@@ -71,8 +72,8 @@ func getOrInitH2Conn(conn *BPFConnInfo, newConn bool) *h2Connection {
 	return &v
 }
 
-func protocolIsGRPC(conn *BPFConnInfo, newConn bool) {
-	h2c := getOrInitH2Conn(conn, newConn)
+func protocolIsGRPC(connID uint64) {
+	h2c := getOrInitH2Conn(connID)
 	if h2c != nil {
 		h2c.protocol = GRPC
 	}
@@ -110,8 +111,8 @@ func knownFrameKeys(fr *http2.Framer, hf *http2.HeadersFrame) bool {
 	return known
 }
 
-func readMetaFrame(conn *BPFConnInfo, newConn bool, fr *http2.Framer, hf *http2.HeadersFrame) (string, string, string, bool) {
-	h2c := getOrInitH2Conn(conn, newConn)
+func readMetaFrame(connID uint64, fr *http2.Framer, hf *http2.HeadersFrame) (string, string, string, bool) {
+	h2c := getOrInitH2Conn(connID)
 
 	ok := false
 	method := ""
@@ -134,7 +135,7 @@ func readMetaFrame(conn *BPFConnInfo, newConn bool, fr *http2.Framer, hf *http2.
 		case "content-type":
 			contentType = strings.ToLower(hf.Value)
 			if contentType == "application/grpc" {
-				protocolIsGRPC(conn, newConn)
+				protocolIsGRPC(connID)
 			}
 			ok = true
 		}
@@ -171,8 +172,8 @@ func http2grpcStatus(status int) int {
 	return 2 // Unknown
 }
 
-func readRetMetaFrame(conn *BPFConnInfo, newConn bool, fr *http2.Framer, hf *http2.HeadersFrame) (int, bool, bool) {
-	h2c := getOrInitH2Conn(conn, newConn)
+func readRetMetaFrame(connID uint64, fr *http2.Framer, hf *http2.HeadersFrame) (int, bool, bool) {
+	h2c := getOrInitH2Conn(connID)
 
 	ok := false
 	status := 0
@@ -193,7 +194,7 @@ func readRetMetaFrame(conn *BPFConnInfo, newConn bool, fr *http2.Framer, hf *htt
 			ok = true
 		case "grpc-status":
 			status, _ = strconv.Atoi(hf.Value)
-			protocolIsGRPC(conn, newConn)
+			protocolIsGRPC(connID)
 			grpc = true
 			ok = true
 		}
@@ -266,6 +267,18 @@ func (event *BPFHTTP2Info) eventType(protocol Protocol) request.EventType {
 	return 0
 }
 
+func readFrameHeader(buf []byte) (http2.FrameHeader, error) {
+	if len(buf) < frameHeaderLen {
+		return http2.FrameHeader{}, fmt.Errorf("EOF")
+	}
+	return http2.FrameHeader{
+		Length:   (uint32(buf[0])<<16 | uint32(buf[1])<<8 | uint32(buf[2])),
+		Type:     http2.FrameType(buf[3]),
+		Flags:    http2.Flags(buf[4]),
+		StreamID: binary.BigEndian.Uint32(buf[5:]) & (1<<31 - 1),
+	}, nil
+}
+
 // nolint:cyclop
 func http2FromBuffers(event *BPFHTTP2Info) (request.Span, bool, error) {
 	bLen := len(event.Data)
@@ -285,22 +298,45 @@ func http2FromBuffers(event *BPFHTTP2Info) (request.Span, bool, error) {
 
 	status := 0
 	eventType := HTTP2
-
-	newConn := true
-	if event.NewConn == 0 {
-		newConn = false
-	}
+	connID := event.NewConnId
 
 	for {
 		f, err := framer.ReadFrame()
 
 		if err != nil {
-			break
+			fail := true
+			// We could have read incomplete buffer from eBPF, if the grpc request was
+			// too large. In this case the frame will be with size bigger than our buffer.
+			// We don't care about what's all in this request, we want to see if we can
+			// find the method and path, so we attempt to adjust the frame size and re-read.
+			if strings.Contains(err.Error(), "unexpected EOF") && bLen > frameHeaderLen {
+				fh, err := readFrameHeader(event.Data[:bLen])
+				if err == nil && fh.Length > uint32(bLen-frameHeaderLen) {
+					newLen := bLen - frameHeaderLen
+					// If we ever use more than 256 for the buffers we have to
+					// change this to encode properly in more than 1 byte
+					if newLen > 255 {
+						newLen = 255
+					}
+					event.Data[0] = 0
+					event.Data[1] = 0
+					event.Data[2] = uint8(newLen)
+					framer = byteFramer(event.Data[:bLen])
+
+					f, err = framer.ReadFrame()
+					if err == nil {
+						fail = false
+					}
+				}
+			}
+			if fail {
+				break
+			}
 		}
 
 		if ff, ok := f.(*http2.HeadersFrame); ok {
 			rok := false
-			method, path, contentType, ok := readMetaFrame((*BPFConnInfo)(&event.ConnInfo), newConn, framer, ff)
+			method, path, contentType, ok := readMetaFrame(connID, framer, ff)
 
 			if path == "" {
 				path = "*"
@@ -316,7 +352,7 @@ func http2FromBuffers(event *BPFHTTP2Info) (request.Span, bool, error) {
 				}
 
 				if ff, ok := retF.(*http2.HeadersFrame); ok {
-					status, grpcInStatus, rok = readRetMetaFrame((*BPFConnInfo)(&event.ConnInfo), newConn, retFramer, ff)
+					status, grpcInStatus, rok = readRetMetaFrame(connID, retFramer, ff)
 					break
 				}
 			}

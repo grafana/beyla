@@ -45,6 +45,7 @@ const (
 	SpanMetricsCalls   = "traces_spanmetrics_calls_total"
 	SpanMetricsSizes   = "traces_spanmetrics_size_total"
 	TracesTargetInfo   = "traces_target_info"
+	TracesHostInfo     = "traces_host_info"
 	ServiceGraphClient = "traces_service_graph_request_client"
 	ServiceGraphServer = "traces_service_graph_request_server"
 	ServiceGraphFailed = "traces_service_graph_request_failed_total"
@@ -248,6 +249,13 @@ func ReportMetrics(
 		if err != nil {
 			return nil, fmt.Errorf("instantiating OTEL metrics reporter: %w", err)
 		}
+
+		if mr.cfg.SpanMetricsEnabled() || mr.cfg.ServiceGraphMetricsEnabled() {
+			hostMetrics := mr.newMetricsInstance(nil)
+			hostMeter := hostMetrics.provider.Meter(reporterName)
+			mr.setupHostInfoMeter(hostMeter)
+		}
+
 		return mr.reportMetrics, nil
 	}
 }
@@ -536,6 +544,21 @@ func (mr *MetricsReporter) setupSpanMeters(m *Metrics, meter instrument.Meter) e
 	return nil
 }
 
+func (mr *MetricsReporter) setupHostInfoMeter(meter instrument.Meter) error {
+	if !mr.cfg.SpanMetricsEnabled() || !mr.cfg.ServiceGraphMetricsEnabled() {
+		return nil
+	}
+
+	tracesHostInfo, err := meter.Int64UpDownCounter(TracesHostInfo)
+	if err != nil {
+		return fmt.Errorf("creating span metric traces host info: %w", err)
+	}
+	attrOpt := instrument.WithAttributeSet(mr.metricHostAttributes())
+	tracesHostInfo.Add(mr.ctx, 1, attrOpt)
+
+	return nil
+}
+
 func (mr *MetricsReporter) setupGraphMeters(m *Metrics, meter instrument.Meter) error {
 	if !mr.cfg.ServiceGraphMetricsEnabled() {
 		return nil
@@ -583,10 +606,14 @@ func (mr *MetricsReporter) setupGraphMeters(m *Metrics, meter instrument.Meter) 
 	return nil
 }
 
-func (mr *MetricsReporter) newMetricSet(service *svc.Attrs) (*Metrics, error) {
-	mlog := mlog().With("service", service)
+func (mr *MetricsReporter) newMetricsInstance(service *svc.Attrs) Metrics {
+	mlog := mlog()
+	var resourceAttributes []attribute.KeyValue
+	if service != nil {
+		mlog = mlog.With("service", service)
+		resourceAttributes = append(getAppResourceAttrs(mr.hostID, service), ResourceAttrsFromEnv(service)...)
+	}
 	mlog.Debug("creating new Metrics reporter")
-	resourceAttributes := append(getAppResourceAttrs(mr.hostID, service), ResourceAttrsFromEnv(service)...)
 	resources := resource.NewWithAttributes(semconv.SchemaURL, resourceAttributes...)
 
 	opts := []metric.Option{
@@ -599,13 +626,18 @@ func (mr *MetricsReporter) newMetricSet(service *svc.Attrs) (*Metrics, error) {
 	opts = append(opts, mr.spanMetricOptions(mlog)...)
 	opts = append(opts, mr.graphMetricOptions(mlog)...)
 
-	m := Metrics{
+	return Metrics{
 		ctx:     mr.ctx,
 		service: service,
 		provider: metric.NewMeterProvider(
 			opts...,
 		),
 	}
+}
+
+func (mr *MetricsReporter) newMetricSet(service *svc.Attrs) (*Metrics, error) {
+	m := mr.newMetricsInstance(service)
+
 	// time units for HTTP and GRPC durations are in seconds, according to the OTEL specification:
 	// https://github.com/open-telemetry/opentelemetry-specification/tree/main/specification/metrics/semantic_conventions
 	// TODO: set ExplicitBucketBoundaries here and in prometheus from the previous specification
@@ -759,6 +791,14 @@ func (mr *MetricsReporter) metricResourceAttributes(service *svc.Attrs) attribut
 	}
 	for k, v := range service.Metadata {
 		attrs = append(attrs, k.OTEL().String(v))
+	}
+
+	return attribute.NewSet(attrs...)
+}
+
+func (mr *MetricsReporter) metricHostAttributes() attribute.Set {
+	attrs := []attribute.KeyValue{
+		semconv.GrafanaHostID(mr.hostID),
 	}
 
 	return attribute.NewSet(attrs...)

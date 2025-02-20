@@ -66,7 +66,31 @@ func main() {
 		os.Exit(1)
 	}
 
-	cmd := exec.Command(OCI_BIN, "run", "--rm", "-v", wd+":/src", GEN_IMG)
+	{
+		cmd := exec.Command("ls", "-ld", wd)
+		o, err := cmd.Output()
+
+		if err != nil {
+			fmt.Println("ls err", err)
+		} else {
+			fmt.Printf("ls out: %s", o)
+		}
+	}
+
+	{
+		cmd := exec.Command("find", wd)
+		o, err := cmd.Output()
+
+		if err != nil {
+			fmt.Println("find err", err)
+		} else {
+			fmt.Printf("find out: %s", o)
+		}
+	}
+
+	fmt.Println("module root is", wd)
+	cmd := exec.Command(OCI_BIN, "run", "--rm", "-v", wd+":/src:z", GEN_IMG)
+	fmt.Println("cmd is:", cmd.String())
 
 	stdoutPipe, stderrPipe, err := getPipes(cmd)
 

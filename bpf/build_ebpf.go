@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
 
 const OCI_BIN = "docker"
@@ -31,6 +32,24 @@ func getPipes(cmd *exec.Cmd) (io.ReadCloser, io.ReadCloser, error) {
 	}
 
 	return stdout, stderr, nil
+}
+
+// when a GH action job is executed inside a container, the host workspace in
+// the host gets mounted in the '/__w'  target directory. However, because the
+// beyla-ebpf-generator image runs as a sibling container (it shares the same
+// docker socket), we need to pass the host path to the '/src' volume rather
+// than the detected container path
+func adjustPathForGitHubActions(path string) string {
+	const prefixInContainer = "/__w/"
+	const prefixInHost = "/home/runner/work/"
+
+	_, isGithubWorkflow := os.LookupEnv("GITHUB_WORKSPACE")
+
+	if isGithubWorkflow && strings.HasPrefix(path, prefixInContainer) {
+		return strings.Replace(path, prefixInContainer, prefixInHost, 1)
+	}
+
+	return path
 }
 
 func moduleRoot() (string, error) {
@@ -65,6 +84,8 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+
+	wd = adjustPathForGitHubActions(wd)
 
 	cmd := exec.Command(OCI_BIN, "run", "--rm", "-v", wd+":/src", GEN_IMG)
 

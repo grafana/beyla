@@ -14,7 +14,7 @@ PROTOC_IMAGE = docker.io/mariomac/protoc-go:latest
 # RELEASE_VERSION will contain the tag name, or the branch name if current commit is not a tag
 RELEASE_VERSION := $(shell git describe --all | cut -d/ -f2)
 RELEASE_REVISION := $(shell git rev-parse --short HEAD )
-BUILDINFO_PKG ?= github.com/grafana/beyla/pkg/buildinfo
+BUILDINFO_PKG ?= github.com/grafana/beyla/v2/pkg/buildinfo
 TEST_OUTPUT ?= ./testoutput
 
 IMG_REGISTRY ?= docker.io

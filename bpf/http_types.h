@@ -195,7 +195,7 @@ typedef struct http2_grpc_request {
     // with other instrumented processes
     pid_info pid;
     u8 ssl;
-    u8 new_conn;
+    u64 new_conn_id;
     tp_info_t tp;
 } http2_grpc_request_t;
 

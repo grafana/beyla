@@ -118,8 +118,7 @@ func TestHTTP2Parsing(t *testing.T) {
 				}
 
 				if ff, ok := f.(*http2.HeadersFrame); ok {
-					connInfo := BPFConnInfo{}
-					method, path, contentType, _ := readMetaFrame(&connInfo, false, framer, ff)
+					method, path, contentType, _ := readMetaFrame(0, framer, ff)
 					assert.Equal(t, tt.method, method)
 					assert.Equal(t, tt.path, path)
 					assert.Equal(t, tt.contentType, contentType)
@@ -250,7 +249,7 @@ func makeBPFHTTP2InfoNewRequest(buf, rbuf []byte, len int) BPFHTTP2Info {
 	info := makeBPFHTTP2Info(buf, rbuf, len)
 	info.ConnInfo.D_port = 1
 	info.ConnInfo.S_port = 1
-	info.NewConn = 1
+	info.NewConnId = 1
 
 	return info
 }

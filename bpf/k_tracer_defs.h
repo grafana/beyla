@@ -46,7 +46,7 @@ static __always_inline void handle_buf_with_args(void *ctx, call_protocol_args_t
             .id = 0,
             .flags = http2_conn_flag_new,
         };
-        data.id = bpf_ktime_get_ns();
+        data.id = uniqueHTTP2ConnId(&args->pid_conn);
         if (args->ssl) {
             data.flags |= http2_conn_flag_ssl;
         }

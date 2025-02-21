@@ -36,6 +36,7 @@ const (
 	EventTypeKafkaServer
 	EventTypeGPUKernelLaunch
 	EventTypeGPUMalloc
+	EventTypeCapability
 )
 
 const (

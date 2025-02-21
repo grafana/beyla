@@ -8,6 +8,7 @@ import (
 
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/ebpf"
+	"github.com/grafana/beyla/pkg/internal/ebpf/capabilitytracer"
 	"github.com/grafana/beyla/pkg/internal/ebpf/generictracer"
 	"github.com/grafana/beyla/pkg/internal/ebpf/gotracer"
 	"github.com/grafana/beyla/pkg/internal/ebpf/gpuevent"
@@ -116,4 +117,8 @@ func newGenericTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf
 		return []ebpf.Tracer{generictracer.New(cfg, metrics), gpuevent.New(cfg, metrics)}
 	}
 	return []ebpf.Tracer{generictracer.New(cfg, metrics)}
+}
+
+func newCapabilityTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Tracer {
+	return []ebpf.Tracer{capabilitytracer.New(cfg, metrics)}
 }

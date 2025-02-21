@@ -549,12 +549,12 @@ func (mr *MetricsReporter) setupHostInfoMeter(meter instrument.Meter) error {
 		return nil
 	}
 
-	tracesHostInfo, err := meter.Int64UpDownCounter(TracesHostInfo)
+	tracesHostInfo, err := meter.Int64Gauge(TracesHostInfo)
 	if err != nil {
 		return fmt.Errorf("creating span metric traces host info: %w", err)
 	}
 	attrOpt := instrument.WithAttributeSet(mr.metricHostAttributes())
-	tracesHostInfo.Add(mr.ctx, 1, attrOpt)
+	tracesHostInfo.Record(mr.ctx, 1, attrOpt)
 
 	return nil
 }

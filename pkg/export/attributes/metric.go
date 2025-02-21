@@ -126,6 +126,11 @@ var (
 		Prom:    "gpu_memory_allocations_bytes_total",
 		OTEL:    "gpu.memory.allocations",
 	}
+	CapabilityRequests = Name{
+		Section: "capability.requests",
+		Prom:    "capability_requests_total",
+		OTEL:    "capability.requests",
+	}
 )
 
 // normalizeMetric will facilitate the user-input in the attributes.enable section.

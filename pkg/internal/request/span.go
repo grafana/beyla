@@ -488,9 +488,9 @@ func (s *Span) isHTTPOrGRPCClient() bool {
 func (s *Span) isMetricsExportURL() bool {
 	switch s.Type {
 	case EventTypeGRPCClient:
-		return strings.HasPrefix(s.Path, grpcMetricsDetectPattern)
+		return strings.HasSuffix(s.Path, grpcMetricsDetectPattern)
 	case EventTypeHTTPClient:
-		return strings.HasPrefix(s.Path, metricsDetectPattern)
+		return strings.HasSuffix(s.Path, metricsDetectPattern)
 	default:
 		return false
 	}

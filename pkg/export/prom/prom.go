@@ -650,7 +650,9 @@ func (r *metricsReporter) observe(span *request.Span) {
 	}
 	t := span.Timings()
 	r.beylaInfo.WithLabelValues(span.Service.SDKLanguage.String()).metric.Set(1.0)
-	r.tracesHostInfo.WithLabelValues(r.hostID).metric.Set(1.0)
+	if r.cfg.SpanMetricsEnabled() || r.cfg.ServiceGraphMetricsEnabled() {
+		r.tracesHostInfo.WithLabelValues(r.hostID).metric.Set(1.0)
+	}
 	duration := t.End.Sub(t.RequestStart).Seconds()
 
 	targetInfoLabelValues := r.labelValuesTargetInfo(span.Service)

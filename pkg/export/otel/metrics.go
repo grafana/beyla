@@ -253,7 +253,10 @@ func ReportMetrics(
 		if mr.cfg.SpanMetricsEnabled() || mr.cfg.ServiceGraphMetricsEnabled() {
 			hostMetrics := mr.newMetricsInstance(nil)
 			hostMeter := hostMetrics.provider.Meter(reporterName)
-			mr.setupHostInfoMeter(hostMeter)
+			err := mr.setupHostInfoMeter(hostMeter)
+			if err != nil {
+				return nil, fmt.Errorf("setting up host metrics: %w", err)
+			}
 		}
 
 		return mr.reportMetrics, nil

@@ -193,6 +193,53 @@ func getFuncName(info *ebpf.ProgramInfo, id ebpf.ProgramID, log *slog.Logger) st
 	return info.Name
 }
 
+func (bc *BPFCollector) collectMapMetrics(ch chan<- prometheus.Metric) {
+	for id := ebpf.MapID(0); ; {
+		nextID, err := ebpf.MapGetNextID(id)
+		if err != nil {
+			break
+		}
+		id = nextID
+
+		m, err := ebpf.NewMapFromID(id)
+		if err != nil {
+			bc.log.Error("failed to load map", "ID", id, "error", err)
+			continue
+		}
+		defer m.Close()
+
+		info, err := m.Info()
+		if err != nil {
+			bc.log.Error("failed to get map info", "ID", id, "error", err)
+			continue
+		}
+
+		// Only collect maps that are LRUHash
+		if info.Type != ebpf.LRUHash {
+			continue
+		}
+
+		var count uint64
+		throwawayKey := discardEncoding{}
+		throwawayValues := make(sliceDiscardEncoding, 0)
+		iter := m.Iterate()
+		for iter.Next(&throwawayKey, &throwawayValues) {
+			count++
+		}
+		if err := iter.Err(); err == nil {
+			ch <- prometheus.MustNewConstMetric(
+				bc.mapSizeDesc,
+				prometheus.CounterValue,
+				float64(count),
+				strconv.FormatUint(uint64(id), 10),
+				info.Name,
+				info.Type.String(),
+				strconv.FormatUint(uint64(info.MaxEntries), 10),
+			)
+		}
+	}
+}
+
 // updateBuckets update the histogram buckets for the given data based on previous data.
 func (bp *BPFProgram) updateBuckets() {
 	// Calculate the difference in runtime and run count
@@ -215,54 +262,6 @@ func (bp *BPFProgram) updateBuckets() {
 		if deltaCount > 0 && avgLatency <= bucket {
 			bp.buckets[bucket] += deltaCount
 			break
-		}
-	}
-}
-
-func (bc *BPFCollector) collectMapMetrics(ch chan<- prometheus.Metric) {
-	for id := ebpf.MapID(0); ; {
-		id, err := ebpf.MapGetNextID(id)
-		if err != nil {
-			break
-		}
-
-		m, err := ebpf.NewMapFromID(id)
-		if err != nil {
-			bc.log.Error("failed to load map", "ID", id, "error", err)
-			continue
-		}
-		defer m.Close()
-
-		info, err := m.Info()
-		if err != nil {
-			bc.log.Error("failed to get map info", "ID", id, "error", err)
-			continue
-		}
-
-		// Only collect maps that are LRUHash
-		if info.Type != ebpf.LRUHash {
-			continue
-		}
-
-		// This snippet is copied from digitalocean-labs/ebpf_exporter
-		// https://github.com/digitalocean-labs/ebpf_exporter/blob/main/collectors/map.go
-		var count uint64
-		throwawayKey := discardEncoding{}
-		throwawayValues := make(sliceDiscardEncoding, 0)
-		iter := m.Iterate()
-		for iter.Next(&throwawayKey, &throwawayValues) {
-			count++
-		}
-		if err := iter.Err(); err == nil {
-			ch <- prometheus.MustNewConstMetric(
-				bc.mapSizeDesc,
-				prometheus.CounterValue,
-				float64(count),
-				strconv.FormatUint(uint64(id), 10),
-				info.Name,
-				info.Type.String(),
-				strconv.FormatUint(uint64(info.MaxEntries), 10),
-			)
 		}
 	}
 }

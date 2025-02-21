@@ -35,6 +35,7 @@ const (
 	SpanMetricsCalls   = "traces_spanmetrics_calls_total"
 	SpanMetricsSizes   = "traces_spanmetrics_size_total"
 	TracesTargetInfo   = "traces_target_info"
+	TracesHostInfo     = "traces_host_info"
 	TargetInfo         = "target_info"
 
 	ServiceGraphClient = "traces_service_graph_request_client_seconds"
@@ -45,8 +46,9 @@ const (
 	serviceKey          = "service"
 	serviceNamespaceKey = "service_namespace"
 
-	hostIDKey   = "host_id"
-	hostNameKey = "host_name"
+	hostIDKey        = "host_id"
+	hostNameKey      = "host_name"
+	grafanaHostIDKey = "grafana_host_id"
 
 	k8sNamespaceName   = "k8s_namespace_name"
 	k8sPodName         = "k8s_pod_name"
@@ -91,6 +93,7 @@ const (
 
 // not adding version, as it is a fixed value
 var beylaInfoLabelNames = []string{LanguageLabel}
+var hostInfoLabelNames = []string{grafanaHostIDKey}
 
 // TODO: TLS
 type PrometheusConfig struct {
@@ -188,6 +191,7 @@ type metricsReporter struct {
 	spanMetricsCallsTotal *Expirer[prometheus.Counter]
 	spanMetricsSizeTotal  *Expirer[prometheus.Counter]
 	tracesTargetInfo      *Expirer[prometheus.Gauge]
+	tracesHostInfo        *Expirer[prometheus.Gauge]
 
 	// trace service graph
 	serviceGraphClient *Expirer[prometheus.Histogram]
@@ -453,6 +457,12 @@ func newReporter(
 				Help: "target service information in trace span metric format",
 			}, labelNamesTargetInfo(kubeEnabled)).MetricVec, clock.Time, cfg.TTL)
 		}),
+		tracesHostInfo: optionalGaugeProvider(cfg.SpanMetricsEnabled() || cfg.ServiceGraphMetricsEnabled(), func() *Expirer[prometheus.Gauge] {
+			return NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
+				Name: TracesHostInfo,
+				Help: "A metric with a constant '1' value labeled by the host id ",
+			}, hostInfoLabelNames).MetricVec, clock.Time, cfg.TTL)
+		}),
 		serviceGraphClient: optionalHistogramProvider(cfg.ServiceGraphMetricsEnabled(), func() *Expirer[prometheus.Histogram] {
 			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
 				Name:                            ServiceGraphClient,
@@ -565,6 +575,10 @@ func newReporter(
 		)
 	}
 
+	if cfg.SpanMetricsEnabled() || cfg.ServiceGraphMetricsEnabled() {
+		registeredMetrics = append(registeredMetrics, mr.tracesHostInfo)
+	}
+
 	if is.GPUEnabled() {
 		registeredMetrics = append(registeredMetrics,
 			mr.gpuKernelCallsTotal,
@@ -636,6 +650,9 @@ func (r *metricsReporter) observe(span *request.Span) {
 	}
 	t := span.Timings()
 	r.beylaInfo.WithLabelValues(span.Service.SDKLanguage.String()).metric.Set(1.0)
+	if r.cfg.SpanMetricsEnabled() || r.cfg.ServiceGraphMetricsEnabled() {
+		r.tracesHostInfo.WithLabelValues(r.hostID).metric.Set(1.0)
+	}
 	duration := t.End.Sub(t.RequestStart).Seconds()
 
 	targetInfoLabelValues := r.labelValuesTargetInfo(span.Service)

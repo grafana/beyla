@@ -33,6 +33,7 @@ func TestSuite(t *testing.T) {
 	t.Run("GRPC TLS RED metrics", testREDMetricsGRPCTLS)
 	t.Run("Internal Prometheus metrics", testInternalPrometheusExport)
 	t.Run("Exemplars exist", testExemplarsExist)
+	t.Run("Testing Host Info metric", testHostInfo)
 
 	require.NoError(t, compose.Close())
 }
@@ -80,6 +81,7 @@ func TestSuiteClientPromScrape(t *testing.T) {
 	require.NoError(t, compose.Up())
 	t.Run("Client RED metrics", testREDMetricsForClientHTTPLibraryNoTraces)
 	t.Run("Testing Beyla Build Info metric", testPrometheusBeylaBuildInfo)
+	t.Run("Testing Host Info metric", testHostInfo)
 	t.Run("Testing process-level metrics", testProcesses(map[string]string{
 		"process_executable_name": "pingclient",
 		"process_executable_path": "/pingclient",

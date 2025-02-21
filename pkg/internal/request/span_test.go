@@ -264,8 +264,13 @@ func TestDetectsOTelExport(t *testing.T) {
 			exports: false,
 		},
 		{
-			name:    "Successfull HTTP /v1/metrics spans export",
+			name:    "Successful HTTP /v1/metrics spans export",
 			span:    Span{Type: EventTypeHTTPClient, Method: "GET", Path: "/v1/metrics", RequestStart: 100, End: 200, Status: 200},
+			exports: true,
+		},
+		{
+			name:    "Successful HTTP /prefix/v1/metrics spans export",
+			span:    Span{Type: EventTypeHTTPClient, Method: "GET", Path: "/prefix/v1/metrics", RequestStart: 100, End: 200, Status: 200},
 			exports: true,
 		},
 		{

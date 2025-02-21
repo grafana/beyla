@@ -548,10 +548,6 @@ func (mr *MetricsReporter) setupSpanMeters(m *Metrics, meter instrument.Meter) e
 }
 
 func (mr *MetricsReporter) setupHostInfoMeter(meter instrument.Meter) error {
-	if !mr.cfg.SpanMetricsEnabled() || !mr.cfg.ServiceGraphMetricsEnabled() {
-		return nil
-	}
-
 	tracesHostInfo, err := meter.Int64Gauge(TracesHostInfo)
 	if err != nil {
 		return fmt.Errorf("creating span metric traces host info: %w", err)

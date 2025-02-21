@@ -90,12 +90,16 @@ func NewFlowFetcher(
 	if tlog.Enabled(context.TODO(), slog.LevelDebug) {
 		traceMsgs = 1
 	}
-	if err := spec.RewriteConstants(map[string]interface{}{
-		constSampling:      uint32(sampling),
-		constTraceMessages: uint8(traceMsgs),
-	}); err != nil {
-		return nil, fmt.Errorf("rewriting BPF constants definition: %w", err)
+
+	err = spec.Variables[constSampling].Set(uint32(sampling))
+	if err != nil {
+		return nil, fmt.Errorf("setting sampling rate: %w", err)
 	}
+	err = spec.Variables[constTraceMessages].Set(uint8(traceMsgs))
+	if err != nil {
+		return nil, fmt.Errorf("setting trace messages: %w", err)
+	}
+
 	if err := spec.LoadAndAssign(&objects, nil); err != nil {
 		return nil, fmt.Errorf("loading and assigning BPF objects: %w", err)
 	}

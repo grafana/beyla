@@ -116,10 +116,11 @@ func (bc *BPFCollector) collectProbesMetrics(ch chan<- prometheus.Metric) {
 	bc.enableBPFStatsRuntime()
 
 	for id := ebpf.ProgramID(0); ; {
-		id, err := ebpf.ProgramGetNextID(id)
+		nextID, err := ebpf.ProgramGetNextID(id)
 		if err != nil {
 			break
 		}
+		id = nextID
 
 		program, err := ebpf.NewProgramFromID(id)
 		if err != nil {

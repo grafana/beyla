@@ -490,7 +490,7 @@ func (s *Span) isMetricsExportURL() bool {
 	case EventTypeGRPCClient:
 		return strings.HasPrefix(s.Path, grpcMetricsDetectPattern)
 	case EventTypeHTTPClient:
-		return strings.HasPrefix(s.Path, metricsDetectPattern)
+		return strings.HasSuffix(s.Path, metricsDetectPattern)
 	default:
 		return false
 	}
@@ -501,7 +501,7 @@ func (s *Span) isTracesExportURL() bool {
 	case EventTypeGRPCClient:
 		return strings.HasPrefix(s.Path, grpcTracesDetectPattern)
 	case EventTypeHTTPClient:
-		return strings.HasPrefix(s.Path, tracesDetectPattern)
+		return strings.HasSuffix(s.Path, tracesDetectPattern)
 	default:
 		return false
 	}

@@ -253,6 +253,10 @@ github.com/gorilla/websocket
 github.com/grafana/go-offsets-tracker/pkg/offsets
 github.com/grafana/go-offsets-tracker/pkg/utils
 github.com/grafana/go-offsets-tracker/pkg/versions
+# github.com/grafana/jvmtools v0.0.3
+## explicit; go 1.23.2
+github.com/grafana/jvmtools/jvm
+github.com/grafana/jvmtools/util
 # github.com/grpc-ecosystem/grpc-gateway/v2 v2.25.1
 ## explicit; go 1.22.0
 github.com/grpc-ecosystem/grpc-gateway/v2/internal/httprule

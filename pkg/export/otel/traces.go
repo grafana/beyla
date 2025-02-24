@@ -389,7 +389,6 @@ func getTraceSettings(ctxInfo *global.ContextInfo, in trace.SpanExporter) export
 	if internalMetricsEnabled(ctxInfo) {
 		telemetryLevel = configtelemetry.LevelBasic
 		spanExporter := instrumentTraceExporter(in, ctxInfo.Metrics)
-		// Reuse newResourceInternal to create the resource with consistent attributes
 		res := newResourceInternal(ctxInfo.HostID)
 		traceProvider = trace.NewTracerProvider(
 			trace.WithBatcher(spanExporter),

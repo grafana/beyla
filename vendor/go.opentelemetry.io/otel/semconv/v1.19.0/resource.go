@@ -919,10 +919,6 @@ const (
 	// Examples: 'fdbf79e8af94cb7f9e8df36789187052'
 	HostIDKey = attribute.Key("host.id")
 
-	// GrafanaHostIDKey is the same attribute Key as HostIDKey, but used for
-	// traces_target_info
-	GrafanaHostIDKey = attribute.Key("grafana.host.id")
-
 	// HostNameKey is the attribute Key conforming to the "host.name" semantic
 	// conventions. It represents the name of the host. On Unix systems, it may
 	// contain what the hostname command returns, or the fully qualified
@@ -1011,11 +1007,6 @@ var (
 // to determine the `machine-id` based on operating system.
 func HostID(val string) attribute.KeyValue {
 	return HostIDKey.String(val)
-}
-
-// GrafanaHostID is the same as the host_id key, just prefixed with grafana_
-func GrafanaHostID(val string) attribute.KeyValue {
-	return GrafanaHostIDKey.String(val)
 }
 
 // HostName returns an attribute KeyValue conforming to the "host.name"

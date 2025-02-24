@@ -6,12 +6,10 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/attribute"
 	instrument "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
-	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
 	"github.com/grafana/beyla/v2/pkg/buildinfo"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
@@ -117,19 +115,6 @@ func NewInternalMetricsReporter(ctx context.Context, ctxInfo *global.ContextInfo
 		instrumentedProcesses: instrumentedProcesses,
 		beylaInfo:             beylaInfo,
 	}, nil
-}
-
-func newResourceInternal(hostID string) *resource.Resource {
-	attrs := []attribute.KeyValue{
-		semconv.ServiceName("beyla-internal"),
-		semconv.ServiceInstanceID(uuid.New().String()),
-		semconv.TelemetrySDKLanguageKey.String(semconv.TelemetrySDKLanguageGo.Value.AsString()),
-		// We set the SDK name as Beyla, so we can distinguish beyla generated metrics from other SDKs
-		semconv.TelemetrySDKNameKey.String("beyla"),
-		semconv.HostID(hostID),
-	}
-
-	return resource.NewWithAttributes(semconv.SchemaURL, attrs...)
 }
 
 func newInternalMeterProvider(res *resource.Resource, exporter *metric.Exporter, interval time.Duration) (*metric.MeterProvider, error) {

@@ -1,6 +1,6 @@
 ---
-title: Measuring traffic between Cloud availability zones
-menuTitle: Measuring traffic between Cloud availability zones
+title: Measure traffic between Cloud availability zones
+menuTitle: Measure traffic between Cloud availability zones
 description: How to measure the network traffic between different Cloud availability zones
 weight: 1
 keywords:
@@ -9,18 +9,18 @@ keywords:
   - Network
 ---
 
-# Measuring traffic between Cloud availability zones
+# Measure traffic between Cloud availability zones
 
-{{% admonition type="note" %}}
+{{< admonition type="note" >}}
 Currently, this feature is only available in Kubernetes clusters.
-{{% /admonition %}}
+{{< /admonition >}}
 
 Traffic between Cloud Availability Zones might incur additional costs. Beyla is able to measure it either by
 adding `src.zone` and `dst.zone` attributes to regular network metrics,
 or by providing a separate `beyla.network.inter.zone.bytes` (OTEL) / `beyla_network_inter_zone_bytes_total` (Prometheus)
 metric.
 
-## Adding `src.zone` and `dst.zone` attributes to regular network metrics
+## Add `src.zone` and `dst.zone` attributes to regular network metrics
 
 Source and destination availability zone attributes are disabled by default in Beyla. To enable it, explicitly add them to the list of
 included network attributes in the Beyla YAML configuration:
@@ -45,7 +45,7 @@ with different `src_zone` and `dst_zone` attributes.
 If you require higher granularity in your inter-zone traffic measurement (for example, source/destination pods or nodes),
 adding zone attributes would impact the cardinality of the metric, even for traffic within the same availability zone.
 
-## Using the `beyla.network.inter.zone` metric
+## Use the `beyla.network.inter.zone` metric
 
 Using a separate metric for inter-zone traffic allows measuring it with a reduced impact in the metrics cardinality,
 as avoids adding the `src.zone` and `dst.zone` attributes to the regular network metrics.

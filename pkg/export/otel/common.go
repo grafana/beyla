@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/google/uuid"
 	"github.com/hashicorp/golang-lru/v2/simplelru"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -16,6 +17,7 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 	"google.golang.org/grpc/credentials"
 
@@ -90,6 +92,19 @@ func getResourceAttrs(hostID string, service *svc.Attrs) []attribute.KeyValue {
 		attrs = append(attrs, k.OTEL().String(v))
 	}
 	return attrs
+}
+
+func newResourceInternal(hostID string) *resource.Resource {
+	attrs := []attribute.KeyValue{
+		semconv.ServiceName("beyla"),
+		semconv.ServiceInstanceID(uuid.New().String()),
+		semconv.TelemetrySDKLanguageKey.String(semconv.TelemetrySDKLanguageGo.Value.AsString()),
+		// We set the SDK name as Beyla, so we can distinguish beyla generated metrics from other SDKs
+		semconv.TelemetrySDKNameKey.String("beyla"),
+		semconv.HostID(hostID),
+	}
+
+	return resource.NewWithAttributes(semconv.SchemaURL, attrs...)
 }
 
 // ReporterPool keeps an LRU cache of different OTEL reporters given a service name.

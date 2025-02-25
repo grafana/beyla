@@ -16,7 +16,12 @@ RUN cat <<EOF > /generate.sh
 export BPF2GO=bpf2go
 export BPF_CLANG=clang
 export BPF_CFLAGS="-O2 -g -Wall -Werror"
-grep -rlI "BPF2GO" pkg/internal/ | xargs -P 0 -n 1 go generate
+
+if [ -e "/genfiles" ]; then
+	cat /genfiles | xargs -P 0 -n 1 go generate
+else
+	grep -rlI "BPF2GO" pkg/internal/ | xargs -P 0 -n 1 go generate
+fi
 EOF
 
 RUN chmod +x /generate.sh

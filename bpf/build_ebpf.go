@@ -6,16 +6,253 @@ package main
 
 import (
 	"fmt"
+	"go/parser"
+	"go/token"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
+	"unicode"
 )
 
 const OCI_BIN = "docker"
 const GEN_IMG = "ghcr.io/grafana/beyla-ebpf-generator:main"
+
+var targetsByGoArch = map[string]Target{
+	"386":      {"bpfel", "x86"},
+	"amd64":    {"bpfel", "x86"},
+	"arm":      {"bpfel", "arm"},
+	"arm64":    {"bpfel", "arm64"},
+	"loong64":  {"bpfel", "loongarch"},
+	"mips":     {"bpfeb", "mips"},
+	"mipsle":   {"bpfel", ""},
+	"mips64":   {"bpfeb", ""},
+	"mips64le": {"bpfel", ""},
+	"ppc64":    {"bpfeb", "powerpc"},
+	"ppc64le":  {"bpfel", "powerpc"},
+	"riscv64":  {"bpfel", "riscv"},
+	"s390x":    {"bpfeb", "s390"},
+}
+
+type Target struct {
+	clang string
+	linux string
+}
+
+func (tgt *Target) Suffix() string {
+	stem := tgt.clang
+
+	if tgt.linux != "" {
+		stem = fmt.Sprintf("%s_%s", tgt.linux, tgt.clang)
+	}
+
+	return stem
+}
+
+type argParser struct {
+	cmdLine string
+	index   int
+}
+
+func newargParser(cmdLine string) *argParser {
+	return &argParser{
+		cmdLine: cmdLine,
+		index:   0,
+	}
+}
+
+func (ap *argParser) shift() (string, bool) {
+	for ap.index < len(ap.cmdLine) && unicode.IsSpace(rune(ap.cmdLine[ap.index])) {
+		ap.index++
+	}
+
+	// If we've reached the end of the string, return false
+	if ap.index >= len(ap.cmdLine) {
+		return "", false
+	}
+
+	start := ap.index
+
+	for ap.index < len(ap.cmdLine) && !unicode.IsSpace(rune(ap.cmdLine[ap.index])) {
+		ap.index++
+	}
+
+	// Return the word
+	return ap.cmdLine[start:ap.index], true
+}
+
+type generateContext struct {
+	goArchs []string
+	stem    string // the ident stem passed to bpf2go
+	outDir  string // the output directory passed to bpf2go
+	srcFile string // the .c source file passed to bpf2go
+	srcDir  string // the source directory of the .go file containing the generate directive
+	goFile  string // the go file containing the generate directive
+}
+
+func parseGenerateLine(goFile string, line string) *generateContext {
+	ctx := &generateContext{
+		goArchs: []string{"bpfel", "bpfeb"}, // the defaults according to bpf2go
+		goFile:  goFile,
+		srcDir:  filepath.Dir(goFile),
+	}
+
+	parser := newargParser(line)
+
+	// yank //go-generate
+	parser.shift()
+
+	// yank $BPF2GO
+	parser.shift()
+
+	for {
+		arg, ok := parser.shift()
+
+		if !ok {
+			break
+		}
+
+		if arg == "-target" {
+			if arg, ok = parser.shift(); ok {
+				ctx.goArchs = strings.Split(arg, ",")
+			}
+		} else if arg == "-output-stem" {
+			if arg, ok = parser.shift(); ok {
+				ctx.stem = strings.ToLower(arg)
+			}
+		} else if arg == "-output-dir" {
+			if arg, ok = parser.shift(); ok {
+				ctx.outDir = arg
+			}
+		} else if arg == "--" {
+			break
+		} else if arg[0] == '-' {
+			parser.shift()
+		} else if ctx.stem == "" {
+			ctx.stem = strings.ToLower(arg)
+		} else if ctx.srcFile == "" {
+			ctx.srcFile = filepath.Join(ctx.srcDir, arg)
+		}
+	}
+
+	if ctx.outDir == "" {
+		ctx.outDir = ctx.srcDir
+	}
+
+	return ctx
+}
+
+func isFileStale(ts time.Time, file string) bool {
+	info, err := os.Stat(file)
+
+	if err != nil {
+		return true
+	}
+
+	return ts.After(info.ModTime())
+}
+
+func goFileNeedsGenerate(ctx *generateContext) (bool, error) {
+	info, err := os.Stat(ctx.srcFile)
+
+	if err != nil {
+		return false, fmt.Errorf("cannot stat source file '%s': %w", ctx.srcFile, err)
+	}
+
+	ts := info.ModTime()
+
+	for _, goArch := range ctx.goArchs {
+		target, ok := targetsByGoArch[goArch]
+
+		if !ok {
+			continue
+		}
+
+		baseName := fmt.Sprintf("%s_%s", ctx.stem, target.Suffix())
+		filePath := filepath.Join(ctx.outDir, baseName)
+
+		if isFileStale(ts, filePath+".o") || isFileStale(ts, filePath+".go") {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func gatherFilesToGenerate(moduleRoot string) map[string]struct{} {
+	rootDir := filepath.Join(moduleRoot, "pkg/internal")
+
+	filesToGenerate := map[string]struct{}{}
+
+	handleEntry := func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if !strings.HasSuffix(d.Name(), ".go") {
+			return nil
+		}
+
+		file, err := os.Open(path)
+
+		if err != nil {
+			return err
+		}
+
+		defer file.Close()
+
+		fs := token.NewFileSet()
+
+		node, err := parser.ParseFile(fs, path, file, parser.ParseComments)
+
+		if err != nil {
+			return err
+		}
+
+		for _, commentGroup := range node.Comments {
+			for _, comment := range commentGroup.List {
+				if strings.HasPrefix(comment.Text, "//go:generate") && strings.Contains(comment.Text, "$BPF2GO") {
+					genCtx := parseGenerateLine(path, comment.Text)
+
+					generate, err := goFileNeedsGenerate(genCtx)
+
+					if err != nil {
+						return err
+					}
+
+					if generate {
+						// we want a relative path from the module root, so
+						// that it works when the source tree is mounted
+						// inside docker containers
+						relPath, err := filepath.Rel(moduleRoot, path)
+
+						if err != nil {
+							return err
+						}
+
+						filesToGenerate[relPath] = struct{}{}
+					}
+				}
+			}
+		}
+
+		return nil
+	}
+
+	// Walk through the project directory
+	err := filepath.WalkDir(rootDir, handleEntry)
+
+	if err != nil {
+		//log.Fatalf("Error walking through the directory: %v", err)
+		return nil
+	}
+
+	return filesToGenerate
+}
 
 func getPipes(cmd *exec.Cmd) (io.ReadCloser, io.ReadCloser, error) {
 	stdout, err := cmd.StdoutPipe()
@@ -40,6 +277,7 @@ func getPipes(cmd *exec.Cmd) (io.ReadCloser, io.ReadCloser, error) {
 // docker socket), we need to pass the host path to the '/src' volume rather
 // than the detected container path
 func adjustPathForGitHubActions(path string) string {
+	//FIXME env vars
 	const prefixInContainer = "/__w/"
 	const prefixInHost = "/home/runner/work/"
 
@@ -73,6 +311,27 @@ func moduleRoot() (string, error) {
 	return wd, nil
 }
 
+func writeGenFile(wd string, files map[string]struct{}) (string, error) {
+	tempFile, err := os.CreateTemp(wd, "gen_files")
+
+	if err != nil {
+		return "", fmt.Errorf("error creating temporary file: %v", err)
+	}
+
+	defer tempFile.Close()
+
+	for f := range files {
+		_, err := fmt.Fprintf(tempFile, "%s\n", f)
+
+		if err != nil {
+			os.Remove(tempFile.Name())
+			return "", fmt.Errorf("error writing to file: %v", err)
+		}
+	}
+
+	return tempFile.Name(), nil
+}
+
 func main() {
 	if runtime.GOOS != "linux" {
 		return
@@ -85,9 +344,34 @@ func main() {
 		os.Exit(1)
 	}
 
-	wd = adjustPathForGitHubActions(wd)
+	files := gatherFilesToGenerate(wd)
 
-	cmd := exec.Command(OCI_BIN, "run", "--rm", "-v", wd+":/src", GEN_IMG)
+	if len(files) == 0 {
+		os.Exit(0)
+	}
+
+	tmpFile, err := writeGenFile(wd, files)
+
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	defer os.Remove(tmpFile)
+
+	adjustedWD := adjustPathForGitHubActions(wd)
+
+	relTmpFile, err := filepath.Rel(wd, tmpFile)
+
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	cmd := exec.Command(OCI_BIN, "run", "--rm",
+		"-v", adjustedWD+":/src",
+		GEN_IMG,
+		filepath.Join("/src", relTmpFile))
 
 	stdoutPipe, stderrPipe, err := getPipes(cmd)
 

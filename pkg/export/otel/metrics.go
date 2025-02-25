@@ -66,6 +66,10 @@ const (
 	FeatureEBPF             = "ebpf"
 )
 
+// GrafanaHostIDKey is the same attribute Key as HostIDKey, but used for
+// traces_target_info
+const GrafanaHostIDKey = attribute.Key("grafana.host.id")
+
 type MetricsConfig struct {
 	Interval time.Duration `yaml:"interval" env:"BEYLA_METRICS_INTERVAL"`
 	// OTELIntervalMS supports metric intervals as specified by the standard OTEL definition.
@@ -797,7 +801,7 @@ func (mr *MetricsReporter) metricResourceAttributes(service *svc.Attrs) attribut
 
 func (mr *MetricsReporter) metricHostAttributes() attribute.Set {
 	attrs := []attribute.KeyValue{
-		semconv.GrafanaHostID(mr.hostID),
+		GrafanaHostIDKey.String(mr.hostID),
 	}
 
 	return attribute.NewSet(attrs...)

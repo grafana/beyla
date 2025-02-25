@@ -183,7 +183,7 @@ func goFileNeedsGenerate(ctx *generateContext) (bool, error) {
 	return false, nil
 }
 
-func gatherFilesToGenerate(moduleRoot string) map[string]struct{} {
+func gatherFilesToGenerate(moduleRoot string) []string {
 	rootDir := filepath.Join(moduleRoot, "pkg/internal")
 
 	filesToGenerate := map[string]struct{}{}
@@ -215,27 +215,20 @@ func gatherFilesToGenerate(moduleRoot string) map[string]struct{} {
 
 		for _, commentGroup := range node.Comments {
 			for _, comment := range commentGroup.List {
-				if strings.HasPrefix(comment.Text, "//go:generate") && strings.Contains(comment.Text, "$BPF2GO") {
-					genCtx := parseGenerateLine(path, comment.Text)
+				if !strings.HasPrefix(comment.Text, "//go:generate") || !strings.Contains(comment.Text, "$BPF2GO") {
+					continue
+				}
 
-					generate, err := goFileNeedsGenerate(genCtx)
+				genCtx := parseGenerateLine(path, comment.Text)
 
-					if err != nil {
-						return err
-					}
+				generate, err := goFileNeedsGenerate(genCtx)
 
-					if generate {
-						// we want a relative path from the module root, so
-						// that it works when the source tree is mounted
-						// inside docker containers
-						relPath, err := filepath.Rel(moduleRoot, path)
+				if err != nil {
+					return err
+				}
 
-						if err != nil {
-							return err
-						}
-
-						filesToGenerate[relPath] = struct{}{}
-					}
+				if generate {
+					filesToGenerate[path] = struct{}{}
 				}
 			}
 		}
@@ -251,7 +244,13 @@ func gatherFilesToGenerate(moduleRoot string) map[string]struct{} {
 		return nil
 	}
 
-	return filesToGenerate
+	ret := make([]string, 0, len(filesToGenerate))
+
+	for k := range filesToGenerate {
+		ret = append(ret, k)
+	}
+
+	return ret
 }
 
 func getPipes(cmd *exec.Cmd) (io.ReadCloser, io.ReadCloser, error) {
@@ -311,7 +310,7 @@ func moduleRoot() (string, error) {
 	return wd, nil
 }
 
-func writeGenFile(wd string, files map[string]struct{}) (string, error) {
+func writeGenFile(wd string, files []string) (string, error) {
 	tempFile, err := os.CreateTemp(wd, "gen_files")
 
 	if err != nil {
@@ -320,16 +319,72 @@ func writeGenFile(wd string, files map[string]struct{}) (string, error) {
 
 	defer tempFile.Close()
 
-	for f := range files {
-		_, err := fmt.Fprintf(tempFile, "%s\n", f)
+	for _, f := range files {
+		// we want a relative path from the module root, so
+		// that it works when the source tree is mounted
+		// inside docker containers
+		relPath, err := filepath.Rel(wd, f)
 
 		if err != nil {
 			os.Remove(tempFile.Name())
-			return "", fmt.Errorf("error writing to file: %v", err)
+			return "", fmt.Errorf("error resolving relative path: %w", err)
+		}
+
+		_, err = fmt.Fprintf(tempFile, "%s\n", relPath)
+
+		if err != nil {
+			os.Remove(tempFile.Name())
+			return "", fmt.Errorf("error writing to file: %w", err)
 		}
 	}
 
 	return tempFile.Name(), nil
+}
+
+func ensureWritableImpl(path string, info os.FileInfo) error {
+	mode := info.Mode()
+
+	if mode&0200 != 0 {
+		return nil
+	}
+
+	mode |= 0200
+
+	return os.Chmod(path, mode)
+}
+
+func ensureWritable(path string) error {
+	info, err := os.Stat(path)
+
+	if err != nil {
+		return fmt.Errorf("error stating file '%s': %w", path, err)
+	}
+
+	return ensureWritableImpl(path, info)
+}
+
+func ensureDirWritable(path string) error {
+	info, err := os.Stat(path)
+
+	if err != nil {
+		return fmt.Errorf("error stating file '%s': %w", path, err)
+	}
+
+	if info.IsDir() {
+		return ensureWritableImpl(path, info)
+	}
+
+	return ensureWritable(filepath.Dir(path))
+}
+
+func ensureDirsWritable(files []string) error {
+	for _, f := range files {
+		if err := ensureDirWritable(f); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func main() {
@@ -344,10 +399,20 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err = ensureWritable(wd); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
 	files := gatherFilesToGenerate(wd)
 
 	if len(files) == 0 {
 		os.Exit(0)
+	}
+
+	if err = ensureDirsWritable(files); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
 
 	tmpFile, err := writeGenFile(wd, files)

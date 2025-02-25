@@ -24,6 +24,7 @@ COPY Makefile Makefile
 COPY LICENSE LICENSE
 COPY NOTICE NOTICE
 COPY third_party_licenses.csv third_party_licenses.csv
+COPY javaotel/opentelemetry-javaagent.jar opentelemetry-javaagent.jar
 
 # Build
 RUN make compile
@@ -39,6 +40,7 @@ COPY --from=builder /opt/app-root/bin/beyla .
 COPY --from=builder /opt/app-root/LICENSE .
 COPY --from=builder /opt/app-root/NOTICE .
 COPY --from=builder /opt/app-root/third_party_licenses.csv .
+COPY --from=builder /opt/app-root/opentelemetry-javaagent.jar .
 
 COPY --from=builder /etc/ssl/certs /etc/ssl/certs
 

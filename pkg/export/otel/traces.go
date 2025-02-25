@@ -118,10 +118,12 @@ func (m *TracesConfig) OTLPTracesEndpoint() (string, bool) {
 	endpoint := m.TracesEndpoint
 	isCommon := false
 	if endpoint == "" {
-		isCommon = true
 		endpoint = m.CommonEndpoint
 		if endpoint == "" && m.Grafana != nil && m.Grafana.CloudZone != "" {
 			endpoint = m.Grafana.Endpoint()
+		}
+		if endpoint != "" {
+			isCommon = true
 		}
 	}
 

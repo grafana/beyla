@@ -18,7 +18,7 @@ import (
 	"github.com/grafana/jvmtools/jvm"
 )
 
-const OTelJDKAgent = "opentelemetry-javaagent-2.14.0.jar"
+const OTelJDKAgent = "opentelemetry-javaagent.jar"
 
 type SDKInjector struct {
 	log *slog.Logger
@@ -181,6 +181,9 @@ func otlpOptions(cfg *beyla.Config) (map[string]string, error) {
 			maps.Copy(options, otel.HeadersFromEnv("OTEL_EXPORTER_OTLP_METRICS_HEADERS"))
 			if cfg.Metrics.Grafana.HasAuth() {
 				expandHeadersWithAuth(options, "OTEL_EXPORTER_OTLP_METRICS_HEADERS", cfg.Metrics.Grafana.AuthHeader())
+			}
+			if !cfg.Traces.Enabled() {
+				options["otel.propagators"] = "none"
 			}
 		}
 	}

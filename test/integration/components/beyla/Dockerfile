@@ -18,6 +18,7 @@ COPY vendor/ vendor/
 COPY go.mod go.mod
 COPY go.sum go.sum
 COPY Makefile Makefile
+COPY javaotel/opentelemetry-javaagent.jar opentelemetry-javaagent.jar
 
 # Build
 RUN make compile-for-coverage
@@ -27,5 +28,6 @@ FROM scratch
 
 WORKDIR /
 COPY --from=builder /src/bin/beyla .
+COPY --from=builder /src/opentelemetry-javaagent.jar .
 
 ENTRYPOINT [ "/beyla" ]

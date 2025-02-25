@@ -96,7 +96,7 @@ func getResourceAttrs(hostID string, service *svc.Attrs) []attribute.KeyValue {
 
 func newResourceInternal(hostID string) *resource.Resource {
 	attrs := []attribute.KeyValue{
-		semconv.ServiceName("beyla-internal"),
+		semconv.ServiceName("beyla"),
 		semconv.ServiceInstanceID(uuid.New().String()),
 		semconv.TelemetrySDKLanguageKey.String(semconv.TelemetrySDKLanguageGo.Value.AsString()),
 		// We set the SDK name as Beyla, so we can distinguish beyla generated metrics from other SDKs

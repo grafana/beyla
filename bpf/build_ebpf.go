@@ -183,7 +183,17 @@ func goFileNeedsGenerate(ctx *generateContext) (bool, error) {
 	return false, nil
 }
 
-func gatherFilesToGenerate(moduleRoot string) []string {
+func mapToArray(m map[string]struct{}) []string {
+	ret := make([]string, 0, len(m))
+
+	for k := range m {
+		ret = append(ret, k)
+	}
+
+	return ret
+}
+
+func gatherFilesToGenerate(moduleRoot string) ([]string, error) {
 	rootDir := filepath.Join(moduleRoot, "pkg/internal")
 
 	filesToGenerate := map[string]struct{}{}
@@ -240,17 +250,10 @@ func gatherFilesToGenerate(moduleRoot string) []string {
 	err := filepath.WalkDir(rootDir, handleEntry)
 
 	if err != nil {
-		//log.Fatalf("Error walking through the directory: %v", err)
-		return nil
+		return nil, fmt.Errorf("error walking through the directory: %w", err)
 	}
 
-	ret := make([]string, 0, len(filesToGenerate))
-
-	for k := range filesToGenerate {
-		ret = append(ret, k)
-	}
-
-	return ret
+	return mapToArray(filesToGenerate), nil
 }
 
 func getPipes(cmd *exec.Cmd) (io.ReadCloser, io.ReadCloser, error) {
@@ -270,15 +273,24 @@ func getPipes(cmd *exec.Cmd) (io.ReadCloser, io.ReadCloser, error) {
 	return stdout, stderr, nil
 }
 
+func getEnv(key string, def string) string {
+	v, ok := os.LookupEnv(key)
+
+	if ok {
+		return v
+	}
+
+	return def
+}
+
 // when a GH action job is executed inside a container, the host workspace in
 // the host gets mounted in the '/__w'  target directory. However, because the
 // beyla-ebpf-generator image runs as a sibling container (it shares the same
 // docker socket), we need to pass the host path to the '/src' volume rather
 // than the detected container path
 func adjustPathForGitHubActions(path string) string {
-	//FIXME env vars
-	const prefixInContainer = "/__w/"
-	const prefixInHost = "/home/runner/work/"
+	prefixInContainer := getEnv("BEYLA_BUILD_EBPF_CONTAINER_PREFIX", "/__w/")
+	prefixInHost := getEnv("BEYLA_BUILD_EBPF_HOST_PREFIX", "/home/runner/work/")
 
 	_, isGithubWorkflow := os.LookupEnv("GITHUB_WORKSPACE")
 
@@ -387,6 +399,11 @@ func ensureDirsWritable(files []string) error {
 	return nil
 }
 
+func bail(err error) {
+	fmt.Fprintln(os.Stderr, err)
+	os.Exit(1)
+}
+
 func main() {
 	if runtime.GOOS != "linux" {
 		return
@@ -395,31 +412,31 @@ func main() {
 	wd, err := moduleRoot()
 
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		bail(err)
 	}
 
 	if err = ensureWritable(wd); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		bail(err)
 	}
 
-	files := gatherFilesToGenerate(wd)
+	files, err := gatherFilesToGenerate(wd)
+
+	if err != nil {
+		bail(err)
+	}
 
 	if len(files) == 0 {
 		os.Exit(0)
 	}
 
 	if err = ensureDirsWritable(files); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		bail(err)
 	}
 
 	tmpFile, err := writeGenFile(wd, files)
 
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		bail(err)
 	}
 
 	defer os.Remove(tmpFile)
@@ -429,8 +446,7 @@ func main() {
 	relTmpFile, err := filepath.Rel(wd, tmpFile)
 
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		bail(err)
 	}
 
 	cmd := exec.Command(OCI_BIN, "run", "--rm",
@@ -441,22 +457,20 @@ func main() {
 	stdoutPipe, stderrPipe, err := getPipes(cmd)
 
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		bail(err)
 	}
 
 	defer stdoutPipe.Close()
 	defer stderrPipe.Close()
 
 	if err := cmd.Start(); err != nil {
-		fmt.Fprintln(os.Stderr, "Failed to start program:", err)
-		os.Exit(1)
+		bail(fmt.Errorf("failed to start program: %w", err))
 	}
 
 	go io.Copy(os.Stdout, stdoutPipe)
 	go io.Copy(os.Stderr, stderrPipe)
 
 	if err := cmd.Wait(); err != nil {
-		fmt.Fprintln(os.Stderr, "Error waiting for child process:", err)
+		bail(fmt.Errorf("error waiting for child process: %w", err))
 	}
 }

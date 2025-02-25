@@ -56,7 +56,7 @@ func TraceAttacherProvider(ta *TraceAttacher) pipe.FinalProvider[[]Event[ebpf.In
 func (ta *TraceAttacher) attacherLoop() (pipe.FinalFunc[[]Event[ebpf.Instrumentable]], error) {
 	ta.log = slog.With("component", "discover.TraceAttacher")
 	ta.existingTracers = map[uint64]*ebpf.ProcessTracer{}
-	ta.sdkInjector = otelsdk.NewSDKInjector(&ta.Cfg.Traces)
+	ta.sdkInjector = otelsdk.NewSDKInjector(ta.Cfg)
 	ta.processInstances = maps.MultiCounter[uint64]{}
 	ta.beylaPID = os.Getpid()
 
@@ -340,5 +340,5 @@ func (ta *TraceAttacher) notifyProcessDeletion(ie *ebpf.Instrumentable) {
 }
 
 func (ta *TraceAttacher) sdkInjectionPossible(ie *ebpf.Instrumentable) bool {
-	return ie.Type == svc.InstrumentableJava
+	return ta.sdkInjector.Enabled() && ie.Type == svc.InstrumentableJava
 }

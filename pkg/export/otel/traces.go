@@ -104,7 +104,7 @@ func (m *TracesConfig) Enabled() bool { //nolint:gocritic
 	return m.CommonEndpoint != "" || m.TracesEndpoint != "" || m.Grafana.TracesEnabled()
 }
 
-func (m *TracesConfig) getProtocol() Protocol {
+func (m *TracesConfig) GetProtocol() Protocol {
 	if m.TracesProtocol != "" {
 		return m.TracesProtocol
 	}
@@ -112,6 +112,20 @@ func (m *TracesConfig) getProtocol() Protocol {
 		return m.Protocol
 	}
 	return m.guessProtocol()
+}
+
+func (m *TracesConfig) OTLPTracesEndpoint() (string, bool) {
+	endpoint := m.TracesEndpoint
+	isCommon := false
+	if endpoint == "" {
+		isCommon = true
+		endpoint = m.CommonEndpoint
+		if endpoint == "" && m.Grafana != nil && m.Grafana.CloudZone != "" {
+			endpoint = m.Grafana.Endpoint()
+		}
+	}
+
+	return endpoint, isCommon
 }
 
 func (m *TracesConfig) guessProtocol() Protocol {
@@ -262,7 +276,7 @@ func (tr *tracesOTELReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], err
 
 // nolint:cyclop
 func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.ContextInfo) (exporter.Traces, error) {
-	switch proto := cfg.getProtocol(); proto {
+	switch proto := cfg.GetProtocol(); proto {
 	case ProtocolHTTPJSON, ProtocolHTTPProtobuf, "": // zero value defaults to HTTP for backwards-compatibility
 		slog.Debug("instantiating HTTP TracesReporter", "protocol", proto)
 		var t trace.SpanExporter
@@ -733,15 +747,7 @@ func spanStartTime(t request.Timings) time.Time {
 // If, by some reason, Grafana changes its OTLP Gateway URL in a distant future, you can still point to the
 // correct URL with the OTLP_EXPORTER_... variables.
 func parseTracesEndpoint(cfg *TracesConfig) (*url.URL, bool, error) {
-	isCommon := false
-	endpoint := cfg.TracesEndpoint
-	if endpoint == "" {
-		isCommon = true
-		endpoint = cfg.CommonEndpoint
-		if endpoint == "" && cfg.Grafana != nil && cfg.Grafana.CloudZone != "" {
-			endpoint = cfg.Grafana.Endpoint()
-		}
-	}
+	endpoint, isCommon := cfg.OTLPTracesEndpoint()
 
 	murl, err := url.Parse(endpoint)
 	if err != nil {
@@ -786,8 +792,8 @@ func getHTTPTracesEndpointOptions(cfg *TracesConfig) (otlpOptions, error) {
 	}
 
 	cfg.Grafana.setupOptions(&opts)
-	maps.Copy(opts.HTTPHeaders, headersFromEnv(envHeaders))
-	maps.Copy(opts.HTTPHeaders, headersFromEnv(envTracesHeaders))
+	maps.Copy(opts.HTTPHeaders, HeadersFromEnv(envHeaders))
+	maps.Copy(opts.HTTPHeaders, HeadersFromEnv(envTracesHeaders))
 
 	return opts, nil
 }
@@ -812,6 +818,10 @@ func getGRPCTracesEndpointOptions(cfg *TracesConfig) (otlpOptions, error) {
 		log.Debug("Setting InsecureSkipVerify")
 		opts.SkipTLSVerify = true
 	}
+
+	cfg.Grafana.setupOptions(&opts)
+	maps.Copy(opts.HTTPHeaders, HeadersFromEnv(envHeaders))
+	maps.Copy(opts.HTTPHeaders, HeadersFromEnv(envTracesHeaders))
 
 	return opts, nil
 }

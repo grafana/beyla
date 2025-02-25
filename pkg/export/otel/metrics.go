@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"maps"
 	"net/url"
 	"os"
 	"slices"
@@ -142,6 +143,20 @@ func (m *MetricsConfig) GuessProtocol() Protocol {
 	// Otherwise we return default protocol according to the latest specification:
 	// https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/protocol/exporter.md?plain=1#L53
 	return ProtocolHTTPProtobuf
+}
+
+func (m *MetricsConfig) OTLPMetricsEndpoint() (string, bool) {
+	isCommon := false
+	endpoint := m.MetricsEndpoint
+	if endpoint == "" {
+		isCommon = true
+		endpoint = m.CommonEndpoint
+		if endpoint == "" && m.Grafana != nil && m.Grafana.CloudZone != "" {
+			endpoint = m.Grafana.Endpoint()
+		}
+	}
+
+	return endpoint, isCommon
 }
 
 // EndpointEnabled specifies that the OTEL metrics node is enabled if and only if
@@ -996,6 +1011,8 @@ func getHTTPMetricEndpointOptions(cfg *MetricsConfig) (otlpOptions, error) {
 	}
 
 	cfg.Grafana.setupOptions(&opts)
+	maps.Copy(opts.HTTPHeaders, HeadersFromEnv(envHeaders))
+	maps.Copy(opts.HTTPHeaders, HeadersFromEnv(envMetricsHeaders))
 
 	return opts, nil
 }
@@ -1020,6 +1037,11 @@ func getGRPCMetricEndpointOptions(cfg *MetricsConfig) (otlpOptions, error) {
 		log.Debug("Setting InsecureSkipVerify")
 		opts.SkipTLSVerify = true
 	}
+
+	cfg.Grafana.setupOptions(&opts)
+	maps.Copy(opts.HTTPHeaders, HeadersFromEnv(envHeaders))
+	maps.Copy(opts.HTTPHeaders, HeadersFromEnv(envMetricsHeaders))
+
 	return opts, nil
 }
 
@@ -1030,15 +1052,7 @@ func getGRPCMetricEndpointOptions(cfg *MetricsConfig) (otlpOptions, error) {
 // If, by some reason, Grafana changes its OTLP Gateway URL in a distant future, you can still point to the
 // correct URL with the OTLP_EXPORTER_... variables.
 func parseMetricsEndpoint(cfg *MetricsConfig) (*url.URL, bool, error) {
-	isCommon := false
-	endpoint := cfg.MetricsEndpoint
-	if endpoint == "" {
-		isCommon = true
-		endpoint = cfg.CommonEndpoint
-		if endpoint == "" && cfg.Grafana != nil && cfg.Grafana.CloudZone != "" {
-			endpoint = cfg.Grafana.Endpoint()
-		}
-	}
+	endpoint, isCommon := cfg.OTLPMetricsEndpoint()
 
 	murl, err := url.Parse(endpoint)
 	if err != nil {

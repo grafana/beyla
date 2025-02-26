@@ -19,6 +19,7 @@ import (
 	"unicode"
 )
 
+const DEBUG = false
 const OCI_BIN = "docker"
 const GEN_IMG = "ghcr.io/grafana/beyla-ebpf-generator:main"
 
@@ -449,10 +450,21 @@ func main() {
 		bail(err)
 	}
 
+	if (DEBUG) {
+		fmt.Println("wd:", wd)
+		fmt.Println("adjusted wd:", adjustedWD)
+		fmt.Println("tmpFile:", tmpFile)
+		fmt.Println("relTmpFile:", relTmpFile)
+	}
+
 	cmd := exec.Command(OCI_BIN, "run", "--rm",
 		"-v", adjustedWD+":/src",
 		GEN_IMG,
 		filepath.Join("/src", relTmpFile))
+
+	if (DEBUG) {
+		fmt.Println("cmd:", cmd.String())
+	}
 
 	stdoutPipe, stderrPipe, err := getPipes(cmd)
 

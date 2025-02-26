@@ -23,7 +23,7 @@ if [ -z "\$GENFILES" ]; then
 	echo No genfiles specified - regenerating everything
 	grep -rlI "BPF2GO" pkg/internal/ | xargs -P 0 -n 1 go generate
 else
-	cat \$GENFILES | xargs -P 0 -n 1 go generate || grep -rlI "BPF2GO" pkg/internal/ | xargs -P 0 -n 1 go generate
+	cat \$GENFILES | xargs -P 0 -n 1 go generate
 fi
 EOF
 

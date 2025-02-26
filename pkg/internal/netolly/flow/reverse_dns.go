@@ -9,11 +9,13 @@ import (
 	"github.com/mariomac/pipes/pipe"
 
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
+	"github.com/grafana/beyla/v2/pkg/internal/rdns/local"
 )
 
 const (
 	ReverseDNSNone        = "none"
 	ReverseDNSLocalLookup = "local"
+	ReverseDNSEBPF        = "ebpf"
 )
 
 func rdlog() *slog.Logger {
@@ -25,25 +27,42 @@ var netLookupAddr = net.LookupAddr
 // ReverseDNS is currently experimental. It is kept disabled by default and will be hidden
 // from the documentation. This means that it does not impact in the overall Beyla performance.
 type ReverseDNS struct {
-	// Type of ReverseDNS. Values are "none" (default) and "local".
+
+	// Type of ReverseDNS. Values are "none" (default), "local" and "ebpf" (experimental)
 	Type string `yaml:"type" env:"BEYLA_NETWORK_REVERSE_DNS_TYPE"`
-	// CacheLen specifies the max size of the LRU cache that is checked before
+
+	// CacheLen only applies to the "local" ReverseDNS type. It
+	// specifies the max size of the LRU cache that is checked before
 	// performing the name lookup. Default: 256
 	CacheLen int `yaml:"cache_len" env:"BEYLA_NETWORK_REVERSE_DNS_CACHE_LEN"`
-	// CacheTTL specifies the time-to-live of a cached IP->hostname entry. After the
+
+	// CacheTTL only applies to the "local" ReverseDNS type. It
+	// specifies the time-to-live of a cached IP->hostname entry. After the
 	// cached entry becomes older than this time, the IP->hostname entry will be looked
 	// up again.
 	CacheTTL time.Duration `yaml:"cache_expiry" env:"BEYLA_NETWORK_REVERSE_DNS_CACHE_TTL"`
+
+	// EBPFProbes only applies if the "ebpf" ReverseDNS type is selected. It specifies
+	// a list with the points where the eBPF probes are attached to.
+	// Accepted values: "getaddrinfo" and "packet". Default: ["getaddrinfo", "packet"]
+	EBPFProbes []string `yaml:"ebpf_probes" env:"BEYLA_NETWORK_REVERSE_DNS_EBPF_PROBES" envSeparator:","`
 }
 
 func (r ReverseDNS) Enabled() bool {
-	return r.Type == ReverseDNSLocalLookup
+	return r.Type == ReverseDNSLocalLookup || r.Type == ReverseDNSEBPF
 }
 
 func ReverseDNSProvider(cfg *ReverseDNS) (pipe.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
 	if !cfg.Enabled() {
 		// This node is not going to be instantiated. Let the pipes library just bypassing it.
 		return pipe.Bypass[[]*ebpf.Record](), nil
+	}
+
+	if cfg.Type == ReverseDNSEBPF {
+		// overriding netLookupAddr by an eBPF-based alternative
+
+		netLookupAddr()
+		rdns = ebpf.NewDNSResolver()
 	}
 	// TODO: replace by a cache with fuzzy expiration time to avoid cache stampede
 	cache := expirable.NewLRU[ebpf.IPAddr, string](cfg.CacheLen, nil, cfg.CacheTTL)
@@ -80,3 +99,5 @@ func optGetName(log *slog.Logger, cache *expirable.LRU[ebpf.IPAddr, string], ip 
 	// the actual IP
 	return ""
 }
+
+func startEBPFReverseDNS(probes []string)

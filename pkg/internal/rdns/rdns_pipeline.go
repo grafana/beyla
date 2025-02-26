@@ -12,6 +12,11 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/rdns/store"
 )
 
+const (
+ 	EBPFProbeGetAddrInfo = "getaddrinfo"
+	EBPFProbeResolverXDP      = "xdp"
+)
+
 type Pipeline struct {
 	packetResolver      pipe.Start[store.DNSEntry]
 	getAddrInfoResolver pipe.Start[store.DNSEntry]

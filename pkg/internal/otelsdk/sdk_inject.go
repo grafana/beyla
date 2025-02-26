@@ -72,6 +72,12 @@ func (i *SDKInjector) NewExecutable(ie *ebpf.Instrumentable) error {
 			return fmt.Errorf("invalid OpenTelemetry SDK agent file")
 		}
 
+		ok := i.verifyJVMVersion(ie.FileInfo.Pid)
+		if !ok {
+			i.log.Info("unsupported Java version for OpenTelemetry Java instrumentation")
+			return fmt.Errorf("Java VM version not supported")
+		}
+
 		loaded, err := i.jdkAgentAlreadyLoaded(ie.FileInfo.Pid)
 		if err != nil {
 			return err
@@ -266,4 +272,25 @@ func (i *SDKInjector) jdkAgentAlreadyLoaded(pid int32) (bool, error) {
 	}
 
 	return false, nil
+}
+
+func (i *SDKInjector) verifyJVMVersion(pid int32) bool {
+	out, err := jvm.Jattach(int(pid), []string{"jcmd", "VM.version"}, i.log)
+	if err != nil {
+		i.log.Error("error executing command for the JVM", "pid", pid, "error", err)
+		return false
+	}
+
+	scanner := bufio.NewScanner(out)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "JDK ") {
+			return !strings.HasPrefix(line, "JDK 25")
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		i.log.Error("error reading from scanner", "error", err)
+	}
+
+	return false
 }

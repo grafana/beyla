@@ -39,6 +39,8 @@ CFLAGS := -O2 -g -Wall -Werror $(CFLAGS)
 
 CLANG_TIDY ?= clang-tidy
 
+CILIUM_EBPF_VER ?= $(call gomod-version,cilium/ebpf)
+
 # regular expressions for excluded file patterns
 EXCLUDE_COVERAGE_FILES="(_bpfel.go)|(/pingserver/)|(/grafana/beyla/test/)|(integration/components)|(/grafana/beyla/docs/)|(/grafana/beyla/configs/)|(/grafana/beyla/examples/)|(.pb.go)"
 
@@ -258,7 +260,8 @@ image-build-push:
 .PHONY: generator-image-build
 generator-image-build:
 	@echo "### Creating the image that generates the eBPF binaries"
-	$(OCI_BIN) build . -f generator.Dockerfile -t $(GEN_IMG)
+	$(OCI_BIN) buildx build --build-arg EBPF_VER="$(CILIUM_EBPF_VER)" --platform linux/amd64,linux/arm64 -t $(GEN_IMG) -f generator.Dockerfile  .
+
 
 .PHONY: prepare-integration-test
 prepare-integration-test:

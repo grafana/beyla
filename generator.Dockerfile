@@ -1,9 +1,11 @@
 FROM golang:alpine3.21 AS base
 
+ARG EBPF_VER
+
 # Installs dependencies that are required to compile eBPF programs
 RUN apk add clang llvm19
 RUN apk cache purge
-RUN go install github.com/cilium/ebpf/cmd/bpf2go@v0.16.0
+RUN go install github.com/cilium/ebpf/cmd/bpf2go@$EBPF_VER
 
 VOLUME ["/src"]
 

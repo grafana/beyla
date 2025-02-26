@@ -14,14 +14,20 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 )
 
-const DEBUG = true
 const OCI_BIN = "docker"
 const GEN_IMG = "ghcr.io/grafana/beyla-ebpf-generator:main"
+
+var debugEnabled = sync.OnceValue(func() bool {
+	b, err := strconv.ParseBool(os.Getenv("BEYLA_BUILD_EBPF_DEBUG"))
+	return err == nil && b
+})
 
 var targetsByGoArch = map[string]Target{
 	"386":      {"bpfel", "x86"},
@@ -195,7 +201,9 @@ func mapToArray(m map[string]struct{}) []string {
 }
 
 func gatherFilesToGenerate(moduleRoot string) ([]string, error) {
-	rootDir := filepath.Join(moduleRoot, "pkg/internal")
+	scanPath := getEnv("BEYLA_BUILD_EBPF_SCAN_PATH", "pkg/internal")
+
+	rootDir := filepath.Join(moduleRoot, scanPath)
 
 	filesToGenerate := map[string]struct{}{}
 
@@ -419,6 +427,14 @@ func bail(err error) {
 	os.Exit(1)
 }
 
+func ociBin() string {
+	return getEnv("BEYLA_BUILD_EBPF_OCI_BIN", OCI_BIN)
+}
+
+func genImg() string {
+	return getEnv("BEYLA_BUILD_EBPF_GEN_IMG", GEN_IMG)
+}
+
 func main() {
 	if runtime.GOOS != "linux" {
 		return
@@ -464,19 +480,19 @@ func main() {
 		bail(err)
 	}
 
-	if DEBUG {
+	if debugEnabled() {
 		fmt.Println("wd:", wd)
 		fmt.Println("adjusted wd:", adjustedWD)
 		fmt.Println("tmpFile:", tmpFile)
 		fmt.Println("relTmpFile:", relTmpFile)
 	}
 
-	cmd := exec.Command(OCI_BIN, "run", "--rm",
+	cmd := exec.Command(ociBin(), "run", "--rm",
 		"-v", adjustedWD+":/src",
-		GEN_IMG,
+		genImg(),
 		filepath.Join("/src", relTmpFile))
 
-	if DEBUG {
+	if debugEnabled() {
 		fmt.Println("cmd:", cmd.String())
 	}
 

@@ -349,6 +349,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 				Insecure:           opts.Insecure,
 				InsecureSkipVerify: cfg.InsecureSkipVerify,
 			},
+			Headers: convertHeaders(opts.GRPCHeaders),
 		}
 		set := getTraceSettings(ctxInfo, t)
 		return factory.CreateTraces(ctx, set, config)
@@ -797,7 +798,7 @@ func getHTTPTracesEndpointOptions(cfg *TracesConfig) (otlpOptions, error) {
 }
 
 func getGRPCTracesEndpointOptions(cfg *TracesConfig) (otlpOptions, error) {
-	opts := otlpOptions{}
+	opts := otlpOptions{GRPCHeaders: map[string]string{}}
 	log := tlog().With("transport", "grpc")
 	murl, _, err := parseTracesEndpoint(cfg)
 	if err != nil {
@@ -817,6 +818,9 @@ func getGRPCTracesEndpointOptions(cfg *TracesConfig) (otlpOptions, error) {
 		opts.SkipTLSVerify = true
 	}
 
+	cfg.Grafana.setupOptions(&opts)
+	maps.Copy(opts.GRPCHeaders, headersFromEnv(envHeaders))
+	maps.Copy(opts.GRPCHeaders, headersFromEnv(envTracesHeaders))
 	return opts, nil
 }
 

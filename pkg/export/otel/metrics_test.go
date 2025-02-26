@@ -93,6 +93,10 @@ func TestHTTPMetricsWithGrafanaOptions(t *testing.T) {
 				// Basic + output of: echo -n 12345:affafafaafkd | gbase64 -w 0
 				"Authorization": "Basic MTIzNDU6YWZmYWZhZmFhZmtk",
 			},
+			GRPCHeaders: map[string]string{
+				// Basic + output of: echo -n 12345:affafafaafkd | gbase64 -w 0
+				"Authorization": "Basic MTIzNDU6YWZmYWZhZmFhZmtk",
+			},
 		}, &mcfg)
 	})
 	mcfg.CommonEndpoint = "https://localhost:3939"
@@ -101,6 +105,10 @@ func TestHTTPMetricsWithGrafanaOptions(t *testing.T) {
 			Endpoint: "localhost:3939",
 			URLPath:  "/v1/metrics",
 			HTTPHeaders: map[string]string{
+				// Basic + output of: echo -n 12345:affafafaafkd | gbase64 -w 0
+				"Authorization": "Basic MTIzNDU6YWZmYWZhZmFhZmtk",
+			},
+			GRPCHeaders: map[string]string{
 				// Basic + output of: echo -n 12345:affafafaafkd | gbase64 -w 0
 				"Authorization": "Basic MTIzNDU6YWZmYWZhZmFhZmtk",
 			},

@@ -311,7 +311,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 				Insecure:           opts.Insecure,
 				InsecureSkipVerify: cfg.InsecureSkipVerify,
 			},
-			Headers: convertHeaders(opts.HTTPHeaders),
+			Headers: convertHeaders(opts.Headers),
 		}
 		slog.Debug("getTracesExporter: confighttp.ClientConfig created", "endpoint", config.ClientConfig.Endpoint)
 		set := getTraceSettings(ctxInfo, t)
@@ -365,7 +365,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 				Insecure:           opts.Insecure,
 				InsecureSkipVerify: cfg.InsecureSkipVerify,
 			},
-			Headers: convertHeaders(opts.GRPCHeaders),
+			Headers: convertHeaders(opts.Headers),
 		}
 		set := getTraceSettings(ctxInfo, t)
 		return factory.CreateTraces(ctx, set, config)
@@ -767,7 +767,7 @@ func parseTracesEndpoint(cfg *TracesConfig) (*url.URL, bool, error) {
 }
 
 func getHTTPTracesEndpointOptions(cfg *TracesConfig) (otlpOptions, error) {
-	opts := otlpOptions{HTTPHeaders: map[string]string{}}
+	opts := otlpOptions{Headers: map[string]string{}}
 	log := tlog().With("transport", "http")
 
 	murl, isCommon, err := parseTracesEndpoint(cfg)
@@ -799,14 +799,14 @@ func getHTTPTracesEndpointOptions(cfg *TracesConfig) (otlpOptions, error) {
 	}
 
 	cfg.Grafana.setupOptions(&opts)
-	maps.Copy(opts.HTTPHeaders, HeadersFromEnv(envHeaders))
-	maps.Copy(opts.HTTPHeaders, HeadersFromEnv(envTracesHeaders))
+	maps.Copy(opts.Headers, HeadersFromEnv(envHeaders))
+	maps.Copy(opts.Headers, HeadersFromEnv(envTracesHeaders))
 
 	return opts, nil
 }
 
 func getGRPCTracesEndpointOptions(cfg *TracesConfig) (otlpOptions, error) {
-	opts := otlpOptions{GRPCHeaders: map[string]string{}}
+	opts := otlpOptions{Headers: map[string]string{}}
 	log := tlog().With("transport", "grpc")
 	murl, _, err := parseTracesEndpoint(cfg)
 	if err != nil {
@@ -827,8 +827,8 @@ func getGRPCTracesEndpointOptions(cfg *TracesConfig) (otlpOptions, error) {
 	}
 
 	cfg.Grafana.setupOptions(&opts)
-	maps.Copy(opts.HTTPHeaders, HeadersFromEnv(envHeaders))
-	maps.Copy(opts.HTTPHeaders, HeadersFromEnv(envTracesHeaders))
+	maps.Copy(opts.Headers, HeadersFromEnv(envHeaders))
+	maps.Copy(opts.Headers, HeadersFromEnv(envTracesHeaders))
 	return opts, nil
 }
 

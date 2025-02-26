@@ -11,12 +11,13 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/grafana/jvmtools/jvm"
+
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf"
 	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
-	"github.com/grafana/jvmtools/jvm"
 )
 
 const OTelJDKAgent = "opentelemetry-javaagent.jar"
@@ -75,7 +76,7 @@ func (i *SDKInjector) NewExecutable(ie *ebpf.Instrumentable) error {
 		ok := i.verifyJVMVersion(ie.FileInfo.Pid)
 		if !ok {
 			i.log.Info("unsupported Java version for OpenTelemetry Java instrumentation")
-			return fmt.Errorf("Java VM version not supported")
+			return fmt.Errorf("unsupported Java VM version")
 		}
 
 		loaded, err := i.jdkAgentAlreadyLoaded(ie.FileInfo.Pid)
@@ -165,7 +166,7 @@ func otlpOptions(cfg *beyla.Config) (map[string]string, error) {
 	if tracesCommon || metricsCommon {
 		if tracesEndpoint != metricsEndpoint {
 			return nil, fmt.Errorf("metrics and traces endpoint definition mismatch, either use OTEL_EXPORTER_OTLP_ENDPOINT for both" +
-				" or specify OTEL_EXPORTER_OTLP_TRACES_ENDPOINT and OTEL_EXPORTER_OTLP_METRICS_ENDPOINT.")
+				" or specify OTEL_EXPORTER_OTLP_TRACES_ENDPOINT and OTEL_EXPORTER_OTLP_METRICS_ENDPOINT")
 		}
 		options["otel.exporter.otlp.endpoint"] = tracesEndpoint
 		options["otel.exporter.otlp.protocol"] = string(cfg.Traces.GetProtocol())

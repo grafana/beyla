@@ -980,7 +980,7 @@ func (mr *MetricsReporter) reportMetrics(input <-chan []request.Span) {
 }
 
 func getHTTPMetricEndpointOptions(cfg *MetricsConfig) (otlpOptions, error) {
-	opts := otlpOptions{}
+	opts := otlpOptions{Headers: map[string]string{}}
 	log := mlog().With("transport", "http")
 	murl, isCommon, err := parseMetricsEndpoint(cfg)
 	if err != nil {
@@ -1013,14 +1013,14 @@ func getHTTPMetricEndpointOptions(cfg *MetricsConfig) (otlpOptions, error) {
 	}
 
 	cfg.Grafana.setupOptions(&opts)
-	maps.Copy(opts.HTTPHeaders, HeadersFromEnv(envHeaders))
-	maps.Copy(opts.HTTPHeaders, HeadersFromEnv(envMetricsHeaders))
+	maps.Copy(opts.Headers, HeadersFromEnv(envHeaders))
+	maps.Copy(opts.Headers, HeadersFromEnv(envMetricsHeaders))
 
 	return opts, nil
 }
 
 func getGRPCMetricEndpointOptions(cfg *MetricsConfig) (otlpOptions, error) {
-	opts := otlpOptions{}
+	opts := otlpOptions{Headers: map[string]string{}}
 	log := mlog().With("transport", "grpc")
 	murl, _, err := parseMetricsEndpoint(cfg)
 	if err != nil {
@@ -1041,8 +1041,8 @@ func getGRPCMetricEndpointOptions(cfg *MetricsConfig) (otlpOptions, error) {
 	}
 
 	cfg.Grafana.setupOptions(&opts)
-	maps.Copy(opts.HTTPHeaders, HeadersFromEnv(envHeaders))
-	maps.Copy(opts.HTTPHeaders, HeadersFromEnv(envMetricsHeaders))
+	maps.Copy(opts.Headers, HeadersFromEnv(envHeaders))
+	maps.Copy(opts.Headers, HeadersFromEnv(envMetricsHeaders))
 
 	return opts, nil
 }

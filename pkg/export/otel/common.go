@@ -230,8 +230,7 @@ type otlpOptions struct {
 	BaseURLPath   string
 	URLPath       string
 	SkipTLSVerify bool
-	HTTPHeaders   map[string]string
-	GRPCHeaders   map[string]string
+	Headers       map[string]string
 }
 
 func (o *otlpOptions) AsMetricHTTP() []otlpmetrichttp.Option {
@@ -247,8 +246,8 @@ func (o *otlpOptions) AsMetricHTTP() []otlpmetrichttp.Option {
 	if o.SkipTLSVerify {
 		opts = append(opts, otlpmetrichttp.WithTLSClientConfig(&tls.Config{InsecureSkipVerify: true}))
 	}
-	if len(o.HTTPHeaders) > 0 {
-		opts = append(opts, otlpmetrichttp.WithHeaders(o.HTTPHeaders))
+	if len(o.Headers) > 0 {
+		opts = append(opts, otlpmetrichttp.WithHeaders(o.Headers))
 	}
 	return opts
 }
@@ -263,8 +262,8 @@ func (o *otlpOptions) AsMetricGRPC() []otlpmetricgrpc.Option {
 	if o.SkipTLSVerify {
 		opts = append(opts, otlpmetricgrpc.WithTLSCredentials(credentials.NewTLS(&tls.Config{InsecureSkipVerify: true})))
 	}
-	if len(o.GRPCHeaders) > 0 {
-		opts = append(opts, otlpmetricgrpc.WithHeaders(o.GRPCHeaders))
+	if len(o.Headers) > 0 {
+		opts = append(opts, otlpmetricgrpc.WithHeaders(o.Headers))
 	}
 	return opts
 }
@@ -282,8 +281,8 @@ func (o *otlpOptions) AsTraceHTTP() []otlptracehttp.Option {
 	if o.SkipTLSVerify {
 		opts = append(opts, otlptracehttp.WithTLSClientConfig(&tls.Config{InsecureSkipVerify: true}))
 	}
-	if len(o.HTTPHeaders) > 0 {
-		opts = append(opts, otlptracehttp.WithHeaders(o.HTTPHeaders))
+	if len(o.Headers) > 0 {
+		opts = append(opts, otlptracehttp.WithHeaders(o.Headers))
 	}
 	return opts
 }
@@ -298,8 +297,8 @@ func (o *otlpOptions) AsTraceGRPC() []otlptracegrpc.Option {
 	if o.SkipTLSVerify {
 		opts = append(opts, otlptracegrpc.WithTLSCredentials(credentials.NewTLS(&tls.Config{InsecureSkipVerify: true})))
 	}
-	if len(o.GRPCHeaders) > 0 {
-		opts = append(opts, otlptracegrpc.WithHeaders(o.GRPCHeaders))
+	if len(o.Headers) > 0 {
+		opts = append(opts, otlptracegrpc.WithHeaders(o.Headers))
 	}
 	return opts
 }

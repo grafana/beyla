@@ -19,7 +19,7 @@ import (
 	"unicode"
 )
 
-const DEBUG = false
+const DEBUG = true
 const OCI_BIN = "docker"
 const GEN_IMG = "ghcr.io/grafana/beyla-ebpf-generator:main"
 
@@ -400,6 +400,20 @@ func ensureDirsWritable(files []string) error {
 	return nil
 }
 
+func isModuleVendored(wd string) bool {
+	return strings.Contains(wd, "/vendor/")
+}
+
+func cleanBuildCache() error {
+	cmd := exec.Command("go", "clean", "-cache")
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to clean build cache: %w", err)
+	}
+
+	return nil
+}
+
 func bail(err error) {
 	fmt.Fprintln(os.Stderr, err)
 	os.Exit(1)
@@ -450,7 +464,7 @@ func main() {
 		bail(err)
 	}
 
-	if (DEBUG) {
+	if DEBUG {
 		fmt.Println("wd:", wd)
 		fmt.Println("adjusted wd:", adjustedWD)
 		fmt.Println("tmpFile:", tmpFile)
@@ -462,7 +476,7 @@ func main() {
 		GEN_IMG,
 		filepath.Join("/src", relTmpFile))
 
-	if (DEBUG) {
+	if DEBUG {
 		fmt.Println("cmd:", cmd.String())
 	}
 
@@ -484,5 +498,11 @@ func main() {
 
 	if err := cmd.Wait(); err != nil {
 		bail(fmt.Errorf("error waiting for child process: %w", err))
+	}
+
+	if !isModuleVendored(wd) {
+		if err := cleanBuildCache(); err != nil {
+			bail(err)
+		}
 	}
 }

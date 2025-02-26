@@ -817,6 +817,8 @@ func getGRPCTracesEndpointOptions(cfg *TracesConfig) (otlpOptions, error) {
 		log.Debug("Setting InsecureSkipVerify")
 		opts.SkipTLSVerify = true
 	}
+
+	cfg.Grafana.setupOptions(&opts)
 	maps.Copy(opts.GRPCHeaders, headersFromEnv(envHeaders))
 	maps.Copy(opts.GRPCHeaders, headersFromEnv(envTracesHeaders))
 	return opts, nil

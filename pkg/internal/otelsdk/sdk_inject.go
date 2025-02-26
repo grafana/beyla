@@ -8,6 +8,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
@@ -162,6 +163,7 @@ func otlpOptions(cfg *beyla.Config) (map[string]string, error) {
 		}
 		options["otel.exporter.otlp.endpoint"] = tracesEndpoint
 		options["otel.exporter.otlp.protocol"] = string(cfg.Traces.GetProtocol())
+		options["otel.metric.export.interval"] = strconv.Itoa(int(cfg.Metrics.GetInterval().Milliseconds()))
 		maps.Copy(options, otel.HeadersFromEnv("OTEL_EXPORTER_OTLP_HEADERS"))
 		if cfg.Traces.Grafana.HasAuth() {
 			expandHeadersWithAuth(options, "OTEL_EXPORTER_OTLP_HEADERS", cfg.Traces.Grafana.AuthHeader())
@@ -174,19 +176,24 @@ func otlpOptions(cfg *beyla.Config) (map[string]string, error) {
 			if cfg.Traces.Grafana.HasAuth() {
 				expandHeadersWithAuth(options, "OTEL_EXPORTER_OTLP_TRACES_HEADERS", cfg.Traces.Grafana.AuthHeader())
 			}
+		} else {
+			options["otel.traces.exporter"] = "none"
 		}
+
 		if cfg.Metrics.Enabled() {
 			options["otel.exporter.otlp.metrics.endpoint"] = metricsEndpoint
 			options["otel.exporter.otlp.metrics.protocol"] = string(cfg.Metrics.GetProtocol())
+			options["otel.metric.export.interval"] = strconv.Itoa(int(cfg.Metrics.GetInterval().Milliseconds()))
 			maps.Copy(options, otel.HeadersFromEnv("OTEL_EXPORTER_OTLP_METRICS_HEADERS"))
 			if cfg.Metrics.Grafana.HasAuth() {
 				expandHeadersWithAuth(options, "OTEL_EXPORTER_OTLP_METRICS_HEADERS", cfg.Metrics.Grafana.AuthHeader())
 			}
-			if !cfg.Traces.Enabled() {
-				options["otel.propagators"] = "none"
-			}
+		} else {
+			options["otel.metrics.exporter"] = "none"
 		}
 	}
+
+	options["otel.logs.exporter"] = "none"
 
 	return options, nil
 }

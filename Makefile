@@ -192,7 +192,8 @@ generate: bpf2go
 
 .PHONY: docker-generate
 docker-generate:
-	$(OCI_BIN) run --rm -v $(shell pwd):/src $(GEN_IMG)
+	@echo "### Generating BPF Go bindings"
+	@go generate bpf/build_ebpf.go
 
 .PHONY: verify
 verify: prereqs lint-dashboard lint test

@@ -230,6 +230,7 @@ type otlpOptions struct {
 	URLPath       string
 	SkipTLSVerify bool
 	HTTPHeaders   map[string]string
+	GRPCHeaders   map[string]string
 }
 
 func (o *otlpOptions) AsMetricHTTP() []otlpmetrichttp.Option {
@@ -260,6 +261,9 @@ func (o *otlpOptions) AsMetricGRPC() []otlpmetricgrpc.Option {
 	}
 	if o.SkipTLSVerify {
 		opts = append(opts, otlpmetricgrpc.WithTLSCredentials(credentials.NewTLS(&tls.Config{InsecureSkipVerify: true})))
+	}
+	if len(o.GRPCHeaders) > 0 {
+		opts = append(opts, otlpmetricgrpc.WithHeaders(o.GRPCHeaders))
 	}
 	return opts
 }
@@ -292,6 +296,9 @@ func (o *otlpOptions) AsTraceGRPC() []otlptracegrpc.Option {
 	}
 	if o.SkipTLSVerify {
 		opts = append(opts, otlptracegrpc.WithTLSCredentials(credentials.NewTLS(&tls.Config{InsecureSkipVerify: true})))
+	}
+	if len(o.GRPCHeaders) > 0 {
+		opts = append(opts, otlptracegrpc.WithHeaders(o.GRPCHeaders))
 	}
 	return opts
 }

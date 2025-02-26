@@ -230,7 +230,6 @@ func (i *SDKInjector) attachJDKAgent(pid int32, path string, cfg *beyla.Config) 
 		i.log.Info("passing options to the JVM agent", "options", options)
 	}
 
-	// TODO: this needs to also check if grpc is used instead of HTTP
 	command := fmt.Sprintf("%s=%s", path, options)
 
 	out, err := jvm.Jattach(int(pid), []string{"load", "instrument", "false", command}, i.log)

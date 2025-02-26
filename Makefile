@@ -383,7 +383,8 @@ artifact: compile
 	cp LICENSE ./bin
 	cp NOTICE ./bin
 	cp third_party_licenses.csv ./bin
-	tar -C ./bin -cvzf bin/beyla.tar.gz beyla LICENSE NOTICE third_party_licenses.csv
+	cp javaotel/opentelemetry-javaagent.jar ./bin
+	tar -C ./bin -cvzf bin/beyla.tar.gz beyla LICENSE NOTICE third_party_licenses.csv opentelemetry-javaagent.jar
 
 .PHONY: clean-testoutput
 clean-testoutput:

@@ -90,5 +90,9 @@ func (cfg *GrafanaOTLP) setupOptions(opt *otlpOptions) {
 			opt.HTTPHeaders = map[string]string{}
 		}
 		opt.HTTPHeaders["Authorization"] = cfg.AuthHeader()
+		if opt.GRPCHeaders == nil {
+			opt.GRPCHeaders = map[string]string{}
+		}
+		opt.GRPCHeaders["Authorization"] = cfg.AuthHeader()
 	}
 }

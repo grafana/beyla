@@ -365,6 +365,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 				Insecure:           opts.Insecure,
 				InsecureSkipVerify: cfg.InsecureSkipVerify,
 			},
+			Headers: convertHeaders(opts.GRPCHeaders),
 		}
 		set := getTraceSettings(ctxInfo, t)
 		return factory.CreateTraces(ctx, set, config)
@@ -405,7 +406,11 @@ func getTraceSettings(ctxInfo *global.ContextInfo, in trace.SpanExporter) export
 	if internalMetricsEnabled(ctxInfo) {
 		telemetryLevel = configtelemetry.LevelBasic
 		spanExporter := instrumentTraceExporter(in, ctxInfo.Metrics)
-		traceProvider = trace.NewTracerProvider(trace.WithBatcher(spanExporter))
+		res := newResourceInternal(ctxInfo.HostID)
+		traceProvider = trace.NewTracerProvider(
+			trace.WithBatcher(spanExporter),
+			trace.WithResource(res),
+		)
 	}
 	meterProvider := metric.NewMeterProvider()
 	telemetrySettings := component.TelemetrySettings{
@@ -801,7 +806,7 @@ func getHTTPTracesEndpointOptions(cfg *TracesConfig) (otlpOptions, error) {
 }
 
 func getGRPCTracesEndpointOptions(cfg *TracesConfig) (otlpOptions, error) {
-	opts := otlpOptions{}
+	opts := otlpOptions{GRPCHeaders: map[string]string{}}
 	log := tlog().With("transport", "grpc")
 	murl, _, err := parseTracesEndpoint(cfg)
 	if err != nil {
@@ -824,7 +829,6 @@ func getGRPCTracesEndpointOptions(cfg *TracesConfig) (otlpOptions, error) {
 	cfg.Grafana.setupOptions(&opts)
 	maps.Copy(opts.HTTPHeaders, HeadersFromEnv(envHeaders))
 	maps.Copy(opts.HTTPHeaders, HeadersFromEnv(envTracesHeaders))
-
 	return opts, nil
 }
 

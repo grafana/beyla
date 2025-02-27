@@ -9,6 +9,7 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
@@ -77,6 +78,13 @@ func (rr *ringReader) size() int {
 	return cap(rr.ring) / 2
 }
 
+// The amount of data available to read in the ring buffer.
+func (rr *ringReader) AvailableBytes() uint64 {
+	prod := atomic.LoadUint64(rr.prod_pos)
+	cons := atomic.LoadUint64(rr.cons_pos)
+	return prod - cons
+}
+
 // Read a record from an event ring.
 func (rr *ringReader) readRecord(rec *Record) error {
 	prod := atomic.LoadUint64(rr.prod_pos)
@@ -85,7 +93,7 @@ func (rr *ringReader) readRecord(rec *Record) error {
 	for {
 		if remaining := prod - cons; remaining == 0 {
 			return errEOR
-		} else if remaining < unix.BPF_RINGBUF_HDR_SZ {
+		} else if remaining < sys.BPF_RINGBUF_HDR_SZ {
 			return fmt.Errorf("read record header: %w", io.ErrUnexpectedEOF)
 		}
 
@@ -104,7 +112,7 @@ func (rr *ringReader) readRecord(rec *Record) error {
 			return errBusy
 		}
 
-		cons += unix.BPF_RINGBUF_HDR_SZ
+		cons += sys.BPF_RINGBUF_HDR_SZ
 
 		// Data is always padded to 8 byte alignment.
 		dataLenAligned := uint64(internal.Align(header.dataLen(), 8))

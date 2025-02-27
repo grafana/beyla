@@ -3,7 +3,7 @@ FROM golang:alpine3.21 AS base
 ARG EBPF_VER
 
 # Installs dependencies that are required to compile eBPF programs
-RUN apk add clang llvm19
+RUN apk add clang llvm19 curl
 RUN apk cache purge
 RUN go install github.com/cilium/ebpf/cmd/bpf2go@$EBPF_VER
 
@@ -20,6 +20,8 @@ export BPF_CLANG=clang
 export BPF_CFLAGS="-O2 -g -Wall -Werror"
 
 export GENFILES=\$1
+
+go generate pkg/internal/otelsdk/sdk_inject.go
 
 if [ -z "\$GENFILES" ]; then
 	echo No genfiles specified - regenerating everything

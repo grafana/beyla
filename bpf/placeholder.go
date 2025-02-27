@@ -1,5 +1,4 @@
-//go:build beyla_bpf
+// This file is only here to not trigger "build constraints exclude all Go
+// files" during tests/linters
 
 package bpf
-
-import _ "github.com/grafana/beyla/v2/bpf/headers"

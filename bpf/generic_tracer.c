@@ -1,3 +1,4 @@
+//go:build beyla_bpf_ignore
 #include "k_tracer.h"
 #include "http_ssl.h"
 #include "nodejs.h"

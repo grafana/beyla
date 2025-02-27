@@ -1,5 +1,5 @@
 # Build the autoinstrumenter binary
-FROM golang:1.23 AS builder
+FROM ghcr.io/grafana/beyla-ebpf-generator:main AS builder
 
 # TODO: embed software version in executable
 
@@ -7,10 +7,9 @@ ARG TARGETARCH
 
 ENV GOARCH=$TARGETARCH
 
-WORKDIR /opt/app-root
+WORKDIR /src
 
-RUN apt-get update
-RUN apt-get install -qy ca-certificates
+RUN apk add make git bash
 
 # Copy the go manifests and source
 COPY .git/ .git/
@@ -24,9 +23,9 @@ COPY Makefile Makefile
 COPY LICENSE LICENSE
 COPY NOTICE NOTICE
 COPY third_party_licenses.csv third_party_licenses.csv
-COPY javaotel/opentelemetry-javaagent.jar opentelemetry-javaagent.jar
 
 # Build
+RUN /generate.sh
 RUN make compile
 
 # Create final image from minimal + built binary
@@ -36,11 +35,10 @@ LABEL maintainer="Grafana Labs <hello@grafana.com>"
 
 WORKDIR /
 
-COPY --from=builder /opt/app-root/bin/beyla .
-COPY --from=builder /opt/app-root/LICENSE .
-COPY --from=builder /opt/app-root/NOTICE .
-COPY --from=builder /opt/app-root/third_party_licenses.csv .
-COPY --from=builder /opt/app-root/opentelemetry-javaagent.jar .
+COPY --from=builder /src/bin/beyla .
+COPY --from=builder /src/LICENSE .
+COPY --from=builder /src/NOTICE .
+COPY --from=builder /src/third_party_licenses.csv .
 
 COPY --from=builder /etc/ssl/certs /etc/ssl/certs
 

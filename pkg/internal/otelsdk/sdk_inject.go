@@ -1,9 +1,12 @@
 package otelsdk
 
+//go:generate curl -L https://github.com/grafana/grafana-opentelemetry-java/releases/download/v2.13.2.1/grafana-opentelemetry-java.jar -o grafana-opentelemetry-java.jar
+
 import (
 	"bufio"
+	_ "embed"
 	"fmt"
-	"io"
+	"io/ioutil"
 	"log/slog"
 	"maps"
 	"os"
@@ -19,8 +22,6 @@ import (
 	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
 )
-
-const OTelJDKAgent = "opentelemetry-javaagent.jar"
 
 type SDKInjector struct {
 	log *slog.Logger
@@ -67,11 +68,6 @@ func (i *SDKInjector) Enabled() bool {
 
 func (i *SDKInjector) NewExecutable(ie *ebpf.Instrumentable) error {
 	if ie.Type == svc.InstrumentableJava {
-		info, err := os.Stat(OTelJDKAgent)
-
-		if err != nil || info.IsDir() {
-			return fmt.Errorf("invalid OpenTelemetry SDK agent file")
-		}
 
 		ok := i.verifyJVMVersion(ie.FileInfo.Pid)
 		if !ok {
@@ -91,23 +87,15 @@ func (i *SDKInjector) NewExecutable(ie *ebpf.Instrumentable) error {
 
 		i.log.Info("injecting OpenTelemetry SDK instrumentation for Java process", "pid", ie.FileInfo.Pid)
 
-		root := ebpfcommon.RootDirectoryForPID(ie.FileInfo.Pid)
-		tempDir, err := i.findTempDir(root, ie)
-		fullTempDir := filepath.Join(root, tempDir)
+		agentPath, err := i.extractAgent(ie)
 
 		if err != nil {
-			i.log.Error("error accessing temp directory", "pid", ie.FileInfo.Pid, "error", err)
+			i.log.Error("failed to extract java agent", "pid", ie.FileInfo.Pid, "error", err)
 			return err
 		}
 
-		i.log.Info("found injection directory for process", "pid", ie.FileInfo.Pid, "path", fullTempDir)
-		if err = copyJDKAgent(".", fullTempDir); err != nil {
-			i.log.Error("couldn't copy OpenTelemetry Java SDK Agent", "pid", ie.FileInfo.Pid, "path", fullTempDir, "error", err)
-			return err
-		}
-
-		if err = i.attachJDKAgent(ie.FileInfo.Pid, filepath.Join(tempDir, OTelJDKAgent), i.cfg); err != nil {
-			i.log.Error("couldn't attach OpenTelemetry Java SDK Agent", "pid", ie.FileInfo.Pid, "path", tempDir, "error", err)
+		if err = i.attachJDKAgent(ie.FileInfo.Pid, agentPath, i.cfg); err != nil {
+			i.log.Error("couldn't attach OpenTelemetry Java SDK Agent", "pid", ie.FileInfo.Pid, "path", agentPath, "error", err)
 			return err
 		}
 
@@ -117,34 +105,25 @@ func (i *SDKInjector) NewExecutable(ie *ebpf.Instrumentable) error {
 	return fmt.Errorf("OpenTelemetry SDK instrumentation not possible")
 }
 
-func copyJDKAgent(srcDir, dstDir string) error {
-	// Open the source file
-	sourceFile, err := os.Open(filepath.Join(srcDir, OTelJDKAgent))
-	if err != nil {
-		return fmt.Errorf("failed to open source file: %w", err)
-	}
-	defer sourceFile.Close()
+func (i *SDKInjector) extractAgent(ie *ebpf.Instrumentable) (string, error) {
+	root := ebpfcommon.RootDirectoryForPID(ie.FileInfo.Pid)
+	tempDir, err := i.findTempDir(root, ie)
 
-	// Create the destination file
-	destFile, err := os.Create(filepath.Join(dstDir, OTelJDKAgent))
 	if err != nil {
-		return fmt.Errorf("failed to create destination file: %w", err)
-	}
-	defer destFile.Close()
-
-	// Copy the contents from source to destination
-	_, err = io.Copy(destFile, sourceFile)
-	if err != nil {
-		return fmt.Errorf("failed to copy contents: %w", err)
+		return "", fmt.Errorf("error accessing temp directory: %w", err)
 	}
 
-	// Flush the contents to disk
-	err = destFile.Sync()
-	if err != nil {
-		return fmt.Errorf("failed to flush contents to disk: %w", err)
+	fullTempDir := filepath.Join(root, tempDir)
+
+	i.log.Info("found injection directory for process", "pid", ie.FileInfo.Pid, "path", fullTempDir)
+
+	agentPath := filepath.Join(fullTempDir, "grafana-opentelemetry-java.jar")
+
+	if err = ioutil.WriteFile(agentPath, _agentBytes, 0644); err != nil {
+		return "", fmt.Errorf("error writing file: %w", err)
 	}
 
-	return nil
+	return agentPath, nil
 }
 
 func expandHeadersWithAuth(options map[string]string, key string, value string) {
@@ -294,3 +273,6 @@ func (i *SDKInjector) verifyJVMVersion(pid int32) bool {
 
 	return false
 }
+
+//go:embed grafana-opentelemetry-java.jar
+var _agentBytes []byte

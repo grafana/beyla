@@ -127,54 +127,38 @@ You can just trigger the Kubernetes descriptors in the `deployments/` folder.
 
 You should be able to query traces and metrics in your Grafana board.
 
-## Development recipes
-
-### How to regenerate the eBPF Kernel binaries
-
-The eBPF program is embedded into the `pkg/internal/ebpf/bpf_*` generated files.
-This step is generally not needed unless you change the C code in the `bpf` folder.
-
-If you have Docker installed, you just need to run:
-
-```
-make docker-generate
-```
-
-If you can't install docker, you should locally install the following required packages:
-
-```
-dnf install -y kernel-devel make llvm clang glibc-devel.i686
-make generate
-```
-
-Tested in Fedora 35, 38 and Red Hat Enterprise Linux 8.
-
 ## Building Beyla from scratch
 
 ### Development environment requirements
 
+#### Minimum requirements
 - go 1.23
-- llvm >= 18
-- clang >= 18
-- clang-tidy >= 18
-- clang-format >= 18
--  git-lfs
+- docker
 - GNU make
-
-> [!IMPORTANT]
->  You need to run `git lfs install` _once_ after installing the _git-lfs_ package to deploy its global configuration
+#### Optional requirements
+- llvm >= 19
+- clang >= 19
+### Quickstart
+```
+$ git clone https://github.com/grafana/beyla.git
+$ cd beyla/
+$ make dev
+```
 
 #### Common `Makefile` targets
 
 Beyla's `Makefile` provides several specific-purpose build targets. The most common ones are:
 - `prereqs` - install the build pre-requisites
-- `generate` - regenerates the eBPF binaries
+- `docker-generate` - regenerates the eBPF binaries (_preferred method_)
+- `generate` - regenerates the eBPF binaries [^1]
 - `compile` - compiles the `beyla` binary (but does not automatically regenerates the eBPF binaries)
-- `dev` - equivalent to `make prereqs && make generate && make compile`
+- `dev` - equivalent to `make prereqs && make docker-generate && make compile`
 - `test` - runs unit tests
 - `integration-tests` - runs integration tests - may require `sudo`
+- `clang-format` - formats C (eBPF) source code[^1]
 
-####  Quickstart: cloning the repository and building Beyla
+[^1]: Requires llvm/clang
+####  Quickstart
 
 ```
 $ git clone https://github.com/grafana/beyla.git
@@ -217,3 +201,5 @@ $ sudo make -C test/vm KERNEL_VER=5.15.152
 ## Credits
 
 Part of the code is taken from: https://github.com/open-telemetry/opentelemetry-go-instrumentation
+
+

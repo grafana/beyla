@@ -96,7 +96,7 @@ func testREDMetricsForJavaOTelSDK(t *testing.T, urls []string) {
 		results, err = pq.Query(`http_server_request_duration_seconds_count{` +
 			`http_request_method="GET",` +
 			`http_response_status_code="204",` +
-			`telemetry_distro_name="opentelemetry-java-instrumentation",` +
+			`telemetry_distro_name="grafana-opentelemetry-java",` +
 			`service_name="greeting-service",` +
 			`http_route="/greeting"}`)
 		require.NoError(t, err)

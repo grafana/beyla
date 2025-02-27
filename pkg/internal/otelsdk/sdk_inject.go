@@ -6,7 +6,6 @@ import (
 	"bufio"
 	_ "embed"
 	"fmt"
-	"io/ioutil"
 	"log/slog"
 	"maps"
 	"os"
@@ -117,13 +116,17 @@ func (i *SDKInjector) extractAgent(ie *ebpf.Instrumentable) (string, error) {
 
 	i.log.Info("found injection directory for process", "pid", ie.FileInfo.Pid, "path", fullTempDir)
 
-	agentPath := filepath.Join(fullTempDir, "grafana-opentelemetry-java.jar")
+	const agentFile = "grafana-opentelemetry-java.jar"
 
-	if err = ioutil.WriteFile(agentPath, _agentBytes, 0644); err != nil {
+	agentPathHost := filepath.Join(fullTempDir, agentFile)
+
+	if err = os.WriteFile(agentPathHost, _agentBytes, 0644); err != nil {
 		return "", fmt.Errorf("error writing file: %w", err)
 	}
 
-	return agentPath, nil
+	agentPathContainer := filepath.Join(tempDir, agentFile)
+
+	return agentPathContainer, nil
 }
 
 func expandHeadersWithAuth(options map[string]string, key string, value string) {
@@ -203,9 +206,12 @@ func (i *SDKInjector) attachJDKAgent(pid int32, path string, cfg *beyla.Config) 
 		return fmt.Errorf("error parsing OTLP options")
 	}
 
-	options := flattenOptionsMap(opts)
+	// this option needs to appear first in the list
+	options := "grafana.otel.debug-agent-startup=true"
+	flattenedMap := flattenOptionsMap(opts)
 
-	if len(options) > 0 {
+	if len(flattenedMap) > 0 {
+		options = options + "," + flattenedMap
 		i.log.Info("passing options to the JVM agent", "options", options)
 	}
 
@@ -244,8 +250,8 @@ func (i *SDKInjector) jdkAgentAlreadyLoaded(pid int32) (bool, error) {
 
 	scanner := bufio.NewScanner(out)
 	for scanner.Scan() {
-		// We check for io.opentelemetry.javaagent.OpenTelemetryAgent/0x<address>
-		if strings.Contains(scanner.Text(), "io.opentelemetry.javaagent.OpenTelemetryAgent/0x") {
+		// We check for com.grafana.GrafanaOpenTelemetryAgent/0x<address>
+		if strings.Contains(scanner.Text(), "com.grafana.GrafanaOpenTelemetryAgent/0x") {
 			return true, nil
 		}
 	}

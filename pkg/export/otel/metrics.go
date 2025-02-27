@@ -146,19 +146,7 @@ func (m *MetricsConfig) GuessProtocol() Protocol {
 }
 
 func (m *MetricsConfig) OTLPMetricsEndpoint() (string, bool) {
-	isCommon := false
-	endpoint := m.MetricsEndpoint
-	if endpoint == "" {
-		endpoint = m.CommonEndpoint
-		if endpoint == "" && m.Grafana != nil && m.Grafana.CloudZone != "" {
-			endpoint = m.Grafana.Endpoint()
-		}
-		if endpoint != "" {
-			isCommon = true
-		}
-	}
-
-	return endpoint, isCommon
+	return ResolveOTLPEndpoint(m.MetricsEndpoint, m.CommonEndpoint, m.Grafana)
 }
 
 // EndpointEnabled specifies that the OTEL metrics node is enabled if and only if

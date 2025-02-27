@@ -119,7 +119,7 @@ func (i *SDKInjector) extractAgent(ie *ebpf.Instrumentable) (string, error) {
 
 	agentPath := filepath.Join(fullTempDir, "grafana-opentelemetry-java.jar")
 
-    if err = ioutil.WriteFile(agentPath, _agentBytes, 0644); err != nil {
+	if err = ioutil.WriteFile(agentPath, _agentBytes, 0644); err != nil {
 		return "", fmt.Errorf("error writing file: %w", err)
 	}
 
@@ -273,7 +273,6 @@ func (i *SDKInjector) verifyJVMVersion(pid int32) bool {
 
 	return false
 }
-
 
 //go:embed grafana-opentelemetry-java.jar
 var _agentBytes []byte

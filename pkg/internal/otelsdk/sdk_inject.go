@@ -6,7 +6,6 @@ import (
 	"bufio"
 	_ "embed"
 	"fmt"
-	"io/ioutil"
 	"log/slog"
 	"maps"
 	"os"
@@ -119,7 +118,7 @@ func (i *SDKInjector) extractAgent(ie *ebpf.Instrumentable) (string, error) {
 
 	agentPath := filepath.Join(fullTempDir, "grafana-opentelemetry-java.jar")
 
-	if err = ioutil.WriteFile(agentPath, _agentBytes, 0644); err != nil {
+	if err = os.WriteFile(agentPath, _agentBytes, 0644); err != nil {
 		return "", fmt.Errorf("error writing file: %w", err)
 	}
 

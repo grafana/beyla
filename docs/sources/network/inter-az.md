@@ -12,7 +12,7 @@ keywords:
 # Measure traffic between Cloud availability zones
 
 {{< admonition type="note" >}}
-Currently, this feature is only available in Kubernetes clusters.
+This feature is currently only available in Kubernetes clusters.
 {{< /admonition >}}
 
 Traffic between Cloud Availability Zones might incur additional costs. Beyla is able to measure it either by
@@ -47,8 +47,8 @@ adding zone attributes would impact the cardinality of the metric, even for traf
 
 ## Use the `beyla.network.inter.zone` metric
 
-Using a separate metric for inter-zone traffic allows measuring it with a reduced impact in the metrics cardinality,
-as avoids adding the `src.zone` and `dst.zone` attributes to the regular network metrics.
+Using a separate metric for inter-zone traffic reduces the metric cardinality impact of collecting this data,
+because the `src.zone` and `dst.zone` attributes are not added to the regular network metrics.
 
 To enable the `beyla.network.inter.zone` metric, add the `network_inter_zone` option to the
 [BEYLA_OTEL_METRICS_FEATURES or BEYLA_PROMETHEUS_FEATURES]({{< relref "../configure/export-data.md" >}}) configuration option,

@@ -17,6 +17,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/transform"
 )
 
 type ProcessFinder struct {
@@ -40,6 +41,7 @@ type nodesMap struct {
 	SurveyCriteriaMatcher pipe.Middle[[]Event[processAttrs], []Event[ProcessMatch]]
 	SurveyExecTyper       pipe.Middle[[]Event[ProcessMatch], []Event[ebpf.Instrumentable]]
 	Surveyor              pipe.Middle[[]Event[ebpf.Instrumentable], []otel.SurveyInfo]
+	SurveyKubeDecorator   pipe.Middle[[]otel.SurveyInfo, []otel.SurveyInfo]
 	SurveyOTelMetrics     pipe.Final[[]otel.SurveyInfo]
 }
 
@@ -51,7 +53,8 @@ func (pf *nodesMap) Connect() {
 	pf.ContainerDBUpdater.SendTo(pf.TraceAttacher)
 	pf.SurveyCriteriaMatcher.SendTo(pf.SurveyExecTyper)
 	pf.SurveyExecTyper.SendTo(pf.Surveyor)
-	pf.Surveyor.SendTo(pf.SurveyOTelMetrics)
+	pf.Surveyor.SendTo(pf.SurveyKubeDecorator)
+	pf.SurveyKubeDecorator.SendTo(pf.SurveyOTelMetrics)
 }
 
 func processWatcher(pf *nodesMap) *pipe.Start[[]Event[processAttrs]] {
@@ -80,6 +83,9 @@ func surveyExecTyper(pf *nodesMap) *pipe.Middle[[]Event[ProcessMatch], []Event[e
 }
 func surveyor(pf *nodesMap) *pipe.Middle[[]Event[ebpf.Instrumentable], []otel.SurveyInfo] {
 	return &pf.Surveyor
+}
+func surveyKubeDecorator(pf *nodesMap) *pipe.Middle[[]otel.SurveyInfo, []otel.SurveyInfo] {
+	return &pf.SurveyKubeDecorator
 }
 func surveyorOTelMetrics(pf *nodesMap) *pipe.Final[[]otel.SurveyInfo] {
 	return &pf.SurveyOTelMetrics
@@ -113,6 +119,7 @@ func (pf *ProcessFinder) Start() (<-chan *ebpf.Instrumentable, <-chan *ebpf.Inst
 		SpanSignalsShortcut: pf.tracesInput,
 	}))
 	pipe.AddMiddleProvider(gb, surveyor, SurveyorProvider(pf.cfg))
+	pipe.AddMiddleProvider(gb, surveyKubeDecorator, transform.KubeSurveyDecoratorProvider(pf.ctx, &pf.cfg.Attributes.Kubernetes, pf.ctxInfo))
 	pipe.AddFinalProvider(gb, surveyorOTelMetrics, otel.SurveyMetricsExporterProvider(pf.ctx, pf.ctxInfo, &otel.SurveyMetricsConfig{
 		Metrics:            &pf.cfg.Metrics,
 		AttributeSelectors: pf.cfg.Attributes.Select,

@@ -8,6 +8,7 @@ import (
 	"github.com/mariomac/pipes/pipe"
 
 	"github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/internal/svc"
 	"github.com/grafana/beyla/v2/pkg/internal/traces/hostname"
 )
 
@@ -62,11 +63,11 @@ func ReadFromChannel(ctx context.Context, r *ReadDecorator) pipe.StartFunc[[]req
 	}
 }
 
-func hostNamePIDDecorator(cfg *InstanceIDConfig) decorator {
+func ResolveHostName(cfg *InstanceIDConfig, plog *slog.Logger) string {
 	// TODO: periodically update in case the current Beyla instance is created from a VM snapshot running as a different hostname
 	resolver := hostname.CreateResolver(cfg.OverrideHostname, "", cfg.HostnameDNSResolution)
 	fullHostName, _, err := resolver.Query()
-	log := rlog().With("function", "instance_ID_hostNamePIDDecorator")
+	log := plog.With("function", "instance_ID_hostNamePIDDecorator")
 	if err != nil {
 		log.Warn("can't read hostname. Leaving empty. Consider overriding"+
 			" the BEYLA_HOSTNAME property", "error", err)
@@ -74,11 +75,20 @@ func hostNamePIDDecorator(cfg *InstanceIDConfig) decorator {
 		log.Info("using hostname", "hostname", fullHostName)
 	}
 
+	return fullHostName
+}
+
+func SetInstanceAndHostName(svc *svc.Attrs, fullHostName string, pid int) {
+	svc.UID.Instance = fullHostName + ":" + strconv.Itoa(int(pid))
+	svc.HostName = fullHostName
+}
+
+func hostNamePIDDecorator(cfg *InstanceIDConfig) decorator {
+	fullHostName := ResolveHostName(cfg, rlog())
 	// caching instance ID composition for speed and saving memory generation
 	return func(spans []request.Span) {
 		for i := range spans {
-			spans[i].Service.UID.Instance = fullHostName + ":" + strconv.Itoa(int(spans[i].Pid.HostPID))
-			spans[i].Service.HostName = fullHostName
+			SetInstanceAndHostName(&spans[i].Service, fullHostName, int(spans[i].Pid.HostPID))
 		}
 	}
 }

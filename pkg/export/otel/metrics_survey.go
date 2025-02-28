@@ -87,9 +87,22 @@ func SurveyMetricsExporterProvider(
 
 func OTELGetters(name attr.Name) (attributes.Getter[*exec.FileInfo, attribute.KeyValue], bool) {
 	var g attributes.Getter[*exec.FileInfo, attribute.KeyValue]
-	if name == attr.ProcPid {
+	switch name {
+	case attr.ProcPid:
 		g = func(fi *exec.FileInfo) attribute.KeyValue {
 			return attribute.Int(string(attr.ProcPid), int(fi.Pid))
+		}
+	case attr.Job:
+		g = func(fi *exec.FileInfo) attribute.KeyValue {
+			return attribute.String(string(attr.Job), fi.Service.Job())
+		}
+	case attr.ServiceName:
+		g = func(fi *exec.FileInfo) attribute.KeyValue {
+			return attribute.String(string(attr.ServiceName), fi.Service.UID.Name)
+		}
+	case attr.ServiceNamespace:
+		g = func(fi *exec.FileInfo) attribute.KeyValue {
+			return attribute.String(string(attr.ServiceNamespace), fi.Service.UID.Namespace)
 		}
 	}
 	return g, g != nil
@@ -147,7 +160,7 @@ func newSurveyMetricsExporter(
 func (me *surveyMetricsExporter) newMetricSet(f *exec.FileInfo) (*surveyMetrics, error) {
 	log := me.log.With("service", f.Service, "processID", f.Service.UID)
 	log.Debug("creating new Metrics exporter")
-	resources := resource.NewWithAttributes(semconv.SchemaURL, getSurveyResourceAttrs(me.hostID, f)...)
+	resources := resource.NewWithAttributes(semconv.SchemaURL, getSurveyResourceAttrs(f)...)
 	opts := []metric.Option{
 		metric.WithResource(resources),
 		metric.WithReader(metric.NewPeriodicReader(me.exporter,
@@ -190,18 +203,26 @@ func (me *surveyMetricsExporter) Do(in <-chan []SurveyInfo) {
 	}
 }
 
-func getSurveyResourceAttrs(hostID string, f *exec.FileInfo) []attribute.KeyValue {
+func getSurveyResourceAttrs(f *exec.FileInfo) []attribute.KeyValue {
+	return []attribute.KeyValue{
+		attr.ServiceName.OTEL().String(f.Service.UID.Name),
+		attr.ServiceNamespace.OTEL().String(f.Service.UID.Namespace),
+	}
+}
+
+func getSurveyAttrs(hostID string, f *exec.FileInfo) []attribute.KeyValue {
 	return append(
 		getResourceAttrs(hostID, &f.Service),
 		semconv.ServiceInstanceID(f.Service.UID.Instance),
 		attr.ProcCommand.OTEL().String(f.CmdExePath),
 		attr.ProcPid.OTEL().String(strconv.Itoa(int(f.Pid))),
 		attr.ProcCommandLine.OTEL().String(f.CmdLine),
+		attr.Instance.OTEL().String(f.Service.UID.Instance),
 	)
 }
 
 func (me *surveyMetricsExporter) observeMetric(reporter *surveyMetrics, s *SurveyInfo) {
-	mr, attrs := reporter.surveyed.ForRecord(s.File)
+	mr, attrs := reporter.surveyed.ForRecord(s.File, getSurveyAttrs(me.hostID, s.File)...)
 	if s.Type == EventCreated {
 		mr.Record(reporter.ctx, 1, metric2.WithAttributeSet(attrs))
 	} else {

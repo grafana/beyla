@@ -220,7 +220,10 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 	var surveyAttributes = AttrReportGroup{
 		SubGroups: []*AttrReportGroup{&appKubeAttributes, &hostAttributes},
 		Attributes: map[attr.Name]Default{
-			attr.ProcPid: true,
+			attr.ProcPid:          true,
+			attr.Job:              true,
+			attr.ServiceName:      true,
+			attr.ServiceNamespace: true,
 		},
 	}
 

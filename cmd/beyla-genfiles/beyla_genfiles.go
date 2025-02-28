@@ -19,8 +19,8 @@ import (
 	"unicode"
 )
 
-const OCI_BIN = "docker"
-const GEN_IMG = "ghcr.io/grafana/beyla-ebpf-generator:main"
+const OCIBin = "docker"
+const GenImg = "ghcr.io/grafana/beyla-ebpf-generator:main"
 
 var debugEnabled = sync.OnceValue(func() bool {
 	b, err := strconv.ParseBool(os.Getenv("BEYLA_GENFILES_DEBUG"))
@@ -99,6 +99,7 @@ type bpf2goGenContext struct {
 	goFile  string // the go file containing the generate directive
 }
 
+//nolint:cyclop
 func parseBPF2GOGenLine(goFile string, line string) *bpf2goGenContext {
 	ctx := &bpf2goGenContext{
 		goArchs: []string{"bpfel", "bpfeb"}, // the defaults according to bpf2go
@@ -121,6 +122,7 @@ func parseBPF2GOGenLine(goFile string, line string) *bpf2goGenContext {
 			break
 		}
 
+		//nolint:gocritic
 		if arg == "-target" {
 			if arg, ok = parser.shift(); ok {
 				ctx.goArchs = strings.Split(arg, ",")
@@ -281,14 +283,14 @@ func getPipes(cmd *exec.Cmd) (io.ReadCloser, io.ReadCloser, error) {
 	stdout, err := cmd.StdoutPipe()
 
 	if err != nil {
-		return nil, nil, fmt.Errorf("error getting stdout pipe: %v", err)
+		return nil, nil, fmt.Errorf("error getting stdout pipe: %w", err)
 	}
 
 	stderr, err := cmd.StderrPipe()
 
 	if err != nil {
 		stdout.Close()
-		return nil, nil, fmt.Errorf("error getting stderr pipe: %v", err)
+		return nil, nil, fmt.Errorf("error getting stderr pipe: %w", err)
 	}
 
 	return stdout, stderr, nil
@@ -362,7 +364,7 @@ func writeGenFile(wd string, files []string) (string, error) {
 	tempFile, err := os.CreateTemp(wd, "gen_files")
 
 	if err != nil {
-		return "", fmt.Errorf("error creating temporary file: %v", err)
+		return "", fmt.Errorf("error creating temporary file: %w", err)
 	}
 
 	defer tempFile.Close()
@@ -455,11 +457,11 @@ func bail(err error) {
 }
 
 func ociBin() string {
-	return getEnv("BEYLA_GENFILES_OCI_BIN", OCI_BIN)
+	return getEnv("BEYLA_GENFILES_OCIBin", OCIBin)
 }
 
 func genImg() string {
-	return getEnv("BEYLA_GENFILES_GEN_IMG", GEN_IMG)
+	return getEnv("BEYLA_GENFILES_GenImg", GenImg)
 }
 
 func shouldRunLocally() bool {
@@ -524,8 +526,8 @@ func executeCommand(name string, args ...string) error {
 		return fmt.Errorf("failed to start program: %w", err)
 	}
 
-	go io.Copy(os.Stdout, stdoutPipe)
-	go io.Copy(os.Stderr, stderrPipe)
+	go io.Copy(os.Stdout, stdoutPipe) //nolint:errcheck
+	go io.Copy(os.Stderr, stderrPipe) //nolint:errcheck
 
 	if err := cmd.Wait(); err != nil {
 		return fmt.Errorf("error waiting for child process: %w", err)
@@ -548,7 +550,7 @@ func runLocally(files []string) error {
 
 			if err != nil {
 				mu.Lock()
-				errors = append(errors, fmt.Errorf("%s: %w", err))
+				errors = append(errors, fmt.Errorf("%s: %w", file, err))
 				mu.Unlock()
 			}
 
@@ -559,7 +561,7 @@ func runLocally(files []string) error {
 	wg.Wait()
 
 	if len(errors) > 0 {
-		fmt.Fprintln(os.Stderr, "The following errors have occurred:\n")
+		fmt.Fprintln(os.Stderr, "The following errors have occurred:")
 
 		for _, err := range errors {
 			fmt.Fprintln(os.Stderr, err)

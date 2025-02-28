@@ -12,6 +12,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf"
 	"github.com/grafana/beyla/v2/pkg/internal/helpers/maps"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
+	"github.com/grafana/beyla/v2/pkg/internal/otelsdk"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
 )
@@ -35,6 +36,7 @@ type TraceAttacher struct {
 
 	// keeps a copy of all the tracers for a given executable path
 	existingTracers     map[uint64]*ebpf.ProcessTracer
+	sdkInjector         *otelsdk.SDKInjector
 	reusableTracer      *ebpf.ProcessTracer
 	reusableGoTracer    *ebpf.ProcessTracer
 	commonTracersLoaded bool
@@ -54,6 +56,7 @@ func TraceAttacherProvider(ta *TraceAttacher) pipe.FinalProvider[[]Event[ebpf.In
 func (ta *TraceAttacher) attacherLoop() (pipe.FinalFunc[[]Event[ebpf.Instrumentable]], error) {
 	ta.log = slog.With("component", "discover.TraceAttacher")
 	ta.existingTracers = map[uint64]*ebpf.ProcessTracer{}
+	ta.sdkInjector = otelsdk.NewSDKInjector(ta.Cfg)
 	ta.processInstances = maps.MultiCounter[uint64]{}
 	ta.beylaPID = os.Getpid()
 
@@ -70,12 +73,21 @@ func (ta *TraceAttacher) attacherLoop() (pipe.FinalFunc[[]Event[ebpf.Instrumenta
 					"exec", instr.Obj.FileInfo.CmdExePath, "pid", instr.Obj.FileInfo.Pid)
 				switch instr.Type {
 				case EventCreated:
-					ta.processInstances.Inc(instr.Obj.FileInfo.Ino)
-					if ok := ta.getTracer(&instr.Obj); ok {
-						ta.DiscoveredTracers <- &instr.Obj
-						if ta.Cfg.Discovery.SystemWide {
-							ta.log.Info("system wide instrumentation. Creating a single instrumenter")
-							break mainLoop
+					sdkInstrumented := false
+					if ta.sdkInjectionPossible(&instr.Obj) {
+						if err := ta.sdkInjector.NewExecutable(&instr.Obj); err == nil {
+							sdkInstrumented = true
+						}
+					}
+
+					if !sdkInstrumented {
+						ta.processInstances.Inc(instr.Obj.FileInfo.Ino)
+						if ok := ta.getTracer(&instr.Obj); ok {
+							ta.DiscoveredTracers <- &instr.Obj
+							if ta.Cfg.Discovery.SystemWide {
+								ta.log.Info("system wide instrumentation. Creating a single instrumenter")
+								break mainLoop
+							}
 						}
 					}
 				case EventDeleted:
@@ -325,4 +337,8 @@ func (ta *TraceAttacher) notifyProcessDeletion(ie *ebpf.Instrumentable) {
 			ta.DeleteTracers <- ie
 		}
 	}
+}
+
+func (ta *TraceAttacher) sdkInjectionPossible(ie *ebpf.Instrumentable) bool {
+	return ta.sdkInjector.Enabled() && ie.Type == svc.InstrumentableJava
 }

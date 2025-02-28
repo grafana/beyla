@@ -1201,3 +1201,6 @@ test/integration/components/testserver_1.17/vendor/gopkg.in/yaml.v2/writerc.go
 test/integration/components/testserver_1.17/vendor/gopkg.in/yaml.v2/yaml.go
 test/integration/components/testserver_1.17/vendor/gopkg.in/yaml.v2/yamlh.go
 test/integration/components/testserver_1.17/vendor/gopkg.in/yaml.v2/yamlprivateh.go
+*_bpfel.go
+*_bpfel.o
+pkg/internal/otelsdk/grafana-opentelemetry-java.jar

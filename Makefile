@@ -183,12 +183,19 @@ update-offsets: prereqs
 
 # Prefer docker-generate instead, as it's able to perform a parallel build
 .PHONY: generate
-generate: export BPF_CLANG := $(CLANG)
-generate: export BPF_CFLAGS := $(CFLAGS)
-generate: export BPF2GO := $(BPF2GO)
-generate: bpf2go
+generate: bpf-generate javaagent-generate
+
+.PHONY: bpf-generate
+bpf-generate: export BPF_CLANG := $(CLANG)
+bpf-generate: export BPF_CFLAGS := $(CFLAGS)
+bpf-generate: export BPF2GO := $(BPF2GO)
+bpf-generate: bpf2go
 	@echo "### Generating BPF Go bindings"
-	go generate ./pkg/...
+	grep -rlI "BPF2GO" pkg/internal/ | xargs -P 0 -n 1 go generate
+
+.PHONY: javaagent-generate
+javaagent-generate:
+	@go generate pkg/internal/otelsdk/sdk_inject.go
 
 .PHONY: docker-generate
 docker-generate:

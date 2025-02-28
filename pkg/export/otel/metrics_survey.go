@@ -19,6 +19,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/export/otel/metric"
 	metric2 "github.com/grafana/beyla/v2/pkg/export/otel/metric/api/metric"
 	"github.com/grafana/beyla/v2/pkg/internal/exec"
+	"github.com/grafana/beyla/v2/pkg/internal/helpers/container"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
 )
@@ -31,8 +32,9 @@ const (
 )
 
 type SurveyInfo struct {
-	File *exec.FileInfo
-	Type SurveyEventType
+	File  *exec.FileInfo
+	Type  SurveyEventType
+	CInfo container.Info
 }
 
 type SurveyMetricsConfig struct {
@@ -85,7 +87,7 @@ func SurveyMetricsExporterProvider(
 	}
 }
 
-func OTELGetters(name attr.Name) (attributes.Getter[*exec.FileInfo, attribute.KeyValue], bool) {
+func surveyGetters(name attr.Name) (attributes.Getter[*exec.FileInfo, attribute.KeyValue], bool) {
 	var g attributes.Getter[*exec.FileInfo, attribute.KeyValue]
 	switch name {
 	case attr.ProcPid:
@@ -125,7 +127,7 @@ func newSurveyMetricsExporter(
 	}
 
 	surveyNames := attrProv.For(attributes.SurveyInfo)
-	attrSurvey := attributes.OpenTelemetryGetters(OTELGetters, surveyNames)
+	attrSurvey := attributes.OpenTelemetryGetters(surveyGetters, surveyNames)
 
 	mr := &surveyMetricsExporter{
 		log:          log,

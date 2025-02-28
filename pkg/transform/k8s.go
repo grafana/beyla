@@ -103,7 +103,7 @@ func KubeSurveyDecoratorProvider(
 			return nil, fmt.Errorf("inititalizing KubeDecoratorProvider: %w", err)
 		}
 		decorator := &metadataDecorator{db: metaStore, clusterName: KubeClusterName(ctx, cfg)}
-		return decorator.nodeSurveyLoop, nil
+		return decorator.surveyLoop, nil
 	}
 }
 
@@ -113,7 +113,7 @@ type metadataDecorator struct {
 }
 
 func (md *metadataDecorator) nodeLoop(in <-chan []request.Span, out chan<- []request.Span) {
-	klog().Debug("starting kubernetes decoration loop")
+	klog().Info("starting kubernetes decoration of spans")
 	for spans := range in {
 		// in-place decoration and forwarding
 		for i := range spans {
@@ -124,15 +124,17 @@ func (md *metadataDecorator) nodeLoop(in <-chan []request.Span, out chan<- []req
 	klog().Debug("stopping kubernetes decoration loop")
 }
 
-func (md *metadataDecorator) nodeSurveyLoop(in <-chan []otel.SurveyInfo, out chan<- []otel.SurveyInfo) {
-	klog().Debug("starting kubernetes decoration loop")
+func (md *metadataDecorator) surveyLoop(in <-chan []otel.SurveyInfo, out chan<- []otel.SurveyInfo) {
+	klog().Info("starting kubernetes decoration of survey data")
 	for surveys := range in {
 		// in-place decoration and forwarding
 		for i := range surveys {
 			survey := &surveys[i]
-			if podMeta, containerName := md.db.PodContainerByPIDNs(survey.File.Ns); podMeta != nil {
+			if podMeta, containerName := md.db.PodContainerByPIDNs(survey.CInfo.PIDNamespace); podMeta != nil {
+				klog().Info("found pod metadata for namespace", "ns", survey.File.Ns)
 				md.appendMetadata(&survey.File.Service, podMeta, containerName)
 			} else {
+				klog().Info("can't find pod metadata for namespace", "ns", survey.File.Ns)
 				// do not leave the service attributes map as nil
 				survey.File.Service.Metadata = map[attr.Name]string{}
 			}

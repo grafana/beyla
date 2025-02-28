@@ -8,6 +8,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf"
+	"github.com/grafana/beyla/v2/pkg/internal/helpers/container"
 	"github.com/grafana/beyla/v2/pkg/internal/traces"
 )
 
@@ -41,9 +42,12 @@ func (s *Surveyor) run(in <-chan []Event[ebpf.Instrumentable], out chan<- []otel
 			s.log.Debug("surveyed process", "cmd", ins.Obj.FileInfo.CmdExePath)
 			traces.SetInstanceAndHostName(&ins.Obj.FileInfo.Service, fullHostName, int(ins.Obj.FileInfo.Pid))
 
+			cInfo, _ := container.InfoForPID(uint32(ins.Obj.FileInfo.Pid))
+
 			outArr = append(outArr, otel.SurveyInfo{
-				Type: otel.SurveyEventType(ins.Type),
-				File: ins.Obj.FileInfo,
+				Type:  otel.SurveyEventType(ins.Type),
+				File:  ins.Obj.FileInfo,
+				CInfo: cInfo,
 			})
 		}
 		out <- outArr

@@ -38,11 +38,12 @@ type nodesMap struct {
 	TraceAttacher       pipe.Final[[]Event[ebpf.Instrumentable]]
 
 	// Service survey (discovery only)
-	SurveyCriteriaMatcher pipe.Middle[[]Event[processAttrs], []Event[ProcessMatch]]
-	SurveyExecTyper       pipe.Middle[[]Event[ProcessMatch], []Event[ebpf.Instrumentable]]
-	Surveyor              pipe.Middle[[]Event[ebpf.Instrumentable], []otel.SurveyInfo]
-	SurveyKubeDecorator   pipe.Middle[[]otel.SurveyInfo, []otel.SurveyInfo]
-	SurveyOTelMetrics     pipe.Final[[]otel.SurveyInfo]
+	SurveyCriteriaMatcher    pipe.Middle[[]Event[processAttrs], []Event[ProcessMatch]]
+	SurveyExecTyper          pipe.Middle[[]Event[ProcessMatch], []Event[ebpf.Instrumentable]]
+	SurveyContainerDBUpdater pipe.Middle[[]Event[ebpf.Instrumentable], []Event[ebpf.Instrumentable]]
+	Surveyor                 pipe.Middle[[]Event[ebpf.Instrumentable], []otel.SurveyInfo]
+	SurveyKubeDecorator      pipe.Middle[[]otel.SurveyInfo, []otel.SurveyInfo]
+	SurveyOTelMetrics        pipe.Final[[]otel.SurveyInfo]
 }
 
 func (pf *nodesMap) Connect() {
@@ -52,7 +53,8 @@ func (pf *nodesMap) Connect() {
 	pf.ExecTyper.SendTo(pf.ContainerDBUpdater)
 	pf.ContainerDBUpdater.SendTo(pf.TraceAttacher)
 	pf.SurveyCriteriaMatcher.SendTo(pf.SurveyExecTyper)
-	pf.SurveyExecTyper.SendTo(pf.Surveyor)
+	pf.SurveyExecTyper.SendTo(pf.SurveyContainerDBUpdater)
+	pf.SurveyContainerDBUpdater.SendTo(pf.Surveyor)
 	pf.Surveyor.SendTo(pf.SurveyKubeDecorator)
 	pf.SurveyKubeDecorator.SendTo(pf.SurveyOTelMetrics)
 }
@@ -90,6 +92,9 @@ func surveyKubeDecorator(pf *nodesMap) *pipe.Middle[[]otel.SurveyInfo, []otel.Su
 func surveyorOTelMetrics(pf *nodesMap) *pipe.Final[[]otel.SurveyInfo] {
 	return &pf.SurveyOTelMetrics
 }
+func surveyContainerDBUpdater(pf *nodesMap) *pipe.Middle[[]Event[ebpf.Instrumentable], []Event[ebpf.Instrumentable]] {
+	return &pf.SurveyContainerDBUpdater
+}
 
 func NewProcessFinder(ctx context.Context, cfg *beyla.Config, ctxInfo *global.ContextInfo, tracesInput chan<- []request.Span) *ProcessFinder {
 	return &ProcessFinder{ctx: ctx, cfg: cfg, ctxInfo: ctxInfo, tracesInput: tracesInput}
@@ -118,6 +123,7 @@ func (pf *ProcessFinder) Start() (<-chan *ebpf.Instrumentable, <-chan *ebpf.Inst
 		Metrics:             pf.ctxInfo.Metrics,
 		SpanSignalsShortcut: pf.tracesInput,
 	}))
+	pipe.AddMiddleProvider(gb, surveyContainerDBUpdater, ContainerDBUpdaterProvider(pf.ctx, pf.ctxInfo.K8sInformer))
 	pipe.AddMiddleProvider(gb, surveyor, SurveyorProvider(pf.cfg))
 	pipe.AddMiddleProvider(gb, surveyKubeDecorator, transform.KubeSurveyDecoratorProvider(pf.ctx, &pf.cfg.Attributes.Kubernetes, pf.ctxInfo))
 	pipe.AddFinalProvider(gb, surveyorOTelMetrics, otel.SurveyMetricsExporterProvider(pf.ctx, pf.ctxInfo, &otel.SurveyMetricsConfig{

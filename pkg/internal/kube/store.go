@@ -334,6 +334,7 @@ func (s *Store) PodByContainerID(cid string) *CachedObjMeta {
 func (s *Store) PodContainerByPIDNs(pidns uint32) (*CachedObjMeta, string) {
 	s.access.RLock()
 	defer s.access.RUnlock()
+
 	if info, ok := s.namespaces[pidns]; ok {
 		if om, ok := s.podsByContainer[info.ContainerID]; ok {
 			oID := fetchOwnerID(om.Meta)

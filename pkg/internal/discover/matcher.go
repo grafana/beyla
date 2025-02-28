@@ -216,6 +216,7 @@ func (m *matcher) matchByAttributes(actual *processAttrs, required *services.Att
 	return true
 }
 
+// nolint:cyclop
 func FindingCriteria(cfg *beyla.Config, mode CriteriaMatcherMode) services.DefinitionCriteria {
 	if cfg.Discovery.SystemWide {
 		// will return all the executables in the system

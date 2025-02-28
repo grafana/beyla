@@ -12,20 +12,26 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 	"unicode"
+
+	"github.com/caarlos0/env/v9"
 )
 
-const OCIBin = "docker"
-const GenImg = "ghcr.io/grafana/beyla-ebpf-generator:main"
+type config struct {
+	DebugEnabled    bool   `env:"BEYLA_GENFILES_DEBUG"            envDefault:"false"`
+	RunLocally      bool   `env:"BEYLA_GENFILES_RUN_LOCALLY"      envDefault:"false"`
+	ScanPath        string `env:"BEYLA_GENFILES_SCAN_PATH"        envDefault:"pkg"`
+	ContainerPrefix string `env:"BEYLA_GENFILES_CONTAINER_PREFIX" envDefault:"/__w/"`
+	HostPrefix      string `env:"BEYLA_GENFILES_HOST_PREFIX"      envDefault:"/home/runner/work/"`
+	Package         string `env:"BEYLA_GENFILES_PKG"              envDefault:"github.com/grafana/beyla/v2/pkg/beyla"`
+	OCIBin          string `env:"BEYLA_GENFILES_OCI_BIN"          envDefault:"docker"`
+	GenImage        string `env:"BEYLA_GENFILES_GEN_IMG"          envDefault:"ghcr.io/grafana/beyla-ebpf-generator:main"`
+}
 
-var debugEnabled = sync.OnceValue(func() bool {
-	b, err := strconv.ParseBool(os.Getenv("BEYLA_GENFILES_DEBUG"))
-	return err == nil && b
-})
+var cfg config
 
 var targetsByGoArch = map[string]Target{
 	"386":      {"bpfel", "x86"},
@@ -203,12 +209,19 @@ func (f fileSet) toArray() []string {
 }
 
 func mustGenerate(path string, comment string) (bool, error) {
+	// we only care about files containing //go-generate
 	if !strings.HasPrefix(comment, "//go:generate") {
 		return false, nil
 	}
 
+	// if not a bpf2go generation, we always regenerate the file
 	if !strings.Contains(comment, "$BPF2GO") {
 		return true, nil
+	}
+
+	// only regenerate bpf2go statements on Linux
+	if runtime.GOOS != "linux" {
+		return false, nil
 	}
 
 	// bpf2go generation is a special case - we don't want to
@@ -261,9 +274,7 @@ func handleDirEntry(path string, d fs.DirEntry, err error, filesToGenerate fileS
 }
 
 func gatherFilesToGenerate(moduleRoot string) ([]string, error) {
-	scanPath := getEnv("BEYLA_GENFILES_SCAN_PATH", "pkg")
-
-	rootDir := filepath.Join(moduleRoot, scanPath)
+	rootDir := filepath.Join(moduleRoot, cfg.ScanPath)
 
 	filesToGenerate := fileSet{}
 
@@ -296,37 +307,23 @@ func getPipes(cmd *exec.Cmd) (io.ReadCloser, io.ReadCloser, error) {
 	return stdout, stderr, nil
 }
 
-func getEnv(key string, def string) string {
-	v, ok := os.LookupEnv(key)
-
-	if ok {
-		return v
-	}
-
-	return def
-}
-
 // when a GH action job is executed inside a container, the host workspace in
 // the host gets mounted in the '/__w'  target directory. However, because the
 // beyla-ebpf-generator image runs as a sibling container (it shares the same
 // docker socket), we need to pass the host path to the '/src' volume rather
 // than the detected container path
 func adjustPathForGitHubActions(path string) string {
-	prefixInContainer := getEnv("BEYLA_GENFILES_CONTAINER_PREFIX", "/__w/")
-	prefixInHost := getEnv("BEYLA_GENFILES_HOST_PREFIX", "/home/runner/work/")
-
 	_, isGithubWorkflow := os.LookupEnv("GITHUB_WORKSPACE")
 
-	if isGithubWorkflow && strings.HasPrefix(path, prefixInContainer) {
-		return strings.Replace(path, prefixInContainer, prefixInHost, 1)
+	if isGithubWorkflow && strings.HasPrefix(path, cfg.ContainerPrefix) {
+		return strings.Replace(path, cfg.ContainerPrefix, cfg.HostPrefix, 1)
 	}
 
 	return path
 }
 
 func beylaPackageDir() (string, error) {
-	pkg := getEnv("BEYLA_GENFILES_PKG", "github.com/grafana/beyla/v2/pkg/beyla")
-	cmd := exec.Command("go", "list", "-f", "'{{.Dir}}'", pkg)
+	cmd := exec.Command("go", "list", "-f", "'{{.Dir}}'", cfg.Package)
 	out, err := cmd.Output()
 
 	if err != nil {
@@ -425,30 +422,17 @@ func bail(err error) {
 	os.Exit(1)
 }
 
-func ociBin() string {
-	return getEnv("BEYLA_GENFILES_OCIBin", OCIBin)
-}
-
-func genImg() string {
-	return getEnv("BEYLA_GENFILES_GenImg", GenImg)
-}
-
-func shouldRunLocally() bool {
-	b, err := strconv.ParseBool(os.Getenv("BEYLA_GENFILES_RUN_LOCALLY"))
-	return err == nil && b
-}
-
 func runInContainer(wd string) {
 	adjustedWD := adjustPathForGitHubActions(wd)
 
-	if debugEnabled() {
+	if cfg.DebugEnabled {
 		fmt.Println("wd:", wd)
 		fmt.Println("adjusted wd:", adjustedWD)
 	}
 
-	err := executeCommand(ociBin(), "run", "--rm",
+	err := executeCommand(cfg.OCIBin, "run", "--rm",
 		"-v", adjustedWD+":/src",
-		genImg())
+		cfg.GenImage)
 
 	if err != nil {
 		bail(fmt.Errorf("error waiting for child process: %w", err))
@@ -458,7 +442,7 @@ func runInContainer(wd string) {
 func executeCommand(name string, args ...string) error {
 	cmd := exec.Command(name, args...)
 
-	if debugEnabled() {
+	if cfg.DebugEnabled {
 		fmt.Println("cmd:", cmd.String())
 	}
 
@@ -549,8 +533,8 @@ func runLocally(wd string) {
 }
 
 func main() {
-	if runtime.GOOS != "linux" {
-		return
+	if err := env.Parse(&cfg); err != nil {
+		bail(fmt.Errorf("error loading config: %w", err))
 	}
 
 	wd, err := moduleRoot()
@@ -563,7 +547,7 @@ func main() {
 		bail(err)
 	}
 
-	if shouldRunLocally() {
+	if cfg.RunLocally {
 		runLocally(wd)
 	} else {
 		runInContainer(wd)

@@ -1,6 +1,4 @@
-//go:build beyla_gen_bpf
-
-//go:generate go run build_ebpf.go
+//go:generate go run beyla_genfiles.go
 
 package main
 
@@ -25,7 +23,7 @@ const OCI_BIN = "docker"
 const GEN_IMG = "ghcr.io/grafana/beyla-ebpf-generator:main"
 
 var debugEnabled = sync.OnceValue(func() bool {
-	b, err := strconv.ParseBool(os.Getenv("BEYLA_BUILD_EBPF_DEBUG"))
+	b, err := strconv.ParseBool(os.Getenv("BEYLA_GENFILES_DEBUG"))
 	return err == nil && b
 })
 
@@ -92,7 +90,7 @@ func (ap *argParser) shift() (string, bool) {
 	return ap.cmdLine[start:ap.index], true
 }
 
-type generateContext struct {
+type bpf2goGenContext struct {
 	goArchs []string
 	stem    string // the ident stem passed to bpf2go
 	outDir  string // the output directory passed to bpf2go
@@ -101,8 +99,8 @@ type generateContext struct {
 	goFile  string // the go file containing the generate directive
 }
 
-func parseGenerateLine(goFile string, line string) *generateContext {
-	ctx := &generateContext{
+func parseBPF2GOGenLine(goFile string, line string) *bpf2goGenContext {
+	ctx := &bpf2goGenContext{
 		goArchs: []string{"bpfel", "bpfeb"}, // the defaults according to bpf2go
 		goFile:  goFile,
 		srcDir:  filepath.Dir(goFile),
@@ -163,7 +161,7 @@ func isFileStale(ts time.Time, file string) bool {
 	return ts.After(info.ModTime())
 }
 
-func goFileNeedsGenerate(ctx *generateContext) (bool, error) {
+func bpf2goFileNeedsGenerate(ctx *bpf2goGenContext) (bool, error) {
 	info, err := os.Stat(ctx.srcFile)
 
 	if err != nil {
@@ -190,79 +188,93 @@ func goFileNeedsGenerate(ctx *generateContext) (bool, error) {
 	return false, nil
 }
 
-func mapToArray(m map[string]struct{}) []string {
-	ret := make([]string, 0, len(m))
+type fileSet map[string]struct{}
 
-	for k := range m {
+func (f fileSet) toArray() []string {
+	ret := make([]string, 0, len(f))
+
+	for k := range f {
 		ret = append(ret, k)
 	}
 
 	return ret
 }
 
-func gatherFilesToGenerate(moduleRoot string) ([]string, error) {
-	scanPath := getEnv("BEYLA_BUILD_EBPF_SCAN_PATH", "pkg/internal")
+func mustGenerate(path string, comment string) (bool, error) {
+	if !strings.HasPrefix(comment, "//go:generate") {
+		return false, nil
+	}
 
-	rootDir := filepath.Join(moduleRoot, scanPath)
+	if !strings.Contains(comment, "$BPF2GO") {
+		return true, nil
+	}
 
-	filesToGenerate := map[string]struct{}{}
+	// bpf2go generation is a special case - we don't want to
+	// regenerate files that haven't changed, so we need to resolve
+	// the source .c file and the bpf2go artifacts (.o and .go files)
+	// to work out whether they need to be regenerated
+	return bpf2goFileNeedsGenerate(parseBPF2GOGenLine(path, comment))
+}
 
-	handleEntry := func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
+func handleDirEntry(path string, d fs.DirEntry, err error, filesToGenerate fileSet) error {
+	if err != nil {
+		return err
+	}
 
-		if !strings.HasSuffix(d.Name(), ".go") {
-			return nil
-		}
-
-		file, err := os.Open(path)
-
-		if err != nil {
-			return err
-		}
-
-		defer file.Close()
-
-		fs := token.NewFileSet()
-
-		node, err := parser.ParseFile(fs, path, file, parser.ParseComments)
-
-		if err != nil {
-			return err
-		}
-
-		for _, commentGroup := range node.Comments {
-			for _, comment := range commentGroup.List {
-				if !strings.HasPrefix(comment.Text, "//go:generate") || !strings.Contains(comment.Text, "$BPF2GO") {
-					continue
-				}
-
-				genCtx := parseGenerateLine(path, comment.Text)
-
-				generate, err := goFileNeedsGenerate(genCtx)
-
-				if err != nil {
-					return err
-				}
-
-				if generate {
-					filesToGenerate[path] = struct{}{}
-				}
-			}
-		}
-
+	if !strings.HasSuffix(d.Name(), ".go") {
 		return nil
 	}
 
+	file, err := os.Open(path)
+
+	if err != nil {
+		return err
+	}
+
+	defer file.Close()
+
+	fs := token.NewFileSet()
+
+	node, err := parser.ParseFile(fs, path, file, parser.ParseComments)
+
+	if err != nil {
+		return err
+	}
+
+	for _, commentGroup := range node.Comments {
+		for _, comment := range commentGroup.List {
+			generate, err := mustGenerate(path, comment.Text)
+
+			if err != nil {
+				return err
+			}
+
+			if generate {
+				filesToGenerate[path] = struct{}{}
+			}
+		}
+	}
+
+	return nil
+}
+
+func gatherFilesToGenerate(moduleRoot string) ([]string, error) {
+	scanPath := getEnv("BEYLA_GENFILES_SCAN_PATH", "pkg")
+
+	rootDir := filepath.Join(moduleRoot, scanPath)
+
+	filesToGenerate := fileSet{}
+
 	// Walk through the project directory
-	err := filepath.WalkDir(rootDir, handleEntry)
+	err := filepath.WalkDir(rootDir, func(path string, d fs.DirEntry, err error) error {
+		return handleDirEntry(path, d, err, filesToGenerate)
+	})
 
 	if err != nil {
 		return nil, fmt.Errorf("error walking through the directory: %w", err)
 	}
 
-	return mapToArray(filesToGenerate), nil
+	return filesToGenerate.toArray(), nil
 }
 
 func getPipes(cmd *exec.Cmd) (io.ReadCloser, io.ReadCloser, error) {
@@ -298,8 +310,8 @@ func getEnv(key string, def string) string {
 // docker socket), we need to pass the host path to the '/src' volume rather
 // than the detected container path
 func adjustPathForGitHubActions(path string) string {
-	prefixInContainer := getEnv("BEYLA_BUILD_EBPF_CONTAINER_PREFIX", "/__w/")
-	prefixInHost := getEnv("BEYLA_BUILD_EBPF_HOST_PREFIX", "/home/runner/work/")
+	prefixInContainer := getEnv("BEYLA_GENFILES_CONTAINER_PREFIX", "/__w/")
+	prefixInHost := getEnv("BEYLA_GENFILES_HOST_PREFIX", "/home/runner/work/")
 
 	_, isGithubWorkflow := os.LookupEnv("GITHUB_WORKSPACE")
 
@@ -310,11 +322,26 @@ func adjustPathForGitHubActions(path string) string {
 	return path
 }
 
-func moduleRoot() (string, error) {
-	wd, err := os.Getwd()
+func beylaPackageDir() (string, error) {
+	pkg := getEnv("BEYLA_GENFILES_PKG", "github.com/grafana/beyla/v2/pkg/beyla")
+	cmd := exec.Command("go", "list", "-f", "'{{.Dir}}'", pkg)
+	out, err := cmd.Output()
 
 	if err != nil {
-		return "", fmt.Errorf("could not get current working directory: %v", err)
+		return "", fmt.Errorf("cannot resolve beyla package dir: %w", err)
+	}
+
+	ret := strings.Trim(string(out), "'\n")
+
+	return ret, nil
+}
+
+func moduleRoot() (string, error) {
+
+	wd, err := beylaPackageDir()
+
+	if err != nil {
+		return "", err
 	}
 
 	for {
@@ -428,11 +455,128 @@ func bail(err error) {
 }
 
 func ociBin() string {
-	return getEnv("BEYLA_BUILD_EBPF_OCI_BIN", OCI_BIN)
+	return getEnv("BEYLA_GENFILES_OCI_BIN", OCI_BIN)
 }
 
 func genImg() string {
-	return getEnv("BEYLA_BUILD_EBPF_GEN_IMG", GEN_IMG)
+	return getEnv("BEYLA_GENFILES_GEN_IMG", GEN_IMG)
+}
+
+func shouldRunLocally() bool {
+	b, err := strconv.ParseBool(os.Getenv("BEYLA_GENFILES_RUN_LOCALLY"))
+	return err == nil && b
+}
+
+func runInContainer(wd string, files []string) error {
+	tmpFile, err := writeGenFile(wd, files)
+
+	if err != nil {
+		return err
+	}
+
+	defer os.Remove(tmpFile)
+
+	adjustedWD := adjustPathForGitHubActions(wd)
+
+	relTmpFile, err := filepath.Rel(wd, tmpFile)
+
+	if err != nil {
+		return err
+	}
+
+	if debugEnabled() {
+		fmt.Println("wd:", wd)
+		fmt.Println("adjusted wd:", adjustedWD)
+		fmt.Println("tmpFile:", tmpFile)
+		fmt.Println("relTmpFile:", relTmpFile)
+		fmt.Println("files:", files)
+	}
+
+	err = executeCommand(ociBin(), "run", "--rm",
+		"-v", adjustedWD+":/src",
+		genImg(),
+		filepath.Join("/src", relTmpFile))
+
+	if err != nil {
+		return fmt.Errorf("error waiting for child process: %w", err)
+	}
+
+	return nil
+}
+
+func executeCommand(name string, args ...string) error {
+	cmd := exec.Command(name, args...)
+
+	if debugEnabled() {
+		fmt.Println("cmd:", cmd.String())
+	}
+
+	stdoutPipe, stderrPipe, err := getPipes(cmd)
+
+	if err != nil {
+		return err
+	}
+
+	defer stdoutPipe.Close()
+	defer stderrPipe.Close()
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start program: %w", err)
+	}
+
+	go io.Copy(os.Stdout, stdoutPipe)
+	go io.Copy(os.Stderr, stderrPipe)
+
+	if err := cmd.Wait(); err != nil {
+		return fmt.Errorf("error waiting for child process: %w", err)
+	}
+
+	return nil
+}
+
+func runLocally(files []string) error {
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
+	wg.Add(len(files))
+
+	var errors []error
+
+	for _, file := range files {
+		go func() {
+			err := executeCommand("go", "generate", file)
+
+			if err != nil {
+				mu.Lock()
+				errors = append(errors, fmt.Errorf("%s: %w", err))
+				mu.Unlock()
+			}
+
+			wg.Done()
+		}()
+	}
+
+	wg.Wait()
+
+	if len(errors) > 0 {
+		fmt.Fprintln(os.Stderr, "The following errors have occurred:\n")
+
+		for _, err := range errors {
+			fmt.Fprintln(os.Stderr, err)
+		}
+
+		return fmt.Errorf("failed to generate files")
+	}
+
+	return nil
+}
+
+func generate(wd string, files []string) error {
+	if shouldRunLocally() {
+		return runLocally(files)
+	}
+
+	return runInContainer(wd, files)
 }
 
 func main() {
@@ -464,56 +608,8 @@ func main() {
 		bail(err)
 	}
 
-	tmpFile, err := writeGenFile(wd, files)
-
-	if err != nil {
+	if err = generate(wd, files); err != nil {
 		bail(err)
-	}
-
-	defer os.Remove(tmpFile)
-
-	adjustedWD := adjustPathForGitHubActions(wd)
-
-	relTmpFile, err := filepath.Rel(wd, tmpFile)
-
-	if err != nil {
-		bail(err)
-	}
-
-	if debugEnabled() {
-		fmt.Println("wd:", wd)
-		fmt.Println("adjusted wd:", adjustedWD)
-		fmt.Println("tmpFile:", tmpFile)
-		fmt.Println("relTmpFile:", relTmpFile)
-	}
-
-	cmd := exec.Command(ociBin(), "run", "--rm",
-		"-v", adjustedWD+":/src",
-		genImg(),
-		filepath.Join("/src", relTmpFile))
-
-	if debugEnabled() {
-		fmt.Println("cmd:", cmd.String())
-	}
-
-	stdoutPipe, stderrPipe, err := getPipes(cmd)
-
-	if err != nil {
-		bail(err)
-	}
-
-	defer stdoutPipe.Close()
-	defer stderrPipe.Close()
-
-	if err := cmd.Start(); err != nil {
-		bail(fmt.Errorf("failed to start program: %w", err))
-	}
-
-	go io.Copy(os.Stdout, stdoutPipe)
-	go io.Copy(os.Stderr, stderrPipe)
-
-	if err := cmd.Wait(); err != nil {
-		bail(fmt.Errorf("error waiting for child process: %w", err))
 	}
 
 	if !isModuleVendored(wd) {

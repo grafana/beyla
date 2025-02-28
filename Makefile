@@ -181,26 +181,18 @@ update-offsets: prereqs
 	@echo "### Updating pkg/internal/goexec/offsets.json"
 	$(GO_OFFSETS_TRACKER) -i configs/offsets/tracker_input.json pkg/internal/goexec/offsets.json
 
-# Prefer docker-generate instead, as it's able to perform a parallel build
 .PHONY: generate
-generate: bpf-generate javaagent-generate
-
-.PHONY: bpf-generate
-bpf-generate: export BPF_CLANG := $(CLANG)
-bpf-generate: export BPF_CFLAGS := $(CFLAGS)
-bpf-generate: export BPF2GO := $(BPF2GO)
-bpf-generate: bpf2go
-	@echo "### Generating BPF Go bindings"
-	grep -rlI "BPF2GO" pkg/internal/ | xargs -P 0 -n 1 go generate
-
-.PHONY: javaagent-generate
-javaagent-generate:
-	@go generate pkg/internal/otelsdk/sdk_inject.go
+generate: export BPF_CLANG := $(CLANG)
+generate: export BPF_CFLAGS := $(CFLAGS)
+generate: export BPF2GO := $(BPF2GO)
+generate: bpf2go
+	@echo "### Generating files..."
+	@BEYLA_GENFILES_RUN_LOCALLY=1 go generate cmd/beyla-genfiles/beyla_genfiles.go
 
 .PHONY: docker-generate
 docker-generate:
-	@echo "### Generating BPF Go bindings"
-	@go generate bpf/build_ebpf.go
+	@echo "### Generating files (docker)..."
+	@go generate cmd/beyla-genfiles/beyla_genfiles.go
 
 .PHONY: verify
 verify: prereqs lint-dashboard lint test

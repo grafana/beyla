@@ -18,15 +18,8 @@ RUN cat <<EOF > /generate.sh
 export BPF2GO=bpf2go
 export BPF_CLANG=clang
 export BPF_CFLAGS="-O2 -g -Wall -Werror"
-
-export GENFILES=\$1
-
-if [ -z "\$GENFILES" ]; then
-	echo No genfiles specified - regenerating everything
-	grep -rlI "//go:generate" pkg/ | xargs -P 0 -n 1 go generate
-else
-	cat \$GENFILES | xargs -P 0 -n 1 go generate
-fi
+export BEYLA_GENFILES_RUN_LOCALLY=1
+go run cmd/beyla-genfiles/beyla_genfiles.go
 EOF
 
 RUN chmod +x /generate.sh

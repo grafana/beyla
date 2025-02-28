@@ -360,37 +360,6 @@ func moduleRoot() (string, error) {
 	return wd, nil
 }
 
-func writeGenFile(wd string, files []string) (string, error) {
-	tempFile, err := os.CreateTemp(wd, "gen_files")
-
-	if err != nil {
-		return "", fmt.Errorf("error creating temporary file: %w", err)
-	}
-
-	defer tempFile.Close()
-
-	for _, f := range files {
-		// we want a relative path from the module root, so
-		// that it works when the source tree is mounted
-		// inside docker containers
-		relPath, err := filepath.Rel(wd, f)
-
-		if err != nil {
-			os.Remove(tempFile.Name())
-			return "", fmt.Errorf("error resolving relative path: %w", err)
-		}
-
-		_, err = fmt.Fprintf(tempFile, "%s\n", relPath)
-
-		if err != nil {
-			os.Remove(tempFile.Name())
-			return "", fmt.Errorf("error writing to file: %w", err)
-		}
-	}
-
-	return tempFile.Name(), nil
-}
-
 func ensureWritableImpl(path string, info os.FileInfo) error {
 	mode := info.Mode()
 
@@ -469,41 +438,21 @@ func shouldRunLocally() bool {
 	return err == nil && b
 }
 
-func runInContainer(wd string, files []string) error {
-	tmpFile, err := writeGenFile(wd, files)
-
-	if err != nil {
-		return err
-	}
-
-	defer os.Remove(tmpFile)
-
+func runInContainer(wd string) {
 	adjustedWD := adjustPathForGitHubActions(wd)
-
-	relTmpFile, err := filepath.Rel(wd, tmpFile)
-
-	if err != nil {
-		return err
-	}
 
 	if debugEnabled() {
 		fmt.Println("wd:", wd)
 		fmt.Println("adjusted wd:", adjustedWD)
-		fmt.Println("tmpFile:", tmpFile)
-		fmt.Println("relTmpFile:", relTmpFile)
-		fmt.Println("files:", files)
 	}
 
-	err = executeCommand(ociBin(), "run", "--rm",
+	err := executeCommand(ociBin(), "run", "--rm",
 		"-v", adjustedWD+":/src",
-		genImg(),
-		filepath.Join("/src", relTmpFile))
+		genImg())
 
 	if err != nil {
-		return fmt.Errorf("error waiting for child process: %w", err)
+		bail(fmt.Errorf("error waiting for child process: %w", err))
 	}
-
-	return nil
 }
 
 func executeCommand(name string, args ...string) error {
@@ -536,7 +485,7 @@ func executeCommand(name string, args ...string) error {
 	return nil
 }
 
-func runLocally(files []string) error {
+func genFiles(files []string) error {
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 
@@ -573,12 +522,30 @@ func runLocally(files []string) error {
 	return nil
 }
 
-func generate(wd string, files []string) error {
-	if shouldRunLocally() {
-		return runLocally(files)
+func runLocally(wd string) {
+	files, err := gatherFilesToGenerate(wd)
+
+	if err != nil {
+		bail(err)
 	}
 
-	return runInContainer(wd, files)
+	if len(files) == 0 {
+		os.Exit(0)
+	}
+
+	if err = ensureDirsWritable(files); err != nil {
+		bail(err)
+	}
+
+	if err = genFiles(files); err != nil {
+		bail(err)
+	}
+
+	if !isModuleVendored(wd) {
+		if err := cleanBuildCache(); err != nil {
+			bail(err)
+		}
+	}
 }
 
 func main() {
@@ -596,27 +563,9 @@ func main() {
 		bail(err)
 	}
 
-	files, err := gatherFilesToGenerate(wd)
-
-	if err != nil {
-		bail(err)
-	}
-
-	if len(files) == 0 {
-		os.Exit(0)
-	}
-
-	if err = ensureDirsWritable(files); err != nil {
-		bail(err)
-	}
-
-	if err = generate(wd, files); err != nil {
-		bail(err)
-	}
-
-	if !isModuleVendored(wd) {
-		if err := cleanBuildCache(); err != nil {
-			bail(err)
-		}
+	if shouldRunLocally() {
+		runLocally(wd)
+	} else {
+		runInContainer(wd)
 	}
 }

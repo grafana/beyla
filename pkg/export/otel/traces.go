@@ -115,19 +115,7 @@ func (m *TracesConfig) GetProtocol() Protocol {
 }
 
 func (m *TracesConfig) OTLPTracesEndpoint() (string, bool) {
-	endpoint := m.TracesEndpoint
-	isCommon := false
-	if endpoint == "" {
-		endpoint = m.CommonEndpoint
-		if endpoint == "" && m.Grafana != nil && m.Grafana.CloudZone != "" {
-			endpoint = m.Grafana.Endpoint()
-		}
-		if endpoint != "" {
-			isCommon = true
-		}
-	}
-
-	return endpoint, isCommon
+	return ResolveOTLPEndpoint(m.TracesEndpoint, m.CommonEndpoint, m.Grafana)
 }
 
 func (m *TracesConfig) guessProtocol() Protocol {

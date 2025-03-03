@@ -5,7 +5,7 @@ go 1.23.2
 require (
 	github.com/AlessandroPomponio/go-gibberish v0.0.0-20191004143433-a2d4156f0396
 	github.com/caarlos0/env/v9 v9.0.0
-	github.com/cilium/ebpf v0.16.0
+	github.com/cilium/ebpf v0.17.3
 	github.com/containers/common v0.61.0
 	github.com/gavv/monotime v0.0.0-20190418164738-30dba4353424
 	github.com/gin-gonic/gin v1.9.1
@@ -65,7 +65,6 @@ require (
 	golang.org/x/mod v0.23.0
 	golang.org/x/net v0.35.0
 	golang.org/x/sys v0.30.0
-	golang.org/x/tools v0.30.0
 	google.golang.org/grpc v1.69.4
 	google.golang.org/protobuf v1.36.3
 	gopkg.in/yaml.v3 v3.0.1
@@ -160,12 +159,11 @@ require (
 	go.opentelemetry.io/proto/otlp v1.5.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/crypto v0.33.0 // indirect
-	golang.org/x/exp v0.0.0-20241009180824-f66d83c29e7c // indirect
 	golang.org/x/oauth2 v0.24.0 // indirect
-	golang.org/x/sync v0.11.0 // indirect
 	golang.org/x/term v0.29.0 // indirect
 	golang.org/x/text v0.22.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
+	golang.org/x/tools v0.30.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.3.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20250115164207-1a7da9e5054f // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250115164207-1a7da9e5054f // indirect

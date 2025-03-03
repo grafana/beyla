@@ -31,6 +31,8 @@ import (
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
 	"golang.org/x/sys/unix"
+
+	"github.com/grafana/beyla/v2/pkg/internal/ebpf/convenience"
 )
 
 // $BPF_CLANG and $BPF_CFLAGS are set by the Makefile.
@@ -71,14 +73,14 @@ func NewSockFlowFetcher(
 	if tlog.Enabled(context.TODO(), slog.LevelDebug) {
 		traceMsgs = 1
 	}
-	if err := spec.RewriteConstants(map[string]interface{}{
+	if err := ebpfconvenience.RewriteConstants(spec, map[string]interface{}{
 		constSampling:      uint32(sampling),
 		constTraceMessages: uint8(traceMsgs),
 	}); err != nil {
 		return nil, fmt.Errorf("rewriting BPF constants definition: %w", err)
 	}
 	if err := spec.LoadAndAssign(&objects, &ebpf.CollectionOptions{
-		Programs: ebpf.ProgramOptions{LogSize: 640 * 1024},
+		Programs: ebpf.ProgramOptions{LogSizeStart: 640 * 1024},
 	}); err != nil {
 		printVerifierErrorInfo(err)
 		return nil, fmt.Errorf("loading and assigning BPF objects: %w", err)

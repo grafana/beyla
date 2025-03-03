@@ -136,7 +136,6 @@ go.uber.org/multierr,https://github.com/grafana/beyla/blob/HEAD/vendor/go.uber.o
 go.uber.org/zap,https://github.com/grafana/beyla/blob/HEAD/vendor/go.uber.org/zap/LICENSE,MIT
 golang.org/x/arch/x86/x86asm,https://github.com/grafana/beyla/blob/HEAD/vendor/golang.org/x/arch/LICENSE,BSD-3-Clause
 golang.org/x/crypto/sha3,https://github.com/grafana/beyla/blob/HEAD/vendor/golang.org/x/crypto/LICENSE,BSD-3-Clause
-golang.org/x/exp/constraints,https://github.com/grafana/beyla/blob/HEAD/vendor/golang.org/x/exp/LICENSE,BSD-3-Clause
 golang.org/x/mod/semver,https://github.com/grafana/beyla/blob/HEAD/vendor/golang.org/x/mod/LICENSE,BSD-3-Clause
 golang.org/x/net,https://github.com/grafana/beyla/blob/HEAD/vendor/golang.org/x/net/LICENSE,BSD-3-Clause
 golang.org/x/oauth2,https://github.com/grafana/beyla/blob/HEAD/vendor/golang.org/x/oauth2/LICENSE,BSD-3-Clause

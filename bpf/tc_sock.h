@@ -11,7 +11,7 @@
 #include "http_ssl_defs.h"
 #include "k_tracer_defs.h"
 
-#define SOCKOPS_MAP_SIZE 65535
+enum { k_sockops_map_size = 65535 };
 
 // A map of sockets which we track with sock_ops. The sock_msg
 // program subscribes to this map and runs for each new socket
@@ -20,7 +20,7 @@
 // the socket information
 struct {
     __uint(type, BPF_MAP_TYPE_SOCKHASH);
-    __uint(max_entries, SOCKOPS_MAP_SIZE);
+    __uint(max_entries, k_sockops_map_size);
     __uint(key_size, sizeof(connection_info_t));
     __uint(value_size, sizeof(uint32_t));
 } sock_dir SEC(".maps");
@@ -42,7 +42,7 @@ struct tc_http_ctx_map {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, u32);
     __type(value, struct tc_http_ctx);
-    __uint(max_entries, SOCKOPS_MAP_SIZE);
+    __uint(max_entries, k_sockops_map_size);
 } tc_http_ctx_map SEC(".maps");
 
 // Memory buffer and a map bellow as temporary storage for

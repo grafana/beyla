@@ -27,7 +27,7 @@ IMG = $(IMG_REGISTRY)/$(IMG_ORG)/$(IMG_NAME):$(VERSION)
 
 # The generator is a container image that provides a reproducible environment for
 # building eBPF binaries
-GEN_IMG ?= ghcr.io/grafana/beyla-generator:main
+GEN_IMG ?= ghcr.io/grafana/beyla-ebpf-generator:main
 
 COMPOSE_ARGS ?= -f test/integration/docker-compose.yml
 
@@ -38,6 +38,8 @@ CLANG ?= clang
 CFLAGS := -O2 -g -Wall -Werror $(CFLAGS)
 
 CLANG_TIDY ?= clang-tidy
+
+CILIUM_EBPF_VER ?= $(call gomod-version,cilium/ebpf)
 
 # regular expressions for excluded file patterns
 EXCLUDE_COVERAGE_FILES="(_bpfel.go)|(/pingserver/)|(/grafana/beyla/test/)|(integration/components)|(/grafana/beyla/docs/)|(/grafana/beyla/configs/)|(/grafana/beyla/examples/)|(.pb.go)"
@@ -179,29 +181,27 @@ update-offsets: prereqs
 	@echo "### Updating pkg/internal/goexec/offsets.json"
 	$(GO_OFFSETS_TRACKER) -i configs/offsets/tracker_input.json pkg/internal/goexec/offsets.json
 
-# As generated artifacts are part of the code repo (pkg/ebpf packages), you don't have
-# to run this target for each build. Only when you change the C code inside the bpf folder.
-# You might want to use the docker-generate target instead of this.
 .PHONY: generate
 generate: export BPF_CLANG := $(CLANG)
 generate: export BPF_CFLAGS := $(CFLAGS)
 generate: export BPF2GO := $(BPF2GO)
 generate: bpf2go
-	@echo "### Generating BPF Go bindings"
-	go generate ./pkg/...
+	@echo "### Generating files..."
+	@BEYLA_GENFILES_RUN_LOCALLY=1 go generate cmd/beyla-genfiles/beyla_genfiles.go
 
 .PHONY: docker-generate
 docker-generate:
-	$(OCI_BIN) run --rm -v $(shell pwd):/src $(GEN_IMG)
+	@echo "### Generating files (docker)..."
+	@go generate cmd/beyla-genfiles/beyla_genfiles.go
 
 .PHONY: verify
 verify: prereqs lint-dashboard lint test
 
 .PHONY: build
-build: verify compile
+build: docker-generate verify compile
 
 .PHONY: all
-all: generate build
+all: docker-generate build
 
 .PHONY: compile compile-cache
 compile:
@@ -216,7 +216,7 @@ debug:
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -gcflags "-N -l" -ldflags="-X '$(BUILDINFO_PKG).Version=$(RELEASE_VERSION)' -X '$(BUILDINFO_PKG).Revision=$(RELEASE_REVISION)'" -a -o bin/$(CMD) $(MAIN_GO_FILE)
 
 .PHONY: dev
-dev: prereqs generate compile-for-coverage
+dev: prereqs docker-generate compile-for-coverage
 
 # Generated binary can provide coverage stats according to https://go.dev/blog/integration-test-coverage
 .PHONY: compile-for-coverage compile-cache-for-coverage
@@ -260,7 +260,8 @@ image-build-push:
 .PHONY: generator-image-build
 generator-image-build:
 	@echo "### Creating the image that generates the eBPF binaries"
-	$(OCI_BIN) build . -f generator.Dockerfile -t $(GEN_IMG)
+	$(OCI_BIN) buildx build --build-arg EBPF_VER="$(CILIUM_EBPF_VER)" --platform linux/amd64,linux/arm64 -t $(GEN_IMG) -f generator.Dockerfile  .
+
 
 .PHONY: prepare-integration-test
 prepare-integration-test:
@@ -334,7 +335,7 @@ bin/ginkgo:
 	$(call go-install-tool,$(GINKGO),github.com/onsi/ginkgo/v2/ginkgo,latest)
 
 .PHONY: oats-prereq
-oats-prereq: bin/ginkgo
+oats-prereq: bin/ginkgo docker-generate
 	mkdir -p $(TEST_OUTPUT)/run
 
 .PHONY: oats-test-sql
@@ -390,15 +391,11 @@ clean-testoutput:
 	@echo "### Cleaning ${TEST_OUTPUT} folder"
 	rm -rf ${TEST_OUTPUT}/*
 
-.PHONY: check-ebpf-integrity
-check-ebpf-integrity: docker-generate
-	git diff --name-status --exit-code || (echo "Run make docker-generate locally and commit the code changes" && false)
-
 .PHONY: protoc-gen
 protoc-gen:
 	docker run --rm -v $(PWD):/work -w /work $(PROTOC_IMAGE) protoc --go_out=pkg/kubecache --go-grpc_out=pkg/kubecache proto/informer.proto
 
 .PHONY: clang-format
 clang-format:
-	find ./bpf -type f -name "*.c" | xargs clang-format -i
-	find ./bpf -type f -name "*.h" | xargs clang-format -i
+	find ./bpf -type f -name "*.c" | xargs -P 0 -n 1 clang-format -i
+	find ./bpf -type f -name "*.h" | xargs -P 0 -n 1 clang-format -i

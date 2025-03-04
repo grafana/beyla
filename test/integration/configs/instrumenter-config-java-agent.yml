@@ -1,0 +1,14 @@
+routes:
+  patterns:
+    - /greeting
+  unmatched: path
+otel_metrics_export:
+  endpoint: http://otelcol:4318/v1/metrics
+attributes:
+  select:
+    process_*:
+      include: ["*"]
+    process_cpu_*:
+      exclude: ["cpu_mode"]
+    "*":
+      include: ["*"]

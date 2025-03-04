@@ -167,9 +167,6 @@ spec:
           image: mariomac/goblog:dev
           imagePullPolicy: IfNotPresent
           command: ["/goblog"]
-          env:
-            - name: "GOBLOG_CONFIG"
-              value: "/sample/config.yml"
           ports:
             - containerPort: 8443
               name: https

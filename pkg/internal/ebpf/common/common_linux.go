@@ -3,6 +3,8 @@ package ebpfcommon
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"strconv"
 	"syscall"
 
 	"github.com/cilium/ebpf/link"
@@ -61,6 +63,10 @@ func hasCapSysAdmin() bool {
 	return err == nil && caps.Has(unix.CAP_SYS_ADMIN)
 }
 
+func HasHostPidAccess() bool {
+	return os.Getpid() != 1
+}
+
 func FindNetworkNamespace(pid int32) (string, error) {
 	netPath := fmt.Sprintf("/proc/%d/ns/net", pid)
 	f, err := os.Open(netPath)
@@ -81,10 +87,6 @@ func FindNetworkNamespace(pid int32) (string, error) {
 	return string(buf[:n]), nil
 }
 
-func HasHostPidAccess() bool {
-	return os.Getpid() != 1
-}
-
 func HasHostNetworkAccess() (bool, error) {
 	// Get the network namespace of the current process
 	containerNS, err := FindNetworkNamespace(int32(os.Getpid()))
@@ -100,4 +102,8 @@ func HasHostNetworkAccess() (bool, error) {
 
 	// Compare the network namespaces
 	return containerNS == hostNS, nil
+}
+
+func RootDirectoryForPID(pid int32) string {
+	return filepath.Join("/proc", strconv.Itoa(int(pid)), "root")
 }

@@ -46,7 +46,7 @@ func TestHTTPTracesEndpoint(t *testing.T) {
 	}
 
 	t.Run("testing with two endpoints", func(t *testing.T) {
-		testHTTPTracesOptions(t, otlpOptions{Scheme: "https", Endpoint: "localhost:3232", URLPath: "/v1/traces", HTTPHeaders: map[string]string{}}, &tcfg)
+		testHTTPTracesOptions(t, otlpOptions{Scheme: "https", Endpoint: "localhost:3232", URLPath: "/v1/traces", Headers: map[string]string{}}, &tcfg)
 	})
 
 	tcfg = TracesConfig{
@@ -55,7 +55,7 @@ func TestHTTPTracesEndpoint(t *testing.T) {
 	}
 
 	t.Run("testing with only common endpoint", func(t *testing.T) {
-		testHTTPTracesOptions(t, otlpOptions{Scheme: "https", Endpoint: "localhost:3131", BaseURLPath: "/otlp", URLPath: "/otlp/v1/traces", HTTPHeaders: map[string]string{}}, &tcfg)
+		testHTTPTracesOptions(t, otlpOptions{Scheme: "https", Endpoint: "localhost:3131", BaseURLPath: "/otlp", URLPath: "/otlp/v1/traces", Headers: map[string]string{}}, &tcfg)
 	})
 
 	tcfg = TracesConfig{
@@ -64,7 +64,7 @@ func TestHTTPTracesEndpoint(t *testing.T) {
 		Instrumentations: []string{instrumentations.InstrumentationALL},
 	}
 	t.Run("testing with insecure endpoint", func(t *testing.T) {
-		testHTTPTracesOptions(t, otlpOptions{Scheme: "http", Endpoint: "localhost:3232", Insecure: true, HTTPHeaders: map[string]string{}}, &tcfg)
+		testHTTPTracesOptions(t, otlpOptions{Scheme: "http", Endpoint: "localhost:3232", Insecure: true, Headers: map[string]string{}}, &tcfg)
 	})
 
 	tcfg = TracesConfig{
@@ -74,7 +74,7 @@ func TestHTTPTracesEndpoint(t *testing.T) {
 	}
 
 	t.Run("testing with skip TLS verification", func(t *testing.T) {
-		testHTTPTracesOptions(t, otlpOptions{Scheme: "https", Endpoint: "localhost:3232", URLPath: "/v1/traces", SkipTLSVerify: true, HTTPHeaders: map[string]string{}}, &tcfg)
+		testHTTPTracesOptions(t, otlpOptions{Scheme: "https", Endpoint: "localhost:3232", URLPath: "/v1/traces", SkipTLSVerify: true, Headers: map[string]string{}}, &tcfg)
 	})
 }
 
@@ -92,11 +92,7 @@ func TestHTTPTracesWithGrafanaOptions(t *testing.T) {
 			Endpoint:    "otlp-gateway-eu-west-23.grafana.net",
 			BaseURLPath: "/otlp",
 			URLPath:     "/otlp/v1/traces",
-			HTTPHeaders: map[string]string{
-				// Basic + output of: echo -n 12345:affafafaafkd | gbase64 -w 0
-				"Authorization": "Basic MTIzNDU6YWZmYWZhZmFhZmtk",
-			},
-			GRPCHeaders: map[string]string{
+			Headers: map[string]string{
 				// Basic + output of: echo -n 12345:affafafaafkd | gbase64 -w 0
 				"Authorization": "Basic MTIzNDU6YWZmYWZhZmFhZmtk",
 			},
@@ -108,11 +104,7 @@ func TestHTTPTracesWithGrafanaOptions(t *testing.T) {
 			Scheme:   "https",
 			Endpoint: "localhost:3939",
 			URLPath:  "/v1/traces",
-			HTTPHeaders: map[string]string{
-				// Base64 representation of 12345:affafafaafkd
-				"Authorization": "Basic MTIzNDU6YWZmYWZhZmFhZmtk",
-			},
-			GRPCHeaders: map[string]string{
+			Headers: map[string]string{
 				// Base64 representation of 12345:affafafaafkd
 				"Authorization": "Basic MTIzNDU6YWZmYWZhZmFhZmtk",
 			},
@@ -190,7 +182,7 @@ func TestHTTPTracesEndpointHeaders(t *testing.T) {
 				Instrumentations: []string{instrumentations.InstrumentationALL},
 			})
 			require.NoError(t, err)
-			assert.Equal(t, tc.ExpectedHeaders, opts.HTTPHeaders)
+			assert.Equal(t, tc.ExpectedHeaders, opts.Headers)
 		})
 	}
 }
@@ -208,7 +200,7 @@ func TestGRPCTracesEndpointOptions(t *testing.T) {
 	}
 
 	t.Run("testing with two endpoints", func(t *testing.T) {
-		testTracesGRPCOptions(t, otlpOptions{Endpoint: "localhost:3232", GRPCHeaders: map[string]string{}}, &tcfg)
+		testTracesGRPCOptions(t, otlpOptions{Endpoint: "localhost:3232", Headers: map[string]string{}}, &tcfg)
 	})
 
 	tcfg = TracesConfig{
@@ -217,7 +209,7 @@ func TestGRPCTracesEndpointOptions(t *testing.T) {
 	}
 
 	t.Run("testing with only common endpoint", func(t *testing.T) {
-		testTracesGRPCOptions(t, otlpOptions{Endpoint: "localhost:3131", GRPCHeaders: map[string]string{}}, &tcfg)
+		testTracesGRPCOptions(t, otlpOptions{Endpoint: "localhost:3131", Headers: map[string]string{}}, &tcfg)
 	})
 
 	tcfg = TracesConfig{
@@ -226,7 +218,7 @@ func TestGRPCTracesEndpointOptions(t *testing.T) {
 		Instrumentations: []string{instrumentations.InstrumentationALL},
 	}
 	t.Run("testing with insecure endpoint", func(t *testing.T) {
-		testTracesGRPCOptions(t, otlpOptions{Endpoint: "localhost:3232", Insecure: true, GRPCHeaders: map[string]string{}}, &tcfg)
+		testTracesGRPCOptions(t, otlpOptions{Endpoint: "localhost:3232", Insecure: true, Headers: map[string]string{}}, &tcfg)
 	})
 
 	tcfg = TracesConfig{
@@ -236,7 +228,7 @@ func TestGRPCTracesEndpointOptions(t *testing.T) {
 	}
 
 	t.Run("testing with skip TLS verification", func(t *testing.T) {
-		testTracesGRPCOptions(t, otlpOptions{Endpoint: "localhost:3232", SkipTLSVerify: true, GRPCHeaders: map[string]string{}}, &tcfg)
+		testTracesGRPCOptions(t, otlpOptions{Endpoint: "localhost:3232", SkipTLSVerify: true, Headers: map[string]string{}}, &tcfg)
 	})
 }
 
@@ -282,7 +274,7 @@ func TestGRPCTracesEndpointHeaders(t *testing.T) {
 				Instrumentations: []string{instrumentations.InstrumentationALL},
 			})
 			require.NoError(t, err)
-			assert.Equal(t, tc.ExpectedHeaders, opts.GRPCHeaders)
+			assert.Equal(t, tc.ExpectedHeaders, opts.Headers)
 		})
 	}
 }

@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  testserver:
+    image: ghcr.io/grafana/beyla-test/greeting-java-jar/0.0.1
+    ports:
+      - "8086:8085"
+    environment:
+      LOG_LEVEL: DEBUG
+    depends_on:
+      otelcol:
+        condition: service_started
+
+  autoinstrumenter:
+    build:
+      context: ../..
+      dockerfile: ./test/integration/components/beyla/Dockerfile
+    command:
+      - --config=/configs/instrumenter-config-java-agent.yml
+    volumes:
+      - ./configs/:/configs
+      - ./system/sys/kernel/security:/sys/kernel/security
+      - ../../testoutput:/coverage
+      - ../../testoutput/run-java:/var/run/beyla
+    image: hatest-javaautoinstrumenter
+    privileged: true # in some environments (not GH Pull Requests) you can set it to false and then cap_add: [ SYS_ADMIN ]
+    network_mode: "service:testserver"
+    pid: "service:testserver"
+    environment:
+      GOCOVERDIR: "/coverage"
+      BEYLA_TRACE_PRINTER: "text"
+      BEYLA_OPEN_PORT: "8085"
+      OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME}"
+      BEYLA_SERVICE_NAMESPACE: "integration-test"
+      OTEL_METRIC_EXPORT_INTERVAL: "10"
+      BEYLA_BPF_BATCH_TIMEOUT: "10ms"
+      BEYLA_LOG_LEVEL: "DEBUG"
+      BEYLA_BPF_DEBUG: "TRUE"
+      BEYLA_HOSTNAME: "beyla"
+      BEYLA_USE_OTEL_SDK_FOR_JAVA: "TRUE"
+    depends_on:
+      testserver:
+        condition: service_started
+
+  # OpenTelemetry Collector
+  otelcol:
+    image: otel/opentelemetry-collector-contrib:0.104.0
+    container_name: otel-col
+    deploy:
+      resources:
+        limits:
+          memory: 125M
+    restart: unless-stopped
+    command: [ "--config=/etc/otelcol-config/otelcol-config.yml" ]
+    volumes:
+      - ./configs/:/etc/otelcol-config
+    ports:
+      - "4317"          # OTLP over gRPC receiver
+      - "4318:4318"     # OTLP over HTTP receiver
+      - "9464"          # Prometheus exporter
+      - "8888"          # metrics endpoint
+    depends_on:
+      prometheus:
+        condition: service_started
+
+  # Prometheus
+  prometheus:
+    image: quay.io/prometheus/prometheus:v2.55.1
+    container_name: prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus-config.yml
+      - --web.enable-lifecycle
+      - --web.route-prefix=/
+    volumes:
+      - ./configs/:/etc/prometheus
+    ports:
+      - "9090:9090"

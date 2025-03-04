@@ -43,12 +43,13 @@ const (
 	ServiceGraphFailed = "traces_service_graph_request_failed_total"
 	ServiceGraphTotal  = "traces_service_graph_request_total"
 
-	serviceKey          = "service"
+	serviceNameKey      = "service_name"
 	serviceNamespaceKey = "service_namespace"
 
 	hostIDKey        = "host_id"
 	hostNameKey      = "host_name"
 	grafanaHostIDKey = "grafana_host_id"
+	processPIDKey    = "process_pid"
 
 	k8sNamespaceName   = "k8s_namespace_name"
 	k8sPodName         = "k8s_pod_name"
@@ -778,7 +779,7 @@ func appendK8sLabelValuesService(values []string, service svc.Attrs) []string {
 }
 
 func labelNamesSpans() []string {
-	return []string{serviceKey, serviceNamespaceKey, spanNameKey, statusCodeKey, spanKindKey, serviceInstanceKey, serviceJobKey, sourceKey}
+	return []string{serviceNameKey, serviceNamespaceKey, spanNameKey, statusCodeKey, spanKindKey, serviceInstanceKey, serviceJobKey, sourceKey}
 }
 
 func (r *metricsReporter) labelValuesSpans(span *request.Span) []string {
@@ -795,7 +796,7 @@ func (r *metricsReporter) labelValuesSpans(span *request.Span) []string {
 }
 
 func labelNamesTargetInfo(kubeEnabled bool) []string {
-	names := []string{hostIDKey, hostNameKey, serviceKey, serviceNamespaceKey, serviceInstanceKey, serviceJobKey, telemetryLanguageKey, telemetrySDKKey, sourceKey}
+	names := []string{hostIDKey, hostNameKey, serviceNameKey, serviceNamespaceKey, serviceInstanceKey, serviceJobKey, telemetryLanguageKey, telemetrySDKKey, sourceKey, processPIDKey}
 
 	if kubeEnabled {
 		names = appendK8sLabelNames(names)
@@ -815,6 +816,7 @@ func (r *metricsReporter) labelValuesTargetInfo(service svc.Attrs) []string {
 		service.SDKLanguage.String(),
 		"beyla",
 		"beyla",
+		strconv.Itoa(int(service.ProcPID)),
 	}
 
 	if r.kubeEnabled {

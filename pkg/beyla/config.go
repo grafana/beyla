@@ -153,7 +153,8 @@ type Config struct {
 
 	Attributes Attributes `yaml:"attributes"`
 	// Routes is an optional node. If not set, data will be directly forwarded to exporters.
-	Routes       *transform.RoutesConfig       `yaml:"routes"`
+	Routes *transform.RoutesConfig `yaml:"routes"`
+	// nolint:undoc
 	NameResolver *transform.NameResolverConfig `yaml:"name_resolver"`
 	Metrics      otel.MetricsConfig            `yaml:"otel_metrics_export"`
 	Traces       otel.TracesConfig             `yaml:"otel_traces_export"`
@@ -161,7 +162,8 @@ type Config struct {
 	TracePrinter debug.TracePrinter            `yaml:"trace_printer" env:"BEYLA_TRACE_PRINTER"`
 
 	// Exec allows selecting the instrumented executable whose complete path contains the Exec value.
-	Exec       services.RegexpAttr `yaml:"executable_name" env:"BEYLA_EXECUTABLE_NAME"`
+	Exec services.RegexpAttr `yaml:"executable_name" env:"BEYLA_EXECUTABLE_NAME"`
+	// nolint:undoc
 	ExecOtelGo services.RegexpAttr `env:"OTEL_GO_AUTO_TARGET_EXE"`
 	// Port allows selecting the instrumented executable that owns the Port value. If this value is set (and
 	// different to zero), the value of the Exec property won't take effect.
@@ -187,9 +189,11 @@ type Config struct {
 	// From this comment, the properties below will remain undocumented, as they
 	// are useful for development purposes. They might be helpful for customer support.
 
-	ChannelBufferLen int             `yaml:"channel_buffer_len" env:"BEYLA_CHANNEL_BUFFER_LEN"`
-	ProfilePort      int             `yaml:"profile_port" env:"BEYLA_PROFILE_PORT"`
-	InternalMetrics  imetrics.Config `yaml:"internal_metrics"`
+	// nolint:undoc
+	ChannelBufferLen int `yaml:"channel_buffer_len" env:"BEYLA_CHANNEL_BUFFER_LEN"`
+	// nolint:undoc
+	ProfilePort     int             `yaml:"profile_port" env:"BEYLA_PROFILE_PORT"`
+	InternalMetrics imetrics.Config `yaml:"internal_metrics"`
 
 	// Processes metrics for application. They will be only enabled if there is a metrics exporter enabled,
 	// and both the "application" and "application_process" features are enabled
@@ -222,8 +226,9 @@ type Attributes struct {
 
 type HostIDConfig struct {
 	// Override allows overriding the reported host.id in Beyla
+	// nolint:undoc
 	Override string `yaml:"override" env:"BEYLA_HOST_ID"`
-	// HostIDFetchTimeout specifies the timeout for trying to fetch the HostID from diverse Cloud Providers
+	// nolint:undoc
 	FetchTimeout time.Duration `yaml:"fetch_timeout" env:"BEYLA_HOST_ID_FETCH_TIMEOUT"`
 }
 

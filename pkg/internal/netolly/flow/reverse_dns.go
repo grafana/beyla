@@ -24,15 +24,19 @@ var netLookupAddr = net.LookupAddr
 
 // ReverseDNS is currently experimental. It is kept disabled by default and will be hidden
 // from the documentation. This means that it does not impact in the overall Beyla performance.
+// nolint:undoc
 type ReverseDNS struct {
 	// Type of ReverseDNS. Values are "none" (default) and "local".
+	// nolint:undoc
 	Type string `yaml:"type" env:"BEYLA_NETWORK_REVERSE_DNS_TYPE"`
 	// CacheLen specifies the max size of the LRU cache that is checked before
 	// performing the name lookup. Default: 256
+	// nolint:undoc
 	CacheLen int `yaml:"cache_len" env:"BEYLA_NETWORK_REVERSE_DNS_CACHE_LEN"`
 	// CacheTTL specifies the time-to-live of a cached IP->hostname entry. After the
 	// cached entry becomes older than this time, the IP->hostname entry will be looked
 	// up again.
+	// nolint:undoc
 	CacheTTL time.Duration `yaml:"cache_expiry" env:"BEYLA_NETWORK_REVERSE_DNS_CACHE_TTL"`
 }
 

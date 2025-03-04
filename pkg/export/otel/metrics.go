@@ -74,6 +74,7 @@ type MetricsConfig struct {
 	Interval time.Duration `yaml:"interval" env:"BEYLA_METRICS_INTERVAL"`
 	// OTELIntervalMS supports metric intervals as specified by the standard OTEL definition.
 	// BEYLA_METRICS_INTERVAL takes precedence over it.
+	// nolint:undoc
 	OTELIntervalMS int `env:"OTEL_METRIC_EXPORT_INTERVAL"`
 
 	CommonEndpoint  string `yaml:"-" env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
@@ -88,10 +89,12 @@ type MetricsConfig struct {
 	Buckets              Buckets `yaml:"buckets"`
 	HistogramAggregation string  `yaml:"histogram_aggregation" env:"OTEL_EXPORTER_OTLP_METRICS_DEFAULT_HISTOGRAM_AGGREGATION"`
 
+	// nolint:undoc
 	ReportersCacheLen int `yaml:"reporters_cache_len" env:"BEYLA_METRICS_REPORT_CACHE_LEN"`
 
 	// SDKLogLevel works independently from the global LogLevel because it prints GBs of logs in Debug mode
 	// and the Info messages leak internal details that are not usually valuable for the final user.
+	// nolint:undoc
 	SDKLogLevel string `yaml:"otel_sdk_log_level" env:"BEYLA_OTEL_SDK_LOG_LEVEL"`
 
 	// Features of metrics that are can be exported. Accepted values are "application" and "network".
@@ -103,6 +106,7 @@ type MetricsConfig struct {
 
 	// TTL is the time since a metric was updated for the last time until it is
 	// removed from the metrics set.
+	// nolint:undoc
 	TTL time.Duration `yaml:"ttl" env:"BEYLA_OTEL_METRICS_TTL"`
 
 	AllowServiceGraphSelfReferences bool `yaml:"allow_service_graph_self_references" env:"BEYLA_OTEL_ALLOW_SERVICE_GRAPH_SELF_REFERENCES"`

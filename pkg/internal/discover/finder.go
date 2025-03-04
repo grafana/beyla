@@ -8,6 +8,7 @@ import (
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
+	"github.com/grafana/beyla/v2/pkg/export/prom"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/generictracer"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/gotracer"
@@ -44,6 +45,7 @@ type nodesMap struct {
 	Surveyor                 pipe.Middle[[]Event[ebpf.Instrumentable], []otel.SurveyInfo]
 	SurveyKubeDecorator      pipe.Middle[[]otel.SurveyInfo, []otel.SurveyInfo]
 	SurveyOTelMetrics        pipe.Final[[]otel.SurveyInfo]
+	SurveyPromMetrics        pipe.Final[[]otel.SurveyInfo]
 }
 
 func (pf *nodesMap) Connect() {
@@ -56,7 +58,7 @@ func (pf *nodesMap) Connect() {
 	pf.SurveyExecTyper.SendTo(pf.SurveyContainerDBUpdater)
 	pf.SurveyContainerDBUpdater.SendTo(pf.Surveyor)
 	pf.Surveyor.SendTo(pf.SurveyKubeDecorator)
-	pf.SurveyKubeDecorator.SendTo(pf.SurveyOTelMetrics)
+	pf.SurveyKubeDecorator.SendTo(pf.SurveyOTelMetrics, pf.SurveyPromMetrics)
 }
 
 func processWatcher(pf *nodesMap) *pipe.Start[[]Event[processAttrs]] {
@@ -91,6 +93,9 @@ func surveyKubeDecorator(pf *nodesMap) *pipe.Middle[[]otel.SurveyInfo, []otel.Su
 }
 func surveyorOTelMetrics(pf *nodesMap) *pipe.Final[[]otel.SurveyInfo] {
 	return &pf.SurveyOTelMetrics
+}
+func surveyorPromMetrics(pf *nodesMap) *pipe.Final[[]otel.SurveyInfo] {
+	return &pf.SurveyPromMetrics
 }
 func surveyContainerDBUpdater(pf *nodesMap) *pipe.Middle[[]Event[ebpf.Instrumentable], []Event[ebpf.Instrumentable]] {
 	return &pf.SurveyContainerDBUpdater
@@ -128,6 +133,10 @@ func (pf *ProcessFinder) Start() (<-chan *ebpf.Instrumentable, <-chan *ebpf.Inst
 	pipe.AddMiddleProvider(gb, surveyKubeDecorator, transform.KubeSurveyDecoratorProvider(pf.ctx, &pf.cfg.Attributes.Kubernetes, pf.ctxInfo))
 	pipe.AddFinalProvider(gb, surveyorOTelMetrics, otel.SurveyMetricsExporterProvider(pf.ctx, pf.ctxInfo, &otel.SurveyMetricsConfig{
 		Metrics:            &pf.cfg.Metrics,
+		AttributeSelectors: pf.cfg.Attributes.Select,
+	}))
+	pipe.AddFinalProvider(gb, surveyorPromMetrics, prom.SurveyPrometheusEndpoint(pf.ctx, pf.ctxInfo, &prom.SurveyPrometheusConfig{
+		Metrics:            &pf.cfg.Prometheus,
 		AttributeSelectors: pf.cfg.Attributes.Select,
 	}))
 	pipeline, err := gb.Build()

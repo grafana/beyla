@@ -63,6 +63,7 @@ type surveyMetricsExporter struct {
 	log *slog.Logger
 
 	attrSurveyed []attributes.Field[*exec.FileInfo, attribute.KeyValue]
+	processMap   map[int32]attribute.Set
 }
 
 type surveyMetrics struct {
@@ -136,9 +137,10 @@ func newSurveyMetricsExporter(
 		hostID:       ctxInfo.HostID,
 		clock:        expire.NewCachedClock(timeNow),
 		attrSurveyed: attrSurvey,
+		processMap:   map[int32]attribute.Set{},
 	}
 
-	mr.reporters = NewReporterPool(cfg.Metrics.ReportersCacheLen, cfg.Metrics.TTL, timeNow,
+	mr.reporters = NewReporterPool(cfg.Metrics.ReportersCacheLen, 360000*time.Hour, timeNow,
 		func(id svc.UID, v *expirable[*surveyMetrics]) {
 			llog := log.With("service", id)
 			llog.Debug("evicting metrics reporter from cache")
@@ -183,7 +185,7 @@ func (me *surveyMetricsExporter) newMetricSet(f *exec.FileInfo) (*surveyMetrics,
 		return nil, err
 	} else {
 		m.surveyed = NewExpirer[*exec.FileInfo, metric2.Int64Gauge, float64](
-			me.ctx, surveyed, me.attrSurveyed, timeNow, 100*time.Hour)
+			me.ctx, surveyed, me.attrSurveyed, timeNow, 360000*time.Hour)
 	}
 
 	return &m, nil
@@ -226,9 +228,13 @@ func getSurveyAttrs(hostID string, f *exec.FileInfo) []attribute.KeyValue {
 func (me *surveyMetricsExporter) observeMetric(reporter *surveyMetrics, s *SurveyInfo) {
 	mr, attrs := reporter.surveyed.ForRecord(s.File, getSurveyAttrs(me.hostID, s.File)...)
 	if s.Type == EventCreated {
+		me.processMap[s.File.Pid] = attrs
 		mr.Record(reporter.ctx, 1, metric2.WithAttributeSet(attrs))
 	} else {
-		mr.Record(reporter.ctx, 0, metric2.WithAttributeSet(attrs))
+		if savedAttrs, ok := me.processMap[s.File.Pid]; ok {
+			mr.Remove(reporter.ctx, metric2.WithAttributeSet(savedAttrs))
+			delete(me.processMap, s.File.Pid)
+		}
 	}
 }
 

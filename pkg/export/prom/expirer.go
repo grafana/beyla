@@ -69,3 +69,11 @@ func (ex *Expirer[T]) Collect(metrics chan<- prometheus.Metric) {
 		metrics <- m.metric
 	}
 }
+
+func (ex *Expirer[T]) ImmediateDelete(labelIndex int, labelValue string) {
+	for _, m := range ex.entries.All() {
+		if m.labelVals[labelIndex] == labelValue {
+			ex.entries.DeleteSelected(m.labelVals)
+		}
+	}
+}

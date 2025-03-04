@@ -97,6 +97,20 @@ func (ex *ExpiryMap[T]) DeleteAll() []T {
 	return entries
 }
 
+// Deletes specific label entry and returns the deleted element
+func (ex *ExpiryMap[T]) DeleteSelected(lbls []string) T {
+	ex.mt.Lock()
+	defer ex.mt.Unlock()
+
+	h := labelsKey(lbls)
+
+	v, _ := ex.entries[h]
+
+	delete(ex.entries, h)
+
+	return v.val
+}
+
 // All returns an array with all the stored entries. It might contain expired entries
 // if DeleteExpired is not invoked before it.
 // TODO: use https://tip.golang.org/wiki/RangefuncExperiment when available

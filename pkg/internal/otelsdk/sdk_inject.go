@@ -1,6 +1,6 @@
 package otelsdk
 
-//go:generate curl -L https://github.com/grafana/grafana-opentelemetry-java/releases/download/v2.13.2.1/grafana-opentelemetry-java.jar -o grafana-opentelemetry-java.jar
+//go:generate curl -L https://github.com/grafana/grafana-opentelemetry-java/releases/download/v2.13.3/grafana-opentelemetry-java.jar -o grafana-opentelemetry-java.jar
 
 import (
 	"bufio"
@@ -196,7 +196,7 @@ func flattenOptionsMap(opts map[string]string) string {
 		}
 	}
 
-	return strings.Join(s, ",")
+	return strings.Join(s, ";")
 }
 
 func (i *SDKInjector) attachJDKAgent(pid int32, path string, cfg *beyla.Config) error {
@@ -211,7 +211,7 @@ func (i *SDKInjector) attachJDKAgent(pid int32, path string, cfg *beyla.Config) 
 	flattenedMap := flattenOptionsMap(opts)
 
 	if len(flattenedMap) > 0 {
-		options = options + "," + flattenedMap
+		options = options + ";" + flattenedMap
 		i.log.Info("passing options to the JVM agent", "options", options)
 	}
 

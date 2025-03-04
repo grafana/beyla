@@ -50,6 +50,7 @@ const (
 	hostNameKey      = "host_name"
 	grafanaHostIDKey = "grafana_host_id"
 	processPIDKey    = "process_pid"
+	osTypeKey        = "os_type"
 
 	k8sNamespaceName   = "k8s_namespace_name"
 	k8sPodName         = "k8s_pod_name"
@@ -62,6 +63,7 @@ const (
 	k8sPodUID          = "k8s_pod_uid"
 	k8sPodStartTime    = "k8s_pod_start_time"
 	k8sClusterName     = "k8s_cluster_name"
+	k8sKind            = "k8s_kind"
 
 	spanNameKey          = "span_name"
 	statusCodeKey        = "status_code"
@@ -756,7 +758,7 @@ func (r *metricsReporter) observe(span *request.Span) {
 
 func appendK8sLabelNames(names []string) []string {
 	names = append(names, k8sNamespaceName, k8sPodName, k8sContainerName, k8sNodeName, k8sPodUID, k8sPodStartTime,
-		k8sDeploymentName, k8sReplicaSetName, k8sStatefulSetName, k8sDaemonSetName, k8sClusterName)
+		k8sDeploymentName, k8sReplicaSetName, k8sStatefulSetName, k8sDaemonSetName, k8sClusterName, k8sKind)
 	return names
 }
 
@@ -774,6 +776,7 @@ func appendK8sLabelValuesService(values []string, service svc.Attrs) []string {
 		service.Metadata[(attr.K8sStatefulSetName)],
 		service.Metadata[(attr.K8sDaemonSetName)],
 		service.Metadata[(attr.K8sClusterName)],
+		service.Metadata[(attr.K8sKind)],
 	)
 	return values
 }
@@ -796,7 +799,19 @@ func (r *metricsReporter) labelValuesSpans(span *request.Span) []string {
 }
 
 func labelNamesTargetInfo(kubeEnabled bool) []string {
-	names := []string{hostIDKey, hostNameKey, serviceNameKey, serviceNamespaceKey, serviceInstanceKey, serviceJobKey, telemetryLanguageKey, telemetrySDKKey, sourceKey, processPIDKey}
+	names := []string{
+		hostIDKey,
+		hostNameKey,
+		serviceNameKey,
+		serviceNamespaceKey,
+		serviceInstanceKey,
+		serviceJobKey,
+		telemetryLanguageKey,
+		telemetrySDKKey,
+		sourceKey,
+		processPIDKey,
+		osTypeKey,
+	}
 
 	if kubeEnabled {
 		names = appendK8sLabelNames(names)
@@ -817,6 +832,7 @@ func (r *metricsReporter) labelValuesTargetInfo(service svc.Attrs) []string {
 		"beyla",
 		"beyla",
 		strconv.Itoa(int(service.ProcPID)),
+		"linux",
 	}
 
 	if r.kubeEnabled {

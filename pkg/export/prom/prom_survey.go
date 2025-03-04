@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/mariomac/pipes/pipe"
 	"github.com/prometheus/client_golang/prometheus"
@@ -64,6 +65,7 @@ type surveyMetricsReporter struct {
 	// metrics
 	surveyedAttrs []attributes.Field[otel.SurveyInfo, string]
 	surveyed      *Expirer[prometheus.Gauge]
+	processMap    map[int32][]string
 }
 
 func newSurveyReporter(
@@ -93,6 +95,7 @@ func newSurveyReporter(
 		promConnect: ctxInfo.Prometheus,
 		clock:       clock,
 		hostID:      ctxInfo.HostID,
+		processMap:  map[int32][]string{},
 	}
 
 	surveyGetters := attributes.PrometheusGetters(mr.surveyGetters, surveyAttrNames)
@@ -106,7 +109,7 @@ func newSurveyReporter(
 	mr.surveyed = NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: attributes.SurveyInfo.Prom,
 		Help: "List of services discovered on the node",
-	}, surveyLabelNames).MetricVec, clock.Time, cfg.Metrics.TTL)
+	}, surveyLabelNames).MetricVec, clock.Time, 360000*time.Hour)
 
 	if cfg.Metrics.Registry != nil {
 		cfg.Metrics.Registry.MustRegister(mr.surveyed)
@@ -134,8 +137,17 @@ func (r *surveyMetricsReporter) collectMetrics(input <-chan []otel.SurveyInfo) {
 }
 
 func (r *surveyMetricsReporter) observeMetric(s otel.SurveyInfo) {
-	r.surveyed.WithLabelValues(labelValues(s, r.surveyedAttrs)...).
-		metric.Set(float64(1))
+	if s.Type == otel.EventDeleted {
+		if vals, ok := r.processMap[s.File.Pid]; ok {
+			fmt.Printf("Deleting metrics for %d, [%v]\n", s.File.Pid, vals)
+			r.surveyed.entries.DeleteSelected(vals)
+			delete(r.processMap, s.File.Pid)
+		}
+	} else {
+		vals := labelValues(s, r.surveyedAttrs)
+		r.processMap[s.File.Pid] = vals
+		r.surveyed.WithLabelValues(vals...).metric.Set(float64(1))
+	}
 }
 
 func (r *surveyMetricsReporter) surveyGetters(name attr.Name) (attributes.Getter[otel.SurveyInfo, string], bool) {
@@ -161,6 +173,8 @@ func (r *surveyMetricsReporter) surveyGetters(name attr.Name) (attributes.Getter
 		g = func(s otel.SurveyInfo) string { return "beyla" }
 	case attr.Name(semconv.TelemetrySDKVersionKey):
 		g = func(s otel.SurveyInfo) string { return buildinfo.Version }
+	case attr.Name(semconv.OSTypeKey):
+		g = func(s otel.SurveyInfo) string { return "linux" }
 	case attr.ServiceName:
 		g = func(s otel.SurveyInfo) string { return s.File.Service.UID.Name }
 	case attr.ServiceNamespace:
@@ -178,6 +192,7 @@ func otherSurveyAttributes(attrs []attr.Name) []attr.Name {
 		attr.ServerNamespace, attr.HostID, attr.Instance,
 		attr.Name(semconv.TelemetrySDKLanguageKey), attr.Name(semconv.TelemetrySDKNameKey), attr.Name(semconv.TelemetrySDKVersionKey),
 		attr.Name(semconv.ServiceInstanceIDKey), attr.ProcCommand, attr.ProcCommandLine,
+		attr.Name(semconv.OSTypeKey),
 	)
 
 	return attrs

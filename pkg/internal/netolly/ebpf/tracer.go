@@ -118,7 +118,7 @@ func NewFlowFetcher(
 		tcManager.AddProgram("tc/ingress_flow_parse", objects.BeylaIngressFlowParse, tcmanager.AttachmentIngress)
 	}
 
-	return &FlowFetcher{
+	fetcher := &FlowFetcher{
 		log:           tlog,
 		objects:       &objects,
 		ringbufReader: flows,
@@ -126,7 +126,12 @@ func NewFlowFetcher(
 		cacheMaxSize:  cacheMaxSize,
 		enableIngress: ingress,
 		enableEgress:  egress,
-	}, nil
+	}
+
+	// errors are not critical for this tracer
+	go fetcher.logTCErrors(tcManager.Errors())
+
+	return fetcher, nil
 }
 
 // Close the eBPF fetcher from the system.
@@ -215,4 +220,10 @@ func (m *FlowFetcher) LookupAndDeleteMap() map[NetFlowId][]NetFlowMetrics {
 		flows[id] = append(flows[id], metrics...)
 	}
 	return flows
+}
+
+func (m *FlowFetcher) logTCErrors(errors chan error) {
+	for err := range errors {
+		m.log.Warn("TCManager error", "error", err)
+	}
 }

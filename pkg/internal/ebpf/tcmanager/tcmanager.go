@@ -45,6 +45,7 @@ type TCManager interface {
 	AddProgram(name string, prog *ebpf.Program, attachment AttachmentType)
 	RemoveProgram(name string)
 	SetInterfaceManager(im *InterfaceManager)
+	Errors() chan error
 }
 
 func newTCManagerAuto() TCManager {

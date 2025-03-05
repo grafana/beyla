@@ -13,6 +13,8 @@
 
 enum { k_sockops_map_size = 65535 };
 
+volatile bool tc_enabled = false;
+
 // A map of sockets which we track with sock_ops. The sock_msg
 // program subscribes to this map and runs for each new socket
 // activity
@@ -138,9 +140,7 @@ static __always_inline void bpf_sock_ops_establish_cb(struct bpf_sock_ops *skops
 // We don't track incoming, those would be BPF_SOCK_OPS_PASSIVE_ESTABLISHED_CB
 SEC("sockops")
 int beyla_sockmap_tracker(struct bpf_sock_ops *skops) {
-    u32 op = skops->op;
-
-    switch (op) {
+    switch (skops->op) {
     case BPF_SOCK_OPS_ACTIVE_ESTABLISHED_CB:
         bpf_sock_ops_establish_cb(skops);
         break;
@@ -152,7 +152,7 @@ int beyla_sockmap_tracker(struct bpf_sock_ops *skops) {
 
 // Just a buffer
 static __always_inline msg_data_t *buffer() {
-    int zero = 0;
+    const int zero = 0;
     return (msg_data_t *)bpf_map_lookup_elem(&buf_mem, &zero);
 }
 
@@ -231,6 +231,11 @@ static __always_inline u8 protocol_detector(struct sk_msg_md *msg,
 // for Traffic Control to do the writing.
 SEC("sk_msg")
 int beyla_packet_extender(struct sk_msg_md *msg) {
+    if (!tc_enabled) {
+        bpf_dbg_printk("beyla_packet_extender: TC not active");
+        return SK_PASS;
+    }
+
     u64 id = bpf_get_current_pid_tgid();
     connection_info_t conn = {};
 

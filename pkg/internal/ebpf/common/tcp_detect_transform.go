@@ -41,6 +41,12 @@ func ReadTCPRequestIntoSpan(cfg *config.EBPFTracer, record *ringbuf.Record, filt
 		fmt.Printf("[<] %v\n", event.Rbuf[:rl])
 	}
 
+	// Check if we have a JSON-RPC message
+	jsonrpc, err := ProcessPossibleJSONRPCEvent(&event, b, event.Rbuf[:rl])
+	if err == nil {
+		return TCPToJSONRPCToSpan(&event, jsonrpc), false, nil
+	}
+
 	// Check if we have a SQL statement
 	op, table, sql, kind := detectSQLPayload(cfg.HeuristicSQLDetect, b)
 	if validSQL(op, table, kind) {

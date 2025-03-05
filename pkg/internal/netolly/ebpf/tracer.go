@@ -30,7 +30,7 @@ import (
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
 
-	"github.com/grafana/beyla/v2/pkg/internal/ebpf/convenience"
+	convenience "github.com/grafana/beyla/v2/pkg/internal/ebpf/convenience"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/tcmanager"
 )
 
@@ -91,7 +91,7 @@ func NewFlowFetcher(
 	if tlog.Enabled(context.TODO(), slog.LevelDebug) {
 		traceMsgs = 1
 	}
-	if err := ebpfconvenience.RewriteConstants(spec, map[string]interface{}{
+	if err := convenience.RewriteConstants(spec, map[string]interface{}{
 		constSampling:      uint32(sampling),
 		constTraceMessages: uint8(traceMsgs),
 	}); err != nil {

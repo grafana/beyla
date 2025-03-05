@@ -32,7 +32,7 @@ import (
 	"github.com/cilium/ebpf/rlimit"
 	"golang.org/x/sys/unix"
 
-	"github.com/grafana/beyla/v2/pkg/internal/ebpf/convenience"
+	convenience "github.com/grafana/beyla/v2/pkg/internal/ebpf/convenience"
 )
 
 // $BPF_CLANG and $BPF_CFLAGS are set by the Makefile.
@@ -73,7 +73,7 @@ func NewSockFlowFetcher(
 	if tlog.Enabled(context.TODO(), slog.LevelDebug) {
 		traceMsgs = 1
 	}
-	if err := ebpfconvenience.RewriteConstants(spec, map[string]interface{}{
+	if err := convenience.RewriteConstants(spec, map[string]interface{}{
 		constSampling:      uint32(sampling),
 		constTraceMessages: uint8(traceMsgs),
 	}); err != nil {

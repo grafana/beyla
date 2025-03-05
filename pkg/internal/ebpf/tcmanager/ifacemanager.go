@@ -79,6 +79,7 @@ func (im *InterfaceManager) Start(ctx context.Context) {
 	ifaceEvents, err := registerer.Subscribe(ctx)
 
 	if err != nil {
+		cancelFunc()
 		im.log.Error("instantiating interfaces' informer", "error", err)
 		im.emitError(fmt.Errorf("instantiating interfaces' informer: %w", err))
 		return

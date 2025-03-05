@@ -18,7 +18,7 @@ import (
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	common "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
-	"github.com/grafana/beyla/v2/pkg/internal/ebpf/convenience"
+	convenience "github.com/grafana/beyla/v2/pkg/internal/ebpf/convenience"
 	"github.com/grafana/beyla/v2/pkg/internal/exec"
 	"github.com/grafana/beyla/v2/pkg/internal/goexec"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
@@ -131,7 +131,7 @@ func (pt *ProcessTracer) loadSpec(p Tracer) (*ebpf.CollectionSpec, error) {
 	if err != nil {
 		return nil, fmt.Errorf("loading eBPF program: %w", err)
 	}
-	if err := ebpfconvenience.RewriteConstants(spec, p.Constants()); err != nil {
+	if err := convenience.RewriteConstants(spec, p.Constants()); err != nil {
 		return nil, fmt.Errorf("rewriting BPF constants definition: %w", err)
 	}
 

@@ -132,12 +132,10 @@ func (tc *netlinkManager) Errors() chan error {
 	return tc.errorCh
 }
 
-func (tc *netlinkManager) attachProgramLocked(prog *netlinkProg) error {
+func (tc *netlinkManager) attachProgramLocked(prog *netlinkProg) {
 	for _, iface := range tc.interfaces {
 		tc.attachProgramToIfaceLocked(prog, iface)
 	}
-
-	return nil
 }
 
 func (tc *netlinkManager) attachProgramToIfaceLocked(prog *netlinkProg, iface *netlinkIface) {

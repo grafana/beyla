@@ -174,12 +174,9 @@ func (tc *netlinkManager) attachProgramToIfaceLocked(prog *netlinkProg, iface *n
 	if err := netlink.FilterAdd(filter); err != nil {
 		if errors.Is(err, fs.ErrExist) {
 			tc.log.Warn("filter already exists. Ignoring", "error", err)
-
-			return
+		} else {
+			tc.emitError("failed to create filter", err)
 		}
-
-		tc.emitError("failed to create filter", err)
-		return
 	}
 
 	iface.filters = append(iface.filters, filter)

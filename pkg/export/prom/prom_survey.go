@@ -137,12 +137,11 @@ func (r *surveyMetricsReporter) collectMetrics(input <-chan []otel.SurveyInfo) {
 }
 
 func (r *surveyMetricsReporter) observeMetric(s otel.SurveyInfo) {
-	if s.Type == otel.EventDeleted {
-		if vals, ok := r.processMap[s.File.Pid]; ok {
-			r.surveyed.entries.DeleteSelected(vals)
-			delete(r.processMap, s.File.Pid)
-		}
-	} else {
+	if vals, ok := r.processMap[s.File.Pid]; ok {
+		r.surveyed.entries.DeleteSelected(vals)
+		delete(r.processMap, s.File.Pid)
+	}
+	if s.Type != otel.EventDeleted {
 		vals := labelValues(s, r.surveyedAttrs)
 		r.processMap[s.File.Pid] = vals
 		r.surveyed.WithLabelValues(vals...).metric.Set(float64(1))

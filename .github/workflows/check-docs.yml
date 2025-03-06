@@ -4,12 +4,12 @@ on:
   pull_request:
     paths:
       - '**.go'
-      - 'docs/sources/configure/options.md'
+      - 'docs/**/*.md'
   push:
     branches: [ main ]
     paths:
       - '**.go'
-      - 'docs/sources/configure/options.md'
+      - 'docs/**/*.md'
 
 jobs:
   check-docs:

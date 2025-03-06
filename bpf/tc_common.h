@@ -11,6 +11,7 @@ const char INV_TP[] = "W3C-BeylaID: 00-00000000000000000000000000000000-00000000
 const u32 EXTEND_SIZE = sizeof(TP) - 1;
 const char TP_PREFIX[] = "Traceparent: ";
 const u32 TP_PREFIX_SIZE = sizeof(TP_PREFIX) - 1;
+const u32 INVALID_POS = 0xffffffff;
 
 static __always_inline unsigned char *
 memchar(unsigned char *haystack, char needle, const unsigned char *end, u32 size) {
@@ -32,22 +33,24 @@ find_first_of(unsigned char *begin, unsigned char *end, char ch) {
     return memchar(begin, ch, end, MAX_INLINE_LEN);
 }
 
-static __always_inline int
-memchar_pos(unsigned const char *haystack, char needle, const unsigned char *end, u32 size) {
+static __always_inline u32 memchar_pos(unsigned char *haystack,
+                                       char needle,
+                                       const unsigned char *end,
+                                       u32 size) {
     for (u32 i = 0; i < size; ++i) {
-        if (&haystack[i] >= end) {
-            break;
-        }
+        unsigned char *ptr = haystack + i;
 
-        if (haystack[i] == needle) {
+        if (ptr + 1 >= end) {
+            break;
+        } else if (ptr && *ptr == needle) {
             return i;
         }
     }
 
-    return -1;
+    return INVALID_POS;
 }
 
-static __always_inline int find_first_pos_of(unsigned char *begin, unsigned char *end, char ch) {
+static __always_inline u32 find_first_pos_of(unsigned char *begin, unsigned char *end, char ch) {
     return memchar_pos(begin, ch, end, MAX_INLINE_LEN);
 }
 
@@ -67,6 +70,26 @@ static __always_inline void *ctx_data_end(struct __sk_buff *ctx) {
     asm("%[res] = *(u32 *)(%[base] + %[offset])"
         : [res] "=r"(data_end)
         : [base] "r"(ctx), [offset] "i"(offsetof(struct __sk_buff, data_end)), "m"(*ctx));
+
+    return data_end;
+}
+
+static __always_inline void *ctx_msg_data(struct sk_msg_md *ctx) {
+    void *data;
+
+    asm("%[res] = *(u64 *)(%[base] + %[offset])"
+        : [res] "=r"(data)
+        : [base] "r"(ctx), [offset] "i"(offsetof(struct sk_msg_md, data)), "m"(*ctx));
+
+    return data;
+}
+
+static __always_inline void *ctx_msg_data_end(struct sk_msg_md *ctx) {
+    void *data_end;
+
+    asm("%[res] = *(u64 *)(%[base] + %[offset])"
+        : [res] "=r"(data_end)
+        : [base] "r"(ctx), [offset] "i"(offsetof(struct sk_msg_md, data_end)), "m"(*ctx));
 
     return data_end;
 }

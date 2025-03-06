@@ -26,6 +26,8 @@ const (
 // ProcessPossibleJSONRPCEvent processes a TCP packet and returns error if the packet is not a valid JSON-RPC request.
 // Otherwise, return JSONRPCInfo with the processed data.
 func ProcessPossibleJSONRPCEvent(event *TCPRequestInfo, pkt []byte, rpkt []byte) (*JSONRPCInfo, error) {
+	// debug
+	log.Debug("[debuger:at:ProcessPossibleJSONRPCEvent>>>>]", event, pkt, rpkt)
 	info, err := ProcessJSONRPCRequest(pkt)
 	if err != nil {
 		// If we are getting the information in the response buffer, the event

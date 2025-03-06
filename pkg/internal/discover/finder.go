@@ -46,6 +46,7 @@ type nodesMap struct {
 	SurveyKubeDecorator      pipe.Middle[[]otel.SurveyInfo, []otel.SurveyInfo]
 	SurveyOTelMetrics        pipe.Final[[]otel.SurveyInfo]
 	SurveyPromMetrics        pipe.Final[[]otel.SurveyInfo]
+	SurveyNoopMetrics        pipe.Final[[]otel.SurveyInfo]
 }
 
 func (pf *nodesMap) Connect() {
@@ -58,7 +59,7 @@ func (pf *nodesMap) Connect() {
 	pf.SurveyExecTyper.SendTo(pf.SurveyContainerDBUpdater)
 	pf.SurveyContainerDBUpdater.SendTo(pf.Surveyor)
 	pf.Surveyor.SendTo(pf.SurveyKubeDecorator)
-	pf.SurveyKubeDecorator.SendTo(pf.SurveyOTelMetrics, pf.SurveyPromMetrics)
+	pf.SurveyKubeDecorator.SendTo(pf.SurveyOTelMetrics, pf.SurveyPromMetrics, pf.SurveyNoopMetrics)
 }
 
 func processWatcher(pf *nodesMap) *pipe.Start[[]Event[processAttrs]] {
@@ -93,6 +94,9 @@ func surveyKubeDecorator(pf *nodesMap) *pipe.Middle[[]otel.SurveyInfo, []otel.Su
 }
 func surveyorOTelMetrics(pf *nodesMap) *pipe.Final[[]otel.SurveyInfo] {
 	return &pf.SurveyOTelMetrics
+}
+func surveyorNoopMetrics(pf *nodesMap) *pipe.Final[[]otel.SurveyInfo] {
+	return &pf.SurveyNoopMetrics
 }
 func surveyorPromMetrics(pf *nodesMap) *pipe.Final[[]otel.SurveyInfo] {
 	return &pf.SurveyPromMetrics
@@ -139,6 +143,7 @@ func (pf *ProcessFinder) Start() (<-chan *ebpf.Instrumentable, <-chan *ebpf.Inst
 		Metrics:            &pf.cfg.Prometheus,
 		AttributeSelectors: pf.cfg.Attributes.Select,
 	}))
+	pipe.AddFinalProvider(gb, surveyorNoopMetrics, otel.SurveyNoopExporterProvider())
 	pipeline, err := gb.Build()
 	if err != nil {
 		return nil, nil, fmt.Errorf("can't instantiate discovery.ProcessFinder pipeline: %w", err)

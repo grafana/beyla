@@ -88,6 +88,12 @@ func SurveyMetricsExporterProvider(
 	}
 }
 
+func SurveyNoopExporterProvider() pipe.FinalProvider[[]SurveyInfo] {
+	return func() (pipe.FinalFunc[[]SurveyInfo], error) {
+		return Noop, nil
+	}
+}
+
 func surveyGetters(name attr.Name) (attributes.Getter[*exec.FileInfo, attribute.KeyValue], bool) {
 	var g attributes.Getter[*exec.FileInfo, attribute.KeyValue]
 	switch name {
@@ -204,6 +210,12 @@ func (me *surveyMetricsExporter) Do(in <-chan []SurveyInfo) {
 			}
 			me.observeMetric(reporter, &e)
 		}
+	}
+}
+
+func Noop(in <-chan []SurveyInfo) {
+	for i := range in {
+		slog.Debug("survey info", "info", i)
 	}
 }
 

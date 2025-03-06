@@ -9,6 +9,8 @@ import (
 
 	"github.com/mariomac/pipes/pipe"
 
+	lru "github.com/hashicorp/golang-lru/v2"
+
 	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/internal/kube"
@@ -17,6 +19,13 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
 	"github.com/grafana/beyla/v2/pkg/kubeflags"
 )
+
+type k8sCacheInfo struct {
+	meta          *kube.CachedObjMeta
+	containerName string
+}
+
+var k8sPIDs, _ = lru.New[uint32, k8sCacheInfo](10000)
 
 func klog() *slog.Logger {
 	return slog.With("component", "transform.KubernetesDecorator")
@@ -133,6 +142,7 @@ func (md *metadataDecorator) surveyLoop(in <-chan []otel.SurveyInfo, out chan<- 
 			if podMeta, containerName := md.db.PodContainerByPIDNs(survey.CInfo.PIDNamespace); podMeta != nil {
 				klog().Info("found pod metadata for namespace", "ns", survey.File.Ns)
 				md.appendMetadata(&survey.File.Service, podMeta, containerName)
+				k8sPIDs.Add(uint32(survey.File.Pid), k8sCacheInfo{meta: podMeta, containerName: containerName})
 			} else {
 				klog().Info("can't find pod metadata for namespace", "ns", survey.File.Ns)
 				// do not leave the service attributes map as nil
@@ -145,11 +155,17 @@ func (md *metadataDecorator) surveyLoop(in <-chan []otel.SurveyInfo, out chan<- 
 }
 
 func (md *metadataDecorator) do(span *request.Span) {
-	if podMeta, containerName := md.db.PodContainerByPIDNs(span.Pid.Namespace); podMeta != nil {
-		md.appendMetadata(&span.Service, podMeta, containerName)
-	} else {
-		// do not leave the service attributes map as nil
-		span.Service.Metadata = map[attr.Name]string{}
+	// if podMeta, containerName := md.db.PodContainerByPIDNs(span.Pid.Namespace); podMeta != nil {
+	// 	md.appendMetadata(&span.Service, podMeta, containerName)
+	// } else {
+	{
+		meta, ok := k8sPIDs.Get(uint32(span.Service.ProcPID))
+		if ok {
+			md.appendMetadata(&span.Service, meta.meta, meta.containerName)
+		} else {
+			// do not leave the service attributes map as nil
+			span.Service.Metadata = map[attr.Name]string{}
+		}
 	}
 	// override the peer and host names from Kubernetes metadata, if found
 	if name, _ := md.db.ServiceNameNamespaceForIP(span.Host); name != "" {

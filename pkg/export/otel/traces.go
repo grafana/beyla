@@ -85,6 +85,7 @@ type TracesConfig struct {
 	// Configuration options for BackOffConfig of the traces exporter.
 	// See https://github.com/open-telemetry/opentelemetry-collector/blob/main/config/configretry/backoff.go
 	// BackOffInitialInterval the time to wait after the first failure before retrying.
+	// nolint:undoc
 	BackOffInitialInterval time.Duration `yaml:"backoff_initial_interval" env:"BEYLA_BACKOFF_INITIAL_INTERVAL"`
 	// BackOffMaxInterval is the upper bound on backoff interval.
 	// nolint:undoc

@@ -6,7 +6,6 @@ on:
     paths:
       - 'pkg/**/*.go'
   pull_request:
-    branches: [ main ]
     paths:
       - 'pkg/**/*.go'
 
@@ -28,8 +27,23 @@ jobs:
     - name: Run alloy field checker
       id: field-checker
       run: |
+        # First compile the checker to ensure it builds
         cd tools/alloy-field-checker
-        go run main.go 2>&1 | tee output.txt
+        go build -o field-checker
+        if [ $? -ne 0 ]; then
+          echo "Failed to build field checker"
+          exit 1
+        fi
+        
+        # Move back to workspace root and run the checker
+        cd ../..
+        if [ ! -d "pkg" ]; then
+          echo "pkg directory not found in $(pwd)"
+          ls -la
+          exit 1
+        fi
+        
+        tools/alloy-field-checker/field-checker 2>&1 | tee output.txt
         if [ ${PIPESTATUS[0]} -ne 0 ]; then
           # Create a normalized version of the output (remove line numbers which can change)
           grep "unmapped fields:" output.txt > /dev/null && {

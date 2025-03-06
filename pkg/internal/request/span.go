@@ -36,6 +36,8 @@ const (
 	EventTypeKafkaServer
 	EventTypeGPUKernelLaunch
 	EventTypeGPUMalloc
+	EventTypeJSONRPCClient
+	EventTypeJSONRPCServer
 )
 
 const (
@@ -84,6 +86,10 @@ func (t EventType) String() string {
 		return "CUDALaunch"
 	case EventTypeGPUMalloc:
 		return "CUDAMalloc"
+	case EventTypeJSONRPCClient:
+		return "JSONRPCClient"
+	case EventTypeJSONRPCServer:
+		return "JSONRPCServer"
 	default:
 		return fmt.Sprintf("UNKNOWN (%d)", t)
 	}
@@ -254,6 +260,13 @@ func spanAttributes(s *Span) SpanAttributes {
 		return SpanAttributes{
 			"size": strconv.FormatInt(s.ContentLength, 10),
 		}
+	case EventTypeJSONRPCClient, EventTypeJSONRPCServer:
+		return SpanAttributes{
+			"method":     s.Method,
+			"id":         s.Statement,
+			"serverAddr": SpanHost(s),
+			"serverPort": strconv.Itoa(s.HostPort),
+		}
 	}
 
 	return SpanAttributes{}
@@ -331,7 +344,7 @@ func (s *Span) IsValid() bool {
 
 func (s *Span) IsClientSpan() bool {
 	switch s.Type {
-	case EventTypeGRPCClient, EventTypeHTTPClient, EventTypeRedisClient, EventTypeKafkaClient, EventTypeSQLClient:
+	case EventTypeGRPCClient, EventTypeHTTPClient, EventTypeRedisClient, EventTypeKafkaClient, EventTypeSQLClient, EventTypeJSONRPCClient:
 		return true
 	}
 
@@ -430,9 +443,9 @@ func (s *Span) RequestLength() int64 {
 // ServiceGraphKind returns the Kind string representation that is compliant with service graph metrics specification
 func (s *Span) ServiceGraphKind() string {
 	switch s.Type {
-	case EventTypeHTTP, EventTypeGRPC, EventTypeKafkaServer, EventTypeRedisServer:
+	case EventTypeHTTP, EventTypeGRPC, EventTypeKafkaServer, EventTypeRedisServer, EventTypeJSONRPCServer:
 		return "SPAN_KIND_SERVER"
-	case EventTypeHTTPClient, EventTypeGRPCClient, EventTypeSQLClient, EventTypeRedisClient:
+	case EventTypeHTTPClient, EventTypeGRPCClient, EventTypeSQLClient, EventTypeRedisClient, EventTypeJSONRPCClient:
 		return "SPAN_KIND_CLIENT"
 	case EventTypeKafkaClient:
 		switch s.Method {
@@ -477,6 +490,11 @@ func (s *Span) TraceName() string {
 			return s.Method
 		}
 		return fmt.Sprintf("%s %s", s.Path, s.Method)
+	case EventTypeJSONRPCClient, EventTypeJSONRPCServer:
+		if s.Method == "" {
+			return "JSONRPC"
+		}
+		return "JSONRPC " + s.Method
 	}
 	return ""
 }

@@ -597,8 +597,9 @@ func (tr *tracesOTELReceiver) acceptSpan(span *request.Span) bool {
 		return tr.is.RedisEnabled()
 	case request.EventTypeKafkaClient, request.EventTypeKafkaServer:
 		return tr.is.KafkaEnabled()
+	case request.EventTypeJSONRPCClient, request.EventTypeJSONRPCServer:
+		return tr.is.HTTPEnabled() // Use HTTP instrumentation flag for JSON-RPC
 	}
-
 	return false
 }
 
@@ -609,7 +610,6 @@ var spanMetricsSkip = attribute.Bool(string(attr.SkipSpanMetrics), true)
 // nolint:cyclop
 func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) []attribute.KeyValue {
 	var attrs []attribute.KeyValue
-
 	switch span.Type {
 	case request.EventTypeHTTP:
 		attrs = []attribute.KeyValue{
@@ -701,20 +701,30 @@ func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 			semconv.MessagingClientID(span.Statement),
 			operation,
 		}
+	case request.EventTypeJSONRPCClient, request.EventTypeJSONRPCServer:
+		attrs = []attribute.KeyValue{
+			request.ServerAddr(request.HostAsServer(span)),
+			request.ServerPort(span.HostPort),
+			// short-term: set the jsonrpc params as attributes into path field
+			// request.HTTPUrlPath(span.Path),
+			attribute.String("rpc.system", "jsonrpc"),
+			semconv.RPCMethod(span.Method),
+		}
+		if span.Statement != "" {
+			attrs = append(attrs, attribute.String("jsonrpc.request.id", span.Statement))
+		}
 	}
-
 	if _, ok := optionalAttrs[attr.SkipSpanMetrics]; ok {
 		attrs = append(attrs, spanMetricsSkip)
 	}
-
 	return attrs
 }
 
 func spanKind(span *request.Span) trace2.SpanKind {
 	switch span.Type {
-	case request.EventTypeHTTP, request.EventTypeGRPC, request.EventTypeRedisServer, request.EventTypeKafkaServer:
+	case request.EventTypeHTTP, request.EventTypeGRPC, request.EventTypeRedisServer, request.EventTypeKafkaServer, request.EventTypeJSONRPCServer:
 		return trace2.SpanKindServer
-	case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient, request.EventTypeRedisClient:
+	case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient, request.EventTypeRedisClient, request.EventTypeJSONRPCClient:
 		return trace2.SpanKindClient
 	case request.EventTypeKafkaClient:
 		switch span.Method {

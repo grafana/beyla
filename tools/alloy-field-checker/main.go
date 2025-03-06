@@ -93,7 +93,7 @@ func findGoFiles() ([]string, error) {
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error walking directory: %w", err)
 	}
 	return goFiles, nil
 }
@@ -101,62 +101,75 @@ func findGoFiles() ([]string, error) {
 func parseStructFields(st *ast.StructType, structName string, file string, fset *token.FileSet) []Field {
 	var fields []Field
 	for _, field := range st.Fields.List {
-		if field.Names == nil || field.Tag == nil {
+		if !isValidField(field) {
 			continue
 		}
 
-		tag := strings.Trim(field.Tag.Value, "`")
-		yamlTag := getTagValue(tag, "yaml")
-		envTag := getTagValue(tag, "env")
-
-		// Skip if field doesn't have yaml or env tag
-		if yamlTag == "" && envTag == "" {
+		fieldData, ok := processField(field, structName, file, fset)
+		if !ok {
 			continue
 		}
-
-		// Get the actual tag value without options
-		if yamlTag != "" {
-			if idx := strings.Index(yamlTag, ","); idx != -1 {
-				yamlTag = yamlTag[:idx]
-			}
-		}
-		if envTag != "" {
-			if idx := strings.Index(envTag, ","); idx != -1 {
-				envTag = envTag[:idx]
-			}
-		}
-
-		// Skip if the tag is "-" or "inline"
-		if yamlTag == "-" || envTag == "-" || yamlTag == ",inline" || envTag == ",inline" {
-			continue
-		}
-
-		fieldName := field.Names[0].Name
-		tagValue := yamlTag
-		if yamlTag == "" {
-			tagValue = envTag
-		}
-
-		// Skip if this specific field should be ignored
-		if shouldIgnoreField(structName, fieldName, tagValue) {
-			continue
-		}
-
-		fieldData := Field{
-			Name:       fieldName,
-			StructName: structName,
-			Ignored:    hasNoDocDirective(field.Doc),
-			FilePath:   file,
-			Tag:        tagValue,
-		}
-
-		pos := fset.Position(field.Pos())
-		fieldData.Line = pos.Line
-		fieldData.Column = pos.Column
 
 		fields = append(fields, fieldData)
 	}
 	return fields
+}
+
+func isValidField(field *ast.Field) bool {
+	return field.Names != nil && field.Tag != nil
+}
+
+func processField(field *ast.Field, structName, file string, fset *token.FileSet) (Field, bool) {
+	tag := strings.Trim(field.Tag.Value, "`")
+	yamlTag := getTagValue(tag, "yaml")
+	envTag := getTagValue(tag, "env")
+
+	// Skip if field doesn't have yaml or env tag
+	if yamlTag == "" && envTag == "" {
+		return Field{}, false
+	}
+
+	// Get the actual tag value without options
+	yamlTag = stripTagOptions(yamlTag)
+	envTag = stripTagOptions(envTag)
+
+	// Skip if the tag is "-" or "inline"
+	if isSkippableTag(yamlTag) || isSkippableTag(envTag) {
+		return Field{}, false
+	}
+
+	fieldName := field.Names[0].Name
+	tagValue := yamlTag
+	if yamlTag == "" {
+		tagValue = envTag
+	}
+
+	// Skip if this specific field should be ignored
+	if shouldIgnoreField(structName, fieldName, tagValue) {
+		return Field{}, false
+	}
+
+	pos := fset.Position(field.Pos())
+	return Field{
+		Name:       fieldName,
+		StructName: structName,
+		Ignored:    hasNoDocDirective(field.Doc),
+		FilePath:   file,
+		Tag:        tagValue,
+		Line:       pos.Line,
+		Column:     pos.Column,
+	}, true
+}
+
+func stripTagOptions(tag string) string {
+	if idx := strings.Index(tag, ","); idx != -1 {
+		return tag[:idx]
+	}
+	return tag
+}
+
+func isSkippableTag(tag string) bool {
+	return tag == "-" || tag == ",inline"
 }
 
 func getTagValue(tag, key string) string {
@@ -174,171 +187,156 @@ func getTagValue(tag, key string) string {
 func collectAllFields() ([]Field, error) {
 	goFiles, err := findGoFiles()
 	if err != nil {
-		return nil, fmt.Errorf("error walking directory: %v", err)
+		return nil, err
 	}
 
 	var allFields []Field
 	for _, file := range goFiles {
-		fset := token.NewFileSet()
-		node, err := parser.ParseFile(fset, file, nil, parser.ParseComments)
+		fields, err := processFile(file)
 		if err != nil {
-			log.Printf("Error parsing %s: %v", file, err)
+			log.Printf("Error processing %s: %v", file, err)
 			continue
 		}
-
-		ast.Inspect(node, func(n ast.Node) bool {
-			switch x := n.(type) {
-			case *ast.TypeSpec:
-				if shouldIgnoreStruct(x.Name.Name) {
-					return true
-				}
-				if st, ok := x.Type.(*ast.StructType); ok {
-					fields := parseStructFields(st, x.Name.Name, file, fset)
-					allFields = append(allFields, fields...)
-				}
-			}
-			return true
-		})
+		allFields = append(allFields, fields...)
 	}
 	return allFields, nil
 }
 
+func processFile(file string) ([]Field, error) {
+	fset := token.NewFileSet()
+	node, err := parser.ParseFile(fset, file, nil, parser.ParseComments)
+	if err != nil {
+		return nil, err
+	}
+
+	var fields []Field
+	ast.Inspect(node, func(n ast.Node) bool {
+		if typeSpec, ok := n.(*ast.TypeSpec); ok {
+			if shouldIgnoreStruct(typeSpec.Name.Name) {
+				return true
+			}
+			if st, ok := typeSpec.Type.(*ast.StructType); ok {
+				fields = append(fields, parseStructFields(st, typeSpec.Name.Name, file, fset)...)
+			}
+		}
+		return true
+	})
+	return fields, nil
+}
+
 func checkAlloyMapping(fields []Field) error {
-	// Fetch beyla_linux.go from GitHub
+	content, err := fetchAlloyFile()
+	if err != nil {
+		return err
+	}
+
+	assignedFields, err := extractAssignedFields(content)
+	if err != nil {
+		return err
+	}
+
+	return checkUnmappedFields(fields, assignedFields)
+}
+
+func fetchAlloyFile() ([]byte, error) {
 	resp, err := http.Get("https://raw.githubusercontent.com/grafana/alloy/main/internal/component/beyla/ebpf/beyla_linux.go")
 	if err != nil {
-		return fmt.Errorf("error fetching beyla_linux.go: %v", err)
+		return nil, fmt.Errorf("error fetching beyla_linux.go: %w", err)
 	}
 	defer resp.Body.Close()
 
 	content, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("error reading beyla_linux.go: %v", err)
+		return nil, fmt.Errorf("error reading beyla_linux.go: %w", err)
 	}
 
-	// Parse the file content
+	return content, nil
+}
+
+func extractAssignedFields(content []byte) (map[string]bool, error) {
 	fset := token.NewFileSet()
 	node, err := parser.ParseFile(fset, "", content, parser.ParseComments)
 	if err != nil {
-		return fmt.Errorf("error parsing beyla_linux.go: %v", err)
+		return nil, fmt.Errorf("error parsing beyla_linux.go: %w", err)
 	}
 
 	assignedFields := make(map[string]bool)
 	defaultConfigFields := make(map[string]bool)
 
-	// Helper function to get the full field path
-	getFieldPath := func(expr ast.Expr) string {
-		var parts []string
-		for {
-			switch x := expr.(type) {
-			case *ast.SelectorExpr:
-				parts = append([]string{x.Sel.Name}, parts...)
-				expr = x.X
-			case *ast.Ident:
-				parts = append([]string{x.Name}, parts...)
-				return strings.ToLower(strings.Join(parts, "."))
-			default:
-				return strings.ToLower(strings.Join(parts, "."))
+	// First pass: find DefaultConfig assignments
+	ast.Inspect(node, func(n ast.Node) bool {
+		if assign, ok := n.(*ast.AssignStmt); ok {
+			processAssignment(assign, defaultConfigFields)
+		}
+		return true
+	})
+
+	// Second pass: track field assignments
+	ast.Inspect(node, func(n ast.Node) bool {
+		processNode(n, assignedFields, defaultConfigFields)
+		return true
+	})
+
+	return assignedFields, nil
+}
+
+func processAssignment(assign *ast.AssignStmt, defaultConfigFields map[string]bool) {
+	for _, rhs := range assign.Rhs {
+		if sel, ok := rhs.(*ast.SelectorExpr); ok {
+			if xsel, ok := sel.X.(*ast.SelectorExpr); ok {
+				if xident, ok := xsel.X.(*ast.Ident); ok {
+					if xident.Name == "beyla" && xsel.Sel.Name == "DefaultConfig" {
+						if lhs, ok := assign.Lhs[0].(*ast.Ident); ok {
+							defaultConfigFields[lhs.Name] = true
+						}
+					}
+				}
 			}
 		}
 	}
+}
 
-	// First pass: find all fields that are assigned from DefaultConfig
-	ast.Inspect(node, func(n ast.Node) bool {
-		if assign, ok := n.(*ast.AssignStmt); ok {
-			for _, rhs := range assign.Rhs {
-				if sel, ok := rhs.(*ast.SelectorExpr); ok {
-					if xsel, ok := sel.X.(*ast.SelectorExpr); ok {
-						if xident, ok := xsel.X.(*ast.Ident); ok {
-							if xident.Name == "beyla" && xsel.Sel.Name == "DefaultConfig" {
-								// Get the variable name being assigned to
-								if lhs, ok := assign.Lhs[0].(*ast.Ident); ok {
-									defaultConfigFields[lhs.Name] = true
-								}
-							}
-						}
-					}
+func processNode(n ast.Node, assignedFields, defaultConfigFields map[string]bool) {
+	if assign, ok := n.(*ast.AssignStmt); ok {
+		processAssignStatement(assign, assignedFields, defaultConfigFields)
+	} else if sel, ok := n.(*ast.SelectorExpr); ok {
+		processSelector(sel, assignedFields)
+	} else if kv, ok := n.(*ast.KeyValueExpr); ok {
+		if key, ok := kv.Key.(*ast.Ident); ok {
+			assignedFields[strings.ToLower(key.Name)] = true
+		}
+	}
+}
+
+func processAssignStatement(assign *ast.AssignStmt, assignedFields, defaultConfigFields map[string]bool) {
+	for i, lhs := range assign.Lhs {
+		if sel, ok := lhs.(*ast.SelectorExpr); ok {
+			processFieldPath(sel, assignedFields, defaultConfigFields)
+			if i < len(assign.Rhs) {
+				if rhs, ok := assign.Rhs[i].(ast.Expr); ok {
+					processFieldPath(rhs, assignedFields, defaultConfigFields)
 				}
 			}
 		}
-		return true
-	})
+	}
+}
 
-	// Second pass: track all field assignments and accesses
-	ast.Inspect(node, func(n ast.Node) bool {
-		switch x := n.(type) {
-		case *ast.AssignStmt:
-			for i, lhs := range x.Lhs {
-				if sel, ok := lhs.(*ast.SelectorExpr); ok {
-					fieldPath := getFieldPath(lhs)
-
-					// Mark all parts of the path as assigned
-					parts := strings.Split(fieldPath, ".")
-					for i := range parts {
-						path := strings.Join(parts[:i+1], ".")
-						assignedFields[path] = true
-					}
-
-					// Check if the base variable is from DefaultConfig
-					if ident, ok := sel.X.(*ast.Ident); ok {
-						if defaultConfigFields[ident.Name] {
-							assignedFields[strings.ToLower(sel.Sel.Name)] = true
-						}
-					}
-
-					// Also check the RHS for field accesses
-					if i < len(x.Rhs) {
-						rhsPath := getFieldPath(x.Rhs[i])
-						if rhsPath != "" {
-							parts := strings.Split(rhsPath, ".")
-							for i := range parts {
-								path := strings.Join(parts[:i+1], ".")
-								assignedFields[path] = true
-							}
-						}
-					}
-				}
-			}
-
-		case *ast.SelectorExpr:
-			// Track field accesses in any context
-			fieldPath := getFieldPath(x)
-			if fieldPath != "" {
-				parts := strings.Split(fieldPath, ".")
-				for i := range parts {
-					path := strings.Join(parts[:i+1], ".")
-					assignedFields[path] = true
-				}
-			}
-
-		case *ast.KeyValueExpr:
-			if key, ok := x.Key.(*ast.Ident); ok {
-				fieldName := strings.ToLower(key.Name)
-				assignedFields[fieldName] = true
-			}
+func processSelector(sel *ast.SelectorExpr, assignedFields map[string]bool) {
+	fieldPath := getFieldPath(sel)
+	if fieldPath != "" {
+		parts := strings.Split(fieldPath, ".")
+		for i := range parts {
+			path := strings.Join(parts[:i+1], ".")
+			assignedFields[path] = true
 		}
-		return true
-	})
+	}
+}
 
-	unmappedFields := []Field{}
+func checkUnmappedFields(fields []Field, assignedFields map[string]bool) error {
+	var unmappedFields []Field
 	for _, field := range fields {
-		if field.Ignored {
-			continue
-		}
-
-		fieldName := strings.ToLower(field.Name)
-		if !assignedFields[fieldName] && field.Tag != "" {
-			// Check if any parent struct is assigned
-			found := false
-			for assignedField := range assignedFields {
-				if strings.HasSuffix(assignedField, "."+fieldName) {
-					found = true
-					break
-				}
-			}
-			if !found {
-				unmappedFields = append(unmappedFields, field)
-			}
+		if !field.Ignored && !isFieldMapped(field, assignedFields) {
+			unmappedFields = append(unmappedFields, field)
 		}
 	}
 
@@ -351,6 +349,57 @@ func checkAlloyMapping(fields []Field) error {
 	}
 
 	return nil
+}
+
+func isFieldMapped(field Field, assignedFields map[string]bool) bool {
+	fieldName := strings.ToLower(field.Name)
+	if assignedFields[fieldName] {
+		return true
+	}
+
+	// Check if any parent struct is assigned
+	for assignedField := range assignedFields {
+		if strings.HasSuffix(assignedField, "."+fieldName) {
+			return true
+		}
+	}
+	return false
+}
+
+func getFieldPath(expr ast.Expr) string {
+	var parts []string
+	for {
+		switch x := expr.(type) {
+		case *ast.SelectorExpr:
+			parts = append([]string{x.Sel.Name}, parts...)
+			expr = x.X
+		case *ast.Ident:
+			parts = append([]string{x.Name}, parts...)
+			return strings.ToLower(strings.Join(parts, "."))
+		default:
+			return strings.ToLower(strings.Join(parts, "."))
+		}
+	}
+}
+
+func processFieldPath(expr ast.Expr, assignedFields map[string]bool, defaultConfigFields map[string]bool) {
+	fieldPath := getFieldPath(expr)
+	if fieldPath != "" {
+		parts := strings.Split(fieldPath, ".")
+		for i := range parts {
+			path := strings.Join(parts[:i+1], ".")
+			assignedFields[path] = true
+		}
+
+		// Check if the base variable is from DefaultConfig
+		if sel, ok := expr.(*ast.SelectorExpr); ok {
+			if ident, ok := sel.X.(*ast.Ident); ok {
+				if defaultConfigFields[ident.Name] {
+					assignedFields[strings.ToLower(sel.Sel.Name)] = true
+				}
+			}
+		}
+	}
 }
 
 func main() {

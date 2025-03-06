@@ -1,4 +1,4 @@
-name: Check Documentation
+name: Check Undocumented Fields
 
 on:
   pull_request:

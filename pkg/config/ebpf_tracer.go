@@ -69,5 +69,6 @@ type EBPFTracer struct {
 	ProtocolDebug bool `yaml:"protocol_debug_print" env:"BEYLA_PROTOCOL_DEBUG_PRINT"`
 
 	// Enables Java instrumentation with the OpenTelemetry JDK Agent
+	// nolint:undoc
 	UseOTelSDKForJava bool `yaml:"use_otel_sdk_for_java" env:"BEYLA_USE_OTEL_SDK_FOR_JAVA"`
 }

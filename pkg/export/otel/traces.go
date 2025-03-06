@@ -112,7 +112,7 @@ func (m *TracesConfig) Enabled() bool { //nolint:gocritic
 	return m.CommonEndpoint != "" || m.TracesEndpoint != "" || m.Grafana.TracesEnabled()
 }
 
-func (m *TracesConfig) getProtocol() Protocol {
+func (m *TracesConfig) GetProtocol() Protocol {
 	if m.TracesProtocol != "" {
 		return m.TracesProtocol
 	}
@@ -120,6 +120,10 @@ func (m *TracesConfig) getProtocol() Protocol {
 		return m.Protocol
 	}
 	return m.guessProtocol()
+}
+
+func (m *TracesConfig) OTLPTracesEndpoint() (string, bool) {
+	return ResolveOTLPEndpoint(m.TracesEndpoint, m.CommonEndpoint, m.Grafana)
 }
 
 func (m *TracesConfig) guessProtocol() Protocol {
@@ -270,7 +274,7 @@ func (tr *tracesOTELReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], err
 
 // nolint:cyclop
 func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.ContextInfo) (exporter.Traces, error) {
-	switch proto := cfg.getProtocol(); proto {
+	switch proto := cfg.GetProtocol(); proto {
 	case ProtocolHTTPJSON, ProtocolHTTPProtobuf, "": // zero value defaults to HTTP for backwards-compatibility
 		slog.Debug("instantiating HTTP TracesReporter", "protocol", proto)
 		var t trace.SpanExporter
@@ -303,7 +307,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 				Insecure:           opts.Insecure,
 				InsecureSkipVerify: cfg.InsecureSkipVerify,
 			},
-			Headers: convertHeaders(opts.HTTPHeaders),
+			Headers: convertHeaders(opts.Headers),
 		}
 		slog.Debug("getTracesExporter: confighttp.ClientConfig created", "endpoint", config.ClientConfig.Endpoint)
 		set := getTraceSettings(ctxInfo, t)
@@ -357,6 +361,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 				Insecure:           opts.Insecure,
 				InsecureSkipVerify: cfg.InsecureSkipVerify,
 			},
+			Headers: convertHeaders(opts.Headers),
 		}
 		set := getTraceSettings(ctxInfo, t)
 		return factory.CreateTraces(ctx, set, config)
@@ -745,15 +750,7 @@ func spanStartTime(t request.Timings) time.Time {
 // If, by some reason, Grafana changes its OTLP Gateway URL in a distant future, you can still point to the
 // correct URL with the OTLP_EXPORTER_... variables.
 func parseTracesEndpoint(cfg *TracesConfig) (*url.URL, bool, error) {
-	isCommon := false
-	endpoint := cfg.TracesEndpoint
-	if endpoint == "" {
-		isCommon = true
-		endpoint = cfg.CommonEndpoint
-		if endpoint == "" && cfg.Grafana != nil && cfg.Grafana.CloudZone != "" {
-			endpoint = cfg.Grafana.Endpoint()
-		}
-	}
+	endpoint, isCommon := cfg.OTLPTracesEndpoint()
 
 	murl, err := url.Parse(endpoint)
 	if err != nil {
@@ -766,7 +763,7 @@ func parseTracesEndpoint(cfg *TracesConfig) (*url.URL, bool, error) {
 }
 
 func getHTTPTracesEndpointOptions(cfg *TracesConfig) (otlpOptions, error) {
-	opts := otlpOptions{HTTPHeaders: map[string]string{}}
+	opts := otlpOptions{Headers: map[string]string{}}
 	log := tlog().With("transport", "http")
 
 	murl, isCommon, err := parseTracesEndpoint(cfg)
@@ -798,14 +795,14 @@ func getHTTPTracesEndpointOptions(cfg *TracesConfig) (otlpOptions, error) {
 	}
 
 	cfg.Grafana.setupOptions(&opts)
-	maps.Copy(opts.HTTPHeaders, headersFromEnv(envHeaders))
-	maps.Copy(opts.HTTPHeaders, headersFromEnv(envTracesHeaders))
+	maps.Copy(opts.Headers, HeadersFromEnv(envHeaders))
+	maps.Copy(opts.Headers, HeadersFromEnv(envTracesHeaders))
 
 	return opts, nil
 }
 
 func getGRPCTracesEndpointOptions(cfg *TracesConfig) (otlpOptions, error) {
-	opts := otlpOptions{}
+	opts := otlpOptions{Headers: map[string]string{}}
 	log := tlog().With("transport", "grpc")
 	murl, _, err := parseTracesEndpoint(cfg)
 	if err != nil {
@@ -825,6 +822,9 @@ func getGRPCTracesEndpointOptions(cfg *TracesConfig) (otlpOptions, error) {
 		opts.SkipTLSVerify = true
 	}
 
+	cfg.Grafana.setupOptions(&opts)
+	maps.Copy(opts.Headers, HeadersFromEnv(envHeaders))
+	maps.Copy(opts.Headers, HeadersFromEnv(envTracesHeaders))
 	return opts, nil
 }
 

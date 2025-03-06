@@ -39,6 +39,7 @@ github.com/gorilla/mux,https://github.com/grafana/beyla/blob/HEAD/vendor/github.
 github.com/gorilla/websocket,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/gorilla/websocket/LICENSE,BSD-2-Clause
 github.com/grafana/beyla/v2,https://github.com/grafana/beyla/blob/HEAD/LICENSE,Apache-2.0
 github.com/grafana/go-offsets-tracker/pkg,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/grafana/go-offsets-tracker/LICENSE,Apache-2.0
+github.com/grafana/jvmtools,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/grafana/jvmtools/LICENSE,Apache-2.0
 github.com/grpc-ecosystem/grpc-gateway/v2,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/grpc-ecosystem/grpc-gateway/v2/LICENSE,BSD-3-Clause
 github.com/hashicorp/go-version,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/hashicorp/go-version/LICENSE,MPL-2.0
 github.com/hashicorp/golang-lru/v2,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/hashicorp/golang-lru/v2/LICENSE,MPL-2.0
@@ -135,7 +136,6 @@ go.uber.org/multierr,https://github.com/grafana/beyla/blob/HEAD/vendor/go.uber.o
 go.uber.org/zap,https://github.com/grafana/beyla/blob/HEAD/vendor/go.uber.org/zap/LICENSE,MIT
 golang.org/x/arch/x86/x86asm,https://github.com/grafana/beyla/blob/HEAD/vendor/golang.org/x/arch/LICENSE,BSD-3-Clause
 golang.org/x/crypto/sha3,https://github.com/grafana/beyla/blob/HEAD/vendor/golang.org/x/crypto/LICENSE,BSD-3-Clause
-golang.org/x/exp/constraints,https://github.com/grafana/beyla/blob/HEAD/vendor/golang.org/x/exp/LICENSE,BSD-3-Clause
 golang.org/x/mod/semver,https://github.com/grafana/beyla/blob/HEAD/vendor/golang.org/x/mod/LICENSE,BSD-3-Clause
 golang.org/x/net,https://github.com/grafana/beyla/blob/HEAD/vendor/golang.org/x/net/LICENSE,BSD-3-Clause
 golang.org/x/oauth2,https://github.com/grafana/beyla/blob/HEAD/vendor/golang.org/x/oauth2/LICENSE,BSD-3-Clause

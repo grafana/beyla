@@ -148,6 +148,16 @@ func (p *Tracer) AlreadyInstrumentedLib(uint64) bool {
 	return false
 }
 
+func (p *Tracer) setTracerActive(active bool) {
+	p.log.Debug("TCTracer active changed", "active", active)
+
+	err := p.bpfObjects.bpfVariables.TcEnabled.Set(active)
+
+	if err != nil {
+		p.log.Error("Failed to change TCTracer active state:", "active", active, "error", err)
+	}
+}
+
 func (p *Tracer) startTC(ctx context.Context) {
 	if p.tcManager != nil {
 		return
@@ -169,25 +179,35 @@ func (p *Tracer) startTC(ctx context.Context) {
 	p.tcManager.SetInterfaceManager(p.ifaceManager)
 	p.tcManager.AddProgram("tc/tc_egress", p.bpfObjects.BeylaAppEgress, tcmanager.AttachmentEgress)
 	p.tcManager.AddProgram("tc/tc_ingress", p.bpfObjects.BeylaAppIngress, tcmanager.AttachmentIngress)
+
 	p.ifaceManager.Start(ctx)
+	p.setTracerActive(true)
 }
 
 func (p *Tracer) Run(ctx context.Context, _ chan<- []request.Span) {
 	p.startTC(ctx)
 
-	<-ctx.Done()
+	errorCh := p.tcManager.Errors()
 
-	p.bpfObjects.Close()
+	select {
+	case <-ctx.Done():
+	case err := <-errorCh:
+		p.log.Error("TC manager returned an error, aborting", "error", err)
+	}
 
 	p.stopTC()
+	p.bpfObjects.Close()
 }
 
 func (p *Tracer) stopTC() {
-	p.log.Info("removing traffic control probes")
+	p.setTracerActive(false)
 
-	p.ifaceManager.Wait()
-	p.ifaceManager = nil
+	p.log.Info("removing traffic control probes")
 
 	p.tcManager.Shutdown()
 	p.tcManager = nil
+
+	p.ifaceManager.Stop()
+	p.ifaceManager.Wait()
+	p.ifaceManager = nil
 }

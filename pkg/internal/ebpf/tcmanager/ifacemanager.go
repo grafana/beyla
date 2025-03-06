@@ -2,6 +2,7 @@ package tcmanager
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"maps"
 	"sync"
@@ -15,6 +16,9 @@ type IMIfaceMap map[int]*ifaces.Interface
 type InterfaceManagerCB func(iface *ifaces.Interface)
 type interfaceManagerCBMap map[uint64]InterfaceManagerCB
 
+type InterfaceManagerErrorCB func(error)
+type interfaceManagerErrorCBMap map[uint64]InterfaceManagerErrorCB
+
 type InterfaceManager struct {
 	filter                *InterfaceFilter
 	monitorMode           MonitorMode
@@ -27,7 +31,9 @@ type InterfaceManager struct {
 	interfaces            IMIfaceMap
 	ifaceAddedCallbacks   interfaceManagerCBMap
 	ifaceRemovedCallbacks interfaceManagerCBMap
+	ifaceErrorCallbacks   interfaceManagerErrorCBMap
 	nextCallbackID        uint64
+	cancelFunc            context.CancelFunc
 }
 
 func NewInterfaceManager() *InterfaceManager {
@@ -43,7 +49,9 @@ func NewInterfaceManager() *InterfaceManager {
 		interfaces:            IMIfaceMap{},
 		ifaceAddedCallbacks:   interfaceManagerCBMap{},
 		ifaceRemovedCallbacks: interfaceManagerCBMap{},
+		ifaceErrorCallbacks:   interfaceManagerErrorCBMap{},
 		nextCallbackID:        0,
+		cancelFunc:            func() {},
 	}
 }
 
@@ -66,13 +74,18 @@ func (im *InterfaceManager) Start(ctx context.Context) {
 
 	im.log.Debug("Subscribing for events")
 
+	ctx, cancelFunc := context.WithCancel(ctx)
+
 	ifaceEvents, err := registerer.Subscribe(ctx)
 
 	if err != nil {
+		cancelFunc()
 		im.log.Error("instantiating interfaces' informer", "error", err)
+		im.emitError(fmt.Errorf("instantiating interfaces' informer: %w", err))
 		return
 	}
 
+	im.cancelFunc = cancelFunc
 	im.registerer = registerer
 
 	im.wg.Add(1)
@@ -97,6 +110,10 @@ func (im *InterfaceManager) Start(ctx context.Context) {
 			}
 		}
 	}()
+}
+
+func (im *InterfaceManager) Stop() {
+	im.cancelFunc()
 }
 
 func (im *InterfaceManager) Wait() {
@@ -151,6 +168,21 @@ func (im *InterfaceManager) onInterfaceRemoved(i *ifaces.Interface) {
 
 	for _, cb := range cbMap {
 		cb(i)
+	}
+}
+
+func (im *InterfaceManager) emitError(err error) {
+	cbMap := interfaceManagerErrorCBMap{}
+
+	func() {
+		im.mutex.Lock()
+		defer im.mutex.Unlock()
+
+		cbMap = maps.Clone(im.ifaceErrorCallbacks)
+	}()
+
+	for _, cb := range cbMap {
+		cb(err)
 	}
 }
 
@@ -213,12 +245,23 @@ func (im *InterfaceManager) AddInterfaceRemovedCallback(cb InterfaceManagerCB) u
 	return im.nextCallbackID
 }
 
+func (im *InterfaceManager) AddErrorCallback(cb InterfaceManagerErrorCB) uint64 {
+	im.mutex.Lock()
+	defer im.mutex.Unlock()
+
+	im.nextCallbackID++
+	im.ifaceErrorCallbacks[im.nextCallbackID] = cb
+
+	return im.nextCallbackID
+}
+
 func (im *InterfaceManager) RemoveCallback(id uint64) {
 	im.mutex.Lock()
 	defer im.mutex.Unlock()
 
 	delete(im.ifaceAddedCallbacks, id)
 	delete(im.ifaceRemovedCallbacks, id)
+	delete(im.ifaceErrorCallbacks, id)
 }
 
 func (im *InterfaceManager) Interfaces() IMIfaceMap {

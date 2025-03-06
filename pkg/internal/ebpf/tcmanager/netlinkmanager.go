@@ -47,6 +47,8 @@ type netlinkManager struct {
 	mutex             sync.Mutex
 	addedCallbackID   uint64
 	removedCallbackID uint64
+	errorCallbackID   uint64
+	errorCh           chan error
 }
 
 func netlinkAttachType(attachment AttachmentType) (uint32, error) {
@@ -67,6 +69,7 @@ func NewNetlinkManager() TCManager {
 		programs:     []*netlinkProg{},
 		log:          slog.With("component", "tc_manager_netlink"),
 		mutex:        sync.Mutex{},
+		errorCh:      make(chan error),
 	}
 }
 
@@ -77,11 +80,13 @@ func (tc *netlinkManager) SetInterfaceManager(im *InterfaceManager) {
 	if tc.ifaceManager != nil {
 		tc.ifaceManager.RemoveCallback(tc.addedCallbackID)
 		tc.ifaceManager.RemoveCallback(tc.removedCallbackID)
+		tc.ifaceManager.RemoveCallback(tc.errorCallbackID)
 	}
 
 	if im != nil {
 		tc.addedCallbackID = im.AddInterfaceAddedCallback(func(i *ifaces.Interface) { tc.onInterfaceAdded(i) })
 		tc.removedCallbackID = im.AddInterfaceRemovedCallback(func(i *ifaces.Interface) { tc.onInterfaceRemoved(i) })
+		tc.errorCallbackID = im.AddErrorCallback(func(err error) { tc.onIfaceManagerError(err) })
 	}
 
 	tc.ifaceManager = im
@@ -95,6 +100,8 @@ func (tc *netlinkManager) Shutdown() {
 
 	tc.cleanupInterfacesLocked()
 	tc.cleanupProgsLocked()
+
+	close(tc.errorCh)
 
 	tc.log.Debug("TC completed shutdown")
 }
@@ -121,6 +128,10 @@ func (tc *netlinkManager) RemoveProgram(name string) {
 	tc.removeProgramLocked(name)
 }
 
+func (tc *netlinkManager) Errors() chan error {
+	return tc.errorCh
+}
+
 func (tc *netlinkManager) attachProgramLocked(prog *netlinkProg) {
 	for _, iface := range tc.interfaces {
 		tc.attachProgramToIfaceLocked(prog, iface)
@@ -135,7 +146,7 @@ func (tc *netlinkManager) attachProgramToIfaceLocked(prog *netlinkProg, iface *n
 	attachType, err := netlinkAttachType(prog.attachType)
 
 	if err != nil {
-		tc.log.Error("Error attaching program", "error", err)
+		tc.emitError("Error attaching program", "error", err)
 		return
 	}
 
@@ -162,10 +173,8 @@ func (tc *netlinkManager) attachProgramToIfaceLocked(prog *netlinkProg, iface *n
 		if errors.Is(err, fs.ErrExist) {
 			tc.log.Warn("filter already exists. Ignoring", "error", err)
 		} else {
-			tc.log.Error("failed to create filter", "error", err)
+			tc.emitError("failed to create filter", err)
 		}
-
-		return
 	}
 
 	iface.filters = append(iface.filters, filter)
@@ -184,7 +193,7 @@ func (tc *netlinkManager) detachProgramFromIfaceLocked(prog string, iface *netli
 		}
 
 		if err := netlink.FilterDel(filter); err != nil {
-			tc.log.Error("Failed to delete filter", "filter", prog, "error", err)
+			tc.emitError("Failed to delete filter", "filter", prog, "error", err)
 		}
 	}
 
@@ -199,7 +208,7 @@ func (tc *netlinkManager) removeProgramLocked(name string) {
 		}
 
 		if err := prog.Close(); err != nil {
-			tc.log.Error("Failed to close program", "program", prog, "error", err)
+			tc.emitError("Failed to close program", "program", prog, "error", err)
 		}
 	}
 
@@ -235,11 +244,15 @@ func (tc *netlinkManager) onInterfaceRemoved(iface *ifaces.Interface) {
 	delete(tc.interfaces, iface.Index)
 }
 
+func (tc *netlinkManager) onIfaceManagerError(err error) {
+	tc.emitError("interface manager error", err)
+}
+
 func (tc *netlinkManager) installQdisc(iface *ifaces.Interface) *netlink.GenericQdisc {
 	link, err := netlink.LinkByIndex(iface.Index)
 
 	if err != nil {
-		tc.log.Error("failed to lookup link device", "index", iface.Index, "name", iface.Name, "error", err)
+		tc.emitError("failed to lookup link device", "index", iface.Index, "name", iface.Name, "error", err)
 		return nil
 	}
 
@@ -258,7 +271,7 @@ func (tc *netlinkManager) installQdisc(iface *ifaces.Interface) *netlink.Generic
 		if errors.Is(err, fs.ErrExist) {
 			tc.log.Warn("qdisc clsact already exists. Ignoring", "error", err)
 		} else {
-			tc.log.Error("failed to create clsact qdisc on", "index", iface.Index, "name", iface.Name, "error", err)
+			tc.emitError("failed to create clsact qdisc on", "index", iface.Index, "name", iface.Name, "error", err)
 			return nil
 		}
 	}
@@ -285,7 +298,7 @@ func (tc *netlinkManager) cleanupFiltersLocked(iface *netlinkIface) {
 		err := doIgnoreNoDev(netlink.FilterDel, netlink.Filter(filter))
 
 		if err != nil {
-			tc.log.Error("deleting filter", "interface", iface,
+			tc.emitError("deleting filter", "interface", iface,
 				"filter", filter.Name, "error", err)
 		}
 	}
@@ -307,7 +320,7 @@ func (tc *netlinkManager) cleanupQdiscLocked(iface *netlinkIface) {
 	tc.log.Debug("deleting Qdisc", "interface", iface)
 
 	if err := doIgnoreNoDev(netlink.QdiscDel, netlink.Qdisc(iface.qdisc)); err != nil {
-		tc.log.Error("deleting qdisc", "error", err)
+		tc.emitError("deleting qdisc", "error", err)
 	}
 }
 
@@ -334,6 +347,15 @@ func (tc *netlinkManager) cleanupProgsLocked() {
 	}
 
 	tc.programs = []*netlinkProg{}
+}
+
+func (tc *netlinkManager) emitError(msg string, args ...any) {
+	tc.log.Error(msg, args...)
+
+	formattedArgs := fmt.Sprint(args...)
+	compositeError := fmt.Errorf("%s: %s", msg, formattedArgs)
+
+	tc.errorCh <- compositeError
 }
 
 // doIgnoreNoDev runs the provided syscall over the provided device and ignores the error

@@ -45,6 +45,7 @@ const (
 	envProtocol        = "OTEL_EXPORTER_OTLP_PROTOCOL"
 	envHeaders         = "OTEL_EXPORTER_OTLP_HEADERS"
 	envTracesHeaders   = "OTEL_EXPORTER_OTLP_TRACES_HEADERS"
+	envMetricsHeaders  = "OTEL_EXPORTER_OTLP_METRICS_HEADERS"
 	envResourceAttrs   = "OTEL_RESOURCE_ATTRIBUTES"
 )
 
@@ -229,7 +230,7 @@ type otlpOptions struct {
 	BaseURLPath   string
 	URLPath       string
 	SkipTLSVerify bool
-	HTTPHeaders   map[string]string
+	Headers       map[string]string
 }
 
 func (o *otlpOptions) AsMetricHTTP() []otlpmetrichttp.Option {
@@ -245,8 +246,8 @@ func (o *otlpOptions) AsMetricHTTP() []otlpmetrichttp.Option {
 	if o.SkipTLSVerify {
 		opts = append(opts, otlpmetrichttp.WithTLSClientConfig(&tls.Config{InsecureSkipVerify: true}))
 	}
-	if len(o.HTTPHeaders) > 0 {
-		opts = append(opts, otlpmetrichttp.WithHeaders(o.HTTPHeaders))
+	if len(o.Headers) > 0 {
+		opts = append(opts, otlpmetrichttp.WithHeaders(o.Headers))
 	}
 	return opts
 }
@@ -260,6 +261,9 @@ func (o *otlpOptions) AsMetricGRPC() []otlpmetricgrpc.Option {
 	}
 	if o.SkipTLSVerify {
 		opts = append(opts, otlpmetricgrpc.WithTLSCredentials(credentials.NewTLS(&tls.Config{InsecureSkipVerify: true})))
+	}
+	if len(o.Headers) > 0 {
+		opts = append(opts, otlpmetricgrpc.WithHeaders(o.Headers))
 	}
 	return opts
 }
@@ -277,8 +281,8 @@ func (o *otlpOptions) AsTraceHTTP() []otlptracehttp.Option {
 	if o.SkipTLSVerify {
 		opts = append(opts, otlptracehttp.WithTLSClientConfig(&tls.Config{InsecureSkipVerify: true}))
 	}
-	if len(o.HTTPHeaders) > 0 {
-		opts = append(opts, otlptracehttp.WithHeaders(o.HTTPHeaders))
+	if len(o.Headers) > 0 {
+		opts = append(opts, otlptracehttp.WithHeaders(o.Headers))
 	}
 	return opts
 }
@@ -292,6 +296,9 @@ func (o *otlpOptions) AsTraceGRPC() []otlptracegrpc.Option {
 	}
 	if o.SkipTLSVerify {
 		opts = append(opts, otlptracegrpc.WithTLSCredentials(credentials.NewTLS(&tls.Config{InsecureSkipVerify: true})))
+	}
+	if len(o.Headers) > 0 {
+		opts = append(opts, otlptracegrpc.WithHeaders(o.Headers))
 	}
 	return opts
 }
@@ -352,7 +359,7 @@ func (l *LogrAdaptor) WithName(name string) logr.LogSink {
 	return &LogrAdaptor{inner: l.inner.With("name", name)}
 }
 
-func headersFromEnv(varName string) map[string]string {
+func HeadersFromEnv(varName string) map[string]string {
 	headers := map[string]string{}
 
 	addToMap := func(k string, v string) {
@@ -396,4 +403,20 @@ func ResourceAttrsFromEnv(svc *svc.Attrs) []attribute.KeyValue {
 
 	parseOTELEnvVar(svc, envResourceAttrs, apply)
 	return otelResourceAttrs
+}
+
+func ResolveOTLPEndpoint(endpoint, common string, grafana *GrafanaOTLP) (string, bool) {
+	if endpoint != "" {
+		return endpoint, false
+	}
+
+	if common != "" {
+		return common, true
+	}
+
+	if grafana != nil && grafana.CloudZone != "" && grafana.Endpoint() != "" {
+		return grafana.Endpoint(), true
+	}
+
+	return "", false
 }

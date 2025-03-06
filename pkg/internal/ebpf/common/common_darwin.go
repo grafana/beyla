@@ -15,3 +15,11 @@ func HasHostPidAccess() bool {
 func HasHostNetworkAccess() (bool, error) {
 	return false, nil
 }
+
+func FindNetworkNamespace(pid int32) (string, error) {
+	return "", nil
+}
+
+func RootDirectoryForPID(pid int32) string {
+	return ""
+}

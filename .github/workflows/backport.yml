@@ -16,7 +16,6 @@ jobs:
           repository: grafana/grafana-github-actions
           path: ./actions
           ref: main
-          lfs: true
       - name: Install Actions
         run: npm install --production --prefix ./actions
       - name: Run backport

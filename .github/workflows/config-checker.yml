@@ -1,4 +1,4 @@
-name: Config Field Checker
+name: Alloy Mapped Fields Checker
 
 on:
   push:
@@ -22,7 +22,9 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.21'
+        go-version-file: 'go.mod'
+        cache: false  # Disable caching to avoid extraction conflicts
+        check-latest: true
 
     - name: Run alloy field checker
       id: field-checker
@@ -72,10 +74,10 @@ jobs:
             owner: context.repo.owner,
             repo: context.repo.repo,
             state: 'open',
-            labels: ['config-check']
+            labels: []
           });
           const existingIssue = issues.data.find(issue => 
-            issue.title === 'Unmapped Configuration Fields Detected'
+            issue.title === 'Map missing Beyla options in Alloy component'
           );
           if (existingIssue) {
             // Extract the hash from the existing issue if it exists
@@ -128,9 +130,9 @@ jobs:
               await github.rest.issues.create({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                title: 'Unmapped Configuration Fields Detected',
+                title: 'Map missing Beyla options in Alloy component',
                 body: issueBody,
-                labels: ['config-check']
+                assignee: context.repo.owner
               });
             }
           }
@@ -146,11 +148,11 @@ jobs:
             owner: context.repo.owner,
             repo: context.repo.repo,
             state: 'open',
-            labels: ['config-check']
+            labels: []
           });
           
           const existingIssue = issues.data.find(issue => 
-            issue.title === 'Unmapped Configuration Fields Detected'
+            issue.title === 'Map missing Beyla options in Alloy component'
           );
           
           if (existingIssue) {

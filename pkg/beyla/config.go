@@ -228,6 +228,7 @@ type HostIDConfig struct {
 	// Override allows overriding the reported host.id in Beyla
 	// nolint:undoc
 	Override string `yaml:"override" env:"BEYLA_HOST_ID"`
+	// FetchTimeout specifies the timeout for trying to fetch the HostID from diverse Cloud Providers
 	// nolint:undoc
 	FetchTimeout time.Duration `yaml:"fetch_timeout" env:"BEYLA_HOST_ID_FETCH_TIMEOUT"`
 }

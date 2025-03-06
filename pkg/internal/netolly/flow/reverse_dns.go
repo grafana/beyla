@@ -24,7 +24,6 @@ var netLookupAddr = net.LookupAddr
 
 // ReverseDNS is currently experimental. It is kept disabled by default and will be hidden
 // from the documentation. This means that it does not impact in the overall Beyla performance.
-// nolint:undoc
 type ReverseDNS struct {
 	// Type of ReverseDNS. Values are "none" (default) and "local".
 	// nolint:undoc

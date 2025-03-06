@@ -193,7 +193,7 @@ func extractFieldData(field *ast.Field, yamlKey, envKey, file string, fset *toke
 func collectAllFields() ([]Field, error) {
 	goFiles, err := findGoFiles()
 	if err != nil {
-		return nil, fmt.Errorf("error walking directory: %v", err)
+		return nil, fmt.Errorf("error walking directory: %w", err)
 	}
 
 	var allFields []Field
@@ -211,7 +211,7 @@ func collectAllFields() ([]Field, error) {
 func buildDocString() (string, error) {
 	mdFiles, err := findMarkdownFiles("docs")
 	if err != nil {
-		return "", fmt.Errorf("error finding markdown files: %v", err)
+		return "", fmt.Errorf("error finding markdown files: %w", err)
 	}
 
 	var docBuilder strings.Builder
@@ -258,10 +258,13 @@ func main() {
 
 	undocumented := findUndocumentedFields(fields, docStr)
 	if len(undocumented) > 0 {
-		fmt.Printf("Found %d undocumented configuration fields:\n", len(undocumented))
+		fmt.Printf("Found %d undocumented configuration fields:\n\n", len(undocumented))
 		for _, field := range undocumented {
 			printError(field)
 		}
+		fmt.Printf("%sTo fix these errors either:%s\n", colorBold, colorReset)
+		fmt.Printf("  1. Add documentation for the fields in the docs/ directory\n")
+		fmt.Printf("  2. Add '// nolint:undoc' above the field to skip the check\n\n")
 		os.Exit(1)
 	}
 

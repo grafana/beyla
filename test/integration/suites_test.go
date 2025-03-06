@@ -279,6 +279,15 @@ func TestSuite_Java_Host_Network(t *testing.T) {
 	require.NoError(t, compose.Close())
 }
 
+func TestSuite_JavaOTelSDK(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-java-agent.yml", path.Join(pathOutput, "test-suite-java-agent.log"))
+	compose.Env = append(compose.Env, `JAVA_TEST_MODE=-jar`, `JAVA_OPEN_PORT=8085`)
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+	t.Run("Java RED metrics with OTel SDK injection", testREDMetricsJavaOTelSDKHTTP)
+	require.NoError(t, compose.Close())
+}
+
 func TestSuite_Rust(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-rust.yml", path.Join(pathOutput, "test-suite-rust.log"))
 	compose.Env = append(compose.Env, `BEYLA_OPEN_PORT=8090`, `BEYLA_EXECUTABLE_NAME=`, `TEST_SERVICE_PORTS=8091:8090`, `TESTSERVER_IMAGE_VERSION=0.0.3`)

@@ -77,14 +77,18 @@ func (cfg *GrafanaOTLP) AuthHeader() string {
 	return "Basic " + base64.StdEncoding.EncodeToString([]byte(cfg.InstanceID+":"+cfg.APIKey))
 }
 
+func (cfg *GrafanaOTLP) HasAuth() bool {
+	return cfg.InstanceID != "" && cfg.APIKey != ""
+}
+
 func (cfg *GrafanaOTLP) setupOptions(opt *otlpOptions) {
 	if cfg == nil {
 		return
 	}
-	if cfg.InstanceID != "" && cfg.APIKey != "" {
-		if opt.HTTPHeaders == nil {
-			opt.HTTPHeaders = map[string]string{}
+	if cfg.HasAuth() {
+		if opt.Headers == nil {
+			opt.Headers = map[string]string{}
 		}
-		opt.HTTPHeaders["Authorization"] = cfg.AuthHeader()
+		opt.Headers["Authorization"] = cfg.AuthHeader()
 	}
 }

@@ -73,24 +73,32 @@ type TracesConfig struct {
 
 	// Configuration options below this line will remain undocumented at the moment,
 	// but can be useful for performance-tuning of some customers.
-	MaxExportBatchSize int           `yaml:"max_export_batch_size" env:"BEYLA_OTLP_TRACES_MAX_EXPORT_BATCH_SIZE"`
-	MaxQueueSize       int           `yaml:"max_queue_size" env:"BEYLA_OTLP_TRACES_MAX_QUEUE_SIZE"`
-	BatchTimeout       time.Duration `yaml:"batch_timeout" env:"BEYLA_OTLP_TRACES_BATCH_TIMEOUT"`
-	ExportTimeout      time.Duration `yaml:"export_timeout" env:"BEYLA_OTLP_TRACES_EXPORT_TIMEOUT"`
+	// nolint:undoc
+	MaxExportBatchSize int `yaml:"max_export_batch_size" env:"BEYLA_OTLP_TRACES_MAX_EXPORT_BATCH_SIZE"`
+	// nolint:undoc
+	MaxQueueSize int `yaml:"max_queue_size" env:"BEYLA_OTLP_TRACES_MAX_QUEUE_SIZE"`
+	// nolint:undoc
+	BatchTimeout time.Duration `yaml:"batch_timeout" env:"BEYLA_OTLP_TRACES_BATCH_TIMEOUT"`
+	// nolint:undoc
+	ExportTimeout time.Duration `yaml:"export_timeout" env:"BEYLA_OTLP_TRACES_EXPORT_TIMEOUT"`
 
 	// Configuration options for BackOffConfig of the traces exporter.
 	// See https://github.com/open-telemetry/opentelemetry-collector/blob/main/config/configretry/backoff.go
 	// BackOffInitialInterval the time to wait after the first failure before retrying.
+	// nolint:undoc
 	BackOffInitialInterval time.Duration `yaml:"backoff_initial_interval" env:"BEYLA_BACKOFF_INITIAL_INTERVAL"`
 	// BackOffMaxInterval is the upper bound on backoff interval.
+	// nolint:undoc
 	BackOffMaxInterval time.Duration `yaml:"backoff_max_interval" env:"BEYLA_BACKOFF_MAX_INTERVAL"`
 	// BackOffMaxElapsedTime is the maximum amount of time (including retries) spent trying to send a request/batch.
+	// nolint:undoc
 	BackOffMaxElapsedTime time.Duration `yaml:"backoff_max_elapsed_time" env:"BEYLA_BACKOFF_MAX_ELAPSED_TIME"`
-
+	// nolint:undoc
 	ReportersCacheLen int `yaml:"reporters_cache_len" env:"BEYLA_TRACES_REPORT_CACHE_LEN"`
 
 	// SDKLogLevel works independently from the global LogLevel because it prints GBs of logs in Debug mode
 	// and the Info messages leak internal details that are not usually valuable for the final user.
+	// nolint:undoc
 	SDKLogLevel string `yaml:"otel_sdk_log_level" env:"BEYLA_OTEL_SDK_LOG_LEVEL"`
 
 	// Grafana configuration needs to be explicitly set up before building the graph

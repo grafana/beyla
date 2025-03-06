@@ -25,6 +25,7 @@ type KubernetesDecorator struct {
 
 	// ClusterName overrides cluster name. If empty, the NetO11y module will try to retrieve
 	// it from the Cloud Provider Metadata (EC2, GCP and Azure), and leave it empty if it fails to.
+	// nolint:undoc
 	ClusterName string `yaml:"cluster_name" env:"BEYLA_KUBE_CLUSTER_NAME"`
 
 	// KubeconfigPath is optional. If unset, it will look in the usual location.
@@ -37,6 +38,7 @@ type KubernetesDecorator struct {
 
 	// DropExternal will drop, in NetO11y component, any flow where the source or destination
 	// IPs are not matched to any kubernetes entity, assuming they are cluster-external
+	// nolint:undoc
 	DropExternal bool `yaml:"drop_external" env:"BEYLA_NETWORK_DROP_EXTERNAL"`
 
 	// DisableInformers allows selectively disabling some informers. Accepted value is a list
@@ -47,6 +49,7 @@ type KubernetesDecorator struct {
 	DisableInformers []string `yaml:"disable_informers" env:"BEYLA_KUBE_DISABLE_INFORMERS"`
 
 	// MetaCacheAddress is the host:port address of the beyla-k8s-cache service instance
+	// nolint:undoc
 	MetaCacheAddress string `yaml:"meta_cache_address" env:"BEYLA_KUBE_META_CACHE_ADDRESS"`
 
 	// MetaRestrictLocalNode will download only the metadata from the Pods that are located in the same
@@ -59,6 +62,7 @@ type KubernetesDecorator struct {
 	MetaSourceLabels kube.MetaSourceLabels `yaml:"meta_source_labels"`
 
 	// ResourceLabels allows Beyla overriding the OTEL Resource attributes from a map of user-defined labels.
+	// nolint:undoc
 	ResourceLabels kube.ResourceLabels `yaml:"resource_labels"`
 }
 

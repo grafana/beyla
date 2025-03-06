@@ -9,6 +9,7 @@ import (
 // EBPFTracer configuration for eBPF programs
 type EBPFTracer struct {
 	// Enables logging of eBPF program events
+	// nolint:undoc
 	BpfDebug bool `yaml:"bpf_debug" env:"BEYLA_BPF_DEBUG"`
 
 	// WakeupLen specifies how many messages need to be accumulated in the eBPF ringbuffer
@@ -19,9 +20,11 @@ type EBPFTracer struct {
 	WakeupLen int `yaml:"wakeup_len" env:"BEYLA_BPF_WAKEUP_LEN"`
 	// BatchLength allows specifying how many traces will be batched at the initial
 	// stage before being forwarded to the next stage
+	// nolint:undoc
 	BatchLength int `yaml:"batch_length" env:"BEYLA_BPF_BATCH_LENGTH"`
 	// BatchTimeout specifies the timeout to forward the data batch if it didn't
 	// reach the BatchLength size
+	// nolint:undoc
 	BatchTimeout time.Duration `yaml:"batch_timeout" env:"BEYLA_BPF_BATCH_TIMEOUT"`
 
 	// If enabled, the kprobes based HTTP request tracking will start tracking the request
@@ -35,9 +38,11 @@ type EBPFTracer struct {
 
 	// Skips checking the kernel version for bpf_loop functionality. Some modified kernels have this
 	// backported prior to version 5.17.
+	// nolint:undoc
 	OverrideBPFLoopEnabled bool `yaml:"override_bpfloop_enabled" env:"BEYLA_OVERRIDE_BPF_LOOP_ENABLED"`
 
 	// Enables Linux Traffic Control probes for context propagation
+	// nolint:undoc
 	UseTCForL7CP bool `yaml:"traffic_control_l7_context_propagation" env:"BEYLA_BPF_TC_L7_CP"`
 
 	// Select the TC attachment backend: accepted values are 'tc' (netlink),
@@ -45,6 +50,7 @@ type EBPFTracer struct {
 	TCBackend tcmanager.TCBackend `yaml:"traffic_control_backend" env:"BEYLA_BPF_TC_BACKEND"`
 
 	// Disables Beyla black-box context propagation. Used for testing purposes only.
+	// nolint:undoc
 	DisableBlackBoxCP bool `yaml:"disable_black_box_cp" env:"BEYLA_BPF_DISABLE_BLACK_BOX_CP"`
 
 	// Optimises for getting requests information immediately when request response is seen
@@ -55,11 +61,14 @@ type EBPFTracer struct {
 	HeuristicSQLDetect bool `yaml:"heuristic_sql_detect" env:"BEYLA_HEURISTIC_SQL_DETECT"`
 
 	// Enables GPU instrumentation for CUDA kernel launches and allocations
+	// nolint:undoc
 	InstrumentGPU bool `yaml:"instrument_gpu" env:"BEYLA_INSTRUMENT_GPU"`
 
 	// Enables debug printing of the protocol data
+	// nolint:undoc
 	ProtocolDebug bool `yaml:"protocol_debug_print" env:"BEYLA_PROTOCOL_DEBUG_PRINT"`
 
 	// Enables Java instrumentation with the OpenTelemetry JDK Agent
+	// nolint:undoc
 	UseOTelSDKForJava bool `yaml:"use_otel_sdk_for_java" env:"BEYLA_USE_OTEL_SDK_FOR_JAVA"`
 }

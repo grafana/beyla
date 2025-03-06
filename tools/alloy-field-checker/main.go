@@ -313,9 +313,7 @@ func processAssignStatement(assign *ast.AssignStmt, assignedFields, defaultConfi
 		if sel, ok := lhs.(*ast.SelectorExpr); ok {
 			processFieldPath(sel, assignedFields, defaultConfigFields)
 			if i < len(assign.Rhs) {
-				if rhs, ok := assign.Rhs[i].(ast.Expr); ok {
-					processFieldPath(rhs, assignedFields, defaultConfigFields)
-				}
+				processFieldPath(assign.Rhs[i], assignedFields, defaultConfigFields)
 			}
 		}
 	}

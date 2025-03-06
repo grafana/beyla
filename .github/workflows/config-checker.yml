@@ -106,7 +106,7 @@ jobs:
           
           // Only update if the hash has changed or there's no existing issue
           if (issueInfo.hash !== newHash || !issueInfo.number) {
-            const issueBody = `Unmapped configuration fields were detected:
+            const issueBody = `Unmapped configuration fields were detected in Beyla's Alloy component:
 
           \`\`\`
           ${process.env.UNMAPPED_FIELDS}

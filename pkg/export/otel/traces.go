@@ -705,7 +705,9 @@ func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 		attrs = []attribute.KeyValue{
 			request.ServerAddr(request.HostAsServer(span)),
 			request.ServerPort(span.HostPort),
-			semconv.RPCSystemJsonRPC,
+			// short-term: set the jsonrpc params as attributes into path field
+			// request.HTTPUrlPath(span.Path),
+			attribute.String("rpc.system", "jsonrpc"),
 			semconv.RPCMethod(span.Method),
 		}
 		if span.Statement != "" {

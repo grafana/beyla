@@ -79,11 +79,6 @@ func NewSockFlowFetcher(
 	}); err != nil {
 		return nil, fmt.Errorf("rewriting BPF constants definition: %w", err)
 	}
-	err = spec.Variables[constTraceMessages].Set(uint8(traceMsgs))
-	if err != nil {
-		return nil, fmt.Errorf("setting trace messages: %w", err)
-	}
-
 	if err := spec.LoadAndAssign(&objects, &ebpf.CollectionOptions{
 		Programs: ebpf.ProgramOptions{LogSizeStart: 640 * 1024},
 	}); err != nil {

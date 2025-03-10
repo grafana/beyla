@@ -97,11 +97,6 @@ func NewFlowFetcher(
 	}); err != nil {
 		return nil, fmt.Errorf("rewriting BPF constants definition: %w", err)
 	}
-	err = spec.Variables[constTraceMessages].Set(uint8(traceMsgs))
-	if err != nil {
-		return nil, fmt.Errorf("setting trace messages: %w", err)
-	}
-
 	if err := spec.LoadAndAssign(&objects, nil); err != nil {
 		return nil, fmt.Errorf("loading and assigning BPF objects: %w", err)
 	}

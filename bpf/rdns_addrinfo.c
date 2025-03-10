@@ -1,6 +1,8 @@
 #include "vmlinux.h"
-#include <bpf/bpf_helpers.h>
-#include <bpf/bpf_tracing.h>
+
+#include "bpf_helpers.h"
+#include "bpf_endian.h"
+#include "bpf_dbg.h"
 
 #define HOSTNAME_MAX_LEN 64
 
@@ -44,7 +46,7 @@ struct {
 } ongoings SEC(".maps");
 
 SEC("uprobe/libc.so.6:getaddrinfo")
-int BPF_KPROBE(uprobe_getaddrinfo,
+int BPF_UPROBE(uprobe_getaddrinfo,
                const char *name,
                const char *service,
                const void *hints, //const struct addrinfo *hints,

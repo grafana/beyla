@@ -18,11 +18,11 @@ import (
 	"github.com/cilium/ebpf/rlimit"
 	"github.com/mariomac/pipes/pipe"
 
-	"github.com/mariomac/rdns/pkg/config"
-	"github.com/mariomac/rdns/pkg/store"
+	"github.com/grafana/beyla/v2/pkg/internal/rdns/ebpf/rdnscfg"
+	"github.com/grafana/beyla/v2/pkg/internal/rdns/store"
 )
 
-//go:generate bpf2go -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 -type dns_entry_t Bpf ../../../../../bpf/rdns_addrinfo.c -- -I../../../../../bpf/include
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 -type dns_entry_t Bpf ../../../../../bpf/rdns_addrinfo.c -- -I../../../../../bpf/headers
 
 func log() *slog.Logger {
 	return slog.With(
@@ -30,10 +30,10 @@ func log() *slog.Logger {
 	)
 }
 
-func AddrInfoProvider(ctx context.Context, cfg *config.Config) pipe.StartProvider[store.DNSEntry] {
+func AddrInfoProvider(ctx context.Context, cfg *rdnscfg.Config) pipe.StartProvider[store.DNSEntry] {
 	return func() (pipe.StartFunc[store.DNSEntry], error) {
 		log := log()
-		if !slices.Contains(cfg.Resolvers, config.ResolverGetAddrInfo) {
+		if !slices.Contains(cfg.Resolvers, rdnscfg.EBPFProbeGetAddrInfo) {
 			log.Debug("getaddrinfo resolver is not enabled, ignoring this stage")
 			return pipe.IgnoreStart[store.DNSEntry](), nil
 		}

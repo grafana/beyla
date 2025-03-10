@@ -1,12 +1,8 @@
-#include <linux/bpf.h>
-#include <linux/if_ether.h>
-#include <linux/in.h>
-#include <linux/ip.h>
-#include <linux/tcp.h>
-#include <linux/udp.h>
+#include "vmlinux.h"
 
-#include <bpf/bpf_endian.h>
-#include <bpf/bpf_helpers.h>
+#include "bpf_helpers.h"
+#include "bpf_endian.h"
+#include "bpf_dbg.h"
 
 // For reference, see:
 // https://datatracker.ietf.org/doc/html/rfc1035

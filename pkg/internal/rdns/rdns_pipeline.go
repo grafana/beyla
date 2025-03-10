@@ -3,19 +3,16 @@ package rdns
 import (
 	"context"
 	"fmt"
-	"log/slog"
 
 	"github.com/mariomac/pipes/pipe"
 
 	"github.com/grafana/beyla/v2/pkg/internal/rdns/ebpf/addrinfo"
+	"github.com/grafana/beyla/v2/pkg/internal/rdns/ebpf/rdnscfg"
 	"github.com/grafana/beyla/v2/pkg/internal/rdns/ebpf/xdp"
 	"github.com/grafana/beyla/v2/pkg/internal/rdns/store"
 )
 
-const (
- 	EBPFProbeGetAddrInfo = "getaddrinfo"
-	EBPFProbeResolverXDP      = "xdp"
-)
+
 
 type Pipeline struct {
 	packetResolver      pipe.Start[store.DNSEntry]
@@ -32,43 +29,26 @@ func (p *Pipeline) Connect() {
 	p.getAddrInfoResolver.SendTo(p.store)
 }
 
-func Run(ctx context.Context, cfg *Config) error {
+type storage interface {
+	PipelineStage(in <-chan store.DNSEntry)
+	GetHostnames(ip string) []string
+}
+
+func Run(ctx context.Context, cfg *rdnscfg.Config, storage storage) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-
-	store := selectStore(ctx, cfg)
 
 	builder := pipe.NewBuilder(&Pipeline{})
 	pipe.AddStartProvider(builder, (*Pipeline).Packet, xdp.PacketResolverProvider(ctx, cfg))
 	pipe.AddStartProvider(builder, (*Pipeline).GetAddrInfo, addrinfo.AddrInfoProvider(ctx, cfg))
-	pipe.AddFinal(builder, (*Pipeline).Store, store.PipelineStage)
+	pipe.AddFinal(builder, (*Pipeline).Store, storage.PipelineStage)
 
 	run, err := builder.Build()
 	if err != nil {
 		return fmt.Errorf("building pipeline: %w", err)
 	}
 
-	go func() {
-		slog.Info("starting HTTP server", "port", cfg.HttpPort)
-		if err := query.HttpJsonServer(store, cfg.HttpPort); err != nil {
-			slog.Error("running HTTP server. Exiting", "error", err)
-			cancel()
-		}
-	}()
-
 	run.Start()
 	<-run.Done()
 	return nil
-}
-
-type storage interface {
-	PipelineStage(in <-chan store.DNSEntry)
-	GetHostnames(ip string) []string
-}
-
-func selectStore(ctx context.Context, cfg *config.Config) storage {
-	if cfg.RedisAddress != "" {
-		return store.NewRedis(ctx, cfg.RedisAddress, cfg.RedisUser, cfg.RedisPassword)
-	}
-	return store.NewInMemory()
 }

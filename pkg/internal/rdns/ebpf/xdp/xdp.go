@@ -14,18 +14,18 @@ import (
 
 	"github.com/mariomac/pipes/pipe"
 
-	"github.com/mariomac/rdns/pkg/config"
-	"github.com/mariomac/rdns/pkg/store"
+	"github.com/grafana/beyla/v2/pkg/internal/rdns/ebpf/rdnscfg"
+	"github.com/grafana/beyla/v2/pkg/internal/rdns/store"
 )
 
 func log() *slog.Logger {
 	return slog.With("component", "xdp.PacketResolver")
 }
 
-func PacketResolverProvider(ctx context.Context, cfg *config.Config) pipe.StartProvider[store.DNSEntry] {
+func PacketResolverProvider(ctx context.Context, cfg *rdnscfg.Config) pipe.StartProvider[store.DNSEntry] {
 	return func() (pipe.StartFunc[store.DNSEntry], error) {
 		log := log()
-		if !slices.Contains(cfg.Resolvers, config.ResolverPacket) {
+		if !slices.Contains(cfg.Resolvers, rdnscfg.EBPFProbeResolverXDP) {
 			log.Debug("packet resolver is not enabled, ignoring this stage")
 			return pipe.IgnoreStart[store.DNSEntry](), nil
 		}

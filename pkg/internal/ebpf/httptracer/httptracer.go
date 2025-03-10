@@ -145,7 +145,13 @@ func (p *Tracer) startTC(ctx context.Context) {
 func (p *Tracer) Run(ctx context.Context, _ chan<- []request.Span) {
 	p.startTC(ctx)
 
-	<-ctx.Done()
+	errorCh := p.tcManager.Errors()
+
+	select {
+	case <-ctx.Done():
+	case err := <-errorCh:
+		p.log.Error("TC manager returned an error, aborting", "error", err)
+	}
 
 	p.bpfObjects.Close()
 
@@ -159,6 +165,7 @@ func (p *Tracer) stopTC() {
 
 	p.log.Info("removing traffic control probes")
 
+	p.ifaceManager.Stop()
 	p.ifaceManager.Wait()
 	p.ifaceManager = nil
 

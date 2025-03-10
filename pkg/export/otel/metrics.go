@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"maps"
 	"net/url"
 	"os"
 	"slices"
@@ -74,6 +75,7 @@ type MetricsConfig struct {
 	Interval time.Duration `yaml:"interval" env:"BEYLA_METRICS_INTERVAL"`
 	// OTELIntervalMS supports metric intervals as specified by the standard OTEL definition.
 	// BEYLA_METRICS_INTERVAL takes precedence over it.
+	// nolint:undoc
 	OTELIntervalMS int `env:"OTEL_METRIC_EXPORT_INTERVAL"`
 
 	CommonEndpoint  string `yaml:"-" env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
@@ -88,10 +90,12 @@ type MetricsConfig struct {
 	Buckets              Buckets `yaml:"buckets"`
 	HistogramAggregation string  `yaml:"histogram_aggregation" env:"OTEL_EXPORTER_OTLP_METRICS_DEFAULT_HISTOGRAM_AGGREGATION"`
 
+	// nolint:undoc
 	ReportersCacheLen int `yaml:"reporters_cache_len" env:"BEYLA_METRICS_REPORT_CACHE_LEN"`
 
 	// SDKLogLevel works independently from the global LogLevel because it prints GBs of logs in Debug mode
 	// and the Info messages leak internal details that are not usually valuable for the final user.
+	// nolint:undoc
 	SDKLogLevel string `yaml:"otel_sdk_log_level" env:"BEYLA_OTEL_SDK_LOG_LEVEL"`
 
 	// Features of metrics that are can be exported. Accepted values are "application" and "network".
@@ -103,6 +107,7 @@ type MetricsConfig struct {
 
 	// TTL is the time since a metric was updated for the last time until it is
 	// removed from the metrics set.
+	// nolint:undoc
 	TTL time.Duration `yaml:"ttl" env:"BEYLA_OTEL_METRICS_TTL"`
 
 	AllowServiceGraphSelfReferences bool `yaml:"allow_service_graph_self_references" env:"BEYLA_OTEL_ALLOW_SERVICE_GRAPH_SELF_REFERENCES"`
@@ -142,6 +147,10 @@ func (m *MetricsConfig) GuessProtocol() Protocol {
 	// Otherwise we return default protocol according to the latest specification:
 	// https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/protocol/exporter.md?plain=1#L53
 	return ProtocolHTTPProtobuf
+}
+
+func (m *MetricsConfig) OTLPMetricsEndpoint() (string, bool) {
+	return ResolveOTLPEndpoint(m.MetricsEndpoint, m.CommonEndpoint, m.Grafana)
 }
 
 // EndpointEnabled specifies that the OTEL metrics node is enabled if and only if
@@ -963,7 +972,7 @@ func (mr *MetricsReporter) reportMetrics(input <-chan []request.Span) {
 }
 
 func getHTTPMetricEndpointOptions(cfg *MetricsConfig) (otlpOptions, error) {
-	opts := otlpOptions{}
+	opts := otlpOptions{Headers: map[string]string{}}
 	log := mlog().With("transport", "http")
 	murl, isCommon, err := parseMetricsEndpoint(cfg)
 	if err != nil {
@@ -996,12 +1005,14 @@ func getHTTPMetricEndpointOptions(cfg *MetricsConfig) (otlpOptions, error) {
 	}
 
 	cfg.Grafana.setupOptions(&opts)
+	maps.Copy(opts.Headers, HeadersFromEnv(envHeaders))
+	maps.Copy(opts.Headers, HeadersFromEnv(envMetricsHeaders))
 
 	return opts, nil
 }
 
 func getGRPCMetricEndpointOptions(cfg *MetricsConfig) (otlpOptions, error) {
-	opts := otlpOptions{}
+	opts := otlpOptions{Headers: map[string]string{}}
 	log := mlog().With("transport", "grpc")
 	murl, _, err := parseMetricsEndpoint(cfg)
 	if err != nil {
@@ -1020,6 +1031,11 @@ func getGRPCMetricEndpointOptions(cfg *MetricsConfig) (otlpOptions, error) {
 		log.Debug("Setting InsecureSkipVerify")
 		opts.SkipTLSVerify = true
 	}
+
+	cfg.Grafana.setupOptions(&opts)
+	maps.Copy(opts.Headers, HeadersFromEnv(envHeaders))
+	maps.Copy(opts.Headers, HeadersFromEnv(envMetricsHeaders))
+
 	return opts, nil
 }
 
@@ -1030,15 +1046,7 @@ func getGRPCMetricEndpointOptions(cfg *MetricsConfig) (otlpOptions, error) {
 // If, by some reason, Grafana changes its OTLP Gateway URL in a distant future, you can still point to the
 // correct URL with the OTLP_EXPORTER_... variables.
 func parseMetricsEndpoint(cfg *MetricsConfig) (*url.URL, bool, error) {
-	isCommon := false
-	endpoint := cfg.MetricsEndpoint
-	if endpoint == "" {
-		isCommon = true
-		endpoint = cfg.CommonEndpoint
-		if endpoint == "" && cfg.Grafana != nil && cfg.Grafana.CloudZone != "" {
-			endpoint = cfg.Grafana.Endpoint()
-		}
-	}
+	endpoint, isCommon := cfg.OTLPMetricsEndpoint()
 
 	murl, err := url.Parse(endpoint)
 	if err != nil {

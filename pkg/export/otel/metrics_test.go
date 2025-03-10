@@ -38,7 +38,7 @@ func TestHTTPMetricsEndpointOptions(t *testing.T) {
 	}
 
 	t.Run("testing with two endpoints", func(t *testing.T) {
-		testMetricsHTTPOptions(t, otlpOptions{Endpoint: "localhost:3232", URLPath: "/v1/metrics"}, &mcfg)
+		testMetricsHTTPOptions(t, otlpOptions{Endpoint: "localhost:3232", URLPath: "/v1/metrics", Headers: map[string]string{}}, &mcfg)
 	})
 
 	mcfg = MetricsConfig{
@@ -49,7 +49,7 @@ func TestHTTPMetricsEndpointOptions(t *testing.T) {
 	}
 
 	t.Run("testing with only common endpoint", func(t *testing.T) {
-		testMetricsHTTPOptions(t, otlpOptions{Endpoint: "localhost:3131", URLPath: "/otlp/v1/metrics"}, &mcfg)
+		testMetricsHTTPOptions(t, otlpOptions{Endpoint: "localhost:3131", URLPath: "/otlp/v1/metrics", Headers: map[string]string{}}, &mcfg)
 	})
 
 	mcfg = MetricsConfig{
@@ -60,7 +60,7 @@ func TestHTTPMetricsEndpointOptions(t *testing.T) {
 		},
 	}
 	t.Run("testing with insecure endpoint", func(t *testing.T) {
-		testMetricsHTTPOptions(t, otlpOptions{Endpoint: "localhost:3232", Insecure: true}, &mcfg)
+		testMetricsHTTPOptions(t, otlpOptions{Endpoint: "localhost:3232", Insecure: true, Headers: map[string]string{}}, &mcfg)
 	})
 
 	mcfg = MetricsConfig{
@@ -72,7 +72,7 @@ func TestHTTPMetricsEndpointOptions(t *testing.T) {
 	}
 
 	t.Run("testing with skip TLS verification", func(t *testing.T) {
-		testMetricsHTTPOptions(t, otlpOptions{Endpoint: "localhost:3232", URLPath: "/v1/metrics", SkipTLSVerify: true}, &mcfg)
+		testMetricsHTTPOptions(t, otlpOptions{Endpoint: "localhost:3232", URLPath: "/v1/metrics", SkipTLSVerify: true, Headers: map[string]string{}}, &mcfg)
 	})
 }
 
@@ -89,7 +89,7 @@ func TestHTTPMetricsWithGrafanaOptions(t *testing.T) {
 		testMetricsHTTPOptions(t, otlpOptions{
 			Endpoint: "otlp-gateway-eu-west-23.grafana.net",
 			URLPath:  "/otlp/v1/metrics",
-			HTTPHeaders: map[string]string{
+			Headers: map[string]string{
 				// Basic + output of: echo -n 12345:affafafaafkd | gbase64 -w 0
 				"Authorization": "Basic MTIzNDU6YWZmYWZhZmFhZmtk",
 			},
@@ -100,7 +100,7 @@ func TestHTTPMetricsWithGrafanaOptions(t *testing.T) {
 		testMetricsHTTPOptions(t, otlpOptions{
 			Endpoint: "localhost:3939",
 			URLPath:  "/v1/metrics",
-			HTTPHeaders: map[string]string{
+			Headers: map[string]string{
 				// Basic + output of: echo -n 12345:affafafaafkd | gbase64 -w 0
 				"Authorization": "Basic MTIzNDU6YWZmYWZhZmFhZmtk",
 			},
@@ -251,7 +251,7 @@ func TestGRPCMetricsEndpointOptions(t *testing.T) {
 	}
 
 	t.Run("testing with two endpoints", func(t *testing.T) {
-		testMetricsGRPCOptions(t, otlpOptions{Endpoint: "localhost:3232"}, &mcfg)
+		testMetricsGRPCOptions(t, otlpOptions{Endpoint: "localhost:3232", Headers: map[string]string{}}, &mcfg)
 	})
 
 	mcfg = MetricsConfig{
@@ -260,7 +260,7 @@ func TestGRPCMetricsEndpointOptions(t *testing.T) {
 	}
 
 	t.Run("testing with only common endpoint", func(t *testing.T) {
-		testMetricsGRPCOptions(t, otlpOptions{Endpoint: "localhost:3131"}, &mcfg)
+		testMetricsGRPCOptions(t, otlpOptions{Endpoint: "localhost:3131", Headers: map[string]string{}}, &mcfg)
 	})
 
 	mcfg = MetricsConfig{
@@ -269,7 +269,7 @@ func TestGRPCMetricsEndpointOptions(t *testing.T) {
 		Instrumentations: []string{instrumentations.InstrumentationHTTP},
 	}
 	t.Run("testing with insecure endpoint", func(t *testing.T) {
-		testMetricsGRPCOptions(t, otlpOptions{Endpoint: "localhost:3232", Insecure: true}, &mcfg)
+		testMetricsGRPCOptions(t, otlpOptions{Endpoint: "localhost:3232", Insecure: true, Headers: map[string]string{}}, &mcfg)
 	})
 
 	mcfg = MetricsConfig{
@@ -279,7 +279,7 @@ func TestGRPCMetricsEndpointOptions(t *testing.T) {
 	}
 
 	t.Run("testing with skip TLS verification", func(t *testing.T) {
-		testMetricsGRPCOptions(t, otlpOptions{Endpoint: "localhost:3232", SkipTLSVerify: true}, &mcfg)
+		testMetricsGRPCOptions(t, otlpOptions{Endpoint: "localhost:3232", SkipTLSVerify: true, Headers: map[string]string{}}, &mcfg)
 	})
 }
 

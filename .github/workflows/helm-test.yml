@@ -27,7 +27,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0 # required for chart-testing to work
-          lfs: true
 
       - name: Regenerate docs
         run: |

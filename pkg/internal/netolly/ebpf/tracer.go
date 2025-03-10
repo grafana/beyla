@@ -91,18 +91,11 @@ func NewFlowFetcher(
 	if tlog.Enabled(context.TODO(), slog.LevelDebug) {
 		traceMsgs = 1
 	}
-<<<<<<< HEAD
 	if err := convenience.RewriteConstants(spec, map[string]interface{}{
 		constSampling:      uint32(sampling),
 		constTraceMessages: uint8(traceMsgs),
 	}); err != nil {
 		return nil, fmt.Errorf("rewriting BPF constants definition: %w", err)
-=======
-
-	err = spec.Variables[constSampling].Set(uint32(sampling))
-	if err != nil {
-		return nil, fmt.Errorf("setting sampling rate: %w", err)
->>>>>>> 75f36514 (fix linter with deprecated notices)
 	}
 	err = spec.Variables[constTraceMessages].Set(uint8(traceMsgs))
 	if err != nil {

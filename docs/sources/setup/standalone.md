@@ -51,7 +51,7 @@ If the same configuration property is defined in both the YAML file and the envi
 variables, the value specified in the environment variables takes precedence over the
 configuration file.
 
-For a complete list of configuration options, see the [Beyla configuration options]({{< relref "../configure/_index.md" >}}) documentation.
+For a complete list of configuration options, see the [Beyla configuration options](../../configure/) documentation.
 
 ## Run
 

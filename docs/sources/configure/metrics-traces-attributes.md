@@ -14,7 +14,7 @@ Grafana Beyla allows configuring how some attributes for metrics and traces
 are decorated. Under the `attributes` top YAML sections, you can enable
 other subsections configure how some attributes are set.
 
-The [Beyla exported metrics]({{< relref "../metrics.md" >}}) document lists the attributes
+The [Beyla exported metrics](../../metrics/) document lists the attributes
 that can be reported with each metric. Some of the attributes are reported by default while
 others are hidden to control the cardinality.
 
@@ -24,7 +24,7 @@ and each metric has two more sub-properties: `include` and `exclude`.
 
 * `include` is a list of attributes that need to be reported. Each attribute can be an attribute
   name or a wildcard (for example, `k8s.dst.*` to include all the attributes starting with `k8s.dst`).
-  If no `include` list is provided, the default attribute set is reported (check [Beyla exported metrics]({{< relref "../metrics.md" >}})
+  If no `include` list is provided, the default attribute set is reported (check [Beyla exported metrics](../../metrics/)
   for more information about the default attributes for a given metric).
 * `exclude` is a list to of attribute names/wildcards containing the attributes to remove from the
   `include` list (or the default attribute set).
@@ -83,7 +83,7 @@ Beyla to propagate any incoming context to downstream services. This context pro
 support works for any programming language and it's implemented by using Linux Traffic Control
 (TC). Because Linux Traffic Control is sometimes used by other eBPF programs, this option 
 requires that the other eBPF programs chain correctly with Beyla. For more information on 
-this topic, see our documentation related to [Cilium CNI]({{< relref "../cilium-compatibility.md" >}}).
+this topic, see our documentation related to [Cilium CNI](../../cilium-compatibility/).
 This context propagation support is fully compatible with any OpenTelemetry
 distributed tracing library.
 
@@ -99,7 +99,7 @@ following configuration must be specified:
 gRPC and HTTP2 are not supported at the moment.
 
 For an example of how to configure distributed traces in Kubernetes, see our 
-[Distributed traces with Beyla]({{< relref "../distributed-traces.md" >}}) guide.
+[Distributed traces with Beyla](../../distributed-traces/) guide.
 
 | YAML                    | Environment variable              | Type    | Default |
 | ----------------------- | --------------------------------- | ------- | ------- |
@@ -191,7 +191,7 @@ attributes:
 
 It is IMPORTANT to consider that enabling this feature requires a previous step of
 providing some extra permissions to the Beyla Pod. Consult the
-["Configuring Kubernetes metadata decoration section" in the "Running Beyla in Kubernetes"]({{< relref "../setup/kubernetes.md" >}}) page.
+["Configuring Kubernetes metadata decoration section" in the "Running Beyla in Kubernetes"](../../setup/kubernetes/) page.
 
 | YAML     | Environment variable         | Type    | Default |
 | -------- | ---------------------------- | ------- | ------- |

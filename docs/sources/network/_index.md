@@ -15,7 +15,7 @@ Grafana Beyla can be configured to provide network metrics between different end
 
 ## Get started
 
-To get started using Beyla networking metrics, consult the [quickstart setup documentation]({{< relref "./quickstart" >}}), and for advanced configuration, consult the [configuration documentation]({{< relref "./config" >}}).
+To get started using Beyla networking metrics, consult the [quickstart setup documentation](quickstart/), and for advanced configuration, consult the [configuration documentation](config/).
 
 ## Metric attributes
 
@@ -38,8 +38,8 @@ By default, only the following attributes are reported: `k8s.src.owner.name`, `k
 | `dst.port` / `dst_port`                     | Destination port of Network flow                                                                                                                                                    |
 | `src.name` / `src_name`                     | Name of Network flow source: Kubernetes name, host name, or IP address                                                                                                              |
 | `dst.name` / `dst_name`                     | Name of Network flow destination: Kubernetes name, host name, or IP address                                                                                                         |
-| `src.cidr` / `src_cidr`                     | If the [`cidrs` configuration section]({{< relref "./config" >}}) is set, the CIDR that matches the source IP address                                                               |
-| `dst.cidr` / `dst_cidr`                     | If the [`cidrs` configuration section]({{< relref "./config" >}}) is set, the CIDR that matches the destination IP address                                                          |
+| `src.cidr` / `src_cidr`                     | If the [`cidrs` configuration section](config/) is set, the CIDR that matches the source IP address                                                               |
+| `dst.cidr` / `dst_cidr`                     | If the [`cidrs` configuration section](config/) is set, the CIDR that matches the destination IP address                                                          |
 | `k8s.src.namespace` / `k8s_src_namespace`   | Kubernetes namespace of the source of the flow                                                                                                                                      |
 | `k8s.dst.namespace` / `k8s_dst_namespace`   | Kubernetes namespace of the destination of the flow                                                                                                                                 |
 | `k8s.src.name` / `k8s_src_name`             | Name of the source Pod, Service, or Node                                                                                                                                            |
@@ -83,4 +83,4 @@ attributes:
 In this example, the bytes metric is the aggregated by the source and destination owners. This is, all the
 pods from a given Deployment/StatefulSet/ReplicaSet/DaemonSet.
 
-For more information about the `attributes.select` section, check the [Configuration options]({{< relref "../configure/options" >}}).
+For more information about the `attributes.select` section, check the [Configuration options](../configure/options/).

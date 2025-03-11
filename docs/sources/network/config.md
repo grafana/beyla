@@ -11,7 +11,7 @@ keywords:
 
 # Beyla Network Metrics configuration options
 
-Network metrics are configured under the `network` property of the [Beyla Configuration YAML file]({{< relref "../configure/options" >}}) or with a set of environment variables prefixed as `BEYLA_NETWORK_`.
+Network metrics are configured under the `network` property of the [Beyla Configuration YAML file](../../configure/options/) or with a set of environment variables prefixed as `BEYLA_NETWORK_`.
 
 Example YAML:
 
@@ -40,7 +40,7 @@ otel_metrics_export:
 
 In addition to the `network` YAML section, Beyla configuration requires an endpoint to export the
 network metrics (in the previous example, `otel_metrics_export`, but it also accepts a
-[Prometheus endpoint]({{< relref "../configure/options.md" >}})).
+[Prometheus endpoint](../../configure/options/)).
 
 ## Network metrics configuration properties
 
@@ -49,8 +49,8 @@ network metrics (in the previous example, `otel_metrics_export`, but it also acc
 | `enable` | `BEYLA_NETWORK_METRICS` | boolean | `false` |
 
 Explicitly enables network metrics reporting in Beyla. You can also enable network metrics reporting
-by adding `network` to the list of `features` for [otel_metrics_export]({{< relref "../configure/export-data.md" >}}))
-or [prometheus_export]({{< relref "../configure/export-data.md#prometheus-http-endpoint" >}})).
+by adding `network` to the list of `features` for [otel_metrics_export](../../configure/export-data/))
+or [prometheus_export](../../configure/export-data/#prometheus-http-endpoint)).
 
 | YAML                 | Environment variable               | Type     | Default             |
 | -------------------- | ---------------------------------- | -------- | ------------------- |

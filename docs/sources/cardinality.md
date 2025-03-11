@@ -13,7 +13,7 @@ keywords:
 
 # Beyla metrics cardinality
 
-The cardinality of [Beyla metrics]({{< relref "./metrics.md" >}}) highly depends on the size and complexity
+The cardinality of [Beyla metrics](../metrics/) highly depends on the size and complexity
 of the instrumented environment, so there is no way to provide a simple and accurate formula.
 
 This document tries to provide an approximation of the metrics cardinality that might

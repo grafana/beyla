@@ -26,7 +26,7 @@ filter:
 ```
 
 For a list of metrics under the application and network family, as well as their
-attributes, check the [Beyla exported metrics]({{< relref "../metrics.md" >}}) document.
+attributes, check the [Beyla exported metrics](../../metrics/) document.
 
 Each `application` and `network` filter section is a map where each key is an attribute
 name (either in Prometheus or OpenTelemetry format), with either the `match` or the `not_match` property. Both properties accept a

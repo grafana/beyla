@@ -48,7 +48,7 @@ HTTP context propagation is fully compatible with any other OpenTelemetry based 
 propagate the trace information, when sending to and receiving from services instrumented with the OpenTelemetry SDKs. We use 
 [Linux Traffic Control (TC)](https://en.wikipedia.org/wiki/Tc_(Linux)) to perform the adjustment of the network packets, which requires that other eBPF 
 programs that use Linux Traffic Control chain properly with Beyla. For special considerations
-regarding Cilium CNI, consult our [Cilium Compatibility]({{< relref "./cilium-compatibility.md" >}}) guide.
+regarding Cilium CNI, consult our [Cilium Compatibility](../cilium-compatibility/) guide.
 
 For TLS encrypted traffic (HTTPS), Beyla is unable to inject the trace information in the outgoing HTTP headers and instead it injects the information
 at TCP/IP packet level. Because of this limitation, Beyla is only able to send the trace information to other Beyla instrumented services. L7 proxies
@@ -58,7 +58,7 @@ Parsing incoming trace context information from OpenTelemetry SDK instrumented s
 gRPC and HTTP2 are not supported at the moment.
 
 This type of context propagation works for any programming language and doesn't require that Beyla runs in `privileged` mode or has
-`CAP_SYS_ADMIN` granted. For more details, see the [Distributed traces and context propagation]({{< relref "./configure/metrics-traces-attributes.md" >}}) configuration section.
+`CAP_SYS_ADMIN` granted. For more details, see the [Distributed traces and context propagation](../configure/metrics-traces-attributes/) configuration section.
 
 #### Kubernetes Configuration
 

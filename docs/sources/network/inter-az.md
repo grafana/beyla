@@ -51,7 +51,7 @@ Using a separate metric for inter-zone traffic reduces the metric cardinality im
 because the `src.zone` and `dst.zone` attributes are not added to the regular network metrics.
 
 To enable the `beyla.network.inter.zone` metric, add the `network_inter_zone` option to the
-[BEYLA_OTEL_METRICS_FEATURES or BEYLA_PROMETHEUS_FEATURES]({{< relref "../configure/export-data.md" >}}) configuration option,
+[BEYLA_OTEL_METRICS_FEATURES or BEYLA_PROMETHEUS_FEATURES](../../configure/export-data/) configuration option,
 or its equivalent YAML options. For example, if Beyla is configured to export metrics via OpenTelemetry:
 
 ```yaml

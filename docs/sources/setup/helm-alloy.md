@@ -586,7 +586,7 @@ helm upgrade --namespace alloy alloy grafana/alloy -f values.yaml
   to perform privileged actions such as loading BPF programs and creating
   BPF maps. Therefore set `privileged: true` in `securityContext` section. For running Beyla as `unprivileged` container, that's without the
   `privileged: true` option, visit the
-  [Deploy Beyla unprivileged]({{< relref "../setup/kubernetes.md#deploy-beyla-unprivileged" >}})
+  [Deploy Beyla unprivileged](../kubernetes/#deploy-beyla-unprivileged)
   guide.
 - The `extraEnv` section sets the environment variables for the Prometheus and Tempo remote write credentials.
 

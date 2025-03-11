@@ -73,13 +73,13 @@ While most eBPF programs require elevated privileges, Beyla allow you to specify
 
 Some Beyla functionality requires further permissions, for example using the network observability probes with Linux Traffic Control requires `CAP_NET_ADMIN`, but it's a feature you have to optionally enable.
 
-For a comprehensive list of capabilities required by Beyla, refer to [Security, permissions and capabilities]({{< relref "./security" >}}).
+For a comprehensive list of capabilities required by Beyla, refer to [Security, permissions and capabilities](security/).
 
 ## Get started
 
-- Follow the [setup]({{< relref "./setup/_index.md" >}}) documentation to get started with Beyla either with Docker or Kubernetes.
+- Follow the [setup](setup/) documentation to get started with Beyla either with Docker or Kubernetes.
 
-- Follow the [language quickstart guides]({{< relref "./quickstart" >}}) for quick instructions
+- Follow the [language quickstart guides](quickstart/) for quick instructions
   about how to set up Beyla to instrument applications written in a particular language.
 
 ## Learn more about Grafana Beyla

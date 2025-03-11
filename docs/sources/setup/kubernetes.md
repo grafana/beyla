@@ -17,7 +17,7 @@ aliases:
 {{% admonition type="note" %}}
 This document explains how to manually deploy Beyla in Kubernetes, setting up all the required entities by yourself.
 
-You might prefer to follow the [Deploy Beyla in Kubernetes with Helm]({{< relref "./kubernetes-helm.md" >}}) documentation instead.
+You might prefer to follow the [Deploy Beyla in Kubernetes with Helm](../kubernetes-helm/) documentation instead.
 {{% /admonition %}}
 
 Contents:
@@ -97,7 +97,7 @@ in another namespace).
 
 Optionally, select which Kubernetes services to instrument in the `discovery -> services`
 section of the YAML configuration file. For more information, refer to the
-_Service discovery_ section in the [Configuration document]({{< relref "../configure/options.md" >}}),
+_Service discovery_ section in the [Configuration document](../../configure/options/),
 as well as the [Providing an external configuration file](#providing-an-external-configuration-file)
 section of this page.
 
@@ -189,7 +189,7 @@ spec:
 ```
 
 For more information about the different configuration options, check the
-[Configuration]({{< relref "../configure/options.md" >}}) section of this documentation site.
+[Configuration](../../configure/options/) section of this documentation site.
 
 ### Deploy Beyla as a Daemonset
 
@@ -362,7 +362,7 @@ metadata:
 
 In the previous examples, Beyla was configured via environment variables.
 However, you can also configure it via an external YAML file (as documented
-in the [Configuration]({{< relref "../configure/options.md" >}}) section of
+in the [Configuration](../../configure/options/) section of
 this site).
 
 To provide the configuration as a file, the recommended way is to deploy

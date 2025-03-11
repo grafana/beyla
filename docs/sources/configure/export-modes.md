@@ -36,15 +36,15 @@ The OTLP endpoint authentication credentials are provided by using the following
 - `OTEL_EXPORTER_OTLP_HEADERS`
 
 To run in Direct mode by using the Prometheus scrape endpoint, please refer to the
-[configuration documentation]({{< relref "./options.md" >}}).
+[configuration documentation](../options/).
 
 ## Running in Alloy mode
 
 > ℹ️ This tutorial assumes that both Alloy and the auto-instrumentation tool are installed
 > as local Linux OS executables. For further examples on downloading and running the
 > auto-instrumentation tool as an OCI container, you can check the documentation sections on
-> [running the Beyla as a Docker container]({{< relref "../setup/docker.md" >}})
-> or [running Beyla in Kubernetes]({{< relref "../setup/kubernetes.md" >}}).
+> [running the Beyla as a Docker container](../../setup/docker/)
+> or [running Beyla in Kubernetes](../../setup/kubernetes/).
 
 First, locally install and configure [Grafana Alloy, according to the latest documentation](/docs/alloy/).
 Alloy facilitates the ingestion of OpenTelemetry metrics and traces from the auto-instrumentation tool,
@@ -153,7 +153,7 @@ This tutorial assumes Beyla and Alloy are running on the same host, so there is 
 
 You can configure the auto-instrumentation tool both via environment variables or via
 a configuration YAML file, which is what we will use in this example.
-Please refer to the complete [Configuration documentation]({{< relref "./options.md" >}}) for
+Please refer to the complete [Configuration documentation](../options/) for
 more detailed description of each configuration option.
 
 You can download the whole [example configuration file](https://github.com/grafana/beyla/blob/main/docs/sources/configure/resources/instrumenter-config.yml),

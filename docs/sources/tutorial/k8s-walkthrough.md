@@ -335,7 +335,7 @@ Also notice:
   to perform privileged actions such as loading BPF programs and creating
   BPF maps. For running Beyla as `unprivileged` container, i.e. without the
   `privileged: true` option, visit the
-  [Deploy Beyla unprivileged]({{< relref "../setup/kubernetes.md#deploy-beyla-unprivileged" >}})
+  [Deploy Beyla unprivileged](../../setup/kubernetes/#deploy-beyla-unprivileged)
   guide.
 
 ### 4. Test your instrumented services and see the results in Grafana
@@ -370,5 +370,5 @@ In the trace details, the resource attributes of the traces are decorated with t
 
 ## Links
 
-- [Documentation: Beyla configuration options]({{< relref "../configure/options.md" >}})
-- [Documentation: run Beyla as Kubernetes DaemonSet]({{< relref "../setup/kubernetes.md" >}})
+- [Documentation: Beyla configuration options](../../configure/options/)
+- [Documentation: run Beyla as Kubernetes DaemonSet](../../setup/kubernetes/)

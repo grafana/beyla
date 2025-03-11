@@ -16,7 +16,7 @@ aliases:
 
 Beyla can run as a standalone Linux OS process with elevated privileges that can inspect other running processes.
 
-For a complete introduction tutorial on how to collect and visualize the instrumented data, follow the [getting started tutorial]({{< relref "../tutorial/getting-started.md" >}}).
+For a complete introduction tutorial on how to collect and visualize the instrumented data, follow the [getting started tutorial](../../tutorial/getting-started/).
 
 ## Download and install
 
@@ -52,7 +52,7 @@ If the same configuration property is defined in both the YAML file and the envi
 variables, the value specified in the environment variables takes precedence over the
 configuration file.
 
-For a complete list of configuration options, see the [Beyla configuration options]({{< relref "../configure/_index.md" >}}) documentation.
+For a complete list of configuration options, see the [Beyla configuration options](../../configure/) documentation.
 
 ## Run
 

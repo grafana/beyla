@@ -104,7 +104,7 @@ go run server.go
 
 ## Instrument a service
 
-Set up Beyla as a standalone linux process by following the [standalone setup]({{< relref "../setup/standalone.md" >}}) documentation.
+Set up Beyla as a standalone linux process by following the [standalone setup](../../setup/standalone/) documentation.
 
 First, we will locally check that Beyla is able to instrument the provided test server application,
 after configuring it to print the traces to the standard output.
@@ -173,7 +173,7 @@ to Grafana Cloud. You can get a [Free Grafana Cloud Account at Grafana's website
 
 For information on how to configure Beyla to submit data to other [OpenTelemetry](https://opentelemetry.io/)
 collectors, or how to generate [Prometheus](https://prometheus.io) metrics, see the
-[configuration options]({{< relref "../configure/options.md" >}}) documentation.
+[configuration options](../../configure/options/) documentation.
 
 There are two ways to forward your OpenTelemetry traces to Grafana Cloud:
 
@@ -251,7 +251,7 @@ The dashboard contains the following components:
 
 - A list with the slowest HTTP routes for all instrumented services. Since you only
   have a single service, only one entry appears. If you configure Beyla to
-  [report the HTTP routes]({{< relref "../configure/options.md#routes-decorator" >}}),
+  [report the HTTP routes](../../configure/options/#routes-decorator),
   many entries could appear there, one for each HTTP path seen by the server.
 - A list with the slowest GRPC methods. Since the test service in this tutorial only
   serves HTTP, this table is empty.
@@ -281,7 +281,7 @@ it together with your service, and your application metrics will start to flow.
 eBPF also allows you to get deeper insights which manual instrumentation doesn't. For example,
 Beyla is able to show you how much time a request is enqueued, after
 the connection is established, and before its code is actually executed (requires [exporting
-OpenTelemetry traces]({{< relref "../configure/options.md#otel-traces-exporter" >}}),
+OpenTelemetry traces](../../configure/options/#otel-traces-exporter),
 but this functionality is not explained in this tutorial).
 
 Beyla has its limitations too. It only provides generic metrics and

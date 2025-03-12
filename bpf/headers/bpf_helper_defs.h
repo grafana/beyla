@@ -3525,7 +3525,7 @@ static long (*bpf_load_hdr_opt)(struct bpf_sock_ops *skops,
  *
  * 	**-EEXIST** if the option already exists.
  *
- * 	**-EFAULT** on failrue to parse the existing header options.
+ * 	**-EFAULT** on failure to parse the existing header options.
  *
  * 	**-EPERM** if the helper cannot be used under the current
  * 	*skops*\ **->op**.
@@ -3881,7 +3881,7 @@ static __u64 (*bpf_ktime_get_coarse_ns)(void) = (void *)160;
 /*
  * bpf_ima_inode_hash
  *
- * 	Returns the stored IMA hash of the *inode* (if it's avaialable).
+ * 	Returns the stored IMA hash of the *inode* (if it's available).
  * 	If the hash is larger than *size*, then only *size*
  * 	bytes will be copied to *dst*
  *

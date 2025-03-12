@@ -2,7 +2,10 @@
 
 #include "bpf_helpers.h"
 #include "bpf_endian.h"
+#include "bpf_tracing.h"
 #include "bpf_dbg.h"
+
+char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
 #define HOSTNAME_MAX_LEN 64
 
@@ -115,5 +118,3 @@ int BPF_KRETPROBE(uretprobe_getaddrinfo, int ret) { //struct addrinfo **pai
     bpf_ringbuf_submit(info, 0);
     return 0;
 }
-
-char _license[] SEC("license") = "GPL";

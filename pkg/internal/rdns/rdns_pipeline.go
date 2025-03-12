@@ -31,10 +31,11 @@ func (p *Pipeline) Connect() {
 
 type storage interface {
 	PipelineStage(in <-chan store.DNSEntry)
-	GetHostnames(ip string) []string
+	GetHostnames(ip string) ([]string, error)
 }
 
-func Run(ctx context.Context, cfg *rdnscfg.Config, storage storage) error {
+// Start rDNS pipeline in background
+func Start(ctx context.Context, cfg *rdnscfg.Config, storage storage) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -49,6 +50,5 @@ func Run(ctx context.Context, cfg *rdnscfg.Config, storage storage) error {
 	}
 
 	run.Start()
-	<-run.Done()
 	return nil
 }

@@ -1,6 +1,8 @@
 package flow
 
 import (
+	"context"
+	"fmt"
 	"log/slog"
 	"net"
 	"time"
@@ -9,7 +11,9 @@ import (
 	"github.com/mariomac/pipes/pipe"
 
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
-	"github.com/grafana/beyla/v2/pkg/internal/rdns/local"
+	"github.com/grafana/beyla/v2/pkg/internal/rdns"
+	"github.com/grafana/beyla/v2/pkg/internal/rdns/ebpf/rdnscfg"
+	"github.com/grafana/beyla/v2/pkg/internal/rdns/store"
 )
 
 const (
@@ -54,17 +58,14 @@ func (r ReverseDNS) Enabled() bool {
 	return r.Type == ReverseDNSLocalLookup || r.Type == ReverseDNSEBPF
 }
 
-func ReverseDNSProvider(cfg *ReverseDNS) (pipe.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
+func ReverseDNSProvider(ctx context.Context, cfg *ReverseDNS) (pipe.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
 	if !cfg.Enabled() {
 		// This node is not going to be instantiated. Let the pipes library just bypassing it.
 		return pipe.Bypass[[]*ebpf.Record](), nil
 	}
 
-	if cfg.Type == ReverseDNSEBPF {
-		// overriding netLookupAddr by an eBPF-based alternative
-
-		netLookupAddr()
-		rdns = ebpf.NewDNSResolver()
+	if err := checkEBPFReverseDNS(ctx, cfg); err != nil {
+		return nil, err
 	}
 	// TODO: replace by a cache with fuzzy expiration time to avoid cache stampede
 	cache := expirable.NewLRU[ebpf.IPAddr, string](cfg.CacheLen, nil, cfg.CacheTTL)
@@ -86,6 +87,21 @@ func ReverseDNSProvider(cfg *ReverseDNS) (pipe.MiddleFunc[[]*ebpf.Record, []*ebp
 	}, nil
 }
 
+func checkEBPFReverseDNS(ctx context.Context, cfg *ReverseDNS) error {
+	if cfg.Type == ReverseDNSEBPF {
+		// overriding netLookupAddr by an eBPF-based alternative
+
+		ipToHosts := store.NewInMemory()
+		if err := rdns.Start(ctx, &rdnscfg.Config{
+			Resolvers: cfg.EBPFProbes,
+		}, ipToHosts); err != nil {
+			return fmt.Errorf("starting eBPF-based reverse DNS: %w", err)
+		}
+		netLookupAddr = ipToHosts.GetHostnames
+	}
+	return nil
+}
+
 func optGetName(log *slog.Logger, cache *expirable.LRU[ebpf.IPAddr, string], ip ebpf.IPAddr) string {
 	if host, ok := cache.Get(ip); ok {
 		return host
@@ -101,5 +117,3 @@ func optGetName(log *slog.Logger, cache *expirable.LRU[ebpf.IPAddr, string], ip 
 	// the actual IP
 	return ""
 }
-
-func startEBPFReverseDNS(probes []string)

@@ -36,7 +36,7 @@ generate, transform, and export traces from HTTP and GRPC applications. In the
 YAML configuration, each component has its own first-level section.
 
 Optionally, Beyla also provides network-level metrics, which are documented in the
-[Network metrics section of the Beyla documentation]({{< relref "../network" >}}).
+[Network metrics section of the Beyla documentation](../../network/).
 
 A quick description of the components:
 
@@ -208,7 +208,7 @@ properties that simplify the configuration of Beyla to instrument a single servi
 a group of related services.
 
 In some scenarios, Beyla will instrument a big variety of services; for example,
-as a [Kubernetes DaemonSet]({{< relref "../setup/kubernetes.md" >}}) that instruments all
+as a [Kubernetes DaemonSet](../../setup/kubernetes/) that instruments all
 the services in a node. The `discovery` YAML section will let you specify a higher
 differentiation degree in the services that Beyla can instrument.
 
@@ -514,7 +514,7 @@ other subsections configure how some attributes are set.
 
 ### Selection of metric attributes
 
-The [Beyla exported metrics]({{< relref "../metrics.md" >}}) document lists the attributes
+The [Beyla exported metrics](../../metrics/) document lists the attributes
 that can be reported with each metric. Some of the attributes are reported by default while
 others are hidden to control the cardinality.
 
@@ -524,7 +524,7 @@ and each metric has two more sub-properties: `include` and `exclude`.
 
 * `include` is a list of attributes that need to be reported. Each attribute can be an attribute
   name or a wildcard (for example, `k8s.dst.*` to include all the attributes starting with `k8s.dst`).
-  If no `include` list is provided, the default attribute set is reported (check [Beyla exported metrics]({{< relref "../metrics.md" >}})
+  If no `include` list is provided, the default attribute set is reported (check [Beyla exported metrics](../../metrics/)
   for more information about the default attributes for a given metric).
 * `exclude` is a list to of attribute names/wildcards containing the attributes to remove from the
   `include` list (or the default attribute set).
@@ -639,7 +639,7 @@ attributes:
 
 It is IMPORTANT to consider that enabling this feature requires a previous step of
 providing some extra permissions to the Beyla Pod. Consult the
-["Configuring Kubernetes metadata decoration section" in the "Running Beyla in Kubernetes"]({{< relref "../setup/kubernetes.md" >}}) page.
+["Configuring Kubernetes metadata decoration section" in the "Running Beyla in Kubernetes"](../../setup/kubernetes/) page.
 
 | YAML     | Environment variable         | Type    | Default |
 | -------- | ---------------------------- | ------- | ------- |
@@ -892,7 +892,7 @@ of Beyla: application-level metrics or network metrics.
   run the instrumented application.
 - If the list contains `network`, the Beyla OpenTelemetry exporter exports network-level
   metrics; but only if there is an OpenTelemetry endpoint defined. For network-level metrics options visit the
-  [network metrics]({{< relref "../network" >}}) configuration documentation.
+  [network metrics](../../network/) configuration documentation.
 
 | YAML                                  | Environment variable                             | Type     | Default |
 |---------------------------------------|--------------------------------------------------|----------|---------|
@@ -1149,7 +1149,7 @@ filter:
 ```
 
 For a list of metrics under the application and network family, as well as their
-attributes, check the [Beyla exported metrics]({{< relref "../metrics.md" >}}) document.
+attributes, check the [Beyla exported metrics](../../metrics/) document.
 
 Each `application` and `network` filter section is a map where each key is an attribute
 name (either in Prometheus or OpenTelemetry format), with either the `match` or the `not_match` property. Both properties accept a 
@@ -1281,7 +1281,7 @@ of Beyla: application-level metrics or network metrics.
   run the instrumented application.
 - If the list contains `network`, the Beyla Prometheus exporter exports network-level
   metrics; but only if the Prometheus `port` property is defined. For network-level metrics options visit the
-  [network metrics]({{< relref "../network" >}}) configuration documentation.
+  [network metrics](../../network/) configuration documentation.
 
 | YAML                                  | Environment variable                                   | Type     | Default |
 |---------------------------------------|--------------------------------------------------------|----------|---------|

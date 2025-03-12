@@ -73,7 +73,7 @@ time=2023-05-22T14:03:42.526Z level=INFO msg="Starting main node"
 
 Now that Beyla is tracing the the target HTTP service, configure it to send metrics and traces to an OpenTelemetry endpoint, or have metrics scraped by Prometheus.
 
-For information on how to export traces and metrics, see the [getting started tutorial]({{< relref "../tutorial/getting-started.md" >}}) and the [configuration options]({{< relref "../configure/options.md" >}}) documentation.
+For information on how to export traces and metrics, see the [getting started tutorial](../../tutorial/getting-started/) and the [configuration options](../../configure/options/) documentation.
 
 ## Docker Compose example
 

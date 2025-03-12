@@ -15,7 +15,7 @@ Network metrics is an [experimental](/docs/release-life-cycle/) under developmen
 
 {{% admonition type="note" %}}
 This tutorial describes how to deploy Beyla in Kubernetes from scratch.
-To use Helm, consult the [Deploy Beyla in Kubernetes with Helm]({{< relref "../setup/kubernetes-helm" >}}) documentation.
+To use Helm, consult the [Deploy Beyla in Kubernetes with Helm](../../setup/kubernetes-helm/) documentation.
 {{% /admonition %}}
 
 # Beyla network metrics quickstart
@@ -56,7 +56,7 @@ Finally, network metrics requires administrative `sudo` privileges with the foll
 - Full privileged access, `root`, `sudo`, or `privileged: true` for Kubernetes
 - The following capabilities: `BPF`, `PERFMON`, `NET_ADMIN`, `SYS_RESOURCE`
 
-To learn more about Beyla configuration, consult the [Beyla configuration documentation]({{< relref "../configure/options.md" >}}).
+To learn more about Beyla configuration, consult the [Beyla configuration documentation](../../configure/options/).
 
 ## Example configuration
 
@@ -159,7 +159,7 @@ k8s.src.owner.name=local-path-provisioner k8s.src.owner.type=Deployment
 k8s.dst.type=Service k8s.dst.owner.name=kubernetes
 ```
 
-For further information on the attributes used, consult the [network metrics documentation]({{< relref "./_index.md" >}}).
+For further information on the attributes used, consult the [network metrics documentation](./).
 
 ## Export OpenTelemetry metrics
 
@@ -213,7 +213,7 @@ Also Add `OTEL_EXPORTER_OTLP_ENDPOINT` and its value as an environment variable 
 
 ## Select metrics attributes to reduce cardinality
 
-Be default, Beyla includes the following [attributes]({{< relref "./_index.md" >}}) in the `beyla.network.flow.bytes` metric:
+Be default, Beyla includes the following [attributes](./) in the `beyla.network.flow.bytes` metric:
 
 - `k8s.src.owner.name`
 - `k8s.src.namespace`

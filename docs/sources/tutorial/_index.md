@@ -15,5 +15,5 @@ keywords:
 In addition to the reference documentation, you can learn Beyla through
 diverse hands-on tutorials:
 
-- [Getting started with Beyla]({{< relref "./getting-started.md" >}})
-- [Beyla and Kubernetes walkthrough]({{< relref "./k8s-walkthrough.md" >}})
+- [Getting started with Beyla](getting-started/)
+- [Beyla and Kubernetes walkthrough](k8s-walkthrough/)

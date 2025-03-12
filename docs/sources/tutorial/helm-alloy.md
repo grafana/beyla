@@ -19,7 +19,7 @@ Alloy offers native pipelines for OpenTelemetry, Prometheus, and other telemetry
 Grafana Alloy bundles Beyla allowing you to instrument your applications at the same time
 you instrument your infrastructure. It also provides a Helm chart to deploy Alloy in Kubernetes.
 
-In this tutorial, you learn how to deploy Beyla in Kubernetes using Grafana Alloy Helm's chart. It's based on the examples from the [Beyla and Kubernetes walkthrough]({{< relref "/k8s-walkthrough.md" >}}).
+In this tutorial, you learn how to deploy Beyla in Kubernetes using Grafana Alloy Helm's chart. It's based on the examples from the [Beyla and Kubernetes walkthrough](../k8s-walkthrough/).
 
 ## Prerequisites
 
@@ -584,7 +584,7 @@ helm upgrade --namespace alloy alloy grafana/alloy -f values.yaml
   to perform privileged actions such as loading BPF programs and creating
   BPF maps. Therefore set `privileged: true` in `securityContext` section. For running Beyla as `unprivileged` container, that's without the
   `privileged: true` option, visit the
-  [Deploy Beyla unprivileged]({{< relref "../setup/kubernetes.md#deploy-beyla-unprivileged" >}})
+  [Deploy Beyla unprivileged](../../setup/kubernetes/#deploy-beyla-unprivileged)
   guide.
 - The `extraEnv` section sets the environment variables for the Prometheus and Tempo remote write credentials.
 

@@ -37,7 +37,7 @@ Beyla uses lowercase fields for YAML configuration and uppercase names for envir
 | `features`<br>`BEYLA_OTEL_METRICS_FEATURES`                                               | The list of metric groups Beyla exports data for, refer to [metrics export features](#metrics-export-features). Accepted values `application`, `application_span`, `application_service_graph`, `application_process`, `network` and `network_inter_zone`.                                                                                                     | list of strings | `["application"]`           |
 | `allow_service_graph_self_references`<br>`BEYLA_OTEL_ALLOW_SERVICE_GRAPH_SELF_REFERENCES` | Does Beyla include self-referencing service in service graph generation, for example a service that calls itself. Self referencing isn't useful service graphs and increases data cardinality.                                                                                                                                                                 | boolean         | `false`                     |
 | `instrumentations`<br>`BEYLA_OTEL_METRICS_INSTRUMENTATIONS`                               | The list of metrics instrumentation Beyla collects data for, refer to [metrics instrumentation](#metrics-instrumentation)  section.                                                                                                                                                                                                                            | list of strings | `["*"]`                     |
-| `buckets`                                                                                 | Sets how you can override bucket boundaries of diverse histograms, refer to [override histogram buckets]({{< relref "./metrics-histograms.md" >}}).                                                                                                                                                                                                                         | (n/a)           | Object                      |
+| `buckets`                                                                                 | Sets how you can override bucket boundaries of diverse histograms, refer to [override histogram buckets](../metrics-histograms/).                                                                                                                                                                                                                         | (n/a)           | Object                      |
 | `histogram_aggregation`<br>`OTEL_EXPORTER_OTLP_METRICS_DEFAULT_HISTOGRAM_AGGREGATION`     | Sets the default aggregation Beyla uses for histogram instruments. Accepted values [`explicit_bucket_histogram`](https://opentelemetry.io/docs/specs/otel/metrics/sdk/#explicit-bucket-histogram-aggregation) or [`base2_exponential_bucket_histogram`](https://opentelemetry.io/docs/specs/otel/metrics/sdk/#base2-exponential-bucket-histogram-aggregation). | `string`        | `explicit_bucket_histogram` |
 
 ### Metrics export protocol
@@ -49,7 +49,7 @@ If you don't set a protocol Beyla sets the protocol as follows:
 
 ### Metrics export features
 
-The Beyla metrics exporter can export the following metrics data groups for processes matching entries in the [metrics discovery]({{< relref "./export-data.md" >}}) configuration.
+The Beyla metrics exporter can export the following metrics data groups for processes matching entries in the [metrics discovery](./) configuration.
 
 - `application`: Application-level metrics
 - `application_span` Application-level trace span metrics
@@ -194,7 +194,7 @@ The purpose of this value is to avoid reporting indefinitely finished applicatio
 | `buckets` | (n/a)                | Object |
 
 The `buckets` object allows overriding the bucket boundaries of diverse histograms. See
-[Overriding histogram buckets]({{< relref "./metrics-histograms.md" >}}) section for more details.
+[Overriding histogram buckets](../metrics-histograms/) section for more details.
 
 | YAML       | Environment variable        | Type            | Default           |
 | ---------- | --------------------------- | --------------- | ----------------- |
@@ -219,7 +219,7 @@ of Beyla: application-level metrics or network metrics.
   run the instrumented application.
 - If the list contains `network` or `network_inter_zone`, the Beyla Prometheus exporter exports network-level
   metrics; but only if the Prometheus `port` property is defined. For network-level metrics options visit the
-  [network metrics]({{< relref "../network" >}}) configuration documentation.
+  [network metrics](../../network/) configuration documentation.
 
 | YAML                                  | Environment variable                                   | Type    | Default |
 | ------------------------------------- | ------------------------------------------------------ | ------- | ------- |

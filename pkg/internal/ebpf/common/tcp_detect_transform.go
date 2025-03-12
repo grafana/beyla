@@ -37,8 +37,8 @@ func ReadTCPRequestIntoSpan(cfg *config.EBPFTracer, record *ringbuf.Record, filt
 	b := event.Buf[:l]
 
 	if cfg.ProtocolDebug {
-		fmt.Printf("[>] %v\n", b)
-		fmt.Printf("[<] %v\n", event.Rbuf[:rl])
+		fmt.Printf("[>] %q\n", b)
+		fmt.Printf("[<] %q\n", event.Rbuf[:rl])
 	}
 
 	// Check if we have a SQL statement

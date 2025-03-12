@@ -31,7 +31,7 @@
 #define FIN_ACK_FLAG 0x200
 #define RST_ACK_FLAG 0x400
 
-// In conn_initiator_key, which sorted ip:port inititated the connection
+// In conn_initiator_key, which sorted ip:port initiated the connection
 #define INITIATOR_LOW 1
 #define INITIATOR_HIGH 2
 

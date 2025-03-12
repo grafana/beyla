@@ -205,7 +205,7 @@ static __always_inline void tp_clone(tp_info_t *dest, tp_info_t *src) {
 
 static __always_inline void
 server_trace_parent(void *goroutine_addr, tp_info_t *tp, tp_info_t *found_tp) {
-    // May get overriden when decoding existing traceparent, but otherwise we set sample ON
+    // May get overridden when decoding existing traceparent, but otherwise we set sample ON
     tp->flags = 1;
     go_addr_key_t g_key = {};
     go_addr_key_from_id(&g_key, goroutine_addr);
@@ -261,7 +261,7 @@ server_trace_parent(void *goroutine_addr, tp_info_t *tp, tp_info_t *found_tp) {
 static __always_inline u8 client_trace_parent(void *goroutine_addr, tp_info_t *tp_i) {
     u8 found_trace_id = 0;
 
-    // May get overriden when decoding existing traceparent or finding a server span, but otherwise we set sample ON
+    // May get overridden when decoding existing traceparent or finding a server span, but otherwise we set sample ON
     tp_i->flags = 1;
 
     go_addr_key_t g_key = {};

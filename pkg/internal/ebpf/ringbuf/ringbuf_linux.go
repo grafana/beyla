@@ -4,7 +4,7 @@
 package ringbuf
 
 import (
-	"github.com/grafana/beyla/v2/pkg/internal/ebpf/ringbuf"
+	"github.com/cilium/ebpf/ringbuf"
 )
 
 type Record = ringbuf.Record

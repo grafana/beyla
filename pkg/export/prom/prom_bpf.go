@@ -115,34 +115,41 @@ func (bc *BPFCollector) Collect(ch chan<- prometheus.Metric) {
 func (bc *BPFCollector) collectProbesMetrics(ch chan<- prometheus.Metric) {
 	bc.enableBPFStatsRuntime()
 
-	// Iterate over all eBPF programs
-	ids, err := ebpf.ProgramGetNextID(0)
-	if err != nil {
-		bc.log.Error("failed to get first program ID", "ID", ids, "error", err)
-	}
-
-	for ids != 0 {
-		// Get the program from the ID
-		program, err := ebpf.NewProgramFromID(ids)
+	for id := ebpf.ProgramID(0); ; {
+		nextID, err := ebpf.ProgramGetNextID(id)
 		if err != nil {
-			bc.log.Error("failed to load program", "ID", ids, "error", err)
+			break
+		}
+		id = nextID
+
+		program, err := ebpf.NewProgramFromID(id)
+		if err != nil {
+			bc.log.Error("failed to load program", "ID", id, "error", err)
 			continue
 		}
 		defer program.Close()
 
-		// Get program info
 		info, err := program.Info()
 		if err != nil {
-			bc.log.Error("failed to get program info", "ID", ids, "error", err)
+			bc.log.Error("failed to get program info", "ID", id, "error", err)
 			continue
 		}
 
+		switch info.Type {
+		case ebpf.Kprobe, ebpf.SocketFilter, ebpf.SchedCLS, ebpf.SkMsg, ebpf.SockOps:
+		// Supported program types
+		default:
+			continue // Skip unsupported program types
+		}
+
+		name := getFuncName(info, id, bc.log)
+
 		runtime, _ := info.Runtime()
 		runCount, _ := info.RunCount()
-		idStr := strconv.FormatUint(uint64(ids), 10)
+		idStr := strconv.FormatUint(uint64(id), 10)
 
 		// Get the previous stats
-		probe, ok := bc.progs[ids]
+		probe, ok := bc.progs[id]
 		if !ok {
 			probe = &BPFProgram{
 				runTime:      runtime,
@@ -150,7 +157,7 @@ func (bc *BPFCollector) collectProbesMetrics(ch chan<- prometheus.Metric) {
 				prevRunTime:  0,
 				prevRunCount: 0,
 			}
-			bc.progs[ids] = probe
+			bc.progs[id] = probe
 		} else {
 			probe.prevRunTime = probe.runTime
 			probe.prevRunCount = probe.runCount
@@ -167,39 +174,52 @@ func (bc *BPFCollector) collectProbesMetrics(ch chan<- prometheus.Metric) {
 			probe.buckets,
 			idStr,
 			info.Type.String(),
-			info.Name,
+			name,
 		)
-
-		// Get the next program ID
-		ids, _ = ebpf.ProgramGetNextID(ids)
 	}
 }
 
-func (bc *BPFCollector) collectMapMetrics(ch chan<- prometheus.Metric) {
-	// Iterate over all eBPF maps
-	ids, err := ebpf.MapGetNextID(0)
+func getFuncName(info *ebpf.ProgramInfo, id ebpf.ProgramID, log *slog.Logger) string {
+	funcInfos, err := info.FuncInfos()
 	if err != nil {
-		bc.log.Error("failed to get first map ID", "ID", ids, "error", err)
+		log.Error("failed to get program func infos", "ID", id, "error", err)
+		return info.Name
 	}
 
-	for ids != 0 {
-		// Get the map from the ID
-		m, err := ebpf.NewMapFromID(ids)
+	for _, funcOffset := range funcInfos {
+		if f := funcOffset.Func; f != nil {
+			return f.Name
+		}
+	}
+	return info.Name
+}
+
+func (bc *BPFCollector) collectMapMetrics(ch chan<- prometheus.Metric) {
+	for id := ebpf.MapID(0); ; {
+		nextID, err := ebpf.MapGetNextID(id)
 		if err != nil {
-			bc.log.Error("failed to load map", "ID", ids, "error", err)
+			break
+		}
+		id = nextID
+
+		m, err := ebpf.NewMapFromID(id)
+		if err != nil {
+			bc.log.Error("failed to load map", "ID", id, "error", err)
 			continue
 		}
 		defer m.Close()
 
-		// Get map info
 		info, err := m.Info()
 		if err != nil {
-			bc.log.Error("failed to get map info", "ID", ids, "error", err)
+			bc.log.Error("failed to get map info", "ID", id, "error", err)
 			continue
 		}
 
-		// This snippet is copied from digitalocean-labs/ebpf_exporter
-		// https://github.com/digitalocean-labs/ebpf_exporter/blob/main/collectors/map.go
+		// Only collect maps that are LRUHash
+		if info.Type != ebpf.LRUHash {
+			continue
+		}
+
 		var count uint64
 		throwawayKey := discardEncoding{}
 		throwawayValues := make(sliceDiscardEncoding, 0)
@@ -208,20 +228,16 @@ func (bc *BPFCollector) collectMapMetrics(ch chan<- prometheus.Metric) {
 			count++
 		}
 		if err := iter.Err(); err == nil {
-			// Create the map metric
 			ch <- prometheus.MustNewConstMetric(
 				bc.mapSizeDesc,
 				prometheus.CounterValue,
 				float64(count),
-				strconv.FormatUint(uint64(ids), 10),
+				strconv.FormatUint(uint64(id), 10),
 				info.Name,
 				info.Type.String(),
 				strconv.FormatUint(uint64(info.MaxEntries), 10),
 			)
 		}
-
-		// Get the next map ID
-		ids, _ = ebpf.MapGetNextID(ids)
 	}
 }
 

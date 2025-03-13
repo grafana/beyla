@@ -48,7 +48,7 @@ The default Beyla configuration:
 
 - exports the metrics as Prometheus metrics in the Pod HTTP port `9090`, `/metrics` path.
 - tries to instrument all the applications in your cluster.
-- only provides application-level metrics and excludes [network-level metrics]({{< relref "../network" >}}) by default
+- only provides application-level metrics and excludes [network-level metrics](../../network/) by default
 - configures Beyla to decorate the metrics with Kubernetes metadata labels, for example `k8s.namespace.name` or `k8s.pod.name`
 
 ## Configuring Beyla
@@ -56,7 +56,7 @@ The default Beyla configuration:
 You might want to override the default configuration of Beyla. For example, to export the metrics and/or spans
 as OpenTelemetry instead of Prometheus, or to restrict the number of services to instrument.
 
-You can override the default [Beyla configuration options]({{< relref "../configure" >}}) with your own values.
+You can override the default [Beyla configuration options](../../configure/) with your own values.
 
 For example, create a `helm-beyla.yml` file with a custom configuration:
 
@@ -73,7 +73,7 @@ config:
 ```
 
 The `config.data` section contains a Beyla configuration file, documented in the
-[Beyla configuration options documentation]({{< relref "../configure/options.md" >}}).
+[Beyla configuration options documentation](../../configure/options/).
 
 Then pass the overridden configuration to the `helm` command with the `-f` flag. For example:
 

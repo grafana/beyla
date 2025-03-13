@@ -518,7 +518,7 @@ func newReporter(
 	if cfg.SpanMetricsEnabled() {
 		mr.serviceCache = expirable.NewLRU(cfg.SpanMetricsServiceCacheSize, func(_ svc.UID, v svc.Attrs) {
 			lv := mr.labelValuesTargetInfo(v)
-			mr.tracesTargetInfo.WithLabelValues(lv...).metric.Sub(1)
+			mr.tracesTargetInfo.WithLabelValues(lv...).metric.Set(0)
 		}, cfg.TTL)
 	}
 
@@ -735,7 +735,7 @@ func (r *metricsReporter) observe(span *request.Span) {
 		_, ok := r.serviceCache.Get(span.Service.UID)
 		if !ok {
 			r.serviceCache.Add(span.Service.UID, span.Service)
-			r.tracesTargetInfo.WithLabelValues(targetInfoLabelValues...).metric.Add(1)
+			r.tracesTargetInfo.WithLabelValues(targetInfoLabelValues...).metric.Set(1)
 		}
 	}
 

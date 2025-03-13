@@ -15,7 +15,7 @@ properties that simplify the configuration of Beyla to instrument a single servi
 a group of related services.
 
 In some scenarios, Beyla will instrument a big variety of services; for example,
-as a [Kubernetes DaemonSet]({{< relref "../setup/kubernetes.md" >}}) that instruments all
+as a [Kubernetes DaemonSet](../../setup/kubernetes/) that instruments all
 the services in a node. The `discovery` YAML section will let you specify a higher
 differentiation degree in the services that Beyla can instrument.
 

@@ -38,13 +38,13 @@ The following table describes the exported metrics in both OpenTelemetry and Pro
 
 Beyla can also export [Span metrics](/docs/tempo/latest/metrics-generator/span_metrics/) and
 [Service graph metrics](/docs/tempo/latest/metrics-generator/service-graph-view/), which you can enable via the
-[features]({{< relref "./configure/options.md" >}}) configuration option.
+[features](../configure/options/) configuration option.
 
 ## Attributes of Beyla metrics
 
 For the sake of brevity, the metrics and attributes in this list use the OTEL `dot.notation`. When using the Prometheus exporter, the metrics use `underscore_notation`.
 
-In order to configure which attributes to show or which attributes to hide, check the `attributes`->`select` section in the [configuration documentation]({{< relref "./configure/options.md" >}}).
+In order to configure which attributes to show or which attributes to hide, check the `attributes`->`select` section in the [configuration documentation](../configure/options/).
 
 | Metrics                        | Name                         | Default                                           |
 |--------------------------------|------------------------------|---------------------------------------------------|
@@ -126,7 +126,7 @@ but all of them are hidden by default, except `k8s.cluster.name`, `src.zone` and
 
 ## Internal metrics
 
-Beyla can be [configured to report internal metrics]({{< relref "./configure/internal-metrics-reporter.md" >}}) in Prometheus Format.
+Beyla can be [configured to report internal metrics](../configure/internal-metrics-reporter/) in Prometheus Format.
 
 | Name                                  | Type        | Description                                                                              |
 | ------------------------------------- | ----------- | ---------------------------------------------------------------------------------------- |

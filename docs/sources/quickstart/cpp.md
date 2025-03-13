@@ -132,5 +132,5 @@ Grafana will now heuristically assign a route to each trace. `/foo` got its own 
 
 ## Next steps
 
-- Get more details of the different [Beyla configuration options]({{< relref "../configure" >}}).
-- Learn how to deploy Beyla as a [Docker container]({{< relref "../setup/docker.md" >}}) or as a [Kubernetes DaemonSet or sidecar]({{< relref "../setup/kubernetes.md" >}}).
+- Get more details of the different [Beyla configuration options](../../configure/).
+- Learn how to deploy Beyla as a [Docker container](../../setup/docker/) or as a [Kubernetes DaemonSet or sidecar](../../setup/kubernetes/).

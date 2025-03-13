@@ -113,20 +113,20 @@ func (p *PrometheusReporter) Start(ctx context.Context) {
 	p.beylaInfo.Set(1)
 }
 
-func (p *PrometheusReporter) TracerFlush(len int) {
-	p.tracerFlushes.Observe(float64(len))
+func (p *PrometheusReporter) TracerFlush(length int) {
+	p.tracerFlushes.Observe(float64(length))
 }
 
-func (p *PrometheusReporter) OTELMetricExport(len int) {
-	p.otelMetricExports.Add(float64(len))
+func (p *PrometheusReporter) OTELMetricExport(length int) {
+	p.otelMetricExports.Add(float64(length))
 }
 
 func (p *PrometheusReporter) OTELMetricExportError(err error) {
 	p.otelMetricExportErrs.WithLabelValues(err.Error()).Inc()
 }
 
-func (p *PrometheusReporter) OTELTraceExport(len int) {
-	p.otelTraceExports.Add(float64(len))
+func (p *PrometheusReporter) OTELTraceExport(length int) {
+	p.otelTraceExports.Add(float64(length))
 }
 
 func (p *PrometheusReporter) OTELTraceExportError(err error) {

@@ -382,7 +382,16 @@ static __always_inline bool
 create_trace_info(u64 id, const connection_info_t *conn, tp_info_pid_t *tp_p) {
     bpf_dbg_printk("=== %s ===", __FUNCTION__);
 
+    pid_connection_info_t *p_conn = pid_conn_info_buf();
+
+    if (!p_conn) {
+        return false;
+    }
+
     const u32 pid = pid_from_pid_tgid(id);
+
+    p_conn->conn = *conn;
+    p_conn->pid = pid;
 
     tp_p->tp.ts = bpf_ktime_get_ns();
     tp_p->tp.flags = 1;
@@ -392,15 +401,6 @@ create_trace_info(u64 id, const connection_info_t *conn, tp_info_pid_t *tp_p) {
     tp_p->req_type = EVENT_HTTP_CLIENT; //XXX double check
 
     urand_bytes(tp_p->tp.span_id, SPAN_ID_SIZE_BYTES);
-
-    pid_connection_info_t *p_conn = pid_conn_info_buf();
-
-    if (!p_conn) {
-        return false;
-    }
-
-    p_conn->conn = *conn;
-    p_conn->pid = pid;
 
     if (find_trace_for_client_request(p_conn, &tp_p->tp)) {
         bpf_dbg_printk("found existing tp info");

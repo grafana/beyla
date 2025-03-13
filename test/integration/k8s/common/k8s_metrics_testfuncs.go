@@ -229,9 +229,9 @@ func FeatureGRPCMetricsDecoration(manifest string, overrideAttrs map[string]stri
 				attributeMap(allAttributes, overrideAttrs))).
 		Assess("target_info metrics exist",
 			testMetricsDecoration([]string{"target_info"}, `{job=~".*testserver"}`, map[string]string{
-				"host_name": "testserver",
-				"host_id":   HostIDRegex,
-				"instance":  targetInfoInstance,
+				"host_name":              "testserver",
+				"host_id":                HostIDRegex,
+				"instance":               targetInfoInstance,
 				"deployment_environment": "integration-test",
 			}),
 		).Feature()

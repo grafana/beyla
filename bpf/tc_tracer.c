@@ -142,10 +142,6 @@ static __always_inline void track_sock(struct __sk_buff *skb, const connection_i
     const u32 s_port = conn->s_port;
 
     if (is_sock_tracked(s_port)) {
-        // the socket is already tracket for this request, so we just cleanup
-        // and move on (we clean up/untrack_sock because the sock will be
-        // retracked on the next call to beyla_packet_extender
-        untrack_sock(s_port);
         return;
     }
 

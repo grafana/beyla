@@ -180,6 +180,23 @@ no Prometheus endpoint is open.
 
 Specifies the HTTP query path to fetch the list of Prometheus metrics.
 
+| YAML                        | Environment variable                         | Type            | Default |
+|-----------------------------|----------------------------------------------|-----------------|---------|
+| `extra_resource_attributes` | `BEYLA_PROMETHEUS_EXTRA_RESOURCE_ATTRIBUTES` | list of strings | (empty) |
+
+A list of additional resource attributes to be added to the reported `target_info` metric.
+
+Due to internal limitations of the Prometheus API client, Beyla needs to know beforehand which attributes are exposed
+for each metric. This would cause that some attributes that are discovered at runtime, during instrumentation, won't
+be visible by default. For example, attributes defined on each application via Kubernetes annotations, or in the
+target application's `OTEL_RESOURCE_ATTRIBUTES` environment variable.
+
+For example, an application defining the `OTEL_RESOURCE_ATTRIBUTES=deployment.environment=production` as environment
+variable, the `target_info{deployment.environment="production"}` attribute would be visible by default if the metrics
+are exported via OpenTelemetry but not if they are exported via Prometheus.
+
+To make `deployment_environment` visible in Prometheus, you need to add it to the `extra_resource_attributes` list.
+
 | YAML  | Environment variable   | Type     | Default |
 | ----- | ---------------------- | -------- | ------- |
 | `ttl` | `BEYLA_PROMETHEUS_TTL` | Duration | `5m`    |

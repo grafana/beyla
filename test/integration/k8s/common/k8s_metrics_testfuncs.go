@@ -232,6 +232,7 @@ func FeatureGRPCMetricsDecoration(manifest string, overrideAttrs map[string]stri
 				"host_name": "testserver",
 				"host_id":   HostIDRegex,
 				"instance":  targetInfoInstance,
+				"deployment_environment": "integration-test",
 			}),
 		).Feature()
 }

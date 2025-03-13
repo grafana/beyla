@@ -187,6 +187,10 @@ static __always_inline void set_tp_info_pid(const egress_key_t *e_key, const tp_
     bpf_map_update_elem(&outgoing_trace_map, e_key, tp_p, BPF_ANY);
 }
 
+static __always_inline void clear_tp_info_pid(const egress_key_t *e_key) {
+    bpf_map_delete_elem(&outgoing_trace_map, &e_key);
+}
+
 static __always_inline u8 is_tracked_go_request(const tp_info_pid_t *tp) {
     return tp != NULL && tp->valid;
 }
@@ -411,14 +415,17 @@ create_trace_info(u64 id, const connection_info_t *conn, tp_info_pid_t *tp_p) {
     return true;
 }
 
-static __always_inline void handle_go_request(struct sk_msg_md *msg, tp_info_pid_t *tp_pid) {
+static __always_inline void
+handle_go_request(struct sk_msg_md *msg, const egress_key_t *e_key, tp_info_pid_t *tp_pid) {
     bpf_dbg_printk("writing go traceparent");
 
     bpf_msg_pull_data(msg, 0, msg->size, 0);
 
     tp_pid->written = write_msg_traceparent(msg, &tp_pid->tp);
 
-    if (!tp_pid->written) {
+    if (tp_pid->written) {
+        clear_tp_info_pid(e_key);
+    } else {
         bpf_dbg_printk("failed to write go traceparent");
     }
 }
@@ -431,10 +438,6 @@ static __always_inline void beyla_packet_extender_track_sock(u32 port) {
 
 static __always_inline u8 is_sock_tracked(u32 port) {
     return bpf_map_lookup_elem(&tc_tracked_socks_map, &port) != NULL;
-}
-
-static __always_inline void untrack_sock(u32 port) {
-    bpf_map_delete_elem(&tc_tracked_socks_map, &port);
 }
 
 // Sock_msg program which detects packets where it should add space for
@@ -455,7 +458,7 @@ int beyla_packet_extender(struct sk_msg_md *msg) {
     // We have metadata setup by the Go uprobes telling us we should extend
     // this packet
     if (is_tracked_go_request(tp_pid)) {
-        handle_go_request(msg, tp_pid);
+        handle_go_request(msg, &e_key, tp_pid);
         return SK_PASS;
     }
 

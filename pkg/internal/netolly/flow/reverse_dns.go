@@ -31,7 +31,7 @@ var netLookupAddr = net.LookupAddr
 // ReverseDNS is currently experimental. It is kept disabled by default and will be hidden
 // from the documentation. This means that it does not impact in the overall Beyla performance.
 type ReverseDNS struct {
-	// Type of ReverseDNS. Values are "none" (default) and "local".
+	// Type of ReverseDNS. Values are "none" (default), "local" and "ebpf"
 	// nolint:undoc
 	Type string `yaml:"type" env:"BEYLA_NETWORK_REVERSE_DNS_TYPE"`
 
@@ -50,7 +50,7 @@ type ReverseDNS struct {
 
 	// EBPFProbes only applies if the "ebpf" ReverseDNS type is selected. It specifies
 	// a list with the points where the eBPF probes are attached to.
-	// Accepted values: "getaddrinfo" and "packet". Default: ["getaddrinfo", "packet"]
+	// Accepted values: "getaddrinfo" and "packet". Default: ["getaddrinfo", "xdp"]
 	EBPFProbes []string `yaml:"ebpf_probes" env:"BEYLA_NETWORK_REVERSE_DNS_EBPF_PROBES" envSeparator:","`
 }
 

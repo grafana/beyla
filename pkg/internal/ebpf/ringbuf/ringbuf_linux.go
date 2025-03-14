@@ -9,6 +9,5 @@ import (
 
 type Record = ringbuf.Record
 
-var ErrClosed = ringbuf.ErrClose
 var ErrClosed = ringbuf.ErrClosed
 var NewReader = ringbuf.NewReader

@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/cilium/ebpf"
-	"github.com/cilium/ebpf/ringbuf"
 
 	"github.com/grafana/beyla/v2/pkg/config"
+	"github.com/grafana/beyla/v2/pkg/internal/ebpf/ringbuf"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 )

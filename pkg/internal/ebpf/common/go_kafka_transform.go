@@ -5,9 +5,9 @@ import (
 	"encoding/binary"
 	"unsafe"
 
-	"github.com/cilium/ebpf/ringbuf"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/grafana/beyla/v2/pkg/internal/ebpf/ringbuf"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 )
 

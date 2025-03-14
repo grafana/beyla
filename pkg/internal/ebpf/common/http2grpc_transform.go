@@ -8,12 +8,12 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/cilium/ebpf/ringbuf"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/net/http2"
 
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/bhpack"
+	"github.com/grafana/beyla/v2/pkg/internal/ebpf/ringbuf"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 )
 
@@ -423,8 +423,8 @@ const (
 
 const frameHeaderLen = 9
 
-func readHTTP2Frame(buf []uint8, len int) (*frameHeader, bool) {
-	if len < frameHeaderLen {
+func readHTTP2Frame(buf []uint8, length int) (*frameHeader, bool) {
+	if length < frameHeaderLen {
 		return nil, false
 	}
 

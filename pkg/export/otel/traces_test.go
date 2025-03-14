@@ -1188,9 +1188,9 @@ type fakeInternalTraces struct {
 	errs atomic.Int32
 }
 
-func (f *fakeInternalTraces) OTELTraceExport(len int) {
+func (f *fakeInternalTraces) OTELTraceExport(length int) {
 	f.cnt.Add(1)
-	f.sum.Add(int32(len))
+	f.sum.Add(int32(length))
 }
 
 func (f *fakeInternalTraces) OTELTraceExportError(_ error) {

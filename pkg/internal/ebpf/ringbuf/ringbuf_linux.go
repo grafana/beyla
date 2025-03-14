@@ -8,6 +8,7 @@ import (
 )
 
 type Record = ringbuf.Record
+type Reader = ringbuf.Reader
 
 var ErrClosed = ringbuf.ErrClosed
 var NewReader = ringbuf.NewReader

@@ -67,7 +67,23 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 	return loadBpf()
 }
 
-func (p *Tracer) SetupTailCalls() {}
+func (p *Tracer) SetupTailCalls() {
+	for _, tc := range []struct {
+		index int
+		prog  *ebpf.Program
+	}{
+		{
+			index: 0,
+			prog:  p.bpfObjects.BeylaPacketExtenderWriteMsgTp,
+		},
+	} {
+		err := p.bpfObjects.ExtenderJumpTable.Update(uint32(tc.index), uint32(tc.prog.FD()), ebpf.UpdateAny)
+
+		if err != nil {
+			p.log.Error("error loading info tail call jump table", "error", err)
+		}
+	}
+}
 
 func (p *Tracer) Constants() map[string]any {
 	m := make(map[string]any, 2)
@@ -148,16 +164,6 @@ func (p *Tracer) AlreadyInstrumentedLib(uint64) bool {
 	return false
 }
 
-func (p *Tracer) setTracerActive(active bool) {
-	p.log.Debug("TCTracer active changed", "active", active)
-
-	err := p.bpfObjects.bpfVariables.TcEnabled.Set(active)
-
-	if err != nil {
-		p.log.Error("Failed to change TCTracer active state:", "active", active, "error", err)
-	}
-}
-
 func (p *Tracer) startTC(ctx context.Context) {
 	if p.tcManager != nil {
 		return
@@ -181,7 +187,6 @@ func (p *Tracer) startTC(ctx context.Context) {
 	p.tcManager.AddProgram("tc/tc_ingress", p.bpfObjects.BeylaAppIngress, tcmanager.AttachmentIngress)
 
 	p.ifaceManager.Start(ctx)
-	p.setTracerActive(true)
 }
 
 func (p *Tracer) Run(ctx context.Context, _ chan<- []request.Span) {
@@ -200,8 +205,6 @@ func (p *Tracer) Run(ctx context.Context, _ chan<- []request.Span) {
 }
 
 func (p *Tracer) stopTC() {
-	p.setTracerActive(false)
-
 	p.log.Info("removing traffic control probes")
 
 	p.tcManager.Shutdown()

@@ -27,10 +27,10 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
 
 	convenience "github.com/grafana/beyla/v2/pkg/internal/ebpf/convenience"
+	"github.com/grafana/beyla/v2/pkg/internal/ebpf/ringbuf"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/tcmanager"
 )
 

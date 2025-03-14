@@ -33,10 +33,10 @@ type Reporter interface {
 	// Start the reporter
 	Start(ctx context.Context)
 	// TracerFlush is invoked every time the eBPF tracer flushes a group of len traces.
-	TracerFlush(len int)
+	TracerFlush(length int)
 	// OTELMetricExport is invoked every time the OpenTelemetry Metrics exporter successfully exports metrics to
 	// a remote collector. It accounts the length, in metrics, for each invocation.
-	OTELMetricExport(len int)
+	OTELMetricExport(length int)
 	// OTELMetricExportError is invoked every time the OpenTelemetry Metrics export fails with an error
 	OTELMetricExportError(err error)
 	// OTELTraceExport is invoked every time the OpenTelemetry Traces exporter successfully exports traces to

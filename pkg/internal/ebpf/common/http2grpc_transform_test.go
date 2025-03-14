@@ -241,17 +241,17 @@ func TestDynamicTableUpdates(t *testing.T) {
 	assert.Equal(t, "*", s.Path) // this value is the same I just changed the first character from r to p
 }
 
-func makeBPFHTTP2Info(buf, rbuf []byte, len int) BPFHTTP2Info {
+func makeBPFHTTP2Info(buf, rbuf []byte, length int) BPFHTTP2Info {
 	var info BPFHTTP2Info
 	copy(info.Data[:], buf)
 	copy(info.RetData[:], rbuf)
-	info.Len = int32(len)
+	info.Len = int32(length)
 
 	return info
 }
 
-func makeBPFHTTP2InfoNewRequest(buf, rbuf []byte, len int) BPFHTTP2Info {
-	info := makeBPFHTTP2Info(buf, rbuf, len)
+func makeBPFHTTP2InfoNewRequest(buf, rbuf []byte, length int) BPFHTTP2Info {
+	info := makeBPFHTTP2Info(buf, rbuf, length)
 	info.ConnInfo.D_port = 1
 	info.ConnInfo.S_port = 1
 	info.NewConnId = 1

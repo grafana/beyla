@@ -204,11 +204,12 @@ handle_ssl_buf(void *ctx, u64 id, ssl_args_t *args, int bytes_len, u8 direction)
     }
 }
 
-static __always_inline void set_active_ssl_connection(pid_connection_info_t *conn, void *ssl) {
+static __always_inline void set_active_ssl_connection(const pid_connection_info_t *conn,
+                                                      void *ssl) {
     bpf_map_update_elem(&active_ssl_connections, conn, &ssl, BPF_ANY);
 }
 
-static __always_inline void *is_ssl_connection(u64 id, pid_connection_info_t *conn) {
+static __always_inline void *is_ssl_connection(u64 id, const pid_connection_info_t *conn) {
     void *ssl = 0;
     // Checks if it's sandwitched between read or write uprobe/uretprobe
     ssl_args_t *ssl_args = bpf_map_lookup_elem(&active_ssl_read_args, &id);

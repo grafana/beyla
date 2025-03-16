@@ -67,7 +67,23 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 	return loadBpf()
 }
 
-func (p *Tracer) SetupTailCalls() {}
+func (p *Tracer) SetupTailCalls() {
+	for _, tc := range []struct {
+		index int
+		prog  *ebpf.Program
+	}{
+		{
+			index: 0,
+			prog:  p.bpfObjects.BeylaPacketExtenderWriteMsgTp,
+		},
+	} {
+		err := p.bpfObjects.ExtenderJumpTable.Update(uint32(tc.index), uint32(tc.prog.FD()), ebpf.UpdateAny)
+
+		if err != nil {
+			p.log.Error("error loading info tail call jump table", "error", err)
+		}
+	}
+}
 
 func (p *Tracer) Constants() map[string]any {
 	m := make(map[string]any, 2)

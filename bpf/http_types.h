@@ -99,6 +99,7 @@ typedef struct tp_info_pid {
     tp_info_t tp;
     u32 pid;
     u8 valid;
+    u8 written;
     u8 req_type;
 } tp_info_pid_t;
 

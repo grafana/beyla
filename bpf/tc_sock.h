@@ -416,7 +416,7 @@ create_trace_info(u64 id, const connection_info_t *conn, tp_info_pid_t *tp_p) {
 }
 
 static __always_inline void
-handle_go_request(struct sk_msg_md *msg, const egress_key_t *e_key, tp_info_pid_t *tp_pid) {
+write_go_traceparent(struct sk_msg_md *msg, const egress_key_t *e_key, tp_info_pid_t *tp_pid) {
     bpf_dbg_printk("writing go traceparent");
 
     bpf_msg_pull_data(msg, 0, msg->size, 0);
@@ -428,6 +428,27 @@ handle_go_request(struct sk_msg_md *msg, const egress_key_t *e_key, tp_info_pid_
     } else {
         bpf_dbg_printk("failed to write go traceparent");
     }
+}
+
+static __always_inline bool handle_go_request(struct sk_msg_md *msg,
+                                              u64 id,
+                                              const connection_info_t *conn,
+                                              const egress_key_t *e_key,
+                                              tp_info_pid_t *tp_pid) {
+    if (!is_tracked_go_request(tp_pid)) {
+        return false;
+    }
+
+    // We have metadata setup by the Go uprobes telling us we should extend
+    // this packet
+    if (!protocol_detector(msg, id, conn)) {
+        bpf_dbg_printk("found TLS or non HTTP go request, ignoring...");
+        return false;
+    }
+
+    write_go_traceparent(msg, e_key, tp_pid);
+
+    return true;
 }
 
 static __always_inline void beyla_packet_extender_track_sock(u32 port) {
@@ -455,10 +476,7 @@ int beyla_packet_extender(struct sk_msg_md *msg) {
 
     bpf_dbg_printk("beyla_packet_extender tp_pid: %llx, buf %s", tp_pid, msg->data);
 
-    // We have metadata setup by the Go uprobes telling us we should extend
-    // this packet
-    if (is_tracked_go_request(tp_pid)) {
-        handle_go_request(msg, &e_key, tp_pid);
+    if (handle_go_request(msg, id, &conn, &e_key, tp_pid)) {
         return SK_PASS;
     }
 

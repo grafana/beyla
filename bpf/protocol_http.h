@@ -49,7 +49,30 @@ static __always_inline void http_get_or_create_trace_info(http_connection_metada
                                                           int bytes_len,
                                                           s32 capture_header_buffer,
                                                           u8 ssl) {
-    tp_info_pid_t *tp_p = tp_buf();
+    //TODO use make_key
+    egress_key_t e_key = {
+        .d_port = conn->d_port,
+        .s_port = conn->s_port,
+    };
+
+    sort_egress_key(&e_key);
+
+    tp_info_pid_t *tp_p = bpf_map_lookup_elem(&outgoing_trace_map, &e_key);
+
+    // TODO move this to sock msg
+    if (tp_p && tp_p->req_type == EVENT_HTTP_CLIENT && tp_p->written && tp_p->pid == pid) {
+        bpf_dbg_printk("found tp info previously set by sock msg");
+        // we've already got a tp_info_pid_t setup by the sockmsg program, use
+        // that instead
+
+        set_trace_info_for_connection(conn, TRACE_TYPE_CLIENT, tp_p);
+
+        // clean up so that TC does not pick it up
+        bpf_map_delete_elem(&outgoing_trace_map, &e_key);
+        return;
+    }
+
+    tp_p = tp_buf();
 
     if (!tp_p) {
         return;
@@ -58,6 +81,7 @@ static __always_inline void http_get_or_create_trace_info(http_connection_metada
     tp_p->tp.ts = bpf_ktime_get_ns();
     tp_p->tp.flags = 1;
     tp_p->valid = 1;
+    tp_p->written = 0;
     tp_p->pid = pid; // used for avoiding finding stale server requests with client port reuse
     tp_p->req_type = (meta) ? meta->type : 0;
 
@@ -82,7 +106,7 @@ static __always_inline void http_get_or_create_trace_info(http_connection_metada
     if (!found_tp) {
         bpf_dbg_printk("Generating new traceparent id");
         new_trace_id(&tp_p->tp);
-        __builtin_memset(tp_p->tp.parent_id, 0, sizeof(tp_p->tp.span_id));
+        __builtin_memset(tp_p->tp.parent_id, 0, sizeof(tp_p->tp.parent_id));
     } else {
         bpf_dbg_printk("Using old traceparent id");
     }

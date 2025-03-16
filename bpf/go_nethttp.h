@@ -1153,6 +1153,7 @@ int beyla_uprobe_persistConnRoundTrip(struct pt_regs *ctx) {
                 tp_info_pid_t tp_p = {
                     .pid = pid,
                     .valid = 1,
+                    .written = 0,
                 };
 
                 tp_clone(&tp_p.tp, &invocation->tp);

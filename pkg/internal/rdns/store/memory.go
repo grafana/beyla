@@ -24,14 +24,12 @@ func NewInMemory() *InMemory {
 	}
 }
 
-func (im *InMemory) PipelineStage(in <-chan DNSEntry) {
-	for entry := range in {
-		im.access.Lock()
-		for _, ip := range entry.IPs {
-			// TODO: store IPv4 also with its IPv6 representation
-			im.entries[ip] = []string{entry.HostName}
-		}
-		im.access.Unlock()
+func (im *InMemory) Store(entry *DNSEntry) {
+	im.access.Lock()
+	defer im.access.Unlock()
+	for _, ip := range entry.IPs {
+		// TODO: store IPv4 also with its IPv6 representation
+		im.entries[ip] = []string{entry.HostName}
 	}
 }
 

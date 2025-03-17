@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/mariomac/pipes/pipe"
 
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
-	"github.com/grafana/beyla/v2/pkg/internal/rdns"
-	"github.com/grafana/beyla/v2/pkg/internal/rdns/ebpf/rdnscfg"
+	"github.com/grafana/beyla/v2/pkg/internal/rdns/ebpf/xdp"
 	"github.com/grafana/beyla/v2/pkg/internal/rdns/store"
 )
 
@@ -47,15 +47,11 @@ type ReverseDNS struct {
 	// up again.
 	// nolint:undoc
 	CacheTTL time.Duration `yaml:"cache_expiry" env:"BEYLA_NETWORK_REVERSE_DNS_CACHE_TTL"`
-
-	// EBPFProbes only applies if the "ebpf" ReverseDNS type is selected. It specifies
-	// a list with the points where the eBPF probes are attached to.
-	// Accepted values: "getaddrinfo" and "packet". Default: ["getaddrinfo", "xdp"]
-	EBPFProbes []string `yaml:"ebpf_probes" env:"BEYLA_NETWORK_REVERSE_DNS_EBPF_PROBES" envSeparator:","`
 }
 
 func (r ReverseDNS) Enabled() bool {
-	return r.Type == ReverseDNSLocalLookup || r.Type == ReverseDNSEBPF
+	rdType := strings.ToLower(r.Type)
+	return rdType == ReverseDNSLocalLookup || rdType == ReverseDNSEBPF
 }
 
 func ReverseDNSProvider(ctx context.Context, cfg *ReverseDNS) (pipe.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
@@ -90,11 +86,8 @@ func ReverseDNSProvider(ctx context.Context, cfg *ReverseDNS) (pipe.MiddleFunc[[
 func checkEBPFReverseDNS(ctx context.Context, cfg *ReverseDNS) error {
 	if cfg.Type == ReverseDNSEBPF {
 		// overriding netLookupAddr by an eBPF-based alternative
-
 		ipToHosts := store.NewInMemory()
-		if err := rdns.Start(ctx, &rdnscfg.Config{
-			Resolvers: cfg.EBPFProbes,
-		}, ipToHosts); err != nil {
+		if err := xdp.StartDNSPacketInspector(ctx, ipToHosts); err != nil {
 			return fmt.Errorf("starting eBPF-based reverse DNS: %w", err)
 		}
 		netLookupAddr = ipToHosts.GetHostnames

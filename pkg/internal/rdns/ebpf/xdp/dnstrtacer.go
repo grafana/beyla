@@ -8,13 +8,14 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
-	"github.com/cilium/ebpf/ringbuf"
+
+	"github.com/grafana/beyla/v2/pkg/internal/ebpf/ringbuf"
 )
 
 type tracer struct {
 	bpfObjects *BpfObjects
-	links []*link.Link
-	ringbuf *ringbuf.Reader
+	links      []*link.Link
+	ringbuf    *ringbuf.Reader
 }
 
 func (t *tracer) Close() error {
@@ -40,8 +41,8 @@ func (t *tracer) Close() error {
 func move(t *tracer) tracer {
 	ret := tracer{
 		bpfObjects: t.bpfObjects,
-		links: t.links,
-		ringbuf: t.ringbuf,
+		links:      t.links,
+		ringbuf:    t.ringbuf,
 	}
 
 	t.bpfObjects = nil
@@ -63,7 +64,7 @@ func newTracer() (*tracer, error) {
 		return nil, fmt.Errorf("loading BPF objects: %w", err)
 	}
 
-	tracer := tracer{ bpfObjects: &objects }
+	tracer := tracer{bpfObjects: &objects}
 	defer tracer.Close()
 
 	ifaces := ifacesToAttach()
@@ -76,7 +77,7 @@ func newTracer() (*tracer, error) {
 
 	for i := range ifaces {
 		link, err := link.AttachXDP(link.XDPOptions{
-			Program: tracer.bpfObjects.BpfPrograms.DnsResponseTracker,
+			Program:   tracer.bpfObjects.BpfPrograms.DnsResponseTracker,
 			Interface: ifaces[i].Index,
 		})
 
@@ -110,7 +111,7 @@ func newTracer() (*tracer, error) {
 func ifacesToAttach() []net.Interface {
 	ifaces, err := net.Interfaces()
 
-	if len(ifaces) == 0  || err != nil {
+	if len(ifaces) == 0 || err != nil {
 		return nil
 	}
 
@@ -127,10 +128,10 @@ func ifacesToAttach() []net.Interface {
 
 func isVirtualInterface(name string) bool {
 	virtualPatterns := []string{
-		"br-",     // Docker bridge interfaces
-		"veth",    // Docker virtual Ethernet interfaces
-		"docker",  // Docker default bridge
-		"lo",      // Loopback interface
+		"br-",    // Docker bridge interfaces
+		"veth",   // Docker virtual Ethernet interfaces
+		"docker", // Docker default bridge
+		"lo",     // Loopback interface
 	}
 
 	for _, pattern := range virtualPatterns {

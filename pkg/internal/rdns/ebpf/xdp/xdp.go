@@ -7,44 +7,35 @@ import (
 	"log/slog"
 	"net"
 	"os"
-	"slices"
 	"time"
 
-	"github.com/cilium/ebpf/ringbuf"
-
-	"github.com/mariomac/pipes/pipe"
-
-	"github.com/grafana/beyla/v2/pkg/internal/rdns/ebpf/rdnscfg"
+	"github.com/grafana/beyla/v2/pkg/internal/ebpf/ringbuf"
 	"github.com/grafana/beyla/v2/pkg/internal/rdns/store"
 )
 
 func log() *slog.Logger {
-	return slog.With("component", "xdp.PacketResolver")
+	return slog.With("component", "xdp.DNSPacketInspector")
 }
 
-func PacketResolverProvider(ctx context.Context, cfg *rdnscfg.Config) pipe.StartProvider[store.DNSEntry] {
-	return func() (pipe.StartFunc[store.DNSEntry], error) {
-		log := log()
-		if !slices.Contains(cfg.Resolvers, rdnscfg.EBPFProbeResolverXDP) {
-			log.Debug("packet resolver is not enabled, ignoring this stage")
-			return pipe.IgnoreStart[store.DNSEntry](), nil
-		}
+type storage interface {
+	Store(*store.DNSEntry)
+	GetHostnames(ip string) ([]string, error)
+}
 
-		// todo: instantiate here the eBPF tracer and return any possible error
+// StartDNSPacketInspector in a backgound goroutine
+func StartDNSPacketInspector(ctx context.Context, storage storage) error {
+	tracer, err := newTracer()
 
-		tracer, err := newTracer()
-
-		if err != nil {
-			return nil, fmt.Errorf("instantiating XDP tracer: %w", err)
-		}
-
-		return func(out chan<- store.DNSEntry) {
-			tracerLoop(ctx, out, tracer)
-		}, nil
+	if err != nil {
+		return fmt.Errorf("instantiating XDP tracer: %w", err)
 	}
+
+	go tracerLoop(ctx, storage, tracer)
+
+	return nil
 }
 
-func tracerLoop(ctx context.Context, out chan<- store.DNSEntry, tracer *tracer) {
+func tracerLoop(ctx context.Context, storage storage, tracer *tracer) {
 	defer tracer.Close()
 
 	log := log()
@@ -84,7 +75,7 @@ func tracerLoop(ctx context.Context, out chan<- store.DNSEntry, tracer *tracer) 
 
 		if entry != nil {
 			log.Debug("received DNS entry", "host", entry.HostName, "ips", entry.IPs)
-			out <- *entry
+			storage.Store(entry)
 		}
 	}
 }
@@ -98,7 +89,7 @@ func handleDNSMessage(rd *ringbuf.Record) *store.DNSEntry {
 
 	entry := store.DNSEntry{
 		HostName: dnsMessage.questions[0].qName,
-		IPs: make([]string, 0, len(dnsMessage.answers)),
+		IPs:      make([]string, 0, len(dnsMessage.answers)),
 	}
 
 	for _, answer := range dnsMessage.answers {

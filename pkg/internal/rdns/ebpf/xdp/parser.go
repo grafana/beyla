@@ -9,7 +9,7 @@ import (
 const DEBUG_PARSER = false
 
 func parserDebug(format string, a ...any) {
-	if (DEBUG_PARSER) {
+	if DEBUG_PARSER {
 		fmt.Printf(format, a...)
 	}
 }
@@ -32,7 +32,7 @@ func readDWord(b *bytes.Buffer) []byte {
 func parseDNSMessage(rawData []byte) *dnsMessage {
 	data := bytes.NewBuffer(rawData)
 
-	if (data.Len() < wordSize) {
+	if data.Len() < wordSize {
 		return nil
 	}
 
@@ -40,7 +40,7 @@ func parseDNSMessage(rawData []byte) *dnsMessage {
 
 	r.id = binary.BigEndian.Uint16(readWord(data))
 
-	if (data.Len() < wordSize) {
+	if data.Len() < wordSize {
 		return nil
 	}
 
@@ -51,7 +51,7 @@ func parseDNSMessage(rawData []byte) *dnsMessage {
 		r.Id(), r.IsQuery(), r.Opcode(), r.AuthoritativeAnswer(), r.Truncation(),
 		r.RecursionDesired(), r.RecursionAvailable(), r.Z(), r.RCode())
 
-	if data.Len() < 4 *wordSize {
+	if data.Len() < 4*wordSize {
 		return nil
 	}
 
@@ -107,7 +107,7 @@ func parseQSection(data *bytes.Buffer) *question {
 		return nil
 	}
 
-	if data.Len() < 2 *wordSize {
+	if data.Len() < 2*wordSize {
 		return nil
 	}
 
@@ -181,7 +181,7 @@ func parseRecord(data *bytes.Buffer, base []byte) *record {
 		labelLen &= 0x3f
 		lenLo := readByte(data)
 
-		offsetBe := []byte { labelLen, lenLo }
+		offsetBe := []byte{labelLen, lenLo}
 		offset := binary.BigEndian.Uint16(offsetBe)
 
 		if uint16(len(base)) < offset {
@@ -198,7 +198,7 @@ func parseRecord(data *bytes.Buffer, base []byte) *record {
 		parserDebug("Parsed normal label: %s\n", r.name)
 	}
 
-	if data.Len() < 5 *wordSize {
+	if data.Len() < 5*wordSize {
 		return nil
 	}
 

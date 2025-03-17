@@ -1,40 +1,40 @@
 package xdp
 
 const (
-	Type_A               = 1
-	Type_NS              = 2
-	Type_MD              = 3
-	Type_MF              = 4
-	Type_CNAME           = 5
-	Type_SOA             = 6
-	Type_MB              = 7
-	Type_MG              = 8
-	Type_MR              = 9
-	Type_NULL            = 10
-	Type_WKS             = 11
-	Type_PTR             = 12
-	Type_HINFO           = 13
-	Type_MINFO           = 14
-	Type_MX              = 15
-	Type_TXT             = 16
+	Type_A     = 1
+	Type_NS    = 2
+	Type_MD    = 3
+	Type_MF    = 4
+	Type_CNAME = 5
+	Type_SOA   = 6
+	Type_MB    = 7
+	Type_MG    = 8
+	Type_MR    = 9
+	Type_NULL  = 10
+	Type_WKS   = 11
+	Type_PTR   = 12
+	Type_HINFO = 13
+	Type_MINFO = 14
+	Type_MX    = 15
+	Type_TXT   = 16
 )
 
 type question struct {
-	qName string
-	qType uint16
+	qName  string
+	qType  uint16
 	qClass uint16
 }
 
 type record struct {
-	name string
-	typ uint16
+	name  string
+	typ   uint16
 	class uint16
-	ttl uint32
-	data []byte
+	ttl   uint32
+	data  []byte
 }
 
 type dnsMessage struct {
-	id uint16
+	id      uint16
 	flagsHi uint8
 	flagsLo uint8
 

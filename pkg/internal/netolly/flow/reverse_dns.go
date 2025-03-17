@@ -83,6 +83,7 @@ func ReverseDNSProvider(ctx context.Context, cfg *ReverseDNS) (pipe.MiddleFunc[[
 	}, nil
 }
 
+// changes reverse DNS method according to the provided configuration
 func checkEBPFReverseDNS(ctx context.Context, cfg *ReverseDNS) error {
 	if cfg.Type == ReverseDNSEBPF {
 		// overriding netLookupAddr by an eBPF-based alternative

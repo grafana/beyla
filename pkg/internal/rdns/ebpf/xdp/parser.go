@@ -1,34 +1,33 @@
+// Package xdp provides DNS message parsing functionality for the XDP-based DNS response tracker.
 package xdp
 
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 )
 
-const DEBUG_PARSER = false
-
-func parserDebug(format string, a ...any) {
-	if DEBUG_PARSER {
-		fmt.Printf(format, a...)
-	}
-}
-
+// wordSize represents the size of a DNS message word (2 bytes)
 const wordSize = 2
 
+// readByte reads and returns a single byte from the buffer
 func readByte(b *bytes.Buffer) byte {
 	u, _ := b.ReadByte()
 	return u
 }
 
+// readWord reads and returns a 2-byte word from the buffer
 func readWord(b *bytes.Buffer) []byte {
 	return b.Next(wordSize)
 }
 
+// readDWord reads and returns a 4-byte double word from the buffer
 func readDWord(b *bytes.Buffer) []byte {
 	return b.Next(2 * wordSize)
 }
 
+// parseDNSMessage parses a raw DNS message into a structured dnsMessage object.
+// It handles the DNS message header, questions, and answer sections.
+// Returns nil if the message is malformed or incomplete.
 func parseDNSMessage(rawData []byte) *dnsMessage {
 	data := bytes.NewBuffer(rawData)
 
@@ -47,10 +46,6 @@ func parseDNSMessage(rawData []byte) *dnsMessage {
 	r.flagsHi = readByte(data)
 	r.flagsLo = readByte(data)
 
-	parserDebug("ID: %x, qr: %t, op: %d, aa: %t, tc: %t, rd: %t, ra: %t, z: %d, rcode: %d\n",
-		r.Id(), r.IsQuery(), r.Opcode(), r.AuthoritativeAnswer(), r.Truncation(),
-		r.RecursionDesired(), r.RecursionAvailable(), r.Z(), r.RCode())
-
 	if data.Len() < 4*wordSize {
 		return nil
 	}
@@ -59,9 +54,7 @@ func parseDNSMessage(rawData []byte) *dnsMessage {
 	ancount := binary.BigEndian.Uint16(readWord(data))
 	nscount := binary.BigEndian.Uint16(readWord(data))
 	arcount := binary.BigEndian.Uint16(readWord(data))
-
-	parserDebug("qdcount: %d, ancount: %d, nscount: %d, arcount: %d\n",
-		qdcount, ancount, nscount, arcount)
+	_, _ = nscount, arcount
 
 	r.questions = parseQSections(data, qdcount)
 
@@ -78,26 +71,24 @@ func parseDNSMessage(rawData []byte) *dnsMessage {
 	return &r
 }
 
+// parseQSections parses the question section of a DNS message.
+// It processes the specified number of questions and returns them as a slice.
+// Returns nil if any question is malformed.
 func parseQSections(data *bytes.Buffer, qdcount uint16) []*question {
 	questions := make([]*question, 0, qdcount)
-
 	for i := uint16(0); i < qdcount; i++ {
-		var q *question
-
-		q = parseQSection(data)
-
+		q := parseQSection(data)
 		if q == nil {
-			return nil
+			break
 		}
-
 		questions = append(questions, q)
-
-		parserDebug("Section name: %s, type: %d, class: %d\n", q.qName, q.qType, q.qClass)
 	}
-
 	return questions
 }
 
+// parseQSection parses a single question section from a DNS message.
+// It extracts the query name, type, and class.
+// Returns nil if the section is malformed.
 func parseQSection(data *bytes.Buffer) *question {
 	s := question{}
 
@@ -117,6 +108,9 @@ func parseQSection(data *bytes.Buffer) *question {
 	return &s
 }
 
+// parseSectionLabel parses a DNS label sequence from the buffer.
+// Labels are separated by dots and terminated by a zero-length label.
+// Returns an empty string if the label sequence is malformed.
 func parseSectionLabel(data *bytes.Buffer) string {
 	var label string
 
@@ -141,28 +135,27 @@ func parseSectionLabel(data *bytes.Buffer) string {
 	return label
 }
 
+// parseRecords parses the answer records section of a DNS message.
+// It processes the specified number of records and returns them as a slice.
+// Returns nil if any record is malformed.
 func parseRecords(data *bytes.Buffer, base []byte, count uint16) []*record {
 	records := make([]*record, 0, count)
 
 	for i := uint16(0); i < count; i++ {
-		var r *record
-
-		r = parseRecord(data, base)
-
+		r := parseRecord(data, base)
 		if r == nil {
-			parserDebug("Error parsing record\n")
-			return nil
+			break
 		}
-
 		records = append(records, r)
-
-		parserDebug("Record name: %s, type: %d, class: %d, data: %v\n",
-			r.name, r.typ, r.class, r.data)
 	}
 
 	return records
 }
 
+// parseRecord parses a single DNS resource record from the buffer.
+// It handles both normal and compressed labels, and extracts record type,
+// class, TTL, and record data.
+// Returns nil if the record is malformed.
 func parseRecord(data *bytes.Buffer, base []byte) *record {
 	if data.Len() == 0 {
 		return nil
@@ -189,13 +182,9 @@ func parseRecord(data *bytes.Buffer, base []byte) *record {
 		}
 
 		r.name = parseSectionLabel(bytes.NewBuffer(base[offset:]))
-
-		parserDebug("Parsed compressed label: %s\n", r.name)
 	} else {
-		data.UnreadByte()
+		_ = data.UnreadByte()
 		r.name = parseSectionLabel(data)
-
-		parserDebug("Parsed normal label: %s\n", r.name)
 	}
 
 	if data.Len() < 5*wordSize {

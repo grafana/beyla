@@ -63,11 +63,9 @@ func tracerLoop(ctx context.Context, storage storage, tracer *tracer) {
 			if errors.Is(err, ringbuf.ErrClosed) {
 				log.Debug("ringbuf closed, exiting..")
 				return
-			} else if errors.Is(err, os.ErrDeadlineExceeded) {
-				continue
+			} else if !errors.Is(err, os.ErrDeadlineExceeded) {
+				log.Error("reading from ringbuf", "error", err)
 			}
-
-			log.Error("reading from ringbuf", err)
 			continue
 		}
 
@@ -93,7 +91,7 @@ func handleDNSMessage(rd *ringbuf.Record) *store.DNSEntry {
 	}
 
 	for _, answer := range dnsMessage.answers {
-		if answer.typ != Type_A {
+		if answer.typ != TypeA {
 			continue
 		}
 

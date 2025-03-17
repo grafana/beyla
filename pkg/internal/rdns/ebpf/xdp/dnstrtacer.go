@@ -12,6 +12,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/ringbuf"
 )
 
+// tracer represents the main structure for DNS response tracking.
 type tracer struct {
 	bpfObjects *BpfObjects
 	links      []*link.Link
@@ -37,7 +38,8 @@ func (t *tracer) Close() error {
 	return nil
 }
 
-// this is analogous to C++ std::move()
+// move transfers ownership of the tracer's resources to a new tracer instance.
+// This is analogous to C++'s std::move() and helps prevent double-closing of resources.
 func move(t *tracer) tracer {
 	ret := tracer{
 		bpfObjects: t.bpfObjects,
@@ -52,6 +54,9 @@ func move(t *tracer) tracer {
 	return ret
 }
 
+// newTracer creates and initializes a new DNS response tracer.
+// It loads the BPF program, attaches it to network interfaces, and sets up the ring buffer.
+// Returns an error if any step fails.
 func newTracer() (*tracer, error) {
 	objects := BpfObjects{}
 
@@ -93,7 +98,7 @@ func newTracer() (*tracer, error) {
 	}
 
 	if len(tracer.links) == 0 {
-		return nil, fmt.Errorf("No interfaces found")
+		return nil, errors.New("no interfaces found")
 	}
 
 	var err error
@@ -108,6 +113,9 @@ func newTracer() (*tracer, error) {
 	return &ret, nil
 }
 
+// ifacesToAttach returns a list of network interfaces that should be monitored.
+// It filters out virtual interfaces like Docker bridges and loopback interfaces.
+// TODO: connect to neto11y interface attachers
 func ifacesToAttach() []net.Interface {
 	ifaces, err := net.Interfaces()
 
@@ -126,6 +134,8 @@ func ifacesToAttach() []net.Interface {
 	return ret
 }
 
+// isVirtualInterface checks if a network interface name matches known virtual interface patterns.
+// It filters out Docker-related interfaces, virtual Ethernet interfaces, and loopback interfaces.
 func isVirtualInterface(name string) bool {
 	virtualPatterns := []string{
 		"br-",    // Docker bridge interfaces

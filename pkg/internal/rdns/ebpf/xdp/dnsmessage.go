@@ -1,22 +1,25 @@
 package xdp
 
+// types here are mostly used for debugging purposes
+// TODO: consider removing some types and functions here to simplify the code, as they remain mostly unused
+
 const (
-	Type_A     = 1
-	Type_NS    = 2
-	Type_MD    = 3
-	Type_MF    = 4
-	Type_CNAME = 5
-	Type_SOA   = 6
-	Type_MB    = 7
-	Type_MG    = 8
-	Type_MR    = 9
-	Type_NULL  = 10
-	Type_WKS   = 11
-	Type_PTR   = 12
-	Type_HINFO = 13
-	Type_MINFO = 14
-	Type_MX    = 15
-	Type_TXT   = 16
+	TypeA     = 1
+	TypeNS    = 2
+	TypeMD    = 3
+	TypeMF    = 4
+	TypeCNAME = 5
+	TypeSOA   = 6
+	TypeMB    = 7
+	TypeMG    = 8
+	TypeMR    = 9
+	TypeNULL  = 10
+	TypeWKS   = 11
+	TypePTR   = 12
+	TypeHINFO = 13
+	TypeMINFO = 14
+	TypeMX    = 15
+	TypeTXT   = 16
 )
 
 type question struct {
@@ -47,7 +50,7 @@ func getBit(word uint8, offset uint8) bool {
 	return ((word >> offset) & 0x1) == 1
 }
 
-func (d *dnsMessage) Id() uint16 {
+func (d *dnsMessage) ID() uint16 {
 	return d.id
 }
 

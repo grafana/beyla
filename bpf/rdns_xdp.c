@@ -1,9 +1,14 @@
+//go:build beyla_bpf_ignore
 #include "vmlinux.h"
 
 #include "bpf_helpers.h"
 #include "bpf_endian.h"
 #include "bpf_dbg.h"
 
+// Reverse DNS implementation by means of XDP packet inspection.
+// This eBPF program inspects DNS response packets at the XDP (eXpress Data Path) level
+// to capture and analyze DNS responses. It uses a ring buffer to communicate the
+// captured DNS packets to user space for further processing.
 // For reference, see:
 // https://datatracker.ietf.org/doc/html/rfc1035
 
@@ -16,35 +21,39 @@ struct {
     __uint(max_entries, 256 * 1024);
 } ring_buffer SEC(".maps");
 
+// DNS header structure constants
 enum {
     // the DNS header is made of 6 16-bit words
     DNS_HEADER_SIZE = 6 * sizeof(__u16),
 };
 
+// Bit offsets and masks for DNS header flags
 enum offsets {
-    QR_OFFSET = 7,
-    OPCODE_OFFSET = 3,
-    OPCODE_MASK = 0xf,
-    AA_OFFSET = 2,
-    TC_OFFSET = 1,
-    RD_OFFSET = 0,
-    RA_OFFSET = 7,
-    Z_OFFSET = 4,
-    Z_MASK = 0x7,
-    RCODE_OFFSET = 0,
-    RCODE_MASK = 0xf
+    QR_OFFSET = 7,     // Query/Response flag offset
+    OPCODE_OFFSET = 3, // Operation code offset
+    OPCODE_MASK = 0xf, // Operation code mask
+    AA_OFFSET = 2,     // Authoritative Answer flag offset
+    TC_OFFSET = 1,     // TrunCation flag offset
+    RD_OFFSET = 0,     // Recursion Desired flag offset
+    RA_OFFSET = 7,     // Recursion Available flag offset
+    Z_OFFSET = 4,      // Reserved field offset
+    Z_MASK = 0x7,      // Reserved field mask
+    RCODE_OFFSET = 0,  // Response code offset
+    RCODE_MASK = 0xf   // Response code mask
 };
 
-enum { QR_QUERY = 0, QR_RESPONSE = 1 };
-enum { OP_QUERY = 0, OP_IQUERY = 1, OP_STATUS = 2 };
-enum { RB_RECORD_LEN = 256 };
-enum { DNS_PORT = 53 };
-enum { UDP_HDR_SIZE = sizeof(struct udphdr), DNS_HDR_SIZE = 12 };
+// DNS message types and constants
+enum { QR_QUERY = 0, QR_RESPONSE = 1 };              // Query/Response types
+enum { OP_QUERY = 0, OP_IQUERY = 1, OP_STATUS = 2 }; // Operation codes
+enum { RB_RECORD_LEN = 256 };                        // Maximum record length for ring buffer
+enum { DNS_PORT = 53 };                              // Standard DNS port
+enum { UDP_HDR_SIZE = sizeof(struct udphdr), DNS_HDR_SIZE = 12 }; // Header sizes
 
 static __always_inline __u8 get_bit(__u8 word, __u8 offset) {
     return (word >> offset) & 0x1;
 }
 
+// Helper functions to access packet data safely
 static __always_inline void *ctx_data(struct xdp_md *ctx) {
     void *data;
 
@@ -65,6 +74,7 @@ static __always_inline void *ctx_data_end(struct xdp_md *ctx) {
     return data_end;
 }
 
+// Helper functions to parse network headers
 static __always_inline struct iphdr *ip_header(struct xdp_md *ctx) {
     void *data = ctx_data(ctx);
 
@@ -89,6 +99,7 @@ static __always_inline struct udphdr *udp_header(struct xdp_md *ctx) {
     return (data + sizeof(struct udphdr) > ctx_data_end(ctx)) ? NULL : data;
 };
 
+// Validates and calculates the size of a DNS question section
 static __always_inline __u32 validate_qsection(struct xdp_md *ctx, const unsigned char *data) {
     __u32 size = 0;
 
@@ -120,6 +131,7 @@ static __always_inline __u32 validate_qsection(struct xdp_md *ctx, const unsigne
     return 0;
 }
 
+// Submits a DNS packet to the ring buffer for user space processing
 static __always_inline void submit_dns_packet(struct xdp_md *ctx, const unsigned char *const data) {
     const unsigned char *begin = ctx_data(ctx);
     const unsigned char *end = ctx_data_end(ctx);
@@ -146,8 +158,10 @@ static __always_inline void submit_dns_packet(struct xdp_md *ctx, const unsigned
     bpf_ringbuf_submit(buf, 0);
 }
 
+// Parses a DNS response packet and validates its structure
 static __always_inline void
 parse_dns_response(struct xdp_md *ctx, const unsigned char *const data, __u32 size) {
+    // Extract DNS header fields
     const __u8 flags0 = *(data + 2);
     const __u8 flags1 = *(data + 3);
 
@@ -184,6 +198,7 @@ parse_dns_response(struct xdp_md *ctx, const unsigned char *const data, __u32 si
         bpf_printk("z: %u, rcode: %u, qdcount = %u, ancount = %u\n", z, rcode, ancount, qdcount);
     }
 
+    // Parse question sections
     __u32 dns_packet_size = 0;
 
     const unsigned char *ptr = data + DNS_HEADER_SIZE;
@@ -207,21 +222,26 @@ parse_dns_response(struct xdp_md *ctx, const unsigned char *const data, __u32 si
         bpf_printk("found qsection size = %u\n", dns_packet_size);
     }
 
+    // Submit valid DNS packet to ring buffer
     submit_dns_packet(ctx, data);
 }
 
+// Main XDP program entry point
 SEC("xdp")
 int dns_response_tracker(struct xdp_md *ctx) {
+    // Get UDP header
     const struct udphdr *udp = udp_header(ctx);
 
     if (!udp)
         return XDP_PASS;
 
+    // Check if packet is from DNS port
     const __u16 source = bpf_ntohs(udp->source);
 
     if (source != DNS_PORT)
         return XDP_PASS;
 
+    // Validate packet size
     const __u16 udp_len = bpf_ntohs(udp->len);
 
     if (DEBUG) {
@@ -236,6 +256,7 @@ int dns_response_tracker(struct xdp_md *ctx) {
         return XDP_PASS;
     }
 
+    // Parse and process DNS response
     parse_dns_response(ctx, (unsigned char *)(udp) + UDP_HDR_SIZE, udp_len - UDP_HDR_SIZE);
 
     return XDP_PASS;

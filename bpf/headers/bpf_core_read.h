@@ -111,9 +111,6 @@ enum bpf_enum_value_kind {
         case 8:                                                                                    \
             val = *(const unsigned long long *)p;                                                  \
             break;                                                                                 \
-        default:                                                                                   \
-            val = 0;                                                                               \
-            break;                                                                                 \
         }                                                                                          \
         val <<= __CORE_RELO(s, field, LSHIFT_U64);                                                 \
         if (__CORE_RELO(s, field, SIGNED))                                                         \
@@ -123,79 +120,8 @@ enum bpf_enum_value_kind {
         val;                                                                                       \
     })
 
-/*
- * Write to a bitfield, identified by s->field.
- * This is the inverse of BPF_CORE_WRITE_BITFIELD().
- */
-#define BPF_CORE_WRITE_BITFIELD(s, field, new_val)                                                 \
-    ({                                                                                             \
-        void *p = (void *)s + __CORE_RELO(s, field, BYTE_OFFSET);                                  \
-        unsigned int byte_size = __CORE_RELO(s, field, BYTE_SIZE);                                 \
-        unsigned int lshift = __CORE_RELO(s, field, LSHIFT_U64);                                   \
-        unsigned int rshift = __CORE_RELO(s, field, RSHIFT_U64);                                   \
-        unsigned long long mask, val, nval = new_val;                                              \
-        unsigned int rpad = rshift - lshift;                                                       \
-                                                                                                   \
-        asm volatile("" : "+r"(p));                                                                \
-                                                                                                   \
-        switch (byte_size) {                                                                       \
-        case 1:                                                                                    \
-            val = *(unsigned char *)p;                                                             \
-            break;                                                                                 \
-        case 2:                                                                                    \
-            val = *(unsigned short *)p;                                                            \
-            break;                                                                                 \
-        case 4:                                                                                    \
-            val = *(unsigned int *)p;                                                              \
-            break;                                                                                 \
-        case 8:                                                                                    \
-            val = *(unsigned long long *)p;                                                        \
-            break;                                                                                 \
-        }                                                                                          \
-                                                                                                   \
-        mask = (~0ULL << rshift) >> lshift;                                                        \
-        val = (val & ~mask) | ((nval << rpad) & mask);                                             \
-                                                                                                   \
-        switch (byte_size) {                                                                       \
-        case 1:                                                                                    \
-            *(unsigned char *)p = val;                                                             \
-            break;                                                                                 \
-        case 2:                                                                                    \
-            *(unsigned short *)p = val;                                                            \
-            break;                                                                                 \
-        case 4:                                                                                    \
-            *(unsigned int *)p = val;                                                              \
-            break;                                                                                 \
-        case 8:                                                                                    \
-            *(unsigned long long *)p = val;                                                        \
-            break;                                                                                 \
-        }                                                                                          \
-    })
-
-/* Differentiator between compilers builtin implementations. This is a
- * requirement due to the compiler parsing differences where GCC optimizes
- * early in parsing those constructs of type pointers to the builtin specific
- * type, resulting in not being possible to collect the required type
- * information in the builtin expansion.
- */
-#ifdef __clang__
-#define ___bpf_typeof(type) ((typeof(type) *)0)
-#else
-#define ___bpf_typeof1(type, NR)                                                                   \
-    ({                                                                                             \
-        extern typeof(type) *___concat(bpf_type_tmp_, NR);                                         \
-        ___concat(bpf_type_tmp_, NR);                                                              \
-    })
-#define ___bpf_typeof(type) ___bpf_typeof1(type, __COUNTER__)
-#endif
-
-#ifdef __clang__
 #define ___bpf_field_ref1(field) (field)
-#define ___bpf_field_ref2(type, field) (___bpf_typeof(type)->field)
-#else
-#define ___bpf_field_ref1(field) (&(field))
-#define ___bpf_field_ref2(type, field) (&(___bpf_typeof(type)->field))
-#endif
+#define ___bpf_field_ref2(type, field) (((typeof(type) *)0)->field)
 #define ___bpf_field_ref(args...) ___bpf_apply(___bpf_field_ref, ___bpf_narg(args))(args)
 
 /*
@@ -243,7 +169,7 @@ enum bpf_enum_value_kind {
  * information. Return 32-bit unsigned integer with type ID from program's own
  * BTF. Always succeeds.
  */
-#define bpf_core_type_id_local(type) __builtin_btf_type_id(*___bpf_typeof(type), BPF_TYPE_ID_LOCAL)
+#define bpf_core_type_id_local(type) __builtin_btf_type_id(*(typeof(type) *)0, BPF_TYPE_ID_LOCAL)
 
 /*
  * Convenience macro to get BTF type ID of a target kernel's type that matches
@@ -252,8 +178,7 @@ enum bpf_enum_value_kind {
  *    - valid 32-bit unsigned type ID in kernel BTF;
  *    - 0, if no matching type was found in a target kernel BTF.
  */
-#define bpf_core_type_id_kernel(type)                                                              \
-    __builtin_btf_type_id(*___bpf_typeof(type), BPF_TYPE_ID_TARGET)
+#define bpf_core_type_id_kernel(type) __builtin_btf_type_id(*(typeof(type) *)0, BPF_TYPE_ID_TARGET)
 
 /*
  * Convenience macro to check that provided named type
@@ -262,8 +187,7 @@ enum bpf_enum_value_kind {
  *    1, if such type is present in target kernel's BTF;
  *    0, if no matching type is found.
  */
-#define bpf_core_type_exists(type)                                                                 \
-    __builtin_preserve_type_info(*___bpf_typeof(type), BPF_TYPE_EXISTS)
+#define bpf_core_type_exists(type) __builtin_preserve_type_info(*(typeof(type) *)0, BPF_TYPE_EXISTS)
 
 /*
  * Convenience macro to check that provided named type
@@ -273,7 +197,7 @@ enum bpf_enum_value_kind {
  *    0, if the type does not match any in the target kernel
  */
 #define bpf_core_type_matches(type)                                                                \
-    __builtin_preserve_type_info(*___bpf_typeof(type), BPF_TYPE_MATCHES)
+    __builtin_preserve_type_info(*(typeof(type) *)0, BPF_TYPE_MATCHES)
 
 /*
  * Convenience macro to get the byte size of a provided named type
@@ -282,7 +206,7 @@ enum bpf_enum_value_kind {
  *    >= 0 size (in bytes), if type is present in target kernel's BTF;
  *    0, if no matching type is found.
  */
-#define bpf_core_type_size(type) __builtin_preserve_type_info(*___bpf_typeof(type), BPF_TYPE_SIZE)
+#define bpf_core_type_size(type) __builtin_preserve_type_info(*(typeof(type) *)0, BPF_TYPE_SIZE)
 
 /*
  * Convenience macro to check that provided enumerator value is defined in
@@ -292,13 +216,8 @@ enum bpf_enum_value_kind {
  *    kernel's BTF;
  *    0, if no matching enum and/or enum value within that enum is found.
  */
-#ifdef __clang__
 #define bpf_core_enum_value_exists(enum_type, enum_value)                                          \
     __builtin_preserve_enum_value(*(typeof(enum_type) *)enum_value, BPF_ENUMVAL_EXISTS)
-#else
-#define bpf_core_enum_value_exists(enum_type, enum_value)                                          \
-    __builtin_preserve_enum_value(___bpf_typeof(enum_type), enum_value, BPF_ENUMVAL_EXISTS)
-#endif
 
 /*
  * Convenience macro to get the integer value of an enumerator value in
@@ -308,13 +227,8 @@ enum bpf_enum_value_kind {
  *    present in target kernel's BTF;
  *    0, if no matching enum and/or enum value within that enum is found.
  */
-#ifdef __clang__
 #define bpf_core_enum_value(enum_type, enum_value)                                                 \
     __builtin_preserve_enum_value(*(typeof(enum_type) *)enum_value, BPF_ENUMVAL_VALUE)
-#else
-#define bpf_core_enum_value(enum_type, enum_value)                                                 \
-    __builtin_preserve_enum_value(___bpf_typeof(enum_type), enum_value, BPF_ENUMVAL_VALUE)
-#endif
 
 /*
  * bpf_core_read() abstracts away bpf_probe_read_kernel() call and captures
@@ -326,7 +240,7 @@ enum bpf_enum_value_kind {
  * a relocation, which records BTF type ID describing root struct/union and an
  * accessor string which describes exact embedded field that was used to take
  * an address. See detailed description of this relocation format and
- * semantics in comments to struct bpf_core_relo in include/uapi/linux/bpf.h.
+ * semantics in comments to struct bpf_field_reloc in libbpf_internal.h.
  *
  * This relocation allows libbpf to adjust BPF instruction to use correct
  * actual field offset, based on target kernel BTF type that matches original
@@ -349,17 +263,6 @@ enum bpf_enum_value_kind {
 /* NOTE: see comments for BPF_CORE_READ_USER() about the proper types use. */
 #define bpf_core_read_user_str(dst, sz, src)                                                       \
     bpf_probe_read_user_str(dst, sz, (const void *)__builtin_preserve_access_index(src))
-
-extern void *bpf_rdonly_cast(const void *obj, __u32 btf_id) __ksym __weak;
-
-/*
- * Cast provided pointer *ptr* into a pointer to a specified *type* in such
- * a way that BPF verifier will become aware of associated kernel-side BTF
- * type. This allows to access members of kernel types directly without the
- * need to use BPF_CORE_READ() macros.
- */
-#define bpf_core_cast(ptr, type)                                                                   \
-    ((typeof(type) *)bpf_rdonly_cast((ptr), bpf_core_type_id_kernel(type)))
 
 #define ___concat(a, b) a##b
 #define ___apply(fn, n) ___concat(fn, n)
@@ -459,7 +362,7 @@ extern void *bpf_rdonly_cast(const void *obj, __u32 btf_id) __ksym __weak;
 
 /* Non-CO-RE variant of BPF_CORE_READ_INTO() */
 #define BPF_PROBE_READ_INTO(dst, src, a, ...)                                                      \
-    ({___core_read(bpf_probe_read_kernel, bpf_probe_read_kernel, dst, (src), a, ##__VA_ARGS__)})
+    ({___core_read(bpf_probe_read, bpf_probe_read, dst, (src), a, ##__VA_ARGS__)})
 
 /* Non-CO-RE variant of BPF_CORE_READ_USER_INTO().
  *
@@ -487,7 +390,7 @@ extern void *bpf_rdonly_cast(const void *obj, __u32 btf_id) __ksym __weak;
 
 /* Non-CO-RE variant of BPF_CORE_READ_STR_INTO() */
 #define BPF_PROBE_READ_STR_INTO(dst, src, a, ...)                                                  \
-    ({___core_read(bpf_probe_read_kernel_str, bpf_probe_read_kernel, dst, (src), a, ##__VA_ARGS__)})
+    ({___core_read(bpf_probe_read_str, bpf_probe_read, dst, (src), a, ##__VA_ARGS__)})
 
 /*
  * Non-CO-RE variant of BPF_CORE_READ_USER_STR_INTO().
@@ -566,5 +469,22 @@ extern void *bpf_rdonly_cast(const void *obj, __u32 btf_id) __ksym __weak;
         BPF_PROBE_READ_USER_INTO(&__r, (src), a, ##__VA_ARGS__);                                   \
         __r;                                                                                       \
     })
+
+#ifdef COMPILE_RUNTIME
+
+#undef BPF_CORE_READ
+#define BPF_CORE_READ BPF_PROBE_READ
+#undef BPF_CORE_READ_USER
+#define BPF_CORE_READ_USER BPF_PROBE_READ_USER
+#undef BPF_CORE_READ_INTO
+#define BPF_CORE_READ_INTO BPF_PROBE_READ_INTO
+#undef BPF_CORE_READ_USER_INTO
+#define BPF_CORE_READ_USER_INTO BPF_PROBE_READ_USER_INTO
+#undef BPF_CORE_READ_STR_INTO
+#define BPF_CORE_READ_STR_INTO BPF_PROBE_READ_STR_INTO
+#undef BPF_CORE_READ_USER_STR_INTO
+#define BPF_CORE_READ_USER_STR_INTO BPF_PROBE_READ_USER_STR_INTO
+
+#endif
 
 #endif

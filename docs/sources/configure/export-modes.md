@@ -77,7 +77,7 @@ otelcol.processor.batch "default" {
 Export either metrics, traces, or both. To export a single data type, omit the `metrics` or `traces` lines in the node definitions and skip the related exporters.
 
 Alloy exports metrics in **Prometheus** format to [Grafana Mimir](/oss/mimir/).
-The configuration uses basic authentication. The Alloy config fetches config options set in environment variables:
+The configuration uses basic authentication. The Alloy configuration uses values set in environment variables:
 
 ```alloy
 otelcol.exporter.prometheus "default" {
@@ -103,7 +103,7 @@ export MIMIR_ENDPOINT=prometheus-prod-01-eu-west-0.grafana.net
 export GRAFANA_API_KEY=VHJhbGFyw60gcXVlIHRlIHbD....=
 ```
 
-Finally, set up a [Grafana Tempo](/oss/tempo/) exporter and endpoint. The Alloy config fetches config options set in environment variables:
+Finally, set up a [Grafana Tempo](/oss/tempo/) exporter and endpoint. The Alloy configuration uses values set in environment variables:
 
 ```alloy
 otelcol.exporter.otlp "tempo" {

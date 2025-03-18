@@ -38,7 +38,7 @@ You can also use the standard OpenTelemetry variables to submit the metrics and 
 
 ### Cloud zone configuration
 
-If any of the `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` or `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` variables are defined, they will override the destination endpoint, so the `cloud_zone` configuration option will be ignored.
+If any of the `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` or `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` variables are defined, they override the destination endpoint, and Beyla ignores the `cloud_zone` configuration option.
 
 ## OpenTelemetry metrics exporter component
 

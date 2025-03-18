@@ -432,7 +432,12 @@ func getCgroupPath() (string, error) {
 
 	enabled, err := v2.Enabled()
 	if !enabled {
-		// If Cgroups V1 only, attempt to bind optimistically to the network hierarchy.
+		// In a hybrid cgroup hierarchy the unified path can exist, so check before
+		// attempting to bind to Cgroups V1.
+		if _, pathErr := os.Stat(filepath.Join(cgroupPath, "unified")); pathErr == nil {
+			return filepath.Join(cgroupPath, "unified"), nil
+		}
+		// If pure Cgroups V1, attempt to bind optimistically to the network hierarchy.
 		if _, pathErr := os.Stat(filepath.Join(cgroupPath, "net_cls,net_prio")); pathErr == nil {
 			return filepath.Join(cgroupPath, "net_cls,net_prio"), nil
 		}
@@ -444,8 +449,7 @@ func getCgroupPath() (string, error) {
 		}
 		return "", errors.New("unable to determine a suitable controller for Cgroups V1")
 	}
-	// The link library works flexibly with Cgroupv2 and can handle the case where
-	// the unified group exists without specifiying the path suffix.
+	// In a pure Cgroups V2 the /sys/fs/cgroup path is the unified hierarchy.
 	return cgroupPath, err
 }
 

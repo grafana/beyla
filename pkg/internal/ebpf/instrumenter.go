@@ -5,6 +5,7 @@ package ebpf
 import (
 	"debug/elf"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -431,13 +432,20 @@ func getCgroupPath() (string, error) {
 
 	enabled, err := v2.Enabled()
 	if !enabled {
-		if _, pathErr := os.Stat(filepath.Join(cgroupPath, "unified")); pathErr != nil {
-			// Return the original error to the caller, pathErr is only required to set the Cgroup path.
-			// Catch all errors here to capture permissions issues as well as existence errors.
-			return cgroupPath, err
+		// If Cgroups V1 only, attempt to bind optimistically to the network hierarchy.
+		if _, pathErr := os.Stat(filepath.Join(cgroupPath, "net_cls,net_prio")); pathErr == nil {
+			return filepath.Join(cgroupPath, "net_cls,net_prio"), nil
 		}
-		cgroupPath = filepath.Join(cgroupPath, "unified")
+		if _, pathErr := os.Stat(filepath.Join(cgroupPath, "net_cls")); pathErr == nil {
+			return filepath.Join(cgroupPath, "net_cls"), nil
+		}
+		if _, pathErr := os.Stat(filepath.Join(cgroupPath, "net_prio")); pathErr == nil {
+			return filepath.Join(cgroupPath, "net_prio"), nil
+		}
+		return "", errors.New("unable to determine a suitable controller for Cgroups V1")
 	}
+	// The link library works flexibly with Cgroupv2 and can handle the case where
+	// the unified group exists without specifiying the path suffix.
 	return cgroupPath, err
 }
 

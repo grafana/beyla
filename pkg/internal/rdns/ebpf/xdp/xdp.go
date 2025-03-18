@@ -17,6 +17,7 @@ func log() *slog.Logger {
 	return slog.With("component", "xdp.DNSPacketInspector")
 }
 
+// storage backend for DNS IP-->Hostnames relation
 type storage interface {
 	Store(*store.DNSEntry)
 	GetHostnames(ip string) ([]string, error)

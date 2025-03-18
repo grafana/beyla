@@ -6,7 +6,6 @@ import (
 	"net"
 	"strings"
 
-	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/ringbuf"
@@ -38,22 +37,6 @@ func (t *tracer) Close() error {
 	return nil
 }
 
-// move transfers ownership of the tracer's resources to a new tracer instance.
-// This is analogous to C++'s std::move() and helps prevent double-closing of resources.
-func move(t *tracer) tracer {
-	ret := tracer{
-		bpfObjects: t.bpfObjects,
-		links:      t.links,
-		ringbuf:    t.ringbuf,
-	}
-
-	t.bpfObjects = nil
-	t.links = nil
-	t.ringbuf = nil
-
-	return ret
-}
-
 // newTracer creates and initializes a new DNS response tracer.
 // It loads the BPF program, attaches it to network interfaces, and sets up the ring buffer.
 // Returns an error if any step fails.
@@ -61,11 +44,6 @@ func newTracer() (*tracer, error) {
 	objects := BpfObjects{}
 
 	if err := LoadBpfObjects(&objects, nil); err != nil {
-		var verr *ebpf.VerifierError
-		if errors.As(err, &verr) {
-			fmt.Printf("%+v\n", verr)
-		}
-
 		return nil, fmt.Errorf("loading BPF objects: %w", err)
 	}
 
@@ -109,8 +87,7 @@ func newTracer() (*tracer, error) {
 		return nil, fmt.Errorf("creating ringbuffer reader: %w", err)
 	}
 
-	ret := move(&tracer)
-	return &ret, nil
+	return &tracer, nil
 }
 
 // ifacesToAttach returns a list of network interfaces that should be monitored.

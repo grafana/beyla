@@ -48,7 +48,6 @@ func newTracer() (*tracer, error) {
 	}
 
 	tracer := tracer{bpfObjects: &objects}
-	defer tracer.Close()
 
 	ifaces := ifacesToAttach()
 
@@ -76,17 +75,17 @@ func newTracer() (*tracer, error) {
 	}
 
 	if len(tracer.links) == 0 {
+		_ = tracer.Close()
 		return nil, errors.New("no interfaces found")
 	}
 
 	var err error
 
 	tracer.ringbuf, err = ringbuf.NewReader(tracer.bpfObjects.RingBuffer)
-
 	if err != nil {
+		_ = tracer.Close()
 		return nil, fmt.Errorf("creating ringbuffer reader: %w", err)
 	}
-
 	return &tracer, nil
 }
 

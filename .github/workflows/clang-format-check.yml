@@ -21,16 +21,15 @@ jobs:
 
       - name: Check Clang Format
         run: |
-          # Check for modified C/C++ files in the ./bpf folder
-          files=$(git diff --name-status origin/main...HEAD | awk '$1 != "D" && /bpf\/.*\.(c|cpp|h)$/ { print $2 }' | sed -e s/^bpf/./ || true)
+          # Check for modified C/C++ files
+          files=$(git diff --name-status origin/main...HEAD | awk '$1 != "D" && /\.(c|cpp|h)$/ { print $2 }' || true)
           if [ -z "$files" ]; then
             echo "No C/C++ files modified."
             exit 0
           fi
 
           # Run clang-format and check for changes
-          cd bpf
-          echo $files | xargs -P 0 -n 1 clang-format -i
+          clang-format -i $files
           if ! git diff --exit-code $files; then
             echo "Error: Some files are not formatted correctly. Please run clang-format on the modified files or use the provided pre-commit hook."
             exit 1

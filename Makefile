@@ -397,5 +397,4 @@ protoc-gen:
 
 .PHONY: clang-format
 clang-format:
-	find ./bpf -type f -name "*.c" | xargs -P 0 -n 1 clang-format -i
-	find ./bpf -type f -name "*.h" | xargs -P 0 -n 1 clang-format -i
+	cd ./bpf; find . -type f -name "*.[ch]" | xargs -P 0 -n 1 clang-format -i

@@ -86,11 +86,13 @@ static __always_inline struct iphdr *ip_header(struct xdp_md *ctx) {
 static __always_inline struct udphdr *udp_header(struct xdp_md *ctx) {
     struct iphdr *iph = ip_header(ctx);
 
-    if (!iph)
+    if (!iph) {
         return NULL;
+    }
 
-    if (iph->protocol != IPPROTO_UDP)
+    if (iph->protocol != IPPROTO_UDP) {
         return NULL;
+    }
 
     const __u32 advance = iph->ihl * 4;
 
@@ -136,10 +138,11 @@ static __always_inline void submit_dns_packet(struct xdp_md *ctx, const unsigned
     const unsigned char *begin = ctx_data(ctx);
     const unsigned char *end = ctx_data_end(ctx);
 
-    const __u32 data_len = end - data & 0xffff;
+    const __u32 data_len = (end - data) & 0xffff;
 
-    if (data_len == 0 || data_len > RB_RECORD_LEN)
+    if (data_len == 0 || data_len > RB_RECORD_LEN) {
         return;
+    }
 
     const __u32 data_offset = data - begin;
 
@@ -232,14 +235,16 @@ int dns_response_tracker(struct xdp_md *ctx) {
     // Get UDP header
     const struct udphdr *udp = udp_header(ctx);
 
-    if (!udp)
+    if (!udp) {
         return XDP_PASS;
+    }
 
     // Check if packet is from DNS port
     const __u16 source = bpf_ntohs(udp->source);
 
-    if (source != DNS_PORT)
+    if (source != DNS_PORT) {
         return XDP_PASS;
+    }
 
     // Validate packet size
     const __u16 udp_len = bpf_ntohs(udp->len);

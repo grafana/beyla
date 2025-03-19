@@ -164,8 +164,9 @@ type bpf_debugTpInfoPidT struct {
 	Tp      bpf_debugTpInfoT
 	Pid     uint32
 	Valid   uint8
+	Written uint8
 	ReqType uint8
-	_       [2]byte
+	_       [1]byte
 }
 
 type bpf_debugTpInfoT struct {

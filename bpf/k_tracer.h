@@ -264,7 +264,7 @@ int BPF_KPROBE(beyla_kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, si
         dbg_print_http_connection_info(
             &s_args.p_conn.conn); // commented out since GitHub CI doesn't like this call
         // Create the egress key before we sort the connection info.
-        egress_key_t e_key = {
+        const egress_key_t e_key = {
             .d_port = s_args.p_conn.conn.d_port,
             .s_port = s_args.p_conn.conn.s_port,
         };
@@ -348,7 +348,7 @@ int BPF_KPROBE(beyla_kprobe_tcp_rate_check_app_limited, struct sock *sk) {
     if (parse_sock_info(sk, &s_args.p_conn.conn)) {
         u16 orig_dport = s_args.p_conn.conn.d_port;
         dbg_print_http_connection_info(&s_args.p_conn.conn);
-        egress_key_t e_key = {
+        const egress_key_t e_key = {
             .d_port = s_args.p_conn.conn.d_port,
             .s_port = s_args.p_conn.conn.s_port,
         };
@@ -505,7 +505,7 @@ static __always_inline int return_recvmsg(void *ctx, u64 id, int copied_len) {
     bpf_map_delete_elem(&active_recv_args, &id);
 
     if (parse_sock_info((struct sock *)sock_ptr, &info.conn)) {
-        u16 orig_dport = info.conn.d_port;
+        const u16 orig_dport = info.conn.d_port;
         //dbg_print_http_connection_info(&info.conn);
         sort_connection_info(&info.conn);
         info.pid = pid_from_pid_tgid(id);

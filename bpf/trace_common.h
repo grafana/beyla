@@ -112,7 +112,7 @@ static __always_inline unsigned char *bpf_strstr_tp_loop(unsigned char *buf, int
     return NULL;
 }
 
-static __always_inline tp_info_pid_t *find_parent_trace(pid_connection_info_t *p_conn) {
+static __always_inline tp_info_pid_t *find_parent_trace(const pid_connection_info_t *p_conn) {
     trace_key_t t_key = {0};
 
     task_tid(&t_key.p_key);
@@ -230,7 +230,7 @@ server_or_client_trace(u8 type, connection_info_t *conn, tp_info_pid_t *tp_p, u8
         // the span id with the SEQ/ACK pair.
         u64 id = bpf_get_current_pid_tgid();
         tp_p->pid = pid_from_pid_tgid(id);
-        egress_key_t e_key = {
+        const egress_key_t e_key = {
             .d_port = conn->d_port,
             .s_port = conn->s_port,
         };
@@ -276,7 +276,7 @@ static __always_inline u8 find_trace_for_server_request(connection_info_t *conn,
     return found_tp;
 }
 
-static __always_inline u8 find_trace_for_client_request(pid_connection_info_t *p_conn,
+static __always_inline u8 find_trace_for_client_request(const pid_connection_info_t *p_conn,
                                                         tp_info_t *tp) {
     u8 found_tp = 0;
     tp_info_pid_t *server_tp = find_parent_trace(p_conn);

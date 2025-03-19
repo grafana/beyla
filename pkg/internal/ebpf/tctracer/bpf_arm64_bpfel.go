@@ -146,8 +146,6 @@ type bpfMsgBufferT struct {
 	Pos uint16
 }
 
-type bpfMsgDataT struct{ Buf [1024]uint8 }
-
 type bpfPidConnectionInfoT struct {
 	Conn bpfConnectionInfoT
 	Pid  uint32
@@ -168,12 +166,6 @@ type bpfSslPidConnectionInfoT struct {
 	P_conn    bpfPidConnectionInfoT
 	OrigDport uint16
 	_         [2]byte
-}
-
-type bpfTcHttpCtx struct {
-	Offset  uint32
-	Seen    uint32
-	Written uint32
 }
 
 type bpfTcpReqT struct {
@@ -205,8 +197,6 @@ type bpfTcpReqT struct {
 	ExtraId uint64
 }
 
-type bpfTpBufDataT struct{ Buf [256]uint8 }
-
 type bpfTpInfoPidT struct {
 	Tp struct {
 		TraceId  [16]uint8
@@ -218,8 +208,9 @@ type bpfTpInfoPidT struct {
 	}
 	Pid     uint32
 	Valid   uint8
+	Written uint8
 	ReqType uint8
-	_       [2]byte
+	_       [1]byte
 }
 
 type bpfTraceKeyT struct {
@@ -278,6 +269,7 @@ type bpfProgramSpecs struct {
 	BeylaAsyncReset                        *ebpf.ProgramSpec `ebpf:"beyla_async_reset"`
 	BeylaEmitAsyncInit                     *ebpf.ProgramSpec `ebpf:"beyla_emit_async_init"`
 	BeylaPacketExtender                    *ebpf.ProgramSpec `ebpf:"beyla_packet_extender"`
+	BeylaPacketExtenderWriteMsgTp          *ebpf.ProgramSpec `ebpf:"beyla_packet_extender_write_msg_tp"`
 	BeylaProtocolHttp                      *ebpf.ProgramSpec `ebpf:"beyla_protocol_http"`
 	BeylaProtocolHttp2                     *ebpf.ProgramSpec `ebpf:"beyla_protocol_http2"`
 	BeylaProtocolHttp2GrpcFrames           *ebpf.ProgramSpec `ebpf:"beyla_protocol_http2_grpc_frames"`
@@ -297,11 +289,12 @@ type bpfMapSpecs struct {
 	ActiveSslWriteArgs        *ebpf.MapSpec `ebpf:"active_ssl_write_args"`
 	ActiveUnixSocks           *ebpf.MapSpec `ebpf:"active_unix_socks"`
 	AsyncResetArgs            *ebpf.MapSpec `ebpf:"async_reset_args"`
-	BufMem                    *ebpf.MapSpec `ebpf:"buf_mem"`
 	ClientConnectInfo         *ebpf.MapSpec `ebpf:"client_connect_info"`
 	CloneMap                  *ebpf.MapSpec `ebpf:"clone_map"`
 	ConnectionMetaMem         *ebpf.MapSpec `ebpf:"connection_meta_mem"`
+	EgressKeyMem              *ebpf.MapSpec `ebpf:"egress_key_mem"`
 	Events                    *ebpf.MapSpec `ebpf:"events"`
+	ExtenderJumpTable         *ebpf.MapSpec `ebpf:"extender_jump_table"`
 	GrpcFramesCtxMem          *ebpf.MapSpec `ebpf:"grpc_frames_ctx_mem"`
 	Http2InfoMem              *ebpf.MapSpec `ebpf:"http2_info_mem"`
 	HttpInfoMem               *ebpf.MapSpec `ebpf:"http_info_mem"`
@@ -319,15 +312,15 @@ type bpfMapSpecs struct {
 	OngoingTcpReq             *ebpf.MapSpec `ebpf:"ongoing_tcp_req"`
 	OutgoingTraceMap          *ebpf.MapSpec `ebpf:"outgoing_trace_map"`
 	PidCache                  *ebpf.MapSpec `ebpf:"pid_cache"`
+	PidConnectionInfoMem      *ebpf.MapSpec `ebpf:"pid_connection_info_mem"`
 	PidTidToConn              *ebpf.MapSpec `ebpf:"pid_tid_to_conn"`
 	ProtocolArgsMem           *ebpf.MapSpec `ebpf:"protocol_args_mem"`
 	ServerTraces              *ebpf.MapSpec `ebpf:"server_traces"`
 	SockDir                   *ebpf.MapSpec `ebpf:"sock_dir"`
 	SslToConn                 *ebpf.MapSpec `ebpf:"ssl_to_conn"`
 	SslToPidTid               *ebpf.MapSpec `ebpf:"ssl_to_pid_tid"`
-	TcHttpCtxMap              *ebpf.MapSpec `ebpf:"tc_http_ctx_map"`
+	TcTrackedSocksMap         *ebpf.MapSpec `ebpf:"tc_tracked_socks_map"`
 	TcpReqMem                 *ebpf.MapSpec `ebpf:"tcp_req_mem"`
-	TpBufMemory               *ebpf.MapSpec `ebpf:"tp_buf_memory"`
 	TpCharBufMem              *ebpf.MapSpec `ebpf:"tp_char_buf_mem"`
 	TpInfoMem                 *ebpf.MapSpec `ebpf:"tp_info_mem"`
 	TraceMap                  *ebpf.MapSpec `ebpf:"trace_map"`
@@ -359,11 +352,12 @@ type bpfMaps struct {
 	ActiveSslWriteArgs        *ebpf.Map `ebpf:"active_ssl_write_args"`
 	ActiveUnixSocks           *ebpf.Map `ebpf:"active_unix_socks"`
 	AsyncResetArgs            *ebpf.Map `ebpf:"async_reset_args"`
-	BufMem                    *ebpf.Map `ebpf:"buf_mem"`
 	ClientConnectInfo         *ebpf.Map `ebpf:"client_connect_info"`
 	CloneMap                  *ebpf.Map `ebpf:"clone_map"`
 	ConnectionMetaMem         *ebpf.Map `ebpf:"connection_meta_mem"`
+	EgressKeyMem              *ebpf.Map `ebpf:"egress_key_mem"`
 	Events                    *ebpf.Map `ebpf:"events"`
+	ExtenderJumpTable         *ebpf.Map `ebpf:"extender_jump_table"`
 	GrpcFramesCtxMem          *ebpf.Map `ebpf:"grpc_frames_ctx_mem"`
 	Http2InfoMem              *ebpf.Map `ebpf:"http2_info_mem"`
 	HttpInfoMem               *ebpf.Map `ebpf:"http_info_mem"`
@@ -381,15 +375,15 @@ type bpfMaps struct {
 	OngoingTcpReq             *ebpf.Map `ebpf:"ongoing_tcp_req"`
 	OutgoingTraceMap          *ebpf.Map `ebpf:"outgoing_trace_map"`
 	PidCache                  *ebpf.Map `ebpf:"pid_cache"`
+	PidConnectionInfoMem      *ebpf.Map `ebpf:"pid_connection_info_mem"`
 	PidTidToConn              *ebpf.Map `ebpf:"pid_tid_to_conn"`
 	ProtocolArgsMem           *ebpf.Map `ebpf:"protocol_args_mem"`
 	ServerTraces              *ebpf.Map `ebpf:"server_traces"`
 	SockDir                   *ebpf.Map `ebpf:"sock_dir"`
 	SslToConn                 *ebpf.Map `ebpf:"ssl_to_conn"`
 	SslToPidTid               *ebpf.Map `ebpf:"ssl_to_pid_tid"`
-	TcHttpCtxMap              *ebpf.Map `ebpf:"tc_http_ctx_map"`
+	TcTrackedSocksMap         *ebpf.Map `ebpf:"tc_tracked_socks_map"`
 	TcpReqMem                 *ebpf.Map `ebpf:"tcp_req_mem"`
-	TpBufMemory               *ebpf.Map `ebpf:"tp_buf_memory"`
 	TpCharBufMem              *ebpf.Map `ebpf:"tp_char_buf_mem"`
 	TpInfoMem                 *ebpf.Map `ebpf:"tp_info_mem"`
 	TraceMap                  *ebpf.Map `ebpf:"trace_map"`
@@ -404,11 +398,12 @@ func (m *bpfMaps) Close() error {
 		m.ActiveSslWriteArgs,
 		m.ActiveUnixSocks,
 		m.AsyncResetArgs,
-		m.BufMem,
 		m.ClientConnectInfo,
 		m.CloneMap,
 		m.ConnectionMetaMem,
+		m.EgressKeyMem,
 		m.Events,
+		m.ExtenderJumpTable,
 		m.GrpcFramesCtxMem,
 		m.Http2InfoMem,
 		m.HttpInfoMem,
@@ -426,15 +421,15 @@ func (m *bpfMaps) Close() error {
 		m.OngoingTcpReq,
 		m.OutgoingTraceMap,
 		m.PidCache,
+		m.PidConnectionInfoMem,
 		m.PidTidToConn,
 		m.ProtocolArgsMem,
 		m.ServerTraces,
 		m.SockDir,
 		m.SslToConn,
 		m.SslToPidTid,
-		m.TcHttpCtxMap,
+		m.TcTrackedSocksMap,
 		m.TcpReqMem,
-		m.TpBufMemory,
 		m.TpCharBufMem,
 		m.TpInfoMem,
 		m.TraceMap,
@@ -451,6 +446,7 @@ type bpfPrograms struct {
 	BeylaAsyncReset                        *ebpf.Program `ebpf:"beyla_async_reset"`
 	BeylaEmitAsyncInit                     *ebpf.Program `ebpf:"beyla_emit_async_init"`
 	BeylaPacketExtender                    *ebpf.Program `ebpf:"beyla_packet_extender"`
+	BeylaPacketExtenderWriteMsgTp          *ebpf.Program `ebpf:"beyla_packet_extender_write_msg_tp"`
 	BeylaProtocolHttp                      *ebpf.Program `ebpf:"beyla_protocol_http"`
 	BeylaProtocolHttp2                     *ebpf.Program `ebpf:"beyla_protocol_http2"`
 	BeylaProtocolHttp2GrpcFrames           *ebpf.Program `ebpf:"beyla_protocol_http2_grpc_frames"`
@@ -467,6 +463,7 @@ func (p *bpfPrograms) Close() error {
 		p.BeylaAsyncReset,
 		p.BeylaEmitAsyncInit,
 		p.BeylaPacketExtender,
+		p.BeylaPacketExtenderWriteMsgTp,
 		p.BeylaProtocolHttp,
 		p.BeylaProtocolHttp2,
 		p.BeylaProtocolHttp2GrpcFrames,

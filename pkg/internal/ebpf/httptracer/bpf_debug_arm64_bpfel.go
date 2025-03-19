@@ -53,8 +53,9 @@ type bpf_debugTpInfoPidT struct {
 	}
 	Pid     uint32
 	Valid   uint8
+	Written uint8
 	ReqType uint8
-	_       [2]byte
+	_       [1]byte
 }
 
 type bpf_debugTraceMapKeyT struct {

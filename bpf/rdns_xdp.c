@@ -76,11 +76,11 @@ static __always_inline void *ctx_xdp_data_end(struct xdp_md *ctx) {
 
 // Helper functions to parse network headers
 static __always_inline struct iphdr *ip_header(struct xdp_md *ctx) {
-    void *data = ctx_data(ctx);
+    void *data = ctx_xdp_data(ctx);
 
     data += sizeof(struct ethhdr);
 
-    return (data + sizeof(struct iphdr) > ctx_data_end(ctx)) ? NULL : data;
+    return (data + sizeof(struct iphdr) > ctx_xdp_data_end(ctx)) ? NULL : data;
 }
 
 static __always_inline struct udphdr *udp_header(struct xdp_md *ctx) {
@@ -98,7 +98,7 @@ static __always_inline struct udphdr *udp_header(struct xdp_md *ctx) {
 
     void *data = (void *)iph + advance;
 
-    return (data + sizeof(struct udphdr) > ctx_data_end(ctx)) ? NULL : data;
+    return (data + sizeof(struct udphdr) > ctx_xdp_data_end(ctx)) ? NULL : data;
 };
 
 // Validates and calculates the size of a DNS question section
@@ -107,7 +107,7 @@ static __always_inline __u32 validate_qsection(struct xdp_md *ctx, const unsigne
 
     // try at most 16 sections
     for (__u8 i = 0; i < 16; ++i) {
-        if ((void *)data >= ctx_data_end(ctx)) {
+        if ((void *)data >= ctx_xdp_data_end(ctx)) {
             return 0;
         }
 
@@ -119,7 +119,7 @@ static __always_inline __u32 validate_qsection(struct xdp_md *ctx, const unsigne
         if (len == 0) {
             size += sizeof(__u16); // account for QTYPE and QCLASS
 
-            if ((void *)(data + sizeof(__u16)) < ctx_data_end(ctx)) {
+            if ((void *)(data + sizeof(__u16)) < ctx_xdp_data_end(ctx)) {
                 return size;
             } else {
                 return 0;
@@ -135,8 +135,8 @@ static __always_inline __u32 validate_qsection(struct xdp_md *ctx, const unsigne
 
 // Submits a DNS packet to the ring buffer for user space processing
 static __always_inline void submit_dns_packet(struct xdp_md *ctx, const unsigned char *const data) {
-    const unsigned char *begin = ctx_data(ctx);
-    const unsigned char *end = ctx_data_end(ctx);
+    const unsigned char *begin = ctx_xdp_data(ctx);
+    const unsigned char *end = ctx_xdp_data_end(ctx);
 
     const __u32 data_len = (end - data) & 0xffff;
 
@@ -257,7 +257,7 @@ int dns_response_tracker(struct xdp_md *ctx) {
         return XDP_PASS;
     }
 
-    if ((void *)udp + UDP_HDR_SIZE + DNS_HDR_SIZE >= ctx_data_end(ctx)) {
+    if ((void *)udp + UDP_HDR_SIZE + DNS_HDR_SIZE >= ctx_xdp_data_end(ctx)) {
         return XDP_PASS;
     }
 

@@ -64,7 +64,7 @@ static __always_inline void *ctx_xdp_data(struct xdp_md *ctx) {
     return data;
 }
 
-static __always_inline void *ctx_data_end(struct xdp_md *ctx) {
+static __always_inline void *ctx_xdp_data_end(struct xdp_md *ctx) {
     void *data_end;
 
     asm("%[res] = *(u32 *)(%[base] + %[offset])"

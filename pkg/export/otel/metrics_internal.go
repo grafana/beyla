@@ -129,20 +129,20 @@ func (p *InternalMetricsReporter) Start(ctx context.Context) {
 	p.beylaInfo.Record(ctx, 1, instrument.WithAttributes(attribute.String("goarch", runtime.GOARCH), attribute.String("goos", runtime.GOOS), attribute.String("goversion", runtime.Version()), attribute.String("version", buildinfo.Version), attribute.String("revision", buildinfo.Revision)))
 }
 
-func (p *InternalMetricsReporter) TracerFlush(len int) {
-	p.tracerFlushes.Record(p.ctx, float64(len))
+func (p *InternalMetricsReporter) TracerFlush(length int) {
+	p.tracerFlushes.Record(p.ctx, float64(length))
 }
 
-func (p *InternalMetricsReporter) OTELMetricExport(len int) {
-	p.otelMetricExports.Add(p.ctx, float64(len))
+func (p *InternalMetricsReporter) OTELMetricExport(length int) {
+	p.otelMetricExports.Add(p.ctx, float64(length))
 }
 
 func (p *InternalMetricsReporter) OTELMetricExportError(err error) {
 	p.otelMetricExportErrs.Add(p.ctx, 1, instrument.WithAttributes(attribute.String("error", err.Error())))
 }
 
-func (p *InternalMetricsReporter) OTELTraceExport(len int) {
-	p.otelTraceExports.Add(p.ctx, float64(len))
+func (p *InternalMetricsReporter) OTELTraceExport(length int) {
+	p.otelTraceExports.Add(p.ctx, float64(length))
 }
 
 func (p *InternalMetricsReporter) OTELTraceExportError(err error) {

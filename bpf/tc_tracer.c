@@ -10,7 +10,8 @@
 #include "tcp_info.h"
 #include "tc_act.h"
 #include "tc_sock.h"
-#include "tc_tracer_l7.h"
+
+static const u64 BPF_F_CURRENT_NETNS = -1;
 
 char __license[] SEC("license") = "Dual MIT/GPL";
 
@@ -41,7 +42,7 @@ int beyla_app_ingress(struct __sk_buff *skb) {
 static __always_inline void update_outgoing_request_span_id(pid_connection_info_t *p_conn,
                                                             protocol_info_t *tcp,
                                                             tp_info_pid_t *tp,
-                                                            egress_key_t *e_key) {
+                                                            const egress_key_t *e_key) {
     http_info_t *h_info = bpf_map_lookup_elem(&ongoing_http, p_conn);
     if (h_info && tp->valid) {
         bpf_dbg_printk("Found HTTP info, resetting the span id to %x%x", tcp->seq, tcp->ack);
@@ -65,7 +66,7 @@ static __always_inline void encode_data_in_ip_options(struct __sk_buff *skb,
                                                       connection_info_t *conn,
                                                       protocol_info_t *tcp,
                                                       tp_info_pid_t *tp,
-                                                      egress_key_t *e_key) {
+                                                      const egress_key_t *e_key) {
     // Handling IPv4
     // We only do this if the IP header doesn't have any options, this can be improved if needed
     if (tcp->h_proto == ETH_P_IP && tcp->ip_len == MIN_IP_LEN) {
@@ -79,6 +80,124 @@ static __always_inline void encode_data_in_ip_options(struct __sk_buff *skb,
         inject_tc_ip_options_ipv6(skb, conn, tcp, tp);
         tp->valid = 0;
     }
+}
+
+static __always_inline struct bpf_sock *lookup_sock_from_tuple(struct __sk_buff *skb,
+                                                               struct bpf_sock_tuple *tuple,
+                                                               bool ipv4,
+                                                               void *data_end) {
+    if (ipv4 && (u64)((u8 *)tuple + sizeof(tuple->ipv4)) < (u64)data_end) {
+        // Lookup to see if you can find a socket for this tuple in the
+        // kernel socket tracking. We look up in all namespaces (-1).
+        return bpf_sk_lookup_tcp(skb, tuple, sizeof(tuple->ipv4), BPF_F_CURRENT_NETNS, 0);
+    } else if (!ipv4 && (u64)((u8 *)tuple + sizeof(tuple->ipv6)) < (u64)data_end) {
+        return bpf_sk_lookup_tcp(skb, tuple, sizeof(tuple->ipv6), BPF_F_CURRENT_NETNS, 0);
+    }
+
+    return 0;
+}
+
+// We use this helper to read in the connection tuple information in the
+// bpf_sock_tuple format. We use this struct to add sockets which are
+// established before we launched Beyla, since we'll not see them in the
+// sock_ops program which tracks them.
+static __always_inline struct bpf_sock_tuple *
+get_tuple(void *data, __u64 nh_off, void *data_end, __u16 eth_proto, bool *ipv4) {
+    struct bpf_sock_tuple *result;
+    __u64 ihl_len = 0;
+    __u8 proto = 0;
+
+    if (eth_proto == bpf_htons(ETH_P_IP)) {
+        struct iphdr *iph = (struct iphdr *)(data + nh_off);
+
+        if ((void *)(iph + 1) > data_end) {
+            return 0;
+        }
+
+        ihl_len = iph->ihl * 4;
+        proto = iph->protocol;
+        *ipv4 = true;
+        result = (struct bpf_sock_tuple *)&iph->saddr;
+    } else if (eth_proto == bpf_htons(ETH_P_IPV6)) {
+        struct ipv6hdr *ip6h = (struct ipv6hdr *)(data + nh_off);
+
+        if ((void *)(ip6h + 1) > data_end) {
+            return 0;
+        }
+
+        ihl_len = sizeof(*ip6h);
+        proto = ip6h->nexthdr;
+        *ipv4 = true;
+        result = (struct bpf_sock_tuple *)&ip6h->saddr;
+    }
+
+    if (data + nh_off + ihl_len > data_end || proto != IPPROTO_TCP) {
+        return 0;
+    }
+
+    return result;
+}
+
+static __always_inline void track_sock(struct __sk_buff *skb, const connection_info_t *conn) {
+    const u32 s_port = conn->s_port;
+
+    if (is_sock_tracked(s_port)) {
+        return;
+    }
+
+    // TODO revist to avoid pulling data (use bpf_skb_load_bytes instead)
+    bpf_skb_pull_data(skb, skb->len);
+
+    void *data_end = ctx_data_end(skb);
+    void *data = ctx_data(skb);
+
+    struct ethhdr *eth = (struct ethhdr *)(data);
+    bool ipv4;
+
+    if ((void *)(eth + 1) > data_end) {
+        bpf_dbg_printk("bad size");
+        return;
+    }
+
+    // Get the bpf_sock_tuple value so we can look up and see if we don't have
+    // this socket yet in our map.
+    struct bpf_sock_tuple *tuple = get_tuple(data, sizeof(*eth), data_end, eth->h_proto, &ipv4);
+    //bpf_printk("tuple %llx, next %llx, data end %llx", tuple, (void *)((u8 *)tuple + sizeof(*tuple)), data_end);
+
+    if (!tuple) {
+        bpf_dbg_printk("bad tuple %llx, next %llx, data end %llx",
+                       tuple,
+                       (void *)(tuple + sizeof(struct bpf_sock_tuple)),
+                       data_end);
+        return;
+    }
+
+    struct bpf_sock *sk = lookup_sock_from_tuple(skb, tuple, ipv4, data_end);
+    bpf_dbg_printk("sk=%d\n", sk ? 1 : 0);
+
+    if (!sk) {
+        return;
+    }
+
+    bpf_dbg_printk("LOOKUP %llx:%d ->", conn->s_ip[3], conn->s_port);
+    bpf_dbg_printk("LOOKUP TO %llx:%d", conn->d_ip[3], conn->d_port);
+
+    // Query the socket map to see if have added this socket.
+    struct bpf_sock *sk1 = (struct bpf_sock *)bpf_map_lookup_elem(&sock_dir, conn);
+
+    // We found the socket, all good it was caught by the sock_ops,
+    // just release it.
+    if (sk1) {
+        bpf_dbg_printk("Found sk1 %llx", sk1);
+        bpf_sk_release(sk1);
+    } else {
+        // First time we see a socket, add it to the map, it will
+        // get tracked on the next request
+        bpf_map_update_elem(&sock_dir, conn, sk, BPF_NOEXIST);
+    }
+
+    // We must release the reference to the original socket we looked up.
+    bpf_sk_release(sk);
 }
 
 SEC("tc_egress")
@@ -95,55 +214,58 @@ int beyla_app_egress(struct __sk_buff *skb) {
     __builtin_memcpy(&p_conn.conn, &conn, sizeof(connection_info_t));
     sort_connection_info(&p_conn.conn);
 
-    egress_key_t e_key = {
+    const egress_key_t e_key = {
         .d_port = conn.d_port,
         .s_port = conn.s_port,
     };
 
     tp_info_pid_t *tp = bpf_map_lookup_elem(&outgoing_trace_map, &e_key);
 
+    if (!tp) {
+        return TC_ACT_UNSPEC;
+    }
+
+    // this shouldn't ever be reached, as the tp should have already been
+    // deleted by the kprobes when tp->written == 1, but it does not hurt to
+    // be robust
+    if (tp->written) {
+        bpf_dbg_printk("tp already written by L7, not injecting IP options");
+        bpf_map_delete_elem(&outgoing_trace_map, &e_key);
+        return TC_ACT_UNSPEC;
+    }
+
     // We look up metadata setup by the Go uprobes or the kprobes on
     // a transaction we consider outgoing HTTP request. We will extend this in
     // the future for other protocols, e.g. gRPC/HTTP2.
     // The metadata always comes setup with the state field valid = 1, which
     // means we haven't seen this request yet.
-    if (tp) {
-        p_conn.pid = tp->pid;
-        bpf_dbg_printk("egress flags %x, sequence %x, valid %d", tcp.flags, tcp.seq, tp->valid);
-        dbg_print_http_connection_info(&conn);
 
-        // If it's the fist packet of an request:
-        // We set the span information to match our TCP information. This
-        // is done for L4 context propagation, where we use the SEQ/ACK
-        // numbers for the Span ID. Since this is the first time we see
-        // these SEQ,ACK ids, we update the random Span ID the metadata has
-        // to match what we send over the wire.
-        if (tp->valid == 1) {
-            populate_span_id_from_tcp_info(&tp->tp, &tcp);
-            update_outgoing_request_span_id(&p_conn, &tcp, tp, &e_key);
-            // We set valid to 2, so we only run this once, the later packets
-            // will have different SEQ/ACK.
-            tp->valid = 2;
-        }
-        // L7 app egress runs on every packet, the packets will be split so
-        // it needs to do work across all packets that go out for this request
-        l7_app_egress(skb, tp, &conn, &tcp, &e_key);
+    p_conn.pid = tp->pid;
+    bpf_dbg_printk("egress flags %x, sequence %x, valid %d", tcp.flags, tcp.seq, tp->valid);
+    dbg_print_http_connection_info(&conn);
 
-        // The following code sets up the context information in L4 and it
-        // does it only once. If it successfully injected the information it
-        // will set valid to 0 so that we only run the L7 part from now on.
-        if (tp->valid) {
-            encode_data_in_ip_options(skb, &conn, &tcp, tp, &e_key);
-        }
-    } else {
-        u32 s_port = e_key.s_port;
-        tc_http_ctx_t *ctx = (tc_http_ctx_t *)bpf_map_lookup_elem(&tc_http_ctx_map, &s_port);
+    // If it's the fist packet of an request:
+    // We set the span information to match our TCP information. This
+    // is done for L4 context propagation, where we use the SEQ/ACK
+    // numbers for the Span ID. Since this is the first time we see
+    // these SEQ,ACK ids, we update the random Span ID the metadata has
+    // to match what we send over the wire.
+    if (tp->valid == 1) {
+        populate_span_id_from_tcp_info(&tp->tp, &tcp);
+        update_outgoing_request_span_id(&p_conn, &tcp, tp, &e_key);
+        // We set valid to 2, so we only run this once, the later packets
+        // will have different SEQ/ACK.
+        tp->valid = 2;
+    }
 
-        if (ctx) {
-            bpf_dbg_printk("No trace-map info, filling up the hole setup by sk_msg");
-            bpf_skb_pull_data(skb, skb->len);
-            write_traceparent(skb, &tcp, &e_key, ctx, INV_TP);
-        }
+    // track any sockets we may have missed from sockops
+    track_sock(skb, &conn);
+
+    // The following code sets up the context information in L4 and it
+    // does it only once. If it successfully injected the information it
+    // will set valid to 0 so that we only run the L7 part from now on.
+    if (tp->valid) {
+        encode_data_in_ip_options(skb, &conn, &tcp, tp, &e_key);
     }
 
     return TC_ACT_UNSPEC;

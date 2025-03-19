@@ -6,9 +6,9 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/cilium/ebpf/ringbuf"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/grafana/beyla/v2/pkg/internal/ebpf/ringbuf"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
 )

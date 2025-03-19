@@ -28,11 +28,11 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf"
-	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
 	"golang.org/x/sys/unix"
 
 	convenience "github.com/grafana/beyla/v2/pkg/internal/ebpf/convenience"
+	"github.com/grafana/beyla/v2/pkg/internal/ebpf/ringbuf"
 )
 
 // $BPF_CLANG and $BPF_CFLAGS are set by the Makefile.

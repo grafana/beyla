@@ -629,11 +629,11 @@ func TestMetricsInterval(t *testing.T) {
 	})
 }
 
-func (f *fakeInternalMetrics) OTELMetricExport(len int) {
+func (f *fakeInternalMetrics) OTELMetricExport(length int) {
 	fakeMux.Lock()
 	defer fakeMux.Unlock()
 	f.cnt.Add(1)
-	f.sum.Add(int32(len))
+	f.sum.Add(int32(length))
 }
 
 func (f *fakeInternalMetrics) OTELMetricExportError(_ error) {

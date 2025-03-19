@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
@@ -121,6 +122,11 @@ type PrometheusConfig struct {
 	// Registry is only used for embedding Beyla within the Grafana Agent.
 	// It must be nil when Beyla runs as standalone
 	Registry *prometheus.Registry `yaml:"-"`
+
+	// ExtraResourceLabels adds extra metadata labels to Prometheus metrics from sources whose availability can't be known
+	// beforehand. For example, to add the OTEL deployment.environment resource attribute as a Prometheus resource attribute,
+	// you should add `deployment.environment`.
+	ExtraResourceLabels []string `yaml:"extra_resource_attributes" env:"BEYLA_PROMETHEUS_EXTRA_RESOURCE_ATTRIBUTES" envSeparator:","`
 }
 
 func (p *PrometheusConfig) SpanMetricsEnabled() bool {
@@ -161,7 +167,8 @@ func (p *PrometheusConfig) Enabled() bool {
 }
 
 type metricsReporter struct {
-	cfg *PrometheusConfig
+	cfg                 *PrometheusConfig
+	extraMetadataLabels []attr.Name
 
 	beylaInfo             *Expirer[prometheus.Gauge]
 	httpDuration          *Expirer[prometheus.Histogram]
@@ -308,11 +315,13 @@ func newReporter(
 	kubeEnabled := ctxInfo.K8sInformer.IsKubeEnabled()
 	// If service name is not explicitly set, we take the service name as set by the
 	// executable inspector
+	extraMetadataLabels := parseExtraMetadata(cfg.ExtraResourceLabels)
 	mr := &metricsReporter{
 		bgCtx:                     ctx,
 		ctxInfo:                   ctxInfo,
 		cfg:                       cfg,
 		kubeEnabled:               kubeEnabled,
+		extraMetadataLabels:       extraMetadataLabels,
 		hostID:                    ctxInfo.HostID,
 		clock:                     clock,
 		is:                        is,
@@ -457,7 +466,7 @@ func newReporter(
 			return NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
 				Name: TracesTargetInfo,
 				Help: "target service information in trace span metric format",
-			}, labelNamesTargetInfo(kubeEnabled)).MetricVec, clock.Time, cfg.TTL)
+			}, labelNamesTargetInfo(kubeEnabled, extraMetadataLabels)).MetricVec, clock.Time, cfg.TTL)
 		}),
 		tracesHostInfo: optionalGaugeProvider(cfg.SpanMetricsEnabled() || cfg.ServiceGraphMetricsEnabled(), func() *Expirer[prometheus.Gauge] {
 			return NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
@@ -500,7 +509,7 @@ func newReporter(
 		targetInfo: NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: TargetInfo,
 			Help: "attributes associated to a given monitored entity",
-		}, labelNamesTargetInfo(kubeEnabled)).MetricVec, clock.Time, cfg.TTL),
+		}, labelNamesTargetInfo(kubeEnabled, extraMetadataLabels)).MetricVec, clock.Time, cfg.TTL),
 		gpuKernelCallsTotal: optionalCounterProvider(is.GPUEnabled(), func() *Expirer[prometheus.Counter] {
 			return NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
 				Name: attributes.GPUKernelLaunchCalls.Prom,
@@ -595,6 +604,16 @@ func newReporter(
 	}
 
 	return mr, nil
+}
+
+func parseExtraMetadata(labels []string) []attr.Name {
+	// first, we convert any metric in snake_format to dotted.format,
+	// as it is the internal representation of metadata labels
+	attrNames := make([]attr.Name, len(labels))
+	for i, label := range labels {
+		attrNames[i] = attr.Name(strings.ReplaceAll(label, "_", "."))
+	}
+	return attrNames
 }
 
 func optionalHistogramProvider(enable bool, provider func() *Expirer[prometheus.Histogram]) *Expirer[prometheus.Histogram] {
@@ -796,11 +815,15 @@ func (r *metricsReporter) labelValuesSpans(span *request.Span) []string {
 	}
 }
 
-func labelNamesTargetInfo(kubeEnabled bool) []string {
+func labelNamesTargetInfo(kubeEnabled bool, extraMetadataLabelNames []attr.Name) []string {
 	names := []string{hostIDKey, hostNameKey, serviceKey, serviceNamespaceKey, serviceInstanceKey, serviceJobKey, telemetryLanguageKey, telemetrySDKKey, sourceKey}
 
 	if kubeEnabled {
 		names = appendK8sLabelNames(names)
+	}
+
+	for _, mdn := range extraMetadataLabelNames {
+		names = append(names, mdn.Prom())
 	}
 
 	return names
@@ -821,6 +844,10 @@ func (r *metricsReporter) labelValuesTargetInfo(service svc.Attrs) []string {
 
 	if r.kubeEnabled {
 		values = appendK8sLabelValuesService(values, service)
+	}
+
+	for _, k := range r.extraMetadataLabels {
+		values = append(values, service.Metadata[k])
 	}
 
 	return values

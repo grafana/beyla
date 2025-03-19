@@ -54,7 +54,7 @@ static __always_inline __u8 get_bit(__u8 word, __u8 offset) {
 }
 
 // Helper functions to access packet data safely
-static __always_inline void *ctx_data(struct xdp_md *ctx) {
+static __always_inline void *ctx_xdp_data(struct xdp_md *ctx) {
     void *data;
 
     asm("%[res] = *(u32 *)(%[base] + %[offset])"

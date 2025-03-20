@@ -5,7 +5,7 @@ go 1.23.2
 require (
 	github.com/AlessandroPomponio/go-gibberish v0.0.0-20191004143433-a2d4156f0396
 	github.com/caarlos0/env/v9 v9.0.0
-	github.com/cilium/ebpf v0.17.3
+	github.com/cilium/ebpf v0.17.2
 	github.com/containers/common v0.61.0
 	github.com/gavv/monotime v0.0.0-20190418164738-30dba4353424
 	github.com/gin-gonic/gin v1.9.1
@@ -34,7 +34,7 @@ require (
 	github.com/vladimirvivien/gexe v0.3.0
 	github.com/xwb1989/sqlparser v0.0.0-20180606152119-120387863bf2
 	github.com/yl2chen/cidranger v1.0.2
-	go.opentelemetry.io/collector/component v0.119.0
+	go.opentelemetry.io/collector/component v0.116.0
 	go.opentelemetry.io/collector/config/configgrpc v0.116.0
 	go.opentelemetry.io/collector/config/confighttp v0.116.0
 	go.opentelemetry.io/collector/config/configopaque v1.22.0

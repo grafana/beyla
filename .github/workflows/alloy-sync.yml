@@ -16,7 +16,6 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-      id-token: write # Required for organization access
 
     steps:
       - name: Checkout Beyla
@@ -49,12 +48,12 @@ jobs:
         with:
           repository: grafana/alloy
           path: alloy
-          token: ${{ secrets.BEYLA_ALLOY_KEY }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create PR in Alloy
         if: steps.check-deps.outputs.has_relevant_updates == 'true' && github.event.action != 'closed'
         env:
-          GH_TOKEN: ${{ secrets.BEYLA_ALLOY_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd alloy
           # Create a new branch
@@ -74,9 +73,10 @@ jobs:
           
           go mod tidy
 
-          # Commit changes
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Configure git
+          git config --local user.email bot@grafana.com
+          git config --local user.name grafanabot
+
           git add go.mod go.sum
           git commit -m "deps: use Beyla PR commit for testing
 
@@ -86,7 +86,7 @@ jobs:
 
           # Push changes and create PR
           git push origin $BRANCH_NAME
-          gh pr create \
+          PR_URL=$(gh pr create \
             --title "deps: test with Beyla PR #${{ github.event.pull_request.number }}" \
             --body "This PR was automatically created to test changes from Beyla PR #${{ github.event.pull_request.number }}
 
@@ -98,12 +98,54 @@ jobs:
             --draft \
             --label "dependencies" \
             --label "beyla" \
-            --repo grafana/alloy
+            --repo grafana/alloy \
+            --json url --jq '.url')
+
+          echo "PR_URL=${PR_URL}" >> $GITHUB_OUTPUT
+
+      - name: Wait for Alloy CI and update status
+        if: steps.check-deps.outputs.has_relevant_updates == 'true' && github.event.action != 'closed'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Extract PR number from the URL
+          PR_NUMBER=$(echo "${{ steps.create-pr.outputs.PR_URL }}" | grep -oE '[0-9]+$')
+          
+          # Wait for checks to complete (timeout after 30 minutes)
+          TIMEOUT=1800  # 30 minutes in seconds
+          INTERVAL=60   # Check every minute
+          ELAPSED=0
+          
+          while [ $ELAPSED -lt $TIMEOUT ]; do
+            # Get the combined status of all checks
+            STATUS=$(gh pr view $PR_NUMBER --repo grafana/alloy --json statusCheckRollup --jq '.statusCheckRollup[].state' | sort -u)
+            
+            # If all checks are complete
+            if ! echo "$STATUS" | grep -q "PENDING"; then
+              if echo "$STATUS" | grep -q "FAILURE"; then
+                # If any check failed, comment on the Beyla PR
+                gh pr comment ${{ github.event.pull_request.number }} --body "❌ The Alloy PR checks failed. Please check [the PR](${{ steps.create-pr.outputs.PR_URL }}) for details."
+                exit 1
+              elif echo "$STATUS" | grep -q "SUCCESS"; then
+                # If all checks passed, convert from draft and comment
+                gh pr ready $PR_NUMBER --repo grafana/alloy
+                gh pr comment ${{ github.event.pull_request.number }} --body "✅ The Alloy PR checks passed. The PR is ready for review: ${{ steps.create-pr.outputs.PR_URL }}"
+                exit 0
+              fi
+            fi
+            
+            sleep $INTERVAL
+            ELAPSED=$((ELAPSED + INTERVAL))
+          done
+          
+          # If we timeout, comment on the PR
+          gh pr comment ${{ github.event.pull_request.number }} --body "⚠️ Timed out waiting for Alloy PR checks to complete. Please check [the PR](${{ steps.create-pr.outputs.PR_URL }}) manually."
+          exit 1
 
       - name: Close Alloy PR
         if: github.event.action == 'closed' && github.event.pull_request.merged == false
         env:
-          GH_TOKEN: ${{ secrets.BEYLA_ALLOY_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Find and close the corresponding PR in Alloy
           gh pr list -R grafana/alloy --search "in:title Beyla #${{ github.event.pull_request.number }}" --json number --jq '.[0].number' | xargs -I {} gh pr close {} -R grafana/alloy 

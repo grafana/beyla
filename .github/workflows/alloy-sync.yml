@@ -16,6 +16,8 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      # Required for cross-repo access within the org
+      repository-projects: write
 
     steps:
       - name: Checkout Beyla
@@ -79,6 +81,9 @@ jobs:
           This PR was automatically created to test changes from Beyla PR #${{ github.event.pull_request.number }}
           Original PR: ${{ github.event.pull_request.html_url }}
           Commit: ${BEYLA_COMMIT}"
+
+          # Set up git to use GH CLI's auth
+          gh auth setup-git
 
           # Push changes and create PR
           git push origin $BRANCH_NAME

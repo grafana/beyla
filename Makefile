@@ -400,6 +400,6 @@ clang-format:
 	find ./bpf -type f -name "*.c" | xargs -P 0 -n 1 clang-format -i
 	find ./bpf -type f -name "*.h" | xargs -P 0 -n 1 clang-format -i
 
-.PHONY: rm-ebpf-generated-files
-rm-ebpf-generated-files:
+.PHONY: clean-ebpf-generated-files
+clean-ebpf-generated-files:
 	find . -name "*_bpfel*" | xargs rm

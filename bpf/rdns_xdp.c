@@ -12,8 +12,6 @@
 // For reference, see:
 // https://datatracker.ietf.org/doc/html/rfc1035
 
-enum { DEBUG = 0 };
-
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
 struct {
@@ -149,9 +147,7 @@ static __always_inline void submit_dns_packet(struct xdp_md *ctx, const unsigned
     unsigned char *buf = bpf_ringbuf_reserve(&ring_buffer, RB_RECORD_LEN, 0);
 
     if (!buf) {
-        if (DEBUG) {
-            bpf_printk("Failed to reserve %u bytes in the ring buffer\n", RB_RECORD_LEN);
-        }
+        bpf_dbg_printk("Failed to reserve %u bytes in the ring buffer\n", RB_RECORD_LEN);
 
         return;
     }
@@ -168,13 +164,8 @@ parse_dns_response(struct xdp_md *ctx, const unsigned char *const data, __u32 si
     const __u8 flags0 = *(data + 2);
     const __u8 flags1 = *(data + 3);
 
-    const __u16 id = bpf_ntohs(*(const __be16 *)(data));
     const __u8 qr = get_bit(flags0, QR_OFFSET);
     const __u8 opcode = (flags0 >> OPCODE_OFFSET) & OPCODE_MASK;
-    const __u8 aa = get_bit(flags0, AA_OFFSET);
-    const __u8 tc = get_bit(flags0, TC_OFFSET);
-    const __u8 rd = get_bit(flags0, RD_OFFSET);
-    const __u8 ra = get_bit(flags1, RA_OFFSET);
     const __u8 z = (flags1 >> Z_OFFSET) & Z_MASK;
     const __u8 rcode = (flags1 >> RCODE_OFFSET) & RCODE_MASK;
     const __u16 qdcount = bpf_ntohs(*(const __be16 *)(data + 4));
@@ -186,10 +177,15 @@ parse_dns_response(struct xdp_md *ctx, const unsigned char *const data, __u32 si
         return;
     }
 
-    if (DEBUG) {
-        bpf_printk("Found possible DNS response: %x!\n", id);
-        bpf_printk("flags[0] = %x\n", flags0);
-        bpf_printk("id: %x, qr: %u, opcode: %u, aa: %u, tc: %u, rd: %u, ra: %u\n",
+#ifdef BPF_DEBUG
+    const __u16 id = bpf_ntohs(*(const __be16 *)(data));
+    const __u8 ra = get_bit(flags1, RA_OFFSET);
+    const __u8 aa = get_bit(flags0, AA_OFFSET);
+    const __u8 tc = get_bit(flags0, TC_OFFSET);
+    const __u8 rd = get_bit(flags0, RD_OFFSET);
+    bpf_dbg_printk("Found possible DNS response: %x!\n", id);
+    bpf_dbg_printk("flags[0] = %x\n", flags0);
+    bpf_dbg_printk("id: %x, qr: %u, opcode: %u, aa: %u, tc: %u, rd: %u, ra: %u\n",
                    id,
                    qr,
                    opcode,
@@ -197,12 +193,12 @@ parse_dns_response(struct xdp_md *ctx, const unsigned char *const data, __u32 si
                    tc,
                    rd,
                    ra);
-        bpf_printk("flags[1] = %x\n", flags1);
-        bpf_printk("z: %u, rcode: %u, qdcount = %u, ancount = %u\n", z, rcode, ancount, qdcount);
-    }
+    bpf_dbg_printk("flags[1] = %x\n", flags1);
+    bpf_dbg_printk("z: %u, rcode: %u, qdcount = %u, ancount = %u\n", z, rcode, ancount, qdcount);
+#endif //BPF_DEBUG
 
     // Parse question sections
-    __u32 dns_packet_size = 0;
+    __u32 __attribute__((unused)) dns_packet_size = 0;
 
     const unsigned char *ptr = data + DNS_HEADER_SIZE;
 
@@ -210,10 +206,7 @@ parse_dns_response(struct xdp_md *ctx, const unsigned char *const data, __u32 si
         const __u32 qsection_size = validate_qsection(ctx, ptr);
 
         if (qsection_size == 0) {
-            if (DEBUG) {
-                bpf_printk("invalid qsection, bailing...\n");
-            }
-
+            bpf_dbg_printk("invalid qsection, bailing...\n");
             return;
         }
 
@@ -221,9 +214,7 @@ parse_dns_response(struct xdp_md *ctx, const unsigned char *const data, __u32 si
         ptr += qsection_size;
     }
 
-    if (DEBUG) {
-        bpf_printk("found qsection size = %u\n", dns_packet_size);
-    }
+    bpf_dbg_printk("found qsection size = %u\n", dns_packet_size);
 
     // Submit valid DNS packet to ring buffer
     submit_dns_packet(ctx, data);
@@ -249,9 +240,7 @@ int dns_response_tracker(struct xdp_md *ctx) {
     // Validate packet size
     const __u16 udp_len = bpf_ntohs(udp->len);
 
-    if (DEBUG) {
-        bpf_printk("udp_len: %u\n", udp_len);
-    }
+    bpf_dbg_printk("udp_len: %u\n", udp_len);
 
     if (udp_len < (UDP_HDR_SIZE + DNS_HDR_SIZE)) {
         return XDP_PASS;

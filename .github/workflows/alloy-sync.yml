@@ -1,0 +1,98 @@
+name: Alloy Dependency Sync
+
+on:
+  pull_request:
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+    types: [opened, synchronize, reopened, closed]
+
+jobs:
+  sync-dependencies:
+    if: |
+      github.event.action != 'closed' ||
+      (github.event.action == 'closed' && github.event.pull_request.merged == true)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout Beyla
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Check for relevant dependency updates
+        id: check-deps
+        run: |
+          # Get the diff of go.mod
+          git diff ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} -- go.mod > go.mod.diff
+          
+          # Check if OpenTelemetry or cilium/ebpf dependencies were updated
+          if grep -E "go.opentelemetry.io/|github.com/cilium/ebpf" go.mod.diff; then
+            echo "has_relevant_updates=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_relevant_updates=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Checkout Alloy
+        if: steps.check-deps.outputs.has_relevant_updates == 'true' && github.event.action != 'closed'
+        uses: actions/checkout@v4
+        with:
+          repository: grafana/alloy
+          path: alloy
+
+      - name: Create PR in Alloy
+        if: steps.check-deps.outputs.has_relevant_updates == 'true' && github.event.action != 'closed'
+        run: |
+          cd alloy
+          # Create a new branch
+          BRANCH_NAME="beyla-deps-sync-${{ github.event.pull_request.number }}"
+          git checkout -b $BRANCH_NAME
+
+          # Update go.mod to use the Beyla PR branch
+          BEYLA_BRANCH="${{ github.event.pull_request.head.ref }}"
+          BEYLA_REPO="${{ github.event.pull_request.head.repo.full_name }}"
+          
+          # Replace or add the replace directive for beyla
+          if grep -q "^replace github.com/grafana/beyla" go.mod; then
+            sed -i "s|^replace github.com/grafana/beyla.*|replace github.com/grafana/beyla => github.com/${BEYLA_REPO} ${BEYLA_BRANCH}|" go.mod
+          else
+            echo "replace github.com/grafana/beyla => github.com/${BEYLA_REPO} ${BEYLA_BRANCH}" >> go.mod
+          fi
+          
+          go mod tidy
+
+          # Commit changes
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add go.mod go.sum
+          git commit -m "deps: use Beyla PR branch for testing
+
+          This PR was automatically created to test changes from Beyla PR #${{ github.event.pull_request.number }}
+          Original PR: ${{ github.event.pull_request.html_url }}"
+
+          # Push changes and create PR
+          git push origin $BRANCH_NAME
+          gh pr create \
+            --title "deps: test with Beyla PR #${{ github.event.pull_request.number }}" \
+            --body "This PR was automatically created to test changes from Beyla PR #${{ github.event.pull_request.number }}
+
+            Original PR: ${{ github.event.pull_request.html_url }}
+
+            This PR updates the Beyla dependency to use the branch from PR #${{ github.event.pull_request.number }} to ensure compatibility.
+            This PR will be automatically closed if the original Beyla PR is closed without merging." \
+            --label "dependencies" \
+            --repo grafana/alloy
+
+      - name: Close Alloy PR
+        if: github.event.action == 'closed' && github.event.pull_request.merged == false
+        run: |
+          # Find and close the corresponding PR in Alloy
+          gh pr list -R grafana/alloy --search "in:title Beyla #${{ github.event.pull_request.number }}" --json number --jq '.[0].number' | xargs -I {} gh pr close {} -R grafana/alloy 

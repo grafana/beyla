@@ -37,6 +37,7 @@ jobs:
           # Check if OpenTelemetry or cilium/ebpf dependencies were updated
           if grep -E "go.opentelemetry.io/|github.com/cilium/ebpf" go.mod.diff; then
             echo "has_relevant_updates=true" >> $GITHUB_OUTPUT
+            echo "commit_sha=${{ github.event.pull_request.head.sha }}" >> $GITHUB_OUTPUT
           else
             echo "has_relevant_updates=false" >> $GITHUB_OUTPUT
           fi
@@ -56,15 +57,15 @@ jobs:
           BRANCH_NAME="beyla-deps-sync-${{ github.event.pull_request.number }}"
           git checkout -b $BRANCH_NAME
 
-          # Update go.mod to use the Beyla PR branch
-          BEYLA_BRANCH="${{ github.event.pull_request.head.ref }}"
+          # Update go.mod to use the Beyla PR commit
+          BEYLA_COMMIT="${{ steps.check-deps.outputs.commit_sha }}"
           BEYLA_REPO="${{ github.event.pull_request.head.repo.full_name }}"
           
           # Replace or add the replace directive for beyla
-          if grep -q "^replace github.com/grafana/beyla" go.mod; then
-            sed -i "s|^replace github.com/grafana/beyla.*|replace github.com/grafana/beyla => github.com/${BEYLA_REPO} ${BEYLA_BRANCH}|" go.mod
+          if grep -q "^replace github.com/grafana/beyla/v2" go.mod; then
+            sed -i "s|^replace github.com/grafana/beyla/v2.*|replace github.com/grafana/beyla/v2 => github.com/${BEYLA_REPO} ${BEYLA_COMMIT}|" go.mod
           else
-            echo "replace github.com/grafana/beyla => github.com/${BEYLA_REPO} ${BEYLA_BRANCH}" >> go.mod
+            echo "replace github.com/grafana/beyla/v2 => github.com/${BEYLA_REPO} ${BEYLA_COMMIT}" >> go.mod
           fi
           
           go mod tidy
@@ -73,10 +74,11 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add go.mod go.sum
-          git commit -m "deps: use Beyla PR branch for testing
+          git commit -m "deps: use Beyla PR commit for testing
 
           This PR was automatically created to test changes from Beyla PR #${{ github.event.pull_request.number }}
-          Original PR: ${{ github.event.pull_request.html_url }}"
+          Original PR: ${{ github.event.pull_request.html_url }}
+          Commit: ${BEYLA_COMMIT}"
 
           # Push changes and create PR
           git push origin $BRANCH_NAME
@@ -85,10 +87,13 @@ jobs:
             --body "This PR was automatically created to test changes from Beyla PR #${{ github.event.pull_request.number }}
 
             Original PR: ${{ github.event.pull_request.html_url }}
+            Commit: ${BEYLA_COMMIT}
 
-            This PR updates the Beyla dependency to use the branch from PR #${{ github.event.pull_request.number }} to ensure compatibility.
+            This PR updates the Beyla dependency to use the specific commit from PR #${{ github.event.pull_request.number }} to ensure compatibility.
             This PR will be automatically closed if the original Beyla PR is closed without merging." \
+            --draft \
             --label "dependencies" \
+            --label "beyla" \
             --repo grafana/alloy
 
       - name: Close Alloy PR

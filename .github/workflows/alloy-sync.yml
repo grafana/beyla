@@ -16,8 +16,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-      # Required for cross-repo access within the org
-      repository-projects: write
+      id-token: write # Required for organization access
 
     steps:
       - name: Checkout Beyla
@@ -50,9 +49,12 @@ jobs:
         with:
           repository: grafana/alloy
           path: alloy
+          token: ${{ secrets.BEYLA_ALLOY_KEY }}
 
       - name: Create PR in Alloy
         if: steps.check-deps.outputs.has_relevant_updates == 'true' && github.event.action != 'closed'
+        env:
+          GH_TOKEN: ${{ secrets.BEYLA_ALLOY_KEY }}
         run: |
           cd alloy
           # Create a new branch
@@ -82,9 +84,6 @@ jobs:
           Original PR: ${{ github.event.pull_request.html_url }}
           Commit: ${BEYLA_COMMIT}"
 
-          # Set up git to use GH CLI's auth
-          gh auth setup-git
-
           # Push changes and create PR
           git push origin $BRANCH_NAME
           gh pr create \
@@ -103,6 +102,8 @@ jobs:
 
       - name: Close Alloy PR
         if: github.event.action == 'closed' && github.event.pull_request.merged == false
+        env:
+          GH_TOKEN: ${{ secrets.BEYLA_ALLOY_KEY }}
         run: |
           # Find and close the corresponding PR in Alloy
           gh pr list -R grafana/alloy --search "in:title Beyla #${{ github.event.pull_request.number }}" --json number --jq '.[0].number' | xargs -I {} gh pr close {} -R grafana/alloy 

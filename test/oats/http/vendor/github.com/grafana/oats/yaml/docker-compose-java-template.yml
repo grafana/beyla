@@ -1,0 +1,64 @@
+version: "3.9"
+services:
+  application:
+    image: "{{ .Image }}"
+    volumes:
+      - "{{ .JavaAgent }}:/grafana-opentelemetry-java.jar"
+      - "{{ .ApplicationJar }}:/app.jar"
+      {{if .JmxConfig }}- "{{ .JmxConfig }}:/otel-jmx-config.yaml" {{end}}
+    environment:
+      GRAFANA_OTLP_DEBUG_LOGGING: "true"
+      OTEL_LOGS_EXPORTER: otlp # otherwise, it's too verbose
+      OTEL_RESOURCE_ATTRIBUTES: 'deployment.environment=production,service.namespace=shop,service.version=1.1'
+      GRAFANA_OTEL_USE_TESTED_INSTRUMENTATIONS: "{{ not .UseAllInstrumentations }}"
+      GRAFANA_OTEL_APPLICATION_OBSERVABILITY_METRICS: "{{ not .DisableDataSaver }}"
+      OTEL_METRIC_EXPORT_INTERVAL: "5000"  # so we don't have to wait 60s for metrics
+      OTEL_JAVAAGENT_DEBUG: "true"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://collector:4318"
+      {{if .JmxConfig }}OTEL_JMX_CONFIG: /otel-jmx-config.yaml{{end}}
+      {{if .OldJvmMetrics }}OTEL_SEMCONV_STABILITY_OPT_IN: old{{end}}
+    command:
+      - /bin/bash
+      - -c
+      - java {{ .JvmDebug }} -javaagent:grafana-opentelemetry-java.jar -jar /app.jar
+    ports:
+      - "{{ .ApplicationPort }}:8080"
+      {{if .JvmDebug }}- "5005:5005" {{end}}
+  grafana:
+    image: grafana/grafana:10.0.5
+    volumes:
+      - "{{ .ConfigDir }}/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/grafana-datasources.yaml"
+      - "{{ .ConfigDir }}/grafana-dashboards.yaml:/etc/grafana/provisioning/dashboards/grafana-dashboards.yaml"
+      - "{{ .Dashboard }}:/etc/grafana/grafana-test-dashboard.json"
+    ports:
+      - "{{ .GrafanaHTTPPort }}:3000"
+  prometheus:
+    image: prom/prometheus:v2.47.0
+    command:
+      - --web.enable-remote-write-receiver
+      - --enable-feature=exemplar-storage
+      - --enable-feature=native-histograms
+      - --config.file=/etc/prometheus/prometheus.yml
+    ports:
+      - "{{ .PrometheusHTTPPort }}:9090"
+  tempo:
+    image: grafana/tempo:2.2.3
+    volumes:
+      - "{{ .ConfigDir }}/tempo-config.yaml:/config.yaml"
+    command:
+      - --config.file=/config.yaml
+    ports:
+      - "{{ .TempoHTTPPort }}:3200"
+
+  loki:
+    image: grafana/loki:2.9.0
+    ports:
+      - "{{ .LokiHTTPPort }}:3100"
+  collector:
+    image: otel/opentelemetry-collector-contrib:0.85.0
+    volumes:
+      - "{{ .ConfigDir }}/otelcol-config.yaml:/config.yaml"
+    command:
+      - --config=file:/config.yaml
+      # we currently don't support this in our dashboards and grafana agent doesn't understand it yet
+      {{if not .PromNaming }}- --feature-gates=-pkg.translator.prometheus.NormalizeName {{end}}

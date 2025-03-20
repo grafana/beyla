@@ -63,9 +63,9 @@ jobs:
           
           # Replace or add the replace directive for beyla
           if grep -q "^replace github.com/grafana/beyla/v2" go.mod; then
-            sed -i "s|^replace github.com/grafana/beyla/v2.*|replace github.com/grafana/beyla/v2 => github.com/${BEYLA_REPO} ${BEYLA_COMMIT}|" go.mod
+            sed -i "s|^replace github.com/grafana/beyla/v2.*|replace github.com/grafana/beyla/v2 => github.com/${BEYLA_REPO}/v2 ${BEYLA_COMMIT}|" go.mod
           else
-            echo "replace github.com/grafana/beyla/v2 => github.com/${BEYLA_REPO} ${BEYLA_COMMIT}" >> go.mod
+            echo "replace github.com/grafana/beyla/v2 => github.com/${BEYLA_REPO}/v2 ${BEYLA_COMMIT}" >> go.mod
           fi
           
           go mod tidy

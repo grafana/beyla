@@ -48,12 +48,12 @@ jobs:
         with:
           repository: grafana/alloy
           path: alloy
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ github.token }}
 
       - name: Create PR in Alloy
         if: steps.check-deps.outputs.has_relevant_updates == 'true' && github.event.action != 'closed'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           cd alloy
           # Create a new branch
@@ -106,7 +106,7 @@ jobs:
       - name: Wait for Alloy CI and update status
         if: steps.check-deps.outputs.has_relevant_updates == 'true' && github.event.action != 'closed'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           # Extract PR number from the URL
           PR_NUMBER=$(echo "${{ steps.create-pr.outputs.PR_URL }}" | grep -oE '[0-9]+$')
@@ -145,7 +145,7 @@ jobs:
       - name: Close Alloy PR
         if: github.event.action == 'closed' && github.event.pull_request.merged == false
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           # Find and close the corresponding PR in Alloy
           gh pr list -R grafana/alloy --search "in:title Beyla #${{ github.event.pull_request.number }}" --json number --jq '.[0].number' | xargs -I {} gh pr close {} -R grafana/alloy 

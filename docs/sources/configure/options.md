@@ -10,6 +10,8 @@ aliases:
   - /docs/grafana-cloud/monitor-applications/beyla/configure/options/
 ---
 
+<!-- vale Grafana.Paragraphs = NO -->
+
 # Beyla global configuration properties
 
 Beyla can be configured via environment variables or via a YAML configuration file passed either with the `-config` command-line argument or the `BEYLA_CONFIG_PATH` environment variable.

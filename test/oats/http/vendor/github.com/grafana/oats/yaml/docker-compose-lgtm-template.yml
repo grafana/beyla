@@ -1,0 +1,45 @@
+version: "3.9"
+services:
+  grafana:
+    image: grafana/grafana:10.0.5
+    # environment:
+    #   - GF_AUTH_DISABLE_LOGIN_FORM=true
+    #   - GF_AUTH_ANONYMOUS_ENABLED=true
+    #   - GF_AUTH_ANONYMOUS_ORG_NAME=OATs
+    #   - GF_AUTH_ANONYMOUS_ORG_ROLE=admin
+    volumes:
+      - "{{ .ConfigDir }}/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/grafana-datasources.yaml"
+      - "{{ .ConfigDir }}/grafana-dashboards.yaml:/etc/grafana/provisioning/dashboards/grafana-dashboards.yaml"
+      - "{{ .Dashboard }}:/etc/grafana/grafana-test-dashboard.json"
+    ports:
+      - "{{ .GrafanaHTTPPort }}:3000"
+  prometheus:
+    image: prom/prometheus:v2.47.0
+    command:
+      - --web.enable-remote-write-receiver
+      - --enable-feature=exemplar-storage
+      - --enable-feature=native-histograms
+      - --config.file=/etc/prometheus/prometheus.yml
+    ports:
+      - "{{ .PrometheusHTTPPort }}:9090"
+  tempo:
+    image: grafana/tempo:2.2.3
+    volumes:
+      - "{{ .ConfigDir }}/tempo-config.yaml:/config.yaml"
+    command:
+      - --config.file=/config.yaml
+    ports:
+      - "{{ .TempoHTTPPort }}:3200"
+
+  loki:
+    image: grafana/loki:2.9.0
+    ports:
+      - "{{ .LokiHTTPPort }}:3100"
+  collector:
+    image: otel/opentelemetry-collector-contrib:0.85.0
+    volumes:
+      - "{{ .ConfigDir }}/otelcol-config.yaml:/config.yaml"
+    command:
+      - --config=file:/config.yaml
+      # we currently don't support this in our dashboards and grafana agent doesn't understand it yet
+      - --feature-gates=-pkg.translator.prometheus.NormalizeName

@@ -1,0 +1,151 @@
+name: Alloy Dependency Sync
+
+on:
+  pull_request:
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+    types: [opened, synchronize, reopened, closed]
+
+jobs:
+  sync-dependencies:
+    if: |
+      github.event.action != 'closed' ||
+      (github.event.action == 'closed' && github.event.pull_request.merged == true)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout Beyla
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Check for relevant dependency updates
+        id: check-deps
+        run: |
+          # Get the diff of go.mod
+          git diff ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} -- go.mod > go.mod.diff
+          
+          # Check if OpenTelemetry or cilium/ebpf dependencies were updated
+          if grep -E "go.opentelemetry.io/|github.com/cilium/ebpf" go.mod.diff; then
+            echo "has_relevant_updates=true" >> $GITHUB_OUTPUT
+            echo "commit_sha=${{ github.event.pull_request.head.sha }}" >> $GITHUB_OUTPUT
+          else
+            echo "has_relevant_updates=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Checkout Alloy
+        if: steps.check-deps.outputs.has_relevant_updates == 'true' && github.event.action != 'closed'
+        uses: actions/checkout@v4
+        with:
+          repository: grafana/alloy
+          path: alloy
+          token: ${{ github.token }}
+
+      - name: Create PR in Alloy
+        if: steps.check-deps.outputs.has_relevant_updates == 'true' && github.event.action != 'closed'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd alloy
+          # Create a new branch
+          BRANCH_NAME="beyla-deps-sync-${{ github.event.pull_request.number }}"
+          git checkout -b $BRANCH_NAME
+
+          # Update go.mod to use the Beyla PR commit
+          BEYLA_COMMIT="${{ steps.check-deps.outputs.commit_sha }}"
+          BEYLA_REPO="${{ github.event.pull_request.head.repo.full_name }}"
+          
+          # Replace or add the replace directive for beyla
+          if grep -q "^replace github.com/grafana/beyla/v2" go.mod; then
+            sed -i "s|^replace github.com/grafana/beyla/v2.*|replace github.com/grafana/beyla/v2 => github.com/${BEYLA_REPO}/v2 ${BEYLA_COMMIT}|" go.mod
+          else
+            echo "replace github.com/grafana/beyla/v2 => github.com/${BEYLA_REPO}/v2 ${BEYLA_COMMIT}" >> go.mod
+          fi
+          
+          go mod tidy
+
+          # Configure git
+          git config --local user.email bot@grafana.com
+          git config --local user.name grafanabot
+
+          git add go.mod go.sum
+          git commit -m "deps: use Beyla PR commit for testing
+
+          This PR was automatically created to test changes from Beyla PR #${{ github.event.pull_request.number }}
+          Original PR: ${{ github.event.pull_request.html_url }}
+          Commit: ${BEYLA_COMMIT}"
+
+          # Push changes and create PR
+          git push origin $BRANCH_NAME
+          PR_URL=$(gh pr create \
+            --title "deps: test with Beyla PR #${{ github.event.pull_request.number }}" \
+            --body "This PR was automatically created to test changes from Beyla PR #${{ github.event.pull_request.number }}
+
+            Original PR: ${{ github.event.pull_request.html_url }}
+            Commit: ${BEYLA_COMMIT}
+
+            This PR updates the Beyla dependency to use the specific commit from PR #${{ github.event.pull_request.number }} to ensure compatibility.
+            This PR will be automatically closed if the original Beyla PR is closed without merging." \
+            --draft \
+            --label "dependencies" \
+            --label "beyla" \
+            --repo grafana/alloy \
+            --json url --jq '.url')
+
+          echo "PR_URL=${PR_URL}" >> $GITHUB_OUTPUT
+
+      - name: Wait for Alloy CI and update status
+        if: steps.check-deps.outputs.has_relevant_updates == 'true' && github.event.action != 'closed'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Extract PR number from the URL
+          PR_NUMBER=$(echo "${{ steps.create-pr.outputs.PR_URL }}" | grep -oE '[0-9]+$')
+          
+          # Wait for checks to complete (timeout after 30 minutes)
+          TIMEOUT=1800  # 30 minutes in seconds
+          INTERVAL=60   # Check every minute
+          ELAPSED=0
+          
+          while [ $ELAPSED -lt $TIMEOUT ]; do
+            # Get the combined status of all checks
+            STATUS=$(gh pr view $PR_NUMBER --repo grafana/alloy --json statusCheckRollup --jq '.statusCheckRollup[].state' | sort -u)
+            
+            # If all checks are complete
+            if ! echo "$STATUS" | grep -q "PENDING"; then
+              if echo "$STATUS" | grep -q "FAILURE"; then
+                # If any check failed, comment on the Beyla PR
+                gh pr comment ${{ github.event.pull_request.number }} --body "❌ The Alloy PR checks failed. Please check [the PR](${{ steps.create-pr.outputs.PR_URL }}) for details."
+                exit 1
+              elif echo "$STATUS" | grep -q "SUCCESS"; then
+                # If all checks passed, convert from draft and comment
+                gh pr ready $PR_NUMBER --repo grafana/alloy
+                gh pr comment ${{ github.event.pull_request.number }} --body "✅ The Alloy PR checks passed. The PR is ready for review: ${{ steps.create-pr.outputs.PR_URL }}"
+                exit 0
+              fi
+            fi
+            
+            sleep $INTERVAL
+            ELAPSED=$((ELAPSED + INTERVAL))
+          done
+          
+          # If we timeout, comment on the PR
+          gh pr comment ${{ github.event.pull_request.number }} --body "⚠️ Timed out waiting for Alloy PR checks to complete. Please check [the PR](${{ steps.create-pr.outputs.PR_URL }}) manually."
+          exit 1
+
+      - name: Close Alloy PR
+        if: github.event.action == 'closed' && github.event.pull_request.merged == false
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Find and close the corresponding PR in Alloy
+          gh pr list -R grafana/alloy --search "in:title Beyla #${{ github.event.pull_request.number }}" --json number --jq '.[0].number' | xargs -I {} gh pr close {} -R grafana/alloy 

@@ -433,10 +433,10 @@ func getCgroupPath() (string, error) {
 	enabled, err := v2.Enabled()
 	if !enabled {
 		if _, pathErr := os.Stat(filepath.Join(cgroupPath, "unified")); pathErr == nil {
-            slog.Debug("discovered hybrid cgroup hierarchy, will attempt to attach sockops")
+			slog.Debug("discovered hybrid cgroup hierarchy, will attempt to attach sockops")
 			return filepath.Join(cgroupPath, "unified"), nil
 		}
-        return "", errors.New("failed to find unified cgroup hierarchy: sockops cannot be used with cgroups v1")
+		return "", errors.New("failed to find unified cgroup hierarchy: sockops cannot be used with cgroups v1")
 	}
 	return cgroupPath, err
 }

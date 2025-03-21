@@ -10,170 +10,96 @@ aliases:
   - /docs/grafana-cloud/monitor-applications/beyla/configure/options/
 ---
 
+<!-- vale Grafana.Paragraphs = NO -->
+
 # Beyla global configuration properties
 
-Beyla can be configured via environment variables or via
-a YAML configuration file that is passed either with the `-config` command-line
-argument or the `BEYLA_CONFIG_PATH` environment variable.
-Environment variables have priority over the properties in the
-configuration file. For example, in the following command line, the `BEYLA_OPEN_PORT` option,
-is used to override any `open_port` settings inside the config.yaml file:
+Beyla can be configured via environment variables or via a YAML configuration file passed either with the `-config` command-line argument or the `BEYLA_CONFIG_PATH` environment variable.
+Environment variables have priority over the properties in the configuration file.
+For example, in the following command line, the `BEYLA_OPEN_PORT` option overrides any `open_port` settings inside config.yaml:
 
-```
-$ BEYLA_OPEN_PORT=8080 beyla -config /path/to/config.yaml
-```
-
-or
-
-```
-$ BEYLA_OPEN_PORT=8080 BEYLA_CONFIG_PATH=/path/to/config.yaml beyla
-```
-
-Refer to the [example YAML configuration file](../example/) for configuration file template.
-
-Currently, Beyla consist of a pipeline of components which
-generate, transform, and export traces from HTTP and GRPC applications. In the
-YAML configuration, each component has its own first-level section.
-
-Optionally, Beyla also provides network-level metrics, which are documented in the
-[Network metrics section of the Beyla documentation](../../network/).
-
-The following sections explain the global configuration properties, as well as
-the options for each component.
-
-## Global configuration properties
-
-The properties in this section are first-level YAML properties, as they apply to the
-whole Beyla configuration:
-
-| YAML              | Environment variable                 | Type   | Default |
-| ----------------- | ----------------------- | ------ | ------- |
-| `executable_name` | `BEYLA_EXECUTABLE_NAME` | string | (unset) |
-
-Selects the process to instrument by the executable name path. This property accepts
-a regular expression to be matched against the full executable command line, including the directory
-where the executable resides on the file system.
-
-This property is used to select a single process to instrument, or a group of processes of
-similar characteristics. For more fine-grained process selection and grouping, you can
-follow the instructions in the [service discovery section](../service-discovery/).
-
-If the `open_port` property is set, the executable to be selected needs to match both properties.
-
-When instrumenting by using the executable name, choose a non-ambiguous name, a name that
-will match a single executable on the target system.
-For example, if you set `BEYLA_EXECUTABLE_NAME=server`, and you have running two processes whose executables
-have the following paths:
+**Config argument:**
 
 ```sh
-/usr/local/bin/language-server
-/opt/app/server
+BEYLA_OPEN_PORT=8080 beyla -config /path/to/config.yaml
 ```
 
-Beyla will match indistinctly one of the above processes and instrument both.
-If you just want to instrument one of them, you should be as concrete as possible about
-the value of the setting. For example, `BEYLA_EXECUTABLE_NAME=/opt/app/server`
-or just `BEYLA_EXECUTABLE_NAME=/server`.
+**Config environment variable:**
 
-| YAML        | Environment variable           | Type   | Default |
-| ----------- | ----------------- | ------ | ------- |
-| `open_port` | `BEYLA_OPEN_PORT` | string | (unset) |
+```sh
+BEYLA_OPEN_PORT=8080 BEYLA_CONFIG_PATH=/path/to/config.yaml beyla
+```
 
-Selects the process to instrument by the port it has open (listens to). This property
-accepts a comma-separated list of ports (for example, `80`), and port ranges (for example, `8000-8999`).
-If the executable matching only one of the ports in the list, it is considered to match
-the selection criteria.
+Refer to the [example YAML configuration file](../example/) for a configuration file template.
 
-For example, specifying the following property:
+Beyla consists of a pipeline of components that generate, transform, and export traces from HTTP and GRPC applications.
+In the YAML configuration, each component has its own first-level section.
+
+Optionally, Beyla also provides network-level metrics, refer to the [network metrics documentation](../../network/) for more information.
+
+The following sections explain the global configuration properties that apply to the entire Beyla configuration:
+
+| Lowercase YAML option<br>Uppercase environment variable option | Description                                                                                                           | Type    | Default               |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------- | --------------------- |
+| `executable_name`<br>`BEYLA_EXECUTABLE_NAME`                   | Selects the process to instrument by regular expression matching against the full executable path.                    | string  | unset                 |
+| `open_port`<br>`BEYLA_OPEN_PORT`                               | Selects a process to instrument by open ports. Accepts comma-separated lists of ports and port ranges.                | string  | unset                 |
+| `service_name`<br>`BEYLA_SERVICE_NAME`                         | **Deprecated** Overrides the name of the instrumented service for metrics export.                                     | string  | see service discovery |
+| `service_namespace`<br>`BEYLA_SERVICE_NAMESPACE`               | **Deprecated** Assigns a namespace for the selected service.                                                          | string  | see service discovery |
+| `log_level`<br>`BEYLA_LOG_LEVEL`                               | Sets process logger verbosity. Valid values: `DEBUG`, `INFO`, `WARN`, `ERROR`.                                        | string  | `INFO`                |
+| `trace_printer`<br>`BEYLA_TRACE_PRINTER`                       | Prints instrumented traces to stdout in a specified format, refer to [trace printer formats](#trace-printer-formats). | string  | `disabled`            |
+| `enforce_sys_caps`<br>`BEYLA_ENFORCE_SYS_CAPS`                 | Controls how Beyla handles missing system capabilities at startup.                                                    | boolean | `false`               |
+
+## Executable name matching
+
+This property accepts a regular expression matched against the full executable command line, including the directory where the executable resides on the file system.
+Beyla selects one process, or multiple processes with similar characteristics.
+For more detailed process selection and grouping, refer to the [service discovery documentation](../service-discovery/).
+
+When you instrument by executable name, choose a non-ambiguous name that matches one executable on the target system.
+For example, if you set `BEYLA_EXECUTABLE_NAME=server` and have two processes that match the regular expression Beyla selects both.
+Instead use the full application path for exact matches, for example `BEYLA_EXECUTABLE_NAME=/opt/app/server` or `BEYLA_EXECUTABLE_NAME=/server`.
+
+If you set `executable_name`, the executable must also match any `open_port` property.
+
+## Open port matching
+
+This property accepts a comma-separated list of ports or port ranges. If an executable matches any of the ports Beyla selects it. For example:
 
 ```yaml
 open_port: 80,443,8000-8999
 ```
 
-Would make Beyla to select any executable that opens port 80, 443, or any of the ports between 8000 and 8999 included.
+In this example, Beyla selects any executable that opens port `80`, `443`, or any port between `8000` and `8999`.
+It can select one process or multiple processes with similar characteristics.
+For more detailed process selection and grouping, follow the instructions in the [service discovery documentation](../service-discovery/).
 
-This property is used to select a single process to instrument, or a group of processes of
-similar characteristics. For more fine-grained process selection and grouping, you can
-follow the instructions in the [service discovery section](../service-discovery/).
+If an executable opens multiple ports, specifying one of those ports is enough for Beyla to instrument all HTTP/S and GRPC requests on all application ports.
+Currently, there is no way to limit instrumentation to requests on a specific port.
 
-If the `executable_name` property is set, the executable to be selected needs to match both properties.
+If the specified port range is wide, for example `1-65535`, Beyla tries to execute all processes that own one of the ports in that range.
 
-If an executable opens multiple ports, only one of the ports needs to be specified
-for Beyla **to instrument all the
-HTTP/S and GRPC requests on all application ports**. At the moment, there is no way to
-restrict the instrumentation only to the methods exposed through a specific port.
+If you set `executable_name`, the executable must also match any `open_port` property.
 
-If the specified port range is wide (e.g. `1-65535`) Beyla will try to execute all the processes
-owning one of the ports in the range.
+## Service name and namespace
 
-| YAML           | Environment variable                                     | Type   | Default                                                                         |
-|----------------| ------------------------------------------- | ------ |---------------------------------------------------------------------------------|
-| `service_name` | `BEYLA_SERVICE_NAME` | string | (refer to [service discovery](../service-discovery/) section) |
+These configuration options are deprecated.
 
-**Deprecated**
+Defining these properties is equivalent to adding a `name` entry to the [`discovery.services` YAML section](../service-discovery/).
+When a single instance of Beyla instruments multiple processes, they share the same service name even if they differ.
+To give multiple services different names, see how to [override the service name and namespace](../service-discovery/) in the service discovery documentation.
 
-Overrides the name of the instrumented service to be reported by the metrics exporter.
-Defining this property is equivalent to add a `name` entry into the [`discovery.services` YAML
-section](../service-discovery/).
+## Trace printer formats
 
-This configuration option is deprecated. If a single instance of Beyla is instrumenting multiple instances of different processes,
-they will share the same service name even if they are different. If you need that a
-single instance of Beyla report different service names, follow the instructions on how to
-[override the service name and namespace](../service-discovery/) in the service discovery documentation
-to enable automatic configuration of service name and namespace from diverse metadata sources.
+This option prints any instrumented trace on the standard output using one of the following formats:
 
-| YAML                | Environment variable                   | Type   | Default                                                                         |
-| ------------------- | ------------------------- | ------ |---------------------------------------------------------------------------------|
-| `service_namespace` | `BEYLA_SERVICE_NAMESPACE` | string | (refer to [service discovery](../service-discovery/) section) |
-
-**Deprecated**
-
-Optionally, allows assigning a namespace for the service selected from the `executable_name`
-or `open_port` properties.
-
-Defining this property is equivalent to add a `name` entry into the [`discovery.services` YAML
-section](../service-discovery/).
-
-This configuration option is deprecated, as it assumes a single namespace for all the services instrumented
-by Beyla. If you need that a single instance of Beyla groups multiple services
-into different namespaces, follow the instructions on how to
-[override the service name and namespace](../service-discovery/) in the service discovery documentation
-to enable automatic configuration of service name and namespace from diverse metadata sources.
-
-| YAML        | Environment variable           | Type   | Default |
-| ----------- | ----------------- | ------ | ------- |
-| `log_level` | `BEYLA_LOG_LEVEL` | string | `INFO`  |
-
-Sets the verbosity level of the process standard output logger.
-Valid log level values are: `DEBUG`, `INFO`, `WARN` and `ERROR`.
-`DEBUG` being the most verbose and `ERROR` the least verbose.
-
-| YAML            | Environment variable  | Type    | Default    |
-| --------------  | --------------------- | ------- | ---------- |
-| `trace_printer` | `BEYLA_TRACE_PRINTER` | string  | `disabled` |
-
-<a id="printer"></a>
-
-Prints any instrumented trace on the standard output. The value of
-this option specify the format to be used when printing the trace. Valid
-formats are:
-
-| Value         | Description                    |
-|---------------|--------------------------------|
+| Format        | Description                    |
+| ------------- | ------------------------------ |
 | `disabled`    | disables the printer           |
 | `text`        | prints a concise line of text  |
 | `json`        | prints a compact JSON object   |
 | `json_indent` | prints an indented JSON object |
 
-| YAML               | Environment variable     | Type     | Default    |
-| -----------------  | ------------------------ | -------- | ---------- |
-| `enforce_sys_caps` | `BEYLA_ENFORCE_SYS_CAPS` | boolean  | `false`    |
+## System capabilities
 
-<a id="caps"></a>
-
-If you have set the `enforce_sys_caps` to true, if the required system
-capabilities are not present Beyla aborts its startup and logs a list of the
-missing capabilities.
-
-If you have set the configuration option to `false`, Beyla logs a list of the
-missing capabilities only.
+If you set `enforce_sys_caps` to true and the required system capabilities are missing, Beyla aborts startup and logs the missing capabilities.
+If you set this option to `false`, Beyla only logs the missing capabilities.

@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  curler:
+    image: alpine/curl
+    command:
+      - sh
+      - -c
+      - "while true; do curl -s https://github.com/; sleep 5; done"
+
+  autoinstrumenter:
+    build:
+      context: ../..
+      dockerfile: ./test/integration/components/beyla/Dockerfile
+    volumes:
+      - ./configs/:/configs
+      - ./system/sys/kernel/security:/sys/kernel/security
+      - ../../testoutput:/coverage
+      - ../../testoutput/run-netolly:/var/run/beyla
+    image: hatest-autoinstrumenter
+    privileged: true
+    network_mode: host
+    environment:
+      BEYLA_CONFIG_PATH: /configs/instrumenter-config-netolly.yml
+      GOCOVERDIR: "/coverage"
+      BEYLA_NETWORK_METRICS: "true" # explicitly enabling network metrics
+      BEYLA_NETWORK_PRINT_FLOWS: "true"
+      BEYLA_METRICS_INTERVAL: "1s"
+      BEYLA_BPF_BATCH_TIMEOUT: "1s"
+      BEYLA_NETWORK_CACHE_ACTIVE_TIMEOUT: "1s"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://localhost:4318 # otelcol exposing port in local node
+      BEYLA_LOG_LEVEL: "DEBUG"
+      BEYLA_BPF_DEBUG: "TRUE"
+      BEYLA_HOSTNAME: "beyla"
+      BEYLA_NETWORK_REVERSE_DNS_TYPE: "ebpf"
+
+  # OpenTelemetry Collector for Metrics. For Traces, we use directly Jaeger
+  otelcol:
+    image: otel/opentelemetry-collector-contrib:0.104.0
+    container_name: otel-col
+    deploy:
+      resources:
+        limits:
+          memory: 125M
+    restart: unless-stopped
+    command: [ "--config=/etc/otelcol-config/otelcol-config.yml" ]
+    volumes:
+      - ./configs/:/etc/otelcol-config
+    ports:
+      - "4317"          # OTLP over gRPC receiver
+      - "4318:4318"     # OTLP over HTTP receiver
+      - "9464"          # Prometheus exporter
+      - "8888"          # metrics endpoint
+    depends_on:
+      prometheus:
+        condition: service_started
+
+  # Prometheus
+  prometheus:
+    image: quay.io/prometheus/prometheus:v2.55.1
+    container_name: prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus-config${PROM_CONFIG_SUFFIX}.yml
+      - --web.enable-lifecycle
+      - --web.route-prefix=/
+    volumes:
+      - ./configs/:/etc/prometheus
+    ports:
+      - "9090:9090"

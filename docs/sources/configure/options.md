@@ -18,10 +18,15 @@ Beyla can be configured via environment variables or via a YAML configuration fi
 Environment variables have priority over the properties in the configuration file.
 For example, in the following command line, the `BEYLA_OPEN_PORT` option overrides any `open_port` settings inside config.yaml:
 
+**Config argument:**
+
 ```sh
-# config path argument
 BEYLA_OPEN_PORT=8080 beyla -config /path/to/config.yaml
-# config path environment variable
+```
+
+**Config environment variable:**
+
+```sh
 BEYLA_OPEN_PORT=8080 BEYLA_CONFIG_PATH=/path/to/config.yaml beyla
 ```
 
@@ -34,15 +39,15 @@ Optionally, Beyla also provides network-level metrics, refer to the [network met
 
 The following sections explain the global configuration properties that apply to the entire Beyla configuration:
 
-| Lowercase YAML option<br>Uppercase environment variable option | Description                                                                                            | Type    | Default               |
-| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------- | --------------------- |
-| `executable_name`<br>`BEYLA_EXECUTABLE_NAME`                   | Selects the process to instrument by regex matching against the full executable path.                  | string  | unset                 |
-| `open_port`<br>`BEYLA_OPEN_PORT`                               | Selects a process to instrument by open ports. Accepts comma-separated lists of ports and port ranges. | string  | unset                 |
-| `service_name`<br>`BEYLA_SERVICE_NAME`                         | **Deprecated** Overrides the name of the instrumented service for metrics export.                      | string  | see service discovery |
-| `service_namespace`<br>`BEYLA_SERVICE_NAMESPACE`               | **Deprecated** Assigns a namespace for the selected service.                                           | string  | see service discovery |
-| `log_level`<br>`BEYLA_LOG_LEVEL`                               | Sets process stdout logger verbosity. Valid values: `DEBUG`, `INFO`, `WARN`, `ERROR`.                  | string  | `INFO`                |
-| `trace_printer`<br>`BEYLA_TRACE_PRINTER`                       | Prints instrumented traces to stdout in a specified format, refer to [trace printer formats](#trace-printer-formats).                                            | string  | `disabled`            |
-| `enforce_sys_caps`<br>`BEYLA_ENFORCE_SYS_CAPS`                 | Controls how Beyla handles missing system capabilities at startup.                                     | boolean | `false`               |
+| Lowercase YAML option<br>Uppercase environment variable option | Description                                                                                                           | Type    | Default               |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------- | --------------------- |
+| `executable_name`<br>`BEYLA_EXECUTABLE_NAME`                   | Selects the process to instrument by regular expression matching against the full executable path.                    | string  | unset                 |
+| `open_port`<br>`BEYLA_OPEN_PORT`                               | Selects a process to instrument by open ports. Accepts comma-separated lists of ports and port ranges.                | string  | unset                 |
+| `service_name`<br>`BEYLA_SERVICE_NAME`                         | **Deprecated** Overrides the name of the instrumented service for metrics export.                                     | string  | see service discovery |
+| `service_namespace`<br>`BEYLA_SERVICE_NAMESPACE`               | **Deprecated** Assigns a namespace for the selected service.                                                          | string  | see service discovery |
+| `log_level`<br>`BEYLA_LOG_LEVEL`                               | Sets process logger verbosity. Valid values: `DEBUG`, `INFO`, `WARN`, `ERROR`.                                        | string  | `INFO`                |
+| `trace_printer`<br>`BEYLA_TRACE_PRINTER`                       | Prints instrumented traces to stdout in a specified format, refer to [trace printer formats](#trace-printer-formats). | string  | `disabled`            |
+| `enforce_sys_caps`<br>`BEYLA_ENFORCE_SYS_CAPS`                 | Controls how Beyla handles missing system capabilities at startup.                                                    | boolean | `false`               |
 
 ## Executable name matching
 
@@ -51,7 +56,7 @@ Beyla selects one process, or multiple processes with similar characteristics.
 For more detailed process selection and grouping, refer to the [service discovery documentation](../service-discovery/).
 
 When you instrument by executable name, choose a non-ambiguous name that matches one executable on the target system.
-For example, if you set `BEYLA_EXECUTABLE_NAME=server` and have two processes that match the regex Beyla selects both.
+For example, if you set `BEYLA_EXECUTABLE_NAME=server` and have two processes that match the regular expression Beyla selects both.
 Instead use the full application path for exact matches, for example `BEYLA_EXECUTABLE_NAME=/opt/app/server` or `BEYLA_EXECUTABLE_NAME=/server`.
 
 If you set `executable_name`, the executable must also match any `open_port` property.

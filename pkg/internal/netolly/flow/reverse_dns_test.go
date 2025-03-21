@@ -1,6 +1,7 @@
 package flow
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -27,7 +28,7 @@ func TestReverseDNS(t *testing.T) {
 	// Given a Reverse DNS node
 	in := make(chan []*ebpf.Record, 10)
 	out := make(chan []*ebpf.Record, 10)
-	reverseDNS, err := ReverseDNSProvider(&ReverseDNS{Type: ReverseDNSLocalLookup, CacheLen: 255, CacheTTL: time.Minute})
+	reverseDNS, err := ReverseDNSProvider(context.TODO(), &ReverseDNS{Type: ReverseDNSLocalLookup, CacheLen: 255, CacheTTL: time.Minute})
 	require.NoError(t, err)
 	go reverseDNS(in, out)
 
@@ -56,7 +57,7 @@ func TestReverseDNS_AlreadyProvidedNames(t *testing.T) {
 	// Given a Reverse DNS node
 	in := make(chan []*ebpf.Record, 10)
 	out := make(chan []*ebpf.Record, 10)
-	reverseDNS, err := ReverseDNSProvider(&ReverseDNS{Type: ReverseDNSLocalLookup, CacheLen: 255, CacheTTL: time.Minute})
+	reverseDNS, err := ReverseDNSProvider(context.TODO(), &ReverseDNS{Type: ReverseDNSLocalLookup, CacheLen: 255, CacheTTL: time.Minute})
 	require.NoError(t, err)
 	go reverseDNS(in, out)
 
@@ -88,7 +89,7 @@ func TestReverseDNS_Cache(t *testing.T) {
 	// Given a Reverse DNS node
 	in := make(chan []*ebpf.Record, 10)
 	out := make(chan []*ebpf.Record, 10)
-	reverseDNS, err := ReverseDNSProvider(&ReverseDNS{Type: ReverseDNSLocalLookup, CacheLen: 255, CacheTTL: time.Minute})
+	reverseDNS, err := ReverseDNSProvider(context.TODO(), &ReverseDNS{Type: ReverseDNSLocalLookup, CacheLen: 255, CacheTTL: time.Minute})
 	require.NoError(t, err)
 	go reverseDNS(in, out)
 

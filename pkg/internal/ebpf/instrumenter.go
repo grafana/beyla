@@ -432,24 +432,12 @@ func getCgroupPath() (string, error) {
 
 	enabled, err := v2.Enabled()
 	if !enabled {
-		// In a hybrid cgroup hierarchy the unified path can exist, so check before
-		// attempting to bind to Cgroups V1.
 		if _, pathErr := os.Stat(filepath.Join(cgroupPath, "unified")); pathErr == nil {
+            slog.Debug("discovered hybrid cgroup hierarchy, will attempt to attach sockops")
 			return filepath.Join(cgroupPath, "unified"), nil
 		}
-		// If pure Cgroups V1, attempt to bind optimistically to the network hierarchy.
-		if _, pathErr := os.Stat(filepath.Join(cgroupPath, "net_cls,net_prio")); pathErr == nil {
-			return filepath.Join(cgroupPath, "net_cls,net_prio"), nil
-		}
-		if _, pathErr := os.Stat(filepath.Join(cgroupPath, "net_cls")); pathErr == nil {
-			return filepath.Join(cgroupPath, "net_cls"), nil
-		}
-		if _, pathErr := os.Stat(filepath.Join(cgroupPath, "net_prio")); pathErr == nil {
-			return filepath.Join(cgroupPath, "net_prio"), nil
-		}
-		return "", errors.New("unable to determine a suitable controller for Cgroups V1")
+        return "", errors.New("failed to find unified cgroup hierarchy: sockops cannot be used with cgroups v1")
 	}
-	// In a pure Cgroups V2 the /sys/fs/cgroup path is the unified hierarchy.
 	return cgroupPath, err
 }
 

@@ -5,6 +5,7 @@ package ebpf
 import (
 	"debug/elf"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -431,12 +432,11 @@ func getCgroupPath() (string, error) {
 
 	enabled, err := v2.Enabled()
 	if !enabled {
-		if _, pathErr := os.Stat(filepath.Join(cgroupPath, "unified")); pathErr != nil {
-			// Return the original error to the caller, pathErr is only required to set the Cgroup path.
-			// Catch all errors here to capture permissions issues as well as existence errors.
-			return cgroupPath, err
+		if _, pathErr := os.Stat(filepath.Join(cgroupPath, "unified")); pathErr == nil {
+			slog.Debug("discovered hybrid cgroup hierarchy, will attempt to attach sockops")
+			return filepath.Join(cgroupPath, "unified"), nil
 		}
-		cgroupPath = filepath.Join(cgroupPath, "unified")
+		return "", errors.New("failed to find unified cgroup hierarchy: sockops cannot be used with cgroups v1")
 	}
 	return cgroupPath, err
 }

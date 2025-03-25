@@ -41,6 +41,7 @@ jobs:
         with:
           app-id: ${{ env.GITHUB_APP_ID }}
           private-key: ${{ env.GITHUB_APP_PRIVATE_KEY }}
+          installation-id: ${{ env.GITHUB_APP_INSTALLATION_ID }}
           owner: grafana
           repositories: "alloy"
 
@@ -156,13 +157,17 @@ jobs:
             # If all checks are complete
             if ! echo "$STATUS" | grep -q "PENDING"; then
               if echo "$STATUS" | grep -q "FAILURE"; then
-                # If any check failed, comment on the Beyla PR
-                gh pr comment $PR_NUMBER --body "❌ The Alloy PR checks failed. Please check [the PR](${ALLOY_PR_URL}) for details."
+                # If any check failed, mark the check as failed
+                echo "❌ The Alloy PR checks failed. Please check the PR: ${ALLOY_PR_URL}"
+                # Try to comment, but don't fail if we can't
+                gh pr comment $PR_NUMBER --body "❌ The Alloy PR checks failed. Please check [the PR](${ALLOY_PR_URL}) for details." || true
                 exit 1
               elif echo "$STATUS" | grep -q "SUCCESS"; then
-                # If all checks passed, convert from draft and comment
+                # If all checks passed, convert from draft and try to comment
                 gh pr ready $ALLOY_PR_NUMBER --repo grafana/alloy
-                gh pr comment $PR_NUMBER --body "✅ The Alloy PR checks passed. The PR is ready for review: ${ALLOY_PR_URL}"
+                echo "✅ The Alloy PR checks passed. PR ready for review: ${ALLOY_PR_URL}"
+                # Try to comment, but don't fail if we can't
+                gh pr comment $PR_NUMBER --body "✅ The Alloy PR checks passed. The PR is ready for review: ${ALLOY_PR_URL}" || true
                 exit 0
               fi
             fi
@@ -171,17 +176,35 @@ jobs:
             ELAPSED=$((ELAPSED + INTERVAL))
           done
           
-          # If we timeout, comment on the PR
-          gh pr comment $PR_NUMBER --body "⚠️ Timed out waiting for Alloy PR checks to complete. Please check [the PR](${ALLOY_PR_URL}) manually."
+          # If we timeout, try to comment but don't fail if we can't
+          echo "⚠️ Timed out waiting for Alloy PR checks to complete. Please check the PR: ${ALLOY_PR_URL}"
+          gh pr comment $PR_NUMBER --body "⚠️ Timed out waiting for Alloy PR checks to complete. Please check [the PR](${ALLOY_PR_URL}) manually." || true
           exit 1
 
-      - name: Close Alloy PR
-        if: github.event.action == 'closed' && github.event.pull_request.merged == false
+      - name: Cleanup Alloy PR and branch
+        if: always() && (steps.check-deps.outputs.has_relevant_updates == 'true' || github.event.action == 'closed')
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          BRANCH_NAME: beyla-deps-sync-${{ github.event.pull_request.number }}
+          ALLOY_PR_NUMBER: ${{ steps.create-pr.outputs.alloy_pr_number }}
         run: |
           set -euf -o pipefail
           
-          # Find and close the corresponding PR in Alloy
-          gh pr list -R grafana/alloy --search "in:title Beyla #${PR_NUMBER}" --json number --jq '.[0].number' | xargs -I {} gh pr close {} -R grafana/alloy 
+          # If PR number is not set (from create-pr step), try to find it
+          if [ -z "${ALLOY_PR_NUMBER:-}" ]; then
+            # List PRs and extract the number using grep and cut
+            ALLOY_PR_NUMBER=$(gh pr list -R grafana/alloy --search "in:title Beyla #${PR_NUMBER}" | grep "^[0-9]" | cut -f1 || echo "")
+          fi
+          
+          # Close PR if it exists and isn't already closed
+          if [ -n "${ALLOY_PR_NUMBER:-}" ]; then
+            if gh pr view "$ALLOY_PR_NUMBER" --repo grafana/alloy &>/dev/null; then
+              gh pr close "$ALLOY_PR_NUMBER" --repo grafana/alloy || true
+            fi
+          fi
+          
+          # Delete branch if it exists
+          if git ls-remote --exit-code --heads origin "refs/heads/${BRANCH_NAME}" &>/dev/null; then
+            git push origin --delete "${BRANCH_NAME}" || true
+          fi 

@@ -26,9 +26,9 @@ jobs:
         uses: grafana/shared-workflows/actions/get-vault-secrets@main
         with:
           repo_secrets: |
-            GITHUB_APP_ID=github-app:app-id
-            GITHUB_APP_INSTALLATION_ID=github-app:app-installation-id
-            GITHUB_APP_PRIVATE_KEY=github-app:app-private-key
+            GITHUB_APP_ID=ci/repo/grafana/beyla/github-app:app-id
+            GITHUB_APP_INSTALLATION_ID=ci/repo/grafana/beyla/github-app:app-installation-id
+            GITHUB_APP_PRIVATE_KEY=ci/repo/grafana/beyla/github-app:private-key
 
       - name: Checkout Beyla
         uses: actions/checkout@v4

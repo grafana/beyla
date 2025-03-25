@@ -115,6 +115,7 @@ jobs:
           # Push changes and create PR
           git push origin "refs/heads/${BRANCH_NAME}"
           
+          # Create PR and get its URL
           PR_URL=$(gh pr create \
             --title "deps: test with Beyla PR #${PR_NUMBER}" \
             --body "This PR was automatically created to test changes from Beyla PR #${PR_NUMBER}
@@ -127,8 +128,7 @@ jobs:
             --draft \
             --label "dependencies" \
             --label "beyla" \
-            --repo grafana/alloy \
-            --json url --jq '.url')
+            --repo grafana/alloy)
 
           echo "PR_URL=${PR_URL}" >> $GITHUB_OUTPUT
 

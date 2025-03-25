@@ -16,11 +16,12 @@ import (
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/link"
 
-	"github.com/grafana/beyla/pkg/beyla"
-	common "github.com/grafana/beyla/pkg/internal/ebpf/common"
-	"github.com/grafana/beyla/pkg/internal/exec"
-	"github.com/grafana/beyla/pkg/internal/goexec"
-	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/beyla"
+	common "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
+	convenience "github.com/grafana/beyla/v2/pkg/internal/ebpf/convenience"
+	"github.com/grafana/beyla/v2/pkg/internal/exec"
+	"github.com/grafana/beyla/v2/pkg/internal/goexec"
+	"github.com/grafana/beyla/v2/pkg/internal/request"
 )
 
 const PinInternal = ebpf.PinType(100)
@@ -115,8 +116,8 @@ func (pt *ProcessTracer) Run(ctx context.Context, out chan<- []request.Span) {
 	for _, t := range trcrs {
 		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			t.Run(ctx, out)
-			wg.Done()
 		}()
 	}
 
@@ -130,7 +131,7 @@ func (pt *ProcessTracer) loadSpec(p Tracer) (*ebpf.CollectionSpec, error) {
 	if err != nil {
 		return nil, fmt.Errorf("loading eBPF program: %w", err)
 	}
-	if err := spec.RewriteConstants(p.Constants()); err != nil {
+	if err := convenience.RewriteConstants(spec, p.Constants()); err != nil {
 		return nil, fmt.Errorf("rewriting BPF constants definition: %w", err)
 	}
 
@@ -150,7 +151,7 @@ func (pt *ProcessTracer) loadAndAssign(p Tracer) error {
 		return err
 	}
 
-	collOpts.Programs = ebpf.ProgramOptions{LogSize: 640 * 1024}
+	collOpts.Programs = ebpf.ProgramOptions{LogSizeStart: 640 * 1024}
 
 	return spec.LoadAndAssign(p.BpfObjects(), collOpts)
 }

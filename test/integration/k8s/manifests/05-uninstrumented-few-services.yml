@@ -51,9 +51,9 @@ spec:
       name: pytestserver
       labels:
         app: pytestserver
-        deployment.environment: 'integration-test'
+        deployment.environment: 'to-be-ignored-in-favor-of-annotation'
       annotations:
-        resource.opentelemetry.io/deployment.environment: 'to-be-ignored-in-favor-of-label'
+        resource.opentelemetry.io/deployment.environment: 'integration-test'
     spec:
       affinity:
           nodeAffinity:

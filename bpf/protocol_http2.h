@@ -13,10 +13,15 @@
 // These are bit flags, if you add any use power of 2 values
 enum { http2_conn_flag_ssl = WITH_SSL, http2_conn_flag_new = 0x2 };
 
+typedef struct http2_conn_info_data {
+    u64 id;
+    u8 flags;
+} http2_conn_info_data_t;
+
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, pid_connection_info_t);
-    __type(value, u8); // flags
+    __type(value, http2_conn_info_data_t); // flags and id
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_http2_connections SEC(".maps");
 
@@ -82,6 +87,14 @@ static __always_inline http2_grpc_request_t *empty_http2_info() {
     return value;
 }
 
+static __always_inline u64 uniqueHTTP2ConnId(pid_connection_info_t *p_conn) {
+    u64 random_id = (u64)bpf_get_prandom_u32() << 32;
+
+    random_id |= ((u32)p_conn->conn.d_port << 16) | p_conn->conn.s_port;
+
+    return random_id;
+}
+
 static __always_inline void http2_grpc_start(
     http2_conn_stream_t *s_key, void *u_buf, int len, u8 direction, u8 ssl, u16 orig_dport) {
     http2_grpc_request_t *existing = bpf_map_lookup_elem(&ongoing_http2_grpc, s_key);
@@ -110,10 +123,11 @@ static __always_inline void http2_grpc_start(
             h2g_info->type = meta->type;
         }
 
-        h2g_info->new_conn = 0;
-        u8 *h2g = bpf_map_lookup_elem(&ongoing_http2_connections, &s_key->pid_conn);
-        if (h2g && http2_flag_new(*h2g)) {
-            h2g_info->new_conn = 1;
+        h2g_info->new_conn_id = 0;
+        http2_conn_info_data_t *h2g =
+            bpf_map_lookup_elem(&ongoing_http2_connections, &s_key->pid_conn);
+        if (h2g && http2_flag_new(h2g->flags)) {
+            h2g_info->new_conn_id = h2g->id;
         }
 
         fixup_connection_info(

@@ -3,13 +3,15 @@ package instrument
 import (
 	"context"
 
-	"github.com/grafana/beyla/pkg/internal/connector"
+	"github.com/grafana/beyla/v2/pkg/internal/connector"
 )
 
 const defaultMetricsPath = "/metrics"
 
 type InternalMetricsConfig struct {
-	Port int    `yaml:"port,omitempty" env:"BEYLA_K8S_CACHE_INTERNAL_METRICS_PROMETHEUS_PORT"`
+	// nolint:undoc
+	Port int `yaml:"port,omitempty" env:"BEYLA_K8S_CACHE_INTERNAL_METRICS_PROMETHEUS_PORT"`
+	// nolint:undoc
 	Path string `yaml:"path,omitempty" env:"BEYLA_K8S_CACHE_INTERNAL_METRICS_PROMETHEUS_PATH"`
 }
 

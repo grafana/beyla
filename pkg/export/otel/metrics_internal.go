@@ -6,15 +6,13 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/attribute"
 	instrument "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
-	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
-	"github.com/grafana/beyla/pkg/buildinfo"
-	"github.com/grafana/beyla/pkg/internal/pipe/global"
+	"github.com/grafana/beyla/v2/pkg/buildinfo"
+	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 )
 
 // InternalMetricsReporter is an internal metrics Reporter that exports to OTEL
@@ -119,19 +117,6 @@ func NewInternalMetricsReporter(ctx context.Context, ctxInfo *global.ContextInfo
 	}, nil
 }
 
-func newResourceInternal(hostID string) *resource.Resource {
-	attrs := []attribute.KeyValue{
-		semconv.ServiceName("beyla-internal"),
-		semconv.ServiceInstanceID(uuid.New().String()),
-		semconv.TelemetrySDKLanguageKey.String(semconv.TelemetrySDKLanguageGo.Value.AsString()),
-		// We set the SDK name as Beyla, so we can distinguish beyla generated metrics from other SDKs
-		semconv.TelemetrySDKNameKey.String("beyla"),
-		semconv.HostID(hostID),
-	}
-
-	return resource.NewWithAttributes(semconv.SchemaURL, attrs...)
-}
-
 func newInternalMeterProvider(res *resource.Resource, exporter *metric.Exporter, interval time.Duration) (*metric.MeterProvider, error) {
 	meterProvider := metric.NewMeterProvider(
 		metric.WithResource(res),
@@ -144,20 +129,20 @@ func (p *InternalMetricsReporter) Start(ctx context.Context) {
 	p.beylaInfo.Record(ctx, 1, instrument.WithAttributes(attribute.String("goarch", runtime.GOARCH), attribute.String("goos", runtime.GOOS), attribute.String("goversion", runtime.Version()), attribute.String("version", buildinfo.Version), attribute.String("revision", buildinfo.Revision)))
 }
 
-func (p *InternalMetricsReporter) TracerFlush(len int) {
-	p.tracerFlushes.Record(p.ctx, float64(len))
+func (p *InternalMetricsReporter) TracerFlush(length int) {
+	p.tracerFlushes.Record(p.ctx, float64(length))
 }
 
-func (p *InternalMetricsReporter) OTELMetricExport(len int) {
-	p.otelMetricExports.Add(p.ctx, float64(len))
+func (p *InternalMetricsReporter) OTELMetricExport(length int) {
+	p.otelMetricExports.Add(p.ctx, float64(length))
 }
 
 func (p *InternalMetricsReporter) OTELMetricExportError(err error) {
 	p.otelMetricExportErrs.Add(p.ctx, 1, instrument.WithAttributes(attribute.String("error", err.Error())))
 }
 
-func (p *InternalMetricsReporter) OTELTraceExport(len int) {
-	p.otelTraceExports.Add(p.ctx, float64(len))
+func (p *InternalMetricsReporter) OTELTraceExport(length int) {
+	p.otelTraceExports.Add(p.ctx, float64(length))
 }
 
 func (p *InternalMetricsReporter) OTELTraceExportError(err error) {

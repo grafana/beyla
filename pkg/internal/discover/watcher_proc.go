@@ -14,11 +14,11 @@ import (
 	"github.com/shirou/gopsutil/v3/net"
 	"github.com/shirou/gopsutil/v3/process"
 
-	"github.com/grafana/beyla/pkg/beyla"
-	"github.com/grafana/beyla/pkg/internal/ebpf"
-	"github.com/grafana/beyla/pkg/internal/ebpf/logger"
-	"github.com/grafana/beyla/pkg/internal/ebpf/watcher"
-	"github.com/grafana/beyla/pkg/services"
+	"github.com/grafana/beyla/v2/pkg/beyla"
+	"github.com/grafana/beyla/v2/pkg/internal/ebpf"
+	"github.com/grafana/beyla/v2/pkg/internal/ebpf/logger"
+	"github.com/grafana/beyla/v2/pkg/internal/ebpf/watcher"
+	"github.com/grafana/beyla/v2/pkg/services"
 )
 
 const (
@@ -94,7 +94,7 @@ type pollAccounter struct {
 	// injectable function
 	listProcesses func(bool) (map[PID]processAttrs, error)
 	// injectable function
-	executableReady func(PID) bool
+	executableReady func(PID) (string, bool)
 	// injectable function to load the bpf program
 	loadBPFWatcher func(cfg *beyla.Config, events chan<- watcher.Event) error
 	loadBPFLogger  func(cfg *beyla.Config) error
@@ -237,18 +237,18 @@ func (pa *pollAccounter) snapshot(fetchedProcs map[PID]processAttrs) []Event[pro
 	return events
 }
 
-func executableReady(pid PID) bool {
+func executableReady(pid PID) (string, bool) {
 	proc, err := process.NewProcess(int32(pid))
 	if err != nil {
-		return false
+		return "", false
 	}
 	exePath, err := proc.Exe()
 
 	if err != nil {
-		return errors.Is(err, os.ErrNotExist)
+		return exePath, errors.Is(err, os.ErrNotExist)
 	}
 
-	return exePath != "/"
+	return exePath, exePath != "/"
 }
 
 func (pa *pollAccounter) checkNewProcessConnectionNotification(
@@ -269,11 +269,13 @@ func (pa *pollAccounter) checkNewProcessConnectionNotification(
 		if _, ok := reportedProcs[pp.Pid]; !ok {
 			// avoid notifying multiple times the same process if it has multiple connections
 			reportedProcs[proc.pid] = struct{}{}
-			if pa.executableReady(pp.Pid) {
+			exec, ok := pa.executableReady(pp.Pid)
+			if ok {
+				wplog().Debug("Executable ready", "path", exec, "pid", pp.Pid, "port", port)
 				return true
 			}
 			notReadyProcs[pp.Pid] = struct{}{}
-			wplog().Debug("Executable not ready", "pid", pp.Pid)
+			wplog().Debug("Executable not ready", "path", exec, "pid", pp.Pid, "port", port)
 		}
 	}
 	return false
@@ -288,11 +290,13 @@ func (pa *pollAccounter) checkNewProcessNotification(pid PID, reportedProcs, not
 		if _, ok := reportedProcs[pid]; !ok {
 			// avoid notifying multiple times the same process if it has multiple connections
 			reportedProcs[pid] = struct{}{}
-			if pa.executableReady(pid) {
+			exec, ok := pa.executableReady(pid)
+			if ok {
+				wplog().Debug("Executable ready", "path", exec, "pid", pid)
 				return true
 			}
 			notReadyProcs[pid] = struct{}{}
-			wplog().Debug("Executable not ready", "pid", pid)
+			wplog().Debug("Executable not ready", "path", exec, "pid", pid)
 		}
 	}
 	return false

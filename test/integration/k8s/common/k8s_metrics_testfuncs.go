@@ -15,14 +15,14 @@ import (
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
 	"sigs.k8s.io/e2e-framework/pkg/features"
 
-	"github.com/grafana/beyla/test/integration/components/kube"
-	"github.com/grafana/beyla/test/integration/components/prom"
+	"github.com/grafana/beyla/v2/test/integration/components/kube"
+	"github.com/grafana/beyla/v2/test/integration/components/prom"
 )
 
 // This file contains some functions and features that are accessed/used
 // from diverse integration tests
 const (
-	testTimeout        = 2 * time.Minute
+	testTimeout        = 3 * time.Minute
 	prometheusHostPort = "localhost:39090"
 
 	HostIDRegex = `^[0-9A-Fa-f\-]+$`
@@ -119,6 +119,7 @@ func FeatureHTTPMetricsDecoration(manifest string, overrideAttrs map[string]stri
 		"host_name":                "testserver",
 		"host_id":                  HostIDRegex,
 		"deployment_environment":   "integration-test",
+		"service_version":          "3.2.1",
 	}
 	// if service_instance_id is overridden to be empty, we will check that value for target_info{instance} instead
 	if overrideAttrs != nil {
@@ -208,6 +209,7 @@ func FeatureGRPCMetricsDecoration(manifest string, overrideAttrs map[string]stri
 		"k8s_replicaset_name":    "^testserver-",
 		"service_instance_id":    "^default\\.testserver-.+\\.testserver",
 		"deployment_environment": "integration-test",
+		"service_version":        "3.2.1",
 	}
 	// if service_instance_id is overridden to be empty, we will check that value for target_info{instance} instead
 	targetInfoInstance := ""
@@ -227,9 +229,10 @@ func FeatureGRPCMetricsDecoration(manifest string, overrideAttrs map[string]stri
 				attributeMap(allAttributes, overrideAttrs))).
 		Assess("target_info metrics exist",
 			testMetricsDecoration([]string{"target_info"}, `{job=~".*testserver"}`, map[string]string{
-				"host_name": "testserver",
-				"host_id":   HostIDRegex,
-				"instance":  targetInfoInstance,
+				"host_name":              "testserver",
+				"host_id":                HostIDRegex,
+				"instance":               targetInfoInstance,
+				"deployment_environment": "integration-test",
 			}),
 		).Feature()
 }

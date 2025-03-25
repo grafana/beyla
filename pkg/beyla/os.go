@@ -8,8 +8,8 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
-	"github.com/grafana/beyla/pkg/internal/helpers"
+	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
+	"github.com/grafana/beyla/v2/pkg/internal/helpers"
 )
 
 // Minimum required Kernel version: 4.18
@@ -82,7 +82,10 @@ func testAndSet(caps *helpers.OSCapabilities, capError *osCapabilitiesError, c h
 func checkCapabilitiesForSetOptions(config *Config, caps *helpers.OSCapabilities, capError *osCapabilitiesError) {
 	if config.Enabled(FeatureAppO11y) {
 		testAndSet(caps, capError, unix.CAP_CHECKPOINT_RESTORE)
+		testAndSet(caps, capError, unix.CAP_DAC_READ_SEARCH)
 		testAndSet(caps, capError, unix.CAP_SYS_PTRACE)
+		testAndSet(caps, capError, unix.CAP_PERFMON)
+		testAndSet(caps, capError, unix.CAP_NET_RAW)
 
 		if config.EBPF.ContextPropagationEnabled || config.EBPF.UseTCForL7CP {
 			testAndSet(caps, capError, unix.CAP_NET_ADMIN)
@@ -90,9 +93,11 @@ func checkCapabilitiesForSetOptions(config *Config, caps *helpers.OSCapabilities
 	}
 
 	if config.Enabled(FeatureNetO11y) {
-		// test for net raw only if we don't have net admin
-		if !caps.Has(unix.CAP_NET_ADMIN) {
+		if config.NetworkFlows.Source == EbpfSourceSock {
 			testAndSet(caps, capError, unix.CAP_NET_RAW)
+		} else if config.NetworkFlows.Source == EbpfSourceTC {
+			testAndSet(caps, capError, unix.CAP_PERFMON)
+			testAndSet(caps, capError, unix.CAP_NET_ADMIN)
 		}
 	}
 }
@@ -126,8 +131,6 @@ func CheckOSCapabilities(config *Config) error {
 
 	// core capabilities
 	testAndSet(caps, &capError, unix.CAP_BPF)
-	testAndSet(caps, &capError, unix.CAP_PERFMON)
-	testAndSet(caps, &capError, unix.CAP_DAC_READ_SEARCH)
 
 	// CAP_SYS_RESOURCE is only required on kernels < 5.11
 	if (major == 5 && minor < 11) || (major < 5) {

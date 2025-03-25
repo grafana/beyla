@@ -17,6 +17,7 @@ exporters:
     enable_open_metrics: true
 processors:
   batch:
+    timeout: 0
 service:
   pipelines:
     metrics:

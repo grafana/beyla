@@ -6,14 +6,14 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/cilium/ebpf/ringbuf"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/grafana/beyla/pkg/internal/request"
-	"github.com/grafana/beyla/pkg/internal/svc"
+	"github.com/grafana/beyla/v2/pkg/internal/ebpf/ringbuf"
+	"github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/internal/svc"
 )
 
-const bufSize = 192
+const bufSize = 256
 
 func TestURL(t *testing.T) {
 	event := BPFHTTPInfo{
@@ -155,7 +155,7 @@ func TestToRequestTraceNoConnection(t *testing.T) {
 		Status:       200,
 		HostPort:     7033,
 		Service:      svc.Attrs{},
-		Statement:    "http;",
+		Statement:    "http;localhost",
 	}
 	assert.Equal(t, expected, result)
 }
@@ -193,13 +193,13 @@ func TestToRequestTrace_BadHost(t *testing.T) {
 		End:          789012,
 		HostPort:     0,
 		Service:      svc.Attrs{},
-		Statement:    "http;",
+		Statement:    "http;example.c",
 	}
 	assert.Equal(t, expected, result)
 
 	s, p := record.hostFromBuf()
-	assert.Equal(t, s, "")
-	assert.Equal(t, p, -1)
+	assert.Equal(t, "example.c", s)
+	assert.Equal(t, -1, p)
 
 	var record1 BPFHTTPInfo
 	copy(record1.Buf[:], "GET /hello HTTP/1.1\r\nHost: example.c:23")

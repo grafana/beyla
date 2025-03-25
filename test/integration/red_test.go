@@ -3,8 +3,11 @@
 package integration
 
 import (
+	"crypto/tls"
 	"fmt"
+	"io"
 	"math/rand"
+	"net/http"
 	"strconv"
 	"strings"
 	"testing"
@@ -14,8 +17,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/beyla/test/integration/components/prom"
-	grpcclient "github.com/grafana/beyla/test/integration/components/testserver/grpc/client"
+	"github.com/grafana/beyla/v2/test/integration/components/prom"
+	grpcclient "github.com/grafana/beyla/v2/test/integration/components/testserver/grpc/client"
 )
 
 const (
@@ -88,6 +91,31 @@ func testREDMetricsShortHTTP(t *testing.T) {
 			testSpanMetricsForHTTPLibrary(t, "testserver", "integration-test")
 		})
 	}
+}
+
+func testExemplarsExist(t *testing.T) {
+	url := "http://" + prometheusHostPort + "/api/v1/query_exemplars?query=http_server_request_duration_seconds_bucket"
+
+	var qtr = &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	var qClient = &http.Client{Transport: qtr}
+
+	req, err := http.NewRequest("GET", url, nil)
+	require.NoError(t, err)
+	r, err := qClient.Do(req)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, r.StatusCode)
+
+	// Read the response body
+	body, err := io.ReadAll(r.Body)
+	require.NoError(t, err)
+	defer r.Body.Close()
+
+	// Convert the body to a string
+	bodyStr := string(body)
+
+	assert.Contains(t, bodyStr, "exemplars", "The response body does not contain exemplars")
 }
 
 // **IMPORTANT** Tests must first call -> func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
@@ -721,6 +749,17 @@ func testPrometheusBeylaBuildInfo(t *testing.T) {
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
 		results, err = pq.Query(`beyla_build_info{target_lang="go"}`)
+		require.NoError(t, err)
+		require.NotEmpty(t, results)
+	})
+}
+
+func testHostInfo(t *testing.T) {
+	pq := prom.Client{HostPort: prometheusHostPort}
+	var results []prom.Result
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		var err error
+		results, err = pq.Query(`traces_host_info{}`)
 		require.NoError(t, err)
 		require.NotEmpty(t, results)
 	})

@@ -15,9 +15,9 @@ import (
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
 	"sigs.k8s.io/e2e-framework/pkg/features"
 
-	"github.com/grafana/beyla/test/integration/components/kube"
-	"github.com/grafana/beyla/test/integration/components/prom"
-	k8s "github.com/grafana/beyla/test/integration/k8s/common"
+	"github.com/grafana/beyla/v2/test/integration/components/kube"
+	"github.com/grafana/beyla/v2/test/integration/components/prom"
+	k8s "github.com/grafana/beyla/v2/test/integration/k8s/common"
 )
 
 const (
@@ -58,7 +58,9 @@ func testNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T, _
 		metric := results[0].Metric
 		assertIsIP(t, metric["src_address"])
 		assertIsIP(t, metric["dst_address"])
-		assert.Equal(t, "beyla-network-flows", metric["job"])
+		assert.Regexp(t,
+			regexp.MustCompile("^beyla-network-flows"),
+			metric["job"])
 		assert.Equal(t, "my-kube", metric["k8s_cluster_name"])
 		assert.Equal(t, "default", metric["k8s_src_namespace"])
 		assert.Equal(t, "internal-pinger-net", metric["k8s_src_name"])
@@ -89,7 +91,9 @@ func testNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T, _
 		metric := results[0].Metric
 		assertIsIP(t, metric["src_address"])
 		assertIsIP(t, metric["dst_address"])
-		assert.Equal(t, "beyla-network-flows", metric["job"])
+		assert.Regexp(t,
+			regexp.MustCompile("^beyla-network-flows"),
+			metric["job"])
 		assert.Equal(t, "default", metric["k8s_src_namespace"])
 		assert.Equal(t, "internal-pinger-net", metric["k8s_src_name"])
 		assert.Equal(t, "Pod", metric["k8s_src_owner_type"])
@@ -124,7 +128,9 @@ func testNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T, _
 		metric := results[0].Metric
 		assertIsIP(t, metric["src_address"])
 		assertIsIP(t, metric["dst_address"])
-		assert.Equal(t, "beyla-network-flows", metric["job"])
+		assert.Regexp(t,
+			regexp.MustCompile("^beyla-network-flows"),
+			metric["job"])
 		assert.Equal(t, "default", metric["k8s_src_namespace"])
 		assert.Regexp(t, regexp.MustCompile("^testserver-"), metric["k8s_src_name"])
 		assert.Equal(t, "Deployment", metric["k8s_src_owner_type"])
@@ -159,7 +165,9 @@ func testNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T, _
 		metric := results[0].Metric
 		assertIsIP(t, metric["src_address"])
 		assertIsIP(t, metric["dst_address"])
-		assert.Equal(t, "beyla-network-flows", metric["job"])
+		assert.Regexp(t,
+			regexp.MustCompile("^beyla-network-flows"),
+			metric["job"])
 		assert.Equal(t, "default", metric["k8s_src_namespace"])
 		assert.Equal(t, "testserver", metric["k8s_src_name"])
 		assert.Equal(t, "Service", metric["k8s_src_owner_type"])

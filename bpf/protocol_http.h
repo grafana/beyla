@@ -47,8 +47,32 @@ static __always_inline void http_get_or_create_trace_info(http_connection_metada
                                                           connection_info_t *conn,
                                                           void *u_buf,
                                                           int bytes_len,
-                                                          s32 capture_header_buffer) {
-    tp_info_pid_t *tp_p = tp_buf();
+                                                          s32 capture_header_buffer,
+                                                          u8 ssl) {
+    //TODO use make_key
+    egress_key_t e_key = {
+        .d_port = conn->d_port,
+        .s_port = conn->s_port,
+    };
+
+    sort_egress_key(&e_key);
+
+    tp_info_pid_t *tp_p = bpf_map_lookup_elem(&outgoing_trace_map, &e_key);
+
+    // TODO move this to sock msg
+    if (tp_p && tp_p->req_type == EVENT_HTTP_CLIENT && tp_p->written && tp_p->pid == pid) {
+        bpf_dbg_printk("found tp info previously set by sock msg");
+        // we've already got a tp_info_pid_t setup by the sockmsg program, use
+        // that instead
+
+        set_trace_info_for_connection(conn, TRACE_TYPE_CLIENT, tp_p);
+
+        // clean up so that TC does not pick it up
+        bpf_map_delete_elem(&outgoing_trace_map, &e_key);
+        return;
+    }
+
+    tp_p = tp_buf();
 
     if (!tp_p) {
         return;
@@ -57,6 +81,7 @@ static __always_inline void http_get_or_create_trace_info(http_connection_metada
     tp_p->tp.ts = bpf_ktime_get_ns();
     tp_p->tp.flags = 1;
     tp_p->valid = 1;
+    tp_p->written = 0;
     tp_p->pid = pid; // used for avoiding finding stale server requests with client port reuse
     tp_p->req_type = (meta) ? meta->type : 0;
 
@@ -81,7 +106,7 @@ static __always_inline void http_get_or_create_trace_info(http_connection_metada
     if (!found_tp) {
         bpf_dbg_printk("Generating new traceparent id");
         new_trace_id(&tp_p->tp);
-        __builtin_memset(tp_p->tp.parent_id, 0, sizeof(tp_p->tp.span_id));
+        __builtin_memset(tp_p->tp.parent_id, 0, sizeof(tp_p->tp.parent_id));
     } else {
         bpf_dbg_printk("Using old traceparent id");
     }
@@ -97,7 +122,7 @@ static __always_inline void http_get_or_create_trace_info(http_connection_metada
             if (meta) {
                 u32 type = trace_type_from_meta(meta);
                 set_trace_info_for_connection(conn, type, tp_p);
-                server_or_client_trace(meta->type, conn, tp_p);
+                server_or_client_trace(meta->type, conn, tp_p, ssl);
             }
             return;
         }
@@ -139,7 +164,7 @@ static __always_inline void http_get_or_create_trace_info(http_connection_metada
         // sock_msg program has already punched a hole in the HTTP headers and has made
         // the HTTP header invalid. We need to add more smarts there or pull the
         // sock msg information here and mark it so that we don't override the span_id.
-        server_or_client_trace(meta->type, conn, tp_p);
+        server_or_client_trace(meta->type, conn, tp_p, ssl);
     }
 }
 
@@ -364,7 +389,8 @@ int beyla_protocol_http(void *ctx) {
                                       &args->pid_conn.conn,
                                       (void *)args->u_buf,
                                       args->bytes_len,
-                                      capture_header_buffer);
+                                      capture_header_buffer,
+                                      args->ssl);
 
         if (meta) {
             u32 type = trace_type_from_meta(meta);

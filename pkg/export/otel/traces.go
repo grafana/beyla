@@ -39,13 +39,13 @@ import (
 	tracenoop "go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/zap"
 
-	"github.com/grafana/beyla/pkg/export/attributes"
-	attr "github.com/grafana/beyla/pkg/export/attributes/names"
-	"github.com/grafana/beyla/pkg/export/instrumentations"
-	"github.com/grafana/beyla/pkg/internal/imetrics"
-	"github.com/grafana/beyla/pkg/internal/pipe/global"
-	"github.com/grafana/beyla/pkg/internal/request"
-	"github.com/grafana/beyla/pkg/internal/svc"
+	"github.com/grafana/beyla/v2/pkg/export/attributes"
+	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
+	"github.com/grafana/beyla/v2/pkg/export/instrumentations"
+	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
+	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
+	"github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/internal/svc"
 )
 
 func tlog() *slog.Logger {
@@ -73,24 +73,32 @@ type TracesConfig struct {
 
 	// Configuration options below this line will remain undocumented at the moment,
 	// but can be useful for performance-tuning of some customers.
-	MaxExportBatchSize int           `yaml:"max_export_batch_size" env:"BEYLA_OTLP_TRACES_MAX_EXPORT_BATCH_SIZE"`
-	MaxQueueSize       int           `yaml:"max_queue_size" env:"BEYLA_OTLP_TRACES_MAX_QUEUE_SIZE"`
-	BatchTimeout       time.Duration `yaml:"batch_timeout" env:"BEYLA_OTLP_TRACES_BATCH_TIMEOUT"`
-	ExportTimeout      time.Duration `yaml:"export_timeout" env:"BEYLA_OTLP_TRACES_EXPORT_TIMEOUT"`
+	// nolint:undoc
+	MaxExportBatchSize int `yaml:"max_export_batch_size" env:"BEYLA_OTLP_TRACES_MAX_EXPORT_BATCH_SIZE"`
+	// nolint:undoc
+	MaxQueueSize int `yaml:"max_queue_size" env:"BEYLA_OTLP_TRACES_MAX_QUEUE_SIZE"`
+	// nolint:undoc
+	BatchTimeout time.Duration `yaml:"batch_timeout" env:"BEYLA_OTLP_TRACES_BATCH_TIMEOUT"`
+	// nolint:undoc
+	ExportTimeout time.Duration `yaml:"export_timeout" env:"BEYLA_OTLP_TRACES_EXPORT_TIMEOUT"`
 
 	// Configuration options for BackOffConfig of the traces exporter.
 	// See https://github.com/open-telemetry/opentelemetry-collector/blob/main/config/configretry/backoff.go
 	// BackOffInitialInterval the time to wait after the first failure before retrying.
+	// nolint:undoc
 	BackOffInitialInterval time.Duration `yaml:"backoff_initial_interval" env:"BEYLA_BACKOFF_INITIAL_INTERVAL"`
 	// BackOffMaxInterval is the upper bound on backoff interval.
+	// nolint:undoc
 	BackOffMaxInterval time.Duration `yaml:"backoff_max_interval" env:"BEYLA_BACKOFF_MAX_INTERVAL"`
 	// BackOffMaxElapsedTime is the maximum amount of time (including retries) spent trying to send a request/batch.
+	// nolint:undoc
 	BackOffMaxElapsedTime time.Duration `yaml:"backoff_max_elapsed_time" env:"BEYLA_BACKOFF_MAX_ELAPSED_TIME"`
-
+	// nolint:undoc
 	ReportersCacheLen int `yaml:"reporters_cache_len" env:"BEYLA_TRACES_REPORT_CACHE_LEN"`
 
 	// SDKLogLevel works independently from the global LogLevel because it prints GBs of logs in Debug mode
 	// and the Info messages leak internal details that are not usually valuable for the final user.
+	// nolint:undoc
 	SDKLogLevel string `yaml:"otel_sdk_log_level" env:"BEYLA_OTEL_SDK_LOG_LEVEL"`
 
 	// Grafana configuration needs to be explicitly set up before building the graph
@@ -104,7 +112,7 @@ func (m *TracesConfig) Enabled() bool { //nolint:gocritic
 	return m.CommonEndpoint != "" || m.TracesEndpoint != "" || m.Grafana.TracesEnabled()
 }
 
-func (m *TracesConfig) getProtocol() Protocol {
+func (m *TracesConfig) GetProtocol() Protocol {
 	if m.TracesProtocol != "" {
 		return m.TracesProtocol
 	}
@@ -112,6 +120,10 @@ func (m *TracesConfig) getProtocol() Protocol {
 		return m.Protocol
 	}
 	return m.guessProtocol()
+}
+
+func (m *TracesConfig) OTLPTracesEndpoint() (string, bool) {
+	return ResolveOTLPEndpoint(m.TracesEndpoint, m.CommonEndpoint, m.Grafana)
 }
 
 func (m *TracesConfig) guessProtocol() Protocol {
@@ -130,27 +142,29 @@ func (m *TracesConfig) guessProtocol() Protocol {
 	return ProtocolHTTPProtobuf
 }
 
-func makeTracesReceiver(ctx context.Context, cfg TracesConfig, ctxInfo *global.ContextInfo, userAttribSelection attributes.Selection) *tracesOTELReceiver {
+func makeTracesReceiver(ctx context.Context, cfg TracesConfig, spanMetricsEnabled bool, ctxInfo *global.ContextInfo, userAttribSelection attributes.Selection) *tracesOTELReceiver {
 	return &tracesOTELReceiver{
-		ctx:        ctx,
-		cfg:        cfg,
-		ctxInfo:    ctxInfo,
-		attributes: userAttribSelection,
-		is:         instrumentations.NewInstrumentationSelection(cfg.Instrumentations),
+		ctx:                ctx,
+		cfg:                cfg,
+		ctxInfo:            ctxInfo,
+		attributes:         userAttribSelection,
+		is:                 instrumentations.NewInstrumentationSelection(cfg.Instrumentations),
+		spanMetricsEnabled: spanMetricsEnabled,
 	}
 }
 
 // TracesReceiver creates a terminal node that consumes request.Spans and sends OpenTelemetry metrics to the configured consumers.
-func TracesReceiver(ctx context.Context, cfg TracesConfig, ctxInfo *global.ContextInfo, userAttribSelection attributes.Selection) pipe.FinalProvider[[]request.Span] {
-	return makeTracesReceiver(ctx, cfg, ctxInfo, userAttribSelection).provideLoop
+func TracesReceiver(ctx context.Context, cfg TracesConfig, spanMetricsEnabled bool, ctxInfo *global.ContextInfo, userAttribSelection attributes.Selection) pipe.FinalProvider[[]request.Span] {
+	return makeTracesReceiver(ctx, cfg, spanMetricsEnabled, ctxInfo, userAttribSelection).provideLoop
 }
 
 type tracesOTELReceiver struct {
-	ctx        context.Context
-	cfg        TracesConfig
-	ctxInfo    *global.ContextInfo
-	attributes attributes.Selection
-	is         instrumentations.InstrumentationSelection
+	ctx                context.Context
+	cfg                TracesConfig
+	ctxInfo            *global.ContextInfo
+	attributes         attributes.Selection
+	is                 instrumentations.InstrumentationSelection
+	spanMetricsEnabled bool
 }
 
 func GetUserSelectedAttributes(attrs attributes.Selection) (map[attr.Name]struct{}, error) {
@@ -166,6 +180,18 @@ func GetUserSelectedAttributes(attrs attributes.Selection) (map[attr.Name]struct
 	}
 
 	return traceAttrs, err
+}
+
+func (tr *tracesOTELReceiver) getConstantAttributes() (map[attr.Name]struct{}, error) {
+	traceAttrs, err := GetUserSelectedAttributes(tr.attributes)
+	if err != nil {
+		return nil, err
+	}
+
+	if tr.spanMetricsEnabled {
+		traceAttrs[attr.SkipSpanMetrics] = struct{}{}
+	}
+	return traceAttrs, nil
 }
 
 func (tr *tracesOTELReceiver) spanDiscarded(span *request.Span) bool {
@@ -228,10 +254,14 @@ func (tr *tracesOTELReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], err
 			return
 		}
 
-		traceAttrs, err := GetUserSelectedAttributes(tr.attributes)
+		traceAttrs, err := tr.getConstantAttributes()
 		if err != nil {
 			slog.Error("error selecting user trace attributes", "error", err)
 			return
+		}
+
+		if tr.spanMetricsEnabled {
+			traceAttrs[attr.SkipSpanMetrics] = struct{}{}
 		}
 
 		sampler := tr.cfg.Sampler.Implementation()
@@ -244,7 +274,7 @@ func (tr *tracesOTELReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], err
 
 // nolint:cyclop
 func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.ContextInfo) (exporter.Traces, error) {
-	switch proto := cfg.getProtocol(); proto {
+	switch proto := cfg.GetProtocol(); proto {
 	case ProtocolHTTPJSON, ProtocolHTTPProtobuf, "": // zero value defaults to HTTP for backwards-compatibility
 		slog.Debug("instantiating HTTP TracesReporter", "protocol", proto)
 		var t trace.SpanExporter
@@ -277,7 +307,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 				Insecure:           opts.Insecure,
 				InsecureSkipVerify: cfg.InsecureSkipVerify,
 			},
-			Headers: convertHeaders(opts.HTTPHeaders),
+			Headers: convertHeaders(opts.Headers),
 		}
 		slog.Debug("getTracesExporter: confighttp.ClientConfig created", "endpoint", config.ClientConfig.Endpoint)
 		set := getTraceSettings(ctxInfo, t)
@@ -331,6 +361,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 				Insecure:           opts.Insecure,
 				InsecureSkipVerify: cfg.InsecureSkipVerify,
 			},
+			Headers: convertHeaders(opts.Headers),
 		}
 		set := getTraceSettings(ctxInfo, t)
 		return factory.CreateTraces(ctx, set, config)
@@ -371,7 +402,11 @@ func getTraceSettings(ctxInfo *global.ContextInfo, in trace.SpanExporter) export
 	if internalMetricsEnabled(ctxInfo) {
 		telemetryLevel = configtelemetry.LevelBasic
 		spanExporter := instrumentTraceExporter(in, ctxInfo.Metrics)
-		traceProvider = trace.NewTracerProvider(trace.WithBatcher(spanExporter))
+		res := newResourceInternal(ctxInfo.HostID)
+		traceProvider = trace.NewTracerProvider(
+			trace.WithBatcher(spanExporter),
+			trace.WithResource(res),
+		)
 	}
 	meterProvider := metric.NewMeterProvider()
 	telemetrySettings := component.TelemetrySettings{
@@ -435,9 +470,10 @@ func GenerateTracesWithAttributes(span *request.Span, hostID string, attrs []att
 	resourceAttrsMap.CopyTo(rs.Resource().Attributes())
 
 	traceID := pcommon.TraceID(span.TraceID)
-	spanID := pcommon.SpanID(randomSpanID())
+	spanID := pcommon.SpanID(RandomSpanID())
+	// This should never happen
 	if traceID.IsEmpty() {
-		traceID = pcommon.TraceID(randomTraceID())
+		traceID = pcommon.TraceID(RandomTraceID())
 	}
 
 	if hasSubSpans {
@@ -484,7 +520,7 @@ func createSubSpans(span *request.Span, parentSpanID pcommon.SpanID, traceID pco
 	spQ.SetKind(ptrace.SpanKindInternal)
 	spQ.SetEndTimestamp(pcommon.NewTimestampFromTime(t.Start))
 	spQ.SetTraceID(traceID)
-	spQ.SetSpanID(pcommon.SpanID(randomSpanID()))
+	spQ.SetSpanID(pcommon.SpanID(RandomSpanID()))
 	spQ.SetParentSpanID(parentSpanID)
 
 	// Create a child span showing the processing time
@@ -497,7 +533,7 @@ func createSubSpans(span *request.Span, parentSpanID pcommon.SpanID, traceID pco
 	if span.SpanID.IsValid() {
 		spP.SetSpanID(pcommon.SpanID(span.SpanID))
 	} else {
-		spP.SetSpanID(pcommon.SpanID(randomSpanID()))
+		spP.SetSpanID(pcommon.SpanID(RandomSpanID()))
 	}
 	spP.SetParentSpanID(parentSpanID)
 }
@@ -576,6 +612,7 @@ func (tr *tracesOTELReceiver) acceptSpan(span *request.Span) bool {
 
 // TODO use semconv.DBSystemRedis when we update to OTEL semantic conventions library 1.30
 var dbSystemRedis = attribute.String(string(attr.DBSystemName), semconv.DBSystemRedis.Value.AsString())
+var spanMetricsSkip = attribute.Bool(string(attr.SkipSpanMetrics), true)
 
 // nolint:cyclop
 func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) []attribute.KeyValue {
@@ -674,6 +711,10 @@ func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 		}
 	}
 
+	if _, ok := optionalAttrs[attr.SkipSpanMetrics]; ok {
+		attrs = append(attrs, spanMetricsSkip)
+	}
+
 	return attrs
 }
 
@@ -709,15 +750,7 @@ func spanStartTime(t request.Timings) time.Time {
 // If, by some reason, Grafana changes its OTLP Gateway URL in a distant future, you can still point to the
 // correct URL with the OTLP_EXPORTER_... variables.
 func parseTracesEndpoint(cfg *TracesConfig) (*url.URL, bool, error) {
-	isCommon := false
-	endpoint := cfg.TracesEndpoint
-	if endpoint == "" {
-		isCommon = true
-		endpoint = cfg.CommonEndpoint
-		if endpoint == "" && cfg.Grafana != nil && cfg.Grafana.CloudZone != "" {
-			endpoint = cfg.Grafana.Endpoint()
-		}
-	}
+	endpoint, isCommon := cfg.OTLPTracesEndpoint()
 
 	murl, err := url.Parse(endpoint)
 	if err != nil {
@@ -730,7 +763,7 @@ func parseTracesEndpoint(cfg *TracesConfig) (*url.URL, bool, error) {
 }
 
 func getHTTPTracesEndpointOptions(cfg *TracesConfig) (otlpOptions, error) {
-	opts := otlpOptions{HTTPHeaders: map[string]string{}}
+	opts := otlpOptions{Headers: map[string]string{}}
 	log := tlog().With("transport", "http")
 
 	murl, isCommon, err := parseTracesEndpoint(cfg)
@@ -762,14 +795,14 @@ func getHTTPTracesEndpointOptions(cfg *TracesConfig) (otlpOptions, error) {
 	}
 
 	cfg.Grafana.setupOptions(&opts)
-	maps.Copy(opts.HTTPHeaders, headersFromEnv(envHeaders))
-	maps.Copy(opts.HTTPHeaders, headersFromEnv(envTracesHeaders))
+	maps.Copy(opts.Headers, HeadersFromEnv(envHeaders))
+	maps.Copy(opts.Headers, HeadersFromEnv(envTracesHeaders))
 
 	return opts, nil
 }
 
 func getGRPCTracesEndpointOptions(cfg *TracesConfig) (otlpOptions, error) {
-	opts := otlpOptions{}
+	opts := otlpOptions{Headers: map[string]string{}}
 	log := tlog().With("transport", "grpc")
 	murl, _, err := parseTracesEndpoint(cfg)
 	if err != nil {
@@ -789,6 +822,9 @@ func getGRPCTracesEndpointOptions(cfg *TracesConfig) (otlpOptions, error) {
 		opts.SkipTLSVerify = true
 	}
 
+	cfg.Grafana.setupOptions(&opts)
+	maps.Copy(opts.Headers, HeadersFromEnv(envHeaders))
+	maps.Copy(opts.Headers, HeadersFromEnv(envTracesHeaders))
 	return opts, nil
 }
 

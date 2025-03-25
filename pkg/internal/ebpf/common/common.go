@@ -12,10 +12,10 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
-	"github.com/cilium/ebpf/ringbuf"
 
-	"github.com/grafana/beyla/pkg/config"
-	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/config"
+	"github.com/grafana/beyla/v2/pkg/internal/ebpf/ringbuf"
+	"github.com/grafana/beyla/v2/pkg/internal/request"
 )
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 -type http_request_trace -type sql_request_trace -type http_info_t -type connection_info_t -type http2_grpc_request_t -type tcp_req_t -type kafka_client_req_t -type kafka_go_req_t  -type redis_client_req_t bpf ../../../../bpf/tracer_common.c -- -I../../../../bpf/headers
@@ -147,33 +147,37 @@ const (
 	KernelLockdownOther
 )
 
-func SupportsContextPropagation(log *slog.Logger) bool {
+func SupportsContextPropagationWithProbe(log *slog.Logger) bool {
 	kernelMajor, kernelMinor := KernelVersion()
 	log.Debug("Linux kernel version", "major", kernelMajor, "minor", kernelMinor)
 
 	if kernelMajor < 5 || (kernelMajor == 5 && kernelMinor < 10) {
-		log.Debug("Found Linux kernel earlier than 5.10, trace context propagation is supported", "major", kernelMajor, "minor", kernelMinor)
+		log.Debug("Found Linux kernel earlier than 5.10, Go trace context propagation at library level is supported", "major", kernelMajor, "minor", kernelMinor)
 		return true
 	}
 
 	// bpf_probe_write_user(), used to inject the context, requires CAP_SYS_ADMIN
 
 	if !hasCapSysAdmin() {
-		log.Info("trace context propagation disabled due to missing capability CAP_SYS_ADMIN")
+		log.Info("Go context propagation at library level disabled due to missing capability CAP_SYS_ADMIN")
 		return false
 	}
 
 	lockdown := KernelLockdownMode()
 
 	if lockdown == KernelLockdownNone {
-		log.Debug("Kernel not in lockdown mode, trace context propagation is supported.")
+		log.Debug("Kernel not in lockdown mode, Go trace context propagation at library level is supported.")
 		return true
 	}
 
 	return false
 }
 
-func SupportsEBPFLoops() bool {
+func SupportsEBPFLoops(log *slog.Logger, overrideKernelVersion bool) bool {
+	if overrideKernelVersion {
+		log.Debug("Skipping kernel version check for bpf_loop functionality: user supplied confirmation of support")
+		return true
+	}
 	kernelMajor, kernelMinor := KernelVersion()
 	return kernelMajor > 5 || (kernelMajor == 5 && kernelMinor >= 17)
 }

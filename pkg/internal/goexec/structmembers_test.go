@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/beyla/test/tools"
+	"github.com/grafana/beyla/v2/test/tools"
 )
 
 var debugData *dwarf.Data
@@ -83,8 +83,8 @@ func TestGrpcOffsetsFromDwarf(t *testing.T) {
 	offsets, _ := structMemberOffsetsFromDwarf(grpcElf)
 	// this test might fail if a future Go gRPC version updates the internal structure of the used structs.
 	mustMatch(t, FieldOffsets{
-		GrpcStreamStPtrPos:     uint64(8),
-		GrpcStreamMethodPtrPos: uint64(88),
+		GrpcServerStreamStPtr:  uint64(8),
+		GrpcStreamMethodPtrPos: uint64(24),
 		GrpcStatusSPos:         uint64(0),
 		ConnFdPos:              uint64(0),
 		FdLaddrPos:             uint64(96),
@@ -109,8 +109,8 @@ func TestGrpcOffsetsWithoutDwarf(t *testing.T) {
 	offsets, _ := structMemberOffsets(smallGRPCElf)
 	// this test might fail if a future Go gRPC version updates the internal structure of the used structs.
 	mustMatch(t, FieldOffsets{
-		GrpcStreamStPtrPos:     uint64(8),
-		GrpcStreamMethodPtrPos: uint64(88),
+		GrpcServerStreamStPtr:  uint64(8),
+		GrpcStreamMethodPtrPos: uint64(24),
 		GrpcStatusSPos:         uint64(0),
 		GrpcStatusCodePtrPos:   uint64(40),
 		ConnFdPos:              uint64(0),

@@ -6,16 +6,16 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/grafana/beyla/pkg/beyla"
-	"github.com/grafana/beyla/pkg/export/attributes"
-	"github.com/grafana/beyla/pkg/export/otel"
-	"github.com/grafana/beyla/pkg/internal/appolly"
-	"github.com/grafana/beyla/pkg/internal/connector"
-	"github.com/grafana/beyla/pkg/internal/imetrics"
-	"github.com/grafana/beyla/pkg/internal/kube"
-	"github.com/grafana/beyla/pkg/internal/netolly/agent"
-	"github.com/grafana/beyla/pkg/internal/netolly/flow"
-	"github.com/grafana/beyla/pkg/internal/pipe/global"
+	"github.com/grafana/beyla/v2/pkg/beyla"
+	"github.com/grafana/beyla/v2/pkg/export/attributes"
+	"github.com/grafana/beyla/v2/pkg/export/otel"
+	"github.com/grafana/beyla/v2/pkg/internal/appolly"
+	"github.com/grafana/beyla/v2/pkg/internal/connector"
+	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
+	"github.com/grafana/beyla/v2/pkg/internal/kube"
+	"github.com/grafana/beyla/v2/pkg/internal/netolly/agent"
+	"github.com/grafana/beyla/v2/pkg/internal/netolly/flow"
+	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 )
 
 // RunBeyla in the foreground process. This is a blocking function and won't exit
@@ -70,15 +70,20 @@ func RunBeyla(ctx context.Context, cfg *beyla.Config) error {
 func setupAppO11y(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config) error {
 	slog.Info("starting Beyla in Application Observability mode")
 
-	wg := sync.WaitGroup{}
-	defer wg.Wait()
-
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	instr := appolly.New(ctx, ctxInfo, config)
-	if err := instr.FindAndInstrument(&wg); err != nil {
+	if finderDone, err := instr.FindAndInstrument(); err != nil {
 		slog.Debug("can't find  target process", "error", err)
 		return fmt.Errorf("can't find target process: %w", err)
+	} else {
+		defer func() {
+			// before exiting, waits for all the resources to be freed
+			<-finderDone
+		}()
 	}
 	if err := instr.ReadAndForward(); err != nil {
+		cancel()
 		slog.Debug("can't start read and forwarding", "error", err)
 		return fmt.Errorf("can't start read and forwarding: %w", err)
 	}

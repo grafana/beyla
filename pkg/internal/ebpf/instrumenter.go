@@ -5,6 +5,7 @@ package ebpf
 import (
 	"debug/elf"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -20,9 +21,9 @@ import (
 	"github.com/prometheus/procfs"
 	"golang.org/x/sys/unix"
 
-	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
-	"github.com/grafana/beyla/pkg/internal/exec"
-	"github.com/grafana/beyla/pkg/internal/goexec"
+	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
+	"github.com/grafana/beyla/v2/pkg/internal/exec"
+	"github.com/grafana/beyla/v2/pkg/internal/goexec"
 )
 
 func ilog() *slog.Logger {
@@ -431,7 +432,11 @@ func getCgroupPath() (string, error) {
 
 	enabled, err := v2.Enabled()
 	if !enabled {
-		cgroupPath = filepath.Join(cgroupPath, "unified")
+		if _, pathErr := os.Stat(filepath.Join(cgroupPath, "unified")); pathErr == nil {
+			slog.Debug("discovered hybrid cgroup hierarchy, will attempt to attach sockops")
+			return filepath.Join(cgroupPath, "unified"), nil
+		}
+		return "", errors.New("failed to find unified cgroup hierarchy: sockops cannot be used with cgroups v1")
 	}
 	return cgroupPath, err
 }

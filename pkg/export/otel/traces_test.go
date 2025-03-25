@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -26,14 +27,14 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.25.0"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/grafana/beyla/pkg/export/attributes"
-	attr "github.com/grafana/beyla/pkg/export/attributes/names"
-	"github.com/grafana/beyla/pkg/export/instrumentations"
-	"github.com/grafana/beyla/pkg/internal/imetrics"
-	"github.com/grafana/beyla/pkg/internal/pipe/global"
-	"github.com/grafana/beyla/pkg/internal/request"
-	"github.com/grafana/beyla/pkg/internal/sqlprune"
-	"github.com/grafana/beyla/pkg/internal/svc"
+	"github.com/grafana/beyla/v2/pkg/export/attributes"
+	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
+	"github.com/grafana/beyla/v2/pkg/export/instrumentations"
+	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
+	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
+	"github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/internal/sqlprune"
+	"github.com/grafana/beyla/v2/pkg/internal/svc"
 )
 
 func TestHTTPTracesEndpoint(t *testing.T) {
@@ -45,7 +46,7 @@ func TestHTTPTracesEndpoint(t *testing.T) {
 	}
 
 	t.Run("testing with two endpoints", func(t *testing.T) {
-		testHTTPTracesOptions(t, otlpOptions{Scheme: "https", Endpoint: "localhost:3232", URLPath: "/v1/traces", HTTPHeaders: map[string]string{}}, &tcfg)
+		testHTTPTracesOptions(t, otlpOptions{Scheme: "https", Endpoint: "localhost:3232", URLPath: "/v1/traces", Headers: map[string]string{}}, &tcfg)
 	})
 
 	tcfg = TracesConfig{
@@ -54,7 +55,7 @@ func TestHTTPTracesEndpoint(t *testing.T) {
 	}
 
 	t.Run("testing with only common endpoint", func(t *testing.T) {
-		testHTTPTracesOptions(t, otlpOptions{Scheme: "https", Endpoint: "localhost:3131", BaseURLPath: "/otlp", URLPath: "/otlp/v1/traces", HTTPHeaders: map[string]string{}}, &tcfg)
+		testHTTPTracesOptions(t, otlpOptions{Scheme: "https", Endpoint: "localhost:3131", BaseURLPath: "/otlp", URLPath: "/otlp/v1/traces", Headers: map[string]string{}}, &tcfg)
 	})
 
 	tcfg = TracesConfig{
@@ -63,7 +64,7 @@ func TestHTTPTracesEndpoint(t *testing.T) {
 		Instrumentations: []string{instrumentations.InstrumentationALL},
 	}
 	t.Run("testing with insecure endpoint", func(t *testing.T) {
-		testHTTPTracesOptions(t, otlpOptions{Scheme: "http", Endpoint: "localhost:3232", Insecure: true, HTTPHeaders: map[string]string{}}, &tcfg)
+		testHTTPTracesOptions(t, otlpOptions{Scheme: "http", Endpoint: "localhost:3232", Insecure: true, Headers: map[string]string{}}, &tcfg)
 	})
 
 	tcfg = TracesConfig{
@@ -73,7 +74,7 @@ func TestHTTPTracesEndpoint(t *testing.T) {
 	}
 
 	t.Run("testing with skip TLS verification", func(t *testing.T) {
-		testHTTPTracesOptions(t, otlpOptions{Scheme: "https", Endpoint: "localhost:3232", URLPath: "/v1/traces", SkipTLSVerify: true, HTTPHeaders: map[string]string{}}, &tcfg)
+		testHTTPTracesOptions(t, otlpOptions{Scheme: "https", Endpoint: "localhost:3232", URLPath: "/v1/traces", SkipTLSVerify: true, Headers: map[string]string{}}, &tcfg)
 	})
 }
 
@@ -91,7 +92,7 @@ func TestHTTPTracesWithGrafanaOptions(t *testing.T) {
 			Endpoint:    "otlp-gateway-eu-west-23.grafana.net",
 			BaseURLPath: "/otlp",
 			URLPath:     "/otlp/v1/traces",
-			HTTPHeaders: map[string]string{
+			Headers: map[string]string{
 				// Basic + output of: echo -n 12345:affafafaafkd | gbase64 -w 0
 				"Authorization": "Basic MTIzNDU6YWZmYWZhZmFhZmtk",
 			},
@@ -103,7 +104,7 @@ func TestHTTPTracesWithGrafanaOptions(t *testing.T) {
 			Scheme:   "https",
 			Endpoint: "localhost:3939",
 			URLPath:  "/v1/traces",
-			HTTPHeaders: map[string]string{
+			Headers: map[string]string{
 				// Base64 representation of 12345:affafafaafkd
 				"Authorization": "Basic MTIzNDU6YWZmYWZhZmFhZmtk",
 			},
@@ -181,7 +182,7 @@ func TestHTTPTracesEndpointHeaders(t *testing.T) {
 				Instrumentations: []string{instrumentations.InstrumentationALL},
 			})
 			require.NoError(t, err)
-			assert.Equal(t, tc.ExpectedHeaders, opts.HTTPHeaders)
+			assert.Equal(t, tc.ExpectedHeaders, opts.Headers)
 		})
 	}
 }
@@ -199,7 +200,7 @@ func TestGRPCTracesEndpointOptions(t *testing.T) {
 	}
 
 	t.Run("testing with two endpoints", func(t *testing.T) {
-		testTracesGRPOptions(t, otlpOptions{Endpoint: "localhost:3232"}, &tcfg)
+		testTracesGRPCOptions(t, otlpOptions{Endpoint: "localhost:3232", Headers: map[string]string{}}, &tcfg)
 	})
 
 	tcfg = TracesConfig{
@@ -208,7 +209,7 @@ func TestGRPCTracesEndpointOptions(t *testing.T) {
 	}
 
 	t.Run("testing with only common endpoint", func(t *testing.T) {
-		testTracesGRPOptions(t, otlpOptions{Endpoint: "localhost:3131"}, &tcfg)
+		testTracesGRPCOptions(t, otlpOptions{Endpoint: "localhost:3131", Headers: map[string]string{}}, &tcfg)
 	})
 
 	tcfg = TracesConfig{
@@ -217,7 +218,7 @@ func TestGRPCTracesEndpointOptions(t *testing.T) {
 		Instrumentations: []string{instrumentations.InstrumentationALL},
 	}
 	t.Run("testing with insecure endpoint", func(t *testing.T) {
-		testTracesGRPOptions(t, otlpOptions{Endpoint: "localhost:3232", Insecure: true}, &tcfg)
+		testTracesGRPCOptions(t, otlpOptions{Endpoint: "localhost:3232", Insecure: true, Headers: map[string]string{}}, &tcfg)
 	})
 
 	tcfg = TracesConfig{
@@ -227,11 +228,58 @@ func TestGRPCTracesEndpointOptions(t *testing.T) {
 	}
 
 	t.Run("testing with skip TLS verification", func(t *testing.T) {
-		testTracesGRPOptions(t, otlpOptions{Endpoint: "localhost:3232", SkipTLSVerify: true}, &tcfg)
+		testTracesGRPCOptions(t, otlpOptions{Endpoint: "localhost:3232", SkipTLSVerify: true, Headers: map[string]string{}}, &tcfg)
 	})
 }
 
-func testTracesGRPOptions(t *testing.T, expected otlpOptions, tcfg *TracesConfig) {
+func TestGRPCTracesEndpointHeaders(t *testing.T) {
+	type testCase struct {
+		Description     string
+		Env             map[string]string
+		ExpectedHeaders map[string]string
+		Grafana         GrafanaOTLP
+	}
+	for _, tc := range []testCase{
+		{Description: "No headers",
+			ExpectedHeaders: map[string]string{}},
+		{Description: "defining common OTLP_HEADERS",
+			Env:             map[string]string{"OTEL_EXPORTER_OTLP_HEADERS": "Foo=Bar ==,Authorization=Base 2222=="},
+			ExpectedHeaders: map[string]string{"Foo": "Bar ==", "Authorization": "Base 2222=="}},
+		{Description: "defining common OTLP_TRACES_HEADERS",
+			Env:             map[string]string{"OTEL_EXPORTER_OTLP_TRACES_HEADERS": "Foo=Bar ==,Authorization=Base 1234=="},
+			ExpectedHeaders: map[string]string{"Foo": "Bar ==", "Authorization": "Base 1234=="}},
+		{Description: "OTLP_TRACES_HEADERS takes precedence over OTLP_HEADERS",
+			Env: map[string]string{
+				"OTEL_EXPORTER_OTLP_HEADERS":        "Foo=Bar ==,Authorization=Base 3210==",
+				"OTEL_EXPORTER_OTLP_TRACES_HEADERS": "Authorization=Base 1111==",
+			},
+			ExpectedHeaders: map[string]string{"Foo": "Bar ==", "Authorization": "Base 1111=="}},
+	} {
+		// mutex to avoid running testcases in parallel so we don't mess up with env vars
+		mt := sync.Mutex{}
+		t.Run(fmt.Sprint(tc.Description), func(t *testing.T) {
+			mt.Lock()
+			restore := restoreEnvAfterExecution()
+			defer func() {
+				restore()
+				mt.Unlock()
+			}()
+			for k, v := range tc.Env {
+				require.NoError(t, os.Setenv(k, v))
+			}
+
+			opts, err := getGRPCTracesEndpointOptions(&TracesConfig{
+				TracesEndpoint:   "https://localhost:1234/v1/traces",
+				Grafana:          &tc.Grafana,
+				Instrumentations: []string{instrumentations.InstrumentationALL},
+			})
+			require.NoError(t, err)
+			assert.Equal(t, tc.ExpectedHeaders, opts.Headers)
+		})
+	}
+}
+
+func testTracesGRPCOptions(t *testing.T, expected otlpOptions, tcfg *TracesConfig) {
 	defer restoreEnvAfterExecution()()
 	opts, err := getGRPCTracesEndpointOptions(tcfg)
 	require.NoError(t, err)
@@ -616,7 +664,7 @@ func TestTraceSampling(t *testing.T) {
 			Route:        "/test" + strconv.Itoa(i),
 			Status:       200,
 			Service:      svc.Attrs{},
-			TraceID:      randomTraceID(),
+			TraceID:      RandomTraceID(),
 		}
 		spans = append(spans, span)
 	}
@@ -672,6 +720,95 @@ func TestTraceSampling(t *testing.T) {
 		// it's a probabilistic matter, we don't want this test to become
 		// flaky as some of them could report even 4-5 samples
 		assert.GreaterOrEqual(t, 6, len(tr))
+	})
+}
+
+func TestTraceSkipSpanMetrics(t *testing.T) {
+	spans := []request.Span{}
+	start := time.Now()
+	for i := 0; i < 10; i++ {
+		span := request.Span{Type: request.EventTypeHTTP,
+			RequestStart: start.UnixNano(),
+			Start:        start.Add(time.Second).UnixNano(),
+			End:          start.Add(3 * time.Second).UnixNano(),
+			Method:       "GET",
+			Route:        "/test" + strconv.Itoa(i),
+			Status:       200,
+			Service:      svc.Attrs{},
+			TraceID:      RandomTraceID(),
+		}
+		spans = append(spans, span)
+	}
+
+	t.Run("test with span metrics on", func(t *testing.T) {
+		receiver := makeTracesTestReceiverWithSpanMetrics([]string{"http"})
+
+		sampler := sdktrace.AlwaysSample()
+		attrs, err := receiver.getConstantAttributes()
+		assert.Nil(t, err)
+
+		tr := []ptrace.Traces{}
+
+		exporter := TestExporter{
+			collector: func(td ptrace.Traces) {
+				tr = append(tr, td)
+			},
+		}
+
+		receiver.processSpans(exporter, spans, attrs, sampler)
+		assert.Equal(t, 10, len(tr))
+
+		for _, ts := range tr {
+			for i := 0; i < ts.ResourceSpans().Len(); i++ {
+				rs := ts.ResourceSpans().At(i)
+				for j := 0; j < rs.ScopeSpans().Len(); j++ {
+					ss := rs.ScopeSpans().At(j)
+					for k := 0; k < ss.Spans().Len(); k++ {
+						span := ss.Spans().At(k)
+						if strings.HasPrefix(span.Name(), "GET /test") {
+							v, ok := span.Attributes().Get(string(attr.SkipSpanMetrics.OTEL()))
+							assert.True(t, ok)
+							assert.Equal(t, true, v.Bool())
+						}
+					}
+				}
+			}
+		}
+	})
+
+	t.Run("test with span metrics off", func(t *testing.T) {
+		receiver := makeTracesTestReceiver([]string{"http"})
+
+		sampler := sdktrace.AlwaysSample()
+		attrs, err := receiver.getConstantAttributes()
+		assert.Nil(t, err)
+
+		tr := []ptrace.Traces{}
+
+		exporter := TestExporter{
+			collector: func(td ptrace.Traces) {
+				tr = append(tr, td)
+			},
+		}
+
+		receiver.processSpans(exporter, spans, attrs, sampler)
+		assert.Equal(t, 10, len(tr))
+
+		for _, ts := range tr {
+			for i := 0; i < ts.ResourceSpans().Len(); i++ {
+				rs := ts.ResourceSpans().At(i)
+				for j := 0; j < rs.ScopeSpans().Len(); j++ {
+					ss := rs.ScopeSpans().At(j)
+					for k := 0; k < ss.Spans().Len(); k++ {
+						span := ss.Spans().At(k)
+						if strings.HasPrefix(span.Name(), "GET /test") {
+							_, ok := span.Attributes().Get(string(attr.SkipSpanMetrics.OTEL()))
+							assert.False(t, ok)
+						}
+					}
+				}
+			}
+		}
 	})
 }
 
@@ -908,6 +1045,7 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 			ReportersCacheLen: 16,
 			Instrumentations:  []string{instrumentations.InstrumentationALL},
 		},
+		false,
 		&global.ContextInfo{
 			Metrics: internalTraces,
 		},
@@ -1050,9 +1188,9 @@ type fakeInternalTraces struct {
 	errs atomic.Int32
 }
 
-func (f *fakeInternalTraces) OTELTraceExport(len int) {
+func (f *fakeInternalTraces) OTELTraceExport(length int) {
 	f.cnt.Add(1)
-	f.sum.Add(int32(len))
+	f.sum.Add(int32(length))
 }
 
 func (f *fakeInternalTraces) OTELTraceExportError(_ error) {
@@ -1352,6 +1490,21 @@ func makeTracesTestReceiver(instr []string) *tracesOTELReceiver {
 			ReportersCacheLen: 16,
 			Instrumentations:  instr,
 		},
+		false,
+		&global.ContextInfo{},
+		attributes.Selection{},
+	)
+}
+
+func makeTracesTestReceiverWithSpanMetrics(instr []string) *tracesOTELReceiver {
+	return makeTracesReceiver(context.Background(),
+		TracesConfig{
+			CommonEndpoint:    "http://something",
+			BatchTimeout:      10 * time.Millisecond,
+			ReportersCacheLen: 16,
+			Instrumentations:  instr,
+		},
+		true,
 		&global.ContextInfo{},
 		attributes.Selection{},
 	)

@@ -3,15 +3,16 @@ package prom
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/mariomac/pipes/pipe"
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/grafana/beyla/pkg/export/attributes"
-	"github.com/grafana/beyla/pkg/export/expire"
-	"github.com/grafana/beyla/pkg/internal/connector"
-	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
-	"github.com/grafana/beyla/pkg/internal/pipe/global"
+	"github.com/grafana/beyla/v2/pkg/export/attributes"
+	"github.com/grafana/beyla/v2/pkg/export/expire"
+	"github.com/grafana/beyla/v2/pkg/internal/connector"
+	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
+	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 )
 
 // injectable function reference for testing
@@ -20,22 +21,25 @@ import (
 type NetPrometheusConfig struct {
 	Config             *PrometheusConfig
 	AttributeSelectors attributes.Selection
-	GloballyEnabled    bool
+	// Deprecated: to be removed in Beyla 3.0 with BEYLA_NETWORK_METRICS bool flag
+	GloballyEnabled bool
 }
 
 // nolint:gocritic
 func (p NetPrometheusConfig) Enabled() bool {
-	return p.Config != nil && p.Config.Port != 0 && (p.Config.NetworkMetricsEnabled() || p.GloballyEnabled)
+	return p.Config != nil && p.Config.EndpointEnabled() && (p.Config.NetworkMetricsEnabled() || p.GloballyEnabled)
 }
 
 type netMetricsReporter struct {
 	cfg *PrometheusConfig
 
 	flowBytes *Expirer[prometheus.Counter]
+	interZone *Expirer[prometheus.Counter]
 
 	promConnect *connector.PrometheusManager
 
-	attrs []attributes.Field[*ebpf.Record, string]
+	flowAttrs      []attributes.Field[*ebpf.Record, string]
+	interZoneAttrs []attributes.Field[*ebpf.Record, string]
 
 	clock *expire.CachedClock
 	bgCtx context.Context
@@ -75,15 +79,6 @@ func newNetReporter(
 		return nil, fmt.Errorf("network Prometheus exporter attributes enable: %w", err)
 	}
 
-	attrs := attributes.PrometheusGetters(
-		ebpf.RecordStringGetters,
-		provider.For(attributes.BeylaNetworkFlow))
-
-	labelNames := make([]string, 0, len(attrs))
-	for _, label := range attrs {
-		labelNames = append(labelNames, label.ExposedName)
-	}
-
 	clock := expire.NewCachedClock(timeNow)
 	// If service name is not explicitly set, we take the service name as set by the
 	// executable inspector
@@ -91,17 +86,41 @@ func newNetReporter(
 		bgCtx:       ctx,
 		cfg:         cfg.Config,
 		promConnect: ctxInfo.Prometheus,
-		attrs:       attrs,
 		clock:       clock,
-		flowBytes: NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
+	}
+
+	var register []prometheus.Collector
+	log := slog.With("component", "prom.NetworkEndpoint")
+	if cfg.GloballyEnabled || mr.cfg.NetworkFlowBytesEnabled() {
+		log.Debug("registering network flow bytes metric")
+		mr.flowAttrs = attributes.PrometheusGetters(
+			ebpf.RecordStringGetters,
+			provider.For(attributes.BeylaNetworkFlow))
+
+		mr.flowBytes = NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: attributes.BeylaNetworkFlow.Prom,
 			Help: "bytes submitted from a source network endpoint to a destination network endpoint",
-		}, labelNames).MetricVec, clock.Time, cfg.Config.TTL),
+		}, labelNames(mr.flowAttrs)).MetricVec, clock.Time, cfg.Config.TTL)
+		register = append(register, mr.flowBytes)
 	}
+
+	if mr.cfg.NetworkInterzoneMetricsEnabled() {
+		log.Debug("registering network inter-zone metric")
+		mr.interZoneAttrs = attributes.PrometheusGetters(
+			ebpf.RecordStringGetters,
+			provider.For(attributes.BeylaNetworkInterZone))
+
+		mr.interZone = NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: attributes.BeylaNetworkInterZone.Prom,
+			Help: "bytes submitted between different cloud availability zones",
+		}, labelNames(mr.interZoneAttrs)).MetricVec, clock.Time, cfg.Config.TTL)
+		register = append(register, mr.interZone)
+	}
+
 	if cfg.Config.Registry != nil {
-		cfg.Config.Registry.MustRegister(mr.flowBytes)
+		cfg.Config.Registry.MustRegister(register...)
 	} else {
-		mr.promConnect.Register(cfg.Config.Port, cfg.Config.Path, mr.flowBytes)
+		mr.promConnect.Register(cfg.Config.Port, cfg.Config.Path, register...)
 	}
 
 	return mr, nil
@@ -118,15 +137,24 @@ func (r *netMetricsReporter) collectMetrics(input <-chan []*ebpf.Record) {
 		// remove the old metrics
 		r.clock.Update()
 		for _, flow := range flows {
-			r.observe(flow)
+			r.observeFlowBytes(flow)
+			r.observeInterZone(flow)
 		}
 	}
 }
 
-func (r *netMetricsReporter) observe(flow *ebpf.Record) {
-	labelValues := make([]string, 0, len(r.attrs))
-	for _, attr := range r.attrs {
-		labelValues = append(labelValues, attr.Get(flow))
+func (r *netMetricsReporter) observeFlowBytes(flow *ebpf.Record) {
+	if r.flowBytes == nil {
+		return
 	}
-	r.flowBytes.WithLabelValues(labelValues...).metric.Add(float64(flow.Metrics.Bytes))
+	r.flowBytes.WithLabelValues(labelValues(flow, r.flowAttrs)...).
+		metric.Add(float64(flow.Metrics.Bytes))
+}
+
+func (r *netMetricsReporter) observeInterZone(flow *ebpf.Record) {
+	if r.interZone == nil || flow.Attrs.SrcZone == flow.Attrs.DstZone {
+		return
+	}
+	r.interZone.WithLabelValues(labelValues(flow, r.interZoneAttrs)...).
+		metric.Add(float64(flow.Metrics.Bytes))
 }

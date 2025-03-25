@@ -13,8 +13,8 @@
 #define RESPONSE_STATUS_POS 9 // HTTP/1.1 <--
 #define MAX_HTTP_STATUS 599
 
-// should be enough for most URLs, we may need to extend it if not. Must be multiple of 16 for the copy to work.
-#define FULL_BUF_SIZE 192
+// should be enough for most URLs, we may need to extend it if not.
+#define FULL_BUF_SIZE 256
 #define TRACE_BUF_SIZE 1024 // must be power of 2, we do an & to limit the buffer size
 #define KPROBES_HTTP2_BUF_SIZE 256
 #define KPROBES_HTTP2_RET_BUF_SIZE 64
@@ -99,6 +99,7 @@ typedef struct tp_info_pid {
     tp_info_t tp;
     u32 pid;
     u8 valid;
+    u8 written;
     u8 req_type;
 } tp_info_pid_t;
 
@@ -195,7 +196,7 @@ typedef struct http2_grpc_request {
     // with other instrumented processes
     pid_info pid;
     u8 ssl;
-    u8 new_conn;
+    u64 new_conn_id;
     tp_info_t tp;
 } http2_grpc_request_t;
 
@@ -224,8 +225,20 @@ static __always_inline void dbg_print_http_connection_info(connection_info_t *in
                    *(u64 *)(&info->d_addr[8]),
                    info->d_port);
 }
+static __always_inline void d_print_http_connection_info(connection_info_t *info) {
+    bpf_d_printk("[conn] s_h = %llx, s_l = %llx, s_port=%d",
+                 *(u64 *)(&info->s_addr),
+                 *(u64 *)(&info->s_addr[8]),
+                 info->s_port);
+    bpf_d_printk("[conn] d_h = %llx, d_l = %llx, d_port=%d",
+                 *(u64 *)(&info->d_addr),
+                 *(u64 *)(&info->d_addr[8]),
+                 info->d_port);
+}
 #else
 static __always_inline void dbg_print_http_connection_info(connection_info_t *info) {
+}
+static __always_inline void d_print_http_connection_info(connection_info_t *info) {
 }
 #endif
 

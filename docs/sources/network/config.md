@@ -11,7 +11,7 @@ keywords:
 
 # Beyla Network Metrics configuration options
 
-Network metrics are configured under the `network` property of the [Beyla Configuration YAML file]({{< relref "../configure/options" >}}) or with a set of environment variables prefixed as `BEYLA_NETWORK_`.
+Network metrics are configured under the `network` property of the [Beyla Configuration YAML file](../../configure/options/) or with a set of environment variables prefixed as `BEYLA_NETWORK_`.
 
 Example YAML:
 
@@ -40,17 +40,24 @@ otel_metrics_export:
 
 In addition to the `network` YAML section, Beyla configuration requires an endpoint to export the
 network metrics (in the previous example, `otel_metrics_export`, but it also accepts a
-[Prometheus endpoint]({{< relref "../configure/options.md" >}})).
+[Prometheus endpoint](../../configure/options/)).
 
 ## Network metrics configuration properties
 
-| YAML     | Environment variable    | Type    | Default |
-| -------- | ----------------------- | ------- | ------- |
-| `enable` | `BEYLA_NETWORK_METRICS` | boolean | `false` |
+To enable network metrics add one of the following `features` to either
+the [otel_metrics_export](../../configure/export-data/))
+or [prometheus_export](../../configure/export-data/#prometheus-http-endpoint))
+configuration properties:
 
-Explicitly enables network metrics reporting in Beyla. You can also enable network metrics reporting
-by adding `network` to the list of `features` for [otel_metrics_export]({{< relref "../configure/export-data.md" >}}))
-or [prometheus_export]({{< relref "../configure/export-data.md#prometheus-http-endpoint" >}})).
+* `network` enables the `beyla_network_flow_bytes` metric: the number of bytes between two endpoints of your cluster
+* `network_inter_zone` enables `beyla_network_inter_zone_bytes` metric: the number of bytes between different
+  availability zones in your Cloud cluster
+
+{{< admonition type="caution" >}}
+The `beyla_network_inter_zone_bytes` specification is currently in experimental and only available for Kubernetes cluster.
+The specification is not final and future version of Beyla may introduce breaking changes.
+{{< /admonition >}}
+
 
 | YAML                 | Environment variable               | Type     | Default             |
 | -------------------- | ---------------------------------- | -------- | ------------------- |

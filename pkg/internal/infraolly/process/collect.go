@@ -26,8 +26,8 @@ import (
 	"github.com/hashicorp/golang-lru/v2/simplelru"
 	"github.com/mariomac/pipes/pipe"
 
-	"github.com/grafana/beyla/pkg/internal/request"
-	"github.com/grafana/beyla/pkg/internal/svc"
+	"github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/internal/svc"
 )
 
 type CollectConfig struct {
@@ -36,6 +36,7 @@ type CollectConfig struct {
 	RunMode RunMode
 
 	// Interval between harvests
+	// nolint:undoc
 	Interval time.Duration `yaml:"interval" env:"BEYLA_PROCESSES_INTERVAL"`
 }
 

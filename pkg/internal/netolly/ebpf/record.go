@@ -23,7 +23,7 @@ import (
 	"io"
 	"net"
 
-	attr "github.com/grafana/beyla/pkg/export/attributes/names"
+	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
 )
 
 // IPAddr encodes v4 and v6 IPs with a fixed length.
@@ -50,6 +50,10 @@ type RecordAttrs struct {
 	// - IP
 	SrcName string
 	DstName string
+
+	// SrcZone and DstZone represent the Cloud availability zones of the source and destination
+	SrcZone string
+	DstZone string
 
 	Interface string
 	// BeylaIP provides information about the source of the flow (the Agent that traced it)

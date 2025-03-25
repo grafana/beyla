@@ -1,3 +1,4 @@
+//go:build beyla_bpf_ignore
 // Copyright (c) Meta Platforms, Inc. and affiliates.
 // Copyright Grafana Labs
 //
@@ -79,7 +80,7 @@ int BPF_KPROBE(handle_cuda_launch,
         for (int i = 0; i < MAX_GPUKERN_ARGS; i++) {
             const void *arg_addr;
             // We don't know how many argument this kernel has until we parse the
-            // signature, so we always attemps to read the maximum number of args,
+            // signature, so we always attempts to read the maximum number of args,
             // even if some of these arg values are not valid.
             bpf_probe_read_user(&arg_addr, sizeof(u64), (const void *)(argv + (i * sizeof(u64))));
 

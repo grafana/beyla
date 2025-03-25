@@ -11,21 +11,21 @@ import (
 	otelconsumer "go.opentelemetry.io/collector/consumer"
 	"gopkg.in/yaml.v3"
 
-	"github.com/grafana/beyla/pkg/config"
-	"github.com/grafana/beyla/pkg/export/attributes"
-	"github.com/grafana/beyla/pkg/export/debug"
-	"github.com/grafana/beyla/pkg/export/instrumentations"
-	"github.com/grafana/beyla/pkg/export/otel"
-	"github.com/grafana/beyla/pkg/export/prom"
-	"github.com/grafana/beyla/pkg/internal/ebpf/tcmanager"
-	"github.com/grafana/beyla/pkg/internal/filter"
-	"github.com/grafana/beyla/pkg/internal/imetrics"
-	"github.com/grafana/beyla/pkg/internal/infraolly/process"
-	"github.com/grafana/beyla/pkg/internal/kube"
-	"github.com/grafana/beyla/pkg/internal/traces"
-	"github.com/grafana/beyla/pkg/kubeflags"
-	"github.com/grafana/beyla/pkg/services"
-	"github.com/grafana/beyla/pkg/transform"
+	"github.com/grafana/beyla/v2/pkg/config"
+	"github.com/grafana/beyla/v2/pkg/export/attributes"
+	"github.com/grafana/beyla/v2/pkg/export/debug"
+	"github.com/grafana/beyla/v2/pkg/export/instrumentations"
+	"github.com/grafana/beyla/v2/pkg/export/otel"
+	"github.com/grafana/beyla/v2/pkg/export/prom"
+	"github.com/grafana/beyla/v2/pkg/filter"
+	"github.com/grafana/beyla/v2/pkg/internal/ebpf/tcmanager"
+	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
+	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
+	"github.com/grafana/beyla/v2/pkg/internal/kube"
+	"github.com/grafana/beyla/v2/pkg/internal/traces"
+	"github.com/grafana/beyla/v2/pkg/kubeflags"
+	"github.com/grafana/beyla/v2/pkg/services"
+	"github.com/grafana/beyla/v2/pkg/transform"
 )
 
 const ReporterLRUSize = 256
@@ -153,7 +153,8 @@ type Config struct {
 
 	Attributes Attributes `yaml:"attributes"`
 	// Routes is an optional node. If not set, data will be directly forwarded to exporters.
-	Routes       *transform.RoutesConfig       `yaml:"routes"`
+	Routes *transform.RoutesConfig `yaml:"routes"`
+	// nolint:undoc
 	NameResolver *transform.NameResolverConfig `yaml:"name_resolver"`
 	Metrics      otel.MetricsConfig            `yaml:"otel_metrics_export"`
 	Traces       otel.TracesConfig             `yaml:"otel_traces_export"`
@@ -161,7 +162,8 @@ type Config struct {
 	TracePrinter debug.TracePrinter            `yaml:"trace_printer" env:"BEYLA_TRACE_PRINTER"`
 
 	// Exec allows selecting the instrumented executable whose complete path contains the Exec value.
-	Exec       services.RegexpAttr `yaml:"executable_name" env:"BEYLA_EXECUTABLE_NAME"`
+	Exec services.RegexpAttr `yaml:"executable_name" env:"BEYLA_EXECUTABLE_NAME"`
+	// nolint:undoc
 	ExecOtelGo services.RegexpAttr `env:"OTEL_GO_AUTO_TARGET_EXE"`
 	// Port allows selecting the instrumented executable that owns the Port value. If this value is set (and
 	// different to zero), the value of the Exec property won't take effect.
@@ -187,9 +189,11 @@ type Config struct {
 	// From this comment, the properties below will remain undocumented, as they
 	// are useful for development purposes. They might be helpful for customer support.
 
-	ChannelBufferLen int             `yaml:"channel_buffer_len" env:"BEYLA_CHANNEL_BUFFER_LEN"`
-	ProfilePort      int             `yaml:"profile_port" env:"BEYLA_PROFILE_PORT"`
-	InternalMetrics  imetrics.Config `yaml:"internal_metrics"`
+	// nolint:undoc
+	ChannelBufferLen int `yaml:"channel_buffer_len" env:"BEYLA_CHANNEL_BUFFER_LEN"`
+	// nolint:undoc
+	ProfilePort     int             `yaml:"profile_port" env:"BEYLA_PROFILE_PORT"`
+	InternalMetrics imetrics.Config `yaml:"internal_metrics"`
 
 	// Processes metrics for application. They will be only enabled if there is a metrics exporter enabled,
 	// and both the "application" and "application_process" features are enabled
@@ -222,8 +226,10 @@ type Attributes struct {
 
 type HostIDConfig struct {
 	// Override allows overriding the reported host.id in Beyla
+	// nolint:undoc
 	Override string `yaml:"override" env:"BEYLA_HOST_ID"`
-	// HostIDFetchTimeout specifies the timeout for trying to fetch the HostID from diverse Cloud Providers
+	// FetchTimeout specifies the timeout for trying to fetch the HostID from diverse Cloud Providers
+	// nolint:undoc
 	FetchTimeout time.Duration `yaml:"fetch_timeout" env:"BEYLA_HOST_ID_FETCH_TIMEOUT"`
 }
 
@@ -242,7 +248,7 @@ func (c *Config) Validate() error {
 		return ConfigError(fmt.Sprintf("error in exclude_services YAML property: %s", err.Error()))
 	}
 	if !c.Enabled(FeatureNetO11y) && !c.Enabled(FeatureAppO11y) {
-		return ConfigError("missing at least one of BEYLA_NETWORK_METRICS, BEYLA_EXECUTABLE_NAME or BEYLA_OPEN_PORT property")
+		return ConfigError("missing to enable application discovery or network metrics. Check documentation")
 	}
 	if (c.Port.Len() > 0 || c.Exec.IsSet() || len(c.Discovery.Services) > 0) && c.Discovery.SystemWide {
 		return ConfigError("you can't use BEYLA_SYSTEM_WIDE if any of BEYLA_EXECUTABLE_NAME, BEYLA_OPEN_PORT or services (YAML) are set")
@@ -253,8 +259,10 @@ func (c *Config) Validate() error {
 	if !c.EBPF.TCBackend.Valid() {
 		return ConfigError("Invalid BEYLA_BPF_TC_BACKEND value")
 	}
-	if err := tcmanager.EnsureCiliumCompatibility(c.EBPF.TCBackend); err != nil {
-		return ConfigError(fmt.Sprintf("Cilium compatibility error: %s", err.Error()))
+	if c.willUseTC() {
+		if err := tcmanager.EnsureCiliumCompatibility(c.EBPF.TCBackend); err != nil {
+			return ConfigError(fmt.Sprintf("Cilium compatibility error: %s", err.Error()))
+		}
 	}
 
 	if c.Attributes.Kubernetes.InformersSyncTimeout == 0 {
@@ -303,6 +311,10 @@ func (c *Config) otelNetO11yEnabled() bool {
 	return (c.Metrics.Enabled() || c.Grafana.OTLP.MetricsEnabled()) && c.Metrics.NetworkMetricsEnabled()
 }
 
+func (c *Config) willUseTC() bool {
+	return c.EBPF.ContextPropagationEnabled || (c.Enabled(FeatureNetO11y) && c.NetworkFlows.Source == EbpfSourceTC)
+}
+
 // Enabled checks if a given Beyla feature is enabled according to the global configuration
 func (c *Config) Enabled(feature Feature) bool {
 	switch feature {
@@ -317,11 +329,12 @@ func (c *Config) Enabled(feature Feature) bool {
 // ExternalLogger sets the logging capabilities of Beyla.
 // Used for integrating Beyla with an external logging system (for example Alloy)
 // TODO: maybe this method has too many responsibilities, as it affects the global logger.
-func (c *Config) ExternalLogger(handler slog.Handler, tracing bool) {
+func (c *Config) ExternalLogger(handler slog.Handler, debugMode bool) {
 	slog.SetDefault(slog.New(handler))
-	if tracing {
+	if debugMode {
 		c.TracePrinter = debug.TracePrinterText
 		c.EBPF.BpfDebug = true
+		c.EBPF.ProtocolDebug = true
 		if c.NetworkFlows.Enable {
 			c.NetworkFlows.Print = true
 		}

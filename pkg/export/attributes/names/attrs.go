@@ -80,6 +80,8 @@ const (
 	Iface      = Name("iface")
 	SrcCIDR    = Name("src.cidr")
 	DstCIDR    = Name("dst.cidr")
+	SrcZone    = Name("src.zone")
+	DstZone    = Name("dst.zone")
 
 	ClientPort = Name("client.port")
 
@@ -143,6 +145,7 @@ const (
 	HostID   = Name(semconv.HostIDKey)
 
 	ServiceInstanceID = Name(semconv.ServiceInstanceIDKey)
+	SkipSpanMetrics   = Name("span.metrics.skip")
 )
 
 // traces related attributes

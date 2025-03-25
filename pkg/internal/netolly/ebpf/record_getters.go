@@ -3,9 +3,9 @@ package ebpf
 import (
 	"go.opentelemetry.io/otel/attribute"
 
-	"github.com/grafana/beyla/pkg/export/attributes"
-	attr "github.com/grafana/beyla/pkg/export/attributes/names"
-	"github.com/grafana/beyla/pkg/internal/netolly/flow/transport"
+	"github.com/grafana/beyla/v2/pkg/export/attributes"
+	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
+	"github.com/grafana/beyla/v2/pkg/internal/netolly/flow/transport"
 )
 
 const (
@@ -93,6 +93,10 @@ func RecordGetters(name attr.Name) (attributes.Getter[*Record, attribute.KeyValu
 			}
 			return attribute.Int(string(attr.ServerPort), int(serverPort))
 		}
+	case attr.SrcZone:
+		getter = func(r *Record) attribute.KeyValue { return attribute.String(string(attr.SrcZone), r.Attrs.SrcZone) }
+	case attr.DstZone:
+		getter = func(r *Record) attribute.KeyValue { return attribute.String(string(attr.DstZone), r.Attrs.DstZone) }
 	default:
 		getter = func(r *Record) attribute.KeyValue { return attribute.String(string(name), r.Attrs.Metadata[name]) }
 	}

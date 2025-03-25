@@ -15,8 +15,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/beyla/test/integration/components/docker"
-	"github.com/grafana/beyla/test/integration/components/prom"
+	"github.com/grafana/beyla/v2/test/integration/components/docker"
+	"github.com/grafana/beyla/v2/test/integration/components/prom"
 )
 
 func TestNetwork_Deduplication(t *testing.T) {
@@ -87,7 +87,31 @@ func TestNetwork_AllowedAttributes(t *testing.T) {
 		assert.NotContains(t, f.Metric, "dst_address")
 		assert.NotContains(t, f.Metric, "dst_name")
 		assert.NotContains(t, f.Metric, "src_port")
+
+		// src_name is just an IP address, as reverse DNS is disabled
+		assert.Regexp(t, `^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$`, f.Metric["src_name"])
 	}
+
+	require.NoError(t, compose.Close())
+}
+
+func TestNetwork_ReverseDNS(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-netolly-rdns.yml", path.Join(pathOutput, "test-suite-netolly-allowed-attrs.log"))
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+
+	var checkCurlFlows = func(query string) {
+		pq := prom.Client{HostPort: prometheusHostPort}
+		test.Eventually(t, 4*testTimeout, func(t require.TestingT) {
+			// now, verify that the network metric has been reported.
+			results, err := pq.Query(`beyla_network_flow_bytes_total` + query)
+			require.NoError(t, err)
+			require.NotEmpty(t, results)
+		})
+	}
+
+	checkCurlFlows(`{dst_name="github.com"}`)
+	checkCurlFlows(`{src_name="github.com"}`)
 
 	require.NoError(t, compose.Close())
 }

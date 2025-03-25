@@ -22,6 +22,7 @@
 typedef struct grpc_srv_func_invocation {
     u64 start_monotime_ns;
     u64 stream;
+    u64 st;
     tp_info_t tp;
 } grpc_srv_func_invocation_t;
 
@@ -87,11 +88,32 @@ int beyla_uprobe_server_handleStream(struct pt_regs *ctx) {
     go_addr_key_from_id(&g_key, goroutine_addr);
 
     void *stream_ptr = GO_PARAM4(ctx);
+    void *stream_stream_ptr = stream_ptr;
     off_table_t *ot = get_offsets_table();
+
+    u64 st_offset = go_offset_of(ot, (go_offset){.v = _grpc_stream_st_ptr_pos});
+
+    u64 new_handle_stream = go_offset_of(ot, (go_offset){.v = _grpc_one_six_nine});
+    bpf_dbg_printk("stream pointer %llx, new_handle_stream %d", stream_ptr, new_handle_stream);
+    if (new_handle_stream == 1) {
+        // Read the embedded object ptr
+        bpf_probe_read(
+            &stream_stream_ptr,
+            sizeof(stream_stream_ptr),
+            (void *)(stream_ptr + go_offset_of(ot, (go_offset){.v = _grpc_server_stream_stream})));
+
+        bpf_dbg_printk("new stream pointer %llx", stream_stream_ptr);
+        if (!stream_stream_ptr) {
+            bpf_dbg_printk("Error loading embedded server stream pointer from %llx", stream_ptr);
+            return 0;
+        }
+        st_offset = go_offset_of(ot, (go_offset){.v = _grpc_server_stream_st_ptr_pos});
+    }
 
     grpc_srv_func_invocation_t invocation = {
         .start_monotime_ns = bpf_ktime_get_ns(),
-        .stream = (u64)stream_ptr,
+        .stream = (u64)stream_stream_ptr,
+        .st = 0,
         .tp = {0},
     };
 
@@ -99,13 +121,10 @@ int beyla_uprobe_server_handleStream(struct pt_regs *ctx) {
         void *st_ptr = 0;
         void *tp_ptr = 0;
         // Read the embedded object ptr
-        bpf_probe_read(&st_ptr,
-                       sizeof(st_ptr),
-                       (void *)(stream_ptr +
-                                go_offset_of(ot, (go_offset){.v = _grpc_stream_st_ptr_pos}) +
-                                sizeof(void *)));
+        bpf_probe_read(&st_ptr, sizeof(st_ptr), (void *)(stream_ptr + st_offset + sizeof(void *)));
 
         bpf_dbg_printk("st_ptr %llx", st_ptr);
+        invocation.st = (u64)st_ptr;
         if (st_ptr) {
             grpc_transports_t *t = bpf_map_lookup_elem(&ongoing_grpc_transports, &st_ptr);
 
@@ -136,7 +155,7 @@ int beyla_uprobe_http2Server_operateHeaders(struct pt_regs *ctx) {
     void *frame = GO_PARAM2(ctx);
     off_table_t *ot = get_offsets_table();
 
-    u64 new_offset_version = go_offset_of(ot, (go_offset){.v = _operate_headers_new});
+    u64 new_offset_version = go_offset_of(ot, (go_offset){.v = _grpc_one_six_zero});
 
     // After grpc version 1.60, they added extra context argument to the
     // function call, which adds two extra arguments.
@@ -223,9 +242,13 @@ int beyla_uprobe_server_handleStream_return(struct pt_regs *ctx) {
     }
 
     void *stream_ptr = (void *)invocation->stream;
+    void *st_ptr = (void *)invocation->st;
     u64 grpc_stream_method_ptr_pos =
         go_offset_of(ot, (go_offset){.v = _grpc_stream_method_ptr_pos});
-    bpf_dbg_printk("stream_ptr %lx, method pos %lx", stream_ptr, grpc_stream_method_ptr_pos);
+    bpf_dbg_printk("stream_ptr %lx, st_ptr %lx, method pos %lx",
+                   stream_ptr,
+                   st_ptr,
+                   grpc_stream_method_ptr_pos);
 
     http_request_trace *trace = bpf_ringbuf_reserve(&events, sizeof(http_request_trace), 0);
     if (!trace) {
@@ -254,16 +277,7 @@ int beyla_uprobe_server_handleStream_return(struct pt_regs *ctx) {
         goto done;
     }
 
-    void *st_ptr = 0;
     u8 found_conn = 0;
-    // Read the embedded object ptr
-    bpf_probe_read(&st_ptr,
-                   sizeof(st_ptr),
-                   (void *)(stream_ptr +
-                            go_offset_of(ot, (go_offset){.v = _grpc_stream_st_ptr_pos}) +
-                            sizeof(void *)));
-
-    bpf_dbg_printk("st_ptr %llx", st_ptr);
     if (st_ptr) {
         grpc_transports_t *t = bpf_map_lookup_elem(&ongoing_grpc_transports, &st_ptr);
 
@@ -743,37 +757,6 @@ int beyla_uprobe_grpcFramerWriteHeaders_returns(struct pt_regs *ctx) {
             if (buf_arr && n < (cap - HTTP2_ENCODED_HEADER_LEN)) {
                 uint8_t tp_str[TP_MAX_VAL_LENGTH];
 
-                u8 type_byte = 0;
-                u8 key_len = TP_ENCODED_LEN | 0x80; // high tagged to signify hpack encoded value
-                u8 val_len = TP_MAX_VAL_LENGTH;
-
-                // We don't hpack encode the value of the traceparent field, because that will require that
-                // we use bpf_loop, which in turn increases the kernel requirement to 5.17+.
-                make_tp_string(tp_str, &f_info->tp);
-                //bpf_dbg_printk("Will write %s, type = %d, key_len = %d, val_len = %d", tp_str, type_byte, key_len, val_len);
-
-                bpf_probe_write_user(buf_arr + (n & 0x0ffff), &type_byte, sizeof(type_byte));
-                n++;
-                // Write the length of the key = 8
-                bpf_probe_write_user(buf_arr + (n & 0x0ffff), &key_len, sizeof(key_len));
-                n++;
-                // Write 'traceparent' encoded as hpack
-                bpf_probe_write_user(buf_arr + (n & 0x0ffff), tp_encoded, sizeof(tp_encoded));
-                ;
-                n += TP_ENCODED_LEN;
-                // Write the length of the hpack encoded traceparent field
-                bpf_probe_write_user(buf_arr + (n & 0x0ffff), &val_len, sizeof(val_len));
-                n++;
-                bpf_probe_write_user(buf_arr + (n & 0x0ffff), tp_str, sizeof(tp_str));
-                n += TP_MAX_VAL_LENGTH;
-                // Update the value of n in w to reflect the new size
-                bpf_probe_write_user(
-                    (void *)(w_ptr +
-                             go_offset_of(ot,
-                                          (go_offset){.v = _grpc_transport_buf_writer_offset_pos})),
-                    &n,
-                    sizeof(n));
-
                 // http2 encodes the length of the headers in the first 3 bytes of buf, we need to update those
                 u8 size_1 = 0;
                 u8 size_2 = 0;
@@ -786,16 +769,51 @@ int beyla_uprobe_grpcFramerWriteHeaders_returns(struct pt_regs *ctx) {
                 bpf_dbg_printk("size 1:%x, 2:%x, 3:%x", size_1, size_2, size_3);
 
                 u32 original_size = ((u32)(size_1) << 16) | ((u32)(size_2) << 8) | size_3;
-                u32 new_size = original_size + HTTP2_ENCODED_HEADER_LEN;
 
-                bpf_dbg_printk("Changing size from %d to %d", original_size, new_size);
-                size_1 = (u8)(new_size >> 16);
-                size_2 = (u8)(new_size >> 8);
-                size_3 = (u8)(new_size);
+                if (original_size > 0) {
+                    u8 type_byte = 0;
+                    u8 key_len =
+                        TP_ENCODED_LEN | 0x80; // high tagged to signify hpack encoded value
+                    u8 val_len = TP_MAX_VAL_LENGTH;
 
-                bpf_probe_write_user((void *)(buf_arr + off), &size_1, sizeof(size_1));
-                bpf_probe_write_user((void *)(buf_arr + off + 1), &size_2, sizeof(size_2));
-                bpf_probe_write_user((void *)(buf_arr + off + 2), &size_3, sizeof(size_3));
+                    // We don't hpack encode the value of the traceparent field, because that will require that
+                    // we use bpf_loop, which in turn increases the kernel requirement to 5.17+.
+                    make_tp_string(tp_str, &f_info->tp);
+                    //bpf_dbg_printk("Will write %s, type = %d, key_len = %d, val_len = %d", tp_str, type_byte, key_len, val_len);
+
+                    bpf_probe_write_user(buf_arr + (n & 0x0ffff), &type_byte, sizeof(type_byte));
+                    n++;
+                    // Write the length of the key = 8
+                    bpf_probe_write_user(buf_arr + (n & 0x0ffff), &key_len, sizeof(key_len));
+                    n++;
+                    // Write 'traceparent' encoded as hpack
+                    bpf_probe_write_user(buf_arr + (n & 0x0ffff), tp_encoded, sizeof(tp_encoded));
+                    ;
+                    n += TP_ENCODED_LEN;
+                    // Write the length of the hpack encoded traceparent field
+                    bpf_probe_write_user(buf_arr + (n & 0x0ffff), &val_len, sizeof(val_len));
+                    n++;
+                    bpf_probe_write_user(buf_arr + (n & 0x0ffff), tp_str, sizeof(tp_str));
+                    n += TP_MAX_VAL_LENGTH;
+                    // Update the value of n in w to reflect the new size
+                    bpf_probe_write_user(
+                        (void *)(w_ptr +
+                                 go_offset_of(
+                                     ot, (go_offset){.v = _grpc_transport_buf_writer_offset_pos})),
+                        &n,
+                        sizeof(n));
+
+                    u32 new_size = original_size + HTTP2_ENCODED_HEADER_LEN;
+
+                    bpf_dbg_printk("Changing size from %d to %d", original_size, new_size);
+                    size_1 = (u8)(new_size >> 16);
+                    size_2 = (u8)(new_size >> 8);
+                    size_3 = (u8)(new_size);
+
+                    bpf_probe_write_user((void *)(buf_arr + off), &size_1, sizeof(size_1));
+                    bpf_probe_write_user((void *)(buf_arr + off + 1), &size_2, sizeof(size_2));
+                    bpf_probe_write_user((void *)(buf_arr + off + 2), &size_3, sizeof(size_3));
+                }
             }
         }
     }

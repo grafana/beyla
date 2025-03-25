@@ -11,16 +11,16 @@ import (
 	"time"
 
 	"github.com/cilium/ebpf"
-	"github.com/cilium/ebpf/ringbuf"
 	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/beyla/pkg/config"
-	"github.com/grafana/beyla/pkg/internal/imetrics"
-	"github.com/grafana/beyla/pkg/internal/request"
-	"github.com/grafana/beyla/pkg/internal/svc"
-	"github.com/grafana/beyla/pkg/internal/testutil"
+	"github.com/grafana/beyla/v2/pkg/config"
+	"github.com/grafana/beyla/v2/pkg/internal/ebpf/ringbuf"
+	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
+	"github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/internal/svc"
+	"github.com/grafana/beyla/v2/pkg/internal/testutil"
 )
 
 const testTimeout = 5 * time.Second
@@ -211,9 +211,9 @@ type metricsReporter struct {
 	flushedLen int
 }
 
-func (m *metricsReporter) TracerFlush(len int) {
+func (m *metricsReporter) TracerFlush(length int) {
 	m.flushes++
-	m.flushedLen += len
+	m.flushedLen += length
 }
 
 type TestPidsFilter struct {

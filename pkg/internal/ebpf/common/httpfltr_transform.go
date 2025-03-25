@@ -9,9 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cilium/ebpf/ringbuf"
-
-	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/internal/ebpf/ringbuf"
+	"github.com/grafana/beyla/v2/pkg/internal/request"
 )
 
 // misses serviceID
@@ -43,7 +42,7 @@ func httpInfoToSpan(info *HTTPInfo) request.Span {
 			UserPID:   info.Pid.UserPid,
 			Namespace: info.Pid.Ns,
 		},
-		Statement: scheme + request.SchemeHostSeparator,
+		Statement: scheme + request.SchemeHostSeparator + info.HeaderHost,
 	}
 }
 
@@ -57,10 +56,11 @@ func removeQuery(url string) string {
 
 type HTTPInfo struct {
 	BPFHTTPInfo
-	Method string
-	URL    string
-	Host   string
-	Peer   string
+	Method     string
+	URL        string
+	Host       string
+	Peer       string
+	HeaderHost string
 }
 
 func ReadHTTPInfoIntoSpan(record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {
@@ -81,6 +81,10 @@ func ReadHTTPInfoIntoSpan(record *ringbuf.Record, filter ServiceFilter) (request
 func HTTPInfoEventToSpan(event BPFHTTPInfo) (request.Span, bool, error) {
 	result := HTTPInfo{BPFHTTPInfo: event}
 
+	var bufHost string
+	var bufPort int
+	parsedHost := false
+
 	// When we can't find the connection info, we signal that through making the
 	// source and destination ports equal to max short. E.g. async SSL
 	if event.ConnInfo.S_port != 0 || event.ConnInfo.D_port != 0 {
@@ -88,15 +92,22 @@ func HTTPInfoEventToSpan(event BPFHTTPInfo) (request.Span, bool, error) {
 		result.Host = target
 		result.Peer = source
 	} else {
-		host, port := event.hostFromBuf()
+		bufHost, bufPort = event.hostFromBuf()
+		parsedHost = true
 
-		if port >= 0 {
-			result.Host = host
-			result.ConnInfo.D_port = uint16(port)
+		if bufPort >= 0 {
+			result.Host = bufHost
+			result.ConnInfo.D_port = uint16(bufPort)
 		}
 	}
 	result.URL = event.url()
 	result.Method = event.method()
+
+	if request.EventType(result.Type) == request.EventTypeHTTPClient && !parsedHost {
+		bufHost, _ = event.hostFromBuf()
+	}
+
+	result.HeaderHost = bufHost
 
 	return httpInfoToSpan(&result), false, nil
 }
@@ -161,7 +172,7 @@ func (event *BPFHTTPInfo) hostFromBuf() (string, int) {
 	host, portStr, err := net.SplitHostPort(buf[:rIdx])
 
 	if err != nil {
-		return "", -1
+		return buf[:rIdx], -1
 	}
 
 	port, _ := strconv.Atoi(portStr)

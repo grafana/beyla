@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/beyla/test/integration/components/jaeger"
-	"github.com/grafana/beyla/test/integration/components/prom"
+	"github.com/grafana/beyla/v2/test/integration/components/jaeger"
+	"github.com/grafana/beyla/v2/test/integration/components/prom"
 )
 
 func testREDMetricsForPythonSQLLibrary(t *testing.T, url, comm, namespace string) {
@@ -80,6 +80,73 @@ func testREDMetricsPythonSQLOnly(t *testing.T) {
 		t.Run(testCaseURL, func(t *testing.T) {
 			waitForSQLTestComponents(t, testCaseURL, "/query")
 			testREDMetricsForPythonSQLLibrary(t, testCaseURL, "python3.12", "integration-test")
+		})
+	}
+}
+
+func testREDMetricsForPythonSQLSSL(t *testing.T, url, comm, namespace string) {
+	urlPath := "/query"
+
+	// Call 3 times the instrumented service, forcing it to:
+	// - take a large JSON file
+	// - returning a 200 code
+	for i := 0; i < 4; i++ {
+		doHTTPGet(t, url+urlPath, 200)
+	}
+
+	// Eventually, Prometheus would make this query visible
+	pq := prom.Client{HostPort: prometheusHostPort}
+	var results []prom.Result
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		var err error
+		results, err = pq.Query(`db_client_operation_duration_seconds_count{` +
+			`db_operation_name="SELECT",` +
+			`service_namespace="` + namespace + `"}`)
+		require.NoError(t, err)
+		enoughPromResults(t, results)
+		val := totalPromCount(t, results)
+		assert.LessOrEqual(t, 3, val)
+	})
+
+	// Look for a trace with SELECT accounting.contacts
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		resp, err := http.Get(jaegerQueryURL + "?service=" + comm + "&operation=SELECT%20accounting.contacts")
+		require.NoError(t, err)
+		if resp == nil {
+			return
+		}
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		var tq jaeger.TracesQuery
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
+		traces := tq.FindBySpan(jaeger.Tag{Key: "db.operation.name", Type: "string", Value: "SELECT"})
+		assert.LessOrEqual(t, 1, len(traces))
+	}, test.Interval(100*time.Millisecond))
+
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		resp, err := http.Get(jaegerQueryURL + "?service=" + comm + "&operation=GET%20%2Fquery")
+		require.NoError(t, err)
+		if resp == nil {
+			return
+		}
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		var tq jaeger.TracesQuery
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
+		traces := tq.FindBySpan(jaeger.Tag{Key: "url.path", Type: "string", Value: "/query"})
+		require.LessOrEqual(t, 1, len(traces))
+		trace := traces[0]
+		// Check the information of the parent span
+		res := trace.FindByOperationName("GET /query")
+		require.Len(t, res, 1)
+	}, test.Interval(100*time.Millisecond))
+}
+
+func testREDMetricsPythonSQLSSL(t *testing.T) {
+	for _, testCaseURL := range []string{
+		"https://localhost:8381",
+	} {
+		t.Run(testCaseURL, func(t *testing.T) {
+			waitForTestComponentsSub(t, testCaseURL, "/query")
+			testREDMetricsForPythonSQLSSL(t, testCaseURL, "python3.12", "integration-test")
 		})
 	}
 }

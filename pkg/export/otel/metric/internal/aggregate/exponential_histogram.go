@@ -14,7 +14,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	sdkmetricdata "go.opentelemetry.io/otel/sdk/metric/metricdata"
 
-	"github.com/grafana/beyla/pkg/export/otel/metric/internal/exemplar"
+	"github.com/grafana/beyla/v2/pkg/export/otel/metric/internal/exemplar"
 )
 
 const (
@@ -48,6 +48,8 @@ type expoHistogramDataPoint[N int64 | float64] struct {
 	zeroCount  uint64
 }
 
+// nolint:revive
+// lint disabled as this is an inherited code
 func newExpoHistogramDataPoint[N int64 | float64](attrs attribute.Set, maxSize, maxScale int, noMinMax, noSum bool) *expoHistogramDataPoint[N] {
 	f := math.MaxFloat64
 	max := N(f) // if N is int64, max will overflow to -9223372036854775808

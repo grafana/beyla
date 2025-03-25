@@ -6,8 +6,8 @@ import (
 
 	trace2 "go.opentelemetry.io/otel/trace"
 
-	"github.com/grafana/beyla/pkg/internal/request"
-	"github.com/grafana/beyla/pkg/internal/sqlprune"
+	"github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/internal/sqlprune"
 )
 
 func sqlKind(b []byte) request.SQLKind {
@@ -20,8 +20,12 @@ func sqlKind(b []byte) request.SQLKind {
 	return request.DBGeneric
 }
 
-func validSQL(op, table string) bool {
-	return op != "" && table != ""
+// If we have already identified Postgres or MySQL, allow the SQL
+// command to be valid with just operation, e.g. we didn't find the
+// table. Otherwise, be more picky so that we don't misclassify easily
+// traffic that may have SQL like keywords as SQL.
+func validSQL(op, table string, sqlKind request.SQLKind) bool {
+	return op != "" && (sqlKind != request.DBGeneric || table != "")
 }
 
 // when the input string is invalid unicode (might happen with the ringbuffer
@@ -60,7 +64,7 @@ func detectSQLPayload(useHeuristics bool, b []byte) (string, string, string, req
 		}
 	}
 	op, table, sql := detectSQL(string(b))
-	if !validSQL(op, table) {
+	if !validSQL(op, table, sqlKind) {
 		switch sqlKind {
 		case request.DBPostgres:
 			op, table, sql = postgresPreparedStatements(b)

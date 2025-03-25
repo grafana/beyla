@@ -21,6 +21,12 @@ typedef struct trace_key {
     u64 extra_id;    // pids namespace for the process
 } __attribute__((packed)) trace_key_t;
 
+// Data structure to support context propagation for thread pools
+typedef struct cp_support_data {
+    trace_key_t t_key;
+    u8 real_client;
+} __attribute__((packed)) cp_support_data_t;
+
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, trace_key_t);     // key: pid_tid
@@ -54,10 +60,10 @@ struct {
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, pid_connection_info_t); // key: conn_info
-    __type(value, trace_key_t);         // value: tracekey to lookup in server_traces
+    __type(value, cp_support_data_t);   // value: tracekey to lookup in server_traces
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
     __uint(pinning, BEYLA_PIN_INTERNAL);
-} client_connect_info SEC(".maps");
+} cp_support_connect_info SEC(".maps");
 
 static __always_inline unsigned char *tp_char_buf() {
     int zero = 0;
@@ -112,7 +118,7 @@ static __always_inline unsigned char *bpf_strstr_tp_loop(unsigned char *buf, int
     return NULL;
 }
 
-static __always_inline tp_info_pid_t *find_parent_trace(pid_connection_info_t *p_conn) {
+static __always_inline tp_info_pid_t *find_parent_trace(const pid_connection_info_t *p_conn) {
     trace_key_t t_key = {0};
 
     task_tid(&t_key.p_key);
@@ -150,10 +156,10 @@ static __always_inline tp_info_pid_t *find_parent_trace(pid_connection_info_t *p
         attempts++;
     } while (attempts < 3); // Up to 3 levels of thread nesting allowed
 
-    trace_key_t *conn_t_key = bpf_map_lookup_elem(&client_connect_info, p_conn);
+    cp_support_data_t *conn_t_key = bpf_map_lookup_elem(&cp_support_connect_info, p_conn);
 
     if (conn_t_key) {
-        return bpf_map_lookup_elem(&server_traces, conn_t_key);
+        return bpf_map_lookup_elem(&server_traces, &conn_t_key->t_key);
     }
 
     return 0;
@@ -181,7 +187,7 @@ static __always_inline void delete_server_trace(trace_key_t *t_key) {
 }
 
 static __always_inline void delete_client_trace_info(pid_connection_info_t *pid_conn) {
-    bpf_dbg_printk("Deleting client trace map for connection");
+    bpf_dbg_printk("Deleting client trace map for connection, pid = %d", pid_conn->pid);
     dbg_print_http_connection_info(&pid_conn->conn);
 
     delete_trace_info_for_connection(&pid_conn->conn, TRACE_TYPE_CLIENT);
@@ -191,7 +197,7 @@ static __always_inline void delete_client_trace_info(pid_connection_info_t *pid_
         .s_port = pid_conn->conn.s_port,
     };
     bpf_map_delete_elem(&outgoing_trace_map, &e_key);
-    bpf_map_delete_elem(&client_connect_info, pid_conn);
+    bpf_map_delete_elem(&cp_support_connect_info, pid_conn);
 }
 
 static __always_inline u8 valid_span(const unsigned char *span_id) {
@@ -203,7 +209,7 @@ static __always_inline u8 valid_trace(const unsigned char *trace_id) {
 }
 
 static __always_inline void
-server_or_client_trace(u8 type, connection_info_t *conn, tp_info_pid_t *tp_p) {
+server_or_client_trace(u8 type, connection_info_t *conn, tp_info_pid_t *tp_p, u8 ssl) {
     if (type == EVENT_HTTP_REQUEST) {
         trace_key_t t_key = {0};
         task_tid(&t_key.p_key);
@@ -230,12 +236,21 @@ server_or_client_trace(u8 type, connection_info_t *conn, tp_info_pid_t *tp_p) {
         // the span id with the SEQ/ACK pair.
         u64 id = bpf_get_current_pid_tgid();
         tp_p->pid = pid_from_pid_tgid(id);
-        egress_key_t e_key = {
+        const egress_key_t e_key = {
             .d_port = conn->d_port,
             .s_port = conn->s_port,
         };
 
-        bpf_map_update_elem(&outgoing_trace_map, &e_key, tp_p, BPF_ANY);
+        if (ssl) {
+            // Clone and mark it invalid for the purpose of storing it in the
+            // outgoing trace map, if it's an SSL connection
+            tp_info_pid_t tp_p_invalid = {0};
+            __builtin_memcpy(&tp_p_invalid, tp_p, sizeof(tp_p_invalid));
+            tp_p_invalid.valid = 0;
+            bpf_map_update_elem(&outgoing_trace_map, &e_key, &tp_p_invalid, BPF_ANY);
+        } else {
+            bpf_map_update_elem(&outgoing_trace_map, &e_key, tp_p, BPF_ANY);
+        }
     }
 }
 
@@ -267,7 +282,7 @@ static __always_inline u8 find_trace_for_server_request(connection_info_t *conn,
     return found_tp;
 }
 
-static __always_inline u8 find_trace_for_client_request(pid_connection_info_t *p_conn,
+static __always_inline u8 find_trace_for_client_request(const pid_connection_info_t *p_conn,
                                                         tp_info_t *tp) {
     u8 found_tp = 0;
     tp_info_pid_t *server_tp = find_parent_trace(p_conn);

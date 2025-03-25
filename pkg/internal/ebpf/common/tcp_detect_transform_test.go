@@ -8,13 +8,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cilium/ebpf/ringbuf"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/beyla/pkg/config"
-	"github.com/grafana/beyla/pkg/internal/request"
-	"github.com/grafana/beyla/pkg/internal/svc"
+	"github.com/grafana/beyla/v2/pkg/config"
+	"github.com/grafana/beyla/v2/pkg/internal/ebpf/ringbuf"
+	"github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/internal/svc"
 )
 
 const (
@@ -64,10 +64,17 @@ func TestSQLDetection(t *testing.T) {
 func TestSQLDetectionFails(t *testing.T) {
 	for _, s := range []string{"SELECT", "UPDATES{}", "DELETE {} ", "INSERT// into accounts "} {
 		op, table, _ := detectSQL(s)
-		assert.False(t, validSQL(op, table))
+		assert.False(t, validSQL(op, table, request.DBGeneric))
 		surrounded := randomStringWithSub(s)
 		op, table, _ = detectSQL(surrounded)
-		assert.False(t, validSQL(op, table))
+		assert.False(t, validSQL(op, table, request.DBGeneric))
+	}
+}
+
+func TestSQLDetectionDoesntFailForDetectedKind(t *testing.T) {
+	for _, s := range []string{"SELECT", "DELETE {} "} {
+		op, table, _ := detectSQL(s)
+		assert.True(t, validSQL(op, table, request.DBPostgres))
 	}
 }
 

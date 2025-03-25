@@ -10,8 +10,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/sys/unix"
 
-	"github.com/grafana/beyla/pkg/internal/helpers"
-	"github.com/grafana/beyla/pkg/services"
+	"github.com/grafana/beyla/v2/pkg/config"
+	"github.com/grafana/beyla/v2/pkg/internal/helpers"
+	"github.com/grafana/beyla/v2/pkg/services"
 )
 
 type testCase struct {
@@ -102,17 +103,25 @@ type capTestData struct {
 	class   capClass
 	kernMaj int
 	kernMin int
+	useTC   bool
 }
 
 var capTests = []capTestData{
-	{osCap: unix.CAP_BPF, class: capCore, kernMaj: 6, kernMin: 10},
-	{osCap: unix.CAP_PERFMON, class: capCore, kernMaj: 6, kernMin: 10},
-	{osCap: unix.CAP_DAC_READ_SEARCH, class: capCore, kernMaj: 6, kernMin: 10},
-	{osCap: unix.CAP_SYS_RESOURCE, class: capCore, kernMaj: 5, kernMin: 10},
-	{osCap: unix.CAP_SYS_ADMIN, class: capCore, kernMaj: 4, kernMin: 11},
-	{osCap: unix.CAP_CHECKPOINT_RESTORE, class: capApp, kernMaj: 6, kernMin: 10},
-	{osCap: unix.CAP_SYS_PTRACE, class: capApp, kernMaj: 6, kernMin: 10},
-	{osCap: unix.CAP_NET_RAW, class: capNet, kernMaj: 6, kernMin: 10},
+	// core
+	{osCap: unix.CAP_BPF, class: capCore, kernMaj: 6, kernMin: 10, useTC: false},
+
+	// app o11y
+	{osCap: unix.CAP_CHECKPOINT_RESTORE, class: capApp, kernMaj: 6, kernMin: 10, useTC: false},
+	{osCap: unix.CAP_DAC_READ_SEARCH, class: capApp, kernMaj: 6, kernMin: 10, useTC: false},
+	{osCap: unix.CAP_SYS_PTRACE, class: capApp, kernMaj: 6, kernMin: 10, useTC: false},
+	{osCap: unix.CAP_PERFMON, class: capApp, kernMaj: 6, kernMin: 10, useTC: false},
+	{osCap: unix.CAP_NET_RAW, class: capApp, kernMaj: 6, kernMin: 10, useTC: false},
+	{osCap: unix.CAP_NET_ADMIN, class: capApp, kernMaj: 6, kernMin: 10, useTC: true},
+
+	// net o11y
+	{osCap: unix.CAP_NET_RAW, class: capNet, kernMaj: 6, kernMin: 10, useTC: false},
+	{osCap: unix.CAP_PERFMON, class: capNet, kernMaj: 6, kernMin: 10, useTC: true},
+	{osCap: unix.CAP_NET_ADMIN, class: capNet, kernMaj: 6, kernMin: 10, useTC: true},
 }
 
 func TestCheckOSCapabilities(t *testing.T) {
@@ -129,9 +138,18 @@ func TestCheckOSCapabilities(t *testing.T) {
 	test := func(data *capTestData) {
 		overrideKernelVersion(testCase{data.kernMaj, data.kernMin})
 
+		netSource := func(useTC bool) string {
+			if useTC {
+				return EbpfSourceTC
+			}
+
+			return EbpfSourceSock
+		}
+
 		cfg := Config{
-			NetworkFlows: NetworkConfig{Enable: data.class == capNet},
+			NetworkFlows: NetworkConfig{Enable: data.class == capNet, Source: netSource(data.useTC)},
 			Discovery:    services.DiscoveryConfig{SystemWide: data.class == capApp},
+			EBPF:         config.EBPFTracer{ContextPropagationEnabled: data.useTC},
 		}
 
 		err := CheckOSCapabilities(&cfg)

@@ -8,11 +8,11 @@ import (
 
 	"github.com/mariomac/pipes/pipe"
 
-	"github.com/grafana/beyla/pkg/internal/helpers/container"
-	"github.com/grafana/beyla/pkg/internal/kube"
-	"github.com/grafana/beyla/pkg/kubecache/informer"
-	"github.com/grafana/beyla/pkg/services"
-	"github.com/grafana/beyla/pkg/transform"
+	"github.com/grafana/beyla/v2/pkg/internal/helpers/container"
+	"github.com/grafana/beyla/v2/pkg/internal/kube"
+	"github.com/grafana/beyla/v2/pkg/kubecache/informer"
+	"github.com/grafana/beyla/v2/pkg/services"
+	"github.com/grafana/beyla/v2/pkg/transform"
 )
 
 // injectable functions for testing
@@ -175,6 +175,7 @@ func (wk *watcherKubeEnricher) onNewProcess(procInfo processAttrs) (processAttrs
 	wk.processByContainer[containerInfo.ContainerID] = procInfo
 
 	if pod := wk.store.PodByContainerID(containerInfo.ContainerID); pod != nil {
+		wk.log.Debug("matched process with running container", "pid", procInfo.pid, "container", containerInfo.ContainerID)
 		procInfo = withMetadata(procInfo, pod.Meta)
 	}
 	return procInfo, true
@@ -186,6 +187,7 @@ func (wk *watcherKubeEnricher) onNewPod(pod *informer.ObjectMeta) []Event[proces
 	var events []Event[processAttrs]
 	for _, cnt := range pod.Pod.Containers {
 		if procInfo, ok := wk.processByContainer[cnt.Id]; ok {
+			wk.log.Debug("matched pod with running process", "container", cnt.Id, "pid", procInfo.pid)
 			events = append(events, Event[processAttrs]{
 				Type: EventCreated,
 				Obj:  withMetadata(procInfo, pod),

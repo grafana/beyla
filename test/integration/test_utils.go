@@ -18,7 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/http2"
 
-	"github.com/grafana/beyla/test/integration/components/prom"
+	"github.com/grafana/beyla/v2/test/integration/components/prom"
 )
 
 var tr = &http.Transport{
@@ -173,6 +173,25 @@ func waitForTestComponentsSubWithTimeAndCode(t *testing.T, url, subpath string, 
 		// we don't really care that this metric could be from a previous
 		// test. Once one it is visible, it means that Otel and Prometheus are healthy
 		results, err := pq.Query(`http_server_request_duration_seconds_count{url_path="` + subpath + `"}`)
+		require.NoError(t, err)
+		require.NotEmpty(t, results)
+	}, test.Interval(time.Second))
+}
+
+func waitForTestComponentsRoute(t *testing.T, url, route string) {
+	pq := prom.Client{HostPort: prometheusHostPort}
+	test.Eventually(t, time.Duration(1)*time.Minute, func(t require.TestingT) {
+		// first, verify that the test service endpoint is healthy
+		req, err := http.NewRequest("GET", url+route, nil)
+		require.NoError(t, err)
+		r, err := testHTTPClient.Do(req)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, r.StatusCode)
+
+		// now, verify that the metric has been reported.
+		// we don't really care that this metric could be from a previous
+		// test. Once one it is visible, it means that Otel and Prometheus are healthy
+		results, err := pq.Query(`http_server_request_duration_seconds_count{http_route="` + route + `"}`)
 		require.NoError(t, err)
 		require.NotEmpty(t, results)
 	}, test.Interval(time.Second))

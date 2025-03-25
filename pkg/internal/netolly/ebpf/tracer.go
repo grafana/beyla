@@ -27,10 +27,11 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
 
-	"github.com/grafana/beyla/pkg/internal/ebpf/tcmanager"
+	convenience "github.com/grafana/beyla/v2/pkg/internal/ebpf/convenience"
+	"github.com/grafana/beyla/v2/pkg/internal/ebpf/ringbuf"
+	"github.com/grafana/beyla/v2/pkg/internal/ebpf/tcmanager"
 )
 
 // $BPF_CLANG and $BPF_CFLAGS are set by the Makefile.
@@ -90,7 +91,7 @@ func NewFlowFetcher(
 	if tlog.Enabled(context.TODO(), slog.LevelDebug) {
 		traceMsgs = 1
 	}
-	if err := spec.RewriteConstants(map[string]interface{}{
+	if err := convenience.RewriteConstants(spec, map[string]interface{}{
 		constSampling:      uint32(sampling),
 		constTraceMessages: uint8(traceMsgs),
 	}); err != nil {
@@ -117,7 +118,7 @@ func NewFlowFetcher(
 		tcManager.AddProgram("tc/ingress_flow_parse", objects.BeylaIngressFlowParse, tcmanager.AttachmentIngress)
 	}
 
-	return &FlowFetcher{
+	fetcher := &FlowFetcher{
 		log:           tlog,
 		objects:       &objects,
 		ringbufReader: flows,
@@ -125,7 +126,12 @@ func NewFlowFetcher(
 		cacheMaxSize:  cacheMaxSize,
 		enableIngress: ingress,
 		enableEgress:  egress,
-	}, nil
+	}
+
+	// errors are not critical for this tracer
+	go fetcher.logTCErrors(tcManager.Errors())
+
+	return fetcher, nil
 }
 
 // Close the eBPF fetcher from the system.
@@ -214,4 +220,10 @@ func (m *FlowFetcher) LookupAndDeleteMap() map[NetFlowId][]NetFlowMetrics {
 		flows[id] = append(flows[id], metrics...)
 	}
 	return flows
+}
+
+func (m *FlowFetcher) logTCErrors(errors chan error) {
+	for err := range errors {
+		m.log.Warn("TCManager error", "error", err)
+	}
 }

@@ -22,14 +22,14 @@ import (
 
 	"github.com/cilium/ebpf"
 
-	"github.com/grafana/beyla/pkg/beyla"
-	"github.com/grafana/beyla/pkg/config"
-	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
-	"github.com/grafana/beyla/pkg/internal/exec"
-	"github.com/grafana/beyla/pkg/internal/goexec"
-	"github.com/grafana/beyla/pkg/internal/imetrics"
-	"github.com/grafana/beyla/pkg/internal/request"
-	"github.com/grafana/beyla/pkg/internal/svc"
+	"github.com/grafana/beyla/v2/pkg/beyla"
+	"github.com/grafana/beyla/v2/pkg/config"
+	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
+	"github.com/grafana/beyla/v2/pkg/internal/exec"
+	"github.com/grafana/beyla/v2/pkg/internal/goexec"
+	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
+	"github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/internal/svc"
 )
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/go_tracer.c -- -I../../../../bpf/headers -DNO_HEADER_PROPAGATION
@@ -65,7 +65,7 @@ func (p *Tracer) BlockPID(pid, ns uint32) {
 }
 
 func (p *Tracer) supportsContextPropagation() bool {
-	return !ebpfcommon.IntegrityModeOverride && ebpfcommon.SupportsContextPropagation(p.log)
+	return !ebpfcommon.IntegrityModeOverride && ebpfcommon.SupportsContextPropagationWithProbe(p.log)
 }
 
 func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
@@ -153,7 +153,10 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 		goexec.SaramaBrokerConnPos,
 		goexec.SaramaBufconnConnPos,
 		// grpc versioning
-		goexec.OperateHeadersNew,
+		goexec.GrpcOneSixZero,
+		goexec.GrpcOneSixNine,
+		goexec.GrpcServerStreamStream,
+		goexec.GrpcServerStreamStPtr,
 	} {
 		if val, ok := offsets.Field[field].(uint64); ok {
 			offTable.Table[field] = val
@@ -265,6 +268,10 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 			End:   p.bpfObjects.BeylaUprobeServerHandleStreamReturn,
 		}},
 		"google.golang.org/grpc/internal/transport.(*http2Server).WriteStatus": {{
+			Start: p.bpfObjects.BeylaUprobeTransportWriteStatus,
+		}},
+		// in grpc 1.69.0 they renamed the above WriteStatus to writeStatus lowecase
+		"google.golang.org/grpc/internal/transport.(*http2Server).writeStatus": {{
 			Start: p.bpfObjects.BeylaUprobeTransportWriteStatus,
 		}},
 		"google.golang.org/grpc.(*ClientConn).Invoke": {{

@@ -14,8 +14,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/beyla/test/integration/components/docker"
-	"github.com/grafana/beyla/test/integration/components/prom"
+	"github.com/grafana/beyla/v2/test/integration/components/docker"
+	"github.com/grafana/beyla/v2/test/integration/components/prom"
 )
 
 func TestMultiProcess(t *testing.T) {
@@ -90,7 +90,7 @@ func TestMultiProcess(t *testing.T) {
 
 	if kprobeTracesEnabled() {
 		t.Run("Nested traces with kprobes: rust -> java -> node -> go -> python -> rails", func(t *testing.T) {
-			testNestedHTTPTracesKProbes(t)
+			testNestedHTTPTracesKProbes(t, true)
 		})
 
 		t.Run("Nested traces with kprobes: SSL node python rails", func(t *testing.T) {
@@ -114,7 +114,7 @@ func TestMultiProcessAppTC(t *testing.T) {
 
 	if kprobeTracesEnabled() {
 		t.Run("Nested traces with kprobes: rust -> java -> node -> go -> python -> rails", func(t *testing.T) {
-			testNestedHTTPTracesKProbes(t)
+			testNestedHTTPTracesKProbes(t, true)
 		})
 	}
 	require.NoError(t, compose.Close())
@@ -129,7 +129,7 @@ func TestMultiProcessAppL7TC(t *testing.T) {
 
 	if kprobeTracesEnabled() {
 		t.Run("Nested traces with kprobes: rust -> java -> node -> go -> python -> rails", func(t *testing.T) {
-			testNestedHTTPTracesKProbes(t)
+			testNestedHTTPTracesKProbes(t, true)
 		})
 	}
 	require.NoError(t, compose.Close())

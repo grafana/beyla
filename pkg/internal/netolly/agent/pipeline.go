@@ -5,14 +5,14 @@ import (
 
 	"github.com/mariomac/pipes/pipe"
 
-	"github.com/grafana/beyla/pkg/export/otel"
-	"github.com/grafana/beyla/pkg/export/prom"
-	"github.com/grafana/beyla/pkg/internal/filter"
-	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
-	"github.com/grafana/beyla/pkg/internal/netolly/export"
-	"github.com/grafana/beyla/pkg/internal/netolly/flow"
-	"github.com/grafana/beyla/pkg/internal/netolly/transform/cidr"
-	"github.com/grafana/beyla/pkg/internal/netolly/transform/k8s"
+	"github.com/grafana/beyla/v2/pkg/export/otel"
+	"github.com/grafana/beyla/v2/pkg/export/prom"
+	"github.com/grafana/beyla/v2/pkg/filter"
+	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
+	"github.com/grafana/beyla/v2/pkg/internal/netolly/export"
+	"github.com/grafana/beyla/v2/pkg/internal/netolly/flow"
+	"github.com/grafana/beyla/v2/pkg/internal/netolly/transform/cidr"
+	"github.com/grafana/beyla/v2/pkg/internal/netolly/transform/k8s"
 )
 
 // FlowsPipeline defines the different nodes in the Beyla's NetO11y module,
@@ -119,7 +119,7 @@ func (f *Flows) pipelineBuilder(ctx context.Context) (*pipe.Builder[*FlowsPipeli
 		return k8s.MetadataDecoratorProvider(ctx, &f.cfg.Attributes.Kubernetes, f.ctxInfo.K8sInformer)
 	})
 	pipe.AddMiddleProvider(pb, rdns, func() (pipe.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
-		return flow.ReverseDNSProvider(&f.cfg.NetworkFlows.ReverseDNS)
+		return flow.ReverseDNSProvider(ctx, &f.cfg.NetworkFlows.ReverseDNS)
 	})
 	pipe.AddMiddleProvider(pb, fltr, filter.ByAttribute(f.cfg.Filters.Network, ebpf.RecordStringGetters))
 

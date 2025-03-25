@@ -4,19 +4,20 @@ package tctracer
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"unsafe"
 
 	"github.com/cilium/ebpf"
 
-	"github.com/grafana/beyla/pkg/beyla"
-	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
-	"github.com/grafana/beyla/pkg/internal/ebpf/tcmanager"
-	"github.com/grafana/beyla/pkg/internal/exec"
-	"github.com/grafana/beyla/pkg/internal/goexec"
-	"github.com/grafana/beyla/pkg/internal/request"
-	"github.com/grafana/beyla/pkg/internal/svc"
+	"github.com/grafana/beyla/v2/pkg/beyla"
+	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
+	"github.com/grafana/beyla/v2/pkg/internal/ebpf/tcmanager"
+	"github.com/grafana/beyla/v2/pkg/internal/exec"
+	"github.com/grafana/beyla/v2/pkg/internal/goexec"
+	"github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/internal/svc"
 )
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/tc_tracer.c -- -I../../../../bpf/headers
@@ -45,6 +46,20 @@ func (p *Tracer) AllowPID(uint32, uint32, *svc.Attrs) {}
 func (p *Tracer) BlockPID(uint32, uint32) {}
 
 func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
+
+	if !ebpfcommon.HasHostPidAccess() {
+		return nil, fmt.Errorf("L4/L7 context-propagation requires host process ID access, e.g. hostPid:true")
+	}
+
+	hostNet, err := ebpfcommon.HasHostNetworkAccess()
+	if err != nil {
+		return nil, fmt.Errorf("failed to check for host network access while enabling L4/L7 context-propagation, error: %w", err)
+	}
+
+	if !hostNet {
+		return nil, fmt.Errorf("L4/L7 context-propagation requires host network access, e.g. hostNetwork:true")
+	}
+
 	if p.cfg.EBPF.BpfDebug {
 		return loadBpf_debug()
 	}
@@ -52,7 +67,23 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 	return loadBpf()
 }
 
-func (p *Tracer) SetupTailCalls() {}
+func (p *Tracer) SetupTailCalls() {
+	for _, tc := range []struct {
+		index int
+		prog  *ebpf.Program
+	}{
+		{
+			index: 0,
+			prog:  p.bpfObjects.BeylaPacketExtenderWriteMsgTp,
+		},
+	} {
+		err := p.bpfObjects.ExtenderJumpTable.Update(uint32(tc.index), uint32(tc.prog.FD()), ebpf.UpdateAny)
+
+		if err != nil {
+			p.log.Error("error loading info tail call jump table", "error", err)
+		}
+	}
+}
 
 func (p *Tracer) Constants() map[string]any {
 	m := make(map[string]any, 2)
@@ -154,25 +185,32 @@ func (p *Tracer) startTC(ctx context.Context) {
 	p.tcManager.SetInterfaceManager(p.ifaceManager)
 	p.tcManager.AddProgram("tc/tc_egress", p.bpfObjects.BeylaAppEgress, tcmanager.AttachmentEgress)
 	p.tcManager.AddProgram("tc/tc_ingress", p.bpfObjects.BeylaAppIngress, tcmanager.AttachmentIngress)
+
 	p.ifaceManager.Start(ctx)
 }
 
 func (p *Tracer) Run(ctx context.Context, _ chan<- []request.Span) {
 	p.startTC(ctx)
 
-	<-ctx.Done()
+	errorCh := p.tcManager.Errors()
 
-	p.bpfObjects.Close()
+	select {
+	case <-ctx.Done():
+	case err := <-errorCh:
+		p.log.Error("TC manager returned an error, aborting", "error", err)
+	}
 
 	p.stopTC()
+	p.bpfObjects.Close()
 }
 
 func (p *Tracer) stopTC() {
 	p.log.Info("removing traffic control probes")
 
-	p.ifaceManager.Wait()
-	p.ifaceManager = nil
-
 	p.tcManager.Shutdown()
 	p.tcManager = nil
+
+	p.ifaceManager.Stop()
+	p.ifaceManager.Wait()
+	p.ifaceManager = nil
 }

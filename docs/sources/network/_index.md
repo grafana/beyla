@@ -15,18 +15,26 @@ Grafana Beyla can be configured to provide network metrics between different end
 
 ## Get started
 
-To get started using Beyla networking metrics, consult the [quickstart setup documentation]({{< relref "./quickstart" >}}), and for advanced configuration, consult the [configuration documentation]({{< relref "./config" >}}).
+To get started using Beyla networking metrics, consult the [quickstart setup documentation](quickstart/), and for advanced configuration, consult the [configuration documentation](config/).
 
 ## Metric attributes
 
-Network metrics provides a single metric:
+Beyla provides two families of network metrics:
 
-- `beyla.network.flow.bytes`, if it is exported via OpenTelemetry.
-- `beyla_network_flow_bytes_total`, if it is exported by a Prometheus endpoint.
+* **Network flow bytes** as the number of bytes observed between two network endpoints.
+  - `beyla.network.flow.bytes`, if it is exported via OpenTelemetry.
+  - `beyla_network_flow_bytes_total`, if it is exported by a Prometheus endpoint.
+  - To enable it, add the `network` option to the [BEYLA_OTEL_METRICS_FEATURES or BEYLA_PROMETHEUS_FEATURES](../configure/export-data/) configuration option.
+* **Inter-zone bytes** as the number of bytes observed between two network endpoints in different Cloud Availability Zones.
+  - `beyla.network.inter.zone.bytes`, if it is exported via OpenTelemetry.
+  - `beyla_network_inter_zone_bytes_total`, if it is exported by a Prometheus endpoint.
+  - More information about how to enable it in the [Measuring traffic between Cloud availability zones](inter-az/) documentation.
 
-The metric represents a counter of the Number of bytes observed between two network endpoints, and can have the attributes in the following table.
+Network metric can have the attributes in the following table.
 
-By default, only the following attributes are reported: `k8s.src.owner.name`, `k8s.src.namespace`, `k8s.dst.owner.name`, `k8s.dst.namespace`, and `k8s.cluster.name`.
+By default, only the following attributes are reported for network flow bytes: `k8s.src.owner.name`, `k8s.src.namespace`, `k8s.dst.owner.name`, `k8s.dst.namespace`, and `k8s.cluster.name`.
+
+For the inter-zone bytes metric, the default attributes are `k8s.cluster.name`, `src.zone` and `dst.zone`.
 
 | Attribute name (OpenTelemetry / Prometheus) | Description                                                                                                                                                                         |
 |---------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -38,8 +46,8 @@ By default, only the following attributes are reported: `k8s.src.owner.name`, `k
 | `dst.port` / `dst_port`                     | Destination port of Network flow                                                                                                                                                    |
 | `src.name` / `src_name`                     | Name of Network flow source: Kubernetes name, host name, or IP address                                                                                                              |
 | `dst.name` / `dst_name`                     | Name of Network flow destination: Kubernetes name, host name, or IP address                                                                                                         |
-| `src.cidr` / `src_cidr`                     | If the [`cidrs` configuration section]({{< relref "./config" >}}) is set, the CIDR that matches the source IP address                                                               |
-| `dst.cidr` / `dst_cidr`                     | If the [`cidrs` configuration section]({{< relref "./config" >}}) is set, the CIDR that matches the destination IP address                                                          |
+| `src.cidr` / `src_cidr`                     | If the [`cidrs` configuration section](config/) is set, the CIDR that matches the source IP address                                                               |
+| `dst.cidr` / `dst_cidr`                     | If the [`cidrs` configuration section](config/) is set, the CIDR that matches the destination IP address                                                          |
 | `k8s.src.namespace` / `k8s_src_namespace`   | Kubernetes namespace of the source of the flow                                                                                                                                      |
 | `k8s.dst.namespace` / `k8s_dst_namespace`   | Kubernetes namespace of the destination of the flow                                                                                                                                 |
 | `k8s.src.name` / `k8s_src_name`             | Name of the source Pod, Service, or Node                                                                                                                                            |
@@ -55,6 +63,8 @@ By default, only the following attributes are reported: `k8s.src.owner.name`, `k
 | `k8s.src.node.name` / `k8s_src.node_name`   | Name of the source Node                                                                                                                                                             |
 | `k8s.dst.node.name` / `k8s_dst.node_name`   | Name of the destination Node                                                                                                                                                        |
 | `k8s.cluster.name` / `k8s_cluster_name`     | Name of the Kubernetes cluster. Beyla can auto-detect it on Google Cloud, Microsoft Azure, and Amazon Web Services. For other providers, set the `BEYLA_KUBE_CLUSTER_NAME` property |
+| `src.zone` / `src_zone`                     | Name of the source Cloud Availability Zone                                                                                                                                          |
+| `dsg.zone` / `dst_zone`                     | Name of the destination Cloud Availability Zone                                                                                                                                     |
 
 ### How to specify reported attributes
 
@@ -83,4 +93,4 @@ attributes:
 In this example, the bytes metric is the aggregated by the source and destination owners. This is, all the
 pods from a given Deployment/StatefulSet/ReplicaSet/DaemonSet.
 
-For more information about the `attributes.select` section, check the [Configuration options]({{< relref "../configure/options" >}}).
+For more information about the `attributes.select` section, check the [Configuration options](../configure/options/).

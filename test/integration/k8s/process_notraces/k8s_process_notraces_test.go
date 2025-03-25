@@ -14,12 +14,12 @@ import (
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
 	"sigs.k8s.io/e2e-framework/pkg/features"
 
-	"github.com/grafana/beyla/test/integration/components/docker"
-	"github.com/grafana/beyla/test/integration/components/kube"
-	"github.com/grafana/beyla/test/integration/components/prom"
-	k8s "github.com/grafana/beyla/test/integration/k8s/common"
-	"github.com/grafana/beyla/test/integration/k8s/common/testpath"
-	"github.com/grafana/beyla/test/tools"
+	"github.com/grafana/beyla/v2/test/integration/components/docker"
+	"github.com/grafana/beyla/v2/test/integration/components/kube"
+	"github.com/grafana/beyla/v2/test/integration/components/prom"
+	k8s "github.com/grafana/beyla/v2/test/integration/k8s/common"
+	"github.com/grafana/beyla/v2/test/integration/k8s/common/testpath"
+	"github.com/grafana/beyla/v2/test/tools"
 )
 
 var cluster *kube.Kind
@@ -32,7 +32,7 @@ func TestMain(m *testing.M) {
 		docker.ImageBuild{Tag: "beyla:dev", Dockerfile: k8s.DockerfileBeyla},
 		docker.ImageBuild{Tag: "grpcpinger:dev", Dockerfile: k8s.DockerfilePinger},
 		docker.ImageBuild{Tag: "httppinger:dev", Dockerfile: k8s.DockerfileHTTPPinger},
-		docker.ImageBuild{Tag: "quay.io/prometheus/prometheus:v2.53.0"},
+		docker.ImageBuild{Tag: "quay.io/prometheus/prometheus:v2.55.1"},
 	); err != nil {
 		slog.Error("can't build docker images", "error", err)
 		os.Exit(-1)
@@ -42,7 +42,7 @@ func TestMain(m *testing.M) {
 		kube.KindConfig(testpath.Manifests+"/00-kind.yml"),
 		kube.LocalImage("testserver:dev"),
 		kube.LocalImage("beyla:dev"),
-		kube.LocalImage("quay.io/prometheus/prometheus:v2.53.0"),
+		kube.LocalImage("quay.io/prometheus/prometheus:v2.55.1"),
 		kube.Deploy(testpath.Manifests+"/01-volumes.yml"),
 		kube.Deploy(testpath.Manifests+"/01-serviceaccount.yml"),
 		kube.Deploy(testpath.Manifests+"/02-prometheus-promscrape.yml"),

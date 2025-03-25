@@ -3,9 +3,8 @@
 package ebpf
 
 import (
-	"github.com/cilium/ebpf/ringbuf"
-
-	"github.com/grafana/beyla/pkg/internal/ebpf/tcmanager"
+	"github.com/grafana/beyla/v2/pkg/internal/ebpf/ringbuf"
+	"github.com/grafana/beyla/v2/pkg/internal/ebpf/tcmanager"
 )
 
 type FlowFetcher struct {

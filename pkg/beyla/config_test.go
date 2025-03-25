@@ -15,21 +15,21 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/beyla/pkg/config"
-	"github.com/grafana/beyla/pkg/export/attributes"
-	"github.com/grafana/beyla/pkg/export/debug"
-	"github.com/grafana/beyla/pkg/export/instrumentations"
-	"github.com/grafana/beyla/pkg/export/otel"
-	"github.com/grafana/beyla/pkg/export/prom"
-	"github.com/grafana/beyla/pkg/internal/ebpf/tcmanager"
-	"github.com/grafana/beyla/pkg/internal/imetrics"
-	"github.com/grafana/beyla/pkg/internal/infraolly/process"
-	"github.com/grafana/beyla/pkg/internal/kube"
-	"github.com/grafana/beyla/pkg/internal/netolly/transform/cidr"
-	"github.com/grafana/beyla/pkg/internal/traces"
-	"github.com/grafana/beyla/pkg/kubeflags"
-	"github.com/grafana/beyla/pkg/services"
-	"github.com/grafana/beyla/pkg/transform"
+	"github.com/grafana/beyla/v2/pkg/config"
+	"github.com/grafana/beyla/v2/pkg/export/attributes"
+	"github.com/grafana/beyla/v2/pkg/export/debug"
+	"github.com/grafana/beyla/v2/pkg/export/instrumentations"
+	"github.com/grafana/beyla/v2/pkg/export/otel"
+	"github.com/grafana/beyla/v2/pkg/export/prom"
+	"github.com/grafana/beyla/v2/pkg/internal/ebpf/tcmanager"
+	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
+	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
+	"github.com/grafana/beyla/v2/pkg/internal/kube"
+	"github.com/grafana/beyla/v2/pkg/internal/netolly/transform/cidr"
+	"github.com/grafana/beyla/v2/pkg/internal/traces"
+	"github.com/grafana/beyla/v2/pkg/kubeflags"
+	"github.com/grafana/beyla/v2/pkg/services"
+	"github.com/grafana/beyla/v2/pkg/transform"
 )
 
 type envMap map[string]string
@@ -432,7 +432,7 @@ func TestConfig_ExternalLogger(t *testing.T) {
 		handler       func(out io.Writer) slog.Handler
 		expectedText  *regexp.Regexp
 		expectedCfg   Config
-		tracing       bool
+		debugMode     bool
 		networkEnable bool
 	}
 	for _, tc := range []testCase{{
@@ -450,10 +450,10 @@ func TestConfig_ExternalLogger(t *testing.T) {
 		expectedText: regexp.MustCompile(
 			`^time=\S+ level=INFO msg=information arg=info
 time=\S+ level=DEBUG msg=debug arg=debug$`),
-		tracing: true,
+		debugMode: true,
 		expectedCfg: Config{
 			TracePrinter: debug.TracePrinterText,
-			EBPF:         config.EBPFTracer{BpfDebug: true},
+			EBPF:         config.EBPFTracer{BpfDebug: true, ProtocolDebug: true},
 		},
 	}, {
 		name: "debug log with network flows",
@@ -464,17 +464,17 @@ time=\S+ level=DEBUG msg=debug arg=debug$`),
 		expectedText: regexp.MustCompile(
 			`^time=\S+ level=INFO msg=information arg=info
 time=\S+ level=DEBUG msg=debug arg=debug$`),
-		tracing: true,
+		debugMode: true,
 		expectedCfg: Config{
 			TracePrinter: debug.TracePrinterText,
-			EBPF:         config.EBPFTracer{BpfDebug: true},
+			EBPF:         config.EBPFTracer{BpfDebug: true, ProtocolDebug: true},
 			NetworkFlows: NetworkConfig{Enable: true, Print: true},
 		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := Config{NetworkFlows: NetworkConfig{Enable: tc.networkEnable}}
 			out := &bytes.Buffer{}
-			cfg.ExternalLogger(tc.handler(out), tc.tracing)
+			cfg.ExternalLogger(tc.handler(out), tc.debugMode)
 			slog.Info("information", "arg", "info")
 			slog.Debug("debug", "arg", "debug")
 			assert.Regexp(t, tc.expectedText, strings.TrimSpace(out.String()))
@@ -502,6 +502,24 @@ func TestDefaultExclusionFilter(t *testing.T) {
 	assert.True(t, c[0].Path.MatchString("/usr/bin/alloy"))
 	assert.True(t, c[0].Path.MatchString("/usr/bin/otelcol-contrib"))
 	assert.True(t, c[0].Path.MatchString("/usr/bin/otelcol-contrib123"))
+}
+
+func TestWillUseTC(t *testing.T) {
+	env := envMap{"BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION": "true"}
+	cfg := loadConfig(t, env)
+	assert.True(t, cfg.willUseTC())
+
+	env = envMap{"BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION": "false"}
+	cfg = loadConfig(t, env)
+	assert.False(t, cfg.willUseTC())
+
+	env = envMap{"BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION": "false", "BEYLA_NETWORK_METRICS": "true"}
+	cfg = loadConfig(t, env)
+	assert.False(t, cfg.willUseTC())
+
+	env = envMap{"BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION": "false", "BEYLA_NETWORK_SOURCE": "tc", "BEYLA_NETWORK_METRICS": "true"}
+	cfg = loadConfig(t, env)
+	assert.True(t, cfg.willUseTC())
 }
 
 func loadConfig(t *testing.T, env envMap) *Config {

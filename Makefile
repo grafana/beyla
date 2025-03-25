@@ -14,7 +14,7 @@ PROTOC_IMAGE = docker.io/mariomac/protoc-go:latest
 # RELEASE_VERSION will contain the tag name, or the branch name if current commit is not a tag
 RELEASE_VERSION := $(shell git describe --all | cut -d/ -f2)
 RELEASE_REVISION := $(shell git rev-parse --short HEAD )
-BUILDINFO_PKG ?= github.com/grafana/beyla/pkg/buildinfo
+BUILDINFO_PKG ?= github.com/grafana/beyla/v2/pkg/buildinfo
 TEST_OUTPUT ?= ./testoutput
 
 IMG_REGISTRY ?= docker.io
@@ -27,7 +27,7 @@ IMG = $(IMG_REGISTRY)/$(IMG_ORG)/$(IMG_NAME):$(VERSION)
 
 # The generator is a container image that provides a reproducible environment for
 # building eBPF binaries
-GEN_IMG ?= ghcr.io/grafana/beyla-generator:main
+GEN_IMG ?= ghcr.io/grafana/beyla-ebpf-generator:main
 
 COMPOSE_ARGS ?= -f test/integration/docker-compose.yml
 
@@ -38,6 +38,8 @@ CLANG ?= clang
 CFLAGS := -O2 -g -Wall -Werror $(CFLAGS)
 
 CLANG_TIDY ?= clang-tidy
+
+CILIUM_EBPF_VER ?= $(call gomod-version,cilium/ebpf)
 
 # regular expressions for excluded file patterns
 EXCLUDE_COVERAGE_FILES="(_bpfel.go)|(/pingserver/)|(/grafana/beyla/test/)|(integration/components)|(/grafana/beyla/docs/)|(/grafana/beyla/configs/)|(/grafana/beyla/examples/)|(.pb.go)"
@@ -131,7 +133,7 @@ bpf2go:
 prereqs: install-hooks bpf2go
 	@echo "### Check if prerequisites are met, and installing missing dependencies"
 	mkdir -p $(TEST_OUTPUT)/run
-	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint,v1.61.0)
+	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint,v1.64.7)
 	$(call go-install-tool,$(GO_OFFSETS_TRACKER),github.com/grafana/go-offsets-tracker/cmd/go-offsets-tracker,$(call gomod-version,grafana/go-offsets-tracker))
 	$(call go-install-tool,$(GOIMPORTS_REVISER),github.com/incu6us/goimports-reviser/v3,v3.6.4)
 	$(call go-install-tool,$(GO_LICENSES),github.com/google/go-licenses,v1.6.0)
@@ -179,29 +181,27 @@ update-offsets: prereqs
 	@echo "### Updating pkg/internal/goexec/offsets.json"
 	$(GO_OFFSETS_TRACKER) -i configs/offsets/tracker_input.json pkg/internal/goexec/offsets.json
 
-# As generated artifacts are part of the code repo (pkg/ebpf packages), you don't have
-# to run this target for each build. Only when you change the C code inside the bpf folder.
-# You might want to use the docker-generate target instead of this.
 .PHONY: generate
 generate: export BPF_CLANG := $(CLANG)
 generate: export BPF_CFLAGS := $(CFLAGS)
 generate: export BPF2GO := $(BPF2GO)
 generate: bpf2go
-	@echo "### Generating BPF Go bindings"
-	go generate ./pkg/...
+	@echo "### Generating files..."
+	@BEYLA_GENFILES_RUN_LOCALLY=1 go generate cmd/beyla-genfiles/beyla_genfiles.go
 
 .PHONY: docker-generate
 docker-generate:
-	$(OCI_BIN) run --rm -v $(shell pwd):/src $(GEN_IMG)
+	@echo "### Generating files (docker)..."
+	@go generate cmd/beyla-genfiles/beyla_genfiles.go
 
 .PHONY: verify
 verify: prereqs lint-dashboard lint test
 
 .PHONY: build
-build: verify compile
+build: docker-generate verify compile
 
 .PHONY: all
-all: generate build
+all: docker-generate build
 
 .PHONY: compile compile-cache
 compile:
@@ -216,7 +216,7 @@ debug:
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -gcflags "-N -l" -ldflags="-X '$(BUILDINFO_PKG).Version=$(RELEASE_VERSION)' -X '$(BUILDINFO_PKG).Revision=$(RELEASE_REVISION)'" -a -o bin/$(CMD) $(MAIN_GO_FILE)
 
 .PHONY: dev
-dev: prereqs generate compile-for-coverage
+dev: prereqs docker-generate compile-for-coverage
 
 # Generated binary can provide coverage stats according to https://go.dev/blog/integration-test-coverage
 .PHONY: compile-for-coverage compile-cache-for-coverage
@@ -260,7 +260,8 @@ image-build-push:
 .PHONY: generator-image-build
 generator-image-build:
 	@echo "### Creating the image that generates the eBPF binaries"
-	$(OCI_BIN) build . -f generator.Dockerfile -t $(GEN_IMG)
+	$(OCI_BIN) buildx build --build-arg EBPF_VER="$(CILIUM_EBPF_VER)" --platform linux/amd64,linux/arm64 -t $(GEN_IMG) -f generator.Dockerfile  .
+
 
 .PHONY: prepare-integration-test
 prepare-integration-test:
@@ -334,28 +335,28 @@ bin/ginkgo:
 	$(call go-install-tool,$(GINKGO),github.com/onsi/ginkgo/v2/ginkgo,latest)
 
 .PHONY: oats-prereq
-oats-prereq: bin/ginkgo
+oats-prereq: bin/ginkgo docker-generate
 	mkdir -p $(TEST_OUTPUT)/run
 
 .PHONY: oats-test-sql
 oats-test-sql: oats-prereq
 	mkdir -p test/oats/sql/$(TEST_OUTPUT)/run
-	cd test/oats/sql && TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
+	cd test/oats/sql && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
 
 .PHONY: oats-test-redis
 oats-test-redis: oats-prereq
 	mkdir -p test/oats/redis/$(TEST_OUTPUT)/run
-	cd test/oats/redis && TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
+	cd test/oats/redis && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
 
 .PHONY: oats-test-kafka
 oats-test-kafka: oats-prereq
 	mkdir -p test/oats/kafka/$(TEST_OUTPUT)/run
-	cd test/oats/kafka && TESTCASE_TIMEOUT=120s TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
+	cd test/oats/kafka && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
 
 .PHONY: oats-test-http
 oats-test-http: oats-prereq
 	mkdir -p test/oats/http/$(TEST_OUTPUT)/run
-	cd test/oats/http && TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
+	cd test/oats/http && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
 
 .PHONY: oats-test
 oats-test: oats-test-sql oats-test-redis oats-test-kafka oats-test-http
@@ -390,15 +391,15 @@ clean-testoutput:
 	@echo "### Cleaning ${TEST_OUTPUT} folder"
 	rm -rf ${TEST_OUTPUT}/*
 
-.PHONY: check-ebpf-integrity
-check-ebpf-integrity: docker-generate
-	git diff --name-status --exit-code || (echo "Run make docker-generate locally and commit the code changes" && false)
-
 .PHONY: protoc-gen
 protoc-gen:
 	docker run --rm -v $(PWD):/work -w /work $(PROTOC_IMAGE) protoc --go_out=pkg/kubecache --go-grpc_out=pkg/kubecache proto/informer.proto
 
 .PHONY: clang-format
 clang-format:
-	find ./bpf -type f -name "*.c" | xargs clang-format -i
-	find ./bpf -type f -name "*.h" | xargs clang-format -i
+	find ./bpf -type f -name "*.c" | xargs -P 0 -n 1 clang-format -i
+	find ./bpf -type f -name "*.h" | xargs -P 0 -n 1 clang-format -i
+
+.PHONY: clean-ebpf-generated-files
+clean-ebpf-generated-files:
+	find . -name "*_bpfel*" | xargs rm

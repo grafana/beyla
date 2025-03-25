@@ -1,12 +1,16 @@
 package ebpfcommon
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
 	"syscall"
 
 	"github.com/cilium/ebpf/link"
 	"golang.org/x/sys/unix"
 
-	"github.com/grafana/beyla/pkg/internal/helpers"
+	"github.com/grafana/beyla/v2/pkg/internal/helpers"
 )
 
 func (f *Filter) Close() error {
@@ -57,4 +61,49 @@ func KernelVersion() (major, minor int) {
 func hasCapSysAdmin() bool {
 	caps, err := helpers.GetCurrentProcCapabilities()
 	return err == nil && caps.Has(unix.CAP_SYS_ADMIN)
+}
+
+func HasHostPidAccess() bool {
+	return os.Getpid() != 1
+}
+
+func FindNetworkNamespace(pid int32) (string, error) {
+	netPath := fmt.Sprintf("/proc/%d/ns/net", pid)
+	f, err := os.Open(netPath)
+
+	if err != nil {
+		return "", fmt.Errorf("failed to open(/proc/%d/ns/net): %w", pid, err)
+	}
+
+	defer f.Close()
+
+	// read the value of the symbolic link
+	buf := make([]byte, syscall.PathMax)
+	n, err := syscall.Readlink(netPath, buf)
+	if err != nil {
+		return "", fmt.Errorf("failed to read symlink(/proc/%d/ns/net): %w", pid, err)
+	}
+
+	return string(buf[:n]), nil
+}
+
+func HasHostNetworkAccess() (bool, error) {
+	// Get the network namespace of the current process
+	containerNS, err := FindNetworkNamespace(int32(os.Getpid()))
+	if err != nil {
+		return false, err
+	}
+
+	// Get the network namespace of the host process (PID 1)
+	hostNS, err := FindNetworkNamespace(1)
+	if err != nil {
+		return false, err
+	}
+
+	// Compare the network namespaces
+	return containerNS == hostNS, nil
+}
+
+func RootDirectoryForPID(pid int32) string {
+	return filepath.Join("/proc", strconv.Itoa(int(pid)), "root")
 }

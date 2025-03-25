@@ -38,6 +38,7 @@ services:
       BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT: 8999
       BEYLA_PROCESSES_INTERVAL: "100ms"
       BEYLA_HOSTNAME: "beyla"
+      BEYLA_PROMETHEUS_FEATURES: "application,application_span,application_process,application_service_graph"
       BEYLA_OTEL_METRIC_FEATURES: "application,application_process"
     ports:
       - "8999:8999" # Prometheus scrape port, if enabled via config
@@ -67,7 +68,7 @@ services:
 
   # Prometheus
   prometheus:
-    image: quay.io/prometheus/prometheus:v2.53.0
+    image: quay.io/prometheus/prometheus:v2.55.1
     container_name: prometheus
     command:
       - --config.file=/etc/prometheus/prometheus-config${PROM_CONFIG_SUFFIX}.yml

@@ -159,7 +159,7 @@ static __always_inline int read_iovec_ctx(iovec_iter_ctx *ctx, u8 *buf, size_t m
 
     u32 tot_len = 0;
 
-    enum { max_segments = 4 };
+    enum { max_segments = 16 };
 
     bpf_clamp_umax(ctx->nr_segs, max_segments);
 

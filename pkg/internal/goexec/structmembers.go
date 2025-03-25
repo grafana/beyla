@@ -23,7 +23,8 @@ type GoOffset uint32
 
 const GoOffsetsTableSize = 30
 
-var operateHeadersNew = version.Must(version.NewVersion("1.60.0"))
+var grpcOneSixZero = version.Must(version.NewVersion("1.60.0"))
+var grpcOneSixNine = version.Must(version.NewVersion("1.69.0"))
 
 const (
 	// go common
@@ -77,7 +78,11 @@ const (
 	SaramaBrokerConnPos
 	SaramaBufconnConnPos
 	// grpc versioning
-	OperateHeadersNew
+	GrpcOneSixZero
+	GrpcOneSixNine
+	// grpc 1.69
+	GrpcServerStreamStream
+	GrpcServerStreamStPtr
 )
 
 //go:embed offsets.json
@@ -123,6 +128,13 @@ var structMembers = map[string]structInfo{
 		fields: map[string]GoOffset{
 			"st":     GrpcStreamStPtrPos,
 			"method": GrpcStreamMethodPtrPos,
+		},
+	},
+	"google.golang.org/grpc/internal/transport.ServerStream": {
+		lib: "google.golang.org/grpc",
+		fields: map[string]GoOffset{
+			"Stream": GrpcServerStreamStream,
+			"st":     GrpcServerStreamStPtr,
 		},
 	},
 	"google.golang.org/grpc/internal/status.Status": {
@@ -178,6 +190,12 @@ var structMembers = map[string]structInfo{
 			"tconn":        CcTconnPos,
 		},
 	},
+	"net/http.http2Framer": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"w": FramerWPos,
+		},
+	},
 	"golang.org/x/net/http2.Framer": {
 		lib: "golang.org/x/net",
 		fields: map[string]GoOffset{
@@ -186,6 +204,12 @@ var structMembers = map[string]structInfo{
 	},
 	"golang.org/x/net/http2.MetaHeadersFrame": {
 		lib: "golang.org/x/net",
+		fields: map[string]GoOffset{
+			"Fields": MetaHeadersFrameFieldsPtrPos,
+		},
+	},
+	"net/http.http2MetaHeadersFrame": {
+		lib: "go",
 		fields: map[string]GoOffset{
 			"Fields": MetaHeadersFrameFieldsPtrPos,
 		},
@@ -349,8 +373,15 @@ func offsetsForLibVersions(fieldOffsets FieldOffsets, libVersions map[string]str
 			ver = cleanLibVersion(ver, true, lib, log)
 
 			if v, err := version.NewVersion(ver); err == nil {
-				if v.GreaterThanOrEqual(operateHeadersNew) {
-					fieldOffsets[OperateHeadersNew] = uint64(1)
+				if v.GreaterThanOrEqual(grpcOneSixZero) {
+					fieldOffsets[GrpcOneSixZero] = uint64(1)
+				} else {
+					fieldOffsets[GrpcOneSixZero] = uint64(0)
+				}
+				if v.GreaterThanOrEqual(grpcOneSixNine) {
+					fieldOffsets[GrpcOneSixNine] = uint64(1)
+				} else {
+					fieldOffsets[GrpcOneSixNine] = uint64(0)
 				}
 			} else {
 				log.Debug("can't parse version for", "library", lib)

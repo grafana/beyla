@@ -1,0 +1,103 @@
+# this file depends in the annotations and 00-kind-multi-node.yml to deploy a testserver
+# and a client in different nodes.
+# Beyla will instrument both, but restricting the metadata only to the local node,
+# so network flows between client and testserver would be incomplete
+apiVersion: v1
+kind: Pod
+metadata:
+  name: httppinger
+  labels:
+    component: httppinger
+    # this label will trigger a deletion of beyla pods before tearing down
+    # kind, to force Beyla writing the coverage data
+    teardown: delete
+  annotations:
+    resource.opentelemetry.io/deployment.environment: integration-test
+    resource.opentelemetry.io/service.version: '3.2.1'
+spec:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          # force multi-zone traffic: server is in us-west-1b
+          - matchExpressions:
+              - key: topology.kubernetes.io/zone
+                operator: In
+                values:
+                  - client-zone
+  containers:
+    - name: httppinger
+      image: httppinger:dev
+      env:
+        - name: TARGET_URL
+          value: "http://testserver:8080"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: testserver
+spec:
+  selector:
+    app: testserver
+  ports:
+    - port: 8080
+      name: http0
+      targetPort: http0
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: testserver
+  labels:
+    app: testserver
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: testserver
+  template:
+    metadata:
+      name: testserver
+      labels:
+        app: testserver
+        # this label will trigger a deletion of beyla pods before tearing down
+        # kind, to force Beyla writing the coverage data
+        teardown: delete
+      annotations:
+        resource.opentelemetry.io/deployment.environment: integration-test
+        resource.opentelemetry.io/service.version: '3.2.1'
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  # force multi-zone traffic: client is in us-west-1a
+                  - key: topology.kubernetes.io/zone
+                    operator: In
+                    values:
+                      - server-zone
+      containers:
+        - name: testserver
+          image: testserver:dev
+          imagePullPolicy: Never # loaded into Kind from localhost
+          ports:
+            # exposing hostports to enable operation from tests
+            - containerPort: 8080
+              hostPort: 8080
+              name: http0
+            - containerPort: 8081
+              hostPort: 8081
+              name: http1
+            - containerPort: 8082
+              hostPort: 8082
+              name: http2
+            - containerPort: 8083
+              hostPort: 8083
+              name: http3
+            - containerPort: 5051
+              hostPort: 5051
+              name: grpc
+          env:
+            - name: LOG_LEVEL
+              value: "DEBUG"

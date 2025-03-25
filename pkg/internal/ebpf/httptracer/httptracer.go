@@ -9,13 +9,13 @@ import (
 
 	"github.com/cilium/ebpf"
 
-	"github.com/grafana/beyla/pkg/beyla"
-	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
-	"github.com/grafana/beyla/pkg/internal/ebpf/tcmanager"
-	"github.com/grafana/beyla/pkg/internal/exec"
-	"github.com/grafana/beyla/pkg/internal/goexec"
-	"github.com/grafana/beyla/pkg/internal/request"
-	"github.com/grafana/beyla/pkg/internal/svc"
+	"github.com/grafana/beyla/v2/pkg/beyla"
+	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
+	"github.com/grafana/beyla/v2/pkg/internal/ebpf/tcmanager"
+	"github.com/grafana/beyla/v2/pkg/internal/exec"
+	"github.com/grafana/beyla/v2/pkg/internal/goexec"
+	"github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/internal/svc"
 )
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/tc_http_tp.c -- -I../../../../bpf/headers
@@ -130,8 +130,8 @@ func (p *Tracer) startTC(ctx context.Context) {
 
 	p.log.Info("enabling L7 context-propagation with Linux Traffic Control")
 
-	if !ebpfcommon.SupportsEBPFLoops() {
-		p.log.Error("cannot enable L7 context-propagation, kernel 5.17 or newer required")
+	if !ebpfcommon.SupportsEBPFLoops(p.log, p.cfg.EBPF.OverrideBPFLoopEnabled) {
+		p.log.Error("cannot enable L7 context-propagation, compatible kernel required")
 	}
 
 	p.ifaceManager = tcmanager.NewInterfaceManager()
@@ -145,7 +145,13 @@ func (p *Tracer) startTC(ctx context.Context) {
 func (p *Tracer) Run(ctx context.Context, _ chan<- []request.Span) {
 	p.startTC(ctx)
 
-	<-ctx.Done()
+	errorCh := p.tcManager.Errors()
+
+	select {
+	case <-ctx.Done():
+	case err := <-errorCh:
+		p.log.Error("TC manager returned an error, aborting", "error", err)
+	}
 
 	p.bpfObjects.Close()
 
@@ -159,6 +165,7 @@ func (p *Tracer) stopTC() {
 
 	p.log.Info("removing traffic control probes")
 
+	p.ifaceManager.Stop()
 	p.ifaceManager.Wait()
 	p.ifaceManager = nil
 

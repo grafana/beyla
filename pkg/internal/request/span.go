@@ -14,8 +14,8 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 	trace2 "go.opentelemetry.io/otel/trace"
 
-	attr "github.com/grafana/beyla/pkg/export/attributes/names"
-	"github.com/grafana/beyla/pkg/internal/svc"
+	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
+	"github.com/grafana/beyla/v2/pkg/internal/svc"
 )
 
 type EventType uint8
@@ -492,7 +492,7 @@ func (s *Span) isMetricsExportURL() bool {
 	case EventTypeGRPCClient:
 		return strings.HasPrefix(s.Path, grpcMetricsDetectPattern)
 	case EventTypeHTTPClient:
-		return strings.HasPrefix(s.Path, metricsDetectPattern)
+		return strings.HasSuffix(s.Path, metricsDetectPattern)
 	default:
 		return false
 	}
@@ -503,7 +503,7 @@ func (s *Span) isTracesExportURL() bool {
 	case EventTypeGRPCClient:
 		return strings.HasPrefix(s.Path, grpcTracesDetectPattern)
 	case EventTypeHTTPClient:
-		return strings.HasPrefix(s.Path, tracesDetectPattern)
+		return strings.HasSuffix(s.Path, tracesDetectPattern)
 	default:
 		return false
 	}

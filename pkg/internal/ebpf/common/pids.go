@@ -6,10 +6,11 @@ import (
 
 	lru "github.com/hashicorp/golang-lru/v2"
 
-	"github.com/grafana/beyla/pkg/internal/exec"
-	"github.com/grafana/beyla/pkg/internal/request"
-	"github.com/grafana/beyla/pkg/internal/svc"
-	"github.com/grafana/beyla/pkg/services"
+	"github.com/grafana/beyla/v2/pkg/export/otel"
+	"github.com/grafana/beyla/v2/pkg/internal/exec"
+	"github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/internal/svc"
+	"github.com/grafana/beyla/v2/pkg/services"
 )
 
 type PIDType uint8
@@ -27,8 +28,9 @@ var activePids, _ = lru.New[uint32, *svc.Attrs](1024)
 var readNamespacePIDs = exec.FindNamespacedPids
 
 type PIDInfo struct {
-	service *svc.Attrs
-	pidType PIDType
+	service        *svc.Attrs
+	pidType        PIDType
+	otherKnownPids []uint32
 }
 
 type ServiceFilter interface {
@@ -121,6 +123,16 @@ func (pf *PIDsFilter) CurrentPIDs(t PIDType) map[uint32]map[uint32]svc.Attrs {
 	return cp
 }
 
+func (pf *PIDsFilter) normalizeTraceContext(span *request.Span) {
+	if !span.TraceID.IsValid() {
+		span.TraceID = otel.RandomTraceID()
+		span.Flags = 1
+	}
+	if !span.SpanID.IsValid() {
+		span.SpanID = otel.RandomSpanID()
+	}
+}
+
 func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 	pf.mux.RLock()
 	defer pf.mux.RUnlock()
@@ -145,6 +157,7 @@ func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 				checkIfExportsOTel(info.service, span)
 			}
 			inputSpans[i].Service = *info.service
+			pf.normalizeTraceContext(&inputSpans[i])
 			outputSpans = append(outputSpans, inputSpans[i])
 		}
 	}
@@ -173,7 +186,7 @@ func (pf *PIDsFilter) addPID(pid, nsid uint32, s *svc.Attrs, t PIDType) {
 	}
 
 	for _, p := range allPids {
-		ns[p] = PIDInfo{service: s, pidType: t}
+		ns[p] = PIDInfo{service: s, pidType: t, otherKnownPids: allPids}
 	}
 }
 
@@ -181,6 +194,12 @@ func (pf *PIDsFilter) removePID(pid, nsid uint32) {
 	ns, nsExists := pf.current[nsid]
 	if !nsExists {
 		return
+	}
+
+	if pidInfo, pidExists := ns[pid]; pidExists {
+		for _, otherPid := range pidInfo.otherKnownPids {
+			delete(ns, otherPid)
+		}
 	}
 
 	delete(ns, pid)

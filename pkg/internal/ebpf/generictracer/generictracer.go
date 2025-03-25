@@ -14,14 +14,14 @@ import (
 	"github.com/gavv/monotime"
 	"github.com/vishvananda/netlink"
 
-	"github.com/grafana/beyla/pkg/beyla"
-	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
-	"github.com/grafana/beyla/pkg/internal/exec"
-	"github.com/grafana/beyla/pkg/internal/goexec"
-	"github.com/grafana/beyla/pkg/internal/imetrics"
-	"github.com/grafana/beyla/pkg/internal/netolly/ifaces"
-	"github.com/grafana/beyla/pkg/internal/request"
-	"github.com/grafana/beyla/pkg/internal/svc"
+	"github.com/grafana/beyla/v2/pkg/beyla"
+	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
+	"github.com/grafana/beyla/v2/pkg/internal/exec"
+	"github.com/grafana/beyla/v2/pkg/internal/goexec"
+	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
+	"github.com/grafana/beyla/v2/pkg/internal/netolly/ifaces"
+	"github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/internal/svc"
 )
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/generic_tracer.c -- -I../../../../bpf/headers
@@ -128,12 +128,14 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 	}
 
 	if p.cfg.EBPF.TrackRequestHeaders || p.cfg.EBPF.UseTCForL7CP || p.cfg.EBPF.ContextPropagationEnabled {
-		if ebpfcommon.SupportsEBPFLoops() {
-			p.log.Info("Found Linux kernel later than 5.17, enabling trace information parsing")
+		if ebpfcommon.SupportsEBPFLoops(p.log, p.cfg.EBPF.OverrideBPFLoopEnabled) {
+			p.log.Info("Found compatible Linux kernel, enabling trace information parsing")
 			loader = loadBpf_tp
 			if p.cfg.EBPF.BpfDebug {
 				loader = loadBpf_tp_debug
 			}
+		} else {
+			p.log.Info("Found incompatible Linux kernel, disabling trace information parsing")
 		}
 	}
 
@@ -261,6 +263,11 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.ProbeDesc {
 			Required: true,
 			End:      p.bpfObjects.BeylaKretprobeSysConnect,
 		},
+		"sock_recvmsg": {
+			Required: true,
+			Start:    p.bpfObjects.BeylaKprobeSockRecvmsg,
+			End:      p.bpfObjects.BeylaKretprobeSockRecvmsg,
+		},
 		"tcp_connect": {
 			Required: true,
 			Start:    p.bpfObjects.BeylaKprobeTcpConnect,
@@ -350,11 +357,6 @@ func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 				Required: false,
 				Start:    p.bpfObjects.BeylaUprobeSslWriteEx,
 				End:      p.bpfObjects.BeylaUretprobeSslWriteEx,
-			}},
-			"SSL_do_handshake": {{
-				Required: false,
-				Start:    p.bpfObjects.BeylaUprobeSslDoHandshake,
-				End:      p.bpfObjects.BeylaUretprobeSslDoHandshake,
 			}},
 			"SSL_shutdown": {{
 				Required: false,
@@ -515,7 +517,7 @@ func (p *Tracer) watchForMisclassifedEvents() {
 			if p.bpfObjects.OngoingHttp2Connections != nil {
 				err := p.bpfObjects.OngoingHttp2Connections.Put(
 					&bpfPidConnectionInfoT{Conn: bpfConnectionInfoT(e.TCPInfo.ConnInfo), Pid: e.TCPInfo.Pid.HostPid},
-					uint8(e.TCPInfo.Ssl), // no new connection flag (0x3)
+					bpfHttp2ConnInfoDataT{Flags: e.TCPInfo.Ssl, Id: 0}, // no new connection flag (0x3)
 				)
 				if err != nil {
 					p.log.Debug("error writing HTTP2/gRPC connection info", "error", err)

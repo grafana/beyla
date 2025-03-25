@@ -151,18 +151,18 @@ jobs:
           ELAPSED=0
           
           while [ $ELAPSED -lt $TIMEOUT ]; do
-            # Get the combined status of all checks
-            STATUS=$(gh pr view $ALLOY_PR_NUMBER --repo grafana/alloy --json statusCheckRollup --jq '.statusCheckRollup[].state' | sort -u)
+            # Get the status of all checks
+            STATUS=$(gh pr view $ALLOY_PR_NUMBER --repo grafana/alloy | grep "Status:" | cut -d: -f2 | xargs)
             
             # If all checks are complete
-            if ! echo "$STATUS" | grep -q "PENDING"; then
-              if echo "$STATUS" | grep -q "FAILURE"; then
+            if [ "$STATUS" != "Pending" ]; then
+              if [ "$STATUS" = "Failed" ]; then
                 # If any check failed, mark the check as failed
                 echo "❌ The Alloy PR checks failed. Please check the PR: ${ALLOY_PR_URL}"
                 # Try to comment, but don't fail if we can't
                 gh pr comment $PR_NUMBER --body "❌ The Alloy PR checks failed. Please check [the PR](${ALLOY_PR_URL}) for details." || true
                 exit 1
-              elif echo "$STATUS" | grep -q "SUCCESS"; then
+              elif [ "$STATUS" = "Passed" ]; then
                 # If all checks passed, convert from draft and try to comment
                 gh pr ready $ALLOY_PR_NUMBER --repo grafana/alloy
                 echo "✅ The Alloy PR checks passed. PR ready for review: ${ALLOY_PR_URL}"

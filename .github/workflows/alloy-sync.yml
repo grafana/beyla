@@ -127,6 +127,7 @@ jobs:
 
             This PR updates the Beyla dependency to use the specific commit from PR #${PR_NUMBER} to ensure compatibility.
             This PR will be automatically closed if the original Beyla PR is closed without merging." \
+            --draft \
             --label "dependencies" \
             --label "beyla" \
             --repo grafana/alloy)
@@ -150,11 +151,22 @@ jobs:
           ELAPSED=0
           
           while [ $ELAPSED -lt $TIMEOUT ]; do
-            # Get the status of all checks
-            CHECK_OUTPUT=$(gh pr checks $ALLOY_PR_NUMBER --repo grafana/alloy --json bucket | jq -r '.[].bucket')
+            # Get the status of all checks, handle case where no checks exist yet
+            CHECK_OUTPUT=$(gh pr checks $ALLOY_PR_NUMBER --repo grafana/alloy --json bucket 2>/dev/null || echo '[]')
+            
+            # If no checks yet, consider it pending
+            if [ "$CHECK_OUTPUT" = "[]" ]; then
+              echo "Waiting for checks to start... (${ELAPSED}s elapsed)"
+              sleep $INTERVAL
+              ELAPSED=$((ELAPSED + INTERVAL))
+              continue
+            fi
+            
+            # Extract all buckets
+            BUCKETS=$(echo "$CHECK_OUTPUT" | jq -r '.[].bucket')
             
             # If any check failed
-            if echo "$CHECK_OUTPUT" | grep -q "fail"; then
+            if echo "$BUCKETS" | grep -q "fail"; then
               echo "❌ The Alloy PR checks failed. Please check the PR: ${ALLOY_PR_URL}"
               # Try to comment, but don't fail if we can't
               gh pr comment $PR_NUMBER --body "❌ The Alloy PR checks failed. Please check [the PR](${ALLOY_PR_URL}) for details." || true
@@ -162,7 +174,7 @@ jobs:
             fi
             
             # If all checks passed (no pending or failing checks)
-            if ! echo "$CHECK_OUTPUT" | grep -q "pending" && ! echo "$CHECK_OUTPUT" | grep -q "fail"; then
+            if ! echo "$BUCKETS" | grep -q "pending" && ! echo "$BUCKETS" | grep -q "fail"; then
               echo "✅ The Alloy PR checks passed. PR ready for review: ${ALLOY_PR_URL}"
               # Try to comment, but don't fail if we can't
               gh pr comment $PR_NUMBER --body "✅ The Alloy PR checks passed. The PR is ready for review: ${ALLOY_PR_URL}" || true

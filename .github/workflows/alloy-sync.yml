@@ -72,6 +72,7 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
 
       - name: Create PR in Alloy
+        id: create-pr
         if: steps.check-deps.outputs.has_relevant_updates == 'true' && github.event.action != 'closed'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -115,7 +116,7 @@ jobs:
           # Push changes and create PR
           git push origin "refs/heads/${BRANCH_NAME}"
           
-          # Create PR and get its URL
+          # Create PR and get its URL and number
           PR_URL=$(gh pr create \
             --title "deps: test with Beyla PR #${PR_NUMBER}" \
             --body "This PR was automatically created to test changes from Beyla PR #${PR_NUMBER}
@@ -130,18 +131,18 @@ jobs:
             --label "beyla" \
             --repo grafana/alloy)
 
-          echo "PR_URL=${PR_URL}" >> $GITHUB_OUTPUT
+          echo "alloy_pr_url=${PR_URL}" >> $GITHUB_OUTPUT
+          echo "alloy_pr_number=$(basename ${PR_URL})" >> $GITHUB_OUTPUT
 
       - name: Wait for Alloy CI and update status
         if: steps.check-deps.outputs.has_relevant_updates == 'true' && github.event.action != 'closed'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          ALLOY_PR_URL: ${{ steps.create-pr.outputs.alloy_pr_url }}
+          ALLOY_PR_NUMBER: ${{ steps.create-pr.outputs.alloy_pr_number }}
         run: |
           set -euf -o pipefail
-          
-          # Extract PR number from the URL
-          ALLOY_PR_NUMBER=$(echo "${{ steps.create-pr.outputs.PR_URL }}" | grep -oE '[0-9]+$')
           
           # Wait for checks to complete (timeout after 30 minutes)
           TIMEOUT=1800  # 30 minutes in seconds
@@ -156,12 +157,12 @@ jobs:
             if ! echo "$STATUS" | grep -q "PENDING"; then
               if echo "$STATUS" | grep -q "FAILURE"; then
                 # If any check failed, comment on the Beyla PR
-                gh pr comment $PR_NUMBER --body "❌ The Alloy PR checks failed. Please check [the PR](${{ steps.create-pr.outputs.PR_URL }}) for details."
+                gh pr comment $PR_NUMBER --body "❌ The Alloy PR checks failed. Please check [the PR](${ALLOY_PR_URL}) for details."
                 exit 1
               elif echo "$STATUS" | grep -q "SUCCESS"; then
                 # If all checks passed, convert from draft and comment
                 gh pr ready $ALLOY_PR_NUMBER --repo grafana/alloy
-                gh pr comment $PR_NUMBER --body "✅ The Alloy PR checks passed. The PR is ready for review: ${{ steps.create-pr.outputs.PR_URL }}"
+                gh pr comment $PR_NUMBER --body "✅ The Alloy PR checks passed. The PR is ready for review: ${ALLOY_PR_URL}"
                 exit 0
               fi
             fi
@@ -171,7 +172,7 @@ jobs:
           done
           
           # If we timeout, comment on the PR
-          gh pr comment $PR_NUMBER --body "⚠️ Timed out waiting for Alloy PR checks to complete. Please check [the PR](${{ steps.create-pr.outputs.PR_URL }}) manually."
+          gh pr comment $PR_NUMBER --body "⚠️ Timed out waiting for Alloy PR checks to complete. Please check [the PR](${ALLOY_PR_URL}) manually."
           exit 1
 
       - name: Close Alloy PR

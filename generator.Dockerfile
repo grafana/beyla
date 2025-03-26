@@ -23,6 +23,7 @@ export BPF2GO=bpf2go
 export BPF_CLANG=clang
 export BPF_CFLAGS="-O2 -g -Wall -Werror"
 export BEYLA_GENFILES_RUN_LOCALLY=1
+export BEYLA_GENFILES_MODULE_ROOT="/src"
 beyla_genfiles
 EOF
 

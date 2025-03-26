@@ -20,6 +20,8 @@ import (
 	"unicode"
 )
 
+const ENV_MODULE_ROOT = "BEYLA_GENFILES_MODULE_ROOT"
+
 type config struct {
 	DebugEnabled    bool   `env:"BEYLA_GENFILES_DEBUG"            envDefault:"false"`
 	RunLocally      bool   `env:"BEYLA_GENFILES_RUN_LOCALLY"      envDefault:"false"`
@@ -369,6 +371,21 @@ func beylaPackageDir() (string, error) {
 }
 
 func moduleRoot() (string, error) {
+	wd := os.Getenv(ENV_MODULE_ROOT)
+
+	if wd != "" {
+		info, err := os.Stat(wd)
+
+		if err != nil {
+			return "", err
+		}
+
+		if !info.IsDir() {
+			return "", fmt.Errorf("specified module root '%s' is not a dir")
+		}
+
+		return wd, nil
+	}
 
 	wd, err := beylaPackageDir()
 
@@ -387,7 +404,13 @@ func moduleRoot() (string, error) {
 		}
 	}
 
-	return wd, nil
+	absPath, err := filepath.Abs(wd)
+
+	if err != nil {
+		return "", fmt.Errorf("error resolving absolute path: %w", err)
+	}
+
+	return absPath, nil
 }
 
 func ensureWritableImpl(path string, info os.FileInfo) error {

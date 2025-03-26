@@ -1,21 +1,25 @@
 FROM golang:alpine3.21 AS base
+FROM base AS builder
 
-ARG EBPF_VER
+WORKDIR /build
 
-# Installs dependencies that are required to compile eBPF programs
-RUN apk add clang llvm19 curl
-RUN apk cache purge
-RUN go install github.com/cilium/ebpf/cmd/bpf2go@$EBPF_VER
 COPY cmd/beyla-genfiles/beyla_genfiles.go .
-RUN go build -o /go/bin/beyla_genfiles beyla_genfiles.go
-RUN go clean -modcache -cache
-RUN rm beyla_genfiles.go
+COPY go.mod go.mod
+COPY go.sum go.sum
+RUN go build -o beyla_genfiles beyla_genfiles.go
 
-VOLUME ["/src"]
+FROM base AS dist
 
 WORKDIR /src
 
-FROM base AS builder
+VOLUME ["/src"]
+
+ARG EBPF_VER
+
+RUN apk add clang llvm19 curl
+RUN apk cache purge
+RUN go install github.com/cilium/ebpf/cmd/bpf2go@$EBPF_VER
+COPY --from=builder /build/beyla_genfiles /go/bin
 
 RUN cat <<EOF > /generate.sh
 #!/bin/sh

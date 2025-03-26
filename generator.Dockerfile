@@ -6,6 +6,10 @@ ARG EBPF_VER
 RUN apk add clang llvm19 curl
 RUN apk cache purge
 RUN go install github.com/cilium/ebpf/cmd/bpf2go@$EBPF_VER
+COPY cmd/beyla-genfiles/beyla_genfiles.go .
+RUN go build -o /go/bin/beyla_genfiles beyla_genfiles.go
+RUN go clean -modcache -cache
+RUN rm beyla_genfiles.go
 
 VOLUME ["/src"]
 
@@ -19,7 +23,7 @@ export BPF2GO=bpf2go
 export BPF_CLANG=clang
 export BPF_CFLAGS="-O2 -g -Wall -Werror"
 export BEYLA_GENFILES_RUN_LOCALLY=1
-go run cmd/beyla-genfiles/beyla_genfiles.go
+beyla_genfiles
 EOF
 
 RUN chmod +x /generate.sh

@@ -16,7 +16,6 @@ import (
 const fastCGIRequestHeaderLen = 8
 const requestMethodKey = "REQUEST_METHOD"
 const requestURIKey = "REQUEST_URI"
-const scriptNameKey = "SCRIPT_NAME"
 const responseError = 7 // FCGI_STDERR
 const responseStatusKey = "Status: "
 
@@ -114,24 +113,35 @@ func maybeFastCGI(b []byte) bool {
 	return methodPos >= 0
 }
 
-func detectFastCGI(b, rb []byte) (string, string, int) {
+func parseHeader(b []byte) ([]byte, error) {
 	for {
 		hdr, err := readFastCGIHeader(b)
 		if err != nil {
-			return "", "", -1
+			return nil, fmt.Errorf("payload too short")
 		}
 
 		if hdr.Type == fcgiFrameTypeParams {
 			if len(b) <= fastCGIRequestHeaderLen {
-				return "", "", -1
+				return nil, fmt.Errorf("payload too short")
 			}
 			b = b[fastCGIRequestHeaderLen:]
 			break
 		}
-		if len(b) <= int(fastCGIRequestHeaderLen+hdr.ContentLength+uint16(hdr.PaddingLength)) {
-			return "", "", -1
+		payloadOffset := int(fastCGIRequestHeaderLen + hdr.ContentLength + uint16(hdr.PaddingLength))
+		if len(b) <= payloadOffset {
+			return nil, fmt.Errorf("payload too short")
 		}
-		b = b[fastCGIRequestHeaderLen+hdr.ContentLength+uint16(hdr.PaddingLength):]
+		b = b[payloadOffset:]
+	}
+
+	return b, nil
+}
+
+func detectFastCGI(b, rb []byte) (string, string, int) {
+	var err error
+	b, err = parseHeader(b)
+	if err != nil {
+		return "", "", -1
 	}
 
 	methodPos := bytes.Index(b, []byte(requestMethodKey))
@@ -142,10 +152,7 @@ func detectFastCGI(b, rb []byte) (string, string, int) {
 		if !ok {
 			return "", "", -1
 		}
-		uri, ok := kv[requestURIKey]
-		if !ok {
-			uri = kv[scriptNameKey]
-		}
+		uri := kv[requestURIKey]
 
 		// Translate the status code into HTTP, 200 OK, 500 ERR
 		status := 200

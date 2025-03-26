@@ -23,8 +23,7 @@ check that Beyla is finding any process to instrument. The logs should show a me
 level=INFO msg="instrumenting process" component=discover.TraceAttacher cmd=/frontend pid=1
 ```
 
-If you don't see any message like the preceding, make sure that the process is properly selected, either with the
-`BEYLA_EXECUTABLE_NAME`, `BEYLA_OPEN_PORT` or with the [discovery YAML section](https://github.com/grafana/beyla/blob/main/docs/sources/configure/options.md#global-configuration-properties).
+If you don't see any message like the preceding, make sure that the process is properly selected with the [discovery YAML section](https://github.com/grafana/beyla/blob/main/docs/sources/configure/options.md#global-configuration-properties).
 
 If you still don't see any message like the preceding, check [Deploy Beyla in Kubernetes](https://github.com/grafana/beyla/blob/main/docs/sources/setup/kubernetes.md) to see if the process is properly selected.
 

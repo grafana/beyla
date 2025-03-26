@@ -10,10 +10,6 @@ keywords:
 
 # Configure Beyla service discovery
 
-The `executable_name`, `open_port`, `service_name` and `service_namespace` are top-level
-properties that simplify the configuration of Beyla to instrument a single service, or
-a group of related services.
-
 In some scenarios, Beyla will instrument a big variety of services; for example,
 as a [Kubernetes DaemonSet](../../setup/kubernetes/) that instruments all
 the services in a node. The `discovery` YAML section will let you specify a higher

@@ -11,13 +11,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 	"unicode"
-
-	"github.com/caarlos0/env/v9"
 )
 
 type config struct {
@@ -31,7 +31,40 @@ type config struct {
 	GenImage        string `env:"BEYLA_GENFILES_GEN_IMG"          envDefault:"ghcr.io/grafana/beyla-ebpf-generator:main"`
 }
 
-var cfg config
+func loadConfig() (*config, error) {
+	var cfg config
+	t := reflect.TypeOf(cfg)
+	v := reflect.ValueOf(&cfg).Elem()
+
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		envVar := field.Tag.Get("env")
+		defaultValue := field.Tag.Get("envDefault")
+
+		value := os.Getenv(envVar)
+
+		if value == "" {
+			value = defaultValue
+		}
+
+		switch field.Type.Kind() {
+		case reflect.Bool:
+			parsedValue, err := strconv.ParseBool(value)
+
+			if err != nil {
+				return nil, fmt.Errorf("error parsing bool value %s: %w", envVar, err)
+			}
+
+			v.Field(i).SetBool(parsedValue)
+		case reflect.String:
+			v.Field(i).SetString(value)
+		}
+	}
+
+	return &cfg, nil
+}
+
+var cfg *config
 
 var targetsByGoArch = map[string]Target{
 	"386":      {"bpfel", "x86"},
@@ -533,7 +566,11 @@ func runLocally(wd string) {
 }
 
 func main() {
-	if err := env.Parse(&cfg); err != nil {
+	var err error
+
+	cfg, err = loadConfig()
+
+	if err != nil {
 		bail(fmt.Errorf("error loading config: %w", err))
 	}
 

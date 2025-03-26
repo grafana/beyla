@@ -196,7 +196,7 @@ func TCPToFastCGIToSpan(trace *TCPRequestInfo, op, uri string, status int) reque
 		PeerPort:      int(trace.ConnInfo.S_port),
 		Host:          hostname,
 		HostPort:      hostPort,
-		ContentLength: int64(trace.Len),
+		ContentLength: int64(trace.ReqLen),
 		RequestStart:  int64(trace.StartMonotimeNs),
 		Start:         int64(trace.StartMonotimeNs),
 		End:           int64(trace.EndMonotimeNs),

@@ -60,6 +60,12 @@ func TestParseCGITable(t *testing.T) {
 		expected map[string]string
 	}{
 		{
+			name:     "Older PHP",
+			input:    []byte("\x01\x01\x00\x01\x00\b\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x01\x04\x00\x01\x02\t\a\x00\x0f\x1eSCRIPT_FILENAME/var/www/html/public/index.php\f\x00QUERY_STRING\x0e\x03REQUEST_METHODGET\f\x00CONTENT_TYPE\x0e\x00CONTENT_LENGTH\v\nSCRIPT_NAME/index.php\v\x01REQUEST_URI/\f\nDOCUMENT_URI/index.php\r\x14DOCUMENT_ROOT/var/www/html/public\x0f\bSERVER_PROTOCOLHTTP/1.1\x0e")[24:],
+			inputLen: 200,
+			expected: map[string]string{"CONTENT_LENGTH": "", "CONTENT_TYPE": "", "QUERY_STRING": "", "REQUEST_METHOD": "GET", "SCRIPT_FILENAME": "/var/www/html/public/index.php", "DOCUMENT_ROOT": "", "DOCUMENT_URI": "/index.php", "REQUEST_URI": "/", "SCRIPT_NAME": "/index.php"},
+		},
+		{
 			name:     "Empty URI",
 			input:    []byte("\x01\x01\x00\x01\x00\b\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x01\x04\x00\x01\x01\xdb\x05\x00\f\x00QUERY_STRING\x0e\x03REQUEST_METHODGET\f\x00CONTENT_TYPE\x0e\x00CONTENT_LENGTH\v\nSCRIPT_NAME/index.php\v\x01REQUEST_URI/\f\x01DOCUMENT_URI/\r\rDOCUMENT_ROOT/var/www/html\x0f\bSERVER_PROTOCOLHTTP/1.1\x0e\x04REQUEST_SCHEMEhttp\x11\aGATEWAY_INTERFACECGI/1.1\x0f\fSERVER_SOFTWAREn")[24:],
 			inputLen: 100,
@@ -127,6 +133,26 @@ func TestDetectFastCGI(t *testing.T) {
 		expectedPath   string
 		expectedResult int
 	}{
+		{
+			name:           "Older PHP, small frame",
+			input:          []byte("\x01\x01\x00\x01\x00\b\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x01\x04\x00\x01\x02\t\a\x00\x0f\x1eSCRIPT_FILENAME/var/www/html/public/index.php\f\x00QUERY_STRING\x0e\x03REQUEST_METHODGET\f\x00CONTENT_TYPE\x0e\x00CONTENT_LENGTH\v\nSCRIPT_NAME/inde\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"),
+			output:         []byte{1, 0, 1, 0, 0},
+			inputLen:       152,
+			outputLen:      20,
+			expectedMethod: "GET",
+			expectedPath:   "",
+			expectedResult: 200,
+		},
+		{
+			name:           "Older PHP",
+			input:          []byte("\x01\x01\x00\x01\x00\b\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x01\x04\x00\x01\x02\t\a\x00\x0f\x1eSCRIPT_FILENAME/var/www/html/public/index.php\f\x00QUERY_STRING\x0e\x03REQUEST_METHODGET\f\x00CONTENT_TYPE\x0e\x00CONTENT_LENGTH\v\nSCRIPT_NAME/index.php\v\x01REQUEST_URI/\f\nDOCUMENT_URI/index.php\r\x14DOCUMENT_ROOT/var/www/html/public\x0f\bSERVER_PROTOCOLHTTP/1.1\x0e"),
+			output:         []byte{1, 0, 1, 0, 0},
+			inputLen:       200,
+			outputLen:      20,
+			expectedMethod: "GET",
+			expectedPath:   "/",
+			expectedResult: 200,
+		},
 		{
 			name:           "Correct values empty URI",
 			input:          []byte("\x01\x01\x00\x01\x00\b\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x01\x04\x00\x01\x01\xdb\x05\x00\f\x00QUERY_STRING\x0e\x03REQUEST_METHODGET\f\x00CONTENT_TYPE\x0e\x00CONTENT_LENGTH\v\nSCRIPT_NAME/index.php\v\x01REQUEST_URI/\f\x01DOCUMENT_URI/\r\rDOCUMENT_ROOT/var/www/html\x0f\bSERVER_PROTOCOLHTTP/1.1\x0e\x04REQUEST_SCHEMEhttp\x11\aGATEWAY_INTERFACECGI/1.1\x0f\fSERVER_SOFTWAREn"),

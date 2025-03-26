@@ -2,6 +2,9 @@ package ebpfcommon
 
 import (
 	"bytes"
+	"encoding/binary"
+	"fmt"
+	"io"
 	"strconv"
 	"unsafe"
 
@@ -10,12 +13,58 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 )
 
-const fastCGIRequestHeaderLen = 24
+const fastCGIRequestHeaderLen = 8
 const requestMethodKey = "REQUEST_METHOD"
 const requestURIKey = "REQUEST_URI"
-const scriptNameKey = "SCRIPT_NAME"
 const responseError = 7 // FCGI_STDERR
 const responseStatusKey = "Status: "
+
+const fcgiFrameTypeParams = 4
+
+// fastCGIHeader represents the structure of a FastCGI header
+type fastCGIHeader struct {
+	Version       uint8  // Protocol version
+	Type          uint8  // Record type
+	RequestID     uint16 // Request ID (big-endian)
+	ContentLength uint16 // Content length (big-endian)
+	PaddingLength uint8  // Padding length
+	Reserved      uint8  // Reserved (always 0)
+}
+
+// ReadFastCGIHeader reads a FastCGI header from an input stream
+func readFastCGIHeader(b []byte) (*fastCGIHeader, error) {
+	reader := bytes.NewReader(b)
+	// FastCGI header is always 8 bytes
+	headerBytes := make([]byte, fastCGIRequestHeaderLen)
+	if _, err := io.ReadFull(reader, headerBytes); err != nil {
+		return nil, fmt.Errorf("failed to read FastCGI header: %w", err)
+	}
+
+	// Parse the header
+	header := &fastCGIHeader{}
+	buffer := bytes.NewReader(headerBytes)
+
+	if err := binary.Read(buffer, binary.BigEndian, &header.Version); err != nil {
+		return nil, fmt.Errorf("failed to read version: %w", err)
+	}
+	if err := binary.Read(buffer, binary.BigEndian, &header.Type); err != nil {
+		return nil, fmt.Errorf("failed to read type: %w", err)
+	}
+	if err := binary.Read(buffer, binary.BigEndian, &header.RequestID); err != nil {
+		return nil, fmt.Errorf("failed to read request ID: %w", err)
+	}
+	if err := binary.Read(buffer, binary.BigEndian, &header.ContentLength); err != nil {
+		return nil, fmt.Errorf("failed to read content length: %w", err)
+	}
+	if err := binary.Read(buffer, binary.BigEndian, &header.PaddingLength); err != nil {
+		return nil, fmt.Errorf("failed to read padding length: %w", err)
+	}
+	if err := binary.Read(buffer, binary.BigEndian, &header.Reserved); err != nil {
+		return nil, fmt.Errorf("failed to read reserved byte: %w", err)
+	}
+
+	return header, nil
+}
 
 func parseCGITable(b []byte) map[string]string {
 	res := map[string]string{}
@@ -64,8 +113,36 @@ func maybeFastCGI(b []byte) bool {
 	return methodPos >= 0
 }
 
+func parseHeader(b []byte) ([]byte, error) {
+	for {
+		hdr, err := readFastCGIHeader(b)
+		if err != nil {
+			return nil, fmt.Errorf("payload too short")
+		}
+
+		if hdr.Type == fcgiFrameTypeParams {
+			if len(b) <= fastCGIRequestHeaderLen {
+				return nil, fmt.Errorf("payload too short")
+			}
+			b = b[fastCGIRequestHeaderLen:]
+			break
+		}
+		payloadOffset := int(fastCGIRequestHeaderLen + hdr.ContentLength + uint16(hdr.PaddingLength))
+		if len(b) <= payloadOffset {
+			return nil, fmt.Errorf("payload too short")
+		}
+		b = b[payloadOffset:]
+	}
+
+	return b, nil
+}
+
 func detectFastCGI(b, rb []byte) (string, string, int) {
-	b = b[fastCGIRequestHeaderLen:]
+	var err error
+	b, err = parseHeader(b)
+	if err != nil {
+		return "", "", -1
+	}
 
 	methodPos := bytes.Index(b, []byte(requestMethodKey))
 	if methodPos >= 0 {
@@ -75,10 +152,7 @@ func detectFastCGI(b, rb []byte) (string, string, int) {
 		if !ok {
 			return "", "", -1
 		}
-		uri, ok := kv[requestURIKey]
-		if !ok {
-			uri = kv[scriptNameKey]
-		}
+		uri := kv[requestURIKey]
 
 		// Translate the status code into HTTP, 200 OK, 500 ERR
 		status := 200
@@ -129,7 +203,7 @@ func TCPToFastCGIToSpan(trace *TCPRequestInfo, op, uri string, status int) reque
 		PeerPort:      int(trace.ConnInfo.S_port),
 		Host:          hostname,
 		HostPort:      hostPort,
-		ContentLength: int64(trace.Len),
+		ContentLength: int64(trace.ReqLen),
 		RequestStart:  int64(trace.StartMonotimeNs),
 		Start:         int64(trace.StartMonotimeNs),
 		End:           int64(trace.EndMonotimeNs),

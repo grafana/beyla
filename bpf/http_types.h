@@ -136,6 +136,7 @@ typedef struct tcp_req {
     unsigned char rbuf[K_TCP_RES_LEN]
         __attribute__((aligned(8))); // ringbuffer memcpy complains unless this is 8 byte aligned
     u32 len;
+    u32 req_len;
     u32 resp_len;
     u8 ssl;
     u8 direction;

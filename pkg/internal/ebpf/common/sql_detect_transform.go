@@ -111,7 +111,7 @@ func TCPToSQLToSpan(trace *TCPRequestInfo, op, table, sql string, kind request.S
 		PeerPort:      peerPort,
 		Host:          hostname,
 		HostPort:      hostPort,
-		ContentLength: int64(trace.Len),
+		ContentLength: int64(trace.ReqLen),
 		RequestStart:  int64(trace.StartMonotimeNs),
 		Start:         int64(trace.StartMonotimeNs),
 		End:           int64(trace.EndMonotimeNs),

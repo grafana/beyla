@@ -20,7 +20,7 @@ import (
 	"unicode"
 )
 
-const ENV_MODULE_ROOT = "BEYLA_GENFILES_MODULE_ROOT"
+const envModuleRoot = "BEYLA_GENFILES_MODULE_ROOT"
 
 type config struct {
 	DebugEnabled    bool   `env:"BEYLA_GENFILES_DEBUG"            envDefault:"false"`
@@ -371,7 +371,7 @@ func beylaPackageDir() (string, error) {
 }
 
 func moduleRoot() (string, error) {
-	wd := os.Getenv(ENV_MODULE_ROOT)
+	wd := os.Getenv(envModuleRoot)
 
 	if wd != "" {
 		info, err := os.Stat(wd)
@@ -381,7 +381,7 @@ func moduleRoot() (string, error) {
 		}
 
 		if !info.IsDir() {
-			return "", fmt.Errorf("specified module root '%s' is not a dir")
+			return "", fmt.Errorf("specified module root '%s' is not a dir", wd)
 		}
 
 		return wd, nil

@@ -6,6 +6,10 @@ on:
       - 'go.mod'
       - 'go.sum'
     types: [opened, synchronize, reopened, closed]
+  pull_request_target:
+    types: [closed]
+    branches:
+      - 'release-*'
 
 # These permissions are needed to assume roles from Github's OIDC
 permissions:
@@ -15,9 +19,12 @@ permissions:
 
 jobs:
   sync-dependencies:
+    # Run if:
+    # 1. Normal PR with go.mod changes (not closed)
+    # 2. PR is merged to any release branch (regardless of files changed)
     if: |
-      github.event.action != 'closed' ||
-      (github.event.action == 'closed' && github.event.pull_request.merged == true)
+      (github.event_name == 'pull_request' && github.event.action != 'closed') ||
+      (github.event_name == 'pull_request_target' && github.event.action == 'closed' && github.event.pull_request.merged == true && startsWith(github.event.pull_request.base.ref, 'release-'))
     runs-on: ubuntu-latest
 
     steps:
@@ -139,7 +146,6 @@ jobs:
         if: steps.check-deps.outputs.has_relevant_updates == 'true' && github.event.action != 'closed'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
           ALLOY_PR_URL: ${{ steps.create-pr.outputs.alloy_pr_url }}
           ALLOY_PR_NUMBER: ${{ steps.create-pr.outputs.alloy_pr_number }}
         run: |

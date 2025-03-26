@@ -152,7 +152,7 @@ jobs:
           
           while [ $ELAPSED -lt $TIMEOUT ]; do
             # Get the status of all checks
-            CHECK_OUTPUT=$(gh pr checks $ALLOY_PR_NUMBER --repo grafana/alloy --json bucket,name,status || echo '[]')
+            CHECK_OUTPUT=$(gh pr checks $ALLOY_PR_NUMBER --repo grafana/alloy --json bucket,name,state || echo '[]')
             
             # If no checks yet, wait and continue
             if [ "$CHECK_OUTPUT" = "[]" ]; then
@@ -164,7 +164,7 @@ jobs:
             
             # Show current status
             echo "Current check status:"
-            echo "$CHECK_OUTPUT" | jq -r '.[] | "- \(.name): \(.status) (\(.bucket))"' || echo "No check status available"
+            echo "$CHECK_OUTPUT" | jq -r '.[] | "- \(.name): \(.state) (\(.bucket))"' || echo "No check status available"
             
             # Extract buckets for status checking
             BUCKETS=$(echo "$CHECK_OUTPUT" | jq -r '.[].bucket' || echo "")

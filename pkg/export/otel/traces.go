@@ -28,7 +28,6 @@ import (
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
@@ -557,13 +556,13 @@ func attrsToMap(attrs []attribute.KeyValue) pcommon.Map {
 }
 
 // codeToStatusCode converts a codes.Code to a ptrace.StatusCode
-func codeToStatusCode(code codes.Code) ptrace.StatusCode {
+func codeToStatusCode(code string) ptrace.StatusCode {
 	switch code {
-	case codes.Unset:
+	case request.StatusCodeUnset:
 		return ptrace.StatusCodeUnset
-	case codes.Error:
+	case request.StatusCodeError:
 		return ptrace.StatusCodeError
-	case codes.Ok:
+	case request.StatusCodeOk:
 		return ptrace.StatusCodeOk
 	}
 	return ptrace.StatusCodeUnset

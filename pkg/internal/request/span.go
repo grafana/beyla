@@ -10,7 +10,6 @@ import (
 
 	"github.com/gavv/monotime"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 	trace2 "go.opentelemetry.io/otel/trace"
 
@@ -362,7 +361,13 @@ func (s *Span) IgnoreTraces() bool {
 	return s.isIgnored(ignoreTraces)
 }
 
-func SpanStatusCode(span *Span) codes.Code {
+const (
+	StatusCodeUnset = "STATUS_CODE_UNSET"
+	StatusCodeError = "STATUS_CODE_ERROR"
+	StatusCodeOk    = "STATUS_CODE_OK"
+)
+
+func SpanStatusCode(span *Span) string {
 	switch span.Type {
 	case EventTypeHTTP, EventTypeHTTPClient:
 		return HTTPSpanStatusCode(span)
@@ -370,40 +375,40 @@ func SpanStatusCode(span *Span) codes.Code {
 		return GrpcSpanStatusCode(span)
 	case EventTypeSQLClient, EventTypeRedisClient, EventTypeRedisServer:
 		if span.Status != 0 {
-			return codes.Error
+			return StatusCodeError
 		}
-		return codes.Unset
+		return StatusCodeUnset
 	}
-	return codes.Unset
+	return StatusCodeUnset
 }
 
 // https://opentelemetry.io/docs/specs/otel/trace/semantic_conventions/http/#status
-func HTTPSpanStatusCode(span *Span) codes.Code {
+func HTTPSpanStatusCode(span *Span) string {
 	if span.Status == 0 {
-		return codes.Error
+		return StatusCodeError
 	}
 
 	if span.Status < 400 {
-		return codes.Unset
+		return StatusCodeUnset
 	}
 
 	if span.Status < 500 {
 		if span.Type == EventTypeHTTPClient {
-			return codes.Error
+			return StatusCodeError
 		}
-		return codes.Unset
+		return StatusCodeUnset
 	}
 
-	return codes.Error
+	return StatusCodeError
 }
 
 // https://opentelemetry.io/docs/specs/otel/trace/semantic_conventions/rpc/#grpc-status
-func GrpcSpanStatusCode(span *Span) codes.Code {
+func GrpcSpanStatusCode(span *Span) string {
 	if span.Type == EventTypeGRPCClient {
 		if span.Status == int(semconv.RPCGRPCStatusCodeOk.Value.AsInt64()) {
-			return codes.Unset
+			return StatusCodeUnset
 		}
-		return codes.Error
+		return StatusCodeError
 	}
 
 	switch int64(span.Status) {
@@ -413,10 +418,10 @@ func GrpcSpanStatusCode(span *Span) codes.Code {
 		semconv.RPCGRPCStatusCodeInternal.Value.AsInt64(),
 		semconv.RPCGRPCStatusCodeUnavailable.Value.AsInt64(),
 		semconv.RPCGRPCStatusCodeDataLoss.Value.AsInt64():
-		return codes.Error
+		return StatusCodeError
 	}
 
-	return codes.Unset
+	return StatusCodeUnset
 }
 
 func (s *Span) RequestLength() int64 {
@@ -509,7 +514,7 @@ func (s *Span) isTracesExportURL() bool {
 
 func (s *Span) IsExportMetricsSpan() bool {
 	// check if it's a successful client call
-	if !s.isHTTPOrGRPCClient() || (SpanStatusCode(s) != codes.Unset) {
+	if !s.isHTTPOrGRPCClient() || (SpanStatusCode(s) != StatusCodeUnset) {
 		return false
 	}
 
@@ -518,7 +523,7 @@ func (s *Span) IsExportMetricsSpan() bool {
 
 func (s *Span) IsExportTracesSpan() bool {
 	// check if it's a successful client call
-	if !s.isHTTPOrGRPCClient() || (SpanStatusCode(s) != codes.Unset) {
+	if !s.isHTTPOrGRPCClient() || (SpanStatusCode(s) != StatusCodeUnset) {
 		return false
 	}
 

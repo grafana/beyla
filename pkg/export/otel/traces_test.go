@@ -22,7 +22,6 @@ import (
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.25.0"
 	"go.opentelemetry.io/otel/trace"
@@ -868,7 +867,7 @@ func TestAttrsToMap(t *testing.T) {
 
 func TestCodeToStatusCode(t *testing.T) {
 	t.Run("test with unset code", func(t *testing.T) {
-		code := codes.Unset
+		code := request.StatusCodeUnset
 		expected := ptrace.StatusCodeUnset
 
 		result := codeToStatusCode(code)
@@ -876,7 +875,7 @@ func TestCodeToStatusCode(t *testing.T) {
 	})
 
 	t.Run("test with error code", func(t *testing.T) {
-		code := codes.Error
+		code := request.StatusCodeError
 		expected := ptrace.StatusCodeError
 
 		result := codeToStatusCode(code)
@@ -884,7 +883,7 @@ func TestCodeToStatusCode(t *testing.T) {
 	})
 
 	t.Run("test with ok code", func(t *testing.T) {
-		code := codes.Ok
+		code := request.StatusCodeOk
 		expected := ptrace.StatusCodeOk
 
 		result := codeToStatusCode(code)
@@ -1234,25 +1233,25 @@ func restoreEnvAfterExecution() func() {
 func TestTraces_HTTPStatus(t *testing.T) {
 	type testPair struct {
 		httpCode   int
-		statusCode codes.Code
+		statusCode string
 	}
 
 	t.Run("HTTP server testing", func(t *testing.T) {
 		for _, p := range []testPair{
-			{100, codes.Unset},
-			{103, codes.Unset},
-			{199, codes.Unset},
-			{200, codes.Unset},
-			{204, codes.Unset},
-			{299, codes.Unset},
-			{300, codes.Unset},
-			{399, codes.Unset},
-			{400, codes.Unset},
-			{404, codes.Unset},
-			{405, codes.Unset},
-			{499, codes.Unset},
-			{500, codes.Error},
-			{5999, codes.Error},
+			{100, request.StatusCodeUnset},
+			{103, request.StatusCodeUnset},
+			{199, request.StatusCodeUnset},
+			{200, request.StatusCodeUnset},
+			{204, request.StatusCodeUnset},
+			{299, request.StatusCodeUnset},
+			{300, request.StatusCodeUnset},
+			{399, request.StatusCodeUnset},
+			{400, request.StatusCodeUnset},
+			{404, request.StatusCodeUnset},
+			{405, request.StatusCodeUnset},
+			{499, request.StatusCodeUnset},
+			{500, request.StatusCodeError},
+			{5999, request.StatusCodeError},
 		} {
 			assert.Equal(t, p.statusCode, request.HTTPSpanStatusCode(&request.Span{Status: p.httpCode, Type: request.EventTypeHTTP}))
 			assert.Equal(t, p.statusCode, request.SpanStatusCode(&request.Span{Status: p.httpCode, Type: request.EventTypeHTTP}))
@@ -1261,20 +1260,20 @@ func TestTraces_HTTPStatus(t *testing.T) {
 
 	t.Run("HTTP client testing", func(t *testing.T) {
 		for _, p := range []testPair{
-			{100, codes.Unset},
-			{103, codes.Unset},
-			{199, codes.Unset},
-			{200, codes.Unset},
-			{204, codes.Unset},
-			{299, codes.Unset},
-			{300, codes.Unset},
-			{399, codes.Unset},
-			{400, codes.Error},
-			{404, codes.Error},
-			{405, codes.Error},
-			{499, codes.Error},
-			{500, codes.Error},
-			{5999, codes.Error},
+			{100, request.StatusCodeUnset},
+			{103, request.StatusCodeUnset},
+			{199, request.StatusCodeUnset},
+			{200, request.StatusCodeUnset},
+			{204, request.StatusCodeUnset},
+			{299, request.StatusCodeUnset},
+			{300, request.StatusCodeUnset},
+			{399, request.StatusCodeUnset},
+			{400, request.StatusCodeError},
+			{404, request.StatusCodeError},
+			{405, request.StatusCodeError},
+			{499, request.StatusCodeError},
+			{500, request.StatusCodeError},
+			{5999, request.StatusCodeError},
 		} {
 			assert.Equal(t, p.statusCode, request.HTTPSpanStatusCode(&request.Span{Status: p.httpCode, Type: request.EventTypeHTTPClient}))
 			assert.Equal(t, p.statusCode, request.SpanStatusCode(&request.Span{Status: p.httpCode, Type: request.EventTypeHTTPClient}))
@@ -1285,28 +1284,28 @@ func TestTraces_HTTPStatus(t *testing.T) {
 func TestTraces_GRPCStatus(t *testing.T) {
 	type testPair struct {
 		grpcCode   attribute.KeyValue
-		statusCode codes.Code
+		statusCode string
 	}
 
 	t.Run("gRPC server testing", func(t *testing.T) {
 		for _, p := range []testPair{
-			{semconv.RPCGRPCStatusCodeOk, codes.Unset},
-			{semconv.RPCGRPCStatusCodeCancelled, codes.Unset},
-			{semconv.RPCGRPCStatusCodeUnknown, codes.Error},
-			{semconv.RPCGRPCStatusCodeInvalidArgument, codes.Unset},
-			{semconv.RPCGRPCStatusCodeDeadlineExceeded, codes.Error},
-			{semconv.RPCGRPCStatusCodeNotFound, codes.Unset},
-			{semconv.RPCGRPCStatusCodeAlreadyExists, codes.Unset},
-			{semconv.RPCGRPCStatusCodePermissionDenied, codes.Unset},
-			{semconv.RPCGRPCStatusCodeResourceExhausted, codes.Unset},
-			{semconv.RPCGRPCStatusCodeFailedPrecondition, codes.Unset},
-			{semconv.RPCGRPCStatusCodeAborted, codes.Unset},
-			{semconv.RPCGRPCStatusCodeOutOfRange, codes.Unset},
-			{semconv.RPCGRPCStatusCodeUnimplemented, codes.Error},
-			{semconv.RPCGRPCStatusCodeInternal, codes.Error},
-			{semconv.RPCGRPCStatusCodeUnavailable, codes.Error},
-			{semconv.RPCGRPCStatusCodeDataLoss, codes.Error},
-			{semconv.RPCGRPCStatusCodeUnauthenticated, codes.Unset},
+			{semconv.RPCGRPCStatusCodeOk, request.StatusCodeUnset},
+			{semconv.RPCGRPCStatusCodeCancelled, request.StatusCodeUnset},
+			{semconv.RPCGRPCStatusCodeUnknown, request.StatusCodeError},
+			{semconv.RPCGRPCStatusCodeInvalidArgument, request.StatusCodeUnset},
+			{semconv.RPCGRPCStatusCodeDeadlineExceeded, request.StatusCodeError},
+			{semconv.RPCGRPCStatusCodeNotFound, request.StatusCodeUnset},
+			{semconv.RPCGRPCStatusCodeAlreadyExists, request.StatusCodeUnset},
+			{semconv.RPCGRPCStatusCodePermissionDenied, request.StatusCodeUnset},
+			{semconv.RPCGRPCStatusCodeResourceExhausted, request.StatusCodeUnset},
+			{semconv.RPCGRPCStatusCodeFailedPrecondition, request.StatusCodeUnset},
+			{semconv.RPCGRPCStatusCodeAborted, request.StatusCodeUnset},
+			{semconv.RPCGRPCStatusCodeOutOfRange, request.StatusCodeUnset},
+			{semconv.RPCGRPCStatusCodeUnimplemented, request.StatusCodeError},
+			{semconv.RPCGRPCStatusCodeInternal, request.StatusCodeError},
+			{semconv.RPCGRPCStatusCodeUnavailable, request.StatusCodeError},
+			{semconv.RPCGRPCStatusCodeDataLoss, request.StatusCodeError},
+			{semconv.RPCGRPCStatusCodeUnauthenticated, request.StatusCodeUnset},
 		} {
 			assert.Equal(t, p.statusCode, request.GrpcSpanStatusCode(&request.Span{Status: int(p.grpcCode.Value.AsInt64()), Type: request.EventTypeGRPC}))
 			assert.Equal(t, p.statusCode, request.SpanStatusCode(&request.Span{Status: int(p.grpcCode.Value.AsInt64()), Type: request.EventTypeGRPC}))
@@ -1315,23 +1314,23 @@ func TestTraces_GRPCStatus(t *testing.T) {
 
 	t.Run("gRPC client testing", func(t *testing.T) {
 		for _, p := range []testPair{
-			{semconv.RPCGRPCStatusCodeOk, codes.Unset},
-			{semconv.RPCGRPCStatusCodeCancelled, codes.Error},
-			{semconv.RPCGRPCStatusCodeUnknown, codes.Error},
-			{semconv.RPCGRPCStatusCodeInvalidArgument, codes.Error},
-			{semconv.RPCGRPCStatusCodeDeadlineExceeded, codes.Error},
-			{semconv.RPCGRPCStatusCodeNotFound, codes.Error},
-			{semconv.RPCGRPCStatusCodeAlreadyExists, codes.Error},
-			{semconv.RPCGRPCStatusCodePermissionDenied, codes.Error},
-			{semconv.RPCGRPCStatusCodeResourceExhausted, codes.Error},
-			{semconv.RPCGRPCStatusCodeFailedPrecondition, codes.Error},
-			{semconv.RPCGRPCStatusCodeAborted, codes.Error},
-			{semconv.RPCGRPCStatusCodeOutOfRange, codes.Error},
-			{semconv.RPCGRPCStatusCodeUnimplemented, codes.Error},
-			{semconv.RPCGRPCStatusCodeInternal, codes.Error},
-			{semconv.RPCGRPCStatusCodeUnavailable, codes.Error},
-			{semconv.RPCGRPCStatusCodeDataLoss, codes.Error},
-			{semconv.RPCGRPCStatusCodeUnauthenticated, codes.Error},
+			{semconv.RPCGRPCStatusCodeOk, request.StatusCodeUnset},
+			{semconv.RPCGRPCStatusCodeCancelled, request.StatusCodeError},
+			{semconv.RPCGRPCStatusCodeUnknown, request.StatusCodeError},
+			{semconv.RPCGRPCStatusCodeInvalidArgument, request.StatusCodeError},
+			{semconv.RPCGRPCStatusCodeDeadlineExceeded, request.StatusCodeError},
+			{semconv.RPCGRPCStatusCodeNotFound, request.StatusCodeError},
+			{semconv.RPCGRPCStatusCodeAlreadyExists, request.StatusCodeError},
+			{semconv.RPCGRPCStatusCodePermissionDenied, request.StatusCodeError},
+			{semconv.RPCGRPCStatusCodeResourceExhausted, request.StatusCodeError},
+			{semconv.RPCGRPCStatusCodeFailedPrecondition, request.StatusCodeError},
+			{semconv.RPCGRPCStatusCodeAborted, request.StatusCodeError},
+			{semconv.RPCGRPCStatusCodeOutOfRange, request.StatusCodeError},
+			{semconv.RPCGRPCStatusCodeUnimplemented, request.StatusCodeError},
+			{semconv.RPCGRPCStatusCodeInternal, request.StatusCodeError},
+			{semconv.RPCGRPCStatusCodeUnavailable, request.StatusCodeError},
+			{semconv.RPCGRPCStatusCodeDataLoss, request.StatusCodeError},
+			{semconv.RPCGRPCStatusCodeUnauthenticated, request.StatusCodeError},
 		} {
 			assert.Equal(t, p.statusCode, request.GrpcSpanStatusCode(&request.Span{Status: int(p.grpcCode.Value.AsInt64()), Type: request.EventTypeGRPCClient}))
 			assert.Equal(t, p.statusCode, request.SpanStatusCode(&request.Span{Status: int(p.grpcCode.Value.AsInt64()), Type: request.EventTypeGRPCClient}))

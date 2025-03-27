@@ -283,6 +283,18 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 				attr.CudaKernelName: true,
 			},
 		},
+		GPUKernelGridSize.Section: {
+			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes},
+			Attributes: map[attr.Name]Default{
+				attr.CudaKernelName: true,
+			},
+		},
+		GPUKernelBlockSize.Section: {
+			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes},
+			Attributes: map[attr.Name]Default{
+				attr.CudaKernelName: true,
+			},
+		},
 		GPUMemoryAllocations.Section: {
 			SubGroups:  []*AttrReportGroup{&appAttributes, &appKubeAttributes},
 			Attributes: map[attr.Name]Default{},

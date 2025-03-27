@@ -162,6 +162,7 @@ type Config struct {
 	TracePrinter debug.TracePrinter            `yaml:"trace_printer" env:"BEYLA_TRACE_PRINTER"`
 
 	// Exec allows selecting the instrumented executable whose complete path contains the Exec value.
+	// Deprecated: use discovery.services instead
 	Exec services.RegexpAttr `yaml:"executable_name" env:"BEYLA_EXECUTABLE_NAME"`
 	// nolint:undoc
 	ExecOtelGo services.RegexpAttr `env:"OTEL_GO_AUTO_TARGET_EXE"`
@@ -169,11 +170,14 @@ type Config struct {
 	// different to zero), the value of the Exec property won't take effect.
 	// It's important to emphasize that if your process opens multiple HTTP/GRPC ports, the auto-instrumenter
 	// will instrument all the service calls in all the ports, not only the port specified here.
+	// Deprecated: use discovery.services instead
 	Port services.PortEnum `yaml:"open_port" env:"BEYLA_OPEN_PORT"`
 
 	// ServiceName is taken from either BEYLA_SERVICE_NAME env var or OTEL_SERVICE_NAME (for OTEL spec compatibility)
 	// Using env and envDefault is a trick to get the value either from one of either variables
-	ServiceName      string `yaml:"service_name" env:"OTEL_SERVICE_NAME,expand" envDefault:"${BEYLA_SERVICE_NAME}"`
+	// Deprecated: use discovery.services instead
+	ServiceName string `yaml:"service_name" env:"OTEL_SERVICE_NAME,expand" envDefault:"${BEYLA_SERVICE_NAME}"`
+	// Deprecated: use discovery.services instead
 	ServiceNamespace string `yaml:"service_namespace" env:"BEYLA_SERVICE_NAMESPACE"`
 
 	// Discovery configuration

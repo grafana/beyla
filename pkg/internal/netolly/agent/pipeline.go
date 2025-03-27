@@ -119,7 +119,7 @@ func (f *Flows) pipelineBuilder(ctx context.Context) (*pipe.Builder[*FlowsPipeli
 		return k8s.MetadataDecoratorProvider(ctx, &f.cfg.Attributes.Kubernetes, f.ctxInfo.K8sInformer)
 	})
 	pipe.AddMiddleProvider(pb, rdns, func() (pipe.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
-		return flow.ReverseDNSProvider(&f.cfg.NetworkFlows.ReverseDNS)
+		return flow.ReverseDNSProvider(ctx, &f.cfg.NetworkFlows.ReverseDNS)
 	})
 	pipe.AddMiddleProvider(pb, fltr, filter.ByAttribute(f.cfg.Filters.Network, ebpf.RecordStringGetters))
 

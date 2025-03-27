@@ -10,73 +10,41 @@ aliases:
   - /docs/grafana-cloud/monitor-applications/beyla/configure/options/
 ---
 
+<!-- vale Grafana.Paragraphs = NO -->
+
 # Beyla global configuration properties
 
-Beyla can be configured via environment variables or via
-a YAML configuration file that is passed either with the `-config` command-line
-argument or the `BEYLA_CONFIG_PATH` environment variable.
-Environment variables have priority over the properties in the
-configuration file. For example, in the following command line, the `BEYLA_OPEN_PORT` option,
-is used to override any `open_port` settings inside the config.yaml file:
+Beyla can be configured via environment variables or via a YAML configuration file passed either with the `-config` command-line argument or the `BEYLA_CONFIG_PATH` environment variable.
+Environment variables have priority over the properties in the configuration file.
 
-```
-$ BEYLA_OPEN_PORT=8080 beyla -config /path/to/config.yaml
-```
+Refer to the [example YAML configuration file](../example/) for a configuration file template.
 
-or
+Beyla consists of a pipeline of components that generate, transform, and export traces from HTTP and GRPC applications.
+In the YAML configuration, each component has its own first-level section.
 
-```
-$ BEYLA_OPEN_PORT=8080 BEYLA_CONFIG_PATH=/path/to/config.yaml beyla
-```
+Optionally, Beyla also provides network-level metrics, refer to the [network metrics documentation](../../network/) for more information.
 
-Refer to the [example YAML configuration file](../example/) for configuration file template.
+The following sections explain the global configuration properties that apply to the entire Beyla configuration:
 
-Currently, Beyla consist of a pipeline of components which
-generate, transform, and export traces from HTTP and GRPC applications. In the
-YAML configuration, each component has its own first-level section.
+| Lowercase YAML option<br>Uppercase environment variable option | Description                                                                                                           | Type    | Default               |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------- | --------------------- |
+| `log_level`<br>`BEYLA_LOG_LEVEL`                               | Sets process logger verbosity. Valid values: `DEBUG`, `INFO`, `WARN`, `ERROR`.                                        | string  | `INFO`                |
+| `trace_printer`<br>`BEYLA_TRACE_PRINTER`                       | Prints instrumented traces to stdout in a specified format, refer to [trace printer formats](#trace-printer-formats). | string  | `disabled`            |
+| `enforce_sys_caps`<br>`BEYLA_ENFORCE_SYS_CAPS`                 | Controls how Beyla handles missing system capabilities at startup.                                                    | boolean | `false`               |
 
-Optionally, Beyla also provides network-level metrics, which are documented in the
-[Network metrics section of the Beyla documentation](../../network/).
 
-The following sections explain the global configuration properties, as well as
-the options for each component.
+## Trace printer formats
 
-## Global configuration properties
+This option prints any instrumented trace on the standard output using one of the following formats:
 
-| YAML        | Environment variable           | Type   | Default |
-| ----------- | ----------------- | ------ | ------- |
-| `log_level` | `BEYLA_LOG_LEVEL` | string | `INFO`  |
-
-Sets the verbosity level of the process standard output logger.
-Valid log level values are: `DEBUG`, `INFO`, `WARN` and `ERROR`.
-`DEBUG` being the most verbose and `ERROR` the least verbose.
-
-| YAML            | Environment variable  | Type    | Default    |
-| --------------  | --------------------- | ------- | ---------- |
-| `trace_printer` | `BEYLA_TRACE_PRINTER` | string  | `disabled` |
-
-<a id="printer"></a>
-
-Prints any instrumented trace on the standard output. The value of
-this option specify the format to be used when printing the trace. Valid
-formats are:
-
-| Value         | Description                    |
-|---------------|--------------------------------|
+| Format        | Description                    |
+| ------------- | ------------------------------ |
 | `disabled`    | disables the printer           |
 | `text`        | prints a concise line of text  |
 | `json`        | prints a compact JSON object   |
 | `json_indent` | prints an indented JSON object |
 
-| YAML               | Environment variable     | Type     | Default    |
-| -----------------  | ------------------------ | -------- | ---------- |
-| `enforce_sys_caps` | `BEYLA_ENFORCE_SYS_CAPS` | boolean  | `false`    |
+## System capabilities
 
-<a id="caps"></a>
-
-If you have set the `enforce_sys_caps` to true, if the required system
-capabilities are not present Beyla aborts its startup and logs a list of the
-missing capabilities.
-
-If you have set the configuration option to `false`, Beyla logs a list of the
-missing capabilities only.
+If you set `enforce_sys_caps` to true and the required system capabilities are missing, Beyla aborts startup and logs the missing capabilities.
+If you set this option to `false`, Beyla only logs the missing capabilities.

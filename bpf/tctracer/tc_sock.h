@@ -1,18 +1,21 @@
-#ifndef TC_SOCK_H
-#define TC_SOCK_H
+#pragma once
 
 #include <bpfcore/vmlinux.h>
 #include <bpfcore/bpf_helpers.h>
 #include <bpfcore/bpf_endian.h>
 
-#include "http_types.h"
-#include "tc_common.h"
-#include "bpf_dbg.h"
-#include "tracing.h"
-#include "http_ssl_defs.h"
-#include "k_tracer_defs.h"
-#include "trace_util.h"
-#include "trace_common.h"
+#include <common/send_args.h>
+#include <common/ssl_helpers.h>
+
+#include <logger/bpf_dbg.h>
+
+#include <maps/msg_buffers.h>
+
+#include <common/http_types.h>
+#include <common/tc_common.h>
+#include <common/tracing.h>
+#include <common/trace_common.h>
+#include <common/trace_util.h>
 
 enum { k_tail_write_msg_traceparent = 0 };
 
@@ -558,5 +561,3 @@ int beyla_packet_extender_write_msg_tp(struct sk_msg_md *msg) {
 
     return SK_PASS;
 }
-
-#endif

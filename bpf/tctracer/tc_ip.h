@@ -1,12 +1,12 @@
-#ifndef TC_IP_HELPERS_H
-#define TC_IP_HELPERS_H
+#pragma once
 
 #include <bpfcore/vmlinux.h>
 #include <bpfcore/bpf_helpers.h>
 
-#include "tcp_info.h"
-#include "tracing.h"
-#include "bpf_dbg.h"
+#include <common/tcp_info.h>
+#include <common/tracing.h>
+
+#include <logger/bpf_dbg.h>
 
 enum { MIN_IP_LEN = 20, MAX_TC_TP_LEN = 20, TC_TP_ID = 0x1488, MAX_IPV6_OPTS_LEN = 24 };
 
@@ -185,5 +185,3 @@ static __always_inline u8 inject_tc_ip_options_ipv6(struct __sk_buff *skb,
 
     return 0;
 }
-
-#endif // TC_IP_HELPERS_H

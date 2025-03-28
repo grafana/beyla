@@ -21,5 +21,4 @@ Checks:
 WarningsAsErrors: '*'
 HeaderFilterRegex: ''
 FormatStyle: none
-ExtraArgs: ['--target=bpf', '-Iheaders', '-D__TARGET_ARCH_x86', '-DBPF_DEBUG', '-DBPF_TRACEPARENT']
-
+ExtraArgs: ['--target=bpf', '-I.', '-D__TARGET_ARCH_x86', '-DBPF_DEBUG', '-DBPF_TRACEPARENT']

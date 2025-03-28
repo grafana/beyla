@@ -85,7 +85,7 @@ static __always_inline void encode_data_in_ip_options(struct __sk_buff *skb,
 static __always_inline struct bpf_sock *lookup_sock_from_tuple(struct __sk_buff *skb,
                                                                struct bpf_sock_tuple *tuple,
                                                                bool ipv4,
-                                                               void *data_end) {
+                                                               const void *data_end) {
     if (ipv4 && (u64)((u8 *)tuple + sizeof(tuple->ipv4)) < (u64)data_end) {
         // Lookup to see if you can find a socket for this tuple in the
         // kernel socket tracking. We look up in all namespaces (-1).
@@ -102,7 +102,7 @@ static __always_inline struct bpf_sock *lookup_sock_from_tuple(struct __sk_buff 
 // established before we launched Beyla, since we'll not see them in the
 // sock_ops program which tracks them.
 static __always_inline struct bpf_sock_tuple *
-get_tuple(void *data, __u64 nh_off, void *data_end, __u16 eth_proto, bool *ipv4) {
+get_tuple(const void *data, __u64 nh_off, const void *data_end, __u16 eth_proto, bool *ipv4) {
     struct bpf_sock_tuple *result;
     __u64 ihl_len = 0;
     __u8 proto = 0;
@@ -138,21 +138,17 @@ get_tuple(void *data, __u64 nh_off, void *data_end, __u16 eth_proto, bool *ipv4)
     return result;
 }
 
-static __always_inline void track_sock(struct __sk_buff *skb, const connection_info_t *conn) {
-    const u32 s_port = conn->s_port;
-
-    if (is_sock_tracked(s_port)) {
+static __always_inline void tc_track_sock(struct __sk_buff *skb, const connection_info_t *conn) {
+    if (is_sock_tracked(conn)) {
         return;
     }
 
     // TODO revist to avoid pulling data (use bpf_skb_load_bytes instead)
     bpf_skb_pull_data(skb, skb->len);
 
-    void *data_end = ctx_data_end(skb);
-    void *data = ctx_data(skb);
-
-    struct ethhdr *eth = (struct ethhdr *)(data);
-    bool ipv4;
+    const void *data_end = ctx_data_end(skb);
+    const void *data = ctx_data(skb);
+    const struct ethhdr *eth = (struct ethhdr *)(data);
 
     if ((void *)(eth + 1) > data_end) {
         bpf_dbg_printk("bad size");
@@ -161,6 +157,7 @@ static __always_inline void track_sock(struct __sk_buff *skb, const connection_i
 
     // Get the bpf_sock_tuple value so we can look up and see if we don't have
     // this socket yet in our map.
+    bool ipv4;
     struct bpf_sock_tuple *tuple = get_tuple(data, sizeof(*eth), data_end, eth->h_proto, &ipv4);
     //bpf_printk("tuple %llx, next %llx, data end %llx", tuple, (void *)((u8 *)tuple + sizeof(*tuple)), data_end);
 
@@ -173,30 +170,14 @@ static __always_inline void track_sock(struct __sk_buff *skb, const connection_i
     }
 
     struct bpf_sock *sk = lookup_sock_from_tuple(skb, tuple, ipv4, data_end);
-    bpf_dbg_printk("sk=%d\n", sk ? 1 : 0);
+    bpf_dbg_printk("sk=%llx\n", sk);
 
     if (!sk) {
         return;
     }
 
-    bpf_dbg_printk("LOOKUP %llx:%d ->", conn->s_ip[3], conn->s_port);
-    bpf_dbg_printk("LOOKUP TO %llx:%d", conn->d_ip[3], conn->d_port);
+    track_sock(conn, sk);
 
-    // Query the socket map to see if have added this socket.
-    struct bpf_sock *sk1 = (struct bpf_sock *)bpf_map_lookup_elem(&sock_dir, conn);
-
-    // We found the socket, all good it was caught by the sock_ops,
-    // just release it.
-    if (sk1) {
-        bpf_dbg_printk("Found sk1 %llx", sk1);
-        bpf_sk_release(sk1);
-    } else {
-        // First time we see a socket, add it to the map, it will
-        // get tracked on the next request
-        bpf_map_update_elem(&sock_dir, conn, sk, BPF_NOEXIST);
-    }
-
-    // We must release the reference to the original socket we looked up.
     bpf_sk_release(sk);
 }
 
@@ -259,7 +240,7 @@ int beyla_app_egress(struct __sk_buff *skb) {
     }
 
     // track any sockets we may have missed from sockops
-    track_sock(skb, &conn);
+    tc_track_sock(skb, &conn);
 
     // The following code sets up the context information in L4 and it
     // does it only once. If it successfully injected the information it

@@ -13,7 +13,6 @@
 #include "trace_util.h"
 #include "trace_common.h"
 
-enum { k_sockops_map_size = 65535 };
 enum { k_tail_write_msg_traceparent = 0 };
 
 // A map of sockets which we track with sock_ops. The sock_msg
@@ -23,17 +22,10 @@ enum { k_tail_write_msg_traceparent = 0 };
 // the socket information
 struct {
     __uint(type, BPF_MAP_TYPE_SOCKHASH);
-    __uint(max_entries, k_sockops_map_size);
+    __uint(max_entries, 65535);
     __uint(key_size, sizeof(connection_info_t));
     __uint(value_size, sizeof(uint32_t));
 } sock_dir SEC(".maps");
-
-struct tc_tracked_socks_map {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, u32);
-    __type(value, u8);
-    __uint(max_entries, k_sockops_map_size);
-} tc_tracked_socks_map SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
@@ -455,14 +447,19 @@ static __always_inline bool handle_go_request(struct sk_msg_md *msg,
     return true;
 }
 
-static __always_inline void beyla_packet_extender_track_sock(u32 port) {
-    // tell TC this socket is already being monitored
-    const u8 zero = 0;
-    bpf_map_update_elem(&tc_tracked_socks_map, &port, &zero, BPF_ANY);
+static __always_inline void track_sock(const connection_info_t *conn, const struct bpf_sock *sk) {
+    bpf_map_update_elem(&sock_dir, conn, sk, BPF_NOEXIST);
 }
 
-static __always_inline u8 is_sock_tracked(u32 port) {
-    return bpf_map_lookup_elem(&tc_tracked_socks_map, &port) != NULL;
+static __always_inline u8 is_sock_tracked(const connection_info_t *conn) {
+    struct bpf_sock *sk = (struct bpf_sock *)bpf_map_lookup_elem(&sock_dir, conn);
+
+    if (sk) {
+        bpf_sk_release(sk);
+        return 1;
+    }
+
+    return 0;
 }
 
 // Sock_msg program which detects packets where it should add space for
@@ -470,8 +467,6 @@ static __always_inline u8 is_sock_tracked(u32 port) {
 // Traceparent string.
 SEC("sk_msg")
 int beyla_packet_extender(struct sk_msg_md *msg) {
-    beyla_packet_extender_track_sock(msg->local_port);
-
     const u64 id = bpf_get_current_pid_tgid();
     const connection_info_t conn = get_connection_info(msg);
     const egress_key_t e_key = make_key(&conn);

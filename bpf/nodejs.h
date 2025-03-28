@@ -1,8 +1,8 @@
 #ifndef NODE_JS_H
 #define NODE_JS_H
 
-#include "vmlinux.h"
-#include "bpf_helpers.h"
+#include <bpfcore/vmlinux.h>
+#include <bpfcore/bpf_helpers.h>
 #include "bpf_dbg.h"
 #include "pid.h"
 #include "ringbuf.h"

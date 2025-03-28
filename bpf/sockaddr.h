@@ -1,10 +1,10 @@
 #ifndef SOCKADDR_HELPERS_H
 #define SOCKADDR_HELPERS_H
 
-#include "vmlinux.h"
-#include "bpf_helpers.h"
-#include "bpf_endian.h"
-#include "bpf_core_read.h"
+#include <bpfcore/vmlinux.h>
+#include <bpfcore/bpf_helpers.h>
+#include <bpfcore/bpf_endian.h>
+#include <bpfcore/bpf_core_read.h>
 #include "http_types.h"
 #include "protocol_defs.h"
 

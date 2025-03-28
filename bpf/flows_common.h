@@ -1,11 +1,11 @@
 #ifndef __FLOW_HELPERS_H__
 #define __FLOW_HELPERS_H__
 
-#include "vmlinux.h"
+#include <bpfcore/vmlinux.h>
 #include <stdbool.h>
 
-#include "bpf_helpers.h"
-#include "bpf_endian.h"
+#include <bpfcore/bpf_helpers.h>
+#include <bpfcore/bpf_endian.h>
 
 #include "flow.h"
 

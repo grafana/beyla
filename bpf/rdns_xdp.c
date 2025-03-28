@@ -1,8 +1,8 @@
 //go:build beyla_bpf_ignore
-#include "vmlinux.h"
+#include <bpfcore/vmlinux.h>
 
-#include "bpf_helpers.h"
-#include "bpf_endian.h"
+#include <bpfcore/bpf_helpers.h>
+#include <bpfcore/bpf_endian.h>
 #include "bpf_dbg.h"
 
 // Reverse DNS implementation by means of XDP packet inspection.

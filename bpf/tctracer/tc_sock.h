@@ -1,9 +1,10 @@
 #ifndef TC_SOCK_H
 #define TC_SOCK_H
 
-#include "vmlinux.h"
-#include "bpf_helpers.h"
-#include "bpf_endian.h"
+#include <bpfcore/vmlinux.h>
+#include <bpfcore/bpf_helpers.h>
+#include <bpfcore/bpf_endian.h>
+
 #include "http_types.h"
 #include "tc_common.h"
 #include "bpf_dbg.h"

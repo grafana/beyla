@@ -1,6 +1,6 @@
 #ifndef TRACING_H
 #define TRACING_H
-#include "vmlinux.h"
+#include <bpfcore/vmlinux.h>
 #include "trace_util.h"
 #include "http_types.h"
 #include "pin_internal.h"

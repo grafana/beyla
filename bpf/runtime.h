@@ -1,8 +1,8 @@
 #ifndef RUNTIME_SUPPORT_H
 #define RUNTIME_SUPPORT_H
 
-#include "vmlinux.h"
-#include "bpf_helpers.h"
+#include <bpfcore/vmlinux.h>
+#include <bpfcore/bpf_helpers.h>
 #include "pid_types.h"
 #include "nodejs.h"
 #include "k_unix_sock_tracker.h"

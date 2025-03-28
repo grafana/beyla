@@ -1,8 +1,8 @@
 #ifndef _K_SEND_RECEIVE_H
 #define _K_SEND_RECEIVE_H
 
-#include "vmlinux.h"
-#include "bpf_helpers.h"
+#include <bpfcore/vmlinux.h>
+#include <bpfcore/bpf_helpers.h>
 #include "k_tracer_defs.h"
 
 struct {

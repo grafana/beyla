@@ -14,7 +14,7 @@
 #define TRACER_COMMON_H
 
 #include "pid_types.h"
-#include "utils.h"
+#include <bpfcore/utils.h>
 #include "http_types.h"
 
 #define PATH_MAX_LEN 100

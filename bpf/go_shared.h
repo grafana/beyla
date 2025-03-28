@@ -1,7 +1,7 @@
 #ifndef GO_SHARED_H
 #define GO_SHARED_H
 
-#include "utils.h"
+#include <bpfcore/utils.h>
 #include "http_types.h"
 
 typedef struct go_addr_key {

@@ -19,9 +19,9 @@
 #ifndef GO_SQL_H
 #define GO_SQL_H
 
-#include "vmlinux.h"
+#include <bpfcore/vmlinux.h>
 
-#include "bpf_helpers.h"
+#include <bpfcore/bpf_helpers.h>
 #include "http_types.h"
 #include "go_common.h"
 #include "ringbuf.h"

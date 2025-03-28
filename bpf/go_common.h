@@ -13,7 +13,7 @@
 #ifndef GO_COMMON_H
 #define GO_COMMON_H
 
-#include "utils.h"
+#include <bpfcore/utils.h>
 #include "map_sizing.h"
 #include "bpf_dbg.h"
 #include "go_shared.h"

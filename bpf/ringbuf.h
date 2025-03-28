@@ -1,7 +1,7 @@
 #ifndef RINGBUF_H
 #define RINGBUF_H
 
-#include "utils.h"
+#include <bpfcore/utils.h>
 #include "pin_internal.h"
 
 // These need to line up with some Go identifiers:

@@ -1,8 +1,9 @@
 #ifndef TC_IP_HELPERS_H
 #define TC_IP_HELPERS_H
 
-#include "vmlinux.h"
-#include "bpf_helpers.h"
+#include <bpfcore/vmlinux.h>
+#include <bpfcore/bpf_helpers.h>
+
 #include "tcp_info.h"
 #include "tracing.h"
 #include "bpf_dbg.h"

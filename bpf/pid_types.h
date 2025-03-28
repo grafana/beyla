@@ -1,9 +1,9 @@
 #ifndef PID_HELPERS_H
 #define PID_HELPERS_H
 
-#include "vmlinux.h"
-#include "bpf_helpers.h"
-#include "bpf_core_read.h"
+#include <bpfcore/vmlinux.h>
+#include <bpfcore/bpf_helpers.h>
+#include <bpfcore/bpf_core_read.h>
 
 typedef struct pid_key {
     u32 tid; // tid as seen by the userspace (for example, inside its container)

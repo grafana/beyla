@@ -1,8 +1,8 @@
 #ifndef K_TRACER_HELPERS
 #define K_TRACER_HELPERS
 
-#include "vmlinux.h"
-#include "bpf_helpers.h"
+#include <bpfcore/vmlinux.h>
+#include <bpfcore/bpf_helpers.h>
 #include "http_types.h"
 #include "k_tracer_tailcall.h"
 #include "ringbuf.h"

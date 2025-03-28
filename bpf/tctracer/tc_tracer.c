@@ -1,8 +1,8 @@
 //go:build beyla_bpf_ignore
-#include "vmlinux.h"
-#include "bpf_helpers.h"
-#include "bpf_dbg.h"
+#include <bpfcore/vmlinux.h>
+#include <bpfcore/bpf_helpers.h>
 
+#include "bpf_dbg.h"
 #include "http_maps.h"
 #include "http_types.h"
 #include "go_shared.h"

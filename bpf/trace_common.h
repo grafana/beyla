@@ -1,7 +1,7 @@
 #ifndef TRACE_COMMON_H
 #define TRACE_COMMON_H
 
-#include "utils.h"
+#include <bpfcore/utils.h>
 #include "http_types.h"
 #include "trace_util.h"
 #include "tracing.h"

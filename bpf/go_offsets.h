@@ -1,7 +1,7 @@
 #ifndef GO_OFFSETS_H
 #define GO_OFFSETS_H
 
-#include "utils.h"
+#include <bpfcore/utils.h>
 #include "pid_types.h"
 
 #define MAX_GO_PROGRAMS 10000 // Max 10,000 go programs tracked

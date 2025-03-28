@@ -1,9 +1,9 @@
 #ifndef HTTP_TYPES_H
 #define HTTP_TYPES_H
 
-#include "vmlinux.h"
+#include <bpfcore/vmlinux.h>
 #include "map_sizing.h"
-#include "bpf_helpers.h"
+#include <bpfcore/bpf_helpers.h>
 #include "protocol_defs.h"
 #include "pid_types.h"
 #include "bpf_dbg.h"

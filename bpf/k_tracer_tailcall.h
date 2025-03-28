@@ -1,8 +1,8 @@
 #ifndef K_TRACER_TAILCALL_H
 #define K_TRACER_TAILCALL_H
 
-#include "vmlinux.h"
-#include "bpf_helpers.h"
+#include <bpfcore/vmlinux.h>
+#include <bpfcore/bpf_helpers.h>
 
 struct bpf_map_def SEC("maps") jump_table = {
     .type = BPF_MAP_TYPE_PROG_ARRAY,

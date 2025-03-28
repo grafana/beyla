@@ -1,8 +1,8 @@
 #ifndef TC_COMMON_H
 #define TC_COMMON_H
 
-#include "vmlinux.h"
-#include "bpf_helpers.h"
+#include <bpfcore/vmlinux.h>
+#include <bpfcore/bpf_helpers.h>
 
 enum { MAX_INLINE_LEN = 0x3ff };
 

@@ -10,7 +10,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "utils.h"
+#include <bpfcore/utils.h>
+
 #include "bpf_dbg.h"
 #include "go_common.h"
 

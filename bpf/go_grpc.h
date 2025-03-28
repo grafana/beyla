@@ -11,7 +11,7 @@
 // limitations under the License.
 
 #include "pid_types.h"
-#include "utils.h"
+#include <bpfcore/utils.h>
 #include "go_str.h"
 #include "go_byte_arr.h"
 #include "bpf_dbg.h"

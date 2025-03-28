@@ -1,8 +1,8 @@
 #ifndef PROTOCOL_TCP
 #define PROTOCOL_TCP
 
-#include "vmlinux.h"
-#include "bpf_helpers.h"
+#include <bpfcore/vmlinux.h>
+#include <bpfcore/bpf_helpers.h>
 #include "http_types.h"
 #include "ringbuf.h"
 #include "protocol_common.h"

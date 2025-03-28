@@ -1,8 +1,8 @@
 #ifndef HTTP_MAPS_H
 #define HTTP_MAPS_H
 
-#include "vmlinux.h"
-#include "bpf_helpers.h"
+#include <bpfcore/vmlinux.h>
+#include <bpfcore/bpf_helpers.h>
 #include "http_types.h"
 
 // Keeps track of the ongoing http connections we match for request/response

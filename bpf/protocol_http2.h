@@ -1,8 +1,8 @@
 #ifndef PROTOCOL_HTTP2
 #define PROTOCOL_HTTP2
 
-#include "vmlinux.h"
-#include "bpf_helpers.h"
+#include <bpfcore/vmlinux.h>
+#include <bpfcore/bpf_helpers.h>
 #include "http2_grpc.h"
 #include "http_types.h"
 #include "k_tracer_tailcall.h"

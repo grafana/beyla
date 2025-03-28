@@ -17,11 +17,11 @@
 // This implementation is a derivation of the code in
 // https://github.com/netobserv/netobserv-ebpf-agent/tree/release-1.4
 
-#include "vmlinux.h"
+#include <bpfcore/vmlinux.h>
 #include <stdbool.h>
 
-#include "bpf_helpers.h"
-#include "bpf_endian.h"
+#include <bpfcore/bpf_helpers.h>
+#include <bpfcore/bpf_endian.h>
 #include "bpf_dbg.h"
 #include "flows_common.h"
 

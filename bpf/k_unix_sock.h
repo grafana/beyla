@@ -1,8 +1,8 @@
 #ifndef _K_UNIX_SOCK
 #define _K_UNIX_SOCK
 
-#include "vmlinux.h"
-#include "bpf_helpers.h"
+#include <bpfcore/vmlinux.h>
+#include <bpfcore/bpf_helpers.h>
 #include "http_types.h"
 #include "tc_common.h"
 #include "bpf_dbg.h"

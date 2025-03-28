@@ -1,7 +1,7 @@
 //go:build beyla_bpf_ignore
-#include "vmlinux.h"
-#include "bpf_helpers.h"
-#include "bpf_tracing.h"
+#include <bpfcore/vmlinux.h>
+#include <bpfcore/bpf_helpers.h>
+#include <bpfcore/bpf_tracing.h>
 #include "bpf_dbg.h"
 #include "sockaddr.h"
 #include "tcp_info.h"

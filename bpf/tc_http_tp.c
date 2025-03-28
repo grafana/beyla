@@ -1,9 +1,9 @@
 //go:build beyla_bpf_ignore
-#include <vmlinux.h>
+#include <bpfcore/vmlinux.h>
 
-#include <bpf_endian.h>
-#include <bpf_helpers.h>
-#include <bpf_tracing.h>
+#include <bpfcore/bpf_endian.h>
+#include <bpfcore/bpf_helpers.h>
+#include <bpfcore/bpf_tracing.h>
 
 #include "http_types.h"
 #include "tcp_info.h"

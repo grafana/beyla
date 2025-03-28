@@ -1,9 +1,9 @@
 #ifndef HTTP2_GRPC_HELPERS
 #define HTTP2_GRPC_HELPERS
 
-#include "vmlinux.h"
-#include "bpf_helpers.h"
-#include "bpf_endian.h"
+#include <bpfcore/vmlinux.h>
+#include <bpfcore/bpf_helpers.h>
+#include <bpfcore/bpf_endian.h>
 #include "http_types.h"
 
 #define HTTP2_GRPC_PREFACE "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"

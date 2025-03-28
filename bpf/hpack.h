@@ -1,8 +1,8 @@
 #ifndef HTTP_HPACK_H
 #define HTTP_HPACK_H
 
-#include "vmlinux.h"
-#include "bpf_helpers.h"
+#include <bpfcore/vmlinux.h>
+#include <bpfcore/bpf_helpers.h>
 #include "tracing.h"
 
 uint32_t huffman_codes[256] = {

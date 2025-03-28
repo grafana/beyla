@@ -1,8 +1,8 @@
 #ifndef HTTP_SSL_H
 #define HTTP_SSL_H
 
-#include "vmlinux.h"
-#include "bpf_helpers.h"
+#include <bpfcore/vmlinux.h>
+#include <bpfcore/bpf_helpers.h>
 #include "http_types.h"
 #include "k_tracer_defs.h"
 #include "bpf_dbg.h"

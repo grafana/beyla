@@ -13,7 +13,7 @@
 #ifndef GO_STR_H
 #define GO_STR_H
 
-#include "utils.h"
+#include <bpfcore/utils.h>
 #include "bpf_dbg.h"
 
 static __always_inline int

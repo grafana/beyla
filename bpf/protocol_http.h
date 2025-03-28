@@ -1,8 +1,8 @@
 #ifndef PROTOCOL_HTTP
 #define PROTOCOL_HTTP
 
-#include "vmlinux.h"
-#include "bpf_helpers.h"
+#include <bpfcore/vmlinux.h>
+#include <bpfcore/bpf_helpers.h>
 #include "http_types.h"
 #include "ringbuf.h"
 #include "runtime.h"

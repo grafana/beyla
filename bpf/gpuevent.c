@@ -5,10 +5,10 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the root directory of this source tree.
 
-#include "vmlinux.h"
-#include "bpf_core_read.h"
-#include "bpf_helpers.h"
-#include "bpf_tracing.h"
+#include <bpfcore/vmlinux.h>
+#include <bpfcore/bpf_core_read.h>
+#include <bpfcore/bpf_helpers.h>
+#include <bpfcore/bpf_tracing.h>
 #include "pid.h"
 #include "bpf_dbg.h"
 #include "gpuevent.h"

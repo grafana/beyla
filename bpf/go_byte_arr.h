@@ -13,7 +13,7 @@
 #ifndef GO_BYTE_ARR_H
 #define GO_BYTE_ARR_H
 
-#include "utils.h"
+#include <bpfcore/utils.h>
 #include "bpf_dbg.h"
 
 static __inline int

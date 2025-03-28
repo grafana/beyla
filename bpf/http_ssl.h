@@ -1,5 +1,5 @@
-#include "vmlinux.h"
-#include "bpf_helpers.h"
+#include <bpfcore/vmlinux.h>
+#include <bpfcore/bpf_helpers.h>
 #include "http_types.h"
 #include "bpf_dbg.h"
 #include "pid.h"

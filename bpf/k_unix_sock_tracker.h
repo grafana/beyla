@@ -1,8 +1,8 @@
 #ifndef _K_UNIX_SOCK_TRACKER
 #define _K_UNIX_SOCK_TRACKER
 
-#include "vmlinux.h"
-#include "bpf_helpers.h"
+#include <bpfcore/vmlinux.h>
+#include <bpfcore/bpf_helpers.h>
 #include "map_sizing.h"
 
 struct {

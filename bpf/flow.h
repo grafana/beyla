@@ -19,7 +19,7 @@
 #ifndef __FLOW_H__
 #define __FLOW_H__
 
-#include "vmlinux.h"
+#include <bpfcore/vmlinux.h>
 #include "tc_act.h"
 
 #define IP_MAX_LEN 16

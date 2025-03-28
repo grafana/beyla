@@ -1,9 +1,9 @@
 #ifndef PID_H
 #define PID_H
 
-#include "vmlinux.h"
-#include "bpf_helpers.h"
-#include "bpf_core_read.h"
+#include <bpfcore/vmlinux.h>
+#include <bpfcore/bpf_helpers.h>
+#include <bpfcore/bpf_core_read.h>
 #include "pid_types.h"
 #include "bpf_dbg.h"
 #include "pin_internal.h"

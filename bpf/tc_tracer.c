@@ -13,6 +13,8 @@
 
 static const u64 BPF_F_CURRENT_NETNS = -1;
 
+enum protocol : u8 { protocol_ip4, protocol_ip6, protocol_unknown };
+
 char __license[] SEC("license") = "Dual MIT/GPL";
 
 SEC("tc_ingress")
@@ -84,13 +86,13 @@ static __always_inline void encode_data_in_ip_options(struct __sk_buff *skb,
 
 static __always_inline struct bpf_sock *lookup_sock_from_tuple(struct __sk_buff *skb,
                                                                struct bpf_sock_tuple *tuple,
-                                                               bool ipv4,
+                                                               enum protocol proto,
                                                                const void *data_end) {
-    if (ipv4 && (u64)((u8 *)tuple + sizeof(tuple->ipv4)) < (u64)data_end) {
+    if (proto == protocol_ip4 && (u64)((u8 *)tuple + sizeof(tuple->ipv4)) < (u64)data_end) {
         // Lookup to see if you can find a socket for this tuple in the
         // kernel socket tracking. We look up in all namespaces (-1).
         return bpf_sk_lookup_tcp(skb, tuple, sizeof(tuple->ipv4), BPF_F_CURRENT_NETNS, 0);
-    } else if (!ipv4 && (u64)((u8 *)tuple + sizeof(tuple->ipv6)) < (u64)data_end) {
+    } else if (proto == protocol_ip6 && (u64)((u8 *)tuple + sizeof(tuple->ipv6)) < (u64)data_end) {
         return bpf_sk_lookup_tcp(skb, tuple, sizeof(tuple->ipv6), BPF_F_CURRENT_NETNS, 0);
     }
 
@@ -101,11 +103,16 @@ static __always_inline struct bpf_sock *lookup_sock_from_tuple(struct __sk_buff 
 // bpf_sock_tuple format. We use this struct to add sockets which are
 // established before we launched Beyla, since we'll not see them in the
 // sock_ops program which tracks them.
-static __always_inline struct bpf_sock_tuple *
-get_tuple(const void *data, __u64 nh_off, const void *data_end, __u16 eth_proto, bool *ipv4) {
+static __always_inline struct bpf_sock_tuple *get_tuple(const void *data,
+                                                        __u64 nh_off,
+                                                        const void *data_end,
+                                                        __u16 eth_proto,
+                                                        enum protocol *ip_proto) {
     struct bpf_sock_tuple *result;
     __u64 ihl_len = 0;
     __u8 proto = 0;
+
+    *ip_proto = protocol_unknown;
 
     if (eth_proto == bpf_htons(ETH_P_IP)) {
         struct iphdr *iph = (struct iphdr *)(data + nh_off);
@@ -116,7 +123,7 @@ get_tuple(const void *data, __u64 nh_off, const void *data_end, __u16 eth_proto,
 
         ihl_len = iph->ihl * 4;
         proto = iph->protocol;
-        *ipv4 = true;
+        *ip_proto = protocol_ip4;
         result = (struct bpf_sock_tuple *)&iph->saddr;
     } else if (eth_proto == bpf_htons(ETH_P_IPV6)) {
         struct ipv6hdr *ip6h = (struct ipv6hdr *)(data + nh_off);
@@ -127,7 +134,7 @@ get_tuple(const void *data, __u64 nh_off, const void *data_end, __u16 eth_proto,
 
         ihl_len = sizeof(*ip6h);
         proto = ip6h->nexthdr;
-        *ipv4 = true;
+        *ip_proto = protocol_ip6;
         result = (struct bpf_sock_tuple *)&ip6h->saddr;
     }
 
@@ -157,8 +164,8 @@ static __always_inline void tc_track_sock(struct __sk_buff *skb, const connectio
 
     // Get the bpf_sock_tuple value so we can look up and see if we don't have
     // this socket yet in our map.
-    bool ipv4;
-    struct bpf_sock_tuple *tuple = get_tuple(data, sizeof(*eth), data_end, eth->h_proto, &ipv4);
+    enum protocol proto;
+    struct bpf_sock_tuple *tuple = get_tuple(data, sizeof(*eth), data_end, eth->h_proto, &proto);
     //bpf_printk("tuple %llx, next %llx, data end %llx", tuple, (void *)((u8 *)tuple + sizeof(*tuple)), data_end);
 
     if (!tuple) {
@@ -169,7 +176,7 @@ static __always_inline void tc_track_sock(struct __sk_buff *skb, const connectio
         return;
     }
 
-    struct bpf_sock *sk = lookup_sock_from_tuple(skb, tuple, ipv4, data_end);
+    struct bpf_sock *sk = lookup_sock_from_tuple(skb, tuple, proto, data_end);
     bpf_dbg_printk("sk=%llx\n", sk);
 
     if (!sk) {

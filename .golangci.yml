@@ -10,7 +10,7 @@ issues:
         - revive
       text: indent-error-flow
 run:
-  go: "1.23"
+  go: "1.24"
   build-tags:
     - integration
 linters:

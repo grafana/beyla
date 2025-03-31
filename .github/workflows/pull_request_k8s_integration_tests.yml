@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest-8-cores
     strategy:
       matrix:
-        go: [ '1.23' ]
+        go: [ '1.24' ]
     steps:
       - uses: actions/checkout@v3
       - name: Set up Go

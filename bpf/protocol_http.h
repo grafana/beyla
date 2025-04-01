@@ -110,9 +110,9 @@ static __always_inline void http_get_or_create_trace_info(http_connection_metada
         bpf_dbg_printk("Using old traceparent id");
     }
 
-    unsigned char tp_buf[TP_MAX_VAL_LENGTH];
-    make_tp_string(tp_buf, &tp_p->tp);
-    bpf_dbg_printk("tp: %s", tp_buf);
+    // unsigned char tp_buf[TP_MAX_VAL_LENGTH];
+    // make_tp_string(tp_buf, &tp_p->tp);
+    // bpf_dbg_printk("tp: %s", tp_buf);
 
     if (k_bpf_traceparent_enabled) {
         // The below buffer scan can be expensive on high volume of requests. We make it optional

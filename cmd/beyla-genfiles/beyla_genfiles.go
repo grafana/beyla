@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -453,7 +454,14 @@ func runInContainer(wd string) {
 		fmt.Println("adjusted wd:", adjustedWD)
 	}
 
-	err := executeCommand(cfg.OCIBin, "run", "--rm",
+	currentUser, err := user.Current()
+
+	if err != nil {
+		bail(fmt.Errorf("error getting current user id: %w", err))
+	}
+
+	err = executeCommand(cfg.OCIBin, "run", "--rm",
+		"--user", currentUser.Uid + ":" + currentUser.Gid,
 		"-v", adjustedWD+":/src",
 		cfg.GenImage)
 

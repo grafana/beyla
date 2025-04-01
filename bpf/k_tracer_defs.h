@@ -6,7 +6,6 @@
 #include "http_types.h"
 #include "k_tracer_tailcall.h"
 #include "ringbuf.h"
-#include "pid.h"
 #include "trace_common.h"
 #include "protocol_common.h"
 #include "protocol_http.h"
@@ -86,8 +85,7 @@ static __always_inline void handle_buf_with_args(void *ctx, call_protocol_args_t
                             decode_hex(info->tp.parent_id, s_id, SPAN_ID_CHAR_LEN);
 
                             trace_key_t t_key = {0};
-                            task_tid(&t_key.p_key);
-                            t_key.extra_id = extra_runtime_id();
+                            trace_key_from_pid_tid(&t_key);
 
                             tp_info_pid_t *existing = bpf_map_lookup_elem(&server_traces, &t_key);
                             if (existing) {

@@ -293,7 +293,7 @@ make_tp_string_skb(unsigned char *buf, const tp_info_t *tp, const unsigned char 
         return;
     }
 
-    [[maybe_unused]] const unsigned char *tp_string = buf;
+    const __attribute__((unused)) unsigned char *tp_string = buf;
 
     *buf++ = 'T';
     *buf++ = 'r';

@@ -6,7 +6,8 @@
 #include "bpf_core_read.h"
 
 typedef struct pid_key {
-    u32 pid; // pid as seen by the userspace (for example, inside its container)
+    u32 tid; // tid as seen by the userspace (for example, inside its container)
+    u32 pid; // parent pid as seen by the userspace (for example, inside its container)
     u32 ns;  // pids namespace for the process
 } __attribute__((packed)) pid_key_t;
 
@@ -77,6 +78,9 @@ static __always_inline void task_tid(pid_key_t *tid) {
     // set user-side PID
     unsigned int level = BPF_CORE_READ(task, nsproxy, pid_ns_for_children, level);
     struct pid *ns_pid = (struct pid *)BPF_CORE_READ(task, thread_pid);
+    bpf_probe_read_kernel(&upid, sizeof(upid), &ns_pid->numbers[level]);
+    tid->tid = (u32)upid.nr;
+    ns_pid = (struct pid *)BPF_CORE_READ(task, group_leader, thread_pid);
     bpf_probe_read_kernel(&upid, sizeof(upid), &ns_pid->numbers[level]);
     tid->pid = (u32)upid.nr;
 

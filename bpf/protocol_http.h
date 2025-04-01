@@ -59,7 +59,6 @@ static __always_inline void http_get_or_create_trace_info(http_connection_metada
 
     tp_info_pid_t *tp_p = bpf_map_lookup_elem(&outgoing_trace_map, &e_key);
 
-    // TODO move this to sock msg
     if (tp_p && tp_p->req_type == EVENT_HTTP_CLIENT && tp_p->written && tp_p->pid == pid) {
         bpf_dbg_printk("found tp info previously set by sock msg");
         // we've already got a tp_info_pid_t setup by the sockmsg program, use
@@ -111,9 +110,9 @@ static __always_inline void http_get_or_create_trace_info(http_connection_metada
         bpf_dbg_printk("Using old traceparent id");
     }
 
-    //unsigned char tp_buf[TP_MAX_VAL_LENGTH];
-    //make_tp_string(tp_buf, &tp_p->tp);
-    //bpf_dbg_printk("tp: %s", tp_buf);
+    unsigned char tp_buf[TP_MAX_VAL_LENGTH];
+    make_tp_string(tp_buf, &tp_p->tp);
+    bpf_dbg_printk("tp: %s", tp_buf);
 
     if (k_bpf_traceparent_enabled) {
         // The below buffer scan can be expensive on high volume of requests. We make it optional
@@ -136,20 +135,21 @@ static __always_inline void http_get_or_create_trace_info(http_connection_metada
             unsigned char *res = bpf_strstr_tp_loop(buf, buf_len);
 
             if (res) {
-                bpf_dbg_printk("Found traceparent %s", res);
+                bpf_dbg_printk("Found traceparent in headers [%s] overriding what was before", res);
                 unsigned char *t_id = extract_trace_id(res);
                 unsigned char *s_id = extract_span_id(res);
                 unsigned char *f_id = extract_flags(res);
 
                 decode_hex(tp_p->tp.trace_id, t_id, TRACE_ID_CHAR_LEN);
                 decode_hex((unsigned char *)&tp_p->tp.flags, f_id, FLAGS_CHAR_LEN);
-                if (meta && meta->type == EVENT_HTTP_CLIENT) {
-                    decode_hex(tp_p->tp.span_id, s_id, SPAN_ID_CHAR_LEN);
-                } else {
+                if (meta && meta->type != EVENT_HTTP_CLIENT) {
                     decode_hex(tp_p->tp.parent_id, s_id, SPAN_ID_CHAR_LEN);
                 }
+                make_tp_string(tp_buf, &tp_p->tp);
+                bpf_dbg_printk("tp: %s", tp_buf);
             } else {
-                bpf_dbg_printk("No traceparent, making a new trace_id", res);
+                bpf_dbg_printk("No additional traceparent in headers, using what was made before",
+                               res);
             }
         } else {
             return;
@@ -317,8 +317,7 @@ static __always_inline void handle_http_response(unsigned char *small_buf,
         high_request_volume /*|| (ssl != NO_SSL) || (orig_len < KPROBES_LARGE_RESPONSE_LEN)*/) {
         finish_http(info, pid_conn);
     } else {
-        if (ssl && (pid_conn->conn.s_port == 0) && (pid_conn->conn.d_port == 0)) {
-            bpf_dbg_printk("Fake connection info, finishing request");
+        if (ssl) {
             finish_http(info, pid_conn);
         } else {
             bpf_dbg_printk("Delaying finish http for large request, orig_len %d", orig_len);
@@ -329,7 +328,8 @@ static __always_inline void handle_http_response(unsigned char *small_buf,
         trace_key_t t_key = {0};
         t_key.extra_id = info->extra_id;
         t_key.p_key.ns = info->pid.ns;
-        t_key.p_key.pid = info->task_tid;
+        t_key.p_key.tid = info->task_tid;
+        t_key.p_key.pid = info->pid.user_pid;
         delete_server_trace(&t_key);
     } else {
         delete_client_trace_info(pid_conn);

@@ -80,6 +80,13 @@ struct callback_ctx {
     u32 pos;
 };
 
+static __always_inline void trace_key_from_pid_tid(trace_key_t *t_key) {
+    task_tid(&t_key->p_key);
+
+    u64 extra_id = extra_runtime_id();
+    t_key->extra_id = extra_id;
+}
+
 static int tp_match(u32 index, void *data) {
     if (!k_bpf_traceparent_enabled) {
         return 0;
@@ -121,9 +128,7 @@ static __always_inline unsigned char *bpf_strstr_tp_loop(unsigned char *buf, int
 static __always_inline tp_info_pid_t *find_parent_trace(const pid_connection_info_t *p_conn) {
     trace_key_t t_key = {0};
 
-    task_tid(&t_key.p_key);
-    u64 extra_id = extra_runtime_id();
-    t_key.extra_id = extra_id;
+    trace_key_from_pid_tid(&t_key);
 
     int attempts = 0;
 
@@ -133,7 +138,7 @@ static __always_inline tp_info_pid_t *find_parent_trace(const pid_connection_inf
         if (!server_tp) { // not this goroutine running the server request processing
             // Let's find the parent scope
             if (t_key.extra_id) {
-                u64 parent_id = parent_runtime_id(&t_key.p_key, t_key.extra_id);
+                u64 parent_id = parent_runtime_id(t_key.extra_id);
                 if (parent_id) {
                     t_key.extra_id = parent_id;
                 } else {
@@ -215,20 +220,18 @@ server_or_client_trace(u8 type, connection_info_t *conn, tp_info_pid_t *tp_p, u8
         task_tid(&t_key.p_key);
         t_key.extra_id = extra_runtime_id();
 
-        tp_info_pid_t *existing = bpf_map_lookup_elem(&server_traces, &t_key);
-        // We have a conflict, mark this invalid and do nothing
-        // We look for conflicts on HTTP requests only and only with other HTTP requests,
-        // since TCP requests can come one after another and with SSL we can have a mix
-        // of TCP and HTTP requests.
-        if (existing && (existing->req_type == tp_p->req_type) &&
-            (tp_p->req_type == EVENT_HTTP_REQUEST)) {
-            bpf_dbg_printk("Found conflicting server span, marking as invalid, id=%llx",
-                           bpf_get_current_pid_tgid());
-            existing->valid = 0;
-            return;
-        }
-
-        // bpf_dbg_printk("Saving server span for id=%llx, pid=%d, ns=%d, extra_id=%llx", bpf_get_current_pid_tgid(), t_key.p_key.pid, t_key.p_key.ns, t_key.extra_id);
+        // We may need to add a check here in the future for an existing server spans
+        // if possible. Namely, on event loop like NodeJS we will see new server
+        // span on every new incoming request on the same thread. This is no longer
+        // an issue on NodeJS because we track the async id, however there might be
+        // a similar runtime. At the same time, a self referencing request on another
+        // port will not be able to be tracked if we invalidate the inner request.
+        bpf_dbg_printk("Saving server span for id=%llx, pid=%d, tid=%d",
+                       bpf_get_current_pid_tgid(),
+                       t_key.p_key.pid,
+                       t_key.p_key.tid);
+        bpf_dbg_printk(
+            "Saving server span for ns=%d, extra_id=%llx", t_key.p_key.ns, t_key.extra_id);
         bpf_map_update_elem(&server_traces, &t_key, tp_p, BPF_ANY);
     } else {
         // Setup a pid, so that we can find it in TC.

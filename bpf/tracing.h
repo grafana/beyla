@@ -66,6 +66,10 @@ static __always_inline void make_tp_string(unsigned char *buf, const tp_info_t *
 static __always_inline void
 trace_key_from_conn(trace_map_key_t *key, connection_info_t *conn, u32 type) {
     key->conn = *conn;
+    // handle port forwarding changes made by proxies
+    // TODO: d_port is likely the one changed, but if the server is using
+    // ports in the ephemeral range this may not work.
+    key->conn.d_port = 0;
     key->type = type;
 }
 

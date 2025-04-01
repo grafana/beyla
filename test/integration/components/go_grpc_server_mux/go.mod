@@ -1,6 +1,6 @@
 module grpc_mux
 
-go 1.23
+go 1.24.1
 
 require (
 	golang.org/x/net v0.33.0

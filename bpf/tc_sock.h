@@ -293,6 +293,8 @@ make_tp_string_skb(unsigned char *buf, const tp_info_t *tp, const unsigned char 
         return;
     }
 
+    [[maybe_unused]] const unsigned char *tp_string = buf;
+
     *buf++ = 'T';
     *buf++ = 'r';
     *buf++ = 'a';
@@ -328,6 +330,8 @@ make_tp_string_skb(unsigned char *buf, const tp_info_t *tp, const unsigned char 
     *buf++ = (tp->flags == 0) ? '0' : '1';
     *buf++ = '\r';
     *buf++ = '\n';
+
+    bpf_dbg_printk("beyla_packet_extender: %s", tp_string);
 }
 
 static __always_inline bool
@@ -474,8 +478,6 @@ int beyla_packet_extender(struct sk_msg_md *msg) {
 
     tp_info_pid_t *tp_pid = get_tp_info_pid(&e_key);
 
-    bpf_dbg_printk("beyla_packet_extender tp_pid: %llx, buf %s", tp_pid, msg->data);
-
     if (handle_go_request(msg, id, &conn, &e_key, tp_pid)) {
         return SK_PASS;
     }
@@ -484,7 +486,6 @@ int beyla_packet_extender(struct sk_msg_md *msg) {
     // PIDs to the PID map (we instrument the binaries), handled in the
     // previous check
     if (!valid_pid(id)) {
-        bpf_dbg_printk("packet extender: ignoring pid...");
         return SK_PASS;
     }
 

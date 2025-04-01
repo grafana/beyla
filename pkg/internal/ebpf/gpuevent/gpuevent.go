@@ -277,9 +277,11 @@ func (p *Tracer) readGPUKernelLaunchIntoSpan(record *ringbuf.Record) (request.Sp
 	}
 
 	return request.Span{
-		Type:   request.EventTypeGPUKernelLaunch,
-		Method: p.symToName(symbol),
-		Path:   p.callStack(&event),
+		Type:          request.EventTypeGPUKernelLaunch,
+		Method:        p.symToName(symbol),
+		Path:          p.callStack(&event),
+		ContentLength: int64(event.GridX * event.GridY * event.GridZ),
+		SubType:       int(event.BlockX * event.BlockY * event.BlockZ),
 	}, false, nil
 }
 

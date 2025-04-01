@@ -12,7 +12,7 @@ jobs:
     runs-on: github-hosted-ubuntu-arm64-large
     strategy:
       matrix:
-        go: [ '1.23' ]
+        go: [ '1.24' ]
     steps:
       - uses: actions/checkout@v3
       - name: Set up Go

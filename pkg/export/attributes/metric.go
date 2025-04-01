@@ -111,6 +111,16 @@ var (
 		Prom:    "gpu_kernel_launch_calls_total",
 		OTEL:    "gpu.kernel.launch.calls",
 	}
+	GPUKernelGridSize = Name{
+		Section: "gpu.kernel.grid.size",
+		Prom:    "gpu_kernel_grid_size_total",
+		OTEL:    "gpu.kernel.grid.size",
+	}
+	GPUKernelBlockSize = Name{
+		Section: "gpu.kernel.block.size",
+		Prom:    "gpu_kernel_block_size_total",
+		OTEL:    "gpu.kernel.block.size",
+	}
 	GPUMemoryAllocations = Name{
 		Section: "gpu.memory.allocations",
 		Prom:    "gpu_memory_allocations_bytes_total",

@@ -17,7 +17,6 @@ import (
 	"go.opentelemetry.io/collector/config/confighttp"
 	"go.opentelemetry.io/collector/config/configopaque"
 	"go.opentelemetry.io/collector/config/configretry"
-	"go.opentelemetry.io/collector/config/configtelemetry"
 	"go.opentelemetry.io/collector/config/configtls"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/exporter"
@@ -295,7 +294,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 		// See: https://github.com/open-telemetry/opentelemetry-collector/issues/8122
 		batchCfg := exporterbatcher.NewDefaultConfig()
 		if cfg.MaxQueueSize > 0 {
-			batchCfg.MaxSizeConfig.MaxSizeItems = cfg.MaxExportBatchSize
+			batchCfg.SizeConfig.MaxSize = cfg.MaxExportBatchSize
 			if cfg.BatchTimeout > 0 {
 				batchCfg.FlushTimeout = cfg.BatchTimeout
 			}
@@ -310,7 +309,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 			Headers: convertHeaders(opts.Headers),
 		}
 		slog.Debug("getTracesExporter: confighttp.ClientConfig created", "endpoint", config.ClientConfig.Endpoint)
-		set := getTraceSettings(ctxInfo, t)
+		set := getTraceSettings(ctxInfo, factory.Type(), t)
 		exporter, err := factory.CreateTraces(ctx, set, config)
 		if err != nil {
 			slog.Error("can't create OTLP HTTP traces exporter", "error", err)
@@ -349,7 +348,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 		// See: https://github.com/open-telemetry/opentelemetry-collector/issues/8122
 		if cfg.MaxExportBatchSize > 0 {
 			config.BatcherConfig.Enabled = true
-			config.BatcherConfig.MaxSizeConfig.MaxSizeItems = cfg.MaxExportBatchSize
+			config.BatcherConfig.SizeConfig.MaxSize = cfg.MaxExportBatchSize
 			if cfg.BatchTimeout > 0 {
 				config.BatcherConfig.FlushTimeout = cfg.BatchTimeout
 			}
@@ -363,7 +362,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 			},
 			Headers: convertHeaders(opts.Headers),
 		}
-		set := getTraceSettings(ctxInfo, t)
+		set := getTraceSettings(ctxInfo, factory.Type(), t)
 		return factory.CreateTraces(ctx, set, config)
 	default:
 		slog.Error(fmt.Sprintf("invalid protocol value: %q. Accepted values are: %s, %s, %s",
@@ -395,12 +394,10 @@ func instrumentTraceExporter(in trace.SpanExporter, internalMetrics imetrics.Rep
 	}
 }
 
-func getTraceSettings(ctxInfo *global.ContextInfo, in trace.SpanExporter) exporter.Settings {
+func getTraceSettings(ctxInfo *global.ContextInfo, dataTypeMetrics component.Type, in trace.SpanExporter) exporter.Settings {
 	var traceProvider trace2.TracerProvider
-	telemetryLevel := configtelemetry.LevelNone
 	traceProvider = tracenoop.NewTracerProvider()
 	if internalMetricsEnabled(ctxInfo) {
-		telemetryLevel = configtelemetry.LevelBasic
 		spanExporter := instrumentTraceExporter(in, ctxInfo.Metrics)
 		res := newResourceInternal(ctxInfo.HostID)
 		traceProvider = trace.NewTracerProvider(
@@ -413,13 +410,9 @@ func getTraceSettings(ctxInfo *global.ContextInfo, in trace.SpanExporter) export
 		Logger:         zap.NewNop(),
 		MeterProvider:  meterProvider,
 		TracerProvider: traceProvider,
-		MetricsLevel:   telemetryLevel,
+		Resource:       pcommon.NewResource(),
 	}
 
-	// component.DataTypeMetrics was removed in collector API v0.112.0 but its value is still required here
-	// dataTypeMetrics variable hardcodes the previous value for the removed constant
-	// TODO: replace legacy API
-	dataTypeMetrics := component.MustNewType("metrics")
 	return exporter.Settings{
 		ID:                component.NewIDWithName(dataTypeMetrics, "beyla"),
 		TelemetrySettings: telemetrySettings,

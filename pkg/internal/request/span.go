@@ -388,36 +388,41 @@ func HTTPSpanStatusCode(span *Span) string {
 		return StatusCodeError
 	}
 
-	if span.Status < 400 {
-		return StatusCodeUnset
-	}
-
-	if span.Status < 500 {
-		if span.Type == EventTypeHTTPClient {
-			return StatusCodeError
+	if span.Type == EventTypeHTTPClient {
+		if span.Status < 400 {
+			return StatusCodeOk
 		}
-		return StatusCodeUnset
+	} else if span.Status < 500 {
+		return StatusCodeOk
 	}
 
 	return StatusCodeError
 }
 
+var (
+	grpcStatusCodeOK               = int(semconv.RPCGRPCStatusCodeOk.Value.AsInt64())
+	grpcStatusCodeUnknown          = int(semconv.RPCGRPCStatusCodeUnknown.Value.AsInt64())
+	grpcStatusCodeDeadlineExceeded = int(semconv.RPCGRPCStatusCodeDeadlineExceeded.Value.AsInt64())
+	grpcStatusCodeUnimplemented    = int(semconv.RPCGRPCStatusCodeUnimplemented.Value.AsInt64())
+	grpcStatusCodeInternal         = int(semconv.RPCGRPCStatusCodeInternal.Value.AsInt64())
+	grpcStatusCodeUnavailable      = int(semconv.RPCGRPCStatusCodeUnavailable.Value.AsInt64())
+	grpcStatusCodeDataLoss         = int(semconv.RPCGRPCStatusCodeDataLoss.Value.AsInt64())
+)
+
 // https://opentelemetry.io/docs/specs/otel/trace/semantic_conventions/rpc/#grpc-status
 func GrpcSpanStatusCode(span *Span) string {
-	if span.Type == EventTypeGRPCClient {
-		if span.Status == int(semconv.RPCGRPCStatusCodeOk.Value.AsInt64()) {
-			return StatusCodeUnset
-		}
-		return StatusCodeError
+	if span.Status == grpcStatusCodeOK {
+		return StatusCodeOk
 	}
 
-	switch int64(span.Status) {
-	case semconv.RPCGRPCStatusCodeUnknown.Value.AsInt64(),
-		semconv.RPCGRPCStatusCodeDeadlineExceeded.Value.AsInt64(),
-		semconv.RPCGRPCStatusCodeUnimplemented.Value.AsInt64(),
-		semconv.RPCGRPCStatusCodeInternal.Value.AsInt64(),
-		semconv.RPCGRPCStatusCodeUnavailable.Value.AsInt64(),
-		semconv.RPCGRPCStatusCodeDataLoss.Value.AsInt64():
+	if span.Type == EventTypeGRPCClient {
+		return StatusCodeError
+	}
+	switch span.Status {
+	case grpcStatusCodeOK:
+		return StatusCodeOk
+	case grpcStatusCodeUnknown, grpcStatusCodeDeadlineExceeded, grpcStatusCodeUnimplemented,
+		grpcStatusCodeInternal, grpcStatusCodeUnavailable, grpcStatusCodeDataLoss:
 		return StatusCodeError
 	}
 
@@ -514,7 +519,7 @@ func (s *Span) isTracesExportURL() bool {
 
 func (s *Span) IsExportMetricsSpan() bool {
 	// check if it's a successful client call
-	if !s.isHTTPOrGRPCClient() || (SpanStatusCode(s) != StatusCodeUnset) {
+	if !s.isHTTPOrGRPCClient() || (SpanStatusCode(s) != StatusCodeOk) {
 		return false
 	}
 
@@ -523,7 +528,7 @@ func (s *Span) IsExportMetricsSpan() bool {
 
 func (s *Span) IsExportTracesSpan() bool {
 	// check if it's a successful client call
-	if !s.isHTTPOrGRPCClient() || (SpanStatusCode(s) != StatusCodeUnset) {
+	if !s.isHTTPOrGRPCClient() || (SpanStatusCode(s) != StatusCodeOk) {
 		return false
 	}
 

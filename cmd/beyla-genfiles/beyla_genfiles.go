@@ -461,7 +461,7 @@ func runInContainer(wd string) {
 	}
 
 	err = executeCommand(cfg.OCIBin, "run", "--rm",
-		"--user", currentUser.Uid + ":" + currentUser.Gid,
+		"--user", currentUser.Uid+":"+currentUser.Gid,
 		"-v", adjustedWD+":/src",
 		cfg.GenImage)
 

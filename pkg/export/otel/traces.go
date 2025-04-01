@@ -17,7 +17,6 @@ import (
 	"go.opentelemetry.io/collector/config/confighttp"
 	"go.opentelemetry.io/collector/config/configopaque"
 	"go.opentelemetry.io/collector/config/configretry"
-	"go.opentelemetry.io/collector/config/configtelemetry"
 	"go.opentelemetry.io/collector/config/configtls"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/exporter"
@@ -295,7 +294,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 		// See: https://github.com/open-telemetry/opentelemetry-collector/issues/8122
 		batchCfg := exporterbatcher.NewDefaultConfig()
 		if cfg.MaxQueueSize > 0 {
-			batchCfg.MaxSizeConfig.MaxSizeItems = cfg.MaxExportBatchSize
+			batchCfg.MaxSizeConfig.MaxSizeItems = &cfg.MaxExportBatchSize
 			if cfg.BatchTimeout > 0 {
 				batchCfg.FlushTimeout = cfg.BatchTimeout
 			}
@@ -349,7 +348,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 		// See: https://github.com/open-telemetry/opentelemetry-collector/issues/8122
 		if cfg.MaxExportBatchSize > 0 {
 			config.BatcherConfig.Enabled = true
-			config.BatcherConfig.MaxSizeConfig.MaxSizeItems = cfg.MaxExportBatchSize
+			config.BatcherConfig.MaxSizeConfig.MaxSizeItems = &cfg.MaxExportBatchSize
 			if cfg.BatchTimeout > 0 {
 				config.BatcherConfig.FlushTimeout = cfg.BatchTimeout
 			}
@@ -397,10 +396,8 @@ func instrumentTraceExporter(in trace.SpanExporter, internalMetrics imetrics.Rep
 
 func getTraceSettings(ctxInfo *global.ContextInfo, in trace.SpanExporter) exporter.Settings {
 	var traceProvider trace2.TracerProvider
-	telemetryLevel := configtelemetry.LevelNone
 	traceProvider = tracenoop.NewTracerProvider()
 	if internalMetricsEnabled(ctxInfo) {
-		telemetryLevel = configtelemetry.LevelBasic
 		spanExporter := instrumentTraceExporter(in, ctxInfo.Metrics)
 		res := newResourceInternal(ctxInfo.HostID)
 		traceProvider = trace.NewTracerProvider(
@@ -413,7 +410,6 @@ func getTraceSettings(ctxInfo *global.ContextInfo, in trace.SpanExporter) export
 		Logger:         zap.NewNop(),
 		MeterProvider:  meterProvider,
 		TracerProvider: traceProvider,
-		MetricsLevel:   telemetryLevel,
 	}
 
 	// component.DataTypeMetrics was removed in collector API v0.112.0 but its value is still required here

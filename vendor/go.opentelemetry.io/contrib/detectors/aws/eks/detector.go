@@ -5,6 +5,7 @@ package eks // import "go.opentelemetry.io/contrib/detectors/aws/eks"
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"regexp"
@@ -130,7 +131,7 @@ func newK8sDetectorUtils() (*eksDetectorUtils, error) {
 	// Create clientset using generated configuration
 	clientset, err := kubernetes.NewForConfig(confs)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create clientset for Kubernetes client")
+		return nil, errors.New("failed to create clientset for Kubernetes client")
 	}
 
 	return &eksDetectorUtils{clientset: clientset}, nil

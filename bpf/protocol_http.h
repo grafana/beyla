@@ -145,8 +145,8 @@ static __always_inline void http_get_or_create_trace_info(http_connection_metada
                 if (meta && meta->type != EVENT_HTTP_CLIENT) {
                     decode_hex(tp_p->tp.parent_id, s_id, SPAN_ID_CHAR_LEN);
                 }
-                make_tp_string(tp_buf, &tp_p->tp);
-                bpf_dbg_printk("tp: %s", tp_buf);
+                // make_tp_string(tp_buf, &tp_p->tp);
+                // bpf_dbg_printk("tp: %s", tp_buf);
             } else {
                 bpf_dbg_printk("No additional traceparent in headers, using what was made before",
                                res);

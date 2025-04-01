@@ -1,4 +1,4 @@
-FROM golang:1.24.1-alpine3.19 AS base
+FROM golang:alpine3.21 AS base
 
 ARG EBPF_VER
 
@@ -13,13 +13,12 @@ WORKDIR /src
 
 FROM base AS builder
 
-ENV BPF_CLANG=clang
-ENV BPF_CFLAGS="-O2 -g -Wall -Werror"
-ENV BPF2GO=/go/bin/bpf2go
-ENV BEYLA_GENFILES_RUN_LOCALLY=1
-
 RUN cat <<EOF > /generate.sh
 #!/bin/sh
+export BPF2GO=bpf2go
+export BPF_CLANG=clang
+export BPF_CFLAGS="-O2 -g -Wall -Werror"
+export BEYLA_GENFILES_RUN_LOCALLY=1
 go run cmd/beyla-genfiles/beyla_genfiles.go
 EOF
 

@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 import requests
 import ssl
 from threading import Thread
@@ -28,7 +28,7 @@ def api1():
     except requests.exceptions.RequestException as e:
         return jsonify({"error": str(e)}), 500
 
-# API for the first application (Port 8081)
+# API for the first application (Port 8082)
 @app2.route('/api2', methods=['GET'])
 def api2():
     try:
@@ -44,7 +44,11 @@ def api2():
     except requests.exceptions.RequestException as e:
         return jsonify({"error": str(e)}), 500
 
-# API for the first application (Port 8081)
+@app3.route("/smoke")
+def smoke():
+    return Response(status=200)
+
+# API for the first application (Port 8083)
 @app3.route('/api3', methods=['GET'])
 def api3():
     try:
@@ -60,7 +64,7 @@ def api3():
     except requests.exceptions.RequestException as e:
         return jsonify({"error": str(e)}), 500
 
-# API for the second application (Port 8082)
+# API for the second application (Port 8084)
 @app4.route('/api4', methods=['GET'])
 def api2():
     return jsonify({"message": "Hello from API4!"}), 200
@@ -68,7 +72,7 @@ def api2():
 # Function to run Flask app with HTTP
 def run_app(app, port):
     # Run the Flask app
-    app.run(host='localhost', port=port, debug=False)
+    app.run(host='0.0.0.0', port=port, debug=False)
 
 # Function to run Flask app with HTTPS
 def run_app_ssl(app, port):
@@ -77,7 +81,7 @@ def run_app_ssl(app, port):
     context.load_cert_chain(certfile='server.crt', keyfile='server.key')
 
     # Run the Flask app
-    app.run(host='localhost', port=port, ssl_context=context, debug=False)
+    app.run(host='0.0.0.0', port=port, ssl_context=context, debug=False)
 
 if __name__ == '__main__':
     # Run both Flask apps on different ports in separate threads

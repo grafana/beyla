@@ -250,6 +250,19 @@ get_or_set_http_info(http_info_t *info, pid_connection_info_t *pid_conn, u8 pack
     return bpf_map_lookup_elem(&ongoing_http, pid_conn);
 }
 
+static __always_inline tp_info_t *self_referencing_request(pid_connection_info_t *pid_conn,
+                                                           u8 packet_type) {
+    if (packet_type == PACKET_TYPE_REQUEST) {
+        http_info_t *old_info = bpf_map_lookup_elem(&ongoing_http, pid_conn);
+        if (old_info && !http_info_complete(old_info) && old_info->type == EVENT_HTTP_CLIENT) {
+            bpf_dbg_printk("found self referencing request, remembering the old tp info parent_id");
+            return &old_info->tp;
+        }
+    }
+
+    return 0;
+}
+
 static __always_inline void finish_possible_delayed_http_request(pid_connection_info_t *pid_conn) {
     if (high_request_volume) {
         return;
@@ -355,6 +368,19 @@ int beyla_protocol_http(void *ctx) {
     __builtin_memcpy(&in->conn_info, &args->pid_conn.conn, sizeof(connection_info_t));
     in->ssl = args->ssl;
 
+    // If we have the same process (or even thread) call itself through HTTP, the
+    // connection information is identical. This means that the client call information
+    // will be overwritten by the server call. In this situation we'll create a gap in
+    // the trace propagation chain, e.g. the client span is lost. To mitigate this edge
+    // case, we pick out the parent_id of the self referencing client call before the
+    // request is overwritten and later we overwrite the client set parent with the
+    // original one that was set on the client call itself.
+    u64 self_ref_parent_id = 0;
+    tp_info_t *self_ref_tp = self_referencing_request(&args->pid_conn, args->packet_type);
+    if (self_ref_tp) {
+        __builtin_memcpy(&self_ref_parent_id, &self_ref_tp->parent_id, sizeof(u64));
+    }
+
     http_info_t *info = get_or_set_http_info(in, &args->pid_conn, args->packet_type);
     u8 fallback = 0;
     if (!info) {
@@ -397,6 +423,11 @@ int beyla_protocol_http(void *ctx) {
             tp_info_pid_t *tp_p = trace_info_for_connection(&args->pid_conn.conn, type);
             if (tp_p) {
                 info->tp = tp_p->tp;
+                if (self_ref_parent_id) {
+                    bpf_dbg_printk(
+                        "overwriting parent id from the self referencing client request");
+                    __builtin_memcpy(&info->tp.parent_id, &self_ref_parent_id, sizeof(u64));
+                }
             } else {
                 bpf_dbg_printk("Can't find trace info, this is a bug!");
             }

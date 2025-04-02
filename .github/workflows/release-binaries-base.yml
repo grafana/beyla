@@ -1,16 +1,21 @@
 name: Release binaries
 on:
-  release:
-    types:
-      - published
-
+  workflow_call:
+    inputs:
+      arch:
+        description: 'Target architecture to build the binaries'
+        required: true
+        type: string
+      runner:
+        description: 'The github runner to run on'
+        required: true
+        type: string
 jobs:
   release-binaries:
-    name: Release compiled binaries for Linux/${{matrix.arch}}
-    runs-on: ubuntu-latest
+    name: Release compiled binaries for Linux/${{inputs.arch}}
+    runs-on: ${{inputs.runner}}
     strategy:
       matrix:
-        arch: ['amd64','arm64']
         go: [ '1.24' ]
     steps:
       - uses: actions/checkout@v3
@@ -18,11 +23,11 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: ${{ matrix.go }}
-      - name: Build Go release for linux/${{ matrix.arch }}
+      - name: Build Go release for linux/${{inputs.arch}}
         run: make artifact
         env:
           GOOS: linux
-          GOARCH: ${{ matrix.arch }}
+          GOARCH: ${{ inputs.arch }}
       - name: Upload release asset
         uses: actions/upload-release-asset@v1
         env:
@@ -30,5 +35,5 @@ jobs:
         with:
           upload_url: ${{ github.event.release.upload_url }}
           asset_path: ./bin/beyla.tar.gz
-          asset_name: beyla-linux-${{ matrix.arch }}-${{ github.event.release.tag_name }}.tar.gz
+          asset_name: beyla-linux-${{ inputs.arch }}-${{ github.event.release.tag_name }}.tar.gz
           asset_content_type: application/gzip

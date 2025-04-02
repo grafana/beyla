@@ -379,7 +379,7 @@ check-licenses: update-licenses
 	fi
 
 .PHONY: artifact
-artifact: compile
+artifact: docker-generate compile
 	@echo "### Packing generated artifact"
 	cp LICENSE ./bin
 	cp NOTICE ./bin

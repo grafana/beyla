@@ -24,10 +24,10 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
 )
 
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/generic_tracer.c -- -I../../../../bpf/headers
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_tp ../../../../bpf/generic_tracer.c -- -I../../../../bpf/headers -DBPF_TRACEPARENT
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../../bpf/generic_tracer.c -- -I../../../../bpf/headers -DBPF_DEBUG
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_tp_debug ../../../../bpf/generic_tracer.c -- -I../../../../bpf/headers -DBPF_DEBUG -DBPF_TRACEPARENT
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/generictracer/generictracer.c -- -I../../../../bpf
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_tp ../../../../bpf/generictracer/generictracer.c -- -I../../../../bpf -DBPF_TRACEPARENT
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../../bpf/generictracer/generictracer.c -- -I../../../../bpf -DBPF_DEBUG
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_tp_debug ../../../../bpf/generictracer/generictracer.c -- -I../../../../bpf -DBPF_DEBUG -DBPF_TRACEPARENT
 
 var instrumentedLibs = make(ebpfcommon.InstrumentedLibsT)
 var libsMux sync.Mutex

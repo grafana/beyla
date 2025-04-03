@@ -36,7 +36,7 @@ import (
 )
 
 // $BPF_CLANG and $BPF_CFLAGS are set by the Makefile.
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type flow_metrics_t -type flow_id_t  -type flow_record_t -target amd64,arm64 NetSk ../../../../bpf/flows_sock.c -- -I../../../../bpf/headers
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type flow_metrics_t -type flow_id_t  -type flow_record_t -target amd64,arm64 NetSk ../../../../bpf/netolly/flows_sock.c -- -I../../../../bpf
 
 // SockFlowFetcher reads and forwards the Flows from the eBPF kernel space with a socket filter implementation.
 // It provides access both to flows that are aggregated in the kernel space (via PerfCPU hashmap)

@@ -158,7 +158,7 @@ checkfmt:
 
 .PHONY: clang-tidy
 clang-tidy:
-	cd bpf && $(CLANG_TIDY) *.c *.h
+	cd bpf && find . -type f \( -name '*.c' -o -name '*.h' \) ! -path "./bpfcore/*" | xargs clang-tidy
 
 .PHONY: lint-dashboard
 lint-dashboard: prereqs

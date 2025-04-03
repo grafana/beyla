@@ -150,7 +150,7 @@ static __always_inline struct bpf_sock_tuple *get_tuple(const void *data,
     return result;
 }
 
-static __always_inline void tc_track_sock(struct __sk_buff *skb, const connection_info_t *conn) {
+static __always_inline void track_sock(struct __sk_buff *skb, const connection_info_t *conn) {
     if (is_sock_tracked(conn)) {
         return;
     }
@@ -188,7 +188,7 @@ static __always_inline void tc_track_sock(struct __sk_buff *skb, const connectio
         return;
     }
 
-    track_sock(conn, sk);
+    bpf_map_update_elem(&sock_dir, conn, sk, BPF_NOEXIST);
 
     bpf_sk_release(sk);
 }
@@ -252,7 +252,7 @@ int beyla_app_egress(struct __sk_buff *skb) {
     }
 
     // track any sockets we may have missed from sockops
-    tc_track_sock(skb, &conn);
+    track_sock(skb, &conn);
 
     // The following code sets up the context information in L4 and it
     // does it only once. If it successfully injected the information it

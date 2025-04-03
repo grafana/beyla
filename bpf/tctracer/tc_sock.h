@@ -451,10 +451,6 @@ static __always_inline bool handle_go_request(struct sk_msg_md *msg,
     return true;
 }
 
-static __always_inline void track_sock(const connection_info_t *conn, const struct bpf_sock *sk) {
-    bpf_map_update_elem(&sock_dir, conn, sk, BPF_NOEXIST);
-}
-
 static __always_inline u8 is_sock_tracked(const connection_info_t *conn) {
     struct bpf_sock *sk = (struct bpf_sock *)bpf_map_lookup_elem(&sock_dir, conn);
 

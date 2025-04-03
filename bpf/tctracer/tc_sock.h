@@ -4,53 +4,24 @@
 #include <bpfcore/bpf_helpers.h>
 #include <bpfcore/bpf_endian.h>
 
+#include <common/http_types.h>
 #include <common/send_args.h>
 #include <common/ssl_helpers.h>
+#include <common/tc_common.h>
+#include <common/trace_common.h>
+#include <common/trace_util.h>
+#include <common/tracing.h>
 
 #include <logger/bpf_dbg.h>
 
 #include <maps/msg_buffers.h>
 
-#include <common/http_types.h>
-#include <common/tc_common.h>
-#include <common/tracing.h>
-#include <common/trace_common.h>
-#include <common/trace_util.h>
+#include <tctracer/maps/egress_key_mem.h>
+#include <tctracer/maps/extender_jump_table.h>
+#include <tctracer/maps/pid_connection_info_mem.h>
+#include <tctracer/maps/sock_dir.h>
 
 enum { k_tail_write_msg_traceparent = 0 };
-
-// A map of sockets which we track with sock_ops. The sock_msg
-// program subscribes to this map and runs for each new socket
-// activity
-// The map size must be max u16 to avoid accidentally losing
-// the socket information
-struct {
-    __uint(type, BPF_MAP_TYPE_SOCKHASH);
-    __uint(max_entries, 65535);
-    __uint(key_size, sizeof(connection_info_t));
-    __uint(value_size, sizeof(uint32_t));
-} sock_dir SEC(".maps");
-
-struct {
-    __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
-    __type(key, int);
-    __type(value, pid_connection_info_t);
-    __uint(max_entries, 1);
-} pid_connection_info_mem SEC(".maps");
-
-struct {
-    __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
-    __type(key, int);
-    __type(value, egress_key_t);
-    __uint(max_entries, 1);
-} egress_key_mem SEC(".maps");
-
-struct {
-    __uint(type, BPF_MAP_TYPE_PROG_ARRAY);
-    __type(key, u32);
-    __type(value, u32);
-    __uint(max_entries, 1);
-} extender_jump_table SEC(".maps");
 
 static __always_inline pid_connection_info_t *pid_conn_info_buf() {
     const int zero = 0;

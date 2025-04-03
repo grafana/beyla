@@ -27,7 +27,7 @@ IMG = $(IMG_REGISTRY)/$(IMG_ORG)/$(IMG_NAME):$(VERSION)
 
 # The generator is a container image that provides a reproducible environment for
 # building eBPF binaries
-GEN_IMG ?= ghcr.io/grafana/beyla-ebpf-generator:main
+GEN_IMG ?= ghcr.io/grafana/beyla-ebpf-generator:2.1
 
 COMPOSE_ARGS ?= -f test/integration/docker-compose.yml
 
@@ -192,7 +192,7 @@ generate: bpf2go
 .PHONY: docker-generate
 docker-generate:
 	@echo "### Generating files (docker)..."
-	@go generate cmd/beyla-genfiles/beyla_genfiles.go
+	@BEYLA_GENFILES_GEN_IMG=$(GEN_IMG) go generate cmd/beyla-genfiles/beyla_genfiles.go
 
 .PHONY: verify
 verify: prereqs lint-dashboard lint test

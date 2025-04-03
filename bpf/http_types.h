@@ -123,6 +123,7 @@ typedef struct http_info {
     tp_info_t tp;
     u64 extra_id;
     u32 task_tid;
+    u8 delayed;
 } http_info_t;
 
 // Here we track unknown TCP requests that are not HTTP, HTTP2 or gRPC

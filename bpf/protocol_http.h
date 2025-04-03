@@ -268,7 +268,7 @@ static __always_inline void finish_possible_delayed_http_request(pid_connection_
         return;
     }
     http_info_t *info = bpf_map_lookup_elem(&ongoing_http, pid_conn);
-    if (info) {
+    if (info && info->delayed) {
         finish_http(info, pid_conn);
     }
 }
@@ -334,6 +334,7 @@ static __always_inline void handle_http_response(unsigned char *small_buf,
             finish_http(info, pid_conn);
         } else {
             bpf_dbg_printk("Delaying finish http for large request, orig_len %d", orig_len);
+            info->delayed = 1;
         }
     }
 

@@ -5,6 +5,7 @@
 #include <common/connection_info.h>
 #include <common/cp_support_data.h>
 #include <common/map_sizing.h>
+#include <common/pin_internal.h>
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);

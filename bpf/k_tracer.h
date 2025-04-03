@@ -83,7 +83,7 @@ int BPF_KPROBE(beyla_kprobe_tcp_rcv_established, struct sock *sk, struct sk_buff
 
     if (parse_sock_info(sk, &pid_info.p_conn.conn)) {
         //u16 orig_dport = info.conn.d_port;
-        //dbg_print_http_connection_info(&info.conn);
+        dbg_print_http_connection_info(&pid_info.p_conn.conn);
         sort_connection_info(&pid_info.p_conn.conn);
         pid_info.p_conn.pid = pid_from_pid_tgid(id);
 
@@ -613,7 +613,7 @@ static __always_inline int return_recvmsg(void *ctx, u64 id, int copied_len) {
                 }
             }
         } else {
-            bpf_dbg_printk("tcp_recvmsg for an identified SSL connection, ignoring...");
+            bpf_dbg_printk("tcp_recvmsg for an identified SSL connection, ignoring [%llx]...", ssl);
         }
     }
 
@@ -757,8 +757,9 @@ int BPF_KRETPROBE(beyla_kretprobe_sys_clone, int tid) {
     task_tid(&parent);
 
     pid_key_t child = {
-        .pid = (u32)tid,
+        .tid = (u32)tid,
         .ns = parent.ns,
+        .pid = parent.pid,
     };
 
     bpf_dbg_printk("sys_clone_ret %d -> %d", id, tid);

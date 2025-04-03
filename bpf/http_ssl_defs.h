@@ -79,7 +79,8 @@ static __always_inline void cleanup_ssl_trace_info(http_info_t *info, void *ssl)
             trace_key_t t_key = {0};
             t_key.extra_id = info->extra_id;
             t_key.p_key.ns = info->pid.ns;
-            t_key.p_key.pid = info->task_tid;
+            t_key.p_key.tid = info->task_tid;
+            t_key.p_key.pid = info->pid.user_pid;
 
             delete_server_trace(&t_key);
         }
@@ -198,12 +199,16 @@ handle_ssl_buf(void *ctx, u64 id, ssl_args_t *args, int bytes_len, u8 direction)
     }
 }
 
-static __always_inline void set_active_ssl_connection(const pid_connection_info_t *conn,
-                                                      void *ssl) {
+static __always_inline void set_active_ssl_connection(pid_connection_info_t *conn, void *ssl) {
+
+    bpf_dbg_printk("Correlating SSL %llx to connection", ssl);
+    dbg_print_http_connection_info(&conn->conn);
+
     bpf_map_update_elem(&active_ssl_connections, conn, &ssl, BPF_ANY);
+    bpf_map_update_elem(&ssl_to_conn, &ssl, conn, BPF_ANY);
 }
 
-static __always_inline void *is_ssl_connection(u64 id, const pid_connection_info_t *conn) {
+static __always_inline void *is_ssl_connection(u64 id, pid_connection_info_t *conn) {
     void *ssl = 0;
     // Checks if it's sandwitched between active SSL handshake, read or write uprobe/uretprobe
     ssl_args_t *ssl_args = bpf_map_lookup_elem(&active_ssl_read_args, &id);

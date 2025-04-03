@@ -422,6 +422,15 @@ func TestSuite_PythonTLS(t *testing.T) {
 	require.NoError(t, compose.Close())
 }
 
+func TestSuite_PythonSelfReference(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-python-self.yml", path.Join(pathOutput, "test-suite-python-self.log"))
+	compose.Env = append(compose.Env, `BEYLA_OPEN_PORT=8081`, `BEYLA_EXECUTABLE_NAME=`)
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+	t.Run("Python Traces with self-references", testHTTPTracesNestedSelfCalls)
+	require.NoError(t, compose.Close())
+}
+
 func TestSuite_DisableKeepAlives(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose.yml", path.Join(pathOutput, "test-suite-disablekeepalives.log"))
 	require.NoError(t, err)

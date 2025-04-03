@@ -59,7 +59,6 @@ static __always_inline void http_get_or_create_trace_info(http_connection_metada
 
     tp_info_pid_t *tp_p = bpf_map_lookup_elem(&outgoing_trace_map, &e_key);
 
-    // TODO move this to sock msg
     if (tp_p && tp_p->req_type == EVENT_HTTP_CLIENT && tp_p->written && tp_p->pid == pid) {
         bpf_dbg_printk("found tp info previously set by sock msg");
         // we've already got a tp_info_pid_t setup by the sockmsg program, use
@@ -111,9 +110,9 @@ static __always_inline void http_get_or_create_trace_info(http_connection_metada
         bpf_dbg_printk("Using old traceparent id");
     }
 
-    //unsigned char tp_buf[TP_MAX_VAL_LENGTH];
-    //make_tp_string(tp_buf, &tp_p->tp);
-    //bpf_dbg_printk("tp: %s", tp_buf);
+    // unsigned char tp_buf[TP_MAX_VAL_LENGTH];
+    // make_tp_string(tp_buf, &tp_p->tp);
+    // bpf_dbg_printk("tp: %s", tp_buf);
 
     if (k_bpf_traceparent_enabled) {
         // The below buffer scan can be expensive on high volume of requests. We make it optional
@@ -136,20 +135,21 @@ static __always_inline void http_get_or_create_trace_info(http_connection_metada
             unsigned char *res = bpf_strstr_tp_loop(buf, buf_len);
 
             if (res) {
-                bpf_dbg_printk("Found traceparent %s", res);
+                bpf_dbg_printk("Found traceparent in headers [%s] overriding what was before", res);
                 unsigned char *t_id = extract_trace_id(res);
                 unsigned char *s_id = extract_span_id(res);
                 unsigned char *f_id = extract_flags(res);
 
                 decode_hex(tp_p->tp.trace_id, t_id, TRACE_ID_CHAR_LEN);
                 decode_hex((unsigned char *)&tp_p->tp.flags, f_id, FLAGS_CHAR_LEN);
-                if (meta && meta->type == EVENT_HTTP_CLIENT) {
-                    decode_hex(tp_p->tp.span_id, s_id, SPAN_ID_CHAR_LEN);
-                } else {
+                if (meta && meta->type != EVENT_HTTP_CLIENT) {
                     decode_hex(tp_p->tp.parent_id, s_id, SPAN_ID_CHAR_LEN);
                 }
+                // make_tp_string(tp_buf, &tp_p->tp);
+                // bpf_dbg_printk("tp: %s", tp_buf);
             } else {
-                bpf_dbg_printk("No traceparent, making a new trace_id", res);
+                bpf_dbg_printk("No additional traceparent in headers, using what was made before",
+                               res);
             }
         } else {
             return;
@@ -250,6 +250,19 @@ get_or_set_http_info(http_info_t *info, pid_connection_info_t *pid_conn, u8 pack
     return bpf_map_lookup_elem(&ongoing_http, pid_conn);
 }
 
+static __always_inline tp_info_t *self_referencing_request(pid_connection_info_t *pid_conn,
+                                                           u8 packet_type) {
+    if (packet_type == PACKET_TYPE_REQUEST) {
+        http_info_t *old_info = bpf_map_lookup_elem(&ongoing_http, pid_conn);
+        if (old_info && !http_info_complete(old_info) && old_info->type == EVENT_HTTP_CLIENT) {
+            bpf_dbg_printk("found self referencing request, remembering the old tp info parent_id");
+            return &old_info->tp;
+        }
+    }
+
+    return 0;
+}
+
 static __always_inline void finish_possible_delayed_http_request(pid_connection_info_t *pid_conn) {
     if (high_request_volume) {
         return;
@@ -317,8 +330,7 @@ static __always_inline void handle_http_response(unsigned char *small_buf,
         high_request_volume /*|| (ssl != NO_SSL) || (orig_len < KPROBES_LARGE_RESPONSE_LEN)*/) {
         finish_http(info, pid_conn);
     } else {
-        if (ssl && (pid_conn->conn.s_port == 0) && (pid_conn->conn.d_port == 0)) {
-            bpf_dbg_printk("Fake connection info, finishing request");
+        if (ssl) {
             finish_http(info, pid_conn);
         } else {
             bpf_dbg_printk("Delaying finish http for large request, orig_len %d", orig_len);
@@ -329,7 +341,8 @@ static __always_inline void handle_http_response(unsigned char *small_buf,
         trace_key_t t_key = {0};
         t_key.extra_id = info->extra_id;
         t_key.p_key.ns = info->pid.ns;
-        t_key.p_key.pid = info->task_tid;
+        t_key.p_key.tid = info->task_tid;
+        t_key.p_key.pid = info->pid.user_pid;
         delete_server_trace(&t_key);
     } else {
         delete_client_trace_info(pid_conn);
@@ -354,6 +367,19 @@ int beyla_protocol_http(void *ctx) {
 
     __builtin_memcpy(&in->conn_info, &args->pid_conn.conn, sizeof(connection_info_t));
     in->ssl = args->ssl;
+
+    // If we have the same process (or even thread) call itself through HTTP, the
+    // connection information is identical. This means that the client call information
+    // will be overwritten by the server call. In this situation we'll create a gap in
+    // the trace propagation chain, e.g. the client span is lost. To mitigate this edge
+    // case, we pick out the parent_id of the self referencing client call before the
+    // request is overwritten and later we overwrite the client set parent with the
+    // original one that was set on the client call itself.
+    u64 self_ref_parent_id = 0;
+    tp_info_t *self_ref_tp = self_referencing_request(&args->pid_conn, args->packet_type);
+    if (self_ref_tp) {
+        __builtin_memcpy(&self_ref_parent_id, &self_ref_tp->parent_id, sizeof(u64));
+    }
 
     http_info_t *info = get_or_set_http_info(in, &args->pid_conn, args->packet_type);
     u8 fallback = 0;
@@ -397,6 +423,11 @@ int beyla_protocol_http(void *ctx) {
             tp_info_pid_t *tp_p = trace_info_for_connection(&args->pid_conn.conn, type);
             if (tp_p) {
                 info->tp = tp_p->tp;
+                if (self_ref_parent_id) {
+                    bpf_dbg_printk(
+                        "overwriting parent id from the self referencing client request");
+                    __builtin_memcpy(&info->tp.parent_id, &self_ref_parent_id, sizeof(u64));
+                }
             } else {
                 bpf_dbg_printk("Can't find trace info, this is a bug!");
             }

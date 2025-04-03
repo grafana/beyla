@@ -1,0 +1,6 @@
+routes:
+  unmatched: path
+otel_metrics_export:
+  endpoint: http://otelcol:4018
+otel_traces_export:
+  endpoint: http://jaeger:4318

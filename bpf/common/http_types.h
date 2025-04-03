@@ -14,7 +14,7 @@
 
 #include <logger/bpf_dbg.h>
 
-#include <pid/pid.h>
+#include <pid/pid_helpers.h>
 
 #define MIN_HTTP_SIZE 12      // HTTP/1.1 CCC is the smallest valid request we can have
 #define MIN_HTTP_REQ_SIZE 9   // OPTIONS / is the largest

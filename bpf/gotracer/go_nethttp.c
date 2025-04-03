@@ -29,7 +29,7 @@
 #include <maps/go_ongoing_http.h>
 #include <maps/go_ongoing_http_client_requests.h>
 
-#include <pid/pid.h>
+#include <pid/pid_helpers.h>
 
 typedef struct http_client_data {
     u8 method[METHOD_MAX_LEN];

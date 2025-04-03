@@ -7,7 +7,7 @@
 #include <maps/active_nodejs_ids.h>
 #include <maps/nodejs_parent_map.h>
 
-#include <pid/pid.h>
+#include <pid/pid_helpers.h>
 
 static __always_inline u64 extra_runtime_id() {
     u64 id = bpf_get_current_pid_tgid();

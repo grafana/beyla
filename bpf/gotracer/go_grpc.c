@@ -21,7 +21,7 @@
 
 #include <logger/bpf_dbg.h>
 
-#include <pid/pid.h>
+#include <pid/pid_helpers.h>
 
 typedef struct grpc_srv_func_invocation {
     u64 start_monotime_ns;

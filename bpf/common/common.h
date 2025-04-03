@@ -14,7 +14,7 @@
 
 #include <bpfcore/utils.h>
 
-#include <pid/pid.h>
+#include <pid/pid_helpers.h>
 
 #include <common/http_types.h>
 

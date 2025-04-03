@@ -5,7 +5,7 @@
 #include <common/connection_info.h>
 #include <common/tp_info.h>
 
-#include <pid/pid.h>
+#include <pid/pid_helpers.h>
 
 #define FULL_BUF_SIZE 256
 

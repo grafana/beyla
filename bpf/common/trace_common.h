@@ -17,7 +17,7 @@
 #include <maps/tp_info_mem.h>
 #include <maps/tp_char_buf_mem.h>
 
-#include <pid/pid.h>
+#include <pid/pid_helpers.h>
 
 #ifdef BPF_TRACEPARENT
 enum { k_bpf_traceparent_enabled = 1 };

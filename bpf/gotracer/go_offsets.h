@@ -2,7 +2,7 @@
 
 #include <bpfcore/utils.h>
 
-#include <pid/pid.h>
+#include <pid/pid_helpers.h>
 
 #define MAX_GO_PROGRAMS 10000 // Max 10,000 go programs tracked
 

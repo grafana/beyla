@@ -2,7 +2,7 @@
 
 #include <bpfcore/vmlinux.h>
 
-#include <pid/pid.h>
+#include <pid/pid_helpers.h>
 
 typedef struct trace_key {
     pid_key_t p_key; // pid key as seen by the userspace (for example, inside its container)

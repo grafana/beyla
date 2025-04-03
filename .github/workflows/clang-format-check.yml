@@ -17,19 +17,19 @@ jobs:
           fetch-depth: 0
 
       - name: Install Clang-Format
-        run: sudo apt-get install clang-format
+        run: sudo apt-get install clang-format-19
 
       - name: Check Clang Format
         run: |
           # Check for modified C/C++ files
-          files=$(git diff --name-status origin/main...HEAD | awk '$1 != "D" && /\.(c|cpp|h)$/ { print $2 }' || true)
+          files=$(git diff --name-status origin/main...HEAD | awk '$1 != "D" && /\.(c|cpp|h)$/ { print ($3 != "" ? $3 : $2) }')
           if [ -z "$files" ]; then
             echo "No C/C++ files modified."
             exit 0
           fi
 
           # Run clang-format and check for changes
-          clang-format -i $files
+          clang-format-19 -i $files
           if ! git diff --exit-code $files; then
             echo "Error: Some files are not formatted correctly. Please run clang-format on the modified files or use the provided pre-commit hook."
             exit 1

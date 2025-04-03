@@ -3,7 +3,7 @@
 #include <bpfcore/vmlinux.h>
 #include <bpfcore/bpf_helpers.h>
 
-#include <common/http_types.h>
+#include <common/http_buf_size.h>
 #include <common/pin_internal.h>
 #include <common/ringbuf.h>
 
@@ -135,7 +135,7 @@ static __always_inline void http2_grpc_start(
 
         fixup_connection_info(
             &h2g_info->conn_info, h2g_info->type == EVENT_HTTP_CLIENT, orig_dport);
-        bpf_probe_read(h2g_info->data, KPROBES_HTTP2_BUF_SIZE, u_buf);
+        bpf_probe_read(h2g_info->data, k_kprobes_http2_buf_size, u_buf);
 
         bpf_map_update_elem(&ongoing_http2_grpc, s_key, h2g_info, BPF_ANY);
     }
@@ -151,7 +151,7 @@ http2_grpc_end(http2_conn_stream_t *stream, http2_grpc_request_t *prev_info, voi
 
         http2_grpc_request_t *trace = bpf_ringbuf_reserve(&events, sizeof(http2_grpc_request_t), 0);
         if (trace) {
-            bpf_probe_read(prev_info->ret_data, KPROBES_HTTP2_RET_BUF_SIZE, u_buf);
+            bpf_probe_read(prev_info->ret_data, k_kprobes_http2_ret_buf_size, u_buf);
             __builtin_memcpy(trace, prev_info, sizeof(http2_grpc_request_t));
             bpf_ringbuf_submit(trace, get_flags());
         }

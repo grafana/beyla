@@ -5,11 +5,11 @@
 
 #include <common/connection_info.h>
 #include <common/egress_key.h>
+#include <common/http_buf_size.h>
 #include <common/http_info.h>
 #include <common/map_sizing.h>
 #include <common/msg_buffer.h>
 #include <common/protocol_defs.h>
-#include <common/sizes.h>
 #include <common/tp_info.h>
 
 #include <logger/bpf_dbg.h>
@@ -23,7 +23,6 @@
 
 // should be enough for most URLs, we may need to extend it if not.
 #define TRACE_BUF_SIZE 1024 // must be power of 2, we do an & to limit the buffer size
-#define KPROBES_HTTP2_RET_BUF_SIZE 64
 
 // 100K and above we try to track the response actual time with kretprobes
 #define KPROBES_LARGE_RESPONSE_LEN 100000
@@ -113,8 +112,8 @@ typedef struct http2_conn_stream {
 typedef struct http2_grpc_request {
     u8 flags; // Must be first
     connection_info_t conn_info;
-    u8 data[KPROBES_HTTP2_BUF_SIZE];
-    u8 ret_data[KPROBES_HTTP2_RET_BUF_SIZE];
+    u8 data[k_kprobes_http2_buf_size];
+    u8 ret_data[k_kprobes_http2_ret_buf_size];
     u8 type;
     int len;
     u64 start_monotime_ns;

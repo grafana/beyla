@@ -12,6 +12,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/gotracer"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/gpuevent"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/httptracer"
+	"github.com/grafana/beyla/v2/pkg/internal/ebpf/sockmsgtracer"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/tctracer"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
@@ -101,7 +102,7 @@ func newCommonTracersGroup(cfg *beyla.Config) []ebpf.Tracer {
 	if cfg.EBPF.UseTCForL7CP {
 		tracers = append(tracers, httptracer.New(cfg))
 	} else if cfg.EBPF.ContextPropagationEnabled {
-		tracers = append(tracers, tctracer.New(cfg))
+		tracers = append(tracers, tctracer.New(cfg), sockmsgtracer.New(cfg))
 	}
 
 	return tracers

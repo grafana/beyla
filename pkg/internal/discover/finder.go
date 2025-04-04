@@ -6,6 +6,7 @@ import (
 
 	"github.com/mariomac/pipes/pipe"
 
+	"github.com/grafana/beyla/pkg/internal/ebpf/capabilitytracer"
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/generictracer"
@@ -116,4 +117,8 @@ func newGenericTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf
 		return []ebpf.Tracer{generictracer.New(cfg, metrics), gpuevent.New(cfg, metrics)}
 	}
 	return []ebpf.Tracer{generictracer.New(cfg, metrics)}
+}
+
+func newCapabilityTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Tracer {
+	return []ebpf.Tracer{capabilitytracer.New(cfg, metrics)}
 }

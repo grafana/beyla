@@ -172,6 +172,9 @@ func (ta *TraceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 
 	ie.FileInfo.Service.SDKLanguage = ie.Type
 
+	ta.log.Info("adding a capability tracers group")
+	programs = append(programs, newCapabilityTracersGroup(ta.Cfg, ta.Metrics)...)
+
 	// Instead of the executable file in the disk, we pass the /proc/<pid>/exec
 	// to allow loading it from different container/pods in containerized environments
 	exe, ok := ta.loadExecutable(ie)

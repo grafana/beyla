@@ -216,6 +216,7 @@ type MetricsReporter struct {
 	attrGPUKernelGridSize     []attributes.Field[*request.Span, attribute.KeyValue]
 	attrGPUKernelBlockSize    []attributes.Field[*request.Span, attribute.KeyValue]
 	attrGPUMemoryAllocations  []attributes.Field[*request.Span, attribute.KeyValue]
+	attrCapabilities          []attributes.Field[*request.Span, attribute.KeyValue]
 }
 
 // Metrics is a set of metrics associated to a given OTEL MeterProvider.
@@ -248,6 +249,7 @@ type Metrics struct {
 	gpuMemoryAllocsTotal  *Expirer[*request.Span, instrument.Int64Counter, int64]
 	gpuKernelGridSize     *Expirer[*request.Span, instrument.Float64Histogram, float64]
 	gpuKernelBlockSize    *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	capabilitiesTotal     *Expirer[*request.Span, instrument.Int64Counter, int64]
 }
 
 func ReportMetrics(
@@ -342,6 +344,10 @@ func newMetricsReporter(
 		mr.attrGPUKernelBlockSize = attributes.OpenTelemetryGetters(
 			request.SpanOTELGetters, mr.attributes.For(attributes.GPUKernelBlockSize))
 	}
+
+	fmt.Println("metrics::newMetricsExporter created capabilities")
+	mr.attrCapabilities = attributes.OpenTelemetryGetters(
+		request.SpanOTELGetters, mr.attributes.For(attributes.CapabilityRequests))
 
 	mr.reporters = NewReporterPool[*svc.Attrs, *Metrics](cfg.ReportersCacheLen, cfg.TTL, timeNow,
 		func(id svc.UID, v *expirable[*Metrics]) {
@@ -541,6 +547,14 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 			m.ctx, gpuKernelBlockSize, mr.attrGPUKernelBlockSize, timeNow, mr.cfg.TTL)
 	}
 
+	capabilitiesTotal, err := meter.Int64Counter(attributes.CapabilityRequests.OTEL, instrument.WithUnit("By"))
+	if err != nil {
+		return fmt.Errorf("creating gpu memory allocations total: %w", err)
+	}
+	m.capabilitiesTotal = NewExpirer[*request.Span, instrument.Int64Counter, int64](
+		m.ctx, capabilitiesTotal, mr.attrCapabilities, timeNow, mr.cfg.TTL)
+
+	fmt.Println("metrics::setupOtelMeters")
 	return nil
 }
 
@@ -878,12 +892,16 @@ func otelSpanAccepted(span *request.Span, mr *MetricsReporter) bool {
 
 // nolint:cyclop
 func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
+	fmt.Println("metrics::record 1")
+
 	t := span.Timings()
 	duration := t.End.Sub(t.RequestStart).Seconds()
 
 	ctx := trace.ContextWithSpanContext(r.ctx, trace.SpanContext{}.WithTraceID(span.TraceID).WithSpanID(span.SpanID).WithTraceFlags(trace.TraceFlags(span.Flags)))
 
 	if otelSpanAccepted(span, mr) {
+		fmt.Println("metrics::record 2")
+
 		switch span.Type {
 		case request.EventTypeHTTP:
 			if mr.is.HTTPEnabled() {
@@ -943,9 +961,18 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 				gmem, attrs := r.gpuMemoryAllocsTotal.ForRecord(span)
 				gmem.Add(ctx, span.ContentLength, instrument.WithAttributeSet(attrs))
 			}
+		case request.EventTypeCapability:
+			fmt.Println("metrics::record capability")
+			ct, attrs := r.capabilitiesTotal.ForRecord(span)
+			capAttrs := attribute.String("capability", fmt.Sprint(span.ContentLength))
+			pidAttrs := attribute.String("pid", fmt.Sprint(span.Pid.HostPID))
+			ct.Add(r.ctx, 1, instrument.WithAttributeSet(attrs), instrument.WithAttributes(capAttrs, pidAttrs))
 		}
 	}
 
+	fmt.Println("metrics::record 3")
+
+	//TODO: Exclude capcbility spans from spanmetrics?
 	if mr.cfg.SpanMetricsEnabled() {
 		sml, attrs := r.spanMetricsLatency.ForRecord(span)
 		sml.Record(ctx, duration, instrument.WithAttributeSet(attrs))
@@ -957,6 +984,7 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 		smst.Add(ctx, float64(span.RequestLength()), instrument.WithAttributeSet(attrs))
 	}
 
+	//TODO: Exclude capcbility spans from servicegraphs?
 	if mr.cfg.ServiceGraphMetricsEnabled() {
 		if !span.IsSelfReferenceSpan() || mr.cfg.AllowServiceGraphSelfReferences {
 			if span.IsClientSpan() {
@@ -977,16 +1005,20 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 }
 
 func (mr *MetricsReporter) reportMetrics(input <-chan []request.Span) {
+	fmt.Println("metrics::reportMetrics 1")
 	for spans := range input {
 		for i := range spans {
+			fmt.Println("metrics::reportMetrics 2")
 			s := &spans[i]
 			if s.InternalSignal() {
 				continue
 			}
+			fmt.Println("metrics::reportMetrics 3")
 			// If we are ignoring this span because of route patterns, don't do anything
 			if s.IgnoreMetrics() {
 				continue
 			}
+			fmt.Println("metrics::reportMetrics 4")
 			reporter, err := mr.reporters.For(&s.Service)
 			if err != nil {
 				mlog().Error("unexpected error creating OTEL resource. Ignoring metric",

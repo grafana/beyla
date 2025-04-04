@@ -118,11 +118,12 @@ network:
 		EnforceSysCaps:   false,
 		TracePrinter:     "json",
 		EBPF: config.EBPFTracer{
-			BatchLength:               100,
-			BatchTimeout:              time.Second,
-			HTTPRequestTimeout:        30 * time.Second,
-			TCBackend:                 tcmanager.TCBackendAuto,
-			ContextPropagationEnabled: false,
+			BatchLength:                 100,
+			BatchTimeout:                time.Second,
+			HTTPRequestTimeout:          30 * time.Second,
+			TCBackend:                   tcmanager.TCBackendAuto,
+			ContextPropagationEnabled:   false,
+			IPContextPropagationEnabled: true,
 		},
 		Grafana: otel.GrafanaConfig{
 			OTLP: otel.GrafanaOTLP{
@@ -512,6 +513,14 @@ func TestWillUseTC(t *testing.T) {
 	env = envMap{"BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION": "false"}
 	cfg = loadConfig(t, env)
 	assert.False(t, cfg.willUseTC())
+
+	env = envMap{"BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION": "true", "BEYLA_BPF_ENABLE_IP_CONTEXT_PROPAGATION": "false"}
+	cfg = loadConfig(t, env)
+	assert.False(t, cfg.willUseTC())
+
+	env = envMap{"BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION": "true", "BEYLA_BPF_ENABLE_IP_CONTEXT_PROPAGATION": "true"}
+	cfg = loadConfig(t, env)
+	assert.True(t, cfg.willUseTC())
 
 	env = envMap{"BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION": "false", "BEYLA_NETWORK_METRICS": "true"}
 	cfg = loadConfig(t, env)

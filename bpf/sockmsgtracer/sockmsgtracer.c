@@ -1,5 +1,3 @@
-#pragma once
-
 #include <bpfcore/vmlinux.h>
 #include <bpfcore/bpf_helpers.h>
 #include <bpfcore/bpf_endian.h>
@@ -15,11 +13,13 @@
 #include <logger/bpf_dbg.h>
 
 #include <maps/msg_buffers.h>
+#include <maps/sock_dir.h>
 
-#include <tctracer/maps/egress_key_mem.h>
-#include <tctracer/maps/extender_jump_table.h>
-#include <tctracer/maps/pid_connection_info_mem.h>
-#include <tctracer/maps/sock_dir.h>
+#include <sockmsgtracer/maps/egress_key_mem.h>
+#include <sockmsgtracer/maps/extender_jump_table.h>
+#include <sockmsgtracer/maps/pid_connection_info_mem.h>
+
+char __license[] SEC("license") = "Dual MIT/GPL";
 
 enum { k_tail_write_msg_traceparent = 0 };
 
@@ -420,17 +420,6 @@ static __always_inline bool handle_go_request(struct sk_msg_md *msg,
     write_go_traceparent(msg, e_key, tp_pid);
 
     return true;
-}
-
-static __always_inline u8 is_sock_tracked(const connection_info_t *conn) {
-    struct bpf_sock *sk = (struct bpf_sock *)bpf_map_lookup_elem(&sock_dir, conn);
-
-    if (sk) {
-        bpf_sk_release(sk);
-        return 1;
-    }
-
-    return 0;
 }
 
 // Sock_msg program which detects packets where it should add space for

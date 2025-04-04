@@ -1,6 +1,6 @@
 //go:build linux
 
-package tctracer
+package sockmsgtracer
 
 import (
 	"context"
@@ -12,27 +12,24 @@ import (
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
-	"github.com/grafana/beyla/v2/pkg/internal/ebpf/tcmanager"
 	"github.com/grafana/beyla/v2/pkg/internal/exec"
 	"github.com/grafana/beyla/v2/pkg/internal/goexec"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
 )
 
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/tctracer/tctracer.c -- -I../../../../bpf -I../../../../bpf
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../../bpf/tctracer/tctracer.c -- -I../../../../bpf -I../../../../bpf -DBPF_DEBUG -DBPF_DEBUG_TC
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/sockmsgtracer/sockmsgtracer.c -- -I../../../../bpf -I../../../../bpf
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../../bpf/sockmsgtracer/sockmsgtracer.c -- -I../../../../bpf -I../../../../bpf -DBPF_DEBUG -DBPF_DEBUG_TC
 
 type Tracer struct {
-	cfg          *beyla.Config
-	bpfObjects   bpfObjects
-	closers      []io.Closer
-	log          *slog.Logger
-	ifaceManager *tcmanager.InterfaceManager
-	tcManager    tcmanager.TCManager
+	cfg        *beyla.Config
+	bpfObjects bpfObjects
+	closers    []io.Closer
+	log        *slog.Logger
 }
 
 func New(cfg *beyla.Config) *Tracer {
-	log := slog.With("component", "tc.Tracer")
+	log := slog.With("component", "sockmsgtracer")
 
 	return &Tracer{
 		log: log,
@@ -67,10 +64,37 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 }
 
 func (p *Tracer) SetupTailCalls() {
+	for _, tc := range []struct {
+		index int
+		prog  *ebpf.Program
+	}{
+		{
+			index: 0,
+			prog:  p.bpfObjects.BeylaPacketExtenderWriteMsgTp,
+		},
+	} {
+		err := p.bpfObjects.ExtenderJumpTable.Update(uint32(tc.index), uint32(tc.prog.FD()), ebpf.UpdateAny)
+
+		if err != nil {
+			p.log.Error("error loading info tail call jump table", "error", err)
+		}
+	}
 }
 
 func (p *Tracer) Constants() map[string]any {
-	return nil
+	m := make(map[string]any, 1)
+
+	// The eBPF side does some basic filtering of events that do not belong to
+	// processes which we monitor. We filter more accurately in the userspace, but
+	// for performance reasons we enable the PID based filtering in eBPF.
+	// This must match httpfltr.go, otherwise we get partial events in userspace.
+	if !p.cfg.Discovery.SystemWide && !p.cfg.Discovery.BPFPidFilterOff {
+		m["filter_pids"] = int32(1)
+	} else {
+		m["filter_pids"] = int32(0)
+	}
+
+	return m
 }
 
 func (p *Tracer) RegisterOffsets(_ *exec.FileInfo, _ *goexec.Offsets) {}
@@ -106,11 +130,22 @@ func (p *Tracer) SocketFilters() []*ebpf.Program {
 }
 
 func (p *Tracer) SockMsgs() []ebpfcommon.SockMsg {
-	return nil
+	return []ebpfcommon.SockMsg{
+		{
+			Program:  p.bpfObjects.BeylaPacketExtender,
+			MapFD:    p.bpfObjects.bpfMaps.SockDir.FD(),
+			AttachAs: ebpf.AttachSkMsgVerdict,
+		},
+	}
 }
 
 func (p *Tracer) SockOps() []ebpfcommon.SockOps {
-	return nil
+	return []ebpfcommon.SockOps{
+		{
+			Program:  p.bpfObjects.BeylaSockmapTracker,
+			AttachAs: ebpf.AttachCGroupSockOps,
+		},
+	}
 }
 
 func (p *Tracer) RecordInstrumentedLib(uint64, []io.Closer) {}
@@ -123,58 +158,12 @@ func (p *Tracer) AlreadyInstrumentedLib(uint64) bool {
 	return false
 }
 
-func (p *Tracer) startTC(ctx context.Context) {
-	if p.tcManager != nil {
-		return
-	}
-
-	if p.cfg.EBPF.UseTCForL7CP {
-		p.log.Info("L7 context-propagation with Linux Traffic Control enabled, not using the regular L4/L7 support.")
-		return
-	}
-
-	if !p.cfg.EBPF.ContextPropagationEnabled {
-		return
-	}
-
-	if !p.cfg.EBPF.IPContextPropagationEnabled {
-		p.log.Info("IP context propagation explicitly disabled by the current configuration")
-		return
-	}
-
-	p.log.Info("enabling L4/L7 context-propagation with Linux Traffic Control")
-
-	p.ifaceManager = tcmanager.NewInterfaceManager()
-	p.tcManager = tcmanager.NewTCManager(p.cfg.EBPF.TCBackend)
-	p.tcManager.SetInterfaceManager(p.ifaceManager)
-	p.tcManager.AddProgram("tc/tc_egress", p.bpfObjects.BeylaAppEgress, tcmanager.AttachmentEgress)
-	p.tcManager.AddProgram("tc/tc_ingress", p.bpfObjects.BeylaAppIngress, tcmanager.AttachmentIngress)
-
-	p.ifaceManager.Start(ctx)
-}
-
 func (p *Tracer) Run(ctx context.Context, _ chan<- []request.Span) {
-	p.startTC(ctx)
+	p.log.Debug("sockmsgtracer started")
 
-	errorCh := p.tcManager.Errors()
+	<-ctx.Done()
 
-	select {
-	case <-ctx.Done():
-	case err := <-errorCh:
-		p.log.Error("TC manager returned an error, aborting", "error", err)
-	}
-
-	p.stopTC()
 	p.bpfObjects.Close()
-}
 
-func (p *Tracer) stopTC() {
-	p.log.Info("removing traffic control probes")
-
-	p.tcManager.Shutdown()
-	p.tcManager = nil
-
-	p.ifaceManager.Stop()
-	p.ifaceManager.Wait()
-	p.ifaceManager = nil
+	p.log.Debug("sockmsgtracer terminated")
 }

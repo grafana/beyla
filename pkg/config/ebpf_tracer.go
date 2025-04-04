@@ -33,8 +33,12 @@ type EBPFTracer struct {
 
 	HTTPRequestTimeout time.Duration `yaml:"http_request_timeout" env:"BEYLA_BPF_HTTP_REQUEST_TIMEOUT"`
 
-	// Enables Linux Traffic Control probes for context propagation
+	// Enables context propagation via HTTP headers
 	ContextPropagationEnabled bool `yaml:"enable_context_propagation" env:"BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION"`
+
+	// Enables Linux Traffic Control probes for encoding the traceparent in
+	// the IP options when ContextPropagationEnabled is 'true'
+	IPContextPropagationEnabled bool `yaml:"enable_ip_context_propagation" env:"BEYLA_BPF_ENABLE_IP_CONTEXT_PROPAGATION"`
 
 	// Skips checking the kernel version for bpf_loop functionality. Some modified kernels have this
 	// backported prior to version 5.17.

@@ -3,11 +3,11 @@
 #include <bpfcore/vmlinux.h>
 
 // The following code is a software implementation of floating point subtraction
-// since eBPF doesn't support floating point instructions in the BPF instruction 
-// set. The code was adapted from the SoftFP Library by Fabrice Bellard 
-// https://bellard.org/softfp/ (Licensed under MIT), with a lot of things removed 
-// related to rounding, floating point denormals etc. The main need for this 
-// library code is to be able to read the NodeJS asyncID, which just like any 
+// since eBPF doesn't support floating point instructions in the BPF instruction
+// set. The code was adapted from the SoftFP Library by Fabrice Bellard
+// https://bellard.org/softfp/ (Licensed under MIT), with a lot of things removed
+// related to rounding, floating point denormals etc. The main need for this
+// library code is to be able to read the NodeJS asyncID, which just like any
 // other JavaScript numbers are stored as float64 in memory.
 
 typedef long int int_fast16_t;

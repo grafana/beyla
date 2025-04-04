@@ -3,6 +3,8 @@
 #include <bpfcore/vmlinux.h>
 #include <bpfcore/bpf_helpers.h>
 
+#include <common/float64.h>
+
 #include <maps/active_unix_socks.h>
 #include <maps/active_nodejs_ids.h>
 #include <maps/nodejs_parent_map.h>
@@ -32,6 +34,12 @@ static __always_inline u64 parent_runtime_id(u64 runtime_id) {
     if (parent_id) {
         return *parent_id;
     }
+
+    // When NodeJS uses await, sometimes the JavaScript interpreted code, which
+    // we cannot instrument will bump the asyncID. Because of this, we will not
+    // be able to find out asyncID call chain for context propagation. This code
+    // tries to look for close enough asyncIDs that will allow us to still
+    // find the chain.
     for (u32 sub = 0; sub < 5; sub++) {
         // lookup_id (as double) - 1 (as double)
         lookup_id = sub_float64(lookup_id, 0x3ff0000000000000, 0);

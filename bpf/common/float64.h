@@ -94,8 +94,12 @@ static __always_inline uint64_t normalize_and_pack_float64(uint8_t z_sign,
 }
 
 static __always_inline uint64_t sub_float64(uint64_t a, uint64_t b, char z_sign) {
-    int_fast16_t a_exp, b_exp, z_exp;
-    uint64_t a_sig, b_sig, z_sig;
+    int_fast16_t a_exp;
+    int_fast16_t b_exp;
+    int_fast16_t z_exp;
+    uint64_t a_sig;
+    uint64_t b_sig;
+    uint64_t z_sig;
     int_fast16_t exp_diff;
 
     a_sig = extract_float64_frac(a);

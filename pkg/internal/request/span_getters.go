@@ -4,7 +4,6 @@ import (
 	"strconv"
 
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
@@ -75,7 +74,7 @@ func SpanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 	case attr.Source:
 		getter = func(_ *Span) attribute.KeyValue { return SourceMetric("beyla") }
 	case attr.StatusCode:
-		getter = func(s *Span) attribute.KeyValue { return StatusCodeMetric(int(SpanStatusCode(s))) }
+		getter = func(s *Span) attribute.KeyValue { return StatusCodeMetric(SpanStatusCode(s)) }
 	case attr.DBOperation:
 		getter = func(span *Span) attribute.KeyValue { return DBOperationName(span.Method) }
 	case attr.DBSystemName:
@@ -90,7 +89,7 @@ func SpanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 		}
 	case attr.ErrorType:
 		getter = func(span *Span) attribute.KeyValue {
-			if SpanStatusCode(span) == codes.Error {
+			if SpanStatusCode(span) == StatusCodeError {
 				return ErrorType("error")
 			}
 			return ErrorType("")
@@ -152,7 +151,7 @@ func SpanPromGetters(attrName attr.Name) (attributes.Getter[*Span, string], bool
 		getter = func(span *Span) string { return span.Method }
 	case attr.ErrorType:
 		getter = func(span *Span) string {
-			if SpanStatusCode(span) == codes.Error {
+			if SpanStatusCode(span) == StatusCodeError {
 				return "error"
 			}
 			return ""

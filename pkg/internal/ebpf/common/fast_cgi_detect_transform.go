@@ -8,8 +8,6 @@ import (
 	"strconv"
 	"unsafe"
 
-	trace2 "go.opentelemetry.io/otel/trace"
-
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 )
 
@@ -208,9 +206,9 @@ func TCPToFastCGIToSpan(trace *TCPRequestInfo, op, uri string, status int) reque
 		Start:         int64(trace.StartMonotimeNs),
 		End:           int64(trace.EndMonotimeNs),
 		Status:        status,
-		TraceID:       trace2.TraceID(trace.Tp.TraceId),
-		SpanID:        trace2.SpanID(trace.Tp.SpanId),
-		ParentSpanID:  trace2.SpanID(trace.Tp.ParentId),
+		TraceID:       trace.Tp.TraceId,
+		SpanID:        trace.Tp.SpanId,
+		ParentSpanID:  trace.Tp.ParentId,
 		Flags:         trace.Tp.Flags,
 		Pid: request.PidInfo{
 			HostPID:   trace.Pid.HostPid,

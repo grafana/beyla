@@ -187,7 +187,7 @@ generate: export BPF_CFLAGS := $(CFLAGS)
 generate: export BPF2GO := $(BPF2GO)
 generate: bpf2go
 	@echo "### Generating files..."
-	@BEYLA_GENFILES_RUN_LOCALLY=1 go generate cmd/beyla-genfiles/beyla_genfiles.go
+	@BEYLA_GENFILES_GEN_IMG=$(GEN_IMG) go generate cmd/beyla-genfiles/beyla_genfiles.go
 
 .PHONY: docker-generate
 docker-generate:

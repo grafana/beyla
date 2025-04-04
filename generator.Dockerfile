@@ -16,7 +16,7 @@ VOLUME ["/src"]
 
 ARG EBPF_VER
 
-RUN apk add clang llvm19 curl
+RUN apk add clang llvm19 wget
 RUN apk cache purge
 RUN go install github.com/cilium/ebpf/cmd/bpf2go@$EBPF_VER
 COPY --from=builder /build/beyla_genfiles /go/bin

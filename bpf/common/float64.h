@@ -1,6 +1,7 @@
 #pragma once
 
 #include <bpfcore/vmlinux.h>
+#include <bpfcore/bpf_helpers.h>
 
 // The following code is a software implementation of floating point subtraction
 // since eBPF doesn't support floating point instructions in the BPF instruction

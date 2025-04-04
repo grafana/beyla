@@ -159,7 +159,7 @@ static __always_inline tp_info_pid_t *find_parent_trace(const pid_connection_inf
         }
 
         attempts++;
-    } while (attempts < 3); // Up to 3 levels of thread nesting allowed
+    } while (attempts < 5); // Up to 5 levels of thread nesting allowed
 
     cp_support_data_t *conn_t_key = bpf_map_lookup_elem(&cp_support_connect_info, p_conn);
 

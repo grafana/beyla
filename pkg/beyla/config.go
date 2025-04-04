@@ -47,11 +47,12 @@ var DefaultConfig = Config{
 	LogLevel:         "INFO",
 	EnforceSysCaps:   false,
 	EBPF: config.EBPFTracer{
-		BatchLength:               100,
-		BatchTimeout:              time.Second,
-		HTTPRequestTimeout:        30 * time.Second,
-		TCBackend:                 tcmanager.TCBackendAuto,
-		ContextPropagationEnabled: false,
+		BatchLength:                 100,
+		BatchTimeout:                time.Second,
+		HTTPRequestTimeout:          30 * time.Second,
+		TCBackend:                   tcmanager.TCBackendAuto,
+		ContextPropagationEnabled:   false,
+		IPContextPropagationEnabled: true,
 	},
 	Grafana: otel.GrafanaConfig{
 		OTLP: otel.GrafanaOTLP{
@@ -312,7 +313,7 @@ func (c *Config) otelNetO11yEnabled() bool {
 }
 
 func (c *Config) willUseTC() bool {
-	return c.EBPF.ContextPropagationEnabled || (c.Enabled(FeatureNetO11y) && c.NetworkFlows.Source == EbpfSourceTC)
+	return (c.EBPF.ContextPropagationEnabled && c.EBPF.IPContextPropagationEnabled) || (c.Enabled(FeatureNetO11y) && c.NetworkFlows.Source == EbpfSourceTC)
 }
 
 // Enabled checks if a given Beyla feature is enabled according to the global configuration

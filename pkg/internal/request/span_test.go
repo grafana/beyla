@@ -98,14 +98,15 @@ func TestSerializeJSONSpans(t *testing.T) {
 		testData{
 			eventType: EventTypeHTTP,
 			attribs: map[string]any{
-				"method":     "method",
-				"status":     "200",
-				"url":        "path",
-				"contentLen": "1024",
-				"route":      "route",
-				"clientAddr": "peername",
-				"serverAddr": "hostname",
-				"serverPort": "5678",
+				"method":       "method",
+				"status":       "200",
+				"url":          "path",
+				"reqBodySize":  "1024",
+				"respBodySize": "2048",
+				"route":        "route",
+				"clientAddr":   "peername",
+				"serverAddr":   "hostname",
+				"serverPort":   "5678",
 			},
 		},
 		testData{
@@ -179,28 +180,29 @@ func TestSerializeJSONSpans(t *testing.T) {
 
 	test := func(t *testing.T, tData *testData) {
 		span := Span{
-			Type:           tData.eventType,
-			IgnoreSpan:     ignoreMetrics,
-			Method:         "method",
-			Path:           "path",
-			Route:          "route",
-			Peer:           "peer",
-			PeerPort:       1234,
-			Host:           "host",
-			HostPort:       5678,
-			Status:         200,
-			ContentLength:  1024,
-			RequestStart:   10000,
-			Start:          15000,
-			End:            35000,
-			TraceID:        trace2.TraceID{0x1, 0x2, 0x3},
-			SpanID:         trace2.SpanID{0x1, 0x2, 0x3},
-			ParentSpanID:   trace2.SpanID{0x1, 0x2, 0x3},
-			Flags:          1,
-			PeerName:       "peername",
-			HostName:       "hostname",
-			OtherNamespace: "otherns",
-			Statement:      "statement",
+			Type:             tData.eventType,
+			IgnoreSpan:       ignoreMetrics,
+			Method:           "method",
+			Path:             "path",
+			Route:            "route",
+			Peer:             "peer",
+			PeerPort:         1234,
+			Host:             "host",
+			HostPort:         5678,
+			Status:           200,
+			ContentLength:    1024,
+			ResponseBodySize: 2048,
+			RequestStart:     10000,
+			Start:            15000,
+			End:              35000,
+			TraceID:          trace2.TraceID{0x1, 0x2, 0x3},
+			SpanID:           trace2.SpanID{0x1, 0x2, 0x3},
+			ParentSpanID:     trace2.SpanID{0x1, 0x2, 0x3},
+			Flags:            1,
+			PeerName:         "peername",
+			HostName:         "hostname",
+			OtherNamespace:   "otherns",
+			Statement:        "statement",
 		}
 
 		data, err := json.MarshalIndent(span, "", " ")
@@ -492,6 +494,86 @@ func TestHostPeerClientServer(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.client, PeerAsClient(&tt.span))
 			assert.Equal(t, tt.server, HostAsServer(&tt.span))
+		})
+	}
+}
+
+func TestRequestBodyLength(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		s        Span
+		expected int64
+	}{
+		{
+			name: "With ContentLength less than zero",
+			s: Span{
+				ContentLength: -1,
+			},
+			expected: 0,
+		},
+		{
+			name: "With ContentLength equal to zero",
+			s: Span{
+				ContentLength: 0,
+			},
+			expected: 0,
+		},
+		{
+			name: "With ContentLength greater than zero",
+			s: Span{
+				ContentLength: 128,
+			},
+			expected: 128,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			assert.Equal(t, tt.expected, tt.s.RequestBodyLength())
+		})
+	}
+}
+
+func TestResponseBodyLength(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		s        Span
+		expected int64
+	}{
+		{
+			name: "With ResponseBodySize less than zero",
+			s: Span{
+				ResponseBodySize: -1,
+			},
+			expected: 0,
+		},
+		{
+			name: "With ResponseBodySize equal to zero",
+			s: Span{
+				ResponseBodySize: 0,
+			},
+			expected: 0,
+		},
+		{
+			name: "With ResponseBodySize greater than zero",
+			s: Span{
+				ResponseBodySize: 128,
+			},
+			expected: 128,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			assert.Equal(t, tt.expected, tt.s.ResponseBodyLength())
 		})
 	}
 }

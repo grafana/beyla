@@ -14,7 +14,12 @@ func tocstr(s string) []byte {
 	return append(b, 0)
 }
 
-func makeHTTPRequestTrace(method, path string, status uint16, durationMs uint64) HTTPRequestTrace {
+func makeHTTPRequestTrace(
+	method, path string,
+	status uint16,
+	contentLength, responseBodySize int64,
+	durationMs uint64,
+) HTTPRequestTrace {
 	m := [7]uint8{}
 	copy(m[:], tocstr(method))
 	p := [100]uint8{}
@@ -25,6 +30,8 @@ func makeHTTPRequestTrace(method, path string, status uint16, durationMs uint64)
 		Method:            m,
 		Path:              p,
 		Status:            status,
+		ContentLength:     contentLength,
+		ResponseBodySize:  responseBodySize,
 		GoStartMonotimeNs: 0,
 		StartMonotimeNs:   durationMs * 1000000,
 		EndMonotimeNs:     durationMs * 2 * 1000000,
@@ -45,43 +52,52 @@ func makeGRPCRequestTrace(path string, status uint16, durationMs uint64) HTTPReq
 	}
 }
 
-func assertMatches(t *testing.T, span *request.Span, method, path string, status int, durationMs uint64) {
+func assertMatches(
+	t *testing.T,
+	span *request.Span,
+	method, path string,
+	contentLength, responseBodySize int64,
+	status int,
+	durationMs uint64,
+) {
 	assert.Equal(t, method, span.Method)
 	assert.Equal(t, path, span.Path)
 	assert.Equal(t, status, span.Status)
+	assert.Equal(t, contentLength, span.ContentLength)
+	assert.Equal(t, responseBodySize, span.ResponseBodySize)
 	assert.Equal(t, int64(durationMs*1000000), int64(span.End-span.Start))
 	assert.Equal(t, int64(durationMs*1000000), int64(span.Start-span.RequestStart))
 }
 
 func TestRequestTraceParsing(t *testing.T) {
 	t.Run("Test basic parsing", func(t *testing.T) {
-		tr := makeHTTPRequestTrace("POST", "/users", 200, 5)
+		tr := makeHTTPRequestTrace("POST", "/users", 200, 1024, 2048, 5)
 		s := HTTPRequestTraceToSpan(&tr)
-		assertMatches(t, &s, "POST", "/users", 200, 5)
+		assertMatches(t, &s, "POST", "/users", 1024, 2048, 200, 5)
 	})
 
-	t.Run("Test with empty path and missing peer host", func(t *testing.T) {
-		tr := makeHTTPRequestTrace("GET", "", 403, 6)
+	t.Run("Test with empty path, missing peer host and empty response body size", func(t *testing.T) {
+		tr := makeHTTPRequestTrace("GET", "", 403, 1024, 0, 6)
 		s := HTTPRequestTraceToSpan(&tr)
-		assertMatches(t, &s, "GET", "", 403, 6)
+		assertMatches(t, &s, "GET", "", 1024, 0, 403, 6)
 	})
 
-	t.Run("Test with missing peer port", func(t *testing.T) {
-		tr := makeHTTPRequestTrace("GET", "/posts/1/1", 500, 1)
+	t.Run("Test with missing peer port and empty content length", func(t *testing.T) {
+		tr := makeHTTPRequestTrace("GET", "/posts/1/1", 500, 0, 2048, 1)
 		s := HTTPRequestTraceToSpan(&tr)
-		assertMatches(t, &s, "GET", "/posts/1/1", 500, 1)
+		assertMatches(t, &s, "GET", "/posts/1/1", 0, 2048, 500, 1)
 	})
 
 	t.Run("Test with invalid peer port", func(t *testing.T) {
-		tr := makeHTTPRequestTrace("GET", "/posts/1/1", 500, 1)
+		tr := makeHTTPRequestTrace("GET", "/posts/1/1", 500, 1024, 2048, 1)
 		s := HTTPRequestTraceToSpan(&tr)
-		assertMatches(t, &s, "GET", "/posts/1/1", 500, 1)
+		assertMatches(t, &s, "GET", "/posts/1/1", 1024, 2048, 500, 1)
 	})
 
 	t.Run("Test with GRPC request", func(t *testing.T) {
 		tr := makeGRPCRequestTrace("/posts/1/1", 2, 1)
 		s := HTTPRequestTraceToSpan(&tr)
-		assertMatches(t, &s, "", "/posts/1/1", 2, 1)
+		assertMatches(t, &s, "", "/posts/1/1", 0, 0, 2, 1)
 	})
 }
 

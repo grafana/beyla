@@ -15,7 +15,8 @@
         "Scheme"
       ],
       "net/http.Response": [
-        "StatusCode"
+        "StatusCode",
+        "ContentLength"
       ],
       "net.TCPAddr": [
         "IP",

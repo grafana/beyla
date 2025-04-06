@@ -51,6 +51,7 @@ func traceFuncHelper(t *testing.T, tracePrinter TracePrinter) string {
 		HostPort:       5678,
 		Status:         200,
 		ContentLength:  1024,
+		ResponseLength: 2048,
 		RequestStart:   10000,
 		Start:          15000,
 		End:            35000,
@@ -97,7 +98,7 @@ func traceFuncHelper(t *testing.T, tracePrinter TracePrinter) string {
 
 func TestTracePrinterResolve_PrinterText(t *testing.T) {
 	expected := "(25µs[20µs]) HTTP 200 method path [peer as peername.otherns:1234]->" +
-		"[host as hostname.foo:5678] size:1024B svc=[foo/bar go]" +
+		"[host as hostname.foo:5678] contentLen:1024B responseLen:2048B svc=[foo/bar go]" +
 		" traceparent=[00-01020300000000000000000000000000-0102030000000000[0102040000000000]-01]\n"
 
 	actual := traceFuncHelper(t, TracePrinterText)
@@ -120,7 +121,7 @@ func TestTracePrinterResolve_PrinterJSON(t *testing.T) {
 
 	suffix := `duration":"25µs","durationUSec":"25","handlerDuration":"20µs",` +
 		`"handlerDurationUSec":"20","attributes":{"clientAddr":"peername",` +
-		`"contentLen":"1024","method":"method","route":"route",` +
+		`"contentLen":"1024","method":"method","responseLen":"2048","route":"route",` +
 		`"serverAddr":"hostname","serverPort":"5678","status":"200","url":"path"}}]` + "\n"
 
 	actual := traceFuncHelper(t, TracePrinterJSON)
@@ -155,6 +156,7 @@ func TestTracePrinterResolve_PrinterJSONIndent(t *testing.T) {
    "clientAddr": "peername",
    "contentLen": "1024",
    "method": "method",
+   "responseLen": "2048",
    "route": "route",
    "serverAddr": "hostname",
    "serverPort": "5678",

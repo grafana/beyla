@@ -180,29 +180,29 @@ func TestSerializeJSONSpans(t *testing.T) {
 
 	test := func(t *testing.T, tData *testData) {
 		span := Span{
-			Type:             tData.eventType,
-			IgnoreSpan:       ignoreMetrics,
-			Method:           "method",
-			Path:             "path",
-			Route:            "route",
-			Peer:             "peer",
-			PeerPort:         1234,
-			Host:             "host",
-			HostPort:         5678,
-			Status:           200,
-			ContentLength:    1024,
-			ResponseBodySize: 2048,
-			RequestStart:     10000,
-			Start:            15000,
-			End:              35000,
-			TraceID:          trace2.TraceID{0x1, 0x2, 0x3},
-			SpanID:           trace2.SpanID{0x1, 0x2, 0x3},
-			ParentSpanID:     trace2.SpanID{0x1, 0x2, 0x3},
-			Flags:            1,
-			PeerName:         "peername",
-			HostName:         "hostname",
-			OtherNamespace:   "otherns",
-			Statement:        "statement",
+			Type:           tData.eventType,
+			IgnoreSpan:     ignoreMetrics,
+			Method:         "method",
+			Path:           "path",
+			Route:          "route",
+			Peer:           "peer",
+			PeerPort:       1234,
+			Host:           "host",
+			HostPort:       5678,
+			Status:         200,
+			ContentLength:  1024,
+			ResponseLength: 2048,
+			RequestStart:   10000,
+			Start:          15000,
+			End:            35000,
+			TraceID:        trace2.TraceID{0x1, 0x2, 0x3},
+			SpanID:         trace2.SpanID{0x1, 0x2, 0x3},
+			ParentSpanID:   trace2.SpanID{0x1, 0x2, 0x3},
+			Flags:          1,
+			PeerName:       "peername",
+			HostName:       "hostname",
+			OtherNamespace: "otherns",
+			Statement:      "statement",
 		}
 
 		data, err := json.MarshalIndent(span, "", " ")
@@ -547,23 +547,23 @@ func TestResponseBodyLength(t *testing.T) {
 		expected int64
 	}{
 		{
-			name: "With ResponseBodySize less than zero",
+			name: "With ResponseLength less than zero",
 			s: Span{
-				ResponseBodySize: -1,
+				ResponseLength: -1,
 			},
 			expected: 0,
 		},
 		{
-			name: "With ResponseBodySize equal to zero",
+			name: "With ResponseLength equal to zero",
 			s: Span{
-				ResponseBodySize: 0,
+				ResponseLength: 0,
 			},
 			expected: 0,
 		},
 		{
-			name: "With ResponseBodySize greater than zero",
+			name: "With ResponseLength greater than zero",
 			s: Span{
-				ResponseBodySize: 128,
+				ResponseLength: 128,
 			},
 			expected: 128,
 		},

@@ -21,7 +21,7 @@ typedef enum {
     _scheme_ptr_pos,
     _method_ptr_pos,
     _status_code_ptr_pos,
-    _response_body_size_ptr_pos,
+    _response_length_ptr_pos,
     _content_length_ptr_pos,
     _req_header_ptr_pos,
     _io_writer_buf_ptr_pos,

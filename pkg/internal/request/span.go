@@ -145,32 +145,32 @@ type PidInfo struct {
 // REMINDER: any attribute here must be also added to the functions SpanOTELGetters,
 // SpanPromGetters and getDefinitions in pkg/export/attributes/attr_defs.go
 type Span struct {
-	Type             EventType      `json:"type"`
-	IgnoreSpan       ignoreMode     `json:"ignoreSpan"`
-	Method           string         `json:"-"`
-	Path             string         `json:"-"`
-	Route            string         `json:"-"`
-	Peer             string         `json:"peer"`
-	PeerPort         int            `json:"peerPort,string"`
-	Host             string         `json:"host"`
-	HostPort         int            `json:"hostPort,string"`
-	Status           int            `json:"-"`
-	ResponseBodySize int64          `json:"-"`
-	ContentLength    int64          `json:"-"`
-	RequestStart     int64          `json:"-"`
-	Start            int64          `json:"-"`
-	End              int64          `json:"-"`
-	Service          svc.Attrs      `json:"-"`
-	TraceID          trace2.TraceID `json:"traceID"`
-	SpanID           trace2.SpanID  `json:"spanID"`
-	ParentSpanID     trace2.SpanID  `json:"parentSpanID"`
-	Flags            uint8          `json:"flags,string"`
-	Pid              PidInfo        `json:"-"`
-	PeerName         string         `json:"peerName"`
-	HostName         string         `json:"hostName"`
-	OtherNamespace   string         `json:"-"`
-	Statement        string         `json:"-"`
-	SubType          int            `json:"-"`
+	Type           EventType      `json:"type"`
+	IgnoreSpan     ignoreMode     `json:"ignoreSpan"`
+	Method         string         `json:"-"`
+	Path           string         `json:"-"`
+	Route          string         `json:"-"`
+	Peer           string         `json:"peer"`
+	PeerPort       int            `json:"peerPort,string"`
+	Host           string         `json:"host"`
+	HostPort       int            `json:"hostPort,string"`
+	Status         int            `json:"-"`
+	ResponseLength int64          `json:"-"`
+	ContentLength  int64          `json:"-"`
+	RequestStart   int64          `json:"-"`
+	Start          int64          `json:"-"`
+	End            int64          `json:"-"`
+	Service        svc.Attrs      `json:"-"`
+	TraceID        trace2.TraceID `json:"traceID"`
+	SpanID         trace2.SpanID  `json:"spanID"`
+	ParentSpanID   trace2.SpanID  `json:"parentSpanID"`
+	Flags          uint8          `json:"flags,string"`
+	Pid            PidInfo        `json:"-"`
+	PeerName       string         `json:"peerName"`
+	HostName       string         `json:"hostName"`
+	OtherNamespace string         `json:"-"`
+	Statement      string         `json:"-"`
+	SubType        int            `json:"-"`
 }
 
 func (s *Span) Inside(parent *Span) bool {
@@ -190,15 +190,15 @@ func spanAttributes(s *Span) SpanAttributes {
 	switch s.Type {
 	case EventTypeHTTP:
 		return SpanAttributes{
-			"method":       s.Method,
-			"status":       strconv.Itoa(s.Status),
-			"url":          s.Path,
-			"reqBodySize":  strconv.FormatInt(s.ContentLength, 10),
-			"respBodySize": strconv.FormatInt(s.ResponseBodySize, 10),
-			"route":        s.Route,
-			"clientAddr":   SpanPeer(s),
-			"serverAddr":   SpanHost(s),
-			"serverPort":   strconv.Itoa(s.HostPort),
+			"method":      s.Method,
+			"status":      strconv.Itoa(s.Status),
+			"url":         s.Path,
+			"contentLen":  strconv.FormatInt(s.ContentLength, 10),
+			"responseLen": strconv.FormatInt(s.ResponseLength, 10),
+			"route":       s.Route,
+			"clientAddr":  SpanPeer(s),
+			"serverAddr":  SpanHost(s),
+			"serverPort":  strconv.Itoa(s.HostPort),
 		}
 	case EventTypeHTTPClient:
 		return SpanAttributes{
@@ -424,6 +424,7 @@ func GrpcSpanStatusCode(span *Span) codes.Code {
 }
 
 func (s *Span) RequestBodyLength() int64 {
+	// The value -1 indicates that the length is unknown.
 	if s.ContentLength < 0 {
 		return 0
 	}
@@ -432,11 +433,12 @@ func (s *Span) RequestBodyLength() int64 {
 }
 
 func (s *Span) ResponseBodyLength() int64 {
-	if s.ResponseBodySize < 0 {
+	// The value -1 indicates that the length is unknown.
+	if s.ResponseLength < 0 {
 		return 0
 	}
 
-	return s.ResponseBodySize
+	return s.ResponseLength
 }
 
 // ServiceGraphKind returns the Kind string representation that is compliant with service graph metrics specification

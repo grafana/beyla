@@ -63,7 +63,7 @@ typedef struct server_http_func_invocation {
     u64 content_length;
 
     u64 status;
-    u64 response_body_size;
+    u64 response_length;
 } server_http_func_invocation_t;
 
 struct {
@@ -103,7 +103,7 @@ int beyla_uprobe_ServeHTTP(struct pt_regs *ctx) {
         .tp = {0},
         .status = 0,
         .content_length = 0,
-        .response_body_size = 0,
+        .response_length = 0,
     };
 
     invocation.method[0] = 0;
@@ -361,7 +361,7 @@ int beyla_uprobe_ServeHTTPReturns(struct pt_regs *ctx) {
     __builtin_memcpy(trace->method, invocation->method, sizeof(trace->method));
     __builtin_memcpy(trace->path, invocation->path, sizeof(trace->path));
     trace->status = (u16)invocation->status;
-    trace->response_body_size = invocation->response_body_size;
+    trace->response_length = invocation->response_length;
 
     make_tp_string(tp_buf, &invocation->tp);
     bpf_dbg_printk("tp: %s", tp_buf);
@@ -561,11 +561,11 @@ int beyla_uprobe_roundTripReturn(struct pt_regs *ctx) {
     bpf_dbg_printk(
         "status %d, offset %d, resp_ptr %lx", trace->status, status_code_ptr_pos, (u64)resp_ptr);
 
-    u64 response_body_size_ptr_pos = go_offset_of(ot, (go_offset){.v = _response_body_size_ptr_pos});
-    bpf_probe_read(&trace->response_body_size, sizeof(trace->response_body_size), (void *)(resp_ptr + response_body_size_ptr_pos));
+    u64 response_length_ptr_pos = go_offset_of(ot, (go_offset){.v = _response_length_ptr_pos});
+    bpf_probe_read(&trace->response_length, sizeof(trace->response_length), (void *)(resp_ptr + response_length_ptr_pos));
 
     bpf_dbg_printk(
-        "response_body_size %d, offset %d, resp_ptr %lx", trace->response_body_size, response_body_size_ptr_pos, (u64)resp_ptr);
+        "response_length %d, offset %d, resp_ptr %lx", trace->response_length, response_length_ptr_pos, (u64)resp_ptr);
 
     // submit the completed trace via ringbuffer
     bpf_ringbuf_submit(trace, get_flags());

@@ -45,7 +45,7 @@ typedef struct http_request_trace_t {
     u16 status;
     connection_info_t conn __attribute__((aligned(8)));
     s64 content_length;
-    s64 response_body_size;
+    s64 response_length;
     tp_info_t tp;
 
     pid_info pid;

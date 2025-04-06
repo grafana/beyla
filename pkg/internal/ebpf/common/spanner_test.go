@@ -17,7 +17,7 @@ func tocstr(s string) []byte {
 func makeHTTPRequestTrace(
 	method, path string,
 	status uint16,
-	contentLength, responseBodySize int64,
+	contentLength, responseLength int64,
 	durationMs uint64,
 ) HTTPRequestTrace {
 	m := [7]uint8{}
@@ -31,7 +31,7 @@ func makeHTTPRequestTrace(
 		Path:              p,
 		Status:            status,
 		ContentLength:     contentLength,
-		ResponseBodySize:  responseBodySize,
+		ResponseLength:    responseLength,
 		GoStartMonotimeNs: 0,
 		StartMonotimeNs:   durationMs * 1000000,
 		EndMonotimeNs:     durationMs * 2 * 1000000,
@@ -56,7 +56,7 @@ func assertMatches(
 	t *testing.T,
 	span *request.Span,
 	method, path string,
-	contentLength, responseBodySize int64,
+	contentLength, responseLength int64,
 	status int,
 	durationMs uint64,
 ) {
@@ -64,7 +64,7 @@ func assertMatches(
 	assert.Equal(t, path, span.Path)
 	assert.Equal(t, status, span.Status)
 	assert.Equal(t, contentLength, span.ContentLength)
-	assert.Equal(t, responseBodySize, span.ResponseBodySize)
+	assert.Equal(t, responseLength, span.ResponseLength)
 	assert.Equal(t, int64(durationMs*1000000), int64(span.End-span.Start))
 	assert.Equal(t, int64(durationMs*1000000), int64(span.Start-span.RequestStart))
 }

@@ -15,9 +15,9 @@
 #include <maps/msg_buffers.h>
 #include <maps/sock_dir.h>
 
-#include <sockmsgtracer/maps/egress_key_mem.h>
-#include <sockmsgtracer/maps/extender_jump_table.h>
-#include <sockmsgtracer/maps/pid_connection_info_mem.h>
+#include <tpinjector/maps/egress_key_mem.h>
+#include <tpinjector/maps/extender_jump_table.h>
+#include <tpinjector/maps/pid_connection_info_mem.h>
 
 char __license[] SEC("license") = "Dual MIT/GPL";
 

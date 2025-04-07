@@ -1,6 +1,6 @@
 //go:build linux
 
-package sockmsgtracer
+package tpinjector
 
 import (
 	"context"
@@ -18,8 +18,8 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
 )
 
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/sockmsgtracer/sockmsgtracer.c -- -I../../../../bpf -I../../../../bpf
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../../bpf/sockmsgtracer/sockmsgtracer.c -- -I../../../../bpf -I../../../../bpf -DBPF_DEBUG -DBPF_DEBUG_TC
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/tpinjector/tpinjector.c -- -I../../../../bpf -I../../../../bpf
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../../bpf/tpinjector/tpinjector.c -- -I../../../../bpf -I../../../../bpf -DBPF_DEBUG -DBPF_DEBUG_TC
 
 type Tracer struct {
 	cfg        *beyla.Config
@@ -29,7 +29,7 @@ type Tracer struct {
 }
 
 func New(cfg *beyla.Config) *Tracer {
-	log := slog.With("component", "sockmsgtracer")
+	log := slog.With("component", "tpinjector")
 
 	return &Tracer{
 		log: log,
@@ -159,11 +159,11 @@ func (p *Tracer) AlreadyInstrumentedLib(uint64) bool {
 }
 
 func (p *Tracer) Run(ctx context.Context, _ chan<- []request.Span) {
-	p.log.Debug("sockmsgtracer started")
+	p.log.Debug("tpinjector started")
 
 	<-ctx.Done()
 
 	p.bpfObjects.Close()
 
-	p.log.Debug("sockmsgtracer terminated")
+	p.log.Debug("tpinjector terminated")
 }

@@ -431,6 +431,15 @@ func TestSuite_PythonSelfReference(t *testing.T) {
 	require.NoError(t, compose.Close())
 }
 
+func TestSuite_NodeJSDist(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-nodejs-dist.yml", path.Join(pathOutput, "test-suite-nodejs-dist.log"))
+	compose.Env = append(compose.Env, `BEYLA_OPEN_PORT=`, `BEYLA_EXECUTABLE_NAME=`)
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+	t.Run("NodeJS Distributed Traces with multiple chained calls", testHTTPTracesNestedNodeJSDistCalls)
+	require.NoError(t, compose.Close())
+}
+
 func TestSuite_DisableKeepAlives(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose.yml", path.Join(pathOutput, "test-suite-disablekeepalives.log"))
 	require.NoError(t, err)

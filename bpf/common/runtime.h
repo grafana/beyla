@@ -5,6 +5,8 @@
 
 #include <common/float64.h>
 
+#include <logger/bpf_dbg.h>
+
 #include <maps/active_unix_socks.h>
 #include <maps/active_nodejs_ids.h>
 #include <maps/nodejs_parent_map.h>
@@ -29,7 +31,7 @@ static __always_inline u64 extra_runtime_id() {
 
 static __always_inline u64 parent_runtime_id(u64 runtime_id) {
     u64 lookup_id = runtime_id;
-    bpf_printk("parent lookup id %llx", lookup_id);
+    bpf_dbg_printk("parent lookup id %llx", lookup_id);
     u64 *parent_id = (u64 *)bpf_map_lookup_elem(&nodejs_parent_map, &lookup_id);
     if (parent_id) {
         return *parent_id;
@@ -48,7 +50,7 @@ static __always_inline u64 parent_runtime_id(u64 runtime_id) {
             return 0;
         }
 
-        bpf_printk("looking up id %llx", lookup_id);
+        bpf_dbg_printk("looking up id %llx", lookup_id);
         u64 *parent_id = (u64 *)bpf_map_lookup_elem(&nodejs_parent_map, &lookup_id);
         if (parent_id) {
             return *parent_id;

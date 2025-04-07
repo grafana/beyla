@@ -1,0 +1,111 @@
+version: '3.8'
+
+services:
+  testserver_b:
+    build:
+      context: ../..
+      dockerfile: test/integration/components/nodejsdist/Dockerfile_b
+    image: hatest-testserver-nodejs-b
+    ports:
+      - 5002:5001
+    environment:
+      OTEL_SERVICE_NAME: "service-b"
+    depends_on:
+      otelcol:
+        condition: service_started
+
+  testserver_r:
+    build:
+      context: ../..
+      dockerfile: test/integration/components/nodejsdist/Dockerfile_r
+    image: hatest-testserver-nodejs-r
+    ports:
+      - 5007:5006
+    environment:
+      OTEL_SERVICE_NAME: "service-r"
+    depends_on:
+      otelcol:
+        condition: service_started
+
+  autoinstrumenter:
+    build:
+      context: ../..
+      dockerfile: ./test/integration/components/beyla/Dockerfile
+    volumes:
+      - ./configs/:/configs
+      - ./system/sys/kernel/security:/sys/kernel/security
+      - /sys/fs/cgroup:/sys/fs/cgroup
+      - ../../testoutput:/coverage
+      - ../../testoutput/run-nodejsdist:/var/run/beyla
+    image: hatest-autoinstrumenter-b
+    privileged: true # in some environments (not GH Pull Requests) you can set it to false and then cap_add: [ SYS_ADMIN ]
+    network_mode: "host"
+    pid: "host"
+    environment:
+      BEYLA_CONFIG_PATH: "/configs/instrumenter-config-with-jaeger-host.yml"
+      GOCOVERDIR: "/coverage"
+      BEYLA_TRACE_PRINTER: "text"
+      BEYLA_OPEN_PORT: "5001,5006"
+      BEYLA_DISCOVERY_POLL_INTERVAL: 500ms
+      BEYLA_SERVICE_NAMESPACE: "integration-test"
+      BEYLA_METRICS_INTERVAL: "10ms"
+      BEYLA_BPF_BATCH_TIMEOUT: "10ms"
+      BEYLA_LOG_LEVEL: "INFO"
+      BEYLA_BPF_DEBUG: "TRUE"
+      BEYLA_HOSTNAME: "beyla"
+      BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION: true
+      BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT: 8999
+      BEYLA_INTERNAL_METRICS_PROMETHEUS_PATH: /metrics
+      BEYLA_BPF_HTTP_REQUEST_TIMEOUT: "5s"
+      BEYLA_PROCESSES_INTERVAL: "100ms"
+      BEYLA_OTEL_METRICS_FEATURES: "application,application_process,application_span,application_service_graph"
+    depends_on:
+      testserver_b:
+        condition: service_started
+      testserver_r:
+        condition: service_started
+
+  # OpenTelemetry Collector
+  otelcol:
+    image: otel/opentelemetry-collector-contrib:0.104.0
+    container_name: otel-col
+    deploy:
+      resources:
+        limits:
+          memory: 125M
+    restart: unless-stopped
+    command: [ "--config=/etc/otelcol-config/otelcol-config-4017.yml" ]
+    volumes:
+      - ./configs/:/etc/otelcol-config
+    ports:
+      - "4017"          # OTLP over gRPC receiver
+      - "4018:4018"     # OTLP over HTTP receiver
+      - "9464"          # Prometheus exporter
+      - "8888"          # metrics endpoint
+    depends_on:
+      prometheus:
+        condition: service_started
+
+  # Prometheus
+  prometheus:
+    image: quay.io/prometheus/prometheus:v2.55.1
+    container_name: prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus-config.yml
+      - --web.enable-lifecycle
+      - --web.route-prefix=/
+      - --log.level=debug
+    volumes:
+      - ./configs/:/etc/prometheus
+    ports:
+      - "9090:9090"
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.57
+    ports:
+      - "16686:16686" # Query frontend
+      - "4317:4317"   # OTEL GRPC traces collector
+      - "4318:4318"   # OTEL HTTP traces collector
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - LOG_LEVEL=debug

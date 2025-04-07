@@ -1,0 +1,15 @@
+FROM node:18-slim
+
+# Set the working directory to /build
+WORKDIR /
+
+# Copy the source code into the image for building
+COPY test/integration/components/nodejsdist .
+
+# Install NodeJS express
+RUN npm init -y && npm install express axios
+
+EXPOSE 5001
+
+# Run the node app
+CMD [ "node", "service-b.js" ]

@@ -66,7 +66,8 @@ int beyla_emit_async_init(struct pt_regs *ctx) {
             if (async_id) {
                 bpf_map_update_elem(&active_nodejs_ids, &id, &async_id, BPF_ANY);
                 if (trigger_async_id) {
-                    bpf_map_update_elem(&nodejs_parent_map, &async_id, &trigger_async_id, BPF_ANY);
+                    bpf_map_update_elem(
+                        &nodejs_parent_map, &async_id, &trigger_async_id, BPF_NOEXIST);
                     bpf_dbg_printk(
                         "async_id = %llx, trigger_async_id = %llx", async_id, trigger_async_id);
                 } else {

@@ -203,7 +203,7 @@ Set the required capabilities and start Beyla:
 
 ```shell
 sudo setcap cap_bpf,cap_dac_read_search,cap_perfmon,cap_net_raw,cap_sys_ptrace,cap_net_admin+ep ./bin/beyla
-BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION=1 BEYLA_OPEN_PORT=8080 BEYLA_TRACE_PRINTER=text bin/beyla
+BEYLA_ENABLE_CONTEXT_PROPAGATION=all BEYLA_OPEN_PORT=8080 BEYLA_TRACE_PRINTER=text bin/beyla
 ```
 
 ## Internal eBPF tracer capability requirement reference

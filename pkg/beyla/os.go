@@ -8,6 +8,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
+	ebpfcfg "github.com/grafana/beyla/v2/pkg/config"
 	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/v2/pkg/internal/helpers"
 )
@@ -87,7 +88,7 @@ func checkCapabilitiesForSetOptions(config *Config, caps *helpers.OSCapabilities
 		testAndSet(caps, capError, unix.CAP_PERFMON)
 		testAndSet(caps, capError, unix.CAP_NET_RAW)
 
-		if config.EBPF.ContextPropagationEnabled || config.EBPF.UseTCForL7CP {
+		if config.EBPF.ContextPropagation != ebpfcfg.ContextPropagationDisabled || config.EBPF.UseTCForL7CP {
 			testAndSet(caps, capError, unix.CAP_NET_ADMIN)
 		}
 	}

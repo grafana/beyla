@@ -108,7 +108,7 @@ func TestMultiProcess(t *testing.T) {
 func TestMultiProcessAppCP(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-multiexec-host.yml", path.Join(pathOutput, "test-suite-multiexec-tc.log"))
 	// we are going to setup discovery directly in the configuration file
-	compose.Env = append(compose.Env, `BEYLA_BPF_DISABLE_BLACK_BOX_CP=1`, `BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION=1`, `BEYLA_BPF_TRACK_REQUEST_HEADERS=1`)
+	compose.Env = append(compose.Env, `BEYLA_BPF_DISABLE_BLACK_BOX_CP=1`, `BEYLA_BPF_CONTEXT_PROPAGATION=all`, `BEYLA_BPF_TRACK_REQUEST_HEADERS=1`)
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 
@@ -123,8 +123,7 @@ func TestMultiProcessAppCP(t *testing.T) {
 func TestMultiProcessAppCPNoIP(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-multiexec-host.yml", path.Join(pathOutput, "test-suite-multiexec-tc.log"))
 	// we are going to setup discovery directly in the configuration file
-	compose.Env = append(compose.Env, `BEYLA_BPF_DISABLE_BLACK_BOX_CP=1`, `BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION=1`,
-		`BEYLA_BPF_TRACK_REQUEST_HEADERS=1`, `BEYLA_BPF_ENABLE_IP_CONTEXT_PROPAGATION=0`)
+	compose.Env = append(compose.Env, `BEYLA_BPF_DISABLE_BLACK_BOX_CP=1`, `BEYLA_BPF_CONTEXT_PROPAGATION=headers`, `BEYLA_BPF_TRACK_REQUEST_HEADERS=1`)
 
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())

@@ -15,6 +15,7 @@ import (
 	"github.com/vishvananda/netlink"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
+	"github.com/grafana/beyla/v2/pkg/config"
 	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/v2/pkg/internal/exec"
 	"github.com/grafana/beyla/v2/pkg/internal/goexec"
@@ -127,7 +128,9 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 		loader = loadBpf_debug
 	}
 
-	if p.cfg.EBPF.TrackRequestHeaders || p.cfg.EBPF.UseTCForL7CP || p.cfg.EBPF.ContextPropagationEnabled {
+	if p.cfg.EBPF.TrackRequestHeaders ||
+		p.cfg.EBPF.UseTCForL7CP ||
+		p.cfg.EBPF.ContextPropagation != config.ContextPropagationDisabled {
 		if ebpfcommon.SupportsEBPFLoops(p.log, p.cfg.EBPF.OverrideBPFLoopEnabled) {
 			p.log.Info("Found compatible Linux kernel, enabling trace information parsing")
 			loader = loadBpf_tp
@@ -195,7 +198,9 @@ func (p *Tracer) Constants() map[string]any {
 		m["filter_pids"] = int32(0)
 	}
 
-	if p.cfg.EBPF.TrackRequestHeaders || p.cfg.EBPF.UseTCForL7CP || p.cfg.EBPF.ContextPropagationEnabled {
+	if p.cfg.EBPF.TrackRequestHeaders ||
+		p.cfg.EBPF.UseTCForL7CP ||
+		p.cfg.EBPF.ContextPropagation != config.ContextPropagationDisabled {
 		m["capture_header_buffer"] = int32(1)
 	} else {
 		m["capture_header_buffer"] = int32(0)
@@ -314,7 +319,7 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.ProbeDesc {
 		},
 	}
 
-	if p.cfg.EBPF.ContextPropagationEnabled {
+	if p.cfg.EBPF.ContextPropagation != config.ContextPropagationDisabled {
 		// tcp_rate_check_app_limited and tcp_sendmsg_fastopen are backup
 		// for tcp_sendmsg_locked which doesn't fire on certain kernels
 		// if sk_msg is attached.

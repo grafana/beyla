@@ -78,6 +78,12 @@ When a metric name matches multiple definitions using wildcards, exact matches h
 | ---------------------------- | -------------------------------------- | ------- | -------- |
 | `enable_context_propagation` | `BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION` | boolean | (false)  |
 
+Deprecated. Use `context_propagation` instead.
+
+| YAML                  | Environment variable            | Type    | Default    |
+| ----------------------| ------------------------------- | ------- | ---------- |
+| `context_propagation` | `BEYLA_BPF_CONTEXT_PROPAGATION` | string  | `disabled` |
+
 Enables injecting of the `Traceparent` header value for outgoing HTTP requests, allowing
 Beyla to propagate any incoming context to downstream services. This context propagation
 support works for any programming language.
@@ -91,10 +97,19 @@ other eBPF programs chain correctly with Beyla. For more information on this
 topic, see our documentation related to [Cilium CNI](../../cilium-compatibility/).
 
 It is possible to completely disable the TCP/IP level encoding (and thus the
-requirement of running a TC program) by setting `enable_ip_context_propagation=false`.
+requirement of running a TC program) by setting `context_propagation="headers"`.
 
 This context propagation support is fully compatible with any OpenTelemetry
 distributed tracing library.
+
+##### Possible values:
+
+| Value      | Description                                              |
+| ---------- | -------------------------------------------------------- |
+| `all`      | Enable both HTTP and IP options context propagation      |
+| `headers`  | Enable context propagation via the HTTP headers only     |
+| `ip`       | Enable context propagation via the IP options field only |
+| `disabled` | Disable trace context propagation                        |
 
 For this option to correctly work in containerized environments (Kubernetes and Docker), the
 following configuration must be specified:
@@ -106,16 +121,6 @@ gRPC and HTTP2 are not supported at the moment.
 
 For an example of how to configure distributed traces in Kubernetes, see our 
 [Distributed traces with Beyla](../../distributed-traces/) guide.
-
-| YAML                            | Environment variable                      | Type    | Default |
-| ------------------------------- | ----------------------------------------- | ------- | ------- |
-| `enable_ip_context_propagation` | `BEYLA_BPF_ENABLE_IP_CONTEXT_PROPAGATION` | boolean | (true)  |
-
-This option only takes effect when `enable_context_propagation=true`. When set
-to `false`, it disables the injection of the trace context at the TCP/IP
-level, and therefore skips the loading of the associated Traffic Control
-programs responsible for doing it. This is useful when chaining multiple eBPF
-traffic control programs is undesirable or causing issues.
 
 | YAML                    | Environment variable              | Type    | Default |
 | ----------------------- | --------------------------------- | ------- | ------- |

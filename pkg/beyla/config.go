@@ -47,12 +47,12 @@ var DefaultConfig = Config{
 	LogLevel:         "INFO",
 	EnforceSysCaps:   false,
 	EBPF: config.EBPFTracer{
-		BatchLength:                 100,
-		BatchTimeout:                time.Second,
-		HTTPRequestTimeout:          30 * time.Second,
-		TCBackend:                   tcmanager.TCBackendAuto,
-		ContextPropagationEnabled:   false,
-		IPContextPropagationEnabled: true,
+		BatchLength:               100,
+		BatchTimeout:              time.Second,
+		HTTPRequestTimeout:        30 * time.Second,
+		TCBackend:                 tcmanager.TCBackendAuto,
+		ContextPropagationEnabled: false,
+		ContextPropagation:        config.ContextPropagationDisabled,
 	},
 	Grafana: otel.GrafanaConfig{
 		OTLP: otel.GrafanaOTLP{
@@ -260,6 +260,18 @@ func (c *Config) Validate() error {
 	if !c.EBPF.TCBackend.Valid() {
 		return ConfigError("Invalid BEYLA_BPF_TC_BACKEND value")
 	}
+
+	if c.EBPF.ContextPropagationEnabled && c.EBPF.ContextPropagation != config.ContextPropagationDisabled {
+		return ConfigError("context_propagation_enabled and context_propagation are mutually exclusive")
+	}
+
+	//TODO deprecated (REMOVE)
+	if c.EBPF.ContextPropagationEnabled {
+		slog.Warn("DEPRECATION NOTICE: 'context_propagation_enabled' configuration option has been " +
+			"deprecated and will be removed in the future - use 'context_propagation' instead")
+		c.EBPF.ContextPropagation = config.ContextPropagationAll
+	}
+
 	if c.willUseTC() {
 		if err := tcmanager.EnsureCiliumCompatibility(c.EBPF.TCBackend); err != nil {
 			return ConfigError(fmt.Sprintf("Cilium compatibility error: %s", err.Error()))
@@ -313,7 +325,10 @@ func (c *Config) otelNetO11yEnabled() bool {
 }
 
 func (c *Config) willUseTC() bool {
-	return (c.EBPF.ContextPropagationEnabled && c.EBPF.IPContextPropagationEnabled) || (c.Enabled(FeatureNetO11y) && c.NetworkFlows.Source == EbpfSourceTC)
+	return c.EBPF.ContextPropagation == config.ContextPropagationAll ||
+		c.EBPF.ContextPropagation == config.ContextPropagationIPOptionsOnly ||
+		c.EBPF.ContextPropagationEnabled ||
+		(c.Enabled(FeatureNetO11y) && c.NetworkFlows.Source == EbpfSourceTC)
 }
 
 // Enabled checks if a given Beyla feature is enabled according to the global configuration

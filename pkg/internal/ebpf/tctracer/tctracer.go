@@ -47,7 +47,7 @@ func (p *Tracer) BlockPID(uint32, uint32) {}
 func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 
 	if !ebpfcommon.HasHostPidAccess() {
-		return nil, fmt.Errorf("IP context-propagation requires host process ID access, e.g. hostPid:true")
+		return nil, fmt.Errorf("L4 context-propagation requires host process ID access, e.g. hostPid:true")
 	}
 
 	hostNet, err := ebpfcommon.HasHostNetworkAccess()
@@ -56,7 +56,7 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 	}
 
 	if !hostNet {
-		return nil, fmt.Errorf("IP context-propagation requires host network access, e.g. hostNetwork:true")
+		return nil, fmt.Errorf("L4 context-propagation requires host network access, e.g. hostNetwork:true")
 	}
 
 	if p.cfg.EBPF.BpfDebug {
@@ -127,22 +127,6 @@ func (p *Tracer) startTC(ctx context.Context) {
 	if p.tcManager != nil {
 		return
 	}
-
-	if p.cfg.EBPF.UseTCForL7CP {
-		p.log.Info("L7 context-propagation with Linux Traffic Control enabled, not using the regular IP support.")
-		return
-	}
-
-	if !p.cfg.EBPF.ContextPropagationEnabled {
-		return
-	}
-
-	if !p.cfg.EBPF.IPContextPropagationEnabled {
-		p.log.Info("IP context propagation explicitly disabled by the current configuration")
-		return
-	}
-
-	p.log.Info("enabling IP context-propagation with Linux Traffic Control")
 
 	p.ifaceManager = tcmanager.NewInterfaceManager()
 	p.tcManager = tcmanager.NewTCManager(p.cfg.EBPF.TCBackend)

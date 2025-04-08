@@ -562,10 +562,14 @@ int beyla_uprobe_roundTripReturn(struct pt_regs *ctx) {
         "status %d, offset %d, resp_ptr %lx", trace->status, status_code_ptr_pos, (u64)resp_ptr);
 
     u64 response_length_ptr_pos = go_offset_of(ot, (go_offset){.v = _response_length_ptr_pos});
-    bpf_probe_read(&trace->response_length, sizeof(trace->response_length), (void *)(resp_ptr + response_length_ptr_pos));
+    bpf_probe_read(&trace->response_length,
+                   sizeof(trace->response_length),
+                   (void *)(resp_ptr + response_length_ptr_pos));
 
-    bpf_dbg_printk(
-        "response_length %d, offset %d, resp_ptr %lx", trace->response_length, response_length_ptr_pos, (u64)resp_ptr);
+    bpf_dbg_printk("response_length %d, offset %d, resp_ptr %lx",
+                   trace->response_length,
+                   response_length_ptr_pos,
+                   (u64)resp_ptr);
 
     // submit the completed trace via ringbuffer
     bpf_ringbuf_submit(trace, get_flags());

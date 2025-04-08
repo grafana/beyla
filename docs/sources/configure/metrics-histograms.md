@@ -39,7 +39,7 @@ If the value is unset, the default bucket boundaries follow the
 | `request_size_histogram` | `[]float64` |
 | `response_size_histogram` | `[]float64` |
 
-Sets the bucket boundaries for the metrics related to request/response sizes. This is:
+Sets the bucket boundaries for the metrics related to request / response sizes. This is:
 
 - `http.server.request.body.size` (OTEL) / `http_server_request_body_size_bytes` (Prometheus)
 - `http.client.request.body.size` (OTEL) / `http_client_request_body_size_bytes` (Prometheus)

@@ -265,7 +265,7 @@ func (c *Config) Validate() error {
 		return ConfigError("context_propagation_enabled and context_propagation are mutually exclusive")
 	}
 
-	//TODO deprecated (REMOVE)
+	// TODO deprecated (REMOVE)
 	if c.EBPF.ContextPropagationEnabled {
 		slog.Warn("DEPRECATION NOTICE: 'context_propagation_enabled' configuration option has been " +
 			"deprecated and will be removed in the future - use 'context_propagation' instead")

@@ -44,7 +44,7 @@ type EBPFTracer struct {
 
 	HTTPRequestTimeout time.Duration `yaml:"http_request_timeout" env:"BEYLA_BPF_HTTP_REQUEST_TIMEOUT"`
 
-	// Deprecated, equivalent to ContextPropagationAll
+	// Deprecated: equivalent to ContextPropagationAll
 	ContextPropagationEnabled bool `yaml:"enable_context_propagation" env:"BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION"`
 
 	// Enables distributed context propagation.

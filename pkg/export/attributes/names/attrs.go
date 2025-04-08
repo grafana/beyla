@@ -32,6 +32,7 @@ const (
 	ServerAddr             = Name("server.address")
 	ServerPort             = Name("server.port")
 	HTTPRequestBodySize    = Name("http.request.body.size")
+	HTTPResponseBodySize   = Name("http.response.body.size")
 	SpanKind               = Name("span.kind")
 	SpanName               = Name("span.name")
 	StatusCode             = Name("status.code")

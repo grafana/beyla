@@ -2,4 +2,4 @@
 
 package bpf
 
-import _ "github.com/grafana/beyla/v2/bpf/headers"
+import _ "github.com/grafana/beyla/v2/bpf"

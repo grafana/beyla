@@ -36,10 +36,20 @@ var (
 		Prom:    "http_server_request_body_size_bytes",
 		OTEL:    "http.server.request.body.size",
 	}
+	HTTPServerResponseSize = Name{
+		Section: "http.server.response.body.size",
+		Prom:    "http_server_response_body_size_bytes",
+		OTEL:    "http.server.response.body.size",
+	}
 	HTTPClientRequestSize = Name{
 		Section: "http.client.request.body.size",
 		Prom:    "http_client_request_body_size_bytes",
 		OTEL:    "http.client.request.body.size",
+	}
+	HTTPClientResponseSize = Name{
+		Section: "http.client.response.body.size",
+		Prom:    "http_client_response_body_size_bytes",
+		OTEL:    "http.client.response.body.size",
 	}
 	HTTPServerDuration = Name{
 		Section: "http.server.request.duration",

@@ -42,15 +42,16 @@ const (
 	// pkg/internal/export/metric package as we are disabling user-provided attribute
 	// selection for them. They are very specific metrics with an opinionated format
 	// for Span Metrics and Service Graph Metrics functionalities
-	SpanMetricsLatency = "traces_spanmetrics_latency"
-	SpanMetricsCalls   = "traces_spanmetrics_calls_total"
-	SpanMetricsSizes   = "traces_spanmetrics_size_total"
-	TracesTargetInfo   = "traces_target_info"
-	TracesHostInfo     = "traces_host_info"
-	ServiceGraphClient = "traces_service_graph_request_client"
-	ServiceGraphServer = "traces_service_graph_request_server"
-	ServiceGraphFailed = "traces_service_graph_request_failed_total"
-	ServiceGraphTotal  = "traces_service_graph_request_total"
+	SpanMetricsLatency       = "traces_spanmetrics_latency"
+	SpanMetricsCalls         = "traces_spanmetrics_calls_total"
+	SpanMetricsRequestSizes  = "traces_spanmetrics_size_total"
+	SpanMetricsResponseSizes = "traces_spanmetrics_response_size_total"
+	TracesTargetInfo         = "traces_target_info"
+	TracesHostInfo           = "traces_host_info"
+	ServiceGraphClient       = "traces_service_graph_request_client"
+	ServiceGraphServer       = "traces_service_graph_request_server"
+	ServiceGraphFailed       = "traces_service_graph_request_failed_total"
+	ServiceGraphTotal        = "traces_service_graph_request_total"
 
 	UsualPortGRPC = "4317"
 	UsualPortHTTP = "4318"
@@ -203,19 +204,21 @@ type MetricsReporter struct {
 	is         instrumentations.InstrumentationSelection
 
 	// user-selected fields for each of the reported metrics
-	attrHTTPDuration          []attributes.Field[*request.Span, attribute.KeyValue]
-	attrHTTPClientDuration    []attributes.Field[*request.Span, attribute.KeyValue]
-	attrGRPCServer            []attributes.Field[*request.Span, attribute.KeyValue]
-	attrGRPCClient            []attributes.Field[*request.Span, attribute.KeyValue]
-	attrDBClient              []attributes.Field[*request.Span, attribute.KeyValue]
-	attrMessagingPublish      []attributes.Field[*request.Span, attribute.KeyValue]
-	attrMessagingProcess      []attributes.Field[*request.Span, attribute.KeyValue]
-	attrHTTPRequestSize       []attributes.Field[*request.Span, attribute.KeyValue]
-	attrHTTPClientRequestSize []attributes.Field[*request.Span, attribute.KeyValue]
-	attrGPUKernelCalls        []attributes.Field[*request.Span, attribute.KeyValue]
-	attrGPUKernelGridSize     []attributes.Field[*request.Span, attribute.KeyValue]
-	attrGPUKernelBlockSize    []attributes.Field[*request.Span, attribute.KeyValue]
-	attrGPUMemoryAllocations  []attributes.Field[*request.Span, attribute.KeyValue]
+	attrHTTPDuration           []attributes.Field[*request.Span, attribute.KeyValue]
+	attrHTTPClientDuration     []attributes.Field[*request.Span, attribute.KeyValue]
+	attrGRPCServer             []attributes.Field[*request.Span, attribute.KeyValue]
+	attrGRPCClient             []attributes.Field[*request.Span, attribute.KeyValue]
+	attrDBClient               []attributes.Field[*request.Span, attribute.KeyValue]
+	attrMessagingPublish       []attributes.Field[*request.Span, attribute.KeyValue]
+	attrMessagingProcess       []attributes.Field[*request.Span, attribute.KeyValue]
+	attrHTTPRequestSize        []attributes.Field[*request.Span, attribute.KeyValue]
+	attrHTTPResponseSize       []attributes.Field[*request.Span, attribute.KeyValue]
+	attrHTTPClientRequestSize  []attributes.Field[*request.Span, attribute.KeyValue]
+	attrHTTPClientResponseSize []attributes.Field[*request.Span, attribute.KeyValue]
+	attrGPUKernelCalls         []attributes.Field[*request.Span, attribute.KeyValue]
+	attrGPUKernelGridSize      []attributes.Field[*request.Span, attribute.KeyValue]
+	attrGPUKernelBlockSize     []attributes.Field[*request.Span, attribute.KeyValue]
+	attrGPUMemoryAllocations   []attributes.Field[*request.Span, attribute.KeyValue]
 }
 
 // Metrics is a set of metrics associated to a given OTEL MeterProvider.
@@ -226,28 +229,31 @@ type Metrics struct {
 	provider *metric.MeterProvider
 
 	// IMPORTANT! Don't forget to clean each Expirer in cleanupAllMetricsInstances method
-	httpDuration          *Expirer[*request.Span, instrument.Float64Histogram, float64]
-	httpClientDuration    *Expirer[*request.Span, instrument.Float64Histogram, float64]
-	grpcDuration          *Expirer[*request.Span, instrument.Float64Histogram, float64]
-	grpcClientDuration    *Expirer[*request.Span, instrument.Float64Histogram, float64]
-	dbClientDuration      *Expirer[*request.Span, instrument.Float64Histogram, float64]
-	msgPublishDuration    *Expirer[*request.Span, instrument.Float64Histogram, float64]
-	msgProcessDuration    *Expirer[*request.Span, instrument.Float64Histogram, float64]
-	httpRequestSize       *Expirer[*request.Span, instrument.Float64Histogram, float64]
-	httpClientRequestSize *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	httpDuration           *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	httpClientDuration     *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	grpcDuration           *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	grpcClientDuration     *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	dbClientDuration       *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	msgPublishDuration     *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	msgProcessDuration     *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	httpRequestSize        *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	httpResponseSize       *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	httpClientRequestSize  *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	httpClientResponseSize *Expirer[*request.Span, instrument.Float64Histogram, float64]
 	// trace span metrics
-	spanMetricsLatency    *Expirer[*request.Span, instrument.Float64Histogram, float64]
-	spanMetricsCallsTotal *Expirer[*request.Span, instrument.Int64Counter, int64]
-	spanMetricsSizeTotal  *Expirer[*request.Span, instrument.Float64Counter, float64]
-	serviceGraphClient    *Expirer[*request.Span, instrument.Float64Histogram, float64]
-	serviceGraphServer    *Expirer[*request.Span, instrument.Float64Histogram, float64]
-	serviceGraphFailed    *Expirer[*request.Span, instrument.Int64Counter, int64]
-	serviceGraphTotal     *Expirer[*request.Span, instrument.Int64Counter, int64]
-	tracesTargetInfo      instrument.Int64UpDownCounter
-	gpuKernelCallsTotal   *Expirer[*request.Span, instrument.Int64Counter, int64]
-	gpuMemoryAllocsTotal  *Expirer[*request.Span, instrument.Int64Counter, int64]
-	gpuKernelGridSize     *Expirer[*request.Span, instrument.Float64Histogram, float64]
-	gpuKernelBlockSize    *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	spanMetricsLatency           *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	spanMetricsCallsTotal        *Expirer[*request.Span, instrument.Int64Counter, int64]
+	spanMetricsRequestSizeTotal  *Expirer[*request.Span, instrument.Float64Counter, float64]
+	spanMetricsResponseSizeTotal *Expirer[*request.Span, instrument.Float64Counter, float64]
+	serviceGraphClient           *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	serviceGraphServer           *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	serviceGraphFailed           *Expirer[*request.Span, instrument.Int64Counter, int64]
+	serviceGraphTotal            *Expirer[*request.Span, instrument.Int64Counter, int64]
+	tracesTargetInfo             instrument.Int64UpDownCounter
+	gpuKernelCallsTotal          *Expirer[*request.Span, instrument.Int64Counter, int64]
+	gpuMemoryAllocsTotal         *Expirer[*request.Span, instrument.Int64Counter, int64]
+	gpuKernelGridSize            *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	gpuKernelBlockSize           *Expirer[*request.Span, instrument.Float64Histogram, float64]
 }
 
 func ReportMetrics(
@@ -310,8 +316,12 @@ func newMetricsReporter(
 			request.SpanOTELGetters, mr.attributes.For(attributes.HTTPClientDuration))
 		mr.attrHTTPRequestSize = attributes.OpenTelemetryGetters(
 			request.SpanOTELGetters, mr.attributes.For(attributes.HTTPServerRequestSize))
+		mr.attrHTTPResponseSize = attributes.OpenTelemetryGetters(
+			request.SpanOTELGetters, mr.attributes.For(attributes.HTTPServerResponseSize))
 		mr.attrHTTPClientRequestSize = attributes.OpenTelemetryGetters(
 			request.SpanOTELGetters, mr.attributes.For(attributes.HTTPClientRequestSize))
+		mr.attrHTTPClientResponseSize = attributes.OpenTelemetryGetters(
+			request.SpanOTELGetters, mr.attributes.For(attributes.HTTPClientResponseSize))
 	}
 	if is.GRPCEnabled() {
 		mr.attrGRPCServer = attributes.OpenTelemetryGetters(
@@ -382,7 +392,9 @@ func (mr *MetricsReporter) otelMetricOptions(mlog *slog.Logger) []metric.Option 
 			metric.WithView(otelHistogramConfig(attributes.HTTPServerDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
 			metric.WithView(otelHistogramConfig(attributes.HTTPClientDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
 			metric.WithView(otelHistogramConfig(attributes.HTTPServerRequestSize.OTEL, mr.cfg.Buckets.RequestSizeHistogram, useExponentialHistograms)),
+			metric.WithView(otelHistogramConfig(attributes.HTTPServerResponseSize.OTEL, mr.cfg.Buckets.ResponseSizeHistogram, useExponentialHistograms)),
 			metric.WithView(otelHistogramConfig(attributes.HTTPClientRequestSize.OTEL, mr.cfg.Buckets.RequestSizeHistogram, useExponentialHistograms)),
+			metric.WithView(otelHistogramConfig(attributes.HTTPClientResponseSize.OTEL, mr.cfg.Buckets.ResponseSizeHistogram, useExponentialHistograms)),
 		)
 	}
 
@@ -457,17 +469,31 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 
 		httpRequestSize, err := meter.Float64Histogram(attributes.HTTPServerRequestSize.OTEL, instrument.WithUnit("By"))
 		if err != nil {
-			return fmt.Errorf("creating http size histogram metric: %w", err)
+			return fmt.Errorf("creating http request size histogram metric: %w", err)
 		}
 		m.httpRequestSize = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
 			m.ctx, httpRequestSize, mr.attrHTTPRequestSize, timeNow, mr.cfg.TTL)
 
+		httpResponseSize, err := meter.Float64Histogram(attributes.HTTPServerResponseSize.OTEL, instrument.WithUnit("By"))
+		if err != nil {
+			return fmt.Errorf("creating http response size histogram metric: %w", err)
+		}
+		m.httpResponseSize = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
+			m.ctx, httpResponseSize, mr.attrHTTPResponseSize, timeNow, mr.cfg.TTL)
+
 		httpClientRequestSize, err := meter.Float64Histogram(attributes.HTTPClientRequestSize.OTEL, instrument.WithUnit("By"))
 		if err != nil {
-			return fmt.Errorf("creating http size histogram metric: %w", err)
+			return fmt.Errorf("creating http client request size histogram metric: %w", err)
 		}
 		m.httpClientRequestSize = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
 			m.ctx, httpClientRequestSize, mr.attrHTTPClientRequestSize, timeNow, mr.cfg.TTL)
+
+		httpClientResponseSize, err := meter.Float64Histogram(attributes.HTTPClientResponseSize.OTEL, instrument.WithUnit("By"))
+		if err != nil {
+			return fmt.Errorf("creating http client response size histogram metric: %w", err)
+		}
+		m.httpClientResponseSize = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
+			m.ctx, httpClientResponseSize, mr.attrHTTPClientResponseSize, timeNow, mr.cfg.TTL)
 	}
 
 	if mr.is.GRPCEnabled() {
@@ -567,12 +593,19 @@ func (mr *MetricsReporter) setupSpanMeters(m *Metrics, meter instrument.Meter) e
 	m.spanMetricsCallsTotal = NewExpirer[*request.Span, instrument.Int64Counter, int64](
 		m.ctx, spanMetricsCallsTotal, spanMetricAttrs, timeNow, mr.cfg.TTL)
 
-	spanMetricsSizeTotal, err := meter.Float64Counter(SpanMetricsSizes)
+	spanMetricsRequestSizeTotal, err := meter.Float64Counter(SpanMetricsRequestSizes)
 	if err != nil {
-		return fmt.Errorf("creating span metric size total: %w", err)
+		return fmt.Errorf("creating span metric request size total: %w", err)
 	}
-	m.spanMetricsSizeTotal = NewExpirer[*request.Span, instrument.Float64Counter, float64](
-		m.ctx, spanMetricsSizeTotal, spanMetricAttrs, timeNow, mr.cfg.TTL)
+	m.spanMetricsRequestSizeTotal = NewExpirer[*request.Span, instrument.Float64Counter, float64](
+		m.ctx, spanMetricsRequestSizeTotal, spanMetricAttrs, timeNow, mr.cfg.TTL)
+
+	spanMetricsResponseSizeTotal, err := meter.Float64Counter(SpanMetricsResponseSizes)
+	if err != nil {
+		return fmt.Errorf("creating span metric response size total: %w", err)
+	}
+	m.spanMetricsResponseSizeTotal = NewExpirer[*request.Span, instrument.Float64Counter, float64](
+		m.ctx, spanMetricsResponseSizeTotal, spanMetricAttrs, timeNow, mr.cfg.TTL)
 
 	m.tracesTargetInfo, err = meter.Int64UpDownCounter(TracesTargetInfo)
 	if err != nil {
@@ -892,7 +925,10 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 				httpDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
 
 				httpRequestSize, attrs := r.httpRequestSize.ForRecord(span)
-				httpRequestSize.Record(ctx, float64(span.RequestLength()), instrument.WithAttributeSet(attrs))
+				httpRequestSize.Record(ctx, float64(span.RequestBodyLength()), instrument.WithAttributeSet(attrs))
+
+				httpResponseSize, attrs := r.httpResponseSize.ForRecord(span)
+				httpResponseSize.Record(ctx, float64(span.ResponseBodyLength()), instrument.WithAttributeSet(attrs))
 			}
 		case request.EventTypeGRPC:
 			if mr.is.GRPCEnabled() {
@@ -909,7 +945,9 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 				httpClientDuration, attrs := r.httpClientDuration.ForRecord(span)
 				httpClientDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
 				httpClientRequestSize, attrs := r.httpClientRequestSize.ForRecord(span)
-				httpClientRequestSize.Record(ctx, float64(span.RequestLength()), instrument.WithAttributeSet(attrs))
+				httpClientRequestSize.Record(ctx, float64(span.RequestBodyLength()), instrument.WithAttributeSet(attrs))
+				httpClientResponseSize, attrs := r.httpClientResponseSize.ForRecord(span)
+				httpClientResponseSize.Record(ctx, float64(span.ResponseBodyLength()), instrument.WithAttributeSet(attrs))
 			}
 		case request.EventTypeRedisServer, request.EventTypeRedisClient, request.EventTypeSQLClient:
 			if mr.is.DBEnabled() {
@@ -953,8 +991,11 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 		smct, attrs := r.spanMetricsCallsTotal.ForRecord(span)
 		smct.Add(ctx, 1, instrument.WithAttributeSet(attrs))
 
-		smst, attrs := r.spanMetricsSizeTotal.ForRecord(span)
-		smst.Add(ctx, float64(span.RequestLength()), instrument.WithAttributeSet(attrs))
+		smst, attrs := r.spanMetricsRequestSizeTotal.ForRecord(span)
+		smst.Add(ctx, float64(span.RequestBodyLength()), instrument.WithAttributeSet(attrs))
+
+		smst, attr := r.spanMetricsResponseSizeTotal.ForRecord(span)
+		smst.Add(ctx, float64(span.ResponseBodyLength()), instrument.WithAttributeSet(attr))
 	}
 
 	if mr.cfg.ServiceGraphMetricsEnabled() {
@@ -1137,10 +1178,12 @@ func (r *Metrics) cleanupAllMetricsInstances() {
 	cleanupMetrics(r.ctx, r.msgPublishDuration)
 	cleanupMetrics(r.ctx, r.msgProcessDuration)
 	cleanupMetrics(r.ctx, r.httpRequestSize)
+	cleanupMetrics(r.ctx, r.httpResponseSize)
 	cleanupMetrics(r.ctx, r.httpClientRequestSize)
 	cleanupMetrics(r.ctx, r.spanMetricsLatency)
 	cleanupCounterMetrics(r.ctx, r.spanMetricsCallsTotal)
-	cleanupFloatCounterMetrics(r.ctx, r.spanMetricsSizeTotal)
+	cleanupFloatCounterMetrics(r.ctx, r.spanMetricsRequestSizeTotal)
+	cleanupFloatCounterMetrics(r.ctx, r.spanMetricsResponseSizeTotal)
 	cleanupMetrics(r.ctx, r.serviceGraphClient)
 	cleanupMetrics(r.ctx, r.serviceGraphServer)
 	cleanupCounterMetrics(r.ctx, r.serviceGraphFailed)

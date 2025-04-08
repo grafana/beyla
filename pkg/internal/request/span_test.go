@@ -98,14 +98,15 @@ func TestSerializeJSONSpans(t *testing.T) {
 		testData{
 			eventType: EventTypeHTTP,
 			attribs: map[string]any{
-				"method":     "method",
-				"status":     "200",
-				"url":        "path",
-				"contentLen": "1024",
-				"route":      "route",
-				"clientAddr": "peername",
-				"serverAddr": "hostname",
-				"serverPort": "5678",
+				"method":      "method",
+				"status":      "200",
+				"url":         "path",
+				"contentLen":  "1024",
+				"responseLen": "2048",
+				"route":       "route",
+				"clientAddr":  "peername",
+				"serverAddr":  "hostname",
+				"serverPort":  "5678",
 			},
 		},
 		testData{
@@ -190,6 +191,7 @@ func TestSerializeJSONSpans(t *testing.T) {
 			HostPort:       5678,
 			Status:         200,
 			ContentLength:  1024,
+			ResponseLength: 2048,
 			RequestStart:   10000,
 			Start:          15000,
 			End:            35000,
@@ -492,6 +494,86 @@ func TestHostPeerClientServer(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.client, PeerAsClient(&tt.span))
 			assert.Equal(t, tt.server, HostAsServer(&tt.span))
+		})
+	}
+}
+
+func TestRequestBodyLength(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		s        Span
+		expected int64
+	}{
+		{
+			name: "With ContentLength less than zero",
+			s: Span{
+				ContentLength: -1,
+			},
+			expected: 0,
+		},
+		{
+			name: "With ContentLength equal to zero",
+			s: Span{
+				ContentLength: 0,
+			},
+			expected: 0,
+		},
+		{
+			name: "With ContentLength greater than zero",
+			s: Span{
+				ContentLength: 128,
+			},
+			expected: 128,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			assert.Equal(t, tt.expected, tt.s.RequestBodyLength())
+		})
+	}
+}
+
+func TestResponseBodyLength(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		s        Span
+		expected int64
+	}{
+		{
+			name: "With ResponseLength less than zero",
+			s: Span{
+				ResponseLength: -1,
+			},
+			expected: 0,
+		},
+		{
+			name: "With ResponseLength equal to zero",
+			s: Span{
+				ResponseLength: 0,
+			},
+			expected: 0,
+		},
+		{
+			name: "With ResponseLength greater than zero",
+			s: Span{
+				ResponseLength: 128,
+			},
+			expected: 128,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			assert.Equal(t, tt.expected, tt.s.ResponseBodyLength())
 		})
 	}
 }

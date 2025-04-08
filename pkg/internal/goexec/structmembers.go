@@ -40,6 +40,7 @@ const (
 	SchemePtrPos
 	MethodPtrPos
 	StatusCodePtrPos
+	ResponseLengthPtrPos
 	ContentLengthPtrPos
 	ReqHeaderPtrPos
 	IoWriterBufPtrPos
@@ -120,7 +121,8 @@ var structMembers = map[string]structInfo{
 	"net/http.Response": {
 		lib: "go",
 		fields: map[string]GoOffset{
-			"StatusCode": StatusCodePtrPos,
+			"StatusCode":    StatusCodePtrPos,
+			"ContentLength": ResponseLengthPtrPos,
 		},
 	},
 	"google.golang.org/grpc/internal/transport.Stream": {

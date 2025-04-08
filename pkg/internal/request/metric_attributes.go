@@ -16,6 +16,10 @@ func HTTPResponseStatusCode(val int) attribute.KeyValue {
 	return attribute.Key(attr.HTTPResponseStatusCode).Int(val)
 }
 
+func HTTPResponseBodySize(val int64) attribute.KeyValue {
+	return attribute.Key(attr.HTTPResponseBodySize).Int64(val)
+}
+
 func HTTPUrlPath(val string) attribute.KeyValue {
 	return attribute.Key(attr.HTTPUrlPath).String(val)
 }

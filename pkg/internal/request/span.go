@@ -155,6 +155,7 @@ type Span struct {
 	Host           string         `json:"host"`
 	HostPort       int            `json:"hostPort,string"`
 	Status         int            `json:"-"`
+	ResponseLength int64          `json:"-"`
 	ContentLength  int64          `json:"-"`
 	RequestStart   int64          `json:"-"`
 	Start          int64          `json:"-"`
@@ -189,14 +190,15 @@ func spanAttributes(s *Span) SpanAttributes {
 	switch s.Type {
 	case EventTypeHTTP:
 		return SpanAttributes{
-			"method":     s.Method,
-			"status":     strconv.Itoa(s.Status),
-			"url":        s.Path,
-			"contentLen": strconv.FormatInt(s.ContentLength, 10),
-			"route":      s.Route,
-			"clientAddr": SpanPeer(s),
-			"serverAddr": SpanHost(s),
-			"serverPort": strconv.Itoa(s.HostPort),
+			"method":      s.Method,
+			"status":      strconv.Itoa(s.Status),
+			"url":         s.Path,
+			"contentLen":  strconv.FormatInt(s.ContentLength, 10),
+			"responseLen": strconv.FormatInt(s.ResponseLength, 10),
+			"route":       s.Route,
+			"clientAddr":  SpanPeer(s),
+			"serverAddr":  SpanHost(s),
+			"serverPort":  strconv.Itoa(s.HostPort),
 		}
 	case EventTypeHTTPClient:
 		return SpanAttributes{
@@ -421,12 +423,22 @@ func GrpcSpanStatusCode(span *Span) codes.Code {
 	return codes.Unset
 }
 
-func (s *Span) RequestLength() int64 {
+func (s *Span) RequestBodyLength() int64 {
+	// The value -1 indicates that the length is unknown.
 	if s.ContentLength < 0 {
 		return 0
 	}
 
 	return s.ContentLength
+}
+
+func (s *Span) ResponseBodyLength() int64 {
+	// The value -1 indicates that the length is unknown.
+	if s.ResponseLength < 0 {
+		return 0
+	}
+
+	return s.ResponseLength
 }
 
 // ServiceGraphKind returns the Kind string representation that is compliant with service graph metrics specification

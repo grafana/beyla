@@ -659,6 +659,18 @@
       }
     },
     "net/http.Response": {
+      "ContentLength": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.24.2"
+        },
+        "offsets": [
+          {
+            "offset": 80,
+            "since": "1.17.0"
+          }
+        ]
+      },
       "StatusCode": {
         "versions": {
           "oldest": "1.17.0",

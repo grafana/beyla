@@ -2,7 +2,7 @@
 
 package otelsdk
 
-//go:generate curl -sSLOz grafana-opentelemetry-java.jar https://github.com/grafana/grafana-opentelemetry-java/releases/download/v2.13.2.1/grafana-opentelemetry-java.jar
+//go:generate wget --quiet -N -O grafana-opentelemetry-java.jar https://github.com/grafana/grafana-opentelemetry-java/releases/download/v2.13.2.1/grafana-opentelemetry-java.jar
 
 import (
 	"bufio"

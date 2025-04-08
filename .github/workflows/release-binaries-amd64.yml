@@ -1,0 +1,12 @@
+name: Release binaries
+on:
+  release:
+    types:
+      - published
+
+jobs:
+  release-amd64:
+    uses: ./.github/workflows/release-binaries-base.yml
+    with:
+      arch: amd64
+      runner: ubuntu-latest

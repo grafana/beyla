@@ -158,7 +158,7 @@ checkfmt:
 
 .PHONY: clang-tidy
 clang-tidy:
-	cd bpf && $(CLANG_TIDY) *.c *.h
+	cd bpf && find . -type f \( -name '*.c' -o -name '*.h' \) ! -path "./bpfcore/*" | xargs clang-tidy
 
 .PHONY: lint-dashboard
 lint-dashboard: prereqs
@@ -216,7 +216,7 @@ debug:
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -gcflags "-N -l" -ldflags="-X '$(BUILDINFO_PKG).Version=$(RELEASE_VERSION)' -X '$(BUILDINFO_PKG).Revision=$(RELEASE_REVISION)'" -a -o bin/$(CMD) $(MAIN_GO_FILE)
 
 .PHONY: dev
-dev: prereqs docker-generate compile-for-coverage
+dev: prereqs generate compile-for-coverage
 
 # Generated binary can provide coverage stats according to https://go.dev/blog/integration-test-coverage
 .PHONY: compile-for-coverage compile-cache-for-coverage
@@ -379,7 +379,7 @@ check-licenses: update-licenses
 	fi
 
 .PHONY: artifact
-artifact: compile
+artifact: docker-generate compile
 	@echo "### Packing generated artifact"
 	cp LICENSE ./bin
 	cp NOTICE ./bin

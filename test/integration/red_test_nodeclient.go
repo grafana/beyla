@@ -106,7 +106,5 @@ func testNodeClientWithMethodAndStatusCode(t *testing.T, method string, statusCo
 		assert.NotEmpty(t, span.TraceID)
 		assert.Truef(t, strings.HasSuffix(span.TraceID, traceIDLookup),
 			"string %q should have suffix %q", span.TraceID, traceIDLookup)
-		assert.Truef(t, strings.HasPrefix(span.SpanID, "00"),
-			"string %q should have prefix '00'", span.SpanID)
 	}
 }

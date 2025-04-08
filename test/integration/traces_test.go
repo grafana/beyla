@@ -943,3 +943,178 @@ func testNestedHTTPSTracesKProbes(t *testing.T) {
 	)
 	assert.Empty(t, sd, sd.String())
 }
+
+func testHTTPTracesNestedSelfCalls(t *testing.T) {
+	var parentID string
+
+	waitForTestComponentsRoute(t, "http://localhost:8083", "/smoke")
+
+	// Run a request, since we have a single app, we should see always all requests
+	doHTTPGet(t, "https://localhost:8081/api1", 200)
+
+	var trace jaeger.Trace
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		resp, err := http.Get(jaegerQueryURL + "?service=python-self&operation=GET%20%2Fapi1")
+		require.NoError(t, err)
+		if resp == nil {
+			return
+		}
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		var tq jaeger.TracesQuery
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
+		traces := tq.FindBySpan(jaeger.Tag{Key: "url.path", Type: "string", Value: "/api1"})
+		require.Len(t, traces, 1)
+		trace = traces[0]
+	}, test.Interval(100*time.Millisecond))
+
+	// Check the information of the parent span
+	res := trace.FindByOperationName("GET /api1")
+	require.Len(t, res, 1)
+	server := res[0]
+	require.NotEmpty(t, server.TraceID)
+	require.NotEmpty(t, server.SpanID)
+	parentID = server.SpanID
+
+	// check span attributes
+	sd := server.Diff(
+		jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
+		jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(200)},
+		jaeger.Tag{Key: "url.path", Type: "string", Value: "/api1"},
+		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(8081)},
+		jaeger.Tag{Key: "http.route", Type: "string", Value: "/api1"},
+		jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
+	)
+	assert.Empty(t, sd, sd.String())
+
+	children := trace.ChildrenOf(parentID)
+	require.Len(t, children, 1)
+	child := children[0]
+
+	sd = child.Diff(
+		jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
+		jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(200)},
+		jaeger.Tag{Key: "url.path", Type: "string", Value: "/api2"},
+		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(8082)},
+		jaeger.Tag{Key: "http.route", Type: "string", Value: "/api2"},
+		jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
+	)
+	assert.Empty(t, sd, sd.String())
+
+	children = trace.ChildrenOf(child.SpanID)
+	require.Len(t, children, 1)
+	child = children[0]
+
+	sd = child.Diff(
+		jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
+		jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(200)},
+		jaeger.Tag{Key: "url.path", Type: "string", Value: "/api3"},
+		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(8083)},
+		jaeger.Tag{Key: "http.route", Type: "string", Value: "/api3"},
+		jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
+	)
+	assert.Empty(t, sd, sd.String())
+
+	children = trace.ChildrenOf(child.SpanID)
+	require.Len(t, children, 1)
+	child = children[0]
+
+	sd = child.Diff(
+		jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
+		jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(200)},
+		jaeger.Tag{Key: "url.path", Type: "string", Value: "/api4"},
+		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(8084)},
+		jaeger.Tag{Key: "http.route", Type: "string", Value: "/api4"},
+		jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
+	)
+	assert.Empty(t, sd, sd.String())
+}
+
+func testHTTPTracesNestedNodeJSDistCalls(t *testing.T) {
+	var parentID string
+
+	waitForTestComponentsRoute(t, "http://localhost:5002", "/smoke")
+
+	// Run a request, since we have a single app, we should see always all requests
+	doHTTPGet(t, "http://localhost:5002/b", 200)
+
+	var trace jaeger.Trace
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		resp, err := http.Get(jaegerQueryURL + "?service=service-b&operation=GET%20%2Fb")
+		require.NoError(t, err)
+		if resp == nil {
+			return
+		}
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		var tq jaeger.TracesQuery
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
+		traces := tq.FindBySpan(jaeger.Tag{Key: "url.path", Type: "string", Value: "/b"})
+		require.Len(t, traces, 1)
+		trace = traces[0]
+	}, test.Interval(100*time.Millisecond))
+
+	// Check the information of the parent span
+	res := trace.FindByOperationName("GET /b")
+	require.Len(t, res, 1)
+	server := res[0]
+	require.NotEmpty(t, server.TraceID)
+	require.NotEmpty(t, server.SpanID)
+	parentID = server.SpanID
+
+	// check span attributes
+	sd := server.Diff(
+		jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
+		jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(200)},
+		jaeger.Tag{Key: "url.path", Type: "string", Value: "/b"},
+		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(5001)},
+		jaeger.Tag{Key: "http.route", Type: "string", Value: "/b"},
+		jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
+	)
+	assert.Empty(t, sd, sd.String())
+
+	children := trace.ChildrenOf(parentID)
+	require.Len(t, children, 3)
+
+	seenP := false
+	seenR := false
+	seenQ := false
+
+	for i := 0; i < 3; i++ {
+		child := children[i]
+
+		sd = child.Diff(
+			jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
+			jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(200)},
+			jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(5006)},
+			jaeger.Tag{Key: "span.kind", Type: "string", Value: "client"},
+		)
+		assert.Empty(t, sd, sd.String())
+
+		inner := trace.ChildrenOf(child.SpanID)
+		require.Len(t, inner, 1)
+		child = inner[0]
+
+		sd = child.Diff(
+			jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
+			jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(200)},
+			jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(5006)},
+			jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
+		)
+		assert.Empty(t, sd, sd.String())
+
+		tag, found := jaeger.FindIn(child.Tags, "http.route")
+		assert.True(t, found)
+
+		switch tag.Value {
+		case "/r":
+			seenR = true
+		case "/p":
+			seenP = true
+		case "/q":
+			seenQ = true
+		}
+	}
+
+	assert.True(t, seenP)
+	assert.True(t, seenQ)
+	assert.True(t, seenR)
+}

@@ -10,15 +10,16 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
-	"time"
-	"unicode"
 
 	"github.com/caarlos0/env/v9"
 )
+
+const envModuleRoot = "BEYLA_GENFILES_MODULE_ROOT"
 
 type config struct {
 	DebugEnabled    bool   `env:"BEYLA_GENFILES_DEBUG"            envDefault:"false"`
@@ -33,169 +34,6 @@ type config struct {
 
 var cfg config
 
-var targetsByGoArch = map[string]Target{
-	"386":      {"bpfel", "x86"},
-	"amd64":    {"bpfel", "x86"},
-	"arm":      {"bpfel", "arm"},
-	"arm64":    {"bpfel", "arm64"},
-	"loong64":  {"bpfel", "loongarch"},
-	"mips":     {"bpfeb", "mips"},
-	"mipsle":   {"bpfel", ""},
-	"mips64":   {"bpfeb", ""},
-	"mips64le": {"bpfel", ""},
-	"ppc64":    {"bpfeb", "powerpc"},
-	"ppc64le":  {"bpfel", "powerpc"},
-	"riscv64":  {"bpfel", "riscv"},
-	"s390x":    {"bpfeb", "s390"},
-}
-
-type Target struct {
-	clang string
-	linux string
-}
-
-func (tgt *Target) Suffix() string {
-	stem := tgt.clang
-
-	if tgt.linux != "" {
-		stem = fmt.Sprintf("%s_%s", tgt.linux, tgt.clang)
-	}
-
-	return stem
-}
-
-type argParser struct {
-	cmdLine string
-	index   int
-}
-
-func newargParser(cmdLine string) *argParser {
-	return &argParser{
-		cmdLine: cmdLine,
-		index:   0,
-	}
-}
-
-func (ap *argParser) shift() (string, bool) {
-	for ap.index < len(ap.cmdLine) && unicode.IsSpace(rune(ap.cmdLine[ap.index])) {
-		ap.index++
-	}
-
-	// If we've reached the end of the string, return false
-	if ap.index >= len(ap.cmdLine) {
-		return "", false
-	}
-
-	start := ap.index
-
-	for ap.index < len(ap.cmdLine) && !unicode.IsSpace(rune(ap.cmdLine[ap.index])) {
-		ap.index++
-	}
-
-	// Return the word
-	return ap.cmdLine[start:ap.index], true
-}
-
-type bpf2goGenContext struct {
-	goArchs []string
-	stem    string // the ident stem passed to bpf2go
-	outDir  string // the output directory passed to bpf2go
-	srcFile string // the .c source file passed to bpf2go
-	srcDir  string // the source directory of the .go file containing the generate directive
-	goFile  string // the go file containing the generate directive
-}
-
-//nolint:cyclop
-func parseBPF2GOGenLine(goFile string, line string) *bpf2goGenContext {
-	ctx := &bpf2goGenContext{
-		goArchs: []string{"bpfel", "bpfeb"}, // the defaults according to bpf2go
-		goFile:  goFile,
-		srcDir:  filepath.Dir(goFile),
-	}
-
-	parser := newargParser(line)
-
-	// yank //go-generate
-	parser.shift()
-
-	// yank $BPF2GO
-	parser.shift()
-
-	for {
-		arg, ok := parser.shift()
-
-		if !ok {
-			break
-		}
-
-		//nolint:gocritic
-		if arg == "-target" {
-			if arg, ok = parser.shift(); ok {
-				ctx.goArchs = strings.Split(arg, ",")
-			}
-		} else if arg == "-output-stem" {
-			if arg, ok = parser.shift(); ok {
-				ctx.stem = strings.ToLower(arg)
-			}
-		} else if arg == "-output-dir" {
-			if arg, ok = parser.shift(); ok {
-				ctx.outDir = arg
-			}
-		} else if arg == "--" {
-			break
-		} else if arg[0] == '-' {
-			parser.shift()
-		} else if ctx.stem == "" {
-			ctx.stem = strings.ToLower(arg)
-		} else if ctx.srcFile == "" {
-			ctx.srcFile = filepath.Join(ctx.srcDir, arg)
-		}
-	}
-
-	if ctx.outDir == "" {
-		ctx.outDir = ctx.srcDir
-	}
-
-	return ctx
-}
-
-func isFileStale(ts time.Time, file string) bool {
-	info, err := os.Stat(file)
-
-	if err != nil {
-		return true
-	}
-
-	return ts.After(info.ModTime())
-}
-
-func bpf2goFileNeedsGenerate(ctx *bpf2goGenContext) (bool, error) {
-	info, err := os.Stat(ctx.srcFile)
-
-	if err != nil {
-		return false, fmt.Errorf("cannot stat source file '%s': %w", ctx.srcFile, err)
-	}
-
-	ts := info.ModTime()
-
-	for _, goArch := range ctx.goArchs {
-		target, ok := targetsByGoArch[goArch]
-
-		if !ok {
-			continue
-		}
-
-		baseName := fmt.Sprintf("%s_%s", ctx.stem, target.Suffix())
-		filePath := filepath.Join(ctx.outDir, baseName)
-
-		if isFileStale(ts, filePath+".o") || isFileStale(ts, filePath+".go") {
-			return true, nil
-		}
-	}
-
-	return false, nil
-}
-
 type fileSet map[string]struct{}
 
 func (f fileSet) toArray() []string {
@@ -208,27 +46,24 @@ func (f fileSet) toArray() []string {
 	return ret
 }
 
-func mustGenerate(path string, comment string) (bool, error) {
+func mustGenerate(comment string) bool {
 	// we only care about files containing //go-generate
 	if !strings.HasPrefix(comment, "//go:generate") {
-		return false, nil
+		return false
 	}
 
 	// if not a bpf2go generation, we always regenerate the file
 	if !strings.Contains(comment, "$BPF2GO") {
-		return true, nil
+		return true
 	}
 
 	// only regenerate bpf2go statements on Linux
 	if runtime.GOOS != "linux" {
-		return false, nil
+		return false
 	}
 
-	// bpf2go generation is a special case - we don't want to
-	// regenerate files that haven't changed, so we need to resolve
-	// the source .c file and the bpf2go artifacts (.o and .go files)
-	// to work out whether they need to be regenerated
-	return bpf2goFileNeedsGenerate(parseBPF2GOGenLine(path, comment))
+	// on linux, we always regenerate the file
+	return true
 }
 
 func handleDirEntry(path string, d fs.DirEntry, err error, filesToGenerate fileSet) error {
@@ -258,13 +93,7 @@ func handleDirEntry(path string, d fs.DirEntry, err error, filesToGenerate fileS
 
 	for _, commentGroup := range node.Comments {
 		for _, comment := range commentGroup.List {
-			generate, err := mustGenerate(path, comment.Text)
-
-			if err != nil {
-				return err
-			}
-
-			if generate {
+			if mustGenerate(comment.Text) {
 				filesToGenerate[path] = struct{}{}
 			}
 		}
@@ -336,6 +165,21 @@ func beylaPackageDir() (string, error) {
 }
 
 func moduleRoot() (string, error) {
+	wd := os.Getenv(envModuleRoot)
+
+	if wd != "" {
+		info, err := os.Stat(wd)
+
+		if err != nil {
+			return "", err
+		}
+
+		if !info.IsDir() {
+			return "", fmt.Errorf("specified module root '%s' is not a dir", wd)
+		}
+
+		return wd, nil
+	}
 
 	wd, err := beylaPackageDir()
 
@@ -354,7 +198,13 @@ func moduleRoot() (string, error) {
 		}
 	}
 
-	return wd, nil
+	absPath, err := filepath.Abs(wd)
+
+	if err != nil {
+		return "", fmt.Errorf("error resolving absolute path: %w", err)
+	}
+
+	return absPath, nil
 }
 
 func ensureWritableImpl(path string, info os.FileInfo) error {
@@ -430,7 +280,14 @@ func runInContainer(wd string) {
 		fmt.Println("adjusted wd:", adjustedWD)
 	}
 
-	err := executeCommand(cfg.OCIBin, "run", "--rm",
+	currentUser, err := user.Current()
+
+	if err != nil {
+		bail(fmt.Errorf("error getting current user id: %w", err))
+	}
+
+	err = executeCommand(cfg.OCIBin, "run", "--rm",
+		"--user", currentUser.Uid+":"+currentUser.Gid,
 		"-v", adjustedWD+":/src",
 		cfg.GenImage)
 

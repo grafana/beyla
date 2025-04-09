@@ -1,8 +1,6 @@
 package ebpfcommon
 
 import (
-	"bytes"
-	"encoding/binary"
 	"fmt"
 
 	"github.com/grafana/beyla/v2/pkg/config"
@@ -12,9 +10,8 @@ import (
 
 // nolint:cyclop
 func ReadTCPRequestIntoSpan(cfg *config.EBPFTracer, record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {
-	var event TCPRequestInfo
+	event, err := reinterpretCast[TCPRequestInfo](record.RawSample)
 
-	err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
 	if err != nil {
 		return request.Span{}, true, err
 	}
@@ -43,20 +40,20 @@ func ReadTCPRequestIntoSpan(cfg *config.EBPFTracer, record *ringbuf.Record, filt
 	// Check if we have a SQL statement
 	op, table, sql, kind := detectSQLPayload(cfg.HeuristicSQLDetect, b)
 	if validSQL(op, table, kind) {
-		return TCPToSQLToSpan(&event, op, table, sql, kind), false, nil
+		return TCPToSQLToSpan(event, op, table, sql, kind), false, nil
 	} else {
 		op, table, sql, kind = detectSQLPayload(cfg.HeuristicSQLDetect, event.Rbuf[:rl])
 		if validSQL(op, table, kind) {
-			reverseTCPEvent(&event)
+			reverseTCPEvent(event)
 
-			return TCPToSQLToSpan(&event, op, table, sql, kind), false, nil
+			return TCPToSQLToSpan(event, op, table, sql, kind), false, nil
 		}
 	}
 
 	if maybeFastCGI(b) {
 		op, uri, status := detectFastCGI(b, event.Rbuf[:rl])
 		if status >= 0 {
-			return TCPToFastCGIToSpan(&event, op, uri, status), false, nil
+			return TCPToFastCGIToSpan(event, op, uri, status), false, nil
 		}
 	}
 
@@ -73,23 +70,24 @@ func ReadTCPRequestIntoSpan(cfg *config.EBPFTracer, record *ringbuf.Record, filt
 				}
 				// We've caught the event reversed in the middle of communication, let's
 				// reverse the event
-				reverseTCPEvent(&event)
+				reverseTCPEvent(event)
 				status = redisStatus(b)
 			} else {
 				status = redisStatus(event.Rbuf[:rl])
 			}
 
-			return TCPToRedisToSpan(&event, op, text, status), false, nil
+			return TCPToRedisToSpan(event, op, text, status), false, nil
 		}
 	default:
 		// Kafka and gRPC can look very similar in terms of bytes. We can mistake one for another.
 		// We try gRPC first because it's more reliable in detecting false gRPC sequences.
 		if isHTTP2(b, int(event.Len)) || isHTTP2(event.Rbuf[:rl], int(event.RespLen)) {
-			MisclassifiedEvents <- MisclassifiedEvent{EventType: EventTypeKHTTP2, TCPInfo: &event}
+			evCopy := *event;
+			MisclassifiedEvents <- MisclassifiedEvent{EventType: EventTypeKHTTP2, TCPInfo: &evCopy}
 		} else {
-			k, err := ProcessPossibleKafkaEvent(&event, b, event.Rbuf[:rl])
+			k, err := ProcessPossibleKafkaEvent(event, b, event.Rbuf[:rl])
 			if err == nil {
-				return TCPToKafkaToSpan(&event, k), false, nil
+				return TCPToKafkaToSpan(event, k), false, nil
 			}
 		}
 	}

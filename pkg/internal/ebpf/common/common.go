@@ -3,12 +3,14 @@ package ebpfcommon
 import (
 	"bufio"
 	"bytes"
-	"encoding/binary"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
 	"os"
+	"reflect"
 	"strings"
+	"unsafe"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
@@ -94,13 +96,11 @@ var MisclassifiedEvents = make(chan MisclassifiedEvent)
 func ptlog() *slog.Logger { return slog.With("component", "ebpf.ProcessTracer") }
 
 func ReadBPFTraceAsSpan(cfg *config.EBPFTracer, record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {
-	var eventType uint8
-
-	// we read the type first, depending on the type we decide what kind of record we have
-	err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &eventType)
-	if err != nil {
-		return request.Span{}, true, err
+	if len(record.RawSample) == 0 {
+		return request.Span{}, true, fmt.Errorf("invalid ringbuffer record size")
 	}
+
+	eventType := record.RawSample[0]
 
 	switch eventType {
 	case EventTypeSQL:
@@ -119,23 +119,33 @@ func ReadBPFTraceAsSpan(cfg *config.EBPFTracer, record *ringbuf.Record, filter S
 		return ReadGoKafkaGoRequestIntoSpan(record)
 	}
 
-	var event HTTPRequestTrace
+	event, err := reinterpretCast[HTTPRequestTrace](record.RawSample)
 
-	err = binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
 	if err != nil {
 		return request.Span{}, true, err
 	}
 
-	return HTTPRequestTraceToSpan(&event), false, nil
+	return HTTPRequestTraceToSpan(event), false, nil
+}
+
+func reinterpretCast[T any](b []byte) (*T, error) {
+	var zero T
+
+	if len(b) < int(unsafe.Sizeof(zero)) {
+		return nil, fmt.Errorf("byte slice too short")
+	}
+
+	return (*T)(unsafe.Pointer((*reflect.SliceHeader)(unsafe.Pointer(&b)).Data)), nil
 }
 
 func ReadSQLRequestTraceAsSpan(record *ringbuf.Record) (request.Span, bool, error) {
-	var event SQLRequestTrace
-	if err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event); err != nil {
+	event, err := reinterpretCast[SQLRequestTrace](record.RawSample)
+
+	if err != nil {
 		return request.Span{}, true, err
 	}
 
-	return SQLRequestTraceToSpan(&event), false, nil
+	return SQLRequestTraceToSpan(event), false, nil
 }
 
 type KernelLockdown uint8

@@ -384,9 +384,8 @@ func http2FromBuffers(event *BPFHTTP2Info) (request.Span, bool, error) {
 }
 
 func ReadHTTP2InfoIntoSpan(record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {
-	var event BPFHTTP2Info
+	event, err := reinterpretCast[BPFHTTP2Info](record.RawSample)
 
-	err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
 	if err != nil {
 		return request.Span{}, true, err
 	}
@@ -395,7 +394,7 @@ func ReadHTTP2InfoIntoSpan(record *ringbuf.Record, filter ServiceFilter) (reques
 		return request.Span{}, true, nil
 	}
 
-	return http2FromBuffers(&event)
+	return http2FromBuffers(event)
 }
 
 type http2FrameType uint8

@@ -22,6 +22,7 @@ import (
 type ringBufReader interface {
 	io.Closer
 	Read() (ringbuf.Record, error)
+	ReadInto(*ringbuf.Record) error
 }
 
 // readerFactory instantiates a ringBufReader from a ring buffer. In unit tests, we can
@@ -148,7 +149,9 @@ func (rbf *ringBufForwarder) readAndForwardInner(eventsReader ringBufReader, spa
 	// Logging each message adds few information and a lot of noise to the debug logs
 	// in production systems with thousands of messages per second
 	rbf.logger.Debug("starting to read ring buffer")
-	record, err := eventsReader.Read()
+
+	var record ringbuf.Record
+	err := eventsReader.ReadInto(&record)
 	for {
 		if err != nil {
 			if errors.Is(err, ringbuf.ErrClosed) {
@@ -156,12 +159,15 @@ func (rbf *ringBufForwarder) readAndForwardInner(eventsReader ringBufReader, spa
 				return
 			}
 			rbf.logger.Error("error reading from perf reader", "error", err)
+
+			time.Sleep(10 * time.Millisecond)
+
 			continue
 		}
 		rbf.processAndForward(record, spansChan)
 
 		// read another event before the next loop iteration
-		record, err = eventsReader.Read()
+		err = eventsReader.ReadInto(&record)
 	}
 }
 

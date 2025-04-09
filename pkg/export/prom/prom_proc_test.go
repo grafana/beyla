@@ -16,6 +16,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
 func TestProcPrometheusEndpoint_AggregatedMetrics(t *testing.T) {
@@ -32,8 +33,9 @@ func TestProcPrometheusEndpoint_AggregatedMetrics(t *testing.T) {
 	attribs := attributes.InclusionLists{
 		Include: []string{"process_command"},
 	}
+	procsInput := msg.NewQueue[[]*process.Status](msg.ChannelBufferLen(10))
 	exporter, err := ProcPrometheusEndpoint(
-		ctx, &global.ContextInfo{Prometheus: &connector.PrometheusManager{}},
+		&global.ContextInfo{Prometheus: &connector.PrometheusManager{}},
 		&ProcPrometheusConfig{Metrics: &PrometheusConfig{
 			Port:                        openPort,
 			Path:                        "/metrics",
@@ -46,14 +48,14 @@ func TestProcPrometheusEndpoint_AggregatedMetrics(t *testing.T) {
 			attributes.ProcessDiskIO.Section:         attribs,
 			attributes.ProcessNetIO.Section:          attribs,
 		}},
-	)()
+		procsInput,
+	)(ctx)
 	require.NoError(t, err)
 
-	metrics := make(chan []*process.Status, 20)
-	go exporter(metrics)
+	go exporter(ctx)
 
 	// WHEN it receives process metrics
-	metrics <- []*process.Status{
+	procsInput.Send([]*process.Status{
 		{ID: process.ID{Service: &svc.Attrs{}, Command: "foo"},
 			CPUUtilisationWait: 3, CPUUtilisationSystem: 2, CPUUtilisationUser: 1,
 			CPUTimeUserDelta: 30, CPUTimeWaitDelta: 20, CPUTimeSystemDelta: 10,
@@ -66,7 +68,7 @@ func TestProcPrometheusEndpoint_AggregatedMetrics(t *testing.T) {
 			IOReadBytesDelta: 321, IOWriteBytesDelta: 654,
 			NetRcvBytesDelta: 1, NetTxBytesDelta: 3,
 		},
-	}
+	})
 
 	// THEN the metrics are exported adding system/user/wait times into a single datapoint
 	test.Eventually(t, timeout, func(t require.TestingT) {
@@ -82,14 +84,14 @@ func TestProcPrometheusEndpoint_AggregatedMetrics(t *testing.T) {
 	})
 
 	// AND WHEN new metrics are received
-	metrics <- []*process.Status{
+	procsInput.Send([]*process.Status{
 		{ID: process.ID{Service: &svc.Attrs{}, Command: "foo"},
 			CPUUtilisationWait: 4, CPUUtilisationSystem: 1, CPUUtilisationUser: 2,
 			CPUTimeUserDelta: 3, CPUTimeWaitDelta: 2, CPUTimeSystemDelta: 1,
 			IOReadBytesDelta: 31, IOWriteBytesDelta: 10,
 			NetRcvBytesDelta: 1, NetTxBytesDelta: 3,
 		},
-	}
+	})
 
 	// THEN the counter is updated by adding values and the gauges change their values
 	test.Eventually(t, timeout, func(t require.TestingT) {
@@ -119,8 +121,9 @@ func TestProcPrometheusEndpoint_DisaggregatedMetrics(t *testing.T) {
 	attribs := attributes.InclusionLists{
 		Include: []string{"process_command", "cpu_mode", "disk_io_direction", "network_io_direction"},
 	}
+	procsInput := msg.NewQueue[[]*process.Status](msg.ChannelBufferLen(10))
 	exporter, err := ProcPrometheusEndpoint(
-		ctx, &global.ContextInfo{Prometheus: &connector.PrometheusManager{}},
+		&global.ContextInfo{Prometheus: &connector.PrometheusManager{}},
 		&ProcPrometheusConfig{Metrics: &PrometheusConfig{
 			Port:                        openPort,
 			Path:                        "/metrics",
@@ -133,21 +136,21 @@ func TestProcPrometheusEndpoint_DisaggregatedMetrics(t *testing.T) {
 			attributes.ProcessDiskIO.Section:         attribs,
 			attributes.ProcessNetIO.Section:          attribs,
 		}},
-	)()
+		procsInput,
+	)(ctx)
 	require.NoError(t, err)
 
-	metrics := make(chan []*process.Status, 20)
-	go exporter(metrics)
+	go exporter(ctx)
 
 	// WHEN it receives process metrics
-	metrics <- []*process.Status{
+	procsInput.Send([]*process.Status{
 		{ID: process.ID{Service: &svc.Attrs{}, Command: "foo"},
 			CPUUtilisationWait: 3, CPUUtilisationSystem: 2, CPUUtilisationUser: 1,
 			CPUTimeUserDelta: 30, CPUTimeWaitDelta: 20, CPUTimeSystemDelta: 10,
 			IOReadBytesDelta: 123, IOWriteBytesDelta: 456,
 			NetRcvBytesDelta: 1, NetTxBytesDelta: 3,
 		},
-	}
+	})
 
 	// THEN the metrics are exported aggregated by system/user/wait times
 	test.Eventually(t, timeout, func(t require.TestingT) {
@@ -165,14 +168,14 @@ func TestProcPrometheusEndpoint_DisaggregatedMetrics(t *testing.T) {
 	})
 
 	// AND WHEN new metrics are received
-	metrics <- []*process.Status{
+	procsInput.Send([]*process.Status{
 		{ID: process.ID{Service: &svc.Attrs{}, Command: "foo"},
 			CPUUtilisationWait: 4, CPUUtilisationSystem: 1, CPUUtilisationUser: 2,
 			CPUTimeUserDelta: 3, CPUTimeWaitDelta: 2, CPUTimeSystemDelta: 1,
 			IOReadBytesDelta: 3, IOWriteBytesDelta: 2,
 			NetRcvBytesDelta: 10, NetTxBytesDelta: 30,
 		},
-	}
+	})
 
 	// THEN the counter is updated by adding values and the gauges change their values
 	test.Eventually(t, timeout, func(t require.TestingT) {

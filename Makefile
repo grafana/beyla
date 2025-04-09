@@ -251,11 +251,11 @@ coverage-report-html: cov-exclude-generated
 	@echo "### Generating HTML coverage report"
 	go tool cover --html=$(TEST_OUTPUT)/cover.txt
 
-.PHONY: image-build-push
-image-build-push:
+.PHONY: image-build
+image-build:
 	@echo "### Building and pushing the auto-instrumenter image"
 	$(call check_defined, IMG_ORG, Your Docker repository user name)
-	$(OCI_BIN) buildx build --push --platform linux/amd64,linux/arm64 -t ${IMG} .
+	$(OCI_BIN) buildx build --platform linux/amd64,linux/arm64 -t ${IMG} .
 
 .PHONY: generator-image-build
 generator-image-build:

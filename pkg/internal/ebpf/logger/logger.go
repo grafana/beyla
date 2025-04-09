@@ -1,12 +1,15 @@
 package logger
 
 import (
-	"bytes"
+	//"bytes"
 	"context"
-	"encoding/binary"
+	//"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
+	"reflect"
+	"unsafe"
 
 	"github.com/cilium/ebpf"
 
@@ -77,10 +80,17 @@ func (p *BPFLogger) Run(ctx context.Context) {
 	)(ctx, nil)
 }
 
-func (p *BPFLogger) processLogEvent(_ *config.EBPFTracer, record *ringbuf.Record, _ ebpfcommon.ServiceFilter) (request.Span, bool, error) {
-	var event BPFLogInfo
 
-	err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
+func bytesToLogInfo(b []byte) (*BPFLogInfo, error) {
+	if len(b) < int(unsafe.Sizeof(BPFLogInfo{})) {
+		return nil, fmt.Errorf("byte slice too short")
+	}
+
+	return (*BPFLogInfo)(unsafe.Pointer((*reflect.SliceHeader)(unsafe.Pointer(&b)).Data)), nil
+}
+
+func (p *BPFLogger) processLogEvent(_ *config.EBPFTracer, record *ringbuf.Record, _ ebpfcommon.ServiceFilter) (request.Span, bool, error) {
+	event, err := bytesToLogInfo(record.RawSample)
 
 	if err == nil {
 		p.log.Debug(readString(event.Log[:]), "pid", event.Pid, "comm", readString(event.Comm[:]))
@@ -90,6 +100,7 @@ func (p *BPFLogger) processLogEvent(_ *config.EBPFTracer, record *ringbuf.Record
 }
 
 func readString(data []int8) string {
+	/*
 	bytes := make([]byte, len(data))
 	for i, v := range data {
 		if v == 0 { // null-terminated string
@@ -99,4 +110,7 @@ func readString(data []int8) string {
 		bytes[i] = byte(v)
 	}
 	return string(bytes)
+	*/
+
+	return *(*string)(unsafe.Pointer(&data))
 }

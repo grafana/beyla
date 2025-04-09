@@ -19,6 +19,7 @@ enum { http2_conn_flag_ssl = WITH_SSL, http2_conn_flag_new = 0x2 };
 typedef struct http2_conn_info_data {
     u64 id;
     u8 flags;
+    u8 _pad[7];
 } http2_conn_info_data_t;
 
 struct {
@@ -39,18 +40,17 @@ struct {
 typedef struct grpc_frames_ctx {
     http2_grpc_request_t prev_info;
     u8 has_prev_info;
-
-    int pos; //FIXME should be size_t equivalent
-    int saved_buf_pos;
-    u32 saved_stream_id;
-
     u8 found_data_frame;
     u8 iterations;
     u8 terminate_search;
 
+    int pos; //FIXME should be size_t equivalent
+    int saved_buf_pos;
+    u32 saved_stream_id;
+    call_protocol_args_t args;
     http2_conn_stream_t stream;
 
-    call_protocol_args_t args;
+    u8 _pad[4];
 } grpc_frames_ctx_t;
 
 struct {

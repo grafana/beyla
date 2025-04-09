@@ -6,4 +6,4 @@ typedef struct pid_key {
     u32 tid; // tid as seen by the userspace (for example, inside its container)
     u32 pid; // parent pid as seen by the userspace (for example, inside its container)
     u32 ns;  // pids namespace for the process
-} __attribute__((packed)) pid_key_t;
+} pid_key_t;

@@ -36,13 +36,15 @@ typedef __u32 u32;
 typedef __u64 u64;
 
 typedef struct flow_metrics_t {
-    u32 packets;
     u64 bytes;
     // start_mono_time_ts and end_mono_time_ts are the start and end times as system monotonic timestamps
     // in nanoseconds, as output from bpf_ktime_get_ns() (kernel space)
     // and monotime.Now() (user space)
     u64 start_mono_time_ns;
     u64 end_mono_time_ns;
+
+    u32 packets;
+
     // TCP Flags from https://www.ietf.org/rfc/rfc793.txt
     u16 flags;
     // direction of the flow EGRESS / INGRESS
@@ -54,7 +56,9 @@ typedef struct flow_metrics_t {
     // 0 otherwise
     // https://chromium.googlesource.com/chromiumos/docs/+/master/constants/errnos.md
     u8 errno;
-} __attribute__((packed)) flow_metrics;
+
+    u8 _pad[7];
+} flow_metrics;
 
 // Attributes that uniquely identify a flow
 // TODO: remove attributes that won't be used in Beyla (e.g. MAC, maybe protocol...)
@@ -64,19 +68,23 @@ typedef struct flow_id_t {
     // as described in https://datatracker.ietf.org/doc/html/rfc4038#section-4.2
     struct in6_addr src_ip; // keep these aligned
     struct in6_addr dst_ip;
+    // OS interface index
+    u32 if_index;
+
     u16 eth_protocol;
+
     // L4 transport layer
     u16 src_port;
     u16 dst_port;
     u8 transport_protocol;
-    // OS interface index
-    u32 if_index;
-} __attribute__((packed)) flow_id;
+    u8 _pad[1];
+} flow_id;
 
 // Flow record is a tuple containing both flow identifier and metrics. It is used to send
 // a complete flow via ring buffer when only when the accounting hashmap is full.
 // Contents in this struct must match byte-by-byte with Go's pkc/flow/Record struct
 typedef struct flow_record_t {
-    flow_id id;
     flow_metrics metrics;
-} __attribute__((packed)) flow_record;
+    flow_id id;
+    u8 _pad[4];
+} flow_record;

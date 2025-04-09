@@ -82,8 +82,9 @@ struct {
 
 typedef struct grpc_transports {
     connection_info_t conn;
-    tp_info_t tp;
     u8 type;
+    u8 pad[3];
+    tp_info_t tp;
 } grpc_transports_t;
 
 // TODO: use go_addr_key_t as key
@@ -98,8 +99,9 @@ typedef struct sql_func_invocation {
     u64 start_monotime_ns;
     u64 sql_param;
     u64 query_len;
-    connection_info_t conn __attribute__((aligned(8)));
     tp_info_t tp;
+    connection_info_t conn;
+    u8 _pad[4];
 } sql_func_invocation_t;
 
 struct {

@@ -154,7 +154,7 @@ func connectOldPipesLibToSwarmProcessSubpipeline(
 			return nil, err
 		}
 		return func(in <-chan []request.Span) {
-			processMetrics(ctx)
+			go processMetrics(ctx)
 			// just connects the old pipe library with the new swarm library
 			// TODO: will be removed when we move the rest of the pipeline to the new swarm
 			for i := range in {

@@ -35,7 +35,7 @@ func ProcessMetricsSwarmInstancer(
 		if !isSubPipeEnabled(cfg) {
 			// returns nothing. Nothing will subscribe to the ProcessSubPipeInput, no extra
 			// load will be held
-			return func(_ context.Context) {}, nil
+			return swarm.EmptyRunFunc()
 		}
 
 		// communication channel between the process collector and the metrics exporters

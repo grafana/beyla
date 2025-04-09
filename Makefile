@@ -192,7 +192,7 @@ generate: bpf2go
 .PHONY: docker-generate
 docker-generate:
 	@echo "### Generating files (docker)..."
-	@go generate cmd/beyla-genfiles/beyla_genfiles.go
+	@BEYLA_GENFILES_GEN_IMG=$(GEN_IMG) go generate cmd/beyla-genfiles/beyla_genfiles.go
 
 .PHONY: verify
 verify: prereqs lint-dashboard lint test

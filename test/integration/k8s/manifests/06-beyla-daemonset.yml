@@ -7,7 +7,6 @@ data:
     attributes:
       kubernetes:
         enable: true
-        cluster_name: beyla
         resource_labels:
           deployment.environment: ["deployment.environment"]
       select:

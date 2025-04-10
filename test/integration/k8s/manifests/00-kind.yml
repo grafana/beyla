@@ -3,6 +3,8 @@ kind: Cluster
 name: beyla
 nodes:
   - role: control-plane
+    labels:
+      cluster.x-k8s.io/cluster-name: beyla-k8s-test-cluster
     extraMounts:
       # configuration files that need to be mounted in the host
       - hostPath: ../../configs

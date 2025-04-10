@@ -8,8 +8,8 @@ import (
 	"path"
 	"strings"
 	"sync"
-	"time"
 	"text/template"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -39,14 +39,14 @@ func klog() *slog.Logger {
 }
 
 type MetadataConfig struct {
-	Enable            kubeflags.EnableFlag
-	DisabledInformers []string
-	KubeConfigPath    string
-	SyncTimeout       time.Duration
-	ResyncPeriod      time.Duration
-	MetaCacheAddr     string
-	ResourceLabels    ResourceLabels
-	RestrictLocalNode bool
+	Enable              kubeflags.EnableFlag
+	DisabledInformers   []string
+	KubeConfigPath      string
+	SyncTimeout         time.Duration
+	ResyncPeriod        time.Duration
+	MetaCacheAddr       string
+	ResourceLabels      ResourceLabels
+	RestrictLocalNode   bool
 	ServiceNameTemplate *template.Template
 }
 

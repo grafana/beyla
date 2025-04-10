@@ -114,7 +114,10 @@ static __always_inline tp_info_pid_t *find_parent_trace(const pid_connection_inf
                 }
             }
         } else {
-            //bpf_dbg_printk("Found parent trace for pid=%d, ns=%lx, orig_extra_id=%llx, extra_id=%llx", t_key.p_key.pid, t_key.p_key.ns, extra_id, t_key.extra_id);
+            bpf_dbg_printk("Found parent trace for pid=%d, ns=%lx, extra_id=%llx",
+                           t_key.p_key.pid,
+                           t_key.p_key.ns,
+                           t_key.extra_id);
             return server_tp;
         }
 
@@ -124,6 +127,7 @@ static __always_inline tp_info_pid_t *find_parent_trace(const pid_connection_inf
     cp_support_data_t *conn_t_key = bpf_map_lookup_elem(&cp_support_connect_info, p_conn);
 
     if (conn_t_key) {
+        bpf_dbg_printk("Found parent trace for connection through connection lookup");
         return bpf_map_lookup_elem(&server_traces, &conn_t_key->t_key);
     }
 
@@ -136,19 +140,22 @@ static __always_inline unsigned char *extract_trace_id(unsigned char *tp_start) 
 }
 
 static __always_inline unsigned char *extract_span_id(unsigned char *tp_start) {
-    return tp_start + 13 + 2 + 1 + 32 +
-           1; // strlen("Traceparent: ") + strlen(ver) + strlen("-") + strlen(trace_id) + strlen("-")
+    // strlen("Traceparent: ") + strlen(ver) + strlen("-") + strlen(trace_id) + strlen("-")
+    return tp_start + 13 + 2 + 1 + 32 + 1;
 }
 
 static __always_inline unsigned char *extract_flags(unsigned char *tp_start) {
-    return tp_start + 13 + 2 + 1 + 32 + 1 + 16 +
-           1; // strlen("Traceparent: ") + strlen(ver) + strlen("-") + strlen(trace_id) + strlen("-") + strlen(span_id) + strlen("-")
+    // strlen("Traceparent: ") + strlen(ver) + strlen("-") + strlen(trace_id) + strlen("-") + strlen(span_id) + strlen("-")
+    return tp_start + 13 + 2 + 1 + 32 + 1 + 16 + 1;
 }
 
 static __always_inline void delete_server_trace(trace_key_t *t_key) {
     int __attribute__((unused)) res = bpf_map_delete_elem(&server_traces, t_key);
-    // Fails on 5.10 with unknown function
-    // bpf_dbg_printk("Deleting server span for id=%llx, pid=%d, ns=%d, res = %d", bpf_get_current_pid_tgid(), t_key->p_key.pid, t_key->p_key.ns, res);
+    bpf_dbg_printk("Deleting server span for id=%llx, pid=%d, ns=%d",
+                   bpf_get_current_pid_tgid(),
+                   t_key->p_key.pid,
+                   t_key->p_key.ns);
+    bpf_dbg_printk("Deleting server span for res = %d", res);
 }
 
 static __always_inline void delete_client_trace_info(pid_connection_info_t *pid_conn) {
@@ -191,7 +198,7 @@ server_or_client_trace(u8 type, connection_info_t *conn, tp_info_pid_t *tp_p, u8
                        t_key.p_key.pid,
                        t_key.p_key.tid);
         bpf_dbg_printk(
-            "Saving server span for ns=%d, extra_id=%llx", t_key.p_key.ns, t_key.extra_id);
+            "Saving server span for ns=%x, extra_id=%llx", t_key.p_key.ns, t_key.extra_id);
         bpf_map_update_elem(&server_traces, &t_key, tp_p, BPF_ANY);
     } else {
         // Setup a pid, so that we can find it in TC.

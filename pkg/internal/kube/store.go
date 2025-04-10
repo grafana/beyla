@@ -1,10 +1,10 @@
 package kube
 
 import (
+	"bytes"
 	"log/slog"
 	"strings"
 	"sync"
-	"bytes"
 	"text/template"
 
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
@@ -186,7 +186,7 @@ func (s *Store) cacheResourceMetadata(meta *informer.ObjectMeta) *CachedObjMeta 
 			com.OTELResourceMeta[serviceNamespaceKey] = val
 		}
 	}
-	com.ServiceName, com.ServiceNamespace = s.serviceNameNamespaceForMetadata(meta)
+	com.ServiceName, com.ServiceNamespace = s.serviceNameNamespaceForMetadata(meta, "")
 	return &com
 }
 
@@ -362,21 +362,21 @@ func (s *Store) ObjectMetaByIP(ip string) *CachedObjMeta {
 	return s.objectMetaByIP[ip]
 }
 
-func (s *Store) ServiceNameNamespaceForMetadata(om *informer.ObjectMeta) (string, string) {
+func (s *Store) ServiceNameNamespaceForMetadata(om *informer.ObjectMeta, containerName string) (string, string) {
 	s.access.RLock()
 	defer s.access.RUnlock()
-	return s.serviceNameNamespaceForMetadata(om)
+	return s.serviceNameNamespaceForMetadata(om, containerName)
 }
 
 // TODO: this function can be probably simplified, as it is used to build a CachedObjectMeta
 // that already contains the metadata
-func (s *Store) serviceNameNamespaceForMetadata(om *informer.ObjectMeta) (string, string) {
+func (s *Store) serviceNameNamespaceForMetadata(om *informer.ObjectMeta, containerName string) (string, string) {
 	var name string
 	var namespace string
 	if owner := TopOwner(om.Pod); owner != nil {
-		name, namespace = s.serviceNameNamespaceOwnerID(om, owner.Name)
+		name, namespace = s.serviceNameNamespaceOwnerID(om, owner.Name, containerName)
 	} else {
-		name, namespace = s.serviceNameNamespaceOwnerID(om, om.Name)
+		name, namespace = s.serviceNameNamespaceOwnerID(om, om.Name, containerName)
 	}
 	return name, namespace
 }
@@ -415,7 +415,7 @@ func (s *Store) ServiceNameNamespaceForIP(ip string) (string, string) {
 
 	name, namespace := "", ""
 	if om, ok := s.objectMetaByIP[ip]; ok {
-		name, namespace = s.serviceNameNamespaceForMetadata(om.Meta)
+		name, namespace = s.serviceNameNamespaceForMetadata(om.Meta, "")
 	}
 
 	s.otelServiceInfoByIP[ip] = OTelServiceNamePair{Name: name, Namespace: namespace}
@@ -429,7 +429,7 @@ func (s *Store) ServiceNameNamespaceForIP(ip string) (string, string) {
 // 2. Resource attributes set via annotations (with the resource.opentelemetry.io/ prefix)
 // 3. Resource attributes set via labels (e.g. app.kubernetes.io/name)
 // 4. Resource attributes calculated from the owner's metadata (e.g. k8s.deployment.name) or pod's metadata (e.g. k8s.pod.name)
-func (s *Store) serviceNameNamespaceOwnerID(om *informer.ObjectMeta, ownerName string) (string, string) {
+func (s *Store) serviceNameNamespaceOwnerID(om *informer.ObjectMeta, ownerName string, containerName string) (string, string) {
 	// ownerName can be the top Owner name, or om.Name in case it's a pod without owner
 	serviceName := ownerName
 	serviceNamespace := om.Namespace
@@ -442,7 +442,14 @@ func (s *Store) serviceNameNamespaceOwnerID(om *informer.ObjectMeta, ownerName s
 	} else if s.serviceNameTemplate != nil {
 		// defining a serviceNameTemplate disables the resolution via annotation + label (this can be implemented in the template)
 		var serviceNameBuffer bytes.Buffer
-		err := s.serviceNameTemplate.Execute(&serviceNameBuffer, om)
+		ctx := struct {
+			Meta          *informer.ObjectMeta
+			ContainerName string
+		}{
+			Meta:          om,
+			ContainerName: containerName,
+		}
+		err := s.serviceNameTemplate.Execute(&serviceNameBuffer, ctx)
 
 		if err != nil {
 			s.log.Error("error executing service name template", "error", err)

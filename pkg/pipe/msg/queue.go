@@ -1,6 +1,8 @@
 // Package msg provides tools for message passing and queues between the different nodes of the Beyla pipelines.
 package msg
 
+import "sync"
+
 type queueConfig struct {
 	channelBufferLen int
 }
@@ -25,6 +27,7 @@ func ChannelBufferLen(l int) QueueOpts {
 // If a message is sent to a queue that has no subscribers, it will not block the sender and the
 // message will be lost. This is by design, as the queue is meant to be used for fire-and-forget
 type Queue[T any] struct {
+	mt   sync.Mutex
 	cfg  *queueConfig
 	dsts []chan T
 	// double-linked list of bypassing queues
@@ -66,9 +69,14 @@ func (q *Queue[T]) Send(o T) {
 // It's important to notice that, if Subscribe is invoked after Send, the sent message
 // will be lost, or forwarded to other subscribed but not to the channel resulting from the
 // last invocation.
-// This operation is not thread-safe.
 // You can't subscribe to a queue that is bypassing to another queue.
+// Concurrent invocations to Subscribe and Bypass are thread-safe between them, so you can be
+// sure that any subscriber will get its own effective channel. But invocations to Subscribe are not
+// thread-safe with the Send method. This means that concurrent invocations to Subscribe and Send might
+// result in few initial lost messages.
 func (q *Queue[T]) Subscribe() <-chan T {
+	q.mt.Lock()
+	defer q.mt.Unlock()
 	if q.bypassTo != nil {
 		panic("this queue is already bypassing data to another queue. Can't subscribe to it")
 	}
@@ -81,6 +89,8 @@ func (q *Queue[T]) Subscribe() <-chan T {
 // messages sent to this queue will also be sent to the other queue.
 // This operation is not thread-safe and does not control for graph cycles.
 func (q *Queue[T]) Bypass(to *Queue[T]) {
+	q.mt.Lock()
+	defer q.mt.Unlock()
 	if q == to {
 		panic("this queue can't bypass to itself")
 	}

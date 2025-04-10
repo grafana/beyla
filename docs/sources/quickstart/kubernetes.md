@@ -29,12 +29,6 @@ group of services within a single Kubernetes node.
 A service selector is a set of properties that let Beyla to query which processes need
 to be instrumented.
 
-When Beyla is deployed as a regular operating system process that instrument other processes,
-the unique service selectors are the network port where the instrumented process should
-be listening to (can be specified with the `BEYLA_OPEN_PORT` environment variable) or
-a regular expression to match against the executable file name of the process to
-instrument (`BEYLA_EXECUTABLE_NAME` environment variable).
-
 To select multiple groups of processes, the Beyla YAML configuration file format
 provides a `discovery.services` section that accepts multiple selector groups:
 

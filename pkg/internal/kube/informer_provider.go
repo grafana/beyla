@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"text/template"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -46,6 +47,7 @@ type MetadataConfig struct {
 	MetaCacheAddr     string
 	ResourceLabels    ResourceLabels
 	RestrictLocalNode bool
+	ServiceNameTemplate *template.Template
 }
 
 type MetadataProvider struct {
@@ -118,7 +120,7 @@ func (mp *MetadataProvider) Get(ctx context.Context) (*Store, error) {
 		return nil, err
 	}
 
-	mp.metadata = NewStore(informer, mp.cfg.ResourceLabels)
+	mp.metadata = NewStore(informer, mp.cfg.ResourceLabels, mp.cfg.ServiceNameTemplate)
 
 	return mp.metadata, nil
 }

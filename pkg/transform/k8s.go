@@ -85,7 +85,7 @@ func KubeDecoratorProvider(
 		if err != nil {
 			return nil, fmt.Errorf("inititalizing KubeDecoratorProvider: %w", err)
 		}
-		decorator := &metadataDecorator{db: metaStore, clusterName: KubeClusterName(ctx, cfg)}
+		decorator := &metadataDecorator{db: metaStore, clusterName: KubeClusterName(ctx, cfg, ctxInfo.K8sInformer)}
 		return decorator.nodeLoop, nil
 	}
 }
@@ -194,7 +194,7 @@ func OwnerLabelName(kind string) attr.Name {
 	}
 }
 
-func KubeClusterName(ctx context.Context, cfg *KubernetesDecorator) string {
+func KubeClusterName(ctx context.Context, cfg *KubernetesDecorator, k8sInformer *kube.MetadataProvider) string {
 	log := klog().With("func", "KubeClusterName")
 	if cfg.ClusterName != "" {
 		log.Debug("using cluster name from configuration", "cluster_name", cfg.ClusterName)
@@ -202,7 +202,7 @@ func KubeClusterName(ctx context.Context, cfg *KubernetesDecorator) string {
 	}
 	retries := 0
 	for retries < clusterMetadataRetries {
-		if clusterName := fetchClusterName(ctx); clusterName != "" {
+		if clusterName := fetchClusterName(ctx, k8sInformer); clusterName != "" {
 			return clusterName
 		}
 		retries++

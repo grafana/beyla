@@ -16,6 +16,7 @@ import (
 	"go.opentelemetry.io/contrib/detectors/aws/eks"
 
 	attr2 "github.com/grafana/beyla/v2/pkg/export/attributes/names"
+	"github.com/grafana/beyla/v2/pkg/internal/kube"
 )
 
 const (
@@ -35,9 +36,10 @@ type clusterNameFetcher func(context.Context) (string, error)
 // fetchClusterName tries to automatically guess the cluster name from three major
 // cloud providers: EC2, GCP, Azure.
 // TODO: consider other providers (Alibaba, Oracle, etc...)
-func fetchClusterName(ctx context.Context) string {
+func fetchClusterName(ctx context.Context, k8sInformer *kube.MetadataProvider) string {
 	log := klog().With("func", "fetchClusterName")
 	var clusterNameFetchers = map[string]clusterNameFetcher{
+		"Label": nodeLabelsClusterNameFetcher(k8sInformer),
 		"EC2":   eksClusterNameFetcher,
 		"GCP":   gcpClusterNameFetcher,
 		"Azure": azureClusterNameFetcher,
@@ -111,4 +113,10 @@ func eksClusterNameFetcher(ctx context.Context) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("did not find any cluster attribute in %+v", resource.Attributes())
+}
+
+func nodeLabelsClusterNameFetcher(k8sInformer *kube.MetadataProvider) func(ctx context.Context) (string, error) {
+	return func(ctx context.Context) (string, error) {
+		return k8sInformer.ClusterName(ctx)
+	}
 }

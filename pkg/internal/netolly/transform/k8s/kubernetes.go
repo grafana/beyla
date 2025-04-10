@@ -60,11 +60,7 @@ func MetadataDecoratorProvider(
 		// This node is not going to be instantiated. Let the pipes library just bypassing it.
 		return pipe.Bypass[[]*ebpf.Record](), nil
 	}
-	metadata, err := k8sInformer.Get(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("instantiating k8s.MetadataDecorator: %w", err)
-	}
-	nt, err := newDecorator(ctx, cfg, metadata)
+	nt, err := newDecorator(ctx, cfg, k8sInformer)
 	if err != nil {
 		return nil, fmt.Errorf("instantiating k8s.MetadataDecorator: %w", err)
 	}
@@ -186,10 +182,14 @@ func (n *decorator) nodeLabels(flow *ebpf.Record, prefix string, meta *informer.
 }
 
 // newDecorator create a new transform
-func newDecorator(ctx context.Context, cfg *transform.KubernetesDecorator, meta *kube.Store) (*decorator, error) {
+func newDecorator(ctx context.Context, cfg *transform.KubernetesDecorator, k8sInformer *kube.MetadataProvider) (*decorator, error) {
+	meta, err := k8sInformer.Get(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("instantiating k8s.MetadataDecorator: %w", err)
+	}
 	nt := decorator{
 		log:         log(),
-		clusterName: transform.KubeClusterName(ctx, cfg),
+		clusterName: transform.KubeClusterName(ctx, cfg, k8sInformer),
 		kube:        meta,
 	}
 	if nt.log.Enabled(ctx, slog.LevelDebug) {

@@ -91,18 +91,14 @@ support works for any programming language.
 For TLS encrypted HTTP requests (HTTPS), the `Traceparent` header value is encoded
 at TCP/IP packet level, and requires that Beyla is present on both sides of the communication.
 
-The TCP/IP packet level encoding is implemented by using Linux Traffic Control (TC).
-Because Linux Traffic Control is sometimes used by other eBPF programs, this requires that the
-other eBPF programs chain correctly with Beyla. For more information on this
-topic, see our documentation related to [Cilium CNI](../../cilium-compatibility/).
+The TCP/IP packet level encoding uses Linux Traffic Control (TC).
+eBPF programs that also use TC need to chain correctly with Beyla.
+For more information about chaining programs, refer to the [Cilium compatibility documentation](../../cilium-compatibility/).
 
-It is possible to completely disable the TCP/IP level encoding (and thus the
-requirement of running a TC program) by setting `context_propagation="headers"`.
+You can disable the TCP/IP level encoding and TC programs by setting `context_propagation="headers"`.
+This context propagation support is fully compatible with any OpenTelemetry distributed tracing library.
 
-This context propagation support is fully compatible with any OpenTelemetry
-distributed tracing library.
-
-##### Possible values:
+Context propagation values:
 
 | Value      | Description                                              |
 | ---------- | -------------------------------------------------------- |
@@ -119,7 +115,7 @@ following configuration must be specified:
 
 gRPC and HTTP2 are not supported at the moment.
 
-For an example of how to configure distributed traces in Kubernetes, see our 
+For an example of how to configure distributed traces in Kubernetes, see our
 [Distributed traces with Beyla](../../distributed-traces/) guide.
 
 | YAML                    | Environment variable              | Type    | Default |

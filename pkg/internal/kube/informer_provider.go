@@ -198,10 +198,16 @@ func (mp *MetadataProvider) fetchClusterNameFromNodeLabels(ctx context.Context) 
 	if err != nil {
 		return "", fmt.Errorf("can't get kubernetes client: %w", err)
 	}
-	node, err := kubeClient.CoreV1().Nodes().Get(ctx, mp.localNodeName, metav1.GetOptions{})
+	nodes, err := kubeClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{
+		FieldSelector: "metadata.name=" + mp.localNodeName,
+	})
 	if err != nil {
 		return "", fmt.Errorf("fetchClusterNameFromNodeLabels getting node %s: %w", mp.localNodeName, err)
 	}
+	if len(nodes.Items) == 0 {
+		return "", fmt.Errorf("fetchClusterNameFromNodeLabels can't find node %s", mp.localNodeName)
+	}
+	node := nodes.Items[0]
 	for _, label := range clusterNameNodeLabels {
 		if name, ok := node.Labels[label]; ok {
 			return name, nil

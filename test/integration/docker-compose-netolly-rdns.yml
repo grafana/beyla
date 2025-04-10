@@ -6,7 +6,15 @@ services:
     command:
       - sh
       - -c
-      - "while true; do curl -s https://github.com/; sleep 5; done"
+      - "while true; do curl -6 -s https://github.com/; sleep 5; done"
+    networks:
+      ipv6_network:
+        ipv6_address: 2001:db8::2
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+      - net.ipv6.conf.default.disable_ipv6=0
+      - net.ipv6.conf.all.forwarding=1
+      - net.ipv6.conf.default.forwarding=1
 
   autoinstrumenter:
     build:
@@ -67,3 +75,12 @@ services:
       - ./configs/:/etc/prometheus
     ports:
       - "9090:9090"
+
+networks:
+  ipv6_network:
+    enable_ipv6: true
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 2001:db8::/64

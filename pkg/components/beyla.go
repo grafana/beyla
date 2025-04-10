@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"text/template"
 
 	"golang.org/x/sync/errgroup"
 
@@ -138,6 +139,18 @@ func buildCommonContextInfo(
 		showDeprecation()
 	}
 
+	var templ *template.Template
+
+	if config.Attributes.Kubernetes.ServiceNameTemplate != "" {
+		var err error
+
+		templ, err = template.New("serviceNameTemplate").Parse(config.Attributes.Kubernetes.ServiceNameTemplate)
+
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse service name template: %w", err)
+		}
+	}
+
 	promMgr := &connector.PrometheusManager{}
 	ctxInfo := &global.ContextInfo{
 		Prometheus: promMgr,
@@ -150,6 +163,7 @@ func buildCommonContextInfo(
 			MetaCacheAddr:     config.Attributes.Kubernetes.MetaCacheAddress,
 			ResourceLabels:    resourceLabels,
 			RestrictLocalNode: config.Attributes.Kubernetes.MetaRestrictLocalNode,
+			ServiceNameTemplate: templ,
 		}),
 	}
 	if config.Attributes.HostID.Override == "" {

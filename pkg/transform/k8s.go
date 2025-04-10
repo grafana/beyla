@@ -66,6 +66,9 @@ type KubernetesDecorator struct {
 	// ResourceLabels allows Beyla overriding the OTEL Resource attributes from a map of user-defined labels.
 	// nolint:undoc
 	ResourceLabels kube.ResourceLabels `yaml:"resource_labels"`
+
+	// ServiceNameTemplate allows to override the service.name with a custom value. Uses the go template language.
+	ServiceNameTemplate string `yaml:"service_name_template" env:"BEYLA_SERVICE_NAME_TEMPLATE"`
 }
 
 const (

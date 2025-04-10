@@ -24,10 +24,11 @@ import (
 	"time"
 
 	"github.com/hashicorp/golang-lru/v2/simplelru"
-	"github.com/mariomac/pipes/pipe"
 
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
+	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 type CollectConfig struct {
@@ -44,43 +45,45 @@ type CollectConfig struct {
 // The collector receives each application trace from the newPids internal channel,
 // to know which PIDs are active.
 type Collector struct {
-	newPids *<-chan []request.Span
-	ctx     context.Context
-	cfg     *CollectConfig
-	harvest *Harvester
-	cache   *simplelru.LRU[int32, *linuxProcess]
-	log     *slog.Logger
+	cfg                *CollectConfig
+	harvest            *Harvester
+	cache              *simplelru.LRU[int32, *linuxProcess]
+	log                *slog.Logger
+	newPids            <-chan []request.Span
+	collectedProcesses *msg.Queue[[]*Status]
 }
 
 // NewCollectorProvider creates and returns a new process Collector, given an agent context.
-func NewCollectorProvider(ctx context.Context, input *<-chan []request.Span, cfg *CollectConfig) pipe.StartProvider[[]*Status] {
-	return func() (pipe.StartFunc[[]*Status], error) {
+func NewCollectorProvider(
+	cfg *CollectConfig,
+	in *msg.Queue[[]request.Span],
+	out *msg.Queue[[]*Status],
+) swarm.InstanceFunc {
+	return func(_ context.Context) (swarm.RunFunc, error) {
 		// we purge entries explicitly so size is unbounded
 		cache, _ := simplelru.NewLRU[int32, *linuxProcess](math.MaxInt, nil)
-		harvest := newHarvester(cfg, cache)
-
-		return (&Collector{
-			ctx:     ctx,
-			cfg:     cfg,
-			harvest: harvest,
-			cache:   cache,
-			log:     pslog(),
-			newPids: input,
-		}).Run, nil
+		collector := &Collector{
+			cfg:                cfg,
+			harvest:            newHarvester(cfg, cache),
+			cache:              cache,
+			log:                pslog(),
+			newPids:            in.Subscribe(),
+			collectedProcesses: out,
+		}
+		return collector.Run, nil
 	}
 }
 
-func (ps *Collector) Run(out chan<- []*Status) {
+func (ps *Collector) Run(ctx context.Context) {
 	// TODO: set app metadata as key for later decoration? (e.g. K8s metadata, svc.Attrs)
 	pids := map[int32]*svc.Attrs{}
 	collectTicker := time.NewTicker(ps.cfg.Interval)
 	defer collectTicker.Stop()
-	newPids := *ps.newPids
 	for {
 		select {
-		case <-ps.ctx.Done():
-			// exiting
-		case spans := <-newPids:
+		case <-ctx.Done():
+			ps.log.Debug("exiting process collector")
+		case spans := <-ps.newPids:
 			// updating PIDs map with spans information
 			for i := range spans {
 				pids[spans[i].Service.ProcPID] = &spans[i].Service
@@ -90,7 +93,7 @@ func (ps *Collector) Run(out chan<- []*Status) {
 			for _, rp := range removed {
 				delete(pids, rp)
 			}
-			out <- procs
+			ps.collectedProcesses.Send(procs)
 		}
 	}
 }

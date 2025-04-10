@@ -17,6 +17,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/traces"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 	"github.com/grafana/beyla/v2/pkg/transform"
 )
 
@@ -95,6 +96,10 @@ func newGraphBuilder(ctx context.Context, config *beyla.Config, ctxInfo *global.
 	// This is how the github.com/mariomac/pipes library, works:
 	// https://github.com/mariomac/pipes/tree/main/docs/tutorial/b-highlevel/01-basic-nodes
 
+	// We are migrating the pipes library to a simpler-but-more-flexible "Swarm" model
+	// We might see some duplications in the code here until we migrate everything
+	appToProcChannel := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(config.ChannelBufferLen))
+
 	// First, we create a graph builder
 	gnb := pipe.NewBuilder(&nodesMap{}, pipe.ChannelBufferLen(config.ChannelBufferLen))
 	gb := &graphFunctions{
@@ -125,13 +130,38 @@ func newGraphBuilder(ctx context.Context, config *beyla.Config, ctxInfo *global.
 
 	// process subpipeline will start another pipeline only to collect and export data
 	// about the processes of an instrumented application
-	pipe.AddFinalProvider(gnb, processReport, SubPipelineProvider(ctx, ctxInfo, config))
+	pipe.AddFinalProvider(gnb, processReport, connectOldPipesLibToSwarmProcessSubpipeline(ctx, config, ctxInfo, appToProcChannel))
 
 	// The returned builder later invokes its "Build" function that, given
 	// the contents of the nodesMap struct, will instantiate
 	// and interconnect each node according to the SendTo invocations in the
 	// Connect() method of the nodesMap.
 	return gb
+}
+
+func connectOldPipesLibToSwarmProcessSubpipeline(
+	ctx context.Context,
+	config *beyla.Config,
+	ctxInfo *global.ContextInfo,
+	appToProcChannel *msg.Queue[[]request.Span],
+) pipe.FinalProvider[[]request.Span] {
+	return func() (pipe.FinalFunc[[]request.Span], error) {
+		if !isProcessSubPipeEnabled(config) {
+			return pipe.IgnoreFinal[[]request.Span](), nil
+		}
+		processMetrics, err := ProcessMetricsSwarmInstancer(ctxInfo, config, appToProcChannel)(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return func(in <-chan []request.Span) {
+			go processMetrics(ctx)
+			// just connects the old pipe library with the new swarm library
+			// TODO: will be removed when we move the rest of the pipeline to the new swarm
+			for i := range in {
+				appToProcChannel.Send(i)
+			}
+		}, nil
+	}
 }
 
 func (gb *graphFunctions) buildGraph() (*Instrumenter, error) {

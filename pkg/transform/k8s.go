@@ -142,7 +142,7 @@ func (md *metadataDecorator) appendMetadata(span *request.Span, meta *kube.Cache
 		return
 	}
 	topOwner := kube.TopOwner(meta.Meta.Pod)
-	name, namespace := md.db.ServiceNameNamespaceForMetadata(meta.Meta)
+	name, namespace := md.db.ServiceNameNamespaceForMetadata(meta.Meta, containerName)
 	// If the user has not defined criteria values for the reported
 	// service name and namespace, we will automatically set it from
 	// the kubernetes metadata

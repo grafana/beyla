@@ -614,7 +614,14 @@ static __always_inline int return_recvmsg(void *ctx, struct sock *in_sock, u64 i
         goto done;
     }
 
-    void *sock_ptr = (in_sock) ? in_sock : (void *)args->sock_ptr;
+    void *sock_ptr = in_sock;
+    if (!sock_ptr) {
+        if (args) {
+            sock_ptr = (void *)args->sock_ptr;
+        } else {
+            goto done;
+        }
+    }
 
     if (copied_len <= 0) {
         if (parse_sock_info((struct sock *)sock_ptr, &info.conn)) {
@@ -622,7 +629,10 @@ static __always_inline int return_recvmsg(void *ctx, struct sock *in_sock, u64 i
             info.pid = pid_from_pid_tgid(id);
             setup_cp_support_conn_info(&info, false);
         }
-        goto done;
+        // Don't clean-up. This is called as backup path for the retprobe from
+        // tcp_cleanup_rbuf which can come in with 0 bytes and we'll delete
+        // the data for completing the request.
+        return 0;
     }
 
     u8 *buf = 0;

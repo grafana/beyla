@@ -5,14 +5,12 @@ import (
 	"fmt"
 	"runtime"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/mariomac/pipes/pipe"
 	"github.com/prometheus/client_golang/prometheus"
-	"go.opentelemetry.io/otel/codes"
 
 	"github.com/grafana/beyla/v2/pkg/buildinfo"
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
@@ -806,7 +804,7 @@ func (r *metricsReporter) observe(span *request.Span) {
 				r.serviceGraphServer.WithLabelValues(lvg...).metric.Observe(duration)
 			}
 			r.serviceGraphTotal.WithLabelValues(lvg...).metric.Add(1)
-			if request.SpanStatusCode(span) == codes.Error {
+			if request.SpanStatusCode(span) == request.StatusCodeError {
 				r.serviceGraphFailed.WithLabelValues(lvg...).metric.Add(1)
 			}
 		}
@@ -846,7 +844,7 @@ func (r *metricsReporter) labelValuesSpans(span *request.Span) []string {
 		span.Service.UID.Name,
 		span.Service.UID.Namespace,
 		span.TraceName(),
-		strconv.Itoa(int(request.SpanStatusCode(span))),
+		request.SpanStatusCode(span),
 		span.ServiceGraphKind(),
 		span.Service.UID.Instance, // app instance ID
 		span.Service.Job(),

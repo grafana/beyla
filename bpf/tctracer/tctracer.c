@@ -8,13 +8,14 @@
 #include <maps/go_ongoing_http.h>
 #include <maps/go_ongoing_http_client_requests.h>
 #include <maps/ongoing_http.h>
+#include <maps/sock_dir.h>
 
 #include <common/http_types.h>
 #include <common/tcp_info.h>
 #include <common/tc_act.h>
+#include <common/tc_common.h>
 
 #include <tctracer/tc_ip.h>
-#include <tctracer/tc_sock.h>
 
 static const u64 BPF_F_CURRENT_NETNS = -1;
 
@@ -148,6 +149,17 @@ static __always_inline struct bpf_sock_tuple *get_tuple(const void *data,
     }
 
     return result;
+}
+
+static __always_inline u8 is_sock_tracked(const connection_info_t *conn) {
+    struct bpf_sock *sk = (struct bpf_sock *)bpf_map_lookup_elem(&sock_dir, conn);
+
+    if (sk) {
+        bpf_sk_release(sk);
+        return 1;
+    }
+
+    return 0;
 }
 
 static __always_inline void track_sock(struct __sk_buff *skb, const connection_info_t *conn) {

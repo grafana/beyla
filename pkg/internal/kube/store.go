@@ -4,6 +4,8 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"bytes"
+	"text/template"
 
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
@@ -105,6 +107,9 @@ type Store struct {
 	meta.BaseNotifier
 
 	resourceLabels ResourceLabels
+
+	// A go template that, if set, is used to create the service name
+	serviceNameTemplate *template.Template
 }
 
 type CachedObjMeta struct {
@@ -114,8 +119,9 @@ type CachedObjMeta struct {
 	OTELResourceMeta map[attr.Name]string
 }
 
-func NewStore(kubeMetadata meta.Notifier, resourceLabels ResourceLabels) *Store {
+func NewStore(kubeMetadata meta.Notifier, resourceLabels ResourceLabels, serviceNameTemplate *template.Template) *Store {
 	log := dblog()
+
 	db := &Store{
 		log:                 log,
 		containerIDs:        map[string]*container.Info{},
@@ -129,6 +135,7 @@ func NewStore(kubeMetadata meta.Notifier, resourceLabels ResourceLabels) *Store 
 		metadataNotifier:    kubeMetadata,
 		BaseNotifier:        meta.NewBaseNotifier(log),
 		resourceLabels:      resourceLabels,
+		serviceNameTemplate: serviceNameTemplate,
 	}
 	kubeMetadata.Subscribe(db)
 	return db
@@ -432,6 +439,22 @@ func (s *Store) serviceNameNamespaceOwnerID(om *informer.ObjectMeta, ownerName s
 	// and labels
 	if envName, ok := s.serviceNameFromEnv(ownerKey); ok {
 		serviceName = envName
+	} else if s.serviceNameTemplate != nil {
+		// defining a serviceNameTemplate disables the resolution via annotation + label (this can be implemented in the template)
+		var serviceNameBuffer bytes.Buffer
+		err := s.serviceNameTemplate.Execute(&serviceNameBuffer, om)
+
+		if err != nil {
+			s.log.Error("error executing service name template", "error", err)
+		} else {
+			parts := strings.Split(serviceNameBuffer.String(), "\n")
+
+			if len(parts) > 0 {
+				// take only first line, and trim
+				serviceName = strings.TrimSpace(parts[0])
+			}
+		}
+
 	} else if nameFromMeta := s.valueFromMetadata(om,
 		ServiceNameAnnotation,
 		s.resourceLabels["service.name"],

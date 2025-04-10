@@ -146,7 +146,7 @@ func connectOldPipesLibToSwarmProcessSubpipeline(
 	appToProcChannel *msg.Queue[[]request.Span],
 ) pipe.FinalProvider[[]request.Span] {
 	return func() (pipe.FinalFunc[[]request.Span], error) {
-		if !isSubPipeEnabled(config) {
+		if !isProcessSubPipeEnabled(config) {
 			return pipe.IgnoreFinal[[]request.Span](), nil
 		}
 		processMetrics, err := ProcessMetricsSwarmInstancer(ctxInfo, config, appToProcChannel)(ctx)

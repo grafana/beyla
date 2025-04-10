@@ -39,12 +39,12 @@ func ProcPrometheusEndpoint(
 	cfg *ProcPrometheusConfig,
 	procStatusInput *msg.Queue[[]*process.Status],
 ) swarm.InstanceFunc {
-	return func(ctx context.Context) (swarm.RunFunc, error) {
+	return func(_ context.Context) (swarm.RunFunc, error) {
 		if !cfg.Enabled() {
 			// This node is not going to be instantiated. Let the pipes library just ignore it.
 			return swarm.EmptyRunFunc()
 		}
-		reporter, err := newProcReporter(ctx, ctxInfo, cfg, procStatusInput)
+		reporter, err := newProcReporter(ctxInfo, cfg, procStatusInput)
 		if err != nil {
 			return nil, err
 		}
@@ -61,7 +61,6 @@ type procMetricsReporter struct {
 	promConnect *connector.PrometheusManager
 
 	clock *expire.CachedClock
-	bgCtx context.Context
 
 	// metrics
 	cpuTimeAttrs []attributes.Field[*process.Status, string]
@@ -96,7 +95,7 @@ type procMetricsReporter struct {
 	procStatusInput <-chan []*process.Status
 }
 
-func newProcReporter(ctx context.Context, ctxInfo *global.ContextInfo, cfg *ProcPrometheusConfig, input *msg.Queue[[]*process.Status]) (*procMetricsReporter, error) {
+func newProcReporter(ctxInfo *global.ContextInfo, cfg *ProcPrometheusConfig, input *msg.Queue[[]*process.Status]) (*procMetricsReporter, error) {
 	group := ctxInfo.MetricAttributeGroups
 	// this property can't be set inside the ConfiguredGroups function, otherwise the
 	// OTEL exporter would report also some prometheus-exclusive attributes
@@ -123,7 +122,6 @@ func newProcReporter(ctx context.Context, ctxInfo *global.ContextInfo, cfg *Proc
 	// If service name is not explicitly set, we take the service name as set by the
 	// executable inspector
 	mr := &procMetricsReporter{
-		bgCtx:        ctx,
 		cfg:          cfg.Metrics,
 		promConnect:  ctxInfo.Prometheus,
 		clock:        clock,
@@ -199,7 +197,7 @@ func newProcReporter(ctx context.Context, ctxInfo *global.ContextInfo, cfg *Proc
 }
 
 func (r *procMetricsReporter) reportMetrics(ctx context.Context) {
-	go r.promConnect.StartHTTP(r.bgCtx)
+	go r.promConnect.StartHTTP(ctx)
 	r.collectMetrics(ctx)
 }
 

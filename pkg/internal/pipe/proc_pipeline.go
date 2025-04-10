@@ -17,7 +17,7 @@ import (
 
 // the sub-pipe is enabled only if there is a metrics exporter enabled,
 // and both the "application" and "application_process" features are enabled
-func isSubPipeEnabled(cfg *beyla.Config) bool {
+func isProcessSubPipeEnabled(cfg *beyla.Config) bool {
 	return (cfg.Metrics.EndpointEnabled() && cfg.Metrics.OTelMetricsEnabled() &&
 		slices.Contains(cfg.Metrics.Features, otel.FeatureProcess)) ||
 		(cfg.Prometheus.EndpointEnabled() && cfg.Prometheus.OTelMetricsEnabled() &&
@@ -32,7 +32,7 @@ func ProcessMetricsSwarmInstancer(
 	appInputSpans *msg.Queue[[]request.Span],
 ) swarm.InstanceFunc {
 	return func(ctx context.Context) (swarm.RunFunc, error) {
-		if !isSubPipeEnabled(cfg) {
+		if !isProcessSubPipeEnabled(cfg) {
 			// returns nothing. Nothing will subscribe to the ProcessSubPipeInput, no extra
 			// load will be held
 			return swarm.EmptyRunFunc()

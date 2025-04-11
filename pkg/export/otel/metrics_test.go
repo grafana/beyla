@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
+	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
 	"github.com/grafana/beyla/v2/pkg/export/instrumentations"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
@@ -486,6 +487,7 @@ func TestAppMetrics_ByInstrumentation(t *testing.T) {
 			EventTypeGRPCClient
 			EventTypeSQLClient
 			EventTypeRedisClient
+			EventTypeRedisServer
 			EventTypeKafkaClient
 			EventTypeRedisServer
 			EventTypeKafkaServer
@@ -688,4 +690,205 @@ func makeExporter(ctx context.Context, t *testing.T, instrumentations []string, 
 	require.NoError(t, err)
 
 	return otelExporter
+}
+
+func TestMetricResourceAttributes(t *testing.T) {
+	// Test different filtering scenarios
+	testCases := []struct {
+		name            string
+		service         *svc.Attrs
+		attributeSelect attributes.Selection
+		expectedAttrs   []string
+		unexpectedAttrs []string
+	}{
+		{
+			name: "No filtering configuration",
+			service: &svc.Attrs{
+				UID: svc.UID{
+					Name:      "test-service",
+					Instance:  "test-instance",
+					Namespace: "test-namespace",
+				},
+				HostName:    "test-host",
+				SDKLanguage: svc.InstrumentableGolang,
+				Metadata: map[attr.Name]string{
+					attr.K8sNamespaceName:  "k8s-namespace",
+					attr.K8sPodName:        "pod-name",
+					attr.K8sDeploymentName: "deployment-name",
+					attr.K8sClusterName:    "cluster-name",
+				},
+			},
+			attributeSelect: attributes.Selection{},
+			expectedAttrs: []string{
+				"service",
+				"service.instance.id",
+				"service.namespace",
+				"telemetry.sdk.language",
+				"telemetry.sdk.name",
+				"host.id",
+				"k8s.namespace.name",
+				"k8s.pod.name",
+				"k8s.deployment.name",
+				"k8s.cluster.name",
+				"source",
+			},
+			unexpectedAttrs: []string{},
+		},
+		{
+			name: "Filter out host attributes",
+			service: &svc.Attrs{
+				UID: svc.UID{
+					Name:      "test-service",
+					Instance:  "test-instance",
+					Namespace: "test-namespace",
+				},
+				HostName:    "test-host",
+				SDKLanguage: svc.InstrumentableGolang,
+				Metadata: map[attr.Name]string{
+					attr.K8sNamespaceName:  "k8s-namespace",
+					attr.K8sPodName:        "pod-name",
+					attr.K8sDeploymentName: "deployment-name",
+					attr.K8sClusterName:    "cluster-name",
+				},
+			},
+			attributeSelect: attributes.Selection{
+				"http.server.request.duration": attributes.InclusionLists{
+					Include: []string{"*"},
+					Exclude: []string{"host.*"},
+				},
+			},
+			expectedAttrs: []string{
+				"service",
+				"service.instance.id",
+				"service.namespace",
+				"telemetry.sdk.language",
+				"telemetry.sdk.name",
+				"k8s.namespace.name",
+				"k8s.pod.name",
+				"k8s.deployment.name",
+				"k8s.cluster.name",
+				"source",
+			},
+			unexpectedAttrs: []string{
+				"host.id",
+			},
+		},
+		{
+			name: "Filter out k8s attributes",
+			service: &svc.Attrs{
+				UID: svc.UID{
+					Name:      "test-service",
+					Instance:  "test-instance",
+					Namespace: "test-namespace",
+				},
+				HostName:    "test-host",
+				SDKLanguage: svc.InstrumentableGolang,
+				Metadata: map[attr.Name]string{
+					attr.K8sNamespaceName:  "k8s-namespace",
+					attr.K8sPodName:        "pod-name",
+					attr.K8sDeploymentName: "deployment-name",
+					attr.K8sClusterName:    "cluster-name",
+				},
+			},
+			attributeSelect: attributes.Selection{
+				"http.server.request.duration": attributes.InclusionLists{
+					Include: []string{"*"},
+					Exclude: []string{"k8s.*"},
+				},
+			},
+			expectedAttrs: []string{
+				"service",
+				"service.instance.id",
+				"service.namespace",
+				"telemetry.sdk.language",
+				"telemetry.sdk.name",
+				"host.id",
+				"source",
+			},
+			unexpectedAttrs: []string{
+				"k8s.namespace.name",
+				"k8s.pod.name",
+				"k8s.deployment.name",
+				"k8s.cluster.name",
+			},
+		},
+		{
+			name: "Only include specific attributes",
+			service: &svc.Attrs{
+				UID: svc.UID{
+					Name:      "test-service",
+					Instance:  "test-instance",
+					Namespace: "test-namespace",
+				},
+				HostName:    "test-host",
+				SDKLanguage: svc.InstrumentableGolang,
+				Metadata: map[attr.Name]string{
+					attr.K8sNamespaceName:  "k8s-namespace",
+					attr.K8sPodName:        "pod-name",
+					attr.K8sDeploymentName: "deployment-name",
+					attr.K8sClusterName:    "cluster-name",
+				},
+			},
+			attributeSelect: attributes.Selection{
+				"http.server.request.duration": attributes.InclusionLists{
+					Include: []string{"service.*", "telemetry.*"},
+					Exclude: []string{},
+				},
+			},
+			expectedAttrs: []string{
+				"service",
+				"service.instance.id",
+				"service.namespace",
+				"telemetry.sdk.language",
+				"telemetry.sdk.name",
+				"source",
+			},
+			unexpectedAttrs: []string{
+				"host.id",
+				"k8s.namespace.name",
+				"k8s.pod.name",
+				"k8s.deployment.name",
+				"k8s.cluster.name",
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mr := &MetricsReporter{
+				hostID:              "test-host-id",
+				userAttribSelection: tc.attributeSelect,
+			}
+
+			attrSet := mr.metricResourceAttributes(tc.service)
+
+			attrs := attrSet.ToSlice()
+			attrMap := make(map[string]string)
+
+			t.Logf("Attributes in test %s:", tc.name)
+			for _, a := range attrs {
+				keyStr := string(a.Key)
+				t.Logf("   - %s = %s", keyStr, a.Value.AsString())
+				attrMap[keyStr] = a.Value.AsString()
+			}
+
+			for _, attrName := range tc.expectedAttrs {
+				_, exists := attrMap[attrName]
+				assert.True(t, exists, "Expected attribute %s not found. Available keys: %v", attrName, getKeys(attrMap))
+			}
+
+			for _, attrName := range tc.unexpectedAttrs {
+				_, exists := attrMap[attrName]
+				assert.False(t, exists, "Unexpected attribute %s found", attrName)
+			}
+		})
+	}
+}
+
+func getKeys(m map[string]string) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
 }

@@ -216,6 +216,8 @@ type MetricsReporter struct {
 	attrGPUKernelGridSize     []attributes.Field[*request.Span, attribute.KeyValue]
 	attrGPUKernelBlockSize    []attributes.Field[*request.Span, attribute.KeyValue]
 	attrGPUMemoryAllocations  []attributes.Field[*request.Span, attribute.KeyValue]
+
+	userAttribSelection attributes.Selection
 }
 
 // Metrics is a set of metrics associated to a given OTEL MeterProvider.
@@ -296,11 +298,12 @@ func newMetricsReporter(
 	is := instrumentations.NewInstrumentationSelection(cfg.Instrumentations)
 
 	mr := MetricsReporter{
-		ctx:        ctx,
-		cfg:        cfg,
-		is:         is,
-		attributes: attribProvider,
-		hostID:     ctxInfo.HostID,
+		ctx:                 ctx,
+		cfg:                 cfg,
+		is:                  is,
+		attributes:          attribProvider,
+		hostID:              ctxInfo.HostID,
+		userAttribSelection: userAttribSelection,
 	}
 	// initialize attribute getters
 	if is.HTTPEnabled() {
@@ -814,20 +817,34 @@ func otelHistogramConfig(metricName string, buckets []float64, useExponentialHis
 }
 
 func (mr *MetricsReporter) metricResourceAttributes(service *svc.Attrs) attribute.Set {
-	attrs := []attribute.KeyValue{
+	baseAttrs := []attribute.KeyValue{
 		request.ServiceMetric(service.UID.Name),
 		semconv.ServiceInstanceID(service.UID.Instance),
 		semconv.ServiceNamespace(service.UID.Namespace),
 		semconv.TelemetrySDKLanguageKey.String(service.SDKLanguage.String()),
 		semconv.TelemetrySDKNameKey.String("beyla"),
 		request.SourceMetric("beyla"),
-		semconv.HostID(mr.hostID),
-	}
-	for k, v := range service.Metadata {
-		attrs = append(attrs, k.OTEL().String(v))
 	}
 
-	return attribute.NewSet(attrs...)
+	extraAttrs := []attribute.KeyValue{
+		semconv.HostID(mr.hostID),
+	}
+
+	for k, v := range service.Metadata {
+		extraAttrs = append(extraAttrs, k.OTEL().String(v))
+	}
+
+	httpMetrics := []string{"http.server", "http.client"}
+	rpcMetrics := []string{"rpc.server", "rpc.client"}
+	dbMetrics := []string{"db.client"}
+	messagingMetrics := []string{"messaging."}
+
+	metricTypes := append(httpMetrics, rpcMetrics...)
+	metricTypes = append(metricTypes, dbMetrics...)
+	metricTypes = append(metricTypes, messagingMetrics...)
+
+	filteredAttrs := getFilteredMetricResourceAttrs(baseAttrs, mr.userAttribSelection, extraAttrs, metricTypes)
+	return attribute.NewSet(filteredAttrs...)
 }
 
 func (mr *MetricsReporter) metricHostAttributes() attribute.Set {

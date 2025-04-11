@@ -56,6 +56,29 @@ func newResource(hostID string) *resource.Resource {
 	return resource.NewWithAttributes(semconv.SchemaURL, attrs...)
 }
 
+// getFilteredNetworkResourceAttrs returns resource attributes that can be filtered based on the attribute selector
+// for network metrics.
+func getFilteredNetworkResourceAttrs(hostID string, attrSelector attributes.Selection) []attribute.KeyValue {
+	baseAttrs := []attribute.KeyValue{
+		semconv.ServiceName("beyla-network-flows"),
+		semconv.ServiceInstanceID(uuid.New().String()),
+		semconv.TelemetrySDKLanguageKey.String(semconv.TelemetrySDKLanguageGo.Value.AsString()),
+		semconv.TelemetrySDKNameKey.String("beyla"),
+		semconv.TelemetrySDKVersion(buildinfo.Version),
+	}
+
+	extraAttrs := []attribute.KeyValue{
+		semconv.HostID(hostID),
+	}
+
+	return getFilteredAttributesByPrefix(baseAttrs, attrSelector, extraAttrs, []string{"network.", "beyla.network"})
+}
+
+func createFilteredNetworkResource(hostID string, attrSelector attributes.Selection) *resource.Resource {
+	attrs := getFilteredNetworkResourceAttrs(hostID, attrSelector)
+	return resource.NewWithAttributes(semconv.SchemaURL, attrs...)
+}
+
 func newMeterProvider(res *resource.Resource, exporter *sdkmetric.Exporter, interval time.Duration) (*metric.MeterProvider, error) {
 	meterProvider := metric.NewMeterProvider(
 		metric.WithResource(res),
@@ -77,6 +100,11 @@ func NetMetricsExporterProvider(ctx context.Context, ctxInfo *global.ContextInfo
 		// This node is not going to be instantiated. Let the pipes library just ignore it.
 		return pipe.IgnoreFinal[[]*ebpf.Record](), nil
 	}
+
+	if cfg.AttributeSelectors == nil {
+		cfg.AttributeSelectors = make(attributes.Selection)
+	}
+
 	exporter, err := newMetricsExporter(ctx, ctxInfo, cfg)
 	if err != nil {
 		return nil, err
@@ -93,7 +121,8 @@ func newMetricsExporter(ctx context.Context, ctxInfo *global.ContextInfo, cfg *N
 		return nil, err
 	}
 
-	provider, err := newMeterProvider(newResource(ctxInfo.HostID), &exporter, cfg.Metrics.Interval)
+	resource := createFilteredNetworkResource(ctxInfo.HostID, cfg.AttributeSelectors)
+	provider, err := newMeterProvider(resource, &exporter, cfg.Metrics.Interval)
 
 	if err != nil {
 		log.Error("can't instantiate meter provider", "error", err)

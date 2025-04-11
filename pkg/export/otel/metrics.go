@@ -13,7 +13,6 @@ import (
 
 	"github.com/mariomac/pipes/pipe"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	"go.opentelemetry.io/otel/sdk/instrumentation"
@@ -985,7 +984,7 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 			}
 			sgt, attrs := r.serviceGraphTotal.ForRecord(span)
 			sgt.Add(ctx, 1, instrument.WithAttributeSet(attrs))
-			if request.SpanStatusCode(span) == codes.Error {
+			if request.SpanStatusCode(span) == request.StatusCodeError {
 				sgf, attrs := r.serviceGraphFailed.ForRecord(span)
 				sgf.Add(ctx, 1, instrument.WithAttributeSet(attrs))
 			}

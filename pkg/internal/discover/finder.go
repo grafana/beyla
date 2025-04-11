@@ -7,12 +7,14 @@ import (
 	"github.com/mariomac/pipes/pipe"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
+	"github.com/grafana/beyla/v2/pkg/config"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/generictracer"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/gotracer"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/gpuevent"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/httptracer"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/tctracer"
+	"github.com/grafana/beyla/v2/pkg/internal/ebpf/tpinjector"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
@@ -96,15 +98,20 @@ func (pf *ProcessFinder) Start() (<-chan *ebpf.Instrumentable, <-chan *ebpf.Inst
 
 // the common tracer group should get loaded for any tracer group, only once
 func newCommonTracersGroup(cfg *beyla.Config) []ebpf.Tracer {
-	tracers := []ebpf.Tracer{}
-
 	if cfg.EBPF.UseTCForL7CP {
-		tracers = append(tracers, httptracer.New(cfg))
-	} else if cfg.EBPF.ContextPropagationEnabled {
-		tracers = append(tracers, tctracer.New(cfg))
+		return []ebpf.Tracer{httptracer.New(cfg)}
 	}
 
-	return tracers
+	switch cfg.EBPF.ContextPropagation {
+	case config.ContextPropagationAll:
+		return []ebpf.Tracer{tctracer.New(cfg), tpinjector.New(cfg)}
+	case config.ContextPropagationHeadersOnly:
+		return []ebpf.Tracer{tpinjector.New(cfg)}
+	case config.ContextPropagationIPOptionsOnly:
+		return []ebpf.Tracer{tctracer.New(cfg)}
+	}
+
+	return []ebpf.Tracer{}
 }
 
 func newGoTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Tracer {

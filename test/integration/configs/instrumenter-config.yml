@@ -11,7 +11,7 @@ otel_traces_export:
   endpoint: http://jaeger:4318
 attributes:
   kubernetes:
-    cluster_name: beyla
+    cluster_name: beyla-k8s-test-cluster
     resource_labels:
       deployment.environment: ["deployment.environment"]
   select:

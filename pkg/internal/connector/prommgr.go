@@ -10,11 +10,13 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"sync/atomic"
+	"sync"
 	"syscall"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+
+	"github.com/grafana/beyla/v2/pkg/internal/helpers/maps"
 )
 
 func log() *slog.Logger {
@@ -24,9 +26,10 @@ func log() *slog.Logger {
 // PrometheusManager allows exporting metrics from different sources (instrumented metrics, internal metrics...)
 // sharing the same port and path, or using different ones, depending on the configuration provided by the registrars.
 type PrometheusManager struct {
-	started atomic.Bool
+	mt      sync.Mutex
+	started bool
 	// key 1: port. Key 2: path
-	registries map[int]map[string]*prometheus.Registry
+	registries maps.Map2[int, string, *prometheus.Registry]
 
 	metrics internalIntrumenter
 }
@@ -36,26 +39,26 @@ type internalIntrumenter interface {
 }
 
 func (pm *PrometheusManager) InstrumentWith(ii internalIntrumenter) {
+	pm.mt.Lock()
+	defer pm.mt.Unlock()
 	pm.metrics = ii
 }
 
 // Register a set of prometheus metrics to be accessible through an HTTP port/path.
 // This method is not thread-safe
 func (pm *PrometheusManager) Register(port int, path string, collectors ...prometheus.Collector) {
+	pm.mt.Lock()
+	defer pm.mt.Unlock()
 	log().Debug("registering Prometheus metrics collectors",
 		"len", len(collectors), "port", port, "path", path)
+
 	if pm.registries == nil {
-		pm.registries = map[int]map[string]*prometheus.Registry{}
+		pm.registries = maps.Map2[int, string, *prometheus.Registry]{}
 	}
-	paths, ok := pm.registries[port]
-	if !ok {
-		paths = map[string]*prometheus.Registry{}
-		pm.registries[port] = paths
-	}
-	reg, ok := paths[path]
+	reg, ok := pm.registries.Get(port, path)
 	if !ok {
 		reg = prometheus.NewRegistry()
-		paths[path] = reg
+		pm.registries.Put(port, path, reg)
 	}
 	reg.MustRegister(collectors...)
 }
@@ -63,9 +66,13 @@ func (pm *PrometheusManager) Register(port int, path string, collectors ...prome
 // StartHTTP serves metrics in background. Its invocation won't have effect if it has been invoked previously,
 // so invoke it only after you are sure that all the collectors have been registered via the Register method.
 func (pm *PrometheusManager) StartHTTP(ctx context.Context) {
-	if pm.started.Swap(true) {
+	pm.mt.Lock()
+	defer pm.mt.Unlock()
+	if pm.started {
 		return
 	}
+	pm.started = true
+
 	log := log()
 	// Creating a serve mux for each port
 	for port, paths := range pm.registries {
@@ -77,7 +84,7 @@ func (pm *PrometheusManager) StartHTTP(ctx context.Context) {
 			promHandler = wrapInstrumentedHandler(pm.metrics, port, path, promHandler)
 			mux.Handle(path, promHandler)
 		}
-		pm.listenAndServe(ctx, port, mux)
+		listenAndServe(ctx, port, mux)
 	}
 }
 
@@ -104,7 +111,7 @@ func wrapDebugHandler(log *slog.Logger, promHandler http.Handler) http.HandlerFu
 	}
 }
 
-func (pm *PrometheusManager) listenAndServe(ctx context.Context, port int, handler http.Handler) {
+func listenAndServe(ctx context.Context, port int, handler http.Handler) {
 	// TODO: support TLS configuration
 	server := http.Server{Addr: fmt.Sprintf(":%d", port), Handler: handler}
 	log := log().With("port", port)

@@ -15,6 +15,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 	"github.com/grafana/beyla/v2/test/collector"
 )
 
@@ -31,8 +32,9 @@ func TestProcMetrics_Disaggregated(t *testing.T) {
 	includedAttributes := attributes.InclusionLists{
 		Include: []string{"process_command", "cpu_mode", "disk_io_direction", "network_io_direction"},
 	}
+	procsInput := msg.NewQueue[[]*process.Status](msg.ChannelBufferLen(10))
 	otelExporter, err := ProcMetricsExporterProvider(
-		ctx, &global.ContextInfo{}, &ProcMetricsConfig{
+		&global.ContextInfo{}, &ProcMetricsConfig{
 			Metrics: &MetricsConfig{
 				ReportersCacheLen: 100,
 				CommonEndpoint:    otlp.ServerEndpoint,
@@ -48,21 +50,20 @@ func TestProcMetrics_Disaggregated(t *testing.T) {
 				attributes.ProcessDiskIO.Section:         includedAttributes,
 				attributes.ProcessNetIO.Section:          includedAttributes,
 			},
-		})()
+		}, procsInput)(ctx)
 	require.NoError(t, err)
 
-	metrics := make(chan []*process.Status, 20)
-	go otelExporter(metrics)
+	go otelExporter(ctx)
 
 	// WHEN it receives process metrics
-	metrics <- []*process.Status{
+	procsInput.Send([]*process.Status{
 		{ID: process.ID{Command: "foo", Service: &svc.Attrs{}, UID: svc.UID{Instance: "foo"}},
 			CPUUtilisationWait: 3, CPUUtilisationSystem: 2, CPUUtilisationUser: 1,
 			CPUTimeUserDelta: 30, CPUTimeWaitDelta: 20, CPUTimeSystemDelta: 10,
 			IOReadBytesDelta: 123, IOWriteBytesDelta: 456,
 			NetRcvBytesDelta: 10, NetTxBytesDelta: 20,
 		},
-	}
+	})
 
 	// THEN the metrics are exported aggregated by system/user/wait times
 	test.Eventually(t, timeout, func(t require.TestingT) {

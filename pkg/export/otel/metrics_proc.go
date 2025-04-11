@@ -7,7 +7,6 @@ import (
 	"slices"
 	"strconv"
 
-	"github.com/mariomac/pipes/pipe"
 	"go.opentelemetry.io/otel/attribute"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -21,6 +20,8 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
+	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 var (
@@ -78,6 +79,8 @@ type procMetricsExporter struct {
 	// the *.io.direction attributes being selected or not
 	diskObserver func(context.Context, *procMetrics, *process.Status)
 	netObserver  func(context.Context, *procMetrics, *process.Status)
+
+	procStatusInput <-chan []*process.Status
 }
 
 type procMetrics struct {
@@ -94,21 +97,20 @@ type procMetrics struct {
 }
 
 func ProcMetricsExporterProvider(
-	ctx context.Context,
 	ctxInfo *global.ContextInfo,
 	cfg *ProcMetricsConfig,
-) pipe.FinalProvider[[]*process.Status] {
-	return func() (pipe.FinalFunc[[]*process.Status], error) {
+	input *msg.Queue[[]*process.Status],
+) swarm.InstanceFunc {
+	return func(ctx context.Context) (swarm.RunFunc, error) {
 		if !cfg.Enabled() {
-			// This node is not going to be instantiated. Let the pipes library just ignore it.
-			return pipe.IgnoreFinal[[]*process.Status](), nil
+			return swarm.EmptyRunFunc()
 		}
 
 		if cfg.AttributeSelectors == nil {
 			cfg.AttributeSelectors = make(attributes.Selection)
 		}
 
-		return newProcMetricsExporter(ctx, ctxInfo, cfg)
+		return newProcMetricsExporter(ctx, ctxInfo, cfg, input)
 	}
 }
 
@@ -116,7 +118,8 @@ func newProcMetricsExporter(
 	ctx context.Context,
 	ctxInfo *global.ContextInfo,
 	cfg *ProcMetricsConfig,
-) (pipe.FinalFunc[[]*process.Status], error) {
+	input *msg.Queue[[]*process.Status],
+) (swarm.RunFunc, error) {
 	SetupInternalOTELSDKLogger(cfg.Metrics.SDKLogLevel)
 
 	log := pmlog()
@@ -152,8 +155,9 @@ func newProcMetricsExporter(
 			attrProv.For(attributes.ProcessMemoryUsage)),
 		attrMemoryVirtual: attributes.OpenTelemetryGetters(process.OTELGetters,
 			attrProv.For(attributes.ProcessMemoryVirtual)),
-		attrDisk: attrDisk,
-		attrNet:  attrNet,
+		attrDisk:        attrDisk,
+		attrNet:         attrNet,
+		procStatusInput: input.Subscribe(),
 	}
 	if slices.Contains(cpuTimeNames, attr2.ProcCPUMode) {
 		mr.cpuTimeObserver = cpuTimeDisaggregatedObserver
@@ -324,8 +328,8 @@ func (me *procMetricsExporter) newMetricSet(procID *process.ID) (*procMetrics, e
 }
 
 // Do reads all the process status data points and create the metrics accordingly
-func (me *procMetricsExporter) Do(in <-chan []*process.Status) {
-	for i := range in {
+func (me *procMetricsExporter) Do(_ context.Context) {
+	for i := range me.procStatusInput {
 		me.clock.Update()
 		for _, s := range i {
 			reporter, err := me.reporters.For(&s.ID)

@@ -27,4 +27,4 @@ attributes:
     "*":
       include: ["*"]
   kubernetes:
-    cluster_name: beyla
+    cluster_name: beyla-k8s-test-cluster

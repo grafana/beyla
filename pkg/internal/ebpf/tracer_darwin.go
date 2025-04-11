@@ -8,6 +8,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/internal/exec"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
 type instrumenter struct {
@@ -15,7 +16,7 @@ type instrumenter struct {
 
 // dummy implementations to avoid compilation errors in Darwin.
 // The tracer component is only usable in Linux.
-func (pt *ProcessTracer) Run(_ context.Context, _ chan<- []request.Span) {}
+func (pt *ProcessTracer) Run(_ context.Context, _ *msg.Queue[[]request.Span]) {}
 
 func NewProcessTracer(_ *beyla.Config, _ ProcessTracerType, _ []Tracer) *ProcessTracer {
 	return nil

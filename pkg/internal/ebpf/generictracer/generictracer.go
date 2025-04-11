@@ -23,6 +23,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/ifaces"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/generictracer/generictracer.c -- -I../../../../bpf
@@ -441,7 +442,7 @@ func (p *Tracer) AlreadyInstrumentedLib(id uint64) bool {
 	return module != nil
 }
 
-func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span) {
+func (p *Tracer) Run(ctx context.Context, eventsChan *msg.Queue[[]request.Span]) {
 	// At this point we now have loaded the bpf objects, which means we should insert any
 	// pids that are allowed into the bpf map
 	if p.bpfObjects.ValidPids != nil {
@@ -472,7 +473,7 @@ func kernelTime(ktime uint64) time.Time {
 }
 
 //nolint:cyclop
-func (p *Tracer) lookForTimeouts(ticker *time.Ticker, eventsChan chan<- []request.Span) {
+func (p *Tracer) lookForTimeouts(ticker *time.Ticker, eventsChan *msg.Queue[[]request.Span]) {
 	for t := range ticker.C {
 		if p.bpfObjects.OngoingHttp != nil {
 			i := p.bpfObjects.OngoingHttp.Iterate()
@@ -488,7 +489,7 @@ func (p *Tracer) lookForTimeouts(ticker *time.Ticker, eventsChan chan<- []reques
 					// ebpf2go outputs
 					s, ignore, err := ebpfcommon.HTTPInfoEventToSpan(*(*ebpfcommon.BPFHTTPInfo)(unsafe.Pointer(&v)))
 					if !ignore && err == nil {
-						eventsChan <- p.pidsFilter.Filter([]request.Span{s})
+						eventsChan.Send(p.pidsFilter.Filter([]request.Span{s}))
 					}
 					if err := p.bpfObjects.OngoingHttp.Delete(k); err != nil {
 						p.log.Debug("Error deleting ongoing request", "error", err)
@@ -505,7 +506,7 @@ func (p *Tracer) lookForTimeouts(ticker *time.Ticker, eventsChan chan<- []reques
 						}
 						s.End = s.Start + p.cfg.EBPF.HTTPRequestTimeout.Nanoseconds()
 
-						eventsChan <- p.pidsFilter.Filter([]request.Span{s})
+						eventsChan.Send(p.pidsFilter.Filter([]request.Span{s}))
 					}
 					if err := p.bpfObjects.OngoingHttp.Delete(k); err != nil {
 						p.log.Debug("Error deleting ongoing request", "error", err)

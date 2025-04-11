@@ -4,6 +4,7 @@ package swarm
 
 import (
 	"context"
+	"sync"
 	"sync/atomic"
 )
 
@@ -20,6 +21,7 @@ func EmptyRunFunc() (RunFunc, error) {
 type Runner struct {
 	started atomic.Bool
 	runners []RunFunc
+	done    chan struct{}
 }
 
 // Start the Swarm in background. It calls all registered service creators and, if all succeed,
@@ -32,7 +34,22 @@ func (s *Runner) Start(ctx context.Context) {
 	if s.started.Swap(true) {
 		panic("swarm.Runner already started")
 	}
+	s.done = make(chan struct{})
+	wg := sync.WaitGroup{}
+	wg.Add(len(s.runners))
+	go func() {
+		wg.Wait()
+		close(s.done)
+	}()
 	for i := range s.runners {
-		go s.runners[i](ctx)
+		go func() {
+			s.runners[i](ctx)
+			wg.Done()
+		}()
 	}
+}
+
+// Done returns a channel that is closed when all the nodes in the swarm Runner have finished their execution.
+func (s *Runner) Done() <-chan struct{} {
+	return s.done
 }

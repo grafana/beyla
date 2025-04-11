@@ -21,6 +21,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
 	"github.com/grafana/beyla/v2/pkg/internal/testutil"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
 const testTimeout = 5 * time.Second
@@ -30,7 +31,8 @@ func TestForwardRingbuf_CapacityFull(t *testing.T) {
 	ringBuf, restore := replaceTestRingBuf()
 	defer restore()
 	metrics := &metricsReporter{}
-	forwardedMessages := make(chan []request.Span, 100)
+	forwardedMessagesQueue := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(100))
+	forwardedMessages := forwardedMessagesQueue.Subscribe()
 	fltr := TestPidsFilter{services: map[uint32]svc.Attrs{}}
 	fltr.AllowPID(1, 1, &svc.Attrs{UID: svc.UID{Name: "myService"}}, PIDTypeGo)
 	go ForwardRingbuf(
@@ -41,7 +43,7 @@ func TestForwardRingbuf_CapacityFull(t *testing.T) {
 		slog.With("test", "TestForwardRingbuf_CapacityFull"),
 		metrics,
 		nil,
-	)(context.Background(), forwardedMessages)
+	)(context.Background(), forwardedMessagesQueue)
 
 	// WHEN it starts receiving trace events
 	var get = [7]byte{'G', 'E', 'T', 0, 0, 0, 0}
@@ -82,7 +84,8 @@ func TestForwardRingbuf_Deadline(t *testing.T) {
 	defer restore()
 
 	metrics := &metricsReporter{}
-	forwardedMessages := make(chan []request.Span, 100)
+	forwardedMessagesQueue := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(100))
+	forwardedMessages := forwardedMessagesQueue.Subscribe()
 	fltr := TestPidsFilter{services: map[uint32]svc.Attrs{}}
 	fltr.AllowPID(1, 1, &svc.Attrs{UID: svc.UID{Name: "myService"}}, PIDTypeGo)
 	go ForwardRingbuf(
@@ -92,7 +95,7 @@ func TestForwardRingbuf_Deadline(t *testing.T) {
 		ReadBPFTraceAsSpan,
 		slog.With("test", "TestForwardRingbuf_Deadline"),
 		metrics,
-	)(context.Background(), forwardedMessages)
+	)(context.Background(), forwardedMessagesQueue)
 
 	// WHEN it receives, after a timeout, less events than its internal buffer
 	var get = [7]byte{'G', 'E', 'T', 0, 0, 0, 0}
@@ -133,7 +136,7 @@ func TestForwardRingbuf_Close(t *testing.T) {
 		slog.With("test", "TestForwardRingbuf_Close"),
 		metrics,
 		&closable,
-	)(context.Background(), make(chan []request.Span, 100))
+	)(context.Background(), msg.NewQueue[[]request.Span](msg.ChannelBufferLen(100)))
 
 	assert.False(t, ringBuf.explicitClose.Load())
 	assert.False(t, closable.closed)

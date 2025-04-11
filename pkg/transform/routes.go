@@ -2,12 +2,13 @@
 package transform
 
 import (
+	"context"
 	"log/slog"
-
-	"github.com/mariomac/pipes/pipe"
 
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/transform/route"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
+	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 // UnmatchType defines which actions to do when a route pattern is not recognized
@@ -53,19 +54,25 @@ type RoutesConfig struct {
 	WildcardChar string `yaml:"wildcard_char,omitempty"`
 }
 
-func RoutesProvider(rc *RoutesConfig) pipe.MiddleProvider[[]request.Span, []request.Span] {
-	return (&routerNode{config: rc}).provideRoutes
+func RoutesProvider(rc *RoutesConfig, input, output *msg.Queue[[]request.Span]) swarm.InstanceFunc {
+	return (&routerNode{
+		config: rc,
+		input:  input,
+		output: output,
+	}).provideRoutes
 }
 
 type routerNode struct {
 	config *RoutesConfig
+	input  *msg.Queue[[]request.Span]
+	output *msg.Queue[[]request.Span]
 }
 
-func (rn *routerNode) provideRoutes() (pipe.MiddleFunc[[]request.Span, []request.Span], error) {
+func (rn *routerNode) provideRoutes(_ context.Context) (swarm.RunFunc, error) {
 	rc := rn.config
 	if rc == nil {
-		// if no configuration is provided, we just bypass the node
-		return pipe.Bypass[[]request.Span](), nil
+		rn.input.Bypass(rn.output)
+		return swarm.EmptyRunFunc()
 	}
 
 	// set default value for Unmatch action
@@ -83,7 +90,12 @@ func (rn *routerNode) provideRoutes() (pipe.MiddleFunc[[]request.Span, []request
 		ignoreMode = IgnoreDefault
 	}
 
-	return func(in <-chan []request.Span, out chan<- []request.Span) {
+	in := rn.input.Subscribe()
+	out := rn.output
+	return func(_ context.Context) {
+		// output channel must be closed so later stages in the pipeline can finish in cascade
+		defer rn.output.Close()
+
 		for spans := range in {
 			for i := range spans {
 				s := &spans[i]
@@ -102,7 +114,7 @@ func (rn *routerNode) provideRoutes() (pipe.MiddleFunc[[]request.Span, []request
 				}
 				unmatchAction(rc, s)
 			}
-			out <- spans
+			out.Send(spans)
 		}
 	}, nil
 }

@@ -8,19 +8,17 @@ import (
 	"time"
 
 	"github.com/cilium/ebpf"
-	"github.com/mariomac/pipes/pipe"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/grafana/beyla/v2/pkg/internal/connector"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
-	"github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 // BPFCollector implements prometheus.Collector for collecting metrics about currently loaded eBPF programs.
 type BPFCollector struct {
 	cfg         *PrometheusConfig
 	promConnect *connector.PrometheusManager
-	bgCtx       context.Context
 	ctxInfo     *global.ContextInfo
 	log         *slog.Logger
 
@@ -55,15 +53,14 @@ var bucketKeysSeconds = []float64{
 }
 
 func BPFMetrics(
-	ctx context.Context,
 	ctxInfo *global.ContextInfo,
 	cfg *PrometheusConfig,
-) pipe.FinalProvider[[]request.Span] {
-	return func() (pipe.FinalFunc[[]request.Span], error) {
+) swarm.InstanceFunc {
+	return func(_ context.Context) (swarm.RunFunc, error) {
 		if !bpfCollectorEnabled(cfg) {
-			return pipe.IgnoreFinal[[]request.Span](), nil
+			return swarm.EmptyRunFunc()
 		}
-		collector := newBPFCollector(ctx, ctxInfo, cfg)
+		collector := newBPFCollector(ctxInfo, cfg)
 		return collector.reportMetrics, nil
 	}
 }
@@ -72,11 +69,10 @@ func bpfCollectorEnabled(cfg *PrometheusConfig) bool {
 	return cfg.EndpointEnabled() && cfg.EBPFEnabled()
 }
 
-func newBPFCollector(ctx context.Context, ctxInfo *global.ContextInfo, cfg *PrometheusConfig) *BPFCollector {
+func newBPFCollector(ctxInfo *global.ContextInfo, cfg *PrometheusConfig) *BPFCollector {
 	c := &BPFCollector{
 		cfg:         cfg,
 		log:         slog.With("component", "prom.BPFCollector"),
-		bgCtx:       ctx,
 		ctxInfo:     ctxInfo,
 		promConnect: ctxInfo.Prometheus,
 		progs:       make(map[ebpf.ProgramID]*BPFProgram),
@@ -98,8 +94,8 @@ func newBPFCollector(ctx context.Context, ctxInfo *global.ContextInfo, cfg *Prom
 	return c
 }
 
-func (bc *BPFCollector) reportMetrics(_ <-chan []request.Span) {
-	go bc.promConnect.StartHTTP(bc.bgCtx)
+func (bc *BPFCollector) reportMetrics(ctx context.Context) {
+	go bc.promConnect.StartHTTP(ctx)
 }
 
 func (bc *BPFCollector) Describe(ch chan<- *prometheus.Desc) {

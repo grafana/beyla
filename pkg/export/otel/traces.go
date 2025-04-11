@@ -11,7 +11,6 @@ import (
 	"time"
 
 	expirable2 "github.com/hashicorp/golang-lru/v2/expirable"
-	"github.com/mariomac/pipes/pipe"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/configgrpc"
 	"go.opentelemetry.io/collector/config/confighttp"
@@ -44,6 +43,8 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
+	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 func tlog() *slog.Logger {
@@ -140,29 +141,41 @@ func (m *TracesConfig) guessProtocol() Protocol {
 	return ProtocolHTTPProtobuf
 }
 
-func makeTracesReceiver(ctx context.Context, cfg TracesConfig, spanMetricsEnabled bool, ctxInfo *global.ContextInfo, userAttribSelection attributes.Selection) *tracesOTELReceiver {
+func makeTracesReceiver(
+	cfg TracesConfig, spanMetricsEnabled bool, ctxInfo *global.ContextInfo, userAttribSelection attributes.Selection,
+	input *msg.Queue[[]request.Span],
+) *tracesOTELReceiver {
 	return &tracesOTELReceiver{
-		ctx:                ctx,
 		cfg:                cfg,
 		ctxInfo:            ctxInfo,
 		attributes:         userAttribSelection,
 		is:                 instrumentations.NewInstrumentationSelection(cfg.Instrumentations),
 		spanMetricsEnabled: spanMetricsEnabled,
+		input:              input.Subscribe(),
 	}
 }
 
 // TracesReceiver creates a terminal node that consumes request.Spans and sends OpenTelemetry metrics to the configured consumers.
-func TracesReceiver(ctx context.Context, cfg TracesConfig, spanMetricsEnabled bool, ctxInfo *global.ContextInfo, userAttribSelection attributes.Selection) pipe.FinalProvider[[]request.Span] {
-	return makeTracesReceiver(ctx, cfg, spanMetricsEnabled, ctxInfo, userAttribSelection).provideLoop
+func TracesReceiver(
+	ctxInfo *global.ContextInfo, cfg TracesConfig, spanMetricsEnabled bool, userAttribSelection attributes.Selection,
+	input *msg.Queue[[]request.Span],
+) swarm.InstanceFunc {
+	return func(_ context.Context) (swarm.RunFunc, error) {
+		if !cfg.Enabled() {
+			return swarm.EmptyRunFunc()
+		}
+		tr := makeTracesReceiver(cfg, spanMetricsEnabled, ctxInfo, userAttribSelection, input)
+		return tr.provideLoop, nil
+	}
 }
 
 type tracesOTELReceiver struct {
-	ctx                context.Context
 	cfg                TracesConfig
 	ctxInfo            *global.ContextInfo
 	attributes         attributes.Selection
 	is                 instrumentations.InstrumentationSelection
 	spanMetricsEnabled bool
+	input              <-chan []request.Span
 }
 
 func GetUserSelectedAttributes(attrs attributes.Selection) (map[attr.Name]struct{}, error) {
@@ -196,7 +209,7 @@ func (tr *tracesOTELReceiver) spanDiscarded(span *request.Span) bool {
 	return span.IgnoreTraces() || span.Service.ExportsOTelTraces() || !tr.acceptSpan(span)
 }
 
-func (tr *tracesOTELReceiver) processSpans(exp exporter.Traces, spans []request.Span, traceAttrs map[attr.Name]struct{}, sampler trace.Sampler) {
+func (tr *tracesOTELReceiver) processSpans(ctx context.Context, exp exporter.Traces, spans []request.Span, traceAttrs map[attr.Name]struct{}, sampler trace.Sampler) {
 	for i := range spans {
 		span := &spans[i]
 		if span.InternalSignal() {
@@ -209,7 +222,7 @@ func (tr *tracesOTELReceiver) processSpans(exp exporter.Traces, spans []request.
 		finalAttrs := traceAttributes(span, traceAttrs)
 
 		sr := sampler.ShouldSample(trace.SamplingParameters{
-			ParentContext: tr.ctx,
+			ParentContext: ctx,
 			Name:          span.TraceName(),
 			TraceID:       span.TraceID,
 			Kind:          spanKind(span),
@@ -222,52 +235,46 @@ func (tr *tracesOTELReceiver) processSpans(exp exporter.Traces, spans []request.
 
 		envResourceAttrs := ResourceAttrsFromEnv(&span.Service)
 		traces := GenerateTracesWithAttributes(span, tr.ctxInfo.HostID, finalAttrs, envResourceAttrs)
-		err := exp.ConsumeTraces(tr.ctx, traces)
+		err := exp.ConsumeTraces(ctx, traces)
 		if err != nil {
 			slog.Error("error sending trace to consumer", "error", err)
 		}
 	}
 }
 
-func (tr *tracesOTELReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], error) {
-	if !tr.cfg.Enabled() {
-		return pipe.IgnoreFinal[[]request.Span](), nil
+func (tr *tracesOTELReceiver) provideLoop(ctx context.Context) {
+	exp, err := getTracesExporter(ctx, tr.cfg, tr.ctxInfo)
+	if err != nil {
+		slog.Error("error creating traces exporter", "error", err)
+		return
 	}
-	SetupInternalOTELSDKLogger(tr.cfg.SDKLogLevel)
-	return func(in <-chan []request.Span) {
-		exp, err := getTracesExporter(tr.ctx, tr.cfg, tr.ctxInfo)
+	defer func() {
+		err := exp.Shutdown(ctx)
 		if err != nil {
-			slog.Error("error creating traces exporter", "error", err)
-			return
+			slog.Error("error shutting down traces exporter", "error", err)
 		}
-		defer func() {
-			err := exp.Shutdown(tr.ctx)
-			if err != nil {
-				slog.Error("error shutting down traces exporter", "error", err)
-			}
-		}()
-		err = exp.Start(tr.ctx, nil)
-		if err != nil {
-			slog.Error("error starting traces exporter", "error", err)
-			return
-		}
+	}()
+	err = exp.Start(ctx, nil)
+	if err != nil {
+		slog.Error("error starting traces exporter", "error", err)
+		return
+	}
 
-		traceAttrs, err := tr.getConstantAttributes()
-		if err != nil {
-			slog.Error("error selecting user trace attributes", "error", err)
-			return
-		}
+	traceAttrs, err := tr.getConstantAttributes()
+	if err != nil {
+		slog.Error("error selecting user trace attributes", "error", err)
+		return
+	}
 
-		if tr.spanMetricsEnabled {
-			traceAttrs[attr.SkipSpanMetrics] = struct{}{}
-		}
+	if tr.spanMetricsEnabled {
+		traceAttrs[attr.SkipSpanMetrics] = struct{}{}
+	}
 
-		sampler := tr.cfg.Sampler.Implementation()
+	sampler := tr.cfg.Sampler.Implementation()
 
-		for spans := range in {
-			tr.processSpans(exp, spans, traceAttrs, sampler)
-		}
-	}, nil
+	for spans := range tr.input {
+		tr.processSpans(ctx, exp, spans, traceAttrs, sampler)
+	}
 }
 
 // nolint:cyclop

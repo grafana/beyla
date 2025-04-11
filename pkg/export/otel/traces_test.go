@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/mariomac/guara/pkg/test"
-	"github.com/mariomac/pipes/pipe"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
@@ -34,6 +33,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/sqlprune"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
 func TestHTTPTracesEndpoint(t *testing.T) {
@@ -682,7 +682,7 @@ func TestTraceSampling(t *testing.T) {
 			},
 		}
 
-		receiver.processSpans(exporter, spans, attrs, sampler)
+		receiver.processSpans(context.Background(), exporter, spans, attrs, sampler)
 		assert.Equal(t, 10, len(tr))
 	})
 
@@ -698,7 +698,7 @@ func TestTraceSampling(t *testing.T) {
 			},
 		}
 
-		receiver.processSpans(exporter, spans, attrs, sampler)
+		receiver.processSpans(context.Background(), exporter, spans, attrs, sampler)
 		assert.Equal(t, 0, len(tr))
 	})
 
@@ -714,7 +714,7 @@ func TestTraceSampling(t *testing.T) {
 			},
 		}
 
-		receiver.processSpans(exporter, spans, attrs, sampler)
+		receiver.processSpans(context.Background(), exporter, spans, attrs, sampler)
 		// The result is likely 0,1,2 with 1/10th, but since sampling
 		// it's a probabilistic matter, we don't want this test to become
 		// flaky as some of them could report even 4-5 samples
@@ -754,7 +754,7 @@ func TestTraceSkipSpanMetrics(t *testing.T) {
 			},
 		}
 
-		receiver.processSpans(exporter, spans, attrs, sampler)
+		receiver.processSpans(context.Background(), exporter, spans, attrs, sampler)
 		assert.Equal(t, 10, len(tr))
 
 		for _, ts := range tr {
@@ -790,7 +790,7 @@ func TestTraceSkipSpanMetrics(t *testing.T) {
 			},
 		}
 
-		receiver.processSpans(exporter, spans, attrs, sampler)
+		receiver.processSpans(context.Background(), exporter, spans, attrs, sampler)
 		assert.Equal(t, 10, len(tr))
 
 		for _, ts := range tr {
@@ -1022,22 +1022,14 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	})
-	builder := pipe.NewBuilder(&testPipeline{}, pipe.ChannelBufferLen(10))
-	// create a simple dummy graph to send data to the Metrics reporter, which will send
-	// metrics to the fake collector
-	sendData := make(chan struct{}, 10)
-	pipe.AddStart(builder, func(impl *testPipeline) *pipe.Start[[]request.Span] {
-		return &impl.inputNode
-	}, func(out chan<- []request.Span) {
-		// on every send data signal, the traces generator sends a dummy trace
-		for range sendData {
-			out <- []request.Span{{Type: request.EventTypeHTTP}}
-		}
-	})
+
+	// run traces exporter standalone
+	exportTraces := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
 	internalTraces := &fakeInternalTraces{}
-	pipe.AddFinalProvider(builder, func(impl *testPipeline) *pipe.Final[[]request.Span] {
-		return &impl.exporter
-	}, TracesReceiver(context.Background(),
+	tracesReceiver, err := TracesReceiver(
+		&global.ContextInfo{
+			Metrics: internalTraces,
+		},
 		TracesConfig{
 			CommonEndpoint:    coll.URL,
 			BatchTimeout:      10 * time.Millisecond,
@@ -1045,17 +1037,14 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 			Instrumentations:  []string{instrumentations.InstrumentationALL},
 		},
 		false,
-		&global.ContextInfo{
-			Metrics: internalTraces,
-		},
 		attributes.Selection{},
-	))
-	graph, err := builder.Build()
+		exportTraces,
+	)(context.Background())
 	require.NoError(t, err)
 
-	graph.Start()
+	go tracesReceiver(context.Background())
 
-	sendData <- struct{}{}
+	exportTraces.Send([]request.Span{{Type: request.EventTypeHTTP}})
 	var previousSum, previousCount int
 	test.Eventually(t, timeout, func(t require.TestingT) {
 		// we can't guarantee the number of calls at test time, but they must be at least 1
@@ -1068,7 +1057,7 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 		assert.Empty(t, internalTraces.Errors())
 	})
 
-	sendData <- struct{}{}
+	exportTraces.Send([]request.Span{{Type: request.EventTypeHTTP}})
 	// after some time, the number of calls should be higher than before
 	test.Eventually(t, timeout, func(t require.TestingT) {
 		sum, count := internalTraces.SumCount()
@@ -1089,7 +1078,7 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 	})
 
 	var previousErrCount int
-	sendData <- struct{}{}
+	exportTraces.Send([]request.Span{{Type: request.EventTypeHTTP}})
 	test.Eventually(t, timeout, func(t require.TestingT) {
 		previousSum, previousCount = internalTraces.SumCount()
 		// calls should start returning errors
@@ -1098,7 +1087,7 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 	})
 
 	// after a while, metrics sum should not increase but errors do
-	sendData <- struct{}{}
+	exportTraces.Send([]request.Span{{Type: request.EventTypeHTTP}})
 	test.Eventually(t, timeout, func(t require.TestingT) {
 		sum, count := internalTraces.SumCount()
 		assert.Equal(t, previousSum, sum)
@@ -1490,7 +1479,7 @@ func ensureTraceAttrNotExists(t *testing.T, attrs pcommon.Map, key attribute.Key
 }
 
 func makeTracesTestReceiver(instr []string) *tracesOTELReceiver {
-	return makeTracesReceiver(context.Background(),
+	return makeTracesReceiver(
 		TracesConfig{
 			CommonEndpoint:    "http://something",
 			BatchTimeout:      10 * time.Millisecond,
@@ -1500,11 +1489,12 @@ func makeTracesTestReceiver(instr []string) *tracesOTELReceiver {
 		false,
 		&global.ContextInfo{},
 		attributes.Selection{},
+		msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10)),
 	)
 }
 
 func makeTracesTestReceiverWithSpanMetrics(instr []string) *tracesOTELReceiver {
-	return makeTracesReceiver(context.Background(),
+	return makeTracesReceiver(
 		TracesConfig{
 			CommonEndpoint:    "http://something",
 			BatchTimeout:      10 * time.Millisecond,
@@ -1514,6 +1504,7 @@ func makeTracesTestReceiverWithSpanMetrics(instr []string) *tracesOTELReceiver {
 		true,
 		&global.ContextInfo{},
 		attributes.Selection{},
+		msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10)),
 	)
 }
 

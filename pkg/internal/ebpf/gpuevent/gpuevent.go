@@ -25,6 +25,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type gpu_kernel_launch_t -type gpu_malloc_t -target amd64,arm64 bpf ../../../../bpf/gpuevent/gpuevent.c -- -I../../../../bpf
@@ -213,7 +214,7 @@ func (p *Tracer) AlreadyInstrumentedLib(id uint64) bool {
 	return module != nil
 }
 
-func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span) {
+func (p *Tracer) Run(ctx context.Context, eventsChan *msg.Queue[[]request.Span]) {
 	ebpfcommon.ForwardRingbuf(
 		&p.cfg.EBPF,
 		p.bpfObjects.Rb,

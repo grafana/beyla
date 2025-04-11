@@ -1,7 +1,6 @@
 package alloy
 
 import (
-	"context"
 	"encoding/binary"
 	"math/rand/v2"
 	"strconv"
@@ -130,18 +129,14 @@ func TestTraceSkipSpanMetrics(t *testing.T) {
 
 func makeTracesTestReceiver() *tracesReceiver {
 	return &tracesReceiver{
-		ctx:        context.Background(),
-		cfg:        &beyla.TracesReceiverConfig{},
-		attributes: attributes.Selection{},
-		hostID:     "Alloy",
+		cfg:    &beyla.TracesReceiverConfig{},
+		hostID: "Alloy",
 	}
 }
 
 func makeTracesTestReceiverWithSpanMetrics() *tracesReceiver {
 	return &tracesReceiver{
-		ctx:                context.Background(),
 		cfg:                &beyla.TracesReceiverConfig{},
-		attributes:         attributes.Selection{},
 		hostID:             "Alloy",
 		spanMetricsEnabled: true,
 	}
@@ -149,14 +144,14 @@ func makeTracesTestReceiverWithSpanMetrics() *tracesReceiver {
 
 func generateTracesForSpans(t *testing.T, tr *tracesReceiver, spans []request.Span) []ptrace.Traces {
 	res := []ptrace.Traces{}
-	traceAttrs, err := tr.getConstantAttributes()
+	err := tr.fetchConstantAttributes(attributes.Selection{})
 	assert.NoError(t, err)
 	for i := range spans {
 		span := &spans[i]
 		if tr.spanDiscarded(span) {
 			continue
 		}
-		res = append(res, otel.GenerateTraces(span, tr.hostID, traceAttrs, []attribute.KeyValue{}))
+		res = append(res, otel.GenerateTraces(span, tr.hostID, tr.traceAttrs, []attribute.KeyValue{}))
 	}
 
 	return res

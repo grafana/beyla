@@ -4,6 +4,7 @@ name: beyla
 nodes:
   - role: control-plane
     labels:
+      cluster.x-k8s.io/cluster-name: beyla-k8s-test-cluster
       # faking a multi-zone cluster
       topology.kubernetes.io/zone: control-plane-zone
     extraMounts:
@@ -17,6 +18,7 @@ nodes:
     labels:
       # faking a multi-zone cluster
       topology.kubernetes.io/zone: server-zone
+      cluster.x-k8s.io/cluster-name: beyla-k8s-test-cluster
     extraMounts:
       # configuration files that need to be mounted in the host
       - hostPath: ../../configs
@@ -28,6 +30,7 @@ nodes:
     labels:
       # faking a multi-zone cluster
       topology.kubernetes.io/zone: client-zone
+      cluster.x-k8s.io/cluster-name: beyla-k8s-test-cluster
       # otel collector / prom scraper needs to be placed here, due to port mappings
       deployment/zone: otel
     extraMounts:

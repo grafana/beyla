@@ -112,7 +112,7 @@ func FeatureHTTPMetricsDecoration(manifest string, overrideAttrs map[string]stri
 		"k8s_owner_name":           "^testserver$",
 		"k8s_deployment_name":      "^testserver$",
 		"k8s_replicaset_name":      "^testserver-",
-		"k8s_cluster_name":         "^beyla$",
+		"k8s_cluster_name":         "^beyla-k8s-test-cluster$",
 		"server_service_namespace": "integration-test",
 		"server":                   "testserver",
 		"source":                   "beyla",
@@ -203,7 +203,7 @@ func FeatureGRPCMetricsDecoration(manifest string, overrideAttrs map[string]stri
 		"k8s_node_name":          ".+-control-plane$",
 		"k8s_pod_uid":            UUIDRegex,
 		"k8s_pod_start_time":     TimeRegex,
-		"k8s_cluster_name":       "^beyla$",
+		"k8s_cluster_name":       "^beyla-k8s-test-cluster",
 		"k8s_owner_name":         "^testserver$",
 		"k8s_deployment_name":    "^testserver$",
 		"k8s_replicaset_name":    "^testserver-",
@@ -246,7 +246,7 @@ func FeatureProcessMetricsDecoration(overrideProperties map[string]string) featu
 		"k8s_pod_start_time":  TimeRegex,
 		"k8s_deployment_name": "^testserver$",
 		"k8s_replicaset_name": "^testserver-",
-		"k8s_cluster_name":    "^beyla$",
+		"k8s_cluster_name":    "^beyla-k8s-test-cluster",
 	}
 	for k, v := range overrideProperties {
 		properties[k] = v
@@ -278,7 +278,7 @@ func FeatureDisableInformersAppMetricsDecoration() features.Feature {
 					"k8s_pod_start_time":  TimeRegex,
 					"k8s_deployment_name": "^testserver$",
 					"k8s_replicaset_name": "^testserver-.*",
-					"k8s_cluster_name":    "^beyla$",
+					"k8s_cluster_name":    "^beyla-k8s-test-cluster$",
 					"service_instance_id": "^default\\.testserver-.+\\.testserver",
 				})).Feature()
 }

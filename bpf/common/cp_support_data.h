@@ -8,4 +8,5 @@
 typedef struct cp_support_data {
     trace_key_t t_key;
     u8 real_client;
-} __attribute__((packed)) cp_support_data_t;
+    u8 _pad[7];
+} cp_support_data_t;

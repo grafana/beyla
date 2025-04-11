@@ -1,8 +1,6 @@
 package ebpfcommon
 
 import (
-	"bytes"
-	"encoding/binary"
 	"unsafe"
 
 	"go.opentelemetry.io/otel/trace"
@@ -12,9 +10,7 @@ import (
 )
 
 func ReadGoSaramaRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
-	var event GoSaramaClientInfo
-
-	err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
+	event, err := ReinterpretCast[GoSaramaClientInfo](record.RawSample)
 	if err != nil {
 		return request.Span{}, true, err
 	}
@@ -22,7 +18,7 @@ func ReadGoSaramaRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, er
 	info, err := ProcessKafkaRequest(event.Buf[:])
 
 	if err == nil {
-		return GoKafkaSaramaToSpan(&event, info), false, nil
+		return GoKafkaSaramaToSpan(event, info), false, nil
 	}
 
 	return request.Span{}, true, nil // ignore if we couldn't parse it
@@ -61,9 +57,7 @@ func GoKafkaSaramaToSpan(event *GoSaramaClientInfo, data *KafkaInfo) request.Spa
 }
 
 func ReadGoKafkaGoRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
-	var event GoKafkaGoClientInfo
-
-	err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
+	event, err := ReinterpretCast[GoKafkaGoClientInfo](record.RawSample)
 	if err != nil {
 		return request.Span{}, true, err
 	}

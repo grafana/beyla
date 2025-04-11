@@ -1,12 +1,11 @@
 package logger
 
 import (
-	"bytes"
 	"context"
-	"encoding/binary"
 	"errors"
 	"io"
 	"log/slog"
+	"unsafe"
 
 	"github.com/cilium/ebpf"
 
@@ -78,9 +77,7 @@ func (p *BPFLogger) Run(ctx context.Context) {
 }
 
 func (p *BPFLogger) processLogEvent(_ *config.EBPFTracer, record *ringbuf.Record, _ ebpfcommon.ServiceFilter) (request.Span, bool, error) {
-	var event BPFLogInfo
-
-	err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
+	event, err := ebpfcommon.ReinterpretCast[BPFLogInfo](record.RawSample)
 
 	if err == nil {
 		p.log.Debug(readString(event.Log[:]), "pid", event.Pid, "comm", readString(event.Comm[:]))
@@ -90,13 +87,5 @@ func (p *BPFLogger) processLogEvent(_ *config.EBPFTracer, record *ringbuf.Record
 }
 
 func readString(data []int8) string {
-	bytes := make([]byte, len(data))
-	for i, v := range data {
-		if v == 0 { // null-terminated string
-			bytes = bytes[:i]
-			break
-		}
-		bytes[i] = byte(v)
-	}
-	return string(bytes)
+	return *(*string)(unsafe.Pointer(&data))
 }

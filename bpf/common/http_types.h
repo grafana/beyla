@@ -54,24 +54,23 @@
 // Here we track unknown TCP requests that are not HTTP, HTTP2 or gRPC
 typedef struct tcp_req {
     u8 flags; // Must be fist we use it to tell what kind of packet we have on the ring buffer
+    u8 ssl;
+    u8 direction;
+    u8 _pad[1];
     connection_info_t conn_info;
     u64 start_monotime_ns;
     u64 end_monotime_ns;
-    unsigned char buf[K_TCP_MAX_LEN]
-        __attribute__((aligned(8))); // ringbuffer memcpy complains unless this is 8 byte aligned
-    unsigned char rbuf[K_TCP_RES_LEN]
-        __attribute__((aligned(8))); // ringbuffer memcpy complains unless this is 8 byte aligned
+    u64 extra_id;
     u32 len;
     u32 req_len;
     u32 resp_len;
-    u8 ssl;
-    u8 direction;
+    unsigned char buf[K_TCP_MAX_LEN];
+    unsigned char rbuf[K_TCP_RES_LEN];
     // we need this for system wide tracking so we can find the service name
     // also to filter traces from unsolicited processes that share the executable
     // with other instrumented processes
     pid_info pid;
     tp_info_t tp;
-    u64 extra_id;
 } tcp_req_t;
 
 typedef struct call_protocol_args {
@@ -83,6 +82,7 @@ typedef struct call_protocol_args {
     u8 direction;
     u16 orig_dport;
     u8 packet_type;
+    u8 _pad[7];
 } call_protocol_args_t;
 
 // Here we keep information on the packets passing through the socket filter
@@ -102,6 +102,7 @@ typedef struct protocol_info {
 typedef struct http_connection_metadata {
     pid_info pid;
     u8 type;
+    u8 _pad[3];
 } http_connection_metadata_t;
 
 typedef struct http2_conn_stream {
@@ -111,18 +112,19 @@ typedef struct http2_conn_stream {
 
 typedef struct http2_grpc_request {
     u8 flags; // Must be first
-    connection_info_t conn_info;
-    u8 data[k_kprobes_http2_buf_size];
-    u8 ret_data[k_kprobes_http2_ret_buf_size];
+    u8 ssl;
     u8 type;
-    int len;
+    u8 _pad0[1];
+    connection_info_t conn_info;
     u64 start_monotime_ns;
     u64 end_monotime_ns;
+    u8 data[k_kprobes_http2_buf_size];
+    u8 ret_data[k_kprobes_http2_ret_buf_size];
+    int len;
     // we need this for system wide tracking so we can find the service name
     // also to filter traces from unsolicited processes that share the executable
     // with other instrumented processes
     pid_info pid;
-    u8 ssl;
     u64 new_conn_id;
     tp_info_t tp;
 } http2_grpc_request_t;

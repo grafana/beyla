@@ -38,6 +38,7 @@ static __always_inline tp_info_pid_t *tp_buf() {
 struct callback_ctx {
     unsigned char *buf;
     u32 pos;
+    u8 _pad[4];
 };
 
 static __always_inline void trace_key_from_pid_tid(trace_key_t *t_key) {

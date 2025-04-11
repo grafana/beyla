@@ -159,9 +159,6 @@ func (rbf *ringBufForwarder) readAndForwardInner(eventsReader ringBufReader, spa
 				return
 			}
 			rbf.logger.Error("error reading from perf reader", "error", err)
-
-			time.Sleep(10 * time.Millisecond)
-
 			continue
 		}
 		rbf.processAndForward(record, spansChan)

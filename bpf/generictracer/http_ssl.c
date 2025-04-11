@@ -144,6 +144,9 @@ int BPF_UPROBE(beyla_uprobe_ssl_write, void *ssl, const void *buf, int num) {
 
     bpf_map_update_elem(&active_ssl_write_args, &id, &args, BPF_ANY);
 
+    // must be last in the function, doesn't return
+    handle_ssl_buf(ctx, id, &args, args.len_ptr, TCP_SEND);
+
     return 0;
 }
 
@@ -155,17 +158,9 @@ int BPF_URETPROBE(beyla_uretprobe_ssl_write, int ret) {
         return 0;
     }
 
-    ssl_args_t *args = bpf_map_lookup_elem(&active_ssl_write_args, &id);
+    bpf_dbg_printk("=== uretprobe SSL_write id=%d ret %d ===", id, ret);
 
-    bpf_dbg_printk("=== uretprobe SSL_write id=%d args %llx ===", id, args);
-
-    if (args) {
-        ssl_args_t saved = {};
-        __builtin_memcpy(&saved, args, sizeof(ssl_args_t));
-        bpf_map_delete_elem(&active_ssl_write_args, &id);
-        // must be last in the function, doesn't return
-        handle_ssl_buf(ctx, id, &saved, saved.len_ptr, TCP_SEND);
-    }
+    bpf_map_delete_elem(&active_ssl_write_args, &id);
 
     return 0;
 }
@@ -187,6 +182,9 @@ int BPF_UPROBE(beyla_uprobe_ssl_write_ex, void *ssl, const void *buf, int num, s
 
     bpf_map_update_elem(&active_ssl_write_args, &id, &args, BPF_ANY);
 
+    // must be last in the function, doesn't return
+    handle_ssl_buf(ctx, id, &args, args.len_ptr, TCP_SEND);
+
     return 0;
 }
 
@@ -198,18 +196,9 @@ int BPF_URETPROBE(beyla_uretprobe_ssl_write_ex, int ret) {
         return 0;
     }
 
-    ssl_args_t *args = bpf_map_lookup_elem(&active_ssl_write_args, &id);
+    bpf_dbg_printk("=== uretprobe SSL_write_ex id=%d ret %d ===", id, ret);
 
-    bpf_dbg_printk("=== uretprobe SSL_write_ex id=%d args %llx ===", id, args);
-
-    if (args) {
-        ssl_args_t saved = {};
-        __builtin_memcpy(&saved, args, sizeof(ssl_args_t));
-        bpf_map_delete_elem(&active_ssl_write_args, &id);
-        // must be last in the function, doesn't return
-        handle_ssl_buf(ctx, id, &saved, saved.len_ptr, TCP_SEND);
-    }
-
+    bpf_map_delete_elem(&active_ssl_write_args, &id);
     return 0;
 }
 

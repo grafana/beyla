@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/mariomac/pipes/pipe"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/flow"
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/transform/cidr"
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/transform/k8s"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
 // FlowsPipeline defines the different nodes in the Beyla's NetO11y module,
@@ -121,7 +123,35 @@ func (f *Flows) pipelineBuilder(ctx context.Context) (*pipe.Builder[*FlowsPipeli
 	pipe.AddMiddleProvider(pb, rdns, func() (pipe.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
 		return flow.ReverseDNSProvider(ctx, &f.cfg.NetworkFlows.ReverseDNS)
 	})
-	pipe.AddMiddleProvider(pb, fltr, filter.ByAttribute(f.cfg.Filters.Network, ebpf.RecordStringGetters))
+
+	// until we migrate the network pipeline to the new Swarm library in a following Pull Request,
+	// we need the below adaptor for the filter.ByAttribute node
+	pipe.AddMiddleProvider(pb, fltr, func() (pipe.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
+		if len(f.cfg.Filters.Network) == 0 {
+			return pipe.Bypass[[]*ebpf.Record](), nil
+		}
+		input := msg.NewQueue[[]*ebpf.Record](msg.ChannelBufferLen(f.cfg.ChannelBufferLen))
+		output := msg.NewQueue[[]*ebpf.Record](msg.ChannelBufferLen(f.cfg.ChannelBufferLen))
+		swarmOutCh := output.Subscribe()
+		attrFilter, err := filter.ByAttribute(f.cfg.Filters.Network, ebpf.RecordStringGetters, input, output)(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("can't instantiate network filter.ByAttribute: %w", err)
+		}
+		return func(in <-chan []*ebpf.Record, out chan<- []*ebpf.Record) {
+			// forward pipe input channel to swarm input queue
+			go func() {
+				for i := range in {
+					input.Send(i)
+				}
+				input.Close()
+			}()
+			go attrFilter(ctx)
+			// forward swarm output queue to pipe output channel
+			for i := range swarmOutCh {
+				out <- i
+			}
+		}, nil
+	})
 
 	// Terminal nodes export the flow record information out of the pipeline: OTEL, Prom and printer.
 	// Not all the nodes are mandatory here. Is the responsibility of each Provider function to decide

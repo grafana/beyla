@@ -1,6 +1,7 @@
 package transform
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/testutil"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
 const testTimeout = 5 * time.Second
@@ -16,17 +18,20 @@ const testTimeout = 5 * time.Second
 func TestUnmatchedWildcard(t *testing.T) {
 	for _, tc := range []UnmatchType{"", UnmatchWildcard, "invalid_value"} {
 		t.Run(string(tc), func(t *testing.T) {
-			router, err := RoutesProvider(&RoutesConfig{Unmatch: tc, Patterns: []string{"/user/:id"}})()
+			input := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
+			output := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
+			router, err := RoutesProvider(&RoutesConfig{Unmatch: tc, Patterns: []string{"/user/:id"}},
+				input, output)(context.Background())
 			require.NoError(t, err)
-			in, out := make(chan []request.Span, 10), make(chan []request.Span, 10)
-			defer close(in)
-			go router(in, out)
-			in <- []request.Span{{Path: "/user/1234"}}
+			out := output.Subscribe()
+			defer input.Close()
+			go router(context.Background())
+			input.Send([]request.Span{{Path: "/user/1234"}})
 			assert.Equal(t, []request.Span{{
 				Path:  "/user/1234",
 				Route: "/user/:id",
 			}}, testutil.ReadChannel(t, out, testTimeout))
-			in <- []request.Span{{Path: "/some/path"}}
+			input.Send([]request.Span{{Path: "/some/path"}})
 			assert.Equal(t, []request.Span{{
 				Path:  "/some/path",
 				Route: "/**",
@@ -36,17 +41,20 @@ func TestUnmatchedWildcard(t *testing.T) {
 }
 
 func TestUnmatchedPath(t *testing.T) {
-	router, err := RoutesProvider(&RoutesConfig{Unmatch: UnmatchPath, Patterns: []string{"/user/:id"}})()
+	input := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
+	output := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
+	router, err := RoutesProvider(&RoutesConfig{Unmatch: UnmatchPath, Patterns: []string{"/user/:id"}},
+		input, output)(context.Background())
 	require.NoError(t, err)
-	in, out := make(chan []request.Span, 10), make(chan []request.Span, 10)
-	defer close(in)
-	go router(in, out)
-	in <- []request.Span{{Path: "/user/1234"}}
+	out := output.Subscribe()
+	defer input.Close()
+	go router(context.Background())
+	input.Send([]request.Span{{Path: "/user/1234"}})
 	assert.Equal(t, []request.Span{{
 		Path:  "/user/1234",
 		Route: "/user/:id",
 	}}, testutil.ReadChannel(t, out, testTimeout))
-	in <- []request.Span{{Path: "/some/path"}}
+	input.Send([]request.Span{{Path: "/some/path"}})
 	assert.Equal(t, []request.Span{{
 		Path:  "/some/path",
 		Route: "/some/path",
@@ -54,17 +62,20 @@ func TestUnmatchedPath(t *testing.T) {
 }
 
 func TestUnmatchedEmpty(t *testing.T) {
-	router, err := RoutesProvider(&RoutesConfig{Unmatch: UnmatchUnset, Patterns: []string{"/user/:id"}})()
+	input := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
+	output := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
+	router, err := RoutesProvider(&RoutesConfig{Unmatch: UnmatchUnset, Patterns: []string{"/user/:id"}},
+		input, output)(context.Background())
 	require.NoError(t, err)
-	in, out := make(chan []request.Span, 10), make(chan []request.Span, 10)
-	defer close(in)
-	go router(in, out)
-	in <- []request.Span{{Path: "/user/1234"}}
+	out := output.Subscribe()
+	defer input.Close()
+	go router(context.Background())
+	input.Send([]request.Span{{Path: "/user/1234"}})
 	assert.Equal(t, []request.Span{{
 		Path:  "/user/1234",
 		Route: "/user/:id",
 	}}, testutil.ReadChannel(t, out, testTimeout))
-	in <- []request.Span{{Path: "/some/path"}}
+	input.Send([]request.Span{{Path: "/some/path"}})
 	assert.Equal(t, []request.Span{{
 		Path: "/some/path",
 	}}, testutil.ReadChannel(t, out, testTimeout))
@@ -73,29 +84,32 @@ func TestUnmatchedEmpty(t *testing.T) {
 func TestUnmatchedAuto(t *testing.T) {
 	for _, tc := range []UnmatchType{UnmatchHeuristic} {
 		t.Run(string(tc), func(t *testing.T) {
-			router, err := RoutesProvider(&RoutesConfig{Unmatch: tc, Patterns: []string{"/user/:id"}, WildcardChar: "*"})()
+			input := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
+			output := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
+			router, err := RoutesProvider(&RoutesConfig{Unmatch: tc, Patterns: []string{"/user/:id"}, WildcardChar: "*"},
+				input, output)(context.Background())
 			require.NoError(t, err)
-			in, out := make(chan []request.Span, 10), make(chan []request.Span, 10)
-			defer close(in)
-			go router(in, out)
-			in <- []request.Span{{Path: "/user/1234"}}
+			out := output.Subscribe()
+			defer input.Close()
+			go router(context.Background())
+			input.Send([]request.Span{{Path: "/user/1234"}})
 			assert.Equal(t, []request.Span{{
 				Path:  "/user/1234",
 				Route: "/user/:id",
 			}}, testutil.ReadChannel(t, out, testTimeout))
-			in <- []request.Span{{Path: "/some/path", Type: request.EventTypeHTTP}}
+			input.Send([]request.Span{{Path: "/some/path", Type: request.EventTypeHTTP}})
 			assert.Equal(t, []request.Span{{
 				Path:  "/some/path",
 				Route: "/some/path",
 				Type:  request.EventTypeHTTP,
 			}}, testutil.ReadChannel(t, out, testTimeout))
-			in <- []request.Span{{Path: "/customer/1/job/2", Type: request.EventTypeHTTP}}
+			input.Send([]request.Span{{Path: "/customer/1/job/2", Type: request.EventTypeHTTP}})
 			assert.Equal(t, []request.Span{{
 				Path:  "/customer/1/job/2",
 				Route: "/customer/*/job/*",
 				Type:  request.EventTypeHTTP,
 			}}, testutil.ReadChannel(t, out, testTimeout))
-			in <- []request.Span{{Path: "/customer/lfdsjd/job/erwejre", Type: request.EventTypeHTTPClient}}
+			input.Send([]request.Span{{Path: "/customer/lfdsjd/job/erwejre", Type: request.EventTypeHTTPClient}})
 			assert.Equal(t, []request.Span{{
 				Path:  "/customer/lfdsjd/job/erwejre",
 				Route: "/customer/*/job/*",
@@ -106,18 +120,23 @@ func TestUnmatchedAuto(t *testing.T) {
 }
 
 func TestIgnoreRoutes(t *testing.T) {
-	router, err := RoutesProvider(&RoutesConfig{Unmatch: UnmatchPath, Patterns: []string{"/user/:id", "/v1/metrics"}, IgnorePatterns: []string{"/v1/metrics/*", "/v1/traces/*", "/exact"}})()
+	input := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
+	output := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
+	router, err := RoutesProvider(&RoutesConfig{
+		Unmatch: UnmatchPath, Patterns: []string{"/user/:id", "/v1/metrics"},
+		IgnorePatterns: []string{"/v1/metrics/*", "/v1/traces/*", "/exact"}},
+		input, output)(context.Background())
 	require.NoError(t, err)
-	in, out := make(chan []request.Span, 10), make(chan []request.Span, 10)
-	defer close(in)
-	go router(in, out)
-	in <- []request.Span{{Path: "/user/1234"}}
-	in <- []request.Span{{Path: "/v1/metrics"}} // this is in routes and ignore, ignore takes precedence
-	in <- []request.Span{{Path: "/v1/traces/1234/test"}}
-	in <- []request.Span{{Path: "/v1/metrics/1234/test"}} // this is in routes and ignore, ignore takes precedence
-	in <- []request.Span{{Path: "/v1/traces"}}
-	in <- []request.Span{{Path: "/exact"}}
-	in <- []request.Span{{Path: "/some/path"}}
+	out := output.Subscribe()
+	defer input.Close()
+	go router(context.Background())
+	input.Send([]request.Span{{Path: "/user/1234"}})
+	input.Send([]request.Span{{Path: "/v1/metrics"}}) // this is in routes and ignore, ignore takes precedence
+	input.Send([]request.Span{{Path: "/v1/traces/1234/test"}})
+	input.Send([]request.Span{{Path: "/v1/metrics/1234/test"}}) // this is in routes and ignore, ignore takes precedence
+	input.Send([]request.Span{{Path: "/v1/traces"}})
+	input.Send([]request.Span{{Path: "/exact"}})
+	input.Send([]request.Span{{Path: "/some/path"}})
 	assert.Equal(t, []request.Span{{
 		Path:  "/user/1234",
 		Route: "/user/:id",
@@ -145,10 +164,13 @@ func BenchmarkRoutesProvider_Heuristic(b *testing.B) {
 }
 
 func benchProvider(b *testing.B, unmatch UnmatchType) {
+	input := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
+	output := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
 	router, err := RoutesProvider(&RoutesConfig{Unmatch: unmatch, Patterns: []string{
 		"/users/{id}",
 		"/users/{id}/product/{pid}",
-	}})()
+	}}, input, output)(context.Background())
+
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -161,7 +183,7 @@ func benchProvider(b *testing.B, unmatch UnmatchType) {
 		{Type: request.EventTypeHTTP, Path: "/products/34322"},
 		{Type: request.EventTypeHTTP, Path: "/users/123/delete"},
 	}
-	go router(inCh, outCh)
+	go router(context.Background())
 	for i := 0; i < b.N; i++ {
 		inCh <- benchmarkInput
 		<-outCh

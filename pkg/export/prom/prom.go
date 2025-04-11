@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
-	"github.com/mariomac/pipes/pipe"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/grafana/beyla/v2/pkg/buildinfo"
@@ -22,6 +21,8 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
+	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 // injectable function reference for testing
@@ -167,6 +168,7 @@ func (p *PrometheusConfig) Enabled() bool {
 type metricsReporter struct {
 	cfg                 *PrometheusConfig
 	extraMetadataLabels []attr.Name
+	input               <-chan []request.Span
 
 	beylaInfo             *Expirer[prometheus.Gauge]
 	httpDuration          *Expirer[prometheus.Histogram]
@@ -217,7 +219,6 @@ type metricsReporter struct {
 	promConnect *connector.PrometheusManager
 
 	clock   *expire.CachedClock
-	bgCtx   context.Context
 	ctxInfo *global.ContextInfo
 
 	is instrumentations.InstrumentationSelection
@@ -229,16 +230,16 @@ type metricsReporter struct {
 }
 
 func PrometheusEndpoint(
-	ctx context.Context,
 	ctxInfo *global.ContextInfo,
 	cfg *PrometheusConfig,
 	attrSelect attributes.Selection,
-) pipe.FinalProvider[[]request.Span] {
-	return func() (pipe.FinalFunc[[]request.Span], error) {
+	input *msg.Queue[[]request.Span],
+) swarm.InstanceFunc {
+	return func(_ context.Context) (swarm.RunFunc, error) {
 		if !cfg.Enabled() {
-			return pipe.IgnoreFinal[[]request.Span](), nil
+			return swarm.EmptyRunFunc()
 		}
-		reporter, err := newReporter(ctx, ctxInfo, cfg, attrSelect)
+		reporter, err := newReporter(ctxInfo, cfg, attrSelect, input)
 		if err != nil {
 			return nil, fmt.Errorf("instantiating Prometheus endpoint: %w", err)
 		}
@@ -251,10 +252,7 @@ func PrometheusEndpoint(
 
 // nolint:cyclop
 func newReporter(
-	ctx context.Context,
-	ctxInfo *global.ContextInfo,
-	cfg *PrometheusConfig,
-	selector attributes.Selection,
+	ctxInfo *global.ContextInfo, cfg *PrometheusConfig, selector attributes.Selection, input *msg.Queue[[]request.Span],
 ) (*metricsReporter, error) {
 	groups := ctxInfo.MetricAttributeGroups
 	groups.Add(attributes.GroupPrometheus)
@@ -326,7 +324,7 @@ func newReporter(
 	// executable inspector
 	extraMetadataLabels := parseExtraMetadata(cfg.ExtraResourceLabels)
 	mr := &metricsReporter{
-		bgCtx:                     ctx,
+		input:                     input.Subscribe(),
 		ctxInfo:                   ctxInfo,
 		cfg:                       cfg,
 		kubeEnabled:               kubeEnabled,
@@ -671,13 +669,13 @@ func optionalGaugeProvider(enable bool, provider func() *Expirer[prometheus.Gaug
 	return provider()
 }
 
-func (r *metricsReporter) reportMetrics(input <-chan []request.Span) {
-	go r.promConnect.StartHTTP(r.bgCtx)
-	r.collectMetrics(input)
+func (r *metricsReporter) reportMetrics(ctx context.Context) {
+	go r.promConnect.StartHTTP(ctx)
+	r.collectMetrics(ctx)
 }
 
-func (r *metricsReporter) collectMetrics(input <-chan []request.Span) {
-	for spans := range input {
+func (r *metricsReporter) collectMetrics(_ context.Context) {
+	for spans := range r.input {
 		// clock needs to be updated to let the expirer
 		// remove the old metrics
 		r.clock.Update()

@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mariomac/pipes/pipe"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
@@ -30,6 +29,8 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
+	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 func mlog() *slog.Logger {
@@ -223,8 +224,8 @@ type MetricsReporter struct {
 	attrGPUKernelGridSize     []attributes.Field[*request.Span, attribute.KeyValue]
 	attrGPUKernelBlockSize    []attributes.Field[*request.Span, attribute.KeyValue]
 	attrGPUMemoryAllocations  []attributes.Field[*request.Span, attribute.KeyValue]
-
-	userAttribSelection attributes.Selection
+	input                     <-chan []request.Span
+	userAttribSelection       attributes.Selection
 }
 
 // Metrics is a set of metrics associated to a given OTEL MeterProvider.
@@ -260,18 +261,18 @@ type Metrics struct {
 }
 
 func ReportMetrics(
-	ctx context.Context,
 	ctxInfo *global.ContextInfo,
 	cfg *MetricsConfig,
 	userAttribSelection attributes.Selection,
-) pipe.FinalProvider[[]request.Span] {
-	return func() (pipe.FinalFunc[[]request.Span], error) {
+	input *msg.Queue[[]request.Span],
+) swarm.InstanceFunc {
+	return func(ctx context.Context) (swarm.RunFunc, error) {
 		if !cfg.Enabled() {
-			return pipe.IgnoreFinal[[]request.Span](), nil
+			return swarm.EmptyRunFunc()
 		}
 		SetupInternalOTELSDKLogger(cfg.SDKLogLevel)
 
-		mr, err := newMetricsReporter(ctx, ctxInfo, cfg, userAttribSelection)
+		mr, err := newMetricsReporter(ctx, ctxInfo, cfg, userAttribSelection, input)
 		if err != nil {
 			return nil, fmt.Errorf("instantiating OTEL metrics reporter: %w", err)
 		}
@@ -294,6 +295,7 @@ func newMetricsReporter(
 	ctxInfo *global.ContextInfo,
 	cfg *MetricsConfig,
 	userAttribSelection attributes.Selection,
+	input *msg.Queue[[]request.Span],
 ) (*MetricsReporter, error) {
 	log := mlog()
 
@@ -304,12 +306,18 @@ func newMetricsReporter(
 
 	is := instrumentations.NewInstrumentationSelection(cfg.Instrumentations)
 
+	// swarm.Instancer will cancel the passed InstanceFunc context once all the nodes
+	// are instanced, so we remove the cancellation from the context to avoid
+	// cancelling the metrics reporter
+	ctx = context.WithoutCancel(ctx)
+
 	mr := MetricsReporter{
 		ctx:                 ctx,
 		cfg:                 cfg,
 		is:                  is,
 		attributes:          attribProvider,
 		hostID:              ctxInfo.HostID,
+		input:               input.Subscribe(),
 		userAttribSelection: userAttribSelection,
 	}
 	// initialize attribute getters
@@ -357,7 +365,7 @@ func newMetricsReporter(
 		func(id svc.UID, v *expirable[*Metrics]) {
 			if mr.cfg.SpanMetricsEnabled() {
 				attrOpt := instrument.WithAttributeSet(mr.metricResourceAttributes(v.value.service))
-				v.value.tracesTargetInfo.Add(mr.ctx, 1, attrOpt)
+				v.value.tracesTargetInfo.Add(ctx, 1, attrOpt)
 			}
 
 			llog := log.With("service", id)
@@ -991,8 +999,8 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 	}
 }
 
-func (mr *MetricsReporter) reportMetrics(input <-chan []request.Span) {
-	for spans := range input {
+func (mr *MetricsReporter) reportMetrics(_ context.Context) {
+	for spans := range mr.input {
 		for i := range spans {
 			s := &spans[i]
 			if s.InternalSignal() {

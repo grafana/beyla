@@ -41,17 +41,16 @@ func TestSwarm_StartTwice(t *testing.T) {
 func TestSwarm_RunnerExecution(t *testing.T) {
 	inst := Instancer{}
 	runnerExecuted := atomic.Bool{}
-	inst.Add(func(_ context.Context) (RunFunc, error) {
-		return func(_ context.Context) {
-			runnerExecuted.Store(true)
-		}, nil
-	})
+	inst.Add(DirectInstance(func(_ context.Context) {
+		runnerExecuted.Store(true)
+	}))
 	s, err := inst.Instance(context.Background())
 	require.NoError(t, err)
 	s.Start(context.Background())
 	test.Eventually(t, 5*time.Second, func(t require.TestingT) {
 		assert.True(t, runnerExecuted.Load(), "runner was not executed")
 	})
+	assertDone(t, s)
 }
 
 func TestSwarm_CreatorFailure(t *testing.T) {
@@ -111,5 +110,15 @@ func TestSwarm_ContextPassed(t *testing.T) {
 	test.Eventually(t, 5*time.Second, func(_ require.TestingT) {
 		doneWg.Wait()
 	})
+	assertDone(t, s)
+}
 
+func assertDone(t *testing.T, s *Runner) {
+	timeout := time.After(5 * time.Second)
+	select {
+	case <-s.Done():
+		// ok!!!
+	case <-timeout:
+		t.Fatal("Runner instance did not properly finish")
+	}
 }

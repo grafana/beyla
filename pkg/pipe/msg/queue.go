@@ -1,7 +1,10 @@
 // Package msg provides tools for message passing and queues between the different nodes of the Beyla pipelines.
 package msg
 
-import "sync"
+import (
+	"sync"
+	"sync/atomic"
+)
 
 type queueConfig struct {
 	channelBufferLen int
@@ -35,6 +38,7 @@ type Queue[T any] struct {
 	// - can't bypass to a queue and having other dsts
 	// - can only bypass to a single queue, despite multiple queues can bypass to it
 	bypassTo *Queue[T]
+	closed   atomic.Bool
 }
 
 // NewQueue creates a new Queue instance with the given options.
@@ -56,6 +60,7 @@ func (q *Queue[T]) config() *queueConfig {
 // Send a message to all subscribers of this queue. If there are no subscribers,
 // the message will be lost and the sender will not be blocked.
 func (q *Queue[T]) Send(o T) {
+	q.assertNotClosed()
 	if q.bypassTo != nil {
 		q.bypassTo.Send(o)
 		return
@@ -75,11 +80,10 @@ func (q *Queue[T]) Send(o T) {
 // thread-safe with the Send method. This means that concurrent invocations to Subscribe and Send might
 // result in few initial lost messages.
 func (q *Queue[T]) Subscribe() <-chan T {
+	q.assertNotClosed()
 	q.mt.Lock()
 	defer q.mt.Unlock()
-	if q.bypassTo != nil {
-		panic("this queue is already bypassing data to another queue. Can't subscribe to it")
-	}
+	q.assertNotBypassing()
 	out := make(chan T, q.config().channelBufferLen)
 	q.dsts = append(q.dsts, out)
 	return out
@@ -89,13 +93,39 @@ func (q *Queue[T]) Subscribe() <-chan T {
 // messages sent to this queue will also be sent to the other queue.
 // This operation is not thread-safe and does not control for graph cycles.
 func (q *Queue[T]) Bypass(to *Queue[T]) {
+	q.assertNotClosed()
 	q.mt.Lock()
 	defer q.mt.Unlock()
 	if q == to {
 		panic("this queue can't bypass to itself")
 	}
-	if q.bypassTo != nil {
-		panic("this queue is already bypassing to another queue")
-	}
+	q.assertNotBypassing()
 	q.bypassTo = to
+}
+
+// Close all the subscribers of this queue. This will close all the channels
+// or will close the bypassed channel
+func (q *Queue[T]) Close() {
+	q.closed.Store(true)
+	q.mt.Lock()
+	defer q.mt.Unlock()
+	if q.bypassTo != nil {
+		q.bypassTo.Close()
+	} else {
+		for _, d := range q.dsts {
+			close(d)
+		}
+	}
+}
+
+func (q *Queue[T]) assertNotBypassing() {
+	if q.bypassTo != nil {
+		panic("queue already bypassing data to another queue")
+	}
+}
+
+func (q *Queue[T]) assertNotClosed() {
+	if q.closed.Load() {
+		panic("queue is closed")
+	}
 }

@@ -1,6 +1,7 @@
 package transform
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/testutil"
 	"github.com/grafana/beyla/v2/pkg/kubecache/informer"
 	"github.com/grafana/beyla/v2/pkg/kubecache/meta"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
 const timeout = 5 * time.Second
@@ -119,20 +121,24 @@ func TestDecoration(t *testing.T) {
 	for _, pid := range []uint32{12, 34, 56, 78, 33, 66} {
 		store.AddProcess(pid)
 	}
-
-	dec := metadataDecorator{db: store, clusterName: "the-cluster"}
-	inputCh, outputhCh := make(chan []request.Span, 10), make(chan []request.Span, 10)
-	defer close(inputCh)
-	go dec.nodeLoop(inputCh, outputhCh)
+	inputQueue := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
+	dec := metadataDecorator{
+		db: store, clusterName: "the-cluster",
+		input:  inputQueue.Subscribe(),
+		output: msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10)),
+	}
+	outputCh := dec.output.Subscribe()
+	defer inputQueue.Close()
+	go dec.nodeLoop(context.Background())
 
 	autoNameSvc := svc.Attrs{}
 	autoNameSvc.SetAutoName()
 
 	t.Run("complete pod info should set deployment as name", func(t *testing.T) {
-		inputCh <- []request.Span{{
+		inputQueue.Send([]request.Span{{
 			Pid: request.PidInfo{Namespace: 1012}, Service: autoNameSvc,
-		}}
-		deco := testutil.ReadChannel(t, outputhCh, timeout)
+		}})
+		deco := testutil.ReadChannel(t, outputCh, timeout)
 		require.Len(t, deco, 1)
 		assert.Equal(t, "the-ns", deco[0].Service.UID.Namespace)
 		assert.Equal(t, "deployment-12", deco[0].Service.UID.Name)
@@ -150,10 +156,10 @@ func TestDecoration(t *testing.T) {
 		}, deco[0].Service.Metadata)
 	})
 	t.Run("pod info whose replicaset did not have an Owner should set the replicaSet name", func(t *testing.T) {
-		inputCh <- []request.Span{{
+		inputQueue.Send([]request.Span{{
 			Pid: request.PidInfo{Namespace: 1034}, Service: autoNameSvc,
-		}}
-		deco := testutil.ReadChannel(t, outputhCh, timeout)
+		}})
+		deco := testutil.ReadChannel(t, outputCh, timeout)
 		require.Len(t, deco, 1)
 		assert.Equal(t, "the-ns", deco[0].Service.UID.Namespace)
 		assert.Equal(t, "rs", deco[0].Service.UID.Name)
@@ -171,10 +177,10 @@ func TestDecoration(t *testing.T) {
 		}, deco[0].Service.Metadata)
 	})
 	t.Run("pod info with only pod name should set pod name as name", func(t *testing.T) {
-		inputCh <- []request.Span{{
+		inputQueue.Send([]request.Span{{
 			Pid: request.PidInfo{Namespace: 1056}, Service: autoNameSvc,
-		}}
-		deco := testutil.ReadChannel(t, outputhCh, timeout)
+		}})
+		deco := testutil.ReadChannel(t, outputCh, timeout)
 		require.Len(t, deco, 1)
 		assert.Equal(t, "the-ns", deco[0].Service.UID.Namespace)
 		assert.Equal(t, "the-pod", deco[0].Service.UID.Name)
@@ -190,10 +196,10 @@ func TestDecoration(t *testing.T) {
 		}, deco[0].Service.Metadata)
 	})
 	t.Run("user can override service name and ns via labels", func(t *testing.T) {
-		inputCh <- []request.Span{{
+		inputQueue.Send([]request.Span{{
 			Pid: request.PidInfo{Namespace: 1078}, Service: autoNameSvc,
-		}}
-		deco := testutil.ReadChannel(t, outputhCh, timeout)
+		}})
+		deco := testutil.ReadChannel(t, outputCh, timeout)
 		require.Len(t, deco, 1)
 		assert.Equal(t, "a-cool-namespace", deco[0].Service.UID.Namespace)
 		assert.Equal(t, "a-cool-name", deco[0].Service.UID.Name)
@@ -211,10 +217,10 @@ func TestDecoration(t *testing.T) {
 		}, deco[0].Service.Metadata)
 	})
 	t.Run("user can override service name and ns via annotations", func(t *testing.T) {
-		inputCh <- []request.Span{{
+		inputQueue.Send([]request.Span{{
 			Pid: request.PidInfo{Namespace: 1033}, Service: autoNameSvc,
-		}}
-		deco := testutil.ReadChannel(t, outputhCh, timeout)
+		}})
+		deco := testutil.ReadChannel(t, outputCh, timeout)
 		require.Len(t, deco, 1)
 		assert.Equal(t, "otel-override-ns", deco[0].Service.UID.Namespace)
 		assert.Equal(t, "otel-override-name", deco[0].Service.UID.Name)
@@ -232,10 +238,10 @@ func TestDecoration(t *testing.T) {
 		}, deco[0].Service.Metadata)
 	})
 	t.Run("user can override service name and ns via env vars, taking precedence over any other criteria", func(t *testing.T) {
-		inputCh <- []request.Span{{
+		inputQueue.Send([]request.Span{{
 			Pid: request.PidInfo{Namespace: 1066}, Service: autoNameSvc,
-		}}
-		deco := testutil.ReadChannel(t, outputhCh, timeout)
+		}})
+		deco := testutil.ReadChannel(t, outputCh, timeout)
 		require.Len(t, deco, 1)
 		assert.Equal(t, "env-svc-ns", deco[0].Service.UID.Namespace)
 		assert.Equal(t, "env-svc-name", deco[0].Service.UID.Name)
@@ -255,20 +261,20 @@ func TestDecoration(t *testing.T) {
 	t.Run("process without pod Info won't be decorated", func(t *testing.T) {
 		svc := svc.Attrs{UID: svc.UID{Name: "exec"}}
 		svc.SetAutoName()
-		inputCh <- []request.Span{{
+		inputQueue.Send([]request.Span{{
 			Pid: request.PidInfo{Namespace: 1099}, Service: svc,
-		}}
-		deco := testutil.ReadChannel(t, outputhCh, timeout)
+		}})
+		deco := testutil.ReadChannel(t, outputCh, timeout)
 		require.Len(t, deco, 1)
 		assert.Empty(t, deco[0].Service.UID.Namespace)
 		assert.Equal(t, "exec", deco[0].Service.UID.Name)
 		assert.Empty(t, deco[0].Service.Metadata)
 	})
 	t.Run("if service name or namespace are manually specified, don't override them", func(t *testing.T) {
-		inputCh <- []request.Span{{
+		inputQueue.Send([]request.Span{{
 			Pid: request.PidInfo{Namespace: 1012}, Service: svc.Attrs{UID: svc.UID{Name: "tralari", Namespace: "tralara"}},
-		}}
-		deco := testutil.ReadChannel(t, outputhCh, timeout)
+		}})
+		deco := testutil.ReadChannel(t, outputCh, timeout)
 		require.Len(t, deco, 1)
 		assert.Equal(t, "tralara", deco[0].Service.UID.Namespace)
 		assert.Equal(t, "tralari", deco[0].Service.UID.Name)

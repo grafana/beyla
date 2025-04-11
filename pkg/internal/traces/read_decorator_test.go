@@ -12,6 +12,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
 	"github.com/grafana/beyla/v2/pkg/internal/testutil"
 	"github.com/grafana/beyla/v2/pkg/internal/traces/hostname"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
 const testTimeout = 5 * time.Second
@@ -47,17 +48,18 @@ func TestReadDecorator(t *testing.T) {
 	}} {
 		t.Run(tc.desc, func(t *testing.T) {
 			cfg := tc.cfg
-			rawInput := make(chan []request.Span, 10)
-			decoratedOutput := make(chan []request.Span, 10)
-			cfg.TracesInput = rawInput
+			cfg.TracesInput = msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
+			cfg.DecoratedTraces = msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
+			decoratedOutput := cfg.DecoratedTraces.Subscribe()
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			readLoop := ReadFromChannel(ctx, &cfg)
-			go readLoop(decoratedOutput)
-			rawInput <- []request.Span{
+			readLoop, err := ReadFromChannel(&cfg)(ctx)
+			require.NoError(t, err)
+			go readLoop(ctx)
+			cfg.TracesInput.Send([]request.Span{
 				{Path: "/foo", Pid: request.PidInfo{HostPID: 1234}},
 				{Path: "/bar", Pid: request.PidInfo{HostPID: 1234}},
-			}
+			})
 			outSpans := testutil.ReadChannel(t, decoratedOutput, testTimeout)
 			assert.Equal(t, []request.Span{
 				{Service: svc.Attrs{UID: svc.UID{Instance: tc.expectedInstance}, HostName: tc.expectedHN},

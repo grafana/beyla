@@ -22,6 +22,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/exec"
 	"github.com/grafana/beyla/v2/pkg/internal/goexec"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
 const PinInternal = ebpf.PinType(100)
@@ -104,7 +105,7 @@ func NewProcessTracer(cfg *beyla.Config, tracerType ProcessTracerType, programs 
 	}
 }
 
-func (pt *ProcessTracer) Run(ctx context.Context, out chan<- []request.Span) {
+func (pt *ProcessTracer) Run(ctx context.Context, out *msg.Queue[[]request.Span]) {
 	pt.log = ptlog().With("type", pt.Type)
 
 	pt.log.Debug("starting process tracer")

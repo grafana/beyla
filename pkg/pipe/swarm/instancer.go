@@ -44,3 +44,11 @@ func (s *Instancer) Instance(ctx context.Context) (*Runner, error) {
 	}
 	return runner, nil
 }
+
+// DirectInstance provides a shortcut to provide the Instancer with a RunFunc that is already instanced, or
+// whose creation does not require any error handling API.
+func DirectInstance(r RunFunc) InstanceFunc {
+	return func(_ context.Context) (RunFunc, error) {
+		return r, nil
+	}
+}

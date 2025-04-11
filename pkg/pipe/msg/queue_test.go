@@ -94,3 +94,79 @@ func TestErrors(t *testing.T) {
 		})
 	})
 }
+
+func TestClose(t *testing.T) {
+	q := NewQueue[int](ChannelBufferLen(10))
+	ch1, ch2 := q.Subscribe(), q.Subscribe()
+	// channels are not closed
+	select {
+	case <-ch1:
+		t.Fatal("channel 1 should not be closed")
+	case <-ch2:
+		t.Fatal("channel 2 should not be closed")
+	default:
+		// ok!!
+	}
+	q.Send(123)
+	q.Send(456)
+	q.Close()
+	// once closed, channels should be closed but might still have contents
+	assert.Equal(t, 123, testutil.ReadChannel(t, ch1, timeout))
+	assert.Equal(t, 123, testutil.ReadChannel(t, ch2, timeout))
+	assert.Equal(t, 456, testutil.ReadChannel(t, ch1, timeout))
+	assert.Equal(t, 456, testutil.ReadChannel(t, ch2, timeout))
+
+	testutil.ChannelEmpty(t, ch1, time.Second)
+	testutil.ChannelEmpty(t, ch1, time.Second)
+}
+
+func TestClose_Bypassed(t *testing.T) {
+	q := NewQueue[int](ChannelBufferLen(10))
+	q2 := NewQueue[int](ChannelBufferLen(10))
+	q.Bypass(q2)
+	ch1, ch2 := q2.Subscribe(), q2.Subscribe()
+	// channels are not closed
+	select {
+	case <-ch1:
+		t.Fatal("channel 1 should not be closed")
+	case <-ch2:
+		t.Fatal("channel 2 should not be closed")
+	default:
+		// ok!!
+	}
+	q.Send(123)
+	q.Send(456)
+	q.Close()
+	// once closed, channels should be closed but might still have contents
+	assert.Equal(t, 123, testutil.ReadChannel(t, ch1, timeout))
+	assert.Equal(t, 123, testutil.ReadChannel(t, ch2, timeout))
+	assert.Equal(t, 456, testutil.ReadChannel(t, ch1, timeout))
+	assert.Equal(t, 456, testutil.ReadChannel(t, ch2, timeout))
+
+	testutil.ChannelEmpty(t, ch1, time.Second)
+	testutil.ChannelEmpty(t, ch1, time.Second)
+}
+
+func TestClose_Errors(t *testing.T) {
+	q := Queue[int]{}
+	q.Close()
+	t.Run("can't send on closed queue", func(t *testing.T) {
+		assert.Panics(t, func() {
+			q.Send(123)
+		})
+	})
+	t.Run("can't subscribe on closed queue", func(t *testing.T) {
+		assert.Panics(t, func() {
+			q.Subscribe()
+		})
+	})
+	t.Run("can't bypass on closed queue", func(t *testing.T) {
+		assert.Panics(t, func() {
+			q2 := Queue[int]{}
+			q.Bypass(&q2)
+		})
+	})
+	t.Run("it's ok re-closing a closed queue", func(t *testing.T) {
+		assert.NotPanics(t, q.Close)
+	})
+}

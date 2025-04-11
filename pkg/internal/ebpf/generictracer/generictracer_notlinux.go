@@ -17,6 +17,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
 type Tracer struct{}
@@ -38,7 +39,7 @@ func (p *Tracer) RecordInstrumentedLib(_ uint64, _ []io.Closer)          {}
 func (p *Tracer) AddInstrumentedLibRef(_ uint64)                         {}
 func (p *Tracer) UnlinkInstrumentedLib(_ uint64)                         {}
 func (p *Tracer) AlreadyInstrumentedLib(_ uint64) bool                   { return false }
-func (p *Tracer) Run(_ context.Context, _ chan<- []request.Span)         {}
+func (p *Tracer) Run(_ context.Context, _ *msg.Queue[[]request.Span])    {}
 func (p *Tracer) Constants() map[string]any                              { return nil }
 func (p *Tracer) SetupTailCalls()                                        {}
 func (p *Tracer) RegisterOffsets(_ *exec.FileInfo, _ *goexec.Offsets)    {}

@@ -6,7 +6,6 @@ import (
 	"os"
 
 	"github.com/cilium/ebpf/link"
-	"github.com/mariomac/pipes/pipe"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf"
@@ -16,19 +15,17 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
 	"github.com/grafana/beyla/v2/pkg/pipe/msg"
+	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 // TraceAttacher creates the available trace.Tracer implementations (Go HTTP tracer, GRPC tracer, Generic tracer...)
 // for each received Instrumentable process and forwards an ebpf.ProcessTracer instance ready to run and start
 // instrumenting the executable
 type TraceAttacher struct {
-	log               *slog.Logger
-	Cfg               *beyla.Config
-	Ctx               context.Context
-	DiscoveredTracers chan *ebpf.Instrumentable
-	DeleteTracers     chan *ebpf.Instrumentable
-	Metrics           imetrics.Reporter
-	beylaPID          int
+	log      *slog.Logger
+	Cfg      *beyla.Config
+	Metrics  imetrics.Reporter
+	beylaPID int
 
 	// processInstances keeps track of the instances of each process. This will help making sure
 	// that we don't remove the BPF resources of an executable until all their instances are removed
@@ -48,13 +45,23 @@ type TraceAttacher struct {
 	// if no spans are detected. This would allow, for example, to start instrumenting this process
 	// from the Process metrics pipeline even before it starts to do/receive requests.
 	SpanSignalsShortcut *msg.Queue[[]request.Span]
+
+	// InputInstrumentables is the input channel for the TraceAttacher, where it receives information
+	// about the instrumentables that traversed the whole process discovery pipeline, so they need to
+	// be instrumented
+	InputInstrumentables *msg.Queue[[]Event[ebpf.Instrumentable]]
+
+	// DiscoveredTracers and DeleteTracers communicate the discovery pipeline with the
+	// instrumentation pipeline
+	// TODO: replace by a single channel forwarding an Event to prevent race condition with very short-lived processes
+	TracerEvents *msg.Queue[Event[*ebpf.Instrumentable]]
 }
 
-func TraceAttacherProvider(ta *TraceAttacher) pipe.FinalProvider[[]Event[ebpf.Instrumentable]] {
+func TraceAttacherProvider(ta *TraceAttacher) swarm.InstanceFunc {
 	return ta.attacherLoop
 }
 
-func (ta *TraceAttacher) attacherLoop() (pipe.FinalFunc[[]Event[ebpf.Instrumentable]], error) {
+func (ta *TraceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) {
 	ta.log = slog.With("component", "discover.TraceAttacher")
 	ta.existingTracers = map[uint64]*ebpf.ProcessTracer{}
 	ta.sdkInjector = otelsdk.NewSDKInjector(ta.Cfg)
@@ -66,7 +73,10 @@ func (ta *TraceAttacher) attacherLoop() (pipe.FinalFunc[[]Event[ebpf.Instrumenta
 		return nil, err
 	}
 
-	return func(in <-chan []Event[ebpf.Instrumentable]) {
+	in := ta.InputInstrumentables.Subscribe()
+	return func(ctx context.Context) {
+		defer ta.TracerEvents.Close()
+
 	mainLoop:
 		for instrumentables := range in {
 			for _, instr := range instrumentables {
@@ -84,7 +94,7 @@ func (ta *TraceAttacher) attacherLoop() (pipe.FinalFunc[[]Event[ebpf.Instrumenta
 					if !sdkInstrumented {
 						ta.processInstances.Inc(instr.Obj.FileInfo.Ino)
 						if ok := ta.getTracer(&instr.Obj); ok {
-							ta.DiscoveredTracers <- &instr.Obj
+							ta.TracerEvents.Send(Event[*ebpf.Instrumentable]{Type: EventCreated, Obj: &instr.Obj})
 							if ta.Cfg.Discovery.SystemWide {
 								ta.log.Info("system wide instrumentation. Creating a single instrumenter")
 								break mainLoop
@@ -97,7 +107,7 @@ func (ta *TraceAttacher) attacherLoop() (pipe.FinalFunc[[]Event[ebpf.Instrumenta
 			}
 		}
 		// waiting until context is done, in the case of SystemWide instrumentation
-		<-ta.Ctx.Done()
+		<-ctx.Done()
 		ta.log.Debug("terminating process attacher")
 		ta.close()
 	}, nil
@@ -335,7 +345,7 @@ func (ta *TraceAttacher) notifyProcessDeletion(ie *ebpf.Instrumentable) {
 		if ta.processInstances.Dec(ie.FileInfo.Ino) == 0 {
 			delete(ta.existingTracers, ie.FileInfo.Ino)
 			ie.Tracer = tracer
-			ta.DeleteTracers <- ie
+			ta.TracerEvents.Send(Event[*ebpf.Instrumentable]{Type: EventDeleted, Obj: ie})
 		}
 	}
 }

@@ -18,6 +18,8 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/testutil"
 	"github.com/grafana/beyla/v2/pkg/kubecache/informer"
 	"github.com/grafana/beyla/v2/pkg/kubecache/meta"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
+	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 	"github.com/grafana/beyla/v2/pkg/services"
 )
 
@@ -35,7 +37,7 @@ const (
 
 func TestWatcherKubeEnricher(t *testing.T) {
 	type event struct {
-		fn           func(inputCh chan []Event[processAttrs], fInformer meta.Notifier)
+		fn           func(input *msg.Queue[[]Event[processAttrs]], fInformer meta.Notifier)
 		shouldNotify bool
 	}
 	type testCase struct {
@@ -43,13 +45,13 @@ func TestWatcherKubeEnricher(t *testing.T) {
 		steps []event
 	}
 	// test deployment functions
-	var process = func(inputCh chan []Event[processAttrs], _ meta.Notifier) {
-		newProcess(inputCh, containerPID, []uint32{containerPort})
+	var process = func(input *msg.Queue[[]Event[processAttrs]], _ meta.Notifier) {
+		newProcess(input, containerPID, []uint32{containerPort})
 	}
-	var pod = func(_ chan []Event[processAttrs], fInformer meta.Notifier) {
+	var pod = func(_ *msg.Queue[[]Event[processAttrs]], fInformer meta.Notifier) {
 		deployPod(fInformer, namespace, podName, containerID, nil)
 	}
-	var ownedPod = func(_ chan []Event[processAttrs], fInformer meta.Notifier) {
+	var ownedPod = func(_ *msg.Queue[[]Event[processAttrs]], fInformer meta.Notifier) {
 		deployOwnedPod(fInformer, namespace, podName, replicaSetName, deploymentName, containerID)
 	}
 
@@ -68,17 +70,19 @@ func TestWatcherKubeEnricher(t *testing.T) {
 			// Setup a fake K8s API connected to the watcherKubeEnricher
 			fInformer := &fakeInformer{}
 			store := kube.NewStore(fInformer, kube.ResourceLabels{})
-			wkeNodeFunc, err := WatcherKubeEnricherProvider(context.TODO(), &fakeMetadataProvider{store: store})()
+			input := msg.NewQueue[[]Event[processAttrs]](msg.ChannelBufferLen(10))
+			defer input.Close()
+			output := msg.NewQueue[[]Event[processAttrs]](msg.ChannelBufferLen(10))
+			outputCh := output.Subscribe()
+			wkeNodeFunc, err := WatcherKubeEnricherProvider(&fakeMetadataProvider{store: store}, input, output)(t.Context())
 			require.NoError(t, err)
-			inputCh, outputCh := make(chan []Event[processAttrs], 10), make(chan []Event[processAttrs], 10)
-			defer close(inputCh)
-			go wkeNodeFunc(inputCh, outputCh)
+			go wkeNodeFunc(t.Context())
 
 			// deploy all the involved elements where the metadata are composed of
 			// in different orders to test that watcherKubeEnricher will eventually handle everything
 			var events []Event[processAttrs]
 			for _, step := range tc.steps {
-				step.fn(inputCh, fInformer)
+				step.fn(input, fInformer)
 				if step.shouldNotify {
 					events = testutil.ReadChannel(t, outputCh, timeout)
 				}
@@ -105,11 +109,18 @@ func TestWatcherKubeEnricher(t *testing.T) {
 func TestWatcherKubeEnricherWithMatcher(t *testing.T) {
 	containerInfoForPID = fakeContainerInfo
 	processInfo = fakeProcessInfo
+
 	// Setup a fake K8s API connected to the watcherKubeEnricher
 	fInformer := &fakeInformer{}
 	store := kube.NewStore(fInformer, kube.ResourceLabels{})
-	wkeNodeFunc, err := WatcherKubeEnricherProvider(context.TODO(), &fakeMetadataProvider{store: store})()
-	require.NoError(t, err)
+	inputQueue := msg.NewQueue[[]Event[processAttrs]](msg.ChannelBufferLen(10))
+	defer inputQueue.Close()
+	connectQueue := msg.NewQueue[[]Event[processAttrs]](msg.ChannelBufferLen(10))
+	outputQueue := msg.NewQueue[[]Event[ProcessMatch]](msg.ChannelBufferLen(10))
+	outputCh := outputQueue.Subscribe()
+	swi := swarm.Instancer{}
+	swi.Add(WatcherKubeEnricherProvider(&fakeMetadataProvider{store: store}, inputQueue, connectQueue))
+
 	pipeConfig := beyla.Config{}
 	require.NoError(t, yaml.Unmarshal([]byte(`discovery:
   services:
@@ -129,24 +140,24 @@ func TestWatcherKubeEnricherWithMatcher(t *testing.T) {
       instrument: "ebpf"
       lang: "go.*"
 `), &pipeConfig))
-	mtchNodeFunc, err := CriteriaMatcherProvider(&pipeConfig)()
+
+	swi.Add(CriteriaMatcherProvider(&pipeConfig, connectQueue, outputQueue))
+
+	nodesRunner, err := swi.Instance(t.Context())
 	require.NoError(t, err)
-	inputCh, connectCh := make(chan []Event[processAttrs], 10), make(chan []Event[processAttrs], 10)
-	outputCh := make(chan []Event[ProcessMatch], 10)
-	defer close(inputCh)
-	go wkeNodeFunc(inputCh, connectCh)
-	go mtchNodeFunc(connectCh, outputCh)
+
+	nodesRunner.Start(t.Context())
 
 	// sending some events that shouldn't match any of the above discovery criteria
 	// so they won't be forwarded before any of later matched events
-	newProcess(inputCh, 123, []uint32{777})
-	newProcess(inputCh, 456, []uint32{})
-	newProcess(inputCh, 789, []uint32{443})
+	newProcess(inputQueue, 123, []uint32{777})
+	newProcess(inputQueue, 456, []uint32{})
+	newProcess(inputQueue, 789, []uint32{443})
 	deployOwnedPod(fInformer, namespace, "depl-rsid-podid", "depl-rsid", "depl", "container-789")
 
 	// sending events that will match and will be forwarded
 	t.Run("port-only match", func(t *testing.T) {
-		newProcess(inputCh, 12, []uint32{80})
+		newProcess(inputQueue, 12, []uint32{80})
 		matches := testutil.ReadChannel(t, outputCh, timeout)
 		require.Len(t, matches, 1)
 		m := matches[0]
@@ -156,7 +167,7 @@ func TestWatcherKubeEnricherWithMatcher(t *testing.T) {
 	})
 
 	t.Run("metadata-only match", func(t *testing.T) {
-		newProcess(inputCh, 34, []uint32{8080})
+		newProcess(inputQueue, 34, []uint32{8080})
 		deployPod(fInformer, namespace, "chichi", "container-34", nil)
 		matches := testutil.ReadChannel(t, outputCh, timeout)
 		require.Len(t, matches, 1)
@@ -167,7 +178,7 @@ func TestWatcherKubeEnricherWithMatcher(t *testing.T) {
 	})
 
 	t.Run("pod-label-only match", func(t *testing.T) {
-		newProcess(inputCh, 42, []uint32{8080})
+		newProcess(inputQueue, 42, []uint32{8080})
 		deployPod(fInformer, namespace, "labeltest", "container-42", map[string]string{"instrument": "beyla"})
 		matches := testutil.ReadChannel(t, outputCh, timeout)
 		require.Len(t, matches, 1)
@@ -178,7 +189,7 @@ func TestWatcherKubeEnricherWithMatcher(t *testing.T) {
 	})
 
 	t.Run("pod-multi-label-only match", func(t *testing.T) {
-		newProcess(inputCh, 43, []uint32{8080})
+		newProcess(inputQueue, 43, []uint32{8080})
 		deployPod(fInformer, namespace, "multi-labeltest", "container-43", map[string]string{"instrument": "ebpf", "lang": "golang"})
 		matches := testutil.ReadChannel(t, outputCh, timeout)
 		require.Len(t, matches, 1)
@@ -189,7 +200,7 @@ func TestWatcherKubeEnricherWithMatcher(t *testing.T) {
 	})
 
 	t.Run("both process and metadata match", func(t *testing.T) {
-		newProcess(inputCh, 56, []uint32{443})
+		newProcess(inputQueue, 56, []uint32{443})
 		deployOwnedPod(fInformer, namespace, "chacha-rsid-podid", "chacha-rsid", "chacha", "container-56")
 		matches := testutil.ReadChannel(t, outputCh, timeout)
 		require.Len(t, matches, 1)
@@ -200,7 +211,7 @@ func TestWatcherKubeEnricherWithMatcher(t *testing.T) {
 	})
 
 	t.Run("process deletion", func(t *testing.T) {
-		inputCh <- []Event[processAttrs]{
+		inputQueue.Send([]Event[processAttrs]{
 			{Type: EventDeleted, Obj: processAttrs{pid: 123}},
 			{Type: EventDeleted, Obj: processAttrs{pid: 456}},
 			{Type: EventDeleted, Obj: processAttrs{pid: 789}},
@@ -208,7 +219,7 @@ func TestWatcherKubeEnricherWithMatcher(t *testing.T) {
 			{Type: EventDeleted, Obj: processAttrs{pid: 12}},
 			{Type: EventDeleted, Obj: processAttrs{pid: 34}},
 			{Type: EventDeleted, Obj: processAttrs{pid: 56}},
-		}
+		})
 		// only forwards the deletion of the processes that were already matched
 		matches := testutil.ReadChannel(t, outputCh, timeout)
 		require.Len(t, matches, 3)
@@ -221,11 +232,11 @@ func TestWatcherKubeEnricherWithMatcher(t *testing.T) {
 	})
 }
 
-func newProcess(inputCh chan []Event[processAttrs], pid PID, ports []uint32) {
-	inputCh <- []Event[processAttrs]{{
+func newProcess(input *msg.Queue[[]Event[processAttrs]], pid PID, ports []uint32) {
+	input.Send([]Event[processAttrs]{{
 		Type: EventCreated,
 		Obj:  processAttrs{pid: pid, openPorts: ports},
-	}}
+	}})
 }
 
 func deployPod(fInformer meta.Notifier, ns, name, containerID string, labels map[string]string) {

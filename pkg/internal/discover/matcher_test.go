@@ -9,6 +9,7 @@ import (
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/internal/testutil"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 	"github.com/grafana/beyla/v2/pkg/services"
 )
 
@@ -26,12 +27,13 @@ func TestCriteriaMatcher(t *testing.T) {
     exe_path_regexp: "server"
 `), &pipeConfig))
 
-	matcherFunc, err := CriteriaMatcherProvider(&pipeConfig)()
+	discoveredProcesses := msg.NewQueue[[]Event[processAttrs]](msg.ChannelBufferLen(10))
+	filteredProcessesQu := msg.NewQueue[[]Event[ProcessMatch]](msg.ChannelBufferLen(10))
+	filteredProcesses := filteredProcessesQu.Subscribe()
+	matcherFunc, err := CriteriaMatcherProvider(&pipeConfig, discoveredProcesses, filteredProcessesQu)(t.Context())
 	require.NoError(t, err)
-	discoveredProcesses := make(chan []Event[processAttrs], 10)
-	filteredProcesses := make(chan []Event[ProcessMatch], 10)
-	go matcherFunc(discoveredProcesses, filteredProcesses)
-	defer close(discoveredProcesses)
+	go matcherFunc(t.Context())
+	defer filteredProcessesQu.Close()
 
 	// it will filter unmatching processes and return a ProcessMatch for these that match
 	processInfo = func(pp processAttrs) (*services.ProcessInfo, error) {
@@ -40,14 +42,14 @@ func TestCriteriaMatcher(t *testing.T) {
 			4: "/bin/something", 5: "server", 6: "/bin/clientweird99"}[pp.pid]
 		return &services.ProcessInfo{Pid: int32(pp.pid), ExePath: exePath, OpenPorts: pp.openPorts}, nil
 	}
-	discoveredProcesses <- []Event[processAttrs]{
+	discoveredProcesses.Send([]Event[processAttrs]{
 		{Type: EventCreated, Obj: processAttrs{pid: 1, openPorts: []uint32{1, 2, 3}}}, // pass
 		{Type: EventDeleted, Obj: processAttrs{pid: 2, openPorts: []uint32{4}}},       // filter
 		{Type: EventCreated, Obj: processAttrs{pid: 3, openPorts: []uint32{8433}}},    // filter
 		{Type: EventCreated, Obj: processAttrs{pid: 4, openPorts: []uint32{8083}}},    // pass
 		{Type: EventCreated, Obj: processAttrs{pid: 5, openPorts: []uint32{443}}},     // pass
 		{Type: EventCreated, Obj: processAttrs{pid: 6}},                               // pass
-	}
+	})
 
 	matches := testutil.ReadChannel(t, filteredProcesses, testTimeout)
 	require.Len(t, matches, 4)
@@ -89,12 +91,13 @@ func TestCriteriaMatcher_Exclude(t *testing.T) {
   - exe_path: s
 `), &pipeConfig))
 
-	matcherFunc, err := CriteriaMatcherProvider(&pipeConfig)()
+	discoveredProcesses := msg.NewQueue[[]Event[processAttrs]](msg.ChannelBufferLen(10))
+	filteredProcessesQu := msg.NewQueue[[]Event[ProcessMatch]](msg.ChannelBufferLen(10))
+	filteredProcesses := filteredProcessesQu.Subscribe()
+	matcherFunc, err := CriteriaMatcherProvider(&pipeConfig, discoveredProcesses, filteredProcessesQu)(t.Context())
 	require.NoError(t, err)
-	discoveredProcesses := make(chan []Event[processAttrs], 10)
-	filteredProcesses := make(chan []Event[ProcessMatch], 10)
-	go matcherFunc(discoveredProcesses, filteredProcesses)
-	defer close(discoveredProcesses)
+	go matcherFunc(t.Context())
+	defer filteredProcessesQu.Close()
 
 	// it will filter unmatching processes and return a ProcessMatch for these that match
 	processInfo = func(pp processAttrs) (*services.ProcessInfo, error) {
@@ -103,14 +106,14 @@ func TestCriteriaMatcher_Exclude(t *testing.T) {
 			4: "/bin/something", 5: "server", 6: "/bin/clientweird99"}[pp.pid]
 		return &services.ProcessInfo{Pid: int32(pp.pid), ExePath: exePath, OpenPorts: pp.openPorts}, nil
 	}
-	discoveredProcesses <- []Event[processAttrs]{
+	discoveredProcesses.Send([]Event[processAttrs]{
 		{Type: EventCreated, Obj: processAttrs{pid: 1, openPorts: []uint32{1, 2, 3}}}, // pass
 		{Type: EventDeleted, Obj: processAttrs{pid: 2, openPorts: []uint32{4}}},       // filter
 		{Type: EventCreated, Obj: processAttrs{pid: 3, openPorts: []uint32{8433}}},    // filter
 		{Type: EventCreated, Obj: processAttrs{pid: 4, openPorts: []uint32{8083}}},    // filter (in exclude)
 		{Type: EventCreated, Obj: processAttrs{pid: 5, openPorts: []uint32{443}}},     // filter (in exclude)
 		{Type: EventCreated, Obj: processAttrs{pid: 6}},                               // pass
-	}
+	})
 
 	matches := testutil.ReadChannel(t, filteredProcesses, testTimeout)
 	require.Len(t, matches, 2)
@@ -135,12 +138,13 @@ func TestCriteriaMatcher_Exclude_Metadata(t *testing.T) {
   - k8s_node_name: bar
 `), &pipeConfig))
 
-	matcherFunc, err := CriteriaMatcherProvider(&pipeConfig)()
+	discoveredProcesses := msg.NewQueue[[]Event[processAttrs]](msg.ChannelBufferLen(10))
+	filteredProcessesQu := msg.NewQueue[[]Event[ProcessMatch]](msg.ChannelBufferLen(10))
+	filteredProcesses := filteredProcessesQu.Subscribe()
+	matcherFunc, err := CriteriaMatcherProvider(&pipeConfig, discoveredProcesses, filteredProcessesQu)(t.Context())
 	require.NoError(t, err)
-	discoveredProcesses := make(chan []Event[processAttrs], 10)
-	filteredProcesses := make(chan []Event[ProcessMatch], 10)
-	go matcherFunc(discoveredProcesses, filteredProcesses)
-	defer close(discoveredProcesses)
+	go matcherFunc(t.Context())
+	defer filteredProcessesQu.Close()
 
 	// it will filter unmatching processes and return a ProcessMatch for these that match
 	processInfo = func(pp processAttrs) (*services.ProcessInfo, error) {
@@ -151,14 +155,14 @@ func TestCriteriaMatcher_Exclude_Metadata(t *testing.T) {
 	}
 	nodeFoo := map[string]string{"k8s_node_name": "foo"}
 	nodeBar := map[string]string{"k8s_node_name": "bar"}
-	discoveredProcesses <- []Event[processAttrs]{
+	discoveredProcesses.Send([]Event[processAttrs]{
 		{Type: EventCreated, Obj: processAttrs{pid: 1, metadata: nodeFoo}}, // pass
 		{Type: EventDeleted, Obj: processAttrs{pid: 2, metadata: nodeFoo}}, // filter
 		{Type: EventCreated, Obj: processAttrs{pid: 3, metadata: nodeFoo}}, // pass
 		{Type: EventCreated, Obj: processAttrs{pid: 4, metadata: nodeBar}}, // filter (in exclude)
 		{Type: EventDeleted, Obj: processAttrs{pid: 5, metadata: nodeFoo}}, // filter
 		{Type: EventCreated, Obj: processAttrs{pid: 6, metadata: nodeBar}}, // filter (in exclude)
-	}
+	})
 
 	matches := testutil.ReadChannel(t, filteredProcesses, 1000*testTimeout)
 	require.Len(t, matches, 2)
@@ -184,12 +188,13 @@ func TestCriteriaMatcher_MustMatchAllAttributes(t *testing.T) {
     k8s_replicaset_name: thers
 `), &pipeConfig))
 
-	matcherFunc, err := CriteriaMatcherProvider(&pipeConfig)()
+	discoveredProcesses := msg.NewQueue[[]Event[processAttrs]](msg.ChannelBufferLen(10))
+	filteredProcessesQu := msg.NewQueue[[]Event[ProcessMatch]](msg.ChannelBufferLen(10))
+	filteredProcesses := filteredProcessesQu.Subscribe()
+	matcherFunc, err := CriteriaMatcherProvider(&pipeConfig, discoveredProcesses, filteredProcessesQu)(t.Context())
 	require.NoError(t, err)
-	discoveredProcesses := make(chan []Event[processAttrs], 10)
-	filteredProcesses := make(chan []Event[ProcessMatch], 10)
-	go matcherFunc(discoveredProcesses, filteredProcesses)
-	defer close(discoveredProcesses)
+	go matcherFunc(t.Context())
+	defer filteredProcessesQu.Close()
 
 	processInfo = func(pp processAttrs) (*services.ProcessInfo, error) {
 		exePath := map[PID]string{
@@ -214,14 +219,14 @@ func TestCriteriaMatcher_MustMatchAllAttributes(t *testing.T) {
 		"k8s_deployment_name": "some-deployment",
 		"k8s_replicaset_name": "thers",
 	}
-	discoveredProcesses <- []Event[processAttrs]{
+	discoveredProcesses.Send([]Event[processAttrs]{
 		{Type: EventCreated, Obj: processAttrs{pid: 1, openPorts: []uint32{8081}, metadata: allMeta}},        // pass
 		{Type: EventDeleted, Obj: processAttrs{pid: 2, openPorts: []uint32{4}, metadata: allMeta}},           // filter: executable does not match
 		{Type: EventCreated, Obj: processAttrs{pid: 3, openPorts: []uint32{7777}, metadata: allMeta}},        // filter: port does not match
 		{Type: EventCreated, Obj: processAttrs{pid: 4, openPorts: []uint32{8083}, metadata: incompleteMeta}}, // filter: not all metadata available
 		{Type: EventCreated, Obj: processAttrs{pid: 5, openPorts: []uint32{80}}},                             // filter: no metadata
 		{Type: EventCreated, Obj: processAttrs{pid: 6, openPorts: []uint32{8083}, metadata: differentMeta}},  // filter: not all metadata matches
-	}
+	})
 	matches := testutil.ReadChannel(t, filteredProcesses, testTimeout)
 	require.Len(t, matches, 1)
 	m := matches[0]
@@ -240,12 +245,13 @@ func TestCriteriaMatcherMissingPort(t *testing.T) {
     open_ports: 80
 `), &pipeConfig))
 
-	matcherFunc, err := CriteriaMatcherProvider(&pipeConfig)()
+	discoveredProcesses := msg.NewQueue[[]Event[processAttrs]](msg.ChannelBufferLen(10))
+	filteredProcessesQu := msg.NewQueue[[]Event[ProcessMatch]](msg.ChannelBufferLen(10))
+	filteredProcesses := filteredProcessesQu.Subscribe()
+	matcherFunc, err := CriteriaMatcherProvider(&pipeConfig, discoveredProcesses, filteredProcessesQu)(t.Context())
 	require.NoError(t, err)
-	discoveredProcesses := make(chan []Event[processAttrs], 10)
-	filteredProcesses := make(chan []Event[ProcessMatch], 10)
-	go matcherFunc(discoveredProcesses, filteredProcesses)
-	defer close(discoveredProcesses)
+	go matcherFunc(t.Context())
+	defer filteredProcessesQu.Close()
 
 	// it will filter unmatching processes and return a ProcessMatch for these that match
 	processInfo = func(pp processAttrs) (*services.ProcessInfo, error) {
@@ -256,11 +262,11 @@ func TestCriteriaMatcherMissingPort(t *testing.T) {
 			1: {Exe: "/bin/weird33", PPid: 0}, 2: {Exe: "/bin/weird33", PPid: 16}, 3: {Exe: "/bin/weird33", PPid: 1}}[pp.pid]
 		return &services.ProcessInfo{Pid: int32(pp.pid), ExePath: proc.Exe, PPid: proc.PPid, OpenPorts: pp.openPorts}, nil
 	}
-	discoveredProcesses <- []Event[processAttrs]{
+	discoveredProcesses.Send([]Event[processAttrs]{
 		{Type: EventCreated, Obj: processAttrs{pid: 1, openPorts: []uint32{80}}}, // this one is the parent, matches on port
 		{Type: EventDeleted, Obj: processAttrs{pid: 2, openPorts: []uint32{}}},   // we'll skip 2 since PPid is 16, not 1
 		{Type: EventCreated, Obj: processAttrs{pid: 3, openPorts: []uint32{}}},   // this one is the child, without port, but matches the parent by port
-	}
+	})
 
 	matches := testutil.ReadChannel(t, filteredProcesses, testTimeout)
 	require.Len(t, matches, 2)

@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mariomac/pipes/pipe"
 	"github.com/shirou/gopsutil/v3/net"
 	"github.com/shirou/gopsutil/v3/process"
 
@@ -18,6 +17,8 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/logger"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/watcher"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
+	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 	"github.com/grafana/beyla/v2/pkg/services"
 )
 
@@ -52,10 +53,10 @@ func wplog() *slog.Logger {
 
 // ProcessWatcherFunc polls every PollInterval for new processes and forwards either new or deleted process PIDs
 // as well as PIDs from processes that setup a new connection
-func ProcessWatcherFunc(ctx context.Context, cfg *beyla.Config) pipe.StartFunc[[]Event[processAttrs]] {
+func ProcessWatcherFunc(cfg *beyla.Config, output *msg.Queue[[]Event[processAttrs]]) swarm.RunFunc {
 	acc := pollAccounter{
-		ctx:               ctx,
 		cfg:               cfg,
+		output:            output,
 		interval:          cfg.Discovery.PollInterval,
 		pids:              map[PID]processAttrs{},
 		pidPorts:          map[pidPort]processAttrs{},
@@ -71,7 +72,7 @@ func ProcessWatcherFunc(ctx context.Context, cfg *beyla.Config) pipe.StartFunc[[
 	if acc.interval == 0 {
 		acc.interval = defaultPollInterval
 	}
-	return acc.Run
+	return acc.run
 }
 
 // pidPort associates a PID with its open port
@@ -83,7 +84,6 @@ type pidPort struct {
 // TODO: combine the poller with an eBPF listener (poll at start and e.g. every 30 seconds, and keep listening eBPF in background)
 // ^ This is partially done, although it's not fully async, we only use the info to reduce the overhead of port scanning.
 type pollAccounter struct {
-	ctx      context.Context
 	cfg      *beyla.Config
 	interval time.Duration
 	// last polled process:ports accessible by its pid
@@ -103,9 +103,12 @@ type pollAccounter struct {
 	bpfWatcherEnabled bool
 	fetchPorts        bool
 	findingCriteria   services.DefinitionCriteria
+	output            *msg.Queue[[]Event[processAttrs]]
 }
 
-func (pa *pollAccounter) Run(out chan<- []Event[processAttrs]) {
+func (pa *pollAccounter) run(ctx context.Context) {
+	defer pa.output.Close()
+
 	log := slog.With("component", "discover.ProcessWatcher", "interval", pa.interval)
 
 	bpfWatchEvents := make(chan watcher.Event, 100)
@@ -131,11 +134,11 @@ func (pa *pollAccounter) Run(out chan<- []Event[processAttrs]) {
 		} else {
 			if events := pa.snapshot(procs); len(events) > 0 {
 				log.Debug("new process watching events", "events", events)
-				out <- events
+				pa.output.Send(events)
 			}
 		}
 		select {
-		case <-pa.ctx.Done():
+		case <-ctx.Done():
 			log.Debug("context canceled. Exiting")
 			return
 		case <-time.After(pa.interval):

@@ -73,7 +73,7 @@ func setupAppO11y(ctx context.Context, ctxInfo *global.ContextInfo, config *beyl
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	instr := appolly.New(ctx, ctxInfo, config)
-	if finderDone, err := instr.FindAndInstrument(); err != nil {
+	if finderDone, err := instr.FindAndInstrument(ctx); err != nil {
 		slog.Debug("can't find  target process", "error", err)
 		return fmt.Errorf("can't find target process: %w", err)
 	} else {
@@ -82,7 +82,7 @@ func setupAppO11y(ctx context.Context, ctxInfo *global.ContextInfo, config *beyl
 			<-finderDone
 		}()
 	}
-	if err := instr.ReadAndForward(); err != nil {
+	if err := instr.ReadAndForward(ctx); err != nil {
 		cancel()
 		slog.Debug("can't start read and forwarding", "error", err)
 		return fmt.Errorf("can't start read and forwarding: %w", err)

@@ -23,7 +23,6 @@ func log() *slog.Logger {
 // Instrumenter finds and instrument a service/process, and forwards the traces as
 // configured by the user
 type Instrumenter struct {
-	ctx     context.Context
 	config  *beyla.Config
 	ctxInfo *global.ContextInfo
 
@@ -36,7 +35,6 @@ type Instrumenter struct {
 func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config) *Instrumenter {
 	setupFeatureContextInfo(ctx, ctxInfo, config)
 	return &Instrumenter{
-		ctx:         ctx,
 		config:      config,
 		ctxInfo:     ctxInfo,
 		tracesInput: msg.NewQueue[[]request.Span](msg.ChannelBufferLen(config.ChannelBufferLen)),
@@ -47,13 +45,12 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 // selection criteria.
 // Returns a channel that is closed when the Instrumenter completed all its tasks.
 // This is: when the context is cancelled, it has unloaded all the eBPF probes.
-func (i *Instrumenter) FindAndInstrument() (<-chan struct{}, error) {
-	finder := discover.NewProcessFinder(i.ctx, i.config, i.ctxInfo, i.tracesInput)
-	foundProcesses, deletedProcesses, err := finder.Start()
+func (i *Instrumenter) FindAndInstrument(ctx context.Context) (<-chan struct{}, error) {
+	finder := discover.NewProcessFinder(i.config, i.ctxInfo, i.tracesInput)
+	processEvents, err := finder.Start(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("couldn't start Process Finder: %w", err)
 	}
-
 	done := make(chan struct{})
 	// In background, listen indefinitely for each new process and run its
 	// associated ebpf.ProcessTracer once it is found.
@@ -62,27 +59,34 @@ func (i *Instrumenter) FindAndInstrument() (<-chan struct{}, error) {
 		log := log()
 		for {
 			select {
-			case <-i.ctx.Done():
+			case <-ctx.Done():
 				log.Debug("stopped searching for new processes to instrument. Waiting for the eBPF tracers to be unloaded")
 				wg.Wait()
 				close(done)
 				log.Debug("tracers unloaded, exiting FindAndInstrument")
 				return
-			case pt := <-foundProcesses:
-				log.Debug("running tracer for new process",
-					"inode", pt.FileInfo.Ino, "pid", pt.FileInfo.Pid, "exec", pt.FileInfo.CmdExePath)
-				if pt.Tracer != nil {
-					wg.Add(1)
-					go func() {
-						defer wg.Done()
-						pt.Tracer.Run(i.ctx, i.tracesInput)
-					}()
-				}
-			case dp := <-deletedProcesses:
-				log.Debug("stopping ProcessTracer because there are no more instances of such process",
-					"inode", dp.FileInfo.Ino, "pid", dp.FileInfo.Pid, "exec", dp.FileInfo.CmdExePath)
-				if dp.Tracer != nil {
-					dp.Tracer.UnlinkExecutable(dp.FileInfo)
+			case ev := <-processEvents:
+				switch ev.Type {
+				case discover.EventCreated:
+					pt := ev.Obj
+					log.Debug("running tracer for new process",
+						"inode", pt.FileInfo.Ino, "pid", pt.FileInfo.Pid, "exec", pt.FileInfo.CmdExePath)
+					if pt.Tracer != nil {
+						wg.Add(1)
+						go func() {
+							defer wg.Done()
+							pt.Tracer.Run(ctx, i.tracesInput)
+						}()
+					}
+				case discover.EventDeleted:
+					dp := ev.Obj
+					log.Debug("stopping ProcessTracer because there are no more instances of such process",
+						"inode", dp.FileInfo.Ino, "pid", dp.FileInfo.Pid, "exec", dp.FileInfo.CmdExePath)
+					if dp.Tracer != nil {
+						dp.Tracer.UnlinkExecutable(dp.FileInfo)
+					}
+				default:
+					log.Error("BUG ALERT! unknown event type", "type", ev.Type)
 				}
 			}
 		}
@@ -93,18 +97,18 @@ func (i *Instrumenter) FindAndInstrument() (<-chan struct{}, error) {
 
 // ReadAndForward keeps listening for traces in the BPF map, then reads,
 // processes and forwards them
-func (i *Instrumenter) ReadAndForward() error {
+func (i *Instrumenter) ReadAndForward(ctx context.Context) error {
 	log := log()
 	log.Debug("creating instrumentation pipeline")
 
-	bp, err := pipe.Build(i.ctx, i.config, i.ctxInfo, i.tracesInput)
+	bp, err := pipe.Build(ctx, i.config, i.ctxInfo, i.tracesInput)
 	if err != nil {
 		return fmt.Errorf("can't instantiate instrumentation pipeline: %w", err)
 	}
 
 	log.Info("Starting main node")
 
-	bp.Run(i.ctx)
+	bp.Run(ctx)
 
 	log.Info("exiting auto-instrumenter")
 

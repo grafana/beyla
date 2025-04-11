@@ -1,6 +1,7 @@
 package discover
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -8,25 +9,29 @@ import (
 	"regexp"
 	"slices"
 
-	"github.com/mariomac/pipes/pipe"
 	"github.com/shirou/gopsutil/v3/process"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
+	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 	"github.com/grafana/beyla/v2/pkg/services"
 )
 
 // CriteriaMatcherProvider filters the processes that match the discovery criteria.
-func CriteriaMatcherProvider(cfg *beyla.Config) pipe.MiddleProvider[[]Event[processAttrs], []Event[ProcessMatch]] {
-	return func() (pipe.MiddleFunc[[]Event[processAttrs], []Event[ProcessMatch]], error) {
-		m := &matcher{
-			log:             slog.With("component", "discover.CriteriaMatcher"),
-			criteria:        FindingCriteria(cfg),
-			excludeCriteria: append(cfg.Discovery.ExcludeServices, cfg.Discovery.DefaultExcludeServices...),
-			processHistory:  map[PID]*services.ProcessInfo{},
-		}
-
-		return m.run, nil
+func CriteriaMatcherProvider(
+	cfg *beyla.Config,
+	input *msg.Queue[[]Event[processAttrs]],
+	output *msg.Queue[[]Event[ProcessMatch]],
+) swarm.InstanceFunc {
+	m := &matcher{
+		log:             slog.With("component", "discover.CriteriaMatcher"),
+		criteria:        FindingCriteria(cfg),
+		excludeCriteria: append(cfg.Discovery.ExcludeServices, cfg.Discovery.DefaultExcludeServices...),
+		processHistory:  map[PID]*services.ProcessInfo{},
+		input:           input.Subscribe(),
+		output:          output,
 	}
+	return swarm.DirectInstance(m.run)
 }
 
 type matcher struct {
@@ -37,6 +42,8 @@ type matcher struct {
 	// instrumentation.
 	// This avoids keep inspecting again and again client processes each time they open a new connection port
 	processHistory map[PID]*services.ProcessInfo
+	input          <-chan []Event[processAttrs]
+	output         *msg.Queue[[]Event[ProcessMatch]]
 }
 
 // ProcessMatch matches a found process with the first selection criteria it fulfilled.
@@ -45,14 +52,15 @@ type ProcessMatch struct {
 	Process  *services.ProcessInfo
 }
 
-func (m *matcher) run(in <-chan []Event[processAttrs], out chan<- []Event[ProcessMatch]) {
+func (m *matcher) run(_ context.Context) {
+	defer m.output.Close()
 	m.log.Debug("starting criteria matcher node")
-	for i := range in {
+	for i := range m.input {
 		m.log.Debug("filtering processes", "len", len(i))
 		o := m.filter(i)
 		m.log.Debug("processes matching selection criteria", "len", len(o))
 		if len(o) > 0 {
-			out <- o
+			m.output.Send(o)
 		}
 	}
 }

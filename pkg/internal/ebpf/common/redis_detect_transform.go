@@ -10,6 +10,7 @@ import (
 
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/ringbuf"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/internal/util"
 )
 
 const minRedisFrameLen = 3
@@ -86,49 +87,75 @@ func isValidRedisChar(c byte) bool {
 }
 
 func parseRedisRequest(buf string) (string, string, bool) {
-	lines := strings.Split(buf, "\r\n")
+	const redisDelim = "\r\n"
 
-	if len(lines) < 2 || len(lines[0]) == 0 {
+	lines := util.NewSplitIterator(buf, redisDelim)
+
+	_, eof := lines.Next()
+
+	if eof {
 		return "", "", false
 	}
 
+	// we need at least 2 lines
+	if _, eof = lines.Next(); eof {
+		return "", "", false
+	}
+
+	// we are good, start over
+	lines.Reset()
+
+	line, _ := lines.Next()
+
 	// It's not a command, something else?
-	if lines[0][0] != '*' {
+	if line[0] != '*' {
 		return "", "", true
 	}
 
 	op := ""
-	text := ""
+
+	var text strings.Builder
 
 	read := false
-	// Skip the first line
-	for _, l := range lines[1:] {
-		if len(l) == 0 {
+
+	for {
+		line, eof = lines.Next()
+
+		if eof {
+			break
+		}
+
+		if line == redisDelim {
 			continue
 		}
+
 		if !read {
-			if isRedisOp([]uint8(l + "\r\n")) {
+			if isRedisOp([]uint8(line)) {
 				read = true
 			} else {
 				break
 			}
 		} else {
-			if isRedisOp([]uint8(l + "\r\n")) {
-				text += "; "
+			if isRedisOp([]uint8(line)) {
+				text.WriteString("; ")
 				continue
 			}
-			if !isValidRedisChar(l[0]) {
+			if !isValidRedisChar(line[0]) {
 				break
 			}
+
+			trimmed := strings.TrimSuffix(line, redisDelim)
+
 			if op == "" {
-				op = l
+				op = trimmed
 			}
-			text += l + " "
+			text.WriteString(trimmed)
+			text.WriteString(" ")
 			read = false
 		}
 	}
 
-	return op, text, true
+	return op, text.String(), true
 }
 
 func redisStatus(buf []byte) int {

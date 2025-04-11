@@ -12,6 +12,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/goexec"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
 type Instrumentable struct {
@@ -96,7 +97,7 @@ type Tracer interface {
 	ProcessBinary(*exec.FileInfo)
 	// Run will do the action of listening for eBPF traces and forward them
 	// periodically to the output channel.
-	Run(context.Context, chan<- []request.Span)
+	Run(context.Context, *msg.Queue[[]request.Span])
 }
 
 // Subset of the above interface, which supports loading eBPF programs which

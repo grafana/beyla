@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/mariomac/guara/pkg/test"
-	"github.com/mariomac/pipes/pipe"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -22,6 +21,8 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
+	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 	"github.com/grafana/beyla/v2/test/collector"
 )
 
@@ -128,13 +129,6 @@ func TestMissingSchemeInMetricsEndpoint(t *testing.T) {
 	require.Error(t, err)
 }
 
-type testPipeline struct {
-	inputNode pipe.Start[[]request.Span]
-	exporter  pipe.Final[[]request.Span]
-}
-
-func (i *testPipeline) Connect() { i.inputNode.SendTo(i.exporter) }
-
 func TestMetrics_InternalInstrumentation(t *testing.T) {
 	defer restoreEnvAfterExecution()()
 	// fake OTEL collector server
@@ -149,35 +143,22 @@ func TestMetrics_InternalInstrumentation(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	})
 
-	// create a simple dummy graph to send data to the Metrics reporter, which will send
-	// metrics to the fake collector
-	builder := pipe.NewBuilder(&testPipeline{})
-	sendData := make(chan struct{})
-	pipe.AddStart(builder, func(impl *testPipeline) *pipe.Start[[]request.Span] {
-		return &impl.inputNode
-	}, func(out chan<- []request.Span) {
-		// on every send data signal, the traces generator sends a dummy trace
-		for range sendData {
-			out <- []request.Span{{Type: request.EventTypeHTTP}}
-		}
-	})
-
+	// Run the metrics reporter node standalone
+	exportMetrics := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
 	internalMetrics := &fakeInternalMetrics{}
-	pipe.AddFinalProvider(builder, func(impl *testPipeline) *pipe.Final[[]request.Span] {
-		return &impl.exporter
-	}, ReportMetrics(context.Background(),
-		&global.ContextInfo{
-			Metrics: internalMetrics,
-		},
-		&MetricsConfig{CommonEndpoint: coll.URL, Interval: 10 * time.Millisecond, ReportersCacheLen: 16, Features: []string{FeatureApplication}, Instrumentations: []string{instrumentations.InstrumentationHTTP}},
-		nil),
-	)
-	graph, err := builder.Build()
+	reporter, err := ReportMetrics(&global.ContextInfo{
+		Metrics: internalMetrics,
+	}, &MetricsConfig{
+		CommonEndpoint: coll.URL, Interval: 10 * time.Millisecond, ReportersCacheLen: 16,
+		Features: []string{FeatureApplication}, Instrumentations: []string{instrumentations.InstrumentationHTTP},
+	}, attributes.Selection{}, exportMetrics,
+	)(context.Background())
 	require.NoError(t, err)
+	go reporter(context.Background())
 
-	graph.Start()
+	// send some dummy traces
+	exportMetrics.Send([]request.Span{{Type: request.EventTypeHTTP}})
 
-	sendData <- struct{}{}
 	var previousSum, previousCount int
 	test.Eventually(t, timeout, func(t require.TestingT) {
 		// we can't guarantee the number of calls at test time, but they must be at least 1
@@ -190,7 +171,9 @@ func TestMetrics_InternalInstrumentation(t *testing.T) {
 		assert.Zero(t, internalMetrics.Errors())
 	})
 
-	sendData <- struct{}{}
+	// send another trace
+	exportMetrics.Send([]request.Span{{Type: request.EventTypeHTTP}})
+
 	// after some time, the number of calls should be higher than before
 	test.Eventually(t, timeout, func(t require.TestingT) {
 		sum, cnt := internalMetrics.SumCount()
@@ -211,7 +194,7 @@ func TestMetrics_InternalInstrumentation(t *testing.T) {
 	})
 
 	var previousErrCount int
-	sendData <- struct{}{}
+	exportMetrics.Send([]request.Span{{Type: request.EventTypeHTTP}})
 	test.Eventually(t, timeout, func(t require.TestingT) {
 		previousSum, previousCount = internalMetrics.SumCount()
 		// calls should start returning errors
@@ -220,7 +203,7 @@ func TestMetrics_InternalInstrumentation(t *testing.T) {
 	})
 
 	// after a while, metrics count should not increase but errors do
-	sendData <- struct{}{}
+	exportMetrics.Send([]request.Span{{Type: request.EventTypeHTTP}})
 	test.Eventually(t, timeout, func(t require.TestingT) {
 		sum, cnt := internalMetrics.SumCount()
 		assert.Equal(t, previousSum, sum)
@@ -472,12 +455,12 @@ func TestAppMetrics_ByInstrumentation(t *testing.T) {
 			now := syncedClock{now: time.Now()}
 			timeNow = now.Now
 
-			otelExporter := makeExporter(ctx, t, tt.instr, otlp)
+			metrics := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(20))
+			otelExporter := makeExporter(ctx, t, tt.instr, otlp, metrics)
 
 			require.NoError(t, err)
 
-			metrics := make(chan []request.Span, 20)
-			go otelExporter(metrics)
+			go otelExporter(ctx)
 
 			/* Available event types (defined in span.go):
 			EventTypeHTTP
@@ -491,7 +474,7 @@ func TestAppMetrics_ByInstrumentation(t *testing.T) {
 			EventTypeKafkaServer
 			*/
 			// WHEN it receives metrics
-			metrics <- []request.Span{
+			metrics.Send([]request.Span{
 				{Service: svc.Attrs{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeHTTP, Path: "/foo", RequestStart: 100, End: 200},
 				{Service: svc.Attrs{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeHTTPClient, Path: "/bar", RequestStart: 150, End: 175},
 				{Service: svc.Attrs{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeGRPC, Path: "/foo", RequestStart: 100, End: 200},
@@ -501,7 +484,7 @@ func TestAppMetrics_ByInstrumentation(t *testing.T) {
 				{Service: svc.Attrs{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeRedisServer, Method: "GET", RequestStart: 150, End: 175},
 				{Service: svc.Attrs{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeKafkaClient, Method: "publish", RequestStart: 150, End: 175},
 				{Service: svc.Attrs{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeKafkaServer, Method: "process", RequestStart: 150, End: 175},
-			}
+			})
 
 			// Read the exported metrics, add +extraColl for HTTP size metrics
 			res := readNChan(t, otlp.Records(), len(tt.expected)+tt.extraColl, timeout)
@@ -538,15 +521,14 @@ func TestAppMetrics_ResourceAttributes(t *testing.T) {
 	now := syncedClock{now: time.Now()}
 	timeNow = now.Now
 
-	otelExporter := makeExporter(ctx, t, []string{instrumentations.InstrumentationHTTP}, otlp)
-	require.NoError(t, err)
+	metrics := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(20))
+	otelExporter := makeExporter(ctx, t, []string{instrumentations.InstrumentationHTTP}, otlp, metrics)
 
-	metrics := make(chan []request.Span, 1)
-	go otelExporter(metrics)
+	go otelExporter(ctx)
 
-	metrics <- []request.Span{
+	metrics.Send([]request.Span{
 		{Service: svc.Attrs{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeHTTP, Path: "/foo", RequestStart: 100, End: 200},
-	}
+	})
 
 	res := readNChan(t, otlp.Records(), 1, timeout)
 	assert.Len(t, res, 1)
@@ -668,9 +650,11 @@ func readNChan(t require.TestingT, inCh <-chan collector.MetricRecord, numRecord
 	return records
 }
 
-func makeExporter(ctx context.Context, t *testing.T, instrumentations []string, otlp *collector.TestCollector) pipe.FinalFunc[[]request.Span] {
+func makeExporter(
+	ctx context.Context, t *testing.T, instrumentations []string, otlp *collector.TestCollector,
+	input *msg.Queue[[]request.Span],
+) swarm.RunFunc {
 	otelExporter, err := ReportMetrics(
-		ctx,
 		&global.ContextInfo{}, &MetricsConfig{
 			Interval:          50 * time.Millisecond,
 			CommonEndpoint:    otlp.ServerEndpoint,
@@ -683,7 +667,7 @@ func makeExporter(ctx context.Context, t *testing.T, instrumentations []string, 
 			attributes.HTTPServerDuration.Section: attributes.InclusionLists{
 				Include: []string{"url.path"},
 			},
-		})()
+		}, input)(ctx)
 
 	require.NoError(t, err)
 

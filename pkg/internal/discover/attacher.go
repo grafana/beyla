@@ -15,6 +15,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/otelsdk"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
 // TraceAttacher creates the available trace.Tracer implementations (Go HTTP tracer, GRPC tracer, Generic tracer...)
@@ -46,7 +47,7 @@ type TraceAttacher struct {
 	// unique purpose is to notify other parts of the system that this process is active, even
 	// if no spans are detected. This would allow, for example, to start instrumenting this process
 	// from the Process metrics pipeline even before it starts to do/receive requests.
-	SpanSignalsShortcut chan<- []request.Span
+	SpanSignalsShortcut *msg.Queue[[]request.Span]
 }
 
 func TraceAttacherProvider(ta *TraceAttacher) pipe.FinalProvider[[]Event[ebpf.Instrumentable]] {
@@ -313,7 +314,7 @@ func (ta *TraceAttacher) monitorPIDs(tracer *ebpf.ProcessTracer, ie *ebpf.Instru
 				Pid:     request.PidInfo{Namespace: ie.FileInfo.Ns},
 			})
 		}
-		ta.SpanSignalsShortcut <- spans
+		ta.SpanSignalsShortcut.Send(spans)
 	}
 }
 

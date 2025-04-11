@@ -13,6 +13,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/pipe"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
 func log() *slog.Logger {
@@ -28,7 +29,7 @@ type Instrumenter struct {
 
 	// tracesInput is used to communicate the found traces between the ProcessFinder and
 	// the ProcessTracer.
-	tracesInput chan []request.Span
+	tracesInput *msg.Queue[[]request.Span]
 }
 
 // New Instrumenter, given a Config
@@ -38,7 +39,7 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 		ctx:         ctx,
 		config:      config,
 		ctxInfo:     ctxInfo,
-		tracesInput: make(chan []request.Span, config.ChannelBufferLen),
+		tracesInput: msg.NewQueue[[]request.Span](msg.ChannelBufferLen(config.ChannelBufferLen)),
 	}
 }
 

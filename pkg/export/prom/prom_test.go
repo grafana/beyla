@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/mariomac/guara/pkg/test"
-	"github.com/mariomac/pipes/pipe"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -26,6 +25,8 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
+	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 const timeout = 3 * time.Second
@@ -41,8 +42,9 @@ func TestAppMetricsExpiration(t *testing.T) {
 	promURL := fmt.Sprintf("http://127.0.0.1:%d/metrics", openPort)
 
 	// GIVEN a Prometheus Metrics Exporter with a metrics expire time of 3 minutes
+	promInput := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
 	exporter, err := PrometheusEndpoint(
-		ctx, &global.ContextInfo{Prometheus: &connector.PrometheusManager{}, HostID: "my-host"},
+		&global.ContextInfo{Prometheus: &connector.PrometheusManager{}, HostID: "my-host"},
 		&PrometheusConfig{
 			Port:                        openPort,
 			Path:                        "/metrics",
@@ -56,17 +58,17 @@ func TestAppMetricsExpiration(t *testing.T) {
 				Include: []string{"url_path"},
 			},
 		},
-	)()
+		promInput,
+	)(ctx)
 	require.NoError(t, err)
 
-	metrics := make(chan []request.Span, 20)
-	go exporter(metrics)
+	go exporter(ctx)
 
 	// WHEN it receives metrics
-	metrics <- []request.Span{
+	promInput.Send([]request.Span{
 		{Type: request.EventTypeHTTP, Path: "/foo", End: 123 * time.Second.Nanoseconds()},
 		{Type: request.EventTypeHTTP, Path: "/baz", End: 456 * time.Second.Nanoseconds()},
-	}
+	})
 
 	containsTargetInfo := regexp.MustCompile(`\ntarget_info\{.*host_id="my-host"`)
 
@@ -81,9 +83,9 @@ func TestAppMetricsExpiration(t *testing.T) {
 	// AND WHEN it keeps receiving a subset of the initial metrics during the timeout
 	now.Advance(2 * time.Minute)
 	// WHEN it receives metrics
-	metrics <- []request.Span{
+	promInput.Send([]request.Span{
 		{Type: request.EventTypeHTTP, Path: "/foo", End: 123 * time.Second.Nanoseconds()},
-	}
+	})
 	now.Advance(2 * time.Minute)
 
 	// THEN THE metrics that have been received during the timeout period are still visible
@@ -98,9 +100,9 @@ func TestAppMetricsExpiration(t *testing.T) {
 	now.Advance(2 * time.Minute)
 
 	// AND WHEN the metrics labels that disappeared are received again
-	metrics <- []request.Span{
+	promInput.Send([]request.Span{
 		{Type: request.EventTypeHTTP, Path: "/baz", End: 456 * time.Second.Nanoseconds()},
-	}
+	})
 	now.Advance(2 * time.Minute)
 
 	// THEN they are reported again, starting from zero in the case of counters
@@ -268,12 +270,11 @@ func TestAppMetrics_ByInstrumentation(t *testing.T) {
 			require.NoError(t, err)
 			promURL := fmt.Sprintf("http://127.0.0.1:%d/metrics", openPort)
 
-			exporter := makePromExporter(ctx, t, tt.instr, openPort)
+			promInput := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
+			exporter := makePromExporter(ctx, t, tt.instr, openPort, promInput)
+			go exporter(ctx)
 
-			metrics := make(chan []request.Span, 20)
-			go exporter(metrics)
-
-			metrics <- []request.Span{
+			promInput.Send([]request.Span{
 				{Service: svc.Attrs{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeHTTP, Path: "/foo", RequestStart: 100, End: 200},
 				{Service: svc.Attrs{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeHTTPClient, Path: "/bar", RequestStart: 150, End: 175},
 				{Service: svc.Attrs{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeGRPC, Path: "/foo", RequestStart: 100, End: 200},
@@ -283,7 +284,7 @@ func TestAppMetrics_ByInstrumentation(t *testing.T) {
 				{Service: svc.Attrs{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeRedisServer, Method: "GET", RequestStart: 150, End: 175},
 				{Service: svc.Attrs{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeKafkaClient, Method: "publish", RequestStart: 150, End: 175},
 				{Service: svc.Attrs{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeKafkaServer, Method: "process", RequestStart: 150, End: 175},
-			}
+			})
 
 			var exported string
 			test.Eventually(t, timeout, func(t require.TestingT) {
@@ -439,9 +440,12 @@ func (c *syncedClock) Advance(t time.Duration) {
 	c.now = c.now.Add(t)
 }
 
-func makePromExporter(ctx context.Context, t *testing.T, instrumentations []string, openPort int) pipe.FinalFunc[[]request.Span] {
+func makePromExporter(
+	ctx context.Context, t *testing.T, instrumentations []string, openPort int,
+	input *msg.Queue[[]request.Span],
+) swarm.RunFunc {
 	exporter, err := PrometheusEndpoint(
-		ctx, &global.ContextInfo{Prometheus: &connector.PrometheusManager{}},
+		&global.ContextInfo{Prometheus: &connector.PrometheusManager{}},
 		&PrometheusConfig{
 			Port:                        openPort,
 			Path:                        "/metrics",
@@ -455,7 +459,8 @@ func makePromExporter(ctx context.Context, t *testing.T, instrumentations []stri
 				Include: []string{"url_path"},
 			},
 		},
-	)()
+		input,
+	)(ctx)
 	require.NoError(t, err)
 
 	return exporter

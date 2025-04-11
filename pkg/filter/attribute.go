@@ -1,13 +1,15 @@
 package filter
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/gobwas/glob"
-	"github.com/mariomac/pipes/pipe"
 
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
+	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 // AttributesConfig stores the user-provided section for filtering either Application or Network
@@ -22,14 +24,16 @@ type AttributeFamilyConfig map[string]MatchDefinition
 
 // ByAttribute provides a pipeline node that drops all the records of type T (*ebpf.Record, or *request.Span)
 // that do not match the provided AttributeFamilyConfig.
-func ByAttribute[T any](config AttributeFamilyConfig, getters attributes.NamedGetters[T, string]) pipe.MiddleProvider[[]T, []T] {
-	return func() (pipe.MiddleFunc[[]T, []T], error) {
+func ByAttribute[T any](config AttributeFamilyConfig, getters attributes.NamedGetters[T, string],
+	input, output *msg.Queue[[]T]) swarm.InstanceFunc {
+	return func(_ context.Context) (swarm.RunFunc, error) {
 		if len(config) == 0 {
 			// No filter configuration provided. The node will be ignored
 			// and bypassed by the Pipes library
-			return pipe.Bypass[[]T](), nil
+			input.Bypass(output)
+			return swarm.EmptyRunFunc()
 		}
-		f, err := newFilter(config, getters)
+		f, err := newFilter(config, getters, input, output)
 		if err != nil {
 			return nil, err
 		}
@@ -39,9 +43,12 @@ func ByAttribute[T any](config AttributeFamilyConfig, getters attributes.NamedGe
 
 type filter[T any] struct {
 	matchers []Matcher[T]
+	input    <-chan []T
+	output   *msg.Queue[[]T]
 }
 
-func newFilter[T any](config AttributeFamilyConfig, getters attributes.NamedGetters[T, string]) (*filter[T], error) {
+func newFilter[T any](config AttributeFamilyConfig, getters attributes.NamedGetters[T, string],
+	input, output *msg.Queue[[]T]) (*filter[T], error) {
 	// Internally, from code, we use the OTEL-like naming (attr.Name) for the attributes,
 	// which usually uses dot-separation but sometimes also use underscore.
 	// Since we allow users to specify metrics in both formats, we convert any user-provided
@@ -65,7 +72,7 @@ func newFilter[T any](config AttributeFamilyConfig, getters attributes.NamedGett
 		}
 		matchers = append(matchers, matcher)
 	}
-	return &filter[T]{matchers: matchers}, nil
+	return &filter[T]{matchers: matchers, input: input.Subscribe(), output: output}, nil
 }
 
 // buildMatcher returns a Matcher given an attribute name, the user-provided MatchDefinition, and the provided
@@ -97,10 +104,13 @@ func buildMatcher[T any](getters attributes.NamedGetters[T, string], attribute a
 }
 
 // main pipeline node loop
-func (f *filter[T]) doFilter(in <-chan []T, out chan<- []T) {
-	for i := range in {
+func (f *filter[T]) doFilter(_ context.Context) {
+	// output channel must be closed so later stages in the pipeline can finish in cascade
+	defer f.output.Close()
+
+	for i := range f.input {
 		if i = f.filterBatch(i); len(i) > 0 {
-			out <- i
+			f.output.Send(i)
 		}
 	}
 }

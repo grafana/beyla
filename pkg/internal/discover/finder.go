@@ -18,13 +18,14 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
 type ProcessFinder struct {
 	ctx         context.Context
 	cfg         *beyla.Config
 	ctxInfo     *global.ContextInfo
-	tracesInput chan<- []request.Span
+	tracesInput *msg.Queue[[]request.Span]
 }
 
 // nodesMap stores ProcessFinder pipeline architecture
@@ -60,7 +61,7 @@ func containerDBUpdater(pf *nodesMap) *pipe.Middle[[]Event[ebpf.Instrumentable],
 }
 func traceAttacher(pf *nodesMap) *pipe.Final[[]Event[ebpf.Instrumentable]] { return &pf.TraceAttacher }
 
-func NewProcessFinder(ctx context.Context, cfg *beyla.Config, ctxInfo *global.ContextInfo, tracesInput chan<- []request.Span) *ProcessFinder {
+func NewProcessFinder(ctx context.Context, cfg *beyla.Config, ctxInfo *global.ContextInfo, tracesInput *msg.Queue[[]request.Span]) *ProcessFinder {
 	return &ProcessFinder{ctx: ctx, cfg: cfg, ctxInfo: ctxInfo, tracesInput: tracesInput}
 }
 

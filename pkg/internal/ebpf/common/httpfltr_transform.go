@@ -63,7 +63,7 @@ type HTTPInfo struct {
 }
 
 func ReadHTTPInfoIntoSpan(record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {
-	event, err := reinterpretCast[BPFHTTPInfo](record.RawSample)
+	event, err := ReinterpretCast[BPFHTTPInfo](record.RawSample)
 	if err != nil {
 		return request.Span{}, true, err
 	}

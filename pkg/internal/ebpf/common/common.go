@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"net"
 	"os"
-	"reflect"
 	"strings"
 	"unsafe"
 
@@ -119,7 +118,7 @@ func ReadBPFTraceAsSpan(cfg *config.EBPFTracer, record *ringbuf.Record, filter S
 		return ReadGoKafkaGoRequestIntoSpan(record)
 	}
 
-	event, err := reinterpretCast[HTTPRequestTrace](record.RawSample)
+	event, err := ReinterpretCast[HTTPRequestTrace](record.RawSample)
 
 	if err != nil {
 		return request.Span{}, true, err
@@ -128,18 +127,18 @@ func ReadBPFTraceAsSpan(cfg *config.EBPFTracer, record *ringbuf.Record, filter S
 	return HTTPRequestTraceToSpan(event), false, nil
 }
 
-func reinterpretCast[T any](b []byte) (*T, error) {
+func ReinterpretCast[T any](b []byte) (*T, error) {
 	var zero T
 
 	if len(b) < int(unsafe.Sizeof(zero)) {
 		return nil, fmt.Errorf("byte slice too short")
 	}
 
-	return (*T)(unsafe.Pointer((*reflect.SliceHeader)(unsafe.Pointer(&b)).Data)), nil
+	return (*T)(unsafe.Pointer(unsafe.SliceData(b))), nil
 }
 
 func ReadSQLRequestTraceAsSpan(record *ringbuf.Record) (request.Span, bool, error) {
-	event, err := reinterpretCast[SQLRequestTrace](record.RawSample)
+	event, err := ReinterpretCast[SQLRequestTrace](record.RawSample)
 
 	if err != nil {
 		return request.Span{}, true, err

@@ -7,7 +7,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"go.opentelemetry.io/otel/attribute"
 
+	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
 )
 
@@ -225,6 +227,186 @@ func TestResolveOTLPEndpoint(t *testing.T) {
 
 			assert.Equal(t, ep, tc.expected.e)
 			assert.Equal(t, common, tc.expected.common)
+		})
+	}
+}
+
+func TestGetFilteredResourceAttrs(t *testing.T) {
+	type testCase struct {
+		name            string
+		baseAttrs       []attribute.KeyValue
+		attrSelector    attributes.Selection
+		extraAttrs      []attribute.KeyValue
+		prefixPatterns  []string
+		expectedAttrs   []string
+		unexpectedAttrs []string
+	}
+
+	testMetric := attributes.Name{
+		Section: "test.metric",
+		Prom:    "test_metric",
+		OTEL:    "test.metric",
+	}
+
+	testCases := []testCase{
+		{
+			name: "No filtering configuration",
+			baseAttrs: []attribute.KeyValue{
+				attribute.String("service.name", "test-service"),
+				attribute.String("telemetry.sdk.name", "beyla"),
+			},
+			attrSelector: attributes.Selection{},
+			extraAttrs: []attribute.KeyValue{
+				attribute.String("process.command_args", "/bin/test --arg1 --arg2"),
+				attribute.String("process.pid", "12345"),
+			},
+			prefixPatterns: []string{"process."},
+			expectedAttrs: []string{
+				"service.name",
+				"telemetry.sdk.name",
+				"process.command_args",
+				"process.pid",
+			},
+			unexpectedAttrs: []string{},
+		},
+		{
+			name: "With filtering configuration excluding process.command_args",
+			baseAttrs: []attribute.KeyValue{
+				attribute.String("service.name", "test-service"),
+				attribute.String("telemetry.sdk.name", "beyla"),
+			},
+			attrSelector: attributes.Selection{
+				testMetric.Section: attributes.InclusionLists{
+					Include: []string{"*"},
+					Exclude: []string{"process.command_args"},
+				},
+			},
+			extraAttrs: []attribute.KeyValue{
+				attribute.String("process.command_args", "/bin/test --arg1 --arg2"),
+				attribute.String("process.pid", "12345"),
+			},
+			prefixPatterns: []string{"test."},
+			expectedAttrs: []string{
+				"service.name",
+				"telemetry.sdk.name",
+				"process.pid",
+			},
+			unexpectedAttrs: []string{
+				"process.command_args",
+			},
+		},
+		{
+			name: "With filtering configuration using glob patterns",
+			baseAttrs: []attribute.KeyValue{
+				attribute.String("service.name", "test-service"),
+				attribute.String("telemetry.sdk.name", "beyla"),
+			},
+			attrSelector: attributes.Selection{
+				testMetric.Section: attributes.InclusionLists{
+					Include: []string{"*"},
+					Exclude: []string{"process.*"},
+				},
+			},
+			extraAttrs: []attribute.KeyValue{
+				attribute.String("process.command_args", "/bin/test --arg1 --arg2"),
+				attribute.String("process.pid", "12345"),
+				attribute.String("host.name", "test-host"),
+			},
+			prefixPatterns: []string{"test."},
+			expectedAttrs: []string{
+				"service.name",
+				"telemetry.sdk.name",
+				"host.name",
+			},
+			unexpectedAttrs: []string{
+				"process.command_args",
+				"process.pid",
+			},
+		},
+		{
+			name: "With different exclusion patterns",
+			baseAttrs: []attribute.KeyValue{
+				attribute.String("service.name", "test-service"),
+				attribute.String("telemetry.sdk.name", "beyla"),
+			},
+			attrSelector: attributes.Selection{
+				testMetric.Section: attributes.InclusionLists{
+					Include: []string{"*"},
+					Exclude: []string{"process.command_args", "host.*"},
+				},
+			},
+			extraAttrs: []attribute.KeyValue{
+				attribute.String("process.command_args", "/bin/test --arg1 --arg2"),
+				attribute.String("process.pid", "12345"),
+				attribute.String("host.name", "test-host"),
+			},
+			prefixPatterns: []string{"test."},
+			expectedAttrs: []string{
+				"service.name",
+				"telemetry.sdk.name",
+				"process.pid",
+			},
+			unexpectedAttrs: []string{
+				"process.command_args",
+				"host.name",
+			},
+		},
+		{
+			name: "Testing selector order - specific patterns override general ones",
+			baseAttrs: []attribute.KeyValue{
+				attribute.String("service.name", "test-service"),
+				attribute.String("telemetry.sdk.name", "beyla"),
+			},
+			attrSelector: attributes.Selection{
+				"*": attributes.InclusionLists{
+					Include: []string{"*"},
+					Exclude: []string{"process.*", "host.*"},
+				},
+				"test.*": attributes.InclusionLists{
+					Exclude: []string{"container.*"},
+				},
+				"test.metric": attributes.InclusionLists{
+					Include: []string{"process.pid", "host.name"},
+				},
+			},
+			extraAttrs: []attribute.KeyValue{
+				attribute.String("process.command_args", "/bin/test --arg1 --arg2"),
+				attribute.String("process.pid", "12345"),
+				attribute.String("host.name", "test-host"),
+				attribute.String("container.id", "container123"),
+			},
+			prefixPatterns: []string{"test."},
+			expectedAttrs: []string{
+				"service.name",
+				"telemetry.sdk.name",
+				"process.pid",
+				"host.name",
+			},
+			unexpectedAttrs: []string{
+				"process.command_args",
+				"container.id",
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := getFilteredAttributesByPrefix(tc.baseAttrs, tc.attrSelector, tc.extraAttrs, tc.prefixPatterns)
+
+			attrMap := make(map[string]attribute.Value)
+			for _, attr := range result {
+				attrMap[string(attr.Key)] = attr.Value
+			}
+
+			for _, attrName := range tc.expectedAttrs {
+				_, ok := attrMap[attrName]
+				assert.True(t, ok, "Expected attribute %s not found in result", attrName)
+			}
+
+			for _, attrName := range tc.unexpectedAttrs {
+				_, ok := attrMap[attrName]
+				assert.False(t, ok, "Unexpected attribute %s found in result", attrName)
+			}
 		})
 	}
 }

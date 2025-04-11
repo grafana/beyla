@@ -105,6 +105,11 @@ func ProcMetricsExporterProvider(
 		if !cfg.Enabled() {
 			return swarm.EmptyRunFunc()
 		}
+
+		if cfg.AttributeSelectors == nil {
+			cfg.AttributeSelectors = make(attributes.Selection)
+		}
+
 		return newProcMetricsExporter(ctx, ctxInfo, cfg, input)
 	}
 }
@@ -196,9 +201,11 @@ func newProcMetricsExporter(
 	return mr.Do, nil
 }
 
-func getProcessResourceAttrs(hostID string, procID *process.ID) []attribute.KeyValue {
-	return append(
-		getResourceAttrs(hostID, procID.Service),
+// getFilteredProcessResourceAttrs returns resource attributes filtered based on the attribute selector
+// for process metrics.
+func getFilteredProcessResourceAttrs(hostID string, procID *process.ID, attrSelector attributes.Selection) []attribute.KeyValue {
+	baseAttrs := getResourceAttrs(hostID, procID.Service)
+	procAttrs := []attribute.KeyValue{
 		semconv.ServiceInstanceID(procID.UID.Instance),
 		attr2.ProcCommand.OTEL().String(procID.Command),
 		attr2.ProcOwner.OTEL().String(procID.User),
@@ -208,13 +215,14 @@ func getProcessResourceAttrs(hostID string, procID *process.ID) []attribute.KeyV
 		attr2.ProcCommandArgs.OTEL().StringSlice(procID.CommandArgs),
 		attr2.ProcExecName.OTEL().String(procID.ExecName),
 		attr2.ProcExecPath.OTEL().String(procID.ExecPath),
-	)
+	}
+	return getFilteredAttributesByPrefix(baseAttrs, attrSelector, procAttrs, []string{"process."})
 }
 
 func (me *procMetricsExporter) newMetricSet(procID *process.ID) (*procMetrics, error) {
 	log := me.log.With("service", procID.Service, "processID", procID.UID)
 	log.Debug("creating new Metrics exporter")
-	resources := resource.NewWithAttributes(semconv.SchemaURL, getProcessResourceAttrs(me.hostID, procID)...)
+	resources := resource.NewWithAttributes(semconv.SchemaURL, getFilteredProcessResourceAttrs(me.hostID, procID, me.cfg.AttributeSelectors)...)
 	opts := []metric.Option{
 		metric.WithResource(resources),
 		metric.WithReader(metric.NewPeriodicReader(me.exporter,

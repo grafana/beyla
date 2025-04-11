@@ -152,3 +152,36 @@ func TestNetMetricsConfig_Disabled(t *testing.T) {
 	assert.False(t, NetMetricsConfig{Metrics: &MetricsConfig{MetricsEndpoint: "foo", Features: fa}}.Enabled())
 	assert.False(t, NetMetricsConfig{Metrics: &MetricsConfig{Grafana: &GrafanaOTLP{Submit: []string{"traces", "metrics"}, InstanceID: "33221"}}}.Enabled())
 }
+
+func TestGetFilteredNetworkResourceAttrs(t *testing.T) {
+	hostID := "test-host-id"
+	attrSelector := attributes.Selection{
+		attributes.BeylaNetworkFlow.Section: attributes.InclusionLists{
+			Include: []string{"*"},
+			Exclude: []string{"host.*"},
+		},
+	}
+
+	attrs := getFilteredNetworkResourceAttrs(hostID, attrSelector)
+
+	expectedAttrs := []string{
+		"service.name",
+		"service.instance.id",
+		"telemetry.sdk.language",
+		"telemetry.sdk.name",
+		"telemetry.sdk.version",
+	}
+
+	attrMap := make(map[string]string)
+	for _, attr := range attrs {
+		attrMap[string(attr.Key)] = attr.Value.AsString()
+	}
+
+	for _, key := range expectedAttrs {
+		_, exists := attrMap[key]
+		assert.True(t, exists, "Expected attribute %s not found", key)
+	}
+
+	_, hostIDExists := attrMap["host.id"]
+	assert.False(t, hostIDExists, "Host ID should be filtered out")
+}

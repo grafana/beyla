@@ -10,7 +10,7 @@ import (
 
 // nolint:cyclop
 func ReadTCPRequestIntoSpan(cfg *config.EBPFTracer, record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {
-	event, err := reinterpretCast[TCPRequestInfo](record.RawSample)
+	event, err := ReinterpretCast[TCPRequestInfo](record.RawSample)
 
 	if err != nil {
 		return request.Span{}, true, err
@@ -82,7 +82,7 @@ func ReadTCPRequestIntoSpan(cfg *config.EBPFTracer, record *ringbuf.Record, filt
 		// Kafka and gRPC can look very similar in terms of bytes. We can mistake one for another.
 		// We try gRPC first because it's more reliable in detecting false gRPC sequences.
 		if isHTTP2(b, int(event.Len)) || isHTTP2(event.Rbuf[:rl], int(event.RespLen)) {
-			evCopy := *event;
+			evCopy := *event
 			MisclassifiedEvents <- MisclassifiedEvent{EventType: EventTypeKHTTP2, TCPInfo: &evCopy}
 		} else {
 			k, err := ProcessPossibleKafkaEvent(event, b, event.Rbuf[:rl])

@@ -384,7 +384,7 @@ func http2FromBuffers(event *BPFHTTP2Info) (request.Span, bool, error) {
 }
 
 func ReadHTTP2InfoIntoSpan(record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {
-	event, err := reinterpretCast[BPFHTTP2Info](record.RawSample)
+	event, err := ReinterpretCast[BPFHTTP2Info](record.RawSample)
 
 	if err != nil {
 		return request.Span{}, true, err

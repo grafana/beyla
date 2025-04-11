@@ -10,7 +10,7 @@ import (
 )
 
 func ReadGoSaramaRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
-	event, err := reinterpretCast[GoSaramaClientInfo](record.RawSample)
+	event, err := ReinterpretCast[GoSaramaClientInfo](record.RawSample)
 	if err != nil {
 		return request.Span{}, true, err
 	}
@@ -57,7 +57,7 @@ func GoKafkaSaramaToSpan(event *GoSaramaClientInfo, data *KafkaInfo) request.Spa
 }
 
 func ReadGoKafkaGoRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
-	event, err := reinterpretCast[GoKafkaGoClientInfo](record.RawSample)
+	event, err := ReinterpretCast[GoKafkaGoClientInfo](record.RawSample)
 	if err != nil {
 		return request.Span{}, true, err
 	}

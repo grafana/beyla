@@ -201,21 +201,6 @@ func newProcMetricsExporter(
 	return mr.Do, nil
 }
 
-func getProcessResourceAttrs(hostID string, procID *process.ID) []attribute.KeyValue {
-	return append(
-		getResourceAttrs(hostID, procID.Service),
-		semconv.ServiceInstanceID(procID.UID.Instance),
-		attr2.ProcCommand.OTEL().String(procID.Command),
-		attr2.ProcOwner.OTEL().String(procID.User),
-		attr2.ProcParentPid.OTEL().String(strconv.Itoa(int(procID.ParentProcessID))),
-		attr2.ProcPid.OTEL().String(strconv.Itoa(int(procID.ProcessID))),
-		attr2.ProcCommandLine.OTEL().String(procID.CommandLine),
-		attr2.ProcCommandArgs.OTEL().StringSlice(procID.CommandArgs),
-		attr2.ProcExecName.OTEL().String(procID.ExecName),
-		attr2.ProcExecPath.OTEL().String(procID.ExecPath),
-	)
-}
-
 // getFilteredProcessResourceAttrs returns resource attributes filtered based on the attribute selector
 // for process metrics.
 func getFilteredProcessResourceAttrs(hostID string, procID *process.ID, attrSelector attributes.Selection) []attribute.KeyValue {

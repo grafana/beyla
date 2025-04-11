@@ -70,6 +70,14 @@ const (
 // traces_target_info
 const GrafanaHostIDKey = attribute.Key("grafana.host.id")
 
+// MetricTypes contains all the supported metric type prefixes used for filtering attributes
+var MetricTypes = []string{
+	"http.server", "http.client",
+	"rpc.server", "rpc.client",
+	"db.client",
+	"messaging.",
+}
+
 type MetricsConfig struct {
 	Interval time.Duration `yaml:"interval" env:"BEYLA_METRICS_INTERVAL"`
 	// OTELIntervalMS supports metric intervals as specified by the standard OTEL definition.
@@ -833,16 +841,7 @@ func (mr *MetricsReporter) metricResourceAttributes(service *svc.Attrs) attribut
 		extraAttrs = append(extraAttrs, k.OTEL().String(v))
 	}
 
-	httpMetrics := []string{"http.server", "http.client"}
-	rpcMetrics := []string{"rpc.server", "rpc.client"}
-	dbMetrics := []string{"db.client"}
-	messagingMetrics := []string{"messaging."}
-
-	metricTypes := append(httpMetrics, rpcMetrics...)
-	metricTypes = append(metricTypes, dbMetrics...)
-	metricTypes = append(metricTypes, messagingMetrics...)
-
-	filteredAttrs := getFilteredMetricResourceAttrs(baseAttrs, mr.userAttribSelection, extraAttrs, metricTypes)
+	filteredAttrs := getFilteredMetricResourceAttrs(baseAttrs, mr.userAttribSelection, extraAttrs, MetricTypes)
 	return attribute.NewSet(filteredAttrs...)
 }
 

@@ -38,24 +38,6 @@ func nmlog() *slog.Logger {
 	return slog.With("component", "otel.NetworkMetricsExporter")
 }
 
-func newResource(hostID string) *resource.Resource {
-	attrs := []attribute.KeyValue{
-		semconv.ServiceName("beyla-network-flows"),
-		semconv.ServiceInstanceID(uuid.New().String()),
-		// SpanMetrics requires an extra attribute besides service name
-		// to generate the traces_target_info metric,
-		// so the service is visible in the ServicesList
-		// This attribute also allows that App O11y plugin shows this app as a Go application.
-		semconv.TelemetrySDKLanguageKey.String(semconv.TelemetrySDKLanguageGo.Value.AsString()),
-		// We set the SDK name as Beyla, so we can distinguish beyla generated metrics from other SDKs
-		semconv.TelemetrySDKNameKey.String("beyla"),
-		semconv.TelemetrySDKVersion(buildinfo.Version),
-		semconv.HostID(hostID),
-	}
-
-	return resource.NewWithAttributes(semconv.SchemaURL, attrs...)
-}
-
 // getFilteredNetworkResourceAttrs returns resource attributes that can be filtered based on the attribute selector
 // for network metrics.
 func getFilteredNetworkResourceAttrs(hostID string, attrSelector attributes.Selection) []attribute.KeyValue {

@@ -326,21 +326,24 @@ int BPF_KPROBE(beyla_kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, si
                         }
                     }
 
+                    // We couldn't find a buffer, for now we just mark the arguments as failed
+                    // and see if on the kretprobe we'll have a backup buffer setup for us
+                    // by the socket filter program.
                     if (!size) {
                         s_args.size = -1;
                         bpf_map_update_elem(&active_send_args, &id, &s_args, BPF_ANY);
                         bpf_dbg_printk("can't find iovec ptr in msghdr, not tracking sendmsg");
                         return 0;
-                    } else {
-                        u64 sock_p = (u64)sk;
-                        bpf_map_update_elem(&active_send_args, &id, &s_args, BPF_ANY);
-                        bpf_map_update_elem(&active_send_sock_args, &sock_p, &s_args, BPF_ANY);
-                        make_inactive_sk_buffer(&s_args.p_conn.conn);
-
-                        // Logically last for !ssl.
-                        handle_buf_with_connection(
-                            ctx, &s_args.p_conn, buf, size, NO_SSL, TCP_SEND, orig_dport);
                     }
+
+                    u64 sock_p = (u64)sk;
+                    bpf_map_update_elem(&active_send_args, &id, &s_args, BPF_ANY);
+                    bpf_map_update_elem(&active_send_sock_args, &sock_p, &s_args, BPF_ANY);
+                    make_inactive_sk_buffer(&s_args.p_conn.conn);
+
+                    // Logically last for !ssl.
+                    handle_buf_with_connection(
+                        ctx, &s_args.p_conn, buf, size, NO_SSL, TCP_SEND, orig_dport);
                 }
             } else {
                 bpf_dbg_printk("tcp_sendmsg for identified SSL connection, ignoring...");
@@ -779,8 +782,9 @@ int beyla_socket__http_filter(struct __sk_buff *skb) {
             buf,
             len,
             &packet_type)) { // we must check tcp_close second, a packet can be a close and a response
-        bpf_d_printk("http buf %s", buf);
-        d_print_http_connection_info(&conn);
+        // this can be very verbose
+        //bpf_d_printk("http buf %s", buf);
+        //d_print_http_connection_info(&conn);
 
         if (packet_type == PACKET_TYPE_REQUEST) {
             u32 full_len = skb->len - tcp.hdr_len;

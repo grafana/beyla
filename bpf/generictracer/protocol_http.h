@@ -113,9 +113,11 @@ static __always_inline void http_get_or_create_trace_info(http_connection_metada
         bpf_dbg_printk("Using old traceparent id");
     }
 
+#ifdef BPF_DEBUG
     unsigned char tp_buf[TP_MAX_VAL_LENGTH];
     make_tp_string(tp_buf, &tp_p->tp);
     bpf_dbg_printk("tp: %s", tp_buf);
+#endif
 
     u8 skip_tp_parsing = 0;
 
@@ -162,8 +164,10 @@ static __always_inline void http_get_or_create_trace_info(http_connection_metada
                 if (meta && meta->type != EVENT_HTTP_CLIENT) {
                     decode_hex(tp_p->tp.parent_id, s_id, SPAN_ID_CHAR_LEN);
                 }
+#ifdef BPF_DEBUG
                 make_tp_string(tp_buf, &tp_p->tp);
-                bpf_dbg_printk("tp: %s", tp_buf);
+                bpf_dbg_printk("new tp: %s", tp_buf);
+#endif
             } else {
                 bpf_dbg_printk("No additional traceparent in headers, using what was made before",
                                res);

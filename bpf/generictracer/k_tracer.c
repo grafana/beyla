@@ -15,6 +15,7 @@
 #include <logger/bpf_dbg.h>
 
 #include <maps/msg_buffers.h>
+#include <maps/sk_buffers.h>
 
 #include <pid/pid.h>
 
@@ -289,6 +290,7 @@ int BPF_KPROBE(beyla_kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, si
         };
         sort_connection_info(&s_args.p_conn.conn);
         s_args.p_conn.pid = pid_from_pid_tgid(id);
+        s_args.orig_dport = orig_dport;
 
         void *ssl = is_ssl_connection(id, &s_args.p_conn);
         if (size > 0) {
@@ -323,17 +325,25 @@ int BPF_KPROBE(beyla_kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, si
                             }
                         }
                     }
-                    if (size) {
-                        u64 sock_p = (u64)sk;
-                        bpf_map_update_elem(&active_send_args, &id, &s_args, BPF_ANY);
-                        bpf_map_update_elem(&active_send_sock_args, &sock_p, &s_args, BPF_ANY);
 
-                        // Logically last for !ssl.
-                        handle_buf_with_connection(
-                            ctx, &s_args.p_conn, buf, size, NO_SSL, TCP_SEND, orig_dport);
-                    } else {
+                    // We couldn't find a buffer, for now we just mark the arguments as failed
+                    // and see if on the kretprobe we'll have a backup buffer setup for us
+                    // by the socket filter program.
+                    if (!size) {
+                        s_args.size = -1;
+                        bpf_map_update_elem(&active_send_args, &id, &s_args, BPF_ANY);
                         bpf_dbg_printk("can't find iovec ptr in msghdr, not tracking sendmsg");
+                        return 0;
                     }
+
+                    u64 sock_p = (u64)sk;
+                    bpf_map_update_elem(&active_send_args, &id, &s_args, BPF_ANY);
+                    bpf_map_update_elem(&active_send_sock_args, &sock_p, &s_args, BPF_ANY);
+                    make_inactive_sk_buffer(&s_args.p_conn.conn);
+
+                    // Logically last for !ssl.
+                    handle_buf_with_connection(
+                        ctx, &s_args.p_conn, buf, size, NO_SSL, TCP_SEND, orig_dport);
                 }
             } else {
                 bpf_dbg_printk("tcp_sendmsg for identified SSL connection, ignoring...");
@@ -345,6 +355,7 @@ int BPF_KPROBE(beyla_kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, si
         }
 
         tcp_send_ssl_check(id, ssl, &s_args.p_conn, orig_dport);
+        bpf_map_delete_elem(&active_send_args, &id);
     }
 
     return 0;
@@ -374,6 +385,7 @@ int BPF_KPROBE(beyla_kprobe_tcp_rate_check_app_limited, struct sock *sk) {
 
         sort_connection_info(&s_args.p_conn.conn);
         s_args.p_conn.pid = pid_from_pid_tgid(id);
+        s_args.orig_dport = orig_dport;
 
         msg_buffer_t *m_buf = bpf_map_lookup_elem(&msg_buffers, &e_key);
         if (m_buf) {
@@ -394,6 +406,9 @@ int BPF_KPROBE(beyla_kprobe_tcp_rate_check_app_limited, struct sock *sk) {
                 u64 sock_p = (u64)sk;
                 bpf_map_update_elem(&active_send_args, &id, &s_args, BPF_ANY);
                 bpf_map_update_elem(&active_send_sock_args, &sock_p, &s_args, BPF_ANY);
+                // must set that any backup buffer on this connection is invalid
+                // to avoid replay
+                make_inactive_sk_buffer(&s_args.p_conn.conn);
 
                 // Logically last for !ssl.
                 handle_buf_with_connection(
@@ -403,6 +418,7 @@ int BPF_KPROBE(beyla_kprobe_tcp_rate_check_app_limited, struct sock *sk) {
 
         void *ssl = is_ssl_connection(id, &s_args.p_conn);
         if (ssl) {
+            make_inactive_sk_buffer(&s_args.p_conn.conn);
             tcp_send_ssl_check(id, ssl, &s_args.p_conn, orig_dport);
         }
     }
@@ -432,8 +448,31 @@ int BPF_KRETPROBE(beyla_kretprobe_tcp_sendmsg, int sent_len) {
             MIN_HTTP_SIZE) { // Sometimes app servers don't send close, but small responses back
             finish_possible_delayed_http_request(&s_args->p_conn);
         }
+
+        // The send_msg buffer couldn't be read, maybe kernel buffers. We consult
+        // the buffers captured by the socket filter
+        if (s_args->size == -1) {
+            sk_msg_buffer_t *msg_buf = bpf_map_lookup_elem(&sk_buffers, &s_args->p_conn.conn);
+            if (msg_buf && buffer_is_active(msg_buf)) {
+                bpf_dbg_printk(
+                    "found backup sk_buffer: size %d, buf[%s]", msg_buf->size, msg_buf->buf);
+
+                bpf_map_delete_elem(&active_send_args, &id);
+                handle_buf_with_connection(ctx,
+                                           &s_args->p_conn,
+                                           msg_buf->buf,
+                                           msg_buf->size,
+                                           NO_SSL,
+                                           TCP_SEND,
+                                           s_args->orig_dport);
+            }
+        }
+        // We don't want to delete the the backup buffer here, since with some
+        // proxies the data is directly forwarded to the other side and
+        // we need the buffer in recvmsg.
     }
 
+    bpf_map_delete_elem(&active_send_args, &id);
     return 0;
 }
 
@@ -458,6 +497,7 @@ int BPF_KPROBE(beyla_kprobe_tcp_close, struct sock *sk, long timeout) {
         //dbg_print_http_connection_info(&info.conn);
         info.pid = pid_from_pid_tgid(id);
         bpf_map_delete_elem(&ongoing_tcp_req, &info);
+        delete_backup_sk_buff(&info.conn);
     }
 
     bpf_map_delete_elem(&active_send_args, &id);
@@ -566,18 +606,25 @@ int BPF_KRETPROBE(beyla_kretprobe_sock_recvmsg, int copied_len) {
     return 0;
 }
 
-static __always_inline int return_recvmsg(void *ctx, u64 id, int copied_len) {
+static __always_inline int return_recvmsg(void *ctx, struct sock *in_sock, u64 id, int copied_len) {
     recv_args_t *args = bpf_map_lookup_elem(&active_recv_args, &id);
 
     bpf_dbg_printk("=== return recvmsg id=%d args=%llx copied_len %d ===", id, args, copied_len);
 
     pid_connection_info_t info = {};
 
-    if (!args) {
+    if (!args && !in_sock) {
         goto done;
     }
 
-    void *sock_ptr = (void *)args->sock_ptr;
+    void *sock_ptr = in_sock;
+    if (!sock_ptr) {
+        if (args) {
+            sock_ptr = (void *)args->sock_ptr;
+        } else {
+            goto done;
+        }
+    }
 
     if (copied_len <= 0) {
         if (parse_sock_info((struct sock *)sock_ptr, &info.conn)) {
@@ -585,19 +632,30 @@ static __always_inline int return_recvmsg(void *ctx, u64 id, int copied_len) {
             info.pid = pid_from_pid_tgid(id);
             setup_cp_support_conn_info(&info, false);
         }
-        goto done;
+        // Don't clean-up. This is called as backup path for the retprobe from
+        // tcp_cleanup_rbuf which can come in with 0 bytes and we'll delete
+        // the data for completing the request.
+        return 0;
     }
 
-    iovec_iter_ctx *iov_ctx = (iovec_iter_ctx *)&args->iovec_ctx;
+    u8 *buf = 0;
+    if (args) {
+        iovec_iter_ctx *iov_ctx = (iovec_iter_ctx *)&args->iovec_ctx;
 
-    if (!iov_ctx->iov && !iov_ctx->ubuf) {
-        bpf_dbg_printk("iovec_ptr found in kprobe is NULL, ignoring this tcp_recvmsg");
-        bpf_map_delete_elem(&active_recv_args, &id);
+        if (!iov_ctx->iov && !iov_ctx->ubuf) {
+            bpf_dbg_printk("iovec_ptr found in kprobe is NULL, ignoring this tcp_recvmsg");
 
-        goto done;
+            goto done;
+        }
+
+        buf = iovec_memory();
+        if (buf) {
+            copied_len = read_iovec_ctx(iov_ctx, buf, copied_len);
+            if (!copied_len) {
+                bpf_dbg_printk("Not copied anything");
+            }
+        }
     }
-
-    bpf_map_delete_elem(&active_recv_args, &id);
 
     if (parse_sock_info((struct sock *)sock_ptr, &info.conn)) {
         const u16 orig_dport = info.conn.d_port;
@@ -608,23 +666,43 @@ static __always_inline int return_recvmsg(void *ctx, u64 id, int copied_len) {
         void *ssl = is_ssl_connection(id, &info);
 
         if (!ssl) {
-            u8 *buf = iovec_memory();
-            if (buf) {
-                copied_len = read_iovec_ctx(iov_ctx, buf, copied_len);
-                if (copied_len) {
-                    // doesn't return must be logically last statement
-                    handle_buf_with_connection(
-                        ctx, &info, buf, copied_len, NO_SSL, TCP_RECV, orig_dport);
-                } else {
-                    bpf_dbg_printk("Not copied anything");
+
+            bpf_dbg_printk("buf = %llx, copied_len %d", buf, copied_len);
+
+            if (!buf || !copied_len) {
+                sk_msg_buffer_t *msg_buf = bpf_map_lookup_elem(&sk_buffers, &info.conn);
+                // we don't check for inactive here, we don't need to, once
+                // we consume a buffer we delete the backup buffer regardless.
+                // When proxies forward the traffic to pipes, the buffer will
+                // likely be marked as inactive on the sendmsg side to avoid
+                // double sending, but we have no other buffer available other than
+                // the backup.
+                if (msg_buf) {
+                    buf = msg_buf->buf;
+                    copied_len = msg_buf->size;
                 }
+                // must delete the backup buffer to avoid replay
+                delete_backup_sk_buff(&info.conn);
+            }
+
+            if (buf && copied_len) {
+                // must delete the backup buffer to avoid replay
+                delete_backup_sk_buff(&info.conn);
+                bpf_map_delete_elem(&active_recv_args, &id);
+                // doesn't return must be logically last statement
+                handle_buf_with_connection(
+                    ctx, &info, buf, copied_len, NO_SSL, TCP_RECV, orig_dport);
             }
         } else {
+            // must delete the backup buffer to avoid replay
+            delete_backup_sk_buff(&info.conn);
             bpf_dbg_printk("tcp_recvmsg for an identified SSL connection, ignoring [%llx]...", ssl);
         }
     }
 
 done:
+    bpf_map_delete_elem(&active_recv_args, &id);
+
     return 0;
 }
 
@@ -638,7 +716,16 @@ int BPF_KPROBE(beyla_kprobe_tcp_cleanup_rbuf, struct sock *sk, int copied) {
 
     bpf_dbg_printk("=== tcp_cleanup_rbuf id=%d copied_len %d ===", id, copied);
 
-    return return_recvmsg(ctx, id, copied);
+#ifdef BPF_DEBUG
+    connection_info_t conn = {};
+
+    if (parse_sock_info(sk, &conn)) {
+        sort_connection_info(&conn);
+        dbg_print_http_connection_info(&conn);
+    }
+#endif
+
+    return return_recvmsg(ctx, sk, id, copied);
 }
 
 SEC("kretprobe/tcp_recvmsg")
@@ -651,7 +738,7 @@ int BPF_KRETPROBE(beyla_kretprobe_tcp_recvmsg, int copied_len) {
 
     bpf_dbg_printk("=== kretprobe_tcp_recvmsg id=%d copied_len %d ===", id, copied_len);
 
-    return return_recvmsg(ctx, id, copied_len);
+    return return_recvmsg(ctx, 0, id, copied_len);
 }
 
 // Fall-back in case we don't see kretprobe on tcp_recvmsg in high network volume situations
@@ -678,53 +765,54 @@ int beyla_socket__http_filter(struct __sk_buff *skb) {
         len = MIN_HTTP_SIZE;
     }
 
+    sort_connection_info(&conn);
+
+    sk_msg_buffer_t *sk_buf = bpf_map_lookup_elem(&sk_buffers, &conn);
+    if (!sk_buf) {
+        sk_buf = empty_sk_buffer();
+    }
+    if (sk_buf) {
+        read_skb_bytes(skb, tcp.hdr_len, sk_buf->buf, sizeof(sk_buf->buf));
+        sk_buf->size = len;
+        bpf_map_update_elem(&sk_buffers, &conn, sk_buf, BPF_ANY);
+    }
+
     u8 packet_type = 0;
     if (is_http(
             buf,
             len,
             &packet_type)) { // we must check tcp_close second, a packet can be a close and a response
-        //dbg_print_http_connection_info(&conn); // commented out since GitHub CI doesn't like this call
-        sort_connection_info(&conn);
-
-        http_info_t *info = empty_http_info();
-        if (!info) {
-            return 0;
-        }
-
-        __builtin_memcpy(&info->conn_info, &conn, sizeof(conn));
+        // this can be very verbose
+        //bpf_d_printk("http buf %s", buf);
+        //d_print_http_connection_info(&conn);
 
         if (packet_type == PACKET_TYPE_REQUEST) {
             u32 full_len = skb->len - tcp.hdr_len;
             if (full_len > FULL_BUF_SIZE) {
                 full_len = FULL_BUF_SIZE;
             }
-            read_skb_bytes(skb, tcp.hdr_len, info->buf, full_len);
             u64 cookie = bpf_get_socket_cookie(skb);
             //bpf_printk("=== http_filter cookie = %llx, len=%d %s ===", cookie, len, buf);
             //dbg_print_http_connection_info(&conn);
-            set_fallback_http_info(info, &conn, skb->len - tcp.hdr_len);
 
             // The code below is looking to see if we have recorded black-box trace info on
             // another interface. We do this for client calls, where essentially the original
             // request may go out on one interface, but then get re-routed to another, which is
             // common with some k8s environments.
-            //
-            // This casting is done here to save allocating memory on a per CPU buffer, since
-            // we don't need info anymore, we reuse it's space and it's much bigger than
-            // partial_connection_info_t.
-            partial_connection_info_t *partial = (partial_connection_info_t *)(info);
-            partial->d_port = conn.d_port;
-            partial->s_port = conn.s_port;
-            partial->tcp_seq = tcp.seq;
-            __builtin_memcpy(partial->s_addr, conn.s_addr, sizeof(partial->s_addr));
+            partial_connection_info_t partial = {
+                .d_port = conn.d_port,
+                .s_port = conn.s_port,
+                .tcp_seq = tcp.seq,
+            };
+            __builtin_memcpy(partial.s_addr, conn.s_addr, sizeof(partial.s_addr));
 
             tp_info_pid_t *trace_info = trace_info_for_connection(&conn, TRACE_TYPE_CLIENT);
             if (trace_info) {
                 if (cookie) { // we have an actual socket associated
-                    bpf_map_update_elem(&tcp_connection_map, partial, &conn, BPF_ANY);
+                    bpf_map_update_elem(&tcp_connection_map, &partial, &conn, BPF_ANY);
                 }
             } else if (!cookie) { // no actual socket for this skb, relayed to another interface
-                connection_info_t *prev_conn = bpf_map_lookup_elem(&tcp_connection_map, partial);
+                connection_info_t *prev_conn = bpf_map_lookup_elem(&tcp_connection_map, &partial);
 
                 if (prev_conn) {
                     tp_info_pid_t *trace_info =
@@ -788,13 +876,6 @@ int BPF_KPROBE(beyla_kprobe_sys_exit, int status) {
 
     bpf_dbg_printk(
         "sys_exit %d, pid=%d, valid_pid(id)=%d", id, pid_from_pid_tgid(id), valid_pid(id));
-
-    // handle the case when the thread terminates without closing a socket
-    send_args_t *s_args = bpf_map_lookup_elem(&active_send_args, &id);
-    if (s_args) {
-        bpf_dbg_printk("Checking if we need to finish the request per thread id");
-        finish_possible_delayed_http_request(&s_args->p_conn);
-    }
 
     bpf_map_delete_elem(&clone_map, &task.p_key);
     // This won't delete trace ids for traces with extra_id, like NodeJS. But,

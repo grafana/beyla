@@ -45,6 +45,7 @@ const (
 var DefaultConfig = Config{
 	ChannelBufferLen: 10,
 	LogLevel:         "INFO",
+	ShutdownTimeout:  5 * time.Minute,
 	EnforceSysCaps:   false,
 	EBPF: config.EBPFTracer{
 		BatchLength:               100,
@@ -181,6 +182,9 @@ type Config struct {
 	Discovery services.DiscoveryConfig `yaml:"discovery"`
 
 	LogLevel string `yaml:"log_level" env:"BEYLA_LOG_LEVEL"`
+
+	// Timeout for a graceful shutdown
+	ShutdownTimeout time.Duration `yaml:"shutdown_timeout" env:"BEYLA_SHUTDOWN_TIMEOUT"`
 
 	// Check for required system capabilities and bail if they are not
 	// present. If set to 'false', Beyla will still print a list of missing

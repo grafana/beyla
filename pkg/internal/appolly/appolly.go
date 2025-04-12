@@ -4,9 +4,11 @@ package appolly
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/internal/discover"
@@ -16,6 +18,8 @@ import (
 	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
+var errShutdownTimeout = errors.New("graceful shutdown has timed out")
+
 func log() *slog.Logger {
 	return slog.With("component", "beyla.Instrumenter")
 }
@@ -23,9 +27,11 @@ func log() *slog.Logger {
 // Instrumenter finds and instrument a service/process, and forwards the traces as
 // configured by the user
 type Instrumenter struct {
-	ctx     context.Context
-	config  *beyla.Config
-	ctxInfo *global.ContextInfo
+	ctx       context.Context
+	config    *beyla.Config
+	ctxInfo   *global.ContextInfo
+	tracersWg *sync.WaitGroup
+	bp        *pipe.Instrumenter
 
 	// tracesInput is used to communicate the found traces between the ProcessFinder and
 	// the ProcessTracer.
@@ -33,48 +39,52 @@ type Instrumenter struct {
 }
 
 // New Instrumenter, given a Config
-func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config) *Instrumenter {
+func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config) (*Instrumenter, error) {
 	setupFeatureContextInfo(ctx, ctxInfo, config)
+
+	tracesInput := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(config.ChannelBufferLen))
+
+	bp, err := pipe.Build(ctx, config, ctxInfo, tracesInput)
+	if err != nil {
+		return nil, fmt.Errorf("can't instantiate instrumentation pipeline: %w", err)
+	}
+
 	return &Instrumenter{
 		ctx:         ctx,
 		config:      config,
 		ctxInfo:     ctxInfo,
-		tracesInput: msg.NewQueue[[]request.Span](msg.ChannelBufferLen(config.ChannelBufferLen)),
-	}
+		tracersWg:   &sync.WaitGroup{},
+		tracesInput: tracesInput,
+		bp:          bp,
+	}, nil
 }
 
 // FindAndInstrument searches in background for any new executable matching the
 // selection criteria.
 // Returns a channel that is closed when the Instrumenter completed all its tasks.
 // This is: when the context is cancelled, it has unloaded all the eBPF probes.
-func (i *Instrumenter) FindAndInstrument() (<-chan struct{}, error) {
+func (i *Instrumenter) FindAndInstrument() error {
 	finder := discover.NewProcessFinder(i.ctx, i.config, i.ctxInfo, i.tracesInput)
 	foundProcesses, deletedProcesses, err := finder.Start()
 	if err != nil {
-		return nil, fmt.Errorf("couldn't start Process Finder: %w", err)
+		return fmt.Errorf("couldn't start Process Finder: %w", err)
 	}
 
-	done := make(chan struct{})
 	// In background, listen indefinitely for each new process and run its
 	// associated ebpf.ProcessTracer once it is found.
-	wg := sync.WaitGroup{}
 	go func() {
 		log := log()
 		for {
 			select {
 			case <-i.ctx.Done():
-				log.Debug("stopped searching for new processes to instrument. Waiting for the eBPF tracers to be unloaded")
-				wg.Wait()
-				close(done)
-				log.Debug("tracers unloaded, exiting FindAndInstrument")
 				return
 			case pt := <-foundProcesses:
 				log.Debug("running tracer for new process",
 					"inode", pt.FileInfo.Ino, "pid", pt.FileInfo.Pid, "exec", pt.FileInfo.CmdExePath)
 				if pt.Tracer != nil {
-					wg.Add(1)
+					i.tracersWg.Add(1)
 					go func() {
-						defer wg.Done()
+						defer i.tracersWg.Done()
 						pt.Tracer.Run(i.ctx, i.tracesInput)
 					}()
 				}
@@ -87,28 +97,41 @@ func (i *Instrumenter) FindAndInstrument() (<-chan struct{}, error) {
 			}
 		}
 	}()
+
 	// TODO: wait until all the resources have been freed/unmounted
-	return done, nil
+	return nil
 }
 
 // ReadAndForward keeps listening for traces in the BPF map, then reads,
 // processes and forwards them
-func (i *Instrumenter) ReadAndForward() error {
+func (i *Instrumenter) ReadAndForward() {
 	log := log()
 	log.Debug("creating instrumentation pipeline")
 
-	bp, err := pipe.Build(i.ctx, i.config, i.ctxInfo, i.tracesInput)
-	if err != nil {
-		return fmt.Errorf("can't instantiate instrumentation pipeline: %w", err)
-	}
-
 	log.Info("Starting main node")
 
-	bp.Run(i.ctx)
+	i.bp.Run(i.ctx)
 
 	log.Info("exiting auto-instrumenter")
+}
 
-	return nil
+func (i *Instrumenter) Stop() error {
+	log := log()
+
+	stopped := make(chan struct{})
+	go func() {
+		log.Debug("stopped searching for new processes to instrument. Waiting for the eBPF tracers to be unloaded")
+		i.tracersWg.Wait()
+		stopped <- struct{}{}
+		log.Debug("tracers unloaded, exiting FindAndInstrument")
+	}()
+
+	select {
+	case <-time.After(i.config.ShutdownTimeout):
+		return errShutdownTimeout
+	case <-stopped:
+		return nil
+	}
 }
 
 func setupFeatureContextInfo(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config) {

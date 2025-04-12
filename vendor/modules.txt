@@ -528,6 +528,7 @@ go.opentelemetry.io/collector/config/configopaque
 go.opentelemetry.io/collector/config/configretry
 # go.opentelemetry.io/collector/config/configtelemetry v0.122.1
 ## explicit; go 1.23.0
+o.opentelemetry.io/collector/config/configtelemetry
 # go.opentelemetry.io/collector/config/configtls v1.28.1
 ## explicit; go 1.23.0
 go.opentelemetry.io/collector/config/configtls

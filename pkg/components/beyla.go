@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"sync"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
@@ -16,7 +18,6 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/agent"
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/flow"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
-	"golang.org/x/sync/errgroup"
 )
 
 // RunBeyla in the foreground process. This is a blocking function and won't exit

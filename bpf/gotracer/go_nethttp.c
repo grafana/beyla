@@ -566,7 +566,7 @@ int beyla_uprobe_roundTripReturn(struct pt_regs *ctx) {
                    sizeof(trace->response_length),
                    (void *)(resp_ptr + response_length_ptr_pos));
 
-    bpf_dbg_printk("response_length %d, offset %d, resp_ptr %lx",
+    bpf_dbg_printk("response_length %llx, offset %llu, resp_ptr %llx",
                    trace->response_length,
                    response_length_ptr_pos,
                    (u64)resp_ptr);

@@ -19,36 +19,29 @@ import (
 
 func testClientWithMethodAndStatusCode(t *testing.T, method string, statusCode int, traces bool) {
 	// Eventually, Prometheus would make this query visible
-	pq := prom.Client{HostPort: prometheusHostPort}
-	var results []prom.Result
-	test.Eventually(t, testTimeout, func(t require.TestingT) {
-		var err error
-		results, err = pq.Query(`http_client_request_duration_seconds_count{` +
-			fmt.Sprintf(`http_request_method="%s",`, method) +
+	var (
+		pq     = prom.Client{HostPort: prometheusHostPort}
+		labels = fmt.Sprintf(`http_request_method="%s",`, method) +
 			fmt.Sprintf(`http_response_status_code="%d",`, statusCode) +
 			`http_route="/oss/",` +
 			`server_address="grafana.com",` +
 			`service_namespace="integration-test",` +
-			`service_name="pingclient"}`)
-		require.NoError(t, err)
-		enoughPromResults(t, results)
-		val := totalPromCount(t, results)
-		assert.LessOrEqual(t, 1, val)
+			`service_name="pingclient"`
+	)
+
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		query := fmt.Sprintf("http_client_request_duration_seconds_count{%s}", labels)
+		checkClientPromQueryResult(t, pq, query, 1)
 	})
 
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
-		var err error
-		results, err = pq.Query(`http_client_request_body_size_bytes_count{` +
-			fmt.Sprintf(`http_request_method="%s",`, method) +
-			fmt.Sprintf(`http_response_status_code="%d",`, statusCode) +
-			`http_route="/oss/",` +
-			`server_address="grafana.com",` +
-			`service_namespace="integration-test",` +
-			`service_name="pingclient"}`)
-		require.NoError(t, err)
-		enoughPromResults(t, results)
-		val := totalPromCount(t, results)
-		assert.LessOrEqual(t, 1, val)
+		query := fmt.Sprintf("http_client_request_body_size_bytes_count{%s}", labels)
+		checkClientPromQueryResult(t, pq, query, 1)
+	})
+
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		query := fmt.Sprintf("http_client_response_body_size_bytes_count{%s}", labels)
+		checkClientPromQueryResult(t, pq, query, 1)
 	})
 
 	if !traces {

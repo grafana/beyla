@@ -38,6 +38,9 @@ var (
 		"http_server_request_body_size_bytes_count",
 		"http_server_request_body_size_bytes_sum",
 		"http_server_request_body_size_bytes_bucket",
+		"http_server_response_body_size_bytes_count",
+		"http_server_response_body_size_bytes_sum",
+		"http_server_response_body_size_bytes_bucket",
 	}
 	httpClientMetrics = []string{
 		"http_client_request_duration_seconds_count",
@@ -46,6 +49,9 @@ var (
 		"http_client_request_body_size_bytes_count",
 		"http_client_request_body_size_bytes_sum",
 		"http_client_request_body_size_bytes_bucket",
+		"http_client_response_body_size_bytes_count",
+		"http_client_response_body_size_bytes_sum",
+		"http_client_response_body_size_bytes_bucket",
 	}
 	grpcServerMetrics = []string{
 		"rpc_server_duration_seconds_count",

@@ -1,9 +1,20 @@
 package config
 
 import (
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/tcmanager"
+)
+
+type ContextPropagationMode uint8
+
+const (
+	ContextPropagationAll = ContextPropagationMode(iota)
+	ContextPropagationHeadersOnly
+	ContextPropagationIPOptionsOnly
+	ContextPropagationDisabled
 )
 
 // EBPFTracer configuration for eBPF programs
@@ -33,8 +44,11 @@ type EBPFTracer struct {
 
 	HTTPRequestTimeout time.Duration `yaml:"http_request_timeout" env:"BEYLA_BPF_HTTP_REQUEST_TIMEOUT"`
 
-	// Enables Linux Traffic Control probes for context propagation
+	// Deprecated: equivalent to ContextPropagationAll
 	ContextPropagationEnabled bool `yaml:"enable_context_propagation" env:"BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION"`
+
+	// Enables distributed context propagation.
+	ContextPropagation ContextPropagationMode `yaml:"context_propagation" env:"BEYLA_BPF_CONTEXT_PROPAGATION"`
 
 	// Skips checking the kernel version for bpf_loop functionality. Some modified kernels have this
 	// backported prior to version 5.17.
@@ -71,4 +85,23 @@ type EBPFTracer struct {
 	// Enables Java instrumentation with the OpenTelemetry JDK Agent
 	// nolint:undoc
 	UseOTelSDKForJava bool `yaml:"use_otel_sdk_for_java" env:"BEYLA_USE_OTEL_SDK_FOR_JAVA"`
+}
+
+func (m *ContextPropagationMode) UnmarshalText(text []byte) error {
+	switch strings.TrimSpace(string(text)) {
+	case "all":
+		*m = ContextPropagationAll
+		return nil
+	case "headers":
+		*m = ContextPropagationHeadersOnly
+		return nil
+	case "ip":
+		*m = ContextPropagationIPOptionsOnly
+		return nil
+	case "disabled":
+		*m = ContextPropagationDisabled
+		return nil
+	}
+
+	return fmt.Errorf("invalid value for context_propagation: '%s'", text)
 }

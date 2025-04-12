@@ -14,6 +14,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/ringbuf"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
 // ringBufReader interface extracts the used methods from ringbuf.Reader for proper
@@ -56,7 +57,7 @@ func SharedRingbuf(
 	filter ServiceFilter,
 	ringbuffer *ebpf.Map,
 	metrics imetrics.Reporter,
-) func(context.Context, []io.Closer, chan<- []request.Span) {
+) func(context.Context, []io.Closer, *msg.Queue[[]request.Span]) {
 	singleRbfLock.Lock()
 	defer singleRbfLock.Unlock()
 
@@ -82,7 +83,7 @@ func ForwardRingbuf(
 	logger *slog.Logger,
 	metrics imetrics.Reporter,
 	closers ...io.Closer,
-) func(context.Context, chan<- []request.Span) {
+) func(context.Context, *msg.Queue[[]request.Span]) {
 	rbf := ringBufForwarder{
 		cfg: cfg, logger: logger, ringbuffer: ringbuffer,
 		closers: closers, reader: reader,
@@ -91,7 +92,7 @@ func ForwardRingbuf(
 	return rbf.readAndForward
 }
 
-func (rbf *ringBufForwarder) sharedReadAndForward(ctx context.Context, closers []io.Closer, spansChan chan<- []request.Span) {
+func (rbf *ringBufForwarder) sharedReadAndForward(ctx context.Context, closers []io.Closer, spansChan *msg.Queue[[]request.Span]) {
 	rbf.logger.Debug("start reading and forwarding")
 	// BPF will send each measured trace via Ring Buffer, so we listen for them from the
 	// user space.
@@ -108,7 +109,7 @@ func (rbf *ringBufForwarder) sharedReadAndForward(ctx context.Context, closers [
 	rbf.readAndForwardInner(eventsReader, spansChan)
 }
 
-func (rbf *ringBufForwarder) readAndForward(ctx context.Context, spansChan chan<- []request.Span) {
+func (rbf *ringBufForwarder) readAndForward(ctx context.Context, spansChan *msg.Queue[[]request.Span]) {
 	rbf.logger.Debug("start reading and forwarding")
 	// BPF will send each measured trace via Ring Buffer, so we listen for them from the
 	// user space.
@@ -129,7 +130,7 @@ func (rbf *ringBufForwarder) readAndForward(ctx context.Context, spansChan chan<
 	rbf.readAndForwardInner(eventsReader, spansChan)
 }
 
-func (rbf *ringBufForwarder) readAndForwardInner(eventsReader ringBufReader, spansChan chan<- []request.Span) {
+func (rbf *ringBufForwarder) readAndForwardInner(eventsReader ringBufReader, spansChan *msg.Queue[[]request.Span]) {
 	// Forwards periodically on timeout, if the batch is not full
 	if rbf.cfg.BatchTimeout > 0 {
 		rbf.ticker = time.NewTicker(rbf.cfg.BatchTimeout)
@@ -164,11 +165,11 @@ func (rbf *ringBufForwarder) readAndForwardInner(eventsReader ringBufReader, spa
 	}
 }
 
-func (rbf *ringBufForwarder) alreadyForwarded(ctx context.Context, _ []io.Closer, _ chan<- []request.Span) {
+func (rbf *ringBufForwarder) alreadyForwarded(ctx context.Context, _ []io.Closer, _ *msg.Queue[[]request.Span]) {
 	<-ctx.Done()
 }
 
-func (rbf *ringBufForwarder) processAndForward(record ringbuf.Record, spansChan chan<- []request.Span) {
+func (rbf *ringBufForwarder) processAndForward(record ringbuf.Record, spansChan *msg.Queue[[]request.Span]) {
 	rbf.access.Lock()
 	defer rbf.access.Unlock()
 	s, ignore, err := rbf.reader(rbf.cfg, &record, rbf.filter)
@@ -196,14 +197,14 @@ func (rbf *ringBufForwarder) processAndForward(record ringbuf.Record, spansChan 
 	}
 }
 
-func (rbf *ringBufForwarder) flushEvents(spansChan chan<- []request.Span) {
+func (rbf *ringBufForwarder) flushEvents(spansChan *msg.Queue[[]request.Span]) {
 	rbf.metrics.TracerFlush(rbf.spansLen)
-	spansChan <- rbf.filter.Filter(rbf.spans[:rbf.spansLen])
+	spansChan.Send(rbf.filter.Filter(rbf.spans[:rbf.spansLen]))
 	rbf.spans = make([]request.Span, rbf.cfg.BatchLength)
 	rbf.spansLen = 0
 }
 
-func (rbf *ringBufForwarder) bgFlushOnTimeout(spansChan chan<- []request.Span) {
+func (rbf *ringBufForwarder) bgFlushOnTimeout(spansChan *msg.Queue[[]request.Span]) {
 	for {
 		<-rbf.ticker.C
 		rbf.access.Lock()

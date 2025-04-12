@@ -9,7 +9,6 @@
 #include <common/runtime.h>
 #include <common/trace_common.h>
 
-#include <generictracer/http_maps.h>
 #include <generictracer/protocol_common.h>
 
 #include <maps/active_ssl_connections.h>
@@ -114,11 +113,27 @@ static __always_inline void http_get_or_create_trace_info(http_connection_metada
         bpf_dbg_printk("Using old traceparent id");
     }
 
-    // unsigned char tp_buf[TP_MAX_VAL_LENGTH];
-    // make_tp_string(tp_buf, &tp_p->tp);
-    // bpf_dbg_printk("tp: %s", tp_buf);
+#ifdef BPF_DEBUG
+    unsigned char tp_buf[TP_MAX_VAL_LENGTH];
+    make_tp_string(tp_buf, &tp_p->tp);
+    bpf_dbg_printk("tp: %s", tp_buf);
+#endif
 
-    if (k_bpf_traceparent_enabled) {
+    u8 skip_tp_parsing = 0;
+
+    // If we receive SSL request, we know that Beyla definitely didn't
+    // inject the traceparent via the header, so if we already have
+    // info about this transaction keep that, don't parse headers. Istio
+    // for example can forward headers as-is, which can give us a stale
+    // value.
+    if (meta) {
+        if (meta->type == EVENT_HTTP_REQUEST && found_tp && ssl) {
+            bpf_dbg_printk("skipping headers parsing because of existing tp info for SSL call");
+            skip_tp_parsing = 1;
+        }
+    }
+
+    if (k_bpf_traceparent_enabled && !skip_tp_parsing) {
         // The below buffer scan can be expensive on high volume of requests. We make it optional
         // for customers to enable it. Off by default.
         if (!capture_header_buffer) {
@@ -149,8 +164,10 @@ static __always_inline void http_get_or_create_trace_info(http_connection_metada
                 if (meta && meta->type != EVENT_HTTP_CLIENT) {
                     decode_hex(tp_p->tp.parent_id, s_id, SPAN_ID_CHAR_LEN);
                 }
-                // make_tp_string(tp_buf, &tp_p->tp);
-                // bpf_dbg_printk("tp: %s", tp_buf);
+#ifdef BPF_DEBUG
+                make_tp_string(tp_buf, &tp_p->tp);
+                bpf_dbg_printk("new tp: %s", tp_buf);
+#endif
             } else {
                 bpf_dbg_printk("No additional traceparent in headers, using what was made before",
                                res);
@@ -277,14 +294,6 @@ static __always_inline void finish_possible_delayed_http_request(pid_connection_
     }
 }
 
-static __always_inline void
-set_fallback_http_info(http_info_t *info, connection_info_t *conn, int len) {
-    info->start_monotime_ns = bpf_ktime_get_ns();
-    info->status = 0;
-    info->len = len;
-    bpf_map_update_elem(&ongoing_http_fallback, conn, info, BPF_ANY);
-}
-
 static __always_inline void process_http_request(
     http_info_t *info, int len, http_connection_metadata_t *meta, int direction, u16 orig_dport) {
     // Set pid and type early as best effort in case the request times out or dies.
@@ -387,22 +396,10 @@ int beyla_protocol_http(void *ctx) {
     }
 
     http_info_t *info = get_or_set_http_info(in, &args->pid_conn, args->packet_type);
-    u8 fallback = 0;
     if (!info) {
-        bpf_dbg_printk("No info, pid =%d?, looking for fallback...", args->pid_conn.pid);
-        info = (http_info_t *)bpf_map_lookup_elem(&ongoing_http_fallback, &args->pid_conn.conn);
-        if (!info) {
-            bpf_dbg_printk("No fallback either, giving up");
-            //dbg_print_http_connection_info(&pid_conn->conn); // commented out since GitHub CI doesn't like this call
-            return 0;
-        }
-        fallback = 1;
-        task_pid(&info->pid);
-        if (args->direction == TCP_RECV) {
-            info->type = EVENT_HTTP_CLIENT;
-        } else {
-            info->type = EVENT_HTTP_REQUEST;
-        }
+        bpf_dbg_printk("No info, pid =%d?", args->pid_conn.pid);
+        dbg_print_http_connection_info(&args->pid_conn.conn);
+        return 0;
     }
 
     bpf_dbg_printk("=== http_buffer_event len=%d pid=%d still_reading=%d ===",
@@ -447,14 +444,10 @@ int beyla_protocol_http(void *ctx) {
     } else if ((args->packet_type == PACKET_TYPE_RESPONSE) && (info->status == 0)) {
         handle_http_response(
             args->small_buf, &args->pid_conn, info, args->bytes_len, args->direction, args->ssl);
-        if (fallback) {
-            finish_http(info, &args->pid_conn);
-        }
     } else if (still_reading(info)) {
         info->len += args->bytes_len;
+        info->end_monotime_ns = bpf_ktime_get_ns();
     }
-
-    bpf_map_delete_elem(&ongoing_http_fallback, &args->pid_conn.conn);
 
     return 0;
 }

@@ -1,3 +1,3 @@
 //go:build beyla_bpf
 
-package headers
+package bpfcore

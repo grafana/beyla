@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"unsafe"
 
 	"github.com/cilium/ebpf"
 
@@ -18,6 +17,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/goexec"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/tctracer/tctracer.c -- -I../../../../bpf -I../../../../bpf
@@ -48,16 +48,16 @@ func (p *Tracer) BlockPID(uint32, uint32) {}
 func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 
 	if !ebpfcommon.HasHostPidAccess() {
-		return nil, fmt.Errorf("L4/L7 context-propagation requires host process ID access, e.g. hostPid:true")
+		return nil, fmt.Errorf("L4 context-propagation requires host process ID access, e.g. hostPid:true")
 	}
 
 	hostNet, err := ebpfcommon.HasHostNetworkAccess()
 	if err != nil {
-		return nil, fmt.Errorf("failed to check for host network access while enabling L4/L7 context-propagation, error: %w", err)
+		return nil, fmt.Errorf("failed to check for host network access while enabling IP context-propagation, error: %w", err)
 	}
 
 	if !hostNet {
-		return nil, fmt.Errorf("L4/L7 context-propagation requires host network access, e.g. hostNetwork:true")
+		return nil, fmt.Errorf("L4 context-propagation requires host network access, e.g. hostNetwork:true")
 	}
 
 	if p.cfg.EBPF.BpfDebug {
@@ -68,39 +68,10 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 }
 
 func (p *Tracer) SetupTailCalls() {
-	for _, tc := range []struct {
-		index int
-		prog  *ebpf.Program
-	}{
-		{
-			index: 0,
-			prog:  p.bpfObjects.BeylaPacketExtenderWriteMsgTp,
-		},
-	} {
-		err := p.bpfObjects.ExtenderJumpTable.Update(uint32(tc.index), uint32(tc.prog.FD()), ebpf.UpdateAny)
-
-		if err != nil {
-			p.log.Error("error loading info tail call jump table", "error", err)
-		}
-	}
 }
 
 func (p *Tracer) Constants() map[string]any {
-	m := make(map[string]any, 2)
-
-	m["wakeup_data_bytes"] = uint32(p.cfg.EBPF.WakeupLen) * uint32(unsafe.Sizeof(ebpfcommon.HTTPRequestTrace{}))
-
-	// The eBPF side does some basic filtering of events that do not belong to
-	// processes which we monitor. We filter more accurately in the userspace, but
-	// for performance reasons we enable the PID based filtering in eBPF.
-	// This must match httpfltr.go, otherwise we get partial events in userspace.
-	if !p.cfg.Discovery.SystemWide && !p.cfg.Discovery.BPFPidFilterOff {
-		m["filter_pids"] = int32(1)
-	} else {
-		m["filter_pids"] = int32(0)
-	}
-
-	return m
+	return nil
 }
 
 func (p *Tracer) RegisterOffsets(_ *exec.FileInfo, _ *goexec.Offsets) {}
@@ -136,22 +107,11 @@ func (p *Tracer) SocketFilters() []*ebpf.Program {
 }
 
 func (p *Tracer) SockMsgs() []ebpfcommon.SockMsg {
-	return []ebpfcommon.SockMsg{
-		{
-			Program:  p.bpfObjects.BeylaPacketExtender,
-			MapFD:    p.bpfObjects.bpfMaps.SockDir.FD(),
-			AttachAs: ebpf.AttachSkMsgVerdict,
-		},
-	}
+	return nil
 }
 
 func (p *Tracer) SockOps() []ebpfcommon.SockOps {
-	return []ebpfcommon.SockOps{
-		{
-			Program:  p.bpfObjects.BeylaSockmapTracker,
-			AttachAs: ebpf.AttachCGroupSockOps,
-		},
-	}
+	return nil
 }
 
 func (p *Tracer) RecordInstrumentedLib(uint64, []io.Closer) {}
@@ -169,17 +129,6 @@ func (p *Tracer) startTC(ctx context.Context) {
 		return
 	}
 
-	if p.cfg.EBPF.UseTCForL7CP {
-		p.log.Info("L7 context-propagation with Linux Traffic Control enabled, not using the regular L4/L7 support.")
-		return
-	}
-
-	if !p.cfg.EBPF.ContextPropagationEnabled {
-		return
-	}
-
-	p.log.Info("enabling L4/L7 context-propagation with Linux Traffic Control")
-
 	p.ifaceManager = tcmanager.NewInterfaceManager()
 	p.tcManager = tcmanager.NewTCManager(p.cfg.EBPF.TCBackend)
 	p.tcManager.SetInterfaceManager(p.ifaceManager)
@@ -189,7 +138,7 @@ func (p *Tracer) startTC(ctx context.Context) {
 	p.ifaceManager.Start(ctx)
 }
 
-func (p *Tracer) Run(ctx context.Context, _ chan<- []request.Span) {
+func (p *Tracer) Run(ctx context.Context, _ *msg.Queue[[]request.Span]) {
 	p.startTC(ctx)
 
 	errorCh := p.tcManager.Errors()

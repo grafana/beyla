@@ -7,7 +7,6 @@ data:
     attributes:
       kubernetes:
         enable: true
-        cluster_name: my-kube
         drop_external: true
         resource_labels:
           deployment.environment: ["deployment.environment"]
@@ -76,3 +75,5 @@ spec:
               value: "10ms"
             - name: BEYLA_BPF_BATCH_TIMEOUT
               value: "10ms"
+            - name: BEYLA_KUBE_CLUSTER_NAME
+              value: "beyla"

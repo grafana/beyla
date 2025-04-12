@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
-	"github.com/mariomac/pipes/pipe"
 
 	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
 	"github.com/grafana/beyla/v2/pkg/internal/helpers/maps"
@@ -16,6 +15,8 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
+	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 const (
@@ -55,16 +56,20 @@ type NameResolver struct {
 	sources maps.Bits
 }
 
-func NameResolutionProvider(ctx context.Context, ctxInfo *global.ContextInfo, cfg *NameResolverConfig) pipe.MiddleProvider[[]request.Span, []request.Span] {
-	return func() (pipe.MiddleFunc[[]request.Span, []request.Span], error) {
+func NameResolutionProvider(ctxInfo *global.ContextInfo, cfg *NameResolverConfig,
+	input, output *msg.Queue[[]request.Span]) swarm.InstanceFunc {
+	return func(ctx context.Context) (swarm.RunFunc, error) {
 		if cfg == nil || len(cfg.Sources) == 0 {
-			return pipe.Bypass[[]request.Span](), nil
+			// if no sources are configured, we just bypass the node
+			input.Bypass(output)
+			return swarm.EmptyRunFunc()
 		}
-		return nameResolver(ctx, ctxInfo, cfg)
+		return nameResolver(ctx, ctxInfo, cfg, input, output)
 	}
 }
 
-func nameResolver(ctx context.Context, ctxInfo *global.ContextInfo, cfg *NameResolverConfig) (pipe.MiddleFunc[[]request.Span, []request.Span], error) {
+func nameResolver(ctx context.Context, ctxInfo *global.ContextInfo, cfg *NameResolverConfig,
+	input, output *msg.Queue[[]request.Span]) (swarm.RunFunc, error) {
 	sources := resolverSources(cfg.Sources)
 
 	var kubeStore *kube2.Store
@@ -80,7 +85,8 @@ func nameResolver(ctx context.Context, ctxInfo *global.ContextInfo, cfg *NameRes
 	// after potentially remove k8s resolver, check again if
 	// this node needs to be bypassed
 	if sources == 0 {
-		return pipe.Bypass[[]request.Span](), nil
+		input.Bypass(output)
+		return swarm.EmptyRunFunc()
 	}
 
 	nr := NameResolver{
@@ -90,13 +96,17 @@ func nameResolver(ctx context.Context, ctxInfo *global.ContextInfo, cfg *NameRes
 		sources: sources,
 	}
 
-	return func(in <-chan []request.Span, out chan<- []request.Span) {
+	in := input.Subscribe()
+	return func(_ context.Context) {
+		// output channel must be closed so later stages in the pipeline can finish in cascade
+		defer output.Close()
+
 		for spans := range in {
 			for i := range spans {
 				s := &spans[i]
 				nr.resolveNames(s)
 			}
-			out <- spans
+			output.Send(spans)
 		}
 	}, nil
 }

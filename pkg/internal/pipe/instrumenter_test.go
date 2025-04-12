@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/mariomac/guara/pkg/test"
-	"github.com/mariomac/pipes/pipe"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/pmetric"
@@ -29,6 +28,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/testutil"
 	"github.com/grafana/beyla/v2/pkg/internal/traces"
 	"github.com/grafana/beyla/v2/pkg/kubeflags"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 	"github.com/grafana/beyla/v2/pkg/transform"
 	"github.com/grafana/beyla/v2/test/collector"
 	"github.com/grafana/beyla/v2/test/consumer"
@@ -65,7 +65,8 @@ func TestBasicPipeline(t *testing.T) {
 	tc, err := collector.Start(ctx)
 	require.NoError(t, err)
 
-	gb := newGraphBuilder(ctx, &beyla.Config{
+	tracesInput := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
+	gb := newGraphBuilder(&beyla.Config{
 		Metrics: otel.MetricsConfig{
 			Features:        []string{otel.FeatureApplication},
 			MetricsEndpoint: tc.ServerEndpoint, Interval: 10 * time.Millisecond,
@@ -75,19 +76,12 @@ func TestBasicPipeline(t *testing.T) {
 				instrumentations.InstrumentationALL,
 			},
 		},
-		Attributes: beyla.Attributes{Select: allMetrics},
-	}, gctx(0), make(<-chan []request.Span))
+		Attributes: beyla.Attributes{Select: allMetrics, InstanceID: traces.InstanceIDConfig{OverrideHostname: "the-host"}},
+	}, gctx(0), tracesInput)
 
 	// Override eBPF tracer to send some fake data
-	pipe.AddStart(gb.builder, tracesReader,
-		func(out chan<- []request.Span) {
-			out <- newRequest("foo-svc", "GET", "/foo/bar", "1.1.1.1:3456", 404)
-			// closing prematurely the input node would finish the whole graph processing
-			// and OTEL exporters could be closed, so we wait.
-			time.Sleep(testTimeout)
-		},
-	)
-	pipe, err := gb.buildGraph()
+	tracesInput.Send(newRequest("foo-svc", "GET", "/foo/bar", "1.1.1.1:3456", 404))
+	pipe, err := gb.buildGraph(ctx)
 	require.NoError(t, err)
 
 	go pipe.Run(ctx)
@@ -133,24 +127,21 @@ func TestTracerPipeline(t *testing.T) {
 	tc, err := collector.Start(ctx)
 	require.NoError(t, err)
 
-	gb := newGraphBuilder(ctx, &beyla.Config{
+	tracesInput := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
+	gb := newGraphBuilder(&beyla.Config{
 		Traces: otel.TracesConfig{
 			BatchTimeout:      10 * time.Millisecond,
 			TracesEndpoint:    tc.ServerEndpoint,
 			ReportersCacheLen: 16,
 			Instrumentations:  []string{instrumentations.InstrumentationALL},
 		},
-	}, gctx(0), make(<-chan []request.Span))
-	// Override eBPF tracer to send some fake data
-	pipe.AddStart(gb.builder, tracesReader,
-		func(out chan<- []request.Span) {
-			out <- newRequest("bar-svc", "GET", "/foo/bar", "1.1.1.1:3456", 404)
-			// closing prematurely the input node would finish the whole graph processing
-			// and OTEL exporters could be closed, so we wait.
-			time.Sleep(testTimeout)
-		})
+		Attributes: beyla.Attributes{InstanceID: traces.InstanceIDConfig{OverrideHostname: "the-host"}},
+	}, gctx(0), tracesInput)
 
-	pipe, err := gb.buildGraph()
+	// Override eBPF tracer to send some fake data
+	tracesInput.Send(newRequest("bar-svc", "GET", "/foo/bar", "1.1.1.1:3456", 404))
+
+	pipe, err := gb.buildGraph(ctx)
 	require.NoError(t, err)
 
 	go pipe.Run(ctx)
@@ -171,20 +162,16 @@ func TestTracerReceiverPipeline(t *testing.T) {
 	require.NoError(t, err)
 	consumer := consumer.MockTraceConsumer{Endpoint: tc.ServerEndpoint}
 	require.NoError(t, err)
-	gb := newGraphBuilder(ctx, &beyla.Config{
+	tracesInput := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
+	gb := newGraphBuilder(&beyla.Config{
 		TracesReceiver: beyla.TracesReceiverConfig{
 			Traces: []beyla.Consumer{&consumer},
 		},
-	}, gctx(0), make(<-chan []request.Span))
+		Attributes: beyla.Attributes{InstanceID: traces.InstanceIDConfig{OverrideHostname: "the-host"}},
+	}, gctx(0), tracesInput)
 	// Override eBPF tracer to send some fake data
-	pipe.AddStart(gb.builder, tracesReader,
-		func(out chan<- []request.Span) {
-			out <- newRequest("bar-svc", "GET", "/foo/bar", "1.1.1.1:3456", 404)
-			// closing prematurely the input node would finish the whole graph processing
-			// and OTEL exporters could be closed, so we wait.
-			time.Sleep(testTimeout)
-		})
-	pipe, err := gb.buildGraph()
+	tracesInput.Send(newRequest("bar-svc", "GET", "/foo/bar", "1.1.1.1:3456", 404))
+	pipe, err := gb.buildGraph(ctx)
 	require.NoError(t, err)
 
 	go pipe.Run(ctx)
@@ -203,24 +190,18 @@ func BenchmarkTestTracerPipeline(b *testing.B) {
 		defer cancel()
 
 		tc, _ := collector.Start(ctx)
-
-		gb := newGraphBuilder(ctx, &beyla.Config{
+		tracesInput := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
+		gb := newGraphBuilder(&beyla.Config{
 			Traces: otel.TracesConfig{
 				BatchTimeout:      10 * time.Millisecond,
 				TracesEndpoint:    tc.ServerEndpoint,
 				ReportersCacheLen: 16,
 				Instrumentations:  []string{instrumentations.InstrumentationALL},
 			},
-		}, gctx(0), make(<-chan []request.Span))
+		}, gctx(0), tracesInput)
 		// Override eBPF tracer to send some fake data
-		pipe.AddStart(gb.builder, tracesReader,
-			func(out chan<- []request.Span) {
-				out <- newRequest("bar-svc", "GET", "/foo/bar", "1.1.1.1:3456", 404)
-				// closing prematurely the input node would finish the whole graph processing
-				// and OTEL exporters could be closed, so we wait.
-				time.Sleep(testTimeout)
-			})
-		pipe, _ := gb.buildGraph()
+		tracesInput.Send(newRequest("bar-svc", "GET", "/foo/bar", "1.1.1.1:3456", 404))
+		pipe, _ := gb.buildGraph(ctx)
 
 		go pipe.Run(ctx)
 		t := &testing.T{}
@@ -237,23 +218,20 @@ func TestTracerPipelineBadTimestamps(t *testing.T) {
 	tc, err := collector.Start(ctx)
 	require.NoError(t, err)
 
-	gb := newGraphBuilder(ctx, &beyla.Config{
+	tracesInput := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
+	gb := newGraphBuilder(&beyla.Config{
 		Traces: otel.TracesConfig{
 			BatchTimeout:      10 * time.Millisecond,
 			TracesEndpoint:    tc.ServerEndpoint,
 			ReportersCacheLen: 16,
 			Instrumentations:  []string{instrumentations.InstrumentationALL},
 		},
-	}, gctx(0), make(<-chan []request.Span))
+	}, gctx(0), tracesInput)
 	// Override eBPF tracer to send some fake data
-	pipe.AddStart(gb.builder, tracesReader,
-		func(out chan<- []request.Span) {
-			out <- newRequestWithTiming("svc1", request.EventTypeHTTP, "GET", "/attach", "2.2.2.2:1234", 200, 60000, 59999, 70000)
-			// closing prematurely the input node would finish the whole graph processing
-			// and OTEL exporters could be closed, so we wait.
-			time.Sleep(testTimeout)
-		})
-	pipe, err := gb.buildGraph()
+	tracesInput.Send(newRequestWithTiming("svc1", request.EventTypeHTTP, "GET", "/attach", "2.2.2.2:1234", 200, 60000, 59999, 70000))
+	// closing prematurely the input node would finish the whole graph processing
+	// and OTEL exporters could be closed, so we wait.
+	pipe, err := gb.buildGraph(ctx)
 	require.NoError(t, err)
 
 	go pipe.Run(ctx)
@@ -269,7 +247,8 @@ func TestRouteConsolidation(t *testing.T) {
 	tc, err := collector.Start(ctx)
 	require.NoError(t, err)
 
-	gb := newGraphBuilder(ctx, &beyla.Config{
+	tracesInput := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
+	gb := newGraphBuilder(&beyla.Config{
 		Metrics: otel.MetricsConfig{
 			Features:        []string{otel.FeatureApplication},
 			MetricsEndpoint: tc.ServerEndpoint, Interval: 10 * time.Millisecond,
@@ -280,19 +259,13 @@ func TestRouteConsolidation(t *testing.T) {
 			},
 		},
 		Routes:     &transform.RoutesConfig{Patterns: []string{"/user/{id}", "/products/{id}/push"}},
-		Attributes: beyla.Attributes{Select: allMetricsBut("client.address", "url.path")},
-	}, gctx(attributes.GroupHTTPRoutes), make(<-chan []request.Span))
+		Attributes: beyla.Attributes{Select: allMetricsBut("client.address", "url.path"), InstanceID: traces.InstanceIDConfig{OverrideHostname: "the-host"}},
+	}, gctx(attributes.GroupHTTPRoutes), tracesInput)
 	// Override eBPF tracer to send some fake data
-	pipe.AddStart(gb.builder, tracesReader,
-		func(out chan<- []request.Span) {
-			out <- newRequest("svc-1", "GET", "/user/1234", "1.1.1.1:3456", 200)
-			out <- newRequest("svc-1", "GET", "/products/3210/push", "1.1.1.1:3456", 200)
-			out <- newRequest("svc-1", "GET", "/attach", "1.1.1.1:3456", 200)
-			// closing prematurely the input node would finish the whole graph processing
-			// and OTEL exporters could be closed, so we wait.
-			time.Sleep(testTimeout)
-		})
-	pipe, err := gb.buildGraph()
+	tracesInput.Send(newRequest("svc-1", "GET", "/user/1234", "1.1.1.1:3456", 200))
+	tracesInput.Send(newRequest("svc-1", "GET", "/products/3210/push", "1.1.1.1:3456", 200))
+	tracesInput.Send(newRequest("svc-1", "GET", "/attach", "1.1.1.1:3456", 200))
+	pipe, err := gb.buildGraph(ctx)
 	require.NoError(t, err)
 
 	go pipe.Run(ctx)
@@ -392,7 +365,8 @@ func TestGRPCPipeline(t *testing.T) {
 	tc, err := collector.Start(ctx)
 	require.NoError(t, err)
 
-	gb := newGraphBuilder(ctx, &beyla.Config{
+	tracesInput := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
+	gb := newGraphBuilder(&beyla.Config{
 		Metrics: otel.MetricsConfig{
 			Features:        []string{otel.FeatureApplication},
 			MetricsEndpoint: tc.ServerEndpoint, Interval: time.Millisecond,
@@ -402,17 +376,11 @@ func TestGRPCPipeline(t *testing.T) {
 				instrumentations.InstrumentationALL,
 			},
 		},
-		Attributes: beyla.Attributes{Select: allMetrics},
-	}, gctx(0), make(<-chan []request.Span))
+		Attributes: beyla.Attributes{Select: allMetrics, InstanceID: traces.InstanceIDConfig{OverrideHostname: "the-host"}},
+	}, gctx(0), tracesInput)
 	// Override eBPF tracer to send some fake data
-	pipe.AddStart(gb.builder, tracesReader,
-		func(out chan<- []request.Span) {
-			out <- newGRPCRequest("grpc-svc", "/foo/bar", 3)
-			// closing prematurely the input node would finish the whole graph processing
-			// and OTEL exporters could be closed, so we wait.
-			time.Sleep(testTimeout)
-		})
-	pipe, err := gb.buildGraph()
+	tracesInput.Send(newGRPCRequest("grpc-svc", "/foo/bar", 3))
+	pipe, err := gb.buildGraph(ctx)
 	require.NoError(t, err)
 
 	go pipe.Run(ctx)
@@ -456,22 +424,18 @@ func TestTraceGRPCPipeline(t *testing.T) {
 	tc, err := collector.Start(ctx)
 	require.NoError(t, err)
 
-	gb := newGraphBuilder(ctx, &beyla.Config{
+	tracesInput := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
+	gb := newGraphBuilder(&beyla.Config{
 		Traces: otel.TracesConfig{
 			TracesEndpoint: tc.ServerEndpoint,
 			BatchTimeout:   time.Millisecond, ReportersCacheLen: 16,
 			Instrumentations: []string{instrumentations.InstrumentationALL},
 		},
-	}, gctx(0), make(<-chan []request.Span))
+		Attributes: beyla.Attributes{InstanceID: traces.InstanceIDConfig{OverrideHostname: "the-host"}},
+	}, gctx(0), tracesInput)
 	// Override eBPF tracer to send some fake data
-	pipe.AddStart(gb.builder, tracesReader,
-		func(out chan<- []request.Span) {
-			out <- newGRPCRequest("svc", "foo.bar", 3)
-			// closing prematurely the input node would finish the whole graph processing
-			// and OTEL exporters could be closed, so we wait.
-			time.Sleep(testTimeout)
-		})
-	pipe, err := gb.buildGraph()
+	tracesInput.Send(newGRPCRequest("svc", "foo.bar", 3))
+	pipe, err := gb.buildGraph(ctx)
 	require.NoError(t, err)
 
 	go pipe.Run(ctx)
@@ -491,8 +455,8 @@ func TestBasicPipelineInfo(t *testing.T) {
 	tc, err := collector.Start(ctx)
 	require.NoError(t, err)
 
-	tracesInput := make(chan []request.Span, 10)
-	gb := newGraphBuilder(ctx, &beyla.Config{
+	tracesInput := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
+	gb := newGraphBuilder(&beyla.Config{
 		Metrics: otel.MetricsConfig{
 			Features:        []string{otel.FeatureApplication},
 			MetricsEndpoint: tc.ServerEndpoint,
@@ -508,8 +472,8 @@ func TestBasicPipelineInfo(t *testing.T) {
 		},
 	}, gctx(0), tracesInput)
 	// send some fake data through the traces' input
-	tracesInput <- newHTTPInfo("PATCH", "/aaa/bbb", "1.1.1.1", 204)
-	pipe, err := gb.buildGraph()
+	tracesInput.Send(newHTTPInfo("PATCH", "/aaa/bbb", "1.1.1.1", 204))
+	pipe, err := gb.buildGraph(ctx)
 	require.NoError(t, err)
 
 	go pipe.Run(ctx)
@@ -553,15 +517,14 @@ func TestTracerPipelineInfo(t *testing.T) {
 	tc, err := collector.Start(ctx)
 	require.NoError(t, err)
 
-	gb := newGraphBuilder(ctx, &beyla.Config{
-		Traces: otel.TracesConfig{TracesEndpoint: tc.ServerEndpoint, ReportersCacheLen: 16, Instrumentations: []string{instrumentations.InstrumentationALL}},
-	}, gctx(0), make(<-chan []request.Span))
+	tracesInput := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
+	gb := newGraphBuilder(&beyla.Config{
+		Traces:     otel.TracesConfig{TracesEndpoint: tc.ServerEndpoint, ReportersCacheLen: 16, Instrumentations: []string{instrumentations.InstrumentationALL}},
+		Attributes: beyla.Attributes{InstanceID: traces.InstanceIDConfig{OverrideHostname: "the-host"}},
+	}, gctx(0), tracesInput)
 	// Override eBPF tracer to send some fake data
-	pipe.AddStart(gb.builder, tracesReader,
-		func(out chan<- []request.Span) {
-			out <- newHTTPInfo("PATCH", "/aaa/bbb", "1.1.1.1", 204)
-		})
-	pipe, err := gb.buildGraph()
+	tracesInput.Send(newHTTPInfo("PATCH", "/aaa/bbb", "1.1.1.1", 204))
+	pipe, err := gb.buildGraph(ctx)
 	require.NoError(t, err)
 
 	go pipe.Run(ctx)
@@ -578,7 +541,8 @@ func TestSpanAttributeFilterNode(t *testing.T) {
 	require.NoError(t, err)
 
 	// Application pipeline that will let only pass spans whose url.path matches /user/*
-	gb := newGraphBuilder(ctx, &beyla.Config{
+	tracesInput := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
+	gb := newGraphBuilder(&beyla.Config{
 		Metrics: otel.MetricsConfig{
 			SDKLogLevel:     "debug",
 			Features:        []string{otel.FeatureApplication},
@@ -590,20 +554,16 @@ func TestSpanAttributeFilterNode(t *testing.T) {
 		Filters: filter.AttributesConfig{
 			Application: map[string]filter.MatchDefinition{"url.path": {Match: "/user/*"}},
 		},
-		Attributes: beyla.Attributes{Select: allMetrics},
-	}, gctx(0), make(<-chan []request.Span))
+		Attributes: beyla.Attributes{Select: allMetrics, InstanceID: traces.InstanceIDConfig{OverrideHostname: "the-host"}},
+	}, gctx(0), tracesInput)
+
 	// Override eBPF tracer to send some fake data
-	pipe.AddStart(gb.builder, tracesReader,
-		func(out chan<- []request.Span) {
-			out <- newRequest("svc-0", "GET", "/products/3210/push", "1.1.1.1:3456", 200)
-			out <- newRequest("svc-1", "GET", "/user/1234", "1.1.1.1:3456", 201)
-			out <- newRequest("svc-2", "GET", "/products/3210/push", "1.1.1.1:3456", 202)
-			out <- newRequest("svc-3", "GET", "/user/4321", "1.1.1.1:3456", 203)
-			// closing prematurely the input node would finish the whole graph processing
-			// and OTEL exporters could be closed, so we wait.
-			time.Sleep(testTimeout)
-		})
-	pipe, err := gb.buildGraph()
+	tracesInput.Send(newRequest("svc-0", "GET", "/products/3210/push", "1.1.1.1:3456", 200))
+	tracesInput.Send(newRequest("svc-1", "GET", "/user/1234", "1.1.1.1:3456", 201))
+	tracesInput.Send(newRequest("svc-2", "GET", "/products/3210/push", "1.1.1.1:3456", 202))
+	tracesInput.Send(newRequest("svc-3", "GET", "/user/4321", "1.1.1.1:3456", 203))
+
+	pipe, err := gb.buildGraph(ctx)
 	require.NoError(t, err)
 
 	go pipe.Run(ctx)

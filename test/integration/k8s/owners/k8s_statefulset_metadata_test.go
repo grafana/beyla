@@ -68,7 +68,7 @@ func TestStatefulSetMetadata(t *testing.T) {
 						{Key: "k8s.pod.start_time", Type: "string", Value: k8s.TimeRegex},
 						{Key: "k8s.statefulset.name", Type: "string", Value: "^statefulservice$"},
 						{Key: "k8s.namespace.name", Type: "string", Value: "^default$"},
-						{Key: "k8s.cluster.name", Type: "string", Value: "^beyla$"},
+						{Key: "k8s.cluster.name", Type: "string", Value: "^beyla-k8s-test-cluster$"},
 						{Key: "service.namespace", Type: "string", Value: "^default$"},
 						{Key: "service.instance.id", Type: "string", Value: "^default\\.statefulservice-.+\\.statefulservice"},
 					}, trace.Processes[parent.ProcessID].Tags)

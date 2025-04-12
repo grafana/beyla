@@ -15,6 +15,7 @@ import (
 	"github.com/vishvananda/netlink"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
+	"github.com/grafana/beyla/v2/pkg/config"
 	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/v2/pkg/internal/exec"
 	"github.com/grafana/beyla/v2/pkg/internal/goexec"
@@ -22,6 +23,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/ifaces"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/generictracer/generictracer.c -- -I../../../../bpf
@@ -127,7 +129,9 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 		loader = loadBpf_debug
 	}
 
-	if p.cfg.EBPF.TrackRequestHeaders || p.cfg.EBPF.UseTCForL7CP || p.cfg.EBPF.ContextPropagationEnabled {
+	if p.cfg.EBPF.TrackRequestHeaders ||
+		p.cfg.EBPF.UseTCForL7CP ||
+		p.cfg.EBPF.ContextPropagation != config.ContextPropagationDisabled {
 		if ebpfcommon.SupportsEBPFLoops(p.log, p.cfg.EBPF.OverrideBPFLoopEnabled) {
 			p.log.Info("Found compatible Linux kernel, enabling trace information parsing")
 			loader = loadBpf_tp
@@ -195,7 +199,9 @@ func (p *Tracer) Constants() map[string]any {
 		m["filter_pids"] = int32(0)
 	}
 
-	if p.cfg.EBPF.TrackRequestHeaders || p.cfg.EBPF.UseTCForL7CP || p.cfg.EBPF.ContextPropagationEnabled {
+	if p.cfg.EBPF.TrackRequestHeaders ||
+		p.cfg.EBPF.UseTCForL7CP ||
+		p.cfg.EBPF.ContextPropagation != config.ContextPropagationDisabled {
 		m["capture_header_buffer"] = int32(1)
 	} else {
 		m["capture_header_buffer"] = int32(0)
@@ -314,7 +320,7 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.ProbeDesc {
 		},
 	}
 
-	if p.cfg.EBPF.ContextPropagationEnabled {
+	if p.cfg.EBPF.ContextPropagation != config.ContextPropagationDisabled {
 		// tcp_rate_check_app_limited and tcp_sendmsg_fastopen are backup
 		// for tcp_sendmsg_locked which doesn't fire on certain kernels
 		// if sk_msg is attached.
@@ -436,7 +442,7 @@ func (p *Tracer) AlreadyInstrumentedLib(id uint64) bool {
 	return module != nil
 }
 
-func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span) {
+func (p *Tracer) Run(ctx context.Context, eventsChan *msg.Queue[[]request.Span]) {
 	// At this point we now have loaded the bpf objects, which means we should insert any
 	// pids that are allowed into the bpf map
 	if p.bpfObjects.ValidPids != nil {
@@ -467,7 +473,7 @@ func kernelTime(ktime uint64) time.Time {
 }
 
 //nolint:cyclop
-func (p *Tracer) lookForTimeouts(ticker *time.Ticker, eventsChan chan<- []request.Span) {
+func (p *Tracer) lookForTimeouts(ticker *time.Ticker, eventsChan *msg.Queue[[]request.Span]) {
 	for t := range ticker.C {
 		if p.bpfObjects.OngoingHttp != nil {
 			i := p.bpfObjects.OngoingHttp.Iterate()
@@ -483,7 +489,7 @@ func (p *Tracer) lookForTimeouts(ticker *time.Ticker, eventsChan chan<- []reques
 					// ebpf2go outputs
 					s, ignore, err := ebpfcommon.HTTPInfoEventToSpan(*(*ebpfcommon.BPFHTTPInfo)(unsafe.Pointer(&v)))
 					if !ignore && err == nil {
-						eventsChan <- p.pidsFilter.Filter([]request.Span{s})
+						eventsChan.Send(p.pidsFilter.Filter([]request.Span{s}))
 					}
 					if err := p.bpfObjects.OngoingHttp.Delete(k); err != nil {
 						p.log.Debug("Error deleting ongoing request", "error", err)
@@ -500,7 +506,7 @@ func (p *Tracer) lookForTimeouts(ticker *time.Ticker, eventsChan chan<- []reques
 						}
 						s.End = s.Start + p.cfg.EBPF.HTTPRequestTimeout.Nanoseconds()
 
-						eventsChan <- p.pidsFilter.Filter([]request.Span{s})
+						eventsChan.Send(p.pidsFilter.Filter([]request.Span{s}))
 					}
 					if err := p.bpfObjects.OngoingHttp.Delete(k); err != nil {
 						p.log.Debug("Error deleting ongoing request", "error", err)

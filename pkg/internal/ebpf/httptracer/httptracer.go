@@ -16,6 +16,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/goexec"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/httptracer/httptracer.c -- -I../../../../bpf
@@ -142,7 +143,7 @@ func (p *Tracer) startTC(ctx context.Context) {
 	p.ifaceManager.Start(ctx)
 }
 
-func (p *Tracer) Run(ctx context.Context, _ chan<- []request.Span) {
+func (p *Tracer) Run(ctx context.Context, _ *msg.Queue[[]request.Span]) {
 	p.startTC(ctx)
 
 	errorCh := p.tcManager.Errors()

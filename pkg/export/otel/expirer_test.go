@@ -16,6 +16,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 	"github.com/grafana/beyla/v2/test/collector"
 )
 
@@ -140,8 +141,8 @@ func TestAppMetricsExpiration_ByMetricAttrs(t *testing.T) {
 	now := syncedClock{now: time.Now()}
 	timeNow = now.Now
 
+	metrics := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(20))
 	otelExporter, err := ReportMetrics(
-		ctx,
 		&global.ContextInfo{}, &MetricsConfig{
 			Interval:          50 * time.Millisecond,
 			CommonEndpoint:    otlp.ServerEndpoint,
@@ -156,18 +157,16 @@ func TestAppMetricsExpiration_ByMetricAttrs(t *testing.T) {
 			attributes.HTTPServerDuration.Section: attributes.InclusionLists{
 				Include: []string{"url.path"},
 			},
-		})()
-
+		}, metrics)(ctx)
 	require.NoError(t, err)
 
-	metrics := make(chan []request.Span, 20)
-	go otelExporter(metrics)
+	go otelExporter(ctx)
 
 	// WHEN it receives metrics
-	metrics <- []request.Span{
+	metrics.Send([]request.Span{
 		{Service: svc.Attrs{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeHTTP, Path: "/foo", RequestStart: 100, End: 200},
 		{Service: svc.Attrs{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeHTTP, Path: "/bar", RequestStart: 150, End: 175},
-	}
+	})
 
 	// THEN the metrics are exported
 	test.Eventually(t, timeout, func(t require.TestingT) {
@@ -188,9 +187,9 @@ func TestAppMetricsExpiration_ByMetricAttrs(t *testing.T) {
 
 	// AND WHEN it keeps receiving a subset of the initial metrics during the TTL
 	now.Advance(2 * time.Minute)
-	metrics <- []request.Span{
+	metrics.Send([]request.Span{
 		{Service: svc.Attrs{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeHTTP, Path: "/foo", RequestStart: 250, End: 280},
-	}
+	})
 
 	// THEN THE metrics that have been received during the TTL period are still visible
 	test.Eventually(t, timeout, func(t require.TestingT) {
@@ -202,9 +201,9 @@ func TestAppMetricsExpiration_ByMetricAttrs(t *testing.T) {
 	})
 
 	now.Advance(2 * time.Minute)
-	metrics <- []request.Span{
+	metrics.Send([]request.Span{
 		{Service: svc.Attrs{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeHTTP, Path: "/foo", RequestStart: 300, End: 310},
-	}
+	})
 
 	// makes sure that the records channel is emptied and any remaining
 	// old metric is sent and then the channel is re-emptied
@@ -230,9 +229,9 @@ func TestAppMetricsExpiration_ByMetricAttrs(t *testing.T) {
 
 	// AND WHEN the metrics labels that disappeared are received again
 	now.Advance(2 * time.Minute)
-	metrics <- []request.Span{
+	metrics.Send([]request.Span{
 		{Service: svc.Attrs{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeHTTP, Path: "/bar", RequestStart: 450, End: 520},
-	}
+	})
 
 	// THEN they are reported again, starting from zero in the case of counters
 	test.Eventually(t, timeout, func(t require.TestingT) {
@@ -259,8 +258,8 @@ func TestAppMetricsExpiration_BySvcID(t *testing.T) {
 	now := syncedClock{now: time.Now()}
 	timeNow = now.Now
 
+	metrics := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(20))
 	otelExporter, err := ReportMetrics(
-		ctx,
 		&global.ContextInfo{}, &MetricsConfig{
 			Interval:          50 * time.Millisecond,
 			CommonEndpoint:    otlp.ServerEndpoint,
@@ -275,18 +274,16 @@ func TestAppMetricsExpiration_BySvcID(t *testing.T) {
 			attributes.HTTPServerDuration.Section: attributes.InclusionLists{
 				Include: []string{"url.path"},
 			},
-		})()
-
+		}, metrics)(ctx)
 	require.NoError(t, err)
 
-	metrics := make(chan []request.Span, 20)
-	go otelExporter(metrics)
+	go otelExporter(ctx)
 
 	// WHEN it receives metrics
-	metrics <- []request.Span{
+	metrics.Send([]request.Span{
 		{Service: svc.Attrs{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeHTTP, Path: "/foo", RequestStart: 100, End: 200},
 		{Service: svc.Attrs{UID: svc.UID{Instance: "bar"}}, Type: request.EventTypeHTTP, Path: "/bar", RequestStart: 150, End: 175},
-	}
+	})
 
 	// THEN the metrics are exported
 	test.Eventually(t, timeout, func(t require.TestingT) {
@@ -307,9 +304,9 @@ func TestAppMetricsExpiration_BySvcID(t *testing.T) {
 
 	// AND WHEN it keeps receiving a subset of the initial metrics during the TTL
 	now.Advance(2 * time.Minute)
-	metrics <- []request.Span{
+	metrics.Send([]request.Span{
 		{Service: svc.Attrs{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeHTTP, Path: "/foo", RequestStart: 250, End: 280},
-	}
+	})
 
 	// THEN THE metrics that have been received during the TTL period are still visible
 	test.Eventually(t, timeout, func(t require.TestingT) {
@@ -321,9 +318,9 @@ func TestAppMetricsExpiration_BySvcID(t *testing.T) {
 	})
 
 	now.Advance(2 * time.Minute)
-	metrics <- []request.Span{
+	metrics.Send([]request.Span{
 		{Service: svc.Attrs{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeHTTP, Path: "/foo", RequestStart: 300, End: 310},
-	}
+	})
 
 	// BUT not the metrics that haven't been received during that time.
 	// We just know it because OTEL will only sends foo/bar metric.
@@ -350,9 +347,9 @@ func TestAppMetricsExpiration_BySvcID(t *testing.T) {
 	})
 	// AND WHEN the metrics labels that disappeared are received again
 	now.Advance(2 * time.Minute)
-	metrics <- []request.Span{
+	metrics.Send([]request.Span{
 		{Service: svc.Attrs{UID: svc.UID{Instance: "bar"}}, Type: request.EventTypeHTTP, Path: "/bar", RequestStart: 450, End: 520},
-	}
+	})
 
 	// THEN they are reported again, starting from zero in the case of counters
 	test.Eventually(t, timeout, func(t require.TestingT) {

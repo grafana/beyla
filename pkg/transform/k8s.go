@@ -7,13 +7,13 @@ import (
 	"maps"
 	"time"
 
-	"github.com/mariomac/pipes/pipe"
-
 	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
 	"github.com/grafana/beyla/v2/pkg/internal/kube"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/kubeflags"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
+	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 func klog() *slog.Logger {
@@ -72,20 +72,26 @@ const (
 )
 
 func KubeDecoratorProvider(
-	ctx context.Context,
-	cfg *KubernetesDecorator,
 	ctxInfo *global.ContextInfo,
-) pipe.MiddleProvider[[]request.Span, []request.Span] {
-	return func() (pipe.MiddleFunc[[]request.Span, []request.Span], error) {
+	cfg *KubernetesDecorator,
+	input, output *msg.Queue[[]request.Span],
+) swarm.InstanceFunc {
+	return func(ctx context.Context) (swarm.RunFunc, error) {
 		if !ctxInfo.K8sInformer.IsKubeEnabled() {
 			// if kubernetes decoration is disabled, we just bypass the node
-			return pipe.Bypass[[]request.Span](), nil
+			input.Bypass(output)
+			return swarm.EmptyRunFunc()
 		}
 		metaStore, err := ctxInfo.K8sInformer.Get(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("inititalizing KubeDecoratorProvider: %w", err)
 		}
-		decorator := &metadataDecorator{db: metaStore, clusterName: KubeClusterName(ctx, cfg)}
+		decorator := &metadataDecorator{
+			db:          metaStore,
+			clusterName: KubeClusterName(ctx, cfg, ctxInfo.K8sInformer),
+			input:       input.Subscribe(),
+			output:      output,
+		}
 		return decorator.nodeLoop, nil
 	}
 }
@@ -93,16 +99,20 @@ func KubeDecoratorProvider(
 type metadataDecorator struct {
 	db          *kube.Store
 	clusterName string
+	input       <-chan []request.Span
+	output      *msg.Queue[[]request.Span]
 }
 
-func (md *metadataDecorator) nodeLoop(in <-chan []request.Span, out chan<- []request.Span) {
+func (md *metadataDecorator) nodeLoop(_ context.Context) {
+	// output channel must be closed so later stages in the pipeline can finish in cascade
+	defer md.output.Close()
 	klog().Debug("starting kubernetes decoration loop")
-	for spans := range in {
+	for spans := range md.input {
 		// in-place decoration and forwarding
 		for i := range spans {
 			md.do(&spans[i])
 		}
-		out <- spans
+		md.output.Send(spans)
 	}
 	klog().Debug("stopping kubernetes decoration loop")
 }
@@ -194,7 +204,7 @@ func OwnerLabelName(kind string) attr.Name {
 	}
 }
 
-func KubeClusterName(ctx context.Context, cfg *KubernetesDecorator) string {
+func KubeClusterName(ctx context.Context, cfg *KubernetesDecorator, k8sInformer *kube.MetadataProvider) string {
 	log := klog().With("func", "KubeClusterName")
 	if cfg.ClusterName != "" {
 		log.Debug("using cluster name from configuration", "cluster_name", cfg.ClusterName)
@@ -202,7 +212,7 @@ func KubeClusterName(ctx context.Context, cfg *KubernetesDecorator) string {
 	}
 	retries := 0
 	for retries < clusterMetadataRetries {
-		if clusterName := fetchClusterName(ctx); clusterName != "" {
+		if clusterName := fetchClusterName(ctx, k8sInformer); clusterName != "" {
 			return clusterName
 		}
 		retries++

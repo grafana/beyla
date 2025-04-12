@@ -23,6 +23,16 @@ const (
 	kubeConfigEnvVariable = "KUBECONFIG"
 )
 
+// Some cloud providers store the cluster name as a Node label.
+// This greatly facilitates the retrieval of the cluster name, as we
+// don't need to rely on provider-specific APIs.
+// TODO: update with labels from other providers, or newer labels as long as specs are updated
+var clusterNameNodeLabels = []string{
+	"alpha.eksctl.io/cluster-name",
+	"cluster.x-k8s.io/cluster-name",
+	"kubernetes.azure.com/cluster",
+}
+
 func klog() *slog.Logger {
 	return slog.With("component", "kube.MetadataProvider")
 }
@@ -45,6 +55,7 @@ type MetadataProvider struct {
 	informer meta.Notifier
 
 	localNodeName string
+	clusterName   string
 
 	cfg *MetadataConfig
 }
@@ -141,6 +152,22 @@ func (mp *MetadataProvider) CurrentNodeName(ctx context.Context) (string, error)
 	return mp.localNodeName, nil
 }
 
+func (mp *MetadataProvider) ClusterName(ctx context.Context) (string, error) {
+	if mp.clusterName != "" {
+		return mp.clusterName, nil
+	}
+	// make sure that node name has been fetched and cached previously
+	if _, err := mp.CurrentNodeName(ctx); err != nil {
+		return "", fmt.Errorf("can't get node name before getting Cluster name: %w", err)
+	}
+	if cn, err := mp.fetchClusterNameFromNodeLabels(ctx); err != nil {
+		return "", err
+	} else {
+		mp.clusterName = cn
+	}
+	return mp.clusterName, nil
+}
+
 func (mp *MetadataProvider) fetchNodeName(ctx context.Context) (string, error) {
 	log := klog().With("func", "fetchNodeName")
 	kubeClient, err := mp.KubeClient()
@@ -164,6 +191,29 @@ func (mp *MetadataProvider) fetchNodeName(ctx context.Context) (string, error) {
 		return checkLocalHostNameWithNodeName(ctx, log, kubeClient, podHostName)
 	}
 	return pods.Items[0].Spec.NodeName, nil
+}
+
+func (mp *MetadataProvider) fetchClusterNameFromNodeLabels(ctx context.Context) (string, error) {
+	kubeClient, err := mp.KubeClient()
+	if err != nil {
+		return "", fmt.Errorf("can't get kubernetes client: %w", err)
+	}
+	nodes, err := kubeClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{
+		FieldSelector: "metadata.name=" + mp.localNodeName,
+	})
+	if err != nil {
+		return "", fmt.Errorf("fetchClusterNameFromNodeLabels getting node %s: %w", mp.localNodeName, err)
+	}
+	if len(nodes.Items) == 0 {
+		return "", fmt.Errorf("fetchClusterNameFromNodeLabels can't find node %s", mp.localNodeName)
+	}
+	node := nodes.Items[0]
+	for _, label := range clusterNameNodeLabels {
+		if name, ok := node.Labels[label]; ok {
+			return name, nil
+		}
+	}
+	return "", fmt.Errorf("no cluster name found in node labels")
 }
 
 func currentNamespace(log *slog.Logger) string {

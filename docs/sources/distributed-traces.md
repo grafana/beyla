@@ -33,11 +33,11 @@ configuration and the Linux system capabilities granted to Beyla. For more detai
 talk [So You Want to Write Memory with eBPF?](https://www.youtube.com/watch?v=TUiVX-44S9s).
 
 The context propagation at **network level** is **disabled** by default and can be enabled by setting the environment variable
-`BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION=true` or by modifying the Beyla configuration file:
+`BEYLA_BPF_CONTEXT_PROPAGATION=all` or by modifying the Beyla configuration file:
 
 ```yaml
 ebpf:
-  enable_context_propagation: true
+  context_propagation: "all"
 
 ```
 

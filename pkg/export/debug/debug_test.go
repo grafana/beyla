@@ -12,6 +12,7 @@ import (
 
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
 func TestTracePrinterValidEnabled(t *testing.T) {
@@ -75,16 +76,16 @@ func traceFuncHelper(t *testing.T, tracePrinter TracePrinter) string {
 	stdout := os.Stdout
 	os.Stdout = w
 
-	spanCh := make(chan []request.Span)
+	spanCh := msg.NewQueue[[]request.Span]()
 
+	f := resolvePrinterFunc(tracePrinter, spanCh)
 	go func() {
-		f := resolvePrinterFunc(tracePrinter)
-		f(spanCh)
+		f(t.Context())
 		w.Close()
 	}()
 
-	spanCh <- []request.Span{fakeSpan}
-	close(spanCh)
+	spanCh.Send([]request.Span{fakeSpan})
+	spanCh.Close()
 
 	funcOutput, err := io.ReadAll(r)
 	r.Close()
@@ -170,10 +171,4 @@ func TestTracePrinterResolve_PrinterJSONIndent(t *testing.T) {
 	actual := traceFuncHelper(t, TracePrinterJSONIndent)
 	assert.True(t, strings.HasPrefix(actual, prefix))
 	assert.True(t, strings.HasSuffix(actual, suffix))
-}
-
-func TestTracePrinterResolve_PrinterDisabledInvalid(t *testing.T) {
-	assert.Nil(t, resolvePrinterFunc(TracePrinterDisabled))
-	assert.Nil(t, resolvePrinterFunc(TracePrinter("")))
-	assert.Nil(t, resolvePrinterFunc(TracePrinter("INVALID")))
 }

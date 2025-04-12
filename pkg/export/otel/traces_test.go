@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/mariomac/guara/pkg/test"
-	"github.com/mariomac/pipes/pipe"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
@@ -22,7 +21,6 @@ import (
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.25.0"
 	"go.opentelemetry.io/otel/trace"
@@ -35,6 +33,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/sqlprune"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
 func TestHTTPTracesEndpoint(t *testing.T) {
@@ -683,7 +682,7 @@ func TestTraceSampling(t *testing.T) {
 			},
 		}
 
-		receiver.processSpans(exporter, spans, attrs, sampler)
+		receiver.processSpans(context.Background(), exporter, spans, attrs, sampler)
 		assert.Equal(t, 10, len(tr))
 	})
 
@@ -699,7 +698,7 @@ func TestTraceSampling(t *testing.T) {
 			},
 		}
 
-		receiver.processSpans(exporter, spans, attrs, sampler)
+		receiver.processSpans(context.Background(), exporter, spans, attrs, sampler)
 		assert.Equal(t, 0, len(tr))
 	})
 
@@ -715,7 +714,7 @@ func TestTraceSampling(t *testing.T) {
 			},
 		}
 
-		receiver.processSpans(exporter, spans, attrs, sampler)
+		receiver.processSpans(context.Background(), exporter, spans, attrs, sampler)
 		// The result is likely 0,1,2 with 1/10th, but since sampling
 		// it's a probabilistic matter, we don't want this test to become
 		// flaky as some of them could report even 4-5 samples
@@ -755,7 +754,7 @@ func TestTraceSkipSpanMetrics(t *testing.T) {
 			},
 		}
 
-		receiver.processSpans(exporter, spans, attrs, sampler)
+		receiver.processSpans(context.Background(), exporter, spans, attrs, sampler)
 		assert.Equal(t, 10, len(tr))
 
 		for _, ts := range tr {
@@ -791,7 +790,7 @@ func TestTraceSkipSpanMetrics(t *testing.T) {
 			},
 		}
 
-		receiver.processSpans(exporter, spans, attrs, sampler)
+		receiver.processSpans(context.Background(), exporter, spans, attrs, sampler)
 		assert.Equal(t, 10, len(tr))
 
 		for _, ts := range tr {
@@ -868,7 +867,7 @@ func TestAttrsToMap(t *testing.T) {
 
 func TestCodeToStatusCode(t *testing.T) {
 	t.Run("test with unset code", func(t *testing.T) {
-		code := codes.Unset
+		code := request.StatusCodeUnset
 		expected := ptrace.StatusCodeUnset
 
 		result := codeToStatusCode(code)
@@ -876,7 +875,7 @@ func TestCodeToStatusCode(t *testing.T) {
 	})
 
 	t.Run("test with error code", func(t *testing.T) {
-		code := codes.Error
+		code := request.StatusCodeError
 		expected := ptrace.StatusCodeError
 
 		result := codeToStatusCode(code)
@@ -884,7 +883,7 @@ func TestCodeToStatusCode(t *testing.T) {
 	})
 
 	t.Run("test with ok code", func(t *testing.T) {
-		code := codes.Ok
+		code := request.StatusCodeOk
 		expected := ptrace.StatusCodeOk
 
 		result := codeToStatusCode(code)
@@ -1023,22 +1022,14 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	})
-	builder := pipe.NewBuilder(&testPipeline{}, pipe.ChannelBufferLen(10))
-	// create a simple dummy graph to send data to the Metrics reporter, which will send
-	// metrics to the fake collector
-	sendData := make(chan struct{}, 10)
-	pipe.AddStart(builder, func(impl *testPipeline) *pipe.Start[[]request.Span] {
-		return &impl.inputNode
-	}, func(out chan<- []request.Span) {
-		// on every send data signal, the traces generator sends a dummy trace
-		for range sendData {
-			out <- []request.Span{{Type: request.EventTypeHTTP}}
-		}
-	})
+
+	// run traces exporter standalone
+	exportTraces := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
 	internalTraces := &fakeInternalTraces{}
-	pipe.AddFinalProvider(builder, func(impl *testPipeline) *pipe.Final[[]request.Span] {
-		return &impl.exporter
-	}, TracesReceiver(context.Background(),
+	tracesReceiver, err := TracesReceiver(
+		&global.ContextInfo{
+			Metrics: internalTraces,
+		},
 		TracesConfig{
 			CommonEndpoint:    coll.URL,
 			BatchTimeout:      10 * time.Millisecond,
@@ -1046,17 +1037,14 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 			Instrumentations:  []string{instrumentations.InstrumentationALL},
 		},
 		false,
-		&global.ContextInfo{
-			Metrics: internalTraces,
-		},
 		attributes.Selection{},
-	))
-	graph, err := builder.Build()
+		exportTraces,
+	)(context.Background())
 	require.NoError(t, err)
 
-	graph.Start()
+	go tracesReceiver(context.Background())
 
-	sendData <- struct{}{}
+	exportTraces.Send([]request.Span{{Type: request.EventTypeHTTP}})
 	var previousSum, previousCount int
 	test.Eventually(t, timeout, func(t require.TestingT) {
 		// we can't guarantee the number of calls at test time, but they must be at least 1
@@ -1069,7 +1057,7 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 		assert.Empty(t, internalTraces.Errors())
 	})
 
-	sendData <- struct{}{}
+	exportTraces.Send([]request.Span{{Type: request.EventTypeHTTP}})
 	// after some time, the number of calls should be higher than before
 	test.Eventually(t, timeout, func(t require.TestingT) {
 		sum, count := internalTraces.SumCount()
@@ -1090,7 +1078,7 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 	})
 
 	var previousErrCount int
-	sendData <- struct{}{}
+	exportTraces.Send([]request.Span{{Type: request.EventTypeHTTP}})
 	test.Eventually(t, timeout, func(t require.TestingT) {
 		previousSum, previousCount = internalTraces.SumCount()
 		// calls should start returning errors
@@ -1099,7 +1087,7 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 	})
 
 	// after a while, metrics sum should not increase but errors do
-	sendData <- struct{}{}
+	exportTraces.Send([]request.Span{{Type: request.EventTypeHTTP}})
 	test.Eventually(t, timeout, func(t require.TestingT) {
 		sum, count := internalTraces.SumCount()
 		assert.Equal(t, previousSum, sum)
@@ -1234,50 +1222,54 @@ func restoreEnvAfterExecution() func() {
 func TestTraces_HTTPStatus(t *testing.T) {
 	type testPair struct {
 		httpCode   int
-		statusCode codes.Code
+		statusCode string
 	}
 
 	t.Run("HTTP server testing", func(t *testing.T) {
 		for _, p := range []testPair{
-			{100, codes.Unset},
-			{103, codes.Unset},
-			{199, codes.Unset},
-			{200, codes.Unset},
-			{204, codes.Unset},
-			{299, codes.Unset},
-			{300, codes.Unset},
-			{399, codes.Unset},
-			{400, codes.Unset},
-			{404, codes.Unset},
-			{405, codes.Unset},
-			{499, codes.Unset},
-			{500, codes.Error},
-			{5999, codes.Error},
+			{100, request.StatusCodeOk},
+			{103, request.StatusCodeOk},
+			{199, request.StatusCodeOk},
+			{200, request.StatusCodeOk},
+			{204, request.StatusCodeOk},
+			{299, request.StatusCodeOk},
+			{300, request.StatusCodeOk},
+			{399, request.StatusCodeOk},
+			{400, request.StatusCodeOk},
+			{404, request.StatusCodeOk},
+			{405, request.StatusCodeOk},
+			{499, request.StatusCodeOk},
+			{500, request.StatusCodeError},
+			{5999, request.StatusCodeError},
 		} {
-			assert.Equal(t, p.statusCode, request.HTTPSpanStatusCode(&request.Span{Status: p.httpCode, Type: request.EventTypeHTTP}))
-			assert.Equal(t, p.statusCode, request.SpanStatusCode(&request.Span{Status: p.httpCode, Type: request.EventTypeHTTP}))
+			t.Run(fmt.Sprintf("%d_%s", p.httpCode, p.statusCode), func(t *testing.T) {
+				assert.Equal(t, p.statusCode, request.HTTPSpanStatusCode(&request.Span{Status: p.httpCode, Type: request.EventTypeHTTP}))
+				assert.Equal(t, p.statusCode, request.SpanStatusCode(&request.Span{Status: p.httpCode, Type: request.EventTypeHTTP}))
+			})
 		}
 	})
 
 	t.Run("HTTP client testing", func(t *testing.T) {
 		for _, p := range []testPair{
-			{100, codes.Unset},
-			{103, codes.Unset},
-			{199, codes.Unset},
-			{200, codes.Unset},
-			{204, codes.Unset},
-			{299, codes.Unset},
-			{300, codes.Unset},
-			{399, codes.Unset},
-			{400, codes.Error},
-			{404, codes.Error},
-			{405, codes.Error},
-			{499, codes.Error},
-			{500, codes.Error},
-			{5999, codes.Error},
+			{100, request.StatusCodeOk},
+			{103, request.StatusCodeOk},
+			{199, request.StatusCodeOk},
+			{200, request.StatusCodeOk},
+			{204, request.StatusCodeOk},
+			{299, request.StatusCodeOk},
+			{300, request.StatusCodeOk},
+			{399, request.StatusCodeOk},
+			{400, request.StatusCodeError},
+			{404, request.StatusCodeError},
+			{405, request.StatusCodeError},
+			{499, request.StatusCodeError},
+			{500, request.StatusCodeError},
+			{5999, request.StatusCodeError},
 		} {
-			assert.Equal(t, p.statusCode, request.HTTPSpanStatusCode(&request.Span{Status: p.httpCode, Type: request.EventTypeHTTPClient}))
-			assert.Equal(t, p.statusCode, request.SpanStatusCode(&request.Span{Status: p.httpCode, Type: request.EventTypeHTTPClient}))
+			t.Run(fmt.Sprintf("%d_%s", p.httpCode, p.statusCode), func(t *testing.T) {
+				assert.Equal(t, p.statusCode, request.HTTPSpanStatusCode(&request.Span{Status: p.httpCode, Type: request.EventTypeHTTPClient}))
+				assert.Equal(t, p.statusCode, request.SpanStatusCode(&request.Span{Status: p.httpCode, Type: request.EventTypeHTTPClient}))
+			})
 		}
 	})
 }
@@ -1285,56 +1277,60 @@ func TestTraces_HTTPStatus(t *testing.T) {
 func TestTraces_GRPCStatus(t *testing.T) {
 	type testPair struct {
 		grpcCode   attribute.KeyValue
-		statusCode codes.Code
+		statusCode string
 	}
 
 	t.Run("gRPC server testing", func(t *testing.T) {
 		for _, p := range []testPair{
-			{semconv.RPCGRPCStatusCodeOk, codes.Unset},
-			{semconv.RPCGRPCStatusCodeCancelled, codes.Unset},
-			{semconv.RPCGRPCStatusCodeUnknown, codes.Error},
-			{semconv.RPCGRPCStatusCodeInvalidArgument, codes.Unset},
-			{semconv.RPCGRPCStatusCodeDeadlineExceeded, codes.Error},
-			{semconv.RPCGRPCStatusCodeNotFound, codes.Unset},
-			{semconv.RPCGRPCStatusCodeAlreadyExists, codes.Unset},
-			{semconv.RPCGRPCStatusCodePermissionDenied, codes.Unset},
-			{semconv.RPCGRPCStatusCodeResourceExhausted, codes.Unset},
-			{semconv.RPCGRPCStatusCodeFailedPrecondition, codes.Unset},
-			{semconv.RPCGRPCStatusCodeAborted, codes.Unset},
-			{semconv.RPCGRPCStatusCodeOutOfRange, codes.Unset},
-			{semconv.RPCGRPCStatusCodeUnimplemented, codes.Error},
-			{semconv.RPCGRPCStatusCodeInternal, codes.Error},
-			{semconv.RPCGRPCStatusCodeUnavailable, codes.Error},
-			{semconv.RPCGRPCStatusCodeDataLoss, codes.Error},
-			{semconv.RPCGRPCStatusCodeUnauthenticated, codes.Unset},
+			{semconv.RPCGRPCStatusCodeOk, request.StatusCodeOk},
+			{semconv.RPCGRPCStatusCodeCancelled, request.StatusCodeUnset},
+			{semconv.RPCGRPCStatusCodeUnknown, request.StatusCodeError},
+			{semconv.RPCGRPCStatusCodeInvalidArgument, request.StatusCodeUnset},
+			{semconv.RPCGRPCStatusCodeDeadlineExceeded, request.StatusCodeError},
+			{semconv.RPCGRPCStatusCodeNotFound, request.StatusCodeUnset},
+			{semconv.RPCGRPCStatusCodeAlreadyExists, request.StatusCodeUnset},
+			{semconv.RPCGRPCStatusCodePermissionDenied, request.StatusCodeUnset},
+			{semconv.RPCGRPCStatusCodeResourceExhausted, request.StatusCodeUnset},
+			{semconv.RPCGRPCStatusCodeFailedPrecondition, request.StatusCodeUnset},
+			{semconv.RPCGRPCStatusCodeAborted, request.StatusCodeUnset},
+			{semconv.RPCGRPCStatusCodeOutOfRange, request.StatusCodeUnset},
+			{semconv.RPCGRPCStatusCodeUnimplemented, request.StatusCodeError},
+			{semconv.RPCGRPCStatusCodeInternal, request.StatusCodeError},
+			{semconv.RPCGRPCStatusCodeUnavailable, request.StatusCodeError},
+			{semconv.RPCGRPCStatusCodeDataLoss, request.StatusCodeError},
+			{semconv.RPCGRPCStatusCodeUnauthenticated, request.StatusCodeUnset},
 		} {
-			assert.Equal(t, p.statusCode, request.GrpcSpanStatusCode(&request.Span{Status: int(p.grpcCode.Value.AsInt64()), Type: request.EventTypeGRPC}))
-			assert.Equal(t, p.statusCode, request.SpanStatusCode(&request.Span{Status: int(p.grpcCode.Value.AsInt64()), Type: request.EventTypeGRPC}))
+			t.Run(fmt.Sprintf("%v_%s", p.grpcCode, p.statusCode), func(t *testing.T) {
+				assert.Equal(t, p.statusCode, request.GrpcSpanStatusCode(&request.Span{Status: int(p.grpcCode.Value.AsInt64()), Type: request.EventTypeGRPC}))
+				assert.Equal(t, p.statusCode, request.SpanStatusCode(&request.Span{Status: int(p.grpcCode.Value.AsInt64()), Type: request.EventTypeGRPC}))
+			})
 		}
 	})
 
 	t.Run("gRPC client testing", func(t *testing.T) {
 		for _, p := range []testPair{
-			{semconv.RPCGRPCStatusCodeOk, codes.Unset},
-			{semconv.RPCGRPCStatusCodeCancelled, codes.Error},
-			{semconv.RPCGRPCStatusCodeUnknown, codes.Error},
-			{semconv.RPCGRPCStatusCodeInvalidArgument, codes.Error},
-			{semconv.RPCGRPCStatusCodeDeadlineExceeded, codes.Error},
-			{semconv.RPCGRPCStatusCodeNotFound, codes.Error},
-			{semconv.RPCGRPCStatusCodeAlreadyExists, codes.Error},
-			{semconv.RPCGRPCStatusCodePermissionDenied, codes.Error},
-			{semconv.RPCGRPCStatusCodeResourceExhausted, codes.Error},
-			{semconv.RPCGRPCStatusCodeFailedPrecondition, codes.Error},
-			{semconv.RPCGRPCStatusCodeAborted, codes.Error},
-			{semconv.RPCGRPCStatusCodeOutOfRange, codes.Error},
-			{semconv.RPCGRPCStatusCodeUnimplemented, codes.Error},
-			{semconv.RPCGRPCStatusCodeInternal, codes.Error},
-			{semconv.RPCGRPCStatusCodeUnavailable, codes.Error},
-			{semconv.RPCGRPCStatusCodeDataLoss, codes.Error},
-			{semconv.RPCGRPCStatusCodeUnauthenticated, codes.Error},
+			{semconv.RPCGRPCStatusCodeOk, request.StatusCodeOk},
+			{semconv.RPCGRPCStatusCodeCancelled, request.StatusCodeError},
+			{semconv.RPCGRPCStatusCodeUnknown, request.StatusCodeError},
+			{semconv.RPCGRPCStatusCodeInvalidArgument, request.StatusCodeError},
+			{semconv.RPCGRPCStatusCodeDeadlineExceeded, request.StatusCodeError},
+			{semconv.RPCGRPCStatusCodeNotFound, request.StatusCodeError},
+			{semconv.RPCGRPCStatusCodeAlreadyExists, request.StatusCodeError},
+			{semconv.RPCGRPCStatusCodePermissionDenied, request.StatusCodeError},
+			{semconv.RPCGRPCStatusCodeResourceExhausted, request.StatusCodeError},
+			{semconv.RPCGRPCStatusCodeFailedPrecondition, request.StatusCodeError},
+			{semconv.RPCGRPCStatusCodeAborted, request.StatusCodeError},
+			{semconv.RPCGRPCStatusCodeOutOfRange, request.StatusCodeError},
+			{semconv.RPCGRPCStatusCodeUnimplemented, request.StatusCodeError},
+			{semconv.RPCGRPCStatusCodeInternal, request.StatusCodeError},
+			{semconv.RPCGRPCStatusCodeUnavailable, request.StatusCodeError},
+			{semconv.RPCGRPCStatusCodeDataLoss, request.StatusCodeError},
+			{semconv.RPCGRPCStatusCodeUnauthenticated, request.StatusCodeError},
 		} {
-			assert.Equal(t, p.statusCode, request.GrpcSpanStatusCode(&request.Span{Status: int(p.grpcCode.Value.AsInt64()), Type: request.EventTypeGRPCClient}))
-			assert.Equal(t, p.statusCode, request.SpanStatusCode(&request.Span{Status: int(p.grpcCode.Value.AsInt64()), Type: request.EventTypeGRPCClient}))
+			t.Run(fmt.Sprintf("%v_%s", p.grpcCode, p.statusCode), func(t *testing.T) {
+				assert.Equal(t, p.statusCode, request.GrpcSpanStatusCode(&request.Span{Status: int(p.grpcCode.Value.AsInt64()), Type: request.EventTypeGRPCClient}))
+				assert.Equal(t, p.statusCode, request.SpanStatusCode(&request.Span{Status: int(p.grpcCode.Value.AsInt64()), Type: request.EventTypeGRPCClient}))
+			})
 		}
 	})
 }
@@ -1483,7 +1479,7 @@ func ensureTraceAttrNotExists(t *testing.T, attrs pcommon.Map, key attribute.Key
 }
 
 func makeTracesTestReceiver(instr []string) *tracesOTELReceiver {
-	return makeTracesReceiver(context.Background(),
+	return makeTracesReceiver(
 		TracesConfig{
 			CommonEndpoint:    "http://something",
 			BatchTimeout:      10 * time.Millisecond,
@@ -1493,11 +1489,12 @@ func makeTracesTestReceiver(instr []string) *tracesOTELReceiver {
 		false,
 		&global.ContextInfo{},
 		attributes.Selection{},
+		msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10)),
 	)
 }
 
 func makeTracesTestReceiverWithSpanMetrics(instr []string) *tracesOTELReceiver {
-	return makeTracesReceiver(context.Background(),
+	return makeTracesReceiver(
 		TracesConfig{
 			CommonEndpoint:    "http://something",
 			BatchTimeout:      10 * time.Millisecond,
@@ -1507,6 +1504,7 @@ func makeTracesTestReceiverWithSpanMetrics(instr []string) *tracesOTELReceiver {
 		true,
 		&global.ContextInfo{},
 		attributes.Selection{},
+		msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10)),
 	)
 }
 

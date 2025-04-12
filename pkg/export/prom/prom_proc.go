@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/mariomac/pipes/pipe"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
@@ -15,6 +14,8 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/connector"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
+	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 // injectable function reference for testing
@@ -34,14 +35,16 @@ func (p ProcPrometheusConfig) Enabled() bool {
 // ProcPrometheusEndpoint provides a pipeline node that export the process information as
 // prometheus metrics
 func ProcPrometheusEndpoint(
-	ctx context.Context, ctxInfo *global.ContextInfo, cfg *ProcPrometheusConfig,
-) pipe.FinalProvider[[]*process.Status] {
-	return func() (pipe.FinalFunc[[]*process.Status], error) {
+	ctxInfo *global.ContextInfo,
+	cfg *ProcPrometheusConfig,
+	procStatusInput *msg.Queue[[]*process.Status],
+) swarm.InstanceFunc {
+	return func(_ context.Context) (swarm.RunFunc, error) {
 		if !cfg.Enabled() {
 			// This node is not going to be instantiated. Let the pipes library just ignore it.
-			return pipe.IgnoreFinal[[]*process.Status](), nil
+			return swarm.EmptyRunFunc()
 		}
-		reporter, err := newProcReporter(ctx, ctxInfo, cfg)
+		reporter, err := newProcReporter(ctxInfo, cfg, procStatusInput)
 		if err != nil {
 			return nil, err
 		}
@@ -58,7 +61,6 @@ type procMetricsReporter struct {
 	promConnect *connector.PrometheusManager
 
 	clock *expire.CachedClock
-	bgCtx context.Context
 
 	// metrics
 	cpuTimeAttrs []attributes.Field[*process.Status, string]
@@ -88,15 +90,12 @@ type procMetricsReporter struct {
 
 	// the observation code for IO metrics will be different depending on
 	// the "*.io.direction" attributes
-	diskObserver func(*process.Status)
-	netObserver  func(*process.Status)
+	diskObserver    func(*process.Status)
+	netObserver     func(*process.Status)
+	procStatusInput <-chan []*process.Status
 }
 
-func newProcReporter(
-	ctx context.Context,
-	ctxInfo *global.ContextInfo,
-	cfg *ProcPrometheusConfig,
-) (*procMetricsReporter, error) {
+func newProcReporter(ctxInfo *global.ContextInfo, cfg *ProcPrometheusConfig, input *msg.Queue[[]*process.Status]) (*procMetricsReporter, error) {
 	group := ctxInfo.MetricAttributeGroups
 	// this property can't be set inside the ConfiguredGroups function, otherwise the
 	// OTEL exporter would report also some prometheus-exclusive attributes
@@ -123,7 +122,6 @@ func newProcReporter(
 	// If service name is not explicitly set, we take the service name as set by the
 	// executable inspector
 	mr := &procMetricsReporter{
-		bgCtx:        ctx,
 		cfg:          cfg.Metrics,
 		promConnect:  ctxInfo.Prometheus,
 		clock:        clock,
@@ -157,6 +155,7 @@ func newProcReporter(
 			Name: attributes.ProcessNetIO.Prom,
 			Help: "Network bytes transferred",
 		}, netLblNames).MetricVec, clock.Time, cfg.Metrics.TTL),
+		procStatusInput: input.Subscribe(),
 	}
 
 	if cpuTimeHasState {
@@ -197,13 +196,13 @@ func newProcReporter(
 	return mr, nil
 }
 
-func (r *procMetricsReporter) reportMetrics(input <-chan []*process.Status) {
-	go r.promConnect.StartHTTP(r.bgCtx)
-	r.collectMetrics(input)
+func (r *procMetricsReporter) reportMetrics(ctx context.Context) {
+	go r.promConnect.StartHTTP(ctx)
+	r.collectMetrics(ctx)
 }
 
-func (r *procMetricsReporter) collectMetrics(input <-chan []*process.Status) {
-	for processes := range input {
+func (r *procMetricsReporter) collectMetrics(_ context.Context) {
+	for processes := range r.procStatusInput {
 		// clock needs to be updated to let the expirer
 		// remove the old metrics
 		r.clock.Update()

@@ -42,7 +42,7 @@ services:
       BEYLA_BPF_BATCH_TIMEOUT: "10ms"
       BEYLA_LOG_LEVEL: "DEBUG"
       BEYLA_BPF_DEBUG: "true"
-      BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION: "true"
+      BEYLA_BPF_CONTEXT_PROPAGATION: "all"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://collector:4318"
     depends_on:
       grpcsrv:

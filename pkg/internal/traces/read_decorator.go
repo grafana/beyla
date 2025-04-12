@@ -5,10 +5,10 @@ import (
 	"log/slog"
 	"strconv"
 
-	"github.com/mariomac/pipes/pipe"
-
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/traces/hostname"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
+	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 func rlog() *slog.Logger {
@@ -31,7 +31,8 @@ type InstanceIDConfig struct {
 // traces to the ReadDecorator's TracesInput, and the ReadDecorator will decorate the traces with some
 // basic information (e.g. instance ID) and forward them to the next pipeline stage
 type ReadDecorator struct {
-	TracesInput <-chan []request.Span
+	TracesInput     *msg.Queue[[]request.Span]
+	DecoratedTraces *msg.Queue[[]request.Span]
 
 	InstanceID InstanceIDConfig
 }
@@ -40,16 +41,20 @@ type ReadDecorator struct {
 // by the tracers (for example, the instance ID)
 type decorator func(spans []request.Span)
 
-func ReadFromChannel(ctx context.Context, r *ReadDecorator) pipe.StartFunc[[]request.Span] {
+func ReadFromChannel(r *ReadDecorator) swarm.InstanceFunc {
 	decorate := hostNamePIDDecorator(&r.InstanceID)
-	return func(out chan<- []request.Span) {
+	tracesInput := r.TracesInput.Subscribe()
+	return swarm.DirectInstance(func(ctx context.Context) {
+		// output channel must be closed so later stages in the pipeline can finish in cascade
+		defer r.DecoratedTraces.Close()
 		cancelChan := ctx.Done()
+		out := r.DecoratedTraces
 		for {
 			select {
-			case trace, ok := <-r.TracesInput:
+			case trace, ok := <-tracesInput:
 				if ok {
 					decorate(trace)
-					out <- trace
+					out.Send(trace)
 				} else {
 					rlog().Debug("input channel closed. Exiting traces input loop")
 					return
@@ -59,7 +64,7 @@ func ReadFromChannel(ctx context.Context, r *ReadDecorator) pipe.StartFunc[[]req
 				return
 			}
 		}
-	}
+	})
 }
 
 func hostNamePIDDecorator(cfg *InstanceIDConfig) decorator {

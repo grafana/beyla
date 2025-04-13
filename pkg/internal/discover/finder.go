@@ -57,7 +57,7 @@ func (pf *ProcessFinder) Start(ctx context.Context) (<-chan Event[*ebpf.Instrume
 
 	swi.Add(TraceAttacherProvider(&TraceAttacher{
 		Cfg:                 pf.cfg,
-		TracerEvents:        tracerEvents,
+		OutputTracerEvents:  tracerEvents,
 		Metrics:             pf.ctxInfo.Metrics,
 		SpanSignalsShortcut: pf.tracesInput,
 

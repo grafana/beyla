@@ -48,13 +48,12 @@ type TraceAttacher struct {
 
 	// InputInstrumentables is the input channel for the TraceAttacher, where it receives information
 	// about the instrumentables that traversed the whole process discovery pipeline, so they need to
-	// be instrumented
+	// be instrumented.
 	InputInstrumentables *msg.Queue[[]Event[ebpf.Instrumentable]]
 
-	// DiscoveredTracers and DeleteTracers communicate the discovery pipeline with the
-	// instrumentation pipeline
-	// TODO: replace by a single channel forwarding an Event to prevent race condition with very short-lived processes
-	TracerEvents *msg.Queue[Event[*ebpf.Instrumentable]]
+	// OutputTracerEvents communicates the process discovery pipeline with the instrumentation pipeline.
+	// This queue will forward any newly discovered process to the instrumentation pipeline.
+	OutputTracerEvents *msg.Queue[Event[*ebpf.Instrumentable]]
 }
 
 func TraceAttacherProvider(ta *TraceAttacher) swarm.InstanceFunc {
@@ -75,7 +74,7 @@ func (ta *TraceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 
 	in := ta.InputInstrumentables.Subscribe()
 	return func(ctx context.Context) {
-		defer ta.TracerEvents.Close()
+		defer ta.OutputTracerEvents.Close()
 
 	mainLoop:
 		for instrumentables := range in {
@@ -94,7 +93,7 @@ func (ta *TraceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 					if !sdkInstrumented {
 						ta.processInstances.Inc(instr.Obj.FileInfo.Ino)
 						if ok := ta.getTracer(&instr.Obj); ok {
-							ta.TracerEvents.Send(Event[*ebpf.Instrumentable]{Type: EventCreated, Obj: &instr.Obj})
+							ta.OutputTracerEvents.Send(Event[*ebpf.Instrumentable]{Type: EventCreated, Obj: &instr.Obj})
 							if ta.Cfg.Discovery.SystemWide {
 								ta.log.Info("system wide instrumentation. Creating a single instrumenter")
 								break mainLoop
@@ -345,7 +344,7 @@ func (ta *TraceAttacher) notifyProcessDeletion(ie *ebpf.Instrumentable) {
 		if ta.processInstances.Dec(ie.FileInfo.Ino) == 0 {
 			delete(ta.existingTracers, ie.FileInfo.Ino)
 			ie.Tracer = tracer
-			ta.TracerEvents.Send(Event[*ebpf.Instrumentable]{Type: EventDeleted, Obj: ie})
+			ta.OutputTracerEvents.Send(Event[*ebpf.Instrumentable]{Type: EventDeleted, Obj: ie})
 		}
 	}
 }

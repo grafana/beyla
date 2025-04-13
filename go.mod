@@ -4,6 +4,7 @@ go 1.24.1
 
 require (
 	github.com/AlessandroPomponio/go-gibberish v0.0.0-20191004143433-a2d4156f0396
+	github.com/alitto/pond/v2 v2.3.2
 	github.com/caarlos0/env/v9 v9.0.0
 	github.com/cilium/ebpf v0.17.3
 	github.com/containers/common v0.61.0
@@ -184,3 +185,5 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
+
+replace regexp => github.com/grafana/regexp v0.0.0-20240607082908-2cb410fa05da

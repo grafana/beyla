@@ -27,19 +27,6 @@ const (
 	UnmatchDefault = UnmatchHeuristic
 )
 
-type IgnoreMode string
-
-const (
-	// IgnoreMetrics prevents sending metric events for ignored patterns
-	IgnoreMetrics = IgnoreMode("metrics")
-	// IgnoreTraces prevents sending trace events for ignored patterns
-	IgnoreTraces = IgnoreMode("traces")
-	// IgnoreAll prevents sending both metrics and traces for ignored patterns
-	IgnoreAll = IgnoreMode("all")
-
-	IgnoreDefault = IgnoreAll
-)
-
 const wildCard = "/**"
 
 // RoutesConfig allows grouping URLs sharing a given pattern.
@@ -173,14 +160,5 @@ func setUnmatchToPath(_ *RoutesConfig, str *request.Span) {
 func classifyFromPath(rc *RoutesConfig, s *request.Span) {
 	if s.Route == "" && (s.Type == request.EventTypeHTTP || s.Type == request.EventTypeHTTPClient) {
 		s.Route = route.ClusterPath(s.Path, rc.WildcardChar[0])
-	}
-}
-
-func setSpanIgnoreMode(mode IgnoreMode, s *request.Span) {
-	switch mode {
-	case IgnoreMetrics:
-		s.SetIgnoreMetrics()
-	case IgnoreTraces:
-		s.SetIgnoreTraces()
 	}
 }

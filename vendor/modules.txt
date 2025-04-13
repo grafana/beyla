@@ -10,6 +10,11 @@ github.com/AlessandroPomponio/go-gibberish/structs
 # github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.25.0
 ## explicit; go 1.21
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp
+# github.com/alitto/pond/v2 v2.3.2
+## explicit; go 1.20
+github.com/alitto/pond/v2
+github.com/alitto/pond/v2/internal/future
+github.com/alitto/pond/v2/internal/linkedbuffer
 # github.com/aws/aws-sdk-go v1.54.13
 ## explicit; go 1.19
 github.com/aws/aws-sdk-go/aws
@@ -1419,3 +1424,4 @@ sigs.k8s.io/structured-merge-diff/v4/value
 ## explicit; go 1.12
 sigs.k8s.io/yaml
 sigs.k8s.io/yaml/goyaml.v2
+# regexp => github.com/grafana/regexp v0.0.0-20240607082908-2cb410fa05da

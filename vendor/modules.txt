@@ -1424,4 +1424,3 @@ sigs.k8s.io/structured-merge-diff/v4/value
 ## explicit; go 1.12
 sigs.k8s.io/yaml
 sigs.k8s.io/yaml/goyaml.v2
-# regexp => github.com/grafana/regexp v0.0.0-20240607082908-2cb410fa05da

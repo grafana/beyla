@@ -3,8 +3,9 @@ package transform
 import (
 	"testing"
 
-	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/grafana/beyla/v2/pkg/internal/request"
 )
 
 func TestIgnoreMode(t *testing.T) {

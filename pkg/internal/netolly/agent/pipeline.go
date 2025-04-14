@@ -53,6 +53,16 @@ func (f *Flows) buildPipeline(ctx context.Context) (*swarm.Runner, error) {
 		CacheActiveTimeout: f.cfg.NetworkFlows.CacheActiveTimeout,
 	}, protocolFilteredEbpfFlows, dedupedEBPFFlows))
 
+	kubeDecoratedFlows := msg.NewQueue[[]*ebpf.Record](msg.ChannelBufferLen(f.cfg.ChannelBufferLen))
+	swi.Add(k8s.MetadataDecoratorProvider(ctx, &f.cfg.Attributes.Kubernetes, f.ctxInfo.K8sInformer,
+		dedupedEBPFFlows, kubeDecoratedFlows))
+
+	dnsDecoratedFlows := msg.NewQueue[[]*ebpf.Record](msg.ChannelBufferLen(f.cfg.ChannelBufferLen))
+	swi.Add(flow.ReverseDNSProvider(&f.cfg.NetworkFlows.ReverseDNS, kubeDecoratedFlows, dnsDecoratedFlows))
+
+	cidrDecoratedFlows := msg.NewQueue[[]*ebpf.Record](msg.ChannelBufferLen(f.cfg.ChannelBufferLen))
+	swi.Add(cidr.DecoratorProvider(f.cfg.NetworkFlows.CIDRs, dnsDecoratedFlows, cidrDecoratedFlows))
+
 	decoratedFlows := msg.NewQueue[[]*ebpf.Record](msg.ChannelBufferLen(f.cfg.ChannelBufferLen))
 	swi.Add(func(_ context.Context) (swarm.RunFunc, error) {
 		// If deduper is enabled, we know that interfaces are unset.
@@ -63,21 +73,11 @@ func (f *Flows) buildPipeline(ctx context.Context) (*swarm.Runner, error) {
 				return ""
 			}
 		}
-		return flow.Decorate(f.agentIP, ifaceNamer, dedupedEBPFFlows, decoratedFlows), nil
+		return flow.Decorate(f.agentIP, ifaceNamer, cidrDecoratedFlows, decoratedFlows), nil
 	})
 
-	cidrDecoratedFlows := msg.NewQueue[[]*ebpf.Record](msg.ChannelBufferLen(f.cfg.ChannelBufferLen))
-	swi.Add(cidr.DecoratorProvider(f.cfg.NetworkFlows.CIDRs, decoratedFlows, cidrDecoratedFlows))
-
-	kubeDecoratedFlows := msg.NewQueue[[]*ebpf.Record](msg.ChannelBufferLen(f.cfg.ChannelBufferLen))
-	swi.Add(k8s.MetadataDecoratorProvider(ctx, &f.cfg.Attributes.Kubernetes, f.ctxInfo.K8sInformer,
-		cidrDecoratedFlows, kubeDecoratedFlows))
-
-	dnsDecoratedFlows := msg.NewQueue[[]*ebpf.Record](msg.ChannelBufferLen(f.cfg.ChannelBufferLen))
-	swi.Add(flow.ReverseDNSProvider(&f.cfg.NetworkFlows.ReverseDNS, kubeDecoratedFlows, dnsDecoratedFlows))
-
 	filteredFlows := msg.NewQueue[[]*ebpf.Record](msg.ChannelBufferLen(f.cfg.ChannelBufferLen))
-	swi.Add(filter.ByAttribute(f.cfg.Filters.Network, ebpf.RecordStringGetters, dnsDecoratedFlows, filteredFlows))
+	swi.Add(filter.ByAttribute(f.cfg.Filters.Network, ebpf.RecordStringGetters, decoratedFlows, filteredFlows))
 
 	// Terminal nodes export the flow record information out of the pipeline: OTEL, Prom and printer.
 	// Not all the nodes are mandatory here. Is the responsibility of each Provider function to decide

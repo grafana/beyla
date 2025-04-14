@@ -32,6 +32,8 @@ type Runner struct {
 	started atomic.Bool
 	runners []RunFunc
 	done    chan struct{}
+
+	cancelInstancerCtx func()
 }
 
 // Start the Swarm in background. It calls all registered service creators and, if all succeed,
@@ -49,6 +51,9 @@ func (s *Runner) Start(ctx context.Context) {
 	wg.Add(len(s.runners))
 	go func() {
 		wg.Wait()
+		// the context previously passed in the InstanceFunc is also
+		// canceled when the swarm stops running, to avoid context leaking
+		s.cancelInstancerCtx()
 		close(s.done)
 	}()
 	for i := range s.runners {

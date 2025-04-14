@@ -96,7 +96,7 @@ func TestNetwork_AllowedAttributes(t *testing.T) {
 }
 
 func TestNetwork_ReverseDNS(t *testing.T) {
-	compose, err := docker.ComposeSuite("docker-compose-netolly-rdns.yml", path.Join(pathOutput, "test-suite-netolly-allowed-attrs.log"))
+	compose, err := docker.ComposeSuite("docker-compose-netolly-rdns.yml", path.Join(pathOutput, "test-suite-netolly-reverse-dns.log"))
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 

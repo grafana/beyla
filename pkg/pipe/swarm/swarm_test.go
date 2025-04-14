@@ -11,6 +11,8 @@ import (
 	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/grafana/beyla/v2/pkg/internal/testutil"
 )
 
 func TestSwarm_BuildWithError(t *testing.T) {
@@ -111,6 +113,41 @@ func TestSwarm_ContextPassed(t *testing.T) {
 		doneWg.Wait()
 	})
 	assertDone(t, s)
+}
+
+func TestSwarm_CancelInstancerCtx(t *testing.T) {
+	swi := Instancer{}
+	instancerCtxCancelled := make(chan struct{})
+	stopRunFunc := make(chan struct{})
+	swi.Add(func(ctx context.Context) (RunFunc, error) {
+		go func() {
+			<-ctx.Done()
+			close(instancerCtxCancelled)
+		}()
+		return func(_ context.Context) {
+			<-stopRunFunc
+		}, nil
+	})
+	swi.Add(func(_ context.Context) (RunFunc, error) {
+		return func(_ context.Context) {
+			<-stopRunFunc
+		}, nil
+	})
+	run, err := swi.Instance(context.Background())
+	require.NoError(t, err)
+	run.Start(t.Context())
+
+	// while the RunFunc is not finished, the instancer context should not be cancelled
+	select {
+	case <-instancerCtxCancelled:
+		t.Fatal("instancer context was cancelled while the RunFunc was running")
+	default:
+		// ok!!
+	}
+
+	// when the RunFunc is finished, the instancer context should be cancelled
+	close(stopRunFunc)
+	testutil.ReadChannel(t, instancerCtxCancelled, 5*time.Second)
 }
 
 func assertDone(t *testing.T, s *Runner) {

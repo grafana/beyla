@@ -331,10 +331,6 @@ github.com/mailru/easyjson/jwriter
 # github.com/mariomac/guara v0.0.0-20230621100729-42bd7716e524
 ## explicit; go 1.18
 github.com/mariomac/guara/pkg/test
-# github.com/mariomac/pipes v0.10.0
-## explicit; go 1.18
-github.com/mariomac/pipes/pipe
-github.com/mariomac/pipes/pipe/internal/connect
 # github.com/mattn/go-isatty v0.0.19
 ## explicit; go 1.15
 github.com/mattn/go-isatty
@@ -526,9 +522,6 @@ go.opentelemetry.io/collector/config/configopaque
 # go.opentelemetry.io/collector/config/configretry v1.28.1
 ## explicit; go 1.23.0
 go.opentelemetry.io/collector/config/configretry
-# go.opentelemetry.io/collector/config/configtelemetry v0.122.1
-## explicit; go 1.23.0
-go.opentelemetry.io/collector/config/configtelemetry
 # go.opentelemetry.io/collector/config/configtls v1.28.1
 ## explicit; go 1.23.0
 go.opentelemetry.io/collector/config/configtls

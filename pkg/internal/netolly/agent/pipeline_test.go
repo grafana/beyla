@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/mariomac/guara/pkg/test"
-	"github.com/mariomac/pipes/pipe"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -21,6 +20,8 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/flow/transport"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
+	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 	prom2 "github.com/grafana/beyla/v2/test/integration/components/prom"
 )
 
@@ -58,22 +59,23 @@ func TestFilter(t *testing.T) {
 		interfaceNamer: func(_ int) string { return "fakeiface" },
 	}
 
-	pb, err := flows.pipelineBuilder(ctx)
-	require.NoError(t, err)
-
 	ringBuf := make(chan []*ebpf.Record, 10)
 	// override eBPF flow fetchers
-	pipe.AddStart(pb, mapTracer, func(_ chan<- []*ebpf.Record) {})
-	pipe.AddStart(pb, ringBufTracer, func(out chan<- []*ebpf.Record) {
-		for i := range ringBuf {
-			out <- i
+	newMapTracer = func(_ *Flows, _ *msg.Queue[[]*ebpf.Record]) swarm.RunFunc {
+		return func(ctx context.Context) {}
+	}
+	newRingBufTracer = func(_ *Flows, out *msg.Queue[[]*ebpf.Record]) swarm.RunFunc {
+		return func(ctx context.Context) {
+			for i := range ringBuf {
+				out.Send(i)
+			}
 		}
-	})
+	}
 
-	runner, err := pb.Build()
+	runner, err := flows.buildPipeline(ctx)
 	require.NoError(t, err)
 
-	go runner.Start()
+	go runner.Start(ctx)
 
 	ringBuf <- []*ebpf.Record{
 		fakeRecord(transport.UDP, 123, 456),

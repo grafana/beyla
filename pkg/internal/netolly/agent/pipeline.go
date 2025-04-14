@@ -15,6 +15,15 @@ import (
 	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
+// mockable functions for testing
+var newMapTracer = func(f *Flows, out *msg.Queue[[]*ebpf.Record]) swarm.RunFunc {
+	return f.mapTracer.TraceLoop(out)
+}
+
+var newRingBufTracer = func(f *Flows, out *msg.Queue[[]*ebpf.Record]) swarm.RunFunc {
+	return f.rbTracer.TraceLoop(out)
+}
+
 // buildPipeline defines the different nodes in the Beyla's NetO11y module,
 // as well as how they are interconnected (in its Connect() method)
 func (f *Flows) buildPipeline(ctx context.Context) (*swarm.Runner, error) {
@@ -24,8 +33,8 @@ func (f *Flows) buildPipeline(ctx context.Context) (*swarm.Runner, error) {
 	swi := &swarm.Instancer{}
 	// Start nodes: those generating flow records (reading them from eBPF)
 	ebpfFlows := msg.NewQueue[[]*ebpf.Record](msg.ChannelBufferLen(f.cfg.ChannelBufferLen))
-	swi.Add(swarm.DirectInstance(f.mapTracer.TraceLoop(ebpfFlows)))
-	swi.Add(swarm.DirectInstance(f.rbTracer.TraceLoop(ebpfFlows)))
+	swi.Add(swarm.DirectInstance(newMapTracer(f, ebpfFlows)))
+	swi.Add(swarm.DirectInstance(newRingBufTracer(f, ebpfFlows)))
 
 	// Middle nodes: transforming flow records and passing them to the next stage in the pipeline.
 	// Many of the nodes here are not mandatory. It's decision of each InstanceFunc to decide

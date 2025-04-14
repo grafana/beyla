@@ -98,7 +98,6 @@ int beyla_uprobe_queryReturn(struct pt_regs *ctx) {
             query_len = sizeof(trace->sql);
         }
 
-        //__builtin_memset(trace->sql, 0, sizeof(trace->sql));
         bpf_probe_read(trace->sql, query_len, (void *)invocation->sql_param);
 
         if (query_len < sizeof(trace->sql)) {

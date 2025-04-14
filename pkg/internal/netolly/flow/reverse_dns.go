@@ -70,6 +70,7 @@ func ReverseDNSProvider(cfg *ReverseDNS, input, output *msg.Queue[[]*ebpf.Record
 		log := rdlog()
 		in := input.Subscribe()
 		return func(_ context.Context) {
+			defer output.Close()
 			log.Debug("starting reverse DNS node")
 			for flows := range in {
 				for _, flow := range flows {

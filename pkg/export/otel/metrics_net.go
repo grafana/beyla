@@ -78,7 +78,7 @@ func NetMetricsExporterProvider(
 ) swarm.InstanceFunc {
 	return func(ctx context.Context) (swarm.RunFunc, error) {
 		if !cfg.Enabled() {
-			// This node is not going to be instantiated. Let the pipes swarm just ignore it.
+			// This node is not going to be instantiated. Let the swarm library just ignore it.
 			return swarm.EmptyRunFunc()
 		}
 		exporter, err := newMetricsExporter(ctx, ctxInfo, cfg, input)

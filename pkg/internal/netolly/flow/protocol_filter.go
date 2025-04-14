@@ -54,6 +54,7 @@ func newFilter(allowed, excluded []string, input, output *msg.Queue[[]*ebpf.Reco
 }
 
 func (pf *protocolFilter) nodeLoop(_ context.Context) {
+	defer pf.output.Close()
 	for records := range pf.input {
 		if filtered := pf.filter(records); len(filtered) > 0 {
 			pf.output.Send(filtered)

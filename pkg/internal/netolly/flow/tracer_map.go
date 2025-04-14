@@ -66,6 +66,7 @@ func (m *MapTracer) Flush() {
 
 func (m *MapTracer) TraceLoop(out *msg.Queue[[]*ebpf.Record]) swarm.RunFunc {
 	return func(ctx context.Context) {
+		defer out.MarkCloseable()
 		evictionTicker := time.NewTicker(m.evictionTimeout)
 		go m.evictionSynchronization(ctx, out)
 		mtlog := mtlog()

@@ -32,7 +32,10 @@ func (f *Flows) buildPipeline(ctx context.Context) (*swarm.Runner, error) {
 	alog.Debug("creating flows' processing graph")
 	swi := &swarm.Instancer{}
 	// Start nodes: those generating flow records (reading them from eBPF)
-	ebpfFlows := msg.NewQueue[[]*ebpf.Record](msg.ChannelBufferLen(f.cfg.ChannelBufferLen))
+	ebpfFlows := msg.NewQueue[[]*ebpf.Record](
+		msg.ChannelBufferLen(f.cfg.ChannelBufferLen),
+		msg.ClosingAttempts(2), // queue won't close until both tracers try to close it
+	)
 	swi.Add(swarm.DirectInstance(newMapTracer(f, ebpfFlows)))
 	swi.Add(swarm.DirectInstance(newRingBufTracer(f, ebpfFlows)))
 

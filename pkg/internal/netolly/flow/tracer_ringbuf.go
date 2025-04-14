@@ -75,6 +75,7 @@ func NewRingBufTracer(
 
 func (m *RingBufTracer) TraceLoop(out *msg.Queue[[]*ebpf.Record]) swarm.RunFunc {
 	return func(ctx context.Context) {
+		defer out.MarkCloseable()
 		rtlog := rtlog()
 		debugging := rtlog.Enabled(ctx, slog.LevelDebug)
 		for {

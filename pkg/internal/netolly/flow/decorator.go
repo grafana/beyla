@@ -38,6 +38,7 @@ func Decorate(agentIP net.IP, ifaceNamer InterfaceNamer, input *msg.Queue[[]*ebp
 	ip := agentIP.String()
 	in := input.Subscribe()
 	return func(_ context.Context) {
+		defer output.Close()
 		for flows := range in {
 			for _, flow := range flows {
 				flow.Attrs.Interface = ifaceNamer(int(flow.Id.IfIndex))

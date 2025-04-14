@@ -41,6 +41,7 @@ func DecoratorProvider(g Definitions, input, output *msg.Queue[[]*ebpf.Record]) 
 		}
 		in := input.Subscribe()
 		return func(_ context.Context) {
+			defer output.Close()
 			glog().Debug("starting node")
 			for flows := range in {
 				for _, flow := range flows {

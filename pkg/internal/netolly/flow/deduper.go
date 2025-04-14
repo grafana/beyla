@@ -89,6 +89,7 @@ func DeduperProvider(dd *Deduper, input, output *msg.Queue[[]*ebpf.Record]) swar
 		}
 		in := input.Subscribe()
 		return func(_ context.Context) {
+			defer output.Close()
 			for records := range in {
 				cache.removeExpired()
 				fwd := make([]*ebpf.Record, 0, len(records))

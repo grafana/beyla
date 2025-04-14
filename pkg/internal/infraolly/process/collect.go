@@ -78,6 +78,7 @@ func (ps *Collector) Run(ctx context.Context) {
 	// TODO: set app metadata as key for later decoration? (e.g. K8s metadata, svc.Attrs)
 	pids := map[int32]*svc.Attrs{}
 	collectTicker := time.NewTicker(ps.cfg.Interval)
+	defer ps.collectedProcesses.Close()
 	defer collectTicker.Stop()
 	for {
 		select {

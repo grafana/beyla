@@ -54,7 +54,7 @@ func NetPrometheusEndpoint(
 ) swarm.InstanceFunc {
 	return func(_ context.Context) (swarm.RunFunc, error) {
 		if !cfg.Enabled() {
-			// This node is not going to be instantiated. Let the swar library just ignore it.
+			// This node is not going to be instantiated. Let the swarm library just ignore it.
 			return swarm.EmptyRunFunc()
 		}
 		reporter, err := newNetReporter(ctxInfo, cfg, input)

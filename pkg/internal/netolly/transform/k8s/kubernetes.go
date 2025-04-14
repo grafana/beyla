@@ -75,6 +75,7 @@ func MetadataDecoratorProvider(
 		}
 		in := input.Subscribe()
 		return func(_ context.Context) {
+			defer output.Close()
 			log().Debug("starting network transformation loop")
 			for flows := range in {
 				output.Send(decorate(flows))

@@ -370,6 +370,8 @@ struct memmove_loop_ctx {
     const unsigned char *end;
 
     u32 size;
+
+    u8 _pad[4];
 };
 
 static long memmove_loop(u32 index, void *ctx) {

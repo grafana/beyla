@@ -15,6 +15,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/watcher"
 	"github.com/grafana/beyla/v2/pkg/internal/testutil"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
 const testTimeout = 5 * time.Second
@@ -32,7 +33,6 @@ func TestWatcher_Poll(t *testing.T) {
 	// GIVEN a pollAccounter
 	acc := pollAccounter{
 		interval: time.Microsecond,
-		ctx:      ctx,
 		cfg:      &beyla.Config{},
 		pidPorts: map[pidPort]processAttrs{},
 		listProcesses: func(bool) (map[PID]processAttrs, error) {
@@ -59,11 +59,12 @@ func TestWatcher_Poll(t *testing.T) {
 		loadBPFLogger: func(*beyla.Config) error {
 			return nil
 		},
+		output: msg.NewQueue[[]Event[processAttrs]](msg.ChannelBufferLen(1)),
 	}
-	accounterOutput := make(chan []Event[processAttrs], 1)
+	accounterOutput := acc.output.Subscribe()
 	accounterExited := make(chan struct{})
 	go func() {
-		acc.Run(accounterOutput)
+		acc.run(ctx)
 		close(accounterExited)
 	}()
 
@@ -128,7 +129,6 @@ func TestProcessNotReady(t *testing.T) {
 
 	acc := pollAccounter{
 		interval: time.Microsecond,
-		ctx:      context.Background(),
 		cfg:      &beyla.Config{},
 		pidPorts: map[pidPort]processAttrs{},
 		listProcesses: func(bool) (map[PID]processAttrs, error) {
@@ -181,7 +181,6 @@ func TestPortsFetchRequired(t *testing.T) {
 	acc := pollAccounter{
 		cfg:      cfg,
 		interval: time.Hour, // don't let the inner loop mess with our test
-		ctx:      ctx,
 		pidPorts: map[pidPort]processAttrs{},
 		listProcesses: func(bool) (map[PID]processAttrs, error) {
 			return nil, nil
@@ -200,12 +199,12 @@ func TestPortsFetchRequired(t *testing.T) {
 		bpfWatcherEnabled: false,
 		fetchPorts:        true,
 		findingCriteria:   FindingCriteria(cfg),
+		output:            msg.NewQueue[[]Event[processAttrs]](msg.ChannelBufferLen(1)),
 	}
 
-	accounterOutput := make(chan []Event[processAttrs], 1)
 	accounterExited := make(chan struct{})
 	go func() {
-		acc.Run(accounterOutput)
+		acc.run(ctx)
 		close(accounterExited)
 	}()
 

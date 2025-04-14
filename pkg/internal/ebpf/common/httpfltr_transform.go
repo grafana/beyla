@@ -2,7 +2,6 @@ package ebpfcommon
 
 import (
 	"bytes"
-	"encoding/binary"
 	"net"
 	"os"
 	"path/filepath"
@@ -65,8 +64,7 @@ type HTTPInfo struct {
 }
 
 func ReadHTTPInfoIntoSpan(record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {
-	var event BPFHTTPInfo
-	err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
+	event, err := ReinterpretCast[BPFHTTPInfo](record.RawSample)
 	if err != nil {
 		return request.Span{}, true, err
 	}
@@ -79,8 +77,8 @@ func ReadHTTPInfoIntoSpan(record *ringbuf.Record, filter ServiceFilter) (request
 	return HTTPInfoEventToSpan(event)
 }
 
-func HTTPInfoEventToSpan(event BPFHTTPInfo) (request.Span, bool, error) {
-	result := HTTPInfo{BPFHTTPInfo: event}
+func HTTPInfoEventToSpan(event *BPFHTTPInfo) (request.Span, bool, error) {
+	result := HTTPInfo{BPFHTTPInfo: *event}
 
 	var bufHost string
 	var bufPort int

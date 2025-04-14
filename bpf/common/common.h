@@ -35,60 +35,66 @@
 // user space through the events ringbuffer.
 typedef struct http_request_trace_t {
     u8 type; // Must be first
+    u8 _pad0[1];
+    u16 status;
+    u8 method[METHOD_MAX_LEN];
+    u8 scheme[SCHEME_MAX_LEN];
+    u8 _pad1[11];
     u64 go_start_monotime_ns;
     u64 start_monotime_ns;
     u64 end_monotime_ns;
-    u8 method[METHOD_MAX_LEN];
-    u8 path[PATH_MAX_LEN];
-    u8 host[HOST_MAX_LEN];
-    u8 scheme[SCHEME_MAX_LEN];
-    u16 status;
-    connection_info_t conn __attribute__((aligned(8)));
     s64 content_length;
     s64 response_length;
+    u8 path[PATH_MAX_LEN];
+    u8 host[HOST_MAX_LEN];
     tp_info_t tp;
-
+    connection_info_t conn;
     pid_info pid;
-} __attribute__((packed)) http_request_trace;
+} http_request_trace;
 
 typedef struct sql_request_trace_t {
     u8 type; // Must be first
+    u8 _pad[1];
+    u16 status;
+    pid_info pid;
     u64 start_monotime_ns;
     u64 end_monotime_ns;
-    u8 sql[SQL_MAX_LEN];
-    u16 status;
-    connection_info_t conn __attribute__((aligned(8)));
     tp_info_t tp;
-    pid_info pid;
-} __attribute__((packed)) sql_request_trace;
+    connection_info_t conn;
+    u8 sql[SQL_MAX_LEN];
+} sql_request_trace;
 
 typedef struct kafka_client_req {
     u8 type; // Must be first
+    u8 _pad[7];
     u64 start_monotime_ns;
     u64 end_monotime_ns;
     u8 buf[KAFKA_MAX_LEN];
-    connection_info_t conn __attribute__((aligned(8)));
+    connection_info_t conn;
     pid_info pid;
-} __attribute__((packed)) kafka_client_req_t;
+} kafka_client_req_t;
 
 typedef struct kafka_go_req {
     u8 type; // Must be first
+    u8 op;
+    u8 _pad0[2];
+    pid_info pid;
+    connection_info_t conn;
+    u8 _pad1[4];
+    tp_info_t tp;
     u64 start_monotime_ns;
     u64 end_monotime_ns;
     u8 topic[MAX_TOPIC_NAME_LEN];
-    connection_info_t conn __attribute__((aligned(8)));
-    tp_info_t tp;
-    pid_info pid;
-    u8 op;
-} __attribute__((packed)) kafka_go_req_t;
+} kafka_go_req_t;
 
 typedef struct redis_client_req {
     u8 type; // Must be first
+    u8 err;
+    u8 _pad[6];
     u64 start_monotime_ns;
     u64 end_monotime_ns;
-    u8 buf[REDIS_MAX_LEN];
-    connection_info_t conn __attribute__((aligned(8)));
-    tp_info_t tp __attribute__((aligned(8)));
     pid_info pid;
-    u8 err;
-} __attribute__((packed)) redis_client_req_t;
+    u8 buf[REDIS_MAX_LEN];
+    connection_info_t conn;
+    tp_info_t tp;
+} redis_client_req_t;

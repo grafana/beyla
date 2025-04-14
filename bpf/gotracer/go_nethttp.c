@@ -32,13 +32,13 @@
 #include <pid/pid_helpers.h>
 
 typedef struct http_client_data {
-    u8 method[METHOD_MAX_LEN];
+    s64 content_length;
+    pid_info pid;
     u8 path[PATH_MAX_LEN];
     u8 host[HOST_MAX_LEN];
     u8 scheme[SCHEME_MAX_LEN];
-    s64 content_length;
-
-    pid_info pid;
+    u8 method[METHOD_MAX_LEN];
+    u8 _pad[3];
 } http_client_data_t;
 
 struct {
@@ -57,13 +57,13 @@ struct {
 
 typedef struct server_http_func_invocation {
     u64 start_monotime_ns;
+    u64 content_length;
+    u64 response_length;
+    u64 status;
     tp_info_t tp;
     u8 method[METHOD_MAX_LEN];
     u8 path[PATH_MAX_LEN];
-    u64 content_length;
-
-    u64 status;
-    u64 response_length;
+    u8 _pad[5];
 } server_http_func_invocation_t;
 
 struct {

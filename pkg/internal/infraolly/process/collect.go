@@ -83,6 +83,7 @@ func (ps *Collector) Run(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			ps.log.Debug("exiting process collector")
+			return
 		case spans := <-ps.newPids:
 			// updating PIDs map with spans information
 			for i := range spans {

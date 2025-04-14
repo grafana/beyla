@@ -1,12 +1,12 @@
 package discover
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"strings"
 
 	lru "github.com/hashicorp/golang-lru/v2"
-	"github.com/mariomac/pipes/pipe"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf"
@@ -15,6 +15,8 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 	"github.com/grafana/beyla/v2/pkg/internal/kube"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
+	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 var instrumentableCache, _ = lru.New[uint64, InstrumentedExecutable](100)
@@ -28,7 +30,13 @@ type InstrumentedExecutable struct {
 // ExecTyperProvider classifies the discovered executables according to the
 // executable type (Go, generic...), and filters these executables
 // that are not instrumentable.
-func ExecTyperProvider(cfg *beyla.Config, metrics imetrics.Reporter, k8sInformer *kube.MetadataProvider) pipe.MiddleProvider[[]Event[ProcessMatch], []Event[ebpf.Instrumentable]] {
+func ExecTyperProvider(
+	cfg *beyla.Config,
+	metrics imetrics.Reporter,
+	k8sInformer *kube.MetadataProvider,
+	input *msg.Queue[[]Event[ProcessMatch]],
+	output *msg.Queue[[]Event[ebpf.Instrumentable]],
+) swarm.InstanceFunc {
 	t := typer{
 		cfg:         cfg,
 		metrics:     metrics,
@@ -36,14 +44,16 @@ func ExecTyperProvider(cfg *beyla.Config, metrics imetrics.Reporter, k8sInformer
 		log:         slog.With("component", "discover.ExecTyper"),
 		currentPids: map[int32]*exec.FileInfo{},
 	}
-	return func() (pipe.MiddleFunc[[]Event[ProcessMatch], []Event[ebpf.Instrumentable]], error) {
+	return func(_ context.Context) (swarm.RunFunc, error) {
 		// TODO: do it per executable
 		if !cfg.Discovery.SkipGoSpecificTracers {
 			t.loadAllGoFunctionNames()
 		}
-		return func(in <-chan []Event[ProcessMatch], out chan<- []Event[ebpf.Instrumentable]) {
+		in := input.Subscribe()
+		return func(_ context.Context) {
+			defer output.Close()
 			for i := range in {
-				out <- t.FilterClassify(i)
+				output.Send(t.FilterClassify(i))
 			}
 		}, nil
 	}

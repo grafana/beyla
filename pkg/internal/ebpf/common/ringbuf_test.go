@@ -187,15 +187,24 @@ func (f *fakeRingBufReader) Close() error {
 }
 
 func (f *fakeRingBufReader) Read() (ringbuf.Record, error) {
+	record := ringbuf.Record{}
+
+	err := f.ReadInto(&record)
+
+	return record, err
+}
+
+func (f *fakeRingBufReader) ReadInto(record *ringbuf.Record) error {
 	select {
 	case traceEvent := <-f.events:
 		binaryRecord := bytes.Buffer{}
 		if err := binary.Write(&binaryRecord, binary.LittleEndian, traceEvent); err != nil {
-			return ringbuf.Record{}, err
+			return err
 		}
-		return ringbuf.Record{RawSample: binaryRecord.Bytes()}, nil
+		record.RawSample = binaryRecord.Bytes()
+		return nil
 	case <-f.closeCh:
-		return ringbuf.Record{}, ringbuf.ErrClosed
+		return ringbuf.ErrClosed
 	}
 }
 

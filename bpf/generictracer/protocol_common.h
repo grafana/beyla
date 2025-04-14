@@ -83,6 +83,9 @@ connection_meta_by_direction(pid_connection_info_t *pid_conn, u8 direction, u8 p
     return meta;
 }
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wpadded"
+
 struct iov_iter___dummy {
     unsigned int type; // for co-re support, use iter_type instead
     u8 iter_type;
@@ -91,6 +94,8 @@ struct iov_iter___dummy {
     const struct iovec *__iov;
     unsigned long nr_segs;
 };
+
+#pragma clang diagnostic pop
 
 typedef struct iov_iter___dummy iovec_iter_ctx;
 

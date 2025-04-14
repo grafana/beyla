@@ -3,6 +3,8 @@
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wpadded"
+#pragma clang diagnostic ignored "-Wpacked"
+#pragma clang diagnostic ignored "-Wunaligned-access"
 
 #if defined(__TARGET_ARCH_x86)
 

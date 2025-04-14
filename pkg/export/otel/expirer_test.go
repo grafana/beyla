@@ -33,8 +33,8 @@ func TestNetMetricsExpiration(t *testing.T) {
 	now := syncedClock{now: time.Now()}
 	timeNow = now.Now
 
+	metrics := msg.NewQueue[[]*ebpf.Record](msg.ChannelBufferLen(20))
 	otelExporter, err := NetMetricsExporterProvider(
-		ctx,
 		&global.ContextInfo{}, &NetMetricsConfig{
 			Metrics: &MetricsConfig{
 				Interval:        50 * time.Millisecond,
@@ -50,19 +50,18 @@ func TestNetMetricsExpiration(t *testing.T) {
 					Include: []string{"src.name", "dst.name"},
 				},
 			},
-		})
+		}, metrics)(ctx)
 	require.NoError(t, err)
 
-	metrics := make(chan []*ebpf.Record, 20)
-	go otelExporter(metrics)
+	go otelExporter(ctx)
 
 	// WHEN it receives metrics
-	metrics <- []*ebpf.Record{
+	metrics.Send([]*ebpf.Record{
 		{Attrs: ebpf.RecordAttrs{SrcName: "foo", DstName: "bar"},
 			NetFlowRecordT: ebpf.NetFlowRecordT{Metrics: ebpf.NetFlowMetrics{Bytes: 123}}},
 		{Attrs: ebpf.RecordAttrs{SrcName: "baz", DstName: "bae"},
 			NetFlowRecordT: ebpf.NetFlowRecordT{Metrics: ebpf.NetFlowMetrics{Bytes: 456}}},
-	}
+	})
 
 	// THEN the metrics are exported
 	test.Eventually(t, timeout, func(t require.TestingT) {
@@ -77,10 +76,10 @@ func TestNetMetricsExpiration(t *testing.T) {
 	})
 	// AND WHEN it keeps receiving a subset of the initial metrics during the TTL
 	now.Advance(2 * time.Minute)
-	metrics <- []*ebpf.Record{
+	metrics.Send([]*ebpf.Record{
 		{Attrs: ebpf.RecordAttrs{SrcName: "foo", DstName: "bar"},
 			NetFlowRecordT: ebpf.NetFlowRecordT{Metrics: ebpf.NetFlowMetrics{Bytes: 123}}},
-	}
+	})
 
 	// THEN THE metrics that have been received during the TTL period are still visible
 	test.Eventually(t, timeout, func(t require.TestingT) {
@@ -90,10 +89,10 @@ func TestNetMetricsExpiration(t *testing.T) {
 	})
 
 	now.Advance(2 * time.Minute)
-	metrics <- []*ebpf.Record{
+	metrics.Send([]*ebpf.Record{
 		{Attrs: ebpf.RecordAttrs{SrcName: "foo", DstName: "bar"},
 			NetFlowRecordT: ebpf.NetFlowRecordT{Metrics: ebpf.NetFlowMetrics{Bytes: 123}}},
-	}
+	})
 
 	// makes sure that the records channel is emptied and any remaining
 	// old metric is sent and then the channel is re-emptied
@@ -113,10 +112,10 @@ func TestNetMetricsExpiration(t *testing.T) {
 
 	// AND WHEN the metrics labels that disappeared are received again
 	now.Advance(2 * time.Minute)
-	metrics <- []*ebpf.Record{
+	metrics.Send([]*ebpf.Record{
 		{Attrs: ebpf.RecordAttrs{SrcName: "baz", DstName: "bae"},
 			NetFlowRecordT: ebpf.NetFlowRecordT{Metrics: ebpf.NetFlowMetrics{Bytes: 456}}},
-	}
+	})
 
 	// THEN they are reported again, starting from zero in the case of counters
 	test.Eventually(t, timeout, func(t require.TestingT) {

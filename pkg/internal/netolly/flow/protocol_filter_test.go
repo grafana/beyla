@@ -9,6 +9,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/flow/transport"
 	"github.com/grafana/beyla/v2/pkg/internal/testutil"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
 var tcp1 = &ebpf.Record{NetFlowRecordT: ebpf.NetFlowRecordT{Id: ebpf.NetFlowId{SrcPort: 1, TransportProtocol: uint8(transport.TCP)}}}
@@ -21,16 +22,18 @@ var icmp2 = &ebpf.Record{NetFlowRecordT: ebpf.NetFlowRecordT{Id: ebpf.NetFlowId{
 var icmp3 = &ebpf.Record{NetFlowRecordT: ebpf.NetFlowRecordT{Id: ebpf.NetFlowId{SrcPort: 9, TransportProtocol: uint8(transport.ICMP)}}}
 
 func TestProtocolFilter_Allow(t *testing.T) {
-	protocolFilter, err := ProtocolFilterProvider([]string{"TCP"}, nil)()
+	input := msg.NewQueue[[]*ebpf.Record](msg.ChannelBufferLen(100))
+	defer input.Close()
+	outputQu := msg.NewQueue[[]*ebpf.Record](msg.ChannelBufferLen(100))
+	output := outputQu.Subscribe()
+	protocolFilter, err := ProtocolFilterProvider([]string{"TCP"}, nil, input, outputQu)(t.Context())
 	require.NoError(t, err)
-	input, output := make(chan []*ebpf.Record, 10), make(chan []*ebpf.Record, 10)
-	defer close(input)
-	go protocolFilter(input, output)
+	go protocolFilter(t.Context())
 
-	input <- []*ebpf.Record{}
-	input <- []*ebpf.Record{tcp1, tcp2, tcp3}
-	input <- []*ebpf.Record{icmp2, udp1, icmp1, udp2, icmp3}
-	input <- []*ebpf.Record{icmp2, tcp1, udp1, icmp1, tcp2, udp2, tcp3, icmp3}
+	input.Send([]*ebpf.Record{})
+	input.Send([]*ebpf.Record{tcp1, tcp2, tcp3})
+	input.Send([]*ebpf.Record{icmp2, udp1, icmp1, udp2, icmp3})
+	input.Send([]*ebpf.Record{icmp2, tcp1, udp1, icmp1, tcp2, udp2, tcp3, icmp3})
 
 	filtered := testutil.ReadChannel(t, output, timeout)
 	assert.Equal(t, []*ebpf.Record{tcp1, tcp2, tcp3}, filtered)
@@ -46,16 +49,18 @@ func TestProtocolFilter_Allow(t *testing.T) {
 }
 
 func TestProtocolFilter_Exclude(t *testing.T) {
-	protocolFilter, err := ProtocolFilterProvider(nil, []string{"TCP"})()
+	input := msg.NewQueue[[]*ebpf.Record](msg.ChannelBufferLen(100))
+	defer input.Close()
+	outputQu := msg.NewQueue[[]*ebpf.Record](msg.ChannelBufferLen(100))
+	output := outputQu.Subscribe()
+	protocolFilter, err := ProtocolFilterProvider(nil, []string{"TCP"}, input, outputQu)(t.Context())
 	require.NoError(t, err)
-	input, output := make(chan []*ebpf.Record, 10), make(chan []*ebpf.Record, 10)
-	defer close(input)
-	go protocolFilter(input, output)
+	go protocolFilter(t.Context())
 
-	input <- []*ebpf.Record{tcp1, tcp2, tcp3}
-	input <- []*ebpf.Record{icmp2, udp1, icmp1, udp2, icmp3}
-	input <- []*ebpf.Record{}
-	input <- []*ebpf.Record{icmp2, tcp1, udp1, icmp1, tcp2, udp2, tcp3, icmp3}
+	input.Send([]*ebpf.Record{tcp1, tcp2, tcp3})
+	input.Send([]*ebpf.Record{icmp2, udp1, icmp1, udp2, icmp3})
+	input.Send([]*ebpf.Record{})
+	input.Send([]*ebpf.Record{icmp2, tcp1, udp1, icmp1, tcp2, udp2, tcp3, icmp3})
 
 	filtered := testutil.ReadChannel(t, output, timeout)
 	assert.Equal(t, []*ebpf.Record{icmp2, udp1, icmp1, udp2, icmp3}, filtered)
@@ -70,10 +75,10 @@ func TestProtocolFilter_Exclude(t *testing.T) {
 	}
 }
 func TestProtocolFilter_ParsingErrors(t *testing.T) {
-	_, err := ProtocolFilterProvider([]string{"TCP", "tralara"}, nil)()
+	_, err := ProtocolFilterProvider([]string{"TCP", "tralara"}, nil, nil, nil)(t.Context())
 	assert.Error(t, err)
-	_, err = ProtocolFilterProvider([]string{"TCP", "tralara"}, []string{"UDP"})()
+	_, err = ProtocolFilterProvider([]string{"TCP", "tralara"}, []string{"UDP"}, nil, nil)(t.Context())
 	assert.Error(t, err)
-	_, err = ProtocolFilterProvider(nil, []string{"TCP", "tralara"})()
+	_, err = ProtocolFilterProvider(nil, []string{"TCP", "tralara"}, nil, nil)(t.Context())
 	assert.Error(t, err)
 }

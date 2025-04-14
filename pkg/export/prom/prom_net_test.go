@@ -15,6 +15,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/connector"
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
 func TestMetricsExpiration(t *testing.T) {
@@ -28,8 +29,9 @@ func TestMetricsExpiration(t *testing.T) {
 	promURL := fmt.Sprintf("http://127.0.0.1:%d/metrics", openPort)
 
 	// GIVEN a Prometheus Metrics Exporter with a metrics expire time of 3 minutes
+	metrics := msg.NewQueue[[]*ebpf.Record](msg.ChannelBufferLen(20))
 	exporter, err := NetPrometheusEndpoint(
-		ctx, &global.ContextInfo{Prometheus: &connector.PrometheusManager{}},
+		&global.ContextInfo{Prometheus: &connector.PrometheusManager{}},
 		&NetPrometheusConfig{Config: &PrometheusConfig{
 			Port:                        openPort,
 			Path:                        "/metrics",
@@ -40,20 +42,18 @@ func TestMetricsExpiration(t *testing.T) {
 			attributes.BeylaNetworkFlow.Section: attributes.InclusionLists{
 				Include: []string{"src_name", "dst_name"},
 			},
-		}},
-	)
+		}}, metrics)(ctx)
 	require.NoError(t, err)
 
-	metrics := make(chan []*ebpf.Record, 20)
-	go exporter(metrics)
+	go exporter(ctx)
 
 	// WHEN it receives metrics
-	metrics <- []*ebpf.Record{
+	metrics.Send([]*ebpf.Record{
 		{Attrs: ebpf.RecordAttrs{SrcName: "foo", DstName: "bar"},
 			NetFlowRecordT: ebpf.NetFlowRecordT{Metrics: ebpf.NetFlowMetrics{Bytes: 123}}},
 		{Attrs: ebpf.RecordAttrs{SrcName: "baz", DstName: "bae"},
 			NetFlowRecordT: ebpf.NetFlowRecordT{Metrics: ebpf.NetFlowMetrics{Bytes: 456}}},
-	}
+	})
 
 	// THEN the metrics are exported
 	test.Eventually(t, timeout, func(t require.TestingT) {
@@ -64,10 +64,10 @@ func TestMetricsExpiration(t *testing.T) {
 
 	// AND WHEN it keeps receiving a subset of the initial metrics during the timeout
 	now.Advance(2 * time.Minute)
-	metrics <- []*ebpf.Record{
+	metrics.Send([]*ebpf.Record{
 		{Attrs: ebpf.RecordAttrs{SrcName: "foo", DstName: "bar"},
 			NetFlowRecordT: ebpf.NetFlowRecordT{Metrics: ebpf.NetFlowMetrics{Bytes: 123}}},
-	}
+	})
 	now.Advance(2 * time.Minute)
 
 	// THEN THE metrics that have been received during the timeout period are still visible
@@ -82,10 +82,10 @@ func TestMetricsExpiration(t *testing.T) {
 	now.Advance(2 * time.Minute)
 
 	// AND WHEN the metrics labels that disappeared are received again
-	metrics <- []*ebpf.Record{
+	metrics.Send([]*ebpf.Record{
 		{Attrs: ebpf.RecordAttrs{SrcName: "baz", DstName: "bae"},
 			NetFlowRecordT: ebpf.NetFlowRecordT{Metrics: ebpf.NetFlowMetrics{Bytes: 456}}},
-	}
+	})
 	now.Advance(2 * time.Minute)
 
 	// THEN they are reported again, starting from zero in the case of counters

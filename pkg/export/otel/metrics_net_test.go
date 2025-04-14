@@ -1,7 +1,6 @@
 package otel
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -13,6 +12,7 @@ import (
 	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
 func TestMetricAttributes(t *testing.T) {
@@ -38,7 +38,7 @@ func TestMetricAttributes(t *testing.T) {
 	in.Id.SrcIp.In6U.U6Addr8 = [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 12, 34, 56, 78}
 	in.Id.DstIp.In6U.U6Addr8 = [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 33, 22, 11, 1}
 
-	me, err := newMetricsExporter(context.Background(),
+	me, err := newMetricsExporter(t.Context(),
 		&global.ContextInfo{MetricAttributeGroups: attributes.GroupKubernetes},
 		&NetMetricsConfig{AttributeSelectors: map[attributes.Section]attributes.InclusionLists{
 			attributes.BeylaNetworkFlow.Section: {Include: []string{"*"}},
@@ -48,7 +48,7 @@ func TestMetricAttributes(t *testing.T) {
 			ReportersCacheLen: 100,
 			TTL:               5 * time.Minute,
 			Features:          []string{FeatureNetwork, FeatureNetworkInterZone},
-		}})
+		}}, msg.NewQueue[[]*ebpf.Record]())
 	require.NoError(t, err)
 
 	_, reportedAttributes := me.flowBytes.ForRecord(in)
@@ -95,7 +95,7 @@ func TestMetricAttributes_Filter(t *testing.T) {
 	in.Id.SrcIp.In6U.U6Addr8 = [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 12, 34, 56, 78}
 	in.Id.DstIp.In6U.U6Addr8 = [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 33, 22, 11, 1}
 
-	me, err := newMetricsExporter(context.Background(),
+	me, err := newMetricsExporter(t.Context(),
 		&global.ContextInfo{MetricAttributeGroups: attributes.GroupKubernetes},
 		&NetMetricsConfig{AttributeSelectors: map[attributes.Section]attributes.InclusionLists{
 			attributes.BeylaNetworkFlow.Section: {Include: []string{
@@ -108,7 +108,7 @@ func TestMetricAttributes_Filter(t *testing.T) {
 			Interval:          10 * time.Millisecond,
 			ReportersCacheLen: 100,
 			Features:          []string{FeatureNetwork, FeatureNetworkInterZone},
-		}})
+		}}, msg.NewQueue[[]*ebpf.Record]())
 	require.NoError(t, err)
 
 	_, reportedAttributes := me.flowBytes.ForRecord(in)

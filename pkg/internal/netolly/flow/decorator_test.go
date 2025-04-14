@@ -11,6 +11,7 @@ import (
 
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/v2/pkg/internal/testutil"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
 const timeout = 5 * time.Second
@@ -20,11 +21,11 @@ func TestDecoration(t *testing.T) {
 	dstIP := [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 4, 3, 2, 1}
 
 	// Given a flow Decorator node
-	in := make(chan []*ebpf.Record, 10)
-	out := make(chan []*ebpf.Record, 10)
+	in := msg.NewQueue[[]*ebpf.Record](msg.ChannelBufferLen(10))
+	out := msg.NewQueue[[]*ebpf.Record](msg.ChannelBufferLen(10))
 	go Decorate(net.IPv4(3, 3, 3, 3), func(n int) string {
 		return fmt.Sprintf("eth%d", n)
-	}, nil, nil)(in, out)
+	}, in, out)(t.Context())
 
 	// When it receives flows
 	f1 := &ebpf.Record{NetFlowRecordT: ebpf.NetFlowRecordT{
@@ -39,11 +40,11 @@ func TestDecoration(t *testing.T) {
 	f2.Id.SrcIp.In6U.U6Addr8 = srcIP
 	f2.Id.DstIp.In6U.U6Addr8 = dstIP
 
-	in <- []*ebpf.Record{f1, f2}
+	in.Send([]*ebpf.Record{f1, f2})
 
 	// THEN it decorates them, by adding IPs to source/destination
 	// names only when they were missing
-	decorated := testutil.ReadChannel(t, out, timeout)
+	decorated := testutil.ReadChannel(t, out.Subscribe(), timeout)
 	require.Len(t, decorated, 2)
 
 	assert.Equal(t, "eth1", decorated[0].Attrs.Interface)

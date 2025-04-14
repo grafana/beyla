@@ -17,7 +17,7 @@ func ProtocolFilterProvider(
 	allowed, excluded []string,
 	input, output *msg.Queue[[]*ebpf.Record],
 ) swarm.InstanceFunc {
-	return func(ctx context.Context) (swarm.RunFunc, error) {
+	return func(_ context.Context) (swarm.RunFunc, error) {
 		if len(allowed) == 0 && len(excluded) == 0 {
 			// user did not configure any filter. Ignore this node
 			return swarm.Bypass(input, output)

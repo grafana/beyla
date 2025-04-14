@@ -487,7 +487,7 @@ func (p *Tracer) lookForTimeouts(ticker *time.Ticker, eventsChan *msg.Queue[[]re
 				if v.EndMonotimeNs != 0 && t.After(kernelTime(v.EndMonotimeNs).Add(2*time.Second)) {
 					// Must use unsafe here, the two bpfHttpInfoTs are the same but generated from different
 					// ebpf2go outputs
-					s, ignore, err := ebpfcommon.HTTPInfoEventToSpan(*(*ebpfcommon.BPFHTTPInfo)(unsafe.Pointer(&v)))
+					s, ignore, err := ebpfcommon.HTTPInfoEventToSpan((*ebpfcommon.BPFHTTPInfo)(unsafe.Pointer(&v)))
 					if !ignore && err == nil {
 						eventsChan.Send(p.pidsFilter.Filter([]request.Span{s}))
 					}
@@ -497,7 +497,7 @@ func (p *Tracer) lookForTimeouts(ticker *time.Ticker, eventsChan *msg.Queue[[]re
 				} else if v.EndMonotimeNs == 0 && p.cfg.EBPF.HTTPRequestTimeout.Milliseconds() > 0 && t.After(kernelTime(v.StartMonotimeNs).Add(p.cfg.EBPF.HTTPRequestTimeout)) {
 					// If we don't have a request finish with endTime by the configured request timeout, terminate the
 					// waiting request with a timeout 408
-					s, ignore, err := ebpfcommon.HTTPInfoEventToSpan(*(*ebpfcommon.BPFHTTPInfo)(unsafe.Pointer(&v)))
+					s, ignore, err := ebpfcommon.HTTPInfoEventToSpan((*ebpfcommon.BPFHTTPInfo)(unsafe.Pointer(&v)))
 
 					if !ignore && err == nil {
 						s.Status = 408 // timeout

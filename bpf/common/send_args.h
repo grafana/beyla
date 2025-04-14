@@ -7,4 +7,5 @@ typedef struct send_args {
     u64 size;
     u64 sock_ptr;
     u16 orig_dport;
+    u8 _pad[6];
 } send_args_t;

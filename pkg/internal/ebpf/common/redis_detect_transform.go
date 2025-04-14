@@ -2,7 +2,6 @@ package ebpfcommon
 
 import (
 	"bytes"
-	"encoding/binary"
 	"strings"
 	"unsafe"
 
@@ -208,9 +207,7 @@ func TCPToRedisToSpan(trace *TCPRequestInfo, op, text string, status int) reques
 }
 
 func ReadGoRedisRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
-	var event GoRedisClientInfo
-
-	err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
+	event, err := ReinterpretCast[GoRedisClientInfo](record.RawSample)
 	if err != nil {
 		return request.Span{}, true, err
 	}

@@ -112,10 +112,14 @@ func (i *Instrumenter) ReadAndForward() {
 
 	i.bp.Run(i.ctx)
 
+	<-i.ctx.Done()
+
 	log.Info("exiting auto-instrumenter")
+
+	i.stop()
 }
 
-func (i *Instrumenter) Stop() error {
+func (i *Instrumenter) stop() error {
 	log := log()
 
 	stopped := make(chan struct{})

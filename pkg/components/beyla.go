@@ -31,7 +31,7 @@ func RunBeyla(ctx context.Context, cfg *beyla.Config) error {
 	app := cfg.Enabled(beyla.FeatureAppO11y)
 	net := cfg.Enabled(beyla.FeatureNetO11y)
 
-	// of one of both nodes fail, the other should stop
+	// if one of nodes fail, the other should stop
 	g, ctx := errgroup.WithContext(ctx)
 
 	if app {
@@ -75,12 +75,6 @@ func setupAppO11y(ctx context.Context, ctxInfo *global.ContextInfo, config *beyl
 
 	instr.ReadAndForward()
 
-	<-ctx.Done()
-
-	if err := instr.Stop(); err != nil {
-		return fmt.Errorf("can't stop instrumenter: %w", err)
-	}
-
 	return nil
 }
 
@@ -97,16 +91,10 @@ func setupNetO11y(ctx context.Context, ctxInfo *global.ContextInfo, cfg *beyla.C
 		return fmt.Errorf("can't start network metrics capture: %w", err)
 	}
 
-	if err := flowsAgent.Start(ctx); err != nil {
-		slog.Debug("can't start network metrics capture", "error", err)
-		return fmt.Errorf("can't start network metrics capture: %w", err)
-	}
-
-	<-ctx.Done()
-
-	if err := flowsAgent.Stop(); err != nil {
-		slog.Debug("can't stop network metrics capture", "error", err)
-		return fmt.Errorf("can't stop network metrics capture: %w", err)
+	err = flowsAgent.Run(ctx)
+	if err != nil {
+		slog.Debug("can't run network metrics capture", "error", err)
+		return fmt.Errorf("can't run network metrics capture: %w", err)
 	}
 
 	return nil

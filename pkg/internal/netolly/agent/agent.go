@@ -235,8 +235,8 @@ func flowDirections(cfg *beyla.NetworkConfig) (ingress, egress bool) {
 	}
 }
 
-// Start a Flows agent
-func (f *Flows) Start(ctx context.Context) error {
+// Run a Flows agent
+func (f *Flows) Run(ctx context.Context) error {
 	alog := alog()
 
 	f.status = StatusStarting
@@ -254,12 +254,20 @@ func (f *Flows) Start(ctx context.Context) error {
 	f.graph.Start()
 
 	f.status = StatusStarted
+
 	alog.Info("Flows agent successfully started")
+
+	<-ctx.Done()
+
+	err = f.stop()
+	if err != nil {
+		return fmt.Errorf("failed to stop Flows agent: %w", err)
+	}
 
 	return nil
 }
 
-func (f *Flows) Stop() error {
+func (f *Flows) stop() error {
 	alog := alog()
 
 	stopped := make(chan struct{})

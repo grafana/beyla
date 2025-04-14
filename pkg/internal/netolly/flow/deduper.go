@@ -20,12 +20,13 @@ package flow
 
 import (
 	"container/list"
+	"context"
 	"log/slog"
 	"time"
 
-	"github.com/mariomac/pipes/pipe"
-
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
+	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 func dlog() *slog.Logger {
@@ -38,8 +39,9 @@ const (
 )
 
 type Deduper struct {
-	Type       string
-	ExpireTime time.Duration
+	Type               string
+	FCTTL              time.Duration
+	CacheActiveTimeout time.Duration
 }
 
 func (d Deduper) Enabled() bool {
@@ -70,37 +72,44 @@ type entry struct {
 // the flows from the first interface coming to it, until that flow expires in the cache
 // (no activity for it during the expiration time)
 // After passing by the deduper, the ebpf.Record instances loose their IfIndex and Direction fields.
-func DeduperProvider(dd *Deduper) (pipe.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
-	if !dd.Enabled() {
-		// This node is not going to be instantiated. Let the pipes library just bypassing it.
-		return pipe.Bypass[[]*ebpf.Record](), nil
+func DeduperProvider(dd *Deduper, input, output *msg.Queue[[]*ebpf.Record]) swarm.InstanceFunc {
+	var deduperExpireTime = dd.FCTTL
+	if deduperExpireTime <= 0 {
+		deduperExpireTime = 2 * dd.CacheActiveTimeout
 	}
-	cache := &deduperCache{
-		expire:  dd.ExpireTime,
-		entries: list.New(),
-		ifaces:  map[ebpf.NetFlowId]*list.Element{},
-	}
-	return func(in <-chan []*ebpf.Record, out chan<- []*ebpf.Record) {
-		for records := range in {
-			cache.removeExpired()
-			fwd := make([]*ebpf.Record, 0, len(records))
-			for _, record := range records {
-				if cache.isDupe(&record.Id) {
-					continue
-				}
-				// Before forwarding, unset the non-common fields of deduplicate flows.
-				// These values are not relevant after deduplication and keeping them
-				// would unnecessarily increase cardinality, as they could chaotically
-				// contain the different interfaces.
-				record.Id.IfIndex = ebpf.InterfaceUnset
-
-				fwd = append(fwd, record)
-			}
-			if len(fwd) > 0 {
-				out <- fwd
-			}
+	return func(_ context.Context) (swarm.RunFunc, error) {
+		if !dd.Enabled() {
+			// This node is not going to be instantiated. Bypassing it
+			return swarm.Bypass(input, output)
 		}
-	}, nil
+		cache := &deduperCache{
+			expire:  deduperExpireTime,
+			entries: list.New(),
+			ifaces:  map[ebpf.NetFlowId]*list.Element{},
+		}
+		in := input.Subscribe()
+		return func(_ context.Context) {
+			for records := range in {
+				cache.removeExpired()
+				fwd := make([]*ebpf.Record, 0, len(records))
+				for _, record := range records {
+					if cache.isDupe(&record.Id) {
+						continue
+					}
+					// Before forwarding, unset the non-common fields of deduplicate flows.
+					// These values are not relevant after deduplication and keeping them
+					// would unnecessarily increase cardinality, as they could chaotically
+					// contain the different interfaces.
+					record.Id.IfIndex = ebpf.InterfaceUnset
+
+					fwd = append(fwd, record)
+				}
+				if len(fwd) > 0 {
+					output.Send(fwd)
+				}
+			}
+		}, nil
+	}
 }
 
 // isDupe returns whether the passed record has been already checked for duplicate for

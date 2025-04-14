@@ -9,11 +9,12 @@ import (
 	"time"
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
-	"github.com/mariomac/pipes/pipe"
 
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/v2/pkg/internal/rdns/ebpf/xdp"
 	"github.com/grafana/beyla/v2/pkg/internal/rdns/store"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
+	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 const (
@@ -54,33 +55,35 @@ func (r ReverseDNS) Enabled() bool {
 	return rdType == ReverseDNSLocalLookup || rdType == ReverseDNSEBPF
 }
 
-func ReverseDNSProvider(ctx context.Context, cfg *ReverseDNS) (pipe.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
-	if !cfg.Enabled() {
-		// This node is not going to be instantiated. Let the pipes library just bypassing it.
-		return pipe.Bypass[[]*ebpf.Record](), nil
-	}
-
-	if err := checkEBPFReverseDNS(ctx, cfg); err != nil {
-		return nil, err
-	}
-	// TODO: replace by a cache with fuzzy expiration time to avoid cache stampede
-	cache := expirable.NewLRU[ebpf.IPAddr, string](cfg.CacheLen, nil, cfg.CacheTTL)
-
-	log := rdlog()
-	return func(in <-chan []*ebpf.Record, out chan<- []*ebpf.Record) {
-		log.Debug("starting reverse DNS node")
-		for flows := range in {
-			for _, flow := range flows {
-				if flow.Attrs.SrcName == "" {
-					flow.Attrs.SrcName = optGetName(log, cache, flow.Id.SrcIp.In6U.U6Addr8)
-				}
-				if flow.Attrs.DstName == "" {
-					flow.Attrs.DstName = optGetName(log, cache, flow.Id.DstIp.In6U.U6Addr8)
-				}
-			}
-			out <- flows
+func ReverseDNSProvider(cfg *ReverseDNS, input, output *msg.Queue[[]*ebpf.Record]) swarm.InstanceFunc {
+	return func(ctx context.Context) (swarm.RunFunc, error) {
+		if !cfg.Enabled() {
+			return swarm.Bypass(input, output)
 		}
-	}, nil
+
+		if err := checkEBPFReverseDNS(ctx, cfg); err != nil {
+			return nil, err
+		}
+		// TODO: replace by a cache with fuzzy expiration time to avoid cache stampede
+		cache := expirable.NewLRU[ebpf.IPAddr, string](cfg.CacheLen, nil, cfg.CacheTTL)
+
+		log := rdlog()
+		in := input.Subscribe()
+		return func(_ context.Context) {
+			log.Debug("starting reverse DNS node")
+			for flows := range in {
+				for _, flow := range flows {
+					if flow.Attrs.SrcName == "" {
+						flow.Attrs.SrcName = optGetName(log, cache, flow.Id.SrcIp.In6U.U6Addr8)
+					}
+					if flow.Attrs.DstName == "" {
+						flow.Attrs.DstName = optGetName(log, cache, flow.Id.DstIp.In6U.U6Addr8)
+					}
+				}
+				output.Send(flows)
+			}
+		}, nil
+	}
 }
 
 // changes reverse DNS method according to the provided configuration

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/mariomac/pipes/pipe"
 	"go.opentelemetry.io/otel/attribute"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -20,6 +19,8 @@ import (
 	metric2 "github.com/grafana/beyla/v2/pkg/export/otel/metric/api/metric"
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
+	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 // NetMetricsConfig extends MetricsConfig for Network Metrics
@@ -65,26 +66,32 @@ func newMeterProvider(res *resource.Resource, exporter *sdkmetric.Exporter, inte
 }
 
 type netMetricsExporter struct {
-	ctx            context.Context
 	flowBytes      *Expirer[*ebpf.Record, metric2.Int64Counter, float64]
 	interZoneBytes *Expirer[*ebpf.Record, metric2.Int64Counter, float64]
 	clock          *expire.CachedClock
 	expireTTL      time.Duration
+	in             <-chan []*ebpf.Record
 }
 
-func NetMetricsExporterProvider(ctx context.Context, ctxInfo *global.ContextInfo, cfg *NetMetricsConfig) (pipe.FinalFunc[[]*ebpf.Record], error) {
-	if !cfg.Enabled() {
-		// This node is not going to be instantiated. Let the pipes library just ignore it.
-		return pipe.IgnoreFinal[[]*ebpf.Record](), nil
+func NetMetricsExporterProvider(
+	ctxInfo *global.ContextInfo, cfg *NetMetricsConfig, input *msg.Queue[[]*ebpf.Record],
+) swarm.InstanceFunc {
+	return func(ctx context.Context) (swarm.RunFunc, error) {
+		if !cfg.Enabled() {
+			// This node is not going to be instantiated. Let the pipes swarm just ignore it.
+			return swarm.EmptyRunFunc()
+		}
+		exporter, err := newMetricsExporter(ctx, ctxInfo, cfg, input)
+		if err != nil {
+			return nil, err
+		}
+		return exporter.Do, nil
 	}
-	exporter, err := newMetricsExporter(ctx, ctxInfo, cfg)
-	if err != nil {
-		return nil, err
-	}
-	return exporter.Do, nil
 }
 
-func newMetricsExporter(ctx context.Context, ctxInfo *global.ContextInfo, cfg *NetMetricsConfig) (*netMetricsExporter, error) {
+func newMetricsExporter(
+	ctx context.Context, ctxInfo *global.ContextInfo, cfg *NetMetricsConfig, input *msg.Queue[[]*ebpf.Record],
+) (*netMetricsExporter, error) {
 	log := nmlog()
 	log.Debug("instantiating network metrics exporter provider")
 	exporter, err := InstantiateMetricsExporter(context.Background(), cfg.Metrics, log)
@@ -110,7 +117,6 @@ func newMetricsExporter(ctx context.Context, ctxInfo *global.ContextInfo, cfg *N
 	ebpfEvents := provider.Meter("network_ebpf_events")
 
 	nme := &netMetricsExporter{
-		ctx:       ctx,
 		clock:     clock,
 		expireTTL: cfg.Metrics.TTL,
 	}
@@ -151,20 +157,21 @@ func newMetricsExporter(ctx context.Context, ctxInfo *global.ContextInfo, cfg *N
 		nme.interZoneBytes = NewExpirer[*ebpf.Record, metric2.Int64Counter, float64](ctx, bytesMetric, attrs, clock.Time, cfg.Metrics.TTL)
 	}
 
+	nme.in = input.Subscribe()
 	return nme, nil
 }
 
-func (me *netMetricsExporter) Do(in <-chan []*ebpf.Record) {
-	for i := range in {
+func (me *netMetricsExporter) Do(ctx context.Context) {
+	for i := range me.in {
 		me.clock.Update()
 		for _, v := range i {
 			if me.flowBytes != nil {
 				flowBytes, attrs := me.flowBytes.ForRecord(v)
-				flowBytes.Add(me.ctx, int64(v.Metrics.Bytes), metric2.WithAttributeSet(attrs))
+				flowBytes.Add(ctx, int64(v.Metrics.Bytes), metric2.WithAttributeSet(attrs))
 			}
 			if me.interZoneBytes != nil && v.Attrs.SrcZone != v.Attrs.DstZone {
 				izBytes, attrs := me.interZoneBytes.ForRecord(v)
-				izBytes.Add(me.ctx, int64(v.Metrics.Bytes), metric2.WithAttributeSet(attrs))
+				izBytes.Add(ctx, int64(v.Metrics.Bytes), metric2.WithAttributeSet(attrs))
 			}
 		}
 	}

@@ -24,7 +24,7 @@ func TestDecoration(t *testing.T) {
 	out := make(chan []*ebpf.Record, 10)
 	go Decorate(net.IPv4(3, 3, 3, 3), func(n int) string {
 		return fmt.Sprintf("eth%d", n)
-	})(in, out)
+	}, nil, nil)(in, out)
 
 	// When it receives flows
 	f1 := &ebpf.Record{NetFlowRecordT: ebpf.NetFlowRecordT{

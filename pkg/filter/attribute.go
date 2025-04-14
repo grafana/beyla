@@ -29,9 +29,7 @@ func ByAttribute[T any](config AttributeFamilyConfig, getters attributes.NamedGe
 	return func(_ context.Context) (swarm.RunFunc, error) {
 		if len(config) == 0 {
 			// No filter configuration provided. The node will be ignored
-			// and bypassed by the Pipes library
-			input.Bypass(output)
-			return swarm.EmptyRunFunc()
+			return swarm.Bypass(input, output)
 		}
 		f, err := newFilter(config, getters, input, output)
 		if err != nil {

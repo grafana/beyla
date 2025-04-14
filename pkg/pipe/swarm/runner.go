@@ -6,15 +6,25 @@ import (
 	"context"
 	"sync"
 	"sync/atomic"
+
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
 // RunFunc is a function that runs a node. The node should be stoppable via the passed context Done function.
 type RunFunc func(context.Context)
 
-// EmptyRunFunc returns a no-op RunFunc that does nothing. Can be used as a convenience reference
+// EmptyRunFunc returns a no-op RunFunc that does nothing. Can be used as a convenience method
 // for an Instancer that returns a function that can be ignored
 func EmptyRunFunc() (RunFunc, error) {
 	return func(_ context.Context) {}, nil
+}
+
+// Bypass is a convenience method that bypasses the input channel to the output channel and returns a
+// no-op RunFunc. It can be used as a convenience method for an Instancer of an optional node
+// that might not be instantiated and its input-output need to be bypassed from its sender to its receiver.
+func Bypass[T any](input, output *msg.Queue[T]) (RunFunc, error) {
+	input.Bypass(output)
+	return EmptyRunFunc()
 }
 
 // Runner runs all the nodes in the swarm returned from an Instancer.

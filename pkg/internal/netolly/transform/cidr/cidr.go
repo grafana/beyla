@@ -1,15 +1,17 @@
 package cidr
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net"
 
-	"github.com/mariomac/pipes/pipe"
 	"github.com/yl2chen/cidranger"
 
 	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
+	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 func glog() *slog.Logger {
@@ -28,25 +30,27 @@ type ipGrouper struct {
 	ranger cidranger.Ranger
 }
 
-func DecoratorProvider(g Definitions) (pipe.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
-	if !g.Enabled() {
-		// This node is not going to be instantiated. Let the pipes library just bypassing it.
-		return pipe.Bypass[[]*ebpf.Record](), nil
-	}
-	grouper, err := newIPGrouper(g)
-	if err != nil {
-		return nil, fmt.Errorf("instantiating IP grouper: %w", err)
-	}
-	return func(in <-chan []*ebpf.Record, out chan<- []*ebpf.Record) {
-		glog().Debug("starting node")
-		for flows := range in {
-			for _, flow := range flows {
-				grouper.decorate(flow)
-			}
-			out <- flows
+func DecoratorProvider(g Definitions, input, output *msg.Queue[[]*ebpf.Record]) swarm.InstanceFunc {
+	return func(_ context.Context) (swarm.RunFunc, error) {
+		if !g.Enabled() {
+			return swarm.Bypass(input, output)
 		}
-		glog().Debug("stopping node")
-	}, nil
+		grouper, err := newIPGrouper(g)
+		if err != nil {
+			return nil, fmt.Errorf("instantiating IP grouper: %w", err)
+		}
+		in := input.Subscribe()
+		return func(_ context.Context) {
+			glog().Debug("starting node")
+			for flows := range in {
+				for _, flow := range flows {
+					grouper.decorate(flow)
+				}
+				output.Send(flows)
+			}
+			glog().Debug("stopping node")
+		}, nil
+	}
 }
 
 type customRangerEntry struct {

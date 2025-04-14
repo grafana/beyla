@@ -27,7 +27,6 @@ func log() *slog.Logger {
 // Instrumenter finds and instrument a service/process, and forwards the traces as
 // configured by the user
 type Instrumenter struct {
-	ctx       context.Context
 	config    *beyla.Config
 	ctxInfo   *global.ContextInfo
 	tracersWg *sync.WaitGroup
@@ -50,7 +49,6 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 	}
 
 	return &Instrumenter{
-		ctx:         ctx,
 		config:      config,
 		ctxInfo:     ctxInfo,
 		tracersWg:   &sync.WaitGroup{},
@@ -63,9 +61,9 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 // selection criteria.
 // Returns a channel that is closed when the Instrumenter completed all its tasks.
 // This is: when the context is cancelled, it has unloaded all the eBPF probes.
-func (i *Instrumenter) FindAndInstrument() error {
-	finder := discover.NewProcessFinder(i.ctx, i.config, i.ctxInfo, i.tracesInput)
-	foundProcesses, deletedProcesses, err := finder.Start()
+func (i *Instrumenter) FindAndInstrument(ctx context.Context) error {
+	finder := discover.NewProcessFinder(i.config, i.ctxInfo, i.tracesInput)
+	processEvents, err := finder.Start(ctx)
 	if err != nil {
 		return fmt.Errorf("couldn't start Process Finder: %w", err)
 	}
@@ -76,23 +74,30 @@ func (i *Instrumenter) FindAndInstrument() error {
 		log := log()
 		for {
 			select {
-			case <-i.ctx.Done():
+			case <-ctx.Done():
 				return
-			case pt := <-foundProcesses:
-				log.Debug("running tracer for new process",
-					"inode", pt.FileInfo.Ino, "pid", pt.FileInfo.Pid, "exec", pt.FileInfo.CmdExePath)
-				if pt.Tracer != nil {
-					i.tracersWg.Add(1)
-					go func() {
-						defer i.tracersWg.Done()
-						pt.Tracer.Run(i.ctx, i.tracesInput)
-					}()
-				}
-			case dp := <-deletedProcesses:
-				log.Debug("stopping ProcessTracer because there are no more instances of such process",
-					"inode", dp.FileInfo.Ino, "pid", dp.FileInfo.Pid, "exec", dp.FileInfo.CmdExePath)
-				if dp.Tracer != nil {
-					dp.Tracer.UnlinkExecutable(dp.FileInfo)
+			case ev := <-processEvents:
+				switch ev.Type {
+				case discover.EventCreated:
+					pt := ev.Obj
+					log.Debug("running tracer for new process",
+						"inode", pt.FileInfo.Ino, "pid", pt.FileInfo.Pid, "exec", pt.FileInfo.CmdExePath)
+					if pt.Tracer != nil {
+						i.tracersWg.Add(1)
+						go func() {
+							defer i.tracersWg.Done()
+							pt.Tracer.Run(ctx, i.tracesInput)
+						}()
+					}
+				case discover.EventDeleted:
+					dp := ev.Obj
+					log.Debug("stopping ProcessTracer because there are no more instances of such process",
+						"inode", dp.FileInfo.Ino, "pid", dp.FileInfo.Pid, "exec", dp.FileInfo.CmdExePath)
+					if dp.Tracer != nil {
+						dp.Tracer.UnlinkExecutable(dp.FileInfo)
+					}
+				default:
+					log.Error("BUG ALERT! unknown event type", "type", ev.Type)
 				}
 			}
 		}
@@ -104,19 +109,24 @@ func (i *Instrumenter) FindAndInstrument() error {
 
 // ReadAndForward keeps listening for traces in the BPF map, then reads,
 // processes and forwards them
-func (i *Instrumenter) ReadAndForward() {
+func (i *Instrumenter) ReadAndForward(ctx context.Context) error {
 	log := log()
 	log.Debug("creating instrumentation pipeline")
 
 	log.Info("Starting main node")
 
-	i.bp.Run(i.ctx)
+	i.bp.Run(ctx)
 
-	<-i.ctx.Done()
+	<-ctx.Done()
 
 	log.Info("exiting auto-instrumenter")
 
-	i.stop()
+	err := i.stop()
+	if err != nil {
+		return fmt.Errorf("failed to stop auto-instrumenter: %w", err)
+	}
+
+	return nil
 }
 
 func (i *Instrumenter) stop() error {

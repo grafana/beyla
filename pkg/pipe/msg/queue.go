@@ -7,11 +7,13 @@ import (
 )
 
 type queueConfig struct {
-	channelBufferLen int
+	channelBufferLen       int
+	discardIfNoSubscribers bool
 }
 
 var defaultQueueConfig = queueConfig{
-	channelBufferLen: 1,
+	channelBufferLen:       1,
+	discardIfNoSubscribers: false,
 }
 
 // QueueOpts allow configuring some operation of a queue
@@ -24,15 +26,31 @@ func ChannelBufferLen(l int) QueueOpts {
 	}
 }
 
+// NotBlockIfNoSubscribers will prevent the Send operation to block when there are
+// no subscribers to the channel.
+// This is useful to define connections to destination nodes that are optional and
+// might not be instantiated.
+func NotBlockIfNoSubscribers() QueueOpts {
+	return func(c *queueConfig) {
+		c.discardIfNoSubscribers = true
+	}
+}
+
 // Queue is a simple message queue that allows sending messages to multiple subscribers.
 // It also allows bypassing messages to other queues, so that a message sent to one queue
 // can be received by subscribers of another queue.
 // If a message is sent to a queue that has no subscribers, it will not block the sender and the
 // message will be lost. This is by design, as the queue is meant to be used for fire-and-forget
 type Queue[T any] struct {
-	mt   sync.Mutex
-	cfg  *queueConfig
-	dsts []chan T
+	mt  sync.Mutex
+	cfg *queueConfig
+
+	// in blocking channels, dsts will be at least 1 even if subscribers are 0
+	// this channel will hold submitted data at least until someone subscribes and
+	// reads it. This can block the sender if no one subscribes to the channel
+	subscribers int
+	dsts        []chan T
+
 	// double-linked list of bypassing queues
 	// For simplicity, a Queue instance:
 	// - can't bypass to a queue and having other dsts
@@ -47,7 +65,11 @@ func NewQueue[T any](opts ...QueueOpts) *Queue[T] {
 	for _, opt := range opts {
 		opt(&cfg)
 	}
-	return &Queue[T]{cfg: &cfg}
+	var dsts []chan T
+	if !cfg.discardIfNoSubscribers {
+		dsts = []chan T{make(chan T, cfg.channelBufferLen)}
+	}
+	return &Queue[T]{cfg: &cfg, dsts: dsts}
 }
 
 func (q *Queue[T]) config() *queueConfig {
@@ -57,7 +79,10 @@ func (q *Queue[T]) config() *queueConfig {
 	return q.cfg
 }
 
-// Send a message to all subscribers of this queue. If there are no subscribers,
+// Send a message to all subscribers of this queue.
+// If there are no subscribers and the internal channel is full,
+// the sender might block unless the Queue has been instantiated
+// with the NotBlockIfNoSubscribers option. In that case,
 // the message will be lost and the sender will not be blocked.
 func (q *Queue[T]) Send(o T) {
 	q.assertNotClosed()
@@ -84,9 +109,14 @@ func (q *Queue[T]) Subscribe() <-chan T {
 	q.mt.Lock()
 	defer q.mt.Unlock()
 	q.assertNotBypassing()
-	out := make(chan T, q.config().channelBufferLen)
-	q.dsts = append(q.dsts, out)
-	return out
+
+	// might be that subscribers <= len(dsts), for example when the queue is new
+	// and has a channel to block sender before subscribers are added
+	q.subscribers++
+	if q.subscribers > len(q.dsts) {
+		q.dsts = append(q.dsts, make(chan T, q.config().channelBufferLen))
+	}
+	return q.dsts[q.subscribers-1]
 }
 
 // Bypass allows this queue to bypass messages to another queue. This means that
@@ -115,6 +145,7 @@ func (q *Queue[T]) Close() {
 		for _, d := range q.dsts {
 			close(d)
 		}
+		q.dsts = nil
 	}
 }
 

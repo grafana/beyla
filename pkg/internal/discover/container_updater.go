@@ -5,31 +5,37 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/mariomac/pipes/pipe"
-
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf"
 	"github.com/grafana/beyla/v2/pkg/internal/kube"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
+	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 // ContainerDBUpdaterProvider is a stage in the Process Finder pipeline that will be
 // enabled only if Kubernetes decoration is enabled.
 // It just updates part of the kubernetes database when a new process is discovered.
-func ContainerDBUpdaterProvider(ctx context.Context, meta kubeMetadataProvider) pipe.MiddleProvider[[]Event[ebpf.Instrumentable], []Event[ebpf.Instrumentable]] {
-	return func() (pipe.MiddleFunc[[]Event[ebpf.Instrumentable], []Event[ebpf.Instrumentable]], error) {
+func ContainerDBUpdaterProvider(
+	meta kubeMetadataProvider, input, output *msg.Queue[[]Event[ebpf.Instrumentable]],
+) swarm.InstanceFunc {
+	return func(ctx context.Context) (swarm.RunFunc, error) {
 		if !meta.IsKubeEnabled() {
-			return pipe.Bypass[[]Event[ebpf.Instrumentable]](), nil
+			input.Bypass(output)
+			return swarm.EmptyRunFunc()
 		}
 		store, err := meta.Get(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("instantiating ContainerDBUpdater: %w", err)
 		}
-		return updateLoop(store), nil
+		return updateLoop(store, input.Subscribe(), output), nil
 	}
 }
 
-func updateLoop(db *kube.Store) pipe.MiddleFunc[[]Event[ebpf.Instrumentable], []Event[ebpf.Instrumentable]] {
+func updateLoop(
+	db *kube.Store, in <-chan []Event[ebpf.Instrumentable], out *msg.Queue[[]Event[ebpf.Instrumentable]],
+) swarm.RunFunc {
 	log := slog.With("component", "ContainerDBUpdater")
-	return func(in <-chan []Event[ebpf.Instrumentable], out chan<- []Event[ebpf.Instrumentable]) {
+	return func(_ context.Context) {
+		defer out.Close()
 		for instrumentables := range in {
 			for i := range instrumentables {
 				ev := &instrumentables[i]
@@ -42,7 +48,7 @@ func updateLoop(db *kube.Store) pipe.MiddleFunc[[]Event[ebpf.Instrumentable], []
 					// remove the process from the database when the Pod that contains it is deleted.
 				}
 			}
-			out <- instrumentables
+			out.Send(instrumentables)
 		}
 	}
 }

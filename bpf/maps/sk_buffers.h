@@ -14,6 +14,7 @@ typedef struct sk_msg_buffer {
     u8 buf[k_kprobes_http2_buf_size];
     u16 size;
     u8 inactive;
+    u8 _pad[1];
 } sk_msg_buffer_t;
 
 struct {

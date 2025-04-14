@@ -6,11 +6,11 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/mariomac/pipes/pipe"
-
 	"github.com/grafana/beyla/v2/pkg/internal/helpers/container"
 	"github.com/grafana/beyla/v2/pkg/internal/kube"
 	"github.com/grafana/beyla/v2/pkg/kubecache/informer"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
+	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 	"github.com/grafana/beyla/v2/pkg/services"
 	"github.com/grafana/beyla/v2/pkg/transform"
 )
@@ -33,6 +33,8 @@ type watcherKubeEnricher struct {
 	processByContainer map[string]processAttrs
 
 	podsInfoCh chan Event[*informer.ObjectMeta]
+	output     *msg.Queue[[]Event[processAttrs]]
+	input      <-chan []Event[processAttrs]
 }
 
 // kubeMetadataProvider abstracts kube.MetadataProvider for easier dependency
@@ -43,12 +45,13 @@ type kubeMetadataProvider interface {
 }
 
 func WatcherKubeEnricherProvider(
-	ctx context.Context,
 	kubeMetaProvider kubeMetadataProvider,
-) pipe.MiddleProvider[[]Event[processAttrs], []Event[processAttrs]] {
-	return func() (pipe.MiddleFunc[[]Event[processAttrs], []Event[processAttrs]], error) {
+	input, output *msg.Queue[[]Event[processAttrs]],
+) swarm.InstanceFunc {
+	return func(ctx context.Context) (swarm.RunFunc, error) {
 		if !kubeMetaProvider.IsKubeEnabled() {
-			return pipe.Bypass[[]Event[processAttrs]](), nil
+			input.Bypass(output)
+			return swarm.EmptyRunFunc()
 		}
 		store, err := kubeMetaProvider.Get(ctx)
 		if err != nil {
@@ -60,6 +63,8 @@ func WatcherKubeEnricherProvider(
 			containerByPID:     map[PID]container.Info{},
 			processByContainer: map[string]processAttrs{},
 			podsInfoCh:         make(chan Event[*informer.ObjectMeta], 10),
+			input:              input.Subscribe(),
+			output:             output,
 		}
 		return wk.enrich, nil
 	}
@@ -91,7 +96,9 @@ func (wk *watcherKubeEnricher) On(event *informer.Event) error {
 // We can't assume any order in the reception of the events, so we always keep an in-memory
 // snapshot of the process-pod tuple that is updated as long as each event
 // is received from different sources.
-func (wk *watcherKubeEnricher) enrich(in <-chan []Event[processAttrs], out chan<- []Event[processAttrs]) {
+func (wk *watcherKubeEnricher) enrich(_ context.Context) {
+	defer wk.output.Close()
+
 	wk.log.Debug("starting watcherKubeEnricher")
 	// the initialization needs to go in a different thread,
 	// as the subscription "welcome message" would otherwise be blocked
@@ -102,25 +109,25 @@ func (wk *watcherKubeEnricher) enrich(in <-chan []Event[processAttrs], out chan<
 	for {
 		select {
 		case podEvent := <-wk.podsInfoCh:
-			wk.enrichPodEvent(podEvent, out)
-		case processEvents, ok := <-in:
+			wk.enrichPodEvent(podEvent)
+		case processEvents, ok := <-wk.input:
 			if !ok {
 				wk.log.Debug("input channel closed. Stopping")
 				return
 			}
-			wk.enrichProcessEvent(processEvents, out)
+			wk.enrichProcessEvent(processEvents)
 		}
 	}
 }
 
-func (wk *watcherKubeEnricher) enrichPodEvent(podEvent Event[*informer.ObjectMeta], out chan<- []Event[processAttrs]) {
+func (wk *watcherKubeEnricher) enrichPodEvent(podEvent Event[*informer.ObjectMeta]) {
 	switch podEvent.Type {
 	case EventCreated:
 		wk.log.Debug("Pod added",
 			"namespace", podEvent.Obj.Namespace, "name", podEvent.Obj.Name,
 			"containers", podEvent.Obj.Pod.Containers)
 		if events := wk.onNewPod(podEvent.Obj); len(events) > 0 {
-			out <- events
+			wk.output.Send(events)
 		}
 	case EventDeleted:
 		wk.log.Debug("Pod deleted", "namespace", podEvent.Obj.Namespace, "name", podEvent.Obj.Name)
@@ -132,7 +139,7 @@ func (wk *watcherKubeEnricher) enrichPodEvent(podEvent Event[*informer.ObjectMet
 
 // enrichProcessEvent creates a copy of the process information in the input slice, but decorated with
 // K8s attributes, if any. It also handles deletion of processes
-func (wk *watcherKubeEnricher) enrichProcessEvent(processEvents []Event[processAttrs], out chan<- []Event[processAttrs]) {
+func (wk *watcherKubeEnricher) enrichProcessEvent(processEvents []Event[processAttrs]) {
 	eventsWithMeta := make([]Event[processAttrs], 0, len(processEvents))
 	for _, procEvent := range processEvents {
 		switch procEvent.Type {
@@ -157,7 +164,7 @@ func (wk *watcherKubeEnricher) enrichProcessEvent(processEvents []Event[processA
 			eventsWithMeta = append(eventsWithMeta, procEvent)
 		}
 	}
-	out <- eventsWithMeta
+	wk.output.Send(eventsWithMeta)
 }
 
 func (wk *watcherKubeEnricher) onNewProcess(procInfo processAttrs) (processAttrs, bool) {

@@ -68,12 +68,17 @@ func setupAppO11y(ctx context.Context, ctxInfo *global.ContextInfo, config *beyl
 		return fmt.Errorf("can't create new instrumenter: %w", err)
 	}
 
-	if err := instr.FindAndInstrument(); err != nil {
+	err = instr.FindAndInstrument(ctx)
+	if err != nil {
 		slog.Debug("can't find target process", "error", err)
 		return fmt.Errorf("can't find target process: %w", err)
 	}
 
-	instr.ReadAndForward()
+	err = instr.ReadAndForward(ctx)
+	if err != nil {
+		slog.Debug("can't read and forward auto-instrumenter", "error", err)
+		return fmt.Errorf("can't read and forward auto-instrumente: %w", err)
+	}
 
 	return nil
 }

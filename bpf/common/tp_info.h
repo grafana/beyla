@@ -11,6 +11,7 @@ typedef struct tp_info {
     unsigned char parent_id[SPAN_ID_SIZE_BYTES];
     u64 ts;
     u8 flags;
+    u8 _pad[7];
 } tp_info_t;
 
 typedef struct tp_info_pid {
@@ -19,4 +20,5 @@ typedef struct tp_info_pid {
     u8 valid;
     u8 written;
     u8 req_type;
+    u8 _pad[1];
 } tp_info_pid_t;

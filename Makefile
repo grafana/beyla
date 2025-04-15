@@ -44,7 +44,7 @@ CILIUM_EBPF_VER ?= $(call gomod-version,cilium/ebpf)
 # regular expressions for excluded file patterns
 EXCLUDE_COVERAGE_FILES="(_bpfel.go)|(/pingserver/)|(/grafana/beyla/test/)|\
 (integration/components)|(/grafana/beyla/docs/)|(/grafana/beyla/configs/)|(/grafana/beyla/examples/)|(.pb.go)|\
-(/grafana/pkg/export/otel/metric/)"
+(/beyla/pkg/export/otel/metric/)"
 
 .DEFAULT_GOAL := all
 

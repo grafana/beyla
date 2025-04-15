@@ -6,15 +6,25 @@ import (
 	"context"
 	"sync"
 	"sync/atomic"
+
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
 // RunFunc is a function that runs a node. The node should be stoppable via the passed context Done function.
 type RunFunc func(context.Context)
 
-// EmptyRunFunc returns a no-op RunFunc that does nothing. Can be used as a convenience reference
+// EmptyRunFunc returns a no-op RunFunc that does nothing. Can be used as a convenience method
 // for an Instancer that returns a function that can be ignored
 func EmptyRunFunc() (RunFunc, error) {
 	return func(_ context.Context) {}, nil
+}
+
+// Bypass is a convenience method that bypasses the input channel to the output channel and returns a
+// no-op RunFunc. It can be used as a convenience method for an Instancer of an optional node
+// that might not be instantiated and its input-output need to be bypassed from its sender to its receiver.
+func Bypass[T any](input, output *msg.Queue[T]) (RunFunc, error) {
+	input.Bypass(output)
+	return EmptyRunFunc()
 }
 
 // Runner runs all the nodes in the swarm returned from an Instancer.
@@ -22,6 +32,8 @@ type Runner struct {
 	started atomic.Bool
 	runners []RunFunc
 	done    chan struct{}
+
+	cancelInstancerCtx func()
 }
 
 // Start the Swarm in background. It calls all registered service creators and, if all succeed,
@@ -39,6 +51,9 @@ func (s *Runner) Start(ctx context.Context) {
 	wg.Add(len(s.runners))
 	go func() {
 		wg.Wait()
+		// the context previously passed in the InstanceFunc is also
+		// canceled when the swarm stops running, to avoid context leaking
+		s.cancelInstancerCtx()
 		close(s.done)
 	}()
 	for i := range s.runners {

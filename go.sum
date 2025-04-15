@@ -165,8 +165,6 @@ github.com/mailru/easyjson v0.7.7 h1:UGYAvKxe3sBsEDzO8ZeWOSlIQfWFlxbzLZe7hwFURr0
 github.com/mailru/easyjson v0.7.7/go.mod h1:xzfreul335JAWq5oZzymOObrkdz5UnU4kGfJJLY9Nlc=
 github.com/mariomac/guara v0.0.0-20230621100729-42bd7716e524 h1:24nnoPrOI7cw2YZTWqDHqIchSJ07thcQDIUNnL6V+2o=
 github.com/mariomac/guara v0.0.0-20230621100729-42bd7716e524/go.mod h1:TMuTALUh4SPCDJdYOuOYIEwBgH2rzCDP1nNgj+lI8AE=
-github.com/mariomac/pipes v0.10.0 h1:2B8WreyTEC4MiThrGmAwLPxVkqPtvLm/aiVghAt2bUo=
-github.com/mariomac/pipes v0.10.0/go.mod h1:Htfq849Q5Vr1uF3XKMhURzuiV7AqL0k2OV2RLm6rPek=
 github.com/mattn/go-isatty v0.0.19 h1:JITubQf0MOLdlGRuRq+jtsDlekdYPia9ZFsB8h/APPA=
 github.com/mattn/go-isatty v0.0.19/go.mod h1:W+V8PltTTMOvKvAeJH7IuucS94S2C6jfK/D7dTCTo3Y=
 github.com/mdlayher/netlink v1.7.2 h1:/UtM3ofJap7Vl4QWCPDGXY8d3GIY2UGSDbK+QWmY8/g=
@@ -289,7 +287,6 @@ go.opentelemetry.io/collector/config/configopaque v1.28.1 h1:y7O89UgOeUjTRK5551B
 go.opentelemetry.io/collector/config/configopaque v1.28.1/go.mod h1:GYQiC8IejBcwE8z0O4DwbBR/Hf6U7d8DTf+cszyqwFs=
 go.opentelemetry.io/collector/config/configretry v1.28.1 h1:WVRw9neCAsWilZU9C4ZzXeQLw1L3dIRlCIqReqhzi70=
 go.opentelemetry.io/collector/config/configretry v1.28.1/go.mod h1:QNnb+MCk7aS1k2EuGJMtlNCltzD7b8uC7Xel0Dxm1wQ=
-go.opentelemetry.io/collector/config/configtelemetry v0.122.1/go.mod h1:WXmlNatI0vwjv7whh/qF1Xy+UufCZDk7VLtYqML7QmA=
 go.opentelemetry.io/collector/config/configtls v1.28.1 h1:UTnB30vfXbnkm94754sd8apbFMrQzESYFxaWZsK6D6o=
 go.opentelemetry.io/collector/config/configtls v1.28.1/go.mod h1:aXztDbmrn/MGbvCNPEYu9KcX8lXFKHyh4x6OsvOfl2c=
 go.opentelemetry.io/collector/confmap v1.28.1 h1:/zUmvpnERhFXrxVCVgubjJRgeOwdPbhTfUILZPUBfyw=

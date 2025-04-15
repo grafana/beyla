@@ -28,10 +28,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mariomac/pipes/pipe"
-
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/ringbuf"
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
+	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 func rtlog() *slog.Logger {
@@ -73,8 +73,9 @@ func NewRingBufTracer(
 	}
 }
 
-func (m *RingBufTracer) TraceLoop(ctx context.Context) pipe.StartFunc[[]*ebpf.Record] {
-	return func(out chan<- []*ebpf.Record) {
+func (m *RingBufTracer) TraceLoop(out *msg.Queue[[]*ebpf.Record]) swarm.RunFunc {
+	return func(ctx context.Context) {
+		defer out.MarkCloseable()
 		rtlog := rtlog()
 		debugging := rtlog.Enabled(ctx, slog.LevelDebug)
 		for {
@@ -96,7 +97,7 @@ func (m *RingBufTracer) TraceLoop(ctx context.Context) pipe.StartFunc[[]*ebpf.Re
 	}
 }
 
-func (m *RingBufTracer) listenAndForwardRingBuffer(debugging bool, forwardCh chan<- []*ebpf.Record) error {
+func (m *RingBufTracer) listenAndForwardRingBuffer(debugging bool, forwardCh *msg.Queue[[]*ebpf.Record]) error {
 	event, err := m.ringBuffer.ReadRingBuf()
 	if err != nil {
 		return fmt.Errorf("reading from ring buffer: %w", err)
@@ -116,9 +117,9 @@ func (m *RingBufTracer) listenAndForwardRingBuffer(debugging bool, forwardCh cha
 		m.mapFlusher.Flush()
 	}
 
-	forwardCh <- []*ebpf.Record{{
+	forwardCh.Send([]*ebpf.Record{{
 		NetFlowRecordT: readFlow,
-	}}
+	}})
 
 	return nil
 }

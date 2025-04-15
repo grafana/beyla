@@ -28,6 +28,7 @@ import (
 
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/v2/pkg/internal/testutil"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
 var oneIf1, oneIf2, twoIf1, twoIf2 *ebpf.Record
@@ -61,27 +62,27 @@ func init() {
 }
 
 func TestDedupe(t *testing.T) {
-	input := make(chan []*ebpf.Record, 100)
-	output := make(chan []*ebpf.Record, 100)
-
-	dedupe, err := DeduperProvider(&Deduper{Type: DeduperFirstCome, ExpireTime: time.Minute})
+	input := msg.NewQueue[[]*ebpf.Record](msg.ChannelBufferLen(100))
+	outputQueue := msg.NewQueue[[]*ebpf.Record](msg.ChannelBufferLen(100))
+	output := outputQueue.Subscribe()
+	dedupe, err := DeduperProvider(&Deduper{Type: DeduperFirstCome, FCTTL: time.Minute}, input, outputQueue)(t.Context())
 	require.NoError(t, err)
-	go dedupe(input, output)
+	go dedupe(t.Context())
 
-	input <- []*ebpf.Record{
+	input.Send([]*ebpf.Record{
 		clone(oneIf2), // record 1 at interface 2: should be accepted
 		clone(twoIf1), // record 2 at interface 1: should be accepted
 		clone(oneIf1), // record 1 duplicate at interface 1: should NOT be accepted
 		clone(oneIf1), //                                        (same record key, different interface)
 		clone(twoIf2), // record 2 duplicate at interface 2: should NOT be accepted
 		clone(oneIf2), // record 1 at interface 1: should be accepted (same record key, same interface)
-	}
+	})
 	deduped := testutil.ReadChannel(t, output, timeout)
 	assert.Equal(t, []*ebpf.Record{unset(oneIf2), unset(twoIf1), unset(oneIf2)}, deduped)
 
 	// should still accept records with same key, same interface,
 	// and discard these with same key, different interface
-	input <- []*ebpf.Record{clone(oneIf1), clone(oneIf2)}
+	input.Send([]*ebpf.Record{clone(oneIf1), clone(oneIf2)})
 	deduped = testutil.ReadChannel(t, output, timeout)
 	assert.Equal(t, []*ebpf.Record{unset(oneIf2)}, deduped)
 }
@@ -89,22 +90,23 @@ func TestDedupe(t *testing.T) {
 func TestDedupe_EvictFlows(t *testing.T) {
 	tm := &timerMock{now: time.Now()}
 	timeNow = tm.Now
-	input := make(chan []*ebpf.Record, 100)
-	output := make(chan []*ebpf.Record, 100)
+	input := msg.NewQueue[[]*ebpf.Record](msg.ChannelBufferLen(100))
+	outputQu := msg.NewQueue[[]*ebpf.Record](msg.ChannelBufferLen(100))
+	output := outputQu.Subscribe()
 
-	dedupe, err := DeduperProvider(&Deduper{Type: DeduperFirstCome, ExpireTime: 15 * time.Second})
+	dedupe, err := DeduperProvider(&Deduper{Type: DeduperFirstCome, FCTTL: 15 * time.Second}, input, outputQu)(t.Context())
 	require.NoError(t, err)
-	go dedupe(input, output)
+	go dedupe(t.Context())
 
 	// Should only accept records 1 and 2, at interface 1
-	input <- []*ebpf.Record{oneIf1, twoIf1, oneIf2}
+	input.Send([]*ebpf.Record{oneIf1, twoIf1, oneIf2})
 	assert.Equal(t, []*ebpf.Record{oneIf1, twoIf1},
 		testutil.ReadChannel(t, output, timeout))
 
 	tm.Add(10 * time.Second)
 
 	// After 10 seconds, it still filters existing flows from different interfaces
-	input <- []*ebpf.Record{oneIf2}
+	input.Send([]*ebpf.Record{oneIf2})
 	time.Sleep(100 * time.Millisecond)
 	requireNoEviction(t, output)
 
@@ -113,14 +115,14 @@ func TestDedupe_EvictFlows(t *testing.T) {
 	// Record 2 hasn't been accounted for >expiryTime, so it will accept the it again
 	// whatever the interface.
 	// Since record 1 was accessed 10 seconds ago (<expiry time) it will filter it
-	input <- []*ebpf.Record{oneIf2, twoIf2, twoIf1}
+	input.Send([]*ebpf.Record{oneIf2, twoIf2, twoIf1})
 	assert.Equal(t, []*ebpf.Record{twoIf2},
 		testutil.ReadChannel(t, output, timeout))
 
 	tm.Add(20 * time.Second)
 
 	// when all the records expire, the deduper is reset for that flow
-	input <- []*ebpf.Record{oneIf2, twoIf2}
+	input.Send([]*ebpf.Record{oneIf2, twoIf2})
 	assert.Equal(t, []*ebpf.Record{oneIf2, twoIf2},
 		testutil.ReadChannel(t, output, timeout))
 }

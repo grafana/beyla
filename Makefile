@@ -42,7 +42,7 @@ CLANG_TIDY ?= clang-tidy
 CILIUM_EBPF_VER ?= $(call gomod-version,cilium/ebpf)
 
 # regular expressions for excluded file patterns
-EXCLUDE_COVERAGE_FILES="(_bpfel.go)|(/pingserver/)|(/grafana/beyla/test/)|(integration/components)|(/grafana/beyla/docs/)|(/grafana/beyla/configs/)|(/grafana/beyla/examples/)|(.pb.go)"
+EXCLUDE_COVERAGE_FILES="(_bpfel.go)|(/beyla/v2/test/)|(/beyla/v2/configs/)|(/v2/examples/)|(.pb.go)|(/beyla/v2/pkg/export/otel/metric/)"
 
 .DEFAULT_GOAL := all
 

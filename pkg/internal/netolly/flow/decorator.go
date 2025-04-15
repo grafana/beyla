@@ -19,9 +19,12 @@
 package flow
 
 import (
+	"context"
 	"net"
 
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
+	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 type InterfaceNamer func(ifIndex int) string
@@ -31,9 +34,11 @@ type InterfaceNamer func(ifIndex int) string
 // - The interface name (corresponding to the interface index in the flow).
 // - The IP address of the agent host.
 // - If there is no source or destination hostname, the source IP and destination
-func Decorate(agentIP net.IP, ifaceNamer InterfaceNamer) func(in <-chan []*ebpf.Record, out chan<- []*ebpf.Record) {
+func Decorate(agentIP net.IP, ifaceNamer InterfaceNamer, input *msg.Queue[[]*ebpf.Record], output *msg.Queue[[]*ebpf.Record]) swarm.RunFunc {
 	ip := agentIP.String()
-	return func(in <-chan []*ebpf.Record, out chan<- []*ebpf.Record) {
+	in := input.Subscribe()
+	return func(_ context.Context) {
+		defer output.Close()
 		for flows := range in {
 			for _, flow := range flows {
 				flow.Attrs.Interface = ifaceNamer(int(flow.Id.IfIndex))
@@ -45,7 +50,7 @@ func Decorate(agentIP net.IP, ifaceNamer InterfaceNamer) func(in <-chan []*ebpf.
 					flow.Attrs.SrcName = flow.Id.SrcIP().IP().String()
 				}
 			}
-			out <- flows
+			output.Send(flows)
 		}
 	}
 }

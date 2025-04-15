@@ -7,8 +7,8 @@ import (
 
 // InstanceFunc is a function that creates a service RunFunc.
 // The passed context will be cancelled by the Instancer's Instance method
-// after all the nodes are created (or if any node has failed), so the context
-// should be not stored for later use in the RunFunc.
+// if any of the nodes in the same swarm returned error in its instantiation,
+// and/or when the returned Runner instance finishes its execution
 type InstanceFunc func(context.Context) (RunFunc, error)
 
 // Instancer coordinates the instantiation of all the swarm nodes and
@@ -32,12 +32,12 @@ func (s *Instancer) Instance(ctx context.Context) (*Runner, error) {
 	s.mt.Lock()
 	defer s.mt.Unlock()
 	runner := &Runner{runners: make([]RunFunc, 0, len(s.creators))}
-	buildCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	var buildCtx context.Context
+	buildCtx, runner.cancelInstancerCtx = context.WithCancel(ctx)
 	for _, creator := range s.creators {
 		runFn, err := creator(buildCtx)
 		if err != nil {
-			cancel()
+			runner.cancelInstancerCtx()
 			return nil, err
 		}
 		runner.runners = append(runner.runners, runFn)

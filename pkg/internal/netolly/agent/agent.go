@@ -27,14 +27,13 @@ import (
 	"net"
 	"time"
 
-	"github.com/mariomac/pipes/pipe"
-
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/ringbuf"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/tcmanager"
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/flow"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
+	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 const (
@@ -92,7 +91,7 @@ var errShutdownTimeout = errors.New("graceful shutdown has timed out")
 type Flows struct {
 	cfg     *beyla.Config
 	ctxInfo *global.ContextInfo
-	graph   *pipe.Runner
+	graph   *swarm.Runner
 
 	// input data providers
 	ifaceManager *tcmanager.InterfaceManager
@@ -251,7 +250,7 @@ func (f *Flows) Run(ctx context.Context) error {
 
 	f.ifaceManager.Start(ctx)
 
-	f.graph.Start()
+	f.graph.Start(ctx)
 
 	f.status = StatusStarted
 

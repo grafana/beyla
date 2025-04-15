@@ -22,7 +22,6 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/ianlancetaylor/demangle v0.0.0-20240912202439-0a2b6291aafd
 	github.com/mariomac/guara v0.0.0-20230621100729-42bd7716e524
-	github.com/mariomac/pipes v0.10.0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.20.1
 	github.com/prometheus/client_model v0.6.1
@@ -39,7 +38,6 @@ require (
 	go.opentelemetry.io/collector/config/confighttp v0.122.1
 	go.opentelemetry.io/collector/config/configopaque v1.28.1
 	go.opentelemetry.io/collector/config/configretry v1.28.1
-	go.opentelemetry.io/collector/config/configtelemetry v0.122.1
 	go.opentelemetry.io/collector/config/configtls v1.28.1
 	go.opentelemetry.io/collector/consumer v1.28.1
 	go.opentelemetry.io/collector/exporter v0.122.1

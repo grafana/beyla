@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/mariomac/pipes/pipe"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
@@ -13,6 +12,8 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/connector"
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
+	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 // injectable function reference for testing
@@ -42,32 +43,35 @@ type netMetricsReporter struct {
 	interZoneAttrs []attributes.Field[*ebpf.Record, string]
 
 	clock *expire.CachedClock
-	bgCtx context.Context
+
+	input <-chan []*ebpf.Record
 }
 
 func NetPrometheusEndpoint(
-	ctx context.Context,
 	ctxInfo *global.ContextInfo,
 	cfg *NetPrometheusConfig,
-) (pipe.FinalFunc[[]*ebpf.Record], error) {
-	if !cfg.Enabled() {
-		// This node is not going to be instantiated. Let the pipes library just ignore it.
-		return pipe.IgnoreFinal[[]*ebpf.Record](), nil
+	input *msg.Queue[[]*ebpf.Record],
+) swarm.InstanceFunc {
+	return func(_ context.Context) (swarm.RunFunc, error) {
+		if !cfg.Enabled() {
+			// This node is not going to be instantiated. Let the swarm library just ignore it.
+			return swarm.EmptyRunFunc()
+		}
+		reporter, err := newNetReporter(ctxInfo, cfg, input)
+		if err != nil {
+			return nil, err
+		}
+		if cfg.Config.Registry != nil {
+			return reporter.collectMetrics, nil
+		}
+		return reporter.reportMetrics, nil
 	}
-	reporter, err := newNetReporter(ctx, ctxInfo, cfg)
-	if err != nil {
-		return nil, err
-	}
-	if cfg.Config.Registry != nil {
-		return reporter.collectMetrics, nil
-	}
-	return reporter.reportMetrics, nil
 }
 
 func newNetReporter(
-	ctx context.Context,
 	ctxInfo *global.ContextInfo,
 	cfg *NetPrometheusConfig,
+	input *msg.Queue[[]*ebpf.Record],
 ) (*netMetricsReporter, error) {
 	group := ctxInfo.MetricAttributeGroups
 	// this property can't be set inside the ConfiguredGroups function, otherwise the
@@ -83,7 +87,6 @@ func newNetReporter(
 	// If service name is not explicitly set, we take the service name as set by the
 	// executable inspector
 	mr := &netMetricsReporter{
-		bgCtx:       ctx,
 		cfg:         cfg.Config,
 		promConnect: ctxInfo.Prometheus,
 		clock:       clock,
@@ -123,16 +126,17 @@ func newNetReporter(
 		mr.promConnect.Register(cfg.Config.Port, cfg.Config.Path, register...)
 	}
 
+	mr.input = input.Subscribe()
 	return mr, nil
 }
 
-func (r *netMetricsReporter) reportMetrics(input <-chan []*ebpf.Record) {
-	go r.promConnect.StartHTTP(r.bgCtx)
-	r.collectMetrics(input)
+func (r *netMetricsReporter) reportMetrics(ctx context.Context) {
+	go r.promConnect.StartHTTP(ctx)
+	r.collectMetrics(ctx)
 }
 
-func (r *netMetricsReporter) collectMetrics(input <-chan []*ebpf.Record) {
-	for flows := range input {
+func (r *netMetricsReporter) collectMetrics(_ context.Context) {
+	for flows := range r.input {
 		// clock needs to be updated to let the expirer
 		// remove the old metrics
 		r.clock.Update()

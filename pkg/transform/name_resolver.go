@@ -61,8 +61,7 @@ func NameResolutionProvider(ctxInfo *global.ContextInfo, cfg *NameResolverConfig
 	return func(ctx context.Context) (swarm.RunFunc, error) {
 		if cfg == nil || len(cfg.Sources) == 0 {
 			// if no sources are configured, we just bypass the node
-			input.Bypass(output)
-			return swarm.EmptyRunFunc()
+			return swarm.Bypass(input, output)
 		}
 		return nameResolver(ctx, ctxInfo, cfg, input, output)
 	}
@@ -85,8 +84,7 @@ func nameResolver(ctx context.Context, ctxInfo *global.ContextInfo, cfg *NameRes
 	// after potentially remove k8s resolver, check again if
 	// this node needs to be bypassed
 	if sources == 0 {
-		input.Bypass(output)
-		return swarm.EmptyRunFunc()
+		return swarm.Bypass(input, output)
 	}
 
 	nr := NameResolver{

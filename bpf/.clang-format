@@ -9,4 +9,5 @@
   BinPackArguments: false,
   BinPackParameters: false,
   TabWidth: 4,
+  PointerAlignment: Right,
 }

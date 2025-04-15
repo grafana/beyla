@@ -80,7 +80,6 @@ func TestForwardRingbuf_Deadline(t *testing.T) {
 	// GIVEN a ring buffer forwarder
 	ringBuf := &fakeRingBufReader{events: make(chan HTTPRequestTrace, 100), closeCh: make(chan struct{})}
 
-
 	metrics := &metricsReporter{}
 	forwardedMessagesQueue := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(100))
 	forwardedMessages := forwardedMessagesQueue.Subscribe()

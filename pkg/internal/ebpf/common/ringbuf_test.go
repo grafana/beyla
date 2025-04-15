@@ -78,7 +78,8 @@ func TestForwardRingbuf_CapacityFull(t *testing.T) {
 
 func TestForwardRingbuf_Deadline(t *testing.T) {
 	// GIVEN a ring buffer forwarder
-	ringBuf := replaceTestRingBuf()
+	ringBuf := &fakeRingBufReader{events: make(chan HTTPRequestTrace, 100), closeCh: make(chan struct{})}
+
 
 	metrics := &metricsReporter{}
 	forwardedMessagesQueue := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(100))
@@ -151,8 +152,7 @@ func TestForwardRingbuf_Close(t *testing.T) {
 	assert.Equal(t, 0, metrics.flushedLen)
 }
 
-// replaces the original ring buffer factory by a fake ring buffer creator and returns it,
-// along with a function to invoke deferred to restore the real ring buffer factory
+// replaces the original ring buffer factory by a fake ring buffer creator and returns it
 func replaceTestRingBuf() *fakeRingBufReader {
 	rb := fakeRingBufReader{events: make(chan HTTPRequestTrace, 100), closeCh: make(chan struct{})}
 	readerFactory = func(_ *ebpf.Map) (ringBufReader, error) {

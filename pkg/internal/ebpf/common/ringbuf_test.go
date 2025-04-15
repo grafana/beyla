@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/binary"
 	"log/slog"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -28,8 +27,7 @@ const testTimeout = 5 * time.Second
 
 func TestForwardRingbuf_CapacityFull(t *testing.T) {
 	// GIVEN a ring buffer forwarder
-	ringBuf, restore := replaceTestRingBuf()
-	defer restore()
+	ringBuf := replaceTestRingBuf()
 	metrics := &metricsReporter{}
 	forwardedMessagesQueue := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(100))
 	forwardedMessages := forwardedMessagesQueue.Subscribe()
@@ -80,8 +78,7 @@ func TestForwardRingbuf_CapacityFull(t *testing.T) {
 
 func TestForwardRingbuf_Deadline(t *testing.T) {
 	// GIVEN a ring buffer forwarder
-	ringBuf, restore := replaceTestRingBuf()
-	defer restore()
+	ringBuf := replaceTestRingBuf()
 
 	metrics := &metricsReporter{}
 	forwardedMessagesQueue := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(100))
@@ -123,8 +120,7 @@ func TestForwardRingbuf_Deadline(t *testing.T) {
 
 func TestForwardRingbuf_Close(t *testing.T) {
 	// GIVEN a ring buffer forwarder
-	ringBuf, restore := replaceTestRingBuf()
-	defer restore()
+	ringBuf := replaceTestRingBuf()
 
 	metrics := &metricsReporter{}
 	closable := closableObject{}
@@ -157,21 +153,12 @@ func TestForwardRingbuf_Close(t *testing.T) {
 
 // replaces the original ring buffer factory by a fake ring buffer creator and returns it,
 // along with a function to invoke deferred to restore the real ring buffer factory
-func replaceTestRingBuf() (ringBuf *fakeRingBufReader, restorer func()) {
+func replaceTestRingBuf() *fakeRingBufReader {
 	rb := fakeRingBufReader{events: make(chan HTTPRequestTrace, 100), closeCh: make(chan struct{})}
-	// required to silence some data race warnings in tests
-	mt := sync.Mutex{}
-	mt.Lock()
-	defer mt.Unlock()
-	oldReaderFactory := readerFactory
 	readerFactory = func(_ *ebpf.Map) (ringBufReader, error) {
 		return &rb, nil
 	}
-	return &rb, func() {
-		mt.Lock()
-		defer mt.Unlock()
-		readerFactory = oldReaderFactory
-	}
+	return &rb
 }
 
 type fakeRingBufReader struct {

@@ -1,24 +1,28 @@
 package flow
 
 import (
+	"context"
 	"fmt"
-
-	"github.com/mariomac/pipes/pipe"
 
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/flow/transport"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
+	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 // ProtocolFilterProvider allows selecting which protocols are going to be instrumented.
 // It drops any flow not appearing in the "allowed" list.
 // If the Allowed list is empty, it drops any flow appearing in the "excluded" list.
-func ProtocolFilterProvider(allowed, excluded []string) pipe.MiddleProvider[[]*ebpf.Record, []*ebpf.Record] {
-	return func() (pipe.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
+func ProtocolFilterProvider(
+	allowed, excluded []string,
+	input, output *msg.Queue[[]*ebpf.Record],
+) swarm.InstanceFunc {
+	return func(_ context.Context) (swarm.RunFunc, error) {
 		if len(allowed) == 0 && len(excluded) == 0 {
 			// user did not configure any filter. Ignore this node
-			return pipe.Bypass[[]*ebpf.Record](), nil
+			return swarm.Bypass(input, output)
 		}
-		pf, err := newFilter(allowed, excluded)
+		pf, err := newFilter(allowed, excluded, input, output)
 		if err != nil {
 			return nil, err
 		}
@@ -28,29 +32,32 @@ func ProtocolFilterProvider(allowed, excluded []string) pipe.MiddleProvider[[]*e
 
 type protocolFilter struct {
 	isAllowed func(r *ebpf.Record) bool
+	input     <-chan []*ebpf.Record
+	output    *msg.Queue[[]*ebpf.Record]
 }
 
-func newFilter(allowed, excluded []string) (*protocolFilter, error) {
+func newFilter(allowed, excluded []string, input, output *msg.Queue[[]*ebpf.Record]) (*protocolFilter, error) {
 	// if the allowed list has items, only interfaces in that list are allowed
 	if len(allowed) > 0 {
 		allow, err := allower(allowed)
 		if err != nil {
 			return nil, err
 		}
-		return &protocolFilter{isAllowed: allow}, nil
+		return &protocolFilter{isAllowed: allow, input: input.Subscribe(), output: output}, nil
 	}
 	// if the allowed list is empty, any interface is allowed except if it matches the exclusion list
 	exclude, err := excluder(excluded)
 	if err != nil {
 		return nil, err
 	}
-	return &protocolFilter{isAllowed: exclude}, nil
+	return &protocolFilter{isAllowed: exclude, input: input.Subscribe(), output: output}, nil
 }
 
-func (pf *protocolFilter) nodeLoop(in <-chan []*ebpf.Record, out chan<- []*ebpf.Record) {
-	for records := range in {
+func (pf *protocolFilter) nodeLoop(_ context.Context) {
+	defer pf.output.Close()
+	for records := range pf.input {
 		if filtered := pf.filter(records); len(filtered) > 0 {
-			out <- filtered
+			pf.output.Send(filtered)
 		}
 	}
 }

@@ -24,12 +24,13 @@ import (
 	"log/slog"
 
 	"github.com/hashicorp/golang-lru/v2/simplelru"
-	"github.com/mariomac/pipes/pipe"
 
 	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
 	"github.com/grafana/beyla/v2/pkg/internal/kube"
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/v2/pkg/kubecache/informer"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
+	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 	"github.com/grafana/beyla/v2/pkg/transform"
 )
 
@@ -55,29 +56,33 @@ func MetadataDecoratorProvider(
 	ctx context.Context,
 	cfg *transform.KubernetesDecorator,
 	k8sInformer *kube.MetadataProvider,
-) (pipe.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
-	if !k8sInformer.IsKubeEnabled() {
-		// This node is not going to be instantiated. Let the pipes library just bypassing it.
-		return pipe.Bypass[[]*ebpf.Record](), nil
-	}
-	nt, err := newDecorator(ctx, cfg, k8sInformer)
-	if err != nil {
-		return nil, fmt.Errorf("instantiating k8s.MetadataDecorator: %w", err)
-	}
-	var decorate func([]*ebpf.Record) []*ebpf.Record
-	if cfg.DropExternal {
-		log().Debug("will drop external flows")
-		decorate = nt.decorateMightDrop
-	} else {
-		decorate = nt.decorateNoDrop
-	}
-	return func(in <-chan []*ebpf.Record, out chan<- []*ebpf.Record) {
-		log().Debug("starting network transformation loop")
-		for flows := range in {
-			out <- decorate(flows)
+	input, output *msg.Queue[[]*ebpf.Record],
+) swarm.InstanceFunc {
+	return func(_ context.Context) (swarm.RunFunc, error) {
+		if !k8sInformer.IsKubeEnabled() {
+			return swarm.Bypass(input, output)
 		}
-		log().Debug("stopping network transformation loop")
-	}, nil
+		nt, err := newDecorator(ctx, cfg, k8sInformer)
+		if err != nil {
+			return nil, fmt.Errorf("instantiating k8s.MetadataDecorator: %w", err)
+		}
+		var decorate func([]*ebpf.Record) []*ebpf.Record
+		if cfg.DropExternal {
+			log().Debug("will drop external flows")
+			decorate = nt.decorateMightDrop
+		} else {
+			decorate = nt.decorateNoDrop
+		}
+		in := input.Subscribe()
+		return func(_ context.Context) {
+			defer output.Close()
+			log().Debug("starting network transformation loop")
+			for flows := range in {
+				output.Send(decorate(flows))
+			}
+			log().Debug("stopping network transformation loop")
+		}, nil
+	}
 }
 
 type decorator struct {

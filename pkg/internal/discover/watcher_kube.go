@@ -50,8 +50,7 @@ func WatcherKubeEnricherProvider(
 ) swarm.InstanceFunc {
 	return func(ctx context.Context) (swarm.RunFunc, error) {
 		if !kubeMetaProvider.IsKubeEnabled() {
-			input.Bypass(output)
-			return swarm.EmptyRunFunc()
+			return swarm.Bypass(input, output)
 		}
 		store, err := kubeMetaProvider.Get(ctx)
 		if err != nil {

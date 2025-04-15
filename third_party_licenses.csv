@@ -60,7 +60,6 @@ github.com/knadh/koanf/v2,https://github.com/grafana/beyla/blob/HEAD/vendor/gith
 github.com/leodido/go-urn,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/leodido/go-urn/LICENSE,MIT
 github.com/mailru/easyjson,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/mailru/easyjson/LICENSE,MIT
 github.com/mariomac/guara/pkg/test,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/mariomac/guara/LICENSE,Apache-2.0
-github.com/mariomac/pipes/pipe,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/mariomac/pipes/LICENSE,Apache-2.0
 github.com/mattn/go-isatty,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/mattn/go-isatty/LICENSE,MIT
 github.com/mitchellh/copystructure,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/mitchellh/copystructure/LICENSE,MIT
 github.com/mitchellh/reflectwalk,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/mitchellh/reflectwalk/LICENSE,MIT

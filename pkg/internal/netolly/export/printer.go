@@ -1,27 +1,30 @@
 package export
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
 
-	"github.com/mariomac/pipes/pipe"
-
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
+	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
-func FlowPrinterProvider(enabled bool) (pipe.FinalFunc[[]*ebpf.Record], error) {
+func FlowPrinterProvider(enabled bool, input *msg.Queue[[]*ebpf.Record]) swarm.RunFunc {
 	if !enabled {
-		// This node is not going to be instantiated. Let the pipes library just ignore it.
-		return pipe.IgnoreFinal[[]*ebpf.Record](), nil
+		// just return a no-op
+		return func(_ context.Context) {}
 	}
-	return func(in <-chan []*ebpf.Record) {
+
+	in := input.Subscribe()
+	return func(_ context.Context) {
 		for flows := range in {
 			for _, flow := range flows {
 				printFlow(flow)
 			}
 		}
-	}, nil
+	}
 }
 
 func printFlow(f *ebpf.Record) {

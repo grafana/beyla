@@ -186,3 +186,22 @@ func TestClose_Errors(t *testing.T) {
 		assert.NotPanics(t, q.Close)
 	})
 }
+
+func TestMarkCloseable(t *testing.T) {
+	q := NewQueue[int](ChannelBufferLen(100), ClosingAttempts(3))
+	q.Send(1)
+	q.MarkCloseable()
+	assert.NotPanics(t, func() {
+		q.Send(2)
+	})
+	q.MarkCloseable()
+	assert.NotPanics(t, func() {
+		q.Send(3)
+	})
+	q.MarkCloseable()
+	t.Run("can't send on closed queue", func(t *testing.T) {
+		assert.Panics(t, func() {
+			q.Send(4)
+		})
+	})
+}

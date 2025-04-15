@@ -71,8 +71,7 @@ type routerNode struct {
 func (rn *routerNode) provideRoutes(_ context.Context) (swarm.RunFunc, error) {
 	rc := rn.config
 	if rc == nil {
-		rn.input.Bypass(rn.output)
-		return swarm.EmptyRunFunc()
+		return swarm.Bypass(rn.input, rn.output)
 	}
 
 	// set default value for Unmatch action

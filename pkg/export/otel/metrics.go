@@ -297,11 +297,6 @@ func newMetricsReporter(
 
 	is := instrumentations.NewInstrumentationSelection(cfg.Instrumentations)
 
-	// swarm.Instancer will cancel the passed InstanceFunc context once all the nodes
-	// are instanced, so we remove the cancellation from the context to avoid
-	// cancelling the metrics reporter
-	ctx = context.WithoutCancel(ctx)
-
 	mr := MetricsReporter{
 		ctx:        ctx,
 		cfg:        cfg,

@@ -25,9 +25,10 @@ import (
 	"time"
 
 	"github.com/gavv/monotime"
-	"github.com/mariomac/pipes/pipe"
 
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
+	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 func mtlog() *slog.Logger {
@@ -63,8 +64,9 @@ func (m *MapTracer) Flush() {
 	m.evictionCond.Broadcast()
 }
 
-func (m *MapTracer) TraceLoop(ctx context.Context) pipe.StartFunc[[]*ebpf.Record] {
-	return func(out chan<- []*ebpf.Record) {
+func (m *MapTracer) TraceLoop(out *msg.Queue[[]*ebpf.Record]) swarm.RunFunc {
+	return func(ctx context.Context) {
+		defer out.MarkCloseable()
 		evictionTicker := time.NewTicker(m.evictionTimeout)
 		go m.evictionSynchronization(ctx, out)
 		mtlog := mtlog()
@@ -85,7 +87,7 @@ func (m *MapTracer) TraceLoop(ctx context.Context) pipe.StartFunc[[]*ebpf.Record
 // evictionSynchronization loop just waits for the evictionCond to happen
 // and triggers the actual eviction. It makes sure that only one eviction
 // is being triggered at the same time
-func (m *MapTracer) evictionSynchronization(ctx context.Context, out chan<- []*ebpf.Record) {
+func (m *MapTracer) evictionSynchronization(ctx context.Context, out *msg.Queue[[]*ebpf.Record]) {
 	// flow eviction loop. It just keeps waiting for eviction until someone triggers the
 	// evictionCond.Broadcast signal
 	mtlog := mtlog()
@@ -106,7 +108,7 @@ func (m *MapTracer) evictionSynchronization(ctx context.Context, out chan<- []*e
 	}
 }
 
-func (m *MapTracer) evictFlows(ctx context.Context, forwardFlows chan<- []*ebpf.Record) {
+func (m *MapTracer) evictFlows(ctx context.Context, forwardFlows *msg.Queue[[]*ebpf.Record]) {
 	var forwardingFlows []*ebpf.Record
 	laterFlowNs := uint64(0)
 	for flowKey, flowMetrics := range m.mapFetcher.LookupAndDeleteMap() {
@@ -127,7 +129,7 @@ func (m *MapTracer) evictFlows(ctx context.Context, forwardFlows chan<- []*ebpf.
 	case <-ctx.Done():
 		mtlog.Debug("skipping flow eviction as agent is being stopped")
 	default:
-		forwardFlows <- forwardingFlows
+		forwardFlows.Send(forwardingFlows)
 	}
 	mtlog.Debug("flows evicted", "len", len(forwardingFlows))
 }

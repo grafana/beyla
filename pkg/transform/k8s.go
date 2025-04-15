@@ -79,8 +79,7 @@ func KubeDecoratorProvider(
 	return func(ctx context.Context) (swarm.RunFunc, error) {
 		if !ctxInfo.K8sInformer.IsKubeEnabled() {
 			// if kubernetes decoration is disabled, we just bypass the node
-			input.Bypass(output)
-			return swarm.EmptyRunFunc()
+			return swarm.Bypass(input, output)
 		}
 		metaStore, err := ctxInfo.K8sInformer.Get(ctx)
 		if err != nil {

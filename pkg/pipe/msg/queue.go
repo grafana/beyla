@@ -9,11 +9,13 @@ import (
 type queueConfig struct {
 	channelBufferLen       int
 	discardIfNoSubscribers bool
+	closingAttempts        int
 }
 
 var defaultQueueConfig = queueConfig{
 	channelBufferLen:       1,
 	discardIfNoSubscribers: false,
+	closingAttempts:        1,
 }
 
 // QueueOpts allow configuring some operation of a queue
@@ -36,6 +38,16 @@ func NotBlockIfNoSubscribers() QueueOpts {
 	}
 }
 
+// ClosingAttempts sets the number of invocations to MarkCloseable before the channel is
+// effectively closed.
+// This is useful when multiple nodes are sending messages to the same queue, and we want
+// to close the queue only when all of them have marked the channel as closeable.
+func ClosingAttempts(attempts int) QueueOpts {
+	return func(c *queueConfig) {
+		c.closingAttempts = attempts
+	}
+}
+
 // Queue is a simple message queue that allows sending messages to multiple subscribers.
 // It also allows bypassing messages to other queues, so that a message sent to one queue
 // can be received by subscribers of another queue.
@@ -48,8 +60,9 @@ type Queue[T any] struct {
 	// in blocking channels, dsts will be at least 1 even if subscribers are 0
 	// this channel will hold submitted data at least until someone subscribes and
 	// reads it. This can block the sender if no one subscribes to the channel
-	subscribers int
-	dsts        []chan T
+	subscribers      int
+	dsts             []chan T
+	remainingClosers int
 
 	// double-linked list of bypassing queues
 	// For simplicity, a Queue instance:
@@ -69,7 +82,7 @@ func NewQueue[T any](opts ...QueueOpts) *Queue[T] {
 	if !cfg.discardIfNoSubscribers {
 		dsts = []chan T{make(chan T, cfg.channelBufferLen)}
 	}
-	return &Queue[T]{cfg: &cfg, dsts: dsts}
+	return &Queue[T]{cfg: &cfg, dsts: dsts, remainingClosers: cfg.closingAttempts}
 }
 
 func (q *Queue[T]) config() *queueConfig {
@@ -136,9 +149,28 @@ func (q *Queue[T]) Bypass(to *Queue[T]) {
 // Close all the subscribers of this queue. This will close all the channels
 // or will close the bypassed channel
 func (q *Queue[T]) Close() {
-	q.closed.Store(true)
 	q.mt.Lock()
 	defer q.mt.Unlock()
+	q.close()
+}
+
+// MarkCloseable decreases the internal counter of submitters, and if it reaches 0,
+// (meaning that all senders have closed their channels) it will close the queue.
+// This method is useful for multiple nodes sending messages to the same queue, and
+// willing to close it only when all
+func (q *Queue[T]) MarkCloseable() {
+	q.mt.Lock()
+	defer q.mt.Unlock()
+	q.remainingClosers--
+	if q.remainingClosers <= 0 {
+		q.close()
+	}
+}
+
+func (q *Queue[T]) close() {
+	if q.closed.Swap(true) {
+		return
+	}
 	if q.bypassTo != nil {
 		q.bypassTo.Close()
 	} else {

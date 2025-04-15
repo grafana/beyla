@@ -10,27 +10,31 @@ import (
 
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/v2/pkg/internal/testutil"
+	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
 const testTimeout = 5 * time.Second
 
 func TestCIDRDecorator(t *testing.T) {
+	input := msg.NewQueue[[]*ebpf.Record](msg.ChannelBufferLen(100))
+	defer input.Close()
+	outputQu := msg.NewQueue[[]*ebpf.Record](msg.ChannelBufferLen(100))
+	outCh := outputQu.Subscribe()
 	grouper, err := DecoratorProvider([]string{
 		"10.0.0.0/8",
 		"10.1.2.0/24",
 		"140.130.22.0/24",
 		"2001:db8:3c4d:15::/64",
 		"2001::/16",
-	})
+	}, input, outputQu)(t.Context())
 	require.NoError(t, err)
-	inCh, outCh := make(chan []*ebpf.Record, 10), make(chan []*ebpf.Record, 10)
-	go grouper(inCh, outCh)
-	inCh <- []*ebpf.Record{
+	go grouper(t.Context())
+	input.Send([]*ebpf.Record{
 		flow("10.3.4.5", "10.1.2.3"),
 		flow("2001:db8:3c4d:15:3210::", "2001:3333:3333::"),
 		flow("140.130.22.11", "140.130.23.11"),
 		flow("180.130.22.11", "10.1.2.4"),
-	}
+	})
 	decorated := testutil.ReadChannel(t, outCh, testTimeout)
 	require.Len(t, decorated, 4)
 	assert.Equal(t, "10.0.0.0/8", decorated[0].Attrs.Metadata["src.cidr"])
@@ -44,6 +48,10 @@ func TestCIDRDecorator(t *testing.T) {
 }
 
 func TestCIDRDecorator_GroupAllUnknownTraffic(t *testing.T) {
+	input := msg.NewQueue[[]*ebpf.Record](msg.ChannelBufferLen(100))
+	defer input.Close()
+	outputQu := msg.NewQueue[[]*ebpf.Record](msg.ChannelBufferLen(100))
+	outCh := outputQu.Subscribe()
 	grouper, err := DecoratorProvider([]string{
 		"10.0.0.0/8",
 		"10.1.2.0/24",
@@ -51,16 +59,15 @@ func TestCIDRDecorator_GroupAllUnknownTraffic(t *testing.T) {
 		"140.130.22.0/24",
 		"2001:db8:3c4d:15::/64",
 		"2001::/16",
-	})
+	}, input, outputQu)(t.Context())
 	require.NoError(t, err)
-	inCh, outCh := make(chan []*ebpf.Record, 10), make(chan []*ebpf.Record, 10)
-	go grouper(inCh, outCh)
-	inCh <- []*ebpf.Record{
+	go grouper(t.Context())
+	input.Send([]*ebpf.Record{
 		flow("10.3.4.5", "10.1.2.3"),
 		flow("2001:db8:3c4d:15:3210::", "2001:3333:3333::"),
 		flow("140.130.22.11", "140.130.23.11"),
 		flow("180.130.22.11", "10.1.2.4"),
-	}
+	})
 	decorated := testutil.ReadChannel(t, outCh, testTimeout)
 	require.Len(t, decorated, 4)
 	assert.Equal(t, "10.0.0.0/8", decorated[0].Attrs.Metadata["src.cidr"])

@@ -242,7 +242,7 @@ func (f *Flows) Run(ctx context.Context) error {
 
 	f.ifaceManager.Start(ctx)
 
-	graph.Start()
+	graph.Start(ctx)
 
 	f.status = StatusStarted
 	alog.Info("Flows agent successfully started")

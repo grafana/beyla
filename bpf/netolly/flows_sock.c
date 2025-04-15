@@ -52,6 +52,7 @@ static __always_inline bool read_sk_buff(struct __sk_buff *skb, flow_id *id, u16
     bpf_skb_load_bytes(skb, offsetof(struct ethhdr, h_proto), &h_proto, sizeof(h_proto));
     h_proto = __bpf_htons(h_proto);
     id->eth_protocol = h_proto;
+    id->if_index = skb->ifindex;
 
     u8 hdr_len;
     u8 proto = 0;

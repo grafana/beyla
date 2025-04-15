@@ -78,8 +78,6 @@ type TracesConfig struct {
 	MaxQueueSize int `yaml:"max_queue_size" env:"BEYLA_OTLP_TRACES_MAX_QUEUE_SIZE"`
 	// nolint:undoc
 	BatchTimeout time.Duration `yaml:"batch_timeout" env:"BEYLA_OTLP_TRACES_BATCH_TIMEOUT"`
-	// nolint:undoc
-	ExportTimeout time.Duration `yaml:"export_timeout" env:"BEYLA_OTLP_TRACES_EXPORT_TIMEOUT"`
 
 	// Configuration options for BackOffConfig of the traces exporter.
 	// See https://github.com/open-telemetry/opentelemetry-collector/blob/main/config/configretry/backoff.go
@@ -301,9 +299,9 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 		batchCfg := exporterbatcher.NewDefaultConfig()
 		if cfg.MaxQueueSize > 0 {
 			batchCfg.SizeConfig.MaxSize = cfg.MaxExportBatchSize
-			if cfg.BatchTimeout > 0 {
-				batchCfg.FlushTimeout = cfg.BatchTimeout
-			}
+		}
+		if cfg.BatchTimeout > 0 {
+			batchCfg.FlushTimeout = cfg.BatchTimeout
 		}
 		config.RetryConfig = getRetrySettings(cfg)
 		config.ClientConfig = confighttp.ClientConfig{
@@ -315,7 +313,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 			Headers: convertHeaders(opts.Headers),
 		}
 		slog.Debug("getTracesExporter: confighttp.ClientConfig created", "endpoint", config.ClientConfig.Endpoint)
-		set := getTraceSettings(ctxInfo, factory.Type(), t)
+		set := getTraceSettings(ctxInfo, factory.Type(), t, &batchCfg)
 		exporter, err := factory.CreateTraces(ctx, set, config)
 		if err != nil {
 			slog.Error("can't create OTLP HTTP traces exporter", "error", err)
@@ -355,9 +353,9 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 		if cfg.MaxExportBatchSize > 0 {
 			config.BatcherConfig.Enabled = true
 			config.BatcherConfig.SizeConfig.MaxSize = cfg.MaxExportBatchSize
-			if cfg.BatchTimeout > 0 {
-				config.BatcherConfig.FlushTimeout = cfg.BatchTimeout
-			}
+		}
+		if cfg.BatchTimeout > 0 {
+			config.BatcherConfig.FlushTimeout = cfg.BatchTimeout
 		}
 		config.RetryConfig = getRetrySettings(cfg)
 		config.ClientConfig = configgrpc.ClientConfig{
@@ -368,7 +366,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 			},
 			Headers: convertHeaders(opts.Headers),
 		}
-		set := getTraceSettings(ctxInfo, factory.Type(), t)
+		set := getTraceSettings(ctxInfo, factory.Type(), t, &config.BatcherConfig)
 		return factory.CreateTraces(ctx, set, config)
 	default:
 		slog.Error(fmt.Sprintf("invalid protocol value: %q. Accepted values are: %s, %s, %s",
@@ -400,14 +398,19 @@ func instrumentTraceExporter(in trace.SpanExporter, internalMetrics imetrics.Rep
 	}
 }
 
-func getTraceSettings(ctxInfo *global.ContextInfo, dataTypeMetrics component.Type, in trace.SpanExporter) exporter.Settings {
+func getTraceSettings(
+	ctxInfo *global.ContextInfo,
+	dataTypeMetrics component.Type,
+	in trace.SpanExporter,
+	batcherCfg *exporterbatcher.Config,
+) exporter.Settings {
 	var traceProvider trace2.TracerProvider
 	traceProvider = tracenoop.NewTracerProvider()
 	if internalMetricsEnabled(ctxInfo) {
 		spanExporter := instrumentTraceExporter(in, ctxInfo.Metrics)
 		res := newResourceInternal(ctxInfo.HostID)
 		traceProvider = trace.NewTracerProvider(
-			trace.WithBatcher(spanExporter),
+			trace.WithBatcher(spanExporter, getInternalBatchSpanOpts(batcherCfg)...),
 			trace.WithResource(res),
 		)
 	}
@@ -423,6 +426,17 @@ func getTraceSettings(ctxInfo *global.ContextInfo, dataTypeMetrics component.Typ
 		ID:                component.NewIDWithName(dataTypeMetrics, "beyla"),
 		TelemetrySettings: telemetrySettings,
 	}
+}
+
+func getInternalBatchSpanOpts(cfg *exporterbatcher.Config) []trace.BatchSpanProcessorOption {
+	var opts []trace.BatchSpanProcessorOption
+	if cfg.FlushTimeout > 0 {
+		opts = append(opts, trace.WithBatchTimeout(cfg.FlushTimeout))
+	}
+	if cfg.MaxSize > 0 {
+		opts = append(opts, trace.WithMaxQueueSize(cfg.MaxSize))
+	}
+	return opts
 }
 
 func getRetrySettings(cfg TracesConfig) configretry.BackOffConfig {

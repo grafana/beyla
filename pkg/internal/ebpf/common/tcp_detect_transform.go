@@ -2,40 +2,11 @@ package ebpfcommon
 
 import (
 	"fmt"
-	"regexp"
 
 	"github.com/grafana/beyla/v2/pkg/config"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/ringbuf"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 )
-
-var (
-	// Match tokens, passwords, auth data, and similar sensitive patterns
-	tokenPattern = regexp.MustCompile(`(?i)(token|password|auth|secret|key|credential|jwt)["']?\s*[:=]\s*["']?([^"'\s,\}]+)`)
-	// Match for JSON, XML and plain values that might contain sensitive info
-	sessionDataPattern = regexp.MustCompile(`(?i)(s:[0-9]+:["'])([^"']+)(["'])`)
-	// Redis AUTH command
-	redisAuthPattern = regexp.MustCompile(`(?i)(AUTH\s+)(\S+)`)
-	// Redis SETEX command (which often contains sensitive session data)
-	redisSetexPattern = regexp.MustCompile(`(?i)(SETEX\s+\S+\s+\d+\s+)(.+)`)
-)
-
-// sanitizeBuffer masks sensitive data in protocol buffers before logging
-func sanitizeBuffer(data []byte) []byte {
-	if len(data) == 0 {
-		return data
-	}
-
-	content := string(data)
-
-	// Replace sensitive pattern matches with masked data
-	content = tokenPattern.ReplaceAllString(content, "$1: \"***REDACTED***\"")
-	content = sessionDataPattern.ReplaceAllString(content, "$1***REDACTED***$3")
-	content = redisAuthPattern.ReplaceAllString(content, "$1***REDACTED***")
-	content = redisSetexPattern.ReplaceAllString(content, "$1***REDACTED***")
-
-	return []byte(content)
-}
 
 // nolint:cyclop
 func ReadTCPRequestIntoSpan(cfg *config.EBPFTracer, record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {
@@ -62,10 +33,8 @@ func ReadTCPRequestIntoSpan(cfg *config.EBPFTracer, record *ringbuf.Record, filt
 	b := event.Buf[:l]
 
 	if cfg.ProtocolDebug {
-		sanitizedReq := sanitizeBuffer(b)
-		sanitizedResp := sanitizeBuffer(event.Rbuf[:rl])
-		fmt.Printf("[>] %q\n", sanitizedReq)
-		fmt.Printf("[<] %q\n", sanitizedResp)
+		fmt.Printf("[>] %q\n", b)
+		fmt.Printf("[<] %q\n", event.Rbuf[:rl])
 	}
 
 	// Check if we have a SQL statement

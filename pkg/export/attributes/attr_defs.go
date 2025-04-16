@@ -261,9 +261,10 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 		DBClientDuration.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes},
 			Attributes: map[attr.Name]Default{
-				attr.DBOperation:  true,
-				attr.DBSystemName: true,
-				attr.ErrorType:    true,
+				attr.DBOperation:          true,
+				attr.DBSystemName:         true,
+				attr.ErrorType:            true,
+				attr.DBResponseStatusCode: true,
 			},
 		},
 		MessagingPublishDuration.Section: {

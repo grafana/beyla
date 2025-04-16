@@ -73,6 +73,37 @@ func testREDMetricsForPythonSQLLibrary(t *testing.T, url, comm, namespace string
 	require.Len(t, traces, 0)
 }
 
+func testREDMetricsForPythonSQLLibraryError(t *testing.T, url, comm, namespace string) {
+	urlPath := "/error"
+
+	for i := 0; i < 4; i++ {
+		doHTTPGet(t, url+urlPath, 200)
+	}
+
+	// Look for a trace with SELECT nonexisting
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		resp, err := http.Get(jaegerQueryURL + "?service=" + comm + "&operation=SELECT%20nonexisting")
+		require.NoError(t, err)
+		require.NotNil(t, resp)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		var tq jaeger.TracesQuery
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
+		traces := tq.FindBySpan(jaeger.Tag{Key: "db.operation.name", Type: "string", Value: "SELECT"})
+		assert.LessOrEqual(t, 1, len(traces))
+		assert.LessOrEqual(t, 1, len(traces[0].Spans))
+		span := traces[0].Spans[0]
+		assert.Equal(t, "SELECT nonexisting", span.OperationName)
+
+		tag, found := jaeger.FindIn(span.Tags, "db.response.status_code")
+		assert.True(t, found)
+		assert.Equal(t, "TODO:fill", tag.Value)
+
+		tag, found = jaeger.FindIn(span.Tags, "error.type")
+		assert.True(t, found)
+		assert.Equal(t, "TODO:fill", tag.Value)
+	}, test.Interval(100*time.Millisecond))
+}
+
 func testREDMetricsPythonSQLOnly(t *testing.T) {
 	for _, testCaseURL := range []string{
 		"http://localhost:8381",
@@ -80,6 +111,7 @@ func testREDMetricsPythonSQLOnly(t *testing.T) {
 		t.Run(testCaseURL, func(t *testing.T) {
 			waitForSQLTestComponents(t, testCaseURL, "/query")
 			testREDMetricsForPythonSQLLibrary(t, testCaseURL, "python3.12", "integration-test")
+			testREDMetricsForPythonSQLLibraryError(t, testCaseURL, "python3.12", "integration-test")
 		})
 	}
 }

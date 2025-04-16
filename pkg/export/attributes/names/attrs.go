@@ -54,6 +54,7 @@ const (
 	MessagingOpType        = Name("messaging.operation.type")
 	MessagingSystem        = Name(semconv.MessagingSystemKey)
 	MessagingDestination   = Name(semconv.MessagingDestinationNameKey)
+	DBResponseStatusCode   = Name("db.response.status_code")
 
 	K8sNamespaceName   = Name("k8s.namespace.name")
 	K8sPodName         = Name("k8s.pod.name")

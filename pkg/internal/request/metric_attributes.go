@@ -96,6 +96,10 @@ func DBOperationName(val string) attribute.KeyValue {
 	return attribute.Key(attr.DBOperation).String(val)
 }
 
+func DBResponseStatusCode(val string) attribute.KeyValue {
+	return attribute.Key(attr.DBResponseStatusCode).String(val)
+}
+
 func DBSystemName(val string) attribute.KeyValue {
 	// TODO: replace by semconv.DBSystemName when we update to OTEL semconv library 1.30
 	return attribute.Key(attr.DBSystemName).String(val)

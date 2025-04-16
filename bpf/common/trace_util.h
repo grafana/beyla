@@ -63,3 +63,21 @@ static __always_inline bool is_traceparent(const unsigned char *p) {
 
     return false;
 }
+
+#define BZERO_MAX 16 * 1024 // 16KB
+
+struct {
+    __uint(type, BPF_MAP_TYPE_ARRAY);
+    __type(key, uint32_t);
+    __type(value, char[BZERO_MAX]);
+    __uint(max_entries, 1);
+} zeros SEC(".maps");
+
+static inline void cheap_bzero(char *buf, size_t size) {
+    void *z = bpf_map_lookup_elem(&zeros, &(uint32_t){0});
+    if (!z) {
+        bpf_dbg_printk("Failed to get zeroed buffer");
+        return;
+    }
+    bpf_probe_read(buf, size, z);
+}

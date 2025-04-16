@@ -103,6 +103,13 @@ func TCPToSQLToSpan(trace *TCPRequestInfo, op, table, sql string, kind request.S
 		hostPort = int(trace.ConnInfo.D_port)
 	}
 
+	var status int
+
+	sqlResponse := sqlprune.SQLParseError(trace.Rbuf[:], trace.RespLen)
+	if sqlResponse != nil {
+		status = 1
+	}
+
 	return request.Span{
 		Type:          request.EventTypeSQLClient,
 		Method:        op,
@@ -115,7 +122,7 @@ func TCPToSQLToSpan(trace *TCPRequestInfo, op, table, sql string, kind request.S
 		RequestStart:  int64(trace.StartMonotimeNs),
 		Start:         int64(trace.StartMonotimeNs),
 		End:           int64(trace.EndMonotimeNs),
-		Status:        0,
+		Status:        status,
 		TraceID:       trace2.TraceID(trace.Tp.TraceId),
 		SpanID:        trace2.SpanID(trace.Tp.SpanId),
 		ParentSpanID:  trace2.SpanID(trace.Tp.ParentId),
@@ -125,7 +132,8 @@ func TCPToSQLToSpan(trace *TCPRequestInfo, op, table, sql string, kind request.S
 			UserPID:   trace.Pid.UserPid,
 			Namespace: trace.Pid.Ns,
 		},
-		Statement: sql,
-		SubType:   int(kind),
+		Statement:   sql,
+		SubType:     int(kind),
+		SQLResponse: sqlResponse,
 	}
 }

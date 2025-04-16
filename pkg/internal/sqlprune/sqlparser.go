@@ -131,3 +131,40 @@ func SQLParseOperationAndTableNEW(query string) (string, string) {
 
 	return "SELECT", tables[0]
 }
+
+type DBType string
+
+type SQLError struct {
+	DB       DBType
+	Code     uint16
+	Message  string
+	SQLState string
+}
+
+func trimNulls(s string) string {
+	if i := strings.IndexByte(s, 0); i != -1 {
+		return s[:i]
+	}
+	return s
+}
+
+// Try to parse the buffer as a database error message.
+//
+// Due to lack of protocol inference in kernel space, we need to
+// perform some basic validation on the parsed error.
+func SQLParseError(buf []uint8, length uint32) *SQLError {
+	var sqlErr *SQLError
+
+	if sqlErr = parseMySQLError(buf, length); sqlErr != nil {
+		if validateMySQLError(sqlErr) {
+			return sqlErr
+		}
+	}
+	if sqlErr = parsePostgresError(buf, length); sqlErr != nil {
+		if validatePostgresError(sqlErr) {
+			return sqlErr
+		}
+	}
+
+	return nil
+}

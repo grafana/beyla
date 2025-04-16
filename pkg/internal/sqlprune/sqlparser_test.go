@@ -140,3 +140,70 @@ func TestSQLExtraction(t *testing.T) {
 		}
 	})
 }
+
+func TestSQLParseError(t *testing.T) {
+	tests := []struct {
+		name     string
+		buf      []uint8
+		length   uint32
+		expected *SQLError
+	}{
+		{
+			name:   "Valid MySQL error with SQL state",
+			buf:    append([]uint8{0x00, 0x00, 0x00, 0x00}, []uint8{0xFF, 0x10, 0x04, '#', 'H', 'Y', '0', '0', '0', 'S', 'o', 'm', 'e', ' ', 'e', 'r', 'r', 'o', 'r'}...),
+			length: 23,
+			expected: &SQLError{
+				DB:       DBTypeMySQL,
+				Code:     1040,
+				Message:  "Some error",
+				SQLState: "#HY000",
+			},
+		},
+		{
+			name:   "Valid MySQL error",
+			buf:    append([]uint8{0x00, 0x00, 0x00, 0x00}, []uint8{0xFF, 0x10, 0x04, 'S', 'o', 'm', 'e', ' ', 'e', 'r', 'r', 'o', 'r'}...),
+			length: 17,
+			expected: &SQLError{
+				DB:       DBTypeMySQL,
+				Code:     1040,
+				Message:  "Some error",
+				SQLState: "",
+			},
+		},
+		{
+			name:   "Valid Postgres error",
+			buf:    append([]uint8{0x00, 0x00, 0x00, 0x00, 0x00}, []uint8{'E', 0x00, 'S', 'E', 'R', 'R', 'O', 'R', 0x00, 'C', '4', '2', '6', '0', '1', 0x00, 'M', 'S', 'y', 'n', 't', 'a', 'x', ' ', 'e', 'r', 'r', 'o', 'r', 0x00, 0x00}...),
+			length: 36,
+			expected: &SQLError{
+				DB:       DBTypePostgres,
+				Message:  "Syntax error",
+				SQLState: "42601",
+			},
+		},
+		{
+			name:     "Invalid MySQL error",
+			buf:      append([]uint8{0x00, 0x00, 0x00, 0x00}, []uint8{0xFF, 0x99, 0x99, 'I', 'n', 'v', 'a', 'l', 'i', 'd'}...),
+			length:   14,
+			expected: nil,
+		},
+		{
+			name:     "Invalid Postgres error",
+			buf:      append([]uint8{0x00, 0x00, 0x00, 0x00, 0x00}, []uint8{'E', 0x00, 'S', 'E', 'R', 'R', 'O', 'R', 0x00, 'C', 'I', 'N', 'V', 'A', 'L', 'I', 'D', 0x00, 0x00}...),
+			length:   24,
+			expected: nil,
+		},
+		{
+			name:     "Empty buffer",
+			buf:      []uint8{0x00, 0x00, 0x00, 0x00, 0x00},
+			length:   5,
+			expected: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := SQLParseError(tt.buf, tt.length)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}

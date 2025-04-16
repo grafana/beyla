@@ -110,7 +110,7 @@ int BPF_KPROBE(beyla_kprobe_unix_stream_recvmsg,
         if (existing_tcp) {
             tcp_req_t *req = empty_tcp_req();
             if (req) {
-                __builtin_memcpy(req, existing_tcp, sizeof(tcp_req_t));
+                bpf_probe_read(req, sizeof(tcp_req_t), existing_tcp);
                 bpf_map_delete_elem(&ongoing_tcp_req, &partial_p_conn);
                 bpf_map_update_elem(&ongoing_tcp_req, &p_conn, req, BPF_ANY);
             }

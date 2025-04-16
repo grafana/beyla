@@ -358,7 +358,7 @@ func TestAppMetrics_ByInstrumentation(t *testing.T) {
 		{
 			name:      "all instrumentations",
 			instr:     []string{instrumentations.InstrumentationALL},
-			extraColl: 2,
+			extraColl: 4,
 			expected: []string{
 				"http.server.request.duration",
 				"http.client.request.duration",

@@ -51,6 +51,7 @@ prometheus_export:
   ttl: 1s
   buckets:
     request_size_histogram: [0, 10, 20, 22]
+    response_size_histogram: [0, 10, 20, 22]
 attributes:
   kubernetes:
     kubeconfig_path: /foo/bar
@@ -138,8 +139,9 @@ network:
 			Protocol:          otel.ProtocolUnset,
 			ReportersCacheLen: ReporterLRUSize,
 			Buckets: otel.Buckets{
-				DurationHistogram:    []float64{0, 1, 2},
-				RequestSizeHistogram: otel.DefaultBuckets.RequestSizeHistogram,
+				DurationHistogram:     []float64{0, 1, 2},
+				RequestSizeHistogram:  otel.DefaultBuckets.RequestSizeHistogram,
+				ResponseSizeHistogram: otel.DefaultBuckets.ResponseSizeHistogram,
 			},
 			Features: []string{"application"},
 			Instrumentations: []string{
@@ -168,8 +170,9 @@ network:
 			TTL:                         time.Second,
 			SpanMetricsServiceCacheSize: 10000,
 			Buckets: otel.Buckets{
-				DurationHistogram:    otel.DefaultBuckets.DurationHistogram,
-				RequestSizeHistogram: []float64{0, 10, 20, 22},
+				DurationHistogram:     otel.DefaultBuckets.DurationHistogram,
+				RequestSizeHistogram:  []float64{0, 10, 20, 22},
+				ResponseSizeHistogram: []float64{0, 10, 20, 22},
 			}},
 		InternalMetrics: imetrics.Config{
 			Exporter: imetrics.InternalMetricsExporterDisabled,

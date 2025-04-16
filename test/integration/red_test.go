@@ -258,24 +258,25 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 	})
 
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
-		var err error
-		results, err = pq.Query(`http_server_request_body_size_bytes_count{` +
-			`http_request_method="GET",` +
+		labels := `http_request_method="GET",` +
 			`http_response_status_code="404",` +
 			`service_namespace="` + svcNs + `",` +
 			`service_name="` + svcName + `",` +
 			`http_route="/basic/:rnd",` +
-			`url_path="` + path + `"}`)
-		require.NoError(t, err)
-		// check duration_count has 3 calls and all the arguments
-		enoughPromResults(t, results)
-		val := totalPromCount(t, results)
-		assert.LessOrEqual(t, 3, val)
-		if len(results) > 0 {
-			res := results[0]
-			addr := res.Metric["client_address"]
-			assert.NotNil(t, addr)
-		}
+			`url_path="` + path + `"`
+		query := fmt.Sprintf("http_server_request_body_size_bytes_count{%s}", labels)
+		checkServerPromQueryResult(t, pq, query, 3)
+	})
+
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		labels := `http_request_method="GET",` +
+			`http_response_status_code="404",` +
+			`service_namespace="` + svcNs + `",` +
+			`service_name="` + svcName + `",` +
+			`http_route="/basic/:rnd",` +
+			`url_path="` + path + `"`
+		query := fmt.Sprintf("http_server_response_body_size_bytes_count{%s}", labels)
+		checkServerPromQueryResult(t, pq, query, 3)
 	})
 
 	if url == instrumentedServiceGorillaURL {
@@ -296,18 +297,23 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 		})
 
 		test.Eventually(t, testTimeout, func(t require.TestingT) {
-			var err error
-			results, err = pq.Query(`http_server_request_body_size_bytes_count{` +
-				`http_request_method="GET",` +
+			labels := `http_request_method="GET",` +
 				`http_response_status_code="203",` +
 				`service_namespace="` + svcNs + `",` +
 				`http_route="/echo",` +
-				`service_name="` + svcName + `"}`)
-			require.NoError(t, err)
-			// check duration_count has 3 calls
-			enoughPromResults(t, results)
-			val := totalPromCount(t, results)
-			assert.LessOrEqual(t, 3, val)
+				`service_name="` + svcName + `"`
+			query := fmt.Sprintf("http_server_request_body_size_bytes_count{%s}", labels)
+			checkServerPromQueryResult(t, pq, query, 3)
+		})
+
+		test.Eventually(t, testTimeout, func(t require.TestingT) {
+			labels := `http_request_method="GET",` +
+				`http_response_status_code="203",` +
+				`service_namespace="` + svcNs + `",` +
+				`http_route="/echo",` +
+				`service_name="` + svcName + `"`
+			query := fmt.Sprintf("http_server_response_body_size_bytes_count{%s}", labels)
+			checkServerPromQueryResult(t, pq, query, 3)
 		})
 
 		// Make sure we see /echoBack server
@@ -327,18 +333,23 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 		})
 
 		test.Eventually(t, testTimeout, func(t require.TestingT) {
-			var err error
-			results, err = pq.Query(`http_server_request_body_size_bytes_count{` +
-				`http_request_method="GET",` +
+			labels := `http_request_method="GET",` +
 				`http_response_status_code="203",` +
 				`service_namespace="` + svcNs + `",` +
 				`http_route="/echoBack",` +
-				`service_name="` + svcName + `"}`)
-			require.NoError(t, err)
-			// check duration_count has 3 calls
-			enoughPromResults(t, results)
-			val := totalPromCount(t, results)
-			assert.LessOrEqual(t, 3, val)
+				`service_name="` + svcName + `"`
+			query := fmt.Sprintf("http_server_request_body_size_bytes_count{%s}", labels)
+			checkServerPromQueryResult(t, pq, query, 3)
+		})
+
+		test.Eventually(t, testTimeout, func(t require.TestingT) {
+			labels := `http_request_method="GET",` +
+				`http_response_status_code="203",` +
+				`service_namespace="` + svcNs + `",` +
+				`http_route="/echoBack",` +
+				`service_name="` + svcName + `"`
+			query := fmt.Sprintf("http_server_response_body_size_bytes_count{%s}", labels)
+			checkServerPromQueryResult(t, pq, query, 3)
 		})
 
 		// make sure we see /echo client
@@ -357,17 +368,21 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 		})
 
 		test.Eventually(t, testTimeout, func(t require.TestingT) {
-			var err error
-			results, err = pq.Query(`http_client_request_body_size_bytes_count{` +
-				`http_request_method="GET",` +
+			labels := `http_request_method="GET",` +
 				`http_response_status_code="203",` +
 				`service_namespace="` + svcNs + `",` +
-				`service_name="` + svcName + `"}`)
-			require.NoError(t, err)
-			// check duration_count has 3 calls
-			enoughPromResults(t, results)
-			val := totalPromCount(t, results)
-			assert.LessOrEqual(t, 3, val)
+				`service_name="` + svcName + `"`
+			query := fmt.Sprintf("http_client_request_body_size_bytes_count{%s}", labels)
+			checkServerPromQueryResult(t, pq, query, 3)
+		})
+
+		test.Eventually(t, testTimeout, func(t require.TestingT) {
+			labels := `http_request_method="GET",` +
+				`http_response_status_code="203",` +
+				`service_namespace="` + svcNs + `",` +
+				`service_name="` + svcName + `"`
+			query := fmt.Sprintf("http_client_response_body_size_bytes_count{%s}", labels)
+			checkServerPromQueryResult(t, pq, query, 3)
 		})
 
 		test.Eventually(t, testTimeout, func(t require.TestingT) {
@@ -420,6 +435,24 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 	sum, err = strconv.ParseFloat(fmt.Sprint(res.Value[1]), 64)
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, sum, 114.0)
+	addr = res.Metric["client_address"]
+	assert.NotNil(t, addr)
+
+	// check response_size_sum is 0
+	results, err = pq.Query(`http_server_response_body_size_bytes_sum{` +
+		`http_request_method="GET",` +
+		`http_response_status_code="404",` +
+		`service_name="` + svcName + `",` +
+		`service_namespace="` + svcNs + `",` +
+		`http_route="/basic/:rnd",` +
+		`url_path="` + path + `"}`)
+	require.NoError(t, err)
+	enoughPromResults(t, results)
+	res = results[0]
+	require.Len(t, res.Value, 2)
+	sum, err = strconv.ParseFloat(fmt.Sprint(res.Value[1]), 64)
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, sum, float64(0))
 	addr = res.Metric["client_address"]
 	assert.NotNil(t, addr)
 
@@ -510,24 +543,25 @@ func testREDMetricsForHTTPLibraryNoRoute(t *testing.T, url, svcName string) {
 	})
 
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
-		var err error
-		results, err = pq.Query(`http_server_request_body_size_bytes_count{` +
-			`http_request_method="GET",` +
+		labels := `http_request_method="GET",` +
 			`http_response_status_code="404",` +
 			`service_namespace="integration-test",` +
 			`service_name="` + svcName + `",` +
 			`http_route="/basic/*",` +
-			`url_path="` + path + `"}`)
-		require.NoError(t, err)
-		// check duration_count has 3 calls and all the arguments
-		enoughPromResults(t, results)
-		val := totalPromCount(t, results)
-		assert.LessOrEqual(t, 3, val)
-		if len(results) > 0 {
-			res := results[0]
-			addr := res.Metric["client_address"]
-			assert.NotNil(t, addr)
-		}
+			`url_path="` + path + `"`
+		query := fmt.Sprintf("http_server_request_body_size_bytes_count{%s}", labels)
+		checkServerPromQueryResult(t, pq, query, 3)
+	})
+
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		labels := `http_request_method="GET",` +
+			`http_response_status_code="404",` +
+			`service_namespace="integration-test",` +
+			`service_name="` + svcName + `",` +
+			`http_route="/basic/*",` +
+			`url_path="` + path + `"`
+		query := fmt.Sprintf("http_server_response_body_size_bytes_count{%s}", labels)
+		checkServerPromQueryResult(t, pq, query, 3)
 	})
 
 	// Make sure we see /echo
@@ -547,18 +581,23 @@ func testREDMetricsForHTTPLibraryNoRoute(t *testing.T, url, svcName string) {
 	})
 
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
-		var err error
-		results, err = pq.Query(`http_server_request_body_size_bytes_count{` +
-			`http_request_method="GET",` +
+		labels := `http_request_method="GET",` +
 			`http_response_status_code="203",` +
 			`service_namespace="integration-test",` +
 			`http_route="/echo",` +
-			`service_name="` + svcName + `"}`)
-		require.NoError(t, err)
-		// check duration_count has 3 calls
-		enoughPromResults(t, results)
-		val := totalPromCount(t, results)
-		assert.LessOrEqual(t, 3, val)
+			`service_name="` + svcName + `"`
+		query := fmt.Sprintf("http_server_request_body_size_bytes_count{%s}", labels)
+		checkServerPromQueryResult(t, pq, query, 3)
+	})
+
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		labels := `http_request_method="GET",` +
+			`http_response_status_code="203",` +
+			`service_namespace="integration-test",` +
+			`http_route="/echo",` +
+			`service_name="` + svcName + `"`
+		query := fmt.Sprintf("http_server_response_body_size_bytes_count{%s}", labels)
+		checkServerPromQueryResult(t, pq, query, 3)
 	})
 
 	// Make sure we see /echoBack server
@@ -578,18 +617,23 @@ func testREDMetricsForHTTPLibraryNoRoute(t *testing.T, url, svcName string) {
 	})
 
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
-		var err error
-		results, err = pq.Query(`http_server_request_body_size_bytes_count{` +
-			`http_request_method="GET",` +
+		labels := `http_request_method="GET",` +
 			`http_response_status_code="203",` +
 			`service_namespace="integration-test",` +
 			`http_route="/echoBack",` +
-			`service_name="` + svcName + `"}`)
-		require.NoError(t, err)
-		// check duration_count has 3 calls
-		enoughPromResults(t, results)
-		val := totalPromCount(t, results)
-		assert.LessOrEqual(t, 3, val)
+			`service_name="` + svcName + `"`
+		query := fmt.Sprintf("http_server_request_body_size_bytes_count{%s}", labels)
+		checkServerPromQueryResult(t, pq, query, 3)
+	})
+
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		labels := `http_request_method="GET",` +
+			`http_response_status_code="203",` +
+			`service_namespace="integration-test",` +
+			`http_route="/echoBack",` +
+			`service_name="` + svcName + `"`
+		query := fmt.Sprintf("http_server_response_body_size_bytes_count{%s}", labels)
+		checkServerPromQueryResult(t, pq, query, 3)
 	})
 
 	// make sure we see /echo client
@@ -608,17 +652,21 @@ func testREDMetricsForHTTPLibraryNoRoute(t *testing.T, url, svcName string) {
 	})
 
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
-		var err error
-		results, err = pq.Query(`http_client_request_body_size_bytes_count{` +
-			`http_request_method="GET",` +
+		labels := `http_request_method="GET",` +
 			`http_response_status_code="203",` +
 			`service_namespace="integration-test",` +
-			`service_name="` + svcName + `"}`)
-		require.NoError(t, err)
-		// check duration_count has 3 calls
-		enoughPromResults(t, results)
-		val := totalPromCount(t, results)
-		assert.LessOrEqual(t, 3, val)
+			`service_name="` + svcName + `"`
+		query := fmt.Sprintf("http_client_request_body_size_bytes_count{%s}", labels)
+		checkClientPromQueryResult(t, pq, query, 3)
+	})
+
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		labels := `http_request_method="GET",` +
+			`http_response_status_code="203",` +
+			`service_namespace="integration-test",` +
+			`service_name="` + svcName + `"`
+		query := fmt.Sprintf("http_client_response_body_size_bytes_count{%s}", labels)
+		checkClientPromQueryResult(t, pq, query, 3)
 	})
 
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
@@ -670,6 +718,24 @@ func testREDMetricsForHTTPLibraryNoRoute(t *testing.T, url, svcName string) {
 	sum, err = strconv.ParseFloat(fmt.Sprint(res.Value[1]), 64)
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, sum, 114.0)
+	addr = res.Metric["client_address"]
+	assert.NotNil(t, addr)
+
+	// check response_size_sum is 0
+	results, err = pq.Query(`http_server_response_body_size_bytes_sum{` +
+		`http_request_method="GET",` +
+		`http_response_status_code="404",` +
+		`service_name="` + svcName + `",` +
+		`service_namespace="integration-test",` +
+		`http_route="/basic/*",` +
+		`url_path="` + path + `"}`)
+	require.NoError(t, err)
+	enoughPromResults(t, results)
+	res = results[0]
+	require.Len(t, res.Value, 2)
+	sum, err = strconv.ParseFloat(fmt.Sprint(res.Value[1]), 64)
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, sum, float64(0))
 	addr = res.Metric["client_address"]
 	assert.NotNil(t, addr)
 

@@ -116,6 +116,7 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 		goexec.SchemePtrPos,
 		goexec.MethodPtrPos,
 		goexec.StatusCodePtrPos,
+		goexec.ResponseLengthPtrPos,
 		goexec.ContentLengthPtrPos,
 		goexec.ReqHeaderPtrPos,
 		goexec.IoWriterBufPtrPos,

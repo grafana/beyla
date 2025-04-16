@@ -640,7 +640,8 @@ func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 			request.ClientAddr(request.PeerAsClient(span)),
 			request.ServerAddr(request.SpanHost(span)),
 			request.ServerPort(span.HostPort),
-			request.HTTPRequestBodySize(int(span.RequestLength())),
+			request.HTTPRequestBodySize(int(span.RequestBodyLength())),
+			request.HTTPResponseBodySize(span.ResponseBodyLength()),
 		}
 		if span.Route != "" {
 			attrs = append(attrs, semconv.HTTPRoute(span.Route))
@@ -669,7 +670,8 @@ func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 			semconv.HTTPScheme(scheme),
 			request.ServerAddr(host),
 			request.ServerPort(span.HostPort),
-			request.HTTPRequestBodySize(int(span.RequestLength())),
+			request.HTTPRequestBodySize(int(span.RequestBodyLength())),
+			request.HTTPResponseBodySize(span.ResponseBodyLength()),
 		}
 	case request.EventTypeGRPCClient:
 		attrs = []attribute.KeyValue{

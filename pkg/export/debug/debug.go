@@ -90,7 +90,7 @@ func textPrinter(in *msg.Queue[[]request.Span]) swarm.RunFunc {
 					}
 				}
 
-				fmt.Printf("%s (%s[%s]) %s %v %s %s [%s:%d]->[%s:%d] size:%dB svc=[%s %s] traceparent=[%s]\n",
+				fmt.Printf("%s (%s[%s]) %s %v %s %s [%s:%d]->[%s:%d] contentLen:%dB responseLen:%dB svc=[%s %s] traceparent=[%s]\n",
 					t.Start.Format("2006-01-02 15:04:05.12345"),
 					t.End.Sub(t.RequestStart),
 					t.End.Sub(t.Start),
@@ -103,6 +103,7 @@ func textPrinter(in *msg.Queue[[]request.Span]) swarm.RunFunc {
 					spans[i].Host+" as "+request.SpanHost(&spans[i])+hn,
 					spans[i].HostPort,
 					spans[i].ContentLength,
+					spans[i].ResponseLength,
 					&spans[i].Service,
 					spans[i].Service.SDKLanguage.String(),
 					traceparent(&spans[i]),

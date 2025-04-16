@@ -44,6 +44,7 @@ typedef struct http_request_trace_t {
     u64 start_monotime_ns;
     u64 end_monotime_ns;
     s64 content_length;
+    s64 response_length;
     u8 path[PATH_MAX_LEN];
     u8 host[HOST_MAX_LEN];
     tp_info_t tp;

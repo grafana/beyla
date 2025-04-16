@@ -21,7 +21,6 @@
 package ifaces
 
 import (
-	"context"
 	"syscall"
 	"testing"
 

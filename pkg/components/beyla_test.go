@@ -4,7 +4,6 @@ package components
 
 import (
 	"bytes"
-	"context"
 	"os"
 	"testing"
 

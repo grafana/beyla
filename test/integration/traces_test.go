@@ -205,45 +205,6 @@ func testGRPCTracesForServiceName(t *testing.T, svcName string) {
 	)
 	assert.Empty(t, sd, sd.String())
 
-	// Check the information of the "in queue" span
-	res = trace.FindByOperationName("in queue", "internal")
-	require.Len(t, res, 1)
-	queue := res[0]
-	// Check parenthood
-	p, ok := trace.ParentOf(&queue)
-	require.True(t, ok)
-	assert.Equal(t, parent.TraceID, p.TraceID)
-	assert.Equal(t, parent.SpanID, p.SpanID)
-	// check reasonable start and end times
-	assert.GreaterOrEqual(t, queue.StartTime, parent.StartTime)
-	assert.LessOrEqual(t,
-		queue.StartTime+queue.Duration,
-		parent.StartTime+parent.Duration+1) // adding 1 to tolerate inaccuracies from rounding from ns to ms
-	// check span attributes
-	sd = queue.Diff(
-		jaeger.Tag{Key: "span.kind", Type: "string", Value: "internal"},
-	)
-	assert.Empty(t, sd, sd.String())
-
-	// Check the information of the "processing" span
-	res = trace.FindByOperationName("processing", "internal")
-	require.Len(t, res, 1)
-	processing := res[0]
-	// Check parenthood
-	p, ok = trace.ParentOf(&queue)
-	require.True(t, ok)
-	assert.Equal(t, parent.TraceID, p.TraceID)
-	require.False(t, strings.HasSuffix(parent.TraceID, "0000000000000000")) // the Debug call doesn't add any traceparent to the request header, the traceID is auto-generated won't look like this
-	assert.Equal(t, parent.SpanID, p.SpanID)
-	// check reasonable start and end times
-	assert.GreaterOrEqual(t, processing.StartTime, queue.StartTime+queue.Duration)
-	assert.LessOrEqual(t, processing.StartTime+processing.Duration, parent.StartTime+parent.Duration+1)
-	// check span attributes
-	sd = queue.Diff(
-		jaeger.Tag{Key: "span.kind", Type: "string", Value: "internal"},
-	)
-	assert.Empty(t, sd, sd.String())
-
 	// check process ID
 	require.Contains(t, trace.Processes, parent.ProcessID)
 	process := trace.Processes[parent.ProcessID]

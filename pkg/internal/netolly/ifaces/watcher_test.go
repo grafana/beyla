@@ -21,7 +21,6 @@
 package ifaces
 
 import (
-	"context"
 	"syscall"
 	"testing"
 
@@ -33,8 +32,7 @@ import (
 )
 
 func TestWatcher(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	watcher := NewWatcher(10)
 	// mock net.Interfaces and linkSubscriber to control which interfaces are discovered

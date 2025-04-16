@@ -447,8 +447,7 @@ func TestAppMetrics_ByInstrumentation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancelCtx := context.WithCancel(context.Background())
-			defer cancelCtx()
+			ctx := t.Context()
 
 			otlp, err := collector.Start(ctx)
 			require.NoError(t, err)
@@ -514,8 +513,7 @@ func TestAppMetrics_ResourceAttributes(t *testing.T) {
 
 	require.NoError(t, os.Setenv(envResourceAttrs, "deployment.environment=production,source=upstream.beyla"))
 
-	ctx, cancelCtx := context.WithCancel(context.Background())
-	defer cancelCtx()
+	ctx := t.Context()
 
 	otlp, err := collector.Start(ctx)
 	require.NoError(t, err)

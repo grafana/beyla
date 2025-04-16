@@ -1,7 +1,6 @@
 package otel
 
 import (
-	"context"
 	"os"
 	"testing"
 	"time"
@@ -22,8 +21,7 @@ import (
 func TestProcMetrics_Disaggregated(t *testing.T) {
 	os.Setenv("OTEL_METRIC_EXPORT_INTERVAL", "100")
 	defer restoreEnvAfterExecution()()
-	ctx, cancelCtx := context.WithCancel(context.Background())
-	defer cancelCtx()
+	ctx := t.Context()
 
 	otlp, err := collector.Start(ctx)
 	require.NoError(t, err)

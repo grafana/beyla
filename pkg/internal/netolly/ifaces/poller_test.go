@@ -19,7 +19,6 @@
 package ifaces
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -30,8 +29,7 @@ import (
 const timeout = 5 * time.Second
 
 func TestPoller(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	// fake net.Interfaces implementation that returns two different sets of
 	// interfaces on successive invocations

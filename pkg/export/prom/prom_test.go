@@ -35,8 +35,7 @@ func TestAppMetricsExpiration(t *testing.T) {
 	now := syncedClock{now: time.Now()}
 	timeNow = now.Now
 
-	ctx, cancelCtx := context.WithCancel(context.Background())
-	defer cancelCtx()
+	ctx := t.Context()
 	openPort, err := test.FreeTCPPort()
 	require.NoError(t, err)
 	promURL := fmt.Sprintf("http://127.0.0.1:%d/metrics", openPort)
@@ -264,8 +263,7 @@ func TestAppMetrics_ByInstrumentation(t *testing.T) {
 			now := syncedClock{now: time.Now()}
 			timeNow = now.Now
 
-			ctx, cancelCtx := context.WithCancel(context.Background())
-			defer cancelCtx()
+			ctx := t.Context()
 			openPort, err := test.FreeTCPPort()
 			require.NoError(t, err)
 			promURL := fmt.Sprintf("http://127.0.0.1:%d/metrics", openPort)
@@ -364,8 +362,7 @@ func TestTerminatesOnBadPromPort(t *testing.T) {
 	now := syncedClock{now: time.Now()}
 	timeNow = now.Now
 
-	ctx, cancelCtx := context.WithCancel(context.Background())
-	defer cancelCtx()
+	ctx := t.Context()
 	openPort, err := test.FreeTCPPort()
 	require.NoError(t, err)
 

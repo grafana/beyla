@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -95,6 +98,85 @@ func getResourceAttrs(hostID string, service *svc.Attrs) []attribute.KeyValue {
 		attrs = append(attrs, k.OTEL().String(v))
 	}
 	return attrs
+}
+
+// getFilteredAttributesByPrefix applies attribute filtering based on selector patterns.
+func getFilteredAttributesByPrefix(baseAttrs []attribute.KeyValue, attrSelector attributes.Selection,
+	extraAttrs []attribute.KeyValue, prefixPatterns []string) []attribute.KeyValue {
+
+	result := make([]attribute.KeyValue, len(baseAttrs))
+	copy(result, baseAttrs)
+
+	if len(extraAttrs) == 0 {
+		return result
+	}
+
+	var matchingPatterns []attributes.InclusionLists
+	for section, inclList := range attrSelector {
+		sectionStr := string(section)
+		for _, prefix := range prefixPatterns {
+			if strings.HasPrefix(sectionStr, prefix) {
+				matchingPatterns = append(matchingPatterns, inclList)
+				break
+			}
+		}
+	}
+
+	if len(matchingPatterns) == 0 {
+		return append(result, extraAttrs...)
+	}
+
+	filtered := filterAttributes(extraAttrs, matchingPatterns)
+	return append(result, filtered...)
+}
+
+func filterAttributes(attrs []attribute.KeyValue, patterns []attributes.InclusionLists) []attribute.KeyValue {
+	var filtered []attribute.KeyValue
+
+	for _, attr := range attrs {
+		attrName := string(attr.Key)
+		normalizedAttrName := strings.ReplaceAll(attrName, ".", "_")
+
+		if shouldIncludeAttribute(normalizedAttrName, patterns) {
+			filtered = append(filtered, attr)
+		}
+	}
+
+	return filtered
+}
+
+func shouldIncludeAttribute(normalizedAttrName string, patterns []attributes.InclusionLists) bool {
+	for _, pattern := range patterns {
+		// Check exclusions first - if any match, exclude the attribute
+		for _, excl := range pattern.Exclude {
+			normalizedPattern := strings.ReplaceAll(excl, ".", "_")
+			if match, _ := path.Match(normalizedPattern, normalizedAttrName); match {
+				return false
+			}
+		}
+
+		// If no includes specified or wildcard present, continue to next pattern
+		if len(pattern.Include) == 0 || slices.Contains(pattern.Include, "*") {
+			continue
+		}
+
+		// Check if attribute matches any inclusion pattern
+		matched := false
+		for _, incl := range pattern.Include {
+			normalizedPattern := strings.ReplaceAll(incl, ".", "_")
+			if match, _ := path.Match(normalizedPattern, normalizedAttrName); match {
+				matched = true
+				break
+			}
+		}
+
+		// If includes specified but none matched, exclude the attribute
+		if !matched {
+			return false
+		}
+	}
+
+	return true
 }
 
 func newResourceInternal(hostID string) *resource.Resource {
@@ -421,4 +503,12 @@ func ResolveOTLPEndpoint(endpoint, common string, grafana *GrafanaOTLP) (string,
 	}
 
 	return "", false
+}
+
+// getFilteredMetricResourceAttrs returns filtered resource attributes for metrics.
+// It applies filtering to extra attributes while preserving base attributes.
+// This is especially useful for RED metrics and span metrics where we want to control
+// which attributes are included in the metrics.
+func getFilteredMetricResourceAttrs(baseAttrs []attribute.KeyValue, attrSelector attributes.Selection, extraAttrs []attribute.KeyValue, metricTypes []string) []attribute.KeyValue {
+	return getFilteredAttributesByPrefix(baseAttrs, attrSelector, extraAttrs, metricTypes)
 }

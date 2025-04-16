@@ -72,6 +72,14 @@ const (
 // traces_target_info
 const GrafanaHostIDKey = attribute.Key("grafana.host.id")
 
+// MetricTypes contains all the supported metric type prefixes used for filtering attributes
+var MetricTypes = []string{
+	"http.server", "http.client",
+	"rpc.server", "rpc.client",
+	"db.client",
+	"messaging.",
+}
+
 type MetricsConfig struct {
 	Interval time.Duration `yaml:"interval" env:"BEYLA_METRICS_INTERVAL"`
 	// OTELIntervalMS supports metric intervals as specified by the standard OTEL definition.
@@ -219,6 +227,7 @@ type MetricsReporter struct {
 	attrGPUKernelGridSize      []attributes.Field[*request.Span, attribute.KeyValue]
 	attrGPUKernelBlockSize     []attributes.Field[*request.Span, attribute.KeyValue]
 	attrGPUMemoryAllocations   []attributes.Field[*request.Span, attribute.KeyValue]
+	userAttribSelection        attributes.Selection
 	input                      <-chan []request.Span
 }
 
@@ -304,12 +313,13 @@ func newMetricsReporter(
 	is := instrumentations.NewInstrumentationSelection(cfg.Instrumentations)
 
 	mr := MetricsReporter{
-		ctx:        ctx,
-		cfg:        cfg,
-		is:         is,
-		attributes: attribProvider,
-		hostID:     ctxInfo.HostID,
-		input:      input.Subscribe(),
+		ctx:                 ctx,
+		cfg:                 cfg,
+		is:                  is,
+		attributes:          attribProvider,
+		hostID:              ctxInfo.HostID,
+		input:               input.Subscribe(),
+		userAttribSelection: userAttribSelection,
 	}
 	// initialize attribute getters
 	if is.HTTPEnabled() {
@@ -850,20 +860,25 @@ func otelHistogramConfig(metricName string, buckets []float64, useExponentialHis
 }
 
 func (mr *MetricsReporter) metricResourceAttributes(service *svc.Attrs) attribute.Set {
-	attrs := []attribute.KeyValue{
+	baseAttrs := []attribute.KeyValue{
 		request.ServiceMetric(service.UID.Name),
 		semconv.ServiceInstanceID(service.UID.Instance),
 		semconv.ServiceNamespace(service.UID.Namespace),
 		semconv.TelemetrySDKLanguageKey.String(service.SDKLanguage.String()),
 		semconv.TelemetrySDKNameKey.String("beyla"),
 		request.SourceMetric("beyla"),
-		semconv.HostID(mr.hostID),
-	}
-	for k, v := range service.Metadata {
-		attrs = append(attrs, k.OTEL().String(v))
 	}
 
-	return attribute.NewSet(attrs...)
+	extraAttrs := []attribute.KeyValue{
+		semconv.HostID(mr.hostID),
+	}
+
+	for k, v := range service.Metadata {
+		extraAttrs = append(extraAttrs, k.OTEL().String(v))
+	}
+
+	filteredAttrs := getFilteredMetricResourceAttrs(baseAttrs, mr.userAttribSelection, extraAttrs, MetricTypes)
+	return attribute.NewSet(filteredAttrs...)
 }
 
 func (mr *MetricsReporter) metricHostAttributes() attribute.Set {

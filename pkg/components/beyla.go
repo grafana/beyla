@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"sync"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
@@ -26,67 +28,58 @@ func RunBeyla(ctx context.Context, cfg *beyla.Config) error {
 		return fmt.Errorf("can't build common context info: %w", err)
 	}
 
-	wg := sync.WaitGroup{}
 	app := cfg.Enabled(beyla.FeatureAppO11y)
-	if app {
-		wg.Add(1)
-	}
 	net := cfg.Enabled(beyla.FeatureNetO11y)
-	if net {
-		wg.Add(1)
+
+	// if one of nodes fail, the other should stop
+	g, ctx := errgroup.WithContext(ctx)
+
+	if app {
+		g.Go(func() error {
+			if err := setupAppO11y(ctx, ctxInfo, cfg); err != nil {
+				return fmt.Errorf("setupAppO11y: %w", err)
+			}
+			return nil
+		})
 	}
 
-	// of one of both nodes fail, the other should stop
-	ctx, cancel := context.WithCancel(ctx)
-	errs := make(chan error, 2)
-	if app {
-		go func() {
-			defer wg.Done()
-			if err := setupAppO11y(ctx, ctxInfo, cfg); err != nil {
-				cancel()
-				errs <- err
-			}
-		}()
-	}
 	if net {
-		go func() {
-			defer wg.Done()
+		g.Go(func() error {
 			if err := setupNetO11y(ctx, ctxInfo, cfg); err != nil {
-				cancel()
-				errs <- err
+				return fmt.Errorf("setupNetO11y: %w", err)
 			}
-		}()
+			return nil
+		})
 	}
-	wg.Wait()
-	cancel()
-	select {
-	case err := <-errs:
+
+	if err := g.Wait(); err != nil {
 		return err
-	default:
-		return nil
 	}
+
+	return nil
 }
 
 func setupAppO11y(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config) error {
 	slog.Info("starting Beyla in Application Observability mode")
 
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	instr := appolly.New(ctx, ctxInfo, config)
-	if finderDone, err := instr.FindAndInstrument(ctx); err != nil {
-		slog.Debug("can't find  target process", "error", err)
+	instr, err := appolly.New(ctx, ctxInfo, config)
+	if err != nil {
+		slog.Debug("can't create new instrumenter", "error", err)
+		return fmt.Errorf("can't create new instrumenter: %w", err)
+	}
+
+	err = instr.FindAndInstrument(ctx)
+	if err != nil {
+		slog.Debug("can't find target process", "error", err)
 		return fmt.Errorf("can't find target process: %w", err)
-	} else {
-		defer func() {
-			// before exiting, waits for all the resources to be freed
-			<-finderDone
-		}()
 	}
-	if err := instr.ReadAndForward(ctx); err != nil {
-		cancel()
-		slog.Debug("can't start read and forwarding", "error", err)
-		return fmt.Errorf("can't start read and forwarding: %w", err)
+
+	err = instr.ReadAndForward(ctx)
+	if err != nil {
+		slog.Debug("can't read and forward auto-instrumenter", "error", err)
+		return fmt.Errorf("can't read and forward auto-instrumente: %w", err)
 	}
+
 	return nil
 }
 
@@ -95,16 +88,20 @@ func setupNetO11y(ctx context.Context, ctxInfo *global.ContextInfo, cfg *beyla.C
 		slog.Warn(msg + ". Skipping Network metrics component")
 		return nil
 	}
+
 	slog.Info("starting Beyla in Network metrics mode")
 	flowsAgent, err := agent.FlowsAgent(ctxInfo, cfg)
 	if err != nil {
 		slog.Debug("can't start network metrics capture", "error", err)
 		return fmt.Errorf("can't start network metrics capture: %w", err)
 	}
-	if err := flowsAgent.Run(ctx); err != nil {
-		slog.Debug("can't start network metrics capture", "error", err)
-		return fmt.Errorf("can't start network metrics capture: %w", err)
+
+	err = flowsAgent.Run(ctx)
+	if err != nil {
+		slog.Debug("can't run network metrics capture", "error", err)
+		return fmt.Errorf("can't run network metrics capture: %w", err)
 	}
+
 	return nil
 }
 

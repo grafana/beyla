@@ -62,6 +62,7 @@ require (
 	golang.org/x/arch v0.7.0
 	golang.org/x/mod v0.23.0
 	golang.org/x/net v0.37.0
+	golang.org/x/sync v0.12.0
 	golang.org/x/sys v0.31.0
 	google.golang.org/grpc v1.71.0
 	google.golang.org/protobuf v1.36.5

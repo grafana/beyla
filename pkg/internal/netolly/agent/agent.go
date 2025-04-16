@@ -20,10 +20,12 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net"
+	"time"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/ringbuf"
@@ -31,6 +33,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/flow"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
+	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 const (
@@ -82,10 +85,13 @@ func (s Status) String() string {
 	}
 }
 
+var errShutdownTimeout = errors.New("graceful shutdown has timed out")
+
 // Flows reporting agent
 type Flows struct {
 	cfg     *beyla.Config
 	ctxInfo *global.ContextInfo
+	graph   *swarm.Runner
 
 	// input data providers
 	ifaceManager *tcmanager.InterfaceManager
@@ -131,7 +137,6 @@ func FlowsAgent(ctxInfo *global.ContextInfo, cfg *beyla.Config) (*Flows, error) 
 	alog.Debug("agent IP: " + agentIP.String())
 
 	fetcher, err := newFetcher(cfg, alog, ifaceManager)
-
 	if err != nil {
 		return nil, err
 	}
@@ -229,40 +234,66 @@ func flowDirections(cfg *beyla.NetworkConfig) (ingress, egress bool) {
 	}
 }
 
-// Run a Flows agent. The function will keep running in the same thread
-// until the passed context is canceled
+// Run a Flows agent
 func (f *Flows) Run(ctx context.Context) error {
 	alog := alog()
+
 	f.status = StatusStarting
 	alog.Info("starting Flows agent")
+
 	graph, err := f.buildPipeline(ctx)
 	if err != nil {
 		return fmt.Errorf("starting processing graph: %w", err)
 	}
 
+	f.graph = graph
+
 	f.ifaceManager.Start(ctx)
 
-	graph.Start(ctx)
+	f.graph.Start(ctx)
 
 	f.status = StatusStarted
+
 	alog.Info("Flows agent successfully started")
+
 	<-ctx.Done()
 
-	f.status = StatusStopping
-	alog.Info("stopping Flows agent")
-	if err := f.ebpf.Close(); err != nil {
-		alog.Warn("eBPF resources not correctly closed", "error", err)
+	err = f.stop()
+	if err != nil {
+		return fmt.Errorf("failed to stop Flows agent: %w", err)
 	}
 
-	alog.Debug("waiting for all nodes to finish their pending work")
-
-	f.ifaceManager.Wait()
-
-	<-graph.Done()
-
-	f.status = StatusStopped
-	alog.Info("Flows agent stopped")
 	return nil
+}
+
+func (f *Flows) stop() error {
+	alog := alog()
+
+	stopped := make(chan struct{})
+	go func() {
+		f.status = StatusStopping
+		alog.Info("stopping Flows agent")
+		if err := f.ebpf.Close(); err != nil {
+			alog.Warn("eBPF resources not correctly closed", "error", err)
+		}
+
+		alog.Debug("waiting for all nodes to finish their pending work")
+
+		f.ifaceManager.Wait()
+		<-f.graph.Done()
+		f.status = StatusStopped
+
+		stopped <- struct{}{}
+
+		alog.Info("Flows agent stopped")
+	}()
+
+	select {
+	case <-time.After(f.cfg.ShutdownTimeout):
+		return errShutdownTimeout
+	case <-stopped:
+		return nil
+	}
 }
 
 func (f *Flows) Status() Status {

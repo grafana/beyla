@@ -37,6 +37,7 @@ type envMap map[string]string
 func TestConfig_Overrides(t *testing.T) {
 	userConfig := bytes.NewBufferString(`
 trace_printer: json
+shutdown_timeout: 30s
 channel_buffer_len: 33
 ebpf:
   functions:
@@ -116,6 +117,7 @@ network:
 		ServiceName:      "svc-name",
 		ChannelBufferLen: 33,
 		LogLevel:         "INFO",
+		ShutdownTimeout:  30 * time.Second,
 		EnforceSysCaps:   false,
 		TracePrinter:     "json",
 		EBPF: config.EBPFTracer{
@@ -236,12 +238,19 @@ func TestConfig_ServiceName(t *testing.T) {
 	assert.Equal(t, "some-svc-name", cfg.ServiceName)
 }
 
+func TestConfig_ShutdownTimeout(t *testing.T) {
+	require.NoError(t, os.Setenv("BEYLA_SHUTDOWN_TIMEOUT", "1m"))
+	cfg, err := LoadConfig(bytes.NewReader(nil))
+	require.NoError(t, err)
+	assert.Equal(t, time.Minute, cfg.ShutdownTimeout)
+}
+
 func TestConfigValidate(t *testing.T) {
 	testCases := []envMap{
 		{"OTEL_EXPORTER_OTLP_ENDPOINT": "localhost:1234", "BEYLA_EXECUTABLE_NAME": "foo", "INSTRUMENT_FUNC_NAME": "bar"},
 		{"OTEL_EXPORTER_OTLP_METRICS_ENDPOINT": "localhost:1234", "BEYLA_EXECUTABLE_NAME": "foo", "INSTRUMENT_FUNC_NAME": "bar"},
 		{"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "localhost:1234", "BEYLA_EXECUTABLE_NAME": "foo", "INSTRUMENT_FUNC_NAME": "bar"},
-		{"BEYLA_TRACE_PRINTER": "text", "BEYLA_EXECUTABLE_NAME": "foo"},
+		{"BEYLA_TRACE_PRINTER": "text", "BEYLA_SHUTDOWN_TIMEOUT": "1m", "BEYLA_EXECUTABLE_NAME": "foo"},
 		{"BEYLA_TRACE_PRINTER": "json", "BEYLA_EXECUTABLE_NAME": "foo"},
 		{"BEYLA_TRACE_PRINTER": "json_indent", "BEYLA_EXECUTABLE_NAME": "foo"},
 		{"BEYLA_TRACE_PRINTER": "counter", "BEYLA_EXECUTABLE_NAME": "foo"},

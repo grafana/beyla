@@ -144,6 +144,7 @@ golang.org/x/crypto/sha3,https://github.com/grafana/beyla/blob/HEAD/vendor/golan
 golang.org/x/mod/semver,https://github.com/grafana/beyla/blob/HEAD/vendor/golang.org/x/mod/LICENSE,BSD-3-Clause
 golang.org/x/net,https://github.com/grafana/beyla/blob/HEAD/vendor/golang.org/x/net/LICENSE,BSD-3-Clause
 golang.org/x/oauth2,https://github.com/grafana/beyla/blob/HEAD/vendor/golang.org/x/oauth2/LICENSE,BSD-3-Clause
+golang.org/x/sync,https://github.com/grafana/beyla/blob/HEAD/vendor/golang.org/x/sync/LICENSE,BSD-3-Clause
 golang.org/x/sys,https://github.com/grafana/beyla/blob/HEAD/vendor/golang.org/x/sys/LICENSE,BSD-3-Clause
 golang.org/x/term,https://github.com/grafana/beyla/blob/HEAD/vendor/golang.org/x/term/LICENSE,BSD-3-Clause
 golang.org/x/text,https://github.com/grafana/beyla/blob/HEAD/vendor/golang.org/x/text/LICENSE,BSD-3-Clause

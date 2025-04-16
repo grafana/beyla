@@ -37,6 +37,7 @@ func sanitizeBuffer(data []byte) []byte {
 	return []byte(content)
 }
 
+// nolint:cyclop
 func ReadTCPRequestIntoSpan(cfg *config.EBPFTracer, record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {
 	event, err := ReinterpretCast[TCPRequestInfo](record.RawSample)
 

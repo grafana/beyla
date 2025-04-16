@@ -49,7 +49,7 @@ func TestPythonBasicTracing(t *testing.T) {
 					require.NotEmpty(t, trace.Spans)
 
 					// Check the information of the parent span
-					res := trace.FindByOperationName("GET /greeting")
+					res := trace.FindByOperationName("GET /greeting", "server")
 					require.Len(t, res, 1)
 					parent := res[0]
 					sd := jaeger.DiffAsRegexp([]jaeger.Tag{
@@ -107,7 +107,7 @@ func TestPythonBasicTracing(t *testing.T) {
 					require.NotEmpty(t, trace.Spans)
 
 					// Check the information of the parent span
-					res := trace.FindByOperationName("GET /smoke")
+					res := trace.FindByOperationName("GET /smoke", "server")
 					require.Len(t, res, 1)
 					parent := res[0]
 					sd := jaeger.DiffAsRegexp([]jaeger.Tag{

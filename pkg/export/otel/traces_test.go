@@ -933,12 +933,12 @@ func TestTracesInstrumentations(t *testing.T) {
 		{
 			name:     "all instrumentations",
 			instr:    []string{instrumentations.InstrumentationALL},
-			expected: []string{"GET /foo", "PUT", "/grpcFoo", "/grpcGoo", "SELECT credentials", "SET", "GET", "important-topic publish", "important-topic process"},
+			expected: []string{"GET /foo", "PUT /bar", "/grpcFoo", "/grpcGoo", "SELECT credentials", "SET", "GET", "important-topic publish", "important-topic process"},
 		},
 		{
 			name:     "http only",
 			instr:    []string{instrumentations.InstrumentationHTTP},
-			expected: []string{"GET /foo", "PUT"},
+			expected: []string{"GET /foo", "PUT /bar"},
 		},
 		{
 			name:     "grpc only",

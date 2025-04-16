@@ -70,7 +70,7 @@ func testNodeClientWithMethodAndStatusCode(t *testing.T, method string, statusCo
 		trace = traces[0]
 	}, test.Interval(100*time.Millisecond))
 
-	spans := trace.FindByOperationName(method)
+	spans := trace.FindByOperationName(method+" /", "")
 	require.Len(t, spans, 1)
 	span := spans[0]
 

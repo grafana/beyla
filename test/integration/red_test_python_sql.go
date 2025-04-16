@@ -135,7 +135,7 @@ func testREDMetricsForPythonSQLSSL(t *testing.T, url, comm, namespace string) {
 		require.LessOrEqual(t, 1, len(traces))
 		trace := traces[0]
 		// Check the information of the parent span
-		res := trace.FindByOperationName("GET /query")
+		res := trace.FindByOperationName("GET /query", "")
 		require.Len(t, res, 1)
 	}, test.Interval(100*time.Millisecond))
 }

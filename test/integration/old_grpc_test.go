@@ -86,7 +86,7 @@ func testREDMetricsTracesForOldGRPCLibrary(t *testing.T, svcNs string) {
 	}, test.Interval(100*time.Millisecond))
 
 	// Check the information of the python parent span
-	res := trace.FindByOperationName("GET /factorial/:rnd")
+	res := trace.FindByOperationName("GET /factorial/:rnd", "server")
 	require.Len(t, res, 1)
 	parent := res[0]
 	require.NotEmpty(t, parent.TraceID)

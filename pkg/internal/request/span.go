@@ -471,7 +471,7 @@ func (s *Span) ServiceGraphKind() string {
 
 func (s *Span) TraceName() string {
 	switch s.Type {
-	case EventTypeHTTP:
+	case EventTypeHTTP, EventTypeHTTPClient:
 		name := s.Method
 		if s.Route != "" {
 			name += " " + s.Route
@@ -479,8 +479,6 @@ func (s *Span) TraceName() string {
 		return name
 	case EventTypeGRPC, EventTypeGRPCClient:
 		return s.Path
-	case EventTypeHTTPClient:
-		return s.Method
 	case EventTypeSQLClient:
 		operation := s.Method
 		if operation == "" {

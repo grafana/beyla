@@ -205,3 +205,81 @@ func makeTCPReq(buf string, direction int, peerPort, hostPort uint32, durationMs
 
 	return i
 }
+
+func TestSanitizeBuffer(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "empty string",
+			input:    "",
+			expected: "",
+		},
+		{
+			name:     "no sensitive data",
+			input:    "SELECT * FROM users WHERE id = 42",
+			expected: "SELECT * FROM users WHERE id = 42",
+		},
+		{
+			name:     "password in JSON",
+			input:    `{"username": "admin", "password": "super-secret123"}`,
+			expected: `{"username": "admin", "password: "***REDACTED***""}`,
+		},
+		{
+			name:     "token in URL",
+			input:    "https://api.example.com/data?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9",
+			expected: "https://api.example.com/data?token: \"***REDACTED***\"",
+		},
+		{
+			name:     "auth header",
+			input:    "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9",
+			expected: "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9",
+		},
+		{
+			name:     "Auth parameter",
+			input:    "auth=secret-token",
+			expected: "auth: \"***REDACTED***\"",
+		},
+		{
+			name:     "Redis AUTH command",
+			input:    "AUTH myStrongPassword123",
+			expected: "AUTH ***REDACTED***",
+		},
+		{
+			name:     "Redis SETEX command with session data",
+			input:    "SETEX session:12345 7200 {\"user_id\":42,\"token\":\"secret-value\"}",
+			expected: "SETEX session:12345 7200 ***REDACTED***",
+		},
+		{
+			name:     "PHP serialized session data",
+			input:    "s:156:\"a:2:{s:6:\"_token\";s:40:\"KJsz1IvQJsSdkDodwUwOCTFqTfWD5tGKCWgNNMJb\";s:9:\"_previous\";a:1:{s:3:\"url\";s:32:\"https://example.com/dashboard\";}}\"",
+			expected: "s:156:\"***REDACTED***\"_token\";s:40:\"***REDACTED***\";s:9:\"***REDACTED***\";a:1:{s:3:\"***REDACTED***\";s:32:\"***REDACTED***\";}}\"",
+		},
+		{
+			name:     "multiple sensitive fields",
+			input:    `{"user": "john", "password": "secret123", "api_key": "abcdef123456", "data": "normal"}`,
+			expected: `{"user": "john", "password: "***REDACTED***"", "api_key: "***REDACTED***"", "data": "normal"}`,
+		},
+		{
+			name:     "sensitive data with unusual formatting",
+			input:    `password = "my secret"; auth_token= 'abc123xyz'`,
+			expected: `password: "***REDACTED***" secret"; auth_token: "***REDACTED***"'`,
+		},
+		{
+			name:     "real world Redis example from user query",
+			input:    `SETEX lumen_cache:v1NwQIyO4RZdPUX6dDWvnS7Wptn6GHBeuJQTiNbb 7200 s:118:"a:2:{s:6:"_token";s:40:"W0EDrNaiAXi*************";s:6:"_flash";a:2:{s:3:"old";a:0:{}s:3:"new";a:0:{}}}";`,
+			expected: `SETEX lumen_cache:v1NwQIyO4RZdPUX6dDWvnS7Wptn6GHBeuJQTiNbb 7200 ***REDACTED***`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := string(sanitizeBuffer([]byte(tt.input)))
+			if result != tt.expected {
+				t.Errorf("sanitizeBuffer() = %q, want %q", result, tt.expected)
+			}
+		})
+	}
+}

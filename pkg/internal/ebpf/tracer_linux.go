@@ -297,7 +297,10 @@ func (pt *ProcessTracer) UnlinkExecutable(info *exec.FileInfo) {
 		}
 		delete(pt.Instrumentables, info.Ino)
 	} else {
-		pt.log.Warn("Unable to find executable to unlink", "info", info)
+		pt.log.Warn("Unable to find executable to unlink",
+			"path", info.CmdExePath,
+			"pid", info.Pid,
+			"inode", info.Ino)
 	}
 }
 

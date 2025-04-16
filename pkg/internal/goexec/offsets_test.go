@@ -1,7 +1,6 @@
 package goexec
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -13,8 +12,6 @@ import (
 // TestProcessNotFound tests that InspectOffsets process exits on context cancellation
 // even if the target process wasn't found
 func TestProcessNotFound(t *testing.T) {
-	_, cancel := context.WithCancel(context.Background())
-	cancel()
 	finish := make(chan struct{})
 	go func() {
 		defer close(finish)

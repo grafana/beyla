@@ -1,7 +1,6 @@
 package pipe
 
 import (
-	"context"
 	"os"
 	"strings"
 	"testing"
@@ -59,8 +58,7 @@ func allMetricsBut(patterns ...string) attributes.Selection {
 }
 
 func TestBasicPipeline(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	tc, err := collector.Start(ctx)
 	require.NoError(t, err)
@@ -121,8 +119,7 @@ func TestBasicPipeline(t *testing.T) {
 }
 
 func TestTracerPipeline(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	tc, err := collector.Start(ctx)
 	require.NoError(t, err)
@@ -155,8 +152,7 @@ func TestTracerPipeline(t *testing.T) {
 }
 
 func TestTracerReceiverPipeline(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	tc, err := collector.Start(ctx)
 	require.NoError(t, err)
@@ -184,36 +180,8 @@ func TestTracerReceiverPipeline(t *testing.T) {
 	matchTraceEvent(t, "GET", event)
 }
 
-func BenchmarkTestTracerPipeline(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-
-		tc, _ := collector.Start(ctx)
-		tracesInput := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
-		gb := newGraphBuilder(&beyla.Config{
-			Traces: otel.TracesConfig{
-				BatchTimeout:      10 * time.Millisecond,
-				TracesEndpoint:    tc.ServerEndpoint,
-				ReportersCacheLen: 16,
-				Instrumentations:  []string{instrumentations.InstrumentationALL},
-			},
-		}, gctx(0), tracesInput)
-		// Override eBPF tracer to send some fake data
-		tracesInput.Send(newRequest("bar-svc", "GET", "/foo/bar", "1.1.1.1:3456", 404))
-		pipe, _ := gb.buildGraph(ctx)
-
-		go pipe.Run(ctx)
-		t := &testing.T{}
-		testutil.ReadChannel(t, tc.TraceRecords(), testTimeout)
-		testutil.ReadChannel(t, tc.TraceRecords(), testTimeout)
-		testutil.ReadChannel(t, tc.TraceRecords(), testTimeout)
-	}
-}
-
 func TestTracerPipelineBadTimestamps(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	tc, err := collector.Start(ctx)
 	require.NoError(t, err)
@@ -241,8 +209,7 @@ func TestTracerPipelineBadTimestamps(t *testing.T) {
 }
 
 func TestRouteConsolidation(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	tc, err := collector.Start(ctx)
 	require.NoError(t, err)
@@ -359,8 +326,7 @@ func TestRouteConsolidation(t *testing.T) {
 }
 
 func TestGRPCPipeline(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	tc, err := collector.Start(ctx)
 	require.NoError(t, err)
@@ -418,8 +384,7 @@ func TestGRPCPipeline(t *testing.T) {
 }
 
 func TestTraceGRPCPipeline(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	tc, err := collector.Start(ctx)
 	require.NoError(t, err)
@@ -449,8 +414,7 @@ func TestTraceGRPCPipeline(t *testing.T) {
 }
 
 func TestBasicPipelineInfo(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	tc, err := collector.Start(ctx)
 	require.NoError(t, err)
@@ -511,8 +475,7 @@ func TestBasicPipelineInfo(t *testing.T) {
 }
 
 func TestTracerPipelineInfo(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	tc, err := collector.Start(ctx)
 	require.NoError(t, err)
@@ -534,8 +497,7 @@ func TestTracerPipelineInfo(t *testing.T) {
 }
 
 func TestSpanAttributeFilterNode(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	tc, err := collector.Start(ctx)
 	require.NoError(t, err)

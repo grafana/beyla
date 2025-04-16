@@ -21,7 +21,6 @@
 package ifaces
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -30,8 +29,7 @@ import (
 )
 
 func TestRegisterer(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	watcher := NewWatcher(10)
 	registry := NewRegisterer(watcher, 10)

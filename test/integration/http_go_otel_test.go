@@ -4,6 +4,7 @@ package integration
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"path"
 	"testing"
@@ -24,48 +25,29 @@ func testForHTTPGoOTelLibrary(t *testing.T, route, svcNs string) {
 	}
 
 	// Eventually, Prometheus would make this query visible
-	pq := prom.Client{HostPort: prometheusHostPort}
-	var results []prom.Result
-	test.Eventually(t, time.Duration(1)*time.Minute, func(t require.TestingT) {
-		var err error
-		results, err = pq.Query(`http_server_request_duration_seconds_count{` +
-			`http_request_method="GET",` +
+	var (
+		pq     = prom.Client{HostPort: prometheusHostPort}
+		labels = `http_request_method="GET",` +
 			`http_response_status_code="200",` +
 			`service_namespace="` + svcNs + `",` +
 			`service_name="rolldice",` +
 			`http_route="` + route + `",` +
-			`url_path="` + route + `"}`)
-		require.NoError(t, err)
-		// check duration_count has 3 calls and all the arguments
-		enoughPromResults(t, results)
-		val := totalPromCount(t, results)
-		assert.LessOrEqual(t, 1, val)
-		if len(results) > 0 {
-			res := results[0]
-			addr := res.Metric["client_address"]
-			assert.NotNil(t, addr)
-		}
+			`url_path="` + route + `"`
+	)
+
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		query := fmt.Sprintf("http_server_request_duration_seconds_count{%s}", labels)
+		checkServerPromQueryResult(t, pq, query, 1)
 	})
 
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
-		var err error
-		results, err = pq.Query(`http_server_request_body_size_bytes_count{` +
-			`http_request_method="GET",` +
-			`http_response_status_code="200",` +
-			`service_namespace="` + svcNs + `",` +
-			`service_name="rolldice",` +
-			`http_route="` + route + `",` +
-			`url_path="` + route + `"}`)
-		require.NoError(t, err)
-		// check duration_count has 3 calls and all the arguments
-		enoughPromResults(t, results)
-		val := totalPromCount(t, results)
-		assert.LessOrEqual(t, 3, val)
-		if len(results) > 0 {
-			res := results[0]
-			addr := res.Metric["client_address"]
-			assert.NotNil(t, addr)
-		}
+		query := fmt.Sprintf("http_server_request_body_size_bytes_count{%s}", labels)
+		checkServerPromQueryResult(t, pq, query, 3)
+	})
+
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		query := fmt.Sprintf("http_server_response_body_size_bytes_count{%s}", labels)
+		checkServerPromQueryResult(t, pq, query, 3)
 	})
 
 	slug := route[1:]
@@ -87,7 +69,7 @@ func testForHTTPGoOTelLibrary(t *testing.T, route, svcNs string) {
 	}, test.Interval(100*time.Millisecond))
 
 	// Check the information of the parent span
-	res := trace.FindByOperationName("GET /" + slug)
+	res := trace.FindByOperationName("GET /"+slug, "server")
 	require.Len(t, res, 1)
 	parent := res[0]
 	require.NotEmpty(t, parent.TraceID)

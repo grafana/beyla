@@ -230,10 +230,16 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 		HTTPServerRequestSize.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &httpCommon, &serverInfo},
 		},
+		HTTPServerResponseSize.Section: {
+			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &httpCommon, &serverInfo},
+		},
 		HTTPClientDuration.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &httpCommon, &httpClientInfo},
 		},
 		HTTPClientRequestSize.Section: {
+			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &httpCommon, &httpClientInfo},
+		},
+		HTTPClientResponseSize.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &httpCommon, &httpClientInfo},
 		},
 		RPCClientDuration.Section: {

@@ -31,12 +31,13 @@ var timeNow = time.Now
 // using labels and names that are equivalent names to the OTEL attributes
 // but following the different naming conventions
 const (
-	SpanMetricsLatency = "traces_spanmetrics_latency"
-	SpanMetricsCalls   = "traces_spanmetrics_calls_total"
-	SpanMetricsSizes   = "traces_spanmetrics_size_total"
-	TracesTargetInfo   = "traces_target_info"
-	TracesHostInfo     = "traces_host_info"
-	TargetInfo         = "target_info"
+	SpanMetricsLatency       = "traces_spanmetrics_latency"
+	SpanMetricsCalls         = "traces_spanmetrics_calls_total"
+	SpanMetricsRequestSizes  = "traces_spanmetrics_size_total"
+	SpanMetricsResponseSizes = "traces_spanmetrics_response_size_total"
+	TracesTargetInfo         = "traces_target_info"
+	TracesHostInfo           = "traces_host_info"
+	TargetInfo               = "target_info"
 
 	ServiceGraphClient = "traces_service_graph_request_client_seconds"
 	ServiceGraphServer = "traces_service_graph_request_server_seconds"
@@ -170,39 +171,44 @@ type metricsReporter struct {
 	extraMetadataLabels []attr.Name
 	input               <-chan []request.Span
 
-	beylaInfo             *Expirer[prometheus.Gauge]
-	httpDuration          *Expirer[prometheus.Histogram]
-	httpClientDuration    *Expirer[prometheus.Histogram]
-	grpcDuration          *Expirer[prometheus.Histogram]
-	grpcClientDuration    *Expirer[prometheus.Histogram]
-	dbClientDuration      *Expirer[prometheus.Histogram]
-	msgPublishDuration    *Expirer[prometheus.Histogram]
-	msgProcessDuration    *Expirer[prometheus.Histogram]
-	httpRequestSize       *Expirer[prometheus.Histogram]
-	httpClientRequestSize *Expirer[prometheus.Histogram]
-	targetInfo            *Expirer[prometheus.Gauge]
+	beylaInfo              *Expirer[prometheus.Gauge]
+	httpDuration           *Expirer[prometheus.Histogram]
+	httpClientDuration     *Expirer[prometheus.Histogram]
+	grpcDuration           *Expirer[prometheus.Histogram]
+	grpcClientDuration     *Expirer[prometheus.Histogram]
+	dbClientDuration       *Expirer[prometheus.Histogram]
+	msgPublishDuration     *Expirer[prometheus.Histogram]
+	msgProcessDuration     *Expirer[prometheus.Histogram]
+	httpRequestSize        *Expirer[prometheus.Histogram]
+	httpResponseSize       *Expirer[prometheus.Histogram]
+	httpClientRequestSize  *Expirer[prometheus.Histogram]
+	httpClientResponseSize *Expirer[prometheus.Histogram]
+	targetInfo             *Expirer[prometheus.Gauge]
 
 	// user-selected attributes for the application-level metrics
-	attrHTTPDuration          []attributes.Field[*request.Span, string]
-	attrHTTPClientDuration    []attributes.Field[*request.Span, string]
-	attrGRPCDuration          []attributes.Field[*request.Span, string]
-	attrGRPCClientDuration    []attributes.Field[*request.Span, string]
-	attrDBClientDuration      []attributes.Field[*request.Span, string]
-	attrMsgPublishDuration    []attributes.Field[*request.Span, string]
-	attrMsgProcessDuration    []attributes.Field[*request.Span, string]
-	attrHTTPRequestSize       []attributes.Field[*request.Span, string]
-	attrHTTPClientRequestSize []attributes.Field[*request.Span, string]
-	attrGPUKernelCalls        []attributes.Field[*request.Span, string]
-	attrGPUMemoryAllocs       []attributes.Field[*request.Span, string]
-	attrGPUKernelGridSize     []attributes.Field[*request.Span, string]
-	attrGPUKernelBlockSize    []attributes.Field[*request.Span, string]
+	attrHTTPDuration           []attributes.Field[*request.Span, string]
+	attrHTTPClientDuration     []attributes.Field[*request.Span, string]
+	attrGRPCDuration           []attributes.Field[*request.Span, string]
+	attrGRPCClientDuration     []attributes.Field[*request.Span, string]
+	attrDBClientDuration       []attributes.Field[*request.Span, string]
+	attrMsgPublishDuration     []attributes.Field[*request.Span, string]
+	attrMsgProcessDuration     []attributes.Field[*request.Span, string]
+	attrHTTPRequestSize        []attributes.Field[*request.Span, string]
+	attrHTTPResponseSize       []attributes.Field[*request.Span, string]
+	attrHTTPClientRequestSize  []attributes.Field[*request.Span, string]
+	attrHTTPClientResponseSize []attributes.Field[*request.Span, string]
+	attrGPUKernelCalls         []attributes.Field[*request.Span, string]
+	attrGPUMemoryAllocs        []attributes.Field[*request.Span, string]
+	attrGPUKernelGridSize      []attributes.Field[*request.Span, string]
+	attrGPUKernelBlockSize     []attributes.Field[*request.Span, string]
 
 	// trace span metrics
-	spanMetricsLatency    *Expirer[prometheus.Histogram]
-	spanMetricsCallsTotal *Expirer[prometheus.Counter]
-	spanMetricsSizeTotal  *Expirer[prometheus.Counter]
-	tracesTargetInfo      *Expirer[prometheus.Gauge]
-	tracesHostInfo        *Expirer[prometheus.Gauge]
+	spanMetricsLatency           *Expirer[prometheus.Histogram]
+	spanMetricsCallsTotal        *Expirer[prometheus.Counter]
+	spanMetricsRequestSizeTotal  *Expirer[prometheus.Counter]
+	spanMetricsResponseSizeTotal *Expirer[prometheus.Counter]
+	tracesTargetInfo             *Expirer[prometheus.Gauge]
+	tracesHostInfo               *Expirer[prometheus.Gauge]
 
 	// trace service graph
 	serviceGraphClient *Expirer[prometheus.Histogram]
@@ -264,7 +270,7 @@ func newReporter(
 
 	is := instrumentations.NewInstrumentationSelection(cfg.Instrumentations)
 
-	var attrHTTPDuration, attrHTTPClientDuration, attrHTTPRequestSize, attrHTTPClientRequestSize []attributes.Field[*request.Span, string]
+	var attrHTTPDuration, attrHTTPClientDuration, attrHTTPRequestSize, attrHTTPResponseSize, attrHTTPClientRequestSize, attrHTTPClientResponseSize []attributes.Field[*request.Span, string]
 
 	if is.HTTPEnabled() {
 		attrHTTPDuration = attributes.PrometheusGetters(request.SpanPromGetters,
@@ -273,8 +279,12 @@ func newReporter(
 			attrsProvider.For(attributes.HTTPClientDuration))
 		attrHTTPRequestSize = attributes.PrometheusGetters(request.SpanPromGetters,
 			attrsProvider.For(attributes.HTTPServerRequestSize))
+		attrHTTPResponseSize = attributes.PrometheusGetters(request.SpanPromGetters,
+			attrsProvider.For(attributes.HTTPServerResponseSize))
 		attrHTTPClientRequestSize = attributes.PrometheusGetters(request.SpanPromGetters,
 			attrsProvider.For(attributes.HTTPClientRequestSize))
+		attrHTTPClientResponseSize = attributes.PrometheusGetters(request.SpanPromGetters,
+			attrsProvider.For(attributes.HTTPClientResponseSize))
 	}
 
 	var attrGRPCDuration, attrGRPCClientDuration []attributes.Field[*request.Span, string]
@@ -324,26 +334,28 @@ func newReporter(
 	// executable inspector
 	extraMetadataLabels := parseExtraMetadata(cfg.ExtraResourceLabels)
 	mr := &metricsReporter{
-		input:                     input.Subscribe(),
-		ctxInfo:                   ctxInfo,
-		cfg:                       cfg,
-		kubeEnabled:               kubeEnabled,
-		extraMetadataLabels:       extraMetadataLabels,
-		hostID:                    ctxInfo.HostID,
-		clock:                     clock,
-		is:                        is,
-		promConnect:               ctxInfo.Prometheus,
-		attrHTTPDuration:          attrHTTPDuration,
-		attrHTTPClientDuration:    attrHTTPClientDuration,
-		attrGRPCDuration:          attrGRPCDuration,
-		attrGRPCClientDuration:    attrGRPCClientDuration,
-		attrDBClientDuration:      attrDBClientDuration,
-		attrMsgPublishDuration:    attrMessagingPublishDuration,
-		attrMsgProcessDuration:    attrMessagingProcessDuration,
-		attrHTTPRequestSize:       attrHTTPRequestSize,
-		attrHTTPClientRequestSize: attrHTTPClientRequestSize,
-		attrGPUKernelCalls:        attrGPUKernelLaunchCalls,
-		attrGPUMemoryAllocs:       attrGPUMemoryAllocations,
+		input:                      input.Subscribe(),
+		ctxInfo:                    ctxInfo,
+		cfg:                        cfg,
+		kubeEnabled:                kubeEnabled,
+		extraMetadataLabels:        extraMetadataLabels,
+		hostID:                     ctxInfo.HostID,
+		clock:                      clock,
+		is:                         is,
+		promConnect:                ctxInfo.Prometheus,
+		attrHTTPDuration:           attrHTTPDuration,
+		attrHTTPClientDuration:     attrHTTPClientDuration,
+		attrGRPCDuration:           attrGRPCDuration,
+		attrGRPCClientDuration:     attrGRPCClientDuration,
+		attrDBClientDuration:       attrDBClientDuration,
+		attrMsgPublishDuration:     attrMessagingPublishDuration,
+		attrMsgProcessDuration:     attrMessagingProcessDuration,
+		attrHTTPRequestSize:        attrHTTPRequestSize,
+		attrHTTPResponseSize:       attrHTTPResponseSize,
+		attrHTTPClientRequestSize:  attrHTTPClientRequestSize,
+		attrHTTPClientResponseSize: attrHTTPClientResponseSize,
+		attrGPUKernelCalls:         attrGPUKernelLaunchCalls,
+		attrGPUMemoryAllocs:        attrGPUMemoryAllocations,
 		beylaInfo: NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: BeylaBuildInfo,
 			Help: "A metric with a constant '1' value labeled by version, revision, branch, " +
@@ -437,6 +449,16 @@ func newReporter(
 				NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
 			}, labelNames(attrHTTPRequestSize)).MetricVec, clock.Time, cfg.TTL)
 		}),
+		httpResponseSize: optionalHistogramProvider(is.HTTPEnabled(), func() *Expirer[prometheus.Histogram] {
+			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
+				Name:                            attributes.HTTPServerResponseSize.Prom,
+				Help:                            "size, in bytes, of the HTTP response body as received at the server side",
+				Buckets:                         cfg.Buckets.ResponseSizeHistogram,
+				NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
+				NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
+				NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
+			}, labelNames(attrHTTPResponseSize)).MetricVec, clock.Time, cfg.TTL)
+		}),
 		httpClientRequestSize: optionalHistogramProvider(is.HTTPEnabled(), func() *Expirer[prometheus.Histogram] {
 			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
 				Name:                            attributes.HTTPClientRequestSize.Prom,
@@ -446,6 +468,16 @@ func newReporter(
 				NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
 				NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
 			}, labelNames(attrHTTPClientRequestSize)).MetricVec, clock.Time, cfg.TTL)
+		}),
+		httpClientResponseSize: optionalHistogramProvider(is.HTTPEnabled(), func() *Expirer[prometheus.Histogram] {
+			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
+				Name:                            attributes.HTTPClientResponseSize.Prom,
+				Help:                            "size, in bytes, of the HTTP response body as sent from the client side",
+				Buckets:                         cfg.Buckets.ResponseSizeHistogram,
+				NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
+				NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
+				NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
+			}, labelNames(attrHTTPClientResponseSize)).MetricVec, clock.Time, cfg.TTL)
 		}),
 		spanMetricsLatency: optionalHistogramProvider(cfg.SpanMetricsEnabled(), func() *Expirer[prometheus.Histogram] {
 			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
@@ -463,10 +495,16 @@ func newReporter(
 				Help: "number of service calls in trace span metrics format",
 			}, labelNamesSpans()).MetricVec, clock.Time, cfg.TTL)
 		}),
-		spanMetricsSizeTotal: optionalCounterProvider(cfg.SpanMetricsEnabled(), func() *Expirer[prometheus.Counter] {
+		spanMetricsRequestSizeTotal: optionalCounterProvider(cfg.SpanMetricsEnabled(), func() *Expirer[prometheus.Counter] {
 			return NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
-				Name: SpanMetricsSizes,
+				Name: SpanMetricsRequestSizes,
 				Help: "size of service calls, in bytes, in trace span metrics format",
+			}, labelNamesSpans()).MetricVec, clock.Time, cfg.TTL)
+		}),
+		spanMetricsResponseSizeTotal: optionalCounterProvider(cfg.SpanMetricsEnabled(), func() *Expirer[prometheus.Counter] {
+			return NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
+				Name: SpanMetricsResponseSizes,
+				Help: "size of service responses, in bytes, in trace span metrics format",
 			}, labelNamesSpans()).MetricVec, clock.Time, cfg.TTL)
 		}),
 		tracesTargetInfo: optionalGaugeProvider(cfg.SpanMetricsEnabled() || cfg.ServiceGraphMetricsEnabled(), func() *Expirer[prometheus.Gauge] {
@@ -568,8 +606,10 @@ func newReporter(
 		if is.HTTPEnabled() {
 			registeredMetrics = append(registeredMetrics,
 				mr.httpClientRequestSize,
+				mr.httpClientResponseSize,
 				mr.httpClientDuration,
 				mr.httpRequestSize,
+				mr.httpResponseSize,
 				mr.httpDuration,
 			)
 		}
@@ -599,7 +639,8 @@ func newReporter(
 		registeredMetrics = append(registeredMetrics,
 			mr.spanMetricsLatency,
 			mr.spanMetricsCallsTotal,
-			mr.spanMetricsSizeTotal,
+			mr.spanMetricsRequestSizeTotal,
+			mr.spanMetricsResponseSizeTotal,
 			mr.tracesTargetInfo,
 		)
 	}
@@ -717,7 +758,10 @@ func (r *metricsReporter) observe(span *request.Span) {
 				).metric.Observe(duration)
 				r.httpRequestSize.WithLabelValues(
 					labelValues(span, r.attrHTTPRequestSize)...,
-				).metric.Observe(float64(span.RequestLength()))
+				).metric.Observe(float64(span.RequestBodyLength()))
+				r.httpResponseSize.WithLabelValues(
+					labelValues(span, r.attrHTTPResponseSize)...,
+				).metric.Observe(float64(span.ResponseBodyLength()))
 			}
 		case request.EventTypeHTTPClient:
 			if r.is.HTTPEnabled() {
@@ -726,7 +770,10 @@ func (r *metricsReporter) observe(span *request.Span) {
 				).metric.Observe(duration)
 				r.httpClientRequestSize.WithLabelValues(
 					labelValues(span, r.attrHTTPClientRequestSize)...,
-				).metric.Observe(float64(span.RequestLength()))
+				).metric.Observe(float64(span.RequestBodyLength()))
+				r.httpClientResponseSize.WithLabelValues(
+					labelValues(span, r.attrHTTPClientResponseSize)...,
+				).metric.Observe(float64(span.ResponseBodyLength()))
 			}
 		case request.EventTypeGRPC:
 			if r.is.GRPCEnabled() {
@@ -784,7 +831,8 @@ func (r *metricsReporter) observe(span *request.Span) {
 		lv := r.labelValuesSpans(span)
 		r.spanMetricsLatency.WithLabelValues(lv...).metric.Observe(duration)
 		r.spanMetricsCallsTotal.WithLabelValues(lv...).metric.Add(1)
-		r.spanMetricsSizeTotal.WithLabelValues(lv...).metric.Add(float64(span.RequestLength()))
+		r.spanMetricsRequestSizeTotal.WithLabelValues(lv...).metric.Add(float64(span.RequestBodyLength()))
+		r.spanMetricsResponseSizeTotal.WithLabelValues(lv...).metric.Add(float64(span.ResponseBodyLength()))
 
 		_, ok := r.serviceCache.Get(span.Service.UID)
 		if !ok {

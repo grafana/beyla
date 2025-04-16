@@ -4,6 +4,7 @@ package integration
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"path"
 	"testing"
@@ -20,74 +21,48 @@ import (
 
 func testREDMetricsForHTTP2Library(t *testing.T, route, svcNs string) {
 	// Eventually, Prometheus would make this query visible
-	pq := prom.Client{HostPort: prometheusHostPort}
-	var results []prom.Result
-	test.Eventually(t, time.Duration(1)*time.Minute, func(t require.TestingT) {
-		var err error
-		results, err = pq.Query(`http_server_request_duration_seconds_count{` +
-			`http_request_method="GET",` +
+	var (
+		pq           = prom.Client{HostPort: prometheusHostPort}
+		serverLabels = `http_request_method="GET",` +
 			`http_response_status_code="200",` +
 			`service_namespace="` + svcNs + `",` +
 			`service_name="server",` +
 			`http_route="` + route + `",` +
-			`url_path="` + route + `"}`)
-		require.NoError(t, err)
-		// check duration_count has 3 calls and all the arguments
-		enoughPromResults(t, results)
-		val := totalPromCount(t, results)
-		assert.LessOrEqual(t, 1, val)
-		if len(results) > 0 {
-			res := results[0]
-			addr := res.Metric["client_address"]
-			assert.NotNil(t, addr)
-		}
+			`url_path="` + route + `"`
+		clientLabels = `http_request_method="GET",` +
+			`http_response_status_code="200",` +
+			`service_namespace="` + svcNs + `",` +
+			`service_name="client"`
+	)
+
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		query := fmt.Sprintf("http_server_request_duration_seconds_count{%s}", serverLabels)
+		checkServerPromQueryResult(t, pq, query, 1)
 	})
 
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
-		var err error
-		results, err = pq.Query(`http_server_request_body_size_bytes_count{` +
-			`http_request_method="GET",` +
-			`http_response_status_code="200",` +
-			`service_namespace="` + svcNs + `",` +
-			`service_name="server",` +
-			`http_route="` + route + `",` +
-			`url_path="` + route + `"}`)
-		require.NoError(t, err)
-		// check duration_count has 3 calls and all the arguments
-		enoughPromResults(t, results)
-		val := totalPromCount(t, results)
-		assert.LessOrEqual(t, 3, val)
-		if len(results) > 0 {
-			res := results[0]
-			addr := res.Metric["client_address"]
-			assert.NotNil(t, addr)
-		}
+		query := fmt.Sprintf("http_server_request_body_size_bytes_count{%s}", serverLabels)
+		checkServerPromQueryResult(t, pq, query, 3)
 	})
 
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
-		var err error
-		results, err = pq.Query(`http_client_request_duration_seconds_count{` +
-			`http_request_method="GET",` +
-			`http_response_status_code="200",` +
-			`service_namespace="` + svcNs + `",` +
-			`service_name="client"}`)
-		require.NoError(t, err)
-		enoughPromResults(t, results)
-		val := totalPromCount(t, results)
-		assert.LessOrEqual(t, 1, val)
+		query := fmt.Sprintf("http_server_response_body_size_bytes_count{%s}", serverLabels)
+		checkServerPromQueryResult(t, pq, query, 3)
 	})
 
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
-		var err error
-		results, err = pq.Query(`http_client_request_body_size_bytes_count{` +
-			`http_request_method="GET",` +
-			`http_response_status_code="200",` +
-			`service_namespace="` + svcNs + `",` +
-			`service_name="client"}`)
-		require.NoError(t, err)
-		enoughPromResults(t, results)
-		val := totalPromCount(t, results)
-		assert.LessOrEqual(t, 1, val)
+		query := fmt.Sprintf("http_client_request_duration_seconds_count{%s}", clientLabels)
+		checkClientPromQueryResult(t, pq, query, 1)
+	})
+
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		query := fmt.Sprintf("http_client_request_body_size_bytes_count{%s}", clientLabels)
+		checkClientPromQueryResult(t, pq, query, 1)
+	})
+
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		query := fmt.Sprintf("http_client_response_body_size_bytes_count{%s}", clientLabels)
+		checkClientPromQueryResult(t, pq, query, 1)
 	})
 }
 
@@ -111,7 +86,7 @@ func testNestedHTTP2Traces(t *testing.T, url string) {
 	}, test.Interval(100*time.Millisecond))
 
 	// Check the information of the python parent span
-	res := trace.FindByOperationName("GET /" + url)
+	res := trace.FindByOperationName("GET /"+url, "server")
 	require.Len(t, res, 1)
 	parent := res[0]
 	require.NotEmpty(t, parent.TraceID)
@@ -131,7 +106,7 @@ func testNestedHTTP2Traces(t *testing.T, url string) {
 	assert.Empty(t, sd, sd.String())
 
 	// Check the information of the rails parent span
-	res = trace.FindByOperationName("GET")
+	res = trace.FindByOperationName("GET /"+url, "client")
 	require.Len(t, res, 1)
 	parent = res[0]
 	require.NotEmpty(t, parent.TraceID)

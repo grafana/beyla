@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/mariomac/guara/pkg/test"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/http2"
 
@@ -238,6 +239,28 @@ func totalPromCount(t require.TestingT, results []prom.Result) int {
 	}
 
 	return total
+}
+
+func checkServerPromQueryResult(t require.TestingT, pq prom.Client, query string, promCount int) {
+	results, err := pq.Query(query)
+	require.NoError(t, err)
+	// check duration_count has 3 calls and all the arguments
+	enoughPromResults(t, results)
+	val := totalPromCount(t, results)
+	assert.LessOrEqual(t, promCount, val)
+	if len(results) > 0 {
+		res := results[0]
+		addr := res.Metric["client_address"]
+		assert.NotNil(t, addr)
+	}
+}
+
+func checkClientPromQueryResult(t require.TestingT, pq prom.Client, query string, promCount int) {
+	results, err := pq.Query(query)
+	require.NoError(t, err)
+	enoughPromResults(t, results)
+	val := totalPromCount(t, results)
+	assert.LessOrEqual(t, promCount, val)
 }
 
 func doHTTP2Post(t *testing.T, path string, status int, jsonBody []byte) {

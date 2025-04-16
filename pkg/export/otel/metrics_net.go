@@ -39,21 +39,26 @@ func nmlog() *slog.Logger {
 	return slog.With("component", "otel.NetworkMetricsExporter")
 }
 
-func newResource(hostID string) *resource.Resource {
-	attrs := []attribute.KeyValue{
+// getFilteredNetworkResourceAttrs returns resource attributes that can be filtered based on the attribute selector
+// for network metrics.
+func getFilteredNetworkResourceAttrs(hostID string, attrSelector attributes.Selection) []attribute.KeyValue {
+	baseAttrs := []attribute.KeyValue{
 		semconv.ServiceName("beyla-network-flows"),
 		semconv.ServiceInstanceID(uuid.New().String()),
-		// SpanMetrics requires an extra attribute besides service name
-		// to generate the traces_target_info metric,
-		// so the service is visible in the ServicesList
-		// This attribute also allows that App O11y plugin shows this app as a Go application.
 		semconv.TelemetrySDKLanguageKey.String(semconv.TelemetrySDKLanguageGo.Value.AsString()),
-		// We set the SDK name as Beyla, so we can distinguish beyla generated metrics from other SDKs
 		semconv.TelemetrySDKNameKey.String("beyla"),
 		semconv.TelemetrySDKVersion(buildinfo.Version),
+	}
+
+	extraAttrs := []attribute.KeyValue{
 		semconv.HostID(hostID),
 	}
 
+	return getFilteredAttributesByPrefix(baseAttrs, attrSelector, extraAttrs, []string{"network.", "beyla.network"})
+}
+
+func createFilteredNetworkResource(hostID string, attrSelector attributes.Selection) *resource.Resource {
+	attrs := getFilteredNetworkResourceAttrs(hostID, attrSelector)
 	return resource.NewWithAttributes(semconv.SchemaURL, attrs...)
 }
 
@@ -81,6 +86,9 @@ func NetMetricsExporterProvider(
 			// This node is not going to be instantiated. Let the swarm library just ignore it.
 			return swarm.EmptyRunFunc()
 		}
+		if cfg.AttributeSelectors == nil {
+			cfg.AttributeSelectors = make(attributes.Selection)
+		}
 		exporter, err := newMetricsExporter(ctx, ctxInfo, cfg, input)
 		if err != nil {
 			return nil, err
@@ -100,7 +108,8 @@ func newMetricsExporter(
 		return nil, err
 	}
 
-	provider, err := newMeterProvider(newResource(ctxInfo.HostID), &exporter, cfg.Metrics.Interval)
+	resource := createFilteredNetworkResource(ctxInfo.HostID, cfg.AttributeSelectors)
+	provider, err := newMeterProvider(resource, &exporter, cfg.Metrics.Interval)
 
 	if err != nil {
 		log.Error("can't instantiate meter provider", "error", err)

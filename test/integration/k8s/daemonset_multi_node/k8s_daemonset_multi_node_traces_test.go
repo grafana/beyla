@@ -57,7 +57,7 @@ func TestMultiNodeTracing(t *testing.T) {
 					require.NotEmpty(t, trace.Spans)
 
 					// Check the information of the parent span (Go app)
-					res := trace.FindByOperationName("GET /gotracemetoo")
+					res := trace.FindByOperationName("GET /gotracemetoo", "server")
 					require.Len(t, res, 1)
 					parent := res[0]
 					require.NotEmpty(t, parent.TraceID)
@@ -70,14 +70,14 @@ func TestMultiNodeTracing(t *testing.T) {
 					require.Empty(t, sd, sd.String())
 
 					// Check the information of the Python span
-					res = trace.FindByOperationName("GET /tracemetoo")
+					res = trace.FindByOperationName("GET /tracemetoo", "server")
 					require.Len(t, res, 1)
 					parent = res[0]
 					require.NotEmpty(t, parent.TraceID)
 					require.Equal(t, traceID, parent.TraceID)
 
 					// Check the information of the Ruby span
-					res = trace.FindByOperationName("GET /users")
+					res = trace.FindByOperationName("GET /users", "server")
 					require.Len(t, res, 1)
 					parent = res[0]
 					require.NotEmpty(t, parent.TraceID)

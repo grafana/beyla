@@ -270,6 +270,7 @@ The calculation is similar to network metrics but with higher cardinality:
 * `traces_spanmetrics_latency`: histogram with 15 + 2 buckets
 * `traces_spanmetrics_calls_total`: counter
 * `traces_spanmetrics_size_total`: counter
+* `traces_spanmetrics_response_size_total`: counter
 
 Attributes that might add cardinality to each metric are:
 

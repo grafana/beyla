@@ -1,7 +1,6 @@
 package otel
 
 import (
-	"context"
 	"sync"
 	"testing"
 	"time"
@@ -24,8 +23,7 @@ const timeout = 20 * time.Second
 
 func TestNetMetricsExpiration(t *testing.T) {
 	defer restoreEnvAfterExecution()()
-	ctx, cancelCtx := context.WithCancel(context.Background())
-	defer cancelCtx()
+	ctx := t.Context()
 
 	otlp, err := collector.Start(ctx)
 	require.NoError(t, err)
@@ -131,8 +129,7 @@ func TestNetMetricsExpiration(t *testing.T) {
 // this test verifies case 1
 func TestAppMetricsExpiration_ByMetricAttrs(t *testing.T) {
 	defer restoreEnvAfterExecution()()
-	ctx, cancelCtx := context.WithCancel(context.Background())
-	defer cancelCtx()
+	ctx := t.Context()
 
 	otlp, err := collector.Start(ctx)
 	require.NoError(t, err)
@@ -248,8 +245,7 @@ func TestAppMetricsExpiration_ByMetricAttrs(t *testing.T) {
 // this test verifies case 2
 func TestAppMetricsExpiration_BySvcID(t *testing.T) {
 	defer restoreEnvAfterExecution()()
-	ctx, cancelCtx := context.WithCancel(context.Background())
-	defer cancelCtx()
+	ctx := t.Context()
 
 	otlp, err := collector.Start(ctx)
 	require.NoError(t, err)

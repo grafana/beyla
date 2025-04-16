@@ -62,14 +62,11 @@ func TestRun_DontPanic(t *testing.T) {
 	}}
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			cancel()
-
 			cfg := tc.configProvider()
 			require.NoError(t, cfg.Validate())
 
 			require.NotPanics(t, func() {
-				_ = RunBeyla(ctx, &cfg)
+				_ = RunBeyla(t.Context(), &cfg)
 			})
 		})
 	}

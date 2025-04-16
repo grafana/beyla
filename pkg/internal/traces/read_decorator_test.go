@@ -1,7 +1,6 @@
 package traces
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -51,8 +50,7 @@ func TestReadDecorator(t *testing.T) {
 			cfg.TracesInput = msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
 			cfg.DecoratedTraces = msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
 			decoratedOutput := cfg.DecoratedTraces.Subscribe()
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			readLoop, err := ReadFromChannel(&cfg)(ctx)
 			require.NoError(t, err)
 			go readLoop(ctx)

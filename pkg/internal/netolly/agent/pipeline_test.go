@@ -28,8 +28,7 @@ import (
 const timeout = 5 * time.Second
 
 func TestFilter(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	promPort, err := test.FreeTCPPort()
 	require.NoError(t, err)

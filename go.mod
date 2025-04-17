@@ -4,6 +4,7 @@ go 1.24.1
 
 require (
 	github.com/AlessandroPomponio/go-gibberish v0.0.0-20191004143433-a2d4156f0396
+	github.com/alitto/pond/v2 v2.3.2
 	github.com/caarlos0/env/v9 v9.0.0
 	github.com/cilium/ebpf v0.17.3
 	github.com/containers/common v0.61.0

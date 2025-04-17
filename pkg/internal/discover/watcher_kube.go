@@ -241,6 +241,7 @@ func withMetadata(pp processAttrs, info *informer.ObjectMeta) processAttrs {
 		services.AttrOwnerName: ownerName,
 	}
 	ret.podLabels = info.Labels
+	ret.podAnnotations = info.Annotations
 
 	// add any other owner name (they might be several, e.g. replicaset and deployment)
 	for _, owner := range info.Pod.Owners {

@@ -1,6 +1,7 @@
 package request
 
 import (
+	"fmt"
 	"strconv"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
+	"github.com/grafana/beyla/v2/pkg/internal/sqlprune"
 )
 
 // SpanOTELGetters returns the attributes.Getter function that returns the
@@ -87,9 +89,24 @@ func SpanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 			}
 			return DBSystemName("unknown")
 		}
+	case attr.DBResponseStatusCode:
+		getter = func(span *Span) attribute.KeyValue {
+			if span.Type == EventTypeSQLClient && span.SQLResponse != nil {
+				if span.SQLResponse.DB == sqlprune.DBTypeMySQL {
+					return DBResponseStatusCode(fmt.Sprintf("%s/%d", span.SQLResponse.SQLState, span.SQLResponse.Code))
+				}
+				if span.SQLResponse.DB == sqlprune.DBTypePostgres {
+					return DBResponseStatusCode(span.SQLResponse.SQLState)
+				}
+			}
+			return DBResponseStatusCode("")
+		}
 	case attr.ErrorType:
 		getter = func(span *Span) attribute.KeyValue {
 			if SpanStatusCode(span) == StatusCodeError {
+				if span.Type == EventTypeSQLClient && span.SQLResponse != nil {
+					return ErrorType(fmt.Sprintf("%s error (%s): %s", span.SQLResponse.DB, span.SQLResponse.SQLState, span.SQLResponse.Message))
+				}
 				return ErrorType("error")
 			}
 			return ErrorType("")
@@ -149,9 +166,24 @@ func SpanPromGetters(attrName attr.Name) (attributes.Getter[*Span, string], bool
 		getter = func(s *Span) string { return strconv.Itoa(s.Status) }
 	case attr.DBOperation:
 		getter = func(span *Span) string { return span.Method }
+	case attr.DBResponseStatusCode:
+		getter = func(span *Span) string {
+			if span.Type == EventTypeSQLClient && span.SQLResponse != nil {
+				if span.SQLResponse.DB == sqlprune.DBTypeMySQL {
+					return fmt.Sprintf("%s/%d", span.SQLResponse.SQLState, span.SQLResponse.Code)
+				}
+				if span.SQLResponse.DB == sqlprune.DBTypePostgres {
+					return span.SQLResponse.SQLState
+				}
+			}
+			return ""
+		}
 	case attr.ErrorType:
 		getter = func(span *Span) string {
 			if SpanStatusCode(span) == StatusCodeError {
+				if span.Type == EventTypeSQLClient && span.SQLResponse != nil {
+					return fmt.Sprintf("%s error (%s): %s", span.SQLResponse.DB, span.SQLResponse.SQLState, span.SQLResponse.Message)
+				}
 				return "error"
 			}
 			return ""

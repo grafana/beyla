@@ -7,6 +7,7 @@
 #include <common/pin_internal.h>
 #include <common/ringbuf.h>
 #include <common/trace_common.h>
+#include <common/trace_util.h>
 
 #include <generictracer/protocol_common.h>
 
@@ -21,16 +22,15 @@ struct {
 
 struct {
     __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
-    __type(key, int);
+    __type(key, uint32_t);
     __type(value, tcp_req_t);
     __uint(max_entries, 1);
 } tcp_req_mem SEC(".maps");
 
 static __always_inline tcp_req_t *empty_tcp_req() {
-    int zero = 0;
-    tcp_req_t *value = bpf_map_lookup_elem(&tcp_req_mem, &zero);
+    tcp_req_t *value = bpf_map_lookup_elem(&tcp_req_mem, &(uint32_t){0});
     if (value) {
-        __builtin_memset(value, 0, sizeof(tcp_req_t));
+        cheap_bzero((char *)value, sizeof(tcp_req_t));
     }
     return value;
 }
@@ -152,8 +152,7 @@ static __always_inline void handle_unknown_tcp_connection(pid_connection_info_t 
             if (trace) {
                 bpf_dbg_printk(
                     "Sending TCP trace %lx, response length %d", existing, existing->resp_len);
-
-                __builtin_memcpy(trace, existing, sizeof(tcp_req_t));
+                bpf_probe_read(trace, sizeof(tcp_req_t), existing);
                 bpf_probe_read(trace->rbuf, K_TCP_RES_LEN, u_buf);
                 bpf_ringbuf_submit(trace, get_flags());
             } else {

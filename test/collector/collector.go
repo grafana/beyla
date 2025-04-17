@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"sync/atomic"
+	"time"
 
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
@@ -50,14 +51,16 @@ func Start(ctx context.Context) (*TestCollector, error) {
 			return
 		}
 		if request.URL.Path == "/v1/metrics" {
+			log.Debug("/v1/metrics", "method", request.Method, "body", string(body))
 			tc.metricEvent(writer, body)
 			return
 		}
 		if request.URL.Path == "/v1/traces" {
+			log.Debug("/v1/traces", "method", request.Method, "body", string(body))
 			tc.traceEvent(writer, body)
 			return
 		}
-		slog.Info("unknown path " + request.URL.String())
+		log.Info("unknown path " + request.Method + " " + request.URL.String())
 		writer.WriteHeader(http.StatusNotFound)
 	}))
 
@@ -73,7 +76,26 @@ func Start(ctx context.Context) (*TestCollector, error) {
 		server.Close()
 	}()
 
+	waitForServerAvailability(server)
 	return &tc, nil
+}
+
+func waitForServerAvailability(server *httptest.Server) {
+	// there is a race condition that is more visible in slow environment such as CI tests
+	// the returned server is invoked for start in a background goroutine
+	// and it might happen that a quick test tries to submit data to the server before it is started
+	// failing the test
+	serverCheckStart := time.Now()
+	for {
+		if resp, err := server.Client().Get(server.URL + "/are-you-ready"); err == nil && resp.StatusCode == http.StatusNotFound {
+			log.Info("test collector started", "url", server.URL)
+			return
+		}
+		if time.Since(serverCheckStart) > 5*time.Second {
+			panic("collector.Start: timeout waiting for server to start")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 func (tc *TestCollector) traceEvent(writer http.ResponseWriter, body []byte) {
@@ -85,7 +107,7 @@ func (tc *TestCollector) traceEvent(writer http.ResponseWriter, body []byte) {
 	}
 	writer.WriteHeader(http.StatusOK)
 	json, _ := req.MarshalJSON()
-	slog.Debug("received trace", "json", string(json))
+	log.Debug("received trace", "json", string(json))
 
 	forEach[ptrace.ResourceSpans](req.Traces().ResourceSpans(), func(rs ptrace.ResourceSpans) {
 		forEach[ptrace.ScopeSpans](rs.ScopeSpans(), func(ss ptrace.ScopeSpans) {
@@ -112,7 +134,7 @@ func (tc *TestCollector) traceEvent(writer http.ResponseWriter, body []byte) {
 					delete(tr.ResourceAttributes, string(semconv.ServiceInstanceIDKey))
 					tc.TraceRecords() <- tr
 				default:
-					slog.Warn("unsupported trace kind", "kind", s.Kind().String())
+					log.Warn("unsupported trace kind", "kind", s.Kind().String())
 				}
 			})
 		})
@@ -144,7 +166,7 @@ func (tc *TestCollector) metricEvent(writer http.ResponseWriter, body []byte) {
 	}
 	writer.WriteHeader(http.StatusOK)
 	json, _ := req.MarshalJSON()
-	slog.Debug("received metric", "json", string(json))
+	log.Debug("received metric", "json", string(json))
 
 	forEach[pmetric.ResourceMetrics](req.Metrics().ResourceMetrics(), func(rm pmetric.ResourceMetrics) {
 		resourceAttrs := map[string]string{}
@@ -212,7 +234,7 @@ func (tc *TestCollector) metricEvent(writer http.ResponseWriter, body []byte) {
 						tc.Records() <- mr
 					})
 				default:
-					slog.Warn("unsupported metric type", "type", m.Type().String())
+					log.Warn("unsupported metric type", "type", m.Type().String())
 				}
 			})
 		})

@@ -64,6 +64,9 @@ type KubernetesDecorator struct {
 	// ResourceLabels allows Beyla overriding the OTEL Resource attributes from a map of user-defined labels.
 	// nolint:undoc
 	ResourceLabels kube.ResourceLabels `yaml:"resource_labels"`
+
+	// ServiceNameTemplate allows to override the service.name with a custom value. Uses the go template language.
+	ServiceNameTemplate string `yaml:"service_name_template" env:"BEYLA_SERVICE_NAME_TEMPLATE"`
 }
 
 const (
@@ -139,7 +142,7 @@ func (md *metadataDecorator) appendMetadata(span *request.Span, meta *kube.Cache
 		return
 	}
 	topOwner := kube.TopOwner(meta.Meta.Pod)
-	name, namespace := md.db.ServiceNameNamespaceForMetadata(meta.Meta)
+	name, namespace := md.db.ServiceNameNamespaceForMetadata(meta.Meta, containerName)
 	// If the user has not defined criteria values for the reported
 	// service name and namespace, we will automatically set it from
 	// the kubernetes metadata

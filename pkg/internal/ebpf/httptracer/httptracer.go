@@ -74,7 +74,7 @@ func (p *Tracer) Constants() map[string]any {
 	return map[string]any{}
 }
 
-func (p *Tracer) RegisterOffsets(_ *exec.FileInfo, _ *goexec.Offsets) {}
+func (p *Tracer) RegisterOffsets(_ *exec.FileInfo, _ *goexec.FieldOffsets) {}
 
 func (p *Tracer) ProcessBinary(_ *exec.FileInfo) {}
 

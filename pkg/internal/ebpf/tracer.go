@@ -24,7 +24,6 @@ type Instrumentable struct {
 	ChildPids []uint32
 
 	FileInfo *exec.FileInfo
-	Offsets  *goexec.Offsets
 	Tracer   *ProcessTracer
 }
 
@@ -93,7 +92,7 @@ type Tracer interface {
 	AddInstrumentedLibRef(uint64)
 	AlreadyInstrumentedLib(uint64) bool
 	UnlinkInstrumentedLib(uint64)
-	RegisterOffsets(*exec.FileInfo, *goexec.Offsets)
+	RegisterOffsets(*exec.FileInfo, *goexec.FieldOffsets)
 	ProcessBinary(*exec.FileInfo)
 	// Run will do the action of listening for eBPF traces and forward them
 	// periodically to the output channel.
@@ -114,6 +113,12 @@ const (
 	Generic
 )
 
+type FileID struct {
+	Dev uint64
+	Ino uint64
+	Pid int32
+}
+
 // ProcessTracer instruments an executable with eBPF and provides the eBPF readers
 // that will forward the traces to later stages in the pipeline
 // TODO: We need to pass the ELFInfo from this ProcessTracker to inside a Tracer
@@ -126,6 +131,7 @@ type ProcessTracer struct {
 	SystemWide      bool
 	Type            ProcessTracerType
 	Instrumentables map[uint64]*instrumenter
+	Instrumented    map[FileID]struct{}
 }
 
 func (pt *ProcessTracer) AllowPID(pid, ns uint32, svc *svc.Attrs) {

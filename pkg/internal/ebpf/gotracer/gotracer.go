@@ -100,7 +100,7 @@ func (p *Tracer) Constants() map[string]any {
 	}
 }
 
-func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offsets) {
+func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.FieldOffsets) {
 	offTable := bpfOffTableT{}
 	// Set the field offsets and the logLevel for the Go BPF program in a map
 	for _, field := range []goexec.GoOffset{
@@ -159,7 +159,7 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 		goexec.GrpcServerStreamStream,
 		goexec.GrpcServerStreamStPtr,
 	} {
-		if val, ok := offsets.Field[field].(uint64); ok {
+		if val, ok := (*offsets)[field].(uint64); ok {
 			offTable.Table[field] = val
 		}
 	}

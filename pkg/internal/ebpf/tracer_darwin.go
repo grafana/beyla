@@ -30,10 +30,6 @@ func (pt *ProcessTracer) NewExecutable(_ *link.Executable, _ *Instrumentable) er
 	return nil
 }
 
-func (pt *ProcessTracer) NewExecutableInstance(_ *Instrumentable) error {
-	return nil
-}
-
 func (pt *ProcessTracer) UnlinkExecutable(_ *exec.FileInfo) {}
 
 func RunUtilityTracer(_ UtilityTracer) error {

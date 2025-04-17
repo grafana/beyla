@@ -128,7 +128,7 @@ func (ta *TraceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 			// a python executable can run an SSL and non-SSL application, so it's not enough
 			// to look at the executable, we must ensure this process doesn't have different
 			// libraries attached
-			ok = ta.updateTracerProbes(tracer, ie)
+			ok = ta.reuseTracer(tracer, ie)
 		} else {
 			ta.monitorPIDs(ta.reusableGoTracer, ie)
 		}
@@ -147,12 +147,7 @@ func (ta *TraceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 	case svc.InstrumentableGolang:
 		// gets all the possible supported tracers for a go program, and filters out
 		// those whose symbols are not present in the ELF functions list
-		if ta.Cfg.Discovery.SkipGoSpecificTracers || ta.Cfg.Discovery.SystemWide || ie.InstrumentationError != nil || ie.Offsets == nil {
-			if ie.InstrumentationError != nil {
-				ta.log.Warn("Unsupported Go program detected, using generic instrumentation", "error", ie.InstrumentationError)
-			} else if ie.Offsets == nil {
-				ta.log.Warn("Go program with null offsets detected, using generic instrumentation")
-			}
+		if ta.Cfg.Discovery.SkipGoSpecificTracers || ta.Cfg.Discovery.SystemWide {
 			if ta.reusableTracer != nil {
 				// We need to do more than monitor PIDs. It's possible that this new
 				// instance of the executable has different DLLs loaded, e.g. libssl.so.
@@ -265,22 +260,6 @@ func (ta *TraceAttacher) reuseTracer(tracer *ebpf.ProcessTracer, ie *ebpf.Instru
 
 	ta.monitorPIDs(tracer, ie)
 	ta.existingTracers[ie.FileInfo.Ino] = tracer
-
-	return true
-}
-
-func (ta *TraceAttacher) updateTracerProbes(tracer *ebpf.ProcessTracer, ie *ebpf.Instrumentable) bool {
-	if err := tracer.NewExecutableInstance(ie); err != nil {
-		ta.log.Debug("Failed to attach uprobes", "pid", ie.FileInfo.Pid, "error", err)
-	}
-
-	ta.log.Debug("reusing Generic tracer for",
-		"pid", ie.FileInfo.Pid,
-		"child", ie.ChildPids,
-		"exec", ie.FileInfo.CmdExePath,
-		"language", ie.Type)
-
-	ta.monitorPIDs(tracer, ie)
 
 	return true
 }

@@ -9,7 +9,3 @@ import (
 func FindProcLanguage(_ int32, _ *elf.File, _ string) svc.InstrumentableType {
 	return svc.InstrumentableGeneric
 }
-
-func FindExeSymbols(_ *elf.File, _ []string) (map[string]Sym, error) {
-	return nil, nil
-}

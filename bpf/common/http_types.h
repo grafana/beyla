@@ -42,12 +42,6 @@
 #define TP_MAX_VAL_LENGTH 55
 #define TP_MAX_KEY_LENGTH 11
 
-#define TCP_SEND 1
-#define TCP_RECV 0
-
-#define NO_SSL 0
-#define WITH_SSL 1
-
 // Preface PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n https://datatracker.ietf.org/doc/html/rfc7540#section-3.5
 #define MIN_HTTP2_SIZE 24
 

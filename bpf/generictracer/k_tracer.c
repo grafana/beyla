@@ -292,7 +292,7 @@ int BPF_KPROBE(beyla_kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, si
         s_args.p_conn.pid = pid_from_pid_tgid(id);
         s_args.orig_dport = orig_dport;
 
-        void *ssl = is_ssl_connection(id, &s_args.p_conn);
+        void *ssl = is_ssl_connection(id, &s_args.p_conn, TCP_SEND);
         if (size > 0) {
             if (!ssl) {
                 u8 *buf = iovec_memory();
@@ -416,7 +416,7 @@ int BPF_KPROBE(beyla_kprobe_tcp_rate_check_app_limited, struct sock *sk) {
             }
         }
 
-        void *ssl = is_ssl_connection(id, &s_args.p_conn);
+        void *ssl = is_ssl_connection(id, &s_args.p_conn, TCP_SEND);
         if (ssl) {
             make_inactive_sk_buffer(&s_args.p_conn.conn);
             tcp_send_ssl_check(id, ssl, &s_args.p_conn, orig_dport);
@@ -663,7 +663,7 @@ static __always_inline int return_recvmsg(void *ctx, struct sock *in_sock, u64 i
         sort_connection_info(&info.conn);
         info.pid = pid_from_pid_tgid(id);
 
-        void *ssl = is_ssl_connection(id, &info);
+        void *ssl = is_ssl_connection(id, &info, TCP_RECV);
 
         if (!ssl) {
 

@@ -32,3 +32,9 @@
 #define TCPHDR_URG 0x20
 #define TCPHDR_ECE 0x40
 #define TCPHDR_CWR 0x80
+
+#define TCP_SEND 1
+#define TCP_RECV 0
+
+#define NO_SSL 0
+#define WITH_SSL 1

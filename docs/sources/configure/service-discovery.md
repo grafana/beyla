@@ -293,6 +293,29 @@ discovery:
 The preceding example discovers all Pods in the `frontend` namespace that have a label
 `instrument` with a value that matches the regular expression `beyla`.
 
+| YAML                  | Environment variable | Type                                     | Default |
+|-----------------------|----------------------|------------------------------------------|---------|
+| `k8s_pod_annotations` | --                   | map\[string\]string (regular expression) | (unset) |
+
+This selector property limits the instrumentation to the applications
+running in the Pods having annotations with keys matching the provided value as regular expression.
+
+If other selectors are specified in the same `services` entry, the processes to be
+selected need to match all the selector properties.
+
+For example:
+
+```yaml
+discovery:
+  services:
+    - k8s_namespace: backend
+      k8s_pod_annotations:
+        beyla.instrument: "true"
+```
+
+The preceding example discovers all Pods in the `backend` namespace that have an annotation
+`beyla.instrument` with a value that matches the regular expression `true`.
+
 ## Override service name and namespace
 
 If the instrumentation data is exported via OpenTelemetry or via Prometheus, Beyla follows the

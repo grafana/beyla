@@ -2,16 +2,13 @@ package discover
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
-	"strings"
 
 	lru "github.com/hashicorp/golang-lru/v2"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf"
 	"github.com/grafana/beyla/v2/pkg/internal/exec"
-	"github.com/grafana/beyla/v2/pkg/internal/goexec"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 	"github.com/grafana/beyla/v2/pkg/internal/kube"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
@@ -22,9 +19,7 @@ import (
 var instrumentableCache, _ = lru.New[uint64, InstrumentedExecutable](100)
 
 type InstrumentedExecutable struct {
-	Type                 svc.InstrumentableType
-	Offsets              *goexec.Offsets
-	InstrumentationError error
+	Type svc.InstrumentableType
 }
 
 // ExecTyperProvider classifies the discovered executables according to the
@@ -45,10 +40,6 @@ func ExecTyperProvider(
 		currentPids: map[int32]*exec.FileInfo{},
 	}
 	return func(_ context.Context) (swarm.RunFunc, error) {
-		// TODO: do it per executable
-		if !cfg.Discovery.SkipGoSpecificTracers {
-			t.loadAllGoFunctionNames()
-		}
 		in := input.Subscribe()
 		return func(_ context.Context) {
 			defer output.Close()
@@ -60,12 +51,11 @@ func ExecTyperProvider(
 }
 
 type typer struct {
-	cfg            *beyla.Config
-	metrics        imetrics.Reporter
-	k8sInformer    *kube.MetadataProvider
-	log            *slog.Logger
-	currentPids    map[int32]*exec.FileInfo
-	allGoFunctions []string
+	cfg         *beyla.Config
+	metrics     imetrics.Reporter
+	k8sInformer *kube.MetadataProvider
+	log         *slog.Logger
+	currentPids map[int32]*exec.FileInfo
 }
 
 // FilterClassify returns the Instrumentable types for each received ProcessMatch,
@@ -94,7 +84,7 @@ func (t *typer) FilterClassify(evs []Event[ProcessMatch]) []Event[ebpf.Instrumen
 				t.currentPids[ev.Obj.Process.Pid] = elfFile
 				elfs = append(elfs, elfFile)
 			}
-		case EventDeleted:
+		case EventDeleted, EventInstanceDeleted:
 			if fInfo, ok := t.currentPids[ev.Obj.Process.Pid]; ok {
 				delete(t.currentPids, ev.Obj.Process.Pid)
 				out = append(out, Event[ebpf.Instrumentable]{
@@ -122,28 +112,10 @@ func (t *typer) asInstrumentable(execElf *exec.FileInfo) ebpf.Instrumentable {
 	log := t.log.With("pid", execElf.Pid, "comm", execElf.CmdExePath)
 	if ic, ok := instrumentableCache.Get(execElf.Ino); ok {
 		log.Debug("new instance of existing executable", "type", ic.Type)
-		return ebpf.Instrumentable{Type: ic.Type, FileInfo: execElf, Offsets: ic.Offsets, InstrumentationError: ic.InstrumentationError}
+		return ebpf.Instrumentable{Type: ic.Type, FileInfo: execElf}
 	}
 
 	log.Debug("getting instrumentable information")
-	// look for suitable Go application first
-	offsets, ok, err := t.inspectOffsets(execElf)
-	if ok {
-		// we found go offsets, let's see if this application is not a proxy
-		if !isGoProxy(offsets) {
-			log.Debug("identified as a Go service or client")
-			instrumentableCache.Add(execElf.Ino, InstrumentedExecutable{Type: svc.InstrumentableGolang, Offsets: offsets})
-			return ebpf.Instrumentable{Type: svc.InstrumentableGolang, FileInfo: execElf, Offsets: offsets}
-		}
-
-		if err == nil {
-			err = fmt.Errorf("identified as a Go proxy")
-		}
-
-		log.Debug("identified as a Go proxy")
-	} else {
-		log.Debug("identified as a generic, non-Go executable")
-	}
 
 	// select the parent (or grandparent) of the executable, if any
 	var child []uint32
@@ -162,59 +134,9 @@ func (t *typer) asInstrumentable(execElf *exec.FileInfo) ebpf.Instrumentable {
 
 	detectedType := exec.FindProcLanguage(execElf.Pid)
 
-	if detectedType == svc.InstrumentableGolang && err == nil {
-		log.Warn("ELF binary appears to be a Go program, but no offsets were found",
-			"comm", execElf.CmdExePath, "pid", execElf.Pid)
-
-		err = fmt.Errorf("could not find any Go offsets in Go binary %s", execElf.CmdExePath)
-	}
-
 	log.Debug("instrumented", "comm", execElf.CmdExePath, "pid", execElf.Pid,
 		"child", child, "language", detectedType.String())
-	// Return the instrumentable without offsets, as it is identified as a generic
-	// (or non-instrumentable Go proxy) executable
-	instrumentableCache.Add(execElf.Ino, InstrumentedExecutable{Type: detectedType, Offsets: nil, InstrumentationError: err})
-	return ebpf.Instrumentable{Type: detectedType, Offsets: nil, FileInfo: execElf, ChildPids: child, InstrumentationError: err}
-}
 
-func (t *typer) inspectOffsets(execElf *exec.FileInfo) (*goexec.Offsets, bool, error) {
-	if !t.cfg.Discovery.SystemWide {
-		if t.cfg.Discovery.SkipGoSpecificTracers {
-			t.log.Debug("skipping inspection for Go functions", "pid", execElf.Pid, "comm", execElf.CmdExePath)
-		} else {
-			t.log.Debug("inspecting", "pid", execElf.Pid, "comm", execElf.CmdExePath)
-			offsets, err := goexec.InspectOffsets(execElf, t.allGoFunctions)
-			if err != nil {
-				t.log.Debug("couldn't find go specific tracers", "error", err)
-				return nil, false, err
-			}
-			return offsets, true, nil
-		}
-	}
-	return nil, false, nil
-}
-
-func isGoProxy(offsets *goexec.Offsets) bool {
-	for f := range offsets.Funcs {
-		// if we find anything of interest other than the Go runtime, we consider this a valid application
-		if !strings.HasPrefix(f, "runtime.") {
-			return false
-		}
-	}
-
-	return true
-}
-
-func (t *typer) loadAllGoFunctionNames() {
-	uniqueFunctions := map[string]struct{}{}
-	t.allGoFunctions = nil
-	for _, p := range newGoTracersGroup(t.cfg, t.metrics) {
-		for symbolName := range p.GoProbes() {
-			// avoid duplicating function names
-			if _, ok := uniqueFunctions[symbolName]; !ok {
-				uniqueFunctions[symbolName] = struct{}{}
-				t.allGoFunctions = append(t.allGoFunctions, symbolName)
-			}
-		}
-	}
+	instrumentableCache.Add(execElf.Ino, InstrumentedExecutable{Type: detectedType})
+	return ebpf.Instrumentable{Type: detectedType, FileInfo: execElf, ChildPids: child}
 }

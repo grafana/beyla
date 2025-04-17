@@ -2,11 +2,13 @@ package ebpf
 
 import (
 	"context"
+	"debug/gosym"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"reflect"
 	"runtime"
 	"strings"
@@ -22,6 +24,8 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/exec"
 	"github.com/grafana/beyla/v2/pkg/internal/goexec"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/internal/svc"
+	"github.com/grafana/beyla/v2/pkg/internal/util"
 	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
@@ -35,10 +39,15 @@ var internalMapsMux sync.Mutex
 func ptlog() *slog.Logger { return slog.With("component", "ebpf.ProcessTracer") }
 
 type instrumenter struct {
-	offsets   *goexec.Offsets
-	exe       *link.Executable
 	closables []io.Closer
 	modules   map[uint64]struct{}
+}
+
+type processBinary struct {
+	Dev     uint64
+	Ino     uint64
+	Path    string
+	UProbes probeDescMap
 }
 
 func roundToNearestMultiple(x, n uint32) uint32 {
@@ -96,18 +105,33 @@ func resolveMaps(spec *ebpf.CollectionSpec) (*ebpf.CollectionOptions, error) {
 	return &collOpts, nil
 }
 
+func resolveMainBinary(ie *Instrumentable) (*processBinary, error) {
+	realPath, err := os.Readlink(ie.FileInfo.ProExeLinkPath)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &processBinary{
+		Dev:     ie.FileInfo.Dev,
+		Ino:     ie.FileInfo.Ino,
+		Path:    realPath,
+		UProbes: probeDescMap{},
+	}, nil
+}
+
 func NewProcessTracer(cfg *beyla.Config, tracerType ProcessTracerType, programs []Tracer) *ProcessTracer {
 	return &ProcessTracer{
+		log:             ptlog().With("type", tracerType),
 		Programs:        programs,
 		SystemWide:      cfg.Discovery.SystemWide,
 		Type:            tracerType,
 		Instrumentables: map[uint64]*instrumenter{},
+		Bins:            common.InstrumentedBins{},
 	}
 }
 
 func (pt *ProcessTracer) Run(ctx context.Context, out *msg.Queue[[]request.Span]) {
-	pt.log = ptlog().With("type", pt.Type)
-
 	pt.log.Debug("starting process tracer")
 	// Searches for traceable functions
 	trcrs := pt.Programs
@@ -248,64 +272,493 @@ func (pt *ProcessTracer) Init() error {
 	return pt.loadTracers()
 }
 
-func (pt *ProcessTracer) NewExecutableInstance(ie *Instrumentable) error {
-	if i, ok := pt.Instrumentables[ie.FileInfo.Ino]; ok {
-		for _, p := range pt.Programs {
-			p.ProcessBinary(ie.FileInfo)
-			// Uprobes to be used for native module instrumentation points
-			if err := i.uprobes(ie.FileInfo.Pid, p); err != nil {
-				printVerifierErrorInfo(err)
-				return err
+type probeDescMap map[string][]*common.ProbeDesc
+type uProbes map[string]probeDescMap
+
+func (pt *ProcessTracer) gatherGoProbes() probeDescMap {
+	ret := probeDescMap{}
+
+	for _, p := range pt.Programs {
+		for sym, probeDesc := range p.GoProbes() {
+			ret[sym] = append(ret[sym], probeDesc...)
+		}
+	}
+
+	return ret
+}
+
+func (pt *ProcessTracer) gatherUProbes() uProbes {
+	ret := uProbes{}
+
+	for _, p := range pt.Programs {
+		for binFile, probes := range p.UProbes() {
+			target, ok := ret[binFile]
+
+			if !ok {
+				target = map[string][]*common.ProbeDesc{}
+				ret[binFile] = target
+			}
+
+			for sym, probeDesc := range probes {
+				target[sym] = append(target[sym], probeDesc...)
 			}
 		}
-	} else {
-		pt.log.Warn("Attempted to update non-existent tracer", "path", ie.FileInfo.CmdExePath, "pid", ie.FileInfo.Pid)
+	}
+
+	return ret
+}
+
+func resolveGoSymTable(ctx *exec.ElfContext) (*gosym.Table, error) {
+	shstrtab := ctx.Sections[ctx.Hdr.Shstrndx]
+	shstrtabData := ctx.Data[shstrtab.Offset:]
+
+	var pclndat []byte
+	var runtimeText uint64
+
+	for _, sec := range ctx.Sections {
+		name := exec.GetCString(shstrtabData, sec.Name)
+
+		if name == ".gopclntab" {
+			pclndat = ctx.Data[sec.Offset:]
+			ptrSize := uint32(pclndat[7])
+
+			switch ptrSize {
+			case 4:
+				runtimeText = uint64(*exec.ReadStruct[uint32](pclndat, int(8+2*ptrSize)))
+			case 8:
+				runtimeText = *exec.ReadStruct[uint64](pclndat, int(8+2*ptrSize))
+			default:
+				return nil, fmt.Errorf("unknown pointer size")
+			}
+		} else if runtimeText == 0 && name == ".text" {
+			runtimeText = sec.Addr
+		}
+	}
+
+	if runtimeText == 0 {
+		return nil, fmt.Errorf("could not find text section")
+	}
+
+	pcln := gosym.NewLineTable(pclndat, runtimeText)
+	return gosym.NewTable(nil, pcln)
+}
+
+func (pt *ProcessTracer) resolveGoProbesOffsets(ctx *exec.ElfContext, probes probeDescMap) error {
+	symTab, err := resolveGoSymTable(ctx)
+
+	if err != nil {
+		return fmt.Errorf("error loading go sym table: %w", err)
+	}
+
+	for _, f := range symTab.Funcs {
+		probeDescArray, ok := probes[f.Name]
+
+		if !ok {
+			continue
+		}
+
+		var fileOffset uint64
+
+		found := false
+
+		for _, seg := range ctx.Segments {
+			if seg.Type == 1 && f.Value >= seg.Vaddr && f.Value < seg.Vaddr+seg.Filesz {
+				offsetInSegment := f.Value - seg.Vaddr
+				fileOffset = seg.Offset + offsetInSegment
+				found = true
+				break
+			}
+		}
+
+		size := f.End - f.Value
+
+		if !found || fileOffset+size > uint64(len(ctx.Data)) {
+			continue
+		}
+
+		code := ctx.Data[fileOffset : fileOffset+size]
+
+		returns, err := goexec.FindReturnOffsets(fileOffset, code)
+
+		if err != nil {
+			return fmt.Errorf("failed to parse return offsets for probe '%s': %w", f.Name, err)
+		}
+
+		for i := range probeDescArray {
+			probeDescArray[i].StartOffset = fileOffset
+			probeDescArray[i].ReturnOffsets = returns
+		}
 	}
 
 	return nil
 }
 
-func (pt *ProcessTracer) NewExecutable(exe *link.Executable, ie *Instrumentable) error {
-	i := instrumenter{
-		exe:     exe,
-		offsets: ie.Offsets, // this is needed for the function offsets, not fields
-		modules: map[uint64]struct{}{},
+func openElf(filePath string) (*exec.ElfContext, *os.File, error) {
+	file, err := os.Open(filePath)
+
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to open '%s': %w", filePath, err)
+	}
+
+	info, err := file.Stat()
+
+	if err != nil {
+		file.Close()
+		return nil, nil, fmt.Errorf("failed to stat '%s': %w", filePath, err)
+	}
+
+	ctx, err := exec.NewElfContext(file, info.Size())
+
+	if err != nil {
+		file.Close()
+		return nil, nil, err
+	}
+
+	return ctx, file, nil
+}
+
+func resolveUProbeOffsets(filePath string, probes probeDescMap) error {
+	ctx, file, err := openElf(filePath)
+
+	if err != nil {
+		return fmt.Errorf("failed open ELF file '%s': %w", filePath, err)
+	}
+
+	defer file.Close()
+	defer ctx.Close()
+
+	return resolveUProbeOffsetsELF(ctx, probes)
+}
+
+// nolint:cyclop
+func resolveUProbeOffsetsELF(ctx *exec.ElfContext, probes probeDescMap) error {
+	for _, sec := range ctx.Sections {
+		if sec.Type != exec.SHT_SYMTAB && sec.Type != exec.SHT_DYNSYM {
+			continue
+		}
+
+		strtab := ctx.Sections[sec.Link]
+		strs := ctx.Data[strtab.Offset:]
+
+		symCount := int(sec.Size / sec.Entsize)
+
+		for i := 0; i < symCount; i++ {
+			sym := exec.ReadStruct[exec.Elf64_Sym](ctx.Data, int(sec.Offset)+i*int(sec.Entsize))
+
+			if sym == nil || exec.SymType(sym.Info) != exec.STT_FUNC || sym.Size == 0 || sym.Value == 0 {
+				continue
+			}
+
+			var fileOffset uint64
+
+			found := false
+
+			for _, seg := range ctx.Segments {
+				if seg.Type == 1 && sym.Value >= seg.Vaddr && sym.Value < seg.Vaddr+seg.Filesz {
+					offsetInSegment := sym.Value - seg.Vaddr
+					fileOffset = seg.Offset + offsetInSegment
+					found = true
+					break
+				}
+			}
+
+			if !found || fileOffset+sym.Size > uint64(len(ctx.Data)) {
+				continue
+			}
+
+			name := exec.GetCStringUnsafe(strs, sym.Name)
+
+			probeDescArray, ok := probes[name]
+
+			if !ok {
+				continue
+			}
+
+			code := ctx.Data[fileOffset : fileOffset+sym.Size]
+
+			returns, err := goexec.FindReturnOffsets(fileOffset, code)
+
+			if err != nil {
+				return fmt.Errorf("failed to parse return offsets for probe '%s': %w", name, err)
+			}
+
+			for i := range probeDescArray {
+				probeDescArray[i].StartOffset = fileOffset
+				probeDescArray[i].ReturnOffsets = returns
+			}
+		}
+	}
+
+	return nil
+}
+
+// nolint: cyclop
+func gatherProcessBinaries(ie *Instrumentable) ([]processBinary, error) {
+	mainBinary, err := resolveMainBinary(ie)
+
+	if err != nil {
+		return nil, fmt.Errorf("unable to resolve main binary: %w", err)
+	}
+
+	libMaps, err := exec.FindLibMaps(ie.FileInfo.Pid)
+
+	if err != nil {
+		return nil, fmt.Errorf("error loading process mappings: %w", err)
+	}
+
+	if len(libMaps) == 0 {
+		return nil, fmt.Errorf("no binaries found")
+	}
+
+	binaries := make([]processBinary, 0, len(libMaps))
+	binaries = append(binaries, *mainBinary)
+
+	lastDev := uint64(0)
+	lastIno := uint64(0)
+
+	for _, m := range libMaps {
+		if m.Dev == 0 || m.Inode == 0 {
+			// not a file
+			continue
+		}
+
+		if m.Perms == nil || !m.Perms.Execute {
+			// not executable
+			continue
+		}
+
+		if m.Dev == lastDev && m.Inode == lastIno {
+			continue
+		}
+
+		if m.Dev == mainBinary.Dev && m.Inode == mainBinary.Ino {
+			// already added main binary explicitly above
+			continue
+		}
+
+		lastDev = m.Dev
+		lastIno = m.Inode
+
+		binaries = append(binaries, processBinary{Dev: m.Dev,
+			Ino: m.Inode, Path: m.Pathname, UProbes: probeDescMap{}})
+	}
+
+	return binaries, nil
+}
+
+func (pt *ProcessTracer) alreadyInstrumentedBin(id uint64) bool {
+	module := pt.Bins.Find(id)
+
+	pt.log.Debug("checking already instrumented bin", "ino", id, "module", module)
+	return module != nil
+}
+
+func (pt *ProcessTracer) addInstrumentedBinRef(id uint64) {
+	pt.recordInstrumentedBin(id, nil)
+}
+
+func (pt *ProcessTracer) recordInstrumentedBin(id uint64, closers []io.Closer) {
+	module := pt.Bins.AddRef(id)
+
+	if len(closers) > 0 {
+		module.Closers = append(module.Closers, closers...)
+	}
+
+	pt.log.Debug("Recorded instrumented bin", "ino", id, "module", module)
+}
+
+func (pt *ProcessTracer) unlinkInstrumentedBin(id uint64) {
+	module, err := pt.Bins.RemoveRef(id)
+
+	pt.log.Debug("Unlinking instrumented bin - before state", "ino", id, "module", module)
+
+	if err != nil {
+		pt.log.Debug("Error unlinking instrumented bin", "ino", id, "error", err)
+	}
+}
+
+func (pt *ProcessTracer) attachGoProbes(ie *Instrumentable, i *instrumenter) error {
+	if ie.Type != svc.InstrumentableGolang {
+		return nil
+	}
+
+	if pt.alreadyInstrumentedBin(ie.FileInfo.Ino) {
+		return nil
+	}
+
+	ctx, err := exec.NewElfContext(ie.FileInfo.File, ie.FileInfo.Size)
+
+	if err != nil {
+		return fmt.Errorf("failed to open elf context for '%s': %w", ie.FileInfo.ProExeLinkPath, err)
+	}
+
+	defer ctx.Close()
+
+	if err := goexec.IsSupportedGoBinary(ctx); err != nil {
+		return err
+	}
+
+	offsets, err := goexec.StructMemberOffsets(ie.FileInfo)
+
+	if err != nil {
+		return fmt.Errorf("failed to load go offsets: %w", err)
 	}
 
 	for _, p := range pt.Programs {
-		p.RegisterOffsets(ie.FileInfo, ie.Offsets)
-
-		// Go style Uprobes
-		if err := i.goprobes(p); err != nil {
-			printVerifierErrorInfo(err)
-			return err
-		}
-
-		// Uprobes to be used for native module instrumentation points
-		if err := i.uprobes(ie.FileInfo.Pid, p); err != nil {
-			printVerifierErrorInfo(err)
-			return err
-		}
+		p.RegisterOffsets(ie.FileInfo, &offsets)
 	}
 
-	pt.Instrumentables[ie.FileInfo.Ino] = &i
+	goProbes := pt.gatherGoProbes()
+
+	if len(goProbes) == 0 {
+		return fmt.Errorf("no Go probes to instrument")
+	}
+
+	if err := pt.resolveGoProbesOffsets(ctx, goProbes); err != nil {
+		return fmt.Errorf("error resolving Go probes offset: %w", err)
+	}
+
+	exe, err := link.OpenExecutable(ie.FileInfo.ProExeLinkPath)
+
+	if err != nil {
+		return fmt.Errorf("failed to open executable: %w", err)
+	}
+
+	closers, err := i.instrumentProbes(exe, goProbes)
+
+	if err != nil {
+		printVerifierErrorInfo(err)
+		return fmt.Errorf("failed to attach go probes: %w", err)
+	}
+
+	i.addModule(ie.FileInfo.Ino)
+	pt.recordInstrumentedBin(ie.FileInfo.Ino, closers)
+	pt.Instrumentables[ie.FileInfo.Ino] = i
+
+	return nil
+}
+
+// assigns uprobes to binaries, or to the main binary in case static linkage
+// is suspected
+func resolveBinProbes(uProbes uProbes, binaries []processBinary) {
+	if len(binaries) == 0 {
+		return
+	}
+
+	// the process main binary is always first
+	mainBinary := &binaries[0]
+
+	// if a shared library is not present, reassign its uprobes to the main
+	// binary in case they are statically linked
+	for fileName, uProbe := range uProbes {
+		binary := util.FindIf(binaries, func(p processBinary) bool {
+			return strings.HasPrefix(filepath.Base(p.Path), fileName)
+		})
+
+		if binary == nil {
+			binary = mainBinary
+		}
+
+		for k, v := range uProbe {
+			binary.UProbes[k] = v
+		}
+	}
+}
+
+func (pt *ProcessTracer) attachUProbes(ie *Instrumentable, i *instrumenter) error {
+	uProbes := pt.gatherUProbes()
+
+	if len(uProbes) == 0 {
+		return nil
+	}
+
+	binaries, err := gatherProcessBinaries(ie)
+
+	if err != nil {
+		return err
+	}
+
+	if len(binaries) == 0 {
+		return fmt.Errorf("no binaries to instrument")
+	}
+
+	resolveBinProbes(uProbes, binaries)
+
+	binAbsPath := func(b *processBinary) string {
+		return fmt.Sprintf("/proc/%d/root%s", ie.FileInfo.Pid, b.Path)
+	}
+
+	for _, binary := range binaries {
+		if len(binary.UProbes) == 0 {
+			continue
+		}
+
+		if pt.alreadyInstrumentedBin(binary.Ino) {
+			pt.log.Debug("module already instrumented by other processes, incrementing reference count",
+				"path", binary.Path, "ino", binary.Ino)
+
+			i.addModule(binary.Ino)
+			pt.addInstrumentedBinRef(binary.Ino)
+			continue
+		}
+
+		absPath := binAbsPath(&binary)
+
+		targetExe, err := link.OpenExecutable(absPath)
+
+		if err != nil {
+			return fmt.Errorf("failed to open binary %s: %w", absPath, err)
+		}
+
+		if err := resolveUProbeOffsets(absPath, binary.UProbes); err != nil {
+			return fmt.Errorf("failed to resolve uprobe offsets: %w", err)
+		}
+
+		closers, err := i.instrumentProbes(targetExe, binary.UProbes)
+
+		if err != nil {
+			printVerifierErrorInfo(err)
+			return fmt.Errorf("failed to attach uprobes: %w", err)
+		}
+
+		i.addModule(binary.Ino)
+		pt.recordInstrumentedBin(binary.Ino, closers)
+	}
+
+	pt.Instrumentables[ie.FileInfo.Ino] = i
+
+	return nil
+}
+
+func (pt *ProcessTracer) NewExecutable(ie *Instrumentable) error {
+	i := instrumenter{
+		modules: map[uint64]struct{}{},
+	}
+
+	if pt.Type == Go {
+		if err := pt.attachGoProbes(ie, &i); err != nil {
+			return fmt.Errorf("failed to attach Go probes: %w", err)
+		}
+	} else {
+		if err := pt.attachUProbes(ie, &i); err != nil {
+			return fmt.Errorf("failed to attach uprobes: %w", err)
+		}
+	}
 
 	return nil
 }
 
 func (pt *ProcessTracer) UnlinkExecutable(info *exec.FileInfo) {
 	if i, ok := pt.Instrumentables[info.Ino]; ok {
-		for _, c := range i.closables {
-			if err := c.Close(); err != nil {
-				pt.log.Debug("Unable to close on unlink", "closable", c)
-			}
-		}
 		for ino := range i.modules {
-			for _, p := range pt.Programs {
-				p.UnlinkInstrumentedLib(ino)
-			}
+			pt.unlinkInstrumentedBin(ino)
 		}
-		delete(pt.Instrumentables, info.Ino)
+
+		// if all references to this executables are gone, we can delete the
+		// instrumentable (i.e. if all instances of this executable are dead)
+		if pt.Bins.Find(info.Ino) == nil {
+			delete(pt.Instrumentables, info.Ino)
+		}
 	} else {
 		pt.log.Warn("Unable to find executable to unlink",
 			"path", info.CmdExePath,

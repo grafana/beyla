@@ -1,8 +1,6 @@
 package exec
 
 import (
-	"debug/elf"
-	"errors"
 	"fmt"
 	"os"
 
@@ -76,95 +74,26 @@ func findLanguageFromElf(filePath string) svc.InstrumentableType {
 	return matchExeSymbols(ctx)
 }
 
-func contains(slice []string, value string) bool {
-	for _, v := range slice {
-		if v == value {
-			return true
-		}
-	}
-
-	return false
-}
-
-func collectSymbols(f *elf.File, syms []elf.Symbol, addresses map[string]Sym, symbolNames []string) {
-	for _, s := range syms {
-		if elf.ST_TYPE(s.Info) != elf.STT_FUNC {
-			// Symbol not associated with a function or other executable code.
-			continue
-		}
-		if !contains(symbolNames, s.Name) {
-			continue
-		}
-		address := s.Value
-		var p *elf.Prog
-
-		// Loop over ELF segments.
-		for _, prog := range f.Progs {
-			// Skip uninteresting segments.
-			if prog.Type != elf.PT_LOAD || (prog.Flags&elf.PF_X) == 0 {
-				continue
-			}
-
-			if prog.Vaddr <= s.Value && s.Value < (prog.Vaddr+prog.Memsz) {
-				address = s.Value - prog.Vaddr + prog.Off
-				p = prog
-				break
-			}
-		}
-		addresses[s.Name] = Sym{Off: address, Len: s.Size, Prog: p}
-	}
-}
-
-func FindExeSymbols(f *elf.File, symbolNames []string) (map[string]Sym, error) {
-	addresses := map[string]Sym{}
-	syms, err := f.Symbols()
-	if err != nil && !errors.Is(err, elf.ErrNoSymbols) {
-		return nil, err
-	}
-
-	collectSymbols(f, syms, addresses, symbolNames)
-
-	dynsyms, err := f.DynamicSymbols()
-	if err != nil && !errors.Is(err, elf.ErrNoSymbols) {
-		return nil, err
-	}
-
-	collectSymbols(f, dynsyms, addresses, symbolNames)
-
-	return addresses, nil
-}
-
 func matchExeSymbols(ctx *fastelf.ElfContext) svc.InstrumentableType {
 	for _, sec := range ctx.Sections {
-		if sec.Type != fastelf.SHT_SYMTAB && sec.Type != fastelf.SHT_DYNSYM {
+		if sec.Type != SHT_SYMTAB && sec.Type != SHT_DYNSYM {
 			continue
 		}
 
-		if int(sec.Link) >= len(ctx.Sections) {
-			continue
-		}
-
+		//FIXME bound checks
 		strtab := ctx.Sections[sec.Link]
-
-		if int(strtab.Offset) >= len(ctx.Data) {
-			continue
-		}
-
 		strs := ctx.Data[strtab.Offset:]
 
 		symCount := int(sec.Size / sec.Entsize)
 
 		for i := 0; i < symCount; i++ {
-			sym := fastelf.ReadStruct[fastelf.Elf64_Sym](ctx.Data, int(sec.Offset)+i*int(sec.Entsize))
+			sym := ReadStruct[Elf64_Sym](ctx.Data, int(sec.Offset)+i*int(sec.Entsize))
 
-			if sym == nil ||
-				fastelf.SymType(sym.Info) != fastelf.STT_FUNC ||
-				sym.Size == 0 ||
-				sym.Value == 0 {
+			if sym == nil || SymType(sym.Info) != STT_FUNC || sym.Size == 0 || sym.Value == 0 {
 				continue
 			}
 
-			name := fastelf.GetCStringUnsafe(strs, sym.Name)
+			name := GetCStringUnsafe(strs, sym.Name)
 
 			t := instrumentableFromSymbolName(name)
 

@@ -15,6 +15,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/ifaces"
+	"github.com/grafana/beyla/v2/pkg/internal/util"
 )
 
 var nextTCHandle = atomic.Uint32{}
@@ -197,8 +198,8 @@ func (tc *netlinkManager) detachProgramFromIfaceLocked(prog string, iface *netli
 		}
 	}
 
-	apply(iface.filters, detach)
-	iface.filters = removeIf(iface.filters, func(filter *netlink.BpfFilter) bool { return filter.Name == prog })
+	util.Apply(iface.filters, detach)
+	iface.filters = util.RemoveIf(iface.filters, func(filter *netlink.BpfFilter) bool { return filter.Name == prog })
 }
 
 func (tc *netlinkManager) removeProgramLocked(name string) {
@@ -212,8 +213,8 @@ func (tc *netlinkManager) removeProgramLocked(name string) {
 		}
 	}
 
-	apply(tc.programs, closeProgs)
-	tc.programs = removeIf(tc.programs, func(prog *netlinkProg) bool { return prog.name == name })
+	util.Apply(tc.programs, closeProgs)
+	tc.programs = util.RemoveIf(tc.programs, func(prog *netlinkProg) bool { return prog.name == name })
 }
 
 func (tc *netlinkManager) onInterfaceAdded(i *ifaces.Interface) {

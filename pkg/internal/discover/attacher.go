@@ -5,8 +5,6 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/cilium/ebpf/link"
-
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf"
 	"github.com/grafana/beyla/v2/pkg/internal/helpers/maps"
@@ -35,8 +33,7 @@ type TraceAttacher struct {
 	// keeps a copy of all the tracers for a given executable path
 	existingTracers     map[uint64]*ebpf.ProcessTracer
 	sdkInjector         *otelsdk.SDKInjector
-	reusableTracer      *ebpf.ProcessTracer
-	reusableGoTracer    *ebpf.ProcessTracer
+	reusableTracers     map[ebpf.ProcessTracerType]*ebpf.ProcessTracer
 	commonTracersLoaded bool
 
 	// Usually, only ebpf.Tracer implementations will send spans data to the read decorator.
@@ -63,6 +60,7 @@ func TraceAttacherProvider(ta *TraceAttacher) swarm.InstanceFunc {
 func (ta *TraceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) {
 	ta.log = slog.With("component", "discover.TraceAttacher")
 	ta.existingTracers = map[uint64]*ebpf.ProcessTracer{}
+	ta.reusableTracers = map[ebpf.ProcessTracerType]*ebpf.ProcessTracer{}
 	ta.sdkInjector = otelsdk.NewSDKInjector(ta.Cfg)
 	ta.processInstances = maps.MultiCounter[uint64]{}
 	ta.beylaPID = os.Getpid()
@@ -112,6 +110,39 @@ func (ta *TraceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 	}, nil
 }
 
+func (ta *TraceAttacher) getPrograms(tracerType ebpf.ProcessTracerType) []ebpf.Tracer {
+	switch tracerType {
+	case ebpf.Go:
+		return ta.withCommonTracersGroup(newGoTracersGroup(ta.Cfg, ta.Metrics))
+	case ebpf.Generic:
+		return ta.withCommonTracersGroup(newGenericTracersGroup(ta.Cfg, ta.Metrics))
+	}
+
+	return nil
+}
+
+func (ta *TraceAttacher) tracerType(iType svc.InstrumentableType) ebpf.ProcessTracerType {
+	switch iType {
+	case svc.InstrumentableGolang:
+		if ta.Cfg.Discovery.SkipGoSpecificTracers || ta.Cfg.Discovery.SystemWide {
+			return ebpf.Generic
+		}
+
+		return ebpf.Go
+	case svc.InstrumentableNodejs,
+		svc.InstrumentableJava,
+		svc.InstrumentableRuby,
+		svc.InstrumentablePython,
+		svc.InstrumentableDotnet,
+		svc.InstrumentableGeneric,
+		svc.InstrumentableRust,
+		svc.InstrumentablePHP:
+		return ebpf.Generic
+	}
+
+	return ebpf.Unknown
+}
+
 //nolint:cyclop
 func (ta *TraceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 	if tracer, ok := ta.existingTracers[ie.FileInfo.Ino]; ok {
@@ -128,9 +159,7 @@ func (ta *TraceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 			// a python executable can run an SSL and non-SSL application, so it's not enough
 			// to look at the executable, we must ensure this process doesn't have different
 			// libraries attached
-			ok = ta.updateTracerProbes(tracer, ie)
-		} else {
-			ta.monitorPIDs(ta.reusableGoTracer, ie)
+			ok = ta.reuseTracer(tracer, ie)
 		}
 		ta.log.Debug(".done", "success", ok)
 		return ok
@@ -140,54 +169,25 @@ func (ta *TraceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 		"cmd", ie.FileInfo.CmdExePath, "pid", ie.FileInfo.Pid, "ino", ie.FileInfo.Ino, "type", ie.Type)
 	ta.Metrics.InstrumentProcess(ie.FileInfo.ExecutableName())
 
-	// builds a tracer for that executable
-	var programs []ebpf.Tracer
-	tracerType := ebpf.Generic
-	switch ie.Type {
-	case svc.InstrumentableGolang:
-		// gets all the possible supported tracers for a go program, and filters out
-		// those whose symbols are not present in the ELF functions list
-		if ta.Cfg.Discovery.SkipGoSpecificTracers || ta.Cfg.Discovery.SystemWide || ie.InstrumentationError != nil || ie.Offsets == nil {
-			if ie.InstrumentationError != nil {
-				ta.log.Warn("Unsupported Go program detected, using generic instrumentation", "error", ie.InstrumentationError)
-			} else if ie.Offsets == nil {
-				ta.log.Warn("Go program with null offsets detected, using generic instrumentation")
-			}
-			if ta.reusableTracer != nil {
-				// We need to do more than monitor PIDs. It's possible that this new
-				// instance of the executable has different DLLs loaded, e.g. libssl.so.
-				return ta.reuseTracer(ta.reusableTracer, ie)
-			} else {
-				programs = ta.withCommonTracersGroup(newGenericTracersGroup(ta.Cfg, ta.Metrics))
-			}
-		} else {
-			if ta.reusableGoTracer != nil {
-				return ta.reuseTracer(ta.reusableGoTracer, ie)
-			}
-			tracerType = ebpf.Go
-			programs = ta.withCommonTracersGroup(newGoTracersGroup(ta.Cfg, ta.Metrics))
-		}
-	case svc.InstrumentableNodejs, svc.InstrumentableJava, svc.InstrumentableRuby, svc.InstrumentablePython, svc.InstrumentableDotnet, svc.InstrumentableGeneric, svc.InstrumentableRust, svc.InstrumentablePHP:
-		if ta.reusableTracer != nil {
-			return ta.reuseTracer(ta.reusableTracer, ie)
-		}
-		programs = ta.withCommonTracersGroup(newGenericTracersGroup(ta.Cfg, ta.Metrics))
-	default:
+	tracerType := ta.tracerType(ie.Type)
+
+	if tracerType == ebpf.Unknown {
 		ta.log.Warn("unexpected instrumentable type. This is basically a bug", "type", ie.Type)
+		return false
 	}
+
+	if tracer, ok := ta.reusableTracers[tracerType]; ok {
+		return ta.reuseTracer(tracer, ie)
+	}
+
+	programs := ta.getPrograms(tracerType)
+
 	if len(programs) == 0 {
 		ta.log.Warn("no instrumentable functions found. Ignoring", "pid", ie.FileInfo.Pid, "cmd", ie.FileInfo.CmdExePath)
 		return false
 	}
 
 	ie.FileInfo.Service.SDKLanguage = ie.Type
-
-	// Instead of the executable file in the disk, we pass the /proc/<pid>/exec
-	// to allow loading it from different container/pods in containerized environments
-	exe, ok := ta.loadExecutable(ie)
-	if !ok {
-		return false
-	}
 
 	tracer := ebpf.NewProcessTracer(ta.Cfg, tracerType, programs)
 
@@ -198,7 +198,12 @@ func (ta *TraceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 
 	ie.Tracer = tracer
 
-	if err := tracer.NewExecutable(exe, ie); err != nil {
+	if err := tracer.NewExecutable(ie); err != nil {
+		ta.log.Error("failed to attach executable",
+			"pid", ie.FileInfo.Pid,
+			"exec", ie.FileInfo.CmdExePath,
+			"type", ie.Type,
+			"error", err)
 		return false
 	}
 
@@ -207,18 +212,12 @@ func (ta *TraceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 		"child", ie.ChildPids,
 		"exec", ie.FileInfo.CmdExePath,
 		"type", ie.Type)
+
 	// allowing the tracer to forward traces from the discovered PID and its children processes
 	ta.monitorPIDs(tracer, ie)
 	ta.existingTracers[ie.FileInfo.Ino] = tracer
-	if tracer.Type == ebpf.Generic {
-		if ta.reusableTracer != nil {
-			ta.monitorPIDs(ta.reusableTracer, ie)
-		} else {
-			ta.reusableTracer = tracer
-		}
-	} else {
-		ta.reusableGoTracer = tracer
-	}
+	ta.reusableTracers[tracerType] = tracer
+
 	ta.log.Debug(".done")
 	return true
 }
@@ -234,26 +233,8 @@ func (ta *TraceAttacher) withCommonTracersGroup(tracers []ebpf.Tracer) []ebpf.Tr
 	return tracers
 }
 
-func (ta *TraceAttacher) loadExecutable(ie *ebpf.Instrumentable) (*link.Executable, bool) {
-	// Instead of the executable file in the disk, we pass the /proc/<pid>/exec
-	// to allow loading it from different container/pods in containerized environments
-	exe, err := link.OpenExecutable(ie.FileInfo.ProExeLinkPath)
-	if err != nil {
-		ta.log.Warn("can't open executable. Ignoring",
-			"error", err, "pid", ie.FileInfo.Pid, "cmd", ie.FileInfo.CmdExePath)
-		return nil, false
-	}
-
-	return exe, true
-}
-
 func (ta *TraceAttacher) reuseTracer(tracer *ebpf.ProcessTracer, ie *ebpf.Instrumentable) bool {
-	exe, ok := ta.loadExecutable(ie)
-	if !ok {
-		return false
-	}
-
-	if err := tracer.NewExecutable(exe, ie); err != nil {
+	if err := tracer.NewExecutable(ie); err != nil {
 		ta.log.Debug("Failed to attach uprobes for new executable", "pid", ie.FileInfo.Pid, "error", err)
 	}
 
@@ -265,22 +246,6 @@ func (ta *TraceAttacher) reuseTracer(tracer *ebpf.ProcessTracer, ie *ebpf.Instru
 
 	ta.monitorPIDs(tracer, ie)
 	ta.existingTracers[ie.FileInfo.Ino] = tracer
-
-	return true
-}
-
-func (ta *TraceAttacher) updateTracerProbes(tracer *ebpf.ProcessTracer, ie *ebpf.Instrumentable) bool {
-	if err := tracer.NewExecutableInstance(ie); err != nil {
-		ta.log.Debug("Failed to attach uprobes", "pid", ie.FileInfo.Pid, "error", err)
-	}
-
-	ta.log.Debug("reusing Generic tracer for",
-		"pid", ie.FileInfo.Pid,
-		"child", ie.ChildPids,
-		"exec", ie.FileInfo.CmdExePath,
-		"language", ie.Type)
-
-	ta.monitorPIDs(tracer, ie)
 
 	return true
 }
@@ -338,12 +303,13 @@ func (ta *TraceAttacher) notifyProcessDeletion(ie *ebpf.Instrumentable) {
 		ta.Metrics.UninstrumentProcess(ie.FileInfo.ExecutableName())
 		tracer.BlockPID(uint32(ie.FileInfo.Pid), ie.FileInfo.Ns)
 
+		ie.Tracer = tracer
+
 		// if there are no more trace instances for a program, we need to notify that
 		// the tracer needs to be stopped and deleted.
 		// We don't remove kernel-based traces as there is only one tracer per host
 		if ta.processInstances.Dec(ie.FileInfo.Ino) == 0 {
 			delete(ta.existingTracers, ie.FileInfo.Ino)
-			ie.Tracer = tracer
 			ta.OutputTracerEvents.Send(Event[*ebpf.Instrumentable]{Type: EventDeleted, Obj: ie})
 		} else {
 			ta.OutputTracerEvents.Send(Event[*ebpf.Instrumentable]{Type: EventInstanceDeleted, Obj: ie})

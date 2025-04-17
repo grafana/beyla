@@ -55,32 +55,30 @@ type GPUMallocInfo bpfGpuMallocT
 // we need to figure out how to pass it to the SharedRingbuf.. not sure if that's
 // possible
 type Tracer struct {
-	pidsFilter       ebpfcommon.ServiceFilter
-	cfg              *beyla.Config
-	metrics          imetrics.Reporter
-	bpfObjects       bpfObjects
-	closers          []io.Closer
-	log              *slog.Logger
-	instrumentedLibs ebpfcommon.InstrumentedLibsT
-	libsMux          sync.Mutex
-	pidMap           map[pidKey]uint64
-	symbolsMap       map[uint64]moduleOffsets
-	baseMap          map[pidKey][]modInfo
+	pidsFilter ebpfcommon.ServiceFilter
+	cfg        *beyla.Config
+	metrics    imetrics.Reporter
+	bpfObjects bpfObjects
+	closers    []io.Closer
+	log        *slog.Logger
+	libsMux    sync.Mutex
+	pidMap     map[pidKey]uint64
+	symbolsMap map[uint64]moduleOffsets
+	baseMap    map[pidKey][]modInfo
 }
 
 func New(cfg *beyla.Config, metrics imetrics.Reporter) *Tracer {
 	log := slog.With("component", "gpuevent.Tracer")
 
 	return &Tracer{
-		log:              log,
-		cfg:              cfg,
-		metrics:          metrics,
-		pidsFilter:       ebpfcommon.CommonPIDsFilter(&cfg.Discovery),
-		instrumentedLibs: make(ebpfcommon.InstrumentedLibsT),
-		libsMux:          sync.Mutex{},
-		pidMap:           map[pidKey]uint64{},
-		symbolsMap:       map[uint64]moduleOffsets{},
-		baseMap:          map[pidKey][]modInfo{},
+		log:        log,
+		cfg:        cfg,
+		metrics:    metrics,
+		pidsFilter: ebpfcommon.CommonPIDsFilter(&cfg.Discovery),
+		libsMux:    sync.Mutex{},
+		pidMap:     map[pidKey]uint64{},
+		symbolsMap: map[uint64]moduleOffsets{},
+		baseMap:    map[pidKey][]modInfo{},
 	}
 }
 
@@ -117,7 +115,7 @@ func (p *Tracer) Constants() map[string]any {
 	return m
 }
 
-func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, _ *goexec.Offsets) {
+func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, _ *goexec.FieldOffsets) {
 	p.ProcessBinary(fileInfo)
 }
 
@@ -171,48 +169,6 @@ func (p *Tracer) SocketFilters() []*ebpf.Program {
 func (p *Tracer) SockMsgs() []ebpfcommon.SockMsg { return nil }
 
 func (p *Tracer) SockOps() []ebpfcommon.SockOps { return nil }
-
-func (p *Tracer) RecordInstrumentedLib(id uint64, closers []io.Closer) {
-	p.libsMux.Lock()
-	defer p.libsMux.Unlock()
-
-	module := p.instrumentedLibs.AddRef(id)
-
-	if len(closers) > 0 {
-		module.Closers = append(module.Closers, closers...)
-	}
-
-	p.log.Debug("Recorded instrumented Lib", "ino", id, "module", module)
-}
-
-func (p *Tracer) AddInstrumentedLibRef(id uint64) {
-	p.RecordInstrumentedLib(id, nil)
-}
-
-func (p *Tracer) UnlinkInstrumentedLib(id uint64) {
-	p.libsMux.Lock()
-	defer p.libsMux.Unlock()
-
-	delete(p.symbolsMap, id)
-
-	module, err := p.instrumentedLibs.RemoveRef(id)
-
-	p.log.Debug("Unlinking instrumented lib - before state", "ino", id, "module", module)
-
-	if err != nil {
-		p.log.Debug("Error unlinking instrumented lib", "ino", id, "error", err)
-	}
-}
-
-func (p *Tracer) AlreadyInstrumentedLib(id uint64) bool {
-	p.libsMux.Lock()
-	defer p.libsMux.Unlock()
-
-	module := p.instrumentedLibs.Find(id)
-
-	p.log.Debug("checking already instrumented Lib", "ino", id, "module", module)
-	return module != nil
-}
 
 func (p *Tracer) Run(ctx context.Context, eventsChan *msg.Queue[[]request.Span]) {
 	ebpfcommon.ForwardRingbuf(

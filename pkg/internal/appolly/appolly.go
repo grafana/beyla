@@ -92,6 +92,7 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 // selection criteria.
 // Returns a channel that is closed when the Instrumenter completed all its tasks.
 // This is: when the context is cancelled, it has unloaded all the eBPF probes.
+// nolint:cyclop
 func (i *Instrumenter) FindAndInstrument(ctx context.Context) error {
 	finder := discover.NewProcessFinder(i.config, i.ctxInfo, i.tracesInput)
 	processEvents, err := finder.Start(ctx)
@@ -123,9 +124,10 @@ func (i *Instrumenter) instrumentedEventLoop(ctx context.Context, processEvents 
 		case <-ctx.Done():
 			return
 		case ev := <-processEvents:
+			pt := ev.Obj
+
 			switch ev.Type {
 			case discover.EventCreated:
-				pt := ev.Obj
 				log.Debug("running tracer for new process",
 					"inode", pt.FileInfo.Ino, "pid", pt.FileInfo.Pid, "exec", pt.FileInfo.CmdExePath)
 				if pt.Tracer != nil {
@@ -136,16 +138,13 @@ func (i *Instrumenter) instrumentedEventLoop(ctx context.Context, processEvents 
 					}()
 				}
 				i.handleAndDispatchProcessEvent(exec.ProcessEvent{Type: exec.ProcessEventCreated, File: pt.FileInfo})
-			case discover.EventDeleted:
-				dp := ev.Obj
+			case discover.EventDeleted, discover.EventInstanceDeleted:
 				log.Debug("stopping ProcessTracer because there are no more instances of such process",
-					"inode", dp.FileInfo.Ino, "pid", dp.FileInfo.Pid, "exec", dp.FileInfo.CmdExePath)
-				if dp.Tracer != nil {
-					dp.Tracer.UnlinkExecutable(dp.FileInfo)
+					"inode", pt.FileInfo.Ino, "pid", pt.FileInfo.Pid, "exec", pt.FileInfo.CmdExePath)
+				if pt.Tracer != nil {
+					pt.Tracer.UnlinkExecutable(pt.FileInfo)
 				}
-				i.handleAndDispatchProcessEvent(exec.ProcessEvent{Type: exec.ProcessEventTerminated, File: dp.FileInfo})
-			case discover.EventInstanceDeleted:
-				i.handleAndDispatchProcessEvent(exec.ProcessEvent{Type: exec.ProcessEventTerminated, File: ev.Obj.FileInfo})
+				i.handleAndDispatchProcessEvent(exec.ProcessEvent{Type: exec.ProcessEventTerminated, File: pt.FileInfo})
 			default:
 				log.Error("BUG ALERT! unknown event type", "type", ev.Type)
 			}

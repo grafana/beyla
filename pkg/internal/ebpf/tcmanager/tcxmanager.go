@@ -11,6 +11,7 @@ import (
 	"github.com/cilium/ebpf/link"
 
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/ifaces"
+	"github.com/grafana/beyla/v2/pkg/internal/util"
 )
 
 type attachedProg struct {
@@ -154,8 +155,8 @@ func (tcx *tcxManager) removeProgramLocked(name string) {
 		}
 	}
 
-	apply(tcx.programs, closeProgs)
-	tcx.programs = removeIf(tcx.programs, func(prog *attachedProg) bool { return prog.name == name })
+	util.Apply(tcx.programs, closeProgs)
+	tcx.programs = util.RemoveIf(tcx.programs, func(prog *attachedProg) bool { return prog.name == name })
 }
 
 func (tcx *tcxManager) unlinkProgramLocked(name string) {
@@ -169,8 +170,8 @@ func (tcx *tcxManager) unlinkProgramLocked(name string) {
 		}
 	}
 
-	apply(tcx.links, closeLinks)
-	tcx.links = removeIf(tcx.links, func(link *ifaceLink) bool { return link.progName == name })
+	util.Apply(tcx.links, closeLinks)
+	tcx.links = util.RemoveIf(tcx.links, func(link *ifaceLink) bool { return link.progName == name })
 }
 
 func (tcx *tcxManager) attachProgramToIfaceLocked(prog *attachedProg, iface int) {
@@ -223,8 +224,8 @@ func (tcx *tcxManager) closeLinksLocked(iface *ifaces.Interface) {
 		}
 	}
 
-	apply(tcx.links, closeLinks)
-	tcx.links = removeIf(tcx.links, func(l *ifaceLink) bool { return l.iface == iface.Index })
+	util.Apply(tcx.links, closeLinks)
+	tcx.links = util.RemoveIf(tcx.links, func(l *ifaceLink) bool { return l.iface == iface.Index })
 }
 
 func (tcx *tcxManager) onIfaceManagerError(err error) {

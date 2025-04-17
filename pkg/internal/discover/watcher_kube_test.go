@@ -139,6 +139,13 @@ func TestWatcherKubeEnricherWithMatcher(t *testing.T) {
     k8s_pod_labels:
       instrument: "ebpf"
       lang: "go.*"
+  - name: pod-annotation-only
+    k8s_pod_annotations:
+      deploy.type: "canary"
+  - name: pod-multi-annotation-only
+    k8s_pod_annotations:
+      deploy.type: "prod"
+      version: "v\\d+"
 `), &pipeConfig))
 
 	swi.Add(CriteriaMatcherProvider(&pipeConfig, connectQueue, outputQueue))
@@ -199,6 +206,28 @@ func TestWatcherKubeEnricherWithMatcher(t *testing.T) {
 		assert.EqualValues(t, 43, m.Obj.Process.Pid)
 	})
 
+	t.Run("pod-annotation-only match", func(t *testing.T) {
+		newProcess(inputQueue, 44, []uint32{8080})
+		deployPod(fInformer, namespace, "annotationtest", "container-44", nil, map[string]string{"deploy.type": "canary"})
+		matches := testutil.ReadChannel(t, outputCh, timeout)
+		require.Len(t, matches, 1)
+		m := matches[0]
+		assert.Equal(t, EventCreated, m.Type)
+		assert.Equal(t, "pod-annotation-only", m.Obj.Criteria.Name)
+		assert.EqualValues(t, 44, m.Obj.Process.Pid)
+	})
+
+	t.Run("pod-multi-annotation-only match", func(t *testing.T) {
+		newProcess(inputQueue, 45, []uint32{8080})
+		deployPod(fInformer, namespace, "multi-annotationtest", "container-45", nil, map[string]string{"deploy.type": "prod", "version": "v1"})
+		matches := testutil.ReadChannel(t, outputCh, timeout)
+		require.Len(t, matches, 1)
+		m := matches[0]
+		assert.Equal(t, EventCreated, m.Type)
+		assert.Equal(t, "pod-multi-annotation-only", m.Obj.Criteria.Name)
+		assert.EqualValues(t, 45, m.Obj.Process.Pid)
+	})
+
 	t.Run("both process and metadata match", func(t *testing.T) {
 		newProcess(inputQueue, 56, []uint32{443})
 		deployOwnedPod(fInformer, namespace, "chacha-rsid-podid", "chacha-rsid", "chacha", "container-56")
@@ -218,17 +247,29 @@ func TestWatcherKubeEnricherWithMatcher(t *testing.T) {
 			{Type: EventDeleted, Obj: processAttrs{pid: 1011}},
 			{Type: EventDeleted, Obj: processAttrs{pid: 12}},
 			{Type: EventDeleted, Obj: processAttrs{pid: 34}},
+			{Type: EventDeleted, Obj: processAttrs{pid: 42}},
+			{Type: EventDeleted, Obj: processAttrs{pid: 43}},
+			{Type: EventDeleted, Obj: processAttrs{pid: 44}},
+			{Type: EventDeleted, Obj: processAttrs{pid: 45}},
 			{Type: EventDeleted, Obj: processAttrs{pid: 56}},
 		})
 		// only forwards the deletion of the processes that were already matched
 		matches := testutil.ReadChannel(t, outputCh, timeout)
-		require.Len(t, matches, 3)
+		require.Len(t, matches, 7)
 		assert.Equal(t, EventDeleted, matches[0].Type)
 		assert.EqualValues(t, 12, matches[0].Obj.Process.Pid)
 		assert.Equal(t, EventDeleted, matches[1].Type)
 		assert.EqualValues(t, 34, matches[1].Obj.Process.Pid)
 		assert.Equal(t, EventDeleted, matches[2].Type)
-		assert.EqualValues(t, 56, matches[2].Obj.Process.Pid)
+		assert.EqualValues(t, 42, matches[2].Obj.Process.Pid)
+		assert.Equal(t, EventDeleted, matches[3].Type)
+		assert.EqualValues(t, 43, matches[3].Obj.Process.Pid)
+		assert.Equal(t, EventDeleted, matches[4].Type)
+		assert.EqualValues(t, 44, matches[4].Obj.Process.Pid)
+		assert.Equal(t, EventDeleted, matches[5].Type)
+		assert.EqualValues(t, 45, matches[5].Obj.Process.Pid)
+		assert.Equal(t, EventDeleted, matches[6].Type)
+		assert.EqualValues(t, 56, matches[6].Obj.Process.Pid)
 	})
 }
 
@@ -239,11 +280,15 @@ func newProcess(input *msg.Queue[[]Event[processAttrs]], pid PID, ports []uint32
 	}})
 }
 
-func deployPod(fInformer meta.Notifier, ns, name, containerID string, labels map[string]string) {
+func deployPod(fInformer meta.Notifier, ns, name, containerID string, labels map[string]string, annotations ...map[string]string) {
+	var podAnnotations map[string]string
+	if len(annotations) > 0 {
+		podAnnotations = annotations[0]
+	}
 	fInformer.Notify(&informer.Event{
 		Type: informer.EventType_CREATED,
 		Resource: &informer.ObjectMeta{
-			Name: name, Namespace: ns, Labels: labels,
+			Name: name, Namespace: ns, Labels: labels, Annotations: podAnnotations,
 			Kind: "Pod",
 			Pod: &informer.PodInfo{
 				Containers: []*informer.ContainerInfo{{Id: containerID}},

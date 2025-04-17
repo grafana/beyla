@@ -84,11 +84,22 @@ func TestBasicPipeline(t *testing.T) {
 
 	go pipe.Run(ctx)
 
-	event := testutil.ReadChannel(t, tc.Records(), testTimeout)
-	assert.NotEmpty(t, event.ResourceAttributes, string(semconv.ServiceInstanceIDKey))
-	delete(event.ResourceAttributes, string(semconv.ServiceInstanceIDKey))
-	assert.NotEmpty(t, event.ResourceAttributes, string(semconv.TelemetrySDKVersionKey))
-	delete(event.ResourceAttributes, string(semconv.TelemetrySDKVersionKey))
+	start := time.Now()
+	var event collector.MetricRecord
+	for {
+		event = testutil.ReadChannel(t, tc.Records(), testTimeout)
+		assert.NotEmpty(t, event.ResourceAttributes, string(semconv.ServiceInstanceIDKey))
+		delete(event.ResourceAttributes, string(semconv.ServiceInstanceIDKey))
+		assert.NotEmpty(t, event.ResourceAttributes, string(semconv.TelemetrySDKVersionKey))
+		delete(event.ResourceAttributes, string(semconv.TelemetrySDKVersionKey))
+		if event.Name == "http.server.request.duration" {
+			break
+		}
+		t.Logf("skipping event %s", event.Name)
+		if time.Since(start) > testTimeout {
+			t.Fatalf("timeout waiting for request.duration event")
+		}
+	}
 
 	assert.Equal(t, collector.MetricRecord{
 		Name: "http.server.request.duration",
@@ -217,6 +228,7 @@ func TestRouteConsolidation(t *testing.T) {
 	tracesInput := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
 	gb := newGraphBuilder(&beyla.Config{
 		Metrics: otel.MetricsConfig{
+			SDKLogLevel:     "debug",
 			Features:        []string{otel.FeatureApplication},
 			MetricsEndpoint: tc.ServerEndpoint, Interval: 10 * time.Millisecond,
 			ReportersCacheLen: 16,
@@ -237,11 +249,19 @@ func TestRouteConsolidation(t *testing.T) {
 
 	go pipe.Run(ctx)
 
+	start := time.Now()
 	// expect to receive 3 events without any guaranteed order
 	events := map[string]collector.MetricRecord{}
-	for i := 0; i < 3; i++ {
+	for len(events) < 3 {
 		ev := testutil.ReadChannel(t, tc.Records(), testTimeout)
-		events[ev.Attributes[string(semconv.HTTPRouteKey)]] = ev
+		if ev.Name == "http.server.request.duration" {
+			events[ev.Attributes[string(semconv.HTTPRouteKey)]] = ev
+		} else {
+			t.Logf("skipping event %s", ev.Name)
+		}
+		if time.Since(start) > testTimeout {
+			t.Fatalf("timeout waiting for request.duration event")
+		}
 	}
 	for _, event := range events {
 		assert.NotEmpty(t, event.ResourceAttributes, string(semconv.ServiceInstanceIDKey))

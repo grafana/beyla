@@ -6,7 +6,6 @@ import (
 	"context"
 	"io"
 	"log/slog"
-	"sync"
 	"time"
 	"unsafe"
 
@@ -30,9 +29,6 @@ import (
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_tp ../../../../bpf/generictracer/generictracer.c -- -I../../../../bpf -DBPF_TRACEPARENT
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../../bpf/generictracer/generictracer.c -- -I../../../../bpf -DBPF_DEBUG
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_tp_debug ../../../../bpf/generictracer/generictracer.c -- -I../../../../bpf -DBPF_DEBUG -DBPF_TRACEPARENT
-
-var instrumentedLibs = make(ebpfcommon.InstrumentedLibsT)
-var libsMux sync.Mutex
 
 type Tracer struct {
 	pidsFilter     ebpfcommon.ServiceFilter
@@ -227,7 +223,7 @@ func (p *Tracer) Constants() map[string]any {
 	return m
 }
 
-func (p *Tracer) RegisterOffsets(_ *exec.FileInfo, _ *goexec.Offsets) {}
+func (p *Tracer) RegisterOffsets(_ *exec.FileInfo, _ *goexec.FieldOffsets) {}
 
 func (p *Tracer) ProcessBinary(_ *exec.FileInfo) {}
 
@@ -401,46 +397,6 @@ func (p *Tracer) SocketFilters() []*ebpf.Program {
 func (p *Tracer) SockMsgs() []ebpfcommon.SockMsg { return nil }
 
 func (p *Tracer) SockOps() []ebpfcommon.SockOps { return nil }
-
-func (p *Tracer) RecordInstrumentedLib(id uint64, closers []io.Closer) {
-	libsMux.Lock()
-	defer libsMux.Unlock()
-
-	module := instrumentedLibs.AddRef(id)
-
-	if len(closers) > 0 {
-		module.Closers = append(module.Closers, closers...)
-	}
-
-	p.log.Debug("Recorded instrumented Lib", "ino", id, "module", module)
-}
-
-func (p *Tracer) AddInstrumentedLibRef(id uint64) {
-	p.RecordInstrumentedLib(id, nil)
-}
-
-func (p *Tracer) UnlinkInstrumentedLib(id uint64) {
-	libsMux.Lock()
-	defer libsMux.Unlock()
-
-	module, err := instrumentedLibs.RemoveRef(id)
-
-	p.log.Debug("Unlinking instrumented lib - before state", "ino", id, "module", module)
-
-	if err != nil {
-		p.log.Debug("Error unlinking instrumented lib", "ino", id, "error", err)
-	}
-}
-
-func (p *Tracer) AlreadyInstrumentedLib(id uint64) bool {
-	libsMux.Lock()
-	defer libsMux.Unlock()
-
-	module := instrumentedLibs.Find(id)
-
-	p.log.Debug("checking already instrumented Lib", "ino", id, "module", module)
-	return module != nil
-}
 
 func (p *Tracer) Run(ctx context.Context, eventsChan *msg.Queue[[]request.Span]) {
 	// At this point we now have loaded the bpf objects, which means we should insert any

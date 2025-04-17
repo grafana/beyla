@@ -1,15 +1,13 @@
 package exec
 
 import (
-	"debug/elf"
-	"errors"
 	"fmt"
 	"os"
 
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
 )
 
-func FindProcLanguage(pid int32, elfF *elf.File, path string) svc.InstrumentableType {
+func FindProcLanguage(pid int32, elfF *os.File, path string) svc.InstrumentableType {
 	maps, err := FindLibMaps(pid)
 
 	if err != nil {
@@ -25,11 +23,13 @@ func FindProcLanguage(pid int32, elfF *elf.File, path string) svc.Instrumentable
 
 	if elfF == nil {
 		pidPath := fmt.Sprintf("/proc/%d/exe", pid)
-		elfF, err = elf.Open(pidPath)
+		elfF, err = os.Open(pidPath)
 
 		if err != nil || elfF == nil {
 			return svc.InstrumentableGeneric
 		}
+
+		defer elfF.Close()
 	}
 
 	t := findLanguageFromElf(elfF)
@@ -49,104 +49,55 @@ func FindProcLanguage(pid int32, elfF *elf.File, path string) svc.Instrumentable
 	return instrumentableFromEnviron(string(bytes))
 }
 
-func findLanguageFromElf(elfF *elf.File) svc.InstrumentableType {
-	gosyms := elfF.Section(".gosymtab")
+func findLanguageFromElf(elfF *os.File) svc.InstrumentableType {
+	info, err := elfF.Stat()
 
-	if gosyms != nil {
+	if err != nil {
+		return svc.InstrumentableGeneric
+	}
+
+	ctx, err := NewElfContext(elfF, info.Size())
+
+	if err != nil {
+		return svc.InstrumentableGeneric
+	}
+
+	defer ctx.Close()
+
+	if ctx.HasSection(".gopclntab") {
 		return svc.InstrumentableGolang
 	}
 
-	return matchExeSymbols(elfF)
+	return matchExeSymbols(ctx)
 }
 
-func contains(slice []string, value string) bool {
-	for _, v := range slice {
-		if v == value {
-			return true
-		}
-	}
-
-	return false
-}
-
-func collectSymbols(f *elf.File, syms []elf.Symbol, addresses map[string]Sym, symbolNames []string) {
-	for _, s := range syms {
-		if elf.ST_TYPE(s.Info) != elf.STT_FUNC {
-			// Symbol not associated with a function or other executable code.
+func matchExeSymbols(ctx *ElfContext) svc.InstrumentableType {
+	for _, sec := range ctx.Sections {
+		if sec.Type != SHT_SYMTAB && sec.Type != SHT_DYNSYM {
 			continue
 		}
-		if !contains(symbolNames, s.Name) {
-			continue
-		}
-		address := s.Value
-		var p *elf.Prog
 
-		// Loop over ELF segments.
-		for _, prog := range f.Progs {
-			// Skip uninteresting segments.
-			if prog.Type != elf.PT_LOAD || (prog.Flags&elf.PF_X) == 0 {
+		strtab := ctx.Sections[sec.Link]
+		strs := ctx.Data[strtab.Offset:]
+
+		symCount := int(sec.Size / sec.Entsize)
+
+		for i := 0; i < symCount; i++ {
+			sym := ReadStruct[Elf64_Sym](ctx.Data, int(sec.Offset)+i*int(sec.Entsize))
+
+			if sym == nil || SymType(sym.Info) != STT_FUNC || sym.Size == 0 || sym.Value == 0 {
 				continue
 			}
 
-			if prog.Vaddr <= s.Value && s.Value < (prog.Vaddr+prog.Memsz) {
-				address = s.Value - prog.Vaddr + prog.Off
-				p = prog
-				break
+			name := GetCStringUnsafe(strs, sym.Name)
+
+			t := instrumentableFromSymbolName(name)
+
+			if t != svc.InstrumentableGeneric {
+				return t
 			}
-		}
-		addresses[s.Name] = Sym{Off: address, Len: s.Size, Prog: p}
-	}
-}
-
-func FindExeSymbols(f *elf.File, symbolNames []string) (map[string]Sym, error) {
-	addresses := map[string]Sym{}
-	syms, err := f.Symbols()
-	if err != nil && !errors.Is(err, elf.ErrNoSymbols) {
-		return nil, err
-	}
-
-	collectSymbols(f, syms, addresses, symbolNames)
-
-	dynsyms, err := f.DynamicSymbols()
-	if err != nil && !errors.Is(err, elf.ErrNoSymbols) {
-		return nil, err
-	}
-
-	collectSymbols(f, dynsyms, addresses, symbolNames)
-
-	return addresses, nil
-}
-
-func matchSymbols(syms []elf.Symbol) svc.InstrumentableType {
-	for _, s := range syms {
-		if elf.ST_TYPE(s.Info) != elf.STT_FUNC {
-			// Symbol not associated with a function or other executable code.
-			continue
-		}
-		t := instrumentableFromSymbolName(s.Name)
-		if t != svc.InstrumentableGeneric {
-			return t
 		}
 	}
 
 	return svc.InstrumentableGeneric
-}
-
-func matchExeSymbols(f *elf.File) svc.InstrumentableType {
-	syms, err := f.Symbols()
-	if err != nil && !errors.Is(err, elf.ErrNoSymbols) {
-		return svc.InstrumentableGeneric
-	}
-
-	t := matchSymbols(syms)
-	if t != svc.InstrumentableGeneric {
-		return t
-	}
-
-	dynsyms, err := f.DynamicSymbols()
-	if err != nil && !errors.Is(err, elf.ErrNoSymbols) {
-		return svc.InstrumentableGeneric
-	}
-
-	return matchSymbols(dynsyms)
 }

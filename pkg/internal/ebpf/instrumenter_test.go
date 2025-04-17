@@ -3,17 +3,13 @@
 package ebpf
 
 import (
-	"bytes"
-	"debug/elf"
-	"log/slog"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
 	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
 )
-
-type probeDescMap map[string][]*ebpfcommon.ProbeDesc
 
 type testCase struct {
 	startOffset   uint64
@@ -30,10 +26,28 @@ func makeProbeDescMap(cases map[string]testCase) probeDescMap {
 	return m
 }
 
-func TestGatherOffsets(t *testing.T) {
-	reader := bytes.NewReader(libbsd_so_0_12_2)
-	assert.NotNil(t, reader)
+func writeTempFile(data []byte) (name string, cleanup func(), err error) {
+	tmpFile, err := os.CreateTemp("", "tempdata-*.bin")
 
+	if err != nil {
+		return "", nil, err
+	}
+
+	if _, err := tmpFile.Write(data); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpFile.Name())
+		return "", nil, err
+	}
+
+	cleanup = func() {
+		tmpFile.Close()
+		os.Remove(tmpFile.Name())
+	}
+
+	return tmpFile.Name(), cleanup, nil
+}
+
+func TestGatherOffsets(t *testing.T) {
 	testCases := map[string]testCase{
 		"setprogname": {
 			startOffset:   0x9c10,
@@ -59,11 +73,14 @@ func TestGatherOffsets(t *testing.T) {
 
 	probes := makeProbeDescMap(testCases)
 
-	elfFile, err := elf.NewFile(reader)
-	assert.NoError(t, err)
-	defer elfFile.Close()
+	filePath, cleanup, err := writeTempFile(libbsd_so_0_12_2)
 
-	err = gatherOffsetsImpl(elfFile, probes, "libbsd.so", slog.Default())
+	assert.NoError(t, err)
+
+	defer cleanup()
+
+	err = resolveUProbeOffsets(filePath, probes)
+
 	assert.NoError(t, err)
 
 	for probeName, probeArr := range probes {

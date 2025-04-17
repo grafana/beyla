@@ -24,7 +24,6 @@ type Instrumentable struct {
 	ChildPids []uint32
 
 	FileInfo *exec.FileInfo
-	Offsets  *goexec.Offsets
 	Tracer   *ProcessTracer
 }
 
@@ -84,16 +83,7 @@ type Tracer interface {
 	// SockOps returns a list of programs that need to be loaded as a
 	// BPF_PROG_TYPE_SOCK_OPS eBPF programs
 	SockOps() []ebpfcommon.SockOps
-	// Probes can potentially instrument a shared library among multiple executables
-	// These two functions alow programs to remember this and avoid duplicated instrumentations
-	// The argument is the OS file id
-	// Closers are the associated closable resources to this lib, that may be
-	// closed when UnlinkInstrumentedLib() is called
-	RecordInstrumentedLib(uint64, []io.Closer)
-	AddInstrumentedLibRef(uint64)
-	AlreadyInstrumentedLib(uint64) bool
-	UnlinkInstrumentedLib(uint64)
-	RegisterOffsets(*exec.FileInfo, *goexec.Offsets)
+	RegisterOffsets(*exec.FileInfo, *goexec.FieldOffsets)
 	ProcessBinary(*exec.FileInfo)
 	// Run will do the action of listening for eBPF traces and forward them
 	// periodically to the output channel.
@@ -112,6 +102,7 @@ type ProcessTracerType int
 const (
 	Go = ProcessTracerType(iota)
 	Generic
+	Unknown
 )
 
 // ProcessTracer instruments an executable with eBPF and provides the eBPF readers
@@ -126,6 +117,7 @@ type ProcessTracer struct {
 	SystemWide      bool
 	Type            ProcessTracerType
 	Instrumentables map[uint64]*instrumenter
+	Bins            ebpfcommon.InstrumentedBins
 }
 
 func (pt *ProcessTracer) AllowPID(pid, ns uint32, svc *svc.Attrs) {

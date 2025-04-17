@@ -18,10 +18,13 @@ type FileInfo struct {
 
 	CmdExePath     string
 	ProExeLinkPath string
-	ELF            *elf.File
+	ELF            *elf.File // TODO REMOVE
+	File           *os.File
 	Pid            int32
 	Ppid           int32
+	Dev            uint64
 	Ino            uint64
+	Size           int64
 	Ns             uint32
 }
 
@@ -56,13 +59,19 @@ func FindExecELF(p *services.ProcessInfo, svcID svc.Attrs, k8sEnabled bool) (*Fi
 		return nil, fmt.Errorf("can't open ELF file in %s: %w", file.ProExeLinkPath, err)
 	}
 
+	if file.File, err = os.Open(file.ProExeLinkPath); err != nil {
+		return nil, fmt.Errorf("can't open ELF file in %s: %w", file.ProExeLinkPath, err)
+	}
+
 	info, err := os.Stat(file.ProExeLinkPath)
 	if err == nil {
 		stat, ok := info.Sys().(*syscall.Stat_t)
 		if !ok {
 			return nil, fmt.Errorf("couldn't cast stat into syscall.Stat_t for %s", file.ProExeLinkPath)
 		}
+		file.Dev = stat.Dev
 		file.Ino = stat.Ino
+		file.Size = stat.Size
 	} else {
 		return nil, err
 	}

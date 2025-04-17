@@ -114,8 +114,6 @@ type Store struct {
 
 type CachedObjMeta struct {
 	Meta             *informer.ObjectMeta
-	ServiceName      string
-	ServiceNamespace string
 	OTELResourceMeta map[attr.Name]string
 }
 
@@ -186,7 +184,7 @@ func (s *Store) cacheResourceMetadata(meta *informer.ObjectMeta) *CachedObjMeta 
 			com.OTELResourceMeta[serviceNamespaceKey] = val
 		}
 	}
-	com.ServiceName, com.ServiceNamespace = s.serviceNameNamespaceForMetadata(meta, "")
+
 	return &com
 }
 

@@ -435,7 +435,7 @@ func (s *Store) serviceNameNamespaceOwnerID(om *informer.ObjectMeta, ownerName s
 
 	// OTEL_SERVICE_NAME and OTEL_SERVICE_NAMESPACE variables take precedence over user-configured annotations
 	// and labels
-	if envName, ok := s.serviceNameFromEnv(ownerKey); ok {
+	if envName, ok := s.serviceNameFromEnv(ownerKey, containerName); ok {
 		serviceName = envName
 	} else if s.serviceNameTemplate != nil {
 		// defining a serviceNameTemplate disables the resolution via annotation + label (this can be implemented in the template)
@@ -466,7 +466,7 @@ func (s *Store) serviceNameNamespaceOwnerID(om *informer.ObjectMeta, ownerName s
 	); nameFromMeta != "" {
 		serviceName = nameFromMeta
 	}
-	if envName, ok := s.serviceNamespaceFromEnv(ownerKey); ok {
+	if envName, ok := s.serviceNamespaceFromEnv(ownerKey, containerName); ok {
 		serviceNamespace = envName
 	} else if nsFromMeta := s.valueFromMetadata(om,
 		ServiceNamespaceAnnotation,
@@ -497,26 +497,30 @@ func isValidServiceName(name string) bool {
 	return name != "" && !strings.HasPrefix(name, "$(")
 }
 
-func (s *Store) serviceNameFromEnv(ownerKey string) (string, bool) {
+func (s *Store) serviceNameFromEnv(ownerKey string, containerName string) (string, bool) {
 	if containers, ok := s.containersByOwner[ownerKey]; ok {
 		for _, c := range containers {
-			if serviceName, ok := c.Env[meta.EnvServiceName]; ok {
-				return serviceName, isValidServiceName(serviceName)
-			}
+			if c.Name == containerName {
+				if serviceName, ok := c.Env[meta.EnvServiceName]; ok {
+					return serviceName, isValidServiceName(serviceName)
+				}
 
-			if serviceName, ok := s.nameFromResourceAttrs(serviceNameKey, c); ok {
-				return serviceName, isValidServiceName(serviceName)
+				if serviceName, ok := s.nameFromResourceAttrs(serviceNameKey, c); ok {
+					return serviceName, isValidServiceName(serviceName)
+				}
 			}
 		}
 	}
 	return "", false
 }
 
-func (s *Store) serviceNamespaceFromEnv(ownerKey string) (string, bool) {
+func (s *Store) serviceNamespaceFromEnv(ownerKey string, containerName string) (string, bool) {
 	if containers, ok := s.containersByOwner[ownerKey]; ok {
 		for _, c := range containers {
-			if namespace, ok := s.nameFromResourceAttrs(serviceNamespaceKey, c); ok {
-				return namespace, isValidServiceName(namespace)
+			if c.Name == containerName {
+				if namespace, ok := s.nameFromResourceAttrs(serviceNamespaceKey, c); ok {
+					return namespace, isValidServiceName(namespace)
+				}
 			}
 		}
 	}

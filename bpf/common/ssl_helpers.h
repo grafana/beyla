@@ -14,6 +14,19 @@
 #include <maps/ssl_to_conn.h>
 
 static __always_inline void set_active_ssl_connection(pid_connection_info_t *conn, void *ssl) {
+    void **other_ssl = bpf_map_lookup_elem(&active_ssl_connections, conn);
+
+    // Sometimes a single thread can work with multiple SSL connections, if
+    // we are trying to associate the same connection with multiple SSLs, we detect that
+    // to avoid conflicting the requests.
+    if (other_ssl) {
+        if (*other_ssl != ssl) {
+            bpf_dbg_printk(
+                "Found different correlated SSL[%llx] to this connection, not correlating",
+                *other_ssl);
+            return;
+        }
+    }
 
     bpf_dbg_printk("Correlating SSL %llx to connection", ssl);
     dbg_print_http_connection_info(&conn->conn);

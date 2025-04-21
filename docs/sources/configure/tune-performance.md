@@ -49,7 +49,7 @@ An empty or unset value defaults to `auto`.
 Configures the time interval after which an HTTP request is considered as a timeout.
 This option allows Beyla to report HTTP transactions which timeout and never return.
 To enable the automatic HTTP request timeout feature, set this option to a non-zero
-value. When a request is automatically timed out, Beyla will report the HTTP status
+value. When a request is automatically timed out, Beyla reports the HTTP status
 code of 408. Disconnects can be misinterpreted as timeouts, therefore, setting this
 value may incorrectly increase your request averages.
 

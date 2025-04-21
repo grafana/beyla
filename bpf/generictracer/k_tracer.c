@@ -496,6 +496,7 @@ int BPF_KPROBE(beyla_kprobe_tcp_close, struct sock *sk, long timeout) {
         sort_connection_info(&info.conn);
         //dbg_print_http_connection_info(&info.conn);
         info.pid = pid_from_pid_tgid(id);
+        terminate_http_request_if_needed(&info);
         bpf_map_delete_elem(&ongoing_tcp_req, &info);
         delete_backup_sk_buff(&info.conn);
     }

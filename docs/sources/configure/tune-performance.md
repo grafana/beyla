@@ -44,12 +44,14 @@ An empty or unset value defaults to `auto`.
 
 | YAML                    | Environment variable               | Type    | Default |
 | ----------------------- | ---------------------------------- | ------- | ------- |
-| `http_request_timeout`  | `BEYLA_BPF_HTTP_REQUEST_TIMEOUT`   | string  | (30s)   |
+| `http_request_timeout`  | `BEYLA_BPF_HTTP_REQUEST_TIMEOUT`   | string  | (0ms)   |
 
 Configures the time interval after which an HTTP request is considered as a timeout.
 This option allows Beyla to report HTTP transactions which timeout and never return.
-To disable the automatic HTTP request timeout feature, set this option to zero,
-that is "0ms".
+To enable the automatic HTTP request timeout feature, set this option to a non-zero
+value. When a request is automatically timed out, Beyla will report the HTTP status
+code of 408. Disconnects can be misinterpreted as timeouts, therefore, setting this
+value may incorrectly increase your request averages.
 
 | YAML                    | Environment variable               | Type     | Default |
 | ----------------------- | ---------------------------------- | -------- | ------- |

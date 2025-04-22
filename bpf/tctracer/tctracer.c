@@ -17,9 +17,11 @@
 
 #include <tctracer/tc_ip.h>
 
-static const u64 BPF_F_CURRENT_NETNS = -1;
+// Do not change this into u64 const, the API doesn't work if
+// we pass in anything other than -1 explicitly.
+#define BPF_F_CURRENT_NETNS (-1)
 
-enum protocol : u8 { protocol_ip4, protocol_ip6, protocol_unknown };
+enum protocol { protocol_ip4, protocol_ip6, protocol_unknown };
 
 char __license[] SEC("license") = "Dual MIT/GPL";
 

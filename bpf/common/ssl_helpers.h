@@ -14,7 +14,6 @@
 #include <maps/ssl_to_conn.h>
 
 static __always_inline void set_active_ssl_connection(pid_connection_info_t *conn, void *ssl) {
-
     bpf_dbg_printk("Correlating SSL %llx to connection", ssl);
     dbg_print_http_connection_info(&conn->conn);
 

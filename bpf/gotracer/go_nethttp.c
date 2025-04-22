@@ -313,7 +313,7 @@ int beyla_uprobe_ServeHTTPReturns(struct pt_regs *ctx) {
         }
         if (!invocation) {
             bpf_dbg_printk("can't read http invocation metadata");
-            return 0;
+            goto done;
         }
     }
 

@@ -198,6 +198,14 @@ func (m *matcher) matchByAttributes(actual *processAttrs, required *services.Att
 			return false
 		}
 	}
+
+	// match pod annotations
+	for annotationName, criteriaRegexp := range required.PodAnnotations {
+		if actualPodAnnotationValue, ok := actual.podAnnotations[annotationName]; !ok || !criteriaRegexp.MatchString(actualPodAnnotationValue) {
+			log.Debug("pod annotation does not match", "annotation", annotationName, "value", actualPodAnnotationValue)
+			return false
+		}
+	}
 	return true
 }
 
@@ -228,7 +236,7 @@ func FindingCriteria(cfg *beyla.Config) services.DefinitionCriteria {
 	// any executable in the matched k8s entities
 	for i := range finderCriteria {
 		fc := &finderCriteria[i]
-		if !fc.Path.IsSet() && fc.OpenPorts.Len() == 0 && (len(fc.Metadata) > 0 || len(fc.PodLabels) > 0) {
+		if !fc.Path.IsSet() && fc.OpenPorts.Len() == 0 && (len(fc.Metadata) > 0 || len(fc.PodLabels) > 0 || len(fc.PodAnnotations) > 0) {
 			// match any executable path
 			if err := fc.Path.UnmarshalText([]byte(".")); err != nil {
 				panic("bug! " + err.Error())

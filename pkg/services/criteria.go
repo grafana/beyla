@@ -89,7 +89,8 @@ func (dc DefinitionCriteria) Validate() error {
 			!dc[i].Path.IsSet() &&
 			!dc[i].PathRegexp.IsSet() &&
 			len(dc[i].Metadata) == 0 &&
-			len(dc[i].PodLabels) == 0 {
+			len(dc[i].PodLabels) == 0 &&
+			len(dc[i].PodAnnotations) == 0 {
 			return fmt.Errorf("discovery.services[%d] should define at least one selection criteria", i)
 		}
 		for k := range dc[i].Metadata {
@@ -133,6 +134,9 @@ type Attributes struct {
 
 	// PodLabels allows matching against the labels of a pod
 	PodLabels map[string]*RegexpAttr `yaml:"k8s_pod_labels"`
+
+	// PodAnnotations allows matching against the annotations of a pod
+	PodAnnotations map[string]*RegexpAttr `yaml:"k8s_pod_annotations"`
 }
 
 // PortEnum defines an enumeration of ports. It allows defining a set of single ports as well a set of

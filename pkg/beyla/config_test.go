@@ -123,7 +123,7 @@ network:
 		EBPF: config.EBPFTracer{
 			BatchLength:               100,
 			BatchTimeout:              time.Second,
-			HTTPRequestTimeout:        30 * time.Second,
+			HTTPRequestTimeout:        0,
 			TCBackend:                 tcmanager.TCBackendAuto,
 			ContextPropagationEnabled: false,
 			ContextPropagation:        config.ContextPropagationDisabled,

@@ -218,6 +218,14 @@ static __always_inline u8 http_info_complete(http_info_t *info) {
     return (info->start_monotime_ns != 0 && info->status != 0 && info->pid.host_pid != 0);
 }
 
+static __always_inline void force_complete_http(http_info_t *info) {
+    info->end_monotime_ns = bpf_ktime_get_ns();
+    info->status = 400;
+    if (info->pid.host_pid == 0) {
+        task_pid(&info->pid);
+    }
+}
+
 static __always_inline u8 http_will_complete(http_info_t *info, unsigned char *buf, u32 len) {
     if (info->start_monotime_ns != 0) {
         u8 packet_type;
@@ -292,6 +300,17 @@ static __always_inline void finish_possible_delayed_http_request(pid_connection_
     }
     http_info_t *info = bpf_map_lookup_elem(&ongoing_http, pid_conn);
     if (info && info->delayed) {
+        finish_http(info, pid_conn);
+    }
+}
+
+static __always_inline void terminate_http_request_if_needed(pid_connection_info_t *pid_conn) {
+    http_info_t *info = bpf_map_lookup_elem(&ongoing_http, pid_conn);
+    if (info) {
+        if (!http_info_complete(info)) {
+            bpf_dbg_printk("Force completing a request on cancelled connection");
+            force_complete_http(info);
+        }
         finish_http(info, pid_conn);
     }
 }

@@ -37,6 +37,9 @@ func TestURLClustering(t *testing.T) {
 			assert.Equal(t, "/products/", ClusterPath("/products/", tc))
 			assert.Equal(t, "/user-space/", ClusterPath("/user-space/", tc))
 			assert.Equal(t, "/user_space/", ClusterPath("/user_space/", tc))
+			assert.Equal(t, "/api/hello.world", ClusterPath("/api/hello.world", tc))
+			assert.Equal(t, "/api/hello.world.again", ClusterPath("/api/hello.world.again", tc))
+			assert.Equal(t, "/api.backup/hello.world", ClusterPath("/api.backup/hello.world", tc))
 		})
 	}
 }

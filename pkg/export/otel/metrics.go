@@ -381,8 +381,8 @@ func newMetricsReporter(
 			llog.Debug("evicting metrics reporter from cache")
 			v.value.cleanupAllMetricsInstances()
 
-			mr.deleteTargetInfo(v.value)
 			mr.deleteTracesTargetInfo(v.value)
+			mr.deleteTargetInfo(v.value)
 
 			go func() {
 				if err := v.value.provider.ForceFlush(ctx); err != nil {
@@ -1106,8 +1106,8 @@ func (mr *MetricsReporter) watchForProcessEvents() {
 			mr.createTargetInfo(reporter)
 			mr.createTracesTargetInfo(reporter)
 		} else {
-			mr.deleteTargetInfo(reporter)
 			mr.deleteTracesTargetInfo(reporter)
+			mr.deleteTargetInfo(reporter)
 		}
 	}
 }

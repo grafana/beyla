@@ -88,6 +88,8 @@ func getResourceAttrs(hostID string, service *svc.Attrs) []attribute.KeyValue {
 		semconv.TelemetrySDKVersion(buildinfo.Version),
 		semconv.HostName(service.HostName),
 		semconv.HostID(hostID),
+		semconv.ProcessPID(int(service.ProcPID)),
+		semconv.OSTypeKey.String("linux"),
 	}
 
 	if service.UID.Namespace != "" {

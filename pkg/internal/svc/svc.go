@@ -60,6 +60,7 @@ type UID struct {
 	Name      string
 	Namespace string
 	Instance  string
+	Pid       int32
 }
 
 // Attrs stores the metadata attributes of a service/resource

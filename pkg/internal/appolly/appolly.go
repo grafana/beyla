@@ -12,10 +12,13 @@ import (
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/internal/discover"
+	"github.com/grafana/beyla/v2/pkg/internal/exec"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/pipe/msg"
+	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
+	"github.com/grafana/beyla/v2/pkg/transform"
 )
 
 var errShutdownTimeout = errors.New("graceful shutdown has timed out")
@@ -34,7 +37,9 @@ type Instrumenter struct {
 
 	// tracesInput is used to communicate the found traces between the ProcessFinder and
 	// the ProcessTracer.
-	tracesInput *msg.Queue[[]request.Span]
+	tracesInput       *msg.Queue[[]request.Span]
+	processEventInput *msg.Queue[exec.ProcessEvent]
+	peK8SDecorator    swarm.InstanceFunc
 }
 
 // New Instrumenter, given a Config
@@ -42,18 +47,27 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 	setupFeatureContextInfo(ctx, ctxInfo, config)
 
 	tracesInput := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(config.ChannelBufferLen))
+	processEventsInput := msg.NewQueue[exec.ProcessEvent](msg.ChannelBufferLen(10))
+	processEventsOutput := msg.NewQueue[exec.ProcessEvent](msg.ChannelBufferLen(10))
 
-	bp, err := pipe.Build(ctx, config, ctxInfo, tracesInput)
+	peK8SDecorator := transform.ProcessEventDecoratorProvider(
+		ctxInfo, &config.Attributes.Kubernetes, &config.Attributes.InstanceID,
+		processEventsInput, processEventsOutput,
+	)
+
+	bp, err := pipe.Build(ctx, config, ctxInfo, tracesInput, processEventsOutput)
 	if err != nil {
 		return nil, fmt.Errorf("can't instantiate instrumentation pipeline: %w", err)
 	}
 
 	return &Instrumenter{
-		config:      config,
-		ctxInfo:     ctxInfo,
-		tracersWg:   &sync.WaitGroup{},
-		tracesInput: tracesInput,
-		bp:          bp,
+		config:            config,
+		ctxInfo:           ctxInfo,
+		tracersWg:         &sync.WaitGroup{},
+		tracesInput:       tracesInput,
+		processEventInput: processEventsInput,
+		bp:                bp,
+		peK8SDecorator:    peK8SDecorator,
 	}, nil
 }
 
@@ -66,6 +80,12 @@ func (i *Instrumenter) FindAndInstrument(ctx context.Context) error {
 	processEvents, err := finder.Start(ctx)
 	if err != nil {
 		return fmt.Errorf("couldn't start Process Finder: %w", err)
+	}
+
+	// In the background process any process found events and annotate them with
+	// the Kubernetes metadata
+	if decorator, err := i.peK8SDecorator(ctx); err == nil {
+		go decorator(ctx)
 	}
 
 	// In background, listen indefinitely for each new process and run its
@@ -89,6 +109,7 @@ func (i *Instrumenter) FindAndInstrument(ctx context.Context) error {
 							pt.Tracer.Run(ctx, i.tracesInput)
 						}()
 					}
+					i.processEventInput.Send(exec.ProcessEvent{Type: exec.ProcessEventCreated, File: pt.FileInfo})
 				case discover.EventDeleted:
 					dp := ev.Obj
 					log.Debug("stopping ProcessTracer because there are no more instances of such process",
@@ -96,6 +117,7 @@ func (i *Instrumenter) FindAndInstrument(ctx context.Context) error {
 					if dp.Tracer != nil {
 						dp.Tracer.UnlinkExecutable(dp.FileInfo)
 					}
+					i.processEventInput.Send(exec.ProcessEvent{Type: exec.ProcessEventTerminated, File: dp.FileInfo})
 				default:
 					log.Error("BUG ALERT! unknown event type", "type", ev.Type)
 				}

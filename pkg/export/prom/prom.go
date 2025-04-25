@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -50,6 +51,8 @@ const (
 	hostIDKey        = "host_id"
 	hostNameKey      = "host_name"
 	grafanaHostIDKey = "grafana_host_id"
+	processPIDKey    = "process_pid"
+	osTypeKey        = "os_type"
 
 	k8sNamespaceName   = "k8s_namespace_name"
 	k8sPodName         = "k8s_pod_name"
@@ -899,7 +902,19 @@ func (r *metricsReporter) labelValuesSpans(span *request.Span) []string {
 }
 
 func labelNamesTargetInfo(kubeEnabled bool, extraMetadataLabelNames []attr.Name) []string {
-	names := []string{hostIDKey, hostNameKey, serviceKey, serviceNamespaceKey, serviceInstanceKey, serviceJobKey, telemetryLanguageKey, telemetrySDKKey, sourceKey}
+	names := []string{
+		hostIDKey,
+		hostNameKey,
+		serviceKey,
+		serviceNamespaceKey,
+		serviceInstanceKey,
+		serviceJobKey,
+		telemetryLanguageKey,
+		telemetrySDKKey,
+		sourceKey,
+		processPIDKey,
+		osTypeKey,
+	}
 
 	if kubeEnabled {
 		names = appendK8sLabelNames(names)
@@ -923,6 +938,8 @@ func (r *metricsReporter) labelValuesTargetInfo(service svc.Attrs) []string {
 		service.SDKLanguage.String(),
 		"beyla",
 		"beyla",
+		strconv.Itoa(int(service.ProcPID)),
+		"linux",
 	}
 
 	if r.kubeEnabled {

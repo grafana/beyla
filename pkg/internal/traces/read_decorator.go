@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/internal/svc"
 	"github.com/grafana/beyla/v2/pkg/internal/traces/hostname"
 	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
@@ -39,10 +40,10 @@ type ReadDecorator struct {
 
 // decorator modifies a []request.Span slice to fill it with extra information that is not provided
 // by the tracers (for example, the instance ID)
-type decorator func(spans []request.Span)
+type decorator func(s *svc.Attrs, pid int)
 
 func ReadFromChannel(r *ReadDecorator) swarm.InstanceFunc {
-	decorate := hostNamePIDDecorator(&r.InstanceID)
+	decorate := HostNamePIDDecorator(&r.InstanceID)
 	tracesInput := r.TracesInput.Subscribe()
 	return swarm.DirectInstance(func(ctx context.Context) {
 		// output channel must be closed so later stages in the pipeline can finish in cascade
@@ -51,10 +52,12 @@ func ReadFromChannel(r *ReadDecorator) swarm.InstanceFunc {
 		out := r.DecoratedTraces
 		for {
 			select {
-			case trace, ok := <-tracesInput:
+			case traces, ok := <-tracesInput:
 				if ok {
-					decorate(trace)
-					out.Send(trace)
+					for i := range traces {
+						decorate(&traces[i].Service, int(traces[i].Pid.HostPID))
+					}
+					out.Send(traces)
 				} else {
 					rlog().Debug("input channel closed. Exiting traces input loop")
 					return
@@ -67,7 +70,7 @@ func ReadFromChannel(r *ReadDecorator) swarm.InstanceFunc {
 	})
 }
 
-func hostNamePIDDecorator(cfg *InstanceIDConfig) decorator {
+func HostNamePIDDecorator(cfg *InstanceIDConfig) decorator {
 	// TODO: periodically update in case the current Beyla instance is created from a VM snapshot running as a different hostname
 	resolver := hostname.CreateResolver(cfg.OverrideHostname, "", cfg.HostnameDNSResolution)
 	fullHostName, _, err := resolver.Query()
@@ -80,10 +83,8 @@ func hostNamePIDDecorator(cfg *InstanceIDConfig) decorator {
 	}
 
 	// caching instance ID composition for speed and saving memory generation
-	return func(spans []request.Span) {
-		for i := range spans {
-			spans[i].Service.UID.Instance = fullHostName + ":" + strconv.Itoa(int(spans[i].Pid.HostPID))
-			spans[i].Service.HostName = fullHostName
-		}
+	return func(s *svc.Attrs, hostPID int) {
+		s.UID.Instance = fullHostName + ":" + strconv.Itoa(hostPID)
+		s.HostName = fullHostName
 	}
 }

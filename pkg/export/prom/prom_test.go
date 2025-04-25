@@ -66,6 +66,16 @@ func TestAppMetricsExpiration(t *testing.T) {
 
 	go exporter(ctx)
 
+	app := exec.FileInfo{
+		Service: svc.Attrs{
+			UID: svc.UID{Pid: 1, Name: "test-app", Namespace: "default", Instance: "test-app-1"},
+		},
+		Pid: 1,
+	}
+
+	// Send a process event so we make target_info
+	processEvents.Send(exec.ProcessEvent{Type: exec.ProcessEventCreated, File: &app})
+
 	// WHEN it receives metrics
 	promInput.Send([]request.Span{
 		{Type: request.EventTypeHTTP, Path: "/foo", End: 123 * time.Second.Nanoseconds()},

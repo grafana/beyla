@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Format all staged C/C++ files
-files=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(c|cpp|h)$')
+files=$(git diff --cached --name-only --diff-filter=ACM | grep -v '^vendor' | grep -E '\.(c|cpp|h)$')
 
 if [ -n "$files" ]; then
     echo "Running clang-format on:"

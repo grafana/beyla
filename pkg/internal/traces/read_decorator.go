@@ -40,7 +40,7 @@ type ReadDecorator struct {
 
 // decorator modifies a []request.Span slice to fill it with extra information that is not provided
 // by the tracers (for example, the instance ID)
-type decorator func(s *svc.Attrs, pid int)
+type Decorator func(s *svc.Attrs, pid int)
 
 func ReadFromChannel(r *ReadDecorator) swarm.InstanceFunc {
 	decorate := HostNamePIDDecorator(&r.InstanceID)
@@ -70,7 +70,7 @@ func ReadFromChannel(r *ReadDecorator) swarm.InstanceFunc {
 	})
 }
 
-func HostNamePIDDecorator(cfg *InstanceIDConfig) decorator {
+func HostNamePIDDecorator(cfg *InstanceIDConfig) Decorator {
 	// TODO: periodically update in case the current Beyla instance is created from a VM snapshot running as a different hostname
 	resolver := hostname.CreateResolver(cfg.OverrideHostname, "", cfg.HostnameDNSResolution)
 	fullHostName, _, err := resolver.Query()

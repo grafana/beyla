@@ -118,6 +118,8 @@ func (i *Instrumenter) FindAndInstrument(ctx context.Context) error {
 						dp.Tracer.UnlinkExecutable(dp.FileInfo)
 					}
 					i.processEventInput.Send(exec.ProcessEvent{Type: exec.ProcessEventTerminated, File: dp.FileInfo})
+				case discover.EventInstanceDeleted:
+					i.processEventInput.Send(exec.ProcessEvent{Type: exec.ProcessEventTerminated, File: ev.Obj.FileInfo})
 				default:
 					log.Error("BUG ALERT! unknown event type", "type", ev.Type)
 				}

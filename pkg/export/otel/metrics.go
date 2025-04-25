@@ -1091,7 +1091,7 @@ func (mr *MetricsReporter) deleteTracesTargetInfo(reporter *Metrics) {
 	reporter.tracesTargetInfo.Remove(mr.ctx, attrOpt)
 }
 
-func (mr *MetricsReporter) watchForProcesEvents() {
+func (mr *MetricsReporter) watchForProcessEvents() {
 	for pe := range mr.processEvents {
 		mlog().Debug("Received new process event", "event type", pe.Type, "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
 
@@ -1113,7 +1113,7 @@ func (mr *MetricsReporter) watchForProcesEvents() {
 }
 
 func (mr *MetricsReporter) reportMetrics(_ context.Context) {
-	go mr.watchForProcesEvents()
+	go mr.watchForProcessEvents()
 	for spans := range mr.input {
 		for i := range spans {
 			s := &spans[i]

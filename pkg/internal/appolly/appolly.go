@@ -16,6 +16,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/pipe"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/internal/traces"
 	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 	"github.com/grafana/beyla/v2/pkg/transform"
@@ -39,7 +40,7 @@ type Instrumenter struct {
 	// the ProcessTracer.
 	tracesInput       *msg.Queue[[]request.Span]
 	processEventInput *msg.Queue[exec.ProcessEvent]
-	peK8SDecorator    swarm.InstanceFunc
+	peGraphBuilder    *swarm.Instancer
 }
 
 // New Instrumenter, given a Config
@@ -47,15 +48,31 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 	setupFeatureContextInfo(ctx, ctxInfo, config)
 
 	tracesInput := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(config.ChannelBufferLen))
-	processEventsInput := msg.NewQueue[exec.ProcessEvent](msg.ChannelBufferLen(10))
-	processEventsOutput := msg.NewQueue[exec.ProcessEvent](msg.ChannelBufferLen(10))
 
-	peK8SDecorator := transform.ProcessEventDecoratorProvider(
-		ctxInfo, &config.Attributes.Kubernetes, &config.Attributes.InstanceID,
-		processEventsInput, processEventsOutput,
-	)
+	newEventQueue := func() *msg.Queue[exec.ProcessEvent] {
+		return msg.NewQueue[exec.ProcessEvent](msg.ChannelBufferLen(config.ChannelBufferLen))
+	}
 
-	bp, err := pipe.Build(ctx, config, ctxInfo, tracesInput, processEventsOutput)
+	swi := &swarm.Instancer{}
+
+	processEventsInput := newEventQueue()
+	processEventsHostDecorated := newEventQueue()
+
+	swi.Add(traces.HostProcessEventDecoratorProvider(
+		&config.Attributes.InstanceID,
+		processEventsInput,
+		processEventsHostDecorated,
+	))
+
+	processEventsKubeDecorated := newEventQueue()
+	swi.Add(transform.KubeProcessEventDecoratorProvider(
+		ctxInfo,
+		&config.Attributes.Kubernetes,
+		processEventsHostDecorated,
+		processEventsKubeDecorated,
+	))
+
+	bp, err := pipe.Build(ctx, config, ctxInfo, tracesInput, processEventsKubeDecorated)
 	if err != nil {
 		return nil, fmt.Errorf("can't instantiate instrumentation pipeline: %w", err)
 	}
@@ -67,7 +84,7 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 		tracesInput:       tracesInput,
 		processEventInput: processEventsInput,
 		bp:                bp,
-		peK8SDecorator:    peK8SDecorator,
+		peGraphBuilder:    swi,
 	}, nil
 }
 
@@ -83,9 +100,12 @@ func (i *Instrumenter) FindAndInstrument(ctx context.Context) error {
 	}
 
 	// In the background process any process found events and annotate them with
-	// the Kubernetes metadata
-	if decorator, err := i.peK8SDecorator(ctx); err == nil {
-		go decorator(ctx)
+	// the Host or Kubernetes metadata
+	graph, err := i.peGraphBuilder.Instance(ctx)
+	if err == nil {
+		go i.processEventsPipeline(ctx, graph)
+	} else {
+		return fmt.Errorf("couldn't start Process Event pipeline: %w", err)
 	}
 
 	// In background, listen indefinitely for each new process and run its
@@ -196,4 +216,15 @@ func refreshK8sInformerCache(ctx context.Context, ctxInfo *global.ContextInfo) e
 	// force the cache to be populated and cached
 	_, err := ctxInfo.K8sInformer.Get(ctx)
 	return err
+}
+
+func (i *Instrumenter) processEventsPipeline(ctx context.Context, graph *swarm.Runner) error {
+	graph.Start(ctx)
+	// run until either the graph is finished or the context is cancelled
+	select {
+	case <-graph.Done():
+	case <-ctx.Done():
+	}
+
+	return nil
 }

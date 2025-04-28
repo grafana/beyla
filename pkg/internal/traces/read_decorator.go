@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"strconv"
 
+	"github.com/grafana/beyla/v2/pkg/internal/exec"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
 	"github.com/grafana/beyla/v2/pkg/internal/traces/hostname"
@@ -40,10 +41,10 @@ type ReadDecorator struct {
 
 // decorator modifies a []request.Span slice to fill it with extra information that is not provided
 // by the tracers (for example, the instance ID)
-type Decorator func(s *svc.Attrs, pid int)
+type decorator func(s *svc.Attrs, pid int)
 
 func ReadFromChannel(r *ReadDecorator) swarm.InstanceFunc {
-	decorate := HostNamePIDDecorator(&r.InstanceID)
+	decorate := hostNamePIDDecorator(&r.InstanceID)
 	tracesInput := r.TracesInput.Subscribe()
 	return swarm.DirectInstance(func(ctx context.Context) {
 		// output channel must be closed so later stages in the pipeline can finish in cascade
@@ -70,7 +71,7 @@ func ReadFromChannel(r *ReadDecorator) swarm.InstanceFunc {
 	})
 }
 
-func HostNamePIDDecorator(cfg *InstanceIDConfig) Decorator {
+func hostNamePIDDecorator(cfg *InstanceIDConfig) decorator {
 	// TODO: periodically update in case the current Beyla instance is created from a VM snapshot running as a different hostname
 	resolver := hostname.CreateResolver(cfg.OverrideHostname, "", cfg.HostnameDNSResolution)
 	fullHostName, _, err := resolver.Query()
@@ -86,5 +87,22 @@ func HostNamePIDDecorator(cfg *InstanceIDConfig) Decorator {
 	return func(s *svc.Attrs, hostPID int) {
 		s.UID.Instance = fullHostName + ":" + strconv.Itoa(hostPID)
 		s.HostName = fullHostName
+	}
+}
+
+func HostProcessEventDecoratorProvider(
+	cfg *InstanceIDConfig,
+	input, output *msg.Queue[exec.ProcessEvent],
+) swarm.InstanceFunc {
+	return func(ctx context.Context) (swarm.RunFunc, error) {
+		decorate := hostNamePIDDecorator(cfg)
+
+		// if kubernetes decoration is disabled, we just bypass the node
+		return func(_ context.Context) {
+			for pe := range input.Subscribe() {
+				decorate(&pe.File.Service, int(pe.File.Pid))
+				output.Send(pe)
+			}
+		}, nil
 	}
 }

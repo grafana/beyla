@@ -13,7 +13,6 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
-	"github.com/grafana/beyla/v2/pkg/internal/traces"
 	"github.com/grafana/beyla/v2/pkg/kubeflags"
 	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
@@ -98,23 +97,14 @@ func KubeDecoratorProvider(
 	}
 }
 
-func ProcessEventDecoratorProvider(
+func KubeProcessEventDecoratorProvider(
 	ctxInfo *global.ContextInfo,
 	cfg *KubernetesDecorator,
-	iCfg *traces.InstanceIDConfig,
 	input, output *msg.Queue[exec.ProcessEvent],
 ) swarm.InstanceFunc {
 	return func(ctx context.Context) (swarm.RunFunc, error) {
 		if !ctxInfo.K8sInformer.IsKubeEnabled() {
-			decorate := traces.HostNamePIDDecorator(iCfg)
-
-			// if kubernetes decoration is disabled, we just bypass the node
-			return func(_ context.Context) {
-				for pe := range input.Subscribe() {
-					decorate(&pe.File.Service, int(pe.File.Pid))
-					output.Send(pe)
-				}
-			}, nil
+			return swarm.Bypass(input, output)
 		}
 		metaStore, err := ctxInfo.K8sInformer.Get(ctx)
 		if err != nil {

@@ -15,10 +15,11 @@ jobs:
 
     steps:
       - id: checkout
-        uses: actions/checkout@v4
-
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          persist-credentials: 'false'
       - id: push-beyla-to-dockerhub
-        uses: grafana/shared-workflows/actions/build-push-to-dockerhub@main
+        uses: grafana/shared-workflows/actions/build-push-to-dockerhub@fa48192dac470ae356b3f7007229f3ac28c48a25 # main
         with:
           repository: grafana/beyla
           context: .
@@ -30,7 +31,7 @@ jobs:
           push: true
 
       - id: push-beyla-k8s-cache-to-dockerhub
-        uses: grafana/shared-workflows/actions/build-push-to-dockerhub@main
+        uses: grafana/shared-workflows/actions/build-push-to-dockerhub@fa48192dac470ae356b3f7007229f3ac28c48a25 # main
         with:
           repository: grafana/beyla-k8s-cache
           file: k8scache.Dockerfile

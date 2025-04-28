@@ -14,10 +14,11 @@ jobs:
       matrix:
         go: [ '1.24' ]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3
       - name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@be3c94b385c4f180051c996d336f57a34c397495 # v3
         with:
+          cache: 'false'
           go-version: ${{ matrix.go }}
       - name: Check licenses
         run: make check-licenses

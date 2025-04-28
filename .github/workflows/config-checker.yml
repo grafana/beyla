@@ -14,10 +14,11 @@ jobs:
       contents: read
 
     steps:
-    - uses: actions/checkout@v4
-
+    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      with:
+        persist-credentials: 'false'
     - name: Set up Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b # v5
       with:
         go-version-file: 'go.mod'
         cache: false  # Disable caching to avoid extraction conflicts
@@ -61,7 +62,7 @@ jobs:
 
     - name: Find existing issues
       if: steps.field-checker.outputs.has_unmapped == 'true'
-      uses: actions/github-script@v7
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
       id: find-issue
       with:
         script: |
@@ -79,7 +80,7 @@ jobs:
 
     - name: Manage issue
       if: steps.field-checker.outputs.has_unmapped == 'true'
-      uses: actions/github-script@v7
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
       with:
         script: |
           const issueNumber = parseInt('${{ steps.find-issue.outputs.result }}');
@@ -116,7 +117,7 @@ jobs:
 
     - name: Close issue if no unmapped fields
       if: steps.field-checker.outputs.has_unmapped == 'false'
-      uses: actions/github-script@v7
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
       with:
         script: |
           const issues = await github.rest.issues.listForRepo({

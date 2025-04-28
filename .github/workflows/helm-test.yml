@@ -24,8 +24,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:
+          persist-credentials: 'false'
           fetch-depth: 0 # required for chart-testing to work
 
       - name: Regenerate docs
@@ -40,7 +41,7 @@ jobs:
           fi
 
       - name: Set up Linting with chart-testing
-        uses: helm/chart-testing-action@v2.1.0
+        uses: helm/chart-testing-action@5f16c27cf7a4fa9c776ff73734df3909b2b65127 # v2.1.0
 
       - name: Run chart-testing (list-changed)
         id: list-changed

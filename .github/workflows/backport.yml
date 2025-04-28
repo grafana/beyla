@@ -1,5 +1,10 @@
 name: Backport PR creator
 on:
+  # zizmor will complain here: pull_request_target is almost always used insecurely
+  # However labeled requires from an administrator action, and the scripts
+  # running below can't be modified by the PR author.
+  # Also, we check that this is only triggered when the pull request is merged
+  # meaning that only maintainers can do it
   pull_request_target:
     types:
       - closed
@@ -7,12 +12,13 @@ on:
 
 jobs:
   main:
-    if: github.repository == 'grafana/beyla'
+    if: github.repository == 'grafana/beyla' && github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Actions
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:
+          persist-credentials: 'false'
           repository: grafana/grafana-github-actions
           path: ./actions
           ref: main

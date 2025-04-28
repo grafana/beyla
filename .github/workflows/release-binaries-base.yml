@@ -10,6 +10,8 @@ on:
         description: 'The github runner to run on'
         required: true
         type: string
+permissions:
+  contents: read
 jobs:
   release-binaries:
     name: Release compiled binaries for Linux/${{inputs.arch}}
@@ -17,8 +19,12 @@ jobs:
     strategy:
       matrix:
         go: [ '1.24' ]
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3
+        with:
+          persist-credentials: false
       - name: Set up Go
         uses: actions/setup-go@be3c94b385c4f180051c996d336f57a34c397495 # v3
         with:

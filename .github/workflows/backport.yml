@@ -1,19 +1,22 @@
 name: Backport PR creator
 on:
-  # zizmor will complain here: pull_request_target is almost always used insecurely
-  # However labeled requires from an administrator action, and the scripts
-  # running below can't be modified by the PR author.
-  # Also, we check that this is only triggered when the pull request is merged
-  # meaning that only maintainers can do it
-  pull_request_target:
-    types:
-      - closed
-      - labeled
+  push:
+    branches: [ 'main' ]
+
+# Set restrictive permissions at workflow level
+permissions:
+  contents: read
 
 jobs:
   main:
-    if: github.repository == 'grafana/beyla' && github.event.pull_request.merged == true
+    # For security, github.event.pull_request.merged == true must be checked
+    # to make sure that the provided actions are only executed when a maintainer
+    # merges the PR
+    if: github.repository == 'grafana/beyla'
     runs-on: ubuntu-latest
+    # Grant specific permissions needed only for this job
+    permissions:
+      pull-requests: write
     steps:
       - name: Checkout Actions
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4

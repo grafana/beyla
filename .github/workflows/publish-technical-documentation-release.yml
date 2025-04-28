@@ -9,6 +9,11 @@ on:
     paths:
       - 'docs/sources/**'
   workflow_dispatch:
+
+# Set restrictive permissions at workflow level
+permissions:
+  contents: read
+
 jobs:
   sync:
     if: github.repository == 'grafana/beyla'

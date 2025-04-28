@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [ 'main', 'release-*' ]
 
+# Set restrictive permissions at workflow level
+permissions:
+  contents: read
+
 jobs:
   clang-format:
     runs-on: ubuntu-latest
@@ -15,6 +19,7 @@ jobs:
         uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Install Clang-Format
         run: sudo apt-get install clang-format-19

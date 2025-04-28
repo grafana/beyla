@@ -8,6 +8,10 @@ on:
     branches: [ 'main', 'release-*' ]
     paths: [ 'bpf/**' ]
 
+# Set restrictive permissions at workflow level
+permissions:
+  contents: read
+
 jobs:
   test:
     uses: ./.github/workflows/workflow_integration_tests_vm.yml

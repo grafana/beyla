@@ -38,7 +38,10 @@ jobs:
       - name: Run VM integration tests
         run: |
           make docker-generate
-          sudo make -C test/vm KERNEL_VER=${{ inputs.kernel-version }} ARCH=${{ inputs.arch }} && [ -f testoutput/success ]
+          sudo make -C test/vm && [ -f testoutput/success ]
+        env:
+          KERNEL_VER: ${{ inputs.kernel-version }}
+          ARCH: ${{ inputs.arch }}
         timeout-minutes: ${{ inputs.timeout-minutes }}
       - name: Upload integration test logs
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

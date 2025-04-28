@@ -6,6 +6,10 @@ on:
     paths:
       - 'pkg/**/*.go'
 
+# Set restrictive permissions at workflow level
+permissions:
+  contents: read
+
 jobs:
   check-config:
     runs-on: ubuntu-latest
@@ -139,4 +143,4 @@ jobs:
               state: 'closed',
               state_reason: 'completed'
             });
-          } 
+          }

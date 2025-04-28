@@ -2,6 +2,10 @@ name: Release Helm chart
 on:
   workflow_dispatch:
 
+# Set restrictive permissions at workflow level
+permissions:
+  contents: read
+
 jobs:
   release-beyla-helm-chart:
     uses: grafana/helm-charts/.github/workflows/update-helm-repo.yaml@87cb2cd95f44387e010aa49c22466dd6d86a2ae9 # main

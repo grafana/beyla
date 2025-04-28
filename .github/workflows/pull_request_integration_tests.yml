@@ -6,15 +6,25 @@ on:
   pull_request:
     branches: [ 'main', 'release-*' ]
 
+# Set restrictive permissions at workflow level
+permissions:
+  contents: read
+
 jobs:
   test:
     name: test
     runs-on: ubuntu-latest-8-cores
+    # Grant specific permissions needed only for this job
+    permissions:
+      contents: read
+      pull-requests: write
     strategy:
       matrix:
         go: [ '1.24' ]
     steps:
       - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3
+        with:
+          persist-credentials: false
       - name: Set up Go
         uses: actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b # v5
         with:

@@ -4,6 +4,10 @@ on:
     paths: ["docs/sources/**"]
   workflow_dispatch:
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   vale:
     runs-on: ubuntu-latest

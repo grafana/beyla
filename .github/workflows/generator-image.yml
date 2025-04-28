@@ -2,6 +2,10 @@ name: Publish Beyla Docker Generator Image
 on:
   workflow_dispatch:
 
+# Set restrictive permissions at workflow level
+permissions:
+  contents: read
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: grafana/beyla-generator

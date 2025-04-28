@@ -3,10 +3,21 @@ on:
   schedule:
     - cron: '0 7 * * 1-5'
   workflow_dispatch:
+
+# Set restrictive permissions at workflow level
+permissions:
+  contents: read
+
 jobs:
   main:
     if: github.repository == 'grafana/beyla'
     runs-on: ubuntu-latest
+    # Grant specific permissions needed for the job
+    permissions:
+      contents: write  # Needed for creating commits or PRs
+      pull-requests: write  # Needed if the action creates PRs
     steps:
-      - uses: actions/checkout@v4
-      - uses: grafana/writers-toolkit/update-make-docs@update-make-docs/v1
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          persist-credentials: 'false'
+      - uses: grafana/writers-toolkit/update-make-docs@f65819d6a412b752c0e0263375215f049507b0e6 # update-make-docs/v1

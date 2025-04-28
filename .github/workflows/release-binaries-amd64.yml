@@ -7,6 +7,8 @@ on:
 jobs:
   release-amd64:
     uses: ./.github/workflows/release-binaries-base.yml
+    permissions:
+      contents: write
     with:
       arch: amd64
       runner: ubuntu-latest

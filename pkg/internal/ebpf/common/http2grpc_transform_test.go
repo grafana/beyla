@@ -132,7 +132,7 @@ func TestHTTP2Parsing(t *testing.T) {
 				}
 
 				if ff, ok := f.(*http2.HeadersFrame); ok {
-					method, path, contentType, _ := readMetaFrame(0, ff)
+					method, path, contentType, _ := readMetaFrame(0, framer, ff)
 					assert.Equal(t, tt.method, method)
 					assert.Equal(t, tt.path, path)
 					assert.Equal(t, tt.contentType, contentType)

@@ -81,7 +81,7 @@ func protocolIsGRPC(connID uint64) {
 
 var commonHDec = bhpack.NewDecoder(0, nil)
 
-func knownFrameKeys(hf *http2.HeadersFrame) bool {
+func knownFrameKeys(fr *http2.Framer, hf *http2.HeadersFrame) bool {
 	known := false
 	commonHDec.SetEmitFunc(func(hf bhpack.HeaderField) {
 		hfKey := strings.ToLower(hf.Name)
@@ -95,11 +95,28 @@ func knownFrameKeys(hf *http2.HeadersFrame) bool {
 	defer commonHDec.Close()
 
 	frag := hf.HeaderBlockFragment()
-	commonHDec.Write(frag)
+	for {
+		if _, err := commonHDec.Write(frag); err != nil {
+			break
+		}
+		if hf.HeadersEnded() {
+			break
+		}
+		hff, err := fr.ReadFrame()
+		if err != nil {
+			break
+		}
+		cf, ok := hff.(*http2.ContinuationFrame)
+		if !ok {
+			break
+		}
+		frag = cf.HeaderBlockFragment()
+	}
+
 	return known
 }
 
-func readMetaFrame(connID uint64, hf *http2.HeadersFrame) (string, string, string, bool) {
+func readMetaFrame(connID uint64, fr *http2.Framer, hf *http2.HeadersFrame) (string, string, string, bool) {
 	h2c := getOrInitH2Conn(connID)
 
 	ok := false
@@ -133,7 +150,24 @@ func readMetaFrame(connID uint64, hf *http2.HeadersFrame) (string, string, strin
 	defer h2c.hdec.Close()
 
 	frag := hf.HeaderBlockFragment()
-	h2c.hdec.Write(frag)
+	for {
+		if _, err := h2c.hdec.Write(frag); err != nil {
+			return method, path, contentType, ok
+		}
+		if hf.HeadersEnded() {
+			break
+		}
+		hff, err := fr.ReadFrame()
+		if err != nil {
+			break
+		}
+		cf, ok := hff.(*http2.ContinuationFrame)
+		if !ok {
+			break
+		}
+		frag = cf.HeaderBlockFragment()
+	}
+
 	return method, path, contentType, ok
 }
 
@@ -312,7 +346,7 @@ func http2FromBuffers(event *BPFHTTP2Info) (request.Span, bool, error) {
 
 		if ff, ok := f.(*http2.HeadersFrame); ok {
 			rok := false
-			method, path, contentType, ok := readMetaFrame(connID, ff)
+			method, path, contentType, ok := readMetaFrame(connID, framer, ff)
 
 			if path == "" {
 				path = "*"
@@ -360,9 +394,8 @@ func http2FromBuffers(event *BPFHTTP2Info) (request.Span, bool, error) {
 }
 
 func ReadHTTP2InfoIntoSpan(record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {
-	var event BPFHTTP2Info
+	event, err := ReinterpretCast[BPFHTTP2Info](record.RawSample)
 
-	err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
 	if err != nil {
 		return request.Span{}, true, err
 	}
@@ -371,7 +404,7 @@ func ReadHTTP2InfoIntoSpan(record *ringbuf.Record, filter ServiceFilter) (reques
 		return request.Span{}, true, nil
 	}
 
-	return http2FromBuffers(&event)
+	return http2FromBuffers(event)
 }
 
 type http2FrameType uint8
@@ -480,7 +513,7 @@ func isHTTP2(data []uint8, eventLen int) bool {
 		}
 
 		if ff, ok := f.(*http2.HeadersFrame); ok {
-			return knownFrameKeys(ff)
+			return knownFrameKeys(framer, ff)
 		}
 	}
 

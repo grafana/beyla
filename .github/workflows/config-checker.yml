@@ -87,7 +87,7 @@ jobs:
       uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
       with:
         script: |
-          const issueNumber = parseInt('${{ steps.find-issue.outputs.result }}');
+          const issueNumber = parseInt('${process.env.ISSUE_NUMBER}');
           const issueBody = `Unmapped configuration fields were detected in Beyla's Alloy component:
 
           \`\`\`
@@ -118,6 +118,7 @@ jobs:
           }
       env:
         UNMAPPED_FIELDS: ${{ steps.field-checker.outputs.unmapped_fields }}
+        ISSUE_NUMBER: ${{ steps.find-issue.outputs.result }}
 
     - name: Close issue if no unmapped fields
       if: steps.field-checker.outputs.has_unmapped == 'false'

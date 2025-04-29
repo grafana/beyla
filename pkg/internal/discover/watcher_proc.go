@@ -31,6 +31,7 @@ type WatchEventType int
 const (
 	EventCreated = WatchEventType(iota)
 	EventDeleted
+	EventInstanceDeleted
 )
 
 type Event[T any] struct {

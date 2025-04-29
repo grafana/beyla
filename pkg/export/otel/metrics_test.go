@@ -18,6 +18,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
 	"github.com/grafana/beyla/v2/pkg/export/instrumentations"
+	"github.com/grafana/beyla/v2/pkg/internal/exec"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
@@ -146,13 +147,15 @@ func TestMetrics_InternalInstrumentation(t *testing.T) {
 
 	// Run the metrics reporter node standalone
 	exportMetrics := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
+	processEvents := msg.NewQueue[exec.ProcessEvent](msg.ChannelBufferLen(20))
+
 	internalMetrics := &fakeInternalMetrics{}
 	reporter, err := ReportMetrics(&global.ContextInfo{
 		Metrics: internalMetrics,
 	}, &MetricsConfig{
 		CommonEndpoint: coll.URL, Interval: 10 * time.Millisecond, ReportersCacheLen: 16,
 		Features: []string{FeatureApplication}, Instrumentations: []string{instrumentations.InstrumentationHTTP},
-	}, attributes.Selection{}, exportMetrics,
+	}, attributes.Selection{}, exportMetrics, processEvents,
 	)(context.Background())
 	require.NoError(t, err)
 	go reporter(context.Background())
@@ -654,6 +657,8 @@ func makeExporter(
 	ctx context.Context, t *testing.T, instrumentations []string, otlp *collector.TestCollector,
 	input *msg.Queue[[]request.Span],
 ) swarm.RunFunc {
+	processEvents := msg.NewQueue[exec.ProcessEvent](msg.ChannelBufferLen(20))
+
 	otelExporter, err := ReportMetrics(
 		&global.ContextInfo{}, &MetricsConfig{
 			Interval:          50 * time.Millisecond,
@@ -667,7 +672,7 @@ func makeExporter(
 			attributes.HTTPServerDuration.Section: attributes.InclusionLists{
 				Include: []string{"url.path"},
 			},
-		}, input)(ctx)
+		}, input, processEvents)(ctx)
 
 	require.NoError(t, err)
 
@@ -842,7 +847,7 @@ func TestMetricResourceAttributes(t *testing.T) {
 				userAttribSelection: tc.attributeSelect,
 			}
 
-			attrSet := mr.metricResourceAttributes(tc.service)
+			attrSet := mr.tracesResourceAttributes(tc.service)
 
 			attrs := attrSet.ToSlice()
 			attrMap := make(map[string]string)

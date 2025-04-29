@@ -11,6 +11,7 @@ import (
 
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	"github.com/grafana/beyla/v2/pkg/export/instrumentations"
+	"github.com/grafana/beyla/v2/pkg/internal/exec"
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
@@ -138,6 +139,7 @@ func TestAppMetricsExpiration_ByMetricAttrs(t *testing.T) {
 	timeNow = now.Now
 
 	metrics := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(20))
+	processEvents := msg.NewQueue[exec.ProcessEvent](msg.ChannelBufferLen(20))
 	otelExporter, err := ReportMetrics(
 		&global.ContextInfo{}, &MetricsConfig{
 			Interval:          50 * time.Millisecond,
@@ -153,7 +155,7 @@ func TestAppMetricsExpiration_ByMetricAttrs(t *testing.T) {
 			attributes.HTTPServerDuration.Section: attributes.InclusionLists{
 				Include: []string{"url.path"},
 			},
-		}, metrics)(ctx)
+		}, metrics, processEvents)(ctx)
 	require.NoError(t, err)
 
 	go otelExporter(ctx)
@@ -254,6 +256,7 @@ func TestAppMetricsExpiration_BySvcID(t *testing.T) {
 	timeNow = now.Now
 
 	metrics := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(20))
+	processEvents := msg.NewQueue[exec.ProcessEvent](msg.ChannelBufferLen(20))
 	otelExporter, err := ReportMetrics(
 		&global.ContextInfo{}, &MetricsConfig{
 			Interval:          50 * time.Millisecond,
@@ -269,7 +272,7 @@ func TestAppMetricsExpiration_BySvcID(t *testing.T) {
 			attributes.HTTPServerDuration.Section: attributes.InclusionLists{
 				Include: []string{"url.path"},
 			},
-		}, metrics)(ctx)
+		}, metrics, processEvents)(ctx)
 	require.NoError(t, err)
 
 	go otelExporter(ctx)

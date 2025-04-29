@@ -345,6 +345,8 @@ func (ta *TraceAttacher) notifyProcessDeletion(ie *ebpf.Instrumentable) {
 			delete(ta.existingTracers, ie.FileInfo.Ino)
 			ie.Tracer = tracer
 			ta.OutputTracerEvents.Send(Event[*ebpf.Instrumentable]{Type: EventDeleted, Obj: ie})
+		} else {
+			ta.OutputTracerEvents.Send(Event[*ebpf.Instrumentable]{Type: EventInstanceDeleted, Obj: ie})
 		}
 	}
 }

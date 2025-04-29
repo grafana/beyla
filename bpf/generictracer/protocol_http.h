@@ -218,14 +218,6 @@ static __always_inline u8 http_info_complete(http_info_t *info) {
     return (info->start_monotime_ns != 0 && info->status != 0 && info->pid.host_pid != 0);
 }
 
-static __always_inline void force_complete_http(http_info_t *info) {
-    info->end_monotime_ns = bpf_ktime_get_ns();
-    info->status = 400;
-    if (info->pid.host_pid == 0) {
-        task_pid(&info->pid);
-    }
-}
-
 static __always_inline u8 http_will_complete(http_info_t *info, unsigned char *buf, u32 len) {
     if (info->start_monotime_ns != 0) {
         u8 packet_type;
@@ -304,15 +296,26 @@ static __always_inline void finish_possible_delayed_http_request(pid_connection_
     }
 }
 
+static __always_inline void cleanup_http_request_data(pid_connection_info_t *pid_conn,
+                                                      http_info_t *info) {
+    if (info) {
+        if (info->type == EVENT_HTTP_REQUEST) {
+            trace_key_t t_key = {0};
+            t_key.extra_id = info->extra_id;
+            t_key.p_key.ns = info->pid.ns;
+            t_key.p_key.tid = info->task_tid;
+            t_key.p_key.pid = info->pid.user_pid;
+            delete_server_trace(&t_key, pid_conn);
+        } else {
+            delete_client_trace_info(pid_conn);
+        }
+    }
+    bpf_map_delete_elem(&active_ssl_connections, pid_conn);
+}
+
 static __always_inline void terminate_http_request_if_needed(pid_connection_info_t *pid_conn) {
     http_info_t *info = bpf_map_lookup_elem(&ongoing_http, pid_conn);
-    if (info) {
-        if (!http_info_complete(info)) {
-            bpf_dbg_printk("Force completing a request on cancelled connection");
-            force_complete_http(info);
-        }
-        finish_http(info, pid_conn);
-    }
+    cleanup_http_request_data(pid_conn, info);
 }
 
 static __always_inline void process_http_request(
@@ -372,17 +375,7 @@ static __always_inline void handle_http_response(unsigned char *small_buf,
         }
     }
 
-    if (info->type == EVENT_HTTP_REQUEST) {
-        trace_key_t t_key = {0};
-        t_key.extra_id = info->extra_id;
-        t_key.p_key.ns = info->pid.ns;
-        t_key.p_key.tid = info->task_tid;
-        t_key.p_key.pid = info->pid.user_pid;
-        delete_server_trace(&t_key);
-    } else {
-        delete_client_trace_info(pid_conn);
-    }
-    bpf_map_delete_elem(&active_ssl_connections, pid_conn);
+    cleanup_http_request_data(pid_conn, info);
 }
 
 // k_tail_protocol_http

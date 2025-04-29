@@ -499,6 +499,7 @@ int BPF_KPROBE(beyla_kprobe_tcp_close, struct sock *sk, long timeout) {
         terminate_http_request_if_needed(&info);
         bpf_map_delete_elem(&ongoing_tcp_req, &info);
         delete_backup_sk_buff(&info.conn);
+        cleanup_tcp_trace_info_if_needed(&info);
     }
 
     bpf_map_delete_elem(&active_send_args, &id);

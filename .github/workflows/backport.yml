@@ -1,18 +1,27 @@
 name: Backport PR creator
 on:
-  pull_request_target:
-    types:
-      - closed
-      - labeled
+  push:
+    branches: [ 'main' ]
+
+# Set restrictive permissions at workflow level
+permissions:
+  contents: read
 
 jobs:
   main:
+    # For security, github.event.pull_request.merged == true must be checked
+    # to make sure that the provided actions are only executed when a maintainer
+    # merges the PR
     if: github.repository == 'grafana/beyla'
     runs-on: ubuntu-latest
+    # Grant specific permissions needed only for this job
+    permissions:
+      pull-requests: write
     steps:
       - name: Checkout Actions
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:
+          persist-credentials: 'false'
           repository: grafana/grafana-github-actions
           path: ./actions
           ref: main

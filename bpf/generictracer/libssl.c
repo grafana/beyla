@@ -25,8 +25,9 @@ static __always_inline int get_read_ssl_fd(void *ssl) {
     bpf_probe_read_user(&rbio, sizeof(rbio), ssl + SSL_RBIO_OFF);
     if (rbio) {
         bpf_probe_read_user(&fd, sizeof(fd), rbio + RBIO_FD_OFF);
-        if (fd > 2)
+        if (fd > 2) {
             return fd;
+        }
     }
 
     return fd;
@@ -39,8 +40,9 @@ static __always_inline int get_write_ssl_fd(void *ssl) {
     bpf_probe_read_user(&wbio, sizeof(wbio), ssl + SSL_WBIO_OFF);
     if (wbio) {
         bpf_probe_read_user(&fd, sizeof(fd), wbio + RBIO_FD_OFF);
-        if (fd > 2)
+        if (fd > 2) {
             return fd;
+        }
     }
 
     return fd;

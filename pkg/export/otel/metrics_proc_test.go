@@ -222,8 +222,9 @@ func TestGetFilteredProcessResourceAttrs(t *testing.T) {
 		assert.True(t, exists, "Base attribute %s should always be included", attrName)
 	}
 
+	// process.pid should be in the list because it's now part of the
+	// resource attributes
 	processAttrs := []string{
-		"process.pid",
 		"process.parent_pid",
 		"process.command",
 		"process.command_line",

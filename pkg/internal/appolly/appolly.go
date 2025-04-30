@@ -12,10 +12,14 @@ import (
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/internal/discover"
+	"github.com/grafana/beyla/v2/pkg/internal/exec"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/internal/traces"
 	"github.com/grafana/beyla/v2/pkg/pipe/msg"
+	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
+	"github.com/grafana/beyla/v2/pkg/transform"
 )
 
 var errShutdownTimeout = errors.New("graceful shutdown has timed out")
@@ -34,7 +38,9 @@ type Instrumenter struct {
 
 	// tracesInput is used to communicate the found traces between the ProcessFinder and
 	// the ProcessTracer.
-	tracesInput *msg.Queue[[]request.Span]
+	tracesInput       *msg.Queue[[]request.Span]
+	processEventInput *msg.Queue[exec.ProcessEvent]
+	peGraphBuilder    *swarm.Instancer
 }
 
 // New Instrumenter, given a Config
@@ -43,17 +49,42 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 
 	tracesInput := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(config.ChannelBufferLen))
 
-	bp, err := pipe.Build(ctx, config, ctxInfo, tracesInput)
+	newEventQueue := func() *msg.Queue[exec.ProcessEvent] {
+		return msg.NewQueue[exec.ProcessEvent](msg.ChannelBufferLen(config.ChannelBufferLen))
+	}
+
+	swi := &swarm.Instancer{}
+
+	processEventsInput := newEventQueue()
+	processEventsHostDecorated := newEventQueue()
+
+	swi.Add(traces.HostProcessEventDecoratorProvider(
+		&config.Attributes.InstanceID,
+		processEventsInput,
+		processEventsHostDecorated,
+	))
+
+	processEventsKubeDecorated := newEventQueue()
+	swi.Add(transform.KubeProcessEventDecoratorProvider(
+		ctxInfo,
+		&config.Attributes.Kubernetes,
+		processEventsHostDecorated,
+		processEventsKubeDecorated,
+	))
+
+	bp, err := pipe.Build(ctx, config, ctxInfo, tracesInput, processEventsKubeDecorated)
 	if err != nil {
 		return nil, fmt.Errorf("can't instantiate instrumentation pipeline: %w", err)
 	}
 
 	return &Instrumenter{
-		config:      config,
-		ctxInfo:     ctxInfo,
-		tracersWg:   &sync.WaitGroup{},
-		tracesInput: tracesInput,
-		bp:          bp,
+		config:            config,
+		ctxInfo:           ctxInfo,
+		tracersWg:         &sync.WaitGroup{},
+		tracesInput:       tracesInput,
+		processEventInput: processEventsInput,
+		bp:                bp,
+		peGraphBuilder:    swi,
 	}, nil
 }
 
@@ -66,6 +97,15 @@ func (i *Instrumenter) FindAndInstrument(ctx context.Context) error {
 	processEvents, err := finder.Start(ctx)
 	if err != nil {
 		return fmt.Errorf("couldn't start Process Finder: %w", err)
+	}
+
+	// In the background process any process found events and annotate them with
+	// the Host or Kubernetes metadata
+	graph, err := i.peGraphBuilder.Instance(ctx)
+	if err == nil {
+		go i.processEventsPipeline(ctx, graph)
+	} else {
+		return fmt.Errorf("couldn't start Process Event pipeline: %w", err)
 	}
 
 	// In background, listen indefinitely for each new process and run its
@@ -89,6 +129,7 @@ func (i *Instrumenter) FindAndInstrument(ctx context.Context) error {
 							pt.Tracer.Run(ctx, i.tracesInput)
 						}()
 					}
+					i.processEventInput.Send(exec.ProcessEvent{Type: exec.ProcessEventCreated, File: pt.FileInfo})
 				case discover.EventDeleted:
 					dp := ev.Obj
 					log.Debug("stopping ProcessTracer because there are no more instances of such process",
@@ -96,6 +137,9 @@ func (i *Instrumenter) FindAndInstrument(ctx context.Context) error {
 					if dp.Tracer != nil {
 						dp.Tracer.UnlinkExecutable(dp.FileInfo)
 					}
+					i.processEventInput.Send(exec.ProcessEvent{Type: exec.ProcessEventTerminated, File: dp.FileInfo})
+				case discover.EventInstanceDeleted:
+					i.processEventInput.Send(exec.ProcessEvent{Type: exec.ProcessEventTerminated, File: ev.Obj.FileInfo})
 				default:
 					log.Error("BUG ALERT! unknown event type", "type", ev.Type)
 				}
@@ -172,4 +216,13 @@ func refreshK8sInformerCache(ctx context.Context, ctxInfo *global.ContextInfo) e
 	// force the cache to be populated and cached
 	_, err := ctxInfo.K8sInformer.Get(ctx)
 	return err
+}
+
+func (i *Instrumenter) processEventsPipeline(ctx context.Context, graph *swarm.Runner) {
+	graph.Start(ctx)
+	// run until either the graph is finished or the context is cancelled
+	select {
+	case <-graph.Done():
+	case <-ctx.Done():
+	}
 }

@@ -8,9 +8,11 @@ import (
 	"time"
 
 	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
+	"github.com/grafana/beyla/v2/pkg/internal/exec"
 	"github.com/grafana/beyla/v2/pkg/internal/kube"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/internal/svc"
 	"github.com/grafana/beyla/v2/pkg/kubeflags"
 	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
@@ -95,6 +97,29 @@ func KubeDecoratorProvider(
 	}
 }
 
+func KubeProcessEventDecoratorProvider(
+	ctxInfo *global.ContextInfo,
+	cfg *KubernetesDecorator,
+	input, output *msg.Queue[exec.ProcessEvent],
+) swarm.InstanceFunc {
+	return func(ctx context.Context) (swarm.RunFunc, error) {
+		if !ctxInfo.K8sInformer.IsKubeEnabled() {
+			return swarm.Bypass(input, output)
+		}
+		metaStore, err := ctxInfo.K8sInformer.Get(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("inititalizing KubeDecoratorProvider: %w", err)
+		}
+		decorator := &procEventMetadataDecorator{
+			db:          metaStore,
+			clusterName: KubeClusterName(ctx, cfg, ctxInfo.K8sInformer),
+			input:       input.Subscribe(),
+			output:      output,
+		}
+		return decorator.k8sLoop, nil
+	}
+}
+
 type metadataDecorator struct {
 	db          *kube.Store
 	clusterName string
@@ -102,10 +127,17 @@ type metadataDecorator struct {
 	output      *msg.Queue[[]request.Span]
 }
 
+type procEventMetadataDecorator struct {
+	db          *kube.Store
+	clusterName string
+	input       <-chan exec.ProcessEvent
+	output      *msg.Queue[exec.ProcessEvent]
+}
+
 func (md *metadataDecorator) nodeLoop(_ context.Context) {
 	// output channel must be closed so later stages in the pipeline can finish in cascade
 	defer md.output.Close()
-	klog().Debug("starting kubernetes decoration loop")
+	klog().Debug("starting kubernetes span decoration loop")
 	for spans := range md.input {
 		// in-place decoration and forwarding
 		for i := range spans {
@@ -113,12 +145,32 @@ func (md *metadataDecorator) nodeLoop(_ context.Context) {
 		}
 		md.output.Send(spans)
 	}
-	klog().Debug("stopping kubernetes decoration loop")
+	klog().Debug("stopping kubernetes span decoration loop")
+}
+
+func (md *procEventMetadataDecorator) k8sLoop(_ context.Context) {
+	// output channel must be closed so later stages in the pipeline can finish in cascade
+	defer md.output.Close()
+	klog().Debug("starting kubernetes process event decoration loop")
+	for pe := range md.input {
+		klog().Debug("annotating process event", "event", pe)
+
+		if podMeta, containerName := md.db.PodContainerByPIDNs(pe.File.Ns); podMeta != nil {
+			appendMetadata(md.db, &pe.File.Service, podMeta, md.clusterName, containerName)
+		} else {
+			// do not leave the service attributes map as nil
+			pe.File.Service.Metadata = map[attr.Name]string{}
+		}
+
+		// in-place decoration and forwarding
+		md.output.Send(pe)
+	}
+	klog().Debug("stopping kubernetes process event decoration loop")
 }
 
 func (md *metadataDecorator) do(span *request.Span) {
 	if podMeta, containerName := md.db.PodContainerByPIDNs(span.Pid.Namespace); podMeta != nil {
-		md.appendMetadata(span, podMeta, containerName)
+		appendMetadata(md.db, &span.Service, podMeta, md.clusterName, containerName)
 	} else {
 		// do not leave the service attributes map as nil
 		span.Service.Metadata = map[attr.Name]string{}
@@ -132,22 +184,22 @@ func (md *metadataDecorator) do(span *request.Span) {
 	}
 }
 
-func (md *metadataDecorator) appendMetadata(span *request.Span, meta *kube.CachedObjMeta, containerName string) {
+func appendMetadata(db *kube.Store, svc *svc.Attrs, meta *kube.CachedObjMeta, clusterName, containerName string) {
 	if meta.Meta.Pod == nil {
 		// if this message happen, there is a bug
 		klog().Debug("pod metadata for is nil. Ignoring decoration", "meta", meta)
 		return
 	}
 	topOwner := kube.TopOwner(meta.Meta.Pod)
-	name, namespace := md.db.ServiceNameNamespaceForMetadata(meta.Meta)
+	name, namespace := db.ServiceNameNamespaceForMetadata(meta.Meta)
 	// If the user has not defined criteria values for the reported
 	// service name and namespace, we will automatically set it from
 	// the kubernetes metadata
-	if span.Service.AutoName() {
-		span.Service.UID.Name = name
+	if svc.AutoName() {
+		svc.UID.Name = name
 	}
-	if span.Service.UID.Namespace == "" {
-		span.Service.UID.Namespace = namespace
+	if svc.UID.Namespace == "" {
+		svc.UID.Namespace = namespace
 	}
 	// overriding the Instance here will avoid reusing the OTEL resource reporter
 	// if the application/process was discovered and reported information
@@ -155,37 +207,37 @@ func (md *metadataDecorator) appendMetadata(span *request.Span, meta *kube.Cache
 	// (related issue: https://github.com/grafana/beyla/issues/1124)
 	// Service Instance ID is set according to OTEL collector conventions:
 	// (related issue: https://github.com/grafana/k8s-monitoring-helm/issues/942)
-	span.Service.UID.Instance = meta.Meta.Namespace + "." + meta.Meta.Name + "." + containerName
+	svc.UID.Instance = meta.Meta.Namespace + "." + meta.Meta.Name + "." + containerName
 
 	// if, in the future, other pipeline steps modify the service metadata, we should
 	// replace the map literal by individual entry insertions
-	span.Service.Metadata = map[attr.Name]string{
+	svc.Metadata = map[attr.Name]string{
 		attr.K8sNamespaceName: meta.Meta.Namespace,
 		attr.K8sPodName:       meta.Meta.Name,
 		attr.K8sContainerName: containerName,
 		attr.K8sNodeName:      meta.Meta.Pod.NodeName,
 		attr.K8sPodUID:        meta.Meta.Pod.Uid,
 		attr.K8sPodStartTime:  meta.Meta.Pod.StartTimeStr,
-		attr.K8sClusterName:   md.clusterName,
+		attr.K8sClusterName:   clusterName,
 	}
 
 	// ownerKind could be also "Pod", but we won't insert it as "owner" label to avoid
 	// growing cardinality
 	if topOwner != nil {
-		span.Service.Metadata[attr.K8sOwnerName] = topOwner.Name
+		svc.Metadata[attr.K8sOwnerName] = topOwner.Name
 	}
 
 	for _, owner := range meta.Meta.Pod.Owners {
 		if kindLabel := OwnerLabelName(owner.Kind); kindLabel != "" {
-			span.Service.Metadata[kindLabel] = owner.Name
+			svc.Metadata[kindLabel] = owner.Name
 		}
 	}
 
 	// append resource metadata from cached object
-	maps.Copy(span.Service.Metadata, meta.OTELResourceMeta)
+	maps.Copy(svc.Metadata, meta.OTELResourceMeta)
 
 	// override hostname by the Pod name
-	span.Service.HostName = meta.Meta.Name
+	svc.HostName = meta.Meta.Name
 }
 
 func OwnerLabelName(kind string) attr.Name {

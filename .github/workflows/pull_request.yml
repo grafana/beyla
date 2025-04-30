@@ -6,23 +6,34 @@ on:
   pull_request:
     branches: [ 'main', 'release-*' ]
 
+# Set restrictive permissions at workflow level
+permissions:
+  contents: read
+
 jobs:
   test:
     name: test
     runs-on: ubuntu-latest
+    # Grant specific permissions needed only for this job
+    permissions:
+      contents: read
+      pull-requests: write
     strategy:
       matrix:
         go: [ '1.24' ]
     steps:
-      - uses: actions/checkout@v3
-      - name: Set up Go
-        uses: actions/setup-go@v3
+      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3
         with:
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@be3c94b385c4f180051c996d336f57a34c397495 # v3
+        with:
+          cache: false  # Disable caching to avoid extraction conflicts
           go-version: ${{ matrix.go }}
       - name: Run verification and unit tests
         run: make docker-generate verify cov-exclude-generated
       - name: Report coverage
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         with:

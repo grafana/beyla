@@ -19,6 +19,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/export/instrumentations"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/filter"
+	"github.com/grafana/beyla/v2/pkg/internal/exec"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 	"github.com/grafana/beyla/v2/pkg/internal/kube"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
@@ -64,6 +65,8 @@ func TestBasicPipeline(t *testing.T) {
 	require.NoError(t, err)
 
 	tracesInput := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
+	processEvents := msg.NewQueue[exec.ProcessEvent](msg.ChannelBufferLen(20))
+
 	gb := newGraphBuilder(&beyla.Config{
 		Metrics: otel.MetricsConfig{
 			Features:        []string{otel.FeatureApplication},
@@ -75,7 +78,7 @@ func TestBasicPipeline(t *testing.T) {
 			},
 		},
 		Attributes: beyla.Attributes{Select: allMetrics, InstanceID: traces.InstanceIDConfig{OverrideHostname: "the-host"}},
-	}, gctx(0), tracesInput)
+	}, gctx(0), tracesInput, processEvents)
 
 	// Override eBPF tracer to send some fake data
 	tracesInput.Send(newRequest("foo-svc", "GET", "/foo/bar", "1.1.1.1:3456", 404))
@@ -121,6 +124,8 @@ func TestBasicPipeline(t *testing.T) {
 			string(semconv.ServiceNamespaceKey):     "ns",
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
+			string(semconv.ProcessPIDKey):           "0",
+			string(semconv.OSTypeKey):               "linux",
 		},
 		Type:     pmetric.MetricTypeHistogram,
 		FloatVal: 2 / float64(time.Second),
@@ -136,6 +141,7 @@ func TestTracerPipeline(t *testing.T) {
 	require.NoError(t, err)
 
 	tracesInput := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
+	processEvents := msg.NewQueue[exec.ProcessEvent](msg.ChannelBufferLen(20))
 	gb := newGraphBuilder(&beyla.Config{
 		Traces: otel.TracesConfig{
 			BatchTimeout:      10 * time.Millisecond,
@@ -144,7 +150,7 @@ func TestTracerPipeline(t *testing.T) {
 			Instrumentations:  []string{instrumentations.InstrumentationALL},
 		},
 		Attributes: beyla.Attributes{InstanceID: traces.InstanceIDConfig{OverrideHostname: "the-host"}},
-	}, gctx(0), tracesInput)
+	}, gctx(0), tracesInput, processEvents)
 
 	// Override eBPF tracer to send some fake data
 	tracesInput.Send(newRequest("bar-svc", "GET", "/foo/bar", "1.1.1.1:3456", 404))
@@ -170,12 +176,14 @@ func TestTracerReceiverPipeline(t *testing.T) {
 	consumer := consumer.MockTraceConsumer{Endpoint: tc.ServerEndpoint}
 	require.NoError(t, err)
 	tracesInput := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
+	processEvents := msg.NewQueue[exec.ProcessEvent](msg.ChannelBufferLen(20))
+
 	gb := newGraphBuilder(&beyla.Config{
 		TracesReceiver: beyla.TracesReceiverConfig{
 			Traces: []beyla.Consumer{&consumer},
 		},
 		Attributes: beyla.Attributes{InstanceID: traces.InstanceIDConfig{OverrideHostname: "the-host"}},
-	}, gctx(0), tracesInput)
+	}, gctx(0), tracesInput, processEvents)
 	// Override eBPF tracer to send some fake data
 	tracesInput.Send(newRequest("bar-svc", "GET", "/foo/bar", "1.1.1.1:3456", 404))
 	pipe, err := gb.buildGraph(ctx)
@@ -198,6 +206,7 @@ func TestTracerPipelineBadTimestamps(t *testing.T) {
 	require.NoError(t, err)
 
 	tracesInput := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
+	processEvents := msg.NewQueue[exec.ProcessEvent](msg.ChannelBufferLen(20))
 	gb := newGraphBuilder(&beyla.Config{
 		Traces: otel.TracesConfig{
 			BatchTimeout:      10 * time.Millisecond,
@@ -205,7 +214,7 @@ func TestTracerPipelineBadTimestamps(t *testing.T) {
 			ReportersCacheLen: 16,
 			Instrumentations:  []string{instrumentations.InstrumentationALL},
 		},
-	}, gctx(0), tracesInput)
+	}, gctx(0), tracesInput, processEvents)
 	// Override eBPF tracer to send some fake data
 	tracesInput.Send(newRequestWithTiming("svc1", request.EventTypeHTTP, "GET", "/attach", "2.2.2.2:1234", 200, 60000, 59999, 70000))
 	// closing prematurely the input node would finish the whole graph processing
@@ -226,6 +235,8 @@ func TestRouteConsolidation(t *testing.T) {
 	require.NoError(t, err)
 
 	tracesInput := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
+	processEvents := msg.NewQueue[exec.ProcessEvent](msg.ChannelBufferLen(20))
+
 	gb := newGraphBuilder(&beyla.Config{
 		Metrics: otel.MetricsConfig{
 			SDKLogLevel:     "debug",
@@ -239,7 +250,7 @@ func TestRouteConsolidation(t *testing.T) {
 		},
 		Routes:     &transform.RoutesConfig{Patterns: []string{"/user/{id}", "/products/{id}/push"}},
 		Attributes: beyla.Attributes{Select: allMetricsBut("client.address", "url.path"), InstanceID: traces.InstanceIDConfig{OverrideHostname: "the-host"}},
-	}, gctx(attributes.GroupHTTPRoutes), tracesInput)
+	}, gctx(attributes.GroupHTTPRoutes), tracesInput, processEvents)
 	// Override eBPF tracer to send some fake data
 	tracesInput.Send(newRequest("svc-1", "GET", "/user/1234", "1.1.1.1:3456", 200))
 	tracesInput.Send(newRequest("svc-1", "GET", "/products/3210/push", "1.1.1.1:3456", 200))
@@ -288,6 +299,8 @@ func TestRouteConsolidation(t *testing.T) {
 			string(semconv.ServiceNamespaceKey):     "ns",
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
+			string(semconv.ProcessPIDKey):           "0",
+			string(semconv.OSTypeKey):               "linux",
 		},
 		Type:     pmetric.MetricTypeHistogram,
 		FloatVal: 2 / float64(time.Second),
@@ -313,6 +326,8 @@ func TestRouteConsolidation(t *testing.T) {
 			string(semconv.ServiceNamespaceKey):     "ns",
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
+			string(semconv.ProcessPIDKey):           "0",
+			string(semconv.OSTypeKey):               "linux",
 		},
 		Type:     pmetric.MetricTypeHistogram,
 		FloatVal: 2 / float64(time.Second),
@@ -338,6 +353,8 @@ func TestRouteConsolidation(t *testing.T) {
 			string(semconv.ServiceNamespaceKey):     "ns",
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
+			string(semconv.ProcessPIDKey):           "0",
+			string(semconv.OSTypeKey):               "linux",
 		},
 		Type:     pmetric.MetricTypeHistogram,
 		FloatVal: 2 / float64(time.Second),
@@ -352,6 +369,8 @@ func TestGRPCPipeline(t *testing.T) {
 	require.NoError(t, err)
 
 	tracesInput := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
+	processEvents := msg.NewQueue[exec.ProcessEvent](msg.ChannelBufferLen(20))
+
 	gb := newGraphBuilder(&beyla.Config{
 		Metrics: otel.MetricsConfig{
 			Features:        []string{otel.FeatureApplication},
@@ -363,7 +382,7 @@ func TestGRPCPipeline(t *testing.T) {
 			},
 		},
 		Attributes: beyla.Attributes{Select: allMetrics, InstanceID: traces.InstanceIDConfig{OverrideHostname: "the-host"}},
-	}, gctx(0), tracesInput)
+	}, gctx(0), tracesInput, processEvents)
 	// Override eBPF tracer to send some fake data
 	tracesInput.Send(newGRPCRequest("grpc-svc", "/foo/bar", 3))
 	pipe, err := gb.buildGraph(ctx)
@@ -396,6 +415,8 @@ func TestGRPCPipeline(t *testing.T) {
 			string(semconv.ServiceNameKey):          "grpc-svc",
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
+			string(semconv.ProcessPIDKey):           "0",
+			string(semconv.OSTypeKey):               "linux",
 		},
 		Type:     pmetric.MetricTypeHistogram,
 		FloatVal: 2 / float64(time.Second),
@@ -410,6 +431,7 @@ func TestTraceGRPCPipeline(t *testing.T) {
 	require.NoError(t, err)
 
 	tracesInput := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
+	processEvents := msg.NewQueue[exec.ProcessEvent](msg.ChannelBufferLen(20))
 	gb := newGraphBuilder(&beyla.Config{
 		Traces: otel.TracesConfig{
 			TracesEndpoint: tc.ServerEndpoint,
@@ -417,7 +439,7 @@ func TestTraceGRPCPipeline(t *testing.T) {
 			Instrumentations: []string{instrumentations.InstrumentationALL},
 		},
 		Attributes: beyla.Attributes{InstanceID: traces.InstanceIDConfig{OverrideHostname: "the-host"}},
-	}, gctx(0), tracesInput)
+	}, gctx(0), tracesInput, processEvents)
 	// Override eBPF tracer to send some fake data
 	tracesInput.Send(newGRPCRequest("svc", "foo.bar", 3))
 	pipe, err := gb.buildGraph(ctx)
@@ -440,6 +462,7 @@ func TestBasicPipelineInfo(t *testing.T) {
 	require.NoError(t, err)
 
 	tracesInput := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
+	processEvents := msg.NewQueue[exec.ProcessEvent](msg.ChannelBufferLen(20))
 	gb := newGraphBuilder(&beyla.Config{
 		Metrics: otel.MetricsConfig{
 			Features:        []string{otel.FeatureApplication},
@@ -454,7 +477,7 @@ func TestBasicPipelineInfo(t *testing.T) {
 			Select:     allMetrics,
 			InstanceID: traces.InstanceIDConfig{OverrideHostname: "the-host"},
 		},
-	}, gctx(0), tracesInput)
+	}, gctx(0), tracesInput, processEvents)
 	// send some fake data through the traces' input
 	tracesInput.Send(newHTTPInfo("PATCH", "/aaa/bbb", "1.1.1.1", 204))
 	pipe, err := gb.buildGraph(ctx)
@@ -487,6 +510,8 @@ func TestBasicPipelineInfo(t *testing.T) {
 			string(semconv.ServiceNameKey):          "comm",
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
+			string(semconv.ProcessPIDKey):           "0",
+			string(semconv.OSTypeKey):               "linux",
 		},
 		Type:     pmetric.MetricTypeHistogram,
 		FloatVal: 1 / float64(time.Second),
@@ -501,10 +526,11 @@ func TestTracerPipelineInfo(t *testing.T) {
 	require.NoError(t, err)
 
 	tracesInput := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
+	processEvents := msg.NewQueue[exec.ProcessEvent](msg.ChannelBufferLen(20))
 	gb := newGraphBuilder(&beyla.Config{
 		Traces:     otel.TracesConfig{TracesEndpoint: tc.ServerEndpoint, ReportersCacheLen: 16, Instrumentations: []string{instrumentations.InstrumentationALL}},
 		Attributes: beyla.Attributes{InstanceID: traces.InstanceIDConfig{OverrideHostname: "the-host"}},
-	}, gctx(0), tracesInput)
+	}, gctx(0), tracesInput, processEvents)
 	// Override eBPF tracer to send some fake data
 	tracesInput.Send(newHTTPInfo("PATCH", "/aaa/bbb", "1.1.1.1", 204))
 	pipe, err := gb.buildGraph(ctx)
@@ -524,6 +550,7 @@ func TestSpanAttributeFilterNode(t *testing.T) {
 
 	// Application pipeline that will let only pass spans whose url.path matches /user/*
 	tracesInput := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
+	processEvents := msg.NewQueue[exec.ProcessEvent](msg.ChannelBufferLen(20))
 	gb := newGraphBuilder(&beyla.Config{
 		Metrics: otel.MetricsConfig{
 			SDKLogLevel:     "debug",
@@ -537,7 +564,7 @@ func TestSpanAttributeFilterNode(t *testing.T) {
 			Application: map[string]filter.MatchDefinition{"url.path": {Match: "/user/*"}},
 		},
 		Attributes: beyla.Attributes{Select: allMetrics, InstanceID: traces.InstanceIDConfig{OverrideHostname: "the-host"}},
-	}, gctx(0), tracesInput)
+	}, gctx(0), tracesInput, processEvents)
 
 	// Override eBPF tracer to send some fake data
 	tracesInput.Send(newRequest("svc-0", "GET", "/products/3210/push", "1.1.1.1:3456", 200))
@@ -667,6 +694,8 @@ func matchTraceEvent(t require.TestingT, name string, event collector.TraceRecor
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
 			string(semconv.OTelLibraryNameKey):      "github.com/grafana/beyla",
+			string(semconv.ProcessPIDKey):           "0",
+			string(semconv.OSTypeKey):               "linux",
 		},
 		Kind: ptrace.SpanKindServer,
 	}, event)
@@ -691,6 +720,8 @@ func matchInnerTraceEvent(t require.TestingT, name string, event collector.Trace
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
 			string(semconv.OTelLibraryNameKey):      "github.com/grafana/beyla",
+			string(semconv.ProcessPIDKey):           "0",
+			string(semconv.OSTypeKey):               "linux",
 		},
 		Kind: ptrace.SpanKindInternal,
 	}, event)
@@ -719,6 +750,8 @@ func matchGRPCTraceEvent(t *testing.T, name string, event collector.TraceRecord)
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
 			string(semconv.OTelLibraryNameKey):      "github.com/grafana/beyla",
+			string(semconv.ProcessPIDKey):           "0",
+			string(semconv.OSTypeKey):               "linux",
 		},
 		Kind: ptrace.SpanKindServer,
 	}, event)
@@ -741,6 +774,8 @@ func matchInnerGRPCTraceEvent(t *testing.T, name string, event collector.TraceRe
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
 			string(semconv.OTelLibraryNameKey):      "github.com/grafana/beyla",
+			string(semconv.ProcessPIDKey):           "0",
+			string(semconv.OSTypeKey):               "linux",
 		},
 		Kind: ptrace.SpanKindInternal,
 	}, event)
@@ -799,6 +834,8 @@ func matchInfoEvent(t *testing.T, name string, event collector.TraceRecord) {
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
 			string(semconv.OTelLibraryNameKey):      "github.com/grafana/beyla",
+			string(semconv.ProcessPIDKey):           "0",
+			string(semconv.OSTypeKey):               "linux",
 		},
 		Kind: ptrace.SpanKindServer,
 	}, event)

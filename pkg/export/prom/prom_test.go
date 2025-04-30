@@ -22,6 +22,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/export/instrumentations"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/internal/connector"
+	"github.com/grafana/beyla/v2/pkg/internal/exec"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
@@ -42,6 +43,7 @@ func TestAppMetricsExpiration(t *testing.T) {
 
 	// GIVEN a Prometheus Metrics Exporter with a metrics expire time of 3 minutes
 	promInput := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
+	processEvents := msg.NewQueue[exec.ProcessEvent](msg.ChannelBufferLen(20))
 	exporter, err := PrometheusEndpoint(
 		&global.ContextInfo{Prometheus: &connector.PrometheusManager{}, HostID: "my-host"},
 		&PrometheusConfig{
@@ -58,10 +60,21 @@ func TestAppMetricsExpiration(t *testing.T) {
 			},
 		},
 		promInput,
+		processEvents,
 	)(ctx)
 	require.NoError(t, err)
 
 	go exporter(ctx)
+
+	app := exec.FileInfo{
+		Service: svc.Attrs{
+			UID: svc.UID{Pid: 1, Name: "test-app", Namespace: "default", Instance: "test-app-1"},
+		},
+		Pid: 1,
+	}
+
+	// Send a process event so we make target_info
+	processEvents.Send(exec.ProcessEvent{Type: exec.ProcessEventCreated, File: &app})
 
 	// WHEN it receives metrics
 	promInput.Send([]request.Span{
@@ -441,6 +454,7 @@ func makePromExporter(
 	ctx context.Context, t *testing.T, instrumentations []string, openPort int,
 	input *msg.Queue[[]request.Span],
 ) swarm.RunFunc {
+	processEvents := msg.NewQueue[exec.ProcessEvent](msg.ChannelBufferLen(20))
 	exporter, err := PrometheusEndpoint(
 		&global.ContextInfo{Prometheus: &connector.PrometheusManager{}},
 		&PrometheusConfig{
@@ -457,6 +471,7 @@ func makePromExporter(
 			},
 		},
 		input,
+		processEvents,
 	)(ctx)
 	require.NoError(t, err)
 

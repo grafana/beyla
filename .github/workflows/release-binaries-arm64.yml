@@ -7,6 +7,8 @@ on:
 jobs:
   release-arm64:
     uses: ./.github/workflows/release-binaries-base.yml
+    permissions:
+      contents: write
     with:
       arch: arm64
       runner: github-hosted-ubuntu-arm64

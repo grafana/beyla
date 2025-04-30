@@ -16,7 +16,7 @@
 
 #define SSL_RBIO_OFF 0x10
 #define SSL_WBIO_OFF 0x18
-#define RBIO_FD_OFF  0x38
+#define RBIO_FD_OFF 0x38
 
 static __always_inline int get_read_ssl_fd(void *ssl) {
     int fd = 0;
@@ -58,8 +58,8 @@ static __always_inline struct socket *sock_from_fd(int fd) {
         bpf_dbg_printk("fd = %d, fdt = %llx, max_files = %d", fd, fd_t, max_fds);
         if (fd < max_fds) {
             struct file *f = 0;
-            bpf_probe_read_kernel(&f, sizeof(f), __fdt.fd + fd);        
-    
+            bpf_probe_read_kernel(&f, sizeof(f), __fdt.fd + fd);
+
             bpf_dbg_printk("f %llx", f);
             if (f) {
                 struct socket *sock = BPF_PROBE_READ(f, private_data);
@@ -79,7 +79,8 @@ static __always_inline void set_active_ssl_connection(pid_connection_info_t *con
     bpf_map_update_elem(&ssl_to_conn, &ssl, conn, BPF_ANY);
 }
 
-static __always_inline bool fill_in_connection_info(u64 id, void *ssl, int fd, ssl_pid_connection_info_t *ssl_conn) {
+static __always_inline bool
+fill_in_connection_info(u64 id, void *ssl, int fd, ssl_pid_connection_info_t *ssl_conn) {
     struct socket *sock = sock_from_fd(fd);
     if (!sock) {
         return false;

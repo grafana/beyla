@@ -562,10 +562,6 @@ int BPF_KPROBE(beyla_kprobe_sock_recvmsg, struct socket *sock, struct msghdr *ms
     BPF_CORE_READ_INTO(&sk, sock, sk);
 
     bpf_dbg_printk("+++ sock_recvmsg sock=%llx, socket=%llx", sk, sock);
-
-    struct file *f = 0;
-    BPF_CORE_READ_INTO(&f, sock, file);
-    bpf_printk("+++ sock_recvmsg file=%llx", f);
     if (sk) {
         setup_recvmsg(id, sk, msg);
     }

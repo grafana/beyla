@@ -8,7 +8,7 @@
 #include <common/tcp_info.h>
 
 #include <generictracer/k_tracer_defs.h>
-#include <generictracer/http_ssl_defs.h>
+#include <generictracer/ssl_defs.h>
 #include <generictracer/k_send_receive.h>
 #include <generictracer/k_unix_sock.h>
 
@@ -561,7 +561,11 @@ int BPF_KPROBE(beyla_kprobe_sock_recvmsg, struct socket *sock, struct msghdr *ms
     struct sock *sk = 0;
     BPF_CORE_READ_INTO(&sk, sock, sk);
 
-    bpf_dbg_printk("+++ sock_recvmsg sock=%llx", sk);
+    bpf_dbg_printk("+++ sock_recvmsg sock=%llx, socket=%llx", sk, sock);
+
+    struct file *f = 0;
+    BPF_CORE_READ_INTO(&f, sock, file);
+    bpf_printk("+++ sock_recvmsg file=%llx", f);
     if (sk) {
         setup_recvmsg(id, sk, msg);
     }

@@ -305,7 +305,7 @@ static __always_inline void cleanup_http_request_data(pid_connection_info_t *pid
             t_key.p_key.ns = info->pid.ns;
             t_key.p_key.tid = info->task_tid;
             t_key.p_key.pid = info->pid.user_pid;
-            delete_server_trace(&t_key, pid_conn);
+            delete_server_trace(pid_conn, &t_key);
         } else {
             delete_client_trace_info(pid_conn);
         }

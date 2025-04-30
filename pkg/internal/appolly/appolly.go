@@ -218,13 +218,11 @@ func refreshK8sInformerCache(ctx context.Context, ctxInfo *global.ContextInfo) e
 	return err
 }
 
-func (i *Instrumenter) processEventsPipeline(ctx context.Context, graph *swarm.Runner) error {
+func (i *Instrumenter) processEventsPipeline(ctx context.Context, graph *swarm.Runner) {
 	graph.Start(ctx)
 	// run until either the graph is finished or the context is cancelled
 	select {
 	case <-graph.Done():
 	case <-ctx.Done():
 	}
-
-	return nil
 }

@@ -8,3 +8,7 @@ attributes:
   select:
     "*":
       include: ["*"]
+discovery:
+  services:
+    - open_ports: 4000
+      containers_only: true      

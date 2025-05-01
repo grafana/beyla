@@ -12,6 +12,7 @@ import (
 	"github.com/shirou/gopsutil/v3/process"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
+	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 	"github.com/grafana/beyla/v2/pkg/services"
@@ -23,6 +24,7 @@ func CriteriaMatcherProvider(
 	input *msg.Queue[[]Event[processAttrs]],
 	output *msg.Queue[[]Event[ProcessMatch]],
 ) swarm.InstanceFunc {
+	beylaNamespace, _ := ebpfcommon.FindNetworkNamespace(int32(os.Getpid()))
 	m := &matcher{
 		log:             slog.With("component", "discover.CriteriaMatcher"),
 		criteria:        FindingCriteria(cfg),
@@ -30,6 +32,7 @@ func CriteriaMatcherProvider(
 		processHistory:  map[PID]*services.ProcessInfo{},
 		input:           input.Subscribe(),
 		output:          output,
+		beylaNamespace:  beylaNamespace,
 	}
 	return swarm.DirectInstance(m.run)
 }
@@ -44,6 +47,7 @@ type matcher struct {
 	processHistory map[PID]*services.ProcessInfo
 	input          <-chan []Event[processAttrs]
 	output         *msg.Queue[[]Event[ProcessMatch]]
+	beylaNamespace string
 }
 
 // ProcessMatch matches a found process with the first selection criteria it fulfilled.
@@ -152,6 +156,14 @@ func (m *matcher) matchProcess(obj *processAttrs, p *services.ProcessInfo, a *se
 	if a.OpenPorts.Len() > 0 && !m.matchByPort(p, a) {
 		log.Debug("open ports do not match", "openPorts", a.OpenPorts)
 		return false
+	}
+	if a.ContainersOnly {
+		ns, _ := ebpfcommon.FindNetworkNamespace(p.Pid)
+		if ns == m.beylaNamespace {
+			log.Debug("not in a container", "namespace", ns)
+			return false
+		}
+		log.Debug("app is in a container", "namespace", ns, "beyla namespace", m.beylaNamespace)
 	}
 	// after matching by process basic information, we check if it matches
 	// by metadata.

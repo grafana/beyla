@@ -23,7 +23,7 @@ type storage interface {
 	GetHostnames(ip string) ([]string, error)
 }
 
-// StartDNSPacketInspector in a backgound goroutine
+// StartDNSPacketInspector in a background goroutine
 func StartDNSPacketInspector(ctx context.Context, storage storage) error {
 	tracer, err := newTracer()
 

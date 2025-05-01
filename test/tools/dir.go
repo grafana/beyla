@@ -14,7 +14,7 @@ func ProjectDir() string {
 	}
 	thisDir := filepath.Dir(thisFile)
 
-	// If we move this file path, this probaly will need to change
+	// If we move this file path, this probably will need to change
 	// Unit tests are provided to avoid a file move to break other tests
 	projectDirFromHere := path.Join(thisDir, "..", "..")
 

@@ -26,7 +26,7 @@ static __always_inline void *is_ssl_connection(u64 id, pid_connection_info_t *co
     ssl_args_t *ssl_args = 0;
     u8 update_info = 0;
 
-    // Checks if it's sandwitched between read or write uprobe/uretprobe
+    // Checks if it's sandwiched between read or write uprobe/uretprobe
     if (direction == TCP_RECV) {
         ssl_args = bpf_map_lookup_elem(&active_ssl_read_args, &id);
         if (ssl_args) {

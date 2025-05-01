@@ -52,7 +52,7 @@ type GPUMallocInfo bpfGpuMallocT
 
 // TODO: We have a way to bring ELF file information to this Tracer struct
 // via the newNonGoTracersGroup / newNonGoTracersGroupUProbes functions. Now,
-// we need to figure out how to pass it to the SharedRingbuf.. not sure if thats
+// we need to figure out how to pass it to the SharedRingbuf.. not sure if that's
 // possible
 type Tracer struct {
 	pidsFilter       ebpfcommon.ServiceFilter

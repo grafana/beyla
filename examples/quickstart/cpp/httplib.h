@@ -759,7 +759,7 @@ public:
  * Captures parameters in request path and stores them in Request::path_params
  *
  * Capture name is a substring of a pattern from : to /.
- * The rest of the pattern is matched agains the request path directly
+ * The rest of the pattern is matched against the request path directly
  * Parameters are captured starting from the next character after
  * the end of the last matched static pattern fragment until the next /.
  *
@@ -5597,7 +5597,7 @@ inline bool PathParamsMatcher::match(Request &request) const {
     request.path_params.emplace(
         param_name, request.path.substr(starting_pos, sep_pos - starting_pos));
 
-    // Mark everythin up to '/' as matched
+    // Mark everything up to '/' as matched
     starting_pos = sep_pos + 1;
   }
   // Returns false if the path is longer than the pattern

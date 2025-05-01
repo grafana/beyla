@@ -1,5 +1,5 @@
 # Build the testserver binary
-# Docker command must be invoked from the projec root directory
+# Docker command must be invoked from the project root directory
 FROM golang:1.22 AS builder
 
 ARG TARGETARCH

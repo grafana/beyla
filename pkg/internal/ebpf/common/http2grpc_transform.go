@@ -498,7 +498,7 @@ func isHTTP2(data []uint8, eventLen int) bool {
 	// Parsing HTTP2 frames with the Go HTTP2/gRPC parser is very expensive.
 	// Therefore, we replicate some of our HTTP2 frame reader from eBPF here to
 	// check if this payload even remotely looks like HTTP2/gRPC, e.g. we must
-	// find a resonably looking HTTP "headers" frame.
+	// find a reasonably looking HTTP "headers" frame.
 	if !isLikelyHTTP2(data, eventLen) {
 		return false
 	}

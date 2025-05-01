@@ -18,13 +18,16 @@ import (
 	"github.com/grafana/beyla/v2/pkg/services"
 )
 
+var namespaceFetcherFunc = ebpfcommon.FindNetworkNamespace
+var osPIDFunc = os.Getpid
+
 // CriteriaMatcherProvider filters the processes that match the discovery criteria.
 func CriteriaMatcherProvider(
 	cfg *beyla.Config,
 	input *msg.Queue[[]Event[processAttrs]],
 	output *msg.Queue[[]Event[ProcessMatch]],
 ) swarm.InstanceFunc {
-	beylaNamespace, _ := ebpfcommon.FindNetworkNamespace(int32(os.Getpid()))
+	beylaNamespace, _ := namespaceFetcherFunc(int32(osPIDFunc()))
 	m := &matcher{
 		log:             slog.With("component", "discover.CriteriaMatcher"),
 		criteria:        FindingCriteria(cfg),
@@ -158,7 +161,7 @@ func (m *matcher) matchProcess(obj *processAttrs, p *services.ProcessInfo, a *se
 		return false
 	}
 	if a.ContainersOnly {
-		ns, _ := ebpfcommon.FindNetworkNamespace(p.Pid)
+		ns, _ := namespaceFetcherFunc(p.Pid)
 		if ns == m.beylaNamespace {
 			log.Debug("not in a container", "namespace", ns)
 			return false

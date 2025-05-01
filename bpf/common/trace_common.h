@@ -150,7 +150,9 @@ static __always_inline unsigned char *extract_flags(unsigned char *tp_start) {
     return tp_start + 13 + 2 + 1 + 32 + 1 + 16 + 1;
 }
 
-static __always_inline void delete_server_trace(trace_key_t *t_key) {
+static __always_inline void delete_server_trace(pid_connection_info_t *pid_conn,
+                                                trace_key_t *t_key) {
+    delete_trace_info_for_connection(&pid_conn->conn, TRACE_TYPE_SERVER);
     int __attribute__((unused)) res = bpf_map_delete_elem(&server_traces, t_key);
     bpf_dbg_printk("Deleting server span for id=%llx, pid=%d, ns=%d",
                    bpf_get_current_pid_tgid(),

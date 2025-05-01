@@ -5,7 +5,7 @@
 #include <common/sockaddr.h>
 #include <common/tcp_info.h>
 
-#include <generictracer/http_ssl_defs.h>
+#include <generictracer/ssl_defs.h>
 
 #include <logger/bpf_dbg.h>
 
@@ -36,6 +36,7 @@ int BPF_UPROBE(beyla_uprobe_ssl_read, void *ssl, const void *buf, int num) {
     args.buf = (u64)buf;
     args.ssl = (u64)ssl;
     args.len_ptr = 0;
+    args.flags = 0;
 
     bpf_map_update_elem(&active_ssl_read_args, &id, &args, BPF_ANY);
     bpf_map_update_elem(&ssl_to_pid_tid,
@@ -88,6 +89,7 @@ int BPF_UPROBE(beyla_uprobe_ssl_read_ex,
     args.buf = (u64)buf;
     args.ssl = (u64)ssl;
     args.len_ptr = (u64)readbytes;
+    args.flags = 0;
 
     bpf_map_update_elem(&active_ssl_read_args, &id, &args, BPF_ANY);
     bpf_map_update_elem(&ssl_to_pid_tid,
@@ -141,6 +143,7 @@ int BPF_UPROBE(beyla_uprobe_ssl_write, void *ssl, const void *buf, int num) {
     args.buf = (u64)buf;
     args.ssl = (u64)ssl;
     args.len_ptr = num;
+    args.flags = 0;
 
     bpf_map_update_elem(&active_ssl_write_args, &id, &args, BPF_ANY);
 
@@ -184,6 +187,7 @@ int BPF_UPROBE(beyla_uprobe_ssl_write_ex, void *ssl, const void *buf, int num, s
     args.buf = (u64)buf;
     args.ssl = (u64)ssl;
     args.len_ptr = num;
+    args.flags = 0;
 
     bpf_map_update_elem(&active_ssl_write_args, &id, &args, BPF_ANY);
 

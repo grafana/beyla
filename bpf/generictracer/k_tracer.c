@@ -8,7 +8,7 @@
 #include <common/tcp_info.h>
 
 #include <generictracer/k_tracer_defs.h>
-#include <generictracer/http_ssl_defs.h>
+#include <generictracer/ssl_defs.h>
 #include <generictracer/k_send_receive.h>
 #include <generictracer/k_unix_sock.h>
 
@@ -292,7 +292,9 @@ int BPF_KPROBE(beyla_kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, si
         s_args.p_conn.pid = pid_from_pid_tgid(id);
         s_args.orig_dport = orig_dport;
 
-        void *ssl = is_ssl_connection(id, &s_args.p_conn, TCP_SEND);
+        connect_ssl_to_connection(id, &s_args.p_conn, TCP_SEND);
+
+        void *ssl = is_ssl_connection(&s_args.p_conn);
         if (size > 0) {
             if (!ssl) {
                 u8 *buf = iovec_memory();
@@ -416,7 +418,9 @@ int BPF_KPROBE(beyla_kprobe_tcp_rate_check_app_limited, struct sock *sk) {
             }
         }
 
-        void *ssl = is_ssl_connection(id, &s_args.p_conn, TCP_SEND);
+        connect_ssl_to_connection(id, &s_args.p_conn, TCP_SEND);
+
+        void *ssl = is_ssl_connection(&s_args.p_conn);
         if (ssl) {
             make_inactive_sk_buffer(&s_args.p_conn.conn);
             tcp_send_ssl_check(id, ssl, &s_args.p_conn, orig_dport);
@@ -499,6 +503,7 @@ int BPF_KPROBE(beyla_kprobe_tcp_close, struct sock *sk, long timeout) {
         terminate_http_request_if_needed(&info);
         bpf_map_delete_elem(&ongoing_tcp_req, &info);
         delete_backup_sk_buff(&info.conn);
+        cleanup_tcp_trace_info_if_needed(&info);
     }
 
     bpf_map_delete_elem(&active_send_args, &id);
@@ -513,6 +518,7 @@ static __always_inline void setup_recvmsg(u64 id, struct sock *sk, struct msghdr
     // threads in the runtime.
     u64 sock_p = (u64)sk;
     ensure_sent_event(id, &sock_p);
+    connect_ssl_to_sock(id, sk, TCP_RECV);
 
     recv_args_t args = {
         .sock_ptr = (u64)sk,
@@ -560,7 +566,7 @@ int BPF_KPROBE(beyla_kprobe_sock_recvmsg, struct socket *sock, struct msghdr *ms
     struct sock *sk = 0;
     BPF_CORE_READ_INTO(&sk, sock, sk);
 
-    bpf_dbg_printk("+++ sock_recvmsg sock=%llx", sk);
+    bpf_dbg_printk("+++ sock_recvmsg sock=%llx, socket=%llx", sk, sock);
     if (sk) {
         setup_recvmsg(id, sk, msg);
     }
@@ -664,7 +670,7 @@ static __always_inline int return_recvmsg(void *ctx, struct sock *in_sock, u64 i
         sort_connection_info(&info.conn);
         info.pid = pid_from_pid_tgid(id);
 
-        void *ssl = is_ssl_connection(id, &info, TCP_RECV);
+        void *ssl = is_ssl_connection(&info);
 
         if (!ssl) {
 

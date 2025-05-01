@@ -182,7 +182,7 @@ static __always_inline u8 protocol_detector(struct sk_msg_md *msg,
     sort_connection_info(&s_args.p_conn.conn);
     s_args.p_conn.pid = pid_from_pid_tgid(id);
 
-    if (s_args.size == 0 || is_ssl_connection(id, &s_args.p_conn, TCP_SEND)) {
+    if (s_args.size == 0 || is_ssl_connection(&s_args.p_conn)) {
         return 0;
     }
 

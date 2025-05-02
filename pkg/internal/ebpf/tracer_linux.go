@@ -223,11 +223,21 @@ func (pt *ProcessTracer) loadTracers() error {
 
 	var log = ptlog()
 
+	loadedPrograms := make([]Tracer, 0, len(pt.Programs))
+
 	for _, p := range pt.Programs {
 		if err := pt.loadTracer(p, log); err != nil {
-			return err
+			log.Warn("couldn't load tracer", "error", err, "required", p.Required())
+
+			if p.Required() {
+				return err
+			}
+		} else {
+			loadedPrograms = append(loadedPrograms, p)
 		}
 	}
+
+	pt.Programs = loadedPrograms
 
 	btf.FlushKernelSpec()
 

@@ -43,3 +43,4 @@ func (p *Tracer) Constants() map[string]any                              { retur
 func (p *Tracer) SetupTailCalls()                                        {}
 func (p *Tracer) RegisterOffsets(_ *exec.FileInfo, _ *goexec.Offsets)    {}
 func (p *Tracer) ProcessBinary(_ *exec.FileInfo)                         {}
+func (p *Tracer) Required() bool                                         { return false }

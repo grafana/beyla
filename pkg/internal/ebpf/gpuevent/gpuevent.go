@@ -538,3 +538,7 @@ func (p *Tracer) findSymbolAddresses(f *elf.File) (*SymbolTree, error) {
 
 	return &t, nil
 }
+
+func (p *Tracer) Required() bool {
+	return false
+}

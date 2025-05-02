@@ -49,6 +49,15 @@ static __always_inline bool parse_sock_info(struct sock *s, connection_info_t *i
     return false;
 }
 
+static __always_inline bool parse_socket_info(struct socket *sock, connection_info_t *info) {
+    struct sock *s;
+    BPF_CORE_READ_INTO(&s, sock, sk);
+    if (!s) {
+        return false;
+    }
+    return parse_sock_info(s, info);
+}
+
 // We tag the server and client calls in flags to avoid mistaking a mutual connection between two
 // services as the same connection info. It would be almost impossible, but it might happen.
 static __always_inline bool parse_accept_socket_info(sock_args_t *args, connection_info_t *info) {

@@ -137,6 +137,9 @@ type Attributes struct {
 
 	// PodAnnotations allows matching against the annotations of a pod
 	PodAnnotations map[string]*RegexpAttr `yaml:"k8s_pod_annotations"`
+
+	// Restrict the discovery to processes which are running inside a container
+	ContainersOnly bool `yaml:"containers_only"`
 }
 
 // PortEnum defines an enumeration of ports. It allows defining a set of single ports as well a set of

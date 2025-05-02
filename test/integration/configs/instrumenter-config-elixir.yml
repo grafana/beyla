@@ -8,3 +8,8 @@ attributes:
   select:
     "*":
       include: ["*"]
+discovery:
+  services:
+    - open_ports: 4000
+      namespace: integration-test
+      containers_only: true      

@@ -64,7 +64,9 @@ func hasCapSysAdmin() bool {
 }
 
 func HasHostPidAccess() bool {
-	return os.Getpid() != 1
+	// not itself pid 1 and not running in sidecar mode
+	// with pid:service
+	return os.Getpid() != 1 && os.Getppid() != 0
 }
 
 func FindNetworkNamespace(pid int32) (string, error) {

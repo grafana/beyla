@@ -307,7 +307,7 @@ func TestCriteriaMatcherContainersOnly(t *testing.T) {
 
 	// override the os.Getpid func to that Beyla is always reported
 	// with pid 1
-	osPIDFunc = func() int {
+	osPidFunc = func() int {
 		return 1
 	}
 

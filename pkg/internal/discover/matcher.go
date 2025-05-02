@@ -19,7 +19,8 @@ import (
 )
 
 var namespaceFetcherFunc = ebpfcommon.FindNetworkNamespace
-var osPIDFunc = os.Getpid
+var hasHostPidAccess = ebpfcommon.HasHostPidAccess
+var osPidFunc = os.Getpid
 
 // CriteriaMatcherProvider filters the processes that match the discovery criteria.
 func CriteriaMatcherProvider(
@@ -27,15 +28,16 @@ func CriteriaMatcherProvider(
 	input *msg.Queue[[]Event[processAttrs]],
 	output *msg.Queue[[]Event[ProcessMatch]],
 ) swarm.InstanceFunc {
-	beylaNamespace, _ := namespaceFetcherFunc(int32(osPIDFunc()))
+	beylaNamespace, _ := namespaceFetcherFunc(int32(osPidFunc()))
 	m := &matcher{
-		log:             slog.With("component", "discover.CriteriaMatcher"),
-		criteria:        FindingCriteria(cfg),
-		excludeCriteria: append(cfg.Discovery.ExcludeServices, cfg.Discovery.DefaultExcludeServices...),
-		processHistory:  map[PID]*services.ProcessInfo{},
-		input:           input.Subscribe(),
-		output:          output,
-		beylaNamespace:  beylaNamespace,
+		log:              slog.With("component", "discover.CriteriaMatcher"),
+		criteria:         FindingCriteria(cfg),
+		excludeCriteria:  append(cfg.Discovery.ExcludeServices, cfg.Discovery.DefaultExcludeServices...),
+		processHistory:   map[PID]*services.ProcessInfo{},
+		input:            input.Subscribe(),
+		output:           output,
+		beylaNamespace:   beylaNamespace,
+		hasHostPidAccess: hasHostPidAccess(),
 	}
 	return swarm.DirectInstance(m.run)
 }
@@ -47,10 +49,11 @@ type matcher struct {
 	// processHistory keeps track of the processes that have been already matched and submitted for
 	// instrumentation.
 	// This avoids keep inspecting again and again client processes each time they open a new connection port
-	processHistory map[PID]*services.ProcessInfo
-	input          <-chan []Event[processAttrs]
-	output         *msg.Queue[[]Event[ProcessMatch]]
-	beylaNamespace string
+	processHistory   map[PID]*services.ProcessInfo
+	input            <-chan []Event[processAttrs]
+	output           *msg.Queue[[]Event[ProcessMatch]]
+	beylaNamespace   string
+	hasHostPidAccess bool
 }
 
 // ProcessMatch matches a found process with the first selection criteria it fulfilled.
@@ -162,7 +165,7 @@ func (m *matcher) matchProcess(obj *processAttrs, p *services.ProcessInfo, a *se
 	}
 	if a.ContainersOnly {
 		ns, _ := namespaceFetcherFunc(p.Pid)
-		if ns == m.beylaNamespace {
+		if ns == m.beylaNamespace && m.hasHostPidAccess {
 			log.Debug("not in a container", "namespace", ns)
 			return false
 		}

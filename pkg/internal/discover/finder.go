@@ -3,6 +3,7 @@ package discover
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/config"
@@ -82,16 +83,27 @@ func newCommonTracersGroup(cfg *beyla.Config) []ebpf.Tracer {
 		return []ebpf.Tracer{httptracer.New(cfg)}
 	}
 
+	tracers := []ebpf.Tracer{}
+
 	switch cfg.EBPF.ContextPropagation {
 	case config.ContextPropagationAll:
-		return []ebpf.Tracer{tctracer.New(cfg), tpinjector.New(cfg)}
+		if tctracer.CanRun() {
+			tracers = append(tracers, tctracer.New(cfg))
+		} else {
+			slog.Warn("L4 trace context propagation cannot be enabled, missing host PID or host network access")
+		}
+		tracers = append(tracers, tpinjector.New(cfg))
 	case config.ContextPropagationHeadersOnly:
-		return []ebpf.Tracer{tpinjector.New(cfg)}
+		tracers = append(tracers, tpinjector.New(cfg))
 	case config.ContextPropagationIPOptionsOnly:
-		return []ebpf.Tracer{tctracer.New(cfg)}
+		if tctracer.CanRun() {
+			tracers = append(tracers, tctracer.New(cfg))
+		} else {
+			slog.Warn("L4 trace context propagation cannot be enabled, missing host PID or host network access")
+		}
 	}
 
-	return []ebpf.Tracer{}
+	return tracers
 }
 
 func newGoTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Tracer {

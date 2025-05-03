@@ -11,6 +11,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/collector/pdata/ptrace"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
@@ -20,7 +21,6 @@ import (
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
 func TestTracesSkipsInstrumented(t *testing.T) {

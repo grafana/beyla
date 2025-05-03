@@ -303,14 +303,14 @@ func NewElfContextFromData(data []byte) (*ElfContext, error) {
 }
 
 func (ctx *ElfContext) Close() error {
+	if ctx.file != nil {
+		defer ctx.file.Close()
+	}
+
 	if ctx.ownsData {
 		if err := unix.Munmap(ctx.Data); err != nil {
 			return fmt.Errorf("failed to unmap elf context: %w", err)
 		}
-	}
-
-	if ctx.file != nil {
-		ctx.file.Close()
 	}
 
 	return nil

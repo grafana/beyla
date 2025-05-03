@@ -47,6 +47,7 @@ func newAttrReportGroup(
 	}
 }
 
+// GroupAttributes defines additional attributes for each group
 type GroupAttributes map[AttrGroups][]attr.Name
 
 func newGroupAttributes(groupAttrsCfg map[string][]attr.Name) GroupAttributes {
@@ -77,6 +78,7 @@ func parseExtraAttrGroup(group string) (AttrGroups, error) {
 	}
 }
 
+// SelectorConfig defines settings for filtering attributes and adding additional attributes
 type SelectorConfig struct {
 	SelectionCfg            Selection
 	ExtraGroupAttributesCfg map[string][]attr.Name

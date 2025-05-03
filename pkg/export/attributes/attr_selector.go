@@ -2,12 +2,17 @@ package attributes
 
 import (
 	"fmt"
+	"log/slog"
 	"maps"
 	"slices"
 
 	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
 	maps2 "github.com/grafana/beyla/v2/pkg/internal/helpers/maps"
 )
+
+func alog() *slog.Logger {
+	return slog.With("component", "attributes")
+}
 
 // Default is true if an attribute must be reported by default,
 // when no "include" selector is specified by the user
@@ -25,6 +30,58 @@ type AttrReportGroup struct {
 	Attributes map[attr.Name]Default
 }
 
+func newAttrReportGroup(
+	disabled bool,
+	subGroups []*AttrReportGroup,
+	attributes map[attr.Name]Default,
+	extraAttributes []attr.Name,
+) AttrReportGroup {
+	for _, extraAttr := range extraAttributes {
+		attributes[extraAttr] = true
+	}
+
+	return AttrReportGroup{
+		Disabled:   disabled,
+		SubGroups:  subGroups,
+		Attributes: attributes,
+	}
+}
+
+type GroupAttributes map[AttrGroups][]attr.Name
+
+func newGroupAttributes(groupAttrsCfg map[string][]attr.Name) GroupAttributes {
+	log := alog()
+
+	groupAttrs := make(GroupAttributes, len(groupAttrsCfg))
+	for group, attrs := range groupAttrsCfg {
+		attrGroup, err := parseExtraAttrGroup(group)
+		if err != nil {
+			log.Warn("failed to parse extra attribute group",
+				slog.String("group", group),
+				slog.String("err", err.Error()),
+			)
+			continue
+		}
+		groupAttrs[attrGroup] = attrs
+	}
+
+	return groupAttrs
+}
+
+func parseExtraAttrGroup(group string) (AttrGroups, error) {
+	switch group {
+	case "app_kube":
+		return GroupAppKube, nil
+	default:
+		return UndefinedGroup, fmt.Errorf("group %s is not supported", group)
+	}
+}
+
+type SelectorConfig struct {
+	SelectionCfg            Selection
+	ExtraGroupAttributesCfg map[string][]attr.Name
+}
+
 // AttrSelector returns, for each metric, the attributes that have to be reported
 // according to the user-provided selection and/or other conditions (e.g. kubernetes is enabled)
 type AttrSelector struct {
@@ -34,12 +91,16 @@ type AttrSelector struct {
 
 // NewAttrSelector returns an AttrSelector instance based on the user-provided attributes Selection
 // and the auto-detected attribute AttrGroups
-func NewAttrSelector(groups AttrGroups, selectorCfg Selection) (*AttrSelector, error) {
-	selectorCfg.Normalize()
+func NewAttrSelector(
+	groups AttrGroups,
+	cfg *SelectorConfig,
+) (*AttrSelector, error) {
+	cfg.SelectionCfg.Normalize()
+	extraGroupAttributes := newGroupAttributes(cfg.ExtraGroupAttributesCfg)
 	// TODO: validate
 	return &AttrSelector{
-		selector:   selectorCfg,
-		definition: getDefinitions(groups),
+		selector:   cfg.SelectionCfg,
+		definition: getDefinitions(groups, extraGroupAttributes),
 	}, nil
 }
 

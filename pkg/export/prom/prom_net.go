@@ -20,8 +20,8 @@ import (
 
 // NetPrometheusConfig for network metrics just wraps the global prom.NetPrometheusConfig as provided by the user
 type NetPrometheusConfig struct {
-	Config             *PrometheusConfig
-	AttributeSelectors attributes.Selection
+	Config      *PrometheusConfig
+	SelectorCfg *attributes.SelectorConfig
 	// Deprecated: to be removed in Beyla 3.0 with BEYLA_NETWORK_METRICS bool flag
 	GloballyEnabled bool
 }
@@ -78,7 +78,7 @@ func newNetReporter(
 	// OTEL exporter would report also some prometheus-exclusive attributes
 	group.Add(attributes.GroupPrometheus)
 
-	provider, err := attributes.NewAttrSelector(group, cfg.AttributeSelectors)
+	provider, err := attributes.NewAttrSelector(group, cfg.SelectorCfg)
 	if err != nil {
 		return nil, fmt.Errorf("network Prometheus exporter attributes enable: %w", err)
 	}

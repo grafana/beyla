@@ -1037,7 +1037,7 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 			Instrumentations:  []string{instrumentations.InstrumentationALL},
 		},
 		false,
-		attributes.Selection{},
+		&attributes.SelectorConfig{},
 		exportTraces,
 	)(context.Background())
 	require.NoError(t, err)
@@ -1488,7 +1488,7 @@ func makeTracesTestReceiver(instr []string) *tracesOTELReceiver {
 		},
 		false,
 		&global.ContextInfo{},
-		attributes.Selection{},
+		&attributes.SelectorConfig{},
 		msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10)),
 	)
 }
@@ -1503,14 +1503,14 @@ func makeTracesTestReceiverWithSpanMetrics(instr []string) *tracesOTELReceiver {
 		},
 		true,
 		&global.ContextInfo{},
-		attributes.Selection{},
+		&attributes.SelectorConfig{},
 		msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10)),
 	)
 }
 
 func generateTracesForSpans(t *testing.T, tr *tracesOTELReceiver, spans []request.Span) []ptrace.Traces {
 	res := []ptrace.Traces{}
-	traceAttrs, err := GetUserSelectedAttributes(tr.attributes)
+	traceAttrs, err := GetUserSelectedAttributes(tr.selectorCfg)
 	assert.NoError(t, err)
 	for i := range spans {
 		span := &spans[i]

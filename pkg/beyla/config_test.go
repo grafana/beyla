@@ -17,6 +17,7 @@ import (
 
 	"github.com/grafana/beyla/v2/pkg/config"
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
+	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
 	"github.com/grafana/beyla/v2/pkg/export/debug"
 	"github.com/grafana/beyla/v2/pkg/export/instrumentations"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
@@ -69,6 +70,8 @@ attributes:
     beyla.network.flow:
       include: ["foo", "bar"]
       exclude: ["baz", "bae"]
+  extra_group_attributes:
+    app_kube: ["k8s.app.version"]
 network:
   enable: true
   cidrs:
@@ -203,6 +206,9 @@ network:
 					Include: []string{"foo", "bar"},
 					Exclude: []string{"baz", "bae"},
 				},
+			},
+			ExtraGroupAttributes: map[string][]attr.Name{
+				"app_kube": {"k8s.app.version"},
 			},
 		},
 		Routes: &transform.RoutesConfig{

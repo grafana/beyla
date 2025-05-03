@@ -279,3 +279,23 @@ Beyla periodically resynchronizes the whole Kubernetes metadata at the frequency
 by this property.
 
 Higher values reduce the load on the Kubernetes API service.
+
+## Extra group attributes
+
+Beyla supports adding custom attributes to metrics by configuring `extra_group_attributes`. You need to add the desired group and an array of attributes to be added to this group.
+
+Currently only `app_kube` group is supported, which characterises attributes specific to the cluster in k8s, e.g. container name, pod name, namespace name, pod uid and others.
+
+For example:
+
+```yaml
+attributes:
+  kubernetes:
+    enable: true
+    resource_labels:
+      app: ["app"]
+  extra_group_attributes:
+    app_kube: ["app"]
+```
+
+Now adding a label named `app` will appear in your metrics. You can also add an annotation with prefix `resource.opentelemetry.io/` and postfix `app` and then this annotation will also appear in the metrics.

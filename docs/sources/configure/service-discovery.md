@@ -192,6 +192,19 @@ executables in the host.
 If other selectors are specified in the same `services` entry, the processes to be
 selected need to match all the selector properties.
 
+| YAML              | Environment variable | Type    | Default |
+| ----------------- | -------------------- | --------| ------- |
+| `containers_only` | --                   | boolean |  false  |
+
+Selects processes to instrument which are running in an OCI container.
+To perform this check, Beyla inspects the process network namespace and 
+matches it against its own network namespace. This option is ignored, if 
+there are insufficient permissions given to the Beyla process to perform 
+the network namespace inspection.
+
+If other selectors are specified in the same `services` entry, the processes to be
+selected need to match all the selector properties.
+
 | YAML            | Environment variable | Type                        | Default |
 | --------------- | ------- | --------------------------- | ------- |
 | `k8s_namespace` | --      | string (regular expression) | (unset) |

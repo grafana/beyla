@@ -12,9 +12,11 @@ discovery:
     - namespace: http2-go
       name: client
       exe_path: http2client
+      containers_only: true
     - namespace: http2-go
       name: server
       exe_path: http2srv
+      containers_only: true
 attributes:
   select:
     "*":

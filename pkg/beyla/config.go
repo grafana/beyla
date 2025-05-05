@@ -204,7 +204,7 @@ type Config struct {
 	// and both the "application" and "application_process" features are enabled
 	Processes process.CollectConfig `yaml:"processes"`
 
-	// Grafana Agent specific configuration
+	// Grafana Alloy specific configuration
 	TracesReceiver TracesReceiverConfig `yaml:"-"`
 }
 
@@ -213,7 +213,9 @@ type Consumer interface {
 }
 
 type TracesReceiverConfig struct {
-	Traces []Consumer
+	Traces           []Consumer
+	Sampler          otel.Sampler `yaml:"sampler"`
+	Instrumentations []string     `yaml:"instrumentations" env:"BEYLA_OTEL_TRACES_INSTRUMENTATIONS" envSeparator:","`
 }
 
 func (t TracesReceiverConfig) Enabled() bool {

@@ -245,10 +245,18 @@ static __always_inline u8 find_trace_for_server_request(connection_info_t *conn,
         bpf_dbg_printk("existing_tp %llx", existing_tp);
 
         if (!disable_black_box_cp && correlated_requests(tp, existing_tp)) {
-            found_tp = 1;
-            bpf_dbg_printk("Found existing correlated tp for server request");
-            __builtin_memcpy(tp->trace_id, existing_tp->tp.trace_id, sizeof(tp->trace_id));
-            __builtin_memcpy(tp->parent_id, existing_tp->tp.span_id, sizeof(tp->parent_id));
+            if (existing_tp->valid) {
+                found_tp = 1;
+                bpf_dbg_printk("Found existing correlated tp for server request");
+                __builtin_memcpy(tp->trace_id, existing_tp->tp.trace_id, sizeof(tp->trace_id));
+                __builtin_memcpy(tp->parent_id, existing_tp->tp.span_id, sizeof(tp->parent_id));
+                // Mark the client info as invalid (used), in case the client
+                // request information is not cleaned up.
+                existing_tp->valid = 0;
+                set_trace_info_for_connection(conn, TRACE_TYPE_CLIENT, existing_tp);
+            } else {
+                bpf_d_printk("the existing client tp was already used, ignoring");
+            }
         }
     }
 

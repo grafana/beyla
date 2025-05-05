@@ -258,9 +258,10 @@ static __always_inline u8 find_trace_for_server_request(connection_info_t *conn,
                     // We only do it for HTTP because TCP can be confused with SSL
                     existing_tp->valid = 0;
                     set_trace_info_for_connection(conn, TRACE_TYPE_CLIENT, existing_tp);
+                    bpf_dbg_printk("setting the client info as used");
                 }
             } else {
-                bpf_d_printk("the existing client tp was already used, ignoring");
+                bpf_dbg_printk("the existing client tp was already used, ignoring");
             }
         }
     }

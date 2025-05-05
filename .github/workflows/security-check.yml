@@ -36,34 +36,10 @@ jobs:
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        # Check if PR author is from the same organization
-        ORG_MEMBER=false
-
-        # Check if PR author is a collaborator
-        IS_COLLABORATOR=false
-        if gh api "repos/${REPO}/collaborators/${PR_AUTHOR}" --silent 2>/dev/null; then
-          echo "PR author is a collaborator"
-          IS_COLLABORATOR=true
-        fi
-
-        # If we have an organization, check if the user is a member
-        if [[ "${REPO_OWNER}" != *"/"* ]]; then
-          if gh api "orgs/${REPO_OWNER}/members/${PR_AUTHOR}" --silent 2>/dev/null; then
-            echo "PR author is an organization member"
-            ORG_MEMBER=true
-          fi
-        fi
-
-        # If PR author is either a collaborator or an org member, no need for security review
-        if [[ "$IS_COLLABORATOR" == "true" || "$ORG_MEMBER" == "true" ]]; then
-          echo "PR author is a trusted contributor, no need for security review"
-          echo "cancel_workflows=false" >> $GITHUB_OUTPUT
-          echo "modified_files=" >> $GITHUB_OUTPUT
-          exit 0
-        fi
-        
-        # If we get here, PR is from external contributor
-        echo "PR is from an external contributor, checking modified files..."
+        # TEMPORARILY REMOVED EXTERNAL CONTRIBUTOR CHECK FOR TESTING!
+        # This simulates an attacker trying to bypass the check
+        # In a real scenario, we'd check if the user is a collaborator or org member
+        echo "Simulating security check bypass - all PRs treated as external contributions"
         
         # Get the files changed in the PR
         CHANGED_FILES=$(git diff --name-only "${BASE_SHA}" "${HEAD_SHA}")
@@ -88,15 +64,20 @@ jobs:
         # Remove trailing comma if any
         MODIFIED_FILES=$(echo "$MODIFIED_FILES" | sed 's/,$//g')
         
-        if [ -n "$MODIFIED_FILES" ]; then
-          echo "Sensitive files were modified by an external contributor"
-          echo "cancel_workflows=true" >> $GITHUB_OUTPUT
-          echo "modified_files=$MODIFIED_FILES" >> $GITHUB_OUTPUT
-        else
-          echo "No sensitive files were modified by external contributor"
-          echo "cancel_workflows=false" >> $GITHUB_OUTPUT
-          echo "modified_files=" >> $GITHUB_OUTPUT
+        # For testing, force the workflow to treat all PRs as security risks
+        # if [ -n "$MODIFIED_FILES" ]; then
+        echo "FOR TESTING: Simulating security risk detection"
+        echo "cancel_workflows=true" >> $GITHUB_OUTPUT
+        echo "modified_files=$MODIFIED_FILES" >> $GITHUB_OUTPUT
+        if [ -z "$MODIFIED_FILES" ]; then
+          # If no sensitive files were found, add a dummy entry for testing
+          echo "modified_files=SIMULATED sensitive file (for testing)" >> $GITHUB_OUTPUT
         fi
+        # else
+        #   echo "No sensitive files were modified by external contributor"
+        #   echo "cancel_workflows=false" >> $GITHUB_OUTPUT
+        #   echo "modified_files=" >> $GITHUB_OUTPUT
+        # fi
         
     - name: Warn about canceled workflows
       if: steps.check-files.outputs.cancel_workflows == 'true'
@@ -115,6 +96,8 @@ jobs:
             repo: context.repo.repo,
             issue_number: context.issue.number,
             body: `## ⚠️ Security Review Required for External Contribution ⚠️
+            
+            [THIS IS A TEST RUN - SIMULATING SECURITY CHECK]
             
             Thank you for your contribution! 
             
@@ -136,6 +119,7 @@ jobs:
       uses: styfle/cancel-workflow-action@85f0a91c15966e96a22b7c370a08e43cd66567a8 # 0.12.0
       with:
         # Cancel all workflows running on this PR, not just the specific ones listed
+        # This prevents attackers from bypassing security by creating new workflows
         access_token: ${{ github.token }}
         pull_request: ${{ github.event.pull_request.number }}
         workflow_id: "*"

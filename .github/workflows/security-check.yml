@@ -1,9 +1,9 @@
 name: Security Check for External Contributions
 
-# Make this action run before any other action
+# Make this action run only when a PR is initially opened
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened]
 
 # This ensures this workflow runs first
 concurrency:
@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   security-check:
-    name: Check for sensitive file modifications
+    name: Check for external contributions with sensitive file modifications
     runs-on: ubuntu-latest
     # Set a default to allow the workflow to complete even if we cancel others
     outputs:
@@ -27,11 +27,38 @@ jobs:
       
     - name: Check if PR is from external contributor and sensitive files were modified
       id: check-files
+      shell: bash
+      env:
+        PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        REPO: ${{ github.repository }}
+        REPO_OWNER: ${{ github.repository_owner }}
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        # Check if the PR author is a collaborator/member
-        if gh api repos/${{ github.repository }}/collaborators/${{ github.event.pull_request.user.login }} --silent 2>/dev/null; then
-          echo "PR author is a collaborator, no need to cancel workflows"
+        # Check if PR author is from the same organization
+        ORG_MEMBER=false
+
+        # Check if PR author is a collaborator
+        IS_COLLABORATOR=false
+        if gh api "repos/${REPO}/collaborators/${PR_AUTHOR}" --silent 2>/dev/null; then
+          echo "PR author is a collaborator"
+          IS_COLLABORATOR=true
+        fi
+
+        # If we have an organization, check if the user is a member
+        if [[ "${REPO_OWNER}" != *"/"* ]]; then
+          if gh api "orgs/${REPO_OWNER}/members/${PR_AUTHOR}" --silent 2>/dev/null; then
+            echo "PR author is an organization member"
+            ORG_MEMBER=true
+          fi
+        fi
+
+        # If PR author is either a collaborator or an org member, no need for security review
+        if [[ "$IS_COLLABORATOR" == "true" || "$ORG_MEMBER" == "true" ]]; then
+          echo "PR author is a trusted contributor, no need for security review"
           echo "cancel_workflows=false" >> $GITHUB_OUTPUT
+          echo "modified_files=" >> $GITHUB_OUTPUT
           exit 0
         fi
         
@@ -39,7 +66,7 @@ jobs:
         echo "PR is from an external contributor, checking modified files..."
         
         # Get the files changed in the PR
-        CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }})
+        CHANGED_FILES=$(git diff --name-only "${BASE_SHA}" "${HEAD_SHA}")
         MODIFIED_FILES=""
         
         # Check for modifications to sensitive files
@@ -66,12 +93,10 @@ jobs:
           echo "cancel_workflows=true" >> $GITHUB_OUTPUT
           echo "modified_files=$MODIFIED_FILES" >> $GITHUB_OUTPUT
         else
-          echo "No sensitive files were modified"
+          echo "No sensitive files were modified by external contributor"
           echo "cancel_workflows=false" >> $GITHUB_OUTPUT
           echo "modified_files=" >> $GITHUB_OUTPUT
         fi
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         
     - name: Warn about canceled workflows
       if: steps.check-files.outputs.cancel_workflows == 'true'
@@ -89,11 +114,11 @@ jobs:
             owner: context.repo.owner,
             repo: context.repo.repo,
             issue_number: context.issue.number,
-            body: `## ⚠️ Security Review Required ⚠️
+            body: `## ⚠️ Security Review Required for External Contribution ⚠️
             
             Thank you for your contribution! 
             
-            This PR requires a security review because it modifies sensitive files:
+            As you're not a repository collaborator, this PR requires a security review because it modifies sensitive files:
             - ${modifiedFiles}
             
             These files can affect the project's build system, CI/CD workflows, or other security-sensitive areas. All other automated checks have been temporarily paused until a maintainer reviews these changes.
@@ -108,7 +133,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Cancel subsequent workflows
-      uses: andymckay/cancel-action@0.3
+      uses: andymckay/cancel-action@0.31db758351ee9c0e0fcfb519d13af42c357fd8b4  # v0.3
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         workflow_id: pull_request.yml,pull_request_k8s_integration_tests.yml,pull_request_oats_test.yml,pull_request_integration_tests.yml,pull_request_integration_tests_arm.yml,pull_request_integration_tests_vm_5.15_x86_64.yml,pull_request_check_license.yml,clang-format-check.yml,helm-test.yml,generator-image.yml,backport.yml,vale.yml,workflow_integration_tests_vm.yml

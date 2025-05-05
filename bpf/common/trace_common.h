@@ -227,7 +227,9 @@ server_or_client_trace(u8 type, connection_info_t *conn, tp_info_pid_t *tp_p, u8
     }
 }
 
-static __always_inline u8 find_trace_for_server_request(connection_info_t *conn, tp_info_t *tp) {
+static __always_inline u8 find_trace_for_server_request(connection_info_t *conn,
+                                                        tp_info_t *tp,
+                                                        u8 type) {
     u8 found_tp = 0;
     tp_info_pid_t *existing_tp = bpf_map_lookup_elem(&incoming_trace_map, conn);
     if (existing_tp) {
@@ -245,10 +247,22 @@ static __always_inline u8 find_trace_for_server_request(connection_info_t *conn,
         bpf_dbg_printk("existing_tp %llx", existing_tp);
 
         if (!disable_black_box_cp && correlated_requests(tp, existing_tp)) {
-            found_tp = 1;
-            bpf_dbg_printk("Found existing correlated tp for server request");
-            __builtin_memcpy(tp->trace_id, existing_tp->tp.trace_id, sizeof(tp->trace_id));
-            __builtin_memcpy(tp->parent_id, existing_tp->tp.span_id, sizeof(tp->parent_id));
+            if (existing_tp->valid) {
+                found_tp = 1;
+                bpf_dbg_printk("Found existing correlated tp for server request");
+                __builtin_memcpy(tp->trace_id, existing_tp->tp.trace_id, sizeof(tp->trace_id));
+                __builtin_memcpy(tp->parent_id, existing_tp->tp.span_id, sizeof(tp->parent_id));
+                // Mark the client info as invalid (used), in case the client
+                // request information is not cleaned up.
+                if (type == EVENT_HTTP_REQUEST) {
+                    // We only do it for HTTP because TCP can be confused with SSL
+                    existing_tp->valid = 0;
+                    set_trace_info_for_connection(conn, TRACE_TYPE_CLIENT, existing_tp);
+                    bpf_dbg_printk("setting the client info as used");
+                }
+            } else {
+                bpf_dbg_printk("the existing client tp was already used, ignoring");
+            }
         }
     }
 

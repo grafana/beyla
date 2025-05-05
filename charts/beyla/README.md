@@ -54,7 +54,7 @@ eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network
 | k8sCache.podAnnotations | object | `{}` | Adds custom annotations to the Beyla Kube Cache Pods. |
 | k8sCache.podLabels | object | `{}` | Adds custom labels to the Beyla Kube Cache Pods. |
 | k8sCache.profilePort | int | `0` | Enables the profile port for the Beyla cache |
-| k8sCache.replicas | int | `0` | Number of replicas for the Kubernetes metadata chache service. 0 disables the service. |
+| k8sCache.replicas | int | `0` | Number of replicas for the Kubernetes metadata cache service. 0 disables the service. |
 | k8sCache.service.annotations | object | `{}` | Service annotations. |
 | k8sCache.service.labels | object | `{}` | Service labels. |
 | k8sCache.service.name | string | `"beyla-k8s-cache"` | Name of both the Service and Deployment |

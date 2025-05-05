@@ -253,7 +253,7 @@ func main() {
 	if ok {
 		err := lvl.UnmarshalText([]byte(lvlEnv))
 		if err != nil {
-			slog.Error("unknown log level specified, choises are [DEBUG, INFO, WARN, ERROR]", "error", errors.New(lvlEnv))
+			slog.Error("unknown log level specified, choices are [DEBUG, INFO, WARN, ERROR]", "error", errors.New(lvlEnv))
 			os.Exit(-1)
 		}
 	}

@@ -211,14 +211,14 @@ handle_headers_frame(void *ctx, grpc_frames_ctx_t *g_ctx, const frame_header_t *
 
         if (http_grpc_stream_ended(frame)) {
             bpf_tail_call(ctx, &jump_table, k_tail_protocol_http2_grpc_handle_end_frame);
-            return 0; // normally unrechable
+            return 0; // normally unreachable
         }
     } else {
         // Not starting new grpc request, found end frame in a start, likely
         // just terminating prev connection
         if (!(is_flags_only_frame(frame) && http_grpc_stream_ended(frame))) {
             bpf_tail_call(ctx, &jump_table, k_tail_protocol_http2_grpc_handle_start_frame);
-            return 0; // normally unrechable
+            return 0; // normally unreachable
         }
     }
 

@@ -91,7 +91,7 @@ var prefetchedOffsets string
 
 type structInfo struct {
 	// lib is the name of the library where the struct is defined.
-	// "go" for the standar library or e.g. "google.golang.org/grpc"
+	// "go" for the standard library or e.g. "google.golang.org/grpc"
 	lib string
 	// fields of the struct as key, and the name of the constant defined in the eBPF code as value
 	fields map[string]GoOffset
@@ -450,7 +450,7 @@ func structMemberOffsetsFromDwarf(data *dwarf.Data) (FieldOffsets, map[GoOffset]
 			expectedReturns[ctName] = struct{}{}
 		}
 	}
-	log.Debug("searching offests for field constants", "constants", expectedReturns)
+	log.Debug("searching offsets for field constants", "constants", expectedReturns)
 
 	fieldOffsets := FieldOffsets{}
 	reader := data.Reader()

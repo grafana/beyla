@@ -68,7 +68,7 @@ func (ta *TraceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 	ta.beylaPID = os.Getpid()
 
 	if err := ta.init(); err != nil {
-		ta.log.Error("cant start process tracer. Stopping it", "error", err)
+		ta.log.Error("can't start process tracer. Stopping it", "error", err)
 		return nil, err
 	}
 

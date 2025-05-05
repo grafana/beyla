@@ -141,11 +141,11 @@ using ssize_t = long;
 #endif // _MSC_VER
 
 #ifndef S_ISREG
-#define S_ISREG(m) (((m)&S_IFREG) == S_IFREG)
+#define S_ISREG(m) (((m) & S_IFREG) == S_IFREG)
 #endif // S_ISREG
 
 #ifndef S_ISDIR
-#define S_ISDIR(m) (((m)&S_IFDIR) == S_IFDIR)
+#define S_ISDIR(m) (((m) & S_IFDIR) == S_IFDIR)
 #endif // S_ISDIR
 
 #ifndef NOMINMAX
@@ -332,7 +332,9 @@ struct scope_exit {
   }
 
   ~scope_exit() {
-    if (execute_on_destruction) { this->exit_function(); }
+    if (execute_on_destruction) {
+      this->exit_function();
+    }
   }
 
   void release() { this->execute_on_destruction = false; }
@@ -712,7 +714,9 @@ private:
           pool_.cond_.wait(
               lock, [&] { return !pool_.jobs_.empty() || pool_.shutdown_; });
 
-          if (pool_.shutdown_ && pool_.jobs_.empty()) { break; }
+          if (pool_.shutdown_ && pool_.jobs_.empty()) {
+            break;
+          }
 
           fn = std::move(pool_.jobs_.front());
           pool_.jobs_.pop_front();
@@ -759,7 +763,7 @@ public:
  * Captures parameters in request path and stores them in Request::path_params
  *
  * Capture name is a substring of a pattern from : to /.
- * The rest of the pattern is matched agains the request path directly
+ * The rest of the pattern is matched against the request path directly
  * Parameters are captured starting from the next character after
  * the end of the last matched static pattern fragment until the next /.
  *
@@ -1831,7 +1835,9 @@ inline ssize_t Stream::write_format(const char *fmt, const Args &...args) {
   std::array<char, bufsiz> buf{};
 
   auto sn = snprintf(buf.data(), buf.size() - 1, fmt, args...);
-  if (sn <= 0) { return sn; }
+  if (sn <= 0) {
+    return sn;
+  }
 
   auto n = static_cast<size_t>(sn);
 
@@ -1869,77 +1875,134 @@ inline void default_socket_options(socket_t sock) {
 
 inline const char *status_message(int status) {
   switch (status) {
-  case StatusCode::Continue_100: return "Continue";
-  case StatusCode::SwitchingProtocol_101: return "Switching Protocol";
-  case StatusCode::Processing_102: return "Processing";
-  case StatusCode::EarlyHints_103: return "Early Hints";
-  case StatusCode::OK_200: return "OK";
-  case StatusCode::Created_201: return "Created";
-  case StatusCode::Accepted_202: return "Accepted";
+  case StatusCode::Continue_100:
+    return "Continue";
+  case StatusCode::SwitchingProtocol_101:
+    return "Switching Protocol";
+  case StatusCode::Processing_102:
+    return "Processing";
+  case StatusCode::EarlyHints_103:
+    return "Early Hints";
+  case StatusCode::OK_200:
+    return "OK";
+  case StatusCode::Created_201:
+    return "Created";
+  case StatusCode::Accepted_202:
+    return "Accepted";
   case StatusCode::NonAuthoritativeInformation_203:
     return "Non-Authoritative Information";
-  case StatusCode::NoContent_204: return "No Content";
-  case StatusCode::ResetContent_205: return "Reset Content";
-  case StatusCode::PartialContent_206: return "Partial Content";
-  case StatusCode::MultiStatus_207: return "Multi-Status";
-  case StatusCode::AlreadyReported_208: return "Already Reported";
-  case StatusCode::IMUsed_226: return "IM Used";
-  case StatusCode::MultipleChoices_300: return "Multiple Choices";
-  case StatusCode::MovedPermanently_301: return "Moved Permanently";
-  case StatusCode::Found_302: return "Found";
-  case StatusCode::SeeOther_303: return "See Other";
-  case StatusCode::NotModified_304: return "Not Modified";
-  case StatusCode::UseProxy_305: return "Use Proxy";
-  case StatusCode::unused_306: return "unused";
-  case StatusCode::TemporaryRedirect_307: return "Temporary Redirect";
-  case StatusCode::PermanentRedirect_308: return "Permanent Redirect";
-  case StatusCode::BadRequest_400: return "Bad Request";
-  case StatusCode::Unauthorized_401: return "Unauthorized";
-  case StatusCode::PaymentRequired_402: return "Payment Required";
-  case StatusCode::Forbidden_403: return "Forbidden";
-  case StatusCode::NotFound_404: return "Not Found";
-  case StatusCode::MethodNotAllowed_405: return "Method Not Allowed";
-  case StatusCode::NotAcceptable_406: return "Not Acceptable";
+  case StatusCode::NoContent_204:
+    return "No Content";
+  case StatusCode::ResetContent_205:
+    return "Reset Content";
+  case StatusCode::PartialContent_206:
+    return "Partial Content";
+  case StatusCode::MultiStatus_207:
+    return "Multi-Status";
+  case StatusCode::AlreadyReported_208:
+    return "Already Reported";
+  case StatusCode::IMUsed_226:
+    return "IM Used";
+  case StatusCode::MultipleChoices_300:
+    return "Multiple Choices";
+  case StatusCode::MovedPermanently_301:
+    return "Moved Permanently";
+  case StatusCode::Found_302:
+    return "Found";
+  case StatusCode::SeeOther_303:
+    return "See Other";
+  case StatusCode::NotModified_304:
+    return "Not Modified";
+  case StatusCode::UseProxy_305:
+    return "Use Proxy";
+  case StatusCode::unused_306:
+    return "unused";
+  case StatusCode::TemporaryRedirect_307:
+    return "Temporary Redirect";
+  case StatusCode::PermanentRedirect_308:
+    return "Permanent Redirect";
+  case StatusCode::BadRequest_400:
+    return "Bad Request";
+  case StatusCode::Unauthorized_401:
+    return "Unauthorized";
+  case StatusCode::PaymentRequired_402:
+    return "Payment Required";
+  case StatusCode::Forbidden_403:
+    return "Forbidden";
+  case StatusCode::NotFound_404:
+    return "Not Found";
+  case StatusCode::MethodNotAllowed_405:
+    return "Method Not Allowed";
+  case StatusCode::NotAcceptable_406:
+    return "Not Acceptable";
   case StatusCode::ProxyAuthenticationRequired_407:
     return "Proxy Authentication Required";
-  case StatusCode::RequestTimeout_408: return "Request Timeout";
-  case StatusCode::Conflict_409: return "Conflict";
-  case StatusCode::Gone_410: return "Gone";
-  case StatusCode::LengthRequired_411: return "Length Required";
-  case StatusCode::PreconditionFailed_412: return "Precondition Failed";
-  case StatusCode::PayloadTooLarge_413: return "Payload Too Large";
-  case StatusCode::UriTooLong_414: return "URI Too Long";
-  case StatusCode::UnsupportedMediaType_415: return "Unsupported Media Type";
-  case StatusCode::RangeNotSatisfiable_416: return "Range Not Satisfiable";
-  case StatusCode::ExpectationFailed_417: return "Expectation Failed";
-  case StatusCode::ImATeapot_418: return "I'm a teapot";
-  case StatusCode::MisdirectedRequest_421: return "Misdirected Request";
-  case StatusCode::UnprocessableContent_422: return "Unprocessable Content";
-  case StatusCode::Locked_423: return "Locked";
-  case StatusCode::FailedDependency_424: return "Failed Dependency";
-  case StatusCode::TooEarly_425: return "Too Early";
-  case StatusCode::UpgradeRequired_426: return "Upgrade Required";
-  case StatusCode::PreconditionRequired_428: return "Precondition Required";
-  case StatusCode::TooManyRequests_429: return "Too Many Requests";
+  case StatusCode::RequestTimeout_408:
+    return "Request Timeout";
+  case StatusCode::Conflict_409:
+    return "Conflict";
+  case StatusCode::Gone_410:
+    return "Gone";
+  case StatusCode::LengthRequired_411:
+    return "Length Required";
+  case StatusCode::PreconditionFailed_412:
+    return "Precondition Failed";
+  case StatusCode::PayloadTooLarge_413:
+    return "Payload Too Large";
+  case StatusCode::UriTooLong_414:
+    return "URI Too Long";
+  case StatusCode::UnsupportedMediaType_415:
+    return "Unsupported Media Type";
+  case StatusCode::RangeNotSatisfiable_416:
+    return "Range Not Satisfiable";
+  case StatusCode::ExpectationFailed_417:
+    return "Expectation Failed";
+  case StatusCode::ImATeapot_418:
+    return "I'm a teapot";
+  case StatusCode::MisdirectedRequest_421:
+    return "Misdirected Request";
+  case StatusCode::UnprocessableContent_422:
+    return "Unprocessable Content";
+  case StatusCode::Locked_423:
+    return "Locked";
+  case StatusCode::FailedDependency_424:
+    return "Failed Dependency";
+  case StatusCode::TooEarly_425:
+    return "Too Early";
+  case StatusCode::UpgradeRequired_426:
+    return "Upgrade Required";
+  case StatusCode::PreconditionRequired_428:
+    return "Precondition Required";
+  case StatusCode::TooManyRequests_429:
+    return "Too Many Requests";
   case StatusCode::RequestHeaderFieldsTooLarge_431:
     return "Request Header Fields Too Large";
   case StatusCode::UnavailableForLegalReasons_451:
     return "Unavailable For Legal Reasons";
-  case StatusCode::NotImplemented_501: return "Not Implemented";
-  case StatusCode::BadGateway_502: return "Bad Gateway";
-  case StatusCode::ServiceUnavailable_503: return "Service Unavailable";
-  case StatusCode::GatewayTimeout_504: return "Gateway Timeout";
+  case StatusCode::NotImplemented_501:
+    return "Not Implemented";
+  case StatusCode::BadGateway_502:
+    return "Bad Gateway";
+  case StatusCode::ServiceUnavailable_503:
+    return "Service Unavailable";
+  case StatusCode::GatewayTimeout_504:
+    return "Gateway Timeout";
   case StatusCode::HttpVersionNotSupported_505:
     return "HTTP Version Not Supported";
-  case StatusCode::VariantAlsoNegotiates_506: return "Variant Also Negotiates";
-  case StatusCode::InsufficientStorage_507: return "Insufficient Storage";
-  case StatusCode::LoopDetected_508: return "Loop Detected";
-  case StatusCode::NotExtended_510: return "Not Extended";
+  case StatusCode::VariantAlsoNegotiates_506:
+    return "Variant Also Negotiates";
+  case StatusCode::InsufficientStorage_507:
+    return "Insufficient Storage";
+  case StatusCode::LoopDetected_508:
+    return "Loop Detected";
+  case StatusCode::NotExtended_510:
+    return "Not Extended";
   case StatusCode::NetworkAuthenticationRequired_511:
     return "Network Authentication Required";
 
   default:
-  case StatusCode::InternalServerError_500: return "Internal Server Error";
+  case StatusCode::InternalServerError_500:
+    return "Internal Server Error";
   }
 }
 
@@ -1969,23 +2032,38 @@ Server::set_idle_interval(const std::chrono::duration<Rep, Period> &duration) {
 
 inline std::string to_string(const Error error) {
   switch (error) {
-  case Error::Success: return "Success (no error)";
-  case Error::Connection: return "Could not establish connection";
-  case Error::BindIPAddress: return "Failed to bind IP address";
-  case Error::Read: return "Failed to read connection";
-  case Error::Write: return "Failed to write connection";
-  case Error::ExceedRedirectCount: return "Maximum redirect count exceeded";
-  case Error::Canceled: return "Connection handling canceled";
-  case Error::SSLConnection: return "SSL connection failed";
-  case Error::SSLLoadingCerts: return "SSL certificate loading failed";
-  case Error::SSLServerVerification: return "SSL server verification failed";
+  case Error::Success:
+    return "Success (no error)";
+  case Error::Connection:
+    return "Could not establish connection";
+  case Error::BindIPAddress:
+    return "Failed to bind IP address";
+  case Error::Read:
+    return "Failed to read connection";
+  case Error::Write:
+    return "Failed to write connection";
+  case Error::ExceedRedirectCount:
+    return "Maximum redirect count exceeded";
+  case Error::Canceled:
+    return "Connection handling canceled";
+  case Error::SSLConnection:
+    return "SSL connection failed";
+  case Error::SSLLoadingCerts:
+    return "SSL certificate loading failed";
+  case Error::SSLServerVerification:
+    return "SSL server verification failed";
   case Error::UnsupportedMultipartBoundaryChars:
     return "Unsupported HTTP multipart boundary characters";
-  case Error::Compression: return "Compression failed";
-  case Error::ConnectionTimeout: return "Connection timed out";
-  case Error::ProxyConnection: return "Proxy connection failed";
-  case Error::Unknown: return "Unknown";
-  default: break;
+  case Error::Compression:
+    return "Compression failed";
+  case Error::ConnectionTimeout:
+    return "Connection timed out";
+  case Error::ProxyConnection:
+    return "Proxy connection failed";
+  case Error::Unknown:
+    return "Unknown";
+  default:
+    break;
   }
 
   return "Invalid";
@@ -2287,11 +2365,15 @@ inline bool is_hex(char c, int &v) {
 
 inline bool from_hex_to_i(const std::string &s, size_t i, size_t cnt,
                           int &val) {
-  if (i >= s.size()) { return false; }
+  if (i >= s.size()) {
+    return false;
+  }
 
   val = 0;
   for (; cnt; i++, cnt--) {
-    if (!s[i]) { return false; }
+    if (!s[i]) {
+      return false;
+    }
     auto v = 0;
     if (is_hex(s[i], v)) {
       val = val * 16 + v;
@@ -2365,7 +2447,9 @@ inline std::string base64_encode(const std::string &in) {
     }
   }
 
-  if (valb > -6) { out.push_back(lookup[((val << 8) >> (valb + 8)) & 0x3F]); }
+  if (valb > -6) {
+    out.push_back(lookup[((val << 8) >> (valb + 8)) & 0x3F]);
+  }
 
   while (out.size() % 4) {
     out.push_back('=');
@@ -2410,7 +2494,9 @@ inline bool is_valid_path(const std::string &path) {
     if (!path.compare(beg, len, ".")) {
       ;
     } else if (!path.compare(beg, len, "..")) {
-      if (level == 0) { return false; }
+      if (level == 0) {
+        return false;
+      }
       level--;
     } else {
       level++;
@@ -2452,14 +2538,28 @@ inline std::string encode_url(const std::string &s) {
 
   for (size_t i = 0; s[i]; i++) {
     switch (s[i]) {
-    case ' ': result += "%20"; break;
-    case '+': result += "%2B"; break;
-    case '\r': result += "%0D"; break;
-    case '\n': result += "%0A"; break;
-    case '\'': result += "%27"; break;
-    case ',': result += "%2C"; break;
+    case ' ':
+      result += "%20";
+      break;
+    case '+':
+      result += "%2B";
+      break;
+    case '\r':
+      result += "%0D";
+      break;
+    case '\n':
+      result += "%0A";
+      break;
+    case '\'':
+      result += "%27";
+      break;
+    case ',':
+      result += "%2C";
+      break;
     // case ':': result += "%3A"; break; // ok? probably...
-    case ';': result += "%3B"; break;
+    case ';':
+      result += "%3B";
+      break;
     default:
       auto c = static_cast<uint8_t>(s[i]);
       if (c >= 0x80) {
@@ -2490,7 +2590,9 @@ inline std::string decode_url(const std::string &s,
           // 4 digits Unicode codes
           char buff[4];
           size_t len = to_utf8(val, buff);
-          if (len > 0) { result.append(buff, len); }
+          if (len > 0) {
+            result.append(buff, len);
+          }
           i += 5; // 'u0000'
         } else {
           result += s[i];
@@ -2527,7 +2629,9 @@ inline void read_file(const std::string &path, std::string &out) {
 inline std::string file_extension(const std::string &path) {
   std::smatch m;
   static auto re = std::regex("\\.([a-zA-Z0-9]+)$");
-  if (std::regex_search(path, m, re)) { return m[1].str(); }
+  if (std::regex_search(path, m, re)) {
+    return m[1].str();
+  }
   return std::string();
 }
 
@@ -2570,7 +2674,9 @@ inline void split(const char *b, const char *e, char d, size_t m,
   while (e ? (b + i < e) : (b[i] != '\0')) {
     if (b[i] == d && count < m) {
       auto r = trim(b, e, beg, i);
-      if (r.first < r.second) { fn(&b[r.first], &b[r.second]); }
+      if (r.first < r.second) {
+        fn(&b[r.first], &b[r.second]);
+      }
       beg = i + 1;
       count++;
     }
@@ -2579,7 +2685,9 @@ inline void split(const char *b, const char *e, char d, size_t m,
 
   if (i) {
     auto r = trim(b, e, beg, i);
-    if (r.first < r.second) { fn(&b[r.first], &b[r.second]); }
+    if (r.first < r.second) {
+      fn(&b[r.first], &b[r.second]);
+    }
   }
 }
 
@@ -2629,7 +2737,9 @@ inline bool stream_line_reader::getline() {
 
     append(byte);
 
-    if (byte == '\n') { break; }
+    if (byte == '\n') {
+      break;
+    }
   }
 
   return true;
@@ -2668,7 +2778,9 @@ inline bool mmap::open(const char *path) {
   hFile_ = ::CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, NULL,
                          OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 
-  if (hFile_ == INVALID_HANDLE_VALUE) { return false; }
+  if (hFile_ == INVALID_HANDLE_VALUE) {
+    return false;
+  }
 
   size_ = ::GetFileSize(hFile_, NULL);
 
@@ -2682,7 +2794,9 @@ inline bool mmap::open(const char *path) {
   addr_ = ::MapViewOfFile(hMapping_, FILE_MAP_READ, 0, 0, 0);
 #else
   fd_ = ::open(path, O_RDONLY);
-  if (fd_ == -1) { return false; }
+  if (fd_ == -1) {
+    return false;
+  }
 
   struct stat sb;
   if (fstat(fd_, &sb) == -1) {
@@ -2751,7 +2865,9 @@ template <typename T> inline ssize_t handle_EINTR(T fn) {
   ssize_t res = 0;
   while (true) {
     res = fn();
-    if (res < 0 && errno == EINTR) { continue; }
+    if (res < 0 && errno == EINTR) {
+      continue;
+    }
     break;
   }
   return res;
@@ -2793,7 +2909,9 @@ inline ssize_t select_read(socket_t sock, time_t sec, time_t usec) {
   return handle_EINTR([&]() { return poll(&pfd_read, 1, timeout); });
 #else
 #ifndef _WIN32
-  if (sock >= FD_SETSIZE) { return 1; }
+  if (sock >= FD_SETSIZE) {
+    return 1;
+  }
 #endif
 
   fd_set fds;
@@ -2821,7 +2939,9 @@ inline ssize_t select_write(socket_t sock, time_t sec, time_t usec) {
   return handle_EINTR([&]() { return poll(&pfd_read, 1, timeout); });
 #else
 #ifndef _WIN32
-  if (sock >= FD_SETSIZE) { return 1; }
+  if (sock >= FD_SETSIZE) {
+    return 1;
+  }
 #endif
 
   fd_set fds;
@@ -2849,7 +2969,9 @@ inline Error wait_until_socket_is_ready(socket_t sock, time_t sec,
 
   auto poll_res = handle_EINTR([&]() { return poll(&pfd_read, 1, timeout); });
 
-  if (poll_res == 0) { return Error::ConnectionTimeout; }
+  if (poll_res == 0) {
+    return Error::ConnectionTimeout;
+  }
 
   if (poll_res > 0 && pfd_read.revents & (POLLIN | POLLOUT)) {
     auto error = 0;
@@ -2863,7 +2985,9 @@ inline Error wait_until_socket_is_ready(socket_t sock, time_t sec,
   return Error::Connection;
 #else
 #ifndef _WIN32
-  if (sock >= FD_SETSIZE) { return Error::Connection; }
+  if (sock >= FD_SETSIZE) {
+    return Error::Connection;
+  }
 #endif
 
   fd_set fdsr;
@@ -2881,7 +3005,9 @@ inline Error wait_until_socket_is_ready(socket_t sock, time_t sec,
     return select(static_cast<int>(sock + 1), &fdsr, &fdsw, &fdse, &tv);
   });
 
-  if (ret == 0) { return Error::ConnectionTimeout; }
+  if (ret == 0) {
+    return Error::ConnectionTimeout;
+  }
 
   if (ret > 0 && (FD_ISSET(sock, &fdsr) || FD_ISSET(sock, &fdsw))) {
     auto error = 0;
@@ -2971,7 +3097,9 @@ inline bool keep_alive(socket_t sock, time_t keep_alive_timeout_sec) {
       auto current = steady_clock::now();
       auto duration = duration_cast<milliseconds>(current - start);
       auto timeout = keep_alive_timeout_sec * 1000;
-      if (duration.count() > timeout) { return false; }
+      if (duration.count() > timeout) {
+        return false;
+      }
       std::this_thread::sleep_for(std::chrono::milliseconds(1));
     } else {
       return true;
@@ -2992,7 +3120,9 @@ process_server_socket_core(const std::atomic<socket_t> &svr_sock, socket_t sock,
     auto close_connection = count == 1;
     auto connection_closed = false;
     ret = callback(close_connection, connection_closed);
-    if (!ret || connection_closed) { break; }
+    if (!ret || connection_closed) {
+      break;
+    }
     count--;
   }
   return ret;
@@ -3052,7 +3182,9 @@ socket_t create_socket(const std::string &host, const std::string &ip, int port,
     hints.ai_family = AF_UNSPEC;
     hints.ai_flags = AI_NUMERICHOST;
   } else {
-    if (!host.empty()) { node = host.c_str(); }
+    if (!host.empty()) {
+      node = host.c_str();
+    }
     hints.ai_family = address_family;
     hints.ai_flags = socket_flags;
   }
@@ -3060,7 +3192,9 @@ socket_t create_socket(const std::string &host, const std::string &ip, int port,
 #ifndef _WIN32
   if (hints.ai_family == AF_UNIX) {
     const auto addrlen = host.length();
-    if (addrlen > sizeof(sockaddr_un::sun_path)) { return INVALID_SOCKET; }
+    if (addrlen > sizeof(sockaddr_un::sun_path)) {
+      return INVALID_SOCKET;
+    }
 
     auto sock = socket(hints.ai_family, hints.ai_socktype, hints.ai_protocol);
     if (sock != INVALID_SOCKET) {
@@ -3073,7 +3207,9 @@ socket_t create_socket(const std::string &host, const std::string &ip, int port,
           sizeof(addr) - sizeof(addr.sun_path) + addrlen);
 
       fcntl(sock, F_SETFD, FD_CLOEXEC);
-      if (socket_options) { socket_options(sock); }
+      if (socket_options) {
+        socket_options(sock);
+      }
 
       if (!bind_or_connect(sock, hints)) {
         close_socket(sock);
@@ -3119,7 +3255,9 @@ socket_t create_socket(const std::string &host, const std::string &ip, int port,
 #else
     auto sock = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
 #endif
-    if (sock == INVALID_SOCKET) { continue; }
+    if (sock == INVALID_SOCKET) {
+      continue;
+    }
 
 #ifndef _WIN32
     if (fcntl(sock, F_SETFD, FD_CLOEXEC) == -1) {
@@ -3139,7 +3277,9 @@ socket_t create_socket(const std::string &host, const std::string &ip, int port,
 #endif
     }
 
-    if (socket_options) { socket_options(sock); }
+    if (socket_options) {
+      socket_options(sock);
+    }
 
     if (rp->ai_family == AF_INET6) {
       auto no = 0;
@@ -3193,7 +3333,9 @@ inline bool bind_ip_address(socket_t sock, const std::string &host) {
   hints.ai_socktype = SOCK_STREAM;
   hints.ai_protocol = 0;
 
-  if (getaddrinfo(host.c_str(), "0", &hints, &result)) { return false; }
+  if (getaddrinfo(host.c_str(), "0", &hints, &result)) {
+    return false;
+  }
 
   auto ret = false;
   for (auto rp = result; rp; rp = rp->ai_next) {
@@ -3263,7 +3405,9 @@ inline socket_t create_client_socket(
         if (!intf.empty()) {
 #ifdef USE_IF2IP
           auto ip_from_if = if2ip(address_family, intf);
-          if (ip_from_if.empty()) { ip_from_if = intf; }
+          if (ip_from_if.empty()) {
+            ip_from_if = intf;
+          }
           if (!bind_ip_address(sock2, ip_from_if)) {
             error = Error::BindIPAddress;
             return false;
@@ -3283,7 +3427,9 @@ inline socket_t create_client_socket(
           }
           error = wait_until_socket_is_ready(sock2, connection_timeout_sec,
                                              connection_timeout_usec);
-          if (error != Error::Success) { return false; }
+          if (error != Error::Success) {
+            return false;
+          }
         }
 
         set_nonblocking(sock2, false);
@@ -3325,7 +3471,9 @@ inline socket_t create_client_socket(
   if (sock != INVALID_SOCKET) {
     error = Error::Success;
   } else {
-    if (error == Error::Success) { error = Error::Connection; }
+    if (error == Error::Success) {
+      error = Error::Connection;
+    }
   }
 
   return sock;
@@ -3421,62 +3569,105 @@ find_content_type(const std::string &path,
   auto ext = file_extension(path);
 
   auto it = user_data.find(ext);
-  if (it != user_data.end()) { return it->second; }
+  if (it != user_data.end()) {
+    return it->second;
+  }
 
   using udl::operator""_t;
 
   switch (str2tag(ext)) {
-  default: return default_content_type;
+  default:
+    return default_content_type;
 
-  case "css"_t: return "text/css";
-  case "csv"_t: return "text/csv";
+  case "css"_t:
+    return "text/css";
+  case "csv"_t:
+    return "text/csv";
   case "htm"_t:
-  case "html"_t: return "text/html";
+  case "html"_t:
+    return "text/html";
   case "js"_t:
-  case "mjs"_t: return "text/javascript";
-  case "txt"_t: return "text/plain";
-  case "vtt"_t: return "text/vtt";
+  case "mjs"_t:
+    return "text/javascript";
+  case "txt"_t:
+    return "text/plain";
+  case "vtt"_t:
+    return "text/vtt";
 
-  case "apng"_t: return "image/apng";
-  case "avif"_t: return "image/avif";
-  case "bmp"_t: return "image/bmp";
-  case "gif"_t: return "image/gif";
-  case "png"_t: return "image/png";
-  case "svg"_t: return "image/svg+xml";
-  case "webp"_t: return "image/webp";
-  case "ico"_t: return "image/x-icon";
-  case "tif"_t: return "image/tiff";
-  case "tiff"_t: return "image/tiff";
+  case "apng"_t:
+    return "image/apng";
+  case "avif"_t:
+    return "image/avif";
+  case "bmp"_t:
+    return "image/bmp";
+  case "gif"_t:
+    return "image/gif";
+  case "png"_t:
+    return "image/png";
+  case "svg"_t:
+    return "image/svg+xml";
+  case "webp"_t:
+    return "image/webp";
+  case "ico"_t:
+    return "image/x-icon";
+  case "tif"_t:
+    return "image/tiff";
+  case "tiff"_t:
+    return "image/tiff";
   case "jpg"_t:
-  case "jpeg"_t: return "image/jpeg";
+  case "jpeg"_t:
+    return "image/jpeg";
 
-  case "mp4"_t: return "video/mp4";
-  case "mpeg"_t: return "video/mpeg";
-  case "webm"_t: return "video/webm";
+  case "mp4"_t:
+    return "video/mp4";
+  case "mpeg"_t:
+    return "video/mpeg";
+  case "webm"_t:
+    return "video/webm";
 
-  case "mp3"_t: return "audio/mp3";
-  case "mpga"_t: return "audio/mpeg";
-  case "weba"_t: return "audio/webm";
-  case "wav"_t: return "audio/wave";
+  case "mp3"_t:
+    return "audio/mp3";
+  case "mpga"_t:
+    return "audio/mpeg";
+  case "weba"_t:
+    return "audio/webm";
+  case "wav"_t:
+    return "audio/wave";
 
-  case "otf"_t: return "font/otf";
-  case "ttf"_t: return "font/ttf";
-  case "woff"_t: return "font/woff";
-  case "woff2"_t: return "font/woff2";
+  case "otf"_t:
+    return "font/otf";
+  case "ttf"_t:
+    return "font/ttf";
+  case "woff"_t:
+    return "font/woff";
+  case "woff2"_t:
+    return "font/woff2";
 
-  case "7z"_t: return "application/x-7z-compressed";
-  case "atom"_t: return "application/atom+xml";
-  case "pdf"_t: return "application/pdf";
-  case "json"_t: return "application/json";
-  case "rss"_t: return "application/rss+xml";
-  case "tar"_t: return "application/x-tar";
+  case "7z"_t:
+    return "application/x-7z-compressed";
+  case "atom"_t:
+    return "application/atom+xml";
+  case "pdf"_t:
+    return "application/pdf";
+  case "json"_t:
+    return "application/json";
+  case "rss"_t:
+    return "application/rss+xml";
+  case "tar"_t:
+    return "application/x-tar";
   case "xht"_t:
-  case "xhtml"_t: return "application/xhtml+xml";
-  case "xslt"_t: return "application/xslt+xml";
-  case "xml"_t: return "application/xml";
-  case "gz"_t: return "application/gzip";
-  case "zip"_t: return "application/zip";
-  case "wasm"_t: return "application/wasm";
+  case "xhtml"_t:
+    return "application/xhtml+xml";
+  case "xslt"_t:
+    return "application/xslt+xml";
+  case "xml"_t:
+    return "application/xml";
+  case "gz"_t:
+    return "application/gzip";
+  case "zip"_t:
+    return "application/zip";
+  case "wasm"_t:
+    return "application/wasm";
   }
 }
 
@@ -3491,7 +3682,8 @@ inline bool can_compress_content_type(const std::string &content_type) {
   case "application/json"_t:
   case "application/xml"_t:
   case "application/protobuf"_t:
-  case "application/xhtml+xml"_t: return true;
+  case "application/xhtml+xml"_t:
+    return true;
 
   default:
     return !content_type.rfind("text/", 0) && tag != "text/event-stream"_t;
@@ -3501,7 +3693,9 @@ inline bool can_compress_content_type(const std::string &content_type) {
 inline EncodingType encoding_type(const Request &req, const Response &res) {
   auto ret =
       detail::can_compress_content_type(res.get_header_value("Content-Type"));
-  if (!ret) { return EncodingType::None; }
+  if (!ret) {
+    return EncodingType::None;
+  }
 
   const auto &s = req.get_header_value("Accept-Encoding");
   (void)(s);
@@ -3509,13 +3703,17 @@ inline EncodingType encoding_type(const Request &req, const Response &res) {
 #ifdef CPPHTTPLIB_BROTLI_SUPPORT
   // TODO: 'Accept-Encoding' has br, not br;q=0
   ret = s.find("br") != std::string::npos;
-  if (ret) { return EncodingType::Brotli; }
+  if (ret) {
+    return EncodingType::Brotli;
+  }
 #endif
 
 #ifdef CPPHTTPLIB_ZLIB_SUPPORT
   // TODO: 'Accept-Encoding' has gzip, not gzip;q=0
   ret = s.find("gzip") != std::string::npos;
-  if (ret) { return EncodingType::Gzip; }
+  if (ret) {
+    return EncodingType::Gzip;
+  }
 #endif
 
   return EncodingType::None;
@@ -3523,7 +3721,9 @@ inline EncodingType encoding_type(const Request &req, const Response &res) {
 
 inline bool nocompressor::compress(const char *data, size_t data_length,
                                    bool /*last*/, Callback callback) {
-  if (!data_length) { return true; }
+  if (!data_length) {
+    return true;
+  }
   return callback(data, data_length);
 }
 
@@ -3564,7 +3764,9 @@ inline bool gzip_compressor::compress(const char *data, size_t data_length,
       strm_.next_out = reinterpret_cast<Bytef *>(buff.data());
 
       ret = deflate(&strm_, flush);
-      if (ret == Z_STREAM_ERROR) { return false; }
+      if (ret == Z_STREAM_ERROR) {
+        return false;
+      }
 
       if (!callback(buff.data(), buff.size() - strm_.avail_out)) {
         return false;
@@ -3624,7 +3826,9 @@ inline bool gzip_decompressor::decompress(const char *data, size_t data_length,
       switch (ret) {
       case Z_NEED_DICT:
       case Z_DATA_ERROR:
-      case Z_MEM_ERROR: inflateEnd(&strm_); return false;
+      case Z_MEM_ERROR:
+        inflateEnd(&strm_);
+        return false;
       }
 
       if (!callback(buff.data(), buff.size() - strm_.avail_out)) {
@@ -3632,7 +3836,9 @@ inline bool gzip_decompressor::decompress(const char *data, size_t data_length,
       }
     }
 
-    if (ret != Z_OK && ret != Z_STREAM_END) { return false; }
+    if (ret != Z_OK && ret != Z_STREAM_END) {
+      return false;
+    }
 
   } while (data_length > 0);
 
@@ -3659,9 +3865,13 @@ inline bool brotli_compressor::compress(const char *data, size_t data_length,
 
   for (;;) {
     if (last) {
-      if (BrotliEncoderIsFinished(state_)) { break; }
+      if (BrotliEncoderIsFinished(state_)) {
+        break;
+      }
     } else {
-      if (!available_in) { break; }
+      if (!available_in) {
+        break;
+      }
     }
 
     auto available_out = buff.size();
@@ -3688,7 +3898,9 @@ inline brotli_decompressor::brotli_decompressor() {
 }
 
 inline brotli_decompressor::~brotli_decompressor() {
-  if (decoder_s) { BrotliDecoderDestroyInstance(decoder_s); }
+  if (decoder_s) {
+    BrotliDecoderDestroyInstance(decoder_s);
+  }
 }
 
 inline bool brotli_decompressor::is_valid() const { return decoder_s; }
@@ -3716,9 +3928,13 @@ inline bool brotli_decompressor::decompress(const char *data,
         decoder_s, &avail_in, &next_in, &avail_out,
         reinterpret_cast<uint8_t **>(&next_out), &total_out);
 
-    if (decoder_r == BROTLI_DECODER_RESULT_ERROR) { return false; }
+    if (decoder_r == BROTLI_DECODER_RESULT_ERROR) {
+      return false;
+    }
 
-    if (!callback(buff.data(), buff.size() - avail_out)) { return false; }
+    if (!callback(buff.data(), buff.size() - avail_out)) {
+      return false;
+    }
   }
 
   return decoder_r == BROTLI_DECODER_RESULT_SUCCESS ||
@@ -3736,14 +3952,20 @@ inline const char *get_header_value(const Headers &headers,
   auto rng = headers.equal_range(key);
   auto it = rng.first;
   std::advance(it, static_cast<ssize_t>(id));
-  if (it != rng.second) { return it->second.c_str(); }
+  if (it != rng.second) {
+    return it->second.c_str();
+  }
   return def;
 }
 
 inline bool compare_case_ignore(const std::string &a, const std::string &b) {
-  if (a.size() != b.size()) { return false; }
+  if (a.size() != b.size()) {
+    return false;
+  }
   for (size_t i = 0; i < b.size(); i++) {
-    if (::tolower(a[i]) != ::tolower(b[i])) { return false; }
+    if (::tolower(a[i]) != ::tolower(b[i])) {
+      return false;
+    }
   }
   return true;
 }
@@ -3760,11 +3982,15 @@ inline bool parse_header(const char *beg, const char *end, T fn) {
     p++;
   }
 
-  if (p == end) { return false; }
+  if (p == end) {
+    return false;
+  }
 
   auto key_end = p;
 
-  if (*p++ != ':') { return false; }
+  if (*p++ != ':') {
+    return false;
+  }
 
   while (p < end && is_space_or_tab(*p)) {
     p++;
@@ -3772,7 +3998,9 @@ inline bool parse_header(const char *beg, const char *end, T fn) {
 
   if (p < end) {
     auto key_len = key_end - beg;
-    if (!key_len) { return false; }
+    if (!key_len) {
+      return false;
+    }
 
     auto key = std::string(beg, key_end);
     auto val = compare_case_ignore(key, "Location")
@@ -3791,17 +4019,23 @@ inline bool read_headers(Stream &strm, Headers &headers) {
   stream_line_reader line_reader(strm, buf, bufsiz);
 
   for (;;) {
-    if (!line_reader.getline()) { return false; }
+    if (!line_reader.getline()) {
+      return false;
+    }
 
     // Check if the line ends with CRLF.
     auto line_terminator_len = 2;
     if (line_reader.end_with_crlf()) {
       // Blank line indicates end of headers.
-      if (line_reader.size() == 2) { break; }
+      if (line_reader.size() == 2) {
+        break;
+      }
 #ifdef CPPHTTPLIB_ALLOW_LF_AS_LINE_TERMINATOR
     } else {
       // Blank line indicates end of headers.
-      if (line_reader.size() == 1) { break; }
+      if (line_reader.size() == 1) {
+        break;
+      }
       line_terminator_len = 1;
     }
 #else
@@ -3810,7 +4044,9 @@ inline bool read_headers(Stream &strm, Headers &headers) {
     }
 #endif
 
-    if (line_reader.size() > CPPHTTPLIB_HEADER_MAX_LENGTH) { return false; }
+    if (line_reader.size() > CPPHTTPLIB_HEADER_MAX_LENGTH) {
+      return false;
+    }
 
     // Exclude line terminator
     auto end = line_reader.ptr() + line_reader.size() - line_terminator_len;
@@ -3833,13 +4069,19 @@ inline bool read_content_with_length(Stream &strm, uint64_t len,
   while (r < len) {
     auto read_len = static_cast<size_t>(len - r);
     auto n = strm.read(buf, (std::min)(read_len, CPPHTTPLIB_RECV_BUFSIZ));
-    if (n <= 0) { return false; }
+    if (n <= 0) {
+      return false;
+    }
 
-    if (!out(buf, static_cast<size_t>(n), r, len)) { return false; }
+    if (!out(buf, static_cast<size_t>(n), r, len)) {
+      return false;
+    }
     r += static_cast<uint64_t>(n);
 
     if (progress) {
-      if (!progress(r, len)) { return false; }
+      if (!progress(r, len)) {
+        return false;
+      }
     }
   }
 
@@ -3852,7 +4094,9 @@ inline void skip_content_with_length(Stream &strm, uint64_t len) {
   while (r < len) {
     auto read_len = static_cast<size_t>(len - r);
     auto n = strm.read(buf, (std::min)(read_len, CPPHTTPLIB_RECV_BUFSIZ));
-    if (n <= 0) { return; }
+    if (n <= 0) {
+      return;
+    }
     r += static_cast<uint64_t>(n);
   }
 }
@@ -3863,9 +4107,13 @@ inline bool read_content_without_length(Stream &strm,
   uint64_t r = 0;
   for (;;) {
     auto n = strm.read(buf, CPPHTTPLIB_RECV_BUFSIZ);
-    if (n <= 0) { return true; }
+    if (n <= 0) {
+      return true;
+    }
 
-    if (!out(buf, static_cast<size_t>(n), r, 0)) { return false; }
+    if (!out(buf, static_cast<size_t>(n), r, 0)) {
+      return false;
+    }
     r += static_cast<uint64_t>(n);
   }
 
@@ -3880,7 +4128,9 @@ inline bool read_content_chunked(Stream &strm, T &x,
 
   stream_line_reader line_reader(strm, buf, bufsiz);
 
-  if (!line_reader.getline()) { return false; }
+  if (!line_reader.getline()) {
+    return false;
+  }
 
   unsigned long chunk_len;
   while (true) {
@@ -3888,29 +4138,45 @@ inline bool read_content_chunked(Stream &strm, T &x,
 
     chunk_len = std::strtoul(line_reader.ptr(), &end_ptr, 16);
 
-    if (end_ptr == line_reader.ptr()) { return false; }
-    if (chunk_len == ULONG_MAX) { return false; }
+    if (end_ptr == line_reader.ptr()) {
+      return false;
+    }
+    if (chunk_len == ULONG_MAX) {
+      return false;
+    }
 
-    if (chunk_len == 0) { break; }
+    if (chunk_len == 0) {
+      break;
+    }
 
     if (!read_content_with_length(strm, chunk_len, nullptr, out)) {
       return false;
     }
 
-    if (!line_reader.getline()) { return false; }
+    if (!line_reader.getline()) {
+      return false;
+    }
 
-    if (strcmp(line_reader.ptr(), "\r\n") != 0) { return false; }
+    if (strcmp(line_reader.ptr(), "\r\n") != 0) {
+      return false;
+    }
 
-    if (!line_reader.getline()) { return false; }
+    if (!line_reader.getline()) {
+      return false;
+    }
   }
 
   assert(chunk_len == 0);
 
   // Trailer
-  if (!line_reader.getline()) { return false; }
+  if (!line_reader.getline()) {
+    return false;
+  }
 
   while (strcmp(line_reader.ptr(), "\r\n") != 0) {
-    if (line_reader.size() > CPPHTTPLIB_HEADER_MAX_LENGTH) { return false; }
+    if (line_reader.size() > CPPHTTPLIB_HEADER_MAX_LENGTH) {
+      return false;
+    }
 
     // Exclude line terminator
     constexpr auto line_terminator_len = 2;
@@ -3921,7 +4187,9 @@ inline bool read_content_chunked(Stream &strm, T &x,
                    x.headers.emplace(std::move(key), std::move(val));
                  });
 
-    if (!line_reader.getline()) { return false; }
+    if (!line_reader.getline()) {
+      return false;
+    }
   }
 
   return true;
@@ -4018,11 +4286,15 @@ inline ssize_t write_headers(Stream &strm, const Headers &headers) {
   for (const auto &x : headers) {
     auto len =
         strm.write_format("%s: %s\r\n", x.first.c_str(), x.second.c_str());
-    if (len < 0) { return len; }
+    if (len < 0) {
+      return len;
+    }
     write_len += len;
   }
   auto len = strm.write("\r\n");
-  if (len < 0) { return len; }
+  if (len < 0) {
+    return len;
+  }
   write_len += len;
   return write_len;
 }
@@ -4031,7 +4303,9 @@ inline bool write_data(Stream &strm, const char *d, size_t l) {
   size_t offset = 0;
   while (offset < l) {
     auto length = strm.write(d + offset, l - offset);
-    if (length < 0) { return false; }
+    if (length < 0) {
+      return false;
+    }
     offset += static_cast<size_t>(length);
   }
   return true;
@@ -4097,7 +4371,9 @@ write_content_without_length(Stream &strm,
   data_sink.write = [&](const char *d, size_t l) -> bool {
     if (ok) {
       offset += l;
-      if (!strm.is_writable() || !write_data(strm, d, l)) { ok = false; }
+      if (!strm.is_writable() || !write_data(strm, d, l)) {
+        ok = false;
+      }
     }
     return ok;
   };
@@ -4157,7 +4433,9 @@ write_content_chunked(Stream &strm, const ContentProvider &content_provider,
   data_sink.is_writable = [&]() -> bool { return strm.is_writable(); };
 
   auto done_with_trailer = [&](const Headers *trailer) {
-    if (!ok) { return; }
+    if (!ok) {
+      return;
+    }
 
     data_available = false;
 
@@ -4197,7 +4475,9 @@ write_content_chunked(Stream &strm, const ContentProvider &content_provider,
     }
 
     static const std::string crlf("\r\n");
-    if (!write_data(strm, crlf.data(), crlf.size())) { ok = false; }
+    if (!write_data(strm, crlf.data(), crlf.size())) {
+      ok = false;
+    }
   };
 
   data_sink.done = [&](void) { done_with_trailer(nullptr); };
@@ -4254,7 +4534,9 @@ inline bool redirect(T &cli, Request &req, Response &res,
     req = new_req;
     res = new_res;
 
-    if (res.location.empty()) { res.location = location; }
+    if (res.location.empty()) {
+      res.location = location;
+    }
   }
   return ret;
 }
@@ -4263,7 +4545,9 @@ inline std::string params_to_query_str(const Params &params) {
   std::string query;
 
   for (auto it = params.begin(); it != params.end(); ++it) {
-    if (it != params.begin()) { query += "&"; }
+    if (it != params.begin()) {
+      query += "&";
+    }
     query += it->first;
     query += "=";
     query += encode_query_param(it->second);
@@ -4275,7 +4559,9 @@ inline void parse_query_text(const std::string &s, Params &params) {
   std::set<std::string> cache;
   split(s.data(), s.data() + s.size(), '&', [&](const char *b, const char *e) {
     std::string kv(b, e);
-    if (cache.find(kv) != cache.end()) { return; }
+    if (cache.find(kv) != cache.end()) {
+      return;
+    }
     cache.insert(kv);
 
     std::string key;
@@ -4298,7 +4584,9 @@ inline bool parse_multipart_boundary(const std::string &content_type,
                                      std::string &boundary) {
   auto boundary_keyword = "boundary=";
   auto pos = content_type.find(boundary_keyword);
-  if (pos == std::string::npos) { return false; }
+  if (pos == std::string::npos) {
+    return false;
+  }
   auto end = content_type.find(';', pos);
   auto beg = pos + strlen(boundary_keyword);
   boundary = trim_double_quotes_copy(content_type.substr(beg, end - beg));
@@ -4309,7 +4597,9 @@ inline void parse_disposition_params(const std::string &s, Params &params) {
   std::set<std::string> cache;
   split(s.data(), s.data() + s.size(), ';', [&](const char *b, const char *e) {
     std::string kv(b, e);
-    if (cache.find(kv) != cache.end()) { return; }
+    if (cache.find(kv) != cache.end()) {
+      return;
+    }
     cache.insert(kv);
 
     std::string key;
@@ -4341,7 +4631,9 @@ inline bool parse_range_header(const std::string &s, Ranges &ranges) try {
     auto len = static_cast<size_t>(m.length(1));
     auto all_valid_ranges = true;
     split(&s[pos], &s[pos + len], ',', [&](const char *b, const char *e) {
-      if (!all_valid_ranges) { return; }
+      if (!all_valid_ranges) {
+        return;
+      }
       static auto re_another_range = std::regex(R"(\s*(\d*)-(\d*))");
       std::cmatch cm;
       if (std::regex_match(b, e, cm, re_another_range)) {
@@ -4368,7 +4660,9 @@ inline bool parse_range_header(const std::string &s, Ranges &ranges) try {
 #ifdef CPPHTTPLIB_NO_EXCEPTIONS
 }
 #else
-} catch (...) { return false; }
+} catch (...) {
+  return false;
+}
 #endif
 
 class MultipartFormDataParser {
@@ -4392,8 +4686,12 @@ public:
       switch (state_) {
       case 0: { // Initial boundary
         buf_erase(buf_find(dash_boundary_crlf_));
-        if (dash_boundary_crlf_.size() > buf_size()) { return true; }
-        if (!buf_start_with(dash_boundary_crlf_)) { return false; }
+        if (dash_boundary_crlf_.size() > buf_size()) {
+          return true;
+        }
+        if (!buf_start_with(dash_boundary_crlf_)) {
+          return false;
+        }
         buf_erase(dash_boundary_crlf_.size());
         state_ = 1;
         break;
@@ -4405,7 +4703,9 @@ public:
       }
       case 2: { // Headers
         auto pos = buf_find(crlf_);
-        if (pos > CPPHTTPLIB_HEADER_MAX_LENGTH) { return false; }
+        if (pos > CPPHTTPLIB_HEADER_MAX_LENGTH) {
+          return false;
+        }
         while (pos < buf_size()) {
           // Empty line
           if (pos == 0) {
@@ -4450,7 +4750,9 @@ public:
               }
 
               it = params.find("filename");
-              if (it != params.end()) { file_.filename = it->second; }
+              if (it != params.end()) {
+                file_.filename = it->second;
+              }
 
               it = params.find("filename*");
               if (it != params.end()) {
@@ -4471,11 +4773,15 @@ public:
           buf_erase(pos + crlf_.size());
           pos = buf_find(crlf_);
         }
-        if (state_ != 3) { return true; }
+        if (state_ != 3) {
+          return true;
+        }
         break;
       }
       case 3: { // Body
-        if (crlf_dash_boundary_.size() > buf_size()) { return true; }
+        if (crlf_dash_boundary_.size() > buf_size()) {
+          return true;
+        }
         auto pos = buf_find(crlf_dash_boundary_);
         if (pos < buf_size()) {
           if (!content_callback(buf_data(), pos)) {
@@ -4498,12 +4804,16 @@ public:
         break;
       }
       case 4: { // Boundary
-        if (crlf_.size() > buf_size()) { return true; }
+        if (crlf_.size() > buf_size()) {
+          return true;
+        }
         if (buf_start_with(crlf_)) {
           buf_erase(crlf_.size());
           state_ = 1;
         } else {
-          if (dash_.size() > buf_size()) { return true; }
+          if (dash_.size() > buf_size()) {
+            return true;
+          }
           if (buf_start_with(dash_)) {
             buf_erase(dash_.size());
             is_valid_ = true;
@@ -4529,9 +4839,13 @@ private:
 
   bool start_with_case_ignore(const std::string &a,
                               const std::string &b) const {
-    if (a.size() < b.size()) { return false; }
+    if (a.size() < b.size()) {
+      return false;
+    }
     for (size_t i = 0; i < b.size(); i++) {
-      if (::tolower(a[i]) != ::tolower(b[i])) { return false; }
+      if (::tolower(a[i]) != ::tolower(b[i])) {
+        return false;
+      }
     }
     return true;
   }
@@ -4549,9 +4863,13 @@ private:
   // Buffer
   bool start_with(const std::string &a, size_t spos, size_t epos,
                   const std::string &b) const {
-    if (epos - spos < b.size()) { return false; }
+    if (epos - spos < b.size()) {
+      return false;
+    }
     for (size_t i = 0; i < b.size(); i++) {
-      if (a[i + spos] != b[i]) { return false; }
+      if (a[i + spos] != b[i]) {
+        return false;
+      }
     }
     return true;
   }
@@ -4573,15 +4891,23 @@ private:
     while (off < buf_epos_) {
       auto pos = off;
       while (true) {
-        if (pos == buf_epos_) { return buf_size(); }
-        if (buf_[pos] == c) { break; }
+        if (pos == buf_epos_) {
+          return buf_size();
+        }
+        if (buf_[pos] == c) {
+          break;
+        }
         pos++;
       }
 
       auto remaining_size = buf_epos_ - pos;
-      if (s.size() > remaining_size) { return buf_size(); }
+      if (s.size() > remaining_size) {
+        return buf_size();
+      }
 
-      if (start_with(buf_, pos, buf_epos_, s)) { return pos - buf_spos_; }
+      if (start_with(buf_, pos, buf_epos_, s)) {
+        return pos - buf_spos_;
+      }
 
       off = pos + 1;
     }
@@ -4599,7 +4925,9 @@ private:
     buf_spos_ = 0;
     buf_epos_ = remaining_size;
 
-    if (remaining_size + n > buf_.size()) { buf_.resize(remaining_size + n); }
+    if (remaining_size + n > buf_.size()) {
+      buf_.resize(remaining_size + n);
+    }
 
     for (size_t i = 0; i < n; i++) {
       buf_[buf_epos_ + i] = data[i];
@@ -4698,7 +5026,9 @@ serialize_multipart_formdata(const MultipartFormDataItems &items,
     body += item.content + serialize_multipart_formdata_item_end();
   }
 
-  if (finish) { body += serialize_multipart_formdata_finish(boundary); }
+  if (finish) {
+    body += serialize_multipart_formdata_finish(boundary);
+  }
 
   return body;
 }
@@ -4719,7 +5049,9 @@ get_range_offset_and_length(const Request &req, size_t content_length,
     r.second = slen - 1;
   }
 
-  if (r.second == -1) { r.second = slen - 1; }
+  if (r.second == -1) {
+    r.second = slen - 1;
+  }
   return std::make_pair(r.first, static_cast<size_t>(r.second - r.first) + 1);
 }
 
@@ -4727,9 +5059,13 @@ inline std::string
 make_content_range_header_field(const std::pair<ssize_t, ssize_t> &range,
                                 size_t content_length) {
   std::string field = "bytes ";
-  if (range.first != -1) { field += std::to_string(range.first); }
+  if (range.first != -1) {
+    field += std::to_string(range.first);
+  }
   field += "-";
-  if (range.second != -1) { field += std::to_string(range.second); }
+  if (range.second != -1) {
+    field += std::to_string(range.second);
+  }
   field += "/";
   field += std::to_string(content_length);
   return field;
@@ -4760,7 +5096,9 @@ bool process_multipart_ranges_data(const Request &req, Response &res,
     auto offsets = get_range_offset_and_length(req, res.content_length_, i);
     auto offset = offsets.first;
     auto length = offsets.second;
-    if (!content(offset, length)) { return false; }
+    if (!content(offset, length)) {
+      return false;
+    }
     ctoken("\r\n");
   }
 
@@ -4846,7 +5184,9 @@ inline bool expect_content(const Request &req) {
 inline bool has_crlf(const std::string &s) {
   auto p = s.c_str();
   while (*p) {
-    if (*p == '\r' || *p == '\n') { return true; }
+    if (*p == '\r' || *p == '\n') {
+      return true;
+    }
     p++;
   }
   return false;
@@ -4892,7 +5232,9 @@ inline std::string SHA_512(const std::string &s) {
 // https://stackoverflow.com/questions/9507184/can-openssl-on-windows-use-the-system-certificate-store
 inline bool load_system_certs_on_windows(X509_STORE *store) {
   auto hStore = CertOpenSystemStoreW((HCRYPTPROV_LEGACY)NULL, L"ROOT");
-  if (!hStore) { return false; }
+  if (!hStore) {
+    return false;
+  }
 
   auto result = false;
   PCCERT_CONTEXT pContext = NULL;
@@ -4921,7 +5263,9 @@ using CFObjectPtr =
     std::unique_ptr<typename std::remove_pointer<T>::type, void (*)(CFTypeRef)>;
 
 inline void cf_object_ptr_deleter(CFTypeRef obj) {
-  if (obj) { CFRelease(obj); }
+  if (obj) {
+    CFRelease(obj);
+  }
 }
 
 inline bool retrieve_certs_from_keychain(CFObjectPtr<CFArrayRef> &certs) {
@@ -4936,7 +5280,9 @@ inline bool retrieve_certs_from_keychain(CFObjectPtr<CFArrayRef> &certs) {
                          &kCFTypeDictionaryValueCallBacks),
       cf_object_ptr_deleter);
 
-  if (!query) { return false; }
+  if (!query) {
+    return false;
+  }
 
   CFTypeRef security_items = nullptr;
   if (SecItemCopyMatching(query.get(), &security_items) != errSecSuccess ||
@@ -4964,7 +5310,9 @@ inline bool add_certs_to_x509_store(CFArrayRef certs, X509_STORE *store) {
     const auto cert = reinterpret_cast<const __SecCertificate *>(
         CFArrayGetValueAtIndex(certs, i));
 
-    if (SecCertificateGetTypeID() != CFGetTypeID(cert)) { continue; }
+    if (SecCertificateGetTypeID() != CFGetTypeID(cert)) {
+      continue;
+    }
 
     CFDataRef cert_data = nullptr;
     if (SecItemExport(cert, kSecFormatX509Cert, 0, nullptr, &cert_data) !=
@@ -5012,11 +5360,13 @@ class WSInit {
 public:
   WSInit() {
     WSADATA wsaData;
-    if (WSAStartup(0x0002, &wsaData) == 0) is_valid_ = true;
+    if (WSAStartup(0x0002, &wsaData) == 0)
+      is_valid_ = true;
   }
 
   ~WSInit() {
-    if (is_valid_) WSACleanup();
+    if (is_valid_)
+      WSACleanup();
   }
 
   bool is_valid_ = false;
@@ -5050,7 +5400,9 @@ inline std::pair<std::string, std::string> make_digest_authentication_header(
   }
 
   std::string algo = "MD5";
-  if (auth.find("algorithm") != auth.end()) { algo = auth.at("algorithm"); }
+  if (auth.find("algorithm") != auth.end()) {
+    algo = auth.at("algorithm");
+  }
 
   std::string response;
   {
@@ -5061,7 +5413,9 @@ inline std::pair<std::string, std::string> make_digest_authentication_header(
     auto A1 = username + ":" + auth.at("realm") + ":" + password;
 
     auto A2 = req.method + ":" + req.path;
-    if (qop == "auth-int") { A2 += ":" + H(req.body); }
+    if (qop == "auth-int") {
+      A2 += ":" + H(req.body);
+    }
 
     if (qop.empty()) {
       response = H(H(A1) + ":" + auth.at("nonce") + ":" + H(A2));
@@ -5153,7 +5507,9 @@ private:
 inline std::string hosted_at(const std::string &hostname) {
   std::vector<std::string> addrs;
   hosted_at(hostname, addrs);
-  if (addrs.empty()) { return std::string(); }
+  if (addrs.empty()) {
+    return std::string();
+  }
   return addrs[0];
 }
 
@@ -5202,10 +5558,16 @@ inline std::pair<std::string, std::string> make_range_header(Ranges ranges) {
   std::string field = "bytes=";
   auto i = 0;
   for (auto r : ranges) {
-    if (i != 0) { field += ", "; }
-    if (r.first != -1) { field += std::to_string(r.first); }
+    if (i != 0) {
+      field += ", ";
+    }
+    if (r.first != -1) {
+      field += std::to_string(r.first);
+    }
     field += '-';
-    if (r.second != -1) { field += std::to_string(r.second); }
+    if (r.second != -1) {
+      field += std::to_string(r.second);
+    }
     i++;
   }
   return std::make_pair("Range", std::move(field));
@@ -5258,7 +5620,9 @@ inline std::string Request::get_param_value(const std::string &key,
   auto rng = params.equal_range(key);
   auto it = rng.first;
   std::advance(it, static_cast<ssize_t>(id));
-  if (it != rng.second) { return it->second; }
+  if (it != rng.second) {
+    return it->second;
+  }
   return std::string();
 }
 
@@ -5278,7 +5642,9 @@ inline bool Request::has_file(const std::string &key) const {
 
 inline MultipartFormData Request::get_file_value(const std::string &key) const {
   auto it = files.find(key);
-  if (it != files.end()) { return it->second; }
+  if (it != files.end()) {
+    return it->second;
+  }
   return MultipartFormData();
 }
 
@@ -5344,7 +5710,9 @@ inline void Response::set_content_provider(
     ContentProviderResourceReleaser resource_releaser) {
   set_header("Content-Type", content_type);
   content_length_ = in_length;
-  if (in_length > 0) { content_provider_ = std::move(provider); }
+  if (in_length > 0) {
+    content_provider_ = std::move(provider);
+  }
   content_provider_resource_releaser_ = resource_releaser;
   is_chunked_content_provider_ = false;
 }
@@ -5439,7 +5807,9 @@ inline ssize_t SocketStream::read(char *ptr, size_t size) {
     }
   }
 
-  if (!is_readable()) { return -1; }
+  if (!is_readable()) {
+    return -1;
+  }
 
   read_buff_off_ = 0;
   read_buff_content_size_ = 0;
@@ -5464,7 +5834,9 @@ inline ssize_t SocketStream::read(char *ptr, size_t size) {
 }
 
 inline ssize_t SocketStream::write(const char *ptr, size_t size) {
-  if (!is_writable()) { return -1; }
+  if (!is_writable()) {
+    return -1;
+  }
 
 #if defined(_WIN32) && !defined(_WIN64)
   size =
@@ -5530,7 +5902,9 @@ inline PathParamsMatcher::PathParamsMatcher(const std::string &pattern) {
 
   while (true) {
     const auto marker_pos = pattern.find(marker, last_param_end);
-    if (marker_pos == std::string::npos) { break; }
+    if (marker_pos == std::string::npos) {
+      break;
+    }
 
     static_fragments_.push_back(
         pattern.substr(last_param_end, marker_pos - last_param_end));
@@ -5538,7 +5912,9 @@ inline PathParamsMatcher::PathParamsMatcher(const std::string &pattern) {
     const auto param_name_start = marker_pos + 1;
 
     auto sep_pos = pattern.find(separator, param_name_start);
-    if (sep_pos == std::string::npos) { sep_pos = pattern.length(); }
+    if (sep_pos == std::string::npos) {
+      sep_pos = pattern.length();
+    }
 
     auto param_name =
         pattern.substr(param_name_start, sep_pos - param_name_start);
@@ -5587,17 +5963,21 @@ inline bool PathParamsMatcher::match(Request &request) const {
     // Should only happen when we have a static fragment after a param
     // Example: '/users/:id/subscriptions'
     // The 'subscriptions' fragment here does not have a corresponding param
-    if (i >= param_names_.size()) { continue; }
+    if (i >= param_names_.size()) {
+      continue;
+    }
 
     auto sep_pos = request.path.find(separator, starting_pos);
-    if (sep_pos == std::string::npos) { sep_pos = request.path.length(); }
+    if (sep_pos == std::string::npos) {
+      sep_pos = request.path.length();
+    }
 
     const auto &param_name = param_names_[i];
 
     request.path_params.emplace(
         param_name, request.path.substr(starting_pos, sep_pos - starting_pos));
 
-    // Mark everythin up to '/' as matched
+    // Mark everything up to '/' as matched
     starting_pos = sep_pos + 1;
   }
   // Returns false if the path is longer than the pattern
@@ -5869,7 +6249,9 @@ inline void Server::stop() {
 
 inline bool Server::parse_request_line(const char *s, Request &req) const {
   auto len = strlen(s);
-  if (len < 2 || s[len - 2] != '\r' || s[len - 1] != '\n') { return false; }
+  if (len < 2 || s[len - 2] != '\r' || s[len - 1] != '\n') {
+    return false;
+  }
   len -= 2;
 
   {
@@ -5877,24 +6259,37 @@ inline bool Server::parse_request_line(const char *s, Request &req) const {
 
     detail::split(s, s + len, ' ', [&](const char *b, const char *e) {
       switch (count) {
-      case 0: req.method = std::string(b, e); break;
-      case 1: req.target = std::string(b, e); break;
-      case 2: req.version = std::string(b, e); break;
-      default: break;
+      case 0:
+        req.method = std::string(b, e);
+        break;
+      case 1:
+        req.target = std::string(b, e);
+        break;
+      case 2:
+        req.version = std::string(b, e);
+        break;
+      default:
+        break;
       }
       count++;
     });
 
-    if (count != 3) { return false; }
+    if (count != 3) {
+      return false;
+    }
   }
 
   static const std::set<std::string> methods{
       "GET",     "HEAD",    "POST",  "PUT",   "DELETE",
       "CONNECT", "OPTIONS", "TRACE", "PATCH", "PRI"};
 
-  if (methods.find(req.method) == methods.end()) { return false; }
+  if (methods.find(req.method) == methods.end()) {
+    return false;
+  }
 
-  if (req.version != "HTTP/1.1" && req.version != "HTTP/1.0") { return false; }
+  if (req.version != "HTTP/1.1" && req.version != "HTTP/1.0") {
+    return false;
+  }
 
   {
     // Skip URL fragment
@@ -5919,12 +6314,15 @@ inline bool Server::parse_request_line(const char *s, Request &req) const {
                       }
                       break;
                     }
-                    default: break;
+                    default:
+                      break;
                     }
                     count++;
                   });
 
-    if (count > 2) { return false; }
+    if (count > 2) {
+      return false;
+    }
   }
 
   return true;
@@ -5954,7 +6352,9 @@ inline bool Server::write_response_core(Stream &strm, bool close_connection,
 
   std::string content_type;
   std::string boundary;
-  if (need_apply_ranges) { apply_ranges(req, res, content_type, boundary); }
+  if (need_apply_ranges) {
+    apply_ranges(req, res, content_type, boundary);
+  }
 
   // Prepare additional headers
   if (close_connection || req.get_header_value("Connection") == "close") {
@@ -5980,7 +6380,9 @@ inline bool Server::write_response_core(Stream &strm, bool close_connection,
     res.set_header("Accept-Ranges", "bytes");
   }
 
-  if (post_routing_handler_) { post_routing_handler_(req, res); }
+  if (post_routing_handler_) {
+    post_routing_handler_(req, res);
+  }
 
   // Response line and headers
   {
@@ -5991,7 +6393,9 @@ inline bool Server::write_response_core(Stream &strm, bool close_connection,
       return false;
     }
 
-    if (!header_writer_(bstrm, res.headers)) { return false; }
+    if (!header_writer_(bstrm, res.headers)) {
+      return false;
+    }
 
     // Flush buffer
     auto &data = bstrm.get_buffer();
@@ -6016,7 +6420,9 @@ inline bool Server::write_response_core(Stream &strm, bool close_connection,
   }
 
   // Log
-  if (logger_) { logger_(req, res); }
+  if (logger_) {
+    logger_(req, res);
+  }
 
   return ret;
 }
@@ -6078,7 +6484,9 @@ inline bool Server::read_content(Stream &strm, Request &req, Response &res) {
           strm, req, res,
           // Regular
           [&](const char *buf, size_t n) {
-            if (req.body.size() + n > req.body.max_size()) { return false; }
+            if (req.body.size() + n > req.body.max_size()) {
+              return false;
+            }
             req.body.append(buf, n);
             return true;
           },
@@ -6092,7 +6500,9 @@ inline bool Server::read_content(Stream &strm, Request &req, Response &res) {
           },
           [&](const char *buf, size_t n) {
             auto &content = cur->second.content;
-            if (content.size() + n > content.max_size()) { return false; }
+            if (content.size() + n > content.max_size()) {
+              return false;
+            }
             content.append(buf, n);
             return true;
           })) {
@@ -6182,7 +6592,9 @@ inline bool Server::handle_file_request(const Request &req, Response &res,
       std::string sub_path = "/" + req.path.substr(entry.mount_point.size());
       if (detail::is_valid_path(sub_path)) {
         auto path = entry.base_dir + sub_path;
-        if (path.back() == '/') { path += "index.html"; }
+        if (path.back() == '/') {
+          path += "index.html";
+        }
 
         if (detail::is_file(path)) {
           for (const auto &kv : entry.headers) {
@@ -6190,7 +6602,9 @@ inline bool Server::handle_file_request(const Request &req, Response &res,
           }
 
           auto mm = std::make_shared<detail::mmap>(path.c_str());
-          if (!mm->is_open()) { return false; }
+          if (!mm->is_open()) {
+            return false;
+          }
 
           res.set_content_provider(
               mm->size(),
@@ -6224,17 +6638,23 @@ Server::create_server_socket(const std::string &host, int port,
         if (::bind(sock, ai.ai_addr, static_cast<socklen_t>(ai.ai_addrlen))) {
           return false;
         }
-        if (::listen(sock, CPPHTTPLIB_LISTEN_BACKLOG)) { return false; }
+        if (::listen(sock, CPPHTTPLIB_LISTEN_BACKLOG)) {
+          return false;
+        }
         return true;
       });
 }
 
 inline int Server::bind_internal(const std::string &host, int port,
                                  int socket_flags) {
-  if (!is_valid()) { return -1; }
+  if (!is_valid()) {
+    return -1;
+  }
 
   svr_sock_ = create_server_socket(host, port, socket_flags, socket_options_);
-  if (svr_sock_ == INVALID_SOCKET) { return -1; }
+  if (svr_sock_ == INVALID_SOCKET) {
+    return -1;
+  }
 
   if (port == 0) {
     struct sockaddr_storage addr;
@@ -6394,7 +6814,9 @@ inline bool Server::routing(Request &req, Response &res, Stream &strm) {
     }
 
     // Read content into `req.body`
-    if (!read_content(strm, req, res)) { return false; }
+    if (!read_content(strm, req, res)) {
+      return false;
+    }
   }
 
   // Regular handler
@@ -6566,7 +6988,9 @@ Server::process_request(Stream &strm, bool close_connection,
   detail::stream_line_reader line_reader(strm, buf.data(), buf.size());
 
   // Connection has been closed on client
-  if (!line_reader.getline()) { return false; }
+  if (!line_reader.getline()) {
+    return false;
+  }
 
   Request req;
 
@@ -6628,7 +7052,9 @@ Server::process_request(Stream &strm, bool close_connection,
     }
   }
 
-  if (setup_request) { setup_request(req); }
+  if (setup_request) {
+    setup_request(req);
+  }
 
   if (req.get_header_value("Expect") == "100-continue") {
     int status = StatusCode::Continue_100;
@@ -6641,7 +7067,8 @@ Server::process_request(Stream &strm, bool close_connection,
       strm.write_format("HTTP/1.1 %d %s\r\n\r\n", status,
                         status_message(status));
       break;
-    default: return write_response(strm, close_connection, req, res);
+    default:
+      return write_response(strm, close_connection, req, res);
     }
   }
 
@@ -6663,9 +7090,15 @@ Server::process_request(Stream &strm, bool close_connection,
       auto s = e.what();
       for (size_t i = 0; s[i]; i++) {
         switch (s[i]) {
-        case '\r': val += "\\r"; break;
-        case '\n': val += "\\n"; break;
-        default: val += s[i]; break;
+        case '\r':
+          val += "\\r";
+          break;
+        case '\n':
+          val += "\\n";
+          break;
+        default:
+          val += s[i];
+          break;
         }
       }
       res.set_header("EXCEPTION_WHAT", val);
@@ -6689,7 +7122,9 @@ Server::process_request(Stream &strm, bool close_connection,
     }
     return write_response_with_content(strm, close_connection, req, res);
   } else {
-    if (res.status == -1) { res.status = StatusCode::NotFound_404; }
+    if (res.status == -1) {
+      res.status = StatusCode::NotFound_404;
+    }
     return write_response(strm, close_connection, req, res);
   }
 }
@@ -6789,7 +7224,9 @@ inline socket_t ClientImpl::create_client_socket(Error &error) const {
   // Check is custom IP specified for host_
   std::string ip;
   auto it = addr_map_.find(host_);
-  if (it != addr_map_.end()) { ip = it->second; }
+  if (it != addr_map_.end()) {
+    ip = it->second;
+  }
 
   return detail::create_client_socket(
       host_, ip, port_, address_family_, tcp_nodelay_, socket_options_,
@@ -6801,7 +7238,9 @@ inline socket_t ClientImpl::create_client_socket(Error &error) const {
 inline bool ClientImpl::create_and_connect_socket(Socket &socket,
                                                   Error &error) {
   auto sock = create_client_socket(error);
-  if (sock == INVALID_SOCKET) { return false; }
+  if (sock == INVALID_SOCKET) {
+    return false;
+  }
   socket.sock = sock;
   return true;
 }
@@ -6815,7 +7254,9 @@ inline void ClientImpl::shutdown_ssl(Socket & /*socket*/,
 }
 
 inline void ClientImpl::shutdown_socket(Socket &socket) const {
-  if (socket.sock == INVALID_SOCKET) { return; }
+  if (socket.sock == INVALID_SOCKET) {
+    return;
+  }
   detail::shutdown_socket(socket.sock);
 }
 
@@ -6833,7 +7274,9 @@ inline void ClientImpl::close_socket(Socket &socket) {
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
   assert(socket.ssl == nullptr);
 #endif
-  if (socket.sock == INVALID_SOCKET) { return; }
+  if (socket.sock == INVALID_SOCKET) {
+    return;
+  }
   detail::close_socket(socket.sock);
   socket.sock = INVALID_SOCKET;
 }
@@ -6844,7 +7287,9 @@ inline bool ClientImpl::read_response_line(Stream &strm, const Request &req,
 
   detail::stream_line_reader line_reader(strm, buf.data(), buf.size());
 
-  if (!line_reader.getline()) { return false; }
+  if (!line_reader.getline()) {
+    return false;
+  }
 
 #ifdef CPPHTTPLIB_ALLOW_LF_AS_LINE_TERMINATOR
   const static std::regex re("(HTTP/1\\.[01]) (\\d{3})(?: (.*?))?\r?\n");
@@ -6862,10 +7307,16 @@ inline bool ClientImpl::read_response_line(Stream &strm, const Request &req,
 
   // Ignore '100 Continue'
   while (res.status == StatusCode::Continue_100) {
-    if (!line_reader.getline()) { return false; } // CRLF
-    if (!line_reader.getline()) { return false; } // next response line
+    if (!line_reader.getline()) {
+      return false;
+    } // CRLF
+    if (!line_reader.getline()) {
+      return false;
+    } // next response line
 
-    if (!std::regex_match(line_reader.ptr(), m, re)) { return false; }
+    if (!std::regex_match(line_reader.ptr(), m, re)) {
+      return false;
+    }
     res.version = std::string(m[1]);
     res.status = std::stoi(std::string(m[2]));
     res.reason = std::string(m[3]);
@@ -6908,7 +7359,9 @@ inline bool ClientImpl::send_(Request &req, Response &res, Error &error) {
     }
 
     if (!is_alive) {
-      if (!create_and_connect_socket(socket_, error)) { return false; }
+      if (!create_and_connect_socket(socket_, error)) {
+        return false;
+      }
 
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
       // TODO: refactoring
@@ -6921,7 +7374,9 @@ inline bool ClientImpl::send_(Request &req, Response &res, Error &error) {
           }
         }
 
-        if (!scli.initialize_ssl(socket_, error)) { return false; }
+        if (!scli.initialize_ssl(socket_, error)) {
+          return false;
+        }
       }
 #endif
     }
@@ -6967,7 +7422,9 @@ inline bool ClientImpl::send_(Request &req, Response &res, Error &error) {
   });
 
   if (!ret) {
-    if (error == Error::Success) { error = Error::Unknown; }
+    if (error == Error::Success) {
+      error = Error::Unknown;
+    }
   }
 
   return ret;
@@ -7007,7 +7464,9 @@ inline bool ClientImpl::handle_request(Stream &strm, Request &req,
     ret = process_request(strm, req, res, close_connection, error);
   }
 
-  if (!ret) { return false; }
+  if (!ret) {
+    return false;
+  }
 
   if (res.get_header_value("Connection") == "close" ||
       (res.version == "HTTP/1.0" && res.reason != "Connection established")) {
@@ -7053,7 +7512,9 @@ inline bool ClientImpl::handle_request(Stream &strm, Request &req,
         Response new_res;
 
         ret = send(new_req, new_res, error);
-        if (ret) { res = new_res; }
+        if (ret) {
+          res = new_res;
+        }
       }
     }
   }
@@ -7069,19 +7530,25 @@ inline bool ClientImpl::redirect(Request &req, Response &res, Error &error) {
   }
 
   auto location = res.get_header_value("location");
-  if (location.empty()) { return false; }
+  if (location.empty()) {
+    return false;
+  }
 
   const static std::regex re(
       R"((?:(https?):)?(?://(?:\[([\d:]+)\]|([^:/?#]+))(?::(\d+))?)?([^?#]*)(\?[^#]*)?(?:#.*)?)");
 
   std::smatch m;
-  if (!std::regex_match(location, m, re)) { return false; }
+  if (!std::regex_match(location, m, re)) {
+    return false;
+  }
 
   auto scheme = is_ssl() ? "https" : "http";
 
   auto next_scheme = m[1].str();
   auto next_host = m[2].str();
-  if (next_host.empty()) { next_host = m[3].str(); }
+  if (next_host.empty()) {
+    next_host = m[3].str();
+  }
   auto port_str = m[4].str();
   auto next_path = m[5].str();
   auto next_query = m[6].str();
@@ -7093,9 +7560,15 @@ inline bool ClientImpl::redirect(Request &req, Response &res, Error &error) {
     next_port = next_scheme == "https" ? 443 : 80;
   }
 
-  if (next_scheme.empty()) { next_scheme = scheme; }
-  if (next_host.empty()) { next_host = host_; }
-  if (next_path.empty()) { next_path = "/"; }
+  if (next_scheme.empty()) {
+    next_scheme = scheme;
+  }
+  if (next_host.empty()) {
+    next_host = host_;
+  }
+  if (next_path.empty()) {
+    next_path = "/";
+  }
 
   auto path = detail::decode_url(next_path, true) + next_query;
 
@@ -7106,7 +7579,9 @@ inline bool ClientImpl::redirect(Request &req, Response &res, Error &error) {
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
       SSLClient cli(next_host, next_port);
       cli.copy_settings(*this);
-      if (ca_cert_store_) { cli.set_ca_cert_store(ca_cert_store_); }
+      if (ca_cert_store_) {
+        cli.set_ca_cert_store(ca_cert_store_);
+      }
       return detail::redirect(cli, req, res, path, location, error);
 #else
       return false;
@@ -7169,7 +7644,9 @@ inline bool ClientImpl::write_request(Stream &strm, Request &req,
     }
   }
 
-  if (!req.has_header("Accept")) { req.set_header("Accept", "*/*"); }
+  if (!req.has_header("Accept")) {
+    req.set_header("Accept", "*/*");
+  }
 
 #ifndef CPPHTTPLIB_NO_DEFAULT_USER_AGENT
   if (!req.has_header("User-Agent")) {
@@ -7267,10 +7744,14 @@ inline std::unique_ptr<Response> ClientImpl::send_with_content_provider(
     ContentProvider content_provider,
     ContentProviderWithoutLength content_provider_without_length,
     const std::string &content_type, Error &error) {
-  if (!content_type.empty()) { req.set_header("Content-Type", content_type); }
+  if (!content_type.empty()) {
+    req.set_header("Content-Type", content_type);
+  }
 
 #ifdef CPPHTTPLIB_ZLIB_SUPPORT
-  if (compress_) { req.set_header("Content-Encoding", "gzip"); }
+  if (compress_) {
+    req.set_header("Content-Encoding", "gzip");
+  }
 #endif
 
 #ifdef CPPHTTPLIB_ZLIB_SUPPORT
@@ -7362,7 +7843,9 @@ inline Result ClientImpl::send_with_content_provider(
 
 inline std::string
 ClientImpl::adjust_host_string(const std::string &host) const {
-  if (host.find(':') != std::string::npos) { return "[" + host + "]"; }
+  if (host.find(':') != std::string::npos) {
+    return "[" + host + "]";
+  }
   return host;
 }
 
@@ -7370,7 +7853,9 @@ inline bool ClientImpl::process_request(Stream &strm, Request &req,
                                         Response &res, bool close_connection,
                                         Error &error) {
   // Send request
-  if (!write_request(strm, req, close_connection, error)) { return false; }
+  if (!write_request(strm, req, close_connection, error)) {
+    return false;
+  }
 
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
   if (is_ssl()) {
@@ -7409,9 +7894,13 @@ inline bool ClientImpl::process_request(Stream &strm, Request &req,
         req.content_receiver
             ? static_cast<ContentReceiverWithProgress>(
                   [&](const char *buf, size_t n, uint64_t off, uint64_t len) {
-                    if (redirect) { return true; }
+                    if (redirect) {
+                      return true;
+                    }
                     auto ret = req.content_receiver(buf, n, off, len);
-                    if (!ret) { error = Error::Canceled; }
+                    if (!ret) {
+                      error = Error::Canceled;
+                    }
                     return ret;
                   })
             : static_cast<ContentReceiverWithProgress>(
@@ -7425,9 +7914,13 @@ inline bool ClientImpl::process_request(Stream &strm, Request &req,
                   });
 
     auto progress = [&](uint64_t current, uint64_t total) {
-      if (!req.progress || redirect) { return true; }
+      if (!req.progress || redirect) {
+        return true;
+      }
       auto ret = req.progress(current, total);
-      if (!ret) { error = Error::Canceled; }
+      if (!ret) {
+        error = Error::Canceled;
+      }
       return ret;
     };
 
@@ -7435,13 +7928,17 @@ inline bool ClientImpl::process_request(Stream &strm, Request &req,
     if (!detail::read_content(strm, res, (std::numeric_limits<size_t>::max)(),
                               dummy_status, std::move(progress), std::move(out),
                               decompress_)) {
-      if (error != Error::Canceled) { error = Error::Read; }
+      if (error != Error::Canceled) {
+        error = Error::Read;
+      }
       return false;
     }
   }
 
   // Log
-  if (logger_) { logger_(req, res); }
+  if (logger_) {
+    logger_(req, res);
+  }
 
   return true;
 }
@@ -7590,7 +8087,9 @@ inline Result ClientImpl::Get(const std::string &path, const Headers &headers,
 
 inline Result ClientImpl::Get(const std::string &path, const Params &params,
                               const Headers &headers, Progress progress) {
-  if (params.empty()) { return Get(path, headers); }
+  if (params.empty()) {
+    return Get(path, headers);
+  }
 
   std::string path_with_query = append_query_params(path, params);
   return Get(path_with_query, headers, progress);
@@ -7938,7 +8437,9 @@ inline Result ClientImpl::Delete(const std::string &path,
   req.headers = headers;
   req.path = path;
 
-  if (!content_type.empty()) { req.set_header("Content-Type", content_type); }
+  if (!content_type.empty()) {
+    req.set_header("Content-Type", content_type);
+  }
   req.body.assign(body, content_length);
 
   return send_(std::move(req));
@@ -8113,7 +8614,9 @@ inline void ClientImpl::set_ca_cert_store(X509_STORE *ca_cert_store) {
 inline X509_STORE *ClientImpl::create_ca_cert_store(const char *ca_cert,
                                                     std::size_t size) const {
   auto mem = BIO_new_mem_buf(ca_cert, static_cast<int>(size));
-  if (!mem) { return nullptr; }
+  if (!mem) {
+    return nullptr;
+  }
 
   auto inf = PEM_X509_INFO_read_bio(mem, nullptr, nullptr, nullptr);
   if (!inf) {
@@ -8125,10 +8628,16 @@ inline X509_STORE *ClientImpl::create_ca_cert_store(const char *ca_cert,
   if (cts) {
     for (auto i = 0; i < static_cast<int>(sk_X509_INFO_num(inf)); i++) {
       auto itmp = sk_X509_INFO_value(inf, i);
-      if (!itmp) { continue; }
+      if (!itmp) {
+        continue;
+      }
 
-      if (itmp->x509) { X509_STORE_add_cert(cts, itmp->x509); }
-      if (itmp->crl) { X509_STORE_add_crl(cts, itmp->crl); }
+      if (itmp->x509) {
+        X509_STORE_add_cert(cts, itmp->x509);
+      }
+      if (itmp->crl) {
+        X509_STORE_add_crl(cts, itmp->crl);
+      }
     }
   }
 
@@ -8189,7 +8698,9 @@ inline void ssl_delete(std::mutex &ctx_mutex, SSL *ssl,
   // the remote has closed the network connection
   // Note that it is not always possible to avoid SIGPIPE, this is merely a
   // best-efforts.
-  if (shutdown_gracefully) { SSL_shutdown(ssl); }
+  if (shutdown_gracefully) {
+    SSL_shutdown(ssl);
+  }
 
   std::lock_guard<std::mutex> guard(ctx_mutex);
   SSL_free(ssl);
@@ -8205,12 +8716,17 @@ bool ssl_connect_or_accept_nonblocking(socket_t sock, SSL *ssl,
     auto err = SSL_get_error(ssl, res);
     switch (err) {
     case SSL_ERROR_WANT_READ:
-      if (select_read(sock, timeout_sec, timeout_usec) > 0) { continue; }
+      if (select_read(sock, timeout_sec, timeout_usec) > 0) {
+        continue;
+      }
       break;
     case SSL_ERROR_WANT_WRITE:
-      if (select_write(sock, timeout_sec, timeout_usec) > 0) { continue; }
+      if (select_write(sock, timeout_sec, timeout_usec) > 0) {
+        continue;
+      }
       break;
-    default: break;
+    default:
+      break;
     }
     return false;
   }
@@ -8294,7 +8810,9 @@ inline ssize_t SSLSocketStream::read(char *ptr, size_t size) {
         } else if (is_readable()) {
           std::this_thread::sleep_for(std::chrono::milliseconds(1));
           ret = SSL_read(ssl_, ptr, static_cast<int>(size));
-          if (ret >= 0) { return ret; }
+          if (ret >= 0) {
+            return ret;
+          }
           err = SSL_get_error(ssl_, ret);
         } else {
           return -1;
@@ -8325,7 +8843,9 @@ inline ssize_t SSLSocketStream::write(const char *ptr, size_t size) {
         if (is_writable()) {
           std::this_thread::sleep_for(std::chrono::milliseconds(1));
           ret = SSL_write(ssl_, ptr, static_cast<int>(handle_size));
-          if (ret >= 0) { return ret; }
+          if (ret >= 0) {
+            return ret;
+          }
           err = SSL_get_error(ssl_, ret);
         } else {
           return -1;
@@ -8425,7 +8945,9 @@ inline SSLServer::SSLServer(
 }
 
 inline SSLServer::~SSLServer() {
-  if (ctx_) { SSL_CTX_free(ctx_); }
+  if (ctx_) {
+    SSL_CTX_free(ctx_);
+  }
 }
 
 inline bool SSLServer::is_valid() const { return ctx_; }
@@ -8513,7 +9035,9 @@ inline SSLClient::SSLClient(const std::string &host, int port,
 }
 
 inline SSLClient::~SSLClient() {
-  if (ctx_) { SSL_CTX_free(ctx_); }
+  if (ctx_) {
+    SSL_CTX_free(ctx_);
+  }
   // Make sure to shut down SSL since shutdown_ssl will resolve to the
   // base function rather than the derived function once we get to the
   // base class destructor, and won't free the SSL (causing a leak).
@@ -8644,7 +9168,9 @@ inline bool SSLClient::load_certs() {
       loaded = detail::load_system_certs_on_macos(SSL_CTX_get_cert_store(ctx_));
 #endif // TARGET_OS_OSX
 #endif // _WIN32
-      if (!loaded) { SSL_CTX_set_default_verify_paths(ctx_); }
+      if (!loaded) {
+        SSL_CTX_set_default_verify_paths(ctx_);
+      }
     }
   });
 
@@ -8774,8 +9300,8 @@ SSLClient::verify_host_with_subject_alt_name(X509 *server_cert) const {
 
   auto type = GEN_DNS;
 
-  struct in6_addr addr6 {};
-  struct in_addr addr {};
+  struct in6_addr addr6{};
+  struct in_addr addr{};
   size_t addr_len = 0;
 
 #ifndef __MINGW32__
@@ -8805,7 +9331,9 @@ SSLClient::verify_host_with_subject_alt_name(X509 *server_cert) const {
         auto name_len = static_cast<size_t>(ASN1_STRING_length(val->d.ia5));
 
         switch (type) {
-        case GEN_DNS: dsn_matched = check_host_name(name, name_len); break;
+        case GEN_DNS:
+          dsn_matched = check_host_name(name, name_len);
+          break;
 
         case GEN_IPADD:
           if (!memcmp(&addr6, name, addr_len) ||
@@ -8817,7 +9345,9 @@ SSLClient::verify_host_with_subject_alt_name(X509 *server_cert) const {
       }
     }
 
-    if (dsn_matched || ip_matched) { ret = true; }
+    if (dsn_matched || ip_matched) {
+      ret = true;
+    }
   }
 
   GENERAL_NAMES_free(const_cast<STACK_OF(GENERAL_NAME) *>(
@@ -8843,7 +9373,9 @@ inline bool SSLClient::verify_host_with_common_name(X509 *server_cert) const {
 
 inline bool SSLClient::check_host_name(const char *pattern,
                                        size_t pattern_len) const {
-  if (host_.size() == pattern_len && host_ == pattern) { return true; }
+  if (host_.size() == pattern_len && host_ == pattern) {
+    return true;
+  }
 
   // Wildcard match
   // https://bugs.launchpad.net/ubuntu/+source/firefox-3.0/+bug/376484
@@ -8853,7 +9385,9 @@ inline bool SSLClient::check_host_name(const char *pattern,
                   pattern_components.emplace_back(b, e);
                 });
 
-  if (host_components_.size() != pattern_components.size()) { return false; }
+  if (host_components_.size() != pattern_components.size()) {
+    return false;
+  }
 
   auto itr = pattern_components.begin();
   for (const auto &h : host_components_) {
@@ -8861,7 +9395,9 @@ inline bool SSLClient::check_host_name(const char *pattern,
     if (p != h && p != "*") {
       auto partial_match = (p.size() > 0 && p[p.size() - 1] == '*' &&
                             !p.compare(0, p.size() - 1, h));
-      if (!partial_match) { return false; }
+      if (!partial_match) {
+        return false;
+      }
     }
     ++itr;
   }
@@ -8899,7 +9435,9 @@ inline Client::Client(const std::string &scheme_host_port,
     auto is_ssl = scheme == "https";
 
     auto host = m[2].str();
-    if (host.empty()) { host = m[3].str(); }
+    if (host.empty()) {
+      host = m[3].str();
+    }
 
     auto port_str = m[4].str();
     auto port = !port_str.empty() ? std::stoi(port_str) : (is_ssl ? 443 : 80);
@@ -9361,7 +9899,9 @@ inline long Client::get_openssl_verify_result() const {
 }
 
 inline SSL_CTX *Client::ssl_context() const {
-  if (is_ssl_) { return static_cast<SSLClient &>(*cli_).ssl_context(); }
+  if (is_ssl_) {
+    return static_cast<SSLClient &>(*cli_).ssl_context();
+  }
   return nullptr;
 }
 #endif

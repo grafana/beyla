@@ -602,7 +602,7 @@ int beyla_tc_http_egress(struct __sk_buff *ctx) {
     get_extra_xmited_bytes(src_port, &extra_bytes, &http_ctx);
 
     if (http_ctx) {
-        // this is a new connection, reset any existing metatada
+        // this is a new connection, reset any existing metadata
         if (tcp->syn) {
             http_ctx->xtra_bytes = 0;
             http_ctx->state = ESTABLISHED;

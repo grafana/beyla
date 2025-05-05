@@ -9,7 +9,7 @@
 
 // LRU map, we don't clean-it up at the moment, which holds onto the mapping
 // of the SSL pointer and the current connection. It's setup by the tcp_sendmsg uprobe
-// when it's sandwitched between ssl_handshake entry/exit.
+// when it's sandwiched between ssl_handshake entry/exit.
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, u64);                         // the SSL struct pointer

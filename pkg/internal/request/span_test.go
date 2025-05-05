@@ -291,7 +291,7 @@ func TestDetectsOTelExport(t *testing.T) {
 			exports: false,
 		},
 		{
-			name:    "Successfull GRPC /v1/metrics spans export",
+			name:    "Successful GRPC /v1/metrics spans export",
 			span:    Span{Type: EventTypeGRPCClient, Method: "GET", Path: "/opentelemetry.proto.collector.metrics.v1.MetricsService/Export", RequestStart: 100, End: 200, Status: 0},
 			exports: true,
 		},
@@ -326,7 +326,7 @@ func TestDetectsOTelExport(t *testing.T) {
 			exports: false,
 		},
 		{
-			name:    "Successfull HTTP /v1/traces spans export",
+			name:    "Successful HTTP /v1/traces spans export",
 			span:    Span{Type: EventTypeHTTPClient, Method: "GET", Path: "/v1/traces", RequestStart: 100, End: 200, Status: 200},
 			exports: true,
 		},
@@ -346,7 +346,7 @@ func TestDetectsOTelExport(t *testing.T) {
 			exports: false,
 		},
 		{
-			name:    "Successfull GRPC /v1/traces spans export",
+			name:    "Successful GRPC /v1/traces spans export",
 			span:    Span{Type: EventTypeGRPCClient, Method: "GET", Path: "/opentelemetry.proto.collector.trace.v1.TraceService/Export", RequestStart: 100, End: 200, Status: 0},
 			exports: true,
 		}}

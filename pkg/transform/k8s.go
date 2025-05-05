@@ -85,7 +85,7 @@ func KubeDecoratorProvider(
 		}
 		metaStore, err := ctxInfo.K8sInformer.Get(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("inititalizing KubeDecoratorProvider: %w", err)
+			return nil, fmt.Errorf("initializing KubeDecoratorProvider: %w", err)
 		}
 		decorator := &metadataDecorator{
 			db:          metaStore,
@@ -108,7 +108,7 @@ func KubeProcessEventDecoratorProvider(
 		}
 		metaStore, err := ctxInfo.K8sInformer.Get(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("inititalizing KubeDecoratorProvider: %w", err)
+			return nil, fmt.Errorf("initializing KubeDecoratorProvider: %w", err)
 		}
 		decorator := &procEventMetadataDecorator{
 			db:          metaStore,

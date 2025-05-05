@@ -1,19 +1,16 @@
-name: Security Check for External Contributions
+name: security-check
 
 # Run this workflow on PR open, update, and reopen events
 on:
   pull_request:
     types: [opened, synchronize, reopened]
 
-# This ensures this workflow runs first 
-# The group name means this workflow creates a check named "security-check"
-# that can be required in branch protection settings
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+# Set restrictive permissions at workflow level
+permissions:
+  contents: read
 
 jobs:
-  security-check:
+  security-gate:
     name: External Contribution Security Review
     runs-on: ubuntu-latest
     steps:
@@ -23,7 +20,7 @@ jobs:
           fetch-depth: 0  # Fetch all history to properly check file changes
       
       - name: Check for security concerns
-        id: security-check
+        id: check
         shell: bash
         env:
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
@@ -33,12 +30,11 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # For testing: this code will make the check always fail 
-          # to simulate an external contributor with sensitive changes
+          # For testing: this code will simulate an external contributor with sensitive changes
           # Remove this in production
           echo "FOR TESTING: Simulating security check for external contributor"
-          echo "SECURITY_ISSUE=true" >> $GITHUB_ENV
-          echo "MODIFIED_FILES=SIMULATED sensitive file (for testing)" >> $GITHUB_ENV
+          echo "security_issue=true" >> $GITHUB_OUTPUT
+          echo "modified_files=SIMULATED sensitive file (for testing)" >> $GITHUB_OUTPUT
           
           # Uncomment and use this code in production:
           # # Check if PR author is from the same organization
@@ -59,9 +55,11 @@ jobs:
           #   fi
           # fi
           # 
-          # # If PR author is either a collaborator or an org member, no security concerns
+          # # If PR author is either a collaborator or an org member, mark as secure
           # if [[ "$IS_COLLABORATOR" == "true" || "$ORG_MEMBER" == "true" ]]; then
           #   echo "PR author is a trusted contributor, no security review needed"
+          #   echo "security_issue=false" >> $GITHUB_OUTPUT
+          #   echo "modified_files=" >> $GITHUB_OUTPUT
           #   exit 0
           # fi
           # 
@@ -93,17 +91,21 @@ jobs:
           # 
           # if [ -n "$MODIFIED_FILES" ]; then
           #   echo "Sensitive files were modified by an external contributor"
-          #   echo "SECURITY_ISSUE=true" >> $GITHUB_ENV
-          #   echo "MODIFIED_FILES=$MODIFIED_FILES" >> $GITHUB_ENV
+          #   echo "security_issue=true" >> $GITHUB_OUTPUT
+          #   echo "modified_files=$MODIFIED_FILES" >> $GITHUB_OUTPUT
+          # else
+          #   echo "No sensitive files were modified by external contributor"
+          #   echo "security_issue=false" >> $GITHUB_OUTPUT
+          #   echo "modified_files=" >> $GITHUB_OUTPUT
           # fi
       
       - name: Post comment for security review needed
-        if: env.SECURITY_ISSUE == 'true'
+        if: steps.check.outputs.security_issue == 'true'
         uses: actions/github-script@v6
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const modifiedFiles = '${{ env.MODIFIED_FILES }}';
+            const modifiedFiles = '${{ steps.check.outputs.modified_files }}';
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -123,7 +125,7 @@ jobs:
             });
           
       - name: Fail check if security review needed
-        if: env.SECURITY_ISSUE == 'true'
+        if: steps.check.outputs.security_issue == 'true'
         run: |
           echo "::error::External contribution modifies sensitive files. Security review required."
           exit 1

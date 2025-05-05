@@ -1,10 +1,11 @@
 name: Pull request checks
 
 on:
-  push:
-    branches: [ 'main', 'release-*' ]
-  pull_request:
-    branches: [ 'main', 'release-*' ]
+  # Only run after security-check workflow completes successfully
+  workflow_run:
+    workflows: ["security-check"]
+    types:
+      - completed
 
 # Set restrictive permissions at workflow level
 permissions:
@@ -12,6 +13,8 @@ permissions:
 
 jobs:
   test:
+    # Only run if the security check passed
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     name: test
     runs-on: ubuntu-latest
     # Grant specific permissions needed only for this job

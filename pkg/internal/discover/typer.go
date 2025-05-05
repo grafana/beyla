@@ -161,7 +161,7 @@ func (t *typer) asInstrumentable(execElf *exec.FileInfo) ebpf.Instrumentable {
 		parent, ok = t.currentPids[parent.Ppid]
 	}
 
-	detectedType := exec.FindProcLanguage(execElf.Pid, execElf.ELF, execElf.CmdExePath)
+	detectedType := exec.FindProcLanguage(execElf.Pid)
 
 	if detectedType == svc.InstrumentableGolang && err == nil {
 		log.Warn("ELF binary appears to be a Go program, but no offsets were found",

@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/grafana/beyla/v2/pkg/internal/fastelf"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
 )
 
-func FindProcLanguage(pid int32, elfF *elf.File, path string) svc.InstrumentableType {
+func FindProcLanguage(pid int32) svc.InstrumentableType {
 	maps, err := FindLibMaps(pid)
 
 	if err != nil {
@@ -23,21 +24,19 @@ func FindProcLanguage(pid int32, elfF *elf.File, path string) svc.Instrumentable
 		}
 	}
 
-	if elfF == nil {
-		pidPath := fmt.Sprintf("/proc/%d/exe", pid)
-		elfF, err = elf.Open(pidPath)
+	filePath, err := resolveProcBinary(pid)
 
-		if err != nil || elfF == nil {
-			return svc.InstrumentableGeneric
-		}
+	if err != nil {
+		return svc.InstrumentableGeneric
 	}
 
-	t := findLanguageFromElf(elfF)
+	t := findLanguageFromElf(filePath)
+
 	if t != svc.InstrumentableGeneric {
 		return t
 	}
 
-	t = instrumentableFromPath(path)
+	t = instrumentableFromPath(filePath)
 	if t != svc.InstrumentableGeneric {
 		return t
 	}
@@ -49,14 +48,32 @@ func FindProcLanguage(pid int32, elfF *elf.File, path string) svc.Instrumentable
 	return instrumentableFromEnviron(string(bytes))
 }
 
-func findLanguageFromElf(elfF *elf.File) svc.InstrumentableType {
-	gosyms := elfF.Section(".gosymtab")
+func resolveProcBinary(pid int32) (string, error) {
+	exePath := fmt.Sprintf("/proc/%d/exe", pid)
 
-	if gosyms != nil {
+	realPath, err := os.Readlink(exePath)
+
+	if err != nil {
+		return "", fmt.Errorf("failed to read process binary: %w", err)
+	}
+
+	return fmt.Sprintf("/proc/%d/root%s", pid, realPath), nil
+}
+
+func findLanguageFromElf(filePath string) svc.InstrumentableType {
+	ctx, err := fastelf.NewElfContextFromFile(filePath)
+
+	if err != nil {
+		return svc.InstrumentableGeneric
+	}
+
+	defer ctx.Close()
+
+	if ctx.HasSection(".gopclntab") {
 		return svc.InstrumentableGolang
 	}
 
-	return matchExeSymbols(elfF)
+	return matchExeSymbols(ctx)
 }
 
 func contains(slice []string, value string) bool {
@@ -117,36 +134,36 @@ func FindExeSymbols(f *elf.File, symbolNames []string) (map[string]Sym, error) {
 	return addresses, nil
 }
 
-func matchSymbols(syms []elf.Symbol) svc.InstrumentableType {
-	for _, s := range syms {
-		if elf.ST_TYPE(s.Info) != elf.STT_FUNC {
-			// Symbol not associated with a function or other executable code.
+func matchExeSymbols(ctx *fastelf.ElfContext) svc.InstrumentableType {
+	for _, sec := range ctx.Sections {
+		if sec.Type != fastelf.SHT_SYMTAB && sec.Type != fastelf.SHT_DYNSYM {
 			continue
 		}
-		t := instrumentableFromSymbolName(s.Name)
-		if t != svc.InstrumentableGeneric {
-			return t
+
+		strtab := ctx.Sections[sec.Link]
+		strs := ctx.Data[strtab.Offset:]
+
+		symCount := int(sec.Size / sec.Entsize)
+
+		for i := 0; i < symCount; i++ {
+			sym := fastelf.ReadStruct[fastelf.Elf64_Sym](ctx.Data, int(sec.Offset)+i*int(sec.Entsize))
+
+			if sym == nil ||
+				fastelf.SymType(sym.Info) != fastelf.STT_FUNC ||
+				sym.Size == 0 ||
+				sym.Value == 0 {
+				continue
+			}
+
+			name := fastelf.GetCStringUnsafe(strs, sym.Name)
+
+			t := instrumentableFromSymbolName(name)
+
+			if t != svc.InstrumentableGeneric {
+				return t
+			}
 		}
 	}
 
 	return svc.InstrumentableGeneric
-}
-
-func matchExeSymbols(f *elf.File) svc.InstrumentableType {
-	syms, err := f.Symbols()
-	if err != nil && !errors.Is(err, elf.ErrNoSymbols) {
-		return svc.InstrumentableGeneric
-	}
-
-	t := matchSymbols(syms)
-	if t != svc.InstrumentableGeneric {
-		return t
-	}
-
-	dynsyms, err := f.DynamicSymbols()
-	if err != nil && !errors.Is(err, elf.ErrNoSymbols) {
-		return svc.InstrumentableGeneric
-	}
-
-	return matchSymbols(dynsyms)
 }

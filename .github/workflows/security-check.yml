@@ -133,7 +133,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Cancel subsequent workflows
-      uses: andymckay/cancel-action@0.31db758351ee9c0e0fcfb519d13af42c357fd8b4  # v0.3
+      uses: styfle/cancel-workflow-action@85f0a91c15966e96a22b7c370a08e43cd66567a8 # 0.12.0
       with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        workflow_id: pull_request.yml,pull_request_k8s_integration_tests.yml,pull_request_oats_test.yml,pull_request_integration_tests.yml,pull_request_integration_tests_arm.yml,pull_request_integration_tests_vm_5.15_x86_64.yml,pull_request_check_license.yml,clang-format-check.yml,helm-test.yml,generator-image.yml,backport.yml,vale.yml,workflow_integration_tests_vm.yml
+        # Cancel all workflows running on this PR, not just the specific ones listed
+        access_token: ${{ github.token }}
+        pull_request: ${{ github.event.pull_request.number }}
+        workflow_id: "*"

@@ -101,7 +101,7 @@ static __always_inline void http_get_or_create_trace_info(http_connection_metada
             //dbg_print_http_connection_info(conn);
 
             // For server requests, we first look for TCP info (setup by TC ingress) and then we fall back to black-box info.
-            found_tp = find_trace_for_server_request(conn, &tp_p->tp);
+            found_tp = find_trace_for_server_request(conn, &tp_p->tp, EVENT_HTTP_REQUEST);
         }
     }
 
@@ -233,10 +233,6 @@ static __always_inline u8 http_will_complete(http_info_t *info, unsigned char *b
 
 static __always_inline u8 is_duplicate_info(http_info_t *info) {
     u64 ts = bpf_ktime_get_ns();
-    bpf_printk("%d %d %d",
-               info->start_monotime_ns,
-               (ts >= info->start_monotime_ns),
-               current_immediate_epoch(ts) == current_immediate_epoch(info->start_monotime_ns));
     return info->start_monotime_ns && (ts >= info->start_monotime_ns) &&
            current_immediate_epoch(ts) == current_immediate_epoch(info->start_monotime_ns);
 }

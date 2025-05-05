@@ -227,7 +227,9 @@ server_or_client_trace(u8 type, connection_info_t *conn, tp_info_pid_t *tp_p, u8
     }
 }
 
-static __always_inline u8 find_trace_for_server_request(connection_info_t *conn, tp_info_t *tp) {
+static __always_inline u8 find_trace_for_server_request(connection_info_t *conn,
+                                                        tp_info_t *tp,
+                                                        u8 type) {
     u8 found_tp = 0;
     tp_info_pid_t *existing_tp = bpf_map_lookup_elem(&incoming_trace_map, conn);
     if (existing_tp) {
@@ -252,8 +254,11 @@ static __always_inline u8 find_trace_for_server_request(connection_info_t *conn,
                 __builtin_memcpy(tp->parent_id, existing_tp->tp.span_id, sizeof(tp->parent_id));
                 // Mark the client info as invalid (used), in case the client
                 // request information is not cleaned up.
-                existing_tp->valid = 0;
-                set_trace_info_for_connection(conn, TRACE_TYPE_CLIENT, existing_tp);
+                if (type == EVENT_HTTP_REQUEST) {
+                    // We only do it for HTTP because TCP can be confused with SSL
+                    existing_tp->valid = 0;
+                    set_trace_info_for_connection(conn, TRACE_TYPE_CLIENT, existing_tp);
+                }
             } else {
                 bpf_d_printk("the existing client tp was already used, ignoring");
             }

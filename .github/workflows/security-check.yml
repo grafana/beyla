@@ -1,9 +1,9 @@
 name: Security Check for External Contributions
 
-# Make this action run only when a PR is initially opened
+# Make this action run when a PR is opened, updated with new commits, or reopened
 on:
   pull_request:
-    types: [opened]
+    types: [opened, synchronize, reopened]
 
 # This ensures this workflow runs first
 concurrency:
@@ -116,7 +116,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Cancel subsequent workflows
-      uses: styfle/cancel-workflow-action@85f0a91c15966e96a22b7c370a08e43cd66567a8 # 0.12.0
+      uses: styfle/cancel-workflow-action@01ce38bf961b4e243a6342cbade0dbc8ba3f0432 # v0.12.0
       with:
         # Cancel all workflows running on this PR, not just the specific ones listed
         # This prevents attackers from bypassing security by creating new workflows

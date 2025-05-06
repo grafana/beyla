@@ -356,7 +356,7 @@ func (p *Tracer) processCudaFileInfo(info *exec.FileInfo) {
 
 	p.log.Info("Processing CUDA symbols for", "pid", info.Pid, "ns", info.Ns)
 
-	disovered := []*procfs.ProcMap{}
+	discovered := []*procfs.ProcMap{}
 	symModules, ok := p.symbolsMap[info.Ino]
 	if !ok {
 		symModules = moduleOffsets{}
@@ -365,22 +365,22 @@ func (p *Tracer) processCudaFileInfo(info *exec.FileInfo) {
 	p.log.Debug("Sym modules have", "count", len(symModules))
 
 	if mod := p.discoverModule(info, maps, symModules, info.CmdExePath); mod != nil {
-		disovered = append(disovered, mod)
+		discovered = append(discovered, mod)
 	}
 
 	if mod := p.discoverModule(info, maps, symModules, "libtorch_cuda.so"); mod != nil {
-		disovered = append(disovered, mod)
+		discovered = append(discovered, mod)
 	}
 
 	for _, m := range maps {
 		if strings.Contains(m.Pathname, "/vllm") {
 			if mod := p.discoverModule(info, maps, symModules, m.Pathname); mod != nil {
-				disovered = append(disovered, mod)
+				discovered = append(discovered, mod)
 			}
 		}
 		if strings.Contains(m.Pathname, "/ggml") {
 			if mod := p.discoverModule(info, maps, symModules, m.Pathname); mod != nil {
-				disovered = append(disovered, mod)
+				discovered = append(discovered, mod)
 			}
 		}
 	}
@@ -393,8 +393,8 @@ func (p *Tracer) processCudaFileInfo(info *exec.FileInfo) {
 	p.log.Debug("Sym modules have", "count", len(symModules))
 
 	p.symbolsMap[info.Ino] = symModules
-	if len(disovered) > 0 {
-		p.establishCudaPID(uint32(info.Pid), info, disovered)
+	if len(discovered) > 0 {
+		p.establishCudaPID(uint32(info.Pid), info, discovered)
 	}
 }
 

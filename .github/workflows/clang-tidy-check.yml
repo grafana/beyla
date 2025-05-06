@@ -19,18 +19,15 @@ jobs:
 
   clang-tidy:
     runs-on: ubuntu-latest
-    # Only depend on security-check for PR events, and either run if it passes or if this is a direct push
+    # Add dependency on security-check for PR events only
     needs: [security-check]
-    if: |
-      success() && (
-        github.event_name != 'pull_request' || 
-        needs.security-check.outputs.security_cleared == 'true'
-      )
+    if: always() && (github.event_name != 'pull_request' || needs.security-check.outputs.security_cleared == 'true')
 
     steps:
       - name: Checkout code
         uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3
         with:
+          fetch-depth: 0  # Need full history for security check
           persist-credentials: false
 
       - name: Install clang-tidy

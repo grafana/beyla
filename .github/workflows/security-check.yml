@@ -34,17 +34,25 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Check if PR author is from the same organization
-          ORG_MEMBER=false
+          echo "Checking security for PR author: ${PR_AUTHOR}"
+          echo "Repository: ${REPO}"
+          echo "Repository Owner: ${REPO_OWNER}"
           
-          # Check if PR author is a collaborator
+          # Check if PR author is a collaborator with write access
           IS_COLLABORATOR=false
-          if gh api "repos/${REPO}/collaborators/${PR_AUTHOR}" --silent 2>/dev/null; then
-            echo "PR author is a collaborator"
+          if gh api "repos/${REPO}/collaborators/${PR_AUTHOR}" --jq '.permissions.push' 2>/dev/null | grep -q 'true'; then
+            echo "PR author is a collaborator with write access"
+            IS_COLLABORATOR=true
+          fi
+          
+          # Check if the user is in MAINTAINERS.md
+          if grep -i "- ${PR_AUTHOR}" MAINTAINERS.md > /dev/null; then
+            echo "PR author is listed in MAINTAINERS.md"
             IS_COLLABORATOR=true
           fi
           
           # If we have an organization, check if the user is a member
+          ORG_MEMBER=false
           if [[ "${REPO_OWNER}" != *"/"* ]]; then
             if gh api "orgs/${REPO_OWNER}/members/${PR_AUTHOR}" --silent 2>/dev/null; then
               echo "PR author is an organization member"

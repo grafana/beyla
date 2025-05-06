@@ -46,7 +46,7 @@ jobs:
           fi
           
           # Check if the user is in MAINTAINERS.md
-          if grep -i "- ${PR_AUTHOR}" MAINTAINERS.md > /dev/null; then
+          if grep -q "@${PR_AUTHOR}" MAINTAINERS.md; then
             echo "PR author is listed in MAINTAINERS.md"
             IS_COLLABORATOR=true
           fi
@@ -59,6 +59,10 @@ jobs:
               ORG_MEMBER=true
             fi
           fi
+          
+          # Debug output
+          echo "IS_COLLABORATOR: ${IS_COLLABORATOR}"
+          echo "ORG_MEMBER: ${ORG_MEMBER}"
           
           # If PR author is either a collaborator or an org member, mark as secure
           if [[ "$IS_COLLABORATOR" == "true" || "$ORG_MEMBER" == "true" ]]; then

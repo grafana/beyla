@@ -32,78 +32,70 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # For testing: this code will simulate an external contributor with sensitive changes
-          # Remove this in production
-          echo "FOR TESTING: Simulating security check for external contributor"
-          echo "security_issue=true" >> $GITHUB_OUTPUT
-          echo "modified_files=SIMULATED sensitive file (for testing)" >> $GITHUB_OUTPUT
-          echo "security_cleared=false" >> $GITHUB_OUTPUT
+          # Check if PR author is from the same organization
+          ORG_MEMBER=false
           
-          # Uncomment and use this code in production:
-          # # Check if PR author is from the same organization
-          # ORG_MEMBER=false
-          # 
-          # # Check if PR author is a collaborator
-          # IS_COLLABORATOR=false
-          # if gh api "repos/${REPO}/collaborators/${PR_AUTHOR}" --silent 2>/dev/null; then
-          #   echo "PR author is a collaborator"
-          #   IS_COLLABORATOR=true
-          # fi
-          # 
-          # # If we have an organization, check if the user is a member
-          # if [[ "${REPO_OWNER}" != *"/"* ]]; then
-          #   if gh api "orgs/${REPO_OWNER}/members/${PR_AUTHOR}" --silent 2>/dev/null; then
-          #     echo "PR author is an organization member"
-          #     ORG_MEMBER=true
-          #   fi
-          # fi
-          # 
-          # # If PR author is either a collaborator or an org member, mark as secure
-          # if [[ "$IS_COLLABORATOR" == "true" || "$ORG_MEMBER" == "true" ]]; then
-          #   echo "PR author is a trusted contributor, no security review needed"
-          #   echo "security_issue=false" >> $GITHUB_OUTPUT
-          #   echo "modified_files=" >> $GITHUB_OUTPUT
-          #   echo "security_cleared=true" >> $GITHUB_OUTPUT
-          #   exit 0
-          # fi
-          # 
-          # # If we get here, PR is from external contributor
-          # echo "PR is from an external contributor, checking modified files..."
-          # 
-          # # Get the files changed in the PR
-          # CHANGED_FILES=$(git diff --name-only "${BASE_SHA}" "${HEAD_SHA}")
-          # MODIFIED_FILES=""
-          # 
-          # # Check for modifications to sensitive files
-          # if echo "$CHANGED_FILES" | grep -q -E '^\.github/'; then
-          #   MODIFIED_FILES="${MODIFIED_FILES} .github/ directory,"
-          # fi
-          # if echo "$CHANGED_FILES" | grep -q -E '^tools/'; then
-          #   MODIFIED_FILES="${MODIFIED_FILES} tools/ directory,"
-          # fi
-          # if echo "$CHANGED_FILES" | grep -q -E 'cmd/beyla-genfiles/beyla_genfiles\.go'; then
-          #   MODIFIED_FILES="${MODIFIED_FILES} beyla_genfiles.go,"
-          # fi
-          # 
-          # # Check for any modifications to Makefile
-          # if echo "$CHANGED_FILES" | grep -q -E '^Makefile$'; then
-          #   MODIFIED_FILES="${MODIFIED_FILES} Makefile,"
-          # fi
-          # 
-          # # Remove trailing comma if any
-          # MODIFIED_FILES=$(echo "$MODIFIED_FILES" | sed 's/,$//g')
-          # 
-          # if [ -n "$MODIFIED_FILES" ]; then
-          #   echo "Sensitive files were modified by an external contributor"
-          #   echo "security_issue=true" >> $GITHUB_OUTPUT
-          #   echo "modified_files=$MODIFIED_FILES" >> $GITHUB_OUTPUT
-          #   echo "security_cleared=false" >> $GITHUB_OUTPUT
-          # else
-          #   echo "No sensitive files were modified by external contributor"
-          #   echo "security_issue=false" >> $GITHUB_OUTPUT
-          #   echo "modified_files=" >> $GITHUB_OUTPUT
-          #   echo "security_cleared=true" >> $GITHUB_OUTPUT
-          # fi
+          # Check if PR author is a collaborator
+          IS_COLLABORATOR=false
+          if gh api "repos/${REPO}/collaborators/${PR_AUTHOR}" --silent 2>/dev/null; then
+            echo "PR author is a collaborator"
+            IS_COLLABORATOR=true
+          fi
+          
+          # If we have an organization, check if the user is a member
+          if [[ "${REPO_OWNER}" != *"/"* ]]; then
+            if gh api "orgs/${REPO_OWNER}/members/${PR_AUTHOR}" --silent 2>/dev/null; then
+              echo "PR author is an organization member"
+              ORG_MEMBER=true
+            fi
+          fi
+          
+          # If PR author is either a collaborator or an org member, mark as secure
+          if [[ "$IS_COLLABORATOR" == "true" || "$ORG_MEMBER" == "true" ]]; then
+            echo "PR author is a trusted contributor, no security review needed"
+            echo "security_issue=false" >> $GITHUB_OUTPUT
+            echo "modified_files=" >> $GITHUB_OUTPUT
+            echo "security_cleared=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # If we get here, PR is from external contributor
+          echo "PR is from an external contributor, checking modified files..."
+          
+          # Get the files changed in the PR
+          CHANGED_FILES=$(git diff --name-only "${BASE_SHA}" "${HEAD_SHA}")
+          MODIFIED_FILES=""
+          
+          # Check for modifications to sensitive files
+          if echo "$CHANGED_FILES" | grep -q -E '^\.github/'; then
+            MODIFIED_FILES="${MODIFIED_FILES} .github/ directory,"
+          fi
+          if echo "$CHANGED_FILES" | grep -q -E '^tools/'; then
+            MODIFIED_FILES="${MODIFIED_FILES} tools/ directory,"
+          fi
+          if echo "$CHANGED_FILES" | grep -q -E 'cmd/beyla-genfiles/beyla_genfiles\.go'; then
+            MODIFIED_FILES="${MODIFIED_FILES} beyla_genfiles.go,"
+          fi
+          
+          # Check for any modifications to Makefile
+          if echo "$CHANGED_FILES" | grep -q -E '^Makefile$'; then
+            MODIFIED_FILES="${MODIFIED_FILES} Makefile,"
+          fi
+          
+          # Remove trailing comma if any
+          MODIFIED_FILES=$(echo "$MODIFIED_FILES" | sed 's/,$//g')
+          
+          if [ -n "$MODIFIED_FILES" ]; then
+            echo "Sensitive files were modified by an external contributor"
+            echo "security_issue=true" >> $GITHUB_OUTPUT
+            echo "modified_files=$MODIFIED_FILES" >> $GITHUB_OUTPUT
+            echo "security_cleared=false" >> $GITHUB_OUTPUT
+          else
+            echo "No sensitive files were modified by external contributor"
+            echo "security_issue=false" >> $GITHUB_OUTPUT
+            echo "modified_files=" >> $GITHUB_OUTPUT
+            echo "security_cleared=true" >> $GITHUB_OUTPUT
+          fi
       
       - name: Post comment for security review needed
         if: steps.check.outputs.security_issue == 'true'
@@ -117,8 +109,6 @@ jobs:
               repo: context.repo.repo,
               issue_number: context.issue.number,
               body: `## ⚠️ Security Review Required ⚠️
-              
-              [THIS IS A TEST RUN - SIMULATING SECURITY CHECK]
               
               Thank you for your contribution! 
               

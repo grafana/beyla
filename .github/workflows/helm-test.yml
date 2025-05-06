@@ -24,8 +24,17 @@ env:
   CT_CONFIGFILE: "${{ github.workspace }}/.github/configs/ct.yml"
 
 jobs:
+  # Reference the security-check workflow when running on PRs
+  security-check:
+    if: github.event_name == 'pull_request'
+    uses: ./.github/workflows/security-check.yml
+    secrets: inherit
+
   lint-helm-chart:
     runs-on: ubuntu-latest
+    # Add dependency on security-check for PR events only
+    needs: [security-check]
+    if: ${{ github.event_name != 'pull_request' || needs.security-check.outputs.security_cleared == 'true' || !failure() }}
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4

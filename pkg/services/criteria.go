@@ -80,6 +80,14 @@ type DiscoveryConfig struct {
 	ExcludeOTelInstrumentedServices bool `yaml:"exclude_otel_instrumented_services" env:"BEYLA_EXCLUDE_OTEL_INSTRUMENTED_SERVICES"`
 }
 
+func (d *DiscoveryConfig) SurveyEnabled() bool {
+	return len(d.Survey) > 0
+}
+
+func (d *DiscoveryConfig) AppDiscoveryEnabled() bool {
+	return len(d.Services) > 0
+}
+
 // DefinitionCriteria allows defining a group of services to be instrumented according to a set
 // of attributes. If a given executable/service matches multiple of the attributes, the
 // earliest defined service will take precedence.

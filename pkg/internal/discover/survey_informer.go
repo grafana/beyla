@@ -37,7 +37,11 @@ func (m *surveyor) run(_ context.Context) {
 	for i := range m.input {
 		m.log.Debug("surveying processes", "len", len(i))
 		for _, pe := range i {
-			m.output.Send(exec.ProcessEvent{Type: exec.ProcessEventSurveyCreated, File: pe.Obj.FileInfo})
+			if pe.Type == EventDeleted {
+				m.output.Send(exec.ProcessEvent{Type: exec.ProcessEventTerminated, File: pe.Obj.FileInfo})
+			} else {
+				m.output.Send(exec.ProcessEvent{Type: exec.ProcessEventSurveyCreated, File: pe.Obj.FileInfo})
+			}
 			m.log.Debug("survey info generation", "pid", pe.Obj.FileInfo.Pid, "ns", pe.Obj.FileInfo.Ns, "cmd", pe.Obj.FileInfo.CmdExePath)
 		}
 	}

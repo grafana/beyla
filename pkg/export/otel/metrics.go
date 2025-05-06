@@ -49,6 +49,7 @@ const (
 	SpanMetricsResponseSizes = "traces_spanmetrics_response_size_total"
 	TracesTargetInfo         = "traces_target_info"
 	TargetInfo               = "target_info"
+	SurveyInfo               = "survey_info"
 	TracesHostInfo           = "traces_host_info"
 	ServiceGraphClient       = "traces_service_graph_request_client"
 	ServiceGraphServer       = "traces_service_graph_request_server"
@@ -205,13 +206,14 @@ func (m *MetricsConfig) Enabled() bool {
 // MetricsReporter implements the graph node that receives request.Span
 // instances and forwards them as OTEL metrics.
 type MetricsReporter struct {
-	ctx        context.Context
-	cfg        *MetricsConfig
-	hostID     string
-	attributes *attributes.AttrSelector
-	exporter   sdkmetric.Exporter
-	reporters  ReporterPool[*svc.Attrs, *Metrics]
-	is         instrumentations.InstrumentationSelection
+	ctx               context.Context
+	cfg               *MetricsConfig
+	surveyInfoEnabled bool
+	hostID            string
+	attributes        *attributes.AttrSelector
+	exporter          sdkmetric.Exporter
+	reporters         ReporterPool[*svc.Attrs, *Metrics]
+	is                instrumentations.InstrumentationSelection
 
 	// user-selected fields for each of the reported metrics
 	attrHTTPDuration           []attributes.Field[*request.Span, attribute.KeyValue]
@@ -266,6 +268,7 @@ type Metrics struct {
 	serviceGraphTotal            *Expirer[*request.Span, instrument.Int64Counter, int64]
 	targetInfo                   instrument.Int64UpDownCounter
 	tracesTargetInfo             instrument.Int64UpDownCounter
+	surveyInfo                   instrument.Int64UpDownCounter
 	gpuKernelCallsTotal          *Expirer[*request.Span, instrument.Int64Counter, int64]
 	gpuMemoryAllocsTotal         *Expirer[*request.Span, instrument.Int64Counter, int64]
 	gpuKernelGridSize            *Expirer[*request.Span, instrument.Float64Histogram, float64]
@@ -275,6 +278,7 @@ type Metrics struct {
 func ReportMetrics(
 	ctxInfo *global.ContextInfo,
 	cfg *MetricsConfig,
+	surveyInfoEnabled bool,
 	userAttribSelection attributes.Selection,
 	input *msg.Queue[[]request.Span],
 	processEventCh *msg.Queue[exec.ProcessEvent],
@@ -285,7 +289,7 @@ func ReportMetrics(
 		}
 		SetupInternalOTELSDKLogger(cfg.SDKLogLevel)
 
-		mr, err := newMetricsReporter(ctx, ctxInfo, cfg, userAttribSelection, input, processEventCh)
+		mr, err := newMetricsReporter(ctx, ctxInfo, cfg, surveyInfoEnabled, userAttribSelection, input, processEventCh)
 		if err != nil {
 			return nil, fmt.Errorf("instantiating OTEL metrics reporter: %w", err)
 		}
@@ -307,6 +311,7 @@ func newMetricsReporter(
 	ctx context.Context,
 	ctxInfo *global.ContextInfo,
 	cfg *MetricsConfig,
+	surveyInfoEnabled bool,
 	userAttribSelection attributes.Selection,
 	input *msg.Queue[[]request.Span],
 	processEventCh *msg.Queue[exec.ProcessEvent],
@@ -323,6 +328,7 @@ func newMetricsReporter(
 	mr := MetricsReporter{
 		ctx:                 ctx,
 		cfg:                 cfg,
+		surveyInfoEnabled:   surveyInfoEnabled,
 		is:                  is,
 		attributes:          attribProvider,
 		hostID:              ctxInfo.HostID,
@@ -381,6 +387,9 @@ func newMetricsReporter(
 			llog.Debug("evicting metrics reporter from cache")
 			v.value.cleanupAllMetricsInstances()
 
+			if mr.surveyInfoEnabled {
+				mr.deleteSurveyInfo(v.value)
+			}
 			mr.deleteTracesTargetInfo(v.value)
 			mr.deleteTargetInfo(v.value)
 
@@ -471,7 +480,17 @@ func (mr *MetricsReporter) setupTargetInfo(m *Metrics, meter instrument.Meter) e
 	var err error
 	m.targetInfo, err = meter.Int64UpDownCounter(TargetInfo)
 	if err != nil {
-		return fmt.Errorf("creating span metric traces target info: %w", err)
+		return fmt.Errorf("creating target info: %w", err)
+	}
+
+	return nil
+}
+
+func (mr *MetricsReporter) setupSurveyInfo(m *Metrics, meter instrument.Meter) error {
+	var err error
+	m.surveyInfo, err = meter.Int64UpDownCounter(SurveyInfo)
+	if err != nil {
+		return fmt.Errorf("creating survey info: %w", err)
 	}
 
 	return nil
@@ -748,6 +767,13 @@ func (mr *MetricsReporter) newMetricSet(service *svc.Attrs) (*Metrics, error) {
 	// Target info is created for every type of OTel metrics
 	if err = mr.setupTargetInfo(&m, meter); err != nil {
 		return nil, err
+	}
+
+	if mr.surveyInfoEnabled {
+		// Target info is created for every type of OTel metrics
+		if err = mr.setupSurveyInfo(&m, meter); err != nil {
+			return nil, err
+		}
 	}
 
 	if mr.cfg.OTelMetricsEnabled() {
@@ -1075,6 +1101,18 @@ func (mr *MetricsReporter) deleteTargetInfo(reporter *Metrics) {
 	reporter.targetInfo.Remove(mr.ctx, attrOpt)
 }
 
+func (mr *MetricsReporter) createSurveyInfo(reporter *Metrics) {
+	mlog().Debug("Creating survey_info", "attrs", reporter.resourceAttributes)
+	attrOpt := instrument.WithAttributeSet(attribute.NewSet(reporter.resourceAttributes...))
+	reporter.surveyInfo.Add(mr.ctx, 1, attrOpt)
+}
+
+func (mr *MetricsReporter) deleteSurveyInfo(reporter *Metrics) {
+	mlog().Debug("Deleting survey_info for", "attrs", reporter.resourceAttributes)
+	attrOpt := instrument.WithAttributeSet(attribute.NewSet(reporter.resourceAttributes...))
+	reporter.surveyInfo.Remove(mr.ctx, attrOpt)
+}
+
 func (mr *MetricsReporter) createTracesTargetInfo(reporter *Metrics) {
 	if !mr.cfg.SpanMetricsEnabled() && !mr.cfg.ServiceGraphMetricsEnabled() {
 		return
@@ -1109,10 +1147,13 @@ func (mr *MetricsReporter) watchForProcessEvents() {
 			mr.createTargetInfo(reporter)
 			mr.createTracesTargetInfo(reporter)
 		case exec.ProcessEventTerminated:
+			if mr.surveyInfoEnabled {
+				mr.deleteSurveyInfo(reporter)
+			}
 			mr.deleteTracesTargetInfo(reporter)
 			mr.deleteTargetInfo(reporter)
 		case exec.ProcessEventSurveyCreated:
-			fmt.Printf("surveyed executable %s\n", pe.File.CmdExePath)
+			mr.createSurveyInfo(reporter)
 		}
 	}
 }

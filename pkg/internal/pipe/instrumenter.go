@@ -81,7 +81,7 @@ func newGraphBuilder(config *beyla.Config, ctxInfo *global.ContextInfo, tracesCh
 		nameResolverToAttrFilter, exportableSpans))
 
 	config.Metrics.Grafana = &gb.config.Grafana.OTLP
-	swi.Add(otel.ReportMetrics(ctxInfo, &config.Metrics, config.Attributes.Select, exportableSpans, processEventsCh))
+	swi.Add(otel.ReportMetrics(ctxInfo, &config.Metrics, config.Discovery.SurveyEnabled(), config.Attributes.Select, exportableSpans, processEventsCh))
 
 	config.Traces.Grafana = &gb.config.Grafana.OTLP
 	swi.Add(otel.TracesReceiver(ctxInfo, config.Traces, config.Metrics.SpanMetricsEnabled(), config.Attributes.Select, exportableSpans))

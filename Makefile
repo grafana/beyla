@@ -116,6 +116,8 @@ define check_format
 		$(GOIMPORTS_REVISER) $(GOIMPORTS_REVISER_ARGS) -list-diff -output stdout $(FILE);))
 endef
 
+# Add a comment to test the security check
+# This is a minor change to trigger the external contributor check
 
 .PHONY: install-hooks
 install-hooks:

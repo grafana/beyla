@@ -47,28 +47,9 @@ jobs:
 
           echo "Checking security for PR author: ${PR_AUTHOR}"
           
-          # Check if user is in MAINTAINERS.md
-          if grep -q "@${PR_AUTHOR}" MAINTAINERS.md; then
-            echo "PR author is listed in MAINTAINERS.md"
-            echo "security_cleared=true" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-          
-          # Check if PR author is a collaborator
-          if gh api "repos/${REPO}/collaborators/${PR_AUTHOR}" --silent 2>/dev/null; then
-            echo "PR author is a repository collaborator"
-            echo "security_cleared=true" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-          
-          # Check if user is an org member
-          if gh api "orgs/${REPO_OWNER}/members/${PR_AUTHOR}" --silent 2>/dev/null; then
-            echo "PR author is an organization member"
-            echo "security_cleared=true" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-          
-          echo "PR is from external contributor, checking modified files..."
+          # SIMULATION: Force external contributor mode for testing
+          echo "SIMULATION: Treating PR author as external contributor for testing"
+          IS_COLLABORATOR=false
           
           # Get the files changed in the PR
           CHANGED_FILES=$(git diff --name-only "${BASE_SHA}" "${HEAD_SHA}")
@@ -93,31 +74,17 @@ jobs:
           
           if [ -n "$MODIFIED_FILES" ]; then
             echo "Sensitive files were modified by external contributor"
+            echo "SIMULATION: Security check would block this PR due to sensitive files: ${MODIFIED_FILES}"
             echo "security_cleared=false" >> $GITHUB_OUTPUT
+            echo "modified_files=${MODIFIED_FILES}" >> $GITHUB_OUTPUT
           else
             echo "No sensitive files were modified by external contributor"
+            echo "SIMULATION: Security check would allow this PR since no sensitive files were modified"
             echo "security_cleared=true" >> $GITHUB_OUTPUT
           fi
 
       - name: Post comment for security review needed
         if: steps.check.outputs.security_cleared == 'false'
-        uses: actions/github-script@v6
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const modifiedFiles = '${{ steps.check.outputs.modified_files }}';
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: `## ⚠️ Security Review Required ⚠️
-              
-              Thank you for your contribution! 
-              
-              As you're not a repository collaborator, this PR requires a security review because it modifies sensitive files:
-              - ${modifiedFiles}
-              
-              These files can affect the project's build system, CI/CD workflows, or other security-sensitive areas. All workflows have been blocked until a maintainer reviews these changes.
-              
-              **Note to maintainers:** Please review these changes carefully before approving the PR.`
-            });
+        run: |
+          echo "SIMULATION: Would post a security review comment on the PR"
+          echo "Security review required for sensitive files: ${{ steps.check.outputs.modified_files }}"

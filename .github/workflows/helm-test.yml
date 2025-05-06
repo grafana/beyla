@@ -16,9 +16,11 @@ on:
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
-# Set restrictive permissions at workflow level
+# Set permissions at workflow level
 permissions:
   contents: read
+  issues: write
+  pull-requests: write
 
 env:
   CT_CONFIGFILE: "${{ github.workspace }}/.github/configs/ct.yml"
@@ -36,6 +38,9 @@ jobs:
     needs: [security-check]
     # Simple condition: Run on push OR on PRs where security-check outputs security_cleared=true
     if: ${{ github.event_name != 'pull_request' || needs.security-check.outputs.security_cleared == 'true' }}
+    # Override permissions for this job to be more restrictive
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4

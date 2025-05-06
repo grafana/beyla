@@ -6,9 +6,11 @@ on:
   pull_request:
     branches: [ 'main', 'release-*' ]
 
-# Set restrictive permissions at workflow level
+# Set permissions at workflow level
 permissions:
   contents: read
+  issues: write
+  pull-requests: write
 
 jobs:
   # Reference the security-check workflow when running on PRs

@@ -1036,14 +1036,17 @@ func (r *metricsReporter) watchForProcessEvents() {
 	for pe := range r.processEvents {
 		mlog().Debug("Received new process event", "event type", pe.Type, "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
 
-		if pe.Type == exec.ProcessEventCreated {
+		switch pe.Type {
+		case exec.ProcessEventCreated:
 			r.createTargetInfo(&pe.File.Service)
 			r.createTracesTargetInfo(&pe.File.Service)
 			r.serviceMap[pe.File.Pid] = pe.File.Service
-		} else {
+		case exec.ProcessEventTerminated:
 			r.deleteTargetInfo(pe.File.Pid, &pe.File.Service)
 			r.deleteTracesTargetInfo(pe.File.Pid, &pe.File.Service)
 			delete(r.serviceMap, pe.File.Pid)
+		case exec.ProcessEventSurveyCreated:
+			fmt.Printf("survey info for command %s\n", pe.File.CmdExePath)
 		}
 	}
 }

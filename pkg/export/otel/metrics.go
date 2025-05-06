@@ -1104,12 +1104,15 @@ func (mr *MetricsReporter) watchForProcessEvents() {
 			continue
 		}
 
-		if pe.Type == exec.ProcessEventCreated {
+		switch pe.Type {
+		case exec.ProcessEventCreated:
 			mr.createTargetInfo(reporter)
 			mr.createTracesTargetInfo(reporter)
-		} else {
+		case exec.ProcessEventTerminated:
 			mr.deleteTracesTargetInfo(reporter)
 			mr.deleteTargetInfo(reporter)
+		case exec.ProcessEventSurveyCreated:
+			fmt.Printf("surveyed executable %s\n", pe.File.CmdExePath)
 		}
 	}
 }

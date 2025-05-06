@@ -47,6 +47,9 @@ type DiscoveryConfig struct {
 	// added to the services definition criteria, with the lowest preference.
 	Services DefinitionCriteria `yaml:"services"`
 
+	// Survey selection. Same as services selection, however, it generates only the target info (survey_info) instead of instrumenting the services
+	Survey DefinitionCriteria `yaml:"survey"`
+
 	// ExcludeServices works analogously to Services, but the applications matching this section won't be instrumented
 	// even if they match the Services selection.
 	ExcludeServices DefinitionCriteria `yaml:"exclude_services"`

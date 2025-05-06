@@ -4,6 +4,11 @@ name: security-check
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+  workflow_call:
+    outputs:
+      security_cleared:
+        description: "Whether the PR passed security checks"
+        value: ${{ jobs.security-gate.outputs.security_cleared }}
 
 # Set permissions at workflow level
 permissions:
@@ -70,6 +75,7 @@ jobs:
             echo "security_issue=false" >> $GITHUB_OUTPUT
             echo "modified_files=" >> $GITHUB_OUTPUT
             echo "security_cleared=true" >> $GITHUB_OUTPUT
+            echo "Setting security_cleared to true"
             exit 0
           fi
           
@@ -104,13 +110,20 @@ jobs:
             echo "security_issue=true" >> $GITHUB_OUTPUT
             echo "modified_files=$MODIFIED_FILES" >> $GITHUB_OUTPUT
             echo "security_cleared=false" >> $GITHUB_OUTPUT
+            echo "Setting security_cleared to false"
           else
             echo "No sensitive files were modified by external contributor"
             echo "security_issue=false" >> $GITHUB_OUTPUT
             echo "modified_files=" >> $GITHUB_OUTPUT
             echo "security_cleared=true" >> $GITHUB_OUTPUT
+            echo "Setting security_cleared to true"
           fi
-      
+
+      - name: Summary
+        run: |
+          echo "Security check result: ${{ steps.check.outputs.security_cleared }}"
+          echo "Security issue detected: ${{ steps.check.outputs.security_issue }}"
+          
       - name: Post comment for security review needed
         if: steps.check.outputs.security_issue == 'true'
         uses: actions/github-script@v6

@@ -1,11 +1,8 @@
 name: Pull request checks
 
 on:
-  # Only run after security-check workflow completes successfully
-  workflow_run:
-    workflows: ["security-check"]
-    types:
-      - completed
+  pull_request:
+    types: [opened, synchronize, reopened]
 
 # Set restrictive permissions at workflow level
 permissions:
@@ -13,8 +10,8 @@ permissions:
 
 jobs:
   test:
-    # Only run if the security check passed
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    needs: security-check
+    if: ${{ needs.security-check.outputs.security_cleared == 'true' || !failure() }}
     name: test
     runs-on: ubuntu-latest
     # Grant specific permissions needed only for this job
@@ -42,3 +39,8 @@ jobs:
         with:
           file: ./testoutput/cover.txt
           flags: unittests
+
+  # Reference the security-check workflow
+  security-check:
+    uses: ./.github/workflows/security-check.yml
+    secrets: inherit

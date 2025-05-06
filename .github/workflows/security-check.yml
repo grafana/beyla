@@ -13,6 +13,8 @@ jobs:
   security-gate:
     name: External Contribution Security Review
     runs-on: ubuntu-latest
+    outputs:
+      security_cleared: ${{ steps.check.outputs.security_cleared }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -35,6 +37,7 @@ jobs:
           echo "FOR TESTING: Simulating security check for external contributor"
           echo "security_issue=true" >> $GITHUB_OUTPUT
           echo "modified_files=SIMULATED sensitive file (for testing)" >> $GITHUB_OUTPUT
+          echo "security_cleared=false" >> $GITHUB_OUTPUT
           
           # Uncomment and use this code in production:
           # # Check if PR author is from the same organization
@@ -60,6 +63,7 @@ jobs:
           #   echo "PR author is a trusted contributor, no security review needed"
           #   echo "security_issue=false" >> $GITHUB_OUTPUT
           #   echo "modified_files=" >> $GITHUB_OUTPUT
+          #   echo "security_cleared=true" >> $GITHUB_OUTPUT
           #   exit 0
           # fi
           # 
@@ -93,10 +97,12 @@ jobs:
           #   echo "Sensitive files were modified by an external contributor"
           #   echo "security_issue=true" >> $GITHUB_OUTPUT
           #   echo "modified_files=$MODIFIED_FILES" >> $GITHUB_OUTPUT
+          #   echo "security_cleared=false" >> $GITHUB_OUTPUT
           # else
           #   echo "No sensitive files were modified by external contributor"
           #   echo "security_issue=false" >> $GITHUB_OUTPUT
           #   echo "modified_files=" >> $GITHUB_OUTPUT
+          #   echo "security_cleared=true" >> $GITHUB_OUTPUT
           # fi
       
       - name: Post comment for security review needed

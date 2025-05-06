@@ -9,10 +9,21 @@ permissions:
   contents: read
 
 jobs:
+  # Reference the security-check workflow
+  security-check:
+    uses: ./.github/workflows/security-check.yml
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    secrets: inherit
+    
   test:
-    needs: security-check
-    if: ${{ needs.security-check.outputs.security_cleared == 'true' || !failure() }}
     name: test
+    # Add dependency on security-check
+    needs: [security-check]
+    # Simple condition: Run only on PRs where security-check outputs security_cleared=true
+    if: ${{ needs.security-check.outputs.security_cleared == 'true' }}
     runs-on: ubuntu-latest-8-cores
     # Grant specific permissions needed only for this job
     permissions:
@@ -52,8 +63,3 @@ jobs:
         with:
           file: ./testoutput/itest-covdata.txt
           flags: integration-test
-
-  # Reference the security-check workflow
-  security-check:
-    uses: ./.github/workflows/security-check.yml
-    secrets: inherit

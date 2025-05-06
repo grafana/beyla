@@ -38,11 +38,67 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # TEMPORARY TEST: Force security check to fail for testing purposes
-          echo "TESTING: Forcing security check to fail"
-          echo "security_cleared=false" >> $GITHUB_OUTPUT
-          echo "modified_files=Makefile (Test simulation)" >> $GITHUB_OUTPUT
-          exit 0
+          # Default to true for push events and workflow_call without PR context
+          if [ -z "${PR_AUTHOR}" ]; then
+            echo "No PR author found, assuming this is a push or workflow_call"
+            echo "security_cleared=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "Checking security for PR author: ${PR_AUTHOR}"
+          
+          # Check if user is in MAINTAINERS.md
+          if grep -q "@${PR_AUTHOR}" MAINTAINERS.md; then
+            echo "PR author is listed in MAINTAINERS.md"
+            echo "security_cleared=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Check if PR author is a collaborator
+          if gh api "repos/${REPO}/collaborators/${PR_AUTHOR}" --silent 2>/dev/null; then
+            echo "PR author is a repository collaborator"
+            echo "security_cleared=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Check if user is an org member
+          if gh api "orgs/${REPO_OWNER}/members/${PR_AUTHOR}" --silent 2>/dev/null; then
+            echo "PR author is an organization member"
+            echo "security_cleared=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          echo "PR is from external contributor, checking modified files..."
+          
+          # Get the files changed in the PR
+          CHANGED_FILES=$(git diff --name-only "${BASE_SHA}" "${HEAD_SHA}")
+          MODIFIED_FILES=""
+          
+          # Check for modifications to sensitive files
+          if echo "$CHANGED_FILES" | grep -q -E '^\.github/'; then
+            MODIFIED_FILES="${MODIFIED_FILES} .github/ directory,"
+          fi
+          if echo "$CHANGED_FILES" | grep -q -E '^tools/'; then
+            MODIFIED_FILES="${MODIFIED_FILES} tools/ directory,"
+          fi
+          if echo "$CHANGED_FILES" | grep -q -E 'cmd/beyla-genfiles/beyla_genfiles\.go'; then
+            MODIFIED_FILES="${MODIFIED_FILES} beyla_genfiles.go,"
+          fi
+          if echo "$CHANGED_FILES" | grep -q -E '^Makefile$'; then
+            MODIFIED_FILES="${MODIFIED_FILES} Makefile,"
+          fi
+          
+          # Remove trailing comma if any
+          MODIFIED_FILES=$(echo "$MODIFIED_FILES" | sed 's/,$//g')
+          
+          if [ -n "$MODIFIED_FILES" ]; then
+            echo "Sensitive files were modified by external contributor"
+            echo "security_cleared=false" >> $GITHUB_OUTPUT
+            echo "modified_files=${MODIFIED_FILES}" >> $GITHUB_OUTPUT
+          else
+            echo "No sensitive files were modified by external contributor"
+            echo "security_cleared=true" >> $GITHUB_OUTPUT
+          fi
 
       - name: Post comment for security review needed
         if: steps.check.outputs.security_cleared == 'false'
@@ -57,9 +113,9 @@ jobs:
               issue_number: context.issue.number,
               body: `## ⚠️ Security Review Required ⚠️
               
-              THIS IS A TEST OF THE SECURITY CHECK WORKFLOW
+              Thank you for your contribution! 
               
-              This PR requires a security review because it modifies sensitive files:
+              As you're not a repository collaborator, this PR requires a security review because it modifies sensitive files:
               - ${modifiedFiles}
               
               These files can affect the project's build system, CI/CD workflows, or other security-sensitive areas. All workflows have been blocked until a maintainer reviews these changes.

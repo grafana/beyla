@@ -32,9 +32,13 @@ jobs:
 
   lint-helm-chart:
     runs-on: ubuntu-latest
-    # Add dependency on security-check for PR events only
+    # Only depend on security-check for PR events, and either run if it passes or if this is a direct push
     needs: [security-check]
-    if: ${{ github.event_name != 'pull_request' || needs.security-check.outputs.security_cleared == 'true' || !failure() }}
+    if: |
+      success() && (
+        github.event_name != 'pull_request' || 
+        needs.security-check.outputs.security_cleared == 'true'
+      )
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4

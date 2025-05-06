@@ -11,12 +11,22 @@ permissions:
   contents: read
 
 jobs:
+  # Reference the security-check workflow when running on PRs
+  security-check:
+    if: github.event_name == 'pull_request'
+    uses: ./.github/workflows/security-check.yml
+    secrets: inherit
+    
   test:
     name: test
+    # Only depend on security-check for PR events, and either run if it passes or if this is a direct push
+    needs: [security-check]
+    if: |
+      success() && (
+        github.event_name != 'pull_request' || 
+        needs.security-check.outputs.security_cleared == 'true'
+      )
     runs-on: ubuntu-latest-8-cores
-    # Add dependency on security-check for PR events only
-    needs: security-check
-    if: ${{ github.event_name != 'pull_request' || needs.security-check.outputs.security_cleared == 'true' || !failure() }}
     # Grant specific permissions needed only for this job
     permissions:
       contents: read
@@ -55,9 +65,3 @@ jobs:
         with:
           file: ./testoutput/itest-covdata.txt
           flags: k8s-integration-test
-
-  # Reference the security-check workflow when running on PRs
-  security-check:
-    if: github.event_name == 'pull_request'
-    uses: ./.github/workflows/security-check.yml
-    secrets: inherit

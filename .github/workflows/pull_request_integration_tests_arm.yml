@@ -19,9 +19,13 @@ jobs:
     
   test:
     name: test
-    # Add dependency on security-check for PR events only
+    # Only depend on security-check for PR events, and either run if it passes or if this is a direct push
     needs: [security-check]
-    if: ${{ github.event_name != 'pull_request' || needs.security-check.outputs.security_cleared == 'true' || !failure() }}
+    if: |
+      success() && (
+        github.event_name != 'pull_request' || 
+        needs.security-check.outputs.security_cleared == 'true'
+      )
     runs-on: github-hosted-ubuntu-arm64-large
     # Grant specific permissions needed only for this job
     permissions:

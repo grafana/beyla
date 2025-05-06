@@ -5,9 +5,11 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 
-# Set restrictive permissions at workflow level
+# Set permissions at workflow level
 permissions:
   contents: read
+  issues: write
+  pull-requests: write
 
 jobs:
   security-gate:

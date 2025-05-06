@@ -20,10 +20,9 @@ jobs:
   clang-tidy:
     runs-on: ubuntu-latest
     # Add dependency on security-check for PR events only
-    needs: security-check
-    if: |
-      github.event_name == 'push' ||
-      (github.event_name == 'pull_request' && needs.security-check.result == 'success' && needs.security-check.outputs.security_cleared == 'true')
+    needs: [security-check]
+    # Simple condition: Run on push OR on PRs where security-check outputs security_cleared=true
+    if: ${{ github.event_name != 'pull_request' || needs.security-check.outputs.security_cleared == 'true' }}
 
     steps:
       - name: Checkout code

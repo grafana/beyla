@@ -20,10 +20,9 @@ jobs:
   test:
     name: test
     # Add dependency on security-check for PR events only
-    needs: security-check
-    if: |
-      github.event_name == 'push' ||
-      (github.event_name == 'pull_request' && needs.security-check.result == 'success' && needs.security-check.outputs.security_cleared == 'true')
+    needs: [security-check]
+    # Simple condition: Run on push OR on PRs where security-check outputs security_cleared=true
+    if: ${{ github.event_name != 'pull_request' || needs.security-check.outputs.security_cleared == 'true' }}
     runs-on: github-hosted-ubuntu-arm64-large
     # Grant specific permissions needed only for this job
     permissions:
@@ -35,7 +34,6 @@ jobs:
     steps:
       - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3
         with:
-          fetch-depth: 0  # Need full history for security check
           persist-credentials: false
 
       - name: Set up Go

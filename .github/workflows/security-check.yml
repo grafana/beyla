@@ -1,14 +1,13 @@
 name: security-check
 
-# Run this workflow on PR open, update, and reopen events
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
   workflow_call:
     outputs:
       security_cleared:
         description: "Whether the PR passed security checks"
         value: ${{ jobs.security-gate.outputs.security_cleared }}
+  pull_request:
+    types: [opened, synchronize, reopened]
 
 # Set permissions at workflow level
 permissions:
@@ -26,8 +25,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0  # Fetch all history to properly check file changes
-      
+          fetch-depth: 0
+
       - name: Check for security concerns
         id: check
         shell: bash
@@ -39,48 +38,37 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "Checking security for PR author: ${PR_AUTHOR}"
-          echo "Repository: ${REPO}"
-          echo "Repository Owner: ${REPO_OWNER}"
-          
-          # Check if PR author is a collaborator with write access
-          IS_COLLABORATOR=false
-          if gh api "repos/${REPO}/collaborators/${PR_AUTHOR}" --jq '.permissions.push' 2>/dev/null | grep -q 'true'; then
-            echo "PR author is a collaborator with write access"
-            IS_COLLABORATOR=true
+          # Default to true for push events and workflow_call without PR context
+          if [ -z "${PR_AUTHOR}" ]; then
+            echo "No PR author found, assuming this is a push or workflow_call"
+            echo "security_cleared=true" >> $GITHUB_OUTPUT
+            exit 0
           fi
+
+          echo "Checking security for PR author: ${PR_AUTHOR}"
           
-          # Check if the user is in MAINTAINERS.md
+          # Check if user is in MAINTAINERS.md
           if grep -q "@${PR_AUTHOR}" MAINTAINERS.md; then
             echo "PR author is listed in MAINTAINERS.md"
-            IS_COLLABORATOR=true
-          fi
-          
-          # If we have an organization, check if the user is a member
-          ORG_MEMBER=false
-          if [[ "${REPO_OWNER}" != *"/"* ]]; then
-            if gh api "orgs/${REPO_OWNER}/members/${PR_AUTHOR}" --silent 2>/dev/null; then
-              echo "PR author is an organization member"
-              ORG_MEMBER=true
-            fi
-          fi
-          
-          # Debug output
-          echo "IS_COLLABORATOR: ${IS_COLLABORATOR}"
-          echo "ORG_MEMBER: ${ORG_MEMBER}"
-          
-          # If PR author is either a collaborator or an org member, mark as secure
-          if [[ "$IS_COLLABORATOR" == "true" || "$ORG_MEMBER" == "true" ]]; then
-            echo "PR author is a trusted contributor, no security review needed"
-            echo "security_issue=false" >> $GITHUB_OUTPUT
-            echo "modified_files=" >> $GITHUB_OUTPUT
             echo "security_cleared=true" >> $GITHUB_OUTPUT
-            echo "Setting security_cleared to true"
             exit 0
           fi
           
-          # If we get here, PR is from external contributor
-          echo "PR is from an external contributor, checking modified files..."
+          # Check if PR author is a collaborator
+          if gh api "repos/${REPO}/collaborators/${PR_AUTHOR}" --silent 2>/dev/null; then
+            echo "PR author is a repository collaborator"
+            echo "security_cleared=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Check if user is an org member
+          if gh api "orgs/${REPO_OWNER}/members/${PR_AUTHOR}" --silent 2>/dev/null; then
+            echo "PR author is an organization member"
+            echo "security_cleared=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          echo "PR is from external contributor, checking modified files..."
           
           # Get the files changed in the PR
           CHANGED_FILES=$(git diff --name-only "${BASE_SHA}" "${HEAD_SHA}")
@@ -96,8 +84,6 @@ jobs:
           if echo "$CHANGED_FILES" | grep -q -E 'cmd/beyla-genfiles/beyla_genfiles\.go'; then
             MODIFIED_FILES="${MODIFIED_FILES} beyla_genfiles.go,"
           fi
-          
-          # Check for any modifications to Makefile
           if echo "$CHANGED_FILES" | grep -q -E '^Makefile$'; then
             MODIFIED_FILES="${MODIFIED_FILES} Makefile,"
           fi
@@ -106,22 +92,15 @@ jobs:
           MODIFIED_FILES=$(echo "$MODIFIED_FILES" | sed 's/,$//g')
           
           if [ -n "$MODIFIED_FILES" ]; then
-            echo "Sensitive files were modified by an external contributor"
-            echo "security_issue=true" >> $GITHUB_OUTPUT
-            echo "modified_files=$MODIFIED_FILES" >> $GITHUB_OUTPUT
+            echo "Sensitive files were modified by external contributor"
             echo "security_cleared=false" >> $GITHUB_OUTPUT
-            echo "Setting security_cleared to false"
           else
             echo "No sensitive files were modified by external contributor"
-            echo "security_issue=false" >> $GITHUB_OUTPUT
-            echo "modified_files=" >> $GITHUB_OUTPUT
             echo "security_cleared=true" >> $GITHUB_OUTPUT
-            echo "Setting security_cleared to true"
           fi
 
-      # Post comment for security review needed, but ALWAYS EXIT SUCCESSFULLY
       - name: Post comment for security review needed
-        if: steps.check.outputs.security_issue == 'true'
+        if: steps.check.outputs.security_cleared == 'false'
         uses: actions/github-script@v6
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}

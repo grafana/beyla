@@ -11,8 +11,17 @@ permissions:
   contents: read
 
 jobs:
+  # Reference the security-check workflow when running on PRs
+  security-check:
+    if: github.event_name == 'pull_request'
+    uses: ./.github/workflows/security-check.yml
+    secrets: inherit
+    
   test:
     name: test
+    # Add dependency on security-check for PR events only
+    needs: [security-check]
+    if: ${{ github.event_name != 'pull_request' || needs.security-check.outputs.security_cleared == 'true' || !failure() }}
     runs-on: github-hosted-ubuntu-arm64-large
     # Grant specific permissions needed only for this job
     permissions:

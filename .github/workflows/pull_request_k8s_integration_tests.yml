@@ -6,17 +6,19 @@ on:
   pull_request:
     branches: [ 'main', 'release-*' ]
 
-# Set permissions at workflow level
+# Set restrictive permissions at workflow level
 permissions:
   contents: read
-  issues: write
-  pull-requests: write
 
 jobs:
   # Reference the security-check workflow when running on PRs
   security-check:
     if: github.event_name == 'pull_request'
     uses: ./.github/workflows/security-check.yml
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
     secrets: inherit
     
   test:
@@ -26,7 +28,7 @@ jobs:
     # Simple condition: Run on push OR on PRs where security-check outputs security_cleared=true
     if: ${{ github.event_name != 'pull_request' || needs.security-check.outputs.security_cleared == 'true' }}
     runs-on: ubuntu-latest-8-cores
-    # Override permissions for this job
+    # Grant specific permissions needed only for this job
     permissions:
       contents: read
       pull-requests: write

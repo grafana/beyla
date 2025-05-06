@@ -16,11 +16,9 @@ on:
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
-# Set permissions at workflow level
+# Set restrictive permissions at workflow level
 permissions:
   contents: read
-  issues: write
-  pull-requests: write
 
 env:
   CT_CONFIGFILE: "${{ github.workspace }}/.github/configs/ct.yml"
@@ -30,6 +28,10 @@ jobs:
   security-check:
     if: github.event_name == 'pull_request'
     uses: ./.github/workflows/security-check.yml
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
     secrets: inherit
 
   lint-helm-chart:

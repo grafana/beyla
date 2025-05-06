@@ -6,17 +6,19 @@ on:
   pull_request:
     branches: [ 'main', 'release-*' ]
 
-# Set permissions at workflow level
+# Set restrictive permissions at workflow level
 permissions:
   contents: read
-  issues: write
-  pull-requests: write
 
 jobs:
   # Reference the security-check workflow when running on PRs
   security-check:
     if: github.event_name == 'pull_request'
     uses: ./.github/workflows/security-check.yml
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
     secrets: inherit
     
   test:

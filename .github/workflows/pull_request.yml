@@ -1,8 +1,10 @@
 name: Pull request checks
 
 on:
+  push:
+    branches: [ 'main', 'release-*' ]
   pull_request:
-    types: [opened, synchronize, reopened]
+    branches: [ 'main', 'release-*' ]
 
 # Set restrictive permissions at workflow level
 permissions:

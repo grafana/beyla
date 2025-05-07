@@ -413,6 +413,7 @@ func getInternalBatchSpanOpts(cfg *exporterhelper.QueueBatchConfig) []trace.Batc
 
 func getBatchConfig(cfg TracesConfig) exporterhelper.QueueBatchConfig {
 	queueBatchCfg := exporterhelper.NewDefaultQueueConfig()
+	queueBatchCfg.Batch = &exporterhelper.BatchConfig{}
 	if cfg.MaxExportBatchSize > 0 {
 		queueBatchCfg.Batch.MaxSize = int64(cfg.MaxExportBatchSize)
 	}

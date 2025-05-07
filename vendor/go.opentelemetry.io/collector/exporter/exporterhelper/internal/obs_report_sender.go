@@ -14,7 +14,9 @@ import (
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/exporter/exporterhelper/internal/metadata"
+	"go.opentelemetry.io/collector/exporter/exporterhelper/internal/queuebatch"
 	"go.opentelemetry.io/collector/exporter/exporterhelper/internal/request"
+	"go.opentelemetry.io/collector/exporter/exporterhelper/internal/sender"
 	"go.opentelemetry.io/collector/pipeline"
 )
 
@@ -44,10 +46,10 @@ type obsReportSender[K request.Request] struct {
 	metricAttr      metric.MeasurementOption
 	itemsSentInst   metric.Int64Counter
 	itemsFailedInst metric.Int64Counter
-	next            Sender[K]
+	next            sender.Sender[K]
 }
 
-func newObsReportSender[K request.Request](set exporter.Settings, signal pipeline.Signal, next Sender[K]) (Sender[K], error) {
+func newObsReportSender[K request.Request](set exporter.Settings, signal pipeline.Signal, next sender.Sender[K]) (sender.Sender[K], error) {
 	telemetryBuilder, err := metadata.NewTelemetryBuilder(set.TelemetrySettings)
 	if err != nil {
 		return nil, err
@@ -95,7 +97,10 @@ func (ors *obsReportSender[K]) Send(ctx context.Context, req K) error {
 // StartOp creates the span used to trace the operation. Returning
 // the updated context and the created span.
 func (ors *obsReportSender[K]) startOp(ctx context.Context) context.Context {
-	ctx, _ = ors.tracer.Start(ctx, ors.spanName, ors.spanAttrs)
+	ctx, _ = ors.tracer.Start(ctx,
+		ors.spanName,
+		ors.spanAttrs,
+		trace.WithLinks(queuebatch.LinksFromContext(ctx)...))
 	return ctx
 }
 

@@ -322,7 +322,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 		// See: https://github.com/open-telemetry/opentelemetry-collector/issues/8122
 		batchCfg := exporterhelper.NewDefaultBatcherConfig()
 		if cfg.MaxQueueSize > 0 {
-			batchCfg.SizeConfig.MaxSize = cfg.MaxExportBatchSize
+			batchCfg.SizeConfig.MaxSize = int64(cfg.MaxExportBatchSize)
 		}
 		if cfg.BatchTimeout > 0 {
 			batchCfg.FlushTimeout = cfg.BatchTimeout
@@ -376,7 +376,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 		// See: https://github.com/open-telemetry/opentelemetry-collector/issues/8122
 		if cfg.MaxExportBatchSize > 0 {
 			config.BatcherConfig.Enabled = true
-			config.BatcherConfig.SizeConfig.MaxSize = cfg.MaxExportBatchSize
+			config.BatcherConfig.SizeConfig.MaxSize = int64(cfg.MaxExportBatchSize)
 		}
 		if cfg.BatchTimeout > 0 {
 			config.BatcherConfig.FlushTimeout = cfg.BatchTimeout
@@ -458,7 +458,7 @@ func getInternalBatchSpanOpts(cfg *exporterhelper.BatcherConfig) []trace.BatchSp
 		opts = append(opts, trace.WithBatchTimeout(cfg.FlushTimeout))
 	}
 	if cfg.MaxSize > 0 {
-		opts = append(opts, trace.WithMaxQueueSize(cfg.MaxSize))
+		opts = append(opts, trace.WithMaxQueueSize(int(cfg.MaxSize)))
 	}
 	return opts
 }

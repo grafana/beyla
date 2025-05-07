@@ -27,7 +27,7 @@ func TestDecoration(t *testing.T) {
 	store := kube.NewStore(inf, kube.ResourceLabels{
 		"service.name":      []string{"app.kubernetes.io/name"},
 		"service.namespace": []string{"app.kubernetes.io/part-of"},
-	})
+	}, nil)
 	// pre-populated kubernetes metadata database
 	inf.Notify(&informer.Event{Type: informer.EventType_CREATED, Resource: &informer.ObjectMeta{
 		Name: "pod-12", Namespace: "the-ns", Kind: "Pod",

@@ -22,6 +22,7 @@ import (
 type Tracer struct{}
 
 func New(_ *beyla.Config) *Tracer                                        { return nil }
+func CanRun() bool                                                       { return false }
 func (p *Tracer) AllowPID(_, _ uint32, _ *svc.Attrs)                     {}
 func (p *Tracer) BlockPID(_, _ uint32)                                   {}
 func (p *Tracer) Load() (*ebpf.CollectionSpec, error)                    { return nil, nil }

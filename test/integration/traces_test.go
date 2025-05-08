@@ -212,7 +212,7 @@ func testGRPCTracesForServiceName(t *testing.T, svcName string) {
 
 	serviceInstance, ok := jaeger.FindIn(process.Tags, "service.instance.id")
 	require.Truef(t, ok, "service.instance.id not found in tags: %v", process.Tags)
-	assert.Regexp(t, `^beyla:\d+$$`, serviceInstance.Value)
+	assert.Regexp(t, `^beyla$`, serviceInstance.Value)
 
 	jaeger.Diff([]jaeger.Tag{
 		{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
@@ -355,7 +355,7 @@ func testHTTPTracesKProbes(t *testing.T) {
 
 	serviceInstance, ok := jaeger.FindIn(process.Tags, "service.instance.id")
 	require.Truef(t, ok, "service.instance.id not found in tags: %v", process.Tags)
-	assert.Regexp(t, `^beyla:\d+$$`, serviceInstance.Value)
+	assert.Regexp(t, `^beyla$`, serviceInstance.Value)
 
 	jaeger.Diff([]jaeger.Tag{
 		{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},

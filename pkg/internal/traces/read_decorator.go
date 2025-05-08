@@ -83,7 +83,7 @@ func hostNamePIDDecorator(cfg *InstanceIDConfig) decorator {
 	}
 
 	// caching instance ID composition for speed and saving memory generation
-	return func(s *svc.Attrs, hostPID int) {
+	return func(s *svc.Attrs, _ int) {
 		// FIXME - the pid here is causing a cardinality explosion of the
 		// 'target_info' metrics when instrumenting processes that fork()
 		// s.UID.Instance = fullHostName + ":" + strconv.Itoa(hostPID)

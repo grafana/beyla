@@ -33,16 +33,16 @@ func TestReadDecorator(t *testing.T) {
 	for _, tc := range []testCase{{
 		desc:             "dns",
 		cfg:              ReadDecorator{InstanceID: InstanceIDConfig{HostnameDNSResolution: true}},
-		expectedInstance: dnsHostname,
+		expectedInstance: dnsHostname + ":1234",
 		expectedHN:       dnsHostname,
 	}, {
 		desc:             "no-dns",
-		expectedInstance: localHostname,
+		expectedInstance: localHostname + ":1234",
 		expectedHN:       localHostname,
 	}, {
 		desc:             "override hostname",
 		cfg:              ReadDecorator{InstanceID: InstanceIDConfig{OverrideHostname: "foooo"}},
-		expectedInstance: "foooo",
+		expectedInstance: "foooo:1234",
 		expectedHN:       "foooo",
 	}} {
 		t.Run(tc.desc, func(t *testing.T) {

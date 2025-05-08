@@ -75,7 +75,7 @@ func TestTraceSkipSpanMetrics(t *testing.T) {
 			Method:       "GET",
 			Route:        "/test" + strconv.Itoa(i),
 			Status:       200,
-			Service:      svc.Attrs{UID: svc.UID{Pid: int32(i)}},
+			Service:      svc.Attrs{UID: svc.UID{Name: strconv.Itoa(i)}},
 			TraceID:      randomTraceID(),
 		}
 		spans = append(spans, span)
@@ -140,7 +140,7 @@ func TestTraceGrouping(t *testing.T) {
 			Method:       "GET",
 			Route:        "/test" + strconv.Itoa(i),
 			Status:       200,
-			Service:      svc.Attrs{UID: svc.UID{Pid: 1}},
+			Service:      svc.Attrs{UID: svc.UID{Name: "1"}},
 			TraceID:      randomTraceID(),
 		}
 		spans = append(spans, span)

@@ -284,9 +284,9 @@ Higher values reduce the load on the Kubernetes API service.
 |---------------------------|--------------------------------------|----------|---------|
 | `service_name_template`   | `BEYLA_SERVICE_NAME_TEMPLATE`        | string   | (empty) |
 
-The service name can be templated with a go template, this makes it possible to create conditional or extended services names.
+You can template service name using Go templates, this makes it possible to create conditional or extended services names.
 
-The template has the following context available:
+The following context is available to the template:
 
 ```
 Meta: (*informer.ObjectMeta)
@@ -304,9 +304,9 @@ Meta: (*informer.ObjectMeta)
 ContainerName: (string)
 ```
 
-The full object and structure can be found in the ```kubecache informer.pb.go```
+You can find the full object and structure in the `kubecache informer.pb.go` source file.
 
-An example value for a service name might look like this:
+Service name template examples:
 
 ```
 {{- .Meta.Namespace }}/{{ index .Meta.Labels "app.kubernetes.io/name" }}/{{ index .Meta.Labels "app.kubernetes.io/component" -}}{{ if .ContainerName }}/{{ .ContainerName -}}{{ end -}}
@@ -318,5 +318,5 @@ or
 {{- .Meta.Namespace }}/{{ index .Meta.Labels "app.kubernetes.io/name" }}/{{ index .Meta.Labels "app.kubernetes.io/component" -}}
 ```
 
-From the result only the first line is used, which is then trimmed to prevent white space in the service name.
+In this example, only the first line is used and trimmed to prevent white space in the service name.
 

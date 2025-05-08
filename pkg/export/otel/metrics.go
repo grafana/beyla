@@ -893,7 +893,6 @@ func (mr *MetricsReporter) tracesResourceAttributes(service *svc.Attrs) attribut
 		semconv.TelemetrySDKLanguageKey.String(service.SDKLanguage.String()),
 		semconv.TelemetrySDKNameKey.String("beyla"),
 		request.SourceMetric("beyla"),
-		semconv.ProcessPID(int(service.ProcPID)),
 		semconv.OSTypeKey.String("linux"),
 	}
 

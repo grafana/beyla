@@ -18,6 +18,7 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/grafana/go-offsets-tracker v0.1.7
 	github.com/grafana/jvmtools v0.0.3
+	github.com/grafana/pyroscope-go/godeltaprof v0.1.8
 	github.com/hashicorp/go-version v1.7.0
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/ianlancetaylor/demangle v0.0.0-20240912202439-0a2b6291aafd

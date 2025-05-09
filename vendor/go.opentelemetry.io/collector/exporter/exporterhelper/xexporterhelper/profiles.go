@@ -16,6 +16,8 @@ import (
 	"go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
 	"go.opentelemetry.io/collector/exporter/exporterhelper/internal"
+	"go.opentelemetry.io/collector/exporter/exporterhelper/internal/request"
+	"go.opentelemetry.io/collector/exporter/exporterhelper/internal/sizer"
 	"go.opentelemetry.io/collector/exporter/xexporter"
 	"go.opentelemetry.io/collector/pdata/pprofile"
 	"go.opentelemetry.io/collector/pipeline/xpipeline"
@@ -26,15 +28,33 @@ var (
 	profilesUnmarshaler = &pprofile.ProtoUnmarshaler{}
 )
 
+// NewProfilesQueueBatchSettings returns a new QueueBatchSettings to configure to WithQueueBatch when using pprofile.Profiles.
+// Experimental: This API is at the early stage of development and may change without backward compatibility
+// until https://github.com/open-telemetry/opentelemetry-collector/issues/8122 is resolved.
+func NewProfilesQueueBatchSettings() exporterhelper.QueueBatchSettings {
+	return exporterhelper.QueueBatchSettings{
+		Encoding: profilesEncoding{},
+		Sizers: map[exporterhelper.RequestSizerType]request.Sizer[exporterhelper.Request]{
+			exporterhelper.RequestSizerTypeRequests: exporterhelper.NewRequestsSizer(),
+			exporterhelper.RequestSizerTypeItems:    request.NewItemsSizer(),
+			exporterhelper.RequestSizerTypeBytes: request.BaseSizer{
+				SizeofFunc: func(req request.Request) int64 {
+					return int64(profilesMarshaler.ProfilesSize(req.(*profilesRequest).pd))
+				},
+			},
+		},
+	}
+}
+
 type profilesRequest struct {
-	pd               pprofile.Profiles
-	cachedItemsCount int
+	pd         pprofile.Profiles
+	cachedSize int
 }
 
 func newProfilesRequest(pd pprofile.Profiles) exporterhelper.Request {
 	return &profilesRequest{
-		pd:               pd,
-		cachedItemsCount: pd.SampleCount(),
+		pd:         pd,
+		cachedSize: -1,
 	}
 }
 
@@ -61,11 +81,18 @@ func (req *profilesRequest) OnError(err error) exporterhelper.Request {
 }
 
 func (req *profilesRequest) ItemsCount() int {
-	return req.cachedItemsCount
+	return req.pd.SampleCount()
 }
 
-func (req *profilesRequest) setCachedItemsCount(count int) {
-	req.cachedItemsCount = count
+func (req *profilesRequest) size(sizer sizer.ProfilesSizer) int {
+	if req.cachedSize == -1 {
+		req.cachedSize = sizer.ProfilesSize(req.pd)
+	}
+	return req.cachedSize
+}
+
+func (req *profilesRequest) setCachedSize(size int) {
+	req.cachedSize = size
 }
 
 type profileExporter struct {
@@ -87,12 +114,9 @@ func NewProfilesExporter(
 	if pusher == nil {
 		return nil, errNilPushProfileData
 	}
-	opts := []exporterhelper.Option{internal.WithEncoding(profilesEncoding{})}
-	return NewProfilesRequestExporter(ctx, set, requestFromProfiles(), requestConsumeFromProfiles(pusher), append(opts, options...)...)
+	return NewProfilesRequest(ctx, set, requestFromProfiles(), requestConsumeFromProfiles(pusher),
+		append([]exporterhelper.Option{internal.WithQueueBatchSettings(NewProfilesQueueBatchSettings())}, options...)...)
 }
-
-// Deprecated: [v0.122.0] use exporterhelper.RequestConverterFunc[pprofile.Profiles].
-type RequestFromProfilesFunc = exporterhelper.RequestConverterFunc[pprofile.Profiles]
 
 // requestConsumeFromProfiles returns a RequestConsumeFunc that consumes pprofile.Profiles.
 func requestConsumeFromProfiles(pusher xconsumer.ConsumeProfilesFunc) exporterhelper.RequestConsumeFunc {
@@ -108,10 +132,13 @@ func requestFromProfiles() exporterhelper.RequestConverterFunc[pprofile.Profiles
 	}
 }
 
-// NewProfilesRequestExporter creates a new profiles exporter based on a custom ProfilesConverter and Sender.
+// Deprecated: [v0.124.0] use NewProfilesRequest.
+var NewProfilesRequestExporter = NewProfilesRequest
+
+// NewProfilesRequest creates a new profiles exporter based on a custom ProfilesConverter and Sender.
 // Experimental: This API is at the early stage of development and may change without backward compatibility
 // until https://github.com/open-telemetry/opentelemetry-collector/issues/8122 is resolved.
-func NewProfilesRequestExporter(
+func NewProfilesRequest(
 	_ context.Context,
 	set exporter.Settings,
 	converter exporterhelper.RequestConverterFunc[pprofile.Profiles],

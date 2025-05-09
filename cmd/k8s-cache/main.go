@@ -18,6 +18,8 @@ import (
 	"github.com/grafana/beyla/v2/pkg/kubecache/instrument"
 	"github.com/grafana/beyla/v2/pkg/kubecache/meta"
 	"github.com/grafana/beyla/v2/pkg/kubecache/service"
+
+	_ "github.com/grafana/pyroscope-go/godeltaprof/http/pprof"
 )
 
 // main code of te Kubernetes K8s informer's metadata cache service, when it runs as a separate service and not

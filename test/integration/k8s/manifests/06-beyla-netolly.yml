@@ -21,7 +21,7 @@ data:
         enable: true
         cluster_name: my-kube
         resource_labels:
-          deployment.environment: ["deployment.environment"]
+          deployment.environment: ["${DEPLOYMENT_ENVIRONMENT:-deployment.environment}"]
       select:
         beyla.network.flow.bytes:
           # assured cardinality explosion. Don't try in production!

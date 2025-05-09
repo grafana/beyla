@@ -8,6 +8,7 @@ import (
 	"github.com/caarlos0/env/v9"
 	"gopkg.in/yaml.v3"
 
+	"github.com/grafana/beyla/v2/pkg/config"
 	"github.com/grafana/beyla/v2/pkg/kubecache/instrument"
 )
 
@@ -51,6 +52,8 @@ func LoadConfig(file io.Reader) (*Config, error) {
 		if err != nil {
 			return nil, fmt.Errorf("reading YAML configuration: %w", err)
 		}
+		// replaces environment variables in YAML file
+		cfgBuf = config.ReplaceEnv(cfgBuf)
 		if err := yaml.Unmarshal(cfgBuf, &cfg); err != nil {
 			return nil, fmt.Errorf("parsing YAML configuration: %w", err)
 		}

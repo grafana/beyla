@@ -1,5 +1,4 @@
-// Package appobserv provides public access to Beyla application observability as a library. All the other subcomponents
-// of Beyla are hidden.
+// Package appolly provides public access to eBPF application observability as a library
 package appolly
 
 import (

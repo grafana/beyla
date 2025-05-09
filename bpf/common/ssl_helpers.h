@@ -14,12 +14,13 @@
 #include <maps/active_ssl_write_args.h>
 #include <maps/ssl_to_conn.h>
 
-static __always_inline void set_active_ssl_connection(pid_connection_info_t *conn, void *ssl) {
+static __always_inline void set_active_ssl_connection(ssl_pid_connection_info_t *ssl_conn,
+                                                      void *ssl) {
     bpf_dbg_printk("Correlating SSL %llx to connection", ssl);
-    dbg_print_http_connection_info(&conn->conn);
+    dbg_print_http_connection_info(&ssl_conn->p_conn.conn);
 
-    bpf_map_update_elem(&active_ssl_connections, conn, &ssl, BPF_ANY);
-    bpf_map_update_elem(&ssl_to_conn, &ssl, conn, BPF_ANY);
+    bpf_map_update_elem(&active_ssl_connections, &ssl_conn->p_conn, &ssl, BPF_ANY);
+    bpf_map_update_elem(&ssl_to_conn, &ssl, ssl_conn, BPF_ANY);
 }
 
 static __always_inline void *unconnected_ssl_from_args(u64 id, u8 direction) {
@@ -47,22 +48,26 @@ static __always_inline void connect_ssl_to_sock(u64 id, struct sock *sock, u8 di
     if (!ssl) {
         return;
     }
-    pid_connection_info_t p_conn = {0};
-    p_conn.pid = pid_from_pid_tgid(id);
-    bool success = parse_sock_info(sock, &p_conn.conn);
+    ssl_pid_connection_info_t ssl_conn = {0};
+    ssl_conn.p_conn.pid = pid_from_pid_tgid(id);
+    bool success = parse_sock_info(sock, &ssl_conn.p_conn.conn);
     if (success) {
-        sort_connection_info(&p_conn.conn);
-        set_active_ssl_connection(&p_conn, ssl);
+        ssl_conn.orig_dport = ssl_conn.p_conn.conn.d_port;
+        sort_connection_info(&ssl_conn.p_conn.conn);
+        set_active_ssl_connection(&ssl_conn, ssl);
     }
 }
 
 static __always_inline void
-connect_ssl_to_connection(u64 id, pid_connection_info_t *conn, u8 direction) {
+connect_ssl_to_connection(u64 id, pid_connection_info_t *conn, u8 direction, u16 orig_dport) {
     void *ssl = unconnected_ssl_from_args(id, direction);
     if (!ssl) {
         return;
     }
-    set_active_ssl_connection(conn, ssl);
+    ssl_pid_connection_info_t ssl_conn = {0};
+    ssl_conn.orig_dport = orig_dport;
+    ssl_conn.p_conn = *conn;
+    set_active_ssl_connection(&ssl_conn, ssl);
 }
 
 static __always_inline void *is_ssl_connection(pid_connection_info_t *conn) {

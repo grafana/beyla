@@ -532,3 +532,7 @@ func (p *Tracer) watchForMisclassifedEvents() {
 		}
 	}
 }
+
+func (p *Tracer) Required() bool {
+	return true
+}

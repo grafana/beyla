@@ -222,20 +222,24 @@ func (pt *ProcessTracer) loadTracers() error {
 	defer loadMux.Unlock()
 
 	var log = ptlog()
-	anyLoaded := false
+
+	loadedPrograms := make([]Tracer, 0, len(pt.Programs))
+
 	for _, p := range pt.Programs {
 		if err := pt.loadTracer(p, log); err != nil {
-			log.Warn("couldn't load tracer", "error", err)
+			log.Warn("couldn't load tracer", "error", err, "required", p.Required())
+
+			if p.Required() {
+				return err
+			}
 		} else {
-			anyLoaded = true
+			loadedPrograms = append(loadedPrograms, p)
 		}
 	}
 
-	btf.FlushKernelSpec()
+	pt.Programs = loadedPrograms
 
-	if !anyLoaded {
-		return fmt.Errorf("failed to load all tracers for this program type")
-	}
+	btf.FlushKernelSpec()
 
 	return nil
 }

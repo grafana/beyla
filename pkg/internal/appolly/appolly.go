@@ -194,6 +194,10 @@ func (i *Instrumenter) stop() error {
 	}
 }
 
+// These process creation and deletion events are used to create/delete
+// the metrics target_info, traces_target_info. If we don't have metrics
+// enabled, not consuming them will eventually block the instrumentation
+// pipeline.
 func (i *Instrumenter) processEventsEnabled() bool {
 	return i.config.Metrics.Enabled() || i.config.Prometheus.Enabled()
 }

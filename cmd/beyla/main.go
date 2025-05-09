@@ -15,11 +15,11 @@ import (
 
 	otelsdk "go.opentelemetry.io/otel/sdk"
 
+	_ "github.com/grafana/pyroscope-go/godeltaprof/http/pprof"
+
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/buildinfo"
 	"github.com/grafana/beyla/v2/pkg/components"
-
-	_ "github.com/grafana/pyroscope-go/godeltaprof/http/pprof"
 )
 
 func main() {

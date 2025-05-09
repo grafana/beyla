@@ -140,7 +140,16 @@ func matchExeSymbols(ctx *fastelf.ElfContext) svc.InstrumentableType {
 			continue
 		}
 
+		if int(sec.Link) >= len(ctx.Sections) {
+			continue
+		}
+
 		strtab := ctx.Sections[sec.Link]
+
+		if int(strtab.Offset) >= len(ctx.Data) {
+			continue
+		}
+
 		strs := ctx.Data[strtab.Offset:]
 
 		symCount := int(sec.Size / sec.Entsize)

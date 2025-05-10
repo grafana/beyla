@@ -12,6 +12,7 @@ import (
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/internal/discover"
+	"github.com/grafana/beyla/v2/pkg/internal/ebpf"
 	"github.com/grafana/beyla/v2/pkg/internal/exec"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
@@ -110,45 +111,47 @@ func (i *Instrumenter) FindAndInstrument(ctx context.Context) error {
 
 	// In background, listen indefinitely for each new process and run its
 	// associated ebpf.ProcessTracer once it is found.
-	go func() {
-		log := log()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case ev := <-processEvents:
-				switch ev.Type {
-				case discover.EventCreated:
-					pt := ev.Obj
-					log.Debug("running tracer for new process",
-						"inode", pt.FileInfo.Ino, "pid", pt.FileInfo.Pid, "exec", pt.FileInfo.CmdExePath)
-					if pt.Tracer != nil {
-						i.tracersWg.Add(1)
-						go func() {
-							defer i.tracersWg.Done()
-							pt.Tracer.Run(ctx, i.tracesInput)
-						}()
-					}
-					i.processEventInput.Send(exec.ProcessEvent{Type: exec.ProcessEventCreated, File: pt.FileInfo})
-				case discover.EventDeleted:
-					dp := ev.Obj
-					log.Debug("stopping ProcessTracer because there are no more instances of such process",
-						"inode", dp.FileInfo.Ino, "pid", dp.FileInfo.Pid, "exec", dp.FileInfo.CmdExePath)
-					if dp.Tracer != nil {
-						dp.Tracer.UnlinkExecutable(dp.FileInfo)
-					}
-					i.processEventInput.Send(exec.ProcessEvent{Type: exec.ProcessEventTerminated, File: dp.FileInfo})
-				case discover.EventInstanceDeleted:
-					i.processEventInput.Send(exec.ProcessEvent{Type: exec.ProcessEventTerminated, File: ev.Obj.FileInfo})
-				default:
-					log.Error("BUG ALERT! unknown event type", "type", ev.Type)
-				}
-			}
-		}
-	}()
+	go i.instrumentedEventLoop(ctx, processEvents)
 
 	// TODO: wait until all the resources have been freed/unmounted
 	return nil
+}
+
+func (i *Instrumenter) instrumentedEventLoop(ctx context.Context, processEvents <-chan discover.Event[*ebpf.Instrumentable]) {
+	log := log()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case ev := <-processEvents:
+			switch ev.Type {
+			case discover.EventCreated:
+				pt := ev.Obj
+				log.Debug("running tracer for new process",
+					"inode", pt.FileInfo.Ino, "pid", pt.FileInfo.Pid, "exec", pt.FileInfo.CmdExePath)
+				if pt.Tracer != nil {
+					i.tracersWg.Add(1)
+					go func() {
+						defer i.tracersWg.Done()
+						pt.Tracer.Run(ctx, i.tracesInput)
+					}()
+				}
+				i.handleAndDispatchProcessEvent(exec.ProcessEvent{Type: exec.ProcessEventCreated, File: pt.FileInfo})
+			case discover.EventDeleted:
+				dp := ev.Obj
+				log.Debug("stopping ProcessTracer because there are no more instances of such process",
+					"inode", dp.FileInfo.Ino, "pid", dp.FileInfo.Pid, "exec", dp.FileInfo.CmdExePath)
+				if dp.Tracer != nil {
+					dp.Tracer.UnlinkExecutable(dp.FileInfo)
+				}
+				i.handleAndDispatchProcessEvent(exec.ProcessEvent{Type: exec.ProcessEventTerminated, File: dp.FileInfo})
+			case discover.EventInstanceDeleted:
+				i.handleAndDispatchProcessEvent(exec.ProcessEvent{Type: exec.ProcessEventTerminated, File: ev.Obj.FileInfo})
+			default:
+				log.Error("BUG ALERT! unknown event type", "type", ev.Type)
+			}
+		}
+	}
 }
 
 // ReadAndForward keeps listening for traces in the BPF map, then reads,
@@ -189,6 +192,20 @@ func (i *Instrumenter) stop() error {
 		return errShutdownTimeout
 	case <-stopped:
 		return nil
+	}
+}
+
+// These process creation and deletion events are used to create/delete
+// the metrics target_info, traces_target_info. If we don't have metrics
+// enabled, not consuming them will eventually block the instrumentation
+// pipeline.
+func (i *Instrumenter) processEventsEnabled() bool {
+	return i.config.Metrics.Enabled() || i.config.Prometheus.Enabled()
+}
+
+func (i *Instrumenter) handleAndDispatchProcessEvent(pe exec.ProcessEvent) {
+	if i.processEventsEnabled() {
+		i.processEventInput.Send(pe)
 	}
 }
 

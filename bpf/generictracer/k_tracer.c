@@ -292,7 +292,7 @@ int BPF_KPROBE(beyla_kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, si
         s_args.p_conn.pid = pid_from_pid_tgid(id);
         s_args.orig_dport = orig_dport;
 
-        connect_ssl_to_connection(id, &s_args.p_conn, TCP_SEND);
+        connect_ssl_to_connection(id, &s_args.p_conn, TCP_SEND, orig_dport);
 
         void *ssl = is_ssl_connection(&s_args.p_conn);
         if (size > 0) {
@@ -418,7 +418,7 @@ int BPF_KPROBE(beyla_kprobe_tcp_rate_check_app_limited, struct sock *sk) {
             }
         }
 
-        connect_ssl_to_connection(id, &s_args.p_conn, TCP_SEND);
+        connect_ssl_to_connection(id, &s_args.p_conn, TCP_SEND, orig_dport);
 
         void *ssl = is_ssl_connection(&s_args.p_conn);
         if (ssl) {

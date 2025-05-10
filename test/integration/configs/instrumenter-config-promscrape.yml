@@ -28,3 +28,5 @@ attributes:
       include: ["*"]
   kubernetes:
     cluster_name: beyla-k8s-test-cluster
+  extra_group_attributes:
+    app_kube: ["component"]

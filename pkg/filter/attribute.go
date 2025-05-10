@@ -24,14 +24,18 @@ type AttributeFamilyConfig map[string]MatchDefinition
 
 // ByAttribute provides a pipeline node that drops all the records of type T (*ebpf.Record, or *request.Span)
 // that do not match the provided AttributeFamilyConfig.
-func ByAttribute[T any](config AttributeFamilyConfig, getters attributes.NamedGetters[T, string],
-	input, output *msg.Queue[[]T]) swarm.InstanceFunc {
+func ByAttribute[T any](
+	config AttributeFamilyConfig,
+	extraGroupAttributeCfg map[string][]attr.Name,
+	getters attributes.NamedGetters[T, string],
+	input, output *msg.Queue[[]T],
+) swarm.InstanceFunc {
 	return func(_ context.Context) (swarm.RunFunc, error) {
 		if len(config) == 0 {
 			// No filter configuration provided. The node will be ignored
 			return swarm.Bypass(input, output)
 		}
-		f, err := newFilter(config, getters, input, output)
+		f, err := newFilter(config, extraGroupAttributeCfg, getters, input, output)
 		if err != nil {
 			return nil, err
 		}
@@ -45,8 +49,12 @@ type filter[T any] struct {
 	output   *msg.Queue[[]T]
 }
 
-func newFilter[T any](config AttributeFamilyConfig, getters attributes.NamedGetters[T, string],
-	input, output *msg.Queue[[]T]) (*filter[T], error) {
+func newFilter[T any](
+	config AttributeFamilyConfig,
+	extraGroupAttributesCfg map[string][]attr.Name,
+	getters attributes.NamedGetters[T, string],
+	input, output *msg.Queue[[]T],
+) (*filter[T], error) {
 	// Internally, from code, we use the OTEL-like naming (attr.Name) for the attributes,
 	// which usually uses dot-separation but sometimes also use underscore.
 	// Since we allow users to specify metrics in both formats, we convert any user-provided
@@ -54,7 +62,7 @@ func newFilter[T any](config AttributeFamilyConfig, getters attributes.NamedGett
 	// Then, to validate the user-provided input, we map the prom-like attributes to
 	// our internal representation.
 	attrProm2Normal := map[string]attr.Name{}
-	for normalizedName := range attributes.AllAttributeNames() {
+	for normalizedName := range attributes.AllAttributeNames(extraGroupAttributesCfg) {
 		attrProm2Normal[normalizedName.Prom()] = normalizedName
 	}
 	// Validate and build Matcher implementations for the user-provided attributes.

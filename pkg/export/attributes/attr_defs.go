@@ -12,12 +12,25 @@ import (
 type AttrGroups int
 
 const (
+	UndefinedGroup  = AttrGroups(0)
 	GroupKubernetes = AttrGroups(1 << iota)
 	GroupPrometheus
 	GroupHTTPRoutes
 	GroupNetIfaceDirection
 	GroupNetCIDR
 	GroupTraces
+	GroupApp
+	GroupNet
+	GroupNetKube
+	GroupAppKube
+	GroupServerInfo
+	GroupHTTPClientInfo
+	GroupGRPCClientInfo
+	GroupHTTPCommon
+	GroupHost
+	GroupPromProcess
+	GroupProcess
+	GroupMessaging
 )
 
 func (e *AttrGroups) Has(groups AttrGroups) bool {
@@ -30,35 +43,45 @@ func (e *AttrGroups) Add(groups AttrGroups) {
 
 // Any new metric and attribute must be added here to be matched from the user-provided wildcard
 // selectors of the attributes.select section
-func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
+func getDefinitions(
+	groups AttrGroups,
+	extraGroupAttributes GroupAttributes,
+) map[Section]AttrReportGroup {
 	kubeEnabled := groups.Has(GroupKubernetes)
 	promEnabled := groups.Has(GroupPrometheus)
 	ifaceDirEnabled := groups.Has(GroupNetIfaceDirection)
 	cidrEnabled := groups.Has(GroupNetCIDR)
 
 	// attributes to be reported exclusively for prometheus exporters
-	var prometheusAttributes = AttrReportGroup{
-		Disabled: !promEnabled,
-		Attributes: map[attr.Name]Default{
+	prometheusAttributes := newAttrReportGroup(
+		!promEnabled,
+		nil,
+		map[attr.Name]Default{
 			attr.Instance:         true,
 			attr.Job:              true,
 			attr.ServiceNamespace: true,
 		},
-	}
+		extraGroupAttributes[GroupPrometheus],
+	)
+
 	// ServiceName and ServiceNamespace are reported both as resource and metric attributes, as
 	// the OTEL definition requires that it is reported as resource attribute,
 	// but Grafana Cloud takes it from the metric
-	var appAttributes = AttrReportGroup{
-		SubGroups: []*AttrReportGroup{&prometheusAttributes},
-		Attributes: map[attr.Name]Default{
+	appAttributes := newAttrReportGroup(
+		false,
+		[]*AttrReportGroup{&prometheusAttributes},
+		map[attr.Name]Default{
 			attr.ServiceName:      true,
 			attr.ServiceNamespace: true,
 		},
-	}
+		extraGroupAttributes[GroupApp],
+	)
 
 	// network metrics attributes
-	networkAttributes := AttrReportGroup{
-		Attributes: map[attr.Name]Default{
+	networkAttributes := newAttrReportGroup(
+		false,
+		nil,
+		map[attr.Name]Default{
 			attr.Direction:      true,
 			attr.BeylaIP:        false,
 			attr.Transport:      false,
@@ -75,13 +98,15 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 			attr.IfaceDirection: Default(ifaceDirEnabled),
 			attr.Iface:          Default(ifaceDirEnabled),
 		},
-	}
+		extraGroupAttributes[GroupNet],
+	)
 
 	// attributes to be reported exclusively for network metrics when
 	// kubernetes metadata is enabled
-	var networkKubeAttributes = AttrReportGroup{
-		Disabled: !kubeEnabled,
-		Attributes: map[attr.Name]Default{
+	networkKubeAttributes := newAttrReportGroup(
+		!kubeEnabled,
+		nil,
+		map[attr.Name]Default{
 			attr.K8sSrcOwnerName: true,
 			attr.K8sSrcOwnerType: true,
 			attr.K8sSrcNamespace: true,
@@ -98,17 +123,20 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 			attr.K8sDstNodeIP:    false,
 			attr.K8sDstNodeName:  false,
 		},
-	}
+		extraGroupAttributes[GroupNetKube],
+	)
 
 	// network CIDR attributes are only enabled if the CIDRs configuration
 	// is defined
-	var networkCIDR = AttrReportGroup{
-		Disabled: !cidrEnabled,
-		Attributes: map[attr.Name]Default{
+	networkCIDR := newAttrReportGroup(
+		!cidrEnabled,
+		nil,
+		map[attr.Name]Default{
 			attr.DstCIDR: true,
 			attr.SrcCIDR: true,
 		},
-	}
+		extraGroupAttributes[GroupNetCIDR],
+	)
 
 	// networkInterZone* supports the same attributes as
 	// network* counterpart, but all of them disabled by default, to keep cardinality low
@@ -122,9 +150,10 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 
 	// attributes to be reported exclusively for application metrics when
 	// kubernetes metadata is enabled
-	var appKubeAttributes = AttrReportGroup{
-		Disabled: !kubeEnabled,
-		Attributes: map[attr.Name]Default{
+	appKubeAttributes := newAttrReportGroup(
+		!kubeEnabled,
+		nil,
+		map[attr.Name]Default{
 			attr.K8sNamespaceName:   true,
 			attr.K8sPodName:         true,
 			attr.K8sContainerName:   true,
@@ -138,55 +167,75 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 			attr.K8sClusterName:     true,
 			attr.K8sOwnerName:       true,
 		},
-	}
+		extraGroupAttributes[GroupAppKube],
+	)
 
-	var httpRoutes = AttrReportGroup{
-		Disabled: !groups.Has(GroupHTTPRoutes),
-		Attributes: map[attr.Name]Default{
+	httpRoutes := newAttrReportGroup(
+		!groups.Has(GroupHTTPRoutes),
+		nil,
+		map[attr.Name]Default{
 			attr.HTTPRoute: true,
 		},
-	}
+		extraGroupAttributes[GroupHTTPRoutes],
+	)
 
-	var serverInfo = AttrReportGroup{
-		Attributes: map[attr.Name]Default{
+	serverInfo := newAttrReportGroup(
+		false,
+		nil,
+		map[attr.Name]Default{
 			attr.ClientAddr: false,
 			attr.ServerAddr: true,
 			attr.ServerPort: true,
 		},
-	}
-	var httpClientInfo = AttrReportGroup{
-		Attributes: map[attr.Name]Default{
+		extraGroupAttributes[GroupServerInfo],
+	)
+
+	httpClientInfo := newAttrReportGroup(
+		false,
+		nil,
+		map[attr.Name]Default{
 			attr.ServerAddr: true,
 			attr.ServerPort: true,
 		},
-	}
-	var grpcClientInfo = AttrReportGroup{
-		Attributes: map[attr.Name]Default{
+		extraGroupAttributes[GroupHTTPClientInfo],
+	)
+
+	grpcClientInfo := newAttrReportGroup(
+		false,
+		nil,
+		map[attr.Name]Default{
 			attr.ServerAddr: true,
 		},
-	}
+		extraGroupAttributes[GroupGRPCClientInfo],
+	)
 
-	var httpCommon = AttrReportGroup{
-		SubGroups: []*AttrReportGroup{&httpRoutes},
-		Attributes: map[attr.Name]Default{
+	httpCommon := newAttrReportGroup(
+		false,
+		[]*AttrReportGroup{&httpRoutes},
+		map[attr.Name]Default{
 			attr.HTTPRequestMethod:      true,
 			attr.HTTPResponseStatusCode: true,
 			attr.HTTPUrlPath:            false,
 		},
-	}
+		extraGroupAttributes[GroupHTTPCommon],
+	)
 
 	// TODO: populate it with host resource attributes in https://opentelemetry.io/docs/specs/semconv/resource/host/
-	var hostAttributes = AttrReportGroup{
-		Attributes: map[attr.Name]Default{
+	hostAttributes := newAttrReportGroup(
+		false,
+		nil,
+		map[attr.Name]Default{
 			attr.HostName: true,
 		},
-	}
+		extraGroupAttributes[GroupHost],
+	)
 
 	// the following attributes are only reported as metric attributes in Prometheus,
 	// as the OTEL standard defines them as resource attributes.
-	var promProcessAttributes = AttrReportGroup{
-		Disabled: !promEnabled,
-		Attributes: map[attr.Name]Default{
+	promProcessAttributes := newAttrReportGroup(
+		!promEnabled,
+		nil,
+		map[attr.Name]Default{
 			attr.Instance:        true,
 			attr.Job:             true,
 			attr.ProcCommand:     true,
@@ -198,24 +247,29 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 			attr.ProcExecName:    false,
 			attr.ProcExecPath:    false,
 		},
-	}
+		extraGroupAttributes[GroupPromProcess],
+	)
 
-	var processAttributes = AttrReportGroup{
-		SubGroups: []*AttrReportGroup{&appKubeAttributes, &hostAttributes, &promProcessAttributes},
-		Attributes: map[attr.Name]Default{
+	processAttributes := newAttrReportGroup(
+		false,
+		[]*AttrReportGroup{&appKubeAttributes, &hostAttributes, &promProcessAttributes},
+		map[attr.Name]Default{
 			attr.ProcCPUMode:   true,
 			attr.ProcDiskIODir: true,
 			attr.ProcNetIODir:  true,
 		},
-	}
+		extraGroupAttributes[GroupProcess],
+	)
 
-	var messagingAttributes = AttrReportGroup{
-		SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes},
-		Attributes: map[attr.Name]Default{
+	messagingAttributes := newAttrReportGroup(
+		false,
+		[]*AttrReportGroup{&appAttributes, &appKubeAttributes},
+		map[attr.Name]Default{
 			attr.MessagingSystem:      true,
 			attr.MessagingDestination: true,
 		},
-	}
+		extraGroupAttributes[GroupMessaging],
+	)
 
 	return map[Section]AttrReportGroup{
 		BeylaNetworkFlow.Section: {
@@ -340,10 +394,11 @@ func copyDisabled(src AttrReportGroup) AttrReportGroup {
 
 // AllAttributeNames returns a set with all the names in the attributes database
 // as returned by the getDefinitions function
-func AllAttributeNames() map[attr.Name]struct{} {
+func AllAttributeNames(extraGroupAttributesCfg map[string][]attr.Name) map[attr.Name]struct{} {
+	extraGroupAttributes := newGroupAttributes(extraGroupAttributesCfg)
 	names := map[attr.Name]struct{}{}
 	// -1 to enable all the metric group flags
-	for _, section := range getDefinitions(-1) {
+	for _, section := range getDefinitions(-1, extraGroupAttributes) {
 		maps.Copy(names, section.All())
 	}
 	return names

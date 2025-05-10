@@ -40,8 +40,10 @@ func TestMetricAttributes(t *testing.T) {
 
 	me, err := newMetricsExporter(t.Context(),
 		&global.ContextInfo{MetricAttributeGroups: attributes.GroupKubernetes},
-		&NetMetricsConfig{AttributeSelectors: map[attributes.Section]attributes.InclusionLists{
-			attributes.BeylaNetworkFlow.Section: {Include: []string{"*"}},
+		&NetMetricsConfig{SelectorCfg: &attributes.SelectorConfig{
+			SelectionCfg: map[attributes.Section]attributes.InclusionLists{
+				attributes.BeylaNetworkFlow.Section: {Include: []string{"*"}},
+			},
 		}, Metrics: &MetricsConfig{
 			MetricsEndpoint:   "http://foo",
 			Interval:          10 * time.Millisecond,
@@ -97,12 +99,14 @@ func TestMetricAttributes_Filter(t *testing.T) {
 
 	me, err := newMetricsExporter(t.Context(),
 		&global.ContextInfo{MetricAttributeGroups: attributes.GroupKubernetes},
-		&NetMetricsConfig{AttributeSelectors: map[attributes.Section]attributes.InclusionLists{
-			attributes.BeylaNetworkFlow.Section: {Include: []string{
-				"src.address",
-				"k8s.src.name",
-				"k8s.dst.name",
-			}},
+		&NetMetricsConfig{SelectorCfg: &attributes.SelectorConfig{
+			SelectionCfg: map[attributes.Section]attributes.InclusionLists{
+				attributes.BeylaNetworkFlow.Section: {Include: []string{
+					"src.address",
+					"k8s.src.name",
+					"k8s.dst.name",
+				}},
+			},
 		}, Metrics: &MetricsConfig{
 			MetricsEndpoint:   "http://foo",
 			Interval:          10 * time.Millisecond,

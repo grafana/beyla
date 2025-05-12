@@ -128,7 +128,7 @@ func testSpanMetricsForHTTPLibrary(t *testing.T, svcName, svcNs string) {
 		var err error
 		results, err = pq.Query(`traces_spanmetrics_latency_count{` +
 			`span_kind="SPAN_KIND_SERVER",` +
-			`status_code="STATUS_CODE_OK",` + // 404 is OK for server spans
+			`status_code="STATUS_CODE_UNSET",` + // 404 is OK for server spans
 			`service_namespace="` + svcNs + `",` +
 			`service="` + svcName + `",` +
 			`span_name="GET /basic/:rnd"` +
@@ -144,7 +144,7 @@ func testSpanMetricsForHTTPLibrary(t *testing.T, svcName, svcNs string) {
 		var err error
 		results, err = pq.Query(`traces_spanmetrics_calls_total{` +
 			`span_kind="SPAN_KIND_SERVER",` +
-			`status_code="STATUS_CODE_OK",` + // 404 is OK for server spans
+			`status_code="STATUS_CODE_UNSET",` + // 404 is OK for server spans
 			`service_namespace="` + svcNs + `",` +
 			`service="` + svcName + `",` +
 			`span_name="GET /basic/:rnd"` +

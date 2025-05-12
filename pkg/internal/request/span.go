@@ -394,10 +394,10 @@ func HTTPSpanStatusCode(span *Span) string {
 
 	if span.Type == EventTypeHTTPClient {
 		if span.Status < 400 {
-			return StatusCodeOk
+			return StatusCodeUnset
 		}
 	} else if span.Status < 500 {
-		return StatusCodeOk
+		return StatusCodeUnset
 	}
 
 	return StatusCodeError
@@ -415,16 +415,13 @@ var (
 
 // https://opentelemetry.io/docs/specs/otel/trace/semantic_conventions/rpc/#grpc-status
 func GrpcSpanStatusCode(span *Span) string {
-	if span.Status == grpcStatusCodeOK {
-		return StatusCodeOk
-	}
-
-	if span.Type == EventTypeGRPCClient {
+	if span.Type == EventTypeGRPCClient && span.Status != grpcStatusCodeOK {
 		return StatusCodeError
 	}
+
 	switch span.Status {
 	case grpcStatusCodeOK:
-		return StatusCodeOk
+		return StatusCodeUnset
 	case grpcStatusCodeUnknown, grpcStatusCodeDeadlineExceeded, grpcStatusCodeUnimplemented,
 		grpcStatusCodeInternal, grpcStatusCodeUnavailable, grpcStatusCodeDataLoss:
 		return StatusCodeError
@@ -531,7 +528,7 @@ func (s *Span) isTracesExportURL() bool {
 
 func (s *Span) IsExportMetricsSpan() bool {
 	// check if it's a successful client call
-	if !s.isHTTPOrGRPCClient() || (SpanStatusCode(s) != StatusCodeOk) {
+	if !s.isHTTPOrGRPCClient() || (SpanStatusCode(s) != StatusCodeUnset) {
 		return false
 	}
 
@@ -540,7 +537,7 @@ func (s *Span) IsExportMetricsSpan() bool {
 
 func (s *Span) IsExportTracesSpan() bool {
 	// check if it's a successful client call
-	if !s.isHTTPOrGRPCClient() || (SpanStatusCode(s) != StatusCodeOk) {
+	if !s.isHTTPOrGRPCClient() || (SpanStatusCode(s) != StatusCodeUnset) {
 		return false
 	}
 

@@ -1242,18 +1242,18 @@ func TestTraces_HTTPStatus(t *testing.T) {
 
 	t.Run("HTTP server testing", func(t *testing.T) {
 		for _, p := range []testPair{
-			{100, request.StatusCodeOk},
-			{103, request.StatusCodeOk},
-			{199, request.StatusCodeOk},
-			{200, request.StatusCodeOk},
-			{204, request.StatusCodeOk},
-			{299, request.StatusCodeOk},
-			{300, request.StatusCodeOk},
-			{399, request.StatusCodeOk},
-			{400, request.StatusCodeOk},
-			{404, request.StatusCodeOk},
-			{405, request.StatusCodeOk},
-			{499, request.StatusCodeOk},
+			{100, request.StatusCodeUnset},
+			{103, request.StatusCodeUnset},
+			{199, request.StatusCodeUnset},
+			{200, request.StatusCodeUnset},
+			{204, request.StatusCodeUnset},
+			{299, request.StatusCodeUnset},
+			{300, request.StatusCodeUnset},
+			{399, request.StatusCodeUnset},
+			{400, request.StatusCodeUnset},
+			{404, request.StatusCodeUnset},
+			{405, request.StatusCodeUnset},
+			{499, request.StatusCodeUnset},
 			{500, request.StatusCodeError},
 			{5999, request.StatusCodeError},
 		} {
@@ -1266,14 +1266,14 @@ func TestTraces_HTTPStatus(t *testing.T) {
 
 	t.Run("HTTP client testing", func(t *testing.T) {
 		for _, p := range []testPair{
-			{100, request.StatusCodeOk},
-			{103, request.StatusCodeOk},
-			{199, request.StatusCodeOk},
-			{200, request.StatusCodeOk},
-			{204, request.StatusCodeOk},
-			{299, request.StatusCodeOk},
-			{300, request.StatusCodeOk},
-			{399, request.StatusCodeOk},
+			{100, request.StatusCodeUnset},
+			{103, request.StatusCodeUnset},
+			{199, request.StatusCodeUnset},
+			{200, request.StatusCodeUnset},
+			{204, request.StatusCodeUnset},
+			{299, request.StatusCodeUnset},
+			{300, request.StatusCodeUnset},
+			{399, request.StatusCodeUnset},
 			{400, request.StatusCodeError},
 			{404, request.StatusCodeError},
 			{405, request.StatusCodeError},
@@ -1297,7 +1297,7 @@ func TestTraces_GRPCStatus(t *testing.T) {
 
 	t.Run("gRPC server testing", func(t *testing.T) {
 		for _, p := range []testPair{
-			{semconv.RPCGRPCStatusCodeOk, request.StatusCodeOk},
+			{semconv.RPCGRPCStatusCodeOk, request.StatusCodeUnset},
 			{semconv.RPCGRPCStatusCodeCancelled, request.StatusCodeUnset},
 			{semconv.RPCGRPCStatusCodeUnknown, request.StatusCodeError},
 			{semconv.RPCGRPCStatusCodeInvalidArgument, request.StatusCodeUnset},
@@ -1324,7 +1324,7 @@ func TestTraces_GRPCStatus(t *testing.T) {
 
 	t.Run("gRPC client testing", func(t *testing.T) {
 		for _, p := range []testPair{
-			{semconv.RPCGRPCStatusCodeOk, request.StatusCodeOk},
+			{semconv.RPCGRPCStatusCodeOk, request.StatusCodeUnset},
 			{semconv.RPCGRPCStatusCodeCancelled, request.StatusCodeError},
 			{semconv.RPCGRPCStatusCodeUnknown, request.StatusCodeError},
 			{semconv.RPCGRPCStatusCodeInvalidArgument, request.StatusCodeError},

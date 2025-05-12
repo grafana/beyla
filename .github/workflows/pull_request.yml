@@ -46,3 +46,6 @@ jobs:
   security-check:
     uses: ./.github/workflows/security-check.yml
     secrets: inherit
+    permissions:
+      issues: write
+      pull-requests: write

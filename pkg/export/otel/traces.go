@@ -7,6 +7,7 @@ import (
 	"maps"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -666,18 +667,26 @@ func TraceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 	switch span.Type {
 	case request.EventTypeHTTP:
 		attrs = []attribute.KeyValue{
+			semconv.HTTPScheme(request.HTTPScheme(span)),
 			request.HTTPRequestMethod(span.Method),
-			request.HTTPResponseStatusCode(span.Status),
-			request.HTTPUrlPath(span.Path),
-			request.ClientAddr(request.PeerAsClient(span)),
 			request.ServerAddr(request.SpanHost(span)),
 			request.ServerPort(span.HostPort),
-			request.HTTPRequestBodySize(int(span.RequestBodyLength())),
-			request.HTTPResponseBodySize(span.ResponseBodyLength()),
+			request.HTTPUrlPath(span.Path),
+			request.ClientAddr(request.PeerAsClient(span)),
+			request.HTTPResponseStatusCode(span.Status),
+			// Below are opt-in attributes.
+			// request.HTTPRequestBodySize(int(span.RequestBodyLength())),
+			// request.HTTPResponseBodySize(span.ResponseBodyLength()),
 		}
 		if span.Route != "" {
 			attrs = append(attrs, semconv.HTTPRoute(span.Route))
 		}
+		// TODO: Implement:
+		// - network.protocol.name
+		// - network.protocol.version
+		// - url.query
+		// - network.peer.address
+		// - user_agent.original
 	case request.EventTypeGRPC:
 		attrs = []attribute.KeyValue{
 			semconv.RPCMethod(span.Path),
@@ -697,14 +706,23 @@ func TraceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 
 		attrs = []attribute.KeyValue{
 			request.HTTPRequestMethod(span.Method),
-			request.HTTPResponseStatusCode(span.Status),
 			request.HTTPUrlFull(url),
-			semconv.HTTPScheme(scheme),
 			request.ServerAddr(host),
 			request.ServerPort(span.HostPort),
-			request.HTTPRequestBodySize(int(span.RequestBodyLength())),
-			request.HTTPResponseBodySize(span.ResponseBodyLength()),
+			// TODO: Implement network.protocol.name and network.protocol.version
+			request.HTTPResponseStatusCode(span.Status),
+
+			// Below are opt-in attributes.
+			// request.HTTPRequestBodySize(int(span.RequestBodyLength())),
+			// request.HTTPResponseBodySize(span.ResponseBodyLength()),
+			// semconv.HTTPScheme(scheme),
 		}
+
+		if span.Status >= 400 || span.Status < 100 {
+			errorType := strconv.Itoa(span.Status)
+			attrs = append(attrs, semconv.ErrorTypeKey.String(errorType))
+		}
+
 	case request.EventTypeGRPCClient:
 		attrs = []attribute.KeyValue{
 			semconv.RPCMethod(span.Path),

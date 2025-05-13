@@ -214,6 +214,7 @@ type MetricsReporter struct {
 	exporter          sdkmetric.Exporter
 	reporters         ReporterPool[*svc.Attrs, *Metrics]
 	systemReporter    Metrics
+	serviceMap        map[svc.UID]*svc.Attrs
 	is                instrumentations.InstrumentationSelection
 
 	// user-selected fields for each of the reported metrics
@@ -398,13 +399,22 @@ func newMetricsReporter(
 			}()
 		}, mr.newMetricSet)
 
-	mr.systemReporter = mr.newSystemMetricsInstance()
 	// Instantiate the OTLP HTTP or GRPC metrics exporter
 	exporter, err := InstantiateMetricsExporter(ctx, cfg, log)
 	if err != nil {
 		return nil, err
 	}
 	mr.exporter = instrumentMetricsExporter(ctxInfo.Metrics, exporter)
+
+	mr.systemReporter = mr.newSystemMetricsInstance()
+	mr.serviceMap = map[svc.UID]*svc.Attrs{}
+	if mr.surveyInfoEnabled {
+		// Survey info is special, created via service less reporter
+		meter := mr.systemReporter.provider.Meter(reporterName)
+		if err = mr.setupSurveyInfo(&mr.systemReporter, meter); err != nil {
+			return nil, err
+		}
+	}
 
 	return &mr, nil
 }
@@ -725,9 +735,10 @@ func (mr *MetricsReporter) setupGraphMeters(m *Metrics, meter instrument.Meter) 
 
 func (mr *MetricsReporter) newSystemMetricsInstance() Metrics {
 	mlog := mlog()
-	mlog.Debug("creating new system Metrics reporter")
+	mlog.Info("creating new system Metrics reporter")
 
 	opts := []metric.Option{
+		metric.WithResource(resource.Empty()),
 		metric.WithReader(metric.NewPeriodicReader(mr.exporter,
 			metric.WithInterval(mr.cfg.Interval))),
 	}
@@ -788,13 +799,6 @@ func (mr *MetricsReporter) newMetricSet(service *svc.Attrs) (*Metrics, error) {
 	// Target info is created for every type of OTel metrics
 	if err = mr.setupTargetInfo(&m, meter); err != nil {
 		return nil, err
-	}
-
-	if mr.surveyInfoEnabled {
-		// Target info is created for every type of OTel metrics
-		if err = mr.setupSurveyInfo(&m, meter); err != nil {
-			return nil, err
-		}
 	}
 
 	if mr.cfg.OTelMetricsEnabled() {
@@ -1121,16 +1125,24 @@ func (mr *MetricsReporter) deleteTargetInfo(reporter *Metrics) {
 	reporter.targetInfo.Remove(mr.ctx, attrOpt)
 }
 
-func (mr *MetricsReporter) createSurveyInfo() {
-	mlog().Debug("Creating survey_info", "attrs", mr.systemReporter.resourceAttributes)
-	attrOpt := instrument.WithAttributeSet(attribute.NewSet(mr.systemReporter.resourceAttributes...))
+func (mr *MetricsReporter) createSurveyInfo(service *svc.Attrs) {
+	resourceAttributes := append(getAppResourceAttrs(mr.hostID, service), ResourceAttrsFromEnv(service)...)
+	mlog().Debug("Creating survey_info", "attrs", resourceAttributes)
+	attrOpt := instrument.WithAttributeSet(attribute.NewSet(resourceAttributes...))
 	mr.systemReporter.surveyInfo.Add(mr.ctx, 1, attrOpt)
+	mr.serviceMap[service.UID] = service
 }
 
-func (mr *MetricsReporter) deleteSurveyInfo() {
-	mlog().Debug("Deleting survey_info for", "attrs", mr.systemReporter.resourceAttributes)
-	attrOpt := instrument.WithAttributeSet(attribute.NewSet(mr.systemReporter.resourceAttributes...))
+func (mr *MetricsReporter) deleteSurveyInfo(s *svc.Attrs) {
+	service, ok := mr.serviceMap[s.UID]
+	if !ok {
+		service = s
+	}
+	resourceAttributes := append(getAppResourceAttrs(mr.hostID, service), ResourceAttrsFromEnv(service)...)
+	mlog().Debug("Deleting survey_info for", "attrs", resourceAttributes)
+	attrOpt := instrument.WithAttributeSet(attribute.NewSet(resourceAttributes...))
 	mr.systemReporter.surveyInfo.Remove(mr.ctx, attrOpt)
+	delete(mr.serviceMap, s.UID)
 }
 
 func (mr *MetricsReporter) createTracesTargetInfo(reporter *Metrics) {
@@ -1168,12 +1180,12 @@ func (mr *MetricsReporter) watchForProcessEvents() {
 			mr.createTracesTargetInfo(reporter)
 		case exec.ProcessEventTerminated:
 			if mr.surveyInfoEnabled {
-				mr.deleteSurveyInfo()
+				mr.deleteSurveyInfo(&pe.File.Service)
 			}
 			mr.deleteTracesTargetInfo(reporter)
 			mr.deleteTargetInfo(reporter)
 		case exec.ProcessEventSurveyCreated:
-			mr.createSurveyInfo()
+			mr.createSurveyInfo(&pe.File.Service)
 		}
 	}
 }

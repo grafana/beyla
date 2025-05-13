@@ -21,6 +21,7 @@ func TestServiceNameTemplate(t *testing.T) {
 
 	temp, err := buildServiceNameTemplate(cfg)
 
+	assert.Nil(t, temp)
 	if assert.Error(t, err) {
 		assert.Equal(t, `unable to parse service name template: template: serviceNameTemplate:1: function "asdf" not defined`, err.Error())
 	}

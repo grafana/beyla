@@ -14,7 +14,7 @@ import (
 )
 
 // Tests fix for https://github.com/grafana/beyla/issues/926
-func TestRun_DontPanic(t *testing.T) {
+func TestRunDontPanic(t *testing.T) {
 	type testCase struct {
 		description    string
 		configProvider func() beyla.Config
@@ -71,7 +71,7 @@ func TestRun_DontPanic(t *testing.T) {
 	}
 }
 
-func Test_NetworkEnabled(t *testing.T) {
+func TestNetworkEnabled(t *testing.T) {
 	require.NoError(t, os.Setenv("BEYLA_NETWORK_METRICS", "true"))
 	cfg, err := beyla.LoadConfig(bytes.NewReader(nil))
 	assert.NoError(t, err)

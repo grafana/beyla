@@ -279,3 +279,44 @@ Beyla periodically resynchronizes the whole Kubernetes metadata at the frequency
 by this property.
 
 Higher values reduce the load on the Kubernetes API service.
+
+| YAML                      | Environment variable                 | Type     | Default |
+|---------------------------|--------------------------------------|----------|---------|
+| `service_name_template`   | `BEYLA_SERVICE_NAME_TEMPLATE`        | string   | (empty) |
+
+You can template service name using Go templates, this makes it possible to create conditional or extended services names.
+
+The following context is available to the template:
+
+```
+Meta: (*informer.ObjectMeta)
+  Name: (string)
+  Namespace: (string)
+  Labels:
+    label1: lv1
+    label2: lv2
+  Annotations:
+    Anno1: av1
+    Anno2: av2
+  Pod: (*PodInfo)
+  ...
+
+ContainerName: (string)
+```
+
+You can find the full object and structure in the `kubecache informer.pb.go` source file.
+
+Service name template examples:
+
+```
+{{- .Meta.Namespace }}/{{ index .Meta.Labels "app.kubernetes.io/name" }}/{{ index .Meta.Labels "app.kubernetes.io/component" -}}{{ if .ContainerName }}/{{ .ContainerName -}}{{ end -}}
+```
+
+or
+
+```
+{{- .Meta.Namespace }}/{{ index .Meta.Labels "app.kubernetes.io/name" }}/{{ index .Meta.Labels "app.kubernetes.io/component" -}}
+```
+
+In this example, only the first line is used and trimmed to prevent white space in the service name.
+

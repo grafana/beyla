@@ -164,7 +164,7 @@ the selection criteria.
 For example, specifying the following property:
 
 ```
-open_port: 80,443,8000-8999
+open_ports: 80,443,8000-8999
 ```
 
 Would make Beyla to select any executable that opens port 80, 443, or any of the ports between 8000 and 8999 included.

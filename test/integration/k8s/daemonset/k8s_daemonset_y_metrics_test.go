@@ -11,7 +11,7 @@ import (
 // to find process information in the prometheus database,
 // we need to make sure that this test is executed after the
 // tests in k8s_daemonsset_traces_test.go file
-func TestProcessMetrics(t *testing.T) {
+func TestSurveyMetrics(t *testing.T) {
 	cluster.TestEnv().Test(t, k8s.FeatureSurveyMetricsDecoration(map[string]string{
 		"k8s_deployment_name": "^otherinstance$",
 		"k8s_replicaset_name": "^otherinstance-.*",

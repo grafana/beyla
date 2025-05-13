@@ -1,6 +1,7 @@
 name: Backport PR creator
 on:
-  push:
+  pull_request_target:
+    types: [closed]
     branches: [ 'main' ]
 
 # Set restrictive permissions at workflow level
@@ -9,10 +10,8 @@ permissions:
 
 jobs:
   main:
-    # For security, github.event.pull_request.merged == true must be checked
-    # to make sure that the provided actions are only executed when a maintainer
-    # merges the PR
-    if: github.repository == 'grafana/beyla'
+    # Only run this job when a PR was merged (not just closed without merging)
+    if: github.repository == 'grafana/beyla' && github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     # Grant specific permissions needed only for this job
     permissions:

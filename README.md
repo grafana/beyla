@@ -75,7 +75,7 @@ See [Documentation](https://grafana.com/docs/beyla/) and the [tutorials](https:/
     - On host systems, running Beyla requires `sudo`.
     - For Kubernetes we have detailed configuration example on how to run with minimum
       required capabilities in the [examples/k8s/unprivileged.yaml](./examples/k8s/unprivileged.yaml) file.
-    - For docker compose, you need to setup Beyla as `privileged` container or grand the `SYS_ADMIN` capability.
+    - For docker compose, you need to setup Beyla as `privileged` container or grant the `SYS_ADMIN` capability.
 
 | Available Instrumentations                    | Supported  |
 |-----------------------------------------------|------------|

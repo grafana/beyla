@@ -385,7 +385,7 @@ func TestGenerateTraces(t *testing.T) {
 			ParentSpanID: parentSpanID,
 			TraceID:      traceID,
 			SpanID:       spanID,
-			Service:      svc.Attrs{UID: svc.UID{Pid: 1}},
+			Service:      svc.Attrs{UID: svc.UID{Name: "1"}},
 		}
 
 		traces := GenerateTraces(&span.Service, []attribute.KeyValue{}, "host-id", groupFromSpanAndAttributes(span, []attribute.KeyValue{}))
@@ -678,7 +678,7 @@ func TestTraceSampling(t *testing.T) {
 			Route:        "/test" + strconv.Itoa(i),
 			Status:       200,
 			TraceID:      RandomTraceID(),
-			Service:      svc.Attrs{UID: svc.UID{Pid: int32(i)}},
+			Service:      svc.Attrs{UID: svc.UID{Name: strconv.Itoa(i)}},
 		}
 		spans = append(spans, span)
 	}
@@ -748,7 +748,7 @@ func TestTraceSkipSpanMetrics(t *testing.T) {
 			Method:       "GET",
 			Route:        "/test" + strconv.Itoa(i),
 			Status:       200,
-			Service:      svc.Attrs{UID: svc.UID{Pid: int32(i)}},
+			Service:      svc.Attrs{UID: svc.UID{Name: strconv.Itoa(i)}},
 			TraceID:      RandomTraceID(),
 		}
 		spans = append(spans, span)
@@ -1242,18 +1242,18 @@ func TestTraces_HTTPStatus(t *testing.T) {
 
 	t.Run("HTTP server testing", func(t *testing.T) {
 		for _, p := range []testPair{
-			{100, request.StatusCodeOk},
-			{103, request.StatusCodeOk},
-			{199, request.StatusCodeOk},
-			{200, request.StatusCodeOk},
-			{204, request.StatusCodeOk},
-			{299, request.StatusCodeOk},
-			{300, request.StatusCodeOk},
-			{399, request.StatusCodeOk},
-			{400, request.StatusCodeOk},
-			{404, request.StatusCodeOk},
-			{405, request.StatusCodeOk},
-			{499, request.StatusCodeOk},
+			{100, request.StatusCodeUnset},
+			{103, request.StatusCodeUnset},
+			{199, request.StatusCodeUnset},
+			{200, request.StatusCodeUnset},
+			{204, request.StatusCodeUnset},
+			{299, request.StatusCodeUnset},
+			{300, request.StatusCodeUnset},
+			{399, request.StatusCodeUnset},
+			{400, request.StatusCodeUnset},
+			{404, request.StatusCodeUnset},
+			{405, request.StatusCodeUnset},
+			{499, request.StatusCodeUnset},
 			{500, request.StatusCodeError},
 			{5999, request.StatusCodeError},
 		} {
@@ -1266,14 +1266,14 @@ func TestTraces_HTTPStatus(t *testing.T) {
 
 	t.Run("HTTP client testing", func(t *testing.T) {
 		for _, p := range []testPair{
-			{100, request.StatusCodeOk},
-			{103, request.StatusCodeOk},
-			{199, request.StatusCodeOk},
-			{200, request.StatusCodeOk},
-			{204, request.StatusCodeOk},
-			{299, request.StatusCodeOk},
-			{300, request.StatusCodeOk},
-			{399, request.StatusCodeOk},
+			{100, request.StatusCodeUnset},
+			{103, request.StatusCodeUnset},
+			{199, request.StatusCodeUnset},
+			{200, request.StatusCodeUnset},
+			{204, request.StatusCodeUnset},
+			{299, request.StatusCodeUnset},
+			{300, request.StatusCodeUnset},
+			{399, request.StatusCodeUnset},
 			{400, request.StatusCodeError},
 			{404, request.StatusCodeError},
 			{405, request.StatusCodeError},
@@ -1297,7 +1297,7 @@ func TestTraces_GRPCStatus(t *testing.T) {
 
 	t.Run("gRPC server testing", func(t *testing.T) {
 		for _, p := range []testPair{
-			{semconv.RPCGRPCStatusCodeOk, request.StatusCodeOk},
+			{semconv.RPCGRPCStatusCodeOk, request.StatusCodeUnset},
 			{semconv.RPCGRPCStatusCodeCancelled, request.StatusCodeUnset},
 			{semconv.RPCGRPCStatusCodeUnknown, request.StatusCodeError},
 			{semconv.RPCGRPCStatusCodeInvalidArgument, request.StatusCodeUnset},
@@ -1324,7 +1324,7 @@ func TestTraces_GRPCStatus(t *testing.T) {
 
 	t.Run("gRPC client testing", func(t *testing.T) {
 		for _, p := range []testPair{
-			{semconv.RPCGRPCStatusCodeOk, request.StatusCodeOk},
+			{semconv.RPCGRPCStatusCodeOk, request.StatusCodeUnset},
 			{semconv.RPCGRPCStatusCodeCancelled, request.StatusCodeError},
 			{semconv.RPCGRPCStatusCodeUnknown, request.StatusCodeError},
 			{semconv.RPCGRPCStatusCodeInvalidArgument, request.StatusCodeError},
@@ -1489,7 +1489,7 @@ func TestTraceGrouping(t *testing.T) {
 			Route:        "/test" + strconv.Itoa(i),
 			Status:       200,
 			TraceID:      RandomTraceID(),
-			Service:      svc.Attrs{UID: svc.UID{Pid: 1}}, // Same service for all spans
+			Service:      svc.Attrs{UID: svc.UID{Instance: "1"}}, // Same service for all spans
 		}
 		spans = append(spans, span)
 	}

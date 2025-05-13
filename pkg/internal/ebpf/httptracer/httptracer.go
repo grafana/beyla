@@ -173,3 +173,7 @@ func (p *Tracer) stopTC() {
 	p.tcManager.Shutdown()
 	p.tcManager = nil
 }
+
+func (p *Tracer) Required() bool {
+	return false
+}

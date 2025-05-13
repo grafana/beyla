@@ -941,6 +941,24 @@ func testNestedHTTPSTracesKProbes(t *testing.T) {
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
 	)
 	assert.Empty(t, sd, sd.String())
+
+	// check client call (and ensure server port is correct/not swapped)
+	res = trace.FindByOperationName("GET /users", "client")
+	require.Len(t, res, 1)
+	parent = res[0]
+	require.NotEmpty(t, parent.TraceID)
+	require.Equal(t, traceID, parent.TraceID)
+	require.NotEmpty(t, parent.SpanID)
+	// check duration is at least 2us
+	assert.Less(t, (2 * time.Microsecond).Microseconds(), parent.Duration)
+	// check span attributes
+	sd = parent.Diff(
+		jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
+		jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(403)},
+		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(3043)},
+		jaeger.Tag{Key: "span.kind", Type: "string", Value: "client"},
+	)
+	assert.Empty(t, sd, sd.String())
 }
 
 func testHTTPTracesNestedSelfCalls(t *testing.T) {

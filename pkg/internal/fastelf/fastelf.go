@@ -205,6 +205,8 @@ func GetCStringUnsafe(strtab []byte, offset uint32) string {
 	return unsafeString(strtab[start:offset])
 }
 
+// ReadStruct returns a non-owning pointer into data cast to T - it performs
+// bounds checking and returns nil if offset is out of bounds
 func ReadStruct[T any](data []byte, offset int) *T {
 	if len(data) < offset+int(unsafe.Sizeof(*new(T))) {
 		return nil
@@ -322,7 +324,16 @@ func (ctx *ElfContext) HasSymbol(symbol string) bool {
 			continue
 		}
 
+		if int(sec.Link) >= len(ctx.Sections) {
+			continue
+		}
+
 		strtab := ctx.Sections[sec.Link]
+
+		if int(strtab.Offset) >= len(ctx.Data) {
+			continue
+		}
+
 		strs := ctx.Data[strtab.Offset:]
 
 		symCount := int(sec.Size / sec.Entsize)
@@ -345,28 +356,46 @@ func (ctx *ElfContext) HasSymbol(symbol string) bool {
 	return false
 }
 
-func (ctx *ElfContext) HasSection(section string) bool {
-	shstrtab := ctx.Sections[ctx.Hdr.Shstrndx]
-	shstrtabData := ctx.Data[shstrtab.Offset:]
-
-	for _, sec := range ctx.Sections {
-		if GetCStringUnsafe(shstrtabData, sec.Name) == section {
-			return true
-		}
-	}
-
-	return false
+func (ctx *ElfContext) HasSection(sectionName string) bool {
+	return ctx.section(sectionName) != nil
 }
 
-func (ctx *ElfContext) SectionAddress(section string) uint64 {
+func (ctx *ElfContext) SectionAddress(sectionName string) uint64 {
+	s := ctx.section(sectionName)
+
+	if s == nil {
+		return InvalidAddr
+	}
+
+	return s.Addr
+}
+
+func (ctx *ElfContext) shstrtabData() []byte {
+	if int(ctx.Hdr.Shstrndx) >= len(ctx.Sections) {
+		return nil
+	}
+
 	shstrtab := ctx.Sections[ctx.Hdr.Shstrndx]
-	shstrtabData := ctx.Data[shstrtab.Offset:]
+
+	if int(shstrtab.Offset) >= len(ctx.Data) {
+		return nil
+	}
+
+	return ctx.Data[shstrtab.Offset:]
+}
+
+func (ctx *ElfContext) section(sectionName string) *Elf64_Shdr {
+	shstrtabData := ctx.shstrtabData()
+
+	if shstrtabData == nil {
+		return nil
+	}
 
 	for _, sec := range ctx.Sections {
-		if GetCStringUnsafe(shstrtabData, sec.Name) == section {
-			return sec.Addr
+		if GetCStringUnsafe(shstrtabData, sec.Name) == sectionName {
+			return sec
 		}
 	}
 
-	return InvalidAddr
+	return nil
 }

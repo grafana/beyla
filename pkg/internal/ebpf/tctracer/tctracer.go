@@ -41,11 +41,6 @@ func New(cfg *beyla.Config) *Tracer {
 	}
 }
 
-func CanRun() bool {
-	hostNet, err := ebpfcommon.HasHostNetworkAccess()
-	return err == nil && hostNet && ebpfcommon.HasHostPidAccess()
-}
-
 func (p *Tracer) AllowPID(uint32, uint32, *svc.Attrs) {}
 
 func (p *Tracer) BlockPID(uint32, uint32) {}
@@ -167,4 +162,8 @@ func (p *Tracer) stopTC() {
 	p.ifaceManager.Stop()
 	p.ifaceManager.Wait()
 	p.ifaceManager = nil
+}
+
+func (p *Tracer) Required() bool {
+	return false
 }

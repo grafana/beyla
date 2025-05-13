@@ -69,7 +69,7 @@ func TestAppMetricsExpiration(t *testing.T) {
 
 	app := exec.FileInfo{
 		Service: svc.Attrs{
-			UID: svc.UID{Pid: 1, Name: "test-app", Namespace: "default", Instance: "test-app-1"},
+			UID: svc.UID{Name: "test-app", Namespace: "default", Instance: "test-app-1"},
 		},
 		Pid: 1,
 	}

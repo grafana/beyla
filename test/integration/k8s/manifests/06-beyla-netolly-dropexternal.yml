@@ -9,7 +9,7 @@ data:
         enable: true
         drop_external: true
         resource_labels:
-          deployment.environment: ["deployment.environment"]
+          deployment.environment: ["${DEPLOYMENT_ENVIRONMENT:-error-not-replaced}"]
       select:
         beyla.network.flow.bytes:
           include:
@@ -77,3 +77,5 @@ spec:
               value: "10ms"
             - name: BEYLA_KUBE_CLUSTER_NAME
               value: "beyla"
+            - name: DEPLOYMENT_ENVIRONMENT
+              value: "deployment.environment"

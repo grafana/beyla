@@ -1043,13 +1043,8 @@ func (r *metricsReporter) deleteTargetInfo(uid svc.UID, service *svc.Attrs) {
 	r.targetInfo.DeleteLabelValues(targetInfoLabelValues...)
 }
 
-func (r *metricsReporter) deleteSurveyInfo(pid int32, service *svc.Attrs) {
-	targetInfoLabelValues := r.labelValuesTargetInfo(r.origService(pid, service))
-	r.surveyInfo.DeleteLabelValues(targetInfoLabelValues...)
-}
-
-func (r *metricsReporter) deleteSurveyInfo(pid int32, service *svc.Attrs) {
-	targetInfoLabelValues := r.labelValuesTargetInfo(r.origService(pid, service))
+func (r *metricsReporter) deleteSurveyInfo(uid svc.UID, service *svc.Attrs) {
+	targetInfoLabelValues := r.labelValuesTargetInfo(r.origService(uid, service))
 	r.surveyInfo.DeleteLabelValues(targetInfoLabelValues...)
 }
 
@@ -1067,8 +1062,6 @@ func (r *metricsReporter) watchForProcessEvents() {
 
 		uid := pe.File.Service.UID
 
-		uid := pe.File.Service.UID
-
 		switch pe.Type {
 		case exec.ProcessEventCreated:
 			r.createTargetInfo(&pe.File.Service)
@@ -1076,14 +1069,14 @@ func (r *metricsReporter) watchForProcessEvents() {
 			r.serviceMap[uid] = pe.File.Service
 		case exec.ProcessEventTerminated:
 			if r.surveyInfo != nil {
-				r.deleteSurveyInfo(pe.File.Pid, &pe.File.Service)
+				r.deleteSurveyInfo(uid, &pe.File.Service)
 			}
 			r.deleteTargetInfo(uid, &pe.File.Service)
 			r.deleteTracesTargetInfo(uid, &pe.File.Service)
 			delete(r.serviceMap, uid)
 		case exec.ProcessEventSurveyCreated:
 			r.createSurveyInfo(&pe.File.Service)
-			r.serviceMap[pe.File.Pid] = pe.File.Service
+			r.serviceMap[uid] = pe.File.Service
 			fmt.Printf("survey info for command %s\n", pe.File.CmdExePath)
 		}
 	}

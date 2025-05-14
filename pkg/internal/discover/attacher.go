@@ -137,7 +137,11 @@ func (ta *TraceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 	}
 
 	ta.log.Info("instrumenting process",
-		"cmd", ie.FileInfo.CmdExePath, "pid", ie.FileInfo.Pid, "ino", ie.FileInfo.Ino, "type", ie.Type)
+		"cmd", ie.FileInfo.CmdExePath,
+		"pid", ie.FileInfo.Pid,
+		"ino", ie.FileInfo.Ino,
+		"type", ie.Type,
+	)
 	ta.Metrics.InstrumentProcess(ie.FileInfo.ExecutableName())
 
 	// builds a tracer for that executable
@@ -329,9 +333,11 @@ func (ta *TraceAttacher) monitorPIDs(tracer *ebpf.ProcessTracer, ie *ebpf.Instru
 
 func (ta *TraceAttacher) notifyProcessDeletion(ie *ebpf.Instrumentable) {
 	if tracer, ok := ta.existingTracers[ie.FileInfo.Ino]; ok {
-		ta.log.Debug("process ended for already instrumented executable",
+		ta.log.Info("process ended for already instrumented executable",
+			"cmd", ie.FileInfo.CmdExePath,
 			"pid", ie.FileInfo.Pid,
-			"exec", ie.FileInfo.CmdExePath)
+			"ino", ie.FileInfo.Ino,
+			"type", ie.Type)
 		// notifying the tracer to block any trace from that PID
 		// to avoid that a new process reusing this PID could send traces
 		// unless explicitly allowed

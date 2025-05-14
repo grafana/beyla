@@ -1,4 +1,4 @@
-name: Generate eBPF Symbols for Release
+name: Generate eBPF Binaries
 
 on:
   release:
@@ -6,12 +6,12 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Release tag to generate symbols for'
+        description: 'Release tag to generate eBPF binaries for'
         required: true
         type: string
 
 jobs:
-  generate-symbols:
+  generate-ebpf-binaries:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -22,7 +22,7 @@ jobs:
           ref: ${{ github.event.release.tag_name || github.event.inputs.tag_name }}
           fetch-depth: 0
 
-      - name: Generate eBPF symbols
+      - name: Generate eBPF binaries
         run: make docker-generate
 
       - name: Check for changes
@@ -40,13 +40,13 @@ jobs:
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config --local user.name "GitHub Actions"
 
-      - name: Commit and push generated symbols
+      - name: Commit and push generated binaries
         if: steps.git-check.outputs.changes == 'true'
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name || github.event.inputs.tag_name }}
         run: |
           git add -A
-          git commit -m "chore: generate eBPF symbols for release ${RELEASE_TAG}"
+          git commit -m "chore: generate eBPF binaries for release ${RELEASE_TAG}"
           
           # Try to push directly first
           if git push; then
@@ -55,7 +55,7 @@ jobs:
             # If direct push fails, create a branch and push that
             # Use sed to sanitize the tag name for branch naming
             safe_tag=$(echo "${RELEASE_TAG}" | sed 's/[^a-zA-Z0-9._-]/-/g')
-            branch_name="update-symbols-for-${safe_tag}"
+            branch_name="update-binaries-for-${safe_tag}"
             git checkout -b "${branch_name}"
             git push -u origin "${branch_name}"
             echo "Created branch ${branch_name} with changes"

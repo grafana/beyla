@@ -42,6 +42,25 @@ func CriteriaMatcherProvider(
 	return swarm.DirectInstance(m.run)
 }
 
+func SurveyCriteriaMatcherProvider(
+	cfg *beyla.Config,
+	input *msg.Queue[[]Event[processAttrs]],
+	output *msg.Queue[[]Event[ProcessMatch]],
+) swarm.InstanceFunc {
+	beylaNamespace, _ := namespaceFetcherFunc(int32(osPidFunc()))
+	m := &matcher{
+		log:              slog.With("component", "discover.SurveyCriteriaMatcher"),
+		criteria:         surveyCriteria(cfg),
+		excludeCriteria:  services.DefinitionCriteria{},
+		processHistory:   map[PID]*services.ProcessInfo{},
+		input:            input.Subscribe(),
+		output:           output,
+		beylaNamespace:   beylaNamespace,
+		hasHostPidAccess: hasHostPidAccess(),
+	}
+	return swarm.DirectInstance(m.run)
+}
+
 type matcher struct {
 	log             *slog.Logger
 	criteria        services.DefinitionCriteria
@@ -160,7 +179,7 @@ func (m *matcher) matchProcess(obj *processAttrs, p *services.ProcessInfo, a *se
 		return false
 	}
 	if a.OpenPorts.Len() > 0 && !m.matchByPort(p, a) {
-		log.Debug("open ports do not match", "openPorts", a.OpenPorts)
+		log.Debug("open ports do not match", "openPorts", a.OpenPorts, "process ports", p.OpenPorts)
 		return false
 	}
 	if a.ContainersOnly {
@@ -227,6 +246,22 @@ func (m *matcher) matchByAttributes(actual *processAttrs, required *services.Att
 	return true
 }
 
+func normalizeCriteria(finderCriteria services.DefinitionCriteria) services.DefinitionCriteria {
+	// normalize criteria that only define metadata (e.g. k8s)
+	// but do neither define executable name nor port: configure them to match
+	// any executable in the matched k8s entities
+	for i := range finderCriteria {
+		fc := finderCriteria[i]
+		if !fc.Path.IsSet() && fc.OpenPorts.Len() == 0 && (len(fc.Metadata) > 0 || len(fc.PodLabels) > 0 || len(fc.PodAnnotations) > 0) {
+			// match any executable path
+			if err := fc.Path.UnmarshalText([]byte(".")); err != nil {
+				panic("bug! " + err.Error())
+			}
+		}
+	}
+	return finderCriteria
+}
+
 func FindingCriteria(cfg *beyla.Config) services.DefinitionCriteria {
 	if cfg.Discovery.SystemWide {
 		// will return all the executables in the system
@@ -249,18 +284,15 @@ func FindingCriteria(cfg *beyla.Config) services.DefinitionCriteria {
 			OpenPorts: cfg.Port,
 		})
 	}
-	// normalize criteria that only define metadata (e.g. k8s)
-	// but do neither define executable name nor port: configure them to match
-	// any executable in the matched k8s entities
-	for i := range finderCriteria {
-		fc := &finderCriteria[i]
-		if !fc.Path.IsSet() && fc.OpenPorts.Len() == 0 && (len(fc.Metadata) > 0 || len(fc.PodLabels) > 0 || len(fc.PodAnnotations) > 0) {
-			// match any executable path
-			if err := fc.Path.UnmarshalText([]byte(".")); err != nil {
-				panic("bug! " + err.Error())
-			}
-		}
-	}
+
+	finderCriteria = normalizeCriteria(finderCriteria)
+
+	return finderCriteria
+}
+
+func surveyCriteria(cfg *beyla.Config) services.DefinitionCriteria {
+	finderCriteria := cfg.Discovery.Survey
+	finderCriteria = normalizeCriteria(finderCriteria)
 
 	return finderCriteria
 }

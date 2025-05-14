@@ -89,7 +89,7 @@ func (t *typer) FilterClassify(evs []Event[ProcessMatch]) []Event[ebpf.Instrumen
 				ProcPID: ev.Obj.Process.Pid,
 			}
 			if elfFile, err := exec.FindExecELF(ev.Obj.Process, svcID, t.k8sInformer.IsKubeEnabled()); err != nil {
-				t.log.Warn("error finding process ELF. Ignoring", "error", err)
+				t.log.Debug("error finding process ELF. Ignoring", "error", err)
 			} else {
 				t.currentPids[ev.Obj.Process.Pid] = elfFile
 				elfs = append(elfs, elfFile)

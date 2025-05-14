@@ -54,6 +54,7 @@ func TestAppMetricsExpiration(t *testing.T) {
 			Features:                    []string{otel.FeatureApplication},
 			Instrumentations:            []string{instrumentations.InstrumentationALL},
 		},
+		false,
 		attributes.Selection{
 			attributes.HTTPServerDuration.Section: attributes.InclusionLists{
 				Include: []string{"url_path"},
@@ -465,6 +466,7 @@ func makePromExporter(
 			Features:                    []string{otel.FeatureApplication},
 			Instrumentations:            instrumentations,
 		},
+		false,
 		attributes.Selection{
 			attributes.HTTPServerDuration.Section: attributes.InclusionLists{
 				Include: []string{"url_path"},

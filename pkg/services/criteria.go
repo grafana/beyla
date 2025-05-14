@@ -47,6 +47,9 @@ type DiscoveryConfig struct {
 	// added to the services definition criteria, with the lowest preference.
 	Services DefinitionCriteria `yaml:"services"`
 
+	// Survey selection. Same as services selection, however, it generates only the target info (survey_info) instead of instrumenting the services
+	Survey DefinitionCriteria `yaml:"survey"`
+
 	// ExcludeServices works analogously to Services, but the applications matching this section won't be instrumented
 	// even if they match the Services selection.
 	ExcludeServices DefinitionCriteria `yaml:"exclude_services"`
@@ -75,6 +78,14 @@ type DiscoveryConfig struct {
 
 	// Disables instrumentation of services which are already instrumented
 	ExcludeOTelInstrumentedServices bool `yaml:"exclude_otel_instrumented_services" env:"BEYLA_EXCLUDE_OTEL_INSTRUMENTED_SERVICES"`
+}
+
+func (d *DiscoveryConfig) SurveyEnabled() bool {
+	return len(d.Survey) > 0
+}
+
+func (d *DiscoveryConfig) AppDiscoveryEnabled() bool {
+	return len(d.Services) > 0
 }
 
 // DefinitionCriteria allows defining a group of services to be instrumented according to a set

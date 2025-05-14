@@ -255,7 +255,7 @@ func (c *Config) Validate() error {
 		return ConfigError(fmt.Sprintf("error in exclude_services YAML property: %s", err.Error()))
 	}
 	if !c.Enabled(FeatureNetO11y) && !c.Enabled(FeatureAppO11y) {
-		return ConfigError("missing to enable application discovery or network metrics. Check documentation")
+		return ConfigError("missing application discovery section or network metrics configuration. Check documentation.")
 	}
 	if (c.Port.Len() > 0 || c.Exec.IsSet() || len(c.Discovery.Services) > 0) && c.Discovery.SystemWide {
 		return ConfigError("you can't use BEYLA_SYSTEM_WIDE if any of BEYLA_EXECUTABLE_NAME, BEYLA_OPEN_PORT or services (YAML) are set")
@@ -349,7 +349,7 @@ func (c *Config) Enabled(feature Feature) bool {
 	case FeatureNetO11y:
 		return c.NetworkFlows.Enable || c.promNetO11yEnabled() || c.otelNetO11yEnabled()
 	case FeatureAppO11y:
-		return c.Port.Len() > 0 || c.Exec.IsSet() || len(c.Discovery.Services) > 0 || c.Discovery.SystemWide
+		return c.Port.Len() > 0 || c.Exec.IsSet() || c.Discovery.AppDiscoveryEnabled() || c.Discovery.SurveyEnabled() || c.Discovery.SystemWide
 	}
 	return false
 }

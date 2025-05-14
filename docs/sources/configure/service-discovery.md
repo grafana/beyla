@@ -32,6 +32,24 @@ namespace.
 For more details about this section, go to the [discovery services section](#discovery-services-section)
 of this document.
 
+| YAML       | Environment variable | Type            | Default |
+| ---------- | -------------------- | --------------- | ------- |
+| `survey`   | N/A                  | list of objects | (unset) |
+
+This section allows specifying different selection criteria for Beyla survey mode.
+In survey mode, Beyla performs only the service discovery and detects the programming
+language a service is written in, without instrumenting any of the discovered services.
+The discovered information from the Beyla survey mode is written in a metric called
+`survey_info`, which has the exact same attributes as the `target_info`
+metric, created by the Prometheus exporter based on the OpenTelemetry metric resource
+attributes. Survey mode can be used for building external automated instrumentation
+solutions. For example, the `survey_info` metric can be used to list the available
+instrumentation targets for someone to choose what to instrument.
+
+The `survey` section is configured exactly the same as the `services` section.
+For more details about this section, go to the [discovery services section](#discovery-services-section)
+of this document.
+
 | YAML               | Environment variable | Type            | Default |
 | ------------------ | -------------------- | --------------- | ------- |
 | `exclude_services` | N/A                  | list of objects | (unset) |

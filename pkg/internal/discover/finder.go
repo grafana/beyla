@@ -13,6 +13,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/httptracer"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/tctracer"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/tpinjector"
+	"github.com/grafana/beyla/v2/pkg/internal/exec"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
@@ -21,13 +22,18 @@ import (
 )
 
 type ProcessFinder struct {
-	cfg         *beyla.Config
-	ctxInfo     *global.ContextInfo
-	tracesInput *msg.Queue[[]request.Span]
+	cfg                *beyla.Config
+	ctxInfo            *global.ContextInfo
+	tracesInput        *msg.Queue[[]request.Span]
+	processEventsInput *msg.Queue[exec.ProcessEvent]
 }
 
-func NewProcessFinder(cfg *beyla.Config, ctxInfo *global.ContextInfo, tracesInput *msg.Queue[[]request.Span]) *ProcessFinder {
-	return &ProcessFinder{cfg: cfg, ctxInfo: ctxInfo, tracesInput: tracesInput}
+func NewProcessFinder(
+	cfg *beyla.Config,
+	ctxInfo *global.ContextInfo,
+	tracesInput *msg.Queue[[]request.Span],
+	processEventsInput *msg.Queue[exec.ProcessEvent]) *ProcessFinder {
+	return &ProcessFinder{cfg: cfg, ctxInfo: ctxInfo, tracesInput: tracesInput, processEventsInput: processEventsInput}
 }
 
 // Start the ProcessFinder pipeline in background. It returns a channel where each new discovered
@@ -46,8 +52,16 @@ func (pf *ProcessFinder) Start(ctx context.Context) (<-chan Event[*ebpf.Instrume
 	criteriaFilteredEvents := msg.NewQueue[[]Event[ProcessMatch]](msg.ChannelBufferLen(pf.cfg.ChannelBufferLen))
 	swi.Add(CriteriaMatcherProvider(pf.cfg, kubeEnrichedEvents, criteriaFilteredEvents))
 
+	surveyFilteredEvents := msg.NewQueue[[]Event[ProcessMatch]](msg.ChannelBufferLen(pf.cfg.ChannelBufferLen))
+	swi.Add(SurveyCriteriaMatcherProvider(pf.cfg, kubeEnrichedEvents, surveyFilteredEvents))
+
 	executableTypes := msg.NewQueue[[]Event[ebpf.Instrumentable]](msg.ChannelBufferLen(pf.cfg.ChannelBufferLen))
 	swi.Add(ExecTyperProvider(pf.cfg, pf.ctxInfo.Metrics, pf.ctxInfo.K8sInformer, criteriaFilteredEvents, executableTypes))
+
+	surveyExecutables := msg.NewQueue[[]Event[ebpf.Instrumentable]](msg.ChannelBufferLen(pf.cfg.ChannelBufferLen))
+	swi.Add(ExecTyperProvider(pf.cfg, pf.ctxInfo.Metrics, pf.ctxInfo.K8sInformer, surveyFilteredEvents, surveyExecutables))
+
+	swi.Add(SurveyEventGenerator(surveyExecutables, pf.processEventsInput))
 
 	// we could subscribe ContainerDBUpdater directly to the executableTypes queue and not providing any output channel
 	// but forcing the output by the executableTypesReplica channel only after the Container DB has been updated

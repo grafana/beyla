@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -111,7 +112,7 @@ func TestAPIs(t *testing.T) {
 		Messages: make(chan *informer.Event, 10),
 	}
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		svcClient.Start(ctx, t)
+		svcClient.Start(ctx, t, nil)
 	})
 
 	// wait for the service to have sent the initial snapshot of entities
@@ -161,12 +162,12 @@ func TestBlockedClients(t *testing.T) {
 	stall5 := &serviceClient{Address: addr, stallAfterMessages: 5}
 	stall10 := &serviceClient{Address: addr, stallAfterMessages: 10}
 	stall15 := &serviceClient{Address: addr, stallAfterMessages: 15}
-	go stall15.Start(ctx, t)
-	go never1.Start(ctx, t)
-	go stall5.Start(ctx, t)
-	go never2.Start(ctx, t)
-	go stall10.Start(ctx, t)
-	go never3.Start(ctx, t)
+	go stall15.Start(ctx, t, nil)
+	go never1.Start(ctx, t, nil)
+	go stall5.Start(ctx, t, nil)
+	go never2.Start(ctx, t, nil)
+	go stall10.Start(ctx, t, nil)
+	go never3.Start(ctx, t, nil)
 
 	// generating a large number of notifications until the gRPC buffer of the
 	// server-to-client connections is full, so the "Send" operation is blocked
@@ -242,9 +243,9 @@ func TestAsynchronousStartup(t *testing.T) {
 	cl1 := serviceClient{Address: addr}
 	cl2 := serviceClient{Address: addr}
 	cl3 := serviceClient{Address: addr}
-	go func() { test.Eventually(t, timeout, func(t require.TestingT) { cl1.Start(ctx, t) }) }()
-	go func() { test.Eventually(t, timeout, func(t require.TestingT) { cl2.Start(ctx, t) }) }()
-	go func() { test.Eventually(t, timeout, func(t require.TestingT) { cl3.Start(ctx, t) }) }()
+	go func() { test.Eventually(t, timeout, func(t require.TestingT) { cl1.Start(ctx, t, nil) }) }()
+	go func() { test.Eventually(t, timeout, func(t require.TestingT) { cl2.Start(ctx, t, nil) }) }()
+	go func() { test.Eventually(t, timeout, func(t require.TestingT) { cl3.Start(ctx, t, nil) }) }()
 
 	iConfig := kubecache.DefaultConfig
 	iConfig.Port = newFreePort
@@ -274,7 +275,7 @@ func TestIgnoreHeadlessServices(t *testing.T) {
 		Messages: make(chan *informer.Event, 10),
 	}
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		svcClient.Start(ctx, t)
+		svcClient.Start(ctx, t, nil)
 	})
 	// wait for the service to have sent the initial snapshot of entities
 	// (at the end, will send the "SYNC_FINISHED" event)
@@ -326,6 +327,39 @@ func TestIgnoreHeadlessServices(t *testing.T) {
 	}
 }
 
+/*
+func TestResultsSortedByTimestamp(t *testing.T) {
+	svcClient := serviceClient{
+		Address:  fmt.Sprintf("127.0.0.1:%d", freePort),
+		Messages: make(chan *informer.Event, 10),
+	}
+
+}
+
+func TestFilterByTimestamp(t *testing.T) {
+	svcClient := serviceClient{
+		Address:  fmt.Sprintf("127.0.0.1:%d", freePort),
+		Messages: make(chan *informer.Event, 10),
+	}
+
+	// filtering any event before this test
+	discardEventsBefore := timestamppb.New(time.Now())
+	test.Eventually(t, timeout, func(t require.TestingT) {
+		svcClient.Start(ctx, t, discardEventsBefore)
+	})
+
+
+
+
+
+
+	for i := 0; i < 10; i++ {
+		fmt.Printf("%+v\n", <-svcClient.Messages)
+	}
+	t.Fail()
+}
+*/
+
 func ReadChannel[T any](t require.TestingT, inCh <-chan T, timeout time.Duration) T {
 	var item T
 	select {
@@ -351,7 +385,7 @@ type serviceClient struct {
 	syncSignalOnMessage atomic.Int32
 }
 
-func (sc *serviceClient) Start(ctx context.Context, t require.TestingT) {
+func (sc *serviceClient) Start(ctx context.Context, t require.TestingT, fromTS *timestamppb.Timestamp) {
 	conn, err := grpc.NewClient(sc.Address,
 		grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
@@ -359,7 +393,7 @@ func (sc *serviceClient) Start(ctx context.Context, t require.TestingT) {
 	eventsClient := informer.NewEventStreamServiceClient(conn)
 
 	// Subscribe to the event stream.
-	stream, err := eventsClient.Subscribe(ctx, &informer.SubscribeMessage{})
+	stream, err := eventsClient.Subscribe(ctx, &informer.SubscribeMessage{FromTimestamp: fromTS})
 	require.NoError(t, err)
 
 	// Receive and print messages.

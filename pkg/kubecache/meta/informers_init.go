@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/protobuf/testing/protocmp"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -53,6 +54,8 @@ type informersConfig struct {
 	cacheSyncTimeout time.Duration
 
 	kubeClient kubernetes.Interface
+
+	localInstance bool
 }
 
 // global object used for comparing protobuf messages in the informers event handlers
@@ -81,6 +84,12 @@ func WithoutNodes() InformerOption {
 func WithoutServices() InformerOption {
 	return func(c *informersConfig) {
 		c.disableServices = true
+	}
+}
+
+func LocalInstance() InformerOption {
+	return func(c *informersConfig) {
+		c.localInstance = true
 	}
 }
 
@@ -535,7 +544,8 @@ func (inf *Informers) ipInfoEventHandler(ctx context.Context) *cache.ResourceEve
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			metrics.InformerUpdate()
-			newEM := newObj.(*indexableEntity).EncodedMeta
+			nie := newObj.(*indexableEntity)
+			newEM := nie.EncodedMeta
 			oldEM := oldObj.(*indexableEntity).EncodedMeta
 			// ignore headless services from being added
 			if headlessService(newEM) && headlessService(oldEM) {
@@ -546,9 +556,11 @@ func (inf *Informers) ipInfoEventHandler(ctx context.Context) *cache.ResourceEve
 			}
 			log.Debug("UpdateFunc", "kind", newEM.Kind, "name", newEM.Name,
 				"ips", newEM.Ips, "oldIps", oldEM.Ips)
+
+			nie.EncodedMeta.StatusTime = timestamppb.New(time.Now())
 			inf.Notify(&informer.Event{
 				Type:     informer.EventType_UPDATED,
-				Resource: newObj.(*indexableEntity).EncodedMeta,
+				Resource: nie.EncodedMeta,
 			})
 		},
 		DeleteFunc: func(obj interface{}) {

@@ -80,7 +80,7 @@ func (ic *InformersCache) Run(ctx context.Context, opts ...meta.InformerOption) 
 }
 
 // Subscribe method of the generated protobuf definition
-func (ic *InformersCache) Subscribe(_ *informer.SubscribeMessage, server informer.EventStreamService_SubscribeServer) error {
+func (ic *InformersCache) Subscribe(msg *informer.SubscribeMessage, server informer.EventStreamService_SubscribeServer) error {
 	// extract peer information to identify it
 	p, ok := peer.FromContext(server.Context())
 	if !ok {
@@ -94,6 +94,7 @@ func (ic *InformersCache) Subscribe(_ *informer.SubscribeMessage, server informe
 		server:      server,
 		sendTimeout: ic.SendTimeout,
 		metrics:     ic.metrics,
+		fromTime:    msg.GetFromTimestamp().AsTime(),
 	}
 	ic.log.Info("client subscribed", "id", o.ID())
 	ic.informers.Subscribe(o)
@@ -116,6 +117,8 @@ type connection struct {
 	sendTimeout time.Duration
 
 	metrics instrument.InternalMetrics
+	// fromTime filters events whose timestamp is lower than its value
+	fromTime time.Time
 }
 
 func (o *connection) ID() string {
@@ -123,7 +126,12 @@ func (o *connection) ID() string {
 }
 
 func (o *connection) On(event *informer.Event) error {
-	// Theoretically Go is ready to run hundreds of thousands of parallel goroutines
+	// the client asked for events happening after their last successfully received event
+	// so ignore older events to save memory and network
+	if event.Resource.GetStatusTime().AsTime().Before(o.fromTime) {
+		return nil
+	}
+	// Theoretically, Go is ready to run hundreds of thousands of parallel goroutines
 	done := make(chan error, 1)
 	o.metrics.MessageSubmit()
 	go func() {

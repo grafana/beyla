@@ -2,6 +2,8 @@ package meta
 
 import (
 	"log/slog"
+	"slices"
+	"time"
 
 	"k8s.io/client-go/tools/cache"
 
@@ -20,50 +22,47 @@ type Informers struct {
 	services cache.SharedIndexInformer
 
 	waitForSync chan struct{}
+
+	// localInstance is true if the current informer instance runs inside a Beyla instance
+	// if it runs as part of the k8s-cache service, it is false
+	localInstance bool
+}
+
+type timestamped interface {
+	FromTime() time.Time
 }
 
 func (inf *Informers) Subscribe(observer Observer) {
 	inf.BaseNotifier.Subscribe(observer)
 
+	var fromTime time.Time
+	if conn, ok := observer.(timestamped); ok {
+		fromTime = conn.FromTime()
+	}
+
 	// as a "welcome" message, we send the whole kube metadata to the new observer
-	for _, pod := range inf.pods.GetStore().List() {
+	pods := inf.pods.GetStore().List()
+	var nodes, services []any
+	if !inf.config.disableNodes {
+		nodes = inf.nodes.GetStore().List()
+	}
+	if !inf.config.disableServices {
+		services = inf.services.GetStore().List()
+	}
+	storedEntities := make([]any, 0, len(pods)+len(nodes)+len(services))
+	storedEntities = append(storedEntities, pods...)
+	storedEntities = append(storedEntities, nodes...)
+	storedEntities = append(storedEntities, services...)
+	for _, entity := range inf.sortAndCut(storedEntities, fromTime) {
 		if err := observer.On(&informer.Event{
 			Type:     informer.EventType_CREATED,
-			Resource: pod.(*indexableEntity).EncodedMeta,
+			Resource: entity.(*indexableEntity).EncodedMeta,
 		}); err != nil {
 			inf.log.Debug("error notifying observer. Unsubscribing", "observerID", observer.ID(), "error", err)
 			inf.BaseNotifier.Unsubscribe(observer)
 			return
 		}
 	}
-	if !inf.config.disableNodes {
-		for _, node := range inf.nodes.GetStore().List() {
-			if err := observer.On(&informer.Event{
-				Type:     informer.EventType_CREATED,
-				Resource: node.(*indexableEntity).EncodedMeta,
-			}); err != nil {
-				inf.log.Debug("error notifying observer. Unsubscribing", "observerID", observer.ID(), "error", err)
-				inf.BaseNotifier.Unsubscribe(observer)
-				return
-			}
-		}
-	}
-	if !inf.config.disableServices {
-		for _, service := range inf.services.GetStore().List() {
-			// ignore headless services from being added
-			if headlessService(service.(*indexableEntity).EncodedMeta) {
-				continue
-			}
-			if err := observer.On(&informer.Event{
-				Type:     informer.EventType_CREATED,
-				Resource: service.(*indexableEntity).EncodedMeta,
-			}); err != nil {
-				inf.log.Debug("error notifying observer. Unsubscribing", "observerID", observer.ID(), "error", err)
-				return
-			}
-		}
-	}
-
 	// until the informer waitForSync, we won't send the sync_finished event to remote beyla clients
 	// TODO: in some very slowed-down environments (e.g. tests with -race conditions), this last message might
 	// be sent and executed before the rest of previous updates have been processed and submitted.
@@ -85,4 +84,27 @@ func (inf *Informers) Subscribe(observer Observer) {
 			return
 		}
 	}()
+}
+
+// sorts the list of entities by status time and cuts the list from the given timestamp.
+// If the timestamp is zero, the list is not cut.
+// The returned list is sorted in ascending order by status time.
+func (inf *Informers) sortAndCut(list []any, cutFrom time.Time) []any {
+	if inf.localInstance {
+		// this feature is only useful for minimizing traffic with the k8s-cache service
+		return list
+	}
+	slices.SortFunc(list, func(i, j any) int {
+		it := i.(*indexableEntity).EncodedMeta.StatusTime.AsTime()
+		jt := j.(*indexableEntity).EncodedMeta.StatusTime.AsTime()
+		return it.Compare(jt)
+	})
+	if cutFrom.IsZero() {
+		return list
+	}
+	elementsFromTS, _ := slices.BinarySearchFunc(list, cutFrom, func(e any, ts time.Time) int {
+		ets := e.(*indexableEntity).EncodedMeta.StatusTime.AsTime()
+		return ets.Compare(ts)
+	})
+	return list[elementsFromTS:]
 }

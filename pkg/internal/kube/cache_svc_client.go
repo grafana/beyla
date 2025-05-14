@@ -8,6 +8,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/grafana/beyla/v2/pkg/kubecache/informer"
 	"github.com/grafana/beyla/v2/pkg/kubecache/meta"
@@ -19,9 +20,9 @@ func cslog() *slog.Logger {
 
 type cacheSvcClient struct {
 	meta.BaseNotifier
-	address string
-	log     *slog.Logger
-
+	address                string
+	log                    *slog.Logger
+	lastEventTS            time.Time
 	ctx                    context.Context
 	syncTimeout            time.Duration
 	waitForSubscription    chan struct{}
@@ -29,11 +30,25 @@ type cacheSvcClient struct {
 	waitForSyncClosed      bool
 }
 
+func (sc *cacheSvcClient) ID() string {
+	return "kube-metadata-cache-svc-client"
+}
+
+func (sc *cacheSvcClient) On(event *informer.Event) error {
+	// we can safely assume that server-side events are ordered
+	// by timestamp
+	sc.lastEventTS = event.Resource.StatusTime.AsTime()
+	return nil
+}
+
 func (sc *cacheSvcClient) Start(ctx context.Context) {
 	sc.log = cslog()
 	sc.waitForSubscription = make(chan struct{})
 	sc.waitForSynchronization = make(chan struct{})
 	sc.ctx = ctx
+	// subscribe itself to each message from the cache, to keep track of the
+	// message timestamps for a more efficient reconnection
+	sc.BaseNotifier.Subscribe(sc)
 	go func() {
 		select {
 		case <-ctx.Done():
@@ -74,7 +89,9 @@ func (sc *cacheSvcClient) connect(ctx context.Context) error {
 	client := informer.NewEventStreamServiceClient(conn)
 
 	// Subscribe to the event stream.
-	stream, err := client.Subscribe(ctx, &informer.SubscribeMessage{})
+	stream, err := client.Subscribe(ctx, &informer.SubscribeMessage{
+		FromTimestamp: timestamppb.New(sc.lastEventTS),
+	})
 	if err != nil {
 		return fmt.Errorf("could not subscribe: %w", err)
 	}

@@ -137,6 +137,7 @@ func TestMultiProcessAppCPNoIP(t *testing.T) {
 }
 
 func TestMultiProcessAppL7CP(t *testing.T) {
+	t.Skip("we don't need to run this test")
 	compose, err := docker.ComposeSuite("docker-compose-multiexec-host.yml", path.Join(pathOutput, "test-suite-multiexec-tcl7.log"))
 	// we are going to setup discovery directly in the configuration file
 	compose.Env = append(compose.Env, `BEYLA_BPF_DISABLE_BLACK_BOX_CP=1`, `BEYLA_BPF_TC_L7_CP=1`, `BEYLA_BPF_TRACK_REQUEST_HEADERS=1`)

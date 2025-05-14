@@ -735,7 +735,7 @@ func (mr *MetricsReporter) setupGraphMeters(m *Metrics, meter instrument.Meter) 
 
 func (mr *MetricsReporter) newSystemMetricsInstance() Metrics {
 	mlog := mlog()
-	mlog.Info("creating new system Metrics reporter")
+	mlog.Debug("creating new system Metrics reporter")
 
 	opts := []metric.Option{
 		metric.WithResource(resource.Empty()),

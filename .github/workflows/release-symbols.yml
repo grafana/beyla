@@ -42,17 +42,20 @@ jobs:
 
       - name: Commit and push generated symbols
         if: steps.git-check.outputs.changes == 'true'
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name || github.event.inputs.tag_name }}
         run: |
-          tag_name="${{ github.event.release.tag_name || github.event.inputs.tag_name }}"
           git add -A
-          git commit -m "chore: generate eBPF symbols for release ${tag_name}"
+          git commit -m "chore: generate eBPF symbols for release ${RELEASE_TAG}"
           
           # Try to push directly first
           if git push; then
             echo "Successfully pushed changes"
           else
             # If direct push fails, create a branch and push that
-            branch_name="update-symbols-for-${tag_name}"
+            # Use sed to sanitize the tag name for branch naming
+            safe_tag=$(echo "${RELEASE_TAG}" | sed 's/[^a-zA-Z0-9._-]/-/g')
+            branch_name="update-symbols-for-${safe_tag}"
             git checkout -b "${branch_name}"
             git push -u origin "${branch_name}"
             echo "Created branch ${branch_name} with changes"

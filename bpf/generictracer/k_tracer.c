@@ -95,16 +95,18 @@ int BPF_KPROBE(beyla_kprobe_tcp_rcv_established, struct sock *sk, struct sk_buff
         sort_connection_info(&pid_info.p_conn.conn);
         pid_info.p_conn.pid = pid_from_pid_tgid(id);
 
-        // This is a current limitation for port ordering detection for SSL.
-        // tcp_rcv_established flip flops the ports and we can't tell if it's client or server call.
-        // If the source port for a client call is lower, we'll get this wrong.
-        // TODO: Need to fix this.
-        pid_info.orig_dport = pid_info.p_conn.conn.s_port,
-        bpf_map_update_elem(
-            &pid_tid_to_conn,
-            &id,
-            &pid_info,
-            BPF_ANY); // to support SSL on missing handshake, respect the original info if there
+        ssl_pid_connection_info_t *prev_info = bpf_map_lookup_elem(&pid_tid_to_conn, &id);
+        // We only update here when we don't know the direction if we haven't previously
+        // set the information in sys_accept or sys_connect
+        if (!prev_info || (prev_info->p_conn.conn.d_port != pid_info.p_conn.conn.d_port) ||
+            (prev_info->p_conn.conn.s_port != pid_info.p_conn.conn.s_port)) {
+            // This is a current limitation for port ordering detection for SSL.
+            // tcp_rcv_established flip flops the ports and we can't tell if it's client or server call.
+            // If the source port for a client call is lower, we'll get this wrong.
+            // Set orig_dport to 0 to avoid swapping connection infos for clients
+            pid_info.orig_dport = 0;
+            bpf_map_update_elem(&pid_tid_to_conn, &id, &pid_info, BPF_ANY);
+        }
     }
 
     return 0;
@@ -149,8 +151,8 @@ int BPF_KRETPROBE(beyla_kretprobe_sys_accept4, uint fd) {
         info.p_conn.pid = pid_from_pid_tgid(id);
         info.orig_dport = orig_dport;
 
-        bpf_map_update_elem(
-            &pid_tid_to_conn, &id, &info, BPF_ANY); // to support SSL on missing handshake
+        // to support SSL on missing handshake
+        bpf_map_update_elem(&pid_tid_to_conn, &id, &info, BPF_ANY);
     }
 
 cleanup:
@@ -389,39 +391,39 @@ int BPF_KPROBE(beyla_kprobe_tcp_rate_check_app_limited, struct sock *sk) {
         s_args.p_conn.pid = pid_from_pid_tgid(id);
         s_args.orig_dport = orig_dport;
 
-        msg_buffer_t *m_buf = bpf_map_lookup_elem(&msg_buffers, &e_key);
-        if (m_buf) {
-            u8 *buf = m_buf->buf;
-            // The buffer setup for us by a sock_msg program is always the
-            // full buffer, but when we extend a packet to be able to inject
-            // a Traceparent field, it will actually be split in 3 chunks:
-            // [before the injected header],[70 bytes for 'Traceparent...'],[the rest].
-            // We don't want the handle_buf_with_connection logic to run more than
-            // once on the same data, so if we find a buf we send all of it to the
-            // handle_buf_with_connection logic and then mark it as seen by making
-            // m_buf->pos be the size of the buffer.
-            if (!m_buf->pos) {
-                u16 size = sizeof(m_buf->buf);
-                m_buf->pos = size;
-                s_args.size = size;
-                bpf_dbg_printk("msg_buffer: size %d, buf[%s]", size, buf);
-                u64 sock_p = (u64)sk;
-                bpf_map_update_elem(&active_send_args, &id, &s_args, BPF_ANY);
-                bpf_map_update_elem(&active_send_sock_args, &sock_p, &s_args, BPF_ANY);
-                // must set that any backup buffer on this connection is invalid
-                // to avoid replay
-                make_inactive_sk_buffer(&s_args.p_conn.conn);
-
-                // Logically last for !ssl.
-                handle_buf_with_connection(
-                    ctx, &s_args.p_conn, buf, size, NO_SSL, TCP_SEND, orig_dport);
-            }
-        }
-
         connect_ssl_to_connection(id, &s_args.p_conn, TCP_SEND, orig_dport);
 
         void *ssl = is_ssl_connection(&s_args.p_conn);
-        if (ssl) {
+        if (!ssl) {
+            msg_buffer_t *m_buf = bpf_map_lookup_elem(&msg_buffers, &e_key);
+            if (m_buf) {
+                u8 *buf = m_buf->buf;
+                // The buffer setup for us by a sock_msg program is always the
+                // full buffer, but when we extend a packet to be able to inject
+                // a Traceparent field, it will actually be split in 3 chunks:
+                // [before the injected header],[70 bytes for 'Traceparent...'],[the rest].
+                // We don't want the handle_buf_with_connection logic to run more than
+                // once on the same data, so if we find a buf we send all of it to the
+                // handle_buf_with_connection logic and then mark it as seen by making
+                // m_buf->pos be the size of the buffer.
+                if (!m_buf->pos) {
+                    u16 size = sizeof(m_buf->buf);
+                    m_buf->pos = size;
+                    s_args.size = size;
+                    bpf_dbg_printk("msg_buffer: size %d, buf[%s]", size, buf);
+                    u64 sock_p = (u64)sk;
+                    bpf_map_update_elem(&active_send_args, &id, &s_args, BPF_ANY);
+                    bpf_map_update_elem(&active_send_sock_args, &sock_p, &s_args, BPF_ANY);
+                    // must set that any backup buffer on this connection is invalid
+                    // to avoid replay
+                    make_inactive_sk_buffer(&s_args.p_conn.conn);
+
+                    // Logically last for !ssl.
+                    handle_buf_with_connection(
+                        ctx, &s_args.p_conn, buf, size, NO_SSL, TCP_SEND, orig_dport);
+                }
+            }
+        } else {
             make_inactive_sk_buffer(&s_args.p_conn.conn);
             tcp_send_ssl_check(id, ssl, &s_args.p_conn, orig_dport);
         }

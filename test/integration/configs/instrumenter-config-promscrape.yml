@@ -1,3 +1,6 @@
+discovery:
+  survey:
+    - open_ports: 8083
 routes:
   patterns:
     - /basic/:rnd

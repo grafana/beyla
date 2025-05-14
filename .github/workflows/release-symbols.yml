@@ -1,0 +1,59 @@
+name: Generate eBPF Symbols for Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release tag to generate symbols for'
+        required: true
+        type: string
+
+jobs:
+  generate-symbols:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || github.event.inputs.tag_name }}
+          fetch-depth: 0
+
+      - name: Generate eBPF symbols
+        run: make docker-generate
+
+      - name: Check for changes
+        id: git-check
+        run: |
+          if [[ $(git status --porcelain | wc -l) -gt 0 ]]; then
+            echo "changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "changes=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Configure Git
+        if: steps.git-check.outputs.changes == 'true'
+        run: |
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "GitHub Actions"
+
+      - name: Commit and push generated symbols
+        if: steps.git-check.outputs.changes == 'true'
+        run: |
+          tag_name="${{ github.event.release.tag_name || github.event.inputs.tag_name }}"
+          git add -A
+          git commit -m "chore: generate eBPF symbols for release ${tag_name}"
+          
+          # Try to push directly first
+          if git push; then
+            echo "Successfully pushed changes"
+          else
+            # If direct push fails, create a branch and push that
+            branch_name="update-symbols-for-${tag_name}"
+            git checkout -b "${branch_name}"
+            git push -u origin "${branch_name}"
+            echo "Created branch ${branch_name} with changes"
+          fi

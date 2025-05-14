@@ -141,6 +141,7 @@ func (ta *TraceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 		"pid", ie.FileInfo.Pid,
 		"ino", ie.FileInfo.Ino,
 		"type", ie.Type,
+		"service", ie.FileInfo.Service.UID.Name,
 	)
 	ta.Metrics.InstrumentProcess(ie.FileInfo.ExecutableName())
 
@@ -337,7 +338,9 @@ func (ta *TraceAttacher) notifyProcessDeletion(ie *ebpf.Instrumentable) {
 			"cmd", ie.FileInfo.CmdExePath,
 			"pid", ie.FileInfo.Pid,
 			"ino", ie.FileInfo.Ino,
-			"type", ie.Type)
+			"type", ie.Type,
+			"service", ie.FileInfo.Service.UID.Name,
+		)
 		// notifying the tracer to block any trace from that PID
 		// to avoid that a new process reusing this PID could send traces
 		// unless explicitly allowed

@@ -1,4 +1,4 @@
-name: Generate eBPF Binaries
+name: Generate Binaries
 
 on:
   release:
@@ -6,12 +6,12 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Release tag to generate eBPF binaries for'
+        description: 'Release tag to generate eBPF and Java agent binaries for'
         required: true
         type: string
 
 jobs:
-  generate-ebpf-binaries:
+  generate-binaries:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -31,16 +31,23 @@ jobs:
 
       - name: Generate eBPF binaries
         run: make docker-generate
+        
+      - name: Generate Java agent
+        run: |
+          cd pkg/internal/otelsdk
+          go generate
+          cd -
 
       - name: Force add generated binaries
         run: |
           # Force add the binary files that might be gitignored
           find . -name "*_bpfel.o" -type f -exec git add -f {} \;
           find . -name "*_bpfel.go" -type f -exec git add -f {} \;
+          find . -name "grafana-opentelemetry-java.jar" -type f -exec git add -f {} \;
           
           # If no changes, create a dummy file to verify workflow execution
           if [[ -z $(git status --porcelain) ]]; then
-            echo "No changes detected in eBPF binaries"
+            echo "No changes detected in binary files"
           fi
 
       - name: Commit and push generated binaries
@@ -49,7 +56,7 @@ jobs:
         run: |
           # Only commit if there are changes to commit
           if ! git diff --staged --quiet; then
-            git commit -m "chore: generate eBPF binaries for release ${RELEASE_TAG}"
+            git commit -m "chore: generate binaries (eBPF and Java agent) for release ${RELEASE_TAG}"
             
             # Try to determine the source branch for this tag and trim whitespace properly
             target_branch=$(git branch -r --contains "tags/${RELEASE_TAG}" | grep -v HEAD | head -n 1 | sed 's/origin\///' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')

@@ -62,7 +62,7 @@ Beyla uses lowercase fields for YAML configuration and uppercase names for envir
 | `interval`<br>`BEYLA_METRICS_INTERVAL`                                                    | The duration between exports.                                                                                                                                                                                                                                                                                                                                  | Duration        | `60s`                       |
 | `features`<br>`BEYLA_OTEL_METRICS_FEATURES`                                               | The list of metric groups Beyla exports data for, refer to [metrics export features](#metrics-export-features). Accepted values `application`, `application_span`, `application_service_graph`, `application_process`, `network` and `network_inter_zone`.                                                                                                     | list of strings | `["application"]`           |
 | `allow_service_graph_self_references`<br>`BEYLA_OTEL_ALLOW_SERVICE_GRAPH_SELF_REFERENCES` | Controls if Beyla includes self-referencing services in service graph generation, for example a service that calls itself. Self referencing reduces service graph usefulness and increases data cardinality.                                                                                                                                                   | boolean         | `false`                     |
-| `instrumentations`<br>`BEYLA_OTEL_METRICS_INSTRUMENTATIONS`                               | The list of metrics instrumentation Beyla collects data for, refer to [metrics instrumentation](#metrics-instrumentation)  section.                                                                                                                                                                                                                            | list of strings | `["*"]`                     |
+| `instrumentations`<br>`BEYLA_OTEL_METRICS_INSTRUMENTATIONS`                               | The list of metrics instrumentation Beyla collects data for, refer to [metrics instrumentation](#metrics-instrumentation) section.                                                                                                                                                                                                                             | list of strings | `["*"]`                     |
 | `buckets`                                                                                 | Sets how you can override bucket boundaries of diverse histograms, refer to [override histogram buckets](../metrics-histograms/).                                                                                                                                                                                                                              | (n/a)           | Object                      |
 | `histogram_aggregation`<br>`OTEL_EXPORTER_OTLP_METRICS_DEFAULT_HISTOGRAM_AGGREGATION`     | Sets the default aggregation Beyla uses for histogram instruments. Accepted values [`explicit_bucket_histogram`](https://opentelemetry.io/docs/specs/otel/metrics/sdk/#explicit-bucket-histogram-aggregation) or [`base2_exponential_bucket_histogram`](https://opentelemetry.io/docs/specs/otel/metrics/sdk/#base2-exponential-bucket-histogram-aggregation). | `string`        | `explicit_bucket_histogram` |
 
@@ -80,10 +80,10 @@ The Beyla metrics exporter can export the following metrics data groups for proc
 - `application`: Application-level metrics
 - `application_span` Application-level trace span metrics
 - `application_service_graph`: Application-level service graph metrics.
-    It's recommended to use a DNS for service discovery and to ensure the DNS names match the OpenTelemetry service names Beyla uses.
-    In Kubernetes environments, the OpenTelemetry service name set by the service name discovery is the best choice for service graph metrics.
+  It's recommended to use a DNS for service discovery and to ensure the DNS names match the OpenTelemetry service names Beyla uses.
+  In Kubernetes environments, the OpenTelemetry service name set by the service name discovery is the best choice for service graph metrics.
 - `application_process`: Metrics about the processes that runs the instrumented application
-- `network`:  Network-level metrics, refer to the [network metrics](/docs/beyla/latest/network/) configuration documentation to learn more
+- `network`: Network-level metrics, refer to the [network metrics](/docs/beyla/latest/network/) configuration documentation to learn more
 - `network_inter_zone`: Network inter-zone metrics, refer to the [network metrics](/docs/beyla/latest/network/) configuration documentation to learn more
 
 ### Metrics instrumentation
@@ -168,8 +168,8 @@ The Prometheus metrics exporter can export the following metrics data groups:
 - `application`: Application-level metrics
 - `application_span`: Application-level trace span metrics
 - `application_service_graph`: Application-level service graph metrics.
-    It's recommended to use a DNS for service discovery and to ensure the DNS names match the OpenTelemetry service names Beyla uses.
-    In Kubernetes environments, the OpenTelemetry service name set by the service name discovery is the best choice for service graph metrics.
+  It's recommended to use a DNS for service discovery and to ensure the DNS names match the OpenTelemetry service names Beyla uses.
+  In Kubernetes environments, the OpenTelemetry service name set by the service name discovery is the best choice for service graph metrics.
 - `application_process`: Metrics about the processes that runs the instrumented application
 - `network`: Network-level metrics, refer to the [network metrics](/docs/beyla/latest/network/) configuration documentation to learn more
 - `network_inter_zone`: Network inter-zone metrics, refer to the [network metrics](/docs/beyla/latest/network/) configuration documentation to learn more

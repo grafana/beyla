@@ -16,10 +16,11 @@ The [Beyla exported metrics](../../metrics/) document lists the attributes you c
 
 For each metric, you control which attributes to see with the `select` subsection. This is a map where each key is the name of a metric either in its OpenTelemetry or Prometheus port, and each metric has two sub-properties: `include` and `exclude`.
 
-* `include` is a list of attributes to report. Each attribute can be a name or a wildcard, for example, `k8s.dst.*` to include all attributes starting with `k8s.dst`. If you don't provide an `include` list, Beyla reports the default attribute set, refer to [Beyla exported metrics](../../metrics/) for more information about default attributes for a given metric
-* `exclude` is a list of attribute names or wildcards to remove from the `include` list, or the default attribute set
+- `include` is a list of attributes to report. Each attribute can be a name or a wildcard, for example, `k8s.dst.*` to include all attributes starting with `k8s.dst`. If you don't provide an `include` list, Beyla reports the default attribute set, refer to [Beyla exported metrics](../../metrics/) for more information about default attributes for a given metric
+- `exclude` is a list of attribute names or wildcards to remove from the `include` list, or the default attribute set
 
 Example:
+
 ```yaml
 attributes:
   select:
@@ -91,9 +92,9 @@ Context propagation values:
 
 To use this option in containerized environments (Kubernetes and Docker), you must:
 
-* Deploy Beyla as a `DaemonSet` with host network access `hostNetwork: true`
-* Volume mount the `/sys/fs/cgroup` path from the host as local `/sys/fs/cgroup` path
-* Grant the `CAP_NET_ADMIN` capability to the Beyla container
+- Deploy Beyla as a `DaemonSet` with host network access `hostNetwork: true`
+- Volume mount the `/sys/fs/cgroup` path from the host as local `/sys/fs/cgroup` path
+- Grant the `CAP_NET_ADMIN` capability to the Beyla container
 
 gRPC and HTTP2 are not supported.
 
@@ -156,17 +157,17 @@ If set, Beyla uses the provided string as the host part of the Instance ID inste
 
 If you run Beyla in a Kubernetes environment, you can configure it to decorate traces and metrics with the standard OpenTelemetry labels:
 
-* `k8s.namespace.name`
-* `k8s.deployment.name`
-* `k8s.statefulset.name`
-* `k8s.replicaset.name`
-* `k8s.daemonset.name`
-* `k8s.node.name`
-* `k8s.pod.name`
-* `k8s.container.name`
-* `k8s.pod.uid`
-* `k8s.pod.start_time`
-* `k8s.cluster.name`
+- `k8s.namespace.name`
+- `k8s.deployment.name`
+- `k8s.statefulset.name`
+- `k8s.replicaset.name`
+- `k8s.daemonset.name`
+- `k8s.node.name`
+- `k8s.pod.name`
+- `k8s.container.name`
+- `k8s.pod.uid`
+- `k8s.pod.start_time`
+- `k8s.cluster.name`
 
 In YAML, this section is named `kubernetes` and is under the `attributes` top-level section. For example:
 
@@ -247,4 +248,3 @@ or
 ```
 
 In this example, only the first line is used and trimmed to prevent white space in the service name.
-

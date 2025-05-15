@@ -14,14 +14,13 @@ The `executable_name`, `open_port`, `service_name`, and `service_namespace` are 
 
 In some scenarios, Beyla instruments many services. For example, as a [Kubernetes DaemonSet](../../setup/kubernetes/) that instruments all the services in a node. The `discovery` YAML section lets you specify more granular selection criteria for the services Beyla can instrument.
 
-
-| Lowercase YAML option<br>Uppercase environment variable option                     | Description                                                                                                                                                                                                                                                         | Type            | Default                                        |
-| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- | ---------------------------------------------- |
-| `services` / N/A                                                                   | Specify different selection criteria for different services, and override their reported name or namespace. Refer to [discovery services](#discovery-services).                                                                                                     | list of objects | (unset)                                        |
-| `exclude_services` / N/A                                                           | Specify selection criteria for excluding services from being instrumented. Useful for avoiding instrumentation of services typically found in observability environments. Refer to [exclude services](#exclude-services).                                           | list of objects | (unset)                                        |
-| `default_exclude_services` / N/A                                                   | Disables instrumentation of Beyla itself, Grafana Alloy, and the OpenTelemetry Collector. Set to empty to allow Beyla to instrument itself and these other components. Refer to [default exclude services](#default-exclude-services).                              | list of objects | Path: `(?:^|\/)(beyla$|alloy$|otelcol[^\/]*$)` |
-| `skip_go_specific_tracers`<br>`BEYLA_SKIP_GO_SPECIFIC_TRACERS`                     | Disables the detection of Go specifics when the **ebpf** tracer inspects executables to be instrumented. The tracer falls back to using generic instrumentation, which is generally less efficient. Refer to [skip go specific tracers](#skip-go-specific-tracers). | boolean         | false                                          |
-| `exclude_otel_instrumented_services`<br>`BEYLA_EXCLUDE_OTEL_INSTRUMENTED_SERVICES` | Disables Beyla instrumentation of services already instrumented with OpenTelemetry. Refer to [exclude otel instrumented services](#exclude-otel-instrumented-services).                                                                                             | boolean         | true                                           |
+| Lowercase YAML option<br>Uppercase environment variable option                     | Description                                                                                                                                                                                                                                                         | Type            | Default     |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- | ----------- | ---------- | ------ | ----------------- |
+| `services` / N/A                                                                   | Specify different selection criteria for different services, and override their reported name or namespace. Refer to [discovery services](#discovery-services).                                                                                                     | list of objects | (unset)     |
+| `exclude_services` / N/A                                                           | Specify selection criteria for excluding services from being instrumented. Useful for avoiding instrumentation of services typically found in observability environments. Refer to [exclude services](#exclude-services).                                           | list of objects | (unset)     |
+| `default_exclude_services` / N/A                                                   | Disables instrumentation of Beyla itself, Grafana Alloy, and the OpenTelemetry Collector. Set to empty to allow Beyla to instrument itself and these other components. Refer to [default exclude services](#default-exclude-services).                              | list of objects | Path: `(?:^ | \/)(beyla$ | alloy$ | otelcol[^\/]\*$)` |
+| `skip_go_specific_tracers`<br>`BEYLA_SKIP_GO_SPECIFIC_TRACERS`                     | Disables the detection of Go specifics when the **ebpf** tracer inspects executables to be instrumented. The tracer falls back to using generic instrumentation, which is generally less efficient. Refer to [skip go specific tracers](#skip-go-specific-tracers). | boolean         | false       |
+| `exclude_otel_instrumented_services`<br>`BEYLA_EXCLUDE_OTEL_INSTRUMENTED_SERVICES` | Disables Beyla instrumentation of services already instrumented with OpenTelemetry. Refer to [exclude otel instrumented services](#exclude-otel-instrumented-services).                                                                                             | boolean         | true        |
 
 ## Discovery services
 
@@ -205,25 +204,26 @@ Beyla uses the following criteria in this order to automatically set the service
 
 1. Resource attributes set via `OTEL_RESOURCE_ATTRIBUTES` and `OTEL_SERVICE_NAME` environment variables of the instrumented process or container.
 2. In Kubernetes, resource attributes set via the following Pod annotations:
-    - `resource.opentelemetry.io/service.name`
-    - `resource.opentelemetry.io/service.namespace`
+   - `resource.opentelemetry.io/service.name`
+   - `resource.opentelemetry.io/service.namespace`
 3. In Kubernetes, resource attributes set via the following Pod labels:
-    - `app.kubernetes.io/name` sets the service name
-    - `app.kubernetes.io/part-of` sets the service namespace
+   - `app.kubernetes.io/name` sets the service name
+   - `app.kubernetes.io/part-of` sets the service namespace
 4. In Kubernetes, resource attributes calculated from the Pod owner's metadata, in the following order (according to their availability):
-    - `k8s.deployment.name`
-    - `k8s.replicaset.name`
-    - `k8s.statefulset.name`
-    - `k8s.daemonset.name`
-    - `k8s.cronjob.name`
-    - `k8s.job.name`
-    - `k8s.pod.name`
-    - `k8s.container.name`
+   - `k8s.deployment.name`
+   - `k8s.replicaset.name`
+   - `k8s.statefulset.name`
+   - `k8s.daemonset.name`
+   - `k8s.cronjob.name`
+   - `k8s.job.name`
+   - `k8s.pod.name`
+   - `k8s.container.name`
 5. The executable name of the instrumented process.
 
 You can override the Kubernetes labels from the previous bullet 3 via configuration.
 
 In YAML:
+
 ```yaml
 kubernetes:
   resource_labels:

@@ -16,7 +16,7 @@ Beyla exports data in Alloy or Direct mode.
 
 ![Beyla architecture alloy vs direct](https://grafana.com/media/docs/grafana-cloud/beyla/alloy-vs-direct.png)
 
-*Beyla running in Alloy mode on the left and Direct mode on the right.*
+_Beyla running in Alloy mode on the left and Direct mode on the right._
 
 ## Direct mode
 

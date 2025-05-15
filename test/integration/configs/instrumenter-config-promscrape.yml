@@ -1,6 +1,6 @@
 discovery:
   survey:
-    - open_ports: 8083
+    - k8s_namespace: .
 routes:
   patterns:
     - /basic/:rnd

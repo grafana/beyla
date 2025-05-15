@@ -280,7 +280,7 @@ func FeatureSurveyMetricsDecoration(overrideProperties map[string]string) featur
 	for k, v := range overrideProperties {
 		properties[k] = v
 	}
-	return features.New("Decoration of process metrics").
+	return features.New("Decoration of survey metrics").
 		Assess("all the survey metrics from currently surveyed services are properly decorated",
 			testMetricsDecoration(surveyMetrics, `{k8s_pod_name=~"`+properties["k8s_pod_name"]+`"}`, properties),
 		).Feature()

@@ -51,9 +51,16 @@ jobs:
           if ! git diff --staged --quiet; then
             git commit -m "chore: generate eBPF binaries for release ${RELEASE_TAG}"
             
-            # Try to determine the source branch for this tag
-            target_branch=$(git branch -r --contains "tags/${RELEASE_TAG}" | grep -v HEAD | head -n 1 | sed 's/origin\///' || echo "main")
-            echo "Attempting to push changes to branch: ${target_branch}"
+            # Try to determine the source branch for this tag and trim whitespace properly
+            target_branch=$(git branch -r --contains "tags/${RELEASE_TAG}" | grep -v HEAD | head -n 1 | sed 's/origin\///' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+            # Fail the workflow if no valid branch is found
+            if [[ -z "$target_branch" ]]; then
+              echo "Error: No valid branch found for tag ${RELEASE_TAG}" >&2
+              exit 1
+            fi
+
+            echo "Attempting to push changes to branch: '${target_branch}'"
             
             if git push origin HEAD:${target_branch}; then
               echo "Successfully pushed changes to ${target_branch}"

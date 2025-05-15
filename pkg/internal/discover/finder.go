@@ -10,7 +10,6 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/generictracer"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/gotracer"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/gpuevent"
-	"github.com/grafana/beyla/v2/pkg/internal/ebpf/httptracer"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/tctracer"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/tpinjector"
 	"github.com/grafana/beyla/v2/pkg/internal/exec"
@@ -92,10 +91,6 @@ func (pf *ProcessFinder) Start(ctx context.Context) (<-chan Event[*ebpf.Instrume
 
 // the common tracer group should get loaded for any tracer group, only once
 func newCommonTracersGroup(cfg *beyla.Config) []ebpf.Tracer {
-	if cfg.EBPF.UseTCForL7CP {
-		return []ebpf.Tracer{httptracer.New(cfg)}
-	}
-
 	switch cfg.EBPF.ContextPropagation {
 	case config.ContextPropagationAll:
 		return []ebpf.Tracer{tctracer.New(cfg), tpinjector.New(cfg)}

@@ -39,7 +39,7 @@ const (
 )
 
 const (
-	defaultMetricsTTL = 70 * time.Minute
+	defaultMetricsTTL = 5 * time.Minute
 )
 
 var DefaultConfig = Config{

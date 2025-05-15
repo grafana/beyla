@@ -130,7 +130,9 @@ jobs:
                 # Try pushing again after integrating remote changes
                 if git push origin "${temp_branch}:${target_branch}"; then
                   echo "Successfully pushed changes to ${target_branch} after syncing with remote"
-                  git branch -D "${temp_branch}"
+                  # Need to switch to another branch before deleting current one
+                  git checkout -q -B _cleanup_temp_branch
+                  git branch -D "${temp_branch}" || echo "Warning: Could not delete temporary branch, but changes were pushed successfully"
                 else
                   echo "Push still failed after syncing - creating separate branch"
                   safe_tag=$(echo "${RELEASE_TAG}" | sed 's/[^a-zA-Z0-9._-]/-/g')
@@ -141,7 +143,9 @@ jobs:
                 fi
               else
                 echo "No changes to commit after syncing with remote branch"
-                git branch -D "${temp_branch}"
+                # Need to switch to another branch before deleting current one
+                git checkout -q -B _cleanup_temp_branch
+                git branch -D "${temp_branch}" || echo "Warning: Could not delete temporary branch, but no changes were needed"
               fi
             fi
           else

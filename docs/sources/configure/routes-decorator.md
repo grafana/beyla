@@ -10,22 +10,23 @@ keywords:
 
 # Configure Beyla routes decorator
 
-You can configure the component under the `routes` section of your YAML configuration or via environment variables.
+You can configure the component under the `routes` section of your YAML configuration or with environment variables.
 
-This section can be only configured via the YAML file. If no `routes` section is provided in
-the YAML file, a default routes' pipeline stage will be created and filtered with the `heuristic`
-routes decorator.
+You must configure this section in the YAML file. If you don't provide a `routes` section, Beyla creates a default routes pipeline stage and uses the `heuristic` routes decorator.
 
-| YAML       | Environment variable | Type            | Default |
-| ---------- | ------- | --------------- | ------- |
-| `patterns` | --      | list of strings | (unset) |
+| Lowercase YAML option | Description                                                                                                                   | Type            | Default   |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------- | --------------- | --------- |
+| `patterns`            | List of URL path patterns to match and set the `http.route` property. Refer to [patterns](#patterns).                         | list of strings | (unset)   |
+| `ignored_patterns`    | List of URL path patterns to ignore. Discards trace/metric events if matched. Refer to [ignored patterns](#ignored-patterns). | list of strings | (unset)   |
+| `ignore_mode`         | Refines which type of events are ignored when using `ignored_patterns`. Refer to [ignore mode](#ignore-mode).                 | string          | all       |
+| `unmatched`           | Specifies what to do when a trace HTTP path doesn't match any `patterns` entries. Refer to [unmatched](#unmatched).           | string          | heuristic |
+| `wildcard_char`       | Character to use for path components replaced by the heuristic mode. Refer to [wildcard char](#wildcard-char).                | string          | '*'       |
 
-Will match the provided URL path patterns and set the `http.route` trace/metric
-property accordingly. You should use the `routes` property
-whenever possible to reduce the cardinality of generated metrics.
+## Patterns
 
-Each route pattern is a URL path with specific tags which allow for grouping path
-segments. The matcher tags can be in the `:name` or `{name}` format.
+Beyla matches the provided URL path patterns and sets the `http.route` trace/metric property. Use the `routes` property whenever possible to reduce the cardinality of generated metrics.
+
+Each route pattern is a URL path with tags that group path segments. You can use the `:name` or `{name}` format for the matcher tags.
 
 For example, if you define the following patterns:
 
@@ -36,23 +37,21 @@ routes:
     - /user/{id}/basket/{product}
 ```
 
-Traces with the following HTTP paths will include the same `http.route='/user/{id}'` property:
+Traces with these HTTP paths include the same `http.route='/user/{id}'` property:
 
 ```
 /user/123
 /user/456
 ```
 
-Traces with the following HTTP paths will include the same `http.route='/user/{id}'/basket/{product}`
-property:
+Traces with these HTTP paths include the same `http.route='/user/{id}'/basket/{product}` property:
 
 ```
 /user/123/basket/1
 /user/456/basket/3
 ```
 
-Additionally, the route matcher also supports the wildcard character `*`, which can be used to
-match path prefixes. For example, if you define the following pattern:
+The route matcher also supports the wildcard character `*`, which matches path prefixes. For example, if you define this pattern:
 
 ```yaml
 routes:
@@ -60,8 +59,7 @@ routes:
     - /user/*
 ```
 
-Any traces with HTTP paths starting with `/user` (including `/user` itself) will be matched to the
-route `/user/*`. As per the example above, all of the following paths will be matched as `/user/*`:
+Any traces with HTTP paths starting with `/user` (including `/user` itself) match the route `/user/*`. All of the following paths match as `/user/*`:
 
 ```
 /user
@@ -70,14 +68,9 @@ route `/user/*`. As per the example above, all of the following paths will be ma
 /user/456/basket/3
 ```
 
-| YAML               | Environment variable | Type            | Default |
-| ------------------ | ------- | --------------- | ------- |
-| `ignored_patterns` | --      | list of strings | (unset) |
+## Ignored patterns
 
-Will match the provided URL path against the defined patterns, and discard the trace and/or metric events if
-they match any of the `ignored_patterns`. The format for the `ignored_patterns` field is identical
-to the `patterns` field described above. You can define the ignored patterns with or without
-any of the wildcard options. For example, if you define the following ignored patterns:
+Beyla matches the provided URL path against the defined patterns and discards the trace and/or metric events if they match any of the `ignored_patterns`. The format for the `ignored_patterns` field is identical to the `patterns` field. You can define the ignored patterns with or without any of the wildcard options. For example, if you define these ignored patterns:
 
 ```yaml
 routes:
@@ -86,59 +79,46 @@ routes:
     - /v1/*
 ```
 
-Any event paths which have a prefix of `/v1` or are equal to `/health` will be ignored.
+Any event paths with a prefix of `/v1` or equal to `/health` are ignored.
 
-This option is very useful if you want to prevent certain paths used development or service health monitoring, to be
-recorded as traces or metrics.
+This option is useful if you want to prevent certain paths used for development or service health monitoring from being recorded as traces or metrics.
 
-| YAML          | Environment variable | Type   | Default |
-| ------------- | ------- | ------ | ------- |
-| `ignore_mode` | --      | string | `all`   |
+## Ignore mode
 
-This property can be used together with the `ignored_patterns` property to refine which type of events are ignored.
+Use this property with the `ignored_patterns` property to refine which type of events are ignored.
 
 Possible values for the `ignore_mode` property are:
 
-- `all` will discard both **metrics** and **traces** which match the `ignored_patterns`.
-- `traces` will discard only the **traces** which match the `ignored_patterns`. No metric events will be ignored.
-- `metrics` will discard only the **metrics** which match the `ignored_patterns`. No trace events will be ignored.
+- `all` discards both **metrics** and **traces** that match the `ignored_patterns`
+- `traces` discards only the **traces** that match the `ignored_patterns`, no metric events are ignored
+- `metrics` discards only the **metrics** that match the `ignored_patterns`, no trace events are ignored
 
-Selectively ignoring only certain type of events might be useful in certain scenarios. For example, you may want to
-know the performance metrics of your health check API, but you wouldn't want the overhead of those trace records in
-your target traces database. In this example scenario, you would set the `ignore_mode` property to `traces`, such
-that only traces matching the `ignored_patterns` will be discarded, while metrics will still be recorded.
+If you want to ignore certain types of events, for example, you may want to know the performance metrics of your health check API, but you don't want the overhead of those trace records in your traces database. In this case, set the `ignore_mode` property to `traces`, so only traces matching the `ignored_patterns` are discarded, while metrics are still recorded.
 
-| YAML        | Environment variable | Type   | Default    |
-| ----------- | ------- | ------ | ---------- |
-| `unmatched` | --      | string | `heuristic` |
+## Unmatched
 
-Specifies what to do when a trace HTTP path does not match any of the `patterns` entries.
+This property specifies what to do when a trace HTTP path doesn't match any of the `patterns` entries.
 
 Possible values for the `unmatched` property are:
 
-- `unset` will leave the `http.route` property as unset.
-- `path` will copy the `http.route` field property to the path value.
-  - 🚨 Caution: this option could lead to cardinality explosion at the ingester side.
-- `wildcard` will set the `http.route` field property to a generic asterisk based `/**` value.
-- `heuristic` will automatically derive the `http.route` field property from the path value, based on the following rules:
-  - Any path components which have numbers or characters outside of the ASCII alphabet (or `-` and `_`), are replaced by `wildcard_char`.
-  - Any alphabetical components which don't look like words, are replaced by `wildcard_char`.
+- `unset` leaves the `http.route` property unset
+- `path` copies the `http.route` field property to the path value
+  - 🚨 Caution: this option could lead to cardinality explosion at the ingestion side
+- `wildcard` sets the `http.route` field property to a generic asterisk-based `/**` value
+- `heuristic` automatically derives the `http.route` field property from the path value, based on these rules:
+  - Any path components with numbers or characters outside of the ASCII alphabet (or `-` and `_`) are replaced by `wildcard_char`
+  - Any alphabetical components that don't look like words are replaced by `wildcard_char`
 
-| YAML        | Environment variable | Type   | Default    |
-| ----------- | ------- | ------ | ---------- |
-| `wildcard_char` | --      | string | `'*'` |
+## Wildcard char
 
-Can be used together with `unmatched: heuristic` to choose what character the path components identified by the heuristic mode are replaced by. By default, an asterisk (`'*'`) is used. The value should be quoted and must be a single character.
+Use this property with `unmatched: heuristic` to choose what character the path components identified by the heuristic mode are replaced by. By default, Beyla uses an asterisk `'*'`. The value should be quoted and must be a single character.
 
-### Special considerations when using the `heuristic` route decorator mode
+## Heuristic route decorator mode
 
-The `heuristic` decorator is a best effort route decorator, which may still lead to cardinality explosion in certain scenarios.
-For example, the GitHub URL paths are a good example where the `heuristic` route decorator will not work, since the URL paths
-are constructed like a directory tree. In this scenario all paths will remain unique and lead to cardinality explosion.
+The `heuristic` decorator is a best effort route decorator, which may still lead to cardinality explosion in some scenarios.
+For example, the GitHub URL paths are a good example where the `heuristic` route decorator won't work, since the URL paths are constructed like a directory tree. In this scenario, all paths remain unique and lead to cardinality explosion.
 
-On the other hand, if your URL path patterns follow certain structure, and the unique IDs are made up of numbers or random characters,
-then the `heuristic` decorator may be a low effort configuration option which is suitable for your use-case. For example, the following
-mock Google Docs URLs will be correctly reduced to a low cardinality version:
+If your URL path patterns follow a certain structure, and the unique IDs are made up of numbers or random characters, then the `heuristic` decorator may be a low effort configuration option that works for your use case. For example, the following mock Google Docs URLs are correctly reduced to a low cardinality version:
 
 Both URL paths below:
 
@@ -152,4 +132,3 @@ are converted to a low cardinality route (using the default `wildcard_char`):
 ```
 document/d/*/edit
 ```
-

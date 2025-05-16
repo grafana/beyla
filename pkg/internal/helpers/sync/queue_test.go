@@ -22,13 +22,7 @@ func TestQueuePopBlockingIfEmpty(t *testing.T) {
 	}()
 
 	// THEN it blocks until an element is available
-	time.Sleep(10 * time.Millisecond)
-	select {
-	case n := <-available:
-		t.Errorf("expected to block, got %d", n)
-	default:
-		// ok!!
-	}
+	testutil.ChannelEmpty(t, available, 10*time.Millisecond)
 
 	// WHEN pushing elements
 	q.Enqueue(1)
@@ -74,8 +68,16 @@ func TestSynchronization(t *testing.T) {
 	}()
 	testutil.ReadChannel(t, done, timeout)
 
-	for i := 0 ; i < 1000 ; i++ {
+	for i := 0; i < 1000; i++ {
 		_, ok := receivedValues.Load(i)
 		assert.Truef(t, ok, "expected to receive value %d", i)
 	}
+
+	// make sure that the queue is empty
+	available := make(chan int)
+	go func() {
+		available <- q.Dequeue()
+	}()
+	testutil.ChannelEmpty(t, available, 10*time.Millisecond)
+
 }

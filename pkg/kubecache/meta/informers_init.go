@@ -266,9 +266,11 @@ func loadKubeconfig(kubeConfigPath string) (*rest.Config, error) {
 // millions of pods
 func minimalIndex(om *metav1.ObjectMeta) metav1.ObjectMeta {
 	return metav1.ObjectMeta{
-		Name:      om.Name,
-		Namespace: om.Namespace,
-		UID:       om.UID,
+		Name:              om.Name,
+		Namespace:         om.Namespace,
+		UID:               om.UID,
+		CreationTimestamp: om.CreationTimestamp,
+		DeletionTimestamp: om.DeletionTimestamp,
 	}
 }
 
@@ -498,6 +500,7 @@ func (inf *Informers) initServiceIPInformer(ctx context.Context, informerFactory
 		if svc.Spec.ClusterIP != v1.ClusterIPNone {
 			ips = svc.Spec.ClusterIPs
 		}
+
 		return &indexableEntity{
 			ObjectMeta: minimalIndex(&svc.ObjectMeta),
 			EncodedMeta: &informer.ObjectMeta{
@@ -534,9 +537,11 @@ func (inf *Informers) ipInfoEventHandler(ctx context.Context) *cache.ResourceEve
 			em := obj.(*indexableEntity).EncodedMeta
 			log.Debug("AddFunc", "kind", em.Kind, "name", em.Name, "ips", em.Ips)
 			// ignore headless services from being added
-			if headlessService(obj.(*indexableEntity).EncodedMeta) {
+			if headlessService(em) {
 				return
 			}
+			fmt.Println("**** creation ts: ", obj.(*indexableEntity).CreationTimestamp.String())
+			em.StatusTime = timestamppb.New(obj.(*indexableEntity).CreationTimestamp.Time)
 			inf.Notify(&informer.Event{
 				Type:     informer.EventType_CREATED,
 				Resource: em,
@@ -581,6 +586,12 @@ func (inf *Informers) ipInfoEventHandler(ctx context.Context) *cache.ResourceEve
 			log.Debug("DeleteFunc", "kind", em.Kind, "name", em.Name, "ips", em.Ips)
 
 			metrics.InformerDelete()
+
+			if dt := obj.(*indexableEntity).DeletionTimestamp; dt != nil {
+				em.StatusTime = timestamppb.New(dt.Time)
+			} else {
+				em.StatusTime = timestamppb.New(time.Now())
+			}
 			inf.Notify(&informer.Event{
 				Type:     informer.EventType_DELETED,
 				Resource: obj.(*indexableEntity).EncodedMeta,

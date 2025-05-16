@@ -1,6 +1,7 @@
 package meta
 
 import (
+	"fmt"
 	"log/slog"
 	"slices"
 	"time"
@@ -54,6 +55,7 @@ func (inf *Informers) Subscribe(observer Observer) {
 	storedEntities = append(storedEntities, nodes...)
 	storedEntities = append(storedEntities, services...)
 	for _, entity := range inf.sortAndCut(storedEntities, fromTime) {
+		fmt.Println("submitting created for", entity.(*indexableEntity).Name)
 		if err := observer.On(&informer.Event{
 			Type:     informer.EventType_CREATED,
 			Resource: entity.(*indexableEntity).EncodedMeta,
@@ -76,6 +78,7 @@ func (inf *Informers) Subscribe(observer Observer) {
 
 		// notify the end of synchronization, so the client knows that already has a snapshot
 		// of all the existing resources
+		fmt.Println("submitting sync_finished")
 		if err := observer.On(&informer.Event{
 			Type: informer.EventType_SYNC_FINISHED,
 		}); err != nil {
@@ -83,6 +86,7 @@ func (inf *Informers) Subscribe(observer Observer) {
 			inf.BaseNotifier.Unsubscribe(observer)
 			return
 		}
+		fmt.Println("submitted sync_finished")
 	}()
 }
 
@@ -102,6 +106,11 @@ func (inf *Informers) sortAndCut(list []any, cutFrom time.Time) []any {
 	if cutFrom.IsZero() {
 		return list
 	}
+	// despite internally using time.Timem the Kubernetes API stores the timestamps in seconds
+	// we remove any nanosecond trace in the current time to allow returning elements belonging
+	// to the same second of the cutFrom timestamp
+	cutFrom = cutFrom.Truncate(time.Second)
+
 	elementsFromTS, _ := slices.BinarySearchFunc(list, cutFrom, func(e any, ts time.Time) int {
 		ets := e.(*indexableEntity).EncodedMeta.StatusTime.AsTime()
 		return ets.Compare(ts)

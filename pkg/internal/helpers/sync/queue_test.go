@@ -1,11 +1,13 @@
 package sync
 
 import (
-	"github.com/grafana/beyla/v2/pkg/internal/testutil"
-	"github.com/stretchr/testify/assert"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+
+	"github.com/grafana/beyla/v2/pkg/internal/testutil"
 )
 
 const timeout = 5 * time.Second

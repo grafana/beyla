@@ -1,7 +1,7 @@
 package sync
 
 import (
-"sync"
+	"sync"
 )
 
 type Queue[T any] struct {
@@ -60,4 +60,3 @@ func (q *Queue[T]) remove() T {
 	}
 	return v.value
 }
-

@@ -215,6 +215,7 @@ type MetricsReporter struct {
 	reporters         ReporterPool[*svc.Attrs, *Metrics]
 	systemReporter    Metrics
 	serviceMap        map[svc.UID]*svc.Attrs
+	pidTracker        PidServiceTracker
 	is                instrumentations.InstrumentationSelection
 
 	// user-selected fields for each of the reported metrics
@@ -408,6 +409,7 @@ func newMetricsReporter(
 
 	mr.systemReporter = mr.newSystemMetricsInstance()
 	mr.serviceMap = map[svc.UID]*svc.Attrs{}
+	mr.pidTracker = NewPidServiceTracker()
 	if mr.surveyInfoEnabled {
 		// Survey info is special, created via service less reporter
 		meter := mr.systemReporter.provider.Meter(reporterName)
@@ -1163,12 +1165,22 @@ func (mr *MetricsReporter) deleteTracesTargetInfo(reporter *Metrics) {
 	reporter.tracesTargetInfo.Remove(mr.ctx, attrOpt)
 }
 
+func (mr *MetricsReporter) setupPIDToServiceRelationship(pid int32, uid svc.UID) {
+	mr.pidTracker.AddPID(pid, uid)
+}
+
+func (mr *MetricsReporter) disassociatePIDFromService(pid int32) (bool, svc.UID) {
+	return mr.pidTracker.RemovePID(pid)
+}
+
 func (mr *MetricsReporter) watchForProcessEvents() {
 	for pe := range mr.processEvents {
 		mlog().Debug("Received new process event", "event type", pe.Type, "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
 
 		reporter, err := mr.reporters.For(&pe.File.Service)
-		if err != nil {
+		// If we are receiving a delete event, the service may come without kubernetes information, which
+		// is why we record the original service info. Delete look up the data from the pid tracker.
+		if err != nil && (pe.Type == exec.ProcessEventCreated || pe.Type == exec.ProcessEventSurveyCreated) {
 			mlog().Error("unexpected error creating OTEL resource. Ignoring metric",
 				"error", err, "service", pe.File.Service.UID)
 			continue
@@ -1178,14 +1190,30 @@ func (mr *MetricsReporter) watchForProcessEvents() {
 		case exec.ProcessEventCreated:
 			mr.createTargetInfo(reporter)
 			mr.createTracesTargetInfo(reporter)
+			mr.setupPIDToServiceRelationship(pe.File.Pid, pe.File.Service.UID)
 		case exec.ProcessEventTerminated:
-			if mr.surveyInfoEnabled {
-				mr.deleteSurveyInfo(&pe.File.Service)
+			if deleted, origUID := mr.disassociatePIDFromService(pe.File.Pid); deleted {
+				if err != nil {
+					// We only need the UID to look up in the pool, no need to cache
+					// the whole of the attrs in the pidTracker
+					svc := svc.Attrs{UID: origUID}
+					reporter, err = mr.reporters.For(&svc)
+					if err != nil {
+						mlog().Error("unexpected error creating OTEL resource. Ignoring metric",
+							"error", err, "service", pe.File.Service.UID)
+						continue
+					}
+				}
+				mlog().Debug("deleting infos for", "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
+				if mr.surveyInfoEnabled {
+					mr.deleteSurveyInfo(&pe.File.Service)
+				}
+				mr.deleteTracesTargetInfo(reporter)
+				mr.deleteTargetInfo(reporter)
 			}
-			mr.deleteTracesTargetInfo(reporter)
-			mr.deleteTargetInfo(reporter)
 		case exec.ProcessEventSurveyCreated:
 			mr.createSurveyInfo(&pe.File.Service)
+			mr.setupPIDToServiceRelationship(pe.File.Pid, pe.File.Service.UID)
 		}
 	}
 }

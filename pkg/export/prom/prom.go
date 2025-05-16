@@ -7,7 +7,6 @@ import (
 	"runtime"
 	"slices"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -174,12 +173,6 @@ func (p *PrometheusConfig) Enabled() bool {
 	return p.EndpointEnabled() && (p.OTelMetricsEnabled() || p.SpanMetricsEnabled() || p.ServiceGraphMetricsEnabled() || p.NetworkMetricsEnabled())
 }
 
-type pidServiceTracker struct {
-	pidToService map[int32]svc.UID
-	servicePIDs  map[svc.UID]map[int32]struct{}
-	lock         sync.Mutex
-}
-
 type metricsReporter struct {
 	cfg                 *PrometheusConfig
 	extraMetadataLabels []attr.Name
@@ -249,7 +242,7 @@ type metricsReporter struct {
 	hostID      string
 
 	serviceMap  map[svc.UID]svc.Attrs
-	pidsTracker pidServiceTracker
+	pidsTracker otel.PidServiceTracker
 }
 
 func PrometheusEndpoint(
@@ -361,7 +354,7 @@ func newReporter(
 		input:                      input.Subscribe(),
 		processEvents:              processEventCh.Subscribe(),
 		serviceMap:                 map[svc.UID]svc.Attrs{},
-		pidsTracker:                pidServiceTracker{pidToService: map[int32]svc.UID{}, servicePIDs: map[svc.UID]map[int32]struct{}{}, lock: sync.Mutex{}},
+		pidsTracker:                otel.NewPidServiceTracker(),
 		ctxInfo:                    ctxInfo,
 		cfg:                        cfg,
 		kubeEnabled:                kubeEnabled,
@@ -1061,47 +1054,12 @@ func (r *metricsReporter) deleteTracesTargetInfo(uid svc.UID, service *svc.Attrs
 	r.tracesTargetInfo.DeleteLabelValues(targetInfoLabelValues...)
 }
 
-func (p *pidServiceTracker) addPID(pid int32, uid svc.UID) {
-	p.lock.Lock()
-	defer p.lock.Unlock()
-
-	p.pidToService[pid] = uid
-
-	pids, ok := p.servicePIDs[uid]
-	if !ok {
-		pids = map[int32]struct{}{}
-	}
-	pids[pid] = struct{}{}
-	p.servicePIDs[uid] = pids
-}
-
-func (p *pidServiceTracker) removePID(pid int32) (bool, svc.UID) {
-	p.lock.Lock()
-	defer p.lock.Unlock()
-
-	uid, ok := p.pidToService[pid]
-	if ok {
-		delete(p.pidToService, pid)
-
-		if pids, exists := p.servicePIDs[uid]; exists {
-			delete(pids, pid)
-			if len(pids) == 0 {
-				delete(p.servicePIDs, uid)
-				return true, uid
-			}
-			return false, svc.UID{}
-		}
-	}
-
-	return false, svc.UID{}
-}
-
 func (r *metricsReporter) setupPIDToServiceRelationship(pid int32, uid svc.UID) {
-	r.pidsTracker.addPID(pid, uid)
+	r.pidsTracker.AddPID(pid, uid)
 }
 
 func (r *metricsReporter) disassociatePIDFromService(pid int32) (bool, svc.UID) {
-	return r.pidsTracker.removePID(pid)
+	return r.pidsTracker.RemovePID(pid)
 }
 
 func (r *metricsReporter) watchForProcessEvents() {
@@ -1118,6 +1076,8 @@ func (r *metricsReporter) watchForProcessEvents() {
 			r.setupPIDToServiceRelationship(pe.File.Pid, uid)
 		case exec.ProcessEventTerminated:
 			if deleted, origUID := r.disassociatePIDFromService(pe.File.Pid); deleted {
+				mlog().Debug("deleting infos for", "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
+
 				if r.surveyInfo != nil {
 					r.deleteSurveyInfo(origUID, &pe.File.Service)
 				}

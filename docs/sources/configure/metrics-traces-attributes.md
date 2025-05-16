@@ -63,7 +63,7 @@ When a metric name matches multiple definitions using wildcards, exact matches t
 
 The following configuration options are accessible under the `attributes.select` property:
 
-| Lowercase YAML option<br>Uppercase environment variable option         | Description                                                                                                                                                                      | Type    | Default  |
+| YAML<br>environment variable                                           | Description                                                                                                                                                                      | Type    | Default  |
 | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | -------- |
 | `enable_context_propagation`<br>`BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION` | Deprecated. Use `context_propagation` instead. For more information, refer to the [enable context propagation section](#enable-context-propagation).                             | boolean | false    |
 | `context_propagation`<br>`BEYLA_BPF_CONTEXT_PROPAGATION`               | Controls trace context propagation method. Accepted: `all`, `headers`, `ip`, `disabled`. For more information, refer to the [context propagation section](#context-propagation). | string  | disabled |
@@ -128,10 +128,10 @@ attributes:
     dns: false
 ```
 
-| Lowercase YAML option<br>Uppercase environment variable option | Description                                                                                                                                                                               | Type    | Default |
-| -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------- |
-| `dns`<br>`BEYLA_HOSTNAME_DNS_RESOLUTION`                       | If `true`, Beyla tries to resolve the local hostname against the network DNS. If `false`, uses local name. For more information, refer to the [dns section](#dns).                        | boolean | true    |
-| `override_hostname`<br>`BEYLA_HOSTNAME`                        | If set, Beyla uses the provided string as the host part of the Instance ID. Overrides DNS resolution. For more information, refer to the [override hostname section](#override-hostname). | string  | (unset) |
+| YAML<br>environment variable             | Description                                                                                                                                                                               | Type    | Default |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------- |
+| `dns`<br>`BEYLA_HOSTNAME_DNS_RESOLUTION` | If `true`, Beyla tries to resolve the local hostname against the network DNS. If `false`, uses local name. For more information, refer to the [dns section](#dns).                        | boolean | true    |
+| `override_hostname`<br>`BEYLA_HOSTNAME`  | If set, Beyla uses the provided string as the host part of the Instance ID. Overrides DNS resolution. For more information, refer to the [override hostname section](#override-hostname). | string  | (unset) |
 
 ### Dns
 
@@ -143,7 +143,7 @@ If set, Beyla uses the provided string as the host part of the Instance ID inste
 
 ## Kubernetes decorator
 
-| Lowercase YAML option<br>Uppercase environment variable option      | Description                                                                                                                                                                                   | Type           | Default        |
+| YAML<br>environment variable                                        | Description                                                                                                                                                                                   | Type           | Default        |
 | ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | -------------- |
 | `enable`<br>`BEYLA_KUBE_METADATA_ENABLE`                            | Enable or disable Kubernetes metadata decoration. Set to `autodetect` to enable if running in Kubernetes. For more information, refer to the [enable kubernetes section](#enable-kubernetes). | boolean/string | false          |
 | `kubeconfig_path`<br>`KUBECONFIG`                                   | Path to the Kubernetes config file. For more information, refer to the [kubeconfig path section](#kubeconfig-path).                                                                           | string         | ~/.kube/config |

@@ -14,13 +14,13 @@ You can configure the component under the `routes` section of your YAML configur
 
 You must configure this section in the YAML file. If you don't provide a `routes` section, Beyla creates a default routes pipeline stage and uses the `heuristic` routes decorator.
 
-| Lowercase YAML option | Description                                                                                                                   | Type            | Default   |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------------- | --------------- | --------- |
-| `patterns`            | List of URL path patterns to match and set the `http.route` property. Refer to [patterns](#patterns).                         | list of strings | (unset)   |
-| `ignored_patterns`    | List of URL path patterns to ignore. Discards trace/metric events if matched. Refer to [ignored patterns](#ignored-patterns). | list of strings | (unset)   |
-| `ignore_mode`         | Refines which type of events are ignored when using `ignored_patterns`. Refer to [ignore mode](#ignore-mode).                 | string          | all       |
-| `unmatched`           | Specifies what to do when a trace HTTP path doesn't match any `patterns` entries. Refer to [unmatched](#unmatched).           | string          | heuristic |
-| `wildcard_char`       | Character to use for path components replaced by the heuristic mode. Refer to [wildcard char](#wildcard-char).                | string          | '*'       |
+| YAML               | Description                                                                                                                   | Type            | Default   |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------- | --------------- | --------- |
+| `patterns`         | List of URL path patterns to match and set the `http.route` property. Refer to [patterns](#patterns).                         | list of strings | (unset)   |
+| `ignored_patterns` | List of URL path patterns to ignore. Discards trace/metric events if matched. Refer to [ignored patterns](#ignored-patterns). | list of strings | (unset)   |
+| `ignore_mode`      | Refines which type of events are ignored when using `ignored_patterns`. Refer to [ignore mode](#ignore-mode).                 | string          | all       |
+| `unmatched`        | Specifies what to do when a trace HTTP path doesn't match any `patterns` entries. Refer to [unmatched](#unmatched).           | string          | heuristic |
+| `wildcard_char`    | Character to use for path components replaced by the heuristic mode. Refer to [wildcard char](#wildcard-char).                | string          | '*'       |
 
 ## Patterns
 

@@ -27,7 +27,7 @@ IMG = $(IMG_REGISTRY)/$(IMG_ORG)/$(IMG_NAME):$(VERSION)
 
 # The generator is a container image that provides a reproducible environment for
 # building eBPF binaries
-GEN_IMG ?= ghcr.io/grafana/beyla-ebpf-generator:main
+GEN_IMG ?= ghcr.io/grafana/beyla-ebpf-generator:2.2
 
 COMPOSE_ARGS ?= -f test/integration/docker-compose.yml
 

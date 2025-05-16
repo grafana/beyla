@@ -1,5 +1,7 @@
 # Build the autoinstrumenter binary
-FROM ghcr.io/grafana/beyla-ebpf-generator:main AS builder
+ARG VER=main
+
+FROM ghcr.io/grafana/beyla-ebpf-generator:$VER AS builder
 
 # TODO: embed software version in executable
 

@@ -25,9 +25,20 @@ IMG_NAME ?= beyla
 VERSION ?= dev
 IMG = $(IMG_REGISTRY)/$(IMG_ORG)/$(IMG_NAME):$(VERSION)
 
+# branch contains the current branch name
+BRANCH := $(shell git rev-parse --abbrev-ref HEAD)
+
+# if BRANCH matches release-*, strip the prefix; else use "main"
+GEN_IMG_VERSION := $(strip \
+	$(if $(filter release-%,$(BRANCH)),\
+		$(patsubst release-%,%,$(BRANCH)),\
+		main \
+	) \
+)
+
 # The generator is a container image that provides a reproducible environment for
 # building eBPF binaries
-GEN_IMG ?= ghcr.io/grafana/beyla-ebpf-generator:main
+GEN_IMG ?= ghcr.io/grafana/beyla-ebpf-generator:$(GEN_IMG_VERSION)
 
 COMPOSE_ARGS ?= -f test/integration/docker-compose.yml
 
@@ -253,9 +264,9 @@ coverage-report-html: cov-exclude-generated
 
 .PHONY: image-build
 image-build:
-	@echo "### Building and pushing the auto-instrumenter image"
 	$(call check_defined, IMG_ORG, Your Docker repository user name)
-	$(OCI_BIN) buildx build --platform linux/amd64,linux/arm64 -t ${IMG} .
+	@echo "### Building the auto-instrumenter image"
+	$(OCI_BIN) buildx build --build-arg VER="$(GEN_IMG_VERSION)" --platform linux/amd64,linux/arm64 -t ${IMG} .
 
 .PHONY: generator-image-build
 generator-image-build:

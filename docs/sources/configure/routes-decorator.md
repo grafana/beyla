@@ -102,8 +102,7 @@ This property specifies what to do when a trace HTTP path doesn't match any of t
 Possible values for the `unmatched` property are:
 
 - `unset` leaves the `http.route` property unset
-- `path` copies the `http.route` field property to the path value
-  - 🚨 Caution: this option could lead to cardinality explosion at the ingestion side
+- `path` copies the `http.route` field property to the path value. This option can lead to cardinality explosion at the ingestion side
 - `wildcard` sets the `http.route` field property to a generic asterisk-based `/**` value
 - `heuristic` automatically derives the `http.route` field property from the path value, based on these rules:
   - Any path components with numbers or characters outside of the ASCII alphabet (or `-` and `_`) are replaced by `wildcard_char`

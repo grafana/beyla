@@ -298,6 +298,26 @@ func runInContainer(wd string) {
 
 func executeCommand(name string, args ...string) error {
 	cmd := exec.Command(name, args...)
+	
+	// Ensure GOTOOLCHAIN=auto is set to allow automatic toolchain downloads
+	if name == "go" {
+		env := os.Environ()
+		hasToolchain := false
+		
+		for i, val := range env {
+			if strings.HasPrefix(val, "GOTOOLCHAIN=") {
+				env[i] = "GOTOOLCHAIN=auto"
+				hasToolchain = true
+				break
+			}
+		}
+		
+		if !hasToolchain {
+			env = append(env, "GOTOOLCHAIN=auto")
+		}
+		
+		cmd.Env = env
+	}
 
 	if cfg.DebugEnabled {
 		fmt.Println("cmd:", cmd.String())
@@ -335,17 +355,55 @@ func genFiles(files []string) error {
 	var errors []error
 
 	for _, file := range files {
-		go func() {
-			err := executeCommand("go", "generate", file)
-
+		go func(f string) {
+			defer wg.Done()
+			cmd := exec.Command("go", "generate", f)
+			
+			// Ensure GOTOOLCHAIN=auto is set
+			env := os.Environ()
+			hasToolchain := false
+			
+			for i, val := range env {
+				if strings.HasPrefix(val, "GOTOOLCHAIN=") {
+					env[i] = "GOTOOLCHAIN=auto"
+					hasToolchain = true
+					break
+				}
+			}
+			
+			if !hasToolchain {
+				env = append(env, "GOTOOLCHAIN=auto")
+			}
+			
+			cmd.Env = env
+			
+			stdoutPipe, stderrPipe, err := getPipes(cmd)
 			if err != nil {
 				mu.Lock()
-				errors = append(errors, fmt.Errorf("%s: %w", file, err))
+				errors = append(errors, fmt.Errorf("%s: failed to create pipes: %w", f, err))
+				mu.Unlock()
+				return
+			}
+			
+			defer stdoutPipe.Close()
+			defer stderrPipe.Close()
+			
+			if err := cmd.Start(); err != nil {
+				mu.Lock()
+				errors = append(errors, fmt.Errorf("%s: failed to start: %w", f, err))
+				mu.Unlock()
+				return
+			}
+			
+			go io.Copy(os.Stdout, stdoutPipe) //nolint:errcheck
+			go io.Copy(os.Stderr, stderrPipe) //nolint:errcheck
+			
+			if err := cmd.Wait(); err != nil {
+				mu.Lock()
+				errors = append(errors, fmt.Errorf("%s: %w", f, err))
 				mu.Unlock()
 			}
-
-			wg.Done()
-		}()
+		}(file)
 	}
 
 	wg.Wait()

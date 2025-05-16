@@ -421,6 +421,49 @@ func TestTerminatesOnBadPromPort(t *testing.T) {
 	assert.True(t, ok)
 }
 
+func TestProcessPIDEvents(t *testing.T) {
+	mc := PrometheusConfig{
+		Features: []string{otel.FeatureApplication},
+	}
+	mr := metricsReporter{
+		cfg:         &mc,
+		serviceMap:  map[svc.UID]svc.Attrs{},
+		pidsTracker: otel.NewPidServiceTracker(),
+	}
+
+	svcA := svc.Attrs{
+		UID: svc.UID{Name: "A", Instance: "A"},
+	}
+	svcB := svc.Attrs{
+		UID: svc.UID{Name: "B", Instance: "B"},
+	}
+
+	mr.setupPIDToServiceRelationship(1, svcA.UID)
+	mr.setupPIDToServiceRelationship(2, svcA.UID)
+	mr.setupPIDToServiceRelationship(3, svcB.UID)
+	mr.setupPIDToServiceRelationship(4, svcB.UID)
+
+	deleted, uid := mr.disassociatePIDFromService(1)
+	assert.Equal(t, false, deleted)
+	assert.Equal(t, svc.UID{}, uid)
+
+	deleted, uid = mr.disassociatePIDFromService(1)
+	assert.Equal(t, false, deleted)
+	assert.Equal(t, svc.UID{}, uid)
+
+	deleted, uid = mr.disassociatePIDFromService(2)
+	assert.Equal(t, true, deleted)
+	assert.Equal(t, svcA.UID, uid)
+
+	deleted, uid = mr.disassociatePIDFromService(3)
+	assert.Equal(t, false, deleted)
+	assert.Equal(t, svc.UID{}, uid)
+
+	deleted, uid = mr.disassociatePIDFromService(4)
+	assert.Equal(t, true, deleted)
+	assert.Equal(t, svcB.UID, uid)
+}
+
 var mmux = sync.Mutex{}
 
 func getMetrics(t require.TestingT, promURL string) string {

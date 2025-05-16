@@ -163,7 +163,7 @@ func (md *procEventMetadataDecorator) k8sLoop(_ context.Context) {
 			// do not leave the service attributes map as nil
 			pe.File.Service.Metadata = map[attr.Name]string{}
 		}
-		klog().Debug("annotating process event", "event", pe, "ns", pe.File.Ns, "procPID", pe.File.Pid, "procPPID", pe.File.Ppid, "service", pe.File.Service)
+		klog().Debug("annotating process event", "event", pe, "ns", pe.File.Ns, "procPID", pe.File.Pid, "procPPID", pe.File.Ppid, "service", pe.File.Service.UID)
 
 		// in-place decoration and forwarding
 		md.output.Send(pe)

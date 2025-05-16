@@ -43,7 +43,7 @@ func (m *surveyor) run(_ context.Context) {
 			} else {
 				m.output.Send(exec.ProcessEvent{Type: exec.ProcessEventSurveyCreated, File: pe.Obj.FileInfo})
 			}
-			m.log.Debug("survey info generation", "pid", pe.Obj.FileInfo.Pid, "ns", pe.Obj.FileInfo.Ns, "cmd", pe.Obj.FileInfo.CmdExePath, "service", pe.Obj.FileInfo.Service)
+			m.log.Debug("survey info generation", "pid", pe.Obj.FileInfo.Pid, "ns", pe.Obj.FileInfo.Ns, "cmd", pe.Obj.FileInfo.CmdExePath, "service", pe.Obj.FileInfo.Service.UID)
 		}
 	}
 }

@@ -58,8 +58,29 @@ jobs:
           if ! git diff --staged --quiet; then
             git commit -m "chore: generate binaries (eBPF and Java agent) for release ${RELEASE_TAG}"
             
-            # Try to determine the source branch for this tag and trim whitespace properly
-            target_branch=$(git branch -r --contains "tags/${RELEASE_TAG}" | grep -v HEAD | head -n 1 | sed 's/origin\///' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            # For semver tags, extract major.minor version for the release branch
+            # Use more robust version extraction with sed and cut
+            tag_version=$(echo "${RELEASE_TAG}" | sed 's/^v//')
+            # Check if this looks like a semver tag (contains at least two dots)
+            if echo "${tag_version}" | grep -q '^\d\+\.\d\+\.\d\+' || echo "${tag_version}" | grep -qE '[0-9]+\.[0-9]+\.[0-9]+'; then
+              # Extract major and minor version numbers with cut
+              major_version=$(echo "${tag_version}" | cut -d. -f1)
+              minor_version=$(echo "${tag_version}" | cut -d. -f2)
+              expected_branch="release-${major_version}.${minor_version}"
+              
+              echo "Detected semantic version ${RELEASE_TAG} (${major_version}.${minor_version}.x) - targeting branch ${expected_branch}"
+              
+              # Check if this branch exists
+              if git ls-remote --heads origin "${expected_branch}" | grep -q "${expected_branch}"; then
+                target_branch="${expected_branch}"
+              else
+                # Try to determine the source branch for this tag as fallback and trim whitespace properly
+                target_branch=$(git branch -r --contains "tags/${RELEASE_TAG}" | grep -v HEAD | head -n 1 | sed 's/origin\///' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+              fi
+            else
+              # Non-semver tag - try to determine the source branch for this tag and trim whitespace properly
+              target_branch=$(git branch -r --contains "tags/${RELEASE_TAG}" | grep -v HEAD | head -n 1 | sed 's/origin\///' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            fi
 
             # Fail the workflow if no valid branch is found
             if [[ -z "$target_branch" ]]; then
@@ -72,12 +93,60 @@ jobs:
             if git push origin HEAD:${target_branch}; then
               echo "Successfully pushed changes to ${target_branch}"
             else
-              echo "Direct push failed - creating separate branch"
-              safe_tag=$(echo "${RELEASE_TAG}" | sed 's/[^a-zA-Z0-9._-]/-/g')
-              branch_name="update-binaries-for-${safe_tag}"
-              git checkout -b "${branch_name}"
-              git push -u origin "${branch_name}"
-              echo "Created branch ${branch_name} with changes"
+              echo "Direct push failed - attempting to pull and merge remote changes"
+              # Save our current commit
+              our_commit=$(git rev-parse HEAD)
+              our_commit_msg=$(git log -1 --pretty=%B)
+              
+              echo "Attempting to sync with remote branch and apply our changes"
+              
+              # Fetch and reset to origin's version of the branch
+              git fetch origin "${target_branch}"
+              
+              # Create a new temporary branch from the remote branch
+              temp_branch="sync-${RELEASE_TAG}-$(date +%s)"
+              git checkout -b "${temp_branch}" "origin/${target_branch}"
+              
+              # Check which files our commit modified
+              modified_files=$(git diff-tree --no-commit-id --name-only -r "${our_commit}")
+              
+              # Generate and apply the same changes on top of the updated branch
+              echo "Copying binary files from our commit to the updated branch"
+              
+              # Instead of looping through modified files (which might miss some)
+              # Let's just find all the binary files we care about in our commit
+              git checkout "${our_commit}" -- "**/*_bpfel.o" "**/*_bpfel.go" "**/grafana-opentelemetry-java.jar" 2>/dev/null || true
+              
+              # Now add them to the updated branch
+              find . -name "*_bpfel.o" -type f -exec git add -f {} \;
+              find . -name "*_bpfel.go" -type f -exec git add -f {} \;
+              find . -name "grafana-opentelemetry-java.jar" -type f -exec git add -f {} \;
+              
+              # Check if we have changes to commit
+              if ! git diff --staged --quiet; then
+                # Commit with the same message
+                git commit -m "${our_commit_msg}"
+                
+                # Try pushing again after integrating remote changes
+                if git push origin "${temp_branch}:${target_branch}"; then
+                  echo "Successfully pushed changes to ${target_branch} after syncing with remote"
+                  # Need to switch to another branch before deleting current one
+                  git checkout -q -B _cleanup_temp_branch
+                  git branch -D "${temp_branch}" || echo "Warning: Could not delete temporary branch, but changes were pushed successfully"
+                else
+                  echo "Push still failed after syncing - creating separate branch"
+                  safe_tag=$(echo "${RELEASE_TAG}" | sed 's/[^a-zA-Z0-9._-]/-/g')
+                  branch_name="update-binaries-for-${safe_tag}"
+                  git checkout -b "${branch_name}"
+                  git push -u origin "${branch_name}"
+                  echo "Created branch ${branch_name} with changes"
+                fi
+              else
+                echo "No changes to commit after syncing with remote branch"
+                # Need to switch to another branch before deleting current one
+                git checkout -q -B _cleanup_temp_branch
+                git branch -D "${temp_branch}" || echo "Warning: Could not delete temporary branch, but no changes were needed"
+              fi
             fi
           else
             echo "No changes to commit"

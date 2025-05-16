@@ -1077,7 +1077,6 @@ func (r *metricsReporter) watchForProcessEvents() {
 		case exec.ProcessEventSurveyCreated:
 			r.createSurveyInfo(&pe.File.Service)
 			r.serviceMap[uid] = pe.File.Service
-			fmt.Printf("survey info for command %s\n", pe.File.CmdExePath)
 		}
 	}
 }

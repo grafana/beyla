@@ -31,12 +31,6 @@ jobs:
 
       - name: Generate eBPF binaries
         run: make docker-generate
-        
-      - name: Generate Java agent
-        run: |
-          cd pkg/internal/otelsdk
-          go generate
-          cd -
 
       - name: Force add generated binaries
         run: |

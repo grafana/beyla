@@ -31,7 +31,7 @@ attributes, check the [Beyla exported metrics](../../metrics/) document.
 Each `application` and `network` filter section is a map where each key is an attribute
 name (either in Prometheus or OpenTelemetry format), with either the `match` or the `not_match` property. Both properties accept a
 [glob-like](https://github.com/gobwas/glob) string (it can be a full value or include
-wildcards). If the `match` property is set, Beyla only reports the metrics and traces
+wildcards). If you set the `match` property, Beyla only reports the metrics and traces
 matching the provided value for that given attribute. The `not_match` property is the
 negation of `match`.
 
@@ -45,4 +45,3 @@ filter:
     dst_port:
       match: "53"
 ```
-

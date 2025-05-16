@@ -133,7 +133,7 @@ attributes:
 | `dns`<br>`BEYLA_HOSTNAME_DNS_RESOLUTION` | If `true`, Beyla tries to resolve the local hostname against the network DNS. If `false`, uses local name. For more information, refer to the [dns section](#dns).                        | boolean | true    |
 | `override_hostname`<br>`BEYLA_HOSTNAME`  | If set, Beyla uses the provided string as the host part of the Instance ID. Overrides DNS resolution. For more information, refer to the [override hostname section](#override-hostname). | string  | (unset) |
 
-### Dns
+### DNS
 
 If `true`, Beyla tries to resolve the local hostname against the network DNS. If `false`, it uses the local hostname.
 

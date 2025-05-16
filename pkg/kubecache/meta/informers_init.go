@@ -500,7 +500,6 @@ func (inf *Informers) initServiceIPInformer(ctx context.Context, informerFactory
 		if svc.Spec.ClusterIP != v1.ClusterIPNone {
 			ips = svc.Spec.ClusterIPs
 		}
-
 		return &indexableEntity{
 			ObjectMeta: minimalIndex(&svc.ObjectMeta),
 			EncodedMeta: &informer.ObjectMeta{
@@ -540,7 +539,6 @@ func (inf *Informers) ipInfoEventHandler(ctx context.Context) *cache.ResourceEve
 			if headlessService(em) {
 				return
 			}
-			fmt.Println("**** creation ts: ", obj.(*indexableEntity).CreationTimestamp.String())
 			em.StatusTime = timestamppb.New(obj.(*indexableEntity).CreationTimestamp.Time)
 			inf.Notify(&informer.Event{
 				Type:     informer.EventType_CREATED,

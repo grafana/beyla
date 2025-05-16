@@ -46,7 +46,6 @@ import (
 	resource "k8s.io/client-go/informers/resource"
 	scheduling "k8s.io/client-go/informers/scheduling"
 	storage "k8s.io/client-go/informers/storage"
-	storagemigration "k8s.io/client-go/informers/storagemigration"
 	kubernetes "k8s.io/client-go/kubernetes"
 	cache "k8s.io/client-go/tools/cache"
 )
@@ -247,7 +246,6 @@ type SharedInformerFactory interface {
 
 	// Start initializes all requested informers. They are handled in goroutines
 	// which run until the stop channel gets closed.
-	// Warning: Start does not block. When run in a go-routine, it will race with a later WaitForCacheSync.
 	Start(stopCh <-chan struct{})
 
 	// Shutdown marks a factory as shutting down. At that point no new
@@ -292,7 +290,6 @@ type SharedInformerFactory interface {
 	Resource() resource.Interface
 	Scheduling() scheduling.Interface
 	Storage() storage.Interface
-	Storagemigration() storagemigration.Interface
 }
 
 func (f *sharedInformerFactory) Admissionregistration() admissionregistration.Interface {
@@ -369,8 +366,4 @@ func (f *sharedInformerFactory) Scheduling() scheduling.Interface {
 
 func (f *sharedInformerFactory) Storage() storage.Interface {
 	return storage.New(f, f.namespace, f.tweakListOptions)
-}
-
-func (f *sharedInformerFactory) Storagemigration() storagemigration.Interface {
-	return storagemigration.New(f, f.namespace, f.tweakListOptions)
 }

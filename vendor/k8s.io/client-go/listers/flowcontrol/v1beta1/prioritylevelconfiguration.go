@@ -19,10 +19,10 @@ limitations under the License.
 package v1beta1
 
 import (
-	flowcontrolv1beta1 "k8s.io/api/flowcontrol/v1beta1"
-	labels "k8s.io/apimachinery/pkg/labels"
-	listers "k8s.io/client-go/listers"
-	cache "k8s.io/client-go/tools/cache"
+	v1beta1 "k8s.io/api/flowcontrol/v1beta1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/tools/cache"
 )
 
 // PriorityLevelConfigurationLister helps list PriorityLevelConfigurations.
@@ -30,19 +30,39 @@ import (
 type PriorityLevelConfigurationLister interface {
 	// List lists all PriorityLevelConfigurations in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*flowcontrolv1beta1.PriorityLevelConfiguration, err error)
+	List(selector labels.Selector) (ret []*v1beta1.PriorityLevelConfiguration, err error)
 	// Get retrieves the PriorityLevelConfiguration from the index for a given name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*flowcontrolv1beta1.PriorityLevelConfiguration, error)
+	Get(name string) (*v1beta1.PriorityLevelConfiguration, error)
 	PriorityLevelConfigurationListerExpansion
 }
 
 // priorityLevelConfigurationLister implements the PriorityLevelConfigurationLister interface.
 type priorityLevelConfigurationLister struct {
-	listers.ResourceIndexer[*flowcontrolv1beta1.PriorityLevelConfiguration]
+	indexer cache.Indexer
 }
 
 // NewPriorityLevelConfigurationLister returns a new PriorityLevelConfigurationLister.
 func NewPriorityLevelConfigurationLister(indexer cache.Indexer) PriorityLevelConfigurationLister {
-	return &priorityLevelConfigurationLister{listers.New[*flowcontrolv1beta1.PriorityLevelConfiguration](indexer, flowcontrolv1beta1.Resource("prioritylevelconfiguration"))}
+	return &priorityLevelConfigurationLister{indexer: indexer}
+}
+
+// List lists all PriorityLevelConfigurations in the indexer.
+func (s *priorityLevelConfigurationLister) List(selector labels.Selector) (ret []*v1beta1.PriorityLevelConfiguration, err error) {
+	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
+		ret = append(ret, m.(*v1beta1.PriorityLevelConfiguration))
+	})
+	return ret, err
+}
+
+// Get retrieves the PriorityLevelConfiguration from the index for a given name.
+func (s *priorityLevelConfigurationLister) Get(name string) (*v1beta1.PriorityLevelConfiguration, error) {
+	obj, exists, err := s.indexer.GetByKey(name)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, errors.NewNotFound(v1beta1.Resource("prioritylevelconfiguration"), name)
+	}
+	return obj.(*v1beta1.PriorityLevelConfiguration), nil
 }

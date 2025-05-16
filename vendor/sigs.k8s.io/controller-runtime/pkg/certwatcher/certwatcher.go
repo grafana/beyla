@@ -17,11 +17,9 @@ limitations under the License.
 package certwatcher
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
 	"fmt"
-	"os"
 	"sync"
 	"time"
 
@@ -35,23 +33,17 @@ import (
 
 var log = logf.RuntimeLog.WithName("certwatcher")
 
-const defaultWatchInterval = 10 * time.Second
-
-// CertWatcher watches certificate and key files for changes.
-// It always returns the cached version,
-// but periodically reads and parses certificate and key for changes
-// and calls an optional callback with the new certificate.
+// CertWatcher watches certificate and key files for changes.  When either file
+// changes, it reads and parses both and calls an optional callback with the new
+// certificate.
 type CertWatcher struct {
 	sync.RWMutex
 
 	currentCert *tls.Certificate
 	watcher     *fsnotify.Watcher
-	interval    time.Duration
 
 	certPath string
 	keyPath  string
-
-	cachedKeyPEMBlock []byte
 
 	// callback is a function to be invoked when the certificate changes.
 	callback func(tls.Certificate)
@@ -64,7 +56,6 @@ func New(certPath, keyPath string) (*CertWatcher, error) {
 	cw := &CertWatcher{
 		certPath: certPath,
 		keyPath:  keyPath,
-		interval: defaultWatchInterval,
 	}
 
 	// Initial read of certificate and key.
@@ -78,12 +69,6 @@ func New(certPath, keyPath string) (*CertWatcher, error) {
 	}
 
 	return cw, nil
-}
-
-// WithWatchInterval sets the watch interval and returns the CertWatcher pointer
-func (cw *CertWatcher) WithWatchInterval(interval time.Duration) *CertWatcher {
-	cw.interval = interval
-	return cw
 }
 
 // RegisterCallback registers a callback to be invoked when the certificate changes.
@@ -127,20 +112,12 @@ func (cw *CertWatcher) Start(ctx context.Context) error {
 
 	go cw.Watch()
 
-	ticker := time.NewTicker(cw.interval)
-	defer ticker.Stop()
+	log.Info("Starting certificate watcher")
 
-	log.Info("Starting certificate poll+watcher", "interval", cw.interval)
-	for {
-		select {
-		case <-ctx.Done():
-			return cw.watcher.Close()
-		case <-ticker.C:
-			if err := cw.ReadCertificate(); err != nil {
-				log.Error(err, "failed read certificate")
-			}
-		}
-	}
+	// Block until the context is done.
+	<-ctx.Done()
+
+	return cw.watcher.Close()
 }
 
 // Watch reads events from the watcher's channel and reacts to changes.
@@ -154,6 +131,7 @@ func (cw *CertWatcher) Watch() {
 			}
 
 			cw.handleEvent(event)
+
 		case err, ok := <-cw.watcher.Errors:
 			// Channel is closed.
 			if !ok {
@@ -165,48 +143,20 @@ func (cw *CertWatcher) Watch() {
 	}
 }
 
-// updateCachedCertificate checks if the new certificate differs from the cache,
-// updates it and returns the result if it was updated or not
-func (cw *CertWatcher) updateCachedCertificate(cert *tls.Certificate, keyPEMBlock []byte) bool {
-	cw.Lock()
-	defer cw.Unlock()
-
-	if cw.currentCert != nil &&
-		bytes.Equal(cw.currentCert.Certificate[0], cert.Certificate[0]) &&
-		bytes.Equal(cw.cachedKeyPEMBlock, keyPEMBlock) {
-		log.V(7).Info("certificate already cached")
-		return false
-	}
-	cw.currentCert = cert
-	cw.cachedKeyPEMBlock = keyPEMBlock
-	return true
-}
-
 // ReadCertificate reads the certificate and key files from disk, parses them,
-// and updates the current certificate on the watcher if updated. If a callback is set, it
+// and updates the current certificate on the watcher.  If a callback is set, it
 // is invoked with the new certificate.
 func (cw *CertWatcher) ReadCertificate() error {
 	metrics.ReadCertificateTotal.Inc()
-	certPEMBlock, err := os.ReadFile(cw.certPath)
-	if err != nil {
-		metrics.ReadCertificateErrors.Inc()
-		return err
-	}
-	keyPEMBlock, err := os.ReadFile(cw.keyPath)
+	cert, err := tls.LoadX509KeyPair(cw.certPath, cw.keyPath)
 	if err != nil {
 		metrics.ReadCertificateErrors.Inc()
 		return err
 	}
 
-	cert, err := tls.X509KeyPair(certPEMBlock, keyPEMBlock)
-	if err != nil {
-		metrics.ReadCertificateErrors.Inc()
-		return err
-	}
-
-	if !cw.updateCachedCertificate(&cert, keyPEMBlock) {
-		return nil
-	}
+	cw.Lock()
+	cw.currentCert = &cert
+	cw.Unlock()
 
 	log.Info("Updated current TLS certificate")
 
@@ -223,20 +173,32 @@ func (cw *CertWatcher) ReadCertificate() error {
 
 func (cw *CertWatcher) handleEvent(event fsnotify.Event) {
 	// Only care about events which may modify the contents of the file.
-	switch {
-	case event.Op.Has(fsnotify.Write):
-	case event.Op.Has(fsnotify.Create):
-	case event.Op.Has(fsnotify.Chmod), event.Op.Has(fsnotify.Remove):
-		// If the file was removed or renamed, re-add the watch to the previous name
-		if err := cw.watcher.Add(event.Name); err != nil {
-			log.Error(err, "error re-watching file")
-		}
-	default:
+	if !(isWrite(event) || isRemove(event) || isCreate(event)) {
 		return
 	}
 
 	log.V(1).Info("certificate event", "event", event)
+
+	// If the file was removed, re-add the watch.
+	if isRemove(event) {
+		if err := cw.watcher.Add(event.Name); err != nil {
+			log.Error(err, "error re-watching file")
+		}
+	}
+
 	if err := cw.ReadCertificate(); err != nil {
 		log.Error(err, "error re-reading certificate")
 	}
+}
+
+func isWrite(event fsnotify.Event) bool {
+	return event.Op.Has(fsnotify.Write)
+}
+
+func isCreate(event fsnotify.Event) bool {
+	return event.Op.Has(fsnotify.Create)
+}
+
+func isRemove(event fsnotify.Event) bool {
+	return event.Op.Has(fsnotify.Remove)
 }

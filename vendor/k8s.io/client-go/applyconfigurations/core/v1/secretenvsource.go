@@ -18,14 +18,14 @@ limitations under the License.
 
 package v1
 
-// SecretEnvSourceApplyConfiguration represents a declarative configuration of the SecretEnvSource type for use
+// SecretEnvSourceApplyConfiguration represents an declarative configuration of the SecretEnvSource type for use
 // with apply.
 type SecretEnvSourceApplyConfiguration struct {
 	LocalObjectReferenceApplyConfiguration `json:",inline"`
 	Optional                               *bool `json:"optional,omitempty"`
 }
 
-// SecretEnvSourceApplyConfiguration constructs a declarative configuration of the SecretEnvSource type for use with
+// SecretEnvSourceApplyConfiguration constructs an declarative configuration of the SecretEnvSource type for use with
 // apply.
 func SecretEnvSource() *SecretEnvSourceApplyConfiguration {
 	return &SecretEnvSourceApplyConfiguration{}
@@ -35,7 +35,7 @@ func SecretEnvSource() *SecretEnvSourceApplyConfiguration {
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Name field is set to the value of the last call.
 func (b *SecretEnvSourceApplyConfiguration) WithName(value string) *SecretEnvSourceApplyConfiguration {
-	b.LocalObjectReferenceApplyConfiguration.Name = &value
+	b.Name = &value
 	return b
 }
 

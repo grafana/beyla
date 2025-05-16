@@ -20,19 +20,19 @@ import (
 	"context"
 	"fmt"
 
-	"sigs.k8s.io/e2e-framework/pkg/utils"
-
 	"sigs.k8s.io/e2e-framework/pkg/env"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
 	"sigs.k8s.io/e2e-framework/support"
 )
+
+type clusterNameContextKey string
 
 var LoadDockerImageToCluster = LoadImageToCluster
 
 // GetClusterFromContext helps extract the E2EClusterProvider object from the context.
 // This can be used to setup and run tests of multi cluster e2e Prioviders.
 func GetClusterFromContext(ctx context.Context, clusterName string) (support.E2EClusterProvider, bool) {
-	c := ctx.Value(support.ClusterNameContextKey(clusterName))
+	c := ctx.Value(clusterNameContextKey(clusterName))
 	if c == nil {
 		return nil, false
 	}
@@ -47,19 +47,8 @@ func GetClusterFromContext(ctx context.Context, clusterName string) (support.E2E
 // NOTE: the returned function will update its env config with the
 // kubeconfig file for the config client.
 func CreateCluster(p support.E2EClusterProvider, clusterName string) env.Func {
-	return CreateClusterWithOpts(p, clusterName)
-}
-
-// CreateClusterWithOpts returns an env.Func that is used to
-// create an E2E provider cluster that is then injected in the context
-// using the name as a key. This can be provided with additional opts to extend the create
-// workflow of the cluster.
-//
-// NOTE: the returned function will update its env config with the
-// kubeconfig file for the config client.
-func CreateClusterWithOpts(p support.E2EClusterProvider, clusterName string, opts ...support.ClusterOpts) env.Func {
 	return func(ctx context.Context, cfg *envconf.Config) (context.Context, error) {
-		k := p.SetDefaults().WithName(clusterName).WithOpts(opts...)
+		k := p.SetDefaults().WithName(clusterName)
 		kubecfg, err := k.Create(ctx)
 		if err != nil {
 			return ctx, err
@@ -74,7 +63,7 @@ func CreateClusterWithOpts(p support.E2EClusterProvider, clusterName string, opt
 		}
 
 		// store entire cluster value in ctx for future access using the cluster name
-		return context.WithValue(ctx, support.ClusterNameContextKey(clusterName), k), nil
+		return context.WithValue(ctx, clusterNameContextKey(clusterName), k), nil
 	}
 }
 
@@ -92,6 +81,7 @@ func CreateClusterWithConfig(p support.E2EClusterProvider, clusterName, configFi
 			return ctx, err
 		}
 
+		cfg.Client().RESTConfig()
 		// update envconfig  with kubeconfig
 		cfg.WithKubeconfigFile(kubecfg)
 
@@ -101,7 +91,7 @@ func CreateClusterWithConfig(p support.E2EClusterProvider, clusterName, configFi
 		}
 
 		// store entire cluster value in ctx for future access using the cluster name
-		return context.WithValue(ctx, support.ClusterNameContextKey(clusterName), k), nil
+		return context.WithValue(ctx, clusterNameContextKey(clusterName), k), nil
 	}
 }
 
@@ -111,7 +101,7 @@ func CreateClusterWithConfig(p support.E2EClusterProvider, clusterName, configFi
 // NOTE: this should be used in a Environment.Finish step.
 func DestroyCluster(name string) env.Func {
 	return func(ctx context.Context, cfg *envconf.Config) (context.Context, error) {
-		clusterVal := ctx.Value(support.ClusterNameContextKey(name))
+		clusterVal := ctx.Value(clusterNameContextKey(name))
 		if clusterVal == nil {
 			return ctx, fmt.Errorf("destroy e2e provider cluster func: context cluster is nil")
 		}
@@ -132,9 +122,9 @@ func DestroyCluster(name string) env.Func {
 // LoadImageToCluster returns an EnvFunc that
 // retrieves a previously saved e2e provider Cluster in the context (using the name), and then loads a container image
 // from the host into the cluster.
-func LoadImageToCluster(name, image string, args ...string) env.Func {
+func LoadImageToCluster(name, image string) env.Func {
 	return func(ctx context.Context, cfg *envconf.Config) (context.Context, error) {
-		clusterVal := ctx.Value(support.ClusterNameContextKey(name))
+		clusterVal := ctx.Value(clusterNameContextKey(name))
 		if clusterVal == nil {
 			return ctx, fmt.Errorf("load image func: context cluster is nil")
 		}
@@ -144,7 +134,7 @@ func LoadImageToCluster(name, image string, args ...string) env.Func {
 			return ctx, fmt.Errorf("load image archive func: cluster provider does not support LoadImage helper")
 		}
 
-		if err := cluster.LoadImage(ctx, image, args...); err != nil {
+		if err := cluster.LoadImage(ctx, image); err != nil {
 			return ctx, fmt.Errorf("load image: %w", err)
 		}
 
@@ -155,9 +145,9 @@ func LoadImageToCluster(name, image string, args ...string) env.Func {
 // LoadImageArchiveToCluster returns an EnvFunc that
 // retrieves a previously saved e2e provider Cluster in the context (using the name), and then loads a container image TAR archive
 // from the host into the cluster.
-func LoadImageArchiveToCluster(name, imageArchive string, args ...string) env.Func {
+func LoadImageArchiveToCluster(name, imageArchive string) env.Func {
 	return func(ctx context.Context, cfg *envconf.Config) (context.Context, error) {
-		clusterVal := ctx.Value(support.ClusterNameContextKey(name))
+		clusterVal := ctx.Value(clusterNameContextKey(name))
 		if clusterVal == nil {
 			return ctx, fmt.Errorf("load image archive func: context cluster is nil")
 		}
@@ -167,7 +157,7 @@ func LoadImageArchiveToCluster(name, imageArchive string, args ...string) env.Fu
 			return ctx, fmt.Errorf("load image archive func: cluster provider does not support LoadImageArchive helper")
 		}
 
-		if err := cluster.LoadImageArchive(ctx, imageArchive, args...); err != nil {
+		if err := cluster.LoadImageArchive(ctx, imageArchive); err != nil {
 			return ctx, fmt.Errorf("load image archive: %w", err)
 		}
 
@@ -180,7 +170,7 @@ func LoadImageArchiveToCluster(name, imageArchive string, args ...string) env.Fu
 // in the provided destination.
 func ExportClusterLogs(name, dest string) env.Func {
 	return func(ctx context.Context, cfg *envconf.Config) (context.Context, error) {
-		clusterVal := ctx.Value(support.ClusterNameContextKey(name))
+		clusterVal := ctx.Value(clusterNameContextKey(name))
 		if clusterVal == nil {
 			return ctx, fmt.Errorf("export e2e provider cluster logs: context cluster is nil")
 		}
@@ -195,14 +185,5 @@ func ExportClusterLogs(name, dest string) env.Func {
 		}
 
 		return ctx, nil
-	}
-}
-
-// PerformNodeOperation returns an EnvFunc that can be used to perform some node lifecycle operations.
-// This can be used to add/remove/start/stop nodes in the cluster.
-func PerformNodeOperation(clusterName string, action support.NodeOperation, node *support.Node, args ...string) env.Func {
-	return func(ctx context.Context, cfg *envconf.Config) (context.Context, error) {
-		err := utils.PerformNodeLifecycleOperation(ctx, action, node, args...)
-		return ctx, err
 	}
 }

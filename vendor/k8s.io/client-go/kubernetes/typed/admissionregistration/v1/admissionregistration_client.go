@@ -19,18 +19,16 @@ limitations under the License.
 package v1
 
 import (
-	http "net/http"
+	"net/http"
 
-	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
-	scheme "k8s.io/client-go/kubernetes/scheme"
+	v1 "k8s.io/api/admissionregistration/v1"
+	"k8s.io/client-go/kubernetes/scheme"
 	rest "k8s.io/client-go/rest"
 )
 
 type AdmissionregistrationV1Interface interface {
 	RESTClient() rest.Interface
 	MutatingWebhookConfigurationsGetter
-	ValidatingAdmissionPoliciesGetter
-	ValidatingAdmissionPolicyBindingsGetter
 	ValidatingWebhookConfigurationsGetter
 }
 
@@ -41,14 +39,6 @@ type AdmissionregistrationV1Client struct {
 
 func (c *AdmissionregistrationV1Client) MutatingWebhookConfigurations() MutatingWebhookConfigurationInterface {
 	return newMutatingWebhookConfigurations(c)
-}
-
-func (c *AdmissionregistrationV1Client) ValidatingAdmissionPolicies() ValidatingAdmissionPolicyInterface {
-	return newValidatingAdmissionPolicies(c)
-}
-
-func (c *AdmissionregistrationV1Client) ValidatingAdmissionPolicyBindings() ValidatingAdmissionPolicyBindingInterface {
-	return newValidatingAdmissionPolicyBindings(c)
 }
 
 func (c *AdmissionregistrationV1Client) ValidatingWebhookConfigurations() ValidatingWebhookConfigurationInterface {
@@ -100,10 +90,10 @@ func New(c rest.Interface) *AdmissionregistrationV1Client {
 }
 
 func setConfigDefaults(config *rest.Config) error {
-	gv := admissionregistrationv1.SchemeGroupVersion
+	gv := v1.SchemeGroupVersion
 	config.GroupVersion = &gv
 	config.APIPath = "/apis"
-	config.NegotiatedSerializer = rest.CodecFactoryForGeneratedClient(scheme.Scheme, scheme.Codecs).WithoutConversion()
+	config.NegotiatedSerializer = scheme.Codecs.WithoutConversion()
 
 	if config.UserAgent == "" {
 		config.UserAgent = rest.DefaultKubernetesUserAgent()

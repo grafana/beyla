@@ -12,12 +12,12 @@ func (e *Echo) Variables() *vars.Variables {
 // Envs declares environment variables using
 // a multi-line space-separated list:
 //
-//	Envs("GOOS=linux" "GOARCH=amd64", `platform="$GOOS:$GOARCH"`)
+//	Envs("GOOS=linux GOARCH=amd64")
 //
 // Environment vars can be used in string values
 // using Eval("building for os=$GOOS")
-func (e *Echo) Envs(variables ...string) *Echo {
-	vars := e.vars.Envs(variables...)
+func (e *Echo) Envs(val string) *Echo {
+	vars := e.vars.Envs(val)
 	e.err = vars.Err()
 	return e
 }
@@ -29,15 +29,18 @@ func (e *Echo) SetEnv(name, value string) *Echo {
 	return e
 }
 
-// Vars declares multiple session-scope variables using
-// string literal format:
+// Vars declares session-scope variables using
+// a multi-line space-separated list:
 //
-// Envs("foo=bar", "platform=amd64", `"data="info ${platform}"`)
+//	Envs("foo=bar platform=amd64")
+//
+// Session vars can be used in string values
+// using Eval("My foo=$foo").
 //
 // Note that session vars are only available
 // for the running process.
-func (e *Echo) Vars(variables ...string) *Echo {
-	vars := e.vars.Vars(variables...)
+func (e *Echo) Vars(val string) *Echo {
+	vars := e.vars.Vars(val)
 	e.err = vars.Err()
 	return e
 }

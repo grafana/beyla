@@ -169,39 +169,6 @@ func (f FieldOwner) ApplyToSubResourceUpdate(opts *SubResourceUpdateOptions) {
 	opts.FieldManager = string(f)
 }
 
-// FieldValidation configures field validation for the given requests.
-type FieldValidation string
-
-// ApplyToPatch applies this configuration to the given patch options.
-func (f FieldValidation) ApplyToPatch(opts *PatchOptions) {
-	opts.FieldValidation = string(f)
-}
-
-// ApplyToCreate applies this configuration to the given create options.
-func (f FieldValidation) ApplyToCreate(opts *CreateOptions) {
-	opts.FieldValidation = string(f)
-}
-
-// ApplyToUpdate applies this configuration to the given update options.
-func (f FieldValidation) ApplyToUpdate(opts *UpdateOptions) {
-	opts.FieldValidation = string(f)
-}
-
-// ApplyToSubResourcePatch applies this configuration to the given patch options.
-func (f FieldValidation) ApplyToSubResourcePatch(opts *SubResourcePatchOptions) {
-	opts.FieldValidation = string(f)
-}
-
-// ApplyToSubResourceCreate applies this configuration to the given create options.
-func (f FieldValidation) ApplyToSubResourceCreate(opts *SubResourceCreateOptions) {
-	opts.FieldValidation = string(f)
-}
-
-// ApplyToSubResourceUpdate applies this configuration to the given update options.
-func (f FieldValidation) ApplyToSubResourceUpdate(opts *SubResourceUpdateOptions) {
-	opts.FieldValidation = string(f)
-}
-
 // }}}
 
 // {{{ Create Options
@@ -220,24 +187,6 @@ type CreateOptions struct {
 	// this request.  It must be set with server-side apply.
 	FieldManager string
 
-	// fieldValidation instructs the server on how to handle
-	// objects in the request (POST/PUT/PATCH) containing unknown
-	// or duplicate fields. Valid values are:
-	// - Ignore: This will ignore any unknown fields that are silently
-	// dropped from the object, and will ignore all but the last duplicate
-	// field that the decoder encounters. This is the default behavior
-	// prior to v1.23.
-	// - Warn: This will send a warning via the standard warning response
-	// header for each unknown field that is dropped from the object, and
-	// for each duplicate field that is encountered. The request will
-	// still succeed if there are no other errors, and will only persist
-	// the last of any duplicate fields. This is the default in v1.23+
-	// - Strict: This will fail the request with a BadRequest error if
-	// any unknown fields would be dropped from the object, or if any
-	// duplicate fields are present. The error returned from the server
-	// will contain all unknown and duplicate fields encountered.
-	FieldValidation string
-
 	// Raw represents raw CreateOptions, as passed to the API server.
 	Raw *metav1.CreateOptions
 }
@@ -254,7 +203,6 @@ func (o *CreateOptions) AsCreateOptions() *metav1.CreateOptions {
 
 	o.Raw.DryRun = o.DryRun
 	o.Raw.FieldManager = o.FieldManager
-	o.Raw.FieldValidation = o.FieldValidation
 	return o.Raw
 }
 
@@ -274,9 +222,6 @@ func (o *CreateOptions) ApplyToCreate(co *CreateOptions) {
 	}
 	if o.FieldManager != "" {
 		co.FieldManager = o.FieldManager
-	}
-	if o.FieldValidation != "" {
-		co.FieldValidation = o.FieldValidation
 	}
 	if o.Raw != nil {
 		co.Raw = o.Raw
@@ -474,7 +419,7 @@ type ListOptions struct {
 	LabelSelector labels.Selector
 	// FieldSelector filters results by a particular field.  In order
 	// to use this with cache-based implementations, restrict usage to
-	// exact match field-value pair that's been added to the indexers.
+	// a single field-value pair that's been added to the indexers.
 	FieldSelector fields.Selector
 
 	// Namespace represents the namespace to list for, or empty for
@@ -569,8 +514,7 @@ type MatchingLabels map[string]string
 func (m MatchingLabels) ApplyToList(opts *ListOptions) {
 	// TODO(directxman12): can we avoid reserializing this over and over?
 	if opts.LabelSelector == nil {
-		opts.LabelSelector = labels.SelectorFromValidatedSet(map[string]string(m))
-		return
+		opts.LabelSelector = labels.NewSelector()
 	}
 	// If there's already a selector, we need to AND the two together.
 	noValidSel := labels.SelectorFromValidatedSet(map[string]string(m))
@@ -734,24 +678,6 @@ type UpdateOptions struct {
 	// this request.  It must be set with server-side apply.
 	FieldManager string
 
-	// fieldValidation instructs the server on how to handle
-	// objects in the request (POST/PUT/PATCH) containing unknown
-	// or duplicate fields. Valid values are:
-	// - Ignore: This will ignore any unknown fields that are silently
-	// dropped from the object, and will ignore all but the last duplicate
-	// field that the decoder encounters. This is the default behavior
-	// prior to v1.23.
-	// - Warn: This will send a warning via the standard warning response
-	// header for each unknown field that is dropped from the object, and
-	// for each duplicate field that is encountered. The request will
-	// still succeed if there are no other errors, and will only persist
-	// the last of any duplicate fields. This is the default in v1.23+
-	// - Strict: This will fail the request with a BadRequest error if
-	// any unknown fields would be dropped from the object, or if any
-	// duplicate fields are present. The error returned from the server
-	// will contain all unknown and duplicate fields encountered.
-	FieldValidation string
-
 	// Raw represents raw UpdateOptions, as passed to the API server.
 	Raw *metav1.UpdateOptions
 }
@@ -768,7 +694,6 @@ func (o *UpdateOptions) AsUpdateOptions() *metav1.UpdateOptions {
 
 	o.Raw.DryRun = o.DryRun
 	o.Raw.FieldManager = o.FieldManager
-	o.Raw.FieldValidation = o.FieldValidation
 	return o.Raw
 }
 
@@ -790,9 +715,6 @@ func (o *UpdateOptions) ApplyToUpdate(uo *UpdateOptions) {
 	}
 	if o.FieldManager != "" {
 		uo.FieldManager = o.FieldManager
-	}
-	if o.FieldValidation != "" {
-		uo.FieldValidation = o.FieldValidation
 	}
 	if o.Raw != nil {
 		uo.Raw = o.Raw
@@ -822,24 +744,6 @@ type PatchOptions struct {
 	// this request.  It must be set with server-side apply.
 	FieldManager string
 
-	// fieldValidation instructs the server on how to handle
-	// objects in the request (POST/PUT/PATCH) containing unknown
-	// or duplicate fields. Valid values are:
-	// - Ignore: This will ignore any unknown fields that are silently
-	// dropped from the object, and will ignore all but the last duplicate
-	// field that the decoder encounters. This is the default behavior
-	// prior to v1.23.
-	// - Warn: This will send a warning via the standard warning response
-	// header for each unknown field that is dropped from the object, and
-	// for each duplicate field that is encountered. The request will
-	// still succeed if there are no other errors, and will only persist
-	// the last of any duplicate fields. This is the default in v1.23+
-	// - Strict: This will fail the request with a BadRequest error if
-	// any unknown fields would be dropped from the object, or if any
-	// duplicate fields are present. The error returned from the server
-	// will contain all unknown and duplicate fields encountered.
-	FieldValidation string
-
 	// Raw represents raw PatchOptions, as passed to the API server.
 	Raw *metav1.PatchOptions
 }
@@ -866,7 +770,6 @@ func (o *PatchOptions) AsPatchOptions() *metav1.PatchOptions {
 	o.Raw.DryRun = o.DryRun
 	o.Raw.Force = o.Force
 	o.Raw.FieldManager = o.FieldManager
-	o.Raw.FieldValidation = o.FieldValidation
 	return o.Raw
 }
 
@@ -882,9 +785,6 @@ func (o *PatchOptions) ApplyToPatch(po *PatchOptions) {
 	}
 	if o.FieldManager != "" {
 		po.FieldManager = o.FieldManager
-	}
-	if o.FieldValidation != "" {
-		po.FieldValidation = o.FieldValidation
 	}
 	if o.Raw != nil {
 		po.Raw = o.Raw

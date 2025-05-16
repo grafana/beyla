@@ -1,7 +1,6 @@
 package meta
 
 import (
-	"fmt"
 	"log/slog"
 	"slices"
 	"time"
@@ -55,7 +54,6 @@ func (inf *Informers) Subscribe(observer Observer) {
 	storedEntities = append(storedEntities, nodes...)
 	storedEntities = append(storedEntities, services...)
 	for _, entity := range inf.sortAndCut(storedEntities, fromTime) {
-		fmt.Println("submitting created for", entity.(*indexableEntity).Name)
 		if err := observer.On(&informer.Event{
 			Type:     informer.EventType_CREATED,
 			Resource: entity.(*indexableEntity).EncodedMeta,
@@ -78,7 +76,6 @@ func (inf *Informers) Subscribe(observer Observer) {
 
 		// notify the end of synchronization, so the client knows that already has a snapshot
 		// of all the existing resources
-		fmt.Println("submitting sync_finished")
 		if err := observer.On(&informer.Event{
 			Type: informer.EventType_SYNC_FINISHED,
 		}); err != nil {
@@ -86,7 +83,6 @@ func (inf *Informers) Subscribe(observer Observer) {
 			inf.BaseNotifier.Unsubscribe(observer)
 			return
 		}
-		fmt.Println("submitted sync_finished")
 	}()
 }
 

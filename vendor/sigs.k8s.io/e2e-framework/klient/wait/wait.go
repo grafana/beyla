@@ -97,13 +97,11 @@ func For(conditionFunc apimachinerywait.ConditionWithContextFunc, opts ...Option
 	}
 
 	if options.Ctx == nil {
-		options.Ctx = context.Background()
-	}
-
-	if options.Timeout != 0 {
-		options.Ctx, cancel = context.WithTimeout(options.Ctx, options.Timeout)
+		options.Ctx, cancel = context.WithTimeout(context.Background(), options.Timeout)
 		defer cancel()
 	}
-
-	return apimachinerywait.PollUntilContextCancel(options.Ctx, options.Interval, options.Immediate, conditionFunc)
+	if options.Immediate {
+		return apimachinerywait.PollUntilContextCancel(options.Ctx, options.Interval, true, conditionFunc)
+	}
+	return apimachinerywait.PollUntilContextCancel(options.Ctx, options.Interval, false, conditionFunc)
 }

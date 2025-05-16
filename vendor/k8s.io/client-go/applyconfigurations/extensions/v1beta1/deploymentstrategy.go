@@ -19,17 +19,17 @@ limitations under the License.
 package v1beta1
 
 import (
-	extensionsv1beta1 "k8s.io/api/extensions/v1beta1"
+	v1beta1 "k8s.io/api/extensions/v1beta1"
 )
 
-// DeploymentStrategyApplyConfiguration represents a declarative configuration of the DeploymentStrategy type for use
+// DeploymentStrategyApplyConfiguration represents an declarative configuration of the DeploymentStrategy type for use
 // with apply.
 type DeploymentStrategyApplyConfiguration struct {
-	Type          *extensionsv1beta1.DeploymentStrategyType  `json:"type,omitempty"`
+	Type          *v1beta1.DeploymentStrategyType            `json:"type,omitempty"`
 	RollingUpdate *RollingUpdateDeploymentApplyConfiguration `json:"rollingUpdate,omitempty"`
 }
 
-// DeploymentStrategyApplyConfiguration constructs a declarative configuration of the DeploymentStrategy type for use with
+// DeploymentStrategyApplyConfiguration constructs an declarative configuration of the DeploymentStrategy type for use with
 // apply.
 func DeploymentStrategy() *DeploymentStrategyApplyConfiguration {
 	return &DeploymentStrategyApplyConfiguration{}
@@ -38,7 +38,7 @@ func DeploymentStrategy() *DeploymentStrategyApplyConfiguration {
 // WithType sets the Type field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Type field is set to the value of the last call.
-func (b *DeploymentStrategyApplyConfiguration) WithType(value extensionsv1beta1.DeploymentStrategyType) *DeploymentStrategyApplyConfiguration {
+func (b *DeploymentStrategyApplyConfiguration) WithType(value v1beta1.DeploymentStrategyType) *DeploymentStrategyApplyConfiguration {
 	b.Type = &value
 	return b
 }

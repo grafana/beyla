@@ -4,6 +4,10 @@ import (
 	"sync"
 )
 
+// Queue is a FIFO structure that allows asynchronously enqueuing messages and synchronously dequeuing them.
+// The Dequeue operation is blocked until there is any content in the queue.
+// You can see a Queue as a channel with infinite capacity where you can keep sending
+// elements without getting blocked.
 type Queue[T any] struct {
 	head  *node[T]
 	tail  *node[T]
@@ -23,6 +27,8 @@ func NewQueue[T any]() *Queue[T] {
 	return q
 }
 
+// Enqueue adds an element to the queue. This operation never blocks, this means that
+// if there isn't any goroutine dequeuing the elements, the queue will grow indefinitely.
 func (q *Queue[T]) Enqueue(item T) {
 	q.mutex.Lock()
 	q.append(item)
@@ -30,6 +36,8 @@ func (q *Queue[T]) Enqueue(item T) {
 	q.mutex.Unlock()
 }
 
+// Dequeue retrieves the firs element in the queue. If the queue is empty, Dequeue will
+// block the current goroutine until there is any available element.
 func (q *Queue[T]) Dequeue() T {
 	q.mutex.Lock()
 	for q.head == nil {

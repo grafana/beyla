@@ -94,16 +94,16 @@ type SubResourceClientConstructor interface {
 	// - ServiceAccount token creation:
 	//     sa := &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Namespace: "foo", Name: "bar"}}
 	//     token := &authenticationv1.TokenRequest{}
-	//     c.SubResource("token").Create(ctx, sa, token)
+	//     c.SubResourceClient("token").Create(ctx, sa, token)
 	//
 	// - Pod eviction creation:
 	//     pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "foo", Name: "bar"}}
-	//     c.SubResource("eviction").Create(ctx, pod, &policyv1.Eviction{})
+	//     c.SubResourceClient("eviction").Create(ctx, pod, &policyv1.Eviction{})
 	//
 	// - Pod binding creation:
 	//     pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "foo", Name: "bar"}}
 	//     binding := &corev1.Binding{Target: corev1.ObjectReference{Name: "my-node"}}
-	//     c.SubResource("binding").Create(ctx, pod, binding)
+	//     c.SubResourceClient("binding").Create(ctx, pod, binding)
 	//
 	// - CertificateSigningRequest approval:
 	//     csr := &certificatesv1.CertificateSigningRequest{
@@ -115,17 +115,17 @@ type SubResourceClientConstructor interface {
 	//         }},
 	//       },
 	//     }
-	//     c.SubResource("approval").Update(ctx, csr)
+	//     c.SubResourceClient("approval").Update(ctx, csr)
 	//
 	// - Scale retrieval:
 	//     dep := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Namespace: "foo", Name: "bar"}}
 	//     scale := &autoscalingv1.Scale{}
-	//     c.SubResource("scale").Get(ctx, dep, scale)
+	//     c.SubResourceClient("scale").Get(ctx, dep, scale)
 	//
 	// - Scale update:
 	//     dep := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Namespace: "foo", Name: "bar"}}
 	//     scale := &autoscalingv1.Scale{Spec: autoscalingv1.ScaleSpec{Replicas: 2}}
-	//     c.SubResource("scale").Update(ctx, dep, client.WithSubResourceBody(scale))
+	//     c.SubResourceClient("scale").Update(ctx, dep, client.WithSubResourceBody(scale))
 	SubResource(subResource string) SubResourceClient
 }
 
@@ -142,7 +142,6 @@ type SubResourceWriter interface {
 	// Create saves the subResource object in the Kubernetes cluster. obj must be a
 	// struct pointer so that obj can be updated with the content returned by the Server.
 	Create(ctx context.Context, obj Object, subResource Object, opts ...SubResourceCreateOption) error
-
 	// Update updates the fields corresponding to the status subresource for the
 	// given obj. obj must be a struct pointer so that obj can be updated
 	// with the content returned by the Server.
@@ -193,7 +192,7 @@ type IndexerFunc func(Object) []string
 // FieldIndexer knows how to index over a particular "field" such that it
 // can later be used by a field selector.
 type FieldIndexer interface {
-	// IndexField adds an index with the given field name on the given object type
+	// IndexFields adds an index with the given field name on the given object type
 	// by using the given function to extract the value for that field.  If you want
 	// compatibility with the Kubernetes API server, only return one key, and only use
 	// fields that the API server supports.  Otherwise, you can return multiple keys,

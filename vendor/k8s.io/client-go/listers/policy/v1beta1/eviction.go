@@ -19,10 +19,10 @@ limitations under the License.
 package v1beta1
 
 import (
-	policyv1beta1 "k8s.io/api/policy/v1beta1"
-	labels "k8s.io/apimachinery/pkg/labels"
-	listers "k8s.io/client-go/listers"
-	cache "k8s.io/client-go/tools/cache"
+	v1beta1 "k8s.io/api/policy/v1beta1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/tools/cache"
 )
 
 // EvictionLister helps list Evictions.
@@ -30,7 +30,7 @@ import (
 type EvictionLister interface {
 	// List lists all Evictions in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*policyv1beta1.Eviction, err error)
+	List(selector labels.Selector) (ret []*v1beta1.Eviction, err error)
 	// Evictions returns an object that can list and get Evictions.
 	Evictions(namespace string) EvictionNamespaceLister
 	EvictionListerExpansion
@@ -38,17 +38,25 @@ type EvictionLister interface {
 
 // evictionLister implements the EvictionLister interface.
 type evictionLister struct {
-	listers.ResourceIndexer[*policyv1beta1.Eviction]
+	indexer cache.Indexer
 }
 
 // NewEvictionLister returns a new EvictionLister.
 func NewEvictionLister(indexer cache.Indexer) EvictionLister {
-	return &evictionLister{listers.New[*policyv1beta1.Eviction](indexer, policyv1beta1.Resource("eviction"))}
+	return &evictionLister{indexer: indexer}
+}
+
+// List lists all Evictions in the indexer.
+func (s *evictionLister) List(selector labels.Selector) (ret []*v1beta1.Eviction, err error) {
+	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
+		ret = append(ret, m.(*v1beta1.Eviction))
+	})
+	return ret, err
 }
 
 // Evictions returns an object that can list and get Evictions.
 func (s *evictionLister) Evictions(namespace string) EvictionNamespaceLister {
-	return evictionNamespaceLister{listers.NewNamespaced[*policyv1beta1.Eviction](s.ResourceIndexer, namespace)}
+	return evictionNamespaceLister{indexer: s.indexer, namespace: namespace}
 }
 
 // EvictionNamespaceLister helps list and get Evictions.
@@ -56,15 +64,36 @@ func (s *evictionLister) Evictions(namespace string) EvictionNamespaceLister {
 type EvictionNamespaceLister interface {
 	// List lists all Evictions in the indexer for a given namespace.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*policyv1beta1.Eviction, err error)
+	List(selector labels.Selector) (ret []*v1beta1.Eviction, err error)
 	// Get retrieves the Eviction from the indexer for a given namespace and name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*policyv1beta1.Eviction, error)
+	Get(name string) (*v1beta1.Eviction, error)
 	EvictionNamespaceListerExpansion
 }
 
 // evictionNamespaceLister implements the EvictionNamespaceLister
 // interface.
 type evictionNamespaceLister struct {
-	listers.ResourceIndexer[*policyv1beta1.Eviction]
+	indexer   cache.Indexer
+	namespace string
+}
+
+// List lists all Evictions in the indexer for a given namespace.
+func (s evictionNamespaceLister) List(selector labels.Selector) (ret []*v1beta1.Eviction, err error) {
+	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
+		ret = append(ret, m.(*v1beta1.Eviction))
+	})
+	return ret, err
+}
+
+// Get retrieves the Eviction from the indexer for a given namespace and name.
+func (s evictionNamespaceLister) Get(name string) (*v1beta1.Eviction, error) {
+	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, errors.NewNotFound(v1beta1.Resource("eviction"), name)
+	}
+	return obj.(*v1beta1.Eviction), nil
 }

@@ -208,10 +208,9 @@ type Connection struct {
 	nextStreamId     spdy.StreamId
 	receivedStreamId spdy.StreamId
 
-	// pingLock protects pingChans and pingId
-	pingLock  sync.Mutex
-	pingId    uint32
-	pingChans map[uint32]chan error
+	pingIdLock sync.Mutex
+	pingId     uint32
+	pingChans  map[uint32]chan error
 
 	shutdownLock sync.Mutex
 	shutdownChan chan error
@@ -275,20 +274,16 @@ func NewConnection(conn net.Conn, server bool) (*Connection, error) {
 // returns the response time
 func (s *Connection) Ping() (time.Duration, error) {
 	pid := s.pingId
-	s.pingLock.Lock()
+	s.pingIdLock.Lock()
 	if s.pingId > 0x7ffffffe {
 		s.pingId = s.pingId - 0x7ffffffe
 	} else {
 		s.pingId = s.pingId + 2
 	}
+	s.pingIdLock.Unlock()
 	pingChan := make(chan error)
 	s.pingChans[pid] = pingChan
-	s.pingLock.Unlock()
-	defer func() {
-		s.pingLock.Lock()
-		delete(s.pingChans, pid)
-		s.pingLock.Unlock()
-	}()
+	defer delete(s.pingChans, pid)
 
 	frame := &spdy.PingFrame{Id: pid}
 	startTime := time.Now()
@@ -617,14 +612,10 @@ func (s *Connection) handleDataFrame(frame *spdy.DataFrame) error {
 }
 
 func (s *Connection) handlePingFrame(frame *spdy.PingFrame) error {
-	s.pingLock.Lock()
-	pingId := s.pingId
-	pingChan, pingOk := s.pingChans[frame.Id]
-	s.pingLock.Unlock()
-
-	if pingId&0x01 != frame.Id&0x01 {
+	if s.pingId&0x01 != frame.Id&0x01 {
 		return s.framer.WriteFrame(frame)
 	}
+	pingChan, pingOk := s.pingChans[frame.Id]
 	if pingOk {
 		close(pingChan)
 	}
@@ -712,9 +703,7 @@ func (s *Connection) shutdown(closeTimeout time.Duration) {
 
 	var timeout <-chan time.Time
 	if closeTimeout > time.Duration(0) {
-		timer := time.NewTimer(closeTimeout)
-		defer timer.Stop()
-		timeout = timer.C
+		timeout = time.After(closeTimeout)
 	}
 	streamsClosed := make(chan bool)
 
@@ -741,23 +730,17 @@ func (s *Connection) shutdown(closeTimeout time.Duration) {
 	}
 
 	if err != nil {
-		// default to 1 second
-		duration := time.Second
-		// if a closeTimeout was given, use that, clipped to 1s-10m
-		if closeTimeout > time.Second {
-			duration = closeTimeout
-		}
-		if duration > 10*time.Minute {
-			duration = 10 * time.Minute
-		}
-		timer := time.NewTimer(duration)
-		defer timer.Stop()
-		select {
-		case s.shutdownChan <- err:
-			// error was handled
-		case <-timer.C:
-			debugMessage("Unhandled close error after %s: %s", duration, err)
-		}
+		duration := 10 * time.Minute
+		time.AfterFunc(duration, func() {
+			select {
+			case err, ok := <-s.shutdownChan:
+				if ok {
+					debugMessage("Unhandled close error after %s: %s", duration, err)
+				}
+			default:
+			}
+		})
+		s.shutdownChan <- err
 	}
 	close(s.shutdownChan)
 }
@@ -816,9 +799,7 @@ func (s *Connection) CloseWait() error {
 func (s *Connection) Wait(waitTimeout time.Duration) error {
 	var timeout <-chan time.Time
 	if waitTimeout > time.Duration(0) {
-		timer := time.NewTimer(waitTimeout)
-		defer timer.Stop()
-		timeout = timer.C
+		timeout = time.After(waitTimeout)
 	}
 
 	select {

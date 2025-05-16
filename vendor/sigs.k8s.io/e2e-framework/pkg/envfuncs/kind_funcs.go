@@ -27,7 +27,7 @@ import (
 func GetKindClusterFromContext(ctx context.Context, clusterName string) (*kind.Cluster, bool) {
 	provider, ok := GetClusterFromContext(ctx, clusterName)
 	if ok {
-		return provider.(*kind.Cluster), ok // nolint: errcheck
+		return provider.(*kind.Cluster), ok
 	}
 	return nil, ok
 }

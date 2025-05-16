@@ -208,7 +208,7 @@ func (c *Condition) JobConditionMatch(job k8s.Object, conditionType batchv1.JobC
 		if err := c.resources.Get(ctx, job.GetName(), job.GetNamespace(), job); err != nil {
 			return false, err
 		}
-		status := job.(*batchv1.Job).Status // nolint: errcheck
+		status := job.(*batchv1.Job).Status
 		log.V(4).InfoS("Current Status of the job resource", "status", status)
 		for _, cond := range status.Conditions {
 			if cond.Type == conditionType && cond.Status == conditionState {
@@ -225,7 +225,7 @@ func (c *Condition) DeploymentConditionMatch(deployment k8s.Object, conditionTyp
 		if err := c.resources.Get(ctx, deployment.GetName(), deployment.GetNamespace(), deployment); err != nil {
 			return false, err
 		}
-		for _, cond := range deployment.(*appsv1.Deployment).Status.Conditions { // nolint: errcheck
+		for _, cond := range deployment.(*appsv1.Deployment).Status.Conditions {
 			if cond.Type == conditionType && cond.Status == conditionState {
 				done = true
 			}
@@ -242,7 +242,7 @@ func (c *Condition) PodConditionMatch(pod k8s.Object, conditionType v1.PodCondit
 		if err := c.resources.Get(ctx, pod.GetName(), pod.GetNamespace(), pod); err != nil {
 			return false, err
 		}
-		status := pod.(*v1.Pod).Status // nolint: errcheck
+		status := pod.(*v1.Pod).Status
 		log.V(4).InfoS("Current Status of the pod resource", "status", status)
 		for _, cond := range status.Conditions {
 			if cond.Type == conditionType && cond.Status == conditionState {
@@ -262,8 +262,8 @@ func (c *Condition) PodPhaseMatch(pod k8s.Object, phase v1.PodPhase) apimachiner
 		if err := c.resources.Get(context.Background(), pod.GetName(), pod.GetNamespace(), pod); err != nil {
 			return false, err
 		}
-		log.V(4).InfoS("Current phase", "phase", pod.(*v1.Pod).Status.Phase) // nolint: errcheck
-		return pod.(*v1.Pod).Status.Phase == phase, nil                      // nolint: errcheck
+		log.V(4).InfoS("Current phase", "phase", pod.(*v1.Pod).Status.Phase)
+		return pod.(*v1.Pod).Status.Phase == phase, nil
 	}
 }
 
@@ -302,18 +302,4 @@ func (c *Condition) DeploymentAvailable(name, namespace string) apimachinerywait
 		appsv1.DeploymentAvailable,
 		v1.ConditionTrue,
 	)
-}
-
-// DaemonSetReady is a helper function used to check if a daemonset's pods are scheduled and ready
-func (c *Condition) DaemonSetReady(daemonset k8s.Object) apimachinerywait.ConditionWithContextFunc {
-	return func(ctx context.Context) (done bool, err error) {
-		if err := c.resources.Get(ctx, daemonset.GetName(), daemonset.GetNamespace(), daemonset); err != nil {
-			return false, err
-		}
-		status := daemonset.(*appsv1.DaemonSet).Status // nolint: errcheck
-		if status.NumberReady == status.DesiredNumberScheduled && status.NumberUnavailable == 0 {
-			done = true
-		}
-		return
-	}
 }

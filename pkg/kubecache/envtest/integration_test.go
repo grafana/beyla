@@ -329,59 +329,73 @@ func TestIgnoreHeadlessServices(t *testing.T) {
 }
 
 func TestResultsSortedByTimestamp(t *testing.T) {
+	// This test:
+	// 1- retrieves all the existing K8s objects from previous test runs
+	// 2- expects that they are sorted by timestamp
+	// 3- creates 2 more objects and expects that they are not received
+	//    before the initial synchronization is finished
+
 	// this test runs better if runs within the whole test suite
 	svcClient := serviceClient{
 		Address:  fmt.Sprintf("127.0.0.1:%d", freePort),
 		Messages: make(chan *informer.Event, 10),
 	}
-	var deployTwoExtraPods = func() {
-		require.NoError(t, k8sClient.Create(ctx, &corev1.Service{
-			ObjectMeta: v1.ObjectMeta{Name: "service1-test-result-sorted", Namespace: "default"},
-			Spec: corev1.ServiceSpec{
-				Ports:     []corev1.ServicePort{{Name: "foo", Port: 8080}},
-				ClusterIP: "10.0.0.123", ClusterIPs: []string{"10.0.0.123"},
-			},
-		}))
-		require.NoError(t, k8sClient.Create(ctx, &corev1.Pod{
-			ObjectMeta: v1.ObjectMeta{Name: "test-result-sorted-pod", Namespace: "default"},
-			Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "test-container", Image: "nginx"}}},
-			Status:     corev1.PodStatus{PodIP: "10.0.0.124"},
-		}))
-	}
+
+	test.Eventually(t, timeout, func(t require.TestingT) {
+		svcClient.Start(ctx, t, nil)
+	})
 
 	prevTS := time.Time{}
-	// should get all the messages before the sync_finished ordered by timestamp
+	// should get all the messages before ordered by timestamp
 	for {
 		evnt := testutil.ReadChannel(t, svcClient.Messages, timeout)
 		if evnt.Type == informer.EventType_SYNC_FINISHED {
 			break
 		}
 		// once we know that the synchronization is started, we deploy to extra pods expecting that
-		// the update is never received
+		// the update is received after SYNC_FINISHED, as they won't be part of the "welcome" list
+		// submitted on connection
 		if prevTS.IsZero() {
-			deployTwoExtraPods()
+			require.NoError(t, k8sClient.Create(ctx, &corev1.Service{
+				ObjectMeta: v1.ObjectMeta{Name: "service1-test-result-sorted", Namespace: "default"},
+				Spec: corev1.ServiceSpec{
+					Ports:     []corev1.ServicePort{{Name: "foo", Port: 8080}},
+					ClusterIP: "10.0.0.123", ClusterIPs: []string{"10.0.0.123"},
+				},
+			}))
+			require.NoError(t, k8sClient.Create(ctx, &corev1.Pod{
+				ObjectMeta: v1.ObjectMeta{Name: "test-result-sorted-pod", Namespace: "default"},
+				Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "test-container", Image: "nginx"}}},
+				Status:     corev1.PodStatus{PodIP: "10.0.0.124"},
+			}))
 		}
 		evntTS := evnt.Resource.StatusTime.AsTime()
 		require.LessOrEqual(t, prevTS, evntTS)
 		prevTS = evntTS
 	}
 	// should get two extra pods after the sync signal
+	newestObjects := map[string]struct{}{
+		"service1-test-result-sorted": {},
+		"test-result-sorted-pod":      {},
+	}
 	evnt := testutil.ReadChannel(t, svcClient.Messages, timeout)
-	assert.Equal(t, "service1-test-result-sorted", evnt.Resource.Name)
+	assert.Contains(t, newestObjects, evnt.Resource.Name)
+	delete(newestObjects, evnt.Resource.Name)
 	evnt = testutil.ReadChannel(t, svcClient.Messages, timeout)
-	assert.Equal(t, "test-result-sorted-pod", evnt.Resource.Name)
+	assert.Contains(t, newestObjects, evnt.Resource.Name)
 }
 
-// TODO: slow test: try with testing/synctest when it becomes stable (experimental did not work)
-// or try to override the testing K8s API to be able to override the creation timestamps
-// (it does not work by explicitly setting the creation timestamp in the objectMeta)
 func TestFilterByTimestamp(t *testing.T) {
+	// this test:
+	// retrieves all the elements whose status timestamp is newer than the test start
+	// (will discard all the items deployed in previous tests)
 	svcClient := serviceClient{
 		Address:  fmt.Sprintf("127.0.0.1:%d", freePort),
 		Messages: make(chan *informer.Event, 10),
 	}
 
-	// starting test at "now + 1s" to discard any previously created element
+	// discard any previously created element from other tests
+	// due to the resolution of Kubernetes timestamps, we need to force wait a second
 	time.Sleep(time.Second)
 	discardEventsBefore := timestamppb.New(time.Now())
 
@@ -393,8 +407,6 @@ func TestFilterByTimestamp(t *testing.T) {
 			ClusterIP: "10.0.0.125", ClusterIPs: []string{"10.0.0.125"},
 		},
 	}))
-	// delaying 1s to force this pod being returned after the previous service
-	time.Sleep(time.Second)
 	require.NoError(t, k8sClient.Create(ctx, &corev1.Pod{
 		ObjectMeta: v1.ObjectMeta{Name: "pod-filter-by-ts", Namespace: "default"},
 		Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "test-container", Image: "nginx"}}},
@@ -404,10 +416,15 @@ func TestFilterByTimestamp(t *testing.T) {
 		svcClient.Start(ctx, t, discardEventsBefore)
 	})
 
+	newestObjects := map[string]struct{}{
+		"service1-filter-by-ts": {},
+		"pod-filter-by-ts":      {},
+	}
 	evnt := testutil.ReadChannel(t, svcClient.Messages, timeout)
-	assert.Equal(t, "service1-filter-by-ts", evnt.Resource.Name)
+	assert.Contains(t, newestObjects, evnt.Resource.Name)
+	delete(newestObjects, evnt.Resource.Name)
 	evnt = testutil.ReadChannel(t, svcClient.Messages, timeout)
-	assert.Equal(t, "pod-filter-by-ts", evnt.Resource.Name)
+	assert.Contains(t, newestObjects, evnt.Resource.Name)
 	evnt = testutil.ReadChannel(t, svcClient.Messages, timeout)
 	assert.Equal(t, informer.EventType_SYNC_FINISHED, evnt.Type)
 
@@ -475,7 +492,6 @@ func (sc *serviceClient) Start(ctx context.Context, t require.TestingT, fromTS *
 			}
 			sc.readMessages.Add(1)
 			if sc.Messages != nil {
-				fmt.Printf("%+v\n", event)
 				sc.Messages <- event
 			}
 			if event.Type == informer.EventType_SYNC_FINISHED {

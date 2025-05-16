@@ -98,7 +98,6 @@ func (m *MapTracer) evictionSynchronization(ctx context.Context, out *msg.Queue[
 		select {
 		case <-ctx.Done():
 			mtlog.Debug("context canceled. Stopping goroutine before evicting flows")
-			m.evictionCond.L.Unlock()
 			return
 		default:
 			mtlog.Debug("evictionSynchronization signal received")

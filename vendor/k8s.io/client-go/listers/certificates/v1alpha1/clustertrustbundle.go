@@ -19,10 +19,10 @@ limitations under the License.
 package v1alpha1
 
 import (
-	certificatesv1alpha1 "k8s.io/api/certificates/v1alpha1"
-	labels "k8s.io/apimachinery/pkg/labels"
-	listers "k8s.io/client-go/listers"
-	cache "k8s.io/client-go/tools/cache"
+	v1alpha1 "k8s.io/api/certificates/v1alpha1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/tools/cache"
 )
 
 // ClusterTrustBundleLister helps list ClusterTrustBundles.
@@ -30,19 +30,39 @@ import (
 type ClusterTrustBundleLister interface {
 	// List lists all ClusterTrustBundles in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*certificatesv1alpha1.ClusterTrustBundle, err error)
+	List(selector labels.Selector) (ret []*v1alpha1.ClusterTrustBundle, err error)
 	// Get retrieves the ClusterTrustBundle from the index for a given name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*certificatesv1alpha1.ClusterTrustBundle, error)
+	Get(name string) (*v1alpha1.ClusterTrustBundle, error)
 	ClusterTrustBundleListerExpansion
 }
 
 // clusterTrustBundleLister implements the ClusterTrustBundleLister interface.
 type clusterTrustBundleLister struct {
-	listers.ResourceIndexer[*certificatesv1alpha1.ClusterTrustBundle]
+	indexer cache.Indexer
 }
 
 // NewClusterTrustBundleLister returns a new ClusterTrustBundleLister.
 func NewClusterTrustBundleLister(indexer cache.Indexer) ClusterTrustBundleLister {
-	return &clusterTrustBundleLister{listers.New[*certificatesv1alpha1.ClusterTrustBundle](indexer, certificatesv1alpha1.Resource("clustertrustbundle"))}
+	return &clusterTrustBundleLister{indexer: indexer}
+}
+
+// List lists all ClusterTrustBundles in the indexer.
+func (s *clusterTrustBundleLister) List(selector labels.Selector) (ret []*v1alpha1.ClusterTrustBundle, err error) {
+	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
+		ret = append(ret, m.(*v1alpha1.ClusterTrustBundle))
+	})
+	return ret, err
+}
+
+// Get retrieves the ClusterTrustBundle from the index for a given name.
+func (s *clusterTrustBundleLister) Get(name string) (*v1alpha1.ClusterTrustBundle, error) {
+	obj, exists, err := s.indexer.GetByKey(name)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, errors.NewNotFound(v1alpha1.Resource("clustertrustbundle"), name)
+	}
+	return obj.(*v1alpha1.ClusterTrustBundle), nil
 }

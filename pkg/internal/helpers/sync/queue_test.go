@@ -12,10 +12,11 @@ import (
 
 const timeout = 5 * time.Second
 
-func TestQueuePopBlockingIfEmpty(t *testing.T) {
+func TestQueueDequeueBlockingIfEmpty(t *testing.T) {
 	// GIVEN an empty queue
 	q := NewQueue[int]()
-	// WHEN popping an element
+
+	// WHEN dequeuing an element
 	available := make(chan int, 30)
 	go func() {
 		for {
@@ -26,7 +27,7 @@ func TestQueuePopBlockingIfEmpty(t *testing.T) {
 	// THEN it blocks until an element is available
 	testutil.ChannelEmpty(t, available, 10*time.Millisecond)
 
-	// WHEN pushing elements
+	// AND WHEN there are available elements
 	q.Enqueue(1)
 
 	// THEN it unblocks and elements are returned in order
@@ -48,21 +49,25 @@ func TestQueueOrdering(t *testing.T) {
 }
 
 func TestSynchronization(t *testing.T) {
-	receivedValues := sync.Map{}
 	q := NewQueue[int]()
+	// enqueuing from concurrent goroutines
 	for i := 0; i < 1000; i++ {
 		cnt := i
 		go q.Enqueue(cnt)
 	}
-	// wait for all the goroutines to finish
+
+	receivedValues := sync.Map{}
 	wg := sync.WaitGroup{}
 	wg.Add(1000)
 	for i := 0; i < 1000; i++ {
+		// dequeuing from concurrent goroutines
 		go func() {
 			receivedValues.Store(q.Dequeue(), struct{}{})
 			wg.Done()
 		}()
 	}
+
+	// wait for all the goroutines to finish
 	done := make(chan struct{})
 	go func() {
 		wg.Wait()
@@ -70,6 +75,7 @@ func TestSynchronization(t *testing.T) {
 	}()
 	testutil.ReadChannel(t, done, timeout)
 
+	// check that each enqueued value has been effectively dequeued
 	for i := 0; i < 1000; i++ {
 		_, ok := receivedValues.Load(i)
 		assert.Truef(t, ok, "expected to receive value %d", i)

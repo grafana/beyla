@@ -18,13 +18,11 @@ package remotecommand
 
 import (
 	"context"
-
-	"k8s.io/klog/v2"
 )
 
-var _ Executor = &FallbackExecutor{}
+var _ Executor = &fallbackExecutor{}
 
-type FallbackExecutor struct {
+type fallbackExecutor struct {
 	primary        Executor
 	secondary      Executor
 	shouldFallback func(error) bool
@@ -35,7 +33,7 @@ type FallbackExecutor struct {
 // websocket "StreamWithContext" call fails.
 // func NewFallbackExecutor(config *restclient.Config, method string, url *url.URL) (Executor, error) {
 func NewFallbackExecutor(primary, secondary Executor, shouldFallback func(error) bool) (Executor, error) {
-	return &FallbackExecutor{
+	return &fallbackExecutor{
 		primary:        primary,
 		secondary:      secondary,
 		shouldFallback: shouldFallback,
@@ -43,17 +41,16 @@ func NewFallbackExecutor(primary, secondary Executor, shouldFallback func(error)
 }
 
 // Stream is deprecated. Please use "StreamWithContext".
-func (f *FallbackExecutor) Stream(options StreamOptions) error {
+func (f *fallbackExecutor) Stream(options StreamOptions) error {
 	return f.StreamWithContext(context.Background(), options)
 }
 
 // StreamWithContext initially attempts to call "StreamWithContext" using the
 // primary executor, falling back to calling the secondary executor if the
 // initial primary call to upgrade to a websocket connection fails.
-func (f *FallbackExecutor) StreamWithContext(ctx context.Context, options StreamOptions) error {
+func (f *fallbackExecutor) StreamWithContext(ctx context.Context, options StreamOptions) error {
 	err := f.primary.StreamWithContext(ctx, options)
 	if f.shouldFallback(err) {
-		klog.V(4).Infof("RemoteCommand fallback: %v", err)
 		return f.secondary.StreamWithContext(ctx, options)
 	}
 	return err

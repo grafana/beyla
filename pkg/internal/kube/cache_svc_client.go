@@ -20,8 +20,9 @@ func cslog() *slog.Logger {
 
 type cacheSvcClient struct {
 	meta.BaseNotifier
-	address                string
-	log                    *slog.Logger
+	address string
+	log     *slog.Logger
+
 	lastEventTS            time.Time
 	ctx                    context.Context
 	syncTimeout            time.Duration

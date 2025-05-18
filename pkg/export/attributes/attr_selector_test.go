@@ -86,6 +86,7 @@ func TestFor_GlobEntries_NoInclusion(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, []attr.Name{
+		"cluster.name",
 		"direction",
 		"k8s.cluster.name",
 		"k8s.src.owner.name",
@@ -111,6 +112,7 @@ func TestFor_GlobEntries_Order(t *testing.T) {
 	assert.Equal(t, []attr.Name{
 		"beyla.ip",
 		"client.port",
+		"cluster.name",
 		"dst.name",
 		"server.port",
 		"src.address",
@@ -151,6 +153,22 @@ func TestFor_KubeDisabled(t *testing.T) {
 	}, p.For(BeylaNetworkFlow))
 }
 
+func TestFor_KubeEnabled_NetworkMetric(t *testing.T) {
+	p, err := NewAttrSelector(GroupKubernetes, Selection{
+		"http_server_request_duration": InclusionLists{
+			Include: []string{"*.name", "http.*"},
+			Exclude: []string{"k8s.*"},
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, []attr.Name{
+		"cluster.name",
+		"http.request.method",
+		"http.response.status_code",
+		"service.name",
+	}, p.For(HTTPServerDuration))
+}
+
 func TestNilDoesNotCrash(t *testing.T) {
 	assert.NotPanics(t, func() {
 		p, err := NewAttrSelector(GroupKubernetes, nil)
@@ -163,6 +181,7 @@ func TestDefault(t *testing.T) {
 	p, err := NewAttrSelector(GroupKubernetes, nil)
 	require.NoError(t, err)
 	assert.Equal(t, []attr.Name{
+		"cluster.name",
 		"direction",
 		"k8s.cluster.name",
 		"k8s.dst.namespace",

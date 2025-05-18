@@ -196,6 +196,7 @@ and metrics with the Standard OpenTelemetry labels:
 - `k8s.pod.uid`
 - `k8s.pod.start_time`
 - `k8s.cluster.name`
+- `cluster.name`
 
 In YAML, this section is named `kubernetes`, and is located under the
 `attributes` top-level section. For example:

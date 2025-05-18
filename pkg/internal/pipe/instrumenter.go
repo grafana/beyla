@@ -65,11 +65,13 @@ func newGraphBuilder(config *beyla.Config, ctxInfo *global.ContextInfo, tracesCh
 		tracesReaderToRouter,
 		routerToKubeDecorator,
 	))
-
 	kubeDecoratorToNameResolver := newQueue()
 	swi.Add(transform.KubeDecoratorProvider(
-		ctxInfo, &config.Attributes.Kubernetes,
-		routerToKubeDecorator, kubeDecoratorToNameResolver,
+		ctxInfo,
+		config.Attributes.ClusterName,
+		&config.Attributes.Kubernetes,
+		routerToKubeDecorator,
+		kubeDecoratorToNameResolver,
 	))
 
 	nameResolverToAttrFilter := newQueue()

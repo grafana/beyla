@@ -67,6 +67,7 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 	processEventsKubeDecorated := newEventQueue()
 	swi.Add(transform.KubeProcessEventDecoratorProvider(
 		ctxInfo,
+		config.Attributes.ClusterName,
 		&config.Attributes.Kubernetes,
 		processEventsHostDecorated,
 		processEventsKubeDecorated,

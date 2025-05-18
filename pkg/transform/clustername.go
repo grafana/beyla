@@ -38,12 +38,14 @@ type clusterNameFetcher func(context.Context) (string, error)
 // TODO: consider other providers (Alibaba, Oracle, etc...)
 func fetchClusterName(ctx context.Context, k8sInformer *kube.MetadataProvider) string {
 	log := klog().With("func", "fetchClusterName")
+
 	var clusterNameFetchers = map[string]clusterNameFetcher{
 		"Label": nodeLabelsClusterNameFetcher(k8sInformer),
 		"EC2":   eksClusterNameFetcher,
 		"GCP":   gcpClusterNameFetcher,
 		"Azure": azureClusterNameFetcher,
 	}
+
 	for provider, fetch := range clusterNameFetchers {
 		log := log.With("provider", provider)
 		log.Debug("trying to retrieve cluster name")
@@ -54,30 +56,36 @@ func fetchClusterName(ctx context.Context, k8sInformer *kube.MetadataProvider) s
 			return name
 		}
 	}
+
 	return ""
 }
 
 func httpGet(ctx context.Context, url string, headers map[string]string) (string, error) {
-	req, err := http.NewRequest(http.MethodGet, url, nil)
-	req = req.WithContext(ctx)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return "", fmt.Errorf("creating HTTP request for %s: %w", url, err)
 	}
+
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}
+
 	resp, err := metadataClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("invoking GET %s: %w", url, err)
 	}
+	defer resp.Body.Close()
+
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("%s unexpected response: %d %s",
 			url, resp.StatusCode, resp.Status)
 	}
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", fmt.Errorf("error reading response body: %w", err)
 	}
+
 	return string(bytes.TrimSpace(body)), nil
 }
 
@@ -107,11 +115,13 @@ func eksClusterNameFetcher(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
 	for _, attr := range resource.Attributes() {
 		if string(attr.Key) == string(attr2.K8sClusterName) {
 			return attr.Value.Emit(), nil
 		}
 	}
+
 	return "", fmt.Errorf("did not find any cluster attribute in %+v", resource.Attributes())
 }
 

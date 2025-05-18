@@ -67,7 +67,9 @@ In order to configure which attributes to show or which attributes to hide, chec
 | Application (all)              | `k8s.cluster.name`           | shown if Kubernetes metadata is enabled           |
 | Application (all)              | `service.name`               | shown                                             |
 | Application (all)              | `service.namespace`          | shown                                             |
-| Application (all)              | `target.instance`            | shown                                             |
+| Application (all)              | `target.instance`            | 
+shown                                             |
+| Application (all)              | `cluster.name`               | shown                                             |
 | Application (all)              | `url.path`                   | hidden                                            |
 | Application (client)           | `server.address`             | hidden                                            |
 | Application (client)           | `server.port`                | hidden                                            |

@@ -53,12 +53,14 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 		Attributes: map[attr.Name]Default{
 			attr.ServiceName:      true,
 			attr.ServiceNamespace: true,
+			attr.ClusterName:      true,
 		},
 	}
 
 	// network metrics attributes
 	networkAttributes := AttrReportGroup{
 		Attributes: map[attr.Name]Default{
+			attr.ClusterName:    true,
 			attr.Direction:      true,
 			attr.BeylaIP:        false,
 			attr.Transport:      false,
@@ -114,8 +116,10 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 	// network* counterpart, but all of them disabled by default, to keep cardinality low
 	networkInterZone := copyDisabled(networkAttributes)
 	networkInterZone.Attributes[attr.K8sClusterName] = true
+
 	networkInterZoneKube := copyDisabled(networkKubeAttributes)
 	networkInterZoneCIDR := copyDisabled(networkCIDR)
+
 	// only src and dst zone are enabled by default
 	networkInterZone.Attributes[attr.SrcZone] = true
 	networkInterZone.Attributes[attr.DstZone] = true

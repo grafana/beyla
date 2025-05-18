@@ -54,6 +54,7 @@ func log() *slog.Logger { return slog.With("component", "k8s.MetadataDecorator")
 
 func MetadataDecoratorProvider(
 	ctx context.Context,
+	clusterName string,
 	cfg *transform.KubernetesDecorator,
 	k8sInformer *kube.MetadataProvider,
 	input, output *msg.Queue[[]*ebpf.Record],
@@ -62,7 +63,7 @@ func MetadataDecoratorProvider(
 		if !k8sInformer.IsKubeEnabled() {
 			return swarm.Bypass(input, output)
 		}
-		nt, err := newDecorator(ctx, cfg, k8sInformer)
+		nt, err := newDecorator(ctx, clusterName, cfg, k8sInformer)
 		if err != nil {
 			return nil, fmt.Errorf("instantiating k8s.MetadataDecorator: %w", err)
 		}
@@ -90,6 +91,7 @@ type decorator struct {
 	alreadyLoggedIPs *simplelru.LRU[string, struct{}]
 	kube             *kube.Store
 	clusterName      string
+	k8sClusterName   string
 }
 
 func (n *decorator) decorateNoDrop(flows []*ebpf.Record) []*ebpf.Record {
@@ -113,8 +115,11 @@ func (n *decorator) transform(flow *ebpf.Record) bool {
 	if flow.Attrs.Metadata == nil {
 		flow.Attrs.Metadata = map[attr.Name]string{}
 	}
+	if n.k8sClusterName != "" {
+		flow.Attrs.Metadata[attr.K8sClusterName] = n.k8sClusterName
+	}
 	if n.clusterName != "" {
-		flow.Attrs.Metadata[(attr.K8sClusterName)] = n.clusterName
+		flow.Attrs.Metadata[attr.ClusterName] = n.clusterName
 	}
 	srcOk := n.decorate(flow, attrPrefixSrc, flow.Id.SrcIP().IP().String())
 	dstOk := n.decorate(flow, attrPrefixDst, flow.Id.DstIP().IP().String())
@@ -187,15 +192,21 @@ func (n *decorator) nodeLabels(flow *ebpf.Record, prefix string, meta *informer.
 }
 
 // newDecorator create a new transform
-func newDecorator(ctx context.Context, cfg *transform.KubernetesDecorator, k8sInformer *kube.MetadataProvider) (*decorator, error) {
+func newDecorator(
+	ctx context.Context,
+	clusterName string,
+	cfg *transform.KubernetesDecorator,
+	k8sInformer *kube.MetadataProvider,
+) (*decorator, error) {
 	meta, err := k8sInformer.Get(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("instantiating k8s.MetadataDecorator: %w", err)
 	}
 	nt := decorator{
-		log:         log(),
-		clusterName: transform.KubeClusterName(ctx, cfg, k8sInformer),
-		kube:        meta,
+		log:            log(),
+		clusterName:    transform.KubeClusterName(ctx, clusterName, cfg, k8sInformer, false),
+		k8sClusterName: transform.KubeClusterName(ctx, clusterName, cfg, k8sInformer, true),
+		kube:           meta,
 	}
 	if nt.log.Enabled(ctx, slog.LevelDebug) {
 		var err error

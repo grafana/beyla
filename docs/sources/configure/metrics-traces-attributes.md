@@ -213,7 +213,7 @@ Beyla immediately receives any update on resources' metadata. In addition, Beyla
 
 ### Service name template
 
-Higher values reduce the load on the Kubernetes API service.
+You can template service names using Go templates. This lets you create conditional or extended service names.
 
 The following context is available to the template:
 

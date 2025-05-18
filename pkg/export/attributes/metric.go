@@ -11,7 +11,7 @@ type Section string
 // Name of a metric in three forms
 type Name struct {
 	// Section name in the attributes.select configuration option. It is
-	// a normalized form accorting to the normalizeMetric function below.
+	// a normalized form according to the normalizeMetric function below.
 	// It makes sure that it does not have metric nor aggregation suffix.
 	Section Section
 	// Prom name of a metric for the Prometheus exporter

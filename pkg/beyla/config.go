@@ -39,7 +39,7 @@ const (
 )
 
 const (
-	defaultMetricsTTL = 70 * time.Minute
+	defaultMetricsTTL = 5 * time.Minute
 )
 
 var DefaultConfig = Config{
@@ -205,7 +205,7 @@ type Config struct {
 	// and both the "application" and "application_process" features are enabled
 	Processes process.CollectConfig `yaml:"processes"`
 
-	// Grafana Agent specific configuration
+	// Grafana Alloy specific configuration
 	TracesReceiver TracesReceiverConfig `yaml:"-"`
 }
 
@@ -214,7 +214,9 @@ type Consumer interface {
 }
 
 type TracesReceiverConfig struct {
-	Traces []Consumer
+	Traces           []Consumer
+	Sampler          otel.Sampler `yaml:"sampler"`
+	Instrumentations []string     `yaml:"instrumentations" env:"BEYLA_OTEL_TRACES_INSTRUMENTATIONS" envSeparator:","`
 }
 
 func (t TracesReceiverConfig) Enabled() bool {
@@ -256,7 +258,7 @@ func (c *Config) Validate() error {
 		return ConfigError(fmt.Sprintf("error in exclude_services YAML property: %s", err.Error()))
 	}
 	if !c.Enabled(FeatureNetO11y) && !c.Enabled(FeatureAppO11y) {
-		return ConfigError("missing to enable application discovery or network metrics. Check documentation")
+		return ConfigError("missing application discovery section or network metrics configuration. Check documentation.")
 	}
 	if (c.Port.Len() > 0 || c.Exec.IsSet() || len(c.Discovery.Services) > 0) && c.Discovery.SystemWide {
 		return ConfigError("you can't use BEYLA_SYSTEM_WIDE if any of BEYLA_EXECUTABLE_NAME, BEYLA_OPEN_PORT or services (YAML) are set")
@@ -350,7 +352,7 @@ func (c *Config) Enabled(feature Feature) bool {
 	case FeatureNetO11y:
 		return c.NetworkFlows.Enable || c.promNetO11yEnabled() || c.otelNetO11yEnabled()
 	case FeatureAppO11y:
-		return c.Port.Len() > 0 || c.Exec.IsSet() || len(c.Discovery.Services) > 0 || c.Discovery.SystemWide
+		return c.Port.Len() > 0 || c.Exec.IsSet() || c.Discovery.AppDiscoveryEnabled() || c.Discovery.SurveyEnabled() || c.Discovery.SystemWide
 	}
 	return false
 }
@@ -381,6 +383,8 @@ func LoadConfig(file io.Reader) (*Config, error) {
 		if err != nil {
 			return nil, fmt.Errorf("reading YAML configuration: %w", err)
 		}
+		// replaces environment variables in YAML file
+		cfgBuf = config.ReplaceEnv(cfgBuf)
 		if err := yaml.Unmarshal(cfgBuf, &cfg); err != nil {
 			return nil, fmt.Errorf("parsing YAML configuration: %w", err)
 		}

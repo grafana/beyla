@@ -54,6 +54,7 @@ func TestAppMetricsExpiration(t *testing.T) {
 			Features:                    []string{otel.FeatureApplication},
 			Instrumentations:            []string{instrumentations.InstrumentationALL},
 		},
+		false,
 		attributes.Selection{
 			attributes.HTTPServerDuration.Section: attributes.InclusionLists{
 				Include: []string{"url_path"},
@@ -68,7 +69,7 @@ func TestAppMetricsExpiration(t *testing.T) {
 
 	app := exec.FileInfo{
 		Service: svc.Attrs{
-			UID: svc.UID{Pid: 1, Name: "test-app", Namespace: "default", Instance: "test-app-1"},
+			UID: svc.UID{Name: "test-app", Namespace: "default", Instance: "test-app-1"},
 		},
 		Pid: 1,
 	}
@@ -465,6 +466,7 @@ func makePromExporter(
 			Features:                    []string{otel.FeatureApplication},
 			Instrumentations:            instrumentations,
 		},
+		false,
 		attributes.Selection{
 			attributes.HTTPServerDuration.Section: attributes.InclusionLists{
 				Include: []string{"url_path"},

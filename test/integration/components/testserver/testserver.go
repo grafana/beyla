@@ -97,7 +97,7 @@ func setupLog(cfg *config) {
 	lvl := slog.LevelInfo
 	err := lvl.UnmarshalText([]byte(cfg.LogLevel))
 	if err != nil {
-		slog.Error("unknown log level specified, choises are [DEBUG, INFO, WARN, ERROR]", "error", err)
+		slog.Error("unknown log level specified, choices are [DEBUG, INFO, WARN, ERROR]", "error", err)
 		os.Exit(-1)
 	}
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{

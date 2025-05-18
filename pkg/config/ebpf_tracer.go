@@ -55,10 +55,6 @@ type EBPFTracer struct {
 	// nolint:undoc
 	OverrideBPFLoopEnabled bool `yaml:"override_bpfloop_enabled" env:"BEYLA_OVERRIDE_BPF_LOOP_ENABLED"`
 
-	// Enables Linux Traffic Control probes for context propagation
-	// nolint:undoc
-	UseTCForL7CP bool `yaml:"traffic_control_l7_context_propagation" env:"BEYLA_BPF_TC_L7_CP"`
-
 	// Select the TC attachment backend: accepted values are 'tc' (netlink),
 	// and 'tcx'
 	TCBackend tcmanager.TCBackend `yaml:"traffic_control_backend" env:"BEYLA_BPF_TC_BACKEND"`

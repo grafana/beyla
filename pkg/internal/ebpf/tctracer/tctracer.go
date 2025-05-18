@@ -163,3 +163,7 @@ func (p *Tracer) stopTC() {
 	p.ifaceManager.Wait()
 	p.ifaceManager = nil
 }
+
+func (p *Tracer) Required() bool {
+	return false
+}

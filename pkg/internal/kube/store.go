@@ -1,9 +1,11 @@
 package kube
 
 import (
+	"bytes"
 	"log/slog"
 	"strings"
 	"sync"
+	"text/template"
 
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
@@ -105,17 +107,19 @@ type Store struct {
 	meta.BaseNotifier
 
 	resourceLabels ResourceLabels
+
+	// A go template that, if set, is used to create the service name
+	serviceNameTemplate *template.Template
 }
 
 type CachedObjMeta struct {
 	Meta             *informer.ObjectMeta
-	ServiceName      string
-	ServiceNamespace string
 	OTELResourceMeta map[attr.Name]string
 }
 
-func NewStore(kubeMetadata meta.Notifier, resourceLabels ResourceLabels) *Store {
+func NewStore(kubeMetadata meta.Notifier, resourceLabels ResourceLabels, serviceNameTemplate *template.Template) *Store {
 	log := dblog()
+
 	db := &Store{
 		log:                 log,
 		containerIDs:        map[string]*container.Info{},
@@ -129,6 +133,7 @@ func NewStore(kubeMetadata meta.Notifier, resourceLabels ResourceLabels) *Store 
 		metadataNotifier:    kubeMetadata,
 		BaseNotifier:        meta.NewBaseNotifier(log),
 		resourceLabels:      resourceLabels,
+		serviceNameTemplate: serviceNameTemplate,
 	}
 	kubeMetadata.Subscribe(db)
 	return db
@@ -179,7 +184,7 @@ func (s *Store) cacheResourceMetadata(meta *informer.ObjectMeta) *CachedObjMeta 
 			com.OTELResourceMeta[serviceNamespaceKey] = val
 		}
 	}
-	com.ServiceName, com.ServiceNamespace = s.serviceNameNamespaceForMetadata(meta)
+
 	return &com
 }
 
@@ -355,21 +360,21 @@ func (s *Store) ObjectMetaByIP(ip string) *CachedObjMeta {
 	return s.objectMetaByIP[ip]
 }
 
-func (s *Store) ServiceNameNamespaceForMetadata(om *informer.ObjectMeta) (string, string) {
+func (s *Store) ServiceNameNamespaceForMetadata(om *informer.ObjectMeta, containerName string) (string, string) {
 	s.access.RLock()
 	defer s.access.RUnlock()
-	return s.serviceNameNamespaceForMetadata(om)
+	return s.serviceNameNamespaceForMetadata(om, containerName)
 }
 
 // TODO: this function can be probably simplified, as it is used to build a CachedObjectMeta
 // that already contains the metadata
-func (s *Store) serviceNameNamespaceForMetadata(om *informer.ObjectMeta) (string, string) {
+func (s *Store) serviceNameNamespaceForMetadata(om *informer.ObjectMeta, containerName string) (string, string) {
 	var name string
 	var namespace string
 	if owner := TopOwner(om.Pod); owner != nil {
-		name, namespace = s.serviceNameNamespaceOwnerID(om, owner.Name)
+		name, namespace = s.serviceNameNamespaceOwnerID(om, owner.Name, containerName)
 	} else {
-		name, namespace = s.serviceNameNamespaceOwnerID(om, om.Name)
+		name, namespace = s.serviceNameNamespaceOwnerID(om, om.Name, containerName)
 	}
 	return name, namespace
 }
@@ -408,7 +413,7 @@ func (s *Store) ServiceNameNamespaceForIP(ip string) (string, string) {
 
 	name, namespace := "", ""
 	if om, ok := s.objectMetaByIP[ip]; ok {
-		name, namespace = s.serviceNameNamespaceForMetadata(om.Meta)
+		name, namespace = s.serviceNameNamespaceForMetadata(om.Meta, "")
 	}
 
 	s.otelServiceInfoByIP[ip] = OTelServiceNamePair{Name: name, Namespace: namespace}
@@ -422,7 +427,7 @@ func (s *Store) ServiceNameNamespaceForIP(ip string) (string, string) {
 // 2. Resource attributes set via annotations (with the resource.opentelemetry.io/ prefix)
 // 3. Resource attributes set via labels (e.g. app.kubernetes.io/name)
 // 4. Resource attributes calculated from the owner's metadata (e.g. k8s.deployment.name) or pod's metadata (e.g. k8s.pod.name)
-func (s *Store) serviceNameNamespaceOwnerID(om *informer.ObjectMeta, ownerName string) (string, string) {
+func (s *Store) serviceNameNamespaceOwnerID(om *informer.ObjectMeta, ownerName string, containerName string) (string, string) {
 	// ownerName can be the top Owner name, or om.Name in case it's a pod without owner
 	serviceName := ownerName
 	serviceNamespace := om.Namespace
@@ -430,15 +435,38 @@ func (s *Store) serviceNameNamespaceOwnerID(om *informer.ObjectMeta, ownerName s
 
 	// OTEL_SERVICE_NAME and OTEL_SERVICE_NAMESPACE variables take precedence over user-configured annotations
 	// and labels
-	if envName, ok := s.serviceNameFromEnv(ownerKey); ok {
+	if envName, ok := s.serviceNameFromEnv(ownerKey, containerName); ok {
 		serviceName = envName
+	} else if s.serviceNameTemplate != nil {
+		// defining a serviceNameTemplate disables the resolution via annotation + label (this can be implemented in the template)
+		var serviceNameBuffer bytes.Buffer
+		ctx := struct {
+			Meta          *informer.ObjectMeta
+			ContainerName string
+		}{
+			Meta:          om,
+			ContainerName: containerName,
+		}
+		err := s.serviceNameTemplate.Execute(&serviceNameBuffer, ctx)
+
+		if err != nil {
+			s.log.Error("error executing service name template", "error", err)
+		} else {
+			parts := strings.Split(serviceNameBuffer.String(), "\n")
+
+			if len(parts) > 0 {
+				// take only first line, and trim
+				serviceName = strings.TrimSpace(parts[0])
+			}
+		}
+
 	} else if nameFromMeta := s.valueFromMetadata(om,
 		ServiceNameAnnotation,
 		s.resourceLabels["service.name"],
 	); nameFromMeta != "" {
 		serviceName = nameFromMeta
 	}
-	if envName, ok := s.serviceNamespaceFromEnv(ownerKey); ok {
+	if envName, ok := s.serviceNamespaceFromEnv(ownerKey, containerName); ok {
 		serviceNamespace = envName
 	} else if nsFromMeta := s.valueFromMetadata(om,
 		ServiceNamespaceAnnotation,
@@ -469,26 +497,30 @@ func isValidServiceName(name string) bool {
 	return name != "" && !strings.HasPrefix(name, "$(")
 }
 
-func (s *Store) serviceNameFromEnv(ownerKey string) (string, bool) {
+func (s *Store) serviceNameFromEnv(ownerKey string, containerName string) (string, bool) {
 	if containers, ok := s.containersByOwner[ownerKey]; ok {
 		for _, c := range containers {
-			if serviceName, ok := c.Env[meta.EnvServiceName]; ok {
-				return serviceName, isValidServiceName(serviceName)
-			}
+			if c.Name == containerName {
+				if serviceName, ok := c.Env[meta.EnvServiceName]; ok {
+					return serviceName, isValidServiceName(serviceName)
+				}
 
-			if serviceName, ok := s.nameFromResourceAttrs(serviceNameKey, c); ok {
-				return serviceName, isValidServiceName(serviceName)
+				if serviceName, ok := s.nameFromResourceAttrs(serviceNameKey, c); ok {
+					return serviceName, isValidServiceName(serviceName)
+				}
 			}
 		}
 	}
 	return "", false
 }
 
-func (s *Store) serviceNamespaceFromEnv(ownerKey string) (string, bool) {
+func (s *Store) serviceNamespaceFromEnv(ownerKey string, containerName string) (string, bool) {
 	if containers, ok := s.containersByOwner[ownerKey]; ok {
 		for _, c := range containers {
-			if namespace, ok := s.nameFromResourceAttrs(serviceNamespaceKey, c); ok {
-				return namespace, isValidServiceName(namespace)
+			if c.Name == containerName {
+				if namespace, ok := s.nameFromResourceAttrs(serviceNamespaceKey, c); ok {
+					return namespace, isValidServiceName(namespace)
+				}
 			}
 		}
 	}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"text/template"
 
 	"golang.org/x/sync/errgroup"
 
@@ -113,6 +114,22 @@ func mustSkip(cfg *beyla.Config) string {
 	return ""
 }
 
+func buildServiceNameTemplate(config *beyla.Config) (*template.Template, error) {
+	var templ *template.Template
+
+	if config.Attributes.Kubernetes.ServiceNameTemplate != "" {
+		var err error
+
+		templ, err = template.New("serviceNameTemplate").Parse(config.Attributes.Kubernetes.ServiceNameTemplate)
+
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse service name template: %w", err)
+		}
+	}
+
+	return templ, nil
+}
+
 // BuildContextInfo populates some globally shared components and properties
 // from the user-provided configuration
 func buildCommonContextInfo(
@@ -138,18 +155,25 @@ func buildCommonContextInfo(
 		showDeprecation()
 	}
 
+	templ, err := buildServiceNameTemplate(config)
+
+	if err != nil {
+		return nil, err
+	}
+
 	promMgr := &connector.PrometheusManager{}
 	ctxInfo := &global.ContextInfo{
 		Prometheus: promMgr,
 		K8sInformer: kube.NewMetadataProvider(kube.MetadataConfig{
-			Enable:            config.Attributes.Kubernetes.Enable,
-			KubeConfigPath:    config.Attributes.Kubernetes.KubeconfigPath,
-			SyncTimeout:       config.Attributes.Kubernetes.InformersSyncTimeout,
-			ResyncPeriod:      config.Attributes.Kubernetes.InformersResyncPeriod,
-			DisabledInformers: config.Attributes.Kubernetes.DisableInformers,
-			MetaCacheAddr:     config.Attributes.Kubernetes.MetaCacheAddress,
-			ResourceLabels:    resourceLabels,
-			RestrictLocalNode: config.Attributes.Kubernetes.MetaRestrictLocalNode,
+			Enable:              config.Attributes.Kubernetes.Enable,
+			KubeConfigPath:      config.Attributes.Kubernetes.KubeconfigPath,
+			SyncTimeout:         config.Attributes.Kubernetes.InformersSyncTimeout,
+			ResyncPeriod:        config.Attributes.Kubernetes.InformersResyncPeriod,
+			DisabledInformers:   config.Attributes.Kubernetes.DisableInformers,
+			MetaCacheAddr:       config.Attributes.Kubernetes.MetaCacheAddress,
+			ResourceLabels:      resourceLabels,
+			RestrictLocalNode:   config.Attributes.Kubernetes.MetaRestrictLocalNode,
+			ServiceNameTemplate: templ,
 		}),
 	}
 	if config.Attributes.HostID.Override == "" {

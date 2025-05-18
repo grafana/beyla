@@ -269,7 +269,7 @@ serviceMonitor:
 
 # -- Options to deploy the Kubernetes metadata cache as a separate service
 k8sCache:
-  # -- Number of replicas for the Kubernetes metadata chache service. 0 disables the service.
+  # -- Number of replicas for the Kubernetes metadata cache service. 0 disables the service.
   replicas: 0
   # -- Enables the profile port for the Beyla cache
   profilePort: 0

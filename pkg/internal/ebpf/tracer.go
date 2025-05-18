@@ -65,7 +65,7 @@ type KprobesTracer interface {
 type Tracer interface {
 	PIDsAccounter
 	KprobesTracer
-	// Constants returns a map of constants to be overriden into the eBPF program.
+	// Constants returns a map of constants to be overridden into the eBPF program.
 	// The key is the constant name and the value is the value to overwrite.
 	Constants() map[string]any
 	// GoProbes returns a slice with the name of Go functions that need to be inspected
@@ -85,7 +85,7 @@ type Tracer interface {
 	// BPF_PROG_TYPE_SOCK_OPS eBPF programs
 	SockOps() []ebpfcommon.SockOps
 	// Probes can potentially instrument a shared library among multiple executables
-	// These two functions alow programs to remember this and avoid duplicated instrumentations
+	// These two functions allow programs to remember this and avoid duplicated instrumentations
 	// The argument is the OS file id
 	// Closers are the associated closable resources to this lib, that may be
 	// closed when UnlinkInstrumentedLib() is called
@@ -95,6 +95,7 @@ type Tracer interface {
 	UnlinkInstrumentedLib(uint64)
 	RegisterOffsets(*exec.FileInfo, *goexec.Offsets)
 	ProcessBinary(*exec.FileInfo)
+	Required() bool
 	// Run will do the action of listening for eBPF traces and forward them
 	// periodically to the output channel.
 	Run(context.Context, *msg.Queue[[]request.Span])

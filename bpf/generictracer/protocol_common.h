@@ -216,6 +216,10 @@ static __always_inline int read_msghdr_buf(struct msghdr *msg, u8 *buf, size_t m
 // and we undo the swap in the data collections we send to user space.
 static __always_inline void
 fixup_connection_info(connection_info_t *conn_info, u8 client, u16 orig_dport) {
+    if (!orig_dport) {
+        bpf_dbg_printk("orig_dport is 0, not swapping");
+        return;
+    }
     // The destination port is the server port in userspace
     if ((client && conn_info->d_port != orig_dport) ||
         (!client && conn_info->d_port == orig_dport)) {

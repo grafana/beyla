@@ -69,7 +69,7 @@ func TestWatcherKubeEnricher(t *testing.T) {
 
 			// Setup a fake K8s API connected to the watcherKubeEnricher
 			fInformer := &fakeInformer{}
-			store := kube.NewStore(fInformer, kube.ResourceLabels{})
+			store := kube.NewStore(fInformer, kube.ResourceLabels{}, nil)
 			input := msg.NewQueue[[]Event[processAttrs]](msg.ChannelBufferLen(10))
 			defer input.Close()
 			output := msg.NewQueue[[]Event[processAttrs]](msg.ChannelBufferLen(10))
@@ -112,7 +112,7 @@ func TestWatcherKubeEnricherWithMatcher(t *testing.T) {
 
 	// Setup a fake K8s API connected to the watcherKubeEnricher
 	fInformer := &fakeInformer{}
-	store := kube.NewStore(fInformer, kube.ResourceLabels{})
+	store := kube.NewStore(fInformer, kube.ResourceLabels{}, nil)
 	inputQueue := msg.NewQueue[[]Event[processAttrs]](msg.ChannelBufferLen(10))
 	defer inputQueue.Close()
 	connectQueue := msg.NewQueue[[]Event[processAttrs]](msg.ChannelBufferLen(10))

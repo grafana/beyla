@@ -13,8 +13,11 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
+	"unicode"
 
 	"github.com/caarlos0/env/v9"
 )
@@ -24,6 +27,7 @@ const envModuleRoot = "BEYLA_GENFILES_MODULE_ROOT"
 type config struct {
 	DebugEnabled    bool   `env:"BEYLA_GENFILES_DEBUG"            envDefault:"false"`
 	RunLocally      bool   `env:"BEYLA_GENFILES_RUN_LOCALLY"      envDefault:"false"`
+	GenModifiedOnly bool   `env:"BEYLA_GENFILES_MODIFIED_ONLY"    envDefault:"false"`
 	ScanPath        string `env:"BEYLA_GENFILES_SCAN_PATH"        envDefault:"pkg"`
 	ContainerPrefix string `env:"BEYLA_GENFILES_CONTAINER_PREFIX" envDefault:"/__w/"`
 	HostPrefix      string `env:"BEYLA_GENFILES_HOST_PREFIX"      envDefault:"/home/runner/work/"`
@@ -33,6 +37,169 @@ type config struct {
 }
 
 var cfg config
+
+var targetsByGoArch = map[string]Target{
+	"386":      {"bpfel", "x86"},
+	"amd64":    {"bpfel", "x86"},
+	"arm":      {"bpfel", "arm"},
+	"arm64":    {"bpfel", "arm64"},
+	"loong64":  {"bpfel", "loongarch"},
+	"mips":     {"bpfeb", "mips"},
+	"mipsle":   {"bpfel", ""},
+	"mips64":   {"bpfeb", ""},
+	"mips64le": {"bpfel", ""},
+	"ppc64":    {"bpfeb", "powerpc"},
+	"ppc64le":  {"bpfel", "powerpc"},
+	"riscv64":  {"bpfel", "riscv"},
+	"s390x":    {"bpfeb", "s390"},
+}
+
+type Target struct {
+	clang string
+	linux string
+}
+
+func (tgt *Target) Suffix() string {
+	stem := tgt.clang
+
+	if tgt.linux != "" {
+		stem = fmt.Sprintf("%s_%s", tgt.linux, tgt.clang)
+	}
+
+	return stem
+}
+
+type argParser struct {
+	cmdLine string
+	index   int
+}
+
+func newargParser(cmdLine string) *argParser {
+	return &argParser{
+		cmdLine: cmdLine,
+		index:   0,
+	}
+}
+
+func (ap *argParser) shift() (string, bool) {
+	for ap.index < len(ap.cmdLine) && unicode.IsSpace(rune(ap.cmdLine[ap.index])) {
+		ap.index++
+	}
+
+	// If we've reached the end of the string, return false
+	if ap.index >= len(ap.cmdLine) {
+		return "", false
+	}
+
+	start := ap.index
+
+	for ap.index < len(ap.cmdLine) && !unicode.IsSpace(rune(ap.cmdLine[ap.index])) {
+		ap.index++
+	}
+
+	// Return the word
+	return ap.cmdLine[start:ap.index], true
+}
+
+type bpf2goGenContext struct {
+	goArchs []string
+	stem    string // the ident stem passed to bpf2go
+	outDir  string // the output directory passed to bpf2go
+	srcFile string // the .c source file passed to bpf2go
+	srcDir  string // the source directory of the .go file containing the generate directive
+	goFile  string // the go file containing the generate directive
+}
+
+//nolint:cyclop
+func parseBPF2GOGenLine(goFile string, line string) *bpf2goGenContext {
+	ctx := &bpf2goGenContext{
+		goArchs: []string{"bpfel", "bpfeb"}, // the defaults according to bpf2go
+		goFile:  goFile,
+		srcDir:  filepath.Dir(goFile),
+	}
+
+	parser := newargParser(line)
+
+	// yank //go-generate
+	parser.shift()
+
+	// yank $BPF2GO
+	parser.shift()
+
+	for {
+		arg, ok := parser.shift()
+
+		if !ok {
+			break
+		}
+
+		//nolint:gocritic
+		if arg == "-target" {
+			if arg, ok = parser.shift(); ok {
+				ctx.goArchs = strings.Split(arg, ",")
+			}
+		} else if arg == "-output-stem" {
+			if arg, ok = parser.shift(); ok {
+				ctx.stem = strings.ToLower(arg)
+			}
+		} else if arg == "-output-dir" {
+			if arg, ok = parser.shift(); ok {
+				ctx.outDir = arg
+			}
+		} else if arg == "--" {
+			break
+		} else if arg[0] == '-' {
+			parser.shift()
+		} else if ctx.stem == "" {
+			ctx.stem = strings.ToLower(arg)
+		} else if ctx.srcFile == "" {
+			ctx.srcFile = filepath.Join(ctx.srcDir, arg)
+		}
+	}
+
+	if ctx.outDir == "" {
+		ctx.outDir = ctx.srcDir
+	}
+
+	return ctx
+}
+
+func isFileStale(ts time.Time, file string) bool {
+	info, err := os.Stat(file)
+
+	if err != nil {
+		return true
+	}
+
+	return ts.After(info.ModTime())
+}
+
+func bpf2goFileNeedsGenerate(ctx *bpf2goGenContext) (bool, error) {
+	info, err := os.Stat(ctx.srcFile)
+
+	if err != nil {
+		return false, fmt.Errorf("cannot stat source file '%s': %w", ctx.srcFile, err)
+	}
+
+	ts := info.ModTime()
+
+	for _, goArch := range ctx.goArchs {
+		target, ok := targetsByGoArch[goArch]
+
+		if !ok {
+			continue
+		}
+
+		baseName := fmt.Sprintf("%s_%s", ctx.stem, target.Suffix())
+		filePath := filepath.Join(ctx.outDir, baseName)
+
+		if isFileStale(ts, filePath+".o") || isFileStale(ts, filePath+".go") {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
 
 type fileSet map[string]struct{}
 
@@ -46,24 +213,29 @@ func (f fileSet) toArray() []string {
 	return ret
 }
 
-func mustGenerate(comment string) bool {
+func mustGenerate(path string, comment string) (bool, error) {
 	// we only care about files containing //go-generate
 	if !strings.HasPrefix(comment, "//go:generate") {
-		return false
+		return false, nil
 	}
 
 	// if not a bpf2go generation, we always regenerate the file
-	if !strings.Contains(comment, "$BPF2GO") {
-		return true
+	// for bpf2go, we always generate unless BEYLA_GENFILES_MODIFIED_ONLY is
+	// set to true
+	if !strings.Contains(comment, "$BPF2GO") || !cfg.GenModifiedOnly {
+		return true, nil
 	}
 
 	// only regenerate bpf2go statements on Linux
 	if runtime.GOOS != "linux" {
-		return false
+		return false, nil
 	}
 
-	// on linux, we always regenerate the file
-	return true
+	// bpf2go generation is a special case - we don't want to
+	// regenerate files that haven't changed, so we need to resolve
+	// the source .c file and the bpf2go artifacts (.o and .go files)
+	// to work out whether they need to be regenerated
+	return bpf2goFileNeedsGenerate(parseBPF2GOGenLine(path, comment))
 }
 
 func handleDirEntry(path string, d fs.DirEntry, err error, filesToGenerate fileSet) error {
@@ -93,7 +265,13 @@ func handleDirEntry(path string, d fs.DirEntry, err error, filesToGenerate fileS
 
 	for _, commentGroup := range node.Comments {
 		for _, comment := range commentGroup.List {
-			if mustGenerate(comment.Text) {
+			generate, err := mustGenerate(path, comment.Text)
+
+			if err != nil {
+				return err
+			}
+
+			if generate {
 				filesToGenerate[path] = struct{}{}
 			}
 		}
@@ -289,6 +467,7 @@ func runInContainer(wd string) {
 	err = executeCommand(cfg.OCIBin, "run", "--rm",
 		"--user", currentUser.Uid+":"+currentUser.Gid,
 		"-v", adjustedWD+":/src",
+		"-e", "BEYLA_GENFILES_MODIFIED_ONLY="+strconv.FormatBool(cfg.GenModifiedOnly),
 		cfg.GenImage)
 
 	if err != nil {

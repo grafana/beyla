@@ -40,6 +40,7 @@ const (
 	TracesTargetInfo         = "traces_target_info"
 	TracesHostInfo           = "traces_host_info"
 	TargetInfo               = "target_info"
+	SurveyInfo               = "survey_info"
 
 	ServiceGraphClient = "traces_service_graph_request_client_seconds"
 	ServiceGraphServer = "traces_service_graph_request_server_seconds"
@@ -194,6 +195,7 @@ type metricsReporter struct {
 	httpClientRequestSize  *Expirer[prometheus.Histogram]
 	httpClientResponseSize *Expirer[prometheus.Histogram]
 	targetInfo             *prometheus.GaugeVec
+	surveyInfo             *prometheus.GaugeVec
 
 	// user-selected attributes for the application-level metrics
 	attrHTTPDuration           []attributes.Field[*request.Span, string]
@@ -242,12 +244,13 @@ type metricsReporter struct {
 	kubeEnabled bool
 	hostID      string
 
-	serviceMap map[int32]svc.Attrs
+	serviceMap map[svc.UID]svc.Attrs
 }
 
 func PrometheusEndpoint(
 	ctxInfo *global.ContextInfo,
 	cfg *PrometheusConfig,
+	surveyModeEnabled bool,
 	attrSelect attributes.Selection,
 	input *msg.Queue[[]request.Span],
 	processEventCh *msg.Queue[exec.ProcessEvent],
@@ -256,7 +259,7 @@ func PrometheusEndpoint(
 		if !cfg.Enabled() {
 			return swarm.EmptyRunFunc()
 		}
-		reporter, err := newReporter(ctxInfo, cfg, attrSelect, input, processEventCh)
+		reporter, err := newReporter(ctxInfo, cfg, surveyModeEnabled, attrSelect, input, processEventCh)
 		if err != nil {
 			return nil, fmt.Errorf("instantiating Prometheus endpoint: %w", err)
 		}
@@ -271,6 +274,7 @@ func PrometheusEndpoint(
 func newReporter(
 	ctxInfo *global.ContextInfo,
 	cfg *PrometheusConfig,
+	surveyModeEnabled bool,
 	selector attributes.Selection,
 	input *msg.Queue[[]request.Span],
 	processEventCh *msg.Queue[exec.ProcessEvent],
@@ -351,7 +355,7 @@ func newReporter(
 	mr := &metricsReporter{
 		input:                      input.Subscribe(),
 		processEvents:              processEventCh.Subscribe(),
-		serviceMap:                 map[int32]svc.Attrs{},
+		serviceMap:                 map[svc.UID]svc.Attrs{},
 		ctxInfo:                    ctxInfo,
 		cfg:                        cfg,
 		kubeEnabled:                kubeEnabled,
@@ -572,6 +576,12 @@ func newReporter(
 			Name: TargetInfo,
 			Help: "attributes associated to a given monitored entity",
 		}, labelNamesTargetInfo(kubeEnabled, extraMetadataLabels)),
+		surveyInfo: optionalDirectGaugeProvider(surveyModeEnabled, func() *prometheus.GaugeVec {
+			return prometheus.NewGaugeVec(prometheus.GaugeOpts{
+				Name: SurveyInfo,
+				Help: "attributes associated to a given surveyed entity",
+			}, labelNamesTargetInfo(kubeEnabled, extraMetadataLabels))
+		}),
 		gpuKernelCallsTotal: optionalCounterProvider(is.GPUEnabled(), func() *Expirer[prometheus.Counter] {
 			return NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
 				Name: attributes.GPUKernelLaunchCalls.Prom,
@@ -610,6 +620,10 @@ func newReporter(
 
 	if !mr.cfg.DisableBuildInfo {
 		registeredMetrics = append(registeredMetrics, mr.beylaInfo)
+	}
+
+	if surveyModeEnabled {
+		registeredMetrics = append(registeredMetrics, mr.surveyInfo)
 	}
 
 	if cfg.OTelMetricsEnabled() {
@@ -1006,6 +1020,11 @@ func (r *metricsReporter) createTargetInfo(service *svc.Attrs) {
 	r.targetInfo.WithLabelValues(targetInfoLabelValues...).Set(1)
 }
 
+func (r *metricsReporter) createSurveyInfo(service *svc.Attrs) {
+	targetInfoLabelValues := r.labelValuesTargetInfo(service)
+	r.surveyInfo.WithLabelValues(targetInfoLabelValues...).Set(1)
+}
+
 func (r *metricsReporter) createTracesTargetInfo(service *svc.Attrs) {
 	if !r.cfg.SpanMetricsEnabled() && !r.cfg.ServiceGraphMetricsEnabled() {
 		return
@@ -1014,24 +1033,29 @@ func (r *metricsReporter) createTracesTargetInfo(service *svc.Attrs) {
 	r.tracesTargetInfo.WithLabelValues(targetInfoLabelValues...).Set(1)
 }
 
-func (r *metricsReporter) origService(pid int32, service *svc.Attrs) *svc.Attrs {
+func (r *metricsReporter) origService(uid svc.UID, service *svc.Attrs) *svc.Attrs {
 	orig := service
-	if origAttrs, ok := r.serviceMap[pid]; ok {
+	if origAttrs, ok := r.serviceMap[uid]; ok {
 		orig = &origAttrs
 	}
 	return orig
 }
 
-func (r *metricsReporter) deleteTargetInfo(pid int32, service *svc.Attrs) {
-	targetInfoLabelValues := r.labelValuesTargetInfo(r.origService(pid, service))
+func (r *metricsReporter) deleteTargetInfo(uid svc.UID, service *svc.Attrs) {
+	targetInfoLabelValues := r.labelValuesTargetInfo(r.origService(uid, service))
 	r.targetInfo.DeleteLabelValues(targetInfoLabelValues...)
 }
 
-func (r *metricsReporter) deleteTracesTargetInfo(pid int32, service *svc.Attrs) {
+func (r *metricsReporter) deleteSurveyInfo(uid svc.UID, service *svc.Attrs) {
+	targetInfoLabelValues := r.labelValuesTargetInfo(r.origService(uid, service))
+	r.surveyInfo.DeleteLabelValues(targetInfoLabelValues...)
+}
+
+func (r *metricsReporter) deleteTracesTargetInfo(uid svc.UID, service *svc.Attrs) {
 	if !r.cfg.SpanMetricsEnabled() && !r.cfg.ServiceGraphMetricsEnabled() {
 		return
 	}
-	targetInfoLabelValues := r.labelValuesTargetInfo(r.origService(pid, service))
+	targetInfoLabelValues := r.labelValuesTargetInfo(r.origService(uid, service))
 	r.tracesTargetInfo.DeleteLabelValues(targetInfoLabelValues...)
 }
 
@@ -1039,14 +1063,23 @@ func (r *metricsReporter) watchForProcessEvents() {
 	for pe := range r.processEvents {
 		mlog().Debug("Received new process event", "event type", pe.Type, "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
 
-		if pe.Type == exec.ProcessEventCreated {
+		uid := pe.File.Service.UID
+
+		switch pe.Type {
+		case exec.ProcessEventCreated:
 			r.createTargetInfo(&pe.File.Service)
 			r.createTracesTargetInfo(&pe.File.Service)
-			r.serviceMap[pe.File.Pid] = pe.File.Service
-		} else {
-			r.deleteTargetInfo(pe.File.Pid, &pe.File.Service)
-			r.deleteTracesTargetInfo(pe.File.Pid, &pe.File.Service)
-			delete(r.serviceMap, pe.File.Pid)
+			r.serviceMap[uid] = pe.File.Service
+		case exec.ProcessEventTerminated:
+			if r.surveyInfo != nil {
+				r.deleteSurveyInfo(uid, &pe.File.Service)
+			}
+			r.deleteTargetInfo(uid, &pe.File.Service)
+			r.deleteTracesTargetInfo(uid, &pe.File.Service)
+			delete(r.serviceMap, uid)
+		case exec.ProcessEventSurveyCreated:
+			r.createSurveyInfo(&pe.File.Service)
+			r.serviceMap[uid] = pe.File.Service
 		}
 	}
 }

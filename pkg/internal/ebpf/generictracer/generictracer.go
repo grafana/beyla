@@ -130,7 +130,6 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 	}
 
 	if p.cfg.EBPF.TrackRequestHeaders ||
-		p.cfg.EBPF.UseTCForL7CP ||
 		p.cfg.EBPF.ContextPropagation != config.ContextPropagationDisabled {
 		if ebpfcommon.SupportsEBPFLoops(p.log, p.cfg.EBPF.OverrideBPFLoopEnabled) {
 			p.log.Info("Found compatible Linux kernel, enabling trace information parsing")
@@ -200,7 +199,6 @@ func (p *Tracer) Constants() map[string]any {
 	}
 
 	if p.cfg.EBPF.TrackRequestHeaders ||
-		p.cfg.EBPF.UseTCForL7CP ||
 		p.cfg.EBPF.ContextPropagation != config.ContextPropagationDisabled {
 		m["capture_header_buffer"] = int32(1)
 	} else {
@@ -531,4 +529,8 @@ func (p *Tracer) watchForMisclassifedEvents() {
 			}
 		}
 	}
+}
+
+func (p *Tracer) Required() bool {
+	return true
 }

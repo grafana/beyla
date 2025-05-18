@@ -13,7 +13,9 @@ permissions:
 jobs:
   clang-format:
     runs-on: ubuntu-latest
-
+    # Only run if security check passed
+    needs: security-check
+    if: ${{ needs.security-check.outputs.security_cleared == 'true' || !failure() }}
     steps:
       - name: Checkout code
         uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3
@@ -39,4 +41,13 @@ jobs:
             echo "Error: Some files are not formatted correctly. Please run clang-format on the modified files or use the provided pre-commit hook."
             exit 1
           fi
+
+  # Reference the security-check workflow
+  security-check:
+    uses: ./.github/workflows/security-check.yml
+    secrets: inherit
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
 

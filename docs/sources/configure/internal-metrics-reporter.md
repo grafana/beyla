@@ -10,14 +10,14 @@ keywords:
 
 # Configure the Beyla internal metrics reporter
 
-YAML section `internal_metrics`.
+YAML section: `internal_metrics`
 
-This component reports certain internal metrics about the behavior of the auto-instrumentation tool.
-The component supports [Prometheus](https://prometheus.io/) and [OpenTelemetry](https://opentelemetry.io/) metrics export.
+This component reports internal metrics about the auto-instrumentation tool's behavior.
+You can export these metrics using [Prometheus](https://prometheus.io/) or [OpenTelemetry](https://opentelemetry.io/).
 
-To enable Prometheus metrics export, set `exporter` to `prometheus` in the `internal_metrics` section, and set `port` in the `prometheus` subsection.
+To export metrics with Prometheus, set `exporter` to `prometheus` in the `internal_metrics` section. Then set `port` in the `prometheus` subsection.
 
-To enable OpenTelemetry metrics export, set `exporter` to `otel` in the `internal_metrics`, and set an endpoint in the `otel_metrics_export` section or `grafana.otlp` section.
+To export metrics with OpenTelemetry, set `exporter` to `otel` in the `internal_metrics` section. Then set an endpoint in the `otel_metrics_export` or `grafana.otlp` section.
 
 Example:
 
@@ -29,29 +29,34 @@ internal_metrics:
     path: /internal/metrics
 ```
 
-| YAML        | Environment variable                                  | Type | Default |
-| ----------- | ---------------------------------------- | ---- | ------- |
-| `exporter`      | `BEYLA_INTERNAL_METRICS_EXPORTER` | string | `disabled` |
+## Configuration summary
 
-Specifies the internal metrics exporter. Accepted values are `disabled`, `prometheus` and `otel`.
+| YAML              | Environment Variable                     | Type   | Default             | Summary                                                      |
+| ----------------- | ---------------------------------------- | ------ | ------------------- | ------------------------------------------------------------ |
+| `exporter`        | `BEYLA_INTERNAL_METRICS_EXPORTER`        | string | `disabled`          | [Selects the internal metrics exporter.](#exporter)          |
+| `prometheus.port` | `BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT` | int    | (unset)             | [HTTP port for Prometheus scrape endpoint.](#prometheusport) |
+| `prometheus.path` | `BEYLA_INTERNAL_METRICS_PROMETHEUS_PATH` | string | `/internal/metrics` | [HTTP query path for Prometheus metrics.](#prometheuspath)   |
 
-| YAML   | Environment variable                                  | Type | Default |
-| ------ | ---------------------------------------- | ---- | ------- |
-| `port` | `BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT` | int  | (unset) |
+---
 
-Specifies the HTTP port for the Prometheus scrape endpoint. If unset or 0,
-no Prometheus endpoint is open and no metrics are accounted.
+## `exporter`
 
-Its value can be the same as [`prometheus_export.port`](../export-data/#prometheus-http-endpoint) (both metric families
-share the same HTTP server, though they can be accessed in different paths),
-or a different value (two different HTTP servers for the different metric families).
+Set the internal metrics exporter.
+You can use `disabled`, `prometheus`, or `otel`.
 
-| YAML   | Environment variable                                  | Type   | Default             |
-| ------ | ---------------------------------------- | ------ | ------------------- |
-| `path` | `BEYLA_INTERNAL_METRICS_PROMETHEUS_PATH` | string | `/internal/metrics` |
+---
 
-Specifies the HTTP query path to fetch the list of Prometheus metrics.
-If [`prometheus_export.port`](../export-data/#prometheus-http-endpoint) and `internal_metrics.prometheus.port` have the
-same values, this `internal_metrics.prometheus.path` value can be
-different from `prometheus_export.path`, to keep both metric families separated,
-or the same (both metric families are listed in the same scrape endpoint).
+## `prometheus.port`
+
+Set the HTTP port for the Prometheus scrape endpoint.
+If you leave it unset or set it to 0, Beyla doesn't open a Prometheus endpoint and doesn't report metrics.
+
+You can use the same value as [`prometheus_export.port`](../export-data/#prometheus-http-endpoint) (both metric families share the same HTTP server, but use different paths), or use a different value (Beyla opens two HTTP servers for the different metric families).
+
+---
+
+## `prometheus.path`
+
+Set the HTTP query path to fetch Prometheus metrics.
+
+If [`prometheus_export.port`](../export-data/#prometheus-http-endpoint) and `internal_metrics.prometheus.port` use the same value, you can set `internal_metrics.prometheus.path` to a different value than `prometheus_export.path` to keep the metric families separate, or use the same value to list both metric families in the same scrape endpoint.

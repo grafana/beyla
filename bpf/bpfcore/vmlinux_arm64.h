@@ -123576,7 +123576,7 @@ struct scsi_device {
     unsigned int busy : 1;
     unsigned int lockable : 1;
     unsigned int locked : 1;
-    unsigned int borken : 1;
+    unsigned int broken : 1;
     unsigned int disconnect : 1;
     unsigned int soft_reset : 1;
     unsigned int sdtr : 1;

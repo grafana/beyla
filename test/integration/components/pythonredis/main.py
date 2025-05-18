@@ -16,7 +16,6 @@ async def root():
         redis_cli = redis.Redis(
             host='redis',
             port=6379,
-            charset="utf-8",
             decode_responses=True
             )
         conn = redis_cli.ping()

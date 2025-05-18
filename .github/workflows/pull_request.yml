@@ -12,6 +12,8 @@ permissions:
 
 jobs:
   test:
+    needs: security-check
+    if: ${{ needs.security-check.outputs.security_cleared == 'true' || !failure() }}
     name: test
     runs-on: ubuntu-latest
     # Grant specific permissions needed only for this job
@@ -39,3 +41,12 @@ jobs:
         with:
           file: ./testoutput/cover.txt
           flags: unittests
+
+  # Reference the security-check workflow
+  security-check:
+    uses: ./.github/workflows/security-check.yml
+    secrets: inherit
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write

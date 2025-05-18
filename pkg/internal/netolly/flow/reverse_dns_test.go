@@ -73,7 +73,7 @@ func TestReverseDNS_AlreadyProvidedNames(t *testing.T) {
 
 	in.Send([]*ebpf.Record{f1})
 
-	// THEN it does not cange the decoration
+	// THEN it does not change the decoration
 	decorated := testutil.ReadChannel(t, outCh, timeout)
 	require.Len(t, decorated, 1)
 

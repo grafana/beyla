@@ -1,5 +1,4 @@
-// Package appobserv provides public access to Beyla application observability as a library. All the other subcomponents
-// of Beyla are hidden.
+// Package appolly provides public access to eBPF application observability as a library
 package appolly
 
 import (
@@ -12,6 +11,7 @@ import (
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/internal/discover"
+	"github.com/grafana/beyla/v2/pkg/internal/ebpf"
 	"github.com/grafana/beyla/v2/pkg/internal/exec"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
@@ -50,7 +50,7 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 	tracesInput := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(config.ChannelBufferLen))
 
 	newEventQueue := func() *msg.Queue[exec.ProcessEvent] {
-		return msg.NewQueue[exec.ProcessEvent](msg.ChannelBufferLen(config.ChannelBufferLen))
+		return msg.NewQueue[exec.ProcessEvent](msg.ChannelBufferLen(config.ChannelBufferLen), msg.NotBlockIfNoSubscribers())
 	}
 
 	swi := &swarm.Instancer{}
@@ -94,7 +94,7 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 // Returns a channel that is closed when the Instrumenter completed all its tasks.
 // This is: when the context is cancelled, it has unloaded all the eBPF probes.
 func (i *Instrumenter) FindAndInstrument(ctx context.Context) error {
-	finder := discover.NewProcessFinder(i.config, i.ctxInfo, i.tracesInput)
+	finder := discover.NewProcessFinder(i.config, i.ctxInfo, i.tracesInput, i.processEventInput)
 	processEvents, err := finder.Start(ctx)
 	if err != nil {
 		return fmt.Errorf("couldn't start Process Finder: %w", err)
@@ -111,45 +111,47 @@ func (i *Instrumenter) FindAndInstrument(ctx context.Context) error {
 
 	// In background, listen indefinitely for each new process and run its
 	// associated ebpf.ProcessTracer once it is found.
-	go func() {
-		log := log()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case ev := <-processEvents:
-				switch ev.Type {
-				case discover.EventCreated:
-					pt := ev.Obj
-					log.Debug("running tracer for new process",
-						"inode", pt.FileInfo.Ino, "pid", pt.FileInfo.Pid, "exec", pt.FileInfo.CmdExePath)
-					if pt.Tracer != nil {
-						i.tracersWg.Add(1)
-						go func() {
-							defer i.tracersWg.Done()
-							pt.Tracer.Run(ctx, i.tracesInput)
-						}()
-					}
-					i.processEventInput.Send(exec.ProcessEvent{Type: exec.ProcessEventCreated, File: pt.FileInfo})
-				case discover.EventDeleted:
-					dp := ev.Obj
-					log.Debug("stopping ProcessTracer because there are no more instances of such process",
-						"inode", dp.FileInfo.Ino, "pid", dp.FileInfo.Pid, "exec", dp.FileInfo.CmdExePath)
-					if dp.Tracer != nil {
-						dp.Tracer.UnlinkExecutable(dp.FileInfo)
-					}
-					i.processEventInput.Send(exec.ProcessEvent{Type: exec.ProcessEventTerminated, File: dp.FileInfo})
-				case discover.EventInstanceDeleted:
-					i.processEventInput.Send(exec.ProcessEvent{Type: exec.ProcessEventTerminated, File: ev.Obj.FileInfo})
-				default:
-					log.Error("BUG ALERT! unknown event type", "type", ev.Type)
-				}
-			}
-		}
-	}()
+	go i.instrumentedEventLoop(ctx, processEvents)
 
 	// TODO: wait until all the resources have been freed/unmounted
 	return nil
+}
+
+func (i *Instrumenter) instrumentedEventLoop(ctx context.Context, processEvents <-chan discover.Event[*ebpf.Instrumentable]) {
+	log := log()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case ev := <-processEvents:
+			switch ev.Type {
+			case discover.EventCreated:
+				pt := ev.Obj
+				log.Debug("running tracer for new process",
+					"inode", pt.FileInfo.Ino, "pid", pt.FileInfo.Pid, "exec", pt.FileInfo.CmdExePath)
+				if pt.Tracer != nil {
+					i.tracersWg.Add(1)
+					go func() {
+						defer i.tracersWg.Done()
+						pt.Tracer.Run(ctx, i.tracesInput)
+					}()
+				}
+				i.handleAndDispatchProcessEvent(exec.ProcessEvent{Type: exec.ProcessEventCreated, File: pt.FileInfo})
+			case discover.EventDeleted:
+				dp := ev.Obj
+				log.Debug("stopping ProcessTracer because there are no more instances of such process",
+					"inode", dp.FileInfo.Ino, "pid", dp.FileInfo.Pid, "exec", dp.FileInfo.CmdExePath)
+				if dp.Tracer != nil {
+					dp.Tracer.UnlinkExecutable(dp.FileInfo)
+				}
+				i.handleAndDispatchProcessEvent(exec.ProcessEvent{Type: exec.ProcessEventTerminated, File: dp.FileInfo})
+			case discover.EventInstanceDeleted:
+				i.handleAndDispatchProcessEvent(exec.ProcessEvent{Type: exec.ProcessEventTerminated, File: ev.Obj.FileInfo})
+			default:
+				log.Error("BUG ALERT! unknown event type", "type", ev.Type)
+			}
+		}
+	}
 }
 
 // ReadAndForward keeps listening for traces in the BPF map, then reads,
@@ -191,6 +193,10 @@ func (i *Instrumenter) stop() error {
 	case <-stopped:
 		return nil
 	}
+}
+
+func (i *Instrumenter) handleAndDispatchProcessEvent(pe exec.ProcessEvent) {
+	i.processEventInput.Send(pe)
 }
 
 func setupFeatureContextInfo(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config) {

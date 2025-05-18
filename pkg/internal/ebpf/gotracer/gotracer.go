@@ -422,3 +422,7 @@ func (p *Tracer) Run(ctx context.Context, eventsChan *msg.Queue[[]request.Span])
 		p.metrics,
 	)(ctx, append(p.closers, &p.bpfObjects), eventsChan)
 }
+
+func (p *Tracer) Required() bool {
+	return true
+}

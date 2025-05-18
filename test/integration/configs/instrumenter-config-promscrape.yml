@@ -1,3 +1,6 @@
+discovery:
+  survey:
+    - k8s_namespace: .
 routes:
   patterns:
     - /basic/:rnd

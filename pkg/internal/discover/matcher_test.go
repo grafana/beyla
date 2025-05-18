@@ -281,3 +281,69 @@ func TestCriteriaMatcherMissingPort(t *testing.T) {
 	assert.Equal(t, "foo", m.Obj.Criteria.Namespace)
 	assert.Equal(t, services.ProcessInfo{Pid: 3, ExePath: "/bin/weird33", OpenPorts: []uint32{}, PPid: 1}, *m.Obj.Process)
 }
+
+func TestCriteriaMatcherContainersOnly(t *testing.T) {
+	pipeConfig := beyla.Config{}
+	require.NoError(t, yaml.Unmarshal([]byte(`discovery:
+  services:
+  - name: port-only-containers
+    namespace: foo
+    open_ports: 80
+    containers_only: true
+`), &pipeConfig))
+
+	// override the namespace fetcher
+	namespaceFetcherFunc = func(pid int32) (string, error) {
+		switch pid {
+		case 1:
+			return "1", nil
+		case 2:
+			return "2", nil
+		case 3:
+			return "3", nil
+		}
+		panic("pid not exposed by test")
+	}
+
+	// override the os.Getpid func to that Beyla is always reported
+	// with pid 1
+	osPidFunc = func() int {
+		return 1
+	}
+
+	discoveredProcesses := msg.NewQueue[[]Event[processAttrs]](msg.ChannelBufferLen(10))
+	filteredProcessesQu := msg.NewQueue[[]Event[ProcessMatch]](msg.ChannelBufferLen(10))
+	filteredProcesses := filteredProcessesQu.Subscribe()
+	matcherFunc, err := CriteriaMatcherProvider(&pipeConfig, discoveredProcesses, filteredProcessesQu)(t.Context())
+	require.NoError(t, err)
+	go matcherFunc(t.Context())
+	defer filteredProcessesQu.Close()
+
+	// it will filter unmatching processes and return a ProcessMatch for these that match
+	processInfo = func(pp processAttrs) (*services.ProcessInfo, error) {
+		proc := map[PID]struct {
+			Exe  string
+			PPid int32
+		}{
+			1: {Exe: "/bin/weird33", PPid: 0}, 2: {Exe: "/bin/weird33", PPid: 0}, 3: {Exe: "/bin/weird33", PPid: 1}}[pp.pid]
+		return &services.ProcessInfo{Pid: int32(pp.pid), ExePath: proc.Exe, PPid: proc.PPid, OpenPorts: pp.openPorts}, nil
+	}
+	discoveredProcesses.Send([]Event[processAttrs]{
+		{Type: EventCreated, Obj: processAttrs{pid: 1, openPorts: []uint32{80}}}, // this one is the parent, matches on port, not in container
+		{Type: EventCreated, Obj: processAttrs{pid: 2, openPorts: []uint32{80}}}, // another pid, but in a container
+		{Type: EventCreated, Obj: processAttrs{pid: 3, openPorts: []uint32{80}}}, // this one is the child, without port, but matches the parent by port, in a container
+	})
+
+	matches := testutil.ReadChannel(t, filteredProcesses, testTimeout)
+	require.Len(t, matches, 2)
+	m := matches[0]
+	assert.Equal(t, EventCreated, m.Type)
+	assert.Equal(t, "port-only-containers", m.Obj.Criteria.Name)
+	assert.Equal(t, "foo", m.Obj.Criteria.Namespace)
+	assert.Equal(t, services.ProcessInfo{Pid: 2, ExePath: "/bin/weird33", OpenPorts: []uint32{80}, PPid: 0}, *m.Obj.Process)
+	m = matches[1]
+	assert.Equal(t, EventCreated, m.Type)
+	assert.Equal(t, "port-only-containers", m.Obj.Criteria.Name)
+	assert.Equal(t, "foo", m.Obj.Criteria.Namespace)
+	assert.Equal(t, services.ProcessInfo{Pid: 3, ExePath: "/bin/weird33", OpenPorts: []uint32{80}, PPid: 1}, *m.Obj.Process)
+}

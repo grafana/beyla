@@ -12,51 +12,40 @@ keywords:
 
 You can use the eBPF tracer to fine-tune Beyla performance.
 
-You can configure the component under the `ebpf` section of your YAML configuration or via environment variables.
+You can configure the component under the `ebpf` section of your YAML configuration or with environment variables.
 
-| YAML         | Environment variable   | Type   | Default |
-| ------------ | ---------------------- | ------ | ------- |
-| `wakeup_len` | `BEYLA_BPF_WAKEUP_LEN` | string | (unset) |
+| YAML<br>environment variable                               | Description                                                                                                                                                   | Type    | Default |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------- |
+| `wakeup_len`<br>`BEYLA_BPF_WAKEUP_LEN`                     | Sets how many messages Beyla accumulates in the eBPF ringbuffer before sending a wake-up request to user space. Refer to [wakeup len](#wakeup-len).           | string  | (unset) |
+| `traffic_control_backend`<br>`BEYLA_BPF_TC_BACKEND`        | Selects the backend for attaching traffic control probes. Refer to the [traffic control backend](#traffic-control-backend) section for details.               | string  | `auto`  |
+| `http_request_timeout`<br>`BEYLA_BPF_HTTP_REQUEST_TIMEOUT` | Sets the time interval after which Beyla considers an HTTP request a timeout. Refer to the [http request timeout](#http-request-timeout) section for details. | string  | (0ms)   |
+| `high_request_volume`<br>`BEYLA_BPF_HIGH_REQUEST_VOLUME`   | Sends telemetry events as soon as Beyla detects a response. Refer to the [high request volume](#high-request-volume) section for details.                     | boolean | (false) |
 
-Specifies how many messages need to be accumulated in the eBPF ringbuffer
-before sending a wake-up request to the user space code.
+## Wakeup len
 
-In high-load services (in terms of requests/second), tuning this option to higher values
-can help with reducing the CPU overhead of Beyla.
+Beyla accumulates messages in the eBPF ringbuffer and sends a wake-up request to user space when it reaches this value.
 
-In low-load services (in terms of requests/second), high values of `wakeup_len` could
-add a noticeable delay in the time the metrics are submitted and become externally visible.
+For high-load services, set this option higher to reduce CPU overhead.
 
-| YAML                      | Environment variable              | Type    | Default |
-| ------------------------- | --------------------------------- | ------- | ------- |
-| `traffic_control_backend` | `BEYLA_BPF_TC_BACKEND`            | string  |  `auto`   |
+For low-load services, high values can delay when Beyla submits metrics and when they become visible.
 
-Chooses which backend to use for the attachment of traffic control probes.
-Linux 6.6 has added support for a file-descriptor based traffic control
-attachment called TCX, providing a more robust way of attaching traffic
-control probes (it does not require explicit qdisc management, and provides a
-deterministic way to chain probes).
-We recommend the usage of the `tcx` backend for kernels >= 6.6 for this reason.
-When set to `auto`, Beyla picks the most suitable backend based on the underlying kernel.
+## Traffic control backend
 
-The accepted backends are `tc`, `tcx`, and `auto.
-An empty or unset value defaults to `auto`.
+This option selects the backend for attaching traffic control probes.
+Linux 6.6 adds support for TCX, a file-descriptor based traffic control attachment. TCX is more robust, doesn't require explicit qdisc management, and chains probes deterministically.
+We recommend the `tcx` backend for kernels >= 6.6.
+When set to `auto`, Beyla chooses the best backend for your kernel.
 
-| YAML                    | Environment variable               | Type    | Default |
-| ----------------------- | ---------------------------------- | ------- | ------- |
-| `http_request_timeout`  | `BEYLA_BPF_HTTP_REQUEST_TIMEOUT`   | string  | (0ms)   |
+Accepted backends: `tc`, `tcx`, and `auto`.
+If you leave this value empty or unset, Beyla uses `auto`.
 
-Configures the time interval after which an HTTP request is considered as a timeout.
-This option allows Beyla to report HTTP transactions which timeout and never return.
-To enable the automatic HTTP request timeout feature, set this option to a non-zero
-value. When a request is automatically timed out, Beyla reports the HTTP status
-code of 408. Disconnects can be misinterpreted as timeouts, therefore, setting this
-value may incorrectly increase your request averages.
+## Http request timeout
 
-| YAML                    | Environment variable               | Type     | Default |
-| ----------------------- | ---------------------------------- | -------- | ------- |
-| `high_request_volume`   | `BEYLA_BPF_HIGH_REQUEST_VOLUME`    | boolean  | (false) |
+This option sets how long Beyla waits before considering an HTTP request a timeout.
+Beyla can report HTTP transactions that time out and never return.
+Set this option to a non-zero value to enable automatic HTTP request timeouts. When a request times out, Beyla reports HTTP status code 408. Disconnects can look like timeouts, so setting this value may increase your request averages.
 
-Configures the HTTP tracer heuristic to send telemetry events as soon as a response is detected.
-Setting this option reduces the accuracy of timings for requests with large responses, however,
-in high request volume scenarios this option will reduce the number of dropped trace events.
+## High request volume
+
+This option makes Beyla send telemetry events as soon as it detects a response.
+It reduces timing accuracy for requests with large responses, but in high-volume scenarios, it helps reduce dropped trace events.

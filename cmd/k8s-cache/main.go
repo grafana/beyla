@@ -13,6 +13,8 @@ import (
 	"syscall"
 	"time"
 
+	_ "github.com/grafana/pyroscope-go/godeltaprof/http/pprof"
+
 	"github.com/grafana/beyla/v2/pkg/buildinfo"
 	"github.com/grafana/beyla/v2/pkg/kubecache"
 	"github.com/grafana/beyla/v2/pkg/kubecache/instrument"

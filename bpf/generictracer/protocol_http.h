@@ -101,7 +101,7 @@ static __always_inline void http_get_or_create_trace_info(http_connection_metada
             //dbg_print_http_connection_info(conn);
 
             // For server requests, we first look for TCP info (setup by TC ingress) and then we fall back to black-box info.
-            found_tp = find_trace_for_server_request(conn, &tp_p->tp);
+            found_tp = find_trace_for_server_request(conn, &tp_p->tp, EVENT_HTTP_REQUEST);
         }
     }
 
@@ -218,14 +218,6 @@ static __always_inline u8 http_info_complete(http_info_t *info) {
     return (info->start_monotime_ns != 0 && info->status != 0 && info->pid.host_pid != 0);
 }
 
-static __always_inline void force_complete_http(http_info_t *info) {
-    info->end_monotime_ns = bpf_ktime_get_ns();
-    info->status = 400;
-    if (info->pid.host_pid == 0) {
-        task_pid(&info->pid);
-    }
-}
-
 static __always_inline u8 http_will_complete(http_info_t *info, unsigned char *buf, u32 len) {
     if (info->start_monotime_ns != 0) {
         u8 packet_type;
@@ -237,6 +229,12 @@ static __always_inline u8 http_will_complete(http_info_t *info, unsigned char *b
     }
 
     return false;
+}
+
+static __always_inline u8 is_duplicate_info(http_info_t *info) {
+    u64 ts = bpf_ktime_get_ns();
+    return info->start_monotime_ns && (ts >= info->start_monotime_ns) &&
+           current_immediate_epoch(ts) == current_immediate_epoch(info->start_monotime_ns);
 }
 
 static __always_inline void finish_http(http_info_t *info, pid_connection_info_t *pid_conn) {
@@ -265,14 +263,21 @@ static __always_inline void update_http_sent_len(pid_connection_info_t *pid_conn
     }
 }
 
-static __always_inline http_info_t *
-get_or_set_http_info(http_info_t *info, pid_connection_info_t *pid_conn, u8 packet_type) {
+static __always_inline http_info_t *get_or_set_http_info(http_info_t *info,
+                                                         pid_connection_info_t *pid_conn,
+                                                         u8 packet_type,
+                                                         u8 direction) {
     if (packet_type == PACKET_TYPE_REQUEST) {
         http_info_t *old_info = bpf_map_lookup_elem(&ongoing_http, pid_conn);
         if (old_info) {
-            finish_http(
-                old_info,
-                pid_conn); // this will delete ongoing_http for this connection info if there's full stale request
+            u8 req_type = request_type_by_direction(direction, packet_type);
+            if (!http_info_complete(old_info)) {
+                if (old_info->type == req_type && is_duplicate_info(old_info)) {
+                    return 0;
+                }
+            }
+            // this will delete ongoing_http for this connection info if there's full stale request
+            finish_http(old_info, pid_conn);
         }
 
         bpf_map_update_elem(&ongoing_http, pid_conn, info, BPF_ANY);
@@ -304,15 +309,26 @@ static __always_inline void finish_possible_delayed_http_request(pid_connection_
     }
 }
 
+static __always_inline void cleanup_http_request_data(pid_connection_info_t *pid_conn,
+                                                      http_info_t *info) {
+    if (info) {
+        if (info->type == EVENT_HTTP_REQUEST) {
+            trace_key_t t_key = {0};
+            t_key.extra_id = info->extra_id;
+            t_key.p_key.ns = info->pid.ns;
+            t_key.p_key.tid = info->task_tid;
+            t_key.p_key.pid = info->pid.user_pid;
+            delete_server_trace(pid_conn, &t_key);
+        } else {
+            delete_client_trace_info(pid_conn);
+        }
+    }
+    bpf_map_delete_elem(&active_ssl_connections, pid_conn);
+}
+
 static __always_inline void terminate_http_request_if_needed(pid_connection_info_t *pid_conn) {
     http_info_t *info = bpf_map_lookup_elem(&ongoing_http, pid_conn);
-    if (info) {
-        if (!http_info_complete(info)) {
-            bpf_dbg_printk("Force completing a request on cancelled connection");
-            force_complete_http(info);
-        }
-        finish_http(info, pid_conn);
-    }
+    cleanup_http_request_data(pid_conn, info);
 }
 
 static __always_inline void process_http_request(
@@ -372,17 +388,7 @@ static __always_inline void handle_http_response(unsigned char *small_buf,
         }
     }
 
-    if (info->type == EVENT_HTTP_REQUEST) {
-        trace_key_t t_key = {0};
-        t_key.extra_id = info->extra_id;
-        t_key.p_key.ns = info->pid.ns;
-        t_key.p_key.tid = info->task_tid;
-        t_key.p_key.pid = info->pid.user_pid;
-        delete_server_trace(&t_key);
-    } else {
-        delete_client_trace_info(pid_conn);
-    }
-    bpf_map_delete_elem(&active_ssl_connections, pid_conn);
+    cleanup_http_request_data(pid_conn, info);
 }
 
 // k_tail_protocol_http
@@ -416,9 +422,10 @@ int beyla_protocol_http(void *ctx) {
         __builtin_memcpy(&self_ref_parent_id, &self_ref_tp->parent_id, sizeof(u64));
     }
 
-    http_info_t *info = get_or_set_http_info(in, &args->pid_conn, args->packet_type);
+    http_info_t *info =
+        get_or_set_http_info(in, &args->pid_conn, args->packet_type, args->direction);
     if (!info) {
-        bpf_dbg_printk("No info, pid =%d?", args->pid_conn.pid);
+        bpf_dbg_printk("No info (or duplicate), pid =%d?", args->pid_conn.pid);
         dbg_print_http_connection_info(&args->pid_conn.conn);
         return 0;
     }

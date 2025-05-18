@@ -8,6 +8,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
+	"github.com/grafana/beyla/v2/pkg/export/instrumentations"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
@@ -31,6 +32,9 @@ func TracesReceiver(
 		tr := &tracesReceiver{
 			cfg: cfg, hostID: ctxInfo.HostID, spanMetricsEnabled: spanMetricsEnabled,
 			input: input.Subscribe(),
+			is: instrumentations.NewInstrumentationSelection([]string{
+				instrumentations.InstrumentationALL,
+			}),
 		}
 		// Get user attributes
 		if err := tr.fetchConstantAttributes(selectorCfg); err != nil {
@@ -44,6 +48,7 @@ type tracesReceiver struct {
 	cfg                *beyla.TracesReceiverConfig
 	hostID             string
 	spanMetricsEnabled bool
+	is                 instrumentations.InstrumentationSelection
 	input              <-chan []request.Span
 	traceAttrs         map[attr.Name]struct{}
 }
@@ -61,24 +66,21 @@ func (tr *tracesReceiver) fetchConstantAttributes(selectorCfg *attributes.Select
 	return nil
 }
 
-func (tr *tracesReceiver) spanDiscarded(span *request.Span) bool {
-	return span.IgnoreTraces() || span.Service.ExportsOTelTraces()
-}
-
 func (tr *tracesReceiver) provideLoop(ctx context.Context) {
-	for spans := range tr.input {
-		for i := range spans {
-			span := &spans[i]
-			if tr.spanDiscarded(span) {
-				continue
-			}
-			envResourceAttrs := otel.ResourceAttrsFromEnv(&span.Service)
+	sampler := tr.cfg.Sampler.Implementation()
 
-			for _, tc := range tr.cfg.Traces {
-				traces := otel.GenerateTraces(span, tr.hostID, tr.traceAttrs, envResourceAttrs)
-				err := tc.ConsumeTraces(ctx, traces)
-				if err != nil {
-					slog.Error("error sending trace to consumer", "error", err)
+	for spans := range tr.input {
+		spanGroups := otel.GroupSpans(ctx, spans, tr.traceAttrs, sampler, tr.is)
+		for _, spanGroup := range spanGroups {
+			if len(spanGroup) > 0 {
+				sample := spanGroup[0]
+				envResourceAttrs := otel.ResourceAttrsFromEnv(&sample.Span.Service)
+				for _, tc := range tr.cfg.Traces {
+					traces := otel.GenerateTraces(&sample.Span.Service, envResourceAttrs, tr.hostID, spanGroup)
+					err := tc.ConsumeTraces(ctx, traces)
+					if err != nil {
+						slog.Error("error sending trace to consumer", "error", err)
+					}
 				}
 			}
 		}

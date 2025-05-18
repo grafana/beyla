@@ -1,6 +1,7 @@
 package alloy
 
 import (
+	"context"
 	"encoding/binary"
 	"math/rand/v2"
 	"strconv"
@@ -10,12 +11,13 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/collector/pdata/ptrace"
-	"go.opentelemetry.io/otel/attribute"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
+	"github.com/grafana/beyla/v2/pkg/export/instrumentations"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
@@ -73,7 +75,7 @@ func TestTraceSkipSpanMetrics(t *testing.T) {
 			Method:       "GET",
 			Route:        "/test" + strconv.Itoa(i),
 			Status:       200,
-			Service:      svc.Attrs{},
+			Service:      svc.Attrs{UID: svc.UID{Name: strconv.Itoa(i)}},
 			TraceID:      randomTraceID(),
 		}
 		spans = append(spans, span)
@@ -127,10 +129,38 @@ func TestTraceSkipSpanMetrics(t *testing.T) {
 	})
 }
 
+func TestTraceGrouping(t *testing.T) {
+	spans := []request.Span{}
+	start := time.Now()
+	for i := 0; i < 10; i++ {
+		span := request.Span{Type: request.EventTypeHTTP,
+			RequestStart: start.UnixNano(),
+			Start:        start.Add(time.Second).UnixNano(),
+			End:          start.Add(3 * time.Second).UnixNano(),
+			Method:       "GET",
+			Route:        "/test" + strconv.Itoa(i),
+			Status:       200,
+			Service:      svc.Attrs{UID: svc.UID{Name: "1"}},
+			TraceID:      randomTraceID(),
+		}
+		spans = append(spans, span)
+	}
+
+	t.Run("test span grouping", func(t *testing.T) {
+		receiver := makeTracesTestReceiverWithSpanMetrics()
+
+		traces := generateTracesForSpans(t, receiver, spans)
+		assert.Equal(t, 1, len(traces))
+	})
+}
+
 func makeTracesTestReceiver() *tracesReceiver {
 	return &tracesReceiver{
 		cfg:    &beyla.TracesReceiverConfig{},
 		hostID: "Alloy",
+		is: instrumentations.NewInstrumentationSelection([]string{
+			instrumentations.InstrumentationALL,
+		}),
 	}
 }
 
@@ -139,6 +169,9 @@ func makeTracesTestReceiverWithSpanMetrics() *tracesReceiver {
 		cfg:                &beyla.TracesReceiverConfig{},
 		hostID:             "Alloy",
 		spanMetricsEnabled: true,
+		is: instrumentations.NewInstrumentationSelection([]string{
+			instrumentations.InstrumentationALL,
+		}),
 	}
 }
 
@@ -146,12 +179,15 @@ func generateTracesForSpans(t *testing.T, tr *tracesReceiver, spans []request.Sp
 	res := []ptrace.Traces{}
 	err := tr.fetchConstantAttributes(&attributes.SelectorConfig{})
 	assert.NoError(t, err)
-	for i := range spans {
-		span := &spans[i]
-		if tr.spanDiscarded(span) {
-			continue
+
+	spanGroups := otel.GroupSpans(context.Background(), spans, tr.traceAttrs, sdktrace.AlwaysSample(), tr.is)
+	for _, spanGroup := range spanGroups {
+		if len(spanGroup) > 0 {
+			sample := spanGroup[0]
+			envResourceAttrs := otel.ResourceAttrsFromEnv(&sample.Span.Service)
+			traces := otel.GenerateTraces(&sample.Span.Service, envResourceAttrs, tr.hostID, spanGroup)
+			res = append(res, traces)
 		}
-		res = append(res, otel.GenerateTraces(span, tr.hostID, tr.traceAttrs, []attribute.KeyValue{}))
 	}
 
 	return res

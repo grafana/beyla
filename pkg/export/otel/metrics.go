@@ -49,6 +49,7 @@ const (
 	SpanMetricsResponseSizes = "traces_spanmetrics_response_size_total"
 	TracesTargetInfo         = "traces_target_info"
 	TargetInfo               = "target_info"
+	SurveyInfo               = "survey_info"
 	TracesHostInfo           = "traces_host_info"
 	ServiceGraphClient       = "traces_service_graph_request_client"
 	ServiceGraphServer       = "traces_service_graph_request_server"
@@ -205,13 +206,16 @@ func (m *MetricsConfig) Enabled() bool {
 // MetricsReporter implements the graph node that receives request.Span
 // instances and forwards them as OTEL metrics.
 type MetricsReporter struct {
-	ctx        context.Context
-	cfg        *MetricsConfig
-	hostID     string
-	attributes *attributes.AttrSelector
-	exporter   sdkmetric.Exporter
-	reporters  ReporterPool[*svc.Attrs, *Metrics]
-	is         instrumentations.InstrumentationSelection
+	ctx               context.Context
+	cfg               *MetricsConfig
+	surveyInfoEnabled bool
+	hostID            string
+	attributes        *attributes.AttrSelector
+	exporter          sdkmetric.Exporter
+	reporters         ReporterPool[*svc.Attrs, *Metrics]
+	systemReporter    Metrics
+	serviceMap        map[svc.UID]*svc.Attrs
+	is                instrumentations.InstrumentationSelection
 
 	// user-selected fields for each of the reported metrics
 	attrHTTPDuration           []attributes.Field[*request.Span, attribute.KeyValue]
@@ -266,6 +270,7 @@ type Metrics struct {
 	serviceGraphTotal            *Expirer[*request.Span, instrument.Int64Counter, int64]
 	targetInfo                   instrument.Int64UpDownCounter
 	tracesTargetInfo             instrument.Int64UpDownCounter
+	surveyInfo                   instrument.Int64UpDownCounter
 	gpuKernelCallsTotal          *Expirer[*request.Span, instrument.Int64Counter, int64]
 	gpuMemoryAllocsTotal         *Expirer[*request.Span, instrument.Int64Counter, int64]
 	gpuKernelGridSize            *Expirer[*request.Span, instrument.Float64Histogram, float64]
@@ -275,6 +280,7 @@ type Metrics struct {
 func ReportMetrics(
 	ctxInfo *global.ContextInfo,
 	cfg *MetricsConfig,
+	surveyInfoEnabled bool,
 	selectorCfg *attributes.SelectorConfig,
 	input *msg.Queue[[]request.Span],
 	processEventCh *msg.Queue[exec.ProcessEvent],
@@ -289,6 +295,7 @@ func ReportMetrics(
 			ctx,
 			ctxInfo,
 			cfg,
+			surveyInfoEnabled,
 			selectorCfg,
 			input,
 			processEventCh,
@@ -314,6 +321,7 @@ func newMetricsReporter(
 	ctx context.Context,
 	ctxInfo *global.ContextInfo,
 	cfg *MetricsConfig,
+	surveyInfoEnabled bool,
 	selectorCfg *attributes.SelectorConfig,
 	input *msg.Queue[[]request.Span],
 	processEventCh *msg.Queue[exec.ProcessEvent],
@@ -330,6 +338,7 @@ func newMetricsReporter(
 	mr := MetricsReporter{
 		ctx:                 ctx,
 		cfg:                 cfg,
+		surveyInfoEnabled:   surveyInfoEnabled,
 		is:                  is,
 		attributes:          attribProvider,
 		hostID:              ctxInfo.HostID,
@@ -399,12 +408,23 @@ func newMetricsReporter(
 				}
 			}()
 		}, mr.newMetricSet)
+
 	// Instantiate the OTLP HTTP or GRPC metrics exporter
 	exporter, err := InstantiateMetricsExporter(ctx, cfg, log)
 	if err != nil {
 		return nil, err
 	}
 	mr.exporter = instrumentMetricsExporter(ctxInfo.Metrics, exporter)
+
+	mr.systemReporter = mr.newSystemMetricsInstance()
+	mr.serviceMap = map[svc.UID]*svc.Attrs{}
+	if mr.surveyInfoEnabled {
+		// Survey info is special, created via service less reporter
+		meter := mr.systemReporter.provider.Meter(reporterName)
+		if err = mr.setupSurveyInfo(&mr.systemReporter, meter); err != nil {
+			return nil, err
+		}
+	}
 
 	return &mr, nil
 }
@@ -480,7 +500,17 @@ func (mr *MetricsReporter) setupTargetInfo(m *Metrics, meter instrument.Meter) e
 	var err error
 	m.targetInfo, err = meter.Int64UpDownCounter(TargetInfo)
 	if err != nil {
-		return fmt.Errorf("creating span metric traces target info: %w", err)
+		return fmt.Errorf("creating target info: %w", err)
+	}
+
+	return nil
+}
+
+func (mr *MetricsReporter) setupSurveyInfo(m *Metrics, meter instrument.Meter) error {
+	var err error
+	m.surveyInfo, err = meter.Int64UpDownCounter(SurveyInfo)
+	if err != nil {
+		return fmt.Errorf("creating survey info: %w", err)
 	}
 
 	return nil
@@ -713,6 +743,28 @@ func (mr *MetricsReporter) setupGraphMeters(m *Metrics, meter instrument.Meter) 
 	return nil
 }
 
+func (mr *MetricsReporter) newSystemMetricsInstance() Metrics {
+	mlog := mlog()
+	mlog.Debug("creating new system Metrics reporter")
+
+	opts := []metric.Option{
+		metric.WithResource(resource.Empty()),
+		metric.WithReader(metric.NewPeriodicReader(mr.exporter,
+			metric.WithInterval(mr.cfg.Interval))),
+	}
+
+	opts = append(opts, mr.otelMetricOptions(mlog)...)
+	opts = append(opts, mr.spanMetricOptions(mlog)...)
+	opts = append(opts, mr.graphMetricOptions(mlog)...)
+
+	return Metrics{
+		ctx: mr.ctx,
+		provider: metric.NewMeterProvider(
+			opts...,
+		),
+	}
+}
+
 func (mr *MetricsReporter) newMetricsInstance(service *svc.Attrs) Metrics {
 	mlog := mlog()
 	var resourceAttributes []attribute.KeyValue
@@ -902,7 +954,6 @@ func (mr *MetricsReporter) tracesResourceAttributes(service *svc.Attrs) attribut
 		semconv.TelemetrySDKLanguageKey.String(service.SDKLanguage.String()),
 		semconv.TelemetrySDKNameKey.String("beyla"),
 		request.SourceMetric("beyla"),
-		semconv.ProcessPID(int(service.ProcPID)),
 		semconv.OSTypeKey.String("linux"),
 	}
 
@@ -1084,6 +1135,26 @@ func (mr *MetricsReporter) deleteTargetInfo(reporter *Metrics) {
 	reporter.targetInfo.Remove(mr.ctx, attrOpt)
 }
 
+func (mr *MetricsReporter) createSurveyInfo(service *svc.Attrs) {
+	resourceAttributes := append(getAppResourceAttrs(mr.hostID, service), ResourceAttrsFromEnv(service)...)
+	mlog().Debug("Creating survey_info", "attrs", resourceAttributes)
+	attrOpt := instrument.WithAttributeSet(attribute.NewSet(resourceAttributes...))
+	mr.systemReporter.surveyInfo.Add(mr.ctx, 1, attrOpt)
+	mr.serviceMap[service.UID] = service
+}
+
+func (mr *MetricsReporter) deleteSurveyInfo(s *svc.Attrs) {
+	service, ok := mr.serviceMap[s.UID]
+	if !ok {
+		service = s
+	}
+	resourceAttributes := append(getAppResourceAttrs(mr.hostID, service), ResourceAttrsFromEnv(service)...)
+	mlog().Debug("Deleting survey_info for", "attrs", resourceAttributes)
+	attrOpt := instrument.WithAttributeSet(attribute.NewSet(resourceAttributes...))
+	mr.systemReporter.surveyInfo.Remove(mr.ctx, attrOpt)
+	delete(mr.serviceMap, s.UID)
+}
+
 func (mr *MetricsReporter) createTracesTargetInfo(reporter *Metrics) {
 	if !mr.cfg.SpanMetricsEnabled() && !mr.cfg.ServiceGraphMetricsEnabled() {
 		return
@@ -1113,12 +1184,18 @@ func (mr *MetricsReporter) watchForProcessEvents() {
 			continue
 		}
 
-		if pe.Type == exec.ProcessEventCreated {
+		switch pe.Type {
+		case exec.ProcessEventCreated:
 			mr.createTargetInfo(reporter)
 			mr.createTracesTargetInfo(reporter)
-		} else {
+		case exec.ProcessEventTerminated:
+			if mr.surveyInfoEnabled {
+				mr.deleteSurveyInfo(&pe.File.Service)
+			}
 			mr.deleteTracesTargetInfo(reporter)
 			mr.deleteTargetInfo(reporter)
+		case exec.ProcessEventSurveyCreated:
+			mr.createSurveyInfo(&pe.File.Service)
 		}
 	}
 }

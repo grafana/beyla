@@ -1,3 +1,5 @@
+// TODO: remove this after batching API becomes stable
+// nolint:staticcheck
 package otel
 
 import (
@@ -19,7 +21,6 @@ import (
 	"go.opentelemetry.io/collector/config/configtls"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/exporter"
-	"go.opentelemetry.io/collector/exporter/exporterbatcher"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
 	"go.opentelemetry.io/collector/exporter/otlpexporter"
 	"go.opentelemetry.io/collector/exporter/otlphttpexporter"
@@ -54,6 +55,11 @@ func tlog() *slog.Logger {
 const reporterName = "github.com/grafana/beyla"
 
 var serviceAttrCache = expirable2.NewLRU[svc.UID, []attribute.KeyValue](1024, nil, 5*time.Minute)
+
+type TraceSpanAndAttributes struct {
+	Span       *request.Span
+	Attributes []attribute.KeyValue
+}
 
 type TracesConfig struct {
 	CommonEndpoint string `yaml:"-" env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
@@ -209,27 +215,29 @@ func (tr *tracesOTELReceiver) getConstantAttributes() (map[attr.Name]struct{}, e
 	return traceAttrs, nil
 }
 
-func (tr *tracesOTELReceiver) spanDiscarded(span *request.Span) bool {
-	return span.IgnoreTraces() || span.Service.ExportsOTelTraces() || !tr.acceptSpan(span)
+func spanDiscarded(span *request.Span, is instrumentations.InstrumentationSelection) bool {
+	return span.IgnoreTraces() || span.Service.ExportsOTelTraces() || !acceptSpan(is, span)
 }
 
-func (tr *tracesOTELReceiver) processSpans(ctx context.Context, exp exporter.Traces, spans []request.Span, traceAttrs map[attr.Name]struct{}, sampler trace.Sampler) {
+func GroupSpans(ctx context.Context, spans []request.Span, traceAttrs map[attr.Name]struct{}, sampler trace.Sampler, is instrumentations.InstrumentationSelection) map[svc.UID][]TraceSpanAndAttributes {
+	spanGroups := map[svc.UID][]TraceSpanAndAttributes{}
+
 	for i := range spans {
 		span := &spans[i]
 		if span.InternalSignal() {
 			continue
 		}
-		if tr.spanDiscarded(span) {
+		if spanDiscarded(span, is) {
 			continue
 		}
 
-		finalAttrs := traceAttributes(span, traceAttrs)
+		finalAttrs := TraceAttributes(span, traceAttrs)
 
 		sr := sampler.ShouldSample(trace.SamplingParameters{
 			ParentContext: ctx,
 			Name:          span.TraceName(),
 			TraceID:       span.TraceID,
-			Kind:          spanKind(span),
+			Kind:          SpanKind(span),
 			Attributes:    finalAttrs,
 		})
 
@@ -237,11 +245,29 @@ func (tr *tracesOTELReceiver) processSpans(ctx context.Context, exp exporter.Tra
 			continue
 		}
 
-		envResourceAttrs := ResourceAttrsFromEnv(&span.Service)
-		traces := GenerateTracesWithAttributes(span, tr.ctxInfo.HostID, finalAttrs, envResourceAttrs)
-		err := exp.ConsumeTraces(ctx, traces)
-		if err != nil {
-			slog.Error("error sending trace to consumer", "error", err)
+		group, ok := spanGroups[span.Service.UID]
+		if !ok {
+			group = []TraceSpanAndAttributes{}
+		}
+		group = append(group, TraceSpanAndAttributes{Span: span, Attributes: finalAttrs})
+		spanGroups[span.Service.UID] = group
+	}
+
+	return spanGroups
+}
+
+func (tr *tracesOTELReceiver) processSpans(ctx context.Context, exp exporter.Traces, spans []request.Span, traceAttrs map[attr.Name]struct{}, sampler trace.Sampler) {
+	spanGroups := GroupSpans(ctx, spans, traceAttrs, sampler, tr.is)
+
+	for _, spanGroup := range spanGroups {
+		if len(spanGroup) > 0 {
+			sample := spanGroup[0]
+			envResourceAttrs := ResourceAttrsFromEnv(&sample.Span.Service)
+			traces := generateTracesWithAttributes(&sample.Span.Service, envResourceAttrs, tr.ctxInfo.HostID, spanGroup)
+			err := exp.ConsumeTraces(ctx, traces)
+			if err != nil {
+				slog.Error("error sending trace to consumer", "error", err)
+			}
 		}
 	}
 }
@@ -302,9 +328,9 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 		config := factory.CreateDefaultConfig().(*otlphttpexporter.Config)
 		// Experimental API for batching
 		// See: https://github.com/open-telemetry/opentelemetry-collector/issues/8122
-		batchCfg := exporterbatcher.NewDefaultConfig()
+		batchCfg := exporterhelper.NewDefaultBatcherConfig()
 		if cfg.MaxQueueSize > 0 {
-			batchCfg.SizeConfig.MaxSize = cfg.MaxExportBatchSize
+			batchCfg.SizeConfig.MaxSize = int64(cfg.MaxExportBatchSize)
 		}
 		if cfg.BatchTimeout > 0 {
 			batchCfg.FlushTimeout = cfg.BatchTimeout
@@ -358,7 +384,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 		// See: https://github.com/open-telemetry/opentelemetry-collector/issues/8122
 		if cfg.MaxExportBatchSize > 0 {
 			config.BatcherConfig.Enabled = true
-			config.BatcherConfig.SizeConfig.MaxSize = cfg.MaxExportBatchSize
+			config.BatcherConfig.SizeConfig.MaxSize = int64(cfg.MaxExportBatchSize)
 		}
 		if cfg.BatchTimeout > 0 {
 			config.BatcherConfig.FlushTimeout = cfg.BatchTimeout
@@ -408,7 +434,7 @@ func getTraceSettings(
 	ctxInfo *global.ContextInfo,
 	dataTypeMetrics component.Type,
 	in trace.SpanExporter,
-	batcherCfg *exporterbatcher.Config,
+	batcherCfg *exporterhelper.BatcherConfig,
 ) exporter.Settings {
 	var traceProvider trace2.TracerProvider
 	traceProvider = tracenoop.NewTracerProvider()
@@ -434,13 +460,13 @@ func getTraceSettings(
 	}
 }
 
-func getInternalBatchSpanOpts(cfg *exporterbatcher.Config) []trace.BatchSpanProcessorOption {
+func getInternalBatchSpanOpts(cfg *exporterhelper.BatcherConfig) []trace.BatchSpanProcessorOption {
 	var opts []trace.BatchSpanProcessorOption
 	if cfg.FlushTimeout > 0 {
 		opts = append(opts, trace.WithBatchTimeout(cfg.FlushTimeout))
 	}
 	if cfg.MaxSize > 0 {
-		opts = append(opts, trace.WithMaxQueueSize(cfg.MaxSize))
+		opts = append(opts, trace.WithMaxQueueSize(int(cfg.MaxSize)))
 	}
 	return opts
 }
@@ -475,59 +501,66 @@ func traceAppResourceAttrs(hostID string, service *svc.Attrs) []attribute.KeyVal
 	return attrs
 }
 
-func GenerateTracesWithAttributes(span *request.Span, hostID string, attrs []attribute.KeyValue, envResourceAttrs []attribute.KeyValue) ptrace.Traces {
-	t := span.Timings()
-	start := spanStartTime(t)
-	hasSubSpans := t.Start.After(start)
+func generateTracesWithAttributes(svc *svc.Attrs, envResourceAttrs []attribute.KeyValue, hostID string, spans []TraceSpanAndAttributes) ptrace.Traces {
 	traces := ptrace.NewTraces()
 	rs := traces.ResourceSpans().AppendEmpty()
-	ss := rs.ScopeSpans().AppendEmpty()
-	resourceAttrs := traceAppResourceAttrs(hostID, &span.Service)
+	resourceAttrs := traceAppResourceAttrs(hostID, svc)
 	resourceAttrs = append(resourceAttrs, envResourceAttrs...)
 	resourceAttrsMap := attrsToMap(resourceAttrs)
 	resourceAttrsMap.PutStr(string(semconv.OTelLibraryNameKey), reporterName)
 	resourceAttrsMap.CopyTo(rs.Resource().Attributes())
 
-	traceID := pcommon.TraceID(span.TraceID)
-	spanID := pcommon.SpanID(RandomSpanID())
-	// This should never happen
-	if traceID.IsEmpty() {
-		traceID = pcommon.TraceID(RandomTraceID())
+	for _, spanWithAttributes := range spans {
+		span := spanWithAttributes.Span
+		attrs := spanWithAttributes.Attributes
+
+		ss := rs.ScopeSpans().AppendEmpty()
+
+		t := span.Timings()
+		start := spanStartTime(t)
+		hasSubSpans := t.Start.After(start)
+
+		traceID := pcommon.TraceID(span.TraceID)
+		spanID := pcommon.SpanID(RandomSpanID())
+		// This should never happen
+		if traceID.IsEmpty() {
+			traceID = pcommon.TraceID(RandomTraceID())
+		}
+
+		if hasSubSpans {
+			createSubSpans(span, spanID, traceID, &ss, t)
+		} else if span.SpanID.IsValid() {
+			spanID = pcommon.SpanID(span.SpanID)
+		}
+
+		// Create a parent span for the whole request session
+		s := ss.Spans().AppendEmpty()
+		s.SetName(span.TraceName())
+		s.SetKind(ptrace.SpanKind(SpanKind(span)))
+		s.SetStartTimestamp(pcommon.NewTimestampFromTime(start))
+
+		// Set trace and span IDs
+		s.SetSpanID(spanID)
+		s.SetTraceID(traceID)
+		if span.ParentSpanID.IsValid() {
+			s.SetParentSpanID(pcommon.SpanID(span.ParentSpanID))
+		}
+
+		// Set span attributes
+		m := attrsToMap(attrs)
+		m.CopyTo(s.Attributes())
+
+		// Set status code
+		statusCode := codeToStatusCode(request.SpanStatusCode(span))
+		s.Status().SetCode(statusCode)
+		s.SetEndTimestamp(pcommon.NewTimestampFromTime(t.End))
 	}
-
-	if hasSubSpans {
-		createSubSpans(span, spanID, traceID, &ss, t)
-	} else if span.SpanID.IsValid() {
-		spanID = pcommon.SpanID(span.SpanID)
-	}
-
-	// Create a parent span for the whole request session
-	s := ss.Spans().AppendEmpty()
-	s.SetName(span.TraceName())
-	s.SetKind(ptrace.SpanKind(spanKind(span)))
-	s.SetStartTimestamp(pcommon.NewTimestampFromTime(start))
-
-	// Set trace and span IDs
-	s.SetSpanID(spanID)
-	s.SetTraceID(traceID)
-	if span.ParentSpanID.IsValid() {
-		s.SetParentSpanID(pcommon.SpanID(span.ParentSpanID))
-	}
-
-	// Set span attributes
-	m := attrsToMap(attrs)
-	m.CopyTo(s.Attributes())
-
-	// Set status code
-	statusCode := codeToStatusCode(request.SpanStatusCode(span))
-	s.Status().SetCode(statusCode)
-	s.SetEndTimestamp(pcommon.NewTimestampFromTime(t.End))
 	return traces
 }
 
 // GenerateTraces creates a ptrace.Traces from a request.Span
-func GenerateTraces(span *request.Span, hostID string, userAttrs map[attr.Name]struct{}, envResourceAttrs []attribute.KeyValue) ptrace.Traces {
-	return GenerateTracesWithAttributes(span, hostID, traceAttributes(span, userAttrs), envResourceAttrs)
+func GenerateTraces(svc *svc.Attrs, envResourceAttrs []attribute.KeyValue, hostID string, spans []TraceSpanAndAttributes) ptrace.Traces {
+	return generateTracesWithAttributes(svc, envResourceAttrs, hostID, spans)
 }
 
 // createSubSpans creates the internal spans for a request.Span
@@ -612,18 +645,18 @@ func grpcTracer(ctx context.Context, opts otlpOptions) (*otlptrace.Exporter, err
 	return texp, nil
 }
 
-func (tr *tracesOTELReceiver) acceptSpan(span *request.Span) bool {
+func acceptSpan(is instrumentations.InstrumentationSelection, span *request.Span) bool {
 	switch span.Type {
 	case request.EventTypeHTTP, request.EventTypeHTTPClient:
-		return tr.is.HTTPEnabled()
+		return is.HTTPEnabled()
 	case request.EventTypeGRPC, request.EventTypeGRPCClient:
-		return tr.is.GRPCEnabled()
+		return is.GRPCEnabled()
 	case request.EventTypeSQLClient:
-		return tr.is.SQLEnabled()
+		return is.SQLEnabled()
 	case request.EventTypeRedisClient, request.EventTypeRedisServer:
-		return tr.is.RedisEnabled()
+		return is.RedisEnabled()
 	case request.EventTypeKafkaClient, request.EventTypeKafkaServer:
-		return tr.is.KafkaEnabled()
+		return is.KafkaEnabled()
 	}
 
 	return false
@@ -634,7 +667,7 @@ var dbSystemRedis = attribute.String(string(attr.DBSystemName), semconv.DBSystem
 var spanMetricsSkip = attribute.Bool(string(attr.SkipSpanMetrics), true)
 
 // nolint:cyclop
-func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) []attribute.KeyValue {
+func TraceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) []attribute.KeyValue {
 	var attrs []attribute.KeyValue
 
 	switch span.Type {
@@ -739,7 +772,7 @@ func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 	return attrs
 }
 
-func spanKind(span *request.Span) trace2.SpanKind {
+func SpanKind(span *request.Span) trace2.SpanKind {
 	switch span.Type {
 	case request.EventTypeHTTP, request.EventTypeGRPC, request.EventTypeRedisServer, request.EventTypeKafkaServer:
 		return trace2.SpanKindServer

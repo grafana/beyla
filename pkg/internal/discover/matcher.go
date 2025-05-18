@@ -12,10 +12,15 @@ import (
 	"github.com/shirou/gopsutil/v3/process"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
+	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 	"github.com/grafana/beyla/v2/pkg/services"
 )
+
+var namespaceFetcherFunc = ebpfcommon.FindNetworkNamespace
+var hasHostPidAccess = ebpfcommon.HasHostPidAccess
+var osPidFunc = os.Getpid
 
 // CriteriaMatcherProvider filters the processes that match the discovery criteria.
 func CriteriaMatcherProvider(
@@ -23,13 +28,35 @@ func CriteriaMatcherProvider(
 	input *msg.Queue[[]Event[processAttrs]],
 	output *msg.Queue[[]Event[ProcessMatch]],
 ) swarm.InstanceFunc {
+	beylaNamespace, _ := namespaceFetcherFunc(int32(osPidFunc()))
 	m := &matcher{
-		log:             slog.With("component", "discover.CriteriaMatcher"),
-		criteria:        FindingCriteria(cfg),
-		excludeCriteria: append(cfg.Discovery.ExcludeServices, cfg.Discovery.DefaultExcludeServices...),
-		processHistory:  map[PID]*services.ProcessInfo{},
-		input:           input.Subscribe(),
-		output:          output,
+		log:              slog.With("component", "discover.CriteriaMatcher"),
+		criteria:         FindingCriteria(cfg),
+		excludeCriteria:  append(cfg.Discovery.ExcludeServices, cfg.Discovery.DefaultExcludeServices...),
+		processHistory:   map[PID]*services.ProcessInfo{},
+		input:            input.Subscribe(),
+		output:           output,
+		beylaNamespace:   beylaNamespace,
+		hasHostPidAccess: hasHostPidAccess(),
+	}
+	return swarm.DirectInstance(m.run)
+}
+
+func SurveyCriteriaMatcherProvider(
+	cfg *beyla.Config,
+	input *msg.Queue[[]Event[processAttrs]],
+	output *msg.Queue[[]Event[ProcessMatch]],
+) swarm.InstanceFunc {
+	beylaNamespace, _ := namespaceFetcherFunc(int32(osPidFunc()))
+	m := &matcher{
+		log:              slog.With("component", "discover.SurveyCriteriaMatcher"),
+		criteria:         surveyCriteria(cfg),
+		excludeCriteria:  services.DefinitionCriteria{},
+		processHistory:   map[PID]*services.ProcessInfo{},
+		input:            input.Subscribe(),
+		output:           output,
+		beylaNamespace:   beylaNamespace,
+		hasHostPidAccess: hasHostPidAccess(),
 	}
 	return swarm.DirectInstance(m.run)
 }
@@ -41,9 +68,11 @@ type matcher struct {
 	// processHistory keeps track of the processes that have been already matched and submitted for
 	// instrumentation.
 	// This avoids keep inspecting again and again client processes each time they open a new connection port
-	processHistory map[PID]*services.ProcessInfo
-	input          <-chan []Event[processAttrs]
-	output         *msg.Queue[[]Event[ProcessMatch]]
+	processHistory   map[PID]*services.ProcessInfo
+	input            <-chan []Event[processAttrs]
+	output           *msg.Queue[[]Event[ProcessMatch]]
+	beylaNamespace   string
+	hasHostPidAccess bool
 }
 
 // ProcessMatch matches a found process with the first selection criteria it fulfilled.
@@ -150,8 +179,16 @@ func (m *matcher) matchProcess(obj *processAttrs, p *services.ProcessInfo, a *se
 		return false
 	}
 	if a.OpenPorts.Len() > 0 && !m.matchByPort(p, a) {
-		log.Debug("open ports do not match", "openPorts", a.OpenPorts)
+		log.Debug("open ports do not match", "openPorts", a.OpenPorts, "process ports", p.OpenPorts)
 		return false
+	}
+	if a.ContainersOnly {
+		ns, _ := namespaceFetcherFunc(p.Pid)
+		if ns == m.beylaNamespace && m.hasHostPidAccess {
+			log.Debug("not in a container", "namespace", ns)
+			return false
+		}
+		log.Debug("app is in a container", "namespace", ns, "beyla namespace", m.beylaNamespace)
 	}
 	// after matching by process basic information, we check if it matches
 	// by metadata.
@@ -209,6 +246,22 @@ func (m *matcher) matchByAttributes(actual *processAttrs, required *services.Att
 	return true
 }
 
+func normalizeCriteria(finderCriteria services.DefinitionCriteria) services.DefinitionCriteria {
+	// normalize criteria that only define metadata (e.g. k8s)
+	// but do neither define executable name nor port: configure them to match
+	// any executable in the matched k8s entities
+	for i := range finderCriteria {
+		fc := finderCriteria[i]
+		if !fc.Path.IsSet() && fc.OpenPorts.Len() == 0 && (len(fc.Metadata) > 0 || len(fc.PodLabels) > 0 || len(fc.PodAnnotations) > 0) {
+			// match any executable path
+			if err := fc.Path.UnmarshalText([]byte(".")); err != nil {
+				panic("bug! " + err.Error())
+			}
+		}
+	}
+	return finderCriteria
+}
+
 func FindingCriteria(cfg *beyla.Config) services.DefinitionCriteria {
 	if cfg.Discovery.SystemWide {
 		// will return all the executables in the system
@@ -231,18 +284,15 @@ func FindingCriteria(cfg *beyla.Config) services.DefinitionCriteria {
 			OpenPorts: cfg.Port,
 		})
 	}
-	// normalize criteria that only define metadata (e.g. k8s)
-	// but do neither define executable name nor port: configure them to match
-	// any executable in the matched k8s entities
-	for i := range finderCriteria {
-		fc := &finderCriteria[i]
-		if !fc.Path.IsSet() && fc.OpenPorts.Len() == 0 && (len(fc.Metadata) > 0 || len(fc.PodLabels) > 0 || len(fc.PodAnnotations) > 0) {
-			// match any executable path
-			if err := fc.Path.UnmarshalText([]byte(".")); err != nil {
-				panic("bug! " + err.Error())
-			}
-		}
-	}
+
+	finderCriteria = normalizeCriteria(finderCriteria)
+
+	return finderCriteria
+}
+
+func surveyCriteria(cfg *beyla.Config) services.DefinitionCriteria {
+	finderCriteria := cfg.Discovery.Survey
+	finderCriteria = normalizeCriteria(finderCriteria)
 
 	return finderCriteria
 }

@@ -15,6 +15,8 @@ data:
     trace_printer: text
     log_level: debug
     discovery:
+      survey:
+        - k8s_deployment_name: .
       services:
         # name and namespace will be automatically set from the K8s metadata
         - k8s_deployment_name: (otherinstance|testserver)

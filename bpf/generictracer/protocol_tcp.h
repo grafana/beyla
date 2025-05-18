@@ -75,7 +75,7 @@ tcp_get_or_set_trace_info(tcp_req_t *req, pid_connection_info_t *pid_conn, u8 ss
 
         set_tcp_trace_info(TRACE_TYPE_CLIENT, &pid_conn->conn, &req->tp, pid_conn->pid, ssl);
     } else { // Server
-        u8 found = find_trace_for_server_request(&pid_conn->conn, &req->tp);
+        u8 found = find_trace_for_server_request(&pid_conn->conn, &req->tp, EVENT_TCP_REQUEST);
         bpf_dbg_printk("Looking up server trace info, found %d", found);
         if (found) {
             urand_bytes(req->tp.span_id, SPAN_ID_SIZE_BYTES);
@@ -92,9 +92,16 @@ static __always_inline void cleanup_trace_info(tcp_req_t *tcp, pid_connection_in
         task_tid(&t_key.p_key);
         t_key.extra_id = tcp->extra_id;
 
-        delete_server_trace(&t_key);
+        delete_server_trace(pid_conn, &t_key);
     } else {
         delete_client_trace_info(pid_conn);
+    }
+}
+
+static __always_inline void cleanup_tcp_trace_info_if_needed(pid_connection_info_t *pid_conn) {
+    tcp_req_t *existing = bpf_map_lookup_elem(&ongoing_tcp_req, pid_conn);
+    if (existing) {
+        cleanup_trace_info(existing, pid_conn);
     }
 }
 

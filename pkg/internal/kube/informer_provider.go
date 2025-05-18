@@ -8,6 +8,7 @@ import (
 	"path"
 	"strings"
 	"sync"
+	"text/template"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -38,14 +39,15 @@ func klog() *slog.Logger {
 }
 
 type MetadataConfig struct {
-	Enable            kubeflags.EnableFlag
-	DisabledInformers []string
-	KubeConfigPath    string
-	SyncTimeout       time.Duration
-	ResyncPeriod      time.Duration
-	MetaCacheAddr     string
-	ResourceLabels    ResourceLabels
-	RestrictLocalNode bool
+	Enable              kubeflags.EnableFlag
+	DisabledInformers   []string
+	KubeConfigPath      string
+	SyncTimeout         time.Duration
+	ResyncPeriod        time.Duration
+	MetaCacheAddr       string
+	ResourceLabels      ResourceLabels
+	RestrictLocalNode   bool
+	ServiceNameTemplate *template.Template
 }
 
 type MetadataProvider struct {
@@ -118,7 +120,7 @@ func (mp *MetadataProvider) Get(ctx context.Context) (*Store, error) {
 		return nil, err
 	}
 
-	mp.metadata = NewStore(informer, mp.cfg.ResourceLabels)
+	mp.metadata = NewStore(informer, mp.cfg.ResourceLabels, mp.cfg.ServiceNameTemplate)
 
 	return mp.metadata, nil
 }
@@ -316,7 +318,7 @@ func loadKubeConfig(kubeConfigPath string) (*rest.Config, error) {
 	// fallback: use in-cluster config
 	config, err = rest.InClusterConfig()
 	if err != nil {
-		return nil, fmt.Errorf("can't access kubenetes. Tried using config from: "+
+		return nil, fmt.Errorf("can't access kubernetes. Tried using config from: "+
 			"config parameter, %s env, homedir and InClusterConfig. Got: %w",
 			kubeConfigEnvVariable, err)
 	}

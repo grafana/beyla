@@ -1,79 +1,40 @@
-//go:build linux
-
 package components
 
 import (
-	"bytes"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
+	"github.com/grafana/beyla/v2/pkg/transform"
 )
 
-// Tests fix for https://github.com/grafana/beyla/issues/926
-func TestRun_DontPanic(t *testing.T) {
-	type testCase struct {
-		description    string
-		configProvider func() beyla.Config
-	}
-	testCases := []testCase{{
-		description: "otel endpoint but feature excluded",
-		configProvider: func() beyla.Config {
-			cfg := beyla.DefaultConfig
-			cfg.Metrics.Features = []string{"application"}
-			cfg.NetworkFlows.Enable = true
-			cfg.Metrics.CommonEndpoint = "http://localhost"
-			return cfg
-		},
-	}, {
-		description: "prom endpoint but feature excluded",
-		configProvider: func() beyla.Config {
-			cfg := beyla.DefaultConfig
-			cfg.Prometheus.Features = []string{"application"}
-			cfg.NetworkFlows.Enable = true
-			cfg.Prometheus.Port = 9090
-			return cfg
-		},
-	}, {
-		description: "otel endpoint, otel feature excluded, but prom enabled",
-		configProvider: func() beyla.Config {
-			cfg := beyla.DefaultConfig
-			cfg.Metrics.Features = []string{"application"}
-			cfg.NetworkFlows.Enable = true
-			cfg.Metrics.CommonEndpoint = "http://localhost"
-			cfg.Prometheus.Port = 9090
-			return cfg
-		},
-	}, {
-		description: "all endpoints, all features excluded",
-		configProvider: func() beyla.Config {
-			cfg := beyla.DefaultConfig
-			cfg.NetworkFlows.Enable = true
-			cfg.Prometheus.Port = 9090
-			cfg.Prometheus.Features = []string{"application"}
-			cfg.Metrics.CommonEndpoint = "http://localhost"
-			cfg.Metrics.Features = []string{"application"}
-			return cfg
-		},
-	}}
-	for _, tc := range testCases {
-		t.Run(tc.description, func(t *testing.T) {
-			cfg := tc.configProvider()
-			require.NoError(t, cfg.Validate())
+func TestServiceNameTemplate(t *testing.T) {
 
-			require.NotPanics(t, func() {
-				_ = RunBeyla(t.Context(), &cfg)
-			})
-		})
+	cfg := &beyla.Config{
+		Attributes: beyla.Attributes{
+			Kubernetes: transform.KubernetesDecorator{
+				ServiceNameTemplate: "{{asdf}}",
+			},
+		},
 	}
-}
 
-func Test_NetworkEnabled(t *testing.T) {
-	require.NoError(t, os.Setenv("BEYLA_NETWORK_METRICS", "true"))
-	cfg, err := beyla.LoadConfig(bytes.NewReader(nil))
+	temp, err := buildServiceNameTemplate(cfg)
+
+	assert.Nil(t, temp)
+	if assert.Error(t, err) {
+		assert.Equal(t, `unable to parse service name template: template: serviceNameTemplate:1: function "asdf" not defined`, err.Error())
+	}
+
+	cfg.Attributes.Kubernetes.ServiceNameTemplate = `{{- if eq .Meta.Pod nil }}{{.Meta.Name}}{{ else }}{{- .Meta.Namespace }}/{{ index .Meta.Labels "app.kubernetes.io/name" }}/{{ index .Meta.Labels "app.kubernetes.io/component" -}}{{ if .ContainerName }}/{{ .ContainerName -}}{{ end -}}{{ end -}}`
+	temp, err = buildServiceNameTemplate(cfg)
+
 	assert.NoError(t, err)
-	assert.Equal(t, mustSkip(cfg), "")
+	assert.NotNil(t, temp)
+
+	cfg.Attributes.Kubernetes.ServiceNameTemplate = ""
+	temp, err = buildServiceNameTemplate(cfg)
+
+	assert.Nil(t, temp)
+	assert.Nil(t, err)
 }

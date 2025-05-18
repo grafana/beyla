@@ -169,7 +169,7 @@ static __always_inline void track_sock(struct __sk_buff *skb, const connection_i
         return;
     }
 
-    // TODO revist to avoid pulling data (use bpf_skb_load_bytes instead)
+    // TODO revisit to avoid pulling data (use bpf_skb_load_bytes instead)
     bpf_skb_pull_data(skb, skb->len);
 
     const void *data_end = ctx_data_end(skb);

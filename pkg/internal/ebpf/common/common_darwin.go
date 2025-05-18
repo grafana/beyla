@@ -9,7 +9,7 @@ func hasCapSysAdmin() bool {
 }
 
 func HasHostPidAccess() bool {
-	return false
+	return true
 }
 
 func HasHostNetworkAccess() (bool, error) {

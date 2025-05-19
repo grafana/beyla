@@ -70,7 +70,7 @@ func TestAppMetricsExpiration(t *testing.T) {
 				},
 			},
 			ExtraGroupAttributesCfg: map[string][]attr.Name{
-				"app_kube": {"k8s.app.version"},
+				"k8s_app_meta": {"k8s.app.version"},
 			},
 		},
 		promInput,

@@ -27,7 +27,7 @@ func TestAttributeFilter(t *testing.T) {
 		"k8s.src.namespace": MatchDefinition{NotMatch: "debug"},
 		"k8s.app.version":   MatchDefinition{Match: "*"},
 	}, map[string][]attr.Name{
-		"app_kube": {"k8s.app.version"},
+		"k8s_app_meta": {"k8s.app.version"},
 	}, ebpf.RecordStringGetters, input, output)(context.Background())
 	require.NoError(t, err)
 

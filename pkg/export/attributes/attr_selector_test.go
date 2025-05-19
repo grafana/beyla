@@ -195,8 +195,8 @@ func TestExtraGroupAttributes(t *testing.T) {
 	g.Add(GroupAppKube)
 	p, err := NewAttrSelector(g, &SelectorConfig{
 		ExtraGroupAttributesCfg: map[string][]attr.Name{
-			"app_kube": {"k8s.app.version"},
-			"test":     {"test"},
+			"k8s_app_meta": {"k8s.app.version"},
+			"test":         {"test"},
 		},
 	})
 	require.NoError(t, err)

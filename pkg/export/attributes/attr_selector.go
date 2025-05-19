@@ -71,7 +71,7 @@ func newGroupAttributes(groupAttrsCfg map[string][]attr.Name) GroupAttributes {
 
 func parseExtraAttrGroup(group string) (AttrGroups, error) {
 	switch group {
-	case "app_kube":
+	case "k8s_app_meta":
 		return GroupAppKube, nil
 	default:
 		return UndefinedGroup, fmt.Errorf("group %s is not supported", group)

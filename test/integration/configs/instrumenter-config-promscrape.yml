@@ -32,4 +32,4 @@ attributes:
   kubernetes:
     cluster_name: beyla-k8s-test-cluster
   extra_group_attributes:
-    app_kube: ["component"]
+    k8s_app_meta: ["component"]

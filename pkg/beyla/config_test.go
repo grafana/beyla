@@ -71,7 +71,7 @@ attributes:
       include: ["foo", "bar"]
       exclude: ["baz", "bae"]
   extra_group_attributes:
-    app_kube: ["k8s.app.version"]
+    k8s_app_meta: ["k8s.app.version"]
 network:
   enable: true
   cidrs:
@@ -208,7 +208,7 @@ network:
 				},
 			},
 			ExtraGroupAttributes: map[string][]attr.Name{
-				"app_kube": {"k8s.app.version"},
+				"k8s_app_meta": {"k8s.app.version"},
 			},
 		},
 		Routes: &transform.RoutesConfig{

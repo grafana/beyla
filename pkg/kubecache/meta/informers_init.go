@@ -13,7 +13,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/protobuf/testing/protocmp"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -539,7 +538,7 @@ func (inf *Informers) ipInfoEventHandler(ctx context.Context) *cache.ResourceEve
 			if headlessService(em) {
 				return
 			}
-			em.StatusTime = timestamppb.New(obj.(*indexableEntity).CreationTimestamp.Time)
+			em.StatusTimeEpoch = obj.(*indexableEntity).CreationTimestamp.Time.Unix()
 			inf.Notify(&informer.Event{
 				Type:     informer.EventType_CREATED,
 				Resource: em,
@@ -560,7 +559,7 @@ func (inf *Informers) ipInfoEventHandler(ctx context.Context) *cache.ResourceEve
 			log.Debug("UpdateFunc", "kind", newEM.Kind, "name", newEM.Name,
 				"ips", newEM.Ips, "oldIps", oldEM.Ips)
 
-			nie.EncodedMeta.StatusTime = timestamppb.New(time.Now())
+			nie.EncodedMeta.StatusTimeEpoch = time.Now().Unix()
 			inf.Notify(&informer.Event{
 				Type:     informer.EventType_UPDATED,
 				Resource: nie.EncodedMeta,
@@ -586,9 +585,9 @@ func (inf *Informers) ipInfoEventHandler(ctx context.Context) *cache.ResourceEve
 			metrics.InformerDelete()
 
 			if dt := obj.(*indexableEntity).DeletionTimestamp; dt != nil {
-				em.StatusTime = timestamppb.New(dt.Time)
+				em.StatusTimeEpoch = dt.Unix()
 			} else {
-				em.StatusTime = timestamppb.New(time.Now())
+				em.StatusTimeEpoch = time.Now().Unix()
 			}
 			inf.Notify(&informer.Event{
 				Type:     informer.EventType_DELETED,

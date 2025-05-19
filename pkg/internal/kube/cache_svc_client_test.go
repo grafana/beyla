@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
-	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/grafana/beyla/v2/pkg/internal/testutil"
 	"github.com/grafana/beyla/v2/pkg/kubecache/informer"
@@ -28,14 +27,14 @@ func TestClientForwardsLastTimestamp(t *testing.T) {
 		Type: informer.EventType_CREATED,
 		Resource: &informer.ObjectMeta{
 			Name: "svc-1", Namespace: "default",
-			StatusTime: timestamppb.New(time.Unix(itemTime-1, 0)),
+			StatusTimeEpoch: itemTime - 1,
 		},
 	}
 	fcs.serverResponses <- &informer.Event{
 		Type: informer.EventType_CREATED,
 		Resource: &informer.ObjectMeta{
 			Name: "svc-1", Namespace: "default",
-			StatusTime: timestamppb.New(time.Unix(itemTime, 0)),
+			StatusTimeEpoch: itemTime,
 		},
 	}
 	fcs.serverResponses <- &informer.Event{
@@ -56,7 +55,7 @@ func TestClientForwardsLastTimestamp(t *testing.T) {
 
 	// THEN the client sends a first subscription message with no timestamp
 	firstSubscribe := testutil.ReadChannel(t, fcs.clientMessages, timeout)
-	assert.True(t, firstSubscribe.FromTimestamp.AsTime().IsZero())
+	assert.Zero(t, firstSubscribe.FromTimestampEpoch)
 
 	// AND WHEN the connection is interrupted then restored
 	fcs.Restart()
@@ -66,7 +65,7 @@ func TestClientForwardsLastTimestamp(t *testing.T) {
 
 	// THEN the client sends another subscription message, with the timestamp of the last received event
 	secondSubscribe := testutil.ReadChannel(t, fcs.clientMessages, timeout)
-	assert.Equal(t, itemTime, secondSubscribe.FromTimestamp.AsTime().Unix())
+	assert.Equal(t, itemTime, secondSubscribe.FromTimestampEpoch)
 }
 
 // cacheSvcClient requires a subscriber to start processing the events, so we provide a dummy here

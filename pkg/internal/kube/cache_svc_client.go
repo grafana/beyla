@@ -8,7 +8,6 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/grafana/beyla/v2/pkg/kubecache/informer"
 	"github.com/grafana/beyla/v2/pkg/kubecache/meta"
@@ -26,7 +25,7 @@ type cacheSvcClient struct {
 	address string
 	log     *slog.Logger
 
-	lastEventTS            time.Time
+	lastEventTSEpoch       int64
 	ctx                    context.Context
 	syncTimeout            time.Duration
 	waitForSubscription    chan struct{}
@@ -43,7 +42,7 @@ func (sc *cacheSvcClient) On(event *informer.Event) error {
 	// we can safely assume that server-side events are ordered
 	// by timestamp
 	if event.GetType() != informer.EventType_SYNC_FINISHED {
-		sc.lastEventTS = event.Resource.StatusTime.AsTime()
+		sc.lastEventTSEpoch = event.Resource.StatusTimeEpoch
 	}
 	return nil
 }
@@ -100,7 +99,7 @@ func (sc *cacheSvcClient) connect(ctx context.Context) error {
 
 	// Subscribe to the event stream.
 	stream, err := client.Subscribe(ctx, &informer.SubscribeMessage{
-		FromTimestamp: timestamppb.New(sc.lastEventTS),
+		FromTimestampEpoch: sc.lastEventTSEpoch,
 	})
 	if err != nil {
 		return fmt.Errorf("could not subscribe: %w", err)

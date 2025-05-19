@@ -94,9 +94,8 @@ func (ic *InformersCache) Subscribe(msg *informer.SubscribeMessage, server infor
 		server:      server,
 		sendTimeout: ic.SendTimeout,
 		metrics:     ic.metrics,
-		// kubernetes has timestamps resolution of 1 second, so we need to truncate
-		fromTime: msg.GetFromTimestamp().AsTime().Truncate(time.Second),
-		messages: sync.NewQueue[*informer.Event](),
+		fromEpoch:   msg.GetFromTimestampEpoch(),
+		messages:    sync.NewQueue[*informer.Event](),
 	}
 	ic.log.Info("client subscribed", "id", o.ID())
 	ic.informers.Subscribe(o)
@@ -121,28 +120,28 @@ type connection struct {
 	sendTimeout time.Duration
 
 	metrics instrument.InternalMetrics
-	// fromTime filters events whose timestamp is lower than its value
-	fromTime time.Time
-	messages *sync.Queue[*informer.Event]
+	// fromEpoch filters events whose timestamp is lower than its value
+	fromEpoch int64
+	messages  *sync.Queue[*informer.Event]
 }
 
 func (o *connection) ID() string {
 	return o.id
 }
 
-// FromTime implements the Timestamped interface to allow filtering the returned list by
-// a given timestamp
-func (o *connection) FromTime() time.Time {
-	return o.fromTime
+// FromEpoch implements the Timestamped interface to allow filtering the returned list by
+// a given timestamp in unix seconds (epoch)
+func (o *connection) FromEpoch() int64 {
+	return o.fromEpoch
 }
 
 func (o *connection) On(event *informer.Event) error {
 	// the client asked for events happening after their last successfully received event
 	// so ignore older events to save memory and network
-	if event.Type != informer.EventType_SYNC_FINISHED && event.Resource.GetStatusTime().AsTime().Before(o.fromTime) {
+	if event.Type != informer.EventType_SYNC_FINISHED && event.Resource.StatusTimeEpoch < o.fromEpoch {
 		return nil
 	}
-	// Theoretically, Go is ready to run hundreds of thousands of parallel goroutines
+	o.metrics.MessageSubmit()
 	o.messages.Enqueue(event)
 	return nil
 }

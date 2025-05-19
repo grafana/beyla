@@ -14,7 +14,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -113,7 +112,7 @@ func TestAPIs(t *testing.T) {
 		Messages: make(chan *informer.Event, 10),
 	}
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		svcClient.Start(ctx, t, nil)
+		svcClient.Start(ctx, t, 0)
 	})
 
 	// wait for the service to have sent the initial snapshot of entities
@@ -163,12 +162,12 @@ func TestBlockedClients(t *testing.T) {
 	stall5 := &serviceClient{Address: addr, stallAfterMessages: 5}
 	stall10 := &serviceClient{Address: addr, stallAfterMessages: 10}
 	stall15 := &serviceClient{Address: addr, stallAfterMessages: 15}
-	go stall15.Start(ctx, t, nil)
-	go never1.Start(ctx, t, nil)
-	go stall5.Start(ctx, t, nil)
-	go never2.Start(ctx, t, nil)
-	go stall10.Start(ctx, t, nil)
-	go never3.Start(ctx, t, nil)
+	go stall15.Start(ctx, t, 0)
+	go never1.Start(ctx, t, 0)
+	go stall5.Start(ctx, t, 0)
+	go never2.Start(ctx, t, 0)
+	go stall10.Start(ctx, t, 0)
+	go never3.Start(ctx, t, 0)
 
 	// generating a large number of notifications until the gRPC buffer of the
 	// server-to-client connections is full, so the "Send" operation is blocked
@@ -244,9 +243,9 @@ func TestAsynchronousStartup(t *testing.T) {
 	cl1 := serviceClient{Address: addr}
 	cl2 := serviceClient{Address: addr}
 	cl3 := serviceClient{Address: addr}
-	go func() { test.Eventually(t, timeout, func(t require.TestingT) { cl1.Start(ctx, t, nil) }) }()
-	go func() { test.Eventually(t, timeout, func(t require.TestingT) { cl2.Start(ctx, t, nil) }) }()
-	go func() { test.Eventually(t, timeout, func(t require.TestingT) { cl3.Start(ctx, t, nil) }) }()
+	go func() { test.Eventually(t, timeout, func(t require.TestingT) { cl1.Start(ctx, t, 0) }) }()
+	go func() { test.Eventually(t, timeout, func(t require.TestingT) { cl2.Start(ctx, t, 0) }) }()
+	go func() { test.Eventually(t, timeout, func(t require.TestingT) { cl3.Start(ctx, t, 0) }) }()
 
 	iConfig := kubecache.DefaultConfig
 	iConfig.Port = newFreePort
@@ -276,7 +275,7 @@ func TestIgnoreHeadlessServices(t *testing.T) {
 		Messages: make(chan *informer.Event, 10),
 	}
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		svcClient.Start(ctx, t, nil)
+		svcClient.Start(ctx, t, 0)
 	})
 	// wait for the service to have sent the initial snapshot of entities
 	// (at the end, will send the "SYNC_FINISHED" event)
@@ -342,10 +341,10 @@ func TestResultsSortedByTimestamp(t *testing.T) {
 	}
 
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		svcClient.Start(ctx, t, nil)
+		svcClient.Start(ctx, t, 0)
 	})
 
-	prevTS := time.Time{}
+	prevTS := int64(-1)
 	// should get all the messages before ordered by timestamp
 	for {
 		evnt := testutil.ReadChannel(t, svcClient.Messages, timeout)
@@ -355,7 +354,7 @@ func TestResultsSortedByTimestamp(t *testing.T) {
 		// once we know that the synchronization is started, we deploy to extra pods expecting that
 		// the update is received after SYNC_FINISHED, as they won't be part of the "welcome" list
 		// submitted on connection
-		if prevTS.IsZero() {
+		if prevTS == -1 {
 			require.NoError(t, k8sClient.Create(ctx, &corev1.Service{
 				ObjectMeta: v1.ObjectMeta{Name: "service1-test-result-sorted", Namespace: "default"},
 				Spec: corev1.ServiceSpec{
@@ -369,7 +368,7 @@ func TestResultsSortedByTimestamp(t *testing.T) {
 				Status:     corev1.PodStatus{PodIP: "10.0.0.124"},
 			}))
 		}
-		evntTS := evnt.Resource.StatusTime.AsTime()
+		evntTS := evnt.Resource.StatusTimeEpoch
 		require.LessOrEqual(t, prevTS, evntTS)
 		prevTS = evntTS
 	}
@@ -397,7 +396,7 @@ func TestFilterByTimestamp(t *testing.T) {
 	// discard any previously created element from other tests
 	// due to the resolution of Kubernetes timestamps, we need to force wait a second
 	time.Sleep(time.Second)
-	discardEventsBefore := timestamppb.New(time.Now())
+	discardEventsBefore := time.Now().Unix()
 
 	// filtering any event before this test
 	require.NoError(t, k8sClient.Create(ctx, &corev1.Service{
@@ -464,7 +463,7 @@ type serviceClient struct {
 	syncSignalOnMessage atomic.Int32
 }
 
-func (sc *serviceClient) Start(ctx context.Context, t require.TestingT, fromTS *timestamppb.Timestamp) {
+func (sc *serviceClient) Start(ctx context.Context, t require.TestingT, fromTS int64) {
 	conn, err := grpc.NewClient(sc.Address,
 		grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
@@ -472,7 +471,7 @@ func (sc *serviceClient) Start(ctx context.Context, t require.TestingT, fromTS *
 	eventsClient := informer.NewEventStreamServiceClient(conn)
 
 	// Subscribe to the event stream.
-	stream, err := eventsClient.Subscribe(ctx, &informer.SubscribeMessage{FromTimestamp: fromTS})
+	stream, err := eventsClient.Subscribe(ctx, &informer.SubscribeMessage{FromTimestampEpoch: fromTS})
 	require.NoError(t, err)
 
 	// Receive and print messages.

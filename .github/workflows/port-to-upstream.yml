@@ -1,0 +1,67 @@
+name: Port to Upstream OTel eBPF Instrumentation
+
+on:
+  pull_request:
+    types:
+      - opened
+      - closed
+
+jobs:
+  port-to-upstream:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for port-to-otel-ebpf-inst label
+        id: check_label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const labels = context.payload.pull_request.labels.map(l => l.name);
+            core.setOutput('has_label', labels.includes('port-to-otel-ebpf-inst'));
+      - name: Exit if label not present
+        if: steps.check_label.outputs.has_label != 'true'
+        run: |
+          echo "Label not present, skipping."
+          exit 0
+      - name: Checkout merged commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+      - name: Set up Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+      - name: Push changes to fork for upstream PR
+        env:
+          UPSTREAM_FORK: ${{ secrets.UPSTREAM_FORK }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH=port/${{ github.event.pull_request.number }}-to-upstream
+          git checkout -b $BRANCH
+          git remote add upstream-fork https://x-access-token:${GITHUB_TOKEN}@github.com/grafana/opentelemetry-ebpf-instrumentation.git
+          git push upstream-fork $BRANCH --force
+      - name: Create PR to upstream repo
+        uses: actions/github-script@v7
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          script: |
+            const prTitle = `[port] #${context.payload.pull_request.number}: ${context.payload.pull_request.title}`;
+            const prBody = `Automated port of #${context.payload.pull_request.number} from grafana/beyla.`;
+            const branch = `port/${context.payload.pull_request.number}-to-upstream`;
+            const pr = await github.rest.pulls.create({
+              owner: 'open-telemetry',
+              repo: 'opentelemetry-ebpf-instrumentation',
+              title: prTitle,
+              head: `grafana:${branch}`,
+              base: 'main',
+              body: prBody
+            });
+            // Trigger the same workflow on the new PR in the upstream repo
+            await github.rest.actions.createWorkflowDispatch({
+              owner: 'open-telemetry',
+              repo: 'opentelemetry-ebpf-instrumentation',
+              workflow_id: 'port-to-upstream.yml',
+              ref: 'main',
+              inputs: {}
+            });

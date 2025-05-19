@@ -25,24 +25,25 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.merge_commit_sha }}
+          persist-credentials: false
       - name: Set up Git
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
       - name: Push changes to fork for upstream PR
         env:
-          UPSTREAM_FORK: ${{ secrets.UPSTREAM_FORK }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_WRITE_TOKEN: ${{ secrets.GH_WRITE_TOKEN }}
         run: |
           BRANCH=port/${{ github.event.pull_request.number }}-to-upstream
           git checkout -b $BRANCH
-          git remote add upstream-fork https://x-access-token:${GITHUB_TOKEN}@github.com/grafana/opentelemetry-ebpf-instrumentation.git
+          git remote add upstream-fork https://x-access-token:${GH_WRITE_TOKEN}@github.com/grafana/opentelemetry-ebpf-instrumentation.git
           git push upstream-fork $BRANCH --force
       - name: Create PR to upstream repo
         uses: actions/github-script@v7
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_WRITE_TOKEN: ${{ secrets.GH_WRITE_TOKEN }}
         with:
+          github-token: ${{ secrets.GH_WRITE_TOKEN }}
           script: |
             const prTitle = `[port] #${context.payload.pull_request.number}: ${context.payload.pull_request.title}`;
             const prBody = `Automated port of #${context.payload.pull_request.number} from grafana/beyla.`;

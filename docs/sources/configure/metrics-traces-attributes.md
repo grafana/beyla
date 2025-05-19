@@ -10,26 +10,17 @@ keywords:
 
 # Configure Beyla metrics and traces attributes
 
-Grafana Beyla allows configuring how some attributes for metrics and traces
-are decorated. Under the `attributes` top YAML sections, you can enable
-other subsections configure how some attributes are set.
+You can configure how Beyla decorates attributes for metrics and traces. Use the `attributes` top YAML section to enable and configure how attributes are set.
 
-The [Beyla exported metrics](../../metrics/) document lists the attributes
-that can be reported with each metric. Some of the attributes are reported by default while
-others are hidden to control the cardinality.
+The [Beyla exported metrics](../../metrics/) document lists the attributes you can report with each metric. Beyla reports some attributes by default and hides others to control cardinality.
 
-For each metric, you can control which attributes to see with the `select` subsection, which
-is a map where each key is the name of a metric (either in its OpenTelemetry or Prometheus port),
-and each metric has two more sub-properties: `include` and `exclude`.
+For each metric, you control which attributes to see with the `select` subsection. This is a map where each key is the name of a metric either in its OpenTelemetry or Prometheus port, and each metric has two sub-properties: `include` and `exclude`.
 
-* `include` is a list of attributes that need to be reported. Each attribute can be an attribute
-  name or a wildcard (for example, `k8s.dst.*` to include all the attributes starting with `k8s.dst`).
-  If no `include` list is provided, the default attribute set is reported (check [Beyla exported metrics](../../metrics/)
-  for more information about the default attributes for a given metric).
-* `exclude` is a list to of attribute names/wildcards containing the attributes to remove from the
-  `include` list (or the default attribute set).
+- `include` is a list of attributes to report. Each attribute can be a name or a wildcard, for example, `k8s.dst.*` to include all attributes starting with `k8s.dst`. If you don't provide an `include` list, Beyla reports the default attribute set, refer to [Beyla exported metrics](../../metrics/) for more information about default attributes for a given metric
+- `exclude` is a list of attribute names or wildcards to remove from the `include` list, or the default attribute set
 
 Example:
+
 ```yaml
 attributes:
   select:
@@ -48,8 +39,7 @@ attributes:
       exclude: ["k8s.pod.*"]
 ```
 
-Additionally, you can use "`*`" wildcards as metric names to add and exclude attributes for
-groups of metrics having the same name. For example:
+Additionally, you can use wildcards as metric names to add and exclude attributes for groups of metrics with the same name. For example:
 
 ```yaml
 attributes:
@@ -65,96 +55,70 @@ attributes:
       include: ["http_route"]
 ```
 
-In the previous example, all the metrics with a name starting with `http_` (or `http.`) would include all
-the possible attributes but `http_path` and `http_route` (or `http.path`/`http.route`).
-The `http_client_*` and `http_server_*` sections would override the base configuration, enabling the
-`http_path` attribute for the HTTP client metrics and `http_route` for the HTTP server metrics.
+In the previous example, all metrics with a name starting with `http_` or `http.` include all possible attributes except `http_path` and `http_route` or `http.path`/`http.route`. The `http_client_*` and `http_server_*` sections override the base configuration, enabling the `http_path` attribute for HTTP client metrics and `http_route` for HTTP server metrics.
 
-When a metric name matches multiple definitions using wildcards, exact matches have higher precedence than wild card matches.
+When a metric name matches multiple definitions using wildcards, exact matches take precedence over wildcard matches.
 
 ## Distributed traces and context propagation
 
-| YAML                         | Environment variable                   | Type    | Default  |
-| ---------------------------- | -------------------------------------- | ------- | -------- |
-| `enable_context_propagation` | `BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION` | boolean | (false)  |
+The following configuration options are accessible under the `attributes.select` property:
+
+| YAML<br>environment variable                                           | Description                                                                                                                                                                      | Type    | Default  |
+| ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | -------- |
+| `enable_context_propagation`<br>`BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION` | Deprecated. Use `context_propagation` instead. For more information, refer to the [enable context propagation section](#enable-context-propagation).                             | boolean | false    |
+| `context_propagation`<br>`BEYLA_BPF_CONTEXT_PROPAGATION`               | Controls trace context propagation method. Accepted: `all`, `headers`, `ip`, `disabled`. For more information, refer to the [context propagation section](#context-propagation). | string  | disabled |
+| `track_request_headers`<br>`BEYLA_BPF_TRACK_REQUEST_HEADERS`           | Track incoming `Traceparent` headers for trace spans. For more information, refer to the [track request headers section](#track-request-headers).                                | boolean | false    |
+
+### Enable context propagation
 
 Deprecated. Use `context_propagation` instead.
 
-| YAML                  | Environment variable            | Type    | Default    |
-| ----------------------| ------------------------------- | ------- | ---------- |
-| `context_propagation` | `BEYLA_BPF_CONTEXT_PROPAGATION` | string  | `disabled` |
+### Context propagation
 
-Enables injecting of the `Traceparent` header value for outgoing HTTP requests, allowing
-Beyla to propagate any incoming context to downstream services. This context propagation
-support works for any programming language.
+Beyla injects the `Traceparent` header value for outgoing HTTP requests, so it can propagate any incoming context to downstream services. This context propagation works for any programming language.
 
-For TLS encrypted HTTP requests (HTTPS), the `Traceparent` header value is encoded
-at TCP/IP packet level, and requires that Beyla is present on both sides of the communication.
+For TLS encrypted HTTP requests (HTTPS), Beyla encodes the `Traceparent` header value at the TCP/IP packet level. Beyla must be present on both sides of the communication.
 
-The TCP/IP packet level encoding uses Linux Traffic Control (TC).
-eBPF programs that also use TC need to chain correctly with Beyla.
-For more information about chaining programs, refer to the [Cilium compatibility documentation](../../cilium-compatibility/).
+The TCP/IP packet level encoding uses Linux Traffic Control (TC). eBPF programs that also use TC must chain correctly with Beyla. For more information about chaining programs, see the [Cilium compatibility documentation](../../cilium-compatibility/).
 
-You can disable the TCP/IP level encoding and TC programs by setting `context_propagation="headers"`.
-This context propagation support is fully compatible with any OpenTelemetry distributed tracing library.
+You can disable the TCP/IP level encoding and TC programs by setting `context_propagation="headers"`. This context propagation is fully compatible with any OpenTelemetry distributed tracing library.
 
 Context propagation values:
 
-| Value      | Description                                              |
-| ---------- | -------------------------------------------------------- |
-| `all`      | Enable both HTTP and IP options context propagation      |
-| `headers`  | Enable context propagation via the HTTP headers only     |
-| `ip`       | Enable context propagation via the IP options field only |
-| `disabled` | Disable trace context propagation                        |
+- `all`: Enable both HTTP and IP options context propagation
+- `headers`: Enable context propagation via the HTTP headers only
+- `ip`: Enable context propagation via the IP options field only
+- `disabled`: Disable trace context propagation
 
-For this option to correctly work in containerized environments (Kubernetes and Docker), the
-following configuration must be specified:
-- Beyla must be deployed as a `DaemonSet` with host network access (`hostNetwork: true`).
-- The `/sys/fs/cgroup` path from the host must be volume mounted as local `/sys/fs/cgroup` path.
-- The `CAP_NET_ADMIN` capability must be granted to the Beyla container.
+To use this option in containerized environments (Kubernetes and Docker), you must:
 
-gRPC and HTTP2 are not supported at the moment.
+- Deploy Beyla as a `DaemonSet` with host network access `hostNetwork: true`
+- Volume mount the `/sys/fs/cgroup` path from the host as local `/sys/fs/cgroup` path
+- Grant the `CAP_NET_ADMIN` capability to the Beyla container
 
-For an example of how to configure distributed traces in Kubernetes, see our
-[Distributed traces with Beyla](../../distributed-traces/) guide.
+gRPC and HTTP2 are not supported.
 
-| YAML                    | Environment variable              | Type    | Default |
-| ----------------------- | --------------------------------- | ------- | ------- |
-| `track_request_headers` | `BEYLA_BPF_TRACK_REQUEST_HEADERS` | boolean | (false) |
+For an example of how to configure distributed traces in Kubernetes, see our [Distributed traces with Beyla](../../distributed-traces/) guide.
 
-Enables tracking of request headers for the purposes of processing any incoming 'Traceparent'
-header values. If this option is enabled, when Beyla encounters an incoming server request with
-a 'Traceparent' header value, it will use the provided 'trace id' to create its own trace spans.
+### Track request headers
 
-This option does not have an effect on Go applications, where the 'Traceparent' field is always
-processed, without additional tracking of the request headers.
+This option lets Beyla process any incoming `Traceparent` header values. If enabled, when Beyla sees an incoming server request with a `Traceparent` header value, it uses the provided 'trace id' to create its own trace spans.
 
-Enabling this option may increase the performance overhead in high request volume scenarios.
-This option is only useful when generating Beyla traces, it does not affect
-generation of Beyla metrics.
+This option does not affect Go applications, where the `Traceparent` field is always processed.
 
-## Other attributes
+Enabling this option may increase performance overhead in high request volume scenarios. This option is only useful when generating Beyla traces; it does not affect metrics.
 
-| YAML                    | Environment variable               | Type     | Default |
-| ----------------------- | ---------------------------------- | -------- | ------- |
-| `heuristic_sql_detect`   | `BEYLA_HEURISTIC_SQL_DETECT`      | boolean  | (false) |
+### Other attributes
 
-By default, Beyla detects various SQL client requests through detection of their
-particular binary protocol format. However, oftentimes SQL database clients send their
-queries in a format where Beyla can detect the query statement without knowing
-the exact binary protocol. If you are using a database technology not directly supported
-by Beyla, you can enable this option to get database client telemetry. The option is
-not enabled by default, because it can create false positives, for example, an application
-sending SQL text for logging purposes through a TCP connection. Currently supported
-protocols where this option isn't needed are the Postgres and MySQL binary protocols.
+| YAML option<br>Environment variable                    | Description                                                   | Type    | Default |
+| ------------------------------------------------------ | ------------------------------------------------------------- | ------- | ------- |
+| `heuristic_sql_detect`<br>`BEYLA_HEURISTIC_SQL_DETECT` | Enable heuristic SQL client detection. See below for details. | boolean | (false) |
+
+The `heuristic sql detect` option lets Beyla detect SQL client requests by inspecting query statements, even if the protocol is not directly supported. By default, Beyla detects SQL client requests by their binary protocol format. If you use a database technology not directly supported by Beyla, you can enable this option to get database client telemetry. This option is not enabled by default, because it can create false positives, for example, if an application sends SQL text for logging through a TCP connection. Currently, Beyla natively supports the Postgres and MySQL binary protocols.
 
 ## Instance ID decoration
 
-The metrics and the traces are decorated with a unique instance ID string, identifying
-each instrumented application. By default, Beyla uses the host name that runs Beyla
-(can be a container or Pod name), followed by the PID of the instrumented process;
-but you can override how the instance ID is composed in the
-`instance_id` YAML subsection under the `attributes` top-level section.
+Beyla decorates metrics and traces with a unique instance ID string, identifying each instrumented application. By default, Beyla uses the host name that runs Beyla (can be a container or Pod name), followed by the PID of the instrumented process. You can override how the instance ID is composed in the `instance_id` YAML subsection under the `attributes` top-level section.
 
 For example:
 
@@ -164,26 +128,34 @@ attributes:
     dns: false
 ```
 
-| YAML  | Environment variable            | Type    | Default |
-| ----- | ------------------------------- | ------- | ------- |
-| `dns` | `BEYLA_HOSTNAME_DNS_RESOLUTION` | boolean | `true`  |
+| YAML<br>environment variable             | Description                                                                                                                                                                               | Type    | Default |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------- |
+| `dns`<br>`BEYLA_HOSTNAME_DNS_RESOLUTION` | If `true`, Beyla tries to resolve the local hostname against the network DNS. If `false`, uses local name. For more information, refer to the [dns section](#dns).                        | boolean | true    |
+| `override_hostname`<br>`BEYLA_HOSTNAME`  | If set, Beyla uses the provided string as the host part of the Instance ID. Overrides DNS resolution. For more information, refer to the [override hostname section](#override-hostname). | string  | (unset) |
 
-If `true`, it will try to resolve the Beyla local hostname against the network DNS.
-If `false`, it will use the local hostname.
+### DNS
 
-| YAML                | Environment variable          | Type   | Default |
-| ------------------- | ---------------- | ------ | ------- |
-| `override_hostname` | `BEYLA_HOSTNAME` | string | (unset) |
+If `true`, Beyla tries to resolve the local hostname against the network DNS. If `false`, it uses the local hostname.
 
-If set, the host part of the Instance ID will use the provided string
-instead of trying to automatically resolve the host name.
+### Override hostname
 
-This option takes precedence over `dns`.
+If set, Beyla uses the provided string as the host part of the Instance ID instead of trying to resolve the host name. This option takes precedence over `dns`.
 
 ## Kubernetes decorator
 
-If you run Beyla in a Kubernetes environment, you can configure it to decorate the traces
-and metrics with the Standard OpenTelemetry labels:
+| YAML<br>environment variable                                        | Description                                                                                                                                                                                   | Type           | Default        |
+| ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | -------------- |
+| `enable`<br>`BEYLA_KUBE_METADATA_ENABLE`                            | Enable or disable Kubernetes metadata decoration. Set to `autodetect` to enable if running in Kubernetes. For more information, refer to the [enable kubernetes section](#enable-kubernetes). | boolean/string | false          |
+| `kubeconfig_path`<br>`KUBECONFIG`                                   | Path to the Kubernetes config file. For more information, refer to the [kubeconfig path section](#kubeconfig-path).                                                                           | string         | ~/.kube/config |
+| `disable_informers`<br>`BEYLA_KUBE_DISABLE_INFORMERS`               | List of informers to disable (`node`, `service`). For more information, refer to the [disable informers section](#disable-informers).                                                         | string         | (empty)        |
+| `meta_restrict_local_node`<br>`BEYLA_KUBE_META_RESTRICT_LOCAL_NODE` | Restrict metadata to local node only. For more information, refer to the [meta restrict local node section](#meta-restrict-local-node).                                                       | boolean        | false          |
+| `informers_sync_timeout`<br>`BEYLA_KUBE_INFORMERS_SYNC_TIMEOUT`     | Maximum time to wait for Kubernetes metadata before starting. For more information, refer to the [informers sync timeout section](#informers-sync-timeout).                                   | Duration       | 30s            |
+| `informers_resync_period`<br>`BEYLA_KUBE_INFORMERS_RESYNC_PERIOD`   | Periodically resynchronize all Kubernetes metadata. For more information, refer to the [informers resync period section](#informers-resync-period).                                           | Duration       | 30m            |
+| `service_name_template`<br>`BEYLA_SERVICE_NAME_TEMPLATE`            | Go template for service names. For more information, refer to the [service name template section](#service-name-template).                                                                    | string         | (empty)        |
+
+### Enable kubernetes
+
+If you run Beyla in a Kubernetes environment, you can configure it to decorate traces and metrics with the standard OpenTelemetry labels:
 
 - `k8s.namespace.name`
 - `k8s.deployment.name`
@@ -197,8 +169,7 @@ and metrics with the Standard OpenTelemetry labels:
 - `k8s.pod.start_time`
 - `k8s.cluster.name`
 
-In YAML, this section is named `kubernetes`, and is located under the
-`attributes` top-level section. For example:
+In YAML, this section is named `kubernetes` and is under the `attributes` top-level section. For example:
 
 ```yaml
 attributes:
@@ -206,85 +177,43 @@ attributes:
     enable: true
 ```
 
-It is IMPORTANT to consider that enabling this feature requires a previous step of
-providing some extra permissions to the Beyla Pod. Consult the
-["Configuring Kubernetes metadata decoration section" in the "Running Beyla in Kubernetes"](../../setup/kubernetes/) page.
+To enable this feature, you must provide extra permissions to the Beyla Pod. See the ["Configuring Kubernetes metadata decoration section" in the "Running Beyla in Kubernetes"](../../setup/kubernetes/) page.
 
-| YAML     | Environment variable         | Type    | Default |
-| -------- | ---------------------------- | ------- | ------- |
-| `enable` | `BEYLA_KUBE_METADATA_ENABLE` | boolean | `false` |
+If you set this option to `true`, Beyla decorates metrics and traces with Kubernetes metadata. If you set it to `false`, Beyla disables the Kubernetes metadata decorator. If you set it to `autodetect`, Beyla tries to detect if it is running inside Kubernetes and enables metadata decoration if so.
 
-If set to `true`, Beyla will decorate the metrics and traces with Kubernetes metadata.
+### Kubeconfig path
 
-If set to `false`, the Kubernetes metadata decorator will be disabled.
+This is a standard Kubernetes configuration environment variable. Use it to tell Beyla where to find the Kubernetes configuration to communicate with the Kubernetes Cluster. Usually, you do not need to change this value.
 
-If set to `autodetect`, Beyla will try to automatically detect if it is running inside
-Kubernetes, and enable the metadata decoration if that is the case.
-
-| YAML              | Environment variable      | Type   | Default          |
-| ----------------- | ------------ | ------ | ---------------- |
-| `kubeconfig_path` | `KUBECONFIG` | string | `~/.kube/config` |
-
-This is a standard Kubernetes configuration environment variable, and is used
-to tell Beyla where to find the Kubernetes configuration in order to try to
-establish communication with the Kubernetes Cluster.
-
-Usually you won't need to change this value.
-
-| YAML                | Environment variable           | Type   | Default |
-|---------------------|--------------------------------|--------|---------|
-| `disable_informers` | `BEYLA_KUBE_DISABLE_INFORMERS` | string | (empty) |
+### Disable informers
 
 The accepted value is a list that might contain `node` and `service`.
 
-This option allows you to selectively disable some Kubernetes informers, which are continuously
-listening to the Kubernetes API to obtain the metadata that is required for decorating
-network metrics or application metrics and traces.
+This option lets you selectively disable some Kubernetes informers, which continuously listen to the Kubernetes API to get the metadata needed for decorating network metrics or application metrics and traces.
 
-When Beyla is deployed as a DaemonSet in very large clusters, all the Beyla instances
-creating multiple informers might end up overloading the Kubernetes API.
+When you deploy Beyla as a DaemonSet in very large clusters, all the Beyla instances creating multiple informers might overload the Kubernetes API.
 
-Disabling some informers would cause reported metadata to be incomplete, but
-reduces the load of the Kubernetes API.
+Disabling some informers causes reported metadata to be incomplete, but reduces the load on the Kubernetes API.
 
-The Pods informer can't be disabled. For that purpose, you should disable the whole
-Kubernetes metadata decoration.
+You cannot disable the Pods informer. To do that, disable the whole Kubernetes metadata decoration.
 
-| YAML                       | Environment variable                  | Type    | Default |
-|----------------------------|---------------------------------------|---------|---------|
-| `meta_restrict_local_node` | `BEYLA_KUBE_META_RESTRICT_LOCAL_NODE` | boolean | false   |
+### Meta restrict local node
 
-If true, Beyla stores Pod and Node metadata only from the node where the Beyla instance is running.
+If true, Beyla stores Pod and Node metadata only from the node where the Beyla instance runs.
 
-This option decreases the memory used to store the metadata, but some metrics
-(such as network bytes or service graph metrics) would miss the metadata from destination
-pods that are located in a different node.
+This option decreases the memory used to store metadata, but some metrics such as network bytes or service graph metrics won't include metadata from destination pods on a different node.
 
+### Informers sync timeout
 
-| YAML                     | Environment variable                | Type     | Default |
-|--------------------------|-------------------------------------|----------|---------|
-| `informers_sync_timeout` | `BEYLA_KUBE_INFORMERS_SYNC_TIMEOUT` | Duration | 30s     |
+This is the maximum time Beyla waits to get all the Kubernetes metadata before starting to decorate metrics and traces. If this timeout is reached, Beyla starts normally, but the metadata attributes might be incomplete until all the Kubernetes metadata is updated in the background.
 
-Maximum time that Beyla waits for getting all the Kubernetes metadata before starting
-to decorate metrics and traces. If this timeout is reached, Beyla starts normally but
-the metadata attributes might be incomplete until all the Kubernetes metadata is locally
-updated in background.
+### Informers resync period
 
-| YAML                      | Environment variable                 | Type     | Default |
-|---------------------------|--------------------------------------|----------|---------|
-| `informers_resync_period` | `BEYLA_KUBE_INFORMERS_RESYNC_PERIOD` | Duration | 30m     |
+Beyla immediately receives any update on resources' metadata. In addition, Beyla periodically resynchronizes all Kubernetes metadata at the frequency you specify with this property. Higher values reduce the load on the Kubernetes API service.
 
-Beyla is subscribed to immediately receive any update on resources' metadata. In addition,
-Beyla periodically resynchronizes the whole Kubernetes metadata at the frequency specified
-by this property.
+### Service name template
 
-Higher values reduce the load on the Kubernetes API service.
-
-| YAML                      | Environment variable                 | Type     | Default |
-|---------------------------|--------------------------------------|----------|---------|
-| `service_name_template`   | `BEYLA_SERVICE_NAME_TEMPLATE`        | string   | (empty) |
-
-You can template service name using Go templates, this makes it possible to create conditional or extended services names.
+You can template service names using Go templates. This lets you create conditional or extended service names.
 
 The following context is available to the template:
 
@@ -319,4 +248,3 @@ or
 ```
 
 In this example, only the first line is used and trimmed to prevent white space in the service name.
-

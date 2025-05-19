@@ -12,8 +12,6 @@ FROM base AS dist
 
 WORKDIR /src
 
-VOLUME ["/src"]
-
 ARG EBPF_VER
 
 RUN apk add clang llvm19 wget
@@ -24,6 +22,7 @@ COPY --from=builder /build/beyla_genfiles /go/bin
 RUN cat <<EOF > /generate.sh
 #!/bin/sh
 export GOCACHE=/tmp
+export GOMODCACHE=/tmp/go-mod-cache
 export BPF2GO=bpf2go
 export BPF_CLANG=clang
 export BPF_CFLAGS="-O2 -g -Wall -Werror"

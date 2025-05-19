@@ -18,4 +18,4 @@ You can configure Beyla by setting [export modes](export-modes/), global propert
 
 For information on the metrics Beyla exports, refer to the [exported metrics](../metrics/) documentation.
 
-Refer to the [routes decorator](routes-decorator/) documentation to configure the low cardinality routes decorator is very important for optimal results.
+Refer to the [routes decorator](routes-decorator/) documentation to configure the low cardinality routes decorator. It's very important for optimal results.

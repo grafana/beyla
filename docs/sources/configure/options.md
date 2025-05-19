@@ -39,16 +39,16 @@ Optionally, Beyla also provides network-level metrics, refer to the [network met
 
 The following sections explain the global configuration properties that apply to the entire Beyla configuration:
 
-| Lowercase YAML option<br>Uppercase environment variable option | Description                                                                                                           | Type    | Default               |
-| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------- | --------------------- |
-| `executable_name`<br>`BEYLA_EXECUTABLE_NAME`                   | Selects the process to instrument by regular expression matching against the full executable path.                    | string  | unset                 |
-| `open_port`<br>`BEYLA_OPEN_PORT`                               | Selects a process to instrument by open ports. Accepts comma-separated lists of ports and port ranges.                | string  | unset                 |
-| `shutdown_timeout`<br>`BEYLA_SHUTDOWN_TIMEOUT`                               | Sets the timeout for a graceful shutdown                | string  | "10s"                 |
-| `service_name`<br>`BEYLA_SERVICE_NAME`                         | **Deprecated** Overrides the name of the instrumented service for metrics export.                                     | string  | see service discovery |
-| `service_namespace`<br>`BEYLA_SERVICE_NAMESPACE`               | **Deprecated** Assigns a namespace for the selected service.                                                          | string  | see service discovery |
-| `log_level`<br>`BEYLA_LOG_LEVEL`                               | Sets process logger verbosity. Valid values: `DEBUG`, `INFO`, `WARN`, `ERROR`.                                        | string  | `INFO`                |
-| `trace_printer`<br>`BEYLA_TRACE_PRINTER`                       | Prints instrumented traces to stdout in a specified format, refer to [trace printer formats](#trace-printer-formats). | string  | `disabled`            |
-| `enforce_sys_caps`<br>`BEYLA_ENFORCE_SYS_CAPS`                 | Controls how Beyla handles missing system capabilities at startup.                                                    | boolean | `false`               |
+| YAML<br>environment variable                     | Description                                                                                                           | Type    | Default               |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- | ------- | --------------------- |
+| `executable_name`<br>`BEYLA_EXECUTABLE_NAME`     | Selects the process to instrument by regular expression matching against the full executable path.                    | string  | unset                 |
+| `open_port`<br>`BEYLA_OPEN_PORT`                 | Selects a process to instrument by open ports. Accepts comma-separated lists of ports and port ranges.                | string  | unset                 |
+| `shutdown_timeout`<br>`BEYLA_SHUTDOWN_TIMEOUT`   | Sets the timeout for a graceful shutdown                                                                              | string  | "10s"                 |
+| `service_name`<br>`BEYLA_SERVICE_NAME`           | **Deprecated** Overrides the name of the instrumented service for metrics export.                                     | string  | see service discovery |
+| `service_namespace`<br>`BEYLA_SERVICE_NAMESPACE` | **Deprecated** Assigns a namespace for the selected service.                                                          | string  | see service discovery |
+| `log_level`<br>`BEYLA_LOG_LEVEL`                 | Sets process logger verbosity. Valid values: `DEBUG`, `INFO`, `WARN`, `ERROR`.                                        | string  | `INFO`                |
+| `trace_printer`<br>`BEYLA_TRACE_PRINTER`         | Prints instrumented traces to stdout in a specified format, refer to [trace printer formats](#trace-printer-formats). | string  | `disabled`            |
+| `enforce_sys_caps`<br>`BEYLA_ENFORCE_SYS_CAPS`   | Controls how Beyla handles missing system capabilities at startup.                                                    | boolean | `false`               |
 
 ## Executable name matching
 
@@ -75,7 +75,7 @@ It can select one process or multiple processes with similar characteristics.
 For more detailed process selection and grouping, follow the instructions in the [service discovery documentation](../service-discovery/).
 
 If an executable opens multiple ports, specifying one of those ports is enough for Beyla to instrument all HTTP/S and GRPC requests on all application ports.
-Currently, there is no way to limit instrumentation to requests on a specific port.
+Currently, there's no way to limit instrumentation to requests on a specific port.
 
 If the specified port range is wide, for example `1-65535`, Beyla tries to execute all processes that own one of the ports in that range.
 
@@ -93,12 +93,10 @@ To give multiple services different names, see how to [override the service name
 
 This option prints any instrumented trace on the standard output using one of the following formats:
 
-| Format        | Description                    |
-| ------------- | ------------------------------ |
-| `disabled`    | disables the printer           |
-| `text`        | prints a concise line of text  |
-| `json`        | prints a compact JSON object   |
-| `json_indent` | prints an indented JSON object |
+- **`disabled`**: Disables the printer
+- **`text`**: Prints a concise line of text
+- **`json`**: Prints a compact JSON object
+- **`json_indent`**: Prints an indented JSON object
 
 ## System capabilities
 

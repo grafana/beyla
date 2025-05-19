@@ -2,13 +2,11 @@ name: Port to Upstream OTel eBPF Instrumentation
 
 on:
   pull_request:
-    types: [labeled, closed]
+    types: [opened, synchronize, labeled, closed]
 
 jobs:
   port-to-upstream:
-    if: |
-      (github.event.action == 'closed' && github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'port-to-otel-ebpf-inst')) ||
-      (github.event.action == 'labeled' && github.event.label.name == 'port-to-otel-ebpf-inst')
+    if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Check for port-to-otel-ebpf-inst label

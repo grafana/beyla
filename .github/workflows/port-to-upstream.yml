@@ -2,15 +2,13 @@ name: Port to Upstream OTel eBPF Instrumentation
 
 on:
   pull_request:
-    types:
-      - opened
-      - closed
+    types: [labeled, closed]
 
 jobs:
   port-to-upstream:
     if: |
-      (github.event.action == 'closed' && github.event.pull_request.merged == true) ||
-      (github.event.action == 'opened')
+      (github.event.action == 'closed' && github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'port-to-otel-ebpf-inst')) ||
+      (github.event.action == 'labeled' && github.event.label.name == 'port-to-otel-ebpf-inst')
     runs-on: ubuntu-latest
     steps:
       - name: Check for port-to-otel-ebpf-inst label
@@ -18,8 +16,8 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const labels = context.payload.pull_request.labels.map(l => l.name);
-            core.setOutput('has_label', labels.includes('port-to-otel-ebpf-inst'));
+            // For testing, always set has_label to true
+            core.setOutput('has_label', true);
       - name: Exit if label not present
         if: steps.check_label.outputs.has_label != 'true'
         run: |

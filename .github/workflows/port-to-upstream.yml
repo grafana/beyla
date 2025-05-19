@@ -8,7 +8,9 @@ on:
 
 jobs:
   port-to-upstream:
-    if: github.event.pull_request.merged == true
+    if: |
+      (github.event.action == 'closed' && github.event.pull_request.merged == true) ||
+      (github.event.action == 'opened')
     runs-on: ubuntu-latest
     steps:
       - name: Check for port-to-otel-ebpf-inst label

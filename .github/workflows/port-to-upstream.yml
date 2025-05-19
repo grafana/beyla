@@ -5,26 +5,16 @@ on:
     types: [opened, synchronize, labeled, closed]
 
 permissions:
+  contents: read
   id-token: write
-  contents: write
+  pull-requests: write
 
 jobs:
   port-to-upstream:
-    if: always()
+    if: |
+      github.event_name == 'pull_request' && github.event.action != 'closed'
     runs-on: ubuntu-latest
     steps:
-      - name: Check for port-to-otel-ebpf-inst label
-        id: check_label
-        uses: actions/github-script@v7
-        with:
-          script: |
-            // For testing, always set has_label to true
-            core.setOutput('has_label', true);
-      - name: Exit if label not present
-        if: steps.check_label.outputs.has_label != 'true'
-        run: |
-          echo "Label not present, skipping."
-          exit 0
       - name: Get secrets from Vault
         id: get-secrets
         uses: grafana/shared-workflows/actions/get-vault-secrets@main
@@ -33,6 +23,10 @@ jobs:
             GITHUB_APP_ID=github-app:app-id
             GITHUB_APP_INSTALLATION_ID=github-app:app-installation-id
             GITHUB_APP_PRIVATE_KEY=github-app:private-key
+      - name: Checkout Beyla
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Generate App Token
         uses: actions/create-github-app-token@v1
         id: app-token
@@ -42,46 +36,22 @@ jobs:
           installation-id: ${{ env.GITHUB_APP_INSTALLATION_ID }}
           owner: grafana
           repositories: "opentelemetry-ebpf-instrumentation"
-      - name: Checkout merged commit
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.merge_commit_sha }}
-          persist-credentials: false
-      - name: Set up Git
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
       - name: Push changes to fork for upstream PR
         env:
-          GH_WRITE_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           BRANCH=port/${{ github.event.pull_request.number }}-to-upstream
           git checkout -b $BRANCH
-          git remote add upstream-fork https://x-access-token:${GH_WRITE_TOKEN}@github.com/grafana/opentelemetry-ebpf-instrumentation.git
+          git remote add upstream-fork https://x-access-token:${GH_TOKEN}@github.com/grafana/opentelemetry-ebpf-instrumentation.git
           git push upstream-fork $BRANCH --force
       - name: Create PR to upstream repo
-        uses: actions/github-script@v7
         env:
-          GH_WRITE_TOKEN: ${{ steps.app-token.outputs.token }}
-        with:
-          github-token: ${{ steps.app-token.outputs.token }}
-          script: |
-            const prTitle = `[port] #${context.payload.pull_request.number}: ${context.payload.pull_request.title}`;
-            const prBody = `Automated port of #${context.payload.pull_request.number} from grafana/beyla.`;
-            const branch = `port/${context.payload.pull_request.number}-to-upstream`;
-            const pr = await github.rest.pulls.create({
-              owner: 'open-telemetry',
-              repo: 'opentelemetry-ebpf-instrumentation',
-              title: prTitle,
-              head: `grafana:${branch}`,
-              base: 'main',
-              body: prBody
-            });
-            // Optionally trigger workflow in upstream repo
-            // await github.rest.actions.createWorkflowDispatch({
-            //   owner: 'open-telemetry',
-            //   repo: 'opentelemetry-ebpf-instrumentation',
-            //   workflow_id: 'port-to-upstream.yml',
-            //   ref: 'main',
-            //   inputs: {}
-            // });
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          gh pr create \
+            --title "[port] #${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}" \
+            --body "Automated port of #${{ github.event.pull_request.number }} from grafana/beyla." \
+            --repo open-telemetry/opentelemetry-ebpf-instrumentation \
+            --head grafana:port/${{ github.event.pull_request.number }}-to-upstream \
+            --base main \
+            --draft

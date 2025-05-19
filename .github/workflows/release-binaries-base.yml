@@ -1,15 +1,6 @@
 name: Release binaries
 on:
-  workflow_call:
-    inputs:
-      arch:
-        description: 'Target architecture to build the binaries'
-        required: true
-        type: string
-      runner:
-        description: 'The github runner to run on'
-        required: true
-        type: string
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

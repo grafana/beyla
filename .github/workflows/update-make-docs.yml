@@ -1,7 +1,5 @@
 name: Update `make docs` procedure
 on:
-  schedule:
-    - cron: '0 7 * * 1-5'
   workflow_dispatch:
 
 # Set restrictive permissions at workflow level

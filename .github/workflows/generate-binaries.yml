@@ -1,8 +1,6 @@
 name: Generate Binaries
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       tag_name:

@@ -21,6 +21,23 @@ jobs:
         run: |
           echo "Label not present, skipping."
           exit 0
+      - name: Get secrets from Vault
+        id: get-secrets
+        uses: grafana/shared-workflows/actions/get-vault-secrets@main
+        with:
+          repo_secrets: |
+            GITHUB_APP_ID=github-app:app-id
+            GITHUB_APP_INSTALLATION_ID=github-app:app-installation-id
+            GITHUB_APP_PRIVATE_KEY=github-app:private-key
+      - name: Generate App Token
+        uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: ${{ env.GITHUB_APP_ID }}
+          private-key: ${{ env.GITHUB_APP_PRIVATE_KEY }}
+          installation-id: ${{ env.GITHUB_APP_INSTALLATION_ID }}
+          owner: grafana
+          repositories: "opentelemetry-ebpf-instrumentation"
       - name: Checkout merged commit
         uses: actions/checkout@v4
         with:
@@ -32,7 +49,7 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
       - name: Push changes to fork for upstream PR
         env:
-          GH_WRITE_TOKEN: ${{ secrets.GH_WRITE_TOKEN }}
+          GH_WRITE_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           BRANCH=port/${{ github.event.pull_request.number }}-to-upstream
           git checkout -b $BRANCH
@@ -41,9 +58,9 @@ jobs:
       - name: Create PR to upstream repo
         uses: actions/github-script@v7
         env:
-          GH_WRITE_TOKEN: ${{ secrets.GH_WRITE_TOKEN }}
+          GH_WRITE_TOKEN: ${{ steps.app-token.outputs.token }}
         with:
-          github-token: ${{ secrets.GH_WRITE_TOKEN }}
+          github-token: ${{ steps.app-token.outputs.token }}
           script: |
             const prTitle = `[port] #${context.payload.pull_request.number}: ${context.payload.pull_request.title}`;
             const prBody = `Automated port of #${context.payload.pull_request.number} from grafana/beyla.`;
@@ -56,11 +73,11 @@ jobs:
               base: 'main',
               body: prBody
             });
-            // Trigger the same workflow on the new PR in the upstream repo
-            await github.rest.actions.createWorkflowDispatch({
-              owner: 'open-telemetry',
-              repo: 'opentelemetry-ebpf-instrumentation',
-              workflow_id: 'port-to-upstream.yml',
-              ref: 'main',
-              inputs: {}
-            });
+            // Optionally trigger workflow in upstream repo
+            // await github.rest.actions.createWorkflowDispatch({
+            //   owner: 'open-telemetry',
+            //   repo: 'opentelemetry-ebpf-instrumentation',
+            //   workflow_id: 'port-to-upstream.yml',
+            //   ref: 'main',
+            //   inputs: {}
+            // });

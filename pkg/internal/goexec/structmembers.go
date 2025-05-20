@@ -46,11 +46,13 @@ const (
 	IoWriterBufPtrPos
 	IoWriterNPos
 	CcNextStreamIDPos
+	CcNextStreamIDVendoredPos
 	FramerWPos
 	PcConnPos
 	PcTLSPos
 	NetConnPos
 	CcTconnPos
+	CcTconnVendoredPos
 	ScConnPos
 	CRwcPos
 	CTlsPos
@@ -226,8 +228,8 @@ var structMembers = map[string]structInfo{
 	"net/http.http2ClientConn": {
 		lib: "go",
 		fields: map[string]GoOffset{
-			"nextStreamID": CcNextStreamIDPos,
-			"tconn":        CcTconnPos,
+			"nextStreamID": CcNextStreamIDVendoredPos,
+			"tconn":        CcTconnVendoredPos,
 		},
 	},
 	"net/http.http2serverConn": {
@@ -435,7 +437,7 @@ func structMemberPreFetchedOffsets(elfFile *elf.File, fieldOffsets FieldOffsets)
 					"lib", strInfo.lib, "name", strName, "field", fieldName, "version", version)
 				continue
 			}
-			log.Debug("found offset", "constantName", constantName, "offset", offset)
+			log.Debug("found offset", "fieldName", fieldName, "constantOffset", constantName, "offset", offset)
 			fieldOffsets[constantName] = offset
 		}
 	}

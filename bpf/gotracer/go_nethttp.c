@@ -775,13 +775,16 @@ struct {
 } http2_req_map SEC(".maps");
 #endif
 
-static __always_inline void setup_http2_client_conn(void *goroutine_addr, void *cc_ptr) {
+static __always_inline void setup_http2_client_conn(void *goroutine_addr,
+                                                    void *cc_ptr,
+                                                    go_offset_const off_cc_tconn_pos,
+                                                    go_offset_const off_cc_next_stream_id_pos) {
     off_table_t *ot = get_offsets_table();
 
     if (cc_ptr) {
-        u64 cc_tconn_pos = go_offset_of(ot, (go_offset){.v = _cc_tconn_pos});
+        u64 cc_tconn_pos = go_offset_of(ot, (go_offset){.v = off_cc_tconn_pos});
         bpf_dbg_printk("cc_ptr %llx, cc_tconn_ptr %llx", cc_ptr, cc_ptr + cc_tconn_pos);
-        void *tconn = cc_ptr + go_offset_of(ot, (go_offset){.v = _cc_tconn_pos});
+        void *tconn = cc_ptr + go_offset_of(ot, (go_offset){.v = off_cc_tconn_pos});
         bpf_probe_read(&tconn, sizeof(tconn), (void *)(cc_ptr + cc_tconn_pos + 8));
         bpf_dbg_printk("tconn %llx", tconn);
 
@@ -811,12 +814,12 @@ static __always_inline void setup_http2_client_conn(void *goroutine_addr, void *
         bpf_probe_read(
             &stream_id,
             sizeof(stream_id),
-            (void *)(cc_ptr + go_offset_of(ot, (go_offset){.v = _cc_next_stream_id_pos})));
+            (void *)(cc_ptr + go_offset_of(ot, (go_offset){.v = off_cc_next_stream_id_pos})));
 
         bpf_dbg_printk("cc_ptr = %llx, nextStreamID=%d, framer %llx", cc_ptr, stream_id, framer);
         if (stream_id && framer) {
             stream_key_t s_key = {
-                .stream_id = stream_id + 1,
+                .stream_id = stream_id,
             };
             s_key.conn_ptr = (u64)framer;
 
@@ -835,17 +838,19 @@ int beyla_uprobe_http2RoundTrip(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     void *cc_ptr = GO_PARAM1(ctx);
 
-    setup_http2_client_conn(goroutine_addr, cc_ptr);
+    setup_http2_client_conn(goroutine_addr, cc_ptr, _cc_tconn_pos, _cc_next_stream_id_pos);
 
     return 0;
 }
 
+// For the vendored version of http2 inside the Go runtime, when they upgrade HTTP to HTTP2.
 SEC("uprobe/http2RoundTripConn")
 int beyla_uprobe_http2RoundTripConn(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     void *cc_ptr = GO_PARAM1(ctx);
 
-    setup_http2_client_conn(goroutine_addr, cc_ptr);
+    setup_http2_client_conn(
+        goroutine_addr, cc_ptr, _cc_tconn_vendored_pos, _cc_next_stream_id_vendored_pos);
 
     return 0;
 }

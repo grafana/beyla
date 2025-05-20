@@ -19,6 +19,7 @@
 #include <gotracer/go_byte_arr.h>
 #include <gotracer/go_common.h>
 #include <gotracer/go_str.h>
+#include <gotracer/go_stream_key.h>
 #include <gotracer/hpack.h>
 
 #include <logger/bpf_dbg.h>
@@ -61,12 +62,6 @@ struct {
     __type(value, grpc_srv_func_invocation_t);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_grpc_server_requests SEC(".maps");
-
-typedef struct stream_key {
-    u64 conn_ptr;
-    u32 stream_id;
-    u32 __pad;
-} stream_key_t;
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);

@@ -24,6 +24,7 @@
 #include <gotracer/go_byte_arr.h>
 #include <gotracer/go_common.h>
 #include <gotracer/go_str.h>
+#include <gotracer/go_stream_key.h>
 #include <gotracer/hpack.h>
 
 #include <logger/bpf_dbg.h>
@@ -767,10 +768,9 @@ int beyla_uprobe_http2serverConn_runHandler(struct pt_regs *ctx) {
 #ifndef NO_HEADER_PROPAGATION
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, go_addr_key_t); // key: stream id
-    __type(
-        value,
-        u64); // the goroutine of the round trip request, which is the key for our traceparent info
+    __type(key, stream_key_t); // key: stream id + connection info
+    // the goroutine of the round trip request, which is the key for our traceparent info
+    __type(value, u64);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } http2_req_map SEC(".maps");
 #endif
@@ -803,16 +803,23 @@ static __always_inline void setup_http2_client_conn(void *goroutine_addr, void *
         }
 
 #ifndef NO_HEADER_PROPAGATION
+        void *framer = 0;
+        // TODO: Add this offset
+        bpf_probe_read(&framer, sizeof(framer), (void *)(cc_ptr + 0x128));
+
         u32 stream_id = 0;
         bpf_probe_read(
             &stream_id,
             sizeof(stream_id),
             (void *)(cc_ptr + go_offset_of(ot, (go_offset){.v = _cc_next_stream_id_pos})));
 
-        bpf_dbg_printk("cc_ptr = %llx, nextStreamID=%d", cc_ptr, stream_id);
-        if (stream_id) {
-            go_addr_key_t s_key = {};
-            go_addr_key_from_id(&s_key, (void *)(uintptr_t)stream_id);
+        bpf_dbg_printk("cc_ptr = %llx, nextStreamID=%d, framer %llx", cc_ptr, stream_id, framer);
+        if (stream_id && framer) {
+            stream_key_t s_key = {
+                .stream_id = stream_id,
+            };
+            s_key.conn_ptr = (u64)framer;
+
             bpf_map_update_elem(&http2_req_map, &s_key, &goroutine_addr, BPF_ANY);
         }
 #endif
@@ -877,9 +884,11 @@ int beyla_uprobe_http2FramerWriteHeaders(struct pt_regs *ctx) {
 
     bpf_dbg_printk("framer=%llx, stream_id=%lld", framer, ((u64)stream_id));
 
-    u32 stream_lookup = (u32)stream_id;
-    go_addr_key_t s_key = {};
-    go_addr_key_from_id(&s_key, (void *)(uintptr_t)stream_lookup);
+    stream_key_t s_key = {
+        .stream_id = stream_id,
+    };
+    s_key.conn_ptr = (u64)framer;
+
     void **go_ptr = bpf_map_lookup_elem(&http2_req_map, &s_key);
 
     if (go_ptr) {

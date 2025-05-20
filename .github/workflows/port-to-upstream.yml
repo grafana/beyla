@@ -33,7 +33,6 @@ jobs:
         with:
           app-id: ${{ env.GITHUB_APP_ID }}
           private-key: ${{ env.GITHUB_APP_PRIVATE_KEY }}
-          installation-id: ${{ env.GITHUB_APP_INSTALLATION_ID }}
           owner: grafana
           repositories: "opentelemetry-ebpf-instrumentation"
       - name: Push changes to fork for upstream PR

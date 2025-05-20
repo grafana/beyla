@@ -28,6 +28,8 @@ typedef enum {
     _io_writer_n_pos,
     _cc_next_stream_id_pos,
     _cc_next_stream_id_vendored_pos,
+    _cc_framer_pos,
+    _cc_framer_vendored_pos,
     _framer_w_pos,
     _pc_conn_pos,
     _pc_tls_pos,

@@ -778,7 +778,8 @@ struct {
 static __always_inline void setup_http2_client_conn(void *goroutine_addr,
                                                     void *cc_ptr,
                                                     go_offset_const off_cc_tconn_pos,
-                                                    go_offset_const off_cc_next_stream_id_pos) {
+                                                    go_offset_const off_cc_next_stream_id_pos,
+                                                    go_offset_const off_cc_framer_pos) {
     off_table_t *ot = get_offsets_table();
 
     if (cc_ptr) {
@@ -808,7 +809,9 @@ static __always_inline void setup_http2_client_conn(void *goroutine_addr,
 #ifndef NO_HEADER_PROPAGATION
         void *framer = 0;
         // TODO: Add this offset
-        bpf_probe_read(&framer, sizeof(framer), (void *)(cc_ptr + 0x128));
+        bpf_probe_read(&framer,
+                       sizeof(framer),
+                       (void *)(cc_ptr + go_offset_of(ot, (go_offset){.v = off_cc_framer_pos})));
 
         u32 stream_id = 0;
         bpf_probe_read(
@@ -838,7 +841,8 @@ int beyla_uprobe_http2RoundTrip(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     void *cc_ptr = GO_PARAM1(ctx);
 
-    setup_http2_client_conn(goroutine_addr, cc_ptr, _cc_tconn_pos, _cc_next_stream_id_pos);
+    setup_http2_client_conn(
+        goroutine_addr, cc_ptr, _cc_tconn_pos, _cc_next_stream_id_pos, _cc_framer_pos);
 
     return 0;
 }
@@ -849,8 +853,11 @@ int beyla_uprobe_http2RoundTripConn(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     void *cc_ptr = GO_PARAM1(ctx);
 
-    setup_http2_client_conn(
-        goroutine_addr, cc_ptr, _cc_tconn_vendored_pos, _cc_next_stream_id_vendored_pos);
+    setup_http2_client_conn(goroutine_addr,
+                            cc_ptr,
+                            _cc_tconn_vendored_pos,
+                            _cc_next_stream_id_vendored_pos,
+                            _cc_framer_vendored_pos);
 
     return 0;
 }

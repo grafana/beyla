@@ -52,7 +52,8 @@
       ],
       "net/http.http2ClientConn": [
         "nextStreamID",
-        "tconn"
+        "tconn",
+        "fr"
       ],
       "net/http.http2serverConn": [
         "conn"
@@ -74,7 +75,8 @@
       ],
       "golang.org/x/net/http2.ClientConn": [
         "nextStreamID",
-        "tconn"
+        "tconn",
+        "fr"
       ],
       "golang.org/x/net/http2.Framer": [
         "w"

@@ -47,6 +47,8 @@ const (
 	IoWriterNPos
 	CcNextStreamIDPos
 	CcNextStreamIDVendoredPos
+	CcFramerPos
+	CcFramerVendoredPos
 	FramerWPos
 	PcConnPos
 	PcTLSPos
@@ -193,6 +195,7 @@ var structMembers = map[string]structInfo{
 		fields: map[string]GoOffset{
 			"nextStreamID": CcNextStreamIDPos,
 			"tconn":        CcTconnPos,
+			"fr":           CcFramerPos,
 		},
 	},
 	"net/http.http2Framer": {
@@ -230,6 +233,7 @@ var structMembers = map[string]structInfo{
 		fields: map[string]GoOffset{
 			"nextStreamID": CcNextStreamIDVendoredPos,
 			"tconn":        CcTconnVendoredPos,
+			"fr":           CcFramerVendoredPos,
 		},
 	},
 	"net/http.http2serverConn": {

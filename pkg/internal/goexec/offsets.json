@@ -213,6 +213,38 @@
       }
     },
     "golang.org/x/net/http2.ClientConn": {
+      "fr": {
+        "versions": {
+          "oldest": "0.12.0",
+          "newest": "0.40.0"
+        },
+        "offsets": [
+          {
+            "offset": 304,
+            "since": "0.12.0"
+          },
+          {
+            "offset": 296,
+            "since": "0.15.0"
+          },
+          {
+            "offset": 304,
+            "since": "0.23.0"
+          },
+          {
+            "offset": 328,
+            "since": "0.30.0"
+          },
+          {
+            "offset": 336,
+            "since": "0.31.0"
+          },
+          {
+            "offset": 360,
+            "since": "0.32.0"
+          }
+        ]
+      },
       "nextStreamID": {
         "versions": {
           "oldest": "0.12.0",
@@ -727,6 +759,42 @@
       }
     },
     "net/http.http2ClientConn": {
+      "fr": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.24.3"
+        },
+        "offsets": [
+          {
+            "offset": 208,
+            "since": "1.17.0"
+          },
+          {
+            "offset": 304,
+            "since": "1.17.3"
+          },
+          {
+            "offset": 312,
+            "since": "1.20.0"
+          },
+          {
+            "offset": 304,
+            "since": "1.21.0"
+          },
+          {
+            "offset": 296,
+            "since": "1.22.0"
+          },
+          {
+            "offset": 304,
+            "since": "1.23.0"
+          },
+          {
+            "offset": 360,
+            "since": "1.24.0"
+          }
+        ]
+      },
       "nextStreamID": {
         "versions": {
           "oldest": "1.17.0",

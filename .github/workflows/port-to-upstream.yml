@@ -21,18 +21,28 @@ jobs:
         with:
           repo_secrets: |
             GITHUB_APP_ID=github-app:app-id
+            GITHUB_APP_INSTALLATION_ID=github-app:app-installation-id
             GITHUB_APP_PRIVATE_KEY=github-app:private-key
       - name: Checkout Beyla
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          
       - name: Generate App Token
         uses: actions/create-github-app-token@v1
         id: app-token
         with:
           app-id: ${{ env.GITHUB_APP_ID }}
           private-key: ${{ env.GITHUB_APP_PRIVATE_KEY }}
-          owner: open-telemetry
+          installation-id: ${{ env.GITHUB_APP_INSTALLATION_ID }}
+          owner: grafana
+          repositories: "opentelemetry-ebpf-instrumentation"
+          
+      - name: Configure Git
+        run: |
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "actions@github.com"
+          
       - name: Push changes to fork for upstream PR
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -41,6 +51,7 @@ jobs:
           git checkout -b $BRANCH
           git remote add upstream-fork https://x-access-token:${GH_TOKEN}@github.com/grafana/opentelemetry-ebpf-instrumentation.git
           git push upstream-fork $BRANCH --force
+          
       - name: Create PR to upstream repo
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}

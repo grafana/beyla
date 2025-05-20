@@ -42,14 +42,51 @@ jobs:
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
           
-      - name: Push changes to fork for upstream PR
+      - name: Port changes and prepare PR
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          BRANCH_NAME: port/${{ github.event.pull_request.number }}-to-upstream
         run: |
-          BRANCH=port/${{ github.event.pull_request.number }}-to-upstream
-          git checkout -b $BRANCH
-          git remote add upstream-fork https://x-access-token:${GH_TOKEN}@github.com/grafana/opentelemetry-ebpf-instrumentation.git
-          git push upstream-fork $BRANCH --force
+          # First, copy over the changes from the Beyla PR that need to be ported
+          # This depends on what specifically needs to be ported - you'll need to customize this part
+          # Example: cp -r some-path/* opentelemetry-ebpf/destination-path/
+          
+          # Navigate to the target repository
+          cd opentelemetry-ebpf
+          
+          # Configure git locally
+          git config --local user.email "actions@github.com"
+          git config --local user.name "GitHub Actions Bot"
+          
+          # Create a new branch
+          git checkout -b ${BRANCH_NAME}
+          
+          # Add and commit the changes
+          git add .
+          git commit -m "[port] #${PR_NUMBER}: ${PR_TITLE}
+          
+          Automated port of #${PR_NUMBER} from grafana/beyla.
+          Original PR: ${PR_URL}"
+          
+          # Push changes to the fork repository
+          git push origin "refs/heads/${BRANCH_NAME}" --force
+          
+          # Create PR to upstream repository
+          PR_URL=$(gh pr create \
+            --title "[port] #${PR_NUMBER}: ${PR_TITLE}" \
+            --body "Automated port of #${PR_NUMBER} from grafana/beyla.
+            
+            Original PR: ${PR_URL}" \
+            --repo open-telemetry/opentelemetry-ebpf-instrumentation \
+            --head grafana:${BRANCH_NAME} \
+            --base main \
+            --draft)
+          
+          echo "upstream_pr_url=${PR_URL}" >> $GITHUB_OUTPUT
+          echo "upstream_pr_number=$(basename ${PR_URL})" >> $GITHUB_OUTPUT
           
       # - name: Create PR to upstream repo
       #   env:

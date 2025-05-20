@@ -62,11 +62,15 @@ struct {
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_grpc_server_requests SEC(".maps");
 
-// Context propagation
-// TODO: use go_addr_key_t as key
+typedef struct stream_key {
+    u64 conn_ptr;
+    u32 stream_id;
+    u32 __pad;
+} stream_key_t;
+
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, u32);                             // key: stream id
+    __type(key, stream_key_t);                    // key: conn_ptr + stream id
     __type(value, grpc_client_func_invocation_t); // stored info for the client request
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_streams SEC(".maps");
@@ -560,6 +564,13 @@ int beyla_uprobe_transport_http2Client_NewStream(struct pt_regs *ctx) {
         void *conn_ptr = t_ptr + go_offset_of(ot, (go_offset){.v = _grpc_t_conn_pos}) + 8;
         u8 buf[16];
         u64 is_secure = 0;
+#ifndef NO_HEADER_PROPAGATION
+        void *conn_ptr_key = 0;
+
+        if (conn_ptr) {
+            bpf_probe_read(&conn_ptr_key, sizeof(conn_ptr_key), conn_ptr);
+        }
+#endif
 
         void *s_ptr = 0;
         buf[0] = 0;
@@ -604,13 +615,19 @@ int beyla_uprobe_transport_http2Client_NewStream(struct pt_regs *ctx) {
         grpc_client_func_invocation_t *invocation =
             bpf_map_lookup_elem(&ongoing_grpc_client_requests, &g_key);
 
-        if (invocation) {
+        if (invocation && conn_ptr_key) {
             grpc_client_func_invocation_t inv_save = *invocation;
+            stream_key_t stream_key = {
+                .stream_id = next_id,
+            };
+            stream_key.conn_ptr = (u64)conn_ptr_key;
             // This map is an LRU map, we can't be sure that all created streams are going to be
             // seen later by writeHeader to clean up this mapping.
-            bpf_map_update_elem(&ongoing_streams, &next_id, &inv_save, BPF_ANY);
+            bpf_map_update_elem(&ongoing_streams, &stream_key, &inv_save, BPF_ANY);
         } else {
-            bpf_dbg_printk("Couldn't find invocation metadata for goroutine %lx", goroutine_addr);
+            bpf_dbg_printk("Couldn't find invocation metadata for goroutine %lx, conn_ptr_key %llx",
+                           goroutine_addr,
+                           conn_ptr_key);
         }
 #endif
     }
@@ -654,10 +671,30 @@ int beyla_uprobe_grpcFramerWriteHeaders(struct pt_regs *ctx) {
     bpf_dbg_printk(
         "framer=%llx, stream_id=%lld, framer_w_pos %llx", framer, ((u64)stream_id), framer_w_pos);
 
-    u32 stream_lookup = (u32)stream_id;
+    void *w_ptr = (void *)(framer + framer_w_pos + 16);
+    bpf_probe_read(&w_ptr, sizeof(w_ptr), (void *)(framer + framer_w_pos + 8));
 
-    grpc_client_func_invocation_t *invocation =
-        bpf_map_lookup_elem(&ongoing_streams, &stream_lookup);
+    if (!w_ptr) {
+        bpf_dbg_printk("w ptr is 0");
+        return 0;
+    }
+
+    // TODO: Use an offset here
+    u32 conn_ptr_pos = 0x30;
+    void *conn_ptr = 0;
+    bpf_probe_read(&conn_ptr, sizeof(conn_ptr), (void *)(w_ptr + conn_ptr_pos + 8));
+
+    if (!conn_ptr) {
+        bpf_dbg_printk("conn ptr is 0");
+        return 0;
+    }
+
+    stream_key_t key = {
+        .stream_id = (u32)stream_id,
+    };
+    key.conn_ptr = (u64)conn_ptr;
+
+    grpc_client_func_invocation_t *invocation = bpf_map_lookup_elem(&ongoing_streams, &key);
 
     if (invocation) {
         bpf_dbg_printk("Found invocation info %llx", invocation);
@@ -665,37 +702,32 @@ int beyla_uprobe_grpcFramerWriteHeaders(struct pt_regs *ctx) {
         go_addr_key_t g_key = {};
         go_addr_key_from_id(&g_key, goroutine_addr);
 
-        void *w_ptr = (void *)(framer + framer_w_pos + 16);
-        bpf_probe_read(&w_ptr, sizeof(w_ptr), (void *)(framer + framer_w_pos + 8));
+        s64 offset;
+        bpf_probe_read(
+            &offset,
+            sizeof(offset),
+            (void *)(w_ptr +
+                     go_offset_of(ot, (go_offset){.v = _grpc_transport_buf_writer_offset_pos})));
 
-        if (w_ptr) {
-            s64 offset;
-            bpf_probe_read(
-                &offset,
-                sizeof(offset),
-                (void *)(w_ptr + go_offset_of(
-                                     ot, (go_offset){.v = _grpc_transport_buf_writer_offset_pos})));
+        bpf_dbg_printk("Found initial data offset %d", offset);
 
-            bpf_dbg_printk("Found initial data offset %d", offset);
+        // The offset will be 0 on first connection through the stream and 9 on subsequent.
+        // If we read some very large offset, we don't do anything since it might be a situation
+        // we can't handle
+        if (offset < MAX_W_PTR_OFFSET) {
+            grpc_framer_func_invocation_t f_info = {
+                .tp = invocation->tp,
+                .framer_ptr = (u64)framer,
+                .offset = offset,
+            };
 
-            // The offset will be 0 on first connection through the stream and 9 on subsequent.
-            // If we read some very large offset, we don't do anything since it might be a situation
-            // we can't handle
-            if (offset < MAX_W_PTR_OFFSET) {
-                grpc_framer_func_invocation_t f_info = {
-                    .tp = invocation->tp,
-                    .framer_ptr = (u64)framer,
-                    .offset = offset,
-                };
-
-                bpf_map_update_elem(&grpc_framer_invocation_map, &g_key, &f_info, BPF_ANY);
-            } else {
-                bpf_dbg_printk("Offset too large, ignoring...");
-            }
+            bpf_map_update_elem(&grpc_framer_invocation_map, &g_key, &f_info, BPF_ANY);
+        } else {
+            bpf_dbg_printk("Offset too large, ignoring...");
         }
     }
 
-    bpf_map_delete_elem(&ongoing_streams, &stream_id);
+    bpf_map_delete_elem(&ongoing_streams, &key);
     return 0;
 }
 #else

@@ -819,7 +819,8 @@ static __always_inline void setup_http2_client_conn(void *goroutine_addr,
             sizeof(stream_id),
             (void *)(cc_ptr + go_offset_of(ot, (go_offset){.v = off_cc_next_stream_id_pos})));
 
-        bpf_dbg_printk("cc_ptr = %llx, nextStreamID=%d, framer %llx", cc_ptr, stream_id, framer);
+        bpf_dbg_printk(
+            "cc_ptr = %llx, nextStreamID = %d, framer = %llx", cc_ptr, stream_id, framer);
         if (stream_id && framer) {
             stream_key_t s_key = {
                 .stream_id = stream_id,

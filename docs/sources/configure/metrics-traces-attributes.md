@@ -263,14 +263,12 @@ Example configuration:
 attributes:
   kubernetes:
     enable: true
-    resource_labels:
-      k8s.app.version: ["k8s.app.version"]
   extra_group_attributes:
     k8s_app_meta: ["k8s.app.version"]
 ```
 
 In this example:
-- `k8s.app.version` is added as a label to your metrics.
+- You can add `k8s.app.version` to the resource_labels block and then the `k8s.app.version` label will appear in the metrics.
 - You can also define annotations with the prefix `resource.opentelemetry.io/` and suffix `k8s.app.version` in your Kubernetes manifests — those will also be automatically included in the metrics.
 
 

@@ -109,6 +109,7 @@ func (t *typer) FilterClassify(evs []Event[ProcessMatch]) []Event[ebpf.Instrumen
 		inst := t.asInstrumentable(elfs[i])
 		t.log.Debug(
 			"found an instrumentable process",
+			"UID", inst.FileInfo.Service.UID,
 			"type", inst.Type.String(),
 			"exec", inst.FileInfo.CmdExePath, "pid", inst.FileInfo.Pid)
 		out = append(out, Event[ebpf.Instrumentable]{Type: EventCreated, Obj: inst})

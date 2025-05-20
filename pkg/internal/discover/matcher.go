@@ -51,7 +51,7 @@ func SurveyCriteriaMatcherProvider(
 	m := &matcher{
 		log:              slog.With("component", "discover.SurveyCriteriaMatcher"),
 		criteria:         surveyCriteria(cfg),
-		excludeCriteria:  services.DefinitionCriteria{},
+		excludeCriteria:  cfg.Discovery.DefaultExcludeServices,
 		processHistory:   map[PID]*services.ProcessInfo{},
 		input:            input.Subscribe(),
 		output:           output,
@@ -122,7 +122,7 @@ func (m *matcher) filterCreated(obj processAttrs) (Event[ProcessMatch], bool) {
 	}
 	for i := range m.criteria {
 		if m.matchProcess(&obj, proc, &m.criteria[i]) && !m.isExcluded(&obj, proc) {
-			m.log.Debug("found process", "pid", proc.Pid, "comm", proc.ExePath, "metadata", obj.metadata, "podLabels", obj.podLabels)
+			m.log.Debug("found process", "pid", proc.Pid, "comm", proc.ExePath, "metadata", obj.metadata, "podLabels", obj.podLabels, "criteria", m.criteria[i])
 			m.processHistory[obj.pid] = proc
 			return Event[ProcessMatch]{
 				Type: EventCreated,

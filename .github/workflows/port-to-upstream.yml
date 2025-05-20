@@ -88,12 +88,6 @@ jobs:
           # Copy only the changed files to the target repository
           # This will handle files that exist in both repositories
           for file in ${CHANGED_FILES}; do
-            # Skip workflow files, they don't need to be ported
-            if [[ $file == .github/workflows/* ]]; then
-              echo "Skipping workflow file: $file"
-              continue
-            fi
-            
             # Skip files that don't exist in the target repo structure
             if [[ ! -f "opentelemetry-ebpf-instrumentation/$file" && ! -d "$(dirname "opentelemetry-ebpf-instrumentation/$file")" ]]; then
               echo "Skipping file not in target repo structure: $file"

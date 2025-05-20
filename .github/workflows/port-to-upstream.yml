@@ -36,6 +36,8 @@ jobs:
           private-key: ${{ env.GITHUB_APP_PRIVATE_KEY }}
           installation-id: ${{ env.GITHUB_APP_INSTALLATION_ID }}
           owner: grafana
+          repositories: "opentelemetry-ebpf-instrumentation"
+          permission-contents: write
           
       - name: Configure Git
         run: |

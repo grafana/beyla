@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build beyla_bpf_ignore
+
 #include <bpfcore/utils.h>
 
 #include <common/http_types.h>

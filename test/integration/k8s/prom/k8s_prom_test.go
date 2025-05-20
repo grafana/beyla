@@ -36,6 +36,7 @@ func TestPrometheus_SurveyMetrics(t *testing.T) {
 	cluster.TestEnv().Test(t, k8s.FeatureSurveyMetricsDecoration(map[string]string{
 		"k8s_namespace_name":  "^default$",
 		"k8s_node_name":       ".+-control-plane$",
+		"k8s_container_name":  "^testserver$",
 		"k8s_deployment_name": "^testserver$",
 		"k8s_replicaset_name": "^testserver-",
 		"k8s_cluster_name":    "^beyla-k8s-test-cluster$",

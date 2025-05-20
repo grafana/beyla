@@ -51,7 +51,7 @@ func SurveyCriteriaMatcherProvider(
 	m := &matcher{
 		log:              slog.With("component", "discover.SurveyCriteriaMatcher"),
 		criteria:         surveyCriteria(cfg),
-		excludeCriteria:  services.DefinitionCriteria{},
+		excludeCriteria:  cfg.Discovery.DefaultExcludeServices,
 		processHistory:   map[PID]*services.ProcessInfo{},
 		input:            input.Subscribe(),
 		output:           output,

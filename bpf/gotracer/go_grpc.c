@@ -539,6 +539,18 @@ int beyla_uprobe_clientStream_RecvMsg_return(struct pt_regs *ctx) {
     return grpc_connect_done(ctx, err);
 }
 
+typedef struct transport_new_client_invocation {
+    grpc_client_func_invocation_t inv;
+    stream_key_t s_key;
+} transport_new_client_invocation_t;
+
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, go_addr_key_t); // key: pointer to the request goroutine
+    __type(value, transport_new_client_invocation_t);
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+} transport_new_client_invocations SEC(".maps");
+
 // The gRPC client stream is written on another goroutine in transport loopyWriter (controlbuf.go).
 // We extract the stream ID when it's just created and make a mapping of it to our goroutine that's executing ClientConn.Invoke.
 SEC("uprobe/transport_http2Client_NewStream")
@@ -611,14 +623,12 @@ int beyla_uprobe_transport_http2Client_NewStream(struct pt_regs *ctx) {
             bpf_map_lookup_elem(&ongoing_grpc_client_requests, &g_key);
 
         if (invocation && conn_ptr_key) {
-            grpc_client_func_invocation_t inv_save = *invocation;
-            stream_key_t stream_key = {
-                .stream_id = next_id,
-            };
-            stream_key.conn_ptr = (u64)conn_ptr_key;
-            // This map is an LRU map, we can't be sure that all created streams are going to be
-            // seen later by writeHeader to clean up this mapping.
-            bpf_map_update_elem(&ongoing_streams, &stream_key, &inv_save, BPF_ANY);
+            transport_new_client_invocation_t wrapper = {};
+            wrapper.inv = *invocation;
+            wrapper.s_key.stream_id = next_id;
+            wrapper.s_key.conn_ptr = (u64)conn_ptr_key;
+
+            bpf_map_update_elem(&transport_new_client_invocations, &g_key, &wrapper, BPF_ANY);
         } else {
             bpf_dbg_printk("Couldn't find invocation metadata for goroutine %lx, conn_ptr_key %llx",
                            goroutine_addr,
@@ -626,6 +636,47 @@ int beyla_uprobe_transport_http2Client_NewStream(struct pt_regs *ctx) {
         }
 #endif
     }
+
+    return 0;
+}
+
+SEC("uprobe/transport_http2Client_NewStream_ret")
+int beyla_uprobe_transport_http2Client_NewStream_Returns(struct pt_regs *ctx) {
+#ifndef NO_HEADER_PROPAGATION
+    bpf_dbg_printk("=== uprobe/proc returns transport.(*http2Client).NewStream === ");
+
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    void *stream = GO_PARAM1(ctx);
+
+    if (!stream) {
+        bpf_dbg_printk("stream is 0");
+        return 0;
+    }
+
+    //off_table_t *ot = get_offsets_table();
+    go_addr_key_t g_key = {};
+    go_addr_key_from_id(&g_key, goroutine_addr);
+
+    transport_new_client_invocation_t *wrapper =
+        bpf_map_lookup_elem(&transport_new_client_invocations, &g_key);
+
+    if (!wrapper) {
+        return 0;
+    }
+
+    u64 stream_id = 0;
+    // TODO: Fix with offset
+    bpf_probe_read_user(&stream_id, sizeof(stream_id), stream);
+    wrapper->s_key.stream_id = stream_id;
+
+    bpf_dbg_printk("after return stream id %d, conn_ptr %llx",
+                   wrapper->s_key.stream_id,
+                   wrapper->s_key.conn_ptr);
+
+    // This map is an LRU map, we can't be sure that all created streams are going to be
+    // seen later by writeHeader to clean up this mapping.
+    bpf_map_update_elem(&ongoing_streams, &wrapper->s_key, &wrapper->inv, BPF_ANY);
+#endif
 
     return 0;
 }

@@ -287,7 +287,7 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 		}},
 		"google.golang.org/grpc.(*ClientConn).NewStream": {{
 			Start: p.bpfObjects.BeylaUprobeClientConnNewStream,
-			End:   p.bpfObjects.BeylaUprobeServerHandleStreamReturn,
+			End:   p.bpfObjects.BeylaUprobeClientConnNewStreamReturn,
 		}},
 		"google.golang.org/grpc.(*ClientConn).Close": {{
 			Start: p.bpfObjects.BeylaUprobeClientConnClose,
@@ -300,6 +300,7 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 		}},
 		"google.golang.org/grpc/internal/transport.(*http2Client).NewStream": {{
 			Start: p.bpfObjects.BeylaUprobeTransportHttp2ClientNewStream,
+			End:   p.bpfObjects.BeylaUprobeTransportHttp2ClientNewStreamReturns,
 		}},
 		"google.golang.org/grpc/internal/transport.(*http2Server).operateHeaders": {{
 			Start: p.bpfObjects.BeylaUprobeHttp2ServerOperateHeaders,

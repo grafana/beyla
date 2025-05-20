@@ -143,6 +143,7 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 		goexec.HTTP2ClientNextIDPos,
 		goexec.GrpcTransportBufWriterBufPos,
 		goexec.GrpcTransportBufWriterOffsetPos,
+		goexec.GrpcTransportBufWriterConnPos,
 		// redis
 		goexec.RedisConnBwPos,
 		// kafka go

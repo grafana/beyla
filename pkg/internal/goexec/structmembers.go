@@ -67,6 +67,7 @@ const (
 	HTTP2ClientNextIDPos
 	GrpcTransportBufWriterBufPos
 	GrpcTransportBufWriterOffsetPos
+	GrpcTransportBufWriterConnPos
 	// redis
 	RedisConnBwPos
 	// kafka go
@@ -273,6 +274,7 @@ var structMembers = map[string]structInfo{
 		fields: map[string]GoOffset{
 			"buf":    GrpcTransportBufWriterBufPos,
 			"offset": GrpcTransportBufWriterOffsetPos,
+			"conn":   GrpcTransportBufWriterConnPos,
 		},
 	},
 	"github.com/IBM/sarama.Broker": {

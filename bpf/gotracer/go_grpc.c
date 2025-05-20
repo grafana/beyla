@@ -610,7 +610,7 @@ int beyla_uprobe_transport_http2Client_NewStream(struct pt_regs *ctx) {
             sizeof(next_id),
             (void *)(t_ptr + go_offset_of(ot, (go_offset){.v = _http2_client_next_id_pos})));
 
-        bpf_dbg_printk("next_id %d", next_id);
+        bpf_dbg_printk("conn_ptr %llx, next_id %d", conn_ptr_key, next_id);
 
         grpc_client_func_invocation_t *invocation =
             bpf_map_lookup_elem(&ongoing_grpc_client_requests, &g_key);
@@ -679,14 +679,15 @@ int beyla_uprobe_grpcFramerWriteHeaders(struct pt_regs *ctx) {
         return 0;
     }
 
-    // TODO: Use an offset here
-    u32 conn_ptr_pos = 0x30;
+    u32 conn_ptr_pos = go_offset_of(ot, (go_offset){.v = _grpc_transport_buf_writer_conn_pos});
     void *conn_ptr = 0;
     bpf_probe_read(&conn_ptr, sizeof(conn_ptr), (void *)(w_ptr + conn_ptr_pos + 8));
 
     if (!conn_ptr) {
         bpf_dbg_printk("conn ptr is 0");
         return 0;
+    } else {
+        bpf_dbg_printk("conn_ptr %llx, stream_id %d", conn_ptr, stream_id);
     }
 
     stream_key_t key = {

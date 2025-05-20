@@ -107,7 +107,8 @@
       ],
       "google.golang.org/grpc/internal/transport.bufWriter": [
         "buf",
-        "offset"
+        "offset",
+        "conn"
       ],
       "google.golang.org/grpc/internal/transport.ServerStream": [
         "[1.69.0]Stream",

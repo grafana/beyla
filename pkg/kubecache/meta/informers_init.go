@@ -53,6 +53,8 @@ type informersConfig struct {
 	cacheSyncTimeout time.Duration
 
 	kubeClient kubernetes.Interface
+
+	localInstance bool
 }
 
 // global object used for comparing protobuf messages in the informers event handlers
@@ -81,6 +83,12 @@ func WithoutNodes() InformerOption {
 func WithoutServices() InformerOption {
 	return func(c *informersConfig) {
 		c.disableServices = true
+	}
+}
+
+func LocalInstance() InformerOption {
+	return func(c *informersConfig) {
+		c.localInstance = true
 	}
 }
 
@@ -257,9 +265,11 @@ func loadKubeconfig(kubeConfigPath string) (*rest.Config, error) {
 // millions of pods
 func minimalIndex(om *metav1.ObjectMeta) metav1.ObjectMeta {
 	return metav1.ObjectMeta{
-		Name:      om.Name,
-		Namespace: om.Namespace,
-		UID:       om.UID,
+		Name:              om.Name,
+		Namespace:         om.Namespace,
+		UID:               om.UID,
+		CreationTimestamp: om.CreationTimestamp,
+		DeletionTimestamp: om.DeletionTimestamp,
 	}
 }
 
@@ -525,9 +535,10 @@ func (inf *Informers) ipInfoEventHandler(ctx context.Context) *cache.ResourceEve
 			em := obj.(*indexableEntity).EncodedMeta
 			log.Debug("AddFunc", "kind", em.Kind, "name", em.Name, "ips", em.Ips)
 			// ignore headless services from being added
-			if headlessService(obj.(*indexableEntity).EncodedMeta) {
+			if headlessService(em) {
 				return
 			}
+			em.StatusTimeEpoch = obj.(*indexableEntity).CreationTimestamp.Time.Unix()
 			inf.Notify(&informer.Event{
 				Type:     informer.EventType_CREATED,
 				Resource: em,
@@ -535,7 +546,8 @@ func (inf *Informers) ipInfoEventHandler(ctx context.Context) *cache.ResourceEve
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			metrics.InformerUpdate()
-			newEM := newObj.(*indexableEntity).EncodedMeta
+			nie := newObj.(*indexableEntity)
+			newEM := nie.EncodedMeta
 			oldEM := oldObj.(*indexableEntity).EncodedMeta
 			// ignore headless services from being added
 			if headlessService(newEM) && headlessService(oldEM) {
@@ -546,9 +558,11 @@ func (inf *Informers) ipInfoEventHandler(ctx context.Context) *cache.ResourceEve
 			}
 			log.Debug("UpdateFunc", "kind", newEM.Kind, "name", newEM.Name,
 				"ips", newEM.Ips, "oldIps", oldEM.Ips)
+
+			nie.EncodedMeta.StatusTimeEpoch = time.Now().Unix()
 			inf.Notify(&informer.Event{
 				Type:     informer.EventType_UPDATED,
-				Resource: newObj.(*indexableEntity).EncodedMeta,
+				Resource: nie.EncodedMeta,
 			})
 		},
 		DeleteFunc: func(obj interface{}) {
@@ -569,6 +583,12 @@ func (inf *Informers) ipInfoEventHandler(ctx context.Context) *cache.ResourceEve
 			log.Debug("DeleteFunc", "kind", em.Kind, "name", em.Name, "ips", em.Ips)
 
 			metrics.InformerDelete()
+
+			if dt := obj.(*indexableEntity).DeletionTimestamp; dt != nil {
+				em.StatusTimeEpoch = dt.Unix()
+			} else {
+				em.StatusTimeEpoch = time.Now().Unix()
+			}
 			inf.Notify(&informer.Event{
 				Type:     informer.EventType_DELETED,
 				Resource: obj.(*indexableEntity).EncodedMeta,

@@ -22,6 +22,10 @@ message ObjectMeta {
 
   // If the Kube object is not a Pod, this field will be empty.
   optional PodInfo pod = 6;
+
+  // Timestamp of the last status: creation/update/deletion, in Unix seconds
+  // We don't need more precision as Kubernetes events are timestamped in seconds
+  int64 status_time_epoch = 7;
 }
 
 message PodInfo {
@@ -46,7 +50,6 @@ message Owner {
 
 // Event represents a single event.
 message Event {
-  // Todo: add timestamp:
   // - avoids out-of-order events coming from different informers (local vs remote)
   // - on failure/reconnection you don't need to receive all the events again
   EventType type = 1;
@@ -54,7 +57,9 @@ message Event {
 }
 
 // Empty message for Subscribe RPC
-message SubscribeMessage {}
+message SubscribeMessage {
+  int64 fromTimestampEpoch = 1;
+}
 
 // EventStreamService defines the gRPC service for event streaming.
 service EventStreamService {

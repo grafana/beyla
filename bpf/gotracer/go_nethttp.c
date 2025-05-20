@@ -816,7 +816,7 @@ static __always_inline void setup_http2_client_conn(void *goroutine_addr, void *
         bpf_dbg_printk("cc_ptr = %llx, nextStreamID=%d, framer %llx", cc_ptr, stream_id, framer);
         if (stream_id && framer) {
             stream_key_t s_key = {
-                .stream_id = stream_id,
+                .stream_id = stream_id + 1,
             };
             s_key.conn_ptr = (u64)framer;
 

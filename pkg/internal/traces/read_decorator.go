@@ -96,10 +96,11 @@ func HostProcessEventDecoratorProvider(
 ) swarm.InstanceFunc {
 	decorate := hostNamePIDDecorator(cfg)
 
-	in := input.Subscribe()
 	return swarm.DirectInstance(func(_ context.Context) {
 		// if kubernetes decoration is disabled, we just bypass the node
 		log := rlog().With("function", "instance_ID_hostNamePIDDecorator")
+		in := input.Subscribe()
+
 		for pe := range in {
 			decorate(&pe.File.Service, int(pe.File.Pid))
 			log.Debug("host decorating event", "event", pe, "ns", pe.File.Ns, "procPID", pe.File.Pid, "procPPID", pe.File.Ppid, "service", pe.File.Service.UID)

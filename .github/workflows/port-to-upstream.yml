@@ -76,8 +76,8 @@ jobs:
           cd opentelemetry-ebpf-instrumentation
           
           # Configure git locally
-          git config --local user.email "actions@github.com"
-          git config --local user.name "GitHub Actions Bot"
+          git config --local user.email bot@grafana.com
+          git config --local user.name grafanabot
           
           # Create a new branch
           git checkout -b ${BRANCH_NAME}
@@ -125,18 +125,18 @@ jobs:
           git push origin "refs/heads/${BRANCH_NAME}" --force
           
           # Create PR to upstream repository
-          PR_URL=$(gh pr create \
-            --title "[port] #${PR_NUMBER}: ${PR_TITLE}" \
-            --body "Automated port of #${PR_NUMBER} from grafana/beyla.
+          # PR_URL=$(gh pr create \
+          #   --title "[port] #${PR_NUMBER}: ${PR_TITLE}" \
+          #   --body "Automated port of #${PR_NUMBER} from grafana/beyla.
             
-            Original PR: ${PR_URL}" \
-            --repo open-telemetry/opentelemetry-ebpf-instrumentation \
-            --head grafana:${BRANCH_NAME} \
-            --base main \
-            --draft)
+          #   Original PR: ${PR_URL}" \
+          #   --repo open-telemetry/opentelemetry-ebpf-instrumentation \
+          #   --head grafana:${BRANCH_NAME} \
+          #   --base main \
+          #   --draft)
           
-          echo "upstream_pr_url=${PR_URL}" >> $GITHUB_OUTPUT
-          echo "upstream_pr_number=$(basename ${PR_URL})" >> $GITHUB_OUTPUT
+          # echo "upstream_pr_url=${PR_URL}" >> $GITHUB_OUTPUT
+          # echo "upstream_pr_number=$(basename ${PR_URL})" >> $GITHUB_OUTPUT
           
       # - name: Create PR to upstream repo
       #   env:

@@ -36,7 +36,6 @@ jobs:
           private-key: ${{ env.GITHUB_APP_PRIVATE_KEY }}
           installation-id: ${{ env.GITHUB_APP_INSTALLATION_ID }}
           owner: grafana
-          repositories: "opentelemetry-ebpf-instrumentation"
           
       - name: Configure Git
         run: |
@@ -52,14 +51,14 @@ jobs:
           git remote add upstream-fork https://x-access-token:${GH_TOKEN}@github.com/grafana/opentelemetry-ebpf-instrumentation.git
           git push upstream-fork $BRANCH --force
           
-      - name: Create PR to upstream repo
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-        run: |
-          gh pr create \
-            --title "[port] #${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}" \
-            --body "Automated port of #${{ github.event.pull_request.number }} from grafana/beyla." \
-            --repo open-telemetry/opentelemetry-ebpf-instrumentation \
-            --head grafana:port/${{ github.event.pull_request.number }}-to-upstream \
-            --base main \
-            --draft
+      # - name: Create PR to upstream repo
+      #   env:
+      #     GH_TOKEN: ${{ steps.app-token.outputs.token }}
+      #   run: |
+      #     gh pr create \
+      #       --title "[port] #${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}" \
+      #       --body "Automated port of #${{ github.event.pull_request.number }} from grafana/beyla." \
+      #       --repo open-telemetry/opentelemetry-ebpf-instrumentation \
+      #       --head grafana:port/${{ github.event.pull_request.number }}-to-upstream \
+      #       --base main \
+      #       --draft

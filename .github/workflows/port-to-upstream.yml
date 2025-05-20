@@ -20,24 +20,14 @@ jobs:
         uses: grafana/shared-workflows/actions/get-vault-secrets@main
         with:
           repo_secrets: |
-            GITHUB_APP_ID=github-app:app-id
-            GITHUB_APP_INSTALLATION_ID=github-app:app-installation-id
-            GITHUB_APP_PRIVATE_KEY=github-app:private-key
+            UPSTREAM_GITHUB_TOKEN=github-app:upstream-github-token
       - name: Checkout Beyla
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Generate App Token
-        uses: actions/create-github-app-token@v1
-        id: app-token
-        with:
-          app-id: ${{ env.GITHUB_APP_ID }}
-          private-key: ${{ env.GITHUB_APP_PRIVATE_KEY }}
-          owner: grafana
-          repositories: "opentelemetry-ebpf-instrumentation"
       - name: Push changes to fork for upstream PR
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_TOKEN: ${{ env.UPSTREAM_GITHUB_TOKEN }}
         run: |
           BRANCH=port/${{ github.event.pull_request.number }}-to-upstream
           git checkout -b $BRANCH
@@ -45,7 +35,7 @@ jobs:
           git push upstream-fork $BRANCH --force
       - name: Create PR to upstream repo
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_TOKEN: ${{ env.UPSTREAM_GITHUB_TOKEN }}
         run: |
           gh pr create \
             --title "[port] #${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}" \

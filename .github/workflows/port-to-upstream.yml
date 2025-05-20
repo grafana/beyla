@@ -56,7 +56,22 @@ jobs:
           PR_URL: ${{ github.event.pull_request.html_url }}
           PR_TITLE: ${{ github.event.pull_request.title }}
           BRANCH_NAME: port/${{ github.event.pull_request.number }}-to-upstream
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
+          # First, get the list of changed files in the PR
+          CHANGED_FILES=$(git diff --name-only ${BASE_SHA} ${HEAD_SHA})
+          
+          # Exit if no files have changed
+          if [ -z "${CHANGED_FILES}" ]; then
+            echo "No files have changed in this PR. Nothing to port."
+            exit 0
+          fi
+          
+          # Print the list of changed files
+          echo "Files changed in this PR:"
+          echo "${CHANGED_FILES}"
+          
           # Navigate to the target repository
           cd opentelemetry-ebpf-instrumentation
           
@@ -67,12 +82,50 @@ jobs:
           # Create a new branch
           git checkout -b ${BRANCH_NAME}
           
+          # Go back to the beyla repository
+          cd ..
+          
+          # Copy only the changed files to the target repository
+          # This will handle files that exist in both repositories
+          for file in ${CHANGED_FILES}; do
+            # Skip workflow files, they don't need to be ported
+            if [[ $file == .github/workflows/* ]]; then
+              echo "Skipping workflow file: $file"
+              continue
+            fi
+            
+            # Skip files that don't exist in the target repo structure
+            if [[ ! -f "opentelemetry-ebpf-instrumentation/$file" && ! -d "$(dirname "opentelemetry-ebpf-instrumentation/$file")" ]]; then
+              echo "Skipping file not in target repo structure: $file"
+              continue
+            fi
+            
+            echo "Copying $file to target repository"
+            mkdir -p $(dirname "opentelemetry-ebpf-instrumentation/$file")
+            cp "$file" "opentelemetry-ebpf-instrumentation/$file"
+          done
+          
+          # Go to the target repository
+          cd opentelemetry-ebpf-instrumentation
+          
+          # Check if there are any changes
+          if git diff --quiet; then
+            echo "No relevant changes to commit"
+            exit 0
+          fi
+          
           # Add and commit the changes
           git add .
-          git commit -m "[port] #${PR_NUMBER}: ${PR_TITLE}
+          git diff --staged --quiet || git commit -m "[port] #${PR_NUMBER}: ${PR_TITLE}
           
           Automated port of #${PR_NUMBER} from grafana/beyla.
           Original PR: ${PR_URL}"
+          
+          # Check if we have changes to push
+          if git diff --quiet HEAD HEAD~1 2>/dev/null; then
+            echo "No changes to push"
+            exit 0
+          fi
           
           # Push changes to the fork repository
           git push origin "refs/heads/${BRANCH_NAME}" --force

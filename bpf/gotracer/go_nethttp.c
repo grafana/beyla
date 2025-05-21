@@ -847,6 +847,24 @@ int beyla_uprobe_http2RoundTrip(struct pt_regs *ctx) {
     return 0;
 }
 
+SEC("uprobe/http2RoundTripVendored")
+int beyla_uprobe_http2RoundTrip_vendored(struct pt_regs *ctx) {
+    // we use the usual start helper, just like for normal http calls, but we later save
+    // more context, like the streamID
+    roundTripStartHelper(ctx);
+
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    void *cc_ptr = GO_PARAM1(ctx);
+
+    setup_http2_client_conn(goroutine_addr,
+                            cc_ptr,
+                            _cc_tconn_vendored_pos,
+                            _cc_next_stream_id_vendored_pos,
+                            _cc_framer_vendored_pos);
+
+    return 0;
+}
+
 // For the vendored version of http2 inside the Go runtime, when they upgrade HTTP to HTTP2.
 SEC("uprobe/http2RoundTripConn")
 int beyla_uprobe_http2RoundTripConn(struct pt_regs *ctx) {

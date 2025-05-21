@@ -221,10 +221,10 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 			End:   p.bpfObjects.BeylaUprobeRoundTripReturn, // return is the same as for http 1.1
 		}},
 		"net/http.(*http2ClientConn).RoundTrip": {{ // http2 client vendored in Go
-			Start: p.bpfObjects.BeylaUprobeHttp2RoundTripConn,
+			Start: p.bpfObjects.BeylaUprobeHttp2RoundTripVendored,
 			End:   p.bpfObjects.BeylaUprobeRoundTripReturn, // return is the same as for http 1.1
 		}},
-		"net/http.(*http2ClientConn).roundTrip": {{ // http2 client vendored in Go
+		"net/http.(*http2ClientConn).roundTrip": {{ // http2 client vendored in Go, but used from http 1.1 transition
 			Start: p.bpfObjects.BeylaUprobeHttp2RoundTripConn,
 		}},
 		"golang.org/x/net/http2.(*responseWriterState).writeHeader": {{ // http2 server request done, capture the response code

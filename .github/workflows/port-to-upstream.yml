@@ -110,8 +110,12 @@ jobs:
           # Go back to the beyla repository
           cd ..
           
-          # Copy only the changed files to the target repository
+          # Create a patches directory
+          mkdir -p patches
+          
+          # Generate specific patches for each changed file
           COPY_ERRORS=""
+          APPLIED_CHANGES=0
           
           for file in ${CHANGED_FILES}; do
             # Skip vendor files
@@ -121,22 +125,47 @@ jobs:
               continue
             fi
             
-            # Skip files that don't exist in the target repo structure
-            if [[ ! -f "opentelemetry-ebpf-instrumentation/$file" && ! -d "$(dirname "opentelemetry-ebpf-instrumentation/$file")" ]]; then
-              echo "Skipping file not in target repo structure: $file"
-              COPY_ERRORS+="- File not in target repo structure: $file\n"
+            # Check if the file exists in the target repository
+            TARGET_FILE="opentelemetry-ebpf-instrumentation/$file"
+            
+            # Create the patch for this specific file
+            echo "Creating patch for $file"
+            git diff --no-prefix ${TARGET_BASE_SHA} ${TARGET_HEAD_SHA} -- "$file" > "patches/${file//\//_}.patch"
+            
+            # If the target file doesn't exist, add to errors and continue
+            if [[ ! -f "$TARGET_FILE" ]]; then
+              echo "Target file doesn't exist: $TARGET_FILE"
+              COPY_ERRORS+="- Target file doesn't exist: $file\n"
               continue
             fi
             
-            echo "Copying $file to target repository"
-            mkdir -p $(dirname "opentelemetry-ebpf-instrumentation/$file")
+            # Navigate to the target repository to apply patch
+            cd opentelemetry-ebpf-instrumentation
             
-            # Copy file with error handling
-            if ! cp "$file" "opentelemetry-ebpf-instrumentation/$file" 2>/tmp/cp_error; then
-              ERROR_MSG=$(cat /tmp/cp_error)
-              echo "Error copying $file: $ERROR_MSG"
-              COPY_ERRORS+="- Error copying $file: $ERROR_MSG\n"
+            # Try to apply the patch with git apply (more reliable than patch command)
+            if git apply --check "../patches/${file//\//_}.patch" 2>/tmp/patch_error; then
+              echo "Applying patch to $file"
+              git apply "../patches/${file//\//_}.patch"
+              APPLIED_CHANGES=$((APPLIED_CHANGES + 1))
+            else
+              ERROR_MSG=$(cat /tmp/patch_error)
+              echo "Failed to apply patch to $file: $ERROR_MSG"
+              COPY_ERRORS+="- Failed to apply patch to $file: $ERROR_MSG\n"
+              
+              # Try to apply patch with fuzz factor and offset as fallback
+              echo "Trying alternative patch method..."
+              if patch -p0 --forward --dry-run < "../patches/${file//\//_}.patch" 2>/tmp/patch_error; then
+                patch -p0 < "../patches/${file//\//_}.patch"
+                echo "Alternative patch method succeeded"
+                APPLIED_CHANGES=$((APPLIED_CHANGES + 1))
+              else
+                ERROR_MSG=$(cat /tmp/patch_error)
+                COPY_ERRORS+="- Alternative patch method also failed: $ERROR_MSG\n"
+              fi
             fi
+            
+            # Go back to the beyla repository
+            cd ..
           done
           
           # Go to the target repository

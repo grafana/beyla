@@ -115,6 +115,9 @@
       "google.golang.org/grpc/internal/transport.ServerStream": [
         "[1.69.0]Stream",
         "[1.69.0]st"
+      ],
+      "google.golang.org/grpc/internal/transport.ClientStream": [
+        "[1.69.0]Stream"
       ]
     }
   },

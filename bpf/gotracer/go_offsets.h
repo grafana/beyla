@@ -70,6 +70,7 @@ typedef enum {
     // grpc 1.69
     _grpc_server_stream_stream,
     _grpc_server_stream_st_ptr_pos,
+    _grpc_client_stream_stream,
     _last_go_offset,
 } go_offset_const;
 

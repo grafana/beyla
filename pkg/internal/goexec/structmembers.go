@@ -89,6 +89,7 @@ const (
 	// grpc 1.69
 	GrpcServerStreamStream
 	GrpcServerStreamStPtr
+	GrpcClientStreamStream
 )
 
 //go:embed offsets.json
@@ -143,6 +144,12 @@ var structMembers = map[string]structInfo{
 		fields: map[string]GoOffset{
 			"Stream": GrpcServerStreamStream,
 			"st":     GrpcServerStreamStPtr,
+		},
+	},
+	"google.golang.org/grpc/internal/transport.ClientStream": {
+		lib: "google.golang.org/grpc",
+		fields: map[string]GoOffset{
+			"Stream": GrpcClientStreamStream,
 		},
 	},
 	"google.golang.org/grpc/internal/status.Status": {

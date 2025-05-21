@@ -164,6 +164,7 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 		goexec.GrpcOneSixNine,
 		goexec.GrpcServerStreamStream,
 		goexec.GrpcServerStreamStPtr,
+		goexec.GrpcClientStreamStream,
 	} {
 		if val, ok := offsets.Field[field].(uint64); ok {
 			offTable.Table[field] = val

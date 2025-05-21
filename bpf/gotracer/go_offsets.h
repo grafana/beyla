@@ -27,11 +27,15 @@ typedef enum {
     _io_writer_buf_ptr_pos,
     _io_writer_n_pos,
     _cc_next_stream_id_pos,
+    _cc_next_stream_id_vendored_pos,
+    _cc_framer_pos,
+    _cc_framer_vendored_pos,
     _framer_w_pos,
     _pc_conn_pos,
     _pc_tls_pos,
     _net_conn_pos,
     _cc_tconn_pos,
+    _cc_tconn_vendored_pos,
     _sc_conn_pos,
     _c_rwc_pos,
     _c_tls_pos,
@@ -45,9 +49,10 @@ typedef enum {
     _grpc_st_conn_pos,
     _grpc_t_conn_pos,
     _grpc_t_scheme_pos,
-    _http2_client_next_id_pos,
+    _grpc_transport_stream_id_pos,
     _grpc_transport_buf_writer_buf_pos,
     _grpc_transport_buf_writer_offset_pos,
+    _grpc_transport_buf_writer_conn_pos,
     // redis
     _redis_conn_bw_pos,
     // kafka go
@@ -65,6 +70,7 @@ typedef enum {
     // grpc 1.69
     _grpc_server_stream_stream,
     _grpc_server_stream_st_ptr_pos,
+    _grpc_client_stream_stream,
     _last_go_offset,
 } go_offset_const;
 

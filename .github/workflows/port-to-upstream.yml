@@ -86,8 +86,8 @@ jobs:
             BASE_SHA=$(git merge-base origin/${PR_BASE_BRANCH} pr-${PR_NUM})
             HEAD_SHA=$(git rev-parse HEAD)
             
-            # Get changed files (excluding vendor/licenses)
-            CHANGED_FILES=$(git diff --name-only ${BASE_SHA} ${HEAD_SHA} | grep -v "vendor/" | grep -v "LICENSE" | grep -v "third_party_licenses.csv" || echo "")
+            # Get changed files (excluding vendor/licenses and workflows)
+            CHANGED_FILES=$(git diff --name-only ${BASE_SHA} ${HEAD_SHA} | grep -v "vendor/" | grep -v "LICENSE" | grep -v "third_party_licenses.csv" | grep -v "\.github/workflows/" || echo "")
             
             if [ -z "${CHANGED_FILES}" ]; then
               echo "No relevant files in PR #${PR_NUM}. Skipping."
@@ -108,6 +108,9 @@ jobs:
             # Apply patch with rejects
             git apply --whitespace=fix --reject ../pr-${PR_NUM}.patch || true
             
+            # Remove workflow .rej files that would cause permission issues
+            find . -path "./.github/workflows/*.rej" -delete
+            
             # Commit and push changes
             if ! git diff --quiet || ! git diff --staged --quiet || [ -n "$(find . -name '*.rej')" ]; then
               git add .
@@ -116,8 +119,10 @@ jobs:
               Automated port of #${PR_NUM} from grafana/beyla.
               Original PR: ${PR_URL}"
               
-              git push origin ${BRANCH_NAME} --force
-              echo "Pushed branch ${BRANCH_NAME}"
+              # Try to push, but continue even if it fails
+              git push origin ${BRANCH_NAME} --force || {
+                echo "Failed to push branch ${BRANCH_NAME} for PR #${PR_NUM}. Continuing with next PR."
+              }
             else
               echo "No changes to commit for PR #${PR_NUM}"
             fi

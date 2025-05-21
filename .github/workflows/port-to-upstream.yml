@@ -204,11 +204,41 @@ jobs:
           # Push changes to the fork repository
           git push origin "refs/heads/${BRANCH_NAME}" --force
           
-          # Create PR to upstream repository
+          # Output summary information for debugging
+          echo "================ PORTING SUMMARY ================"
+          echo "PR #1904: ${TARGET_PR_TITLE}"
+          echo "PR URL: ${TARGET_PR_URL}"
+          echo "Total files changed in PR: $(echo "${CHANGED_FILES}" | wc -l)"
+          echo "Non-vendor files changed: $(echo "${CHANGED_FILES}" | grep -v "^vendor/" | wc -l)"
+          echo "Successfully applied changes: ${APPLIED_CHANGES}"
+          
+          if [[ ! -z "$COPY_ERRORS" ]]; then
+            echo -e "\nIssues encountered:"
+            echo -e "${COPY_ERRORS}"
+          fi
+          
+          # If we need to debug specific files being processed
+          echo -e "\nNon-vendor files that weren't applied:"
+          for file in ${CHANGED_FILES}; do
+            if [[ $file != vendor/* ]]; then
+              # Check if this non-vendor file was successfully patched
+              FILE_PATCH="patches/${file//\//_}.patch"
+              if [ -f "$FILE_PATCH" ] && [ -s "$FILE_PATCH" ]; then
+                if [[ ! -f "opentelemetry-ebpf-instrumentation/$file" ]]; then
+                  echo "- $file (target file doesn't exist)"
+                else
+                  echo "- $file (patch couldn't be applied)"
+                fi
+              fi
+            fi
+          done
+          echo "================================================="
+          
+          # PR creation is intentionally kept commented out
           # PR_URL=$(gh pr create \
           #   --title "[port] #1904: ${TARGET_PR_TITLE}" \
           #   --body "Automated port of #1904 from grafana/beyla.
-            
+          
           #   Original PR: ${TARGET_PR_URL}" \
           #   --repo open-telemetry/opentelemetry-ebpf-instrumentation \
           #   --head grafana:${BRANCH_NAME} \
@@ -217,16 +247,3 @@ jobs:
           
           # echo "upstream_pr_url=${PR_URL}" >> $GITHUB_OUTPUT
           # echo "upstream_pr_number=$(basename ${PR_URL})" >> $GITHUB_OUTPUT
-          
-      # - name: Create PR to upstream repo
-      #   env:
-      #     GH_TOKEN: ${{ steps.app-token.outputs.token }}
-      #   run: |
-      #     gh pr create \
-      #       --title "[port] #1904: ${TARGET_PR_TITLE}" \
-      #       --body "Automated port of #1904 from grafana/beyla.
-      #       Original PR: ${TARGET_PR_URL}" \
-      #       --repo open-telemetry/opentelemetry-ebpf-instrumentation \
-      #       --head grafana:${BRANCH_NAME} \
-      #       --base main \
-      #       --draft

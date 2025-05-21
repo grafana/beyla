@@ -58,15 +58,19 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          # Determine which PRs to process
-          if [ -n "${{ github.event.inputs.pr_numbers }}" ]; then
-            PR_NUMBERS=(${{{ github.event.inputs.pr_numbers }//,/ }})
-          else
-            # Default list of PRs to port
-            PR_NUMBERS=(1904 1800 1750 1700)
+          # Find all PRs with the port-to-upstream label
+          echo "Finding PRs with port-to-upstream label..."
+          LABELED_PRS=$(gh pr list --repo grafana/beyla --label "port-to-upstream" --json number,title,url --jq '.[].number')
+          
+          if [ -z "$LABELED_PRS" ]; then
+            echo "No PRs found with port-to-upstream label."
+            exit 0
           fi
           
-          echo "Processing PRs: ${PR_NUMBERS[@]}"
+          # Convert to array
+          PR_NUMBERS=($LABELED_PRS)
+          
+          echo "Found PRs to process: ${PR_NUMBERS[@]}"
           
           # Create a directory for reject files
           mkdir -p reject_files
@@ -206,6 +210,14 @@ jobs:
             echo "Creating archive of all reject files..."
             tar -czf reject_files.tar.gz reject_files/
             echo "Reject files archive created: reject_files.tar.gz"
+            
+            # Upload artifact in GitHub Actions
+            echo "To access the reject files, upload them as an artifact using:"
+            echo "- name: Upload Reject Files"
+            echo "  uses: actions/upload-artifact@v3"
+            echo "  with:"
+            echo "    name: reject-files"
+            echo "    path: reject_files.tar.gz"
           else
             echo "No reject files were created."
           fi

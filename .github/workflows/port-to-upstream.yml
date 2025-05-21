@@ -1,10 +1,12 @@
 name: Port PRs to Upstream OTel eBPF Instrumentation
 
 on:
+  pull_request:
+    types: [labeled]
   workflow_dispatch:
     inputs:
       pr_numbers:
-        description: 'Comma-separated list of PR numbers to port (leave empty to use hardcoded list)'
+        description: 'Comma-separated list of PR numbers to port (leave empty to use labeled PRs)'
         required: false
         default: ''
 

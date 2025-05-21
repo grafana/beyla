@@ -164,7 +164,7 @@ jobs:
               
               # Continue without trying to apply these patches automatically
               continue
-            }
+            fi
             
             # Navigate to the target repository to apply patch
             cd opentelemetry-ebpf-instrumentation
@@ -290,6 +290,39 @@ jobs:
             fi
           done
           echo "================================================="
+          
+          # Alternative approach based on colleague's suggestion
+          echo "Trying alternative approach with full branch diff and reject files..."
+          
+          # Navigate back to Beyla repository
+          cd ..
+          
+          # Create a full diff between the base and head of PR #1904
+          git diff ${TARGET_BASE_SHA} ${TARGET_HEAD_SHA} > full_pr_diff.patch
+          
+          # Move to target repository
+          cd opentelemetry-ebpf-instrumentation
+          
+          # Apply the full diff with whitespace fix and reject options
+          git apply ../full_pr_diff.patch --whitespace=fix --reject || true
+          
+          # Find and report any .rej files that were created
+          REJ_FILES=$(find . -name "*.rej")
+          if [ ! -z "$REJ_FILES" ]; then
+            echo -e "\nThe following .rej files were created and need manual attention:"
+            echo "$REJ_FILES"
+            
+            # Copy .rej files to a directory for easier access
+            mkdir -p ../reject_files
+            find . -name "*.rej" -exec cp --parents {} ../reject_files/ \;
+            
+            # Create a tar of the reject files for easy download
+            cd ..
+            tar -czf reject_files.tar.gz reject_files/
+            cd opentelemetry-ebpf-instrumentation
+          else
+            echo "No .rej files were created - all changes applied successfully"
+          fi
           
           # PR creation is intentionally kept commented out
           # PR_URL=$(gh pr create \

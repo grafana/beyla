@@ -1,8 +1,12 @@
-name: Port to Upstream OTel eBPF Instrumentation
+name: Port PRs to Upstream OTel eBPF Instrumentation
 
 on:
-  pull_request:
-    types: [opened, synchronize, labeled, closed]
+  workflow_dispatch:
+    inputs:
+      pr_numbers:
+        description: 'Comma-separated list of PR numbers to port (leave empty to use hardcoded list)'
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -11,8 +15,6 @@ permissions:
 
 jobs:
   port-to-upstream:
-    if: |
-      github.event_name == 'pull_request' && github.event.action != 'closed'
     runs-on: ubuntu-latest
     steps:
       - name: Get secrets from Vault
@@ -23,6 +25,7 @@ jobs:
             GITHUB_APP_ID=github-app:app-id
             GITHUB_APP_INSTALLATION_ID=github-app:app-installation-id
             GITHUB_APP_PRIVATE_KEY=github-app:private-key
+            
       - name: Checkout Beyla
         uses: actions/checkout@v4
         with:
@@ -49,326 +52,160 @@ jobs:
         with:
           repository: grafana/opentelemetry-ebpf-instrumentation
           token: ${{ steps.app-token.outputs.token }}
-          path: opentelemetry-ebpf-instrumentation          
+          path: opentelemetry-ebpf-instrumentation
           
-      - name: Port changes and prepare PR
+      - name: Port PRs to upstream
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          TARGET_PR_NUMBER: "1904"  # Hardcoded target PR number
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          PR_TITLE: ${{ github.event.pull_request.title }}
-          BRANCH_NAME: port/1904-to-upstream
         run: |
-          # Fetch the target PR information
-          echo "Fetching information for PR #1904"
-          TARGET_PR_INFO=$(gh pr view 1904 --repo grafana/beyla --json title,url,baseRefName,headRefName,headRepositoryOwner,headRepository)
-          TARGET_PR_TITLE=$(echo "$TARGET_PR_INFO" | jq -r '.title')
-          TARGET_PR_URL=$(echo "$TARGET_PR_INFO" | jq -r '.url')
-          TARGET_PR_BASE_BRANCH=$(echo "$TARGET_PR_INFO" | jq -r '.baseRefName')
-          TARGET_PR_HEAD_BRANCH=$(echo "$TARGET_PR_INFO" | jq -r '.headRefName')
-          TARGET_PR_HEAD_OWNER=$(echo "$TARGET_PR_INFO" | jq -r '.headRepositoryOwner.login')
-          TARGET_PR_HEAD_REPO=$(echo "$TARGET_PR_INFO" | jq -r '.headRepository.name')
-          
-          echo "Target PR Title: $TARGET_PR_TITLE"
-          echo "Target PR URL: $TARGET_PR_URL"
-          
-          # Fetch the PR branch
-          git fetch origin pull/1904/head:pr-1904
-          git checkout pr-1904
-          
-          # Get the base and head SHAs
-          TARGET_BASE_SHA=$(git merge-base origin/$TARGET_PR_BASE_BRANCH pr-1904)
-          TARGET_HEAD_SHA=$(git rev-parse HEAD)
-          
-          echo "Target PR Base SHA: $TARGET_BASE_SHA"
-          echo "Target PR Head SHA: $TARGET_HEAD_SHA"
-          
-          # Get the list of changed files in the target PR
-          CHANGED_FILES=$(git diff --name-only ${TARGET_BASE_SHA} ${TARGET_HEAD_SHA})
-          
-          # Exit if no files have changed
-          if [ -z "${CHANGED_FILES}" ]; then
-            echo "No files have changed in PR #1904. Nothing to port."
-            exit 0
+          # Determine which PRs to process
+          if [ -n "${{ github.event.inputs.pr_numbers }}" ]; then
+            PR_NUMBERS=(${{{ github.event.inputs.pr_numbers }//,/ }})
+          else
+            # Default list of PRs to port
+            PR_NUMBERS=(1904 1800 1750 1700)
           fi
           
-          # Print the list of changed files
-          echo "Files changed in PR #1904:"
-          echo "${CHANGED_FILES}"
+          echo "Processing PRs: ${PR_NUMBERS[@]}"
           
-          # Navigate to the target repository
-          cd opentelemetry-ebpf-instrumentation
+          # Create a directory for reject files
+          mkdir -p reject_files
           
-          # Configure git locally
-          git config --local user.email bot@grafana.com
-          git config --local user.name grafanabot
-          
-          # Create a new branch
-          git checkout -b ${BRANCH_NAME}
-          
-          # Go back to the beyla repository
-          cd ..
-          
-          # Create a patches directory
-          mkdir -p patches
-          
-          # Generate specific patches for each changed file
-          COPY_ERRORS=""
-          APPLIED_CHANGES=0
-          
-          for file in ${CHANGED_FILES}; do
-            # Skip vendor files
-            if [[ $file == vendor/* ]]; then
-              echo "Skipping vendor file: $file"
-              COPY_ERRORS+="- Skipped vendor file: $file\n"
+          # Process each PR
+          for PR_NUM in "${PR_NUMBERS[@]}"; do
+            echo "================================================================"
+            echo "Processing PR #${PR_NUM}"
+            echo "================================================================"
+            
+            # Try to fetch PR info, if it fails, skip this PR
+            if ! PR_INFO=$(gh pr view ${PR_NUM} --repo grafana/beyla --json title,url,baseRefName,headRefName,headRepositoryOwner,headRepository,state 2>/dev/null); then
+              echo "Could not fetch PR #${PR_NUM}. Skipping."
               continue
             fi
             
-            # Check if the file exists in the target repository
-            TARGET_FILE="opentelemetry-ebpf-instrumentation/$file"
+            # Extract PR information
+            PR_TITLE=$(echo "$PR_INFO" | jq -r '.title')
+            PR_URL=$(echo "$PR_INFO" | jq -r '.url')
+            PR_BASE_BRANCH=$(echo "$PR_INFO" | jq -r '.baseRefName')
+            PR_HEAD_BRANCH=$(echo "$PR_INFO" | jq -r '.headRefName')
+            PR_STATE=$(echo "$PR_INFO" | jq -r '.state')
             
-            # Create the patch for this specific file
-            echo "Creating patch for $file"
-            # Use a more reliable patch format with -p1 in mind
-            git diff --no-prefix -U10 ${TARGET_BASE_SHA} ${TARGET_HEAD_SHA} -- "$file" > "patches/${file//\//_}.patch"
+            echo "PR Title: $PR_TITLE"
+            echo "PR URL: $PR_URL"
+            echo "PR State: $PR_STATE"
             
-            # If the target file doesn't exist, add to errors and continue
-            if [[ ! -f "$TARGET_FILE" ]]; then
-              echo "Target file doesn't exist: $TARGET_FILE"
-              COPY_ERRORS+="- Target file doesn't exist: $file\n"
-              
-              # For non-vendor files that don't exist in target repo, save content for manual review
-              if [[ $file != vendor/* ]]; then
-                mkdir -p "missing_files/$(dirname "$file")"
-                cp "$file" "missing_files/$file"
-                echo "Saved content to missing_files/$file for manual review"
-              fi
+            # Skip closed PRs that are not merged
+            if [ "$PR_STATE" == "CLOSED" ]; then
+              echo "PR is closed. Skipping."
               continue
             fi
             
-            # For go.mod and go.sum files, use a special approach
-            if [[ $file == "go.mod" || $file == "go.sum" ]]; then
-              echo "Special handling for $file"
-              
-              # Extract version changes for go.mod
-              if [[ $file == "go.mod" ]]; then
-                # Extract version number changes only
-                grep "go\." "patches/${file//\//_}.patch" | grep -v "//go:" > "patches/${file//\//_}.versions"
-                echo "Extracted version changes to patches/${file//\//_}.versions"
-                
-                # Save these for manual review in PR description
-                VERSION_CHANGES=$(cat "patches/${file//\//_}.versions")
-                COPY_ERRORS+="- $file version changes (for manual application):\n$VERSION_CHANGES\n"
-              fi
-              
-              # Continue without trying to apply these patches automatically
+            # Create branch name for this port
+            BRANCH_NAME="port/${PR_NUM}-to-upstream"
+            
+            # Try to fetch the PR branch, continue if it fails
+            if ! git fetch origin pull/${PR_NUM}/head:pr-${PR_NUM} 2>/dev/null; then
+              echo "Could not fetch PR branch for #${PR_NUM}. Skipping."
               continue
             fi
             
-            # Navigate to the target repository to apply patch
+            # Checkout the PR branch
+            git checkout pr-${PR_NUM}
+            
+            # Get the base and head SHAs
+            TARGET_BASE_SHA=$(git merge-base origin/${PR_BASE_BRANCH} pr-${PR_NUM})
+            TARGET_HEAD_SHA=$(git rev-parse HEAD)
+            
+            echo "PR Base SHA: $TARGET_BASE_SHA"
+            echo "PR Head SHA: $TARGET_HEAD_SHA"
+            
+            # Get the list of changed files excluding vendor and license files
+            CHANGED_FILES=$(git diff --name-only ${TARGET_BASE_SHA} ${TARGET_HEAD_SHA} | grep -v "vendor/" | grep -v "LICENSE" | grep -v "third_party_licenses.csv")
+            
+            # Check if there are any relevant files to port
+            if [ -z "${CHANGED_FILES}" ]; then
+              echo "No relevant files changed in PR #${PR_NUM}. Skipping."
+              continue
+            fi
+            
+            echo "Files to port:"
+            echo "${CHANGED_FILES}"
+            
+            # Create a full diff excluding vendor files
+            git diff ${TARGET_BASE_SHA} ${TARGET_HEAD_SHA} -- ${CHANGED_FILES} > pr-${PR_NUM}.patch
+            
+            # Navigate to target repository
             cd opentelemetry-ebpf-instrumentation
             
-            # Try with different patch options
-            patch_applied=false
-            
-            # Try first with git apply with increasing fuzz factor
-            for fuzz in 0 3 5; do
-              if git apply --check --ignore-whitespace --reject --fuzz=$fuzz "../patches/${file//\//_}.patch" 2>/tmp/patch_error; then
-                echo "Applying patch to $file with git apply (fuzz=$fuzz)"
-                git apply --ignore-whitespace --fuzz=$fuzz "../patches/${file//\//_}.patch"
-                patch_applied=true
-                APPLIED_CHANGES=$((APPLIED_CHANGES + 1))
-                break
+            # Try to create and checkout a branch, continue if it fails
+            if ! git checkout -b ${BRANCH_NAME} 2>/dev/null; then
+              echo "Branch ${BRANCH_NAME} already exists or could not be created. Trying to reset it."
+              if ! git checkout ${BRANCH_NAME} 2>/dev/null; then
+                echo "Could not checkout branch ${BRANCH_NAME}. Skipping."
+                cd ..
+                continue
               fi
-            done
+              # Reset branch to match upstream main
+              git reset --hard origin/main
+            fi
             
-            # If git apply didn't work, try patch command with different options
-            if [ "$patch_applied" = false ]; then
-              echo "Git apply failed, trying patch command..."
-              if patch -p0 --forward --ignore-whitespace --fuzz=3 < "../patches/${file//\//_}.patch" 2>/tmp/patch_error; then
-                echo "Applied patch to $file with patch command"
-                patch_applied=true
-                APPLIED_CHANGES=$((APPLIED_CHANGES + 1))
+            # Apply the patch with reject files
+            echo "Applying patch for PR #${PR_NUM}..."
+            git apply --whitespace=fix --reject ../pr-${PR_NUM}.patch || true
+            
+            # Find reject files
+            REJ_FILES=$(find . -name "*.rej")
+            
+            # Create a directory for this PR's rejects
+            if [ ! -z "$REJ_FILES" ]; then
+              echo "Reject files created for PR #${PR_NUM}:"
+              echo "$REJ_FILES"
+              
+              # Copy reject files to the rejects directory
+              mkdir -p ../reject_files/pr-${PR_NUM}
+              find . -name "*.rej" -exec cp --parents {} ../reject_files/pr-${PR_NUM}/ \;
+              
+              # Remove reject files from the working directory
+              find . -name "*.rej" -exec rm {} \;
+            fi
+            
+            # Check if there are any changes to commit
+            if ! git diff --quiet || ! git diff --staged --quiet; then
+              # Add all changes
+              git add .
+              
+              # Create commit message
+              COMMIT_MSG="[port] #${PR_NUM}: ${PR_TITLE}
+              
+              Automated port of #${PR_NUM} from grafana/beyla.
+              Original PR: ${PR_URL}
+              
+              Note: Some changes couldn't be applied automatically and have been saved as reject files.
+              Manual intervention is required to complete the port."
+              
+              # Commit changes
+              git commit -m "$COMMIT_MSG"
+              
+              # Push branch to upstream
+              echo "Pushing branch ${BRANCH_NAME}..."
+              if ! git push origin ${BRANCH_NAME} --force; then
+                echo "Failed to push branch ${BRANCH_NAME}."
               else
-                ERROR_MSG=$(cat /tmp/patch_error)
-                echo "Failed to apply patch to $file: $ERROR_MSG"
-                
-                # Extract the hunks that succeeded for the report
-                SUCCEEDED_HUNKS=$(grep "Hunk #.*succeeded" /tmp/patch_error | wc -l)
-                TOTAL_HUNKS=$(grep "Hunk #" /tmp/patch_error | wc -l)
-                
-                COPY_ERRORS+="- $file: Applied $SUCCEEDED_HUNKS/$TOTAL_HUNKS hunks. Manual attention needed.\n"
-                
-                # Try to apply what we can with -N (ignore failures) for partial progress
-                patch -p0 --forward --ignore-whitespace -N < "../patches/${file//\//_}.patch" 2>/dev/null || true
+                echo "Successfully pushed branch ${BRANCH_NAME}."
               fi
+            else
+              echo "No changes to commit for PR #${PR_NUM}."
             fi
             
-            # Go back to the beyla repository
+            # Go back to Beyla repository
             cd ..
           done
           
-          # If we have missing files that need to be reviewed and potentially added
-          if [ -d "missing_files" ]; then
-            echo "The following new files from PR #1904 don't exist in the target repository:"
-            find missing_files -type f | sort
-            
-            # Create a tar file of missing files for easy download from artifacts
-            tar -czf missing_files.tar.gz missing_files/
-          fi
-          
-          # Go to the target repository
-          cd opentelemetry-ebpf-instrumentation
-          
-          # Check if there are any changes
-          if git diff --quiet; then
-            echo "No relevant changes to commit"
-            exit 0
-          fi
-          
-          # Add and commit the changes
-          git add .
-          
-          # Create commit message with errors if any
-          COMMIT_MSG="[port] #1904: ${TARGET_PR_TITLE}
-          
-          Automated port of #1904 from grafana/beyla.
-          Original PR: ${TARGET_PR_URL}"
-          
-          if [[ ! -z "$COPY_ERRORS" ]]; then
-            COMMIT_MSG+="
-          
-          NOTE: Some files couldn't be copied automatically and may need manual attention:
-          ${COPY_ERRORS}"
-          fi
-          
-          git diff --staged --quiet || git commit -m "$COMMIT_MSG"
-          
-          # Check if we have changes to push
-          if git diff --quiet HEAD HEAD~1 2>/dev/null; then
-            echo "No changes to push"
-            exit 0
-          fi
-          
-          # Push changes to the fork repository
-          git push origin "refs/heads/${BRANCH_NAME}" --force
-          
-          # Output summary information for debugging
-          echo "================ PORTING SUMMARY ================"
-          echo "PR #1904: ${TARGET_PR_TITLE}"
-          echo "PR URL: ${TARGET_PR_URL}"
-          echo "Total files changed in PR: $(echo "${CHANGED_FILES}" | wc -l)"
-          echo "Non-vendor files changed: $(echo "${CHANGED_FILES}" | grep -v "^vendor/" | wc -l)"
-          echo "Successfully applied changes: ${APPLIED_CHANGES}"
-          
-          if [[ ! -z "$COPY_ERRORS" ]]; then
-            echo -e "\nIssues encountered:"
-            echo -e "${COPY_ERRORS}"
-          fi
-          
-          # If we need to debug specific files being processed
-          echo -e "\nNon-vendor files that weren't fully applied:"
-          for file in ${CHANGED_FILES}; do
-            if [[ $file != vendor/* ]]; then
-              # Check if this non-vendor file was successfully patched
-              FILE_PATCH="../patches/${file//\//_}.patch"
-              if [ -f "$FILE_PATCH" ] && [ -s "$FILE_PATCH" ]; then
-                # Special handling for go.mod and go.sum
-                if [[ $file == "go.mod" || $file == "go.sum" ]]; then
-                  echo "- $file (requires manual application)"
-                elif [[ ! -f "$file" ]]; then
-                  echo "- $file (target file doesn't exist)"
-                elif ! grep -q "Hunk #.*succeeded" /tmp/patch_error 2>/dev/null; then
-                  # If we have zero succeeded hunks, it wasn't applied at all
-                  echo "- $file (patch couldn't be applied at all)"
-                elif grep -q "Hunk #.*FAILED" /tmp/patch_error 2>/dev/null; then
-                  # If we have some failed hunks, it was partially applied
-                  echo "- $file (patch was partially applied)"
-                fi
-              fi
-          done
-          echo "================================================="
-          
-          # Alternative approach based on colleague's suggestion
-          echo "Trying alternative approach with full branch diff and reject files..."
-          
-          # Navigate back to Beyla repository
-          cd ..
-          
-          # Create a full diff between the base and head of PR #1904
-          git diff ${TARGET_BASE_SHA} ${TARGET_HEAD_SHA} > full_pr_diff.patch
-          
-          # Move to target repository
-          cd opentelemetry-ebpf-instrumentation
-          
-          # Apply the full diff with whitespace fix and reject options
-          git apply ../full_pr_diff.patch --whitespace=fix --reject || true
-          
-          # Find and report any .rej files that were created
-          REJ_FILES=$(find . -name "*.rej")
-          if [ ! -z "$REJ_FILES" ]; then
-            echo -e "\nThe following .rej files were created and need manual attention:"
-            echo "$REJ_FILES"
-            
-            # Copy .rej files to a directory for easier access
-            mkdir -p ../reject_files
-            find . -name "*.rej" -exec cp --parents {} ../reject_files/ \;
-            
-            # Create a tar of the reject files for easy download
-            cd ..
+          # Create a tar of all reject files
+          if [ "$(ls -A reject_files)" ]; then
+            echo "Creating archive of all reject files..."
             tar -czf reject_files.tar.gz reject_files/
-            cd opentelemetry-ebpf-instrumentation
+            echo "Reject files archive created: reject_files.tar.gz"
           else
-            echo "No .rej files were created - all changes applied successfully"
+            echo "No reject files were created."
           fi
-          
-          # Commit and push changes from the alternative approach
-          echo "Committing and pushing changes from alternative approach..."
-          
-          # Check if there are any changes to commit
-          if ! git diff --quiet || ! git diff --staged --quiet; then
-            # Add any unstaged changes
-            git add .
-            
-            # Append info about the alternative approach to commit message
-            COMMIT_MSG+="
-            
-            Note: Used alternative patching approach with rejection files.
-            See reject_files.tar.gz for changes that couldn't be applied automatically."
-            
-            # Commit the changes
-            git commit -m "$COMMIT_MSG"
-            
-            # Push the changes
-            git push origin "refs/heads/${BRANCH_NAME}" --force
-            
-            echo "Successfully pushed changes to ${BRANCH_NAME}"
-          else
-            echo "No changes to commit from alternative approach"
-          fi
-          
-          # Upload the artifact files if they exist
-          if [ -f "../missing_files.tar.gz" ]; then
-            echo "Missing files archive created: missing_files.tar.gz"
-            # In a GitHub workflow, you would add a step to upload this artifact
-          fi
-          
-          if [ -f "../reject_files.tar.gz" ]; then
-            echo "Rejection files archive created: reject_files.tar.gz"
-            # In a GitHub workflow, you would add a step to upload this artifact
-          fi
-          
-          # PR creation is intentionally kept commented out
-          # PR_URL=$(gh pr create \
-          #   --title "[port] #1904: ${TARGET_PR_TITLE}" \
-          #   --body "Automated port of #1904 from grafana/beyla.
-          
-          #   Original PR: ${TARGET_PR_URL}" \
-          #   --repo open-telemetry/opentelemetry-ebpf-instrumentation \
-          #   --head grafana:${BRANCH_NAME} \
-          #   --base main \
-          #   --draft)
-          
-          # echo "upstream_pr_url=${PR_URL}" >> $GITHUB_OUTPUT
-          # echo "upstream_pr_number=$(basename ${PR_URL})" >> $GITHUB_OUTPUT

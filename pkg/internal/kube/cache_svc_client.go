@@ -13,6 +13,9 @@ import (
 	"github.com/grafana/beyla/v2/pkg/kubecache/meta"
 )
 
+// TODO: make configurable
+const defaultReconnectTime = 5 * time.Second
+
 func cslog() *slog.Logger {
 	return slog.With("component", "kube.CacheSvcClient")
 }
@@ -22,11 +25,26 @@ type cacheSvcClient struct {
 	address string
 	log     *slog.Logger
 
+	lastEventTSEpoch       int64
 	ctx                    context.Context
 	syncTimeout            time.Duration
 	waitForSubscription    chan struct{}
 	waitForSynchronization chan struct{}
 	waitForSyncClosed      bool
+	reconnectTime          time.Duration
+}
+
+func (sc *cacheSvcClient) ID() string {
+	return "kube-metadata-cache-svc-client"
+}
+
+func (sc *cacheSvcClient) On(event *informer.Event) error {
+	// we can safely assume that server-side events are ordered
+	// by timestamp
+	if event.GetType() != informer.EventType_SYNC_FINISHED {
+		sc.lastEventTSEpoch = event.Resource.StatusTimeEpoch
+	}
+	return nil
 }
 
 func (sc *cacheSvcClient) Start(ctx context.Context) {
@@ -34,6 +52,12 @@ func (sc *cacheSvcClient) Start(ctx context.Context) {
 	sc.waitForSubscription = make(chan struct{})
 	sc.waitForSynchronization = make(chan struct{})
 	sc.ctx = ctx
+	if sc.reconnectTime == 0 {
+		sc.reconnectTime = defaultReconnectTime
+	}
+	// subscribe itself to each message from the cache, to keep track of the
+	// message timestamps for a more efficient reconnection
+	sc.BaseNotifier.Subscribe(sc)
 	go func() {
 		select {
 		case <-ctx.Done():
@@ -55,7 +79,7 @@ func (sc *cacheSvcClient) Start(ctx context.Context) {
 				err := sc.connect(ctx)
 				sc.log.Info("K8s cache service connection lost. Reconnecting...", "error", err)
 				// TODO: exponential backoff
-				time.Sleep(5 * time.Second)
+				time.Sleep(sc.reconnectTime)
 			}
 		}
 	}()
@@ -74,7 +98,9 @@ func (sc *cacheSvcClient) connect(ctx context.Context) error {
 	client := informer.NewEventStreamServiceClient(conn)
 
 	// Subscribe to the event stream.
-	stream, err := client.Subscribe(ctx, &informer.SubscribeMessage{})
+	stream, err := client.Subscribe(ctx, &informer.SubscribeMessage{
+		FromTimestampEpoch: sc.lastEventTSEpoch,
+	})
 	if err != nil {
 		return fmt.Errorf("could not subscribe: %w", err)
 	}

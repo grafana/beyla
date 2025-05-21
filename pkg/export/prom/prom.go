@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"runtime"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -53,7 +52,6 @@ const (
 	hostIDKey        = "host_id"
 	hostNameKey      = "host_name"
 	grafanaHostIDKey = "grafana_host_id"
-	processPIDKey    = "process_pid"
 	osTypeKey        = "os_type"
 
 	k8sNamespaceName   = "k8s_namespace_name"
@@ -243,7 +241,8 @@ type metricsReporter struct {
 	kubeEnabled bool
 	hostID      string
 
-	serviceMap map[svc.UID]svc.Attrs
+	serviceMap  map[svc.UID]svc.Attrs
+	pidsTracker otel.PidServiceTracker
 }
 
 func PrometheusEndpoint(
@@ -355,6 +354,7 @@ func newReporter(
 		input:                      input.Subscribe(),
 		processEvents:              processEventCh.Subscribe(),
 		serviceMap:                 map[svc.UID]svc.Attrs{},
+		pidsTracker:                otel.NewPidServiceTracker(),
 		ctxInfo:                    ctxInfo,
 		cfg:                        cfg,
 		kubeEnabled:                kubeEnabled,
@@ -932,7 +932,6 @@ func labelNamesTargetInfo(kubeEnabled bool, extraMetadataLabelNames []attr.Name)
 		telemetryLanguageKey,
 		telemetrySDKKey,
 		sourceKey,
-		processPIDKey,
 		osTypeKey,
 	}
 
@@ -958,7 +957,6 @@ func (r *metricsReporter) labelValuesTargetInfo(service *svc.Attrs) []string {
 		service.SDKLanguage.String(),
 		"beyla",
 		"beyla",
-		strconv.Itoa(int(service.ProcPID)),
 		"linux",
 	}
 
@@ -1056,6 +1054,14 @@ func (r *metricsReporter) deleteTracesTargetInfo(uid svc.UID, service *svc.Attrs
 	r.tracesTargetInfo.DeleteLabelValues(targetInfoLabelValues...)
 }
 
+func (r *metricsReporter) setupPIDToServiceRelationship(pid int32, uid svc.UID) {
+	r.pidsTracker.AddPID(pid, uid)
+}
+
+func (r *metricsReporter) disassociatePIDFromService(pid int32) (bool, svc.UID) {
+	return r.pidsTracker.RemovePID(pid)
+}
+
 func (r *metricsReporter) watchForProcessEvents() {
 	for pe := range r.processEvents {
 		mlog().Debug("Received new process event", "event type", pe.Type, "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
@@ -1067,16 +1073,22 @@ func (r *metricsReporter) watchForProcessEvents() {
 			r.createTargetInfo(&pe.File.Service)
 			r.createTracesTargetInfo(&pe.File.Service)
 			r.serviceMap[uid] = pe.File.Service
+			r.setupPIDToServiceRelationship(pe.File.Pid, uid)
 		case exec.ProcessEventTerminated:
-			if r.surveyInfo != nil {
-				r.deleteSurveyInfo(uid, &pe.File.Service)
+			if deleted, origUID := r.disassociatePIDFromService(pe.File.Pid); deleted {
+				mlog().Debug("deleting infos for", "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
+
+				if r.surveyInfo != nil {
+					r.deleteSurveyInfo(origUID, &pe.File.Service)
+				}
+				r.deleteTargetInfo(origUID, &pe.File.Service)
+				r.deleteTracesTargetInfo(origUID, &pe.File.Service)
+				delete(r.serviceMap, origUID)
 			}
-			r.deleteTargetInfo(uid, &pe.File.Service)
-			r.deleteTracesTargetInfo(uid, &pe.File.Service)
-			delete(r.serviceMap, uid)
 		case exec.ProcessEventSurveyCreated:
 			r.createSurveyInfo(&pe.File.Service)
 			r.serviceMap[uid] = pe.File.Service
+			r.setupPIDToServiceRelationship(pe.File.Pid, uid)
 		}
 	}
 }

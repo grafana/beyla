@@ -2,13 +2,9 @@ name: Port PRs to Upstream OTel eBPF Instrumentation
 
 on:
   push:
-    branches:
-      - main
-    paths:
-      - '.github/workflows/port-to-upstream.yml'
+    branches-ignore: []  # Run on all pushes
   pull_request:
-    paths:
-      - '.github/workflows/port-to-upstream.yml'
+    types: [opened, synchronize, reopened]  # Run on all PR events
 
 permissions:
   contents: read

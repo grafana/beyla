@@ -1,10 +1,9 @@
 name: Port PRs to Upstream OTel eBPF Instrumentation
 
 on:
+  # Run immediately on all PRs and pushes
   push:
-    branches-ignore: []  # Run on all pushes
   pull_request:
-    types: [opened, synchronize, reopened]  # Run on all PR events
 
 permissions:
   contents: read

@@ -138,6 +138,9 @@ jobs:
             # Create a full diff excluding vendor files
             git diff ${TARGET_BASE_SHA} ${TARGET_HEAD_SHA} -- ${CHANGED_FILES} > pr-${PR_NUM}.patch
             
+            # Filter out any binary files or files that might cause issues
+            grep -l "^Binary files" pr-${PR_NUM}.patch | xargs -r sed -i '/^Binary files/d' pr-${PR_NUM}.patch
+            
             # Navigate to target repository
             cd opentelemetry-ebpf-instrumentation
             
@@ -159,9 +162,11 @@ jobs:
             
             # Find reject files
             REJ_FILES=$(find . -name "*.rej")
+            REJECTED=false
             
             # Create a directory for this PR's rejects
             if [ ! -z "$REJ_FILES" ]; then
+              REJECTED=true
               echo "Reject files created for PR #${PR_NUM}:"
               echo "$REJ_FILES"
               
@@ -180,12 +185,17 @@ jobs:
               
               # Create commit message
               COMMIT_MSG="[port] #${PR_NUM}: ${PR_TITLE}
-              
-              Automated port of #${PR_NUM} from grafana/beyla.
-              Original PR: ${PR_URL}
-              
-              Note: Some changes couldn't be applied automatically and have been saved as reject files.
-              Manual intervention is required to complete the port."
+
+Automated port of #${PR_NUM} from grafana/beyla.
+Original PR: ${PR_URL}"
+
+              # Add note about rejects if any
+              if [ "$REJECTED" = true ]; then
+                COMMIT_MSG+="
+
+Note: Some changes couldn't be applied automatically and have been saved as reject files.
+Manual intervention is required to complete the port."
+              fi
               
               # Commit changes
               git commit -m "$COMMIT_MSG"

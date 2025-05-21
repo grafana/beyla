@@ -571,13 +571,13 @@ int beyla_uprobe_transport_http2Client_NewStream(struct pt_regs *ctx) {
         void *conn_ptr = t_ptr + go_offset_of(ot, (go_offset){.v = _grpc_t_conn_pos}) + 8;
         u8 buf[16];
         u64 is_secure = 0;
-        //#ifndef NO_HEADER_PROPAGATION
+#ifndef NO_HEADER_PROPAGATION
         void *conn_ptr_key = 0;
 
         if (conn_ptr) {
             bpf_probe_read(&conn_ptr_key, sizeof(conn_ptr_key), conn_ptr);
         }
-        //#endif
+#endif
 
         void *s_ptr = 0;
         buf[0] = 0;
@@ -609,7 +609,7 @@ int beyla_uprobe_transport_http2Client_NewStream(struct pt_regs *ctx) {
             }
         }
 
-        //#ifndef NO_HEADER_PROPAGATION
+#ifndef NO_HEADER_PROPAGATION
         bpf_dbg_printk("conn_ptr %llx", conn_ptr_key);
 
         grpc_client_func_invocation_t *invocation =
@@ -627,7 +627,7 @@ int beyla_uprobe_transport_http2Client_NewStream(struct pt_regs *ctx) {
                            goroutine_addr,
                            conn_ptr_key);
         }
-        //#endif
+#endif
     }
 
     return 0;
@@ -639,7 +639,7 @@ int beyla_uprobe_transport_http2Client_NewStream(struct pt_regs *ctx) {
 // the nextID. We read what's the right stream id on exit.
 SEC("uprobe/transport_http2Client_NewStream_ret")
 int beyla_uprobe_transport_http2Client_NewStream_Returns(struct pt_regs *ctx) {
-    //#ifndef NO_HEADER_PROPAGATION
+#ifndef NO_HEADER_PROPAGATION
     bpf_dbg_printk("=== uprobe/proc returns transport.(*http2Client).NewStream === ");
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
@@ -661,9 +661,9 @@ int beyla_uprobe_transport_http2Client_NewStream_Returns(struct pt_regs *ctx) {
         return 0;
     }
 
-    u64 new_new_stream = go_offset_of(ot, (go_offset){.v = _grpc_one_six_nine});
-    bpf_dbg_printk("stream pointer %llx, new_handle_stream %d", stream, new_handle_stream);
-    if (new_new_stream == 1) {
+    u64 new_stream = go_offset_of(ot, (go_offset){.v = _grpc_one_six_nine});
+    bpf_dbg_printk("stream pointer %llx, new_stream %d", stream, new_stream);
+    if (new_stream == 1) {
         bpf_probe_read_user(&stream,
                             sizeof(stream),
                             stream +
@@ -685,7 +685,7 @@ int beyla_uprobe_transport_http2Client_NewStream_Returns(struct pt_regs *ctx) {
     // seen later by writeHeader to clean up this mapping.
     bpf_map_update_elem(&ongoing_streams, &wrapper->s_key, &wrapper->inv, BPF_ANY);
     bpf_map_delete_elem(&transport_new_client_invocations, &g_key);
-    //#endif
+#endif
 
     return 0;
 }

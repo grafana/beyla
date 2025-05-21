@@ -808,7 +808,6 @@ static __always_inline void setup_http2_client_conn(void *goroutine_addr,
 
 #ifndef NO_HEADER_PROPAGATION
         void *framer = 0;
-        // TODO: Add this offset
         bpf_probe_read(&framer,
                        sizeof(framer),
                        (void *)(cc_ptr + go_offset_of(ot, (go_offset){.v = off_cc_framer_pos})));

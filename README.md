@@ -5,7 +5,7 @@
 Open source zero-code automatic instrumentation with eBPF and OpenTelemetry.
 
 [![status badge](https://github.com/grafana/beyla/actions/workflows/publish_dockerhub_release.yml/badge.svg)](https://github.com/grafana/beyla/actions/workflows/publish_dockerhub_release.yml)
-[![License](https://github.com/grafana/beyla/blob/main/LICENSE)](https://github.com/grafana/beyla/blob/main/LICENSE)
+[![License](https://img.shields.io/github/license/grafana/beyla)](https://github.com/grafana/beyla/blob/main/LICENSE)
 
 ## Introduction
 

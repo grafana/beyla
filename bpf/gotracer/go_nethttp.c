@@ -834,6 +834,7 @@ static __always_inline void setup_http2_client_conn(void *goroutine_addr,
 
 SEC("uprobe/http2RoundTrip")
 int beyla_uprobe_http2RoundTrip(struct pt_regs *ctx) {
+    bpf_dbg_printk("=== uprobe/proc http2RoundTrip === ");
     // we use the usual start helper, just like for normal http calls, but we later save
     // more context, like the streamID
     roundTripStartHelper(ctx);
@@ -851,6 +852,8 @@ SEC("uprobe/http2RoundTripVendored")
 int beyla_uprobe_http2RoundTrip_vendored(struct pt_regs *ctx) {
     // we use the usual start helper, just like for normal http calls, but we later save
     // more context, like the streamID
+    bpf_dbg_printk("=== uprobe/proc http2RoundTripVendored === ");
+
     roundTripStartHelper(ctx);
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
@@ -870,6 +873,8 @@ SEC("uprobe/http2RoundTripConn")
 int beyla_uprobe_http2RoundTripConn(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     void *cc_ptr = GO_PARAM1(ctx);
+
+    bpf_dbg_printk("=== uprobe/proc http2RoundTripConn === ");
 
     setup_http2_client_conn(goroutine_addr,
                             cc_ptr,

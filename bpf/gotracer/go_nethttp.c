@@ -777,9 +777,22 @@ struct {
 
 static __always_inline void setup_http2_client_conn(void *goroutine_addr,
                                                     void *cc_ptr,
+                                                    u32 stream_id,
                                                     go_offset_const off_cc_tconn_pos,
                                                     go_offset_const off_cc_next_stream_id_pos,
                                                     go_offset_const off_cc_framer_pos) {
+    go_addr_key_t g_key = {};
+    go_addr_key_from_id(&g_key, goroutine_addr);
+
+    void *parent_go = (void *)find_parent_goroutine(&g_key);
+
+    // We should find a parent always
+    if (parent_go) {
+        bpf_dbg_printk("Found parent goroutine %lx", parent_go);
+        goroutine_addr = parent_go;
+        go_addr_key_from_id(&g_key, goroutine_addr);
+    }
+
     off_table_t *ot = get_offsets_table();
 
     if (cc_ptr) {
@@ -799,8 +812,6 @@ static __always_inline void setup_http2_client_conn(void *goroutine_addr,
 
             if (ok) {
                 bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
-                go_addr_key_t g_key = {};
-                go_addr_key_from_id(&g_key, goroutine_addr);
 
                 bpf_map_update_elem(&ongoing_client_connections, &g_key, &conn, BPF_ANY);
             }
@@ -811,12 +822,6 @@ static __always_inline void setup_http2_client_conn(void *goroutine_addr,
         bpf_probe_read(&framer,
                        sizeof(framer),
                        (void *)(cc_ptr + go_offset_of(ot, (go_offset){.v = off_cc_framer_pos})));
-
-        u32 stream_id = 0;
-        bpf_probe_read(
-            &stream_id,
-            sizeof(stream_id),
-            (void *)(cc_ptr + go_offset_of(ot, (go_offset){.v = off_cc_next_stream_id_pos})));
 
         bpf_dbg_printk(
             "cc_ptr = %llx, nextStreamID = %d, framer = %llx", cc_ptr, stream_id, framer);
@@ -839,45 +844,43 @@ int beyla_uprobe_http2RoundTrip(struct pt_regs *ctx) {
     // more context, like the streamID
     roundTripStartHelper(ctx);
 
+    return 0;
+}
+
+// This runs on separate go routine called from the round tripper, but we need it
+// to establish the correct connection information and stream_id
+SEC("uprobe/http2WriteHeaders")
+int beyla_uprobe_http2WriteHeaders(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     void *cc_ptr = GO_PARAM1(ctx);
+    u64 stream_id = (u64)GO_PARAM2(ctx);
 
-    setup_http2_client_conn(
-        goroutine_addr, cc_ptr, _cc_tconn_pos, _cc_next_stream_id_pos, _cc_framer_pos);
+    bpf_dbg_printk("=== uprobe/proc http2WriteHeaders === ");
+
+    setup_http2_client_conn(goroutine_addr,
+                            cc_ptr,
+                            (u32)stream_id,
+                            _cc_tconn_pos,
+                            _cc_next_stream_id_pos,
+                            _cc_framer_pos);
 
     return 0;
 }
 
-SEC("uprobe/http2RoundTripVendored")
-int beyla_uprobe_http2RoundTrip_vendored(struct pt_regs *ctx) {
-    // we use the usual start helper, just like for normal http calls, but we later save
-    // more context, like the streamID
-    bpf_dbg_printk("=== uprobe/proc http2RoundTripVendored === ");
-
-    roundTripStartHelper(ctx);
-
+// This runs on separate go routine called from the round tripper, but we need it
+// to establish the correct connection information and stream_id. The Go vendored
+// version has its own offsets.
+SEC("uprobe/http2WriteHeadersVendored")
+int beyla_uprobe_http2WriteHeaders_vendored(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     void *cc_ptr = GO_PARAM1(ctx);
+    u64 stream_id = (u64)GO_PARAM2(ctx);
+
+    bpf_dbg_printk("=== uprobe/proc http2WriteHeaders === ");
 
     setup_http2_client_conn(goroutine_addr,
                             cc_ptr,
-                            _cc_tconn_vendored_pos,
-                            _cc_next_stream_id_vendored_pos,
-                            _cc_framer_vendored_pos);
-
-    return 0;
-}
-
-// For the vendored version of http2 inside the Go runtime, when they upgrade HTTP to HTTP2.
-SEC("uprobe/http2RoundTripConn")
-int beyla_uprobe_http2RoundTripConn(struct pt_regs *ctx) {
-    void *goroutine_addr = GOROUTINE_PTR(ctx);
-    void *cc_ptr = GO_PARAM1(ctx);
-
-    bpf_dbg_printk("=== uprobe/proc http2RoundTripConn === ");
-
-    setup_http2_client_conn(goroutine_addr,
-                            cc_ptr,
+                            (u32)stream_id,
                             _cc_tconn_vendored_pos,
                             _cc_next_stream_id_vendored_pos,
                             _cc_framer_vendored_pos);

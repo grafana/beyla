@@ -54,24 +54,47 @@ jobs:
       - name: Port changes and prepare PR
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          TARGET_PR_NUMBER: "1904"  # Hardcoded target PR number
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_URL: ${{ github.event.pull_request.html_url }}
           PR_TITLE: ${{ github.event.pull_request.title }}
-          BRANCH_NAME: port/${{ github.event.pull_request.number }}-to-upstream
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BRANCH_NAME: port/1904-to-upstream
         run: |
-          # First, get the list of changed files in the PR
-          CHANGED_FILES=$(git diff --name-only ${BASE_SHA} ${HEAD_SHA})
+          # Fetch the target PR information
+          echo "Fetching information for PR #1904"
+          TARGET_PR_INFO=$(gh pr view 1904 --repo grafana/beyla --json title,url,baseRefName,headRefName,headRepositoryOwner,headRepository)
+          TARGET_PR_TITLE=$(echo "$TARGET_PR_INFO" | jq -r '.title')
+          TARGET_PR_URL=$(echo "$TARGET_PR_INFO" | jq -r '.url')
+          TARGET_PR_BASE_BRANCH=$(echo "$TARGET_PR_INFO" | jq -r '.baseRefName')
+          TARGET_PR_HEAD_BRANCH=$(echo "$TARGET_PR_INFO" | jq -r '.headRefName')
+          TARGET_PR_HEAD_OWNER=$(echo "$TARGET_PR_INFO" | jq -r '.headRepositoryOwner.login')
+          TARGET_PR_HEAD_REPO=$(echo "$TARGET_PR_INFO" | jq -r '.headRepository.name')
+          
+          echo "Target PR Title: $TARGET_PR_TITLE"
+          echo "Target PR URL: $TARGET_PR_URL"
+          
+          # Fetch the PR branch
+          git fetch origin pull/1904/head:pr-1904
+          git checkout pr-1904
+          
+          # Get the base and head SHAs
+          TARGET_BASE_SHA=$(git merge-base origin/$TARGET_PR_BASE_BRANCH pr-1904)
+          TARGET_HEAD_SHA=$(git rev-parse HEAD)
+          
+          echo "Target PR Base SHA: $TARGET_BASE_SHA"
+          echo "Target PR Head SHA: $TARGET_HEAD_SHA"
+          
+          # Get the list of changed files in the target PR
+          CHANGED_FILES=$(git diff --name-only ${TARGET_BASE_SHA} ${TARGET_HEAD_SHA})
           
           # Exit if no files have changed
           if [ -z "${CHANGED_FILES}" ]; then
-            echo "No files have changed in this PR. Nothing to port."
+            echo "No files have changed in PR #1904. Nothing to port."
             exit 0
           fi
           
           # Print the list of changed files
-          echo "Files changed in this PR:"
+          echo "Files changed in PR #1904:"
           echo "${CHANGED_FILES}"
           
           # Navigate to the target repository
@@ -88,7 +111,6 @@ jobs:
           cd ..
           
           # Copy only the changed files to the target repository
-          # This will handle files that exist in both repositories
           for file in ${CHANGED_FILES}; do
             # Skip files that don't exist in the target repo structure
             if [[ ! -f "opentelemetry-ebpf-instrumentation/$file" && ! -d "$(dirname "opentelemetry-ebpf-instrumentation/$file")" ]]; then
@@ -112,10 +134,10 @@ jobs:
           
           # Add and commit the changes
           git add .
-          git diff --staged --quiet || git commit -m "[port] #${PR_NUMBER}: ${PR_TITLE}
+          git diff --staged --quiet || git commit -m "[port] #1904: ${TARGET_PR_TITLE}
           
-          Automated port of #${PR_NUMBER} from grafana/beyla.
-          Original PR: ${PR_URL}"
+          Automated port of #1904 from grafana/beyla.
+          Original PR: ${TARGET_PR_URL}"
           
           # Check if we have changes to push
           if git diff --quiet HEAD HEAD~1 2>/dev/null; then
@@ -128,10 +150,10 @@ jobs:
           
           # Create PR to upstream repository
           # PR_URL=$(gh pr create \
-          #   --title "[port] #${PR_NUMBER}: ${PR_TITLE}" \
-          #   --body "Automated port of #${PR_NUMBER} from grafana/beyla.
+          #   --title "[port] #1904: ${TARGET_PR_TITLE}" \
+          #   --body "Automated port of #1904 from grafana/beyla.
             
-          #   Original PR: ${PR_URL}" \
+          #   Original PR: ${TARGET_PR_URL}" \
           #   --repo open-telemetry/opentelemetry-ebpf-instrumentation \
           #   --head grafana:${BRANCH_NAME} \
           #   --base main \
@@ -145,9 +167,10 @@ jobs:
       #     GH_TOKEN: ${{ steps.app-token.outputs.token }}
       #   run: |
       #     gh pr create \
-      #       --title "[port] #${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}" \
-      #       --body "Automated port of #${{ github.event.pull_request.number }} from grafana/beyla." \
+      #       --title "[port] #1904: ${TARGET_PR_TITLE}" \
+      #       --body "Automated port of #1904 from grafana/beyla.
+      #       Original PR: ${TARGET_PR_URL}" \
       #       --repo open-telemetry/opentelemetry-ebpf-instrumentation \
-      #       --head grafana:port/${{ github.event.pull_request.number }}-to-upstream \
+      #       --head grafana:${BRANCH_NAME} \
       #       --base main \
       #       --draft

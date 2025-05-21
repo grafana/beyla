@@ -404,7 +404,7 @@ type JobSpec struct {
 	// - Failed means to wait until a previously created Pod is fully terminated (has phase
 	//   Failed or Succeeded) before creating a replacement Pod.
 	//
-	// When using podFailurePolicy, Failed is the the only allowed value.
+	// When using podFailurePolicy, Failed is the only allowed value.
 	// TerminatingOrFailed and Failed are allowed values when podFailurePolicy is not in use.
 	// This is an beta field. To use this, enable the JobPodReplacementPolicy feature toggle.
 	// This is on by default.

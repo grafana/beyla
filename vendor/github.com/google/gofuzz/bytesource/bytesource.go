@@ -69,7 +69,7 @@ func (s *ByteSource) Seed(seed int64) {
 	s.Reader = bytes.NewReader(nil)
 }
 
-// consumeUint64 reads 8 bytes from the input and convert them to a uint64. It assumes that the the
+// consumeUint64 reads 8 bytes from the input and convert them to a uint64. It assumes that the
 // bytes reader is not empty.
 func (s *ByteSource) consumeUint64() uint64 {
 	var bytes [8]byte

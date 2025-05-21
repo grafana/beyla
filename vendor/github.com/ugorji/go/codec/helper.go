@@ -726,7 +726,7 @@ var SelfExt = &extFailWrapper{}
 //	func (s *testSelferRecur) CodecDecodeSelf(d *Decoder) { d.MustDecode(s) }
 //
 // Note: *the first set of bytes of any value MUST NOT represent nil in the format*.
-// This is because, during each decode, we first check the the next set of bytes
+// This is because, during each decode, we first check the next set of bytes
 // represent nil, and if so, we just set the value to nil.
 type Selfer interface {
 	CodecEncodeSelf(*Encoder)

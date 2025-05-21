@@ -12,7 +12,7 @@ import (
 )
 
 // We need to use LoadLibrary and GetProcAddress from the Go runtime, because
-// the these symbols are loaded by the system linker and are required to
+// these symbols are loaded by the system linker and are required to
 // dynamically load additional symbols. Note that in the Go runtime, these
 // return syscall.Handle and syscall.Errno, but these are the same, in fact,
 // as windows.Handle and windows.Errno, and we intend to keep these the same.

@@ -241,7 +241,7 @@ Example #2
 
 	map[[2]string]string with validation tag "gt=0,dive,keys,dive,eq=1|eq=2,endkeys,required"
 	// gt=0 will be applied to the map itself
-	// eg=1|eq=2 will be applied to each array element in the the map keys
+	// eg=1|eq=2 will be applied to each array element in the map keys
 	// required will be applied to map values
 
 Required
@@ -907,7 +907,7 @@ this with the omitempty tag.
 Base64URL String
 
 This validates that a string value contains a valid base64 URL safe value
-according the the RFC4648 spec.
+according to the RFC4648 spec.
 Although an empty string is a valid base64 URL safe value, this will report
 an empty string as an error, if you wish to accept an empty string as valid
 you can use this with the omitempty tag.

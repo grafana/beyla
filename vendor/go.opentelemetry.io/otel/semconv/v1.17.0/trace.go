@@ -2229,7 +2229,7 @@ const (
 	AWSDynamoDBExclusiveStartTableKey = attribute.Key("aws.dynamodb.exclusive_start_table")
 
 	// AWSDynamoDBTableCountKey is the attribute Key conforming to the
-	// "aws.dynamodb.table_count" semantic conventions. It represents the the
+	// "aws.dynamodb.table_count" semantic conventions. It represents the
 	// number of items in the `TableNames` response parameter.
 	//
 	// Type: int
@@ -2247,7 +2247,7 @@ func AWSDynamoDBExclusiveStartTable(val string) attribute.KeyValue {
 }
 
 // AWSDynamoDBTableCount returns an attribute KeyValue conforming to the
-// "aws.dynamodb.table_count" semantic conventions. It represents the the
+// "aws.dynamodb.table_count" semantic conventions. It represents the
 // number of items in the `TableNames` response parameter.
 func AWSDynamoDBTableCount(val int) attribute.KeyValue {
 	return AWSDynamoDBTableCountKey.Int(val)
@@ -2382,7 +2382,7 @@ func AWSDynamoDBAttributeDefinitions(val ...string) attribute.KeyValue {
 
 // AWSDynamoDBGlobalSecondaryIndexUpdates returns an attribute KeyValue
 // conforming to the "aws.dynamodb.global_secondary_index_updates" semantic
-// conventions. It represents the JSON-serialized value of each item in the the
+// conventions. It represents the JSON-serialized value of each item in the
 // `GlobalSecondaryIndexUpdates` request field.
 func AWSDynamoDBGlobalSecondaryIndexUpdates(val ...string) attribute.KeyValue {
 	return AWSDynamoDBGlobalSecondaryIndexUpdatesKey.StringSlice(val)

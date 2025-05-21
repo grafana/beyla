@@ -287,7 +287,6 @@ jobs:
                   echo "- $file (patch was partially applied)"
                 fi
               fi
-            fi
           done
           echo "================================================="
           
@@ -322,6 +321,42 @@ jobs:
             cd opentelemetry-ebpf-instrumentation
           else
             echo "No .rej files were created - all changes applied successfully"
+          fi
+          
+          # Commit and push changes from the alternative approach
+          echo "Committing and pushing changes from alternative approach..."
+          
+          # Check if there are any changes to commit
+          if ! git diff --quiet || ! git diff --staged --quiet; then
+            # Add any unstaged changes
+            git add .
+            
+            # Append info about the alternative approach to commit message
+            COMMIT_MSG+="
+            
+            Note: Used alternative patching approach with rejection files.
+            See reject_files.tar.gz for changes that couldn't be applied automatically."
+            
+            # Commit the changes
+            git commit -m "$COMMIT_MSG"
+            
+            # Push the changes
+            git push origin "refs/heads/${BRANCH_NAME}" --force
+            
+            echo "Successfully pushed changes to ${BRANCH_NAME}"
+          else
+            echo "No changes to commit from alternative approach"
+          fi
+          
+          # Upload the artifact files if they exist
+          if [ -f "../missing_files.tar.gz" ]; then
+            echo "Missing files archive created: missing_files.tar.gz"
+            # In a GitHub workflow, you would add a step to upload this artifact
+          fi
+          
+          if [ -f "../reject_files.tar.gz" ]; then
+            echo "Rejection files archive created: reject_files.tar.gz"
+            # In a GitHub workflow, you would add a step to upload this artifact
           fi
           
           # PR creation is intentionally kept commented out

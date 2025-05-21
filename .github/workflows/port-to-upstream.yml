@@ -111,16 +111,32 @@ jobs:
           cd ..
           
           # Copy only the changed files to the target repository
+          COPY_ERRORS=""
+          
           for file in ${CHANGED_FILES}; do
+            # Skip vendor files
+            if [[ $file == vendor/* ]]; then
+              echo "Skipping vendor file: $file"
+              COPY_ERRORS+="- Skipped vendor file: $file\n"
+              continue
+            fi
+            
             # Skip files that don't exist in the target repo structure
             if [[ ! -f "opentelemetry-ebpf-instrumentation/$file" && ! -d "$(dirname "opentelemetry-ebpf-instrumentation/$file")" ]]; then
               echo "Skipping file not in target repo structure: $file"
+              COPY_ERRORS+="- File not in target repo structure: $file\n"
               continue
             fi
             
             echo "Copying $file to target repository"
             mkdir -p $(dirname "opentelemetry-ebpf-instrumentation/$file")
-            cp "$file" "opentelemetry-ebpf-instrumentation/$file"
+            
+            # Copy file with error handling
+            if ! cp "$file" "opentelemetry-ebpf-instrumentation/$file" 2>/tmp/cp_error; then
+              ERROR_MSG=$(cat /tmp/cp_error)
+              echo "Error copying $file: $ERROR_MSG"
+              COPY_ERRORS+="- Error copying $file: $ERROR_MSG\n"
+            fi
           done
           
           # Go to the target repository
@@ -134,10 +150,21 @@ jobs:
           
           # Add and commit the changes
           git add .
-          git diff --staged --quiet || git commit -m "[port] #1904: ${TARGET_PR_TITLE}
+          
+          # Create commit message with errors if any
+          COMMIT_MSG="[port] #1904: ${TARGET_PR_TITLE}
           
           Automated port of #1904 from grafana/beyla.
           Original PR: ${TARGET_PR_URL}"
+          
+          if [[ ! -z "$COPY_ERRORS" ]]; then
+            COMMIT_MSG+="
+          
+          NOTE: Some files couldn't be copied automatically and may need manual attention:
+          ${COPY_ERRORS}"
+          fi
+          
+          git diff --staged --quiet || git commit -m "$COMMIT_MSG"
           
           # Check if we have changes to push
           if git diff --quiet HEAD HEAD~1 2>/dev/null; then

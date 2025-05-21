@@ -786,9 +786,10 @@ static __always_inline void setup_http2_client_conn(void *goroutine_addr,
 
     void *parent_go = (void *)find_parent_goroutine(&g_key);
 
+    bpf_dbg_printk("goroutine %lx, parent %lx", goroutine_addr, parent_go);
+
     // We should find a parent always
     if (parent_go) {
-        bpf_dbg_printk("Found parent goroutine %lx", parent_go);
         goroutine_addr = parent_go;
         go_addr_key_from_id(&g_key, goroutine_addr);
     }

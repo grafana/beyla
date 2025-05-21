@@ -130,43 +130,93 @@ jobs:
             
             # Create the patch for this specific file
             echo "Creating patch for $file"
-            git diff --no-prefix ${TARGET_BASE_SHA} ${TARGET_HEAD_SHA} -- "$file" > "patches/${file//\//_}.patch"
+            # Use a more reliable patch format with -p1 in mind
+            git diff --no-prefix -U10 ${TARGET_BASE_SHA} ${TARGET_HEAD_SHA} -- "$file" > "patches/${file//\//_}.patch"
             
             # If the target file doesn't exist, add to errors and continue
             if [[ ! -f "$TARGET_FILE" ]]; then
               echo "Target file doesn't exist: $TARGET_FILE"
               COPY_ERRORS+="- Target file doesn't exist: $file\n"
+              
+              # For non-vendor files that don't exist in target repo, save content for manual review
+              if [[ $file != vendor/* ]]; then
+                mkdir -p "missing_files/$(dirname "$file")"
+                cp "$file" "missing_files/$file"
+                echo "Saved content to missing_files/$file for manual review"
+              fi
               continue
             fi
+            
+            # For go.mod and go.sum files, use a special approach
+            if [[ $file == "go.mod" || $file == "go.sum" ]]; then
+              echo "Special handling for $file"
+              
+              # Extract version changes for go.mod
+              if [[ $file == "go.mod" ]]; then
+                # Extract version number changes only
+                grep "go\." "patches/${file//\//_}.patch" | grep -v "//go:" > "patches/${file//\//_}.versions"
+                echo "Extracted version changes to patches/${file//\//_}.versions"
+                
+                # Save these for manual review in PR description
+                VERSION_CHANGES=$(cat "patches/${file//\//_}.versions")
+                COPY_ERRORS+="- $file version changes (for manual application):\n$VERSION_CHANGES\n"
+              fi
+              
+              # Continue without trying to apply these patches automatically
+              continue
+            }
             
             # Navigate to the target repository to apply patch
             cd opentelemetry-ebpf-instrumentation
             
-            # Try to apply the patch with git apply (more reliable than patch command)
-            if git apply --check "../patches/${file//\//_}.patch" 2>/tmp/patch_error; then
-              echo "Applying patch to $file"
-              git apply "../patches/${file//\//_}.patch"
-              APPLIED_CHANGES=$((APPLIED_CHANGES + 1))
-            else
-              ERROR_MSG=$(cat /tmp/patch_error)
-              echo "Failed to apply patch to $file: $ERROR_MSG"
-              COPY_ERRORS+="- Failed to apply patch to $file: $ERROR_MSG\n"
-              
-              # Try to apply patch with fuzz factor and offset as fallback
-              echo "Trying alternative patch method..."
-              if patch -p0 --forward --dry-run < "../patches/${file//\//_}.patch" 2>/tmp/patch_error; then
-                patch -p0 < "../patches/${file//\//_}.patch"
-                echo "Alternative patch method succeeded"
+            # Try with different patch options
+            patch_applied=false
+            
+            # Try first with git apply with increasing fuzz factor
+            for fuzz in 0 3 5; do
+              if git apply --check --ignore-whitespace --reject --fuzz=$fuzz "../patches/${file//\//_}.patch" 2>/tmp/patch_error; then
+                echo "Applying patch to $file with git apply (fuzz=$fuzz)"
+                git apply --ignore-whitespace --fuzz=$fuzz "../patches/${file//\//_}.patch"
+                patch_applied=true
+                APPLIED_CHANGES=$((APPLIED_CHANGES + 1))
+                break
+              fi
+            done
+            
+            # If git apply didn't work, try patch command with different options
+            if [ "$patch_applied" = false ]; then
+              echo "Git apply failed, trying patch command..."
+              if patch -p0 --forward --ignore-whitespace --fuzz=3 < "../patches/${file//\//_}.patch" 2>/tmp/patch_error; then
+                echo "Applied patch to $file with patch command"
+                patch_applied=true
                 APPLIED_CHANGES=$((APPLIED_CHANGES + 1))
               else
                 ERROR_MSG=$(cat /tmp/patch_error)
-                COPY_ERRORS+="- Alternative patch method also failed: $ERROR_MSG\n"
+                echo "Failed to apply patch to $file: $ERROR_MSG"
+                
+                # Extract the hunks that succeeded for the report
+                SUCCEEDED_HUNKS=$(grep "Hunk #.*succeeded" /tmp/patch_error | wc -l)
+                TOTAL_HUNKS=$(grep "Hunk #" /tmp/patch_error | wc -l)
+                
+                COPY_ERRORS+="- $file: Applied $SUCCEEDED_HUNKS/$TOTAL_HUNKS hunks. Manual attention needed.\n"
+                
+                # Try to apply what we can with -N (ignore failures) for partial progress
+                patch -p0 --forward --ignore-whitespace -N < "../patches/${file//\//_}.patch" 2>/dev/null || true
               fi
             fi
             
             # Go back to the beyla repository
             cd ..
           done
+          
+          # If we have missing files that need to be reviewed and potentially added
+          if [ -d "missing_files" ]; then
+            echo "The following new files from PR #1904 don't exist in the target repository:"
+            find missing_files -type f | sort
+            
+            # Create a tar file of missing files for easy download from artifacts
+            tar -czf missing_files.tar.gz missing_files/
+          fi
           
           # Go to the target repository
           cd opentelemetry-ebpf-instrumentation
@@ -218,16 +268,23 @@ jobs:
           fi
           
           # If we need to debug specific files being processed
-          echo -e "\nNon-vendor files that weren't applied:"
+          echo -e "\nNon-vendor files that weren't fully applied:"
           for file in ${CHANGED_FILES}; do
             if [[ $file != vendor/* ]]; then
               # Check if this non-vendor file was successfully patched
-              FILE_PATCH="patches/${file//\//_}.patch"
+              FILE_PATCH="../patches/${file//\//_}.patch"
               if [ -f "$FILE_PATCH" ] && [ -s "$FILE_PATCH" ]; then
-                if [[ ! -f "opentelemetry-ebpf-instrumentation/$file" ]]; then
+                # Special handling for go.mod and go.sum
+                if [[ $file == "go.mod" || $file == "go.sum" ]]; then
+                  echo "- $file (requires manual application)"
+                elif [[ ! -f "$file" ]]; then
                   echo "- $file (target file doesn't exist)"
-                else
-                  echo "- $file (patch couldn't be applied)"
+                elif ! grep -q "Hunk #.*succeeded" /tmp/patch_error 2>/dev/null; then
+                  # If we have zero succeeded hunks, it wasn't applied at all
+                  echo "- $file (patch couldn't be applied at all)"
+                elif grep -q "Hunk #.*FAILED" /tmp/patch_error 2>/dev/null; then
+                  # If we have some failed hunks, it was partially applied
+                  echo "- $file (patch was partially applied)"
                 fi
               fi
             fi

@@ -94,7 +94,8 @@
     "fields": {
       "google.golang.org/grpc/internal/transport.Stream": [
         "method",
-        "st"
+        "st",
+        "id"
       ],
       "google.golang.org/grpc/internal/status.Status": [
         "s"
@@ -103,7 +104,6 @@
         "conn"
       ],
       "google.golang.org/grpc/internal/transport.http2Client": [
-        "nextID",
         "conn",
         "scheme"
       ],

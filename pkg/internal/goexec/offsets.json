@@ -393,6 +393,18 @@
       }
     },
     "google.golang.org/grpc/internal/transport.Stream": {
+      "id": {
+        "versions": {
+          "oldest": "1.40.0",
+          "newest": "1.72.1"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.40.0"
+          }
+        ]
+      },
       "method": {
         "versions": {
           "oldest": "1.40.0",
@@ -494,42 +506,6 @@
           {
             "offset": 128,
             "since": "1.58.0"
-          }
-        ]
-      },
-      "nextID": {
-        "versions": {
-          "oldest": "1.40.0",
-          "newest": "1.72.1"
-        },
-        "offsets": [
-          {
-            "offset": 340,
-            "since": "1.40.0"
-          },
-          {
-            "offset": 348,
-            "since": "1.48.0"
-          },
-          {
-            "offset": 340,
-            "since": "1.51.0"
-          },
-          {
-            "offset": 412,
-            "since": "1.52.0"
-          },
-          {
-            "offset": 404,
-            "since": "1.58.0"
-          },
-          {
-            "offset": 432,
-            "since": "1.64.0"
-          },
-          {
-            "offset": 440,
-            "since": "1.68.0"
           }
         ]
       },

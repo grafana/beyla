@@ -610,14 +610,7 @@ int beyla_uprobe_transport_http2Client_NewStream(struct pt_regs *ctx) {
         }
 
 #ifndef NO_HEADER_PROPAGATION
-        u32 next_id = 0;
-        // Read the next stream id from the httpClient
-        bpf_probe_read(
-            &next_id,
-            sizeof(next_id),
-            (void *)(t_ptr + go_offset_of(ot, (go_offset){.v = _http2_client_next_id_pos})));
-
-        bpf_dbg_printk("conn_ptr %llx, next_id %d", conn_ptr_key, next_id);
+        bpf_dbg_printk("conn_ptr %llx", conn_ptr_key);
 
         grpc_client_func_invocation_t *invocation =
             bpf_map_lookup_elem(&ongoing_grpc_client_requests, &g_key);
@@ -625,7 +618,7 @@ int beyla_uprobe_transport_http2Client_NewStream(struct pt_regs *ctx) {
         if (invocation && conn_ptr_key) {
             transport_new_client_invocation_t wrapper = {};
             wrapper.inv = *invocation;
-            wrapper.s_key.stream_id = next_id;
+            wrapper.s_key.stream_id = 0;
             wrapper.s_key.conn_ptr = (u64)conn_ptr_key;
 
             bpf_map_update_elem(&transport_new_client_invocations, &g_key, &wrapper, BPF_ANY);
@@ -640,6 +633,10 @@ int beyla_uprobe_transport_http2Client_NewStream(struct pt_regs *ctx) {
     return 0;
 }
 
+// The stream_id setup in the uprobe (on function start) might be stale, since the stream id
+// is only updated under a lock inside the newStream function. Theoretically, multiple goroutines
+// can hit the uprobe at the same time on different CPUs and both will grab the same stream_id, i.e
+// the nextID. We read what's the right stream id on exit.
 SEC("uprobe/transport_http2Client_NewStream_ret")
 int beyla_uprobe_transport_http2Client_NewStream_Returns(struct pt_regs *ctx) {
 #ifndef NO_HEADER_PROPAGATION
@@ -653,7 +650,7 @@ int beyla_uprobe_transport_http2Client_NewStream_Returns(struct pt_regs *ctx) {
         return 0;
     }
 
-    //off_table_t *ot = get_offsets_table();
+    off_table_t *ot = get_offsets_table();
     go_addr_key_t g_key = {};
     go_addr_key_from_id(&g_key, goroutine_addr);
 
@@ -665,8 +662,9 @@ int beyla_uprobe_transport_http2Client_NewStream_Returns(struct pt_regs *ctx) {
     }
 
     u64 stream_id = 0;
-    // TODO: Fix with offset
-    bpf_probe_read_user(&stream_id, sizeof(stream_id), stream);
+    bpf_probe_read_user(&stream_id,
+                        sizeof(stream_id),
+                        stream + go_offset_of(ot, (go_offset){.v = _grpc_transport_stream_id_pos}));
     wrapper->s_key.stream_id = stream_id;
 
     bpf_dbg_printk("after return stream id %d, conn_ptr %llx",
@@ -676,6 +674,7 @@ int beyla_uprobe_transport_http2Client_NewStream_Returns(struct pt_regs *ctx) {
     // This map is an LRU map, we can't be sure that all created streams are going to be
     // seen later by writeHeader to clean up this mapping.
     bpf_map_update_elem(&ongoing_streams, &wrapper->s_key, &wrapper->inv, BPF_ANY);
+    bpf_map_delete_elem(&transport_new_client_invocations, &g_key);
 #endif
 
     return 0;

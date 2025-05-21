@@ -68,7 +68,7 @@ const (
 	GrpcStConnPos
 	GrpcTConnPos
 	GrpcTSchemePos
-	HTTP2ClientNextIDPos
+	GrpcTransportStreamIDPos
 	GrpcTransportBufWriterBufPos
 	GrpcTransportBufWriterOffsetPos
 	GrpcTransportBufWriterConnPos
@@ -135,6 +135,7 @@ var structMembers = map[string]structInfo{
 		fields: map[string]GoOffset{
 			"st":     GrpcStreamStPtrPos,
 			"method": GrpcStreamMethodPtrPos,
+			"id":     GrpcTransportStreamIDPos,
 		},
 	},
 	"google.golang.org/grpc/internal/transport.ServerStream": {
@@ -185,7 +186,6 @@ var structMembers = map[string]structInfo{
 	"google.golang.org/grpc/internal/transport.http2Client": {
 		lib: "google.golang.org/grpc",
 		fields: map[string]GoOffset{
-			"nextID": HTTP2ClientNextIDPos,
 			"conn":   GrpcTConnPos,
 			"scheme": GrpcTSchemePos,
 		},

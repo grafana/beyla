@@ -144,7 +144,7 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 		goexec.GrpcStConnPos,
 		goexec.GrpcTConnPos,
 		goexec.GrpcTSchemePos,
-		goexec.HTTP2ClientNextIDPos,
+		goexec.GrpcTransportStreamIDPos,
 		goexec.GrpcTransportBufWriterBufPos,
 		goexec.GrpcTransportBufWriterOffsetPos,
 		goexec.GrpcTransportBufWriterConnPos,

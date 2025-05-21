@@ -1,14 +1,14 @@
 name: Port PRs to Upstream OTel eBPF Instrumentation
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/port-to-upstream.yml'
   pull_request:
-    types: [labeled]
-  workflow_dispatch:
-    inputs:
-      pr_numbers:
-        description: 'Comma-separated list of PR numbers to port (leave empty to use labeled PRs)'
-        required: false
-        default: ''
+    paths:
+      - '.github/workflows/port-to-upstream.yml'
 
 permissions:
   contents: read
@@ -18,10 +18,6 @@ permissions:
 jobs:
   port-to-upstream:
     runs-on: ubuntu-latest
-    # Run this job when a PR is labeled or manually triggered
-    if: |
-      (github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'port-to-upstream') ||
-      github.event_name == 'workflow_dispatch'
     steps:
       - name: Get secrets from Vault
         id: get-secrets
@@ -60,142 +56,108 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
           path: opentelemetry-ebpf-instrumentation
           
-      - name: Port current PR to upstream
-        if: github.event_name == 'pull_request'
+      - name: Process PRs with port-to-otel-ebpf-inst label
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          # Get the current PR number
-          PR_NUM=${{ github.event.pull_request.number }}
+          # Find all PRs with the port-to-otel-ebpf-inst label
+          echo "Finding PRs with port-to-otel-ebpf-inst label..."
+          LABELED_PRS=$(gh pr list --repo grafana/beyla --label "port-to-otel-ebpf-inst" --json number,title,url,baseRefName,headRefName,state --limit 100)
           
-          echo "================================================================"
-          echo "Processing current PR #${PR_NUM}"
-          echo "================================================================"
-          
-          # Extract PR information
-          PR_TITLE="${{ github.event.pull_request.title }}"
-          PR_URL="${{ github.event.pull_request.html_url }}"
-          PR_BASE_BRANCH="${{ github.event.pull_request.base.ref }}"
-          
-          echo "PR Title: $PR_TITLE"
-          echo "PR URL: $PR_URL"
-          
-          # Create branch name for this port
-          BRANCH_NAME="port/${PR_NUM}-to-upstream"
-          
-          # Get the base and head SHAs
-          BASE_SHA="${{ github.event.pull_request.base.sha }}"
-          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
-          
-          echo "PR Base SHA: $BASE_SHA"
-          echo "PR Head SHA: $HEAD_SHA"
-          
-          # Get the list of changed files excluding vendor and license files
-          CHANGED_FILES=$(git diff --name-only $BASE_SHA $HEAD_SHA | grep -v "vendor/" | grep -v "LICENSE" | grep -v "third_party_licenses.csv" || echo "")
-          
-          # Check if there are any relevant files to port
-          if [ -z "${CHANGED_FILES}" ]; then
-            echo "No relevant files changed in this PR. Nothing to port."
+          # Exit if no PRs found
+          if [ -z "$LABELED_PRS" ] || [ "$LABELED_PRS" == "[]" ]; then
+            echo "No PRs found with port-to-otel-ebpf-inst label."
             exit 0
           fi
           
-          echo "Files to port:"
-          echo "${CHANGED_FILES}"
-          
-          # Create a full diff excluding vendor files
-          git diff $BASE_SHA $HEAD_SHA -- ${CHANGED_FILES} > current-pr.patch
-          
-          # Navigate to target repository
-          cd opentelemetry-ebpf-instrumentation
-          
-          # Create and checkout a branch
-          git checkout -b ${BRANCH_NAME} 2>/dev/null || git checkout ${BRANCH_NAME}
-          git reset --hard origin/main
-          
-          # Apply the patch with reject files
-          echo "Applying patch..."
-          git apply --whitespace=fix --reject ../current-pr.patch || true
-          
-          # Find reject files
-          REJ_FILES=$(find . -name "*.rej")
-          REJECTED=false
-          
-          # Handle reject files
-          if [ ! -z "$REJ_FILES" ]; then
-            REJECTED=true
-            echo "Reject files created:"
-            echo "$REJ_FILES"
+          # Process each PR
+          echo "$LABELED_PRS" | jq -c '.[]' | while read -r PR_JSON; do
+            PR_NUM=$(echo "$PR_JSON" | jq -r '.number')
+            PR_TITLE=$(echo "$PR_JSON" | jq -r '.title')
+            PR_URL=$(echo "$PR_JSON" | jq -r '.url')
+            PR_BASE_BRANCH=$(echo "$PR_JSON" | jq -r '.baseRefName')
+            PR_HEAD_BRANCH=$(echo "$PR_JSON" | jq -r '.headRefName')
+            PR_STATE=$(echo "$PR_JSON" | jq -r '.state')
             
-            # Copy reject files to the rejects directory
-            mkdir -p ../reject_files/pr-${PR_NUM}
-            find . -name "*.rej" -exec cp --parents {} ../reject_files/pr-${PR_NUM}/ \;
+            echo "================================================================"
+            echo "Processing PR #${PR_NUM}: ${PR_TITLE}"
+            echo "================================================================"
             
-            # Remove reject files from the working directory
-            find . -name "*.rej" -exec rm {} \;
-          fi
-          
-          # Check if there are any changes to commit
-          if ! git diff --quiet || ! git diff --staged --quiet; then
-            # Add all changes
-            git add .
-            
-            # Create commit message
-            COMMIT_MSG="[port] #${PR_NUM}: ${PR_TITLE}
-
-Automated port of #${PR_NUM} from grafana/beyla.
-Original PR: ${PR_URL}"
-
-            # Add note about rejects if any
-            if [ "$REJECTED" = true ]; then
-              COMMIT_MSG+="
-
-Note: Some changes couldn't be applied automatically and have been saved as reject files.
-Manual intervention is required to complete the port."
+            # Skip closed PRs
+            if [ "$PR_STATE" == "CLOSED" ]; then
+              echo "PR is closed. Skipping."
+              continue
             fi
             
-            # Commit changes
-            git commit -m "$COMMIT_MSG"
+            # Branch name in target repo
+            BRANCH_NAME="port/${PR_NUM}-to-upstream"
             
-            # Push branch to upstream
-            echo "Pushing branch ${BRANCH_NAME}..."
-            git push origin ${BRANCH_NAME} --force
+            # Try to fetch the PR branch
+            if ! git fetch origin pull/${PR_NUM}/head:pr-${PR_NUM} 2>/dev/null; then
+              echo "Could not fetch PR branch. Skipping."
+              continue
+            fi
             
-            echo "Successfully pushed branch ${BRANCH_NAME}."
-          else
-            echo "No changes to commit."
-          fi
-          
-          # Report status
-          echo "================================================================"
-          echo "Port attempt completed for PR #${PR_NUM}"
-          echo "================================================================"
-          
-      - name: Upload reject files
-        if: always()
-        uses: actions/upload-artifact@v3
-        with:
-          name: reject-files
-          path: reject_files/
-          if-no-files-found: ignore
-          
-      - name: Comment on PR
-        if: github.event_name == 'pull_request'
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          PR_NUM: ${{ github.event.pull_request.number }}
-        run: |
-          BRANCH_NAME="port/${PR_NUM}-to-upstream"
-          
-          # Check if reject files exist
-          if [ -d "reject_files/pr-${PR_NUM}" ]; then
-            # Create comment about reject files and manual attention needed
-            COMMENT="🔄 Ported changes to branch [\`$BRANCH_NAME\`](https://github.com/grafana/opentelemetry-ebpf-instrumentation/tree/$BRANCH_NAME) in grafana/opentelemetry-ebpf-instrumentation.
+            # Checkout the PR branch
+            git checkout pr-${PR_NUM}
+            
+            # Get the base and head SHAs
+            BASE_SHA=$(git merge-base origin/${PR_BASE_BRANCH} pr-${PR_NUM})
+            HEAD_SHA=$(git rev-parse HEAD)
+            
+            # Get changed files excluding vendor and license files
+            CHANGED_FILES=$(git diff --name-only ${BASE_SHA} ${HEAD_SHA} | grep -v "vendor/" | grep -v "LICENSE" | grep -v "third_party_licenses.csv" || echo "")
+            
+            # Check if there are any relevant files to port
+            if [ -z "${CHANGED_FILES}" ]; then
+              echo "No relevant files to port. Skipping."
+              continue
+            fi
+            
+            # Create a patch
+            git diff ${BASE_SHA} ${HEAD_SHA} -- ${CHANGED_FILES} > pr-${PR_NUM}.patch
+            
+            # Go to target repository and create/reset branch
+            cd opentelemetry-ebpf-instrumentation
+            
+            # Create or checkout branch
+            git checkout -b ${BRANCH_NAME} 2>/dev/null || git checkout ${BRANCH_NAME}
+            git reset --hard origin/main
+            
+            # Apply patch with reject files
+            git apply --whitespace=fix --reject ../pr-${PR_NUM}.patch || true
+            
+            # Keep reject files for manual application
+            # Add them to the commit so they're available in the branch
+            
+            # Commit and push if there are changes
+            if ! git diff --quiet || ! git diff --staged --quiet || [ -n "$(find . -name '*.rej')" ]; then
+              # Add all changes including .rej files
+              git add .
+              
+              # Check if we have any reject files
+              if [ -n "$(find . -name '*.rej')" ]; then
+                REJECT_MESSAGE="
 
-⚠️ Some changes couldn't be applied automatically. See the workflow run for details and download the reject files artifact."
-          else
-            # Create success comment
-            COMMENT="✅ Successfully ported changes to branch [\`$BRANCH_NAME\`](https://github.com/grafana/opentelemetry-ebpf-instrumentation/tree/$BRANCH_NAME) in grafana/opentelemetry-ebpf-instrumentation."
-          fi
+Some changes couldn't be automatically applied and have been saved as .rej files.
+These files are included in this branch for manual application."
+              else
+                REJECT_MESSAGE=""
+              fi
+              
+              git commit -m "[port] #${PR_NUM}: ${PR_TITLE}
+              
+Automated port of #${PR_NUM} from grafana/beyla.
+Original PR: ${PR_URL}${REJECT_MESSAGE}"
+              
+              git push origin ${BRANCH_NAME} --force
+              echo "Pushed branch ${BRANCH_NAME}"
+            else
+              echo "No changes to commit for PR #${PR_NUM}"
+            fi
+            
+            # Go back to Beyla repository
+            cd ..
+          done
           
-          # Add the comment to the PR
-          gh pr comment $PR_NUM --repo grafana/beyla --body "$COMMENT"
+          echo "Processing completed."

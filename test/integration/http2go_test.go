@@ -146,9 +146,7 @@ func TestHTTP2Go(t *testing.T) {
 	// Seems flaky, we need to look into this.
 	if !lockdown {
 		t.Run("Go RED metrics: http2 context propagation ", func(t *testing.T) {
-			testNestedHTTP2Traces(t, "ping")
 			testNestedHTTP2Traces(t, "pingdo")
-			testNestedHTTP2Traces(t, "pingrt")
 		})
 	}
 

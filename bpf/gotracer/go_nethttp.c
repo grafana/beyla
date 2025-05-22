@@ -784,7 +784,7 @@ static __always_inline void setup_http2_client_conn(void *goroutine_addr,
     go_addr_key_t g_key = {};
     go_addr_key_from_id(&g_key, goroutine_addr);
 
-    void *parent_go = (void *)find_parent_goroutine(&g_key);
+    void *parent_go = (void *)find_parent_goroutine_in_chain(&g_key);
 
     bpf_dbg_printk("goroutine %lx, parent %lx", goroutine_addr, parent_go);
 

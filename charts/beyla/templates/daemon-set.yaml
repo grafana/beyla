@@ -91,7 +91,7 @@ spec:
           env:
             - name: BEYLA_CONFIG_PATH
               value: "/etc/beyla/config/beyla-config.yml"
-          {{- if .Values.k8sCache.replicas }}
+          {{- if and .Values.k8sCache.replicas (gt (int .Values.k8sCache.replicas) 0) }}
             - name: BEYLA_KUBE_META_CACHE_ADDRESS
               value: {{ .Values.k8sCache.service.name }}:{{ .Values.k8sCache.service.port }}
           {{- end }}

@@ -67,7 +67,6 @@ func testREDMetricsForHTTP2Library(t *testing.T, route, svcNs string) {
 }
 
 func testNestedHTTP2Traces(t *testing.T, url string) {
-	t.Skip("seems flaky, we need to look into this")
 	var traceID string
 
 	var trace jaeger.Trace

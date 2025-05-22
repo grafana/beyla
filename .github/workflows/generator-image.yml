@@ -61,6 +61,11 @@ jobs:
           fi
       - run: echo "Version is ${{ steps.version.outputs.version }}"
 
+      - name: Extract cilium/ebpf version
+        id: ebpf_version
+        run: |
+          version=$(grep 'cilium/ebpf' go.mod | awk '{print $2}')
+          echo "version=$version" >> $GITHUB_OUTPUT
 
       - name: Build and push Docker image
         id: push
@@ -71,6 +76,8 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            EBPF_VER="${{ steps.ebpf_version.outputs.version }}"
           tags: |
             "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.timestamp.outputs.ts }}"
             "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}"

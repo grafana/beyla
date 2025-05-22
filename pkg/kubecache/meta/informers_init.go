@@ -540,7 +540,7 @@ func objLastUpdateTime(
 	}
 	for i := range nodeConditions {
 		if nodeConditions[i].LastTransitionTime.After(lastStatus.Time) {
-			lastStatus = podConditions[i].LastTransitionTime
+			lastStatus = nodeConditions[i].LastTransitionTime
 		}
 	}
 	return lastStatus.Unix()

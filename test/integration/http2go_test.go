@@ -70,7 +70,7 @@ func testNestedHTTP2Traces(t *testing.T, url string) {
 
 	var trace jaeger.Trace
 	test.Eventually(t, time.Duration(1)*time.Minute, func(t require.TestingT) {
-		resp, err := http.Get(jaegerQueryURL + "?service=client&operation=GET /" + url)
+		resp, err := http.Get(jaegerQueryURL + "?service=client&operation=GET%20%2F" + url)
 		require.NoError(t, err)
 		if resp == nil {
 			return
@@ -93,7 +93,7 @@ func testNestedHTTP2Traces(t *testing.T, url string) {
 
 	// Find the same traceID on a server span
 	test.Eventually(t, time.Duration(1)*time.Minute, func(t require.TestingT) {
-		resp, err := http.Get(jaegerQueryURL + "?service=server&operation=GET /" + url + "&traceID=" + traceID)
+		resp, err := http.Get(jaegerQueryURL + "?service=server&operation=GET%20%2F" + url + "&traceID=" + traceID)
 		require.NoError(t, err)
 		if resp == nil {
 			return
@@ -126,11 +126,11 @@ func TestHTTP2Go(t *testing.T) {
 		testREDMetricsForHTTP2Library(t, "/pingrt", "http2-go")
 	})
 
-	//if !lockdown {
-	t.Run("Go RED metrics: http2 context propagation ", func(t *testing.T) {
-		testNestedHTTP2Traces(t, "pingdo")
-	})
-	//}
+	if !lockdown {
+		t.Run("Go RED metrics: http2 context propagation ", func(t *testing.T) {
+			testNestedHTTP2Traces(t, "pingdo")
+		})
+	}
 
 	require.NoError(t, compose.Close())
 }

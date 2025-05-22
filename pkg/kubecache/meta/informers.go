@@ -54,7 +54,10 @@ func (inf *Informers) Subscribe(observer Observer) {
 	storedEntities = append(storedEntities, pods...)
 	storedEntities = append(storedEntities, nodes...)
 	storedEntities = append(storedEntities, services...)
-	for _, entity := range inf.sortAndCut(storedEntities, fromEpoch) {
+	storedEntities = inf.sortAndCut(storedEntities, fromEpoch)
+	inf.log.Debug("sending welcome snapshot to new observer",
+		"observerID", observer.ID(), "count", len(storedEntities))
+	for _, entity := range storedEntities {
 		if err := observer.On(&informer.Event{
 			Type:     informer.EventType_CREATED,
 			Resource: entity.(*indexableEntity).EncodedMeta,

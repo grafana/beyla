@@ -381,6 +381,7 @@ func (inf *Informers) podToIndexableEntity(pod *v1.Pod) (interface{}, error) {
 				Owners:       ownersFrom(&pod.ObjectMeta),
 				HostIp:       pod.Status.HostIP,
 			},
+			StatusTimeEpoch: objLastUpdateTime(&pod.ObjectMeta, pod.Status.Conditions, nil),
 		},
 	}, nil
 }
@@ -457,11 +458,12 @@ func (inf *Informers) initNodeIPInformer(ctx context.Context, informerFactory in
 		return &indexableEntity{
 			ObjectMeta: minimalIndex(&node.ObjectMeta),
 			EncodedMeta: &informer.ObjectMeta{
-				Name:      node.Name,
-				Namespace: node.Namespace,
-				Labels:    node.Labels,
-				Ips:       ips,
-				Kind:      typeNode,
+				Name:            node.Name,
+				Namespace:       node.Namespace,
+				Labels:          node.Labels,
+				Ips:             ips,
+				Kind:            typeNode,
+				StatusTimeEpoch: objLastUpdateTime(&node.ObjectMeta, nil, node.Status.Conditions),
 			},
 		}, nil
 	}); err != nil {
@@ -499,14 +501,16 @@ func (inf *Informers) initServiceIPInformer(ctx context.Context, informerFactory
 		if svc.Spec.ClusterIP != v1.ClusterIPNone {
 			ips = svc.Spec.ClusterIPs
 		}
+
 		return &indexableEntity{
 			ObjectMeta: minimalIndex(&svc.ObjectMeta),
 			EncodedMeta: &informer.ObjectMeta{
-				Name:      svc.Name,
-				Namespace: svc.Namespace,
-				Labels:    svc.Labels,
-				Ips:       ips,
-				Kind:      typeService,
+				Name:            svc.Name,
+				Namespace:       svc.Namespace,
+				Labels:          svc.Labels,
+				Ips:             ips,
+				Kind:            typeService,
+				StatusTimeEpoch: objLastUpdateTime(&svc.ObjectMeta, nil, nil),
 			},
 		}, nil
 	}); err != nil {
@@ -520,6 +524,26 @@ func (inf *Informers) initServiceIPInformer(ctx context.Context, informerFactory
 
 	inf.services = services
 	return nil
+}
+
+func objLastUpdateTime(
+	om *metav1.ObjectMeta, podConditions []v1.PodCondition, nodeConditions []v1.NodeCondition,
+) int64 {
+	if om.DeletionTimestamp != nil {
+		return om.DeletionTimestamp.Unix()
+	}
+	lastStatus := om.CreationTimestamp
+	for i := range podConditions {
+		if podConditions[i].LastTransitionTime.After(lastStatus.Time) {
+			lastStatus = podConditions[i].LastTransitionTime
+		}
+	}
+	for i := range nodeConditions {
+		if nodeConditions[i].LastTransitionTime.After(lastStatus.Time) {
+			lastStatus = nodeConditions[i].LastTransitionTime
+		}
+	}
+	return lastStatus.Unix()
 }
 
 func headlessService(om *informer.ObjectMeta) bool {

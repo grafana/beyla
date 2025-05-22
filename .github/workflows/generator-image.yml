@@ -77,7 +77,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            EBPF_VER="${{ steps.ebpf_version.outputs.version }}"
+            EBPF_VER=${{ steps.ebpf_version.outputs.version }}
           tags: |
             "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.timestamp.outputs.ts }}"
             "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}"

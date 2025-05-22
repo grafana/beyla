@@ -47,7 +47,14 @@ func SpanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 	case attr.RPCMethod:
 		getter = func(s *Span) attribute.KeyValue { return semconv.RPCMethod(s.Path) }
 	case attr.RPCSystem:
-		getter = func(_ *Span) attribute.KeyValue { return semconv.RPCSystemGRPC }
+		getter = func(s *Span) attribute.KeyValue {
+			switch s.Type {
+			case EventTypeJSONRPC:
+				return semconv.RPCSystemKey.String("jsonrpc")
+			default:
+				return semconv.RPCSystemGRPC
+			}
+		}
 	case attr.RPCGRPCStatusCode:
 		getter = func(s *Span) attribute.KeyValue { return semconv.RPCGRPCStatusCodeKey.Int(s.Status) }
 	case attr.Server:

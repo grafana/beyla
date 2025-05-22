@@ -1,0 +1,3 @@
+prometheus_export:
+  port: 8999
+  path: /metrics

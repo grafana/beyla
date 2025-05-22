@@ -35,6 +35,7 @@ const (
 	EventTypeKafkaServer
 	EventTypeGPUKernelLaunch
 	EventTypeGPUMalloc
+	EventTypeJSONRPC
 )
 
 const (
@@ -83,6 +84,8 @@ func (t EventType) String() string {
 		return "CUDALaunch"
 	case EventTypeGPUMalloc:
 		return "CUDAMalloc"
+	case EventTypeJSONRPC:
+		return "JSONRPC"
 	default:
 		return fmt.Sprintf("UNKNOWN (%d)", t)
 	}
@@ -246,16 +249,17 @@ func spanAttributes(s *Span) SpanAttributes {
 			"operation":  s.Method,
 			"clientId":   s.OtherNamespace,
 		}
-	case EventTypeGPUKernelLaunch:
+	case EventTypeJSONRPC:
 		return SpanAttributes{
-			"function":  s.Method,
-			"callStack": s.Path,
-			"gridSize":  strconv.FormatInt(s.ContentLength, 10),
-			"blockSize": strconv.Itoa(s.SubType),
-		}
-	case EventTypeGPUMalloc:
-		return SpanAttributes{
-			"size": strconv.FormatInt(s.ContentLength, 10),
+			"method":      "POST", // JSON-RPC uses POST
+			"rpc.method":  s.Path, // JSON-RPC method will be in the Path field
+			"status":      strconv.Itoa(s.Status),
+			"contentLen":  strconv.FormatInt(s.ContentLength, 10),
+			"responseLen": strconv.FormatInt(s.ResponseLength, 10),
+			"clientAddr":  SpanPeer(s),
+			"serverAddr":  SpanHost(s),
+			"serverPort":  strconv.Itoa(s.HostPort),
+			"rpc.system":  "jsonrpc",
 		}
 	}
 

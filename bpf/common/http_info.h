@@ -8,6 +8,8 @@
 #include <pid/pid_helpers.h>
 
 #define FULL_BUF_SIZE 256
+#define JSONRPC_METHOD_SIZE 64
+#define JSONRPC_ID_SIZE 32
 
 // Here we keep the information that is sent on the ring buffer
 typedef struct http_info {
@@ -27,4 +29,9 @@ typedef struct http_info {
     u16 status;
     unsigned char buf[FULL_BUF_SIZE];
     u8 _pad[6];
+    // JSON-RPC specific fields
+    unsigned char jsonrpc_method[JSONRPC_METHOD_SIZE];
+    unsigned char jsonrpc_id[JSONRPC_ID_SIZE];
+    u32 jsonrpc_params_len;
+    u8 is_jsonrpc;
 } http_info_t;

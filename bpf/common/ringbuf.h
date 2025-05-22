@@ -17,6 +17,7 @@
 #define EVENT_GO_KAFKA 9
 #define EVENT_GO_REDIS 10
 #define EVENT_GO_KAFKA_SEG 11 // the segment-io version (kafka-go) has different format
+#define EVENT_JSONRPC 12 // JSON-RPC 2.0 events
 
 // setting here the following map definitions without pinning them to a global namespace
 // would lead that services running both HTTP and GRPC server would duplicate

@@ -1,0 +1,26 @@
+services:
+  # Service to instrument. Change it to any
+  # other container that you want to instrument.
+  jsonrpc:
+    image: ghcr.io/4406arthur/mock-server:jsonrpc
+    ports:
+      - "8899:8899"
+
+  autoinstrumenter:
+    image: ghcr.io/4406arthur/beyla:v0.1.0
+    pull_policy: always
+    command: ["-config", "/etc/beyla/config.yaml"]
+    pid: "service:jsonrpc"
+    privileged: true
+    environment:
+      BEYLA_TRACE_PRINTER: text
+      BEYLA_OPEN_PORT: 8899
+      BEYLA_PROTOCOL_DEBUG_PRINT: "TRUE"
+      BEYLA_PROMETHEUS_FEATURES: "application,application_span,application_process,application_service_graph,ebpf"
+      BEYLA_BPF_DEBUG: "TRUE"
+      BEYLA_LOG_LEVEL: "DEBUG"
+    volumes:
+      - ./configs/config.yaml:/etc/beyla/config.yaml
+    ports:
+      # Expose Prometheus metrics port
+      - "8999:8999"

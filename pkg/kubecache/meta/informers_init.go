@@ -4,15 +4,15 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"maps"
 	"net"
 	"os"
 	"path"
+	"slices"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
-	"google.golang.org/protobuf/testing/protocmp"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -56,9 +56,6 @@ type informersConfig struct {
 
 	localInstance bool
 }
-
-// global object used for comparing protobuf messages in the informers event handlers
-var protoCmpTransform = protocmp.Transform()
 
 type InformerOption func(*informersConfig)
 
@@ -562,7 +559,6 @@ func (inf *Informers) ipInfoEventHandler(ctx context.Context) *cache.ResourceEve
 			if headlessService(em) {
 				return
 			}
-			em.StatusTimeEpoch = obj.(*indexableEntity).CreationTimestamp.Time.Unix()
 			inf.Notify(&informer.Event{
 				Type:     informer.EventType_CREATED,
 				Resource: em,
@@ -577,13 +573,11 @@ func (inf *Informers) ipInfoEventHandler(ctx context.Context) *cache.ResourceEve
 			if headlessService(newEM) && headlessService(oldEM) {
 				return
 			}
-			if cmp.Equal(oldEM, newEM, protoCmpTransform) {
+			if unchanged(oldEM, newEM) {
 				return
 			}
 			log.Debug("UpdateFunc", "kind", newEM.Kind, "name", newEM.Name,
 				"ips", newEM.Ips, "oldIps", oldEM.Ips)
-
-			nie.EncodedMeta.StatusTimeEpoch = time.Now().Unix()
 			inf.Notify(&informer.Event{
 				Type:     informer.EventType_UPDATED,
 				Resource: nie.EncodedMeta,
@@ -607,16 +601,18 @@ func (inf *Informers) ipInfoEventHandler(ctx context.Context) *cache.ResourceEve
 			log.Debug("DeleteFunc", "kind", em.Kind, "name", em.Name, "ips", em.Ips)
 
 			metrics.InformerDelete()
-
-			if dt := obj.(*indexableEntity).DeletionTimestamp; dt != nil {
-				em.StatusTimeEpoch = dt.Unix()
-			} else {
-				em.StatusTimeEpoch = time.Now().Unix()
-			}
 			inf.Notify(&informer.Event{
 				Type:     informer.EventType_DELETED,
 				Resource: obj.(*indexableEntity).EncodedMeta,
 			})
 		},
 	}
+}
+
+// unchanged compares the relevant fields from two versions of an object and returns whether they are
+// different. It only compares fields that could effectively mutate during the life of a Pod, Service or Node
+func unchanged(o, n *informer.ObjectMeta) bool {
+	return slices.Equal(o.Ips, n.Ips) &&
+		maps.Equal(o.Labels, n.Labels) &&
+		maps.Equal(o.Annotations, n.Annotations)
 }

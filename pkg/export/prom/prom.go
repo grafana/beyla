@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"runtime"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -52,7 +51,6 @@ const (
 	hostIDKey        = "host_id"
 	hostNameKey      = "host_name"
 	grafanaHostIDKey = "grafana_host_id"
-	processPIDKey    = "process_pid"
 	osTypeKey        = "os_type"
 
 	k8sNamespaceName   = "k8s_namespace_name"
@@ -918,7 +916,6 @@ func labelNamesTargetInfo(kubeEnabled bool, extraMetadataLabelNames []attr.Name)
 		telemetryLanguageKey,
 		telemetrySDKKey,
 		sourceKey,
-		processPIDKey,
 		osTypeKey,
 	}
 
@@ -944,7 +941,6 @@ func (r *metricsReporter) labelValuesTargetInfo(service *svc.Attrs) []string {
 		service.SDKLanguage.String(),
 		"beyla",
 		"beyla",
-		strconv.Itoa(int(service.ProcPID)),
 		"linux",
 	}
 

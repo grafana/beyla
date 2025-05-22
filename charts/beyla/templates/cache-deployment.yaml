@@ -1,4 +1,4 @@
-{{- if .Values.k8sCache.replicas }}
+{{- if and .Values.k8sCache.replicas (gt (int .Values.k8sCache.replicas) 0) }}
 {{- $root := . }}
 apiVersion: apps/v1
 kind: Deployment
@@ -45,12 +45,14 @@ spec:
             - containerPort: {{ .Values.k8sCache.service.port }}
               protocol: TCP
               name: grpc
-          {{- if .Values.k8sCache.profilePort }}
+          {{- if and .Values.k8sCache.profilePort
+              (gt (int .Values.k8sCache.profilePort) 0)}}
             - name: profile
               containerPort: {{ .Values.k8sCache.profilePort }}
               protocol: TCP
           {{- end }}
-          {{- if .Values.k8sCache.internalMetrics.port }}
+          {{- if and .Values.k8sCache.internalMetrics.port
+                (gt (int .Values.k8sCache.internalMetrics.port) 0) }}
             - name: {{ .Values.k8sCache.internalMetrics.portName }}
               containerPort: {{ .Values.k8sCache.internalMetrics.port }}
               protocol: TCP
@@ -62,11 +64,13 @@ spec:
           env:
             - name: BEYLA_K8S_CACHE_PORT
               value: "{{ .Values.k8sCache.service.port }}"
-          {{- if .Values.k8sCache.profilePort }}
+          {{- if and .Values.k8sCache.profilePort
+              (gt (int .Values.k8sCache.profilePort) 0)}}
             - name: BEYLA_K8S_CACHE_PROFILE_PORT
               value: "{{ .Values.k8sCache.profilePort }}"
           {{- end }}
-          {{- if .Values.k8sCache.internalMetrics.port }}
+          {{- if and .Values.k8sCache.internalMetrics.port
+                (gt (int .Values.k8sCache.internalMetrics.port) 0) }}
             - name: BEYLA_K8S_CACHE_INTERNAL_METRICS_PROMETHEUS_PORT
               value: "{{ .Values.k8sCache.internalMetrics.port }}"
           {{- end }}

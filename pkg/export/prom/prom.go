@@ -727,11 +727,11 @@ func optionalDirectGaugeProvider(enable bool, provider func() *prometheus.GaugeV
 
 func (r *metricsReporter) reportMetrics(ctx context.Context) {
 	go r.promConnect.StartHTTP(ctx)
-	go r.watchForProcessEvents()
 	r.collectMetrics(ctx)
 }
 
 func (r *metricsReporter) collectMetrics(_ context.Context) {
+	go r.watchForProcessEvents()
 	for spans := range r.input {
 		// clock needs to be updated to let the expirer
 		// remove the old metrics

@@ -747,7 +747,9 @@ func (r *metricsReporter) reportMetrics(ctx context.Context) {
 	r.collectMetrics(ctx)
 }
 
+// Grafana Alloy integration calls this directly
 func (r *metricsReporter) collectMetrics(_ context.Context) {
+	go r.watchForProcessEvents()
 	for spans := range r.input {
 		// clock needs to be updated to let the expirer
 		// remove the old metrics

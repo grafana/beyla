@@ -475,7 +475,7 @@ int BPF_KRETPROBE(beyla_kretprobe_tcp_sendmsg, int sent_len) {
                                            s_args->orig_dport);
             }
         }
-        // We don't want to delete the the backup buffer here, since with some
+        // We don't want to delete the backup buffer here, since with some
         // proxies the data is directly forwarded to the other side and
         // we need the buffer in recvmsg.
     }

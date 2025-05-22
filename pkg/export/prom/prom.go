@@ -743,7 +743,6 @@ func optionalDirectGaugeProvider(enable bool, provider func() *prometheus.GaugeV
 
 func (r *metricsReporter) reportMetrics(ctx context.Context) {
 	go r.promConnect.StartHTTP(ctx)
-	go r.watchForProcessEvents()
 	r.collectMetrics(ctx)
 }
 

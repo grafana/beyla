@@ -230,6 +230,8 @@ func (i *Instrumenter) processEventsPipeline(ctx context.Context, graph *swarm.R
 	// run until either the graph is finished or the context is cancelled
 	select {
 	case <-graph.Done():
+		log().Debug("process event pipeline terminated")
 	case <-ctx.Done():
+		log().Debug("process event pipeline context done")
 	}
 }

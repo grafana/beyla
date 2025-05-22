@@ -225,6 +225,7 @@ func refreshK8sInformerCache(ctx context.Context, ctxInfo *global.ContextInfo) e
 }
 
 func (i *Instrumenter) processEventsPipeline(ctx context.Context, graph *swarm.Runner) {
+	log().Debug("launching process event pipeline")
 	graph.Start(ctx)
 	// run until either the graph is finished or the context is cancelled
 	select {

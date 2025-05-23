@@ -6,5 +6,5 @@ const (
 	EnabledTrue       = EnableFlag("true")
 	EnabledFalse      = EnableFlag("false")
 	EnabledAutodetect = EnableFlag("autodetect")
-	EnabledDefault    = EnabledFalse
+	EnabledDefault    = EnabledAutodetect
 )

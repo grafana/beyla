@@ -65,6 +65,8 @@ const (
 	k8sPodUID          = "k8s_pod_uid"
 	k8sPodStartTime    = "k8s_pod_start_time"
 	k8sClusterName     = "k8s_cluster_name"
+	k8sKind            = "k8s_kind"
+	k8sOwnerName       = "k8s_owner_name"
 
 	spanNameKey          = "span_name"
 	statusCodeKey        = "status_code"
@@ -884,7 +886,7 @@ func (r *metricsReporter) observe(span *request.Span) {
 
 func appendK8sLabelNames(names []string) []string {
 	names = append(names, k8sNamespaceName, k8sPodName, k8sContainerName, k8sNodeName, k8sPodUID, k8sPodStartTime,
-		k8sDeploymentName, k8sReplicaSetName, k8sStatefulSetName, k8sDaemonSetName, k8sClusterName)
+		k8sDeploymentName, k8sReplicaSetName, k8sStatefulSetName, k8sDaemonSetName, k8sClusterName, k8sKind, k8sOwnerName)
 	return names
 }
 
@@ -902,6 +904,8 @@ func appendK8sLabelValuesService(values []string, service *svc.Attrs) []string {
 		service.Metadata[(attr.K8sStatefulSetName)],
 		service.Metadata[(attr.K8sDaemonSetName)],
 		service.Metadata[(attr.K8sClusterName)],
+		service.Metadata[(attr.K8sKind)],
+		service.Metadata[(attr.K8sOwnerName)],
 	)
 	return values
 }

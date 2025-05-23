@@ -14,6 +14,7 @@ import (
 	trace2 "go.opentelemetry.io/otel/trace"
 
 	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
+	"github.com/grafana/beyla/v2/pkg/internal/sqlprune"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
 )
 
@@ -144,32 +145,33 @@ type PidInfo struct {
 // REMINDER: any attribute here must be also added to the functions SpanOTELGetters,
 // SpanPromGetters and getDefinitions in pkg/export/attributes/attr_defs.go
 type Span struct {
-	Type           EventType      `json:"type"`
-	IgnoreSpan     ignoreMode     `json:"ignoreSpan"`
-	Method         string         `json:"-"`
-	Path           string         `json:"-"`
-	Route          string         `json:"-"`
-	Peer           string         `json:"peer"`
-	PeerPort       int            `json:"peerPort,string"`
-	Host           string         `json:"host"`
-	HostPort       int            `json:"hostPort,string"`
-	Status         int            `json:"-"`
-	ResponseLength int64          `json:"-"`
-	ContentLength  int64          `json:"-"`
-	RequestStart   int64          `json:"-"`
-	Start          int64          `json:"-"`
-	End            int64          `json:"-"`
-	Service        svc.Attrs      `json:"-"`
-	TraceID        trace2.TraceID `json:"traceID"`
-	SpanID         trace2.SpanID  `json:"spanID"`
-	ParentSpanID   trace2.SpanID  `json:"parentSpanID"`
-	Flags          uint8          `json:"flags,string"`
-	Pid            PidInfo        `json:"-"`
-	PeerName       string         `json:"peerName"`
-	HostName       string         `json:"hostName"`
-	OtherNamespace string         `json:"-"`
-	Statement      string         `json:"-"`
-	SubType        int            `json:"-"`
+	Type           EventType          `json:"type"`
+	IgnoreSpan     ignoreMode         `json:"ignoreSpan"`
+	Method         string             `json:"-"`
+	Path           string             `json:"-"`
+	Route          string             `json:"-"`
+	Peer           string             `json:"peer"`
+	PeerPort       int                `json:"peerPort,string"`
+	Host           string             `json:"host"`
+	HostPort       int                `json:"hostPort,string"`
+	Status         int                `json:"-"`
+	ResponseLength int64              `json:"-"`
+	ContentLength  int64              `json:"-"`
+	RequestStart   int64              `json:"-"`
+	Start          int64              `json:"-"`
+	End            int64              `json:"-"`
+	Service        svc.Attrs          `json:"-"`
+	TraceID        trace2.TraceID     `json:"traceID"`
+	SpanID         trace2.SpanID      `json:"spanID"`
+	ParentSpanID   trace2.SpanID      `json:"parentSpanID"`
+	Flags          uint8              `json:"flags,string"`
+	Pid            PidInfo            `json:"-"`
+	PeerName       string             `json:"peerName"`
+	HostName       string             `json:"hostName"`
+	OtherNamespace string             `json:"-"`
+	Statement      string             `json:"-"`
+	SubType        int                `json:"-"`
+	SQLResponse    *sqlprune.SQLError `json:"-"`
 }
 
 func (s *Span) Inside(parent *Span) bool {
@@ -224,13 +226,24 @@ func spanAttributes(s *Span) SpanAttributes {
 			"serverPort": strconv.Itoa(s.HostPort),
 		}
 	case EventTypeSQLClient:
-		return SpanAttributes{
+		attributes := SpanAttributes{
 			"serverAddr": SpanHost(s),
 			"serverPort": strconv.Itoa(s.HostPort),
 			"operation":  s.Method,
 			"table":      s.Path,
 			"statement":  s.Statement,
 		}
+
+		if s.SQLResponse != nil {
+			attributes["databaseName"] = string(s.SQLResponse.DB) //TODO(matt): this is probably redundant, remove?
+			attributes["errorMessage"] = s.SQLResponse.Message
+			attributes["errorSQLState"] = s.SQLResponse.SQLState
+			if s.SQLResponse.DB == sqlprune.DBTypeMySQL {
+				attributes["errorCode"] = strconv.Itoa(int(s.SQLResponse.Code))
+			}
+		}
+
+		return attributes
 	case EventTypeRedisServer:
 		return SpanAttributes{
 			"serverAddr": SpanHost(s),

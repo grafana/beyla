@@ -58,7 +58,7 @@ func testREDMetricsHTTP(t *testing.T) {
 		t.Run(testCaseURL, func(t *testing.T) {
 			waitForTestComponents(t, testCaseURL)
 			testREDMetricsForHTTPLibrary(t, testCaseURL, "testserver", "integration-test")
-			testSpanMetricsForHTTPLibrary(t, "testserver", "integration-test")
+			testSpanMetricsForHTTPLibraryOTelFormat(t, "testserver", "integration-test")
 			testServiceGraphMetricsForHTTPLibrary(t, "integration-test")
 		})
 	}
@@ -88,7 +88,7 @@ func testREDMetricsShortHTTP(t *testing.T) {
 		t.Run(testCaseURL, func(t *testing.T) {
 			waitForTestComponents(t, testCaseURL)
 			testREDMetricsForHTTPLibrary(t, testCaseURL, "testserver", "integration-test")
-			testSpanMetricsForHTTPLibrary(t, "testserver", "integration-test")
+			testSpanMetricsForHTTPLibraryOTelFormat(t, "testserver", "integration-test")
 		})
 	}
 }
@@ -119,6 +119,58 @@ func testExemplarsExist(t *testing.T) {
 }
 
 // **IMPORTANT** Tests must first call -> func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
+func testSpanMetricsForHTTPLibraryOTelFormat(t *testing.T, svcName, svcNs string) {
+	pq := prom.Client{HostPort: prometheusHostPort}
+	var results []prom.Result
+
+	// Test span metrics
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		var err error
+		results, err = pq.Query(`traces_span_metrics_duration_count{` +
+			`span_kind="SPAN_KIND_SERVER",` +
+			`status_code="STATUS_CODE_UNSET",` + // 404 is OK for server spans
+			`service_namespace="` + svcNs + `",` +
+			`service_name="` + svcName + `",` +
+			`span_name="GET /basic/:rnd"` +
+			`}`)
+		require.NoError(t, err)
+		// check span metric latency exists
+		enoughPromResults(t, results)
+		val := totalPromCount(t, results)
+		assert.LessOrEqual(t, 3, val)
+	})
+
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		var err error
+		results, err = pq.Query(`traces_span_metrics_calls_total{` +
+			`span_kind="SPAN_KIND_SERVER",` +
+			`status_code="STATUS_CODE_UNSET",` + // 404 is OK for server spans
+			`service_namespace="` + svcNs + `",` +
+			`service_name="` + svcName + `",` +
+			`span_name="GET /basic/:rnd"` +
+			`}`)
+		require.NoError(t, err)
+		// check calls total exists
+		enoughPromResults(t, results)
+		val := totalPromCount(t, results)
+		assert.LessOrEqual(t, 3, val)
+	})
+
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		var err error
+		results, err = pq.Query(`traces_target_info{` +
+			`service_namespace="` + svcNs + `",` +
+			`service_name="` + svcName + `",` +
+			`telemetry_sdk_language="go"` +
+			`}`)
+		require.NoError(t, err)
+		enoughPromResults(t, results)
+		val := totalPromCount(t, results)
+		assert.LessOrEqual(t, 1, val) // we report this count for each service, doesn't matter how many calls
+	})
+}
+
+// **IMPORTANT** Tests must first call -> func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 func testSpanMetricsForHTTPLibrary(t *testing.T, svcName, svcNs string) {
 	pq := prom.Client{HostPort: prometheusHostPort}
 	var results []prom.Result
@@ -130,7 +182,7 @@ func testSpanMetricsForHTTPLibrary(t *testing.T, svcName, svcNs string) {
 			`span_kind="SPAN_KIND_SERVER",` +
 			`status_code="STATUS_CODE_UNSET",` + // 404 is OK for server spans
 			`service_namespace="` + svcNs + `",` +
-			`service="` + svcName + `",` +
+			`service_name="` + svcName + `",` +
 			`span_name="GET /basic/:rnd"` +
 			`}`)
 		require.NoError(t, err)
@@ -146,7 +198,7 @@ func testSpanMetricsForHTTPLibrary(t *testing.T, svcName, svcNs string) {
 			`span_kind="SPAN_KIND_SERVER",` +
 			`status_code="STATUS_CODE_UNSET",` + // 404 is OK for server spans
 			`service_namespace="` + svcNs + `",` +
-			`service="` + svcName + `",` +
+			`service_name="` + svcName + `",` +
 			`span_name="GET /basic/:rnd"` +
 			`}`)
 		require.NoError(t, err)
@@ -160,7 +212,7 @@ func testSpanMetricsForHTTPLibrary(t *testing.T, svcName, svcNs string) {
 		var err error
 		results, err = pq.Query(`traces_target_info{` +
 			`service_namespace="` + svcNs + `",` +
-			`service="` + svcName + `",` +
+			`service_name="` + svcName + `",` +
 			`telemetry_sdk_language="go"` +
 			`}`)
 		require.NoError(t, err)

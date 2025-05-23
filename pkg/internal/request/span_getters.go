@@ -59,8 +59,6 @@ func SpanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 			}
 			return ServerNamespaceMetric(s.Service.UID.Namespace)
 		}
-	case attr.Service:
-		getter = func(s *Span) attribute.KeyValue { return ServiceMetric(s.Service.UID.Name) }
 	case attr.ServiceInstanceID:
 		getter = func(s *Span) attribute.KeyValue { return semconv.ServiceInstanceID(string(s.Service.UID.Instance)) }
 	case attr.ServiceName:

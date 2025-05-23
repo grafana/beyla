@@ -17,6 +17,7 @@ func TestSurveyMetrics(t *testing.T) {
 		"k8s_replicaset_name": "^otherinstance-.*",
 		"k8s_pod_name":        "^otherinstance-.*",
 		"k8s_owner_name":      "^otherinstance$",
+		"k8s_kind":            "Deployment",
 		"service_instance_id": "^default\\.otherinstance-.+\\.otherinstance",
 	}))
 }

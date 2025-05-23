@@ -1,10 +1,8 @@
 name: Alloy Mapped Fields Checker
 
 on:
-  push:
-    branches: [ main ]
-    paths:
-      - 'pkg/**/*.go'
+  workflow_dispatch:
+
 # Set restrictive permissions at workflow level
 permissions:
   contents: read

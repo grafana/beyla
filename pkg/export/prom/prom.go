@@ -140,6 +140,10 @@ func (p *PrometheusConfig) SpanMetricsEnabled() bool {
 	return slices.Contains(p.Features, otel.FeatureSpan)
 }
 
+func (p *PrometheusConfig) HostMetricsEnabled() bool {
+	return slices.Contains(p.Features, otel.FeatureApplicationHost)
+}
+
 func (p *PrometheusConfig) OTelMetricsEnabled() bool {
 	return slices.Contains(p.Features, otel.FeatureApplication)
 }
@@ -533,7 +537,7 @@ func newReporter(
 				Help: "target service information in trace span metric format",
 			}, labelNamesTargetInfo(kubeEnabled, extraMetadataLabels))
 		}),
-		tracesHostInfo: optionalGaugeProvider(cfg.SpanMetricsEnabled() || cfg.ServiceGraphMetricsEnabled(), func() *Expirer[prometheus.Gauge] {
+		tracesHostInfo: optionalGaugeProvider(cfg.HostMetricsEnabled(), func() *Expirer[prometheus.Gauge] {
 			return NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
 				Name: TracesHostInfo,
 				Help: "A metric with a constant '1' value labeled by the host id ",
@@ -677,7 +681,7 @@ func newReporter(
 		)
 	}
 
-	if cfg.SpanMetricsEnabled() || cfg.ServiceGraphMetricsEnabled() {
+	if cfg.HostMetricsEnabled() {
 		registeredMetrics = append(registeredMetrics, mr.tracesHostInfo)
 	}
 
@@ -775,7 +779,7 @@ func (r *metricsReporter) observe(span *request.Span) {
 	}
 	t := span.Timings()
 	r.beylaInfo.WithLabelValues(span.Service.SDKLanguage.String()).metric.Set(1.0)
-	if r.cfg.SpanMetricsEnabled() || r.cfg.ServiceGraphMetricsEnabled() {
+	if r.cfg.HostMetricsEnabled() {
 		r.tracesHostInfo.WithLabelValues(r.hostID).metric.Set(1.0)
 	}
 	duration := t.End.Sub(t.RequestStart).Seconds()

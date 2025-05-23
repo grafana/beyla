@@ -37,7 +37,6 @@ const (
 	SpanName               = Name("span.name")
 	StatusCode             = Name("status.code")
 	Source                 = Name("source")
-	Service                = Name("service")
 	Client                 = Name("client")
 	ClientNamespace        = Name("client_service_namespace")
 	Server                 = Name("server")

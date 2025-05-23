@@ -46,7 +46,7 @@ const (
 	ServiceGraphFailed = "traces_service_graph_request_failed_total"
 	ServiceGraphTotal  = "traces_service_graph_request_total"
 
-	serviceKey          = "service"
+	serviceNameKey      = "service_name"
 	serviceNamespaceKey = "service_namespace"
 
 	hostIDKey        = "host_id"
@@ -911,7 +911,7 @@ func appendK8sLabelValuesService(values []string, service *svc.Attrs) []string {
 }
 
 func labelNamesSpans() []string {
-	return []string{serviceKey, serviceNamespaceKey, spanNameKey, statusCodeKey, spanKindKey, serviceInstanceKey, serviceJobKey, sourceKey}
+	return []string{serviceNameKey, serviceNamespaceKey, spanNameKey, statusCodeKey, spanKindKey, serviceInstanceKey, serviceJobKey, sourceKey}
 }
 
 func (r *metricsReporter) labelValuesSpans(span *request.Span) []string {
@@ -931,7 +931,7 @@ func labelNamesTargetInfo(kubeEnabled bool, extraMetadataLabelNames []attr.Name)
 	names := []string{
 		hostIDKey,
 		hostNameKey,
-		serviceKey,
+		serviceNameKey,
 		serviceNamespaceKey,
 		serviceInstanceKey,
 		serviceJobKey,

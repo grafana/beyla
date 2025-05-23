@@ -317,7 +317,7 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 				attr.Server:            false,
 				attr.ServerNamespace:   false,
 				attr.Source:            false,
-				attr.Service:           false,
+				attr.ServiceName:       false,
 				attr.ServiceInstanceID: false,
 				attr.ServiceNamespace:  false,
 				attr.SpanKind:          false,

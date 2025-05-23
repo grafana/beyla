@@ -79,6 +79,7 @@ The Beyla metrics exporter can export the following metrics data groups for proc
 
 - `application`: Application-level metrics
 - `application_span` Application-level trace span metrics
+- `application_host` Application-level host metrics for host based pricing
 - `application_service_graph`: Application-level service graph metrics.
   It's recommended to use a DNS for service discovery and to ensure the DNS names match the OpenTelemetry service names Beyla uses.
   In Kubernetes environments, the OpenTelemetry service name set by the service name discovery is the best choice for service graph metrics.
@@ -167,6 +168,7 @@ The Prometheus metrics exporter can export the following metrics data groups:
 
 - `application`: Application-level metrics
 - `application_span`: Application-level trace span metrics
+- `application_host` Application-level host metrics for host based pricing
 - `application_service_graph`: Application-level service graph metrics.
   It's recommended to use a DNS for service discovery and to ensure the DNS names match the OpenTelemetry service names Beyla uses.
   In Kubernetes environments, the OpenTelemetry service name set by the service name discovery is the best choice for service graph metrics.

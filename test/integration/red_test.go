@@ -126,7 +126,7 @@ func testSpanMetricsForHTTPLibraryOTelFormat(t *testing.T, svcName, svcNs string
 	// Test span metrics
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
-		results, err = pq.Query(`duration_count{` +
+		results, err = pq.Query(`traces_span_metrics_duration_count{` +
 			`span_kind="SPAN_KIND_SERVER",` +
 			`status_code="STATUS_CODE_UNSET",` + // 404 is OK for server spans
 			`service_namespace="` + svcNs + `",` +
@@ -142,7 +142,7 @@ func testSpanMetricsForHTTPLibraryOTelFormat(t *testing.T, svcName, svcNs string
 
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
-		results, err = pq.Query(`calls_total{` +
+		results, err = pq.Query(`traces_span_metrics_calls_total{` +
 			`span_kind="SPAN_KIND_SERVER",` +
 			`status_code="STATUS_CODE_UNSET",` + // 404 is OK for server spans
 			`service_namespace="` + svcNs + `",` +

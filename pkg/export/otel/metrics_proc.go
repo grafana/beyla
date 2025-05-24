@@ -38,8 +38,8 @@ var (
 
 // ProcMetricsConfig extends MetricsConfig for process metrics
 type ProcMetricsConfig struct {
-	Metrics            *MetricsConfig
-	AttributeSelectors attributes.Selection
+	Metrics     *MetricsConfig
+	SelectorCfg *attributes.SelectorConfig
 }
 
 func (mc *ProcMetricsConfig) Enabled() bool {
@@ -106,8 +106,8 @@ func ProcMetricsExporterProvider(
 			return swarm.EmptyRunFunc()
 		}
 
-		if cfg.AttributeSelectors == nil {
-			cfg.AttributeSelectors = make(attributes.Selection)
+		if cfg.SelectorCfg.SelectionCfg == nil {
+			cfg.SelectorCfg.SelectionCfg = make(attributes.Selection)
 		}
 
 		return newProcMetricsExporter(ctx, ctxInfo, cfg, input)
@@ -126,7 +126,7 @@ func newProcMetricsExporter(
 	log.Debug("instantiating process metrics exporter provider")
 
 	// only user-provided attributes (or default set) will decorate the metrics
-	attrProv, err := attributes.NewAttrSelector(ctxInfo.MetricAttributeGroups, cfg.AttributeSelectors)
+	attrProv, err := attributes.NewAttrSelector(ctxInfo.MetricAttributeGroups, cfg.SelectorCfg)
 	if err != nil {
 		return nil, fmt.Errorf("process OTEL exporter attributes: %w", err)
 	}
@@ -222,7 +222,7 @@ func getFilteredProcessResourceAttrs(hostID string, procID *process.ID, attrSele
 func (me *procMetricsExporter) newMetricSet(procID *process.ID) (*procMetrics, error) {
 	log := me.log.With("service", procID.Service, "processID", procID.UID)
 	log.Debug("creating new Metrics exporter")
-	resources := resource.NewWithAttributes(semconv.SchemaURL, getFilteredProcessResourceAttrs(me.hostID, procID, me.cfg.AttributeSelectors)...)
+	resources := resource.NewWithAttributes(semconv.SchemaURL, getFilteredProcessResourceAttrs(me.hostID, procID, me.cfg.SelectorCfg.SelectionCfg)...)
 	opts := []metric.Option{
 		metric.WithResource(resources),
 		metric.WithReader(metric.NewPeriodicReader(me.exporter,

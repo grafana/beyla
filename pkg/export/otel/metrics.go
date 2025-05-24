@@ -282,7 +282,7 @@ func ReportMetrics(
 	ctxInfo *global.ContextInfo,
 	cfg *MetricsConfig,
 	surveyInfoEnabled bool,
-	userAttribSelection attributes.Selection,
+	selectorCfg *attributes.SelectorConfig,
 	input *msg.Queue[[]request.Span],
 	processEventCh *msg.Queue[exec.ProcessEvent],
 ) swarm.InstanceFunc {
@@ -292,7 +292,15 @@ func ReportMetrics(
 		}
 		SetupInternalOTELSDKLogger(cfg.SDKLogLevel)
 
-		mr, err := newMetricsReporter(ctx, ctxInfo, cfg, surveyInfoEnabled, userAttribSelection, input, processEventCh)
+		mr, err := newMetricsReporter(
+			ctx,
+			ctxInfo,
+			cfg,
+			surveyInfoEnabled,
+			selectorCfg,
+			input,
+			processEventCh,
+		)
 		if err != nil {
 			return nil, fmt.Errorf("instantiating OTEL metrics reporter: %w", err)
 		}
@@ -315,13 +323,13 @@ func newMetricsReporter(
 	ctxInfo *global.ContextInfo,
 	cfg *MetricsConfig,
 	surveyInfoEnabled bool,
-	userAttribSelection attributes.Selection,
+	selectorCfg *attributes.SelectorConfig,
 	input *msg.Queue[[]request.Span],
 	processEventCh *msg.Queue[exec.ProcessEvent],
 ) (*MetricsReporter, error) {
 	log := mlog()
 
-	attribProvider, err := attributes.NewAttrSelector(ctxInfo.MetricAttributeGroups, userAttribSelection)
+	attribProvider, err := attributes.NewAttrSelector(ctxInfo.MetricAttributeGroups, selectorCfg)
 	if err != nil {
 		return nil, fmt.Errorf("attributes select: %w", err)
 	}
@@ -337,8 +345,9 @@ func newMetricsReporter(
 		hostID:              ctxInfo.HostID,
 		input:               input.Subscribe(),
 		processEvents:       processEventCh.Subscribe(),
-		userAttribSelection: userAttribSelection,
+		userAttribSelection: selectorCfg.SelectionCfg,
 	}
+
 	// initialize attribute getters
 	if is.HTTPEnabled() {
 		mr.attrHTTPDuration = attributes.OpenTelemetryGetters(
@@ -354,6 +363,7 @@ func newMetricsReporter(
 		mr.attrHTTPClientResponseSize = attributes.OpenTelemetryGetters(
 			request.SpanOTELGetters, mr.attributes.For(attributes.HTTPClientResponseSize))
 	}
+
 	if is.GRPCEnabled() {
 		mr.attrGRPCServer = attributes.OpenTelemetryGetters(
 			request.SpanOTELGetters, mr.attributes.For(attributes.RPCServerDuration))

@@ -21,7 +21,7 @@ func TracesReceiver(
 	ctxInfo *global.ContextInfo,
 	cfg *beyla.TracesReceiverConfig,
 	spanMetricsEnabled bool,
-	userAttribSelection attributes.Selection,
+	selectorCfg *attributes.SelectorConfig,
 	input *msg.Queue[[]request.Span],
 ) swarm.InstanceFunc {
 	return func(_ context.Context) (swarm.RunFunc, error) {
@@ -37,7 +37,7 @@ func TracesReceiver(
 			}),
 		}
 		// Get user attributes
-		if err := tr.fetchConstantAttributes(userAttribSelection); err != nil {
+		if err := tr.fetchConstantAttributes(selectorCfg); err != nil {
 			return nil, fmt.Errorf("error fetching user defined attributes: %w", err)
 		}
 		return tr.provideLoop, nil
@@ -53,9 +53,9 @@ type tracesReceiver struct {
 	traceAttrs         map[attr.Name]struct{}
 }
 
-func (tr *tracesReceiver) fetchConstantAttributes(attrs attributes.Selection) error {
+func (tr *tracesReceiver) fetchConstantAttributes(selectorCfg *attributes.SelectorConfig) error {
 	var err error
-	tr.traceAttrs, err = otel.GetUserSelectedAttributes(attrs)
+	tr.traceAttrs, err = otel.GetUserSelectedAttributes(selectorCfg)
 	if err != nil {
 		return err
 	}

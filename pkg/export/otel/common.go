@@ -98,6 +98,7 @@ func getResourceAttrs(hostID string, service *svc.Attrs) []attribute.KeyValue {
 	for k, v := range service.Metadata {
 		attrs = append(attrs, k.OTEL().String(v))
 	}
+
 	return attrs
 }
 

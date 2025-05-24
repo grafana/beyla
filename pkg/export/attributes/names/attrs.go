@@ -70,19 +70,20 @@ const (
 
 // Beyla-specific network attributes
 const (
-	BeylaIP    = Name("beyla.ip")
-	Transport  = Name("transport")
-	SrcAddress = Name("src.address")
-	DstAddres  = Name("dst.address")
-	SrcPort    = Name("src.port")
-	DstPort    = Name("dst.port")
-	SrcName    = Name("src.name")
-	DstName    = Name("dst.name")
-	Iface      = Name("iface")
-	SrcCIDR    = Name("src.cidr")
-	DstCIDR    = Name("dst.cidr")
-	SrcZone    = Name("src.zone")
-	DstZone    = Name("dst.zone")
+	ClusterName = Name("cluster.name")
+	BeylaIP     = Name("beyla.ip")
+	Transport   = Name("transport")
+	SrcAddress  = Name("src.address")
+	DstAddres   = Name("dst.address")
+	SrcPort     = Name("src.port")
+	DstPort     = Name("dst.port")
+	SrcName     = Name("src.name")
+	DstName     = Name("dst.name")
+	Iface       = Name("iface")
+	SrcCIDR     = Name("src.cidr")
+	DstCIDR     = Name("dst.cidr")
+	SrcZone     = Name("src.zone")
+	DstZone     = Name("dst.zone")
 
 	ClientPort = Name("client.port")
 

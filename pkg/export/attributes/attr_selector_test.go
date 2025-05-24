@@ -168,7 +168,7 @@ func TestFor_KubeDisabled(t *testing.T) {
 
 func TestNilDoesNotCrash(t *testing.T) {
 	assert.NotPanics(t, func() {
-		p, err := NewAttrSelector(GroupKubernetes, nil)
+		p, err := NewAttrSelector(GroupKubernetes, &SelectorConfig{})
 		require.NoError(t, err)
 		assert.NotEmpty(t, p.For(BeylaNetworkFlow))
 	})

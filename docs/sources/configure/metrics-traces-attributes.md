@@ -251,11 +251,11 @@ In this example, only the first line is used and trimmed to prevent white space 
 
 ## Extra group attributes
 
-Beyla allows you to enhance your metrics with custom attributes using the extra_group_attributes configuration. This gives you the flexibility to include additional metadata in your metrics, beyond the standard set.
+Beyla allows you to enhance your metrics with custom attributes using the `extra_group_attributes` configuration. This gives you the flexibility to include additional metadata in your metrics, beyond the standard set.
 
 To use this feature, specify the group name and the list of attributes you want to include in that group.
 
-Currently, only the `k8s_app_meta` group is supported. This group contains Kubernetes-specific metadata such as pod name, namespace, container name, pod UID, and more.
+Currently, only the `k8s_app_meta` group is supported. This group contains Kubernetes-specific metadata such as Pod name, namespace, container name, Pod UID, and more.
 
 Example configuration:
 
@@ -268,9 +268,8 @@ attributes:
 ```
 
 In this example:
-- You can add `k8s.app.version` to the resource_labels block and then the `k8s.app.version` label will appear in the metrics.
-- You can also define annotations with the prefix `resource.opentelemetry.io/` and suffix `k8s.app.version` in your Kubernetes manifests — those will also be automatically included in the metrics.
-
+- Adding `k8s.app.version` to the `resource_labels` block causes the `k8s.app.version` label to appear in the metrics.
+- You can also define annotations with the prefix `resource.opentelemetry.io/` and suffix `k8s.app.version` in your Kubernetes manifests, these annotations are automatically included in the metrics.
 
 The following table describes the default group attributes.
 

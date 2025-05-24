@@ -30,7 +30,7 @@ func TestTransform(t *testing.T) {
 		defaultK8sClusterName = "test-beyla-k8s-cluster"
 
 		notifier = meta.NewBaseNotifier(defaultLogger)
-		store    = kube.NewStore(&notifier, kube.DefaultResourceLabels)
+		store    = kube.NewStore(&notifier, kube.DefaultResourceLabels, nil)
 	)
 
 	type args struct {
@@ -45,7 +45,7 @@ func TestTransform(t *testing.T) {
 		expected      bool
 	}{
 		{
-			name: "without k8s cluster name and cluster name",
+			name: "without cluster name",
 			makeDecorator: func() *decorator {
 				return &decorator{
 					kube: store,
@@ -59,7 +59,7 @@ func TestTransform(t *testing.T) {
 			expected:  false,
 		},
 		{
-			name: "with cluster name ",
+			name: "with cluster name",
 			makeDecorator: func() *decorator {
 				return &decorator{
 					kube:        store,
@@ -81,9 +81,10 @@ func TestTransform(t *testing.T) {
 			name: "with k8s cluster name ",
 			makeDecorator: func() *decorator {
 				return &decorator{
-					kube:           store,
-					log:            defaultLogger,
-					k8sClusterName: defaultK8sClusterName,
+					kube:                store,
+					log:                 defaultLogger,
+					clusterName:         defaultK8sClusterName,
+					isLegacyClusterName: true,
 				}
 			},
 			args: args{
@@ -91,27 +92,6 @@ func TestTransform(t *testing.T) {
 			},
 			checkFlow: func(flow *ebpf.Record, r *require.Assertions) {
 				r.Equal(map[attr.Name]string{
-					attr.K8sClusterName: defaultK8sClusterName,
-				}, flow.Attrs.Metadata)
-			},
-			expected: false,
-		},
-		{
-			name: "with cluster name and k8s cluster name ",
-			makeDecorator: func() *decorator {
-				return &decorator{
-					kube:           store,
-					log:            defaultLogger,
-					clusterName:    defaultClusterName,
-					k8sClusterName: defaultK8sClusterName,
-				}
-			},
-			args: args{
-				flow: defaultFlow(),
-			},
-			checkFlow: func(flow *ebpf.Record, r *require.Assertions) {
-				r.Equal(map[attr.Name]string{
-					attr.ClusterName:    defaultClusterName,
 					attr.K8sClusterName: defaultK8sClusterName,
 				}, flow.Attrs.Metadata)
 			},

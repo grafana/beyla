@@ -29,6 +29,8 @@ func RunBeyla(ctx context.Context, cfg *beyla.Config) error {
 		return fmt.Errorf("can't build common context info: %w", err)
 	}
 
+	transformK8sConfig(&cfg.Attributes)
+
 	app := cfg.Enabled(beyla.FeatureAppO11y)
 	net := cfg.Enabled(beyla.FeatureNetO11y)
 
@@ -223,5 +225,15 @@ func attributeGroups(config *beyla.Config, ctxInfo *global.ContextInfo) {
 	}
 	if config.NetworkFlows.CIDRs.Enabled() {
 		ctxInfo.MetricAttributeGroups.Add(attributes.GroupNetCIDR)
+	}
+}
+
+// transformK8sConfig adds support for the new BEYLA_CLUSTER_NAME attribute
+func transformK8sConfig(cfg *beyla.Attributes) {
+	clusterName := cfg.ClusterName
+	if clusterName != "" {
+		cfg.Kubernetes.K8sClusterName = clusterName
+	} else {
+		cfg.Kubernetes.IsLegacyClusterName = true
 	}
 }

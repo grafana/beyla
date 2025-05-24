@@ -56,7 +56,6 @@ func (f *Flows) buildPipeline(ctx context.Context) (*swarm.Runner, error) {
 	kubeDecoratedFlows := msg.NewQueue[[]*ebpf.Record](msg.ChannelBufferLen(f.cfg.ChannelBufferLen))
 	swi.Add(k8s.MetadataDecoratorProvider(
 		ctx,
-		f.cfg.Attributes.ClusterName,
 		&f.cfg.Attributes.Kubernetes,
 		f.ctxInfo.K8sInformer,
 		dedupedEBPFFlows, kubeDecoratedFlows),

@@ -123,7 +123,7 @@ func TestK8sDecoration(t *testing.T) {
 	}
 	inputQueue := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
 	dec := k8sMetadataDecorator{
-		db: store, clusterName: "the-cluster", k8sClusterName: "the-k8s-cluster",
+		db: store, clusterName: "the-cluster",
 		input:  inputQueue.Subscribe(),
 		output: msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10)),
 	}
@@ -152,7 +152,6 @@ func TestK8sDecoration(t *testing.T) {
 			"k8s.deployment.name": "deployment-12",
 			"k8s.owner.name":      "deployment-12",
 			"k8s.pod.start_time":  "2020-01-02 12:12:56",
-			"k8s.cluster.name":    "the-k8s-cluster",
 			"cluster.name":        "the-cluster",
 		}, deco[0].Service.Metadata)
 	})
@@ -174,7 +173,6 @@ func TestK8sDecoration(t *testing.T) {
 			"k8s.container.name":  "a-container",
 			"k8s.pod.uid":         "uid-34",
 			"k8s.pod.start_time":  "2020-01-02 12:34:56",
-			"k8s.cluster.name":    "the-k8s-cluster",
 			"cluster.name":        "the-cluster",
 		}, deco[0].Service.Metadata)
 	})
@@ -194,7 +192,6 @@ func TestK8sDecoration(t *testing.T) {
 			"k8s.container.name": "a-container",
 			"k8s.pod.uid":        "uid-56",
 			"k8s.pod.start_time": "2020-01-02 12:56:56",
-			"k8s.cluster.name":   "the-k8s-cluster",
 			"cluster.name":       "the-cluster",
 		}, deco[0].Service.Metadata)
 	})
@@ -214,7 +211,6 @@ func TestK8sDecoration(t *testing.T) {
 			"k8s.container.name": "a-container",
 			"k8s.pod.uid":        "uid-78",
 			"k8s.pod.start_time": "2020-01-02 12:56:56",
-			"k8s.cluster.name":   "the-k8s-cluster",
 			"cluster.name":       "the-cluster",
 			"service.name":       "a-cool-name",
 			"service.namespace":  "a-cool-namespace",
@@ -236,7 +232,6 @@ func TestK8sDecoration(t *testing.T) {
 			"k8s.container.name": "a-container",
 			"k8s.pod.uid":        "uid-33",
 			"k8s.pod.start_time": "2020-01-02 12:56:56",
-			"k8s.cluster.name":   "the-k8s-cluster",
 			"cluster.name":       "the-cluster",
 			"service.name":       "otel-override-name",
 			"service.namespace":  "otel-override-ns",
@@ -258,7 +253,6 @@ func TestK8sDecoration(t *testing.T) {
 			"k8s.container.name": "a-container",
 			"k8s.pod.uid":        "uid-66",
 			"k8s.pod.start_time": "2020-01-02 12:56:56",
-			"k8s.cluster.name":   "the-k8s-cluster",
 			"cluster.name":       "the-cluster",
 			"service.name":       "env-svc-name",
 			"service.namespace":  "env-svc-ns",
@@ -294,7 +288,6 @@ func TestK8sDecoration(t *testing.T) {
 			"k8s.deployment.name": "deployment-12",
 			"k8s.owner.name":      "deployment-12",
 			"k8s.pod.start_time":  "2020-01-02 12:12:56",
-			"k8s.cluster.name":    "the-k8s-cluster",
 			"cluster.name":        "the-cluster",
 		}, deco[0].Service.Metadata)
 	})

@@ -72,6 +72,7 @@ const (
 	FeatureSpanSizes        = "application_span_sizes"
 	FeatureGraph            = "application_service_graph"
 	FeatureProcess          = "application_process"
+	FeatureApplicationHost  = "application_host"
 	FeatureEBPF             = "ebpf"
 )
 
@@ -195,6 +196,10 @@ func (m *MetricsConfig) InvalidSpanMetricsConfig() bool {
 	return slices.Contains(m.Features, FeatureSpan) && slices.Contains(m.Features, FeatureSpanOTel)
 }
 
+func (m *MetricsConfig) HostMetricsEnabled() bool {
+	return slices.Contains(m.Features, FeatureApplicationHost)
+}
+
 func (m *MetricsConfig) ServiceGraphMetricsEnabled() bool {
 	return slices.Contains(m.Features, FeatureGraph)
 }
@@ -313,7 +318,7 @@ func ReportMetrics(
 			return nil, fmt.Errorf("instantiating OTEL metrics reporter: %w", err)
 		}
 
-		if mr.cfg.AnySpanMetricsEnabled() {
+		if mr.cfg.HostMetricsEnabled() {
 			hostMetrics := mr.newMetricsInstance(nil)
 			hostMeter := hostMetrics.provider.Meter(reporterName)
 			err := mr.setupHostInfoMeter(hostMeter)

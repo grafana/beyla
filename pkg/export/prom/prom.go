@@ -33,7 +33,9 @@ var timeNow = time.Now
 // but following the different naming conventions
 const (
 	SpanMetricsLatency       = "traces_spanmetrics_latency"
+	SpanMetricsLatencyOTel   = "traces_span_metrics_duration"
 	SpanMetricsCalls         = "traces_spanmetrics_calls_total"
+	SpanMetricsCallsOTel     = "traces_span_metrics_calls_total"
 	SpanMetricsRequestSizes  = "traces_spanmetrics_size_total"
 	SpanMetricsResponseSizes = "traces_spanmetrics_response_size_total"
 	TracesTargetInfo         = "traces_target_info"
@@ -138,8 +140,20 @@ func mlog() *slog.Logger {
 	return slog.With("component", "prom.MetricsReporter")
 }
 
+func (p *PrometheusConfig) AnySpanMetricsEnabled() bool {
+	return p.SpanMetricsEnabled() || p.SpanMetricsSizesEnabled() || p.ServiceGraphMetricsEnabled()
+}
+
+func (p *PrometheusConfig) SpanMetricsSizesEnabled() bool {
+	return slices.Contains(p.Features, otel.FeatureSpanSizes)
+}
+
 func (p *PrometheusConfig) SpanMetricsEnabled() bool {
-	return slices.Contains(p.Features, otel.FeatureSpan)
+	return slices.Contains(p.Features, otel.FeatureSpan) || slices.Contains(p.Features, otel.FeatureSpanOTel)
+}
+
+func (p *PrometheusConfig) InvalidSpanMetricsConfig() bool {
+	return slices.Contains(p.Features, otel.FeatureSpan) && slices.Contains(p.Features, otel.FeatureSpanOTel)
 }
 
 func (p *PrometheusConfig) OTelMetricsEnabled() bool {
@@ -172,7 +186,7 @@ func (p *PrometheusConfig) EndpointEnabled() bool {
 
 // nolint:gocritic
 func (p *PrometheusConfig) Enabled() bool {
-	return p.EndpointEnabled() && (p.OTelMetricsEnabled() || p.SpanMetricsEnabled() || p.ServiceGraphMetricsEnabled() || p.NetworkMetricsEnabled())
+	return p.EndpointEnabled() && (p.OTelMetricsEnabled() || p.AnySpanMetricsEnabled() || p.NetworkMetricsEnabled())
 }
 
 type metricsReporter struct {
@@ -268,6 +282,22 @@ func PrometheusEndpoint(
 		}
 		return reporter.reportMetrics, nil
 	}
+}
+
+func (p *PrometheusConfig) spanMetricsLatencyName() string {
+	if slices.Contains(p.Features, otel.FeatureSpan) {
+		return SpanMetricsLatency
+	}
+
+	return SpanMetricsLatencyOTel
+}
+
+func (p *PrometheusConfig) spanMetricsCallsName() string {
+	if slices.Contains(p.Features, otel.FeatureSpan) {
+		return SpanMetricsCalls
+	}
+
+	return SpanMetricsCallsOTel
 }
 
 // nolint:cyclop
@@ -503,7 +533,7 @@ func newReporter(
 		}),
 		spanMetricsLatency: optionalHistogramProvider(cfg.SpanMetricsEnabled(), func() *Expirer[prometheus.Histogram] {
 			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
-				Name:                            SpanMetricsLatency,
+				Name:                            cfg.spanMetricsLatencyName(),
 				Help:                            "duration of service calls (client and server), in seconds, in trace span metrics format",
 				Buckets:                         cfg.Buckets.DurationHistogram,
 				NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
@@ -513,29 +543,29 @@ func newReporter(
 		}),
 		spanMetricsCallsTotal: optionalCounterProvider(cfg.SpanMetricsEnabled(), func() *Expirer[prometheus.Counter] {
 			return NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
-				Name: SpanMetricsCalls,
+				Name: cfg.spanMetricsCallsName(),
 				Help: "number of service calls in trace span metrics format",
 			}, labelNamesSpans()).MetricVec, clock.Time, cfg.TTL)
 		}),
-		spanMetricsRequestSizeTotal: optionalCounterProvider(cfg.SpanMetricsEnabled(), func() *Expirer[prometheus.Counter] {
+		spanMetricsRequestSizeTotal: optionalCounterProvider(cfg.SpanMetricsSizesEnabled(), func() *Expirer[prometheus.Counter] {
 			return NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
 				Name: SpanMetricsRequestSizes,
 				Help: "size of service calls, in bytes, in trace span metrics format",
 			}, labelNamesSpans()).MetricVec, clock.Time, cfg.TTL)
 		}),
-		spanMetricsResponseSizeTotal: optionalCounterProvider(cfg.SpanMetricsEnabled(), func() *Expirer[prometheus.Counter] {
+		spanMetricsResponseSizeTotal: optionalCounterProvider(cfg.SpanMetricsSizesEnabled(), func() *Expirer[prometheus.Counter] {
 			return NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
 				Name: SpanMetricsResponseSizes,
 				Help: "size of service responses, in bytes, in trace span metrics format",
 			}, labelNamesSpans()).MetricVec, clock.Time, cfg.TTL)
 		}),
-		tracesTargetInfo: optionalDirectGaugeProvider(cfg.SpanMetricsEnabled() || cfg.ServiceGraphMetricsEnabled(), func() *prometheus.GaugeVec {
+		tracesTargetInfo: optionalDirectGaugeProvider(cfg.AnySpanMetricsEnabled(), func() *prometheus.GaugeVec {
 			return prometheus.NewGaugeVec(prometheus.GaugeOpts{
 				Name: TracesTargetInfo,
 				Help: "target service information in trace span metric format",
 			}, labelNamesTargetInfo(kubeEnabled, extraMetadataLabels))
 		}),
-		tracesHostInfo: optionalGaugeProvider(cfg.SpanMetricsEnabled() || cfg.ServiceGraphMetricsEnabled(), func() *Expirer[prometheus.Gauge] {
+		tracesHostInfo: optionalGaugeProvider(cfg.AnySpanMetricsEnabled(), func() *Expirer[prometheus.Gauge] {
 			return NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
 				Name: TracesHostInfo,
 				Help: "A metric with a constant '1' value labeled by the host id ",
@@ -664,9 +694,13 @@ func newReporter(
 		registeredMetrics = append(registeredMetrics,
 			mr.spanMetricsLatency,
 			mr.spanMetricsCallsTotal,
+		)
+	}
+
+	if cfg.SpanMetricsSizesEnabled() {
+		registeredMetrics = append(registeredMetrics,
 			mr.spanMetricsRequestSizeTotal,
 			mr.spanMetricsResponseSizeTotal,
-			mr.tracesTargetInfo,
 		)
 	}
 
@@ -679,8 +713,8 @@ func newReporter(
 		)
 	}
 
-	if cfg.SpanMetricsEnabled() || cfg.ServiceGraphMetricsEnabled() {
-		registeredMetrics = append(registeredMetrics, mr.tracesHostInfo)
+	if cfg.AnySpanMetricsEnabled() {
+		registeredMetrics = append(registeredMetrics, mr.tracesTargetInfo, mr.tracesHostInfo)
 	}
 
 	if is.GPUEnabled() {
@@ -777,7 +811,7 @@ func (r *metricsReporter) observe(span *request.Span) {
 	}
 	t := span.Timings()
 	r.beylaInfo.WithLabelValues(span.Service.SDKLanguage.String()).metric.Set(1.0)
-	if r.cfg.SpanMetricsEnabled() || r.cfg.ServiceGraphMetricsEnabled() {
+	if r.cfg.AnySpanMetricsEnabled() {
 		r.tracesHostInfo.WithLabelValues(r.hostID).metric.Set(1.0)
 	}
 	duration := t.End.Sub(t.RequestStart).Seconds()
@@ -864,6 +898,10 @@ func (r *metricsReporter) observe(span *request.Span) {
 		lv := r.labelValuesSpans(span)
 		r.spanMetricsLatency.WithLabelValues(lv...).metric.Observe(duration)
 		r.spanMetricsCallsTotal.WithLabelValues(lv...).metric.Add(1)
+	}
+
+	if r.cfg.SpanMetricsSizesEnabled() {
+		lv := r.labelValuesSpans(span)
 		r.spanMetricsRequestSizeTotal.WithLabelValues(lv...).metric.Add(float64(span.RequestBodyLength()))
 		r.spanMetricsResponseSizeTotal.WithLabelValues(lv...).metric.Add(float64(span.ResponseBodyLength()))
 	}
@@ -1027,7 +1065,7 @@ func (r *metricsReporter) createSurveyInfo(service *svc.Attrs) {
 }
 
 func (r *metricsReporter) createTracesTargetInfo(service *svc.Attrs) {
-	if !r.cfg.SpanMetricsEnabled() && !r.cfg.ServiceGraphMetricsEnabled() {
+	if !r.cfg.AnySpanMetricsEnabled() {
 		return
 	}
 	targetInfoLabelValues := r.labelValuesTargetInfo(service)
@@ -1053,7 +1091,7 @@ func (r *metricsReporter) deleteSurveyInfo(uid svc.UID, service *svc.Attrs) {
 }
 
 func (r *metricsReporter) deleteTracesTargetInfo(uid svc.UID, service *svc.Attrs) {
-	if !r.cfg.SpanMetricsEnabled() && !r.cfg.ServiceGraphMetricsEnabled() {
+	if !r.cfg.AnySpanMetricsEnabled() {
 		return
 	}
 	targetInfoLabelValues := r.labelValuesTargetInfo(r.origService(uid, service))

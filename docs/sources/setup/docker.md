@@ -71,7 +71,7 @@ time=2023-05-22T14:03:42.526Z level=INFO msg="Starting main node"
 2023-05-22 14:13:47.52221347 (115µs[75.625µs]) 200 GET /static/style.css [172.17.0.1]->[localhost:18443] size:0B
 ```
 
-Now that Beyla is tracing the the target HTTP service, configure it to send metrics and traces to an OpenTelemetry endpoint, or have metrics scraped by Prometheus.
+Now that Beyla is tracing the target HTTP service, configure it to send metrics and traces to an OpenTelemetry endpoint, or have metrics scraped by Prometheus.
 
 For information on how to export traces and metrics, refer to the [configuration options](../../configure/options/) documentation.
 

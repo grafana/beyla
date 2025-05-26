@@ -60,13 +60,16 @@ func (pf *ProcessFinder) Start(ctx context.Context) (<-chan Event[*ebpf.Instrume
 	surveyExecutables := msg.NewQueue[[]Event[ebpf.Instrumentable]](msg.ChannelBufferLen(pf.cfg.ChannelBufferLen))
 	swi.Add(ExecTyperProvider(pf.cfg, pf.ctxInfo.Metrics, pf.ctxInfo.K8sInformer, surveyFilteredEvents, surveyExecutables))
 
-	swi.Add(SurveyEventGenerator(surveyExecutables, pf.processEventsInput))
-
 	// we could subscribe ContainerDBUpdater directly to the executableTypes queue and not providing any output channel
 	// but forcing the output by the executableTypesReplica channel only after the Container DB has been updated
 	// prevents race conditions in later stages of the pipeline
 	storedExecutableTypes := msg.NewQueue[[]Event[ebpf.Instrumentable]](msg.ChannelBufferLen(pf.cfg.ChannelBufferLen))
 	swi.Add(ContainerDBUpdaterProvider(pf.ctxInfo.K8sInformer, executableTypes, storedExecutableTypes))
+
+	surveyExecutableTypes := msg.NewQueue[[]Event[ebpf.Instrumentable]](msg.ChannelBufferLen(pf.cfg.ChannelBufferLen))
+	swi.Add(ContainerDBUpdaterProvider(pf.ctxInfo.K8sInformer, surveyExecutables, surveyExecutableTypes))
+
+	swi.Add(SurveyEventGenerator(surveyExecutableTypes, pf.processEventsInput))
 
 	swi.Add(TraceAttacherProvider(&TraceAttacher{
 		Cfg:                 pf.cfg,

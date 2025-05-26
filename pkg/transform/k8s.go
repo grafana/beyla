@@ -162,8 +162,6 @@ func (md *procEventMetadataDecorator) k8sLoop(_ context.Context) {
 	defer md.output.Close()
 	klog().Debug("starting kubernetes process event decoration loop")
 	for pe := range md.input {
-		klog().Debug("annotating process event", "event", pe)
-
 		if podMeta, containerName := md.db.PodContainerByPIDNs(pe.File.Ns); podMeta != nil {
 			appendMetadata(
 				md.db,
@@ -174,9 +172,11 @@ func (md *procEventMetadataDecorator) k8sLoop(_ context.Context) {
 				containerName,
 			)
 		} else {
+			klog().Debug("can't find metadata for event", "ns", pe.File.Ns)
 			// do not leave the service attributes map as nil
 			pe.File.Service.Metadata = map[attr.Name]string{}
 		}
+		klog().Debug("annotating process event", "event", pe, "ns", pe.File.Ns, "procPID", pe.File.Pid, "procPPID", pe.File.Ppid, "service", pe.File.Service.UID)
 
 		// in-place decoration and forwarding
 		md.output.Send(pe)

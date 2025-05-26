@@ -52,7 +52,8 @@
       ],
       "net/http.http2ClientConn": [
         "nextStreamID",
-        "tconn"
+        "tconn",
+        "fr"
       ],
       "net/http.http2serverConn": [
         "conn"
@@ -74,7 +75,8 @@
       ],
       "golang.org/x/net/http2.ClientConn": [
         "nextStreamID",
-        "tconn"
+        "tconn",
+        "fr"
       ],
       "golang.org/x/net/http2.Framer": [
         "w"
@@ -92,7 +94,8 @@
     "fields": {
       "google.golang.org/grpc/internal/transport.Stream": [
         "method",
-        "st"
+        "st",
+        "id"
       ],
       "google.golang.org/grpc/internal/status.Status": [
         "s"
@@ -101,17 +104,20 @@
         "conn"
       ],
       "google.golang.org/grpc/internal/transport.http2Client": [
-        "nextID",
         "conn",
         "scheme"
       ],
       "google.golang.org/grpc/internal/transport.bufWriter": [
         "buf",
-        "offset"
+        "offset",
+        "conn"
       ],
       "google.golang.org/grpc/internal/transport.ServerStream": [
         "[1.69.0]Stream",
         "[1.69.0]st"
+      ],
+      "google.golang.org/grpc/internal/transport.ClientStream": [
+        "[1.69.0]Stream"
       ]
     }
   },

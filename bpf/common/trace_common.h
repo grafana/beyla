@@ -254,11 +254,15 @@ static __always_inline u8 find_trace_for_server_request(connection_info_t *conn,
                 __builtin_memcpy(tp->parent_id, existing_tp->tp.span_id, sizeof(tp->parent_id));
                 // Mark the client info as invalid (used), in case the client
                 // request information is not cleaned up.
-                if (type == EVENT_HTTP_REQUEST) {
-                    // We only do it for HTTP because TCP can be confused with SSL
+                if ((type == EVENT_HTTP_REQUEST && existing_tp->req_type == EVENT_HTTP_CLIENT) &&
+                    (type == EVENT_TCP_REQUEST && existing_tp->req_type == EVENT_TCP_REQUEST)) {
+                    // We ensure that server requests match the client type, otherwise SSL
+                    // can often be confused with TCP.
                     existing_tp->valid = 0;
                     set_trace_info_for_connection(conn, TRACE_TYPE_CLIENT, existing_tp);
                     bpf_dbg_printk("setting the client info as used");
+                } else {
+                    bpf_dbg_printk("incompatible trace info, not using the correlated tp");
                 }
             } else {
                 bpf_dbg_printk("the existing client tp was already used, ignoring");

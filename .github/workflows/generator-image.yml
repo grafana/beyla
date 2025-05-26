@@ -1,6 +1,8 @@
 name: Publish Beyla Docker Generator Image
 on:
   workflow_dispatch:
+  push:
+    branches: [ 'main', 'release-*' ]
 
 # Set restrictive permissions at workflow level
 permissions:
@@ -47,6 +49,24 @@ jobs:
       - name: Get current timestamp
         id: timestamp
         run: echo "::set-output name=ts::$(date +'%Y%m%d%H%M')"
+
+        # compute VERSION = "x.y" if branch is release-x.y, otherwise "main"
+      - name: Extract version
+        id: version
+        run: |
+          if [[ "${GITHUB_REF_NAME}" == release-* ]]; then
+            echo "version=${GITHUB_REF_NAME#release-}" >> $GITHUB_OUTPUT
+          else
+            echo "version=main" >> $GITHUB_OUTPUT
+          fi
+      - run: echo "Version is ${{ steps.version.outputs.version }}"
+
+      - name: Extract cilium/ebpf version
+        id: ebpf_version
+        run: |
+          version=$(grep 'cilium/ebpf' go.mod | awk '{print $2}')
+          echo "version=$version" >> $GITHUB_OUTPUT
+
       - name: Build and push Docker image
         id: push
         uses: docker/build-push-action@2cdde995de11925a030ce8070c3d77a52ffcf1c0 # v5.3.0
@@ -56,6 +76,8 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            EBPF_VER=${{ steps.ebpf_version.outputs.version }}
           tags: |
             "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.timestamp.outputs.ts }}"
-            "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main"
+            "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}"

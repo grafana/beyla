@@ -153,6 +153,7 @@ func TestDecoration(t *testing.T) {
 			"k8s.owner.name":      "deployment-12",
 			"k8s.pod.start_time":  "2020-01-02 12:12:56",
 			"k8s.cluster.name":    "the-cluster",
+			"k8s.kind":            "Deployment",
 		}, deco[0].Service.Metadata)
 	})
 	t.Run("pod info whose replicaset did not have an Owner should set the replicaSet name", func(t *testing.T) {
@@ -174,6 +175,7 @@ func TestDecoration(t *testing.T) {
 			"k8s.pod.uid":         "uid-34",
 			"k8s.pod.start_time":  "2020-01-02 12:34:56",
 			"k8s.cluster.name":    "the-cluster",
+			"k8s.kind":            "ReplicaSet",
 		}, deco[0].Service.Metadata)
 	})
 	t.Run("pod info with only pod name should set pod name as name", func(t *testing.T) {
@@ -289,6 +291,7 @@ func TestDecoration(t *testing.T) {
 			"k8s.owner.name":      "deployment-12",
 			"k8s.pod.start_time":  "2020-01-02 12:12:56",
 			"k8s.cluster.name":    "the-cluster",
+			"k8s.kind":            "Deployment",
 		}, deco[0].Service.Metadata)
 	})
 }

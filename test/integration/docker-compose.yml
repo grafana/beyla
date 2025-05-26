@@ -36,8 +36,8 @@ services:
       GOCOVERDIR: "/coverage"
       BEYLA_TRACE_PRINTER: "json"
       BEYLA_OPEN_PORT: "${BEYLA_OPEN_PORT}"
-      BEYLA_OTEL_METRICS_FEATURES: "application,application_span,application_process,application_service_graph,ebpf"
-      BEYLA_PROMETHEUS_FEATURES: "application,application_span,application_process,application_service_graph,ebpf"
+      BEYLA_OTEL_METRICS_FEATURES: "application,application_span_otel,application_process,application_service_graph,ebpf"
+      BEYLA_PROMETHEUS_FEATURES: "application,application_span_otel,application_process,application_service_graph,ebpf"
       BEYLA_DISCOVERY_POLL_INTERVAL: 500ms
       BEYLA_EXECUTABLE_NAME: "${BEYLA_EXECUTABLE_NAME}"
       BEYLA_SKIP_GO_SPECIFIC_TRACERS: "${BEYLA_SKIP_GO_SPECIFIC_TRACERS}"

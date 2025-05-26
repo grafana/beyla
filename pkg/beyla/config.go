@@ -314,6 +314,13 @@ func (c *Config) Validate() error {
 			" grafana, otel_metrics_export, otel_traces_export or prometheus_export")
 	}
 
+	if c.Enabled(FeatureAppO11y) &&
+		((c.Prometheus.Enabled() && c.Prometheus.InvalidSpanMetricsConfig()) ||
+			(c.Metrics.Enabled() && c.Metrics.InvalidSpanMetricsConfig())) {
+		return ConfigError("you can only enable one format of span metrics," +
+			" application_span or application_span_otel")
+	}
+
 	if len(c.Routes.WildcardChar) > 1 {
 		return ConfigError("wildcard_char can only be a single character, multiple characters are not allowed")
 	}

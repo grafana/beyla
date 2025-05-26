@@ -717,6 +717,10 @@ func newReporter(
 		)
 	}
 
+	if cfg.AnySpanMetricsEnabled() {
+		registeredMetrics = append(registeredMetrics, mr.tracesTargetInfo)
+	}
+
 	if cfg.HostMetricsEnabled() {
 		registeredMetrics = append(registeredMetrics, mr.tracesHostInfo)
 	}

@@ -5,16 +5,15 @@ import (
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
 	"github.com/grafana/beyla/v2/pkg/internal/kube"
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/v2/pkg/kubecache/meta"
-	"github.com/stretchr/testify/require"
 )
 
 func TestTransform(t *testing.T) {
-	t.Parallel()
-
 	var (
 		defaultLogger = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 			Level: slog.LevelWarn,
@@ -55,7 +54,7 @@ func TestTransform(t *testing.T) {
 			args: args{
 				flow: defaultFlow(),
 			},
-			checkFlow: func(flow *ebpf.Record, r *require.Assertions) {},
+			checkFlow: func(_ *ebpf.Record, _ *require.Assertions) {},
 			expected:  false,
 		},
 		{
@@ -72,7 +71,8 @@ func TestTransform(t *testing.T) {
 			},
 			checkFlow: func(flow *ebpf.Record, r *require.Assertions) {
 				r.Equal(map[attr.Name]string{
-					attr.ClusterName: defaultClusterName,
+					attr.ClusterName:    defaultClusterName,
+					attr.K8sClusterName: defaultClusterName,
 				}, flow.Attrs.Metadata)
 			},
 			expected: false,
@@ -81,10 +81,9 @@ func TestTransform(t *testing.T) {
 			name: "with k8s cluster name ",
 			makeDecorator: func() *decorator {
 				return &decorator{
-					kube:                store,
-					log:                 defaultLogger,
-					clusterName:         defaultK8sClusterName,
-					isLegacyClusterName: true,
+					kube:        store,
+					log:         defaultLogger,
+					clusterName: defaultK8sClusterName,
 				}
 			},
 			args: args{
@@ -93,6 +92,7 @@ func TestTransform(t *testing.T) {
 			checkFlow: func(flow *ebpf.Record, r *require.Assertions) {
 				r.Equal(map[attr.Name]string{
 					attr.K8sClusterName: defaultK8sClusterName,
+					attr.ClusterName:    defaultK8sClusterName,
 				}, flow.Attrs.Metadata)
 			},
 			expected: false,

@@ -86,11 +86,10 @@ func MetadataDecoratorProvider(
 }
 
 type decorator struct {
-	log                 *slog.Logger
-	alreadyLoggedIPs    *simplelru.LRU[string, struct{}]
-	kube                *kube.Store
-	clusterName         string
-	isLegacyClusterName bool
+	log              *slog.Logger
+	alreadyLoggedIPs *simplelru.LRU[string, struct{}]
+	kube             *kube.Store
+	clusterName      string
 }
 
 func (n *decorator) decorateNoDrop(flows []*ebpf.Record) []*ebpf.Record {
@@ -114,10 +113,11 @@ func (n *decorator) transform(flow *ebpf.Record) bool {
 	if flow.Attrs.Metadata == nil {
 		flow.Attrs.Metadata = map[attr.Name]string{}
 	}
-	if n.isLegacyClusterName {
-		flow.Attrs.Metadata[attr.K8sClusterName] = n.clusterName
-	} else {
+	if n.clusterName != "" {
+		// From Beyla 2.3, cluster_name is the recommended attribute
+		// k8s_cluster_name is kept for backwards compatibility
 		flow.Attrs.Metadata[attr.ClusterName] = n.clusterName
+		flow.Attrs.Metadata[attr.K8sClusterName] = n.clusterName
 	}
 	srcOk := n.decorate(flow, attrPrefixSrc, flow.Id.SrcIP().IP().String())
 	dstOk := n.decorate(flow, attrPrefixDst, flow.Id.DstIP().IP().String())
@@ -190,20 +190,15 @@ func (n *decorator) nodeLabels(flow *ebpf.Record, prefix string, meta *informer.
 }
 
 // newDecorator create a new transform
-func newDecorator(
-	ctx context.Context,
-	cfg *transform.KubernetesDecorator,
-	k8sInformer *kube.MetadataProvider,
-) (*decorator, error) {
+func newDecorator(ctx context.Context, cfg *transform.KubernetesDecorator, k8sInformer *kube.MetadataProvider) (*decorator, error) {
 	meta, err := k8sInformer.Get(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("instantiating k8s.MetadataDecorator: %w", err)
 	}
 	nt := decorator{
-		log:                 log(),
-		clusterName:         transform.KubeClusterName(ctx, cfg, k8sInformer),
-		isLegacyClusterName: cfg.IsLegacyClusterName,
-		kube:                meta,
+		log:         log(),
+		clusterName: transform.KubeClusterName(ctx, cfg, k8sInformer),
+		kube:        meta,
 	}
 	if nt.log.Enabled(ctx, slog.LevelDebug) {
 		var err error

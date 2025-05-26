@@ -167,7 +167,6 @@ If you run Beyla in a Kubernetes environment, you can configure it to decorate t
 - `k8s.container.name`
 - `k8s.pod.uid`
 - `k8s.pod.start_time`
-- `k8s.cluster.name`
 - `cluster.name`
 
 In YAML, this section is named `kubernetes` and is under the `attributes` top-level section. For example:

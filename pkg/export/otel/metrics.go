@@ -1118,7 +1118,6 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 func (mr *MetricsReporter) createTargetInfo(reporter *Metrics) {
 	mlog().Debug("Creating target_info")
 	attrOpt := instrument.WithAttributeSet(attribute.NewSet(reporter.resourceAttributes...))
-	fmt.Println("attrOpt attribute set: ", reporter.resourceAttributes)
 	reporter.targetInfo.Add(mr.ctx, 1, attrOpt)
 }
 

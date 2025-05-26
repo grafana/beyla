@@ -90,15 +90,16 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 			attr.K8sDstOwnerName: true,
 			attr.K8sDstOwnerType: true,
 			attr.K8sDstNamespace: true,
-			attr.K8sClusterName:  true,
-			attr.K8sSrcName:      false,
-			attr.K8sSrcType:      false,
-			attr.K8sSrcNodeIP:    false,
-			attr.K8sSrcNodeName:  false,
-			attr.K8sDstName:      false,
-			attr.K8sDstType:      false,
-			attr.K8sDstNodeIP:    false,
-			attr.K8sDstNodeName:  false,
+			// TODO Beyla 3.0: set to false
+			attr.K8sClusterName: true,
+			attr.K8sSrcName:     false,
+			attr.K8sSrcType:     false,
+			attr.K8sSrcNodeIP:   false,
+			attr.K8sSrcNodeName: false,
+			attr.K8sDstName:     false,
+			attr.K8sDstType:     false,
+			attr.K8sDstNodeIP:   false,
+			attr.K8sDstNodeName: false,
 		},
 	}
 
@@ -115,6 +116,8 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 	// networkInterZone* supports the same attributes as
 	// network* counterpart, but all of them disabled by default, to keep cardinality low
 	networkInterZone := copyDisabled(networkAttributes)
+	networkInterZone.Attributes[attr.ClusterName] = true
+	// TODO Beyla 3.0: set to false and mark to be removed in Beyla 4.0
 	networkInterZone.Attributes[attr.K8sClusterName] = true
 
 	networkInterZoneKube := copyDisabled(networkKubeAttributes)

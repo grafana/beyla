@@ -233,7 +233,5 @@ func transformK8sConfig(cfg *beyla.Attributes) {
 	clusterName := cfg.ClusterName
 	if clusterName != "" {
 		cfg.Kubernetes.K8sClusterName = clusterName
-	} else {
-		cfg.Kubernetes.IsLegacyClusterName = true
 	}
 }

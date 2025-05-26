@@ -109,7 +109,6 @@ var DefaultConfig = Config{
 		},
 	},
 	Attributes: Attributes{
-		ClusterName: "beyla",
 		InstanceID: traces.InstanceIDConfig{
 			HostnameDNSResolution: true,
 		},

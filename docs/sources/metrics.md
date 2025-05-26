@@ -67,9 +67,8 @@ In order to configure which attributes to show or which attributes to hide, chec
 | Application (all)              | `k8s.cluster.name`           | shown if Kubernetes metadata is enabled           |
 | Application (all)              | `service.name`               | shown                                             |
 | Application (all)              | `service.namespace`          | shown                                             |
-| Application (all)              | `target.instance`            | 
-shown                                             |
-| Application (all)              | `cluster.name`               | shown, overrides `k8s.cluster.name` if set                                    |
+| Application (all)              | `target.instance`            | shown                                             |
+| Application (all)              | `cluster.name`               | shown,                                            |
 | Application (all)              | `url.path`                   | hidden                                            |
 | Application (client)           | `server.address`             | hidden                                            |
 | Application (client)           | `server.port`                | hidden                                            |
@@ -100,7 +99,6 @@ shown                                             |
 | `beyla.network.flow.bytes`     | `dst.port`                   | hidden                                            |
 | `beyla.network.flow.bytes`     | `dst.zone` (only Kubernetes) | hidden                                            |
 | `beyla.network.flow.bytes`     | `iface`                      | hidden                                            |
-| `beyla.network.flow.bytes`     | `k8s.cluster.name`           | shown if Kubernetes is enabled                    |
 | `beyla.network.flow.bytes`     | `k8s.dst.name`               | hidden                                            |
 | `beyla.network.flow.bytes`     | `k8s.dst.namespace`          | shown if Kubernetes is enabled                    |
 | `beyla.network.flow.bytes`     | `k8s.dst.node.ip`            | hidden                                            |

@@ -54,12 +54,8 @@ func (f *Flows) buildPipeline(ctx context.Context) (*swarm.Runner, error) {
 	}, protocolFilteredEbpfFlows, dedupedEBPFFlows))
 
 	kubeDecoratedFlows := msg.NewQueue[[]*ebpf.Record](msg.ChannelBufferLen(f.cfg.ChannelBufferLen))
-	swi.Add(k8s.MetadataDecoratorProvider(
-		ctx,
-		&f.cfg.Attributes.Kubernetes,
-		f.ctxInfo.K8sInformer,
-		dedupedEBPFFlows, kubeDecoratedFlows),
-	)
+	swi.Add(k8s.MetadataDecoratorProvider(ctx, &f.cfg.Attributes.Kubernetes, f.ctxInfo.K8sInformer,
+		dedupedEBPFFlows, kubeDecoratedFlows))
 
 	dnsDecoratedFlows := msg.NewQueue[[]*ebpf.Record](msg.ChannelBufferLen(f.cfg.ChannelBufferLen))
 	swi.Add(flow.ReverseDNSProvider(&f.cfg.NetworkFlows.ReverseDNS, kubeDecoratedFlows, dnsDecoratedFlows))

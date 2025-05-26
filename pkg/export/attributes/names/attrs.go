@@ -96,6 +96,7 @@ const (
 	K8sSrcNamespace = Name("k8s.src.namespace")
 	K8sDstOwnerName = Name("k8s.dst.owner.name")
 	K8sDstNamespace = Name("k8s.dst.namespace")
+	// K8sClusterName is deprecated. Use cluster.name
 	K8sClusterName  = Name("k8s.cluster.name")
 	K8sSrcName      = Name("k8s.src.name")
 	K8sSrcType      = Name("k8s.src.type")

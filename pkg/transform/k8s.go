@@ -230,9 +230,13 @@ func appendMetadata(db *kube.Store, svc *svc.Attrs, meta *kube.CachedObjMeta, cl
 	// growing cardinality
 	if topOwner != nil {
 		svc.Metadata[attr.K8sOwnerName] = topOwner.Name
+		svc.Metadata[attr.K8sKind] = topOwner.Kind
 	}
 
 	for _, owner := range meta.Meta.Pod.Owners {
+		if _, ok := svc.Metadata[attr.K8sKind]; !ok {
+			svc.Metadata[attr.K8sKind] = owner.Kind
+		}
 		if kindLabel := OwnerLabelName(owner.Kind); kindLabel != "" {
 			svc.Metadata[kindLabel] = owner.Name
 		}

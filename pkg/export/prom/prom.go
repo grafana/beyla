@@ -46,14 +46,14 @@ const (
 	ServiceGraphFailed = "traces_service_graph_request_failed_total"
 	ServiceGraphTotal  = "traces_service_graph_request_total"
 
-	serviceKey          = "service"
+	serviceNameKey      = "service_name"
 	serviceNamespaceKey = "service_namespace"
 
 	hostIDKey        = "host_id"
 	hostNameKey      = "host_name"
 	grafanaHostIDKey = "grafana_host_id"
 	osTypeKey        = "os_type"
-	clusterName      = "cluster_name"
+	clusterNameKey   = "cluster_name"
 
 	k8sNamespaceName   = "k8s_namespace_name"
 	k8sPodName         = "k8s_pod_name"
@@ -66,6 +66,8 @@ const (
 	k8sPodUID          = "k8s_pod_uid"
 	k8sPodStartTime    = "k8s_pod_start_time"
 	k8sClusterName     = "k8s_cluster_name"
+	k8sKind            = "k8s_kind"
+	k8sOwnerName       = "k8s_owner_name"
 
 	spanNameKey          = "span_name"
 	statusCodeKey        = "status_code"
@@ -885,7 +887,7 @@ func (r *metricsReporter) observe(span *request.Span) {
 
 func appendK8sLabelNames(names []string) []string {
 	names = append(names, k8sNamespaceName, k8sPodName, k8sContainerName, k8sNodeName, k8sPodUID, k8sPodStartTime,
-		k8sDeploymentName, k8sReplicaSetName, k8sStatefulSetName, k8sDaemonSetName, k8sClusterName)
+		k8sDeploymentName, k8sReplicaSetName, k8sStatefulSetName, k8sDaemonSetName, k8sClusterName, k8sKind, k8sOwnerName)
 	return names
 }
 
@@ -903,12 +905,14 @@ func appendK8sLabelValuesService(values []string, service *svc.Attrs) []string {
 		service.Metadata[(attr.K8sStatefulSetName)],
 		service.Metadata[(attr.K8sDaemonSetName)],
 		service.Metadata[(attr.K8sClusterName)],
+		service.Metadata[(attr.K8sKind)],
+		service.Metadata[(attr.K8sOwnerName)],
 	)
 	return values
 }
 
 func labelNamesSpans() []string {
-	return []string{serviceKey, serviceNamespaceKey, spanNameKey, statusCodeKey, spanKindKey, serviceInstanceKey, serviceJobKey, sourceKey}
+	return []string{serviceNameKey, serviceNamespaceKey, spanNameKey, statusCodeKey, spanKindKey, serviceInstanceKey, serviceJobKey, sourceKey}
 }
 
 func (r *metricsReporter) labelValuesSpans(span *request.Span) []string {
@@ -928,8 +932,8 @@ func labelNamesTargetInfo(kubeEnabled bool, extraMetadataLabelNames []attr.Name)
 	names := []string{
 		hostIDKey,
 		hostNameKey,
-		clusterName,
-		serviceKey,
+		clusterNameKey,
+		serviceNameKey,
 		serviceNamespaceKey,
 		serviceInstanceKey,
 		serviceJobKey,

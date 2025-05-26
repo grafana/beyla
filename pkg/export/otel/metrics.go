@@ -940,7 +940,7 @@ func (mr *MetricsReporter) tracesResourceAttributes(service *svc.Attrs) attribut
 		return *attribute.EmptySet()
 	}
 	baseAttrs := []attribute.KeyValue{
-		request.ServiceMetric(service.UID.Name),
+		semconv.ServiceName(service.UID.Name),
 		semconv.ServiceInstanceID(service.UID.Instance),
 		semconv.ServiceNamespace(service.UID.Namespace),
 		semconv.TelemetrySDKLanguageKey.String(service.SDKLanguage.String()),
@@ -974,7 +974,7 @@ func (mr *MetricsReporter) metricHostAttributes() attribute.Set {
 func (mr *MetricsReporter) spanMetricAttributes() []attributes.Field[*request.Span, attribute.KeyValue] {
 	return append(attributes.OpenTelemetryGetters(
 		request.SpanOTELGetters, []attr.Name{
-			attr.Service,
+			attr.ServiceName,
 			attr.ServiceInstanceID,
 			attr.ServiceNamespace,
 			attr.SpanKind,

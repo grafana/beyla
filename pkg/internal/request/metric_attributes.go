@@ -56,10 +56,6 @@ func SourceMetric(val string) attribute.KeyValue {
 	return attribute.Key(attr.Source).String(val)
 }
 
-func ServiceMetric(val string) attribute.KeyValue {
-	return attribute.Key(attr.Service).String(val)
-}
-
 func StatusCodeMetric(val string) attribute.KeyValue {
 	return attribute.Key(attr.StatusCode).String(val)
 }

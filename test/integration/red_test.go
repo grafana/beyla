@@ -130,7 +130,7 @@ func testSpanMetricsForHTTPLibrary(t *testing.T, svcName, svcNs string) {
 			`span_kind="SPAN_KIND_SERVER",` +
 			`status_code="STATUS_CODE_UNSET",` + // 404 is OK for server spans
 			`service_namespace="` + svcNs + `",` +
-			`service="` + svcName + `",` +
+			`service_name="` + svcName + `",` +
 			`span_name="GET /basic/:rnd"` +
 			`}`)
 		require.NoError(t, err)
@@ -146,7 +146,7 @@ func testSpanMetricsForHTTPLibrary(t *testing.T, svcName, svcNs string) {
 			`span_kind="SPAN_KIND_SERVER",` +
 			`status_code="STATUS_CODE_UNSET",` + // 404 is OK for server spans
 			`service_namespace="` + svcNs + `",` +
-			`service="` + svcName + `",` +
+			`service_name="` + svcName + `",` +
 			`span_name="GET /basic/:rnd"` +
 			`}`)
 		require.NoError(t, err)
@@ -160,7 +160,7 @@ func testSpanMetricsForHTTPLibrary(t *testing.T, svcName, svcNs string) {
 		var err error
 		results, err = pq.Query(`traces_target_info{` +
 			`service_namespace="` + svcNs + `",` +
-			`service="` + svcName + `",` +
+			`service_name="` + svcName + `",` +
 			`telemetry_sdk_language="go"` +
 			`}`)
 		require.NoError(t, err)

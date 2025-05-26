@@ -133,8 +133,8 @@ var DefaultConfig = Config{
 	},
 	Discovery: services.DiscoveryConfig{
 		ExcludeOTelInstrumentedServices: true,
-		DefaultExcludeServices: services.DefinitionCriteria{
-			services.Attributes{
+		DefaultExcludeServices: services.RegexDefinitionCriteria{
+			services.RegexSelector{
 				Path: services.NewPathRegexp(regexp.MustCompile("(?:^|/)(beyla$|alloy$|otelcol[^/]*$)")),
 			},
 		},

@@ -244,7 +244,7 @@ func (ta *TraceAttacher) loadExecutable(ie *ebpf.Instrumentable) (*link.Executab
 	// to allow loading it from different container/pods in containerized environments
 	exe, err := link.OpenExecutable(ie.FileInfo.ProExeLinkPath)
 	if err != nil {
-		ta.log.Warn("can't open executable. Ignoring",
+		ta.log.Debug("can't open executable. Ignoring",
 			"error", err, "pid", ie.FileInfo.Pid, "cmd", ie.FileInfo.CmdExePath)
 		return nil, false
 	}

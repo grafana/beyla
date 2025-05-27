@@ -195,9 +195,10 @@ server_or_client_trace(u8 type, connection_info_t *conn, tp_info_pid_t *tp_p, u8
                        t_key.p_key.pid,
                        t_key.p_key.tid);
 
-        tp_info_pid_t *existing_tp = bpf_map_lookup_elem(&server_traces, &t_key);
-        if (existing_tp) {
-            existing_tp->valid = 0;
+        tp_info_pid_t *existing = bpf_map_lookup_elem(&server_traces, &t_key);
+        if (existing && (existing->req_type == tp_p->req_type) &&
+            (tp_p->req_type == EVENT_HTTP_REQUEST)) {
+            existing->valid = 0;
             bpf_dbg_printk("Found conflicting server span, marking it invalid.");
             return;
         }

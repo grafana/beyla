@@ -12,8 +12,11 @@ on:
 # Set permissions at workflow level
 permissions:
   contents: read
-  issues: write
+  issues: write 
   pull-requests: write
+  # Adding more specific permissions to help with PR comments
+  discussions: write
+  statuses: write
 
 jobs:
   security-gate:
@@ -72,21 +75,28 @@ jobs:
           
           # Get the files changed in the PR
           CHANGED_FILES=$(git diff --name-only "${BASE_SHA}" "${HEAD_SHA}")
+          echo "Files changed in this PR:"
+          echo "${CHANGED_FILES}"
+          echo ""
+          
           MODIFIED_FILES=""
           
-          # Check for modifications to sensitive files
-          if echo "$CHANGED_FILES" | grep -q -E '^\.github/'; then
-            MODIFIED_FILES="${MODIFIED_FILES} .github/ directory,"
-          fi
-          if echo "$CHANGED_FILES" | grep -q -E '^tools/'; then
-            MODIFIED_FILES="${MODIFIED_FILES} tools/ directory,"
-          fi
-          if echo "$CHANGED_FILES" | grep -q -E 'cmd/beyla-genfiles/beyla_genfiles\.go'; then
-            MODIFIED_FILES="${MODIFIED_FILES} beyla_genfiles.go,"
-          fi
-          if echo "$CHANGED_FILES" | grep -q -E '^Makefile$'; then
-            MODIFIED_FILES="${MODIFIED_FILES} Makefile,"
-          fi
+          # Check for modifications to sensitive files - processing each file individually
+          while read -r file; do
+            if [[ "$file" =~ ^\.github/ ]]; then
+              MODIFIED_FILES="${MODIFIED_FILES} .github/ directory,"
+              echo "Sensitive file detected: $file (.github/ directory)"
+            elif [[ "$file" =~ ^tools/ ]]; then
+              MODIFIED_FILES="${MODIFIED_FILES} tools/ directory,"
+              echo "Sensitive file detected: $file (tools/ directory)"
+            elif [[ "$file" == "cmd/beyla-genfiles/beyla_genfiles.go" ]]; then
+              MODIFIED_FILES="${MODIFIED_FILES} beyla_genfiles.go,"
+              echo "Sensitive file detected: $file (beyla_genfiles.go)"
+            elif [[ "$file" == "Makefile" ]]; then
+              MODIFIED_FILES="${MODIFIED_FILES} Makefile,"
+              echo "Sensitive file detected: $file (Makefile)"
+            fi
+          done <<< "${CHANGED_FILES}"
           
           # Remove trailing comma if any
           MODIFIED_FILES=$(echo "$MODIFIED_FILES" | sed 's/,$//g')

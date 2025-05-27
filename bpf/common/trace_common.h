@@ -190,16 +190,18 @@ server_or_client_trace(u8 type, connection_info_t *conn, tp_info_pid_t *tp_p, u8
         task_tid(&t_key.p_key);
         t_key.extra_id = extra_runtime_id();
 
-        // We may need to add a check here in the future for an existing server spans
-        // if possible. Namely, on event loop like NodeJS we will see new server
-        // span on every new incoming request on the same thread. This is no longer
-        // an issue on NodeJS because we track the async id, however there might be
-        // a similar runtime. At the same time, a self referencing request on another
-        // port will not be able to be tracked if we invalidate the inner request.
         bpf_dbg_printk("Saving server span for id=%llx, pid=%d, tid=%d",
                        bpf_get_current_pid_tgid(),
                        t_key.p_key.pid,
                        t_key.p_key.tid);
+
+        tp_info_pid_t *existing_tp = bpf_map_lookup_elem(&server_traces, &t_key);
+        if (existing_tp) {
+            existing_tp->valid = 0;
+            bpf_dbg_printk("Found conflicting server span, marking it invalid.");
+            return;
+        }
+
         bpf_dbg_printk(
             "Saving server span for ns=%x, extra_id=%llx", t_key.p_key.ns, t_key.extra_id);
         bpf_map_update_elem(&server_traces, &t_key, tp_p, BPF_ANY);
@@ -248,21 +250,24 @@ static __always_inline u8 find_trace_for_server_request(connection_info_t *conn,
 
         if (!disable_black_box_cp && correlated_requests(tp, existing_tp)) {
             if (existing_tp->valid) {
-                found_tp = 1;
                 bpf_dbg_printk("Found existing correlated tp for server request");
-                __builtin_memcpy(tp->trace_id, existing_tp->tp.trace_id, sizeof(tp->trace_id));
-                __builtin_memcpy(tp->parent_id, existing_tp->tp.span_id, sizeof(tp->parent_id));
                 // Mark the client info as invalid (used), in case the client
                 // request information is not cleaned up.
-                if ((type == EVENT_HTTP_REQUEST && existing_tp->req_type == EVENT_HTTP_CLIENT) &&
+                if ((type == EVENT_HTTP_REQUEST && existing_tp->req_type == EVENT_HTTP_CLIENT) ||
                     (type == EVENT_TCP_REQUEST && existing_tp->req_type == EVENT_TCP_REQUEST)) {
+                    found_tp = 1;
+                    __builtin_memcpy(tp->trace_id, existing_tp->tp.trace_id, sizeof(tp->trace_id));
+                    __builtin_memcpy(tp->parent_id, existing_tp->tp.span_id, sizeof(tp->parent_id));
                     // We ensure that server requests match the client type, otherwise SSL
                     // can often be confused with TCP.
                     existing_tp->valid = 0;
                     set_trace_info_for_connection(conn, TRACE_TYPE_CLIENT, existing_tp);
                     bpf_dbg_printk("setting the client info as used");
                 } else {
-                    bpf_dbg_printk("incompatible trace info, not using the correlated tp");
+                    bpf_dbg_printk("incompatible trace info, not using the correlated tp, type %d, "
+                                   "other type %d",
+                                   type,
+                                   existing_tp->req_type);
                 }
             } else {
                 bpf_dbg_printk("the existing client tp was already used, ignoring");

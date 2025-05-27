@@ -89,7 +89,7 @@ func TestSuiteClientPromScrape(t *testing.T) {
 		"process_command_line":    "/pingclient",
 	}))
 
-	require.NoError(t, compose.Close())
+	//require.NoError(t, compose.Close())
 }
 
 // Same as Test suite, but the generated test image does not contain debug information

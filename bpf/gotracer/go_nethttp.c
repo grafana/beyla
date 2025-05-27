@@ -1228,6 +1228,7 @@ int beyla_uprobe_persistConnRoundTrip(struct pt_regs *ctx) {
                     .pid = pid,
                     .valid = 1,
                     .written = 0,
+                    .req_type = EVENT_HTTP_CLIENT,
                 };
 
                 tp_clone(&tp_p.tp, &invocation->tp);

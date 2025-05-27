@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/peer"
 
+	"github.com/grafana/beyla/v2/pkg/internal/helpers/sync"
 	"github.com/grafana/beyla/v2/pkg/kubecache"
 	"github.com/grafana/beyla/v2/pkg/kubecache/informer"
 	"github.com/grafana/beyla/v2/pkg/kubecache/instrument"
@@ -80,35 +81,40 @@ func (ic *InformersCache) Run(ctx context.Context, opts ...meta.InformerOption) 
 }
 
 // Subscribe method of the generated protobuf definition
-func (ic *InformersCache) Subscribe(_ *informer.SubscribeMessage, server informer.EventStreamService_SubscribeServer) error {
+func (ic *InformersCache) Subscribe(msg *informer.SubscribeMessage, server informer.EventStreamService_SubscribeServer) error {
 	// extract peer information to identify it
 	p, ok := peer.FromContext(server.Context())
 	if !ok {
 		return fmt.Errorf("failed to extract peer information")
 	}
 	ic.metrics.ClientConnect()
-	connCtx, cancel := context.WithCancel(server.Context())
 	o := &connection{
-		cancel:      cancel,
+		log:         ic.log.With("clientID", p.Addr.String()),
 		id:          p.Addr.String(),
 		server:      server,
 		sendTimeout: ic.SendTimeout,
 		metrics:     ic.metrics,
+		fromEpoch:   msg.GetFromTimestampEpoch(),
+		messages:    sync.NewQueue[*informer.Event](),
 	}
-	ic.log.Info("client subscribed", "id", o.ID())
+	ic.log.Info("client subscribed", "id", o.ID(),
+		"fromEpoch", o.fromEpoch,
+		"fromLast", time.Since(time.Unix(o.fromEpoch, 0)))
 	ic.informers.Subscribe(o)
+
 	// Keep the connection open
-	<-connCtx.Done()
+	o.handleMessagesQueue(server.Context())
+
+	ic.informers.Unsubscribe(o)
 	ic.metrics.ClientDisconnect()
 	ic.log.Info("client disconnected", "id", o.ID())
-	ic.informers.Unsubscribe(o)
 	return nil
 }
 
 // connection implements the meta.Observer pattern to store the handle to
 // each client connection subscription
 type connection struct {
-	cancel func()
+	log *slog.Logger
 
 	id     string
 	server grpc.ServerStreamingServer[informer.Event]
@@ -116,36 +122,46 @@ type connection struct {
 	sendTimeout time.Duration
 
 	metrics instrument.InternalMetrics
+	// fromEpoch filters events whose timestamp is lower than its value
+	fromEpoch int64
+	messages  *sync.Queue[*informer.Event]
 }
 
 func (o *connection) ID() string {
 	return o.id
 }
 
+// FromEpoch implements the Timestamped interface to allow filtering the returned list by
+// a given timestamp in unix seconds (epoch)
+func (o *connection) FromEpoch() int64 {
+	return o.fromEpoch
+}
+
 func (o *connection) On(event *informer.Event) error {
-	// Theoretically Go is ready to run hundreds of thousands of parallel goroutines
-	done := make(chan error, 1)
+	// the client asked for events happening after their last successfully received event
+	// so ignore older events to save memory and network
+	if event.Type != informer.EventType_SYNC_FINISHED && event.Resource.StatusTimeEpoch < o.fromEpoch {
+		return nil
+	}
 	o.metrics.MessageSubmit()
-	go func() {
-		if err := o.server.Send(event); err != nil {
-			slog.Debug("sending message. Closing client connection", "clientID", o.ID(), "error", err)
-			o.cancel()
-			done <- err
-		}
-		close(done)
-	}()
-	timeout := time.After(o.sendTimeout)
-	select {
-	case err := <-done:
-		if err == nil {
+	o.messages.Enqueue(event)
+	return nil
+}
+
+func (o *connection) handleMessagesQueue(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			o.log.Debug("context done. Closing client connection")
+			return
+		default:
+			event := o.messages.Dequeue()
+			if err := o.server.Send(event); err != nil {
+				o.log.Debug("Error sending message. Closing client connection", "clientID", o.ID(), "error", err)
+				o.metrics.MessageError()
+				return
+			}
 			o.metrics.MessageSucceed()
-		} else {
-			o.metrics.MessageError()
 		}
-		return err
-	case <-timeout:
-		o.metrics.MessageTimeout()
-		o.cancel()
-		return errors.New("timeout sending message to client. Closing connection " + o.ID())
 	}
 }

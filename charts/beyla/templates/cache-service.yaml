@@ -1,4 +1,4 @@
-{{- if .Values.k8sCache.replicas }}
+{{- if and .Values.k8sCache.replicas (gt (int .Values.k8sCache.replicas) 0) }}
 {{- $root := . }}
 apiVersion: v1
 kind: Service

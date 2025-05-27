@@ -36,7 +36,7 @@ type Config struct {
 var DefaultConfig = Config{
 	LogLevel:             "info",
 	Port:                 50055,
-	MaxConnections:       100,
+	MaxConnections:       150,
 	InformerResyncPeriod: 30 * time.Minute,
 	ProfilePort:          0,
 }

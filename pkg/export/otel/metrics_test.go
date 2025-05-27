@@ -614,6 +614,48 @@ func TestMetricsInterval(t *testing.T) {
 	})
 }
 
+func TestProcessPIDEvents(t *testing.T) {
+	mc := MetricsConfig{
+		Features: []string{FeatureApplication},
+	}
+	mr := MetricsReporter{
+		cfg:        &mc,
+		pidTracker: NewPidServiceTracker(),
+	}
+
+	svcA := svc.Attrs{
+		UID: svc.UID{Name: "A", Instance: "A"},
+	}
+	svcB := svc.Attrs{
+		UID: svc.UID{Name: "B", Instance: "B"},
+	}
+
+	mr.setupPIDToServiceRelationship(1, svcA.UID)
+	mr.setupPIDToServiceRelationship(2, svcA.UID)
+	mr.setupPIDToServiceRelationship(3, svcB.UID)
+	mr.setupPIDToServiceRelationship(4, svcB.UID)
+
+	deleted, uid := mr.disassociatePIDFromService(1)
+	assert.Equal(t, false, deleted)
+	assert.Equal(t, svc.UID{}, uid)
+
+	deleted, uid = mr.disassociatePIDFromService(1)
+	assert.Equal(t, false, deleted)
+	assert.Equal(t, svc.UID{}, uid)
+
+	deleted, uid = mr.disassociatePIDFromService(2)
+	assert.Equal(t, true, deleted)
+	assert.Equal(t, svcA.UID, uid)
+
+	deleted, uid = mr.disassociatePIDFromService(3)
+	assert.Equal(t, false, deleted)
+	assert.Equal(t, svc.UID{}, uid)
+
+	deleted, uid = mr.disassociatePIDFromService(4)
+	assert.Equal(t, true, deleted)
+	assert.Equal(t, svcB.UID, uid)
+}
+
 func (f *fakeInternalMetrics) OTELMetricExport(length int) {
 	fakeMux.Lock()
 	defer fakeMux.Unlock()
@@ -707,7 +749,7 @@ func TestMetricResourceAttributes(t *testing.T) {
 			},
 			attributeSelect: attributes.Selection{},
 			expectedAttrs: []string{
-				"service",
+				"service.name",
 				"service.instance.id",
 				"service.namespace",
 				"telemetry.sdk.language",
@@ -745,7 +787,7 @@ func TestMetricResourceAttributes(t *testing.T) {
 				},
 			},
 			expectedAttrs: []string{
-				"service",
+				"service.name",
 				"service.instance.id",
 				"service.namespace",
 				"telemetry.sdk.language",
@@ -784,7 +826,7 @@ func TestMetricResourceAttributes(t *testing.T) {
 				},
 			},
 			expectedAttrs: []string{
-				"service",
+				"service.name",
 				"service.instance.id",
 				"service.namespace",
 				"telemetry.sdk.language",
@@ -823,7 +865,7 @@ func TestMetricResourceAttributes(t *testing.T) {
 				},
 			},
 			expectedAttrs: []string{
-				"service",
+				"service.name",
 				"service.instance.id",
 				"service.namespace",
 				"telemetry.sdk.language",

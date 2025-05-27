@@ -244,7 +244,7 @@ func (ta *TraceAttacher) loadExecutable(ie *ebpf.Instrumentable) (*link.Executab
 	// to allow loading it from different container/pods in containerized environments
 	exe, err := link.OpenExecutable(ie.FileInfo.ProExeLinkPath)
 	if err != nil {
-		ta.log.Warn("can't open executable. Ignoring",
+		ta.log.Debug("can't open executable. Ignoring",
 			"error", err, "pid", ie.FileInfo.Pid, "cmd", ie.FileInfo.CmdExePath)
 		return nil, false
 	}
@@ -291,18 +291,7 @@ func (ta *TraceAttacher) updateTracerProbes(tracer *ebpf.ProcessTracer, ie *ebpf
 }
 
 func (ta *TraceAttacher) monitorPIDs(tracer *ebpf.ProcessTracer, ie *ebpf.Instrumentable) {
-	// If the user does not override the service name via configuration
-	// the service name is the name of the found executable
-	// Unless the case of system-wide tracing, where the name of the
-	// executable will be dynamically set for each traced http request call.
-	if ie.FileInfo.Service.UID.Name == "" {
-		ie.FileInfo.Service.UID.Name = ie.FileInfo.ExecutableName()
-		// we mark the service ID as automatically named in case we want to look,
-		// in later stages of the pipeline, for better automatic service name
-		ie.FileInfo.Service.SetAutoName()
-	}
-
-	ie.FileInfo.Service.SDKLanguage = ie.Type
+	ie.CopyToServiceAttributes()
 
 	// allowing the tracer to forward traces from the discovered PID and its children processes
 	tracer.AllowPID(uint32(ie.FileInfo.Pid), ie.FileInfo.Ns, &ie.FileInfo.Service)

@@ -122,11 +122,15 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 		goexec.IoWriterBufPtrPos,
 		goexec.IoWriterNPos,
 		goexec.CcNextStreamIDPos,
+		goexec.CcNextStreamIDVendoredPos,
+		goexec.CcFramerPos,
+		goexec.CcFramerVendoredPos,
 		goexec.FramerWPos,
 		goexec.PcConnPos,
 		goexec.PcTLSPos,
 		goexec.NetConnPos,
 		goexec.CcTconnPos,
+		goexec.CcTconnVendoredPos,
 		goexec.ScConnPos,
 		goexec.CRwcPos,
 		goexec.CTlsPos,
@@ -140,9 +144,10 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 		goexec.GrpcStConnPos,
 		goexec.GrpcTConnPos,
 		goexec.GrpcTSchemePos,
-		goexec.HTTP2ClientNextIDPos,
+		goexec.GrpcTransportStreamIDPos,
 		goexec.GrpcTransportBufWriterBufPos,
 		goexec.GrpcTransportBufWriterOffsetPos,
+		goexec.GrpcTransportBufWriterConnPos,
 		// redis
 		goexec.RedisConnBwPos,
 		// kafka go
@@ -159,6 +164,7 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 		goexec.GrpcOneSixNine,
 		goexec.GrpcServerStreamStream,
 		goexec.GrpcServerStreamStPtr,
+		goexec.GrpcClientStreamStream,
 	} {
 		if val, ok := offsets.Field[field].(uint64); ok {
 			offTable.Table[field] = val
@@ -218,8 +224,11 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 			Start: p.bpfObjects.BeylaUprobeHttp2RoundTrip,
 			End:   p.bpfObjects.BeylaUprobeRoundTripReturn, // return is the same as for http 1.1
 		}},
-		"net/http.(*http2ClientConn).roundTrip": {{ // http2 client vendored in Go
-			Start: p.bpfObjects.BeylaUprobeHttp2RoundTripConn,
+		"golang.org/x/net/http2.(*ClientConn).writeHeaders": {{ // http2 client
+			Start: p.bpfObjects.BeylaUprobeHttp2WriteHeaders,
+		}},
+		"net/http.(*http2ClientConn).writeHeaders": {{ // http2 client vendored in Go, but used from http 1.1 transition
+			Start: p.bpfObjects.BeylaUprobeHttp2WriteHeadersVendored,
 		}},
 		"golang.org/x/net/http2.(*responseWriterState).writeHeader": {{ // http2 server request done, capture the response code
 			Start: p.bpfObjects.BeylaUprobeHttp2ResponseWriterStateWriteHeader,
@@ -282,7 +291,7 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 		}},
 		"google.golang.org/grpc.(*ClientConn).NewStream": {{
 			Start: p.bpfObjects.BeylaUprobeClientConnNewStream,
-			End:   p.bpfObjects.BeylaUprobeServerHandleStreamReturn,
+			End:   p.bpfObjects.BeylaUprobeClientConnNewStreamReturn,
 		}},
 		"google.golang.org/grpc.(*ClientConn).Close": {{
 			Start: p.bpfObjects.BeylaUprobeClientConnClose,
@@ -295,6 +304,7 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 		}},
 		"google.golang.org/grpc/internal/transport.(*http2Client).NewStream": {{
 			Start: p.bpfObjects.BeylaUprobeTransportHttp2ClientNewStream,
+			End:   p.bpfObjects.BeylaUprobeTransportHttp2ClientNewStreamReturns,
 		}},
 		"google.golang.org/grpc/internal/transport.(*http2Server).operateHeaders": {{
 			Start: p.bpfObjects.BeylaUprobeHttp2ServerOperateHeaders,

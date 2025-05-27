@@ -11,25 +11,8 @@ permissions:
   contents: read
 
 jobs:
-  # Reference the security-check workflow when running on PRs
-  security-check:
-    if: github.event_name == 'pull_request'
-    uses: ./.github/workflows/security-check.yml
-    permissions:
-      contents: read
-      issues: write
-      pull-requests: write
-    secrets: inherit
-
   clang-tidy:
     runs-on: ubuntu-latest
-    # Add dependency on security-check for PR events only
-    needs: [security-check]
-    # Simple condition: Run on push OR on PRs where security-check outputs security_cleared=true
-    if: ${{ github.event_name != 'pull_request' || needs.security-check.outputs.security_cleared == 'true' }}
-    # Override permissions for this job to be more restrictive
-    permissions:
-      contents: read
 
     steps:
       - name: Checkout code

@@ -204,6 +204,9 @@ type Config struct {
 	// and both the "application" and "application_process" features are enabled
 	Processes process.CollectConfig `yaml:"processes"`
 
+	// Tracking which Linux capabilities have been used by which process.
+	Capabilities CapabilitiesConfig `yaml:"capabilities"`
+
 	// Grafana Alloy specific configuration
 	TracesReceiver TracesReceiverConfig `yaml:"-"`
 }
@@ -220,6 +223,12 @@ type TracesReceiverConfig struct {
 
 func (t TracesReceiverConfig) Enabled() bool {
 	return len(t.Traces) > 0
+}
+
+type CapabilitiesConfig struct {
+	// Enable logging a line each time a Linux capability is used.
+	// Default value is false (disabled)
+	Enable bool `yaml:"enable" env:"BEYLA_CAPABILITIES_ENABLE"`
 }
 
 // Attributes configures the decoration of some extra attributes that will be

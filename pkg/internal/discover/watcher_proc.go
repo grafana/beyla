@@ -104,7 +104,7 @@ type pollAccounter struct {
 	stateMux          sync.Mutex
 	bpfWatcherEnabled bool
 	fetchPorts        bool
-	findingCriteria   services.DefinitionCriteria
+	findingCriteria   []services.Selector
 	output            *msg.Queue[[]Event[processAttrs]]
 }
 
@@ -175,6 +175,15 @@ func (pa *pollAccounter) portFetchRequired() bool {
 	return ret
 }
 
+func portOfInterest(criteria []services.Selector, port int) bool {
+	for _, cr := range criteria {
+		if cr.GetOpenPorts().Matches(port) {
+			return true
+		}
+	}
+	return false
+}
+
 func (pa *pollAccounter) watchForProcessEvents(log *slog.Logger, events <-chan watcher.Event) {
 	for e := range events {
 		switch e.Type {
@@ -182,7 +191,7 @@ func (pa *pollAccounter) watchForProcessEvents(log *slog.Logger, events <-chan w
 			pa.bpfWatcherIsReady()
 		case watcher.NewPort:
 			port := int(e.Payload)
-			if pa.cfg.Port.Matches(port) || pa.findingCriteria.PortOfInterest(port) {
+			if pa.cfg.Port.Matches(port) || portOfInterest(pa.findingCriteria, port) {
 				pa.refetchPorts()
 			}
 		default:

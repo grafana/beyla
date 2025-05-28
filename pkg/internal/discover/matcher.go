@@ -63,8 +63,8 @@ func SurveyCriteriaMatcherProvider(
 
 type matcher struct {
 	log             *slog.Logger
-	criteria        services.DefinitionCriteria
-	excludeCriteria services.DefinitionCriteria
+	criteria        []services.Selector
+	excludeCriteria services.RegexDefinitionCriteria
 	// processHistory keeps track of the processes that have been already matched and submitted for
 	// instrumentation.
 	// This avoids keep inspecting again and again client processes each time they open a new connection port
@@ -77,7 +77,7 @@ type matcher struct {
 
 // ProcessMatch matches a found process with the first selection criteria it fulfilled.
 type ProcessMatch struct {
-	Criteria *services.Attributes
+	Criteria services.Selector
 	Process  *services.ProcessInfo
 }
 
@@ -121,12 +121,12 @@ func (m *matcher) filterCreated(obj processAttrs) (Event[ProcessMatch], bool) {
 		return Event[ProcessMatch]{}, false
 	}
 	for i := range m.criteria {
-		if m.matchProcess(&obj, proc, &m.criteria[i]) && !m.isExcluded(&obj, proc) {
+		if m.matchProcess(&obj, proc, m.criteria[i]) && !m.isExcluded(&obj, proc) {
 			m.log.Debug("found process", "pid", proc.Pid, "comm", proc.ExePath, "metadata", obj.metadata, "podLabels", obj.podLabels, "criteria", m.criteria[i])
 			m.processHistory[obj.pid] = proc
 			return Event[ProcessMatch]{
 				Type: EventCreated,
-				Obj:  ProcessMatch{Criteria: &m.criteria[i], Process: proc},
+				Obj:  ProcessMatch{Criteria: m.criteria[i], Process: proc},
 			}, true
 		}
 	}
@@ -137,7 +137,7 @@ func (m *matcher) filterCreated(obj processAttrs) (Event[ProcessMatch], bool) {
 		m.processHistory[obj.pid] = proc
 		return Event[ProcessMatch]{
 			Type: EventCreated,
-			Obj:  ProcessMatch{Criteria: &m.criteria[0], Process: proc},
+			Obj:  ProcessMatch{Criteria: m.criteria[0], Process: proc},
 		}, true
 	}
 
@@ -168,21 +168,21 @@ func (m *matcher) isExcluded(obj *processAttrs, proc *services.ProcessInfo) bool
 	return false
 }
 
-func (m *matcher) matchProcess(obj *processAttrs, p *services.ProcessInfo, a *services.Attributes) bool {
+func (m *matcher) matchProcess(obj *processAttrs, p *services.ProcessInfo, a services.Selector) bool {
 	log := m.log.With("pid", p.Pid, "exe", p.ExePath)
-	if !a.Path.IsSet() && a.OpenPorts.Len() == 0 && len(obj.metadata) == 0 {
+	if !a.GetPath().IsSet() && a.GetOpenPorts().Len() == 0 && len(obj.metadata) == 0 {
 		log.Debug("no Kube metadata, no local selection criteria. Ignoring")
 		return false
 	}
-	if (a.Path.IsSet() || a.PathRegexp.IsSet()) && !m.matchByExecutable(p, a) {
-		log.Debug("executable path does not match", "path", a.Path, "pathregexp", a.PathRegexp)
+	if (a.GetPath().IsSet() || a.GetPathRegexp().IsSet()) && !m.matchByExecutable(p, a) {
+		log.Debug("executable path does not match", "path", a.GetPath(), "pathregexp", a.GetPathRegexp())
 		return false
 	}
-	if a.OpenPorts.Len() > 0 && !m.matchByPort(p, a) {
-		log.Debug("open ports do not match", "openPorts", a.OpenPorts, "process ports", p.OpenPorts)
+	if a.GetOpenPorts().Len() > 0 && !m.matchByPort(p, a) {
+		log.Debug("open ports do not match", "openPorts", a.GetOpenPorts(), "process ports", p.OpenPorts)
 		return false
 	}
-	if a.ContainersOnly {
+	if a.IsContainersOnly() {
 		ns, _ := namespaceFetcherFunc(p.Pid)
 		if ns == m.beylaNamespace && m.hasHostPidAccess {
 			log.Debug("not in a container", "namespace", ns)
@@ -196,23 +196,23 @@ func (m *matcher) matchProcess(obj *processAttrs, p *services.ProcessInfo, a *se
 	return m.matchByAttributes(obj, a)
 }
 
-func (m *matcher) matchByPort(p *services.ProcessInfo, a *services.Attributes) bool {
+func (m *matcher) matchByPort(p *services.ProcessInfo, a services.Selector) bool {
 	for _, c := range p.OpenPorts {
-		if a.OpenPorts.Matches(int(c)) {
+		if a.GetOpenPorts().Matches(int(c)) {
 			return true
 		}
 	}
 	return false
 }
 
-func (m *matcher) matchByExecutable(p *services.ProcessInfo, a *services.Attributes) bool {
-	if a.Path.IsSet() {
-		return a.Path.MatchString(p.ExePath)
+func (m *matcher) matchByExecutable(p *services.ProcessInfo, a services.Selector) bool {
+	if a.GetPath().IsSet() {
+		return a.GetPath().MatchString(p.ExePath)
 	}
-	return a.PathRegexp.MatchString(p.ExePath)
+	return a.GetPathRegexp().MatchString(p.ExePath)
 }
 
-func (m *matcher) matchByAttributes(actual *processAttrs, required *services.Attributes) bool {
+func (m *matcher) matchByAttributes(actual *processAttrs, required services.Selector) bool {
 	if required == nil {
 		return true
 	}
@@ -221,7 +221,7 @@ func (m *matcher) matchByAttributes(actual *processAttrs, required *services.Att
 	}
 	log := m.log.With("pid", actual.pid)
 	// match metadata
-	for attrName, criteriaRegexp := range required.Metadata {
+	for attrName, criteriaRegexp := range required.RangeMetadata() {
 		if attrValue, ok := actual.metadata[attrName]; !ok || !criteriaRegexp.MatchString(attrValue) {
 			log.Debug("metadata does not match", "attr", attrName, "value", attrValue)
 			return false
@@ -229,7 +229,7 @@ func (m *matcher) matchByAttributes(actual *processAttrs, required *services.Att
 	}
 
 	// match pod labels
-	for labelName, criteriaRegexp := range required.PodLabels {
+	for labelName, criteriaRegexp := range required.RangePodLabels() {
 		if actualPodLabelValue, ok := actual.podLabels[labelName]; !ok || !criteriaRegexp.MatchString(actualPodLabelValue) {
 			log.Debug("pod label does not match", "label", labelName, "value", actualPodLabelValue)
 			return false
@@ -237,7 +237,7 @@ func (m *matcher) matchByAttributes(actual *processAttrs, required *services.Att
 	}
 
 	// match pod annotations
-	for annotationName, criteriaRegexp := range required.PodAnnotations {
+	for annotationName, criteriaRegexp := range required.RangePodAnnotations() {
 		if actualPodAnnotationValue, ok := actual.podAnnotations[annotationName]; !ok || !criteriaRegexp.MatchString(actualPodAnnotationValue) {
 			log.Debug("pod annotation does not match", "annotation", annotationName, "value", actualPodAnnotationValue)
 			return false
@@ -246,27 +246,47 @@ func (m *matcher) matchByAttributes(actual *processAttrs, required *services.Att
 	return true
 }
 
-func normalizeCriteria(finderCriteria services.DefinitionCriteria) services.DefinitionCriteria {
+func normalizeGlobCriteria(finderCriteria services.GlobDefinitionCriteria) []services.Selector {
 	// normalize criteria that only define metadata (e.g. k8s)
 	// but do neither define executable name nor port: configure them to match
 	// any executable in the matched k8s entities
+	criteria := make([]services.Selector, 0, len(finderCriteria))
 	for i := range finderCriteria {
-		fc := finderCriteria[i]
+		fc := &finderCriteria[i]
+		if !fc.Path.IsSet() && fc.OpenPorts.Len() == 0 && (len(fc.Metadata) > 0 || len(fc.PodLabels) > 0 || len(fc.PodAnnotations) > 0) {
+			// match any executable path
+			if err := fc.Path.UnmarshalText([]byte("*")); err != nil {
+				panic("bug! " + err.Error())
+			}
+		}
+		criteria = append(criteria, fc)
+	}
+	return criteria
+}
+
+func normalizeRegexCriteria(finderCriteria services.RegexDefinitionCriteria) []services.Selector {
+	// normalize criteria that only define metadata (e.g. k8s)
+	// but do neither define executable name nor port: configure them to match
+	// any executable in the matched k8s entities
+	criteria := make([]services.Selector, 0, len(finderCriteria))
+	for i := range finderCriteria {
+		fc := &finderCriteria[i]
 		if !fc.Path.IsSet() && fc.OpenPorts.Len() == 0 && (len(fc.Metadata) > 0 || len(fc.PodLabels) > 0 || len(fc.PodAnnotations) > 0) {
 			// match any executable path
 			if err := fc.Path.UnmarshalText([]byte(".")); err != nil {
 				panic("bug! " + err.Error())
 			}
 		}
+		criteria = append(criteria, fc)
 	}
-	return finderCriteria
+	return criteria
 }
 
-func FindingCriteria(cfg *beyla.Config) services.DefinitionCriteria {
+func FindingCriteria(cfg *beyla.Config) []services.Selector {
 	if cfg.Discovery.SystemWide {
 		// will return all the executables in the system
-		return services.DefinitionCriteria{
-			services.Attributes{
+		return []services.Selector{
+			&services.RegexSelector{
 				Namespace: cfg.ServiceNamespace,
 				Path:      services.NewPathRegexp(regexp.MustCompile(".")),
 			},
@@ -277,7 +297,7 @@ func FindingCriteria(cfg *beyla.Config) services.DefinitionCriteria {
 	// with the new, map-based multi-services selector.
 	if cfg.Exec.IsSet() || cfg.Port.Len() > 0 {
 		finderCriteria = slices.Clone(cfg.Discovery.Services)
-		finderCriteria = append(finderCriteria, services.Attributes{
+		finderCriteria = append(finderCriteria, services.RegexSelector{
 			Name:      cfg.ServiceName,
 			Namespace: cfg.ServiceNamespace,
 			Path:      cfg.Exec,
@@ -285,16 +305,12 @@ func FindingCriteria(cfg *beyla.Config) services.DefinitionCriteria {
 		})
 	}
 
-	finderCriteria = normalizeCriteria(finderCriteria)
-
-	return finderCriteria
+	return normalizeRegexCriteria(finderCriteria)
 }
 
-func surveyCriteria(cfg *beyla.Config) services.DefinitionCriteria {
+func surveyCriteria(cfg *beyla.Config) []services.Selector {
 	finderCriteria := cfg.Discovery.Survey
-	finderCriteria = normalizeCriteria(finderCriteria)
-
-	return finderCriteria
+	return normalizeGlobCriteria(finderCriteria)
 }
 
 // replaceable function to allow unit tests with faked processes

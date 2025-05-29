@@ -1,18 +1,61 @@
 #pragma once
 
+// Include eBPF core headers
 #include <bpfcore/vmlinux.h>
 #include <bpfcore/bpf_helpers.h>
+#include <bpfcore/bpf_core_read.h>
+#include <bpfcore/bpf_tracing.h>
+#include <bpfcore/bpf_endian.h>
+#include <bpfcore/compiler.h>
 
+// Include project specific headers
 #include <common/http_types.h>
 #include <common/pin_internal.h>
 #include <common/ringbuf.h>
 #include <common/runtime.h>
 #include <common/trace_common.h>
+#include <common/protocol_defs.h>
+#include <common/common.h>
 
 #include <generictracer/protocol_common.h>
 
 #include <maps/active_ssl_connections.h>
 #include <maps/ongoing_http.h>
+
+// Basic types definitions for eBPF
+typedef unsigned char u8;
+typedef unsigned short u16;
+typedef unsigned int u32;
+typedef unsigned long long u64;
+typedef int s32;
+
+// Boolean definition
+typedef _Bool bool;
+#define true 1
+#define false 0
+
+// BPF constants
+#ifndef BPF_ANY
+#define BPF_ANY 0
+#endif
+
+#ifndef BPF_MAP_TYPE_PERCPU_ARRAY
+#define BPF_MAP_TYPE_PERCPU_ARRAY 6
+#endif
+
+// JSON-RPC 2.0 specification keys
+#define JSONRPC_KEY_JSONRPC "jsonrpc"
+#define JSONRPC_KEY_METHOD "method"
+#define JSONRPC_KEY_PARAMS "params"
+#define JSONRPC_KEY_ID "id"
+#define JSONRPC_VERSION "2.0"
+
+// Forward declarations for JSON-RPC related functions to avoid implicit declaration errors
+static __always_inline unsigned char *bpf_strstr(const unsigned char *haystack, int haystack_len, const char *needle);
+static __always_inline u8 is_jsonrpc(const unsigned char *buf, int len);
+static __always_inline void extract_jsonrpc_method(const unsigned char *buf, int len, unsigned char *method, int method_size);
+static __always_inline void extract_jsonrpc_id(const unsigned char *buf, int len, unsigned char *id, int id_size);
+static __always_inline u32 get_jsonrpc_params_len(const unsigned char *buf, int len);
 
 volatile const u32 high_request_volume;
 
@@ -237,14 +280,61 @@ static __always_inline u8 is_duplicate_info(http_info_t *info) {
            current_immediate_epoch(ts) == current_immediate_epoch(info->start_monotime_ns);
 }
 
+// Simple implementation of a string search function to find a substring
+static __always_inline unsigned char *bpf_strstr(const unsigned char *haystack, int haystack_len, const char *needle) {
+    // Get the length of the needle (search string)
+    int needle_len = 0;
+    for (int i = 0; needle[i] != '\0' && i < 32; i++) {
+        needle_len++;
+    }
+
+    // Bounds check to avoid searching beyond the haystack
+    if (needle_len == 0 || needle_len > haystack_len) {
+        return NULL;
+    }
+
+    // Search for the needle in the haystack
+    #pragma unroll
+    for (int i = 0; i <= haystack_len - needle_len; i++) {
+        u8 found = 1; // Using u8 instead of bool
+        
+        #pragma unroll
+        for (int j = 0; j < needle_len; j++) {
+            if (haystack[i + j] != (unsigned char)needle[j]) {
+                found = 0; // Using 0 instead of false
+                break;
+            }
+        }
+        
+        if (found) {
+            return (unsigned char *)&haystack[i];
+        }
+    }
+    
+    return NULL;
+}
+
 static __always_inline void finish_http(http_info_t *info, pid_connection_info_t *pid_conn) {
+    bpf_dbg_printk("protocol_http.h: MARKER_FINISH_HTTP_V4_ENTRY"); // New distinct marker
+
+    bpf_dbg_printk("protocol_http: finish_http: s_port=%d d_port=%d is_jsonrpc=%d, type=%d, status=%d",
+        bpf_ntohs(info->conn_info.s_port), bpf_ntohs(info->conn_info.d_port),
+        info->is_jsonrpc, info->type, info->status);
     if (http_info_complete(info)) {
         http_info_t *trace = bpf_ringbuf_reserve(&events, sizeof(http_info_t), 0);
         if (trace) {
             bpf_dbg_printk("Sending trace %lx, response length %d", info, info->resp_len);
 
             __builtin_memcpy(trace, info, sizeof(http_info_t));
-            trace->flags = EVENT_K_HTTP_REQUEST;
+            
+            // Set the appropriate flag based on if it's JSON-RPC or regular HTTP
+            if (info->is_jsonrpc) {
+                trace->flags = EVENT_JSONRPC;
+                trace->type = EVENT_JSONRPC;
+            } else {
+                trace->flags = EVENT_K_HTTP_REQUEST;
+            }
+            
             bpf_ringbuf_submit(trace, get_flags());
         } else {
             bpf_printk("failed to reserve space in the ringbuf");
@@ -331,8 +421,11 @@ static __always_inline void terminate_http_request_if_needed(pid_connection_info
     cleanup_http_request_data(pid_conn, info);
 }
 
-static __always_inline void process_http_request(
+static __always_inline void
+process_http_request(
     http_info_t *info, int len, http_connection_metadata_t *meta, int direction, u16 orig_dport) {
+    bpf_dbg_printk("protocol_http.h: MARKER_PROCESS_HTTP_REQUEST_V4_ENTRY"); // New distinct marker
+
     // Set pid and type early as best effort in case the request times out or dies.
     if (meta) {
         info->pid = meta->pid;
@@ -353,6 +446,28 @@ static __always_inline void process_http_request(
     info->len = len;
     info->extra_id = extra_runtime_id(); // required for deleting the trace information
     info->task_tid = get_task_tid();     // required for deleting the trace information
+    
+    // Check if this is a JSON-RPC request
+    if (is_jsonrpc(info->buf, FULL_BUF_SIZE)) {
+        bpf_dbg_printk("Detected JSON-RPC request");
+        info->is_jsonrpc = 1;
+        info->flags = EVENT_JSONRPC;
+        info->type = EVENT_JSONRPC; // Set the type to JSON-RPC
+        extract_jsonrpc_method(info->buf, FULL_BUF_SIZE, info->jsonrpc_method, JSONRPC_METHOD_SIZE);
+        
+        // Extract JSON-RPC ID
+        extract_jsonrpc_id(info->buf, FULL_BUF_SIZE, info->jsonrpc_id, JSONRPC_ID_SIZE);
+        
+        // Get params length
+        info->jsonrpc_params_len = get_jsonrpc_params_len(info->buf, FULL_BUF_SIZE);
+        
+        bpf_dbg_printk("JSON-RPC method: %s, params len: %d", info->jsonrpc_method, info->jsonrpc_params_len);
+    } else {
+        info->is_jsonrpc = 0;
+    }
+    bpf_dbg_printk("protocol_http: process_http_request: s_port=%d d_port=%d is_jsonrpc=%d, type=%d, flags=%d",
+        bpf_ntohs(info->conn_info.s_port), bpf_ntohs(info->conn_info.d_port),
+        info->is_jsonrpc, info->type, info->flags);
 }
 
 static __always_inline void
@@ -389,6 +504,182 @@ static __always_inline void handle_http_response(unsigned char *small_buf,
     }
 
     cleanup_http_request_data(pid_conn, info);
+}
+
+static __always_inline u8 is_jsonrpc(const unsigned char *buf, int len) {
+    if (len < 20) {
+        return 0;
+    }
+    
+    // Look for {"jsonrpc":"2.0" pattern
+    // This is a simplistic check but sufficient for most cases
+    unsigned char *jsonrpc_key = bpf_strstr(buf, len, JSONRPC_KEY_JSONRPC);
+    if (!jsonrpc_key) {
+        return 0;
+    }
+    
+    // Find the value of jsonrpc key
+    unsigned char *version = bpf_strstr(jsonrpc_key, 30, JSONRPC_VERSION);
+    if (!version) {
+        return 0;
+    }
+    
+    // Check for method key
+    unsigned char *method_key = bpf_strstr(buf, len, JSONRPC_KEY_METHOD);
+    if (!method_key) {
+        return 0;
+    }
+    
+    return 1;
+}
+
+// Extract the JSON-RPC method name from the buffer
+static __always_inline void extract_jsonrpc_method(const unsigned char *buf, int len, unsigned char *method, int method_size) {
+    __builtin_memset(method, 0, method_size);
+    
+    // Find the method key
+    unsigned char *method_key = bpf_strstr(buf, len, JSONRPC_KEY_METHOD);
+    if (!method_key) {
+        return;
+    }
+    
+    // Move past the method key to find the value
+    method_key += 8; // Length of "method":"
+    
+    // Find the opening quote
+    unsigned char *method_start = bpf_strstr(method_key, 30, "\"");
+    if (!method_start) {
+        return;
+    }
+    
+    method_start += 1; // Move past the quote
+    
+    // Find the closing quote
+    unsigned char *method_end = bpf_strstr(method_start, method_size, "\"");
+    if (!method_end) {
+        return;
+    }
+    
+    int method_len = method_end - method_start;
+    if (method_len < method_size) {
+        bpf_probe_read(method, method_len, method_start);
+    }
+}
+
+// Extract the JSON-RPC id from the buffer
+static __always_inline void extract_jsonrpc_id(const unsigned char *buf, int len, unsigned char *id, int id_size) {
+    __builtin_memset(id, 0, id_size);
+    
+    // Find the id key
+    unsigned char *id_key = bpf_strstr(buf, len, JSONRPC_KEY_ID);
+    if (!id_key) {
+        return;
+    }
+    
+    // Move past the id key
+    id_key += 4; // Length of "id":
+    
+    // Check for null value
+    unsigned char *null_value = bpf_strstr(id_key, 10, "null");
+    if (null_value && (null_value - id_key) < 3) {
+        bpf_probe_read(id, 4, "null");
+        return;
+    }
+    
+    // Check for string id
+    unsigned char *id_start = bpf_strstr(id_key, 10, "\"");
+    if (id_start) {
+        id_start += 1; // Move past the quote
+        
+        // Find the closing quote
+        unsigned char *id_end = bpf_strstr(id_start, id_size, "\"");
+        if (!id_end) {
+            return;
+        }
+        
+        int id_len = id_end - id_start;
+        if (id_len < id_size) {
+            bpf_probe_read(id, id_len, id_start);
+        }
+        return;
+    }
+    
+    // Assume numeric id
+    // Read up to the next delimiter (comma or closing brace)
+    unsigned char *id_end = bpf_strstr(id_key, id_size, ",");
+    if (!id_end) {
+        id_end = bpf_strstr(id_key, id_size, "}");
+    }
+    
+    if (id_end) {
+        int id_len = id_end - id_key;
+        if (id_len < id_size) {
+            bpf_probe_read(id, id_len, id_key);
+        }
+    }
+}
+
+// Get the params length in the JSON-RPC request (approximate)
+static __always_inline u32 get_jsonrpc_params_len(const unsigned char *buf, int len) {
+    // Find the params key
+    unsigned char *params_key = bpf_strstr(buf, len, JSONRPC_KEY_PARAMS);
+    if (!params_key) {
+        return 0;
+    }
+    
+    // Move past the params key
+    params_key += 8; // Length of "params":
+    
+    // Check for different params formats
+    u32 params_len = 0;
+    unsigned char *params_end = NULL;
+    
+    // Array params
+    if (*params_key == '[') {
+        // Count brackets to find matching closing bracket
+        int bracket_count = 1;
+        unsigned char *ptr = params_key + 1;
+        
+        #pragma unroll
+        for (int i = 0; i < 200 && ptr - params_key < len - 8; i++) {
+            if (*ptr == '[') {
+                bracket_count++;
+            } else if (*ptr == ']') {
+                bracket_count--;
+                if (bracket_count == 0) {
+                    params_end = ptr + 1;
+                    break;
+                }
+            }
+            ptr++;
+        }
+    } 
+    // Object params
+    else if (*params_key == '{') {
+        // Count braces to find matching closing brace
+        int brace_count = 1;
+        unsigned char *ptr = params_key + 1;
+        
+        #pragma unroll
+        for (int i = 0; i < 200 && ptr - params_key < len - 8; i++) {
+            if (*ptr == '{') {
+                brace_count++;
+            } else if (*ptr == '}') {
+                brace_count--;
+                if (brace_count == 0) {
+                    params_end = ptr + 1;
+                    break;
+                }
+            }
+            ptr++;
+        }
+    }
+    
+    if (params_end) {
+        params_len = params_end - params_key;
+    }
+    
+    return params_len;
 }
 
 // k_tail_protocol_http

@@ -39,6 +39,7 @@ const EventTypeTCP = 8        // Unknown TCP protocol to be classified by user s
 const EventTypeGoSarama = 9   // Kafka client for Go (Shopify/IBM Sarama)
 const EventTypeGoRedis = 10   // Redis client for Go
 const EventTypeGoKafkaGo = 11 // Kafka-Go client from Segment-io
+const EventTypeJSONRPC = 12   // JSON-RPC 2.0 events
 
 var IntegrityModeOverride = false
 
@@ -100,6 +101,8 @@ func ReadBPFTraceAsSpan(cfg *config.EBPFTracer, record *ringbuf.Record, filter S
 	}
 
 	eventType := record.RawSample[0]
+	plog := ptlog()
+	plog.Debug("XXX44XX reading event", "event_type", eventType)
 
 	switch eventType {
 	case EventTypeSQL:
@@ -116,6 +119,8 @@ func ReadBPFTraceAsSpan(cfg *config.EBPFTracer, record *ringbuf.Record, filter S
 		return ReadGoRedisRequestIntoSpan(record)
 	case EventTypeGoKafkaGo:
 		return ReadGoKafkaGoRequestIntoSpan(record)
+	case EventTypeJSONRPC:
+		return ReadJSONRPCRequestIntoSpan(record, filter)
 	}
 
 	event, err := ReinterpretCast[HTTPRequestTrace](record.RawSample)
@@ -145,6 +150,74 @@ func ReadSQLRequestTraceAsSpan(record *ringbuf.Record) (request.Span, bool, erro
 	}
 
 	return SQLRequestTraceToSpan(event), false, nil
+}
+
+// ReadJSONRPCRequestIntoSpan converts HTTP-based JSON-RPC events from eBPF into spans
+func ReadJSONRPCRequestIntoSpan(record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {
+	// JSON-RPC uses the same HTTP info structure as regular HTTP events
+	httpEvent, err := ReinterpretCast[BPFHTTPInfo](record.RawSample)
+	if err != nil {
+		return request.Span{}, true, err
+	}
+
+	// If PID isn't valid, skip
+	if !filter.ValidPID(httpEvent.Pid.UserPid, httpEvent.Pid.Ns, PIDTypeKProbes) {
+		return request.Span{}, true, nil
+	}
+
+	// First create a regular HTTP span
+	result := HTTPInfo{BPFHTTPInfo: *httpEvent}
+
+	var bufHost string
+	var bufPort int
+	parsedHost := false
+
+	// When we can't find the connection info, we signal that through making the
+	// source and destination ports equal to max short. E.g. async SSL
+	if httpEvent.ConnInfo.S_port != 0 || httpEvent.ConnInfo.D_port != 0 {
+		source, target := (*BPFConnInfo)(&httpEvent.ConnInfo).reqHostInfo()
+		result.Host = target
+		result.Peer = source
+	} else {
+		bufHost, bufPort = httpEvent.hostFromBuf()
+		parsedHost = true
+
+		if bufPort >= 0 {
+			result.Host = bufHost
+			result.ConnInfo.D_port = uint16(bufPort)
+		}
+	}
+	result.URL = httpEvent.url()
+	result.Method = httpEvent.method()
+
+	if request.EventType(result.Type) == request.EventTypeHTTPClient && !parsedHost {
+		bufHost, _ = httpEvent.hostFromBuf()
+	}
+
+	result.HeaderHost = bufHost
+	// Create the span but modify it to be JSON-RPC
+	span := httpInfoToSpan(&result)
+	span.Type = request.EventTypeJSONRPC
+
+	// Extract JSON-RPC specific information
+	if httpEvent.IsJsonrpc == 1 {
+		// Extract method from the JSON-RPC request and use it as the Path
+		jsonRPCMethod := cstr(httpEvent.JsonrpcMethod[:])
+		plog := ptlog()
+		plog.Debug("XXX44XX jsonrpc method", "method", jsonRPCMethod)
+		if jsonRPCMethod != "" {
+			span.Path = jsonRPCMethod
+			span.Method = "POST" // JSON-RPC is typically sent via POST
+		}
+
+		// We could use Statement for storing the JSON-RPC ID if needed
+		jsonRPCId := cstr(httpEvent.JsonrpcId[:])
+		if jsonRPCId != "" {
+			span.Statement = jsonRPCId
+		}
+	}
+
+	return span, false, nil
 }
 
 type KernelLockdown uint8

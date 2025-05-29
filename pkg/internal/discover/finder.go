@@ -7,6 +7,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/config"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf"
+	"github.com/grafana/beyla/v2/pkg/internal/ebpf/capabilitytracer"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/generictracer"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/gotracer"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/gpuevent"
@@ -94,16 +95,22 @@ func (pf *ProcessFinder) Start(ctx context.Context) (<-chan Event[*ebpf.Instrume
 
 // the common tracer group should get loaded for any tracer group, only once
 func newCommonTracersGroup(cfg *beyla.Config) []ebpf.Tracer {
+	tracers := []ebpf.Tracer{}
+
 	switch cfg.EBPF.ContextPropagation {
 	case config.ContextPropagationAll:
-		return []ebpf.Tracer{tctracer.New(cfg), tpinjector.New(cfg)}
+		tracers = append(tracers, tctracer.New(cfg), tpinjector.New(cfg))
 	case config.ContextPropagationHeadersOnly:
-		return []ebpf.Tracer{tpinjector.New(cfg)}
+		tracers = append(tracers, tpinjector.New(cfg))
 	case config.ContextPropagationIPOptionsOnly:
-		return []ebpf.Tracer{tctracer.New(cfg)}
+		tracers = append(tracers, tctracer.New(cfg))
 	}
 
-	return []ebpf.Tracer{}
+	if cfg.Capabilities.Enable {
+		tracers = append(tracers, newCapabilityTracersGroup(cfg)...)
+	}
+
+	return tracers
 }
 
 func newGoTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Tracer {
@@ -115,4 +122,8 @@ func newGenericTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf
 		return []ebpf.Tracer{generictracer.New(cfg, metrics), gpuevent.New(cfg, metrics)}
 	}
 	return []ebpf.Tracer{generictracer.New(cfg, metrics)}
+}
+
+func newCapabilityTracersGroup(cfg *beyla.Config) []ebpf.Tracer {
+	return []ebpf.Tracer{capabilitytracer.New(cfg)}
 }

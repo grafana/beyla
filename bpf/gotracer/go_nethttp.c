@@ -58,18 +58,6 @@ struct {
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } http2_server_requests_tp SEC(".maps");
 
-typedef struct body_buf {
-    u64 data_addr; // pointer to the body buffer
-    u64 len;
-} body_buf_t;
-
-struct {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, go_addr_key_t); // key: pointer to the request goroutine
-    __type(value, body_buf_t);  // value: the buf pointer
-    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
-} http_body SEC(".maps");
-
 typedef struct server_http_func_invocation {
     u64 start_monotime_ns;
     u64 content_length;
@@ -79,6 +67,7 @@ typedef struct server_http_func_invocation {
     u8 method[METHOD_MAX_LEN];
     u8 path[PATH_MAX_LEN];
     u8 _pad[5];
+    u64 body_addr; // pointer to the body buffer
 } server_http_func_invocation_t;
 
 struct {
@@ -385,21 +374,13 @@ int beyla_uprobe_ServeHTTPReturns(struct pt_regs *ctx) {
     bpf_dbg_printk("ServeHTTP_ret method: %s", trace->method);
     bpf_dbg_printk("ServeHTTP_ret path: %s", trace->path);
 
-    body_buf_t *buf = bpf_map_lookup_elem(&http_body, &g_key);
-    if (buf) {
-        u64 n = invocation->content_length;
-        if (n > sizeof(trace->body) - 1) {
-            n = sizeof(trace->body) - 1; // Ensure we don't overflow temp
-        }
-        // Read the bytes from the buffer
-        bpf_probe_read_user(trace->body, n, (void *)buf->data_addr);
-
-        // Null-terminate for printing as string
-
-        trace->body[n] = '\0';
-
-        bpf_dbg_printk("len=%d, body read tmp=%s", buf->len, trace->body);
+    u64 n = invocation->content_length;
+    if (n > sizeof(trace->body) - 1) {
+        n = sizeof(trace->body) - 1;
     }
+    // Read the bytes from the buffer
+    bpf_probe_read_user(trace->body, n, (void *)invocation->body_addr);
+
     // submit the completed trace via ringbuffer
     bpf_ringbuf_submit(trace, get_flags());
 
@@ -1203,34 +1184,16 @@ int beyla_uprobe_bodyRead(struct pt_regs *ctx) {
     go_addr_key_from_id(&g_key, goroutine_addr);
 
     // Get the address of the slice struct (p)
-    u64 data_addr = (u64)GO_PARAM2(ctx);
-    u64 len = (u64)GO_PARAM3(ctx);
+    u64 body_addr = (u64)GO_PARAM2(ctx);
 
-    body_buf_t buf = {
-        .data_addr = data_addr,
-        .len = len,
-    };
-    bpf_map_update_elem(&http_body, &g_key, &buf, BPF_ANY);
-
-    return 0;
-}
-
-SEC("uprobe/bodyReadRet")
-int beyla_uprobe_bodyReadReturn(struct pt_regs *ctx) {
-    void *goroutine_addr = GOROUTINE_PTR(ctx);
-    bpf_dbg_printk("=== uprobe/proc body read goroutine return === ");
-    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
-    go_addr_key_t g_key = {};
-    go_addr_key_from_id(&g_key, goroutine_addr);
-
-    body_buf_t *buf = bpf_map_lookup_elem(&http_body, &g_key);
-    if (!buf)
+    server_http_func_invocation_t *invocation =
+        bpf_map_lookup_elem(&ongoing_http_server_requests, &g_key);
+    if (!invocation) {
+        bpf_dbg_printk("can't find invocation info for server call");
         return 0;
-
-    bpf_dbg_printk("buf addr=%lx, buf len=%d", buf->data_addr, buf->len);
-
-    // update http body real content length
-    bpf_map_update_elem(&http_body, &g_key, buf, BPF_ANY);
+    }
+    invocation->body_addr = body_addr;
+    bpf_map_update_elem(&ongoing_http_server_requests, &g_key, invocation, BPF_ANY);
 
     return 0;
 }

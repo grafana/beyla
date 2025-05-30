@@ -58,6 +58,18 @@ struct {
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } http2_server_requests_tp SEC(".maps");
 
+typedef struct body_buf {
+    u64 data_addr; // pointer to the body buffer
+    u64 len;
+} body_buf_t;
+
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, go_addr_key_t); // key: pointer to the request goroutine
+    __type(value, body_buf_t);  // value: the buf pointer
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+} http_body SEC(".maps");
+
 typedef struct server_http_func_invocation {
     u64 start_monotime_ns;
     u64 content_length;
@@ -143,8 +155,6 @@ int beyla_uprobe_ServeHTTP(struct pt_regs *ctx) {
             goto done;
         }
 
-        bpf_dbg_printk("path: %s", invocation.path);
-
         res = bpf_probe_read(
             &invocation.content_length,
             sizeof(invocation.content_length),
@@ -156,6 +166,10 @@ int beyla_uprobe_ServeHTTP(struct pt_regs *ctx) {
     } else {
         goto done;
     }
+    bpf_dbg_printk("ServeHTTP method: %s, path: %s, content length: %d",
+                   invocation.method,
+                   invocation.path,
+                   invocation.content_length);
 
     // Write event
     if (bpf_map_update_elem(&ongoing_http_server_requests, &g_key, &invocation, BPF_ANY)) {
@@ -367,9 +381,9 @@ int beyla_uprobe_ServeHTTPReturns(struct pt_regs *ctx) {
     trace->response_length = invocation->response_length;
 
     make_tp_string(tp_buf, &invocation->tp);
-    bpf_dbg_printk("tp: %s", tp_buf);
-    bpf_dbg_printk("method: %s", trace->method);
-    bpf_dbg_printk("path: %s", trace->path);
+    bpf_dbg_printk("ServeHTTP_ret tp: %s", tp_buf);
+    bpf_dbg_printk("ServeHTTP_ret method: %s", trace->method);
+    bpf_dbg_printk("ServeHTTP_ret path: %s", trace->path);
 
     // submit the completed trace via ringbuffer
     bpf_ringbuf_submit(trace, get_flags());
@@ -1142,7 +1156,7 @@ int beyla_uprobe_netFdRead(struct pt_regs *ctx) {
     // lookup a grpc connection
     // Sets up the connection info to be grabbed and mapped over the transport to operateHeaders
     void *tr = bpf_map_lookup_elem(&ongoing_grpc_operate_headers, &g_key);
-    bpf_dbg_printk("tr %llx", tr);
+    bpf_dbg_printk("netFdRead tr %llx", tr);
     if (tr) {
         grpc_transports_t *t = bpf_map_lookup_elem(&ongoing_grpc_transports, tr);
         bpf_dbg_printk("t %llx", t);
@@ -1156,12 +1170,69 @@ int beyla_uprobe_netFdRead(struct pt_regs *ctx) {
     }
     // lookup active sql connection
     sql_func_invocation_t *sql_conn = bpf_map_lookup_elem(&ongoing_sql_queries, &g_key);
-    bpf_dbg_printk("sql_conn %llx", sql_conn);
+    bpf_dbg_printk("netFdRead sql_conn %llx", sql_conn);
     if (sql_conn) {
         void *fd_ptr = GO_PARAM1(ctx);
         get_conn_info_from_fd(fd_ptr,
                               &sql_conn->conn); // ok to not check the result, we leave it as 0
     }
+
+    return 0;
+}
+
+SEC("uprobe/bodyRead")
+int beyla_uprobe_bodyRead(struct pt_regs *ctx) {
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    bpf_dbg_printk("=== uprobe/proc body read goroutine === ");
+    go_addr_key_t g_key = {};
+    go_addr_key_from_id(&g_key, goroutine_addr);
+
+    // Get the address of the slice struct (p)
+    u64 data_addr = (u64)GO_PARAM2(ctx);
+    u64 len = (u64)GO_PARAM3(ctx);
+
+    body_buf_t buf = {
+        .data_addr = data_addr,
+        .len = len,
+    };
+    bpf_map_update_elem(&http_body, &g_key, &buf, BPF_ANY);
+
+    return 0;
+}
+
+SEC("uprobe/bodyReadRet")
+int beyla_uprobe_bodyReadReturn(struct pt_regs *ctx) {
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    bpf_dbg_printk("=== uprobe/proc body read goroutine return === ");
+    go_addr_key_t g_key = {};
+    go_addr_key_from_id(&g_key, goroutine_addr);
+
+    body_buf_t *buf = bpf_map_lookup_elem(&http_body, &g_key);
+    if (!buf)
+        return 0;
+
+    // Get the number of bytes read (n)
+    u64 n = (u64)GO_PARAM1(ctx);
+    bpf_dbg_printk("original read len=%d, buf addr=%lld, buf len=%d", n, buf->data_addr, buf->len);
+
+    u8 temp[150];
+    u64 max_len = sizeof(temp);
+
+    if (n > max_len)
+        n = max_len;
+    if (n > buf->len)
+        n = buf->len;
+
+    // Read the bytes from the buffer
+    bpf_probe_read_user(temp, n, (void *)buf->data_addr);
+
+    // Null-terminate for printing as string
+    if (n < sizeof(temp))
+        temp[n] = '\0';
+    else
+        temp[sizeof(temp) - 1] = '\0';
+
+    bpf_dbg_printk("len=%d, body read tmp=%s", n, temp);
 
     return 0;
 }

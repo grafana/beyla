@@ -1,6 +1,7 @@
 package ebpfcommon
 
 import (
+	"fmt"
 	"log/slog"
 	"strings"
 	"unsafe"
@@ -19,6 +20,8 @@ func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
 	path := cstr(trace.Path[:])
 	scheme := cstr(trace.Scheme[:])
 	origHost := cstr(trace.Host[:])
+	body := cstr(trace.Body[:])
+	fmt.Println("HTTPRequestTraceToSpan", body)
 
 	peer := ""
 	hostname := ""

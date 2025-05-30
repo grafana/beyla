@@ -385,6 +385,21 @@ int beyla_uprobe_ServeHTTPReturns(struct pt_regs *ctx) {
     bpf_dbg_printk("ServeHTTP_ret method: %s", trace->method);
     bpf_dbg_printk("ServeHTTP_ret path: %s", trace->path);
 
+    body_buf_t *buf = bpf_map_lookup_elem(&http_body, &g_key);
+    if (buf) {
+        u64 n = invocation->content_length;
+        if (n > sizeof(trace->body) - 1) {
+            n = sizeof(trace->body) - 1; // Ensure we don't overflow temp
+        }
+        // Read the bytes from the buffer
+        bpf_probe_read_user(trace->body, n, (void *)buf->data_addr);
+
+        // Null-terminate for printing as string
+
+        trace->body[n] = '\0';
+
+        bpf_dbg_printk("len=%d, body read tmp=%s", buf->len, trace->body);
+    }
     // submit the completed trace via ringbuffer
     bpf_ringbuf_submit(trace, get_flags());
 
@@ -1204,6 +1219,7 @@ SEC("uprobe/bodyReadRet")
 int beyla_uprobe_bodyReadReturn(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("=== uprobe/proc body read goroutine return === ");
+    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
     go_addr_key_t g_key = {};
     go_addr_key_from_id(&g_key, goroutine_addr);
 
@@ -1211,28 +1227,10 @@ int beyla_uprobe_bodyReadReturn(struct pt_regs *ctx) {
     if (!buf)
         return 0;
 
-    // Get the number of bytes read (n)
-    u64 n = (u64)GO_PARAM1(ctx);
-    bpf_dbg_printk("original read len=%d, buf addr=%lld, buf len=%d", n, buf->data_addr, buf->len);
+    bpf_dbg_printk("buf addr=%lx, buf len=%d", buf->data_addr, buf->len);
 
-    u8 temp[150];
-    u64 max_len = sizeof(temp);
-
-    if (n > max_len)
-        n = max_len;
-    if (n > buf->len)
-        n = buf->len;
-
-    // Read the bytes from the buffer
-    bpf_probe_read_user(temp, n, (void *)buf->data_addr);
-
-    // Null-terminate for printing as string
-    if (n < sizeof(temp))
-        temp[n] = '\0';
-    else
-        temp[sizeof(temp) - 1] = '\0';
-
-    bpf_dbg_printk("len=%d, body read tmp=%s", n, temp);
+    // update http body real content length
+    bpf_map_update_elem(&http_body, &g_key, buf, BPF_ANY);
 
     return 0;
 }

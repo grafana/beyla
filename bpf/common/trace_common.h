@@ -11,8 +11,10 @@
 #include <common/trace_util.h>
 #include <common/tracing.h>
 
+#include <maps/active_nodejs_ids.h>
 #include <maps/clone_map.h>
 #include <maps/cp_support_connect_info.h>
+#include <maps/fd_to_connection.h>
 #include <maps/server_traces.h>
 #include <maps/tp_info_mem.h>
 #include <maps/tp_char_buf_mem.h>
@@ -86,7 +88,32 @@ static __always_inline unsigned char *bpf_strstr_tp_loop(unsigned char *buf, int
     return NULL;
 }
 
+static __always_inline tp_info_pid_t *find_nodejs_parent_trace() {
+    const u64 pid_tgid = bpf_get_current_pid_tgid();
+    const s32 *node_parent_request_fd = bpf_map_lookup_elem(&active_nodejs_ids, &pid_tgid);
+
+    if (!node_parent_request_fd) {
+        return NULL;
+    }
+
+    const fd_key key = {.pid_tgid = pid_tgid, .fd = *node_parent_request_fd};
+
+    const pid_connection_info_t *p_conn = bpf_map_lookup_elem(&fd_to_connection, &key);
+
+    if (!p_conn) {
+        return NULL;
+    }
+
+    return trace_info_for_connection(&p_conn->conn, TRACE_TYPE_SERVER);
+}
+
 static __always_inline tp_info_pid_t *find_parent_trace(const pid_connection_info_t *p_conn) {
+    tp_info_pid_t *node_tp = find_nodejs_parent_trace();
+
+    if (node_tp) {
+        return node_tp;
+    }
+
     trace_key_t t_key = {0};
 
     trace_key_from_pid_tid(&t_key);

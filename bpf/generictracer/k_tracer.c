@@ -17,6 +17,7 @@
 #include <logger/bpf_dbg.h>
 
 #include <maps/fd_map.h>
+#include <maps/fd_to_connection.h>
 #include <maps/msg_buffers.h>
 #include <maps/sk_buffers.h>
 
@@ -122,7 +123,7 @@ int BPF_KPROBE(beyla_kprobe_tcp_rcv_established, struct sock *sk, struct sk_buff
 // Note: A current limitation is that likely we won't capture the first accept request. The
 // process may have already reached accept, before the instrumenter has launched.
 SEC("kretprobe/sys_accept4")
-int BPF_KRETPROBE(beyla_kretprobe_sys_accept4, uint fd) {
+int BPF_KRETPROBE(beyla_kretprobe_sys_accept4, s32 fd) {
     u64 id = bpf_get_current_pid_tgid();
 
     if (!valid_pid(id)) {
@@ -135,7 +136,7 @@ int BPF_KRETPROBE(beyla_kretprobe_sys_accept4, uint fd) {
 
     // The file descriptor is the value returned from the accept4 syscall.
     // If we got a negative file descriptor we don't have a connection
-    if ((int)fd < 0) {
+    if (fd < 0) {
         goto cleanup;
     }
 
@@ -159,6 +160,10 @@ int BPF_KRETPROBE(beyla_kretprobe_sys_accept4, uint fd) {
 
         // to support SSL on missing handshake
         bpf_map_update_elem(&pid_tid_to_conn, &id, &info, BPF_ANY);
+
+        const fd_key key = {.pid_tgid = id, .fd = fd};
+
+        bpf_map_update_elem(&fd_to_connection, &key, &info.p_conn.conn, BPF_ANY);
     }
 
 cleanup:

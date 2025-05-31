@@ -248,3 +248,66 @@ or
 ```
 
 In this example, only the first line is used and trimmed to prevent white space in the service name.
+
+## Extra group attributes
+
+Beyla allows you to enhance your metrics with custom attributes using the `extra_group_attributes` configuration. This gives you the flexibility to include additional metadata in your metrics, beyond the standard set.
+
+To use this feature, specify the group name and the list of attributes you want to include in that group.
+
+Currently, only the `k8s_app_meta` group is supported. This group contains Kubernetes-specific metadata such as Pod name, namespace, container name, Pod UID, and more.
+
+Example configuration:
+
+```yaml
+attributes:
+  kubernetes:
+    enable: true
+  extra_group_attributes:
+    k8s_app_meta: ["k8s.app.version"]
+```
+
+In this example:
+- Adding `k8s.app.version` to the `resource_labels` block causes the `k8s.app.version` label to appear in the metrics.
+- You can also define annotations with the prefix `resource.opentelemetry.io/` and suffix `k8s.app.version` in your Kubernetes manifests, these annotations are automatically included in the metrics.
+
+The following table describes the default group attributes.
+
+| Group              | Label                     |
+|---------------------|---------------------------------|
+| `k8s_app_meta`         | `k8s.namespace.name`  |
+| `k8s_app_meta`         | `k8s.pod.name` | 
+| `k8s_app_meta`         | `k8s.container.name` | 
+| `k8s_app_meta`         | `k8s.deployment.name` | 
+| `k8s_app_meta`         | `k8s.replicaset.name` | 
+| `k8s_app_meta`         | `k8s.daemonset.name` | 
+| `k8s_app_meta`         | `k8s.statefulset.name` | 
+| `k8s_app_meta`         | `k8s.node.name` | 
+| `k8s_app_meta`         | `k8s.pod.uid` | 
+| `k8s_app_meta`         | `k8s.pod.start_time` | 
+| `k8s_app_meta`         | `k8s.cluster.name` |
+| `k8s_app_meta`         | `k8s.owner.name` | 
+
+And the following table describes the metrics and their associated groups.
+| Group               | OTEL Metric                      | Prom Metric                    |
+|---------------------|---------------------------------|---------------------------------|
+| `k8s_app_meta`         | `process.cpu.utilization`  | `process_cpu_utilization_ratio` |
+| `k8s_app_meta`         | `process.cpu.time` | `process_cpu_time_seconds_total` |
+| `k8s_app_meta`         | `process.memory.usage` | `process_memory_usage_bytes` |
+| `k8s_app_meta`         | `process.memory.virtual` | `process_memory_virtual_bytes` |
+| `k8s_app_meta`         | `process.disk.io` | `process_disk_io_bytes_total` |
+| `k8s_app_meta`         | `messaging.publish.duration` | `messaging_publish_duration_seconds` |
+| `k8s_app_meta`         | `messaging.process.duration` | `messaging_process_duration_seconds` |
+| `k8s_app_meta`         | `http.server.request.duration` | `http_server_request_duration_seconds` |
+| `k8s_app_meta`         | `http.server.request.body.size` | `http_server_request_body_size_bytes` |
+| `k8s_app_meta`         | `http.server.response.body.size` | `http_server_response_body_size_bytes` |
+| `k8s_app_meta`         | `http.client.request.duration` | `http_client_request_duration_seconds` |
+| `k8s_app_meta`         | `http.client.request.body.size` | `http_client_request_body_size_bytes` |
+| `k8s_app_meta`         | `http.client.response.body.size` | `http_client_response_body_size_bytes` |
+| `k8s_app_meta`         | `rpc.client.duration` | `rpc_client_duration_seconds` |
+| `k8s_app_meta`         | `rpc.server.duration` | `rpc_server_duration_seconds` |
+| `k8s_app_meta`         | `db.client.operation.duration` | `db_client_operation_duration_seconds` |
+| `k8s_app_meta`         | `gpu.kernel.launch.calls` | `gpu_kernel_launch_calls_total` |
+| `k8s_app_meta`         | `gpu.kernel.grid.size` | `gpu_kernel_grid_size_total` |
+| `k8s_app_meta`         | `gpu.kernel.block.size` | `gpu_kernel_block_size_total` |
+| `k8s_app_meta`         | `gpu.memory.allocations` | `gpu_memory_allocations_bytes_total` |

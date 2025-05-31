@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 
+	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/export/prom"
 	"github.com/grafana/beyla/v2/pkg/filter"
@@ -30,6 +31,12 @@ func (f *Flows) buildPipeline(ctx context.Context) (*swarm.Runner, error) {
 	alog := alog()
 
 	alog.Debug("creating flows' processing graph")
+
+	selectorCfg := &attributes.SelectorConfig{
+		SelectionCfg:            f.cfg.Attributes.Select,
+		ExtraGroupAttributesCfg: f.cfg.Attributes.ExtraGroupAttributes,
+	}
+
 	swi := &swarm.Instancer{}
 	// Start nodes: those generating flow records (reading them from eBPF)
 	ebpfFlows := msg.NewQueue[[]*ebpf.Record](
@@ -77,22 +84,22 @@ func (f *Flows) buildPipeline(ctx context.Context) (*swarm.Runner, error) {
 	})
 
 	filteredFlows := msg.NewQueue[[]*ebpf.Record](msg.ChannelBufferLen(f.cfg.ChannelBufferLen))
-	swi.Add(filter.ByAttribute(f.cfg.Filters.Network, ebpf.RecordStringGetters, decoratedFlows, filteredFlows))
+	swi.Add(filter.ByAttribute(f.cfg.Filters.Network, selectorCfg.ExtraGroupAttributesCfg, ebpf.RecordStringGetters, decoratedFlows, filteredFlows))
 
 	// Terminal nodes export the flow record information out of the pipeline: OTEL, Prom and printer.
 	// Not all the nodes are mandatory here. Is the responsibility of each Provider function to decide
 	// whether each node is going to be instantiated or just ignored.
 	f.cfg.Attributes.Select.Normalize()
 	swi.Add(otel.NetMetricsExporterProvider(f.ctxInfo, &otel.NetMetricsConfig{
-		Metrics:            &f.cfg.Metrics,
-		AttributeSelectors: f.cfg.Attributes.Select,
-		GloballyEnabled:    f.cfg.NetworkFlows.Enable,
+		Metrics:         &f.cfg.Metrics,
+		SelectorCfg:     selectorCfg,
+		GloballyEnabled: f.cfg.NetworkFlows.Enable,
 	}, filteredFlows))
 
 	swi.Add(prom.NetPrometheusEndpoint(f.ctxInfo, &prom.NetPrometheusConfig{
-		Config:             &f.cfg.Prometheus,
-		AttributeSelectors: f.cfg.Attributes.Select,
-		GloballyEnabled:    f.cfg.NetworkFlows.Enable,
+		Config:          &f.cfg.Prometheus,
+		SelectorCfg:     selectorCfg,
+		GloballyEnabled: f.cfg.NetworkFlows.Enable,
 	}, filteredFlows))
 
 	swi.Add(swarm.DirectInstance(export.FlowPrinterProvider(f.cfg.NetworkFlows.Print, filteredFlows)))

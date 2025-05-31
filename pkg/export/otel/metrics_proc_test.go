@@ -42,11 +42,13 @@ func TestProcMetrics_Disaggregated(t *testing.T) {
 				Instrumentations: []string{
 					instrumentations.InstrumentationALL,
 				},
-			}, AttributeSelectors: attributes.Selection{
-				attributes.ProcessCPUTime.Section:        includedAttributes,
-				attributes.ProcessCPUUtilization.Section: includedAttributes,
-				attributes.ProcessDiskIO.Section:         includedAttributes,
-				attributes.ProcessNetIO.Section:          includedAttributes,
+			}, SelectorCfg: &attributes.SelectorConfig{
+				SelectionCfg: attributes.Selection{
+					attributes.ProcessCPUTime.Section:        includedAttributes,
+					attributes.ProcessCPUUtilization.Section: includedAttributes,
+					attributes.ProcessDiskIO.Section:         includedAttributes,
+					attributes.ProcessNetIO.Section:          includedAttributes,
+				},
 			},
 		}, procsInput)(ctx)
 	require.NoError(t, err)

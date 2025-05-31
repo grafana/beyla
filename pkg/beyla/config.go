@@ -225,10 +225,12 @@ func (t TracesReceiverConfig) Enabled() bool {
 // Attributes configures the decoration of some extra attributes that will be
 // added to each span
 type Attributes struct {
-	Kubernetes transform.KubernetesDecorator `yaml:"kubernetes"`
-	InstanceID traces.InstanceIDConfig       `yaml:"instance_id"`
-	Select     attributes.Selection          `yaml:"select"`
-	HostID     HostIDConfig                  `yaml:"host_id"`
+	// ClusterName is the generic cluster name for both the k8s cluster and other cloud cluster environments.
+	ClusterName string                        `yaml:"cluster_name" env:"BEYLA_CLUSTER_NAME"`
+	Kubernetes  transform.KubernetesDecorator `yaml:"kubernetes"`
+	InstanceID  traces.InstanceIDConfig       `yaml:"instance_id"`
+	Select      attributes.Selection          `yaml:"select"`
+	HostID      HostIDConfig                  `yaml:"host_id"`
 }
 
 type HostIDConfig struct {

@@ -24,6 +24,7 @@
 #include <gotracer/go_byte_arr.h>
 #include <gotracer/go_common.h>
 #include <gotracer/go_str.h>
+#include <gotracer/go_stream_key.h>
 #include <gotracer/hpack.h>
 
 #include <logger/bpf_dbg.h>
@@ -767,21 +768,38 @@ int beyla_uprobe_http2serverConn_runHandler(struct pt_regs *ctx) {
 #ifndef NO_HEADER_PROPAGATION
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, go_addr_key_t); // key: stream id
-    __type(
-        value,
-        u64); // the goroutine of the round trip request, which is the key for our traceparent info
+    __type(key, stream_key_t); // key: stream id + connection info
+    // the goroutine of the round trip request, which is the key for our traceparent info
+    __type(value, u64);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } http2_req_map SEC(".maps");
 #endif
 
-static __always_inline void setup_http2_client_conn(void *goroutine_addr, void *cc_ptr) {
+static __always_inline void setup_http2_client_conn(void *goroutine_addr,
+                                                    void *cc_ptr,
+                                                    u32 stream_id,
+                                                    go_offset_const off_cc_tconn_pos,
+                                                    go_offset_const off_cc_next_stream_id_pos,
+                                                    go_offset_const off_cc_framer_pos) {
+    go_addr_key_t g_key = {};
+    go_addr_key_from_id(&g_key, goroutine_addr);
+
+    void *parent_go = (void *)find_parent_goroutine_in_chain(&g_key);
+
+    bpf_dbg_printk("goroutine %lx, parent %lx", goroutine_addr, parent_go);
+
+    // We should find a parent always
+    if (parent_go) {
+        goroutine_addr = parent_go;
+        go_addr_key_from_id(&g_key, goroutine_addr);
+    }
+
     off_table_t *ot = get_offsets_table();
 
     if (cc_ptr) {
-        u64 cc_tconn_pos = go_offset_of(ot, (go_offset){.v = _cc_tconn_pos});
+        u64 cc_tconn_pos = go_offset_of(ot, (go_offset){.v = off_cc_tconn_pos});
         bpf_dbg_printk("cc_ptr %llx, cc_tconn_ptr %llx", cc_ptr, cc_ptr + cc_tconn_pos);
-        void *tconn = cc_ptr + go_offset_of(ot, (go_offset){.v = _cc_tconn_pos});
+        void *tconn = cc_ptr + go_offset_of(ot, (go_offset){.v = off_cc_tconn_pos});
         bpf_probe_read(&tconn, sizeof(tconn), (void *)(cc_ptr + cc_tconn_pos + 8));
         bpf_dbg_printk("tconn %llx", tconn);
 
@@ -795,24 +813,25 @@ static __always_inline void setup_http2_client_conn(void *goroutine_addr, void *
 
             if (ok) {
                 bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
-                go_addr_key_t g_key = {};
-                go_addr_key_from_id(&g_key, goroutine_addr);
 
                 bpf_map_update_elem(&ongoing_client_connections, &g_key, &conn, BPF_ANY);
             }
         }
 
 #ifndef NO_HEADER_PROPAGATION
-        u32 stream_id = 0;
-        bpf_probe_read(
-            &stream_id,
-            sizeof(stream_id),
-            (void *)(cc_ptr + go_offset_of(ot, (go_offset){.v = _cc_next_stream_id_pos})));
+        void *framer = 0;
+        bpf_probe_read(&framer,
+                       sizeof(framer),
+                       (void *)(cc_ptr + go_offset_of(ot, (go_offset){.v = off_cc_framer_pos})));
 
-        bpf_dbg_printk("cc_ptr = %llx, nextStreamID=%d", cc_ptr, stream_id);
-        if (stream_id) {
-            go_addr_key_t s_key = {};
-            go_addr_key_from_id(&s_key, (void *)(uintptr_t)stream_id);
+        bpf_dbg_printk(
+            "cc_ptr = %llx, nextStreamID = %d, framer = %llx", cc_ptr, stream_id, framer);
+        if (stream_id && framer) {
+            stream_key_t s_key = {
+                .stream_id = stream_id,
+            };
+            s_key.conn_ptr = (u64)framer;
+
             bpf_map_update_elem(&http2_req_map, &s_key, &goroutine_addr, BPF_ANY);
         }
 #endif
@@ -821,24 +840,51 @@ static __always_inline void setup_http2_client_conn(void *goroutine_addr, void *
 
 SEC("uprobe/http2RoundTrip")
 int beyla_uprobe_http2RoundTrip(struct pt_regs *ctx) {
+    bpf_dbg_printk("=== uprobe/proc http2RoundTrip === ");
     // we use the usual start helper, just like for normal http calls, but we later save
     // more context, like the streamID
     roundTripStartHelper(ctx);
 
+    return 0;
+}
+
+// This runs on separate go routine called from the round tripper, but we need it
+// to establish the correct connection information and stream_id
+SEC("uprobe/http2WriteHeaders")
+int beyla_uprobe_http2WriteHeaders(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     void *cc_ptr = GO_PARAM1(ctx);
+    u64 stream_id = (u64)GO_PARAM2(ctx);
 
-    setup_http2_client_conn(goroutine_addr, cc_ptr);
+    bpf_dbg_printk("=== uprobe/proc http2WriteHeaders === ");
+
+    setup_http2_client_conn(goroutine_addr,
+                            cc_ptr,
+                            (u32)stream_id,
+                            _cc_tconn_pos,
+                            _cc_next_stream_id_pos,
+                            _cc_framer_pos);
 
     return 0;
 }
 
-SEC("uprobe/http2RoundTripConn")
-int beyla_uprobe_http2RoundTripConn(struct pt_regs *ctx) {
+// This runs on separate go routine called from the round tripper, but we need it
+// to establish the correct connection information and stream_id. The Go vendored
+// version has its own offsets.
+SEC("uprobe/http2WriteHeadersVendored")
+int beyla_uprobe_http2WriteHeaders_vendored(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     void *cc_ptr = GO_PARAM1(ctx);
+    u64 stream_id = (u64)GO_PARAM2(ctx);
 
-    setup_http2_client_conn(goroutine_addr, cc_ptr);
+    bpf_dbg_printk("=== uprobe/proc http2WriteHeaders === ");
+
+    setup_http2_client_conn(goroutine_addr,
+                            cc_ptr,
+                            (u32)stream_id,
+                            _cc_tconn_vendored_pos,
+                            _cc_next_stream_id_vendored_pos,
+                            _cc_framer_vendored_pos);
 
     return 0;
 }
@@ -877,9 +923,11 @@ int beyla_uprobe_http2FramerWriteHeaders(struct pt_regs *ctx) {
 
     bpf_dbg_printk("framer=%llx, stream_id=%lld", framer, ((u64)stream_id));
 
-    u32 stream_lookup = (u32)stream_id;
-    go_addr_key_t s_key = {};
-    go_addr_key_from_id(&s_key, (void *)(uintptr_t)stream_lookup);
+    stream_key_t s_key = {
+        .stream_id = stream_id,
+    };
+    s_key.conn_ptr = (u64)framer;
+
     void **go_ptr = bpf_map_lookup_elem(&http2_req_map, &s_key);
 
     if (go_ptr) {
@@ -1180,6 +1228,7 @@ int beyla_uprobe_persistConnRoundTrip(struct pt_regs *ctx) {
                     .pid = pid,
                     .valid = 1,
                     .written = 0,
+                    .req_type = EVENT_HTTP_CLIENT,
                 };
 
                 tp_clone(&tp_p.tp, &invocation->tp);

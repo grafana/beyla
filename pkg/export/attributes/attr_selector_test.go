@@ -175,7 +175,7 @@ func TestNilDoesNotCrash(t *testing.T) {
 }
 
 func TestDefault(t *testing.T) {
-	p, err := NewAttrSelector(GroupKubernetes, nil)
+	p, err := NewAttrSelector(GroupKubernetes, &SelectorConfig{})
 	require.NoError(t, err)
 	assert.Equal(t, []attr.Name{
 		"direction",
@@ -207,6 +207,7 @@ func TestExtraGroupAttributes(t *testing.T) {
 		"k8s.container.name",
 		"k8s.daemonset.name",
 		"k8s.deployment.name",
+		"k8s.kind",
 		"k8s.namespace.name",
 		"k8s.node.name",
 		"k8s.owner.name",

@@ -22,8 +22,8 @@
 
 typedef struct log_info {
     u64 pid;
-    char log[80];
-    char comm[20];
+    unsigned char log[80];
+    unsigned char comm[20];
     u8 _pad[4];
 } log_info_t;
 
@@ -44,13 +44,11 @@ enum bpf_func_id___x { BPF_FUNC_snprintf___x = 42 /* avoid zero */ };
         log_info_t *__trace__ = bpf_ringbuf_reserve(&debug_events, sizeof(log_info_t), 0);         \
         if (__trace__) {                                                                           \
             if (bpf_core_enum_value_exists(enum bpf_func_id___x, BPF_FUNC_snprintf___x)) {         \
-                BPF_SNPRINTF(__trace__->log, sizeof(__trace__->log), fmt, ##args);                 \
+                BPF_SNPRINTF((char *)__trace__->log, sizeof(__trace__->log), fmt, ##args);         \
             } else {                                                                               \
                 __builtin_memcpy(__trace__->log, fmt, sizeof(__trace__->log));                     \
             }                                                                                      \
             bpf_ringbuf_submit(__trace__, 0);                                                      \
-        } else {                                                                                   \
-            bpf_printk("error allocating ringbuffer space");                                       \
         }                                                                                          \
     }
 #else // BPF_DEBUG_TC
@@ -59,7 +57,7 @@ enum bpf_func_id___x { BPF_FUNC_snprintf___x = 42 /* avoid zero */ };
         log_info_t *__trace__ = bpf_ringbuf_reserve(&debug_events, sizeof(log_info_t), 0);         \
         if (__trace__) {                                                                           \
             if (bpf_core_enum_value_exists(enum bpf_func_id___x, BPF_FUNC_snprintf___x)) {         \
-                BPF_SNPRINTF(__trace__->log, sizeof(__trace__->log), fmt, ##args);                 \
+                BPF_SNPRINTF((char *)__trace__->log, sizeof(__trace__->log), fmt, ##args);         \
             } else {                                                                               \
                 __builtin_memcpy(__trace__->log, fmt, sizeof(__trace__->log));                     \
             }                                                                                      \
@@ -67,8 +65,6 @@ enum bpf_func_id___x { BPF_FUNC_snprintf___x = 42 /* avoid zero */ };
             bpf_get_current_comm(&__trace__->comm, sizeof(__trace__->comm));                       \
             __trace__->pid = id >> 32;                                                             \
             bpf_ringbuf_submit(__trace__, 0);                                                      \
-        } else {                                                                                   \
-            bpf_printk("error allocating ringbuffer space");                                       \
         }                                                                                          \
     }
 #endif // BPF_DEBUG_TC

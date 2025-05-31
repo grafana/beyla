@@ -508,7 +508,7 @@ func generateTracesWithAttributes(svc *svc.Attrs, envResourceAttrs []attribute.K
 	resourceAttrs = append(resourceAttrs, envResourceAttrs...)
 	resourceAttrsMap := attrsToMap(resourceAttrs)
 	resourceAttrsMap.PutStr(string(semconv.OTelLibraryNameKey), reporterName)
-	resourceAttrsMap.CopyTo(rs.Resource().Attributes())
+	resourceAttrsMap.MoveTo(rs.Resource().Attributes())
 
 	for _, spanWithAttributes := range spans {
 		span := spanWithAttributes.Span
@@ -548,7 +548,7 @@ func generateTracesWithAttributes(svc *svc.Attrs, envResourceAttrs []attribute.K
 
 		// Set span attributes
 		m := attrsToMap(attrs)
-		m.CopyTo(s.Attributes())
+		m.MoveTo(s.Attributes())
 
 		// Set status code
 		statusCode := codeToStatusCode(request.SpanStatusCode(span))
@@ -593,6 +593,7 @@ func createSubSpans(span *request.Span, parentSpanID pcommon.SpanID, traceID pco
 // attrsToMap converts a slice of attribute.KeyValue to a pcommon.Map
 func attrsToMap(attrs []attribute.KeyValue) pcommon.Map {
 	m := pcommon.NewMap()
+	m.EnsureCapacity(len(attrs))
 	for _, attr := range attrs {
 		switch v := attr.Value.AsInterface().(type) {
 		case string:

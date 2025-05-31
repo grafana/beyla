@@ -152,7 +152,7 @@
       "bw": {
         "versions": {
           "oldest": "9.0.0",
-          "newest": "9.8.0"
+          "newest": "9.9.0"
         },
         "offsets": [
           {
@@ -213,6 +213,38 @@
       }
     },
     "golang.org/x/net/http2.ClientConn": {
+      "fr": {
+        "versions": {
+          "oldest": "0.12.0",
+          "newest": "0.40.0"
+        },
+        "offsets": [
+          {
+            "offset": 304,
+            "since": "0.12.0"
+          },
+          {
+            "offset": 296,
+            "since": "0.15.0"
+          },
+          {
+            "offset": 304,
+            "since": "0.23.0"
+          },
+          {
+            "offset": 328,
+            "since": "0.30.0"
+          },
+          {
+            "offset": 336,
+            "since": "0.31.0"
+          },
+          {
+            "offset": 360,
+            "since": "0.32.0"
+          }
+        ]
+      },
       "nextStreamID": {
         "versions": {
           "oldest": "0.12.0",
@@ -324,7 +356,7 @@
       "s": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.72.1"
+          "newest": "1.72.2"
         },
         "offsets": [
           {
@@ -334,11 +366,25 @@
         ]
       }
     },
+    "google.golang.org/grpc/internal/transport.ClientStream": {
+      "Stream": {
+        "versions": {
+          "oldest": "1.69.0",
+          "newest": "1.72.2"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.69.0"
+          }
+        ]
+      }
+    },
     "google.golang.org/grpc/internal/transport.ServerStream": {
       "Stream": {
         "versions": {
           "oldest": "1.69.0",
-          "newest": "1.72.1"
+          "newest": "1.72.2"
         },
         "offsets": [
           {
@@ -350,7 +396,7 @@
       "st": {
         "versions": {
           "oldest": "1.69.0",
-          "newest": "1.72.1"
+          "newest": "1.72.2"
         },
         "offsets": [
           {
@@ -361,10 +407,22 @@
       }
     },
     "google.golang.org/grpc/internal/transport.Stream": {
+      "id": {
+        "versions": {
+          "oldest": "1.40.0",
+          "newest": "1.72.2"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.40.0"
+          }
+        ]
+      },
       "method": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.72.1"
+          "newest": "1.72.2"
         },
         "offsets": [
           {
@@ -384,7 +442,7 @@
       "st": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.72.1"
+          "newest": "1.72.2"
         },
         "offsets": [
           {
@@ -398,7 +456,7 @@
       "buf": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.72.1"
+          "newest": "1.72.2"
         },
         "offsets": [
           {
@@ -411,10 +469,26 @@
           }
         ]
       },
+      "conn": {
+        "versions": {
+          "oldest": "1.40.0",
+          "newest": "1.72.2"
+        },
+        "offsets": [
+          {
+            "offset": 40,
+            "since": "1.40.0"
+          },
+          {
+            "offset": 48,
+            "since": "1.58.0"
+          }
+        ]
+      },
       "offset": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.72.1"
+          "newest": "1.72.2"
         },
         "offsets": [
           {
@@ -432,7 +506,7 @@
       "conn": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.72.1"
+          "newest": "1.72.2"
         },
         "offsets": [
           {
@@ -449,46 +523,10 @@
           }
         ]
       },
-      "nextID": {
-        "versions": {
-          "oldest": "1.40.0",
-          "newest": "1.72.1"
-        },
-        "offsets": [
-          {
-            "offset": 340,
-            "since": "1.40.0"
-          },
-          {
-            "offset": 348,
-            "since": "1.48.0"
-          },
-          {
-            "offset": 340,
-            "since": "1.51.0"
-          },
-          {
-            "offset": 412,
-            "since": "1.52.0"
-          },
-          {
-            "offset": 404,
-            "since": "1.58.0"
-          },
-          {
-            "offset": 432,
-            "since": "1.64.0"
-          },
-          {
-            "offset": 440,
-            "since": "1.68.0"
-          }
-        ]
-      },
       "scheme": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.72.1"
+          "newest": "1.72.2"
         },
         "offsets": [
           {
@@ -514,7 +552,7 @@
       "conn": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.72.1"
+          "newest": "1.72.2"
         },
         "offsets": [
           {
@@ -711,6 +749,42 @@
       }
     },
     "net/http.http2ClientConn": {
+      "fr": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.24.3"
+        },
+        "offsets": [
+          {
+            "offset": 208,
+            "since": "1.17.0"
+          },
+          {
+            "offset": 304,
+            "since": "1.17.3"
+          },
+          {
+            "offset": 312,
+            "since": "1.20.0"
+          },
+          {
+            "offset": 304,
+            "since": "1.21.0"
+          },
+          {
+            "offset": 296,
+            "since": "1.22.0"
+          },
+          {
+            "offset": 304,
+            "since": "1.23.0"
+          },
+          {
+            "offset": 360,
+            "since": "1.24.0"
+          }
+        ]
+      },
       "nextStreamID": {
         "versions": {
           "oldest": "1.17.0",

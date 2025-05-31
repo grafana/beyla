@@ -83,8 +83,8 @@ func (t *typer) FilterClassify(evs []Event[ProcessMatch]) []Event[ebpf.Instrumen
 		case EventCreated:
 			svcID := svc.Attrs{
 				UID: svc.UID{
-					Name:      ev.Obj.Criteria.Name,
-					Namespace: ev.Obj.Criteria.Namespace,
+					Name:      ev.Obj.Criteria.GetName(),
+					Namespace: ev.Obj.Criteria.GetNamespace(),
 				},
 				ProcPID: ev.Obj.Process.Pid,
 			}

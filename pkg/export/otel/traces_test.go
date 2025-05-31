@@ -36,6 +36,42 @@ import (
 	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
+func BenchmarkGenerateTraces(b *testing.B) {
+	start := time.Now()
+
+	span := &request.Span{
+		Type:         request.EventTypeHTTP,
+		RequestStart: start.UnixNano(),
+		Start:        start.Add(time.Second).UnixNano(),
+		End:          start.Add(3 * time.Second).UnixNano(),
+		Method:       "GET",
+		Route:        "/test",
+		Status:       200,
+	}
+
+	attrs := []attribute.KeyValue{
+		attribute.String("http.method", "GET"),
+		attribute.String("http.route", "/test"),
+		attribute.Int("http.status_code", 200),
+		attribute.String("net.host.name", "example.com"),
+		attribute.String("user_agent.original", "benchmark-agent/1.0"),
+		attribute.String("service.name", "test-service"),
+		attribute.String("telemetry.sdk.language", "go"),
+	}
+
+	group := groupFromSpanAndAttributes(span, attrs)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		traces := GenerateTraces(&span.Service, attrs, "host-id", group)
+
+		if traces.ResourceSpans().Len() == 0 {
+			b.Fatal("Generated traces is empty")
+		}
+	}
+}
+
 func TestHTTPTracesEndpoint(t *testing.T) {
 	defer restoreEnvAfterExecution()()
 	tcfg := TracesConfig{

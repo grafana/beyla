@@ -1,6 +1,6 @@
 # beyla
 
-![Version: 1.7.2](https://img.shields.io/badge/Version-1.7.2-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 2.0.2](https://img.shields.io/badge/AppVersion-2.0.2-informational?style=flat-square)
+![Version: 1.7.5](https://img.shields.io/badge/Version-1.7.5-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 2.2.3](https://img.shields.io/badge/AppVersion-2.2.3-informational?style=flat-square)
 
 eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network metrics.
 
@@ -25,7 +25,7 @@ eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network
 |-----|------|---------|-------------|
 | affinity | object | `{}` | used for scheduling of pods based on affinity rules |
 | config.create | bool | `true` | set to true, to use the below default configurations |
-| config.data | object | `{"attributes":{"kubernetes":{"enable":true},"select":{"beyla_network_flow_bytes":{"include":["k8s.src.owner.type","k8s.dst.owner.type","direction"]}}},"filter":{"network":{"k8s_dst_owner_name":{"not_match":"{kube*,*jaeger-agent*,*prometheus*,*promtail*,*grafana-agent*}"},"k8s_src_owner_name":{"not_match":"{kube*,*jaeger-agent*,*prometheus*,*promtail*,*grafana-agent*}"}}},"prometheus_export":{"path":"/metrics","port":9090}}` | default value of beyla configuration |
+| config.data | object | `{"attributes":{"kubernetes":{"enable":true}},"filter":{"network":{"k8s_dst_owner_name":{"not_match":"{kube*,*jaeger-agent*,*prometheus*,*promtail*,*grafana-agent*}"},"k8s_src_owner_name":{"not_match":"{kube*,*jaeger-agent*,*prometheus*,*promtail*,*grafana-agent*}"}}},"prometheus_export":{"path":"/metrics","port":9090}}` | default value of beyla configuration |
 | config.name | string | `""` |  |
 | config.skipConfigMapCheck | bool | `false` | set to true, to skip the check around the ConfigMap creation |
 | dnsPolicy | string | `"ClusterFirstWithHostNet"` | Determines how DNS resolution is handled for that pod. If `.Values.preset` is set to `network` or `.Values.config.data.network` is enabled, Beyla requires `hostNetwork` access, causing cluster service DNS resolution to fail. It is recommended not to change this if Beyla sends traces and metrics to Grafana components via k8s service. |
@@ -101,7 +101,7 @@ eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network
 | serviceMonitor.metrics.endpoint | object | `{"interval":"15s"}` | ServiceMonitor Prometheus scraping endpoint. Target port and path is set based on service and `prometheus_export` values. For additional values, see the ServiceMonitor spec |
 | tolerations | list | `[]` | Tolerations allow pods to be scheduled on nodes with specific taints |
 | updateStrategy.type | string | `"RollingUpdate"` | update strategy type |
-| volumeMounts | list | `[]` | Additional volumeMounts on the output Deployment definition. |
+| volumeMounts | list | `[]` | Additional volumeMounts on the output daemonset definition. |
 | volumes | list | `[]` | Additional volumes on the output daemonset definition. |
 
 ----------------------------------------------

@@ -4,15 +4,15 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"maps"
 	"net"
 	"os"
 	"path"
+	"slices"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
-	"google.golang.org/protobuf/testing/protocmp"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -56,9 +56,6 @@ type informersConfig struct {
 
 	localInstance bool
 }
-
-// global object used for comparing protobuf messages in the informers event handlers
-var protoCmpTransform = protocmp.Transform()
 
 type InformerOption func(*informersConfig)
 
@@ -381,6 +378,7 @@ func (inf *Informers) podToIndexableEntity(pod *v1.Pod) (interface{}, error) {
 				Owners:       ownersFrom(&pod.ObjectMeta),
 				HostIp:       pod.Status.HostIP,
 			},
+			StatusTimeEpoch: objLastUpdateTime(&pod.ObjectMeta, pod.Status.Conditions, nil),
 		},
 	}, nil
 }
@@ -457,11 +455,12 @@ func (inf *Informers) initNodeIPInformer(ctx context.Context, informerFactory in
 		return &indexableEntity{
 			ObjectMeta: minimalIndex(&node.ObjectMeta),
 			EncodedMeta: &informer.ObjectMeta{
-				Name:      node.Name,
-				Namespace: node.Namespace,
-				Labels:    node.Labels,
-				Ips:       ips,
-				Kind:      typeNode,
+				Name:            node.Name,
+				Namespace:       node.Namespace,
+				Labels:          node.Labels,
+				Ips:             ips,
+				Kind:            typeNode,
+				StatusTimeEpoch: objLastUpdateTime(&node.ObjectMeta, nil, node.Status.Conditions),
 			},
 		}, nil
 	}); err != nil {
@@ -499,14 +498,16 @@ func (inf *Informers) initServiceIPInformer(ctx context.Context, informerFactory
 		if svc.Spec.ClusterIP != v1.ClusterIPNone {
 			ips = svc.Spec.ClusterIPs
 		}
+
 		return &indexableEntity{
 			ObjectMeta: minimalIndex(&svc.ObjectMeta),
 			EncodedMeta: &informer.ObjectMeta{
-				Name:      svc.Name,
-				Namespace: svc.Namespace,
-				Labels:    svc.Labels,
-				Ips:       ips,
-				Kind:      typeService,
+				Name:            svc.Name,
+				Namespace:       svc.Namespace,
+				Labels:          svc.Labels,
+				Ips:             ips,
+				Kind:            typeService,
+				StatusTimeEpoch: objLastUpdateTime(&svc.ObjectMeta, nil, nil),
 			},
 		}, nil
 	}); err != nil {
@@ -520,6 +521,26 @@ func (inf *Informers) initServiceIPInformer(ctx context.Context, informerFactory
 
 	inf.services = services
 	return nil
+}
+
+func objLastUpdateTime(
+	om *metav1.ObjectMeta, podConditions []v1.PodCondition, nodeConditions []v1.NodeCondition,
+) int64 {
+	if om.DeletionTimestamp != nil {
+		return om.DeletionTimestamp.Unix()
+	}
+	lastStatus := om.CreationTimestamp
+	for i := range podConditions {
+		if podConditions[i].LastTransitionTime.After(lastStatus.Time) {
+			lastStatus = podConditions[i].LastTransitionTime
+		}
+	}
+	for i := range nodeConditions {
+		if nodeConditions[i].LastTransitionTime.After(lastStatus.Time) {
+			lastStatus = nodeConditions[i].LastTransitionTime
+		}
+	}
+	return lastStatus.Unix()
 }
 
 func headlessService(om *informer.ObjectMeta) bool {
@@ -538,7 +559,6 @@ func (inf *Informers) ipInfoEventHandler(ctx context.Context) *cache.ResourceEve
 			if headlessService(em) {
 				return
 			}
-			em.StatusTimeEpoch = obj.(*indexableEntity).CreationTimestamp.Time.Unix()
 			inf.Notify(&informer.Event{
 				Type:     informer.EventType_CREATED,
 				Resource: em,
@@ -553,13 +573,11 @@ func (inf *Informers) ipInfoEventHandler(ctx context.Context) *cache.ResourceEve
 			if headlessService(newEM) && headlessService(oldEM) {
 				return
 			}
-			if cmp.Equal(oldEM, newEM, protoCmpTransform) {
+			if unchanged(oldEM, newEM) {
 				return
 			}
 			log.Debug("UpdateFunc", "kind", newEM.Kind, "name", newEM.Name,
 				"ips", newEM.Ips, "oldIps", oldEM.Ips)
-
-			nie.EncodedMeta.StatusTimeEpoch = time.Now().Unix()
 			inf.Notify(&informer.Event{
 				Type:     informer.EventType_UPDATED,
 				Resource: nie.EncodedMeta,
@@ -583,16 +601,18 @@ func (inf *Informers) ipInfoEventHandler(ctx context.Context) *cache.ResourceEve
 			log.Debug("DeleteFunc", "kind", em.Kind, "name", em.Name, "ips", em.Ips)
 
 			metrics.InformerDelete()
-
-			if dt := obj.(*indexableEntity).DeletionTimestamp; dt != nil {
-				em.StatusTimeEpoch = dt.Unix()
-			} else {
-				em.StatusTimeEpoch = time.Now().Unix()
-			}
 			inf.Notify(&informer.Event{
 				Type:     informer.EventType_DELETED,
 				Resource: obj.(*indexableEntity).EncodedMeta,
 			})
 		},
 	}
+}
+
+// unchanged compares the relevant fields from two versions of an object and returns whether they are
+// different. It only compares fields that could effectively mutate during the life of a Pod, Service or Node
+func unchanged(o, n *informer.ObjectMeta) bool {
+	return slices.Equal(o.Ips, n.Ips) &&
+		maps.Equal(o.Labels, n.Labels) &&
+		maps.Equal(o.Annotations, n.Annotations)
 }

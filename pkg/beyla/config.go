@@ -134,8 +134,8 @@ var DefaultConfig = Config{
 	},
 	Discovery: services.DiscoveryConfig{
 		ExcludeOTelInstrumentedServices: true,
-		DefaultExcludeServices: services.DefinitionCriteria{
-			services.Attributes{
+		DefaultExcludeServices: services.RegexDefinitionCriteria{
+			services.RegexSelector{
 				Path: services.NewPathRegexp(regexp.MustCompile("(?:^|/)(beyla$|alloy$|otelcol[^/]*$)")),
 			},
 		},
@@ -312,6 +312,13 @@ func (c *Config) Validate() error {
 		!c.Prometheus.Enabled() && !c.TracePrinter.Enabled() {
 		return ConfigError("you need to define at least one exporter: trace_printer," +
 			" grafana, otel_metrics_export, otel_traces_export or prometheus_export")
+	}
+
+	if c.Enabled(FeatureAppO11y) &&
+		((c.Prometheus.Enabled() && c.Prometheus.InvalidSpanMetricsConfig()) ||
+			(c.Metrics.Enabled() && c.Metrics.InvalidSpanMetricsConfig())) {
+		return ConfigError("you can only enable one format of span metrics," +
+			" application_span or application_span_otel")
 	}
 
 	if len(c.Routes.WildcardChar) > 1 {

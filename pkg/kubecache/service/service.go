@@ -97,7 +97,9 @@ func (ic *InformersCache) Subscribe(msg *informer.SubscribeMessage, server infor
 		fromEpoch:   msg.GetFromTimestampEpoch(),
 		messages:    sync.NewQueue[*informer.Event](),
 	}
-	ic.log.Info("client subscribed", "id", o.ID())
+	ic.log.Info("client subscribed", "id", o.ID(),
+		"fromEpoch", o.fromEpoch,
+		"fromLast", time.Since(time.Unix(o.fromEpoch, 0)))
 	ic.informers.Subscribe(o)
 
 	// Keep the connection open

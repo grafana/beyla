@@ -21,7 +21,8 @@ func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
 	scheme := cstr(trace.Scheme[:])
 	origHost := cstr(trace.Host[:])
 	body := cstr(trace.Body[:])
-	fmt.Println("HTTPRequestTraceToSpan", body)
+	contentType := cstr(trace.ContentType[:])
+	fmt.Println("HTTPRequestTraceToSpan", body, contentType)
 
 	peer := ""
 	hostname := ""

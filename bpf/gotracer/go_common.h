@@ -192,6 +192,40 @@ static __always_inline u64 find_parent_goroutine_in_chain(go_addr_key_t *current
     return 0;
 }
 
+// Copies an HTTP header value from buf (starting after the colon) into out, skipping leading spaces/tabs.
+// Stops at '\r', '\n', or after max_len-1 bytes. Null-terminates out.
+// Returns the number of bytes copied (excluding null terminator).
+static __always_inline int copy_http_header_value(u8 *buf, int buf_len, u8 *out, int max_len) {
+    int i = 0;
+    // Skip leading spaces/tabs
+#pragma unroll
+    for (int j = 0; j < 8; j++) {
+        if (i >= buf_len)
+            return 0;
+        if (buf[i] != ' ' && buf[i] != '\t')
+            break;
+        i++;
+    }
+
+    int out_idx = 0;
+#pragma unroll
+    for (int j = 0; j < 64; j++) { // 64: max value length
+        if (i >= buf_len || out_idx >= max_len - 1)
+            break;
+        char c = buf[i];
+        if (c == '\r' || c == '\n')
+            break;
+        out[out_idx++] = c;
+        i++;
+    }
+    // Always null-terminate
+    if (out_idx < max_len)
+        out[out_idx] = 0;
+    else if (max_len > 0)
+        out[max_len - 1] = 0;
+    return out_idx;
+}
+
 static __always_inline void decode_go_traceparent(unsigned char *buf,
                                                   unsigned char *trace_id,
                                                   unsigned char *span_id,

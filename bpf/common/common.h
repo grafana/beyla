@@ -31,6 +31,8 @@
 #define HOST_MAX_LEN 100
 #define SCHEME_MAX_LEN 10
 #define HTTP_BODY_MAX_LEN 256
+#define CONTENT_TYPE_KEY_LEN 12 // "content-type" length
+#define HTTP_CONTENT_TYPE_MAX_LEN 64
 
 // Trace of an HTTP call invocation. It is instantiated by the return uprobe and forwarded to the
 // user space through the events ringbuffer.
@@ -52,6 +54,7 @@ typedef struct http_request_trace_t {
     connection_info_t conn;
     pid_info pid;
     u8 body[HTTP_BODY_MAX_LEN];
+    u8 content_type[HTTP_CONTENT_TYPE_MAX_LEN];
 } http_request_trace;
 
 typedef struct sql_request_trace_t {

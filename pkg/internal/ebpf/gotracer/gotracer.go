@@ -205,6 +205,9 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 			Start: p.bpfObjects.BeylaUprobeReadRequestStart,
 			End:   p.bpfObjects.BeylaUprobeReadRequestReturns,
 		}},
+		"net/http.(*body).Read": {{
+			Start: p.bpfObjects.BeylaUprobeBodyRead,
+		}},
 		"net/textproto.(*Reader).readContinuedLineSlice": {{
 			End: p.bpfObjects.BeylaUprobeReadContinuedLineSliceReturns,
 		}},

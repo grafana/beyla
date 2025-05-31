@@ -67,6 +67,8 @@ typedef struct server_http_func_invocation {
     u8 method[METHOD_MAX_LEN];
     u8 path[PATH_MAX_LEN];
     u8 _pad[5];
+    u64 body_addr; // pointer to the body buffer
+    u8 content_type[HTTP_CONTENT_TYPE_MAX_LEN];
 } server_http_func_invocation_t;
 
 struct {
@@ -93,12 +95,12 @@ int beyla_uprobe_ServeHTTP(struct pt_regs *ctx) {
 
     off_table_t *ot = get_offsets_table();
 
-    // Lookup any traceparent information setup for us by readContinuedLineSlice
-    server_http_func_invocation_t *tp_inv =
+    // Lookup any header information setup for us by readContinuedLineSlice
+    server_http_func_invocation_t *header_inv =
         bpf_map_lookup_elem(&ongoing_http_server_requests, &g_key);
     tp_info_t *decoded_tp = 0;
-    if (tp_inv && valid_trace(tp_inv->tp.trace_id)) {
-        decoded_tp = &tp_inv->tp;
+    if (header_inv && valid_trace(header_inv->tp.trace_id)) {
+        decoded_tp = &header_inv->tp;
     }
 
     server_http_func_invocation_t invocation = {
@@ -116,6 +118,14 @@ int beyla_uprobe_ServeHTTP(struct pt_regs *ctx) {
         server_trace_parent(goroutine_addr, &invocation.tp, decoded_tp);
         // TODO: if context propagation is supported, overwrite the header value in the map with the
         // new span context and the same thread id.
+
+        // get content-type from readContinuedLineSlice
+        if (header_inv && header_inv->content_type[0]) {
+            bpf_dbg_printk("Found content type in ongoing request: %s", header_inv->content_type);
+            __builtin_memcpy(invocation.content_type,
+                             header_inv->content_type,
+                             sizeof(header_inv->content_type));
+        }
 
         // Get method from Request.Method
         if (!read_go_str("method",
@@ -143,8 +153,6 @@ int beyla_uprobe_ServeHTTP(struct pt_regs *ctx) {
             goto done;
         }
 
-        bpf_dbg_printk("path: %s", invocation.path);
-
         res = bpf_probe_read(
             &invocation.content_length,
             sizeof(invocation.content_length),
@@ -156,6 +164,10 @@ int beyla_uprobe_ServeHTTP(struct pt_regs *ctx) {
     } else {
         goto done;
     }
+    bpf_dbg_printk("ServeHTTP method: %s, path: %s, content length: %d",
+                   invocation.method,
+                   invocation.path,
+                   invocation.content_length);
 
     // Write event
     if (bpf_map_update_elem(&ongoing_http_server_requests, &g_key, &invocation, BPF_ANY)) {
@@ -267,27 +279,49 @@ int beyla_uprobe_readContinuedLineSliceReturns(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc readContinuedLineSlice returns === ");
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
-    u64 len = (u64)GO_PARAM2(ctx);
+    // u64 len = (u64)GO_PARAM2(ctx);
     u8 *buf = (u8 *)GO_PARAM1(ctx);
 
-    if (len >= (W3C_KEY_LENGTH + W3C_VAL_LENGTH + 2)) {
-        u8 temp[W3C_KEY_LENGTH + W3C_VAL_LENGTH + 2];
-        bpf_probe_read(temp, sizeof(temp), buf);
-        bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
-        go_addr_key_t g_key = {};
-        go_addr_key_from_id(&g_key, goroutine_addr);
+    // if (len >= (W3C_KEY_LENGTH + W3C_VAL_LENGTH + 2)) {
+    // u8 temp[W3C_KEY_LENGTH + W3C_VAL_LENGTH + 2];
+    u8 temp[100];
+    bpf_probe_read(temp, sizeof(temp), buf);
+    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
+    go_addr_key_t g_key = {};
+    go_addr_key_from_id(&g_key, goroutine_addr);
 
-        connection_info_t *existing = bpf_map_lookup_elem(&ongoing_server_connections, &g_key);
-        if (existing) {
-            if (!bpf_memicmp((const char *)temp, "traceparent: ", W3C_KEY_LENGTH + 2)) {
-                server_http_func_invocation_t inv = {};
-                decode_go_traceparent(
-                    temp + W3C_KEY_LENGTH + 2, inv.tp.trace_id, inv.tp.parent_id, &inv.tp.flags);
-                bpf_dbg_printk("Found traceparent in header %s", temp);
-                bpf_map_update_elem(&ongoing_http_server_requests, &g_key, &inv, BPF_ANY);
+    connection_info_t *existing = bpf_map_lookup_elem(&ongoing_server_connections, &g_key);
+    if (existing) {
+        server_http_func_invocation_t new_inv = {};
+        server_http_func_invocation_t *inv =
+            bpf_map_lookup_elem(&ongoing_http_server_requests, &g_key);
+        if (inv) {
+            // Copy the existing struct to preserve other fields
+            __builtin_memcpy(&new_inv, inv, sizeof(new_inv));
+        }
+        if (!bpf_memicmp((const char *)temp, "traceparent: ", W3C_KEY_LENGTH + 2)) {
+            decode_go_traceparent(temp + W3C_KEY_LENGTH + 2,
+                                  new_inv.tp.trace_id,
+                                  new_inv.tp.parent_id,
+                                  &new_inv.tp.flags);
+            bpf_dbg_printk("Found traceparent in header %s", temp);
+        }
+        if (!bpf_memicmp((const char *)temp, "content-type: ", CONTENT_TYPE_KEY_LEN + 2)) {
+            // u8 content_type[HTTP_CONTENT_TYPE_MAX_LEN] = {};
+            int value_buf_len = sizeof(temp) - (CONTENT_TYPE_KEY_LEN + 2);
+            if (value_buf_len > 0) {
+                copy_http_header_value(temp + CONTENT_TYPE_KEY_LEN + 2,
+                                       value_buf_len,
+                                       new_inv.content_type,
+                                       sizeof(new_inv.content_type));
+                bpf_dbg_printk("Found content-type in header %s", new_inv.content_type);
+                // __builtin_memcpy(new_inv.content_type, content_type, sizeof(content_type));
             }
         }
+        // Insert or update the struct in the map
+        bpf_map_update_elem(&ongoing_http_server_requests, &g_key, &new_inv, BPF_ANY);
     }
+    // }
 
     return 0;
 }
@@ -367,9 +401,19 @@ int beyla_uprobe_ServeHTTPReturns(struct pt_regs *ctx) {
     trace->response_length = invocation->response_length;
 
     make_tp_string(tp_buf, &invocation->tp);
-    bpf_dbg_printk("tp: %s", tp_buf);
-    bpf_dbg_printk("method: %s", trace->method);
-    bpf_dbg_printk("path: %s", trace->path);
+    bpf_dbg_printk("ServeHTTP_ret tp: %s", tp_buf);
+    bpf_dbg_printk("ServeHTTP_ret method: %s", trace->method);
+    bpf_dbg_printk("ServeHTTP_ret path: %s", trace->path);
+
+    u64 n = invocation->content_length;
+    if (n > sizeof(trace->body) - 1) {
+        n = sizeof(trace->body) - 1;
+    }
+
+    bpf_probe_read_user(trace->body, n, (void *)invocation->body_addr);
+    __builtin_memcpy(
+        trace->content_type, invocation->content_type, sizeof(invocation->content_type));
+    bpf_dbg_printk("ServeHTTP_ret content_type: %s", trace->content_type);
 
     // submit the completed trace via ringbuffer
     bpf_ringbuf_submit(trace, get_flags());
@@ -1142,7 +1186,7 @@ int beyla_uprobe_netFdRead(struct pt_regs *ctx) {
     // lookup a grpc connection
     // Sets up the connection info to be grabbed and mapped over the transport to operateHeaders
     void *tr = bpf_map_lookup_elem(&ongoing_grpc_operate_headers, &g_key);
-    bpf_dbg_printk("tr %llx", tr);
+    bpf_dbg_printk("netFdRead tr %llx", tr);
     if (tr) {
         grpc_transports_t *t = bpf_map_lookup_elem(&ongoing_grpc_transports, tr);
         bpf_dbg_printk("t %llx", t);
@@ -1156,12 +1200,34 @@ int beyla_uprobe_netFdRead(struct pt_regs *ctx) {
     }
     // lookup active sql connection
     sql_func_invocation_t *sql_conn = bpf_map_lookup_elem(&ongoing_sql_queries, &g_key);
-    bpf_dbg_printk("sql_conn %llx", sql_conn);
+    bpf_dbg_printk("netFdRead sql_conn %llx", sql_conn);
     if (sql_conn) {
         void *fd_ptr = GO_PARAM1(ctx);
         get_conn_info_from_fd(fd_ptr,
                               &sql_conn->conn); // ok to not check the result, we leave it as 0
     }
+
+    return 0;
+}
+
+SEC("uprobe/bodyRead")
+int beyla_uprobe_bodyRead(struct pt_regs *ctx) {
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    bpf_dbg_printk("=== uprobe/proc body read goroutine === ");
+    go_addr_key_t g_key = {};
+    go_addr_key_from_id(&g_key, goroutine_addr);
+
+    // Get the address of the slice struct (p)
+    u64 body_addr = (u64)GO_PARAM2(ctx);
+
+    server_http_func_invocation_t *invocation =
+        bpf_map_lookup_elem(&ongoing_http_server_requests, &g_key);
+    if (!invocation) {
+        bpf_dbg_printk("can't find invocation info for server call");
+        return 0;
+    }
+    invocation->body_addr = body_addr;
+    bpf_map_update_elem(&ongoing_http_server_requests, &g_key, invocation, BPF_ANY);
 
     return 0;
 }

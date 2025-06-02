@@ -13,6 +13,8 @@
 
 #include <maps/clone_map.h>
 #include <maps/cp_support_connect_info.h>
+#include <maps/fd_map.h>
+#include <maps/nginx_upstream.h>
 #include <maps/server_traces.h>
 #include <maps/tp_info_mem.h>
 #include <maps/tp_char_buf_mem.h>
@@ -86,12 +88,41 @@ static __always_inline unsigned char *bpf_strstr_tp_loop(unsigned char *buf, int
     return NULL;
 }
 
-static __always_inline tp_info_pid_t *find_parent_trace(const pid_connection_info_t *p_conn) {
+static __always_inline tp_info_pid_t *find_nginx_parent_trace(const pid_connection_info_t *p_conn,
+                                                              u16 orig_dport) {
+    connection_info_part_t client_part = {};
+    populate_ephemeral_info(&client_part, &p_conn->conn, orig_dport, 1);
+    fd_info_t *fd_info = fd_info_for_conn(&client_part);
+
+    bpf_dbg_printk("fd_info lookup %llx", fd_info);
+    if (fd_info) {
+        connection_info_part_t *parent = bpf_map_lookup_elem(&nginx_upstream, fd_info);
+        bpf_dbg_printk("parent %llx", parent);
+        if (parent) {
+            return bpf_map_lookup_elem(&server_traces_aux, parent);
+        }
+    }
+
+    return 0;
+}
+
+static __always_inline tp_info_pid_t *find_parent_trace(const pid_connection_info_t *p_conn,
+                                                        u16 orig_dport) {
     trace_key_t t_key = {0};
 
     trace_key_from_pid_tid(&t_key);
 
     int attempts = 0;
+
+    bpf_dbg_printk("Looking up parent trace for pid=%d, ns=%lx, extra_id=%llx",
+                   t_key.p_key.pid,
+                   t_key.p_key.ns,
+                   t_key.extra_id);
+
+    tp_info_pid_t *nginx_parent = find_nginx_parent_trace(p_conn, orig_dport);
+    if (nginx_parent) {
+        return nginx_parent;
+    }
 
     do {
         tp_info_pid_t *server_tp = bpf_map_lookup_elem(&server_traces, &t_key);
@@ -183,8 +214,8 @@ static __always_inline u8 valid_trace(const unsigned char *trace_id) {
     return *((u64 *)trace_id) != 0 || *((u64 *)(trace_id + 8)) != 0;
 }
 
-static __always_inline void
-server_or_client_trace(u8 type, connection_info_t *conn, tp_info_pid_t *tp_p, u8 ssl) {
+static __always_inline void server_or_client_trace(
+    u8 type, connection_info_t *conn, tp_info_pid_t *tp_p, u8 ssl, u16 orig_dport) {
     if (type == EVENT_HTTP_REQUEST) {
         trace_key_t t_key = {0};
         task_tid(&t_key.p_key);
@@ -203,9 +234,15 @@ server_or_client_trace(u8 type, connection_info_t *conn, tp_info_pid_t *tp_p, u8
             return;
         }
 
-        bpf_dbg_printk(
-            "Saving server span for ns=%x, extra_id=%llx", t_key.p_key.ns, t_key.extra_id);
+        connection_info_part_t conn_part = {};
+        populate_ephemeral_info(&conn_part, conn, orig_dport, 0);
+
+        bpf_dbg_printk("Saving server span for ns=%x, extra_id=%llx, ephemeral_port %d",
+                       t_key.p_key.ns,
+                       t_key.extra_id,
+                       conn_part.port);
         bpf_map_update_elem(&server_traces, &t_key, tp_p, BPF_ANY);
+        bpf_map_update_elem(&server_traces_aux, &conn_part, tp_p, BPF_ANY);
     } else {
         // Setup a pid, so that we can find it in TC.
         // We need the PID id to be able to query ongoing_http and update
@@ -280,9 +317,10 @@ static __always_inline u8 find_trace_for_server_request(connection_info_t *conn,
 }
 
 static __always_inline u8 find_trace_for_client_request(const pid_connection_info_t *p_conn,
+                                                        u16 orig_dport,
                                                         tp_info_t *tp) {
     u8 found_tp = 0;
-    tp_info_pid_t *server_tp = find_parent_trace(p_conn);
+    tp_info_pid_t *server_tp = find_parent_trace(p_conn, orig_dport);
     if (server_tp && server_tp->valid && valid_trace(server_tp->tp.trace_id)) {
         found_tp = 1;
         bpf_dbg_printk("Found existing server tp for client call");

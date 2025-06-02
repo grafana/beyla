@@ -7,8 +7,8 @@
 
 #include <logger/bpf_dbg.h>
 
-#include <maps/active_unix_socks.h>
 #include <maps/active_nodejs_ids.h>
+#include <maps/active_unix_socks.h>
 #include <maps/nodejs_parent_map.h>
 
 #include <pid/pid_helpers.h>

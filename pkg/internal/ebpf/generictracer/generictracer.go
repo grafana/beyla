@@ -265,6 +265,7 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.ProbeDesc {
 		// Tracking of HTTP client calls, by tapping into connect
 		"sys_connect": {
 			Required: true,
+			Start:    p.bpfObjects.BeylaKprobeSysConnect,
 			End:      p.bpfObjects.BeylaKretprobeSysConnect,
 		},
 		"sock_recvmsg": {
@@ -387,6 +388,16 @@ func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 			"_ZN4node9AsyncWrap10AsyncResetERKN2v820FunctionCallbackInfoINS1_5ValueEEE": {{
 				Required: false,
 				Start:    p.bpfObjects.BeylaAsyncReset,
+			}},
+		},
+		"nginx": {
+			"ngx_http_upstream_init": {{ // on upstream dispatch
+				Required: false,
+				Start:    p.bpfObjects.BeylaNgxHttpUpstreamInit,
+			}},
+			"ngx_event_connect_peer": {{
+				Required: false,
+				End:      p.bpfObjects.BeylaNgxEventConnectPeerRet,
 			}},
 		},
 	}

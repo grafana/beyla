@@ -221,28 +221,27 @@ static __always_inline void server_or_client_trace(
         task_tid(&t_key.p_key);
         t_key.extra_id = extra_runtime_id();
 
-        bpf_dbg_printk("Saving server span for id=%llx, pid=%d, tid=%d",
-                       bpf_get_current_pid_tgid(),
+        connection_info_part_t conn_part = {};
+        populate_ephemeral_info(&conn_part, conn, orig_dport, 0);
+
+        bpf_dbg_printk("Saving connection server span for pid=%d, tid=%d, ephemeral_port %d",
                        t_key.p_key.pid,
-                       t_key.p_key.tid);
+                       t_key.p_key.tid,
+                       conn_part.port);
+
+        bpf_map_update_elem(&server_traces_aux, &conn_part, tp_p, BPF_ANY);
 
         tp_info_pid_t *existing = bpf_map_lookup_elem(&server_traces, &t_key);
         if (existing && (existing->req_type == tp_p->req_type) &&
             (tp_p->req_type == EVENT_HTTP_REQUEST)) {
             existing->valid = 0;
-            bpf_dbg_printk("Found conflicting server span, marking it invalid.");
+            bpf_dbg_printk("Found conflicting thread server span, marking it invalid.");
             return;
         }
 
-        connection_info_part_t conn_part = {};
-        populate_ephemeral_info(&conn_part, conn, orig_dport, 0);
-
-        bpf_dbg_printk("Saving server span for ns=%x, extra_id=%llx, ephemeral_port %d",
-                       t_key.p_key.ns,
-                       t_key.extra_id,
-                       conn_part.port);
+        bpf_dbg_printk(
+            "Saving thread server span for ns=%x, extra_id=%llx", t_key.p_key.ns, t_key.extra_id);
         bpf_map_update_elem(&server_traces, &t_key, tp_p, BPF_ANY);
-        bpf_map_update_elem(&server_traces_aux, &conn_part, tp_p, BPF_ANY);
     } else {
         // Setup a pid, so that we can find it in TC.
         // We need the PID id to be able to query ongoing_http and update

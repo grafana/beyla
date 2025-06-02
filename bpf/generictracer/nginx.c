@@ -5,6 +5,7 @@
 
 #include <common/fd_info.h>
 #include <common/connection_info.h>
+#include <common/sockaddr.h>
 
 #include <logger/bpf_dbg.h>
 

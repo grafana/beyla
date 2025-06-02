@@ -2,6 +2,7 @@
 
 #include <bpfcore/utils.h>
 
+#include <common/connection_info.h>
 #include <common/tp_info.h>
 #include <common/trace_key.h>
 #include <common/map_sizing.h>

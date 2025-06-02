@@ -3,6 +3,7 @@
 #include <bpfcore/vmlinux.h>
 #include <bpfcore/bpf_helpers.h>
 
+#include <common/connection_info.h>
 #include <common/egress_key.h>
 #include <common/map_sizing.h>
 #include <common/msg_buffer.h>

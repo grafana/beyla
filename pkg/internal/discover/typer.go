@@ -179,20 +179,17 @@ func (t *typer) asInstrumentable(execElf *exec.FileInfo) ebpf.Instrumentable {
 }
 
 func (t *typer) inspectOffsets(execElf *exec.FileInfo) (*goexec.Offsets, bool, error) {
-	if !t.cfg.Discovery.SystemWide {
-		if t.cfg.Discovery.SkipGoSpecificTracers {
-			t.log.Debug("skipping inspection for Go functions", "pid", execElf.Pid, "comm", execElf.CmdExePath)
-		} else {
-			t.log.Debug("inspecting", "pid", execElf.Pid, "comm", execElf.CmdExePath)
-			offsets, err := goexec.InspectOffsets(execElf, t.allGoFunctions)
-			if err != nil {
-				t.log.Debug("couldn't find go specific tracers", "error", err)
-				return nil, false, err
-			}
-			return offsets, true, nil
-		}
+	if t.cfg.Discovery.SkipGoSpecificTracers {
+		t.log.Debug("skipping inspection for Go functions", "pid", execElf.Pid, "comm", execElf.CmdExePath)
+		return nil, false, nil
 	}
-	return nil, false, nil
+	t.log.Debug("inspecting", "pid", execElf.Pid, "comm", execElf.CmdExePath)
+	offsets, err := goexec.InspectOffsets(execElf, t.allGoFunctions)
+	if err != nil {
+		t.log.Debug("couldn't find go specific tracers", "error", err)
+		return nil, false, err
+	}
+	return offsets, true, nil
 }
 
 func isGoProxy(offsets *goexec.Offsets) bool {

@@ -16,7 +16,6 @@ import (
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/link"
 
-	"github.com/grafana/beyla/v2/pkg/beyla"
 	common "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
 	convenience "github.com/grafana/beyla/v2/pkg/internal/ebpf/convenience"
 	"github.com/grafana/beyla/v2/pkg/internal/exec"
@@ -96,10 +95,9 @@ func resolveMaps(spec *ebpf.CollectionSpec) (*ebpf.CollectionOptions, error) {
 	return &collOpts, nil
 }
 
-func NewProcessTracer(cfg *beyla.Config, tracerType ProcessTracerType, programs []Tracer) *ProcessTracer {
+func NewProcessTracer(tracerType ProcessTracerType, programs []Tracer) *ProcessTracer {
 	return &ProcessTracer{
 		Programs:        programs,
-		SystemWide:      cfg.Discovery.SystemWide,
 		Type:            tracerType,
 		Instrumentables: map[uint64]*instrumenter{},
 	}

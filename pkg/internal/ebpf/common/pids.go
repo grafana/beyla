@@ -67,12 +67,6 @@ func CommonPIDsFilter(c *services.DiscoveryConfig) ServiceFilter {
 	commonLock.Lock()
 	defer commonLock.Unlock()
 
-	if c.SystemWide {
-		return &IdentityPidsFilter{
-			detectOTel: c.ExcludeOTelInstrumentedServices,
-		}
-	}
-
 	if commonPIDsFilter == nil {
 		commonPIDsFilter = newPIDsFilter(c, slog.With("component", "ebpfCommon.CommonPIDsFilter"))
 	}
@@ -209,7 +203,7 @@ func (pf *PIDsFilter) removePID(pid, nsid uint32) {
 }
 
 // IdentityPidsFilter is a PIDsFilter that does not filter anything. It is feasible
-// for system-wide instrumenation
+// for concrete cases like GPU tracing
 type IdentityPidsFilter struct {
 	detectOTel bool
 }

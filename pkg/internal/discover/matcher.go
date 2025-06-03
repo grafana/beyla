@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"regexp"
 	"slices"
 
 	"github.com/shirou/gopsutil/v3/process"
@@ -283,15 +282,6 @@ func normalizeRegexCriteria(finderCriteria services.RegexDefinitionCriteria) []s
 }
 
 func FindingCriteria(cfg *beyla.Config) []services.Selector {
-	if cfg.Discovery.SystemWide {
-		// will return all the executables in the system
-		return []services.Selector{
-			&services.RegexSelector{
-				Namespace: cfg.ServiceNamespace,
-				Path:      services.NewPathRegexp(regexp.MustCompile(".")),
-			},
-		}
-	}
 	finderCriteria := cfg.Discovery.Services
 	// Merge the old, individual single-service selector,
 	// with the new, map-based multi-services selector.

@@ -73,10 +73,9 @@ func (ta *TraceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 	}
 
 	in := ta.InputInstrumentables.Subscribe()
-	return func(ctx context.Context) {
+	return func(_ context.Context) {
 		defer ta.OutputTracerEvents.Close()
 
-	mainLoop:
 		for instrumentables := range in {
 			for _, instr := range instrumentables {
 				ta.log.Debug("Instrumentable", "created", instr.Type, "type", instr.Obj.Type,
@@ -94,10 +93,6 @@ func (ta *TraceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 						ta.processInstances.Inc(instr.Obj.FileInfo.Ino)
 						if ok := ta.getTracer(&instr.Obj); ok {
 							ta.OutputTracerEvents.Send(Event[*ebpf.Instrumentable]{Type: EventCreated, Obj: &instr.Obj})
-							if ta.Cfg.Discovery.SystemWide {
-								ta.log.Info("system wide instrumentation. Creating a single instrumenter")
-								break mainLoop
-							}
 						}
 					}
 				case EventDeleted:
@@ -105,8 +100,6 @@ func (ta *TraceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 				}
 			}
 		}
-		// waiting until context is done, in the case of SystemWide instrumentation
-		<-ctx.Done()
 		ta.log.Debug("terminating process attacher")
 		ta.close()
 	}, nil
@@ -152,7 +145,7 @@ func (ta *TraceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 	case svc.InstrumentableGolang:
 		// gets all the possible supported tracers for a go program, and filters out
 		// those whose symbols are not present in the ELF functions list
-		if ta.Cfg.Discovery.SkipGoSpecificTracers || ta.Cfg.Discovery.SystemWide || ie.InstrumentationError != nil || ie.Offsets == nil {
+		if ta.Cfg.Discovery.SkipGoSpecificTracers || ie.InstrumentationError != nil || ie.Offsets == nil {
 			if ie.InstrumentationError != nil {
 				ta.log.Warn("Unsupported Go program detected, using generic instrumentation", "error", ie.InstrumentationError)
 			} else if ie.Offsets == nil {
@@ -194,7 +187,7 @@ func (ta *TraceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 		return false
 	}
 
-	tracer := ebpf.NewProcessTracer(ta.Cfg, tracerType, programs)
+	tracer := ebpf.NewProcessTracer(tracerType, programs)
 
 	if err := tracer.Init(); err != nil {
 		ta.log.Error("couldn't trace process. Stopping process tracer", "error", err)

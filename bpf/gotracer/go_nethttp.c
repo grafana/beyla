@@ -1200,7 +1200,7 @@ int beyla_uprobe_netFdRead(struct pt_regs *ctx) {
     // lookup a grpc connection
     // Sets up the connection info to be grabbed and mapped over the transport to operateHeaders
     void *tr = bpf_map_lookup_elem(&ongoing_grpc_operate_headers, &g_key);
-    bpf_dbg_printk("netFdRead tr %llx", tr);
+    bpf_dbg_printk("tr %llx", tr);
     if (tr) {
         grpc_transports_t *t = bpf_map_lookup_elem(&ongoing_grpc_transports, tr);
         bpf_dbg_printk("t %llx", t);
@@ -1214,7 +1214,7 @@ int beyla_uprobe_netFdRead(struct pt_regs *ctx) {
     }
     // lookup active sql connection
     sql_func_invocation_t *sql_conn = bpf_map_lookup_elem(&ongoing_sql_queries, &g_key);
-    bpf_dbg_printk("netFdRead sql_conn %llx", sql_conn);
+    bpf_dbg_printk("sql_conn %llx", sql_conn);
     if (sql_conn) {
         void *fd_ptr = GO_PARAM1(ctx);
         get_conn_info_from_fd(fd_ptr,
@@ -1241,7 +1241,6 @@ int beyla_uprobe_bodyRead(struct pt_regs *ctx) {
         return 0;
     }
     invocation->body_addr = body_addr;
-    bpf_map_update_elem(&ongoing_http_server_requests, &g_key, invocation, BPF_ANY);
 
     return 0;
 }

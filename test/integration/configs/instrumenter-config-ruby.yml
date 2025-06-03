@@ -1,9 +1,9 @@
 routes:
-  patterns:
-    - /users/:user_id
   unmatched: path
 otel_metrics_export:
-  endpoint: http://otelcol:4318
+  endpoint: http://127.0.0.1:4318
+otel_traces_export:
+  endpoint: http://127.0.0.1:4418  
 attributes:
   select:
     "*":

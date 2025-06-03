@@ -373,7 +373,7 @@ create_trace_info(u64 id, const connection_info_t *conn, tp_info_pid_t *tp_p) {
 
     urand_bytes(tp_p->tp.span_id, SPAN_ID_SIZE_BYTES);
 
-    if (find_trace_for_client_request(p_conn, &tp_p->tp)) {
+    if (find_trace_for_client_request(p_conn, p_conn->conn.d_port, &tp_p->tp)) {
         bpf_dbg_printk("found existing tp info");
         return true;
     }

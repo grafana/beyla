@@ -209,24 +209,3 @@ static __always_inline int read_msghdr_buf(struct msghdr *msg, u8 *buf, size_t m
 
     return read_iovec_ctx(&ctx, buf, max_len);
 }
-
-// We sort the connection info to ensure we can track requests and responses. However, if the destination port
-// is somehow in the ephemeral port range, it can be higher than the source port and we'd use the sorted connection
-// info in user space, effectively reversing the flow of the operation. We keep track of the original destination port
-// and we undo the swap in the data collections we send to user space.
-static __always_inline void
-fixup_connection_info(connection_info_t *conn_info, u8 client, u16 orig_dport) {
-    if (!orig_dport) {
-        bpf_dbg_printk("orig_dport is 0, not swapping");
-        return;
-    }
-    // The destination port is the server port in userspace
-    if ((client && conn_info->d_port != orig_dport) ||
-        (!client && conn_info->d_port == orig_dport)) {
-        bpf_dbg_printk("Swapped connection info for userspace, client = %d, orig_dport = %d",
-                       client,
-                       orig_dport);
-        swap_connection_info_order(conn_info);
-        //dbg_print_http_connection_info(conn_info); // commented out since GitHub CI doesn't like this call
-    }
-}

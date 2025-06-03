@@ -3,12 +3,17 @@
 package integration
 
 import (
+	"encoding/json"
+	"net/http"
+	"strconv"
 	"testing"
+	"time"
 
 	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/grafana/beyla/v2/test/integration/components/jaeger"
 	"github.com/grafana/beyla/v2/test/integration/components/prom"
 )
 
@@ -24,8 +29,17 @@ func testREDMetricsForRubyHTTPLibrary(t *testing.T, url string, comm string) {
 	pq := prom.Client{HostPort: prometheusHostPort}
 	var results []prom.Result
 
-	// add one record to users, it will get record id of 1
+	// add couple of record to users, we will get records id of 1,2,3,4
 	jsonBody := []byte(`{"name": "Jane Doe", "email": "jane@grafana.com"}`)
+	doHTTPPost(t, url+path, 201, jsonBody)
+
+	jsonBody = []byte(`{"name": "John Doe", "email": "john@grafana.com"}`)
+	doHTTPPost(t, url+path, 201, jsonBody)
+
+	jsonBody = []byte(`{"name": "Mary Doe", "email": "mary@grafana.com"}`)
+	doHTTPPost(t, url+path, 201, jsonBody)
+
+	jsonBody = []byte(`{"name": "Mark Doe", "email": "mark@grafana.com"}`)
 	doHTTPPost(t, url+path, 201, jsonBody)
 
 	// Eventually, Prometheus would make this query visible
@@ -75,7 +89,6 @@ func testREDMetricsForRubyHTTPLibrary(t *testing.T, url string, comm string) {
 			`http_response_status_code="200",` +
 			`service_namespace="integration-test",` +
 			`service_name="` + comm + `",` +
-			`http_route="/users/:user_id",` +
 			`url_path="` + path + `/1"}`)
 		require.NoError(t, err)
 		enoughPromResults(t, results)
@@ -108,5 +121,46 @@ func testREDMetricsRailsHTTPS(t *testing.T) {
 			waitForRubyTestComponents(t, testCaseURL)
 			testREDMetricsForRubyHTTPLibrary(t, testCaseURL, "my-ruby-app")
 		})
+	}
+}
+
+// Assumes we've run the metics tests
+func testHTTPTracesNestedNginx(t *testing.T) {
+	for i := 1; i <= 4; i++ {
+		go doHTTPGet(t, "https://localhost:8443/users/"+strconv.Itoa(i), 200)
+	}
+
+	for i := 1; i <= 4; i++ {
+		slug := strconv.Itoa(i)
+		var trace jaeger.Trace
+		test.Eventually(t, testTimeout, func(t require.TestingT) {
+			resp, err := http.Get(jaegerQueryURL + "?service=nginx&tags=%7B%22url.path%22%3A%22%2Fusers%2F" + slug + "%22%7D")
+			require.NoError(t, err)
+			if resp == nil {
+				return
+			}
+			require.Equal(t, http.StatusOK, resp.StatusCode)
+			var tq jaeger.TracesQuery
+			require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
+			traces := tq.FindBySpan(jaeger.Tag{Key: "url.path", Type: "string", Value: "/users/" + slug})
+			require.GreaterOrEqual(t, len(traces), 1)
+			trace = traces[0]
+
+			// Check the information of the server span
+			res := trace.FindByOperationName("GET /users/"+slug, "server")
+			require.GreaterOrEqual(t, len(res), 1)
+			server := res[0]
+			require.NotEmpty(t, server.TraceID)
+			require.NotEmpty(t, server.SpanID)
+
+			// check client call
+			res = trace.FindByOperationName("GET /users/"+slug, "client")
+			require.GreaterOrEqual(t, len(res), 1)
+			client := res[0]
+			require.NotEmpty(t, client.TraceID)
+			require.Equal(t, server.TraceID, client.TraceID)
+			require.NotEmpty(t, client.SpanID)
+
+		}, test.Interval(100*time.Millisecond))
 	}
 }

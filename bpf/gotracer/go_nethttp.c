@@ -307,15 +307,12 @@ int beyla_uprobe_readContinuedLineSliceReturns(struct pt_regs *ctx) {
             bpf_dbg_printk("Found traceparent in header %s", temp);
         }
         if (!bpf_memicmp((const char *)temp, "content-type: ", CONTENT_TYPE_KEY_LEN + 2)) {
-            // u8 content_type[HTTP_CONTENT_TYPE_MAX_LEN] = {};
             int value_buf_len = sizeof(temp) - (CONTENT_TYPE_KEY_LEN + 2);
             if (value_buf_len > 0) {
-                copy_http_header_value(temp + CONTENT_TYPE_KEY_LEN + 2,
-                                       value_buf_len,
-                                       new_inv.content_type,
-                                       sizeof(new_inv.content_type));
+                __builtin_memcpy(new_inv.content_type,
+                                 temp + CONTENT_TYPE_KEY_LEN + 2,
+                                 sizeof(new_inv.content_type));
                 bpf_dbg_printk("Found content-type in header %s", new_inv.content_type);
-                // __builtin_memcpy(new_inv.content_type, content_type, sizeof(content_type));
             }
         }
         // Insert or update the struct in the map

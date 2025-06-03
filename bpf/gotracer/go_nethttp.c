@@ -274,51 +274,68 @@ int beyla_uprobe_http2Server_processHeaders(struct pt_regs *ctx) {
     return 0;
 }
 
+static __always_inline void update_traceparent(server_http_func_invocation_t *inv,
+                                               u8 *header_start) {
+    decode_go_traceparent(header_start, inv->tp.trace_id, inv->tp.parent_id, &inv->tp.flags);
+    bpf_dbg_printk("Found traceparent in header %s", header_start);
+}
+
+static __always_inline void update_content_type(server_http_func_invocation_t *inv,
+                                                u8 *header_start) {
+    __builtin_memset(inv->content_type, 0, sizeof(inv->content_type));
+    __builtin_memcpy(inv->content_type, header_start, sizeof(inv->content_type));
+    bpf_dbg_printk("Found content-type in header %s", inv->content_type);
+}
+
 SEC("uprobe/readContinuedLineSlice")
 int beyla_uprobe_readContinuedLineSliceReturns(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc readContinuedLineSlice returns === ");
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
-    // u64 len = (u64)GO_PARAM2(ctx);
+    u64 len = (u64)GO_PARAM2(ctx);
     u8 *buf = (u8 *)GO_PARAM1(ctx);
 
-    // if (len >= (W3C_KEY_LENGTH + W3C_VAL_LENGTH + 2)) {
-    // u8 temp[W3C_KEY_LENGTH + W3C_VAL_LENGTH + 2];
-    u8 temp[100];
-    bpf_probe_read(temp, sizeof(temp), buf);
+    u8 temp[HTTP_HEADER_MAX_LEN];
+    if (len > sizeof(temp))
+        len = sizeof(temp);
+    bpf_probe_read(temp, len, buf);
+
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
     go_addr_key_t g_key = {};
     go_addr_key_from_id(&g_key, goroutine_addr);
 
+    int w3c_value_start = W3C_KEY_LENGTH + 2; // "traceparent: "
+    int w3c_header_length = w3c_value_start + W3C_VAL_LENGTH;
+    int content_type_value_start = CONTENT_TYPE_KEY_LEN + 2; // "content-type: "
+    int content_type_header_length = content_type_value_start + HTTP_CONTENT_TYPE_MAX_LEN;
+
     connection_info_t *existing = bpf_map_lookup_elem(&ongoing_server_connections, &g_key);
     if (existing) {
-        server_http_func_invocation_t new_inv = {};
         server_http_func_invocation_t *inv =
             bpf_map_lookup_elem(&ongoing_http_server_requests, &g_key);
-        if (inv) {
-            // Copy the existing struct to preserve other fields
-            __builtin_memcpy(&new_inv, inv, sizeof(new_inv));
-        }
-        if (!bpf_memicmp((const char *)temp, "traceparent: ", W3C_KEY_LENGTH + 2)) {
-            decode_go_traceparent(temp + W3C_KEY_LENGTH + 2,
-                                  new_inv.tp.trace_id,
-                                  new_inv.tp.parent_id,
-                                  &new_inv.tp.flags);
-            bpf_dbg_printk("Found traceparent in header %s", temp);
-        }
-        if (!bpf_memicmp((const char *)temp, "content-type: ", CONTENT_TYPE_KEY_LEN + 2)) {
-            int value_buf_len = sizeof(temp) - (CONTENT_TYPE_KEY_LEN + 2);
-            if (value_buf_len > 0) {
-                __builtin_memcpy(new_inv.content_type,
-                                 temp + CONTENT_TYPE_KEY_LEN + 2,
-                                 sizeof(new_inv.content_type));
-                bpf_dbg_printk("Found content-type in header %s", new_inv.content_type);
+
+        if (len >= w3c_header_length &&
+            !bpf_memicmp((const char *)temp, "traceparent: ", w3c_value_start)) {
+            u8 *traceparent_start = temp + w3c_value_start;
+            if (inv) {
+                update_traceparent(inv, traceparent_start);
+            } else {
+                server_http_func_invocation_t minimal_inv = {};
+                update_traceparent(&minimal_inv, traceparent_start);
+                bpf_map_update_elem(&ongoing_http_server_requests, &g_key, &minimal_inv, BPF_ANY);
+            }
+        } else if (len >= content_type_header_length &&
+                   !bpf_memicmp((const char *)temp, "content-type: ", content_type_value_start)) {
+            u8 *content_type_start = temp + content_type_value_start;
+            if (inv) {
+                update_content_type(inv, content_type_start);
+            } else {
+                server_http_func_invocation_t minimal_inv = {};
+                update_content_type(&minimal_inv, content_type_start);
+                bpf_map_update_elem(&ongoing_http_server_requests, &g_key, &minimal_inv, BPF_ANY);
             }
         }
-        // Insert or update the struct in the map
-        bpf_map_update_elem(&ongoing_http_server_requests, &g_key, &new_inv, BPF_ANY);
     }
-    // }
 
     return 0;
 }

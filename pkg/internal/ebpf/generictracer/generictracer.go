@@ -217,11 +217,6 @@ func (p *Tracer) Constants() map[string]any {
 		m["disable_black_box_cp"] = uint32(0)
 	}
 
-	// TODO: These need to be moved to RegisterOffsets if they change position
-	// based on the NodeJS runtime
-	m["async_wrap_async_id_off"] = int32(0x28)
-	m["async_wrap_trigger_async_id_off"] = int32(0x30)
-
 	return m
 }
 

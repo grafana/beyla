@@ -7,52 +7,19 @@
 #include <common/pin_internal.h>
 #include <common/ringbuf.h>
 
+#include <generictracer/maps/async_id_to_fd.h>
+#include <generictracer/maps/node_client_requests.h>
+#include <generictracer/maps/node_fds.h>
+#include <generictracer/types/async_id_to_fd_key.h>
+#include <generictracer/types/node_client_request_key.h>
 #include <generictracer/types/node_provider_type.h>
 
 #include <logger/bpf_dbg.h>
 
 #include <maps/active_nodejs_ids.h>
 #include <maps/fd_to_connection.h>
-#include <maps/nodejs_parent_map.h>
 
 #include <pid/pid.h>
-
-volatile const s32 async_wrap_async_id_off = 0;
-volatile const s32 async_wrap_trigger_async_id_off = 0;
-
-typedef struct node_client_request_key_t {
-    u64 pid_tgid;
-    u64 client_request_id;
-} node_client_request_key;
-
-struct {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, node_client_request_key);
-    __type(value, u64);        // parent (server) connection fd
-    __uint(max_entries, 1000); // 1000 nodejs services, small number, nodejs is single threaded
-    __uint(pinning, BEYLA_PIN_INTERNAL);
-} node_client_requests SEC(".maps");
-
-struct {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, u64);
-    __type(value, s32);
-    __uint(max_entries, 1000);
-    __uint(pinning, BEYLA_PIN_INTERNAL);
-} node_fds SEC(".maps");
-
-typedef struct async_id_to_fd_key_t {
-    u64 pid_tgid;
-    u64 async_id;
-} async_id_to_fd_key;
-
-struct {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, async_id_to_fd_key);
-    __type(value, s32);
-    __uint(max_entries, 1000);
-    __uint(pinning, BEYLA_PIN_INTERNAL);
-} async_id_to_fd SEC(".maps");
 
 enum { k_invalid_request_id = 0 };
 

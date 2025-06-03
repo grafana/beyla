@@ -90,8 +90,8 @@ static __always_inline unsigned char *bpf_strstr_tp_loop(unsigned char *buf, int
     return NULL;
 }
 
-static __always_inline tp_info_pid_t *find_nginx_parent_trace(const pid_connection_info_t *p_conn,
-                                                              u16 orig_dport) {
+static __always_inline const tp_info_pid_t *
+find_nginx_parent_trace(const pid_connection_info_t *p_conn, u16 orig_dport) {
     connection_info_part_t client_part = {};
     populate_ephemeral_info(&client_part, &p_conn->conn, orig_dport, 1);
     fd_info_t *fd_info = fd_info_for_conn(&client_part);
@@ -105,10 +105,10 @@ static __always_inline tp_info_pid_t *find_nginx_parent_trace(const pid_connecti
         }
     }
 
-    return 0;
+    return NULL;
 }
 
-static __always_inline tp_info_pid_t *find_nodejs_parent_trace() {
+static __always_inline const tp_info_pid_t *find_nodejs_parent_trace() {
     const u64 pid_tgid = bpf_get_current_pid_tgid();
     const s32 *node_parent_request_fd = bpf_map_lookup_elem(&active_nodejs_ids, &pid_tgid);
 
@@ -127,9 +127,39 @@ static __always_inline tp_info_pid_t *find_nodejs_parent_trace() {
     return trace_info_for_connection(conn, TRACE_TYPE_SERVER);
 }
 
-static __always_inline tp_info_pid_t *find_parent_trace(const pid_connection_info_t *p_conn,
-                                                        u16 orig_dport) {
-    tp_info_pid_t *node_tp = find_nodejs_parent_trace();
+static __always_inline const tp_info_pid_t *find_parent_process_trace(trace_key_t *t_key) {
+    // Up to 5 levels of thread nesting allowed
+    enum { k_max_depth = 5 };
+
+    for (u8 i = 0; i < k_max_depth; ++i) {
+        const tp_info_pid_t *server_tp = bpf_map_lookup_elem(&server_traces, t_key);
+
+        if (server_tp) {
+            bpf_dbg_printk("Found parent trace for pid=%d, ns=%lx, extra_id=%llx",
+                           t_key->p_key.pid,
+                           t_key->p_key.ns,
+                           t_key->extra_id);
+            return server_tp;
+        }
+
+        // not this goroutine running the server request processing
+        // Let's find the parent scope
+        const pid_key_t *p_tid = (const pid_key_t *)bpf_map_lookup_elem(&clone_map, &t_key->p_key);
+
+        if (!p_tid) {
+            break;
+        }
+
+        // Lookup now to see if the parent was a request
+        t_key->p_key = *p_tid;
+    }
+
+    return NULL;
+}
+
+static __always_inline const tp_info_pid_t *find_parent_trace(const pid_connection_info_t *p_conn,
+                                                              u16 orig_dport) {
+    const tp_info_pid_t *node_tp = find_nodejs_parent_trace();
 
     if (node_tp) {
         return node_tp;
@@ -139,58 +169,31 @@ static __always_inline tp_info_pid_t *find_parent_trace(const pid_connection_inf
 
     trace_key_from_pid_tid(&t_key);
 
-    int attempts = 0;
-
     bpf_dbg_printk("Looking up parent trace for pid=%d, ns=%lx, extra_id=%llx",
                    t_key.p_key.pid,
                    t_key.p_key.ns,
                    t_key.extra_id);
 
-    tp_info_pid_t *nginx_parent = find_nginx_parent_trace(p_conn, orig_dport);
+    const tp_info_pid_t *nginx_parent = find_nginx_parent_trace(p_conn, orig_dport);
+
     if (nginx_parent) {
         return nginx_parent;
     }
 
-    do {
-        tp_info_pid_t *server_tp = bpf_map_lookup_elem(&server_traces, &t_key);
+    const tp_info_pid_t *proc_parent = find_parent_process_trace(&t_key);
 
-        if (!server_tp) { // not this goroutine running the server request processing
-            // Let's find the parent scope
-            if (t_key.extra_id) {
-                u64 parent_id = parent_runtime_id(t_key.extra_id);
-                if (parent_id) {
-                    t_key.extra_id = parent_id;
-                } else {
-                    break;
-                }
-            } else {
-                pid_key_t *p_tid = (pid_key_t *)bpf_map_lookup_elem(&clone_map, &t_key.p_key);
-                if (p_tid) {
-                    // Lookup now to see if the parent was a request
-                    t_key.p_key = *p_tid;
-                } else {
-                    break;
-                }
-            }
-        } else {
-            bpf_dbg_printk("Found parent trace for pid=%d, ns=%lx, extra_id=%llx",
-                           t_key.p_key.pid,
-                           t_key.p_key.ns,
-                           t_key.extra_id);
-            return server_tp;
-        }
+    if (proc_parent) {
+        return proc_parent;
+    }
 
-        attempts++;
-    } while (attempts < 5); // Up to 5 levels of thread nesting allowed
-
-    cp_support_data_t *conn_t_key = bpf_map_lookup_elem(&cp_support_connect_info, p_conn);
+    const cp_support_data_t *conn_t_key = bpf_map_lookup_elem(&cp_support_connect_info, p_conn);
 
     if (conn_t_key) {
         bpf_dbg_printk("Found parent trace for connection through connection lookup");
         return bpf_map_lookup_elem(&server_traces, &conn_t_key->t_key);
     }
 
-    return 0;
+    return NULL;
 }
 
 // Traceparent format: Traceparent: ver (2 chars) - trace_id (32 chars) - span_id (16 chars) - flags (2 chars)
@@ -345,14 +348,14 @@ static __always_inline u8 find_trace_for_server_request(connection_info_t *conn,
 static __always_inline u8 find_trace_for_client_request(const pid_connection_info_t *p_conn,
                                                         u16 orig_dport,
                                                         tp_info_t *tp) {
-    u8 found_tp = 0;
-    tp_info_pid_t *server_tp = find_parent_trace(p_conn, orig_dport);
+    const tp_info_pid_t *server_tp = find_parent_trace(p_conn, orig_dport);
+
     if (server_tp && server_tp->valid && valid_trace(server_tp->tp.trace_id)) {
-        found_tp = 1;
         bpf_dbg_printk("Found existing server tp for client call");
         __builtin_memcpy(tp->trace_id, server_tp->tp.trace_id, sizeof(tp->trace_id));
         __builtin_memcpy(tp->parent_id, server_tp->tp.span_id, sizeof(tp->parent_id));
+        return 1;
     }
 
-    return found_tp;
+    return 0;
 }

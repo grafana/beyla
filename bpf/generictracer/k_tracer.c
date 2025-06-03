@@ -163,6 +163,9 @@ int BPF_KRETPROBE(beyla_kretprobe_sys_accept4, s32 fd) {
 
         const fd_key key = {.pid_tgid = id, .fd = fd};
 
+        // used by nodejs to track the fd of incoming connections - see
+        // find_nodejs_parent_trace() for usage
+        // TODO: try to merge with store_accept_fd_info() above
         bpf_map_update_elem(&fd_to_connection, &key, &info.p_conn.conn, BPF_ANY);
     }
 

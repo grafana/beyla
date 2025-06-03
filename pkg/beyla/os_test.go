@@ -12,7 +12,6 @@ import (
 
 	"github.com/grafana/beyla/v2/pkg/config"
 	"github.com/grafana/beyla/v2/pkg/internal/helpers"
-	"github.com/grafana/beyla/v2/pkg/services"
 )
 
 type testCase struct {
@@ -148,8 +147,11 @@ func TestCheckOSCapabilities(t *testing.T) {
 
 		cfg := Config{
 			NetworkFlows: NetworkConfig{Enable: data.class == capNet, Source: netSource(data.useTC)},
-			Discovery:    services.DiscoveryConfig{SystemWide: data.class == capApp},
 			EBPF:         config.EBPFTracer{ContextPropagationEnabled: data.useTC},
+		}
+		if data.class == capApp {
+			// activates app o11y feature
+			require.NoError(t, cfg.Exec.UnmarshalText([]byte(".")))
 		}
 
 		err := CheckOSCapabilities(&cfg)

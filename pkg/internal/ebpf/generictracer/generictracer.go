@@ -192,10 +192,10 @@ func (p *Tracer) Constants() map[string]any {
 	// processes which we monitor. We filter more accurately in the userspace, but
 	// for performance reasons we enable the PID based filtering in eBPF.
 	// This must match httpfltr.go, otherwise we get partial events in userspace.
-	if !p.cfg.Discovery.SystemWide && !p.cfg.Discovery.BPFPidFilterOff {
-		m["filter_pids"] = int32(1)
-	} else {
+	if p.cfg.Discovery.BPFPidFilterOff {
 		m["filter_pids"] = int32(0)
+	} else {
+		m["filter_pids"] = int32(1)
 	}
 
 	if p.cfg.EBPF.TrackRequestHeaders ||

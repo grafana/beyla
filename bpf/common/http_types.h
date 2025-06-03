@@ -60,9 +60,7 @@ typedef struct tcp_req {
     u32 resp_len;
     unsigned char buf[K_TCP_MAX_LEN];
     unsigned char rbuf[K_TCP_RES_LEN];
-    // we need this for system wide tracking so we can find the service name
-    // also to filter traces from unsolicited processes that share the executable
-    // with other instrumented processes
+    // we need this to filter traces from unsolicited processes that share the executable
     pid_info pid;
     tp_info_t tp;
 } tcp_req_t;
@@ -115,9 +113,7 @@ typedef struct http2_grpc_request {
     u8 data[k_kprobes_http2_buf_size];
     u8 ret_data[k_kprobes_http2_ret_buf_size];
     int len;
-    // we need this for system wide tracking so we can find the service name
-    // also to filter traces from unsolicited processes that share the executable
-    // with other instrumented processes
+    // we need this to filter traces from unsolicited processes that share the executable
     pid_info pid;
     u64 new_conn_id;
     tp_info_t tp;

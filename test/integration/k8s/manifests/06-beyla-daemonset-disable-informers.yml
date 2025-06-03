@@ -19,7 +19,7 @@ data:
     trace_printer: text
     log_level: debug
     discovery:
-      services:
+      instrument:
         - k8s_pod_name: testserver
     routes:
       patterns:

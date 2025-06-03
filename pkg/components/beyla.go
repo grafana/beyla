@@ -87,11 +87,6 @@ func setupAppO11y(ctx context.Context, ctxInfo *global.ContextInfo, config *beyl
 }
 
 func setupNetO11y(ctx context.Context, ctxInfo *global.ContextInfo, cfg *beyla.Config) error {
-	if msg := mustSkip(cfg); msg != "" {
-		slog.Warn(msg + ". Skipping Network metrics component")
-		return nil
-	}
-
 	slog.Info("starting Beyla in Network metrics mode")
 	flowsAgent, err := agent.FlowsAgent(ctxInfo, cfg)
 	if err != nil {
@@ -106,14 +101,6 @@ func setupNetO11y(ctx context.Context, ctxInfo *global.ContextInfo, cfg *beyla.C
 	}
 
 	return nil
-}
-
-func mustSkip(cfg *beyla.Config) string {
-	enabled := cfg.Enabled(beyla.FeatureNetO11y)
-	if !enabled {
-		return "network not present neither in BEYLA_PROMETHEUS_FEATURES nor BEYLA_OTEL_METRICS_FEATURES"
-	}
-	return ""
 }
 
 func buildServiceNameTemplate(config *beyla.Config) (*template.Template, error) {

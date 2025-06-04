@@ -17,6 +17,7 @@ import (
 // into actionable events to be consumed by the metrics generation
 // logic
 func SurveyEventGenerator(
+	cfg *transform.KubernetesDecorator,
 	k8sInformer *kube.MetadataProvider,
 	input *msg.Queue[[]Event[ebpf.Instrumentable]],
 	output *msg.Queue[exec.ProcessEvent],
@@ -33,16 +34,19 @@ func SurveyEventGenerator(
 			} else {
 				m.store = store
 			}
+			m.clusterName = transform.KubeClusterName(ctx, cfg, k8sInformer)
+
 		}
 		return m.run, nil
 	}
 }
 
 type surveyor struct {
-	log    *slog.Logger
-	input  <-chan []Event[ebpf.Instrumentable]
-	output *msg.Queue[exec.ProcessEvent]
-	store  *kube.Store
+	log         *slog.Logger
+	input       <-chan []Event[ebpf.Instrumentable]
+	output      *msg.Queue[exec.ProcessEvent]
+	store       *kube.Store
+	clusterName string
 }
 
 func (m *surveyor) run(_ context.Context) {
@@ -71,7 +75,7 @@ func (m *surveyor) fetchMetadata(i *ebpf.Instrumentable) {
 		// we can do this because there is a previous ContainerDBUpdater pipeline stage
 		// that has provided this information
 		if objectMeta, containerName := m.store.PodContainerByPIDNs(i.FileInfo.Ns); objectMeta != nil {
-			transform.AppendKubeMetadata(m.store, &i.FileInfo.Service, objectMeta, "cluster-deleteme", containerName)
+			transform.AppendKubeMetadata(m.store, &i.FileInfo.Service, objectMeta, m.clusterName, containerName)
 		}
 	}
 }

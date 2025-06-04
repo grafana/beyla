@@ -19,7 +19,7 @@ import (
 )
 
 func smlog() *slog.Logger {
-	return slog.With("component", "otel.SystemMetricsReporter")
+	return slog.With("component", "otel.SurveyMetricsReporter")
 }
 
 type SurveyMetricsReporter struct {
@@ -106,8 +106,7 @@ func (smr *SurveyMetricsReporter) watchForProcessEvents(ctx context.Context) {
 				log.Debug("deleting survey_info", "origuid", origUID)
 				smr.deleteSurveyInfo(ctx, &svc)
 			}
-			// TODO: mirar si esto no debería ser un simple ProcessEventCreated
-		case exec.ProcessEventSurveyCreated:
+		case exec.ProcessEventCreated:
 			smr.createSurveyInfo(ctx, &pe.File.Service)
 			smr.setupPIDToServiceRelationship(pe.File.Pid, pe.File.Service.UID)
 		}
@@ -124,7 +123,7 @@ func (smr *SurveyMetricsReporter) disassociatePIDFromService(pid int32) (bool, s
 
 func (smr *SurveyMetricsReporter) createSurveyInfo(ctx context.Context, service *svc.Attrs) {
 	resourceAttributes := append(getAppResourceAttrs(smr.hostID, service), ResourceAttrsFromEnv(service)...)
-	mlog().Debug("Creating survey_info", "attrs", resourceAttributes)
+	smr.log.Debug("Creating survey_info", "attrs", resourceAttributes)
 	attrOpt := instrument.WithAttributeSet(attribute.NewSet(resourceAttributes...))
 	smr.surveyInfo.Add(ctx, 1, attrOpt)
 	smr.serviceMap[service.UID] = resourceAttributes
@@ -133,10 +132,10 @@ func (smr *SurveyMetricsReporter) createSurveyInfo(ctx context.Context, service 
 func (smr *SurveyMetricsReporter) deleteSurveyInfo(ctx context.Context, s *svc.Attrs) {
 	attrs, ok := smr.serviceMap[s.UID]
 	if !ok {
-		mlog().Debug("No service map", "UID", s.UID)
+		smr.log.Debug("No service map", "UID", s.UID)
 		return
 	}
-	mlog().Debug("Deleting survey_info for", "attrs", attrs)
+	smr.log.Debug("Deleting survey_info for", "attrs", attrs)
 	attrOpt := instrument.WithAttributeSet(attribute.NewSet(attrs...))
 	smr.surveyInfo.Remove(ctx, attrOpt)
 	delete(smr.serviceMap, s.UID)

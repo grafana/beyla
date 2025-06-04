@@ -164,8 +164,7 @@ func (r *surveyMetricsReporter) watchForProcessEvents(_ context.Context) {
 				r.deleteSurveyInfo(origUID, &pe.File.Service)
 				delete(r.serviceMap, origUID)
 			}
-			// TODO: use ProcessEventCreated?
-		case exec.ProcessEventSurveyCreated:
+		case exec.ProcessEventCreated:
 			r.createSurveyInfo(&pe.File.Service)
 			r.serviceMap[uid] = pe.File.Service
 			r.setupPIDToServiceRelationship(pe.File.Pid, uid)

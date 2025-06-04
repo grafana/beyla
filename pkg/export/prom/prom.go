@@ -792,14 +792,22 @@ func (r *metricsReporter) reportMetrics(ctx context.Context) {
 
 // This function is called directly by the Alloy integration. It differs from
 // reportMetrics in the fact that it doesn't setup the scrape endpoint.
-func (r *metricsReporter) collectMetrics(_ context.Context) {
-	go r.watchForProcessEvents()
-	for spans := range r.input {
-		// clock needs to be updated to let the expirer
-		// remove the old metrics
-		r.clock.Update()
-		for i := range spans {
-			r.observe(&spans[i])
+func (r *metricsReporter) collectMetrics(ctx context.Context) {
+	go r.watchForProcessEvents(ctx)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case spans, ok := <-r.input:
+			if !ok {
+				return
+			}
+			// clock needs to be updated to let the expirer
+			// remove the old metrics
+			r.clock.Update()
+			for i := range spans {
+				r.observe(&spans[i])
+			}
 		}
 	}
 }
@@ -1114,33 +1122,41 @@ func (r *metricsReporter) disassociatePIDFromService(pid int32) (bool, svc.UID) 
 	return r.pidsTracker.RemovePID(pid)
 }
 
-func (r *metricsReporter) watchForProcessEvents() {
-	for pe := range r.processEvents {
-		mlog().Debug("Received new process event", "event type", pe.Type, "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
-
-		uid := pe.File.Service.UID
-
-		switch pe.Type {
-		case exec.ProcessEventCreated:
-			r.createTargetInfo(&pe.File.Service)
-			r.createTracesTargetInfo(&pe.File.Service)
-			r.serviceMap[uid] = pe.File.Service
-			r.setupPIDToServiceRelationship(pe.File.Pid, uid)
-		case exec.ProcessEventTerminated:
-			if deleted, origUID := r.disassociatePIDFromService(pe.File.Pid); deleted {
-				mlog().Debug("deleting infos for", "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
-
-				if r.surveyInfo != nil {
-					r.deleteSurveyInfo(origUID, &pe.File.Service)
-				}
-				r.deleteTargetInfo(origUID, &pe.File.Service)
-				r.deleteTracesTargetInfo(origUID, &pe.File.Service)
-				delete(r.serviceMap, origUID)
+func (r *metricsReporter) watchForProcessEvents(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case pe, ok := <-r.processEvents:
+			if !ok {
+				return
 			}
-		case exec.ProcessEventSurveyCreated:
-			r.createSurveyInfo(&pe.File.Service)
-			r.serviceMap[uid] = pe.File.Service
-			r.setupPIDToServiceRelationship(pe.File.Pid, uid)
+			mlog().Debug("Received new process event", "event type", pe.Type, "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
+
+			uid := pe.File.Service.UID
+
+			switch pe.Type {
+			case exec.ProcessEventCreated:
+				r.createTargetInfo(&pe.File.Service)
+				r.createTracesTargetInfo(&pe.File.Service)
+				r.serviceMap[uid] = pe.File.Service
+				r.setupPIDToServiceRelationship(pe.File.Pid, uid)
+			case exec.ProcessEventTerminated:
+				if deleted, origUID := r.disassociatePIDFromService(pe.File.Pid); deleted {
+					mlog().Debug("deleting infos for", "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
+
+					if r.surveyInfo != nil {
+						r.deleteSurveyInfo(origUID, &pe.File.Service)
+					}
+					r.deleteTargetInfo(origUID, &pe.File.Service)
+					r.deleteTracesTargetInfo(origUID, &pe.File.Service)
+					delete(r.serviceMap, origUID)
+				}
+			case exec.ProcessEventSurveyCreated:
+				r.createSurveyInfo(&pe.File.Service)
+				r.serviceMap[uid] = pe.File.Service
+				r.setupPIDToServiceRelationship(pe.File.Pid, uid)
+			}
 		}
 	}
 }

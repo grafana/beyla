@@ -419,12 +419,15 @@ int beyla_uprobe_ServeHTTPReturns(struct pt_regs *ctx) {
     bpf_dbg_printk("ServeHTTP_ret method: %s", trace->method);
     bpf_dbg_printk("ServeHTTP_ret path: %s", trace->path);
 
-    u64 n = invocation->content_length;
-    if (n > sizeof(trace->body) - 1) {
-        n = sizeof(trace->body) - 1;
+    if (!read_go_str_n("http body",
+                       (void *)invocation->body_addr,
+                       invocation->content_length,
+                       trace->body,
+                       sizeof(trace->body))) {
+        bpf_dbg_printk("can't read http body");
+        trace->body[0] = '\0';
     }
 
-    bpf_probe_read_user(trace->body, n, (void *)invocation->body_addr);
     __builtin_memcpy(
         trace->content_type, invocation->content_type, sizeof(invocation->content_type));
     bpf_dbg_printk("ServeHTTP_ret content_type: %s", trace->content_type);

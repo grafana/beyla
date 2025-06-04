@@ -69,17 +69,25 @@ func (tr *tracesReceiver) fetchConstantAttributes(attrs attributes.Selection) er
 func (tr *tracesReceiver) provideLoop(ctx context.Context) {
 	sampler := tr.cfg.Sampler.Implementation()
 
-	for spans := range tr.input {
-		spanGroups := otel.GroupSpans(ctx, spans, tr.traceAttrs, sampler, tr.is)
-		for _, spanGroup := range spanGroups {
-			if len(spanGroup) > 0 {
-				sample := spanGroup[0]
-				envResourceAttrs := otel.ResourceAttrsFromEnv(&sample.Span.Service)
-				for _, tc := range tr.cfg.Traces {
-					traces := otel.GenerateTraces(&sample.Span.Service, envResourceAttrs, tr.hostID, spanGroup)
-					err := tc.ConsumeTraces(ctx, traces)
-					if err != nil {
-						slog.Error("error sending trace to consumer", "error", err)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case spans, ok := <-tr.input:
+			if !ok {
+				return
+			}
+			spanGroups := otel.GroupSpans(ctx, spans, tr.traceAttrs, sampler, tr.is)
+			for _, spanGroup := range spanGroups {
+				if len(spanGroup) > 0 {
+					sample := spanGroup[0]
+					envResourceAttrs := otel.ResourceAttrsFromEnv(&sample.Span.Service)
+					for _, tc := range tr.cfg.Traces {
+						traces := otel.GenerateTraces(&sample.Span.Service, envResourceAttrs, tr.hostID, spanGroup)
+						err := tc.ConsumeTraces(ctx, traces)
+						if err != nil {
+							slog.Error("error sending trace to consumer", "error", err)
+						}
 					}
 				}
 			}

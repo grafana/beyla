@@ -462,8 +462,8 @@ func (p *Tracer) Run(ctx context.Context, eventsChan *msg.Queue[[]request.Span])
 
 	timeoutTicker := time.NewTicker(2 * time.Second)
 
-	go p.watchForMisclassifedEvents()
-	go p.lookForTimeouts(timeoutTicker, eventsChan)
+	go p.watchForMisclassifedEvents(ctx)
+	go p.lookForTimeouts(ctx, timeoutTicker, eventsChan)
 	defer timeoutTicker.Stop()
 
 	ebpfcommon.SharedRingbuf(
@@ -482,43 +482,48 @@ func kernelTime(ktime uint64) time.Time {
 }
 
 //nolint:cyclop
-func (p *Tracer) lookForTimeouts(ticker *time.Ticker, eventsChan *msg.Queue[[]request.Span]) {
-	for t := range ticker.C {
-		if p.bpfObjects.OngoingHttp != nil {
-			i := p.bpfObjects.OngoingHttp.Iterate()
-			var k bpfPidConnectionInfoT
-			var v bpfHttpInfoT
-			for i.Next(&k, &v) {
-				// Check if we have a lingering request which we've completed, as in it has EndMonotimeNs
-				// but it hasn't been posted yet, likely missed by the logic that looks at finishing requests
-				// where we track the full response. If we haven't updated the EndMonotimeNs in more than some
-				// short interval, we are likely not going to finish this request from eBPF, so let's do it here.
-				if v.EndMonotimeNs != 0 && t.After(kernelTime(v.EndMonotimeNs).Add(2*time.Second)) {
-					// Must use unsafe here, the two bpfHttpInfoTs are the same but generated from different
-					// ebpf2go outputs
-					s, ignore, err := ebpfcommon.HTTPInfoEventToSpan((*ebpfcommon.BPFHTTPInfo)(unsafe.Pointer(&v)))
-					if !ignore && err == nil {
-						eventsChan.Send(p.pidsFilter.Filter([]request.Span{s}))
-					}
-					if err := p.bpfObjects.OngoingHttp.Delete(k); err != nil {
-						p.log.Debug("Error deleting ongoing request", "error", err)
-					}
-				} else if v.EndMonotimeNs == 0 && p.cfg.EBPF.HTTPRequestTimeout.Milliseconds() > 0 && t.After(kernelTime(v.StartMonotimeNs).Add(p.cfg.EBPF.HTTPRequestTimeout)) {
-					// If we don't have a request finish with endTime by the configured request timeout, terminate the
-					// waiting request with a timeout 408
-					s, ignore, err := ebpfcommon.HTTPInfoEventToSpan((*ebpfcommon.BPFHTTPInfo)(unsafe.Pointer(&v)))
-
-					if !ignore && err == nil {
-						s.Status = 408 // timeout
-						if s.RequestStart == 0 {
-							s.RequestStart = s.Start
+func (p *Tracer) lookForTimeouts(ctx context.Context, ticker *time.Ticker, eventsChan *msg.Queue[[]request.Span]) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case t := <-ticker.C:
+			if p.bpfObjects.OngoingHttp != nil {
+				i := p.bpfObjects.OngoingHttp.Iterate()
+				var k bpfPidConnectionInfoT
+				var v bpfHttpInfoT
+				for i.Next(&k, &v) {
+					// Check if we have a lingering request which we've completed, as in it has EndMonotimeNs
+					// but it hasn't been posted yet, likely missed by the logic that looks at finishing requests
+					// where we track the full response. If we haven't updated the EndMonotimeNs in more than some
+					// short interval, we are likely not going to finish this request from eBPF, so let's do it here.
+					if v.EndMonotimeNs != 0 && t.After(kernelTime(v.EndMonotimeNs).Add(2*time.Second)) {
+						// Must use unsafe here, the two bpfHttpInfoTs are the same but generated from different
+						// ebpf2go outputs
+						s, ignore, err := ebpfcommon.HTTPInfoEventToSpan((*ebpfcommon.BPFHTTPInfo)(unsafe.Pointer(&v)))
+						if !ignore && err == nil {
+							eventsChan.Send(p.pidsFilter.Filter([]request.Span{s}))
 						}
-						s.End = s.Start + p.cfg.EBPF.HTTPRequestTimeout.Nanoseconds()
+						if err := p.bpfObjects.OngoingHttp.Delete(k); err != nil {
+							p.log.Debug("Error deleting ongoing request", "error", err)
+						}
+					} else if v.EndMonotimeNs == 0 && p.cfg.EBPF.HTTPRequestTimeout.Milliseconds() > 0 && t.After(kernelTime(v.StartMonotimeNs).Add(p.cfg.EBPF.HTTPRequestTimeout)) {
+						// If we don't have a request finish with endTime by the configured request timeout, terminate the
+						// waiting request with a timeout 408
+						s, ignore, err := ebpfcommon.HTTPInfoEventToSpan((*ebpfcommon.BPFHTTPInfo)(unsafe.Pointer(&v)))
 
-						eventsChan.Send(p.pidsFilter.Filter([]request.Span{s}))
-					}
-					if err := p.bpfObjects.OngoingHttp.Delete(k); err != nil {
-						p.log.Debug("Error deleting ongoing request", "error", err)
+						if !ignore && err == nil {
+							s.Status = 408 // timeout
+							if s.RequestStart == 0 {
+								s.RequestStart = s.Start
+							}
+							s.End = s.Start + p.cfg.EBPF.HTTPRequestTimeout.Nanoseconds()
+
+							eventsChan.Send(p.pidsFilter.Filter([]request.Span{s}))
+						}
+						if err := p.bpfObjects.OngoingHttp.Delete(k); err != nil {
+							p.log.Debug("Error deleting ongoing request", "error", err)
+						}
 					}
 				}
 			}
@@ -526,16 +531,21 @@ func (p *Tracer) lookForTimeouts(ticker *time.Ticker, eventsChan *msg.Queue[[]re
 	}
 }
 
-func (p *Tracer) watchForMisclassifedEvents() {
-	for e := range ebpfcommon.MisclassifiedEvents {
-		if e.EventType == ebpfcommon.EventTypeKHTTP2 {
-			if p.bpfObjects.OngoingHttp2Connections != nil {
-				err := p.bpfObjects.OngoingHttp2Connections.Put(
-					&bpfPidConnectionInfoT{Conn: bpfConnectionInfoT(e.TCPInfo.ConnInfo), Pid: e.TCPInfo.Pid.HostPid},
-					bpfHttp2ConnInfoDataT{Flags: e.TCPInfo.Ssl, Id: 0}, // no new connection flag (0x3)
-				)
-				if err != nil {
-					p.log.Debug("error writing HTTP2/gRPC connection info", "error", err)
+func (p *Tracer) watchForMisclassifedEvents(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case e := <-ebpfcommon.MisclassifiedEvents:
+			if e.EventType == ebpfcommon.EventTypeKHTTP2 {
+				if p.bpfObjects.OngoingHttp2Connections != nil {
+					err := p.bpfObjects.OngoingHttp2Connections.Put(
+						&bpfPidConnectionInfoT{Conn: bpfConnectionInfoT(e.TCPInfo.ConnInfo), Pid: e.TCPInfo.Pid.HostPid},
+						bpfHttp2ConnInfoDataT{Flags: e.TCPInfo.Ssl, Id: 0}, // no new connection flag (0x3)
+					)
+					if err != nil {
+						p.log.Debug("error writing HTTP2/gRPC connection info", "error", err)
+					}
 				}
 			}
 		}

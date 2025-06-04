@@ -9,6 +9,7 @@ import (
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf"
+	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/v2/pkg/internal/helpers/maps"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 	"github.com/grafana/beyla/v2/pkg/internal/otelsdk"
@@ -54,6 +55,9 @@ type TraceAttacher struct {
 	// OutputTracerEvents communicates the process discovery pipeline with the instrumentation pipeline.
 	// This queue will forward any newly discovered process to the instrumentation pipeline.
 	OutputTracerEvents *msg.Queue[Event[*ebpf.Instrumentable]]
+
+	// The common PID filter that's used to filter out events we don't need
+	commonPIDsFilter ebpfcommon.ServiceFilter
 }
 
 func TraceAttacherProvider(ta *TraceAttacher) swarm.InstanceFunc {
@@ -66,6 +70,7 @@ func (ta *TraceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 	ta.sdkInjector = otelsdk.NewSDKInjector(ta.Cfg)
 	ta.processInstances = maps.MultiCounter[uint64]{}
 	ta.beylaPID = os.Getpid()
+	ta.commonPIDsFilter = ebpfcommon.CommonPIDsFilter(&ta.Cfg.Discovery)
 
 	if err := ta.init(); err != nil {
 		ta.log.Error("can't start process tracer. Stopping it", "error", err)
@@ -163,20 +168,20 @@ func (ta *TraceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 				// instance of the executable has different DLLs loaded, e.g. libssl.so.
 				return ta.reuseTracer(ta.reusableTracer, ie)
 			} else {
-				programs = ta.withCommonTracersGroup(newGenericTracersGroup(ta.Cfg, ta.Metrics))
+				programs = ta.withCommonTracersGroup(newGenericTracersGroup(ta.commonPIDsFilter, ta.Cfg, ta.Metrics))
 			}
 		} else {
 			if ta.reusableGoTracer != nil {
 				return ta.reuseTracer(ta.reusableGoTracer, ie)
 			}
 			tracerType = ebpf.Go
-			programs = ta.withCommonTracersGroup(newGoTracersGroup(ta.Cfg, ta.Metrics))
+			programs = ta.withCommonTracersGroup(newGoTracersGroup(ta.commonPIDsFilter, ta.Cfg, ta.Metrics))
 		}
 	case svc.InstrumentableNodejs, svc.InstrumentableJava, svc.InstrumentableRuby, svc.InstrumentablePython, svc.InstrumentableDotnet, svc.InstrumentableGeneric, svc.InstrumentableRust, svc.InstrumentablePHP:
 		if ta.reusableTracer != nil {
 			return ta.reuseTracer(ta.reusableTracer, ie)
 		}
-		programs = ta.withCommonTracersGroup(newGenericTracersGroup(ta.Cfg, ta.Metrics))
+		programs = ta.withCommonTracersGroup(newGenericTracersGroup(ta.commonPIDsFilter, ta.Cfg, ta.Metrics))
 	default:
 		ta.log.Warn("unexpected instrumentable type. This is basically a bug", "type", ie.Type)
 	}

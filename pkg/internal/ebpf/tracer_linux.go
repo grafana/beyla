@@ -95,6 +95,17 @@ func resolveMaps(spec *ebpf.CollectionSpec) (*ebpf.CollectionOptions, error) {
 	return &collOpts, nil
 }
 
+func unloadInternalMaps() {
+	internalMapsMux.Lock()
+	defer internalMapsMux.Unlock()
+
+	for _, v := range internalMaps {
+		v.Close()
+	}
+
+	internalMaps = make(map[string]*ebpf.Map)
+}
+
 func NewProcessTracer(tracerType ProcessTracerType, programs []Tracer) *ProcessTracer {
 	return &ProcessTracer{
 		Programs:        programs,
@@ -121,6 +132,7 @@ func (pt *ProcessTracer) Run(ctx context.Context, out *msg.Queue[[]request.Span]
 	}
 
 	<-ctx.Done()
+	unloadInternalMaps()
 
 	wg.Wait()
 }

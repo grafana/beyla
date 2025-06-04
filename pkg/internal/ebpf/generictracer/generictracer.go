@@ -31,34 +31,35 @@ import (
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../../bpf/generictracer/generictracer.c -- -I../../../../bpf -DBPF_DEBUG
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_tp_debug ../../../../bpf/generictracer/generictracer.c -- -I../../../../bpf -DBPF_DEBUG -DBPF_TRACEPARENT
 
-var instrumentedLibs = make(ebpfcommon.InstrumentedLibsT)
-var libsMux sync.Mutex
-
 type Tracer struct {
-	pidsFilter     ebpfcommon.ServiceFilter
-	cfg            *beyla.Config
-	metrics        imetrics.Reporter
-	bpfObjects     bpfObjects
-	closers        []io.Closer
-	log            *slog.Logger
-	qdiscs         map[ifaces.Interface]*netlink.GenericQdisc
-	egressFilters  map[ifaces.Interface]*netlink.BpfFilter
-	ingressFilters map[ifaces.Interface]*netlink.BpfFilter
+	pidsFilter       ebpfcommon.ServiceFilter
+	cfg              *beyla.Config
+	metrics          imetrics.Reporter
+	bpfObjects       bpfObjects
+	closers          []io.Closer
+	log              *slog.Logger
+	qdiscs           map[ifaces.Interface]*netlink.GenericQdisc
+	egressFilters    map[ifaces.Interface]*netlink.BpfFilter
+	ingressFilters   map[ifaces.Interface]*netlink.BpfFilter
+	instrumentedLibs ebpfcommon.InstrumentedLibsT
+	libsMux          sync.Mutex
 }
 
 func tlog() *slog.Logger {
 	return slog.With("component", "generic.Tracer")
 }
 
-func New(cfg *beyla.Config, metrics imetrics.Reporter) *Tracer {
+func New(pidFilter ebpfcommon.ServiceFilter, cfg *beyla.Config, metrics imetrics.Reporter) *Tracer {
 	return &Tracer{
-		log:            tlog(),
-		cfg:            cfg,
-		metrics:        metrics,
-		pidsFilter:     ebpfcommon.CommonPIDsFilter(&cfg.Discovery),
-		qdiscs:         map[ifaces.Interface]*netlink.GenericQdisc{},
-		egressFilters:  map[ifaces.Interface]*netlink.BpfFilter{},
-		ingressFilters: map[ifaces.Interface]*netlink.BpfFilter{},
+		log:              tlog(),
+		cfg:              cfg,
+		metrics:          metrics,
+		pidsFilter:       pidFilter,
+		qdiscs:           map[ifaces.Interface]*netlink.GenericQdisc{},
+		egressFilters:    map[ifaces.Interface]*netlink.BpfFilter{},
+		ingressFilters:   map[ifaces.Interface]*netlink.BpfFilter{},
+		instrumentedLibs: make(ebpfcommon.InstrumentedLibsT),
+		libsMux:          sync.Mutex{},
 	}
 }
 
@@ -412,10 +413,10 @@ func (p *Tracer) SockMsgs() []ebpfcommon.SockMsg { return nil }
 func (p *Tracer) SockOps() []ebpfcommon.SockOps { return nil }
 
 func (p *Tracer) RecordInstrumentedLib(id uint64, closers []io.Closer) {
-	libsMux.Lock()
-	defer libsMux.Unlock()
+	p.libsMux.Lock()
+	defer p.libsMux.Unlock()
 
-	module := instrumentedLibs.AddRef(id)
+	module := p.instrumentedLibs.AddRef(id)
 
 	if len(closers) > 0 {
 		module.Closers = append(module.Closers, closers...)
@@ -429,10 +430,10 @@ func (p *Tracer) AddInstrumentedLibRef(id uint64) {
 }
 
 func (p *Tracer) UnlinkInstrumentedLib(id uint64) {
-	libsMux.Lock()
-	defer libsMux.Unlock()
+	p.libsMux.Lock()
+	defer p.libsMux.Unlock()
 
-	module, err := instrumentedLibs.RemoveRef(id)
+	module, err := p.instrumentedLibs.RemoveRef(id)
 
 	p.log.Debug("Unlinking instrumented lib - before state", "ino", id, "module", module)
 
@@ -442,10 +443,10 @@ func (p *Tracer) UnlinkInstrumentedLib(id uint64) {
 }
 
 func (p *Tracer) AlreadyInstrumentedLib(id uint64) bool {
-	libsMux.Lock()
-	defer libsMux.Unlock()
+	p.libsMux.Lock()
+	defer p.libsMux.Unlock()
 
-	module := instrumentedLibs.Find(id)
+	module := p.instrumentedLibs.Find(id)
 
 	p.log.Debug("checking already instrumented Lib", "ino", id, "module", module)
 	return module != nil
@@ -465,6 +466,8 @@ func (p *Tracer) Run(ctx context.Context, eventsChan *msg.Queue[[]request.Span])
 	go p.watchForMisclassifedEvents(ctx)
 	go p.lookForTimeouts(ctx, timeoutTicker, eventsChan)
 	defer timeoutTicker.Stop()
+
+	p.log.Info("Launching p.Tracer")
 
 	ebpfcommon.SharedRingbuf(
 		&p.cfg.EBPF,

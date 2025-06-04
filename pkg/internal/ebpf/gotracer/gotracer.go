@@ -47,11 +47,11 @@ type Tracer struct {
 	closers    []io.Closer
 }
 
-func New(cfg *beyla.Config, metrics imetrics.Reporter) *Tracer {
+func New(pidFilter ebpfcommon.ServiceFilter, cfg *beyla.Config, metrics imetrics.Reporter) *Tracer {
 	log := slog.With("component", "go.Tracer")
 	return &Tracer{
 		log:        log,
-		pidsFilter: ebpfcommon.CommonPIDsFilter(&cfg.Discovery),
+		pidsFilter: pidFilter,
 		cfg:        &cfg.EBPF,
 		metrics:    metrics,
 	}

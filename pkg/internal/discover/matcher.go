@@ -80,15 +80,25 @@ type ProcessMatch struct {
 	Process  *services.ProcessInfo
 }
 
-func (m *matcher) run(_ context.Context) {
+func (m *matcher) run(ctx context.Context) {
 	defer m.output.Close()
 	m.log.Debug("starting criteria matcher node")
-	for i := range m.input {
-		m.log.Debug("filtering processes", "len", len(i))
-		o := m.filter(i)
-		m.log.Debug("processes matching selection criteria", "len", len(o))
-		if len(o) > 0 {
-			m.output.Send(o)
+	for {
+		select {
+		case <-ctx.Done():
+			m.log.Debug("context cancelled, stopping criteria matcher node")
+			return
+		case i, ok := <-m.input:
+			if !ok {
+				m.log.Debug("input channel closed, stopping criteria matcher node")
+				return
+			}
+			m.log.Debug("filtering processes", "len", len(i))
+			o := m.filter(i)
+			m.log.Debug("processes matching selection criteria", "len", len(o))
+			if len(o) > 0 {
+				m.output.Send(o)
+			}
 		}
 	}
 }

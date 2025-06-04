@@ -50,10 +50,19 @@ func ExecTyperProvider(
 			t.loadAllGoFunctionNames()
 		}
 		in := input.Subscribe()
-		return func(_ context.Context) {
+		return func(ctx context.Context) {
 			defer output.Close()
-			for i := range in {
-				output.Send(t.FilterClassify(i))
+			for {
+				select {
+				case <-ctx.Done():
+					t.log.Debug("context cancelled, closing ExecTyper")
+					return
+				case i, ok := <-in:
+					if !ok {
+						return
+					}
+					output.Send(t.FilterClassify(i))
+				}
 			}
 		}, nil
 	}

@@ -73,35 +73,42 @@ func (ta *TraceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 	}
 
 	in := ta.InputInstrumentables.Subscribe()
-	return func(_ context.Context) {
+	return func(ctx context.Context) {
 		defer ta.OutputTracerEvents.Close()
 
-		for instrumentables := range in {
-			for _, instr := range instrumentables {
-				ta.log.Debug("Instrumentable", "created", instr.Type, "type", instr.Obj.Type,
-					"exec", instr.Obj.FileInfo.CmdExePath, "pid", instr.Obj.FileInfo.Pid)
-				switch instr.Type {
-				case EventCreated:
-					sdkInstrumented := false
-					if ta.sdkInjectionPossible(&instr.Obj) {
-						if err := ta.sdkInjector.NewExecutable(&instr.Obj); err == nil {
-							sdkInstrumented = true
-						}
-					}
+		for {
+			select {
+			case <-ctx.Done():
+				// waiting until context is done, in the case of SystemWide instrumentation
+				ta.log.Debug("terminating process attacher")
+				ta.close()
 
-					if !sdkInstrumented {
-						ta.processInstances.Inc(instr.Obj.FileInfo.Ino)
-						if ok := ta.getTracer(&instr.Obj); ok {
-							ta.OutputTracerEvents.Send(Event[*ebpf.Instrumentable]{Type: EventCreated, Obj: &instr.Obj})
+				return
+			case instrumentables := <-in:
+				for _, instr := range instrumentables {
+					ta.log.Debug("Instrumentable", "created", instr.Type, "type", instr.Obj.Type,
+						"exec", instr.Obj.FileInfo.CmdExePath, "pid", instr.Obj.FileInfo.Pid)
+					switch instr.Type {
+					case EventCreated:
+						sdkInstrumented := false
+						if ta.sdkInjectionPossible(&instr.Obj) {
+							if err := ta.sdkInjector.NewExecutable(&instr.Obj); err == nil {
+								sdkInstrumented = true
+							}
 						}
+
+						if !sdkInstrumented {
+							ta.processInstances.Inc(instr.Obj.FileInfo.Ino)
+							if ok := ta.getTracer(&instr.Obj); ok {
+								ta.OutputTracerEvents.Send(Event[*ebpf.Instrumentable]{Type: EventCreated, Obj: &instr.Obj})
+							}
+						}
+					case EventDeleted:
+						ta.notifyProcessDeletion(&instr.Obj)
 					}
-				case EventDeleted:
-					ta.notifyProcessDeletion(&instr.Obj)
 				}
 			}
 		}
-		ta.log.Debug("terminating process attacher")
-		ta.close()
 	}, nil
 }
 

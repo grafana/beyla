@@ -107,7 +107,7 @@ func (rbf *ringBufForwarder) sharedReadAndForward(ctx context.Context, closers [
 
 	// If the underlying context is closed, it closes the objects we have allocated for this bpf program
 	go rbf.bgListenSharedContextCancelation(ctx, closers, eventsReader)
-	rbf.readAndForwardInner(eventsReader, spansChan)
+	rbf.readAndForwardInner(ctx, eventsReader, spansChan)
 }
 
 func (rbf *ringBufForwarder) readAndForward(ctx context.Context, spansChan *msg.Queue[[]request.Span]) {
@@ -128,14 +128,14 @@ func (rbf *ringBufForwarder) readAndForward(ctx context.Context, spansChan *msg.
 	// If the underlying context is closed, it closes the events reader
 	// so the function can exit.
 	go rbf.bgListenContextCancelation(ctx, eventsReader)
-	rbf.readAndForwardInner(eventsReader, spansChan)
+	rbf.readAndForwardInner(ctx, eventsReader, spansChan)
 }
 
-func (rbf *ringBufForwarder) readAndForwardInner(eventsReader ringBufReader, spansChan *msg.Queue[[]request.Span]) {
+func (rbf *ringBufForwarder) readAndForwardInner(ctx context.Context, eventsReader ringBufReader, spansChan *msg.Queue[[]request.Span]) {
 	// Forwards periodically on timeout, if the batch is not full
 	if rbf.cfg.BatchTimeout > 0 {
 		rbf.ticker = time.NewTicker(rbf.cfg.BatchTimeout)
-		go rbf.bgFlushOnTimeout(spansChan)
+		go rbf.bgFlushOnTimeout(ctx, spansChan)
 	}
 
 	// Main loop:
@@ -206,16 +206,20 @@ func (rbf *ringBufForwarder) flushEvents(spansChan *msg.Queue[[]request.Span]) {
 	rbf.spans = make([]request.Span, rbf.cfg.BatchLength)
 	rbf.spansLen = 0
 }
-
-func (rbf *ringBufForwarder) bgFlushOnTimeout(spansChan *msg.Queue[[]request.Span]) {
+func (rbf *ringBufForwarder) bgFlushOnTimeout(ctx context.Context, spansChan *msg.Queue[[]request.Span]) {
 	for {
-		<-rbf.ticker.C
-		rbf.access.Lock()
-		if rbf.spansLen > 0 {
-			rbf.logger.Debug("submitting traces on timeout", "len", rbf.spansLen)
-			rbf.flushEvents(spansChan)
+		select {
+		case <-ctx.Done():
+			return
+
+		case <-rbf.ticker.C:
+			rbf.access.Lock()
+			if rbf.spansLen > 0 {
+				rbf.logger.Debug("submitting traces on timeout", "len", rbf.spansLen)
+				rbf.flushEvents(spansChan)
+			}
+			rbf.access.Unlock()
 		}
-		rbf.access.Unlock()
 	}
 }
 

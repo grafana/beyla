@@ -319,7 +319,7 @@ func printVerifierErrorInfo(err error) {
 	}
 }
 
-func RunUtilityTracer(p UtilityTracer) error {
+func RunUtilityTracer(ctx context.Context, p UtilityTracer) error {
 	i := instrumenter{}
 	plog := ptlog()
 	plog.Debug("loading independent eBPF program")
@@ -348,7 +348,7 @@ func RunUtilityTracer(p UtilityTracer) error {
 		return err
 	}
 
-	go p.Run(context.Background())
+	go p.Run(ctx)
 
 	btf.FlushKernelSpec()
 

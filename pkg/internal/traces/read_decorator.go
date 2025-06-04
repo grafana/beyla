@@ -94,16 +94,15 @@ func HostProcessEventDecoratorProvider(
 	cfg *InstanceIDConfig,
 	input, output *msg.Queue[exec.ProcessEvent],
 ) swarm.InstanceFunc {
-	return func(ctx context.Context) (swarm.RunFunc, error) {
+	return func(_ context.Context) (swarm.RunFunc, error) {
 		decorate := hostNamePIDDecorator(cfg)
 		in := input.Subscribe()
-		cancelChan := ctx.Done()
 		log := rlog().With("function", "instance_ID_hostNamePIDDecorator")
 		// if kubernetes decoration is disabled, we just bypass the node
 		return func(ctx context.Context) {
 			for {
 				select {
-				case <-cancelChan:
+				case <-ctx.Done():
 					return
 				case pe, ok := <-in:
 					if !ok {

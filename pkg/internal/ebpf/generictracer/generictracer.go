@@ -217,11 +217,6 @@ func (p *Tracer) Constants() map[string]any {
 		m["disable_black_box_cp"] = uint32(0)
 	}
 
-	// TODO: These need to be moved to RegisterOffsets if they change position
-	// based on the NodeJS runtime
-	m["async_wrap_async_id_off"] = int32(0x28)
-	m["async_wrap_trigger_async_id_off"] = int32(0x30)
-
 	return m
 }
 
@@ -369,25 +364,32 @@ func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 			}},
 		},
 		"node": {
-			"_ZN4node9AsyncWrap13EmitAsyncInitEPNS_11EnvironmentEN2v85LocalINS3_6ObjectEEENS4_INS3_6StringEEEdd": {{
-				Required: false,
-				Start:    p.bpfObjects.BeylaEmitAsyncInit,
-			}},
-			"_ZN4node13EmitAsyncInitEPN2v87IsolateENS0_5LocalINS0_6ObjectEEENS3_INS0_6StringEEEd": {{
-				Required: false,
-				Start:    p.bpfObjects.BeylaEmitAsyncInit,
-			}},
-			"_ZN4node13EmitAsyncInitEPN2v87IsolateENS0_5LocalINS0_6ObjectEEEPKcd": {{
-				Required: false,
-				Start:    p.bpfObjects.BeylaEmitAsyncInit,
-			}},
 			"_ZN4node9AsyncWrap10AsyncResetEN2v85LocalINS1_6ObjectEEEdb": {{
 				Required: false,
 				Start:    p.bpfObjects.BeylaAsyncReset,
 			}},
-			"_ZN4node9AsyncWrap10AsyncResetERKN2v820FunctionCallbackInfoINS1_5ValueEEE": {{
+			// the next one is node::AsyncWrap::AsyncReset(v8::Local<v8::Object>, double)
+			// aka _ZN4node9AsyncWrap10AsyncResetEN2v85LocalINS1_6ObjectEEEd
+			// we insert the probe at 0xb6e760 which is after the async_id and
+			// trigger_async_id members have been set on the 'this' pointer,
+			// i.e. a little after the actual address of
+			// _ZN4node9AsyncWrap10AsyncResetEN2v85LocalINS1_6ObjectEEEd
+			"": {{
+				Required:    true,
+				Start:       p.bpfObjects.BeylaAsyncReset,
+				StartOffset: 0xb6e760,
+			}},
+			"_ZN4node9AsyncWrap12MakeCallbackEN2v85LocalINS1_8FunctionEEEiPNS2_INS1_5ValueEEE": {{
 				Required: false,
-				Start:    p.bpfObjects.BeylaAsyncReset,
+				Start:    p.bpfObjects.BeylaMakeCallback,
+			}},
+			"_ZN4node9AsyncWrap12MakeCallbackEN2v85LocalINS1_4NameEEEiPNS2_INS1_5ValueEEE": {{
+				Required: false,
+				Start:    p.bpfObjects.BeylaMakeCallback,
+			}},
+			"_ZN4node14ConnectionWrapINS_7TCPWrapE8uv_tcp_sE12OnConnectionEP11uv_stream_si": {{
+				Required: false,
+				Start:    p.bpfObjects.BeylaOnConnection,
 			}},
 		},
 		"nginx": {

@@ -1124,6 +1124,7 @@ func (r *metricsReporter) watchForProcessEvents(ctx context.Context) {
 					r.deleteTracesTargetInfo(origUID, &pe.File.Service)
 					delete(r.serviceMap, origUID)
 				}
+			}
 		}
 	}
 }

@@ -5,7 +5,6 @@ type ProcessEventType int
 const (
 	ProcessEventCreated = ProcessEventType(iota)
 	ProcessEventTerminated
-	ProcessEventSurveyCreated
 )
 
 type ProcessEvent struct {

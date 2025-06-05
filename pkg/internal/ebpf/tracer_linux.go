@@ -114,7 +114,7 @@ func NewProcessTracer(tracerType ProcessTracerType, programs []Tracer) *ProcessT
 	}
 }
 
-func (pt *ProcessTracer) Run(ctx context.Context, out *msg.Queue[[]request.Span]) {
+func (pt *ProcessTracer) Run(ctx context.Context, ebpfEventContext *common.EBPFEventContext, out *msg.Queue[[]request.Span]) {
 	pt.log = ptlog().With("type", pt.Type)
 
 	pt.log.Debug("starting process tracer")
@@ -127,7 +127,7 @@ func (pt *ProcessTracer) Run(ctx context.Context, out *msg.Queue[[]request.Span]
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			t.Run(ctx, out)
+			t.Run(ctx, ebpfEventContext, out)
 		}()
 	}
 

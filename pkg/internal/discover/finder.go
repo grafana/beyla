@@ -24,16 +24,18 @@ import (
 )
 
 type ProcessFinder struct {
-	cfg         *beyla.Config
-	ctxInfo     *global.ContextInfo
-	tracesInput *msg.Queue[[]request.Span]
+	cfg              *beyla.Config
+	ctxInfo          *global.ContextInfo
+	tracesInput      *msg.Queue[[]request.Span]
+	ebpfEventContext *ebpfcommon.EBPFEventContext
 }
 
 func NewProcessFinder(
 	cfg *beyla.Config,
 	ctxInfo *global.ContextInfo,
-	tracesInput *msg.Queue[[]request.Span]) *ProcessFinder {
-	return &ProcessFinder{cfg: cfg, ctxInfo: ctxInfo, tracesInput: tracesInput}
+	tracesInput *msg.Queue[[]request.Span],
+	ebpfEventContext *ebpfcommon.EBPFEventContext) *ProcessFinder {
+	return &ProcessFinder{cfg: cfg, ctxInfo: ctxInfo, tracesInput: tracesInput, ebpfEventContext: ebpfEventContext}
 }
 
 // Start the ProcessFinder pipeline in background. It returns a channel where each new discovered
@@ -63,12 +65,12 @@ func (pf *ProcessFinder) Start(ctx context.Context) (<-chan Event[*ebpf.Instrume
 	swi.Add(ContainerDBUpdaterProvider(pf.ctxInfo.K8sInformer, executableTypes, storedExecutableTypes))
 
 	swi.Add(TraceAttacherProvider(&TraceAttacher{
-		Cfg:                 pf.cfg,
-		OutputTracerEvents:  tracerEvents,
-		Metrics:             pf.ctxInfo.Metrics,
-		SpanSignalsShortcut: pf.tracesInput,
-
+		Cfg:                  pf.cfg,
+		OutputTracerEvents:   tracerEvents,
+		Metrics:              pf.ctxInfo.Metrics,
+		SpanSignalsShortcut:  pf.tracesInput,
 		InputInstrumentables: storedExecutableTypes,
+		ebpfEventContext:     pf.ebpfEventContext,
 	}))
 
 	pipeline, err := swi.Instance(ctx)

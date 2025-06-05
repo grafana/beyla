@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"sync"
 	"unsafe"
 
 	"github.com/cilium/ebpf"
@@ -93,6 +94,14 @@ type MisclassifiedEvent struct {
 
 type EBPFParseContext struct {
 	h2c *lru.Cache[uint64, h2Connection]
+}
+
+type EBPFEventContext struct {
+	CommonPIDsFilter ServiceFilter
+	SharedRingBuffer *ringBufForwarder
+	EBPFMaps         map[string]*ebpf.Map
+	RingBufLock      sync.Mutex
+	MapsLock         sync.Mutex
 }
 
 var MisclassifiedEvents = make(chan MisclassifiedEvent)

@@ -214,11 +214,11 @@ func (p *Tracer) AlreadyInstrumentedLib(id uint64) bool {
 	return module != nil
 }
 
-func (p *Tracer) Run(ctx context.Context, eventsChan *msg.Queue[[]request.Span]) {
+func (p *Tracer) Run(ctx context.Context, ebpfEventContext *ebpfcommon.EBPFEventContext, eventsChan *msg.Queue[[]request.Span]) {
 	ebpfcommon.ForwardRingbuf(
 		&p.cfg.EBPF,
 		p.bpfObjects.Rb,
-		ebpfcommon.CommonPIDsFilter(&p.cfg.Discovery),
+		ebpfEventContext.CommonPIDsFilter,
 		p.processCudaEvent,
 		p.log,
 		p.metrics,

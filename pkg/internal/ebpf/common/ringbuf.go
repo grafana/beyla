@@ -48,24 +48,22 @@ type ringBufForwarder struct {
 	parseContext *EBPFParseContext
 }
 
-var singleRbf *ringBufForwarder
-var singleRbfLock sync.Mutex
-
 // ForwardRingbuf returns a function reads HTTPRequestTraces from an input ring buffer, accumulates them into an
 // internal buffer, and forwards them to an output events channel, previously converted to request.Span
 // instances.
 func SharedRingbuf(
+	eventContext *EBPFEventContext,
 	cfg *config.EBPFTracer,
 	filter ServiceFilter,
 	ringbuffer *ebpf.Map,
 	metrics imetrics.Reporter,
 ) func(context.Context, []io.Closer, *msg.Queue[[]request.Span]) {
-	singleRbfLock.Lock()
-	defer singleRbfLock.Unlock()
+	eventContext.RingBufLock.Lock()
+	defer eventContext.RingBufLock.Unlock()
 
-	if singleRbf != nil {
+	if eventContext.SharedRingBuffer != nil {
 		slog.Debug("reusing ringbuf forwarder")
-		return singleRbf.alreadyForwarded
+		return eventContext.SharedRingBuffer.alreadyForwarded
 	}
 
 	log := slog.With("component", "ringbuf.Tracer")
@@ -75,9 +73,9 @@ func SharedRingbuf(
 		filter: filter, metrics: metrics,
 		parseContext: NewEBPFParseContext(),
 	}
-	singleRbf = &rbf
+	eventContext.SharedRingBuffer = &rbf
 	slog.Debug("setting up shared ring buffer")
-	return singleRbf.sharedReadAndForward
+	return eventContext.SharedRingBuffer.sharedReadAndForward
 }
 
 func ForwardRingbuf(
@@ -241,9 +239,6 @@ func (rbf *ringBufForwarder) bgListenSharedContextCancelation(ctx context.Contex
 		_ = c.Close()
 	}
 	_ = eventsReader.Close()
-	singleRbfLock.Lock()
-	defer singleRbfLock.Unlock()
-	singleRbf = nil
 }
 
 func (rbf *ringBufForwarder) closeAllResources() {

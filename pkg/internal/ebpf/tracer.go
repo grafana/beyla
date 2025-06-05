@@ -111,7 +111,7 @@ type Tracer interface {
 	Required() bool
 	// Run will do the action of listening for eBPF traces and forward them
 	// periodically to the output channel.
-	Run(context.Context, *msg.Queue[[]request.Span])
+	Run(context.Context, *ebpfcommon.EBPFEventContext, *msg.Queue[[]request.Span])
 }
 
 // Subset of the above interface, which supports loading eBPF programs which

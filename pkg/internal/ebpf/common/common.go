@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"sync"
 	"unsafe"
 
 	"github.com/cilium/ebpf"
@@ -95,6 +96,15 @@ type EBPFParseContext struct {
 	h2c *lru.Cache[uint64, h2Connection]
 }
 
+type EBPFEventContext struct {
+	CommonPIDsFilter ServiceFilter
+	SharedRingBuffer *ringBufForwarder
+	EBPFMaps         map[string]*ebpf.Map
+	RingBufLock      sync.Mutex
+	MapsLock         sync.Mutex
+	LoadLock         sync.Mutex
+}
+
 var MisclassifiedEvents = make(chan MisclassifiedEvent)
 
 func ptlog() *slog.Logger { return slog.With("component", "ebpf.ProcessTracer") }
@@ -103,6 +113,15 @@ func NewEBPFParseContext() *EBPFParseContext {
 	h2c, _ := lru.New[uint64, h2Connection](1024 * 10)
 	return &EBPFParseContext{
 		h2c: h2c,
+	}
+}
+
+func NewEBPFEventContext() *EBPFEventContext {
+	return &EBPFEventContext{
+		EBPFMaps:    map[string]*ebpf.Map{},
+		RingBufLock: sync.Mutex{},
+		MapsLock:    sync.Mutex{},
+		LoadLock:    sync.Mutex{},
 	}
 }
 

@@ -12,6 +12,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/internal/discover"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf"
+	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/v2/pkg/internal/exec"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
@@ -41,6 +42,9 @@ type Instrumenter struct {
 	tracesInput       *msg.Queue[[]request.Span]
 	processEventInput *msg.Queue[exec.ProcessEvent]
 	peGraphBuilder    *swarm.Instancer
+
+	// global data structures for all eBPF tracers
+	ebpfEventContext *ebpfcommon.EBPFEventContext
 }
 
 // New Instrumenter, given a Config
@@ -85,6 +89,7 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 		processEventInput: processEventsInput,
 		bp:                bp,
 		peGraphBuilder:    swi,
+		ebpfEventContext:  ebpfcommon.NewEBPFEventContext(),
 	}, nil
 }
 
@@ -93,7 +98,7 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 // Returns a channel that is closed when the Instrumenter completed all its tasks.
 // This is: when the context is cancelled, it has unloaded all the eBPF probes.
 func (i *Instrumenter) FindAndInstrument(ctx context.Context) error {
-	finder := discover.NewProcessFinder(i.config, i.ctxInfo, i.tracesInput)
+	finder := discover.NewProcessFinder(i.config, i.ctxInfo, i.tracesInput, i.ebpfEventContext)
 	processEvents, err := finder.Start(ctx)
 	if err != nil {
 		return fmt.Errorf("couldn't start Process Finder: %w", err)
@@ -132,7 +137,7 @@ func (i *Instrumenter) instrumentedEventLoop(ctx context.Context, processEvents 
 					i.tracersWg.Add(1)
 					go func() {
 						defer i.tracersWg.Done()
-						pt.Tracer.Run(ctx, i.tracesInput)
+						pt.Tracer.Run(ctx, i.ebpfEventContext, i.tracesInput)
 					}()
 				}
 				i.handleAndDispatchProcessEvent(exec.ProcessEvent{Type: exec.ProcessEventCreated, File: pt.FileInfo})

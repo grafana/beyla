@@ -41,7 +41,6 @@ const (
 	TracesTargetInfo         = "traces_target_info"
 	TracesHostInfo           = "traces_host_info"
 	TargetInfo               = "target_info"
-	SurveyInfo               = "survey_info"
 
 	ServiceGraphClient = "traces_service_graph_request_client_seconds"
 	ServiceGraphServer = "traces_service_graph_request_server_seconds"
@@ -212,7 +211,6 @@ type metricsReporter struct {
 	httpClientRequestSize  *Expirer[prometheus.Histogram]
 	httpClientResponseSize *Expirer[prometheus.Histogram]
 	targetInfo             *prometheus.GaugeVec
-	surveyInfo             *prometheus.GaugeVec
 
 	// user-selected attributes for the application-level metrics
 	attrHTTPDuration           []attributes.Field[*request.Span, string]
@@ -268,7 +266,6 @@ type metricsReporter struct {
 func PrometheusEndpoint(
 	ctxInfo *global.ContextInfo,
 	cfg *PrometheusConfig,
-	surveyModeEnabled bool,
 	attrSelect attributes.Selection,
 	input *msg.Queue[[]request.Span],
 	processEventCh *msg.Queue[exec.ProcessEvent],
@@ -277,7 +274,7 @@ func PrometheusEndpoint(
 		if !cfg.Enabled() {
 			return swarm.EmptyRunFunc()
 		}
-		reporter, err := newReporter(ctxInfo, cfg, surveyModeEnabled, attrSelect, input, processEventCh)
+		reporter, err := newReporter(ctxInfo, cfg, attrSelect, input, processEventCh)
 		if err != nil {
 			return nil, fmt.Errorf("instantiating Prometheus endpoint: %w", err)
 		}
@@ -308,7 +305,6 @@ func (p *PrometheusConfig) spanMetricsCallsName() string {
 func newReporter(
 	ctxInfo *global.ContextInfo,
 	cfg *PrometheusConfig,
-	surveyModeEnabled bool,
 	selector attributes.Selection,
 	input *msg.Queue[[]request.Span],
 	processEventCh *msg.Queue[exec.ProcessEvent],
@@ -611,12 +607,6 @@ func newReporter(
 			Name: TargetInfo,
 			Help: "attributes associated to a given monitored entity",
 		}, labelNamesTargetInfo(kubeEnabled, extraMetadataLabels)),
-		surveyInfo: optionalDirectGaugeProvider(surveyModeEnabled, func() *prometheus.GaugeVec {
-			return prometheus.NewGaugeVec(prometheus.GaugeOpts{
-				Name: SurveyInfo,
-				Help: "attributes associated to a given surveyed entity",
-			}, labelNamesTargetInfo(kubeEnabled, extraMetadataLabels))
-		}),
 		gpuKernelCallsTotal: optionalCounterProvider(is.GPUEnabled(), func() *Expirer[prometheus.Counter] {
 			return NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
 				Name: attributes.GPUKernelLaunchCalls.Prom,
@@ -655,10 +645,6 @@ func newReporter(
 
 	if !mr.cfg.DisableBuildInfo {
 		registeredMetrics = append(registeredMetrics, mr.beylaInfo)
-	}
-
-	if surveyModeEnabled {
-		registeredMetrics = append(registeredMetrics, mr.surveyInfo)
 	}
 
 	if cfg.OTelMetricsEnabled() {
@@ -1067,11 +1053,6 @@ func (r *metricsReporter) createTargetInfo(service *svc.Attrs) {
 	r.targetInfo.WithLabelValues(targetInfoLabelValues...).Set(1)
 }
 
-func (r *metricsReporter) createSurveyInfo(service *svc.Attrs) {
-	targetInfoLabelValues := r.labelValuesTargetInfo(service)
-	r.surveyInfo.WithLabelValues(targetInfoLabelValues...).Set(1)
-}
-
 func (r *metricsReporter) createTracesTargetInfo(service *svc.Attrs) {
 	if !r.cfg.AnySpanMetricsEnabled() {
 		return
@@ -1091,11 +1072,6 @@ func (r *metricsReporter) origService(uid svc.UID, service *svc.Attrs) *svc.Attr
 func (r *metricsReporter) deleteTargetInfo(uid svc.UID, service *svc.Attrs) {
 	targetInfoLabelValues := r.labelValuesTargetInfo(r.origService(uid, service))
 	r.targetInfo.DeleteLabelValues(targetInfoLabelValues...)
-}
-
-func (r *metricsReporter) deleteSurveyInfo(uid svc.UID, service *svc.Attrs) {
-	targetInfoLabelValues := r.labelValuesTargetInfo(r.origService(uid, service))
-	r.surveyInfo.DeleteLabelValues(targetInfoLabelValues...)
 }
 
 func (r *metricsReporter) deleteTracesTargetInfo(uid svc.UID, service *svc.Attrs) {
@@ -1129,18 +1105,10 @@ func (r *metricsReporter) watchForProcessEvents() {
 		case exec.ProcessEventTerminated:
 			if deleted, origUID := r.disassociatePIDFromService(pe.File.Pid); deleted {
 				mlog().Debug("deleting infos for", "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
-
-				if r.surveyInfo != nil {
-					r.deleteSurveyInfo(origUID, &pe.File.Service)
-				}
 				r.deleteTargetInfo(origUID, &pe.File.Service)
 				r.deleteTracesTargetInfo(origUID, &pe.File.Service)
 				delete(r.serviceMap, origUID)
 			}
-		case exec.ProcessEventSurveyCreated:
-			r.createSurveyInfo(&pe.File.Service)
-			r.serviceMap[uid] = pe.File.Service
-			r.setupPIDToServiceRelationship(pe.File.Pid, uid)
 		}
 	}
 }

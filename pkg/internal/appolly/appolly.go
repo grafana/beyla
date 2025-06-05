@@ -93,7 +93,7 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 // Returns a channel that is closed when the Instrumenter completed all its tasks.
 // This is: when the context is cancelled, it has unloaded all the eBPF probes.
 func (i *Instrumenter) FindAndInstrument(ctx context.Context) error {
-	finder := discover.NewProcessFinder(i.config, i.ctxInfo, i.tracesInput, i.processEventInput)
+	finder := discover.NewProcessFinder(i.config, i.ctxInfo, i.tracesInput)
 	processEvents, err := finder.Start(ctx)
 	if err != nil {
 		return fmt.Errorf("couldn't start Process Finder: %w", err)

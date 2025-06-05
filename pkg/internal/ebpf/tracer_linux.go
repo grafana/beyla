@@ -26,11 +26,6 @@ import (
 
 const PinInternal = ebpf.PinType(100)
 
-var loadMux sync.Mutex
-
-var internalMaps = make(map[string]*ebpf.Map)
-var internalMapsMux sync.Mutex
-
 func ptlog() *slog.Logger { return slog.With("component", "ebpf.ProcessTracer") }
 
 type instrumenter struct {
@@ -60,11 +55,11 @@ func alignMaxEntriesIfRingBuf(m *ebpf.MapSpec) {
 }
 
 // sets up internal maps and ensures sane max entries values
-func resolveMaps(spec *ebpf.CollectionSpec) (*ebpf.CollectionOptions, error) {
+func resolveMaps(eventContext *common.EBPFEventContext, spec *ebpf.CollectionSpec) (*ebpf.CollectionOptions, error) {
 	collOpts := ebpf.CollectionOptions{MapReplacements: map[string]*ebpf.Map{}}
 
-	internalMapsMux.Lock()
-	defer internalMapsMux.Unlock()
+	eventContext.MapsLock.Lock()
+	defer eventContext.MapsLock.Unlock()
 
 	for k, v := range spec.Maps {
 		alignMaxEntriesIfRingBuf(v)
@@ -74,7 +69,7 @@ func resolveMaps(spec *ebpf.CollectionSpec) (*ebpf.CollectionOptions, error) {
 		}
 
 		v.Pinning = ebpf.PinNone
-		internalMap := internalMaps[k]
+		internalMap := eventContext.EBPFMaps[k]
 
 		var err error
 
@@ -85,7 +80,7 @@ func resolveMaps(spec *ebpf.CollectionSpec) (*ebpf.CollectionOptions, error) {
 				return nil, fmt.Errorf("failed to load shared map: %w", err)
 			}
 
-			internalMaps[k] = internalMap
+			eventContext.EBPFMaps[k] = internalMap
 			runtime.SetFinalizer(internalMap, (*ebpf.Map).Close)
 		}
 
@@ -95,15 +90,15 @@ func resolveMaps(spec *ebpf.CollectionSpec) (*ebpf.CollectionOptions, error) {
 	return &collOpts, nil
 }
 
-func unloadInternalMaps() {
-	internalMapsMux.Lock()
-	defer internalMapsMux.Unlock()
+func unloadInternalMaps(eventContext *common.EBPFEventContext) {
+	eventContext.MapsLock.Lock()
+	defer eventContext.MapsLock.Unlock()
 
-	for _, v := range internalMaps {
+	for _, v := range eventContext.EBPFMaps {
 		v.Close()
 	}
 
-	internalMaps = make(map[string]*ebpf.Map)
+	eventContext.EBPFMaps = make(map[string]*ebpf.Map)
 }
 
 func NewProcessTracer(tracerType ProcessTracerType, programs []Tracer) *ProcessTracer {
@@ -132,7 +127,7 @@ func (pt *ProcessTracer) Run(ctx context.Context, ebpfEventContext *common.EBPFE
 	}
 
 	<-ctx.Done()
-	unloadInternalMaps()
+	unloadInternalMaps(ebpfEventContext)
 
 	wg.Wait()
 }
@@ -149,14 +144,14 @@ func (pt *ProcessTracer) loadSpec(p Tracer) (*ebpf.CollectionSpec, error) {
 	return spec, nil
 }
 
-func (pt *ProcessTracer) loadAndAssign(p Tracer) error {
+func (pt *ProcessTracer) loadAndAssign(eventContext *common.EBPFEventContext, p Tracer) error {
 	spec, err := pt.loadSpec(p)
 
 	if err != nil {
 		return err
 	}
 
-	collOpts, err := resolveMaps(spec)
+	collOpts, err := resolveMaps(eventContext, spec)
 
 	if err != nil {
 		return err
@@ -167,11 +162,11 @@ func (pt *ProcessTracer) loadAndAssign(p Tracer) error {
 	return spec.LoadAndAssign(p.BpfObjects(), collOpts)
 }
 
-func (pt *ProcessTracer) loadTracer(p Tracer, log *slog.Logger) error {
+func (pt *ProcessTracer) loadTracer(eventContext *common.EBPFEventContext, p Tracer, log *slog.Logger) error {
 	plog := log.With("program", reflect.TypeOf(p))
 	plog.Debug("loading eBPF program", "type", pt.Type)
 
-	err := pt.loadAndAssign(p)
+	err := pt.loadAndAssign(eventContext, p)
 
 	if err != nil && strings.Contains(err.Error(), "unknown func bpf_probe_write_user") {
 		plog.Warn("Failed to enable Go write memory distributed tracing context-propagation on a " +
@@ -181,7 +176,7 @@ func (pt *ProcessTracer) loadTracer(p Tracer, log *slog.Logger) error {
 			"For more details set BEYLA_LOG_LEVEL=DEBUG.")
 
 		common.IntegrityModeOverride = true
-		err = pt.loadAndAssign(p)
+		err = pt.loadAndAssign(eventContext, p)
 	}
 
 	if err != nil {
@@ -227,16 +222,16 @@ func (pt *ProcessTracer) loadTracer(p Tracer, log *slog.Logger) error {
 	return nil
 }
 
-func (pt *ProcessTracer) loadTracers() error {
-	loadMux.Lock()
-	defer loadMux.Unlock()
+func (pt *ProcessTracer) loadTracers(eventContext *common.EBPFEventContext) error {
+	eventContext.LoadLock.Lock()
+	defer eventContext.LoadLock.Unlock()
 
 	var log = ptlog()
 
 	loadedPrograms := make([]Tracer, 0, len(pt.Programs))
 
 	for _, p := range pt.Programs {
-		if err := pt.loadTracer(p, log); err != nil {
+		if err := pt.loadTracer(eventContext, p, log); err != nil {
 			log.Warn("couldn't load tracer", "error", err, "required", p.Required())
 
 			if p.Required() {
@@ -254,8 +249,8 @@ func (pt *ProcessTracer) loadTracers() error {
 	return nil
 }
 
-func (pt *ProcessTracer) Init() error {
-	return pt.loadTracers()
+func (pt *ProcessTracer) Init(eventContext *common.EBPFEventContext) error {
+	return pt.loadTracers(eventContext)
 }
 
 func (pt *ProcessTracer) NewExecutableInstance(ie *Instrumentable) error {
@@ -333,6 +328,7 @@ func printVerifierErrorInfo(err error) {
 
 func RunUtilityTracer(ctx context.Context, p UtilityTracer) error {
 	i := instrumenter{}
+	eventContext := common.NewEBPFEventContext()
 	plog := ptlog()
 	plog.Debug("loading independent eBPF program")
 	spec, err := p.Load()
@@ -340,7 +336,7 @@ func RunUtilityTracer(ctx context.Context, p UtilityTracer) error {
 		return fmt.Errorf("loading eBPF program: %w", err)
 	}
 
-	collOpts, err := resolveMaps(spec)
+	collOpts, err := resolveMaps(eventContext, spec)
 	if err != nil {
 		return err
 	}

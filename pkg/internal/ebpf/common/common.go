@@ -102,6 +102,7 @@ type EBPFEventContext struct {
 	EBPFMaps         map[string]*ebpf.Map
 	RingBufLock      sync.Mutex
 	MapsLock         sync.Mutex
+	LoadLock         sync.Mutex
 }
 
 var MisclassifiedEvents = make(chan MisclassifiedEvent)
@@ -112,6 +113,15 @@ func NewEBPFParseContext() *EBPFParseContext {
 	h2c, _ := lru.New[uint64, h2Connection](1024 * 10)
 	return &EBPFParseContext{
 		h2c: h2c,
+	}
+}
+
+func NewEBPFEventContext() *EBPFEventContext {
+	return &EBPFEventContext{
+		EBPFMaps:    map[string]*ebpf.Map{},
+		RingBufLock: sync.Mutex{},
+		MapsLock:    sync.Mutex{},
+		LoadLock:    sync.Mutex{},
 	}
 }
 

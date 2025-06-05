@@ -89,7 +89,7 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 		processEventInput: processEventsInput,
 		bp:                bp,
 		peGraphBuilder:    swi,
-		ebpfEventContext:  &ebpfcommon.EBPFEventContext{},
+		ebpfEventContext:  ebpfcommon.NewEBPFEventContext(),
 	}, nil
 }
 

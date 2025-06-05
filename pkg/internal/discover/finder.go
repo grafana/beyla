@@ -9,6 +9,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/export/prom"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf"
+	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/generictracer"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/gotracer"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/gpuevent"
@@ -117,13 +118,13 @@ func newCommonTracersGroup(cfg *beyla.Config) []ebpf.Tracer {
 	return []ebpf.Tracer{}
 }
 
-func newGoTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Tracer {
-	return []ebpf.Tracer{gotracer.New(cfg, metrics)}
+func newGoTracersGroup(pidFilter ebpfcommon.ServiceFilter, cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Tracer {
+	return []ebpf.Tracer{gotracer.New(pidFilter, cfg, metrics)}
 }
 
-func newGenericTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Tracer {
+func newGenericTracersGroup(pidFilter ebpfcommon.ServiceFilter, cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Tracer {
 	if cfg.EBPF.InstrumentGPU {
-		return []ebpf.Tracer{generictracer.New(cfg, metrics), gpuevent.New(cfg, metrics)}
+		return []ebpf.Tracer{generictracer.New(pidFilter, cfg, metrics), gpuevent.New(pidFilter, cfg, metrics)}
 	}
-	return []ebpf.Tracer{generictracer.New(cfg, metrics)}
+	return []ebpf.Tracer{generictracer.New(pidFilter, cfg, metrics)}
 }

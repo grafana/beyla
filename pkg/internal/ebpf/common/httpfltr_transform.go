@@ -3,8 +3,6 @@ package ebpfcommon
 import (
 	"bytes"
 	"net"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -177,19 +175,4 @@ func (event *BPFHTTPInfo) hostFromBuf() (string, int) {
 	port, _ := strconv.Atoi(portStr)
 
 	return host, port
-}
-
-func commName(pid uint32) string {
-	procPath := filepath.Join("/proc", strconv.FormatUint(uint64(pid), 10), "comm")
-	_, err := os.Stat(procPath)
-	if os.IsNotExist(err) {
-		return ""
-	}
-
-	name, err := os.ReadFile(procPath)
-	if err != nil {
-		return ""
-	}
-
-	return strings.TrimSpace(string(name))
 }

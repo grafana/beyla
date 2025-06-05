@@ -95,6 +95,17 @@ func resolveMaps(spec *ebpf.CollectionSpec) (*ebpf.CollectionOptions, error) {
 	return &collOpts, nil
 }
 
+func unloadInternalMaps() {
+	internalMapsMux.Lock()
+	defer internalMapsMux.Unlock()
+
+	for _, v := range internalMaps {
+		v.Close()
+	}
+
+	internalMaps = make(map[string]*ebpf.Map)
+}
+
 func NewProcessTracer(tracerType ProcessTracerType, programs []Tracer) *ProcessTracer {
 	return &ProcessTracer{
 		Programs:        programs,
@@ -121,6 +132,7 @@ func (pt *ProcessTracer) Run(ctx context.Context, out *msg.Queue[[]request.Span]
 	}
 
 	<-ctx.Done()
+	unloadInternalMaps()
 
 	wg.Wait()
 }
@@ -319,7 +331,7 @@ func printVerifierErrorInfo(err error) {
 	}
 }
 
-func RunUtilityTracer(p UtilityTracer) error {
+func RunUtilityTracer(ctx context.Context, p UtilityTracer) error {
 	i := instrumenter{}
 	plog := ptlog()
 	plog.Debug("loading independent eBPF program")
@@ -348,7 +360,7 @@ func RunUtilityTracer(p UtilityTracer) error {
 		return err
 	}
 
-	go p.Run(context.Background())
+	go p.Run(ctx)
 
 	btf.FlushKernelSpec()
 

@@ -10,7 +10,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: grafana/beyla-generator
+  IMAGE_NAME: grafana/beyla-ebpf-generator
 
 jobs:
   build-and-push-image:

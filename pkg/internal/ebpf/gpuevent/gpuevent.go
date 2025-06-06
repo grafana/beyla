@@ -68,14 +68,14 @@ type Tracer struct {
 	baseMap          map[pidKey][]modInfo
 }
 
-func New(cfg *beyla.Config, metrics imetrics.Reporter) *Tracer {
+func New(pidFilter ebpfcommon.ServiceFilter, cfg *beyla.Config, metrics imetrics.Reporter) *Tracer {
 	log := slog.With("component", "gpuevent.Tracer")
 
 	return &Tracer{
 		log:              log,
 		cfg:              cfg,
 		metrics:          metrics,
-		pidsFilter:       ebpfcommon.CommonPIDsFilter(&cfg.Discovery),
+		pidsFilter:       pidFilter,
 		instrumentedLibs: make(ebpfcommon.InstrumentedLibsT),
 		libsMux:          sync.Mutex{},
 		pidMap:           map[pidKey]uint64{},
@@ -214,11 +214,11 @@ func (p *Tracer) AlreadyInstrumentedLib(id uint64) bool {
 	return module != nil
 }
 
-func (p *Tracer) Run(ctx context.Context, eventsChan *msg.Queue[[]request.Span]) {
+func (p *Tracer) Run(ctx context.Context, ebpfEventContext *ebpfcommon.EBPFEventContext, eventsChan *msg.Queue[[]request.Span]) {
 	ebpfcommon.ForwardRingbuf(
 		&p.cfg.EBPF,
 		p.bpfObjects.Rb,
-		&ebpfcommon.IdentityPidsFilter{},
+		ebpfEventContext.CommonPIDsFilter,
 		p.processCudaEvent,
 		p.log,
 		p.metrics,
@@ -226,7 +226,7 @@ func (p *Tracer) Run(ctx context.Context, eventsChan *msg.Queue[[]request.Span])
 	)(ctx, eventsChan)
 }
 
-func (p *Tracer) processCudaEvent(_ *config.EBPFTracer, record *ringbuf.Record, _ ebpfcommon.ServiceFilter) (request.Span, bool, error) {
+func (p *Tracer) processCudaEvent(_ *ebpfcommon.EBPFParseContext, _ *config.EBPFTracer, record *ringbuf.Record, _ ebpfcommon.ServiceFilter) (request.Span, bool, error) {
 	var eventType uint8
 
 	// we read the type first, depending on the type we decide what kind of record we have

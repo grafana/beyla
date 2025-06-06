@@ -32,7 +32,7 @@ to be instrumented.
 When Beyla is deployed as a regular operating system process that instrument other processes,
 the unique service selectors are the network port where the instrumented process should
 be listening to (can be specified with the `BEYLA_OPEN_PORT` environment variable) or
-a [Glob](https://en.wikipedia.org/wiki/Glob_(programming)) to match against the executable file name of the process to
+a [Glob](https://en.wikipedia.org/wiki/Glob_(programming)) to match against the executable filename of the process to
 instrument (`BEYLA_AUTO_TARGET_EXE` environment variable).
 
 To select multiple groups of processes, the Beyla YAML configuration file format
@@ -54,7 +54,7 @@ discovery:
 The above criteria are insufficient for Kubernetes pods where the ports are ephemeral
 and internal to the pods. Also, pods are a level of abstraction that should hide
 details such as the name of their executables.
-For that reason, Beyla allows to use Kubernetes attributes in the service instrumentation
+For that reason, Beyla makes it possible to use Kubernetes attributes in the service instrumentation
 selection criteria. All of them accept a [glob](https://en.wikipedia.org/wiki/Glob_(programming))
 as value:
 

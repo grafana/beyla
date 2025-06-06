@@ -58,7 +58,7 @@ When you instrument by executable name, choose a non-ambiguous name that matches
 For example, if you set `BEYLA_AUTO_TARGET_EXE=*/server` and have two processes that match the Glob, Beyla selects both.
 Instead use the full application path for exact matches, for example `BEYLA_AUTO_TARGET_EXE=/opt/app/server` or `BEYLA_AUTO_TARGET_EXE=/server`.
 
-If you set both `BEYLA_AUTO_TARGET_EXE` and `BEYLA_OPEN_PORT` properties, Beyla will select only executables
+If you set both `BEYLA_AUTO_TARGET_EXE` and `BEYLA_OPEN_PORT` properties, Beyla selects only executables
 matching both selection criteria.
 
 ## Open port matching
@@ -78,7 +78,7 @@ Currently, there's no way to limit instrumentation to requests on a specific por
 
 If the specified port range is wide, for example `1-65535`, Beyla tries to execute all processes that own one of the ports in that range.
 
-If you set both `BEYLA_AUTO_TARGET_EXE` and `BEYLA_OPEN_PORT` properties, Beyla will select only executables
+If you set both `BEYLA_AUTO_TARGET_EXE` and `BEYLA_OPEN_PORT` properties, Beyla selects only executables
 matching both selection criteria.
 
 ## Service name and namespace

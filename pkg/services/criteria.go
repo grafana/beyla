@@ -47,6 +47,7 @@ type DiscoveryConfig struct {
 	// Services selection. If the user defined the BEYLA_EXECUTABLE_NAME or BEYLA_OPEN_PORT variables, they will be automatically
 	// added to the services definition criteria, with the lowest preference.
 	// Deprecated: Use Instrument instead
+	//nolint:undoc
 	Services RegexDefinitionCriteria `yaml:"services"`
 
 	// Survey selection. Same as services selection, however, it generates only the target info (survey_info) instead of instrumenting the services
@@ -55,11 +56,13 @@ type DiscoveryConfig struct {
 	// ExcludeServices works analogously to Services, but the applications matching this section won't be instrumented
 	// even if they match the Services selection.
 	// Deprecated: Use ExcludeInstrument instead
+	//nolint:undoc
 	ExcludeServices RegexDefinitionCriteria `yaml:"exclude_services"`
 
 	// DefaultExcludeServices by default prevents self-instrumentation of Beyla as well as related services (Alloy and OpenTelemetry collector)
 	// It must be set to an empty string or a different value if self-instrumentation is desired.
 	// Deprecated: Use DefaultExcludeInstrument instead
+	//nolint:undoc
 	DefaultExcludeServices RegexDefinitionCriteria `yaml:"default_exclude_services"`
 
 	// Instrument selects the services to instrument via Globs. If this section is set,

@@ -28,21 +28,21 @@ In some scenarios, Beyla instruments many services. For example, as a [Kubernete
 You can override the service name, namespace, and other configurations per service type.
 
 | YAML                   | Description                                                                                                                              | Type                     | Default                  |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |--------------------------| ------------------------ |
+| ---------------------- |------------------------------------------------------------------------------------------------------------------------------------------|--------------------------| ------------------------ |
 | `name`                 | Defines a name for the matching instrumented service. Refer to [name](#name).                                                            | string                   | (see description)        |
 | `namespace`            | Defines a namespace for the matching instrumented service. Refer to [namespace](#namespace).                                             | string                   | (empty or K8s namespace) |
 | `open_ports`           | Selects the process to instrument by the port it has open (listens to). Refer to [open ports](#open-ports).                              | string                   | (unset)                  |
-| `exe_path`             | Selects the processes to instrument by their executable name path. Refer to [exe path](#exe-path).                                       | string (glob)            | (unset)                  |
+| `exe_path`             | Selects the processes to instrument by their executable name path. Refer to [executable path](#executable-path).                         | string (glob)            | (unset)                  |
 | `containers_only`      | Selects processes to instrument which are running in an OCI container. Refer to [containers only](#containers-only).                     | boolean                  | false                    |
-| `k8s_namespace`        | Filter services by Kubernetes namespace. Refer to [k8s namespace](#k8s-namespace).                                                       | string (glob)            | (unset)                  |
-| `k8s_pod_name`         | Filter services by Kubernetes Pod. Refer to [k8s pod name](#k8s-pod-name).                                                               | string (glob)            | (unset)                  |
-| `k8s_deployment_name`  | Filter services by Kubernetes Deployment. Refer to [k8s deployment name](#k8s-deployment-name).                                          | string (glob)            | (unset)                  |
-| `k8s_replicaset_name`  | Filter services by Kubernetes ReplicaSet. Refer to [k8s replicaset name](#k8s-replicaset-name).                                          | string (glob)            | (unset)                  |
-| `k8s_statefulset_name` | Filter services by Kubernetes StatefulSet. Refer to [k8s statefulset name](#k8s-statefulset-name).                                       | string (glob)            | (unset)                  |
-| `k8s_daemonset_name`   | Filter services by Kubernetes DaemonSet. Refer to [k8s daemonset name](#k8s-daemonset-name).                                             | string (glob)            | (unset)                  |
-| `k8s_owner_name`       | Filter services by Kubernetes Pod owner (Deployment, ReplicaSet, DaemonSet, or StatefulSet). Refer to [k8s owner name](#k8s-owner-name). | string (glob)            | (unset)                  |
-| `k8s_pod_labels`       | Filter services by Kubernetes Pod labels. Refer to [k8s pod labels](#k8s-pod-labels).                                                    | map[string]string (glob) | (unset)                  |
-| `k8s_pod_annotations`  | Filter services by Kubernetes Pod annotations. Refer to [k8s pod annotations](#k8s-pod-annotations).                                     | map[string]string (glob) | (unset)                  |
+| `k8s_namespace`        | Filter services by Kubernetes namespace. Refer to [K8s namespace](#k8s-namespace).                                                       | string (glob)            | (unset)                  |
+| `k8s_pod_name`         | Filter services by Kubernetes Pod. Refer to [K8s Pod name](#k8s-pod-name).                                                               | string (glob)            | (unset)                  |
+| `k8s_deployment_name`  | Filter services by Kubernetes Deployment. Refer to [K8s deployment name](#k8s-deployment-name).                                          | string (glob)            | (unset)                  |
+| `k8s_replicaset_name`  | Filter services by Kubernetes ReplicaSet. Refer to [K8s ReplicaSet name](#k8s-replicaset-name).                                          | string (glob)            | (unset)                  |
+| `k8s_statefulset_name` | Filter services by Kubernetes StatefulSet. Refer to [K8s StatefulSet name](#k8s-statefulset-name).                                       | string (glob)            | (unset)                  |
+| `k8s_daemonset_name`   | Filter services by Kubernetes DaemonSet. Refer to [K8s DaemonSet name](#k8s-daemonset-name).                                             | string (glob)            | (unset)                  |
+| `k8s_owner_name`       | Filter services by Kubernetes Pod owner (Deployment, ReplicaSet, DaemonSet, or StatefulSet). Refer to [K8s owner name](#k8s-owner-name). | string (glob)            | (unset)                  |
+| `k8s_pod_labels`       | Filter services by Kubernetes Pod labels. Refer to [K8s Pod labels](#k8s-pod-labels).                                                    | map[string]string (glob) | (unset)                  |
+| `k8s_pod_annotations`  | Filter services by Kubernetes Pod annotations. Refer to [K8s Pod annotations](#k8s-pod-annotations).                                     | map[string]string (glob) | (unset)                  |
 
 ### Name
 
@@ -87,7 +87,7 @@ If you specify other selectors in the same `instrument` entry, the processes mus
 
 If an executable opens multiple ports, you only need to specify one of those ports for Beyla to instrument all the HTTP/S and GRPC requests on all application ports. Currently, you can't restrict the instrumentation only to the methods exposed through a specific port.
 
-### Exe path
+### Executable path
 
 Selects the processes to instrument by their executable name path. This property accepts a glob to match against the full executable command line, including the directory where the executable resides on the file system.
 
@@ -107,7 +107,7 @@ This selector property limits the instrumentation to the applications running in
 
 If you specify other selectors in the same `instrument` entry, the processes must match all the selector properties.
 
-### K8s pod name
+### K8s Pod name
 
 This selector property limits the instrumentation to the applications running in the Kubernetes Pods with a name matching the provided glob.
 
@@ -143,7 +143,7 @@ This selector property limits the instrumentation to the applications running in
 
 If you specify other selectors in the same `instrument` entry, the processes must match all the selector properties.
 
-### K8s pod labels
+### K8s Pod labels
 
 This selector property limits the instrumentation to the applications running in the Pods with labels matching the provided value as glob.
 
@@ -161,7 +161,7 @@ discovery:
 
 The preceding example discovers all Pods in the `frontend` namespace that have a label `instrument` with a value that matches the glob `beyla`.
 
-### K8s pod annotations
+### K8s Pod annotations
 
 This selector property limits the instrumentation to the applications running in the Pods with annotations matching the provided value as glob.
 

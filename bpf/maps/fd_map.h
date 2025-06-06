@@ -21,22 +21,34 @@ static __always_inline void get_ephemeral_info(connection_info_part_t *part,
     part->port = unordered_conn->s_port;
 }
 
-static __always_inline void store_connect_fd_info(int fd, connection_info_t *unordered_conn) {
+static __always_inline void get_ephemeral_accept_info(connection_info_part_t *part,
+                                                      connection_info_t *unordered_conn) {
+    __builtin_memcpy(part->addr, unordered_conn->d_addr, IP_V6_ADDR_LEN);
+    part->port = unordered_conn->d_port;
+}
+
+static __always_inline void
+store_connect_fd_info(u32 pid, int fd, connection_info_t *unordered_conn) {
     fd_info_t fdinfo = {};
     fd_info(&fdinfo, fd, FD_CLIENT);
     connection_info_part_t part = {};
     get_ephemeral_info(&part, unordered_conn);
-    bpf_dbg_printk("storing client info for fd=%d", fd);
+    part.type = FD_CLIENT;
+    part.pid = pid;
+    bpf_dbg_printk("storing client info for fd=%d, type=%d", fd, part.type);
     dbg_print_http_connection_info_part(&part);
     bpf_map_update_elem(&fd_map, &part, &fdinfo, BPF_ANY);
 }
 
-static __always_inline void store_accept_fd_info(int fd, connection_info_t *unordered_conn) {
+static __always_inline void
+store_accept_fd_info(u32 pid, int fd, connection_info_t *unordered_conn) {
     fd_info_t fdinfo = {};
     fd_info(&fdinfo, fd, FD_SERVER);
     connection_info_part_t part = {};
-    get_ephemeral_info(&part, unordered_conn);
-    bpf_dbg_printk("storing server info for fd=%d", fd);
+    get_ephemeral_accept_info(&part, unordered_conn);
+    part.type = FD_SERVER;
+    part.pid = pid;
+    bpf_dbg_printk("storing server info for fd=%d, type=%d", fd, part.type);
     dbg_print_http_connection_info_part(&part);
     bpf_map_update_elem(&fd_map, &part, &fdinfo, BPF_ANY);
 }

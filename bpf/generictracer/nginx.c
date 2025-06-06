@@ -44,14 +44,15 @@ int beyla_ngx_http_upstream_init(struct pt_regs *ctx) {
     return 0;
 }
 
-static __always_inline void get_sock_info(void *conn_ptr, connection_info_part_t *part) {
+static __always_inline void get_sock_info(u64 id, void *conn_ptr, connection_info_part_t *part) {
     if (conn_ptr) {
+        u32 host_pid = pid_from_pid_tgid(id);
         void *sockaddr_ptr = 0;
         bpf_probe_read(&sockaddr_ptr, sizeof(void *), conn_ptr + ngx_connection_s_sockaddr);
 
         bpf_dbg_printk("sock_addr %llx", sockaddr_ptr);
         if (sockaddr_ptr) {
-            parse_sockaddr_info((struct sockaddr *)sockaddr_ptr, part);
+            parse_sockaddr_info(host_pid, (struct sockaddr *)sockaddr_ptr, part);
             bpf_dbg_printk("connection port %d", part->port);
         }
     }
@@ -81,7 +82,8 @@ int beyla_ngx_event_connect_peer_ret(struct pt_regs *ctx) {
     bpf_probe_read(&up_ptr, sizeof(void *), req + ngx_http_request_s_upstream);
 
     connection_info_part_t part = {0};
-    get_sock_info(conn_ptr, &part);
+    get_sock_info(id, conn_ptr, &part);
+    part.type = FD_SERVER;
 
     void *peer_conn = 0;
     bpf_probe_read(&peer_conn, sizeof(void *), up_ptr + ngx_http_upstream_s_conn);

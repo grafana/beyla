@@ -149,8 +149,9 @@ int BPF_KRETPROBE(beyla_kretprobe_sys_accept4, s32 fd) {
     ssl_pid_connection_info_t info = {};
 
     if (parse_accept_socket_info(args, &info.p_conn.conn)) {
+        u32 host_pid = pid_from_pid_tgid(id);
         // store fd to connection mapping
-        store_accept_fd_info(fd, &info.p_conn.conn);
+        store_accept_fd_info(host_pid, fd, &info.p_conn.conn);
 
         u16 orig_dport = info.p_conn.conn.d_port;
         //dbg_print_http_connection_info(&info.conn);
@@ -266,10 +267,11 @@ int BPF_KRETPROBE(beyla_kretprobe_sys_connect, int res) {
     ssl_pid_connection_info_t info = {};
 
     if (parse_connect_sock_info(args, &info.p_conn.conn)) {
+        u32 host_pid = pid_from_pid_tgid(id);
         bpf_dbg_printk(
             "=== connect ret id=%d, pid=%d fd=%d ===", id, pid_from_pid_tgid(id), args->fd);
         // store fd to connection mapping
-        store_connect_fd_info(args->fd, &info.p_conn.conn);
+        store_connect_fd_info(host_pid, args->fd, &info.p_conn.conn);
 
         u16 orig_dport = info.p_conn.conn.d_port;
         dbg_print_http_connection_info(&info.p_conn.conn);

@@ -48,8 +48,8 @@ services:
       BEYLA_SERVICE_NAMESPACE: "integration-test"
       BEYLA_METRICS_INTERVAL: "10ms"
       BEYLA_BPF_BATCH_TIMEOUT: "10ms"
-      #BEYLA_LOG_LEVEL: "DEBUG"
-      #BEYLA_BPF_DEBUG: "TRUE"
+      BEYLA_LOG_LEVEL: "DEBUG"
+      BEYLA_BPF_DEBUG: "TRUE"
       BEYLA_HOSTNAME: "beyla"
     depends_on:
       testserver:

@@ -115,8 +115,8 @@ static __always_inline u16 get_sockaddr_port_user(struct sockaddr *addr) {
     return bport;
 }
 
-static __always_inline bool parse_sockaddr_info(struct sockaddr *addr,
-                                                connection_info_part_t *info) {
+static __always_inline bool
+parse_sockaddr_info(u32 pid, struct sockaddr *addr, connection_info_part_t *info) {
     short unsigned int sa_family;
 
     bpf_probe_read(&sa_family, sizeof(short unsigned int), &addr->sa_family);
@@ -137,6 +137,7 @@ static __always_inline bool parse_sockaddr_info(struct sockaddr *addr,
     }
 
     info->port = bpf_ntohs(info->port);
+    info->pid = pid;
 
     return false;
 }

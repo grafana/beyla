@@ -20,7 +20,7 @@ data:
     log_level: debug
     discovery:
       instrument:
-        - k8s_pod_name: testserver
+        - k8s_pod_name: testserver*
     routes:
       patterns:
         - /pingpong

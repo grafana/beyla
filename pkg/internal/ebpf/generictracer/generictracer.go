@@ -377,7 +377,7 @@ func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 			"": {{
 				Required:    true,
 				Start:       p.bpfObjects.BeylaAsyncReset,
-				StartOffset: 0xb6e760,
+				StartOffset: 0xc2d5d5,
 			}},
 			"_ZN4node9AsyncWrap12MakeCallbackEN2v85LocalINS1_8FunctionEEEiPNS2_INS1_5ValueEEE": {{
 				Required: false,
@@ -390,6 +390,10 @@ func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 			"_ZN4node14ConnectionWrapINS_7TCPWrapE8uv_tcp_sE12OnConnectionEP11uv_stream_si": {{
 				Required: false,
 				Start:    p.bpfObjects.BeylaOnConnection,
+			}},
+			"_ZN4node14ConnectionWrapINS_7TCPWrapE8uv_tcp_sE12AfterConnectEP12uv_connect_si": {{
+				Required: false,
+				Start:    p.bpfObjects.BeylaAfterConnect,
 			}},
 		},
 		"nginx": {

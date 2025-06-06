@@ -12,7 +12,7 @@ data:
     trace_printer: text
     log_level: debug
     discovery:
-      services:
+      instrument:
         - open_ports: 8083
           namespace: integration-test
     routes:

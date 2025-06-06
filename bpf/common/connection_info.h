@@ -49,6 +49,7 @@ typedef struct connection_info_part {
         u8 addr[IP_V6_ADDR_LEN];
         u32 ip[IP_V6_ADDR_LEN_WORDS];
     };
+    u32 pid;
     u16 port;
     u8 type;
     u8 __pad;
@@ -174,6 +175,7 @@ populate_partial_info(connection_info_part_t *part, const u8 *addr, u16 port) {
 static __always_inline void populate_ephemeral_info(connection_info_part_t *part,
                                                     const connection_info_t *sorted_conn,
                                                     u16 orig_dport,
+                                                    u32 pid,
                                                     u8 client) {
     if ((client && sorted_conn->d_port != orig_dport) ||
         (!client && sorted_conn->d_port == orig_dport)) {
@@ -187,4 +189,5 @@ static __always_inline void populate_ephemeral_info(connection_info_part_t *part
     } else {
         part->type = FD_SERVER;
     }
+    part->pid = pid;
 }

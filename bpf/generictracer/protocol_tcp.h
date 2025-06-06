@@ -128,7 +128,7 @@ static __always_inline void handle_unknown_tcp_connection(pid_connection_info_t 
                 return;
             }
             connection_info_part_t client_part = {};
-            populate_ephemeral_info(&client_part, &pid_conn->conn, orig_dport, 1);
+            populate_ephemeral_info(&client_part, &pid_conn->conn, orig_dport, pid_conn->pid, 1);
             fd_info_t *fd_info = fd_info_for_conn(&client_part);
             if (fd_info) {
                 bpf_dbg_printk(
@@ -137,7 +137,7 @@ static __always_inline void handle_unknown_tcp_connection(pid_connection_info_t 
             }
         } else {
             connection_info_part_t server_part = {};
-            populate_ephemeral_info(&server_part, &pid_conn->conn, orig_dport, 0);
+            populate_ephemeral_info(&server_part, &pid_conn->conn, orig_dport, pid_conn->pid, 0);
             fd_info_t *fd_info = fd_info_for_conn(&server_part);
             if (fd_info) {
                 bpf_dbg_printk(

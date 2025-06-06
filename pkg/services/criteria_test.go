@@ -10,6 +10,7 @@ import (
 )
 
 type yamlFile struct {
+	//nolint:undoc
 	Services RegexDefinitionCriteria `yaml:"services"`
 }
 

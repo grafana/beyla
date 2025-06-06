@@ -7,6 +7,9 @@ import (
 	"sync"
 	"text/template"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/kube"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/agent"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/flow"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
@@ -15,9 +18,6 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/appolly"
 	"github.com/grafana/beyla/v2/pkg/internal/connector"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
-	"github.com/grafana/beyla/v2/pkg/internal/kube"
-	"github.com/grafana/beyla/v2/pkg/internal/netolly/agent"
-	"github.com/grafana/beyla/v2/pkg/internal/netolly/flow"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 )
 

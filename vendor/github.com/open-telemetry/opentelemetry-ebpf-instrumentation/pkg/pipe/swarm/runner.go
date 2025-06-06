@@ -4,8 +4,11 @@ package swarm
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 )
@@ -27,12 +30,18 @@ func Bypass[T any](input, output *msg.Queue[T]) (RunFunc, error) {
 	return EmptyRunFunc()
 }
 
+type runnerMeta struct {
+	id   string
+	fn   RunFunc
+	done atomic.Bool
+}
+
 // Runner runs all the nodes in the swarm returned from an Instancer.
 type Runner struct {
-	started atomic.Bool
-	runners []RunFunc
-	done    chan struct{}
-
+	started            atomic.Bool
+	runners            []runnerMeta
+	done               chan error
+	cancelTimeout      time.Duration
 	cancelInstancerCtx func()
 }
 
@@ -42,11 +51,16 @@ type Runner struct {
 // that is passed to the rest of creators will be cancelled.
 // No service RunFunc internal instance is started until all the Creators are successfully
 // created. This means that if any of the creators fail, no service RunFunc is started.
-func (s *Runner) Start(ctx context.Context) {
+func (s *Runner) Start(ctx context.Context, opts ...StartOpt) {
 	if s.started.Swap(true) {
 		panic("swarm.Runner already started")
 	}
-	s.done = make(chan struct{})
+	for _, opt := range opts {
+		opt(s)
+	}
+	s.done = make(chan error, 1)
+	doneClosed := false
+	doneCloseMutex := sync.Mutex{}
 	wg := sync.WaitGroup{}
 	wg.Add(len(s.runners))
 	go func() {
@@ -54,17 +68,83 @@ func (s *Runner) Start(ctx context.Context) {
 		// the context previously passed in the InstanceFunc is also
 		// canceled when the swarm stops running, to avoid context leaking
 		s.cancelInstancerCtx()
+		doneCloseMutex.Lock()
+		defer doneCloseMutex.Unlock()
+		doneClosed = true
 		close(s.done)
 	}()
 	for i := range s.runners {
+		runner := &s.runners[i]
 		go func() {
-			s.runners[i](ctx)
+			runner.fn(ctx)
 			wg.Done()
+			runner.done.Store(true)
 		}()
+	}
+	if s.cancelTimeout > 0 {
+		go s.watchForRunnersExiting(ctx, &wg, &doneCloseMutex, &doneClosed)
+	}
+}
+
+// watchForRunnersExiting waits for the main context to complete and, check that all the runners
+// have ended before a given timeout
+func (s *Runner) watchForRunnersExiting(ctx context.Context, wg *sync.WaitGroup, doneCloseMutex *sync.Mutex, doneClosed *bool) {
+	// wait for the context to be canceled
+	<-ctx.Done()
+	allRunnersClosed := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(allRunnersClosed)
+	}()
+	select {
+	case <-allRunnersClosed:
+		// ok!
+	case <-time.After(s.cancelTimeout):
+		// collect all the running instances
+		var ids []string
+		for i := range s.runners {
+			r := &s.runners[i]
+			if !r.done.Load() {
+				ids = append(ids, r.id)
+			}
+		}
+		// it might happen that, during the collection of instances
+		// all the runners have exited, so we just exit successfully
+		// and avoid sending any error
+		doneCloseMutex.Lock()
+		defer doneCloseMutex.Unlock()
+		if *doneClosed || len(ids) == 0 {
+			return
+		}
+		s.done <- CancelTimeoutError{timeout: s.cancelTimeout, runningIDs: ids}
 	}
 }
 
 // Done returns a channel that is closed when all the nodes in the swarm Runner have finished their execution.
-func (s *Runner) Done() <-chan struct{} {
+// If there is an internal error (for example, if some nodes of the graph don't properly exit after the main
+// context is canceled), the channel returns an error.
+func (s *Runner) Done() <-chan error {
 	return s.done
+}
+
+// StartOpt defines options for the Runner's Start method
+type StartOpt func(*Runner)
+
+// WithCancelTimeout will cause that the Done() method returns an error
+// if the context passed to the Start(ctx) method is canceled but any of the
+// internal RunFunc don't exit within the provided timeout
+func WithCancelTimeout(timeout time.Duration) StartOpt {
+	return func(runner *Runner) {
+		runner.cancelTimeout = timeout
+	}
+}
+
+type CancelTimeoutError struct {
+	timeout    time.Duration
+	runningIDs []string
+}
+
+func (c CancelTimeoutError) Error() string {
+	return fmt.Sprintf("nodes don't finishing %s after canceling the context: %v",
+		c.timeout, strings.Join(c.runningIDs, ", "))
 }

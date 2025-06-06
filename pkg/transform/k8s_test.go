@@ -6,18 +6,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers/container"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/kube"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubecache/informer"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubecache/meta"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
-	"github.com/grafana/beyla/v2/pkg/internal/helpers/container"
-	"github.com/grafana/beyla/v2/pkg/internal/kube"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
 	"github.com/grafana/beyla/v2/pkg/internal/testutil"
-	"github.com/grafana/beyla/v2/pkg/kubecache/informer"
-	"github.com/grafana/beyla/v2/pkg/kubecache/meta"
 )
 
 const timeout = 5 * time.Second
@@ -27,7 +27,7 @@ func TestDecoration(t *testing.T) {
 	store := kube.NewStore(inf, kube.ResourceLabels{
 		"service.name":      []string{"app.kubernetes.io/name"},
 		"service.namespace": []string{"app.kubernetes.io/part-of"},
-	}, nil)
+	})
 	// pre-populated kubernetes metadata database
 	inf.Notify(&informer.Event{Type: informer.EventType_CREATED, Resource: &informer.ObjectMeta{
 		Name: "pod-12", Namespace: "the-ns", Kind: "Pod",

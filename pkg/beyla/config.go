@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v9"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/kube"
 	otelconsumer "go.opentelemetry.io/collector/consumer"
 	"gopkg.in/yaml.v3"
 
@@ -21,7 +22,6 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/tcmanager"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
-	"github.com/grafana/beyla/v2/pkg/internal/kube"
 	"github.com/grafana/beyla/v2/pkg/internal/traces"
 	"github.com/grafana/beyla/v2/pkg/kubeflags"
 	"github.com/grafana/beyla/v2/pkg/services"

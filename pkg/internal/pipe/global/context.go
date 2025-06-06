@@ -1,10 +1,11 @@
 package global
 
 import (
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/kube"
+
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	"github.com/grafana/beyla/v2/pkg/internal/connector"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
-	kube2 "github.com/grafana/beyla/v2/pkg/internal/kube"
 )
 
 // ContextInfo stores some context information that must be shared across some nodes of the
@@ -25,7 +26,7 @@ type ContextInfo struct {
 	// in the metric exporters
 	MetricAttributeGroups attributes.AttrGroups
 	// K8sInformer enables direct access to the Kubernetes API
-	K8sInformer *kube2.MetadataProvider
+	K8sInformer *kube.MetadataProvider
 }
 
 // AppO11y stores context information that is only required for application observability.

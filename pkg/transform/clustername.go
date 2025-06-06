@@ -13,10 +13,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/kube"
 	"go.opentelemetry.io/contrib/detectors/aws/eks"
 
 	attr2 "github.com/grafana/beyla/v2/pkg/export/attributes/names"
-	"github.com/grafana/beyla/v2/pkg/internal/kube"
 )
 
 const (

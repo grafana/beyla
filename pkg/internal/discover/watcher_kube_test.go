@@ -8,6 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers/container"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/kube"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubecache/informer"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubecache/meta"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 	"github.com/stretchr/testify/assert"
@@ -15,11 +19,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
-	"github.com/grafana/beyla/v2/pkg/internal/helpers/container"
-	"github.com/grafana/beyla/v2/pkg/internal/kube"
 	"github.com/grafana/beyla/v2/pkg/internal/testutil"
-	"github.com/grafana/beyla/v2/pkg/kubecache/informer"
-	"github.com/grafana/beyla/v2/pkg/kubecache/meta"
 	"github.com/grafana/beyla/v2/pkg/services"
 )
 
@@ -69,7 +69,7 @@ func TestWatcherKubeEnricher(t *testing.T) {
 
 			// Setup a fake K8s API connected to the watcherKubeEnricher
 			fInformer := &fakeInformer{}
-			store := kube.NewStore(fInformer, kube.ResourceLabels{}, nil)
+			store := kube.NewStore(fInformer, kube.ResourceLabels{})
 			input := msg.NewQueue[[]Event[processAttrs]](msg.ChannelBufferLen(10))
 			defer input.Close()
 			output := msg.NewQueue[[]Event[processAttrs]](msg.ChannelBufferLen(10))
@@ -112,7 +112,7 @@ func TestWatcherKubeEnricherWithMatcher(t *testing.T) {
 
 	// Setup a fake K8s API connected to the watcherKubeEnricher
 	fInformer := &fakeInformer{}
-	store := kube.NewStore(fInformer, kube.ResourceLabels{}, nil)
+	store := kube.NewStore(fInformer, kube.ResourceLabels{})
 	inputQueue := msg.NewQueue[[]Event[processAttrs]](msg.ChannelBufferLen(10))
 	defer inputQueue.Close()
 	connectQueue := msg.NewQueue[[]Event[processAttrs]](msg.ChannelBufferLen(10))

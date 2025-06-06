@@ -5,13 +5,13 @@ import (
 	"time"
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
+	kube2 "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/kube"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubecache/informer"
 	"github.com/stretchr/testify/assert"
 
 	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
-	kube2 "github.com/grafana/beyla/v2/pkg/internal/kube"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
-	"github.com/grafana/beyla/v2/pkg/kubecache/informer"
 )
 
 func TestSuffixPrefix(t *testing.T) {
@@ -32,7 +32,7 @@ func TestSuffixPrefix(t *testing.T) {
 
 func TestResolvePodsFromK8s(t *testing.T) {
 	inf := &fakeInformer{}
-	db := kube2.NewStore(inf, kube2.ResourceLabels{}, nil)
+	db := kube2.NewStore(inf, kube2.ResourceLabels{})
 	pod1 := &informer.ObjectMeta{Name: "pod1", Kind: "Pod", Ips: []string{"10.0.0.1", "10.1.0.1"}}
 	pod2 := &informer.ObjectMeta{Name: "pod2", Namespace: "something", Kind: "Pod", Ips: []string{"10.0.0.2", "10.1.0.2"}}
 	pod3 := &informer.ObjectMeta{Name: "pod3", Kind: "Pod", Ips: []string{"10.0.0.3", "10.1.0.3"}}
@@ -104,7 +104,7 @@ func TestResolvePodsFromK8s(t *testing.T) {
 
 func TestResolveServiceFromK8s(t *testing.T) {
 	inf := &fakeInformer{}
-	db := kube2.NewStore(inf, kube2.ResourceLabels{}, nil)
+	db := kube2.NewStore(inf, kube2.ResourceLabels{})
 	pod1 := &informer.ObjectMeta{Name: "pod1", Kind: "Service", Ips: []string{"10.0.0.1", "10.1.0.1"}}
 	pod2 := &informer.ObjectMeta{Name: "pod2", Namespace: "something", Kind: "Service", Ips: []string{"10.0.0.2", "10.1.0.2"}}
 	pod3 := &informer.ObjectMeta{Name: "pod3", Kind: "Service", Ips: []string{"10.0.0.3", "10.1.0.3"}}
@@ -196,7 +196,7 @@ func TestCleanName(t *testing.T) {
 
 func TestResolveNodesFromK8s(t *testing.T) {
 	inf := &fakeInformer{}
-	db := kube2.NewStore(inf, kube2.ResourceLabels{}, nil)
+	db := kube2.NewStore(inf, kube2.ResourceLabels{})
 	node1 := &informer.ObjectMeta{Name: "node1", Kind: "Node", Ips: []string{"10.0.0.1", "10.1.0.1"}}
 	node2 := &informer.ObjectMeta{Name: "node2", Namespace: "something", Kind: "Node", Ips: []string{"10.0.0.2", "10.1.0.2"}}
 	node3 := &informer.ObjectMeta{Name: "node3", Kind: "Node", Ips: []string{"10.0.0.3", "10.1.0.3"}}

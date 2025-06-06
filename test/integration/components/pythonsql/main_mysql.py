@@ -72,6 +72,24 @@ async def root():
 
     return row
 
+@app.get("/error")
+async def root():
+    global conn
+    if conn is None:
+        conn = mysql.connector.connect(
+            database="sakila",
+            user="sakila",
+            password="p_ssW0rd",
+            host="sqlserver",
+            port="3306"
+        )
+
+    cur = conn.cursor()
+    cur.execute("SELECT * from nonexisting")
+
+    return ""
+
+
 if __name__ == "__main__":
     print(f"Server running: port={8080} process_id={os.getpid()}")
     uvicorn.run(app, host="0.0.0.0", port=8080)

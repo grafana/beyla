@@ -9,6 +9,7 @@ import (
 	"io"
 
 	"github.com/cilium/ebpf"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
@@ -17,12 +18,12 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
-	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
 type Tracer struct{}
 
-func New(_ *beyla.Config, _ imetrics.Reporter) *Tracer                   { return nil }
+func New(_ ebpfcommon.ServiceFilter, _ *beyla.Config, _ imetrics.Reporter) *Tracer { return nil }
+
 func (p *Tracer) AllowPID(_, _ uint32, _ *svc.Attrs)                     {}
 func (p *Tracer) BlockPID(_, _ uint32)                                   {}
 func (p *Tracer) Load() (*ebpf.CollectionSpec, error)                    { return nil, nil }
@@ -39,9 +40,12 @@ func (p *Tracer) RecordInstrumentedLib(_ uint64, _ []io.Closer)          {}
 func (p *Tracer) AddInstrumentedLibRef(_ uint64)                         {}
 func (p *Tracer) UnlinkInstrumentedLib(_ uint64)                         {}
 func (p *Tracer) AlreadyInstrumentedLib(_ uint64) bool                   { return false }
-func (p *Tracer) Run(_ context.Context, _ *msg.Queue[[]request.Span])    {}
-func (p *Tracer) Constants() map[string]any                              { return nil }
-func (p *Tracer) SetupTailCalls()                                        {}
-func (p *Tracer) RegisterOffsets(_ *exec.FileInfo, _ *goexec.Offsets)    {}
-func (p *Tracer) ProcessBinary(_ *exec.FileInfo)                         {}
-func (p *Tracer) Required() bool                                         { return false }
+func (p *Tracer) Run(
+	_ context.Context, _ *ebpfcommon.EBPFEventContext, _ *msg.Queue[[]request.Span],
+) {
+}
+func (p *Tracer) Constants() map[string]any                           { return nil }
+func (p *Tracer) SetupTailCalls()                                     {}
+func (p *Tracer) RegisterOffsets(_ *exec.FileInfo, _ *goexec.Offsets) {}
+func (p *Tracer) ProcessBinary(_ *exec.FileInfo)                      {}
+func (p *Tracer) Required() bool                                      { return false }

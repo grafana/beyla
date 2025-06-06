@@ -70,6 +70,7 @@ github.com/modern-go/reflect2,https://github.com/grafana/beyla/blob/HEAD/vendor/
 github.com/mostynb/go-grpc-compression,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/mostynb/go-grpc-compression/LICENSE,Apache-2.0
 github.com/munnerz/goautoneg,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/munnerz/goautoneg/LICENSE,BSD-3-Clause
 github.com/mxk/go-flowrate/flowrate,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/mxk/go-flowrate/LICENSE,BSD-3-Clause
+github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/open-telemetry/opentelemetry-ebpf-instrumentation/LICENSE,Apache-2.0
 github.com/pelletier/go-toml/v2,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/pelletier/go-toml/v2/LICENSE,MIT
 github.com/pierrec/lz4/v4,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/pierrec/lz4/v4/LICENSE,BSD-3-Clause
 github.com/pkg/errors,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/pkg/errors/LICENSE,BSD-2-Clause

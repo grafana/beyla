@@ -18,7 +18,7 @@ type Instancer struct {
 	creators []InstanceFunc
 }
 
-// Add a service instancer to the swarm. The instancer will be called when the swarm Instance starts,
+// Add a service instancer to the swarm. The intancer will be called when the swarm Instance starts,
 // and must return a RunFunc instance that will execute the actual operation of the service node.
 func (s *Instancer) Add(c InstanceFunc) {
 	s.mt.Lock()

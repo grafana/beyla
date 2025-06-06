@@ -1,7 +1,5 @@
 name: Documentation CI
 on:
-  pull_request:
-    paths: ["docs/sources/**"]
   workflow_dispatch:
 
 permissions:

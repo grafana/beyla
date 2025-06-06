@@ -150,24 +150,34 @@ func (r *surveyMetricsReporter) disassociatePIDFromService(pid int32) (bool, svc
 	return r.pidsTracker.RemovePID(pid)
 }
 
-func (r *surveyMetricsReporter) watchForProcessEvents(_ context.Context) {
+func (r *surveyMetricsReporter) watchForProcessEvents(ctx context.Context) {
 	log := pslog()
-	for pe := range r.processEvents {
-		log.Debug("Received new process event", "event type", pe.Type, "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
 
-		uid := pe.File.Service.UID
-
-		switch pe.Type {
-		case exec.ProcessEventTerminated:
-			if deleted, origUID := r.disassociatePIDFromService(pe.File.Pid); deleted {
-				log.Debug("deleting infos for", "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
-				r.deleteSurveyInfo(origUID, &pe.File.Service)
-				delete(r.serviceMap, origUID)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case pe, ok := <-r.processEvents:
+			if !ok {
+				return
 			}
-		case exec.ProcessEventCreated:
-			r.createSurveyInfo(&pe.File.Service)
-			r.serviceMap[uid] = pe.File.Service
-			r.setupPIDToServiceRelationship(pe.File.Pid, uid)
+
+			log.Debug("Received new process event", "event type", pe.Type, "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
+
+			uid := pe.File.Service.UID
+
+			switch pe.Type {
+			case exec.ProcessEventTerminated:
+				if deleted, origUID := r.disassociatePIDFromService(pe.File.Pid); deleted {
+					log.Debug("deleting infos for", "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
+					r.deleteSurveyInfo(origUID, &pe.File.Service)
+					delete(r.serviceMap, origUID)
+				}
+			case exec.ProcessEventCreated:
+				r.createSurveyInfo(&pe.File.Service)
+				r.serviceMap[uid] = pe.File.Service
+				r.setupPIDToServiceRelationship(pe.File.Pid, uid)
+			}
 		}
 	}
 }

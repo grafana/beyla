@@ -11,12 +11,12 @@
 #include <common/trace_util.h>
 #include <common/tracing.h>
 
-#include <maps/active_nodejs_ids.h>
 #include <maps/clone_map.h>
 #include <maps/cp_support_connect_info.h>
 #include <maps/fd_map.h>
 #include <maps/fd_to_connection.h>
 #include <maps/nginx_upstream.h>
+#include <maps/nodejs_fd_map.h>
 #include <maps/server_traces.h>
 #include <maps/tp_info_mem.h>
 #include <maps/tp_char_buf_mem.h>
@@ -93,7 +93,7 @@ static __always_inline unsigned char *bpf_strstr_tp_loop(unsigned char *buf, int
 static __always_inline const tp_info_pid_t *
 find_nginx_parent_trace(const pid_connection_info_t *p_conn, u16 orig_dport) {
     connection_info_part_t client_part = {};
-    populate_ephemeral_info(&client_part, &p_conn->conn, orig_dport, p_conn->pid, 1);
+    populate_ephemeral_info(&client_part, &p_conn->conn, orig_dport, p_conn->pid, FD_CLIENT);
     fd_info_t *fd_info = fd_info_for_conn(&client_part);
 
     bpf_dbg_printk("fd_info lookup %llx, type=%d", fd_info, client_part.type);
@@ -108,13 +108,28 @@ find_nginx_parent_trace(const pid_connection_info_t *p_conn, u16 orig_dport) {
     return NULL;
 }
 
-static __always_inline const tp_info_pid_t *find_nodejs_parent_trace() {
+static __always_inline const tp_info_pid_t *
+find_nodejs_parent_trace(const pid_connection_info_t *p_conn, u16 orig_dport) {
+    connection_info_part_t client_part = {};
+    populate_ephemeral_info(&client_part, &p_conn->conn, orig_dport, p_conn->pid, FD_CLIENT);
+    fd_info_t *fd_info = fd_info_for_conn(&client_part);
+
+    if (!fd_info) {
+        return NULL;
+    }
+
     const u64 pid_tgid = bpf_get_current_pid_tgid();
-    const s32 *node_parent_request_fd = bpf_map_lookup_elem(&active_nodejs_ids, &pid_tgid);
+    const u64 client_key = (pid_tgid << 32) | fd_info->fd;
+
+    const s32 *node_parent_request_fd = bpf_map_lookup_elem(&nodejs_fd_map, &client_key);
 
     if (!node_parent_request_fd) {
         return NULL;
     }
+
+    bpf_dbg_printk("find_nodejs_parent_trace client_fd = %d, server_fd = %d",
+                   fd_info->fd,
+                   *node_parent_request_fd);
 
     const fd_key key = {.pid_tgid = pid_tgid, .fd = *node_parent_request_fd};
 
@@ -159,7 +174,7 @@ static __always_inline const tp_info_pid_t *find_parent_process_trace(trace_key_
 
 static __always_inline const tp_info_pid_t *find_parent_trace(const pid_connection_info_t *p_conn,
                                                               u16 orig_dport) {
-    const tp_info_pid_t *node_tp = find_nodejs_parent_trace();
+    const tp_info_pid_t *node_tp = find_nodejs_parent_trace(p_conn, orig_dport);
 
     if (node_tp) {
         return node_tp;
@@ -256,7 +271,7 @@ static __always_inline void server_or_client_trace(
         t_key.extra_id = extra_runtime_id();
 
         connection_info_part_t conn_part = {};
-        populate_ephemeral_info(&conn_part, conn, orig_dport, host_pid, 0);
+        populate_ephemeral_info(&conn_part, conn, orig_dport, host_pid, FD_SERVER);
 
         bpf_dbg_printk("Saving connection server span for pid=%d, tid=%d, ephemeral_port %d",
                        t_key.p_key.pid,

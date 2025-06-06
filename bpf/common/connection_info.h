@@ -176,18 +176,15 @@ static __always_inline void populate_ephemeral_info(connection_info_part_t *part
                                                     const connection_info_t *sorted_conn,
                                                     u16 orig_dport,
                                                     u32 pid,
-                                                    u8 client) {
-    if ((client && sorted_conn->d_port != orig_dport) ||
-        (!client && sorted_conn->d_port == orig_dport)) {
+                                                    u8 type) {
+
+    if ((type == FD_CLIENT && sorted_conn->d_port != orig_dport) ||
+        (type == FD_SERVER && sorted_conn->d_port == orig_dport)) {
         populate_partial_info(part, sorted_conn->d_addr, sorted_conn->d_port);
     } else {
         populate_partial_info(part, sorted_conn->s_addr, sorted_conn->s_port);
     }
 
-    if (client) {
-        part->type = FD_CLIENT;
-    } else {
-        part->type = FD_SERVER;
-    }
+    part->type = type;
     part->pid = pid;
 }

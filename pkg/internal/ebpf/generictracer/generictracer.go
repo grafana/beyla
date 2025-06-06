@@ -364,35 +364,6 @@ func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 				Start:    p.bpfObjects.BeylaUprobeSslShutdown,
 			}},
 		},
-		"node": {
-			"_ZN4node9AsyncWrap10AsyncResetEN2v85LocalINS1_6ObjectEEEdb": {{
-				Required: false,
-				Start:    p.bpfObjects.BeylaAsyncReset,
-			}},
-			// the next one is node::AsyncWrap::AsyncReset(v8::Local<v8::Object>, double)
-			// aka _ZN4node9AsyncWrap10AsyncResetEN2v85LocalINS1_6ObjectEEEd
-			// we insert the probe at 0xb6e760 which is after the async_id and
-			// trigger_async_id members have been set on the 'this' pointer,
-			// i.e. a little after the actual address of
-			// _ZN4node9AsyncWrap10AsyncResetEN2v85LocalINS1_6ObjectEEEd
-			"": {{
-				Required:    true,
-				Start:       p.bpfObjects.BeylaAsyncReset,
-				StartOffset: 0xb6e760,
-			}},
-			"_ZN4node9AsyncWrap12MakeCallbackEN2v85LocalINS1_8FunctionEEEiPNS2_INS1_5ValueEEE": {{
-				Required: false,
-				Start:    p.bpfObjects.BeylaMakeCallback,
-			}},
-			"_ZN4node9AsyncWrap12MakeCallbackEN2v85LocalINS1_4NameEEEiPNS2_INS1_5ValueEEE": {{
-				Required: false,
-				Start:    p.bpfObjects.BeylaMakeCallback,
-			}},
-			"_ZN4node14ConnectionWrapINS_7TCPWrapE8uv_tcp_sE12OnConnectionEP11uv_stream_si": {{
-				Required: false,
-				Start:    p.bpfObjects.BeylaOnConnection,
-			}},
-		},
 		"nginx": {
 			"ngx_http_upstream_init": {{ // on upstream dispatch
 				Required: false,

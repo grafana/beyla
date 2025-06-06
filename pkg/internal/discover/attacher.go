@@ -14,6 +14,7 @@ import (
 	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/v2/pkg/internal/helpers/maps"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
+	"github.com/grafana/beyla/v2/pkg/internal/nodejs"
 	"github.com/grafana/beyla/v2/pkg/internal/otelsdk"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
@@ -36,6 +37,7 @@ type TraceAttacher struct {
 	// keeps a copy of all the tracers for a given executable path
 	existingTracers     map[uint64]*ebpf.ProcessTracer
 	sdkInjector         *otelsdk.SDKInjector
+	nodeInjector        *nodejs.NodeInjector
 	reusableTracer      *ebpf.ProcessTracer
 	reusableGoTracer    *ebpf.ProcessTracer
 	commonTracersLoaded bool
@@ -68,6 +70,7 @@ func (ta *TraceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 	ta.log = slog.With("component", "discover.TraceAttacher")
 	ta.existingTracers = map[uint64]*ebpf.ProcessTracer{}
 	ta.sdkInjector = otelsdk.NewSDKInjector(ta.Cfg)
+	ta.nodeInjector = nodejs.NewNodeInjector(ta.Cfg)
 	ta.processInstances = maps.MultiCounter[uint64]{}
 	ta.beylaPID = os.Getpid()
 	ta.ebpfEventContext.CommonPIDsFilter = ebpfcommon.CommonPIDsFilter(&ta.Cfg.Discovery)
@@ -103,6 +106,8 @@ func (ta *TraceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 						}
 
 						if !sdkInstrumented {
+							ta.nodeInjector.NewExecutable(&instr.Obj)
+
 							ta.processInstances.Inc(instr.Obj.FileInfo.Ino)
 							if ok := ta.getTracer(&instr.Obj); ok {
 								ta.OutputTracerEvents.Send(Event[*ebpf.Instrumentable]{Type: EventCreated, Obj: &instr.Obj})

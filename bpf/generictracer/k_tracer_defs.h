@@ -9,6 +9,7 @@
 #include <common/tc_common.h>
 #include <common/trace_common.h>
 
+#include <generictracer/beyla_ipc.h>
 #include <generictracer/k_tracer_tailcall.h>
 #include <generictracer/protocol_common.h>
 #include <generictracer/protocol_http.h>
@@ -24,8 +25,9 @@ typedef struct recv_args {
 } recv_args_t;
 
 static __always_inline void handle_buf_with_args(void *ctx, call_protocol_args_t *args) {
-    bpf_dbg_printk(
-        "buf=[%s], pid=%d, len=%d", args->small_buf, args->pid_conn.pid, args->bytes_len);
+    if (args->direction == TCP_SEND && handle_beyla_ipc(args->small_buf, sizeof(args->small_buf))) {
+        return;
+    }
 
     if (is_http(args->small_buf, MIN_HTTP_SIZE, &args->packet_type)) {
         bpf_tail_call(ctx, &jump_table, k_tail_protocol_http);

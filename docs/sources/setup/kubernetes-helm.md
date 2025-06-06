@@ -65,7 +65,7 @@ config:
   data:
     # Contents of the actual Beyla configuration file
     discovery:
-      services:
+      instrument:
         - k8s_namespace: demo
         - k8s_namespace: blog
     routes:

@@ -286,7 +286,7 @@ data:
       unmatched: heuristic
     # let's instrument only the docs server
     discovery:
-      services:
+      instrument:
         - k8s_deployment_name: "nodejs-deployment"
         - k8s_deployment_name: "go-deployment"
         - k8s_deployment_name: "python-deployment"

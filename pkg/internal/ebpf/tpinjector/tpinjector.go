@@ -144,7 +144,7 @@ func (p *Tracer) AlreadyInstrumentedLib(uint64) bool {
 	return false
 }
 
-func (p *Tracer) Run(ctx context.Context, _ *msg.Queue[[]request.Span]) {
+func (p *Tracer) Run(ctx context.Context, _ *ebpfcommon.EBPFEventContext, _ *msg.Queue[[]request.Span]) {
 	p.log.Debug("tpinjector started")
 
 	<-ctx.Done()

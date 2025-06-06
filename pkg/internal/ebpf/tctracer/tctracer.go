@@ -138,7 +138,7 @@ func (p *Tracer) startTC(ctx context.Context) {
 	p.ifaceManager.Start(ctx)
 }
 
-func (p *Tracer) Run(ctx context.Context, _ *msg.Queue[[]request.Span]) {
+func (p *Tracer) Run(ctx context.Context, _ *ebpfcommon.EBPFEventContext, _ *msg.Queue[[]request.Span]) {
 	p.startTC(ctx)
 
 	errorCh := p.tcManager.Errors()

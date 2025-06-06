@@ -77,7 +77,7 @@ func (p *BPFLogger) Run(ctx context.Context) {
 	)(ctx, nil)
 }
 
-func (p *BPFLogger) processLogEvent(_ *config.EBPFTracer, record *ringbuf.Record, _ ebpfcommon.ServiceFilter) (request.Span, bool, error) {
+func (p *BPFLogger) processLogEvent(_ *ebpfcommon.EBPFParseContext, _ *config.EBPFTracer, record *ringbuf.Record, _ ebpfcommon.ServiceFilter) (request.Span, bool, error) {
 	event, err := ebpfcommon.ReinterpretCast[BPFLogInfo](record.RawSample)
 
 	if err == nil {

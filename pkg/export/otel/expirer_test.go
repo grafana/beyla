@@ -151,7 +151,7 @@ func TestAppMetricsExpiration_ByMetricAttrs(t *testing.T) {
 			Instrumentations: []string{
 				instrumentations.InstrumentationALL,
 			},
-		}, false, attributes.Selection{
+		}, attributes.Selection{
 			attributes.HTTPServerDuration.Section: attributes.InclusionLists{
 				Include: []string{"url.path"},
 			},
@@ -268,7 +268,7 @@ func TestAppMetricsExpiration_BySvcID(t *testing.T) {
 			Instrumentations: []string{
 				instrumentations.InstrumentationALL,
 			},
-		}, false, attributes.Selection{
+		}, attributes.Selection{
 			attributes.HTTPServerDuration.Section: attributes.InclusionLists{
 				Include: []string{"url.path"},
 			},

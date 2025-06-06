@@ -82,6 +82,7 @@ int beyla_ngx_event_connect_peer_ret(struct pt_regs *ctx) {
 
     connection_info_part_t part = {0};
     get_sock_info(conn_ptr, &part);
+    part.type = FD_SERVER;
 
     void *peer_conn = 0;
     bpf_probe_read(&peer_conn, sizeof(void *), up_ptr + ngx_http_upstream_s_conn);

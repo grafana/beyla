@@ -4,6 +4,7 @@
 #include <bpfcore/bpf_helpers.h>
 
 #include <common/egress_key.h>
+#include <common/fd_info.h>
 #include <common/protocol_defs.h>
 
 #include <logger/bpf_dbg.h>
@@ -49,7 +50,8 @@ typedef struct connection_info_part {
         u32 ip[IP_V6_ADDR_LEN_WORDS];
     };
     u16 port;
-    u16 __pad;
+    u8 type;
+    u8 __pad;
 } connection_info_part_t;
 
 #ifdef BPF_DEBUG
@@ -178,5 +180,11 @@ static __always_inline void populate_ephemeral_info(connection_info_part_t *part
         populate_partial_info(part, sorted_conn->d_addr, sorted_conn->d_port);
     } else {
         populate_partial_info(part, sorted_conn->s_addr, sorted_conn->s_port);
+    }
+
+    if (client) {
+        part->type = FD_CLIENT;
+    } else {
+        part->type = FD_SERVER;
     }
 }

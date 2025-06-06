@@ -96,10 +96,10 @@ find_nginx_parent_trace(const pid_connection_info_t *p_conn, u16 orig_dport) {
     populate_ephemeral_info(&client_part, &p_conn->conn, orig_dport, 1);
     fd_info_t *fd_info = fd_info_for_conn(&client_part);
 
-    bpf_dbg_printk("fd_info lookup %llx", fd_info);
+    bpf_dbg_printk("fd_info lookup %llx, type=%d", fd_info, client_part.type);
     if (fd_info) {
         connection_info_part_t *parent = bpf_map_lookup_elem(&nginx_upstream, fd_info);
-        bpf_dbg_printk("parent %llx", parent);
+        bpf_dbg_printk("parent %llx, fd=%d, type=%d", parent, fd_info->fd, fd_info->type);
         if (parent) {
             return bpf_map_lookup_elem(&server_traces_aux, parent);
         }

@@ -20,6 +20,7 @@
 #include <common/http_types.h>
 #include <common/ringbuf.h>
 #include <common/tracing.h>
+#include <generictracer/protocol_jsonrpc.h>
 
 #include <gotracer/go_byte_arr.h>
 #include <gotracer/go_common.h>
@@ -1244,6 +1245,38 @@ int beyla_uprobe_bodyRead(struct pt_regs *ctx) {
         return 0;
     }
     invocation->body_addr = body_addr;
+
+    return 0;
+}
+
+SEC("uprobe/bodyReadRet")
+int beyla_uprobe_bodyReadReturn(struct pt_regs *ctx) {
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    bpf_dbg_printk("=== uprobe/proc body read goroutine === ");
+    go_addr_key_t g_key = {};
+    go_addr_key_from_id(&g_key, goroutine_addr);
+
+    u64 n = (u64)GO_PARAM1(ctx);
+
+    server_http_func_invocation_t *invocation =
+        bpf_map_lookup_elem(&ongoing_http_server_requests, &g_key);
+    if (!invocation) {
+        bpf_dbg_printk("can't find invocation info for server call");
+        return 0;
+    }
+    u64 body_addr = (u64)invocation->body_addr;
+    bpf_dbg_printk("n is %d", n);
+
+    char body_buf[HTTP_BODY_MAX_LEN] = {};
+    if (n > 0 && body_addr) {
+        if (!read_go_str_n("http body", (void *)body_addr, n, body_buf, sizeof(body_buf))) {
+            bpf_dbg_printk("can't read http body");
+            body_buf[0] = '\0';
+        } else {
+            // is_jsonrpc2_body(body_buf, copy_len);
+            bpf_dbg_printk("body is %s", body_buf);
+        }
+    }
 
     return 0;
 }

@@ -54,8 +54,6 @@ typedef struct http_request_trace_t {
     tp_info_t tp;
     connection_info_t conn;
     pid_info pid;
-    u8 body[HTTP_BODY_MAX_LEN];
-    u8 content_type[HTTP_CONTENT_TYPE_MAX_LEN];
 } http_request_trace;
 
 typedef struct sql_request_trace_t {

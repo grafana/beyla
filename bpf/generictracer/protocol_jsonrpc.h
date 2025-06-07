@@ -5,6 +5,12 @@
 #define JSONRPC_KEY_LEN 9
 #define JSONRPC_VAL "\"2.0\""
 #define JSONRPC_VAL_LEN 5
+#define APPLICATION_JSON "application/json"
+#define APPLICATION_JSON_LEN 16
+
+static __always_inline int is_json_content_type(const char *content_type, int content_type_len) {
+    return __builtin_memcmp(content_type, APPLICATION_JSON, APPLICATION_JSON_LEN) == 0;
+}
 
 // Looks for '"jsonrpc":"2.0"' and '"method":"'
 static __always_inline int is_jsonrpc2_body(const char *body, int body_len) {

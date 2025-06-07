@@ -1251,14 +1251,19 @@ int beyla_uprobe_bodyReadReturn(struct pt_regs *ctx) {
         bpf_dbg_printk("can't find invocation info for server call");
         return 0;
     }
-    u64 body_addr = (u64)invocation->body_addr;
+    // content-type is set in invocation in ServeHTTP
     bpf_dbg_printk("n is %d", n);
+    bpf_dbg_printk("content type is %s", invocation->content_type);
 
     char body_buf[HTTP_BODY_MAX_LEN] = {};
-    if (n > 0 && body_addr) {
-        if (read_go_str_n("http body", (void *)body_addr, n, body_buf, sizeof(body_buf))) {
-            bpf_dbg_printk("body is %s", body_buf);
-            is_jsonrpc2_body(body_buf, sizeof(body_buf));
+    if (n > 0 && invocation->body_addr) {
+        if (is_json_content_type((void *)invocation->content_type,
+                                 sizeof(invocation->content_type))) {
+            if (read_go_str_n(
+                    "http body", (void *)invocation->body_addr, n, body_buf, sizeof(body_buf))) {
+                bpf_dbg_printk("body is %s", body_buf);
+                is_jsonrpc2_body(body_buf, sizeof(body_buf));
+            }
         }
     }
     return 0;

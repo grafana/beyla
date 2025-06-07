@@ -9,10 +9,12 @@ import (
 	"net"
 	"os"
 	"strings"
+	"sync"
 	"unsafe"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
+	lru "github.com/hashicorp/golang-lru/v2"
 
 	"github.com/grafana/beyla/v2/pkg/config"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/ringbuf"
@@ -90,11 +92,40 @@ type MisclassifiedEvent struct {
 	TCPInfo   *TCPRequestInfo
 }
 
+type EBPFParseContext struct {
+	h2c *lru.Cache[uint64, h2Connection]
+}
+
+type EBPFEventContext struct {
+	CommonPIDsFilter ServiceFilter
+	SharedRingBuffer *ringBufForwarder
+	EBPFMaps         map[string]*ebpf.Map
+	RingBufLock      sync.Mutex
+	MapsLock         sync.Mutex
+	LoadLock         sync.Mutex
+}
+
 var MisclassifiedEvents = make(chan MisclassifiedEvent)
 
 func ptlog() *slog.Logger { return slog.With("component", "ebpf.ProcessTracer") }
 
-func ReadBPFTraceAsSpan(cfg *config.EBPFTracer, record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {
+func NewEBPFParseContext() *EBPFParseContext {
+	h2c, _ := lru.New[uint64, h2Connection](1024 * 10)
+	return &EBPFParseContext{
+		h2c: h2c,
+	}
+}
+
+func NewEBPFEventContext() *EBPFEventContext {
+	return &EBPFEventContext{
+		EBPFMaps:    map[string]*ebpf.Map{},
+		RingBufLock: sync.Mutex{},
+		MapsLock:    sync.Mutex{},
+		LoadLock:    sync.Mutex{},
+	}
+}
+
+func ReadBPFTraceAsSpan(parseCtx *EBPFParseContext, cfg *config.EBPFTracer, record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {
 	if len(record.RawSample) == 0 {
 		return request.Span{}, true, fmt.Errorf("invalid ringbuffer record size")
 	}
@@ -107,7 +138,7 @@ func ReadBPFTraceAsSpan(cfg *config.EBPFTracer, record *ringbuf.Record, filter S
 	case EventTypeKHTTP:
 		return ReadHTTPInfoIntoSpan(record, filter)
 	case EventTypeKHTTP2:
-		return ReadHTTP2InfoIntoSpan(record, filter)
+		return ReadHTTP2InfoIntoSpan(parseCtx, record, filter)
 	case EventTypeTCP:
 		return ReadTCPRequestIntoSpan(cfg, record, filter)
 	case EventTypeGoSarama:

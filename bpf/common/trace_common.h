@@ -11,8 +11,12 @@
 #include <common/trace_util.h>
 #include <common/tracing.h>
 
+#include <maps/active_nodejs_ids.h>
 #include <maps/clone_map.h>
 #include <maps/cp_support_connect_info.h>
+#include <maps/fd_map.h>
+#include <maps/fd_to_connection.h>
+#include <maps/nginx_upstream.h>
 #include <maps/server_traces.h>
 #include <maps/tp_info_mem.h>
 #include <maps/tp_char_buf_mem.h>
@@ -86,53 +90,110 @@ static __always_inline unsigned char *bpf_strstr_tp_loop(unsigned char *buf, int
     return NULL;
 }
 
-static __always_inline tp_info_pid_t *find_parent_trace(const pid_connection_info_t *p_conn) {
+static __always_inline const tp_info_pid_t *
+find_nginx_parent_trace(const pid_connection_info_t *p_conn, u16 orig_dport) {
+    connection_info_part_t client_part = {};
+    populate_ephemeral_info(&client_part, &p_conn->conn, orig_dport, 1);
+    fd_info_t *fd_info = fd_info_for_conn(&client_part);
+
+    bpf_dbg_printk("fd_info lookup %llx", fd_info);
+    if (fd_info) {
+        connection_info_part_t *parent = bpf_map_lookup_elem(&nginx_upstream, fd_info);
+        bpf_dbg_printk("parent %llx", parent);
+        if (parent) {
+            return bpf_map_lookup_elem(&server_traces_aux, parent);
+        }
+    }
+
+    return NULL;
+}
+
+static __always_inline const tp_info_pid_t *find_nodejs_parent_trace() {
+    const u64 pid_tgid = bpf_get_current_pid_tgid();
+    const s32 *node_parent_request_fd = bpf_map_lookup_elem(&active_nodejs_ids, &pid_tgid);
+
+    if (!node_parent_request_fd) {
+        return NULL;
+    }
+
+    const fd_key key = {.pid_tgid = pid_tgid, .fd = *node_parent_request_fd};
+
+    const connection_info_t *conn = bpf_map_lookup_elem(&fd_to_connection, &key);
+
+    if (!conn) {
+        return NULL;
+    }
+
+    return trace_info_for_connection(conn, TRACE_TYPE_SERVER);
+}
+
+static __always_inline const tp_info_pid_t *find_parent_process_trace(trace_key_t *t_key) {
+    // Up to 5 levels of thread nesting allowed
+    enum { k_max_depth = 5 };
+
+    for (u8 i = 0; i < k_max_depth; ++i) {
+        const tp_info_pid_t *server_tp = bpf_map_lookup_elem(&server_traces, t_key);
+
+        if (server_tp) {
+            bpf_dbg_printk("Found parent trace for pid=%d, ns=%lx, extra_id=%llx",
+                           t_key->p_key.pid,
+                           t_key->p_key.ns,
+                           t_key->extra_id);
+            return server_tp;
+        }
+
+        // not this goroutine running the server request processing
+        // Let's find the parent scope
+        const pid_key_t *p_tid = (const pid_key_t *)bpf_map_lookup_elem(&clone_map, &t_key->p_key);
+
+        if (!p_tid) {
+            break;
+        }
+
+        // Lookup now to see if the parent was a request
+        t_key->p_key = *p_tid;
+    }
+
+    return NULL;
+}
+
+static __always_inline const tp_info_pid_t *find_parent_trace(const pid_connection_info_t *p_conn,
+                                                              u16 orig_dport) {
+    const tp_info_pid_t *node_tp = find_nodejs_parent_trace();
+
+    if (node_tp) {
+        return node_tp;
+    }
+
     trace_key_t t_key = {0};
 
     trace_key_from_pid_tid(&t_key);
 
-    int attempts = 0;
+    bpf_dbg_printk("Looking up parent trace for pid=%d, ns=%lx, extra_id=%llx",
+                   t_key.p_key.pid,
+                   t_key.p_key.ns,
+                   t_key.extra_id);
 
-    do {
-        tp_info_pid_t *server_tp = bpf_map_lookup_elem(&server_traces, &t_key);
+    const tp_info_pid_t *nginx_parent = find_nginx_parent_trace(p_conn, orig_dport);
 
-        if (!server_tp) { // not this goroutine running the server request processing
-            // Let's find the parent scope
-            if (t_key.extra_id) {
-                u64 parent_id = parent_runtime_id(t_key.extra_id);
-                if (parent_id) {
-                    t_key.extra_id = parent_id;
-                } else {
-                    break;
-                }
-            } else {
-                pid_key_t *p_tid = (pid_key_t *)bpf_map_lookup_elem(&clone_map, &t_key.p_key);
-                if (p_tid) {
-                    // Lookup now to see if the parent was a request
-                    t_key.p_key = *p_tid;
-                } else {
-                    break;
-                }
-            }
-        } else {
-            bpf_dbg_printk("Found parent trace for pid=%d, ns=%lx, extra_id=%llx",
-                           t_key.p_key.pid,
-                           t_key.p_key.ns,
-                           t_key.extra_id);
-            return server_tp;
-        }
+    if (nginx_parent) {
+        return nginx_parent;
+    }
 
-        attempts++;
-    } while (attempts < 5); // Up to 5 levels of thread nesting allowed
+    const tp_info_pid_t *proc_parent = find_parent_process_trace(&t_key);
 
-    cp_support_data_t *conn_t_key = bpf_map_lookup_elem(&cp_support_connect_info, p_conn);
+    if (proc_parent) {
+        return proc_parent;
+    }
+
+    const cp_support_data_t *conn_t_key = bpf_map_lookup_elem(&cp_support_connect_info, p_conn);
 
     if (conn_t_key) {
         bpf_dbg_printk("Found parent trace for connection through connection lookup");
         return bpf_map_lookup_elem(&server_traces, &conn_t_key->t_key);
     }
 
-    return 0;
+    return NULL;
 }
 
 // Traceparent format: Traceparent: ver (2 chars) - trace_id (32 chars) - span_id (16 chars) - flags (2 chars)
@@ -183,28 +244,33 @@ static __always_inline u8 valid_trace(const unsigned char *trace_id) {
     return *((u64 *)trace_id) != 0 || *((u64 *)(trace_id + 8)) != 0;
 }
 
-static __always_inline void
-server_or_client_trace(u8 type, connection_info_t *conn, tp_info_pid_t *tp_p, u8 ssl) {
+static __always_inline void server_or_client_trace(
+    u8 type, connection_info_t *conn, tp_info_pid_t *tp_p, u8 ssl, u16 orig_dport) {
     if (type == EVENT_HTTP_REQUEST) {
         trace_key_t t_key = {0};
         task_tid(&t_key.p_key);
         t_key.extra_id = extra_runtime_id();
 
-        bpf_dbg_printk("Saving server span for id=%llx, pid=%d, tid=%d",
-                       bpf_get_current_pid_tgid(),
+        connection_info_part_t conn_part = {};
+        populate_ephemeral_info(&conn_part, conn, orig_dport, 0);
+
+        bpf_dbg_printk("Saving connection server span for pid=%d, tid=%d, ephemeral_port %d",
                        t_key.p_key.pid,
-                       t_key.p_key.tid);
+                       t_key.p_key.tid,
+                       conn_part.port);
+
+        bpf_map_update_elem(&server_traces_aux, &conn_part, tp_p, BPF_ANY);
 
         tp_info_pid_t *existing = bpf_map_lookup_elem(&server_traces, &t_key);
         if (existing && (existing->req_type == tp_p->req_type) &&
             (tp_p->req_type == EVENT_HTTP_REQUEST)) {
             existing->valid = 0;
-            bpf_dbg_printk("Found conflicting server span, marking it invalid.");
+            bpf_dbg_printk("Found conflicting thread server span, marking it invalid.");
             return;
         }
 
         bpf_dbg_printk(
-            "Saving server span for ns=%x, extra_id=%llx", t_key.p_key.ns, t_key.extra_id);
+            "Saving thread server span for ns=%x, extra_id=%llx", t_key.p_key.ns, t_key.extra_id);
         bpf_map_update_elem(&server_traces, &t_key, tp_p, BPF_ANY);
     } else {
         // Setup a pid, so that we can find it in TC.
@@ -280,15 +346,16 @@ static __always_inline u8 find_trace_for_server_request(connection_info_t *conn,
 }
 
 static __always_inline u8 find_trace_for_client_request(const pid_connection_info_t *p_conn,
+                                                        u16 orig_dport,
                                                         tp_info_t *tp) {
-    u8 found_tp = 0;
-    tp_info_pid_t *server_tp = find_parent_trace(p_conn);
+    const tp_info_pid_t *server_tp = find_parent_trace(p_conn, orig_dport);
+
     if (server_tp && server_tp->valid && valid_trace(server_tp->tp.trace_id)) {
-        found_tp = 1;
         bpf_dbg_printk("Found existing server tp for client call");
         __builtin_memcpy(tp->trace_id, server_tp->tp.trace_id, sizeof(tp->trace_id));
         __builtin_memcpy(tp->parent_id, server_tp->tp.span_id, sizeof(tp->parent_id));
+        return 1;
     }
 
-    return found_tp;
+    return 0;
 }

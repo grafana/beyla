@@ -41,8 +41,8 @@ static __always_inline void init_new_trace(tp_info_t *tp) {
     __builtin_memset(tp->parent_id, 0, sizeof(tp->span_id));
 }
 
-static __always_inline void
-set_tcp_trace_info(u32 type, connection_info_t *conn, tp_info_t *tp, u32 pid, u8 ssl) {
+static __always_inline void set_tcp_trace_info(
+    u32 type, connection_info_t *conn, tp_info_t *tp, u32 pid, u8 ssl, u16 orig_dport) {
     tp_info_pid_t *tp_p = tp_buf();
 
     if (!tp_p) {
@@ -59,13 +59,13 @@ set_tcp_trace_info(u32 type, connection_info_t *conn, tp_info_t *tp, u32 pid, u8
     bpf_dbg_printk("Set traceinfo for conn");
     dbg_print_http_connection_info(conn);
 
-    server_or_client_trace(type, conn, tp_p, ssl);
+    server_or_client_trace(type, conn, tp_p, ssl, orig_dport);
 }
 
 static __always_inline void
-tcp_get_or_set_trace_info(tcp_req_t *req, pid_connection_info_t *pid_conn, u8 ssl) {
+tcp_get_or_set_trace_info(tcp_req_t *req, pid_connection_info_t *pid_conn, u8 ssl, u16 orig_dport) {
     if (req->direction == TCP_SEND) { // Client
-        u8 found = find_trace_for_client_request(pid_conn, &req->tp);
+        u8 found = find_trace_for_client_request(pid_conn, orig_dport, &req->tp);
         bpf_dbg_printk("Looking up client trace info, found %d", found);
         if (found) {
             urand_bytes(req->tp.span_id, SPAN_ID_SIZE_BYTES);
@@ -73,7 +73,8 @@ tcp_get_or_set_trace_info(tcp_req_t *req, pid_connection_info_t *pid_conn, u8 ss
             init_new_trace(&req->tp);
         }
 
-        set_tcp_trace_info(TRACE_TYPE_CLIENT, &pid_conn->conn, &req->tp, pid_conn->pid, ssl);
+        set_tcp_trace_info(
+            TRACE_TYPE_CLIENT, &pid_conn->conn, &req->tp, pid_conn->pid, ssl, orig_dport);
     } else { // Server
         u8 found = find_trace_for_server_request(&pid_conn->conn, &req->tp, EVENT_TCP_REQUEST);
         bpf_dbg_printk("Looking up server trace info, found %d", found);
@@ -82,7 +83,8 @@ tcp_get_or_set_trace_info(tcp_req_t *req, pid_connection_info_t *pid_conn, u8 ss
         } else {
             init_new_trace(&req->tp);
         }
-        set_tcp_trace_info(TRACE_TYPE_SERVER, &pid_conn->conn, &req->tp, pid_conn->pid, ssl);
+        set_tcp_trace_info(
+            TRACE_TYPE_SERVER, &pid_conn->conn, &req->tp, pid_conn->pid, ssl, orig_dport);
     }
 }
 
@@ -147,7 +149,7 @@ static __always_inline void handle_unknown_tcp_connection(pid_connection_info_t 
 
             bpf_dbg_printk("TCP request start, direction = %d, ssl = %d", direction, ssl);
 
-            tcp_get_or_set_trace_info(req, pid_conn, ssl);
+            tcp_get_or_set_trace_info(req, pid_conn, ssl, orig_dport);
 
             bpf_map_update_elem(&ongoing_tcp_req, pid_conn, req, BPF_ANY);
         }

@@ -25,8 +25,8 @@ import (
 
 // NetMetricsConfig extends MetricsConfig for Network Metrics
 type NetMetricsConfig struct {
-	Metrics            *MetricsConfig
-	AttributeSelectors attributes.Selection
+	Metrics     *MetricsConfig
+	SelectorCfg *attributes.SelectorConfig
 	// Deprecated: to be removed in Beyla 3.0 with BEYLA_NETWORK_METRICS bool flag
 	GloballyEnabled bool
 }
@@ -86,8 +86,8 @@ func NetMetricsExporterProvider(
 			// This node is not going to be instantiated. Let the swarm library just ignore it.
 			return swarm.EmptyRunFunc()
 		}
-		if cfg.AttributeSelectors == nil {
-			cfg.AttributeSelectors = make(attributes.Selection)
+		if cfg.SelectorCfg.SelectionCfg == nil {
+			cfg.SelectorCfg.SelectionCfg = make(attributes.Selection)
 		}
 		exporter, err := newMetricsExporter(ctx, ctxInfo, cfg, input)
 		if err != nil {
@@ -108,7 +108,7 @@ func newMetricsExporter(
 		return nil, err
 	}
 
-	resource := createFilteredNetworkResource(ctxInfo.HostID, cfg.AttributeSelectors)
+	resource := createFilteredNetworkResource(ctxInfo.HostID, cfg.SelectorCfg.SelectionCfg)
 	provider, err := newMeterProvider(resource, &exporter, cfg.Metrics.Interval)
 
 	if err != nil {
@@ -116,7 +116,7 @@ func newMetricsExporter(
 		return nil, err
 	}
 
-	attrProv, err := attributes.NewAttrSelector(ctxInfo.MetricAttributeGroups, cfg.AttributeSelectors)
+	attrProv, err := attributes.NewAttrSelector(ctxInfo.MetricAttributeGroups, cfg.SelectorCfg)
 	if err != nil {
 		return nil, fmt.Errorf("network OTEL exporter attributes enable: %w", err)
 	}
@@ -140,7 +140,7 @@ func newMetricsExporter(
 			return nil, err
 		}
 
-		log.Debug("restricting attributes not in this list", "attributes", cfg.AttributeSelectors)
+		log.Debug("restricting attributes not in this list", "attributes", cfg.SelectorCfg.SelectionCfg)
 		attrs := attributes.OpenTelemetryGetters(
 			ebpf.RecordGetters,
 			attrProv.For(attributes.BeylaNetworkFlow))
@@ -158,7 +158,7 @@ func newMetricsExporter(
 			log.Error("creating observable counter", "error", err)
 			return nil, err
 		}
-		log.Debug("restricting attributes not in this list", "attributes", cfg.AttributeSelectors)
+		log.Debug("restricting attributes not in this list", "attributes", cfg.SelectorCfg.SelectionCfg)
 		attrs := attributes.OpenTelemetryGetters(
 			ebpf.RecordGetters,
 			attrProv.For(attributes.BeylaNetworkInterZone))

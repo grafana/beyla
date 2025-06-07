@@ -181,7 +181,7 @@ func makeTracesTestReceiverWithSpanMetrics() *tracesReceiver {
 
 func generateTracesForSpans(t *testing.T, tr *tracesReceiver, spans []request.Span) []ptrace.Traces {
 	res := []ptrace.Traces{}
-	err := tr.fetchConstantAttributes(attributes.Selection{})
+	err := tr.fetchConstantAttributes(&attributes.SelectorConfig{})
 	assert.NoError(t, err)
 
 	spanGroups := otel.GroupSpans(context.Background(), spans, tr.traceAttrs, sdktrace.AlwaysSample(), tr.is)

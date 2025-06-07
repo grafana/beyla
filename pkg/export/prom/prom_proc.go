@@ -22,8 +22,8 @@ import (
 
 // ProcPrometheusConfig for process metrics just wraps the global prom.ProcPrometheusConfig as provided by the user
 type ProcPrometheusConfig struct {
-	Metrics            *PrometheusConfig
-	AttributeSelectors attributes.Selection
+	Metrics     *PrometheusConfig
+	SelectorCfg *attributes.SelectorConfig
 }
 
 // nolint:gocritic
@@ -101,7 +101,7 @@ func newProcReporter(ctxInfo *global.ContextInfo, cfg *ProcPrometheusConfig, inp
 	// OTEL exporter would report also some prometheus-exclusive attributes
 	group.Add(attributes.GroupPrometheus)
 
-	provider, err := attributes.NewAttrSelector(group, cfg.AttributeSelectors)
+	provider, err := attributes.NewAttrSelector(group, cfg.SelectorCfg)
 	if err != nil {
 		return nil, fmt.Errorf("network Prometheus exporter attributes enable: %w", err)
 	}

@@ -155,7 +155,7 @@ func TestMetrics_InternalInstrumentation(t *testing.T) {
 	}, &MetricsConfig{
 		CommonEndpoint: coll.URL, Interval: 10 * time.Millisecond, ReportersCacheLen: 16,
 		Features: []string{FeatureApplication}, Instrumentations: []string{instrumentations.InstrumentationHTTP},
-	}, false, &attributes.SelectorConfig{}, exportMetrics, processEvents,
+	}, &attributes.SelectorConfig{}, exportMetrics, processEvents,
 	)(context.Background())
 	require.NoError(t, err)
 	go reporter(context.Background())
@@ -710,7 +710,7 @@ func makeExporter(
 			TTL:               30 * time.Minute,
 			ReportersCacheLen: 100,
 			Instrumentations:  instrumentations,
-		}, false, &attributes.SelectorConfig{
+		}, &attributes.SelectorConfig{
 			SelectionCfg: attributes.Selection{
 				attributes.HTTPServerDuration.Section: attributes.InclusionLists{
 					Include: []string{"url.path"},

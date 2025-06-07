@@ -53,10 +53,10 @@ func TestWatcher_Poll(t *testing.T) {
 		executableReady: func(PID) (string, bool) {
 			return "", true
 		},
-		loadBPFWatcher: func(*beyla.Config, chan<- watcher.Event) error {
+		loadBPFWatcher: func(context.Context, *beyla.Config, chan<- watcher.Event) error {
 			return nil
 		},
-		loadBPFLogger: func(*beyla.Config) error {
+		loadBPFLogger: func(context.Context, *beyla.Config) error {
 			return nil
 		},
 		output: msg.NewQueue[[]Event[processAttrs]](msg.ChannelBufferLen(1)),
@@ -137,10 +137,10 @@ func TestProcessNotReady(t *testing.T) {
 		executableReady: func(pid PID) (string, bool) {
 			return "", pid >= 3
 		},
-		loadBPFWatcher: func(*beyla.Config, chan<- watcher.Event) error {
+		loadBPFWatcher: func(context.Context, *beyla.Config, chan<- watcher.Event) error {
 			return nil
 		},
-		loadBPFLogger: func(*beyla.Config) error {
+		loadBPFLogger: func(context.Context, *beyla.Config) error {
 			return nil
 		},
 	}
@@ -188,11 +188,11 @@ func TestPortsFetchRequired(t *testing.T) {
 		executableReady: func(_ PID) (string, bool) {
 			return "", true
 		},
-		loadBPFWatcher: func(_ *beyla.Config, events chan<- watcher.Event) error {
+		loadBPFWatcher: func(_ context.Context, _ *beyla.Config, events chan<- watcher.Event) error {
 			channelReturner <- events
 			return nil
 		},
-		loadBPFLogger: func(*beyla.Config) error {
+		loadBPFLogger: func(context.Context, *beyla.Config) error {
 			return nil
 		},
 		stateMux:          sync.Mutex{},

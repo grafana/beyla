@@ -54,8 +54,6 @@ func tlog() *slog.Logger {
 
 const reporterName = "github.com/grafana/beyla"
 
-var serviceAttrCache = expirable2.NewLRU[svc.UID, []attribute.KeyValue](1024, nil, 5*time.Minute)
-
 type TraceSpanAndAttributes struct {
 	Span       *request.Span
 	Attributes []attribute.KeyValue
@@ -159,6 +157,7 @@ func makeTracesReceiver(
 		is:                 instrumentations.NewInstrumentationSelection(cfg.Instrumentations),
 		spanMetricsEnabled: spanMetricsEnabled,
 		input:              input.Subscribe(),
+		attributeCache:     expirable2.NewLRU[svc.UID, []attribute.KeyValue](1024, nil, 5*time.Minute),
 	}
 }
 
@@ -185,6 +184,7 @@ type tracesOTELReceiver struct {
 	selectorCfg        *attributes.SelectorConfig
 	is                 instrumentations.InstrumentationSelection
 	spanMetricsEnabled bool
+	attributeCache     *expirable2.LRU[svc.UID, []attribute.KeyValue]
 	input              <-chan []request.Span
 }
 
@@ -263,7 +263,7 @@ func (tr *tracesOTELReceiver) processSpans(ctx context.Context, exp exporter.Tra
 		if len(spanGroup) > 0 {
 			sample := spanGroup[0]
 			envResourceAttrs := ResourceAttrsFromEnv(&sample.Span.Service)
-			traces := generateTracesWithAttributes(&sample.Span.Service, envResourceAttrs, tr.ctxInfo.HostID, spanGroup)
+			traces := generateTracesWithAttributes(tr.attributeCache, &sample.Span.Service, envResourceAttrs, tr.ctxInfo.HostID, spanGroup)
 			err := exp.ConsumeTraces(ctx, traces)
 			if err != nil {
 				slog.Error("error sending trace to consumer", "error", err)
@@ -485,26 +485,26 @@ func getRetrySettings(cfg TracesConfig) configretry.BackOffConfig {
 	return backOffCfg
 }
 
-func traceAppResourceAttrs(hostID string, service *svc.Attrs) []attribute.KeyValue {
+func traceAppResourceAttrs(cache *expirable2.LRU[svc.UID, []attribute.KeyValue], hostID string, service *svc.Attrs) []attribute.KeyValue {
 	// TODO: remove?
 	if service.UID == emptyUID {
 		return getAppResourceAttrs(hostID, service)
 	}
 
-	attrs, ok := serviceAttrCache.Get(service.UID)
+	attrs, ok := cache.Get(service.UID)
 	if ok {
 		return attrs
 	}
 	attrs = getAppResourceAttrs(hostID, service)
-	serviceAttrCache.Add(service.UID, attrs)
+	cache.Add(service.UID, attrs)
 
 	return attrs
 }
 
-func generateTracesWithAttributes(svc *svc.Attrs, envResourceAttrs []attribute.KeyValue, hostID string, spans []TraceSpanAndAttributes) ptrace.Traces {
+func generateTracesWithAttributes(cache *expirable2.LRU[svc.UID, []attribute.KeyValue], svc *svc.Attrs, envResourceAttrs []attribute.KeyValue, hostID string, spans []TraceSpanAndAttributes) ptrace.Traces {
 	traces := ptrace.NewTraces()
 	rs := traces.ResourceSpans().AppendEmpty()
-	resourceAttrs := traceAppResourceAttrs(hostID, svc)
+	resourceAttrs := traceAppResourceAttrs(cache, hostID, svc)
 	resourceAttrs = append(resourceAttrs, envResourceAttrs...)
 	resourceAttrsMap := attrsToMap(resourceAttrs)
 	resourceAttrsMap.PutStr(string(semconv.OTelLibraryNameKey), reporterName)
@@ -559,8 +559,8 @@ func generateTracesWithAttributes(svc *svc.Attrs, envResourceAttrs []attribute.K
 }
 
 // GenerateTraces creates a ptrace.Traces from a request.Span
-func GenerateTraces(svc *svc.Attrs, envResourceAttrs []attribute.KeyValue, hostID string, spans []TraceSpanAndAttributes) ptrace.Traces {
-	return generateTracesWithAttributes(svc, envResourceAttrs, hostID, spans)
+func GenerateTraces(cache *expirable2.LRU[svc.UID, []attribute.KeyValue], svc *svc.Attrs, envResourceAttrs []attribute.KeyValue, hostID string, spans []TraceSpanAndAttributes) ptrace.Traces {
+	return generateTracesWithAttributes(cache, svc, envResourceAttrs, hostID, spans)
 }
 
 // createSubSpans creates the internal spans for a request.Span

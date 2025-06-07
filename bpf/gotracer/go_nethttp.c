@@ -1273,8 +1273,8 @@ int beyla_uprobe_bodyReadReturn(struct pt_regs *ctx) {
             bpf_dbg_printk("can't read http body");
             body_buf[0] = '\0';
         } else {
-            // is_jsonrpc2_body(body_buf, copy_len);
             bpf_dbg_printk("body is %s", body_buf);
+            is_jsonrpc2_body(body_buf, sizeof(body_buf));
         }
     }
 

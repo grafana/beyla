@@ -22,7 +22,7 @@ import (
 
 const timeout = 5 * time.Second
 
-func TestDecoration(t *testing.T) {
+func TestK8sDecoration(t *testing.T) {
 	inf := &fakeInformer{}
 	store := kube.NewStore(inf, kube.ResourceLabels{
 		"service.name":      []string{"app.kubernetes.io/name"},
@@ -122,7 +122,7 @@ func TestDecoration(t *testing.T) {
 		store.AddProcess(pid)
 	}
 	inputQueue := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
-	dec := metadataDecorator{
+	dec := k8sMetadataDecorator{
 		db: store, clusterName: "the-cluster",
 		input:  inputQueue.Subscribe(),
 		output: msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10)),
@@ -153,6 +153,7 @@ func TestDecoration(t *testing.T) {
 			"k8s.owner.name":      "deployment-12",
 			"k8s.pod.start_time":  "2020-01-02 12:12:56",
 			"k8s.cluster.name":    "the-cluster",
+			"cluster.name":        "the-cluster",
 			"k8s.kind":            "Deployment",
 		}, deco[0].Service.Metadata)
 	})
@@ -175,6 +176,7 @@ func TestDecoration(t *testing.T) {
 			"k8s.pod.uid":         "uid-34",
 			"k8s.pod.start_time":  "2020-01-02 12:34:56",
 			"k8s.cluster.name":    "the-cluster",
+			"cluster.name":        "the-cluster",
 			"k8s.kind":            "ReplicaSet",
 		}, deco[0].Service.Metadata)
 	})
@@ -195,6 +197,7 @@ func TestDecoration(t *testing.T) {
 			"k8s.pod.uid":        "uid-56",
 			"k8s.pod.start_time": "2020-01-02 12:56:56",
 			"k8s.cluster.name":   "the-cluster",
+			"cluster.name":       "the-cluster",
 		}, deco[0].Service.Metadata)
 	})
 	t.Run("user can override service name and ns via labels", func(t *testing.T) {
@@ -214,6 +217,7 @@ func TestDecoration(t *testing.T) {
 			"k8s.pod.uid":        "uid-78",
 			"k8s.pod.start_time": "2020-01-02 12:56:56",
 			"k8s.cluster.name":   "the-cluster",
+			"cluster.name":       "the-cluster",
 			"service.name":       "a-cool-name",
 			"service.namespace":  "a-cool-namespace",
 		}, deco[0].Service.Metadata)
@@ -235,6 +239,7 @@ func TestDecoration(t *testing.T) {
 			"k8s.pod.uid":        "uid-33",
 			"k8s.pod.start_time": "2020-01-02 12:56:56",
 			"k8s.cluster.name":   "the-cluster",
+			"cluster.name":       "the-cluster",
 			"service.name":       "otel-override-name",
 			"service.namespace":  "otel-override-ns",
 		}, deco[0].Service.Metadata)
@@ -256,6 +261,7 @@ func TestDecoration(t *testing.T) {
 			"k8s.pod.uid":        "uid-66",
 			"k8s.pod.start_time": "2020-01-02 12:56:56",
 			"k8s.cluster.name":   "the-cluster",
+			"cluster.name":       "the-cluster",
 			"service.name":       "env-svc-name",
 			"service.namespace":  "env-svc-ns",
 		}, deco[0].Service.Metadata)
@@ -291,6 +297,7 @@ func TestDecoration(t *testing.T) {
 			"k8s.owner.name":      "deployment-12",
 			"k8s.pod.start_time":  "2020-01-02 12:12:56",
 			"k8s.cluster.name":    "the-cluster",
+			"cluster.name":        "the-cluster",
 			"k8s.kind":            "Deployment",
 		}, deco[0].Service.Metadata)
 	})

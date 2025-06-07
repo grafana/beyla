@@ -54,6 +54,7 @@ const (
 	hostNameKey      = "host_name"
 	grafanaHostIDKey = "grafana_host_id"
 	osTypeKey        = "os_type"
+	clusterNameKey   = "cluster_name"
 
 	k8sNamespaceName   = "k8s_namespace_name"
 	k8sPodName         = "k8s_pod_name"
@@ -971,6 +972,7 @@ func labelNamesTargetInfo(kubeEnabled bool, extraMetadataLabelNames []attr.Name)
 	names := []string{
 		hostIDKey,
 		hostNameKey,
+		clusterNameKey,
 		serviceNameKey,
 		serviceNamespaceKey,
 		serviceInstanceKey,
@@ -996,6 +998,7 @@ func (r *metricsReporter) labelValuesTargetInfo(service *svc.Attrs) []string {
 	values := []string{
 		r.hostID,
 		service.HostName,
+		service.Metadata[attr.ClusterName],
 		service.UID.Name,
 		service.UID.Namespace,
 		service.UID.Instance, // app instance ID

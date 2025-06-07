@@ -30,6 +30,10 @@
 #define MAX_TOPIC_NAME_LEN 64
 #define HOST_MAX_LEN 100
 #define SCHEME_MAX_LEN 10
+#define HTTP_BODY_MAX_LEN 64
+#define HTTP_HEADER_MAX_LEN 100
+#define CONTENT_TYPE_KEY_LEN 12 // "content-type" length
+#define HTTP_CONTENT_TYPE_MAX_LEN 16
 
 // Trace of an HTTP call invocation. It is instantiated by the return uprobe and forwarded to the
 // user space through the events ringbuffer.

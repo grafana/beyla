@@ -3,6 +3,9 @@
 #include <bpfcore/vmlinux.h>
 #include <bpfcore/bpf_helpers.h>
 
+// Max needle length supported
+#define MAX_NEEDLE_LEN 16
+
 enum { MAX_INLINE_LEN = 0x3ff };
 
 const char TP[] = "Traceparent: 00-00000000000000000000000000000000-0000000000000000-01\r\n";
@@ -137,27 +140,20 @@ static __always_inline int
 bpf_memstr(const char *haystack, int haystack_len, const char *needle, int needle_len) {
     if (needle_len == 0 || haystack_len < needle_len)
         return -1;
-
-    unsigned char *begin = (unsigned char *)haystack;
-    unsigned char *end = begin + haystack_len;
-    char first = needle[0];
-
-    int i = 0;
-    while (i <= haystack_len - needle_len) {
-        int pos = find_first_pos_of(begin + i, end, first);
-        if (pos == INVALID_POS || (i + pos) > haystack_len - needle_len)
-            break;
-
-        int match = 1;
-        for (int j = 0; j < needle_len; j++) {
-            if (haystack[i + pos + j] != needle[j]) {
-                match = 0;
+    for (int i = 0; i <= haystack_len - needle_len; i++) {
+        int found = 1;
+#pragma unroll
+        // max needle length
+        for (int j = 0; j < MAX_NEEDLE_LEN; j++) {
+            if (j >= needle_len)
+                break;
+            if (haystack[i + j] != needle[j]) {
+                found = 0;
                 break;
             }
         }
-        if (match)
-            return i + pos;
-        i += pos + 1;
+        if (found)
+            return i;
     }
     return -1;
 }

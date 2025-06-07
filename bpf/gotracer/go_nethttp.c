@@ -420,19 +420,6 @@ int beyla_uprobe_ServeHTTPReturns(struct pt_regs *ctx) {
     bpf_dbg_printk("ServeHTTP_ret method: %s", trace->method);
     bpf_dbg_printk("ServeHTTP_ret path: %s", trace->path);
 
-    if (!read_go_str_n("http body",
-                       (void *)invocation->body_addr,
-                       invocation->content_length,
-                       trace->body,
-                       sizeof(trace->body))) {
-        bpf_dbg_printk("can't read http body");
-        trace->body[0] = '\0';
-    }
-
-    __builtin_memcpy(
-        trace->content_type, invocation->content_type, sizeof(invocation->content_type));
-    bpf_dbg_printk("ServeHTTP_ret content_type: %s", trace->content_type);
-
     // submit the completed trace via ringbuffer
     bpf_ringbuf_submit(trace, get_flags());
 
@@ -1252,7 +1239,7 @@ int beyla_uprobe_bodyRead(struct pt_regs *ctx) {
 SEC("uprobe/bodyReadRet")
 int beyla_uprobe_bodyReadReturn(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
-    bpf_dbg_printk("=== uprobe/proc body read goroutine === ");
+    bpf_dbg_printk("=== uprobe/proc body read returns goroutine === ");
     go_addr_key_t g_key = {};
     go_addr_key_from_id(&g_key, goroutine_addr);
 
@@ -1269,15 +1256,11 @@ int beyla_uprobe_bodyReadReturn(struct pt_regs *ctx) {
 
     char body_buf[HTTP_BODY_MAX_LEN] = {};
     if (n > 0 && body_addr) {
-        if (!read_go_str_n("http body", (void *)body_addr, n, body_buf, sizeof(body_buf))) {
-            bpf_dbg_printk("can't read http body");
-            body_buf[0] = '\0';
-        } else {
+        if (read_go_str_n("http body", (void *)body_addr, n, body_buf, sizeof(body_buf))) {
             bpf_dbg_printk("body is %s", body_buf);
             is_jsonrpc2_body(body_buf, sizeof(body_buf));
         }
     }
-
     return 0;
 }
 

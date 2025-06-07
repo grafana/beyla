@@ -66,6 +66,7 @@ func TestInformersCache_MetricsDecoration_HTTP(t *testing.T) {
 		map[string]string{
 			"server_service_namespace": "overridden-testserver-namespace",
 			"k8s_cluster_name":         "my-kube",
+			"cluster_name":             "my-kube",
 			"service_namespace":        "overridden-testserver-namespace",
 			"service_instance_id":      "default.testserver-.+\\.testserver",
 		}))

@@ -144,6 +144,8 @@ int beyla_uprobe_ServeHTTP(struct pt_regs *ctx) {
                                  sizeof(url_ptr),
                                  (void *)(req + go_offset_of(ot, (go_offset){.v = _url_ptr_pos})));
 
+        bpf_dbg_printk("path: %s", invocation.path);
+
         if (res || !url_ptr ||
             !read_go_str("path",
                          url_ptr,
@@ -165,10 +167,6 @@ int beyla_uprobe_ServeHTTP(struct pt_regs *ctx) {
     } else {
         goto done;
     }
-    bpf_dbg_printk("ServeHTTP method: %s, path: %s, content length: %d",
-                   invocation.method,
-                   invocation.path,
-                   invocation.content_length);
 
     // Write event
     if (bpf_map_update_elem(&ongoing_http_server_requests, &g_key, &invocation, BPF_ANY)) {
@@ -416,9 +414,9 @@ int beyla_uprobe_ServeHTTPReturns(struct pt_regs *ctx) {
     trace->response_length = invocation->response_length;
 
     make_tp_string(tp_buf, &invocation->tp);
-    bpf_dbg_printk("ServeHTTP_ret tp: %s", tp_buf);
-    bpf_dbg_printk("ServeHTTP_ret method: %s", trace->method);
-    bpf_dbg_printk("ServeHTTP_ret path: %s", trace->path);
+    bpf_dbg_printk("tp: %s", tp_buf);
+    bpf_dbg_printk("method: %s", trace->method);
+    bpf_dbg_printk("path: %s", trace->path);
 
     // submit the completed trace via ringbuffer
     bpf_ringbuf_submit(trace, get_flags());

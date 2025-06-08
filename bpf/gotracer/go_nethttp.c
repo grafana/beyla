@@ -1268,6 +1268,11 @@ int beyla_uprobe_bodyReadReturn(struct pt_regs *ctx) {
                         extract_jsonrpc2_method(body_buf, sizeof(body_buf), method_buf);
                     if (method_len > 0) {
                         bpf_dbg_printk("JSON-RPC method: %s", method_buf);
+                        read_go_str_n("JSON-RPC method",
+                                      (void *)method_buf,
+                                      method_len,
+                                      invocation->method,
+                                      sizeof(invocation->method));
                     }
                 }
             }

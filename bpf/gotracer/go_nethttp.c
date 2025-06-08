@@ -144,8 +144,6 @@ int beyla_uprobe_ServeHTTP(struct pt_regs *ctx) {
                                  sizeof(url_ptr),
                                  (void *)(req + go_offset_of(ot, (go_offset){.v = _url_ptr_pos})));
 
-        bpf_dbg_printk("path: %s", invocation.path);
-
         if (res || !url_ptr ||
             !read_go_str("path",
                          url_ptr,
@@ -155,6 +153,8 @@ int beyla_uprobe_ServeHTTP(struct pt_regs *ctx) {
             bpf_dbg_printk("can't read http Request.URL.Path");
             goto done;
         }
+
+        bpf_dbg_printk("path: %s", invocation.path);
 
         res = bpf_probe_read(
             &invocation.content_length,

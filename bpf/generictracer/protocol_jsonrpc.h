@@ -1,5 +1,6 @@
 #include <logger/bpf_dbg.h>
 #include <common/tc_common.h>
+#include <common/common.h>
 
 #define JSONRPC_KEY "\"jsonrpc\""
 #define JSONRPC_KEY_LEN 9
@@ -11,8 +12,19 @@
 #define JSONRPC_METHOD_KEY_LEN 8
 #define JSONRPC_METHOD_BUF_SIZE 16
 
-static __always_inline int is_json_content_type(const char *content_type, int content_type_len) {
-    return __builtin_memcmp(content_type, APPLICATION_JSON, APPLICATION_JSON_LEN) == 0;
+// should match application/json, application/json-rpc, application/jsonrequest
+// listed in https://www.jsonrpc.org/historical/json-rpc-over-http.html
+static __always_inline int is_json_content_type(const char *c, int len) {
+    if (len < APPLICATION_JSON_LEN) {
+        return 0;
+    }
+    // Check for "application/json" at the start
+    if (c[0] == 'a' && c[1] == 'p' && c[2] == 'p' && c[3] == 'l' && c[4] == 'i' && c[5] == 'c' &&
+        c[6] == 'a' && c[7] == 't' && c[8] == 'i' && c[9] == 'o' && c[10] == 'n' && c[11] == '/' &&
+        c[12] == 'j' && c[13] == 's' && c[14] == 'o' && c[15] == 'n') {
+        return 1;
+    }
+    return 0;
 }
 
 // Looks for '"jsonrpc":"2.0"'

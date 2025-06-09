@@ -16,6 +16,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	cfgconv "github.com/grafana/beyla/v2/pkg/internal/helpers/config"
+	obicfg "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla"
+
 	"github.com/grafana/beyla/v2/pkg/config"
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	"github.com/grafana/beyla/v2/pkg/export/debug"
@@ -552,6 +555,21 @@ func TestWillUseTC(t *testing.T) {
 	env = envMap{"BEYLA_BPF_CONTEXT_PROPAGATION": "disabled", "BEYLA_NETWORK_SOURCE": "tc", "BEYLA_NETWORK_METRICS": "true"}
 	cfg = loadConfig(t, env)
 	assert.True(t, cfg.willUseTC())
+}
+
+func TestOBIConfigConversion(t *testing.T) {
+	cfg := DefaultConfig
+	cfg.Prometheus.Port = 6060
+	cfg.Metrics.MetricsEndpoint = "http://localhost:4318"
+
+	dst := obicfg.Config{}
+
+	err := cfgconv.Convert(cfg, &dst, map[string]string{
+
+	})
+	require.NoError(t, err)
+	assert.Equal(t, dst.Prometheus.Port, 6060)
+	assert.Equal(t, dst.Metrics.MetricsEndpoint, "http://localhost:4318")
 }
 
 func loadConfig(t *testing.T, env envMap) *Config {

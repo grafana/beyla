@@ -115,7 +115,8 @@ network:
 
 	metaSources := maps.Clone(kube.DefaultResourceLabels)
 	metaSources["service.namespace"] = []string{"huha.com/yeah"}
-
+	// uncache internal field
+	cfg.obi = nil
 	assert.Equal(t, &Config{
 		Exec:             cfg.Exec,
 		Port:             cfg.Port,
@@ -565,6 +566,29 @@ func TestWillUseTC(t *testing.T) {
 	env = envMap{"BEYLA_BPF_CONTEXT_PROPAGATION": "disabled", "BEYLA_NETWORK_SOURCE": "tc", "BEYLA_NETWORK_METRICS": "true"}
 	cfg = loadConfig(t, env)
 	assert.True(t, cfg.willUseTC())
+}
+
+func TestOBIConfigConversion(t *testing.T) {
+	cfg := DefaultConfig
+	cfg.Prometheus.Port = 6060
+	cfg.Metrics.MetricsEndpoint = "http://localhost:4318"
+	cfg.Discovery = servicesextra.BeylaDiscoveryConfig{
+		Instrument: services.GlobDefinitionCriteria{
+			{Path: services.NewGlob(glob.MustCompile("hello*"))},
+			{Path: services.NewGlob(glob.MustCompile("bye*"))},
+		},
+	}
+
+	// TODO: add more fields that you want to verify they are properly converted
+	dst := cfg.AsOBI()
+	assert.Equal(t, dst.Prometheus.Port, 6060)
+	assert.Equal(t, dst.Metrics.MetricsEndpoint, "http://localhost:4318")
+	assert.Equal(t,
+		services.GlobDefinitionCriteria{
+			{Path: services.NewGlob(glob.MustCompile("hello*"))},
+			{Path: services.NewGlob(glob.MustCompile("bye*"))},
+		},
+		dst.Discovery.Instrument)
 }
 
 func loadConfig(t *testing.T, env envMap) *Config {

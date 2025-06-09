@@ -7,21 +7,30 @@ import (
 
 const SkipConversion = "(skip)"
 
+// Convert converts a struct from src to dst, when they have different types but similar structures
+// and names.
+//
+// The conversion is done recursively, so that nested structs are also converted.
+//
+// The conversion is done by matching the field names of the source and destination structs.
+// If the field names do not match, the field name can be specified in the fieldHints map.
+//
+// The fieldHints map is used to specify the field name of the source struct for a field
 func Convert(
 	src, dst any,
 	fieldHints map[string]string,
-) error {
+) {
 	if fieldHints == nil {
 		fieldHints = map[string]string{}
 	}
-	return convert(".", reflect.ValueOf(src), reflect.ValueOf(dst), fieldHints)
+	convert(".", reflect.ValueOf(src), reflect.ValueOf(dst), fieldHints)
 }
 
 func convert(
 	prefix string,
 	src, dst reflect.Value,
 	fieldHints map[string]string,
-) error {
+) {
 	// Handle pointers - make sure dst is a non-nil pointer
 	if dst.Kind() != reflect.Ptr {
 		panic(fmt.Sprintf("%s: destination must be a pointer, got %v", prefix, dst.Kind()))
@@ -36,54 +45,56 @@ func convert(
 	srcValue := src
 	if src.Kind() == reflect.Ptr {
 		if src.IsNil() {
-			return fmt.Errorf("source is nil pointer")
+			panic(prefix + ": source is nil pointer")
 		}
 		srcValue = src.Elem()
 	}
 
 	if srcValue.Kind() == reflect.Struct && dstElem.Kind() == reflect.Struct {
-		return convertStruct(prefix, srcValue, dstElem, fieldHints)
+		convertStruct(prefix, srcValue, dstElem, fieldHints)
+		return
 	}
 
 	if srcValue.Type().AssignableTo(dstElem.Type()) {
 		dstElem.Set(srcValue)
-		return nil
+		return
 	}
 	if srcValue.Type().ConvertibleTo(dstElem.Type()) {
 		dstElem.Set(srcValue.Convert(dstElem.Type()))
-		return nil
+		return
 	}
 
-	return fmt.Errorf("field %s: cannot convert %s to %s", prefix, srcValue.Type(), dstElem.Type())
+	panic(fmt.Sprintf("field %s: cannot convert %s to %s", prefix, srcValue.Type(), dstElem.Type()))
 }
 
 func handleFieldConversion(
 	prefix string,
 	srcField, dstField reflect.Value,
 	fieldHints map[string]string,
-) error {
+) {
 	// Direct assignment if types match
 	if srcField.Type().AssignableTo(dstField.Type()) {
 		dstField.Set(srcField)
-		return nil
+		return
 	}
 
 	// Type conversion if possible
 	if srcField.Type().ConvertibleTo(dstField.Type()) {
 		dstField.Set(srcField.Convert(dstField.Type()))
-		return nil
+		return
 	}
 
 	// For struct fields, we need recursive handling
 	if srcField.Kind() == reflect.Struct && dstField.Kind() == reflect.Struct {
-		return convertStruct(prefix, srcField, dstField, fieldHints)
+		convertStruct(prefix, srcField, dstField, fieldHints)
+		return
 	}
 
 	// For pointer fields, create new instance if needed
 	if srcField.Kind() == reflect.Ptr && dstField.Kind() == reflect.Ptr {
 		if srcField.IsNil() {
 			// Source is nil, nothing to convert
-			return nil
+			return
 		}
 
 		if dstField.IsNil() {
@@ -92,17 +103,18 @@ func handleFieldConversion(
 		}
 
 		// Convert what the pointers point to
-		return convert(prefix, srcField.Elem(), dstField, fieldHints)
+		convert(prefix, srcField.Elem(), dstField, fieldHints)
+		return
 	}
 
-	return fmt.Errorf("field %s: cannot convert %s to %s", prefix, srcField.Type(), dstField.Type())
+	panic(fmt.Sprintf("field %s: cannot convert %s to %s", prefix, srcField.Type(), dstField.Type()))
 }
 
 func convertStruct(
 	prefix string,
 	src, dst reflect.Value,
 	fieldHints map[string]string,
-) error {
+) {
 	srcVals := structFieldValues(src)
 	dstVals := structFieldValues(dst)
 
@@ -112,15 +124,12 @@ func convertStruct(
 			srcName = hint
 		}
 		if sv, ok := srcVals[srcName]; ok {
-			if err := handleFieldConversion(prefix+dn+".", sv, dv, fieldHints); err != nil {
-				return err
-			}
+			handleFieldConversion(prefix+dn+".", sv, dv, fieldHints)
 		} else {
-			return fmt.Errorf("dst field %s: cannot find field %s in source",
-				prefix+dn, srcName)
+			panic(fmt.Sprintf("dst field %s: cannot find field %s in source",
+				prefix+dn, srcName))
 		}
 	}
-	return nil
 }
 
 func structFieldValues(str reflect.Value) map[string]reflect.Value {

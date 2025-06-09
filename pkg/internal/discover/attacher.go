@@ -70,7 +70,8 @@ func (ta *TraceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 	ta.sdkInjector = otelsdk.NewSDKInjector(ta.Cfg)
 	ta.processInstances = maps.MultiCounter[uint64]{}
 	ta.beylaPID = os.Getpid()
-	obiCfg := ta.Cfg.Discovery.AsOBI()
+
+	obiCfg := ta.Cfg.AsOBI().Discovery
 	ta.ebpfEventContext.CommonPIDsFilter = ebpfcommon.CommonPIDsFilter(&obiCfg)
 
 	if err := ta.init(); err != nil {

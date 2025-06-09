@@ -63,26 +63,6 @@ func (d *BeylaDiscoveryConfig) SurveyEnabled() bool {
 	return len(d.Survey) > 0
 }
 
-func (d *BeylaDiscoveryConfig) Validate() error {
-	obiCfg := d.AsOBI()
-	return obiCfg.Validate()
-}
-
-func (d *BeylaDiscoveryConfig) AsOBI() services.DiscoveryConfig {
-	return services.DiscoveryConfig{
-		Services:                        d.Services,
-		ExcludeServices:                 d.ExcludeServices,
-		DefaultExcludeServices:          d.DefaultExcludeServices,
-		Instrument:                      d.Instrument,
-		ExcludeInstrument:               d.ExcludeInstrument,
-		DefaultExcludeInstrument:        d.DefaultExcludeInstrument,
-		PollInterval:                    d.PollInterval,
-		SkipGoSpecificTracers:           d.SkipGoSpecificTracers,
-		BPFPidFilterOff:                 d.BPFPidFilterOff,
-		ExcludeOTelInstrumentedServices: d.ExcludeOTelInstrumentedServices,
-	}
-}
-
 func (d *BeylaDiscoveryConfig) AppDiscoveryEnabled() bool {
 	return len(d.Services) > 0 || len(d.Instrument) > 0
 }

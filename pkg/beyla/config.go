@@ -14,6 +14,7 @@ import (
 
 	"github.com/grafana/beyla/v2/pkg/config"
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
+	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
 	"github.com/grafana/beyla/v2/pkg/export/debug"
 	"github.com/grafana/beyla/v2/pkg/export/instrumentations"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
@@ -243,10 +244,11 @@ func (t TracesReceiverConfig) Enabled() bool {
 // Attributes configures the decoration of some extra attributes that will be
 // added to each span
 type Attributes struct {
-	Kubernetes transform.KubernetesDecorator `yaml:"kubernetes"`
-	InstanceID traces.InstanceIDConfig       `yaml:"instance_id"`
-	Select     attributes.Selection          `yaml:"select"`
-	HostID     HostIDConfig                  `yaml:"host_id"`
+	Kubernetes           transform.KubernetesDecorator `yaml:"kubernetes"`
+	InstanceID           traces.InstanceIDConfig       `yaml:"instance_id"`
+	Select               attributes.Selection          `yaml:"select"`
+	HostID               HostIDConfig                  `yaml:"host_id"`
+	ExtraGroupAttributes map[string][]attr.Name        `yaml:"extra_group_attributes"`
 }
 
 type HostIDConfig struct {

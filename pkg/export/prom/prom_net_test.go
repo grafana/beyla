@@ -37,9 +37,11 @@ func TestMetricsExpiration(t *testing.T) {
 			TTL:                         3 * time.Minute,
 			SpanMetricsServiceCacheSize: 10,
 			Features:                    []string{otel.FeatureNetwork},
-		}, AttributeSelectors: attributes.Selection{
-			attributes.BeylaNetworkFlow.Section: attributes.InclusionLists{
-				Include: []string{"src_name", "dst_name"},
+		}, SelectorCfg: &attributes.SelectorConfig{
+			SelectionCfg: attributes.Selection{
+				attributes.BeylaNetworkFlow.Section: attributes.InclusionLists{
+					Include: []string{"src_name", "dst_name"},
+				},
 			},
 		}}, metrics)(ctx)
 	require.NoError(t, err)

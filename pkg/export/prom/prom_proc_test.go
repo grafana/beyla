@@ -40,11 +40,13 @@ func TestProcPrometheusEndpoint_AggregatedMetrics(t *testing.T) {
 			TTL:                         3 * time.Minute,
 			SpanMetricsServiceCacheSize: 10,
 			Features:                    []string{otel.FeatureApplication, otel.FeatureProcess},
-		}, AttributeSelectors: attributes.Selection{
-			attributes.ProcessCPUTime.Section:        attribs,
-			attributes.ProcessCPUUtilization.Section: attribs,
-			attributes.ProcessDiskIO.Section:         attribs,
-			attributes.ProcessNetIO.Section:          attribs,
+		}, SelectorCfg: &attributes.SelectorConfig{
+			SelectionCfg: attributes.Selection{
+				attributes.ProcessCPUTime.Section:        attribs,
+				attributes.ProcessCPUUtilization.Section: attribs,
+				attributes.ProcessDiskIO.Section:         attribs,
+				attributes.ProcessNetIO.Section:          attribs,
+			},
 		}},
 		procsInput,
 	)(ctx)
@@ -127,11 +129,13 @@ func TestProcPrometheusEndpoint_DisaggregatedMetrics(t *testing.T) {
 			TTL:                         3 * time.Minute,
 			SpanMetricsServiceCacheSize: 10,
 			Features:                    []string{otel.FeatureApplication, otel.FeatureProcess},
-		}, AttributeSelectors: attributes.Selection{
-			attributes.ProcessCPUTime.Section:        attribs,
-			attributes.ProcessCPUUtilization.Section: attribs,
-			attributes.ProcessDiskIO.Section:         attribs,
-			attributes.ProcessNetIO.Section:          attribs,
+		}, SelectorCfg: &attributes.SelectorConfig{
+			SelectionCfg: attributes.Selection{
+				attributes.ProcessCPUTime.Section:        attribs,
+				attributes.ProcessCPUUtilization.Section: attribs,
+				attributes.ProcessDiskIO.Section:         attribs,
+				attributes.ProcessNetIO.Section:          attribs,
+			},
 		}},
 		procsInput,
 	)(ctx)

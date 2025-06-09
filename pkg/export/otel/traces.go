@@ -144,13 +144,16 @@ func (m *TracesConfig) guessProtocol() Protocol {
 }
 
 func makeTracesReceiver(
-	cfg TracesConfig, spanMetricsEnabled bool, ctxInfo *global.ContextInfo, userAttribSelection attributes.Selection,
+	cfg TracesConfig,
+	spanMetricsEnabled bool,
+	ctxInfo *global.ContextInfo,
+	selectorCfg *attributes.SelectorConfig,
 	input *msg.Queue[[]request.Span],
 ) *tracesOTELReceiver {
 	return &tracesOTELReceiver{
 		cfg:                cfg,
 		ctxInfo:            ctxInfo,
-		attributes:         userAttribSelection,
+		selectorCfg:        selectorCfg,
 		is:                 instrumentations.NewInstrumentationSelection(cfg.Instrumentations),
 		spanMetricsEnabled: spanMetricsEnabled,
 		input:              input.Subscribe(),
@@ -160,14 +163,17 @@ func makeTracesReceiver(
 
 // TracesReceiver creates a terminal node that consumes request.Spans and sends OpenTelemetry metrics to the configured consumers.
 func TracesReceiver(
-	ctxInfo *global.ContextInfo, cfg TracesConfig, spanMetricsEnabled bool, userAttribSelection attributes.Selection,
+	ctxInfo *global.ContextInfo,
+	cfg TracesConfig,
+	spanMetricsEnabled bool,
+	selectorCfg *attributes.SelectorConfig,
 	input *msg.Queue[[]request.Span],
 ) swarm.InstanceFunc {
 	return func(_ context.Context) (swarm.RunFunc, error) {
 		if !cfg.Enabled() {
 			return swarm.EmptyRunFunc()
 		}
-		tr := makeTracesReceiver(cfg, spanMetricsEnabled, ctxInfo, userAttribSelection, input)
+		tr := makeTracesReceiver(cfg, spanMetricsEnabled, ctxInfo, selectorCfg, input)
 		return tr.provideLoop, nil
 	}
 }
@@ -175,16 +181,16 @@ func TracesReceiver(
 type tracesOTELReceiver struct {
 	cfg                TracesConfig
 	ctxInfo            *global.ContextInfo
-	attributes         attributes.Selection
+	selectorCfg        *attributes.SelectorConfig
 	is                 instrumentations.InstrumentationSelection
 	spanMetricsEnabled bool
 	attributeCache     *expirable2.LRU[svc.UID, []attribute.KeyValue]
 	input              <-chan []request.Span
 }
 
-func GetUserSelectedAttributes(attrs attributes.Selection) (map[attr.Name]struct{}, error) {
+func GetUserSelectedAttributes(selectorCfg *attributes.SelectorConfig) (map[attr.Name]struct{}, error) {
 	// Get user attributes
-	attribProvider, err := attributes.NewAttrSelector(attributes.GroupTraces, attrs)
+	attribProvider, err := attributes.NewAttrSelector(attributes.GroupTraces, selectorCfg)
 	if err != nil {
 		return nil, err
 	}
@@ -198,7 +204,7 @@ func GetUserSelectedAttributes(attrs attributes.Selection) (map[attr.Name]struct
 }
 
 func (tr *tracesOTELReceiver) getConstantAttributes() (map[attr.Name]struct{}, error) {
-	traceAttrs, err := GetUserSelectedAttributes(tr.attributes)
+	traceAttrs, err := GetUserSelectedAttributes(tr.selectorCfg)
 	if err != nil {
 		return nil, err
 	}

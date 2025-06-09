@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
+	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
 	"github.com/grafana/beyla/v2/pkg/export/instrumentations"
 	"github.com/grafana/beyla/v2/pkg/internal/exec"
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
@@ -44,9 +45,11 @@ func TestNetMetricsExpiration(t *testing.T) {
 				Instrumentations: []string{
 					instrumentations.InstrumentationALL,
 				},
-			}, AttributeSelectors: attributes.Selection{
-				attributes.BeylaNetworkFlow.Section: attributes.InclusionLists{
-					Include: []string{"src.name", "dst.name"},
+			}, SelectorCfg: &attributes.SelectorConfig{
+				SelectionCfg: attributes.Selection{
+					attributes.BeylaNetworkFlow.Section: attributes.InclusionLists{
+						Include: []string{"src.name", "dst.name"},
+					},
 				},
 			},
 		}, metrics)(ctx)
@@ -138,10 +141,15 @@ func TestAppMetricsExpiration_ByMetricAttrs(t *testing.T) {
 	now := syncedClock{now: time.Now()}
 	timeNow = now.Now
 
+	var g attributes.AttrGroups
+	g.Add(attributes.GroupKubernetes)
+
 	metrics := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(20))
 	processEvents := msg.NewQueue[exec.ProcessEvent](msg.ChannelBufferLen(20))
 	otelExporter, err := ReportMetrics(
-		&global.ContextInfo{}, &MetricsConfig{
+		&global.ContextInfo{
+			MetricAttributeGroups: g,
+		}, &MetricsConfig{
 			Interval:          50 * time.Millisecond,
 			CommonEndpoint:    otlp.ServerEndpoint,
 			MetricsProtocol:   ProtocolHTTPProtobuf,
@@ -151,9 +159,14 @@ func TestAppMetricsExpiration_ByMetricAttrs(t *testing.T) {
 			Instrumentations: []string{
 				instrumentations.InstrumentationALL,
 			},
-		}, attributes.Selection{
-			attributes.HTTPServerDuration.Section: attributes.InclusionLists{
-				Include: []string{"url.path"},
+		}, &attributes.SelectorConfig{
+			SelectionCfg: attributes.Selection{
+				attributes.HTTPServerDuration.Section: attributes.InclusionLists{
+					Include: []string{"url.path", "k8s.app.version"},
+				},
+			},
+			ExtraGroupAttributesCfg: map[string][]attr.Name{
+				"k8s_app_meta": {"k8s.app.version"},
 			},
 		}, metrics, processEvents)(ctx)
 	require.NoError(t, err)
@@ -162,7 +175,18 @@ func TestAppMetricsExpiration_ByMetricAttrs(t *testing.T) {
 
 	// WHEN it receives metrics
 	metrics.Send([]request.Span{
-		{Service: svc.Attrs{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeHTTP, Path: "/foo", RequestStart: 100, End: 200},
+		{
+			Service: svc.Attrs{
+				UID: svc.UID{Instance: "foo"},
+				Metadata: map[attr.Name]string{
+					"k8s.app.version": "v0.0.1",
+				},
+			},
+			Type:         request.EventTypeHTTP,
+			Path:         "/foo",
+			RequestStart: 100,
+			End:          200,
+		},
 		{Service: svc.Attrs{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeHTTP, Path: "/bar", RequestStart: 150, End: 175},
 	})
 
@@ -170,6 +194,8 @@ func TestAppMetricsExpiration_ByMetricAttrs(t *testing.T) {
 	test.Eventually(t, timeout, func(t require.TestingT) {
 		metric := readChan(t, otlp.Records(), timeout)
 		assert.Equal(t, "http.server.request.duration", metric.Name)
+		// k8s.app.version attribute is missing because the otel exporter
+		// does not read values from span metadata
 		assert.Equal(t, map[string]string{"url.path": "/foo"}, metric.Attributes)
 		assert.EqualValues(t, 100/float64(time.Second), metric.FloatVal)
 		assert.Equal(t, 1, metric.Count)
@@ -268,9 +294,11 @@ func TestAppMetricsExpiration_BySvcID(t *testing.T) {
 			Instrumentations: []string{
 				instrumentations.InstrumentationALL,
 			},
-		}, attributes.Selection{
-			attributes.HTTPServerDuration.Section: attributes.InclusionLists{
-				Include: []string{"url.path"},
+		}, &attributes.SelectorConfig{
+			SelectionCfg: attributes.Selection{
+				attributes.HTTPServerDuration.Section: attributes.InclusionLists{
+					Include: []string{"url.path"},
+				},
 			},
 		}, metrics, processEvents)(ctx)
 	require.NoError(t, err)

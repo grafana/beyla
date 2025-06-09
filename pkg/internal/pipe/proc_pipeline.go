@@ -9,6 +9,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
+	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/export/prom"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
@@ -39,6 +40,11 @@ func ProcessMetricsSwarmInstancer(
 			return swarm.EmptyRunFunc()
 		}
 
+		selectorCfg := &attributes.SelectorConfig{
+			SelectionCfg:            cfg.Attributes.Select,
+			ExtraGroupAttributesCfg: cfg.Attributes.ExtraGroupAttributes,
+		}
+
 		// communication channel between the process collector and the metrics exporters
 		processCollectStatus := msg.NewQueue[[]*process.Status](msg.ChannelBufferLen(cfg.ChannelBufferLen))
 
@@ -51,15 +57,15 @@ func ProcessMetricsSwarmInstancer(
 		builder.Add(otel.ProcMetricsExporterProvider(
 			ctxInfo,
 			&otel.ProcMetricsConfig{
-				Metrics:            &cfg.Metrics,
-				AttributeSelectors: cfg.Attributes.Select,
+				Metrics:     &cfg.Metrics,
+				SelectorCfg: selectorCfg,
 			},
 			processCollectStatus,
 		))
 		builder.Add(prom.ProcPrometheusEndpoint(ctxInfo,
 			&prom.ProcPrometheusConfig{
-				Metrics:            &cfg.Prometheus,
-				AttributeSelectors: cfg.Attributes.Select,
+				Metrics:     &cfg.Prometheus,
+				SelectorCfg: selectorCfg,
 			},
 			processCollectStatus,
 		))

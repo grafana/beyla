@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 	"go.opentelemetry.io/otel/attribute"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -14,8 +16,6 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/exec"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
-	"github.com/grafana/beyla/v2/pkg/pipe/msg"
-	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 func smlog() *slog.Logger {
@@ -93,22 +93,31 @@ func newSurveyMetricsReporter(
 }
 
 func (smr *SurveyMetricsReporter) watchForProcessEvents(ctx context.Context) {
-	for pe := range smr.processEvents {
-		log := smr.log.With("event_type", pe.Type, "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
-		log.Debug("process event received")
-
-		switch pe.Type {
-		case exec.ProcessEventTerminated:
-			if deleted, origUID := smr.disassociatePIDFromService(pe.File.Pid); deleted {
-				// We only need the UID to look up in the pool, no need to cache
-				// the whole of the attrs in the pidTracker
-				svc := svc.Attrs{UID: origUID}
-				log.Debug("deleting survey_info", "origuid", origUID)
-				smr.deleteSurveyInfo(ctx, &svc)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case pe, ok := <-smr.processEvents:
+			if !ok {
+				return
 			}
-		case exec.ProcessEventCreated:
-			smr.createSurveyInfo(ctx, &pe.File.Service)
-			smr.setupPIDToServiceRelationship(pe.File.Pid, pe.File.Service.UID)
+
+			log := smr.log.With("event_type", pe.Type, "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
+			log.Debug("process event received")
+
+			switch pe.Type {
+			case exec.ProcessEventTerminated:
+				if deleted, origUID := smr.disassociatePIDFromService(pe.File.Pid); deleted {
+					// We only need the UID to look up in the pool, no need to cache
+					// the whole of the attrs in the pidTracker
+					svc := svc.Attrs{UID: origUID}
+					log.Debug("deleting survey_info", "origuid", origUID)
+					smr.deleteSurveyInfo(ctx, &svc)
+				}
+			case exec.ProcessEventCreated:
+				smr.createSurveyInfo(ctx, &pe.File.Service)
+				smr.setupPIDToServiceRelationship(pe.File.Pid, pe.File.Service.UID)
+			}
 		}
 	}
 }

@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
+
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
@@ -12,8 +15,6 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
-	"github.com/grafana/beyla/v2/pkg/pipe/msg"
-	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 // the sub-pipe is enabled only if there is a metrics exporter enabled,

@@ -136,7 +136,9 @@ Install [Grafana Beyla](../../setup/) and download the example [configuration fi
 First, specify the executable to instrument. For a service executable running on port `443`, add the `open_port` property to the YAML document:
 
 ```yaml
-open_port: 443
+discovery:
+  instrument:
+    - open_ports: 443
 ```
 
 Next, specify where the traces and the metrics are sent. If Alloy is running on the local host, it uses port `4318`:

@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gobwas/glob"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -231,6 +232,11 @@ network:
 					Path: services.NewPathRegexp(regexp.MustCompile("(?:^|/)(beyla$|alloy$|otelcol[^/]*$)")),
 				},
 			},
+			DefaultExcludeInstrument: services.GlobDefinitionCriteria{
+				services.GlobAttributes{
+					Path: services.NewGlob(glob.MustCompile("{*beyla,*alloy,*ebpf-instrument,*otelcol,*otelcol-contrib,*otelcol-contrib[!/]*}")),
+				},
+			},
 		},
 	}, cfg)
 }
@@ -417,12 +423,13 @@ routes:
 }
 
 func TestConfig_OtelGoAutoEnv(t *testing.T) {
-	// OTEL_GO_AUTO_TARGET_EXE is an alias to BEYLA_EXECUTABLE_NAME
+	// OTEL_GO_AUTO_TARGET_EXE is an alias to OTEL_EBPF_AUTO_TARGET_EXE
 	// (Compatibility with OpenTelemetry)
-	require.NoError(t, os.Setenv("OTEL_GO_AUTO_TARGET_EXE", "testserver"))
+	t.Setenv("OTEL_GO_AUTO_TARGET_EXE", "*testserver")
 	cfg, err := LoadConfig(bytes.NewReader(nil))
 	require.NoError(t, err)
-	assert.True(t, cfg.Exec.IsSet()) // Exec maps to BEYLA_EXECUTABLE_NAME
+	assert.True(t, cfg.AutoTargetExe.MatchString("/bin/testserver"))
+	assert.False(t, cfg.AutoTargetExe.MatchString("somethingelse"))
 }
 
 func TestConfig_NetworkImplicit(t *testing.T) {

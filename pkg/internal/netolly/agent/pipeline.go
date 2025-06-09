@@ -3,6 +3,9 @@ package agent
 import (
 	"context"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
+
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/export/prom"
@@ -12,8 +15,6 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/flow"
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/transform/cidr"
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/transform/k8s"
-	"github.com/grafana/beyla/v2/pkg/pipe/msg"
-	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 // mockable functions for testing

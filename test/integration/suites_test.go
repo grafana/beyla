@@ -124,6 +124,7 @@ func TestSuite_StaticCompilation(t *testing.T) {
 
 func TestSuite_OldestGoVersion(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-1.17.yml", path.Join(pathOutput, "test-suite-oldest-go.log"))
+	compose.Env = []string{`OTEL_GO_AUTO_TARGET_EXE=*testserver`}
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("RED metrics", testREDMetricsOldHTTP)

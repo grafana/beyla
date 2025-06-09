@@ -486,7 +486,7 @@ func TestInstrumentation_CoexistingWithDeprecatedServices(t *testing.T) {
 	}
 }
 
-func criteriaMatcher_Exclude_Default_Metadata_Helper(t *testing.T, pipeConfig beyla.Config) {
+func criteriaMatcherExcludeDefaultMetadataHelper(t *testing.T, pipeConfig beyla.Config) {
 	k8sSystemNamespaces := []string{
 		"gke-connect", "gke-gmp-system", "gke-managed-cim", "gke-managed-filestorecsi",
 		"gke-managed-metrics-server", "gke-managed-system", "gke-system", "gke-managed-volumepopulator",
@@ -548,7 +548,7 @@ func TestCriteriaMatcher_Exclude_Default_Metadata_Regex(t *testing.T) {
 
 	pipeConfig.Discovery.DefaultExcludeServices = beyla.DefaultConfig.Discovery.DefaultExcludeServices
 
-	criteriaMatcher_Exclude_Default_Metadata_Helper(t, pipeConfig)
+	criteriaMatcherExcludeDefaultMetadataHelper(t, pipeConfig)
 }
 
 func TestCriteriaMatcher_Exclude_Default_Metadata_Glob(t *testing.T) {
@@ -560,5 +560,5 @@ func TestCriteriaMatcher_Exclude_Default_Metadata_Glob(t *testing.T) {
 
 	pipeConfig.Discovery.DefaultExcludeInstrument = beyla.DefaultConfig.Discovery.DefaultExcludeInstrument
 
-	criteriaMatcher_Exclude_Default_Metadata_Helper(t, pipeConfig)
+	criteriaMatcherExcludeDefaultMetadataHelper(t, pipeConfig)
 }

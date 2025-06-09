@@ -19,8 +19,8 @@ data:
     trace_printer: text
     log_level: debug
     discovery:
-      services:
-        - k8s_pod_name: testserver
+      instrument:
+        - k8s_pod_name: testserver*
     routes:
       patterns:
         - /pingpong

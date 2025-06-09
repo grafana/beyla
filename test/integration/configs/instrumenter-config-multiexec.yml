@@ -7,6 +7,8 @@ otel_metrics_export:
 otel_traces_export:
   endpoint: http://jaeger:4318
 discovery:
+  # services section is left in this file for legacy configuration compatibility
+  # users should define the "instrument:" section instead
   services:
     - namespace: just-will-be-ignored
       name: another-service

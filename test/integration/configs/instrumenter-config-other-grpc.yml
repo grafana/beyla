@@ -1,10 +1,10 @@
 discovery:
-  services:
-    - exe_path: backend
+  instrument:
+    - exe_path: "*backend"
       namespace: integration-test
-    - exe_path: worker
+    - exe_path: "*worker"
       namespace: integration-test
-    - exe_path: grpcpinger
+    - exe_path: "*grpcpinger"
       namespace: integration-test
 routes:
   patterns:

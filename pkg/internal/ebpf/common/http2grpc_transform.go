@@ -306,9 +306,6 @@ func http2FromBuffers(parseContext *EBPFParseContext, event *BPFHTTP2Info) (requ
 		bLen = int(event.Len)
 	}
 
-	fmt.Printf("[>] %v\n", event.Data[:bLen])
-	fmt.Printf("[<] %v\n", event.RetData[:])
-
 	framer := byteFramer(event.Data[:bLen])
 	retFramer := byteFramer(event.RetData[:])
 

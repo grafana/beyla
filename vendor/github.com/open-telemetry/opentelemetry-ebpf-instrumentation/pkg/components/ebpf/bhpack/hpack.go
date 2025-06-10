@@ -7,7 +7,6 @@
 //
 // See http://tools.ietf.org/html/draft-ietf-httpbis-header-compression-09
 
-// nolint
 package bhpack
 
 import (
@@ -264,7 +263,7 @@ func (d *Decoder) Write(p []byte) (n int, err error) {
 
 	for len(d.buf) > 0 {
 		err = d.parseHeaderFieldRepr()
-		if err == errNeedMore {
+		if errors.Is(err, errNeedMore) {
 			// Extra paranoia, making sure saveBuf won't
 			// get too large. All the varint and string
 			// reading code earlier should already catch

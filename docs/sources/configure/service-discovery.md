@@ -18,8 +18,8 @@ In some scenarios, Beyla instruments many services. For example, as a [Kubernete
 |------------------------------------------------------------------------------------| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- | ----------------------------------------------------- |
 | `instrument`                                                                       | Specify different selection criteria for different services, and override their reported name or namespace. Refer to the [discovery services](#discovery-services) section for details. .                                                                                                     | list of objects | (unset)                                               |
 | `survey`                                                                           | specifying different selection criteria for Beyla survey mode. Refer to the [survey mode](#survey-mode) section for details.                                                                                                                                                                  | List of objects | (unset)                                               |
-| `exclude_instrument`                                                               | Specify selection criteria for excluding services from being instrumented. Useful for avoiding instrumentation of services typically found in observability environments. Refer to the [exclude services](#exclude-services) section for details. .                                           | list of objects | (unset)                                               |
-| `default_exclude_instrument`                                                       | Disables instrumentation of Beyla itself, Grafana Alloy, and the OpenTelemetry Collector. Set to empty to allow Beyla to instrument itself and these other components. Refer to the [default exclude services](#default-exclude-services) section for details. .                              | list of objects | Path: `(?:^ | \/)(beyla$ | alloy$ | otelcol[^\/]\*$)` |
+| `exclude_instrument`                                                               | Specify selection criteria for excluding services from being instrumented. Useful for avoiding instrumentation of services typically found in observability environments. Refer to the [exclude services from instrumentation](#exclude-services-from-instrumentation) section for details. .                                           | list of objects | (unset)                                               |
+| `default_exclude_instrument`                                                       | Disables instrumentation of Beyla itself, Grafana Alloy, and the OpenTelemetry Collector. Set to empty to allow Beyla to instrument itself and these other components. Refer to the [default exclude services from instrumentation](#default-exclude-services-from-instrumentation) section for details. .                              | list of objects | Path: `(?:^ | \/)(beyla$ | alloy$ | otelcol[^\/]\*$)` and certain Kubernetes system namespaces |
 | `skip_go_specific_tracers`<br>`BEYLA_SKIP_GO_SPECIFIC_TRACERS`                     | Disables the detection of Go specifics when the **ebpf** tracer inspects executables to be instrumented. The tracer falls back to using generic instrumentation, which is generally less efficient. Refer to the [skip go specific tracers](#skip-go-specific-tracers) section for details. . | boolean         | false                                                 |
 | `exclude_otel_instrumented_services`<br>`BEYLA_EXCLUDE_OTEL_INSTRUMENTED_SERVICES` | Disables Beyla instrumentation of services already instrumented with OpenTelemetry. Refer to the [exclude instrumented services](#exclude-otel-instrumented-services) section for details.                                                                                                    | boolean         | true                                                  |
 
@@ -195,9 +195,18 @@ This option helps you avoid instrumenting services typically found in observabil
 
 ## Default exclude services from instrumentation
 
-The `default_exclude_instrument` section disables instrumentation of Beyla itself (self-instrumentation), as well as Grafana Alloy and the OpenTelemetry Collector. Set to empty to allow Beyla to instrument itself as well as these other components.
+The `default_exclude_instrument` section disables instrumentation of Beyla itself (self-instrumentation), as well as Grafana Alloy and the OpenTelemetry Collector. 
+It also disables instrumentation of various Kubernetes system namespaces to reduce the overall cost of metric generation. The following section contains all excluded
+components:
+- Excluded services by `exe_path`: `beyla`, `alloy`, `otelcol*`.
+- Excluded services by `k8s_namespace`: `kube-system`, `kube-node-lease`, `local-path-storage`, `grafana-alloy`, `cert-manager`, `monitoring`, 
+  `gke-connect`, `gke-gmp-system`, `gke-managed-cim`, `gke-managed-filestorecsi`, `gke-managed-metrics-server`, `gke-managed-system`, `gke-system`, `gke-managed-volumepopulator`,
+  `gatekeeper-system`.
 
-Note: to enable such self-instrumentation, you still need to include them in the `instrument` section.
+Change this option to allow Beyla to instrument itself or some of the other excluded components.
+
+Note: to enable such self-instrumentation, you still need to include them in the `instrument` section, or these components need to be
+a part of a encompassing inclusion criteria.
 
 ## Skip go specific tracers
 

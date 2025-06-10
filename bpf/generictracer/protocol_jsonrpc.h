@@ -15,7 +15,7 @@ enum { JSONRPC_METHOD_BUF_SIZE = 16 };
 
 // should match application/json, application/json-rpc, application/jsonrequest
 // listed in https://www.jsonrpc.org/historical/json-rpc-over-http.html
-static __always_inline u32 is_json_content_type(const char *c, u32 len) {
+static __always_inline u8 is_json_content_type(const char *c, u32 len) {
     if (len < k_application_json_len) {
         return 0;
     }
@@ -28,6 +28,21 @@ static __always_inline u32 is_json_content_type(const char *c, u32 len) {
     return 0;
 }
 
+// ref: https://en.cppreference.com/w/c/string/byte/isspace
+static __always_inline u8 bpf_isspace(char c) {
+    return (c == ' ' || c == '\f' || c == '\n' || c == '\r' || c == '\t' || c == '\v');
+}
+
+// Returns the offset of the next JSON value after skipping whitespace and colon.
+// If not found, returns body_len.
+static __always_inline u32 json_value_offset(const char *body, u32 body_len, u32 start_pos) {
+    u32 pos = start_pos;
+    while (pos < body_len && (bpf_isspace(body[pos]) || body[pos] == ':')) {
+        pos++;
+    }
+    return pos;
+}
+
 // Looks for '"jsonrpc":"2.0"'
 static __always_inline u32 is_jsonrpc2_body(const char *body, u32 body_len) {
     u32 key_pos = bpf_memstr(body, body_len, k_jsonrpc_key, k_jsonrpc_key_len);
@@ -36,20 +51,15 @@ static __always_inline u32 is_jsonrpc2_body(const char *body, u32 body_len) {
 
     bpf_dbg_printk("Found JSON-RPC 2.0 key");
 
-    // Look for value after the key (skip whitespace and colon)
-    u32 val_search_start = key_pos + k_jsonrpc_key_len;
-    // Skip whitespace and colon
-    while (val_search_start < body_len &&
-           (body[val_search_start] == ' ' || body[val_search_start] == '\t' ||
-            body[val_search_start] == '\n' || body[val_search_start] == ':')) {
-        val_search_start++;
-    }
-    if (val_search_start >= body_len)
+    u32 val_search_start = json_value_offset(body, body_len, key_pos + k_jsonrpc_key_len);
+    // The jsonrpc value should be a string
+    if (val_search_start >= body_len || body[val_search_start] != '"')
         return 0;
 
     u32 val_pos = bpf_memstr(
         body + val_search_start, body_len - val_search_start, k_jsonrpc_val, k_jsonrpc_val_len);
-    if (val_pos == INVALID_POS)
+    // The jsonrpc value should start immediately after the opening quote
+    if (val_pos == INVALID_POS || val_pos != 0)
         return 0;
 
     bpf_dbg_printk("Found JSON-RPC 2.0 value");
@@ -69,14 +79,8 @@ static __always_inline u32 extract_jsonrpc2_method(const char *body,
 
     bpf_dbg_printk("Found JSON-RPC method key");
 
-    // Move past the key
-    u32 val_search_start = key_pos + k_method_key_len;
-    // Skip whitespace and colon
-    while (val_search_start < body_len &&
-           (body[val_search_start] == ' ' || body[val_search_start] == '\t' ||
-            body[val_search_start] == '\n' || body[val_search_start] == ':')) {
-        val_search_start++;
-    }
+    u32 val_search_start = json_value_offset(body, body_len, key_pos + k_method_key_len);
+    // method value should be a string
     if (val_search_start >= body_len || body[val_search_start] != '"')
         return 0;
 

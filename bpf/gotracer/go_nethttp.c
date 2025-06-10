@@ -309,30 +309,30 @@ int beyla_uprobe_readContinuedLineSliceReturns(struct pt_regs *ctx) {
     int content_type_header_length = content_type_value_start + HTTP_CONTENT_TYPE_MAX_LEN;
 
     connection_info_t *existing = bpf_map_lookup_elem(&ongoing_server_connections, &g_key);
-    if (existing) {
-        server_http_func_invocation_t *inv =
-            bpf_map_lookup_elem(&ongoing_http_server_requests, &g_key);
+    if (!existing) {
+        return 0;
+    }
+    server_http_func_invocation_t *inv = bpf_map_lookup_elem(&ongoing_http_server_requests, &g_key);
 
-        if (len >= w3c_header_length &&
-            !bpf_memicmp((const char *)temp, "traceparent: ", w3c_value_start)) {
-            u8 *traceparent_start = temp + w3c_value_start;
-            if (inv) {
-                update_traceparent(inv, traceparent_start);
-            } else {
-                server_http_func_invocation_t minimal_inv = {};
-                update_traceparent(&minimal_inv, traceparent_start);
-                bpf_map_update_elem(&ongoing_http_server_requests, &g_key, &minimal_inv, BPF_ANY);
-            }
-        } else if (len >= content_type_header_length &&
-                   !bpf_memicmp((const char *)temp, "content-type: ", content_type_value_start)) {
-            u8 *content_type_start = temp + content_type_value_start;
-            if (inv) {
-                update_content_type(inv, content_type_start);
-            } else {
-                server_http_func_invocation_t minimal_inv = {};
-                update_content_type(&minimal_inv, content_type_start);
-                bpf_map_update_elem(&ongoing_http_server_requests, &g_key, &minimal_inv, BPF_ANY);
-            }
+    if (len >= w3c_header_length &&
+        !bpf_memicmp((const char *)temp, "traceparent: ", w3c_value_start)) {
+        u8 *traceparent_start = temp + w3c_value_start;
+        if (inv) {
+            update_traceparent(inv, traceparent_start);
+        } else {
+            server_http_func_invocation_t minimal_inv = {};
+            update_traceparent(&minimal_inv, traceparent_start);
+            bpf_map_update_elem(&ongoing_http_server_requests, &g_key, &minimal_inv, BPF_ANY);
+        }
+    } else if (len >= content_type_header_length &&
+               !bpf_memicmp((const char *)temp, "content-type: ", content_type_value_start)) {
+        u8 *content_type_start = temp + content_type_value_start;
+        if (inv) {
+            update_content_type(inv, content_type_start);
+        } else {
+            server_http_func_invocation_t minimal_inv = {};
+            update_content_type(&minimal_inv, content_type_start);
+            bpf_map_update_elem(&ongoing_http_server_requests, &g_key, &minimal_inv, BPF_ANY);
         }
     }
 

@@ -2,20 +2,21 @@
 #include <common/tc_common.h>
 #include <common/common.h>
 
-#define JSONRPC_KEY "\"jsonrpc\""
-#define JSONRPC_KEY_LEN 9
-#define JSONRPC_VAL "\"2.0\""
-#define JSONRPC_VAL_LEN 5
-#define APPLICATION_JSON "application/json"
-#define APPLICATION_JSON_LEN 16
-#define JSONRPC_METHOD_KEY "\"method\""
-#define JSONRPC_METHOD_KEY_LEN 8
-#define JSONRPC_METHOD_BUF_SIZE 16
+static const char k_jsonrpc_key[] = "\"jsonrpc\"";
+static const u32 k_jsonrpc_key_len = sizeof(k_jsonrpc_key) - 1;
+static const char k_jsonrpc_val[] = "\"2.0\"";
+static const u32 k_jsonrpc_val_len = sizeof(k_jsonrpc_val) - 1;
+static const char k_application_json[] = "application/json";
+static const u32 k_application_json_len = sizeof(k_application_json) - 1;
+static const char k_method_key[] = "\"method\"";
+static const u32 k_method_key_len = sizeof(k_method_key) - 1;
+
+enum { JSONRPC_METHOD_BUF_SIZE = 16 };
 
 // should match application/json, application/json-rpc, application/jsonrequest
 // listed in https://www.jsonrpc.org/historical/json-rpc-over-http.html
-static __always_inline int is_json_content_type(const char *c, int len) {
-    if (len < APPLICATION_JSON_LEN) {
+static __always_inline u32 is_json_content_type(const char *c, u32 len) {
+    if (len < k_application_json_len) {
         return 0;
     }
     // Check for "application/json" at the start
@@ -28,15 +29,15 @@ static __always_inline int is_json_content_type(const char *c, int len) {
 }
 
 // Looks for '"jsonrpc":"2.0"'
-static __always_inline int is_jsonrpc2_body(const char *body, int body_len) {
-    int key_pos = bpf_memstr(body, body_len, JSONRPC_KEY, JSONRPC_KEY_LEN);
-    if (key_pos < 0)
+static __always_inline u32 is_jsonrpc2_body(const char *body, u32 body_len) {
+    u32 key_pos = bpf_memstr(body, body_len, k_jsonrpc_key, k_jsonrpc_key_len);
+    if (key_pos == INVALID_POS)
         return 0;
 
     bpf_dbg_printk("Found JSON-RPC 2.0 key");
 
     // Look for value after the key (skip whitespace and colon)
-    int val_search_start = key_pos + JSONRPC_KEY_LEN;
+    u32 val_search_start = key_pos + k_jsonrpc_key_len;
     // Skip whitespace and colon
     while (val_search_start < body_len &&
            (body[val_search_start] == ' ' || body[val_search_start] == '\t' ||
@@ -46,9 +47,9 @@ static __always_inline int is_jsonrpc2_body(const char *body, int body_len) {
     if (val_search_start >= body_len)
         return 0;
 
-    int val_pos = bpf_memstr(
-        body + val_search_start, body_len - val_search_start, JSONRPC_VAL, JSONRPC_VAL_LEN);
-    if (val_pos < 0)
+    u32 val_pos = bpf_memstr(
+        body + val_search_start, body_len - val_search_start, k_jsonrpc_val, k_jsonrpc_val_len);
+    if (val_pos == INVALID_POS)
         return 0;
 
     bpf_dbg_printk("Found JSON-RPC 2.0 value");
@@ -59,16 +60,17 @@ static __always_inline int is_jsonrpc2_body(const char *body, int body_len) {
 // Extracts the value of the "method" key from a JSON-RPC 2.0 body.
 // Returns the length of the method value, or 0 if not found or error.
 // method_buf must be at least method_buf_len bytes.
-static __always_inline int
-extract_jsonrpc2_method(const char *body, int body_len, char *method_buf) {
-    int key_pos = bpf_memstr(body, body_len, JSONRPC_METHOD_KEY, JSONRPC_METHOD_KEY_LEN);
-    if (key_pos < 0)
+static __always_inline u32 extract_jsonrpc2_method(const char *body,
+                                                   u32 body_len,
+                                                   char *method_buf) {
+    u32 key_pos = bpf_memstr(body, body_len, k_method_key, k_method_key_len);
+    if (key_pos == INVALID_POS)
         return 0;
 
     bpf_dbg_printk("Found JSON-RPC method key");
 
     // Move past the key
-    int val_search_start = key_pos + JSONRPC_METHOD_KEY_LEN;
+    u32 val_search_start = key_pos + k_method_key_len;
     // Skip whitespace and colon
     while (val_search_start < body_len &&
            (body[val_search_start] == ' ' || body[val_search_start] == '\t' ||
@@ -81,15 +83,15 @@ extract_jsonrpc2_method(const char *body, int body_len, char *method_buf) {
     bpf_dbg_printk("Found JSON-RPC method value opening quote");
 
     // Start of the value (after the opening quote)
-    int value_start = val_search_start + 1;
-    int value_end = value_start;
+    u32 value_start = val_search_start + 1;
+    u32 value_end = value_start;
     // Find the closing quote, or stop at end of buffer
     while (value_end < body_len && body[value_end] != '"') {
         value_end++;
     }
     // If closing quote not found, value_end will be body_len
 
-    int value_len = value_end - value_start;
+    u32 value_len = value_end - value_start;
     if (value_len <= 0)
         return 0;
     if (value_len >= JSONRPC_METHOD_BUF_SIZE)
@@ -97,7 +99,7 @@ extract_jsonrpc2_method(const char *body, int body_len, char *method_buf) {
 
     // TODO: make it unrolled for performance
     // #pragma unroll
-    for (int i = 0; i < JSONRPC_METHOD_BUF_SIZE; i++) {
+    for (u32 i = 0; i < JSONRPC_METHOD_BUF_SIZE; i++) {
         if (i >= value_len)
             break;
         method_buf[i] = body[value_start + i];

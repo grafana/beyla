@@ -1262,7 +1262,7 @@ int beyla_uprobe_bodyReadReturn(struct pt_regs *ctx) {
                 bpf_dbg_printk("body is %s", body_buf);
                 if (is_jsonrpc2_body(body_buf, sizeof(body_buf))) {
                     char method_buf[JSONRPC_METHOD_BUF_SIZE] = {};
-                    int method_len =
+                    u32 method_len =
                         extract_jsonrpc2_method(body_buf, sizeof(body_buf), method_buf);
                     if (method_len > 0) {
                         bpf_dbg_printk("JSON-RPC method: %s", method_buf);

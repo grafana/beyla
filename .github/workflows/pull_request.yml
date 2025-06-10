@@ -32,10 +32,14 @@ jobs:
           go-version: ${{ matrix.go }}
       - name: Run verification and unit tests
         run: make docker-generate verify cov-exclude-generated
+      - id: get-codecov-token
+        uses: grafana/shared-workflows/actions/get-vault-secrets@get-vault-secrets/v1.2.1
+        with:
+          # Secrets placed in the ci/repo/grafana/beyla/codecov path in Vault
+          repo_secrets: |
+            CODECOV_TOKEN=codecov:token
       - name: Report coverage
         uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         with:
           file: ./testoutput/cover.txt
           flags: unittests

@@ -14,7 +14,6 @@ jobs:
       cr_configfile: .github/configs/cr.yml
       ct_configfile: .github/configs/ct.yml
     secrets:
-      # values are created in https://github.com/organizations/grafana/settings/apps/grafana-beyla-release
-      # and copied to a repository secret
-      github_app_id: ${{ secrets.BEYLA_RELEASE_APP_ID }}
-      github_app_pem: ${{ secrets.BEYLA_RELEASE_APP_PEM }}
+      # "mimir-helm-release" is a GitHub app, that has permissions to push to grafana/helm-charts.
+      # We created there a private key that seat in the Beyla repo's vault (ref https://github.com/grafana/shared-workflows/tree/main/actions/get-vault-secrets).
+      vault_repo_secret_name: beyla-helm-release

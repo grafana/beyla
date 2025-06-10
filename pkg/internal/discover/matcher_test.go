@@ -485,3 +485,80 @@ func TestInstrumentation_CoexistingWithDeprecatedServices(t *testing.T) {
 		})
 	}
 }
+
+func criteriaMatcherExcludeDefaultMetadataHelper(t *testing.T, pipeConfig beyla.Config) {
+	k8sSystemNamespaces := []string{
+		"gke-connect", "gke-gmp-system", "gke-managed-cim", "gke-managed-filestorecsi",
+		"gke-managed-metrics-server", "gke-managed-system", "gke-system", "gke-managed-volumepopulator",
+		"gatekeeper-system", "kube-system", "kube-node-lease", "local-path-storage", "grafana-alloy",
+		"cert-manager", "monitoring",
+	}
+
+	k8sAllowedNamespaces := []string{"default", "random-service-namespace"}
+
+	discoveredProcesses := msg.NewQueue[[]Event[processAttrs]](msg.ChannelBufferLen(10))
+	filteredProcessesQu := msg.NewQueue[[]Event[ProcessMatch]](msg.ChannelBufferLen(10))
+	filteredProcesses := filteredProcessesQu.Subscribe()
+	matcherFunc, err := CriteriaMatcherProvider(&pipeConfig, discoveredProcesses, filteredProcessesQu)(t.Context())
+	require.NoError(t, err)
+	go matcherFunc(t.Context())
+	defer filteredProcessesQu.Close()
+
+	processInfo = func(pp processAttrs) (*services.ProcessInfo, error) {
+		return &services.ProcessInfo{Pid: int32(pp.pid), ExePath: "/something/something", PPid: 1}, nil
+	}
+
+	pid := 1
+	events := []Event[processAttrs]{}
+
+	for _, ns := range k8sSystemNamespaces {
+		events = append(events,
+			Event[processAttrs]{Type: EventCreated, Obj: processAttrs{pid: PID(pid), metadata: map[string]string{"k8s_namespace": ns}}},
+		)
+		pid++
+	}
+
+	savePid := pid
+
+	for _, ns := range k8sAllowedNamespaces {
+		events = append(events,
+			Event[processAttrs]{Type: EventCreated, Obj: processAttrs{pid: PID(pid), metadata: map[string]string{"k8s_namespace": ns}}},
+		)
+		pid++
+	}
+
+	discoveredProcesses.Send(events)
+
+	matches := testutil.ReadChannel(t, filteredProcesses, 1000*testTimeout)
+	require.Len(t, matches, 2)
+	m := matches[0]
+	assert.Equal(t, EventCreated, m.Type)
+	assert.Equal(t, services.ProcessInfo{Pid: int32(savePid), PPid: 1, ExePath: "/something/something"}, *m.Obj.Process)
+	m = matches[1]
+	assert.Equal(t, EventCreated, m.Type)
+	assert.Equal(t, services.ProcessInfo{Pid: int32(savePid + 1), PPid: 1, ExePath: "/something/something"}, *m.Obj.Process)
+}
+
+func TestCriteriaMatcher_Exclude_Default_Metadata_Regex(t *testing.T) {
+	pipeConfig := beyla.Config{}
+	require.NoError(t, yaml.Unmarshal([]byte(`discovery:
+  services:
+  - k8s_namespace: .
+`), &pipeConfig))
+
+	pipeConfig.Discovery.DefaultExcludeServices = beyla.DefaultConfig.Discovery.DefaultExcludeServices
+
+	criteriaMatcherExcludeDefaultMetadataHelper(t, pipeConfig)
+}
+
+func TestCriteriaMatcher_Exclude_Default_Metadata_Glob(t *testing.T) {
+	pipeConfig := beyla.Config{}
+	require.NoError(t, yaml.Unmarshal([]byte(`discovery:
+  instrument:
+  - k8s_namespace: "*"
+`), &pipeConfig))
+
+	pipeConfig.Discovery.DefaultExcludeInstrument = beyla.DefaultConfig.Discovery.DefaultExcludeInstrument
+
+	criteriaMatcherExcludeDefaultMetadataHelper(t, pipeConfig)
+}

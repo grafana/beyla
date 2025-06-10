@@ -231,10 +231,16 @@ network:
 				services.RegexSelector{
 					Path: services.NewPathRegexp(regexp.MustCompile("(?:^|/)(beyla$|alloy$|otelcol[^/]*$)")),
 				},
+				services.RegexSelector{
+					Metadata: map[string]*services.RegexpAttr{"k8s_namespace": &k8sDefaultNamespacesRegex},
+				},
 			},
 			DefaultExcludeInstrument: services.GlobDefinitionCriteria{
 				services.GlobAttributes{
 					Path: services.NewGlob(glob.MustCompile("{*beyla,*alloy,*ebpf-instrument,*otelcol,*otelcol-contrib,*otelcol-contrib[!/]*}")),
+				},
+				services.GlobAttributes{
+					Metadata: map[string]*services.GlobAttr{"k8s_namespace": &k8sDefaultNamespacesGlob},
 				},
 			},
 		},

@@ -88,7 +88,7 @@ func (p *BPFLogger) processLogEvent(_ *ebpfcommon.EBPFParseContext, _ *config.EB
 }
 
 func readString(data []uint8) string {
-	l := bytes.IndexByte([]byte(data), 0)
+	l := bytes.IndexByte(data, 0)
 	if l < 0 {
 		l = len(data)
 	}

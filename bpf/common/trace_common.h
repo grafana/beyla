@@ -193,7 +193,7 @@ static __always_inline const tp_info_pid_t *find_parent_trace(const pid_connecti
         return bpf_map_lookup_elem(&server_traces, &conn_t_key->t_key);
     }
 
-    return NULL;
+    return 0;
 }
 
 // Traceparent format: Traceparent: ver (2 chars) - trace_id (32 chars) - span_id (16 chars) - flags (2 chars)

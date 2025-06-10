@@ -26,7 +26,7 @@ static __always_inline void set_active_ssl_connection(ssl_pid_connection_info_t 
 static __always_inline void *unconnected_ssl_from_args(u64 id, u8 direction) {
     ssl_args_t *ssl_args = 0;
 
-    // Checks if it's sandwiched between read or write uprobe/uretprobe
+    // Checks if it's sandwitched between read or write uprobe/uretprobe
     if (direction == TCP_RECV) {
         ssl_args = bpf_map_lookup_elem(&active_ssl_read_args, &id);
     } else if (direction == TCP_SEND) {

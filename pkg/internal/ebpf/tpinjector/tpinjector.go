@@ -8,6 +8,7 @@ import (
 	"log/slog"
 
 	"github.com/cilium/ebpf"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
@@ -15,7 +16,6 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/goexec"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
-	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/tpinjector/tpinjector.c -- -I../../../../bpf -I../../../../bpf
@@ -74,10 +74,10 @@ func (p *Tracer) Constants() map[string]any {
 	// processes which we monitor. We filter more accurately in the userspace, but
 	// for performance reasons we enable the PID based filtering in eBPF.
 	// This must match httpfltr.go, otherwise we get partial events in userspace.
-	if !p.cfg.Discovery.SystemWide && !p.cfg.Discovery.BPFPidFilterOff {
-		m["filter_pids"] = int32(1)
-	} else {
+	if p.cfg.Discovery.BPFPidFilterOff {
 		m["filter_pids"] = int32(0)
+	} else {
+		m["filter_pids"] = int32(1)
 	}
 
 	return m
@@ -144,7 +144,7 @@ func (p *Tracer) AlreadyInstrumentedLib(uint64) bool {
 	return false
 }
 
-func (p *Tracer) Run(ctx context.Context, _ *msg.Queue[[]request.Span]) {
+func (p *Tracer) Run(ctx context.Context, _ *ebpfcommon.EBPFEventContext, _ *msg.Queue[[]request.Span]) {
 	p.log.Debug("tpinjector started")
 
 	<-ctx.Done()

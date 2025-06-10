@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
@@ -30,8 +32,6 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
-	"github.com/grafana/beyla/v2/pkg/pipe/msg"
-	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 func mlog() *slog.Logger {
@@ -227,17 +227,14 @@ func (m *MetricsConfig) Enabled() bool {
 // MetricsReporter implements the graph node that receives request.Span
 // instances and forwards them as OTEL metrics.
 type MetricsReporter struct {
-	ctx               context.Context
-	cfg               *MetricsConfig
-	surveyInfoEnabled bool
-	hostID            string
-	attributes        *attributes.AttrSelector
-	exporter          sdkmetric.Exporter
-	reporters         ReporterPool[*svc.Attrs, *Metrics]
-	systemReporter    Metrics
-	serviceMap        map[svc.UID][]attribute.KeyValue
-	pidTracker        PidServiceTracker
-	is                instrumentations.InstrumentationSelection
+	ctx        context.Context
+	cfg        *MetricsConfig
+	hostID     string
+	attributes *attributes.AttrSelector
+	exporter   sdkmetric.Exporter
+	reporters  ReporterPool[*svc.Attrs, *Metrics]
+	pidTracker PidServiceTracker
+	is         instrumentations.InstrumentationSelection
 
 	// user-selected fields for each of the reported metrics
 	attrHTTPDuration           []attributes.Field[*request.Span, attribute.KeyValue]
@@ -292,7 +289,6 @@ type Metrics struct {
 	serviceGraphTotal            *Expirer[*request.Span, instrument.Int64Counter, int64]
 	targetInfo                   instrument.Int64UpDownCounter
 	tracesTargetInfo             instrument.Int64UpDownCounter
-	surveyInfo                   instrument.Int64UpDownCounter
 	gpuKernelCallsTotal          *Expirer[*request.Span, instrument.Int64Counter, int64]
 	gpuMemoryAllocsTotal         *Expirer[*request.Span, instrument.Int64Counter, int64]
 	gpuKernelGridSize            *Expirer[*request.Span, instrument.Float64Histogram, float64]
@@ -302,8 +298,7 @@ type Metrics struct {
 func ReportMetrics(
 	ctxInfo *global.ContextInfo,
 	cfg *MetricsConfig,
-	surveyInfoEnabled bool,
-	userAttribSelection attributes.Selection,
+	selectorCfg *attributes.SelectorConfig,
 	input *msg.Queue[[]request.Span],
 	processEventCh *msg.Queue[exec.ProcessEvent],
 ) swarm.InstanceFunc {
@@ -313,7 +308,14 @@ func ReportMetrics(
 		}
 		SetupInternalOTELSDKLogger(cfg.SDKLogLevel)
 
-		mr, err := newMetricsReporter(ctx, ctxInfo, cfg, surveyInfoEnabled, userAttribSelection, input, processEventCh)
+		mr, err := newMetricsReporter(
+			ctx,
+			ctxInfo,
+			cfg,
+			selectorCfg,
+			input,
+			processEventCh,
+		)
 		if err != nil {
 			return nil, fmt.Errorf("instantiating OTEL metrics reporter: %w", err)
 		}
@@ -335,14 +337,13 @@ func newMetricsReporter(
 	ctx context.Context,
 	ctxInfo *global.ContextInfo,
 	cfg *MetricsConfig,
-	surveyInfoEnabled bool,
-	userAttribSelection attributes.Selection,
+	selectorCfg *attributes.SelectorConfig,
 	input *msg.Queue[[]request.Span],
 	processEventCh *msg.Queue[exec.ProcessEvent],
 ) (*MetricsReporter, error) {
 	log := mlog()
 
-	attribProvider, err := attributes.NewAttrSelector(ctxInfo.MetricAttributeGroups, userAttribSelection)
+	attribProvider, err := attributes.NewAttrSelector(ctxInfo.MetricAttributeGroups, selectorCfg)
 	if err != nil {
 		return nil, fmt.Errorf("attributes select: %w", err)
 	}
@@ -352,14 +353,14 @@ func newMetricsReporter(
 	mr := MetricsReporter{
 		ctx:                 ctx,
 		cfg:                 cfg,
-		surveyInfoEnabled:   surveyInfoEnabled,
 		is:                  is,
 		attributes:          attribProvider,
 		hostID:              ctxInfo.HostID,
 		input:               input.Subscribe(),
 		processEvents:       processEventCh.Subscribe(),
-		userAttribSelection: userAttribSelection,
+		userAttribSelection: selectorCfg.SelectionCfg,
 	}
+
 	// initialize attribute getters
 	if is.HTTPEnabled() {
 		mr.attrHTTPDuration = attributes.OpenTelemetryGetters(
@@ -375,6 +376,7 @@ func newMetricsReporter(
 		mr.attrHTTPClientResponseSize = attributes.OpenTelemetryGetters(
 			request.SpanOTELGetters, mr.attributes.For(attributes.HTTPClientResponseSize))
 	}
+
 	if is.GRPCEnabled() {
 		mr.attrGRPCServer = attributes.OpenTelemetryGetters(
 			request.SpanOTELGetters, mr.attributes.For(attributes.RPCServerDuration))
@@ -428,16 +430,7 @@ func newMetricsReporter(
 	}
 	mr.exporter = instrumentMetricsExporter(ctxInfo.Metrics, exporter)
 
-	mr.systemReporter = mr.newSystemMetricsInstance()
-	mr.serviceMap = map[svc.UID][]attribute.KeyValue{}
 	mr.pidTracker = NewPidServiceTracker()
-	if mr.surveyInfoEnabled {
-		// Survey info is special, created via service less reporter
-		meter := mr.systemReporter.provider.Meter(reporterName)
-		if err = mr.setupSurveyInfo(&mr.systemReporter, meter); err != nil {
-			return nil, err
-		}
-	}
 
 	return &mr, nil
 }
@@ -522,16 +515,6 @@ func (mr *MetricsReporter) setupTargetInfo(m *Metrics, meter instrument.Meter) e
 	m.targetInfo, err = meter.Int64UpDownCounter(TargetInfo)
 	if err != nil {
 		return fmt.Errorf("creating target info: %w", err)
-	}
-
-	return nil
-}
-
-func (mr *MetricsReporter) setupSurveyInfo(m *Metrics, meter instrument.Meter) error {
-	var err error
-	m.surveyInfo, err = meter.Int64UpDownCounter(SurveyInfo)
-	if err != nil {
-		return fmt.Errorf("creating survey info: %w", err)
 	}
 
 	return nil
@@ -781,28 +764,6 @@ func (mr *MetricsReporter) setupGraphMeters(m *Metrics, meter instrument.Meter) 
 		m.ctx, serviceGraphTotal, serviceGraphAttrs, timeNow, mr.cfg.TTL)
 
 	return nil
-}
-
-func (mr *MetricsReporter) newSystemMetricsInstance() Metrics {
-	mlog := mlog()
-	mlog.Debug("creating new system Metrics reporter")
-
-	opts := []metric.Option{
-		metric.WithResource(resource.Empty()),
-		metric.WithReader(metric.NewPeriodicReader(mr.exporter,
-			metric.WithInterval(mr.cfg.Interval))),
-	}
-
-	opts = append(opts, mr.otelMetricOptions(mlog)...)
-	opts = append(opts, mr.spanMetricOptions(mlog)...)
-	opts = append(opts, mr.graphMetricOptions(mlog)...)
-
-	return Metrics{
-		ctx: mr.ctx,
-		provider: metric.NewMeterProvider(
-			opts...,
-		),
-	}
 }
 
 func (mr *MetricsReporter) newMetricsInstance(service *svc.Attrs) Metrics {
@@ -1191,26 +1152,6 @@ func (mr *MetricsReporter) deleteTargetInfo(reporter *Metrics) {
 	reporter.targetInfo.Remove(mr.ctx, attrOpt)
 }
 
-func (mr *MetricsReporter) createSurveyInfo(service *svc.Attrs) {
-	resourceAttributes := append(getAppResourceAttrs(mr.hostID, service), ResourceAttrsFromEnv(service)...)
-	mlog().Debug("Creating survey_info", "attrs", resourceAttributes)
-	attrOpt := instrument.WithAttributeSet(attribute.NewSet(resourceAttributes...))
-	mr.systemReporter.surveyInfo.Add(mr.ctx, 1, attrOpt)
-	mr.serviceMap[service.UID] = resourceAttributes
-}
-
-func (mr *MetricsReporter) deleteSurveyInfo(s *svc.Attrs) {
-	attrs, ok := mr.serviceMap[s.UID]
-	if !ok {
-		mlog().Debug("No service map", "UID", s.UID)
-		return
-	}
-	mlog().Debug("Deleting survey_info for", "attrs", attrs)
-	attrOpt := instrument.WithAttributeSet(attribute.NewSet(attrs...))
-	mr.systemReporter.surveyInfo.Remove(mr.ctx, attrOpt)
-	delete(mr.serviceMap, s.UID)
-}
-
 func (mr *MetricsReporter) createTracesTargetInfo(reporter *Metrics) {
 	if !mr.cfg.AnySpanMetricsEnabled() {
 		return
@@ -1267,15 +1208,9 @@ func (mr *MetricsReporter) watchForProcessEvents() {
 					continue
 				}
 				mlog().Debug("deleting infos for", "pid", pe.File.Pid, "attrs", reporter.service)
-				if mr.surveyInfoEnabled {
-					mr.deleteSurveyInfo(&svc)
-				}
 				mr.deleteTracesTargetInfo(reporter)
 				mr.deleteTargetInfo(reporter)
 			}
-		case exec.ProcessEventSurveyCreated:
-			mr.createSurveyInfo(&pe.File.Service)
-			mr.setupPIDToServiceRelationship(pe.File.Pid, pe.File.Service.UID)
 		}
 	}
 }

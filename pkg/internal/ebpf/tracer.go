@@ -6,13 +6,13 @@ import (
 	"log/slog"
 
 	"github.com/cilium/ebpf"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 
 	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/v2/pkg/internal/exec"
 	"github.com/grafana/beyla/v2/pkg/internal/goexec"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
-	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
 type Instrumentable struct {
@@ -31,8 +31,6 @@ type Instrumentable struct {
 func (ie *Instrumentable) CopyToServiceAttributes() {
 	// If the user does not override the service name via configuration
 	// the service name is the name of the found executable
-	// Unless the case of system-wide tracing, where the name of the
-	// executable will be dynamically set for each traced http request call.
 	if ie.FileInfo.Service.UID.Name == "" {
 		ie.FileInfo.Service.UID.Name = ie.FileInfo.ExecutableName()
 		// we mark the service ID as automatically named in case we want to look,
@@ -45,7 +43,7 @@ func (ie *Instrumentable) CopyToServiceAttributes() {
 
 type PIDsAccounter interface {
 	// AllowPID notifies the tracer to accept traces from the process with the
-	// provided PID. Unless system-wide instrumentation, the Tracer should discard
+	// provided PID. The Tracer should discard
 	// traces from processes whose PID has not been allowed before
 	// We must use a pointer for svc.Attrs so that all child processes share the same
 	// object. This is important when we tag a service as exporting traces or metrics.
@@ -113,7 +111,7 @@ type Tracer interface {
 	Required() bool
 	// Run will do the action of listening for eBPF traces and forward them
 	// periodically to the output channel.
-	Run(context.Context, *msg.Queue[[]request.Span])
+	Run(context.Context, *ebpfcommon.EBPFEventContext, *msg.Queue[[]request.Span])
 }
 
 // Subset of the above interface, which supports loading eBPF programs which
@@ -139,7 +137,6 @@ type ProcessTracer struct {
 	log      *slog.Logger //nolint:unused
 	Programs []Tracer
 
-	SystemWide      bool
 	Type            ProcessTracerType
 	Instrumentables map[uint64]*instrumenter
 }

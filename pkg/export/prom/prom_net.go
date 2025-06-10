@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
@@ -12,16 +14,14 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/connector"
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
-	"github.com/grafana/beyla/v2/pkg/pipe/msg"
-	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 // injectable function reference for testing
 
 // NetPrometheusConfig for network metrics just wraps the global prom.NetPrometheusConfig as provided by the user
 type NetPrometheusConfig struct {
-	Config             *PrometheusConfig
-	AttributeSelectors attributes.Selection
+	Config      *PrometheusConfig
+	SelectorCfg *attributes.SelectorConfig
 	// Deprecated: to be removed in Beyla 3.0 with BEYLA_NETWORK_METRICS bool flag
 	GloballyEnabled bool
 }
@@ -78,7 +78,7 @@ func newNetReporter(
 	// OTEL exporter would report also some prometheus-exclusive attributes
 	group.Add(attributes.GroupPrometheus)
 
-	provider, err := attributes.NewAttrSelector(group, cfg.AttributeSelectors)
+	provider, err := attributes.NewAttrSelector(group, cfg.SelectorCfg)
 	if err != nil {
 		return nil, fmt.Errorf("network Prometheus exporter attributes enable: %w", err)
 	}

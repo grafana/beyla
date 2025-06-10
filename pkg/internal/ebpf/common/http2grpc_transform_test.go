@@ -121,6 +121,8 @@ func TestHTTP2Parsing(t *testing.T) {
 		},
 	}
 
+	parseContext := NewEBPFParseContext()
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			framer := byteFramer(tt.input[:tt.inputLen])
@@ -132,7 +134,7 @@ func TestHTTP2Parsing(t *testing.T) {
 				}
 
 				if ff, ok := f.(*http2.HeadersFrame); ok {
-					method, path, contentType, _ := readMetaFrame(0, framer, ff)
+					method, path, contentType, _ := readMetaFrame(parseContext, 0, framer, ff)
 					assert.Equal(t, tt.method, method)
 					assert.Equal(t, tt.path, path)
 					assert.Equal(t, tt.contentType, contentType)
@@ -173,10 +175,12 @@ func TestHTTP2EventsParsing(t *testing.T) {
 		},
 	}
 
+	parseContext := NewEBPFParseContext()
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			info := makeBPFHTTP2Info(tt.input, tt.rinput, tt.inputLen)
-			_, ignore, _ := http2FromBuffers(&info)
+			_, ignore, _ := http2FromBuffers(parseContext, &info)
 			assert.Equal(t, tt.ignored, ignore)
 		})
 	}
@@ -212,10 +216,12 @@ func TestDynamicTableUpdates(t *testing.T) {
 		},
 	}
 
+	parseContext := NewEBPFParseContext()
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			info := makeBPFHTTP2InfoNewRequest(tt.input, rinput, tt.inputLen)
-			s, ignore, _ := http2FromBuffers(&info)
+			s, ignore, _ := http2FromBuffers(parseContext, &info)
 			assert.False(t, ignore)
 			assert.Equal(t, "POST", s.Method)
 			assert.Equal(t, "/routeguide.RouteGuide/GetFeature", s.Path)
@@ -226,7 +232,7 @@ func TestDynamicTableUpdates(t *testing.T) {
 	unknownIndexInput := []byte{0, 0, 8, 1, 4, 0, 0, 0, 3, 199, 200, 131, 134, 201, 202, 203, 204, 0, 0, 4, 8, 0, 0, 0, 0, 3, 0, 0, 0, 5, 0, 0, 5, 0, 1, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 4, 8, 0, 0, 0, 0, 0, 0, 0, 0, 84}
 
 	info := makeBPFHTTP2InfoNewRequest(unknownIndexInput, rinput, 1024)
-	s, ignore, _ := http2FromBuffers(&info)
+	s, ignore, _ := http2FromBuffers(parseContext, &info)
 	assert.False(t, ignore)
 	assert.Equal(t, "POST", s.Method)
 	assert.Equal(t, "/routeguide.RouteGuide/GetFeature", s.Path)
@@ -238,7 +244,7 @@ func TestDynamicTableUpdates(t *testing.T) {
 
 	// We'll be able to decode this correctly, even with broken decoder, because the values are sent as text
 	info = makeBPFHTTP2InfoNewRequest(newPathInput, rinput, 1024)
-	s, ignore, _ = http2FromBuffers(&info)
+	s, ignore, _ = http2FromBuffers(parseContext, &info)
 	assert.False(t, ignore)
 	assert.Equal(t, "POST", s.Method)
 	assert.Equal(t, "/pouteguide.RouteGuide/GetFeature", s.Path) // this value is the same I just changed the first character from r to p
@@ -249,7 +255,7 @@ func TestDynamicTableUpdates(t *testing.T) {
 	indexedNewPath := []byte{0, 0, 8, 1, 4, 0, 0, 0, 3, 195, 194, 131, 134, 193, 192, 191, byte(nextIndex + 128), 0, 0, 4, 8, 0, 0, 0, 0, 3, 0, 0, 0, 5, 0, 0, 5, 0, 1, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 4, 8, 0, 0, 0, 0, 0, 0, 0, 0, 84}
 
 	info = makeBPFHTTP2InfoNewRequest(indexedNewPath, rinput, 1024)
-	s, ignore, _ = http2FromBuffers(&info)
+	s, ignore, _ = http2FromBuffers(parseContext, &info)
 	assert.False(t, ignore)
 	assert.Equal(t, "POST", s.Method)
 	assert.Equal(t, "*", s.Path) // this value is the same I just changed the first character from r to p

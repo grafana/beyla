@@ -69,13 +69,6 @@ func testREDMetricsJavaHTTP(t *testing.T) {
 	})
 }
 
-func testREDMetricsJavaHTTPSystemWide(t *testing.T) {
-	t.Run("http://localhost:8086", func(t *testing.T) {
-		waitForJavaTestComponents(t, "http://localhost:8086")
-		testREDMetricsForJavaHTTPLibrary(t, []string{"http://localhost:8086", "http://localhost:8087"}, "") // The test is flaky, sometimes we get docker-proxy sometimes greeting
-	})
-}
-
 func testREDMetricsForJavaOTelSDK(t *testing.T, urls []string) {
 	path := "/greeting"
 

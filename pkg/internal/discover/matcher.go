@@ -6,15 +6,14 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"regexp"
 	"slices"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 	"github.com/shirou/gopsutil/v3/process"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
-	"github.com/grafana/beyla/v2/pkg/pipe/msg"
-	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 	"github.com/grafana/beyla/v2/pkg/services"
 )
 
@@ -32,7 +31,7 @@ func CriteriaMatcherProvider(
 	m := &matcher{
 		log:              slog.With("component", "discover.CriteriaMatcher"),
 		criteria:         FindingCriteria(cfg),
-		excludeCriteria:  append(cfg.Discovery.ExcludeServices, cfg.Discovery.DefaultExcludeServices...),
+		excludeCriteria:  ExcludingCriteria(cfg),
 		processHistory:   map[PID]*services.ProcessInfo{},
 		input:            input.Subscribe(),
 		output:           output,
@@ -51,7 +50,7 @@ func SurveyCriteriaMatcherProvider(
 	m := &matcher{
 		log:              slog.With("component", "discover.SurveyCriteriaMatcher"),
 		criteria:         surveyCriteria(cfg),
-		excludeCriteria:  cfg.Discovery.DefaultExcludeServices,
+		excludeCriteria:  surveyExcludingCriteria(cfg),
 		processHistory:   map[PID]*services.ProcessInfo{},
 		input:            input.Subscribe(),
 		output:           output,
@@ -63,8 +62,8 @@ func SurveyCriteriaMatcherProvider(
 
 type matcher struct {
 	log             *slog.Logger
-	criteria        services.DefinitionCriteria
-	excludeCriteria services.DefinitionCriteria
+	criteria        []services.Selector
+	excludeCriteria []services.Selector
 	// processHistory keeps track of the processes that have been already matched and submitted for
 	// instrumentation.
 	// This avoids keep inspecting again and again client processes each time they open a new connection port
@@ -77,19 +76,29 @@ type matcher struct {
 
 // ProcessMatch matches a found process with the first selection criteria it fulfilled.
 type ProcessMatch struct {
-	Criteria *services.Attributes
+	Criteria services.Selector
 	Process  *services.ProcessInfo
 }
 
-func (m *matcher) run(_ context.Context) {
+func (m *matcher) run(ctx context.Context) {
 	defer m.output.Close()
 	m.log.Debug("starting criteria matcher node")
-	for i := range m.input {
-		m.log.Debug("filtering processes", "len", len(i))
-		o := m.filter(i)
-		m.log.Debug("processes matching selection criteria", "len", len(o))
-		if len(o) > 0 {
-			m.output.Send(o)
+	for {
+		select {
+		case <-ctx.Done():
+			m.log.Debug("context cancelled, stopping criteria matcher node")
+			return
+		case i, ok := <-m.input:
+			if !ok {
+				m.log.Debug("input channel closed, stopping criteria matcher node")
+				return
+			}
+			m.log.Debug("filtering processes", "len", len(i))
+			o := m.filter(i)
+			m.log.Debug("processes matching selection criteria", "len", len(o))
+			if len(o) > 0 {
+				m.output.Send(o)
+			}
 		}
 	}
 }
@@ -121,12 +130,12 @@ func (m *matcher) filterCreated(obj processAttrs) (Event[ProcessMatch], bool) {
 		return Event[ProcessMatch]{}, false
 	}
 	for i := range m.criteria {
-		if m.matchProcess(&obj, proc, &m.criteria[i]) && !m.isExcluded(&obj, proc) {
+		if m.matchProcess(&obj, proc, m.criteria[i]) && !m.isExcluded(&obj, proc) {
 			m.log.Debug("found process", "pid", proc.Pid, "comm", proc.ExePath, "metadata", obj.metadata, "podLabels", obj.podLabels, "criteria", m.criteria[i])
 			m.processHistory[obj.pid] = proc
 			return Event[ProcessMatch]{
 				Type: EventCreated,
-				Obj:  ProcessMatch{Criteria: &m.criteria[i], Process: proc},
+				Obj:  ProcessMatch{Criteria: m.criteria[i], Process: proc},
 			}, true
 		}
 	}
@@ -137,7 +146,7 @@ func (m *matcher) filterCreated(obj processAttrs) (Event[ProcessMatch], bool) {
 		m.processHistory[obj.pid] = proc
 		return Event[ProcessMatch]{
 			Type: EventCreated,
-			Obj:  ProcessMatch{Criteria: &m.criteria[0], Process: proc},
+			Obj:  ProcessMatch{Criteria: m.criteria[0], Process: proc},
 		}, true
 	}
 
@@ -161,28 +170,28 @@ func (m *matcher) filterDeleted(obj processAttrs) (Event[ProcessMatch], bool) {
 func (m *matcher) isExcluded(obj *processAttrs, proc *services.ProcessInfo) bool {
 	for i := range m.excludeCriteria {
 		m.log.Debug("checking exclusion criteria", "pid", proc.Pid, "comm", proc.ExePath)
-		if m.matchProcess(obj, proc, &m.excludeCriteria[i]) {
+		if m.matchProcess(obj, proc, m.excludeCriteria[i]) {
 			return true
 		}
 	}
 	return false
 }
 
-func (m *matcher) matchProcess(obj *processAttrs, p *services.ProcessInfo, a *services.Attributes) bool {
+func (m *matcher) matchProcess(obj *processAttrs, p *services.ProcessInfo, a services.Selector) bool {
 	log := m.log.With("pid", p.Pid, "exe", p.ExePath)
-	if !a.Path.IsSet() && a.OpenPorts.Len() == 0 && len(obj.metadata) == 0 {
+	if !a.GetPath().IsSet() && a.GetOpenPorts().Len() == 0 && len(obj.metadata) == 0 {
 		log.Debug("no Kube metadata, no local selection criteria. Ignoring")
 		return false
 	}
-	if (a.Path.IsSet() || a.PathRegexp.IsSet()) && !m.matchByExecutable(p, a) {
-		log.Debug("executable path does not match", "path", a.Path, "pathregexp", a.PathRegexp)
+	if (a.GetPath().IsSet() || a.GetPathRegexp().IsSet()) && !m.matchByExecutable(p, a) {
+		log.Debug("executable path does not match", "path", a.GetPath(), "pathregexp", a.GetPathRegexp())
 		return false
 	}
-	if a.OpenPorts.Len() > 0 && !m.matchByPort(p, a) {
-		log.Debug("open ports do not match", "openPorts", a.OpenPorts, "process ports", p.OpenPorts)
+	if a.GetOpenPorts().Len() > 0 && !m.matchByPort(p, a) {
+		log.Debug("open ports do not match", "openPorts", a.GetOpenPorts(), "process ports", p.OpenPorts)
 		return false
 	}
-	if a.ContainersOnly {
+	if a.IsContainersOnly() {
 		ns, _ := namespaceFetcherFunc(p.Pid)
 		if ns == m.beylaNamespace && m.hasHostPidAccess {
 			log.Debug("not in a container", "namespace", ns)
@@ -196,23 +205,23 @@ func (m *matcher) matchProcess(obj *processAttrs, p *services.ProcessInfo, a *se
 	return m.matchByAttributes(obj, a)
 }
 
-func (m *matcher) matchByPort(p *services.ProcessInfo, a *services.Attributes) bool {
+func (m *matcher) matchByPort(p *services.ProcessInfo, a services.Selector) bool {
 	for _, c := range p.OpenPorts {
-		if a.OpenPorts.Matches(int(c)) {
+		if a.GetOpenPorts().Matches(int(c)) {
 			return true
 		}
 	}
 	return false
 }
 
-func (m *matcher) matchByExecutable(p *services.ProcessInfo, a *services.Attributes) bool {
-	if a.Path.IsSet() {
-		return a.Path.MatchString(p.ExePath)
+func (m *matcher) matchByExecutable(p *services.ProcessInfo, a services.Selector) bool {
+	if a.GetPath().IsSet() {
+		return a.GetPath().MatchString(p.ExePath)
 	}
-	return a.PathRegexp.MatchString(p.ExePath)
+	return a.GetPathRegexp().MatchString(p.ExePath)
 }
 
-func (m *matcher) matchByAttributes(actual *processAttrs, required *services.Attributes) bool {
+func (m *matcher) matchByAttributes(actual *processAttrs, required services.Selector) bool {
 	if required == nil {
 		return true
 	}
@@ -221,7 +230,7 @@ func (m *matcher) matchByAttributes(actual *processAttrs, required *services.Att
 	}
 	log := m.log.With("pid", actual.pid)
 	// match metadata
-	for attrName, criteriaRegexp := range required.Metadata {
+	for attrName, criteriaRegexp := range required.RangeMetadata() {
 		if attrValue, ok := actual.metadata[attrName]; !ok || !criteriaRegexp.MatchString(attrValue) {
 			log.Debug("metadata does not match", "attr", attrName, "value", attrValue)
 			return false
@@ -229,7 +238,7 @@ func (m *matcher) matchByAttributes(actual *processAttrs, required *services.Att
 	}
 
 	// match pod labels
-	for labelName, criteriaRegexp := range required.PodLabels {
+	for labelName, criteriaRegexp := range required.RangePodLabels() {
 		if actualPodLabelValue, ok := actual.podLabels[labelName]; !ok || !criteriaRegexp.MatchString(actualPodLabelValue) {
 			log.Debug("pod label does not match", "label", labelName, "value", actualPodLabelValue)
 			return false
@@ -237,7 +246,7 @@ func (m *matcher) matchByAttributes(actual *processAttrs, required *services.Att
 	}
 
 	// match pod annotations
-	for annotationName, criteriaRegexp := range required.PodAnnotations {
+	for annotationName, criteriaRegexp := range required.RangePodAnnotations() {
 		if actualPodAnnotationValue, ok := actual.podAnnotations[annotationName]; !ok || !criteriaRegexp.MatchString(actualPodAnnotationValue) {
 			log.Debug("pod annotation does not match", "annotation", annotationName, "value", actualPodAnnotationValue)
 			return false
@@ -246,55 +255,171 @@ func (m *matcher) matchByAttributes(actual *processAttrs, required *services.Att
 	return true
 }
 
-func normalizeCriteria(finderCriteria services.DefinitionCriteria) services.DefinitionCriteria {
+func normalizeGlobCriteria(finderCriteria services.GlobDefinitionCriteria) []services.Selector {
 	// normalize criteria that only define metadata (e.g. k8s)
 	// but do neither define executable name nor port: configure them to match
 	// any executable in the matched k8s entities
+	criteria := make([]services.Selector, 0, len(finderCriteria))
 	for i := range finderCriteria {
-		fc := finderCriteria[i]
+		fc := &finderCriteria[i]
+		if !fc.Path.IsSet() && fc.OpenPorts.Len() == 0 && (len(fc.Metadata) > 0 || len(fc.PodLabels) > 0 || len(fc.PodAnnotations) > 0) {
+			// match any executable path
+			if err := fc.Path.UnmarshalText([]byte("*")); err != nil {
+				panic("bug! " + err.Error())
+			}
+		}
+		criteria = append(criteria, fc)
+	}
+	return criteria
+}
+
+func normalizeRegexCriteria(finderCriteria services.RegexDefinitionCriteria) []services.Selector {
+	// normalize criteria that only define metadata (e.g. k8s)
+	// but do neither define executable name nor port: configure them to match
+	// any executable in the matched k8s entities
+	criteria := make([]services.Selector, 0, len(finderCriteria))
+	for i := range finderCriteria {
+		fc := &finderCriteria[i]
 		if !fc.Path.IsSet() && fc.OpenPorts.Len() == 0 && (len(fc.Metadata) > 0 || len(fc.PodLabels) > 0 || len(fc.PodAnnotations) > 0) {
 			// match any executable path
 			if err := fc.Path.UnmarshalText([]byte(".")); err != nil {
 				panic("bug! " + err.Error())
 			}
 		}
+		criteria = append(criteria, fc)
 	}
-	return finderCriteria
+	return criteria
 }
 
-func FindingCriteria(cfg *beyla.Config) services.DefinitionCriteria {
-	if cfg.Discovery.SystemWide {
-		// will return all the executables in the system
-		return services.DefinitionCriteria{
-			services.Attributes{
+func FindingCriteria(cfg *beyla.Config) []services.Selector {
+	logDeprecationAndConflicts(cfg)
+
+	if onlyDefinesDeprecatedServiceSelection(cfg) {
+		// deprecated use case. Supporting the old discovery > services section when the
+		// newest discovery > instrument is not set
+		finderCriteria := cfg.Discovery.Services
+		// Merge the old, individual single-service selector,
+		// with the new, map-based multi-services selector.
+		if cfg.Exec.IsSet() || cfg.Port.Len() > 0 {
+			finderCriteria = slices.Clone(cfg.Discovery.Services)
+			finderCriteria = append(finderCriteria, services.RegexSelector{
+				Name:      cfg.ServiceName,
 				Namespace: cfg.ServiceNamespace,
-				Path:      services.NewPathRegexp(regexp.MustCompile(".")),
+				Path:      cfg.Exec,
+				OpenPorts: cfg.Port,
+			})
+		}
+		return normalizeRegexCriteria(finderCriteria)
+	}
+
+	if len(cfg.Discovery.Instrument) > 0 {
+		finderCriteria := cfg.Discovery.Instrument
+		if cfg.AutoTargetExe.IsSet() || cfg.Port.Len() > 0 {
+			finderCriteria = slices.Clone(cfg.Discovery.Instrument)
+			finderCriteria = append(finderCriteria, services.GlobAttributes{
+				Name:      cfg.ServiceName,
+				Namespace: cfg.ServiceNamespace,
+				Path:      cfg.AutoTargetExe,
+				OpenPorts: cfg.Port,
+			})
+		}
+		return normalizeGlobCriteria(finderCriteria)
+	}
+
+	// edge use case: when neither discovery > services nor discovery > instrument sections are set
+	// we will prioritize the newer BEYLA_AUTO_TARGET_EXE/OTEL_GO_AUTO_TARGET_EXE property
+	// over the old, deprecated BEYLA_EXECUTABLE_PATH
+	if cfg.AutoTargetExe.IsSet() {
+		return []services.Selector{
+			&services.GlobAttributes{
+				Name:      cfg.ServiceName,
+				Namespace: cfg.ServiceNamespace,
+				Path:      cfg.AutoTargetExe,
+				OpenPorts: cfg.Port,
 			},
 		}
 	}
-	finderCriteria := cfg.Discovery.Services
-	// Merge the old, individual single-service selector,
-	// with the new, map-based multi-services selector.
-	if cfg.Exec.IsSet() || cfg.Port.Len() > 0 {
-		finderCriteria = slices.Clone(cfg.Discovery.Services)
-		finderCriteria = append(finderCriteria, services.Attributes{
+
+	return []services.Selector{
+		&services.RegexSelector{
 			Name:      cfg.ServiceName,
 			Namespace: cfg.ServiceNamespace,
 			Path:      cfg.Exec,
 			OpenPorts: cfg.Port,
-		})
+		},
 	}
-
-	finderCriteria = normalizeCriteria(finderCriteria)
-
-	return finderCriteria
 }
 
-func surveyCriteria(cfg *beyla.Config) services.DefinitionCriteria {
+func surveyCriteria(cfg *beyla.Config) []services.Selector {
 	finderCriteria := cfg.Discovery.Survey
-	finderCriteria = normalizeCriteria(finderCriteria)
+	return normalizeGlobCriteria(finderCriteria)
+}
 
-	return finderCriteria
+func ExcludingCriteria(cfg *beyla.Config) []services.Selector {
+	// deprecated options: supporting them only if the user neither defines
+	// the instrument nor exclude_instrument sections
+	if onlyDefinesDeprecatedServiceSelection(cfg) {
+		return append(regexAsSelector(cfg.Discovery.ExcludeServices),
+			regexAsSelector(cfg.Discovery.DefaultExcludeServices)...)
+	}
+	return append(globsAsSelector(cfg.Discovery.ExcludeInstrument),
+		globsAsSelector(cfg.Discovery.DefaultExcludeInstrument)...)
+}
+
+func surveyExcludingCriteria(cfg *beyla.Config) []services.Selector {
+	// deprecated options: supporting them only if the user neither defines
+	// the instrument nor exclude_instrument sections
+	if onlyDefinesDeprecatedServiceSelection(cfg) {
+		return regexAsSelector(cfg.Discovery.DefaultExcludeServices)
+	}
+	return globsAsSelector(cfg.Discovery.DefaultExcludeInstrument)
+}
+
+func onlyDefinesDeprecatedServiceSelection(cfg *beyla.Config) bool {
+	c := &cfg.Discovery
+	return (len(c.Services) > 0 || len(c.ExcludeServices) > 0) &&
+		len(c.Instrument) == 0 && len(c.ExcludeInstrument) == 0
+}
+
+func globsAsSelector(in services.GlobDefinitionCriteria) []services.Selector {
+	out := make([]services.Selector, 0, len(in))
+	for i := range in {
+		out = append(out, &in[i])
+	}
+	return out
+}
+
+func regexAsSelector(in services.RegexDefinitionCriteria) []services.Selector {
+	out := make([]services.Selector, 0, len(in))
+	for i := range in {
+		out = append(out, &in[i])
+	}
+	return out
+}
+
+func logDeprecationAndConflicts(cfg *beyla.Config) {
+	c := &cfg.Discovery
+	if len(c.Services) > 0 {
+		switch {
+		case len(c.Instrument) > 0:
+			slog.Warn("both discovery > instrument and legacy discovery > services YAML sections are defined. Using" +
+				" discovery > instrument and ignoring discovery > services (also ignoring discovery > exclude_services)")
+		case cfg.Exec.IsSet():
+			slog.Warn("both discovery > instrument and legacy OTEL_EBPF_EXECUTABLE_NAME are defined. Using" +
+				" discovery > instrument and ignoring OTEL_EBPF_EXECUTABLE_NAME")
+		default:
+			slog.Warn("discovery > services YAML property is deprecated and will be removed in a future version. Use" +
+				" discovery > instrument instead. See documentation for more details")
+		}
+	}
+	if len(c.ExcludeServices) > 0 {
+		if len(c.ExcludeInstrument) > 0 {
+			slog.Warn("discovery > exclude_services will be ignored. Use discovery > exclude_instrument instead")
+		} else {
+			slog.Warn("discovery > exclude_services YAML property is deprecated and will be removed in a future version. Use" +
+				" discovery > exclude_instrument instead. See documentation for more details")
+		}
+	}
 }
 
 // replaceable function to allow unit tests with faked processes

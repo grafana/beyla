@@ -1,15 +1,17 @@
 package discover
 
 import (
+	"regexp"
 	"testing"
 
+	"github.com/gobwas/glob"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/internal/testutil"
-	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 	"github.com/grafana/beyla/v2/pkg/services"
 )
 
@@ -55,23 +57,23 @@ func TestCriteriaMatcher(t *testing.T) {
 	require.Len(t, matches, 4)
 	m := matches[0]
 	assert.Equal(t, EventCreated, m.Type)
-	assert.Equal(t, "exec-only", m.Obj.Criteria.Name)
-	assert.Equal(t, "", m.Obj.Criteria.Namespace)
+	assert.Equal(t, "exec-only", m.Obj.Criteria.GetName())
+	assert.Equal(t, "", m.Obj.Criteria.GetNamespace())
 	assert.Equal(t, services.ProcessInfo{Pid: 1, ExePath: "/bin/weird33", OpenPorts: []uint32{1, 2, 3}}, *m.Obj.Process)
 	m = matches[1]
 	assert.Equal(t, EventCreated, m.Type)
-	assert.Equal(t, "port-only", m.Obj.Criteria.Name)
-	assert.Equal(t, "foo", m.Obj.Criteria.Namespace)
+	assert.Equal(t, "port-only", m.Obj.Criteria.GetName())
+	assert.Equal(t, "foo", m.Obj.Criteria.GetNamespace())
 	assert.Equal(t, services.ProcessInfo{Pid: 4, ExePath: "/bin/something", OpenPorts: []uint32{8083}}, *m.Obj.Process)
 	m = matches[2]
 	assert.Equal(t, EventCreated, m.Type)
-	assert.Equal(t, "both", m.Obj.Criteria.Name)
-	assert.Equal(t, "", m.Obj.Criteria.Namespace)
+	assert.Equal(t, "both", m.Obj.Criteria.GetName())
+	assert.Equal(t, "", m.Obj.Criteria.GetNamespace())
 	assert.Equal(t, services.ProcessInfo{Pid: 5, ExePath: "server", OpenPorts: []uint32{443}}, *m.Obj.Process)
 	m = matches[3]
 	assert.Equal(t, EventCreated, m.Type)
-	assert.Equal(t, "exec-only", m.Obj.Criteria.Name)
-	assert.Equal(t, "", m.Obj.Criteria.Namespace)
+	assert.Equal(t, "exec-only", m.Obj.Criteria.GetName())
+	assert.Equal(t, "", m.Obj.Criteria.GetNamespace())
 	assert.Equal(t, services.ProcessInfo{Pid: 6, ExePath: "/bin/clientweird99"}, *m.Obj.Process)
 }
 
@@ -119,13 +121,13 @@ func TestCriteriaMatcher_Exclude(t *testing.T) {
 	require.Len(t, matches, 2)
 	m := matches[0]
 	assert.Equal(t, EventCreated, m.Type)
-	assert.Equal(t, "exec-only", m.Obj.Criteria.Name)
-	assert.Equal(t, "", m.Obj.Criteria.Namespace)
+	assert.Equal(t, "exec-only", m.Obj.Criteria.GetName())
+	assert.Equal(t, "", m.Obj.Criteria.GetNamespace())
 	assert.Equal(t, services.ProcessInfo{Pid: 1, ExePath: "/bin/weird33", OpenPorts: []uint32{1, 2, 3}}, *m.Obj.Process)
 	m = matches[1]
 	assert.Equal(t, EventCreated, m.Type)
-	assert.Equal(t, "exec-only", m.Obj.Criteria.Name)
-	assert.Equal(t, "", m.Obj.Criteria.Namespace)
+	assert.Equal(t, "exec-only", m.Obj.Criteria.GetName())
+	assert.Equal(t, "", m.Obj.Criteria.GetNamespace())
 	assert.Equal(t, services.ProcessInfo{Pid: 6, ExePath: "/bin/clientweird99"}, *m.Obj.Process)
 }
 
@@ -231,8 +233,8 @@ func TestCriteriaMatcher_MustMatchAllAttributes(t *testing.T) {
 	require.Len(t, matches, 1)
 	m := matches[0]
 	assert.Equal(t, EventCreated, m.Type)
-	assert.Equal(t, "all-attributes-must-match", m.Obj.Criteria.Name)
-	assert.Equal(t, "foons", m.Obj.Criteria.Namespace)
+	assert.Equal(t, "all-attributes-must-match", m.Obj.Criteria.GetName())
+	assert.Equal(t, "foons", m.Obj.Criteria.GetNamespace())
 	assert.Equal(t, services.ProcessInfo{Pid: 1, ExePath: "/bin/foo", OpenPorts: []uint32{8081}}, *m.Obj.Process)
 }
 
@@ -272,13 +274,13 @@ func TestCriteriaMatcherMissingPort(t *testing.T) {
 	require.Len(t, matches, 2)
 	m := matches[0]
 	assert.Equal(t, EventCreated, m.Type)
-	assert.Equal(t, "port-only", m.Obj.Criteria.Name)
-	assert.Equal(t, "foo", m.Obj.Criteria.Namespace)
+	assert.Equal(t, "port-only", m.Obj.Criteria.GetName())
+	assert.Equal(t, "foo", m.Obj.Criteria.GetNamespace())
 	assert.Equal(t, services.ProcessInfo{Pid: 1, ExePath: "/bin/weird33", OpenPorts: []uint32{80}, PPid: 0}, *m.Obj.Process)
 	m = matches[1]
 	assert.Equal(t, EventCreated, m.Type)
-	assert.Equal(t, "port-only", m.Obj.Criteria.Name)
-	assert.Equal(t, "foo", m.Obj.Criteria.Namespace)
+	assert.Equal(t, "port-only", m.Obj.Criteria.GetName())
+	assert.Equal(t, "foo", m.Obj.Criteria.GetNamespace())
 	assert.Equal(t, services.ProcessInfo{Pid: 3, ExePath: "/bin/weird33", OpenPorts: []uint32{}, PPid: 1}, *m.Obj.Process)
 }
 
@@ -338,12 +340,225 @@ func TestCriteriaMatcherContainersOnly(t *testing.T) {
 	require.Len(t, matches, 2)
 	m := matches[0]
 	assert.Equal(t, EventCreated, m.Type)
-	assert.Equal(t, "port-only-containers", m.Obj.Criteria.Name)
-	assert.Equal(t, "foo", m.Obj.Criteria.Namespace)
+	assert.Equal(t, "port-only-containers", m.Obj.Criteria.GetName())
+	assert.Equal(t, "foo", m.Obj.Criteria.GetNamespace())
 	assert.Equal(t, services.ProcessInfo{Pid: 2, ExePath: "/bin/weird33", OpenPorts: []uint32{80}, PPid: 0}, *m.Obj.Process)
 	m = matches[1]
 	assert.Equal(t, EventCreated, m.Type)
-	assert.Equal(t, "port-only-containers", m.Obj.Criteria.Name)
-	assert.Equal(t, "foo", m.Obj.Criteria.Namespace)
+	assert.Equal(t, "port-only-containers", m.Obj.Criteria.GetName())
+	assert.Equal(t, "foo", m.Obj.Criteria.GetNamespace())
 	assert.Equal(t, services.ProcessInfo{Pid: 3, ExePath: "/bin/weird33", OpenPorts: []uint32{80}, PPid: 1}, *m.Obj.Process)
+}
+
+func TestInstrumentation_CoexistingWithDeprecatedServices(t *testing.T) {
+	// setup conflicting criteria and see how some of them are ignored and others not
+	type testCase struct {
+		name string
+		cfg  beyla.Config
+	}
+	pass := services.NewGlob(glob.MustCompile("*/must-pass"))
+	notPass := services.NewGlob(glob.MustCompile("*/dont-pass"))
+	neitherPass := services.NewGlob(glob.MustCompile("*/neither-pass"))
+	bothPass := services.NewGlob(glob.MustCompile("*/{must,also}-pass"))
+
+	passPort := services.PortEnum{Ranges: []services.PortRange{{Start: 80}}}
+	allPorts := services.PortEnum{Ranges: []services.PortRange{{Start: 1, End: 65535}}}
+
+	passRE := services.NewPathRegexp(regexp.MustCompile("must-pass"))
+	notPassRE := services.NewPathRegexp(regexp.MustCompile("dont-pass"))
+	neitherPassRE := services.NewPathRegexp(regexp.MustCompile("neither-pass"))
+	bothPassRE := services.NewPathRegexp(regexp.MustCompile("(must|also)-pass"))
+
+	for _, tc := range []testCase{
+		{name: "discovery > instrument", cfg: beyla.Config{Discovery: services.DiscoveryConfig{
+			Instrument: services.GlobDefinitionCriteria{{Path: pass}, {OpenPorts: passPort}},
+		}}},
+		{
+			name: "discovery > instrument with discovery > exclude_instrument && default_exclude_instrument",
+			cfg: beyla.Config{Discovery: services.DiscoveryConfig{
+				Instrument:               services.GlobDefinitionCriteria{{OpenPorts: allPorts}},
+				ExcludeInstrument:        services.GlobDefinitionCriteria{{Path: notPass}},
+				DefaultExcludeInstrument: services.GlobDefinitionCriteria{{Path: neitherPass}},
+			}},
+		},
+		{
+			name: "discovery > instrument with deprecated discovery > services",
+			cfg: beyla.Config{Discovery: services.DiscoveryConfig{
+				Instrument: services.GlobDefinitionCriteria{{Path: pass}, {OpenPorts: passPort}},
+				// To be ignored
+				Services: services.RegexDefinitionCriteria{{OpenPorts: allPorts}},
+			}},
+		},
+		{
+			name: "discovery > instrument with top-level auto-target-exec option",
+			cfg: beyla.Config{Discovery: services.DiscoveryConfig{
+				Instrument: services.GlobDefinitionCriteria{{OpenPorts: passPort}},
+			}, AutoTargetExe: pass},
+		},
+		{
+			name: "discovery > instrument with top-level ports option",
+			cfg: beyla.Config{Discovery: services.DiscoveryConfig{
+				Instrument: services.GlobDefinitionCriteria{{Path: pass}},
+			}, Port: passPort},
+		},
+		{
+			name: "discovery > instrument ignoring deprecated path option",
+			cfg: beyla.Config{Discovery: services.DiscoveryConfig{
+				Instrument: services.GlobDefinitionCriteria{{Path: pass}, {OpenPorts: passPort}},
+			}, Exec: services.NewPathRegexp(regexp.MustCompile("dont-pass"))},
+		},
+		// cases below would be removed if the deprecated discovery > services options are removed,
+		{name: "deprecated discovery > services", cfg: beyla.Config{Discovery: services.DiscoveryConfig{
+			Services: services.RegexDefinitionCriteria{{Path: passRE}, {OpenPorts: passPort}},
+		}}},
+		{
+			name: "deprecated discovery > services with discovery > exclude_services && default_exclude_services",
+			cfg: beyla.Config{Discovery: services.DiscoveryConfig{
+				Services:               services.RegexDefinitionCriteria{{OpenPorts: allPorts}},
+				ExcludeServices:        services.RegexDefinitionCriteria{{Path: notPassRE}},
+				DefaultExcludeServices: services.RegexDefinitionCriteria{{Path: neitherPassRE}},
+			}},
+		},
+		{
+			name: "deprecated discovery > services with top-level deprecated exec option",
+			cfg: beyla.Config{Discovery: services.DiscoveryConfig{
+				Services: services.RegexDefinitionCriteria{{OpenPorts: passPort}},
+			}, Exec: passRE},
+		},
+		{
+			name: "deprecated discovery > services with top-level deprecated port option",
+			cfg: beyla.Config{Discovery: services.DiscoveryConfig{
+				Services: services.RegexDefinitionCriteria{{Path: passRE}},
+			}, Port: passPort},
+		},
+		{
+			name: "no YAML discovery section, using top-level AutoTargetExe variable",
+			cfg:  beyla.Config{AutoTargetExe: bothPass},
+		},
+		{
+			name: "no YAML discovery section, using deprecated top-level discovery variables",
+			cfg:  beyla.Config{Exec: bothPassRE},
+		},
+		{name: "prioritizing top-level AutoTarget variable over deprecated exec", cfg: beyla.Config{
+			AutoTargetExe: bothPass,
+			// to be ignored
+			Exec: notPassRE,
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// it will filter unmatching processes and return a ProcessMatch for these that match
+			processInfo = func(pp processAttrs) (*services.ProcessInfo, error) {
+				proc := map[PID]struct {
+					Exe  string
+					PPid int32
+				}{
+					1:  {Exe: "/bin/must-pass", PPid: 0},
+					2:  {Exe: "/bin/also-pass", PPid: 0},
+					11: {Exe: "/bin/dont-pass", PPid: 0},
+					12: {Exe: "/bin/neither-pass", PPid: 0},
+				}[pp.pid]
+				return &services.ProcessInfo{Pid: int32(pp.pid), ExePath: proc.Exe, PPid: proc.PPid, OpenPorts: pp.openPorts}, nil
+			}
+			discoveredProcesses := msg.NewQueue[[]Event[processAttrs]](msg.ChannelBufferLen(10))
+			filteredProcessesQu := msg.NewQueue[[]Event[ProcessMatch]](msg.ChannelBufferLen(10))
+			filteredProcesses := filteredProcessesQu.Subscribe()
+			matcherFunc, err := CriteriaMatcherProvider(&tc.cfg, discoveredProcesses, filteredProcessesQu)(t.Context())
+			require.NoError(t, err)
+			go matcherFunc(t.Context())
+			defer filteredProcessesQu.Close()
+
+			discoveredProcesses.Send([]Event[processAttrs]{
+				{Type: EventCreated, Obj: processAttrs{pid: 1, openPorts: []uint32{1234}}},
+				{Type: EventCreated, Obj: processAttrs{pid: 2, openPorts: []uint32{80}}},
+				{Type: EventCreated, Obj: processAttrs{pid: 11, openPorts: []uint32{4321}}},
+				{Type: EventCreated, Obj: processAttrs{pid: 12, openPorts: []uint32{3456}}},
+			})
+
+			matches := testutil.ReadChannel(t, filteredProcesses, testTimeout)
+			require.Len(t, matches, 2)
+			m := matches[0]
+			assert.Equal(t, EventCreated, m.Type)
+			assert.Equal(t, services.ProcessInfo{Pid: 1, ExePath: "/bin/must-pass", OpenPorts: []uint32{1234}}, *m.Obj.Process)
+			m = matches[1]
+			assert.Equal(t, EventCreated, m.Type)
+			assert.Equal(t, services.ProcessInfo{Pid: 2, ExePath: "/bin/also-pass", OpenPorts: []uint32{80}}, *m.Obj.Process)
+		})
+	}
+}
+
+func criteriaMatcherExcludeDefaultMetadataHelper(t *testing.T, pipeConfig beyla.Config) {
+	k8sSystemNamespaces := []string{
+		"gke-connect", "gke-gmp-system", "gke-managed-cim", "gke-managed-filestorecsi",
+		"gke-managed-metrics-server", "gke-managed-system", "gke-system", "gke-managed-volumepopulator",
+		"gatekeeper-system", "kube-system", "kube-node-lease", "local-path-storage", "grafana-alloy",
+		"cert-manager", "monitoring",
+	}
+
+	k8sAllowedNamespaces := []string{"default", "random-service-namespace"}
+
+	discoveredProcesses := msg.NewQueue[[]Event[processAttrs]](msg.ChannelBufferLen(10))
+	filteredProcessesQu := msg.NewQueue[[]Event[ProcessMatch]](msg.ChannelBufferLen(10))
+	filteredProcesses := filteredProcessesQu.Subscribe()
+	matcherFunc, err := CriteriaMatcherProvider(&pipeConfig, discoveredProcesses, filteredProcessesQu)(t.Context())
+	require.NoError(t, err)
+	go matcherFunc(t.Context())
+	defer filteredProcessesQu.Close()
+
+	processInfo = func(pp processAttrs) (*services.ProcessInfo, error) {
+		return &services.ProcessInfo{Pid: int32(pp.pid), ExePath: "/something/something", PPid: 1}, nil
+	}
+
+	pid := 1
+	events := []Event[processAttrs]{}
+
+	for _, ns := range k8sSystemNamespaces {
+		events = append(events,
+			Event[processAttrs]{Type: EventCreated, Obj: processAttrs{pid: PID(pid), metadata: map[string]string{"k8s_namespace": ns}}},
+		)
+		pid++
+	}
+
+	savePid := pid
+
+	for _, ns := range k8sAllowedNamespaces {
+		events = append(events,
+			Event[processAttrs]{Type: EventCreated, Obj: processAttrs{pid: PID(pid), metadata: map[string]string{"k8s_namespace": ns}}},
+		)
+		pid++
+	}
+
+	discoveredProcesses.Send(events)
+
+	matches := testutil.ReadChannel(t, filteredProcesses, 1000*testTimeout)
+	require.Len(t, matches, 2)
+	m := matches[0]
+	assert.Equal(t, EventCreated, m.Type)
+	assert.Equal(t, services.ProcessInfo{Pid: int32(savePid), PPid: 1, ExePath: "/something/something"}, *m.Obj.Process)
+	m = matches[1]
+	assert.Equal(t, EventCreated, m.Type)
+	assert.Equal(t, services.ProcessInfo{Pid: int32(savePid + 1), PPid: 1, ExePath: "/something/something"}, *m.Obj.Process)
+}
+
+func TestCriteriaMatcher_Exclude_Default_Metadata_Regex(t *testing.T) {
+	pipeConfig := beyla.Config{}
+	require.NoError(t, yaml.Unmarshal([]byte(`discovery:
+  services:
+  - k8s_namespace: .
+`), &pipeConfig))
+
+	pipeConfig.Discovery.DefaultExcludeServices = beyla.DefaultConfig.Discovery.DefaultExcludeServices
+
+	criteriaMatcherExcludeDefaultMetadataHelper(t, pipeConfig)
+}
+
+func TestCriteriaMatcher_Exclude_Default_Metadata_Glob(t *testing.T) {
+	pipeConfig := beyla.Config{}
+	require.NoError(t, yaml.Unmarshal([]byte(`discovery:
+  instrument:
+  - k8s_namespace: "*"
+`), &pipeConfig))
+
+	pipeConfig.Discovery.DefaultExcludeInstrument = beyla.DefaultConfig.Discovery.DefaultExcludeInstrument
+
+	criteriaMatcherExcludeDefaultMetadataHelper(t, pipeConfig)
 }

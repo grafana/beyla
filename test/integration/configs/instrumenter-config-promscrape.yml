@@ -1,6 +1,6 @@
 discovery:
   survey:
-    - k8s_namespace: .
+    - k8s_namespace: "*"
 routes:
   patterns:
     - /basic/:rnd
@@ -31,3 +31,5 @@ attributes:
       include: ["*"]
   kubernetes:
     cluster_name: beyla-k8s-test-cluster
+  extra_group_attributes:
+    k8s_app_meta: ["component"]

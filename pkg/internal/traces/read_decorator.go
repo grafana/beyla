@@ -5,12 +5,13 @@ import (
 	"log/slog"
 	"strconv"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
+
 	"github.com/grafana/beyla/v2/pkg/internal/exec"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
 	"github.com/grafana/beyla/v2/pkg/internal/traces/hostname"
-	"github.com/grafana/beyla/v2/pkg/pipe/msg"
-	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 func rlog() *slog.Logger {
@@ -99,11 +100,19 @@ func HostProcessEventDecoratorProvider(
 		in := input.Subscribe()
 		log := rlog().With("function", "instance_ID_hostNamePIDDecorator")
 		// if kubernetes decoration is disabled, we just bypass the node
-		return func(_ context.Context) {
-			for pe := range in {
-				decorate(&pe.File.Service, int(pe.File.Pid))
-				log.Debug("host decorating event", "event", pe, "ns", pe.File.Ns, "procPID", pe.File.Pid, "procPPID", pe.File.Ppid, "service", pe.File.Service.UID)
-				output.Send(pe)
+		return func(ctx context.Context) {
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case pe, ok := <-in:
+					if !ok {
+						return
+					}
+					decorate(&pe.File.Service, int(pe.File.Pid))
+					log.Debug("host decorating event", "event", pe, "ns", pe.File.Ns, "procPID", pe.File.Pid, "procPPID", pe.File.Ppid, "service", pe.File.Service.UID)
+					output.Send(pe)
+				}
 			}
 		}, nil
 	}

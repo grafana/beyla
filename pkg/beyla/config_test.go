@@ -12,11 +12,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gobwas/glob"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/v2/pkg/config"
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
+	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
 	"github.com/grafana/beyla/v2/pkg/export/debug"
 	"github.com/grafana/beyla/v2/pkg/export/instrumentations"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
@@ -69,6 +71,8 @@ attributes:
     beyla.network.flow:
       include: ["foo", "bar"]
       exclude: ["baz", "bae"]
+  extra_group_attributes:
+    k8s_app_meta: ["k8s.app.version"]
 network:
   enable: true
   cidrs:
@@ -204,6 +208,9 @@ network:
 					Exclude: []string{"baz", "bae"},
 				},
 			},
+			ExtraGroupAttributes: map[string][]attr.Name{
+				"k8s_app_meta": {"k8s.app.version"},
+			},
 		},
 		Routes: &transform.RoutesConfig{
 			Unmatch:      transform.UnmatchHeuristic,
@@ -220,9 +227,20 @@ network:
 		},
 		Discovery: services.DiscoveryConfig{
 			ExcludeOTelInstrumentedServices: true,
-			DefaultExcludeServices: services.DefinitionCriteria{
-				services.Attributes{
+			DefaultExcludeServices: services.RegexDefinitionCriteria{
+				services.RegexSelector{
 					Path: services.NewPathRegexp(regexp.MustCompile("(?:^|/)(beyla$|alloy$|otelcol[^/]*$)")),
+				},
+				services.RegexSelector{
+					Metadata: map[string]*services.RegexpAttr{"k8s_namespace": &k8sDefaultNamespacesRegex},
+				},
+			},
+			DefaultExcludeInstrument: services.GlobDefinitionCriteria{
+				services.GlobAttributes{
+					Path: services.NewGlob(glob.MustCompile("{*beyla,*alloy,*ebpf-instrument,*otelcol,*otelcol-contrib,*otelcol-contrib[!/]*}")),
+				},
+				services.GlobAttributes{
+					Metadata: map[string]*services.GlobAttr{"k8s_namespace": &k8sDefaultNamespacesGlob},
 				},
 			},
 		},
@@ -411,12 +429,13 @@ routes:
 }
 
 func TestConfig_OtelGoAutoEnv(t *testing.T) {
-	// OTEL_GO_AUTO_TARGET_EXE is an alias to BEYLA_EXECUTABLE_NAME
+	// OTEL_GO_AUTO_TARGET_EXE is an alias to OTEL_EBPF_AUTO_TARGET_EXE
 	// (Compatibility with OpenTelemetry)
-	require.NoError(t, os.Setenv("OTEL_GO_AUTO_TARGET_EXE", "testserver"))
+	t.Setenv("OTEL_GO_AUTO_TARGET_EXE", "*testserver")
 	cfg, err := LoadConfig(bytes.NewReader(nil))
 	require.NoError(t, err)
-	assert.True(t, cfg.Exec.IsSet()) // Exec maps to BEYLA_EXECUTABLE_NAME
+	assert.True(t, cfg.AutoTargetExe.MatchString("/bin/testserver"))
+	assert.False(t, cfg.AutoTargetExe.MatchString("somethingelse"))
 }
 
 func TestConfig_NetworkImplicit(t *testing.T) {

@@ -13,8 +13,9 @@ keywords:
 An example Beyla YAML configuration file to send OTLP data to Grafana Cloud OTLP endpoint:
 
 ```yaml
-open_port: 443
-service_name: my-instrumented-service
+discovery:
+  instrument:
+    - open_ports: 443
 log_level: DEBUG
 
 ebpf:

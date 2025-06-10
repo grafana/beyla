@@ -40,7 +40,7 @@ static __always_inline void make_tp_string(unsigned char *buf, const tp_info_t *
 }
 
 static __always_inline void
-trace_key_from_conn(trace_map_key_t *key, connection_info_t *conn, u32 type) {
+trace_key_from_conn(trace_map_key_t *key, const connection_info_t *conn, u32 type) {
     key->conn = *conn;
     // handle port forwarding changes made by proxies
     // TODO: d_port is likely the one changed, but if the server is using
@@ -49,7 +49,8 @@ trace_key_from_conn(trace_map_key_t *key, connection_info_t *conn, u32 type) {
     key->type = type;
 }
 
-static __always_inline tp_info_pid_t *trace_info_for_connection(connection_info_t *conn, u32 type) {
+static __always_inline tp_info_pid_t *trace_info_for_connection(const connection_info_t *conn,
+                                                                u32 type) {
     trace_map_key_t key = {};
     trace_key_from_conn(&key, conn, type);
     return (tp_info_pid_t *)bpf_map_lookup_elem(&trace_map, &key);
@@ -59,9 +60,9 @@ static __always_inline void
 set_trace_info_for_connection(connection_info_t *conn, u32 type, tp_info_pid_t *info) {
     trace_map_key_t key = {};
 
-    // bpf_printk("setting trace info");
+    // bpf_dbg_printk("setting trace info, type %d", info->req_type);
 
-    // d_print_http_connection_info(conn);
+    // dbg_print_http_connection_info(conn);
 
     // unsigned char tp_buf[TP_MAX_VAL_LENGTH];
     // make_tp_string(tp_buf, &info->tp);

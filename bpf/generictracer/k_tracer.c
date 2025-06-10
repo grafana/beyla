@@ -16,6 +16,8 @@
 
 #include <logger/bpf_dbg.h>
 
+#include <maps/fd_map.h>
+#include <maps/fd_to_connection.h>
 #include <maps/msg_buffers.h>
 #include <maps/sk_buffers.h>
 
@@ -121,7 +123,7 @@ int BPF_KPROBE(beyla_kprobe_tcp_rcv_established, struct sock *sk, struct sk_buff
 // Note: A current limitation is that likely we won't capture the first accept request. The
 // process may have already reached accept, before the instrumenter has launched.
 SEC("kretprobe/sys_accept4")
-int BPF_KRETPROBE(beyla_kretprobe_sys_accept4, uint fd) {
+int BPF_KRETPROBE(beyla_kretprobe_sys_accept4, s32 fd) {
     u64 id = bpf_get_current_pid_tgid();
 
     if (!valid_pid(id)) {
@@ -134,7 +136,7 @@ int BPF_KRETPROBE(beyla_kretprobe_sys_accept4, uint fd) {
 
     // The file descriptor is the value returned from the accept4 syscall.
     // If we got a negative file descriptor we don't have a connection
-    if ((int)fd < 0) {
+    if (fd < 0) {
         goto cleanup;
     }
 
@@ -147,6 +149,10 @@ int BPF_KRETPROBE(beyla_kretprobe_sys_accept4, uint fd) {
     ssl_pid_connection_info_t info = {};
 
     if (parse_accept_socket_info(args, &info.p_conn.conn)) {
+        u32 host_pid = pid_from_pid_tgid(id);
+        // store fd to connection mapping
+        store_accept_fd_info(host_pid, fd, &info.p_conn.conn);
+
         u16 orig_dport = info.p_conn.conn.d_port;
         //dbg_print_http_connection_info(&info.conn);
         sort_connection_info(&info.p_conn.conn);
@@ -155,10 +161,40 @@ int BPF_KRETPROBE(beyla_kretprobe_sys_accept4, uint fd) {
 
         // to support SSL on missing handshake
         bpf_map_update_elem(&pid_tid_to_conn, &id, &info, BPF_ANY);
+
+        const fd_key key = {.pid_tgid = id, .fd = fd};
+
+        // used by nodejs to track the fd of incoming connections - see
+        // find_nodejs_parent_trace() for usage
+        // TODO: try to merge with store_accept_fd_info() above
+        bpf_map_update_elem(&fd_to_connection, &key, &info.p_conn.conn, BPF_ANY);
     }
 
 cleanup:
     bpf_map_delete_elem(&active_accept_args, &id);
+    return 0;
+}
+
+SEC("kprobe/sys_connect")
+int BPF_KPROBE(beyla_kprobe_sys_connect) {
+    u64 id = bpf_get_current_pid_tgid();
+
+    if (!valid_pid(id)) {
+        return 0;
+    }
+
+    // unwrap fd because of sys call
+    int fd;
+    struct pt_regs *__ctx = (struct pt_regs *)PT_REGS_PARM1(ctx);
+    bpf_probe_read(&fd, sizeof(int), (void *)&PT_REGS_PARM1(__ctx));
+
+    bpf_dbg_printk("=== connect id=%d, fd=%d ===", id, fd);
+
+    sock_args_t args = {0};
+    args.fd = fd;
+
+    bpf_map_update_elem(&active_connect_args, &id, &args, BPF_ANY);
+
     return 0;
 }
 
@@ -171,16 +207,16 @@ int BPF_KPROBE(beyla_kprobe_tcp_connect, struct sock *sk) {
         return 0;
     }
 
-    bpf_dbg_printk("=== tcp connect %llx ===", id);
-
     u64 addr = (u64)sk;
 
-    sock_args_t args = {};
+    sock_args_t *args = bpf_map_lookup_elem(&active_connect_args, &id);
 
-    args.addr = addr;
-    args.accept_time = bpf_ktime_get_ns();
+    bpf_dbg_printk("=== tcp connect %llx args %llx ===", id, args);
 
-    bpf_map_update_elem(&active_connect_args, &id, &args, BPF_ANY);
+    if (args) {
+        args->addr = addr;
+        args->accept_time = bpf_ktime_get_ns();
+    }
 
     return 0;
 }
@@ -231,7 +267,12 @@ int BPF_KRETPROBE(beyla_kretprobe_sys_connect, int res) {
     ssl_pid_connection_info_t info = {};
 
     if (parse_connect_sock_info(args, &info.p_conn.conn)) {
-        bpf_dbg_printk("=== connect ret id=%d, pid=%d ===", id, pid_from_pid_tgid(id));
+        u32 host_pid = pid_from_pid_tgid(id);
+        bpf_dbg_printk(
+            "=== connect ret id=%d, pid=%d fd=%d ===", id, pid_from_pid_tgid(id), args->fd);
+        // store fd to connection mapping
+        store_connect_fd_info(host_pid, args->fd, &info.p_conn.conn);
+
         u16 orig_dport = info.p_conn.conn.d_port;
         dbg_print_http_connection_info(&info.p_conn.conn);
         sort_connection_info(&info.p_conn.conn);

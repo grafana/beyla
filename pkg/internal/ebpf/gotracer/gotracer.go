@@ -21,6 +21,7 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/config"
@@ -30,7 +31,6 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
-	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/gotracer/gotracer.c -- -I../../../../bpf -DNO_HEADER_PROPAGATION
@@ -47,11 +47,11 @@ type Tracer struct {
 	closers    []io.Closer
 }
 
-func New(cfg *beyla.Config, metrics imetrics.Reporter) *Tracer {
+func New(pidFilter ebpfcommon.ServiceFilter, cfg *beyla.Config, metrics imetrics.Reporter) *Tracer {
 	log := slog.With("component", "go.Tracer")
 	return &Tracer{
 		log:        log,
-		pidsFilter: ebpfcommon.CommonPIDsFilter(&cfg.Discovery),
+		pidsFilter: pidFilter,
 		cfg:        &cfg.EBPF,
 		metrics:    metrics,
 	}
@@ -428,8 +428,9 @@ func (p *Tracer) AlreadyInstrumentedLib(_ uint64) bool {
 	return false
 }
 
-func (p *Tracer) Run(ctx context.Context, eventsChan *msg.Queue[[]request.Span]) {
+func (p *Tracer) Run(ctx context.Context, ebpfEventContext *ebpfcommon.EBPFEventContext, eventsChan *msg.Queue[[]request.Span]) {
 	ebpfcommon.SharedRingbuf(
+		ebpfEventContext,
 		p.cfg,
 		p.pidsFilter,
 		p.bpfObjects.Events,

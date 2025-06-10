@@ -14,11 +14,14 @@ import (
 	"time"
 
 	"github.com/mariomac/guara/pkg/test"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
+	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
 	"github.com/grafana/beyla/v2/pkg/export/instrumentations"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/internal/connector"
@@ -26,8 +29,6 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
-	"github.com/grafana/beyla/v2/pkg/pipe/msg"
-	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 const timeout = 3 * time.Second
@@ -41,11 +42,18 @@ func TestAppMetricsExpiration(t *testing.T) {
 	require.NoError(t, err)
 	promURL := fmt.Sprintf("http://127.0.0.1:%d/metrics", openPort)
 
+	var g attributes.AttrGroups
+	g.Add(attributes.GroupKubernetes)
+
 	// GIVEN a Prometheus Metrics Exporter with a metrics expire time of 3 minutes
 	promInput := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
 	processEvents := msg.NewQueue[exec.ProcessEvent](msg.ChannelBufferLen(20))
 	exporter, err := PrometheusEndpoint(
-		&global.ContextInfo{Prometheus: &connector.PrometheusManager{}, HostID: "my-host"},
+		&global.ContextInfo{
+			Prometheus:            &connector.PrometheusManager{},
+			HostID:                "my-host",
+			MetricAttributeGroups: g,
+		},
 		&PrometheusConfig{
 			Port:                        openPort,
 			Path:                        "/metrics",
@@ -54,10 +62,14 @@ func TestAppMetricsExpiration(t *testing.T) {
 			Features:                    []string{otel.FeatureApplication},
 			Instrumentations:            []string{instrumentations.InstrumentationALL},
 		},
-		false,
-		attributes.Selection{
-			attributes.HTTPServerDuration.Section: attributes.InclusionLists{
-				Include: []string{"url_path"},
+		&attributes.SelectorConfig{
+			SelectionCfg: attributes.Selection{
+				attributes.HTTPServerDuration.Section: attributes.InclusionLists{
+					Include: []string{"url_path", "k8s.app.version"},
+				},
+			},
+			ExtraGroupAttributesCfg: map[string][]attr.Name{
+				"k8s_app_meta": {"k8s.app.version"},
 			},
 		},
 		promInput,
@@ -79,7 +91,15 @@ func TestAppMetricsExpiration(t *testing.T) {
 
 	// WHEN it receives metrics
 	promInput.Send([]request.Span{
-		{Type: request.EventTypeHTTP, Path: "/foo", End: 123 * time.Second.Nanoseconds()},
+		{Type: request.EventTypeHTTP,
+			Path: "/foo",
+			End:  123 * time.Second.Nanoseconds(),
+			Service: svc.Attrs{
+				Metadata: map[attr.Name]string{
+					"k8s.app.version": "v0.0.1",
+				},
+			},
+		},
 		{Type: request.EventTypeHTTP, Path: "/baz", End: 456 * time.Second.Nanoseconds()},
 	})
 
@@ -88,8 +108,8 @@ func TestAppMetricsExpiration(t *testing.T) {
 	// THEN the metrics are exported
 	test.Eventually(t, timeout, func(t require.TestingT) {
 		exported := getMetrics(t, promURL)
-		assert.Contains(t, exported, `http_server_request_duration_seconds_sum{url_path="/foo"} 123`)
-		assert.Contains(t, exported, `http_server_request_duration_seconds_sum{url_path="/baz"} 456`)
+		assert.Contains(t, exported, `http_server_request_duration_seconds_sum{k8s_app_version="v0.0.1",url_path="/foo"} 123`)
+		assert.Contains(t, exported, `http_server_request_duration_seconds_sum{k8s_app_version="",url_path="/baz"} 456`)
 		assert.Regexp(t, containsTargetInfo, exported)
 	})
 
@@ -97,7 +117,16 @@ func TestAppMetricsExpiration(t *testing.T) {
 	now.Advance(2 * time.Minute)
 	// WHEN it receives metrics
 	promInput.Send([]request.Span{
-		{Type: request.EventTypeHTTP, Path: "/foo", End: 123 * time.Second.Nanoseconds()},
+		{
+			Type: request.EventTypeHTTP,
+			Path: "/foo",
+			End:  123 * time.Second.Nanoseconds(),
+			Service: svc.Attrs{
+				Metadata: map[attr.Name]string{
+					"k8s.app.version": "v0.0.1",
+				},
+			},
+		},
 	})
 	now.Advance(2 * time.Minute)
 
@@ -105,10 +134,10 @@ func TestAppMetricsExpiration(t *testing.T) {
 	var exported string
 	test.Eventually(t, timeout, func(t require.TestingT) {
 		exported = getMetrics(t, promURL)
-		assert.Contains(t, exported, `http_server_request_duration_seconds_sum{url_path="/foo"} 246`)
+		assert.Contains(t, exported, `http_server_request_duration_seconds_sum{k8s_app_version="v0.0.1",url_path="/foo"} 246`)
 	})
 	// BUT not the metrics that haven't been received during that time
-	assert.NotContains(t, exported, `http_server_request_duration_seconds_sum{url_path="/baz"}`)
+	assert.NotContains(t, exported, `http_server_request_duration_seconds_sum{k8s_app_version="",url_path="/baz"}`)
 	assert.Regexp(t, containsTargetInfo, exported)
 	now.Advance(2 * time.Minute)
 
@@ -121,9 +150,9 @@ func TestAppMetricsExpiration(t *testing.T) {
 	// THEN they are reported again, starting from zero in the case of counters
 	test.Eventually(t, timeout, func(t require.TestingT) {
 		exported = getMetrics(t, promURL)
-		assert.Contains(t, exported, `http_server_request_duration_seconds_sum{url_path="/baz"} 456`)
+		assert.Contains(t, exported, `http_server_request_duration_seconds_sum{k8s_app_version="",url_path="/baz"} 456`)
 	})
-	assert.NotContains(t, exported, `http_server_request_duration_seconds_sum{url_path="/foo"}`)
+	assert.NotContains(t, exported, `http_server_request_duration_seconds_sum{k8s_app_version="",url_path="/foo"}`)
 	assert.Regexp(t, containsTargetInfo, exported)
 }
 
@@ -366,7 +395,7 @@ func TestSpanMetricsDiscarded(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.discarded, !(mr.otelSpanObserved(&tt.span)), tt.name)
+			assert.Equal(t, tt.discarded, !mr.otelSpanObserved(&tt.span), tt.name)
 			assert.Equal(t, tt.filtered, mr.otelSpanFiltered(&tt.span), tt.name)
 		})
 	}
@@ -409,7 +438,7 @@ func TestTerminatesOnBadPromPort(t *testing.T) {
 	pm.Register(openPort, "/metrics", c)
 	go pm.StartHTTP(ctx)
 
-	ok := false
+	var ok bool
 	select {
 	case sig := <-sigChan:
 		assert.Equal(t, sig, syscall.SIGINT)
@@ -509,10 +538,11 @@ func makePromExporter(
 			Features:                    []string{otel.FeatureApplication},
 			Instrumentations:            instrumentations,
 		},
-		false,
-		attributes.Selection{
-			attributes.HTTPServerDuration.Section: attributes.InclusionLists{
-				Include: []string{"url_path"},
+		&attributes.SelectorConfig{
+			SelectionCfg: attributes.Selection{
+				attributes.HTTPServerDuration.Section: attributes.InclusionLists{
+					Include: []string{"url_path"},
+				},
 			},
 		},
 		input,

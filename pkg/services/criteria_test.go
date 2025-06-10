@@ -10,7 +10,8 @@ import (
 )
 
 type yamlFile struct {
-	Services DefinitionCriteria `yaml:"services"`
+	//nolint:undoc
+	Services RegexDefinitionCriteria `yaml:"services"`
 }
 
 func TestYAMLParse_PathRegexp(t *testing.T) {

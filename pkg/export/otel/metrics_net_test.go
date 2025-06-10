@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/attribute"
@@ -12,7 +13,6 @@ import (
 	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
-	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
 func TestMetricAttributes(t *testing.T) {
@@ -40,8 +40,10 @@ func TestMetricAttributes(t *testing.T) {
 
 	me, err := newMetricsExporter(t.Context(),
 		&global.ContextInfo{MetricAttributeGroups: attributes.GroupKubernetes},
-		&NetMetricsConfig{AttributeSelectors: map[attributes.Section]attributes.InclusionLists{
-			attributes.BeylaNetworkFlow.Section: {Include: []string{"*"}},
+		&NetMetricsConfig{SelectorCfg: &attributes.SelectorConfig{
+			SelectionCfg: map[attributes.Section]attributes.InclusionLists{
+				attributes.BeylaNetworkFlow.Section: {Include: []string{"*"}},
+			},
 		}, Metrics: &MetricsConfig{
 			MetricsEndpoint:   "http://foo",
 			Interval:          10 * time.Millisecond,
@@ -97,12 +99,14 @@ func TestMetricAttributes_Filter(t *testing.T) {
 
 	me, err := newMetricsExporter(t.Context(),
 		&global.ContextInfo{MetricAttributeGroups: attributes.GroupKubernetes},
-		&NetMetricsConfig{AttributeSelectors: map[attributes.Section]attributes.InclusionLists{
-			attributes.BeylaNetworkFlow.Section: {Include: []string{
-				"src.address",
-				"k8s.src.name",
-				"k8s.dst.name",
-			}},
+		&NetMetricsConfig{SelectorCfg: &attributes.SelectorConfig{
+			SelectionCfg: map[attributes.Section]attributes.InclusionLists{
+				attributes.BeylaNetworkFlow.Section: {Include: []string{
+					"src.address",
+					"k8s.src.name",
+					"k8s.dst.name",
+				}},
+			},
 		}, Metrics: &MetricsConfig{
 			MetricsEndpoint:   "http://foo",
 			Interval:          10 * time.Millisecond,

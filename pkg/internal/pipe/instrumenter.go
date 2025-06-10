@@ -3,6 +3,9 @@ package pipe
 import (
 	"context"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
+
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/export/alloy"
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
@@ -16,8 +19,6 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/traces"
-	"github.com/grafana/beyla/v2/pkg/pipe/msg"
-	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 	"github.com/grafana/beyla/v2/pkg/transform"
 )
 
@@ -43,6 +44,11 @@ func newGraphBuilder(config *beyla.Config, ctxInfo *global.ContextInfo, tracesCh
 		builder: swi,
 		config:  config,
 		ctxInfo: ctxInfo,
+	}
+
+	selectorCfg := &attributes.SelectorConfig{
+		SelectionCfg:            config.Attributes.Select,
+		ExtraGroupAttributesCfg: config.Attributes.ExtraGroupAttributes,
 	}
 
 	newQueue := func() *msg.Queue[[]request.Span] {
@@ -77,17 +83,24 @@ func newGraphBuilder(config *beyla.Config, ctxInfo *global.ContextInfo, tracesCh
 		kubeDecoratorToNameResolver, nameResolverToAttrFilter))
 
 	exportableSpans := newQueue()
-	swi.Add(filter.ByAttribute(config.Filters.Application, spanPtrPromGetters,
+	swi.Add(filter.ByAttribute(config.Filters.Application, selectorCfg.ExtraGroupAttributesCfg, spanPtrPromGetters,
 		nameResolverToAttrFilter, exportableSpans))
 
 	config.Metrics.Grafana = &gb.config.Grafana.OTLP
-	swi.Add(otel.ReportMetrics(ctxInfo, &config.Metrics, config.Discovery.SurveyEnabled(), config.Attributes.Select, exportableSpans, processEventsCh))
+	swi.Add(otel.ReportMetrics(
+		ctxInfo,
+		&config.Metrics,
+		selectorCfg,
+		exportableSpans,
+		processEventsCh,
+	))
 
 	config.Traces.Grafana = &gb.config.Grafana.OTLP
-	swi.Add(otel.TracesReceiver(ctxInfo, config.Traces, config.Metrics.SpanMetricsEnabled(), config.Attributes.Select, exportableSpans))
-	swi.Add(prom.PrometheusEndpoint(ctxInfo, &config.Prometheus, config.Discovery.SurveyEnabled(), config.Attributes.Select, exportableSpans, processEventsCh))
+	swi.Add(otel.TracesReceiver(ctxInfo, config.Traces, config.Metrics.SpanMetricsEnabled(), selectorCfg, exportableSpans))
+	swi.Add(prom.PrometheusEndpoint(ctxInfo, &config.Prometheus, selectorCfg, exportableSpans, processEventsCh))
+
 	swi.Add(prom.BPFMetrics(ctxInfo, &config.Prometheus))
-	swi.Add(alloy.TracesReceiver(ctxInfo, &config.TracesReceiver, config.Metrics.SpanMetricsEnabled(), config.Attributes.Select, exportableSpans))
+	swi.Add(alloy.TracesReceiver(ctxInfo, &config.TracesReceiver, config.Metrics.SpanMetricsEnabled(), selectorCfg, exportableSpans))
 
 	swi.Add(debug.PrinterNode(config.TracePrinter, exportableSpans))
 

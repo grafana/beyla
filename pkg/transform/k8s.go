@@ -7,6 +7,9 @@ import (
 	"maps"
 	"time"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
+
 	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
 	"github.com/grafana/beyla/v2/pkg/internal/exec"
 	"github.com/grafana/beyla/v2/pkg/internal/kube"
@@ -14,8 +17,6 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
 	"github.com/grafana/beyla/v2/pkg/kubeflags"
-	"github.com/grafana/beyla/v2/pkg/pipe/msg"
-	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 func klog() *slog.Logger {
@@ -157,7 +158,7 @@ func (md *procEventMetadataDecorator) k8sLoop(_ context.Context) {
 	klog().Debug("starting kubernetes process event decoration loop")
 	for pe := range md.input {
 		if podMeta, containerName := md.db.PodContainerByPIDNs(pe.File.Ns); podMeta != nil {
-			appendMetadata(md.db, &pe.File.Service, podMeta, md.clusterName, containerName)
+			AppendKubeMetadata(md.db, &pe.File.Service, podMeta, md.clusterName, containerName)
 		} else {
 			klog().Debug("can't find metadata for event", "ns", pe.File.Ns)
 			// do not leave the service attributes map as nil
@@ -173,7 +174,7 @@ func (md *procEventMetadataDecorator) k8sLoop(_ context.Context) {
 
 func (md *metadataDecorator) do(span *request.Span) {
 	if podMeta, containerName := md.db.PodContainerByPIDNs(span.Pid.Namespace); podMeta != nil {
-		appendMetadata(md.db, &span.Service, podMeta, md.clusterName, containerName)
+		AppendKubeMetadata(md.db, &span.Service, podMeta, md.clusterName, containerName)
 	} else {
 		// do not leave the service attributes map as nil
 		span.Service.Metadata = map[attr.Name]string{}
@@ -187,7 +188,10 @@ func (md *metadataDecorator) do(span *request.Span) {
 	}
 }
 
-func appendMetadata(db *kube.Store, svc *svc.Attrs, meta *kube.CachedObjMeta, clusterName, containerName string) {
+// AppendKubeMetadata populates some metadata values in the passed svc.Attrs.
+// This method should be invoked by any entity willing to follow a common policy for
+// setting metadata attributes. For example this metadataDecorator or the survey informer
+func AppendKubeMetadata(db *kube.Store, svc *svc.Attrs, meta *kube.CachedObjMeta, clusterName, containerName string) {
 	if meta.Meta.Pod == nil {
 		// if this message happen, there is a bug
 		klog().Debug("pod metadata for is nil. Ignoring decoration", "meta", meta)

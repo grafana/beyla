@@ -5,10 +5,11 @@ import (
 	"context"
 	"log/slog"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
+
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/transform/route"
-	"github.com/grafana/beyla/v2/pkg/pipe/msg"
-	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 // UnmatchType defines which actions to do when a route pattern is not recognized
@@ -91,29 +92,34 @@ func (rn *routerNode) provideRoutes(_ context.Context) (swarm.RunFunc, error) {
 
 	in := rn.input.Subscribe()
 	out := rn.output
-	return func(_ context.Context) {
+	return func(ctx context.Context) {
 		// output channel must be closed so later stages in the pipeline can finish in cascade
 		defer rn.output.Close()
 
-		for spans := range in {
-			for i := range spans {
-				s := &spans[i]
-				if ignoreEnabled {
-					if discarder.Find(s.Path) != "" {
-						if ignoreMode == IgnoreAll {
-							s.SetIgnoreMetrics()
-							s.SetIgnoreTraces()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case spans := <-in:
+				for i := range spans {
+					s := &spans[i]
+					if ignoreEnabled {
+						if discarder.Find(s.Path) != "" {
+							if ignoreMode == IgnoreAll {
+								s.SetIgnoreMetrics()
+								s.SetIgnoreTraces()
+							}
+							// we can't discard it here, ignoring is selective (metrics | traces)
+							setSpanIgnoreMode(ignoreMode, s)
 						}
-						// we can't discard it here, ignoring is selective (metrics | traces)
-						setSpanIgnoreMode(ignoreMode, s)
 					}
+					if routesEnabled {
+						s.Route = matcher.Find(s.Path)
+					}
+					unmatchAction(rc, s)
 				}
-				if routesEnabled {
-					s.Route = matcher.Find(s.Path)
-				}
-				unmatchAction(rc, s)
+				out.Send(spans)
 			}
-			out.Send(spans)
 		}
 	}, nil
 }

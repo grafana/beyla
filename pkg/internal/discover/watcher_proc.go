@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 	"github.com/shirou/gopsutil/v3/net"
 	"github.com/shirou/gopsutil/v3/process"
 
@@ -17,8 +19,6 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/logger"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/watcher"
-	"github.com/grafana/beyla/v2/pkg/pipe/msg"
-	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 	"github.com/grafana/beyla/v2/pkg/services"
 )
 
@@ -98,13 +98,13 @@ type pollAccounter struct {
 	// injectable function
 	executableReady func(PID) (string, bool)
 	// injectable function to load the bpf program
-	loadBPFWatcher func(cfg *beyla.Config, events chan<- watcher.Event) error
-	loadBPFLogger  func(cfg *beyla.Config) error
+	loadBPFWatcher func(ctx context.Context, cfg *beyla.Config, events chan<- watcher.Event) error
+	loadBPFLogger  func(ctx context.Context, cfg *beyla.Config) error
 	// we use these to ensure we poll for the open ports effectively
 	stateMux          sync.Mutex
 	bpfWatcherEnabled bool
 	fetchPorts        bool
-	findingCriteria   services.DefinitionCriteria
+	findingCriteria   []services.Selector
 	output            *msg.Queue[[]Event[processAttrs]]
 }
 
@@ -114,20 +114,20 @@ func (pa *pollAccounter) run(ctx context.Context) {
 	log := slog.With("component", "discover.ProcessWatcher", "interval", pa.interval)
 
 	bpfWatchEvents := make(chan watcher.Event, 100)
-	if err := pa.loadBPFWatcher(pa.cfg, bpfWatchEvents); err != nil {
+	if err := pa.loadBPFWatcher(ctx, pa.cfg, bpfWatchEvents); err != nil {
 		log.Error("Unable to load eBPF watcher for process events", "error", err)
 		// will stop pipeline in cascade
 		return
 	}
 
 	if pa.cfg.EBPF.BpfDebug {
-		if err := pa.loadBPFLogger(pa.cfg); err != nil {
+		if err := pa.loadBPFLogger(ctx, pa.cfg); err != nil {
 			log.Error("Unable to load eBPF logger for process events", "error", err)
 			// keep running without logs
 		}
 	}
 
-	go pa.watchForProcessEvents(log, bpfWatchEvents)
+	go pa.watchForProcessEvents(ctx, log, bpfWatchEvents)
 
 	for {
 		procs, err := pa.listProcesses(pa.portFetchRequired())
@@ -175,18 +175,32 @@ func (pa *pollAccounter) portFetchRequired() bool {
 	return ret
 }
 
-func (pa *pollAccounter) watchForProcessEvents(log *slog.Logger, events <-chan watcher.Event) {
-	for e := range events {
-		switch e.Type {
-		case watcher.Ready:
-			pa.bpfWatcherIsReady()
-		case watcher.NewPort:
-			port := int(e.Payload)
-			if pa.cfg.Port.Matches(port) || pa.findingCriteria.PortOfInterest(port) {
-				pa.refetchPorts()
+func portOfInterest(criteria []services.Selector, port int) bool {
+	for _, cr := range criteria {
+		if cr.GetOpenPorts().Matches(port) {
+			return true
+		}
+	}
+	return false
+}
+
+func (pa *pollAccounter) watchForProcessEvents(ctx context.Context, log *slog.Logger, events <-chan watcher.Event) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case e := <-events:
+			switch e.Type {
+			case watcher.Ready:
+				pa.bpfWatcherIsReady()
+			case watcher.NewPort:
+				port := int(e.Payload)
+				if pa.cfg.Port.Matches(port) || portOfInterest(pa.findingCriteria, port) {
+					pa.refetchPorts()
+				}
+			default:
+				log.Warn("Unknown ebpf process watch event", "type", e.Type)
 			}
-		default:
-			log.Warn("Unknown ebpf process watch event", "type", e.Type)
 		}
 	}
 }
@@ -337,12 +351,12 @@ func fetchProcessPorts(scanPorts bool) (map[PID]processAttrs, error) {
 	return processes, nil
 }
 
-func loadBPFWatcher(cfg *beyla.Config, events chan<- watcher.Event) error {
+func loadBPFWatcher(ctx context.Context, cfg *beyla.Config, events chan<- watcher.Event) error {
 	wt := watcher.New(cfg, events)
-	return ebpf.RunUtilityTracer(wt)
+	return ebpf.RunUtilityTracer(ctx, wt)
 }
 
-func loadBPFLogger(cfg *beyla.Config) error {
+func loadBPFLogger(ctx context.Context, cfg *beyla.Config) error {
 	wt := logger.New(cfg)
-	return ebpf.RunUtilityTracer(wt)
+	return ebpf.RunUtilityTracer(ctx, wt)
 }

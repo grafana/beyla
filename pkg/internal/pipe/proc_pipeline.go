@@ -73,6 +73,6 @@ func ProcessMetricsSwarmInstancer(
 		if err != nil {
 			return nil, fmt.Errorf("failed to create the process pipeline: %w", err)
 		}
-		return runner.Start, nil
+		return func(ctx context.Context) { runner.Start(ctx) }, nil
 	}
 }

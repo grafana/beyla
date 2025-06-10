@@ -9,6 +9,8 @@ on:
 # Set restrictive permissions at workflow level
 permissions:
   contents: read
+  # required for CODECOV token
+  id-token: write
 
 jobs:
   test:

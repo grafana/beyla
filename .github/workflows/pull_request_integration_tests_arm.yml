@@ -18,6 +18,8 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+      # required for CODECOV token
+      id-token: write
     strategy:
       matrix:
         go: [ '1.24' ]

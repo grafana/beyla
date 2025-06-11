@@ -4,11 +4,10 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	trace2 "go.opentelemetry.io/otel/trace"
-
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 )
 
 func TestSpanClientServer(t *testing.T) {

@@ -3,8 +3,9 @@ package attributes
 import (
 	"maps"
 
-	attrextra "github.com/grafana/beyla/v2/pkg/export/attributes/beyla"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
+
+	attrextra "github.com/grafana/beyla/v2/pkg/export/attributes/beyla"
 )
 
 // AttrGroups will let enabling by default some groups of attributes under

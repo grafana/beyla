@@ -9,6 +9,8 @@ import (
 
 	"github.com/caarlos0/env/v9"
 	"github.com/gobwas/glob"
+	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/services"
 	otelconsumer "go.opentelemetry.io/collector/consumer"
 	"gopkg.in/yaml.v3"
 
@@ -27,8 +29,6 @@ import (
 	"github.com/grafana/beyla/v2/pkg/kubeflags"
 	servicesextra "github.com/grafana/beyla/v2/pkg/services"
 	"github.com/grafana/beyla/v2/pkg/transform"
-	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/services"
 )
 
 const ReporterLRUSize = 256

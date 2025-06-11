@@ -12,6 +12,7 @@ import (
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/services"
 	"github.com/shirou/gopsutil/v3/net"
 	"github.com/shirou/gopsutil/v3/process"
 
@@ -19,7 +20,6 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/logger"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/watcher"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/services"
 )
 
 const (

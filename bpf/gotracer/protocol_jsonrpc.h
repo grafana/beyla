@@ -43,6 +43,15 @@ static __always_inline u32 json_value_offset(const char *body, u32 body_len, u32
     return pos;
 }
 
+// Returns the end position (index of closing quote) of a JSON string value.
+// If not found, returns body_len.
+static __always_inline u32 json_str_value_end(const char *body, u32 body_len, u32 value_start) {
+    // find_first_pos_of expects unsigned char*, so cast accordingly
+    return value_start + find_first_pos_of((unsigned char *)(body + value_start),
+                                           (unsigned char *)(body + body_len),
+                                           '"');
+}
+
 // Looks for '"jsonrpc":"2.0"'
 static __always_inline u32 is_jsonrpc2_body(const char *body, u32 body_len) {
     u32 key_pos = bpf_memstr(body, body_len, k_jsonrpc_key, k_jsonrpc_key_len);
@@ -88,11 +97,7 @@ static __always_inline u32 extract_jsonrpc2_method(const char *body,
 
     // Start of the value (after the opening quote)
     u32 value_start = val_search_start + 1;
-    u32 value_end = value_start;
-    // Find the closing quote, or stop at end of buffer
-    while (value_end < body_len && body[value_end] != '"') {
-        value_end++;
-    }
+    u32 value_end = json_str_value_end(body, body_len, value_start);
     // If closing quote not found, value_end will be body_len
 
     u32 value_len = value_end - value_start;

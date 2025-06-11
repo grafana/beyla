@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"strings"
 
+	ebpfcommon "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/common"
 	"golang.org/x/sys/unix"
 
 	ebpfcfg "github.com/grafana/beyla/v2/pkg/config"
-	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/v2/pkg/internal/helpers"
 )
 

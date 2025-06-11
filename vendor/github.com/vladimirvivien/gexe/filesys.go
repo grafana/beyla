@@ -1,6 +1,7 @@
 package gexe
 
 import (
+	"context"
 	"os"
 
 	"github.com/vladimirvivien/gexe/fs"
@@ -31,23 +32,33 @@ func (e *Echo) PathInfo(path string) *fs.FSInfo {
 	return fs.PathWithVars(path, e.vars).Info()
 }
 
+// FileReadWithContext uses specified context to provide methods to read file
+// content at path.
+func (e *Echo) FileReadWithContext(ctx context.Context, path string) *fs.FileReader {
+	return fs.ReadWithContextVars(ctx, path, e.vars)
+}
+
 // FileRead provides methods to read file content
-//
-// FileRead(path).Lines()
 func (e *Echo) FileRead(path string) *fs.FileReader {
-	return fs.PathWithVars(path, e.vars).Read()
+	return fs.ReadWithContextVars(context.Background(), path, e.vars)
 }
 
-// FileWrite provides methods to write content to provided path
-//
-// FileWrite(path).String("hello world")
+// FileWriteWithContext uses context ctx to create a fs.FileWriter to write content to provided path
+func (e *Echo) FileWriteWithContext(ctx context.Context, path string) *fs.FileWriter {
+	return fs.WriteWithContextVars(ctx, path, e.vars)
+}
+
+// FileWrite creates a fs.FileWriter to write content to provided path
 func (e *Echo) FileWrite(path string) *fs.FileWriter {
-	return fs.PathWithVars(path, e.vars).Write()
+	return fs.WriteWithContextVars(context.Background(), path, e.vars)
 }
 
-// FileAppend provides methods to append content to provided path
-//
-// FileAppend(path).String("hello world")
+// FileAppend creates a new fs.FileWriter to append content to provided path
+func (e *Echo) FileAppendWithContext(ctx context.Context, path string) *fs.FileWriter {
+	return fs.AppendWithContextVars(ctx, path, e.vars)
+}
+
+// FileAppend creates a new fs.FileWriter to append content to provided path
 func (e *Echo) FileAppend(path string) *fs.FileWriter {
-	return fs.PathWithVars(path, e.vars).Append()
+	return fs.AppendWithContextVars(context.Background(), path, e.vars)
 }

@@ -24,12 +24,8 @@ aliases:
   controller-runtime-reviewers:
   - varshaprasad96
   - inteon
-
-  # folks to can approve things in the directly-ported
-  # testing_frameworks portions of the codebase
-  testing-integration-approvers:
-  - apelisse
-  - hoegaarden
+  - JoelSpeed
+  - troy0820
 
   # folks who may have context on ancient history,
   # but are no longer directly involved

@@ -5,7 +5,7 @@ package ec2 // import "go.opentelemetry.io/contrib/detectors/aws/ec2"
 
 // Version is the current release version of the EC2 resource detector.
 func Version() string {
-	return "1.28.0"
+	return "1.36.0"
 	// This string is updated by the pre_release.sh script during release
 }
 

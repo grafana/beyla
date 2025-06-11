@@ -1,6 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
+// Package ec2 provides a resource detector for EC2 instances.
 package ec2 // import "go.opentelemetry.io/contrib/detectors/aws/ec2"
 
 import (

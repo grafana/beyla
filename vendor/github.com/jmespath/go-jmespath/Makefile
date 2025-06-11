@@ -19,13 +19,17 @@ build:
 	rm -f cmd/$(CMD)/$(CMD) && cd cmd/$(CMD)/ && go build ./...
 	mv cmd/$(CMD)/$(CMD) .
 
-test: build
+test: test-internal-testify
+	echo "making tests ${SRC_PKGS}"
 	go test -v ${SRC_PKGS}
 
 check:
 	go vet ${SRC_PKGS}
-	golint ${SRC_PKGS}
-	golangci-lint run
+	@echo "golint ${SRC_PKGS}"
+	@lint=`golint ${SRC_PKGS}`; \
+	lint=`echo "$$lint" | grep -v "astnodetype_string.go" | grep -v "toktype_string.go"`; \
+	echo "$$lint"; \
+	if [ "$$lint" != "" ]; then exit 1; fi
 
 htmlc:
 	go test -coverprofile="/tmp/jpcov"  && go tool cover -html="/tmp/jpcov" && unlink /tmp/jpcov
@@ -42,7 +46,6 @@ bench:
 pprof-cpu:
 	go tool pprof ./go-jmespath.test ./cpu.out
 
-install-dev-cmds:
-	go install golang.org/x/lint/golint@latest
-	go install golang.org/x/tools/cmd/stringer@latest
-	command -v golangci-lint || { curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $$(go env GOPATH)/bin v1.46.2; }
+test-internal-testify:
+	cd internal/testify && go test ./...
+

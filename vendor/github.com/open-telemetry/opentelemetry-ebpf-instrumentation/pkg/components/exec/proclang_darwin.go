@@ -3,7 +3,7 @@ package exec
 import (
 	"debug/elf"
 
-	"github.com/grafana/beyla/v2/pkg/internal/svc"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 )
 
 func FindProcLanguage(_ int32) svc.InstrumentableType {

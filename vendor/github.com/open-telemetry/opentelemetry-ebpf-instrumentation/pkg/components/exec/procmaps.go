@@ -9,7 +9,6 @@ import (
 
 func FindLibMaps(pid int32) ([]*procfs.ProcMap, error) {
 	proc, err := procfs.NewProc(int(pid))
-
 	if err != nil {
 		return nil, err
 	}

@@ -11,8 +11,8 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/connector"
 	"github.com/grafana/beyla/v2/pkg/internal/discover"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf"
-	"github.com/grafana/beyla/v2/pkg/internal/exec"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 )
 
 func TestProcessEventsLoopDoesntBlock(t *testing.T) {

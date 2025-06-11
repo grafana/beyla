@@ -3,7 +3,8 @@ package attributes
 import (
 	"maps"
 
-	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
+	attrextra "github.com/grafana/beyla/v2/pkg/export/attributes/beyla"
+	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 )
 
 // AttrGroups will let enabling by default some groups of attributes under
@@ -166,7 +167,7 @@ func getDefinitions(
 			attr.K8sPodStartTime:    true,
 			attr.K8sClusterName:     true,
 			attr.K8sOwnerName:       true,
-			attr.K8sKind:            true,
+			attrextra.K8sKind:       true,
 		},
 		extraGroupAttributes[GroupAppKube],
 	)
@@ -237,16 +238,16 @@ func getDefinitions(
 		!promEnabled,
 		nil,
 		map[attr.Name]Default{
-			attr.Instance:        true,
-			attr.Job:             true,
-			attr.ProcCommand:     true,
-			attr.ProcOwner:       true,
-			attr.ProcParentPid:   true,
-			attr.ProcPid:         true,
-			attr.ProcCommandLine: false,
-			attr.ProcCommandArgs: false,
-			attr.ProcExecName:    false,
-			attr.ProcExecPath:    false,
+			attr.Instance:             true,
+			attr.Job:                  true,
+			attrextra.ProcCommand:     true,
+			attrextra.ProcOwner:       true,
+			attrextra.ProcParentPid:   true,
+			attrextra.ProcPid:         true,
+			attrextra.ProcCommandLine: false,
+			attrextra.ProcCommandArgs: false,
+			attrextra.ProcExecName:    false,
+			attrextra.ProcExecPath:    false,
 		},
 		extraGroupAttributes[GroupPromProcess],
 	)
@@ -255,9 +256,9 @@ func getDefinitions(
 		false,
 		[]*AttrReportGroup{&appKubeAttributes, &hostAttributes, &promProcessAttributes},
 		map[attr.Name]Default{
-			attr.ProcCPUMode:   true,
-			attr.ProcDiskIODir: true,
-			attr.ProcNetIODir:  true,
+			attrextra.ProcCPUMode:   true,
+			attrextra.ProcDiskIODir: true,
+			attrextra.ProcNetIODir:  true,
 		},
 		extraGroupAttributes[GroupProcess],
 	)

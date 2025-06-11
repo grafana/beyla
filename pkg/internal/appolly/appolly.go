@@ -16,12 +16,12 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/discover"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf"
 	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
-	"github.com/grafana/beyla/v2/pkg/internal/exec"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/traces"
 	"github.com/grafana/beyla/v2/pkg/transform"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 )
 
 var errShutdownTimeout = errors.New("graceful shutdown has timed out")

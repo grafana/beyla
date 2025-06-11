@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"strconv"
 
-	"github.com/grafana/beyla/v2/pkg/internal/exec"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 )
 
 // injectable values for testing

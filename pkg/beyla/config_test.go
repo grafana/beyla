@@ -18,7 +18,6 @@ import (
 
 	"github.com/grafana/beyla/v2/pkg/config"
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
-	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
 	"github.com/grafana/beyla/v2/pkg/export/debug"
 	"github.com/grafana/beyla/v2/pkg/export/instrumentations"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
@@ -30,8 +29,10 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/transform/cidr"
 	"github.com/grafana/beyla/v2/pkg/internal/traces"
 	"github.com/grafana/beyla/v2/pkg/kubeflags"
-	"github.com/grafana/beyla/v2/pkg/services"
+	servicesextra "github.com/grafana/beyla/v2/pkg/services"
 	"github.com/grafana/beyla/v2/pkg/transform"
+	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/services"
 )
 
 type envMap map[string]string
@@ -225,22 +226,24 @@ network:
 			RunMode:  process.RunModePrivileged,
 			Interval: 5 * time.Second,
 		},
-		Discovery: services.DiscoveryConfig{
-			ExcludeOTelInstrumentedServices: true,
-			DefaultExcludeServices: services.RegexDefinitionCriteria{
-				services.RegexSelector{
-					Path: services.NewPathRegexp(regexp.MustCompile("(?:^|/)(beyla$|alloy$|otelcol[^/]*$)")),
+		Discovery: servicesextra.BeylaDiscoveryConfig{
+			DiscoveryConfig: services.DiscoveryConfig{
+				ExcludeOTelInstrumentedServices: true,
+				DefaultExcludeServices: services.RegexDefinitionCriteria{
+					services.RegexSelector{
+						Path: services.NewPathRegexp(regexp.MustCompile("(?:^|/)(beyla$|alloy$|otelcol[^/]*$)")),
+					},
+					services.RegexSelector{
+						Metadata: map[string]*services.RegexpAttr{"k8s_namespace": &k8sDefaultNamespacesRegex},
+					},
 				},
-				services.RegexSelector{
-					Metadata: map[string]*services.RegexpAttr{"k8s_namespace": &k8sDefaultNamespacesRegex},
-				},
-			},
-			DefaultExcludeInstrument: services.GlobDefinitionCriteria{
-				services.GlobAttributes{
-					Path: services.NewGlob(glob.MustCompile("{*beyla,*alloy,*ebpf-instrument,*otelcol,*otelcol-contrib,*otelcol-contrib[!/]*}")),
-				},
-				services.GlobAttributes{
-					Metadata: map[string]*services.GlobAttr{"k8s_namespace": &k8sDefaultNamespacesGlob},
+				DefaultExcludeInstrument: services.GlobDefinitionCriteria{
+					services.GlobAttributes{
+						Path: services.NewGlob(glob.MustCompile("{*beyla,*alloy,*ebpf-instrument,*otelcol,*otelcol-contrib,*otelcol-contrib[!/]*}")),
+					},
+					services.GlobAttributes{
+						Metadata: map[string]*services.GlobAttr{"k8s_namespace": &k8sDefaultNamespacesGlob},
+					},
 				},
 			},
 		},

@@ -27,13 +27,11 @@ func envStrsToMap(varsStr []string) map[string]string {
 
 func EnvVars(pid int32) (map[string]string, error) {
 	proc, err := procfs.NewProc(int(pid))
-
 	if err != nil {
 		return nil, err
 	}
 
 	varsStr, err := proc.Environ()
-
 	if err != nil {
 		return nil, err
 	}

@@ -6,13 +6,12 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/grafana/beyla/v2/pkg/internal/fastelf"
-	"github.com/grafana/beyla/v2/pkg/internal/svc"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/fastelf"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 )
 
 func FindProcLanguage(pid int32) svc.InstrumentableType {
 	maps, err := FindLibMaps(pid)
-
 	if err != nil {
 		return svc.InstrumentableGeneric
 	}
@@ -25,7 +24,6 @@ func FindProcLanguage(pid int32) svc.InstrumentableType {
 	}
 
 	filePath, err := resolveProcBinary(pid)
-
 	if err != nil {
 		return svc.InstrumentableGeneric
 	}
@@ -52,7 +50,6 @@ func resolveProcBinary(pid int32) (string, error) {
 	exePath := fmt.Sprintf("/proc/%d/exe", pid)
 
 	realPath, err := os.Readlink(exePath)
-
 	if err != nil {
 		return "", fmt.Errorf("failed to read process binary: %w", err)
 	}
@@ -62,7 +59,6 @@ func resolveProcBinary(pid int32) (string, error) {
 
 func findLanguageFromElf(filePath string) svc.InstrumentableType {
 	ctx, err := fastelf.NewElfContextFromFile(filePath)
-
 	if err != nil {
 		return svc.InstrumentableGeneric
 	}

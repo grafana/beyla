@@ -12,7 +12,7 @@ import (
 	trace2 "go.opentelemetry.io/otel/trace"
 
 	"github.com/grafana/beyla/v2/pkg/internal/request"
-	"github.com/grafana/beyla/v2/pkg/internal/svc"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 )
 
 func TestTracePrinterValidEnabled(t *testing.T) {

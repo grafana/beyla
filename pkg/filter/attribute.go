@@ -9,7 +9,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
-	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
+	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 )
 
 // AttributesConfig stores the user-provided section for filtering either Application or Network

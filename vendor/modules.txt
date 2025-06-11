@@ -370,11 +370,18 @@ github.com/munnerz/goautoneg
 # github.com/mxk/go-flowrate v0.0.0-20140419014527-cca7078d478f
 ## explicit
 github.com/mxk/go-flowrate/flowrate
-# github.com/open-telemetry/opentelemetry-ebpf-instrumentation v0.0.0-20250610142953-3b357a6371de
+# github.com/open-telemetry/opentelemetry-ebpf-instrumentation v0.0.0-20250611163711-08d9fca59d9b
 ## explicit; go 1.24.1
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/bhpack
+github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec
+github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/fastelf
+github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers/maps
+github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc
+github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes
+github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm
+github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/services
 # github.com/pelletier/go-toml/v2 v2.0.8
 ## explicit; go 1.16
 github.com/pelletier/go-toml/v2

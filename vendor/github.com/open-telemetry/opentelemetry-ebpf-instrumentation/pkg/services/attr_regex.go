@@ -22,11 +22,11 @@ func (dc RegexDefinitionCriteria) Validate() error {
 			len(dc[i].Metadata) == 0 &&
 			len(dc[i].PodLabels) == 0 &&
 			len(dc[i].PodAnnotations) == 0 {
-			return fmt.Errorf("discovery.services[%d] should define at least one selection criteria", i)
+			return fmt.Errorf("index [%d] should define at least one selection criteria", i)
 		}
 		for k := range dc[i].Metadata {
 			if _, ok := allowedAttributeNames[k]; !ok {
-				return fmt.Errorf("unknown attribute in discovery.services[%d]: %s", i, k)
+				return fmt.Errorf("unknown attribute in index [%d]: %s", i, k)
 			}
 		}
 	}
@@ -128,11 +128,9 @@ func (p *RegexpAttr) MatchString(input string) bool {
 	return p.re.MatchString(input)
 }
 
-func (a *RegexSelector) GetName() string        { return a.Name }
-func (a *RegexSelector) GetNamespace() string   { return a.Namespace }
-func (a *RegexSelector) GetPath() StringMatcher { return &a.Path }
-
-// Deprecated. To be removed in Beyla 3.0
+func (a *RegexSelector) GetName() string              { return a.Name }
+func (a *RegexSelector) GetNamespace() string         { return a.Namespace }
+func (a *RegexSelector) GetPath() StringMatcher       { return &a.Path }
 func (a *RegexSelector) GetPathRegexp() StringMatcher { return &a.PathRegexp }
 func (a *RegexSelector) GetOpenPorts() *PortEnum      { return &a.OpenPorts }
 func (a *RegexSelector) IsContainersOnly() bool       { return a.ContainersOnly }
@@ -145,6 +143,7 @@ func (a *RegexSelector) RangeMetadata() iter.Seq2[string, StringMatcher] {
 		}
 	}
 }
+
 func (a *RegexSelector) RangePodLabels() iter.Seq2[string, StringMatcher] {
 	return func(yield func(string, StringMatcher) bool) {
 		for k, v := range a.PodLabels {
@@ -154,6 +153,7 @@ func (a *RegexSelector) RangePodLabels() iter.Seq2[string, StringMatcher] {
 		}
 	}
 }
+
 func (a *RegexSelector) RangePodAnnotations() iter.Seq2[string, StringMatcher] {
 	return func(yield func(string, StringMatcher) bool) {
 		for k, v := range a.PodAnnotations {

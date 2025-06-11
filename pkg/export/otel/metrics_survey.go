@@ -13,9 +13,9 @@ import (
 
 	"github.com/grafana/beyla/v2/pkg/export/otel/metric"
 	instrument "github.com/grafana/beyla/v2/pkg/export/otel/metric/api/metric"
-	"github.com/grafana/beyla/v2/pkg/internal/exec"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
-	"github.com/grafana/beyla/v2/pkg/internal/svc"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 )
 
 func smlog() *slog.Logger {

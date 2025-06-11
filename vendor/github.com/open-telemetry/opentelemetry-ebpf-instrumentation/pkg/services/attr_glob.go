@@ -25,7 +25,7 @@ func (dc GlobDefinitionCriteria) Validate() error {
 		}
 		for k := range dc[i].Metadata {
 			if _, ok := allowedAttributeNames[k]; !ok {
-				return fmt.Errorf("unknown attribute in entry [%d]: %s", i, k)
+				return fmt.Errorf("unknown attribute in discovery.services[%d]: %s", i, k)
 			}
 		}
 	}
@@ -123,11 +123,9 @@ func (p *GlobAttr) MatchString(input string) bool {
 	return p.glob.Match(input)
 }
 
-func (ga *GlobAttributes) GetName() string        { return ga.Name }
-func (ga *GlobAttributes) GetNamespace() string   { return ga.Namespace }
-func (ga *GlobAttributes) GetPath() StringMatcher { return &ga.Path }
-
-// Deprecated. Kept here for backwards compatibility
+func (ga *GlobAttributes) GetName() string              { return ga.Name }
+func (ga *GlobAttributes) GetNamespace() string         { return ga.Namespace }
+func (ga *GlobAttributes) GetPath() StringMatcher       { return &ga.Path }
 func (ga *GlobAttributes) GetPathRegexp() StringMatcher { return nilMatcher{} }
 func (ga *GlobAttributes) GetOpenPorts() *PortEnum      { return &ga.OpenPorts }
 func (ga *GlobAttributes) IsContainersOnly() bool       { return ga.ContainersOnly }

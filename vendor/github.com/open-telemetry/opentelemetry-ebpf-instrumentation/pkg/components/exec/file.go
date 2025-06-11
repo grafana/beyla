@@ -1,4 +1,4 @@
-// Package goexec provides the utilities to analyse the executable code
+// Package goexec provides the utilities to analyze the executable code
 package exec
 
 import (
@@ -8,9 +8,9 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
-	"github.com/grafana/beyla/v2/pkg/internal/svc"
-	"github.com/grafana/beyla/v2/pkg/services"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/services"
 )
 
 type FileInfo struct {
@@ -68,7 +68,6 @@ func FindExecELF(p *services.ProcessInfo, svcID svc.Attrs, k8sEnabled bool) (*Fi
 	}
 
 	envVars, err := EnvVars(p.Pid)
-
 	if err != nil {
 		return nil, err
 	}

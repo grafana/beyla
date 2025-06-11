@@ -8,7 +8,7 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/grafana/beyla/v2/pkg/internal/exec"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 )
 
 func isSupportedGoBinary(elfF *elf.File) error {

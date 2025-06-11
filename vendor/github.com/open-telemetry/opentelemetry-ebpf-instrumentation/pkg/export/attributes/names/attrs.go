@@ -7,7 +7,6 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
-	semconv2 "go.opentelemetry.io/otel/semconv/v1.25.0"
 )
 
 // Name of an attribute. This is the common internal representation of a metric attribute name,
@@ -37,6 +36,7 @@ const (
 	SpanName               = Name("span.name")
 	StatusCode             = Name("status.code")
 	Source                 = Name("source")
+	Service                = Name("service")
 	Client                 = Name("client")
 	ClientNamespace        = Name("client_service_namespace")
 	Server                 = Name("server")
@@ -59,13 +59,14 @@ const (
 	K8sContainerName   = Name("k8s.container.name")
 	K8sDeploymentName  = Name("k8s.deployment.name")
 	K8sReplicaSetName  = Name("k8s.replicaset.name")
+	K8sJobName         = Name("k8s.job.name")
+	K8sCronJobName     = Name("k8s.cronjob.name")
 	K8sDaemonSetName   = Name("k8s.daemonset.name")
 	K8sStatefulSetName = Name("k8s.statefulset.name")
 	K8sOwnerName       = Name("k8s.owner.name")
 	K8sNodeName        = Name("k8s.node.name")
 	K8sPodUID          = Name("k8s.pod.uid")
 	K8sPodStartTime    = Name("k8s.pod.start_time")
-	K8sKind            = Name("k8s.kind")
 )
 
 // Beyla-specific network attributes
@@ -106,24 +107,6 @@ const (
 	K8sDstOwnerType = Name("k8s.dst.owner.type")
 	K8sDstNodeIP    = Name("k8s.dst.node.ip")
 	K8sDstNodeName  = Name("k8s.dst.node.name")
-)
-
-// Process Metrics following OTEL 1.26 experimental conventions
-// https://opentelemetry.io/docs/specs/semconv/resource/process/
-// https://opentelemetry.io/docs/specs/semconv/system/process-metrics/
-
-const (
-	ProcCommand     = Name(semconv.ProcessCommandKey)
-	ProcCommandLine = Name(semconv.ProcessCommandLineKey)
-	ProcCPUMode     = Name("cpu.mode")
-	ProcDiskIODir   = Name(semconv2.DiskIoDirectionKey)
-	ProcNetIODir    = Name(semconv2.NetworkIoDirectionKey)
-	ProcOwner       = Name(semconv.ProcessOwnerKey)
-	ProcParentPid   = Name(semconv.ProcessParentPIDKey)
-	ProcPid         = Name(semconv.ProcessPIDKey)
-	ProcCommandArgs = Name(semconv.ProcessCommandArgsKey)
-	ProcExecName    = Name(semconv.ProcessExecutableNameKey)
-	ProcExecPath    = Name(semconv.ProcessExecutablePathKey)
 )
 
 // other beyla-specific attributes

@@ -5,7 +5,7 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 
-	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
+	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 )
 
 func HTTPRequestMethod(val string) attribute.KeyValue {

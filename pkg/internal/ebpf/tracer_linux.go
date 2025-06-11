@@ -19,9 +19,9 @@ import (
 
 	common "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
 	convenience "github.com/grafana/beyla/v2/pkg/internal/ebpf/convenience"
-	"github.com/grafana/beyla/v2/pkg/internal/exec"
 	"github.com/grafana/beyla/v2/pkg/internal/goexec"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 )
 
 const PinInternal = ebpf.PinType(100)

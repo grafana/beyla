@@ -13,7 +13,6 @@ import (
 func FindNamespace(pid int32) (uint32, error) {
 	pidPath := fmt.Sprintf("/proc/%d/ns/pid", pid)
 	f, err := os.Open(pidPath)
-
 	if err != nil {
 		return 0, fmt.Errorf("failed to open(/proc/%d/ns/pid): %w", pid, err)
 	}
@@ -38,7 +37,6 @@ func FindNamespace(pid int32) (uint32, error) {
 
 	if start >= 0 && end >= 0 && end > start {
 		npid, err := strconv.ParseUint(string(buf[start+1:end]), 10, 32)
-
 		if err != nil {
 			return 0, fmt.Errorf("failed to parse ns pid %w", err)
 		}
@@ -52,7 +50,6 @@ func FindNamespace(pid int32) (uint32, error) {
 func FindNamespacedPids(pid int32) ([]uint32, error) {
 	statusPath := fmt.Sprintf("/proc/%d/status", pid)
 	f, err := os.Open(statusPath)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to open(/proc/%d/status): %w", pid, err)
 	}

@@ -19,7 +19,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/logger"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/watcher"
-	"github.com/grafana/beyla/v2/pkg/services"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/services"
 )
 
 const (

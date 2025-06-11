@@ -20,7 +20,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/testutil"
 	"github.com/grafana/beyla/v2/pkg/kubecache/informer"
 	"github.com/grafana/beyla/v2/pkg/kubecache/meta"
-	"github.com/grafana/beyla/v2/pkg/services"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/services"
 )
 
 const timeout = 5 * time.Second

@@ -15,8 +15,8 @@ import (
 
 	"go.opentelemetry.io/contrib/detectors/aws/eks"
 
-	attr2 "github.com/grafana/beyla/v2/pkg/export/attributes/names"
 	"github.com/grafana/beyla/v2/pkg/internal/kube"
+	attr2 "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 )
 
 const (

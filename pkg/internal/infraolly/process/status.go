@@ -8,8 +8,9 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
-	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
-	"github.com/grafana/beyla/v2/pkg/internal/svc"
+	attrextra "github.com/grafana/beyla/v2/pkg/export/attributes/beyla"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 )
 
 func pslog() *slog.Logger {
@@ -91,7 +92,7 @@ func NewStatus(pid int32, svcID *svc.Attrs) *Status {
 func OTELGetters(name attr.Name) (attributes.Getter[*Status, attribute.KeyValue], bool) {
 	var g attributes.Getter[*Status, attribute.KeyValue]
 	switch name {
-	case attr.ProcCPUMode, attr.ProcDiskIODir, attr.ProcNetIODir:
+	case attrextra.ProcCPUMode, attrextra.ProcDiskIODir, attrextra.ProcNetIODir:
 		// the attributes are handled explicitly by the OTEL exporter, but we need to
 		// ignore them to avoid that the default case tries to report them from service metadata
 	}
@@ -104,23 +105,23 @@ func PromGetters(name attr.Name) (attributes.Getter[*Status, string], bool) {
 	switch name {
 	case attr.HostName:
 		g = func(s *Status) string { return s.ID.Service.HostName }
-	case attr.ProcCommand:
+	case attrextra.ProcCommand:
 		g = func(s *Status) string { return s.ID.Command }
-	case attr.ProcCommandLine:
+	case attrextra.ProcCommandLine:
 		g = func(s *Status) string { return s.ID.CommandLine }
-	case attr.ProcExecName:
+	case attrextra.ProcExecName:
 		g = func(status *Status) string { return status.ID.ExecName }
-	case attr.ProcExecPath:
+	case attrextra.ProcExecPath:
 		g = func(status *Status) string { return status.ID.ExecPath }
-	case attr.ProcCommandArgs:
+	case attrextra.ProcCommandArgs:
 		g = func(status *Status) string { return strings.Join(status.ID.CommandArgs, ",") }
-	case attr.ProcOwner:
+	case attrextra.ProcOwner:
 		g = func(s *Status) string { return s.ID.User }
-	case attr.ProcParentPid:
+	case attrextra.ProcParentPid:
 		g = func(s *Status) string { return strconv.Itoa(int(s.ID.ParentProcessID)) }
-	case attr.ProcPid:
+	case attrextra.ProcPid:
 		g = func(s *Status) string { return strconv.Itoa(int(s.ID.ProcessID)) }
-	case attr.ProcCPUMode, attr.ProcDiskIODir, attr.ProcNetIODir:
+	case attrextra.ProcCPUMode, attrextra.ProcDiskIODir, attrextra.ProcNetIODir:
 		// the attributes are handled explicitly by the prometheus exporter, but we need to
 		// ignore them to avoid that the default case tries to report them from service metadata
 	case attr.Instance:

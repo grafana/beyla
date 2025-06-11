@@ -1,0 +1,4 @@
+[submodule "opentelemetry-ebpf-instrumentation"]
+	path = opentelemetry-ebpf-instrumentation
+	url = git@github.com:open-telemetry/opentelemetry-ebpf-instrumentation.git
+

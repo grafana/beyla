@@ -2,6 +2,8 @@
 CMD ?= beyla
 MAIN_GO_FILE ?= cmd/$(CMD)/main.go
 
+OBI_SUBMODULE=./opentelemetry-ebpf-instrumentation
+
 CACHE_CMD ?= k8s-cache
 CACHE_MAIN_GO_FILE ?= cmd/$(CACHE_CMD)/main.go
 
@@ -193,17 +195,14 @@ update-offsets: prereqs
 	$(GO_OFFSETS_TRACKER) -i configs/offsets/tracker_input.json pkg/internal/goexec/offsets.json
 
 .PHONY: generate
-generate: export BPF_CLANG := $(CLANG)
-generate: export BPF_CFLAGS := $(CFLAGS)
-generate: export BPF2GO := $(BPF2GO)
 generate: bpf2go
 	@echo "### Generating files..."
-	@BEYLA_GENFILES_RUN_LOCALLY=1 go generate cmd/beyla-genfiles/beyla_genfiles.go
+	cd $(OBI_SUBMODULE) && make generate
 
 .PHONY: docker-generate
 docker-generate:
 	@echo "### Generating files (docker)..."
-	@BEYLA_GENFILES_GEN_IMG=$(GEN_IMG) go generate cmd/beyla-genfiles/beyla_genfiles.go
+	cd $(OBI_SUBMODULE) && make docker-generate
 
 .PHONY: verify
 verify: prereqs lint-dashboard lint test

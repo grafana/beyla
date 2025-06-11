@@ -18,10 +18,6 @@ on:
         default: 60
 jobs:
   test:
-    permissions:
-      contents: read
-      # required for CODECOV token
-      id-token: write
     name: test
     runs-on: ubuntu-latest
     strategy:

@@ -70,7 +70,8 @@ func (ta *TraceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 	ta.sdkInjector = otelsdk.NewSDKInjector(ta.Cfg)
 	ta.processInstances = maps.MultiCounter[uint64]{}
 	ta.beylaPID = os.Getpid()
-	ta.ebpfEventContext.CommonPIDsFilter = ebpfcommon.CommonPIDsFilter(&ta.Cfg.Discovery.DiscoveryConfig)
+	obiCfg := ta.Cfg.Discovery.AsOBI()
+	ta.ebpfEventContext.CommonPIDsFilter = ebpfcommon.CommonPIDsFilter(&obiCfg)
 
 	if err := ta.init(); err != nil {
 		ta.log.Error("can't start process tracer. Stopping it", "error", err)

@@ -52,6 +52,29 @@ static __always_inline u32 json_str_value_end(const char *body, u32 body_len, u3
                                            '"');
 }
 
+/**
+ * Copies a JSON string value from body[value_start..value_end) into dest_buf.
+ * Ensures null-termination and does not exceed dest_buf_size.
+ * Returns the number of bytes copied (excluding null terminator), or 0 on error.
+ */
+static __always_inline u32 copy_json_string_value(
+    const char *body, u32 value_start, u32 value_end, char *dest_buf, u32 dest_buf_size) {
+    u32 value_len = value_end - value_start;
+    if (value_len <= 0)
+        return 0;
+    if (value_len >= dest_buf_size)
+        value_len = dest_buf_size - 1; // leave space for null terminator
+
+    // #pragma unroll // Uncomment if unrolling is desired for eBPF
+    for (u32 i = 0; i < dest_buf_size; i++) {
+        if (i >= value_len)
+            break;
+        dest_buf[i] = body[value_start + i];
+    }
+    dest_buf[value_len] = '\0';
+    return value_len;
+}
+
 // Looks for '"jsonrpc":"2.0"'
 static __always_inline u32 is_jsonrpc2_body(const char *body, u32 body_len) {
     u32 key_pos = bpf_memstr(body, body_len, k_jsonrpc_key, k_jsonrpc_key_len);
@@ -98,22 +121,7 @@ static __always_inline u32 extract_jsonrpc2_method(const char *body,
     // Start of the value (after the opening quote)
     u32 value_start = val_search_start + 1;
     u32 value_end = json_str_value_end(body, body_len, value_start);
-    // If closing quote not found, value_end will be body_len
 
-    u32 value_len = value_end - value_start;
-    if (value_len <= 0)
-        return 0;
-    if (value_len >= JSONRPC_METHOD_BUF_SIZE)
-        value_len = JSONRPC_METHOD_BUF_SIZE - 1; // leave space for null terminator
-
-    // TODO: make it unrolled for performance
-    // #pragma unroll
-    for (u32 i = 0; i < JSONRPC_METHOD_BUF_SIZE; i++) {
-        if (i >= value_len)
-            break;
-        method_buf[i] = body[value_start + i];
-    }
-    method_buf[value_len] = '\0';
-
-    return value_len;
+    return copy_json_string_value(
+        body, value_start, value_end, method_buf, JSONRPC_METHOD_BUF_SIZE);
 }

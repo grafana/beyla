@@ -8,9 +8,8 @@ import (
 	"syscall"
 
 	"github.com/cilium/ebpf/link"
-	"golang.org/x/sys/unix"
-
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers"
+	"golang.org/x/sys/unix"
 )
 
 func (f *Filter) Close() error {

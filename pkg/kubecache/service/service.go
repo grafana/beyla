@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers/sync"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/peer"
 
@@ -16,7 +17,6 @@ import (
 	"github.com/grafana/beyla/v2/pkg/kubecache/informer"
 	"github.com/grafana/beyla/v2/pkg/kubecache/instrument"
 	"github.com/grafana/beyla/v2/pkg/kubecache/meta"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers/sync"
 )
 
 const defaultSendTimeout = 10 * time.Second

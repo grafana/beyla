@@ -4,6 +4,7 @@ import (
 	"debug/elf"
 	"debug/gosym"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -161,12 +162,12 @@ func findGoSymbolTable(elfF *elf.File) (*gosym.Table, error) {
 		case 8:
 			runtimeText = binary.LittleEndian.Uint64(pclndat[8+2*ptrSize:])
 		default:
-			return nil, fmt.Errorf("unknown .gopclntab text ptr size")
+			return nil, errors.New("unknown .gopclntab text ptr size")
 		}
 	} else {
 		txtSection := elfF.Section(".text")
 		if txtSection == nil {
-			return nil, fmt.Errorf("can't find .text section in ELF file")
+			return nil, errors.New("can't find .text section in ELF file")
 		}
 		runtimeText = txtSection.Addr
 	}

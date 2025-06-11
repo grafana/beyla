@@ -16,11 +16,11 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
-	"github.com/grafana/beyla/v2/pkg/internal/helpers/container"
 	"github.com/grafana/beyla/v2/pkg/internal/kube"
 	"github.com/grafana/beyla/v2/pkg/internal/testutil"
 	"github.com/grafana/beyla/v2/pkg/kubecache/informer"
 	"github.com/grafana/beyla/v2/pkg/kubecache/meta"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers/container"
 )
 
 const timeout = 5 * time.Second

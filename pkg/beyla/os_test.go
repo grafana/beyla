@@ -12,7 +12,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/grafana/beyla/v2/pkg/config"
-	"github.com/grafana/beyla/v2/pkg/internal/helpers"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers"
 )
 
 type testCase struct {

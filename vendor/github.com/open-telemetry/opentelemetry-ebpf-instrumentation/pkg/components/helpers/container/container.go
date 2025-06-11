@@ -12,8 +12,10 @@ import (
 )
 
 // injectable values for testing
-var procRoot = "/proc/"
-var namespaceFinder = exec.FindNamespace
+var (
+	procRoot        = "/proc/"
+	namespaceFinder = exec.FindNamespace
+)
 
 // Info that we need to keep from a container: its ContainerID in Kubernetes and
 // the PIDNamespace of its processes.

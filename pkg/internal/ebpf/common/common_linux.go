@@ -10,7 +10,7 @@ import (
 	"github.com/cilium/ebpf/link"
 	"golang.org/x/sys/unix"
 
-	"github.com/grafana/beyla/v2/pkg/internal/helpers"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers"
 )
 
 func (f *Filter) Close() error {

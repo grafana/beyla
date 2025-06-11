@@ -10,7 +10,7 @@ import (
 
 	ebpfcfg "github.com/grafana/beyla/v2/pkg/config"
 	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
-	"github.com/grafana/beyla/v2/pkg/internal/helpers"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers"
 )
 
 // Minimum required Kernel version: 4.18

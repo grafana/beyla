@@ -1,4 +1,4 @@
-// Package goexec provides the utilities to analyse the executable code
+// Package goexec provides the utilities to analyze the executable code
 package goexec
 
 import (
@@ -158,7 +158,7 @@ func readData(f *elf.File, addr, size uint64) ([]byte, error) {
 			return data, nil
 		}
 	}
-	return nil, fmt.Errorf("address not mapped")
+	return nil, errors.New("address not mapped")
 }
 
 // readString returns the string at address addr in the executable x.

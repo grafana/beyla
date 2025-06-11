@@ -18,14 +18,14 @@ func NewCommand(command string, arguments ...string) *Command {
 }
 
 func (c *Command) WithStdin(stdin string) *Command {
-	c.Cmd.Stdin = bytes.NewBufferString(stdin)
+	c.Stdin = bytes.NewBufferString(stdin)
 	return c
 }
 
 func (c *Command) Run() (string, error) {
 	// Set the locale
-	c.Cmd.Env = append(os.Environ(), "LANG=en_US.utf8")
-	outputCommand, errorCommand := c.Cmd.CombinedOutput()
+	c.Env = append(os.Environ(), "LANG=en_US.utf8")
+	outputCommand, errorCommand := c.CombinedOutput()
 	return strings.TrimSpace(string(outputCommand)), errorCommand
 }
 

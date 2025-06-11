@@ -9,9 +9,8 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/hashicorp/go-version"
-
 	"github.com/grafana/go-offsets-tracker/pkg/offsets"
+	"github.com/hashicorp/go-version"
 )
 
 func log() *slog.Logger {
@@ -23,8 +22,10 @@ type GoOffset uint32
 
 const GoOffsetsTableSize = 30
 
-var grpcOneSixZero = version.Must(version.NewVersion("1.60.0"))
-var grpcOneSixNine = version.Must(version.NewVersion("1.69.0"))
+var (
+	grpcOneSixZero = version.Must(version.NewVersion("1.60.0"))
+	grpcOneSixNine = version.Must(version.NewVersion("1.69.0"))
+)
 
 const (
 	// go common
@@ -97,7 +98,7 @@ var prefetchedOffsets string
 
 type structInfo struct {
 	// lib is the name of the library where the struct is defined.
-	// "go" for the standard library or e.g. "google.golang.org/grpc"
+	// "go" for the standar library or e.g. "google.golang.org/grpc"
 	lib string
 	// fields of the struct as key, and the name of the constant defined in the eBPF code as value
 	fields map[string]GoOffset
@@ -465,7 +466,7 @@ func structMemberOffsetsFromDwarf(data *dwarf.Data) (FieldOffsets, map[GoOffset]
 			expectedReturns[ctName] = struct{}{}
 		}
 	}
-	log.Debug("searching offsets for field constants", "constants", expectedReturns)
+	log.Debug("searching offests for field constants", "constants", expectedReturns)
 
 	fieldOffsets := FieldOffsets{}
 	reader := data.Reader()

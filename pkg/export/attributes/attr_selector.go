@@ -8,7 +8,7 @@ import (
 
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 
-	maps2 "github.com/grafana/beyla/v2/pkg/internal/helpers/maps"
+	maps2 "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers/maps"
 )
 
 func alog() *slog.Logger {

@@ -375,7 +375,11 @@ github.com/mxk/go-flowrate/flowrate
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/bhpack
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/fastelf
+github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/goexec
+github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers
+github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers/container
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers/maps
+github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers/sync
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names

@@ -14,9 +14,9 @@ import (
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf"
-	"github.com/grafana/beyla/v2/pkg/internal/goexec"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 	"github.com/grafana/beyla/v2/pkg/internal/kube"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/goexec"
 )
 
 type InstrumentedExecutable struct {

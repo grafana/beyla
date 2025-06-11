@@ -23,7 +23,6 @@ func FindReturnOffsets(baseOffset uint64, data []byte) ([]uint64, error) {
 	var returnOffsets []uint64
 	index := 0
 	for index < len(data) {
-
 		// FIXME remove this once x86asm is able to recognize and decode
 		// ENDBR64
 		if isENDBRXX(data[index:]) {

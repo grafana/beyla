@@ -2,6 +2,7 @@
 package goexec
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
@@ -24,10 +25,10 @@ type FieldOffsets map[GoOffset]any
 // parameters fields to be read from the eBPF code
 func InspectOffsets(execElf *exec.FileInfo, funcs []string) (*Offsets, error) {
 	if execElf == nil {
-		return nil, fmt.Errorf("executable not found")
+		return nil, errors.New("executable not found")
 	}
 
-	// Analyse executable ELF file and find instrumentation points
+	// Analyze executable ELF file and find instrumentation points
 	found, err := instrumentationPoints(execElf.ELF, funcs)
 	if err != nil {
 		return nil, fmt.Errorf("finding instrumentation points: %w", err)

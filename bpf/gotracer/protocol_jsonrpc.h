@@ -43,6 +43,15 @@ static __always_inline u32 json_value_offset(const char *body, u32 body_len, u32
     return pos;
 }
 
+// Returns the position of the first occurrence of a string in a JSON body.
+// If not found, returns INVALID_POS.
+static __always_inline u32 json_str_value(const char *body,
+                                          u32 body_len,
+                                          const char *str,
+                                          u32 str_len) {
+    return bpf_memstr((const char *)body, body_len, (const char *)str, str_len);
+}
+
 // Returns the end position (index of closing quote) of a JSON string value.
 // If not found, returns body_len.
 static __always_inline u32 json_str_value_end(const char *body, u32 body_len, u32 value_start) {
@@ -77,7 +86,7 @@ static __always_inline u32 copy_json_string_value(
 
 // Looks for '"jsonrpc":"2.0"'
 static __always_inline u32 is_jsonrpc2_body(const char *body, u32 body_len) {
-    u32 key_pos = bpf_memstr(body, body_len, k_jsonrpc_key, k_jsonrpc_key_len);
+    u32 key_pos = json_str_value(body, body_len, k_jsonrpc_key, k_jsonrpc_key_len);
     if (key_pos == INVALID_POS)
         return 0;
 
@@ -88,7 +97,7 @@ static __always_inline u32 is_jsonrpc2_body(const char *body, u32 body_len) {
     if (val_search_start >= body_len || body[val_search_start] != '"')
         return 0;
 
-    u32 val_pos = bpf_memstr(
+    u32 val_pos = json_str_value(
         body + val_search_start, body_len - val_search_start, k_jsonrpc_val, k_jsonrpc_val_len);
     // The jsonrpc value should start immediately after the opening quote
     if (val_pos == INVALID_POS || val_pos != 0)
@@ -105,7 +114,7 @@ static __always_inline u32 is_jsonrpc2_body(const char *body, u32 body_len) {
 static __always_inline u32 extract_jsonrpc2_method(const char *body,
                                                    u32 body_len,
                                                    char *method_buf) {
-    u32 key_pos = bpf_memstr(body, body_len, k_method_key, k_method_key_len);
+    u32 key_pos = json_str_value(body, body_len, k_method_key, k_method_key_len);
     if (key_pos == INVALID_POS)
         return 0;
 

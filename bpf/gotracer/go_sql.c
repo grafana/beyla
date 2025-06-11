@@ -16,7 +16,7 @@
 // This implementation was inspired by https://github.com/open-telemetry/opentelemetry-go-instrumentation/blob/ca1afccea6ec520d18238c3865024a9f5b9c17fe/internal/pkg/instrumentors/bpf/database/sql/bpf/probe.bpf.c
 // and has been modified since.
 
-//go:build beyla_bpf_ignore
+//go:build obi_bpf_ignore
 
 #include <bpfcore/vmlinux.h>
 #include <bpfcore/bpf_helpers.h>

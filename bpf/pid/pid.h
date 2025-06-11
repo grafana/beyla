@@ -38,7 +38,7 @@ static __always_inline u8 pid_matches(pid_data_t *p) {
 
 static __always_inline u32 valid_pid(u64 id) {
     u32 a_pid = id >> 32;
-    // accept all PIDs if debugging BEYLA_BPF_PID_FILTER_OFF option is set
+    // accept all PIDs if debugging OTEL_EBPF_BPF_PID_FILTER_OFF option is set
     if (!filter_pids) {
         return a_pid;
     }

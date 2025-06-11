@@ -65,7 +65,7 @@ static __always_inline u32 copy_json_string_value(
     if (value_len >= dest_buf_size)
         value_len = dest_buf_size - 1; // leave space for null terminator
 
-    // #pragma unroll // Uncomment if unrolling is desired for eBPF
+#pragma unroll
     for (u32 i = 0; i < dest_buf_size; i++) {
         if (i >= value_len)
             break;
@@ -118,7 +118,7 @@ static __always_inline u32 extract_jsonrpc2_method(const char *body,
 
     bpf_dbg_printk("Found JSON-RPC method value opening quote");
 
-    // Start of the value (after the opening quote)
+    // Copy the method value from the body after the opening quote
     u32 value_start = val_search_start + 1;
     u32 value_end = json_str_value_end(body, body_len, value_start);
 

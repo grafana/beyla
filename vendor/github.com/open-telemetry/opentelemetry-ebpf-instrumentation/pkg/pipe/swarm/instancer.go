@@ -2,6 +2,7 @@ package swarm
 
 import (
 	"context"
+	"fmt"
 	"sync"
 )
 
@@ -15,15 +16,23 @@ type InstanceFunc func(context.Context) (RunFunc, error)
 // manages any error during the construction of it.
 type Instancer struct {
 	mt       sync.Mutex
-	creators []InstanceFunc
+	creators []instanceMeta
 }
 
 // Add a service instancer to the swarm. The intancer will be called when the swarm Instance starts,
 // and must return a RunFunc instance that will execute the actual operation of the service node.
-func (s *Instancer) Add(c InstanceFunc) {
+func (s *Instancer) Add(c InstanceFunc, opts ...AddOpt) {
 	s.mt.Lock()
 	defer s.mt.Unlock()
-	s.creators = append(s.creators, c)
+	im := instanceMeta{
+		// if no explicit ID is provided, it would show the order in which the InstanceFunc is added
+		id: fmt.Sprintf("#%d", len(s.creators)),
+		fn: c,
+	}
+	for _, opt := range opts {
+		opt(&im)
+	}
+	s.creators = append(s.creators, im)
 }
 
 // Instance the Swarm. It calls all registered service creators and, if all succeed,
@@ -31,16 +40,19 @@ func (s *Instancer) Add(c InstanceFunc) {
 func (s *Instancer) Instance(ctx context.Context) (*Runner, error) {
 	s.mt.Lock()
 	defer s.mt.Unlock()
-	runner := &Runner{runners: make([]RunFunc, 0, len(s.creators))}
+	runner := &Runner{runners: make([]runnerMeta, 0, len(s.creators))}
 	var buildCtx context.Context
 	buildCtx, runner.cancelInstancerCtx = context.WithCancel(ctx)
 	for _, creator := range s.creators {
-		runFn, err := creator(buildCtx)
+		runFn, err := creator.fn(buildCtx)
 		if err != nil {
 			runner.cancelInstancerCtx()
 			return nil, err
 		}
-		runner.runners = append(runner.runners, runFn)
+		runner.runners = append(runner.runners, runnerMeta{
+			id: creator.id,
+			fn: runFn,
+		})
 	}
 	return runner, nil
 }
@@ -50,5 +62,21 @@ func (s *Instancer) Instance(ctx context.Context) (*Runner, error) {
 func DirectInstance(r RunFunc) InstanceFunc {
 	return func(_ context.Context) (RunFunc, error) {
 		return r, nil
+	}
+}
+
+type instanceMeta struct {
+	id string
+	fn InstanceFunc
+}
+
+// AddOpt allows overriding the behavior of the Instancer's Add method
+type AddOpt func(*instanceMeta)
+
+// WithID associates the added InstanceFunc with an ID that would allow identify it
+// in case it detects a zombie RunFunc
+func WithID(id string) AddOpt {
+	return func(i *instanceMeta) {
+		i.id = id
 	}
 }

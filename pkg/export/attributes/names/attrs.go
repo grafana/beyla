@@ -3,24 +3,14 @@
 package attr
 
 import (
-	"strings"
-
-	"go.opentelemetry.io/otel/attribute"
+	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 	semconv2 "go.opentelemetry.io/otel/semconv/v1.25.0"
 )
 
 // Name of an attribute. This is the common internal representation of a metric attribute name,
 // which can be converted to OTEL or Prometheus format right before exporting them.
-type Name attribute.Key
-
-func (an Name) OTEL() attribute.Key {
-	return attribute.Key(an)
-}
-
-func (an Name) Prom() string {
-	return strings.ReplaceAll(string(an), ".", "_")
-}
+type Name = attr.Name
 
 // OpenTelemetry 1.23 semantic convention
 const (

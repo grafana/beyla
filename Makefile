@@ -197,11 +197,13 @@ update-offsets: prereqs
 .PHONY: generate
 generate: bpf2go
 	@echo "### Generating files..."
+	@BEYLA_GENFILES_RUN_LOCALLY=1 go generate cmd/beyla-genfiles/beyla_genfiles.go
 	cd $(OBI_SUBMODULE) && make generate
 
 .PHONY: docker-generate
 docker-generate:
 	@echo "### Generating files (docker)..."
+	@BEYLA_GENFILES_GEN_IMG=$(GEN_IMG) go generate cmd/beyla-genfiles/beyla_genfiles.go
 	cd $(OBI_SUBMODULE) && make docker-generate
 
 .PHONY: verify

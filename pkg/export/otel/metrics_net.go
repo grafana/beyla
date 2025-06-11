@@ -3,6 +3,7 @@ package otel
 import (
 	"context"
 	"fmt"
+	attributes2 "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	"log/slog"
 	"time"
 
@@ -41,7 +42,7 @@ func nmlog() *slog.Logger {
 
 // getFilteredNetworkResourceAttrs returns resource attributes that can be filtered based on the attribute selector
 // for network metrics.
-func getFilteredNetworkResourceAttrs(hostID string, attrSelector attributes.Selection) []attribute.KeyValue {
+func getFilteredNetworkResourceAttrs(hostID string, attrSelector attributes2.Selection) []attribute.KeyValue {
 	baseAttrs := []attribute.KeyValue{
 		semconv.ServiceName("beyla-network-flows"),
 		semconv.ServiceInstanceID(uuid.New().String()),
@@ -57,7 +58,7 @@ func getFilteredNetworkResourceAttrs(hostID string, attrSelector attributes.Sele
 	return getFilteredAttributesByPrefix(baseAttrs, attrSelector, extraAttrs, []string{"network.", "beyla.network"})
 }
 
-func createFilteredNetworkResource(hostID string, attrSelector attributes.Selection) *resource.Resource {
+func createFilteredNetworkResource(hostID string, attrSelector attributes2.Selection) *resource.Resource {
 	attrs := getFilteredNetworkResourceAttrs(hostID, attrSelector)
 	return resource.NewWithAttributes(semconv.SchemaURL, attrs...)
 }
@@ -87,7 +88,7 @@ func NetMetricsExporterProvider(
 			return swarm.EmptyRunFunc()
 		}
 		if cfg.SelectorCfg.SelectionCfg == nil {
-			cfg.SelectorCfg.SelectionCfg = make(attributes.Selection)
+			cfg.SelectorCfg.SelectionCfg = make(attributes2.Selection)
 		}
 		exporter, err := newMetricsExporter(ctx, ctxInfo, cfg, input)
 		if err != nil {
@@ -116,7 +117,7 @@ func newMetricsExporter(
 		return nil, err
 	}
 
-	attrProv, err := attributes.NewAttrSelector(ctxInfo.MetricAttributeGroups, cfg.SelectorCfg)
+	attrProv, err := attributes2.NewAttrSelector(ctxInfo.MetricAttributeGroups, cfg.SelectorCfg)
 	if err != nil {
 		return nil, fmt.Errorf("network OTEL exporter attributes enable: %w", err)
 	}
@@ -131,7 +132,7 @@ func newMetricsExporter(
 	}
 	if cfg.GloballyEnabled || cfg.Metrics.NetworkFlowBytesEnabled() {
 		log := log.With("metricFamily", "FlowBytes")
-		bytesMetric, err := ebpfEvents.Int64Counter(attributes.BeylaNetworkFlow.OTEL,
+		bytesMetric, err := ebpfEvents.Int64Counter(attributes2.BeylaNetworkFlow.OTEL,
 			metric2.WithDescription("total bytes_sent value of network flows observed by probe since its launch"),
 			metric2.WithUnit("{bytes}"), // TODO: By?
 		)
@@ -141,16 +142,16 @@ func newMetricsExporter(
 		}
 
 		log.Debug("restricting attributes not in this list", "attributes", cfg.SelectorCfg.SelectionCfg)
-		attrs := attributes.OpenTelemetryGetters(
+		attrs := attributes2.OpenTelemetryGetters(
 			ebpf.RecordGetters,
-			attrProv.For(attributes.BeylaNetworkFlow))
+			attrProv.For(attributes2.BeylaNetworkFlow))
 
 		nme.flowBytes = NewExpirer[*ebpf.Record, metric2.Int64Counter, float64](ctx, bytesMetric, attrs, clock.Time, cfg.Metrics.TTL)
 	}
 
 	if cfg.Metrics.NetworkInterzoneMetricsEnabled() {
 		log := log.With("metricFamily", "InterZoneBytes")
-		bytesMetric, err := ebpfEvents.Int64Counter(attributes.BeylaNetworkInterZone.OTEL,
+		bytesMetric, err := ebpfEvents.Int64Counter(attributes2.BeylaNetworkInterZone.OTEL,
 			metric2.WithDescription("total bytes_sent value between Cloud availability zones"),
 			metric2.WithUnit("{bytes}"), // TODO: By?
 		)
@@ -159,9 +160,9 @@ func newMetricsExporter(
 			return nil, err
 		}
 		log.Debug("restricting attributes not in this list", "attributes", cfg.SelectorCfg.SelectionCfg)
-		attrs := attributes.OpenTelemetryGetters(
+		attrs := attributes2.OpenTelemetryGetters(
 			ebpf.RecordGetters,
-			attrProv.For(attributes.BeylaNetworkInterZone))
+			attrProv.For(attributes2.BeylaNetworkInterZone))
 
 		nme.interZoneBytes = NewExpirer[*ebpf.Record, metric2.Int64Counter, float64](ctx, bytesMetric, attrs, clock.Time, cfg.Metrics.TTL)
 	}

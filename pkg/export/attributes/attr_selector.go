@@ -2,6 +2,7 @@ package attributes
 
 import (
 	"fmt"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	"log/slog"
 	"maps"
 	"slices"
@@ -69,7 +70,7 @@ func newGroupAttributes(groupAttrsCfg map[string][]attr.Name) GroupAttributes {
 	return groupAttrs
 }
 
-func parseExtraAttrGroup(group string) (AttrGroups, error) {
+func parseExtraAttrGroup(group string) (attributes.AttrGroups, error) {
 	switch group {
 	case "k8s_app_meta":
 		return GroupAppKube, nil
@@ -80,7 +81,7 @@ func parseExtraAttrGroup(group string) (AttrGroups, error) {
 
 // SelectorConfig defines settings for filtering attributes and adding additional attributes
 type SelectorConfig struct {
-	SelectionCfg            Selection
+	SelectionCfg            attributes.Selection
 	ExtraGroupAttributesCfg map[string][]attr.Name
 }
 
@@ -88,13 +89,13 @@ type SelectorConfig struct {
 // according to the user-provided selection and/or other conditions (e.g. kubernetes is enabled)
 type AttrSelector struct {
 	definition map[Section]AttrReportGroup
-	selector   Selection
+	selector   attributes.Selection
 }
 
 // NewAttrSelector returns an AttrSelector instance based on the user-provided attributes Selection
 // and the auto-detected attribute AttrGroups
 func NewAttrSelector(
-	groups AttrGroups,
+	groups attributes.AttrGroups,
 	cfg *SelectorConfig,
 ) (*AttrSelector, error) {
 	cfg.SelectionCfg.Normalize()

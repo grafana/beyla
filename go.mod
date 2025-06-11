@@ -20,6 +20,7 @@ require (
 	github.com/hashicorp/go-version v1.7.0
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/mariomac/guara v0.0.0-20250408105519-1e4dbdfb7136
+	github.com/open-telemetry/opentelemetry-ebpf-instrumentation v0.0.0-20250611100941-b48e3ca1eaa2
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.22.0
 	github.com/prometheus/client_model v0.6.2
@@ -193,3 +194,5 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.7.0 // indirect
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
+
+replace github.com/open-telemetry/opentelemetry-ebpf-instrumentation v0.0.0-20250611100941-b48e3ca1eaa2 => ./opentelemetry-ebpf-instrumentation

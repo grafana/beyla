@@ -20,13 +20,13 @@
 #include <common/http_types.h>
 #include <common/ringbuf.h>
 #include <common/tracing.h>
-#include <generictracer/protocol_jsonrpc.h>
 
 #include <gotracer/go_byte_arr.h>
 #include <gotracer/go_common.h>
 #include <gotracer/go_str.h>
 #include <gotracer/go_stream_key.h>
 #include <gotracer/hpack.h>
+#include <gotracer/protocol_jsonrpc.h>
 
 #include <logger/bpf_dbg.h>
 

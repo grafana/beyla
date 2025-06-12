@@ -3,8 +3,9 @@
 package ebpf
 
 import (
-	"github.com/grafana/beyla/v2/pkg/internal/ebpf/ringbuf"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/tcmanager"
+
+	"github.com/grafana/beyla/v2/pkg/internal/ebpf/ringbuf"
 )
 
 type FlowFetcher struct {

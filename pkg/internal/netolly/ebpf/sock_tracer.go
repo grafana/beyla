@@ -21,7 +21,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	ebpf2 "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/ebpf"
 	"log/slog"
 	"os"
 	"strings"
@@ -30,6 +29,7 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/rlimit"
+	ebpf2 "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/ebpf"
 	"golang.org/x/sys/unix"
 
 	convenience "github.com/grafana/beyla/v2/pkg/internal/ebpf/convenience"
@@ -175,7 +175,7 @@ func (m *SockFlowFetcher) LookupAndDeleteMap() map[ebpf2.NetFlowId][]ebpf2.NetFl
 	iterator := flowMap.Iterate()
 	flows := make(map[ebpf2.NetFlowId][]ebpf2.NetFlowMetrics, m.cacheMaxSize)
 
-	id :=ebpf2. NetFlowId{}
+	id := ebpf2.NetFlowId{}
 	var metrics []ebpf2.NetFlowMetrics
 	// Changing Iterate+Delete by LookupAndDelete would prevent some possible race conditions
 	// TODO: detect whether LookupAndDelete is supported (Kernel>=4.20) and use it selectively

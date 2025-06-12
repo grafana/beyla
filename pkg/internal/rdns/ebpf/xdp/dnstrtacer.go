@@ -3,11 +3,11 @@ package xdp
 import (
 	"errors"
 	"fmt"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/rdns/ebpf/xdp"
 	"net"
 	"strings"
 
 	"github.com/cilium/ebpf/link"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/rdns/ebpf/xdp"
 
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/ringbuf"
 )

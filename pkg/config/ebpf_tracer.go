@@ -2,10 +2,10 @@ package config
 
 import (
 	"fmt"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/tcmanager"
 	"strings"
 	"time"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/tcmanager"
 )
 
 type ContextPropagationMode uint8

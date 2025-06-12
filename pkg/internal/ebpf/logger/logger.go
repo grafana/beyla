@@ -9,14 +9,13 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/logger"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/config"
 	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/ringbuf"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
-
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/logger"
 )
 
 // TODO: remove this file and use vendored OBI file

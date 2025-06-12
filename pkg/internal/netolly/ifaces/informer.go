@@ -21,9 +21,10 @@ package ifaces
 import (
 	"context"
 	"fmt"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/ifaces"
 	"log/slog"
 	"net"
+
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/ifaces"
 )
 
 // EventType for an interface: added, deleted

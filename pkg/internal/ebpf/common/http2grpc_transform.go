@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	ebpfcommon "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/common"
 	"strconv"
 	"strings"
 	"unsafe"
 
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/bhpack"
+	ebpfcommon "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/common"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/net/http2"
 

@@ -1,7 +1,7 @@
 package kube
 
 import (
-	"github.com/grafana/beyla/v2/pkg/kubecache/informer"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubecache/informer"
 )
 
 // TopOwner assumes that the owners slice as returned by the informers' cache library,

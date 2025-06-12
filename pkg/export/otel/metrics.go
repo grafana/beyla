@@ -238,21 +238,21 @@ type MetricsReporter struct {
 	is         instrumentations.InstrumentationSelection
 
 	// user-selected fields for each of the reported metrics
-	attrHTTPDuration           []attributes.Field[*request.Span, attribute.KeyValue]
-	attrHTTPClientDuration     []attributes.Field[*request.Span, attribute.KeyValue]
-	attrGRPCServer             []attributes.Field[*request.Span, attribute.KeyValue]
-	attrGRPCClient             []attributes.Field[*request.Span, attribute.KeyValue]
-	attrDBClient               []attributes.Field[*request.Span, attribute.KeyValue]
-	attrMessagingPublish       []attributes.Field[*request.Span, attribute.KeyValue]
-	attrMessagingProcess       []attributes.Field[*request.Span, attribute.KeyValue]
-	attrHTTPRequestSize        []attributes.Field[*request.Span, attribute.KeyValue]
-	attrHTTPResponseSize       []attributes.Field[*request.Span, attribute.KeyValue]
-	attrHTTPClientRequestSize  []attributes.Field[*request.Span, attribute.KeyValue]
-	attrHTTPClientResponseSize []attributes.Field[*request.Span, attribute.KeyValue]
-	attrGPUKernelCalls         []attributes.Field[*request.Span, attribute.KeyValue]
-	attrGPUKernelGridSize      []attributes.Field[*request.Span, attribute.KeyValue]
-	attrGPUKernelBlockSize     []attributes.Field[*request.Span, attribute.KeyValue]
-	attrGPUMemoryAllocations   []attributes.Field[*request.Span, attribute.KeyValue]
+	attrHTTPDuration           []attrobi.Field[*request.Span, attribute.KeyValue]
+	attrHTTPClientDuration     []attrobi.Field[*request.Span, attribute.KeyValue]
+	attrGRPCServer             []attrobi.Field[*request.Span, attribute.KeyValue]
+	attrGRPCClient             []attrobi.Field[*request.Span, attribute.KeyValue]
+	attrDBClient               []attrobi.Field[*request.Span, attribute.KeyValue]
+	attrMessagingPublish       []attrobi.Field[*request.Span, attribute.KeyValue]
+	attrMessagingProcess       []attrobi.Field[*request.Span, attribute.KeyValue]
+	attrHTTPRequestSize        []attrobi.Field[*request.Span, attribute.KeyValue]
+	attrHTTPResponseSize       []attrobi.Field[*request.Span, attribute.KeyValue]
+	attrHTTPClientRequestSize  []attrobi.Field[*request.Span, attribute.KeyValue]
+	attrHTTPClientResponseSize []attrobi.Field[*request.Span, attribute.KeyValue]
+	attrGPUKernelCalls         []attrobi.Field[*request.Span, attribute.KeyValue]
+	attrGPUKernelGridSize      []attrobi.Field[*request.Span, attribute.KeyValue]
+	attrGPUKernelBlockSize     []attrobi.Field[*request.Span, attribute.KeyValue]
+	attrGPUMemoryAllocations   []attrobi.Field[*request.Span, attribute.KeyValue]
 	userAttribSelection        attributes.Selection
 	input                      <-chan []request.Span
 	processEvents              <-chan exec.ProcessEvent
@@ -364,47 +364,47 @@ func newMetricsReporter(
 
 	// initialize attribute getters
 	if is.HTTPEnabled() {
-		mr.attrHTTPDuration = attributes.OpenTelemetryGetters(
+		mr.attrHTTPDuration = attrobi.OpenTelemetryGetters(
 			request.SpanOTELGetters, mr.attributes.For(attrobi.HTTPServerDuration))
-		mr.attrHTTPClientDuration = attributes.OpenTelemetryGetters(
+		mr.attrHTTPClientDuration = attrobi.OpenTelemetryGetters(
 			request.SpanOTELGetters, mr.attributes.For(attrobi.HTTPClientDuration))
-		mr.attrHTTPRequestSize = attributes.OpenTelemetryGetters(
+		mr.attrHTTPRequestSize = attrobi.OpenTelemetryGetters(
 			request.SpanOTELGetters, mr.attributes.For(attrobi.HTTPServerRequestSize))
-		mr.attrHTTPResponseSize = attributes.OpenTelemetryGetters(
+		mr.attrHTTPResponseSize = attrobi.OpenTelemetryGetters(
 			request.SpanOTELGetters, mr.attributes.For(attrobi.HTTPServerResponseSize))
-		mr.attrHTTPClientRequestSize = attributes.OpenTelemetryGetters(
+		mr.attrHTTPClientRequestSize = attrobi.OpenTelemetryGetters(
 			request.SpanOTELGetters, mr.attributes.For(attrobi.HTTPClientRequestSize))
-		mr.attrHTTPClientResponseSize = attributes.OpenTelemetryGetters(
+		mr.attrHTTPClientResponseSize = attrobi.OpenTelemetryGetters(
 			request.SpanOTELGetters, mr.attributes.For(attrobi.HTTPClientResponseSize))
 	}
 
 	if is.GRPCEnabled() {
-		mr.attrGRPCServer = attributes.OpenTelemetryGetters(
+		mr.attrGRPCServer = attrobi.OpenTelemetryGetters(
 			request.SpanOTELGetters, mr.attributes.For(attrobi.RPCServerDuration))
-		mr.attrGRPCClient = attributes.OpenTelemetryGetters(
+		mr.attrGRPCClient = attrobi.OpenTelemetryGetters(
 			request.SpanOTELGetters, mr.attributes.For(attrobi.RPCClientDuration))
 	}
 
 	if is.DBEnabled() {
-		mr.attrDBClient = attributes.OpenTelemetryGetters(
+		mr.attrDBClient = attrobi.OpenTelemetryGetters(
 			request.SpanOTELGetters, mr.attributes.For(attrobi.DBClientDuration))
 	}
 
 	if is.MQEnabled() {
-		mr.attrMessagingPublish = attributes.OpenTelemetryGetters(
+		mr.attrMessagingPublish = attrobi.OpenTelemetryGetters(
 			request.SpanOTELGetters, mr.attributes.For(attrobi.MessagingPublishDuration))
-		mr.attrMessagingProcess = attributes.OpenTelemetryGetters(
+		mr.attrMessagingProcess = attrobi.OpenTelemetryGetters(
 			request.SpanOTELGetters, mr.attributes.For(attrobi.MessagingProcessDuration))
 	}
 
 	if is.GPUEnabled() {
-		mr.attrGPUKernelCalls = attributes.OpenTelemetryGetters(
+		mr.attrGPUKernelCalls = attrobi.OpenTelemetryGetters(
 			request.SpanOTELGetters, mr.attributes.For(attrobi.GPUKernelLaunchCalls))
-		mr.attrGPUMemoryAllocations = attributes.OpenTelemetryGetters(
+		mr.attrGPUMemoryAllocations = attrobi.OpenTelemetryGetters(
 			request.SpanOTELGetters, mr.attributes.For(attrobi.GPUMemoryAllocations))
-		mr.attrGPUKernelGridSize = attributes.OpenTelemetryGetters(
+		mr.attrGPUKernelGridSize = attrobi.OpenTelemetryGetters(
 			request.SpanOTELGetters, mr.attributes.For(attrobi.GPUKernelGridSize))
-		mr.attrGPUKernelBlockSize = attributes.OpenTelemetryGetters(
+		mr.attrGPUKernelBlockSize = attrobi.OpenTelemetryGetters(
 			request.SpanOTELGetters, mr.attributes.For(attrobi.GPUKernelBlockSize))
 	}
 
@@ -995,8 +995,8 @@ func (mr *MetricsReporter) metricHostAttributes() attribute.Set {
 
 // spanMetricAttributes follow a given specification, so their attribute getters are predefined and can't be
 // selected by the user
-func (mr *MetricsReporter) spanMetricAttributes() []attributes.Field[*request.Span, attribute.KeyValue] {
-	return append(attributes.OpenTelemetryGetters(
+func (mr *MetricsReporter) spanMetricAttributes() []attrobi.Field[*request.Span, attribute.KeyValue] {
+	return append(attrobi.OpenTelemetryGetters(
 		request.SpanOTELGetters, []attr.Name{
 			attr.ServiceName,
 			attr.ServiceInstanceID,
@@ -1008,7 +1008,7 @@ func (mr *MetricsReporter) spanMetricAttributes() []attributes.Field[*request.Sp
 		}),
 		// hostID is not taken from the span but common to the metrics reporter,
 		// so the getter is injected here directly
-		attributes.Field[*request.Span, attribute.KeyValue]{
+		attrobi.Field[*request.Span, attribute.KeyValue]{
 			ExposedName: string(attr.HostID.OTEL()),
 			Get: func(_ *request.Span) attribute.KeyValue {
 				return semconv.HostID(mr.hostID)
@@ -1016,8 +1016,8 @@ func (mr *MetricsReporter) spanMetricAttributes() []attributes.Field[*request.Sp
 		})
 }
 
-func (mr *MetricsReporter) serviceGraphAttributes() []attributes.Field[*request.Span, attribute.KeyValue] {
-	return attributes.OpenTelemetryGetters(
+func (mr *MetricsReporter) serviceGraphAttributes() []attrobi.Field[*request.Span, attribute.KeyValue] {
+	return attrobi.OpenTelemetryGetters(
 		request.SpanOTELGetters, []attr.Name{
 			attr.Client,
 			attr.ClientNamespace,

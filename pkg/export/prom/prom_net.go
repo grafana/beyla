@@ -40,8 +40,8 @@ type netMetricsReporter struct {
 
 	promConnect *connector.PrometheusManager
 
-	flowAttrs      []attributes.Field[*ebpf.Record, string]
-	interZoneAttrs []attributes.Field[*ebpf.Record, string]
+	flowAttrs      []attrobi.Field[*ebpf.Record, string]
+	interZoneAttrs []attrobi.Field[*ebpf.Record, string]
 
 	clock *expire.CachedClock
 
@@ -97,7 +97,7 @@ func newNetReporter(
 	log := slog.With("component", "prom.NetworkEndpoint")
 	if cfg.GloballyEnabled || mr.cfg.NetworkFlowBytesEnabled() {
 		log.Debug("registering network flow bytes metric")
-		mr.flowAttrs = attributes.PrometheusGetters(
+		mr.flowAttrs = attrobi.PrometheusGetters(
 			ebpf.RecordStringGetters,
 			provider.For(attrobi.BeylaNetworkFlow))
 
@@ -110,7 +110,7 @@ func newNetReporter(
 
 	if mr.cfg.NetworkInterzoneMetricsEnabled() {
 		log.Debug("registering network inter-zone metric")
-		mr.interZoneAttrs = attributes.PrometheusGetters(
+		mr.interZoneAttrs = attrobi.PrometheusGetters(
 			ebpf.RecordStringGetters,
 			provider.For(attrobi.BeylaNetworkInterZone))
 

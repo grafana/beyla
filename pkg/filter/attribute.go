@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/gobwas/glob"
+	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
@@ -27,7 +28,7 @@ type AttributeFamilyConfig map[string]MatchDefinition
 func ByAttribute[T any](
 	config AttributeFamilyConfig,
 	extraGroupAttributeCfg map[string][]attr.Name,
-	getters attributes.NamedGetters[T, string],
+	getters attrobi.NamedGetters[T, string],
 	input, output *msg.Queue[[]T],
 ) swarm.InstanceFunc {
 	return func(_ context.Context) (swarm.RunFunc, error) {
@@ -52,7 +53,7 @@ type filter[T any] struct {
 func newFilter[T any](
 	config AttributeFamilyConfig,
 	extraGroupAttributesCfg map[string][]attr.Name,
-	getters attributes.NamedGetters[T, string],
+	getters attrobi.NamedGetters[T, string],
 	input, output *msg.Queue[[]T],
 ) (*filter[T], error) {
 	// Internally, from code, we use the OTEL-like naming (attr.Name) for the attributes,
@@ -83,7 +84,7 @@ func newFilter[T any](
 
 // buildMatcher returns a Matcher given an attribute name, the user-provided MatchDefinition, and the provided
 // list of getters for a given record type T.
-func buildMatcher[T any](getters attributes.NamedGetters[T, string], attribute attr.Name, def *MatchDefinition) (Matcher[T], error) {
+func buildMatcher[T any](getters attrobi.NamedGetters[T, string], attribute attr.Name, def *MatchDefinition) (Matcher[T], error) {
 	m := Matcher[T]{}
 	if err := def.Validate(); err != nil {
 		return m, err

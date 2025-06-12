@@ -3,18 +3,17 @@ package request
 import (
 	"strconv"
 
+	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"go.opentelemetry.io/otel/attribute"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
-
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
 )
 
 // SpanOTELGetters returns the attributes.Getter function that returns the
 // OTEL attribute.KeyValue of a given attribute name.
 // nolint:cyclop
-func SpanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValue], bool) {
-	var getter attributes.Getter[*Span, attribute.KeyValue]
+func SpanOTELGetters(name attr.Name) (attrobi.Getter[*Span, attribute.KeyValue], bool) {
+	var getter attrobi.Getter[*Span, attribute.KeyValue]
 	switch name {
 	case attr.Client:
 		getter = func(s *Span) attribute.KeyValue { return ClientMetric(SpanPeer(s)) }
@@ -117,8 +116,8 @@ func SpanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 // SpanPromGetters returns the attributes.Getter function that returns the
 // Prometheus string value of a given attribute name.
 // nolint:cyclop
-func SpanPromGetters(attrName attr.Name) (attributes.Getter[*Span, string], bool) {
-	var getter attributes.Getter[*Span, string]
+func SpanPromGetters(attrName attr.Name) (attrobi.Getter[*Span, string], bool) {
+	var getter attrobi.Getter[*Span, string]
 	switch attrName {
 	case attr.HTTPRequestMethod:
 		getter = func(s *Span) string { return s.Method }

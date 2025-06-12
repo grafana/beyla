@@ -142,7 +142,7 @@ func newMetricsExporter(
 		}
 
 		log.Debug("restricting attributes not in this list", "attributes", cfg.SelectorCfg.SelectionCfg)
-		attrs := attributes.OpenTelemetryGetters(
+		attrs := attrobi.OpenTelemetryGetters(
 			ebpf.RecordGetters,
 			attrProv.For(attrobi.BeylaNetworkFlow))
 
@@ -160,7 +160,7 @@ func newMetricsExporter(
 			return nil, err
 		}
 		log.Debug("restricting attributes not in this list", "attributes", cfg.SelectorCfg.SelectionCfg)
-		attrs := attributes.OpenTelemetryGetters(
+		attrs := attrobi.OpenTelemetryGetters(
 			ebpf.RecordGetters,
 			attrProv.For(attrobi.BeylaNetworkInterZone))
 

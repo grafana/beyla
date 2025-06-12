@@ -3,9 +3,8 @@ package attributes
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestSelectorMatch(t *testing.T) {

@@ -65,24 +65,24 @@ type procMetricsReporter struct {
 	clock *expire.CachedClock
 
 	// metrics
-	cpuTimeAttrs []attributes.Field[*process.Status, string]
+	cpuTimeAttrs []attrobi.Field[*process.Status, string]
 	cpuTime      *Expirer[prometheus.Counter]
 
-	cpuUtilizationAttrs []attributes.Field[*process.Status, string]
+	cpuUtilizationAttrs []attrobi.Field[*process.Status, string]
 	cpuUtilization      *Expirer[prometheus.Gauge]
 
 	// the OTEL spec for process memory says that this type is an UpDownCounter.
 	// Using Gauge as the nearest type in Prometheus.
-	memoryAttrs []attributes.Field[*process.Status, string]
+	memoryAttrs []attrobi.Field[*process.Status, string]
 	memory      *Expirer[prometheus.Gauge]
 
-	memoryVirtualAttrs []attributes.Field[*process.Status, string]
+	memoryVirtualAttrs []attrobi.Field[*process.Status, string]
 	memoryVirtual      *Expirer[prometheus.Gauge]
 
-	diskAttrs []attributes.Field[*process.Status, string]
+	diskAttrs []attrobi.Field[*process.Status, string]
 	disk      *Expirer[prometheus.Counter]
 
-	netAttrs []attributes.Field[*process.Status, string]
+	netAttrs []attrobi.Field[*process.Status, string]
 	net      *Expirer[prometheus.Counter]
 
 	// the observation code for CPU metrics will be different depending on
@@ -117,8 +117,8 @@ func newProcReporter(ctxInfo *global.ContextInfo, cfg *ProcPrometheusConfig, inp
 	netLblNames, netGetters, netHasDirection :=
 		attributesWithExplicit(provider, attributes.ProcessDiskIO, attrextra.ProcNetIODir)
 
-	attrMemory := attributes.PrometheusGetters(process.PromGetters, provider.For(attributes.ProcessMemoryUsage))
-	attrMemoryVirtual := attributes.PrometheusGetters(process.PromGetters, provider.For(attributes.ProcessMemoryVirtual))
+	attrMemory := attrobi.PrometheusGetters(process.PromGetters, provider.For(attributes.ProcessMemoryUsage))
+	attrMemoryVirtual := attrobi.PrometheusGetters(process.PromGetters, provider.For(attributes.ProcessMemoryVirtual))
 
 	clock := expire.NewCachedClock(timeNow)
 	// If service name is not explicitly set, we take the service name as set by the
@@ -299,7 +299,7 @@ func (r *procMetricsReporter) observeDisaggregatedNet(proc *process.Status) {
 func attributesWithExplicit(
 	provider *attributes.AttrSelector, metricName attrobi.Name, explicitAttribute attr2.Name,
 ) (
-	names []string, getters []attributes.Field[*process.Status, string], containsExplicit bool,
+	names []string, getters []attrobi.Field[*process.Status, string], containsExplicit bool,
 ) {
 	attrNames := provider.For(metricName)
 	// For example, "cpu_mode" won't be added by PrometheusGetters, as it's not defined in the *process.Status
@@ -307,7 +307,7 @@ func attributesWithExplicit(
 	// observeAggregatedCPU and observeDisaggregatedCPU
 	// Similar for "process_disk_io" or "process_network_io"
 	containsExplicit = slices.Contains(attrNames, explicitAttribute)
-	getters = attributes.PrometheusGetters(process.PromGetters, attrNames)
+	getters = attrobi.PrometheusGetters(process.PromGetters, attrNames)
 
 	if containsExplicit {
 		// the names and the getters arrays will have different length.

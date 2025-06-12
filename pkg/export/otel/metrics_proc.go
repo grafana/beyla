@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/expire"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
@@ -63,12 +64,12 @@ type procMetricsExporter struct {
 
 	log *slog.Logger
 
-	attrCPUTime       []attributes.Field[*process.Status, attribute.KeyValue]
-	attrCPUUtil       []attributes.Field[*process.Status, attribute.KeyValue]
-	attrMemory        []attributes.Field[*process.Status, attribute.KeyValue]
-	attrMemoryVirtual []attributes.Field[*process.Status, attribute.KeyValue]
-	attrDisk          []attributes.Field[*process.Status, attribute.KeyValue]
-	attrNet           []attributes.Field[*process.Status, attribute.KeyValue]
+	attrCPUTime       []attrobi.Field[*process.Status, attribute.KeyValue]
+	attrCPUUtil       []attrobi.Field[*process.Status, attribute.KeyValue]
+	attrMemory        []attrobi.Field[*process.Status, attribute.KeyValue]
+	attrMemoryVirtual []attrobi.Field[*process.Status, attribute.KeyValue]
+	attrDisk          []attrobi.Field[*process.Status, attribute.KeyValue]
+	attrNet           []attrobi.Field[*process.Status, attribute.KeyValue]
 
 	// the observation code for CPU metrics will be different depending on
 	// the "cpu.mode" attribute being selected or not
@@ -132,16 +133,16 @@ func newProcMetricsExporter(
 	}
 
 	cpuTimeNames := attrProv.For(attributes.ProcessCPUTime)
-	attrCPUTime := attributes.OpenTelemetryGetters(process.OTELGetters, cpuTimeNames)
+	attrCPUTime := attrobi.OpenTelemetryGetters(process.OTELGetters, cpuTimeNames)
 
 	cpuUtilNames := attrProv.For(attributes.ProcessCPUUtilization)
-	attrCPUUtil := attributes.OpenTelemetryGetters(process.OTELGetters, cpuUtilNames)
+	attrCPUUtil := attrobi.OpenTelemetryGetters(process.OTELGetters, cpuUtilNames)
 
 	diskNames := attrProv.For(attributes.ProcessDiskIO)
-	attrDisk := attributes.OpenTelemetryGetters(process.OTELGetters, diskNames)
+	attrDisk := attrobi.OpenTelemetryGetters(process.OTELGetters, diskNames)
 
 	netNames := attrProv.For(attributes.ProcessNetIO)
-	attrNet := attributes.OpenTelemetryGetters(process.OTELGetters, netNames)
+	attrNet := attrobi.OpenTelemetryGetters(process.OTELGetters, netNames)
 
 	mr := &procMetricsExporter{
 		log:         log,
@@ -151,9 +152,9 @@ func newProcMetricsExporter(
 		clock:       expire.NewCachedClock(timeNow),
 		attrCPUTime: attrCPUTime,
 		attrCPUUtil: attrCPUUtil,
-		attrMemory: attributes.OpenTelemetryGetters(process.OTELGetters,
+		attrMemory: attrobi.OpenTelemetryGetters(process.OTELGetters,
 			attrProv.For(attributes.ProcessMemoryUsage)),
-		attrMemoryVirtual: attributes.OpenTelemetryGetters(process.OTELGetters,
+		attrMemoryVirtual: attrobi.OpenTelemetryGetters(process.OTELGetters,
 			attrProv.For(attributes.ProcessMemoryVirtual)),
 		attrDisk:        attrDisk,
 		attrNet:         attrNet,

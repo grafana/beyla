@@ -6,10 +6,10 @@ import (
 	"log/slog"
 	"time"
 
+	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/expire"
 	"go.opentelemetry.io/otel/attribute"
 
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	"github.com/grafana/beyla/v2/pkg/export/otel/metric/api/metric"
 )
 
@@ -31,7 +31,7 @@ type removableMetric[VT any] interface {
 // VT: type of the value inside the datapoint: int, float64...
 type Expirer[Record any, Metric removableMetric[ValType], ValType any] struct {
 	ctx     context.Context
-	attrs   []attributes.Field[Record, attribute.KeyValue]
+	attrs   []attrobi.Field[Record, attribute.KeyValue]
 	metric  Metric
 	entries *expire.ExpiryMap[attribute.Set]
 	log     *slog.Logger
@@ -51,7 +51,7 @@ type Expirer[Record any, Metric removableMetric[ValType], ValType any] struct {
 func NewExpirer[Record any, Metric removableMetric[ValType], ValType any](
 	ctx context.Context,
 	metric Metric,
-	attrs []attributes.Field[Record, attribute.KeyValue],
+	attrs []attrobi.Field[Record, attribute.KeyValue],
 	clock expire.Clock,
 	ttl time.Duration,
 ) *Expirer[Record, Metric, ValType] {

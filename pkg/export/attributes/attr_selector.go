@@ -6,9 +6,8 @@ import (
 	"maps"
 	"slices"
 
-	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
-
 	maps2 "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers/maps"
+	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 )
 

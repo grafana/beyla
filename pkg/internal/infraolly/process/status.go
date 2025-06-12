@@ -6,10 +6,10 @@ import (
 	"strings"
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"go.opentelemetry.io/otel/attribute"
 
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	attrextra "github.com/grafana/beyla/v2/pkg/export/attributes/beyla"
 )
 
@@ -89,8 +89,8 @@ func NewStatus(pid int32, svcID *svc.Attrs) *Status {
 // OTELGetters is currently empty as most attributes are resource-level,
 // but left as a placeholder for future attribute additions.
 // nolint:cyclop
-func OTELGetters(name attr.Name) (attributes.Getter[*Status, attribute.KeyValue], bool) {
-	var g attributes.Getter[*Status, attribute.KeyValue]
+func OTELGetters(name attr.Name) (attrobi.Getter[*Status, attribute.KeyValue], bool) {
+	var g attrobi.Getter[*Status, attribute.KeyValue]
 	switch name {
 	case attrextra.ProcCPUMode, attrextra.ProcDiskIODir, attrextra.ProcNetIODir:
 		// the attributes are handled explicitly by the OTEL exporter, but we need to
@@ -100,8 +100,8 @@ func OTELGetters(name attr.Name) (attributes.Getter[*Status, attribute.KeyValue]
 }
 
 // nolint:cyclop
-func PromGetters(name attr.Name) (attributes.Getter[*Status, string], bool) {
-	var g attributes.Getter[*Status, string]
+func PromGetters(name attr.Name) (attrobi.Getter[*Status, string], bool) {
+	var g attrobi.Getter[*Status, string]
 	switch name {
 	case attr.HostName:
 		g = func(s *Status) string { return s.ID.Service.HostName }

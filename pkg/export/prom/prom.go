@@ -214,21 +214,21 @@ type metricsReporter struct {
 	targetInfo             *prometheus.GaugeVec
 
 	// user-selected attributes for the application-level metrics
-	attrHTTPDuration           []attributes.Field[*request.Span, string]
-	attrHTTPClientDuration     []attributes.Field[*request.Span, string]
-	attrGRPCDuration           []attributes.Field[*request.Span, string]
-	attrGRPCClientDuration     []attributes.Field[*request.Span, string]
-	attrDBClientDuration       []attributes.Field[*request.Span, string]
-	attrMsgPublishDuration     []attributes.Field[*request.Span, string]
-	attrMsgProcessDuration     []attributes.Field[*request.Span, string]
-	attrHTTPRequestSize        []attributes.Field[*request.Span, string]
-	attrHTTPResponseSize       []attributes.Field[*request.Span, string]
-	attrHTTPClientRequestSize  []attributes.Field[*request.Span, string]
-	attrHTTPClientResponseSize []attributes.Field[*request.Span, string]
-	attrGPUKernelCalls         []attributes.Field[*request.Span, string]
-	attrGPUMemoryAllocs        []attributes.Field[*request.Span, string]
-	attrGPUKernelGridSize      []attributes.Field[*request.Span, string]
-	attrGPUKernelBlockSize     []attributes.Field[*request.Span, string]
+	attrHTTPDuration           []attrobi.Field[*request.Span, string]
+	attrHTTPClientDuration     []attrobi.Field[*request.Span, string]
+	attrGRPCDuration           []attrobi.Field[*request.Span, string]
+	attrGRPCClientDuration     []attrobi.Field[*request.Span, string]
+	attrDBClientDuration       []attrobi.Field[*request.Span, string]
+	attrMsgPublishDuration     []attrobi.Field[*request.Span, string]
+	attrMsgProcessDuration     []attrobi.Field[*request.Span, string]
+	attrHTTPRequestSize        []attrobi.Field[*request.Span, string]
+	attrHTTPResponseSize       []attrobi.Field[*request.Span, string]
+	attrHTTPClientRequestSize  []attrobi.Field[*request.Span, string]
+	attrHTTPClientResponseSize []attrobi.Field[*request.Span, string]
+	attrGPUKernelCalls         []attrobi.Field[*request.Span, string]
+	attrGPUMemoryAllocs        []attrobi.Field[*request.Span, string]
+	attrGPUKernelGridSize      []attrobi.Field[*request.Span, string]
+	attrGPUKernelBlockSize     []attrobi.Field[*request.Span, string]
 
 	// trace span metrics
 	spanMetricsLatency           *Expirer[prometheus.Histogram]
@@ -320,61 +320,61 @@ func newReporter(
 
 	is := instrumentations.NewInstrumentationSelection(cfg.Instrumentations)
 
-	var attrHTTPDuration, attrHTTPClientDuration, attrHTTPRequestSize, attrHTTPResponseSize, attrHTTPClientRequestSize, attrHTTPClientResponseSize []attributes.Field[*request.Span, string]
+	var attrHTTPDuration, attrHTTPClientDuration, attrHTTPRequestSize, attrHTTPResponseSize, attrHTTPClientRequestSize, attrHTTPClientResponseSize []attrobi.Field[*request.Span, string]
 
 	if is.HTTPEnabled() {
-		attrHTTPDuration = attributes.PrometheusGetters(request.SpanPromGetters,
+		attrHTTPDuration = attrobi.PrometheusGetters(request.SpanPromGetters,
 			attrsProvider.For(attrobi.HTTPServerDuration))
-		attrHTTPClientDuration = attributes.PrometheusGetters(request.SpanPromGetters,
+		attrHTTPClientDuration = attrobi.PrometheusGetters(request.SpanPromGetters,
 			attrsProvider.For(attrobi.HTTPClientDuration))
-		attrHTTPRequestSize = attributes.PrometheusGetters(request.SpanPromGetters,
+		attrHTTPRequestSize = attrobi.PrometheusGetters(request.SpanPromGetters,
 			attrsProvider.For(attrobi.HTTPServerRequestSize))
-		attrHTTPResponseSize = attributes.PrometheusGetters(request.SpanPromGetters,
+		attrHTTPResponseSize = attrobi.PrometheusGetters(request.SpanPromGetters,
 			attrsProvider.For(attrobi.HTTPServerResponseSize))
-		attrHTTPClientRequestSize = attributes.PrometheusGetters(request.SpanPromGetters,
+		attrHTTPClientRequestSize = attrobi.PrometheusGetters(request.SpanPromGetters,
 			attrsProvider.For(attrobi.HTTPClientRequestSize))
-		attrHTTPClientResponseSize = attributes.PrometheusGetters(request.SpanPromGetters,
+		attrHTTPClientResponseSize = attrobi.PrometheusGetters(request.SpanPromGetters,
 			attrsProvider.For(attrobi.HTTPClientResponseSize))
 	}
 
-	var attrGRPCDuration, attrGRPCClientDuration []attributes.Field[*request.Span, string]
+	var attrGRPCDuration, attrGRPCClientDuration []attrobi.Field[*request.Span, string]
 
 	if is.GRPCEnabled() {
-		attrGRPCDuration = attributes.PrometheusGetters(request.SpanPromGetters,
+		attrGRPCDuration = attrobi.PrometheusGetters(request.SpanPromGetters,
 			attrsProvider.For(attrobi.RPCServerDuration))
-		attrGRPCClientDuration = attributes.PrometheusGetters(request.SpanPromGetters,
+		attrGRPCClientDuration = attrobi.PrometheusGetters(request.SpanPromGetters,
 			attrsProvider.For(attrobi.RPCClientDuration))
 	}
 
-	var attrDBClientDuration []attributes.Field[*request.Span, string]
+	var attrDBClientDuration []attrobi.Field[*request.Span, string]
 
 	if is.DBEnabled() {
-		attrDBClientDuration = attributes.PrometheusGetters(request.SpanPromGetters,
+		attrDBClientDuration = attrobi.PrometheusGetters(request.SpanPromGetters,
 			attrsProvider.For(attrobi.DBClientDuration))
 	}
 
-	var attrMessagingProcessDuration, attrMessagingPublishDuration []attributes.Field[*request.Span, string]
+	var attrMessagingProcessDuration, attrMessagingPublishDuration []attrobi.Field[*request.Span, string]
 
 	if is.MQEnabled() {
-		attrMessagingPublishDuration = attributes.PrometheusGetters(request.SpanPromGetters,
+		attrMessagingPublishDuration = attrobi.PrometheusGetters(request.SpanPromGetters,
 			attrsProvider.For(attrobi.MessagingPublishDuration))
-		attrMessagingProcessDuration = attributes.PrometheusGetters(request.SpanPromGetters,
+		attrMessagingProcessDuration = attrobi.PrometheusGetters(request.SpanPromGetters,
 			attrsProvider.For(attrobi.MessagingProcessDuration))
 	}
 
-	var attrGPUKernelLaunchCalls []attributes.Field[*request.Span, string]
-	var attrGPUMemoryAllocations []attributes.Field[*request.Span, string]
-	var attrGPUKernelGridSize []attributes.Field[*request.Span, string]
-	var attrGPUKernelBlockSize []attributes.Field[*request.Span, string]
+	var attrGPUKernelLaunchCalls []attrobi.Field[*request.Span, string]
+	var attrGPUMemoryAllocations []attrobi.Field[*request.Span, string]
+	var attrGPUKernelGridSize []attrobi.Field[*request.Span, string]
+	var attrGPUKernelBlockSize []attrobi.Field[*request.Span, string]
 
 	if is.GPUEnabled() {
-		attrGPUKernelLaunchCalls = attributes.PrometheusGetters(request.SpanPromGetters,
+		attrGPUKernelLaunchCalls = attrobi.PrometheusGetters(request.SpanPromGetters,
 			attrsProvider.For(attrobi.GPUKernelLaunchCalls))
-		attrGPUMemoryAllocations = attributes.PrometheusGetters(request.SpanPromGetters,
+		attrGPUMemoryAllocations = attrobi.PrometheusGetters(request.SpanPromGetters,
 			attrsProvider.For(attrobi.GPUMemoryAllocations))
-		attrGPUKernelGridSize = attributes.PrometheusGetters(request.SpanPromGetters,
+		attrGPUKernelGridSize = attrobi.PrometheusGetters(request.SpanPromGetters,
 			attrsProvider.For(attrobi.GPUKernelGridSize))
-		attrGPUKernelBlockSize = attributes.PrometheusGetters(request.SpanPromGetters,
+		attrGPUKernelBlockSize = attrobi.PrometheusGetters(request.SpanPromGetters,
 			attrsProvider.For(attrobi.GPUKernelBlockSize))
 	}
 
@@ -1041,7 +1041,7 @@ func (r *metricsReporter) labelValuesServiceGraph(span *request.Span) []string {
 	}
 }
 
-func labelNames[T any](getters []attributes.Field[T, string]) []string {
+func labelNames[T any](getters []attrobi.Field[T, string]) []string {
 	labels := make([]string, 0, len(getters))
 	for _, label := range getters {
 		labels = append(labels, label.ExposedName)
@@ -1049,7 +1049,7 @@ func labelNames[T any](getters []attributes.Field[T, string]) []string {
 	return labels
 }
 
-func labelValues[T any](s T, getters []attributes.Field[T, string]) []string {
+func labelValues[T any](s T, getters []attrobi.Field[T, string]) []string {
 	values := make([]string, 0, len(getters))
 	for _, getter := range getters {
 		values = append(values, getter.Get(s))

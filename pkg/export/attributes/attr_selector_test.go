@@ -5,7 +5,6 @@ import (
 
 	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

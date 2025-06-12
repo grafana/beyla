@@ -17,11 +17,11 @@ import (
 
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	attrextra "github.com/grafana/beyla/v2/pkg/export/attributes/beyla"
-	"github.com/grafana/beyla/v2/pkg/export/expire"
 	"github.com/grafana/beyla/v2/pkg/export/otel/metric"
 	metric2 "github.com/grafana/beyla/v2/pkg/export/otel/metric/api/metric"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/expire"
 )
 
 var (

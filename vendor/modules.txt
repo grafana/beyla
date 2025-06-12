@@ -370,7 +370,7 @@ github.com/munnerz/goautoneg
 # github.com/mxk/go-flowrate v0.0.0-20140419014527-cca7078d478f
 ## explicit
 github.com/mxk/go-flowrate/flowrate
-# github.com/open-telemetry/opentelemetry-ebpf-instrumentation v0.0.0-20250611163711-08d9fca59d9b
+# github.com/open-telemetry/opentelemetry-ebpf-instrumentation v0.0.0-00010101000000-000000000000 => ./.obi-src
 ## explicit; go 1.24.1
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/bhpack
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec
@@ -1458,3 +1458,4 @@ sigs.k8s.io/structured-merge-diff/v4/value
 sigs.k8s.io/yaml
 sigs.k8s.io/yaml/goyaml.v2
 sigs.k8s.io/yaml/goyaml.v3
+# github.com/open-telemetry/opentelemetry-ebpf-instrumentation => ./.obi-src

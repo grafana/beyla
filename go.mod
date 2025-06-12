@@ -4,7 +4,7 @@ go 1.24.1
 
 // opentelemetry-ebpf-instrumentation is not downloaded directly via go mod
 // but included as a go submodule
-replace github.com/open-telemetry/opentelemetry-ebpf-instrumentation => ./obi-src
+replace github.com/open-telemetry/opentelemetry-ebpf-instrumentation => ./.obi-src
 
 require (
 	github.com/AlessandroPomponio/go-gibberish v0.0.0-20191004143433-a2d4156f0396
@@ -24,7 +24,7 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/ianlancetaylor/demangle v0.0.0-20250417193237-f615e6bd150b
 	github.com/mariomac/guara v0.0.0-20250408105519-1e4dbdfb7136
-	github.com/open-telemetry/opentelemetry-ebpf-instrumentation v0.0.0-20250611163711-08d9fca59d9b
+	github.com/open-telemetry/opentelemetry-ebpf-instrumentation v0.0.0-00010101000000-000000000000
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.22.0
 	github.com/prometheus/client_model v0.6.2

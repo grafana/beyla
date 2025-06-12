@@ -4,9 +4,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
-
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/expire"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 func plog() *slog.Logger {

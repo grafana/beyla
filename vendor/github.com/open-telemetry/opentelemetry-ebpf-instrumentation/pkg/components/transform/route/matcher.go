@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// wildcard format. By now, we will support wildcards in the form:
+// wildcard format. By now, we will suppport wildcards in the form:
 // - /user/:userId/details (Gin)
 // - /user/{userId}/details (Gorilla)
 // More formats will be appended at some point

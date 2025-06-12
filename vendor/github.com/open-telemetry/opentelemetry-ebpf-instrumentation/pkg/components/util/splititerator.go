@@ -21,7 +21,7 @@ func NewSplitIterator(buf string, delim string) *SplitIterator {
 	}
 }
 
-// returns a token and false if there are any tokens available, otherwise
+// Next returns a token and false if there are any tokens available, otherwise
 // returns "" and true to convey EOF has been reached
 func (sp *SplitIterator) Next() (string, bool) {
 	if len(sp.buf) == 0 {

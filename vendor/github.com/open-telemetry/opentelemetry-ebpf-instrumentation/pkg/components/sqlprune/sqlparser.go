@@ -37,7 +37,7 @@ var tokenIsDBOperation = map[int]bool{
 func SQLParseOperationAndTable(query string) (string, string) {
 	var operation string
 	var lastType int
-	var tables = []string{}
+	tables := []string{}
 
 	tokens := sqlparser.NewTokenizer(strings.NewReader(query))
 	addedTable := false

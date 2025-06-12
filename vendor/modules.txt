@@ -370,8 +370,9 @@ github.com/munnerz/goautoneg
 # github.com/mxk/go-flowrate v0.0.0-20140419014527-cca7078d478f
 ## explicit
 github.com/mxk/go-flowrate/flowrate
-# github.com/open-telemetry/opentelemetry-ebpf-instrumentation v0.0.0-20250611163711-08d9fca59d9b
+# github.com/open-telemetry/opentelemetry-ebpf-instrumentation v0.0.0-20250612140350-16975884f762
 ## explicit; go 1.24.1
+github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/connector
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/bhpack
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/fastelf
@@ -380,9 +381,16 @@ github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/help
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers/container
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers/maps
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers/sync
+github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/sqlprune
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc
+github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/testutil
+github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/transform/route
+github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/util
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names
+github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/expire
+github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations
+github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubeflags
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/services

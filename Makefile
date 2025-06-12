@@ -213,7 +213,7 @@ vendor-obi: obi-submodule docker-generate
 	go mod vendor
 
 .PHONY: verify
-verify: prereqs lint-dashboard lint test
+verify: prereqs lint-dashboard vendor-obi lint test
 
 .PHONY: build
 build: vendor-obi verify compile

@@ -5,25 +5,26 @@ import (
 	"fmt"
 	"slices"
 
+	attr2 "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
-	attr2 "github.com/grafana/beyla/v2/pkg/export/attributes/names"
+	attrextra "github.com/grafana/beyla/v2/pkg/export/attributes/beyla"
 	"github.com/grafana/beyla/v2/pkg/export/expire"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/internal/connector"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
-	"github.com/grafana/beyla/v2/pkg/pipe/msg"
-	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 // injectable function reference for testing
 
 // ProcPrometheusConfig for process metrics just wraps the global prom.ProcPrometheusConfig as provided by the user
 type ProcPrometheusConfig struct {
-	Metrics            *PrometheusConfig
-	AttributeSelectors attributes.Selection
+	Metrics     *PrometheusConfig
+	SelectorCfg *attributes.SelectorConfig
 }
 
 // nolint:gocritic
@@ -101,19 +102,19 @@ func newProcReporter(ctxInfo *global.ContextInfo, cfg *ProcPrometheusConfig, inp
 	// OTEL exporter would report also some prometheus-exclusive attributes
 	group.Add(attributes.GroupPrometheus)
 
-	provider, err := attributes.NewAttrSelector(group, cfg.AttributeSelectors)
+	provider, err := attributes.NewAttrSelector(group, cfg.SelectorCfg)
 	if err != nil {
 		return nil, fmt.Errorf("network Prometheus exporter attributes enable: %w", err)
 	}
 
 	cpuTimeLblNames, cpuTimeGetters, cpuTimeHasState :=
-		attributesWithExplicit(provider, attributes.ProcessCPUTime, attr2.ProcCPUMode)
+		attributesWithExplicit(provider, attributes.ProcessCPUTime, attrextra.ProcCPUMode)
 	cpuUtilLblNames, cpuUtilGetters, cpuUtilHasState :=
-		attributesWithExplicit(provider, attributes.ProcessCPUUtilization, attr2.ProcCPUMode)
+		attributesWithExplicit(provider, attributes.ProcessCPUUtilization, attrextra.ProcCPUMode)
 	diskLblNames, diskGetters, diskHasDirection :=
-		attributesWithExplicit(provider, attributes.ProcessDiskIO, attr2.ProcDiskIODir)
+		attributesWithExplicit(provider, attributes.ProcessDiskIO, attrextra.ProcDiskIODir)
 	netLblNames, netGetters, netHasDirection :=
-		attributesWithExplicit(provider, attributes.ProcessDiskIO, attr2.ProcNetIODir)
+		attributesWithExplicit(provider, attributes.ProcessDiskIO, attrextra.ProcNetIODir)
 
 	attrMemory := attributes.PrometheusGetters(process.PromGetters, provider.For(attributes.ProcessMemoryUsage))
 	attrMemoryVirtual := attributes.PrometheusGetters(process.PromGetters, provider.For(attributes.ProcessMemoryVirtual))

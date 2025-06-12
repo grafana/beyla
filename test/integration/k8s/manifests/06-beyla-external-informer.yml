@@ -37,9 +37,9 @@ data:
     trace_printer: text
     log_level: debug
     discovery:
-      services:
-        - k8s_deployment_name: (otherinstance|testserver)
-        - k8s_pod_name: .*pinger.*
+      instrument:
+        - k8s_deployment_name: "{otherinstance,testserver}"
+        - k8s_pod_name: "*pinger*"
 ---
 apiVersion: apps/v1
 kind: DaemonSet

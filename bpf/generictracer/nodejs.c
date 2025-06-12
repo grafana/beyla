@@ -1,4 +1,4 @@
-//go:build beyla_bpf_ignore
+//go:build obi_bpf_ignore
 
 #include <bpfcore/vmlinux.h>
 #include <bpfcore/bpf_helpers.h>
@@ -122,10 +122,8 @@ static __always_inline void async_reset_httpincomingmessage(const void *wrap, u6
     const s32 fd = get_active_fd(pid_tgid);
     const u64 async_id = wrap_async_id(wrap);
 
-    bpf_dbg_printk("NODEE === async_reset_httpincomingmessage wrap=%llx, id=%llu, fd=%d\n",
-                   wrap,
-                   async_id,
-                   fd);
+    bpf_dbg_printk(
+        "NODE === async_reset_httpincomingmessage wrap=%llx, id=%llu, fd=%d\n", wrap, async_id, fd);
 
     set_async_id_fd(async_id, fd, pid_tgid);
 }
@@ -133,16 +131,16 @@ static __always_inline void async_reset_httpincomingmessage(const void *wrap, u6
 static __always_inline void async_reset_httpclientrequest(const void *wrap, u64 pid_tgid) {
     const u64 async_id = wrap_async_id(wrap);
 
-    bpf_dbg_printk("NODEE === uprobe AsyncReset id=%llu wrap=%llx ===", async_id, wrap);
+    bpf_dbg_printk("NODE === uprobe AsyncReset id=%llu wrap=%llx ===", async_id, wrap);
 
     const u64 parent_request_id = get_active_parent_request(pid_tgid);
 
     if (parent_request_id == k_invalid_request_id) {
-        bpf_dbg_printk("NODEE found orphan client request (%llu), ignoring...", async_id);
+        bpf_dbg_printk("NODE found orphan client request (%llu), ignoring...", async_id);
         return;
     }
 
-    bpf_dbg_printk("NODEE new client request started wrap = %llx, id = %llu, parent = %llu",
+    bpf_dbg_printk("NODE new client request started wrap = %llx, id = %llu, parent = %llu",
                    wrap,
                    async_id,
                    parent_request_id);
@@ -169,11 +167,9 @@ static __always_inline void async_reset_tcpwrap(const void *wrap, u64 pid_tgid) 
     const s32 fd = trigger_async_id > 0 ? get_async_id_fd(trigger_async_id, pid_tgid)
                                         : get_active_parent_request(pid_tgid);
 
-    bpf_dbg_printk("NODEE async_reset_tcpwrap wrap=%llx async_id=%llu trigger=%llu fd=%d",
-                   wrap,
-                   async_id,
-                   trigger_async_id,
-                   fd);
+    bpf_dbg_printk("NODE async_reset_tcpwrap wrap=%llx async_id=%llu", wrap, async_id);
+
+    bpf_dbg_printk("NODE async_reset_tcpwrap trigger=%llu fd=%d", trigger_async_id, fd);
 
     set_async_id_fd(async_id, fd, pid_tgid);
 }
@@ -192,11 +188,8 @@ int beyla_async_reset(struct pt_regs *ctx) {
     [[maybe_unused]] const u64 async_id = wrap_async_id(wrap);
     [[maybe_unused]] const u64 trigger = wrap_trigger_async_id(wrap);
 
-    bpf_dbg_printk("NODEE AsyncReset wrap=%llx, provider=%u, id=%llu, trigger=%llu",
-                   wrap,
-                   provider,
-                   async_id,
-                   trigger);
+    bpf_dbg_printk("NODE AsyncReset wrap=%llx, provider=%u", wrap, provider);
+    bpf_dbg_printk("NODE AsyncReset id=%llu, trigger=%llu", async_id, trigger);
 
     switch (provider) {
     case NODE_PROVIDER_HTTPINCOMINGMESSAGE:
@@ -218,8 +211,7 @@ int beyla_async_reset(struct pt_regs *ctx) {
 static __always_inline void handle_incoming_request(u64 async_id, u64 pid_tgid) {
     const u64 parent_request_id = get_async_id_fd(async_id, pid_tgid);
 
-    bpf_dbg_printk(
-        "NODEE new request received async_id=%llu, fd=%llu", async_id, parent_request_id);
+    bpf_dbg_printk("NODE new request received async_id=%llu, fd=%llu", async_id, parent_request_id);
 
     // (3) node is done processing the incoming request and will trigger the
     // first client request - so we use the incoming request fd as the parent
@@ -230,7 +222,7 @@ static __always_inline void handle_incoming_request(u64 async_id, u64 pid_tgid) 
 static __always_inline void handle_client_request(u64 async_id, u64 pid_tgid) {
     const u64 parent_request_id = get_parent_request(async_id, pid_tgid);
     bpf_dbg_printk(
-        "NODEE client request finished async_id=%llu, parent = %llu", async_id, parent_request_id);
+        "NODE client request finished async_id=%llu, parent = %llu", async_id, parent_request_id);
 
     // (2) reset the active parent request to this client request's parent request
     // so that the next client request in the chain can be linked to it
@@ -240,7 +232,7 @@ static __always_inline void handle_client_request(u64 async_id, u64 pid_tgid) {
 static __always_inline void handle_tcp_connect_wrap(u64 trigger_async_id, u64 pid_tgid) {
     const s32 fd = get_async_id_fd(trigger_async_id, pid_tgid);
 
-    bpf_dbg_printk("NODEE === handle_tcp_connect_wrap trigger=%llu fd = %d", trigger_async_id, fd);
+    bpf_dbg_printk("NODE === handle_tcp_connect_wrap trigger=%llu fd = %d", trigger_async_id, fd);
 
     // (5) the client connection is about to start - TCPCONNECTWRAP is always
     // triggered by a TCPWRAP, so we simply grab the fd set up by it during
@@ -262,11 +254,8 @@ int beyla_make_callback(struct pt_regs *ctx) {
     const u64 async_id = wrap_async_id(wrap);
     const u64 trigger = wrap_trigger_async_id(wrap);
 
-    bpf_dbg_printk("NODEE === uprobe MakeCallback wrap=%llx, provider=%u, id=%llu, trigger=%llu",
-                   wrap,
-                   provider,
-                   async_id,
-                   trigger);
+    bpf_dbg_printk("NODE === uprobe MakeCallback wrap=%llx, provider=%u", wrap, provider);
+    bpf_dbg_printk("NODE === uprobe MakeCallback id=%llu, trigger=%llu", async_id, trigger);
 
     switch (provider) {
     case NODE_PROVIDER_HTTPINCOMINGMESSAGE:
@@ -298,7 +287,7 @@ int beyla_on_connection(struct pt_regs *ctx) {
     s32 accepted_fd;
     bpf_core_read_user(&accepted_fd, sizeof(accepted_fd), handle + 0xec);
 
-    bpf_dbg_printk("NODEE === uprobe OnConnection fd = %d", accepted_fd);
+    bpf_dbg_printk("NODE === uprobe OnConnection fd = %d", accepted_fd);
 
     // (1) new incoming connection, we store the accepted fd
     set_active_fd(accepted_fd, pid_tgid);

@@ -32,9 +32,8 @@ import (
 	"strconv"
 
 	"github.com/hashicorp/golang-lru/v2/simplelru"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 	"github.com/shirou/gopsutil/v3/process"
-
-	"github.com/grafana/beyla/v2/pkg/internal/svc"
 )
 
 func hlog() *slog.Logger {

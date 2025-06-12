@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers"
 	"golang.org/x/sys/unix"
 
 	ebpfcfg "github.com/grafana/beyla/v2/pkg/config"
 	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
-	"github.com/grafana/beyla/v2/pkg/internal/helpers"
 )
 
 // Minimum required Kernel version: 4.18

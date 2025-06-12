@@ -93,13 +93,13 @@ static __always_inline unsigned char *bpf_strstr_tp_loop(unsigned char *buf, int
 static __always_inline const tp_info_pid_t *
 find_nginx_parent_trace(const pid_connection_info_t *p_conn, u16 orig_dport) {
     connection_info_part_t client_part = {};
-    populate_ephemeral_info(&client_part, &p_conn->conn, orig_dport, 1);
+    populate_ephemeral_info(&client_part, &p_conn->conn, orig_dport, p_conn->pid, 1);
     fd_info_t *fd_info = fd_info_for_conn(&client_part);
 
-    bpf_dbg_printk("fd_info lookup %llx", fd_info);
+    bpf_dbg_printk("fd_info lookup %llx, type=%d", fd_info, client_part.type);
     if (fd_info) {
         connection_info_part_t *parent = bpf_map_lookup_elem(&nginx_upstream, fd_info);
-        bpf_dbg_printk("parent %llx", parent);
+        bpf_dbg_printk("parent %llx, fd=%d, type=%d", parent, fd_info->fd, fd_info->type);
         if (parent) {
             return bpf_map_lookup_elem(&server_traces_aux, parent);
         }
@@ -193,7 +193,7 @@ static __always_inline const tp_info_pid_t *find_parent_trace(const pid_connecti
         return bpf_map_lookup_elem(&server_traces, &conn_t_key->t_key);
     }
 
-    return NULL;
+    return 0;
 }
 
 // Traceparent format: Traceparent: ver (2 chars) - trace_id (32 chars) - span_id (16 chars) - flags (2 chars)
@@ -246,13 +246,17 @@ static __always_inline u8 valid_trace(const unsigned char *trace_id) {
 
 static __always_inline void server_or_client_trace(
     u8 type, connection_info_t *conn, tp_info_pid_t *tp_p, u8 ssl, u16 orig_dport) {
+
+    u64 id = bpf_get_current_pid_tgid();
+    u32 host_pid = pid_from_pid_tgid(id);
+
     if (type == EVENT_HTTP_REQUEST) {
         trace_key_t t_key = {0};
         task_tid(&t_key.p_key);
         t_key.extra_id = extra_runtime_id();
 
         connection_info_part_t conn_part = {};
-        populate_ephemeral_info(&conn_part, conn, orig_dport, 0);
+        populate_ephemeral_info(&conn_part, conn, orig_dport, host_pid, 0);
 
         bpf_dbg_printk("Saving connection server span for pid=%d, tid=%d, ephemeral_port %d",
                        t_key.p_key.pid,
@@ -276,8 +280,7 @@ static __always_inline void server_or_client_trace(
         // Setup a pid, so that we can find it in TC.
         // We need the PID id to be able to query ongoing_http and update
         // the span id with the SEQ/ACK pair.
-        u64 id = bpf_get_current_pid_tgid();
-        tp_p->pid = pid_from_pid_tgid(id);
+        tp_p->pid = host_pid;
         const egress_key_t e_key = {
             .d_port = conn->d_port,
             .s_port = conn->s_port,

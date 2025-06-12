@@ -9,10 +9,10 @@ import (
 	"unsafe"
 
 	lru "github.com/hashicorp/golang-lru/v2"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/bhpack"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/net/http2"
 
-	"github.com/grafana/beyla/v2/pkg/internal/ebpf/bhpack"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/ringbuf"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 )
@@ -199,10 +199,21 @@ func readRetMetaFrame(parseContext *EBPFParseContext, connID uint64, fr *http2.F
 		// end up first in the headers list.
 		switch hfKey {
 		case ":status":
-			status, _ = strconv.Atoi(hf.Value)
+			if !grpc { // only set the HTTP status if we didn't find grpc status
+				status, _ = strconv.Atoi(hf.Value)
+			}
 			ok = true
 		case "grpc-status":
 			status, _ = strconv.Atoi(hf.Value)
+			protocolIsGRPC(parseContext.h2c, connID)
+			grpc = true
+			ok = true
+		case "grpc-message":
+			if hf.Value != "" {
+				if !grpc { // unset or we have the HTTP status
+					status = 2
+				}
+			}
 			protocolIsGRPC(parseContext.h2c, connID)
 			grpc = true
 			ok = true

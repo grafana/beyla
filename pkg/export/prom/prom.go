@@ -9,21 +9,22 @@ import (
 	"strings"
 	"time"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/grafana/beyla/v2/pkg/buildinfo"
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
-	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
+	attrextra "github.com/grafana/beyla/v2/pkg/export/attributes/beyla"
 	"github.com/grafana/beyla/v2/pkg/export/expire"
 	"github.com/grafana/beyla/v2/pkg/export/instrumentations"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/internal/connector"
-	"github.com/grafana/beyla/v2/pkg/internal/exec"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
-	"github.com/grafana/beyla/v2/pkg/internal/svc"
-	"github.com/grafana/beyla/v2/pkg/pipe/msg"
-	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 // injectable function reference for testing
@@ -267,7 +268,7 @@ type metricsReporter struct {
 func PrometheusEndpoint(
 	ctxInfo *global.ContextInfo,
 	cfg *PrometheusConfig,
-	attrSelect attributes.Selection,
+	selectorCfg *attributes.SelectorConfig,
 	input *msg.Queue[[]request.Span],
 	processEventCh *msg.Queue[exec.ProcessEvent],
 ) swarm.InstanceFunc {
@@ -275,7 +276,7 @@ func PrometheusEndpoint(
 		if !cfg.Enabled() {
 			return swarm.EmptyRunFunc()
 		}
-		reporter, err := newReporter(ctxInfo, cfg, attrSelect, input, processEventCh)
+		reporter, err := newReporter(ctxInfo, cfg, selectorCfg, input, processEventCh)
 		if err != nil {
 			return nil, fmt.Errorf("instantiating Prometheus endpoint: %w", err)
 		}
@@ -306,14 +307,14 @@ func (p *PrometheusConfig) spanMetricsCallsName() string {
 func newReporter(
 	ctxInfo *global.ContextInfo,
 	cfg *PrometheusConfig,
-	selector attributes.Selection,
+	selectorCfg *attributes.SelectorConfig,
 	input *msg.Queue[[]request.Span],
 	processEventCh *msg.Queue[exec.ProcessEvent],
 ) (*metricsReporter, error) {
 	groups := ctxInfo.MetricAttributeGroups
 	groups.Add(attributes.GroupPrometheus)
 
-	attrsProvider, err := attributes.NewAttrSelector(groups, selector)
+	attrsProvider, err := attributes.NewAttrSelector(groups, selectorCfg)
 	if err != nil {
 		return nil, fmt.Errorf("selecting metrics attributes: %w", err)
 	}
@@ -934,19 +935,19 @@ func appendK8sLabelNames(names []string) []string {
 func appendK8sLabelValuesService(values []string, service *svc.Attrs) []string {
 	// must follow the order in appendK8sLabelNames
 	values = append(values,
-		service.Metadata[(attr.K8sNamespaceName)],
-		service.Metadata[(attr.K8sPodName)],
-		service.Metadata[(attr.K8sContainerName)],
-		service.Metadata[(attr.K8sNodeName)],
-		service.Metadata[(attr.K8sPodUID)],
-		service.Metadata[(attr.K8sPodStartTime)],
-		service.Metadata[(attr.K8sDeploymentName)],
-		service.Metadata[(attr.K8sReplicaSetName)],
-		service.Metadata[(attr.K8sStatefulSetName)],
-		service.Metadata[(attr.K8sDaemonSetName)],
-		service.Metadata[(attr.K8sClusterName)],
-		service.Metadata[(attr.K8sKind)],
-		service.Metadata[(attr.K8sOwnerName)],
+		service.Metadata[attr.K8sNamespaceName],
+		service.Metadata[attr.K8sPodName],
+		service.Metadata[attr.K8sContainerName],
+		service.Metadata[attr.K8sNodeName],
+		service.Metadata[attr.K8sPodUID],
+		service.Metadata[attr.K8sPodStartTime],
+		service.Metadata[attr.K8sDeploymentName],
+		service.Metadata[attr.K8sReplicaSetName],
+		service.Metadata[attr.K8sStatefulSetName],
+		service.Metadata[attr.K8sDaemonSetName],
+		service.Metadata[attr.K8sClusterName],
+		service.Metadata[attrextra.K8sKind],
+		service.Metadata[attr.K8sOwnerName],
 	)
 	return values
 }

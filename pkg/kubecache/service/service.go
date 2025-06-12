@@ -9,10 +9,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers/sync"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/peer"
 
-	"github.com/grafana/beyla/v2/pkg/internal/helpers/sync"
 	"github.com/grafana/beyla/v2/pkg/kubecache"
 	"github.com/grafana/beyla/v2/pkg/kubecache/informer"
 	"github.com/grafana/beyla/v2/pkg/kubecache/instrument"

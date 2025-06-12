@@ -1,10 +1,11 @@
 package global
 
 import (
-	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
-	kube2 "github.com/grafana/beyla/v2/pkg/internal/kube"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/connector"
 	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
+
+	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
+	kube2 "github.com/grafana/beyla/v2/pkg/internal/kube"
 )
 
 // ContextInfo stores some context information that must be shared across some nodes of the

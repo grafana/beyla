@@ -4,7 +4,8 @@ import (
 	"errors"
 
 	"github.com/gobwas/glob"
-	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
+
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 )
 
 // Matcher condition for a given field of the record type T.
@@ -14,7 +15,7 @@ type Matcher[T any] struct {
 	// Negate the condition value
 	Negate bool
 	// Getter for the field to be compared with the Glob
-	Getter attrobi.Getter[T, string]
+	Getter attributes.Getter[T, string]
 }
 
 func (m *Matcher[T]) Matches(record T) bool {

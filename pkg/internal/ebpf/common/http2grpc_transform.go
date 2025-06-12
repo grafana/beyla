@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	ebpfcommon "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/common"
 	"strconv"
 	"strings"
 	"unsafe"
@@ -17,7 +18,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 )
 
-type BPFHTTP2Info bpfHttp2GrpcRequestT
+type BPFHTTP2Info ebpfcommon.BpfHttp2GrpcRequestT
 
 type Protocol uint8
 

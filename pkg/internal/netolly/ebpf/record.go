@@ -23,7 +23,7 @@ import (
 	"io"
 	"net"
 
-	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/ebpf"
 )
 
 // IPAddr encodes v4 and v6 IPs with a fixed length.
@@ -36,67 +36,20 @@ type IPAddr [net.IPv6len]uint8
 // that is added from the user space
 // REMINDER: any attribute here must be also added to the functions RecordGetters
 // and getDefinitions in pkg/internal/export/metric/definitions.go
-type Record struct {
-	NetFlowRecordT
+type Record = ebpf.Record
 
-	// Attrs of the flow record: source/destination, Interface, Beyla IP, etc...
-	Attrs RecordAttrs
-}
-
-type RecordAttrs struct {
-	// SrcName and DstName might be set from several sources along the processing/decoration pipeline:
-	// - K8s entity
-	// - Host name
-	// - IP
-	SrcName string
-	DstName string
-
-	// SrcZone and DstZone represent the Cloud availability zones of the source and destination
-	SrcZone string
-	DstZone string
-
-	Interface string
-	// BeylaIP provides information about the source of the flow (the Agent that traced it)
-	BeylaIP  string
-	Metadata map[attr.Name]string
-}
+type RecordAttrs = ebpf.RecordAttrs
 
 func NewRecord(
-	key NetFlowId,
-	metrics NetFlowMetrics,
+	key ebpf.NetFlowId,
+	metrics ebpf.NetFlowMetrics,
 ) *Record {
 	return &Record{
-		NetFlowRecordT: NetFlowRecordT{
+		NetFlowRecordT: ebpf.NetFlowRecordT{
 			Id:      key,
 			Metrics: metrics,
 		},
 	}
-}
-
-func (fm *NetFlowMetrics) Accumulate(src *NetFlowMetrics) {
-	// time == 0 if the value has not been yet set
-	if fm.StartMonoTimeNs == 0 || fm.StartMonoTimeNs > src.StartMonoTimeNs {
-		fm.StartMonoTimeNs = src.StartMonoTimeNs
-		// set IfaceDirection here, because the correct value is in the first packet only
-		fm.IfaceDirection = src.IfaceDirection
-		fm.Initiator = src.Initiator
-	}
-	if fm.EndMonoTimeNs == 0 || fm.EndMonoTimeNs < src.EndMonoTimeNs {
-		fm.EndMonoTimeNs = src.EndMonoTimeNs
-	}
-	fm.Bytes += src.Bytes
-	fm.Packets += src.Packets
-	fm.Flags |= src.Flags
-}
-
-// SrcIP is never null. Returned as pointer for efficiency.
-func (fi *NetFlowId) SrcIP() *IPAddr {
-	return (*IPAddr)(&fi.SrcIp.In6U.U6Addr8)
-}
-
-// DstIP is never null. Returned as pointer for efficiency.
-func (fi *NetFlowId) DstIP() *IPAddr {
-	return (*IPAddr)(&fi.DstIp.In6U.U6Addr8)
 }
 
 // IP returns the net.IP equivalent object
@@ -116,8 +69,8 @@ func (ia *IPAddr) MarshalJSON() ([]byte, error) {
 }
 
 // ReadFrom reads a Record from a binary source, in LittleEndian order
-func ReadFrom(reader io.Reader) (NetFlowRecordT, error) {
-	var fr NetFlowRecordT
+func ReadFrom(reader io.Reader) (ebpf.NetFlowRecordT, error) {
+	var fr ebpf.NetFlowRecordT
 	err := binary.Read(reader, binary.LittleEndian, &fr)
 	return fr, err
 }

@@ -3,6 +3,7 @@ package xdp
 import (
 	"errors"
 	"fmt"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/rdns/ebpf/xdp"
 	"net"
 	"strings"
 
@@ -13,7 +14,7 @@ import (
 
 // tracer represents the main structure for DNS response tracking.
 type tracer struct {
-	bpfObjects *BpfObjects
+	bpfObjects *xdp.BpfObjects
 	links      []*link.Link
 	ringbuf    *ringbuf.Reader
 }
@@ -41,9 +42,9 @@ func (t *tracer) Close() error {
 // It loads the BPF program, attaches it to network interfaces, and sets up the ring buffer.
 // Returns an error if any step fails.
 func newTracer() (*tracer, error) {
-	objects := BpfObjects{}
+	objects := xdp.BpfObjects{}
 
-	if err := LoadBpfObjects(&objects, nil); err != nil {
+	if err := xdp.LoadBpfObjects(&objects, nil); err != nil {
 		return nil, fmt.Errorf("loading BPF objects: %w", err)
 	}
 

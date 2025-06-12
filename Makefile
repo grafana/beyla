@@ -2,7 +2,7 @@
 CMD ?= beyla
 MAIN_GO_FILE ?= cmd/$(CMD)/main.go
 
-OBI_MODULE := obi-src
+OBI_MODULE := ./.obi-src
 
 CACHE_CMD ?= k8s-cache
 CACHE_MAIN_GO_FILE ?= cmd/$(CACHE_CMD)/main.go
@@ -125,7 +125,7 @@ SHELL = /usr/bin/env bash -o pipefail
 GOIMPORTS_REVISER_ARGS = -company-prefixes github.com/grafana -project-name github.com/grafana/beyla/
 
 define check_format
-	$(shell $(foreach FILE, $(shell find . -name "*.go" -not -path "**/vendor/*" -not -path "**/obi-src/*"), \
+	$(shell $(foreach FILE, $(shell find . -name "*.go" -not -path "**/vendor/*" -not -path "**/.obi-src/*"), \
 		$(GOIMPORTS_REVISER) $(GOIMPORTS_REVISER_ARGS) -list-diff -output stdout $(FILE);))
 endef
 
@@ -160,7 +160,7 @@ prereqs: install-hooks bpf2go
 .PHONY: fmt
 fmt: prereqs
 	@echo "### Formatting code and fixing imports"
-	@$(foreach FILE, $(shell find . -name "*.go" -not -path "**/vendor/*" -not -path "**/obi-src/*"), \
+	@$(foreach FILE, $(shell find . -name "*.go" -not -path "**/vendor/*" -not -path "**/.obi-src/*"), \
 		$(GOIMPORTS_REVISER) $(GOIMPORTS_REVISER_ARGS) $(FILE);)
 
 .PHONY: checkfmt

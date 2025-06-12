@@ -9,6 +9,7 @@ import (
 	"log/slog"
 
 	"github.com/cilium/ebpf"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/tctracer"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/goexec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
@@ -16,8 +17,8 @@ import (
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
-	"github.com/grafana/beyla/v2/pkg/internal/ebpf/tcmanager"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/tcmanager"
 )
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/tctracer/tctracer.c -- -I../../../../bpf -I../../../../bpf
@@ -25,7 +26,7 @@ import (
 
 type Tracer struct {
 	cfg          *beyla.Config
-	bpfObjects   bpfObjects
+	bpfObjects   tctracer.BpfObjects
 	closers      []io.Closer
 	log          *slog.Logger
 	ifaceManager *tcmanager.InterfaceManager
@@ -61,10 +62,10 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 	}
 
 	if p.cfg.EBPF.BpfDebug {
-		return loadBpf_debug()
+		return tctracer.LoadBpf()
 	}
 
-	return loadBpf()
+	return tctracer.LoadBpf()
 }
 
 func (p *Tracer) SetupTailCalls() {

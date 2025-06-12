@@ -24,6 +24,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/tcmanager"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/ebpf"
 	"log/slog"
 	"strings"
 
@@ -31,7 +33,6 @@ import (
 
 	convenience "github.com/grafana/beyla/v2/pkg/internal/ebpf/convenience"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/ringbuf"
-	"github.com/grafana/beyla/v2/pkg/internal/ebpf/tcmanager"
 )
 
 // $BPF_CLANG and $BPF_CFLAGS are set by the Makefile.
@@ -56,7 +57,7 @@ func tlog() *slog.Logger {
 // in the map
 type FlowFetcher struct {
 	log           *slog.Logger
-	objects       *NetObjects
+	objects       *ebpf.NetObjects
 	ringbufReader *ringbuf.Reader
 	tcManager     tcmanager.TCManager
 	cacheMaxSize  int
@@ -76,8 +77,8 @@ func NewFlowFetcher(
 			"error", err)
 	}
 
-	objects := NetObjects{}
-	spec, err := LoadNet()
+	objects := ebpf.NetObjects{}
+	spec, err := ebpf.LoadNet()
 	if err != nil {
 		return nil, fmt.Errorf("loading BPF data: %w", err)
 	}
@@ -200,14 +201,14 @@ func (m *FlowFetcher) ReadRingBuf() (ringbuf.Record, error) {
 // TODO: detect whether BatchLookupAndDelete is supported (Kernel>=5.6) and use it selectively
 // Supported Lookup/Delete operations by kernel: https://github.com/iovisor/bcc/blob/master/docs/kernel-versions.md
 // Race conditions here causes that some flows are lost in high-load scenarios
-func (m *FlowFetcher) LookupAndDeleteMap() map[NetFlowId][]NetFlowMetrics {
+func (m *FlowFetcher) LookupAndDeleteMap() map[ebpf.NetFlowId][]ebpf.NetFlowMetrics {
 	flowMap := m.objects.AggregatedFlows
 
 	iterator := flowMap.Iterate()
-	flows := make(map[NetFlowId][]NetFlowMetrics, m.cacheMaxSize)
+	flows := make(map[ebpf.NetFlowId][]ebpf.NetFlowMetrics, m.cacheMaxSize)
 
-	id := NetFlowId{}
-	var metrics []NetFlowMetrics
+	id := ebpf.NetFlowId{}
+	var metrics []ebpf.NetFlowMetrics
 	// Changing Iterate+Delete by LookupAndDelete would prevent some possible race conditions
 	// TODO: detect whether LookupAndDelete is supported (Kernel>=4.20) and use it selectively
 	for iterator.Next(&id, &metrics) {

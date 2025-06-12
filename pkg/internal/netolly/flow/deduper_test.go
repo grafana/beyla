@@ -28,7 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
-	"github.com/grafana/beyla/v2/pkg/internal/testutil"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/testutil"
 )
 
 var oneIf1, oneIf2, twoIf1, twoIf2 *ebpf.Record

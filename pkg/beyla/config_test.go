@@ -30,9 +30,9 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/kube"
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/transform/cidr"
 	"github.com/grafana/beyla/v2/pkg/internal/traces"
-	"github.com/grafana/beyla/v2/pkg/kubeflags"
 	servicesextra "github.com/grafana/beyla/v2/pkg/services"
 	"github.com/grafana/beyla/v2/pkg/transform"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubeflags"
 )
 
 type envMap map[string]string

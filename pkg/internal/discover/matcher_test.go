@@ -12,8 +12,8 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
-	"github.com/grafana/beyla/v2/pkg/internal/testutil"
 	servicesextra "github.com/grafana/beyla/v2/pkg/services"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/testutil"
 )
 
 func TestCriteriaMatcher(t *testing.T) {

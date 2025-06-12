@@ -13,9 +13,9 @@ import (
 
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
-	"github.com/grafana/beyla/v2/pkg/internal/connector"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/connector"
 )
 
 func TestProcPrometheusEndpoint_AggregatedMetrics(t *testing.T) {

@@ -26,12 +26,12 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/kube"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
-	"github.com/grafana/beyla/v2/pkg/internal/testutil"
 	"github.com/grafana/beyla/v2/pkg/internal/traces"
-	"github.com/grafana/beyla/v2/pkg/kubeflags"
 	"github.com/grafana/beyla/v2/pkg/transform"
 	"github.com/grafana/beyla/v2/test/collector"
 	"github.com/grafana/beyla/v2/test/consumer"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/testutil"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubeflags"
 )
 
 const testTimeout = 5 * time.Second

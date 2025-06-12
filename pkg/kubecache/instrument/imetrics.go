@@ -6,7 +6,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/grafana/beyla/v2/pkg/buildinfo"
-	"github.com/grafana/beyla/v2/pkg/internal/connector"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/connector"
 )
 
 // InternalMetrics accounts diverse events of the Beyla Cache service

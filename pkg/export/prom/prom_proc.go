@@ -14,9 +14,9 @@ import (
 	attrextra "github.com/grafana/beyla/v2/pkg/export/attributes/beyla"
 	"github.com/grafana/beyla/v2/pkg/export/expire"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
-	"github.com/grafana/beyla/v2/pkg/internal/connector"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/connector"
 )
 
 // injectable function reference for testing

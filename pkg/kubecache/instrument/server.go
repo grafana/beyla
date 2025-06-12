@@ -3,7 +3,7 @@ package instrument
 import (
 	"context"
 
-	"github.com/grafana/beyla/v2/pkg/internal/connector"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/connector"
 )
 
 const defaultMetricsPath = "/metrics"

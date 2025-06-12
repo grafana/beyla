@@ -9,7 +9,7 @@ import (
 
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/flow/transport"
-	"github.com/grafana/beyla/v2/pkg/internal/testutil"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/testutil"
 )
 
 var tcp1 = &ebpf.Record{NetFlowRecordT: ebpf.NetFlowRecordT{Id: ebpf.NetFlowId{SrcPort: 1, TransportProtocol: uint8(transport.TCP)}}}

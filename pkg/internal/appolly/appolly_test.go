@@ -9,10 +9,10 @@ import (
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
-	"github.com/grafana/beyla/v2/pkg/internal/connector"
 	"github.com/grafana/beyla/v2/pkg/internal/discover"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/connector"
 )
 
 func TestProcessEventsLoopDoesntBlock(t *testing.T) {

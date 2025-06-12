@@ -20,7 +20,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/ringbuf"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
-	"github.com/grafana/beyla/v2/pkg/internal/testutil"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/testutil"
 )
 
 const testTimeout = 5 * time.Second

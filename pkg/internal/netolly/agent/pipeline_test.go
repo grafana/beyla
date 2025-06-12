@@ -18,11 +18,11 @@ import (
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/export/prom"
 	"github.com/grafana/beyla/v2/pkg/filter"
-	"github.com/grafana/beyla/v2/pkg/internal/connector"
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/flow/transport"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	prom2 "github.com/grafana/beyla/v2/test/integration/components/prom"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/connector"
 )
 
 const timeout = 5 * time.Second

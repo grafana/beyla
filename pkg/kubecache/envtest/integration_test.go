@@ -22,11 +22,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
-	"github.com/grafana/beyla/v2/pkg/internal/testutil"
 	"github.com/grafana/beyla/v2/pkg/kubecache"
 	"github.com/grafana/beyla/v2/pkg/kubecache/informer"
 	"github.com/grafana/beyla/v2/pkg/kubecache/meta"
 	"github.com/grafana/beyla/v2/pkg/kubecache/service"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/testutil"
 )
 
 var (

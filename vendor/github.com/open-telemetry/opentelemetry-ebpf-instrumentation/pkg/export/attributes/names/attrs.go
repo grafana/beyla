@@ -36,7 +36,6 @@ const (
 	SpanName               = Name("span.name")
 	StatusCode             = Name("status.code")
 	Source                 = Name("source")
-	Service                = Name("service")
 	Client                 = Name("client")
 	ClientNamespace        = Name("client_service_namespace")
 	Server                 = Name("server")
@@ -67,6 +66,7 @@ const (
 	K8sNodeName        = Name("k8s.node.name")
 	K8sPodUID          = Name("k8s.pod.uid")
 	K8sPodStartTime    = Name("k8s.pod.start_time")
+	K8sKind            = Name("k8s.kind")
 )
 
 // Beyla-specific network attributes

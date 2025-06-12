@@ -19,7 +19,7 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/ianlancetaylor/demangle v0.0.0-20250417193237-f615e6bd150b
 	github.com/mariomac/guara v0.0.0-20250408105519-1e4dbdfb7136
-	github.com/open-telemetry/opentelemetry-ebpf-instrumentation v0.0.0-20250612214512-4202627f879d
+	github.com/open-telemetry/opentelemetry-ebpf-instrumentation v0.0.0-20250612234548-4aae6e9741b4
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.22.0
 	github.com/prometheus/client_model v0.6.2

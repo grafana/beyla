@@ -370,7 +370,7 @@ github.com/munnerz/goautoneg
 # github.com/mxk/go-flowrate v0.0.0-20140419014527-cca7078d478f
 ## explicit
 github.com/mxk/go-flowrate/flowrate
-# github.com/open-telemetry/opentelemetry-ebpf-instrumentation v0.0.0-20250612214512-4202627f879d
+# github.com/open-telemetry/opentelemetry-ebpf-instrumentation v0.0.0-20250612234548-4aae6e9741b4
 ## explicit; go 1.24.1
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/connector
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/bhpack

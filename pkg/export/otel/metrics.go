@@ -27,6 +27,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	"github.com/grafana/beyla/v2/pkg/export/otel/metric"
 	instrument "github.com/grafana/beyla/v2/pkg/export/otel/metric/api/metric"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
@@ -343,7 +344,7 @@ func newMetricsReporter(
 ) (*MetricsReporter, error) {
 	log := mlog()
 
-	attribProvider, err := attrobi.NewAttrSelector(ctxInfo.MetricAttributeGroups, selectorCfg)
+	attribProvider, err := attributes.NewBeylaAttrSelector(ctxInfo.MetricAttributeGroups, selectorCfg)
 	if err != nil {
 		return nil, fmt.Errorf("attributes select: %w", err)
 	}

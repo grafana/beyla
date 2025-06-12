@@ -313,7 +313,7 @@ func newReporter(
 	groups := ctxInfo.MetricAttributeGroups
 	groups.Add(attributes.GroupPrometheus)
 
-	attrsProvider, err := attrobi.NewAttrSelector(groups, selectorCfg)
+	attrsProvider, err := attributes.NewBeylaAttrSelector(groups, selectorCfg)
 	if err != nil {
 		return nil, fmt.Errorf("selecting metrics attributes: %w", err)
 	}

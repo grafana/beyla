@@ -17,6 +17,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
 	"github.com/grafana/beyla/v2/pkg/buildinfo"
+	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	"github.com/grafana/beyla/v2/pkg/export/otel/metric"
 	metric2 "github.com/grafana/beyla/v2/pkg/export/otel/metric/api/metric"
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
@@ -116,7 +117,7 @@ func newMetricsExporter(
 		return nil, err
 	}
 
-	attrProv, err := attrobi.NewAttrSelector(ctxInfo.MetricAttributeGroups, cfg.SelectorCfg)
+	attrProv, err := attributes.NewBeylaAttrSelector(ctxInfo.MetricAttributeGroups, cfg.SelectorCfg)
 	if err != nil {
 		return nil, fmt.Errorf("network OTEL exporter attributes enable: %w", err)
 	}

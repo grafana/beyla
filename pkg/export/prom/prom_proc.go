@@ -103,7 +103,7 @@ func newProcReporter(ctxInfo *global.ContextInfo, cfg *ProcPrometheusConfig, inp
 	// OTEL exporter would report also some prometheus-exclusive attributes
 	group.Add(attributes.GroupPrometheus)
 
-	provider, err := attrobi.NewAttrSelector(group, cfg.SelectorCfg)
+	provider, err := attributes.NewBeylaAttrSelector(group, cfg.SelectorCfg)
 	if err != nil {
 		return nil, fmt.Errorf("network Prometheus exporter attributes enable: %w", err)
 	}

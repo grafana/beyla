@@ -127,7 +127,7 @@ func newProcMetricsExporter(
 	log.Debug("instantiating process metrics exporter provider")
 
 	// only user-provided attributes (or default set) will decorate the metrics
-	attrProv, err := attrobi.NewAttrSelector(ctxInfo.MetricAttributeGroups, cfg.SelectorCfg)
+	attrProv, err := attributes.NewBeylaAttrSelector(ctxInfo.MetricAttributeGroups, cfg.SelectorCfg)
 	if err != nil {
 		return nil, fmt.Errorf("process OTEL exporter attributes: %w", err)
 	}

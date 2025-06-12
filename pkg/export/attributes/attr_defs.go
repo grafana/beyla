@@ -86,6 +86,13 @@ func parseExtraAttrGroup(group string) (attrobi.AttrGroups, error) {
 	}
 }
 
+func NewBeylaAttrSelector(
+	groups attrobi.AttrGroups,
+	cfg *attrobi.SelectorConfig,
+) (*attrobi.AttrSelector, error) {
+	return attrobi.NewCustomAttrSelector(groups, cfg, getDefinitions)
+}
+
 // Any new metric and attribute must be added here to be matched from the user-provided wildcard
 // selectors of the attributes.select section
 func getDefinitions(

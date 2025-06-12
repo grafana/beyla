@@ -191,7 +191,7 @@ type tracesOTELReceiver struct {
 
 func GetUserSelectedAttributes(selectorCfg *attrobi.SelectorConfig) (map[attr.Name]struct{}, error) {
 	// Get user attributes
-	attribProvider, err := attrobi.NewAttrSelector(attributes.GroupTraces, selectorCfg)
+	attribProvider, err := attributes.NewBeylaAttrSelector(attributes.GroupTraces, selectorCfg)
 	if err != nil {
 		return nil, err
 	}

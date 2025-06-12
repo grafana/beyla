@@ -1,10 +1,11 @@
 name: Clang Tidy Check
 
 on:
-  push:
-    branches: [ 'main', 'release-*' ]
-  pull_request:
-    branches: [ 'main', 'release-*' ]
+# temporarily disabling this task, as Beyla is not adding C code ATM
+#  push:
+#    branches: [ 'main', 'release-*' ]
+#  pull_request:
+#    branches: [ 'main', 'release-*' ]
 
 # Set restrictive permissions at workflow level
 permissions:

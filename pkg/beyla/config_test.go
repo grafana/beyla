@@ -14,6 +14,7 @@ import (
 
 	"github.com/gobwas/glob"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubeflags"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/services"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -32,7 +33,6 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/traces"
 	servicesextra "github.com/grafana/beyla/v2/pkg/services"
 	"github.com/grafana/beyla/v2/pkg/transform"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubeflags"
 )
 
 type envMap map[string]string

@@ -4,10 +4,10 @@ import (
 	"strings"
 	"unsafe"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/sqlprune"
 	trace2 "go.opentelemetry.io/otel/trace"
 
 	"github.com/grafana/beyla/v2/pkg/internal/request"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/sqlprune"
 )
 
 func sqlKind(b []byte) request.SQLKind {

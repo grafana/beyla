@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/gobwas/glob"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/testutil"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/services"
 	"github.com/stretchr/testify/assert"
@@ -13,7 +14,6 @@ import (
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	servicesextra "github.com/grafana/beyla/v2/pkg/services"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/testutil"
 )
 
 func TestCriteriaMatcher(t *testing.T) {

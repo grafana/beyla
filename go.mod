@@ -2,6 +2,10 @@ module github.com/grafana/beyla/v2
 
 go 1.24.1
 
+// opentelemetry-ebpf-instrumentation is not downloaded directly via go mod
+// but included as a go submodule
+replace github.com/open-telemetry/opentelemetry-ebpf-instrumentation => ./obi-src
+
 require (
 	github.com/AlessandroPomponio/go-gibberish v0.0.0-20191004143433-a2d4156f0396
 	github.com/caarlos0/env/v9 v9.0.0

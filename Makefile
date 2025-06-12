@@ -2,6 +2,8 @@
 CMD ?= beyla
 MAIN_GO_FILE ?= cmd/$(CMD)/main.go
 
+OBI_MODULE := obi-src
+
 CACHE_CMD ?= k8s-cache
 CACHE_MAIN_GO_FILE ?= cmd/$(CACHE_CMD)/main.go
 
@@ -123,10 +125,13 @@ SHELL = /usr/bin/env bash -o pipefail
 GOIMPORTS_REVISER_ARGS = -company-prefixes github.com/grafana -project-name github.com/grafana/beyla/
 
 define check_format
-	$(shell $(foreach FILE, $(shell find . -name "*.go" -not -path "**/vendor/*"), \
+	$(shell $(foreach FILE, $(shell find . -name "*.go" -not -path "**/vendor/*" -not -path "**/obi-src/*"), \
 		$(GOIMPORTS_REVISER) $(GOIMPORTS_REVISER_ARGS) -list-diff -output stdout $(FILE);))
 endef
 
+.phony: obi-submodule
+obi-submodule:
+	@git submodule update
 
 .PHONY: install-hooks
 install-hooks:
@@ -155,7 +160,7 @@ prereqs: install-hooks bpf2go
 .PHONY: fmt
 fmt: prereqs
 	@echo "### Formatting code and fixing imports"
-	@$(foreach FILE, $(shell find . -name "*.go" -not -path "**/vendor/*"), \
+	@$(foreach FILE, $(shell find . -name "*.go" -not -path "**/vendor/*" -not -path "**/obi-src/*"), \
 		$(GOIMPORTS_REVISER) $(GOIMPORTS_REVISER_ARGS) $(FILE);)
 
 .PHONY: checkfmt
@@ -193,17 +198,12 @@ update-offsets: prereqs
 	$(GO_OFFSETS_TRACKER) -i configs/offsets/tracker_input.json pkg/internal/goexec/offsets.json
 
 .PHONY: generate
-generate: export BPF_CLANG := $(CLANG)
-generate: export BPF_CFLAGS := $(CFLAGS)
-generate: export BPF2GO := $(BPF2GO)
-generate: bpf2go
-	@echo "### Generating files..."
-	@BEYLA_GENFILES_RUN_LOCALLY=1 go generate cmd/beyla-genfiles/beyla_genfiles.go
+generate: obi-submodule
+	@cd $(OBI_MODULE) && make generate
 
 .PHONY: docker-generate
-docker-generate:
-	@echo "### Generating files (docker)..."
-	@BEYLA_GENFILES_GEN_IMG=$(GEN_IMG) go generate cmd/beyla-genfiles/beyla_genfiles.go
+docker-generate: obi-submodule
+	@cd $(OBI_MODULE) && make docker-generate
 
 .PHONY: verify
 verify: prereqs lint-dashboard lint test
@@ -390,7 +390,7 @@ check-licenses: update-licenses
 	fi
 
 .PHONY: artifact
-artifact: docker-generate compile
+artifact: obi-submodule docker-generate compile
 	@echo "### Packing generated artifact"
 	cp LICENSE ./bin
 	cp NOTICE ./bin

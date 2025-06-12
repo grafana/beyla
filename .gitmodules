@@ -1,0 +1,3 @@
+[submodule "obi-src"]
+	path = obi-src
+	url = git@github.com:open-telemetry/opentelemetry-ebpf-instrumentation.git

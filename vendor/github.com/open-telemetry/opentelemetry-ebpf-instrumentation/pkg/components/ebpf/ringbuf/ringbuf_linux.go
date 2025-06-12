@@ -7,8 +7,12 @@ import (
 	"github.com/cilium/ebpf/ringbuf"
 )
 
-type Record = ringbuf.Record
-type Reader = ringbuf.Reader
+type (
+	Record = ringbuf.Record
+	Reader = ringbuf.Reader
+)
 
-var ErrClosed = ringbuf.ErrClosed
-var NewReader = ringbuf.NewReader
+var (
+	ErrClosed = ringbuf.ErrClosed
+	NewReader = ringbuf.NewReader
+)

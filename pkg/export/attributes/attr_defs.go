@@ -3,6 +3,7 @@ package attributes
 import (
 	"maps"
 
+	attributes2 "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 
 	attrextra "github.com/grafana/beyla/v2/pkg/export/attributes/beyla"
@@ -11,7 +12,7 @@ import (
 // AttrGroups will let enabling by default some groups of attributes under
 // given circumstances. For example, will let enabling kubernetes metadata attributes
 // only if Beyla is running under Kubernetes and kube metadata is enabled.
-type AttrGroups int
+type AttrGroups = attributes2.AttrGroups
 
 const (
 	UndefinedGroup  = AttrGroups(0)
@@ -34,14 +35,6 @@ const (
 	GroupProcess
 	GroupMessaging
 )
-
-func (e *AttrGroups) Has(groups AttrGroups) bool {
-	return *e&groups != 0
-}
-
-func (e *AttrGroups) Add(groups AttrGroups) {
-	*e |= groups
-}
 
 // Any new metric and attribute must be added here to be matched from the user-provided wildcard
 // selectors of the attributes.select section

@@ -90,7 +90,3 @@ test/integration/components/testserver_1.17/vendor
 *_bpfel.go
 *_bpfel.o
 pkg/internal/otelsdk/grafana-opentelemetry-java.jar
-
-# ignore vendoring of OBI, as the main copy will be held in the .obi-src submodule folder
-# and imported to vendor at runtime
-vendor/github.com/open-telemetry/opentelemetry-ebpf-instrumentation

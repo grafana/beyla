@@ -13,10 +13,9 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers/maps"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-
-	"github.com/grafana/beyla/v2/pkg/internal/helpers/maps"
 )
 
 func log() *slog.Logger {

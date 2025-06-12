@@ -6,8 +6,8 @@ import (
 	"maps"
 	"slices"
 
-	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
-	maps2 "github.com/grafana/beyla/v2/pkg/internal/helpers/maps"
+	maps2 "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers/maps"
+	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 )
 
 func alog() *slog.Logger {

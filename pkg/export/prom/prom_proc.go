@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"slices"
 
+	attr2 "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
-	attr2 "github.com/grafana/beyla/v2/pkg/export/attributes/names"
+	attrextra "github.com/grafana/beyla/v2/pkg/export/attributes/beyla"
 	"github.com/grafana/beyla/v2/pkg/export/expire"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/internal/connector"
@@ -107,13 +108,13 @@ func newProcReporter(ctxInfo *global.ContextInfo, cfg *ProcPrometheusConfig, inp
 	}
 
 	cpuTimeLblNames, cpuTimeGetters, cpuTimeHasState :=
-		attributesWithExplicit(provider, attributes.ProcessCPUTime, attr2.ProcCPUMode)
+		attributesWithExplicit(provider, attributes.ProcessCPUTime, attrextra.ProcCPUMode)
 	cpuUtilLblNames, cpuUtilGetters, cpuUtilHasState :=
-		attributesWithExplicit(provider, attributes.ProcessCPUUtilization, attr2.ProcCPUMode)
+		attributesWithExplicit(provider, attributes.ProcessCPUUtilization, attrextra.ProcCPUMode)
 	diskLblNames, diskGetters, diskHasDirection :=
-		attributesWithExplicit(provider, attributes.ProcessDiskIO, attr2.ProcDiskIODir)
+		attributesWithExplicit(provider, attributes.ProcessDiskIO, attrextra.ProcDiskIODir)
 	netLblNames, netGetters, netHasDirection :=
-		attributesWithExplicit(provider, attributes.ProcessDiskIO, attr2.ProcNetIODir)
+		attributesWithExplicit(provider, attributes.ProcessDiskIO, attrextra.ProcNetIODir)
 
 	attrMemory := attributes.PrometheusGetters(process.PromGetters, provider.For(attributes.ProcessMemoryUsage))
 	attrMemoryVirtual := attributes.PrometheusGetters(process.PromGetters, provider.For(attributes.ProcessMemoryVirtual))

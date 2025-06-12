@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strconv"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 	"go.opentelemetry.io/otel/attribute"
@@ -15,25 +16,24 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
-	attr2 "github.com/grafana/beyla/v2/pkg/export/attributes/names"
+	attrextra "github.com/grafana/beyla/v2/pkg/export/attributes/beyla"
 	"github.com/grafana/beyla/v2/pkg/export/expire"
 	"github.com/grafana/beyla/v2/pkg/export/otel/metric"
 	metric2 "github.com/grafana/beyla/v2/pkg/export/otel/metric/api/metric"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
-	"github.com/grafana/beyla/v2/pkg/internal/svc"
 )
 
 var (
-	stateWaitAttr   = attr2.ProcCPUMode.OTEL().String("wait")
-	stateUserAttr   = attr2.ProcCPUMode.OTEL().String("user")
-	stateSystemAttr = attr2.ProcCPUMode.OTEL().String("system")
+	stateWaitAttr   = attrextra.ProcCPUMode.OTEL().String("wait")
+	stateUserAttr   = attrextra.ProcCPUMode.OTEL().String("user")
+	stateSystemAttr = attrextra.ProcCPUMode.OTEL().String("system")
 
-	diskIODirRead  = attr2.ProcDiskIODir.OTEL().String("read")
-	diskIODirWrite = attr2.ProcDiskIODir.OTEL().String("write")
+	diskIODirRead  = attrextra.ProcDiskIODir.OTEL().String("read")
+	diskIODirWrite = attrextra.ProcDiskIODir.OTEL().String("write")
 
-	netIODirTx  = attr2.ProcNetIODir.OTEL().String("transmit")
-	netIODirRcv = attr2.ProcNetIODir.OTEL().String("receive")
+	netIODirTx  = attrextra.ProcNetIODir.OTEL().String("transmit")
+	netIODirRcv = attrextra.ProcNetIODir.OTEL().String("receive")
 )
 
 // ProcMetricsConfig extends MetricsConfig for process metrics
@@ -159,22 +159,22 @@ func newProcMetricsExporter(
 		attrNet:         attrNet,
 		procStatusInput: input.Subscribe(),
 	}
-	if slices.Contains(cpuTimeNames, attr2.ProcCPUMode) {
+	if slices.Contains(cpuTimeNames, attrextra.ProcCPUMode) {
 		mr.cpuTimeObserver = cpuTimeDisaggregatedObserver
 	} else {
 		mr.cpuTimeObserver = cpuTimeAggregatedObserver
 	}
-	if slices.Contains(cpuUtilNames, attr2.ProcCPUMode) {
+	if slices.Contains(cpuUtilNames, attrextra.ProcCPUMode) {
 		mr.cpuUtilisationObserver = cpuUtilisationDisaggregatedObserver
 	} else {
 		mr.cpuUtilisationObserver = cpuUtilisationAggregatedObserver
 	}
-	if slices.Contains(diskNames, attr2.ProcDiskIODir) {
+	if slices.Contains(diskNames, attrextra.ProcDiskIODir) {
 		mr.diskObserver = diskDisaggregatedObserver
 	} else {
 		mr.diskObserver = diskAggregatedObserver
 	}
-	if slices.Contains(netNames, attr2.ProcNetIODir) {
+	if slices.Contains(netNames, attrextra.ProcNetIODir) {
 		mr.netObserver = netDisaggregatedObserver
 	} else {
 		mr.netObserver = netAggregatedObserver
@@ -207,14 +207,14 @@ func getFilteredProcessResourceAttrs(hostID string, procID *process.ID, attrSele
 	baseAttrs := getResourceAttrs(hostID, procID.Service)
 	procAttrs := []attribute.KeyValue{
 		semconv.ServiceInstanceID(procID.UID.Instance),
-		attr2.ProcCommand.OTEL().String(procID.Command),
-		attr2.ProcOwner.OTEL().String(procID.User),
-		attr2.ProcParentPid.OTEL().String(strconv.Itoa(int(procID.ParentProcessID))),
-		attr2.ProcPid.OTEL().String(strconv.Itoa(int(procID.ProcessID))),
-		attr2.ProcCommandLine.OTEL().String(procID.CommandLine),
-		attr2.ProcCommandArgs.OTEL().StringSlice(procID.CommandArgs),
-		attr2.ProcExecName.OTEL().String(procID.ExecName),
-		attr2.ProcExecPath.OTEL().String(procID.ExecPath),
+		attrextra.ProcCommand.OTEL().String(procID.Command),
+		attrextra.ProcOwner.OTEL().String(procID.User),
+		attrextra.ProcParentPid.OTEL().String(strconv.Itoa(int(procID.ParentProcessID))),
+		attrextra.ProcPid.OTEL().String(strconv.Itoa(int(procID.ProcessID))),
+		attrextra.ProcCommandLine.OTEL().String(procID.CommandLine),
+		attrextra.ProcCommandArgs.OTEL().StringSlice(procID.CommandArgs),
+		attrextra.ProcExecName.OTEL().String(procID.ExecName),
+		attrextra.ProcExecPath.OTEL().String(procID.ExecPath),
 	}
 	return getFilteredAttributesByPrefix(baseAttrs, attrSelector, procAttrs, []string{"process."})
 }

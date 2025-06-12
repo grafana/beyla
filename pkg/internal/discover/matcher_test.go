@@ -6,13 +6,14 @@ import (
 
 	"github.com/gobwas/glob"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/services"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/internal/testutil"
-	"github.com/grafana/beyla/v2/pkg/services"
+	servicesextra "github.com/grafana/beyla/v2/pkg/services"
 )
 
 func TestCriteriaMatcher(t *testing.T) {
@@ -370,12 +371,12 @@ func TestInstrumentation_CoexistingWithDeprecatedServices(t *testing.T) {
 	bothPassRE := services.NewPathRegexp(regexp.MustCompile("(must|also)-pass"))
 
 	for _, tc := range []testCase{
-		{name: "discovery > instrument", cfg: beyla.Config{Discovery: services.DiscoveryConfig{
+		{name: "discovery > instrument", cfg: beyla.Config{Discovery: servicesextra.BeylaDiscoveryConfig{
 			Instrument: services.GlobDefinitionCriteria{{Path: pass}, {OpenPorts: passPort}},
 		}}},
 		{
 			name: "discovery > instrument with discovery > exclude_instrument && default_exclude_instrument",
-			cfg: beyla.Config{Discovery: services.DiscoveryConfig{
+			cfg: beyla.Config{Discovery: servicesextra.BeylaDiscoveryConfig{
 				Instrument:               services.GlobDefinitionCriteria{{OpenPorts: allPorts}},
 				ExcludeInstrument:        services.GlobDefinitionCriteria{{Path: notPass}},
 				DefaultExcludeInstrument: services.GlobDefinitionCriteria{{Path: neitherPass}},
@@ -383,7 +384,7 @@ func TestInstrumentation_CoexistingWithDeprecatedServices(t *testing.T) {
 		},
 		{
 			name: "discovery > instrument with deprecated discovery > services",
-			cfg: beyla.Config{Discovery: services.DiscoveryConfig{
+			cfg: beyla.Config{Discovery: servicesextra.BeylaDiscoveryConfig{
 				Instrument: services.GlobDefinitionCriteria{{Path: pass}, {OpenPorts: passPort}},
 				// To be ignored
 				Services: services.RegexDefinitionCriteria{{OpenPorts: allPorts}},
@@ -391,29 +392,29 @@ func TestInstrumentation_CoexistingWithDeprecatedServices(t *testing.T) {
 		},
 		{
 			name: "discovery > instrument with top-level auto-target-exec option",
-			cfg: beyla.Config{Discovery: services.DiscoveryConfig{
+			cfg: beyla.Config{Discovery: servicesextra.BeylaDiscoveryConfig{
 				Instrument: services.GlobDefinitionCriteria{{OpenPorts: passPort}},
 			}, AutoTargetExe: pass},
 		},
 		{
 			name: "discovery > instrument with top-level ports option",
-			cfg: beyla.Config{Discovery: services.DiscoveryConfig{
+			cfg: beyla.Config{Discovery: servicesextra.BeylaDiscoveryConfig{
 				Instrument: services.GlobDefinitionCriteria{{Path: pass}},
 			}, Port: passPort},
 		},
 		{
 			name: "discovery > instrument ignoring deprecated path option",
-			cfg: beyla.Config{Discovery: services.DiscoveryConfig{
+			cfg: beyla.Config{Discovery: servicesextra.BeylaDiscoveryConfig{
 				Instrument: services.GlobDefinitionCriteria{{Path: pass}, {OpenPorts: passPort}},
 			}, Exec: services.NewPathRegexp(regexp.MustCompile("dont-pass"))},
 		},
 		// cases below would be removed if the deprecated discovery > services options are removed,
-		{name: "deprecated discovery > services", cfg: beyla.Config{Discovery: services.DiscoveryConfig{
+		{name: "deprecated discovery > services", cfg: beyla.Config{Discovery: servicesextra.BeylaDiscoveryConfig{
 			Services: services.RegexDefinitionCriteria{{Path: passRE}, {OpenPorts: passPort}},
 		}}},
 		{
 			name: "deprecated discovery > services with discovery > exclude_services && default_exclude_services",
-			cfg: beyla.Config{Discovery: services.DiscoveryConfig{
+			cfg: beyla.Config{Discovery: servicesextra.BeylaDiscoveryConfig{
 				Services:               services.RegexDefinitionCriteria{{OpenPorts: allPorts}},
 				ExcludeServices:        services.RegexDefinitionCriteria{{Path: notPassRE}},
 				DefaultExcludeServices: services.RegexDefinitionCriteria{{Path: neitherPassRE}},
@@ -421,13 +422,13 @@ func TestInstrumentation_CoexistingWithDeprecatedServices(t *testing.T) {
 		},
 		{
 			name: "deprecated discovery > services with top-level deprecated exec option",
-			cfg: beyla.Config{Discovery: services.DiscoveryConfig{
+			cfg: beyla.Config{Discovery: servicesextra.BeylaDiscoveryConfig{
 				Services: services.RegexDefinitionCriteria{{OpenPorts: passPort}},
 			}, Exec: passRE},
 		},
 		{
 			name: "deprecated discovery > services with top-level deprecated port option",
-			cfg: beyla.Config{Discovery: services.DiscoveryConfig{
+			cfg: beyla.Config{Discovery: servicesextra.BeylaDiscoveryConfig{
 				Services: services.RegexDefinitionCriteria{{Path: passRE}},
 			}, Port: passPort},
 		},

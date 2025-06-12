@@ -9,12 +9,13 @@ import (
 
 	"github.com/caarlos0/env/v9"
 	"github.com/gobwas/glob"
+	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/services"
 	otelconsumer "go.opentelemetry.io/collector/consumer"
 	"gopkg.in/yaml.v3"
 
 	"github.com/grafana/beyla/v2/pkg/config"
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
-	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
 	"github.com/grafana/beyla/v2/pkg/export/debug"
 	"github.com/grafana/beyla/v2/pkg/export/instrumentations"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
@@ -26,7 +27,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/kube"
 	"github.com/grafana/beyla/v2/pkg/internal/traces"
 	"github.com/grafana/beyla/v2/pkg/kubeflags"
-	"github.com/grafana/beyla/v2/pkg/services"
+	servicesextra "github.com/grafana/beyla/v2/pkg/services"
 	"github.com/grafana/beyla/v2/pkg/transform"
 )
 
@@ -146,7 +147,7 @@ var DefaultConfig = Config{
 		RunMode:  process.RunModePrivileged,
 		Interval: 5 * time.Second,
 	},
-	Discovery: services.DiscoveryConfig{
+	Discovery: servicesextra.BeylaDiscoveryConfig{
 		ExcludeOTelInstrumentedServices: true,
 		DefaultExcludeServices: services.RegexDefinitionCriteria{
 			services.RegexSelector{
@@ -217,7 +218,7 @@ type Config struct {
 	ServiceNamespace string `yaml:"service_namespace" env:"BEYLA_SERVICE_NAMESPACE"`
 
 	// Discovery configuration
-	Discovery services.DiscoveryConfig `yaml:"discovery"`
+	Discovery servicesextra.BeylaDiscoveryConfig `yaml:"discovery"`
 
 	LogLevel string `yaml:"log_level" env:"BEYLA_LOG_LEVEL"`
 

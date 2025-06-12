@@ -40,7 +40,7 @@ var (
 // ProcMetricsConfig extends MetricsConfig for process metrics
 type ProcMetricsConfig struct {
 	Metrics     *MetricsConfig
-	SelectorCfg *attributes.SelectorConfig
+	SelectorCfg *attrobi.SelectorConfig
 }
 
 func (mc *ProcMetricsConfig) Enabled() bool {
@@ -108,7 +108,7 @@ func ProcMetricsExporterProvider(
 		}
 
 		if cfg.SelectorCfg.SelectionCfg == nil {
-			cfg.SelectorCfg.SelectionCfg = make(attributes.Selection)
+			cfg.SelectorCfg.SelectionCfg = make(attrobi.Selection)
 		}
 
 		return newProcMetricsExporter(ctx, ctxInfo, cfg, input)
@@ -127,7 +127,7 @@ func newProcMetricsExporter(
 	log.Debug("instantiating process metrics exporter provider")
 
 	// only user-provided attributes (or default set) will decorate the metrics
-	attrProv, err := attributes.NewAttrSelector(ctxInfo.MetricAttributeGroups, cfg.SelectorCfg)
+	attrProv, err := attrobi.NewAttrSelector(ctxInfo.MetricAttributeGroups, cfg.SelectorCfg)
 	if err != nil {
 		return nil, fmt.Errorf("process OTEL exporter attributes: %w", err)
 	}
@@ -204,7 +204,7 @@ func newProcMetricsExporter(
 
 // getFilteredProcessResourceAttrs returns resource attributes filtered based on the attribute selector
 // for process metrics.
-func getFilteredProcessResourceAttrs(hostID string, procID *process.ID, attrSelector attributes.Selection) []attribute.KeyValue {
+func getFilteredProcessResourceAttrs(hostID string, procID *process.ID, attrSelector attrobi.Selection) []attribute.KeyValue {
 	baseAttrs := getResourceAttrs(hostID, procID.Service)
 	procAttrs := []attribute.KeyValue{
 		semconv.ServiceInstanceID(procID.UID.Instance),

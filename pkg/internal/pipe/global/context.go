@@ -1,11 +1,10 @@
 package global
 
 import (
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/connector"
-
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 	kube2 "github.com/grafana/beyla/v2/pkg/internal/kube"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/connector"
+	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 )
 
 // ContextInfo stores some context information that must be shared across some nodes of the
@@ -24,7 +23,7 @@ type ContextInfo struct {
 	Prometheus *connector.PrometheusManager
 	// MetricAttributeGroups will selectively enable or disable diverse groups of attributes
 	// in the metric exporters
-	MetricAttributeGroups attributes.AttrGroups
+	MetricAttributeGroups attrobi.AttrGroups
 	// K8sInformer enables direct access to the Kubernetes API
 	K8sInformer *kube2.MetadataProvider
 }

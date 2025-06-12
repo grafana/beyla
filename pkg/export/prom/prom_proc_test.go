@@ -8,6 +8,7 @@ import (
 	"github.com/mariomac/guara/pkg/test"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/connector"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -28,7 +29,7 @@ func TestProcPrometheusEndpoint_AggregatedMetrics(t *testing.T) {
 	promURL := fmt.Sprintf("http://127.0.0.1:%d/metrics", openPort)
 
 	// GIVEN a Prometheus Metrics Exporter whose process CPU metrics do not consider the cpu_mode
-	attribs := attributes.InclusionLists{
+	attribs := attrobi.InclusionLists{
 		Include: []string{"process_command"},
 	}
 	procsInput := msg.NewQueue[[]*process.Status](msg.ChannelBufferLen(10))
@@ -40,8 +41,8 @@ func TestProcPrometheusEndpoint_AggregatedMetrics(t *testing.T) {
 			TTL:                         3 * time.Minute,
 			SpanMetricsServiceCacheSize: 10,
 			Features:                    []string{otel.FeatureApplication, otel.FeatureProcess},
-		}, SelectorCfg: &attributes.SelectorConfig{
-			SelectionCfg: attributes.Selection{
+		}, SelectorCfg: &attrobi.SelectorConfig{
+			SelectionCfg: attrobi.Selection{
 				attributes.ProcessCPUTime.Section:        attribs,
 				attributes.ProcessCPUUtilization.Section: attribs,
 				attributes.ProcessDiskIO.Section:         attribs,
@@ -117,7 +118,7 @@ func TestProcPrometheusEndpoint_DisaggregatedMetrics(t *testing.T) {
 	promURL := fmt.Sprintf("http://127.0.0.1:%d/metrics", openPort)
 
 	// GIVEN a Prometheus Metrics Exporter whose process CPU metrics consider the cpu_mode
-	attribs := attributes.InclusionLists{
+	attribs := attrobi.InclusionLists{
 		Include: []string{"process_command", "cpu_mode", "disk_io_direction", "network_io_direction"},
 	}
 	procsInput := msg.NewQueue[[]*process.Status](msg.ChannelBufferLen(10))
@@ -129,8 +130,8 @@ func TestProcPrometheusEndpoint_DisaggregatedMetrics(t *testing.T) {
 			TTL:                         3 * time.Minute,
 			SpanMetricsServiceCacheSize: 10,
 			Features:                    []string{otel.FeatureApplication, otel.FeatureProcess},
-		}, SelectorCfg: &attributes.SelectorConfig{
-			SelectionCfg: attributes.Selection{
+		}, SelectorCfg: &attrobi.SelectorConfig{
+			SelectionCfg: attrobi.Selection{
 				attributes.ProcessCPUTime.Section:        attribs,
 				attributes.ProcessCPUUtilization.Section: attribs,
 				attributes.ProcessDiskIO.Section:         attribs,

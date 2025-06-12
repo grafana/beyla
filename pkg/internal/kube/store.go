@@ -9,9 +9,9 @@ import (
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers/container"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers/maps"
+	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	"github.com/grafana/beyla/v2/pkg/kubecache/informer"
 	"github.com/grafana/beyla/v2/pkg/kubecache/meta"
 )
@@ -175,7 +175,7 @@ func (s *Store) cacheResourceMetadata(meta *informer.ObjectMeta) *CachedObjMeta 
 		if len(cnt.Env) == 0 {
 			continue
 		}
-		attributes.ParseOTELResourceVariable(cnt.Env[EnvResourceAttributes], func(k, v string) {
+		attrobi.ParseOTELResourceVariable(cnt.Env[EnvResourceAttributes], func(k, v string) {
 			com.OTELResourceMeta[attr.Name(k)] = v
 		})
 		if val := cnt.Env[EnvServiceName]; val != "" {
@@ -485,7 +485,7 @@ func (s *Store) nameFromResourceAttrs(variable string, c *informer.ContainerInfo
 		collect := func(k string, v string) {
 			allVars[k] = v
 		}
-		attributes.ParseOTELResourceVariable(resourceVars, collect)
+		attrobi.ParseOTELResourceVariable(resourceVars, collect)
 		if result, ok := allVars[variable]; ok {
 			return result, true
 		}

@@ -7,6 +7,7 @@ import (
 
 	"github.com/mariomac/guara/pkg/test"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/stretchr/testify/assert"
@@ -27,7 +28,7 @@ func TestProcMetrics_Disaggregated(t *testing.T) {
 	require.NoError(t, err)
 
 	// GIVEN an OTEL Metrics Exporter whose process CPU metrics consider the cpu.mode
-	includedAttributes := attributes.InclusionLists{
+	includedAttributes := attrobi.InclusionLists{
 		Include: []string{"process_command", "cpu_mode", "disk_io_direction", "network_io_direction"},
 	}
 	procsInput := msg.NewQueue[[]*process.Status](msg.ChannelBufferLen(10))
@@ -42,8 +43,8 @@ func TestProcMetrics_Disaggregated(t *testing.T) {
 				Instrumentations: []string{
 					instrumentations.InstrumentationALL,
 				},
-			}, SelectorCfg: &attributes.SelectorConfig{
-				SelectionCfg: attributes.Selection{
+			}, SelectorCfg: &attrobi.SelectorConfig{
+				SelectionCfg: attrobi.Selection{
 					attributes.ProcessCPUTime.Section:        includedAttributes,
 					attributes.ProcessCPUUtilization.Section: includedAttributes,
 					attributes.ProcessDiskIO.Section:         includedAttributes,
@@ -164,8 +165,8 @@ func TestGetFilteredProcessResourceAttrs(t *testing.T) {
 		UID:             service.UID,
 	}
 
-	attrSelector := attributes.Selection{
-		attributes.ProcessCPUTime.Section: attributes.InclusionLists{
+	attrSelector := attrobi.Selection{
+		attributes.ProcessCPUTime.Section: attrobi.InclusionLists{
 			Include: []string{"*"},
 			Exclude: []string{"process.command_args", "process.exec_path"},
 		},
@@ -205,8 +206,8 @@ func TestGetFilteredProcessResourceAttrs(t *testing.T) {
 	_, hasExecPath := attrMap["process.exec_path"]
 	assert.False(t, hasExecPath, "process.exec_path should be filtered out")
 
-	attrSelector = attributes.Selection{
-		attributes.ProcessMemoryUsage.Section: attributes.InclusionLists{
+	attrSelector = attrobi.Selection{
+		attributes.ProcessMemoryUsage.Section: attrobi.InclusionLists{
 			Include: []string{"*"},
 			Exclude: []string{"process.*"}, // Exclude all process attributes
 		},

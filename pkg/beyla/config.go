@@ -9,6 +9,7 @@ import (
 
 	"github.com/caarlos0/env/v9"
 	"github.com/gobwas/glob"
+	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubeflags"
@@ -17,7 +18,6 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/grafana/beyla/v2/pkg/config"
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	"github.com/grafana/beyla/v2/pkg/export/debug"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/export/prom"
@@ -266,7 +266,7 @@ func (t TracesReceiverConfig) Enabled() bool {
 type Attributes struct {
 	Kubernetes           transform.KubernetesDecorator `yaml:"kubernetes"`
 	InstanceID           traces.InstanceIDConfig       `yaml:"instance_id"`
-	Select               attributes.Selection          `yaml:"select"`
+	Select               attrobi.Selection             `yaml:"select"`
 	HostID               HostIDConfig                  `yaml:"host_id"`
 	ExtraGroupAttributes map[string][]attr.Name        `yaml:"extra_group_attributes"`
 }

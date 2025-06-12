@@ -43,7 +43,7 @@ func TestAppMetricsExpiration(t *testing.T) {
 	require.NoError(t, err)
 	promURL := fmt.Sprintf("http://127.0.0.1:%d/metrics", openPort)
 
-	var g attributes.AttrGroups
+	var g attrobi.AttrGroups
 	g.Add(attributes.GroupKubernetes)
 
 	// GIVEN a Prometheus Metrics Exporter with a metrics expire time of 3 minutes
@@ -63,9 +63,9 @@ func TestAppMetricsExpiration(t *testing.T) {
 			Features:                    []string{otel.FeatureApplication},
 			Instrumentations:            []string{instrumentations.InstrumentationALL},
 		},
-		&attributes.SelectorConfig{
-			SelectionCfg: attributes.Selection{
-				attrobi.HTTPServerDuration.Section: attributes.InclusionLists{
+		&attrobi.SelectorConfig{
+			SelectionCfg: attrobi.Selection{
+				attrobi.HTTPServerDuration.Section: attrobi.InclusionLists{
 					Include: []string{"url_path", "k8s.app.version"},
 				},
 			},
@@ -539,9 +539,9 @@ func makePromExporter(
 			Features:                    []string{otel.FeatureApplication},
 			Instrumentations:            instrumentations,
 		},
-		&attributes.SelectorConfig{
-			SelectionCfg: attributes.Selection{
-				attrobi.HTTPServerDuration.Section: attributes.InclusionLists{
+		&attrobi.SelectorConfig{
+			SelectionCfg: attrobi.Selection{
+				attrobi.HTTPServerDuration.Section: attrobi.InclusionLists{
 					Include: []string{"url_path"},
 				},
 			},

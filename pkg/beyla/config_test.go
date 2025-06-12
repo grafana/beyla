@@ -22,7 +22,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/v2/pkg/config"
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	"github.com/grafana/beyla/v2/pkg/export/debug"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/export/prom"
@@ -204,8 +203,8 @@ network:
 				Override:     "the-host-id",
 				FetchTimeout: 4 * time.Second,
 			},
-			Select: attributes.Selection{
-				attrobi.BeylaNetworkFlow.Section: attributes.InclusionLists{
+			Select: attrobi.Selection{
+				attrobi.BeylaNetworkFlow.Section: attrobi.InclusionLists{
 					Include: []string{"foo", "bar"},
 					Exclude: []string{"baz", "bae"},
 				},

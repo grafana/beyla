@@ -3,11 +3,12 @@ package attributes
 import (
 	"testing"
 
+	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestEnabledGroups(t *testing.T) {
-	var group AttrGroups
+	var group attrobi.AttrGroups
 
 	assert.False(t, group.Has(GroupPrometheus))
 	assert.False(t, group.Has(GroupKubernetes))

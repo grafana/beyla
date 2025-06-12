@@ -16,7 +16,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/export/prom"
 	"github.com/grafana/beyla/v2/pkg/filter"
@@ -50,8 +49,8 @@ func TestFilter(t *testing.T) {
 			Filters: filter.AttributesConfig{
 				Network: map[string]filter.MatchDefinition{"transport": {Match: "TCP"}},
 			},
-			Attributes: beyla.Attributes{Select: attributes.Selection{
-				attrobi.BeylaNetworkFlow.Section: attributes.InclusionLists{
+			Attributes: beyla.Attributes{Select: attrobi.Selection{
+				attrobi.BeylaNetworkFlow.Section: attrobi.InclusionLists{
 					Include: []string{"beyla_ip", "iface.direction", "dst_port", "iface", "src_port", "transport"},
 				},
 			}},

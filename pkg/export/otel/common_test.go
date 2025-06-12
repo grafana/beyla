@@ -10,8 +10,6 @@ import (
 	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/otel/attribute"
-
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
 )
 
 func TestOtlpOptions_AsMetricHTTP(t *testing.T) {
@@ -236,7 +234,7 @@ func TestGetFilteredResourceAttrs(t *testing.T) {
 	type testCase struct {
 		name            string
 		baseAttrs       []attribute.KeyValue
-		attrSelector    attributes.Selection
+		attrSelector    attrobi.Selection
 		extraAttrs      []attribute.KeyValue
 		prefixPatterns  []string
 		expectedAttrs   []string
@@ -256,7 +254,7 @@ func TestGetFilteredResourceAttrs(t *testing.T) {
 				attribute.String("service.name", "test-service"),
 				attribute.String("telemetry.sdk.name", "beyla"),
 			},
-			attrSelector: attributes.Selection{},
+			attrSelector: attrobi.Selection{},
 			extraAttrs: []attribute.KeyValue{
 				attribute.String("process.command_args", "/bin/test --arg1 --arg2"),
 				attribute.String("process.pid", "12345"),
@@ -276,8 +274,8 @@ func TestGetFilteredResourceAttrs(t *testing.T) {
 				attribute.String("service.name", "test-service"),
 				attribute.String("telemetry.sdk.name", "beyla"),
 			},
-			attrSelector: attributes.Selection{
-				testMetric.Section: attributes.InclusionLists{
+			attrSelector: attrobi.Selection{
+				testMetric.Section: attrobi.InclusionLists{
 					Include: []string{"*"},
 					Exclude: []string{"process.command_args"},
 				},
@@ -302,8 +300,8 @@ func TestGetFilteredResourceAttrs(t *testing.T) {
 				attribute.String("service.name", "test-service"),
 				attribute.String("telemetry.sdk.name", "beyla"),
 			},
-			attrSelector: attributes.Selection{
-				testMetric.Section: attributes.InclusionLists{
+			attrSelector: attrobi.Selection{
+				testMetric.Section: attrobi.InclusionLists{
 					Include: []string{"*"},
 					Exclude: []string{"process.*"},
 				},
@@ -330,8 +328,8 @@ func TestGetFilteredResourceAttrs(t *testing.T) {
 				attribute.String("service.name", "test-service"),
 				attribute.String("telemetry.sdk.name", "beyla"),
 			},
-			attrSelector: attributes.Selection{
-				testMetric.Section: attributes.InclusionLists{
+			attrSelector: attrobi.Selection{
+				testMetric.Section: attrobi.InclusionLists{
 					Include: []string{"*"},
 					Exclude: []string{"process.command_args", "host.*"},
 				},
@@ -358,15 +356,15 @@ func TestGetFilteredResourceAttrs(t *testing.T) {
 				attribute.String("service.name", "test-service"),
 				attribute.String("telemetry.sdk.name", "beyla"),
 			},
-			attrSelector: attributes.Selection{
-				"*": attributes.InclusionLists{
+			attrSelector: attrobi.Selection{
+				"*": attrobi.InclusionLists{
 					Include: []string{"*"},
 					Exclude: []string{"process.*", "host.*"},
 				},
-				"test.*": attributes.InclusionLists{
+				"test.*": attrobi.InclusionLists{
 					Exclude: []string{"container.*"},
 				},
-				"test.metric": attributes.InclusionLists{
+				"test.metric": attrobi.InclusionLists{
 					Include: []string{"process.pid", "host.name"},
 				},
 			},

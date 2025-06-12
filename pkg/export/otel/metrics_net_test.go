@@ -41,8 +41,8 @@ func TestMetricAttributes(t *testing.T) {
 
 	me, err := newMetricsExporter(t.Context(),
 		&global.ContextInfo{MetricAttributeGroups: attributes.GroupKubernetes},
-		&NetMetricsConfig{SelectorCfg: &attributes.SelectorConfig{
-			SelectionCfg: map[attrobi.Section]attributes.InclusionLists{
+		&NetMetricsConfig{SelectorCfg: &attrobi.SelectorConfig{
+			SelectionCfg: map[attrobi.Section]attrobi.InclusionLists{
 				attrobi.BeylaNetworkFlow.Section: {Include: []string{"*"}},
 			},
 		}, Metrics: &MetricsConfig{
@@ -100,8 +100,8 @@ func TestMetricAttributes_Filter(t *testing.T) {
 
 	me, err := newMetricsExporter(t.Context(),
 		&global.ContextInfo{MetricAttributeGroups: attributes.GroupKubernetes},
-		&NetMetricsConfig{SelectorCfg: &attributes.SelectorConfig{
-			SelectionCfg: map[attrobi.Section]attributes.InclusionLists{
+		&NetMetricsConfig{SelectorCfg: &attrobi.SelectorConfig{
+			SelectionCfg: map[attrobi.Section]attrobi.InclusionLists{
 				attrobi.BeylaNetworkFlow.Section: {Include: []string{
 					"src.address",
 					"k8s.src.name",
@@ -160,8 +160,8 @@ func TestNetMetricsConfig_Disabled(t *testing.T) {
 
 func TestGetFilteredNetworkResourceAttrs(t *testing.T) {
 	hostID := "test-host-id"
-	attrSelector := attributes.Selection{
-		attrobi.BeylaNetworkFlow.Section: attributes.InclusionLists{
+	attrSelector := attrobi.Selection{
+		attrobi.BeylaNetworkFlow.Section: attrobi.InclusionLists{
 			Include: []string{"*"},
 			Exclude: []string{"host.*"},
 		},

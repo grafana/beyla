@@ -148,7 +148,7 @@ func makeTracesReceiver(
 	cfg TracesConfig,
 	spanMetricsEnabled bool,
 	ctxInfo *global.ContextInfo,
-	selectorCfg *attributes.SelectorConfig,
+	selectorCfg *attrobi.SelectorConfig,
 	input *msg.Queue[[]request.Span],
 ) *tracesOTELReceiver {
 	return &tracesOTELReceiver{
@@ -167,7 +167,7 @@ func TracesReceiver(
 	ctxInfo *global.ContextInfo,
 	cfg TracesConfig,
 	spanMetricsEnabled bool,
-	selectorCfg *attributes.SelectorConfig,
+	selectorCfg *attrobi.SelectorConfig,
 	input *msg.Queue[[]request.Span],
 ) swarm.InstanceFunc {
 	return func(_ context.Context) (swarm.RunFunc, error) {
@@ -182,16 +182,16 @@ func TracesReceiver(
 type tracesOTELReceiver struct {
 	cfg                TracesConfig
 	ctxInfo            *global.ContextInfo
-	selectorCfg        *attributes.SelectorConfig
+	selectorCfg        *attrobi.SelectorConfig
 	is                 instrumentations.InstrumentationSelection
 	spanMetricsEnabled bool
 	attributeCache     *expirable2.LRU[svc.UID, []attribute.KeyValue]
 	input              <-chan []request.Span
 }
 
-func GetUserSelectedAttributes(selectorCfg *attributes.SelectorConfig) (map[attr.Name]struct{}, error) {
+func GetUserSelectedAttributes(selectorCfg *attrobi.SelectorConfig) (map[attr.Name]struct{}, error) {
 	// Get user attributes
-	attribProvider, err := attributes.NewAttrSelector(attributes.GroupTraces, selectorCfg)
+	attribProvider, err := attrobi.NewAttrSelector(attributes.GroupTraces, selectorCfg)
 	if err != nil {
 		return nil, err
 	}

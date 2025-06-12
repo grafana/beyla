@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/hashicorp/golang-lru/v2/simplelru"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/expire"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -27,7 +28,6 @@ import (
 	"google.golang.org/grpc/credentials"
 
 	"github.com/grafana/beyla/v2/pkg/buildinfo"
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
 )
 
 // Protocol values for the OTEL_EXPORTER_OTLP_PROTOCOL, OTEL_EXPORTER_OTLP_TRACES_PROTOCOL and
@@ -102,7 +102,7 @@ func getResourceAttrs(hostID string, service *svc.Attrs) []attribute.KeyValue {
 }
 
 // getFilteredAttributesByPrefix applies attribute filtering based on selector patterns.
-func getFilteredAttributesByPrefix(baseAttrs []attribute.KeyValue, attrSelector attributes.Selection,
+func getFilteredAttributesByPrefix(baseAttrs []attribute.KeyValue, attrSelector attrobi.Selection,
 	extraAttrs []attribute.KeyValue, prefixPatterns []string) []attribute.KeyValue {
 
 	result := make([]attribute.KeyValue, len(baseAttrs))
@@ -112,7 +112,7 @@ func getFilteredAttributesByPrefix(baseAttrs []attribute.KeyValue, attrSelector 
 		return result
 	}
 
-	var matchingPatterns []attributes.InclusionLists
+	var matchingPatterns []attrobi.InclusionLists
 	for section, inclList := range attrSelector {
 		sectionStr := string(section)
 		for _, prefix := range prefixPatterns {
@@ -131,7 +131,7 @@ func getFilteredAttributesByPrefix(baseAttrs []attribute.KeyValue, attrSelector 
 	return append(result, filtered...)
 }
 
-func filterAttributes(attrs []attribute.KeyValue, patterns []attributes.InclusionLists) []attribute.KeyValue {
+func filterAttributes(attrs []attribute.KeyValue, patterns []attrobi.InclusionLists) []attribute.KeyValue {
 	var filtered []attribute.KeyValue
 
 	for _, attr := range attrs {
@@ -146,7 +146,7 @@ func filterAttributes(attrs []attribute.KeyValue, patterns []attributes.Inclusio
 	return filtered
 }
 
-func shouldIncludeAttribute(normalizedAttrName string, patterns []attributes.InclusionLists) bool {
+func shouldIncludeAttribute(normalizedAttrName string, patterns []attrobi.InclusionLists) bool {
 	for _, pattern := range patterns {
 		// Check exclusions first - if any match, exclude the attribute
 		for _, excl := range pattern.Exclude {
@@ -461,7 +461,7 @@ func HeadersFromEnv(varName string) map[string]string {
 // OTEL_RESOURCE_ATTRIBUTES, i.e. a comma-separated list of
 // key=values. For example: api-key=key,other-config-value=value
 // The values are passed as parameters to the handler function
-func parseOTELEnvVar(svc *svc.Attrs, varName string, handler attributes.VarHandler) {
+func parseOTELEnvVar(svc *svc.Attrs, varName string, handler attrobi.VarHandler) {
 	var envVar string
 	ok := false
 
@@ -477,7 +477,7 @@ func parseOTELEnvVar(svc *svc.Attrs, varName string, handler attributes.VarHandl
 		return
 	}
 
-	attributes.ParseOTELResourceVariable(envVar, handler)
+	attrobi.ParseOTELResourceVariable(envVar, handler)
 }
 
 func ResourceAttrsFromEnv(svc *svc.Attrs) []attribute.KeyValue {
@@ -510,6 +510,6 @@ func ResolveOTLPEndpoint(endpoint, common string, grafana *GrafanaOTLP) (string,
 // It applies filtering to extra attributes while preserving base attributes.
 // This is especially useful for RED metrics and span metrics where we want to control
 // which attributes are included in the metrics.
-func getFilteredMetricResourceAttrs(baseAttrs []attribute.KeyValue, attrSelector attributes.Selection, extraAttrs []attribute.KeyValue, metricTypes []string) []attribute.KeyValue {
+func getFilteredMetricResourceAttrs(baseAttrs []attribute.KeyValue, attrSelector attrobi.Selection, extraAttrs []attribute.KeyValue, metricTypes []string) []attribute.KeyValue {
 	return getFilteredAttributesByPrefix(baseAttrs, attrSelector, extraAttrs, metricTypes)
 }

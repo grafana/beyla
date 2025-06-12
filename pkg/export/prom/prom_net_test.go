@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
@@ -38,9 +37,9 @@ func TestMetricsExpiration(t *testing.T) {
 			TTL:                         3 * time.Minute,
 			SpanMetricsServiceCacheSize: 10,
 			Features:                    []string{otel.FeatureNetwork},
-		}, SelectorCfg: &attributes.SelectorConfig{
-			SelectionCfg: attributes.Selection{
-				attrobi.BeylaNetworkFlow.Section: attributes.InclusionLists{
+		}, SelectorCfg: &attrobi.SelectorConfig{
+			SelectionCfg: attrobi.Selection{
+				attrobi.BeylaNetworkFlow.Section: attrobi.InclusionLists{
 					Include: []string{"src_name", "dst_name"},
 				},
 			},

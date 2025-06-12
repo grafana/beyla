@@ -27,7 +27,6 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	"github.com/grafana/beyla/v2/pkg/export/otel/metric"
 	instrument "github.com/grafana/beyla/v2/pkg/export/otel/metric/api/metric"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
@@ -231,7 +230,7 @@ type MetricsReporter struct {
 	ctx        context.Context
 	cfg        *MetricsConfig
 	hostID     string
-	attributes *attributes.AttrSelector
+	attributes *attrobi.AttrSelector
 	exporter   sdkmetric.Exporter
 	reporters  ReporterPool[*svc.Attrs, *Metrics]
 	pidTracker PidServiceTracker
@@ -253,7 +252,7 @@ type MetricsReporter struct {
 	attrGPUKernelGridSize      []attrobi.Field[*request.Span, attribute.KeyValue]
 	attrGPUKernelBlockSize     []attrobi.Field[*request.Span, attribute.KeyValue]
 	attrGPUMemoryAllocations   []attrobi.Field[*request.Span, attribute.KeyValue]
-	userAttribSelection        attributes.Selection
+	userAttribSelection        attrobi.Selection
 	input                      <-chan []request.Span
 	processEvents              <-chan exec.ProcessEvent
 }
@@ -299,7 +298,7 @@ type Metrics struct {
 func ReportMetrics(
 	ctxInfo *global.ContextInfo,
 	cfg *MetricsConfig,
-	selectorCfg *attributes.SelectorConfig,
+	selectorCfg *attrobi.SelectorConfig,
 	input *msg.Queue[[]request.Span],
 	processEventCh *msg.Queue[exec.ProcessEvent],
 ) swarm.InstanceFunc {
@@ -338,13 +337,13 @@ func newMetricsReporter(
 	ctx context.Context,
 	ctxInfo *global.ContextInfo,
 	cfg *MetricsConfig,
-	selectorCfg *attributes.SelectorConfig,
+	selectorCfg *attrobi.SelectorConfig,
 	input *msg.Queue[[]request.Span],
 	processEventCh *msg.Queue[exec.ProcessEvent],
 ) (*MetricsReporter, error) {
 	log := mlog()
 
-	attribProvider, err := attributes.NewAttrSelector(ctxInfo.MetricAttributeGroups, selectorCfg)
+	attribProvider, err := attrobi.NewAttrSelector(ctxInfo.MetricAttributeGroups, selectorCfg)
 	if err != nil {
 		return nil, fmt.Errorf("attributes select: %w", err)
 	}

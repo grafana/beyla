@@ -3,10 +3,10 @@ package agent
 import (
 	"context"
 
+	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/export/prom"
 	"github.com/grafana/beyla/v2/pkg/filter"
@@ -33,7 +33,7 @@ func (f *Flows) buildPipeline(ctx context.Context) (*swarm.Runner, error) {
 
 	alog.Debug("creating flows' processing graph")
 
-	selectorCfg := &attributes.SelectorConfig{
+	selectorCfg := &attrobi.SelectorConfig{
 		SelectionCfg:            f.cfg.Attributes.Select,
 		ExtraGroupAttributesCfg: f.cfg.Attributes.ExtraGroupAttributes,
 	}

@@ -10,6 +10,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/testutil"
+	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubeflags"
@@ -36,7 +37,7 @@ import (
 
 const testTimeout = 5 * time.Second
 
-func gctx(groups attributes.AttrGroups) *global.ContextInfo {
+func gctx(groups attrobi.AttrGroups) *global.ContextInfo {
 	return &global.ContextInfo{
 		Metrics:               imetrics.NoopReporter{},
 		MetricAttributeGroups: groups,
@@ -45,13 +46,13 @@ func gctx(groups attributes.AttrGroups) *global.ContextInfo {
 	}
 }
 
-var allMetrics = attributes.Selection{
-	"*": attributes.InclusionLists{Include: []string{"*"}},
+var allMetrics = attrobi.Selection{
+	"*": attrobi.InclusionLists{Include: []string{"*"}},
 }
 
-func allMetricsBut(patterns ...string) attributes.Selection {
-	return attributes.Selection{
-		attributes.HTTPServerDuration.Section: attributes.InclusionLists{
+func allMetricsBut(patterns ...string) attrobi.Selection {
+	return attrobi.Selection{
+		attrobi.HTTPServerDuration.Section: attrobi.InclusionLists{
 			Include: []string{"*"},
 			Exclude: patterns,
 		},

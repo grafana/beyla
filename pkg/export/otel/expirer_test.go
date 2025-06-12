@@ -46,9 +46,9 @@ func TestNetMetricsExpiration(t *testing.T) {
 				Instrumentations: []string{
 					instrumentations.InstrumentationALL,
 				},
-			}, SelectorCfg: &attributes.SelectorConfig{
-				SelectionCfg: attributes.Selection{
-					attrobi.BeylaNetworkFlow.Section: attributes.InclusionLists{
+			}, SelectorCfg: &attrobi.SelectorConfig{
+				SelectionCfg: attrobi.Selection{
+					attrobi.BeylaNetworkFlow.Section: attrobi.InclusionLists{
 						Include: []string{"src.name", "dst.name"},
 					},
 				},
@@ -142,7 +142,7 @@ func TestAppMetricsExpiration_ByMetricAttrs(t *testing.T) {
 	now := syncedClock{now: time.Now()}
 	timeNow = now.Now
 
-	var g attributes.AttrGroups
+	var g attrobi.AttrGroups
 	g.Add(attributes.GroupKubernetes)
 
 	metrics := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(20))
@@ -160,9 +160,9 @@ func TestAppMetricsExpiration_ByMetricAttrs(t *testing.T) {
 			Instrumentations: []string{
 				instrumentations.InstrumentationALL,
 			},
-		}, &attributes.SelectorConfig{
-			SelectionCfg: attributes.Selection{
-				attrobi.HTTPServerDuration.Section: attributes.InclusionLists{
+		}, &attrobi.SelectorConfig{
+			SelectionCfg: attrobi.Selection{
+				attrobi.HTTPServerDuration.Section: attrobi.InclusionLists{
 					Include: []string{"url.path", "k8s.app.version"},
 				},
 			},
@@ -295,9 +295,9 @@ func TestAppMetricsExpiration_BySvcID(t *testing.T) {
 			Instrumentations: []string{
 				instrumentations.InstrumentationALL,
 			},
-		}, &attributes.SelectorConfig{
-			SelectionCfg: attributes.Selection{
-				attrobi.HTTPServerDuration.Section: attributes.InclusionLists{
+		}, &attrobi.SelectorConfig{
+			SelectionCfg: attrobi.Selection{
+				attrobi.HTTPServerDuration.Section: attrobi.InclusionLists{
 					Include: []string{"url.path"},
 				},
 			},

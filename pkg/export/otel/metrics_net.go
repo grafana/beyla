@@ -17,7 +17,6 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
 	"github.com/grafana/beyla/v2/pkg/buildinfo"
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	"github.com/grafana/beyla/v2/pkg/export/otel/metric"
 	metric2 "github.com/grafana/beyla/v2/pkg/export/otel/metric/api/metric"
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
@@ -27,7 +26,7 @@ import (
 // NetMetricsConfig extends MetricsConfig for Network Metrics
 type NetMetricsConfig struct {
 	Metrics     *MetricsConfig
-	SelectorCfg *attributes.SelectorConfig
+	SelectorCfg *attrobi.SelectorConfig
 	// Deprecated: to be removed in Beyla 3.0 with BEYLA_NETWORK_METRICS bool flag
 	GloballyEnabled bool
 }
@@ -42,7 +41,7 @@ func nmlog() *slog.Logger {
 
 // getFilteredNetworkResourceAttrs returns resource attributes that can be filtered based on the attribute selector
 // for network metrics.
-func getFilteredNetworkResourceAttrs(hostID string, attrSelector attributes.Selection) []attribute.KeyValue {
+func getFilteredNetworkResourceAttrs(hostID string, attrSelector attrobi.Selection) []attribute.KeyValue {
 	baseAttrs := []attribute.KeyValue{
 		semconv.ServiceName("beyla-network-flows"),
 		semconv.ServiceInstanceID(uuid.New().String()),
@@ -58,7 +57,7 @@ func getFilteredNetworkResourceAttrs(hostID string, attrSelector attributes.Sele
 	return getFilteredAttributesByPrefix(baseAttrs, attrSelector, extraAttrs, []string{"network.", "beyla.network"})
 }
 
-func createFilteredNetworkResource(hostID string, attrSelector attributes.Selection) *resource.Resource {
+func createFilteredNetworkResource(hostID string, attrSelector attrobi.Selection) *resource.Resource {
 	attrs := getFilteredNetworkResourceAttrs(hostID, attrSelector)
 	return resource.NewWithAttributes(semconv.SchemaURL, attrs...)
 }
@@ -88,7 +87,7 @@ func NetMetricsExporterProvider(
 			return swarm.EmptyRunFunc()
 		}
 		if cfg.SelectorCfg.SelectionCfg == nil {
-			cfg.SelectorCfg.SelectionCfg = make(attributes.Selection)
+			cfg.SelectorCfg.SelectionCfg = make(attrobi.Selection)
 		}
 		exporter, err := newMetricsExporter(ctx, ctxInfo, cfg, input)
 		if err != nil {
@@ -117,7 +116,7 @@ func newMetricsExporter(
 		return nil, err
 	}
 
-	attrProv, err := attributes.NewAttrSelector(ctxInfo.MetricAttributeGroups, cfg.SelectorCfg)
+	attrProv, err := attrobi.NewAttrSelector(ctxInfo.MetricAttributeGroups, cfg.SelectorCfg)
 	if err != nil {
 		return nil, fmt.Errorf("network OTEL exporter attributes enable: %w", err)
 	}

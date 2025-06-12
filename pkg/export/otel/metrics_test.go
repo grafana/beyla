@@ -22,7 +22,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
@@ -156,7 +155,7 @@ func TestMetrics_InternalInstrumentation(t *testing.T) {
 	}, &MetricsConfig{
 		CommonEndpoint: coll.URL, Interval: 10 * time.Millisecond, ReportersCacheLen: 16,
 		Features: []string{FeatureApplication}, Instrumentations: []string{instrumentations.InstrumentationHTTP},
-	}, &attributes.SelectorConfig{}, exportMetrics, processEvents,
+	}, &attrobi.SelectorConfig{}, exportMetrics, processEvents,
 	)(context.Background())
 	require.NoError(t, err)
 	go reporter(context.Background())
@@ -711,9 +710,9 @@ func makeExporter(
 			TTL:               30 * time.Minute,
 			ReportersCacheLen: 100,
 			Instrumentations:  instrumentations,
-		}, &attributes.SelectorConfig{
-			SelectionCfg: attributes.Selection{
-				attrobi.HTTPServerDuration.Section: attributes.InclusionLists{
+		}, &attrobi.SelectorConfig{
+			SelectionCfg: attrobi.Selection{
+				attrobi.HTTPServerDuration.Section: attrobi.InclusionLists{
 					Include: []string{"url.path"},
 				},
 			},
@@ -729,7 +728,7 @@ func TestMetricResourceAttributes(t *testing.T) {
 	testCases := []struct {
 		name            string
 		service         *svc.Attrs
-		attributeSelect attributes.Selection
+		attributeSelect attrobi.Selection
 		expectedAttrs   []string
 		unexpectedAttrs []string
 	}{
@@ -750,7 +749,7 @@ func TestMetricResourceAttributes(t *testing.T) {
 					attr.K8sClusterName:    "cluster-name",
 				},
 			},
-			attributeSelect: attributes.Selection{},
+			attributeSelect: attrobi.Selection{},
 			expectedAttrs: []string{
 				"service.name",
 				"service.instance.id",
@@ -783,8 +782,8 @@ func TestMetricResourceAttributes(t *testing.T) {
 					attr.K8sClusterName:    "cluster-name",
 				},
 			},
-			attributeSelect: attributes.Selection{
-				"http.server.request.duration": attributes.InclusionLists{
+			attributeSelect: attrobi.Selection{
+				"http.server.request.duration": attrobi.InclusionLists{
 					Include: []string{"*"},
 					Exclude: []string{"host.*"},
 				},
@@ -822,8 +821,8 @@ func TestMetricResourceAttributes(t *testing.T) {
 					attr.K8sClusterName:    "cluster-name",
 				},
 			},
-			attributeSelect: attributes.Selection{
-				"http.server.request.duration": attributes.InclusionLists{
+			attributeSelect: attrobi.Selection{
+				"http.server.request.duration": attrobi.InclusionLists{
 					Include: []string{"*"},
 					Exclude: []string{"k8s.*"},
 				},
@@ -861,8 +860,8 @@ func TestMetricResourceAttributes(t *testing.T) {
 					attr.K8sClusterName:    "cluster-name",
 				},
 			},
-			attributeSelect: attributes.Selection{
-				"http.server.request.duration": attributes.InclusionLists{
+			attributeSelect: attrobi.Selection{
+				"http.server.request.duration": attrobi.InclusionLists{
 					Include: []string{"service.*", "telemetry.*"},
 					Exclude: []string{},
 				},

@@ -206,8 +206,8 @@ generate: obi-submodule
 docker-generate: obi-submodule
 	@cd $(OBI_MODULE) && make docker-generate
 
-.PHONY: vendor-bpf
-vendor-bpf: obi-submodule docker-generate
+.PHONY: vendor-obi
+vendor-obi: obi-submodule docker-generate
 	@echo "### Vendoring OBI submodule..."
 	go get github.com/open-telemetry/opentelemetry-ebpf-instrumentation
 	go mod vendor
@@ -216,16 +216,16 @@ vendor-bpf: obi-submodule docker-generate
 verify: prereqs lint-dashboard lint test
 
 .PHONY: build
-build: docker-generate verify compile
+build: vendor-obi verify compile
 
 .PHONY: all
-all: docker-generate build
+all: vendor-obi build
 
 .PHONY: compile compile-cache
-compile:
+compile: vendor-obi
 	@echo "### Compiling Beyla"
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -ldflags="-X '$(BUILDINFO_PKG).Version=$(RELEASE_VERSION)' -X '$(BUILDINFO_PKG).Revision=$(RELEASE_REVISION)'" -a -o bin/$(CMD) $(MAIN_GO_FILE)
-compile-cache:
+compile-cache: vendor-obi
 	@echo "### Compiling Beyla K8s cache"
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -ldflags="-X '$(BUILDINFO_PKG).Version=$(RELEASE_VERSION)' -X '$(BUILDINFO_PKG).Revision=$(RELEASE_REVISION)'" -a -o bin/$(CACHE_CMD) $(CACHE_MAIN_GO_FILE)
 
@@ -270,7 +270,7 @@ coverage-report-html: cov-exclude-generated
 	go tool cover --html=$(TEST_OUTPUT)/cover.txt
 
 .PHONY: image-build
-image-build:
+image-build: vendor-obi
 	$(call check_defined, IMG_ORG, Your Docker repository user name)
 	@echo "### Building the auto-instrumenter image"
 	$(OCI_BIN) buildx build --build-arg VER="$(GEN_IMG_VERSION)" --platform linux/amd64,linux/arm64 -t ${IMG} .
@@ -282,7 +282,7 @@ generator-image-build:
 
 
 .PHONY: prepare-integration-test
-prepare-integration-test:
+prepare-integration-test: vendor-obi
 	@echo "### Removing resources from previous integration tests, if any"
 	rm -rf $(TEST_OUTPUT)/* || true
 	$(MAKE) cleanup-integration-test
@@ -353,7 +353,7 @@ bin/ginkgo:
 	$(call go-install-tool,$(GINKGO),github.com/onsi/ginkgo/v2/ginkgo,latest)
 
 .PHONY: oats-prereq
-oats-prereq: bin/ginkgo docker-generate
+oats-prereq: bin/ginkgo vendor-obi
 	mkdir -p $(TEST_OUTPUT)/run
 
 .PHONY: oats-test-sql
@@ -397,7 +397,7 @@ check-licenses: update-licenses
 	fi
 
 .PHONY: artifact
-artifact: obi-submodule docker-generate compile
+artifact: vendor-obi compile
 	@echo "### Packing generated artifact"
 	cp LICENSE ./bin
 	cp NOTICE ./bin

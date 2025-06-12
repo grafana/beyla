@@ -35,9 +35,6 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/ringbuf"
 )
 
-// $BPF_CLANG and $BPF_CFLAGS are set by the Makefile.
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type flow_metrics_t -type flow_id_t  -type flow_record_t -target amd64,arm64 Net ../../../../bpf/netolly/flows.c -- -I../../../../bpf
-
 const (
 	// constants defined in flows.c as "volatile const"
 	constSampling      = "sampling"

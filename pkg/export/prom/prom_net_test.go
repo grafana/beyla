@@ -7,6 +7,7 @@ import (
 
 	"github.com/mariomac/guara/pkg/test"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/connector"
+	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -39,7 +40,7 @@ func TestMetricsExpiration(t *testing.T) {
 			Features:                    []string{otel.FeatureNetwork},
 		}, SelectorCfg: &attributes.SelectorConfig{
 			SelectionCfg: attributes.Selection{
-				attributes.BeylaNetworkFlow.Section: attributes.InclusionLists{
+				attrobi.BeylaNetworkFlow.Section: attributes.InclusionLists{
 					Include: []string{"src_name", "dst_name"},
 				},
 			},

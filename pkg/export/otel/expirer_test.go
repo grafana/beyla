@@ -8,6 +8,7 @@ import (
 	"github.com/mariomac/guara/pkg/test"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
@@ -47,7 +48,7 @@ func TestNetMetricsExpiration(t *testing.T) {
 				},
 			}, SelectorCfg: &attributes.SelectorConfig{
 				SelectionCfg: attributes.Selection{
-					attributes.BeylaNetworkFlow.Section: attributes.InclusionLists{
+					attrobi.BeylaNetworkFlow.Section: attributes.InclusionLists{
 						Include: []string{"src.name", "dst.name"},
 					},
 				},
@@ -161,7 +162,7 @@ func TestAppMetricsExpiration_ByMetricAttrs(t *testing.T) {
 			},
 		}, &attributes.SelectorConfig{
 			SelectionCfg: attributes.Selection{
-				attributes.HTTPServerDuration.Section: attributes.InclusionLists{
+				attrobi.HTTPServerDuration.Section: attributes.InclusionLists{
 					Include: []string{"url.path", "k8s.app.version"},
 				},
 			},
@@ -296,7 +297,7 @@ func TestAppMetricsExpiration_BySvcID(t *testing.T) {
 			},
 		}, &attributes.SelectorConfig{
 			SelectionCfg: attributes.Selection{
-				attributes.HTTPServerDuration.Section: attributes.InclusionLists{
+				attrobi.HTTPServerDuration.Section: attributes.InclusionLists{
 					Include: []string{"url.path"},
 				},
 			},

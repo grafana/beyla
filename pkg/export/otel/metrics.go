@@ -13,6 +13,7 @@ import (
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
@@ -364,47 +365,47 @@ func newMetricsReporter(
 	// initialize attribute getters
 	if is.HTTPEnabled() {
 		mr.attrHTTPDuration = attributes.OpenTelemetryGetters(
-			request.SpanOTELGetters, mr.attributes.For(attributes.HTTPServerDuration))
+			request.SpanOTELGetters, mr.attributes.For(attrobi.HTTPServerDuration))
 		mr.attrHTTPClientDuration = attributes.OpenTelemetryGetters(
-			request.SpanOTELGetters, mr.attributes.For(attributes.HTTPClientDuration))
+			request.SpanOTELGetters, mr.attributes.For(attrobi.HTTPClientDuration))
 		mr.attrHTTPRequestSize = attributes.OpenTelemetryGetters(
-			request.SpanOTELGetters, mr.attributes.For(attributes.HTTPServerRequestSize))
+			request.SpanOTELGetters, mr.attributes.For(attrobi.HTTPServerRequestSize))
 		mr.attrHTTPResponseSize = attributes.OpenTelemetryGetters(
-			request.SpanOTELGetters, mr.attributes.For(attributes.HTTPServerResponseSize))
+			request.SpanOTELGetters, mr.attributes.For(attrobi.HTTPServerResponseSize))
 		mr.attrHTTPClientRequestSize = attributes.OpenTelemetryGetters(
-			request.SpanOTELGetters, mr.attributes.For(attributes.HTTPClientRequestSize))
+			request.SpanOTELGetters, mr.attributes.For(attrobi.HTTPClientRequestSize))
 		mr.attrHTTPClientResponseSize = attributes.OpenTelemetryGetters(
-			request.SpanOTELGetters, mr.attributes.For(attributes.HTTPClientResponseSize))
+			request.SpanOTELGetters, mr.attributes.For(attrobi.HTTPClientResponseSize))
 	}
 
 	if is.GRPCEnabled() {
 		mr.attrGRPCServer = attributes.OpenTelemetryGetters(
-			request.SpanOTELGetters, mr.attributes.For(attributes.RPCServerDuration))
+			request.SpanOTELGetters, mr.attributes.For(attrobi.RPCServerDuration))
 		mr.attrGRPCClient = attributes.OpenTelemetryGetters(
-			request.SpanOTELGetters, mr.attributes.For(attributes.RPCClientDuration))
+			request.SpanOTELGetters, mr.attributes.For(attrobi.RPCClientDuration))
 	}
 
 	if is.DBEnabled() {
 		mr.attrDBClient = attributes.OpenTelemetryGetters(
-			request.SpanOTELGetters, mr.attributes.For(attributes.DBClientDuration))
+			request.SpanOTELGetters, mr.attributes.For(attrobi.DBClientDuration))
 	}
 
 	if is.MQEnabled() {
 		mr.attrMessagingPublish = attributes.OpenTelemetryGetters(
-			request.SpanOTELGetters, mr.attributes.For(attributes.MessagingPublishDuration))
+			request.SpanOTELGetters, mr.attributes.For(attrobi.MessagingPublishDuration))
 		mr.attrMessagingProcess = attributes.OpenTelemetryGetters(
-			request.SpanOTELGetters, mr.attributes.For(attributes.MessagingProcessDuration))
+			request.SpanOTELGetters, mr.attributes.For(attrobi.MessagingProcessDuration))
 	}
 
 	if is.GPUEnabled() {
 		mr.attrGPUKernelCalls = attributes.OpenTelemetryGetters(
-			request.SpanOTELGetters, mr.attributes.For(attributes.GPUKernelLaunchCalls))
+			request.SpanOTELGetters, mr.attributes.For(attrobi.GPUKernelLaunchCalls))
 		mr.attrGPUMemoryAllocations = attributes.OpenTelemetryGetters(
-			request.SpanOTELGetters, mr.attributes.For(attributes.GPUMemoryAllocations))
+			request.SpanOTELGetters, mr.attributes.For(attrobi.GPUMemoryAllocations))
 		mr.attrGPUKernelGridSize = attributes.OpenTelemetryGetters(
-			request.SpanOTELGetters, mr.attributes.For(attributes.GPUKernelGridSize))
+			request.SpanOTELGetters, mr.attributes.For(attrobi.GPUKernelGridSize))
 		mr.attrGPUKernelBlockSize = attributes.OpenTelemetryGetters(
-			request.SpanOTELGetters, mr.attributes.For(attributes.GPUKernelBlockSize))
+			request.SpanOTELGetters, mr.attributes.For(attrobi.GPUKernelBlockSize))
 	}
 
 	mr.reporters = NewReporterPool[*svc.Attrs, *Metrics](cfg.ReportersCacheLen, cfg.TTL, timeNow,
@@ -445,32 +446,32 @@ func (mr *MetricsReporter) otelMetricOptions(mlog *slog.Logger) []metric.Option 
 
 	if mr.is.HTTPEnabled() {
 		opts = append(opts,
-			metric.WithView(otelHistogramConfig(attributes.HTTPServerDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
-			metric.WithView(otelHistogramConfig(attributes.HTTPClientDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
-			metric.WithView(otelHistogramConfig(attributes.HTTPServerRequestSize.OTEL, mr.cfg.Buckets.RequestSizeHistogram, useExponentialHistograms)),
-			metric.WithView(otelHistogramConfig(attributes.HTTPServerResponseSize.OTEL, mr.cfg.Buckets.ResponseSizeHistogram, useExponentialHistograms)),
-			metric.WithView(otelHistogramConfig(attributes.HTTPClientRequestSize.OTEL, mr.cfg.Buckets.RequestSizeHistogram, useExponentialHistograms)),
-			metric.WithView(otelHistogramConfig(attributes.HTTPClientResponseSize.OTEL, mr.cfg.Buckets.ResponseSizeHistogram, useExponentialHistograms)),
+			metric.WithView(otelHistogramConfig(attrobi.HTTPServerDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
+			metric.WithView(otelHistogramConfig(attrobi.HTTPClientDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
+			metric.WithView(otelHistogramConfig(attrobi.HTTPServerRequestSize.OTEL, mr.cfg.Buckets.RequestSizeHistogram, useExponentialHistograms)),
+			metric.WithView(otelHistogramConfig(attrobi.HTTPServerResponseSize.OTEL, mr.cfg.Buckets.ResponseSizeHistogram, useExponentialHistograms)),
+			metric.WithView(otelHistogramConfig(attrobi.HTTPClientRequestSize.OTEL, mr.cfg.Buckets.RequestSizeHistogram, useExponentialHistograms)),
+			metric.WithView(otelHistogramConfig(attrobi.HTTPClientResponseSize.OTEL, mr.cfg.Buckets.ResponseSizeHistogram, useExponentialHistograms)),
 		)
 	}
 
 	if mr.is.GRPCEnabled() {
 		opts = append(opts,
-			metric.WithView(otelHistogramConfig(attributes.RPCServerDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
-			metric.WithView(otelHistogramConfig(attributes.RPCClientDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
+			metric.WithView(otelHistogramConfig(attrobi.RPCServerDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
+			metric.WithView(otelHistogramConfig(attrobi.RPCClientDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
 		)
 	}
 
 	if mr.is.DBEnabled() {
 		opts = append(opts,
-			metric.WithView(otelHistogramConfig(attributes.DBClientDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
+			metric.WithView(otelHistogramConfig(attrobi.DBClientDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
 		)
 	}
 
 	if mr.is.MQEnabled() {
 		opts = append(opts,
-			metric.WithView(otelHistogramConfig(attributes.MessagingPublishDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
-			metric.WithView(otelHistogramConfig(attributes.MessagingProcessDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
+			metric.WithView(otelHistogramConfig(attrobi.MessagingPublishDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
+			metric.WithView(otelHistogramConfig(attrobi.MessagingProcessDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
 		)
 	}
 
@@ -527,42 +528,42 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 	}
 
 	if mr.is.HTTPEnabled() {
-		httpDuration, err := meter.Float64Histogram(attributes.HTTPServerDuration.OTEL, instrument.WithUnit("s"))
+		httpDuration, err := meter.Float64Histogram(attrobi.HTTPServerDuration.OTEL, instrument.WithUnit("s"))
 		if err != nil {
 			return fmt.Errorf("creating http duration histogram metric: %w", err)
 		}
 		m.httpDuration = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
 			m.ctx, httpDuration, mr.attrHTTPDuration, timeNow, mr.cfg.TTL)
 
-		httpClientDuration, err := meter.Float64Histogram(attributes.HTTPClientDuration.OTEL, instrument.WithUnit("s"))
+		httpClientDuration, err := meter.Float64Histogram(attrobi.HTTPClientDuration.OTEL, instrument.WithUnit("s"))
 		if err != nil {
 			return fmt.Errorf("creating http duration histogram metric: %w", err)
 		}
 		m.httpClientDuration = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
 			m.ctx, httpClientDuration, mr.attrHTTPClientDuration, timeNow, mr.cfg.TTL)
 
-		httpRequestSize, err := meter.Float64Histogram(attributes.HTTPServerRequestSize.OTEL, instrument.WithUnit("By"))
+		httpRequestSize, err := meter.Float64Histogram(attrobi.HTTPServerRequestSize.OTEL, instrument.WithUnit("By"))
 		if err != nil {
 			return fmt.Errorf("creating http request size histogram metric: %w", err)
 		}
 		m.httpRequestSize = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
 			m.ctx, httpRequestSize, mr.attrHTTPRequestSize, timeNow, mr.cfg.TTL)
 
-		httpResponseSize, err := meter.Float64Histogram(attributes.HTTPServerResponseSize.OTEL, instrument.WithUnit("By"))
+		httpResponseSize, err := meter.Float64Histogram(attrobi.HTTPServerResponseSize.OTEL, instrument.WithUnit("By"))
 		if err != nil {
 			return fmt.Errorf("creating http response size histogram metric: %w", err)
 		}
 		m.httpResponseSize = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
 			m.ctx, httpResponseSize, mr.attrHTTPResponseSize, timeNow, mr.cfg.TTL)
 
-		httpClientRequestSize, err := meter.Float64Histogram(attributes.HTTPClientRequestSize.OTEL, instrument.WithUnit("By"))
+		httpClientRequestSize, err := meter.Float64Histogram(attrobi.HTTPClientRequestSize.OTEL, instrument.WithUnit("By"))
 		if err != nil {
 			return fmt.Errorf("creating http client request size histogram metric: %w", err)
 		}
 		m.httpClientRequestSize = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
 			m.ctx, httpClientRequestSize, mr.attrHTTPClientRequestSize, timeNow, mr.cfg.TTL)
 
-		httpClientResponseSize, err := meter.Float64Histogram(attributes.HTTPClientResponseSize.OTEL, instrument.WithUnit("By"))
+		httpClientResponseSize, err := meter.Float64Histogram(attrobi.HTTPClientResponseSize.OTEL, instrument.WithUnit("By"))
 		if err != nil {
 			return fmt.Errorf("creating http client response size histogram metric: %w", err)
 		}
@@ -571,14 +572,14 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 	}
 
 	if mr.is.GRPCEnabled() {
-		grpcDuration, err := meter.Float64Histogram(attributes.RPCServerDuration.OTEL, instrument.WithUnit("s"))
+		grpcDuration, err := meter.Float64Histogram(attrobi.RPCServerDuration.OTEL, instrument.WithUnit("s"))
 		if err != nil {
 			return fmt.Errorf("creating grpc duration histogram metric: %w", err)
 		}
 		m.grpcDuration = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
 			m.ctx, grpcDuration, mr.attrGRPCServer, timeNow, mr.cfg.TTL)
 
-		grpcClientDuration, err := meter.Float64Histogram(attributes.RPCClientDuration.OTEL, instrument.WithUnit("s"))
+		grpcClientDuration, err := meter.Float64Histogram(attrobi.RPCClientDuration.OTEL, instrument.WithUnit("s"))
 		if err != nil {
 			return fmt.Errorf("creating grpc duration histogram metric: %w", err)
 		}
@@ -587,7 +588,7 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 	}
 
 	if mr.is.DBEnabled() {
-		dbClientDuration, err := meter.Float64Histogram(attributes.DBClientDuration.OTEL, instrument.WithUnit("s"))
+		dbClientDuration, err := meter.Float64Histogram(attrobi.DBClientDuration.OTEL, instrument.WithUnit("s"))
 		if err != nil {
 			return fmt.Errorf("creating db client duration histogram metric: %w", err)
 		}
@@ -596,14 +597,14 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 	}
 
 	if mr.is.MQEnabled() {
-		msgPublishDuration, err := meter.Float64Histogram(attributes.MessagingPublishDuration.OTEL, instrument.WithUnit("s"))
+		msgPublishDuration, err := meter.Float64Histogram(attrobi.MessagingPublishDuration.OTEL, instrument.WithUnit("s"))
 		if err != nil {
 			return fmt.Errorf("creating messaging client publish duration histogram metric: %w", err)
 		}
 		m.msgPublishDuration = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
 			m.ctx, msgPublishDuration, mr.attrMessagingPublish, timeNow, mr.cfg.TTL)
 
-		msgProcessDuration, err := meter.Float64Histogram(attributes.MessagingProcessDuration.OTEL, instrument.WithUnit("s"))
+		msgProcessDuration, err := meter.Float64Histogram(attrobi.MessagingProcessDuration.OTEL, instrument.WithUnit("s"))
 		if err != nil {
 			return fmt.Errorf("creating messaging client process duration histogram metric: %w", err)
 		}
@@ -612,28 +613,28 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 	}
 
 	if mr.is.GPUEnabled() {
-		gpuKernelCallsTotal, err := meter.Int64Counter(attributes.GPUKernelLaunchCalls.OTEL)
+		gpuKernelCallsTotal, err := meter.Int64Counter(attrobi.GPUKernelLaunchCalls.OTEL)
 		if err != nil {
 			return fmt.Errorf("creating gpu kernel calls total: %w", err)
 		}
 		m.gpuKernelCallsTotal = NewExpirer[*request.Span, instrument.Int64Counter, int64](
 			m.ctx, gpuKernelCallsTotal, mr.attrGPUKernelCalls, timeNow, mr.cfg.TTL)
 
-		gpuMemoryAllocationsTotal, err := meter.Int64Counter(attributes.GPUMemoryAllocations.OTEL, instrument.WithUnit("By"))
+		gpuMemoryAllocationsTotal, err := meter.Int64Counter(attrobi.GPUMemoryAllocations.OTEL, instrument.WithUnit("By"))
 		if err != nil {
 			return fmt.Errorf("creating gpu memory allocations total: %w", err)
 		}
 		m.gpuMemoryAllocsTotal = NewExpirer[*request.Span, instrument.Int64Counter, int64](
 			m.ctx, gpuMemoryAllocationsTotal, mr.attrGPUMemoryAllocations, timeNow, mr.cfg.TTL)
 
-		gpuKernelGridSize, err := meter.Float64Histogram(attributes.GPUKernelGridSize.OTEL, instrument.WithUnit("1"))
+		gpuKernelGridSize, err := meter.Float64Histogram(attrobi.GPUKernelGridSize.OTEL, instrument.WithUnit("1"))
 		if err != nil {
 			return fmt.Errorf("creating gpu kernel grid size histogram: %w", err)
 		}
 		m.gpuKernelGridSize = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
 			m.ctx, gpuKernelGridSize, mr.attrGPUKernelGridSize, timeNow, mr.cfg.TTL)
 
-		gpuKernelBlockSize, err := meter.Float64Histogram(attributes.GPUKernelBlockSize.OTEL, instrument.WithUnit("1"))
+		gpuKernelBlockSize, err := meter.Float64Histogram(attrobi.GPUKernelBlockSize.OTEL, instrument.WithUnit("1"))
 		if err != nil {
 			return fmt.Errorf("creating gpu kernel block size histogram: %w", err)
 		}

@@ -6,13 +6,14 @@ import (
 	"slices"
 	"strings"
 
+	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 )
 
 // Selection specifies which attributes are allowed for each metric.
 // The key is the metric name (either in Prometheus or OpenTelemetry format)
 // The value is the enumeration of included/excluded attribute globs
-type Selection map[Section]InclusionLists
+type Selection map[attrobi.Section]InclusionLists
 
 type InclusionLists struct {
 	// Include is a list of metric attributes that have to be reported. It can be an attribute
@@ -62,12 +63,12 @@ func (incl Selection) Normalize() {
 	if incl == nil {
 		return
 	}
-	normalized := map[Section]InclusionLists{}
+	normalized := map[attrobi.Section]InclusionLists{}
 	for metricName, allowedAttrs := range incl {
 		normalized[normalizeMetric(metricName)] = allowedAttrs
 	}
 	// clear the current map before copying again normalized values
-	maps.DeleteFunc(incl, func(_ Section, _ InclusionLists) bool { return true })
+	maps.DeleteFunc(incl, func(_ attrobi.Section, _ InclusionLists) bool { return true })
 	maps.Copy(incl, normalized)
 }
 
@@ -75,11 +76,11 @@ func (incl Selection) Normalize() {
 // This would include "glob-like" entries.
 // They are returned from more to less broad scope (for example, for a metric named foo_bar
 // it could return the inclusion lists defined with keys "*", "foo_*" and "foo_bar", in that order).
-func (incl Selection) Matching(metricName Name) []InclusionLists {
+func (incl Selection) Matching(metricName attrobi.Name) []InclusionLists {
 	if incl == nil {
 		return nil
 	}
-	var matchingMetricGlobs []Section
+	var matchingMetricGlobs []attrobi.Section
 	for glob := range incl {
 		if ok, _ := path.Match(string(glob), string(metricName.Section)); ok {
 			matchingMetricGlobs = append(matchingMetricGlobs, glob)

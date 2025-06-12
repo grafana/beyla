@@ -3,7 +3,9 @@ package attributes
 import (
 	"testing"
 
+	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -41,7 +43,7 @@ func TestFor(t *testing.T) {
 		"src.address",
 		"src.name",
 		"src.port",
-	}, p.For(BeylaNetworkFlow))
+	}, p.For(attrobi.BeylaNetworkFlow))
 }
 
 func TestFor_GlobEntries(t *testing.T) {
@@ -74,7 +76,7 @@ func TestFor_GlobEntries(t *testing.T) {
 		"src.address",
 		"src.name",
 		"src.port",
-	}, p.For(BeylaNetworkFlow))
+	}, p.For(attrobi.BeylaNetworkFlow))
 }
 
 // if no include lists are defined, it takes the default arguments
@@ -96,7 +98,7 @@ func TestFor_GlobEntries_NoInclusion(t *testing.T) {
 		"k8s.src.owner.name",
 		"k8s.src.owner.type",
 		"src.cidr",
-	}, p.For(BeylaNetworkFlow))
+	}, p.For(attrobi.BeylaNetworkFlow))
 }
 
 func TestFor_GlobEntries_Order(t *testing.T) {
@@ -123,7 +125,7 @@ func TestFor_GlobEntries_Order(t *testing.T) {
 		"src.address",
 		"src.name",
 		"src.port",
-	}, p.For(BeylaNetworkFlow))
+	}, p.For(attrobi.BeylaNetworkFlow))
 }
 
 func TestFor_GlobEntries_Order_Default(t *testing.T) {
@@ -145,7 +147,7 @@ func TestFor_GlobEntries_Order_Default(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []attr.Name{
 		"url.path",
-	}, p.For(HTTPServerDuration))
+	}, p.For(attrobi.HTTPServerDuration))
 }
 
 func TestFor_KubeDisabled(t *testing.T) {
@@ -162,14 +164,14 @@ func TestFor_KubeDisabled(t *testing.T) {
 		"beyla.ip",
 		"src.address",
 		"src.name",
-	}, p.For(BeylaNetworkFlow))
+	}, p.For(attrobi.BeylaNetworkFlow))
 }
 
 func TestNilDoesNotCrash(t *testing.T) {
 	assert.NotPanics(t, func() {
 		p, err := NewAttrSelector(GroupKubernetes, &SelectorConfig{})
 		require.NoError(t, err)
-		assert.NotEmpty(t, p.For(BeylaNetworkFlow))
+		assert.NotEmpty(t, p.For(attrobi.BeylaNetworkFlow))
 	})
 }
 
@@ -185,7 +187,7 @@ func TestDefault(t *testing.T) {
 		"k8s.src.namespace",
 		"k8s.src.owner.name",
 		"k8s.src.owner.type",
-	}, p.For(BeylaNetworkFlow))
+	}, p.For(attrobi.BeylaNetworkFlow))
 }
 
 func TestExtraGroupAttributes(t *testing.T) {
@@ -220,7 +222,7 @@ func TestExtraGroupAttributes(t *testing.T) {
 		"service.name",
 		"service.namespace",
 		"k8s.app.version",
-	}, p.For(HTTPServerRequestSize))
+	}, p.For(attrobi.HTTPServerRequestSize))
 }
 
 func TestTraces(t *testing.T) {
@@ -234,5 +236,5 @@ func TestTraces(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []attr.Name{
 		"db.query.text",
-	}, p.For(Traces))
+	}, p.For(attrobi.Traces))
 }

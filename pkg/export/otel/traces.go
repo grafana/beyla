@@ -14,6 +14,7 @@ import (
 
 	expirable2 "github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
@@ -194,7 +195,7 @@ func GetUserSelectedAttributes(selectorCfg *attributes.SelectorConfig) (map[attr
 	if err != nil {
 		return nil, err
 	}
-	traceAttrsArr := attribProvider.For(attributes.Traces)
+	traceAttrsArr := attribProvider.For(attrobi.Traces)
 	traceAttrs := make(map[attr.Name]struct{})
 	for _, a := range traceAttrsArr {
 		traceAttrs[a] = struct{}{}

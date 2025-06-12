@@ -6,6 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/connector"
+	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/expire"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
@@ -98,10 +99,10 @@ func newNetReporter(
 		log.Debug("registering network flow bytes metric")
 		mr.flowAttrs = attributes.PrometheusGetters(
 			ebpf.RecordStringGetters,
-			provider.For(attributes.BeylaNetworkFlow))
+			provider.For(attrobi.BeylaNetworkFlow))
 
 		mr.flowBytes = NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: attributes.BeylaNetworkFlow.Prom,
+			Name: attrobi.BeylaNetworkFlow.Prom,
 			Help: "bytes submitted from a source network endpoint to a destination network endpoint",
 		}, labelNames(mr.flowAttrs)).MetricVec, clock.Time, cfg.Config.TTL)
 		register = append(register, mr.flowBytes)
@@ -111,10 +112,10 @@ func newNetReporter(
 		log.Debug("registering network inter-zone metric")
 		mr.interZoneAttrs = attributes.PrometheusGetters(
 			ebpf.RecordStringGetters,
-			provider.For(attributes.BeylaNetworkInterZone))
+			provider.For(attrobi.BeylaNetworkInterZone))
 
 		mr.interZone = NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: attributes.BeylaNetworkInterZone.Prom,
+			Name: attrobi.BeylaNetworkInterZone.Prom,
 			Help: "bytes submitted between different cloud availability zones",
 		}, labelNames(mr.interZoneAttrs)).MetricVec, clock.Time, cfg.Config.TTL)
 		register = append(register, mr.interZone)

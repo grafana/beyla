@@ -17,6 +17,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/connector"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
@@ -64,7 +65,7 @@ func TestAppMetricsExpiration(t *testing.T) {
 		},
 		&attributes.SelectorConfig{
 			SelectionCfg: attributes.Selection{
-				attributes.HTTPServerDuration.Section: attributes.InclusionLists{
+				attrobi.HTTPServerDuration.Section: attributes.InclusionLists{
 					Include: []string{"url_path", "k8s.app.version"},
 				},
 			},
@@ -540,7 +541,7 @@ func makePromExporter(
 		},
 		&attributes.SelectorConfig{
 			SelectionCfg: attributes.Selection{
-				attributes.HTTPServerDuration.Section: attributes.InclusionLists{
+				attrobi.HTTPServerDuration.Section: attributes.InclusionLists{
 					Include: []string{"url_path"},
 				},
 			},

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/otel/attribute"
 
@@ -242,7 +243,7 @@ func TestGetFilteredResourceAttrs(t *testing.T) {
 		unexpectedAttrs []string
 	}
 
-	testMetric := attributes.Name{
+	testMetric := attrobi.Name{
 		Section: "test.metric",
 		Prom:    "test_metric",
 		OTEL:    "test.metric",

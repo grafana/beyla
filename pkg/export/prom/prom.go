@@ -12,6 +12,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/connector"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/expire"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
@@ -21,7 +22,6 @@ import (
 
 	"github.com/grafana/beyla/v2/pkg/buildinfo"
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
-	attrextra "github.com/grafana/beyla/v2/pkg/export/attributes/beyla"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
@@ -324,42 +324,42 @@ func newReporter(
 
 	if is.HTTPEnabled() {
 		attrHTTPDuration = attributes.PrometheusGetters(request.SpanPromGetters,
-			attrsProvider.For(attributes.HTTPServerDuration))
+			attrsProvider.For(attrobi.HTTPServerDuration))
 		attrHTTPClientDuration = attributes.PrometheusGetters(request.SpanPromGetters,
-			attrsProvider.For(attributes.HTTPClientDuration))
+			attrsProvider.For(attrobi.HTTPClientDuration))
 		attrHTTPRequestSize = attributes.PrometheusGetters(request.SpanPromGetters,
-			attrsProvider.For(attributes.HTTPServerRequestSize))
+			attrsProvider.For(attrobi.HTTPServerRequestSize))
 		attrHTTPResponseSize = attributes.PrometheusGetters(request.SpanPromGetters,
-			attrsProvider.For(attributes.HTTPServerResponseSize))
+			attrsProvider.For(attrobi.HTTPServerResponseSize))
 		attrHTTPClientRequestSize = attributes.PrometheusGetters(request.SpanPromGetters,
-			attrsProvider.For(attributes.HTTPClientRequestSize))
+			attrsProvider.For(attrobi.HTTPClientRequestSize))
 		attrHTTPClientResponseSize = attributes.PrometheusGetters(request.SpanPromGetters,
-			attrsProvider.For(attributes.HTTPClientResponseSize))
+			attrsProvider.For(attrobi.HTTPClientResponseSize))
 	}
 
 	var attrGRPCDuration, attrGRPCClientDuration []attributes.Field[*request.Span, string]
 
 	if is.GRPCEnabled() {
 		attrGRPCDuration = attributes.PrometheusGetters(request.SpanPromGetters,
-			attrsProvider.For(attributes.RPCServerDuration))
+			attrsProvider.For(attrobi.RPCServerDuration))
 		attrGRPCClientDuration = attributes.PrometheusGetters(request.SpanPromGetters,
-			attrsProvider.For(attributes.RPCClientDuration))
+			attrsProvider.For(attrobi.RPCClientDuration))
 	}
 
 	var attrDBClientDuration []attributes.Field[*request.Span, string]
 
 	if is.DBEnabled() {
 		attrDBClientDuration = attributes.PrometheusGetters(request.SpanPromGetters,
-			attrsProvider.For(attributes.DBClientDuration))
+			attrsProvider.For(attrobi.DBClientDuration))
 	}
 
 	var attrMessagingProcessDuration, attrMessagingPublishDuration []attributes.Field[*request.Span, string]
 
 	if is.MQEnabled() {
 		attrMessagingPublishDuration = attributes.PrometheusGetters(request.SpanPromGetters,
-			attrsProvider.For(attributes.MessagingPublishDuration))
+			attrsProvider.For(attrobi.MessagingPublishDuration))
 		attrMessagingProcessDuration = attributes.PrometheusGetters(request.SpanPromGetters,
-			attrsProvider.For(attributes.MessagingProcessDuration))
+			attrsProvider.For(attrobi.MessagingProcessDuration))
 	}
 
 	var attrGPUKernelLaunchCalls []attributes.Field[*request.Span, string]
@@ -369,13 +369,13 @@ func newReporter(
 
 	if is.GPUEnabled() {
 		attrGPUKernelLaunchCalls = attributes.PrometheusGetters(request.SpanPromGetters,
-			attrsProvider.For(attributes.GPUKernelLaunchCalls))
+			attrsProvider.For(attrobi.GPUKernelLaunchCalls))
 		attrGPUMemoryAllocations = attributes.PrometheusGetters(request.SpanPromGetters,
-			attrsProvider.For(attributes.GPUMemoryAllocations))
+			attrsProvider.For(attrobi.GPUMemoryAllocations))
 		attrGPUKernelGridSize = attributes.PrometheusGetters(request.SpanPromGetters,
-			attrsProvider.For(attributes.GPUKernelGridSize))
+			attrsProvider.For(attrobi.GPUKernelGridSize))
 		attrGPUKernelBlockSize = attributes.PrometheusGetters(request.SpanPromGetters,
-			attrsProvider.For(attributes.GPUKernelBlockSize))
+			attrsProvider.For(attrobi.GPUKernelBlockSize))
 	}
 
 	clock := expire.NewCachedClock(timeNow)
@@ -424,7 +424,7 @@ func newReporter(
 		}, beylaInfoLabelNames).MetricVec, clock.Time, cfg.TTL),
 		httpDuration: optionalHistogramProvider(is.HTTPEnabled(), func() *Expirer[prometheus.Histogram] {
 			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
-				Name:                            attributes.HTTPServerDuration.Prom,
+				Name:                            attrobi.HTTPServerDuration.Prom,
 				Help:                            "duration of HTTP service calls from the server side, in seconds",
 				Buckets:                         cfg.Buckets.DurationHistogram,
 				NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
@@ -434,7 +434,7 @@ func newReporter(
 		}),
 		httpClientDuration: optionalHistogramProvider(is.HTTPEnabled(), func() *Expirer[prometheus.Histogram] {
 			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
-				Name:                            attributes.HTTPClientDuration.Prom,
+				Name:                            attrobi.HTTPClientDuration.Prom,
 				Help:                            "duration of HTTP service calls from the client side, in seconds",
 				Buckets:                         cfg.Buckets.DurationHistogram,
 				NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
@@ -444,7 +444,7 @@ func newReporter(
 		}),
 		grpcDuration: optionalHistogramProvider(is.GRPCEnabled(), func() *Expirer[prometheus.Histogram] {
 			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
-				Name:                            attributes.RPCServerDuration.Prom,
+				Name:                            attrobi.RPCServerDuration.Prom,
 				Help:                            "duration of RCP service calls from the server side, in seconds",
 				Buckets:                         cfg.Buckets.DurationHistogram,
 				NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
@@ -454,7 +454,7 @@ func newReporter(
 		}),
 		grpcClientDuration: optionalHistogramProvider(is.GRPCEnabled(), func() *Expirer[prometheus.Histogram] {
 			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
-				Name:                            attributes.RPCClientDuration.Prom,
+				Name:                            attrobi.RPCClientDuration.Prom,
 				Help:                            "duration of GRPC service calls from the client side, in seconds",
 				Buckets:                         cfg.Buckets.DurationHistogram,
 				NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
@@ -464,7 +464,7 @@ func newReporter(
 		}),
 		dbClientDuration: optionalHistogramProvider(is.DBEnabled(), func() *Expirer[prometheus.Histogram] {
 			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
-				Name:                            attributes.DBClientDuration.Prom,
+				Name:                            attrobi.DBClientDuration.Prom,
 				Help:                            "duration of db client operations, in seconds",
 				Buckets:                         cfg.Buckets.DurationHistogram,
 				NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
@@ -474,7 +474,7 @@ func newReporter(
 		}),
 		msgPublishDuration: optionalHistogramProvider(is.MQEnabled(), func() *Expirer[prometheus.Histogram] {
 			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
-				Name:                            attributes.MessagingPublishDuration.Prom,
+				Name:                            attrobi.MessagingPublishDuration.Prom,
 				Help:                            "duration of messaging client publish operations, in seconds",
 				Buckets:                         cfg.Buckets.DurationHistogram,
 				NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
@@ -484,7 +484,7 @@ func newReporter(
 		}),
 		msgProcessDuration: optionalHistogramProvider(is.MQEnabled(), func() *Expirer[prometheus.Histogram] {
 			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
-				Name:                            attributes.MessagingProcessDuration.Prom,
+				Name:                            attrobi.MessagingProcessDuration.Prom,
 				Help:                            "duration of messaging client process operations, in seconds",
 				Buckets:                         cfg.Buckets.DurationHistogram,
 				NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
@@ -494,7 +494,7 @@ func newReporter(
 		}),
 		httpRequestSize: optionalHistogramProvider(is.HTTPEnabled(), func() *Expirer[prometheus.Histogram] {
 			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
-				Name:                            attributes.HTTPServerRequestSize.Prom,
+				Name:                            attrobi.HTTPServerRequestSize.Prom,
 				Help:                            "size, in bytes, of the HTTP request body as received at the server side",
 				Buckets:                         cfg.Buckets.RequestSizeHistogram,
 				NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
@@ -504,7 +504,7 @@ func newReporter(
 		}),
 		httpResponseSize: optionalHistogramProvider(is.HTTPEnabled(), func() *Expirer[prometheus.Histogram] {
 			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
-				Name:                            attributes.HTTPServerResponseSize.Prom,
+				Name:                            attrobi.HTTPServerResponseSize.Prom,
 				Help:                            "size, in bytes, of the HTTP response body as received at the server side",
 				Buckets:                         cfg.Buckets.ResponseSizeHistogram,
 				NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
@@ -514,7 +514,7 @@ func newReporter(
 		}),
 		httpClientRequestSize: optionalHistogramProvider(is.HTTPEnabled(), func() *Expirer[prometheus.Histogram] {
 			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
-				Name:                            attributes.HTTPClientRequestSize.Prom,
+				Name:                            attrobi.HTTPClientRequestSize.Prom,
 				Help:                            "size, in bytes, of the HTTP request body as sent from the client side",
 				Buckets:                         cfg.Buckets.RequestSizeHistogram,
 				NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
@@ -524,7 +524,7 @@ func newReporter(
 		}),
 		httpClientResponseSize: optionalHistogramProvider(is.HTTPEnabled(), func() *Expirer[prometheus.Histogram] {
 			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
-				Name:                            attributes.HTTPClientResponseSize.Prom,
+				Name:                            attrobi.HTTPClientResponseSize.Prom,
 				Help:                            "size, in bytes, of the HTTP response body as sent from the client side",
 				Buckets:                         cfg.Buckets.ResponseSizeHistogram,
 				NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
@@ -610,19 +610,19 @@ func newReporter(
 		}, labelNamesTargetInfo(kubeEnabled, extraMetadataLabels)),
 		gpuKernelCallsTotal: optionalCounterProvider(is.GPUEnabled(), func() *Expirer[prometheus.Counter] {
 			return NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
-				Name: attributes.GPUKernelLaunchCalls.Prom,
+				Name: attrobi.GPUKernelLaunchCalls.Prom,
 				Help: "number of GPU kernel launches",
 			}, labelNames(attrGPUKernelLaunchCalls)).MetricVec, clock.Time, cfg.TTL)
 		}),
 		gpuMemoryAllocsTotal: optionalCounterProvider(is.GPUEnabled(), func() *Expirer[prometheus.Counter] {
 			return NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
-				Name: attributes.GPUMemoryAllocations.Prom,
+				Name: attrobi.GPUMemoryAllocations.Prom,
 				Help: "amount of GPU allocated memory in bytes",
 			}, labelNames(attrGPUMemoryAllocations)).MetricVec, clock.Time, cfg.TTL)
 		}),
 		gpuKernelGridSize: optionalHistogramProvider(is.GPUEnabled(), func() *Expirer[prometheus.Histogram] {
 			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
-				Name:                            attributes.GPUKernelGridSize.Prom,
+				Name:                            attrobi.GPUKernelGridSize.Prom,
 				Help:                            "number of blocks in the GPU kernel grid",
 				Buckets:                         cfg.Buckets.RequestSizeHistogram,
 				NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
@@ -632,7 +632,7 @@ func newReporter(
 		}),
 		gpuKernelBlockSize: optionalHistogramProvider(is.GPUEnabled(), func() *Expirer[prometheus.Histogram] {
 			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
-				Name:                            attributes.GPUKernelBlockSize.Prom,
+				Name:                            attrobi.GPUKernelBlockSize.Prom,
 				Help:                            "number of threads in the GPU kernel block",
 				Buckets:                         cfg.Buckets.RequestSizeHistogram,
 				NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
@@ -945,7 +945,7 @@ func appendK8sLabelValuesService(values []string, service *svc.Attrs) []string {
 		service.Metadata[attr.K8sStatefulSetName],
 		service.Metadata[attr.K8sDaemonSetName],
 		service.Metadata[attr.K8sClusterName],
-		service.Metadata[attrextra.K8sKind],
+		service.Metadata[attr.K8sKind],
 		service.Metadata[attr.K8sOwnerName],
 	)
 	return values

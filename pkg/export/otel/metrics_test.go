@@ -14,6 +14,7 @@ import (
 	"github.com/mariomac/guara/pkg/test"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
@@ -712,7 +713,7 @@ func makeExporter(
 			Instrumentations:  instrumentations,
 		}, &attributes.SelectorConfig{
 			SelectionCfg: attributes.Selection{
-				attributes.HTTPServerDuration.Section: attributes.InclusionLists{
+				attrobi.HTTPServerDuration.Section: attributes.InclusionLists{
 					Include: []string{"url.path"},
 				},
 			},

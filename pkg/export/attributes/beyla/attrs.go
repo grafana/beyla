@@ -8,15 +8,9 @@ import (
 	semconv2 "go.opentelemetry.io/otel/semconv/v1.25.0"
 )
 
-// OpenTelemetry 1.23 semantic convention
-const (
-	K8sKind = attr.Name("k8s.kind")
-)
-
 // Process Metrics following OTEL 1.26 experimental conventions
 // https://opentelemetry.io/docs/specs/semconv/resource/process/
 // https://opentelemetry.io/docs/specs/semconv/system/process-metrics/
-
 const (
 	ProcCommand     = attr.Name(semconv.ProcessCommandKey)
 	ProcCommandLine = attr.Name(semconv.ProcessCommandLineKey)

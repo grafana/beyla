@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/connector"
+	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	attr2 "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/expire"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
@@ -296,7 +297,7 @@ func (r *procMetricsReporter) observeDisaggregatedNet(proc *process.Status) {
 // provided explicit attribute name and value (e.g. "cpu.mode"
 // or "disk.io.direction")
 func attributesWithExplicit(
-	provider *attributes.AttrSelector, metricName attributes.Name, explicitAttribute attr2.Name,
+	provider *attributes.AttrSelector, metricName attrobi.Name, explicitAttribute attr2.Name,
 ) (
 	names []string, getters []attributes.Field[*process.Status, string], containsExplicit bool,
 ) {

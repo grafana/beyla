@@ -6,6 +6,8 @@ import (
 	"maps"
 	"slices"
 
+	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
+
 	maps2 "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers/maps"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 )
@@ -87,7 +89,7 @@ type SelectorConfig struct {
 // AttrSelector returns, for each metric, the attributes that have to be reported
 // according to the user-provided selection and/or other conditions (e.g. kubernetes is enabled)
 type AttrSelector struct {
-	definition map[Section]AttrReportGroup
+	definition map[attrobi.Section]AttrReportGroup
 	selector   Selection
 }
 
@@ -107,7 +109,7 @@ func NewAttrSelector(
 }
 
 // For returns the list of enabled attribute names for a given metric
-func (p *AttrSelector) For(metricName Name) []attr.Name {
+func (p *AttrSelector) For(metricName attrobi.Name) []attr.Name {
 	attributeNames, ok := p.definition[metricName.Section]
 	if !ok {
 		panic(fmt.Sprintf("BUG! metric not found %+v", metricName))

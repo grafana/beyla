@@ -9,6 +9,7 @@ import (
 
 	"github.com/mariomac/guara/pkg/test"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/connector"
+	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 	"github.com/stretchr/testify/assert"
@@ -50,7 +51,7 @@ func TestFilter(t *testing.T) {
 				Network: map[string]filter.MatchDefinition{"transport": {Match: "TCP"}},
 			},
 			Attributes: beyla.Attributes{Select: attributes.Selection{
-				attributes.BeylaNetworkFlow.Section: attributes.InclusionLists{
+				attrobi.BeylaNetworkFlow.Section: attributes.InclusionLists{
 					Include: []string{"beyla_ip", "iface.direction", "dst_port", "iface", "src_port", "transport"},
 				},
 			}},

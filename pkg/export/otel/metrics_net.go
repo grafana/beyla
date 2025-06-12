@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/expire"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
@@ -131,7 +132,7 @@ func newMetricsExporter(
 	}
 	if cfg.GloballyEnabled || cfg.Metrics.NetworkFlowBytesEnabled() {
 		log := log.With("metricFamily", "FlowBytes")
-		bytesMetric, err := ebpfEvents.Int64Counter(attributes.BeylaNetworkFlow.OTEL,
+		bytesMetric, err := ebpfEvents.Int64Counter(attrobi.BeylaNetworkFlow.OTEL,
 			metric2.WithDescription("total bytes_sent value of network flows observed by probe since its launch"),
 			metric2.WithUnit("{bytes}"), // TODO: By?
 		)
@@ -143,14 +144,14 @@ func newMetricsExporter(
 		log.Debug("restricting attributes not in this list", "attributes", cfg.SelectorCfg.SelectionCfg)
 		attrs := attributes.OpenTelemetryGetters(
 			ebpf.RecordGetters,
-			attrProv.For(attributes.BeylaNetworkFlow))
+			attrProv.For(attrobi.BeylaNetworkFlow))
 
 		nme.flowBytes = NewExpirer[*ebpf.Record, metric2.Int64Counter, float64](ctx, bytesMetric, attrs, clock.Time, cfg.Metrics.TTL)
 	}
 
 	if cfg.Metrics.NetworkInterzoneMetricsEnabled() {
 		log := log.With("metricFamily", "InterZoneBytes")
-		bytesMetric, err := ebpfEvents.Int64Counter(attributes.BeylaNetworkInterZone.OTEL,
+		bytesMetric, err := ebpfEvents.Int64Counter(attrobi.BeylaNetworkInterZone.OTEL,
 			metric2.WithDescription("total bytes_sent value between Cloud availability zones"),
 			metric2.WithUnit("{bytes}"), // TODO: By?
 		)
@@ -161,7 +162,7 @@ func newMetricsExporter(
 		log.Debug("restricting attributes not in this list", "attributes", cfg.SelectorCfg.SelectionCfg)
 		attrs := attributes.OpenTelemetryGetters(
 			ebpf.RecordGetters,
-			attrProv.For(attributes.BeylaNetworkInterZone))
+			attrProv.For(attrobi.BeylaNetworkInterZone))
 
 		nme.interZoneBytes = NewExpirer[*ebpf.Record, metric2.Int64Counter, float64](ctx, bytesMetric, attrs, clock.Time, cfg.Metrics.TTL)
 	}

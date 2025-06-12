@@ -3,6 +3,7 @@ package attributes
 import (
 	"maps"
 
+	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 
 	attrextra "github.com/grafana/beyla/v2/pkg/export/attributes/beyla"
@@ -48,7 +49,7 @@ func (e *AttrGroups) Add(groups AttrGroups) {
 func getDefinitions(
 	groups AttrGroups,
 	extraGroupAttributes GroupAttributes,
-) map[Section]AttrReportGroup {
+) map[attrobi.Section]AttrReportGroup {
 	kubeEnabled := groups.Has(GroupKubernetes)
 	promEnabled := groups.Has(GroupPrometheus)
 	ifaceDirEnabled := groups.Has(GroupNetIfaceDirection)
@@ -168,7 +169,7 @@ func getDefinitions(
 			attr.K8sPodStartTime:    true,
 			attr.K8sClusterName:     true,
 			attr.K8sOwnerName:       true,
-			attrextra.K8sKind:       true,
+			attr.K8sKind:            true,
 		},
 		extraGroupAttributes[GroupAppKube],
 	)
@@ -274,32 +275,32 @@ func getDefinitions(
 		extraGroupAttributes[GroupMessaging],
 	)
 
-	return map[Section]AttrReportGroup{
-		BeylaNetworkFlow.Section: {
+	return map[attrobi.Section]AttrReportGroup{
+		attrobi.BeylaNetworkFlow.Section: {
 			SubGroups: []*AttrReportGroup{&networkAttributes, &networkCIDR, &networkKubeAttributes},
 		},
-		BeylaNetworkInterZone.Section: {
+		attrobi.BeylaNetworkInterZone.Section: {
 			SubGroups: []*AttrReportGroup{&networkInterZone, &networkInterZoneCIDR, &networkInterZoneKube},
 		},
-		HTTPServerDuration.Section: {
+		attrobi.HTTPServerDuration.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &httpCommon, &serverInfo},
 		},
-		HTTPServerRequestSize.Section: {
+		attrobi.HTTPServerRequestSize.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &httpCommon, &serverInfo},
 		},
-		HTTPServerResponseSize.Section: {
+		attrobi.HTTPServerResponseSize.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &httpCommon, &serverInfo},
 		},
-		HTTPClientDuration.Section: {
+		attrobi.HTTPClientDuration.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &httpCommon, &httpClientInfo},
 		},
-		HTTPClientRequestSize.Section: {
+		attrobi.HTTPClientRequestSize.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &httpCommon, &httpClientInfo},
 		},
-		HTTPClientResponseSize.Section: {
+		attrobi.HTTPClientResponseSize.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &httpCommon, &httpClientInfo},
 		},
-		RPCClientDuration.Section: {
+		attrobi.RPCClientDuration.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &grpcClientInfo},
 			Attributes: map[attr.Name]Default{
 				attr.RPCMethod:         true,
@@ -307,7 +308,7 @@ func getDefinitions(
 				attr.RPCGRPCStatusCode: true,
 			},
 		},
-		RPCServerDuration.Section: {
+		attrobi.RPCServerDuration.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &serverInfo},
 			Attributes: map[attr.Name]Default{
 				attr.RPCMethod:         true,
@@ -315,7 +316,7 @@ func getDefinitions(
 				attr.RPCGRPCStatusCode: true,
 			},
 		},
-		DBClientDuration.Section: {
+		attrobi.DBClientDuration.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes},
 			Attributes: map[attr.Name]Default{
 				attr.DBOperation:  true,
@@ -323,13 +324,13 @@ func getDefinitions(
 				attr.ErrorType:    true,
 			},
 		},
-		MessagingPublishDuration.Section: {
+		attrobi.MessagingPublishDuration.Section: {
 			SubGroups: []*AttrReportGroup{&messagingAttributes},
 		},
-		MessagingProcessDuration.Section: {
+		attrobi.MessagingProcessDuration.Section: {
 			SubGroups: []*AttrReportGroup{&messagingAttributes},
 		},
-		Traces.Section: {
+		attrobi.Traces.Section: {
 			Attributes: map[attr.Name]Default{
 				attr.DBQueryText: false,
 			},
@@ -340,25 +341,25 @@ func getDefinitions(
 		ProcessMemoryVirtual.Section:  {SubGroups: []*AttrReportGroup{&processAttributes}},
 		ProcessDiskIO.Section:         {SubGroups: []*AttrReportGroup{&processAttributes}},
 		ProcessNetIO.Section:          {SubGroups: []*AttrReportGroup{&processAttributes}},
-		GPUKernelLaunchCalls.Section: {
+		attrobi.GPUKernelLaunchCalls.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes},
 			Attributes: map[attr.Name]Default{
 				attr.CudaKernelName: true,
 			},
 		},
-		GPUKernelGridSize.Section: {
+		attrobi.GPUKernelGridSize.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes},
 			Attributes: map[attr.Name]Default{
 				attr.CudaKernelName: true,
 			},
 		},
-		GPUKernelBlockSize.Section: {
+		attrobi.GPUKernelBlockSize.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes},
 			Attributes: map[attr.Name]Default{
 				attr.CudaKernelName: true,
 			},
 		},
-		GPUMemoryAllocations.Section: {
+		attrobi.GPUMemoryAllocations.Section: {
 			SubGroups:  []*AttrReportGroup{&appAttributes, &appKubeAttributes},
 			Attributes: map[attr.Name]Default{},
 		},

@@ -131,7 +131,8 @@ endef
 
 .phony: obi-submodule
 obi-submodule:
-	@git submodule update
+	@echo "# Updating OBI Git submodule..."
+	git submodule update --init --recursive
 
 .PHONY: install-hooks
 install-hooks:
@@ -204,6 +205,12 @@ generate: obi-submodule
 .PHONY: docker-generate
 docker-generate: obi-submodule
 	@cd $(OBI_MODULE) && make docker-generate
+
+.PHONY: vendor-bpf
+vendor-bpf: obi-submodule docker-generate
+	@echo "### Vendoring OBI submodule..."
+	go get github.com/open-telemetry/opentelemetry-ebpf-instrumentation
+	go mod vendor
 
 .PHONY: verify
 verify: prereqs lint-dashboard lint test

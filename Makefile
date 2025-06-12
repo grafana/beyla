@@ -199,11 +199,17 @@ update-offsets: prereqs
 	$(GO_OFFSETS_TRACKER) -i configs/offsets/tracker_input.json pkg/internal/goexec/offsets.json
 
 .PHONY: generate
+generate: export BPF_CLANG := $(CLANG)
+generate: export BPF_CFLAGS := $(CFLAGS)
+generate: export BPF2GO := $(BPF2GO)
 generate: obi-submodule
+	@echo "### Generating files..."
+	@BEYLA_GENFILES_RUN_LOCALLY=1 go generate cmd/beyla-genfiles/beyla_genfiles.go
 	@cd $(OBI_MODULE) && make generate
 
 .PHONY: docker-generate
 docker-generate: obi-submodule
+	@BEYLA_GENFILES_GEN_IMG=$(GEN_IMG) go generate cmd/beyla-genfiles/beyla_genfiles.go
 	@cd $(OBI_MODULE) && make docker-generate
 
 .PHONY: vendor-obi

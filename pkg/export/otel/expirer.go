@@ -8,9 +8,8 @@ import (
 
 	attributes "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/expire"
-	"go.opentelemetry.io/otel/attribute"
-
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel/metric/api/metric"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 var timeNow = time.Now

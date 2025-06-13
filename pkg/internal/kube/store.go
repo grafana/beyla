@@ -10,9 +10,9 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers/container"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers/maps"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubecache/informer"
 
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
-	"github.com/grafana/beyla/v2/pkg/kubecache/informer"
 	"github.com/grafana/beyla/v2/pkg/kubecache/meta"
 )
 

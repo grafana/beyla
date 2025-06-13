@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubecache/informer"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -22,7 +23,6 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/grafana/beyla/v2/pkg/kubecache/informer"
 	"github.com/grafana/beyla/v2/pkg/kubecache/instrument"
 	"github.com/grafana/beyla/v2/pkg/kubecache/meta/cni"
 )

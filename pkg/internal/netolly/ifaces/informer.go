@@ -23,6 +23,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/ifaces"
 )
 
 // EventType for an interface: added, deleted
@@ -54,10 +56,7 @@ type Event struct {
 	Interface Interface
 }
 
-type Interface struct {
-	Name  string
-	Index int
-}
+type Interface = ifaces.Interface
 
 // Informer provides notifications about each network interface that is added or removed
 // from the host. Production implementations: Poller and Watcher.

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/gobwas/glob"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/tcmanager"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubeflags"
@@ -25,7 +26,6 @@ import (
 	"github.com/grafana/beyla/v2/pkg/export/debug"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/export/prom"
-	"github.com/grafana/beyla/v2/pkg/internal/ebpf/tcmanager"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
 	"github.com/grafana/beyla/v2/pkg/internal/kube"

@@ -28,8 +28,6 @@ const (
 	GroupGRPCClientInfo
 	GroupHTTPCommon
 	GroupHost
-	GroupPromProcess
-	GroupProcess
 	GroupMessaging
 )
 
@@ -53,7 +51,7 @@ func getDefinitions(
 	cidrEnabled := groups.Has(GroupNetCIDR)
 
 	// attributes to be reported exclusively for prometheus exporters
-	prometheusAttributes := newAttrReportGroup(
+	prometheusAttributes := NewAttrReportGroup(
 		!promEnabled,
 		nil,
 		map[attr.Name]Default{
@@ -66,7 +64,7 @@ func getDefinitions(
 	// ServiceName and ServiceNamespace are reported both as resource and metric attributes, as
 	// the OTEL definition requires that it is reported as resource attribute,
 	// but Grafana Cloud takes it from the metric
-	appAttributes := newAttrReportGroup(
+	appAttributes := NewAttrReportGroup(
 		false,
 		[]*AttrReportGroup{&prometheusAttributes},
 		map[attr.Name]Default{
@@ -77,7 +75,7 @@ func getDefinitions(
 	)
 
 	// network metrics attributes
-	networkAttributes := newAttrReportGroup(
+	networkAttributes := NewAttrReportGroup(
 		false,
 		nil,
 		map[attr.Name]Default{
@@ -102,7 +100,7 @@ func getDefinitions(
 
 	// attributes to be reported exclusively for network metrics when
 	// kubernetes metadata is enabled
-	networkKubeAttributes := newAttrReportGroup(
+	networkKubeAttributes := NewAttrReportGroup(
 		!kubeEnabled,
 		nil,
 		map[attr.Name]Default{
@@ -127,7 +125,7 @@ func getDefinitions(
 
 	// network CIDR attributes are only enabled if the CIDRs configuration
 	// is defined
-	networkCIDR := newAttrReportGroup(
+	networkCIDR := NewAttrReportGroup(
 		!cidrEnabled,
 		nil,
 		map[attr.Name]Default{
@@ -149,7 +147,7 @@ func getDefinitions(
 
 	// attributes to be reported exclusively for application metrics when
 	// kubernetes metadata is enabled
-	appKubeAttributes := newAttrReportGroup(
+	appKubeAttributes := NewAttrReportGroup(
 		!kubeEnabled,
 		nil,
 		map[attr.Name]Default{
@@ -170,7 +168,7 @@ func getDefinitions(
 		extraGroupAttributes[GroupAppKube],
 	)
 
-	httpRoutes := newAttrReportGroup(
+	httpRoutes := NewAttrReportGroup(
 		!groups.Has(GroupHTTPRoutes),
 		nil,
 		map[attr.Name]Default{
@@ -179,7 +177,7 @@ func getDefinitions(
 		extraGroupAttributes[GroupHTTPRoutes],
 	)
 
-	serverInfo := newAttrReportGroup(
+	serverInfo := NewAttrReportGroup(
 		false,
 		nil,
 		map[attr.Name]Default{
@@ -190,7 +188,7 @@ func getDefinitions(
 		extraGroupAttributes[GroupServerInfo],
 	)
 
-	httpClientInfo := newAttrReportGroup(
+	httpClientInfo := NewAttrReportGroup(
 		false,
 		nil,
 		map[attr.Name]Default{
@@ -200,7 +198,7 @@ func getDefinitions(
 		extraGroupAttributes[GroupHTTPClientInfo],
 	)
 
-	grpcClientInfo := newAttrReportGroup(
+	grpcClientInfo := NewAttrReportGroup(
 		false,
 		nil,
 		map[attr.Name]Default{
@@ -209,7 +207,7 @@ func getDefinitions(
 		extraGroupAttributes[GroupGRPCClientInfo],
 	)
 
-	httpCommon := newAttrReportGroup(
+	httpCommon := NewAttrReportGroup(
 		false,
 		[]*AttrReportGroup{&httpRoutes},
 		map[attr.Name]Default{
@@ -220,7 +218,7 @@ func getDefinitions(
 		extraGroupAttributes[GroupHTTPCommon],
 	)
 
-	messagingAttributes := newAttrReportGroup(
+	messagingAttributes := NewAttrReportGroup(
 		false,
 		[]*AttrReportGroup{&appAttributes, &appKubeAttributes},
 		map[attr.Name]Default{
@@ -348,7 +346,7 @@ func copyDisabled(src AttrReportGroup) AttrReportGroup {
 // AllAttributeNames returns a set with all the names in the attributes database
 // as returned by the getDefinitions function
 func AllAttributeNames(extraGroupAttributesCfg map[string][]attr.Name) map[attr.Name]struct{} {
-	extraGroupAttributes := newGroupAttributes(extraGroupAttributesCfg)
+	extraGroupAttributes := NewGroupAttributes(extraGroupAttributesCfg)
 	names := map[attr.Name]struct{}{}
 	// -1 to enable all the metric group flags
 	for _, section := range getDefinitions(-1, extraGroupAttributes) {

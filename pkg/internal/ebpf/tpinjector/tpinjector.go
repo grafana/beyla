@@ -8,6 +8,7 @@ import (
 	"log/slog"
 
 	"github.com/cilium/ebpf"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/tpinjector"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/goexec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
@@ -18,12 +19,9 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 )
 
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/tpinjector/tpinjector.c -- -I../../../../bpf -I../../../../bpf
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../../bpf/tpinjector/tpinjector.c -- -I../../../../bpf -I../../../../bpf -DBPF_DEBUG -DBPF_DEBUG_TC
-
 type Tracer struct {
 	cfg        *beyla.Config
-	bpfObjects bpfObjects
+	bpfObjects tpinjector.BpfObjects
 	closers    []io.Closer
 	log        *slog.Logger
 }
@@ -43,10 +41,10 @@ func (p *Tracer) BlockPID(uint32, uint32) {}
 
 func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 	if p.cfg.EBPF.BpfDebug {
-		return loadBpf_debug()
+		return tpinjector.LoadBpfDebug()
 	}
 
-	return loadBpf()
+	return tpinjector.LoadBpf()
 }
 
 func (p *Tracer) SetupTailCalls() {
@@ -119,7 +117,7 @@ func (p *Tracer) SockMsgs() []ebpfcommon.SockMsg {
 	return []ebpfcommon.SockMsg{
 		{
 			Program:  p.bpfObjects.BeylaPacketExtender,
-			MapFD:    p.bpfObjects.bpfMaps.SockDir.FD(),
+			MapFD:    p.bpfObjects.BpfMaps.SockDir.FD(),
 			AttachAs: ebpf.AttachSkMsgVerdict,
 		},
 	}

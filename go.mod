@@ -2,7 +2,12 @@ module github.com/grafana/beyla/v2
 
 go 1.24.1
 
+// opentelemetry-ebpf-instrumentation is not downloaded directly via go mod
+// but included as a go submodule
+replace github.com/open-telemetry/opentelemetry-ebpf-instrumentation => ./.obi-src
+
 require (
+	github.com/AlessandroPomponio/go-gibberish v0.0.0-20191004143433-a2d4156f0396
 	github.com/caarlos0/env/v9 v9.0.0
 	github.com/cilium/ebpf v0.18.0
 	github.com/containers/common v0.63.1
@@ -19,7 +24,7 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/ianlancetaylor/demangle v0.0.0-20250417193237-f615e6bd150b
 	github.com/mariomac/guara v0.0.0-20250408105519-1e4dbdfb7136
-	github.com/open-telemetry/opentelemetry-ebpf-instrumentation v0.0.0-20250612140350-16975884f762
+	github.com/open-telemetry/opentelemetry-ebpf-instrumentation v0.0.0-20250612235719-9266ba8148da
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.22.0
 	github.com/prometheus/client_model v0.6.2
@@ -29,6 +34,7 @@ require (
 	github.com/stretchr/testify v1.10.0
 	github.com/vishvananda/netlink v1.3.1
 	github.com/vladimirvivien/gexe v0.3.0
+	github.com/xwb1989/sqlparser v0.0.0-20180606152119-120387863bf2
 	github.com/yl2chen/cidranger v1.0.2
 	go.opentelemetry.io/collector/component v1.31.0
 	go.opentelemetry.io/collector/config/configgrpc v0.125.0
@@ -71,7 +77,6 @@ require (
 
 require (
 	cloud.google.com/go/compute/metadata v0.6.0 // indirect
-	github.com/AlessandroPomponio/go-gibberish v0.0.0-20191004143433-a2d4156f0396 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.26.0 // indirect
 	github.com/aws/aws-sdk-go v1.54.13 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
@@ -139,7 +144,6 @@ require (
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.11 // indirect
 	github.com/vishvananda/netns v0.0.5 // indirect
-	github.com/xwb1989/sqlparser v0.0.0-20180606152119-120387863bf2 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
 	go.opentelemetry.io/collector v0.125.0 // indirect

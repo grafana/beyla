@@ -13,8 +13,11 @@ import (
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel/metric"
+	instrument "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel/metric/api/metric"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 	"go.opentelemetry.io/otel/attribute"
@@ -26,9 +29,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
-	"github.com/grafana/beyla/v2/pkg/export/otel/metric"
-	instrument "github.com/grafana/beyla/v2/pkg/export/otel/metric/api/metric"
+	"github.com/grafana/beyla/v2/pkg/export/extraattributes"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
@@ -343,7 +344,7 @@ func newMetricsReporter(
 ) (*MetricsReporter, error) {
 	log := mlog()
 
-	attribProvider, err := attributes.NewAttrSelector(ctxInfo.MetricAttributeGroups, selectorCfg)
+	attribProvider, err := extraattributes.NewBeylaAttrSelector(ctxInfo.MetricAttributeGroups, selectorCfg)
 	if err != nil {
 		return nil, fmt.Errorf("attributes select: %w", err)
 	}

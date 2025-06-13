@@ -4,17 +4,17 @@ import (
 	"context"
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
+	attributes "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/filter"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/export/alloy"
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	"github.com/grafana/beyla/v2/pkg/export/debug"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/export/prom"
-	"github.com/grafana/beyla/v2/pkg/filter"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
@@ -83,7 +83,7 @@ func newGraphBuilder(config *beyla.Config, ctxInfo *global.ContextInfo, tracesCh
 		kubeDecoratorToNameResolver, nameResolverToAttrFilter))
 
 	exportableSpans := newQueue()
-	swi.Add(filter.ByAttribute(config.Filters.Application, selectorCfg.ExtraGroupAttributesCfg, spanPtrPromGetters,
+	swi.Add(filter.ByAttribute(config.Filters.Application, nil, selectorCfg.ExtraGroupAttributesCfg, spanPtrPromGetters,
 		nameResolverToAttrFilter, exportableSpans))
 
 	config.Metrics.Grafana = &gb.config.Grafana.OTLP

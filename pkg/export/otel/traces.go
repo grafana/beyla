@@ -14,6 +14,7 @@ import (
 
 	expirable2 "github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
@@ -42,7 +43,7 @@ import (
 	tracenoop "go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/zap"
 
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
+	"github.com/grafana/beyla/v2/pkg/export/extraattributes"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
@@ -190,7 +191,7 @@ type tracesOTELReceiver struct {
 
 func GetUserSelectedAttributes(selectorCfg *attributes.SelectorConfig) (map[attr.Name]struct{}, error) {
 	// Get user attributes
-	attribProvider, err := attributes.NewAttrSelector(attributes.GroupTraces, selectorCfg)
+	attribProvider, err := extraattributes.NewBeylaAttrSelector(attributes.GroupTraces, selectorCfg)
 	if err != nil {
 		return nil, err
 	}

@@ -1,6 +1,6 @@
 // Package attr contains definition of the attribute names of for the metrics, especially
 // for the metrics whose reported attributes are selected in the attributes.select YAML option
-package beyla
+package names
 
 import (
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
@@ -8,15 +8,9 @@ import (
 	semconv2 "go.opentelemetry.io/otel/semconv/v1.25.0"
 )
 
-// OpenTelemetry 1.23 semantic convention
-const (
-	K8sKind = attr.Name("k8s.kind")
-)
-
 // Process Metrics following OTEL 1.26 experimental conventions
 // https://opentelemetry.io/docs/specs/semconv/resource/process/
 // https://opentelemetry.io/docs/specs/semconv/system/process-metrics/
-
 const (
 	ProcCommand     = attr.Name(semconv.ProcessCommandKey)
 	ProcCommandLine = attr.Name(semconv.ProcessCommandLineKey)

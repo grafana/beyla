@@ -8,7 +8,10 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/ebpf"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/expire"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel/metric"
+	metric2 "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel/metric/api/metric"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 	"go.opentelemetry.io/otel/attribute"
@@ -17,9 +20,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
 	"github.com/grafana/beyla/v2/pkg/buildinfo"
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
-	"github.com/grafana/beyla/v2/pkg/export/otel/metric"
-	metric2 "github.com/grafana/beyla/v2/pkg/export/otel/metric/api/metric"
+	"github.com/grafana/beyla/v2/pkg/export/extraattributes"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 )
 
@@ -116,7 +117,7 @@ func newMetricsExporter(
 		return nil, err
 	}
 
-	attrProv, err := attributes.NewAttrSelector(ctxInfo.MetricAttributeGroups, cfg.SelectorCfg)
+	attrProv, err := extraattributes.NewBeylaAttrSelector(ctxInfo.MetricAttributeGroups, cfg.SelectorCfg)
 	if err != nil {
 		return nil, fmt.Errorf("network OTEL exporter attributes enable: %w", err)
 	}

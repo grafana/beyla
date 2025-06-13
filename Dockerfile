@@ -26,7 +26,9 @@ COPY NOTICE NOTICE
 COPY third_party_licenses.csv third_party_licenses.csv
 
 # Build
+RUN make obi-submodule
 RUN /generate.sh
+RUN make copy-obi-vendor
 RUN make compile
 
 # Create final image from minimal + built binary

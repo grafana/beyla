@@ -345,12 +345,20 @@ func copyDisabled(src AttrReportGroup) AttrReportGroup {
 
 // AllAttributeNames returns a set with all the names in the attributes database
 // as returned by the getDefinitions function
-func AllAttributeNames(extraGroupAttributesCfg map[string][]attr.Name) map[attr.Name]struct{} {
+func AllAttributeNames(
+	extraDefinitionsProvider func(groups AttrGroups, extraGroupAttributes GroupAttributes) map[Section]AttrReportGroup,
+	extraGroupAttributesCfg map[string][]attr.Name,
+) map[attr.Name]struct{} {
 	extraGroupAttributes := NewGroupAttributes(extraGroupAttributesCfg)
 	names := map[attr.Name]struct{}{}
 	// -1 to enable all the metric group flags
 	for _, section := range getDefinitions(-1, extraGroupAttributes) {
 		maps.Copy(names, section.All())
+	}
+	if extraDefinitionsProvider != nil {
+		for _, section := range extraDefinitionsProvider(-1, extraGroupAttributes) {
+			maps.Copy(names, section.All())
+		}
 	}
 	return names
 }

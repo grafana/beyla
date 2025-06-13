@@ -1,11 +1,9 @@
 package attributes
 
 import (
-	"fmt"
-	"log/slog"
 	"maps"
 
-	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
+	attributes2 "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 
 	attrextra "github.com/grafana/beyla/v2/pkg/export/attributes/beyla"
@@ -14,91 +12,36 @@ import (
 // AttrGroups will let enabling by default some groups of attributes under
 // given circumstances. For example, will let enabling kubernetes metadata attributes
 // only if Beyla is running under Kubernetes and kube metadata is enabled.
+type AttrGroups = attributes2.AttrGroups
 
 const (
-	UndefinedGroup         = attrobi.AttrGroups(0)
-	GroupKubernetes        = attrobi.AttrGroups(1 << iota)
-	GroupPrometheus        = attrobi.GroupPrometheus
-	GroupHTTPRoutes        = attrobi.GroupHTTPRoutes
-	GroupNetIfaceDirection = attrobi.GroupNetIfaceDirection
-	GroupNetCIDR           = attrobi.GroupNetCIDR
-	GroupTraces            = attrobi.GroupTraces
-	GroupApp               = attrobi.GroupApp
-	GroupNet               = attrobi.GroupNet
-	GroupNetKube           = attrobi.GroupNetKube
-	GroupAppKube           = attrobi.GroupAppKube
-	GroupServerInfo        = attrobi.GroupServerInfo
-	GroupHTTPClientInfo    = attrobi.GroupHTTPClientInfo
-	GroupGRPCClientInfo    = attrobi.GroupGRPCClientInfo
-	GroupHTTPCommon        = attrobi.GroupHTTPCommon
-	GroupHost              = attrobi.GroupHost
-	GroupMessaging         = attrobi.GroupMessaging
+	UndefinedGroup  = AttrGroups(0)
+	GroupKubernetes = AttrGroups(1 << iota)
+	GroupPrometheus
+	GroupHTTPRoutes
+	GroupNetIfaceDirection
+	GroupNetCIDR
+	GroupTraces
+	GroupApp
+	GroupNet
+	GroupNetKube
+	GroupAppKube
+	GroupServerInfo
+	GroupHTTPClientInfo
+	GroupGRPCClientInfo
+	GroupHTTPCommon
+	GroupHost
 	GroupPromProcess
 	GroupProcess
+	GroupMessaging
 )
-
-func alog() *slog.Logger {
-	return slog.With("component", "attributes")
-}
-
-func newAttrReportGroup(
-	disabled bool,
-	subGroups []*attrobi.AttrReportGroup,
-	attributes map[attr.Name]attrobi.Default,
-	extraAttributes []attr.Name,
-) attrobi.AttrReportGroup {
-	for _, extraAttr := range extraAttributes {
-		attributes[extraAttr] = true
-	}
-
-	return attrobi.AttrReportGroup{
-		Disabled:   disabled,
-		SubGroups:  subGroups,
-		Attributes: attributes,
-	}
-}
-
-func newGroupAttributes(groupAttrsCfg map[string][]attr.Name) attrobi.GroupAttributes {
-	log := alog()
-
-	groupAttrs := make(attrobi.GroupAttributes, len(groupAttrsCfg))
-	for group, attrs := range groupAttrsCfg {
-		attrGroup, err := parseExtraAttrGroup(group)
-		if err != nil {
-			log.Warn("failed to parse extra attribute group",
-				slog.String("group", group),
-				slog.String("err", err.Error()),
-			)
-			continue
-		}
-		groupAttrs[attrGroup] = attrs
-	}
-
-	return groupAttrs
-}
-
-func parseExtraAttrGroup(group string) (attrobi.AttrGroups, error) {
-	switch group {
-	case "k8s_app_meta":
-		return GroupAppKube, nil
-	default:
-		return UndefinedGroup, fmt.Errorf("group %s is not supported", group)
-	}
-}
-
-func NewBeylaAttrSelector(
-	groups attrobi.AttrGroups,
-	cfg *attrobi.SelectorConfig,
-) (*attrobi.AttrSelector, error) {
-	return attrobi.NewCustomAttrSelector(groups, cfg, getDefinitions)
-}
 
 // Any new metric and attribute must be added here to be matched from the user-provided wildcard
 // selectors of the attributes.select section
 func getDefinitions(
-	groups attrobi.AttrGroups,
-	extraGroupAttributes attrobi.GroupAttributes,
-) map[attrobi.Section]attrobi.AttrReportGroup {
+	groups AttrGroups,
+	extraGroupAttributes GroupAttributes,
+) map[Section]AttrReportGroup {
 	kubeEnabled := groups.Has(GroupKubernetes)
 	promEnabled := groups.Has(GroupPrometheus)
 	ifaceDirEnabled := groups.Has(GroupNetIfaceDirection)
@@ -108,7 +51,7 @@ func getDefinitions(
 	prometheusAttributes := newAttrReportGroup(
 		!promEnabled,
 		nil,
-		map[attr.Name]attrobi.Default{
+		map[attr.Name]Default{
 			attr.Instance:         true,
 			attr.Job:              true,
 			attr.ServiceNamespace: true,
@@ -121,8 +64,8 @@ func getDefinitions(
 	// but Grafana Cloud takes it from the metric
 	appAttributes := newAttrReportGroup(
 		false,
-		[]*attrobi.AttrReportGroup{&prometheusAttributes},
-		map[attr.Name]attrobi.Default{
+		[]*AttrReportGroup{&prometheusAttributes},
+		map[attr.Name]Default{
 			attr.ServiceName:      true,
 			attr.ServiceNamespace: true,
 		},
@@ -133,7 +76,7 @@ func getDefinitions(
 	networkAttributes := newAttrReportGroup(
 		false,
 		nil,
-		map[attr.Name]attrobi.Default{
+		map[attr.Name]Default{
 			attr.Direction:      true,
 			attr.BeylaIP:        false,
 			attr.Transport:      false,
@@ -147,8 +90,8 @@ func getDefinitions(
 			attr.ClientPort:     false,
 			attr.SrcZone:        false,
 			attr.DstZone:        false,
-			attr.IfaceDirection: attrobi.Default(ifaceDirEnabled),
-			attr.Iface:          attrobi.Default(ifaceDirEnabled),
+			attr.IfaceDirection: Default(ifaceDirEnabled),
+			attr.Iface:          Default(ifaceDirEnabled),
 		},
 		extraGroupAttributes[GroupNet],
 	)
@@ -158,7 +101,7 @@ func getDefinitions(
 	networkKubeAttributes := newAttrReportGroup(
 		!kubeEnabled,
 		nil,
-		map[attr.Name]attrobi.Default{
+		map[attr.Name]Default{
 			attr.K8sSrcOwnerName: true,
 			attr.K8sSrcOwnerType: true,
 			attr.K8sSrcNamespace: true,
@@ -183,11 +126,11 @@ func getDefinitions(
 	networkCIDR := newAttrReportGroup(
 		!cidrEnabled,
 		nil,
-		map[attr.Name]attrobi.Default{
+		map[attr.Name]Default{
 			attr.DstCIDR: true,
 			attr.SrcCIDR: true,
 		},
-		extraGroupAttributes[attrobi.GroupNetCIDR],
+		extraGroupAttributes[GroupNetCIDR],
 	)
 
 	// networkInterZone* supports the same attributes as
@@ -205,7 +148,7 @@ func getDefinitions(
 	appKubeAttributes := newAttrReportGroup(
 		!kubeEnabled,
 		nil,
-		map[attr.Name]attrobi.Default{
+		map[attr.Name]Default{
 			attr.K8sNamespaceName:   true,
 			attr.K8sPodName:         true,
 			attr.K8sContainerName:   true,
@@ -218,7 +161,7 @@ func getDefinitions(
 			attr.K8sPodStartTime:    true,
 			attr.K8sClusterName:     true,
 			attr.K8sOwnerName:       true,
-			attr.K8sKind:            true,
+			attrextra.K8sKind:       true,
 		},
 		extraGroupAttributes[GroupAppKube],
 	)
@@ -226,7 +169,7 @@ func getDefinitions(
 	httpRoutes := newAttrReportGroup(
 		!groups.Has(GroupHTTPRoutes),
 		nil,
-		map[attr.Name]attrobi.Default{
+		map[attr.Name]Default{
 			attr.HTTPRoute: true,
 		},
 		extraGroupAttributes[GroupHTTPRoutes],
@@ -235,7 +178,7 @@ func getDefinitions(
 	serverInfo := newAttrReportGroup(
 		false,
 		nil,
-		map[attr.Name]attrobi.Default{
+		map[attr.Name]Default{
 			attr.ClientAddr: false,
 			attr.ServerAddr: true,
 			attr.ServerPort: true,
@@ -246,7 +189,7 @@ func getDefinitions(
 	httpClientInfo := newAttrReportGroup(
 		false,
 		nil,
-		map[attr.Name]attrobi.Default{
+		map[attr.Name]Default{
 			attr.ServerAddr: true,
 			attr.ServerPort: true,
 		},
@@ -256,7 +199,7 @@ func getDefinitions(
 	grpcClientInfo := newAttrReportGroup(
 		false,
 		nil,
-		map[attr.Name]attrobi.Default{
+		map[attr.Name]Default{
 			attr.ServerAddr: true,
 		},
 		extraGroupAttributes[GroupGRPCClientInfo],
@@ -264,8 +207,8 @@ func getDefinitions(
 
 	httpCommon := newAttrReportGroup(
 		false,
-		[]*attrobi.AttrReportGroup{&httpRoutes},
-		map[attr.Name]attrobi.Default{
+		[]*AttrReportGroup{&httpRoutes},
+		map[attr.Name]Default{
 			attr.HTTPRequestMethod:      true,
 			attr.HTTPResponseStatusCode: true,
 			attr.HTTPUrlPath:            false,
@@ -277,7 +220,7 @@ func getDefinitions(
 	hostAttributes := newAttrReportGroup(
 		false,
 		nil,
-		map[attr.Name]attrobi.Default{
+		map[attr.Name]Default{
 			attr.HostName: true,
 		},
 		extraGroupAttributes[GroupHost],
@@ -288,7 +231,7 @@ func getDefinitions(
 	promProcessAttributes := newAttrReportGroup(
 		!promEnabled,
 		nil,
-		map[attr.Name]attrobi.Default{
+		map[attr.Name]Default{
 			attr.Instance:             true,
 			attr.Job:                  true,
 			attrextra.ProcCommand:     true,
@@ -305,8 +248,8 @@ func getDefinitions(
 
 	processAttributes := newAttrReportGroup(
 		false,
-		[]*attrobi.AttrReportGroup{&appKubeAttributes, &hostAttributes, &promProcessAttributes},
-		map[attr.Name]attrobi.Default{
+		[]*AttrReportGroup{&appKubeAttributes, &hostAttributes, &promProcessAttributes},
+		map[attr.Name]Default{
 			attrextra.ProcCPUMode:   true,
 			attrextra.ProcDiskIODir: true,
 			attrextra.ProcNetIODir:  true,
@@ -316,108 +259,108 @@ func getDefinitions(
 
 	messagingAttributes := newAttrReportGroup(
 		false,
-		[]*attrobi.AttrReportGroup{&appAttributes, &appKubeAttributes},
-		map[attr.Name]attrobi.Default{
+		[]*AttrReportGroup{&appAttributes, &appKubeAttributes},
+		map[attr.Name]Default{
 			attr.MessagingSystem:      true,
 			attr.MessagingDestination: true,
 		},
 		extraGroupAttributes[GroupMessaging],
 	)
 
-	return map[attrobi.Section]attrobi.AttrReportGroup{
-		attrobi.BeylaNetworkFlow.Section: {
-			SubGroups: []*attrobi.AttrReportGroup{&networkAttributes, &networkCIDR, &networkKubeAttributes},
+	return map[Section]AttrReportGroup{
+		BeylaNetworkFlow.Section: {
+			SubGroups: []*AttrReportGroup{&networkAttributes, &networkCIDR, &networkKubeAttributes},
 		},
-		attrobi.BeylaNetworkInterZone.Section: {
-			SubGroups: []*attrobi.AttrReportGroup{&networkInterZone, &networkInterZoneCIDR, &networkInterZoneKube},
+		BeylaNetworkInterZone.Section: {
+			SubGroups: []*AttrReportGroup{&networkInterZone, &networkInterZoneCIDR, &networkInterZoneKube},
 		},
-		attrobi.HTTPServerDuration.Section: {
-			SubGroups: []*attrobi.AttrReportGroup{&appAttributes, &appKubeAttributes, &httpCommon, &serverInfo},
+		HTTPServerDuration.Section: {
+			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &httpCommon, &serverInfo},
 		},
-		attrobi.HTTPServerRequestSize.Section: {
-			SubGroups: []*attrobi.AttrReportGroup{&appAttributes, &appKubeAttributes, &httpCommon, &serverInfo},
+		HTTPServerRequestSize.Section: {
+			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &httpCommon, &serverInfo},
 		},
-		attrobi.HTTPServerResponseSize.Section: {
-			SubGroups: []*attrobi.AttrReportGroup{&appAttributes, &appKubeAttributes, &httpCommon, &serverInfo},
+		HTTPServerResponseSize.Section: {
+			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &httpCommon, &serverInfo},
 		},
-		attrobi.HTTPClientDuration.Section: {
-			SubGroups: []*attrobi.AttrReportGroup{&appAttributes, &appKubeAttributes, &httpCommon, &httpClientInfo},
+		HTTPClientDuration.Section: {
+			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &httpCommon, &httpClientInfo},
 		},
-		attrobi.HTTPClientRequestSize.Section: {
-			SubGroups: []*attrobi.AttrReportGroup{&appAttributes, &appKubeAttributes, &httpCommon, &httpClientInfo},
+		HTTPClientRequestSize.Section: {
+			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &httpCommon, &httpClientInfo},
 		},
-		attrobi.HTTPClientResponseSize.Section: {
-			SubGroups: []*attrobi.AttrReportGroup{&appAttributes, &appKubeAttributes, &httpCommon, &httpClientInfo},
+		HTTPClientResponseSize.Section: {
+			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &httpCommon, &httpClientInfo},
 		},
-		attrobi.RPCClientDuration.Section: {
-			SubGroups: []*attrobi.AttrReportGroup{&appAttributes, &appKubeAttributes, &grpcClientInfo},
-			Attributes: map[attr.Name]attrobi.Default{
+		RPCClientDuration.Section: {
+			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &grpcClientInfo},
+			Attributes: map[attr.Name]Default{
 				attr.RPCMethod:         true,
 				attr.RPCSystem:         true,
 				attr.RPCGRPCStatusCode: true,
 			},
 		},
-		attrobi.RPCServerDuration.Section: {
-			SubGroups: []*attrobi.AttrReportGroup{&appAttributes, &appKubeAttributes, &serverInfo},
-			Attributes: map[attr.Name]attrobi.Default{
+		RPCServerDuration.Section: {
+			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &serverInfo},
+			Attributes: map[attr.Name]Default{
 				attr.RPCMethod:         true,
 				attr.RPCSystem:         true,
 				attr.RPCGRPCStatusCode: true,
 			},
 		},
-		attrobi.DBClientDuration.Section: {
-			SubGroups: []*attrobi.AttrReportGroup{&appAttributes, &appKubeAttributes},
-			Attributes: map[attr.Name]attrobi.Default{
+		DBClientDuration.Section: {
+			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes},
+			Attributes: map[attr.Name]Default{
 				attr.DBOperation:  true,
 				attr.DBSystemName: true,
 				attr.ErrorType:    true,
 			},
 		},
-		attrobi.MessagingPublishDuration.Section: {
-			SubGroups: []*attrobi.AttrReportGroup{&messagingAttributes},
+		MessagingPublishDuration.Section: {
+			SubGroups: []*AttrReportGroup{&messagingAttributes},
 		},
-		attrobi.MessagingProcessDuration.Section: {
-			SubGroups: []*attrobi.AttrReportGroup{&messagingAttributes},
+		MessagingProcessDuration.Section: {
+			SubGroups: []*AttrReportGroup{&messagingAttributes},
 		},
-		attrobi.Traces.Section: {
-			Attributes: map[attr.Name]attrobi.Default{
+		Traces.Section: {
+			Attributes: map[attr.Name]Default{
 				attr.DBQueryText: false,
 			},
 		},
-		ProcessCPUUtilization.Section: {SubGroups: []*attrobi.AttrReportGroup{&processAttributes}},
-		ProcessCPUTime.Section:        {SubGroups: []*attrobi.AttrReportGroup{&processAttributes}},
-		ProcessMemoryUsage.Section:    {SubGroups: []*attrobi.AttrReportGroup{&processAttributes}},
-		ProcessMemoryVirtual.Section:  {SubGroups: []*attrobi.AttrReportGroup{&processAttributes}},
-		ProcessDiskIO.Section:         {SubGroups: []*attrobi.AttrReportGroup{&processAttributes}},
-		ProcessNetIO.Section:          {SubGroups: []*attrobi.AttrReportGroup{&processAttributes}},
-		attrobi.GPUKernelLaunchCalls.Section: {
-			SubGroups: []*attrobi.AttrReportGroup{&appAttributes, &appKubeAttributes},
-			Attributes: map[attr.Name]attrobi.Default{
+		ProcessCPUUtilization.Section: {SubGroups: []*AttrReportGroup{&processAttributes}},
+		ProcessCPUTime.Section:        {SubGroups: []*AttrReportGroup{&processAttributes}},
+		ProcessMemoryUsage.Section:    {SubGroups: []*AttrReportGroup{&processAttributes}},
+		ProcessMemoryVirtual.Section:  {SubGroups: []*AttrReportGroup{&processAttributes}},
+		ProcessDiskIO.Section:         {SubGroups: []*AttrReportGroup{&processAttributes}},
+		ProcessNetIO.Section:          {SubGroups: []*AttrReportGroup{&processAttributes}},
+		GPUKernelLaunchCalls.Section: {
+			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes},
+			Attributes: map[attr.Name]Default{
 				attr.CudaKernelName: true,
 			},
 		},
-		attrobi.GPUKernelGridSize.Section: {
-			SubGroups: []*attrobi.AttrReportGroup{&appAttributes, &appKubeAttributes},
-			Attributes: map[attr.Name]attrobi.Default{
+		GPUKernelGridSize.Section: {
+			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes},
+			Attributes: map[attr.Name]Default{
 				attr.CudaKernelName: true,
 			},
 		},
-		attrobi.GPUKernelBlockSize.Section: {
-			SubGroups: []*attrobi.AttrReportGroup{&appAttributes, &appKubeAttributes},
-			Attributes: map[attr.Name]attrobi.Default{
+		GPUKernelBlockSize.Section: {
+			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes},
+			Attributes: map[attr.Name]Default{
 				attr.CudaKernelName: true,
 			},
 		},
-		attrobi.GPUMemoryAllocations.Section: {
-			SubGroups:  []*attrobi.AttrReportGroup{&appAttributes, &appKubeAttributes},
-			Attributes: map[attr.Name]attrobi.Default{},
+		GPUMemoryAllocations.Section: {
+			SubGroups:  []*AttrReportGroup{&appAttributes, &appKubeAttributes},
+			Attributes: map[attr.Name]Default{},
 		},
 		// span and service graph metrics don't yet implement attribute selection,
 		// but their values can still be filtered, so we list them here just to
 		// make the filter recognize its attributes
 		// TODO: when service graph and spam metrics implement attribute selection, replace this section by proper metric names
 		"---- temporary placeholder for span and service graph metrics ----": {
-			Attributes: map[attr.Name]attrobi.Default{
+			Attributes: map[attr.Name]Default{
 				attr.Client:            false,
 				attr.ClientNamespace:   false,
 				attr.Server:            false,
@@ -434,10 +377,10 @@ func getDefinitions(
 	}
 }
 
-func copyDisabled(src attrobi.AttrReportGroup) attrobi.AttrReportGroup {
-	var dst = attrobi.AttrReportGroup{
+func copyDisabled(src AttrReportGroup) AttrReportGroup {
+	var dst = AttrReportGroup{
 		Disabled:   src.Disabled,
-		Attributes: map[attr.Name]attrobi.Default{},
+		Attributes: map[attr.Name]Default{},
 	}
 	for k := range src.Attributes {
 		dst.Attributes[k] = false

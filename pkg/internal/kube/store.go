@@ -11,6 +11,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers/maps"
 	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubecache/informer"
 
 	"github.com/grafana/beyla/v2/pkg/kubecache/informer"
 	"github.com/grafana/beyla/v2/pkg/kubecache/meta"

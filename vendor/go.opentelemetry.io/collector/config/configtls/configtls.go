@@ -75,9 +75,12 @@ type Config struct {
 	// an ECDHE handshake, in preference order
 	// Defaults to empty list and "crypto/tls" defaults are used, internally.
 	CurvePreferences []string `mapstructure:"curve_preferences,omitempty"`
+
+	// Trusted platform module configuration
+	TPMConfig TPMConfig `mapstructure:"tpm,omitempty"`
 }
 
-// NewDefaultConfig creates a new TLSSetting with any default values set.
+// NewDefaultConfig creates a new Config with any default values set.
 func NewDefaultConfig() Config {
 	return Config{}
 }
@@ -106,7 +109,7 @@ type ClientConfig struct {
 	_ struct{}
 }
 
-// NewDefaultClientConfig creates a new TLSClientSetting with any default values set.
+// NewDefaultClientConfig creates a new ClientConfig with any default values set.
 func NewDefaultClientConfig() ClientConfig {
 	return ClientConfig{
 		Config: NewDefaultConfig(),
@@ -134,7 +137,7 @@ type ServerConfig struct {
 	_ struct{}
 }
 
-// NewDefaultServerConfig creates a new TLSServerSetting with any default values set.
+// NewDefaultServerConfig creates a new ServerConfig with any default values set.
 func NewDefaultServerConfig() ServerConfig {
 	return ServerConfig{
 		Config: NewDefaultConfig(),
@@ -363,11 +366,18 @@ func (c Config) loadCertificate() (tls.Certificate, error) {
 		keyPem = []byte(c.KeyPem)
 	}
 
-	certificate, err := tls.X509KeyPair(certPem, keyPem)
-	if err != nil {
-		return tls.Certificate{}, fmt.Errorf("failed to load TLS cert and key PEMs: %w", err)
+	if c.TPMConfig.Enabled {
+		certificate, errTPM := c.TPMConfig.tpmCertificate(keyPem, certPem, openTPM(c.TPMConfig.Path))
+		if errTPM != nil {
+			return tls.Certificate{}, fmt.Errorf("failed to load private key from TPM: %w", errTPM)
+		}
+		return certificate, nil
 	}
 
+	certificate, errKeyPair := tls.X509KeyPair(certPem, keyPem)
+	if errKeyPair != nil {
+		return tls.Certificate{}, fmt.Errorf("failed to load TLS cert and key PEMs: %w", errKeyPair)
+	}
 	return certificate, err
 }
 

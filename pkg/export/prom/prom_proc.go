@@ -141,12 +141,12 @@ func newProcReporter(ctxInfo *global.ContextInfo, cfg *ProcPrometheusConfig, inp
 		memory: NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: attributes.ProcessMemoryUsage.Prom,
 			Help: "The amount of physical memory in use",
-		}, labelNames(attrMemory)).MetricVec, clock.Time, cfg.Metrics.TTL),
+		}, labelNames[*process.Status](attrMemory)).MetricVec, clock.Time, cfg.Metrics.TTL),
 		memoryVirtualAttrs: attrMemoryVirtual,
 		memoryVirtual: NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: attributes.ProcessMemoryVirtual.Prom,
 			Help: "The amount of committed virtual memory",
-		}, labelNames(attrMemoryVirtual)).MetricVec, clock.Time, cfg.Metrics.TTL),
+		}, labelNames[*process.Status](attrMemoryVirtual)).MetricVec, clock.Time, cfg.Metrics.TTL),
 		diskAttrs: diskGetters,
 		disk: NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: attributes.ProcessDiskIO.Prom,

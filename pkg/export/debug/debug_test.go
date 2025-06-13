@@ -12,7 +12,8 @@ import (
 	"github.com/stretchr/testify/require"
 	trace2 "go.opentelemetry.io/otel/trace"
 
-	"github.com/grafana/beyla/v2/pkg/internal/request"
+	internalrequest "github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
 )
 
 func TestTracePrinterValidEnabled(t *testing.T) {
@@ -66,7 +67,7 @@ func traceFuncHelper(t *testing.T, tracePrinter TracePrinter) string {
 		Statement:      "statement",
 	}
 
-	fakeSpan.SetIgnoreMetrics()
+	internalrequest.SetIgnoreMetrics(&fakeSpan)
 
 	// redirect the TracePrinter function stdout to a pipe so that we can
 	// capture and return its output

@@ -21,7 +21,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/tpinjector"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
-	"github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
 )
 
 type ProcessFinder struct {

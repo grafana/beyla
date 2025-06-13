@@ -46,7 +46,8 @@ import (
 	"github.com/grafana/beyla/v2/pkg/export/extraattributes"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
-	"github.com/grafana/beyla/v2/pkg/internal/request"
+	internalrequest "github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
 )
 
 func tlog() *slog.Logger {
@@ -217,7 +218,7 @@ func (tr *tracesOTELReceiver) getConstantAttributes() (map[attr.Name]struct{}, e
 }
 
 func spanDiscarded(span *request.Span, is instrumentations.InstrumentationSelection) bool {
-	return span.IgnoreTraces() || span.Service.ExportsOTelTraces() || !acceptSpan(is, span)
+	return internalrequest.IgnoreTraces(span) || span.Service.ExportsOTelTraces() || !acceptSpan(is, span)
 }
 
 func GroupSpans(ctx context.Context, spans []request.Span, traceAttrs map[attr.Name]struct{}, sampler trace.Sampler, is instrumentations.InstrumentationSelection) map[svc.UID][]TraceSpanAndAttributes {

@@ -32,7 +32,8 @@ import (
 	"github.com/grafana/beyla/v2/pkg/export/extraattributes"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
-	"github.com/grafana/beyla/v2/pkg/internal/request"
+	internalrequest "github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
 )
 
 func mlog() *slog.Logger {
@@ -1225,7 +1226,7 @@ func (mr *MetricsReporter) reportMetrics(_ context.Context) {
 				continue
 			}
 			// If we are ignoring this span because of route patterns, don't do anything
-			if s.IgnoreMetrics() {
+			if internalrequest.IgnoreMetrics(s) {
 				continue
 			}
 			reporter, err := mr.reporters.For(&s.Service)

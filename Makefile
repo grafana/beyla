@@ -2,6 +2,8 @@
 CMD ?= beyla
 MAIN_GO_FILE ?= cmd/$(CMD)/main.go
 
+OBI_MODULE := ./.obi-src
+
 CACHE_CMD ?= k8s-cache
 CACHE_MAIN_GO_FILE ?= cmd/$(CACHE_CMD)/main.go
 
@@ -123,10 +125,14 @@ SHELL = /usr/bin/env bash -o pipefail
 GOIMPORTS_REVISER_ARGS = -company-prefixes github.com/grafana -project-name github.com/grafana/beyla/
 
 define check_format
-	$(shell $(foreach FILE, $(shell find . -name "*.go" -not -path "**/vendor/*"), \
+	$(shell $(foreach FILE, $(shell find . -name "*.go" -not -path "**/vendor/*" -not -path "**/.obi-src/*"), \
 		$(GOIMPORTS_REVISER) $(GOIMPORTS_REVISER_ARGS) -list-diff -output stdout $(FILE);))
 endef
 
+.phony: obi-submodule
+obi-submodule:
+	@echo "# Updating OBI Git submodule..."
+	git submodule update --init --recursive
 
 .PHONY: install-hooks
 install-hooks:
@@ -155,7 +161,7 @@ prereqs: install-hooks bpf2go
 .PHONY: fmt
 fmt: prereqs
 	@echo "### Formatting code and fixing imports"
-	@$(foreach FILE, $(shell find . -name "*.go" -not -path "**/vendor/*"), \
+	@$(foreach FILE, $(shell find . -name "*.go" -not -path "**/vendor/*" -not -path "**/.obi-src/*"), \
 		$(GOIMPORTS_REVISER) $(GOIMPORTS_REVISER_ARGS) $(FILE);)
 
 .PHONY: checkfmt
@@ -196,29 +202,36 @@ update-offsets: prereqs
 generate: export BPF_CLANG := $(CLANG)
 generate: export BPF_CFLAGS := $(CFLAGS)
 generate: export BPF2GO := $(BPF2GO)
-generate: bpf2go
+generate: obi-submodule
 	@echo "### Generating files..."
 	@BEYLA_GENFILES_RUN_LOCALLY=1 go generate cmd/beyla-genfiles/beyla_genfiles.go
+	@cd $(OBI_MODULE) && make generate
 
 .PHONY: docker-generate
-docker-generate:
-	@echo "### Generating files (docker)..."
+docker-generate: obi-submodule
 	@BEYLA_GENFILES_GEN_IMG=$(GEN_IMG) go generate cmd/beyla-genfiles/beyla_genfiles.go
+	@cd $(OBI_MODULE) && make docker-generate
+
+.PHONY: vendor-obi
+vendor-obi: obi-submodule docker-generate
+	@echo "### Vendoring OBI submodule..."
+	go get github.com/open-telemetry/opentelemetry-ebpf-instrumentation
+	go mod vendor
 
 .PHONY: verify
-verify: prereqs lint-dashboard lint test
+verify: prereqs lint-dashboard vendor-obi lint test
 
 .PHONY: build
-build: docker-generate verify compile
+build: vendor-obi verify compile
 
 .PHONY: all
-all: docker-generate build
+all: vendor-obi build
 
 .PHONY: compile compile-cache
-compile:
+compile: vendor-obi
 	@echo "### Compiling Beyla"
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -ldflags="-X '$(BUILDINFO_PKG).Version=$(RELEASE_VERSION)' -X '$(BUILDINFO_PKG).Revision=$(RELEASE_REVISION)'" -a -o bin/$(CMD) $(MAIN_GO_FILE)
-compile-cache:
+compile-cache: vendor-obi
 	@echo "### Compiling Beyla K8s cache"
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -ldflags="-X '$(BUILDINFO_PKG).Version=$(RELEASE_VERSION)' -X '$(BUILDINFO_PKG).Revision=$(RELEASE_REVISION)'" -a -o bin/$(CACHE_CMD) $(CACHE_MAIN_GO_FILE)
 
@@ -263,7 +276,7 @@ coverage-report-html: cov-exclude-generated
 	go tool cover --html=$(TEST_OUTPUT)/cover.txt
 
 .PHONY: image-build
-image-build:
+image-build: vendor-obi
 	$(call check_defined, IMG_ORG, Your Docker repository user name)
 	@echo "### Building the auto-instrumenter image"
 	$(OCI_BIN) buildx build --build-arg VER="$(GEN_IMG_VERSION)" --platform linux/amd64,linux/arm64 -t ${IMG} .
@@ -275,7 +288,7 @@ generator-image-build:
 
 
 .PHONY: prepare-integration-test
-prepare-integration-test:
+prepare-integration-test: vendor-obi
 	@echo "### Removing resources from previous integration tests, if any"
 	rm -rf $(TEST_OUTPUT)/* || true
 	$(MAKE) cleanup-integration-test
@@ -346,7 +359,7 @@ bin/ginkgo:
 	$(call go-install-tool,$(GINKGO),github.com/onsi/ginkgo/v2/ginkgo,latest)
 
 .PHONY: oats-prereq
-oats-prereq: bin/ginkgo docker-generate
+oats-prereq: bin/ginkgo vendor-obi
 	mkdir -p $(TEST_OUTPUT)/run
 
 .PHONY: oats-test-sql
@@ -390,7 +403,7 @@ check-licenses: update-licenses
 	fi
 
 .PHONY: artifact
-artifact: docker-generate compile
+artifact: vendor-obi compile
 	@echo "### Packing generated artifact"
 	cp LICENSE ./bin
 	cp NOTICE ./bin

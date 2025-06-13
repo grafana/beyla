@@ -28,6 +28,9 @@ import (
 
 const timeout = 5 * time.Second
 
+// this is going to be removed
+//
+//nolint:govet
 func TestPoller(t *testing.T) {
 	ctx := t.Context()
 

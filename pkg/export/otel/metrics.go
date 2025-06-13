@@ -14,6 +14,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 	"go.opentelemetry.io/otel/attribute"
@@ -26,7 +27,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
-	"github.com/grafana/beyla/v2/pkg/export/instrumentations"
 	"github.com/grafana/beyla/v2/pkg/export/otel/metric"
 	instrument "github.com/grafana/beyla/v2/pkg/export/otel/metric/api/metric"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
@@ -151,7 +151,7 @@ func (m *MetricsConfig) GetInterval() time.Duration {
 }
 
 func (m *MetricsConfig) GuessProtocol() Protocol {
-	// If no explicit protocol is set, we guess it it from the metrics enpdoint port
+	// If no explicit protocol is set, we guess it it from the metrics endpoint port
 	// (assuming it uses a standard port or a development-like form like 14317, 24317, 14318...)
 	ep, _, err := parseMetricsEndpoint(m)
 	if err == nil {

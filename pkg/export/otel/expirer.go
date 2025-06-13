@@ -6,10 +6,10 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/expire"
 	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
-	"github.com/grafana/beyla/v2/pkg/export/expire"
 	"github.com/grafana/beyla/v2/pkg/export/otel/metric/api/metric"
 )
 

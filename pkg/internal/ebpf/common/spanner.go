@@ -5,10 +5,10 @@ import (
 	"strings"
 	"unsafe"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/sqlprune"
 	trace2 "go.opentelemetry.io/otel/trace"
 
 	"github.com/grafana/beyla/v2/pkg/internal/request"
-	"github.com/grafana/beyla/v2/pkg/internal/sqlprune"
 )
 
 func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {

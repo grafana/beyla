@@ -1,10 +1,7 @@
 name: Pull request integration tests ARM
 
 on:
-  push:
-    branches: [ 'main', 'release-*' ]
-  pull_request:
-    branches: [ 'main', 'release-*' ]
+  workflow_dispatch:
 
 # Set restrictive permissions at workflow level
 permissions:

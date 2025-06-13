@@ -1,8 +1,6 @@
 name: Backport PR creator
 on:
-  pull_request:
-    types: [closed]
-    branches: [ 'main' ]
+  workflow_dispatch:
 
 # Set restrictive permissions at workflow level
 permissions:

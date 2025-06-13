@@ -1,9 +1,7 @@
 # TODO: trigger only if testing or any other checks previously succeeded
 name: Push to DockerHub (release)
 on:
-  push:
-    tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
 
 permissions:
   contents: read

@@ -1,11 +1,6 @@
 name: publish-technical-documentation-next
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "docs/sources/**"
   workflow_dispatch:
 
 # Set restrictive permissions at workflow level

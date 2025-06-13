@@ -5,14 +5,13 @@ import (
 	"time"
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/ebpf"
-	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/attribute"
 
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 )
 
@@ -41,9 +40,9 @@ func TestMetricAttributes(t *testing.T) {
 
 	me, err := newMetricsExporter(t.Context(),
 		&global.ContextInfo{MetricAttributeGroups: attributes.GroupKubernetes},
-		&NetMetricsConfig{SelectorCfg: &attrobi.SelectorConfig{
-			SelectionCfg: map[attrobi.Section]attrobi.InclusionLists{
-				attrobi.BeylaNetworkFlow.Section: {Include: []string{"*"}},
+		&NetMetricsConfig{SelectorCfg: &attributes.SelectorConfig{
+			SelectionCfg: map[attributes.Section]attributes.InclusionLists{
+				attributes.BeylaNetworkFlow.Section: {Include: []string{"*"}},
 			},
 		}, Metrics: &MetricsConfig{
 			MetricsEndpoint:   "http://foo",
@@ -100,9 +99,9 @@ func TestMetricAttributes_Filter(t *testing.T) {
 
 	me, err := newMetricsExporter(t.Context(),
 		&global.ContextInfo{MetricAttributeGroups: attributes.GroupKubernetes},
-		&NetMetricsConfig{SelectorCfg: &attrobi.SelectorConfig{
-			SelectionCfg: map[attrobi.Section]attrobi.InclusionLists{
-				attrobi.BeylaNetworkFlow.Section: {Include: []string{
+		&NetMetricsConfig{SelectorCfg: &attributes.SelectorConfig{
+			SelectionCfg: map[attributes.Section]attributes.InclusionLists{
+				attributes.BeylaNetworkFlow.Section: {Include: []string{
 					"src.address",
 					"k8s.src.name",
 					"k8s.dst.name",
@@ -160,8 +159,8 @@ func TestNetMetricsConfig_Disabled(t *testing.T) {
 
 func TestGetFilteredNetworkResourceAttrs(t *testing.T) {
 	hostID := "test-host-id"
-	attrSelector := attrobi.Selection{
-		attrobi.BeylaNetworkFlow.Section: attrobi.InclusionLists{
+	attrSelector := attributes.Selection{
+		attributes.BeylaNetworkFlow.Section: attributes.InclusionLists{
 			Include: []string{"*"},
 			Exclude: []string{"host.*"},
 		},

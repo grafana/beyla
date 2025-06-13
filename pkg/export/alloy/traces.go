@@ -8,7 +8,7 @@ import (
 
 	expirable2 "github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
-	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
+	attributes "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
@@ -26,7 +26,7 @@ func TracesReceiver(
 	ctxInfo *global.ContextInfo,
 	cfg *beyla.TracesReceiverConfig,
 	spanMetricsEnabled bool,
-	selectorCfg *attrobi.SelectorConfig,
+	selectorCfg *attributes.SelectorConfig,
 	input *msg.Queue[[]request.Span],
 ) swarm.InstanceFunc {
 	return func(_ context.Context) (swarm.RunFunc, error) {
@@ -60,7 +60,7 @@ type tracesReceiver struct {
 	attributeCache     *expirable2.LRU[svc.UID, []attribute.KeyValue]
 }
 
-func (tr *tracesReceiver) fetchConstantAttributes(selectorCfg *attrobi.SelectorConfig) error {
+func (tr *tracesReceiver) fetchConstantAttributes(selectorCfg *attributes.SelectorConfig) error {
 	var err error
 	tr.traceAttrs, err = otel.GetUserSelectedAttributes(selectorCfg)
 	if err != nil {

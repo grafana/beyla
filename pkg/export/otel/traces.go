@@ -14,7 +14,7 @@ import (
 
 	expirable2 "github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
-	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
@@ -43,7 +43,7 @@ import (
 	tracenoop "go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/zap"
 
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
+	"github.com/grafana/beyla/v2/pkg/export/extraattributes"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
@@ -148,7 +148,7 @@ func makeTracesReceiver(
 	cfg TracesConfig,
 	spanMetricsEnabled bool,
 	ctxInfo *global.ContextInfo,
-	selectorCfg *attrobi.SelectorConfig,
+	selectorCfg *attributes.SelectorConfig,
 	input *msg.Queue[[]request.Span],
 ) *tracesOTELReceiver {
 	return &tracesOTELReceiver{
@@ -167,7 +167,7 @@ func TracesReceiver(
 	ctxInfo *global.ContextInfo,
 	cfg TracesConfig,
 	spanMetricsEnabled bool,
-	selectorCfg *attrobi.SelectorConfig,
+	selectorCfg *attributes.SelectorConfig,
 	input *msg.Queue[[]request.Span],
 ) swarm.InstanceFunc {
 	return func(_ context.Context) (swarm.RunFunc, error) {
@@ -182,20 +182,20 @@ func TracesReceiver(
 type tracesOTELReceiver struct {
 	cfg                TracesConfig
 	ctxInfo            *global.ContextInfo
-	selectorCfg        *attrobi.SelectorConfig
+	selectorCfg        *attributes.SelectorConfig
 	is                 instrumentations.InstrumentationSelection
 	spanMetricsEnabled bool
 	attributeCache     *expirable2.LRU[svc.UID, []attribute.KeyValue]
 	input              <-chan []request.Span
 }
 
-func GetUserSelectedAttributes(selectorCfg *attrobi.SelectorConfig) (map[attr.Name]struct{}, error) {
+func GetUserSelectedAttributes(selectorCfg *attributes.SelectorConfig) (map[attr.Name]struct{}, error) {
 	// Get user attributes
-	attribProvider, err := attributes.NewBeylaAttrSelector(attributes.GroupTraces, selectorCfg)
+	attribProvider, err := extraattributes.NewBeylaAttrSelector(attributes.GroupTraces, selectorCfg)
 	if err != nil {
 		return nil, err
 	}
-	traceAttrsArr := attribProvider.For(attrobi.Traces)
+	traceAttrsArr := attribProvider.For(attributes.Traces)
 	traceAttrs := make(map[attr.Name]struct{})
 	for _, a := range traceAttrsArr {
 		traceAttrs[a] = struct{}{}

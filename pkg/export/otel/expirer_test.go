@@ -9,14 +9,14 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/ebpf"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
-	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
+
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/test/collector"
@@ -46,9 +46,9 @@ func TestNetMetricsExpiration(t *testing.T) {
 				Instrumentations: []string{
 					instrumentations.InstrumentationALL,
 				},
-			}, SelectorCfg: &attrobi.SelectorConfig{
-				SelectionCfg: attrobi.Selection{
-					attrobi.BeylaNetworkFlow.Section: attrobi.InclusionLists{
+			}, SelectorCfg: &attributes.SelectorConfig{
+				SelectionCfg: attributes.Selection{
+					attributes.BeylaNetworkFlow.Section: attributes.InclusionLists{
 						Include: []string{"src.name", "dst.name"},
 					},
 				},
@@ -142,7 +142,7 @@ func TestAppMetricsExpiration_ByMetricAttrs(t *testing.T) {
 	now := syncedClock{now: time.Now()}
 	timeNow = now.Now
 
-	var g attrobi.AttrGroups
+	var g attributes.AttrGroups
 	g.Add(attributes.GroupKubernetes)
 
 	metrics := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(20))
@@ -160,9 +160,9 @@ func TestAppMetricsExpiration_ByMetricAttrs(t *testing.T) {
 			Instrumentations: []string{
 				instrumentations.InstrumentationALL,
 			},
-		}, &attrobi.SelectorConfig{
-			SelectionCfg: attrobi.Selection{
-				attrobi.HTTPServerDuration.Section: attrobi.InclusionLists{
+		}, &attributes.SelectorConfig{
+			SelectionCfg: attributes.Selection{
+				attributes.HTTPServerDuration.Section: attributes.InclusionLists{
 					Include: []string{"url.path", "k8s.app.version"},
 				},
 			},
@@ -295,9 +295,9 @@ func TestAppMetricsExpiration_BySvcID(t *testing.T) {
 			Instrumentations: []string{
 				instrumentations.InstrumentationALL,
 			},
-		}, &attrobi.SelectorConfig{
-			SelectionCfg: attrobi.Selection{
-				attrobi.HTTPServerDuration.Section: attrobi.InclusionLists{
+		}, &attributes.SelectorConfig{
+			SelectionCfg: attributes.Selection{
+				attributes.HTTPServerDuration.Section: attributes.InclusionLists{
 					Include: []string{"url.path"},
 				},
 			},

@@ -10,7 +10,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/testutil"
-	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/filter"
@@ -23,7 +23,6 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 	"github.com/grafana/beyla/v2/pkg/internal/kube"
@@ -37,7 +36,7 @@ import (
 
 const testTimeout = 5 * time.Second
 
-func gctx(groups attrobi.AttrGroups) *global.ContextInfo {
+func gctx(groups attributes.AttrGroups) *global.ContextInfo {
 	return &global.ContextInfo{
 		Metrics:               imetrics.NoopReporter{},
 		MetricAttributeGroups: groups,
@@ -46,13 +45,13 @@ func gctx(groups attrobi.AttrGroups) *global.ContextInfo {
 	}
 }
 
-var allMetrics = attrobi.Selection{
-	"*": attrobi.InclusionLists{Include: []string{"*"}},
+var allMetrics = attributes.Selection{
+	"*": attributes.InclusionLists{Include: []string{"*"}},
 }
 
-func allMetricsBut(patterns ...string) attrobi.Selection {
-	return attrobi.Selection{
-		attrobi.HTTPServerDuration.Section: attrobi.InclusionLists{
+func allMetricsBut(patterns ...string) attributes.Selection {
+	return attributes.Selection{
+		attributes.HTTPServerDuration.Section: attributes.InclusionLists{
 			Include: []string{"*"},
 			Exclude: patterns,
 		},

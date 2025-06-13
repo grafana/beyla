@@ -14,7 +14,7 @@ import (
 
 	"github.com/gobwas/glob"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/tcmanager"
-	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
+	attributes "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubeflags"
@@ -203,8 +203,8 @@ network:
 				Override:     "the-host-id",
 				FetchTimeout: 4 * time.Second,
 			},
-			Select: attrobi.Selection{
-				attrobi.BeylaNetworkFlow.Section: attrobi.InclusionLists{
+			Select: attributes.Selection{
+				attributes.BeylaNetworkFlow.Section: attributes.InclusionLists{
 					Include: []string{"foo", "bar"},
 					Exclude: []string{"baz", "bae"},
 				},

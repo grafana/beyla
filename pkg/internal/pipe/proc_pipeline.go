@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"slices"
 
-	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
+	attributes "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 
@@ -40,7 +40,7 @@ func ProcessMetricsSwarmInstancer(
 			return swarm.EmptyRunFunc()
 		}
 
-		selectorCfg := &attrobi.SelectorConfig{
+		selectorCfg := &attributes.SelectorConfig{
 			SelectionCfg:            cfg.Attributes.Select,
 			ExtraGroupAttributesCfg: cfg.Attributes.ExtraGroupAttributes,
 		}

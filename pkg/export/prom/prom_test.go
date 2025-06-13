@@ -17,7 +17,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/connector"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
-	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
@@ -26,7 +26,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
@@ -43,7 +42,7 @@ func TestAppMetricsExpiration(t *testing.T) {
 	require.NoError(t, err)
 	promURL := fmt.Sprintf("http://127.0.0.1:%d/metrics", openPort)
 
-	var g attrobi.AttrGroups
+	var g attributes.AttrGroups
 	g.Add(attributes.GroupKubernetes)
 
 	// GIVEN a Prometheus Metrics Exporter with a metrics expire time of 3 minutes
@@ -63,9 +62,9 @@ func TestAppMetricsExpiration(t *testing.T) {
 			Features:                    []string{otel.FeatureApplication},
 			Instrumentations:            []string{instrumentations.InstrumentationALL},
 		},
-		&attrobi.SelectorConfig{
-			SelectionCfg: attrobi.Selection{
-				attrobi.HTTPServerDuration.Section: attrobi.InclusionLists{
+		&attributes.SelectorConfig{
+			SelectionCfg: attributes.Selection{
+				attributes.HTTPServerDuration.Section: attributes.InclusionLists{
 					Include: []string{"url_path", "k8s.app.version"},
 				},
 			},
@@ -539,9 +538,9 @@ func makePromExporter(
 			Features:                    []string{otel.FeatureApplication},
 			Instrumentations:            instrumentations,
 		},
-		&attrobi.SelectorConfig{
-			SelectionCfg: attrobi.Selection{
-				attrobi.HTTPServerDuration.Section: attrobi.InclusionLists{
+		&attributes.SelectorConfig{
+			SelectionCfg: attributes.Selection{
+				attributes.HTTPServerDuration.Section: attributes.InclusionLists{
 					Include: []string{"url_path"},
 				},
 			},

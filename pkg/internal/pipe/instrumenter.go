@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
-	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
+	attributes "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/filter"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
@@ -46,7 +46,7 @@ func newGraphBuilder(config *beyla.Config, ctxInfo *global.ContextInfo, tracesCh
 		ctxInfo: ctxInfo,
 	}
 
-	selectorCfg := &attrobi.SelectorConfig{
+	selectorCfg := &attributes.SelectorConfig{
 		SelectionCfg:            config.Attributes.Select,
 		ExtraGroupAttributesCfg: config.Attributes.ExtraGroupAttributes,
 	}
@@ -147,7 +147,7 @@ func (i *Instrumenter) Run(ctx context.Context) {
 // spanPtrPromGetters adapts the invocation of SpanPromGetters to work with a request.Span value
 // instead of a *request.Span pointer. This is a convenience method created to avoid having to
 // rewrite the pipeline types from []request.Span types to []*request.Span
-func spanPtrPromGetters(name attr.Name) (attrobi.Getter[request.Span, string], bool) {
+func spanPtrPromGetters(name attr.Name) (attributes.Getter[request.Span, string], bool) {
 	if ptrGetter, ok := request.SpanPromGetters(name); ok {
 		return func(span request.Span) string { return ptrGetter(&span) }, true
 	}

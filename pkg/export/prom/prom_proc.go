@@ -6,15 +6,15 @@ import (
 	"slices"
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/connector"
-	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
-	attr2 "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
+	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/expire"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
-	attrextra "github.com/grafana/beyla/v2/pkg/export/attributes/beyla"
+	"github.com/grafana/beyla/v2/pkg/export/extraattributes"
+	extranames "github.com/grafana/beyla/v2/pkg/export/extraattributes/names"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
@@ -25,7 +25,7 @@ import (
 // ProcPrometheusConfig for process metrics just wraps the global prom.ProcPrometheusConfig as provided by the user
 type ProcPrometheusConfig struct {
 	Metrics     *PrometheusConfig
-	SelectorCfg *attrobi.SelectorConfig
+	SelectorCfg *attributes.SelectorConfig
 }
 
 // nolint:gocritic
@@ -65,24 +65,24 @@ type procMetricsReporter struct {
 	clock *expire.CachedClock
 
 	// metrics
-	cpuTimeAttrs []attrobi.Field[*process.Status, string]
+	cpuTimeAttrs []attributes.Field[*process.Status, string]
 	cpuTime      *Expirer[prometheus.Counter]
 
-	cpuUtilizationAttrs []attrobi.Field[*process.Status, string]
+	cpuUtilizationAttrs []attributes.Field[*process.Status, string]
 	cpuUtilization      *Expirer[prometheus.Gauge]
 
 	// the OTEL spec for process memory says that this type is an UpDownCounter.
 	// Using Gauge as the nearest type in Prometheus.
-	memoryAttrs []attrobi.Field[*process.Status, string]
+	memoryAttrs []attributes.Field[*process.Status, string]
 	memory      *Expirer[prometheus.Gauge]
 
-	memoryVirtualAttrs []attrobi.Field[*process.Status, string]
+	memoryVirtualAttrs []attributes.Field[*process.Status, string]
 	memoryVirtual      *Expirer[prometheus.Gauge]
 
-	diskAttrs []attrobi.Field[*process.Status, string]
+	diskAttrs []attributes.Field[*process.Status, string]
 	disk      *Expirer[prometheus.Counter]
 
-	netAttrs []attrobi.Field[*process.Status, string]
+	netAttrs []attributes.Field[*process.Status, string]
 	net      *Expirer[prometheus.Counter]
 
 	// the observation code for CPU metrics will be different depending on
@@ -103,22 +103,22 @@ func newProcReporter(ctxInfo *global.ContextInfo, cfg *ProcPrometheusConfig, inp
 	// OTEL exporter would report also some prometheus-exclusive attributes
 	group.Add(attributes.GroupPrometheus)
 
-	provider, err := attributes.NewBeylaAttrSelector(group, cfg.SelectorCfg)
+	provider, err := extraattributes.NewBeylaAttrSelector(group, cfg.SelectorCfg)
 	if err != nil {
 		return nil, fmt.Errorf("network Prometheus exporter attributes enable: %w", err)
 	}
 
 	cpuTimeLblNames, cpuTimeGetters, cpuTimeHasState :=
-		attributesWithExplicit(provider, attributes.ProcessCPUTime, attrextra.ProcCPUMode)
+		attributesWithExplicit(provider, extraattributes.ProcessCPUTime, extranames.ProcCPUMode)
 	cpuUtilLblNames, cpuUtilGetters, cpuUtilHasState :=
-		attributesWithExplicit(provider, attributes.ProcessCPUUtilization, attrextra.ProcCPUMode)
+		attributesWithExplicit(provider, extraattributes.ProcessCPUUtilization, extranames.ProcCPUMode)
 	diskLblNames, diskGetters, diskHasDirection :=
-		attributesWithExplicit(provider, attributes.ProcessDiskIO, attrextra.ProcDiskIODir)
+		attributesWithExplicit(provider, extraattributes.ProcessDiskIO, extranames.ProcDiskIODir)
 	netLblNames, netGetters, netHasDirection :=
-		attributesWithExplicit(provider, attributes.ProcessDiskIO, attrextra.ProcNetIODir)
+		attributesWithExplicit(provider, extraattributes.ProcessDiskIO, extranames.ProcNetIODir)
 
-	attrMemory := attrobi.PrometheusGetters(process.PromGetters, provider.For(attributes.ProcessMemoryUsage))
-	attrMemoryVirtual := attrobi.PrometheusGetters(process.PromGetters, provider.For(attributes.ProcessMemoryVirtual))
+	attrMemory := attributes.PrometheusGetters(process.PromGetters, provider.For(extraattributes.ProcessMemoryUsage))
+	attrMemoryVirtual := attributes.PrometheusGetters(process.PromGetters, provider.For(extraattributes.ProcessMemoryVirtual))
 
 	clock := expire.NewCachedClock(timeNow)
 	// If service name is not explicitly set, we take the service name as set by the
@@ -129,32 +129,32 @@ func newProcReporter(ctxInfo *global.ContextInfo, cfg *ProcPrometheusConfig, inp
 		clock:        clock,
 		cpuTimeAttrs: cpuTimeGetters,
 		cpuTime: NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: attributes.ProcessCPUTime.Prom,
+			Name: extraattributes.ProcessCPUTime.Prom,
 			Help: "Total CPU seconds broken down by different states",
 		}, cpuTimeLblNames).MetricVec, clock.Time, cfg.Metrics.TTL),
 		cpuUtilizationAttrs: cpuUtilGetters,
 		cpuUtilization: NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
-			Name: attributes.ProcessCPUUtilization.Prom,
+			Name: extraattributes.ProcessCPUUtilization.Prom,
 			Help: "Difference in process.cpu.time since the last measurement, divided by the elapsed time and number of CPUs available to the process",
 		}, cpuUtilLblNames).MetricVec, clock.Time, cfg.Metrics.TTL),
 		memoryAttrs: attrMemory,
 		memory: NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
-			Name: attributes.ProcessMemoryUsage.Prom,
+			Name: extraattributes.ProcessMemoryUsage.Prom,
 			Help: "The amount of physical memory in use",
 		}, labelNames[*process.Status](attrMemory)).MetricVec, clock.Time, cfg.Metrics.TTL),
 		memoryVirtualAttrs: attrMemoryVirtual,
 		memoryVirtual: NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
-			Name: attributes.ProcessMemoryVirtual.Prom,
+			Name: extraattributes.ProcessMemoryVirtual.Prom,
 			Help: "The amount of committed virtual memory",
 		}, labelNames[*process.Status](attrMemoryVirtual)).MetricVec, clock.Time, cfg.Metrics.TTL),
 		diskAttrs: diskGetters,
 		disk: NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: attributes.ProcessDiskIO.Prom,
+			Name: extraattributes.ProcessDiskIO.Prom,
 			Help: "Disk bytes transferred",
 		}, diskLblNames).MetricVec, clock.Time, cfg.Metrics.TTL),
 		netAttrs: netGetters,
 		net: NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: attributes.ProcessNetIO.Prom,
+			Name: extraattributes.ProcessNetIO.Prom,
 			Help: "Network bytes transferred",
 		}, netLblNames).MetricVec, clock.Time, cfg.Metrics.TTL),
 		procStatusInput: input.Subscribe(),
@@ -297,9 +297,9 @@ func (r *procMetricsReporter) observeDisaggregatedNet(proc *process.Status) {
 // provided explicit attribute name and value (e.g. "cpu.mode"
 // or "disk.io.direction")
 func attributesWithExplicit(
-	provider *attrobi.AttrSelector, metricName attrobi.Name, explicitAttribute attr2.Name,
+	provider *attributes.AttrSelector, metricName attributes.Name, explicitAttribute attr.Name,
 ) (
-	names []string, getters []attrobi.Field[*process.Status, string], containsExplicit bool,
+	names []string, getters []attributes.Field[*process.Status, string], containsExplicit bool,
 ) {
 	attrNames := provider.For(metricName)
 	// For example, "cpu_mode" won't be added by PrometheusGetters, as it's not defined in the *process.Status
@@ -307,7 +307,7 @@ func attributesWithExplicit(
 	// observeAggregatedCPU and observeDisaggregatedCPU
 	// Similar for "process_disk_io" or "process_network_io"
 	containsExplicit = slices.Contains(attrNames, explicitAttribute)
-	getters = attrobi.PrometheusGetters(process.PromGetters, attrNames)
+	getters = attributes.PrometheusGetters(process.PromGetters, attrNames)
 
 	if containsExplicit {
 		// the names and the getters arrays will have different length.

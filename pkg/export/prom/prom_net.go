@@ -7,13 +7,13 @@ import (
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/connector"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/ebpf"
-	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/expire"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
+	"github.com/grafana/beyla/v2/pkg/export/extraattributes"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 )
 
@@ -22,7 +22,7 @@ import (
 // NetPrometheusConfig for network metrics just wraps the global prom.NetPrometheusConfig as provided by the user
 type NetPrometheusConfig struct {
 	Config      *PrometheusConfig
-	SelectorCfg *attrobi.SelectorConfig
+	SelectorCfg *attributes.SelectorConfig
 	// Deprecated: to be removed in Beyla 3.0 with BEYLA_NETWORK_METRICS bool flag
 	GloballyEnabled bool
 }
@@ -40,8 +40,8 @@ type netMetricsReporter struct {
 
 	promConnect *connector.PrometheusManager
 
-	flowAttrs      []attrobi.Field[*ebpf.Record, string]
-	interZoneAttrs []attrobi.Field[*ebpf.Record, string]
+	flowAttrs      []attributes.Field[*ebpf.Record, string]
+	interZoneAttrs []attributes.Field[*ebpf.Record, string]
 
 	clock *expire.CachedClock
 
@@ -79,7 +79,7 @@ func newNetReporter(
 	// OTEL exporter would report also some prometheus-exclusive attributes
 	group.Add(attributes.GroupPrometheus)
 
-	provider, err := attributes.NewBeylaAttrSelector(group, cfg.SelectorCfg)
+	provider, err := extraattributes.NewBeylaAttrSelector(group, cfg.SelectorCfg)
 	if err != nil {
 		return nil, fmt.Errorf("network Prometheus exporter attributes enable: %w", err)
 	}
@@ -97,12 +97,12 @@ func newNetReporter(
 	log := slog.With("component", "prom.NetworkEndpoint")
 	if cfg.GloballyEnabled || mr.cfg.NetworkFlowBytesEnabled() {
 		log.Debug("registering network flow bytes metric")
-		mr.flowAttrs = attrobi.PrometheusGetters(
+		mr.flowAttrs = attributes.PrometheusGetters(
 			ebpf.RecordStringGetters,
-			provider.For(attrobi.BeylaNetworkFlow))
+			provider.For(attributes.BeylaNetworkFlow))
 
 		mr.flowBytes = NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: attrobi.BeylaNetworkFlow.Prom,
+			Name: attributes.BeylaNetworkFlow.Prom,
 			Help: "bytes submitted from a source network endpoint to a destination network endpoint",
 		}, labelNames(mr.flowAttrs)).MetricVec, clock.Time, cfg.Config.TTL)
 		register = append(register, mr.flowBytes)
@@ -110,12 +110,12 @@ func newNetReporter(
 
 	if mr.cfg.NetworkInterzoneMetricsEnabled() {
 		log.Debug("registering network inter-zone metric")
-		mr.interZoneAttrs = attrobi.PrometheusGetters(
+		mr.interZoneAttrs = attributes.PrometheusGetters(
 			ebpf.RecordStringGetters,
-			provider.For(attrobi.BeylaNetworkInterZone))
+			provider.For(attributes.BeylaNetworkInterZone))
 
 		mr.interZone = NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: attrobi.BeylaNetworkInterZone.Prom,
+			Name: attributes.BeylaNetworkInterZone.Prom,
 			Help: "bytes submitted between different cloud availability zones",
 		}, labelNames(mr.interZoneAttrs)).MetricVec, clock.Time, cfg.Config.TTL)
 		register = append(register, mr.interZone)

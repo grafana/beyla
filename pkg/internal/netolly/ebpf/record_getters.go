@@ -1,7 +1,7 @@
 package ebpf
 
 import (
-	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
+	attributes "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"go.opentelemetry.io/otel/attribute"
 
@@ -16,8 +16,8 @@ const (
 // RecordGetters returns the attributes.Getter function that returns the string value of a given
 // attribute name.
 // nolint:cyclop
-func RecordGetters(name attr.Name) (attrobi.Getter[*Record, attribute.KeyValue], bool) {
-	var getter attrobi.Getter[*Record, attribute.KeyValue]
+func RecordGetters(name attr.Name) (attributes.Getter[*Record, attribute.KeyValue], bool) {
+	var getter attributes.Getter[*Record, attribute.KeyValue]
 	switch name {
 	case attr.BeylaIP:
 		getter = func(r *Record) attribute.KeyValue { return attribute.String(string(attr.BeylaIP), r.Attrs.BeylaIP) }
@@ -103,7 +103,7 @@ func RecordGetters(name attr.Name) (attrobi.Getter[*Record, attribute.KeyValue],
 	return getter, getter != nil
 }
 
-func RecordStringGetters(name attr.Name) (attrobi.Getter[*Record, string], bool) {
+func RecordStringGetters(name attr.Name) (attributes.Getter[*Record, string], bool) {
 	if g, ok := RecordGetters(name); ok {
 		return func(r *Record) string { return g(r).Value.Emit() }, true
 	}

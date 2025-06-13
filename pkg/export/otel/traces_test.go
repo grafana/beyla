@@ -17,7 +17,7 @@ import (
 	"github.com/mariomac/guara/pkg/test"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/sqlprune"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
-	attrobi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
+	attributes "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
@@ -1091,7 +1091,7 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 			Instrumentations:  []string{instrumentations.InstrumentationALL},
 		},
 		false,
-		&attrobi.SelectorConfig{},
+		&attributes.SelectorConfig{},
 		exportTraces,
 	)(context.Background())
 	require.NoError(t, err)
@@ -1579,7 +1579,7 @@ func makeTracesTestReceiver(instr []string) *tracesOTELReceiver {
 		},
 		false,
 		&global.ContextInfo{},
-		&attrobi.SelectorConfig{},
+		&attributes.SelectorConfig{},
 		msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10)),
 	)
 }
@@ -1594,7 +1594,7 @@ func makeTracesTestReceiverWithSpanMetrics(instr []string) *tracesOTELReceiver {
 		},
 		true,
 		&global.ContextInfo{},
-		&attrobi.SelectorConfig{},
+		&attributes.SelectorConfig{},
 		msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10)),
 	)
 }

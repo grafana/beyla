@@ -197,7 +197,7 @@ func TCPToRedisToSpan(trace *TCPRequestInfo, op, text string, status int) reques
 		TraceID:       trace2.TraceID(trace.Tp.TraceId),
 		SpanID:        trace2.SpanID(trace.Tp.SpanId),
 		ParentSpanID:  trace2.SpanID(trace.Tp.ParentId),
-		Flags:         trace.Tp.Flags,
+		TraceFlags:    trace.Tp.Flags,
 		Pid: request.PidInfo{
 			HostPID:   trace.Pid.HostPid,
 			UserPID:   trace.Pid.UserPid,
@@ -243,7 +243,7 @@ func ReadGoRedisRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, err
 		TraceID:       trace2.TraceID(event.Tp.TraceId),
 		SpanID:        trace2.SpanID(event.Tp.SpanId),
 		ParentSpanID:  trace2.SpanID(event.Tp.ParentId),
-		Flags:         event.Tp.Flags,
+		TraceFlags:    event.Tp.Flags,
 		Pid: request.PidInfo{
 			HostPID:   event.Pid.HostPid,
 			UserPID:   event.Pid.UserPid,

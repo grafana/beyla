@@ -121,6 +121,7 @@ type PidInfo struct {
 // SpanPromGetters and getDefinitions in pkg/export/attributes/attr_defs.go
 type Span struct {
 	Type           EventType      `json:"type"`
+	Flags          uint8          `json:"-"`
 	Method         string         `json:"-"`
 	Path           string         `json:"-"`
 	Route          string         `json:"-"`
@@ -138,7 +139,7 @@ type Span struct {
 	TraceID        trace2.TraceID `json:"traceID"`
 	SpanID         trace2.SpanID  `json:"spanID"`
 	ParentSpanID   trace2.SpanID  `json:"parentSpanID"`
-	Flags          uint8          `json:"flags,string"`
+	TraceFlags     uint8          `json:"traceFlags,string"`
 	Pid            PidInfo        `json:"-"`
 	PeerName       string         `json:"peerName"`
 	HostName       string         `json:"hostName"`

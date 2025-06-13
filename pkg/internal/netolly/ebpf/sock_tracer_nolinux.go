@@ -4,6 +4,7 @@ package ebpf
 
 import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/ringbuf"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/ebpf"
 )
 
 type SockFlowFetcher struct{}
@@ -12,7 +13,7 @@ func (s *SockFlowFetcher) Close() error {
 	panic("this is never going to be executed")
 }
 
-func (s *SockFlowFetcher) LookupAndDeleteMap() map[NetFlowId][]NetFlowMetrics {
+func (s *SockFlowFetcher) LookupAndDeleteMap() map[ebpf.NetFlowId][]ebpf.NetFlowMetrics {
 	panic("this is never going to be executed")
 }
 

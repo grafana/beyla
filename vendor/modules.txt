@@ -370,7 +370,7 @@ github.com/munnerz/goautoneg
 # github.com/mxk/go-flowrate v0.0.0-20140419014527-cca7078d478f
 ## explicit
 github.com/mxk/go-flowrate/flowrate
-# github.com/open-telemetry/opentelemetry-ebpf-instrumentation v0.0.0-20250612140350-16975884f762 => ./.obi-src
+# github.com/open-telemetry/opentelemetry-ebpf-instrumentation v0.0.0-20250612235719-9266ba8148da => ./.obi-src
 ## explicit; go 1.24.1
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla
@@ -420,11 +420,11 @@ github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrume
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel/metric
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel/metric/api/metric
+github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel/metric/components
+github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel/metric/components/aggregate
+github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel/metric/components/exemplar
+github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel/metric/components/x
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel/metric/global
-github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel/metric/internal
-github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel/metric/internal/aggregate
-github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel/metric/internal/exemplar
-github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel/metric/internal/x
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/prom
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/filter
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubecache/informer

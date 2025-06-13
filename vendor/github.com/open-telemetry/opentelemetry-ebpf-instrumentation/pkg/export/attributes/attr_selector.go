@@ -30,7 +30,7 @@ type AttrReportGroup struct {
 	Attributes map[attr.Name]Default
 }
 
-func newAttrReportGroup(
+func NewAttrReportGroup(
 	disabled bool,
 	subGroups []*AttrReportGroup,
 	attributes map[attr.Name]Default,
@@ -50,7 +50,7 @@ func newAttrReportGroup(
 // GroupAttributes defines additional attributes for each group
 type GroupAttributes map[AttrGroups][]attr.Name
 
-func newGroupAttributes(groupAttrsCfg map[string][]attr.Name) GroupAttributes {
+func NewGroupAttributes(groupAttrsCfg map[string][]attr.Name) GroupAttributes {
 	log := alog()
 
 	groupAttrs := make(GroupAttributes, len(groupAttrsCfg))
@@ -97,12 +97,20 @@ func NewAttrSelector(
 	groups AttrGroups,
 	cfg *SelectorConfig,
 ) (*AttrSelector, error) {
+	return NewCustomAttrSelector(groups, cfg, getDefinitions)
+}
+
+func NewCustomAttrSelector(
+	groups AttrGroups,
+	cfg *SelectorConfig,
+	definitionsProvider func(groups AttrGroups, extraGroupAttributes GroupAttributes) map[Section]AttrReportGroup,
+) (*AttrSelector, error) {
 	cfg.SelectionCfg.Normalize()
-	extraGroupAttributes := newGroupAttributes(cfg.ExtraGroupAttributesCfg)
+	extraGroupAttributes := NewGroupAttributes(cfg.ExtraGroupAttributesCfg)
 	// TODO: validate
 	return &AttrSelector{
 		selector:   cfg.SelectionCfg,
-		definition: getDefinitions(groups, extraGroupAttributes),
+		definition: definitionsProvider(groups, extraGroupAttributes),
 	}, nil
 }
 

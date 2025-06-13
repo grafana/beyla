@@ -37,7 +37,7 @@ func newAttrReportGroup(
 }
 
 // GroupAttributes defines additional attributes for each group
-type GroupAttributes map[AttrGroups][]attr.Name
+type GroupAttributes = attributes2.GroupAttributes
 
 func newGroupAttributes(groupAttrsCfg map[string][]attr.Name) GroupAttributes {
 	log := alog()
@@ -78,4 +78,15 @@ type AttrSelector = attributes2.AttrSelector
 
 // NewAttrSelector returns an AttrSelector instance based on the user-provided attributes Selection
 // and the auto-detected attribute AttrGroups
-var NewAttrSelector = attributes2.NewAttrSelector
+func NewAttrSelector(
+	groups AttrGroups,
+	cfg *SelectorConfig,
+) (*AttrSelector, error) {
+	cfg.SelectionCfg.Normalize()
+
+	return attributes2.NewCustomAttrSelector(
+		groups,
+		cfg,
+		getDefinitions,
+	)
+}

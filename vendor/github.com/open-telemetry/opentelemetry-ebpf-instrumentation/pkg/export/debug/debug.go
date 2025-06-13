@@ -140,7 +140,7 @@ func traceparent(span *request.Span) string {
 	if !span.TraceID.IsValid() {
 		return ""
 	}
-	return fmt.Sprintf("00-%s-%s[%s]-%02x", span.TraceID.String(), span.SpanID.String(), span.ParentSpanID.String(), span.Flags)
+	return fmt.Sprintf("00-%s-%s[%s]-%02x", span.TraceID.String(), span.SpanID.String(), span.ParentSpanID.String(), span.TraceFlags)
 }
 
 func counterPrinter(in *msg.Queue[[]request.Span]) swarm.RunFunc {

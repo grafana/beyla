@@ -5,6 +5,7 @@ package ebpf
 import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/ringbuf"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/tcmanager"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/ebpf"
 )
 
 type FlowFetcher struct {
@@ -22,6 +23,6 @@ func (m *FlowFetcher) ReadRingBuf() (ringbuf.Record, error) {
 	return ringbuf.Record{}, nil
 }
 
-func (m *FlowFetcher) LookupAndDeleteMap() map[NetFlowId][]NetFlowMetrics {
+func (m *FlowFetcher) LookupAndDeleteMap() map[ebpf.NetFlowId][]ebpf.NetFlowMetrics {
 	return nil
 }

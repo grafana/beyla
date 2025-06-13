@@ -212,7 +212,7 @@ func TCPToFastCGIToSpan(trace *TCPRequestInfo, op, uri string, status int) reque
 		TraceID:       trace.Tp.TraceId,
 		SpanID:        trace.Tp.SpanId,
 		ParentSpanID:  trace.Tp.ParentId,
-		Flags:         trace.Tp.Flags,
+		TraceFlags:    trace.Tp.Flags,
 		Pid: request.PidInfo{
 			HostPID:   trace.Pid.HostPid,
 			UserPID:   trace.Pid.UserPid,

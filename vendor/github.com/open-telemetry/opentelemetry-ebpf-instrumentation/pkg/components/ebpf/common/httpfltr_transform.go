@@ -34,7 +34,7 @@ func httpInfoToSpan(info *HTTPInfo) request.Span {
 		TraceID:        info.Tp.TraceId,
 		SpanID:         info.Tp.SpanId,
 		ParentSpanID:   info.Tp.ParentId,
-		Flags:          info.Tp.Flags,
+		TraceFlags:     info.Tp.Flags,
 		Pid: request.PidInfo{
 			HostPID:   info.Pid.HostPid,
 			UserPID:   info.Pid.UserPid,

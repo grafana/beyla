@@ -43,7 +43,6 @@ func serve(rw http.ResponseWriter, req *http.Request) {
 
 func pingAsync(rw http.ResponseWriter, req *http.Request) {
 	duration, err := time.ParseDuration("10s")
-
 	if err != nil {
 		slog.Error("can't parse duration", "error", err)
 		os.Exit(-1)
@@ -71,7 +70,7 @@ func pingAsync(rw http.ResponseWriter, req *http.Request) {
 }
 
 func pingHandler(rw http.ResponseWriter, req *http.Request) {
-	var delay = 0 * time.Second
+	delay := 0 * time.Second
 
 	if req.URL.Query().Has(delayArg) {
 		delay, _ = time.ParseDuration(req.URL.Query().Get(delayArg))

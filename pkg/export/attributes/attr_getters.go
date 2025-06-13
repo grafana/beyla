@@ -6,9 +6,11 @@ import (
 )
 
 // TODO : remove
-type Getter[T, O any] = attributes2.Getter[T, O]
-type Field[T, O any] = attributes2.Field[T, O]
-type NamedGetters[T, O any] = attributes2.NamedGetters[T, O]
+type (
+	Getter[T, O any]       = attributes2.Getter[T, O]
+	Field[T, O any]        = attributes2.Field[T, O]
+	NamedGetters[T, O any] = attributes2.NamedGetters[T, O]
+)
 
 func PrometheusGetters[T, O any](getter NamedGetters[T, O], names []attr.Name) []Field[T, O] {
 	return buildGetterList[T, O](getter, names, attr.Name.Prom)

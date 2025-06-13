@@ -38,7 +38,6 @@ func TestMultiNodeTracing(t *testing.T) {
 				var trace jaeger.Trace
 				var traceID string
 				test.Eventually(t, testTimeout, func(t require.TestingT) {
-
 					resp, err := http.Get("http://localhost:38080/gotracemetoo")
 					require.NoError(t, err)
 					require.Equal(t, http.StatusOK, resp.StatusCode)

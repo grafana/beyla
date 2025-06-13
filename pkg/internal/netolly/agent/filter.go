@@ -35,7 +35,7 @@ type interfaceFilter struct {
 // according to the provided allowed and excluded interfaces from the configuration. It allows
 // matching by exact string or by regular expression
 func initInterfaceFilter(allowed, excluded []string) (interfaceFilter, error) {
-	var isRegexp = regexp.MustCompile("^/(.*)/$")
+	isRegexp := regexp.MustCompile("^/(.*)/$")
 
 	itf := interfaceFilter{}
 	for _, definition := range allowed {

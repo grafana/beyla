@@ -8,15 +8,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
+
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers/container"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/testutil"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubecache/informer"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/services"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/internal/kube"
@@ -45,13 +46,13 @@ func TestWatcherKubeEnricher(t *testing.T) {
 		steps []event
 	}
 	// test deployment functions
-	var process = func(input *msg.Queue[[]Event[processAttrs]], _ meta.Notifier) {
+	process := func(input *msg.Queue[[]Event[processAttrs]], _ meta.Notifier) {
 		newProcess(input, containerPID, []uint32{containerPort})
 	}
-	var pod = func(_ *msg.Queue[[]Event[processAttrs]], fInformer meta.Notifier) {
+	pod := func(_ *msg.Queue[[]Event[processAttrs]], fInformer meta.Notifier) {
 		deployPod(fInformer, namespace, podName, containerID, nil)
 	}
-	var ownedPod = func(_ *msg.Queue[[]Event[processAttrs]], fInformer meta.Notifier) {
+	ownedPod := func(_ *msg.Queue[[]Event[processAttrs]], fInformer meta.Notifier) {
 		deployOwnedPod(fInformer, namespace, podName, replicaSetName, deploymentName, containerID)
 	}
 
@@ -61,7 +62,8 @@ func TestWatcherKubeEnricher(t *testing.T) {
 		{name: "process-pod", steps: []event{{fn: process, shouldNotify: true}, {fn: ownedPod, shouldNotify: true}}},
 		{name: "pod-process", steps: []event{{fn: ownedPod, shouldNotify: false}, {fn: process, shouldNotify: true}}},
 		{name: "process-pod (no owner)", steps: []event{{fn: process, shouldNotify: true}, {fn: pod, shouldNotify: true}}},
-		{name: "pod-process (no owner)", steps: []event{{fn: pod, shouldNotify: false}, {fn: process, shouldNotify: true}}}}
+		{name: "pod-process (no owner)", steps: []event{{fn: pod, shouldNotify: false}, {fn: process, shouldNotify: true}}},
+	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -305,8 +307,10 @@ func deployOwnedPod(fInformer meta.Notifier, ns, name, replicaSetName, deploymen
 			Kind: "Pod",
 			Pod: &informer.PodInfo{
 				Containers: []*informer.ContainerInfo{{Id: containerID}},
-				Owners: []*informer.Owner{{Name: replicaSetName, Kind: "ReplicaSet"},
-					{Name: deploymentName, Kind: "Deployment"}},
+				Owners: []*informer.Owner{
+					{Name: replicaSetName, Kind: "ReplicaSet"},
+					{Name: deploymentName, Kind: "Deployment"},
+				},
 			},
 		},
 	})

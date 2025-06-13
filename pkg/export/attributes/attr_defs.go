@@ -378,7 +378,7 @@ func getDefinitions(
 }
 
 func copyDisabled(src AttrReportGroup) AttrReportGroup {
-	var dst = AttrReportGroup{
+	dst := AttrReportGroup{
 		Disabled:   src.Disabled,
 		Attributes: map[attr.Name]Default{},
 	}

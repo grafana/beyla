@@ -39,7 +39,6 @@ func init() {
 }
 
 func Start(ctx context.Context) (*TestCollector, error) {
-
 	tc := TestCollector{}
 	tc.ResetRecords()
 	tc.ResetTraceRecords()

@@ -10,7 +10,6 @@ import (
 )
 
 func TestServiceNameTemplate(t *testing.T) {
-
 	cfg := &beyla.Config{
 		Attributes: beyla.Attributes{
 			Kubernetes: transform.KubernetesDecorator{

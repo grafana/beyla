@@ -26,8 +26,10 @@ const (
 )
 
 // values according to official Kind documentation: https://kind.sigs.k8s.io/docs/user/configuration/#pod-subnet
-var podSubnets = []string{"10.244.0.0/16", "fd00:10:244::/56"}
-var svcSubnets = []string{"10.96.0.0/16", "fd00:10:96::/112"}
+var (
+	podSubnets = []string{"10.244.0.0/16", "fd00:10:244::/56"}
+	svcSubnets = []string{"10.96.0.0/16", "fd00:10:96::/112"}
+)
 
 func FeatureNetworkFlowBytes() features.Feature {
 	pinger := kube.Template[k8s.Pinger]{

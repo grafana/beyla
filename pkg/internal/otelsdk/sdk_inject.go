@@ -90,7 +90,6 @@ func (i *SDKInjector) NewExecutable(ie *ebpf.Instrumentable) error {
 		i.log.Info("injecting OpenTelemetry SDK instrumentation for Java process", "pid", ie.FileInfo.Pid)
 
 		agentPath, err := i.extractAgent(ie)
-
 		if err != nil {
 			i.log.Error("failed to extract java agent", "pid", ie.FileInfo.Pid, "error", err)
 			return err
@@ -110,7 +109,6 @@ func (i *SDKInjector) NewExecutable(ie *ebpf.Instrumentable) error {
 func (i *SDKInjector) extractAgent(ie *ebpf.Instrumentable) (string, error) {
 	root := ebpfcommon.RootDirectoryForPID(ie.FileInfo.Pid)
 	tempDir, err := i.findTempDir(root, ie)
-
 	if err != nil {
 		return "", fmt.Errorf("error accessing temp directory: %w", err)
 	}
@@ -123,7 +121,7 @@ func (i *SDKInjector) extractAgent(ie *ebpf.Instrumentable) (string, error) {
 
 	agentPathHost := filepath.Join(fullTempDir, agentFile)
 
-	if err = os.WriteFile(agentPathHost, _agentBytes, 0644); err != nil {
+	if err = os.WriteFile(agentPathHost, _agentBytes, 0o644); err != nil {
 		return "", fmt.Errorf("error writing file: %w", err)
 	}
 

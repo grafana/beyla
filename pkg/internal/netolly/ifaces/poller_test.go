@@ -37,7 +37,7 @@ func TestPoller(t *testing.T) {
 	// fake net.Interfaces implementation that returns two different sets of
 	// interfaces on successive invocations
 	firstInvocation := true
-	var fakeInterfaces = func() ([]Interface, error) {
+	fakeInterfaces := func() ([]Interface, error) {
 		if firstInvocation {
 			firstInvocation = false
 			return []Interface{{"foo", 1}, {"bar", 2}}, nil

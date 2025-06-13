@@ -106,7 +106,6 @@ __check_defined = \
 GOLANGCI_LINT = $(TOOLS_DIR)/golangci-lint
 BPF2GO = $(TOOLS_DIR)/bpf2go
 GO_OFFSETS_TRACKER = $(TOOLS_DIR)/go-offsets-tracker
-GOIMPORTS_REVISER = $(TOOLS_DIR)/goimports-reviser
 GO_LICENSES = $(TOOLS_DIR)/go-licenses
 KIND = $(TOOLS_DIR)/kind
 DASHBOARD_LINTER = $(TOOLS_DIR)/dashboard-linter
@@ -121,13 +120,6 @@ ENVTEST_K8S_VERSION = 1.30.0
 # Options are set to exit when a recipe line exits non-zero or a piped command fails.
 SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
-
-GOIMPORTS_REVISER_ARGS = -company-prefixes github.com/grafana -project-name github.com/grafana/beyla/
-
-define check_format
-	$(shell $(foreach FILE, $(shell find . -name "*.go" -not -path "**/vendor/*" -not -path "**/.obi-src/*"), \
-		$(GOIMPORTS_REVISER) $(GOIMPORTS_REVISER_ARGS) -list-diff -output stdout $(FILE);))
-endef
 
 .phony: obi-submodule
 obi-submodule:
@@ -150,9 +142,8 @@ bpf2go:
 prereqs: install-hooks bpf2go
 	@echo "### Check if prerequisites are met, and installing missing dependencies"
 	mkdir -p $(TEST_OUTPUT)/run
-	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint,v1.64.7)
+	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/v2/cmd/golangci-lint,v2.1.6)
 	$(call go-install-tool,$(GO_OFFSETS_TRACKER),github.com/grafana/go-offsets-tracker/cmd/go-offsets-tracker,$(call gomod-version,grafana/go-offsets-tracker))
-	$(call go-install-tool,$(GOIMPORTS_REVISER),github.com/incu6us/goimports-reviser/v3,v3.6.4)
 	$(call go-install-tool,$(GO_LICENSES),github.com/google/go-licenses,v1.6.0)
 	$(call go-install-tool,$(KIND),sigs.k8s.io/kind,v0.20.0)
 	$(call go-install-tool,$(DASHBOARD_LINTER),github.com/grafana/dashboard-linter,latest)
@@ -161,17 +152,7 @@ prereqs: install-hooks bpf2go
 .PHONY: fmt
 fmt: prereqs
 	@echo "### Formatting code and fixing imports"
-	@$(foreach FILE, $(shell find . -name "*.go" -not -path "**/vendor/*" -not -path "**/.obi-src/*"), \
-		$(GOIMPORTS_REVISER) $(GOIMPORTS_REVISER_ARGS) $(FILE);)
-
-.PHONY: checkfmt
-checkfmt:
-	@echo '### check correct formatting and imports'
-	@if [ "$(strip $(check_format))" != "" ]; then \
-		echo "$(check_format)"; \
-		echo "Above files are not properly formatted. Run 'make fmt' to fix them"; \
-		exit 1; \
-	fi
+	$(GOLANGCI_LINT) fmt
 
 .PHONY: clang-tidy
 clang-tidy:
@@ -189,7 +170,7 @@ lint-dashboard: prereqs
 	fi
 
 .PHONY: lint
-lint: prereqs checkfmt
+lint: prereqs
 	@echo "### Linting code"
 	$(GOLANGCI_LINT) run ./... --timeout=6m
 

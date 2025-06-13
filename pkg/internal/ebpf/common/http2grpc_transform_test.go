@@ -128,7 +128,6 @@ func TestHTTP2Parsing(t *testing.T) {
 			framer := byteFramer(tt.input[:tt.inputLen])
 			for {
 				f, err := framer.ReadFrame()
-
 				if err != nil {
 					break
 				}

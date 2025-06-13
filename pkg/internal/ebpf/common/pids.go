@@ -160,7 +160,6 @@ func (pf *PIDsFilter) addPID(pid, nsid uint32, s *svc.Attrs, t PIDType) {
 	}
 
 	allPids, err := readNamespacePIDs(int32(pid))
-
 	if err != nil {
 		pf.log.Debug("Error looking up namespaced pids", "pid", pid, "error", err)
 		return
@@ -191,8 +190,7 @@ func (pf *PIDsFilter) removePID(pid, nsid uint32) {
 
 // IdentityPidsFilter is a PIDsFilter that does not filter anything. It is feasible
 // for concrete cases like GPU tracing
-type IdentityPidsFilter struct {
-}
+type IdentityPidsFilter struct{}
 
 func (pf *IdentityPidsFilter) AllowPID(_ uint32, _ uint32, _ *svc.Attrs, _ PIDType) {}
 

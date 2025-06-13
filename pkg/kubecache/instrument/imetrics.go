@@ -3,8 +3,9 @@ package instrument
 import (
 	"runtime"
 
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/connector"
 	"github.com/prometheus/client_golang/prometheus"
+
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/connector"
 
 	"github.com/grafana/beyla/v2/pkg/buildinfo"
 )
@@ -89,27 +90,35 @@ func prometheusInternalMetrics(
 func (n *promInternalMetrics) InformerNew() {
 	n.informerEvents.WithLabelValues("new").Inc()
 }
+
 func (n *promInternalMetrics) InformerUpdate() {
 	n.informerEvents.WithLabelValues("update").Inc()
 }
+
 func (n *promInternalMetrics) InformerDelete() {
 	n.informerEvents.WithLabelValues("delete").Inc()
 }
+
 func (n *promInternalMetrics) ClientConnect() {
 	n.connectedClients.Inc()
 }
+
 func (n *promInternalMetrics) ClientDisconnect() {
 	n.connectedClients.Dec()
 }
+
 func (n *promInternalMetrics) MessageSubmit() {
 	n.clientMessages.WithLabelValues("submit").Inc()
 }
+
 func (n *promInternalMetrics) MessageSucceed() {
 	n.clientMessages.WithLabelValues("success").Inc()
 }
+
 func (n *promInternalMetrics) MessageTimeout() {
 	n.clientMessages.WithLabelValues("timeout").Inc()
 }
+
 func (n *promInternalMetrics) MessageError() {
 	n.clientMessages.WithLabelValues("error").Inc()
 }

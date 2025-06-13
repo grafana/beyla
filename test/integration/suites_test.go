@@ -525,7 +525,6 @@ func KernelLockdownMode() bool {
 	// If we can't find the file, assume no lockdown
 	if _, err := os.Stat(lockdownPath); err == nil {
 		f, err := os.Open(lockdownPath)
-
 		if err != nil {
 			return true
 		}

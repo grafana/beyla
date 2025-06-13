@@ -29,9 +29,10 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/rlimit"
+	"golang.org/x/sys/unix"
+
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/ringbuf"
 	ebpf2 "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/ebpf"
-	"golang.org/x/sys/unix"
 
 	convenience "github.com/grafana/beyla/v2/pkg/internal/ebpf/convenience"
 )

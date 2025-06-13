@@ -83,7 +83,6 @@ func TestDaemonSetMetadata(t *testing.T) {
 						{ErrType: jaeger.ErrTypeMissing, Expected: jaeger.Tag{Key: "k8s.deployment.name", Type: "string"}},
 						{ErrType: jaeger.ErrTypeMissing, Expected: jaeger.Tag{Key: "k8s.statefulset.name", Type: "string"}},
 					}, sd)
-
 				}, test.Interval(100*time.Millisecond))
 				return ctx
 			},

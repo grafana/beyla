@@ -26,9 +26,10 @@ import (
 	"path"
 	"testing"
 
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers"
 )
 
 func TestLinuxProcess_CmdLine(t *testing.T) {
@@ -54,7 +55,9 @@ func TestLinuxProcess_CmdLine(t *testing.T) {
 		{[]byte{'-', '/', 'b', 'i', 'n', '/', 'b', 'a', 's', 'h', 0, 'a', 'r', 'g', 0}, "bash", "/bin/bash", []string{"arg"}, "/bin/bash arg"},
 		{
 			[]byte{'/', 'a', ' ', 'f', 'o', 'l', 'd', 'e', 'r', '/', 'c', 'm', 'd', 0, '-', 'a', 'g', 0, 'x', 'x', 0},
-			"cmd", "/a folder/cmd", []string{"-ag", "xx"}, "/a folder/cmd -ag xx",
+			"cmd", "/a folder/cmd",
+			[]string{"-ag", "xx"},
+			"/a folder/cmd -ag xx",
 		},
 	}
 	for _, tc := range testCases {

@@ -96,10 +96,10 @@ func testREDMetricsShortHTTP(t *testing.T) {
 func testExemplarsExist(t *testing.T) {
 	url := "http://" + prometheusHostPort + "/api/v1/query_exemplars?query=http_server_request_duration_seconds_bucket"
 
-	var qtr = &http.Transport{
+	qtr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
-	var qClient = &http.Client{Transport: qtr}
+	qClient := &http.Client{Transport: qtr}
 
 	req, err := http.NewRequest("GET", url, nil)
 	require.NoError(t, err)

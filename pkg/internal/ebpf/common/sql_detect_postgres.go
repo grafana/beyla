@@ -7,9 +7,11 @@ import (
 	"strings"
 )
 
-const kPostgresBind = byte('B')
-const kPostgresQuery = byte('Q')
-const kPostgresCommand = byte('C')
+const (
+	kPostgresBind    = byte('B')
+	kPostgresQuery   = byte('Q')
+	kPostgresCommand = byte('C')
+)
 
 func isPostgres(b []byte) bool {
 	op, ok := isValidPostgresPayload(b)

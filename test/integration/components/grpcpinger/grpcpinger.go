@@ -12,7 +12,6 @@ import (
 )
 
 func main() {
-
 	// Adding shutdown hook for graceful stop.
 	ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	for {

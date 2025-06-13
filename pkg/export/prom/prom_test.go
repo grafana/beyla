@@ -14,6 +14,10 @@ import (
 	"time"
 
 	"github.com/mariomac/guara/pkg/test"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/connector"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
@@ -21,9 +25,6 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
@@ -91,7 +92,8 @@ func TestAppMetricsExpiration(t *testing.T) {
 
 	// WHEN it receives metrics
 	promInput.Send([]request.Span{
-		{Type: request.EventTypeHTTP,
+		{
+			Type: request.EventTypeHTTP,
 			Path: "/foo",
 			End:  123 * time.Second.Nanoseconds(),
 			Service: svc.Attrs{
@@ -337,7 +339,6 @@ func TestAppMetrics_ByInstrumentation(t *testing.T) {
 					assert.NotContains(t, exported, tt.unexpected[i])
 				}
 			})
-
 		})
 	}
 }

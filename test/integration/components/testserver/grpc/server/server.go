@@ -32,9 +32,7 @@ import (
 	pb "github.com/grafana/beyla/v2/test/integration/components/testserver/grpc/routeguide"
 )
 
-var (
-	jsonDBFile = flag.String("json_db_file", "", "A json file containing a list of features")
-)
+var jsonDBFile = flag.String("json_db_file", "", "A json file containing a list of features")
 
 var log = slog.With("component", "grpc.Server")
 

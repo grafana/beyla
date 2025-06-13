@@ -185,7 +185,7 @@ func (k *Kind) exportAllMetrics() env.Func {
 		if k.promEndpoint == "" {
 			return ctx, nil
 		}
-		_ = os.MkdirAll(path.Join(k.logsDir, k.clusterName), 0755)
+		_ = os.MkdirAll(path.Join(k.logsDir, k.clusterName), 0o755)
 		out, err := os.Create(path.Join(k.logsDir, k.clusterName, "prometheus_metrics.txt"))
 		if err != nil {
 			log().Error("creating prometheus export file", "error", err)
@@ -205,7 +205,7 @@ func (k *Kind) exportAllTraces() env.Func {
 		if k.promEndpoint == "" {
 			return ctx, nil
 		}
-		_ = os.MkdirAll(path.Join(k.logsDir, k.clusterName), 0755)
+		_ = os.MkdirAll(path.Join(k.logsDir, k.clusterName), 0o755)
 		out, err := os.Create(path.Join(k.logsDir, k.clusterName, "jaeger_traces.txt"))
 		if err != nil {
 			log().Error("creating jaeger export file", "error", err)

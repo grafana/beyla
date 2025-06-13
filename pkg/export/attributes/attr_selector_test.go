@@ -3,9 +3,10 @@ package attributes
 import (
 	"testing"
 
-	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 )
 
 func TestNormalize(t *testing.T) {

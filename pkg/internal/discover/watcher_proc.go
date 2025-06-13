@@ -10,11 +10,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/shirou/gopsutil/v3/net"
+	"github.com/shirou/gopsutil/v3/process"
+
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/services"
-	"github.com/shirou/gopsutil/v3/net"
-	"github.com/shirou/gopsutil/v3/process"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf"
@@ -262,7 +263,6 @@ func executableReady(pid PID) (string, bool) {
 		return "", false
 	}
 	exePath, err := proc.Exe()
-
 	if err != nil {
 		return exePath, errors.Is(err, os.ErrNotExist)
 	}

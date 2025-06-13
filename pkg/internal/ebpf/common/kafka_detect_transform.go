@@ -44,8 +44,10 @@ func (k Operation) String() string {
 	}
 }
 
-const KafkaMinLength = 14
-const KafkaMaxPayload = 20 * 1024 * 1024 // 20 MB max, 1MB is default for most Kafka installations
+const (
+	KafkaMinLength  = 14
+	KafkaMaxPayload = 20 * 1024 * 1024 // 20 MB max, 1MB is default for most Kafka installations
+)
 
 var topicRegex = regexp.MustCompile("\x02\t(.*)\x02")
 

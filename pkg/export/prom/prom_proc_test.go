@@ -6,11 +6,12 @@ import (
 	"time"
 
 	"github.com/mariomac/guara/pkg/test"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/connector"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
@@ -56,13 +57,15 @@ func TestProcPrometheusEndpoint_AggregatedMetrics(t *testing.T) {
 
 	// WHEN it receives process metrics
 	procsInput.Send([]*process.Status{
-		{ID: process.ID{Service: &svc.Attrs{}, Command: "foo"},
+		{
+			ID:                 process.ID{Service: &svc.Attrs{}, Command: "foo"},
 			CPUUtilisationWait: 3, CPUUtilisationSystem: 2, CPUUtilisationUser: 1,
 			CPUTimeUserDelta: 30, CPUTimeWaitDelta: 20, CPUTimeSystemDelta: 10,
 			IOReadBytesDelta: 123, IOWriteBytesDelta: 456,
 			NetRcvBytesDelta: 12, NetTxBytesDelta: 34,
 		},
-		{ID: process.ID{Service: &svc.Attrs{}, Command: "bar"},
+		{
+			ID:                 process.ID{Service: &svc.Attrs{}, Command: "bar"},
 			CPUUtilisationWait: 31, CPUUtilisationSystem: 21, CPUUtilisationUser: 11,
 			CPUTimeUserDelta: 301, CPUTimeWaitDelta: 201, CPUTimeSystemDelta: 101,
 			IOReadBytesDelta: 321, IOWriteBytesDelta: 654,
@@ -85,7 +88,8 @@ func TestProcPrometheusEndpoint_AggregatedMetrics(t *testing.T) {
 
 	// AND WHEN new metrics are received
 	procsInput.Send([]*process.Status{
-		{ID: process.ID{Service: &svc.Attrs{}, Command: "foo"},
+		{
+			ID:                 process.ID{Service: &svc.Attrs{}, Command: "foo"},
 			CPUUtilisationWait: 4, CPUUtilisationSystem: 1, CPUUtilisationUser: 2,
 			CPUTimeUserDelta: 3, CPUTimeWaitDelta: 2, CPUTimeSystemDelta: 1,
 			IOReadBytesDelta: 31, IOWriteBytesDelta: 10,
@@ -145,7 +149,8 @@ func TestProcPrometheusEndpoint_DisaggregatedMetrics(t *testing.T) {
 
 	// WHEN it receives process metrics
 	procsInput.Send([]*process.Status{
-		{ID: process.ID{Service: &svc.Attrs{}, Command: "foo"},
+		{
+			ID:                 process.ID{Service: &svc.Attrs{}, Command: "foo"},
 			CPUUtilisationWait: 3, CPUUtilisationSystem: 2, CPUUtilisationUser: 1,
 			CPUTimeUserDelta: 30, CPUTimeWaitDelta: 20, CPUTimeSystemDelta: 10,
 			IOReadBytesDelta: 123, IOWriteBytesDelta: 456,
@@ -170,7 +175,8 @@ func TestProcPrometheusEndpoint_DisaggregatedMetrics(t *testing.T) {
 
 	// AND WHEN new metrics are received
 	procsInput.Send([]*process.Status{
-		{ID: process.ID{Service: &svc.Attrs{}, Command: "foo"},
+		{
+			ID:                 process.ID{Service: &svc.Attrs{}, Command: "foo"},
 			CPUUtilisationWait: 4, CPUUtilisationSystem: 1, CPUUtilisationUser: 2,
 			CPUTimeUserDelta: 3, CPUTimeWaitDelta: 2, CPUTimeSystemDelta: 1,
 			IOReadBytesDelta: 3, IOWriteBytesDelta: 2,

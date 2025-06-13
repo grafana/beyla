@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers"
 	"golang.org/x/sys/unix"
+
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers"
 
 	ebpfcfg "github.com/grafana/beyla/v2/pkg/config"
 	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
@@ -105,7 +106,6 @@ func checkCapabilitiesForSetOptions(config *Config, caps *helpers.OSCapabilities
 
 func CheckOSCapabilities(config *Config) error {
 	caps, err := helpers.GetCurrentProcCapabilities()
-
 	if err != nil {
 		return fmt.Errorf("unable to query OS capabilities: %w", err)
 	}

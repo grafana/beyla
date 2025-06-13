@@ -15,6 +15,7 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/link"
+
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/goexec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
@@ -75,7 +76,6 @@ func resolveMaps(eventContext *common.EBPFEventContext, spec *ebpf.CollectionSpe
 
 		if internalMap == nil {
 			internalMap, err = ebpf.NewMap(v)
-
 			if err != nil {
 				return nil, fmt.Errorf("failed to load shared map: %w", err)
 			}
@@ -146,13 +146,11 @@ func (pt *ProcessTracer) loadSpec(p Tracer) (*ebpf.CollectionSpec, error) {
 
 func (pt *ProcessTracer) loadAndAssign(eventContext *common.EBPFEventContext, p Tracer) error {
 	spec, err := pt.loadSpec(p)
-
 	if err != nil {
 		return err
 	}
 
 	collOpts, err := resolveMaps(eventContext, spec)
-
 	if err != nil {
 		return err
 	}
@@ -226,7 +224,7 @@ func (pt *ProcessTracer) loadTracers(eventContext *common.EBPFEventContext) erro
 	eventContext.LoadLock.Lock()
 	defer eventContext.LoadLock.Unlock()
 
-	var log = ptlog()
+	log := ptlog()
 
 	loadedPrograms := make([]Tracer, 0, len(pt.Programs))
 

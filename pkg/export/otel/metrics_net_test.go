@@ -4,12 +4,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/ebpf"
-	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/attribute"
+
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/ebpf"
+	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
@@ -71,7 +72,6 @@ func TestMetricAttributes(t *testing.T) {
 		assert.Truef(t, ok, "expected %+v in %v", mustContain.Key, reportedAttributes)
 		assert.Equal(t, mustContain.Value, val)
 	}
-
 }
 
 func TestMetricAttributes_Filter(t *testing.T) {
@@ -138,16 +138,19 @@ func TestMetricAttributes_Filter(t *testing.T) {
 
 func TestNetMetricsConfig_Enabled(t *testing.T) {
 	assert.True(t, NetMetricsConfig{Metrics: &MetricsConfig{
-		Features: []string{FeatureApplication, FeatureNetwork}, CommonEndpoint: "foo"}}.Enabled())
+		Features: []string{FeatureApplication, FeatureNetwork}, CommonEndpoint: "foo",
+	}}.Enabled())
 	assert.True(t, NetMetricsConfig{Metrics: &MetricsConfig{
-		Features: []string{FeatureNetwork, FeatureApplication}, MetricsEndpoint: "foo"}}.Enabled())
+		Features: []string{FeatureNetwork, FeatureApplication}, MetricsEndpoint: "foo",
+	}}.Enabled())
 	assert.True(t, NetMetricsConfig{Metrics: &MetricsConfig{
-		Features: []string{FeatureNetwork}, Grafana: &GrafanaOTLP{Submit: []string{"traces", "metrics"}, InstanceID: "33221"}}}.Enabled())
+		Features: []string{FeatureNetwork}, Grafana: &GrafanaOTLP{Submit: []string{"traces", "metrics"}, InstanceID: "33221"},
+	}}.Enabled())
 }
 
 func TestNetMetricsConfig_Disabled(t *testing.T) {
-	var fa = []string{FeatureApplication}
-	var fn = []string{FeatureNetwork}
+	fa := []string{FeatureApplication}
+	fn := []string{FeatureNetwork}
 	assert.False(t, NetMetricsConfig{Metrics: &MetricsConfig{Features: fn}}.Enabled())
 	assert.False(t, NetMetricsConfig{Metrics: &MetricsConfig{Features: fn, Grafana: &GrafanaOTLP{Submit: []string{"traces"}, InstanceID: "33221"}}}.Enabled())
 	assert.False(t, NetMetricsConfig{Metrics: &MetricsConfig{Features: fn, Grafana: &GrafanaOTLP{Submit: []string{"metrics"}}}}.Enabled())

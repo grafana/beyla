@@ -45,9 +45,9 @@ discovery:
       name: rust-service
       open_ports: 8090
 attributes:
+  cluster_name: my-kube
   kubernetes:
     enable: true
-    cluster_name: my-kube
   select:
     http_server_request_duration_seconds_count:
       exclude: ["server_address"]

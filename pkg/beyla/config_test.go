@@ -57,6 +57,7 @@ prometheus_export:
     request_size_histogram: [0, 10, 20, 22]
     response_size_histogram: [0, 10, 20, 22]
 attributes:
+  cluster_name: test-cluster
   kubernetes:
     kubeconfig_path: /foo/bar
     enable: true
@@ -189,6 +190,7 @@ network:
 			},
 		},
 		Attributes: Attributes{
+			ClusterName: "test-cluster",
 			InstanceID: traces.InstanceIDConfig{
 				HostnameDNSResolution: true,
 			},

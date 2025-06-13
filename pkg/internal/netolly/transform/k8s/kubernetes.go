@@ -114,7 +114,10 @@ func (n *decorator) transform(flow *ebpf.Record) bool {
 		flow.Attrs.Metadata = map[attr.Name]string{}
 	}
 	if n.clusterName != "" {
-		flow.Attrs.Metadata[(attr.K8sClusterName)] = n.clusterName
+		// From Beyla 2.3, cluster_name is the recommended attribute
+		// k8s_cluster_name is kept for backwards compatibility
+		flow.Attrs.Metadata[attr.ClusterName] = n.clusterName
+		flow.Attrs.Metadata[attr.K8sClusterName] = n.clusterName
 	}
 	srcOk := n.decorate(flow, attrPrefixSrc, flow.Id.SrcIP().IP().String())
 	dstOk := n.decorate(flow, attrPrefixDst, flow.Id.DstIP().IP().String())

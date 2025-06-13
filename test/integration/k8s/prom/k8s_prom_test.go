@@ -42,5 +42,6 @@ func TestPrometheus_SurveyMetrics(t *testing.T) {
 		"k8s_replicaset_name": "^testserver-",
 		"k8s_kind":            "Deployment",
 		"k8s_cluster_name":    "^beyla-k8s-test-cluster$",
+		"cluster_name":        "^beyla-k8s-test-cluster$",
 	}))
 }

@@ -27,10 +27,11 @@ func klog() *slog.Logger {
 type KubernetesDecorator struct {
 	Enable kubeflags.EnableFlag `yaml:"enable" env:"BEYLA_KUBE_METADATA_ENABLE"`
 
-	// ClusterName overrides cluster name. If empty, the NetO11y module will try to retrieve
+	// K8sClusterName overrides cluster name. If empty, the NetO11y module will try to retrieve
 	// it from the Cloud Provider Metadata (EC2, GCP and Azure), and leave it empty if it fails to.
+	// Deprecated: use BEYLA_CLUSTER_NAME.
 	// nolint:undoc
-	ClusterName string `yaml:"cluster_name" env:"BEYLA_KUBE_CLUSTER_NAME"`
+	K8sClusterName string `yaml:"cluster_name" env:"BEYLA_KUBE_CLUSTER_NAME"`
 
 	// KubeconfigPath is optional. If unset, it will look in the usual location.
 	KubeconfigPath string `yaml:"kubeconfig_path" env:"KUBECONFIG"`
@@ -92,7 +93,7 @@ func KubeDecoratorProvider(
 		if err != nil {
 			return nil, fmt.Errorf("initializing KubeDecoratorProvider: %w", err)
 		}
-		decorator := &metadataDecorator{
+		decorator := &k8sMetadataDecorator{
 			db:          metaStore,
 			clusterName: KubeClusterName(ctx, cfg, ctxInfo.K8sInformer),
 			input:       input.Subscribe(),
@@ -125,7 +126,7 @@ func KubeProcessEventDecoratorProvider(
 	}
 }
 
-type metadataDecorator struct {
+type k8sMetadataDecorator struct {
 	db          *kube.Store
 	clusterName string
 	input       <-chan []request.Span
@@ -139,7 +140,7 @@ type procEventMetadataDecorator struct {
 	output      *msg.Queue[exec.ProcessEvent]
 }
 
-func (md *metadataDecorator) nodeLoop(_ context.Context) {
+func (md *k8sMetadataDecorator) nodeLoop(_ context.Context) {
 	// output channel must be closed so later stages in the pipeline can finish in cascade
 	defer md.output.Close()
 	klog().Debug("starting kubernetes span decoration loop")
@@ -173,7 +174,7 @@ func (md *procEventMetadataDecorator) k8sLoop(_ context.Context) {
 	klog().Debug("stopping kubernetes process event decoration loop")
 }
 
-func (md *metadataDecorator) do(span *request.Span) {
+func (md *k8sMetadataDecorator) do(span *request.Span) {
 	if podMeta, containerName := md.db.PodContainerByPIDNs(span.Pid.Namespace); podMeta != nil {
 		AppendKubeMetadata(md.db, &span.Service, podMeta, md.clusterName, containerName)
 	} else {
@@ -227,6 +228,7 @@ func AppendKubeMetadata(db *kube.Store, svc *svc.Attrs, meta *kube.CachedObjMeta
 		attr.K8sPodUID:        meta.Meta.Pod.Uid,
 		attr.K8sPodStartTime:  meta.Meta.Pod.StartTimeStr,
 		attr.K8sClusterName:   clusterName,
+		attr.ClusterName:      clusterName,
 	}
 
 	// ownerKind could be also "Pod", but we won't insert it as "owner" label to avoid
@@ -267,12 +269,17 @@ func OwnerLabelName(kind string) attr.Name {
 	}
 }
 
-func KubeClusterName(ctx context.Context, cfg *KubernetesDecorator, k8sInformer *kube.MetadataProvider) string {
+func KubeClusterName(
+	ctx context.Context,
+	cfg *KubernetesDecorator,
+	k8sInformer *kube.MetadataProvider,
+) string {
 	log := klog().With("func", "KubeClusterName")
-	if cfg.ClusterName != "" {
-		log.Debug("using cluster name from configuration", "cluster_name", cfg.ClusterName)
-		return cfg.ClusterName
+	if cfg.K8sClusterName != "" {
+		log.Debug("using cluster name from configuration", "cluster_name", cfg.K8sClusterName)
+		return cfg.K8sClusterName
 	}
+
 	retries := 0
 	for retries < clusterMetadataRetries {
 		if clusterName := fetchClusterName(ctx, k8sInformer); clusterName != "" {
@@ -288,8 +295,10 @@ func KubeClusterName(ctx context.Context, cfg *KubernetesDecorator, k8sInformer 
 			// retry or end!
 		}
 	}
+
 	log.Warn("can't fetch Kubernetes Cluster Name." +
 		" Network metrics won't contain k8s.cluster.name attribute unless you explicitly set " +
 		" the BEYLA_KUBE_CLUSTER_NAME environment variable")
+
 	return ""
 }

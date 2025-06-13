@@ -71,19 +71,20 @@ const (
 
 // Beyla-specific network attributes
 const (
-	BeylaIP    = Name("beyla.ip")
-	Transport  = Name("transport")
-	SrcAddress = Name("src.address")
-	DstAddres  = Name("dst.address")
-	SrcPort    = Name("src.port")
-	DstPort    = Name("dst.port")
-	SrcName    = Name("src.name")
-	DstName    = Name("dst.name")
-	Iface      = Name("iface")
-	SrcCIDR    = Name("src.cidr")
-	DstCIDR    = Name("dst.cidr")
-	SrcZone    = Name("src.zone")
-	DstZone    = Name("dst.zone")
+	ClusterName = Name("cluster.name")
+	BeylaIP     = Name("beyla.ip")
+	Transport   = Name("transport")
+	SrcAddress  = Name("src.address")
+	DstAddres   = Name("dst.address")
+	SrcPort     = Name("src.port")
+	DstPort     = Name("dst.port")
+	SrcName     = Name("src.name")
+	DstName     = Name("dst.name")
+	Iface       = Name("iface")
+	SrcCIDR     = Name("src.cidr")
+	DstCIDR     = Name("dst.cidr")
+	SrcZone     = Name("src.zone")
+	DstZone     = Name("dst.zone")
 
 	ClientPort = Name("client.port")
 
@@ -96,6 +97,7 @@ const (
 	K8sSrcNamespace = Name("k8s.src.namespace")
 	K8sDstOwnerName = Name("k8s.dst.owner.name")
 	K8sDstNamespace = Name("k8s.dst.namespace")
+	// K8sClusterName is deprecated. Use cluster.name
 	K8sClusterName  = Name("k8s.cluster.name")
 	K8sSrcName      = Name("k8s.src.name")
 	K8sSrcType      = Name("k8s.src.type")

@@ -68,6 +68,7 @@ func getDefinitions(
 		map[attr.Name]Default{
 			attr.ServiceName:      true,
 			attr.ServiceNamespace: true,
+			attr.ClusterName:      true,
 		},
 		extraGroupAttributes[GroupApp],
 	)
@@ -77,6 +78,7 @@ func getDefinitions(
 		false,
 		nil,
 		map[attr.Name]Default{
+			attr.ClusterName:    true,
 			attr.Direction:      true,
 			attr.BeylaIP:        false,
 			attr.Transport:      false,
@@ -108,15 +110,16 @@ func getDefinitions(
 			attr.K8sDstOwnerName: true,
 			attr.K8sDstOwnerType: true,
 			attr.K8sDstNamespace: true,
-			attr.K8sClusterName:  true,
-			attr.K8sSrcName:      false,
-			attr.K8sSrcType:      false,
-			attr.K8sSrcNodeIP:    false,
-			attr.K8sSrcNodeName:  false,
-			attr.K8sDstName:      false,
-			attr.K8sDstType:      false,
-			attr.K8sDstNodeIP:    false,
-			attr.K8sDstNodeName:  false,
+			// TODO Beyla 3.0: set to false
+			attr.K8sClusterName: true,
+			attr.K8sSrcName:     false,
+			attr.K8sSrcType:     false,
+			attr.K8sSrcNodeIP:   false,
+			attr.K8sSrcNodeName: false,
+			attr.K8sDstName:     false,
+			attr.K8sDstType:     false,
+			attr.K8sDstNodeIP:   false,
+			attr.K8sDstNodeName: false,
 		},
 		extraGroupAttributes[GroupNetKube],
 	)
@@ -136,9 +139,13 @@ func getDefinitions(
 	// networkInterZone* supports the same attributes as
 	// network* counterpart, but all of them disabled by default, to keep cardinality low
 	networkInterZone := copyDisabled(networkAttributes)
+	networkInterZone.Attributes[attr.ClusterName] = true
+	// TODO Beyla 3.0: set to false and mark to be removed in Beyla 4.0
 	networkInterZone.Attributes[attr.K8sClusterName] = true
+
 	networkInterZoneKube := copyDisabled(networkKubeAttributes)
 	networkInterZoneCIDR := copyDisabled(networkCIDR)
+
 	// only src and dst zone are enabled by default
 	networkInterZone.Attributes[attr.SrcZone] = true
 	networkInterZone.Attributes[attr.DstZone] = true

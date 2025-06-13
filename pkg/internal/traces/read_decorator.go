@@ -5,13 +5,12 @@ import (
 	"log/slog"
 	"strconv"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/traces/hostname"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
-
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/traces/hostname"
 )
 
 func rlog() *slog.Logger {

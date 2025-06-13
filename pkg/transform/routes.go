@@ -5,12 +5,12 @@ import (
 	"context"
 	"log/slog"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/transform/route"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 
 	internalrequest "github.com/grafana/beyla/v2/pkg/internal/request"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
 )
 
 // UnmatchType defines which actions to do when a route pattern is not recognized

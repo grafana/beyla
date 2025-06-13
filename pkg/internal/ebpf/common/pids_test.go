@@ -5,12 +5,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/services"
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/otel/trace"
-
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
 )
 
 var spanSet = []request.Span{

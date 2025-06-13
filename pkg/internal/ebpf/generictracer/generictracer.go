@@ -12,6 +12,7 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/gavv/monotime"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/generictracer"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/goexec"
@@ -24,7 +25,6 @@ import (
 	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/ifaces"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
 )
 
 // TODO: remove this tracer and use the vendored one

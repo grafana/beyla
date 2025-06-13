@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/mariomac/guara/pkg/test"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/testutil"
@@ -31,7 +32,6 @@ import (
 	"github.com/grafana/beyla/v2/pkg/transform"
 	"github.com/grafana/beyla/v2/test/collector"
 	"github.com/grafana/beyla/v2/test/consumer"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
 )
 
 const testTimeout = 5 * time.Second

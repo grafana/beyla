@@ -9,6 +9,7 @@ import (
 	"log/slog"
 
 	"github.com/cilium/ebpf"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/tcmanager"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/tctracer"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
@@ -18,7 +19,6 @@ import (
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
 )
 
 type Tracer struct {

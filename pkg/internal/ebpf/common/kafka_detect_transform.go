@@ -6,9 +6,8 @@ import (
 	"regexp"
 	"unsafe"
 
-	trace2 "go.opentelemetry.io/otel/trace"
-
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
+	trace2 "go.opentelemetry.io/otel/trace"
 )
 
 type Operation int8

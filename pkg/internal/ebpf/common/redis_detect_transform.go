@@ -5,11 +5,10 @@ import (
 	"strings"
 	"unsafe"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/ringbuf"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/util"
 	trace2 "go.opentelemetry.io/otel/trace"
-
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
 )
 
 const minRedisFrameLen = 3

@@ -7,6 +7,7 @@ import (
 	"maps"
 	"time"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
@@ -16,7 +17,6 @@ import (
 
 	"github.com/grafana/beyla/v2/pkg/internal/kube"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
 )
 
 func klog() *slog.Logger {

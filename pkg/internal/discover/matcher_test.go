@@ -5,12 +5,13 @@ import (
 	"testing"
 
 	"github.com/gobwas/glob"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/testutil"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/services"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
+
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/testutil"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/services"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	servicesextra "github.com/grafana/beyla/v2/pkg/services"
@@ -42,7 +43,8 @@ func TestCriteriaMatcher(t *testing.T) {
 	processInfo = func(pp processAttrs) (*services.ProcessInfo, error) {
 		exePath := map[PID]string{
 			1: "/bin/weird33", 2: "/bin/weird33", 3: "server",
-			4: "/bin/something", 5: "server", 6: "/bin/clientweird99"}[pp.pid]
+			4: "/bin/something", 5: "server", 6: "/bin/clientweird99",
+		}[pp.pid]
 		return &services.ProcessInfo{Pid: int32(pp.pid), ExePath: exePath, OpenPorts: pp.openPorts}, nil
 	}
 	discoveredProcesses.Send([]Event[processAttrs]{
@@ -106,7 +108,8 @@ func TestCriteriaMatcher_Exclude(t *testing.T) {
 	processInfo = func(pp processAttrs) (*services.ProcessInfo, error) {
 		exePath := map[PID]string{
 			1: "/bin/weird33", 2: "/bin/weird33", 3: "server",
-			4: "/bin/something", 5: "server", 6: "/bin/clientweird99"}[pp.pid]
+			4: "/bin/something", 5: "server", 6: "/bin/clientweird99",
+		}[pp.pid]
 		return &services.ProcessInfo{Pid: int32(pp.pid), ExePath: exePath, OpenPorts: pp.openPorts}, nil
 	}
 	discoveredProcesses.Send([]Event[processAttrs]{
@@ -153,7 +156,8 @@ func TestCriteriaMatcher_Exclude_Metadata(t *testing.T) {
 	processInfo = func(pp processAttrs) (*services.ProcessInfo, error) {
 		exePath := map[PID]string{
 			1: "/bin/weird33", 2: "/bin/weird33", 3: "server",
-			4: "/bin/something", 5: "server", 6: "/bin/clientweird99"}[pp.pid]
+			4: "/bin/something", 5: "server", 6: "/bin/clientweird99",
+		}[pp.pid]
 		return &services.ProcessInfo{Pid: int32(pp.pid), ExePath: exePath, OpenPorts: pp.openPorts}, nil
 	}
 	nodeFoo := map[string]string{"k8s_node_name": "foo"}
@@ -202,7 +206,8 @@ func TestCriteriaMatcher_MustMatchAllAttributes(t *testing.T) {
 	processInfo = func(pp processAttrs) (*services.ProcessInfo, error) {
 		exePath := map[PID]string{
 			1: "/bin/foo", 2: "/bin/faa", 3: "foo",
-			4: "foool", 5: "thefoool", 6: "foo"}[pp.pid]
+			4: "foool", 5: "thefoool", 6: "foo",
+		}[pp.pid]
 		return &services.ProcessInfo{Pid: int32(pp.pid), ExePath: exePath, OpenPorts: pp.openPorts}, nil
 	}
 	allMeta := map[string]string{
@@ -262,7 +267,8 @@ func TestCriteriaMatcherMissingPort(t *testing.T) {
 			Exe  string
 			PPid int32
 		}{
-			1: {Exe: "/bin/weird33", PPid: 0}, 2: {Exe: "/bin/weird33", PPid: 16}, 3: {Exe: "/bin/weird33", PPid: 1}}[pp.pid]
+			1: {Exe: "/bin/weird33", PPid: 0}, 2: {Exe: "/bin/weird33", PPid: 16}, 3: {Exe: "/bin/weird33", PPid: 1},
+		}[pp.pid]
 		return &services.ProcessInfo{Pid: int32(pp.pid), ExePath: proc.Exe, PPid: proc.PPid, OpenPorts: pp.openPorts}, nil
 	}
 	discoveredProcesses.Send([]Event[processAttrs]{
@@ -328,7 +334,8 @@ func TestCriteriaMatcherContainersOnly(t *testing.T) {
 			Exe  string
 			PPid int32
 		}{
-			1: {Exe: "/bin/weird33", PPid: 0}, 2: {Exe: "/bin/weird33", PPid: 0}, 3: {Exe: "/bin/weird33", PPid: 1}}[pp.pid]
+			1: {Exe: "/bin/weird33", PPid: 0}, 2: {Exe: "/bin/weird33", PPid: 0}, 3: {Exe: "/bin/weird33", PPid: 1},
+		}[pp.pid]
 		return &services.ProcessInfo{Pid: int32(pp.pid), ExePath: proc.Exe, PPid: proc.PPid, OpenPorts: pp.openPorts}, nil
 	}
 	discoveredProcesses.Send([]Event[processAttrs]{

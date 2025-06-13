@@ -8,9 +8,10 @@ import (
 	"time"
 
 	"github.com/cilium/ebpf"
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/connector"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
-	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 )
@@ -270,8 +271,7 @@ var (
 )
 
 // discardEncoding implements encoding.BinaryMarshaler for eBPF map values such that everything is discarded.
-type discardEncoding struct {
-}
+type discardEncoding struct{}
 
 func (de *discardEncoding) UnmarshalBinary(_ []byte) error {
 	return nil

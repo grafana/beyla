@@ -4,10 +4,11 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	trace2 "go.opentelemetry.io/otel/trace"
+
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 )
 
 func TestSpanClientServer(t *testing.T) {
@@ -60,17 +61,17 @@ func TestIgnoreModeString(t *testing.T) {
 
 func TestKindString(t *testing.T) {
 	m := map[*Span]string{
-		&Span{Type: EventTypeHTTP}:                                  "SPAN_KIND_SERVER",
-		&Span{Type: EventTypeGRPC}:                                  "SPAN_KIND_SERVER",
-		&Span{Type: EventTypeKafkaServer}:                           "SPAN_KIND_SERVER",
-		&Span{Type: EventTypeRedisServer}:                           "SPAN_KIND_SERVER",
-		&Span{Type: EventTypeHTTPClient}:                            "SPAN_KIND_CLIENT",
-		&Span{Type: EventTypeGRPCClient}:                            "SPAN_KIND_CLIENT",
-		&Span{Type: EventTypeSQLClient}:                             "SPAN_KIND_CLIENT",
-		&Span{Type: EventTypeRedisClient}:                           "SPAN_KIND_CLIENT",
-		&Span{Type: EventTypeKafkaClient, Method: MessagingPublish}: "SPAN_KIND_PRODUCER",
-		&Span{Type: EventTypeKafkaClient, Method: MessagingProcess}: "SPAN_KIND_CONSUMER",
-		&Span{}: "SPAN_KIND_INTERNAL",
+		{Type: EventTypeHTTP}:                                  "SPAN_KIND_SERVER",
+		{Type: EventTypeGRPC}:                                  "SPAN_KIND_SERVER",
+		{Type: EventTypeKafkaServer}:                           "SPAN_KIND_SERVER",
+		{Type: EventTypeRedisServer}:                           "SPAN_KIND_SERVER",
+		{Type: EventTypeHTTPClient}:                            "SPAN_KIND_CLIENT",
+		{Type: EventTypeGRPCClient}:                            "SPAN_KIND_CLIENT",
+		{Type: EventTypeSQLClient}:                             "SPAN_KIND_CLIENT",
+		{Type: EventTypeRedisClient}:                           "SPAN_KIND_CLIENT",
+		{Type: EventTypeKafkaClient, Method: MessagingPublish}: "SPAN_KIND_PRODUCER",
+		{Type: EventTypeKafkaClient, Method: MessagingProcess}: "SPAN_KIND_CONSUMER",
+		{}: "SPAN_KIND_INTERNAL",
 	}
 
 	for span, str := range m {
@@ -94,7 +95,7 @@ func TestSerializeJSONSpans(t *testing.T) {
 	}
 
 	tData := []testData{
-		testData{
+		{
 			eventType: EventTypeHTTP,
 			attribs: map[string]any{
 				"method":      "method",
@@ -108,7 +109,7 @@ func TestSerializeJSONSpans(t *testing.T) {
 				"serverPort":  "5678",
 			},
 		},
-		testData{
+		{
 			eventType: EventTypeHTTPClient,
 			attribs: map[string]any{
 				"method":     "method",
@@ -119,7 +120,7 @@ func TestSerializeJSONSpans(t *testing.T) {
 				"serverPort": "5678",
 			},
 		},
-		testData{
+		{
 			eventType: EventTypeGRPC,
 			attribs: map[string]any{
 				"method":     "path",
@@ -129,7 +130,7 @@ func TestSerializeJSONSpans(t *testing.T) {
 				"serverPort": "5678",
 			},
 		},
-		testData{
+		{
 			eventType: EventTypeGRPCClient,
 			attribs: map[string]any{
 				"method":     "path",
@@ -138,7 +139,7 @@ func TestSerializeJSONSpans(t *testing.T) {
 				"serverPort": "5678",
 			},
 		},
-		testData{
+		{
 			eventType: EventTypeSQLClient,
 			attribs: map[string]any{
 				"serverAddr": "hostname",
@@ -148,15 +149,15 @@ func TestSerializeJSONSpans(t *testing.T) {
 				"statement":  "statement",
 			},
 		},
-		testData{
+		{
 			eventType: EventTypeRedisClient,
 			attribs:   map[string]any{},
 		},
-		testData{
+		{
 			eventType: EventTypeKafkaClient,
 			attribs:   map[string]any{},
 		},
-		testData{
+		{
 			eventType: EventTypeRedisServer,
 			attribs: map[string]any{
 				"serverAddr": "hostname",
@@ -166,7 +167,7 @@ func TestSerializeJSONSpans(t *testing.T) {
 				"query":      "path",
 			},
 		},
-		testData{
+		{
 			eventType: EventTypeKafkaServer,
 			attribs: map[string]any{
 				"serverAddr": "hostname",
@@ -348,7 +349,8 @@ func TestDetectsOTelExport(t *testing.T) {
 			name:    "Successful GRPC /v1/traces spans export",
 			span:    Span{Type: EventTypeGRPCClient, Method: "GET", Path: "/opentelemetry.proto.collector.trace.v1.TraceService/Export", RequestStart: 100, End: 200, Status: 0},
 			exports: true,
-		}}
+		},
+	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

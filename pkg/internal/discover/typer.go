@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	lru "github.com/hashicorp/golang-lru/v2"
+
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/goexec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"

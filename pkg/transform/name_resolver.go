@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
+
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers/maps"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
@@ -57,7 +58,8 @@ type NameResolver struct {
 }
 
 func NameResolutionProvider(ctxInfo *global.ContextInfo, cfg *NameResolverConfig,
-	input, output *msg.Queue[[]request.Span]) swarm.InstanceFunc {
+	input, output *msg.Queue[[]request.Span],
+) swarm.InstanceFunc {
 	return func(ctx context.Context) (swarm.RunFunc, error) {
 		if cfg == nil || len(cfg.Sources) == 0 {
 			// if no sources are configured, we just bypass the node
@@ -68,7 +70,8 @@ func NameResolutionProvider(ctxInfo *global.ContextInfo, cfg *NameResolverConfig
 }
 
 func nameResolver(ctx context.Context, ctxInfo *global.ContextInfo, cfg *NameResolverConfig,
-	input, output *msg.Queue[[]request.Span]) (swarm.RunFunc, error) {
+	input, output *msg.Queue[[]request.Span],
+) (swarm.RunFunc, error) {
 	sources := resolverSources(cfg.Sources)
 
 	var kubeStore *kube2.Store
@@ -216,7 +219,6 @@ func (nr *NameResolver) resolveIP(ip string) string {
 
 	var r *net.Resolver
 	addr, err := r.LookupAddr(context.Background(), ip)
-
 	if err != nil {
 		nr.cache.Add(ip, ip)
 		return ip

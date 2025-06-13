@@ -12,7 +12,6 @@ import (
 // nolint:cyclop
 func ReadTCPRequestIntoSpan(cfg *config.EBPFTracer, record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {
 	event, err := ReinterpretCast[TCPRequestInfo](record.RawSample)
-
 	if err != nil {
 		return request.Span{}, true, err
 	}

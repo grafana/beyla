@@ -1,7 +1,5 @@
 package attributes
 
-var (
-	Traces = Name{
-		Section: "traces",
-	}
-)
+var Traces = Name{
+	Section: "traces",
+}

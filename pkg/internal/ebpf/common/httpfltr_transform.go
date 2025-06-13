@@ -168,7 +168,6 @@ func (event *BPFHTTPInfo) hostFromBuf() (string, int) {
 	}
 
 	host, portStr, err := net.SplitHostPort(buf[:rIdx])
-
 	if err != nil {
 		return buf[:rIdx], -1
 	}

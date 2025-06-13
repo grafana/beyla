@@ -4,11 +4,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/testutil"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/internal/traces/hostname"
@@ -60,12 +61,15 @@ func TestReadDecorator(t *testing.T) {
 			})
 			outSpans := testutil.ReadChannel(t, decoratedOutput, testTimeout)
 			assert.Equal(t, []request.Span{
-				{Service: svc.Attrs{UID: svc.UID{Instance: tc.expectedInstance}, HostName: tc.expectedHN},
-					Path: "/foo", Pid: request.PidInfo{HostPID: 1234}},
-				{Service: svc.Attrs{UID: svc.UID{Instance: tc.expectedInstance}, HostName: tc.expectedHN},
-					Path: "/bar", Pid: request.PidInfo{HostPID: 1234}},
+				{
+					Service: svc.Attrs{UID: svc.UID{Instance: tc.expectedInstance}, HostName: tc.expectedHN},
+					Path:    "/foo", Pid: request.PidInfo{HostPID: 1234},
+				},
+				{
+					Service: svc.Attrs{UID: svc.UID{Instance: tc.expectedInstance}, HostName: tc.expectedHN},
+					Path:    "/bar", Pid: request.PidInfo{HostPID: 1234},
+				},
 			}, outSpans)
 		})
 	}
-
 }

@@ -6,10 +6,11 @@ import (
 	"testing"
 	"unsafe"
 
+	"github.com/stretchr/testify/assert"
+
 	ebpfcommon "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/common"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/ringbuf"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
-	"github.com/stretchr/testify/assert"
 
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 )

@@ -51,45 +51,71 @@ func TestAgentIP_Any(t *testing.T) {
 	}
 
 	for _, tc := range []testCase{
-		{dsc: "hardcoding IPv4 address",
+		{
+			dsc:    "hardcoding IPv4 address",
 			cfg:    beyla.NetworkConfig{AgentIP: "192.168.1.13"},
-			expect: net.IPv4(192, 168, 1, 13)},
-		{dsc: "hardcoding IPv6 address",
+			expect: net.IPv4(192, 168, 1, 13),
+		},
+		{
+			dsc:    "hardcoding IPv6 address",
 			cfg:    beyla.NetworkConfig{AgentIP: "2002:0db9::7336"},
-			expect: net.ParseIP("2002:0db9::7336")},
-		{dsc: "any local address",
+			expect: net.ParseIP("2002:0db9::7336"),
+		},
+		{
+			dsc:    "any local address",
 			cfg:    beyla.NetworkConfig{AgentIPIface: "local", AgentIPType: "any"},
-			expect: localIP4},
-		{dsc: "local IPv4 address",
+			expect: localIP4,
+		},
+		{
+			dsc:    "local IPv4 address",
 			cfg:    beyla.NetworkConfig{AgentIPIface: "local", AgentIPType: "ipv4"},
-			expect: localIP4},
-		{dsc: "local IPv6 address",
+			expect: localIP4,
+		},
+		{
+			dsc:    "local IPv6 address",
 			cfg:    beyla.NetworkConfig{AgentIPIface: "local", AgentIPType: "ipv6"},
-			expect: localIP6},
-		{dsc: "any external address",
+			expect: localIP6,
+		},
+		{
+			dsc:    "any external address",
 			cfg:    beyla.NetworkConfig{AgentIPIface: "external", AgentIPType: "any"},
-			expect: externalIP4},
-		{dsc: "external IPv4 address",
+			expect: externalIP4,
+		},
+		{
+			dsc:    "external IPv4 address",
 			cfg:    beyla.NetworkConfig{AgentIPIface: "external", AgentIPType: "ipv4"},
-			expect: externalIP4},
-		{dsc: "external IPv6 address",
+			expect: externalIP4,
+		},
+		{
+			dsc:    "external IPv6 address",
 			cfg:    beyla.NetworkConfig{AgentIPIface: "external", AgentIPType: "ipv6"},
-			expect: externalIP6},
-		{dsc: "any IP given an interface name",
+			expect: externalIP6,
+		},
+		{
+			dsc:    "any IP given an interface name",
 			cfg:    beyla.NetworkConfig{AgentIPIface: "name:" + testIFName, AgentIPType: "any"},
-			expect: testIfIP4},
-		{dsc: "IPv4 address given an interface name",
+			expect: testIfIP4,
+		},
+		{
+			dsc:    "IPv4 address given an interface name",
 			cfg:    beyla.NetworkConfig{AgentIPIface: "name:" + testIFName, AgentIPType: "ipv4"},
-			expect: testIfIP4},
-		{dsc: "IPv6 address given an interface name",
+			expect: testIfIP4,
+		},
+		{
+			dsc:    "IPv6 address given an interface name",
 			cfg:    beyla.NetworkConfig{AgentIPIface: "name:" + testIFName, AgentIPType: "ipv6"},
-			expect: testIfIP6},
-		{dsc: "any IP given an IPV6-only interface name",
+			expect: testIfIP6,
+		},
+		{
+			dsc:    "any IP given an IPV6-only interface name",
 			cfg:    beyla.NetworkConfig{AgentIPIface: "name:" + testIFName2, AgentIPType: "any"},
-			expect: testIf2IP6},
-		{dsc: "IPv6 address given an IPV6-only interface name",
+			expect: testIf2IP6,
+		},
+		{
+			dsc:    "IPv6 address given an IPV6-only interface name",
 			cfg:    beyla.NetworkConfig{AgentIPIface: "name:" + testIFName2, AgentIPType: "ipv6"},
-			expect: testIf2IP6},
+			expect: testIf2IP6,
+		},
 	} {
 		t.Run(tc.dsc, func(t *testing.T) {
 			ip, err := fetchAgentIP(&tc.cfg)

@@ -6,9 +6,10 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubecache/informer"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubecache/informer"
 
 	"github.com/grafana/beyla/v2/pkg/kubecache/meta"
 )

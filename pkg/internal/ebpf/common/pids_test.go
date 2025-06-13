@@ -5,10 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/services"
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/services"
 
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 )
@@ -164,7 +165,7 @@ func TestFilter_Cleanup(t *testing.T) {
 	}, resetTraceContext(pf.Filter(spanSet)))
 
 	// We should be able to filter on the other namespaced pids: 1, 2 and 3
-	var anotherSpanSet = []request.Span{
+	anotherSpanSet := []request.Span{
 		{Pid: request.PidInfo{UserPID: 33, HostPID: 123, Namespace: 33}},
 		{Pid: request.PidInfo{UserPID: 1, HostPID: 333, Namespace: 33}},
 		{Pid: request.PidInfo{UserPID: 66, HostPID: 456, Namespace: 33}},

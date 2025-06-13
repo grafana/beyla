@@ -8,8 +8,9 @@ import (
 	"syscall"
 
 	"github.com/cilium/ebpf/link"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers"
 	"golang.org/x/sys/unix"
+
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers"
 )
 
 func (f *Filter) Close() error {
@@ -71,7 +72,6 @@ func HasHostPidAccess() bool {
 func FindNetworkNamespace(pid int32) (string, error) {
 	netPath := fmt.Sprintf("/proc/%d/ns/net", pid)
 	f, err := os.Open(netPath)
-
 	if err != nil {
 		return "", fmt.Errorf("failed to open(/proc/%d/ns/net): %w", pid, err)
 	}

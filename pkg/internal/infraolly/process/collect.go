@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/golang-lru/v2/simplelru"
+
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"

@@ -9,6 +9,7 @@ import (
 	"log/slog"
 
 	"github.com/cilium/ebpf"
+
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/tcmanager"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/tctracer"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
@@ -44,7 +45,6 @@ func (p *Tracer) AllowPID(uint32, uint32, *svc.Attrs) {}
 func (p *Tracer) BlockPID(uint32, uint32) {}
 
 func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
-
 	if !ebpfcommon.HasHostPidAccess() {
 		return nil, fmt.Errorf("L4 context-propagation requires host process ID access, e.g. hostPid:true")
 	}

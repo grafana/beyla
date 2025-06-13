@@ -5,10 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/testutil"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/testutil"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 )
@@ -124,7 +125,8 @@ func TestIgnoreRoutes(t *testing.T) {
 	output := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
 	router, err := RoutesProvider(&RoutesConfig{
 		Unmatch: UnmatchPath, Patterns: []string{"/user/:id", "/v1/metrics"},
-		IgnorePatterns: []string{"/v1/metrics/*", "/v1/traces/*", "/exact"}},
+		IgnorePatterns: []string{"/v1/metrics/*", "/v1/traces/*", "/exact"},
+	},
 		input, output)(context.Background())
 	require.NoError(t, err)
 	out := output.Subscribe()
@@ -170,7 +172,6 @@ func benchProvider(b *testing.B, unmatch UnmatchType) {
 		"/users/{id}",
 		"/users/{id}/product/{pid}",
 	}}, input, output)(context.Background())
-
 	if err != nil {
 		b.Fatal(err)
 	}

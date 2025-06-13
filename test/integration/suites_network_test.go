@@ -100,7 +100,7 @@ func TestNetwork_ReverseDNS(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 
-	var checkCurlFlows = func(query string) {
+	checkCurlFlows := func(query string) {
 		pq := prom.Client{HostPort: prometheusHostPort}
 		test.Eventually(t, 4*testTimeout, func(t require.TestingT) {
 			// now, verify that the network metric has been reported.

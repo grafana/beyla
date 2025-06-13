@@ -11,12 +11,13 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/mariomac/guara/pkg/test"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/ringbuf"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/testutil"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/v2/pkg/config"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
@@ -44,7 +45,7 @@ func TestForwardRingbuf_CapacityFull(t *testing.T) {
 	)(context.Background(), forwardedMessagesQueue)
 
 	// WHEN it starts receiving trace events
-	var get = [7]byte{'G', 'E', 'T', 0, 0, 0, 0}
+	get := [7]byte{'G', 'E', 'T', 0, 0, 0, 0}
 	for i := 0; i < 20; i++ {
 		t := HTTPRequestTrace{Type: 1, Method: get, ContentLength: int64(i)}
 		t.Pid.HostPid = 1
@@ -95,7 +96,7 @@ func TestForwardRingbuf_Deadline(t *testing.T) {
 	)(context.Background(), forwardedMessagesQueue)
 
 	// WHEN it receives, after a timeout, less events than its internal buffer
-	var get = [7]byte{'G', 'E', 'T', 0, 0, 0, 0}
+	get := [7]byte{'G', 'E', 'T', 0, 0, 0, 0}
 	for i := 0; i < 7; i++ {
 		t := HTTPRequestTrace{Type: 1, Method: get, ContentLength: int64(i)}
 		t.Pid.HostPid = 1

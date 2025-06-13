@@ -33,8 +33,10 @@ import (
 	pb "github.com/grafana/beyla/v2/test/integration/components/testserver/grpc/routeguide"
 )
 
-var logs = slog.With("component", "grpc.Client")
-var counter int64
+var (
+	logs    = slog.With("component", "grpc.Client")
+	counter int64
+)
 
 type pingOpts struct {
 	ssl        bool

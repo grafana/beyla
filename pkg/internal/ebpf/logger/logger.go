@@ -9,6 +9,7 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf"
+
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/logger"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/ringbuf"
 

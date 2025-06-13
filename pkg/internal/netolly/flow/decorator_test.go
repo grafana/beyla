@@ -6,11 +6,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/ebpf"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/testutil"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 const timeout = 5 * time.Second
@@ -55,5 +56,4 @@ func TestDecoration(t *testing.T) {
 	assert.Equal(t, "3.3.3.3", decorated[1].Attrs.BeylaIP)
 	assert.Equal(t, "1.2.3.4", decorated[1].Attrs.SrcName)
 	assert.Equal(t, "destination", decorated[1].Attrs.DstName)
-
 }

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/cilium/ebpf"
+
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/ringbuf"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 
@@ -209,6 +210,7 @@ func (rbf *ringBufForwarder) flushEvents(spansChan *msg.Queue[[]request.Span]) {
 	rbf.spans = make([]request.Span, rbf.cfg.BatchLength)
 	rbf.spansLen = 0
 }
+
 func (rbf *ringBufForwarder) bgFlushOnTimeout(ctx context.Context, spansChan *msg.Queue[[]request.Span]) {
 	for {
 		select {

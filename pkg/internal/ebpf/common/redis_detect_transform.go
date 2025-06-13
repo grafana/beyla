@@ -5,9 +5,10 @@ import (
 	"strings"
 	"unsafe"
 
+	trace2 "go.opentelemetry.io/otel/trace"
+
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/ringbuf"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/util"
-	trace2 "go.opentelemetry.io/otel/trace"
 
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 )

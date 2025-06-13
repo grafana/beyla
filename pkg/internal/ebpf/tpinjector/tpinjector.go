@@ -8,6 +8,7 @@ import (
 	"log/slog"
 
 	"github.com/cilium/ebpf"
+
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/tpinjector"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/goexec"
@@ -58,7 +59,6 @@ func (p *Tracer) SetupTailCalls() {
 		},
 	} {
 		err := p.bpfObjects.ExtenderJumpTable.Update(uint32(tc.index), uint32(tc.prog.FD()), ebpf.UpdateAny)
-
 		if err != nil {
 			p.log.Error("error loading info tail call jump table", "error", err)
 		}

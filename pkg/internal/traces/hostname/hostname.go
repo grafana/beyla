@@ -10,9 +10,7 @@ import (
 	"sync"
 )
 
-var (
-	fullHostnameResolver = getFqdnHostname
-)
+var fullHostnameResolver = getFqdnHostname
 
 func logger() *slog.Logger {
 	return slog.With("component", "HostnameResolver")

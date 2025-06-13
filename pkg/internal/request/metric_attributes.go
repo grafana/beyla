@@ -3,8 +3,9 @@ package request
 import (
 	"strings"
 
-	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"go.opentelemetry.io/otel/attribute"
+
+	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 )
 
 func HTTPRequestMethod(val string) attribute.KeyValue {

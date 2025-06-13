@@ -56,5 +56,4 @@ func IsMountFS(mntType int64, path string) (bool, bool, error) {
 	}
 
 	return true, int64(fst.Type) == mntType, nil
-
 }

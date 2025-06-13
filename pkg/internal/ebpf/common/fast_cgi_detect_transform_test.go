@@ -49,7 +49,6 @@ func TestMaybeFastCGI(t *testing.T) {
 			assert.Equal(t, tt.expected, res)
 		})
 	}
-
 }
 
 func TestParseCGITable(t *testing.T) {
@@ -119,7 +118,6 @@ func TestParseCGITable(t *testing.T) {
 			assert.Equal(t, tt.expected, res)
 		})
 	}
-
 }
 
 func TestDetectFastCGI(t *testing.T) {
@@ -231,5 +229,4 @@ func TestDetectFastCGI(t *testing.T) {
 			assert.Equal(t, tt.expectedResult, status)
 		})
 	}
-
 }

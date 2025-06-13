@@ -24,6 +24,7 @@ import (
 	"log/slog"
 
 	"github.com/hashicorp/golang-lru/v2/simplelru"
+
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/ebpf"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubecache/informer"

@@ -68,7 +68,6 @@ func HTTPHandler(log *slog.Logger, echoPort int) http.HandlerFunc {
 
 func echoAsync(rw http.ResponseWriter, port int) {
 	duration, err := time.ParseDuration("10s")
-
 	if err != nil {
 		slog.Error("can't parse duration", "error", err)
 		rw.WriteHeader(500)
@@ -113,17 +112,18 @@ func echo(rw http.ResponseWriter, port int) {
 	rw.WriteHeader(res.StatusCode)
 }
 
-var addrLowPort = net.TCPAddr{Port: 7000}
-var transport = &http.Transport{
-	TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	DialContext: (&net.Dialer{
-		LocalAddr: &addrLowPort,
-	}).DialContext,
-}
+var (
+	addrLowPort = net.TCPAddr{Port: 7000}
+	transport   = &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		DialContext: (&net.Dialer{
+			LocalAddr: &addrLowPort,
+		}).DialContext,
+	}
+)
 var httpClient = &http.Client{Transport: transport}
 
 func echoLowPort(rw http.ResponseWriter) {
-
 	requestURL := os.Getenv("TARGET_URL")
 
 	slog.Debug("calling", "url", requestURL)

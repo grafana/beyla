@@ -14,8 +14,6 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/google/uuid"
 	"github.com/hashicorp/golang-lru/v2/simplelru"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/expire"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
@@ -25,6 +23,9 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 	"google.golang.org/grpc/credentials"
+
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/expire"
 
 	"github.com/grafana/beyla/v2/pkg/buildinfo"
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
@@ -103,8 +104,8 @@ func getResourceAttrs(hostID string, service *svc.Attrs) []attribute.KeyValue {
 
 // getFilteredAttributesByPrefix applies attribute filtering based on selector patterns.
 func getFilteredAttributesByPrefix(baseAttrs []attribute.KeyValue, attrSelector attributes.Selection,
-	extraAttrs []attribute.KeyValue, prefixPatterns []string) []attribute.KeyValue {
-
+	extraAttrs []attribute.KeyValue, prefixPatterns []string,
+) []attribute.KeyValue {
 	result := make([]attribute.KeyValue, len(baseAttrs))
 	copy(result, baseAttrs)
 

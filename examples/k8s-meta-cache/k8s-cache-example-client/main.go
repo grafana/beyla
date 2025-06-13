@@ -6,9 +6,10 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubecache/informer"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubecache/informer"
 )
 
 const (
@@ -20,7 +21,6 @@ func main() {
 	// Set up a connection to the server.
 	conn, err := grpc.NewClient(address,
 		grpc.WithTransportCredentials(insecure.NewCredentials()))
-
 	if err != nil {
 		slog.Error("could not connect", "address", address, "error", err)
 		os.Exit(-1)

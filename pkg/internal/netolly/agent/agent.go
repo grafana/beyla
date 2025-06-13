@@ -130,7 +130,6 @@ func FlowsAgent(ctxInfo *global.ContextInfo, cfg *beyla.Config) (*Flows, error) 
 	alog.Debug("acquiring Agent IP")
 
 	agentIP, err := fetchAgentIP(&cfg.NetworkFlows)
-
 	if err != nil {
 		return nil, fmt.Errorf("acquiring Agent IP: %w", err)
 	}

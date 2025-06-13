@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/cilium/ebpf/link"
+
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/ringbuf"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/rdns/ebpf/xdp"
 )
@@ -62,7 +63,6 @@ func newTracer() (*tracer, error) {
 			Program:   tracer.bpfObjects.BpfPrograms.DnsResponseTracker,
 			Interface: ifaces[i].Index,
 		})
-
 		if err != nil {
 			log.Debug("failed to attach XDP program to interface",
 				"interface", ifaces[i].Name, "error", err)

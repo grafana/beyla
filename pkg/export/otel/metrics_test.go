@@ -12,14 +12,15 @@ import (
 	"time"
 
 	"github.com/mariomac/guara/pkg/test"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
@@ -81,12 +82,13 @@ func TestHTTPMetricsEndpointOptions(t *testing.T) {
 
 func TestHTTPMetricsWithGrafanaOptions(t *testing.T) {
 	defer restoreEnvAfterExecution()
-	mcfg := MetricsConfig{Grafana: &GrafanaOTLP{
-		Submit:     []string{submitMetrics, submitTraces},
-		CloudZone:  "eu-west-23",
-		InstanceID: "12345",
-		APIKey:     "affafafaafkd",
-	}, Instrumentations: []string{instrumentations.InstrumentationHTTP},
+	mcfg := MetricsConfig{
+		Grafana: &GrafanaOTLP{
+			Submit:     []string{submitMetrics, submitTraces},
+			CloudZone:  "eu-west-23",
+			InstanceID: "12345",
+			APIKey:     "affafafaafkd",
+		}, Instrumentations: []string{instrumentations.InstrumentationHTTP},
 	}
 	t.Run("testing basic Grafana Cloud options", func(t *testing.T) {
 		testMetricsHTTPOptions(t, otlpOptions{
@@ -508,7 +510,6 @@ func TestAppMetrics_ByInstrumentation(t *testing.T) {
 			restoreEnvAfterExecution()
 		})
 	}
-
 }
 
 func TestAppMetrics_ResourceAttributes(t *testing.T) {

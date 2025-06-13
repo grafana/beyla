@@ -10,8 +10,6 @@ import (
 	"time"
 
 	"github.com/mariomac/guara/pkg/test"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/testutil"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubecache/informer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -23,6 +21,9 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
+
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/testutil"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubecache/informer"
 
 	"github.com/grafana/beyla/v2/pkg/kubecache"
 	"github.com/grafana/beyla/v2/pkg/kubecache/meta"
@@ -201,7 +202,6 @@ func TestBlockedClients(t *testing.T) {
 		require.GreaterOrEqual(t, never1.readMessages.Load(), int32(createdPods))
 		require.GreaterOrEqual(t, never2.readMessages.Load(), int32(createdPods))
 		require.GreaterOrEqual(t, never3.readMessages.Load(), int32(createdPods))
-
 	})
 
 	// we don't exit until all the pods have been created, to avoid failing the

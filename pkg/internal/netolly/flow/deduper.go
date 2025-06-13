@@ -73,7 +73,7 @@ type entry struct {
 // (no activity for it during the expiration time)
 // After passing by the deduper, the ebpf.Record instances loose their IfIndex and Direction fields.
 func DeduperProvider(dd *Deduper, input, output *msg.Queue[[]*ebpf.Record]) swarm.InstanceFunc {
-	var deduperExpireTime = dd.FCTTL
+	deduperExpireTime := dd.FCTTL
 	if deduperExpireTime <= 0 {
 		deduperExpireTime = 2 * dd.CacheActiveTimeout
 	}

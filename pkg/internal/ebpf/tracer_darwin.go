@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/cilium/ebpf/link"
+
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 
@@ -11,8 +12,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 )
 
-type instrumenter struct {
-}
+type instrumenter struct{}
 
 // dummy implementations to avoid compilation errors in Darwin.
 // The tracer component is only usable in Linux.

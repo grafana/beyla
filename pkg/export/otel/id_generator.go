@@ -26,9 +26,11 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-type BeylaIDGenerator struct{}
-type traceAndSpanKey struct{}
-type traceOnlyKey struct{}
+type (
+	BeylaIDGenerator struct{}
+	traceAndSpanKey  struct{}
+	traceOnlyKey     struct{}
+)
 
 type idPair struct {
 	traceID trace.TraceID

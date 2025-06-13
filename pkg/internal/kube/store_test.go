@@ -5,9 +5,10 @@ import (
 	"testing"
 	"text/template"
 
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubecache/informer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubecache/informer"
 
 	"github.com/grafana/beyla/v2/pkg/kubecache/meta"
 )
@@ -554,7 +555,8 @@ func TestNoLeakOnUpdateOrDeletion(t *testing.T) {
 					{Id: "container1-2"},
 				},
 			},
-		}}))
+		},
+	}))
 	require.NoError(t, store.On(&informer.Event{
 		Type: informer.EventType_CREATED,
 		Resource: &informer.ObjectMeta{
@@ -569,7 +571,8 @@ func TestNoLeakOnUpdateOrDeletion(t *testing.T) {
 					{Id: "container2-2"},
 				},
 			},
-		}}))
+		},
+	}))
 	require.NoError(t, store.On(&informer.Event{
 		Type: informer.EventType_UPDATED,
 		Resource: &informer.ObjectMeta{
@@ -583,7 +586,9 @@ func TestNoLeakOnUpdateOrDeletion(t *testing.T) {
 					{Id: "container1-1"},
 					{Id: "container1-3"},
 				},
-			}}}))
+			},
+		},
+	}))
 	require.NoError(t, store.On(&informer.Event{
 		Type: informer.EventType_DELETED,
 		Resource: &informer.ObjectMeta{
@@ -597,13 +602,16 @@ func TestNoLeakOnUpdateOrDeletion(t *testing.T) {
 					{Id: "container1"},
 					{Id: "container3"},
 				},
-			}}}))
+			},
+		},
+	}))
 	require.NoError(t, store.On(&informer.Event{
 		Type: informer.EventType_DELETED,
 		Resource: &informer.ObjectMeta{
 			Name:      "foo",
 			Namespace: "namespaceA",
-		}}))
+		},
+	}))
 	require.NoError(t, store.On(&informer.Event{
 		Type: informer.EventType_DELETED,
 		Resource: &informer.ObjectMeta{
@@ -616,7 +624,9 @@ func TestNoLeakOnUpdateOrDeletion(t *testing.T) {
 					{Id: "container2-1"},
 					{Id: "container2-3"},
 				},
-			}}}))
+			},
+		},
+	}))
 
 	assert.Empty(t, store.objectMetaByQName)
 	assert.Empty(t, store.objectMetaByIP)

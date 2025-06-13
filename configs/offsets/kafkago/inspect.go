@@ -16,7 +16,6 @@ func producerHandler(kafkaWriter *kafka.Writer) {
 		Value: []byte("world"),
 	}
 	err := kafkaWriter.WriteMessages(context.Background(), msg)
-
 	if err != nil {
 		fmt.Printf("error %v\n", err)
 	}

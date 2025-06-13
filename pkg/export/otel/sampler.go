@@ -16,7 +16,7 @@ type Sampler struct {
 }
 
 func (s *Sampler) Implementation() trace.Sampler {
-	var defaultSampler = func() trace.Sampler {
+	defaultSampler := func() trace.Sampler {
 		return trace.ParentBased(trace.AlwaysSample())
 	}
 	log := slog.With("component", "otel.Sampler", "name", s.Name, "arg", s.Arg)

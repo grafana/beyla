@@ -14,13 +14,14 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/ianlancetaylor/demangle"
+	"github.com/prometheus/procfs"
+
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/gpuevent"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/ringbuf"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/goexec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
-	"github.com/prometheus/procfs"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/config"
@@ -29,8 +30,10 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 )
 
-const EventTypeKernelLaunch = 1 // EVENT_GPU_KERNEL_LAUNCH
-const EventTypeMalloc = 2       // EVENT_GPU_MALLOC
+const (
+	EventTypeKernelLaunch = 1 // EVENT_GPU_KERNEL_LAUNCH
+	EventTypeMalloc       = 2 // EVENT_GPU_MALLOC
+)
 
 type pidKey struct {
 	Pid int32
@@ -45,8 +48,10 @@ type modInfo struct {
 
 type moduleOffsets map[uint64]*SymbolTree
 
-type GPUKernelLaunchInfo gpuevent.BpfGpuKernelLaunchT
-type GPUMallocInfo gpuevent.BpfGpuMallocT
+type (
+	GPUKernelLaunchInfo gpuevent.BpfGpuKernelLaunchT
+	GPUMallocInfo       gpuevent.BpfGpuMallocT
+)
 
 // TODO: We have a way to bring ELF file information to this Tracer struct
 // via the newNonGoTracersGroup / newNonGoTracersGroupUProbes functions. Now,
@@ -404,7 +409,6 @@ func (p *Tracer) establishCudaPID(pid uint32, fi *exec.FileInfo, mods []*procfs.
 	}
 
 	allPids, err := exec.FindNamespacedPids(int32(pid))
-
 	if err != nil {
 		p.log.Error("Error finding namespaced pids", "error", err)
 		return

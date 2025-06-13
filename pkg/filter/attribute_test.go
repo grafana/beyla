@@ -6,12 +6,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/ebpf"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/testutil"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 )
@@ -37,111 +38,137 @@ func TestAttributeFilter(t *testing.T) {
 	// records not matching both the ip and src namespace will be dropped
 	input.Send([]*ebpf.Record{
 		{
-			Attrs: ebpf.RecordAttrs{BeylaIP: "148.132.1.1",
+			Attrs: ebpf.RecordAttrs{
+				BeylaIP: "148.132.1.1",
 				Metadata: map[attr.Name]string{
 					"k8s.src.namespace": "debug",
 					"k8s.app.version":   "v0.0.1",
-				}},
+				},
+			},
 		},
 		{
-			Attrs: ebpf.RecordAttrs{BeylaIP: "128.132.1.1",
+			Attrs: ebpf.RecordAttrs{
+				BeylaIP: "128.132.1.1",
 				Metadata: map[attr.Name]string{
 					"k8s.src.namespace": "foo",
 					"k8s.app.version":   "v0.0.1",
-				}},
+				},
+			},
 		},
 		{
-			Attrs: ebpf.RecordAttrs{BeylaIP: "148.132.1.1",
+			Attrs: ebpf.RecordAttrs{
+				BeylaIP: "148.132.1.1",
 				Metadata: map[attr.Name]string{
 					"k8s.src.namespace": "foo",
 					"k8s.app.version":   "v0.0.1",
-				}},
+				},
+			},
 		},
 		{
-			Attrs: ebpf.RecordAttrs{BeylaIP: "148.133.2.1",
+			Attrs: ebpf.RecordAttrs{
+				BeylaIP: "148.133.2.1",
 				Metadata: map[attr.Name]string{
 					"k8s.src.namespace": "tralar",
 					"k8s.app.version":   "v0.0.1",
-				}},
+				},
+			},
 		},
 		{
-			Attrs: ebpf.RecordAttrs{BeylaIP: "141.132.1.1",
+			Attrs: ebpf.RecordAttrs{
+				BeylaIP: "141.132.1.1",
 				Metadata: map[attr.Name]string{
 					"k8s.src.namespace": "tralari",
 					"k8s.app.version":   "v0.0.1",
-				}},
+				},
+			},
 		},
 	})
 
 	// the whole batch will be dropped (won't go to the out channel)
 	input.Send([]*ebpf.Record{
 		{
-			Attrs: ebpf.RecordAttrs{BeylaIP: "128.132.1.1",
+			Attrs: ebpf.RecordAttrs{
+				BeylaIP: "128.132.1.1",
 				Metadata: map[attr.Name]string{
 					"k8s.src.namespace": "foo",
 					"k8s.app.version":   "v0.0.1",
-				}},
+				},
+			},
 		},
 		{
-			Attrs: ebpf.RecordAttrs{BeylaIP: "141.132.1.1",
+			Attrs: ebpf.RecordAttrs{
+				BeylaIP: "141.132.1.1",
 				Metadata: map[attr.Name]string{
 					"k8s.src.namespace": "tralari",
 					"k8s.app.version":   "v0.0.1",
-				}},
+				},
+			},
 		},
 	})
 
 	// no record will be dropped
 	input.Send([]*ebpf.Record{
 		{
-			Attrs: ebpf.RecordAttrs{BeylaIP: "148.132.1.1",
+			Attrs: ebpf.RecordAttrs{
+				BeylaIP: "148.132.1.1",
 				Metadata: map[attr.Name]string{
 					"k8s.src.namespace": "foo",
 					"k8s.app.version":   "v0.0.1",
-				}},
+				},
+			},
 		},
 		{
-			Attrs: ebpf.RecordAttrs{BeylaIP: "148.133.2.1",
+			Attrs: ebpf.RecordAttrs{
+				BeylaIP: "148.133.2.1",
 				Metadata: map[attr.Name]string{
 					"k8s.src.namespace": "tralar",
 					"k8s.app.version":   "v0.0.1",
-				}},
+				},
+			},
 		},
 	})
 
 	filtered := testutil.ReadChannel(t, out, timeout)
 	assert.Equal(t, []*ebpf.Record{
 		{
-			Attrs: ebpf.RecordAttrs{BeylaIP: "148.132.1.1",
+			Attrs: ebpf.RecordAttrs{
+				BeylaIP: "148.132.1.1",
 				Metadata: map[attr.Name]string{
 					"k8s.src.namespace": "foo",
 					"k8s.app.version":   "v0.0.1",
-				}},
+				},
+			},
 		},
 		{
-			Attrs: ebpf.RecordAttrs{BeylaIP: "148.133.2.1",
+			Attrs: ebpf.RecordAttrs{
+				BeylaIP: "148.133.2.1",
 				Metadata: map[attr.Name]string{
 					"k8s.src.namespace": "tralar",
 					"k8s.app.version":   "v0.0.1",
-				}},
+				},
+			},
 		},
 	}, filtered)
 
 	filtered = testutil.ReadChannel(t, out, timeout)
 	assert.Equal(t, []*ebpf.Record{
 		{
-			Attrs: ebpf.RecordAttrs{BeylaIP: "148.132.1.1",
+			Attrs: ebpf.RecordAttrs{
+				BeylaIP: "148.132.1.1",
 				Metadata: map[attr.Name]string{
 					"k8s.src.namespace": "foo",
 					"k8s.app.version":   "v0.0.1",
-				}},
+				},
+			},
 		},
 		{
-			Attrs: ebpf.RecordAttrs{BeylaIP: "148.133.2.1",
+			Attrs: ebpf.RecordAttrs{
+				BeylaIP: "148.133.2.1",
 				Metadata: map[attr.Name]string{
 					"k8s.src.namespace": "tralar",
 					"k8s.app.version":   "v0.0.1",
-				}},
+				},
+			},
 		},
 	}, filtered)
 
@@ -151,7 +178,6 @@ func TestAttributeFilter(t *testing.T) {
 	default:
 		// ok!!
 	}
-
 }
 
 func TestAttributeFilter_VerificationError(t *testing.T) {
@@ -216,5 +242,4 @@ func TestAttributeFilter_SpanMetrics(t *testing.T) {
 	default:
 		// ok!!
 	}
-
 }

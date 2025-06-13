@@ -127,7 +127,6 @@ func jsonPrinter(in *msg.Queue[[]request.Span], indent bool) swarm.RunFunc {
 	return func(_ context.Context) {
 		for spans := range input {
 			data, err := serializeSpansJSON(spans, indent)
-
 			if err != nil {
 				mlog().Error("Error serializing span to json", "error", err)
 				continue

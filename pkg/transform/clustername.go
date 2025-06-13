@@ -13,8 +13,9 @@ import (
 	"strings"
 	"time"
 
-	attr2 "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"go.opentelemetry.io/contrib/detectors/aws/eks"
+
+	attr2 "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 
 	"github.com/grafana/beyla/v2/pkg/internal/kube"
 )
@@ -38,7 +39,7 @@ type clusterNameFetcher func(context.Context) (string, error)
 // TODO: consider other providers (Alibaba, Oracle, etc...)
 func fetchClusterName(ctx context.Context, k8sInformer *kube.MetadataProvider) string {
 	log := klog().With("func", "fetchClusterName")
-	var clusterNameFetchers = map[string]clusterNameFetcher{
+	clusterNameFetchers := map[string]clusterNameFetcher{
 		"Label": nodeLabelsClusterNameFetcher(k8sInformer),
 		"EC2":   eksClusterNameFetcher,
 		"GCP":   gcpClusterNameFetcher,

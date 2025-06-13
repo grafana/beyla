@@ -11,11 +11,13 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 )
 
-const fastCGIRequestHeaderLen = 8
-const requestMethodKey = "REQUEST_METHOD"
-const requestURIKey = "REQUEST_URI"
-const responseError = 7 // FCGI_STDERR
-const responseStatusKey = "Status: "
+const (
+	fastCGIRequestHeaderLen = 8
+	requestMethodKey        = "REQUEST_METHOD"
+	requestURIKey           = "REQUEST_URI"
+	responseError           = 7 // FCGI_STDERR
+	responseStatusKey       = "Status: "
+)
 
 const fcgiFrameTypeParams = 4
 

@@ -8,12 +8,13 @@ import (
 	"time"
 
 	"github.com/mariomac/guara/pkg/test"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/connector"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/ebpf"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
@@ -102,7 +103,6 @@ func TestFilter(t *testing.T) {
 			{Name: "promhttp_metric_handler_errors_total", Labels: map[string]string{"cause": "encoding"}},
 			{Name: "promhttp_metric_handler_errors_total", Labels: map[string]string{"cause": "gathering"}},
 		}, metrics)
-
 	})
 }
 

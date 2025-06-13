@@ -15,11 +15,6 @@ import (
 
 	expirable2 "github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/mariomac/guara/pkg/test"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/sqlprune"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
-	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
@@ -30,6 +25,12 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.25.0"
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/sqlprune"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
@@ -178,24 +179,35 @@ func TestHTTPTracesEndpointHeaders(t *testing.T) {
 		Grafana         GrafanaOTLP
 	}
 	for _, tc := range []testCase{
-		{Description: "No headers",
-			ExpectedHeaders: map[string]string{}},
-		{Description: "defining common OTLP_HEADERS",
+		{
+			Description:     "No headers",
+			ExpectedHeaders: map[string]string{},
+		},
+		{
+			Description:     "defining common OTLP_HEADERS",
 			Env:             map[string]string{"OTEL_EXPORTER_OTLP_HEADERS": "Foo=Bar ==,Authorization=Base 2222=="},
-			ExpectedHeaders: map[string]string{"Foo": "Bar ==", "Authorization": "Base 2222=="}},
-		{Description: "defining common OTLP_TRACES_HEADERS",
+			ExpectedHeaders: map[string]string{"Foo": "Bar ==", "Authorization": "Base 2222=="},
+		},
+		{
+			Description:     "defining common OTLP_TRACES_HEADERS",
 			Env:             map[string]string{"OTEL_EXPORTER_OTLP_TRACES_HEADERS": "Foo=Bar ==,Authorization=Base 1234=="},
-			ExpectedHeaders: map[string]string{"Foo": "Bar ==", "Authorization": "Base 1234=="}},
-		{Description: "OTLP_TRACES_HEADERS takes precedence over OTLP_HEADERS",
+			ExpectedHeaders: map[string]string{"Foo": "Bar ==", "Authorization": "Base 1234=="},
+		},
+		{
+			Description: "OTLP_TRACES_HEADERS takes precedence over OTLP_HEADERS",
 			Env: map[string]string{
 				"OTEL_EXPORTER_OTLP_HEADERS":        "Foo=Bar ==,Authorization=Base 3210==",
 				"OTEL_EXPORTER_OTLP_TRACES_HEADERS": "Authorization=Base 1111==",
 			},
-			ExpectedHeaders: map[string]string{"Foo": "Bar ==", "Authorization": "Base 1111=="}},
-		{Description: "Legacy Grafana Cloud vars",
+			ExpectedHeaders: map[string]string{"Foo": "Bar ==", "Authorization": "Base 1111=="},
+		},
+		{
+			Description:     "Legacy Grafana Cloud vars",
 			Grafana:         GrafanaOTLP{InstanceID: "123", APIKey: "456"},
-			ExpectedHeaders: map[string]string{"Authorization": "Basic MTIzOjQ1Ng=="}},
-		{Description: "OTLP en vars take precedence over legacy Grafana Cloud vars",
+			ExpectedHeaders: map[string]string{"Authorization": "Basic MTIzOjQ1Ng=="},
+		},
+		{
+			Description:     "OTLP en vars take precedence over legacy Grafana Cloud vars",
 			Grafana:         GrafanaOTLP{InstanceID: "123", APIKey: "456"},
 			Env:             map[string]string{"OTEL_EXPORTER_OTLP_HEADERS": "Foo=Bar ==,Authorization=Base 4321=="},
 			ExpectedHeaders: map[string]string{"Foo": "Bar ==", "Authorization": "Base 4321=="},
@@ -278,20 +290,28 @@ func TestGRPCTracesEndpointHeaders(t *testing.T) {
 		Grafana         GrafanaOTLP
 	}
 	for _, tc := range []testCase{
-		{Description: "No headers",
-			ExpectedHeaders: map[string]string{}},
-		{Description: "defining common OTLP_HEADERS",
+		{
+			Description:     "No headers",
+			ExpectedHeaders: map[string]string{},
+		},
+		{
+			Description:     "defining common OTLP_HEADERS",
 			Env:             map[string]string{"OTEL_EXPORTER_OTLP_HEADERS": "Foo=Bar ==,Authorization=Base 2222=="},
-			ExpectedHeaders: map[string]string{"Foo": "Bar ==", "Authorization": "Base 2222=="}},
-		{Description: "defining common OTLP_TRACES_HEADERS",
+			ExpectedHeaders: map[string]string{"Foo": "Bar ==", "Authorization": "Base 2222=="},
+		},
+		{
+			Description:     "defining common OTLP_TRACES_HEADERS",
 			Env:             map[string]string{"OTEL_EXPORTER_OTLP_TRACES_HEADERS": "Foo=Bar ==,Authorization=Base 1234=="},
-			ExpectedHeaders: map[string]string{"Foo": "Bar ==", "Authorization": "Base 1234=="}},
-		{Description: "OTLP_TRACES_HEADERS takes precedence over OTLP_HEADERS",
+			ExpectedHeaders: map[string]string{"Foo": "Bar ==", "Authorization": "Base 1234=="},
+		},
+		{
+			Description: "OTLP_TRACES_HEADERS takes precedence over OTLP_HEADERS",
 			Env: map[string]string{
 				"OTEL_EXPORTER_OTLP_HEADERS":        "Foo=Bar ==,Authorization=Base 3210==",
 				"OTEL_EXPORTER_OTLP_TRACES_HEADERS": "Authorization=Base 1111==",
 			},
-			ExpectedHeaders: map[string]string{"Foo": "Bar ==", "Authorization": "Base 1111=="}},
+			ExpectedHeaders: map[string]string{"Foo": "Bar ==", "Authorization": "Base 1111=="},
+		},
 	} {
 		// mutex to avoid running testcases in parallel so we don't mess up with env vars
 		mt := sync.Mutex{}
@@ -601,7 +621,6 @@ func TestGenerateTraces(t *testing.T) {
 		assert.NotEmpty(t, spans.At(0).SpanID().String())
 		assert.NotEmpty(t, spans.At(0).TraceID().String())
 	})
-
 }
 
 func TestGenerateTracesAttributes(t *testing.T) {
@@ -687,7 +706,6 @@ func TestGenerateTracesAttributes(t *testing.T) {
 		ensureTraceStrAttr(t, attrs, attribute.Key(attr.MessagingOpType), "process")
 		ensureTraceStrAttr(t, attrs, semconv.MessagingDestinationNameKey, "important-topic")
 		ensureTraceStrAttr(t, attrs, semconv.MessagingClientIDKey, "test")
-
 	})
 	t.Run("test env var resource attributes", func(t *testing.T) {
 		defer restoreEnvAfterExecution()()
@@ -709,7 +727,8 @@ func TestTraceSampling(t *testing.T) {
 	spans := []request.Span{}
 	start := time.Now()
 	for i := 0; i < 10; i++ {
-		span := request.Span{Type: request.EventTypeHTTP,
+		span := request.Span{
+			Type:         request.EventTypeHTTP,
 			RequestStart: start.UnixNano(),
 			Start:        start.Add(time.Second).UnixNano(),
 			End:          start.Add(3 * time.Second).UnixNano(),
@@ -780,7 +799,8 @@ func TestTraceSkipSpanMetrics(t *testing.T) {
 	spans := []request.Span{}
 	start := time.Now()
 	for i := 0; i < 10; i++ {
-		span := request.Span{Type: request.EventTypeHTTP,
+		span := request.Span{
+			Type:         request.EventTypeHTTP,
 			RequestStart: start.UnixNano(),
 			Start:        start.Add(time.Second).UnixNano(),
 			End:          start.Add(3 * time.Second).UnixNano(),
@@ -1256,8 +1276,11 @@ func restoreEnvAfterExecution() func() {
 		val    string
 		exists bool
 	}{
-		{name: envTracesProtocol}, {name: envMetricsProtocol}, {name: envProtocol},
-		{name: envHeaders}, {name: envTracesHeaders},
+		{name: envTracesProtocol},
+		{name: envMetricsProtocol},
+		{name: envProtocol},
+		{name: envHeaders},
+		{name: envTracesHeaders},
 	}
 	for _, v := range vals {
 		v.val, v.exists = os.LookupEnv(v.name)
@@ -1520,7 +1543,8 @@ func TestTraceGrouping(t *testing.T) {
 	spans := []request.Span{}
 	start := time.Now()
 	for i := 0; i < 10; i++ {
-		span := request.Span{Type: request.EventTypeHTTP,
+		span := request.Span{
+			Type:         request.EventTypeHTTP,
 			RequestStart: start.UnixNano(),
 			Start:        start.Add(time.Second).UnixNano(),
 			End:          start.Add(3 * time.Second).UnixNano(),

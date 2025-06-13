@@ -46,7 +46,6 @@ func TestInterfaceFilter_SelectingInterfaces_DefaultExclusion(t *testing.T) {
 }
 
 func TestInterfaceFilter_ExclusionTakesPriority(t *testing.T) {
-
 	ifaces, err := initInterfaceFilter([]string{"/^eth/", "/^br-/"}, []string{"eth1", "/^br-1/"})
 	require.NoError(t, err)
 

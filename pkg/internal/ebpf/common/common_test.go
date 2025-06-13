@@ -11,12 +11,12 @@ import (
 const privilegedEnv = "PRIVILEGED_TESTS"
 
 func setIntegrity(t *testing.T, path, text string) {
-	err := os.WriteFile(path, []byte(text), 0644)
+	err := os.WriteFile(path, []byte(text), 0o644)
 	assert.NoError(t, err)
 }
 
 func setNotReadable(t *testing.T, path string) {
-	err := os.Chmod(path, 000)
+	err := os.Chmod(path, 0o00)
 	assert.NoError(t, err)
 }
 

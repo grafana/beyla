@@ -7,8 +7,9 @@ import (
 	"sync"
 	"text/template"
 
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/connector"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/connector"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
@@ -108,7 +109,6 @@ func buildServiceNameTemplate(config *beyla.Config) (*template.Template, error) 
 		var err error
 
 		templ, err = template.New("serviceNameTemplate").Parse(config.Attributes.Kubernetes.ServiceNameTemplate)
-
 		if err != nil {
 			return nil, fmt.Errorf("unable to parse service name template: %w", err)
 		}
@@ -122,7 +122,6 @@ func buildServiceNameTemplate(config *beyla.Config) (*template.Template, error) 
 func buildCommonContextInfo(
 	ctx context.Context, config *beyla.Config,
 ) (*global.ContextInfo, error) {
-
 	// merging deprecated resource labels definition for backwards compatibility
 	resourceLabels := config.Attributes.Kubernetes.ResourceLabels
 	if resourceLabels == nil {
@@ -143,7 +142,6 @@ func buildCommonContextInfo(
 	}
 
 	templ, err := buildServiceNameTemplate(config)
-
 	if err != nil {
 		return nil, err
 	}

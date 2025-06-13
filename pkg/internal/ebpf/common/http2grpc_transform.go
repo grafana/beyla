@@ -9,11 +9,12 @@ import (
 	"unsafe"
 
 	lru "github.com/hashicorp/golang-lru/v2"
+	"go.opentelemetry.io/otel/trace"
+	"golang.org/x/net/http2"
+
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/bhpack"
 	ebpfcommon "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/common"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/ringbuf"
-	"go.opentelemetry.io/otel/trace"
-	"golang.org/x/net/http2"
 
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 )
@@ -323,7 +324,6 @@ func http2FromBuffers(parseContext *EBPFParseContext, event *BPFHTTP2Info) (requ
 
 	for {
 		f, err := framer.ReadFrame()
-
 		if err != nil {
 			fail := true
 			// We could have read incomplete buffer from eBPF, if the grpc request was
@@ -367,7 +367,6 @@ func http2FromBuffers(parseContext *EBPFParseContext, event *BPFHTTP2Info) (requ
 
 			for {
 				retF, err := retFramer.ReadFrame()
-
 				if err != nil {
 					break
 				}
@@ -406,7 +405,6 @@ func http2FromBuffers(parseContext *EBPFParseContext, event *BPFHTTP2Info) (requ
 
 func ReadHTTP2InfoIntoSpan(parseCtx *EBPFParseContext, record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {
 	event, err := ReinterpretCast[BPFHTTP2Info](record.RawSample)
-
 	if err != nil {
 		return request.Span{}, true, err
 	}
@@ -518,7 +516,6 @@ func isHTTP2(data []uint8, eventLen int) bool {
 
 	for {
 		f, err := framer.ReadFrame()
-
 		if err != nil {
 			break
 		}

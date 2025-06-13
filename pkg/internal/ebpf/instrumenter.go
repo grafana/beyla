@@ -18,10 +18,11 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 	v2 "github.com/containers/common/pkg/cgroupv2"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/goexec"
 	"github.com/prometheus/procfs"
 	"golang.org/x/sys/unix"
+
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/goexec"
 
 	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
 )
@@ -43,7 +44,6 @@ func (i *instrumenter) goprobes(p Tracer) error {
 	i.gatherGoOffsets(goProbes)
 
 	closers, err := i.instrumentProbes(i.exe, goProbes)
-
 	if err != nil {
 		return err
 	}
@@ -180,7 +180,6 @@ func resolveExePath(pid int32) (string, uint64, error) {
 	exePath := fmt.Sprintf("/proc/%d/exe", pid)
 
 	info, err := os.Stat(exePath)
-
 	if err != nil {
 		return "", 0, err
 	}
@@ -206,7 +205,6 @@ func (i *instrumenter) uprobes(pid int32, p Tracer) error {
 	}
 
 	exePath, exeIno, err := resolveExePath(pid)
-
 	if err != nil {
 		return err
 	}
@@ -231,7 +229,6 @@ func (i *instrumenter) uprobes(pid int32, p Tracer) error {
 		}
 
 		libExe, err := link.OpenExecutable(m.instrPath)
-
 		if err != nil {
 			log.Debug("can't open executable for inspection", "error", err)
 			continue
@@ -244,7 +241,6 @@ func (i *instrumenter) uprobes(pid int32, p Tracer) error {
 			}
 
 			closers, err := i.instrumentProbes(libExe, m.probes[j])
-
 			if err != nil {
 				log.Debug("error instrumenting probes", "error", err)
 				continue
@@ -268,7 +264,6 @@ func uprobe(exe *link.Executable, probe *ebpfcommon.ProbeDesc) ([]io.Closer, err
 		up, err := exe.Uprobe("", probe.Start, &link.UprobeOptions{
 			Address: probe.StartOffset,
 		})
-
 		if err != nil {
 			return closers, fmt.Errorf("setting uprobe (offset): %w", err)
 		}
@@ -285,7 +280,6 @@ func uprobe(exe *link.Executable, probe *ebpfcommon.ProbeDesc) ([]io.Closer, err
 			up, err := exe.Uprobe("", probe.End, &link.UprobeOptions{
 				Address: offset,
 			})
-
 			if err != nil {
 				return closers, fmt.Errorf("setting uretprobe (attaching to offset): %w", err)
 			}
@@ -331,7 +325,6 @@ func (i *instrumenter) sockmsgs(p Tracer) error {
 			Program: sockmsg.Program,
 			Attach:  sockmsg.AttachAs,
 		})
-
 		if err != nil {
 			return fmt.Errorf("attaching sock_msg program: %w", err)
 		}
@@ -345,7 +338,6 @@ func (i *instrumenter) sockmsgs(p Tracer) error {
 func (i *instrumenter) sockops(p Tracer) error {
 	for _, sockops := range p.SockOps() {
 		cgroupPath, err := getCgroupPath()
-
 		if err != nil {
 			return fmt.Errorf("error getting cgroup path for sockops: %w", err)
 		}
@@ -357,7 +349,6 @@ func (i *instrumenter) sockops(p Tracer) error {
 			Attach:  sockops.AttachAs,
 			Program: sockops.Program,
 		})
-
 		if err != nil {
 			return fmt.Errorf("attaching sockops program: %w", err)
 		}
@@ -453,7 +444,6 @@ func symbolNames(m map[string][]*ebpfcommon.ProbeDesc) []string {
 
 func gatherOffsets(instrPath string, probes map[string][]*ebpfcommon.ProbeDesc, log *slog.Logger) error {
 	elfFile, err := elf.Open(instrPath)
-
 	if err != nil {
 		return fmt.Errorf("failed to open elf file %s: %w", instrPath, err)
 	}
@@ -464,9 +454,9 @@ func gatherOffsets(instrPath string, probes map[string][]*ebpfcommon.ProbeDesc, 
 }
 
 func gatherOffsetsImpl(elfFile *elf.File, probes map[string][]*ebpfcommon.ProbeDesc,
-	instrPath string, log *slog.Logger) error {
+	instrPath string, log *slog.Logger,
+) error {
 	syms, err := exec.FindExeSymbols(elfFile, symbolNames(probes))
-
 	if err != nil {
 		return fmt.Errorf("failed to lookup symbols for %s: %w", instrPath, err)
 	}
@@ -486,7 +476,6 @@ func gatherOffsetsImpl(elfFile *elf.File, probes map[string][]*ebpfcommon.ProbeD
 			}
 
 			returns, err := goexec.FindReturnOffsets(sym.Off, progData)
-
 			if err != nil {
 				log.Debug("Error finding return offsets", "symbol", sym)
 				continue
@@ -527,7 +516,6 @@ func readSymbolData(sym *exec.Sym) []byte {
 	data := make([]byte, sym.Len)
 
 	_, err := sym.Prog.ReadAt(data, int64(sym.Off-sym.Prog.Off))
-
 	if err != nil {
 		fmt.Printf("Error loading symbol data: %v\n", err)
 		return nil

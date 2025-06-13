@@ -13,11 +13,6 @@ import (
 	"time"
 
 	expirable2 "github.com/hashicorp/golang-lru/v2/expirable"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
-	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/configgrpc"
 	"go.opentelemetry.io/collector/config/confighttp"
@@ -41,6 +36,12 @@ import (
 	trace2 "go.opentelemetry.io/otel/trace"
 	tracenoop "go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/zap"
+
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
@@ -405,7 +406,6 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 			proto, ProtocolGRPC, ProtocolHTTPJSON, ProtocolHTTPProtobuf))
 		return nil, fmt.Errorf("invalid protocol value: %q", proto)
 	}
-
 }
 
 func internalMetricsEnabled(ctxInfo *global.ContextInfo) bool {
@@ -664,8 +664,10 @@ func acceptSpan(is instrumentations.InstrumentationSelection, span *request.Span
 }
 
 // TODO use semconv.DBSystemRedis when we update to OTEL semantic conventions library 1.30
-var dbSystemRedis = attribute.String(string(attr.DBSystemName), semconv.DBSystemRedis.Value.AsString())
-var spanMetricsSkip = attribute.Bool(string(attr.SkipSpanMetrics), true)
+var (
+	dbSystemRedis   = attribute.String(string(attr.DBSystemName), semconv.DBSystemRedis.Value.AsString())
+	spanMetricsSkip = attribute.Bool(string(attr.SkipSpanMetrics), true)
+)
 
 // nolint:cyclop
 func TraceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) []attribute.KeyValue {

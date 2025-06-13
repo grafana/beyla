@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/connector"
 	attr2 "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/expire"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
-	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	attrextra "github.com/grafana/beyla/v2/pkg/export/attributes/beyla"
@@ -107,14 +108,10 @@ func newProcReporter(ctxInfo *global.ContextInfo, cfg *ProcPrometheusConfig, inp
 		return nil, fmt.Errorf("network Prometheus exporter attributes enable: %w", err)
 	}
 
-	cpuTimeLblNames, cpuTimeGetters, cpuTimeHasState :=
-		attributesWithExplicit(provider, attributes.ProcessCPUTime, attrextra.ProcCPUMode)
-	cpuUtilLblNames, cpuUtilGetters, cpuUtilHasState :=
-		attributesWithExplicit(provider, attributes.ProcessCPUUtilization, attrextra.ProcCPUMode)
-	diskLblNames, diskGetters, diskHasDirection :=
-		attributesWithExplicit(provider, attributes.ProcessDiskIO, attrextra.ProcDiskIODir)
-	netLblNames, netGetters, netHasDirection :=
-		attributesWithExplicit(provider, attributes.ProcessDiskIO, attrextra.ProcNetIODir)
+	cpuTimeLblNames, cpuTimeGetters, cpuTimeHasState := attributesWithExplicit(provider, attributes.ProcessCPUTime, attrextra.ProcCPUMode)
+	cpuUtilLblNames, cpuUtilGetters, cpuUtilHasState := attributesWithExplicit(provider, attributes.ProcessCPUUtilization, attrextra.ProcCPUMode)
+	diskLblNames, diskGetters, diskHasDirection := attributesWithExplicit(provider, attributes.ProcessDiskIO, attrextra.ProcDiskIODir)
+	netLblNames, netGetters, netHasDirection := attributesWithExplicit(provider, attributes.ProcessDiskIO, attrextra.ProcNetIODir)
 
 	attrMemory := attributes.PrometheusGetters(process.PromGetters, provider.For(attributes.ProcessMemoryUsage))
 	attrMemoryVirtual := attributes.PrometheusGetters(process.PromGetters, provider.For(attributes.ProcessMemoryVirtual))

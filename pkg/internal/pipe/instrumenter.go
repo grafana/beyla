@@ -83,7 +83,7 @@ func newGraphBuilder(config *beyla.Config, ctxInfo *global.ContextInfo, tracesCh
 		kubeDecoratorToNameResolver, nameResolverToAttrFilter))
 
 	exportableSpans := newQueue()
-	swi.Add(filter.ByAttribute(config.Filters.Application, selectorCfg.ExtraGroupAttributesCfg, spanPtrPromGetters,
+	swi.Add(filter.ByAttribute(config.Filters.Application, nil, selectorCfg.ExtraGroupAttributesCfg, spanPtrPromGetters,
 		nameResolverToAttrFilter, exportableSpans))
 
 	config.Metrics.Grafana = &gb.config.Grafana.OTLP

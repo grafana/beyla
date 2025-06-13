@@ -149,12 +149,6 @@ You should be able to query traces and metrics in your Grafana board.
 #### Optional requirements
 - llvm >= 19
 - clang >= 19
-### Quickstart
-```
-$ git clone https://github.com/grafana/beyla.git
-$ cd beyla/
-$ make dev
-```
 
 #### Common `Makefile` targets
 
@@ -167,8 +161,10 @@ Beyla's `Makefile` provides several specific-purpose build targets. The most com
 - `test` - runs unit tests
 - `integration-tests` - runs integration tests - may require `sudo`
 - `clang-format` - formats C (eBPF) source code[^1]
+- `vendor-obi` - Downloads all the Opentelemetry-eBPF-Instrumentation (OBI) dependencies in a submodule, builds the BPF targets, and vendors it.
 
 [^1]: Requires llvm/clang
+
 ####  Quickstart
 
 ```
@@ -180,6 +176,29 @@ $ make dev
 As described in the previous section, `make dev` takes care of setting up the build pre-requisites, including deploying a `clang-format` pre-commit hook.
 
 After a successful compilation, binaries can be found in the `bin/` subdirectory.
+
+#### Managing code dependencies to opentelemetry-ebpf-instrumentation
+
+Beyla vendors part of the code from the [opentelemetry-ebpf-instrumentation](https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation)
+(OBI) project.
+
+The code is incorporated as a Git submodule, named `obi-src`, in the `.obi-src` folder in the Beyla code base.
+The contents of the `.obi-src` are used to build the BPF dependencies, and in a second step they are vendored
+in the `vendor/` directory.
+
+Usually, you just need to run `make vendor-obi` to get the submodule data, compile BPF targets, and vendor them locally.
+
+`.obi-src` folder is pinned to a concrete version of the OBI Git history. If you did changes in the upstream
+[opentelemetry-ebpf-instrumentation](https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation)
+repository, and want to update `.obi-src` to the latest contents, you'll need to run, from Beyla's project folder:
+
+```
+git submodule update --checkout --remote 
+git add .
+```
+
+(`git add .` is really important, otherwise when you try to recompile the code, the `obi-src` submodule might be
+reverted to its original status).
 
 #### Formatting and linting code
 

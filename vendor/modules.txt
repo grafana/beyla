@@ -407,6 +407,7 @@ github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/rdns
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/rdns/store
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/sqlprune
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc
+github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/testutil
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/traces
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/traces/hostname
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/transform/route

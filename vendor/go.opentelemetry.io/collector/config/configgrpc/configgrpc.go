@@ -74,8 +74,8 @@ type ClientConfig struct {
 	// The compression key for supported compression types within collector.
 	Compression configcompression.Type `mapstructure:"compression,omitempty"`
 
-	// TLSSetting struct exposes TLS client configuration.
-	TLSSetting configtls.ClientConfig `mapstructure:"tls,omitempty"`
+	// TLS struct exposes TLS client configuration.
+	TLS configtls.ClientConfig `mapstructure:"tls,omitempty"`
 
 	// The keepalive parameters for gRPC client. See grpc.WithKeepaliveParams.
 	// (https://godoc.org/google.golang.org/grpc#WithKeepaliveParams).
@@ -105,7 +105,7 @@ type ClientConfig struct {
 	Authority string `mapstructure:"authority,omitempty"`
 
 	// Auth configuration for outgoing RPCs.
-	Auth *configauth.Authentication `mapstructure:"auth,omitempty"`
+	Auth *configauth.Config `mapstructure:"auth,omitempty"`
 
 	// Middlewares for the gRPC client.
 	Middlewares []configmiddleware.Config `mapstructure:"middlewares,omitempty"`
@@ -114,7 +114,7 @@ type ClientConfig struct {
 // NewDefaultClientConfig returns a new instance of ClientConfig with default values.
 func NewDefaultClientConfig() *ClientConfig {
 	return &ClientConfig{
-		TLSSetting:   configtls.NewDefaultClientConfig(),
+		TLS:          configtls.NewDefaultClientConfig(),
 		Keepalive:    NewDefaultKeepaliveClientConfig(),
 		BalancerName: BalancerName(),
 	}
@@ -176,7 +176,7 @@ type ServerConfig struct {
 
 	// Configures the protocol to use TLS.
 	// The default value is nil, which will cause the protocol to not use TLS.
-	TLSSetting *configtls.ServerConfig `mapstructure:"tls,omitempty"`
+	TLS *configtls.ServerConfig `mapstructure:"tls,omitempty"`
 
 	// MaxRecvMsgSizeMiB sets the maximum size (in MiB) of messages accepted by the server.
 	MaxRecvMsgSizeMiB int `mapstructure:"max_recv_msg_size_mib,omitempty"`
@@ -197,7 +197,7 @@ type ServerConfig struct {
 	Keepalive *KeepaliveServerConfig `mapstructure:"keepalive,omitempty"`
 
 	// Auth for this receiver
-	Auth *configauth.Authentication `mapstructure:"auth,omitempty"`
+	Auth *configauth.Config `mapstructure:"auth,omitempty"`
 
 	// Include propagates the incoming connection's metadata to downstream consumers.
 	IncludeMetadata bool `mapstructure:"include_metadata,omitempty"`
@@ -306,7 +306,7 @@ func (gcs *ClientConfig) getGrpcDialOptions(
 		opts = append(opts, grpc.WithDefaultCallOptions(grpc.UseCompressor(cp)))
 	}
 
-	tlsCfg, err := gcs.TLSSetting.LoadTLSConfig(ctx)
+	tlsCfg, err := gcs.TLS.LoadTLSConfig(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -451,8 +451,8 @@ func (gss *ServerConfig) getGrpcServerOptions(
 ) ([]grpc.ServerOption, error) {
 	var opts []grpc.ServerOption
 
-	if gss.TLSSetting != nil {
-		tlsCfg, err := gss.TLSSetting.LoadTLSConfig(context.Background())
+	if gss.TLS != nil {
+		tlsCfg, err := gss.TLS.LoadTLSConfig(context.Background())
 		if err != nil {
 			return nil, err
 		}

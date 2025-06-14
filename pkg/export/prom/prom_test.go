@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/mariomac/guara/pkg/test"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/connector"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
@@ -28,7 +29,7 @@ import (
 
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
-	"github.com/grafana/beyla/v2/pkg/internal/request"
+	internalrequest "github.com/grafana/beyla/v2/pkg/internal/request"
 )
 
 const timeout = 3 * time.Second
@@ -359,7 +360,7 @@ func TestSpanMetricsDiscarded(t *testing.T) {
 	svcExportTraces.SetExportsOTelTraces()
 
 	ignoredSpan := request.Span{Service: svcExportTraces, Type: request.EventTypeHTTPClient, Method: "GET", Route: "/v1/traces", RequestStart: 100, End: 200}
-	ignoredSpan.SetIgnoreMetrics()
+	internalrequest.SetIgnoreMetrics(&ignoredSpan)
 
 	tests := []struct {
 		name      string

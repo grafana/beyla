@@ -5,11 +5,12 @@ import (
 	"context"
 	"log/slog"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/transform/route"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 
-	"github.com/grafana/beyla/v2/pkg/internal/request"
+	internalrequest "github.com/grafana/beyla/v2/pkg/internal/request"
 )
 
 // UnmatchType defines which actions to do when a route pattern is not recognized
@@ -106,8 +107,8 @@ func (rn *routerNode) provideRoutes(_ context.Context) (swarm.RunFunc, error) {
 					if ignoreEnabled {
 						if discarder.Find(s.Path) != "" {
 							if ignoreMode == IgnoreAll {
-								s.SetIgnoreMetrics()
-								s.SetIgnoreTraces()
+								internalrequest.SetIgnoreMetrics(s)
+								internalrequest.SetIgnoreTraces(s)
 							}
 							// we can't discard it here, ignoring is selective (metrics | traces)
 							setSpanIgnoreMode(ignoreMode, s)
@@ -184,8 +185,8 @@ func classifyFromPath(rc *RoutesConfig, s *request.Span) {
 func setSpanIgnoreMode(mode IgnoreMode, s *request.Span) {
 	switch mode {
 	case IgnoreMetrics:
-		s.SetIgnoreMetrics()
+		internalrequest.SetIgnoreMetrics(s)
 	case IgnoreTraces:
-		s.SetIgnoreTraces()
+		internalrequest.SetIgnoreTraces(s)
 	}
 }

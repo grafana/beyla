@@ -107,7 +107,7 @@ func (pf *PIDsFilter) CurrentPIDs(t PIDType) map[uint32]map[uint32]svc.Attrs {
 func (pf *PIDsFilter) normalizeTraceContext(span *request.Span) {
 	if !span.TraceID.IsValid() {
 		span.TraceID = otel.RandomTraceID()
-		span.Flags = 1
+		span.TraceFlags = 1
 	}
 	if !span.SpanID.IsValid() {
 		span.SpanID = otel.RandomSpanID()

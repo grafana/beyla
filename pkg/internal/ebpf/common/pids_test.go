@@ -196,7 +196,7 @@ func resetTraceContext(spans []request.Span) []request.Span {
 	for i := range spans {
 		spans[i].TraceID = trace.TraceID{0}
 		spans[i].SpanID = trace.SpanID{0}
-		spans[i].Flags = 0
+		spans[i].TraceFlags = 0
 	}
 
 	return spans

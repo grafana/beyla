@@ -76,11 +76,12 @@ func TestConvert(t *testing.T) {
 	})
 	t.Run("the source misses a destination field, but we define skip", func(t *testing.T) {
 		d := Cake{}
-		require.Panics(t, func() {
+		require.NotPanics(t, func() {
 			Convert(Dough{Flour: "flour", Temperature: 100}, &d, map[string]string{
 				".Sugar": SkipConversion,
 			})
 		})
+		assert.Equal(t, Cake{Flour: "flour", Temperature: 100}, d)
 	})
 }
 

@@ -112,8 +112,10 @@ func convertStruct(
 		if sv, ok := srcVals[srcName]; ok {
 			handleFieldConversion(prefix+dn+".", sv, dv, fieldHints)
 		} else {
-			panic(fmt.Sprintf("dst field %s: cannot find field %s in source",
-				prefix+dn, srcName))
+			if srcName != SkipConversion {
+				panic(fmt.Sprintf("dst field %s: cannot find field %s in source",
+					prefix+dn, srcName))
+			}
 		}
 	}
 }

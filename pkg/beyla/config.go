@@ -297,8 +297,8 @@ func (c *Config) AsOBI() *obi.Config {
 		cfgutil.Convert(c, obiCfg, map[string]string{
 			// here, some hints might be useful if we need to skip values that are non-existing in OBI,
 			// or, renamed. For example:
-			// ".Some.Renamed.FieldInSrc": "NewNameInDst",
-			// ".Some.Missing.FieldInDst": cfgutil.SkipConversion,
+			// ".Some.Renamed.FieldInDst": "NameInSrc",
+			// ".Some.Missing.FieldInSrc": cfgutil.SkipConversion,
 		})
 		c.obi = obiCfg
 	}

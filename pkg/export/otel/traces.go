@@ -14,6 +14,7 @@ import (
 
 	expirable2 "github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/imetrics"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/pipe/global"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
@@ -46,7 +47,6 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/grafana/beyla/v2/pkg/export/extraattributes"
-	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 	internalrequest "github.com/grafana/beyla/v2/pkg/internal/request"
 )
 

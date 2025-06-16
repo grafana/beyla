@@ -13,6 +13,7 @@ import (
 	"github.com/mariomac/guara/pkg/test"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/ringbuf"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/imetrics"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/testutil"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
@@ -20,7 +21,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/v2/pkg/config"
-	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 )
 
 const testTimeout = 5 * time.Second

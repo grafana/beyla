@@ -11,10 +11,10 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/ringbuf"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/imetrics"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 
 	"github.com/grafana/beyla/v2/pkg/config"
-	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 )
 
 // ringBufReader interface extracts the used methods from ringbuf.Reader for proper

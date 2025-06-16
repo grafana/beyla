@@ -6,6 +6,7 @@ import (
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/imetrics"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/pipe/global"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
@@ -21,7 +22,6 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/gpuevent"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/tctracer"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/tpinjector"
-	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 )
 
 type ProcessFinder struct {

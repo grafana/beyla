@@ -6,11 +6,11 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/ebpf"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	obiotel "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel"
+	obiprom "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/prom"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/filter"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 
-	"github.com/grafana/beyla/v2/pkg/export/prom"
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/export"
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/flow"
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/transform/cidr"
@@ -97,8 +97,8 @@ func (f *Flows) buildPipeline(ctx context.Context) (*swarm.Runner, error) {
 		GloballyEnabled: f.cfg.NetworkFlows.Enable,
 	}, filteredFlows))
 
-	swi.Add(prom.NetPrometheusEndpoint(f.ctxInfo, &prom.NetPrometheusConfig{
-		Config:          &f.cfg.Prometheus,
+	swi.Add(obiprom.NetPrometheusEndpoint(f.ctxInfo, &obiprom.NetPrometheusConfig{
+		Config:          &f.cfg.AsOBI().Prometheus,
 		SelectorCfg:     selectorCfg,
 		GloballyEnabled: f.cfg.NetworkFlows.Enable,
 	}, filteredFlows))

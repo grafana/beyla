@@ -50,21 +50,7 @@ func convert(
 		srcValue = src.Elem()
 	}
 
-	if srcValue.Kind() == reflect.Struct && dstElem.Kind() == reflect.Struct {
-		convertStruct(prefix, srcValue, dstElem, fieldHints)
-		return
-	}
-
-	if srcValue.Type().AssignableTo(dstElem.Type()) {
-		dstElem.Set(srcValue)
-		return
-	}
-	if srcValue.Type().ConvertibleTo(dstElem.Type()) {
-		dstElem.Set(srcValue.Convert(dstElem.Type()))
-		return
-	}
-
-	panic(fmt.Sprintf("field %s: cannot convert %s to %s", prefix, srcValue.Type(), dstElem.Type()))
+	handleFieldConversion(prefix, srcValue, dstElem, fieldHints)
 }
 
 func handleFieldConversion(

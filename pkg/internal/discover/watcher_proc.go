@@ -17,9 +17,9 @@ import (
 	"github.com/shirou/gopsutil/v3/process"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
-	"github.com/grafana/beyla/v2/pkg/internal/ebpf"
-	"github.com/grafana/beyla/v2/pkg/internal/ebpf/logger"
-	"github.com/grafana/beyla/v2/pkg/internal/ebpf/watcher"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/logger"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/watcher"
 )
 
 const (
@@ -352,11 +352,11 @@ func fetchProcessPorts(scanPorts bool) (map[PID]processAttrs, error) {
 }
 
 func loadBPFWatcher(ctx context.Context, cfg *beyla.Config, events chan<- watcher.Event) error {
-	wt := watcher.New(cfg, events)
+	wt := watcher.New(cfg.AsOBI(), events)
 	return ebpf.RunUtilityTracer(ctx, wt)
 }
 
 func loadBPFLogger(ctx context.Context, cfg *beyla.Config) error {
-	wt := logger.New(cfg)
+	wt := logger.New(cfg.AsOBI())
 	return ebpf.RunUtilityTracer(ctx, wt)
 }

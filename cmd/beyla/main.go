@@ -21,6 +21,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/buildinfo"
 	"github.com/grafana/beyla/v2/pkg/components"
+	obi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla"
 )
 
 func main() {
@@ -33,7 +34,7 @@ func main() {
 
 	slog.Info("Grafana Beyla", "Version", buildinfo.Version, "Revision", buildinfo.Revision, "OpenTelemetry SDK Version", otelsdk.Version())
 
-	if err := beyla.CheckOSSupport(); err != nil {
+	if err := obi.CheckOSSupport(); err != nil {
 		slog.Error("can't start Beyla", "error", err)
 		os.Exit(-1)
 	}
@@ -56,7 +57,7 @@ func main() {
 		os.Exit(-1)
 	}
 
-	if err := beyla.CheckOSCapabilities(config); err != nil {
+	if err := obi.CheckOSCapabilities(config.AsOBI()); err != nil {
 		if config.EnforceSysCaps {
 			slog.Error("can't start Beyla", "error", err)
 			os.Exit(-1)

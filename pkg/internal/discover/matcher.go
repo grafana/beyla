@@ -14,7 +14,7 @@ import (
 	"github.com/shirou/gopsutil/v3/process"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
-	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
+	ebpfcommon "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/common"
 )
 
 var namespaceFetcherFunc = ebpfcommon.FindNetworkNamespace

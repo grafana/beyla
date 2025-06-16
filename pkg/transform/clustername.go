@@ -13,10 +13,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/kube"
 	attr2 "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"go.opentelemetry.io/contrib/detectors/aws/eks"
-
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/kube"
 )
 
 const (

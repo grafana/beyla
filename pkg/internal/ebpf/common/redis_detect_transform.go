@@ -5,11 +5,10 @@ import (
 	"strings"
 	"unsafe"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/ringbuf"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/util"
 	trace2 "go.opentelemetry.io/otel/trace"
-
-	"github.com/grafana/beyla/v2/pkg/internal/request"
 )
 
 const minRedisFrameLen = 3
@@ -197,7 +196,7 @@ func TCPToRedisToSpan(trace *TCPRequestInfo, op, text string, status int) reques
 		TraceID:       trace2.TraceID(trace.Tp.TraceId),
 		SpanID:        trace2.SpanID(trace.Tp.SpanId),
 		ParentSpanID:  trace2.SpanID(trace.Tp.ParentId),
-		Flags:         trace.Tp.Flags,
+		TraceFlags:    trace.Tp.Flags,
 		Pid: request.PidInfo{
 			HostPID:   trace.Pid.HostPid,
 			UserPID:   trace.Pid.UserPid,
@@ -243,7 +242,7 @@ func ReadGoRedisRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, err
 		TraceID:       trace2.TraceID(event.Tp.TraceId),
 		SpanID:        trace2.SpanID(event.Tp.SpanId),
 		ParentSpanID:  trace2.SpanID(event.Tp.ParentId),
-		Flags:         event.Tp.Flags,
+		TraceFlags:    event.Tp.Flags,
 		Pid: request.PidInfo{
 			HostPID:   event.Pid.HostPid,
 			UserPID:   event.Pid.UserPid,

@@ -212,17 +212,14 @@ docker-generate: obi-submodule
 	@BEYLA_GENFILES_GEN_IMG=$(GEN_IMG) go generate cmd/beyla-genfiles/beyla_genfiles.go
 	@cd $(OBI_MODULE) && make docker-generate
 
-.PHONY: copy-obi-vendor
-copy-obi-vendor:
+.PHONY: obi-get-vendor
+obi-get-vendor:
 	@echo "### Vendoring OBI submodule..."
 	go get github.com/open-telemetry/opentelemetry-ebpf-instrumentation
 	go mod vendor
 
 .PHONY: vendor-obi
-vendor-obi: obi-submodule docker-generate
-	@echo "### Vendoring OBI submodule..."
-	go get github.com/open-telemetry/opentelemetry-ebpf-instrumentation
-	go mod vendor
+vendor-obi: obi-submodule docker-generate obi-get-vendor
 
 .PHONY: verify
 verify: prereqs lint-dashboard vendor-obi lint test

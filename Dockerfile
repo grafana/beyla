@@ -17,6 +17,7 @@ RUN apk add make git bash
 COPY .git/ .git/
 COPY cmd/ cmd/
 COPY pkg/ pkg/
+COPY test/ test/
 COPY vendor/ vendor/
 COPY go.mod go.mod
 COPY go.sum go.sum
@@ -28,7 +29,7 @@ COPY third_party_licenses.csv third_party_licenses.csv
 # Build
 RUN make obi-submodule
 RUN /generate.sh
-RUN make copy-obi-vendor
+RUN make obi-get-vendor
 RUN make compile
 
 # Create final image from minimal + built binary

@@ -7,12 +7,13 @@ import (
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/connector"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/ebpf"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/expire"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
+	"github.com/grafana/beyla/v2/pkg/export/extraattributes"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 )
 
@@ -78,7 +79,7 @@ func newNetReporter(
 	// OTEL exporter would report also some prometheus-exclusive attributes
 	group.Add(attributes.GroupPrometheus)
 
-	provider, err := attributes.NewAttrSelector(group, cfg.SelectorCfg)
+	provider, err := extraattributes.NewBeylaAttrSelector(group, cfg.SelectorCfg)
 	if err != nil {
 		return nil, fmt.Errorf("network Prometheus exporter attributes enable: %w", err)
 	}

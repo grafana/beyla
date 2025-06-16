@@ -5,12 +5,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/testutil"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/beyla/v2/pkg/internal/request"
+	internalrequest "github.com/grafana/beyla/v2/pkg/internal/request"
 )
 
 const testTimeout = 5 * time.Second
@@ -150,9 +151,9 @@ func TestIgnoreRoutes(t *testing.T) {
 func TestIgnoreMode(t *testing.T) {
 	s := request.Span{Path: "/user/1234"}
 	setSpanIgnoreMode(IgnoreTraces, &s)
-	assert.True(t, s.IgnoreTraces())
+	assert.True(t, internalrequest.IgnoreTraces(&s))
 	setSpanIgnoreMode(IgnoreMetrics, &s)
-	assert.True(t, s.IgnoreMetrics())
+	assert.True(t, internalrequest.IgnoreMetrics(&s))
 }
 
 func BenchmarkRoutesProvider_Wildcard(b *testing.B) {
@@ -197,11 +198,11 @@ func filterIgnored(reader func() []request.Span) []request.Span {
 		for i := range input {
 			s := &input[i]
 
-			if s.IgnoreMetrics() {
+			if internalrequest.IgnoreMetrics(s) {
 				continue
 			}
 
-			if s.IgnoreTraces() {
+			if internalrequest.IgnoreTraces(s) {
 				continue
 			}
 

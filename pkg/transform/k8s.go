@@ -7,6 +7,7 @@ import (
 	"maps"
 	"time"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
@@ -14,10 +15,8 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 
-	attrextra "github.com/grafana/beyla/v2/pkg/export/attributes/beyla"
 	"github.com/grafana/beyla/v2/pkg/internal/kube"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
-	"github.com/grafana/beyla/v2/pkg/internal/request"
 )
 
 func klog() *slog.Logger {
@@ -233,12 +232,12 @@ func AppendKubeMetadata(db *kube.Store, svc *svc.Attrs, meta *kube.CachedObjMeta
 	// growing cardinality
 	if topOwner != nil {
 		svc.Metadata[attr.K8sOwnerName] = topOwner.Name
-		svc.Metadata[attrextra.K8sKind] = topOwner.Kind
+		svc.Metadata[attr.K8sKind] = topOwner.Kind
 	}
 
 	for _, owner := range meta.Meta.Pod.Owners {
-		if _, ok := svc.Metadata[attrextra.K8sKind]; !ok {
-			svc.Metadata[attrextra.K8sKind] = owner.Kind
+		if _, ok := svc.Metadata[attr.K8sKind]; !ok {
+			svc.Metadata[attr.K8sKind] = owner.Kind
 		}
 		if kindLabel := OwnerLabelName(owner.Kind); kindLabel != "" {
 			svc.Metadata[kindLabel] = owner.Name

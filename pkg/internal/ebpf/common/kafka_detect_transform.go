@@ -6,9 +6,8 @@ import (
 	"regexp"
 	"unsafe"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
 	trace2 "go.opentelemetry.io/otel/trace"
-
-	"github.com/grafana/beyla/v2/pkg/internal/request"
 )
 
 type Operation int8
@@ -374,7 +373,7 @@ func TCPToKafkaToSpan(trace *TCPRequestInfo, data *KafkaInfo) request.Span {
 		TraceID:       trace2.TraceID(trace.Tp.TraceId),
 		SpanID:        trace2.SpanID(trace.Tp.SpanId),
 		ParentSpanID:  trace2.SpanID(trace.Tp.ParentId),
-		Flags:         trace.Tp.Flags,
+		TraceFlags:    trace.Tp.Flags,
 		Pid: request.PidInfo{
 			HostPID:   trace.Pid.HostPid,
 			UserPID:   trace.Pid.UserPid,

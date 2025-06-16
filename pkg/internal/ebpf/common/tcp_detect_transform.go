@@ -3,10 +3,10 @@ package ebpfcommon
 import (
 	"fmt"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/ringbuf"
 
 	"github.com/grafana/beyla/v2/pkg/config"
-	"github.com/grafana/beyla/v2/pkg/internal/request"
 )
 
 // nolint:cyclop

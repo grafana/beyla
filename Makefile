@@ -212,6 +212,12 @@ docker-generate: obi-submodule
 	@BEYLA_GENFILES_GEN_IMG=$(GEN_IMG) go generate cmd/beyla-genfiles/beyla_genfiles.go
 	@cd $(OBI_MODULE) && make docker-generate
 
+.PHONY: copy-obi-vendor
+copy-obi-vendor:
+	@echo "### Vendoring OBI submodule..."
+	go get github.com/open-telemetry/opentelemetry-ebpf-instrumentation
+	go mod vendor
+
 .PHONY: vendor-obi
 vendor-obi: obi-submodule docker-generate
 	@echo "### Vendoring OBI submodule..."
@@ -228,10 +234,10 @@ build: vendor-obi verify compile
 all: vendor-obi build
 
 .PHONY: compile compile-cache
-compile: vendor-obi
+compile:
 	@echo "### Compiling Beyla"
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -ldflags="-X '$(BUILDINFO_PKG).Version=$(RELEASE_VERSION)' -X '$(BUILDINFO_PKG).Revision=$(RELEASE_REVISION)'" -a -o bin/$(CMD) $(MAIN_GO_FILE)
-compile-cache: vendor-obi
+compile-cache:
 	@echo "### Compiling Beyla K8s cache"
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -ldflags="-X '$(BUILDINFO_PKG).Version=$(RELEASE_VERSION)' -X '$(BUILDINFO_PKG).Revision=$(RELEASE_REVISION)'" -a -o bin/$(CACHE_CMD) $(CACHE_MAIN_GO_FILE)
 

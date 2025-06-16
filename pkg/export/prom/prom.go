@@ -9,9 +9,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/connector"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/expire"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
@@ -20,11 +22,10 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/grafana/beyla/v2/pkg/buildinfo"
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
-	attrextra "github.com/grafana/beyla/v2/pkg/export/attributes/beyla"
+	"github.com/grafana/beyla/v2/pkg/export/extraattributes"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
-	"github.com/grafana/beyla/v2/pkg/internal/request"
+	internalrequest "github.com/grafana/beyla/v2/pkg/internal/request"
 )
 
 // injectable function reference for testing
@@ -313,7 +314,7 @@ func newReporter(
 	groups := ctxInfo.MetricAttributeGroups
 	groups.Add(attributes.GroupPrometheus)
 
-	attrsProvider, err := attributes.NewAttrSelector(groups, selectorCfg)
+	attrsProvider, err := extraattributes.NewBeylaAttrSelector(groups, selectorCfg)
 	if err != nil {
 		return nil, fmt.Errorf("selecting metrics attributes: %w", err)
 	}
@@ -804,7 +805,7 @@ func (r *metricsReporter) otelSpanObserved(span *request.Span) bool {
 }
 
 func (r *metricsReporter) otelSpanFiltered(span *request.Span) bool {
-	return span.InternalSignal() || span.IgnoreMetrics()
+	return span.InternalSignal() || internalrequest.IgnoreMetrics(span)
 }
 
 // nolint:cyclop
@@ -945,7 +946,7 @@ func appendK8sLabelValuesService(values []string, service *svc.Attrs) []string {
 		service.Metadata[attr.K8sStatefulSetName],
 		service.Metadata[attr.K8sDaemonSetName],
 		service.Metadata[attr.K8sClusterName],
-		service.Metadata[attrextra.K8sKind],
+		service.Metadata[attr.K8sKind],
 		service.Metadata[attr.K8sOwnerName],
 	)
 	return values

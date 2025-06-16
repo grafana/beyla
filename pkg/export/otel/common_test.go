@@ -7,10 +7,9 @@ import (
 	"testing"
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	attributes "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/otel/attribute"
-
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
 )
 
 func TestOtlpOptions_AsMetricHTTP(t *testing.T) {

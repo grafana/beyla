@@ -312,7 +312,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 		config.RetryConfig = getRetrySettings(cfg)
 		config.ClientConfig = confighttp.ClientConfig{
 			Endpoint: opts.Scheme + "://" + opts.Endpoint + opts.BaseURLPath,
-			TLSSetting: configtls.ClientConfig{
+			TLS: configtls.ClientConfig{
 				Insecure:           opts.Insecure,
 				InsecureSkipVerify: cfg.InsecureSkipVerify,
 			},
@@ -366,7 +366,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 		config.RetryConfig = getRetrySettings(cfg)
 		config.ClientConfig = configgrpc.ClientConfig{
 			Endpoint: endpoint.String(),
-			TLSSetting: configtls.ClientConfig{
+			TLS: configtls.ClientConfig{
 				Insecure:           opts.Insecure,
 				InsecureSkipVerify: cfg.InsecureSkipVerify,
 			},

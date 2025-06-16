@@ -9,6 +9,7 @@ import (
 
 	"github.com/caarlos0/env/v9"
 	"github.com/gobwas/glob"
+	obi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/tcmanager"
 	attributes "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
@@ -23,6 +24,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/config"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/export/prom"
+	cfgutil "github.com/grafana/beyla/v2/pkg/internal/helpers/config"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
 	"github.com/grafana/beyla/v2/pkg/internal/kube"
@@ -245,6 +247,9 @@ type Config struct {
 
 	// Grafana Alloy specific configuration
 	TracesReceiver TracesReceiverConfig `yaml:"-"`
+
+	// cached equivalent for the OBI conversion
+	obi *obi.Config `yaml:"-"`
 }
 
 type Consumer interface {
@@ -286,11 +291,27 @@ func (e ConfigError) Error() string {
 	return string(e)
 }
 
+func (c *Config) AsOBI() *obi.Config {
+	if c.obi == nil {
+		obiCfg := &obi.Config{}
+		cfgutil.Convert(c, obiCfg, map[string]string{
+			// here, some hints might be useful if we need to skip values that are non-existing in OBI,
+			// or, renamed. For example:
+			// ".Some.Renamed.FieldInDst": "NameInSrc",
+			// ".Some.Missing.FieldInSrc": cfgutil.SkipConversion,
+		})
+		c.obi = obiCfg
+	}
+	return c.obi
+}
+
 // nolint:cyclop
 func (c *Config) Validate() error {
-	if err := c.Discovery.Validate(); err != nil {
+	obiCfg := c.AsOBI()
+	if err := obiCfg.Discovery.Validate(); err != nil {
 		return ConfigError(err.Error())
 	}
+
 	if !c.Enabled(FeatureNetO11y) && !c.Enabled(FeatureAppO11y) {
 		return ConfigError("missing application discovery section or network metrics configuration. Check documentation.")
 	}

@@ -18,6 +18,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
+	obiotel "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel/metric"
 	instrument "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel/metric/api/metric"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
@@ -39,6 +40,8 @@ import (
 func mlog() *slog.Logger {
 	return slog.With("component", "otel.MetricsReporter")
 }
+
+var timeNow = time.Now
 
 const (
 	// SpanMetricsLatency and rest of metrics below haven't been yet moved to the
@@ -269,32 +272,32 @@ type Metrics struct {
 	tracesResourceAttributes attribute.Set
 
 	// IMPORTANT! Don't forget to clean each Expirer in cleanupAllMetricsInstances method
-	httpDuration           *Expirer[*request.Span, instrument.Float64Histogram, float64]
-	httpClientDuration     *Expirer[*request.Span, instrument.Float64Histogram, float64]
-	grpcDuration           *Expirer[*request.Span, instrument.Float64Histogram, float64]
-	grpcClientDuration     *Expirer[*request.Span, instrument.Float64Histogram, float64]
-	dbClientDuration       *Expirer[*request.Span, instrument.Float64Histogram, float64]
-	msgPublishDuration     *Expirer[*request.Span, instrument.Float64Histogram, float64]
-	msgProcessDuration     *Expirer[*request.Span, instrument.Float64Histogram, float64]
-	httpRequestSize        *Expirer[*request.Span, instrument.Float64Histogram, float64]
-	httpResponseSize       *Expirer[*request.Span, instrument.Float64Histogram, float64]
-	httpClientRequestSize  *Expirer[*request.Span, instrument.Float64Histogram, float64]
-	httpClientResponseSize *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	httpDuration           *obiotel.Expirer[*request.Span, instrument.Float64Histogram, float64]
+	httpClientDuration     *obiotel.Expirer[*request.Span, instrument.Float64Histogram, float64]
+	grpcDuration           *obiotel.Expirer[*request.Span, instrument.Float64Histogram, float64]
+	grpcClientDuration     *obiotel.Expirer[*request.Span, instrument.Float64Histogram, float64]
+	dbClientDuration       *obiotel.Expirer[*request.Span, instrument.Float64Histogram, float64]
+	msgPublishDuration     *obiotel.Expirer[*request.Span, instrument.Float64Histogram, float64]
+	msgProcessDuration     *obiotel.Expirer[*request.Span, instrument.Float64Histogram, float64]
+	httpRequestSize        *obiotel.Expirer[*request.Span, instrument.Float64Histogram, float64]
+	httpResponseSize       *obiotel.Expirer[*request.Span, instrument.Float64Histogram, float64]
+	httpClientRequestSize  *obiotel.Expirer[*request.Span, instrument.Float64Histogram, float64]
+	httpClientResponseSize *obiotel.Expirer[*request.Span, instrument.Float64Histogram, float64]
 	// trace span metrics
-	spanMetricsLatency           *Expirer[*request.Span, instrument.Float64Histogram, float64]
-	spanMetricsCallsTotal        *Expirer[*request.Span, instrument.Int64Counter, int64]
-	spanMetricsRequestSizeTotal  *Expirer[*request.Span, instrument.Float64Counter, float64]
-	spanMetricsResponseSizeTotal *Expirer[*request.Span, instrument.Float64Counter, float64]
-	serviceGraphClient           *Expirer[*request.Span, instrument.Float64Histogram, float64]
-	serviceGraphServer           *Expirer[*request.Span, instrument.Float64Histogram, float64]
-	serviceGraphFailed           *Expirer[*request.Span, instrument.Int64Counter, int64]
-	serviceGraphTotal            *Expirer[*request.Span, instrument.Int64Counter, int64]
+	spanMetricsLatency           *obiotel.Expirer[*request.Span, instrument.Float64Histogram, float64]
+	spanMetricsCallsTotal        *obiotel.Expirer[*request.Span, instrument.Int64Counter, int64]
+	spanMetricsRequestSizeTotal  *obiotel.Expirer[*request.Span, instrument.Float64Counter, float64]
+	spanMetricsResponseSizeTotal *obiotel.Expirer[*request.Span, instrument.Float64Counter, float64]
+	serviceGraphClient           *obiotel.Expirer[*request.Span, instrument.Float64Histogram, float64]
+	serviceGraphServer           *obiotel.Expirer[*request.Span, instrument.Float64Histogram, float64]
+	serviceGraphFailed           *obiotel.Expirer[*request.Span, instrument.Int64Counter, int64]
+	serviceGraphTotal            *obiotel.Expirer[*request.Span, instrument.Int64Counter, int64]
 	targetInfo                   instrument.Int64UpDownCounter
 	tracesTargetInfo             instrument.Int64UpDownCounter
-	gpuKernelCallsTotal          *Expirer[*request.Span, instrument.Int64Counter, int64]
-	gpuMemoryAllocsTotal         *Expirer[*request.Span, instrument.Int64Counter, int64]
-	gpuKernelGridSize            *Expirer[*request.Span, instrument.Float64Histogram, float64]
-	gpuKernelBlockSize           *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	gpuKernelCallsTotal          *obiotel.Expirer[*request.Span, instrument.Int64Counter, int64]
+	gpuMemoryAllocsTotal         *obiotel.Expirer[*request.Span, instrument.Int64Counter, int64]
+	gpuKernelGridSize            *obiotel.Expirer[*request.Span, instrument.Float64Histogram, float64]
+	gpuKernelBlockSize           *obiotel.Expirer[*request.Span, instrument.Float64Histogram, float64]
 }
 
 func ReportMetrics(
@@ -533,42 +536,42 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 		if err != nil {
 			return fmt.Errorf("creating http duration histogram metric: %w", err)
 		}
-		m.httpDuration = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
+		m.httpDuration = obiotel.NewExpirer[*request.Span, instrument.Float64Histogram, float64](
 			m.ctx, httpDuration, mr.attrHTTPDuration, timeNow, mr.cfg.TTL)
 
 		httpClientDuration, err := meter.Float64Histogram(attributes.HTTPClientDuration.OTEL, instrument.WithUnit("s"))
 		if err != nil {
 			return fmt.Errorf("creating http duration histogram metric: %w", err)
 		}
-		m.httpClientDuration = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
+		m.httpClientDuration = obiotel.NewExpirer[*request.Span, instrument.Float64Histogram, float64](
 			m.ctx, httpClientDuration, mr.attrHTTPClientDuration, timeNow, mr.cfg.TTL)
 
 		httpRequestSize, err := meter.Float64Histogram(attributes.HTTPServerRequestSize.OTEL, instrument.WithUnit("By"))
 		if err != nil {
 			return fmt.Errorf("creating http request size histogram metric: %w", err)
 		}
-		m.httpRequestSize = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
+		m.httpRequestSize = obiotel.NewExpirer[*request.Span, instrument.Float64Histogram, float64](
 			m.ctx, httpRequestSize, mr.attrHTTPRequestSize, timeNow, mr.cfg.TTL)
 
 		httpResponseSize, err := meter.Float64Histogram(attributes.HTTPServerResponseSize.OTEL, instrument.WithUnit("By"))
 		if err != nil {
 			return fmt.Errorf("creating http response size histogram metric: %w", err)
 		}
-		m.httpResponseSize = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
+		m.httpResponseSize = obiotel.NewExpirer[*request.Span, instrument.Float64Histogram, float64](
 			m.ctx, httpResponseSize, mr.attrHTTPResponseSize, timeNow, mr.cfg.TTL)
 
 		httpClientRequestSize, err := meter.Float64Histogram(attributes.HTTPClientRequestSize.OTEL, instrument.WithUnit("By"))
 		if err != nil {
 			return fmt.Errorf("creating http client request size histogram metric: %w", err)
 		}
-		m.httpClientRequestSize = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
+		m.httpClientRequestSize = obiotel.NewExpirer[*request.Span, instrument.Float64Histogram, float64](
 			m.ctx, httpClientRequestSize, mr.attrHTTPClientRequestSize, timeNow, mr.cfg.TTL)
 
 		httpClientResponseSize, err := meter.Float64Histogram(attributes.HTTPClientResponseSize.OTEL, instrument.WithUnit("By"))
 		if err != nil {
 			return fmt.Errorf("creating http client response size histogram metric: %w", err)
 		}
-		m.httpClientResponseSize = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
+		m.httpClientResponseSize = obiotel.NewExpirer[*request.Span, instrument.Float64Histogram, float64](
 			m.ctx, httpClientResponseSize, mr.attrHTTPClientResponseSize, timeNow, mr.cfg.TTL)
 	}
 
@@ -577,14 +580,14 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 		if err != nil {
 			return fmt.Errorf("creating grpc duration histogram metric: %w", err)
 		}
-		m.grpcDuration = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
+		m.grpcDuration = obiotel.NewExpirer[*request.Span, instrument.Float64Histogram, float64](
 			m.ctx, grpcDuration, mr.attrGRPCServer, timeNow, mr.cfg.TTL)
 
 		grpcClientDuration, err := meter.Float64Histogram(attributes.RPCClientDuration.OTEL, instrument.WithUnit("s"))
 		if err != nil {
 			return fmt.Errorf("creating grpc duration histogram metric: %w", err)
 		}
-		m.grpcClientDuration = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
+		m.grpcClientDuration = obiotel.NewExpirer[*request.Span, instrument.Float64Histogram, float64](
 			m.ctx, grpcClientDuration, mr.attrGRPCClient, timeNow, mr.cfg.TTL)
 	}
 
@@ -593,7 +596,7 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 		if err != nil {
 			return fmt.Errorf("creating db client duration histogram metric: %w", err)
 		}
-		m.dbClientDuration = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
+		m.dbClientDuration = obiotel.NewExpirer[*request.Span, instrument.Float64Histogram, float64](
 			m.ctx, dbClientDuration, mr.attrDBClient, timeNow, mr.cfg.TTL)
 	}
 
@@ -602,14 +605,14 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 		if err != nil {
 			return fmt.Errorf("creating messaging client publish duration histogram metric: %w", err)
 		}
-		m.msgPublishDuration = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
+		m.msgPublishDuration = obiotel.NewExpirer[*request.Span, instrument.Float64Histogram, float64](
 			m.ctx, msgPublishDuration, mr.attrMessagingPublish, timeNow, mr.cfg.TTL)
 
 		msgProcessDuration, err := meter.Float64Histogram(attributes.MessagingProcessDuration.OTEL, instrument.WithUnit("s"))
 		if err != nil {
 			return fmt.Errorf("creating messaging client process duration histogram metric: %w", err)
 		}
-		m.msgProcessDuration = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
+		m.msgProcessDuration = obiotel.NewExpirer[*request.Span, instrument.Float64Histogram, float64](
 			m.ctx, msgProcessDuration, mr.attrMessagingProcess, timeNow, mr.cfg.TTL)
 	}
 
@@ -618,28 +621,28 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 		if err != nil {
 			return fmt.Errorf("creating gpu kernel calls total: %w", err)
 		}
-		m.gpuKernelCallsTotal = NewExpirer[*request.Span, instrument.Int64Counter, int64](
+		m.gpuKernelCallsTotal = obiotel.NewExpirer[*request.Span, instrument.Int64Counter, int64](
 			m.ctx, gpuKernelCallsTotal, mr.attrGPUKernelCalls, timeNow, mr.cfg.TTL)
 
 		gpuMemoryAllocationsTotal, err := meter.Int64Counter(attributes.GPUMemoryAllocations.OTEL, instrument.WithUnit("By"))
 		if err != nil {
 			return fmt.Errorf("creating gpu memory allocations total: %w", err)
 		}
-		m.gpuMemoryAllocsTotal = NewExpirer[*request.Span, instrument.Int64Counter, int64](
+		m.gpuMemoryAllocsTotal = obiotel.NewExpirer[*request.Span, instrument.Int64Counter, int64](
 			m.ctx, gpuMemoryAllocationsTotal, mr.attrGPUMemoryAllocations, timeNow, mr.cfg.TTL)
 
 		gpuKernelGridSize, err := meter.Float64Histogram(attributes.GPUKernelGridSize.OTEL, instrument.WithUnit("1"))
 		if err != nil {
 			return fmt.Errorf("creating gpu kernel grid size histogram: %w", err)
 		}
-		m.gpuKernelGridSize = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
+		m.gpuKernelGridSize = obiotel.NewExpirer[*request.Span, instrument.Float64Histogram, float64](
 			m.ctx, gpuKernelGridSize, mr.attrGPUKernelGridSize, timeNow, mr.cfg.TTL)
 
 		gpuKernelBlockSize, err := meter.Float64Histogram(attributes.GPUKernelBlockSize.OTEL, instrument.WithUnit("1"))
 		if err != nil {
 			return fmt.Errorf("creating gpu kernel block size histogram: %w", err)
 		}
-		m.gpuKernelBlockSize = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
+		m.gpuKernelBlockSize = obiotel.NewExpirer[*request.Span, instrument.Float64Histogram, float64](
 			m.ctx, gpuKernelBlockSize, mr.attrGPUKernelBlockSize, timeNow, mr.cfg.TTL)
 	}
 
@@ -667,14 +670,14 @@ func (mr *MetricsReporter) setupSpanSizeMeters(m *Metrics, meter instrument.Mete
 	if err != nil {
 		return fmt.Errorf("creating span metric request size total: %w", err)
 	}
-	m.spanMetricsRequestSizeTotal = NewExpirer[*request.Span, instrument.Float64Counter, float64](
+	m.spanMetricsRequestSizeTotal = obiotel.NewExpirer[*request.Span, instrument.Float64Counter, float64](
 		m.ctx, spanMetricsRequestSizeTotal, spanMetricAttrs, timeNow, mr.cfg.TTL)
 
 	spanMetricsResponseSizeTotal, err := meter.Float64Counter(SpanMetricsResponseSizes)
 	if err != nil {
 		return fmt.Errorf("creating span metric response size total: %w", err)
 	}
-	m.spanMetricsResponseSizeTotal = NewExpirer[*request.Span, instrument.Float64Counter, float64](
+	m.spanMetricsResponseSizeTotal = obiotel.NewExpirer[*request.Span, instrument.Float64Counter, float64](
 		m.ctx, spanMetricsResponseSizeTotal, spanMetricAttrs, timeNow, mr.cfg.TTL)
 
 	return nil
@@ -704,14 +707,14 @@ func (mr *MetricsReporter) setupSpanMeters(m *Metrics, meter instrument.Meter) e
 	if err != nil {
 		return fmt.Errorf("creating span metric histogram for latency: %w", err)
 	}
-	m.spanMetricsLatency = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
+	m.spanMetricsLatency = obiotel.NewExpirer[*request.Span, instrument.Float64Histogram, float64](
 		m.ctx, spanMetricsLatency, spanMetricAttrs, timeNow, mr.cfg.TTL)
 
 	spanMetricsCallsTotal, err := meter.Int64Counter(mr.spanMetricsCallsName())
 	if err != nil {
 		return fmt.Errorf("creating span metric calls total: %w", err)
 	}
-	m.spanMetricsCallsTotal = NewExpirer[*request.Span, instrument.Int64Counter, int64](
+	m.spanMetricsCallsTotal = obiotel.NewExpirer[*request.Span, instrument.Int64Counter, int64](
 		m.ctx, spanMetricsCallsTotal, spanMetricAttrs, timeNow, mr.cfg.TTL)
 
 	return nil
@@ -741,28 +744,28 @@ func (mr *MetricsReporter) setupGraphMeters(m *Metrics, meter instrument.Meter) 
 	if err != nil {
 		return fmt.Errorf("creating service graph client histogram: %w", err)
 	}
-	m.serviceGraphClient = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
+	m.serviceGraphClient = obiotel.NewExpirer[*request.Span, instrument.Float64Histogram, float64](
 		m.ctx, serviceGraphClient, serviceGraphAttrs, timeNow, mr.cfg.TTL)
 
 	serviceGraphServer, err := meter.Float64Histogram(ServiceGraphServer, instrument.WithUnit("s"))
 	if err != nil {
 		return fmt.Errorf("creating service graph server histogram: %w", err)
 	}
-	m.serviceGraphServer = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
+	m.serviceGraphServer = obiotel.NewExpirer[*request.Span, instrument.Float64Histogram, float64](
 		m.ctx, serviceGraphServer, serviceGraphAttrs, timeNow, mr.cfg.TTL)
 
 	serviceGraphFailed, err := meter.Int64Counter(ServiceGraphFailed)
 	if err != nil {
 		return fmt.Errorf("creating service graph failed total: %w", err)
 	}
-	m.serviceGraphFailed = NewExpirer[*request.Span, instrument.Int64Counter, int64](
+	m.serviceGraphFailed = obiotel.NewExpirer[*request.Span, instrument.Int64Counter, int64](
 		m.ctx, serviceGraphFailed, serviceGraphAttrs, timeNow, mr.cfg.TTL)
 
 	serviceGraphTotal, err := meter.Int64Counter(ServiceGraphTotal)
 	if err != nil {
 		return fmt.Errorf("creating service graph total: %w", err)
 	}
-	m.serviceGraphTotal = NewExpirer[*request.Span, instrument.Int64Counter, int64](
+	m.serviceGraphTotal = obiotel.NewExpirer[*request.Span, instrument.Int64Counter, int64](
 		m.ctx, serviceGraphTotal, serviceGraphAttrs, timeNow, mr.cfg.TTL)
 
 	return nil
@@ -1352,19 +1355,19 @@ func setMetricsProtocol(cfg *MetricsConfig) {
 	os.Setenv(envMetricsProtocol, string(cfg.GuessProtocol()))
 }
 
-func cleanupMetrics(ctx context.Context, m *Expirer[*request.Span, instrument.Float64Histogram, float64]) {
+func cleanupMetrics(ctx context.Context, m *obiotel.Expirer[*request.Span, instrument.Float64Histogram, float64]) {
 	if m != nil {
 		m.RemoveAllMetrics(ctx)
 	}
 }
 
-func cleanupCounterMetrics(ctx context.Context, m *Expirer[*request.Span, instrument.Int64Counter, int64]) {
+func cleanupCounterMetrics(ctx context.Context, m *obiotel.Expirer[*request.Span, instrument.Int64Counter, int64]) {
 	if m != nil {
 		m.RemoveAllMetrics(ctx)
 	}
 }
 
-func cleanupFloatCounterMetrics(ctx context.Context, m *Expirer[*request.Span, instrument.Float64Counter, float64]) {
+func cleanupFloatCounterMetrics(ctx context.Context, m *obiotel.Expirer[*request.Span, instrument.Float64Counter, float64]) {
 	if m != nil {
 		m.RemoveAllMetrics(ctx)
 	}

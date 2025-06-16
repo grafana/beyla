@@ -2,6 +2,7 @@ package otel
 
 import (
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -241,4 +242,31 @@ func TestGetFilteredProcessResourceAttrs(t *testing.T) {
 		_, exists := attrMap[attrName]
 		assert.False(t, exists, "Process attribute %s should be filtered out", attrName)
 	}
+}
+
+type syncedClock struct {
+	mt  sync.Mutex
+	now time.Time
+}
+
+func (c *syncedClock) Now() time.Time {
+	c.mt.Lock()
+	defer c.mt.Unlock()
+	return c.now
+}
+
+func (c *syncedClock) Advance(t time.Duration) {
+	c.mt.Lock()
+	defer c.mt.Unlock()
+	c.now = c.now.Add(t)
+}
+
+func readChan(t require.TestingT, inCh <-chan collector.MetricRecord, timeout time.Duration) collector.MetricRecord {
+	select {
+	case item := <-inCh:
+		return item
+	case <-time.After(timeout):
+		require.Failf(t, "timeout while waiting for event in input channel", "timeout: %s", timeout)
+	}
+	return collector.MetricRecord{}
 }

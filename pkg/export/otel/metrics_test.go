@@ -30,6 +30,8 @@ import (
 
 var fakeMux = sync.Mutex{}
 
+const timeout = 20 * time.Second
+
 func TestHTTPMetricsEndpointOptions(t *testing.T) {
 	defer restoreEnvAfterExecution()()
 	mcfg := MetricsConfig{

@@ -4,17 +4,16 @@ import (
 	"context"
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/ebpf"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/export"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/flow"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/transform/cidr"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/transform/k8s"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
-	obiotel "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel"
-	obiprom "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/prom"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/prom"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/filter"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
-
-	"github.com/grafana/beyla/v2/pkg/internal/netolly/export"
-	"github.com/grafana/beyla/v2/pkg/internal/netolly/flow"
-	"github.com/grafana/beyla/v2/pkg/internal/netolly/transform/cidr"
-	"github.com/grafana/beyla/v2/pkg/internal/netolly/transform/k8s"
 )
 
 // mockable functions for testing
@@ -91,14 +90,14 @@ func (f *Flows) buildPipeline(ctx context.Context) (*swarm.Runner, error) {
 	// Not all the nodes are mandatory here. Is the responsibility of each Provider function to decide
 	// whether each node is going to be instantiated or just ignored.
 	f.cfg.Attributes.Select.Normalize()
-	swi.Add(obiotel.NetMetricsExporterProvider(f.ctxInfo, &obiotel.NetMetricsConfig{
-		Metrics:         &f.cfg.AsOBI().Metrics,
+	swi.Add(otel.NetMetricsExporterProvider(f.ctxInfo, &otel.NetMetricsConfig{
+		Metrics:         &f.cfg.Metrics,
 		SelectorCfg:     selectorCfg,
 		GloballyEnabled: f.cfg.NetworkFlows.Enable,
 	}, filteredFlows))
 
-	swi.Add(obiprom.NetPrometheusEndpoint(f.ctxInfo, &obiprom.NetPrometheusConfig{
-		Config:          &f.cfg.AsOBI().Prometheus,
+	swi.Add(prom.NetPrometheusEndpoint(f.ctxInfo, &prom.NetPrometheusConfig{
+		Config:          &f.cfg.Prometheus,
 		SelectorCfg:     selectorCfg,
 		GloballyEnabled: f.cfg.NetworkFlows.Enable,
 	}, filteredFlows))

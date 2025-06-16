@@ -10,6 +10,8 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/connector"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/imetrics"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/kube"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/agent"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/flow"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/pipe/global"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	"golang.org/x/sync/errgroup"
@@ -17,8 +19,6 @@ import (
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/internal/appolly"
-	"github.com/grafana/beyla/v2/pkg/internal/netolly/agent"
-	"github.com/grafana/beyla/v2/pkg/internal/netolly/flow"
 )
 
 // RunBeyla in the foreground process. This is a blocking function and won't exit
@@ -86,7 +86,7 @@ func setupAppO11y(ctx context.Context, ctxInfo *global.ContextInfo, config *beyl
 
 func setupNetO11y(ctx context.Context, ctxInfo *global.ContextInfo, cfg *beyla.Config) error {
 	slog.Info("starting Beyla in Network metrics mode")
-	flowsAgent, err := agent.FlowsAgent(ctxInfo, cfg)
+	flowsAgent, err := agent.FlowsAgent(ctxInfo, cfg.AsOBI())
 	if err != nil {
 		slog.Debug("can't start network metrics capture", "error", err)
 		return fmt.Errorf("can't start network metrics capture: %w", err)

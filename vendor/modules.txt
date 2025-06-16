@@ -408,11 +408,14 @@ github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/help
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers/sync
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/imetrics
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/kube
+github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/agent
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/ebpf
+github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/export
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/flow
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/flow/transport
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/ifaces
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/transform/cidr
+github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/transform/k8s
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/pipe/global
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/rdns/ebpf/xdp
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/rdns/store

@@ -23,7 +23,7 @@ import (
 	"net"
 	"strings"
 
-	"github.com/grafana/beyla/v2/pkg/beyla"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla"
 )
 
 // dependencies that can be injected from testing

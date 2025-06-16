@@ -27,14 +27,13 @@ import (
 	"net"
 	"time"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/ringbuf"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/tcmanager"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/ebpf"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/flow"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/pipe/global"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
-
-	"github.com/grafana/beyla/v2/pkg/beyla"
-	"github.com/grafana/beyla/v2/pkg/internal/netolly/flow"
 )
 
 const (
@@ -86,7 +85,7 @@ func (s Status) String() string {
 	}
 }
 
-var errShutdownTimeout = errors.New("graceful shutdown has timed out")
+var errShutdownTimeout = errors.New("graceful shutdown has timed out while waiting for eBPF network infrastructure to finish")
 
 // Flows reporting agent
 type Flows struct {
@@ -130,7 +129,6 @@ func FlowsAgent(ctxInfo *global.ContextInfo, cfg *beyla.Config) (*Flows, error) 
 	alog.Debug("acquiring Agent IP")
 
 	agentIP, err := fetchAgentIP(&cfg.NetworkFlows)
-
 	if err != nil {
 		return nil, fmt.Errorf("acquiring Agent IP: %w", err)
 	}
@@ -159,7 +157,7 @@ func newFetcher(cfg *beyla.Config, alog *slog.Logger, ifaceManager *tcmanager.In
 			ingress, egress, ifaceManager, cfg.EBPF.TCBackend)
 	}
 
-	return nil, fmt.Errorf("unknown network configuration eBPF source specified, allowed options are [tc, socket_filter]")
+	return nil, errors.New("unknown network configuration eBPF source specified, allowed options are [tc, socket_filter]")
 }
 
 func monitorMode(cfg *beyla.Config, alog *slog.Logger) tcmanager.MonitorMode {
@@ -251,16 +249,14 @@ func (f *Flows) Run(ctx context.Context) error {
 
 	f.ifaceManager.Start(ctx)
 
-	f.graph.Start(ctx)
-
+	f.graph.Start(ctx, swarm.WithCancelTimeout(f.cfg.ShutdownTimeout))
 	f.status = StatusStarted
 
 	alog.Info("Flows agent successfully started")
 
 	<-ctx.Done()
 
-	err = f.stop()
-	if err != nil {
+	if err := f.stop(); err != nil {
 		return fmt.Errorf("failed to stop Flows agent: %w", err)
 	}
 
@@ -270,7 +266,7 @@ func (f *Flows) Run(ctx context.Context) error {
 func (f *Flows) stop() error {
 	alog := alog()
 
-	stopped := make(chan struct{})
+	stopped := make(chan error)
 	go func() {
 		f.status = StatusStopping
 		alog.Info("stopping Flows agent")
@@ -284,7 +280,10 @@ func (f *Flows) stop() error {
 		<-f.graph.Done()
 		f.status = StatusStopped
 
-		stopped <- struct{}{}
+		if err := <-f.graph.Done(); err != nil {
+			stopped <- err
+		}
+		close(stopped)
 
 		alog.Info("Flows agent stopped")
 	}()
@@ -292,8 +291,9 @@ func (f *Flows) stop() error {
 	select {
 	case <-time.After(f.cfg.ShutdownTimeout):
 		return errShutdownTimeout
-	case <-stopped:
-		return nil
+	case err := <-stopped:
+		// err might be nil
+		return err
 	}
 }
 

@@ -24,8 +24,8 @@ import (
 	"github.com/grafana/beyla/v2/pkg/buildinfo"
 	"github.com/grafana/beyla/v2/pkg/export/extraattributes"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
-	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	internalrequest "github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/pipe/global"
 )
 
 // injectable function reference for testing

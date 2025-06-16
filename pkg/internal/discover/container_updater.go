@@ -9,7 +9,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf"
-	"github.com/grafana/beyla/v2/pkg/internal/kube"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/kube"
 )
 
 // ContainerDBUpdaterProvider is a stage in the Process Finder pipeline that will be

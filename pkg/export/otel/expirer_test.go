@@ -9,15 +9,16 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/ebpf"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/pipe/global"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
+	obiotel "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/test/collector"
 )
 
@@ -34,12 +35,12 @@ func TestNetMetricsExpiration(t *testing.T) {
 	timeNow = now.Now
 
 	metrics := msg.NewQueue[[]*ebpf.Record](msg.ChannelBufferLen(20))
-	otelExporter, err := NetMetricsExporterProvider(
-		&global.ContextInfo{}, &NetMetricsConfig{
-			Metrics: &MetricsConfig{
+	otelExporter, err := obiotel.NetMetricsExporterProvider(
+		&global.ContextInfo{}, &obiotel.NetMetricsConfig{
+			Metrics: &obiotel.MetricsConfig{
 				Interval:        50 * time.Millisecond,
 				CommonEndpoint:  otlp.ServerEndpoint,
-				MetricsProtocol: ProtocolHTTPProtobuf,
+				MetricsProtocol: obiotel.ProtocolHTTPProtobuf,
 				Features:        []string{FeatureNetwork},
 				TTL:             3 * time.Minute,
 				Instrumentations: []string{
@@ -146,13 +147,13 @@ func TestAppMetricsExpiration_ByMetricAttrs(t *testing.T) {
 
 	metrics := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(20))
 	processEvents := msg.NewQueue[exec.ProcessEvent](msg.ChannelBufferLen(20))
-	otelExporter, err := ReportMetrics(
+	otelExporter, err := obiotel.ReportMetrics(
 		&global.ContextInfo{
 			MetricAttributeGroups: g,
-		}, &MetricsConfig{
+		}, &obiotel.MetricsConfig{
 			Interval:          50 * time.Millisecond,
 			CommonEndpoint:    otlp.ServerEndpoint,
-			MetricsProtocol:   ProtocolHTTPProtobuf,
+			MetricsProtocol:   obiotel.ProtocolHTTPProtobuf,
 			Features:          []string{FeatureApplication},
 			TTL:               3 * time.Minute,
 			ReportersCacheLen: 100,
@@ -283,11 +284,11 @@ func TestAppMetricsExpiration_BySvcID(t *testing.T) {
 
 	metrics := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(20))
 	processEvents := msg.NewQueue[exec.ProcessEvent](msg.ChannelBufferLen(20))
-	otelExporter, err := ReportMetrics(
-		&global.ContextInfo{}, &MetricsConfig{
+	otelExporter, err := obiotel.ReportMetrics(
+		&global.ContextInfo{}, &obiotel.MetricsConfig{
 			Interval:          50 * time.Millisecond,
 			CommonEndpoint:    otlp.ServerEndpoint,
-			MetricsProtocol:   ProtocolHTTPProtobuf,
+			MetricsProtocol:   obiotel.ProtocolHTTPProtobuf,
 			Features:          []string{FeatureApplication},
 			TTL:               3 * time.Minute,
 			ReportersCacheLen: 100,

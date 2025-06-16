@@ -5,11 +5,11 @@ import (
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/ebpf"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
+	obiotel "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/filter"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 
-	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/export/prom"
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/export"
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/flow"
@@ -91,8 +91,8 @@ func (f *Flows) buildPipeline(ctx context.Context) (*swarm.Runner, error) {
 	// Not all the nodes are mandatory here. Is the responsibility of each Provider function to decide
 	// whether each node is going to be instantiated or just ignored.
 	f.cfg.Attributes.Select.Normalize()
-	swi.Add(otel.NetMetricsExporterProvider(f.ctxInfo, &otel.NetMetricsConfig{
-		Metrics:         &f.cfg.Metrics,
+	swi.Add(obiotel.NetMetricsExporterProvider(f.ctxInfo, &obiotel.NetMetricsConfig{
+		Metrics:         &f.cfg.AsOBI().Metrics,
 		SelectorCfg:     selectorCfg,
 		GloballyEnabled: f.cfg.NetworkFlows.Enable,
 	}, filteredFlows))

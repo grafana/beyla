@@ -24,7 +24,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/config"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/export/prom"
-	config2 "github.com/grafana/beyla/v2/pkg/internal/helpers/config"
+	cfgutil "github.com/grafana/beyla/v2/pkg/internal/helpers/config"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
 	"github.com/grafana/beyla/v2/pkg/internal/kube"
@@ -294,11 +294,11 @@ func (e ConfigError) Error() string {
 func (c *Config) AsOBI() *obi.Config {
 	if c.obi == nil {
 		obiCfg := &obi.Config{}
-		config2.Convert(c, obiCfg, map[string]string{
+		cfgutil.Convert(c, obiCfg, map[string]string{
 			// here, some hints might be useful if we need to skip values that are non-existing in OBI,
 			// or, renamed. For example:
 			// ".Some.Renamed.FieldInSrc": "NewNameInDst",
-			// ".Some.Missing.FieldInDst": config2.SkipConversion,
+			// ".Some.Missing.FieldInDst": cfgutil.SkipConversion,
 		})
 		c.obi = obiCfg
 	}

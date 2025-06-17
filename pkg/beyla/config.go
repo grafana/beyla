@@ -79,7 +79,7 @@ var DefaultConfig = Config{
 			Submit: []string{"traces"},
 		},
 	},
-	NameResolver: nameResolverConfig{
+	NameResolver: &nameResolverConfig{
 		Sources:  []string{"k8s"},
 		CacheLen: 1024,
 		CacheTTL: 5 * time.Minute,
@@ -186,7 +186,7 @@ type Config struct {
 	// Routes is an optional node. If not set, data will be directly forwarded to exporters.
 	Routes *transform.RoutesConfig `yaml:"routes"`
 	// nolint:undoc
-	NameResolver nameResolverConfig    `yaml:"name_resolver"`
+	NameResolver *nameResolverConfig   `yaml:"name_resolver"`
 	Metrics      otel.MetricsConfig    `yaml:"otel_metrics_export"`
 	Traces       otel.TracesConfig     `yaml:"otel_traces_export"`
 	Prometheus   prom.PrometheusConfig `yaml:"prometheus_export"`

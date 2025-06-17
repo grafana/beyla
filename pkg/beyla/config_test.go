@@ -218,7 +218,7 @@ network:
 			Unmatch:      transform.UnmatchHeuristic,
 			WildcardChar: "*",
 		},
-		NameResolver: nameResolverConfig{
+		NameResolver: &nameResolverConfig{
 			Sources:  []string{"k8s", "dns"},
 			CacheLen: 1024,
 			CacheTTL: 5 * time.Minute,

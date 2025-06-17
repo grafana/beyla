@@ -79,7 +79,7 @@ var DefaultConfig = Config{
 			Submit: []string{"traces"},
 		},
 	},
-	NameResolver: &transform.NameResolverConfig{
+	NameResolver: nameResolverConfig{
 		Sources:  []string{"k8s"},
 		CacheLen: 1024,
 		CacheTTL: 5 * time.Minute,

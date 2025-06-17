@@ -11,6 +11,8 @@ import (
 	"github.com/gobwas/glob"
 	obi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/tcmanager"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/imetrics"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/kube"
 	attributes "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/debug"
@@ -25,9 +27,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/export/prom"
 	cfgutil "github.com/grafana/beyla/v2/pkg/internal/helpers/config"
-	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
-	"github.com/grafana/beyla/v2/pkg/internal/kube"
 	"github.com/grafana/beyla/v2/pkg/internal/traces"
 	servicesextra "github.com/grafana/beyla/v2/pkg/services"
 	"github.com/grafana/beyla/v2/pkg/transform"
@@ -119,9 +119,9 @@ var DefaultConfig = Config{
 		SpanMetricsServiceCacheSize: 10000,
 	},
 	TracePrinter: debug.TracePrinterDisabled,
-	InternalMetrics: imetrics.Config{
+	InternalMetrics: internalMetricsConfig{
 		Exporter: imetrics.InternalMetricsExporterDisabled,
-		Prometheus: imetrics.PrometheusConfig{
+		Prometheus: internalPromConfig{
 			Port: 0, // disabled by default
 			Path: "/internal/metrics",
 		},
@@ -238,8 +238,8 @@ type Config struct {
 	// nolint:undoc
 	ChannelBufferLen int `yaml:"channel_buffer_len" env:"BEYLA_CHANNEL_BUFFER_LEN"`
 	// nolint:undoc
-	ProfilePort     int             `yaml:"profile_port" env:"BEYLA_PROFILE_PORT"`
-	InternalMetrics imetrics.Config `yaml:"internal_metrics"`
+	ProfilePort     int                   `yaml:"profile_port" env:"BEYLA_PROFILE_PORT"`
+	InternalMetrics internalMetricsConfig `yaml:"internal_metrics"`
 
 	// Processes metrics for application. They will be only enabled if there is a metrics exporter enabled,
 	// and both the "application" and "application_process" features are enabled

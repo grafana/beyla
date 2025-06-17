@@ -8,16 +8,15 @@ import (
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers/container"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/kube"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/testutil"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubecache/informer"
+	obimeta "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubecache/meta"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/grafana/beyla/v2/pkg/internal/kube"
-	"github.com/grafana/beyla/v2/pkg/kubecache/meta"
 )
 
 const timeout = 5 * time.Second
@@ -297,17 +296,17 @@ func TestDecoration(t *testing.T) {
 }
 
 type fakeInformer struct {
-	observers map[string]meta.Observer
+	observers map[string]obimeta.Observer
 }
 
-func (f *fakeInformer) Subscribe(observer meta.Observer) {
+func (f *fakeInformer) Subscribe(observer obimeta.Observer) {
 	if f.observers == nil {
-		f.observers = map[string]meta.Observer{}
+		f.observers = map[string]obimeta.Observer{}
 	}
 	f.observers[observer.ID()] = observer
 }
 
-func (f *fakeInformer) Unsubscribe(observer meta.Observer) {
+func (f *fakeInformer) Unsubscribe(observer obimeta.Observer) {
 	delete(f.observers, observer.ID())
 }
 

@@ -8,17 +8,17 @@ import (
 	"text/template"
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/connector"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/imetrics"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/kube"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/agent"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/flow"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/pipe/global"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/internal/appolly"
-	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
-	"github.com/grafana/beyla/v2/pkg/internal/kube"
-	"github.com/grafana/beyla/v2/pkg/internal/netolly/agent"
-	"github.com/grafana/beyla/v2/pkg/internal/netolly/flow"
-	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 )
 
 // RunBeyla in the foreground process. This is a blocking function and won't exit
@@ -86,7 +86,7 @@ func setupAppO11y(ctx context.Context, ctxInfo *global.ContextInfo, config *beyl
 
 func setupNetO11y(ctx context.Context, ctxInfo *global.ContextInfo, cfg *beyla.Config) error {
 	slog.Info("starting Beyla in Network metrics mode")
-	flowsAgent, err := agent.FlowsAgent(ctxInfo, cfg)
+	flowsAgent, err := agent.FlowsAgent(ctxInfo, cfg.AsOBI())
 	if err != nil {
 		slog.Debug("can't start network metrics capture", "error", err)
 		return fmt.Errorf("can't start network metrics capture: %w", err)
@@ -179,13 +179,15 @@ func buildCommonContextInfo(
 		}
 	case config.InternalMetrics.Exporter == imetrics.InternalMetricsExporterPrometheus || config.InternalMetrics.Prometheus.Port != 0:
 		slog.Debug("reporting internal metrics as Prometheus")
-		ctxInfo.Metrics = imetrics.NewPrometheusReporter(&config.InternalMetrics.Prometheus, promMgr, nil)
+		obiCfg := config.AsOBI()
+		ctxInfo.Metrics = imetrics.NewPrometheusReporter(&obiCfg.InternalMetrics.Prometheus, promMgr, nil)
 		// Prometheus manager also has its own internal metrics, so we need to pass the imetrics reporter
 		// TODO: remove this dependency cycle and let prommgr to create and return the PrometheusReporter
 		promMgr.InstrumentWith(ctxInfo.Metrics)
 	case config.Prometheus.Registry != nil:
 		slog.Debug("reporting internal metrics with Prometheus Registry")
-		ctxInfo.Metrics = imetrics.NewPrometheusReporter(&config.InternalMetrics.Prometheus, nil, config.Prometheus.Registry)
+		obiCfg := config.AsOBI()
+		ctxInfo.Metrics = imetrics.NewPrometheusReporter(&obiCfg.InternalMetrics.Prometheus, nil, config.Prometheus.Registry)
 	default:
 		slog.Debug("not reporting internal metrics")
 		ctxInfo.Metrics = imetrics.NoopReporter{}

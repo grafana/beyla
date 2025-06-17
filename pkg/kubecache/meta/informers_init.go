@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubecache/informer"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubecache/meta"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -119,7 +120,7 @@ func InitInformers(ctx context.Context, opts ...InformerOption) (*Informers, err
 	svc := &Informers{
 		log:          log,
 		config:       config,
-		BaseNotifier: NewBaseNotifier(log),
+		BaseNotifier: meta.NewBaseNotifier(log),
 		waitForSync:  make(chan struct{}),
 	}
 

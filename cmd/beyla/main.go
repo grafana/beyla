@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	obi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla"
 	otelsdk "go.opentelemetry.io/otel/sdk"
 
 	_ "github.com/grafana/pyroscope-go/godeltaprof/http/pprof"
@@ -33,7 +34,7 @@ func main() {
 
 	slog.Info("Grafana Beyla", "Version", buildinfo.Version, "Revision", buildinfo.Revision, "OpenTelemetry SDK Version", otelsdk.Version())
 
-	if err := beyla.CheckOSSupport(); err != nil {
+	if err := obi.CheckOSSupport(); err != nil {
 		slog.Error("can't start Beyla", "error", err)
 		os.Exit(-1)
 	}
@@ -56,7 +57,7 @@ func main() {
 		os.Exit(-1)
 	}
 
-	if err := beyla.CheckOSCapabilities(config); err != nil {
+	if err := obi.CheckOSCapabilities(config.AsOBI()); err != nil {
 		if config.EnforceSysCaps {
 			slog.Error("can't start Beyla", "error", err)
 			os.Exit(-1)

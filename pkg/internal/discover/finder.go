@@ -5,7 +5,16 @@ import (
 	"fmt"
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf"
+	ebpfcommon "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/common"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/generictracer"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/gotracer"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/gpuevent"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/tctracer"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/tpinjector"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/imetrics"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/pipe/global"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 
@@ -13,15 +22,6 @@ import (
 	"github.com/grafana/beyla/v2/pkg/config"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/export/prom"
-	"github.com/grafana/beyla/v2/pkg/internal/ebpf"
-	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
-	"github.com/grafana/beyla/v2/pkg/internal/ebpf/generictracer"
-	"github.com/grafana/beyla/v2/pkg/internal/ebpf/gotracer"
-	"github.com/grafana/beyla/v2/pkg/internal/ebpf/gpuevent"
-	"github.com/grafana/beyla/v2/pkg/internal/ebpf/tctracer"
-	"github.com/grafana/beyla/v2/pkg/internal/ebpf/tpinjector"
-	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
-	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 )
 
 type ProcessFinder struct {
@@ -47,7 +47,7 @@ func (pf *ProcessFinder) Start(ctx context.Context) (<-chan Event[*ebpf.Instrume
 
 	swi := swarm.Instancer{}
 	processEvents := msg.NewQueue[[]Event[processAttrs]](msg.ChannelBufferLen(pf.cfg.ChannelBufferLen))
-	swi.Add(swarm.DirectInstance(ProcessWatcherFunc(pf.cfg, processEvents)))
+	swi.Add(swarm.DirectInstance(ProcessWatcherFunc(pf.cfg, pf.ebpfEventContext, processEvents)))
 
 	kubeEnrichedEvents := msg.NewQueue[[]Event[processAttrs]](msg.ChannelBufferLen(pf.cfg.ChannelBufferLen))
 	swi.Add(WatcherKubeEnricherProvider(pf.ctxInfo.K8sInformer, processEvents, kubeEnrichedEvents))
@@ -109,25 +109,27 @@ func (pf *ProcessFinder) connectSurveySubPipeline(swi *swarm.Instancer, kubeEnri
 
 // the common tracer group should get loaded for any tracer group, only once
 func newCommonTracersGroup(cfg *beyla.Config) []ebpf.Tracer {
+	obiCfg := cfg.AsOBI()
 	switch cfg.EBPF.ContextPropagation {
 	case config.ContextPropagationAll:
-		return []ebpf.Tracer{tctracer.New(cfg), tpinjector.New(cfg)}
+		return []ebpf.Tracer{tctracer.New(obiCfg), tpinjector.New(obiCfg)}
 	case config.ContextPropagationHeadersOnly:
-		return []ebpf.Tracer{tpinjector.New(cfg)}
+		return []ebpf.Tracer{tpinjector.New(obiCfg)}
 	case config.ContextPropagationIPOptionsOnly:
-		return []ebpf.Tracer{tctracer.New(cfg)}
+		return []ebpf.Tracer{tctracer.New(obiCfg)}
 	}
 
 	return []ebpf.Tracer{}
 }
 
 func newGoTracersGroup(pidFilter ebpfcommon.ServiceFilter, cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Tracer {
-	return []ebpf.Tracer{gotracer.New(pidFilter, cfg, metrics)}
+	return []ebpf.Tracer{gotracer.New(pidFilter, cfg.AsOBI(), metrics)}
 }
 
 func newGenericTracersGroup(pidFilter ebpfcommon.ServiceFilter, cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Tracer {
+	obiCfg := cfg.AsOBI()
 	if cfg.EBPF.InstrumentGPU {
-		return []ebpf.Tracer{generictracer.New(pidFilter, cfg, metrics), gpuevent.New(pidFilter, cfg, metrics)}
+		return []ebpf.Tracer{generictracer.New(pidFilter, obiCfg, metrics), gpuevent.New(pidFilter, obiCfg, metrics)}
 	}
-	return []ebpf.Tracer{generictracer.New(pidFilter, cfg, metrics)}
+	return []ebpf.Tracer{generictracer.New(pidFilter, obiCfg, metrics)}
 }

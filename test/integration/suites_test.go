@@ -9,14 +9,14 @@ import (
 	"strings"
 	"testing"
 
+	obi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/test/integration/components/docker"
 )
 
 func kprobeTracesEnabled() bool {
-	major, minor := beyla.KernelVersion()
+	major, minor := obi.KernelVersion()
 
 	return major > 5 || (major == 5 && minor >= 17)
 }

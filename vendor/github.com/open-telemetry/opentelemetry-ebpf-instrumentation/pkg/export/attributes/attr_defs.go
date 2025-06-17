@@ -157,6 +157,8 @@ func getDefinitions(
 			attr.K8sDeploymentName:  true,
 			attr.K8sReplicaSetName:  true,
 			attr.K8sDaemonSetName:   true,
+			attr.K8sJobName:         true,
+			attr.K8sCronJobName:     true,
 			attr.K8sStatefulSetName: true,
 			attr.K8sNodeName:        true,
 			attr.K8sPodUID:          true,

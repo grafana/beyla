@@ -13,6 +13,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/filter"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
+	obitransform "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/transform"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/export/alloy"
@@ -55,6 +56,8 @@ func newGraphBuilder(config *beyla.Config, ctxInfo *global.ContextInfo, tracesCh
 		return msg.NewQueue[[]request.Span](msg.ChannelBufferLen(config.ChannelBufferLen))
 	}
 
+	obiCfg := config.AsOBI()
+
 	// Second, we register instancers for each pipe node, as well as communication queues between them
 	// TODO: consider moving the queues to a publis structure so when Beyla is used as library, other components can
 	// listen to the messages and expanding the Pipeline
@@ -79,7 +82,7 @@ func newGraphBuilder(config *beyla.Config, ctxInfo *global.ContextInfo, tracesCh
 	))
 
 	nameResolverToAttrFilter := newQueue()
-	swi.Add(transform.NameResolutionProvider(ctxInfo, config.NameResolver,
+	swi.Add(obitransform.NameResolutionProvider(ctxInfo, obiCfg.NameResolver,
 		kubeDecoratorToNameResolver, nameResolverToAttrFilter))
 
 	exportableSpans := newQueue()

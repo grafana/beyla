@@ -179,13 +179,15 @@ func buildCommonContextInfo(
 		}
 	case config.InternalMetrics.Exporter == imetrics.InternalMetricsExporterPrometheus || config.InternalMetrics.Prometheus.Port != 0:
 		slog.Debug("reporting internal metrics as Prometheus")
-		ctxInfo.Metrics = imetrics.NewPrometheusReporter(&config.InternalMetrics.Prometheus, promMgr, nil)
+		obiCfg := config.AsOBI()
+		ctxInfo.Metrics = imetrics.NewPrometheusReporter(&obiCfg.InternalMetrics.Prometheus, promMgr, nil)
 		// Prometheus manager also has its own internal metrics, so we need to pass the imetrics reporter
 		// TODO: remove this dependency cycle and let prommgr to create and return the PrometheusReporter
 		promMgr.InstrumentWith(ctxInfo.Metrics)
 	case config.Prometheus.Registry != nil:
 		slog.Debug("reporting internal metrics with Prometheus Registry")
-		ctxInfo.Metrics = imetrics.NewPrometheusReporter(&config.InternalMetrics.Prometheus, nil, config.Prometheus.Registry)
+		obiCfg := config.AsOBI()
+		ctxInfo.Metrics = imetrics.NewPrometheusReporter(&obiCfg.InternalMetrics.Prometheus, nil, config.Prometheus.Registry)
 	default:
 		slog.Debug("not reporting internal metrics")
 		ctxInfo.Metrics = imetrics.NoopReporter{}

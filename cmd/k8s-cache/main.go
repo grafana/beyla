@@ -43,7 +43,7 @@ func main() {
 		configPath = &cfg
 	}
 	config := &kubecache.Config{}
-	configutil.Convert(loadFromFile(configPath), &config, map[string]string{
+	configutil.Convert(loadFromFile(configPath), config, map[string]string{
 		// add field hints if some destination field name changes in the OBI's configuration
 	})
 

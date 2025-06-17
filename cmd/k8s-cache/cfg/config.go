@@ -8,7 +8,6 @@ import (
 	"github.com/caarlos0/env/v9"
 	"gopkg.in/yaml.v3"
 
-	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/config"
 )
 
@@ -30,7 +29,15 @@ type Config struct {
 	// nolint:undoc
 	InformerResyncPeriod time.Duration `yaml:"informer_resync_period" env:"BEYLA_K8S_CACHE_INFORMER_RESYNC_PERIOD"`
 
-	InternalMetrics beyla.InternalMetricsConfig `yaml:"internal_metrics"`
+	InternalMetrics InternalMetricsConfig `yaml:"internal_metrics"`
+}
+
+// mimic InternalMetricsConfig in .obi-src/pkg/kubecache/config.go
+type InternalMetricsConfig struct {
+	//nolint:undoc
+	Port int `yaml:"port,omitempty" env:"BEYLA_K8S_CACHE_INTERNAL_METRICS_PROMETHEUS_PORT"`
+	//nolint:undoc
+	Path string `yaml:"path,omitempty" env:"BEYLA_K8S_CACHE_INTERNAL_METRICS_PROMETHEUS_PATH"`
 }
 
 var DefaultConfig = Config{

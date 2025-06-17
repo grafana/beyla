@@ -9,7 +9,6 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/pipe"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/pipe/global"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/instrumenter"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 
@@ -24,10 +23,10 @@ func ilog() *slog.Logger {
 // pipeline graph and returns it as a startable item
 func Build(ctx context.Context, config *beyla.Config, ctxInfo *global.ContextInfo, tracesCh *msg.Queue[[]request.Span], processEventsCh *msg.Queue[exec.ProcessEvent]) (*swarm.Runner, error) {
 
-	exportableSpans := ctxInfo.OverrideAppExportQueue
-	if exportableSpans == nil {
-		exportableSpans = msg.NewQueue[[]request.Span](msg.ChannelBufferLen(config.ChannelBufferLen))
-		instrumenter.OverrideAppExportQueue(exportableSpans)
+	if ctxInfo.OverrideAppExportQueue == nil {
+		ctxInfo.OverrideAppExportQueue = msg.NewQueue[[]request.Span](
+			msg.ChannelBufferLen(config.ChannelBufferLen),
+		)
 	}
 	// a swarm containing two swarms
 	// 1. OBI's actual pipe.Build swarm
@@ -39,10 +38,11 @@ func Build(ctx context.Context, config *beyla.Config, ctxInfo *global.ContextInf
 			return nil, fmt.Errorf("instantiating OBI app pipeline: %w", err)
 		}
 		return func(ctx context.Context) {
+			obiFinished := obiSwarm.Start(ctx)
 			select {
 			case <-ctx.Done():
 				ilog().Debug("context done, stopping OBI internal swarm")
-			case <-obiSwarm.Start(ctx):
+			case <-obiFinished:
 				ilog().Debug("OBI internal swarm stopped")
 			}
 		}, nil
@@ -50,7 +50,8 @@ func Build(ctx context.Context, config *beyla.Config, ctxInfo *global.ContextInf
 
 	// process subpipeline optionally starts another pipeline only to collect and export data
 	// about the processes of an instrumented application
-	swi.Add(ProcessMetricsSwarmInstancer(ctxInfo, config, exportableSpans))
+	swi.Add(ProcessMetricsSwarmInstancer(ctxInfo, config,
+		ctxInfo.OverrideAppExportQueue.Subscribe()))
 
 	return swi.Instance(ctx)
 }

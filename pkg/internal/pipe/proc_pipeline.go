@@ -31,7 +31,7 @@ func isProcessSubPipeEnabled(cfg *beyla.Config) bool {
 func ProcessMetricsSwarmInstancer(
 	ctxInfo *global.ContextInfo,
 	cfg *beyla.Config,
-	appInputSpans *msg.Queue[[]request.Span],
+	appInputSpans <-chan []request.Span,
 ) swarm.InstanceFunc {
 	return func(ctx context.Context) (swarm.RunFunc, error) {
 		if !isProcessSubPipeEnabled(cfg) {

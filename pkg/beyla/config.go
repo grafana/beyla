@@ -28,7 +28,6 @@ import (
 	"github.com/grafana/beyla/v2/pkg/export/prom"
 	cfgutil "github.com/grafana/beyla/v2/pkg/helpers/config"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
-	"github.com/grafana/beyla/v2/pkg/internal/traces"
 	servicesextra "github.com/grafana/beyla/v2/pkg/services"
 	"github.com/grafana/beyla/v2/pkg/transform"
 )
@@ -127,7 +126,7 @@ var DefaultConfig = Config{
 		},
 	},
 	Attributes: Attributes{
-		InstanceID: traces.InstanceIDConfig{
+		InstanceID: InstanceIDConfig{
 			HostnameDNSResolution: true,
 		},
 		Kubernetes: transform.KubernetesDecorator{
@@ -270,7 +269,7 @@ func (t TracesReceiverConfig) Enabled() bool {
 // added to each span
 type Attributes struct {
 	Kubernetes           transform.KubernetesDecorator `yaml:"kubernetes"`
-	InstanceID           traces.InstanceIDConfig       `yaml:"instance_id"`
+	InstanceID           InstanceIDConfig              `yaml:"instance_id"`
 	Select               attributes.Selection          `yaml:"select"`
 	HostID               HostIDConfig                  `yaml:"host_id"`
 	ExtraGroupAttributes map[string][]attr.Name        `yaml:"extra_group_attributes"`

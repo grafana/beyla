@@ -14,13 +14,13 @@ import (
 	ebpfcommon "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/common"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/pipe/global"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/traces"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/internal/discover"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe"
-	"github.com/grafana/beyla/v2/pkg/internal/traces"
 	"github.com/grafana/beyla/v2/pkg/transform"
 )
 
@@ -64,7 +64,7 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 	processEventsHostDecorated := newEventQueue()
 
 	swi.Add(traces.HostProcessEventDecoratorProvider(
-		&config.Attributes.InstanceID,
+		&config.AsOBI().Attributes.InstanceID,
 		processEventsInput,
 		processEventsHostDecorated,
 	))

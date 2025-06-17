@@ -50,8 +50,7 @@ func Build(ctx context.Context, config *beyla.Config, ctxInfo *global.ContextInf
 
 	// process subpipeline optionally starts another pipeline only to collect and export data
 	// about the processes of an instrumented application
-	swi.Add(ProcessMetricsSwarmInstancer(ctxInfo, config,
-		ctxInfo.OverrideAppExportQueue.Subscribe()))
+	swi.Add(ProcessMetricsSwarmInstancer(ctxInfo, config, ctxInfo.OverrideAppExportQueue))
 
 	return swi.Instance(ctx)
 }

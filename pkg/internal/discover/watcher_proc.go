@@ -18,6 +18,7 @@ import (
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf"
+	ebpfcommon "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/common"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/logger"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/watcher"
 )
@@ -55,9 +56,10 @@ func wplog() *slog.Logger {
 
 // ProcessWatcherFunc polls every PollInterval for new processes and forwards either new or deleted process PIDs
 // as well as PIDs from processes that setup a new connection
-func ProcessWatcherFunc(cfg *beyla.Config, output *msg.Queue[[]Event[processAttrs]]) swarm.RunFunc {
+func ProcessWatcherFunc(cfg *beyla.Config, ebpfContext *ebpfcommon.EBPFEventContext, output *msg.Queue[[]Event[processAttrs]]) swarm.RunFunc {
 	acc := pollAccounter{
 		cfg:               cfg,
+		ebpfContext:       ebpfContext,
 		output:            output,
 		interval:          cfg.Discovery.PollInterval,
 		pids:              map[PID]processAttrs{},
@@ -86,8 +88,9 @@ type pidPort struct {
 // TODO: combine the poller with an eBPF listener (poll at start and e.g. every 30 seconds, and keep listening eBPF in background)
 // ^ This is partially done, although it's not fully async, we only use the info to reduce the overhead of port scanning.
 type pollAccounter struct {
-	cfg      *beyla.Config
-	interval time.Duration
+	cfg         *beyla.Config
+	ebpfContext *ebpfcommon.EBPFEventContext
+	interval    time.Duration
 	// last polled process:ports accessible by its pid
 	pids map[PID]processAttrs
 	// last polled process:ports accessible by a combination of pid/connection port
@@ -98,8 +101,8 @@ type pollAccounter struct {
 	// injectable function
 	executableReady func(PID) (string, bool)
 	// injectable function to load the bpf program
-	loadBPFWatcher func(ctx context.Context, cfg *beyla.Config, events chan<- watcher.Event) error
-	loadBPFLogger  func(ctx context.Context, cfg *beyla.Config) error
+	loadBPFWatcher func(ctx context.Context, ebpfContext *ebpfcommon.EBPFEventContext, cfg *beyla.Config, events chan<- watcher.Event) error
+	loadBPFLogger  func(ctx context.Context, ebpfContext *ebpfcommon.EBPFEventContext, cfg *beyla.Config) error
 	// we use these to ensure we poll for the open ports effectively
 	stateMux          sync.Mutex
 	bpfWatcherEnabled bool
@@ -114,14 +117,14 @@ func (pa *pollAccounter) run(ctx context.Context) {
 	log := slog.With("component", "discover.ProcessWatcher", "interval", pa.interval)
 
 	bpfWatchEvents := make(chan watcher.Event, 100)
-	if err := pa.loadBPFWatcher(ctx, pa.cfg, bpfWatchEvents); err != nil {
+	if err := pa.loadBPFWatcher(ctx, pa.ebpfContext, pa.cfg, bpfWatchEvents); err != nil {
 		log.Error("Unable to load eBPF watcher for process events", "error", err)
 		// will stop pipeline in cascade
 		return
 	}
 
 	if pa.cfg.EBPF.BpfDebug {
-		if err := pa.loadBPFLogger(ctx, pa.cfg); err != nil {
+		if err := pa.loadBPFLogger(ctx, pa.ebpfContext, pa.cfg); err != nil {
 			log.Error("Unable to load eBPF logger for process events", "error", err)
 			// keep running without logs
 		}
@@ -351,12 +354,12 @@ func fetchProcessPorts(scanPorts bool) (map[PID]processAttrs, error) {
 	return processes, nil
 }
 
-func loadBPFWatcher(ctx context.Context, cfg *beyla.Config, events chan<- watcher.Event) error {
+func loadBPFWatcher(ctx context.Context, ebpfContext *ebpfcommon.EBPFEventContext, cfg *beyla.Config, events chan<- watcher.Event) error {
 	wt := watcher.New(cfg.AsOBI(), events)
-	return ebpf.RunUtilityTracer(ctx, wt)
+	return ebpf.RunUtilityTracer(ctx, ebpfContext, wt)
 }
 
-func loadBPFLogger(ctx context.Context, cfg *beyla.Config) error {
+func loadBPFLogger(ctx context.Context, ebpfContext *ebpfcommon.EBPFEventContext, cfg *beyla.Config) error {
 	wt := logger.New(cfg.AsOBI())
-	return ebpf.RunUtilityTracer(ctx, wt)
+	return ebpf.RunUtilityTracer(ctx, ebpfContext, wt)
 }

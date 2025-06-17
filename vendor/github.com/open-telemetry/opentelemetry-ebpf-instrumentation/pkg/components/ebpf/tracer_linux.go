@@ -354,9 +354,8 @@ func printVerifierErrorInfo(err error) {
 	}
 }
 
-func RunUtilityTracer(ctx context.Context, p UtilityTracer) error {
+func RunUtilityTracer(ctx context.Context, eventContext *common.EBPFEventContext, p UtilityTracer) error {
 	i := instrumenter{}
-	eventContext := common.NewEBPFEventContext()
 	plog := ptlog()
 	plog.Debug("loading independent eBPF program")
 	spec, err := p.Load()

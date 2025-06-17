@@ -182,9 +182,9 @@ network:
 				RequestSizeHistogram:  []float64{0, 10, 20, 22},
 				ResponseSizeHistogram: []float64{0, 10, 20, 22},
 			}},
-		InternalMetrics: internalMetricsConfig{
+		InternalMetrics: InternalMetricsConfig{
 			Exporter: imetrics.InternalMetricsExporterDisabled,
-			Prometheus: internalPromConfig{
+			Prometheus: InternalPromConfig{
 				Port: 3210,
 				Path: "/internal/metrics",
 			},

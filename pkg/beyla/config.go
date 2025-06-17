@@ -26,7 +26,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/config"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/export/prom"
-	cfgutil "github.com/grafana/beyla/v2/pkg/internal/helpers/config"
+	cfgutil "github.com/grafana/beyla/v2/pkg/helpers/config"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
 	"github.com/grafana/beyla/v2/pkg/internal/traces"
 	servicesextra "github.com/grafana/beyla/v2/pkg/services"
@@ -119,9 +119,9 @@ var DefaultConfig = Config{
 		SpanMetricsServiceCacheSize: 10000,
 	},
 	TracePrinter: debug.TracePrinterDisabled,
-	InternalMetrics: internalMetricsConfig{
+	InternalMetrics: InternalMetricsConfig{
 		Exporter: imetrics.InternalMetricsExporterDisabled,
-		Prometheus: internalPromConfig{
+		Prometheus: InternalPromConfig{
 			Port: 0, // disabled by default
 			Path: "/internal/metrics",
 		},
@@ -239,7 +239,7 @@ type Config struct {
 	ChannelBufferLen int `yaml:"channel_buffer_len" env:"BEYLA_CHANNEL_BUFFER_LEN"`
 	// nolint:undoc
 	ProfilePort     int                   `yaml:"profile_port" env:"BEYLA_PROFILE_PORT"`
-	InternalMetrics internalMetricsConfig `yaml:"internal_metrics"`
+	InternalMetrics InternalMetricsConfig `yaml:"internal_metrics"`
 
 	// Processes metrics for application. They will be only enabled if there is a metrics exporter enabled,
 	// and both the "application" and "application_process" features are enabled

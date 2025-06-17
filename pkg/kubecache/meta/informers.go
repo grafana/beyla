@@ -6,11 +6,12 @@ import (
 	"slices"
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubecache/informer"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubecache/meta"
 	"k8s.io/client-go/tools/cache"
 )
 
 type Informers struct {
-	BaseNotifier
+	meta.BaseNotifier
 
 	log    *slog.Logger
 	config *informersConfig
@@ -32,7 +33,7 @@ type timestamped interface {
 	FromEpoch() int64
 }
 
-func (inf *Informers) Subscribe(observer Observer) {
+func (inf *Informers) Subscribe(observer meta.Observer) {
 	inf.BaseNotifier.Subscribe(observer)
 
 	fromEpoch := int64(0)

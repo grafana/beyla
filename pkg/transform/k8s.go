@@ -61,7 +61,7 @@ type KubernetesDecorator struct {
 	// MetaSourceLabels allows Beyla overriding the service name and namespace of an application from
 	// the given labels.
 	// Deprecated: kept for backwards-compatibility with Beyla 1.9
-	MetaSourceLabels kube.MetaSourceLabels `yaml:"meta_source_labels"`
+	MetaSourceLabels metaSourceLabels `yaml:"meta_source_labels"`
 
 	// ResourceLabels allows Beyla overriding the OTEL Resource attributes from a map of user-defined labels.
 	// nolint:undoc
@@ -69,6 +69,15 @@ type KubernetesDecorator struct {
 
 	// ServiceNameTemplate allows to override the service.name with a custom value. Uses the go template language.
 	ServiceNameTemplate string `yaml:"service_name_template" env:"BEYLA_SERVICE_NAME_TEMPLATE"`
+}
+
+// metasourceLabels mimics OBI's kube.MetaSourceLabels (.obi-src/pkg/components/kube/store.go)
+// but keeping BEYLA_ prefixed env vars for backwards compatibility
+type metaSourceLabels struct {
+	//nolint:undoc
+	ServiceName string `yaml:"service_name" env:"BEYLA_KUBE_META_SOURCE_LABEL_SERVICE_NAME"`
+	//nolint:undoc
+	ServiceNamespace string `yaml:"service_namespace" env:"BEYLA_KUBE_META_SOURCE_LABEL_SERVICE_NAMESPACE"`
 }
 
 const (

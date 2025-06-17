@@ -10,9 +10,6 @@ CACHE_MAIN_GO_FILE ?= cmd/$(CACHE_CMD)/main.go
 GOOS ?= linux
 GOARCH ?= amd64
 
-# todo: upload to a grafana artifact
-PROTOC_IMAGE = docker.io/mariomac/protoc-go:latest
-
 # RELEASE_VERSION will contain the tag name, or the branch name if current commit is not a tag
 RELEASE_VERSION := $(shell git describe --all | cut -d/ -f2)
 RELEASE_REVISION := $(shell git rev-parse --short HEAD )
@@ -421,9 +418,6 @@ clean-testoutput:
 	@echo "### Cleaning ${TEST_OUTPUT} folder"
 	rm -rf ${TEST_OUTPUT}/*
 
-.PHONY: protoc-gen
-protoc-gen:
-	docker run --rm -v $(PWD):/work -w /work $(PROTOC_IMAGE) protoc --go_out=pkg/kubecache --go-grpc_out=pkg/kubecache proto/informer.proto
 
 .PHONY: clang-format
 clang-format:

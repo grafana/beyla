@@ -13,13 +13,16 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubecache"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubecache/instrument"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubecache/meta"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubecache/service"
+
 	_ "github.com/grafana/pyroscope-go/godeltaprof/http/pprof"
 
+	"github.com/grafana/beyla/v2/cmd/k8s-cache/cfg"
 	"github.com/grafana/beyla/v2/pkg/buildinfo"
-	"github.com/grafana/beyla/v2/pkg/kubecache"
-	"github.com/grafana/beyla/v2/pkg/kubecache/instrument"
-	"github.com/grafana/beyla/v2/pkg/kubecache/meta"
-	"github.com/grafana/beyla/v2/pkg/kubecache/service"
+	configutil "github.com/grafana/beyla/v2/pkg/helpers/config"
 )
 
 // main code of te Kubernetes K8s informer's metadata cache service, when it runs as a separate service and not
@@ -39,7 +42,11 @@ func main() {
 	if cfg := os.Getenv("BEYLA_K8S_CACHE_CONFIG_PATH"); cfg != "" {
 		configPath = &cfg
 	}
-	config := loadFromFile(configPath)
+	config := &kubecache.Config{}
+	configutil.Convert(loadFromFile(configPath), config, map[string]string{
+		// add field hints if some destination field name changes in the OBI's configuration
+	})
+
 	if err := lvl.UnmarshalText([]byte(config.LogLevel)); err != nil {
 		slog.Error("unknown log level specified, choices are [DEBUG, INFO, WARN, ERROR]", "error", err)
 		os.Exit(-1)
@@ -74,7 +81,7 @@ func main() {
 	}
 }
 
-func loadFromFile(configPath *string) *kubecache.Config {
+func loadFromFile(configPath *string) *cfg.Config {
 	var configReader io.ReadCloser
 	if configPath != nil && *configPath != "" {
 		var err error
@@ -84,7 +91,7 @@ func loadFromFile(configPath *string) *kubecache.Config {
 		}
 		defer configReader.Close()
 	}
-	config, err := kubecache.LoadConfig(configReader)
+	config, err := cfg.LoadConfig(configReader)
 	if err != nil {
 		slog.Error("wrong configuration", "error", err)
 		// nolint:gocritic

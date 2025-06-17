@@ -31,7 +31,6 @@ github.com/go-playground/validator/v10,https://github.com/grafana/beyla/blob/HEA
 github.com/go-viper/mapstructure/v2,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/go-viper/mapstructure/v2/LICENSE,MIT
 github.com/gobwas/glob,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/gobwas/glob/LICENSE,MIT
 github.com/gogo/protobuf,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/gogo/protobuf/LICENSE,BSD-3-Clause
-github.com/golang/groupcache/lru,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/golang/groupcache/LICENSE,Apache-2.0
 github.com/golang/protobuf,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/golang/protobuf/LICENSE,BSD-3-Clause
 github.com/golang/snappy,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/golang/snappy/LICENSE,BSD-3-Clause
 github.com/google/gnostic-models,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/google/gnostic-models/LICENSE,Apache-2.0
@@ -158,7 +157,6 @@ golang.org/x/sys,https://github.com/grafana/beyla/blob/HEAD/vendor/golang.org/x/
 golang.org/x/term,https://github.com/grafana/beyla/blob/HEAD/vendor/golang.org/x/term/LICENSE,BSD-3-Clause
 golang.org/x/text,https://github.com/grafana/beyla/blob/HEAD/vendor/golang.org/x/text/LICENSE,BSD-3-Clause
 golang.org/x/time/rate,https://github.com/grafana/beyla/blob/HEAD/vendor/golang.org/x/time/LICENSE,BSD-3-Clause
-gomodules.xyz/jsonpatch/v2,https://github.com/grafana/beyla/blob/HEAD/vendor/gomodules.xyz/jsonpatch/v2/LICENSE,Apache-2.0
 google.golang.org/genproto/googleapis/api/httpbody,https://github.com/grafana/beyla/blob/HEAD/vendor/google.golang.org/genproto/googleapis/api/LICENSE,Apache-2.0
 google.golang.org/genproto/googleapis/rpc,https://github.com/grafana/beyla/blob/HEAD/vendor/google.golang.org/genproto/googleapis/rpc/LICENSE,Apache-2.0
 google.golang.org/grpc,https://github.com/grafana/beyla/blob/HEAD/vendor/google.golang.org/grpc/LICENSE,Apache-2.0
@@ -167,18 +165,16 @@ gopkg.in/inf.v0,https://github.com/grafana/beyla/blob/HEAD/vendor/gopkg.in/inf.v
 gopkg.in/yaml.v2,https://github.com/grafana/beyla/blob/HEAD/vendor/gopkg.in/yaml.v2/LICENSE,Apache-2.0
 gopkg.in/yaml.v3,https://github.com/grafana/beyla/blob/HEAD/vendor/gopkg.in/yaml.v3/LICENSE,MIT
 k8s.io/api,https://github.com/grafana/beyla/blob/HEAD/vendor/k8s.io/api/LICENSE,Apache-2.0
-k8s.io/apiextensions-apiserver/pkg,https://github.com/grafana/beyla/blob/HEAD/vendor/k8s.io/apiextensions-apiserver/LICENSE,Apache-2.0
 k8s.io/apimachinery/pkg,https://github.com/grafana/beyla/blob/HEAD/vendor/k8s.io/apimachinery/LICENSE,Apache-2.0
 k8s.io/apimachinery/third_party/forked/golang,https://github.com/grafana/beyla/blob/HEAD/vendor/k8s.io/apimachinery/third_party/forked/golang/LICENSE,BSD-3-Clause
 k8s.io/client-go,https://github.com/grafana/beyla/blob/HEAD/vendor/k8s.io/client-go/LICENSE,Apache-2.0
-k8s.io/component-base/config,https://github.com/grafana/beyla/blob/HEAD/vendor/k8s.io/component-base/LICENSE,Apache-2.0
 k8s.io/klog/v2,https://github.com/grafana/beyla/blob/HEAD/vendor/k8s.io/klog/v2/LICENSE,Apache-2.0
 k8s.io/kube-openapi/pkg,https://github.com/grafana/beyla/blob/HEAD/vendor/k8s.io/kube-openapi/LICENSE,Apache-2.0
 k8s.io/kube-openapi/pkg/internal/third_party/go-json-experiment/json,https://github.com/grafana/beyla/blob/HEAD/vendor/k8s.io/kube-openapi/pkg/internal/third_party/go-json-experiment/json/LICENSE,BSD-3-Clause
 k8s.io/kube-openapi/pkg/validation/spec,https://github.com/grafana/beyla/blob/HEAD/vendor/k8s.io/kube-openapi/pkg/validation/spec/LICENSE,Apache-2.0
 k8s.io/utils,https://github.com/grafana/beyla/blob/HEAD/vendor/k8s.io/utils/LICENSE,Apache-2.0
 k8s.io/utils/internal/third_party/forked/golang/net,https://github.com/grafana/beyla/blob/HEAD/vendor/k8s.io/utils/internal/third_party/forked/golang/LICENSE,BSD-3-Clause
-sigs.k8s.io/controller-runtime,https://github.com/grafana/beyla/blob/HEAD/vendor/sigs.k8s.io/controller-runtime/LICENSE,Apache-2.0
+sigs.k8s.io/controller-runtime/pkg,https://github.com/grafana/beyla/blob/HEAD/vendor/sigs.k8s.io/controller-runtime/LICENSE,Apache-2.0
 sigs.k8s.io/e2e-framework,https://github.com/grafana/beyla/blob/HEAD/vendor/sigs.k8s.io/e2e-framework/LICENSE,Apache-2.0
 sigs.k8s.io/json,https://github.com/grafana/beyla/blob/HEAD/vendor/sigs.k8s.io/json/LICENSE,Apache-2.0
 sigs.k8s.io/structured-merge-diff/v4,https://github.com/grafana/beyla/blob/HEAD/vendor/sigs.k8s.io/structured-merge-diff/v4/LICENSE,Apache-2.0

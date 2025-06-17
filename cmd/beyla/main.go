@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	obi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla"
 	otelsdk "go.opentelemetry.io/otel/sdk"
 
 	_ "github.com/grafana/pyroscope-go/godeltaprof/http/pprof"
@@ -21,7 +22,6 @@ import (
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/buildinfo"
 	"github.com/grafana/beyla/v2/pkg/components"
-	obi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla"
 )
 
 func main() {

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	ebpfcommon "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/common"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/watcher"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/testutil"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
@@ -53,10 +54,10 @@ func TestWatcher_Poll(t *testing.T) {
 		executableReady: func(PID) (string, bool) {
 			return "", true
 		},
-		loadBPFWatcher: func(context.Context, *beyla.Config, chan<- watcher.Event) error {
+		loadBPFWatcher: func(context.Context, *ebpfcommon.EBPFEventContext, *beyla.Config, chan<- watcher.Event) error {
 			return nil
 		},
-		loadBPFLogger: func(context.Context, *beyla.Config) error {
+		loadBPFLogger: func(context.Context, *ebpfcommon.EBPFEventContext, *beyla.Config) error {
 			return nil
 		},
 		output: msg.NewQueue[[]Event[processAttrs]](msg.ChannelBufferLen(1)),
@@ -137,10 +138,10 @@ func TestProcessNotReady(t *testing.T) {
 		executableReady: func(pid PID) (string, bool) {
 			return "", pid >= 3
 		},
-		loadBPFWatcher: func(context.Context, *beyla.Config, chan<- watcher.Event) error {
+		loadBPFWatcher: func(context.Context, *ebpfcommon.EBPFEventContext, *beyla.Config, chan<- watcher.Event) error {
 			return nil
 		},
-		loadBPFLogger: func(context.Context, *beyla.Config) error {
+		loadBPFLogger: func(context.Context, *ebpfcommon.EBPFEventContext, *beyla.Config) error {
 			return nil
 		},
 	}
@@ -188,11 +189,11 @@ func TestPortsFetchRequired(t *testing.T) {
 		executableReady: func(_ PID) (string, bool) {
 			return "", true
 		},
-		loadBPFWatcher: func(_ context.Context, _ *beyla.Config, events chan<- watcher.Event) error {
+		loadBPFWatcher: func(_ context.Context, _ *ebpfcommon.EBPFEventContext, _ *beyla.Config, events chan<- watcher.Event) error {
 			channelReturner <- events
 			return nil
 		},
-		loadBPFLogger: func(context.Context, *beyla.Config) error {
+		loadBPFLogger: func(context.Context, *ebpfcommon.EBPFEventContext, *beyla.Config) error {
 			return nil
 		},
 		stateMux:          sync.Mutex{},

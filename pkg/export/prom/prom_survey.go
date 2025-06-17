@@ -5,16 +5,16 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/connector"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 	"github.com/prometheus/client_golang/prometheus"
 
-	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
-	"github.com/grafana/beyla/v2/pkg/internal/connector"
-	"github.com/grafana/beyla/v2/pkg/internal/exec"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
-	"github.com/grafana/beyla/v2/pkg/internal/svc"
-	"github.com/grafana/beyla/v2/pkg/pipe/msg"
-	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 const (
@@ -150,24 +150,34 @@ func (r *surveyMetricsReporter) disassociatePIDFromService(pid int32) (bool, svc
 	return r.pidsTracker.RemovePID(pid)
 }
 
-func (r *surveyMetricsReporter) watchForProcessEvents(_ context.Context) {
+func (r *surveyMetricsReporter) watchForProcessEvents(ctx context.Context) {
 	log := pslog()
-	for pe := range r.processEvents {
-		log.Debug("Received new process event", "event type", pe.Type, "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
 
-		uid := pe.File.Service.UID
-
-		switch pe.Type {
-		case exec.ProcessEventTerminated:
-			if deleted, origUID := r.disassociatePIDFromService(pe.File.Pid); deleted {
-				log.Debug("deleting infos for", "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
-				r.deleteSurveyInfo(origUID, &pe.File.Service)
-				delete(r.serviceMap, origUID)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case pe, ok := <-r.processEvents:
+			if !ok {
+				return
 			}
-		case exec.ProcessEventCreated:
-			r.createSurveyInfo(&pe.File.Service)
-			r.serviceMap[uid] = pe.File.Service
-			r.setupPIDToServiceRelationship(pe.File.Pid, uid)
+
+			log.Debug("Received new process event", "event type", pe.Type, "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
+
+			uid := pe.File.Service.UID
+
+			switch pe.Type {
+			case exec.ProcessEventTerminated:
+				if deleted, origUID := r.disassociatePIDFromService(pe.File.Pid); deleted {
+					log.Debug("deleting infos for", "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
+					r.deleteSurveyInfo(origUID, &pe.File.Service)
+					delete(r.serviceMap, origUID)
+				}
+			case exec.ProcessEventCreated:
+				r.createSurveyInfo(&pe.File.Service)
+				r.serviceMap[uid] = pe.File.Service
+				r.setupPIDToServiceRelationship(pe.File.Pid, uid)
+			}
 		}
 	}
 }

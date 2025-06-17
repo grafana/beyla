@@ -11,16 +11,16 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/mariomac/guara/pkg/test"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/ringbuf"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/testutil"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/v2/pkg/config"
-	"github.com/grafana/beyla/v2/pkg/internal/ebpf/ringbuf"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
-	"github.com/grafana/beyla/v2/pkg/internal/request"
-	"github.com/grafana/beyla/v2/pkg/internal/svc"
-	"github.com/grafana/beyla/v2/pkg/internal/testutil"
-	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
 const testTimeout = 5 * time.Second

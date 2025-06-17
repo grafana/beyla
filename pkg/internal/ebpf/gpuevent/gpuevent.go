@@ -14,22 +14,20 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/ianlancetaylor/demangle"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/gpuevent"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/ringbuf"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/goexec"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/prometheus/procfs"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/config"
 	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
-	"github.com/grafana/beyla/v2/pkg/internal/ebpf/ringbuf"
-	"github.com/grafana/beyla/v2/pkg/internal/exec"
-	"github.com/grafana/beyla/v2/pkg/internal/goexec"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
-	"github.com/grafana/beyla/v2/pkg/internal/request"
-	"github.com/grafana/beyla/v2/pkg/internal/svc"
-	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
-
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type gpu_kernel_launch_t -type gpu_malloc_t -target amd64,arm64 bpf ../../../../bpf/gpuevent/gpuevent.c -- -I../../../../bpf
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type gpu_kernel_launch_t -type gpu_malloc_t -target amd64,arm64 bpf_debug ../../../../bpf/gpuevent/gpuevent.c -- -I../../../../bpf -DBPF_DEBUG
 
 const EventTypeKernelLaunch = 1 // EVENT_GPU_KERNEL_LAUNCH
 const EventTypeMalloc = 2       // EVENT_GPU_MALLOC
@@ -47,8 +45,8 @@ type modInfo struct {
 
 type moduleOffsets map[uint64]*SymbolTree
 
-type GPUKernelLaunchInfo bpfGpuKernelLaunchT
-type GPUMallocInfo bpfGpuMallocT
+type GPUKernelLaunchInfo gpuevent.BpfGpuKernelLaunchT
+type GPUMallocInfo gpuevent.BpfGpuMallocT
 
 // TODO: We have a way to bring ELF file information to this Tracer struct
 // via the newNonGoTracersGroup / newNonGoTracersGroupUProbes functions. Now,
@@ -58,7 +56,7 @@ type Tracer struct {
 	pidsFilter       ebpfcommon.ServiceFilter
 	cfg              *beyla.Config
 	metrics          imetrics.Reporter
-	bpfObjects       bpfObjects
+	bpfObjects       gpuevent.BpfObjects
 	closers          []io.Closer
 	log              *slog.Logger
 	instrumentedLibs ebpfcommon.InstrumentedLibsT
@@ -94,9 +92,9 @@ func (p *Tracer) BlockPID(pid, ns uint32) {
 }
 
 func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
-	loader := loadBpf
+	loader := gpuevent.LoadBpf
 	if p.cfg.EBPF.BpfDebug {
-		loader = loadBpf_debug
+		loader = gpuevent.LoadBpfDebug
 	}
 
 	return loader()

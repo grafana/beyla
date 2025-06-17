@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"unsafe"
 
-	"github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
 )
 
 const fastCGIRequestHeaderLen = 8
@@ -209,7 +209,7 @@ func TCPToFastCGIToSpan(trace *TCPRequestInfo, op, uri string, status int) reque
 		TraceID:       trace.Tp.TraceId,
 		SpanID:        trace.Tp.SpanId,
 		ParentSpanID:  trace.Tp.ParentId,
-		Flags:         trace.Tp.Flags,
+		TraceFlags:    trace.Tp.Flags,
 		Pid: request.PidInfo{
 			HostPID:   trace.Pid.HostPid,
 			UserPID:   trace.Pid.UserPid,

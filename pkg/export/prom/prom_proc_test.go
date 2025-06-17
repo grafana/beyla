@@ -6,16 +6,17 @@ import (
 	"time"
 
 	"github.com/mariomac/guara/pkg/test"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/connector"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
+	"github.com/grafana/beyla/v2/pkg/export/extraattributes"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
-	"github.com/grafana/beyla/v2/pkg/internal/connector"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
-	"github.com/grafana/beyla/v2/pkg/internal/svc"
-	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
 func TestProcPrometheusEndpoint_AggregatedMetrics(t *testing.T) {
@@ -40,11 +41,13 @@ func TestProcPrometheusEndpoint_AggregatedMetrics(t *testing.T) {
 			TTL:                         3 * time.Minute,
 			SpanMetricsServiceCacheSize: 10,
 			Features:                    []string{otel.FeatureApplication, otel.FeatureProcess},
-		}, AttributeSelectors: attributes.Selection{
-			attributes.ProcessCPUTime.Section:        attribs,
-			attributes.ProcessCPUUtilization.Section: attribs,
-			attributes.ProcessDiskIO.Section:         attribs,
-			attributes.ProcessNetIO.Section:          attribs,
+		}, SelectorCfg: &attributes.SelectorConfig{
+			SelectionCfg: attributes.Selection{
+				extraattributes.ProcessCPUTime.Section:        attribs,
+				extraattributes.ProcessCPUUtilization.Section: attribs,
+				extraattributes.ProcessDiskIO.Section:         attribs,
+				extraattributes.ProcessNetIO.Section:          attribs,
+			},
 		}},
 		procsInput,
 	)(ctx)
@@ -127,11 +130,13 @@ func TestProcPrometheusEndpoint_DisaggregatedMetrics(t *testing.T) {
 			TTL:                         3 * time.Minute,
 			SpanMetricsServiceCacheSize: 10,
 			Features:                    []string{otel.FeatureApplication, otel.FeatureProcess},
-		}, AttributeSelectors: attributes.Selection{
-			attributes.ProcessCPUTime.Section:        attribs,
-			attributes.ProcessCPUUtilization.Section: attribs,
-			attributes.ProcessDiskIO.Section:         attribs,
-			attributes.ProcessNetIO.Section:          attribs,
+		}, SelectorCfg: &attributes.SelectorConfig{
+			SelectionCfg: attributes.Selection{
+				extraattributes.ProcessCPUTime.Section:        attribs,
+				extraattributes.ProcessCPUUtilization.Section: attribs,
+				extraattributes.ProcessDiskIO.Section:         attribs,
+				extraattributes.ProcessNetIO.Section:          attribs,
+			},
 		}},
 		procsInput,
 	)(ctx)

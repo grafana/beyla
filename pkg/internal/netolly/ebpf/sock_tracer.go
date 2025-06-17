@@ -29,14 +29,12 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/rlimit"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/ringbuf"
+	ebpf2 "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/ebpf"
 	"golang.org/x/sys/unix"
 
 	convenience "github.com/grafana/beyla/v2/pkg/internal/ebpf/convenience"
-	"github.com/grafana/beyla/v2/pkg/internal/ebpf/ringbuf"
 )
-
-// $BPF_CLANG and $BPF_CFLAGS are set by the Makefile.
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type flow_metrics_t -type flow_id_t  -type flow_record_t -target amd64,arm64 NetSk ../../../../bpf/netolly/flows_sock.c -- -I../../../../bpf
 
 // SockFlowFetcher reads and forwards the Flows from the eBPF kernel space with a socket filter implementation.
 // It provides access both to flows that are aggregated in the kernel space (via PerfCPU hashmap)
@@ -44,7 +42,7 @@ import (
 // in the map
 type SockFlowFetcher struct {
 	log           *slog.Logger
-	objects       *NetSkObjects
+	objects       *ebpf2.NetSkObjects
 	ringbufReader *ringbuf.Reader
 	cacheMaxSize  int
 }
@@ -58,8 +56,8 @@ func NewSockFlowFetcher(
 			"error", err)
 	}
 
-	objects := NetSkObjects{}
-	spec, err := LoadNetSk()
+	objects := ebpf2.NetSkObjects{}
+	spec, err := ebpf2.LoadNetSk()
 	if err != nil {
 		return nil, fmt.Errorf("loading BPF data: %w", err)
 	}
@@ -171,14 +169,14 @@ func (m *SockFlowFetcher) ReadRingBuf() (ringbuf.Record, error) {
 // TODO: detect whether BatchLookupAndDelete is supported (Kernel>=5.6) and use it selectively
 // Supported Lookup/Delete operations by kernel: https://github.com/iovisor/bcc/blob/master/docs/kernel-versions.md
 // Race conditions here causes that some flows are lost in high-load scenarios
-func (m *SockFlowFetcher) LookupAndDeleteMap() map[NetFlowId][]NetFlowMetrics {
+func (m *SockFlowFetcher) LookupAndDeleteMap() map[ebpf2.NetFlowId][]ebpf2.NetFlowMetrics {
 	flowMap := m.objects.AggregatedFlows
 
 	iterator := flowMap.Iterate()
-	flows := make(map[NetFlowId][]NetFlowMetrics, m.cacheMaxSize)
+	flows := make(map[ebpf2.NetFlowId][]ebpf2.NetFlowMetrics, m.cacheMaxSize)
 
-	id := NetFlowId{}
-	var metrics []NetFlowMetrics
+	id := ebpf2.NetFlowId{}
+	var metrics []ebpf2.NetFlowMetrics
 	// Changing Iterate+Delete by LookupAndDelete would prevent some possible race conditions
 	// TODO: detect whether LookupAndDelete is supported (Kernel>=4.20) and use it selectively
 	for iterator.Next(&id, &metrics) {

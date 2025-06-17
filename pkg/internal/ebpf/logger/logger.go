@@ -9,21 +9,22 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/logger"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/ringbuf"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/config"
 	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
-	"github.com/grafana/beyla/v2/pkg/internal/ebpf/ringbuf"
-	"github.com/grafana/beyla/v2/pkg/internal/request"
 )
 
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type log_info_t -target amd64,arm64 bpf_debug ../../../../bpf/logger/logger.c -- -I../../../../bpf -DBPF_DEBUG
+// TODO: remove this file and use vendored OBI file
 
-type BPFLogInfo bpf_debugLogInfoT
+type BPFLogInfo logger.BpfDebugLogInfoT
 
 type BPFLogger struct {
 	cfg        *beyla.Config
-	bpfObjects bpf_debugObjects
+	bpfObjects logger.BpfDebugObjects
 	closers    []io.Closer
 	log        *slog.Logger
 }
@@ -42,7 +43,7 @@ func New(cfg *beyla.Config) *BPFLogger {
 
 func (p *BPFLogger) Load() (*ebpf.CollectionSpec, error) {
 	if p.cfg.EBPF.BpfDebug {
-		return loadBpf_debug()
+		return logger.LoadBpfDebug()
 	}
 	return nil, errors.New("BPF debug is not enabled")
 }
@@ -88,7 +89,7 @@ func (p *BPFLogger) processLogEvent(_ *ebpfcommon.EBPFParseContext, _ *config.EB
 }
 
 func readString(data []uint8) string {
-	l := bytes.IndexByte([]byte(data), 0)
+	l := bytes.IndexByte(data, 0)
 	if l < 0 {
 		l = len(data)
 	}

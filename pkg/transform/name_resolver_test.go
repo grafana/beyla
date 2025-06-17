@@ -5,13 +5,13 @@ import (
 	"time"
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubecache/informer"
 	"github.com/stretchr/testify/assert"
 
-	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
 	kube2 "github.com/grafana/beyla/v2/pkg/internal/kube"
-	"github.com/grafana/beyla/v2/pkg/internal/request"
-	"github.com/grafana/beyla/v2/pkg/internal/svc"
-	"github.com/grafana/beyla/v2/pkg/kubecache/informer"
 )
 
 func TestSuffixPrefix(t *testing.T) {

@@ -18,6 +18,8 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+      # required for CODECOV token
+      id-token: write
     strategy:
       matrix:
         go: [ '1.24' ]
@@ -45,10 +47,16 @@ jobs:
           path: |
             testoutput/*.log
             testoutput/kind
+      - id: get-codecov-token
+        uses: grafana/shared-workflows/actions/get-vault-secrets@get-vault-secrets/v1.2.1
+        continue-on-error: true
+        with:
+          # Secrets placed in the ci/repo/grafana/beyla/codecov path in Vault
+          repo_secrets: |
+            CODECOV_TOKEN=codecov:token
       - name: Report coverage
         uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        continue-on-error: true
         with:
           file: ./testoutput/itest-covdata.txt
           flags: k8s-integration-test

@@ -4,10 +4,9 @@ import (
 	"strings"
 	"unsafe"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/sqlprune"
 	trace2 "go.opentelemetry.io/otel/trace"
-
-	"github.com/grafana/beyla/v2/pkg/internal/request"
-	"github.com/grafana/beyla/v2/pkg/internal/sqlprune"
 )
 
 func sqlKind(b []byte) request.SQLKind {
@@ -119,7 +118,7 @@ func TCPToSQLToSpan(trace *TCPRequestInfo, op, table, sql string, kind request.S
 		TraceID:       trace2.TraceID(trace.Tp.TraceId),
 		SpanID:        trace2.SpanID(trace.Tp.SpanId),
 		ParentSpanID:  trace2.SpanID(trace.Tp.ParentId),
-		Flags:         trace.Tp.Flags,
+		TraceFlags:    trace.Tp.Flags,
 		Pid: request.PidInfo{
 			HostPID:   trace.Pid.HostPid,
 			UserPID:   trace.Pid.UserPid,

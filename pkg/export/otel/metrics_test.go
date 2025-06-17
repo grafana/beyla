@@ -12,19 +12,19 @@ import (
 	"time"
 
 	"github.com/mariomac/guara/pkg/test"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	attributes "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
+	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
-	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
-	"github.com/grafana/beyla/v2/pkg/export/instrumentations"
-	"github.com/grafana/beyla/v2/pkg/internal/exec"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
-	"github.com/grafana/beyla/v2/pkg/internal/request"
-	"github.com/grafana/beyla/v2/pkg/internal/svc"
-	"github.com/grafana/beyla/v2/pkg/pipe/msg"
-	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 	"github.com/grafana/beyla/v2/test/collector"
 )
 
@@ -155,7 +155,7 @@ func TestMetrics_InternalInstrumentation(t *testing.T) {
 	}, &MetricsConfig{
 		CommonEndpoint: coll.URL, Interval: 10 * time.Millisecond, ReportersCacheLen: 16,
 		Features: []string{FeatureApplication}, Instrumentations: []string{instrumentations.InstrumentationHTTP},
-	}, attributes.Selection{}, exportMetrics, processEvents,
+	}, &attributes.SelectorConfig{}, exportMetrics, processEvents,
 	)(context.Background())
 	require.NoError(t, err)
 	go reporter(context.Background())
@@ -710,9 +710,11 @@ func makeExporter(
 			TTL:               30 * time.Minute,
 			ReportersCacheLen: 100,
 			Instrumentations:  instrumentations,
-		}, attributes.Selection{
-			attributes.HTTPServerDuration.Section: attributes.InclusionLists{
-				Include: []string{"url.path"},
+		}, &attributes.SelectorConfig{
+			SelectionCfg: attributes.Selection{
+				attributes.HTTPServerDuration.Section: attributes.InclusionLists{
+					Include: []string{"url.path"},
+				},
 			},
 		}, input, processEvents)(ctx)
 

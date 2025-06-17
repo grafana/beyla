@@ -6,15 +6,15 @@ import (
 	"time"
 
 	"github.com/mariomac/guara/pkg/test"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/connector"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/ebpf"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
-	"github.com/grafana/beyla/v2/pkg/internal/connector"
-	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
-	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
 func TestMetricsExpiration(t *testing.T) {
@@ -37,9 +37,11 @@ func TestMetricsExpiration(t *testing.T) {
 			TTL:                         3 * time.Minute,
 			SpanMetricsServiceCacheSize: 10,
 			Features:                    []string{otel.FeatureNetwork},
-		}, AttributeSelectors: attributes.Selection{
-			attributes.BeylaNetworkFlow.Section: attributes.InclusionLists{
-				Include: []string{"src_name", "dst_name"},
+		}, SelectorCfg: &attributes.SelectorConfig{
+			SelectionCfg: attributes.Selection{
+				attributes.BeylaNetworkFlow.Section: attributes.InclusionLists{
+					Include: []string{"src_name", "dst_name"},
+				},
 			},
 		}}, metrics)(ctx)
 	require.NoError(t, err)

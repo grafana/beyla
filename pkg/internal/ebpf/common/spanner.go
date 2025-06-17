@@ -5,10 +5,9 @@ import (
 	"strings"
 	"unsafe"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/sqlprune"
 	trace2 "go.opentelemetry.io/otel/trace"
-
-	"github.com/grafana/beyla/v2/pkg/internal/request"
-	"github.com/grafana/beyla/v2/pkg/internal/sqlprune"
 )
 
 func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
@@ -50,7 +49,7 @@ func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
 		TraceID:        trace2.TraceID(trace.Tp.TraceId),
 		SpanID:         trace2.SpanID(trace.Tp.SpanId),
 		ParentSpanID:   trace2.SpanID(trace.Tp.ParentId),
-		Flags:          trace.Tp.Flags,
+		TraceFlags:     trace.Tp.Flags,
 		Pid: request.PidInfo{
 			HostPID:   trace.Pid.HostPid,
 			UserPID:   trace.Pid.UserPid,
@@ -98,7 +97,7 @@ func SQLRequestTraceToSpan(trace *SQLRequestTrace) request.Span {
 		TraceID:       trace2.TraceID(trace.Tp.TraceId),
 		SpanID:        trace2.SpanID(trace.Tp.SpanId),
 		ParentSpanID:  trace2.SpanID(trace.Tp.ParentId),
-		Flags:         trace.Tp.Flags,
+		TraceFlags:    trace.Tp.Flags,
 		Pid: request.PidInfo{
 			HostPID:   trace.Pid.HostPid,
 			UserPID:   trace.Pid.UserPid,

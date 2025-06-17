@@ -3,13 +3,13 @@ package flow
 import (
 	"testing"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/ebpf"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/testutil"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/flow/transport"
-	"github.com/grafana/beyla/v2/pkg/internal/testutil"
-	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
 
 var tcp1 = &ebpf.Record{NetFlowRecordT: ebpf.NetFlowRecordT{Id: ebpf.NetFlowId{SrcPort: 1, TransportProtocol: uint8(transport.TCP)}}}

@@ -11,7 +11,6 @@ WORKDIR /src
 
 # Copy the go manifests and source
 COPY .git/ .git/
-COPY bpf/ bpf/
 COPY cmd/ cmd/
 COPY pkg/ pkg/
 COPY vendor/ vendor/

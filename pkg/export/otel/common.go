@@ -14,6 +14,9 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/google/uuid"
 	"github.com/hashicorp/golang-lru/v2/simplelru"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	attributes "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/expire"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
@@ -25,9 +28,6 @@ import (
 	"google.golang.org/grpc/credentials"
 
 	"github.com/grafana/beyla/v2/pkg/buildinfo"
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
-	"github.com/grafana/beyla/v2/pkg/export/expire"
-	"github.com/grafana/beyla/v2/pkg/internal/svc"
 )
 
 // Protocol values for the OTEL_EXPORTER_OTLP_PROTOCOL, OTEL_EXPORTER_OTLP_TRACES_PROTOCOL and

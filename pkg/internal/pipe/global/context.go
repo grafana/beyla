@@ -1,8 +1,9 @@
 package global
 
 import (
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
-	"github.com/grafana/beyla/v2/pkg/internal/connector"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/connector"
+	attributes "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
+
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 	kube2 "github.com/grafana/beyla/v2/pkg/internal/kube"
 )

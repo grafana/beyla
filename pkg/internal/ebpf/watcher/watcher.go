@@ -8,22 +8,20 @@ import (
 	"log/slog"
 
 	"github.com/cilium/ebpf"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/ringbuf"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/watcher"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/config"
 	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
-	"github.com/grafana/beyla/v2/pkg/internal/ebpf/ringbuf"
-	"github.com/grafana/beyla/v2/pkg/internal/request"
 )
 
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type watch_info_t -target amd64,arm64 bpf ../../../../bpf/watcher/watcher.c -- -I../../../../bpf
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type watch_info_t -target amd64,arm64 bpf_debug ../../../../bpf/watcher/watcher.c -- -I../../../../bpf -DBPF_DEBUG
-
-type BPFWatchInfo bpfWatchInfoT
+type BPFWatchInfo watcher.BpfWatchInfoT
 
 type Watcher struct {
 	cfg        *beyla.Config
-	bpfObjects bpfObjects
+	bpfObjects watcher.BpfObjects
 	closers    []io.Closer
 	log        *slog.Logger
 	events     chan<- Event
@@ -51,9 +49,9 @@ func New(cfg *beyla.Config, events chan<- Event) *Watcher {
 }
 
 func (p *Watcher) Load() (*ebpf.CollectionSpec, error) {
-	loader := loadBpf
+	loader := watcher.LoadBpf
 	if p.cfg.EBPF.BpfDebug {
-		loader = loadBpf_debug
+		loader = watcher.LoadBpfDebug
 	}
 
 	return loader()

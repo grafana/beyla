@@ -24,13 +24,13 @@ import (
 	"log/slog"
 
 	"github.com/hashicorp/golang-lru/v2/simplelru"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/ebpf"
+	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubecache/informer"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 
-	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
 	"github.com/grafana/beyla/v2/pkg/internal/kube"
-	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
-	"github.com/grafana/beyla/v2/pkg/kubecache/informer"
-	"github.com/grafana/beyla/v2/pkg/pipe/msg"
-	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 	"github.com/grafana/beyla/v2/pkg/transform"
 )
 

@@ -4,7 +4,7 @@ go 1.24.1
 
 // opentelemetry-ebpf-instrumentation is not downloaded directly via go mod
 // but included as a go submodule
-replace github.com/open-telemetry/opentelemetry-ebpf-instrumentation => ../opentelemetry-ebpf-instrumentation
+replace github.com/open-telemetry/opentelemetry-ebpf-instrumentation => ./.obi-src
 
 require (
 	github.com/caarlos0/env/v9 v9.0.0

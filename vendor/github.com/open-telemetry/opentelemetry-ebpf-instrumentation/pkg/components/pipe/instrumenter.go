@@ -30,13 +30,22 @@ type graphFunctions struct {
 
 // Build instantiates the whole instrumentation --> processing --> submit
 // pipeline graph and returns it as a startable item
-func Build(ctx context.Context, config *beyla.Config, ctxInfo *global.ContextInfo, tracesCh *msg.Queue[[]request.Span], processEventsCh *msg.Queue[exec.ProcessEvent]) (*Instrumenter, error) {
-	return newGraphBuilder(config, ctxInfo, tracesCh, processEventsCh).buildGraph(ctx)
+func Build(
+	ctx context.Context, config *beyla.Config, ctxInfo *global.ContextInfo, tracesCh *msg.Queue[[]request.Span], processEventsCh *msg.Queue[exec.ProcessEvent],
+	resourceOptions ...otel.ResourceOpt,
+) (*Instrumenter, error) {
+	return newGraphBuilder(config, ctxInfo, tracesCh, processEventsCh, resourceOptions...).buildGraph(ctx)
 }
 
 // private constructor that can be instantiated from tests to override the node providers
 // and offsets inspector
-func newGraphBuilder(config *beyla.Config, ctxInfo *global.ContextInfo, tracesCh *msg.Queue[[]request.Span], processEventsCh *msg.Queue[exec.ProcessEvent]) *graphFunctions {
+func newGraphBuilder(
+	config *beyla.Config,
+	ctxInfo *global.ContextInfo,
+	tracesCh *msg.Queue[[]request.Span],
+	processEventsCh *msg.Queue[exec.ProcessEvent],
+	resourceOptions ...otel.ResourceOpt,
+) *graphFunctions {
 	// First, we create a graph builder
 	swi := &swarm.Instancer{}
 	gb := &graphFunctions{
@@ -98,7 +107,10 @@ func newGraphBuilder(config *beyla.Config, ctxInfo *global.ContextInfo, tracesCh
 		processEventsCh,
 	))
 
-	swi.Add(otel.TracesReceiver(ctxInfo, config.Traces, config.Metrics.SpanMetricsEnabled(), selectorCfg, exportableSpans))
+	swi.Add(otel.TracesReceiver(
+		ctxInfo, config.Traces, config.Metrics.SpanMetricsEnabled(), selectorCfg, exportableSpans,
+		resourceOptions...,
+	))
 	swi.Add(prom.PrometheusEndpoint(ctxInfo, &config.Prometheus, selectorCfg, exportableSpans, processEventsCh))
 	swi.Add(prom.BPFMetrics(ctxInfo, &config.Prometheus))
 

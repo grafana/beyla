@@ -9,10 +9,13 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/pipe"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/pipe/global"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
+	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
+	otel2 "github.com/grafana/beyla/v2/pkg/export/otel"
 )
 
 func ilog() *slog.Logger {
@@ -33,7 +36,8 @@ func Build(ctx context.Context, config *beyla.Config, ctxInfo *global.ContextInf
 	// 2. the process metrics swarm pipeline, connected to the output of (1)
 	swi := &swarm.Instancer{}
 	swi.Add(func(ctx context.Context) (swarm.RunFunc, error) {
-		obiSwarm, err := pipe.Build(ctx, config.AsOBI(), ctxInfo, tracesCh, processEventsCh)
+		obiSwarm, err := pipe.Build(ctx, config.AsOBI(), ctxInfo, tracesCh, processEventsCh,
+			otel.OverrideResourceAttrs(semconv.OTelLibraryName(otel2.ReporterName)))
 		if err != nil {
 			return nil, fmt.Errorf("instantiating OBI app pipeline: %w", err)
 		}

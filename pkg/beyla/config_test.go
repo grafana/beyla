@@ -17,6 +17,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/imetrics"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/kube"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/transform/cidr"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/traces"
 	attributes "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/debug"
@@ -189,7 +190,7 @@ network:
 			},
 		},
 		Attributes: Attributes{
-			InstanceID: InstanceIDConfig{
+			InstanceID: traces.InstanceIDConfig{
 				HostnameDNSResolution: true,
 			},
 			Kubernetes: transform.KubernetesDecorator{

@@ -12,10 +12,6 @@ data:
       select:
         process_*:
           include: ["*"]
-    filter:
-      application:
-        http_route:
-          not_match: "/metrics"
     trace_printer: text
     log_level: debug
     discovery:
@@ -34,6 +30,8 @@ data:
     routes:
       patterns:
         - /pingpong
+      ignored_patterns:
+        - /metrics
       unmatched: path
     otel_metrics_export:
       endpoint: http://otelcol:4318

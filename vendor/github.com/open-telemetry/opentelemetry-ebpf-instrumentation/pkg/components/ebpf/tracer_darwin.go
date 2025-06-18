@@ -40,6 +40,6 @@ func (pt *ProcessTracer) NewExecutableInstance(_ *Instrumentable) error {
 
 func (pt *ProcessTracer) UnlinkExecutable(_ *exec.FileInfo) {}
 
-func RunUtilityTracer(_ context.Context, _ UtilityTracer) error {
+func RunUtilityTracer(_ context.Context, _ *ebpfcommon.EBPFEventContext, _ UtilityTracer) error {
 	return nil
 }

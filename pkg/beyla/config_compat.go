@@ -2,7 +2,7 @@ package beyla
 
 import "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/imetrics"
 
-// structs in this file mimic some structs in from OBI, replacing BEYLA_*
+// structs in this file mimic some structs in from OBI, replacing OTEL_EBPF_*
 // by BEYLA_* for backwards compatibility
 
 // mimic imetrics.Config in .obi-src/pkg/imetrics/imetrics.go
@@ -14,10 +14,4 @@ type InternalMetricsConfig struct {
 type InternalPromConfig struct {
 	Port int    `yaml:"port,omitempty" env:"BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT"`
 	Path string `yaml:"path,omitempty" env:"BEYLA_INTERNAL_METRICS_PROMETHEUS_PATH"`
-}
-
-// mimic traces.InstanceIDConfig
-type InstanceIDConfig struct {
-	HostnameDNSResolution bool   `yaml:"dns" env:"BEYLA_HOSTNAME_DNS_RESOLUTION"`
-	OverrideHostname      string `yaml:"override_hostname" env:"BEYLA_HOSTNAME"`
 }

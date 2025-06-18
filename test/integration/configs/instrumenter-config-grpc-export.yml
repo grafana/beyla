@@ -1,6 +1,9 @@
 routes:
   patterns:
     - /basic/:rnd
+  ignored_patterns:
+    - /metrics
+  ignore_mode: traces
   unmatched: path
 otel_metrics_export:
   endpoint: http://otelcol:4317
@@ -12,7 +15,3 @@ attributes:
   select:
     "*":
       include: ["*"]
-filter:
-  application:
-    http_route:
-      not_match: "/metrics"

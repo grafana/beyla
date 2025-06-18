@@ -94,6 +94,7 @@ network:
 		"BEYLA_OPEN_PORT": "", "BEYLA_EXECUTABLE_NAME": "", "OTEL_SERVICE_NAME": "",
 		"OTEL_EXPORTER_OTLP_ENDPOINT": "", "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "", "GRAFANA_CLOUD_SUBMIT": "",
 	})
+	setupOBIEnvVars()
 
 	cfg, err := LoadConfig(userConfig)
 	require.NoError(t, err)
@@ -247,6 +248,33 @@ network:
 			},
 		},
 	}, cfg)
+}
+
+func appendAlternateEnvVar(env, oldPrefix, altPrefix string) bool {
+	oldLen := len(oldPrefix)
+	if len(env) > (oldLen+1) && strings.HasPrefix(env, oldPrefix) {
+		eqIdx := strings.IndexByte(env, '=')
+		if eqIdx > (oldLen + 1) {
+			key := env[:eqIdx]
+			val := env[eqIdx+1:]
+			newKey := altPrefix + key[oldLen:]
+			// Only set if not already set
+			if os.Getenv(newKey) == "" {
+				os.Setenv(newKey, val)
+			}
+			return true
+		}
+	}
+	return false
+}
+
+func setupOBIEnvVars() {
+	for _, env := range os.Environ() {
+		appended := appendAlternateEnvVar(env, "BEYLA_", "OTEL_EBPF_")
+		if !appended {
+			appendAlternateEnvVar(env, "OTEL_EBPF_", "BEYLA_")
+		}
+	}
 }
 
 func TestConfig_ServiceName(t *testing.T) {

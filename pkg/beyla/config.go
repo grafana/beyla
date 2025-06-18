@@ -130,7 +130,7 @@ var DefaultConfig = Config{
 		InstanceID: traces.InstanceIDConfig{
 			HostnameDNSResolution: true,
 		},
-		Kubernetes: transform.KubernetesDecorator{
+		Kubernetes: KubernetesDecorator{
 			Enable:                kubeflags.EnabledDefault,
 			InformersSyncTimeout:  30 * time.Second,
 			InformersResyncPeriod: 30 * time.Minute,
@@ -269,11 +269,11 @@ func (t TracesReceiverConfig) Enabled() bool {
 // Attributes configures the decoration of some extra attributes that will be
 // added to each span
 type Attributes struct {
-	Kubernetes           transform.KubernetesDecorator `yaml:"kubernetes"`
-	InstanceID           traces.InstanceIDConfig       `yaml:"instance_id"`
-	Select               attributes.Selection          `yaml:"select"`
-	HostID               HostIDConfig                  `yaml:"host_id"`
-	ExtraGroupAttributes map[string][]attr.Name        `yaml:"extra_group_attributes"`
+	Kubernetes           KubernetesDecorator     `yaml:"kubernetes"`
+	InstanceID           traces.InstanceIDConfig `yaml:"instance_id"`
+	Select               attributes.Selection    `yaml:"select"`
+	HostID               HostIDConfig            `yaml:"host_id"`
+	ExtraGroupAttributes map[string][]attr.Name  `yaml:"extra_group_attributes"`
 }
 
 type HostIDConfig struct {

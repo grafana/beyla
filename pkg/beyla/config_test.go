@@ -193,7 +193,7 @@ network:
 			InstanceID: traces.InstanceIDConfig{
 				HostnameDNSResolution: true,
 			},
-			Kubernetes: transform.KubernetesDecorator{
+			Kubernetes: KubernetesDecorator{
 				KubeconfigPath:        "/foo/bar",
 				Enable:                kubeflags.EnabledTrue,
 				InformersSyncTimeout:  30 * time.Second,

@@ -3,16 +3,16 @@ package components
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/grafana/beyla/v2/pkg/beyla"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/transform"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestServiceNameTemplate(t *testing.T) {
 
 	cfg := &beyla.Config{
 		Attributes: beyla.Attributes{
-			Kubernetes: beyla.KubernetesDecorator{
+			Kubernetes: transform.KubernetesDecorator{
 				ServiceNameTemplate: "{{asdf}}",
 			},
 		},

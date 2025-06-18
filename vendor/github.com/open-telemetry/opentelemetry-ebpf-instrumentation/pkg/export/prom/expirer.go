@@ -20,8 +20,8 @@ type Expirer[T prometheus.Metric] struct {
 }
 
 type MetricEntry[T prometheus.Metric] struct {
-	metric    T
-	labelVals []string
+	Metric    T
+	LabelVals []string
 }
 
 // NewExpirer creates a metric that wraps a given CounterVec. Its labeled instances are dropped
@@ -47,8 +47,8 @@ func (ex *Expirer[T]) WithLabelValues(lbls ...string) *MetricEntry[T] {
 			panic(err)
 		}
 		return &MetricEntry[T]{
-			metric:    c.(T),
-			labelVals: lbls,
+			Metric:    c.(T),
+			LabelVals: lbls,
 		}
 	})
 }
@@ -62,10 +62,10 @@ func (ex *Expirer[T]) Describe(descs chan<- *prometheus.Desc) {
 func (ex *Expirer[T]) Collect(metrics chan<- prometheus.Metric) {
 	log := plog()
 	for _, old := range ex.entries.DeleteExpired() {
-		ex.wrapped.DeleteLabelValues(old.labelVals...)
+		ex.wrapped.DeleteLabelValues(old.LabelVals...)
 		log.With("labelValues", old).Debug("deleting old Prometheus metric")
 	}
 	for _, m := range ex.entries.All() {
-		metrics <- m.metric
+		metrics <- m.Metric
 	}
 }

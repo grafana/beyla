@@ -13,14 +13,13 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/filter"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
-	obitransform "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/transform"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/transform"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/export/alloy"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/export/prom"
 	"github.com/grafana/beyla/v2/pkg/internal/traces"
-	"github.com/grafana/beyla/v2/pkg/transform"
 )
 
 // builder with injectable instantiators for unit testing
@@ -70,19 +69,19 @@ func newGraphBuilder(config *beyla.Config, ctxInfo *global.ContextInfo, tracesCh
 
 	routerToKubeDecorator := newQueue()
 	swi.Add(transform.RoutesProvider(
-		config.Routes,
+		obiCfg.Routes,
 		tracesReaderToRouter,
 		routerToKubeDecorator,
 	))
 
 	kubeDecoratorToNameResolver := newQueue()
-	swi.Add(obitransform.KubeDecoratorProvider(
+	swi.Add(transform.KubeDecoratorProvider(
 		ctxInfo, &obiCfg.Attributes.Kubernetes,
 		routerToKubeDecorator, kubeDecoratorToNameResolver,
 	))
 
 	nameResolverToAttrFilter := newQueue()
-	swi.Add(obitransform.NameResolutionProvider(ctxInfo, obiCfg.NameResolver,
+	swi.Add(transform.NameResolutionProvider(ctxInfo, obiCfg.NameResolver,
 		kubeDecoratorToNameResolver, nameResolverToAttrFilter))
 
 	exportableSpans := newQueue()

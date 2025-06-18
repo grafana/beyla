@@ -32,7 +32,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
 	"github.com/grafana/beyla/v2/pkg/internal/traces"
 	servicesextra "github.com/grafana/beyla/v2/pkg/services"
-	"github.com/grafana/beyla/v2/pkg/transform"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/transform"
 )
 
 type envMap map[string]string
@@ -193,7 +193,7 @@ network:
 			InstanceID: traces.InstanceIDConfig{
 				HostnameDNSResolution: true,
 			},
-			Kubernetes: KubernetesDecorator{
+			Kubernetes: transform.KubernetesDecorator{
 				KubeconfigPath:        "/foo/bar",
 				Enable:                kubeflags.EnabledTrue,
 				InformersSyncTimeout:  30 * time.Second,
@@ -218,7 +218,7 @@ network:
 			Unmatch:      transform.UnmatchHeuristic,
 			WildcardChar: "*",
 		},
-		NameResolver: &nameResolverConfig{
+		NameResolver: &transform.NameResolverConfig{
 			Sources:  []string{"k8s", "dns"},
 			CacheLen: 1024,
 			CacheTTL: 5 * time.Minute,

@@ -20,6 +20,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/filter"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubeflags"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/services"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/transform"
 	otelconsumer "go.opentelemetry.io/collector/consumer"
 	"gopkg.in/yaml.v3"
 
@@ -30,7 +31,6 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
 	"github.com/grafana/beyla/v2/pkg/internal/traces"
 	servicesextra "github.com/grafana/beyla/v2/pkg/services"
-	"github.com/grafana/beyla/v2/pkg/transform"
 )
 
 const ReporterLRUSize = 256
@@ -79,7 +79,7 @@ var DefaultConfig = Config{
 			Submit: []string{"traces"},
 		},
 	},
-	NameResolver: &nameResolverConfig{
+	NameResolver: &transform.NameResolverConfig{
 		Sources:  []string{"k8s"},
 		CacheLen: 1024,
 		CacheTTL: 5 * time.Minute,
@@ -130,7 +130,7 @@ var DefaultConfig = Config{
 		InstanceID: traces.InstanceIDConfig{
 			HostnameDNSResolution: true,
 		},
-		Kubernetes: KubernetesDecorator{
+		Kubernetes: transform.KubernetesDecorator{
 			Enable:                kubeflags.EnabledDefault,
 			InformersSyncTimeout:  30 * time.Second,
 			InformersResyncPeriod: 30 * time.Minute,
@@ -186,11 +186,11 @@ type Config struct {
 	// Routes is an optional node. If not set, data will be directly forwarded to exporters.
 	Routes *transform.RoutesConfig `yaml:"routes"`
 	// nolint:undoc
-	NameResolver *nameResolverConfig   `yaml:"name_resolver"`
-	Metrics      otel.MetricsConfig    `yaml:"otel_metrics_export"`
-	Traces       otel.TracesConfig     `yaml:"otel_traces_export"`
-	Prometheus   prom.PrometheusConfig `yaml:"prometheus_export"`
-	TracePrinter debug.TracePrinter    `yaml:"trace_printer" env:"BEYLA_TRACE_PRINTER"`
+	NameResolver *transform.NameResolverConfig `yaml:"name_resolver"`
+	Metrics      otel.MetricsConfig            `yaml:"otel_metrics_export"`
+	Traces       otel.TracesConfig             `yaml:"otel_traces_export"`
+	Prometheus   prom.PrometheusConfig         `yaml:"prometheus_export"`
+	TracePrinter debug.TracePrinter            `yaml:"trace_printer" env:"BEYLA_TRACE_PRINTER"`
 
 	// Exec allows selecting the instrumented executable whose complete path contains the Exec value.
 	// Deprecated: Use BEYLA_AUTO_TARGET_EXE
@@ -269,11 +269,11 @@ func (t TracesReceiverConfig) Enabled() bool {
 // Attributes configures the decoration of some extra attributes that will be
 // added to each span
 type Attributes struct {
-	Kubernetes           KubernetesDecorator     `yaml:"kubernetes"`
-	InstanceID           traces.InstanceIDConfig `yaml:"instance_id"`
-	Select               attributes.Selection    `yaml:"select"`
-	HostID               HostIDConfig            `yaml:"host_id"`
-	ExtraGroupAttributes map[string][]attr.Name  `yaml:"extra_group_attributes"`
+	Kubernetes           transform.KubernetesDecorator `yaml:"kubernetes"`
+	InstanceID           traces.InstanceIDConfig       `yaml:"instance_id"`
+	Select               attributes.Selection          `yaml:"select"`
+	HostID               HostIDConfig                  `yaml:"host_id"`
+	ExtraGroupAttributes map[string][]attr.Name        `yaml:"extra_group_attributes"`
 }
 
 type HostIDConfig struct {

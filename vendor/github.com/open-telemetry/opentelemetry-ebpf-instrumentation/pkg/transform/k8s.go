@@ -169,7 +169,7 @@ mainLoop:
 			log.Debug("annotating process event", "event", pe)
 
 			if podMeta, containerName := md.db.PodContainerByPIDNs(pe.File.Ns); podMeta != nil {
-				appendMetadata(md.db, &pe.File.Service, podMeta, md.clusterName, containerName)
+				AppendKubeMetadata(md.db, &pe.File.Service, podMeta, md.clusterName, containerName)
 			} else {
 				// do not leave the service attributes map as nil
 				pe.File.Service.Metadata = map[attr.Name]string{}
@@ -184,7 +184,7 @@ mainLoop:
 
 func (md *metadataDecorator) do(span *request.Span) {
 	if podMeta, containerName := md.db.PodContainerByPIDNs(span.Pid.Namespace); podMeta != nil {
-		appendMetadata(md.db, &span.Service, podMeta, md.clusterName, containerName)
+		AppendKubeMetadata(md.db, &span.Service, podMeta, md.clusterName, containerName)
 	} else {
 		// do not leave the service attributes map as nil
 		span.Service.Metadata = map[attr.Name]string{}
@@ -198,7 +198,10 @@ func (md *metadataDecorator) do(span *request.Span) {
 	}
 }
 
-func appendMetadata(db *kube.Store, svc *svc.Attrs, meta *kube.CachedObjMeta, clusterName, containerName string) {
+// AppendKubeMetadata populates some metadata values in the passed svc.Attrs.
+// This method should be invoked by any entity willing to follow a common policy for
+// setting metadata attributes. For example this metadataDecorator or the survey informer
+func AppendKubeMetadata(db *kube.Store, svc *svc.Attrs, meta *kube.CachedObjMeta, clusterName, containerName string) {
 	if meta.Meta.Pod == nil {
 		// if this message happen, there is a bug
 		klog().Debug("pod metadata for is nil. Ignoring decoration", "meta", meta)

@@ -1,6 +1,8 @@
 package beyla
 
-import "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/imetrics"
+import (
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/imetrics"
+)
 
 // structs in this file mimic some structs in from OBI, replacing OTEL_EBPF_*
 // by BEYLA_* for backwards compatibility

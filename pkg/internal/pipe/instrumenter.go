@@ -13,13 +13,13 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/filter"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/transform"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/export/alloy"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/export/prom"
 	"github.com/grafana/beyla/v2/pkg/internal/traces"
-	"github.com/grafana/beyla/v2/pkg/transform"
 )
 
 // builder with injectable instantiators for unit testing
@@ -55,6 +55,8 @@ func newGraphBuilder(config *beyla.Config, ctxInfo *global.ContextInfo, tracesCh
 		return msg.NewQueue[[]request.Span](msg.ChannelBufferLen(config.ChannelBufferLen))
 	}
 
+	obiCfg := config.AsOBI()
+
 	// Second, we register instancers for each pipe node, as well as communication queues between them
 	// TODO: consider moving the queues to a publis structure so when Beyla is used as library, other components can
 	// listen to the messages and expanding the Pipeline
@@ -67,19 +69,19 @@ func newGraphBuilder(config *beyla.Config, ctxInfo *global.ContextInfo, tracesCh
 
 	routerToKubeDecorator := newQueue()
 	swi.Add(transform.RoutesProvider(
-		config.Routes,
+		obiCfg.Routes,
 		tracesReaderToRouter,
 		routerToKubeDecorator,
 	))
 
 	kubeDecoratorToNameResolver := newQueue()
 	swi.Add(transform.KubeDecoratorProvider(
-		ctxInfo, &config.Attributes.Kubernetes,
+		ctxInfo, &obiCfg.Attributes.Kubernetes,
 		routerToKubeDecorator, kubeDecoratorToNameResolver,
 	))
 
 	nameResolverToAttrFilter := newQueue()
-	swi.Add(transform.NameResolutionProvider(ctxInfo, config.NameResolver,
+	swi.Add(transform.NameResolutionProvider(ctxInfo, obiCfg.NameResolver,
 		kubeDecoratorToNameResolver, nameResolverToAttrFilter))
 
 	exportableSpans := newQueue()

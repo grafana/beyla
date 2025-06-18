@@ -152,7 +152,7 @@ func (r *netMetricsReporter) observeFlowBytes(flow *ebpf.Record) {
 		return
 	}
 	r.flowBytes.WithLabelValues(labelValues(flow, r.flowAttrs)...).
-		metric.Add(float64(flow.Metrics.Bytes))
+		Metric.Add(float64(flow.Metrics.Bytes))
 }
 
 func (r *netMetricsReporter) observeInterZone(flow *ebpf.Record) {
@@ -160,5 +160,5 @@ func (r *netMetricsReporter) observeInterZone(flow *ebpf.Record) {
 		return
 	}
 	r.interZone.WithLabelValues(labelValues(flow, r.interZoneAttrs)...).
-		metric.Add(float64(flow.Metrics.Bytes))
+		Metric.Add(float64(flow.Metrics.Bytes))
 }

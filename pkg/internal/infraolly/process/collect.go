@@ -55,7 +55,7 @@ type Collector struct {
 // NewCollectorProvider creates and returns a new process Collector, given an agent context.
 func NewCollectorProvider(
 	cfg *CollectConfig,
-	in *msg.Queue[[]request.Span],
+	in <-chan []request.Span,
 	out *msg.Queue[[]*Status],
 ) swarm.InstanceFunc {
 	return func(_ context.Context) (swarm.RunFunc, error) {
@@ -66,7 +66,7 @@ func NewCollectorProvider(
 			harvest:            newHarvester(cfg, cache),
 			cache:              cache,
 			log:                pslog(),
-			newPids:            in.Subscribe(),
+			newPids:            in,
 			collectedProcesses: out,
 		}
 		return collector.Run, nil

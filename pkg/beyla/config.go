@@ -15,6 +15,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/tcmanager"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/imetrics"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/kube"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/traces"
 	attributes "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/debug"
@@ -31,7 +32,6 @@ import (
 	"github.com/grafana/beyla/v2/pkg/export/prom"
 	cfgutil "github.com/grafana/beyla/v2/pkg/helpers/config"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
-	"github.com/grafana/beyla/v2/pkg/internal/traces"
 	servicesextra "github.com/grafana/beyla/v2/pkg/services"
 )
 
@@ -298,7 +298,7 @@ func (c *Config) AsOBI() *obi.Config {
 		obiCfg := &obi.Config{}
 		cfgutil.Convert(c, obiCfg, map[string]string{
 			// here, some hints might be useful if we need to skip values that are non-existing in OBI,
-			// or, renamed. For example:
+			// or renamed. For example:
 			// ".Some.Renamed.FieldInDst": "NameInSrc",
 			// ".Some.Missing.FieldInSrc": cfgutil.SkipConversion,
 		})

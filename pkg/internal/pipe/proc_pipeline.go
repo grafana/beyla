@@ -33,13 +33,15 @@ func ProcessMetricsSwarmInstancer(
 	cfg *beyla.Config,
 	appInputSpans *msg.Queue[[]request.Span],
 ) swarm.InstanceFunc {
+	if !isProcessSubPipeEnabled(cfg) {
+		// returns nothing. Nothing will subscribe to the ProcessSubPipeInput, no extra
+		// load will be held
+		return swarm.DirectInstance(func(_ context.Context) {})
+	}
+	// needs to be instantiated here to make sure all the messages from the
+	// vendored OBI app swarm are catched
+	appInputSpansCh := appInputSpans.Subscribe()
 	return func(ctx context.Context) (swarm.RunFunc, error) {
-		if !isProcessSubPipeEnabled(cfg) {
-			// returns nothing. Nothing will subscribe to the ProcessSubPipeInput, no extra
-			// load will be held
-			return swarm.EmptyRunFunc()
-		}
-
 		selectorCfg := &attributes.SelectorConfig{
 			SelectionCfg:            cfg.Attributes.Select,
 			ExtraGroupAttributesCfg: cfg.Attributes.ExtraGroupAttributes,
@@ -51,7 +53,7 @@ func ProcessMetricsSwarmInstancer(
 		builder := swarm.Instancer{}
 		builder.Add(process.NewCollectorProvider(
 			&cfg.Processes,
-			appInputSpans,
+			appInputSpansCh,
 			processCollectStatus,
 		))
 		builder.Add(otel.ProcMetricsExporterProvider(

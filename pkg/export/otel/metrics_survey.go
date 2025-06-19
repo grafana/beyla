@@ -82,7 +82,7 @@ func newSurveyMetricsReporter(
 		metric.WithReader(metric.NewPeriodicReader(smr.exporter,
 			metric.WithInterval(smr.cfg.Interval))),
 	)
-	meter := smr.provider.Meter(reporterName)
+	meter := smr.provider.Meter(ReporterName)
 	smr.surveyInfo, err = meter.Int64UpDownCounter(SurveyInfo)
 	if err != nil {
 		return nil, fmt.Errorf("creating survey info: %w", err)

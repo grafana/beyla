@@ -236,7 +236,7 @@ func (me *procMetricsExporter) newMetricSet(procID *process.ID) (*procMetrics, e
 		provider: metric.NewMeterProvider(opts...),
 	}
 
-	meter := m.provider.Meter(reporterName)
+	meter := m.provider.Meter(ReporterName)
 
 	if cpuTime, err := meter.Float64Counter(
 		extraattributes.ProcessCPUTime.OTEL, metric2.WithUnit("s"),

@@ -378,7 +378,7 @@ github.com/munnerz/goautoneg
 # github.com/mxk/go-flowrate v0.0.0-20140419014527-cca7078d478f
 ## explicit
 github.com/mxk/go-flowrate/flowrate
-# github.com/open-telemetry/opentelemetry-ebpf-instrumentation v0.0.0-20250619120827-ca73810626e7 => ./.obi-src
+# github.com/open-telemetry/opentelemetry-ebpf-instrumentation v0.0.0-20250619130105-445d756fea2d => ./.obi-src
 ## explicit; go 1.24.1
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla
@@ -417,12 +417,12 @@ github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/neto
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/transform/k8s
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/nodejs
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/otelsdk
+github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/pipe
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/pipe/global
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/rdns/ebpf/xdp
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/rdns/store
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/sqlprune
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc
-github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/testutil
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/traces
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/traces/hostname
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/transform/route

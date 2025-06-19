@@ -508,7 +508,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 	addr = res.Metric["client_address"]
 	assert.NotNil(t, addr)
 
-	// Check that we never recorded metrics for /metrics, in the basic test only traces are ignored
+	// Check that we recorded metrics for /metrics, in the basic test only traces are ignored
 	results, err = pq.Query(`http_server_request_duration_seconds_count{http_route="/metrics"}`)
 	require.NoError(t, err)
 	enoughPromResults(t, results)

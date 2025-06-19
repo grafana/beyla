@@ -15,6 +15,7 @@ import (
 	ebpfcommon "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/common"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/pipe/global"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/traces"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/transform"
@@ -22,7 +23,6 @@ import (
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/internal/discover"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe"
-	"github.com/grafana/beyla/v2/pkg/internal/traces"
 )
 
 var errShutdownTimeout = errors.New("graceful shutdown has timed out")
@@ -37,7 +37,7 @@ type Instrumenter struct {
 	config    *beyla.Config
 	ctxInfo   *global.ContextInfo
 	tracersWg *sync.WaitGroup
-	bp        *pipe.Instrumenter
+	bp        *swarm.Runner
 
 	// tracesInput is used to communicate the found traces between the ProcessFinder and
 	// the ProcessTracer.
@@ -66,7 +66,7 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 	processEventsHostDecorated := newEventQueue()
 
 	swi.Add(traces.HostProcessEventDecoratorProvider(
-		&config.Attributes.InstanceID,
+		&obiCfg.Attributes.InstanceID,
 		processEventsInput,
 		processEventsHostDecorated,
 	))
@@ -169,9 +169,9 @@ func (i *Instrumenter) ReadAndForward(ctx context.Context) error {
 
 	log.Info("Starting main node")
 
-	i.bp.Run(ctx)
+	i.bp.Start(ctx)
 
-	<-ctx.Done()
+	<-i.bp.Done()
 
 	log.Info("exiting auto-instrumenter")
 

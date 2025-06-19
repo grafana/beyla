@@ -54,7 +54,7 @@ func tlog() *slog.Logger {
 	return slog.With("component", "otel.TracesReporter")
 }
 
-const reporterName = "github.com/grafana/beyla"
+const ReporterName = "github.com/grafana/beyla"
 
 type TraceSpanAndAttributes struct {
 	Span       *request.Span
@@ -509,7 +509,7 @@ func generateTracesWithAttributes(cache *expirable2.LRU[svc.UID, []attribute.Key
 	resourceAttrs := traceAppResourceAttrs(cache, hostID, svc)
 	resourceAttrs = append(resourceAttrs, envResourceAttrs...)
 	resourceAttrsMap := attrsToMap(resourceAttrs)
-	resourceAttrsMap.PutStr(string(semconv.OTelLibraryNameKey), reporterName)
+	resourceAttrsMap.PutStr(string(semconv.OTelLibraryNameKey), ReporterName)
 	resourceAttrsMap.MoveTo(rs.Resource().Attributes())
 
 	for _, spanWithAttributes := range spans {

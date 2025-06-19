@@ -1,8 +1,11 @@
 package http
 
 import (
+	"bytes"
+	"context"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/vladimirvivien/gexe/vars"
@@ -10,22 +13,38 @@ import (
 
 // ResourceReader provides types and methods to read content of resources from a server using HTTP
 type ResourceReader struct {
-	client *http.Client
-	err    error
-	url    string
-	vars   *vars.Variables
+	client  *http.Client
+	err     error
+	url     string
+	vars    *vars.Variables
+	ctx     context.Context
+	data    io.Reader
+	headers http.Header
+}
+
+// GetWithContextVars uses context ctx and session variables to initiate
+// a "GET" operation for the specified resource
+func GetWithContextVars(ctx context.Context, url string, variables *vars.Variables) *ResourceReader {
+	if variables == nil {
+		variables = &vars.Variables{}
+	}
+
+	return &ResourceReader{
+		ctx:    ctx,
+		url:    variables.Eval(url),
+		client: &http.Client{},
+		vars:   &vars.Variables{},
+	}
+}
+
+// GetWithVars uses session vars to initiate  a "GET" operation
+func GetWithVars(url string, variables *vars.Variables) *ResourceReader {
+	return GetWithContextVars(context.Background(), url, variables)
 }
 
 // Get initiates a "GET" operation for the specified resource
 func Get(url string) *ResourceReader {
-	return &ResourceReader{url: url, client: &http.Client{}, vars: &vars.Variables{}}
-}
-
-// Get initiates a "GET" operation and sets session variables
-func GetWithVars(url string, variables *vars.Variables) *ResourceReader {
-	r := Get(variables.Eval(url))
-	r.vars = variables
-	return r
+	return GetWithContextVars(context.Background(), url, &vars.Variables{})
 }
 
 // SetVars sets session variables for ResourceReader
@@ -45,46 +64,60 @@ func (r *ResourceReader) WithTimeout(to time.Duration) *ResourceReader {
 	return r
 }
 
-// Do invokes the client.Get to "GET" the content from server
-// Use Response.Err() to access server response errors
+// WithContext sets the context for the HTTP request
+func (r *ResourceReader) WithContext(ctx context.Context) *ResourceReader {
+	r.ctx = ctx
+	return r
+}
+
+// WithHeaders sets all HTTP headers for GET request
+func (r *ResourceReader) WithHeaders(h http.Header) *ResourceReader {
+	r.headers = h
+	return r
+}
+
+// AddHeader convenience method to add request header
+func (r *ResourceReader) AddHeader(key, value string) *ResourceReader {
+	r.headers.Add(r.vars.Eval(key), r.vars.Eval(value))
+	return r
+}
+
+// SetHeader convenience method to set a specific header
+func (r *ResourceReader) SetHeader(key, value string) *ResourceReader {
+	r.headers.Set(r.vars.Eval(key), r.vars.Eval(value))
+	return r
+}
+
+// RequestString sets GET request data as string
+func (r *ResourceReader) String(val string) *ResourceReader {
+	r.data = strings.NewReader(r.vars.Eval(val))
+	return r
+}
+
+// RequestBytes sets GET request data as byte slice
+func (r *ResourceReader) Bytes(data []byte) *ResourceReader {
+	r.data = bytes.NewReader(data)
+	return r
+}
+
+// RequestBody sets GET request content as io.Reader
+func (r *ResourceReader) Body(body io.Reader) *ResourceReader {
+	r.data = body
+	return r
+}
+
+// Do is a terminal method that actually retrieves the HTTP resource from the server.
+// It returns a gexe/http/*Response instance that can be used to access the result.
 func (r *ResourceReader) Do() *Response {
-	res, err := r.client.Get(r.url)
+	req, err := http.NewRequestWithContext(r.ctx, "GET", r.url, r.data)
 	if err != nil {
 		return &Response{err: err}
 	}
+
+	res, err := r.client.Do(req)
+	if err != nil {
+		return &Response{err: err}
+	}
+
 	return &Response{stat: res.Status, statCode: res.StatusCode, body: res.Body}
-}
-
-// Bytes returns the server response as a []byte
-// This is a shorthad for ResourceReader.Do().Bytes()
-func (r *ResourceReader) Bytes() []byte {
-	resp := r.Do()
-	if resp.Err() != nil {
-		r.err = resp.Err()
-		return nil
-	}
-	return resp.Bytes()
-}
-
-// String returns the server response as a string.
-// It is a shorthad for ResourceReader.Do().String()
-func (r *ResourceReader) String() string {
-	resp := r.Do()
-	if resp.Err() != nil {
-		r.err = resp.Err()
-		return ""
-	}
-	return resp.String()
-}
-
-// Body returns the server response body (as io.ReadCloser).
-// It is a shorthand for ResourceReader().Do().Body()
-// NOTE: ensure to close the stream when finished.
-func (r *ResourceReader) Body() io.ReadCloser {
-	resp := r.Do()
-	if resp.Err() != nil {
-		r.err = resp.Err()
-		return nil
-	}
-	return resp.Body()
 }

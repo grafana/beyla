@@ -805,7 +805,7 @@ func (r *metricsReporter) otelSpanObserved(span *request.Span) bool {
 }
 
 func (r *metricsReporter) otelSpanFiltered(span *request.Span) bool {
-	return span.InternalSignal()
+	return span.InternalSignal() || request.IgnoreMetrics(span)
 }
 
 //nolint:cyclop

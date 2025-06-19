@@ -1,6 +1,7 @@
 package gexe
 
 import (
+	"context"
 	"os"
 
 	"github.com/vladimirvivien/gexe/exec"
@@ -23,8 +24,8 @@ func Variables() *vars.Variables {
 //
 // Environment vars can be used in string values
 // using Eval("building for os=$GOOS")
-func Envs(val string) *Echo {
-	return DefaultEcho.Envs(val)
+func Envs(val ...string) *Echo {
+	return DefaultEcho.Envs(val...)
 }
 
 // SetEnv sets a process environment variable.
@@ -32,18 +33,15 @@ func SetEnv(name, value string) *Echo {
 	return DefaultEcho.SetEnv(name, value)
 }
 
-// Vars declares session-scope variables using
-// a multi-line space-separated list:
+// Vars declares multiple session-scope variables using
+// string literals:
 //
-//	Envs("foo=bar platform=amd64")
-//
-// Session vars can be used in string values
-// using Eval("My foo=$foo").
+//	Envs("foo=bar", "platform=amd64", `"data="info ${platform}"`)
 //
 // Note that session vars are only available
 // for the running process.
-func Vars(val string) *Echo {
-	return DefaultEcho.Vars(val)
+func Vars(variables ...string) *Echo {
+	return DefaultEcho.Vars(variables...)
 }
 
 // SetVar declares a session variable.
@@ -63,10 +61,22 @@ func Eval(str string) string {
 	return DefaultEcho.Eval(str)
 }
 
+// NewProcWithContext setups a new process with specified context and command cmdStr and returns immediately
+// without starting. Information about the running process is stored in *exec.Proc.
+func NewProcWithContext(ctx context.Context, cmdStr string) *exec.Proc {
+	return DefaultEcho.NewProcWithContext(ctx, cmdStr)
+}
+
 // NewProc setups a new process with specified command cmdStr and returns immediately
 // without starting. Information about the running process is stored in *exec.Proc.
 func NewProc(cmdStr string) *exec.Proc {
-	return DefaultEcho.NewProc(cmdStr)
+	return DefaultEcho.NewProcWithContext(context.Background(), cmdStr)
+}
+
+// StartProcWith executes the command in cmdStr with the specified contex and returns immediately
+// without waiting. Information about the running process is stored in *exec.Proc.
+func StartProcWithContext(ctx context.Context, cmdStr string) *exec.Proc {
+	return DefaultEcho.StartProcWithContext(ctx, cmdStr)
 }
 
 // StartProc executes the command in cmdStr and returns immediately
@@ -75,10 +85,22 @@ func StartProc(cmdStr string) *exec.Proc {
 	return DefaultEcho.StartProc(cmdStr)
 }
 
+// RunProcWithContext executes command in cmdStr, with specified ctx, and waits for the result.
+// It returns a *Proc with information about the executed process.
+func RunProcWithContext(ctx context.Context, cmdStr string) *exec.Proc {
+	return DefaultEcho.RunProc(cmdStr)
+}
+
 // RunProc executes command in cmdStr and waits for the result.
 // It returns a *Proc with information about the executed process.
 func RunProc(cmdStr string) *exec.Proc {
 	return DefaultEcho.RunProc(cmdStr)
+}
+
+// RunWithContext executes cmdStr, with specified context, and waits for completion.
+// It returns the result as a string.
+func RunWithContext(ctx context.Context, cmdStr string) string {
+	return DefaultEcho.RunWithContext(ctx, cmdStr)
 }
 
 // Run executes cmdStr, waits, and returns the result as a string.
@@ -152,24 +174,54 @@ func RmPath(path string) *fs.FSInfo {
 	return DefaultEcho.RmPath(path)
 }
 
+// FileRead uses context ctx to read file content from path
+func FileReadWithContext(ctx context.Context, path string) *fs.FileReader {
+	return DefaultEcho.FileReadWithContext(ctx, path)
+}
+
 // FileRead provides methods to read file content from path
 func FileRead(path string) *fs.FileReader {
-	return DefaultEcho.FileRead(path)
+	return DefaultEcho.FileReadWithContext(context.Background(), path)
+}
+
+// FileWriteWithContext uses context ctx to write file content to path
+func FileWriteWithContext(ctx context.Context, path string) *fs.FileWriter {
+	return DefaultEcho.FileWriteWithContext(ctx, path)
 }
 
 // FileWrite provides methods to write file content to path
 func FileWrite(path string) *fs.FileWriter {
-	return DefaultEcho.FileWrite(path)
+	return DefaultEcho.FileWriteWithContext(context.Background(), path)
 }
 
-// GetUrl creates a *http.ResourceReader to retrieve HTTP content
-func GetUrl(url string) *http.ResourceReader {
-	return DefaultEcho.Get(url)
+// HttpGetWithContext uses context ctx to start an HTTP GET operation to retrieve resource at URL/path
+func HttpGetWithContext(ctx context.Context, url string, paths ...string) *http.ResourceReader {
+	return DefaultEcho.HttpGetWithContext(ctx, url, paths...)
 }
 
-// PostUrl creates a *http.ResourceWriter to write content to an HTTP server
-func PostUrl(url string) *http.ResourceWriter {
-	return DefaultEcho.Post(url)
+// HttpGet starts an HTTP GET operation to retrieve resource at URL/path
+func HttpGet(url string, paths ...string) *http.ResourceReader {
+	return DefaultEcho.HttpGetWithContext(context.Background(), url, paths...)
+}
+
+// Get is a convenient alias for HttpGet that retrieves specified resource at given URL/path
+func Get(url string, paths ...string) *http.Response {
+	return DefaultEcho.Get(url, paths...)
+}
+
+// HttpPostWithContext uses context ctx to start an HTTP POST operation to post resource to URL/path
+func HttpPostWithContext(ctx context.Context, url string, paths ...string) *http.ResourceWriter {
+	return DefaultEcho.HttpPostWithContext(ctx, url, paths...)
+}
+
+// HttpPost starts an HTTP POST operation to post resource to URL/path
+func HttpPost(url string, paths ...string) *http.ResourceWriter {
+	return DefaultEcho.HttpPostWithContext(context.Background(), url, paths...)
+}
+
+// Post is a convenient alias for HttpPost to post data at specified URL
+func Post(data []byte, url string) *http.Response {
+	return DefaultEcho.Post(data, url)
 }
 
 // Prog returns program information via *prog.Info

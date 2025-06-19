@@ -1,6 +1,7 @@
 package beyla
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -304,6 +305,9 @@ func (c *Config) AsOBI() *obi.Config {
 		})
 		c.obi = obiCfg
 	}
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("  ", "  " )
+	enc.Encode(c.obi)
 	return c.obi
 }
 

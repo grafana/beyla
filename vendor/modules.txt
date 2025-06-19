@@ -378,7 +378,7 @@ github.com/munnerz/goautoneg
 # github.com/mxk/go-flowrate v0.0.0-20140419014527-cca7078d478f
 ## explicit
 github.com/mxk/go-flowrate/flowrate
-# github.com/open-telemetry/opentelemetry-ebpf-instrumentation v0.0.0-20250619085259-94fb02a2f5e5 => ./.obi-src
+# github.com/open-telemetry/opentelemetry-ebpf-instrumentation v0.0.0-20250619120827-ca73810626e7 => ./.obi-src
 ## explicit; go 1.24.1
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla
@@ -554,8 +554,8 @@ github.com/vishvananda/netlink/nl
 # github.com/vishvananda/netns v0.0.5
 ## explicit; go 1.17
 github.com/vishvananda/netns
-# github.com/vladimirvivien/gexe v0.3.0
-## explicit; go 1.22
+# github.com/vladimirvivien/gexe v0.5.0
+## explicit; go 1.23
 github.com/vladimirvivien/gexe
 github.com/vladimirvivien/gexe/exec
 github.com/vladimirvivien/gexe/fs

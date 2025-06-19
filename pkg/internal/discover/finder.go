@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/discover"
+	obiDiscover "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/discover"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf"
 	ebpfcommon "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/common"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
@@ -33,34 +33,34 @@ func NewProcessFinder(
 	return &ProcessFinder{cfg: cfg, ctxInfo: ctxInfo, tracesInput: tracesInput, ebpfEventContext: ebpfEventContext}
 }
 
-// Start the ProcessFinder pipeline in background. It returns a channel where each new discovered
+// Start the ProcessFinder pipeline in background. It returns a channel where each new obiDiscovered
 // ebpf.ProcessTracer will be notified.
-func (pf *ProcessFinder) Start(ctx context.Context) (<-chan discover.Event[*ebpf.Instrumentable], error) {
+func (pf *ProcessFinder) Start(ctx context.Context) (<-chan obiDiscover.Event[*ebpf.Instrumentable], error) {
 
-	tracerEvents := msg.NewQueue[discover.Event[*ebpf.Instrumentable]](msg.ChannelBufferLen(pf.cfg.ChannelBufferLen))
+	tracerEvents := msg.NewQueue[obiDiscover.Event[*ebpf.Instrumentable]](msg.ChannelBufferLen(pf.cfg.ChannelBufferLen))
 	obiCfg := pf.cfg.AsOBI()
 
 	swi := swarm.Instancer{}
-	processEvents := msg.NewQueue[[]discover.Event[discover.ProcessAttrs]](msg.ChannelBufferLen(pf.cfg.ChannelBufferLen))
-	swi.Add(swarm.DirectInstance(discover.ProcessWatcherFunc(obiCfg, pf.ebpfEventContext, processEvents)))
+	processEvents := msg.NewQueue[[]obiDiscover.Event[obiDiscover.ProcessAttrs]](msg.ChannelBufferLen(pf.cfg.ChannelBufferLen))
+	swi.Add(swarm.DirectInstance(obiDiscover.ProcessWatcherFunc(obiCfg, pf.ebpfEventContext, processEvents)))
 
-	kubeEnrichedEvents := msg.NewQueue[[]discover.Event[discover.ProcessAttrs]](msg.ChannelBufferLen(pf.cfg.ChannelBufferLen))
-	swi.Add(discover.WatcherKubeEnricherProvider(pf.ctxInfo.K8sInformer, processEvents, kubeEnrichedEvents))
+	kubeEnrichedEvents := msg.NewQueue[[]obiDiscover.Event[obiDiscover.ProcessAttrs]](msg.ChannelBufferLen(pf.cfg.ChannelBufferLen))
+	swi.Add(obiDiscover.WatcherKubeEnricherProvider(pf.ctxInfo.K8sInformer, processEvents, kubeEnrichedEvents))
 	pf.connectSurveySubPipeline(&swi, kubeEnrichedEvents)
 
-	criteriaFilteredEvents := msg.NewQueue[[]discover.Event[discover.ProcessMatch]](msg.ChannelBufferLen(pf.cfg.ChannelBufferLen))
-	swi.Add(discover.CriteriaMatcherProvider(obiCfg, kubeEnrichedEvents, criteriaFilteredEvents))
+	criteriaFilteredEvents := msg.NewQueue[[]obiDiscover.Event[obiDiscover.ProcessMatch]](msg.ChannelBufferLen(pf.cfg.ChannelBufferLen))
+	swi.Add(obiDiscover.CriteriaMatcherProvider(obiCfg, kubeEnrichedEvents, criteriaFilteredEvents))
 
-	executableTypes := msg.NewQueue[[]discover.Event[ebpf.Instrumentable]](msg.ChannelBufferLen(pf.cfg.ChannelBufferLen))
-	swi.Add(discover.ExecTyperProvider(obiCfg, pf.ctxInfo.Metrics, pf.ctxInfo.K8sInformer, criteriaFilteredEvents, executableTypes))
+	executableTypes := msg.NewQueue[[]obiDiscover.Event[ebpf.Instrumentable]](msg.ChannelBufferLen(pf.cfg.ChannelBufferLen))
+	swi.Add(obiDiscover.ExecTyperProvider(obiCfg, pf.ctxInfo.Metrics, pf.ctxInfo.K8sInformer, criteriaFilteredEvents, executableTypes))
 
 	// we could subscribe ContainerDBUpdater directly to the executableTypes queue and not providing any output channel
 	// but forcing the output by the executableTypesReplica channel only after the Container DB has been updated
 	// prevents race conditions in later stages of the pipeline
-	storedExecutableTypes := msg.NewQueue[[]discover.Event[ebpf.Instrumentable]](msg.ChannelBufferLen(pf.cfg.ChannelBufferLen))
-	swi.Add(discover.ContainerDBUpdaterProvider(pf.ctxInfo.K8sInformer, executableTypes, storedExecutableTypes))
+	storedExecutableTypes := msg.NewQueue[[]obiDiscover.Event[ebpf.Instrumentable]](msg.ChannelBufferLen(pf.cfg.ChannelBufferLen))
+	swi.Add(obiDiscover.ContainerDBUpdaterProvider(pf.ctxInfo.K8sInformer, executableTypes, storedExecutableTypes))
 
-	swi.Add(discover.TraceAttacherProvider(&discover.TraceAttacher{
+	swi.Add(obiDiscover.TraceAttacherProvider(&obiDiscover.TraceAttacher{
 		Cfg:                  obiCfg,
 		OutputTracerEvents:   tracerEvents,
 		Metrics:              pf.ctxInfo.Metrics,
@@ -71,7 +71,7 @@ func (pf *ProcessFinder) Start(ctx context.Context) (<-chan discover.Event[*ebpf
 
 	pipeline, err := swi.Instance(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("can't instantiate discovery.ProcessFinder pipeline: %w", err)
+		return nil, fmt.Errorf("can't instantiate obiDiscovery.ProcessFinder pipeline: %w", err)
 	}
 	tracerEventsCh := tracerEvents.Subscribe()
 	pipeline.Start(ctx)
@@ -80,24 +80,23 @@ func (pf *ProcessFinder) Start(ctx context.Context) (<-chan discover.Event[*ebpf
 
 // connects the survey sub-pipeline to the pipe of kube enriched events, and forwards
 // survey_info metrics from there
-func (pf *ProcessFinder) connectSurveySubPipeline(swi *swarm.Instancer, kubeEnrichedEvents *msg.Queue[[]discover.Event[discover.ProcessAttrs]]) {
+func (pf *ProcessFinder) connectSurveySubPipeline(swi *swarm.Instancer, kubeEnrichedEvents *msg.Queue[[]obiDiscover.Event[obiDiscover.ProcessAttrs]]) {
 	if !pf.cfg.Discovery.SurveyEnabled() {
 		return
 	}
 	obiCfg := pf.cfg.AsOBI()
 
-	surveyFilteredEvents := msg.NewQueue[[]discover.Event[discover.ProcessMatch]](msg.ChannelBufferLen(pf.cfg.ChannelBufferLen))
+	surveyFilteredEvents := msg.NewQueue[[]obiDiscover.Event[obiDiscover.ProcessMatch]](msg.ChannelBufferLen(pf.cfg.ChannelBufferLen))
 	swi.Add(SurveyCriteriaMatcherProvider(pf.cfg, kubeEnrichedEvents, surveyFilteredEvents))
 
-	surveyExecutables := msg.NewQueue[[]discover.Event[ebpf.Instrumentable]](msg.ChannelBufferLen(pf.cfg.ChannelBufferLen))
-	swi.Add(discover.ExecTyperProvider(obiCfg, pf.ctxInfo.Metrics, pf.ctxInfo.K8sInformer, surveyFilteredEvents, surveyExecutables))
+	surveyExecutables := msg.NewQueue[[]obiDiscover.Event[ebpf.Instrumentable]](msg.ChannelBufferLen(pf.cfg.ChannelBufferLen))
+	swi.Add(obiDiscover.ExecTyperProvider(obiCfg, pf.ctxInfo.Metrics, pf.ctxInfo.K8sInformer, surveyFilteredEvents, surveyExecutables))
 
-	surveyExecutableTypes := msg.NewQueue[[]discover.Event[ebpf.Instrumentable]](msg.ChannelBufferLen(pf.cfg.ChannelBufferLen))
-	swi.Add(discover.ContainerDBUpdaterProvider(pf.ctxInfo.K8sInformer, surveyExecutables, surveyExecutableTypes))
+	surveyExecutableTypes := msg.NewQueue[[]obiDiscover.Event[ebpf.Instrumentable]](msg.ChannelBufferLen(pf.cfg.ChannelBufferLen))
+	swi.Add(obiDiscover.ContainerDBUpdaterProvider(pf.ctxInfo.K8sInformer, surveyExecutables, surveyExecutableTypes))
 
 	surveyEvents := msg.NewQueue[exec.ProcessEvent](msg.ChannelBufferLen(pf.cfg.ChannelBufferLen))
-	obiCfg := pf.cfg.AsOBI()
-	swi.Add(SurveyEventGenerator(&obiCfg.Attributes.Kubernetes, pf.ctxInfo.K8sInformer, surveyExecutableTypes, surveyEvents))
+	swi.Add(SurveyEventGenerator(&pf.cfg.Attributes.Kubernetes, pf.ctxInfo.K8sInformer, surveyExecutableTypes, surveyEvents))
 	swi.Add(otel.SurveyInfoMetrics(pf.ctxInfo, &pf.cfg.Metrics, surveyEvents))
 	swi.Add(prom.SurveyPrometheusEndpoint(pf.ctxInfo, &pf.cfg.Prometheus, surveyEvents))
 }

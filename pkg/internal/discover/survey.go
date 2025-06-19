@@ -4,7 +4,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/discover"
+	obiDiscover "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/discover"
 	ebpfcommon "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/common"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
@@ -19,15 +19,15 @@ var osPidFunc = os.Getpid
 
 func SurveyCriteriaMatcherProvider(
 	cfg *beyla.Config,
-	input *msg.Queue[[]discover.Event[discover.ProcessAttrs]],
-	output *msg.Queue[[]discover.Event[discover.ProcessMatch]],
+	input *msg.Queue[[]obiDiscover.Event[obiDiscover.ProcessAttrs]],
+	output *msg.Queue[[]obiDiscover.Event[obiDiscover.ProcessMatch]],
 ) swarm.InstanceFunc {
 	beylaNamespace, _ := namespaceFetcherFunc(int32(osPidFunc()))
-	m := &discover.Matcher{
-		Log:              slog.With("component", "discover.SurveyCriteriaMatcher"),
+	m := &obiDiscover.Matcher{
+		Log:              slog.With("component", "obiDiscover.SurveyCriteriaMatcher"),
 		Criteria:         surveyCriteria(cfg),
 		ExcludeCriteria:  surveyExcludingCriteria(cfg),
-		ProcessHistory:   map[discover.PID]*services.ProcessInfo{},
+		ProcessHistory:   map[obiDiscover.PID]*services.ProcessInfo{},
 		Input:            input.Subscribe(),
 		Output:           output,
 		Namespace:        beylaNamespace,
@@ -38,15 +38,15 @@ func SurveyCriteriaMatcherProvider(
 
 func surveyCriteria(cfg *beyla.Config) []services.Selector {
 	finderCriteria := cfg.Discovery.Survey
-	return discover.NormalizeGlobCriteria(finderCriteria)
+	return obiDiscover.NormalizeGlobCriteria(finderCriteria)
 }
 
 func surveyExcludingCriteria(cfg *beyla.Config) []services.Selector {
 	// deprecated options: supporting them only if the user neither defines
 	// the instrument nor exclude_instrument sections
 	obiCfg := cfg.AsOBI()
-	if discover.OnlyDefinesDeprecatedServiceSelection(obiCfg) {
-		return discover.RegexAsSelector(cfg.Discovery.DefaultExcludeServices)
+	if obiDiscover.OnlyDefinesDeprecatedServiceSelection(obiCfg) {
+		return obiDiscover.RegexAsSelector(cfg.Discovery.DefaultExcludeServices)
 	}
-	return discover.GlobsAsSelector(cfg.Discovery.DefaultExcludeInstrument)
+	return obiDiscover.GlobsAsSelector(cfg.Discovery.DefaultExcludeInstrument)
 }

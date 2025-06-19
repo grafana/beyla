@@ -36,7 +36,7 @@ func TestWatcher_Poll(t *testing.T) {
 		interval: time.Microsecond,
 		cfg:      &beyla.Config{},
 		pidPorts: map[pidPort]processAttrs{},
-		listProcesses: func(bool) (map[PID]processAttrs, error) {
+		listProcesses: func(bool, time.Duration) (map[PID]processAttrs, error) {
 			invocation++
 			switch invocation {
 			case 1:
@@ -132,7 +132,7 @@ func TestProcessNotReady(t *testing.T) {
 		interval: time.Microsecond,
 		cfg:      &beyla.Config{},
 		pidPorts: map[pidPort]processAttrs{},
-		listProcesses: func(bool) (map[PID]processAttrs, error) {
+		listProcesses: func(bool, time.Duration) (map[PID]processAttrs, error) {
 			return map[PID]processAttrs{p1.pid: p1, p5.pid: p5, p2.pid: p2, p3.pid: p3, p4.pid: p4}, nil
 		},
 		executableReady: func(pid PID) (string, bool) {
@@ -146,7 +146,7 @@ func TestProcessNotReady(t *testing.T) {
 		},
 	}
 
-	procs, err := acc.listProcesses(true)
+	procs, err := acc.listProcesses(true, 0)
 	assert.NoError(t, err)
 	assert.Equal(t, 5, len(procs))
 	events := acc.snapshot(procs)
@@ -183,7 +183,7 @@ func TestPortsFetchRequired(t *testing.T) {
 		cfg:      cfg,
 		interval: time.Hour, // don't let the inner loop mess with our test
 		pidPorts: map[pidPort]processAttrs{},
-		listProcesses: func(bool) (map[PID]processAttrs, error) {
+		listProcesses: func(bool, time.Duration) (map[PID]processAttrs, error) {
 			return nil, nil
 		},
 		executableReady: func(_ PID) (string, bool) {

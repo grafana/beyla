@@ -21,7 +21,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/debug"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
 	otel2 "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel"
-	prom2 "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/prom"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/prom"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/filter"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubeflags"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/services"
@@ -111,7 +111,7 @@ var DefaultConfig = Config{
 			instrumentations.InstrumentationALL,
 		},
 	},
-	Prometheus: prom2.PrometheusConfig{
+	Prometheus: prom.PrometheusConfig{
 		Path:     "/metrics",
 		Buckets:  otel2.DefaultBuckets,
 		Features: []string{otel.FeatureApplication},
@@ -192,7 +192,7 @@ type Config struct {
 	NameResolver *transform.NameResolverConfig `yaml:"name_resolver"`
 	Metrics      otel.MetricsConfig            `yaml:"otel_metrics_export"`
 	Traces       otel.TracesConfig             `yaml:"otel_traces_export"`
-	Prometheus   prom2.PrometheusConfig        `yaml:"prometheus_export"`
+	Prometheus   prom.PrometheusConfig         `yaml:"prometheus_export"`
 	TracePrinter debug.TracePrinter            `yaml:"trace_printer" env:"BEYLA_TRACE_PRINTER"`
 
 	// Exec allows selecting the instrumented executable whose complete path contains the Exec value.

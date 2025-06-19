@@ -24,7 +24,6 @@ import (
 )
 
 func main() {
-	beyla.SetupOBIEnvVars()
 	lvl := slog.LevelVar{}
 	lvl.Set(slog.LevelInfo)
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{

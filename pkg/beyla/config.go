@@ -20,6 +20,8 @@ import (
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/debug"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
+	otel2 "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/prom"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/filter"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubeflags"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/services"
@@ -29,7 +31,6 @@ import (
 
 	"github.com/grafana/beyla/v2/pkg/config"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
-	"github.com/grafana/beyla/v2/pkg/export/prom"
 	cfgutil "github.com/grafana/beyla/v2/pkg/helpers/config"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
 	servicesextra "github.com/grafana/beyla/v2/pkg/services"
@@ -112,7 +113,7 @@ var DefaultConfig = Config{
 	},
 	Prometheus: prom.PrometheusConfig{
 		Path:     "/metrics",
-		Buckets:  otel.DefaultBuckets,
+		Buckets:  otel2.DefaultBuckets,
 		Features: []string{otel.FeatureApplication},
 		Instrumentations: []string{
 			instrumentations.InstrumentationALL,
@@ -121,9 +122,9 @@ var DefaultConfig = Config{
 		SpanMetricsServiceCacheSize: 10000,
 	},
 	TracePrinter: debug.TracePrinterDisabled,
-	InternalMetrics: InternalMetricsConfig{
+	InternalMetrics: imetrics.Config{
 		Exporter: imetrics.InternalMetricsExporterDisabled,
-		Prometheus: InternalPromConfig{
+		Prometheus: imetrics.PrometheusConfig{
 			Port: 0, // disabled by default
 			Path: "/internal/metrics",
 		},
@@ -240,8 +241,8 @@ type Config struct {
 	// nolint:undoc
 	ChannelBufferLen int `yaml:"channel_buffer_len" env:"BEYLA_CHANNEL_BUFFER_LEN"`
 	// nolint:undoc
-	ProfilePort     int                   `yaml:"profile_port" env:"BEYLA_PROFILE_PORT"`
-	InternalMetrics InternalMetricsConfig `yaml:"internal_metrics"`
+	ProfilePort     int             `yaml:"profile_port" env:"BEYLA_PROFILE_PORT"`
+	InternalMetrics imetrics.Config `yaml:"internal_metrics"`
 
 	// Processes metrics for application. They will be only enabled if there is a metrics exporter enabled,
 	// and both the "application" and "application_process" features are enabled
@@ -439,6 +440,7 @@ func (c *Config) ExternalLogger(handler slog.Handler, debugMode bool) {
 // 2 - Contents of the provided file reader (nillable)
 // 3 - Environment variables
 func LoadConfig(file io.Reader) (*Config, error) {
+	SetupOBIEnvVars()
 	cfg := DefaultConfig
 	if file != nil {
 		cfgBuf, err := io.ReadAll(file)

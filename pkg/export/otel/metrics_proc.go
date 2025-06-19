@@ -40,7 +40,7 @@ var (
 
 // ProcMetricsConfig extends MetricsConfig for process metrics
 type ProcMetricsConfig struct {
-	Metrics     *MetricsConfig
+	Metrics     *obiotel.MetricsConfig
 	SelectorCfg *attributes.SelectorConfig
 }
 
@@ -61,7 +61,7 @@ type procMetricsExporter struct {
 	hostID string
 
 	exporter  sdkmetric.Exporter
-	reporters ReporterPool[*process.ID, *procMetrics]
+	reporters obiotel.ReporterPool[*process.ID, *procMetrics]
 
 	log *slog.Logger
 
@@ -122,7 +122,7 @@ func newProcMetricsExporter(
 	cfg *ProcMetricsConfig,
 	input *msg.Queue[[]*process.Status],
 ) (swarm.RunFunc, error) {
-	SetupInternalOTELSDKLogger(cfg.Metrics.SDKLogLevel)
+	obiotel.SetupInternalOTELSDKLogger(cfg.Metrics.SDKLogLevel)
 
 	log := pmlog()
 	log.Debug("instantiating process metrics exporter provider")
@@ -182,19 +182,19 @@ func newProcMetricsExporter(
 		mr.netObserver = netAggregatedObserver
 	}
 
-	mr.reporters = NewReporterPool[*process.ID, *procMetrics](cfg.Metrics.ReportersCacheLen, cfg.Metrics.TTL, timeNow,
-		func(id svc.UID, v *expirable[*procMetrics]) {
+	mr.reporters = obiotel.NewReporterPool[*process.ID, *procMetrics](cfg.Metrics.ReportersCacheLen, cfg.Metrics.TTL, timeNow,
+		func(id svc.UID, v *procMetrics) {
 			llog := log.With("service", id)
 			llog.Debug("evicting metrics reporter from cache")
-			v.value.cleanupAllMetricsInstances()
+			v.cleanupAllMetricsInstances()
 			go func() {
-				if err := v.value.provider.ForceFlush(ctx); err != nil {
+				if err := v.provider.ForceFlush(ctx); err != nil {
 					llog.Warn("error flushing evicted metrics provider", "error", err)
 				}
 			}()
 		}, mr.newMetricSet)
 
-	mr.exporter, err = InstantiateMetricsExporter(ctx, cfg.Metrics, log)
+	mr.exporter, err = obiotel.InstantiateMetricsExporter(ctx, cfg.Metrics, log)
 	if err != nil {
 		log.Error("instantiating metrics exporter", "error", err)
 		return nil, err
@@ -206,7 +206,7 @@ func newProcMetricsExporter(
 // getFilteredProcessResourceAttrs returns resource attributes filtered based on the attribute selector
 // for process metrics.
 func getFilteredProcessResourceAttrs(hostID string, procID *process.ID, attrSelector attributes.Selection) []attribute.KeyValue {
-	baseAttrs := getResourceAttrs(hostID, procID.Service)
+	baseAttrs := obiotel.GetResourceAttrs(hostID, procID.Service)
 	procAttrs := []attribute.KeyValue{
 		semconv.ServiceInstanceID(procID.UID.Instance),
 		extranames.ProcCommand.OTEL().String(procID.Command),
@@ -218,7 +218,7 @@ func getFilteredProcessResourceAttrs(hostID string, procID *process.ID, attrSele
 		extranames.ProcExecName.OTEL().String(procID.ExecName),
 		extranames.ProcExecPath.OTEL().String(procID.ExecPath),
 	}
-	return getFilteredAttributesByPrefix(baseAttrs, attrSelector, procAttrs, []string{"process."})
+	return obiotel.GetFilteredAttributesByPrefix(baseAttrs, attrSelector, procAttrs, []string{"process."})
 }
 
 func (me *procMetricsExporter) newMetricSet(procID *process.ID) (*procMetrics, error) {

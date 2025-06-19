@@ -22,7 +22,7 @@ import (
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/debug"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
-	otel2 "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel"
+	obiotel "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/prom"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubeflags"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/services"
@@ -136,16 +136,16 @@ network:
 			},
 		},
 		NetworkFlows: nc,
-		Metrics: otel.MetricsConfig{
+		Metrics: obiotel.MetricsConfig{
 			OTELIntervalMS:    60_000,
 			CommonEndpoint:    "localhost:3131",
 			MetricsEndpoint:   "localhost:3030",
-			Protocol:          otel.ProtocolUnset,
+			MetricsProtocol:   obiotel.ProtocolHTTPProtobuf,
 			ReportersCacheLen: ReporterLRUSize,
-			Buckets: otel.Buckets{
+			Buckets: obiotel.Buckets{
 				DurationHistogram:     []float64{0, 1, 2},
-				RequestSizeHistogram:  otel.DefaultBuckets.RequestSizeHistogram,
-				ResponseSizeHistogram: otel.DefaultBuckets.ResponseSizeHistogram,
+				RequestSizeHistogram:  obiotel.DefaultBuckets.RequestSizeHistogram,
+				ResponseSizeHistogram: obiotel.DefaultBuckets.ResponseSizeHistogram,
 			},
 			Features: []string{"application"},
 			Instrumentations: []string{
@@ -154,8 +154,8 @@ network:
 			HistogramAggregation: "base2_exponential_bucket_histogram",
 			TTL:                  5 * time.Minute,
 		},
-		Traces: otel.TracesConfig{
-			Protocol:           otel.ProtocolUnset,
+		Traces: obiotel.TracesConfig{
+			TracesProtocol:     obiotel.ProtocolHTTPProtobuf,
 			CommonEndpoint:     "localhost:3131",
 			TracesEndpoint:     "localhost:3232",
 			MaxQueueSize:       4096,
@@ -167,14 +167,14 @@ network:
 		},
 		Prometheus: prom.PrometheusConfig{
 			Path:     "/metrics",
-			Features: []string{otel.FeatureApplication},
+			Features: []string{obiotel.FeatureApplication},
 			Instrumentations: []string{
 				instrumentations.InstrumentationALL,
 			},
 			TTL:                         time.Second,
 			SpanMetricsServiceCacheSize: 10000,
-			Buckets: otel2.Buckets{
-				DurationHistogram:     otel.DefaultBuckets.DurationHistogram,
+			Buckets: obiotel.Buckets{
+				DurationHistogram:     obiotel.DefaultBuckets.DurationHistogram,
 				RequestSizeHistogram:  []float64{0, 10, 20, 22},
 				ResponseSizeHistogram: []float64{0, 10, 20, 22},
 			}},

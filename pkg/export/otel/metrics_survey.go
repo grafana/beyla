@@ -8,6 +8,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/pipe/global"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel/metric"
 	instrument "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel/metric/api/metric"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
@@ -23,7 +24,7 @@ func smlog() *slog.Logger {
 
 type SurveyMetricsReporter struct {
 	log *slog.Logger
-	cfg *MetricsConfig
+	cfg *otel.MetricsConfig
 
 	provider *metric.MeterProvider
 
@@ -32,20 +33,20 @@ type SurveyMetricsReporter struct {
 	hostID        string
 	processEvents <-chan exec.ProcessEvent
 	exporter      sdkmetric.Exporter
-	pidTracker    PidServiceTracker
+	pidTracker    otel.PidServiceTracker
 	serviceMap    map[svc.UID][]attribute.KeyValue
 }
 
 func SurveyInfoMetrics(
 	ctxInfo *global.ContextInfo,
-	cfg *MetricsConfig,
+	cfg *otel.MetricsConfig,
 	processEventCh *msg.Queue[exec.ProcessEvent],
 ) swarm.InstanceFunc {
 	return func(ctx context.Context) (swarm.RunFunc, error) {
 		if !cfg.Enabled() {
 			return swarm.EmptyRunFunc()
 		}
-		SetupInternalOTELSDKLogger(cfg.SDKLogLevel)
+		otel.SetupInternalOTELSDKLogger(cfg.SDKLogLevel)
 
 		mr, err := newSurveyMetricsReporter(ctx, ctxInfo, cfg, processEventCh)
 		if err != nil {
@@ -57,7 +58,7 @@ func SurveyInfoMetrics(
 }
 
 func newSurveyMetricsReporter(
-	ctx context.Context, ctxInfo *global.ContextInfo, cfg *MetricsConfig,
+	ctx context.Context, ctxInfo *global.ContextInfo, cfg *otel.MetricsConfig,
 	processEventsQueue *msg.Queue[exec.ProcessEvent],
 ) (*SurveyMetricsReporter, error) {
 	log := smlog()
@@ -67,12 +68,12 @@ func newSurveyMetricsReporter(
 		hostID:        ctxInfo.HostID,
 		serviceMap:    map[svc.UID][]attribute.KeyValue{},
 		processEvents: processEventsQueue.Subscribe(),
-		pidTracker:    NewPidServiceTracker(),
+		pidTracker:    otel.NewPidServiceTracker(),
 	}
 	log.Debug("creating new Survey Metrics reporter")
 
 	var err error
-	smr.exporter, err = InstantiateMetricsExporter(ctx, cfg, log)
+	smr.exporter, err = otel.InstantiateMetricsExporter(ctx, cfg, log)
 	if err != nil {
 		return nil, fmt.Errorf("instantiating OTEL Survey metrics exporter: %w", err)
 	}
@@ -130,7 +131,7 @@ func (smr *SurveyMetricsReporter) disassociatePIDFromService(pid int32) (bool, s
 }
 
 func (smr *SurveyMetricsReporter) createSurveyInfo(ctx context.Context, service *svc.Attrs) {
-	resourceAttributes := append(getAppResourceAttrs(smr.hostID, service), ResourceAttrsFromEnv(service)...)
+	resourceAttributes := append(otel.GetAppResourceAttrs(smr.hostID, service), otel.ResourceAttrsFromEnv(service)...)
 	smr.log.Debug("Creating survey_info", "attrs", resourceAttributes)
 	attrOpt := instrument.WithAttributeSet(attribute.NewSet(resourceAttributes...))
 	smr.surveyInfo.Add(ctx, 1, attrOpt)

@@ -1,8 +1,6 @@
 package otel
 
 import (
-	"os"
-	"sync"
 	"testing"
 	"time"
 
@@ -11,6 +9,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,9 +19,10 @@ import (
 	"github.com/grafana/beyla/v2/test/collector"
 )
 
+const timeout = 3 * time.Second
+
 func TestProcMetrics_Disaggregated(t *testing.T) {
-	os.Setenv("OTEL_METRIC_EXPORT_INTERVAL", "100")
-	defer restoreEnvAfterExecution()()
+	t.Setenv("OTEL_METRIC_EXPORT_INTERVAL", "100")
 	ctx := t.Context()
 
 	otlp, err := collector.Start(ctx)
@@ -35,11 +35,11 @@ func TestProcMetrics_Disaggregated(t *testing.T) {
 	procsInput := msg.NewQueue[[]*process.Status](msg.ChannelBufferLen(10))
 	otelExporter, err := ProcMetricsExporterProvider(
 		&global.ContextInfo{}, &ProcMetricsConfig{
-			Metrics: &MetricsConfig{
+			Metrics: &otel.MetricsConfig{
 				ReportersCacheLen: 100,
 				CommonEndpoint:    otlp.ServerEndpoint,
-				MetricsProtocol:   ProtocolHTTPProtobuf,
-				Features:          []string{FeatureApplication, FeatureProcess},
+				MetricsProtocol:   otel.ProtocolHTTPProtobuf,
+				Features:          []string{otel.FeatureApplication, FeatureProcess},
 				TTL:               3 * time.Minute,
 				Instrumentations: []string{
 					instrumentations.InstrumentationALL,
@@ -242,23 +242,6 @@ func TestGetFilteredProcessResourceAttrs(t *testing.T) {
 		_, exists := attrMap[attrName]
 		assert.False(t, exists, "Process attribute %s should be filtered out", attrName)
 	}
-}
-
-type syncedClock struct {
-	mt  sync.Mutex
-	now time.Time
-}
-
-func (c *syncedClock) Now() time.Time {
-	c.mt.Lock()
-	defer c.mt.Unlock()
-	return c.now
-}
-
-func (c *syncedClock) Advance(t time.Duration) {
-	c.mt.Lock()
-	defer c.mt.Unlock()
-	c.now = c.now.Add(t)
 }
 
 func readChan(t require.TestingT, inCh <-chan collector.MetricRecord, timeout time.Duration) collector.MetricRecord {

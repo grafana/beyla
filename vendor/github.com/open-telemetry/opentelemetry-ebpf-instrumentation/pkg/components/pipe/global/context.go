@@ -1,6 +1,8 @@
 package global
 
 import (
+	"go.opentelemetry.io/otel/attribute"
+
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/connector"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/imetrics"
@@ -31,6 +33,9 @@ type ContextInfo struct {
 
 	// OverrideAppExportQueue
 	OverrideAppExportQueue *msg.Queue[[]request.Span]
+
+	// ExtraResourceAttributes allows extending (or overriding) the reported resource attributes in the traces exporters
+	ExtraResourceAttributes []attribute.KeyValue
 }
 
 // AppO11y stores context information that is only required for application observability.

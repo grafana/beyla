@@ -4,9 +4,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"os"
 	"regexp"
-	"strings"
 	"time"
 
 	"github.com/caarlos0/env/v9"
@@ -20,7 +18,7 @@ import (
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/debug"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
-	otel2 "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/prom"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/filter"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubeflags"
@@ -30,8 +28,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/grafana/beyla/v2/pkg/config"
-	"github.com/grafana/beyla/v2/pkg/export/otel"
-	cfgutil "github.com/grafana/beyla/v2/pkg/helpers/config"
+	botel "github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
 	servicesextra "github.com/grafana/beyla/v2/pkg/services"
 )
@@ -76,8 +73,8 @@ var DefaultConfig = Config{
 		ContextPropagationEnabled: false,
 		ContextPropagation:        config.ContextPropagationDisabled,
 	},
-	Grafana: otel.GrafanaConfig{
-		OTLP: otel.GrafanaOTLP{
+	Grafana: botel.GrafanaConfig{
+		OTLP: botel.GrafanaOTLP{
 			// by default we will only submit traces, assuming span2metrics will do the metrics conversion
 			Submit: []string{"traces"},
 		},
@@ -113,7 +110,7 @@ var DefaultConfig = Config{
 	},
 	Prometheus: prom.PrometheusConfig{
 		Path:     "/metrics",
-		Buckets:  otel2.DefaultBuckets,
+		Buckets:  otel.DefaultBuckets,
 		Features: []string{otel.FeatureApplication},
 		Instrumentations: []string{
 			instrumentations.InstrumentationALL,
@@ -181,7 +178,7 @@ type Config struct {
 
 	// Grafana overrides some values of the otel.MetricsConfig and otel.TracesConfig below
 	// for a simpler submission of OTEL metrics to Grafana Cloud
-	Grafana otel.GrafanaConfig `yaml:"grafana"`
+	Grafana botel.GrafanaConfig `yaml:"grafana"`
 
 	Filters filter.AttributesConfig `yaml:"filter"`
 
@@ -292,20 +289,6 @@ type ConfigError string
 
 func (e ConfigError) Error() string {
 	return string(e)
-}
-
-func (c *Config) AsOBI() *obi.Config {
-	if c.obi == nil {
-		obiCfg := &obi.Config{}
-		cfgutil.Convert(c, obiCfg, map[string]string{
-			// here, some hints might be useful if we need to skip values that are non-existing in OBI,
-			// or renamed. For example:
-			// ".Some.Renamed.FieldInDst": "NameInSrc",
-			// ".Some.Missing.FieldInSrc": cfgutil.SkipConversion,
-		})
-		c.obi = obiCfg
-	}
-	return c.obi
 }
 
 // nolint:cyclop
@@ -458,33 +441,4 @@ func LoadConfig(file io.Reader) (*Config, error) {
 	}
 
 	return &cfg, nil
-}
-
-// Duplicates any BEYLA_ prefixed environment variables with the OTEL_EBPF_ prefix
-// and vice versa
-func SetupOBIEnvVars() {
-	for _, env := range os.Environ() {
-		appended := appendAlternateEnvVar(env, "BEYLA_", "OTEL_EBPF_")
-		if !appended {
-			appendAlternateEnvVar(env, "OTEL_EBPF_", "BEYLA_")
-		}
-	}
-}
-
-func appendAlternateEnvVar(env, oldPrefix, altPrefix string) bool {
-	oldLen := len(oldPrefix)
-	if len(env) > (oldLen+1) && strings.HasPrefix(env, oldPrefix) {
-		eqIdx := strings.IndexByte(env, '=')
-		if eqIdx > (oldLen + 1) {
-			key := env[:eqIdx]
-			val := env[eqIdx+1:]
-			newKey := altPrefix + key[oldLen:]
-			// Only set if not already set
-			if os.Getenv(newKey) == "" {
-				os.Setenv(newKey, val)
-			}
-			return true
-		}
-	}
-	return false
 }

@@ -10,10 +10,10 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
+	obi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla"
 	otelsdk "go.opentelemetry.io/otel/sdk"
 
 	_ "github.com/grafana/pyroscope-go/godeltaprof/http/pprof"
@@ -24,7 +24,7 @@ import (
 )
 
 func main() {
-	setupOBIEnvVars()
+	beyla.SetupOBIEnvVars()
 	lvl := slog.LevelVar{}
 	lvl.Set(slog.LevelInfo)
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
@@ -33,7 +33,7 @@ func main() {
 
 	slog.Info("Grafana Beyla", "Version", buildinfo.Version, "Revision", buildinfo.Revision, "OpenTelemetry SDK Version", otelsdk.Version())
 
-	if err := beyla.CheckOSSupport(); err != nil {
+	if err := obi.CheckOSSupport(); err != nil {
 		slog.Error("can't start Beyla", "error", err)
 		os.Exit(-1)
 	}
@@ -56,7 +56,7 @@ func main() {
 		os.Exit(-1)
 	}
 
-	if err := beyla.CheckOSCapabilities(config); err != nil {
+	if err := obi.CheckOSCapabilities(config.AsOBI()); err != nil {
 		if config.EnforceSysCaps {
 			slog.Error("can't start Beyla", "error", err)
 			os.Exit(-1)
@@ -106,33 +106,4 @@ func loadConfig(configPath *string) *beyla.Config {
 		os.Exit(-1)
 	}
 	return config
-}
-
-func appendAlternateEnvVar(env, oldPrefix, altPrefix string) bool {
-	oldLen := len(oldPrefix)
-	if len(env) > (oldLen+1) && strings.HasPrefix(env, oldPrefix) {
-		eqIdx := strings.IndexByte(env, '=')
-		if eqIdx > (oldLen + 1) {
-			key := env[:eqIdx]
-			val := env[eqIdx+1:]
-			newKey := altPrefix + key[oldLen:]
-			// Only set if not already set
-			if os.Getenv(newKey) == "" {
-				os.Setenv(newKey, val)
-			}
-			return true
-		}
-	}
-	return false
-}
-
-// Duplicates any BEYLA_ prefixed environment variables with the OTEL_EBPF_ prefix
-// and vice versa
-func setupOBIEnvVars() {
-	for _, env := range os.Environ() {
-		appended := appendAlternateEnvVar(env, "BEYLA_", "OTEL_EBPF_")
-		if !appended {
-			appendAlternateEnvVar(env, "OTEL_EBPF_", "BEYLA_")
-		}
-	}
 }

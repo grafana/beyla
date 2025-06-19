@@ -48,6 +48,10 @@ type RoutesConfig struct {
 	Unmatch UnmatchType `yaml:"unmatched"`
 	// Patterns of the paths that will match to a route
 	Patterns []string `yaml:"patterns"`
+	// Deprecated. To be removed and replaced by a collector-like filtering mechanism
+	IgnorePatterns []string `yaml:"ignored_patterns"`
+	// Deprecated. To be removed and replaced by a collector-like filtering mechanism
+	IgnoredEvents IgnoreMode `yaml:"ignore_mode"`
 	// Character that will be used to replace route segments
 	WildcardChar string `yaml:"wildcard_char,omitempty"`
 }
@@ -78,22 +82,45 @@ func (rn *routerNode) provideRoutes(_ context.Context) (swarm.RunFunc, error) {
 		return nil, err
 	}
 	matcher := route.NewMatcher(rc.Patterns)
+	discarder := route.NewMatcher(rc.IgnorePatterns)
 	routesEnabled := len(rc.Patterns) > 0
+	ignoreEnabled := len(rc.IgnorePatterns) > 0
+
+	ignoreMode := rc.IgnoredEvents
+	if ignoreMode == "" {
+		ignoreMode = IgnoreDefault
+	}
 
 	in := rn.input.Subscribe()
 	out := rn.output
-	return func(_ context.Context) {
+	return func(ctx context.Context) {
 		// output channel must be closed so later stages in the pipeline can finish in cascade
 		defer rn.output.Close()
-		for spans := range in {
-			for i := range spans {
-				s := &spans[i]
-				if routesEnabled {
-					s.Route = matcher.Find(s.Path)
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case spans := <-in:
+				for i := range spans {
+					s := &spans[i]
+					if ignoreEnabled {
+						if discarder.Find(s.Path) != "" {
+							if ignoreMode == IgnoreAll {
+								request.SetIgnoreMetrics(s)
+								request.SetIgnoreTraces(s)
+							}
+							// we can't discard it here, ignoring is selective (metrics | traces)
+							setSpanIgnoreMode(ignoreMode, s)
+						}
+					}
+					if routesEnabled {
+						s.Route = matcher.Find(s.Path)
+					}
+					unmatchAction(rc, s)
 				}
-				unmatchAction(rc, s)
+				out.Send(spans)
 			}
-			out.Send(spans)
 		}
 	}, nil
 }
@@ -152,5 +179,14 @@ func setUnmatchToPath(_ *RoutesConfig, str *request.Span) {
 func classifyFromPath(rc *RoutesConfig, s *request.Span) {
 	if s.Route == "" && (s.Type == request.EventTypeHTTP || s.Type == request.EventTypeHTTPClient) {
 		s.Route = route.ClusterPath(s.Path, rc.WildcardChar[0])
+	}
+}
+
+func setSpanIgnoreMode(mode IgnoreMode, s *request.Span) {
+	switch mode {
+	case IgnoreMetrics:
+		request.SetIgnoreMetrics(s)
+	case IgnoreTraces:
+		request.SetIgnoreTraces(s)
 	}
 }

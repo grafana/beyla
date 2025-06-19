@@ -4,13 +4,17 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/caarlos0/env/v9"
 	"github.com/gobwas/glob"
 	obi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/tcmanager"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/imetrics"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/kube"
 	attributes "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/debug"
@@ -18,19 +22,17 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/filter"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubeflags"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/services"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/transform"
 	otelconsumer "go.opentelemetry.io/collector/consumer"
 	"gopkg.in/yaml.v3"
 
 	"github.com/grafana/beyla/v2/pkg/config"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/export/prom"
-	cfgutil "github.com/grafana/beyla/v2/pkg/internal/helpers/config"
-	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
+	cfgutil "github.com/grafana/beyla/v2/pkg/helpers/config"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
-	"github.com/grafana/beyla/v2/pkg/internal/kube"
 	"github.com/grafana/beyla/v2/pkg/internal/traces"
 	servicesextra "github.com/grafana/beyla/v2/pkg/services"
-	"github.com/grafana/beyla/v2/pkg/transform"
 )
 
 const ReporterLRUSize = 256
@@ -119,9 +121,9 @@ var DefaultConfig = Config{
 		SpanMetricsServiceCacheSize: 10000,
 	},
 	TracePrinter: debug.TracePrinterDisabled,
-	InternalMetrics: imetrics.Config{
+	InternalMetrics: InternalMetricsConfig{
 		Exporter: imetrics.InternalMetricsExporterDisabled,
-		Prometheus: imetrics.PrometheusConfig{
+		Prometheus: InternalPromConfig{
 			Port: 0, // disabled by default
 			Path: "/internal/metrics",
 		},
@@ -238,8 +240,8 @@ type Config struct {
 	// nolint:undoc
 	ChannelBufferLen int `yaml:"channel_buffer_len" env:"BEYLA_CHANNEL_BUFFER_LEN"`
 	// nolint:undoc
-	ProfilePort     int             `yaml:"profile_port" env:"BEYLA_PROFILE_PORT"`
-	InternalMetrics imetrics.Config `yaml:"internal_metrics"`
+	ProfilePort     int                   `yaml:"profile_port" env:"BEYLA_PROFILE_PORT"`
+	InternalMetrics InternalMetricsConfig `yaml:"internal_metrics"`
 
 	// Processes metrics for application. They will be only enabled if there is a metrics exporter enabled,
 	// and both the "application" and "application_process" features are enabled
@@ -454,4 +456,33 @@ func LoadConfig(file io.Reader) (*Config, error) {
 	}
 
 	return &cfg, nil
+}
+
+// Duplicates any BEYLA_ prefixed environment variables with the OTEL_EBPF_ prefix
+// and vice versa
+func SetupOBIEnvVars() {
+	for _, env := range os.Environ() {
+		appended := appendAlternateEnvVar(env, "BEYLA_", "OTEL_EBPF_")
+		if !appended {
+			appendAlternateEnvVar(env, "OTEL_EBPF_", "BEYLA_")
+		}
+	}
+}
+
+func appendAlternateEnvVar(env, oldPrefix, altPrefix string) bool {
+	oldLen := len(oldPrefix)
+	if len(env) > (oldLen+1) && strings.HasPrefix(env, oldPrefix) {
+		eqIdx := strings.IndexByte(env, '=')
+		if eqIdx > (oldLen + 1) {
+			key := env[:eqIdx]
+			val := env[eqIdx+1:]
+			newKey := altPrefix + key[oldLen:]
+			// Only set if not already set
+			if os.Getenv(newKey) == "" {
+				os.Setenv(newKey, val)
+			}
+			return true
+		}
+	}
+	return false
 }

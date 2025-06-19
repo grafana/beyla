@@ -2,10 +2,12 @@ package otel
 
 import (
 	"os"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/mariomac/guara/pkg/test"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/pipe/global"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
@@ -15,7 +17,6 @@ import (
 
 	"github.com/grafana/beyla/v2/pkg/export/extraattributes"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
-	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/test/collector"
 )
 
@@ -241,4 +242,31 @@ func TestGetFilteredProcessResourceAttrs(t *testing.T) {
 		_, exists := attrMap[attrName]
 		assert.False(t, exists, "Process attribute %s should be filtered out", attrName)
 	}
+}
+
+type syncedClock struct {
+	mt  sync.Mutex
+	now time.Time
+}
+
+func (c *syncedClock) Now() time.Time {
+	c.mt.Lock()
+	defer c.mt.Unlock()
+	return c.now
+}
+
+func (c *syncedClock) Advance(t time.Duration) {
+	c.mt.Lock()
+	defer c.mt.Unlock()
+	c.now = c.now.Add(t)
+}
+
+func readChan(t require.TestingT, inCh <-chan collector.MetricRecord, timeout time.Duration) collector.MetricRecord {
+	select {
+	case item := <-inCh:
+		return item
+	case <-time.After(timeout):
+		require.Failf(t, "timeout while waiting for event in input channel", "timeout: %s", timeout)
+	}
+	return collector.MetricRecord{}
 }

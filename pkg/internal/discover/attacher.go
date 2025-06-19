@@ -7,16 +7,16 @@ import (
 
 	"github.com/cilium/ebpf/link"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf"
+	ebpfcommon "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/common"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers/maps"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/imetrics"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/otelsdk"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
-	"github.com/grafana/beyla/v2/pkg/internal/ebpf"
-	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
-	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
-	"github.com/grafana/beyla/v2/pkg/internal/otelsdk"
 )
 
 // TraceAttacher creates the available trace.Tracer implementations (Go HTTP tracer, GRPC tracer, Generic tracer...)
@@ -67,7 +67,7 @@ func TraceAttacherProvider(ta *TraceAttacher) swarm.InstanceFunc {
 func (ta *TraceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) {
 	ta.log = slog.With("component", "discover.TraceAttacher")
 	ta.existingTracers = map[uint64]*ebpf.ProcessTracer{}
-	ta.sdkInjector = otelsdk.NewSDKInjector(ta.Cfg)
+	ta.sdkInjector = otelsdk.NewSDKInjector(ta.Cfg.AsOBI())
 	ta.processInstances = maps.MultiCounter[uint64]{}
 	ta.beylaPID = os.Getpid()
 
@@ -201,7 +201,7 @@ func (ta *TraceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 		return false
 	}
 
-	tracer := ebpf.NewProcessTracer(tracerType, programs)
+	tracer := ebpf.NewProcessTracer(tracerType, programs, ta.Cfg.ShutdownTimeout)
 
 	if err := tracer.Init(ta.ebpfEventContext); err != nil {
 		ta.log.Error("couldn't trace process. Stopping process tracer", "error", err)

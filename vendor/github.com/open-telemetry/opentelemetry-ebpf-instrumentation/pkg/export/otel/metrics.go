@@ -44,7 +44,9 @@ const (
 	// selection for them. They are very specific metrics with an opinionated format
 	// for Span Metrics and Service Graph Metrics functionalities
 	SpanMetricsLatency       = "traces_spanmetrics_latency"
+	SpanMetricsLatencyOTel   = "traces_span_metrics_duration"
 	SpanMetricsCalls         = "traces_spanmetrics_calls_total"
+	SpanMetricsCallsOTel     = "traces_span_metrics_calls_total"
 	SpanMetricsRequestSizes  = "traces_spanmetrics_size_total"
 	SpanMetricsResponseSizes = "traces_spanmetrics_response_size_total"
 	TracesTargetInfo         = "traces_target_info"
@@ -65,8 +67,11 @@ const (
 	FeatureNetworkInterZone = "network_inter_zone"
 	FeatureApplication      = "application"
 	FeatureSpan             = "application_span"
+	FeatureSpanOTel         = "application_span_otel"
+	FeatureSpanSizes        = "application_span_sizes"
 	FeatureGraph            = "application_service_graph"
 	FeatureProcess          = "application_process"
+	FeatureApplicationHost  = "application_host"
 	FeatureEBPF             = "ebpf"
 )
 
@@ -170,8 +175,24 @@ func (m *MetricsConfig) EndpointEnabled() bool {
 	return m.CommonEndpoint != "" || m.MetricsEndpoint != ""
 }
 
+func (m *MetricsConfig) AnySpanMetricsEnabled() bool {
+	return m.SpanMetricsEnabled() || m.ServiceGraphMetricsEnabled() || m.SpanMetricsSizesEnabled()
+}
+
+func (m *MetricsConfig) SpanMetricsSizesEnabled() bool {
+	return slices.Contains(m.Features, FeatureSpanSizes)
+}
+
 func (m *MetricsConfig) SpanMetricsEnabled() bool {
-	return slices.Contains(m.Features, FeatureSpan)
+	return slices.Contains(m.Features, FeatureSpan) || slices.Contains(m.Features, FeatureSpanOTel)
+}
+
+func (m *MetricsConfig) InvalidSpanMetricsConfig() bool {
+	return slices.Contains(m.Features, FeatureSpan) && slices.Contains(m.Features, FeatureSpanOTel)
+}
+
+func (m *MetricsConfig) HostMetricsEnabled() bool {
+	return slices.Contains(m.Features, FeatureApplicationHost)
 }
 
 func (m *MetricsConfig) ServiceGraphMetricsEnabled() bool {
@@ -195,7 +216,7 @@ func (m *MetricsConfig) NetworkInterzoneMetricsEnabled() bool {
 }
 
 func (m *MetricsConfig) Enabled() bool {
-	return m.EndpointEnabled() && (m.OTelMetricsEnabled() || m.SpanMetricsEnabled() || m.ServiceGraphMetricsEnabled() || m.NetworkMetricsEnabled())
+	return m.EndpointEnabled() && (m.OTelMetricsEnabled() || m.AnySpanMetricsEnabled() || m.NetworkMetricsEnabled())
 }
 
 // MetricsReporter implements the graph node that receives request.Span
@@ -207,6 +228,7 @@ type MetricsReporter struct {
 	attributes *attributes.AttrSelector
 	exporter   sdkmetric.Exporter
 	reporters  ReporterPool[*svc.Attrs, *Metrics]
+	pidTracker PidServiceTracker
 	is         instrumentations.InstrumentationSelection
 
 	// user-selected fields for each of the reported metrics
@@ -293,7 +315,7 @@ func ReportMetrics(
 			return nil, fmt.Errorf("instantiating OTEL metrics reporter: %w", err)
 		}
 
-		if mr.cfg.SpanMetricsEnabled() || mr.cfg.ServiceGraphMetricsEnabled() {
+		if mr.cfg.HostMetricsEnabled() {
 			hostMetrics := mr.newMetricsInstance(nil)
 			hostMeter := hostMetrics.provider.Meter(reporterName)
 			err := mr.setupHostInfoMeter(hostMeter)
@@ -402,6 +424,8 @@ func newMetricsReporter(
 	}
 	mr.exporter = instrumentMetricsExporter(ctxInfo.Metrics, exporter)
 
+	mr.pidTracker = NewPidServiceTracker()
+
 	return &mr, nil
 }
 
@@ -447,6 +471,14 @@ func (mr *MetricsReporter) otelMetricOptions(mlog *slog.Logger) []metric.Option 
 	return opts
 }
 
+func (mr *MetricsReporter) spanMetricsLatencyName() string {
+	if slices.Contains(mr.cfg.Features, FeatureSpan) {
+		return SpanMetricsLatency
+	}
+
+	return SpanMetricsLatencyOTel
+}
+
 func (mr *MetricsReporter) spanMetricOptions(mlog *slog.Logger) []metric.Option {
 	if !mr.cfg.SpanMetricsEnabled() {
 		return []metric.Option{}
@@ -455,7 +487,7 @@ func (mr *MetricsReporter) spanMetricOptions(mlog *slog.Logger) []metric.Option 
 	useExponentialHistograms := isExponentialAggregation(mr.cfg, mlog)
 
 	return []metric.Option{
-		metric.WithView(otelHistogramConfig(SpanMetricsLatency, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
+		metric.WithView(otelHistogramConfig(mr.spanMetricsLatencyName(), mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
 	}
 }
 
@@ -476,7 +508,7 @@ func (mr *MetricsReporter) setupTargetInfo(m *Metrics, meter instrument.Meter) e
 	var err error
 	m.targetInfo, err = meter.Int64UpDownCounter(TargetInfo)
 	if err != nil {
-		return fmt.Errorf("creating span metric traces target info: %w", err)
+		return fmt.Errorf("creating target info: %w", err)
 	}
 
 	return nil
@@ -606,28 +638,22 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 	return nil
 }
 
-func (mr *MetricsReporter) setupSpanMeters(m *Metrics, meter instrument.Meter) error {
-	if !mr.cfg.SpanMetricsEnabled() {
+func (mr *MetricsReporter) spanMetricsCallsName() string {
+	if slices.Contains(mr.cfg.Features, FeatureSpan) {
+		return SpanMetricsCalls
+	}
+
+	return SpanMetricsCallsOTel
+}
+
+func (mr *MetricsReporter) setupSpanSizeMeters(m *Metrics, meter instrument.Meter) error {
+	if !mr.cfg.SpanMetricsSizesEnabled() {
 		return nil
 	}
 
 	var err error
 
 	spanMetricAttrs := mr.spanMetricAttributes()
-
-	spanMetricsLatency, err := meter.Float64Histogram(SpanMetricsLatency)
-	if err != nil {
-		return fmt.Errorf("creating span metric histogram for latency: %w", err)
-	}
-	m.spanMetricsLatency = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
-		m.ctx, spanMetricsLatency, spanMetricAttrs, timeNow, mr.cfg.TTL)
-
-	spanMetricsCallsTotal, err := meter.Int64Counter(SpanMetricsCalls)
-	if err != nil {
-		return fmt.Errorf("creating span metric calls total: %w", err)
-	}
-	m.spanMetricsCallsTotal = NewExpirer[*request.Span, instrument.Int64Counter, int64](
-		m.ctx, spanMetricsCallsTotal, spanMetricAttrs, timeNow, mr.cfg.TTL)
 
 	spanMetricsRequestSizeTotal, err := meter.Float64Counter(SpanMetricsRequestSizes)
 	if err != nil {
@@ -643,10 +669,42 @@ func (mr *MetricsReporter) setupSpanMeters(m *Metrics, meter instrument.Meter) e
 	m.spanMetricsResponseSizeTotal = NewExpirer[*request.Span, instrument.Float64Counter, float64](
 		m.ctx, spanMetricsResponseSizeTotal, spanMetricAttrs, timeNow, mr.cfg.TTL)
 
+	return nil
+}
+
+func (mr *MetricsReporter) setupTracesTargetInfo(m *Metrics, meter instrument.Meter) error {
+	var err error
+
 	m.tracesTargetInfo, err = meter.Int64UpDownCounter(TracesTargetInfo)
 	if err != nil {
 		return fmt.Errorf("creating span metric traces target info: %w", err)
 	}
+
+	return nil
+}
+
+func (mr *MetricsReporter) setupSpanMeters(m *Metrics, meter instrument.Meter) error {
+	if !mr.cfg.SpanMetricsEnabled() {
+		return nil
+	}
+
+	var err error
+
+	spanMetricAttrs := mr.spanMetricAttributes()
+
+	spanMetricsLatency, err := meter.Float64Histogram(mr.spanMetricsLatencyName())
+	if err != nil {
+		return fmt.Errorf("creating span metric histogram for latency: %w", err)
+	}
+	m.spanMetricsLatency = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
+		m.ctx, spanMetricsLatency, spanMetricAttrs, timeNow, mr.cfg.TTL)
+
+	spanMetricsCallsTotal, err := meter.Int64Counter(mr.spanMetricsCallsName())
+	if err != nil {
+		return fmt.Errorf("creating span metric calls total: %w", err)
+	}
+	m.spanMetricsCallsTotal = NewExpirer[*request.Span, instrument.Int64Counter, int64](
+		m.ctx, spanMetricsCallsTotal, spanMetricAttrs, timeNow, mr.cfg.TTL)
 
 	return nil
 }
@@ -698,13 +756,6 @@ func (mr *MetricsReporter) setupGraphMeters(m *Metrics, meter instrument.Meter) 
 	}
 	m.serviceGraphTotal = NewExpirer[*request.Span, instrument.Int64Counter, int64](
 		m.ctx, serviceGraphTotal, serviceGraphAttrs, timeNow, mr.cfg.TTL)
-
-	if m.tracesTargetInfo == nil {
-		m.tracesTargetInfo, err = meter.Int64UpDownCounter(TracesTargetInfo)
-		if err != nil {
-			return fmt.Errorf("creating service graph traces target info: %w", err)
-		}
-	}
 
 	return nil
 }
@@ -762,8 +813,22 @@ func (mr *MetricsReporter) newMetricSet(service *svc.Attrs) (*Metrics, error) {
 		}
 	}
 
+	if mr.cfg.AnySpanMetricsEnabled() {
+		err = mr.setupTracesTargetInfo(&m, meter)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	if mr.cfg.SpanMetricsEnabled() {
 		err = mr.setupSpanMeters(&m, meter)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if mr.cfg.SpanMetricsSizesEnabled() {
+		err = mr.setupSpanSizeMeters(&m, meter)
 		if err != nil {
 			return nil, err
 		}
@@ -1039,7 +1104,9 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 
 		smct, attrs := r.spanMetricsCallsTotal.ForRecord(span)
 		smct.Add(ctx, 1, instrument.WithAttributeSet(attrs))
+	}
 
+	if mr.cfg.SpanMetricsSizesEnabled() {
 		smst, attrs := r.spanMetricsRequestSizeTotal.ForRecord(span)
 		smst.Add(ctx, float64(span.RequestBodyLength()), instrument.WithAttributeSet(attrs))
 
@@ -1079,7 +1146,7 @@ func (mr *MetricsReporter) deleteTargetInfo(reporter *Metrics) {
 }
 
 func (mr *MetricsReporter) createTracesTargetInfo(reporter *Metrics) {
-	if !mr.cfg.SpanMetricsEnabled() && !mr.cfg.ServiceGraphMetricsEnabled() {
+	if !mr.cfg.AnySpanMetricsEnabled() {
 		return
 	}
 	mlog().Debug("Creating traces_target_info")
@@ -1088,7 +1155,7 @@ func (mr *MetricsReporter) createTracesTargetInfo(reporter *Metrics) {
 }
 
 func (mr *MetricsReporter) deleteTracesTargetInfo(reporter *Metrics) {
-	if !mr.cfg.SpanMetricsEnabled() && !mr.cfg.ServiceGraphMetricsEnabled() {
+	if !mr.cfg.AnySpanMetricsEnabled() {
 		return
 	}
 	mlog().Debug("Deleting traces_target_info for", "attrs", reporter.resourceAttributes)
@@ -1096,11 +1163,21 @@ func (mr *MetricsReporter) deleteTracesTargetInfo(reporter *Metrics) {
 	reporter.tracesTargetInfo.Remove(mr.ctx, attrOpt)
 }
 
+func (mr *MetricsReporter) setupPIDToServiceRelationship(pid int32, uid svc.UID) {
+	mr.pidTracker.AddPID(pid, uid)
+}
+
+func (mr *MetricsReporter) disassociatePIDFromService(pid int32) (bool, svc.UID) {
+	return mr.pidTracker.RemovePID(pid)
+}
+
 func (mr *MetricsReporter) watchForProcessEvents() {
 	for pe := range mr.processEvents {
 		mlog().Debug("Received new process event", "event type", pe.Type, "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
 
 		reporter, err := mr.reporters.For(&pe.File.Service)
+		// If we are receiving a delete event, the service may come without kubernetes information, which
+		// is why we record the original service info. Delete look up the data from the pid tracker.
 		if err != nil {
 			mlog().Error("unexpected error creating OTEL resource. Ignoring metric",
 				"error", err, "service", pe.File.Service.UID)
@@ -1110,9 +1187,22 @@ func (mr *MetricsReporter) watchForProcessEvents() {
 		if pe.Type == exec.ProcessEventCreated {
 			mr.createTargetInfo(reporter)
 			mr.createTracesTargetInfo(reporter)
+			mr.setupPIDToServiceRelationship(pe.File.Pid, pe.File.Service.UID)
 		} else {
-			mr.deleteTracesTargetInfo(reporter)
-			mr.deleteTargetInfo(reporter)
+			if deleted, origUID := mr.disassociatePIDFromService(pe.File.Pid); deleted {
+				// We only need the UID to look up in the pool, no need to cache
+				// the whole of the attrs in the pidTracker
+				svc := svc.Attrs{UID: origUID}
+				reporter, err = mr.reporters.For(&svc)
+				if err != nil {
+					mlog().Error("unexpected error creating OTEL resource. Ignoring metric",
+						"error", err, "service", pe.File.Service.UID)
+					continue
+				}
+				mlog().Debug("deleting infos for", "pid", pe.File.Pid, "attrs", reporter.service)
+				mr.deleteTracesTargetInfo(reporter)
+				mr.deleteTargetInfo(reporter)
+			}
 		}
 	}
 }

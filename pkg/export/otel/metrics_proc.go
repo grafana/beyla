@@ -7,9 +7,11 @@ import (
 	"slices"
 	"strconv"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/pipe/global"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/expire"
+	obiotel "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel/metric"
 	metric2 "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel/metric/api/metric"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
@@ -22,7 +24,6 @@ import (
 	"github.com/grafana/beyla/v2/pkg/export/extraattributes"
 	extranames "github.com/grafana/beyla/v2/pkg/export/extraattributes/names"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
-	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 )
 
 var (
@@ -89,12 +90,12 @@ type procMetrics struct {
 	provider *metric.MeterProvider
 
 	// don't forget to add the cleanup code in cleanupAllMetricsInstances function
-	cpuTime        *Expirer[*process.Status, metric2.Float64Counter, float64]
-	cpuUtilisation *Expirer[*process.Status, metric2.Float64Gauge, float64]
-	memory         *Expirer[*process.Status, metric2.Int64UpDownCounter, int64]
-	memoryVirtual  *Expirer[*process.Status, metric2.Int64UpDownCounter, int64]
-	disk           *Expirer[*process.Status, metric2.Int64Counter, int64]
-	net            *Expirer[*process.Status, metric2.Int64Counter, int64]
+	cpuTime        *obiotel.Expirer[*process.Status, metric2.Float64Counter, float64]
+	cpuUtilisation *obiotel.Expirer[*process.Status, metric2.Float64Gauge, float64]
+	memory         *obiotel.Expirer[*process.Status, metric2.Int64UpDownCounter, int64]
+	memoryVirtual  *obiotel.Expirer[*process.Status, metric2.Int64UpDownCounter, int64]
+	disk           *obiotel.Expirer[*process.Status, metric2.Int64Counter, int64]
+	net            *obiotel.Expirer[*process.Status, metric2.Int64Counter, int64]
 }
 
 func ProcMetricsExporterProvider(
@@ -244,7 +245,7 @@ func (me *procMetricsExporter) newMetricSet(procID *process.ID) (*procMetrics, e
 		log.Error("creating observable gauge for "+extraattributes.ProcessCPUUtilization.OTEL, "error", err)
 		return nil, err
 	} else {
-		m.cpuTime = NewExpirer[*process.Status, metric2.Float64Counter, float64](
+		m.cpuTime = obiotel.NewExpirer[*process.Status, metric2.Float64Counter, float64](
 			me.ctx, cpuTime, me.attrCPUTime, timeNow, me.cfg.Metrics.TTL)
 	}
 
@@ -256,7 +257,7 @@ func (me *procMetricsExporter) newMetricSet(procID *process.ID) (*procMetrics, e
 		log.Error("creating observable gauge for "+extraattributes.ProcessCPUUtilization.OTEL, "error", err)
 		return nil, err
 	} else {
-		m.cpuUtilisation = NewExpirer[*process.Status, metric2.Float64Gauge, float64](
+		m.cpuUtilisation = obiotel.NewExpirer[*process.Status, metric2.Float64Gauge, float64](
 			me.ctx, cpuUtilisation, me.attrCPUUtil, timeNow, me.cfg.Metrics.TTL)
 	}
 
@@ -271,7 +272,7 @@ func (me *procMetricsExporter) newMetricSet(procID *process.ID) (*procMetrics, e
 		log.Error("creating observable gauge for "+extraattributes.ProcessMemoryUsage.OTEL, "error", err)
 		return nil, err
 	} else {
-		m.memory = NewExpirer[*process.Status, metric2.Int64UpDownCounter, int64](
+		m.memory = obiotel.NewExpirer[*process.Status, metric2.Int64UpDownCounter, int64](
 			me.ctx, memory, me.attrMemory, timeNow, me.cfg.Metrics.TTL)
 	}
 
@@ -283,7 +284,7 @@ func (me *procMetricsExporter) newMetricSet(procID *process.ID) (*procMetrics, e
 		log.Error("creating observable gauge for "+extraattributes.ProcessMemoryVirtual.OTEL, "error", err)
 		return nil, err
 	} else {
-		m.memoryVirtual = NewExpirer[*process.Status, metric2.Int64UpDownCounter, int64](
+		m.memoryVirtual = obiotel.NewExpirer[*process.Status, metric2.Int64UpDownCounter, int64](
 			me.ctx, memoryVirtual, me.attrMemoryVirtual, timeNow, me.cfg.Metrics.TTL)
 	}
 
@@ -295,7 +296,7 @@ func (me *procMetricsExporter) newMetricSet(procID *process.ID) (*procMetrics, e
 		log.Error("creating observable gauge for "+extraattributes.ProcessMemoryVirtual.OTEL, "error", err)
 		return nil, err
 	} else {
-		m.disk = NewExpirer[*process.Status, metric2.Int64Counter, int64](
+		m.disk = obiotel.NewExpirer[*process.Status, metric2.Int64Counter, int64](
 			me.ctx, disk, me.attrDisk, timeNow, me.cfg.Metrics.TTL)
 	}
 
@@ -307,7 +308,7 @@ func (me *procMetricsExporter) newMetricSet(procID *process.ID) (*procMetrics, e
 		log.Error("creating observable gauge for "+extraattributes.ProcessMemoryVirtual.OTEL, "error", err)
 		return nil, err
 	} else {
-		m.net = NewExpirer[*process.Status, metric2.Int64Counter, int64](
+		m.net = obiotel.NewExpirer[*process.Status, metric2.Int64Counter, int64](
 			me.ctx, net, me.attrNet, timeNow, me.cfg.Metrics.TTL)
 	}
 	return &m, nil

@@ -6,13 +6,13 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/pipe/global"
 	"go.opentelemetry.io/otel/attribute"
 	instrument "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 
 	"github.com/grafana/beyla/v2/pkg/buildinfo"
-	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 )
 
 // InternalMetricsReporter is an internal metrics Reporter that exports to OTEL

@@ -10,18 +10,18 @@ import (
 	"time"
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf"
+	ebpfcommon "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/common"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/pipe/global"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/transform"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/internal/discover"
-	"github.com/grafana/beyla/v2/pkg/internal/ebpf"
-	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe"
-	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/traces"
-	"github.com/grafana/beyla/v2/pkg/transform"
 )
 
 var errShutdownTimeout = errors.New("graceful shutdown has timed out")
@@ -59,6 +59,7 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 	}
 
 	swi := &swarm.Instancer{}
+	obiCfg := config.AsOBI()
 
 	processEventsInput := newEventQueue()
 	processEventsHostDecorated := newEventQueue()
@@ -72,7 +73,7 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 	processEventsKubeDecorated := newEventQueue()
 	swi.Add(transform.KubeProcessEventDecoratorProvider(
 		ctxInfo,
-		&config.Attributes.Kubernetes,
+		&obiCfg.Attributes.Kubernetes,
 		processEventsHostDecorated,
 		processEventsKubeDecorated,
 	))

@@ -2,11 +2,14 @@ package discover
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
 
 	lru "github.com/hashicorp/golang-lru/v2"
+
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/goexec"
@@ -15,8 +18,6 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
-
-	"github.com/grafana/beyla/v2/pkg/beyla"
 )
 
 type InstrumentedExecutable struct {
@@ -45,13 +46,13 @@ func ExecTyperProvider(
 		currentPids:         map[int32]*exec.FileInfo{},
 		instrumentableCache: instrumentableCache,
 	}
-	return func(_ context.Context) (swarm.RunFunc, error) {
+	return func(ctx context.Context) (swarm.RunFunc, error) {
 		// TODO: do it per executable
 		if !cfg.Discovery.SkipGoSpecificTracers {
 			t.loadAllGoFunctionNames()
 		}
 		in := input.Subscribe()
-		return func(ctx context.Context) {
+		return func(_ context.Context) {
 			defer output.Close()
 			for {
 				select {
@@ -149,7 +150,7 @@ func (t *typer) asInstrumentable(execElf *exec.FileInfo) ebpf.Instrumentable {
 		}
 
 		if err == nil {
-			err = fmt.Errorf("identified as a Go proxy")
+			err = errors.New("identified as a Go proxy")
 		}
 
 		log.Debug("identified as a Go proxy")
@@ -165,7 +166,6 @@ func (t *typer) asInstrumentable(execElf *exec.FileInfo) ebpf.Instrumentable {
 		// to avoid wrongly instrumenting process launcher such as systemd or containerd-shimd
 		// when they launch an instrumentable service
 		execElf.CmdExePath == parent.CmdExePath {
-
 		log.Debug("replacing executable by its parent", "ppid", execElf.Ppid)
 		child = append(child, uint32(execElf.Pid))
 		execElf = parent

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
+	obiDiscover "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/discover"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf"
 	ebpfcommon "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/common"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
@@ -123,7 +124,7 @@ func (i *Instrumenter) FindAndInstrument(ctx context.Context) error {
 	return nil
 }
 
-func (i *Instrumenter) instrumentedEventLoop(ctx context.Context, processEvents <-chan discover.Event[*ebpf.Instrumentable]) {
+func (i *Instrumenter) instrumentedEventLoop(ctx context.Context, processEvents <-chan obiDiscover.Event[*ebpf.Instrumentable]) {
 	log := log()
 	for {
 		select {
@@ -131,7 +132,7 @@ func (i *Instrumenter) instrumentedEventLoop(ctx context.Context, processEvents 
 			return
 		case ev := <-processEvents:
 			switch ev.Type {
-			case discover.EventCreated:
+			case obiDiscover.EventCreated:
 				pt := ev.Obj
 				log.Debug("running tracer for new process",
 					"inode", pt.FileInfo.Ino, "pid", pt.FileInfo.Pid, "exec", pt.FileInfo.CmdExePath)
@@ -143,7 +144,7 @@ func (i *Instrumenter) instrumentedEventLoop(ctx context.Context, processEvents 
 					}()
 				}
 				i.handleAndDispatchProcessEvent(exec.ProcessEvent{Type: exec.ProcessEventCreated, File: pt.FileInfo})
-			case discover.EventDeleted:
+			case obiDiscover.EventDeleted:
 				dp := ev.Obj
 				log.Debug("stopping ProcessTracer because there are no more instances of such process",
 					"inode", dp.FileInfo.Ino, "pid", dp.FileInfo.Pid, "exec", dp.FileInfo.CmdExePath)
@@ -151,7 +152,7 @@ func (i *Instrumenter) instrumentedEventLoop(ctx context.Context, processEvents 
 					dp.Tracer.UnlinkExecutable(dp.FileInfo)
 				}
 				i.handleAndDispatchProcessEvent(exec.ProcessEvent{Type: exec.ProcessEventTerminated, File: dp.FileInfo})
-			case discover.EventInstanceDeleted:
+			case obiDiscover.EventInstanceDeleted:
 				i.handleAndDispatchProcessEvent(exec.ProcessEvent{Type: exec.ProcessEventTerminated, File: ev.Obj.FileInfo})
 			default:
 				log.Error("BUG ALERT! unknown event type", "type", ev.Type)

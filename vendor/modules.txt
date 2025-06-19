@@ -384,6 +384,7 @@ github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/buildinfo
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/connector
+github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/discover
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/bhpack
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/common
@@ -414,6 +415,7 @@ github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/neto
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/ifaces
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/transform/cidr
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/transform/k8s
+github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/nodejs
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/otelsdk
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/pipe
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/pipe/global
@@ -421,7 +423,6 @@ github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/rdns
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/rdns/store
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/sqlprune
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc
-github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/testutil
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/traces
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/traces/hostname
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/transform/route

@@ -1,7 +1,6 @@
 package beyla
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -299,15 +298,12 @@ func (c *Config) AsOBI() *obi.Config {
 		obiCfg := &obi.Config{}
 		cfgutil.Convert(c, obiCfg, map[string]string{
 			// here, some hints might be useful if we need to skip values that are non-existing in OBI,
-			// or, renamed. For example:
+			// or renamed. For example:
 			// ".Some.Renamed.FieldInDst": "NameInSrc",
 			// ".Some.Missing.FieldInSrc": cfgutil.SkipConversion,
 		})
 		c.obi = obiCfg
 	}
-	enc := json.NewEncoder(os.Stdout)
-	enc.SetIndent("  ", "  " )
-	enc.Encode(c.obi)
 	return c.obi
 }
 

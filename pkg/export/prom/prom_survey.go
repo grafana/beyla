@@ -10,6 +10,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/pipe/global"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/prom"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 	"github.com/prometheus/client_golang/prometheus"
@@ -43,7 +44,7 @@ type surveyMetricsReporter struct {
 
 func SurveyPrometheusEndpoint(
 	ctxInfo *global.ContextInfo,
-	cfg *PrometheusConfig,
+	cfg *prom.PrometheusConfig,
 	processEventCh *msg.Queue[exec.ProcessEvent],
 ) swarm.InstanceFunc {
 	return func(_ context.Context) (swarm.RunFunc, error) {
@@ -64,7 +65,7 @@ func SurveyPrometheusEndpoint(
 // nolint:cyclop
 func newSurveyReporter(
 	ctxInfo *global.ContextInfo,
-	cfg *PrometheusConfig,
+	cfg *prom.PrometheusConfig,
 	processEventCh *msg.Queue[exec.ProcessEvent],
 ) (*surveyMetricsReporter, error) {
 

@@ -2,6 +2,9 @@ package prom
 
 import (
 	"fmt"
+	"io"
+	"net/http"
+	"sync"
 	"testing"
 	"time"
 
@@ -10,6 +13,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/pipe/global"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/prom"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -18,6 +22,8 @@ import (
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
 )
+
+const timeout = 3 * time.Second
 
 func TestProcPrometheusEndpoint_AggregatedMetrics(t *testing.T) {
 	now := syncedClock{now: time.Now()}
@@ -35,7 +41,7 @@ func TestProcPrometheusEndpoint_AggregatedMetrics(t *testing.T) {
 	procsInput := msg.NewQueue[[]*process.Status](msg.ChannelBufferLen(10))
 	exporter, err := ProcPrometheusEndpoint(
 		&global.ContextInfo{Prometheus: &connector.PrometheusManager{}},
-		&ProcPrometheusConfig{Metrics: &PrometheusConfig{
+		&ProcPrometheusConfig{Metrics: &prom.PrometheusConfig{
 			Port:                        openPort,
 			Path:                        "/metrics",
 			TTL:                         3 * time.Minute,
@@ -124,7 +130,7 @@ func TestProcPrometheusEndpoint_DisaggregatedMetrics(t *testing.T) {
 	procsInput := msg.NewQueue[[]*process.Status](msg.ChannelBufferLen(10))
 	exporter, err := ProcPrometheusEndpoint(
 		&global.ContextInfo{Prometheus: &connector.PrometheusManager{}},
-		&ProcPrometheusConfig{Metrics: &PrometheusConfig{
+		&ProcPrometheusConfig{Metrics: &prom.PrometheusConfig{
 			Port:                        openPort,
 			Path:                        "/metrics",
 			TTL:                         3 * time.Minute,
@@ -193,4 +199,34 @@ func TestProcPrometheusEndpoint_DisaggregatedMetrics(t *testing.T) {
 		assert.Contains(t, exported, `process_network_io_bytes_total{network_io_direction="transmit",process_command="foo"} 33`)
 		assert.Contains(t, exported, `process_network_io_bytes_total{network_io_direction="receive",process_command="foo"} 11`)
 	})
+}
+
+type syncedClock struct {
+	mt  sync.Mutex
+	now time.Time
+}
+
+func (c *syncedClock) Now() time.Time {
+	c.mt.Lock()
+	defer c.mt.Unlock()
+	return c.now
+}
+
+func (c *syncedClock) Advance(t time.Duration) {
+	c.mt.Lock()
+	defer c.mt.Unlock()
+	c.now = c.now.Add(t)
+}
+
+var mmux = sync.Mutex{}
+
+func getMetrics(t require.TestingT, promURL string) string {
+	mmux.Lock()
+	defer mmux.Unlock()
+	resp, err := http.Get(promURL)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	return string(body)
 }

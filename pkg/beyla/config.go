@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/caarlos0/env/v9"
@@ -21,6 +23,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/filter"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubeflags"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/services"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/transform"
 	otelconsumer "go.opentelemetry.io/collector/consumer"
 	"gopkg.in/yaml.v3"
 
@@ -30,7 +33,6 @@ import (
 	cfgutil "github.com/grafana/beyla/v2/pkg/helpers/config"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
 	servicesextra "github.com/grafana/beyla/v2/pkg/services"
-	"github.com/grafana/beyla/v2/pkg/transform"
 )
 
 const ReporterLRUSize = 256
@@ -454,4 +456,33 @@ func LoadConfig(file io.Reader) (*Config, error) {
 	}
 
 	return &cfg, nil
+}
+
+// Duplicates any BEYLA_ prefixed environment variables with the OTEL_EBPF_ prefix
+// and vice versa
+func SetupOBIEnvVars() {
+	for _, env := range os.Environ() {
+		appended := appendAlternateEnvVar(env, "BEYLA_", "OTEL_EBPF_")
+		if !appended {
+			appendAlternateEnvVar(env, "OTEL_EBPF_", "BEYLA_")
+		}
+	}
+}
+
+func appendAlternateEnvVar(env, oldPrefix, altPrefix string) bool {
+	oldLen := len(oldPrefix)
+	if len(env) > (oldLen+1) && strings.HasPrefix(env, oldPrefix) {
+		eqIdx := strings.IndexByte(env, '=')
+		if eqIdx > (oldLen + 1) {
+			key := env[:eqIdx]
+			val := env[eqIdx+1:]
+			newKey := altPrefix + key[oldLen:]
+			// Only set if not already set
+			if os.Getenv(newKey) == "" {
+				os.Setenv(newKey, val)
+			}
+			return true
+		}
+	}
+	return false
 }

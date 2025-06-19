@@ -226,13 +226,13 @@ func (pa *pollAccounter) snapshot(fetchedProcs map[PID]processAttrs) []Event[pro
 		if len(proc.openPorts) == 0 {
 			if pa.checkNewProcessNotification(pid, reportedProcs, notReadyProcs) {
 				events = append(events, Event[processAttrs]{Type: EventCreated, Obj: proc})
-				log.Info("Process added", "pid", pid, "name", proc.processName, "status", proc.processStatus, "age", proc.processAge.Round(time.Second))
+				log.Debug("Process added", "pid", pid, "name", proc.processName, "status", proc.processStatus, "age", proc.processAge.Round(time.Second))
 			}
 		} else {
 			for _, port := range proc.openPorts {
 				if pa.checkNewProcessConnectionNotification(proc, port, currentPidPorts, reportedProcs, notReadyProcs) {
 					events = append(events, Event[processAttrs]{Type: EventCreated, Obj: proc})
-					log.Info("Process added", "pid", pid, "name", proc.processName, "status", proc.processStatus, "age", proc.processAge.Round(time.Second), "port", port)
+					log.Debug("Process added", "pid", pid, "name", proc.processName, "status", proc.processStatus, "age", proc.processAge.Round(time.Second), "port", port)
 					// skip checking new connections for that process
 					continue
 				}
@@ -243,7 +243,7 @@ func (pa *pollAccounter) snapshot(fetchedProcs map[PID]processAttrs) []Event[pro
 	for pid, proc := range pa.pids {
 		if _, ok := fetchedProcs[pid]; !ok {
 			events = append(events, Event[processAttrs]{Type: EventDeleted, Obj: proc})
-			log.Info("Process removed", "pid", pid, "name", proc.processName, "status", proc.processStatus, "age", proc.processAge.Round(time.Second))
+			log.Debug("Process removed", "pid", pid, "name", proc.processName, "status", proc.processStatus, "age", proc.processAge.Round(time.Second))
 		}
 	}
 
@@ -366,7 +366,7 @@ func fetchProcessPorts(scanPorts bool, minProcessAge time.Duration) (map[PID]pro
 
 		// Check if the process is running for more than the minProcessAge
 		if duration < minProcessAge {
-			log.Info("Skipping process", "pid", pid, "name", processName, "status", status, "age", duration.Round(time.Microsecond))
+			log.Debug("Skipping process", "pid", pid, "name", processName, "status", status, "age", duration.Round(time.Microsecond))
 			continue
 		}
 		if !scanPorts {

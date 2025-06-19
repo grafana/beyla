@@ -1,14 +1,13 @@
 package logger
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"io"
 	"log/slog"
-	"unsafe"
 
 	"github.com/cilium/ebpf"
+	"golang.org/x/sys/unix"
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla"
@@ -81,17 +80,8 @@ func (p *BPFLogger) processLogEvent(_ *ebpfcommon.EBPFParseContext, _ *config.EB
 	event, err := ebpfcommon.ReinterpretCast[BPFLogInfo](record.RawSample)
 
 	if err == nil {
-		p.log.Debug(readString(event.Log[:]), "pid", event.Pid, "comm", readString(event.Comm[:]))
+		p.log.Debug(unix.ByteSliceToString(event.Log[:]), "pid", event.Pid, "comm", unix.ByteSliceToString(event.Comm[:]))
 	}
 
 	return request.Span{}, true, nil
-}
-
-func readString(data []uint8) string {
-	l := bytes.IndexByte(data, 0)
-	if l < 0 {
-		l = len(data)
-	}
-
-	return (*(*string)(unsafe.Pointer(&data)))[:l]
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	obiDiscover "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/discover"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/kube"
@@ -19,7 +20,7 @@ import (
 func SurveyEventGenerator(
 	cfg *transform.KubernetesDecorator,
 	k8sInformer *kube.MetadataProvider,
-	input *msg.Queue[[]Event[ebpf.Instrumentable]],
+	input *msg.Queue[[]obiDiscover.Event[ebpf.Instrumentable]],
 	output *msg.Queue[exec.ProcessEvent],
 ) swarm.InstanceFunc {
 	m := &surveyor{
@@ -43,7 +44,7 @@ func SurveyEventGenerator(
 
 type surveyor struct {
 	log         *slog.Logger
-	input       <-chan []Event[ebpf.Instrumentable]
+	input       <-chan []obiDiscover.Event[ebpf.Instrumentable]
 	output      *msg.Queue[exec.ProcessEvent]
 	store       *kube.Store
 	clusterName string
@@ -56,7 +57,7 @@ func (m *surveyor) run(_ context.Context) {
 		m.log.Debug("surveying processes", "len", len(i))
 		for _, pe := range i {
 			m.fetchMetadata(&pe.Obj)
-			if pe.Type == EventDeleted {
+			if pe.Type == obiDiscover.EventDeleted {
 				m.output.Send(exec.ProcessEvent{Type: exec.ProcessEventTerminated, File: pe.Obj.FileInfo})
 			} else {
 				m.output.Send(exec.ProcessEvent{Type: exec.ProcessEventCreated, File: pe.Obj.FileInfo})

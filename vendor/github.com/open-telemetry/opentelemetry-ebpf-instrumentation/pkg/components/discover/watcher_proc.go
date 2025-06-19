@@ -10,6 +10,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/shirou/gopsutil/v3/net"
+	"github.com/shirou/gopsutil/v3/process"
+
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf"
 	ebpfcommon "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/common"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/logger"
@@ -17,10 +21,6 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/services"
-	"github.com/shirou/gopsutil/v3/net"
-	"github.com/shirou/gopsutil/v3/process"
-
-	"github.com/grafana/beyla/v2/pkg/beyla"
 )
 
 const (
@@ -42,7 +42,7 @@ type Event[T any] struct {
 
 type PID int32
 
-type processAttrs struct {
+type ProcessAttrs struct {
 	pid            PID
 	openPorts      []uint32
 	metadata       map[string]string
@@ -56,14 +56,13 @@ func wplog() *slog.Logger {
 
 // ProcessWatcherFunc polls every PollInterval for new processes and forwards either new or deleted process PIDs
 // as well as PIDs from processes that setup a new connection
-func ProcessWatcherFunc(cfg *beyla.Config, ebpfContext *ebpfcommon.EBPFEventContext, output *msg.Queue[[]Event[processAttrs]]) swarm.RunFunc {
+func ProcessWatcherFunc(cfg *beyla.Config, ebpfContext *ebpfcommon.EBPFEventContext, output *msg.Queue[[]Event[ProcessAttrs]]) swarm.RunFunc {
 	acc := pollAccounter{
 		cfg:               cfg,
-		ebpfContext:       ebpfContext,
 		output:            output,
 		interval:          cfg.Discovery.PollInterval,
-		pids:              map[PID]processAttrs{},
-		pidPorts:          map[pidPort]processAttrs{},
+		pids:              map[PID]ProcessAttrs{},
+		pidPorts:          map[pidPort]ProcessAttrs{},
 		listProcesses:     fetchProcessPorts,
 		executableReady:   executableReady,
 		loadBPFWatcher:    loadBPFWatcher,
@@ -72,6 +71,7 @@ func ProcessWatcherFunc(cfg *beyla.Config, ebpfContext *ebpfcommon.EBPFEventCont
 		bpfWatcherEnabled: false, // async set by listening on the bpfWatchEvents channel
 		stateMux:          sync.Mutex{},
 		findingCriteria:   FindingCriteria(cfg),
+		ebpfContext:       ebpfContext,
 	}
 	if acc.interval == 0 {
 		acc.interval = defaultPollInterval
@@ -88,16 +88,15 @@ type pidPort struct {
 // TODO: combine the poller with an eBPF listener (poll at start and e.g. every 30 seconds, and keep listening eBPF in background)
 // ^ This is partially done, although it's not fully async, we only use the info to reduce the overhead of port scanning.
 type pollAccounter struct {
-	cfg         *beyla.Config
-	ebpfContext *ebpfcommon.EBPFEventContext
-	interval    time.Duration
+	cfg      *beyla.Config
+	interval time.Duration
 	// last polled process:ports accessible by its pid
-	pids map[PID]processAttrs
+	pids map[PID]ProcessAttrs
 	// last polled process:ports accessible by a combination of pid/connection port
 	// same process might appear several times
-	pidPorts map[pidPort]processAttrs
+	pidPorts map[pidPort]ProcessAttrs
 	// injectable function
-	listProcesses func(bool) (map[PID]processAttrs, error)
+	listProcesses func(bool) (map[PID]ProcessAttrs, error)
 	// injectable function
 	executableReady func(PID) (string, bool)
 	// injectable function to load the bpf program
@@ -108,7 +107,8 @@ type pollAccounter struct {
 	bpfWatcherEnabled bool
 	fetchPorts        bool
 	findingCriteria   []services.Selector
-	output            *msg.Queue[[]Event[processAttrs]]
+	output            *msg.Queue[[]Event[ProcessAttrs]]
+	ebpfContext       *ebpfcommon.EBPFEventContext
 }
 
 func (pa *pollAccounter) run(ctx context.Context) {
@@ -210,9 +210,9 @@ func (pa *pollAccounter) watchForProcessEvents(ctx context.Context, log *slog.Lo
 
 // snapshot compares the current processes with the status of the previous poll
 // and forwards a list of process creation/deletion events
-func (pa *pollAccounter) snapshot(fetchedProcs map[PID]processAttrs) []Event[processAttrs] {
-	var events []Event[processAttrs]
-	currentPidPorts := make(map[pidPort]processAttrs, len(fetchedProcs))
+func (pa *pollAccounter) snapshot(fetchedProcs map[PID]ProcessAttrs) []Event[ProcessAttrs] {
+	var events []Event[ProcessAttrs]
+	currentPidPorts := make(map[pidPort]ProcessAttrs, len(fetchedProcs))
 	reportedProcs := map[PID]struct{}{}
 	notReadyProcs := map[PID]struct{}{}
 	// notify processes that are new, or already existed but have a new connection
@@ -221,12 +221,12 @@ func (pa *pollAccounter) snapshot(fetchedProcs map[PID]processAttrs) []Event[pro
 		// for example, if it's a client with ephemeral connections, which might be later matched by executable name
 		if len(proc.openPorts) == 0 {
 			if pa.checkNewProcessNotification(pid, reportedProcs, notReadyProcs) {
-				events = append(events, Event[processAttrs]{Type: EventCreated, Obj: proc})
+				events = append(events, Event[ProcessAttrs]{Type: EventCreated, Obj: proc})
 			}
 		} else {
 			for _, port := range proc.openPorts {
 				if pa.checkNewProcessConnectionNotification(proc, port, currentPidPorts, reportedProcs, notReadyProcs) {
-					events = append(events, Event[processAttrs]{Type: EventCreated, Obj: proc})
+					events = append(events, Event[ProcessAttrs]{Type: EventCreated, Obj: proc})
 					// skip checking new connections for that process
 					continue
 				}
@@ -236,7 +236,7 @@ func (pa *pollAccounter) snapshot(fetchedProcs map[PID]processAttrs) []Event[pro
 	// notify processes that are removed
 	for pid, proc := range pa.pids {
 		if _, ok := fetchedProcs[pid]; !ok {
-			events = append(events, Event[processAttrs]{Type: EventDeleted, Obj: proc})
+			events = append(events, Event[ProcessAttrs]{Type: EventDeleted, Obj: proc})
 		}
 	}
 
@@ -265,7 +265,6 @@ func executableReady(pid PID) (string, bool) {
 		return "", false
 	}
 	exePath, err := proc.Exe()
-
 	if err != nil {
 		return exePath, errors.Is(err, os.ErrNotExist)
 	}
@@ -274,9 +273,9 @@ func executableReady(pid PID) (string, bool) {
 }
 
 func (pa *pollAccounter) checkNewProcessConnectionNotification(
-	proc processAttrs,
+	proc ProcessAttrs,
 	port uint32,
-	currentPidPorts map[pidPort]processAttrs,
+	currentPidPorts map[pidPort]ProcessAttrs,
 	reportedProcs, notReadyProcs map[PID]struct{},
 ) bool {
 	pp := pidPort{Pid: proc.pid, Port: port}
@@ -326,9 +325,9 @@ func (pa *pollAccounter) checkNewProcessNotification(pid PID, reportedProcs, not
 
 // fetchProcessConnections returns a map with the PIDs of all the running processes as a key,
 // and the open ports for the given process as a value
-func fetchProcessPorts(scanPorts bool) (map[PID]processAttrs, error) {
+func fetchProcessPorts(scanPorts bool) (map[PID]ProcessAttrs, error) {
 	log := wplog()
-	processes := map[PID]processAttrs{}
+	processes := map[PID]ProcessAttrs{}
 	pids, err := process.Pids()
 	if err != nil {
 		return nil, fmt.Errorf("can't get processes: %w", err)
@@ -336,7 +335,7 @@ func fetchProcessPorts(scanPorts bool) (map[PID]processAttrs, error) {
 
 	for _, pid := range pids {
 		if !scanPorts {
-			processes[PID(pid)] = processAttrs{pid: PID(pid), openPorts: []uint32{}}
+			processes[PID(pid)] = ProcessAttrs{pid: PID(pid), openPorts: []uint32{}}
 			continue
 		}
 		conns, err := net.ConnectionsPid("inet", pid)
@@ -349,17 +348,17 @@ func fetchProcessPorts(scanPorts bool) (map[PID]processAttrs, error) {
 		for _, conn := range conns {
 			openPorts = append(openPorts, conn.Laddr.Port)
 		}
-		processes[PID(pid)] = processAttrs{pid: PID(pid), openPorts: openPorts}
+		processes[PID(pid)] = ProcessAttrs{pid: PID(pid), openPorts: openPorts}
 	}
 	return processes, nil
 }
 
-func loadBPFWatcher(ctx context.Context, ebpfContext *ebpfcommon.EBPFEventContext, cfg *beyla.Config, events chan<- watcher.Event) error {
-	wt := watcher.New(cfg.AsOBI(), events)
-	return ebpf.RunUtilityTracer(ctx, ebpfContext, wt)
+func loadBPFWatcher(ctx context.Context, ebpfEventContext *ebpfcommon.EBPFEventContext, cfg *beyla.Config, events chan<- watcher.Event) error {
+	wt := watcher.New(cfg, events)
+	return ebpf.RunUtilityTracer(ctx, ebpfEventContext, wt)
 }
 
-func loadBPFLogger(ctx context.Context, ebpfContext *ebpfcommon.EBPFEventContext, cfg *beyla.Config) error {
-	wt := logger.New(cfg.AsOBI())
-	return ebpf.RunUtilityTracer(ctx, ebpfContext, wt)
+func loadBPFLogger(ctx context.Context, ebpfEventContext *ebpfcommon.EBPFEventContext, cfg *beyla.Config) error {
+	wt := logger.New(cfg)
+	return ebpf.RunUtilityTracer(ctx, ebpfEventContext, wt)
 }

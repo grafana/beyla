@@ -5,18 +5,20 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/cilium/ebpf/link"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf"
 	ebpfcommon "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/common"
+
+	"github.com/cilium/ebpf/link"
+
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers/maps"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/imetrics"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/nodejs"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/otelsdk"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
-
-	"github.com/grafana/beyla/v2/pkg/beyla"
 )
 
 // TraceAttacher creates the available trace.Tracer implementations (Go HTTP tracer, GRPC tracer, Generic tracer...)
@@ -36,6 +38,7 @@ type TraceAttacher struct {
 	// keeps a copy of all the tracers for a given executable path
 	existingTracers     map[uint64]*ebpf.ProcessTracer
 	sdkInjector         *otelsdk.SDKInjector
+	nodeInjector        *nodejs.NodeInjector
 	reusableTracer      *ebpf.ProcessTracer
 	reusableGoTracer    *ebpf.ProcessTracer
 	commonTracersLoaded bool
@@ -56,8 +59,8 @@ type TraceAttacher struct {
 	// This queue will forward any newly discovered process to the instrumentation pipeline.
 	OutputTracerEvents *msg.Queue[Event[*ebpf.Instrumentable]]
 
-	// The common PID filter that's used to filter out events we don't need
-	ebpfEventContext *ebpfcommon.EBPFEventContext
+	// EbpfEventContext allows to set the common PID filter that's used to filter out events we don't need
+	EbpfEventContext *ebpfcommon.EBPFEventContext
 }
 
 func TraceAttacherProvider(ta *TraceAttacher) swarm.InstanceFunc {
@@ -67,15 +70,14 @@ func TraceAttacherProvider(ta *TraceAttacher) swarm.InstanceFunc {
 func (ta *TraceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) {
 	ta.log = slog.With("component", "discover.TraceAttacher")
 	ta.existingTracers = map[uint64]*ebpf.ProcessTracer{}
-	ta.sdkInjector = otelsdk.NewSDKInjector(ta.Cfg.AsOBI())
+	ta.sdkInjector = otelsdk.NewSDKInjector(ta.Cfg)
+	ta.nodeInjector = nodejs.NewNodeInjector(ta.Cfg)
 	ta.processInstances = maps.MultiCounter[uint64]{}
 	ta.beylaPID = os.Getpid()
-
-	obiCfg := ta.Cfg.AsOBI().Discovery
-	ta.ebpfEventContext.CommonPIDsFilter = ebpfcommon.CommonPIDsFilter(&obiCfg)
+	ta.EbpfEventContext.CommonPIDsFilter = ebpfcommon.CommonPIDsFilter(&ta.Cfg.Discovery)
 
 	if err := ta.init(); err != nil {
-		ta.log.Error("can't start process tracer. Stopping it", "error", err)
+		ta.log.Error("cant start process tracer. Stopping it", "error", err)
 		return nil, err
 	}
 
@@ -86,12 +88,15 @@ func (ta *TraceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 		for {
 			select {
 			case <-ctx.Done():
-				// waiting until context is done, in the case of SystemWide instrumentation
-				ta.log.Debug("terminating process attacher")
+				ta.log.Debug("context done. terminating process attacher")
 				ta.close()
-
 				return
-			case instrumentables := <-in:
+			case instrumentables, ok := <-in:
+				if !ok {
+					ta.log.Debug("input channel closed. terminating process attacher")
+					ta.close()
+					return
+				}
 				for _, instr := range instrumentables {
 					ta.log.Debug("Instrumentable", "created", instr.Type, "type", instr.Obj.Type,
 						"exec", instr.Obj.FileInfo.CmdExePath, "pid", instr.Obj.FileInfo.Pid)
@@ -105,6 +110,8 @@ func (ta *TraceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 						}
 
 						if !sdkInstrumented {
+							ta.nodeInjector.NewExecutable(&instr.Obj)
+
 							ta.processInstances.Inc(instr.Obj.FileInfo.Ino)
 							if ok := ta.getTracer(&instr.Obj); ok {
 								ta.OutputTracerEvents.Send(Event[*ebpf.Instrumentable]{Type: EventCreated, Obj: &instr.Obj})
@@ -170,20 +177,20 @@ func (ta *TraceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 				// instance of the executable has different DLLs loaded, e.g. libssl.so.
 				return ta.reuseTracer(ta.reusableTracer, ie)
 			} else {
-				programs = ta.withCommonTracersGroup(newGenericTracersGroup(ta.ebpfEventContext.CommonPIDsFilter, ta.Cfg, ta.Metrics))
+				programs = ta.withCommonTracersGroup(newGenericTracersGroup(ta.EbpfEventContext.CommonPIDsFilter, ta.Cfg, ta.Metrics))
 			}
 		} else {
 			if ta.reusableGoTracer != nil {
 				return ta.reuseTracer(ta.reusableGoTracer, ie)
 			}
 			tracerType = ebpf.Go
-			programs = ta.withCommonTracersGroup(newGoTracersGroup(ta.ebpfEventContext.CommonPIDsFilter, ta.Cfg, ta.Metrics))
+			programs = ta.withCommonTracersGroup(newGoTracersGroup(ta.EbpfEventContext.CommonPIDsFilter, ta.Cfg, ta.Metrics))
 		}
 	case svc.InstrumentableNodejs, svc.InstrumentableJava, svc.InstrumentableRuby, svc.InstrumentablePython, svc.InstrumentableDotnet, svc.InstrumentableGeneric, svc.InstrumentableRust, svc.InstrumentablePHP:
 		if ta.reusableTracer != nil {
 			return ta.reuseTracer(ta.reusableTracer, ie)
 		}
-		programs = ta.withCommonTracersGroup(newGenericTracersGroup(ta.ebpfEventContext.CommonPIDsFilter, ta.Cfg, ta.Metrics))
+		programs = ta.withCommonTracersGroup(newGenericTracersGroup(ta.EbpfEventContext.CommonPIDsFilter, ta.Cfg, ta.Metrics))
 	default:
 		ta.log.Warn("unexpected instrumentable type. This is basically a bug", "type", ie.Type)
 	}
@@ -203,7 +210,7 @@ func (ta *TraceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 
 	tracer := ebpf.NewProcessTracer(tracerType, programs, ta.Cfg.ShutdownTimeout)
 
-	if err := tracer.Init(ta.ebpfEventContext); err != nil {
+	if err := tracer.Init(ta.EbpfEventContext); err != nil {
 		ta.log.Error("couldn't trace process. Stopping process tracer", "error", err)
 		return false
 	}

@@ -148,7 +148,12 @@ func makeTracesReceiver(
 	ctxInfo *global.ContextInfo,
 	selectorCfg *attributes.SelectorConfig,
 	input *msg.Queue[[]request.Span],
+	resOpts ...ResourceOpt,
 ) *tracesOTELReceiver {
+	resourceOpts := resourceOptions{}
+	for _, opt := range resOpts {
+		opt(&resourceOpts)
+	}
 	return &tracesOTELReceiver{
 		cfg:                cfg,
 		ctxInfo:            ctxInfo,
@@ -157,6 +162,7 @@ func makeTracesReceiver(
 		spanMetricsEnabled: spanMetricsEnabled,
 		input:              input.Subscribe(),
 		attributeCache:     expirable2.NewLRU[svc.UID, []attribute.KeyValue](1024, nil, 5*time.Minute),
+		resourceOpts:       resourceOpts,
 	}
 }
 
@@ -167,12 +173,13 @@ func TracesReceiver(
 	spanMetricsEnabled bool,
 	selectorCfg *attributes.SelectorConfig,
 	input *msg.Queue[[]request.Span],
+	resOpts ...ResourceOpt,
 ) swarm.InstanceFunc {
 	return func(_ context.Context) (swarm.RunFunc, error) {
 		if !cfg.Enabled() {
 			return swarm.EmptyRunFunc()
 		}
-		tr := makeTracesReceiver(cfg, spanMetricsEnabled, ctxInfo, selectorCfg, input)
+		tr := makeTracesReceiver(cfg, spanMetricsEnabled, ctxInfo, selectorCfg, input, resOpts...)
 		return tr.provideLoop, nil
 	}
 }
@@ -185,6 +192,7 @@ type tracesOTELReceiver struct {
 	spanMetricsEnabled bool
 	attributeCache     *expirable2.LRU[svc.UID, []attribute.KeyValue]
 	input              <-chan []request.Span
+	resourceOpts       resourceOptions
 }
 
 func GetUserSelectedAttributes(selectorCfg *attributes.SelectorConfig) (map[attr.Name]struct{}, error) {
@@ -262,7 +270,7 @@ func (tr *tracesOTELReceiver) processSpans(ctx context.Context, exp exporter.Tra
 		if len(spanGroup) > 0 {
 			sample := spanGroup[0]
 			envResourceAttrs := ResourceAttrsFromEnv(&sample.Span.Service)
-			traces := generateTracesWithAttributes(tr.attributeCache, &sample.Span.Service, envResourceAttrs, tr.ctxInfo.HostID, spanGroup)
+			traces := generateTracesWithAttributes(tr.attributeCache, &sample.Span.Service, envResourceAttrs, tr.ctxInfo.HostID, spanGroup, tr.resourceOpts)
 			err := exp.ConsumeTraces(ctx, traces)
 			if err != nil {
 				slog.Error("error sending trace to consumer", "error", err)
@@ -499,13 +507,21 @@ func traceAppResourceAttrs(cache *expirable2.LRU[svc.UID, []attribute.KeyValue],
 	return attrs
 }
 
-func generateTracesWithAttributes(cache *expirable2.LRU[svc.UID, []attribute.KeyValue], svc *svc.Attrs, envResourceAttrs []attribute.KeyValue, hostID string, spans []TraceSpanAndAttributes) ptrace.Traces {
+func generateTracesWithAttributes(
+	cache *expirable2.LRU[svc.UID, []attribute.KeyValue],
+	svc *svc.Attrs,
+	envResourceAttrs []attribute.KeyValue,
+	hostID string,
+	spans []TraceSpanAndAttributes,
+	opts resourceOptions,
+) ptrace.Traces {
 	traces := ptrace.NewTraces()
 	rs := traces.ResourceSpans().AppendEmpty()
 	resourceAttrs := traceAppResourceAttrs(cache, hostID, svc)
 	resourceAttrs = append(resourceAttrs, envResourceAttrs...)
 	resourceAttrsMap := attrsToMap(resourceAttrs)
 	resourceAttrsMap.PutStr(string(semconv.OTelLibraryNameKey), reporterName)
+	addAttrsToMap(opts.overrideAttrs, resourceAttrsMap)
 	resourceAttrsMap.MoveTo(rs.Resource().Attributes())
 
 	for _, spanWithAttributes := range spans {
@@ -557,8 +573,19 @@ func generateTracesWithAttributes(cache *expirable2.LRU[svc.UID, []attribute.Key
 }
 
 // GenerateTraces creates a ptrace.Traces from a request.Span
-func GenerateTraces(cache *expirable2.LRU[svc.UID, []attribute.KeyValue], svc *svc.Attrs, envResourceAttrs []attribute.KeyValue, hostID string, spans []TraceSpanAndAttributes) ptrace.Traces {
-	return generateTracesWithAttributes(cache, svc, envResourceAttrs, hostID, spans)
+func GenerateTraces(
+	cache *expirable2.LRU[svc.UID, []attribute.KeyValue],
+	svc *svc.Attrs,
+	envResourceAttrs []attribute.KeyValue,
+	hostID string,
+	spans []TraceSpanAndAttributes,
+	opts ...ResourceOpt,
+) ptrace.Traces {
+	rOpts := resourceOptions{}
+	for _, opt := range opts {
+		opt(&rOpts)
+	}
+	return generateTracesWithAttributes(cache, svc, envResourceAttrs, hostID, spans, rOpts)
 }
 
 // createSubSpans creates the internal spans for a request.Span
@@ -591,20 +618,24 @@ func createSubSpans(span *request.Span, parentSpanID pcommon.SpanID, traceID pco
 // attrsToMap converts a slice of attribute.KeyValue to a pcommon.Map
 func attrsToMap(attrs []attribute.KeyValue) pcommon.Map {
 	m := pcommon.NewMap()
-	m.EnsureCapacity(len(attrs))
+	addAttrsToMap(attrs, m)
+	return m
+}
+
+func addAttrsToMap(attrs []attribute.KeyValue, dst pcommon.Map) {
+	dst.EnsureCapacity(dst.Len() + len(attrs))
 	for _, attr := range attrs {
 		switch v := attr.Value.AsInterface().(type) {
 		case string:
-			m.PutStr(string(attr.Key), v)
+			dst.PutStr(string(attr.Key), v)
 		case int64:
-			m.PutInt(string(attr.Key), v)
+			dst.PutInt(string(attr.Key), v)
 		case float64:
-			m.PutDouble(string(attr.Key), v)
+			dst.PutDouble(string(attr.Key), v)
 		case bool:
-			m.PutBool(string(attr.Key), v)
+			dst.PutBool(string(attr.Key), v)
 		}
 	}
-	return m
 }
 
 // codeToStatusCode converts a codes.Code to a ptrace.StatusCode

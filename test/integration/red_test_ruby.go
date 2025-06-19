@@ -124,7 +124,7 @@ func testREDMetricsRailsHTTPS(t *testing.T) {
 	}
 }
 
-// Assumes we've run the metics tests
+// Assumes we've run the metrics tests
 func testHTTPTracesNestedNginx(t *testing.T) {
 	for i := 1; i <= 4; i++ {
 		go doHTTPGet(t, "https://localhost:8443/users/"+strconv.Itoa(i), 200)

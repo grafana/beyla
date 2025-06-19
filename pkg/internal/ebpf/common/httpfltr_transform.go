@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/grafana/beyla/v2/pkg/internal/ebpf/ringbuf"
-	"github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/ringbuf"
 )
 
 // misses serviceID
@@ -34,7 +34,7 @@ func httpInfoToSpan(info *HTTPInfo) request.Span {
 		TraceID:        info.Tp.TraceId,
 		SpanID:         info.Tp.SpanId,
 		ParentSpanID:   info.Tp.ParentId,
-		Flags:          info.Tp.Flags,
+		TraceFlags:     info.Tp.Flags,
 		Pid: request.PidInfo{
 			HostPID:   info.Pid.HostPid,
 			UserPID:   info.Pid.UserPid,

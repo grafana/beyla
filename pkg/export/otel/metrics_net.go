@@ -7,26 +7,27 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/ebpf"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/expire"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel/metric"
+	metric2 "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel/metric/api/metric"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 	"go.opentelemetry.io/otel/attribute"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
 	"github.com/grafana/beyla/v2/pkg/buildinfo"
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
-	"github.com/grafana/beyla/v2/pkg/export/expire"
-	"github.com/grafana/beyla/v2/pkg/export/otel/metric"
-	metric2 "github.com/grafana/beyla/v2/pkg/export/otel/metric/api/metric"
-	"github.com/grafana/beyla/v2/pkg/internal/netolly/ebpf"
+	"github.com/grafana/beyla/v2/pkg/export/extraattributes"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
-	"github.com/grafana/beyla/v2/pkg/pipe/msg"
-	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 // NetMetricsConfig extends MetricsConfig for Network Metrics
 type NetMetricsConfig struct {
-	Metrics            *MetricsConfig
-	AttributeSelectors attributes.Selection
+	Metrics     *MetricsConfig
+	SelectorCfg *attributes.SelectorConfig
 	// Deprecated: to be removed in Beyla 3.0 with BEYLA_NETWORK_METRICS bool flag
 	GloballyEnabled bool
 }
@@ -86,8 +87,8 @@ func NetMetricsExporterProvider(
 			// This node is not going to be instantiated. Let the swarm library just ignore it.
 			return swarm.EmptyRunFunc()
 		}
-		if cfg.AttributeSelectors == nil {
-			cfg.AttributeSelectors = make(attributes.Selection)
+		if cfg.SelectorCfg.SelectionCfg == nil {
+			cfg.SelectorCfg.SelectionCfg = make(attributes.Selection)
 		}
 		exporter, err := newMetricsExporter(ctx, ctxInfo, cfg, input)
 		if err != nil {
@@ -108,7 +109,7 @@ func newMetricsExporter(
 		return nil, err
 	}
 
-	resource := createFilteredNetworkResource(ctxInfo.HostID, cfg.AttributeSelectors)
+	resource := createFilteredNetworkResource(ctxInfo.HostID, cfg.SelectorCfg.SelectionCfg)
 	provider, err := newMeterProvider(resource, &exporter, cfg.Metrics.Interval)
 
 	if err != nil {
@@ -116,7 +117,7 @@ func newMetricsExporter(
 		return nil, err
 	}
 
-	attrProv, err := attributes.NewAttrSelector(ctxInfo.MetricAttributeGroups, cfg.AttributeSelectors)
+	attrProv, err := extraattributes.NewBeylaAttrSelector(ctxInfo.MetricAttributeGroups, cfg.SelectorCfg)
 	if err != nil {
 		return nil, fmt.Errorf("network OTEL exporter attributes enable: %w", err)
 	}
@@ -140,7 +141,7 @@ func newMetricsExporter(
 			return nil, err
 		}
 
-		log.Debug("restricting attributes not in this list", "attributes", cfg.AttributeSelectors)
+		log.Debug("restricting attributes not in this list", "attributes", cfg.SelectorCfg.SelectionCfg)
 		attrs := attributes.OpenTelemetryGetters(
 			ebpf.RecordGetters,
 			attrProv.For(attributes.BeylaNetworkFlow))
@@ -158,7 +159,7 @@ func newMetricsExporter(
 			log.Error("creating observable counter", "error", err)
 			return nil, err
 		}
-		log.Debug("restricting attributes not in this list", "attributes", cfg.AttributeSelectors)
+		log.Debug("restricting attributes not in this list", "attributes", cfg.SelectorCfg.SelectionCfg)
 		attrs := attributes.OpenTelemetryGetters(
 			ebpf.RecordGetters,
 			attrProv.For(attributes.BeylaNetworkInterZone))

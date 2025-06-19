@@ -28,6 +28,9 @@ import (
 	"github.com/vishvananda/netlink"
 )
 
+// this is going to be removed
+//
+//nolint:govet
 func TestRegisterer(t *testing.T) {
 	ctx := t.Context()
 

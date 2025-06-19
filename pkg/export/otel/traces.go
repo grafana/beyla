@@ -13,6 +13,13 @@ import (
 	"time"
 
 	expirable2 "github.com/hashicorp/golang-lru/v2/expirable"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
+	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/configgrpc"
 	"go.opentelemetry.io/collector/config/confighttp"
@@ -37,15 +44,10 @@ import (
 	tracenoop "go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/zap"
 
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
-	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
-	"github.com/grafana/beyla/v2/pkg/export/instrumentations"
+	"github.com/grafana/beyla/v2/pkg/export/extraattributes"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
-	"github.com/grafana/beyla/v2/pkg/internal/request"
-	"github.com/grafana/beyla/v2/pkg/internal/svc"
-	"github.com/grafana/beyla/v2/pkg/pipe/msg"
-	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
+	internalrequest "github.com/grafana/beyla/v2/pkg/internal/request"
 )
 
 func tlog() *slog.Logger {
@@ -128,7 +130,7 @@ func (m *TracesConfig) OTLPTracesEndpoint() (string, bool) {
 }
 
 func (m *TracesConfig) guessProtocol() Protocol {
-	// If no explicit protocol is set, we guess it it from the metrics enpdoint port
+	// If no explicit protocol is set, we guess it it from the metrics endpoint port
 	// (assuming it uses a standard port or a development-like form like 14317, 24317, 14318...)
 	ep, _, err := parseTracesEndpoint(m)
 	if err == nil {
@@ -144,13 +146,16 @@ func (m *TracesConfig) guessProtocol() Protocol {
 }
 
 func makeTracesReceiver(
-	cfg TracesConfig, spanMetricsEnabled bool, ctxInfo *global.ContextInfo, userAttribSelection attributes.Selection,
+	cfg TracesConfig,
+	spanMetricsEnabled bool,
+	ctxInfo *global.ContextInfo,
+	selectorCfg *attributes.SelectorConfig,
 	input *msg.Queue[[]request.Span],
 ) *tracesOTELReceiver {
 	return &tracesOTELReceiver{
 		cfg:                cfg,
 		ctxInfo:            ctxInfo,
-		attributes:         userAttribSelection,
+		selectorCfg:        selectorCfg,
 		is:                 instrumentations.NewInstrumentationSelection(cfg.Instrumentations),
 		spanMetricsEnabled: spanMetricsEnabled,
 		input:              input.Subscribe(),
@@ -160,14 +165,17 @@ func makeTracesReceiver(
 
 // TracesReceiver creates a terminal node that consumes request.Spans and sends OpenTelemetry metrics to the configured consumers.
 func TracesReceiver(
-	ctxInfo *global.ContextInfo, cfg TracesConfig, spanMetricsEnabled bool, userAttribSelection attributes.Selection,
+	ctxInfo *global.ContextInfo,
+	cfg TracesConfig,
+	spanMetricsEnabled bool,
+	selectorCfg *attributes.SelectorConfig,
 	input *msg.Queue[[]request.Span],
 ) swarm.InstanceFunc {
 	return func(_ context.Context) (swarm.RunFunc, error) {
 		if !cfg.Enabled() {
 			return swarm.EmptyRunFunc()
 		}
-		tr := makeTracesReceiver(cfg, spanMetricsEnabled, ctxInfo, userAttribSelection, input)
+		tr := makeTracesReceiver(cfg, spanMetricsEnabled, ctxInfo, selectorCfg, input)
 		return tr.provideLoop, nil
 	}
 }
@@ -175,16 +183,16 @@ func TracesReceiver(
 type tracesOTELReceiver struct {
 	cfg                TracesConfig
 	ctxInfo            *global.ContextInfo
-	attributes         attributes.Selection
+	selectorCfg        *attributes.SelectorConfig
 	is                 instrumentations.InstrumentationSelection
 	spanMetricsEnabled bool
 	attributeCache     *expirable2.LRU[svc.UID, []attribute.KeyValue]
 	input              <-chan []request.Span
 }
 
-func GetUserSelectedAttributes(attrs attributes.Selection) (map[attr.Name]struct{}, error) {
+func GetUserSelectedAttributes(selectorCfg *attributes.SelectorConfig) (map[attr.Name]struct{}, error) {
 	// Get user attributes
-	attribProvider, err := attributes.NewAttrSelector(attributes.GroupTraces, attrs)
+	attribProvider, err := extraattributes.NewBeylaAttrSelector(attributes.GroupTraces, selectorCfg)
 	if err != nil {
 		return nil, err
 	}
@@ -198,7 +206,7 @@ func GetUserSelectedAttributes(attrs attributes.Selection) (map[attr.Name]struct
 }
 
 func (tr *tracesOTELReceiver) getConstantAttributes() (map[attr.Name]struct{}, error) {
-	traceAttrs, err := GetUserSelectedAttributes(tr.attributes)
+	traceAttrs, err := GetUserSelectedAttributes(tr.selectorCfg)
 	if err != nil {
 		return nil, err
 	}
@@ -210,7 +218,7 @@ func (tr *tracesOTELReceiver) getConstantAttributes() (map[attr.Name]struct{}, e
 }
 
 func spanDiscarded(span *request.Span, is instrumentations.InstrumentationSelection) bool {
-	return span.IgnoreTraces() || span.Service.ExportsOTelTraces() || !acceptSpan(is, span)
+	return internalrequest.IgnoreTraces(span) || span.Service.ExportsOTelTraces() || !acceptSpan(is, span)
 }
 
 func GroupSpans(ctx context.Context, spans []request.Span, traceAttrs map[attr.Name]struct{}, sampler trace.Sampler, is instrumentations.InstrumentationSelection) map[svc.UID][]TraceSpanAndAttributes {
@@ -332,7 +340,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 		config.RetryConfig = getRetrySettings(cfg)
 		config.ClientConfig = confighttp.ClientConfig{
 			Endpoint: opts.Scheme + "://" + opts.Endpoint + opts.BaseURLPath,
-			TLSSetting: configtls.ClientConfig{
+			TLS: configtls.ClientConfig{
 				Insecure:           opts.Insecure,
 				InsecureSkipVerify: cfg.InsecureSkipVerify,
 			},
@@ -386,7 +394,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 		config.RetryConfig = getRetrySettings(cfg)
 		config.ClientConfig = configgrpc.ClientConfig{
 			Endpoint: endpoint.String(),
-			TLSSetting: configtls.ClientConfig{
+			TLS: configtls.ClientConfig{
 				Insecure:           opts.Insecure,
 				InsecureSkipVerify: cfg.InsecureSkipVerify,
 			},

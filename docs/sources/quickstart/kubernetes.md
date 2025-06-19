@@ -32,39 +32,39 @@ to be instrumented.
 When Beyla is deployed as a regular operating system process that instrument other processes,
 the unique service selectors are the network port where the instrumented process should
 be listening to (can be specified with the `BEYLA_OPEN_PORT` environment variable) or
-a regular expression to match against the executable file name of the process to
-instrument (`BEYLA_EXECUTABLE_NAME` environment variable).
+a [Glob](https://en.wikipedia.org/wiki/Glob_(programming)) to match against the executable filename of the process to
+instrument (`BEYLA_AUTO_TARGET_EXE` environment variable).
 
 To select multiple groups of processes, the Beyla YAML configuration file format
-provides a `discovery.services` section that accepts multiple selector groups:
+provides a `discovery.instrument` section that accepts multiple selector groups:
 
 ```yaml
 discovery:
-  services:
+  instrument:
     # Instrument any process using the ports from 8080 to 8089
     - open_ports: 8080-8089
-    # Instrument any process whose executable contains "http"
-    - exe_path: "http"
-    # Instrument any process with an executable containing "nginx"
+    # Instrument any process whose command line path contains "http"
+    - exe_path: "*http*"
+    # Instrument any process with a command line path containing "nginx"
     # and using the port 443 (both conditions must be fulfilled)
     - open_ports: 443
-      exe_path: "nginx"
+      exe_path: "*nginx*"
 ```
 
 The above criteria are insufficient for Kubernetes pods where the ports are ephemeral
 and internal to the pods. Also, pods are a level of abstraction that should hide
 details such as the name of their executables.
-For that reason, Beyla v1.2 introduces the new Kubernetes service
-selection criteria. All of them accept a [Go RE2-syntax regular expression](https://github.com/google/re2/wiki/Syntax)
+For that reason, Beyla makes it possible to use Kubernetes attributes in the service instrumentation
+selection criteria. All of them accept a [glob](https://en.wikipedia.org/wiki/Glob_(programming))
 as value:
 
 - `k8s_namespace`: only instrument applications in the
-  namespace matching the provided regular expression.
+  namespace matching the provided glob.
 - `k8s_deployment_name`: only instrument Pods that belong to
-  a Deployment with a name matching the provided regular expression.
+  a Deployment with a name matching the provided glob.
 - `k8s_replicaset_name`: only instrument Pods that belong to
-  a ReplicaSet with a name matching the provided regular expression.
-- `k8s_pod_name`: only instrument Pods with a name matching the provided regular expression.
+  a ReplicaSet with a name matching the provided glob.
+- `k8s_pod_name`: only instrument Pods with a name matching the provided glob.
 
 ## Example scenario
 
@@ -273,10 +273,10 @@ data:
       unmatched: heuristic
     # let's instrument only the docs server
     discovery:
-      services:
-        - k8s_deployment_name: "^docs$"
+      instrument:
+        - k8s_deployment_name: "docs"
         # uncomment the following line to also instrument the website server
-        # - k8s_deployment_name: "^website$"
+        # - k8s_deployment_name: "website"
 ---
 apiVersion: apps/v1
 kind: DaemonSet

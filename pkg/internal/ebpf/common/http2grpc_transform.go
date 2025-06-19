@@ -9,15 +9,15 @@ import (
 	"unsafe"
 
 	lru "github.com/hashicorp/golang-lru/v2"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/bhpack"
+	ebpfcommon "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/common"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/ringbuf"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/net/http2"
-
-	"github.com/grafana/beyla/v2/pkg/internal/ebpf/bhpack"
-	"github.com/grafana/beyla/v2/pkg/internal/ebpf/ringbuf"
-	"github.com/grafana/beyla/v2/pkg/internal/request"
 )
 
-type BPFHTTP2Info bpfHttp2GrpcRequestT
+type BPFHTTP2Info ebpfcommon.BpfHttp2GrpcRequestT
 
 type Protocol uint8
 
@@ -199,10 +199,21 @@ func readRetMetaFrame(parseContext *EBPFParseContext, connID uint64, fr *http2.F
 		// end up first in the headers list.
 		switch hfKey {
 		case ":status":
-			status, _ = strconv.Atoi(hf.Value)
+			if !grpc { // only set the HTTP status if we didn't find grpc status
+				status, _ = strconv.Atoi(hf.Value)
+			}
 			ok = true
 		case "grpc-status":
 			status, _ = strconv.Atoi(hf.Value)
+			protocolIsGRPC(parseContext.h2c, connID)
+			grpc = true
+			ok = true
+		case "grpc-message":
+			if hf.Value != "" {
+				if !grpc { // unset or we have the HTTP status
+					status = 2
+				}
+			}
 			protocolIsGRPC(parseContext.h2c, connID)
 			grpc = true
 			ok = true
@@ -246,7 +257,7 @@ func http2InfoToSpan(info *BPFHTTP2Info, method, path, peer, host string, status
 		TraceID:       trace.TraceID(info.Tp.TraceId),
 		SpanID:        trace.SpanID(info.Tp.SpanId),
 		ParentSpanID:  trace.SpanID(info.Tp.ParentId),
-		Flags:         info.Tp.Flags,
+		TraceFlags:    info.Tp.Flags,
 		Pid: request.PidInfo{
 			HostPID:   info.Pid.HostPid,
 			UserPID:   info.Pid.UserPid,

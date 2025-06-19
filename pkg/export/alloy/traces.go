@@ -7,18 +7,18 @@ import (
 	"time"
 
 	expirable2 "github.com/hashicorp/golang-lru/v2/expirable"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	attributes "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
+	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
-	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
-	"github.com/grafana/beyla/v2/pkg/export/instrumentations"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
-	"github.com/grafana/beyla/v2/pkg/internal/request"
-	"github.com/grafana/beyla/v2/pkg/internal/svc"
-	"github.com/grafana/beyla/v2/pkg/pipe/msg"
-	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 // TracesReceiver creates a terminal node that consumes request.Spans and sends OpenTelemetry traces to the configured consumers.
@@ -26,7 +26,7 @@ func TracesReceiver(
 	ctxInfo *global.ContextInfo,
 	cfg *beyla.TracesReceiverConfig,
 	spanMetricsEnabled bool,
-	userAttribSelection attributes.Selection,
+	selectorCfg *attributes.SelectorConfig,
 	input *msg.Queue[[]request.Span],
 ) swarm.InstanceFunc {
 	return func(_ context.Context) (swarm.RunFunc, error) {
@@ -43,7 +43,7 @@ func TracesReceiver(
 			attributeCache: expirable2.NewLRU[svc.UID, []attribute.KeyValue](1024, nil, 5*time.Minute),
 		}
 		// Get user attributes
-		if err := tr.fetchConstantAttributes(userAttribSelection); err != nil {
+		if err := tr.fetchConstantAttributes(selectorCfg); err != nil {
 			return nil, fmt.Errorf("error fetching user defined attributes: %w", err)
 		}
 		return tr.provideLoop, nil
@@ -60,9 +60,9 @@ type tracesReceiver struct {
 	attributeCache     *expirable2.LRU[svc.UID, []attribute.KeyValue]
 }
 
-func (tr *tracesReceiver) fetchConstantAttributes(attrs attributes.Selection) error {
+func (tr *tracesReceiver) fetchConstantAttributes(selectorCfg *attributes.SelectorConfig) error {
 	var err error
-	tr.traceAttrs, err = otel.GetUserSelectedAttributes(attrs)
+	tr.traceAttrs, err = otel.GetUserSelectedAttributes(selectorCfg)
 	if err != nil {
 		return err
 	}

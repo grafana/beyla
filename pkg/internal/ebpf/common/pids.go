@@ -4,11 +4,12 @@ import (
 	"log/slog"
 	"sync"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/services"
+
 	"github.com/grafana/beyla/v2/pkg/export/otel"
-	"github.com/grafana/beyla/v2/pkg/internal/exec"
-	"github.com/grafana/beyla/v2/pkg/internal/request"
-	"github.com/grafana/beyla/v2/pkg/internal/svc"
-	"github.com/grafana/beyla/v2/pkg/services"
 )
 
 type PIDType uint8
@@ -106,7 +107,7 @@ func (pf *PIDsFilter) CurrentPIDs(t PIDType) map[uint32]map[uint32]svc.Attrs {
 func (pf *PIDsFilter) normalizeTraceContext(span *request.Span) {
 	if !span.TraceID.IsValid() {
 		span.TraceID = otel.RandomTraceID()
-		span.Flags = 1
+		span.TraceFlags = 1
 	}
 	if !span.SpanID.IsValid() {
 		span.SpanID = otel.RandomSpanID()

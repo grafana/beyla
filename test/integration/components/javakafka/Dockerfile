@@ -10,7 +10,7 @@ RUN microdnf update \
 
 # Install Maven
 ARG USER_HOME_DIR="/cache"
-ARG MAVEN_DOWNLOAD_URL=https://dlcdn.apache.org/maven/maven-3/3.9.4/binaries/apache-maven-3.9.4-bin.tar.gz
+ARG MAVEN_DOWNLOAD_URL=https://dlcdn.apache.org/maven/maven-3/3.9.10/binaries/apache-maven-3.9.10-bin.tar.gz
 
 RUN mkdir -p /usr/share/maven /usr/share/maven/ref \
   && curl -L -o /tmp/apache-maven.tar.gz ${MAVEN_DOWNLOAD_URL} \

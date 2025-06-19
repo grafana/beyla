@@ -6,15 +6,16 @@ import (
 	"time"
 
 	"github.com/mariomac/guara/pkg/test"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
-	"github.com/grafana/beyla/v2/pkg/export/instrumentations"
+	"github.com/grafana/beyla/v2/pkg/export/extraattributes"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
-	"github.com/grafana/beyla/v2/pkg/internal/svc"
-	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 	"github.com/grafana/beyla/v2/test/collector"
 )
 
@@ -42,11 +43,13 @@ func TestProcMetrics_Disaggregated(t *testing.T) {
 				Instrumentations: []string{
 					instrumentations.InstrumentationALL,
 				},
-			}, AttributeSelectors: attributes.Selection{
-				attributes.ProcessCPUTime.Section:        includedAttributes,
-				attributes.ProcessCPUUtilization.Section: includedAttributes,
-				attributes.ProcessDiskIO.Section:         includedAttributes,
-				attributes.ProcessNetIO.Section:          includedAttributes,
+			}, SelectorCfg: &attributes.SelectorConfig{
+				SelectionCfg: attributes.Selection{
+					extraattributes.ProcessCPUTime.Section:        includedAttributes,
+					extraattributes.ProcessCPUUtilization.Section: includedAttributes,
+					extraattributes.ProcessDiskIO.Section:         includedAttributes,
+					extraattributes.ProcessNetIO.Section:          includedAttributes,
+				},
 			},
 		}, procsInput)(ctx)
 	require.NoError(t, err)
@@ -163,7 +166,7 @@ func TestGetFilteredProcessResourceAttrs(t *testing.T) {
 	}
 
 	attrSelector := attributes.Selection{
-		attributes.ProcessCPUTime.Section: attributes.InclusionLists{
+		extraattributes.ProcessCPUTime.Section: attributes.InclusionLists{
 			Include: []string{"*"},
 			Exclude: []string{"process.command_args", "process.exec_path"},
 		},
@@ -204,7 +207,7 @@ func TestGetFilteredProcessResourceAttrs(t *testing.T) {
 	assert.False(t, hasExecPath, "process.exec_path should be filtered out")
 
 	attrSelector = attributes.Selection{
-		attributes.ProcessMemoryUsage.Section: attributes.InclusionLists{
+		extraattributes.ProcessMemoryUsage.Section: attributes.InclusionLists{
 			Include: []string{"*"},
 			Exclude: []string{"process.*"}, // Exclude all process attributes
 		},

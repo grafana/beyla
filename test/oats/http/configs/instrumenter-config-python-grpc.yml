@@ -1,5 +1,5 @@
 discovery:
-  services:
+  instrument:
     - namespace: grpc-python
       name: grpcsrv
       open_ports: 50051

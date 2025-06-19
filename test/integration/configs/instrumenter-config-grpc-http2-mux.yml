@@ -8,10 +8,10 @@ prometheus_export:
 otel_traces_export:
   endpoint: http://jaeger:4318
 discovery:
-  services:
+  instrument:
     - namespace: grpc-http2-go
       name: server
-      exe_path: testserver
+      exe_path: "*/testserver"
 attributes:
   select:
     "*":

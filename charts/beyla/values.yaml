@@ -333,3 +333,28 @@ k8sCache:
   podAnnotations: {}
   # -- Adds custom labels to the Beyla Kube Cache Pods.
   podLabels: {}
+
+# -- Extra k8s manifests to deploy
+extraObjects: []
+# extraObjects:
+# - apiVersion: v1
+#   kind: Secret
+#   metadata:
+#     name: api-token
+#     namespace: {{ .Release.Namespace }}
+#   stringData:
+#     TOP_SECRET: 'hush hush'
+#
+# Alternatively, you can use strings, which lets you use additional templating features:
+#
+# extraObjects:
+# - |
+#   apiVersion: v1
+#   kind: Secret
+#   metadata:
+#     name: {{ include "beyla.fullname" . }}-api-token
+#     namespace: {{ include "beyla.namespace" .}}
+#    labels:
+#      {{- include "beyla.labels" . | nindent 4 }}
+#   stringData:
+#     TOP_SECRET: 'hush hush'

@@ -21,29 +21,25 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/gotracer"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/goexec"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/config"
 	ebpfcommon "github.com/grafana/beyla/v2/pkg/internal/ebpf/common"
-	"github.com/grafana/beyla/v2/pkg/internal/exec"
-	"github.com/grafana/beyla/v2/pkg/internal/goexec"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
-	"github.com/grafana/beyla/v2/pkg/internal/request"
-	"github.com/grafana/beyla/v2/pkg/internal/svc"
-	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 )
-
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/gotracer/gotracer.c -- -I../../../../bpf -DNO_HEADER_PROPAGATION
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../../bpf/gotracer/gotracer.c -- -I../../../../bpf -DBPF_DEBUG -DNO_HEADER_PROPAGATION
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_tp ../../../../bpf/gotracer/gotracer.c -- -I../../../../bpf
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_tp_debug ../../../../bpf/gotracer/gotracer.c -- -I../../../../bpf -DBPF_DEBUG
 
 type Tracer struct {
 	log        *slog.Logger
 	pidsFilter ebpfcommon.ServiceFilter
 	cfg        *config.EBPFTracer
 	metrics    imetrics.Reporter
-	bpfObjects bpfObjects
+	bpfObjects gotracer.BpfObjects
 	closers    []io.Closer
 }
 
@@ -70,15 +66,15 @@ func (p *Tracer) supportsContextPropagation() bool {
 }
 
 func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
-	loader := loadBpf
+	loader := gotracer.LoadBpf
 	if p.cfg.BpfDebug {
-		loader = loadBpf_debug
+		loader = gotracer.LoadBpfDebug
 	}
 
 	if p.supportsContextPropagation() {
-		loader = loadBpf_tp
+		loader = gotracer.LoadBpfTP
 		if p.cfg.BpfDebug {
-			loader = loadBpf_tp_debug
+			loader = gotracer.LoadBpfTPDebug
 		}
 	} else {
 		p.log.Info("Kernel in lockdown mode or missing CAP_SYS_ADMIN.")
@@ -101,7 +97,7 @@ func (p *Tracer) Constants() map[string]any {
 }
 
 func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offsets) {
-	offTable := bpfOffTableT{}
+	offTable := gotracer.BpfOffTableT{}
 	// Set the field offsets and the logLevel for the Go BPF program in a map
 	for _, field := range []goexec.GoOffset{
 		goexec.ConnFdPos,
@@ -281,7 +277,7 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 		"google.golang.org/grpc/internal/transport.(*http2Server).WriteStatus": {{
 			Start: p.bpfObjects.BeylaUprobeTransportWriteStatus,
 		}},
-		// in grpc 1.69.0 they renamed the above WriteStatus to writeStatus lowecase
+		// in grpc 1.69.0 they renamed the above WriteStatus to writeStatus lowercase
 		"google.golang.org/grpc/internal/transport.(*http2Server).writeStatus": {{
 			Start: p.bpfObjects.BeylaUprobeTransportWriteStatus,
 		}},

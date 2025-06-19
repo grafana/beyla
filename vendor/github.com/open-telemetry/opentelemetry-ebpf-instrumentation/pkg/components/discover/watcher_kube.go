@@ -30,11 +30,11 @@ type watcherKubeEnricher struct {
 	// cached system objects
 	mt                 sync.RWMutex
 	containerByPID     map[PID]container.Info
-	processByContainer map[string]processAttrs
+	processByContainer map[string]ProcessAttrs
 
 	podsInfoCh chan Event[*informer.ObjectMeta]
-	output     *msg.Queue[[]Event[processAttrs]]
-	input      <-chan []Event[processAttrs]
+	output     *msg.Queue[[]Event[ProcessAttrs]]
+	input      <-chan []Event[ProcessAttrs]
 }
 
 // kubeMetadataProvider abstracts kube.MetadataProvider for easier dependency
@@ -46,7 +46,7 @@ type kubeMetadataProvider interface {
 
 func WatcherKubeEnricherProvider(
 	kubeMetaProvider kubeMetadataProvider,
-	input, output *msg.Queue[[]Event[processAttrs]],
+	input, output *msg.Queue[[]Event[ProcessAttrs]],
 ) swarm.InstanceFunc {
 	return func(ctx context.Context) (swarm.RunFunc, error) {
 		if !kubeMetaProvider.IsKubeEnabled() {
@@ -60,7 +60,7 @@ func WatcherKubeEnricherProvider(
 			log:                slog.With("component", "discover.watcherKubeEnricher"),
 			store:              store,
 			containerByPID:     map[PID]container.Info{},
-			processByContainer: map[string]processAttrs{},
+			processByContainer: map[string]ProcessAttrs{},
 			podsInfoCh:         make(chan Event[*informer.ObjectMeta], 10),
 			input:              input.Subscribe(),
 			output:             output,
@@ -138,14 +138,14 @@ func (wk *watcherKubeEnricher) enrichPodEvent(podEvent Event[*informer.ObjectMet
 
 // enrichProcessEvent creates a copy of the process information in the input slice, but decorated with
 // K8s attributes, if any. It also handles deletion of processes
-func (wk *watcherKubeEnricher) enrichProcessEvent(processEvents []Event[processAttrs]) {
-	eventsWithMeta := make([]Event[processAttrs], 0, len(processEvents))
+func (wk *watcherKubeEnricher) enrichProcessEvent(processEvents []Event[ProcessAttrs]) {
+	eventsWithMeta := make([]Event[ProcessAttrs], 0, len(processEvents))
 	for _, procEvent := range processEvents {
 		switch procEvent.Type {
 		case EventCreated:
 			wk.log.Debug("new process", "pid", procEvent.Obj.pid)
 			if procWithMeta, ok := wk.onNewProcess(procEvent.Obj); ok {
-				eventsWithMeta = append(eventsWithMeta, Event[processAttrs]{
+				eventsWithMeta = append(eventsWithMeta, Event[ProcessAttrs]{
 					Type: EventCreated,
 					Obj:  procWithMeta,
 				})
@@ -166,7 +166,7 @@ func (wk *watcherKubeEnricher) enrichProcessEvent(processEvents []Event[processA
 	wk.output.Send(eventsWithMeta)
 }
 
-func (wk *watcherKubeEnricher) onNewProcess(procInfo processAttrs) (processAttrs, bool) {
+func (wk *watcherKubeEnricher) onNewProcess(procInfo ProcessAttrs) (ProcessAttrs, bool) {
 	wk.mt.Lock()
 	defer wk.mt.Unlock()
 	// 1. get container owning the process and cache it
@@ -175,7 +175,7 @@ func (wk *watcherKubeEnricher) onNewProcess(procInfo processAttrs) (processAttrs
 	if err != nil {
 		// it is expected for any process not running inside a container
 		wk.log.Debug("can't get container info for PID", "pid", procInfo.pid, "error", err)
-		return processAttrs{}, false
+		return ProcessAttrs{}, false
 	}
 
 	wk.processByContainer[containerInfo.ContainerID] = procInfo
@@ -187,14 +187,14 @@ func (wk *watcherKubeEnricher) onNewProcess(procInfo processAttrs) (processAttrs
 	return procInfo, true
 }
 
-func (wk *watcherKubeEnricher) onNewPod(pod *informer.ObjectMeta) []Event[processAttrs] {
+func (wk *watcherKubeEnricher) onNewPod(pod *informer.ObjectMeta) []Event[ProcessAttrs] {
 	wk.mt.RLock()
 	defer wk.mt.RUnlock()
-	var events []Event[processAttrs]
+	var events []Event[ProcessAttrs]
 	for _, cnt := range pod.Pod.Containers {
 		if procInfo, ok := wk.processByContainer[cnt.Id]; ok {
 			wk.log.Debug("matched pod with running process", "container", cnt.Id, "pid", procInfo.pid)
-			events = append(events, Event[processAttrs]{
+			events = append(events, Event[ProcessAttrs]{
 				Type: EventCreated,
 				Obj:  withMetadata(procInfo, pod),
 			})
@@ -227,8 +227,7 @@ func (wk *watcherKubeEnricher) getContainerInfo(pid PID) (container.Info, error)
 }
 
 // withMetadata returns a copy with a new map to avoid race conditions in later stages of the pipeline
-func withMetadata(pp processAttrs, info *informer.ObjectMeta) processAttrs {
-
+func withMetadata(pp ProcessAttrs, info *informer.ObjectMeta) ProcessAttrs {
 	ownerName := info.Name
 	if topOwner := kube.TopOwner(info.Pod); topOwner != nil {
 		ownerName = topOwner.Name

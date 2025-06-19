@@ -69,6 +69,19 @@ var DefaultBuckets = Buckets{
 	ResponseSizeHistogram: []float64{0, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192},
 }
 
+type resourceOptions struct {
+	overrideAttrs []attribute.KeyValue
+}
+
+type ResourceOpt func(*resourceOptions)
+
+// OverrideResourceAttrs overrides the resource attributes when invoking OBI in vendored mode.
+func OverrideResourceAttrs(attrs ...attribute.KeyValue) ResourceOpt {
+	return func(opts *resourceOptions) {
+		opts.overrideAttrs = append(opts.overrideAttrs, attrs...)
+	}
+}
+
 func getAppResourceAttrs(hostID string, service *svc.Attrs) []attribute.KeyValue {
 	return append(getResourceAttrs(hostID, service),
 		semconv.ServiceInstanceID(service.UID.Instance),

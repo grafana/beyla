@@ -127,6 +127,13 @@ type MetricsConfig struct {
 	TTL time.Duration `yaml:"ttl" env:"OTEL_EBPF_OTEL_METRICS_TTL"`
 
 	AllowServiceGraphSelfReferences bool `yaml:"allow_service_graph_self_references" env:"OTEL_EBPF_OTEL_ALLOW_SERVICE_GRAPH_SELF_REFERENCES"`
+
+	// OTLPEndpointProvider allows overriding the OTLP Endpoint. It needs to return an endpoint and
+	// a boolean indicating if the endpoint is common for both traces and metrics
+	OTLPEndpointProvider func() (string, bool) `yaml:"-" env:"-"`
+
+	// InjectHeaders allows injecting custom headers to the HTTP OTLP exporter
+	InjectHeaders func(dst map[string]string) `yaml:"-" env:"-"`
 }
 
 func (m *MetricsConfig) GetProtocol() Protocol {
@@ -147,7 +154,7 @@ func (m *MetricsConfig) GetInterval() time.Duration {
 }
 
 func (m *MetricsConfig) GuessProtocol() Protocol {
-	// If no explicit protocol is set, we guess it it from the metrics enpdoint port
+	// If no explicit protocol is set, we guess it it from the metrics endpoint port
 	// (assuming it uses a standard port or a development-like form like 14317, 24317, 14318...)
 	ep, _, err := parseMetricsEndpoint(m)
 	if err == nil {
@@ -163,6 +170,9 @@ func (m *MetricsConfig) GuessProtocol() Protocol {
 }
 
 func (m *MetricsConfig) OTLPMetricsEndpoint() (string, bool) {
+	if m.OTLPEndpointProvider != nil {
+		return m.OTLPEndpointProvider()
+	}
 	return ResolveOTLPEndpoint(m.MetricsEndpoint, m.CommonEndpoint)
 }
 
@@ -172,7 +182,8 @@ func (m *MetricsConfig) OTLPMetricsEndpoint() (string, bool) {
 // Reason to disable linting: it requires to be a value despite it is considered a "heavy struct".
 // This method is invoked only once during startup time so it doesn't have a noticeable performance impact.
 func (m *MetricsConfig) EndpointEnabled() bool {
-	return m.CommonEndpoint != "" || m.MetricsEndpoint != ""
+	ep, _ := m.OTLPMetricsEndpoint()
+	return ep != ""
 }
 
 func (m *MetricsConfig) AnySpanMetricsEnabled() bool {
@@ -403,16 +414,16 @@ func newMetricsReporter(
 	}
 
 	mr.reporters = NewReporterPool[*svc.Attrs, *Metrics](cfg.ReportersCacheLen, cfg.TTL, timeNow,
-		func(id svc.UID, v *expirable[*Metrics]) {
+		func(id svc.UID, v *Metrics) {
 			llog := log.With("service", id)
 			llog.Debug("evicting metrics reporter from cache")
-			v.value.cleanupAllMetricsInstances()
+			v.cleanupAllMetricsInstances()
 
-			mr.deleteTracesTargetInfo(v.value)
-			mr.deleteTargetInfo(v.value)
+			mr.deleteTracesTargetInfo(v)
+			mr.deleteTargetInfo(v)
 
 			go func() {
-				if err := v.value.provider.ForceFlush(ctx); err != nil {
+				if err := v.provider.ForceFlush(ctx); err != nil {
 					llog.Warn("error flushing evicted metrics provider", "error", err)
 				}
 			}()
@@ -765,7 +776,7 @@ func (mr *MetricsReporter) newMetricsInstance(service *svc.Attrs) Metrics {
 	var resourceAttributes []attribute.KeyValue
 	if service != nil {
 		mlog = mlog.With("service", service)
-		resourceAttributes = append(getAppResourceAttrs(mr.hostID, service), ResourceAttrsFromEnv(service)...)
+		resourceAttributes = append(GetAppResourceAttrs(mr.hostID, service), ResourceAttrsFromEnv(service)...)
 	}
 	mlog.Debug("creating new Metrics reporter")
 	resources := resource.NewWithAttributes(semconv.SchemaURL, resourceAttributes...)
@@ -1264,6 +1275,9 @@ func getHTTPMetricEndpointOptions(cfg *MetricsConfig) (otlpOptions, error) {
 		opts.SkipTLSVerify = cfg.InsecureSkipVerify
 	}
 
+	if cfg.InjectHeaders != nil {
+		cfg.InjectHeaders(opts.Headers)
+	}
 	maps.Copy(opts.Headers, HeadersFromEnv(envHeaders))
 	maps.Copy(opts.Headers, HeadersFromEnv(envMetricsHeaders))
 
@@ -1291,6 +1305,9 @@ func getGRPCMetricEndpointOptions(cfg *MetricsConfig) (otlpOptions, error) {
 		opts.SkipTLSVerify = true
 	}
 
+	if cfg.InjectHeaders != nil {
+		cfg.InjectHeaders(opts.Headers)
+	}
 	maps.Copy(opts.Headers, HeadersFromEnv(envHeaders))
 	maps.Copy(opts.Headers, HeadersFromEnv(envMetricsHeaders))
 
@@ -1298,11 +1315,9 @@ func getGRPCMetricEndpointOptions(cfg *MetricsConfig) (otlpOptions, error) {
 }
 
 // the HTTP path will be defined from one of the following sources, from highest to lowest priority
+// - the result from any overridden OTLP Provider function
 // - OTEL_EXPORTER_OTLP_METRICS_ENDPOINT, if defined
 // - OTEL_EXPORTER_OTLP_ENDPOINT, if defined
-// - https://otlp-gateway-${GRAFANA_CLOUD_ZONE}.grafana.net/otlp, if GRAFANA_CLOUD_ZONE is defined
-// If, by some reason, Grafana changes its OTLP Gateway URL in a distant future, you can still point to the
-// correct URL with the OTLP_EXPORTER_... variables.
 func parseMetricsEndpoint(cfg *MetricsConfig) (*url.URL, bool, error) {
 	endpoint, isCommon := cfg.OTLPMetricsEndpoint()
 

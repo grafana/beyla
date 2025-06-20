@@ -69,26 +69,13 @@ var DefaultBuckets = Buckets{
 	ResponseSizeHistogram: []float64{0, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192},
 }
 
-type resourceOptions struct {
-	overrideAttrs []attribute.KeyValue
-}
-
-type ResourceOpt func(*resourceOptions)
-
-// OverrideResourceAttrs overrides the resource attributes when invoking OBI in vendored mode.
-func OverrideResourceAttrs(attrs ...attribute.KeyValue) ResourceOpt {
-	return func(opts *resourceOptions) {
-		opts.overrideAttrs = append(opts.overrideAttrs, attrs...)
-	}
-}
-
-func getAppResourceAttrs(hostID string, service *svc.Attrs) []attribute.KeyValue {
-	return append(getResourceAttrs(hostID, service),
+func GetAppResourceAttrs(hostID string, service *svc.Attrs) []attribute.KeyValue {
+	return append(GetResourceAttrs(hostID, service),
 		semconv.ServiceInstanceID(service.UID.Instance),
 	)
 }
 
-func getResourceAttrs(hostID string, service *svc.Attrs) []attribute.KeyValue {
+func GetResourceAttrs(hostID string, service *svc.Attrs) []attribute.KeyValue {
 	attrs := []attribute.KeyValue{
 		semconv.ServiceName(service.UID.Name),
 		// SpanMetrics requires an extra attribute besides service name
@@ -114,8 +101,8 @@ func getResourceAttrs(hostID string, service *svc.Attrs) []attribute.KeyValue {
 	return attrs
 }
 
-// getFilteredAttributesByPrefix applies attribute filtering based on selector patterns.
-func getFilteredAttributesByPrefix(baseAttrs []attribute.KeyValue, attrSelector attributes.Selection,
+// GetFilteredAttributesByPrefix applies attribute filtering based on selector patterns.
+func GetFilteredAttributesByPrefix(baseAttrs []attribute.KeyValue, attrSelector attributes.Selection,
 	extraAttrs []attribute.KeyValue, prefixPatterns []string,
 ) []attribute.KeyValue {
 	result := make([]attribute.KeyValue, len(baseAttrs))
@@ -241,10 +228,12 @@ func NewReporterPool[K uidGetter, T any](
 	cacheLen int,
 	ttl time.Duration,
 	clock expire.Clock,
-	callback simplelru.EvictCallback[svc.UID, *expirable[T]],
+	callback simplelru.EvictCallback[svc.UID, T],
 	itemConstructor func(id K) (T, error),
 ) ReporterPool[K, T] {
-	pool, err := simplelru.NewLRU[svc.UID, *expirable[T]](cacheLen, callback)
+	pool, err := simplelru.NewLRU[svc.UID, *expirable[T]](cacheLen, func(key svc.UID, value *expirable[T]) {
+		callback(key, value.value)
+	})
 	if err != nil {
 		// should never happen: bug!
 		panic(err)
@@ -520,5 +509,5 @@ func ResolveOTLPEndpoint(endpoint, common string) (string, bool) {
 // This is especially useful for RED metrics and span metrics where we want to control
 // which attributes are included in the metrics.
 func getFilteredMetricResourceAttrs(baseAttrs []attribute.KeyValue, attrSelector attributes.Selection, extraAttrs []attribute.KeyValue, metricTypes []string) []attribute.KeyValue {
-	return getFilteredAttributesByPrefix(baseAttrs, attrSelector, extraAttrs, metricTypes)
+	return GetFilteredAttributesByPrefix(baseAttrs, attrSelector, extraAttrs, metricTypes)
 }

@@ -103,6 +103,13 @@ type TracesConfig struct {
 	// and the Info messages leak internal details that are not usually valuable for the final user.
 	//nolint:undoc
 	SDKLogLevel string `yaml:"otel_sdk_log_level" env:"OTEL_EBPF_OTEL_SDK_LOG_LEVEL"`
+
+	// OTLPEndpointProvider allows overriding the OTLP Endpoint. It needs to return an endpoint and
+	// a boolean indicating if the endpoint is common for both traces and metrics
+	OTLPEndpointProvider func() (string, bool) `yaml:"-" env:"-"`
+
+	// InjectHeaders allows injecting custom headers to the HTTP OTLP exporter
+	InjectHeaders func(dst map[string]string) `yaml:"-" env:"-"`
 }
 
 // Enabled specifies that the OTEL traces node is enabled if and only if
@@ -123,6 +130,9 @@ func (m *TracesConfig) GetProtocol() Protocol {
 }
 
 func (m *TracesConfig) OTLPTracesEndpoint() (string, bool) {
+	if m.OTLPEndpointProvider != nil {
+		return m.OTLPEndpointProvider()
+	}
 	return ResolveOTLPEndpoint(m.TracesEndpoint, m.CommonEndpoint)
 }
 
@@ -148,12 +158,7 @@ func makeTracesReceiver(
 	ctxInfo *global.ContextInfo,
 	selectorCfg *attributes.SelectorConfig,
 	input *msg.Queue[[]request.Span],
-	resOpts ...ResourceOpt,
 ) *tracesOTELReceiver {
-	resourceOpts := resourceOptions{}
-	for _, opt := range resOpts {
-		opt(&resourceOpts)
-	}
 	return &tracesOTELReceiver{
 		cfg:                cfg,
 		ctxInfo:            ctxInfo,
@@ -162,7 +167,6 @@ func makeTracesReceiver(
 		spanMetricsEnabled: spanMetricsEnabled,
 		input:              input.Subscribe(),
 		attributeCache:     expirable2.NewLRU[svc.UID, []attribute.KeyValue](1024, nil, 5*time.Minute),
-		resourceOpts:       resourceOpts,
 	}
 }
 
@@ -173,13 +177,12 @@ func TracesReceiver(
 	spanMetricsEnabled bool,
 	selectorCfg *attributes.SelectorConfig,
 	input *msg.Queue[[]request.Span],
-	resOpts ...ResourceOpt,
 ) swarm.InstanceFunc {
 	return func(_ context.Context) (swarm.RunFunc, error) {
 		if !cfg.Enabled() {
 			return swarm.EmptyRunFunc()
 		}
-		tr := makeTracesReceiver(cfg, spanMetricsEnabled, ctxInfo, selectorCfg, input, resOpts...)
+		tr := makeTracesReceiver(cfg, spanMetricsEnabled, ctxInfo, selectorCfg, input)
 		return tr.provideLoop, nil
 	}
 }
@@ -192,7 +195,6 @@ type tracesOTELReceiver struct {
 	spanMetricsEnabled bool
 	attributeCache     *expirable2.LRU[svc.UID, []attribute.KeyValue]
 	input              <-chan []request.Span
-	resourceOpts       resourceOptions
 }
 
 func GetUserSelectedAttributes(selectorCfg *attributes.SelectorConfig) (map[attr.Name]struct{}, error) {
@@ -270,7 +272,7 @@ func (tr *tracesOTELReceiver) processSpans(ctx context.Context, exp exporter.Tra
 		if len(spanGroup) > 0 {
 			sample := spanGroup[0]
 			envResourceAttrs := ResourceAttrsFromEnv(&sample.Span.Service)
-			traces := generateTracesWithAttributes(tr.attributeCache, &sample.Span.Service, envResourceAttrs, tr.ctxInfo.HostID, spanGroup, tr.resourceOpts)
+			traces := generateTracesWithAttributes(tr.attributeCache, &sample.Span.Service, envResourceAttrs, tr.ctxInfo.HostID, spanGroup, tr.ctxInfo.ExtraResourceAttributes)
 			err := exp.ConsumeTraces(ctx, traces)
 			if err != nil {
 				slog.Error("error sending trace to consumer", "error", err)
@@ -494,14 +496,14 @@ func getRetrySettings(cfg TracesConfig) configretry.BackOffConfig {
 func traceAppResourceAttrs(cache *expirable2.LRU[svc.UID, []attribute.KeyValue], hostID string, service *svc.Attrs) []attribute.KeyValue {
 	// TODO: remove?
 	if service.UID == emptyUID {
-		return getAppResourceAttrs(hostID, service)
+		return GetAppResourceAttrs(hostID, service)
 	}
 
 	attrs, ok := cache.Get(service.UID)
 	if ok {
 		return attrs
 	}
-	attrs = getAppResourceAttrs(hostID, service)
+	attrs = GetAppResourceAttrs(hostID, service)
 	cache.Add(service.UID, attrs)
 
 	return attrs
@@ -513,7 +515,7 @@ func generateTracesWithAttributes(
 	envResourceAttrs []attribute.KeyValue,
 	hostID string,
 	spans []TraceSpanAndAttributes,
-	opts resourceOptions,
+	extraResAttrs []attribute.KeyValue,
 ) ptrace.Traces {
 	traces := ptrace.NewTraces()
 	rs := traces.ResourceSpans().AppendEmpty()
@@ -521,7 +523,7 @@ func generateTracesWithAttributes(
 	resourceAttrs = append(resourceAttrs, envResourceAttrs...)
 	resourceAttrsMap := attrsToMap(resourceAttrs)
 	resourceAttrsMap.PutStr(string(semconv.OTelLibraryNameKey), reporterName)
-	addAttrsToMap(opts.overrideAttrs, resourceAttrsMap)
+	addAttrsToMap(extraResAttrs, resourceAttrsMap)
 	resourceAttrsMap.MoveTo(rs.Resource().Attributes())
 
 	for _, spanWithAttributes := range spans {
@@ -579,13 +581,9 @@ func GenerateTraces(
 	envResourceAttrs []attribute.KeyValue,
 	hostID string,
 	spans []TraceSpanAndAttributes,
-	opts ...ResourceOpt,
+	extraResAttrs ...attribute.KeyValue,
 ) ptrace.Traces {
-	rOpts := resourceOptions{}
-	for _, opt := range opts {
-		opt(&rOpts)
-	}
-	return generateTracesWithAttributes(cache, svc, envResourceAttrs, hostID, spans, rOpts)
+	return generateTracesWithAttributes(cache, svc, envResourceAttrs, hostID, spans, extraResAttrs)
 }
 
 // createSubSpans creates the internal spans for a request.Span
@@ -880,6 +878,9 @@ func getHTTPTracesEndpointOptions(cfg *TracesConfig) (otlpOptions, error) {
 		opts.SkipTLSVerify = true
 	}
 
+	if cfg.InjectHeaders != nil {
+		cfg.InjectHeaders(opts.Headers)
+	}
 	maps.Copy(opts.Headers, HeadersFromEnv(envHeaders))
 	maps.Copy(opts.Headers, HeadersFromEnv(envTracesHeaders))
 
@@ -907,6 +908,9 @@ func getGRPCTracesEndpointOptions(cfg *TracesConfig) (otlpOptions, error) {
 		opts.SkipTLSVerify = true
 	}
 
+	if cfg.InjectHeaders != nil {
+		cfg.InjectHeaders(opts.Headers)
+	}
 	maps.Copy(opts.Headers, HeadersFromEnv(envHeaders))
 	maps.Copy(opts.Headers, HeadersFromEnv(envTracesHeaders))
 	return opts, nil

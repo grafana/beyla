@@ -13,6 +13,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/pipe/global"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
+	obiotel "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/prom"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/stretchr/testify/assert"
@@ -46,7 +47,7 @@ func TestProcPrometheusEndpoint_AggregatedMetrics(t *testing.T) {
 			Path:                        "/metrics",
 			TTL:                         3 * time.Minute,
 			SpanMetricsServiceCacheSize: 10,
-			Features:                    []string{otel.FeatureApplication, otel.FeatureProcess},
+			Features:                    []string{obiotel.FeatureApplication, otel.FeatureProcess},
 		}, SelectorCfg: &attributes.SelectorConfig{
 			SelectionCfg: attributes.Selection{
 				extraattributes.ProcessCPUTime.Section:        attribs,
@@ -135,7 +136,7 @@ func TestProcPrometheusEndpoint_DisaggregatedMetrics(t *testing.T) {
 			Path:                        "/metrics",
 			TTL:                         3 * time.Minute,
 			SpanMetricsServiceCacheSize: 10,
-			Features:                    []string{otel.FeatureApplication, otel.FeatureProcess},
+			Features:                    []string{obiotel.FeatureApplication, otel.FeatureProcess},
 		}, SelectorCfg: &attributes.SelectorConfig{
 			SelectionCfg: attributes.Selection{
 				extraattributes.ProcessCPUTime.Section:        attribs,

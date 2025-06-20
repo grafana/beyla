@@ -14,6 +14,9 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/flow"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/pipe/global"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
+	obiotel "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel"
+	"go.opentelemetry.io/otel/attribute"
+	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
@@ -162,6 +165,7 @@ func buildCommonContextInfo(
 			RestrictLocalNode:   config.Attributes.Kubernetes.MetaRestrictLocalNode,
 			ServiceNameTemplate: templ,
 		}),
+		ExtraResourceAttributes: []attribute.KeyValue{semconv.OTelLibraryName(otel.ReporterName)},
 	}
 	if config.Attributes.HostID.Override == "" {
 		ctxInfo.FetchHostID(ctx, config.Attributes.HostID.FetchTimeout)
@@ -171,9 +175,8 @@ func buildCommonContextInfo(
 	switch {
 	case config.InternalMetrics.Exporter == imetrics.InternalMetricsExporterOTEL:
 		var err error
-		config.Metrics.Grafana = &config.Grafana.OTLP
 		slog.Debug("reporting internal metrics as OpenTelemetry")
-		ctxInfo.Metrics, err = otel.NewInternalMetricsReporter(ctx, ctxInfo, &config.Metrics)
+		ctxInfo.Metrics, err = obiotel.NewInternalMetricsReporter(ctx, ctxInfo, &config.Metrics)
 		if err != nil {
 			return nil, fmt.Errorf("can't start OpenTelemetry metrics: %w", err)
 		}

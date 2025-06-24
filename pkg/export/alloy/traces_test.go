@@ -9,19 +9,23 @@ import (
 	"testing"
 	"time"
 
+	expirable2 "github.com/hashicorp/golang-lru/v2/expirable"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	attributes "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
+	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel"
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/collector/pdata/ptrace"
+	"go.opentelemetry.io/otel/attribute"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
-	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
-	"github.com/grafana/beyla/v2/pkg/export/instrumentations"
-	"github.com/grafana/beyla/v2/pkg/export/otel"
-	"github.com/grafana/beyla/v2/pkg/internal/request"
-	"github.com/grafana/beyla/v2/pkg/internal/svc"
 )
+
+var cache = expirable2.NewLRU[svc.UID, []attribute.KeyValue](1024, nil, 5*time.Minute)
 
 func TestTracesSkipsInstrumented(t *testing.T) {
 	svcNoExport := svc.Attrs{}
@@ -177,7 +181,7 @@ func makeTracesTestReceiverWithSpanMetrics() *tracesReceiver {
 
 func generateTracesForSpans(t *testing.T, tr *tracesReceiver, spans []request.Span) []ptrace.Traces {
 	res := []ptrace.Traces{}
-	err := tr.fetchConstantAttributes(attributes.Selection{})
+	err := tr.fetchConstantAttributes(&attributes.SelectorConfig{})
 	assert.NoError(t, err)
 
 	spanGroups := otel.GroupSpans(context.Background(), spans, tr.traceAttrs, sdktrace.AlwaysSample(), tr.is)
@@ -185,7 +189,7 @@ func generateTracesForSpans(t *testing.T, tr *tracesReceiver, spans []request.Sp
 		if len(spanGroup) > 0 {
 			sample := spanGroup[0]
 			envResourceAttrs := otel.ResourceAttrsFromEnv(&sample.Span.Service)
-			traces := otel.GenerateTraces(&sample.Span.Service, envResourceAttrs, tr.hostID, spanGroup)
+			traces := otel.GenerateTraces(cache, &sample.Span.Service, envResourceAttrs, tr.hostID, spanGroup)
 			res = append(res, traces)
 		}
 	}

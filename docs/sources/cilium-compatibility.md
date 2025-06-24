@@ -35,7 +35,7 @@ Beyla also refuses to run if it's configured to use Netlink attachments and it d
 
 ### Configure Cilium Netlink priority
 
-You can configure Cilium Netlink program priority via the `bpf-filter-priorty` configuration:
+You can configure Cilium Netlink program priority via the `bpf-filter-priority` configuration:
 
 ```shell
 cilium config set bpf-filter-priority 2
@@ -286,7 +286,7 @@ data:
       unmatched: heuristic
     # let's instrument only the docs server
     discovery:
-      services:
+      instrument:
         - k8s_deployment_name: "nodejs-deployment"
         - k8s_deployment_name: "go-deployment"
         - k8s_deployment_name: "python-deployment"

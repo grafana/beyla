@@ -3,6 +3,7 @@ package fs
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"io"
 	"os"
 
@@ -10,34 +11,66 @@ import (
 )
 
 type FileReader struct {
-	err  error
-	path string
-	info os.FileInfo
-	mode os.FileMode
-	vars *vars.Variables
+	err     error
+	path    string
+	info    os.FileInfo
+	mode    os.FileMode
+	vars    *vars.Variables
+	content *bytes.Buffer
+	ctx     context.Context
 }
 
-// Read creates a new FileReader using the provided path.
-// A non-nil FileReader.Err() is returned if file does not exist
-// or another error is generated.
-func Read(path string) *FileReader {
-	info, err := os.Stat(path)
-	if err != nil {
-		return &FileReader{err: err, path: path}
+// ReadWithContextVars uses specified context and session variables to read the file at path
+// and returns a *FileReader to access its content
+func ReadWithContextVars(ctx context.Context, path string, variables *vars.Variables) *FileReader {
+	if variables == nil {
+		variables = &vars.Variables{}
 	}
-	return &FileReader{path: path, info: info, mode: info.Mode()}
+	filePath := variables.Eval(path)
+
+	if err := ctx.Err(); err != nil {
+		return &FileReader{err: err, path: filePath}
+	}
+
+	info, err := os.Stat(filePath)
+	if err != nil {
+		return &FileReader{err: err, path: filePath}
+	}
+
+	fileData, err := os.ReadFile(filePath)
+	if err != nil {
+		return &FileReader{err: err, path: filePath}
+	}
+
+	return &FileReader{
+		path:    filePath,
+		info:    info,
+		mode:    info.Mode(),
+		content: bytes.NewBuffer(fileData),
+		vars:    variables,
+		ctx:     ctx,
+	}
 }
 
-// ReadWithVars creates a new FileReader and sets the reader's session variables
+// ReadWithVars uses session variables to create  a new FileReader
 func ReadWithVars(path string, variables *vars.Variables) *FileReader {
-	reader := Read(variables.Eval(path))
-	reader.vars = variables
-	return reader
+	return ReadWithContextVars(context.Background(), path, variables)
+}
+
+// Read reads the file at path and returns FileReader to access its content
+func Read(path string) *FileReader {
+	return ReadWithContextVars(context.Background(), path, &vars.Variables{})
 }
 
 // SetVars sets the FileReader's session variables
 func (fr *FileReader) SetVars(variables *vars.Variables) *FileReader {
 	fr.vars = variables
+	return fr
+}
+
+// SetContext sets the context for the FileReader operations
+func (fr *FileReader) SetContext(ctx context.Context) *FileReader {
+	fr.ctx = ctx
 	return fr
 }
 
@@ -53,36 +86,32 @@ func (fr *FileReader) Info() os.FileInfo {
 
 // String returns the content of the file as a string value
 func (fr *FileReader) String() string {
-	file, err := os.Open(fr.path)
-	if err != nil {
-		fr.err = err
-		return ""
-	}
-	defer file.Close()
-
-	buf := new(bytes.Buffer)
-	if _, err := buf.ReadFrom(file); err != nil {
-		fr.err = err
-		return ""
-	}
-
-	return buf.String()
+	return fr.content.String()
 }
 
 // Lines returns the content of the file as slice of string
 func (fr *FileReader) Lines() []string {
-	file, err := os.Open(fr.path)
-	if err != nil {
+	if fr.err != nil {
+		return []string{}
+	}
+
+	if err := fr.ctx.Err(); err != nil {
 		fr.err = err
 		return []string{}
 	}
+
 	var lines []string
-	scnr := bufio.NewScanner(file)
+	scnr := bufio.NewScanner(fr.content)
 
 	for scnr.Scan() {
+		if err := fr.ctx.Err(); err != nil {
+			fr.err = err
+			break
+		}
 		lines = append(lines, scnr.Text())
 	}
 
+	// err should never happen, but capture it anyway
 	if scnr.Err() != nil {
 		fr.err = scnr.Err()
 		return []string{}
@@ -93,33 +122,31 @@ func (fr *FileReader) Lines() []string {
 
 // Bytes returns the content of the file as []byte
 func (fr *FileReader) Bytes() []byte {
-	file, err := os.Open(fr.path)
-	if err != nil {
-		fr.err = err
+	if fr.err != nil {
 		return []byte{}
 	}
-	defer file.Close()
 
-	buf := new(bytes.Buffer)
-
-	if _, err := buf.ReadFrom(file); err != nil {
+	if err := fr.ctx.Err(); err != nil {
 		fr.err = err
 		return []byte{}
 	}
 
-	return buf.Bytes()
+	return fr.content.Bytes()
 }
 
 // Into reads the content of the file and writes
 // it into the specified Writer
 func (fr *FileReader) Into(w io.Writer) *FileReader {
-	file, err := os.Open(fr.path)
-	if err != nil {
+	if fr.err != nil {
+		return fr
+	}
+
+	if err := fr.ctx.Err(); err != nil {
 		fr.err = err
 		return fr
 	}
-	defer file.Close()
-	if _, err := io.Copy(w, file); err != nil {
+
+	if _, err := io.Copy(w, fr.content); err != nil {
 		fr.err = err
 	}
 	return fr

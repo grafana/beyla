@@ -5,14 +5,16 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/pipe/global"
+	attributes "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
+
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/export/prom"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
-	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
-	"github.com/grafana/beyla/v2/pkg/internal/request"
-	"github.com/grafana/beyla/v2/pkg/pipe/msg"
-	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 // the sub-pipe is enabled only if there is a metrics exporter enabled,
@@ -31,11 +33,18 @@ func ProcessMetricsSwarmInstancer(
 	cfg *beyla.Config,
 	appInputSpans *msg.Queue[[]request.Span],
 ) swarm.InstanceFunc {
+	if !isProcessSubPipeEnabled(cfg) {
+		// returns nothing. Nothing will subscribe to the ProcessSubPipeInput, no extra
+		// load will be held
+		return swarm.DirectInstance(func(_ context.Context) {})
+	}
+	// needs to be instantiated here to make sure all the messages from the
+	// vendored OBI app swarm are catched
+	appInputSpansCh := appInputSpans.Subscribe()
 	return func(ctx context.Context) (swarm.RunFunc, error) {
-		if !isProcessSubPipeEnabled(cfg) {
-			// returns nothing. Nothing will subscribe to the ProcessSubPipeInput, no extra
-			// load will be held
-			return swarm.EmptyRunFunc()
+		selectorCfg := &attributes.SelectorConfig{
+			SelectionCfg:            cfg.Attributes.Select,
+			ExtraGroupAttributesCfg: cfg.Attributes.ExtraGroupAttributes,
 		}
 
 		// communication channel between the process collector and the metrics exporters
@@ -44,21 +53,21 @@ func ProcessMetricsSwarmInstancer(
 		builder := swarm.Instancer{}
 		builder.Add(process.NewCollectorProvider(
 			&cfg.Processes,
-			appInputSpans,
+			appInputSpansCh,
 			processCollectStatus,
 		))
 		builder.Add(otel.ProcMetricsExporterProvider(
 			ctxInfo,
 			&otel.ProcMetricsConfig{
-				Metrics:            &cfg.Metrics,
-				AttributeSelectors: cfg.Attributes.Select,
+				Metrics:     &cfg.Metrics,
+				SelectorCfg: selectorCfg,
 			},
 			processCollectStatus,
 		))
 		builder.Add(prom.ProcPrometheusEndpoint(ctxInfo,
 			&prom.ProcPrometheusConfig{
-				Metrics:            &cfg.Prometheus,
-				AttributeSelectors: cfg.Attributes.Select,
+				Metrics:     &cfg.Prometheus,
+				SelectorCfg: selectorCfg,
 			},
 			processCollectStatus,
 		))
@@ -66,6 +75,6 @@ func ProcessMetricsSwarmInstancer(
 		if err != nil {
 			return nil, fmt.Errorf("failed to create the process pipeline: %w", err)
 		}
-		return runner.Start, nil
+		return func(ctx context.Context) { runner.Start(ctx) }, nil
 	}
 }

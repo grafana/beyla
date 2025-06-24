@@ -65,8 +65,8 @@ spec:
           value: "500ms"
         - name: BEYLA_TRACE_PRINTER
           value: "text"
-        - name: BEYLA_EXECUTABLE_NAME
-          value: "httppinger"
+        - name: BEYLA_AUTO_TARGET_EXE
+          value: "*httppinger"
         - name: BEYLA_METRICS_INTERVAL
           value: "10ms"
         - name: BEYLA_BPF_BATCH_TIMEOUT

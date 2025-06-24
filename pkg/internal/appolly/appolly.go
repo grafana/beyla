@@ -9,17 +9,20 @@ import (
 	"sync"
 	"time"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
+	obiDiscover "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/discover"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf"
+	ebpfcommon "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/common"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/pipe/global"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/traces"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/transform"
+
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/internal/discover"
-	"github.com/grafana/beyla/v2/pkg/internal/ebpf"
-	"github.com/grafana/beyla/v2/pkg/internal/exec"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe"
-	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
-	"github.com/grafana/beyla/v2/pkg/internal/request"
-	"github.com/grafana/beyla/v2/pkg/internal/traces"
-	"github.com/grafana/beyla/v2/pkg/pipe/msg"
-	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
-	"github.com/grafana/beyla/v2/pkg/transform"
 )
 
 var errShutdownTimeout = errors.New("graceful shutdown has timed out")
@@ -34,13 +37,16 @@ type Instrumenter struct {
 	config    *beyla.Config
 	ctxInfo   *global.ContextInfo
 	tracersWg *sync.WaitGroup
-	bp        *pipe.Instrumenter
+	bp        *swarm.Runner
 
 	// tracesInput is used to communicate the found traces between the ProcessFinder and
 	// the ProcessTracer.
 	tracesInput       *msg.Queue[[]request.Span]
 	processEventInput *msg.Queue[exec.ProcessEvent]
 	peGraphBuilder    *swarm.Instancer
+
+	// global data structures for all eBPF tracers
+	ebpfEventContext *ebpfcommon.EBPFEventContext
 }
 
 // New Instrumenter, given a Config
@@ -54,12 +60,13 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 	}
 
 	swi := &swarm.Instancer{}
+	obiCfg := config.AsOBI()
 
 	processEventsInput := newEventQueue()
 	processEventsHostDecorated := newEventQueue()
 
 	swi.Add(traces.HostProcessEventDecoratorProvider(
-		&config.Attributes.InstanceID,
+		&obiCfg.Attributes.InstanceID,
 		processEventsInput,
 		processEventsHostDecorated,
 	))
@@ -67,7 +74,7 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 	processEventsKubeDecorated := newEventQueue()
 	swi.Add(transform.KubeProcessEventDecoratorProvider(
 		ctxInfo,
-		&config.Attributes.Kubernetes,
+		&obiCfg.Attributes.Kubernetes,
 		processEventsHostDecorated,
 		processEventsKubeDecorated,
 	))
@@ -85,6 +92,7 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 		processEventInput: processEventsInput,
 		bp:                bp,
 		peGraphBuilder:    swi,
+		ebpfEventContext:  ebpfcommon.NewEBPFEventContext(),
 	}, nil
 }
 
@@ -93,7 +101,7 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 // Returns a channel that is closed when the Instrumenter completed all its tasks.
 // This is: when the context is cancelled, it has unloaded all the eBPF probes.
 func (i *Instrumenter) FindAndInstrument(ctx context.Context) error {
-	finder := discover.NewProcessFinder(i.config, i.ctxInfo, i.tracesInput, i.processEventInput)
+	finder := discover.NewProcessFinder(i.config, i.ctxInfo, i.tracesInput, i.ebpfEventContext)
 	processEvents, err := finder.Start(ctx)
 	if err != nil {
 		return fmt.Errorf("couldn't start Process Finder: %w", err)
@@ -116,7 +124,7 @@ func (i *Instrumenter) FindAndInstrument(ctx context.Context) error {
 	return nil
 }
 
-func (i *Instrumenter) instrumentedEventLoop(ctx context.Context, processEvents <-chan discover.Event[*ebpf.Instrumentable]) {
+func (i *Instrumenter) instrumentedEventLoop(ctx context.Context, processEvents <-chan obiDiscover.Event[*ebpf.Instrumentable]) {
 	log := log()
 	for {
 		select {
@@ -124,7 +132,7 @@ func (i *Instrumenter) instrumentedEventLoop(ctx context.Context, processEvents 
 			return
 		case ev := <-processEvents:
 			switch ev.Type {
-			case discover.EventCreated:
+			case obiDiscover.EventCreated:
 				pt := ev.Obj
 				log.Debug("running tracer for new process",
 					"inode", pt.FileInfo.Ino, "pid", pt.FileInfo.Pid, "exec", pt.FileInfo.CmdExePath)
@@ -132,11 +140,11 @@ func (i *Instrumenter) instrumentedEventLoop(ctx context.Context, processEvents 
 					i.tracersWg.Add(1)
 					go func() {
 						defer i.tracersWg.Done()
-						pt.Tracer.Run(ctx, i.tracesInput)
+						pt.Tracer.Run(ctx, i.ebpfEventContext, i.tracesInput)
 					}()
 				}
 				i.handleAndDispatchProcessEvent(exec.ProcessEvent{Type: exec.ProcessEventCreated, File: pt.FileInfo})
-			case discover.EventDeleted:
+			case obiDiscover.EventDeleted:
 				dp := ev.Obj
 				log.Debug("stopping ProcessTracer because there are no more instances of such process",
 					"inode", dp.FileInfo.Ino, "pid", dp.FileInfo.Pid, "exec", dp.FileInfo.CmdExePath)
@@ -144,7 +152,7 @@ func (i *Instrumenter) instrumentedEventLoop(ctx context.Context, processEvents 
 					dp.Tracer.UnlinkExecutable(dp.FileInfo)
 				}
 				i.handleAndDispatchProcessEvent(exec.ProcessEvent{Type: exec.ProcessEventTerminated, File: dp.FileInfo})
-			case discover.EventInstanceDeleted:
+			case obiDiscover.EventInstanceDeleted:
 				i.handleAndDispatchProcessEvent(exec.ProcessEvent{Type: exec.ProcessEventTerminated, File: ev.Obj.FileInfo})
 			default:
 				log.Error("BUG ALERT! unknown event type", "type", ev.Type)
@@ -161,9 +169,9 @@ func (i *Instrumenter) ReadAndForward(ctx context.Context) error {
 
 	log.Info("Starting main node")
 
-	i.bp.Run(ctx)
+	i.bp.Start(ctx)
 
-	<-ctx.Done()
+	<-i.bp.Done()
 
 	log.Info("exiting auto-instrumenter")
 

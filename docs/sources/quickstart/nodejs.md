@@ -55,14 +55,13 @@ To run Beyla, first set the following environment variables:
 
 To facilitate local testing, set the `BEYLA_TRACE_PRINTER=text` environment variable. When this option is set, Beyla prints traces in text format to the standard output.
 
-Also set the `BEYLA_SERVICE_NAME=quickstart` to override the reported service
-name in the traces and metrics. If it is not set, Beyla would automatically
-report the name of the process executable: `node`.
+Beyla automatically reports the name of the process executable as service name: `node`.
+To override it, refer to the [override service name and namespace](../configure/service-discovery#override-service-name-and-namespace)
+documentation section.
 
 Notice: Beyla requires administrative (sudo) privileges, or at least it needs to be granted the `CAP_SYS_ADMIN` capability.
 
 ```sh
-export BEYLA_SERVICE_NAME=quickstart
 export BEYLA_OPEN_PORT=8080
 export BEYLA_TRACE_PRINTER=text
 export OTEL_EXPORTER_OTLP_PROTOCOL="http/protobuf"

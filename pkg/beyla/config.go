@@ -8,24 +8,29 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v9"
+	"github.com/gobwas/glob"
+	obi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/tcmanager"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/imetrics"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/kube"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/traces"
+	attributes "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
+	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/debug"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/prom"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/filter"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubeflags"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/services"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/transform"
 	otelconsumer "go.opentelemetry.io/collector/consumer"
 	"gopkg.in/yaml.v3"
 
 	"github.com/grafana/beyla/v2/pkg/config"
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
-	"github.com/grafana/beyla/v2/pkg/export/debug"
-	"github.com/grafana/beyla/v2/pkg/export/instrumentations"
-	"github.com/grafana/beyla/v2/pkg/export/otel"
-	"github.com/grafana/beyla/v2/pkg/export/prom"
-	"github.com/grafana/beyla/v2/pkg/filter"
-	"github.com/grafana/beyla/v2/pkg/internal/ebpf/tcmanager"
-	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
+	botel "github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
-	"github.com/grafana/beyla/v2/pkg/internal/kube"
-	"github.com/grafana/beyla/v2/pkg/internal/traces"
-	"github.com/grafana/beyla/v2/pkg/kubeflags"
-	"github.com/grafana/beyla/v2/pkg/services"
-	"github.com/grafana/beyla/v2/pkg/transform"
+	servicesextra "github.com/grafana/beyla/v2/pkg/services"
 )
 
 const ReporterLRUSize = 256
@@ -42,6 +47,19 @@ const (
 	defaultMetricsTTL = 5 * time.Minute
 )
 
+const (
+	k8sGKEDefaultNamespacesRegex = "|^gke-connect$|^gke-gmp-system$|^gke-managed-cim$|^gke-managed-filestorecsi$|^gke-managed-metrics-server$|^gke-managed-system$|^gke-system$|^gke-managed-volumepopulator$"
+	k8sGKEDefaultNamespacesGlob  = ",gke-connect,gke-gmp-system,gke-managed-cim,gke-managed-filestorecsi,gke-managed-metrics-server,gke-managed-system,gke-system,gke-managed-volumepopulator"
+)
+
+const (
+	k8sAKSDefaultNamespacesRegex = "|^gatekeeper-system"
+	k8sAKSDefaultNamespacesGlob  = ",gatekeeper-system"
+)
+
+var k8sDefaultNamespacesRegex = services.NewPathRegexp(regexp.MustCompile("^kube-system$|^kube-node-lease$|^local-path-storage$|^grafana-alloy$|^cert-manager$|^monitoring$" + k8sGKEDefaultNamespacesRegex + k8sAKSDefaultNamespacesRegex))
+var k8sDefaultNamespacesGlob = services.NewGlob(glob.MustCompile("{kube-system,kube-node-lease,local-path-storage,grafana-alloy,cert-manager,monitoring" + k8sGKEDefaultNamespacesGlob + k8sAKSDefaultNamespacesGlob + "}"))
+
 var DefaultConfig = Config{
 	ChannelBufferLen: 10,
 	LogLevel:         "INFO",
@@ -55,8 +73,8 @@ var DefaultConfig = Config{
 		ContextPropagationEnabled: false,
 		ContextPropagation:        config.ContextPropagationDisabled,
 	},
-	Grafana: otel.GrafanaConfig{
-		OTLP: otel.GrafanaOTLP{
+	Grafana: botel.GrafanaConfig{
+		OTLP: botel.GrafanaOTLP{
 			// by default we will only submit traces, assuming span2metrics will do the metrics conversion
 			Submit: []string{"traces"},
 		},
@@ -131,11 +149,22 @@ var DefaultConfig = Config{
 		RunMode:  process.RunModePrivileged,
 		Interval: 5 * time.Second,
 	},
-	Discovery: services.DiscoveryConfig{
+	Discovery: servicesextra.BeylaDiscoveryConfig{
 		ExcludeOTelInstrumentedServices: true,
-		DefaultExcludeServices: services.DefinitionCriteria{
-			services.Attributes{
+		DefaultExcludeServices: services.RegexDefinitionCriteria{
+			services.RegexSelector{
 				Path: services.NewPathRegexp(regexp.MustCompile("(?:^|/)(beyla$|alloy$|otelcol[^/]*$)")),
+			},
+			services.RegexSelector{
+				Metadata: map[string]*services.RegexpAttr{"k8s_namespace": &k8sDefaultNamespacesRegex},
+			},
+		},
+		DefaultExcludeInstrument: services.GlobDefinitionCriteria{
+			services.GlobAttributes{
+				Path: services.NewGlob(glob.MustCompile("{*beyla,*alloy,*ebpf-instrument,*otelcol,*otelcol-contrib,*otelcol-contrib[!/]*}")),
+			},
+			services.GlobAttributes{
+				Metadata: map[string]*services.GlobAttr{"k8s_namespace": &k8sDefaultNamespacesGlob},
 			},
 		},
 	},
@@ -149,7 +178,7 @@ type Config struct {
 
 	// Grafana overrides some values of the otel.MetricsConfig and otel.TracesConfig below
 	// for a simpler submission of OTEL metrics to Grafana Cloud
-	Grafana otel.GrafanaConfig `yaml:"grafana"`
+	Grafana botel.GrafanaConfig `yaml:"grafana"`
 
 	Filters filter.AttributesConfig `yaml:"filter"`
 
@@ -164,9 +193,15 @@ type Config struct {
 	TracePrinter debug.TracePrinter            `yaml:"trace_printer" env:"BEYLA_TRACE_PRINTER"`
 
 	// Exec allows selecting the instrumented executable whose complete path contains the Exec value.
+	// Deprecated: Use BEYLA_AUTO_TARGET_EXE
+	//nolint:undoc
 	Exec services.RegexpAttr `yaml:"executable_name" env:"BEYLA_EXECUTABLE_NAME"`
-	// nolint:undoc
-	ExecOtelGo services.RegexpAttr `env:"OTEL_GO_AUTO_TARGET_EXE"`
+
+	// AutoTargetExe selects the executable to instrument matching a Glob against the executable path.
+	// To set this value via YAML, use discovery > instrument.
+	// It also accepts BEYLA_AUTO_TARGET_EXE for compatibility with opentelemetry-go-instrumentation
+	AutoTargetExe services.GlobAttr `env:"BEYLA_AUTO_TARGET_EXE,expand" envDefault:"${OTEL_GO_AUTO_TARGET_EXE}"`
+
 	// Port allows selecting the instrumented executable that owns the Port value. If this value is set (and
 	// different to zero), the value of the Exec property won't take effect.
 	// It's important to emphasize that if your process opens multiple HTTP/GRPC ports, the auto-instrumenter
@@ -174,12 +209,18 @@ type Config struct {
 	Port services.PortEnum `yaml:"open_port" env:"BEYLA_OPEN_PORT"`
 
 	// ServiceName is taken from either BEYLA_SERVICE_NAME env var or OTEL_SERVICE_NAME (for OTEL spec compatibility)
-	// Using env and envDefault is a trick to get the value either from one of either variables
-	ServiceName      string `yaml:"service_name" env:"OTEL_SERVICE_NAME,expand" envDefault:"${BEYLA_SERVICE_NAME}"`
+	// Using env and envDefault is a trick to get the value either from one of either variables.
+	// Deprecated: Service name should be set in the instrumentation target (env vars, kube metadata...)
+	// as this is a reminiscence of past times when we only supported one executable per instance.
+	//nolint:undoc
+	ServiceName string `yaml:"service_name" env:"OTEL_SERVICE_NAME,expand" envDefault:"${BEYLA_SERVICE_NAME}"`
+	// Deprecated: Service namespace should be set in the instrumentation target (env vars, kube metadata...)
+	// as this is a reminiscence of past times when we only supported one executable per instance.
+	//nolint:undoc
 	ServiceNamespace string `yaml:"service_namespace" env:"BEYLA_SERVICE_NAMESPACE"`
 
 	// Discovery configuration
-	Discovery services.DiscoveryConfig `yaml:"discovery"`
+	Discovery servicesextra.BeylaDiscoveryConfig `yaml:"discovery"`
 
 	LogLevel string `yaml:"log_level" env:"BEYLA_LOG_LEVEL"`
 
@@ -206,6 +247,9 @@ type Config struct {
 
 	// Grafana Alloy specific configuration
 	TracesReceiver TracesReceiverConfig `yaml:"-"`
+
+	// cached equivalent for the OBI conversion
+	obi *obi.Config `yaml:"-"`
 }
 
 type Consumer interface {
@@ -225,10 +269,11 @@ func (t TracesReceiverConfig) Enabled() bool {
 // Attributes configures the decoration of some extra attributes that will be
 // added to each span
 type Attributes struct {
-	Kubernetes transform.KubernetesDecorator `yaml:"kubernetes"`
-	InstanceID traces.InstanceIDConfig       `yaml:"instance_id"`
-	Select     attributes.Selection          `yaml:"select"`
-	HostID     HostIDConfig                  `yaml:"host_id"`
+	Kubernetes           transform.KubernetesDecorator `yaml:"kubernetes"`
+	InstanceID           traces.InstanceIDConfig       `yaml:"instance_id"`
+	Select               attributes.Selection          `yaml:"select"`
+	HostID               HostIDConfig                  `yaml:"host_id"`
+	ExtraGroupAttributes map[string][]attr.Name        `yaml:"extra_group_attributes"`
 }
 
 type HostIDConfig struct {
@@ -248,17 +293,13 @@ func (e ConfigError) Error() string {
 
 // nolint:cyclop
 func (c *Config) Validate() error {
-	if err := c.Discovery.Services.Validate(); err != nil {
-		return ConfigError(fmt.Sprintf("error in services YAML property: %s", err.Error()))
+	obiCfg := c.AsOBI()
+	if err := obiCfg.Discovery.Validate(); err != nil {
+		return ConfigError(err.Error())
 	}
-	if err := c.Discovery.ExcludeServices.Validate(); err != nil {
-		return ConfigError(fmt.Sprintf("error in exclude_services YAML property: %s", err.Error()))
-	}
+
 	if !c.Enabled(FeatureNetO11y) && !c.Enabled(FeatureAppO11y) {
 		return ConfigError("missing application discovery section or network metrics configuration. Check documentation.")
-	}
-	if (c.Port.Len() > 0 || c.Exec.IsSet() || len(c.Discovery.Services) > 0) && c.Discovery.SystemWide {
-		return ConfigError("you can't use BEYLA_SYSTEM_WIDE if any of BEYLA_EXECUTABLE_NAME, BEYLA_OPEN_PORT or services (YAML) are set")
 	}
 	if c.EBPF.BatchLength == 0 {
 		return ConfigError("BEYLA_BPF_BATCH_LENGTH must be at least 1")
@@ -356,7 +397,8 @@ func (c *Config) Enabled(feature Feature) bool {
 	case FeatureNetO11y:
 		return c.NetworkFlows.Enable || c.promNetO11yEnabled() || c.otelNetO11yEnabled()
 	case FeatureAppO11y:
-		return c.Port.Len() > 0 || c.Exec.IsSet() || c.Discovery.AppDiscoveryEnabled() || c.Discovery.SurveyEnabled() || c.Discovery.SystemWide
+		return c.Port.Len() > 0 || c.AutoTargetExe.IsSet() || c.Exec.IsSet() ||
+			c.Exec.IsSet() || c.Discovery.AppDiscoveryEnabled() || c.Discovery.SurveyEnabled()
 	}
 	return false
 }
@@ -381,6 +423,7 @@ func (c *Config) ExternalLogger(handler slog.Handler, debugMode bool) {
 // 2 - Contents of the provided file reader (nillable)
 // 3 - Environment variables
 func LoadConfig(file io.Reader) (*Config, error) {
+	SetupOBIEnvVars()
 	cfg := DefaultConfig
 	if file != nil {
 		cfgBuf, err := io.ReadAll(file)
@@ -395,11 +438,6 @@ func LoadConfig(file io.Reader) (*Config, error) {
 	}
 	if err := env.Parse(&cfg); err != nil {
 		return nil, fmt.Errorf("reading env vars: %w", err)
-	}
-
-	// We support OTEL_GO_AUTO_TARGET_EXE as an alias to BEYLA_EXECUTABLE_NAME
-	if !cfg.Exec.IsSet() && cfg.ExecOtelGo.IsSet() {
-		cfg.Exec = cfg.ExecOtelGo
 	}
 
 	return &cfg, nil

@@ -24,11 +24,10 @@ import (
 	"time"
 
 	"github.com/hashicorp/golang-lru/v2/simplelru"
-
-	"github.com/grafana/beyla/v2/pkg/internal/request"
-	"github.com/grafana/beyla/v2/pkg/internal/svc"
-	"github.com/grafana/beyla/v2/pkg/pipe/msg"
-	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 )
 
 type CollectConfig struct {
@@ -56,7 +55,7 @@ type Collector struct {
 // NewCollectorProvider creates and returns a new process Collector, given an agent context.
 func NewCollectorProvider(
 	cfg *CollectConfig,
-	in *msg.Queue[[]request.Span],
+	in <-chan []request.Span,
 	out *msg.Queue[[]*Status],
 ) swarm.InstanceFunc {
 	return func(_ context.Context) (swarm.RunFunc, error) {
@@ -67,7 +66,7 @@ func NewCollectorProvider(
 			harvest:            newHarvester(cfg, cache),
 			cache:              cache,
 			log:                pslog(),
-			newPids:            in.Subscribe(),
+			newPids:            in,
 			collectedProcesses: out,
 		}
 		return collector.Run, nil

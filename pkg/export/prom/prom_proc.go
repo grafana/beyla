@@ -5,25 +5,26 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/connector"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/pipe/global"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
+	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/expire"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/prom"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
-	attr2 "github.com/grafana/beyla/v2/pkg/export/attributes/names"
-	"github.com/grafana/beyla/v2/pkg/export/expire"
+	"github.com/grafana/beyla/v2/pkg/export/extraattributes"
+	extranames "github.com/grafana/beyla/v2/pkg/export/extraattributes/names"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
-	"github.com/grafana/beyla/v2/pkg/internal/connector"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
-	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
-	"github.com/grafana/beyla/v2/pkg/pipe/msg"
-	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
-
-// injectable function reference for testing
 
 // ProcPrometheusConfig for process metrics just wraps the global prom.ProcPrometheusConfig as provided by the user
 type ProcPrometheusConfig struct {
-	Metrics            *PrometheusConfig
-	AttributeSelectors attributes.Selection
+	Metrics     *prom.PrometheusConfig
+	SelectorCfg *attributes.SelectorConfig
 }
 
 // nolint:gocritic
@@ -56,7 +57,7 @@ func ProcPrometheusEndpoint(
 }
 
 type procMetricsReporter struct {
-	cfg *PrometheusConfig
+	cfg *prom.PrometheusConfig
 
 	promConnect *connector.PrometheusManager
 
@@ -64,24 +65,24 @@ type procMetricsReporter struct {
 
 	// metrics
 	cpuTimeAttrs []attributes.Field[*process.Status, string]
-	cpuTime      *Expirer[prometheus.Counter]
+	cpuTime      *prom.Expirer[prometheus.Counter]
 
 	cpuUtilizationAttrs []attributes.Field[*process.Status, string]
-	cpuUtilization      *Expirer[prometheus.Gauge]
+	cpuUtilization      *prom.Expirer[prometheus.Gauge]
 
 	// the OTEL spec for process memory says that this type is an UpDownCounter.
 	// Using Gauge as the nearest type in Prometheus.
 	memoryAttrs []attributes.Field[*process.Status, string]
-	memory      *Expirer[prometheus.Gauge]
+	memory      *prom.Expirer[prometheus.Gauge]
 
 	memoryVirtualAttrs []attributes.Field[*process.Status, string]
-	memoryVirtual      *Expirer[prometheus.Gauge]
+	memoryVirtual      *prom.Expirer[prometheus.Gauge]
 
 	diskAttrs []attributes.Field[*process.Status, string]
-	disk      *Expirer[prometheus.Counter]
+	disk      *prom.Expirer[prometheus.Counter]
 
 	netAttrs []attributes.Field[*process.Status, string]
-	net      *Expirer[prometheus.Counter]
+	net      *prom.Expirer[prometheus.Counter]
 
 	// the observation code for CPU metrics will be different depending on
 	// the "cpu.mode" attribute being selected or not
@@ -101,22 +102,22 @@ func newProcReporter(ctxInfo *global.ContextInfo, cfg *ProcPrometheusConfig, inp
 	// OTEL exporter would report also some prometheus-exclusive attributes
 	group.Add(attributes.GroupPrometheus)
 
-	provider, err := attributes.NewAttrSelector(group, cfg.AttributeSelectors)
+	provider, err := extraattributes.NewBeylaAttrSelector(group, cfg.SelectorCfg)
 	if err != nil {
 		return nil, fmt.Errorf("network Prometheus exporter attributes enable: %w", err)
 	}
 
 	cpuTimeLblNames, cpuTimeGetters, cpuTimeHasState :=
-		attributesWithExplicit(provider, attributes.ProcessCPUTime, attr2.ProcCPUMode)
+		attributesWithExplicit(provider, extraattributes.ProcessCPUTime, extranames.ProcCPUMode)
 	cpuUtilLblNames, cpuUtilGetters, cpuUtilHasState :=
-		attributesWithExplicit(provider, attributes.ProcessCPUUtilization, attr2.ProcCPUMode)
+		attributesWithExplicit(provider, extraattributes.ProcessCPUUtilization, extranames.ProcCPUMode)
 	diskLblNames, diskGetters, diskHasDirection :=
-		attributesWithExplicit(provider, attributes.ProcessDiskIO, attr2.ProcDiskIODir)
+		attributesWithExplicit(provider, extraattributes.ProcessDiskIO, extranames.ProcDiskIODir)
 	netLblNames, netGetters, netHasDirection :=
-		attributesWithExplicit(provider, attributes.ProcessDiskIO, attr2.ProcNetIODir)
+		attributesWithExplicit(provider, extraattributes.ProcessDiskIO, extranames.ProcNetIODir)
 
-	attrMemory := attributes.PrometheusGetters(process.PromGetters, provider.For(attributes.ProcessMemoryUsage))
-	attrMemoryVirtual := attributes.PrometheusGetters(process.PromGetters, provider.For(attributes.ProcessMemoryVirtual))
+	attrMemory := attributes.PrometheusGetters(process.PromGetters, provider.For(extraattributes.ProcessMemoryUsage))
+	attrMemoryVirtual := attributes.PrometheusGetters(process.PromGetters, provider.For(extraattributes.ProcessMemoryVirtual))
 
 	clock := expire.NewCachedClock(timeNow)
 	// If service name is not explicitly set, we take the service name as set by the
@@ -126,33 +127,33 @@ func newProcReporter(ctxInfo *global.ContextInfo, cfg *ProcPrometheusConfig, inp
 		promConnect:  ctxInfo.Prometheus,
 		clock:        clock,
 		cpuTimeAttrs: cpuTimeGetters,
-		cpuTime: NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: attributes.ProcessCPUTime.Prom,
+		cpuTime: prom.NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: extraattributes.ProcessCPUTime.Prom,
 			Help: "Total CPU seconds broken down by different states",
 		}, cpuTimeLblNames).MetricVec, clock.Time, cfg.Metrics.TTL),
 		cpuUtilizationAttrs: cpuUtilGetters,
-		cpuUtilization: NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
-			Name: attributes.ProcessCPUUtilization.Prom,
+		cpuUtilization: prom.NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: extraattributes.ProcessCPUUtilization.Prom,
 			Help: "Difference in process.cpu.time since the last measurement, divided by the elapsed time and number of CPUs available to the process",
 		}, cpuUtilLblNames).MetricVec, clock.Time, cfg.Metrics.TTL),
 		memoryAttrs: attrMemory,
-		memory: NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
-			Name: attributes.ProcessMemoryUsage.Prom,
+		memory: prom.NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: extraattributes.ProcessMemoryUsage.Prom,
 			Help: "The amount of physical memory in use",
-		}, labelNames(attrMemory)).MetricVec, clock.Time, cfg.Metrics.TTL),
+		}, labelNames[*process.Status](attrMemory)).MetricVec, clock.Time, cfg.Metrics.TTL),
 		memoryVirtualAttrs: attrMemoryVirtual,
-		memoryVirtual: NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
-			Name: attributes.ProcessMemoryVirtual.Prom,
+		memoryVirtual: prom.NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: extraattributes.ProcessMemoryVirtual.Prom,
 			Help: "The amount of committed virtual memory",
-		}, labelNames(attrMemoryVirtual)).MetricVec, clock.Time, cfg.Metrics.TTL),
+		}, labelNames[*process.Status](attrMemoryVirtual)).MetricVec, clock.Time, cfg.Metrics.TTL),
 		diskAttrs: diskGetters,
-		disk: NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: attributes.ProcessDiskIO.Prom,
+		disk: prom.NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: extraattributes.ProcessDiskIO.Prom,
 			Help: "Disk bytes transferred",
 		}, diskLblNames).MetricVec, clock.Time, cfg.Metrics.TTL),
 		netAttrs: netGetters,
-		net: NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: attributes.ProcessNetIO.Prom,
+		net: prom.NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: extraattributes.ProcessNetIO.Prom,
 			Help: "Network bytes transferred",
 		}, netLblNames).MetricVec, clock.Time, cfg.Metrics.TTL),
 		procStatusInput: input.Subscribe(),
@@ -216,9 +217,9 @@ func (r *procMetricsReporter) observeMetric(proc *process.Status) {
 	r.cpuTimeObserver(proc)
 	r.cpuUtilizationObserver(proc)
 	r.memory.WithLabelValues(labelValues(proc, r.memoryAttrs)...).
-		metric.Set(float64(proc.MemoryRSSBytes))
+		Metric.Set(float64(proc.MemoryRSSBytes))
 	r.memoryVirtual.WithLabelValues(labelValues(proc, r.memoryVirtualAttrs)...).
-		metric.Set(float64(proc.MemoryVMSBytes))
+		Metric.Set(float64(proc.MemoryVMSBytes))
 	r.diskObserver(proc)
 	r.netObserver(proc)
 }
@@ -227,12 +228,12 @@ func (r *procMetricsReporter) observeMetric(proc *process.Status) {
 // to be triggered when the user disables the "cpu_mode" metric
 func (r *procMetricsReporter) observeAggregatedCPUTime(proc *process.Status) {
 	r.cpuTime.WithLabelValues(labelValues(proc, r.cpuTimeAttrs)...).
-		metric.Add(proc.CPUTimeUserDelta + proc.CPUTimeSystemDelta + proc.CPUTimeWaitDelta)
+		Metric.Add(proc.CPUTimeUserDelta + proc.CPUTimeSystemDelta + proc.CPUTimeWaitDelta)
 }
 
 func (r *procMetricsReporter) observeAggregatedCPUUtilization(proc *process.Status) {
 	r.cpuUtilization.WithLabelValues(labelValues(proc, r.cpuUtilizationAttrs)...).
-		metric.Set(proc.CPUUtilisationUser + proc.CPUUtilisationSystem + proc.CPUUtilisationWait)
+		Metric.Set(proc.CPUUtilisationUser + proc.CPUUtilisationSystem + proc.CPUUtilisationWait)
 }
 
 // disaggregated observers report three CPU metrics: system, user and wait time
@@ -241,52 +242,52 @@ func (r *procMetricsReporter) observeDisaggregatedCPUTime(proc *process.Status) 
 	commonLabelValues := labelValues(proc, r.cpuTimeAttrs)
 
 	userLabels := append([]string{"user"}, commonLabelValues...)
-	r.cpuTime.WithLabelValues(userLabels...).metric.Add(proc.CPUTimeUserDelta)
+	r.cpuTime.WithLabelValues(userLabels...).Metric.Add(proc.CPUTimeUserDelta)
 
 	systemLabels := append([]string{"system"}, commonLabelValues...)
-	r.cpuTime.WithLabelValues(systemLabels...).metric.Add(proc.CPUTimeSystemDelta)
+	r.cpuTime.WithLabelValues(systemLabels...).Metric.Add(proc.CPUTimeSystemDelta)
 
 	waitLabels := append([]string{"wait"}, commonLabelValues...)
-	r.cpuTime.WithLabelValues(waitLabels...).metric.Add(proc.CPUTimeWaitDelta)
+	r.cpuTime.WithLabelValues(waitLabels...).Metric.Add(proc.CPUTimeWaitDelta)
 }
 
 func (r *procMetricsReporter) observeDisaggregatedCPUUtilization(proc *process.Status) {
 	commonLabelValues := labelValues(proc, r.cpuUtilizationAttrs)
 
 	userLabels := append([]string{"user"}, commonLabelValues...)
-	r.cpuUtilization.WithLabelValues(userLabels...).metric.Set(proc.CPUUtilisationUser)
+	r.cpuUtilization.WithLabelValues(userLabels...).Metric.Set(proc.CPUUtilisationUser)
 
 	systemLabels := append([]string{"system"}, commonLabelValues...)
-	r.cpuUtilization.WithLabelValues(systemLabels...).metric.Set(proc.CPUUtilisationSystem)
+	r.cpuUtilization.WithLabelValues(systemLabels...).Metric.Set(proc.CPUUtilisationSystem)
 
 	waitLabels := append([]string{"wait"}, commonLabelValues...)
-	r.cpuUtilization.WithLabelValues(waitLabels...).metric.Set(proc.CPUUtilisationWait)
+	r.cpuUtilization.WithLabelValues(waitLabels...).Metric.Set(proc.CPUUtilisationWait)
 }
 
 func (r *procMetricsReporter) observeAggregatedDisk(proc *process.Status) {
 	r.disk.WithLabelValues(labelValues(proc, r.diskAttrs)...).
-		metric.Add(float64(proc.IOReadBytesDelta + proc.IOWriteBytesDelta))
+		Metric.Add(float64(proc.IOReadBytesDelta + proc.IOWriteBytesDelta))
 }
 
 func (r *procMetricsReporter) observeDisaggregatedDisk(proc *process.Status) {
 	commonLabels := labelValues(proc, r.diskAttrs)
 	readLabels := append([]string{"read"}, commonLabels...)
-	r.disk.WithLabelValues(readLabels...).metric.Add(float64(proc.IOReadBytesDelta))
+	r.disk.WithLabelValues(readLabels...).Metric.Add(float64(proc.IOReadBytesDelta))
 	writeLabels := append([]string{"write"}, commonLabels...)
-	r.disk.WithLabelValues(writeLabels...).metric.Add(float64(proc.IOWriteBytesDelta))
+	r.disk.WithLabelValues(writeLabels...).Metric.Add(float64(proc.IOWriteBytesDelta))
 }
 
 func (r *procMetricsReporter) observeAggregatedNet(proc *process.Status) {
 	r.net.WithLabelValues(labelValues(proc, r.netAttrs)...).
-		metric.Add(float64(proc.NetTxBytesDelta + proc.NetRcvBytesDelta))
+		Metric.Add(float64(proc.NetTxBytesDelta + proc.NetRcvBytesDelta))
 }
 
 func (r *procMetricsReporter) observeDisaggregatedNet(proc *process.Status) {
 	commonLabels := labelValues(proc, r.netAttrs)
 	readLabels := append([]string{"transmit"}, commonLabels...)
-	r.net.WithLabelValues(readLabels...).metric.Add(float64(proc.NetTxBytesDelta))
+	r.net.WithLabelValues(readLabels...).Metric.Add(float64(proc.NetTxBytesDelta))
 	writeLabels := append([]string{"receive"}, commonLabels...)
-	r.net.WithLabelValues(writeLabels...).metric.Add(float64(proc.NetRcvBytesDelta))
+	r.net.WithLabelValues(writeLabels...).Metric.Add(float64(proc.NetRcvBytesDelta))
 }
 
 // attributesWithExplicit returns, for a metric name definition,
@@ -295,7 +296,7 @@ func (r *procMetricsReporter) observeDisaggregatedNet(proc *process.Status) {
 // provided explicit attribute name and value (e.g. "cpu.mode"
 // or "disk.io.direction")
 func attributesWithExplicit(
-	provider *attributes.AttrSelector, metricName attributes.Name, explicitAttribute attr2.Name,
+	provider *attributes.AttrSelector, metricName attributes.Name, explicitAttribute attr.Name,
 ) (
 	names []string, getters []attributes.Field[*process.Status, string], containsExplicit bool,
 ) {

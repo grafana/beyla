@@ -7,39 +7,41 @@ import (
 	"slices"
 	"strconv"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/pipe/global"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/expire"
+	obiotel "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel/metric"
+	metric2 "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel/metric/api/metric"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 	"go.opentelemetry.io/otel/attribute"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
-	attr2 "github.com/grafana/beyla/v2/pkg/export/attributes/names"
-	"github.com/grafana/beyla/v2/pkg/export/expire"
-	"github.com/grafana/beyla/v2/pkg/export/otel/metric"
-	metric2 "github.com/grafana/beyla/v2/pkg/export/otel/metric/api/metric"
+	"github.com/grafana/beyla/v2/pkg/export/extraattributes"
+	extranames "github.com/grafana/beyla/v2/pkg/export/extraattributes/names"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
-	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
-	"github.com/grafana/beyla/v2/pkg/internal/svc"
-	"github.com/grafana/beyla/v2/pkg/pipe/msg"
-	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
 
 var (
-	stateWaitAttr   = attr2.ProcCPUMode.OTEL().String("wait")
-	stateUserAttr   = attr2.ProcCPUMode.OTEL().String("user")
-	stateSystemAttr = attr2.ProcCPUMode.OTEL().String("system")
+	stateWaitAttr   = extranames.ProcCPUMode.OTEL().String("wait")
+	stateUserAttr   = extranames.ProcCPUMode.OTEL().String("user")
+	stateSystemAttr = extranames.ProcCPUMode.OTEL().String("system")
 
-	diskIODirRead  = attr2.ProcDiskIODir.OTEL().String("read")
-	diskIODirWrite = attr2.ProcDiskIODir.OTEL().String("write")
+	diskIODirRead  = extranames.ProcDiskIODir.OTEL().String("read")
+	diskIODirWrite = extranames.ProcDiskIODir.OTEL().String("write")
 
-	netIODirTx  = attr2.ProcNetIODir.OTEL().String("transmit")
-	netIODirRcv = attr2.ProcNetIODir.OTEL().String("receive")
+	netIODirTx  = extranames.ProcNetIODir.OTEL().String("transmit")
+	netIODirRcv = extranames.ProcNetIODir.OTEL().String("receive")
 )
 
 // ProcMetricsConfig extends MetricsConfig for process metrics
 type ProcMetricsConfig struct {
-	Metrics            *MetricsConfig
-	AttributeSelectors attributes.Selection
+	Metrics     *obiotel.MetricsConfig
+	SelectorCfg *attributes.SelectorConfig
 }
 
 func (mc *ProcMetricsConfig) Enabled() bool {
@@ -59,7 +61,7 @@ type procMetricsExporter struct {
 	hostID string
 
 	exporter  sdkmetric.Exporter
-	reporters ReporterPool[*process.ID, *procMetrics]
+	reporters obiotel.ReporterPool[*process.ID, *procMetrics]
 
 	log *slog.Logger
 
@@ -88,12 +90,12 @@ type procMetrics struct {
 	provider *metric.MeterProvider
 
 	// don't forget to add the cleanup code in cleanupAllMetricsInstances function
-	cpuTime        *Expirer[*process.Status, metric2.Float64Counter, float64]
-	cpuUtilisation *Expirer[*process.Status, metric2.Float64Gauge, float64]
-	memory         *Expirer[*process.Status, metric2.Int64UpDownCounter, int64]
-	memoryVirtual  *Expirer[*process.Status, metric2.Int64UpDownCounter, int64]
-	disk           *Expirer[*process.Status, metric2.Int64Counter, int64]
-	net            *Expirer[*process.Status, metric2.Int64Counter, int64]
+	cpuTime        *obiotel.Expirer[*process.Status, metric2.Float64Counter, float64]
+	cpuUtilisation *obiotel.Expirer[*process.Status, metric2.Float64Gauge, float64]
+	memory         *obiotel.Expirer[*process.Status, metric2.Int64UpDownCounter, int64]
+	memoryVirtual  *obiotel.Expirer[*process.Status, metric2.Int64UpDownCounter, int64]
+	disk           *obiotel.Expirer[*process.Status, metric2.Int64Counter, int64]
+	net            *obiotel.Expirer[*process.Status, metric2.Int64Counter, int64]
 }
 
 func ProcMetricsExporterProvider(
@@ -106,8 +108,8 @@ func ProcMetricsExporterProvider(
 			return swarm.EmptyRunFunc()
 		}
 
-		if cfg.AttributeSelectors == nil {
-			cfg.AttributeSelectors = make(attributes.Selection)
+		if cfg.SelectorCfg.SelectionCfg == nil {
+			cfg.SelectorCfg.SelectionCfg = make(attributes.Selection)
 		}
 
 		return newProcMetricsExporter(ctx, ctxInfo, cfg, input)
@@ -120,27 +122,27 @@ func newProcMetricsExporter(
 	cfg *ProcMetricsConfig,
 	input *msg.Queue[[]*process.Status],
 ) (swarm.RunFunc, error) {
-	SetupInternalOTELSDKLogger(cfg.Metrics.SDKLogLevel)
+	obiotel.SetupInternalOTELSDKLogger(cfg.Metrics.SDKLogLevel)
 
 	log := pmlog()
 	log.Debug("instantiating process metrics exporter provider")
 
 	// only user-provided attributes (or default set) will decorate the metrics
-	attrProv, err := attributes.NewAttrSelector(ctxInfo.MetricAttributeGroups, cfg.AttributeSelectors)
+	attrProv, err := extraattributes.NewBeylaAttrSelector(ctxInfo.MetricAttributeGroups, cfg.SelectorCfg)
 	if err != nil {
 		return nil, fmt.Errorf("process OTEL exporter attributes: %w", err)
 	}
 
-	cpuTimeNames := attrProv.For(attributes.ProcessCPUTime)
+	cpuTimeNames := attrProv.For(extraattributes.ProcessCPUTime)
 	attrCPUTime := attributes.OpenTelemetryGetters(process.OTELGetters, cpuTimeNames)
 
-	cpuUtilNames := attrProv.For(attributes.ProcessCPUUtilization)
+	cpuUtilNames := attrProv.For(extraattributes.ProcessCPUUtilization)
 	attrCPUUtil := attributes.OpenTelemetryGetters(process.OTELGetters, cpuUtilNames)
 
-	diskNames := attrProv.For(attributes.ProcessDiskIO)
+	diskNames := attrProv.For(extraattributes.ProcessDiskIO)
 	attrDisk := attributes.OpenTelemetryGetters(process.OTELGetters, diskNames)
 
-	netNames := attrProv.For(attributes.ProcessNetIO)
+	netNames := attrProv.For(extraattributes.ProcessNetIO)
 	attrNet := attributes.OpenTelemetryGetters(process.OTELGetters, netNames)
 
 	mr := &procMetricsExporter{
@@ -152,47 +154,47 @@ func newProcMetricsExporter(
 		attrCPUTime: attrCPUTime,
 		attrCPUUtil: attrCPUUtil,
 		attrMemory: attributes.OpenTelemetryGetters(process.OTELGetters,
-			attrProv.For(attributes.ProcessMemoryUsage)),
+			attrProv.For(extraattributes.ProcessMemoryUsage)),
 		attrMemoryVirtual: attributes.OpenTelemetryGetters(process.OTELGetters,
-			attrProv.For(attributes.ProcessMemoryVirtual)),
+			attrProv.For(extraattributes.ProcessMemoryVirtual)),
 		attrDisk:        attrDisk,
 		attrNet:         attrNet,
 		procStatusInput: input.Subscribe(),
 	}
-	if slices.Contains(cpuTimeNames, attr2.ProcCPUMode) {
+	if slices.Contains(cpuTimeNames, extranames.ProcCPUMode) {
 		mr.cpuTimeObserver = cpuTimeDisaggregatedObserver
 	} else {
 		mr.cpuTimeObserver = cpuTimeAggregatedObserver
 	}
-	if slices.Contains(cpuUtilNames, attr2.ProcCPUMode) {
+	if slices.Contains(cpuUtilNames, extranames.ProcCPUMode) {
 		mr.cpuUtilisationObserver = cpuUtilisationDisaggregatedObserver
 	} else {
 		mr.cpuUtilisationObserver = cpuUtilisationAggregatedObserver
 	}
-	if slices.Contains(diskNames, attr2.ProcDiskIODir) {
+	if slices.Contains(diskNames, extranames.ProcDiskIODir) {
 		mr.diskObserver = diskDisaggregatedObserver
 	} else {
 		mr.diskObserver = diskAggregatedObserver
 	}
-	if slices.Contains(netNames, attr2.ProcNetIODir) {
+	if slices.Contains(netNames, extranames.ProcNetIODir) {
 		mr.netObserver = netDisaggregatedObserver
 	} else {
 		mr.netObserver = netAggregatedObserver
 	}
 
-	mr.reporters = NewReporterPool[*process.ID, *procMetrics](cfg.Metrics.ReportersCacheLen, cfg.Metrics.TTL, timeNow,
-		func(id svc.UID, v *expirable[*procMetrics]) {
+	mr.reporters = obiotel.NewReporterPool[*process.ID, *procMetrics](cfg.Metrics.ReportersCacheLen, cfg.Metrics.TTL, timeNow,
+		func(id svc.UID, v *procMetrics) {
 			llog := log.With("service", id)
 			llog.Debug("evicting metrics reporter from cache")
-			v.value.cleanupAllMetricsInstances()
+			v.cleanupAllMetricsInstances()
 			go func() {
-				if err := v.value.provider.ForceFlush(ctx); err != nil {
+				if err := v.provider.ForceFlush(ctx); err != nil {
 					llog.Warn("error flushing evicted metrics provider", "error", err)
 				}
 			}()
 		}, mr.newMetricSet)
 
-	mr.exporter, err = InstantiateMetricsExporter(ctx, cfg.Metrics, log)
+	mr.exporter, err = obiotel.InstantiateMetricsExporter(ctx, cfg.Metrics, log)
 	if err != nil {
 		log.Error("instantiating metrics exporter", "error", err)
 		return nil, err
@@ -204,25 +206,25 @@ func newProcMetricsExporter(
 // getFilteredProcessResourceAttrs returns resource attributes filtered based on the attribute selector
 // for process metrics.
 func getFilteredProcessResourceAttrs(hostID string, procID *process.ID, attrSelector attributes.Selection) []attribute.KeyValue {
-	baseAttrs := getResourceAttrs(hostID, procID.Service)
+	baseAttrs := obiotel.GetResourceAttrs(hostID, procID.Service)
 	procAttrs := []attribute.KeyValue{
 		semconv.ServiceInstanceID(procID.UID.Instance),
-		attr2.ProcCommand.OTEL().String(procID.Command),
-		attr2.ProcOwner.OTEL().String(procID.User),
-		attr2.ProcParentPid.OTEL().String(strconv.Itoa(int(procID.ParentProcessID))),
-		attr2.ProcPid.OTEL().String(strconv.Itoa(int(procID.ProcessID))),
-		attr2.ProcCommandLine.OTEL().String(procID.CommandLine),
-		attr2.ProcCommandArgs.OTEL().StringSlice(procID.CommandArgs),
-		attr2.ProcExecName.OTEL().String(procID.ExecName),
-		attr2.ProcExecPath.OTEL().String(procID.ExecPath),
+		extranames.ProcCommand.OTEL().String(procID.Command),
+		extranames.ProcOwner.OTEL().String(procID.User),
+		extranames.ProcParentPid.OTEL().String(strconv.Itoa(int(procID.ParentProcessID))),
+		extranames.ProcPid.OTEL().String(strconv.Itoa(int(procID.ProcessID))),
+		extranames.ProcCommandLine.OTEL().String(procID.CommandLine),
+		extranames.ProcCommandArgs.OTEL().StringSlice(procID.CommandArgs),
+		extranames.ProcExecName.OTEL().String(procID.ExecName),
+		extranames.ProcExecPath.OTEL().String(procID.ExecPath),
 	}
-	return getFilteredAttributesByPrefix(baseAttrs, attrSelector, procAttrs, []string{"process."})
+	return obiotel.GetFilteredAttributesByPrefix(baseAttrs, attrSelector, procAttrs, []string{"process."})
 }
 
 func (me *procMetricsExporter) newMetricSet(procID *process.ID) (*procMetrics, error) {
 	log := me.log.With("service", procID.Service, "processID", procID.UID)
 	log.Debug("creating new Metrics exporter")
-	resources := resource.NewWithAttributes(semconv.SchemaURL, getFilteredProcessResourceAttrs(me.hostID, procID, me.cfg.AttributeSelectors)...)
+	resources := resource.NewWithAttributes(semconv.SchemaURL, getFilteredProcessResourceAttrs(me.hostID, procID, me.cfg.SelectorCfg.SelectionCfg)...)
 	opts := []metric.Option{
 		metric.WithResource(resources),
 		metric.WithReader(metric.NewPeriodicReader(me.exporter,
@@ -234,28 +236,28 @@ func (me *procMetricsExporter) newMetricSet(procID *process.ID) (*procMetrics, e
 		provider: metric.NewMeterProvider(opts...),
 	}
 
-	meter := m.provider.Meter(reporterName)
+	meter := m.provider.Meter(ReporterName)
 
 	if cpuTime, err := meter.Float64Counter(
-		attributes.ProcessCPUTime.OTEL, metric2.WithUnit("s"),
+		extraattributes.ProcessCPUTime.OTEL, metric2.WithUnit("s"),
 		metric2.WithDescription("Total CPU seconds broken down by different states"),
 	); err != nil {
-		log.Error("creating observable gauge for "+attributes.ProcessCPUUtilization.OTEL, "error", err)
+		log.Error("creating observable gauge for "+extraattributes.ProcessCPUUtilization.OTEL, "error", err)
 		return nil, err
 	} else {
-		m.cpuTime = NewExpirer[*process.Status, metric2.Float64Counter, float64](
+		m.cpuTime = obiotel.NewExpirer[*process.Status, metric2.Float64Counter, float64](
 			me.ctx, cpuTime, me.attrCPUTime, timeNow, me.cfg.Metrics.TTL)
 	}
 
 	if cpuUtilisation, err := meter.Float64Gauge(
-		attributes.ProcessCPUUtilization.OTEL,
+		extraattributes.ProcessCPUUtilization.OTEL,
 		metric2.WithDescription("Difference in process.cpu.time since the last measurement, divided by the elapsed time and number of CPUs available to the process"),
 		metric2.WithUnit("1"),
 	); err != nil {
-		log.Error("creating observable gauge for "+attributes.ProcessCPUUtilization.OTEL, "error", err)
+		log.Error("creating observable gauge for "+extraattributes.ProcessCPUUtilization.OTEL, "error", err)
 		return nil, err
 	} else {
-		m.cpuUtilisation = NewExpirer[*process.Status, metric2.Float64Gauge, float64](
+		m.cpuUtilisation = obiotel.NewExpirer[*process.Status, metric2.Float64Gauge, float64](
 			me.ctx, cpuUtilisation, me.attrCPUUtil, timeNow, me.cfg.Metrics.TTL)
 	}
 
@@ -263,50 +265,50 @@ func (me *procMetricsExporter) newMetricSet(procID *process.ID) (*procMetrics, e
 	// internally treat them as gauges, as it's aligned to what we get from the /proc filesystem
 
 	if memory, err := meter.Int64UpDownCounter(
-		attributes.ProcessMemoryUsage.OTEL,
+		extraattributes.ProcessMemoryUsage.OTEL,
 		metric2.WithDescription("The amount of physical memory in use"),
 		metric2.WithUnit("By"),
 	); err != nil {
-		log.Error("creating observable gauge for "+attributes.ProcessMemoryUsage.OTEL, "error", err)
+		log.Error("creating observable gauge for "+extraattributes.ProcessMemoryUsage.OTEL, "error", err)
 		return nil, err
 	} else {
-		m.memory = NewExpirer[*process.Status, metric2.Int64UpDownCounter, int64](
+		m.memory = obiotel.NewExpirer[*process.Status, metric2.Int64UpDownCounter, int64](
 			me.ctx, memory, me.attrMemory, timeNow, me.cfg.Metrics.TTL)
 	}
 
 	if memoryVirtual, err := meter.Int64UpDownCounter(
-		attributes.ProcessMemoryVirtual.OTEL,
+		extraattributes.ProcessMemoryVirtual.OTEL,
 		metric2.WithDescription("The amount of committed virtual memory"),
 		metric2.WithUnit("By"),
 	); err != nil {
-		log.Error("creating observable gauge for "+attributes.ProcessMemoryVirtual.OTEL, "error", err)
+		log.Error("creating observable gauge for "+extraattributes.ProcessMemoryVirtual.OTEL, "error", err)
 		return nil, err
 	} else {
-		m.memoryVirtual = NewExpirer[*process.Status, metric2.Int64UpDownCounter, int64](
+		m.memoryVirtual = obiotel.NewExpirer[*process.Status, metric2.Int64UpDownCounter, int64](
 			me.ctx, memoryVirtual, me.attrMemoryVirtual, timeNow, me.cfg.Metrics.TTL)
 	}
 
 	if disk, err := meter.Int64Counter(
-		attributes.ProcessDiskIO.OTEL,
+		extraattributes.ProcessDiskIO.OTEL,
 		metric2.WithDescription("Disk bytes transferred"),
 		metric2.WithUnit("By"),
 	); err != nil {
-		log.Error("creating observable gauge for "+attributes.ProcessMemoryVirtual.OTEL, "error", err)
+		log.Error("creating observable gauge for "+extraattributes.ProcessMemoryVirtual.OTEL, "error", err)
 		return nil, err
 	} else {
-		m.disk = NewExpirer[*process.Status, metric2.Int64Counter, int64](
+		m.disk = obiotel.NewExpirer[*process.Status, metric2.Int64Counter, int64](
 			me.ctx, disk, me.attrDisk, timeNow, me.cfg.Metrics.TTL)
 	}
 
 	if net, err := meter.Int64Counter(
-		attributes.ProcessNetIO.OTEL,
+		extraattributes.ProcessNetIO.OTEL,
 		metric2.WithDescription("Network bytes transferred"),
 		metric2.WithUnit("By"),
 	); err != nil {
-		log.Error("creating observable gauge for "+attributes.ProcessMemoryVirtual.OTEL, "error", err)
+		log.Error("creating observable gauge for "+extraattributes.ProcessMemoryVirtual.OTEL, "error", err)
 		return nil, err
 	} else {
-		m.net = NewExpirer[*process.Status, metric2.Int64Counter, int64](
+		m.net = obiotel.NewExpirer[*process.Status, metric2.Int64Counter, int64](
 			me.ctx, net, me.attrNet, timeNow, me.cfg.Metrics.TTL)
 	}
 	return &m, nil

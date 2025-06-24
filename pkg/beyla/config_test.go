@@ -12,24 +12,28 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gobwas/glob"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/tcmanager"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/imetrics"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/kube"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/transform/cidr"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/traces"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
+	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/debug"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
+	obiotel "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/prom"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubeflags"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/services"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/transform"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/v2/pkg/config"
-	"github.com/grafana/beyla/v2/pkg/export/attributes"
-	"github.com/grafana/beyla/v2/pkg/export/debug"
-	"github.com/grafana/beyla/v2/pkg/export/instrumentations"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
-	"github.com/grafana/beyla/v2/pkg/export/prom"
-	"github.com/grafana/beyla/v2/pkg/internal/ebpf/tcmanager"
-	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
-	"github.com/grafana/beyla/v2/pkg/internal/kube"
-	"github.com/grafana/beyla/v2/pkg/internal/netolly/transform/cidr"
-	"github.com/grafana/beyla/v2/pkg/internal/traces"
-	"github.com/grafana/beyla/v2/pkg/kubeflags"
-	"github.com/grafana/beyla/v2/pkg/services"
-	"github.com/grafana/beyla/v2/pkg/transform"
+	servicesextra "github.com/grafana/beyla/v2/pkg/services"
 )
 
 type envMap map[string]string
@@ -69,27 +73,24 @@ attributes:
     beyla.network.flow:
       include: ["foo", "bar"]
       exclude: ["baz", "bae"]
+  extra_group_attributes:
+    k8s_app_meta: ["k8s.app.version"]
 network:
   enable: true
   cidrs:
     - 10.244.0.0/16
 `)
-	require.NoError(t, os.Setenv("BEYLA_EXECUTABLE_NAME", "tras"))
-	require.NoError(t, os.Setenv("BEYLA_NETWORK_AGENT_IP", "1.2.3.4"))
-	require.NoError(t, os.Setenv("BEYLA_OPEN_PORT", "8080-8089"))
-	require.NoError(t, os.Setenv("OTEL_SERVICE_NAME", "svc-name"))
-	require.NoError(t, os.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "localhost:3131"))
-	require.NoError(t, os.Setenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "localhost:3232"))
-	require.NoError(t, os.Setenv("BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT", "3210"))
-	require.NoError(t, os.Setenv("GRAFANA_CLOUD_SUBMIT", "metrics,traces"))
-	require.NoError(t, os.Setenv("KUBECONFIG", "/foo/bar"))
-	require.NoError(t, os.Setenv("BEYLA_NAME_RESOLVER_SOURCES", "k8s,dns"))
-	defer unsetEnv(t, envMap{
-		"KUBECONFIG":      "",
-		"BEYLA_OPEN_PORT": "", "BEYLA_EXECUTABLE_NAME": "", "OTEL_SERVICE_NAME": "",
-		"OTEL_EXPORTER_OTLP_ENDPOINT": "", "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "", "GRAFANA_CLOUD_SUBMIT": "",
-	})
-
+	t.Setenv("BEYLA_EXECUTABLE_NAME", "tras")
+	t.Setenv("BEYLA_NETWORK_AGENT_IP", "1.2.3.4")
+	t.Setenv("BEYLA_OPEN_PORT", "8080-8089")
+	t.Setenv("OTEL_SERVICE_NAME", "svc-name")
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "localhost:3131")
+	t.Setenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "localhost:3232")
+	t.Setenv("BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT", "3210")
+	t.Setenv("GRAFANA_CLOUD_SUBMIT", "metrics,traces")
+	t.Setenv("KUBECONFIG", "/foo/bar")
+	t.Setenv("BEYLA_NAME_RESOLVER_SOURCES", "k8s,dns")
+	defer unsetOBIEnv(t)
 	cfg, err := LoadConfig(userConfig)
 	require.NoError(t, err)
 	assert.NoError(t, cfg.Validate())
@@ -110,7 +111,8 @@ network:
 
 	metaSources := maps.Clone(kube.DefaultResourceLabels)
 	metaSources["service.namespace"] = []string{"huha.com/yeah"}
-
+	// uncache internal field
+	cfg.obi = nil
 	assert.Equal(t, &Config{
 		Exec:             cfg.Exec,
 		Port:             cfg.Port,
@@ -134,16 +136,16 @@ network:
 			},
 		},
 		NetworkFlows: nc,
-		Metrics: otel.MetricsConfig{
+		Metrics: obiotel.MetricsConfig{
 			OTELIntervalMS:    60_000,
 			CommonEndpoint:    "localhost:3131",
 			MetricsEndpoint:   "localhost:3030",
-			Protocol:          otel.ProtocolUnset,
+			MetricsProtocol:   obiotel.ProtocolHTTPProtobuf,
 			ReportersCacheLen: ReporterLRUSize,
-			Buckets: otel.Buckets{
+			Buckets: obiotel.Buckets{
 				DurationHistogram:     []float64{0, 1, 2},
-				RequestSizeHistogram:  otel.DefaultBuckets.RequestSizeHistogram,
-				ResponseSizeHistogram: otel.DefaultBuckets.ResponseSizeHistogram,
+				RequestSizeHistogram:  obiotel.DefaultBuckets.RequestSizeHistogram,
+				ResponseSizeHistogram: obiotel.DefaultBuckets.ResponseSizeHistogram,
 			},
 			Features: []string{"application"},
 			Instrumentations: []string{
@@ -152,8 +154,8 @@ network:
 			HistogramAggregation: "base2_exponential_bucket_histogram",
 			TTL:                  5 * time.Minute,
 		},
-		Traces: otel.TracesConfig{
-			Protocol:           otel.ProtocolUnset,
+		Traces: obiotel.TracesConfig{
+			TracesProtocol:     obiotel.ProtocolHTTPProtobuf,
 			CommonEndpoint:     "localhost:3131",
 			TracesEndpoint:     "localhost:3232",
 			MaxQueueSize:       4096,
@@ -165,14 +167,14 @@ network:
 		},
 		Prometheus: prom.PrometheusConfig{
 			Path:     "/metrics",
-			Features: []string{otel.FeatureApplication},
+			Features: []string{obiotel.FeatureApplication},
 			Instrumentations: []string{
 				instrumentations.InstrumentationALL,
 			},
 			TTL:                         time.Second,
 			SpanMetricsServiceCacheSize: 10000,
-			Buckets: otel.Buckets{
-				DurationHistogram:     otel.DefaultBuckets.DurationHistogram,
+			Buckets: obiotel.Buckets{
+				DurationHistogram:     obiotel.DefaultBuckets.DurationHistogram,
 				RequestSizeHistogram:  []float64{0, 10, 20, 22},
 				ResponseSizeHistogram: []float64{0, 10, 20, 22},
 			}},
@@ -204,6 +206,9 @@ network:
 					Exclude: []string{"baz", "bae"},
 				},
 			},
+			ExtraGroupAttributes: map[string][]attr.Name{
+				"k8s_app_meta": {"k8s.app.version"},
+			},
 		},
 		Routes: &transform.RoutesConfig{
 			Unmatch:      transform.UnmatchHeuristic,
@@ -218,11 +223,22 @@ network:
 			RunMode:  process.RunModePrivileged,
 			Interval: 5 * time.Second,
 		},
-		Discovery: services.DiscoveryConfig{
+		Discovery: servicesextra.BeylaDiscoveryConfig{
 			ExcludeOTelInstrumentedServices: true,
-			DefaultExcludeServices: services.DefinitionCriteria{
-				services.Attributes{
+			DefaultExcludeServices: services.RegexDefinitionCriteria{
+				services.RegexSelector{
 					Path: services.NewPathRegexp(regexp.MustCompile("(?:^|/)(beyla$|alloy$|otelcol[^/]*$)")),
+				},
+				services.RegexSelector{
+					Metadata: map[string]*services.RegexpAttr{"k8s_namespace": &k8sDefaultNamespacesRegex},
+				},
+			},
+			DefaultExcludeInstrument: services.GlobDefinitionCriteria{
+				services.GlobAttributes{
+					Path: services.NewGlob(glob.MustCompile("{*beyla,*alloy,*ebpf-instrument,*otelcol,*otelcol-contrib,*otelcol-contrib[!/]*}")),
+				},
+				services.GlobAttributes{
+					Metadata: map[string]*services.GlobAttr{"k8s_namespace": &k8sDefaultNamespacesGlob},
 				},
 			},
 		},
@@ -232,14 +248,14 @@ network:
 func TestConfig_ServiceName(t *testing.T) {
 	// ServiceName property can be handled via two different env vars BEYLA_SERVICE_NAME and OTEL_SERVICE_NAME (for
 	// compatibility with OpenTelemetry)
-	require.NoError(t, os.Setenv("BEYLA_SERVICE_NAME", "some-svc-name"))
+	t.Setenv("BEYLA_SERVICE_NAME", "some-svc-name")
 	cfg, err := LoadConfig(bytes.NewReader(nil))
 	require.NoError(t, err)
 	assert.Equal(t, "some-svc-name", cfg.ServiceName)
 }
 
 func TestConfig_ShutdownTimeout(t *testing.T) {
-	require.NoError(t, os.Setenv("BEYLA_SHUTDOWN_TIMEOUT", "1m"))
+	t.Setenv("BEYLA_SHUTDOWN_TIMEOUT", "1m")
 	cfg, err := LoadConfig(bytes.NewReader(nil))
 	require.NoError(t, err)
 	assert.Equal(t, time.Minute, cfg.ShutdownTimeout)
@@ -259,7 +275,6 @@ func TestConfigValidate(t *testing.T) {
 	}
 	for n, tc := range testCases {
 		t.Run(fmt.Sprint("case", n), func(t *testing.T) {
-			defer unsetEnv(t, tc)
 			assert.NoError(t, loadConfig(t, tc).Validate())
 		})
 	}
@@ -274,7 +289,6 @@ func TestConfigValidate_error(t *testing.T) {
 	}
 	for n, tc := range testCases {
 		t.Run(fmt.Sprint("case", n), func(t *testing.T) {
-			defer unsetEnv(t, tc)
 			assert.Error(t, loadConfig(t, tc).Validate())
 		})
 	}
@@ -353,12 +367,13 @@ func TestConfigValidate_TracePrinter(t *testing.T) {
 	}
 
 	for i := range testCases {
-		cfg := loadConfig(t, testCases[i].env)
-		unsetEnv(t, testCases[i].env)
+		t.Run(fmt.Sprint("case", i), func(t *testing.T) {
+			cfg := loadConfig(t, testCases[i].env)
 
-		err := cfg.Validate()
-		require.Error(t, err)
-		assert.Equal(t, err.Error(), testCases[i].errorMsg)
+			err := cfg.Validate()
+			require.Error(t, err)
+			assert.Equal(t, err.Error(), testCases[i].errorMsg)
+		})
 	}
 }
 
@@ -366,8 +381,6 @@ func TestConfigValidate_TracePrinterFallback(t *testing.T) {
 	env := envMap{"BEYLA_EXECUTABLE_NAME": "foo", "BEYLA_TRACE_PRINTER": "text"}
 
 	cfg := loadConfig(t, env)
-
-	unsetEnv(t, env)
 
 	err := cfg.Validate()
 	require.NoError(t, err)
@@ -411,19 +424,20 @@ routes:
 }
 
 func TestConfig_OtelGoAutoEnv(t *testing.T) {
-	// OTEL_GO_AUTO_TARGET_EXE is an alias to BEYLA_EXECUTABLE_NAME
+	// OTEL_GO_AUTO_TARGET_EXE is an alias to OTEL_EBPF_AUTO_TARGET_EXE
 	// (Compatibility with OpenTelemetry)
-	require.NoError(t, os.Setenv("OTEL_GO_AUTO_TARGET_EXE", "testserver"))
+	t.Setenv("OTEL_GO_AUTO_TARGET_EXE", "*testserver")
 	cfg, err := LoadConfig(bytes.NewReader(nil))
 	require.NoError(t, err)
-	assert.True(t, cfg.Exec.IsSet()) // Exec maps to BEYLA_EXECUTABLE_NAME
+	assert.True(t, cfg.AutoTargetExe.MatchString("/bin/testserver"))
+	assert.False(t, cfg.AutoTargetExe.MatchString("somethingelse"))
 }
 
 func TestConfig_NetworkImplicit(t *testing.T) {
 	// OTEL_GO_AUTO_TARGET_EXE is an alias to BEYLA_EXECUTABLE_NAME
 	// (Compatibility with OpenTelemetry)
-	require.NoError(t, os.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318"))
-	require.NoError(t, os.Setenv("BEYLA_OTEL_METRIC_FEATURES", "network"))
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318")
+	t.Setenv("BEYLA_OTEL_METRIC_FEATURES", "network")
 	cfg, err := LoadConfig(bytes.NewReader(nil))
 	require.NoError(t, err)
 	assert.True(t, cfg.Enabled(FeatureNetO11y)) // Net o11y should be on
@@ -432,8 +446,8 @@ func TestConfig_NetworkImplicit(t *testing.T) {
 func TestConfig_NetworkImplicitProm(t *testing.T) {
 	// OTEL_GO_AUTO_TARGET_EXE is an alias to BEYLA_EXECUTABLE_NAME
 	// (Compatibility with OpenTelemetry)
-	require.NoError(t, os.Setenv("BEYLA_PROMETHEUS_PORT", "9090"))
-	require.NoError(t, os.Setenv("BEYLA_PROMETHEUS_FEATURES", "network"))
+	t.Setenv("BEYLA_PROMETHEUS_PORT", "9090")
+	t.Setenv("BEYLA_PROMETHEUS_FEATURES", "network")
 	cfg, err := LoadConfig(bytes.NewReader(nil))
 	require.NoError(t, err)
 	assert.True(t, cfg.Enabled(FeatureNetO11y)) // Net o11y should be on
@@ -547,17 +561,43 @@ func TestWillUseTC(t *testing.T) {
 	assert.True(t, cfg.willUseTC())
 }
 
+func TestOBIConfigConversion(t *testing.T) {
+	cfg := DefaultConfig
+	cfg.Prometheus.Port = 6060
+	cfg.Metrics.MetricsEndpoint = "http://localhost:4318"
+	cfg.Discovery = servicesextra.BeylaDiscoveryConfig{
+		Instrument: services.GlobDefinitionCriteria{
+			{Path: services.NewGlob(glob.MustCompile("hello*"))},
+			{Path: services.NewGlob(glob.MustCompile("bye*"))},
+		},
+	}
+
+	// TODO: add more fields that you want to verify they are properly converted
+	dst := cfg.AsOBI()
+	assert.Equal(t, dst.Prometheus.Port, 6060)
+	assert.Equal(t, dst.Metrics.MetricsEndpoint, "http://localhost:4318")
+	assert.Equal(t,
+		services.GlobDefinitionCriteria{
+			{Path: services.NewGlob(glob.MustCompile("hello*"))},
+			{Path: services.NewGlob(glob.MustCompile("bye*"))},
+		},
+		dst.Discovery.Instrument)
+}
+
 func loadConfig(t *testing.T, env envMap) *Config {
 	for k, v := range env {
-		require.NoError(t, os.Setenv(k, v))
+		t.Setenv(k, v)
 	}
 	cfg, err := LoadConfig(nil)
 	require.NoError(t, err)
+	unsetOBIEnv(t)
 	return cfg
 }
 
-func unsetEnv(t *testing.T, env envMap) {
-	for k := range env {
-		require.NoError(t, os.Unsetenv(k))
+func unsetOBIEnv(t *testing.T) {
+	for _, env := range os.Environ() {
+		if strings.HasPrefix(env, "OTEL_EBPF_") {
+			require.NoError(t, os.Unsetenv(env[:strings.IndexByte(env, '=')]))
+		}
 	}
 }

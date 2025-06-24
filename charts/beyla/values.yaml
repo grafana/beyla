@@ -61,7 +61,7 @@ podSecurityContext: {}
 # -- If set to false, deploys an unprivileged / less privileged setup.
 privileged: true
 
-# -- Enables context propagation support. 
+# -- Enables context propagation support.
 contextPropagation:
   enabled: false
 

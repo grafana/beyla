@@ -61,13 +61,7 @@ podSecurityContext: {}
 # -- If set to false, deploys an unprivileged / less privileged setup.
 privileged: true
 
-# -- Enables context propagation support. When enabled, requires hostNetwork and /sys/fs/cgroup mount.
-# This enables distributed tracing context propagation at the network level.
-# When enabled, the following changes are applied:
-# - hostNetwork: true is set (for network-level context propagation)
-# - /sys/fs/cgroup is mounted from the host (to monitor newly created sockets)
-# - NET_ADMIN capability is added (to inject HTTP and TCP context propagation information)
-# Note: This feature generally requires kernel 5.17 or newer for BPF loops support.
+# -- Enables context propagation support. 
 contextPropagation:
   enabled: false
 

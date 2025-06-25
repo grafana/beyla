@@ -63,13 +63,13 @@ privileged: true
 
 # -- Enables context propagation support.
 contextPropagation:
-  enabled: false
+  enabled: true
 
 # -- Extra capabilities for unprivileged / less privileged setup.
 extraCapabilities: []
   # - SYS_RESOURCE       # <-- pre 5.11 only. Allows Beyla to increase the amount of locked memory.
   # - SYS_ADMIN          # <-- Required for Go application trace context propagation, or if kernel.perf_event_paranoid >= 3 on Debian distributions.
-  # - NET_ADMIN          # <-- Required to inject HTTP and TCP context propagation information.
+  # - NET_ADMIN          # <-- Required to inject HTTP and TCP context propagation information. This will be added when contextPropagation is enabled.
 
 # -- Security context for privileged setup.
 securityContext:

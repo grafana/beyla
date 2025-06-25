@@ -47,7 +47,6 @@ The following sections explain the global configuration properties that apply to
 | `log_level`<br>`BEYLA_LOG_LEVEL`                 | Sets process logger verbosity. Valid values: `DEBUG`, `INFO`, `WARN`, `ERROR`.                                        | string  | `INFO`                |
 | `trace_printer`<br>`BEYLA_TRACE_PRINTER`         | Prints instrumented traces to stdout in a specified format, refer to [trace printer formats](#trace-printer-formats). | string  | `disabled`            |
 | `enforce_sys_caps`<br>`BEYLA_ENFORCE_SYS_CAPS`   | Controls how Beyla handles missing system capabilities at startup.                                                    | boolean | `false`               |
-| `print_config`<br>`BEYLA_PRINT_CONFIG`   | Prints the active Beyla config on startup.                                                    | boolean | `false`               |
 
 ## Executable name matching
 

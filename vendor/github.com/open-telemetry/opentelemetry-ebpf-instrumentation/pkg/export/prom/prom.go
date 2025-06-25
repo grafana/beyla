@@ -800,8 +800,12 @@ func (r *metricsReporter) collectMetrics(ctx context.Context) {
 	}
 }
 
-func (r *metricsReporter) otelSpanObserved(span *request.Span) bool {
+func (r *metricsReporter) otelMetricsObserved(span *request.Span) bool {
 	return r.cfg.OTelMetricsEnabled() && !span.Service.ExportsOTelMetrics()
+}
+
+func (r *metricsReporter) otelSpanMetricsObserved(span *request.Span) bool {
+	return r.cfg.OTelMetricsEnabled() && !span.Service.ExportsOTelMetricsSpan()
 }
 
 func (r *metricsReporter) otelSpanFiltered(span *request.Span) bool {
@@ -820,7 +824,7 @@ func (r *metricsReporter) observe(span *request.Span) {
 	}
 	duration := t.End.Sub(t.RequestStart).Seconds()
 
-	if r.otelSpanObserved(span) {
+	if r.otelMetricsObserved(span) {
 		switch span.Type {
 		case request.EventTypeHTTP:
 			if r.is.HTTPEnabled() {
@@ -898,29 +902,31 @@ func (r *metricsReporter) observe(span *request.Span) {
 		}
 	}
 
-	if r.cfg.SpanMetricsEnabled() {
-		lv := r.labelValuesSpans(span)
-		r.spanMetricsLatency.WithLabelValues(lv...).Metric.Observe(duration)
-		r.spanMetricsCallsTotal.WithLabelValues(lv...).Metric.Add(1)
-	}
+	if r.otelSpanMetricsObserved(span) {
+		if r.cfg.SpanMetricsEnabled() {
+			lv := r.labelValuesSpans(span)
+			r.spanMetricsLatency.WithLabelValues(lv...).Metric.Observe(duration)
+			r.spanMetricsCallsTotal.WithLabelValues(lv...).Metric.Add(1)
+		}
 
-	if r.cfg.SpanMetricsSizesEnabled() {
-		lv := r.labelValuesSpans(span)
-		r.spanMetricsRequestSizeTotal.WithLabelValues(lv...).Metric.Add(float64(span.RequestBodyLength()))
-		r.spanMetricsResponseSizeTotal.WithLabelValues(lv...).Metric.Add(float64(span.ResponseBodyLength()))
-	}
+		if r.cfg.SpanMetricsSizesEnabled() {
+			lv := r.labelValuesSpans(span)
+			r.spanMetricsRequestSizeTotal.WithLabelValues(lv...).Metric.Add(float64(span.RequestBodyLength()))
+			r.spanMetricsResponseSizeTotal.WithLabelValues(lv...).Metric.Add(float64(span.ResponseBodyLength()))
+		}
 
-	if r.cfg.ServiceGraphMetricsEnabled() {
-		if !span.IsSelfReferenceSpan() || r.cfg.AllowServiceGraphSelfReferences {
-			lvg := r.labelValuesServiceGraph(span)
-			if span.IsClientSpan() {
-				r.serviceGraphClient.WithLabelValues(lvg...).Metric.Observe(duration)
-			} else {
-				r.serviceGraphServer.WithLabelValues(lvg...).Metric.Observe(duration)
-			}
-			r.serviceGraphTotal.WithLabelValues(lvg...).Metric.Add(1)
-			if request.SpanStatusCode(span) == request.StatusCodeError {
-				r.serviceGraphFailed.WithLabelValues(lvg...).Metric.Add(1)
+		if r.cfg.ServiceGraphMetricsEnabled() {
+			if !span.IsSelfReferenceSpan() || r.cfg.AllowServiceGraphSelfReferences {
+				lvg := r.labelValuesServiceGraph(span)
+				if span.IsClientSpan() {
+					r.serviceGraphClient.WithLabelValues(lvg...).Metric.Observe(duration)
+				} else {
+					r.serviceGraphServer.WithLabelValues(lvg...).Metric.Observe(duration)
+				}
+				r.serviceGraphTotal.WithLabelValues(lvg...).Metric.Add(1)
+				if request.SpanStatusCode(span) == request.StatusCodeError {
+					r.serviceGraphFailed.WithLabelValues(lvg...).Metric.Add(1)
+				}
 			}
 		}
 	}

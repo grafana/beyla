@@ -49,9 +49,10 @@ func (it InstrumentableType) String() string {
 type idFlags uint8
 
 const (
-	autoName           idFlags = 0x1
-	exportsOTelMetrics idFlags = 0x2
-	exportsOTelTraces  idFlags = 0x4
+	autoName               idFlags = 0x1
+	exportsOTelMetrics     idFlags = 0x2
+	exportsOTelTraces      idFlags = 0x4
+	exportsOTelMetricsSpan idFlags = 0x8
 )
 
 // UID uniquely identifies a service instance across the whole system
@@ -123,6 +124,14 @@ func (i *Attrs) SetExportsOTelMetrics() {
 
 func (i *Attrs) ExportsOTelMetrics() bool {
 	return i.getFlag(exportsOTelMetrics)
+}
+
+func (i *Attrs) SetExportsOTelMetricsSpan() {
+	i.setFlag(exportsOTelMetricsSpan)
+}
+
+func (i *Attrs) ExportsOTelMetricsSpan() bool {
+	return i.getFlag(exportsOTelMetricsSpan)
 }
 
 func (i *Attrs) SetExportsOTelTraces() {

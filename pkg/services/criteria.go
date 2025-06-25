@@ -57,6 +57,9 @@ type BeylaDiscoveryConfig struct {
 
 	// Disables instrumentation of services which are already instrumented
 	ExcludeOTelInstrumentedServices bool `yaml:"exclude_otel_instrumented_services" env:"BEYLA_EXCLUDE_OTEL_INSTRUMENTED_SERVICES"`
+
+	// Disables generation of span metrics of services which are already instrumented
+	ExcludeOTelInstrumentedServicesSpanMetrics bool `yaml:"exclude_otel_instrumented_services_span_metrics" env:"BEYLA_EXCLUDE_OTEL_INSTRUMENTED_SERVICES_SPAN_METRICS"`
 }
 
 func (d *BeylaDiscoveryConfig) SurveyEnabled() bool {

@@ -186,11 +186,12 @@ type Config struct {
 	// Routes is an optional node. If not set, data will be directly forwarded to exporters.
 	Routes *transform.RoutesConfig `yaml:"routes"`
 	// nolint:undoc
-	NameResolver *transform.NameResolverConfig `yaml:"name_resolver"`
-	Metrics      otel.MetricsConfig            `yaml:"otel_metrics_export"`
-	Traces       otel.TracesConfig             `yaml:"otel_traces_export"`
-	Prometheus   prom.PrometheusConfig         `yaml:"prometheus_export"`
-	TracePrinter debug.TracePrinter            `yaml:"trace_printer" env:"BEYLA_TRACE_PRINTER"`
+	NameResolver       *transform.NameResolverConfig `yaml:"name_resolver"`
+	Metrics            otel.MetricsConfig            `yaml:"otel_metrics_export"`
+	Traces             otel.TracesConfig             `yaml:"otel_traces_export"`
+	Prometheus         prom.PrometheusConfig         `yaml:"prometheus_export"`
+	TracePrinter       debug.TracePrinter            `yaml:"trace_printer" env:"BEYLA_TRACE_PRINTER"`
+	PrintConfigOnStart bool                          `yaml:"print_config" env:"BEYLA_PRINT_CONFIG"`
 
 	// Exec allows selecting the instrumented executable whose complete path contains the Exec value.
 	// Deprecated: Use BEYLA_AUTO_TARGET_EXE
@@ -291,8 +292,22 @@ func (e ConfigError) Error() string {
 	return string(e)
 }
 
+func (c *Config) ToYAML() (string, error) {
+	data, err := yaml.Marshal(c)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
 // nolint:cyclop
 func (c *Config) Validate() error {
+	if c.PrintConfigOnStart {
+		if configText, err := c.ToYAML(); err == nil {
+			fmt.Println(configText)
+		}
+	}
+
 	obiCfg := c.AsOBI()
 	if err := obiCfg.Discovery.Validate(); err != nil {
 		return ConfigError(err.Error())

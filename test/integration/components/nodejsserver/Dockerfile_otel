@@ -1,0 +1,17 @@
+FROM node:20-slim
+
+# Set the working directory to /build
+WORKDIR /
+
+# Copy the source code into the image for building
+COPY test/integration/components/nodejsserver .
+
+# Install NodeJS express
+RUN npm install express --save
+RUN npm install @opentelemetry/sdk-node @opentelemetry/api @opentelemetry/auto-instrumentations-node @opentelemetry/sdk-metrics @opentelemetry/sdk-trace-node @opentelemetry/exporter-trace-otlp-http @opentelemetry/exporter-metrics-otlp-http
+
+EXPOSE 3030
+EXPOSE 3033
+
+# Run the node app
+CMD [ "node", "--require", "./instrumentation.js", "app" ]

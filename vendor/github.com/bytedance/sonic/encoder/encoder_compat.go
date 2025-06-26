@@ -1,4 +1,4 @@
-// +build !amd64 go1.21
+// +build !amd64 !go1.16 go1.23
 
 /*
 * Copyright 2023 ByteDance Inc.
@@ -27,6 +27,13 @@ import (
     `github.com/bytedance/sonic/option`
 )
 
+func init() {
+    println("WARNING:(encoder) sonic only supports Go1.16~1.22 && CPU amd64, but your environment is not suitable")
+}
+
+// EnableFallback indicates if encoder use fallback
+const EnableFallback = true
+
 // Options is a set of encoding options.
 type Options uint64
 
@@ -37,6 +44,8 @@ const (
     bitNoQuoteTextMarshaler
     bitNoNullSliceOrMap
     bitValidateString
+    bitNoValidateJSONMarshaler
+    bitNoEncoderNewline
 
     // used for recursive compile
     bitPointerValue = 63
@@ -68,6 +77,13 @@ const (
     // ValidateString indicates that encoder should validate the input string
     // before encoding it into JSON.
     ValidateString       Options = 1 << bitValidateString
+
+    // NoValidateJSONMarshaler indicates that the encoder should not validate the output string
+    // after encoding the JSONMarshaler to JSON.
+    NoValidateJSONMarshaler Options = 1 << bitNoValidateJSONMarshaler
+
+    // NoEncoderNewline indicates that the encoder should not add a newline after every message
+    NoEncoderNewline Options = 1 << bitNoEncoderNewline
   
     // CompatibleWithStd is used to be compatible with std encoder.
     CompatibleWithStd Options = SortMapKeys | EscapeHTML | CompactMarshaler
@@ -109,6 +125,24 @@ func (self *Encoder) SetValidateString(f bool) {
         self.Opts |= ValidateString
     } else {
         self.Opts &= ^ValidateString
+    }
+}
+
+// SetNoValidateJSONMarshaler specifies if option NoValidateJSONMarshaler opens
+func (self *Encoder) SetNoValidateJSONMarshaler(f bool) {
+    if f {
+        self.Opts |= NoValidateJSONMarshaler
+    } else {
+        self.Opts &= ^NoValidateJSONMarshaler
+    }
+}
+
+// SetNoEncoderNewline specifies if option NoEncoderNewline opens
+func (self *Encoder) SetNoEncoderNewline(f bool) {
+    if f {
+        self.Opts |= NoEncoderNewline
+    } else {
+        self.Opts &= ^NoEncoderNewline
     }
 }
 
@@ -157,15 +191,19 @@ func Encode(val interface{}, opts Options) ([]byte, error) {
 // EncodeInto is like Encode but uses a user-supplied buffer instead of allocating
 // a new one.
 func EncodeInto(buf *[]byte, val interface{}, opts Options) error {
-   if buf == nil {
-       panic("user-supplied buffer buf is nil")
-   }
-   w := bytes.NewBuffer(*buf)
-   enc := json.NewEncoder(w)
-   enc.SetEscapeHTML((opts & EscapeHTML) != 0)
-   err := enc.Encode(val)
-   *buf = w.Bytes()
-   return err
+    if buf == nil {
+        panic("user-supplied buffer buf is nil")
+    }
+    w := bytes.NewBuffer(*buf)
+    enc := json.NewEncoder(w)
+    enc.SetEscapeHTML((opts & EscapeHTML) != 0)
+    err := enc.Encode(val)
+    *buf = w.Bytes()
+    l := len(*buf)
+    if l > 0 && (opts & NoEncoderNewline != 0) && (*buf)[l-1] == '\n' {
+        *buf = (*buf)[:l-1]
+    }
+    return err
 }
 
 // HTMLEscape appends to dst the JSON-encoded src with <, >, &, U+2028 and U+2029
@@ -212,23 +250,12 @@ func Valid(data []byte) (ok bool, start int) {
 }
 
 // StreamEncoder uses io.Writer as 
-type StreamEncoder struct {
-   w io.Writer
-   Encoder
-}
+type StreamEncoder = json.Encoder
 
 // NewStreamEncoder adapts to encoding/json.NewDecoder API.
 //
 // NewStreamEncoder returns a new encoder that write to w.
 func NewStreamEncoder(w io.Writer) *StreamEncoder {
-   return &StreamEncoder{w: w}
+   return json.NewEncoder(w)
 }
 
-// Encode encodes interface{} as JSON to io.Writer
-func (enc *StreamEncoder) Encode(val interface{}) (err error) {
-   jenc := json.NewEncoder(enc.w)
-   jenc.SetEscapeHTML((enc.Opts & EscapeHTML) != 0)
-   jenc.SetIndent(enc.prefix, enc.indent)
-   err = jenc.Encode(val)
-   return err
-}

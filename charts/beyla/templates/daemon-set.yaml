@@ -35,7 +35,7 @@ spec:
       {{- if eq .Values.preset "application" }}
       hostPID: true
       {{- end }}
-      {{- if or (eq .Values.preset "network") .Values.config.data.network }}
+      {{- if or (eq .Values.preset "network") .Values.config.data.network .Values.contextPropagation.enabled }}
       hostNetwork: true
       dnsPolicy: {{ .Values.dnsPolicy }}
       {{- end }}
@@ -62,6 +62,9 @@ spec:
                 - CHECKPOINT_RESTORE
                 - DAC_READ_SEARCH
                 - PERFMON
+              {{- if .Values.contextPropagation.enabled }}
+                - NET_ADMIN
+              {{- end }}
               {{- with .Values.extraCapabilities }}
                 {{- toYaml . | nindent 16 }}
               {{- end }}
@@ -107,6 +110,10 @@ spec:
           volumeMounts:
             - mountPath: /etc/beyla/config
               name: beyla-config
+          {{- if .Values.contextPropagation.enabled }}
+            - mountPath: /sys/fs/cgroup
+              name: cgroup
+          {{- end }}
           {{- with .Values.volumeMounts }}
             {{- toYaml . | nindent 12 }}
           {{- end }}
@@ -134,6 +141,11 @@ spec:
         - name: beyla-config
           configMap:
             name: {{ default (include "beyla.fullname" .) .Values.config.name }}
+      {{- if .Values.contextPropagation.enabled }}
+        - name: cgroup
+          hostPath:
+            path: /sys/fs/cgroup
+      {{- end }}
       {{- with .Values.volumes }}
         {{- toYaml . | nindent 8 }}
       {{- end }}

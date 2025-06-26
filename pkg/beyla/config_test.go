@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gobwas/glob"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/tcmanager"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/imetrics"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/kube"
@@ -227,7 +226,7 @@ network:
 			ExcludeOTelInstrumentedServices: true,
 			DefaultExcludeServices: services.RegexDefinitionCriteria{
 				services.RegexSelector{
-					Path: services.NewPathRegexp(regexp.MustCompile("(?:^|/)(beyla$|alloy$|otelcol[^/]*$)")),
+					Path: services.NewRegexp("(?:^|/)(beyla$|alloy$|otelcol[^/]*$)"),
 				},
 				services.RegexSelector{
 					Metadata: map[string]*services.RegexpAttr{"k8s_namespace": &k8sDefaultNamespacesRegex},
@@ -235,7 +234,7 @@ network:
 			},
 			DefaultExcludeInstrument: services.GlobDefinitionCriteria{
 				services.GlobAttributes{
-					Path: services.NewGlob(glob.MustCompile("{*beyla,*alloy,*ebpf-instrument,*otelcol,*otelcol-contrib,*otelcol-contrib[!/]*}")),
+					Path: services.NewGlob("{*beyla,*alloy,*ebpf-instrument,*otelcol,*otelcol-contrib,*otelcol-contrib[!/]*}"),
 				},
 				services.GlobAttributes{
 					Metadata: map[string]*services.GlobAttr{"k8s_namespace": &k8sDefaultNamespacesGlob},
@@ -567,8 +566,8 @@ func TestOBIConfigConversion(t *testing.T) {
 	cfg.Metrics.MetricsEndpoint = "http://localhost:4318"
 	cfg.Discovery = servicesextra.BeylaDiscoveryConfig{
 		Instrument: services.GlobDefinitionCriteria{
-			{Path: services.NewGlob(glob.MustCompile("hello*"))},
-			{Path: services.NewGlob(glob.MustCompile("bye*"))},
+			{Path: services.NewGlob("hello*")},
+			{Path: services.NewGlob("bye*")},
 		},
 	}
 
@@ -578,8 +577,8 @@ func TestOBIConfigConversion(t *testing.T) {
 	assert.Equal(t, dst.Metrics.MetricsEndpoint, "http://localhost:4318")
 	assert.Equal(t,
 		services.GlobDefinitionCriteria{
-			{Path: services.NewGlob(glob.MustCompile("hello*"))},
-			{Path: services.NewGlob(glob.MustCompile("bye*"))},
+			{Path: services.NewGlob("hello*")},
+			{Path: services.NewGlob("bye*")},
 		},
 		dst.Discovery.Instrument)
 }

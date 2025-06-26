@@ -517,7 +517,7 @@ func (mr *MetricsReporter) graphMetricOptions(mlog *slog.Logger) []metric.Option
 
 func (mr *MetricsReporter) setupTargetInfo(m *Metrics, meter instrument.Meter) error {
 	var err error
-	m.targetInfo, err = meter.Int64UpDownCounter(TargetInfo)
+	m.targetInfo, err = meter.Int64UpDownCounter(TargetInfo, instrument.WithDescription("Target metadata"))
 	if err != nil {
 		return fmt.Errorf("creating target info: %w", err)
 	}
@@ -1030,8 +1030,12 @@ func (mr *MetricsReporter) serviceGraphAttributes() []attributes.Field[*request.
 		})
 }
 
-func otelSpanAccepted(span *request.Span, mr *MetricsReporter) bool {
+func otelMetricsAccepted(span *request.Span, mr *MetricsReporter) bool {
 	return mr.cfg.OTelMetricsEnabled() && !span.Service.ExportsOTelMetrics()
+}
+
+func otelSpanMetricsAccepted(span *request.Span, mr *MetricsReporter) bool {
+	return mr.cfg.OTelMetricsEnabled() && !span.Service.ExportsOTelMetricsSpan()
 }
 
 //nolint:cyclop
@@ -1041,7 +1045,7 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 
 	ctx := trace.ContextWithSpanContext(r.ctx, trace.SpanContext{}.WithTraceID(span.TraceID).WithSpanID(span.SpanID).WithTraceFlags(trace.TraceFlags(span.TraceFlags)))
 
-	if otelSpanAccepted(span, mr) {
+	if otelMetricsAccepted(span, mr) {
 		switch span.Type {
 		case request.EventTypeHTTP:
 			if mr.is.HTTPEnabled() {
@@ -1109,36 +1113,38 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 		}
 	}
 
-	if mr.cfg.SpanMetricsEnabled() {
-		sml, attrs := r.spanMetricsLatency.ForRecord(span)
-		sml.Record(ctx, duration, instrument.WithAttributeSet(attrs))
+	if otelSpanMetricsAccepted(span, mr) {
+		if mr.cfg.SpanMetricsEnabled() {
+			sml, attrs := r.spanMetricsLatency.ForRecord(span)
+			sml.Record(ctx, duration, instrument.WithAttributeSet(attrs))
 
-		smct, attrs := r.spanMetricsCallsTotal.ForRecord(span)
-		smct.Add(ctx, 1, instrument.WithAttributeSet(attrs))
-	}
+			smct, attrs := r.spanMetricsCallsTotal.ForRecord(span)
+			smct.Add(ctx, 1, instrument.WithAttributeSet(attrs))
+		}
 
-	if mr.cfg.SpanMetricsSizesEnabled() {
-		smst, attrs := r.spanMetricsRequestSizeTotal.ForRecord(span)
-		smst.Add(ctx, float64(span.RequestBodyLength()), instrument.WithAttributeSet(attrs))
+		if mr.cfg.SpanMetricsSizesEnabled() {
+			smst, attrs := r.spanMetricsRequestSizeTotal.ForRecord(span)
+			smst.Add(ctx, float64(span.RequestBodyLength()), instrument.WithAttributeSet(attrs))
 
-		smst, attr := r.spanMetricsResponseSizeTotal.ForRecord(span)
-		smst.Add(ctx, float64(span.ResponseBodyLength()), instrument.WithAttributeSet(attr))
-	}
+			smst, attr := r.spanMetricsResponseSizeTotal.ForRecord(span)
+			smst.Add(ctx, float64(span.ResponseBodyLength()), instrument.WithAttributeSet(attr))
+		}
 
-	if mr.cfg.ServiceGraphMetricsEnabled() {
-		if !span.IsSelfReferenceSpan() || mr.cfg.AllowServiceGraphSelfReferences {
-			if span.IsClientSpan() {
-				sgc, attrs := r.serviceGraphClient.ForRecord(span)
-				sgc.Record(ctx, duration, instrument.WithAttributeSet(attrs))
-			} else {
-				sgs, attrs := r.serviceGraphServer.ForRecord(span)
-				sgs.Record(ctx, duration, instrument.WithAttributeSet(attrs))
-			}
-			sgt, attrs := r.serviceGraphTotal.ForRecord(span)
-			sgt.Add(ctx, 1, instrument.WithAttributeSet(attrs))
-			if request.SpanStatusCode(span) == request.StatusCodeError {
-				sgf, attrs := r.serviceGraphFailed.ForRecord(span)
-				sgf.Add(ctx, 1, instrument.WithAttributeSet(attrs))
+		if mr.cfg.ServiceGraphMetricsEnabled() {
+			if !span.IsSelfReferenceSpan() || mr.cfg.AllowServiceGraphSelfReferences {
+				if span.IsClientSpan() {
+					sgc, attrs := r.serviceGraphClient.ForRecord(span)
+					sgc.Record(ctx, duration, instrument.WithAttributeSet(attrs))
+				} else {
+					sgs, attrs := r.serviceGraphServer.ForRecord(span)
+					sgs.Record(ctx, duration, instrument.WithAttributeSet(attrs))
+				}
+				sgt, attrs := r.serviceGraphTotal.ForRecord(span)
+				sgt.Add(ctx, 1, instrument.WithAttributeSet(attrs))
+				if request.SpanStatusCode(span) == request.StatusCodeError {
+					sgf, attrs := r.serviceGraphFailed.ForRecord(span)
+					sgf.Add(ctx, 1, instrument.WithAttributeSet(attrs))
+				}
 			}
 		}
 	}

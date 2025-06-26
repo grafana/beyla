@@ -281,7 +281,7 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 		"google.golang.org/grpc/internal/transport.(*http2Server).WriteStatus": {{
 			Start: p.bpfObjects.BeylaUprobeTransportWriteStatus,
 		}},
-		// in grpc 1.69.0 they renamed the above WriteStatus to writeStatus lowecase
+		// in grpc 1.69.0 they renamed the above WriteStatus to writeStatus lowercase
 		"google.golang.org/grpc/internal/transport.(*http2Server).writeStatus": {{
 			Start: p.bpfObjects.BeylaUprobeTransportWriteStatus,
 		}},

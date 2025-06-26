@@ -64,6 +64,7 @@ func ReadTCPRequestIntoSpan(cfg *config.EBPFTracer, record *ringbuf.Record, filt
 
 		if ok {
 			var status int
+			var redisErr request.DBError
 			if op == "" {
 				op, text, ok = parseRedisRequest(string(event.Rbuf[:rl]))
 				if !ok || op == "" {
@@ -72,12 +73,12 @@ func ReadTCPRequestIntoSpan(cfg *config.EBPFTracer, record *ringbuf.Record, filt
 				// We've caught the event reversed in the middle of communication, let's
 				// reverse the event
 				reverseTCPEvent(event)
-				status = redisStatus(b)
+				redisErr, status = redisStatus(b)
 			} else {
-				status = redisStatus(event.Rbuf[:rl])
+				redisErr, status = redisStatus(event.Rbuf[:rl])
 			}
 
-			return TCPToRedisToSpan(event, op, text, status), false, nil
+			return TCPToRedisToSpan(event, op, text, status, redisErr), false, nil
 		}
 	default:
 		// Kafka and gRPC can look very similar in terms of bytes. We can mistake one for another.

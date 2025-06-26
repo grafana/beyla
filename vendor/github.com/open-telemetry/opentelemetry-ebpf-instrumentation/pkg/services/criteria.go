@@ -1,6 +1,7 @@
 package services
 
 import (
+	"bytes"
 	"fmt"
 	"iter"
 	"regexp"
@@ -91,6 +92,9 @@ type DiscoveryConfig struct {
 
 	// Disables instrumentation of services which are already instrumented
 	ExcludeOTelInstrumentedServices bool `yaml:"exclude_otel_instrumented_services" env:"OTEL_EBPF_EXCLUDE_OTEL_INSTRUMENTED_SERVICES"`
+
+	// Disables generation of span metrics of services which are already instrumented
+	ExcludeOTelInstrumentedServicesSpanMetrics bool `yaml:"exclude_otel_instrumented_services_span_metrics" env:"OTEL_EBPF_EXCLUDE_OTEL_INSTRUMENTED_SERVICES_SPAN_METRICS"`
 }
 
 func (c *DiscoveryConfig) Validate() error {
@@ -160,6 +164,21 @@ func (p *PortEnum) UnmarshalYAML(value *yaml.Node) error {
 		return fmt.Errorf("PortEnum: unexpected YAML node kind %d", value.Kind)
 	}
 	return p.UnmarshalText([]byte(value.Value))
+}
+
+func (p PortEnum) MarshalYAML() (any, error) {
+	sb := bytes.Buffer{}
+	for i, r := range p.Ranges {
+		if i > 0 {
+			sb.WriteByte(',')
+		}
+		sb.WriteString(strconv.Itoa(r.Start))
+		if r.End > 0 {
+			sb.WriteByte('-')
+			sb.WriteString(strconv.Itoa(r.End))
+		}
+	}
+	return sb.String(), nil
 }
 
 func (p *PortEnum) UnmarshalText(text []byte) error {

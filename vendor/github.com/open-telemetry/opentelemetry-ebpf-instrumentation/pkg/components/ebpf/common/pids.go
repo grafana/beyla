@@ -41,18 +41,20 @@ type ServiceFilter interface {
 // be forwarded. Its Filter method filters the request.Span instances whose
 // PIDs are not in the allowed list.
 type PIDsFilter struct {
-	log        *slog.Logger
-	current    map[uint32]map[uint32]PIDInfo
-	mux        *sync.RWMutex
-	detectOtel bool
+	log            *slog.Logger
+	current        map[uint32]map[uint32]PIDInfo
+	mux            *sync.RWMutex
+	ignoreOtel     bool
+	ignoreOtelSpan bool
 }
 
 func newPIDsFilter(c *services.DiscoveryConfig, log *slog.Logger) *PIDsFilter {
 	return &PIDsFilter{
-		log:        log,
-		current:    map[uint32]map[uint32]PIDInfo{},
-		mux:        &sync.RWMutex{},
-		detectOtel: c.ExcludeOTelInstrumentedServices,
+		log:            log,
+		current:        map[uint32]map[uint32]PIDInfo{},
+		mux:            &sync.RWMutex{},
+		ignoreOtel:     c.ExcludeOTelInstrumentedServices,
+		ignoreOtelSpan: c.ExcludeOTelInstrumentedServicesSpanMetrics,
 	}
 }
 
@@ -133,8 +135,11 @@ func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 		// saw. We don't check for the host pid, because we can't be sure of the number
 		// of container layers. The Host PID is always the outer most layer.
 		if info, pidExists := ns[span.Pid.UserPID]; pidExists {
-			if pf.detectOtel {
+			if pf.ignoreOtel {
 				checkIfExportsOTel(info.service, span)
+			}
+			if pf.ignoreOtelSpan {
+				checkIfExportsOTelSpanMetrics(info.service, span)
 			}
 			inputSpans[i].Service = *info.service
 			pf.normalizeTraceContext(&inputSpans[i])
@@ -212,5 +217,11 @@ func checkIfExportsOTel(svc *svc.Attrs, span *request.Span) {
 		svc.SetExportsOTelMetrics()
 	} else if span.IsExportTracesSpan() {
 		svc.SetExportsOTelTraces()
+	}
+}
+
+func checkIfExportsOTelSpanMetrics(svc *svc.Attrs, span *request.Span) {
+	if span.IsExportTracesSpan() {
+		svc.SetExportsOTelMetricsSpan()
 	}
 }

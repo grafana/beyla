@@ -569,6 +569,10 @@ func generateTracesWithAttributes(
 		// Set status code
 		statusCode := codeToStatusCode(request.SpanStatusCode(span))
 		s.Status().SetCode(statusCode)
+		statusMessage := request.SpanStatusMessage(span)
+		if statusMessage != "" {
+			s.Status().SetMessage(statusMessage)
+		}
 		s.SetEndTimestamp(pcommon.NewTimestampFromTime(t.End))
 	}
 	return traces
@@ -782,6 +786,9 @@ func TraceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 					attrs = append(attrs, request.DBQueryText(query))
 				}
 			}
+		}
+		if span.Status == 1 {
+			attrs = append(attrs, request.DBResponseStatusCode(span.DBError.ErrorCode))
 		}
 	case request.EventTypeKafkaServer, request.EventTypeKafkaClient:
 		operation := request.MessagingOperationType(span.Method)

@@ -14,6 +14,17 @@ import (
 
 const minRedisFrameLen = 3
 
+var redisErrorCodes = [...]string{
+	"ERR ",
+	"WRONGTYPE ",
+	"MOVED ",
+	"ASK ",
+	"BUSY ",
+	"NOSCRIPT ",
+	"CLUSTERDOWN ",
+	"READONLY ",
+}
+
 func isRedis(buf []uint8) bool {
 	if len(buf) < minRedisFrameLen {
 		return false
@@ -35,7 +46,8 @@ func isRedisOp(buf []uint8) bool {
 			return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '.' || c == ' ' || c == '-' || c == '_'
 		})
 	case '-':
-		return isRedisError(buf[1:])
+		_, isError := getRedisError(buf[1:])
+		return isError
 	case ':', '$', '*':
 		return crlfTerminatedMatch(buf[1:], func(c uint8) bool {
 			return (c >= '0' && c <= '9') || c == '-'
@@ -45,14 +57,21 @@ func isRedisOp(buf []uint8) bool {
 	return false
 }
 
-func isRedisError(buf []uint8) bool {
-	return bytes.HasPrefix(buf, []byte("ERR ")) ||
-		bytes.HasPrefix(buf, []byte("WRONGTYPE ")) ||
-		bytes.HasPrefix(buf, []byte("MOVED ")) ||
-		bytes.HasPrefix(buf, []byte("ASK ")) ||
-		bytes.HasPrefix(buf, []byte("BUSY ")) ||
-		bytes.HasPrefix(buf, []byte("NOSCRIPT ")) ||
-		bytes.HasPrefix(buf, []byte("CLUSTERDOWN "))
+func getRedisError(buf []uint8) (request.DBError, bool) {
+	description := strings.Trim(string(buf), "\r\n")
+	errorCode := ""
+
+	for _, redisErrorCode := range redisErrorCodes {
+		if bytes.HasPrefix(buf, []byte(redisErrorCode)) {
+			errorCode = strings.TrimSpace(redisErrorCode)
+			break
+		}
+	}
+	dbError := request.DBError{
+		Description: description,
+		ErrorCode:   errorCode,
+	}
+	return dbError, errorCode != ""
 }
 
 func crlfTerminatedMatch(buf []uint8, matches func(c uint8) bool) bool {
@@ -154,19 +173,24 @@ func parseRedisRequest(buf string) (string, string, bool) {
 		}
 	}
 
-	return op, text.String(), true
+	return op, strings.TrimSpace(text.String()), true
 }
 
-func redisStatus(buf []byte) int {
+func redisStatus(buf []byte) (request.DBError, int) {
 	status := 0
-	if isErr := isRedisError(buf); isErr {
+	firstChar := buf[0]
+	if firstChar != '-' {
+		return request.DBError{}, status
+	}
+	dbError, isError := getRedisError(buf[1:])
+	if isError {
 		status = 1
 	}
 
-	return status
+	return dbError, status
 }
 
-func TCPToRedisToSpan(trace *TCPRequestInfo, op, text string, status int) request.Span {
+func TCPToRedisToSpan(trace *TCPRequestInfo, op, text string, status int, dbError request.DBError) request.Span {
 	peer := ""
 	hostname := ""
 	hostPort := 0
@@ -203,6 +227,7 @@ func TCPToRedisToSpan(trace *TCPRequestInfo, op, text string, status int) reques
 			UserPID:   trace.Pid.UserPid,
 			Namespace: trace.Pid.Ns,
 		},
+		DBError: dbError,
 	}
 }
 

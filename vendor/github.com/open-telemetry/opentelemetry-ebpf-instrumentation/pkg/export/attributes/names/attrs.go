@@ -135,7 +135,8 @@ const (
 // traces related attributes
 const (
 	// SQL
-	DBQueryText = Name("db.query.text")
+	DBQueryText          = Name("db.query.text")
+	DBResponseStatusCode = Name("db.response.status_code")
 )
 
 // Beyla specific GPU events

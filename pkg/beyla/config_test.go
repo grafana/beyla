@@ -128,6 +128,10 @@ network:
 			TCBackend:                 tcmanager.TCBackendAuto,
 			ContextPropagationEnabled: false,
 			ContextPropagation:        config.ContextPropagationDisabled,
+			RedisDBCache: config.RedisDBCacheConfig{
+				Enabled: false,
+				MaxSize: 1000,
+			},
 		},
 		Grafana: otel.GrafanaConfig{
 			OTLP: otel.GrafanaOTLP{

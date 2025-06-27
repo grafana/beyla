@@ -18,9 +18,6 @@ func (c *Config) AsOBI() *obi.Config {
 			// or, renamed. For example:
 			// ".Some.Renamed.FieldInDst": "NameInSrc",
 			// ".Some.Missing.FieldInSrc": cfgutil.SkipConversion,
-			// TODO: support this OBI PR from Beyla configuration https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pull/223
-			// and remove this entry
-			".EBPF.RedisDBCache": cfgutil.SkipConversion,
 		})
 		overrideOBI(c, obiCfg)
 		c.obi = obiCfg

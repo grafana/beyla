@@ -14,10 +14,13 @@ func (c *Config) AsOBI() *obi.Config {
 	if c.obi == nil {
 		obiCfg := &obi.Config{}
 		cfgutil.Convert(c, obiCfg, map[string]string{
-			// here, some hints might be useful if we need to skip values that are non-existing in OBI,
+			// here, some hints might be useful if we need to skip values that are non-existing in Beyla Config,
 			// or, renamed. For example:
 			// ".Some.Renamed.FieldInDst": "NameInSrc",
 			// ".Some.Missing.FieldInSrc": cfgutil.SkipConversion,
+			// TODO: support this OBI PR from Beyla configuration https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pull/223
+			// and remove this entry
+			".EBPF.RedisDBCache": cfgutil.SkipConversion,
 		})
 		overrideOBI(c, obiCfg)
 		c.obi = obiCfg

@@ -153,7 +153,7 @@ var DefaultConfig = Config{
 		ExcludeOTelInstrumentedServices: true,
 		DefaultExcludeServices: services.RegexDefinitionCriteria{
 			services.RegexSelector{
-				Path: services.NewPathRegexp(regexp.MustCompile("(?:^|/)(beyla$|alloy$|otelcol[^/]*$)")),
+				Path: services.NewPathRegexp(regexp.MustCompile("(?:^|/)(beyla$|alloy$|prometheus-config-reloader$|otelcol[^/]*$)")),
 			},
 			services.RegexSelector{
 				Metadata: map[string]*services.RegexpAttr{"k8s_namespace": &k8sDefaultNamespacesRegex},
@@ -161,7 +161,7 @@ var DefaultConfig = Config{
 		},
 		DefaultExcludeInstrument: services.GlobDefinitionCriteria{
 			services.GlobAttributes{
-				Path: services.NewGlob(glob.MustCompile("{*beyla,*alloy,*ebpf-instrument,*otelcol,*otelcol-contrib,*otelcol-contrib[!/]*}")),
+				Path: services.NewGlob(glob.MustCompile("{*beyla,*alloy,*prometheus-config-reloader,*ebpf-instrument,*otelcol,*otelcol-contrib,*otelcol-contrib[!/]*}")),
 			},
 			services.GlobAttributes{
 				Metadata: map[string]*services.GlobAttr{"k8s_namespace": &k8sDefaultNamespacesGlob},

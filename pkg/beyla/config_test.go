@@ -140,7 +140,7 @@ network:
 			OTELIntervalMS:    60_000,
 			CommonEndpoint:    "localhost:3131",
 			MetricsEndpoint:   "localhost:3030",
-			MetricsProtocol:   obiotel.ProtocolUnset,
+			MetricsProtocol:   obiotel.ProtocolHTTPProtobuf,
 			ReportersCacheLen: ReporterLRUSize,
 			Buckets: obiotel.Buckets{
 				DurationHistogram:     []float64{0, 1, 2},
@@ -155,7 +155,7 @@ network:
 			TTL:                  5 * time.Minute,
 		},
 		Traces: obiotel.TracesConfig{
-			TracesProtocol:     obiotel.ProtocolUnset,
+			TracesProtocol:     obiotel.ProtocolHTTPProtobuf,
 			CommonEndpoint:     "localhost:3131",
 			TracesEndpoint:     "localhost:3232",
 			MaxQueueSize:       4096,

@@ -137,6 +137,7 @@ const (
 	// SQL
 	DBQueryText          = Name("db.query.text")
 	DBResponseStatusCode = Name("db.response.status_code")
+	DBNamespace          = Name("db.namespace")
 )
 
 // Beyla specific GPU events

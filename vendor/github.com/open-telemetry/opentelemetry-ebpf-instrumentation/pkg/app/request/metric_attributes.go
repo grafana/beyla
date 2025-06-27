@@ -76,12 +76,12 @@ func ServerNamespaceMetric(val string) attribute.KeyValue {
 	return attribute.Key(attr.ServerNamespace).String(val)
 }
 
-func ConnectionTypeMetric(val string) attribute.KeyValue {
-	return attribute.Key(attr.ConnectionType).String(val)
-}
-
 func DBQueryText(val string) attribute.KeyValue {
 	return attribute.Key(attr.DBQueryText).String(val)
+}
+
+func DBNamespace(val string) attribute.KeyValue {
+	return attribute.Key(attr.DBNamespace).String(val)
 }
 
 func DBResponseStatusCode(val string) attribute.KeyValue {

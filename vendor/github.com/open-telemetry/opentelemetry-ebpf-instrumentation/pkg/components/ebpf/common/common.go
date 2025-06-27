@@ -12,6 +12,8 @@ import (
 	"sync"
 	"unsafe"
 
+	"github.com/hashicorp/golang-lru/v2/simplelru"
+
 	lru "github.com/hashicorp/golang-lru/v2"
 
 	"github.com/cilium/ebpf"
@@ -98,7 +100,8 @@ type MisclassifiedEvent struct {
 }
 
 type EBPFParseContext struct {
-	h2c *lru.Cache[uint64, h2Connection]
+	h2c          *lru.Cache[uint64, h2Connection]
+	redisDBCache *simplelru.LRU[BpfConnectionInfoT, int]
 }
 
 type EBPFEventContext struct {
@@ -114,10 +117,20 @@ var MisclassifiedEvents = make(chan MisclassifiedEvent)
 
 func ptlog() *slog.Logger { return slog.With("component", "ebpf.ProcessTracer") }
 
-func NewEBPFParseContext() *EBPFParseContext {
+func NewEBPFParseContext(cfg *config.EBPFTracer) *EBPFParseContext {
+	var redisDBCache *simplelru.LRU[BpfConnectionInfoT, int]
 	h2c, _ := lru.New[uint64, h2Connection](1024 * 10)
+	if cfg != nil && cfg.RedisDBCache.Enabled {
+		var err error
+		redisDBCache, err = simplelru.NewLRU[BpfConnectionInfoT, int](cfg.RedisDBCache.MaxSize, nil)
+		if err != nil {
+			ptlog().Error("failed to create Redis DB cache", "error", err)
+			redisDBCache = nil
+		}
+	}
 	return &EBPFParseContext{
-		h2c: h2c,
+		h2c:          h2c,
+		redisDBCache: redisDBCache,
 	}
 }
 
@@ -145,7 +158,7 @@ func ReadBPFTraceAsSpan(parseCtx *EBPFParseContext, cfg *config.EBPFTracer, reco
 	case EventTypeKHTTP2:
 		return ReadHTTP2InfoIntoSpan(parseCtx, record, filter)
 	case EventTypeTCP:
-		return ReadTCPRequestIntoSpan(cfg, record, filter)
+		return ReadTCPRequestIntoSpan(parseCtx, cfg, record, filter)
 	case EventTypeGoSarama:
 		return ReadGoSaramaRequestIntoSpan(record)
 	case EventTypeGoRedis:

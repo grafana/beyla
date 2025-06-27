@@ -72,7 +72,7 @@ func SharedRingbuf(
 		cfg: cfg, logger: log, ringbuffer: ringbuffer,
 		closers: nil, reader: ReadBPFTraceAsSpan,
 		filter: filter, metrics: metrics,
-		parseContext: NewEBPFParseContext(),
+		parseContext: NewEBPFParseContext(cfg),
 	}
 	eventContext.SharedRingBuffer = &rbf
 	return eventContext.SharedRingBuffer.sharedReadAndForward
@@ -91,7 +91,7 @@ func ForwardRingbuf(
 		cfg: cfg, logger: logger, ringbuffer: ringbuffer,
 		closers: closers, reader: reader,
 		filter: filter, metrics: metrics,
-		parseContext: NewEBPFParseContext(),
+		parseContext: NewEBPFParseContext(cfg),
 	}
 	return rbf.readAndForward
 }

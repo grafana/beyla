@@ -790,6 +790,9 @@ func TraceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 		if span.Status == 1 {
 			attrs = append(attrs, request.DBResponseStatusCode(span.DBError.ErrorCode))
 		}
+		if span.DBNamespace != "" {
+			attrs = append(attrs, request.DBNamespace(span.DBNamespace))
+		}
 	case request.EventTypeKafkaServer, request.EventTypeKafkaClient:
 		operation := request.MessagingOperationType(span.Method)
 		attrs = []attribute.KeyValue{

@@ -67,6 +67,10 @@ var DefaultConfig = Config{
 		TCBackend:                 tcmanager.TCBackendAuto,
 		ContextPropagationEnabled: false,
 		ContextPropagation:        config.ContextPropagationDisabled,
+		RedisDBCache: config.RedisDBCacheConfig{
+			Enabled: false,
+			MaxSize: 1000,
+		},
 	},
 	NameResolver: &transform.NameResolverConfig{
 		Sources:  []string{"k8s"},

@@ -2,8 +2,11 @@ package ebpfcommon
 
 import (
 	"bytes"
+	"strconv"
 	"strings"
 	"unsafe"
+
+	"github.com/hashicorp/golang-lru/v2/simplelru"
 
 	trace2 "go.opentelemetry.io/otel/trace"
 
@@ -190,11 +193,33 @@ func redisStatus(buf []byte) (request.DBError, int) {
 	return dbError, status
 }
 
-func TCPToRedisToSpan(trace *TCPRequestInfo, op, text string, status int, dbError request.DBError) request.Span {
+func getRedisDB(connInfo BpfConnectionInfoT, op, text string, dbCache *simplelru.LRU[BpfConnectionInfoT, int]) (int, bool) {
+	if dbCache == nil {
+		return -1, false
+	}
+	db, found := dbCache.Get(connInfo)
+	switch strings.ToUpper(op) {
+	case "SELECT":
+		// get db number from text after first space
+		if text != "" {
+			parts := strings.Split(text, " ")
+			if len(parts) > 1 {
+				if dbNum, err := strconv.Atoi(parts[1]); err == nil && dbNum >= 0 {
+					dbCache.Add(connInfo, dbNum)
+				}
+			}
+		}
+	case "QUIT":
+		dbCache.Remove(connInfo)
+	}
+	return db, found
+}
+
+func TCPToRedisToSpan(trace *TCPRequestInfo, op, text string, status, db int, dbError request.DBError) request.Span {
 	peer := ""
 	hostname := ""
 	hostPort := 0
-
+	dbNamespace := ""
 	if trace.ConnInfo.S_port != 0 || trace.ConnInfo.D_port != 0 {
 		peer, hostname = (*BPFConnInfo)(unsafe.Pointer(&trace.ConnInfo)).reqHostInfo()
 		hostPort = int(trace.ConnInfo.D_port)
@@ -203,6 +228,11 @@ func TCPToRedisToSpan(trace *TCPRequestInfo, op, text string, status int, dbErro
 	reqType := request.EventTypeRedisClient
 	if trace.Direction == 0 {
 		reqType = request.EventTypeRedisServer
+	}
+
+	if db >= 0 {
+		// If we have a valid db number, we can use it as a namespace
+		dbNamespace = strconv.Itoa(db)
 	}
 
 	return request.Span{
@@ -227,7 +257,8 @@ func TCPToRedisToSpan(trace *TCPRequestInfo, op, text string, status int, dbErro
 			UserPID:   trace.Pid.UserPid,
 			Namespace: trace.Pid.Ns,
 		},
-		DBError: dbError,
+		DBError:     dbError,
+		DBNamespace: dbNamespace,
 	}
 }
 

@@ -10,6 +10,11 @@ import (
 
 type ContextPropagationMode uint8
 
+type RedisDBCacheConfig struct {
+	Enabled bool `yaml:"enabled" env:"OTEL_EBPF_BPF_REDIS_DB_CACHE_ENABLED"`
+	MaxSize int  `yaml:"max_size" env:"OTEL_EBPF_BPF_REDIS_DB_CACHE_MAX_SIZE"`
+}
+
 const (
 	ContextPropagationAll = ContextPropagationMode(iota)
 	ContextPropagationHeadersOnly
@@ -81,6 +86,8 @@ type EBPFTracer struct {
 	// Enables Java instrumentation with the OpenTelemetry JDK Agent
 	//nolint:undoc
 	UseOTelSDKForJava bool `yaml:"use_otel_sdk_for_java" env:"OTEL_EBPF_USE_OTEL_SDK_FOR_JAVA"`
+
+	RedisDBCache RedisDBCacheConfig `yaml:"redis_db_cache"`
 }
 
 func (m *ContextPropagationMode) UnmarshalText(text []byte) error {

@@ -17,6 +17,13 @@ const (
 	ContextPropagationDisabled
 )
 
+type RedisDBCacheConfig struct {
+	// nolint:undoc
+	Enabled bool `yaml:"enabled" env:"BEYLA_BPF_REDIS_DB_CACHE_ENABLED"`
+	// nolint:undoc
+	MaxSize int `yaml:"max_size" env:"BEYLA_BPF_REDIS_DB_CACHE_MAX_SIZE"`
+}
+
 // EBPFTracer configuration for eBPF programs
 type EBPFTracer struct {
 	// Enables logging of eBPF program events
@@ -81,6 +88,9 @@ type EBPFTracer struct {
 	// Enables Java instrumentation with the OpenTelemetry JDK Agent
 	// nolint:undoc
 	UseOTelSDKForJava bool `yaml:"use_otel_sdk_for_java" env:"BEYLA_USE_OTEL_SDK_FOR_JAVA"`
+
+	// nolint:undoc
+	RedisDBCache RedisDBCacheConfig `yaml:"redis_db_cache"`
 }
 
 func (m *ContextPropagationMode) UnmarshalText(text []byte) error {

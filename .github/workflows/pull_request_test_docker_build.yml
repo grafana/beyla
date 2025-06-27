@@ -1,0 +1,40 @@
+name: Test Docker build
+on:
+  pull_request:
+    branches: [ 'main', 'release-*' ]
+
+permissions:
+  contents: read
+
+jobs:
+  build-multiarch:
+    runs-on: ubuntu-latest-8-cores
+
+    steps:
+      - id: checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          persist-credentials: 'false'
+      - id: docker-build-beyla
+        uses: grafana/shared-workflows/actions/build-push-to-dockerhub@fa48192dac470ae356b3f7007229f3ac28c48a25 # main
+        with:
+          context: .
+          platforms: |-
+            "linux/amd64"
+            "linux/arm64"
+          tags: |-
+            "pr-test"
+          push: false
+
+      - id: docker-build-cache
+        uses: grafana/shared-workflows/actions/build-push-to-dockerhub@fa48192dac470ae356b3f7007229f3ac28c48a25 # main
+        with:
+          repository: grafana/beyla-k8s-cache
+          file: k8scache.Dockerfile
+          context: .
+          platforms: |-
+            "linux/amd64"
+            "linux/arm64"
+          tags: |-
+            "pr-test"
+          push: false

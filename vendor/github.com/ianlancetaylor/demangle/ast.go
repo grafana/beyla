@@ -1724,11 +1724,12 @@ func (ft *FixedType) goString(indent int, field string) string {
 
 // BinaryFP is a binary floating-point type.
 type BinaryFP struct {
-	Bits int
+	Bits   int
+	Suffix string
 }
 
 func (bfp *BinaryFP) print(ps *printState) {
-	fmt.Fprintf(&ps.buf, "_Float%d", bfp.Bits)
+	fmt.Fprintf(&ps.buf, "_Float%d%s", bfp.Bits, bfp.Suffix)
 }
 
 func (bfp *BinaryFP) Traverse(fn func(AST) bool) {
@@ -1747,7 +1748,7 @@ func (bfp *BinaryFP) GoString() string {
 }
 
 func (bfp *BinaryFP) goString(indent int, field string) string {
-	return fmt.Sprintf("%*s%sBinaryFP: %d", indent, "", field, bfp.Bits)
+	return fmt.Sprintf("%*s%sBinaryFP: Bits: %d Suffix: %s", indent, "", field, bfp.Bits, bfp.Suffix)
 }
 
 // BitIntType is the C++23 _BitInt(N) type.

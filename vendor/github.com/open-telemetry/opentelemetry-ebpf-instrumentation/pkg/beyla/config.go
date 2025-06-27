@@ -4,11 +4,9 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"regexp"
 	"time"
 
 	"github.com/caarlos0/env/v9"
-	"github.com/gobwas/glob"
 	"gopkg.in/yaml.v3"
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/tcmanager"
@@ -53,8 +51,8 @@ const (
 )
 
 var (
-	k8sDefaultNamespacesRegex = services.NewPathRegexp(regexp.MustCompile("^kube-system$|^kube-node-lease$|^local-path-storage$|^grafana-alloy$|^cert-manager$|^monitoring$" + k8sGKEDefaultNamespacesRegex + k8sAKSDefaultNamespacesRegex))
-	k8sDefaultNamespacesGlob  = services.NewGlob(glob.MustCompile("{kube-system,kube-node-lease,local-path-storage,grafana-alloy,cert-manager,monitoring" + k8sGKEDefaultNamespacesGlob + k8sAKSDefaultNamespacesGlob + "}"))
+	k8sDefaultNamespacesRegex = services.NewRegexp("^kube-system$|^kube-node-lease$|^local-path-storage$|^grafana-alloy$|^cert-manager$|^monitoring$" + k8sGKEDefaultNamespacesRegex + k8sAKSDefaultNamespacesRegex)
+	k8sDefaultNamespacesGlob  = services.NewGlob("{kube-system,kube-node-lease,local-path-storage,grafana-alloy,cert-manager,monitoring" + k8sGKEDefaultNamespacesGlob + k8sAKSDefaultNamespacesGlob + "}")
 )
 
 var DefaultConfig = Config{
@@ -69,6 +67,10 @@ var DefaultConfig = Config{
 		TCBackend:                 tcmanager.TCBackendAuto,
 		ContextPropagationEnabled: false,
 		ContextPropagation:        config.ContextPropagationDisabled,
+		RedisDBCache: config.RedisDBCacheConfig{
+			Enabled: false,
+			MaxSize: 1000,
+		},
 	},
 	NameResolver: &transform.NameResolverConfig{
 		Sources:  []string{"k8s"},
@@ -140,7 +142,7 @@ var DefaultConfig = Config{
 		ExcludeOTelInstrumentedServices: true,
 		DefaultExcludeServices: services.RegexDefinitionCriteria{
 			services.RegexSelector{
-				Path: services.NewPathRegexp(regexp.MustCompile("(?:^|/)(beyla$|alloy$|otelcol[^/]*$)")),
+				Path: services.NewRegexp("(?:^|/)(beyla$|alloy$|otelcol[^/]*$)"),
 			},
 			services.RegexSelector{
 				Metadata: map[string]*services.RegexpAttr{"k8s_namespace": &k8sDefaultNamespacesRegex},
@@ -148,7 +150,7 @@ var DefaultConfig = Config{
 		},
 		DefaultExcludeInstrument: services.GlobDefinitionCriteria{
 			services.GlobAttributes{
-				Path: services.NewGlob(glob.MustCompile("{*beyla,*alloy,*ebpf-instrument,*otelcol,*otelcol-contrib,*otelcol-contrib[!/]*}")),
+				Path: services.NewGlob("{*beyla,*alloy,*ebpf-instrument,*otelcol,*otelcol-contrib,*otelcol-contrib[!/]*}"),
 			},
 			services.GlobAttributes{
 				Metadata: map[string]*services.GlobAttr{"k8s_namespace": &k8sDefaultNamespacesGlob},

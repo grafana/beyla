@@ -74,11 +74,13 @@ type GlobAttributes struct {
 
 // GlobAttr provides a YAML handler for glob.Glob so the type can be parsed from YAML or environment variables
 type GlobAttr struct {
+	// str is kept for debugging/printing purposes
+	str  string
 	glob glob.Glob
 }
 
-func NewGlob(g glob.Glob) GlobAttr {
-	return GlobAttr{glob: g}
+func NewGlob(pattern string) GlobAttr {
+	return GlobAttr{str: pattern, glob: glob.MustCompile(pattern)}
 }
 
 func (p *GlobAttr) IsSet() bool {
@@ -98,8 +100,13 @@ func (p *GlobAttr) UnmarshalYAML(value *yaml.Node) error {
 	if err != nil {
 		return fmt.Errorf("invalid regular expression in node %s: %w", value.Tag, err)
 	}
+	p.str = value.Value
 	p.glob = re
 	return nil
+}
+
+func (p GlobAttr) MarshalYAML() (any, error) {
+	return p.str, nil
 }
 
 func (p *GlobAttr) UnmarshalText(text []byte) error {

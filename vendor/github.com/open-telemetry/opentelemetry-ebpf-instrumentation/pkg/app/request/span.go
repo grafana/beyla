@@ -115,6 +115,11 @@ type PidInfo struct {
 	Namespace uint32
 }
 
+type DBError struct {
+	ErrorCode   string
+	Description string
+}
+
 // Span contains the information being submitted by the following nodes in the graph.
 // It enables comfortable handling of data from Go.
 // REMINDER: any attribute here must be also added to the functions SpanOTELGetters,
@@ -146,6 +151,8 @@ type Span struct {
 	OtherNamespace string         `json:"-"`
 	Statement      string         `json:"-"`
 	SubType        int            `json:"-"`
+	DBError        DBError        `json:"-"`
+	DBNamespace    string         `json:"-"`
 }
 
 func (s *Span) Inside(parent *Span) bool {
@@ -336,6 +343,16 @@ func SpanStatusCode(span *Span) string {
 		return StatusCodeUnset
 	}
 	return StatusCodeUnset
+}
+
+func SpanStatusMessage(span *Span) string {
+	switch span.Type {
+	case EventTypeRedisClient, EventTypeRedisServer:
+		if span.Status != 0 && span.DBError.Description != "" {
+			return span.DBError.Description
+		}
+	}
+	return ""
 }
 
 // HTTPSpanStatusCode https://opentelemetry.io/docs/specs/otel/trace/semantic_conventions/http/#status

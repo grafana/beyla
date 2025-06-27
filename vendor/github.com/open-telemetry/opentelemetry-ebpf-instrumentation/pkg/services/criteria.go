@@ -1,6 +1,7 @@
 package services
 
 import (
+	"bytes"
 	"fmt"
 	"iter"
 	"regexp"
@@ -163,6 +164,21 @@ func (p *PortEnum) UnmarshalYAML(value *yaml.Node) error {
 		return fmt.Errorf("PortEnum: unexpected YAML node kind %d", value.Kind)
 	}
 	return p.UnmarshalText([]byte(value.Value))
+}
+
+func (p PortEnum) MarshalYAML() (any, error) {
+	sb := bytes.Buffer{}
+	for i, r := range p.Ranges {
+		if i > 0 {
+			sb.WriteByte(',')
+		}
+		sb.WriteString(strconv.Itoa(r.Start))
+		if r.End > 0 {
+			sb.WriteByte('-')
+			sb.WriteString(strconv.Itoa(r.End))
+		}
+	}
+	return sb.String(), nil
 }
 
 func (p *PortEnum) UnmarshalText(text []byte) error {

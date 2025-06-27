@@ -140,7 +140,7 @@ network:
 			OTELIntervalMS:    60_000,
 			CommonEndpoint:    "localhost:3131",
 			MetricsEndpoint:   "localhost:3030",
-			MetricsProtocol:   obiotel.ProtocolHTTPProtobuf,
+			MetricsProtocol:   obiotel.ProtocolUnset,
 			ReportersCacheLen: ReporterLRUSize,
 			Buckets: obiotel.Buckets{
 				DurationHistogram:     []float64{0, 1, 2},
@@ -155,7 +155,7 @@ network:
 			TTL:                  5 * time.Minute,
 		},
 		Traces: obiotel.TracesConfig{
-			TracesProtocol:     obiotel.ProtocolHTTPProtobuf,
+			TracesProtocol:     obiotel.ProtocolUnset,
 			CommonEndpoint:     "localhost:3131",
 			TracesEndpoint:     "localhost:3232",
 			MaxQueueSize:       4096,
@@ -227,7 +227,7 @@ network:
 			ExcludeOTelInstrumentedServices: true,
 			DefaultExcludeServices: services.RegexDefinitionCriteria{
 				services.RegexSelector{
-					Path: services.NewPathRegexp(regexp.MustCompile("(?:^|/)(beyla$|alloy$|otelcol[^/]*$)")),
+					Path: services.NewPathRegexp(regexp.MustCompile("(?:^|/)(beyla$|alloy$|prometheus-config-reloader$|otelcol[^/]*$)")),
 				},
 				services.RegexSelector{
 					Metadata: map[string]*services.RegexpAttr{"k8s_namespace": &k8sDefaultNamespacesRegex},
@@ -235,7 +235,7 @@ network:
 			},
 			DefaultExcludeInstrument: services.GlobDefinitionCriteria{
 				services.GlobAttributes{
-					Path: services.NewGlob(glob.MustCompile("{*beyla,*alloy,*ebpf-instrument,*otelcol,*otelcol-contrib,*otelcol-contrib[!/]*}")),
+					Path: services.NewGlob(glob.MustCompile("{*beyla,*alloy,*prometheus-config-reloader,*ebpf-instrument,*otelcol,*otelcol-contrib,*otelcol-contrib[!/]*}")),
 				},
 				services.GlobAttributes{
 					Metadata: map[string]*services.GlobAttr{"k8s_namespace": &k8sDefaultNamespacesGlob},
@@ -515,6 +515,7 @@ func TestDefaultExclusionFilter(t *testing.T) {
 
 	assert.True(t, c[0].Path.MatchString("beyla"))
 	assert.True(t, c[0].Path.MatchString("alloy"))
+	assert.True(t, c[0].Path.MatchString("prometheus-config-reloader"))
 	assert.True(t, c[0].Path.MatchString("otelcol-contrib"))
 
 	assert.False(t, c[0].Path.MatchString("/usr/bin/beyla/test"))
@@ -523,6 +524,7 @@ func TestDefaultExclusionFilter(t *testing.T) {
 
 	assert.True(t, c[0].Path.MatchString("/beyla"))
 	assert.True(t, c[0].Path.MatchString("/alloy"))
+	assert.True(t, c[0].Path.MatchString("/bin/prometheus-config-reloader"))
 	assert.True(t, c[0].Path.MatchString("/otelcol-contrib"))
 
 	assert.True(t, c[0].Path.MatchString("/usr/bin/beyla"))

@@ -75,6 +75,11 @@ attributes:
       exclude: ["baz", "bae"]
   extra_group_attributes:
     k8s_app_meta: ["k8s.app.version"]
+discovery:
+  services:                                                                                                                                                                                                      
+    - k8s_namespace: .  
+  instrument:
+    - k8s_pod_name: "*"
 network:
   enable: true
   cidrs:
@@ -108,6 +113,9 @@ network:
 	nc.Enable = true
 	nc.AgentIP = "1.2.3.4"
 	nc.CIDRs = cidr.Definitions{"10.244.0.0/16"}
+
+	nsNamespaceAttr := services.NewPathRegexp(regexp.MustCompile("."))
+	nsPodNameAttr := services.NewGlob(glob.MustCompile("*"))
 
 	metaSources := maps.Clone(kube.DefaultResourceLabels)
 	metaSources["service.namespace"] = []string{"huha.com/yeah"}
@@ -225,6 +233,12 @@ network:
 		},
 		Discovery: servicesextra.BeylaDiscoveryConfig{
 			ExcludeOTelInstrumentedServices: true,
+			Services: services.RegexDefinitionCriteria{{Metadata: map[string]*services.RegexpAttr{
+				"k8s_namespace": &nsNamespaceAttr,
+			}}},
+			Instrument: services.GlobDefinitionCriteria{{Metadata: map[string]*services.GlobAttr{
+				"k8s_pod_name": &nsPodNameAttr,
+			}}},
 			DefaultExcludeServices: services.RegexDefinitionCriteria{
 				services.RegexSelector{
 					Path: services.NewPathRegexp(regexp.MustCompile("(?:^|/)(beyla$|alloy$|otelcol[^/]*$)")),

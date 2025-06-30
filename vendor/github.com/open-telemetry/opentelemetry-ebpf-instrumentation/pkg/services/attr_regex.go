@@ -83,8 +83,8 @@ type RegexpAttr struct {
 	re *regexp.Regexp
 }
 
-func NewPathRegexp(re *regexp.Regexp) RegexpAttr {
-	return RegexpAttr{re: re}
+func NewRegexp(pattern string) RegexpAttr {
+	return RegexpAttr{re: regexp.MustCompile(pattern)}
 }
 
 func (p *RegexpAttr) IsSet() bool {
@@ -105,6 +105,10 @@ func (p *RegexpAttr) UnmarshalYAML(value *yaml.Node) error {
 	}
 	p.re = re
 	return nil
+}
+
+func (p RegexpAttr) MarshalYAML() (any, error) {
+	return p.re.String(), nil
 }
 
 func (p *RegexpAttr) UnmarshalText(text []byte) error {

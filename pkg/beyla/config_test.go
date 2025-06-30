@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gobwas/glob"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/tcmanager"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/imetrics"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/kube"
@@ -114,8 +113,8 @@ network:
 	nc.AgentIP = "1.2.3.4"
 	nc.CIDRs = cidr.Definitions{"10.244.0.0/16"}
 
-	nsNamespaceAttr := services.NewPathRegexp(regexp.MustCompile("."))
-	nsPodNameAttr := services.NewGlob(glob.MustCompile("*"))
+	nsNamespaceAttr := services.NewRegexp(".")
+	nsPodNameAttr := services.NewGlob("*")
 
 	metaSources := maps.Clone(kube.DefaultResourceLabels)
 	metaSources["service.namespace"] = []string{"huha.com/yeah"}
@@ -137,6 +136,10 @@ network:
 			TCBackend:                 tcmanager.TCBackendAuto,
 			ContextPropagationEnabled: false,
 			ContextPropagation:        config.ContextPropagationDisabled,
+			RedisDBCache: config.RedisDBCacheConfig{
+				Enabled: false,
+				MaxSize: 1000,
+			},
 		},
 		Grafana: otel.GrafanaConfig{
 			OTLP: otel.GrafanaOTLP{
@@ -241,7 +244,7 @@ network:
 			}}},
 			DefaultExcludeServices: services.RegexDefinitionCriteria{
 				services.RegexSelector{
-					Path: services.NewPathRegexp(regexp.MustCompile("(?:^|/)(beyla$|alloy$|prometheus-config-reloader$|otelcol[^/]*$)")),
+					Path: services.NewRegexp("(?:^|/)(beyla$|alloy$|prometheus-config-reloader$|otelcol[^/]*$)"),
 				},
 				services.RegexSelector{
 					Metadata: map[string]*services.RegexpAttr{"k8s_namespace": &k8sDefaultNamespacesRegex},
@@ -249,7 +252,7 @@ network:
 			},
 			DefaultExcludeInstrument: services.GlobDefinitionCriteria{
 				services.GlobAttributes{
-					Path: services.NewGlob(glob.MustCompile("{*beyla,*alloy,*prometheus-config-reloader,*ebpf-instrument,*otelcol,*otelcol-contrib,*otelcol-contrib[!/]*}")),
+					Path: services.NewGlob("{*beyla,*alloy,*prometheus-config-reloader,*ebpf-instrument,*otelcol,*otelcol-contrib,*otelcol-contrib[!/]*}"),
 				},
 				services.GlobAttributes{
 					Metadata: map[string]*services.GlobAttr{"k8s_namespace": &k8sDefaultNamespacesGlob},
@@ -583,8 +586,8 @@ func TestOBIConfigConversion(t *testing.T) {
 	cfg.Metrics.MetricsEndpoint = "http://localhost:4318"
 	cfg.Discovery = servicesextra.BeylaDiscoveryConfig{
 		Instrument: services.GlobDefinitionCriteria{
-			{Path: services.NewGlob(glob.MustCompile("hello*"))},
-			{Path: services.NewGlob(glob.MustCompile("bye*"))},
+			{Path: services.NewGlob("hello*")},
+			{Path: services.NewGlob("bye*")},
 		},
 	}
 
@@ -594,8 +597,8 @@ func TestOBIConfigConversion(t *testing.T) {
 	assert.Equal(t, dst.Metrics.MetricsEndpoint, "http://localhost:4318")
 	assert.Equal(t,
 		services.GlobDefinitionCriteria{
-			{Path: services.NewGlob(glob.MustCompile("hello*"))},
-			{Path: services.NewGlob(glob.MustCompile("bye*"))},
+			{Path: services.NewGlob("hello*")},
+			{Path: services.NewGlob("bye*")},
 		},
 		dst.Discovery.Instrument)
 }

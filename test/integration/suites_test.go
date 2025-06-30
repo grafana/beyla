@@ -395,6 +395,15 @@ func TestSuite_PythonSQL(t *testing.T) {
 	require.NoError(t, compose.Close())
 }
 
+func TestSuite_PythonRedis(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-python-redis.yml", path.Join(pathOutput, "test-suite-python-redis.log"))
+	compose.Env = append(compose.Env, `BEYLA_OPEN_PORT=8080`, `BEYLA_EXECUTABLE_NAME=`, `TEST_SERVICE_PORTS=8381:8080`)
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+	t.Run("Python Redis metrics", testREDMetricsPythonRedisOnly)
+	require.NoError(t, compose.Close())
+}
+
 func TestSuite_PythonSQLSSL(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-python-sql-ssl.yml", path.Join(pathOutput, "test-suite-python-sql-ssl.log"))
 	compose.Env = append(compose.Env, `BEYLA_OPEN_PORT=8080`, `BEYLA_EXECUTABLE_NAME=`, `TEST_SERVICE_PORTS=8381:8080`)

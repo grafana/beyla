@@ -15,7 +15,7 @@ expected:
             db.operation.name: set
             db.system.name: redis
             server.port: 6379
-            db.query.text: "set beyla rocks "
+            db.query.text: "set obi rocks"
   metrics:
     - promql: 'db_client_operation_duration_sum{db_operation_name="get", db_system_name="redis"}'
       value: "> 0"

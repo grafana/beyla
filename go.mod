@@ -9,13 +9,12 @@ replace github.com/open-telemetry/opentelemetry-ebpf-instrumentation => ./.obi-s
 require (
 	github.com/caarlos0/env/v9 v9.0.0
 	github.com/gin-gonic/gin v1.10.1
-	github.com/gobwas/glob v0.2.3
 	github.com/goccy/go-json v0.10.5
 	github.com/gorilla/mux v1.8.1
 	github.com/grafana/pyroscope-go/godeltaprof v0.1.8
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/mariomac/guara v0.0.0-20250408105519-1e4dbdfb7136
-	github.com/open-telemetry/opentelemetry-ebpf-instrumentation v0.0.0-20250625013500-97ac1d4c58dd
+	github.com/open-telemetry/opentelemetry-ebpf-instrumentation v0.0.0-20250626202113-9c0027b17e61
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.22.0
 	github.com/prometheus/client_model v0.6.2
@@ -73,6 +72,7 @@ require (
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.20.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.3.0 // indirect
+	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/golang/snappy v1.0.0 // indirect
@@ -81,12 +81,12 @@ require (
 	github.com/google/go-tpm v0.9.5 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/gorilla/websocket v1.5.0 // indirect
+	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/grafana/go-offsets-tracker v0.1.7 // indirect
 	github.com/grafana/jvmtools v0.0.3 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.25.1 // indirect
 	github.com/hashicorp/go-version v1.7.0 // indirect
-	github.com/ianlancetaylor/demangle v0.0.0-20250417193237-f615e6bd150b // indirect
+	github.com/ianlancetaylor/demangle v0.0.0-20250628045327-2d64ad6b7ec5 // indirect
 	github.com/imdario/mergo v0.3.15 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect

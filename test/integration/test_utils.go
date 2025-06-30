@@ -11,14 +11,17 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/attribute"
 	"golang.org/x/net/http2"
 
+	"github.com/grafana/beyla/v2/test/integration/components/jaeger"
 	"github.com/grafana/beyla/v2/test/integration/components/prom"
 )
 
@@ -300,4 +303,18 @@ func waitForTestComponentsHTTP2Sub(t *testing.T, url, subpath string, minutes in
 		require.NoError(t, err)
 		require.NotEmpty(t, results)
 	}, test.Interval(time.Second))
+}
+
+func otelAttributeToJaegerTag(attr attribute.KeyValue) jaeger.Tag {
+	var value any
+	value = attr.Value.AsInterface()
+	if attr.Value.Type() == attribute.INT64 {
+		// jaeger encodes int64 as float64
+		value = float64(attr.Value.AsInt64())
+	}
+	return jaeger.Tag{
+		Key:   string(attr.Key),
+		Type:  strings.ToLower(attr.Value.Type().String()),
+		Value: value,
+	}
 }

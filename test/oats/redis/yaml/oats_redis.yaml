@@ -3,7 +3,7 @@ docker-compose:
   files:
     - ../docker-compose-beyla-redis.yml
 input:
-  - path: '/query'
+  - path: '/redis'
 
 interval: 500ms
 expected:
@@ -15,7 +15,7 @@ expected:
             db.operation.name: SET
             db.system.name: redis
             server.port: 6379
-            db.query.text: "SET beyla rocks "
+            db.query.text: "SET obi rocks"
   metrics:
     - promql: 'db_client_operation_duration_sum{db_operation_name="GET", db_system_name="redis"}'
       value: "> 0"

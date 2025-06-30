@@ -29,9 +29,6 @@ import (
 	"go.opentelemetry.io/collector/exporter/otlphttpexporter"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/ptrace"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.25.0"
@@ -40,7 +37,6 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/imetrics"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/pipe/global"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
@@ -282,7 +278,7 @@ func (tr *tracesOTELReceiver) processSpans(ctx context.Context, exp exporter.Tra
 }
 
 func (tr *tracesOTELReceiver) provideLoop(ctx context.Context) {
-	exp, err := getTracesExporter(ctx, tr.cfg, tr.ctxInfo)
+	exp, err := getTracesExporter(ctx, tr.cfg)
 	if err != nil {
 		slog.Error("error creating traces exporter", "error", err)
 		return
@@ -317,20 +313,15 @@ func (tr *tracesOTELReceiver) provideLoop(ctx context.Context) {
 }
 
 //nolint:cyclop
-func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.ContextInfo) (exporter.Traces, error) {
+func getTracesExporter(ctx context.Context, cfg TracesConfig) (exporter.Traces, error) {
 	switch proto := cfg.GetProtocol(); proto {
 	case ProtocolHTTPJSON, ProtocolHTTPProtobuf, "": // zero value defaults to HTTP for backwards-compatibility
 		slog.Debug("instantiating HTTP TracesReporter", "protocol", proto)
-		var t trace.SpanExporter
 		var err error
 
 		opts, err := getHTTPTracesEndpointOptions(&cfg)
 		if err != nil {
 			slog.Error("can't get HTTP traces endpoint options", "error", err)
-			return nil, err
-		}
-		if t, err = httpTracer(ctx, opts); err != nil {
-			slog.Error("can't instantiate OTEL HTTP traces exporter", "error", err)
 			return nil, err
 		}
 		factory := otlphttpexporter.NewFactory()
@@ -354,7 +345,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 			Headers: convertHeaders(opts.Headers),
 		}
 		slog.Debug("getTracesExporter: confighttp.ClientConfig created", "endpoint", config.ClientConfig.Endpoint)
-		set := getTraceSettings(ctxInfo, factory.Type(), t, &batchCfg)
+		set := getTraceSettings(factory.Type())
 		exporter, err := factory.CreateTraces(ctx, set, config)
 		if err != nil {
 			slog.Error("can't create OTLP HTTP traces exporter", "error", err)
@@ -371,15 +362,10 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 			exporterhelper.WithRetry(config.RetryConfig))
 	case ProtocolGRPC:
 		slog.Debug("instantiating GRPC TracesReporter", "protocol", proto)
-		var t trace.SpanExporter
 		var err error
 		opts, err := getGRPCTracesEndpointOptions(&cfg)
 		if err != nil {
 			slog.Error("can't get GRPC traces endpoint options", "error", err)
-			return nil, err
-		}
-		if t, err = grpcTracer(ctx, opts); err != nil {
-			slog.Error("can't instantiate OTEL GRPC traces exporter", "error", err)
 			return nil, err
 		}
 		endpoint, _, err := parseTracesEndpoint(&cfg)
@@ -407,7 +393,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 			},
 			Headers: convertHeaders(opts.Headers),
 		}
-		set := getTraceSettings(ctxInfo, factory.Type(), t, &config.BatcherConfig)
+		set := getTraceSettings(factory.Type())
 		return factory.CreateTraces(ctx, set, config)
 	default:
 		slog.Error(fmt.Sprintf("invalid protocol value: %q. Accepted values are: %s, %s, %s",
@@ -416,44 +402,8 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 	}
 }
 
-func internalMetricsEnabled(ctxInfo *global.ContextInfo) bool {
-	internalMetrics := ctxInfo.Metrics
-	if internalMetrics == nil {
-		return false
-	}
-	_, ok := internalMetrics.(imetrics.NoopReporter)
-
-	return !ok
-}
-
-func instrumentTraceExporter(in trace.SpanExporter, internalMetrics imetrics.Reporter) trace.SpanExporter {
-	// avoid wrapping the instrumented exporter if we don't have
-	// internal instrumentation (NoopReporter)
-	if _, ok := internalMetrics.(imetrics.NoopReporter); ok || internalMetrics == nil {
-		return in
-	}
-	return &instrumentedTracesExporter{
-		SpanExporter: in,
-		internal:     internalMetrics,
-	}
-}
-
-func getTraceSettings(
-	ctxInfo *global.ContextInfo,
-	dataTypeMetrics component.Type,
-	in trace.SpanExporter,
-	batcherCfg *exporterhelper.BatcherConfig,
-) exporter.Settings {
-	var traceProvider trace2.TracerProvider
-	traceProvider = tracenoop.NewTracerProvider()
-	if internalMetricsEnabled(ctxInfo) {
-		spanExporter := instrumentTraceExporter(in, ctxInfo.Metrics)
-		res := newResourceInternal(ctxInfo.HostID)
-		traceProvider = trace.NewTracerProvider(
-			trace.WithBatcher(spanExporter, getInternalBatchSpanOpts(batcherCfg)...),
-			trace.WithResource(res),
-		)
-	}
+func getTraceSettings(dataTypeMetrics component.Type) exporter.Settings {
+	traceProvider := tracenoop.NewTracerProvider()
 	meterProvider := metric.NewMeterProvider()
 	telemetrySettings := component.TelemetrySettings{
 		Logger:         zap.NewNop(),
@@ -466,17 +416,6 @@ func getTraceSettings(
 		ID:                component.NewIDWithName(dataTypeMetrics, "beyla"),
 		TelemetrySettings: telemetrySettings,
 	}
-}
-
-func getInternalBatchSpanOpts(cfg *exporterhelper.BatcherConfig) []trace.BatchSpanProcessorOption {
-	var opts []trace.BatchSpanProcessorOption
-	if cfg.FlushTimeout > 0 {
-		opts = append(opts, trace.WithBatchTimeout(cfg.FlushTimeout))
-	}
-	if cfg.MaxSize > 0 {
-		opts = append(opts, trace.WithMaxQueueSize(int(cfg.MaxSize)))
-	}
-	return opts
 }
 
 func getRetrySettings(cfg TracesConfig) configretry.BackOffConfig {
@@ -569,6 +508,10 @@ func generateTracesWithAttributes(
 		// Set status code
 		statusCode := codeToStatusCode(request.SpanStatusCode(span))
 		s.Status().SetCode(statusCode)
+		statusMessage := request.SpanStatusMessage(span)
+		if statusMessage != "" {
+			s.Status().SetMessage(statusMessage)
+		}
 		s.SetEndTimestamp(pcommon.NewTimestampFromTime(t.End))
 	}
 	return traces
@@ -655,22 +598,6 @@ func convertHeaders(headers map[string]string) map[string]configopaque.String {
 		opaqueHeaders[key] = configopaque.String(value)
 	}
 	return opaqueHeaders
-}
-
-func httpTracer(ctx context.Context, opts otlpOptions) (*otlptrace.Exporter, error) {
-	texp, err := otlptracehttp.New(ctx, opts.AsTraceHTTP()...)
-	if err != nil {
-		return nil, fmt.Errorf("creating HTTP trace exporter: %w", err)
-	}
-	return texp, nil
-}
-
-func grpcTracer(ctx context.Context, opts otlpOptions) (*otlptrace.Exporter, error) {
-	texp, err := otlptracegrpc.New(ctx, opts.AsTraceGRPC()...)
-	if err != nil {
-		return nil, fmt.Errorf("creating GRPC trace exporter: %w", err)
-	}
-	return texp, nil
 }
 
 func acceptSpan(is instrumentations.InstrumentationSelection, span *request.Span) bool {
@@ -782,6 +709,12 @@ func TraceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 					attrs = append(attrs, request.DBQueryText(query))
 				}
 			}
+		}
+		if span.Status == 1 {
+			attrs = append(attrs, request.DBResponseStatusCode(span.DBError.ErrorCode))
+		}
+		if span.DBNamespace != "" {
+			attrs = append(attrs, request.DBNamespace(span.DBNamespace))
 		}
 	case request.EventTypeKafkaServer, request.EventTypeKafkaClient:
 		operation := request.MessagingOperationType(span.Method)

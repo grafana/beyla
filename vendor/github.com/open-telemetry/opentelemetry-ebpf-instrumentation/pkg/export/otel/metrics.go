@@ -482,8 +482,12 @@ func (mr *MetricsReporter) otelMetricOptions(mlog *slog.Logger) []metric.Option 
 	return opts
 }
 
+func (mr *MetricsReporter) usesLegacySpanNames() bool {
+	return slices.Contains(mr.cfg.Features, FeatureSpan)
+}
+
 func (mr *MetricsReporter) spanMetricsLatencyName() string {
-	if slices.Contains(mr.cfg.Features, FeatureSpan) {
+	if mr.usesLegacySpanNames() {
 		return SpanMetricsLatency
 	}
 
@@ -650,7 +654,7 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 }
 
 func (mr *MetricsReporter) spanMetricsCallsName() string {
-	if slices.Contains(mr.cfg.Features, FeatureSpan) {
+	if mr.usesLegacySpanNames() {
 		return SpanMetricsCalls
 	}
 
@@ -703,7 +707,13 @@ func (mr *MetricsReporter) setupSpanMeters(m *Metrics, meter instrument.Meter) e
 
 	spanMetricAttrs := mr.spanMetricAttributes()
 
-	spanMetricsLatency, err := meter.Float64Histogram(mr.spanMetricsLatencyName())
+	instrumentOpts := []instrument.Float64HistogramOption{}
+
+	if !mr.usesLegacySpanNames() {
+		instrumentOpts = append(instrumentOpts, instrument.WithUnit("s"))
+	}
+
+	spanMetricsLatency, err := meter.Float64Histogram(mr.spanMetricsLatencyName(), instrumentOpts...)
 	if err != nil {
 		return fmt.Errorf("creating span metric histogram for latency: %w", err)
 	}

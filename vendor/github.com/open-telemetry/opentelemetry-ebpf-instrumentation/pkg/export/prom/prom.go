@@ -33,7 +33,7 @@ var timeNow = time.Now
 // but following the different naming conventions
 const (
 	SpanMetricsLatency       = "traces_spanmetrics_latency"
-	SpanMetricsLatencyOTel   = "traces_span_metrics_duration"
+	SpanMetricsLatencyOTel   = "traces_span_metrics_duration_seconds"
 	SpanMetricsCalls         = "traces_spanmetrics_calls_total"
 	SpanMetricsCallsOTel     = "traces_span_metrics_calls_total"
 	SpanMetricsRequestSizes  = "traces_spanmetrics_size_total"

@@ -6,6 +6,7 @@ package demangle
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -86,6 +87,11 @@ type printState struct {
 	// parentheses if used as a template argument that is not
 	// inside some other set of parentheses.
 	scopes int
+
+	// lambdaTemplateArgs is true if we are printing the template
+	// arguments to a lambda with explicit template parameters.
+	// In that case template parameters are printed without names.
+	lambdaTemplateArgs bool
 
 	buf  strings.Builder
 	last byte // Last byte written to buffer.
@@ -2422,8 +2428,12 @@ type TemplateParamName struct {
 
 func (tpn *TemplateParamName) print(ps *printState) {
 	ps.writeString(tpn.Prefix)
-	if tpn.Index > 0 {
-		ps.writeString(fmt.Sprintf("%d", tpn.Index-1))
+	if ps.llvmStyle {
+		if tpn.Index > 0 {
+			ps.writeString(fmt.Sprintf("%d", tpn.Index-1))
+		}
+	} else {
+		ps.writeString(fmt.Sprintf("%d", tpn.Index))
 	}
 }
 
@@ -2443,11 +2453,7 @@ func (tpn *TemplateParamName) GoString() string {
 }
 
 func (tpn *TemplateParamName) goString(indent int, field string) string {
-	name := tpn.Prefix
-	if tpn.Index > 0 {
-		name += fmt.Sprintf("%d", tpn.Index-1)
-	}
-	return fmt.Sprintf("%*s%sTemplateParamName: %s", indent, "", field, name)
+	return fmt.Sprintf("%*s%sTemplateParamName: %s%d", indent, "", field, tpn.Prefix, tpn.Index)
 }
 
 // TypeTemplateParam is a type template parameter that appears in a
@@ -2457,9 +2463,17 @@ type TypeTemplateParam struct {
 }
 
 func (ttp *TypeTemplateParam) print(ps *printState) {
-	ps.writeString("typename ")
+	ps.writeString("typename")
+	if ps.llvmStyle {
+		ps.writeByte(' ')
+	}
 	ps.printInner(false)
-	ps.print(ttp.Name)
+	if ps.llvmStyle || !ps.lambdaTemplateArgs {
+		if !ps.llvmStyle {
+			ps.writeByte(' ')
+		}
+		ps.print(ttp.Name)
+	}
 }
 
 func (ttp *TypeTemplateParam) Traverse(fn func(AST) bool) {
@@ -2503,8 +2517,10 @@ func (nttp *NonTypeTemplateParam) print(ps *printState) {
 	ps.inner = append(ps.inner, nttp)
 	ps.print(nttp.Type)
 	if len(ps.inner) > 0 {
-		ps.writeByte(' ')
-		ps.print(nttp.Name)
+		if ps.llvmStyle || !ps.lambdaTemplateArgs {
+			ps.writeByte(' ')
+			ps.print(nttp.Name)
+		}
 		ps.inner = ps.inner[:len(ps.inner)-1]
 	}
 }
@@ -2563,14 +2579,30 @@ type TemplateTemplateParam struct {
 func (ttp *TemplateTemplateParam) print(ps *printState) {
 	scopes := ps.scopes
 	ps.scopes = 0
+	lambdaTemplateArgs := ps.lambdaTemplateArgs
+	ps.lambdaTemplateArgs = true
+	inner := ps.inner
+	ps.inner = nil
 
 	ps.writeString("template<")
 	ps.printList(ttp.Params, nil)
-	ps.writeString("> typename ")
+	ps.writeString("> ")
+	if ps.llvmStyle {
+		ps.writeString("typename")
+	} else {
+		ps.writeString("class")
+	}
 
 	ps.scopes = scopes
+	ps.lambdaTemplateArgs = lambdaTemplateArgs
+	ps.inner = inner
 
-	ps.print(ttp.Name)
+	ps.printInner(false)
+
+	if ps.llvmStyle || !ps.lambdaTemplateArgs {
+		ps.writeByte(' ')
+		ps.print(ttp.Name)
+	}
 
 	if ttp.Constraint != nil {
 		ps.writeString(" requires ")
@@ -2734,13 +2766,18 @@ func (tpp *TemplateParamPack) print(ps *printState) {
 	defer func() { ps.inner = holdInner }()
 
 	ps.inner = []AST{tpp}
-	if nttp, ok := tpp.Param.(*NonTypeTemplateParam); ok {
+	nttp, isNTTP := tpp.Param.(*NonTypeTemplateParam)
+	if isNTTP {
 		ps.print(nttp.Type)
 	} else {
 		ps.print(tpp.Param)
 	}
 	if len(ps.inner) > 0 {
 		ps.writeString("...")
+		if isNTTP && (ps.llvmStyle || !ps.lambdaTemplateArgs) {
+			ps.writeByte(' ')
+			ps.print(nttp.Name)
+		}
 	}
 }
 
@@ -2957,17 +2994,11 @@ func (u *Unary) print(ps *printState) {
 	}
 
 	if !u.Suffix {
-		isDelete := op != nil && (op.Name == "delete " || op.Name == "delete[] ")
+		alwaysParens := u.SizeofType || (op != nil && (op.Name == "__alignof__" || op.Name == "noexcept"))
 		if op != nil && op.Name == "::" {
 			// Don't use parentheses after ::.
 			ps.print(expr)
-		} else if u.SizeofType {
-			// Always use parentheses for sizeof argument.
-			ps.startScope('(')
-			ps.print(expr)
-			ps.endScope(')')
-		} else if op != nil && op.Name == "__alignof__" {
-			// Always use parentheses for __alignof__ argument.
+		} else if alwaysParens {
 			ps.startScope('(')
 			ps.print(expr)
 			ps.endScope(')')
@@ -2980,7 +3011,7 @@ func (u *Unary) print(ps *printState) {
 				wantParens = false
 			case op.Name == "&":
 				wantParens = false
-			case isDelete:
+			case op.Name == "delete" || op.Name == "delete[]":
 				wantParens = false
 			case op.Name == "alignof ":
 				wantParens = true
@@ -3165,19 +3196,21 @@ func (b *Binary) print(ps *printState) {
 
 	// For a function call in an expression, don't print the types
 	// of the arguments unless there is a return type.
-	if op != nil && op.Name == "()" {
+	if op != nil && strings.HasPrefix(op.Name, "()") {
 		if ty, ok := b.Left.(*Typed); ok {
 			if ft, ok := ty.Type.(*FunctionType); ok {
 				if ft.Return == nil {
 					left = ty.Name
 				} else {
-					skipParens = true
+					if op.Name != "() " {
+						skipParens = true
+					}
 				}
 			} else {
 				left = ty.Name
 			}
 		}
-		if ps.llvmStyle {
+		if ps.llvmStyle && op.Name != "() " {
 			skipParens = true
 		}
 	}
@@ -3189,7 +3222,7 @@ func (b *Binary) print(ps *printState) {
 		if p, ok := left.(hasPrec); ok {
 			prec = p.prec()
 		}
-		needsParen := false
+		needsParen := op.Name == "() "
 		if prec > b.prec() {
 			needsParen = true
 		}
@@ -3214,7 +3247,7 @@ func (b *Binary) print(ps *printState) {
 	}
 
 	if op != nil {
-		if op.Name != "()" {
+		if !strings.HasPrefix(op.Name, "()") {
 			if addSpaces && op.Name != "," {
 				ps.writeByte(' ')
 			}
@@ -4090,11 +4123,102 @@ type InitializerList struct {
 
 func (il *InitializerList) print(ps *printState) {
 	if il.Type != nil {
+		if array, ok := il.Type.(*ArrayType); ok {
+			if builtin, ok := array.Element.(*BuiltinType); ok && builtin.Name == "char" {
+				if il.printAsString(ps) {
+					return
+				}
+			}
+		}
+	}
+
+	if il.Type != nil {
 		ps.print(il.Type)
 	}
 	ps.writeByte('{')
 	ps.print(il.Exprs)
 	ps.writeByte('}')
+}
+
+// printAsString tries to print a char array initializer as a string.
+// It reports whether it succeeded.
+func (il *InitializerList) printAsString(ps *printState) bool {
+	exprList, ok := il.Exprs.(*ExprList)
+	if !ok {
+		return false
+	}
+
+	var sb strings.Builder
+	sb.WriteByte('"')
+	inNumericEscape := false
+	for _, e := range exprList.Exprs {
+		lit, ok := e.(*Literal)
+		if !ok {
+			return false
+		}
+		if lit.Neg {
+			return false
+		}
+		val, err := strconv.Atoi(lit.Val)
+		if err != nil || val > 255 {
+			return false
+		}
+
+		// If we just added a numeric escape,
+		// make sure it doesn't get accidentally extended
+		// (numeric escapes here are C++ syntax, not Go syntax).
+		if inNumericEscape {
+			if (val >= '0' && val <= '9') ||
+				(val >= 'a' && val <= 'f') ||
+				(val >= 'A' && val <= 'F') {
+				sb.WriteString(`""`)
+			}
+		}
+		inNumericEscape = false
+
+		switch val {
+		case '\a':
+			sb.WriteString(`\a`)
+		case '\b':
+			sb.WriteString(`\b`)
+		case '\f':
+			sb.WriteString(`\f`)
+		case '\n':
+			sb.WriteString(`\n`)
+		case '\r':
+			sb.WriteString(`\r`)
+		case '\t':
+			sb.WriteString(`\t`)
+		case '\v':
+			sb.WriteString(`\v`)
+
+		case '"':
+			sb.WriteString(`\"`)
+		case '\\':
+			sb.WriteString(`\\`)
+
+		default:
+			if val < 32 || val == 127 {
+				const hex = "0123456789ABCDEF"
+				sb.WriteByte('\\')
+				if val > 7 {
+					sb.WriteByte('x')
+				}
+				if val >= 16 {
+					sb.WriteByte(hex[val>>4])
+				}
+				sb.WriteByte(hex[val&0xf])
+				inNumericEscape = true
+				break
+			}
+
+			sb.WriteByte(byte(val))
+		}
+	}
+	sb.WriteByte('"')
+
+	ps.writeString(sb.String())
+	return true
 }
 
 func (il *InitializerList) Traverse(fn func(AST) bool) {
@@ -4806,8 +4930,13 @@ type Friend struct {
 }
 
 func (f *Friend) print(ps *printState) {
-	ps.writeString("friend ")
+	if ps.llvmStyle {
+		ps.writeString("friend ")
+	}
 	ps.print(f.Name)
+	if !ps.llvmStyle {
+		ps.writeString("[friend]")
+	}
 }
 
 func (f *Friend) Traverse(fn func(AST) bool) {
@@ -4841,13 +4970,23 @@ func (f *Friend) goString(indent int, field string) string {
 }
 
 // Constraint represents an AST with a constraint.
+// ForTemplateArgs is true if this constraint was found at the
+// end of a list of template arguments. We need that because
+// in LLVM style we don't print constraints of that sort.
 type Constraint struct {
-	Name     AST
-	Requires AST
+	Name            AST
+	Requires        AST
+	ForTemplateArgs bool
 }
 
 func (c *Constraint) print(ps *printState) {
 	ps.print(c.Name)
+
+	// For LLVM style skip the constraint on a template.
+	if ps.llvmStyle && c.ForTemplateArgs {
+		return
+	}
+
 	ps.writeString(" requires ")
 	ps.print(c.Requires)
 }
@@ -4874,7 +5013,11 @@ func (c *Constraint) Copy(fn func(AST) AST, skip func(AST) bool) AST {
 	if requires == nil {
 		requires = c.Requires
 	}
-	c = &Constraint{Name: name, Requires: requires}
+	c = &Constraint{
+		Name:            name,
+		Requires:        requires,
+		ForTemplateArgs: c.ForTemplateArgs,
+	}
 	if r := fn(c); r != nil {
 		return r
 	}
@@ -4886,7 +5029,8 @@ func (c *Constraint) GoString() string {
 }
 
 func (c *Constraint) goString(indent int, field string) string {
-	return fmt.Sprintf("%*s%sConstraint:\n%s\n%s", indent, "", field,
+	return fmt.Sprintf("%*s%sConstraint: ForTemplateArgs: %t\n%s\n%s", indent, "", field,
+		c.ForTemplateArgs,
 		c.Name.goString(indent+2, "Name: "),
 		c.Requires.goString(indent+2, "Requires: "))
 }

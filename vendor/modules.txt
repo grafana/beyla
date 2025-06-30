@@ -197,7 +197,7 @@ github.com/go-playground/universal-translator
 # github.com/go-playground/validator/v10 v10.20.0
 ## explicit; go 1.18
 github.com/go-playground/validator/v10
-# github.com/go-viper/mapstructure/v2 v2.2.1
+# github.com/go-viper/mapstructure/v2 v2.3.0
 ## explicit; go 1.18
 github.com/go-viper/mapstructure/v2
 github.com/go-viper/mapstructure/v2/internal/errors
@@ -302,7 +302,7 @@ github.com/hashicorp/golang-lru/v2
 github.com/hashicorp/golang-lru/v2/expirable
 github.com/hashicorp/golang-lru/v2/internal
 github.com/hashicorp/golang-lru/v2/simplelru
-# github.com/ianlancetaylor/demangle v0.0.0-20250625212726-86fd2c0a1a74
+# github.com/ianlancetaylor/demangle v0.0.0-20250628045327-2d64ad6b7ec5
 ## explicit; go 1.13
 github.com/ianlancetaylor/demangle
 # github.com/imdario/mergo v0.3.15

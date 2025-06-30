@@ -22,7 +22,7 @@ services:
   autoinstrumenter:
     build:
       context: ../..
-      dockerfile: ./test/integration/components/ebpf-instrument/Dockerfile
+      dockerfile: ./test/integration/components/beyla/Dockerfile
     volumes:
       - ./configs/:/configs
       - ./system/sys/kernel/security:/sys/kernel/security

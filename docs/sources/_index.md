@@ -6,7 +6,7 @@ weight: 3
 cascade:
   labels:
     products:
-      - cloud
+      - oss
 keywords:
   - Beyla
   - eBPF

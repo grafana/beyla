@@ -1,7 +1,7 @@
 # Build the autoinstrumenter binary
-ARG VER=main
+ARG GEN_IMG=ghcr.io/open-telemetry/obi-generator:latest
 
-FROM ghcr.io/grafana/beyla-ebpf-generator:$VER AS builder
+FROM $GEN_IMG AS builder
 
 # TODO: embed software version in executable
 

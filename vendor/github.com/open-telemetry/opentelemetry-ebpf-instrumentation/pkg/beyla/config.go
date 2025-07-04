@@ -71,6 +71,9 @@ var DefaultConfig = Config{
 			Enabled: false,
 			MaxSize: 1000,
 		},
+		BufferSizes: config.EBPFBufferSizes{
+			MySQL: 0,
+		},
 	},
 	NameResolver: &transform.NameResolverConfig{
 		Sources:  []string{"k8s"},
@@ -326,6 +329,10 @@ func (c *Config) Validate() error {
 	}
 	if c.InternalMetrics.Exporter == imetrics.InternalMetricsExporterOTEL && !c.Metrics.Enabled() {
 		return ConfigError("you can't enable OTEL internal metrics without enabling OTEL metrics")
+	}
+
+	if err := c.EBPF.Validate(); err != nil {
+		return ConfigError(err.Error())
 	}
 
 	return nil

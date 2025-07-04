@@ -38,9 +38,31 @@ func NewProcessFinder(
 	return &ProcessFinder{cfg: cfg, ctxInfo: ctxInfo, tracesInput: tracesInput, ebpfEventContext: ebpfEventContext}
 }
 
+type processFinderStartConfig struct {
+	enrichedProcessEvents *msg.Queue[[]Event[ProcessAttrs]]
+}
+
+// ProcessFinderStartOpt allows overriding some internal behavior of ProcessFinder.Start method.
+// This is useful for vendoring OBI inside another collector
+type ProcessFinderStartOpt func(*processFinderStartConfig)
+
+// WithEnrichedProcessEvents allows overriding the enrichedProcessEvents internal communication queue.
+// This is useful for components that vendor OBI and want to listen for process events that have been already
+// enriched with extra metadata (e.g. Kubernetes)
+func WithEnrichedProcessEvents(enrichedProcessEvents *msg.Queue[[]Event[ProcessAttrs]]) ProcessFinderStartOpt {
+	return func(cfg *processFinderStartConfig) {
+		cfg.enrichedProcessEvents = enrichedProcessEvents
+	}
+}
+
 // Start the ProcessFinder pipeline in background. It returns a channel where each new discovered
 // ebpf.ProcessTracer will be notified.
-func (pf *ProcessFinder) Start(ctx context.Context) (<-chan Event[*ebpf.Instrumentable], error) {
+func (pf *ProcessFinder) Start(ctx context.Context, opts ...ProcessFinderStartOpt) (<-chan Event[*ebpf.Instrumentable], error) {
+	startConfig := processFinderStartConfig{}
+	for _, opt := range opts {
+		opt(&startConfig)
+	}
+
 	tracerEvents := msg.NewQueue[Event[*ebpf.Instrumentable]](msg.ChannelBufferLen(pf.cfg.ChannelBufferLen))
 
 	swi := swarm.Instancer{}
@@ -48,12 +70,15 @@ func (pf *ProcessFinder) Start(ctx context.Context) (<-chan Event[*ebpf.Instrume
 	swi.Add(swarm.DirectInstance(ProcessWatcherFunc(pf.cfg, pf.ebpfEventContext, processEvents)),
 		swarm.WithID("ProcessWatcher"))
 
-	kubeEnrichedEvents := msg.NewQueue[[]Event[ProcessAttrs]](msg.ChannelBufferLen(pf.cfg.ChannelBufferLen))
-	swi.Add(WatcherKubeEnricherProvider(pf.ctxInfo.K8sInformer, processEvents, kubeEnrichedEvents),
+	enrichedProcessEvents := startConfig.enrichedProcessEvents
+	if enrichedProcessEvents == nil {
+		enrichedProcessEvents = msg.NewQueue[[]Event[ProcessAttrs]](msg.ChannelBufferLen(pf.cfg.ChannelBufferLen))
+	}
+	swi.Add(WatcherKubeEnricherProvider(pf.ctxInfo.K8sInformer, processEvents, enrichedProcessEvents),
 		swarm.WithID("WatcherKubeEnricher"))
 
 	criteriaFilteredEvents := msg.NewQueue[[]Event[ProcessMatch]](msg.ChannelBufferLen(pf.cfg.ChannelBufferLen))
-	swi.Add(CriteriaMatcherProvider(pf.cfg, kubeEnrichedEvents, criteriaFilteredEvents),
+	swi.Add(CriteriaMatcherProvider(pf.cfg, enrichedProcessEvents, criteriaFilteredEvents),
 		swarm.WithID("CriteriaMatcher"))
 
 	executableTypes := msg.NewQueue[[]Event[ebpf.Instrumentable]](msg.ChannelBufferLen(pf.cfg.ChannelBufferLen))

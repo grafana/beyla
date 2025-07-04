@@ -175,6 +175,14 @@ func (p *Tracer) SetupTailCalls() {
 			index: 5,
 			prog:  p.bpfObjects.BeylaProtocolHttp2GrpcHandleEndFrame,
 		},
+		{
+			index: 6,
+			prog:  p.bpfObjects.BeylaProtocolMysql,
+		},
+		{
+			index: 7,
+			prog:  p.bpfObjects.BeylaHandleBufWithArgs,
+		},
 	} {
 		err := p.bpfObjects.JumpTable.Update(uint32(tc.index), uint32(tc.prog.FD()), ebpf.UpdateAny)
 		if err != nil {
@@ -216,6 +224,8 @@ func (p *Tracer) Constants() map[string]any {
 	} else {
 		m["disable_black_box_cp"] = uint32(0)
 	}
+
+	m["mysql_buffer_size"] = p.cfg.EBPF.BufferSizes.MySQL
 
 	return m
 }

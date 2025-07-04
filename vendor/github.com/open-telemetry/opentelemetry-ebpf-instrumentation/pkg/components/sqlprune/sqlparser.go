@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"github.com/xwb1989/sqlparser"
+
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
 )
 
 var tokenIsDBOperation = map[int]bool{
@@ -130,4 +132,25 @@ func SQLParseOperationAndTableNEW(query string) (string, string) {
 	tables = getTableNames(reflect.Indirect(reflect.ValueOf(stmt)), tables, 0, false)
 
 	return "SELECT", tables[0]
+}
+
+func SQLParseError(buf []uint8) *request.SQLError {
+	var sqlErr *request.SQLError
+
+	if sqlErr = parseMySQLError(buf); sqlErr != nil {
+		if validateMySQLError(sqlErr) {
+			return sqlErr
+		}
+	}
+
+	return nil
+}
+
+func SQLParseCommandID(kind request.SQLKind, buf []byte) string {
+	switch kind {
+	case request.DBMySQL:
+		return mysqlCommandIDToString(parseMySQLCommandID(buf))
+	default:
+		return ""
+	}
 }

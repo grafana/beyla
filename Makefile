@@ -24,20 +24,12 @@ IMG_NAME ?= beyla
 VERSION ?= dev
 IMG = $(IMG_REGISTRY)/$(IMG_ORG)/$(IMG_NAME):$(VERSION)
 
-# branch contains the current branch name
-BRANCH := $(shell git rev-parse --abbrev-ref HEAD)
-
-# if BRANCH matches release-*, strip the prefix; else use "main"
-GEN_IMG_VERSION := $(strip \
-	$(if $(filter release-%,$(BRANCH)),\
-		$(patsubst release-%,%,$(BRANCH)),\
-		main \
-	) \
-)
+# Override the value in `release-*` branches to a compatible version
+GEN_IMG_VERSION=latest
 
 # The generator is a container image that provides a reproducible environment for
 # building eBPF binaries
-GEN_IMG ?= ghcr.io/grafana/beyla-ebpf-generator:$(GEN_IMG_VERSION)
+GEN_IMG ?= ghcr.io/open-telemetry/obi-generator:$(GEN_IMG_VERSION)
 
 COMPOSE_ARGS ?= -f test/integration/docker-compose.yml
 
@@ -199,14 +191,16 @@ update-offsets: prereqs
 generate: export BPF_CLANG := $(CLANG)
 generate: export BPF_CFLAGS := $(CFLAGS)
 generate: export BPF2GO := $(BPF2GO)
+generate: export GOFLAGS := "-mod=mod"
 generate: obi-submodule
 	@echo "### Generating files..."
-	@BEYLA_GENFILES_RUN_LOCALLY=1 go generate cmd/beyla-genfiles/beyla_genfiles.go
+	@OTEL_EBPF_GENFILES_RUN_LOCALLY=1 go generate ./.obi-src/cmd/obi-genfiles/obi_genfiles.go
 	@cd $(OBI_MODULE) && make generate
 
 .PHONY: docker-generate
+docker-generate: export GOFLAGS := "-mod=mod"
 docker-generate: obi-submodule
-	@BEYLA_GENFILES_GEN_IMG=$(GEN_IMG) go generate cmd/beyla-genfiles/beyla_genfiles.go
+	@OTEL_EBPF_GENFILES_GEN_IMG=$(GEN_IMG) go generate ./.obi-src/cmd/obi-genfiles/obi_genfiles.go
 	@cd $(OBI_MODULE) && make docker-generate
 
 .PHONY: copy-obi-vendor
@@ -282,13 +276,7 @@ coverage-report-html: cov-exclude-generated
 image-build: vendor-obi
 	$(call check_defined, IMG_ORG, Your Docker repository user name)
 	@echo "### Building the auto-instrumenter image"
-	$(OCI_BIN) buildx build --build-arg VER="$(GEN_IMG_VERSION)" --platform linux/amd64,linux/arm64 -t ${IMG} .
-
-.PHONY: generator-image-build
-generator-image-build:
-	@echo "### Creating the image that generates the eBPF binaries"
-	$(OCI_BIN) buildx build --build-arg EBPF_VER="$(CILIUM_EBPF_VER)" --platform linux/amd64,linux/arm64 -t $(GEN_IMG) -f generator.Dockerfile  .
-
+	$(OCI_BIN) buildx build --build-arg GEN_IMG="$(GEN_IMG)" --platform linux/amd64,linux/arm64 -t ${IMG} .
 
 .PHONY: prepare-integration-test
 prepare-integration-test: vendor-obi

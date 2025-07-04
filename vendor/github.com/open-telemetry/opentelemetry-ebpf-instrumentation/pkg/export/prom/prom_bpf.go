@@ -140,16 +140,20 @@ func (bc *BPFCollector) collectProbesMetrics(ch chan<- prometheus.Metric) {
 
 		name := getFuncName(info, id, bc.log)
 
-		runtime, _ := info.Runtime()
-		runCount, _ := info.RunCount()
+		stats, err := program.Stats()
+		if err != nil {
+			bc.log.Error("failed to get program stats", "ID", id, "error", err)
+			continue
+		}
+
 		idStr := strconv.FormatUint(uint64(id), 10)
 
 		// Get the previous stats
 		probe, ok := bc.progs[id]
 		if !ok {
 			probe = &BPFProgram{
-				runTime:      runtime,
-				runCount:     runCount,
+				runTime:      stats.Runtime,
+				runCount:     stats.RunCount,
 				prevRunTime:  0,
 				prevRunCount: 0,
 			}
@@ -157,16 +161,16 @@ func (bc *BPFCollector) collectProbesMetrics(ch chan<- prometheus.Metric) {
 		} else {
 			probe.prevRunTime = probe.runTime
 			probe.prevRunCount = probe.runCount
-			probe.runTime = runtime
-			probe.runCount = runCount
+			probe.runTime = stats.Runtime
+			probe.runCount = stats.RunCount
 		}
 		probe.updateBuckets()
 
 		// Create the histogram metric
 		ch <- prometheus.MustNewConstHistogram(
 			bc.probeLatencyDesc,
-			runCount,
-			runtime.Seconds(),
+			stats.RunCount,
+			stats.Runtime.Seconds(),
 			probe.buckets,
 			idStr,
 			info.Type.String(),

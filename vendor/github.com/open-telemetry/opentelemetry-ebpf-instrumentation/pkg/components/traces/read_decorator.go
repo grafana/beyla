@@ -108,7 +108,6 @@ func HostProcessEventDecoratorProvider(
 						return
 					}
 					decorate(&pe.File.Service, int(pe.File.Pid))
-					decorate(&pe.File.Service, int(pe.File.Pid))
 					log.Debug("host decorating event", "event", pe, "ns", pe.File.Ns, "procPID", pe.File.Pid, "procPPID", pe.File.Ppid, "service", pe.File.Service.UID)
 					output.Send(pe)
 				case <-ctx.Done():

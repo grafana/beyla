@@ -91,16 +91,21 @@ func detectSQL(buf string) (string, string, string) {
 	return "", "", ""
 }
 
-func TCPToSQLToSpan(trace *TCPRequestInfo, op, table, sql string, kind request.SQLKind) request.Span {
-	peer := ""
-	peerPort := 0
-	hostname := ""
-	hostPort := 0
+func TCPToSQLToSpan(trace *TCPRequestInfo, op, table, sql string, kind request.SQLKind, _, responseBuffer []byte, sqlCommand string) request.Span {
+	var (
+		peer, hostname             string
+		peerPort, hostPort, status int
+	)
 
 	if trace.ConnInfo.S_port != 0 || trace.ConnInfo.D_port != 0 {
 		peer, hostname = (*BPFConnInfo)(unsafe.Pointer(&trace.ConnInfo)).reqHostInfo()
 		peerPort = int(trace.ConnInfo.S_port)
 		hostPort = int(trace.ConnInfo.D_port)
+	}
+
+	sqlError := sqlprune.SQLParseError(responseBuffer)
+	if sqlError != nil {
+		status = 1
 	}
 
 	return request.Span{
@@ -115,7 +120,7 @@ func TCPToSQLToSpan(trace *TCPRequestInfo, op, table, sql string, kind request.S
 		RequestStart:  int64(trace.StartMonotimeNs),
 		Start:         int64(trace.StartMonotimeNs),
 		End:           int64(trace.EndMonotimeNs),
-		Status:        0,
+		Status:        status,
 		TraceID:       trace2.TraceID(trace.Tp.TraceId),
 		SpanID:        trace2.SpanID(trace.Tp.SpanId),
 		ParentSpanID:  trace2.SpanID(trace.Tp.ParentId),
@@ -125,7 +130,9 @@ func TCPToSQLToSpan(trace *TCPRequestInfo, op, table, sql string, kind request.S
 			UserPID:   trace.Pid.UserPid,
 			Namespace: trace.Pid.Ns,
 		},
-		Statement: sql,
-		SubType:   int(kind),
+		Statement:  sql,
+		SubType:    int(kind),
+		SQLCommand: sqlCommand,
+		SQLError:   sqlError,
 	}
 }

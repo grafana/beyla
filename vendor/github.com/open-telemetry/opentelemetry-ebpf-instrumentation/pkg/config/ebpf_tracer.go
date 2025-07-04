@@ -34,10 +34,12 @@ type EBPFTracer struct {
 	// requests/second.
 	// TODO: see if there is a way to force eBPF to wakeup userspace on timeout
 	WakeupLen int `yaml:"wakeup_len" env:"OTEL_EBPF_BPF_WAKEUP_LEN"`
+
 	// BatchLength allows specifying how many traces will be batched at the initial
 	// stage before being forwarded to the next stage
 	//nolint:undoc
 	BatchLength int `yaml:"batch_length" env:"OTEL_EBPF_BPF_BATCH_LENGTH"`
+
 	// BatchTimeout specifies the timeout to forward the data batch if it didn't
 	// reach the BatchLength size
 	//nolint:undoc
@@ -88,6 +90,31 @@ type EBPFTracer struct {
 	UseOTelSDKForJava bool `yaml:"use_otel_sdk_for_java" env:"OTEL_EBPF_USE_OTEL_SDK_FOR_JAVA"`
 
 	RedisDBCache RedisDBCacheConfig `yaml:"redis_db_cache"`
+
+	// Limit max data buffer size per protocol.
+	BufferSizes EBPFBufferSizes `yaml:"buffer_sizes" env:"OTEL_EBPF_BPF_BUFFER_SIZES"`
+}
+
+type EBPFBufferSizes struct {
+	// MySQL data buffer size in bytes.
+	// Min: 128 bytes, Max: 8192 bytes.
+	// Valid values: 0, 128, 256, 512, 1024, 2048, 4096, 8192.
+	//
+	// Default: 0 (disabled).
+	MySQL uint32 `yaml:"mysql" env:"OTEL_EBPF_BPF_BUFFER_SIZE_MYSQL"`
+}
+
+func (c *EBPFTracer) Validate() error {
+	// TODO(matt): validate all the existing attributes
+
+	switch c.BufferSizes.MySQL {
+	case 0, 128, 256, 512, 1024, 2048, 4096, 8192:
+		// valid sizes
+	default:
+		return fmt.Errorf("invalid MySQL buffer size: %d, must be one of 0, 128, 256, 512, 1024, 2048, 4096, 8192", c.BufferSizes.MySQL)
+	}
+
+	return nil
 }
 
 func (m *ContextPropagationMode) UnmarshalText(text []byte) error {

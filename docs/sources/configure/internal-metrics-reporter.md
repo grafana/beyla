@@ -37,7 +37,7 @@ internal_metrics:
 | `prometheus.port` | `BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT` | int    | (unset)             | [HTTP port for Prometheus scrape endpoint.](#prometheus-port)        |
 | `prometheus.path` | `BEYLA_INTERNAL_METRICS_PROMETHEUS_PATH` | string | `/internal/metrics` | [HTTP query path for Prometheus metrics.](#prometheus-path)          |
 
-## Internal metrics exporter`
+## Internal metrics exporter
 
 Set the internal metrics exporter.
 You can use `disabled`, `prometheus`, or `otel`.

@@ -51,7 +51,10 @@ func SetupOBIEnvVars() {
 	for _, env := range os.Environ() {
 		newEnv := replacingPrefix.ReplaceAllString(env, "OTEL_EBPF_")
 		if parts := strings.SplitN(newEnv, "=", 2); len(parts) == 2 {
-			os.Setenv(parts[0], parts[1])
+			if _, ok := os.LookupEnv(parts[0]); !ok {
+				// Set only if not already set
+				os.Setenv(parts[0], parts[1])
+			}
 		}
 	}
 }

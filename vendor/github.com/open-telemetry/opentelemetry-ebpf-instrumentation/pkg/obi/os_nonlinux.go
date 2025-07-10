@@ -1,6 +1,6 @@
 //go:build !linux
 
-package beyla
+package obi
 
 func CheckOSSupport() error {
 	return nil

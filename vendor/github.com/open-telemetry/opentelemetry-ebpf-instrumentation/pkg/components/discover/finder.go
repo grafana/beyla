@@ -7,7 +7,6 @@ import (
 	ebpfcommon "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/common"
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/generictracer"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/gotracer"
@@ -17,12 +16,13 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/imetrics"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/pipe/global"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/config"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/obi"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 )
 
 type ProcessFinder struct {
-	cfg              *beyla.Config
+	cfg              *obi.Config
 	ctxInfo          *global.ContextInfo
 	tracesInput      *msg.Queue[[]request.Span]
 	ebpfEventContext *ebpfcommon.EBPFEventContext
@@ -30,7 +30,7 @@ type ProcessFinder struct {
 }
 
 func NewProcessFinder(
-	cfg *beyla.Config,
+	cfg *obi.Config,
 	ctxInfo *global.ContextInfo,
 	tracesInput *msg.Queue[[]request.Span],
 	ebpfEventContext *ebpfcommon.EBPFEventContext,
@@ -120,7 +120,7 @@ func (pf *ProcessFinder) Done() <-chan error {
 // discovery pipeline
 
 // the common tracer group should get loaded for any tracer group, only once
-func newCommonTracersGroup(cfg *beyla.Config) []ebpf.Tracer {
+func newCommonTracersGroup(cfg *obi.Config) []ebpf.Tracer {
 	switch cfg.EBPF.ContextPropagation {
 	case config.ContextPropagationAll:
 		return []ebpf.Tracer{tctracer.New(cfg), tpinjector.New(cfg)}
@@ -133,11 +133,11 @@ func newCommonTracersGroup(cfg *beyla.Config) []ebpf.Tracer {
 	return []ebpf.Tracer{}
 }
 
-func newGoTracersGroup(pidFilter ebpfcommon.ServiceFilter, cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Tracer {
+func newGoTracersGroup(pidFilter ebpfcommon.ServiceFilter, cfg *obi.Config, metrics imetrics.Reporter) []ebpf.Tracer {
 	return []ebpf.Tracer{gotracer.New(pidFilter, cfg, metrics)}
 }
 
-func newGenericTracersGroup(pidFilter ebpfcommon.ServiceFilter, cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Tracer {
+func newGenericTracersGroup(pidFilter ebpfcommon.ServiceFilter, cfg *obi.Config, metrics imetrics.Reporter) []ebpf.Tracer {
 	if cfg.EBPF.InstrumentGPU {
 		return []ebpf.Tracer{generictracer.New(pidFilter, cfg, metrics), gpuevent.New(pidFilter, cfg, metrics)}
 	}

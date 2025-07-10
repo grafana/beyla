@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/imetrics"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/pipe/global"
@@ -16,6 +15,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/prom"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/filter"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/obi"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/transform"
@@ -23,7 +23,7 @@ import (
 
 // builder with injectable instantiators for unit testing
 type graphFunctions struct {
-	config  *beyla.Config
+	config  *obi.Config
 	builder *swarm.Instancer
 	ctxInfo *global.ContextInfo
 }
@@ -32,7 +32,7 @@ type graphFunctions struct {
 // pipeline graph and returns it as a startable item
 func Build(
 	ctx context.Context,
-	config *beyla.Config,
+	config *obi.Config,
 	ctxInfo *global.ContextInfo,
 	tracesCh *msg.Queue[[]request.Span],
 	processEventsCh *msg.Queue[exec.ProcessEvent],
@@ -43,7 +43,7 @@ func Build(
 // private constructor that can be instantiated from tests to override the node providers
 // and offsets inspector
 func newGraphBuilder(
-	config *beyla.Config,
+	config *obi.Config,
 	ctxInfo *global.ContextInfo,
 	tracesCh *msg.Queue[[]request.Span],
 	processEventsCh *msg.Queue[exec.ProcessEvent],

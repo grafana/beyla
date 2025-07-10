@@ -9,21 +9,21 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/obi"
 )
 
 type NodeInjector struct {
 	log *slog.Logger
-	cfg *beyla.Config
+	cfg *obi.Config
 }
 
 // make sure not to use a variable name (such as that returned by
 // os.CreateTemp() to ensure that node does not load the file twice
 const fdExtractorPath = "/beyla_fdextractor.js"
 
-func NewNodeInjector(cfg *beyla.Config) *NodeInjector {
+func NewNodeInjector(cfg *obi.Config) *NodeInjector {
 	return &NodeInjector{
 		cfg: cfg,
 		log: slog.With("component", "nodejs.Injector"),

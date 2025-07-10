@@ -14,7 +14,7 @@ import (
 // ContextInfo stores some context information that must be shared across some nodes of the
 // processing graph.
 type ContextInfo struct {
-	// HostID of the host running Beyla. Unless testing environments, this value must be
+	// HostID of the host running OBI. Unless testing environments, this value must be
 	// automatically set after invoking FetchHostID
 	HostID string
 	// AppO11y stores context information that is only required for application observability.

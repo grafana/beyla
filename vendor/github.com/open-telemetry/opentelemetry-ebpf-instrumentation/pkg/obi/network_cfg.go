@@ -16,7 +16,7 @@
 // This implementation is a derivation of the code in
 // https://github.com/netobserv/netobserv-ebpf-agent/tree/release-1.4
 
-package beyla
+package obi
 
 import (
 	"time"
@@ -33,7 +33,7 @@ const (
 type NetworkConfig struct {
 	// Enable network metrics.
 	// Default value is false (disabled)
-	// Deprecated: add "network" to OTEL_EBPF_OTEL_METRIC_FEATURES or OTEL_EBPF_PROMETHEUS_FEATURES
+	// Deprecated: add "network" to OTEL_EBPF_METRIC_FEATURES or OTEL_EBPF_PROMETHEUS_FEATURES
 	// TODO Beyla 3.0: remove
 	Enable bool `yaml:"enable" env:"OTEL_EBPF_NETWORK_METRICS"`
 

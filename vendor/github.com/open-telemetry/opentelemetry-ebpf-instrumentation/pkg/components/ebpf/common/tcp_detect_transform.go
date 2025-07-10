@@ -105,6 +105,20 @@ func ReadTCPRequestIntoSpan(parseCtx *EBPFParseContext, cfg *config.EBPFTracer, 
 		}
 	}
 
+	var mongoRequest *MongoRequestValue
+	var moreToCome bool
+	_, _, err = ProcessMongoEvent(requestBuffer, int64(event.StartMonotimeNs), int64(event.EndMonotimeNs), event.ConnInfo, *parseCtx.mongoRequestCache)
+	if err == nil {
+		mongoRequest, moreToCome, err = ProcessMongoEvent(event.Rbuf[:l], int64(event.StartMonotimeNs), int64(event.EndMonotimeNs), event.ConnInfo, *parseCtx.mongoRequestCache)
+	}
+	if err == nil && !moreToCome && mongoRequest != nil {
+		mongoInfo, err := getMongoInfo(mongoRequest)
+		if err == nil {
+			mongoSpan := TCPToMongoToSpan(event, mongoInfo)
+			return mongoSpan, false, nil
+		}
+	}
+
 	switch {
 	case isRedis(requestBuffer) && isRedis(responseBuffer):
 		op, text, ok := parseRedisRequest(string(requestBuffer))

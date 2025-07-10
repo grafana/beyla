@@ -5,9 +5,12 @@ package otel
 
 import (
 	"context"
+	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"maps"
+	"math"
 	"net/url"
 	"os"
 	"strconv"
@@ -36,6 +39,7 @@ import (
 	trace2 "go.opentelemetry.io/otel/trace"
 	tracenoop "go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/zap"
+	"golang.org/x/sys/unix"
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/pipe/global"
@@ -66,10 +70,10 @@ type TracesConfig struct {
 	TracesProtocol Protocol `yaml:"-" env:"OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"`
 
 	// Allows configuration of which instrumentations should be enabled, e.g. http, grpc, sql...
-	Instrumentations []string `yaml:"instrumentations" env:"OTEL_EBPF_OTEL_TRACES_INSTRUMENTATIONS" envSeparator:","`
+	Instrumentations []string `yaml:"instrumentations" env:"OTEL_EBPF_TRACES_INSTRUMENTATIONS" envSeparator:","`
 
 	// InsecureSkipVerify is not standard, so we don't follow the same naming convention
-	InsecureSkipVerify bool `yaml:"insecure_skip_verify" env:"OTEL_EBPF_OTEL_INSECURE_SKIP_VERIFY"`
+	InsecureSkipVerify bool `yaml:"insecure_skip_verify" env:"OTEL_EBPF_INSECURE_SKIP_VERIFY"`
 
 	Sampler Sampler `yaml:"sampler"`
 
@@ -99,7 +103,7 @@ type TracesConfig struct {
 	// SDKLogLevel works independently from the global LogLevel because it prints GBs of logs in Debug mode
 	// and the Info messages leak internal details that are not usually valuable for the final user.
 	//nolint:undoc
-	SDKLogLevel string `yaml:"otel_sdk_log_level" env:"OTEL_EBPF_OTEL_SDK_LOG_LEVEL"`
+	SDKLogLevel string `yaml:"otel_sdk_log_level" env:"OTEL_EBPF_SDK_LOG_LEVEL"`
 
 	// OTLPEndpointProvider allows overriding the OTLP Endpoint. It needs to return an endpoint and
 	// a boolean indicating if the endpoint is common for both traces and metrics
@@ -107,6 +111,14 @@ type TracesConfig struct {
 
 	// InjectHeaders allows injecting custom headers to the HTTP OTLP exporter
 	InjectHeaders func(dst map[string]string) `yaml:"-" env:"-"`
+}
+
+type SpanAttr struct {
+	ValLength uint16
+	Vtype     uint8
+	Reserved  uint8
+	Key       [32]uint8
+	Value     [128]uint8
 }
 
 // Enabled specifies that the OTEL traces node is enabled if and only if
@@ -613,6 +625,10 @@ func acceptSpan(is instrumentations.InstrumentationSelection, span *request.Span
 		return is.RedisEnabled()
 	case request.EventTypeKafkaClient, request.EventTypeKafkaServer:
 		return is.KafkaEnabled()
+	case request.EventTypeMongoClient:
+		return is.MongoEnabled()
+	case request.EventTypeManualSpan:
+		return true
 	}
 
 	return false
@@ -621,6 +637,7 @@ func acceptSpan(is instrumentations.InstrumentationSelection, span *request.Span
 // TODO use semconv.DBSystemRedis when we update to OTEL semantic conventions library 1.30
 var (
 	dbSystemRedis   = attribute.String(string(attr.DBSystemName), semconv.DBSystemRedis.Value.AsString())
+	dbSystemMongo   = attribute.String(string(attr.DBSystemName), semconv.DBSystemMongoDB.Value.AsString())
 	spanMetricsSkip = attribute.Bool(string(attr.SkipSpanMetrics), true)
 )
 
@@ -731,6 +748,27 @@ func TraceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 			semconv.MessagingClientID(span.Statement),
 			operation,
 		}
+	case request.EventTypeMongoClient:
+		attrs = []attribute.KeyValue{
+			request.ServerAddr(request.HostAsServer(span)),
+			request.ServerPort(span.HostPort),
+			dbSystemMongo,
+		}
+		operation := span.Method
+		if operation != "" {
+			attrs = append(attrs, request.DBOperationName(operation))
+		}
+		if span.Path != "" {
+			attrs = append(attrs, request.DBCollectionName(span.Path))
+		}
+		if span.Status == 1 {
+			attrs = append(attrs, request.DBResponseStatusCode(span.DBError.ErrorCode))
+		}
+		if span.DBNamespace != "" {
+			attrs = append(attrs, request.DBNamespace(span.DBNamespace))
+		}
+	case request.EventTypeManualSpan:
+		attrs = manualSpanAttributes(span)
 	}
 
 	if _, ok := optionalAttrs[attr.SkipSpanMetrics]; ok {
@@ -744,7 +782,7 @@ func SpanKind(span *request.Span) trace2.SpanKind {
 	switch span.Type {
 	case request.EventTypeHTTP, request.EventTypeGRPC, request.EventTypeRedisServer, request.EventTypeKafkaServer:
 		return trace2.SpanKindServer
-	case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient, request.EventTypeRedisClient:
+	case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient, request.EventTypeRedisClient, request.EventTypeMongoClient:
 		return trace2.SpanKindClient
 	case request.EventTypeKafkaClient:
 		switch span.Method {
@@ -876,4 +914,38 @@ func setTracesProtocol(cfg *TracesConfig) {
 	}
 	// unset. Guessing it
 	os.Setenv(envTracesProtocol, string(cfg.guessProtocol()))
+}
+
+func manualSpanAttributes(span *request.Span) []attribute.KeyValue {
+	attrs := []attribute.KeyValue{}
+
+	if span.Statement == "" {
+		return attrs
+	}
+
+	var unmarshaledAttrs []SpanAttr
+	err := json.Unmarshal([]byte(span.Statement), &unmarshaledAttrs)
+	if err != nil {
+		fmt.Println(err)
+		return attrs
+	}
+
+	for i := range unmarshaledAttrs {
+		akv := unmarshaledAttrs[i]
+		key := unix.ByteSliceToString(akv.Key[:])
+		switch akv.Vtype {
+		case uint8(attribute.BOOL):
+			attrs = append(attrs, attribute.Bool(key, akv.Value[0] != 0))
+		case uint8(attribute.INT64):
+			v := binary.LittleEndian.Uint64(akv.Value[:8])
+			attrs = append(attrs, attribute.Int(key, int(v)))
+		case uint8(attribute.FLOAT64):
+			v := math.Float64frombits(binary.LittleEndian.Uint64(akv.Value[:8]))
+			attrs = append(attrs, attribute.Float64(key, v))
+		case uint8(attribute.STRING):
+			attrs = append(attrs, attribute.String(key, unix.ByteSliceToString(akv.Value[:])))
+		}
+	}
+
+	return attrs
 }

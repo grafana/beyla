@@ -10,8 +10,8 @@ import (
 
 	"github.com/shirou/gopsutil/v3/process"
 
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla"
 	ebpfcommon "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/common"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/obi"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/services"
@@ -25,7 +25,7 @@ var (
 
 // CriteriaMatcherProvider filters the processes that match the discovery criteria.
 func CriteriaMatcherProvider(
-	cfg *beyla.Config,
+	cfg *obi.Config,
 	input *msg.Queue[[]Event[ProcessAttrs]],
 	output *msg.Queue[[]Event[ProcessMatch]],
 ) swarm.InstanceFunc {
@@ -276,7 +276,7 @@ func normalizeRegexCriteria(finderCriteria services.RegexDefinitionCriteria) []s
 	return criteria
 }
 
-func FindingCriteria(cfg *beyla.Config) []services.Selector {
+func FindingCriteria(cfg *obi.Config) []services.Selector {
 	logDeprecationAndConflicts(cfg)
 
 	if OnlyDefinesDeprecatedServiceSelection(cfg) {
@@ -335,7 +335,7 @@ func FindingCriteria(cfg *beyla.Config) []services.Selector {
 	}
 }
 
-func ExcludingCriteria(cfg *beyla.Config) []services.Selector {
+func ExcludingCriteria(cfg *obi.Config) []services.Selector {
 	// deprecated options: supporting them only if the user neither defines
 	// the instrument nor exclude_instrument sections
 	if OnlyDefinesDeprecatedServiceSelection(cfg) {
@@ -346,7 +346,7 @@ func ExcludingCriteria(cfg *beyla.Config) []services.Selector {
 		GlobsAsSelector(cfg.Discovery.DefaultExcludeInstrument)...)
 }
 
-func OnlyDefinesDeprecatedServiceSelection(cfg *beyla.Config) bool {
+func OnlyDefinesDeprecatedServiceSelection(cfg *obi.Config) bool {
 	c := &cfg.Discovery
 	return (len(c.Services) > 0 || len(c.ExcludeServices) > 0) &&
 		len(c.Instrument) == 0 && len(c.ExcludeInstrument) == 0
@@ -368,7 +368,7 @@ func RegexAsSelector(in services.RegexDefinitionCriteria) []services.Selector {
 	return out
 }
 
-func logDeprecationAndConflicts(cfg *beyla.Config) {
+func logDeprecationAndConflicts(cfg *obi.Config) {
 	c := &cfg.Discovery
 	if len(c.Services) > 0 {
 		switch {

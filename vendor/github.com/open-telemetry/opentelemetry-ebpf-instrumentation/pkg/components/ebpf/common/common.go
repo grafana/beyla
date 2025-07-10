@@ -26,7 +26,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/config"
 )
 
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 -type http_request_trace -type sql_request_trace -type http_info_t -type connection_info_t -type http2_grpc_request_t -type tcp_req_t -type kafka_client_req_t -type kafka_go_req_t -type redis_client_req_t -type tcp_large_buffer_t Bpf ../../../../bpf/common/common.c -- -I../../../../bpf
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 -type http_request_trace -type sql_request_trace -type http_info_t -type connection_info_t -type http2_grpc_request_t -type tcp_req_t -type kafka_client_req_t -type kafka_go_req_t -type redis_client_req_t -type tcp_large_buffer_t -type otel_span_t Bpf ../../../../bpf/common/common.c -- -I../../../../bpf
 
 // HTTPRequestTrace contains information from an HTTP request as directly received from the
 // eBPF layer. This contains low-level C structures for accurate binary read from ring buffer.
@@ -40,6 +40,7 @@ type (
 	GoRedisClientInfo    BpfRedisClientReqT
 	GoKafkaGoClientInfo  BpfKafkaGoReqT
 	TCPLargeBufferHeader BpfTcpLargeBufferT
+	GoOTelSpanTrace      BpfOtelSpanT
 )
 
 const (
@@ -51,6 +52,8 @@ const (
 	EventTypeGoRedis        = 10 // Redis client for Go
 	EventTypeGoKafkaGo      = 11 // Kafka-Go client from Segment-io
 	EventTypeTCPLargeBuffer = 12 // Dynamically sized TCP buffers
+	EventOTelSDKGo          = 13 // OTel SDK manual span
+
 )
 
 // Kernel-side classification
@@ -110,9 +113,10 @@ type MisclassifiedEvent struct {
 }
 
 type EBPFParseContext struct {
-	h2c          *lru.Cache[uint64, h2Connection]
-	redisDBCache *simplelru.LRU[BpfConnectionInfoT, int]
-	largeBuffers *expirable.LRU[largeBufferKey, largeBuffer]
+	h2c               *lru.Cache[uint64, h2Connection]
+	redisDBCache      *simplelru.LRU[BpfConnectionInfoT, int]
+	largeBuffers      *expirable.LRU[largeBufferKey, largeBuffer]
+	mongoRequestCache *PendingMongoDBRequests
 }
 
 type EBPFEventContext struct {
@@ -141,11 +145,12 @@ func NewEBPFParseContext(cfg *config.EBPFTracer) *EBPFParseContext {
 			redisDBCache = nil
 		}
 	}
-
+	mongoRequestCache := expirable.NewLRU[MongoRequestKey, *MongoRequestValue](1000, nil, 0)
 	return &EBPFParseContext{
-		h2c:          h2c,
-		redisDBCache: redisDBCache,
-		largeBuffers: largeBuffers,
+		h2c:               h2c,
+		redisDBCache:      redisDBCache,
+		largeBuffers:      largeBuffers,
+		mongoRequestCache: &mongoRequestCache,
 	}
 }
 
@@ -182,6 +187,8 @@ func ReadBPFTraceAsSpan(parseCtx *EBPFParseContext, cfg *config.EBPFTracer, reco
 		return ReadGoKafkaGoRequestIntoSpan(record)
 	case EventTypeTCPLargeBuffer:
 		return setTCPLargeBuffer(parseCtx, record)
+	case EventOTelSDKGo:
+		return ReadGoOTelEventIntoSpan(record)
 	}
 
 	event, err := ReinterpretCast[HTTPRequestTrace](record.RawSample)

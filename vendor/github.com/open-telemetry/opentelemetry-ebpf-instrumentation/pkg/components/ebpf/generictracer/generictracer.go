@@ -15,7 +15,6 @@ import (
 	"github.com/vishvananda/netlink"
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla"
 	ebpfcommon "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/common"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/goexec"
@@ -23,6 +22,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/ifaces"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/config"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/obi"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 )
 
@@ -33,7 +33,7 @@ import (
 
 type Tracer struct {
 	pidsFilter       ebpfcommon.ServiceFilter
-	cfg              *beyla.Config
+	cfg              *obi.Config
 	metrics          imetrics.Reporter
 	bpfObjects       BpfObjects
 	closers          []io.Closer
@@ -49,7 +49,7 @@ func tlog() *slog.Logger {
 	return slog.With("component", "generic.Tracer")
 }
 
-func New(pidFilter ebpfcommon.ServiceFilter, cfg *beyla.Config, metrics imetrics.Reporter) *Tracer {
+func New(pidFilter ebpfcommon.ServiceFilter, cfg *obi.Config, metrics imetrics.Reporter) *Tracer {
 	return &Tracer{
 		log:              tlog(),
 		cfg:              cfg,
@@ -286,7 +286,7 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.ProbeDesc {
 			Required: true,
 			Start:    p.bpfObjects.BeylaKprobeTcpClose,
 		},
-		"tcp_sendmsg_locked": {
+		"tcp_sendmsg": {
 			Required: true,
 			Start:    p.bpfObjects.BeylaKprobeTcpSendmsg,
 			End:      p.bpfObjects.BeylaKretprobeTcpSendmsg,
@@ -381,6 +381,12 @@ func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 			"ngx_event_connect_peer": {{
 				Required: false,
 				End:      p.bpfObjects.BeylaNgxEventConnectPeerRet,
+			}},
+		},
+		"node": {
+			"uv_fs_access": {{
+				Required: false,
+				Start:    p.bpfObjects.BeylaUvFsAccess,
 			}},
 		},
 	}

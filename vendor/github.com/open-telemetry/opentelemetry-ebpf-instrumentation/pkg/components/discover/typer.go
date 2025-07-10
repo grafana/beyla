@@ -9,13 +9,13 @@ import (
 
 	lru "github.com/hashicorp/golang-lru/v2"
 
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/goexec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/imetrics"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/kube"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/obi"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 )
@@ -30,7 +30,7 @@ type InstrumentedExecutable struct {
 // executable type (Go, generic...), and filters these executables
 // that are not instrumentable.
 func ExecTyperProvider(
-	cfg *beyla.Config,
+	cfg *obi.Config,
 	metrics imetrics.Reporter,
 	k8sInformer *kube.MetadataProvider,
 	input *msg.Queue[[]Event[ProcessMatch]],
@@ -71,7 +71,7 @@ func ExecTyperProvider(
 }
 
 type typer struct {
-	cfg                 *beyla.Config
+	cfg                 *obi.Config
 	metrics             imetrics.Reporter
 	k8sInformer         *kube.MetadataProvider
 	log                 *slog.Logger

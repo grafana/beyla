@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -1067,9 +1068,20 @@ func labelNames[T any](getters []attributes.Field[T, string]) []string {
 func labelValues[T any](s T, getters []attributes.Field[T, string]) []string {
 	values := make([]string, 0, len(getters))
 	for _, getter := range getters {
-		values = append(values, getter.Get(s))
+		rawValue := getter.Get(s)
+		sanitizedValue := sanitizeUTF8ForPrometheus(rawValue)
+		values = append(values, sanitizedValue)
 	}
 	return values
+}
+
+// sanitizeUTF8ForPrometheus sanitizes a string to ensure it contains only valid UTF-8 characters.
+// Invalid UTF-8 sequences are removed entirely.
+func sanitizeUTF8ForPrometheus(s string) string {
+	if utf8.ValidString(s) {
+		return s
+	}
+	return strings.ToValidUTF8(s, "")
 }
 
 func (r *metricsReporter) createTargetInfo(service *svc.Attrs) {

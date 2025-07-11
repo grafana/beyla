@@ -51,10 +51,17 @@ func SetupOBIEnvVars() {
 	for _, env := range os.Environ() {
 		newEnv := replacingPrefix.ReplaceAllString(env, "OTEL_EBPF_")
 		if parts := strings.SplitN(newEnv, "=", 2); len(parts) == 2 {
-			if _, ok := os.LookupEnv(parts[0]); !ok {
+			if os.Getenv(parts[0]) == "" {
 				// Set only if not already set
 				os.Setenv(parts[0], parts[1])
 			}
 		}
+	}
+	// Temporary patch: Overrides telemetry_sdk_name in OBI until we are able
+	// to provide OBI with a mechanism to override resource & metric attributes
+	if ras := os.Getenv("OTEL_RESOURCE_ATTRIBUTES"); ras != "" {
+		os.Setenv("OTEL_RESOURCE_ATTRIBUTES", ras + ",telemetry.sdk.name=beyla")
+	} else {
+		os.Setenv("OTEL_RESOURCE_ATTRIBUTES", "telemetry.sdk.name=beyla")
 	}
 }

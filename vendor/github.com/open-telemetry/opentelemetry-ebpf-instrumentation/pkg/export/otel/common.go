@@ -84,7 +84,7 @@ func GetResourceAttrs(hostID string, service *svc.Attrs) []attribute.KeyValue {
 		// This attribute also allows that App O11y plugin shows this app as a Go application.
 		semconv.TelemetrySDKLanguageKey.String(service.SDKLanguage.String()),
 		// We set the SDK name as Beyla, so we can distinguish beyla generated metrics from other SDKs
-		semconv.TelemetrySDKNameKey.String("beyla"),
+		semconv.TelemetrySDKNameKey.String("opentelemetry-ebpf-instrumentation"),
 		semconv.TelemetrySDKVersion(buildinfo.Version),
 		semconv.HostName(service.HostName),
 		semconv.HostID(hostID),
@@ -182,11 +182,11 @@ func shouldIncludeAttribute(normalizedAttrName string, patterns []attributes.Inc
 
 func newResourceInternal(hostID string) *resource.Resource {
 	attrs := []attribute.KeyValue{
-		semconv.ServiceName("beyla"),
+		semconv.ServiceName("opentelemetry-ebpf-instrumentation"),
 		semconv.ServiceInstanceID(uuid.New().String()),
 		semconv.TelemetrySDKLanguageKey.String(semconv.TelemetrySDKLanguageGo.Value.AsString()),
 		// We set the SDK name as Beyla, so we can distinguish beyla generated metrics from other SDKs
-		semconv.TelemetrySDKNameKey.String("beyla"),
+		semconv.TelemetrySDKNameKey.String("opentelemetry-ebpf-instrumentation"),
 		semconv.HostID(hostID),
 	}
 

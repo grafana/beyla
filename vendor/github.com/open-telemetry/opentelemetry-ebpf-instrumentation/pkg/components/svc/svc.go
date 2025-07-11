@@ -55,12 +55,21 @@ const (
 	exportsOTelMetricsSpan idFlags = 0x8
 )
 
+type ServiceNameNamespace struct {
+	Name      string
+	Namespace string
+}
+
 // UID uniquely identifies a service instance across the whole system
 // according to the OpenTelemetry specification: (name, namespace, instance)
 type UID struct {
 	Name      string
 	Namespace string
 	Instance  string
+}
+
+func (uid *UID) NameNamespace() ServiceNameNamespace {
+	return ServiceNameNamespace{Name: uid.Name, Namespace: uid.Namespace}
 }
 
 // Attrs stores the metadata attributes of a service/resource

@@ -18,19 +18,19 @@ import (
 
 	"github.com/grafana/jvmtools/jvm"
 
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf"
 	ebpfcommon "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/common"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/obi"
 )
 
 type SDKInjector struct {
 	log *slog.Logger
-	cfg *beyla.Config
+	cfg *obi.Config
 }
 
-func NewSDKInjector(cfg *beyla.Config) *SDKInjector {
+func NewSDKInjector(cfg *obi.Config) *SDKInjector {
 	return &SDKInjector{
 		cfg: cfg,
 		log: slog.With("component", "otelsdk.Injector"),
@@ -129,7 +129,7 @@ func (i *SDKInjector) extractAgent(ie *ebpf.Instrumentable) (string, error) {
 	return agentPathContainer, nil
 }
 
-func otlpOptions(cfg *beyla.Config) (map[string]string, error) {
+func otlpOptions(cfg *obi.Config) (map[string]string, error) {
 	options := map[string]string{}
 	var tracesEndpoint, metricsEndpoint string
 	var tracesCommon, metricsCommon bool
@@ -182,7 +182,7 @@ func flattenOptionsMap(opts map[string]string) string {
 	return strings.Join(s, ",")
 }
 
-func (i *SDKInjector) attachJDKAgent(pid int32, path string, cfg *beyla.Config) error {
+func (i *SDKInjector) attachJDKAgent(pid int32, path string, cfg *obi.Config) error {
 	opts, err := otlpOptions(cfg)
 	if err != nil {
 		i.log.Error("error parsing OTLP options", "err", err)

@@ -17,7 +17,6 @@ import (
 	"github.com/prometheus/procfs"
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla"
 	ebpfcommon "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/common"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/ringbuf"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
@@ -25,6 +24,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/imetrics"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/config"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/obi"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 )
 
@@ -60,7 +60,7 @@ type (
 // possible
 type Tracer struct {
 	pidsFilter       ebpfcommon.ServiceFilter
-	cfg              *beyla.Config
+	cfg              *obi.Config
 	metrics          imetrics.Reporter
 	bpfObjects       BpfObjects
 	closers          []io.Closer
@@ -72,7 +72,7 @@ type Tracer struct {
 	baseMap          map[pidKey][]modInfo
 }
 
-func New(pidFilter ebpfcommon.ServiceFilter, cfg *beyla.Config, metrics imetrics.Reporter) *Tracer {
+func New(pidFilter ebpfcommon.ServiceFilter, cfg *obi.Config, metrics imetrics.Reporter) *Tracer {
 	log := slog.With("component", "gpuevent.Tracer")
 
 	return &Tracer{

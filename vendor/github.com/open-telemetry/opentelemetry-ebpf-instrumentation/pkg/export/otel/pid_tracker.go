@@ -10,10 +10,16 @@ type PidServiceTracker struct {
 	pidToService map[int32]svc.UID
 	servicePIDs  map[svc.UID]map[int32]struct{}
 	lock         sync.Mutex
+	names        map[svc.ServiceNameNamespace]svc.UID
 }
 
 func NewPidServiceTracker() PidServiceTracker {
-	return PidServiceTracker{pidToService: map[int32]svc.UID{}, servicePIDs: map[svc.UID]map[int32]struct{}{}, lock: sync.Mutex{}}
+	return PidServiceTracker{
+		pidToService: map[int32]svc.UID{},
+		servicePIDs:  map[svc.UID]map[int32]struct{}{},
+		lock:         sync.Mutex{},
+		names:        map[svc.ServiceNameNamespace]svc.UID{},
+	}
 }
 
 func (p *PidServiceTracker) AddPID(pid int32, uid svc.UID) {
@@ -25,6 +31,8 @@ func (p *PidServiceTracker) AddPID(pid int32, uid svc.UID) {
 	pids, ok := p.servicePIDs[uid]
 	if !ok {
 		pids = map[int32]struct{}{}
+		n := uid.NameNamespace()
+		p.names[n] = uid
 	}
 	pids[pid] = struct{}{}
 	p.servicePIDs[uid] = pids
@@ -42,6 +50,8 @@ func (p *PidServiceTracker) RemovePID(pid int32) (bool, svc.UID) {
 			delete(pids, pid)
 			if len(pids) == 0 {
 				delete(p.servicePIDs, uid)
+				n := uid.NameNamespace()
+				delete(p.names, n)
 				return true, uid
 			}
 			return false, svc.UID{}
@@ -49,4 +59,9 @@ func (p *PidServiceTracker) RemovePID(pid int32) (bool, svc.UID) {
 	}
 
 	return false, svc.UID{}
+}
+
+func (p *PidServiceTracker) IsTrackingServerService(n svc.ServiceNameNamespace) bool {
+	_, ok := p.names[n]
+	return ok
 }

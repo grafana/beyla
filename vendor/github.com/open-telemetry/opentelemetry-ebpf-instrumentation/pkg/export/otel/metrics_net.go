@@ -46,7 +46,7 @@ func getFilteredNetworkResourceAttrs(hostID string, attrSelector attributes.Sele
 		semconv.ServiceName("beyla-network-flows"),
 		semconv.ServiceInstanceID(uuid.New().String()),
 		semconv.TelemetrySDKLanguageKey.String(semconv.TelemetrySDKLanguageGo.Value.AsString()),
-		semconv.TelemetrySDKNameKey.String("beyla"),
+		semconv.TelemetrySDKNameKey.String("opentelemetry-ebpf-instrumentation"),
 		semconv.TelemetrySDKVersion(buildinfo.Version),
 	}
 

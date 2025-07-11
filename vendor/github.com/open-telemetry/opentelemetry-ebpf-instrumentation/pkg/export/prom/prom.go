@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -862,7 +863,7 @@ func (r *metricsReporter) observe(span *request.Span) {
 					labelValues(span, r.attrGRPCClientDuration)...,
 				).Metric.Observe(duration)
 			}
-		case request.EventTypeRedisClient, request.EventTypeSQLClient, request.EventTypeRedisServer:
+		case request.EventTypeRedisClient, request.EventTypeSQLClient, request.EventTypeRedisServer, request.EventTypeMongoClient:
 			if r.is.DBEnabled() {
 				r.dbClientDuration.WithLabelValues(
 					labelValues(span, r.attrDBClientDuration)...,
@@ -920,10 +921,16 @@ func (r *metricsReporter) observe(span *request.Span) {
 				lvg := r.labelValuesServiceGraph(span)
 				if span.IsClientSpan() {
 					r.serviceGraphClient.WithLabelValues(lvg...).Metric.Observe(duration)
+					// If we managed to resolve the remote name only, we check to see
+					// we are not instrumenting the server service, then and only then,
+					// we generate client span count for service graph total
+					if otel.ClientSpanToUninstrumentedService(&r.pidsTracker, span) {
+						r.serviceGraphTotal.WithLabelValues(lvg...).Metric.Add(1)
+					}
 				} else {
 					r.serviceGraphServer.WithLabelValues(lvg...).Metric.Observe(duration)
+					r.serviceGraphTotal.WithLabelValues(lvg...).Metric.Add(1)
 				}
-				r.serviceGraphTotal.WithLabelValues(lvg...).Metric.Add(1)
 				if request.SpanStatusCode(span) == request.StatusCodeError {
 					r.serviceGraphFailed.WithLabelValues(lvg...).Metric.Add(1)
 				}
@@ -1061,9 +1068,20 @@ func labelNames[T any](getters []attributes.Field[T, string]) []string {
 func labelValues[T any](s T, getters []attributes.Field[T, string]) []string {
 	values := make([]string, 0, len(getters))
 	for _, getter := range getters {
-		values = append(values, getter.Get(s))
+		rawValue := getter.Get(s)
+		sanitizedValue := sanitizeUTF8ForPrometheus(rawValue)
+		values = append(values, sanitizedValue)
 	}
 	return values
+}
+
+// sanitizeUTF8ForPrometheus sanitizes a string to ensure it contains only valid UTF-8 characters.
+// Invalid UTF-8 sequences are removed entirely.
+func sanitizeUTF8ForPrometheus(s string) string {
+	if utf8.ValidString(s) {
+		return s
+	}
+	return strings.ToValidUTF8(s, "")
 }
 
 func (r *metricsReporter) createTargetInfo(service *svc.Attrs) {

@@ -27,12 +27,12 @@ import (
 	"net"
 	"time"
 
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/ringbuf"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/tcmanager"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/ebpf"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/flow"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/pipe/global"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/obi"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 )
 
@@ -89,7 +89,7 @@ var errShutdownTimeout = errors.New("graceful shutdown has timed out while waiti
 
 // Flows reporting agent
 type Flows struct {
-	cfg     *beyla.Config
+	cfg     *obi.Config
 	ctxInfo *global.ContextInfo
 	graph   *swarm.Runner
 
@@ -117,7 +117,7 @@ type ebpfFlowFetcher interface {
 }
 
 // FlowsAgent instantiates a new agent, given a configuration.
-func FlowsAgent(ctxInfo *global.ContextInfo, cfg *beyla.Config) (*Flows, error) {
+func FlowsAgent(ctxInfo *global.ContextInfo, cfg *obi.Config) (*Flows, error) {
 	alog := alog()
 	alog.Info("initializing Flows agent")
 
@@ -143,13 +143,13 @@ func FlowsAgent(ctxInfo *global.ContextInfo, cfg *beyla.Config) (*Flows, error) 
 	return flowsAgent(ctxInfo, cfg, fetcher, agentIP, ifaceManager)
 }
 
-func newFetcher(cfg *beyla.Config, alog *slog.Logger, ifaceManager *tcmanager.InterfaceManager) (ebpfFlowFetcher, error) {
+func newFetcher(cfg *obi.Config, alog *slog.Logger, ifaceManager *tcmanager.InterfaceManager) (ebpfFlowFetcher, error) {
 	switch cfg.NetworkFlows.Source {
-	case beyla.EbpfSourceSock:
+	case obi.EbpfSourceSock:
 		alog.Info("using socket filter for collecting network events")
 
 		return ebpf.NewSockFlowFetcher(cfg.NetworkFlows.Sampling, cfg.NetworkFlows.CacheMaxFlows)
-	case beyla.EbpfSourceTC:
+	case obi.EbpfSourceTC:
 		alog.Info("using kernel Traffic Control for collecting network events")
 		ingress, egress := flowDirections(&cfg.NetworkFlows)
 
@@ -160,7 +160,7 @@ func newFetcher(cfg *beyla.Config, alog *slog.Logger, ifaceManager *tcmanager.In
 	return nil, errors.New("unknown network configuration eBPF source specified, allowed options are [tc, socket_filter]")
 }
 
-func monitorMode(cfg *beyla.Config, alog *slog.Logger) tcmanager.MonitorMode {
+func monitorMode(cfg *obi.Config, alog *slog.Logger) tcmanager.MonitorMode {
 	switch cfg.NetworkFlows.ListenInterfaces {
 	case listenPoll:
 		alog.Debug("listening for new interfaces: use polling",
@@ -182,7 +182,7 @@ func monitorMode(cfg *beyla.Config, alog *slog.Logger) tcmanager.MonitorMode {
 // flowsAgent is a private constructor with injectable dependencies, usable for tests
 func flowsAgent(
 	ctxInfo *global.ContextInfo,
-	cfg *beyla.Config,
+	cfg *obi.Config,
 	fetcher ebpfFlowFetcher,
 	agentIP net.IP,
 	ifaceManager *tcmanager.InterfaceManager,
@@ -218,7 +218,7 @@ func flowsAgent(
 	}, nil
 }
 
-func flowDirections(cfg *beyla.NetworkConfig) (ingress, egress bool) {
+func flowDirections(cfg *obi.NetworkConfig) (ingress, egress bool) {
 	switch cfg.Direction {
 	case directionIngress:
 		return true, false

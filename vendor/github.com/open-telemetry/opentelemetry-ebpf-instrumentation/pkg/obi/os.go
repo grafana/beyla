@@ -1,6 +1,6 @@
 //go:build linux
 
-package beyla
+package obi
 
 import (
 	"fmt"

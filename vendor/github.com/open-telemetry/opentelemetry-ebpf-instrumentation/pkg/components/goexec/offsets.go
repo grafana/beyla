@@ -4,14 +4,16 @@ package goexec
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 )
 
 type Offsets struct {
 	// Funcs key: function name
-	Funcs map[string]FuncOffsets
-	Field FieldOffsets
+	Funcs  map[string]FuncOffsets
+	Field  FieldOffsets
+	ITypes map[string]uint64
 }
 
 type FuncOffsets struct {
@@ -43,8 +45,14 @@ func InspectOffsets(execElf *exec.FileInfo, funcs []string) (*Offsets, error) {
 		return nil, fmt.Errorf("checking struct members in file %s: %w", execElf.ProExeLinkPath, err)
 	}
 
+	itypes, err := findInterfaceImpls(execElf.ELF)
+	if err != nil {
+		slog.Warn("error reading itab section in Go program, manual spans will not work", "error", err)
+	}
+
 	return &Offsets{
-		Funcs: found,
-		Field: structFieldOffsets,
+		Funcs:  found,
+		Field:  structFieldOffsets,
+		ITypes: itypes,
 	}, nil
 }

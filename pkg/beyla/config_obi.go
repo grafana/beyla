@@ -2,9 +2,10 @@ package beyla
 
 import (
 	"os"
+	"regexp"
 	"strings"
 
-	obi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/obi"
 
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	cfgutil "github.com/grafana/beyla/v2/pkg/helpers/config"
@@ -46,28 +47,21 @@ func overrideOBI(src *Config, dst *obi.Config) {
 // SetupOBIEnvVars duplicates any BEYLA_ prefixed environment variables with the OTEL_EBPF_ prefix
 // and vice versa
 func SetupOBIEnvVars() {
+	replacingPrefix := regexp.MustCompile("^BEYLA_(OTEL_)?")
 	for _, env := range os.Environ() {
-		appended := appendAlternateEnvVar(env, "BEYLA_", "OTEL_EBPF_")
-		if !appended {
-			appendAlternateEnvVar(env, "OTEL_EBPF_", "BEYLA_")
-		}
-	}
-}
-
-func appendAlternateEnvVar(env, oldPrefix, altPrefix string) bool {
-	oldLen := len(oldPrefix)
-	if len(env) > (oldLen+1) && strings.HasPrefix(env, oldPrefix) {
-		eqIdx := strings.IndexByte(env, '=')
-		if eqIdx > (oldLen + 1) {
-			key := env[:eqIdx]
-			val := env[eqIdx+1:]
-			newKey := altPrefix + key[oldLen:]
-			// Only set if not already set
-			if os.Getenv(newKey) == "" {
-				os.Setenv(newKey, val)
+		newEnv := replacingPrefix.ReplaceAllString(env, "OTEL_EBPF_")
+		if parts := strings.SplitN(newEnv, "=", 2); len(parts) == 2 {
+			if os.Getenv(parts[0]) == "" {
+				// Set only if not already set
+				os.Setenv(parts[0], parts[1])
 			}
-			return true
 		}
 	}
-	return false
+	// Temporary patch: Overrides telemetry_sdk_name in OBI until we are able
+	// to provide OBI with a mechanism to override resource & metric attributes
+	if ras := os.Getenv("OTEL_RESOURCE_ATTRIBUTES"); ras != "" {
+		os.Setenv("OTEL_RESOURCE_ATTRIBUTES", ras+",telemetry.sdk.name=beyla")
+	} else {
+		os.Setenv("OTEL_RESOURCE_ATTRIBUTES", "telemetry.sdk.name=beyla")
+	}
 }

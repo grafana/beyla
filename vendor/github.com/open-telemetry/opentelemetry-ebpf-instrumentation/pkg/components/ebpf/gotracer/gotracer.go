@@ -21,15 +21,16 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf"
+	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla"
 	ebpfcommon "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/common"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/goexec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/imetrics"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/config"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/obi"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 )
 
@@ -47,7 +48,7 @@ type Tracer struct {
 	closers    []io.Closer
 }
 
-func New(pidFilter ebpfcommon.ServiceFilter, cfg *beyla.Config, metrics imetrics.Reporter) *Tracer {
+func New(pidFilter ebpfcommon.ServiceFilter, cfg *obi.Config, metrics imetrics.Reporter) *Tracer {
 	log := slog.With("component", "go.Tracer")
 	return &Tracer{
 		log:        log,
@@ -86,7 +87,22 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 	return loader()
 }
 
-func (p *Tracer) SetupTailCalls() {}
+func (p *Tracer) SetupTailCalls() {
+	for _, tc := range []struct {
+		index int
+		prog  *ebpf.Program
+	}{
+		{
+			index: 0,
+			prog:  p.bpfObjects.BeylaReadJsonrpcMethod,
+		},
+	} {
+		err := p.bpfObjects.JsonrpcJumpTable.Update(uint32(tc.index), uint32(tc.prog.FD()), ebpf.UpdateAny)
+		if err != nil {
+			p.log.Error("error loading info tail call jump table", "error", err)
+		}
+	}
+}
 
 func (p *Tracer) Constants() map[string]any {
 	blackBoxCP := uint32(0)
@@ -95,8 +111,17 @@ func (p *Tracer) Constants() map[string]any {
 	}
 
 	return map[string]any{
-		"wakeup_data_bytes":    uint32(p.cfg.WakeupLen) * uint32(unsafe.Sizeof(ebpfcommon.HTTPRequestTrace{})),
-		"disable_black_box_cp": blackBoxCP,
+		"wakeup_data_bytes":      uint32(p.cfg.WakeupLen) * uint32(unsafe.Sizeof(ebpfcommon.HTTPRequestTrace{})),
+		"disable_black_box_cp":   blackBoxCP,
+		"attr_type_invalid":      uint64(attribute.INVALID),
+		"attr_type_bool":         uint64(attribute.BOOL),
+		"attr_type_int64":        uint64(attribute.INT64),
+		"attr_type_float64":      uint64(attribute.FLOAT64),
+		"attr_type_string":       uint64(attribute.STRING),
+		"attr_type_boolslice":    uint64(attribute.BOOLSLICE),
+		"attr_type_int64slice":   uint64(attribute.INT64SLICE),
+		"attr_type_float64slice": uint64(attribute.FLOAT64SLICE),
+		"attr_type_stringslice":  uint64(attribute.STRINGSLICE),
 	}
 }
 
@@ -165,9 +190,29 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 		goexec.GrpcServerStreamStream,
 		goexec.GrpcServerStreamStPtr,
 		goexec.GrpcClientStreamStream,
+		// go manual spans
+		goexec.GoTracerDelegatePos,
 	} {
 		if val, ok := offsets.Field[field].(uint64); ok {
 			offTable.Table[field] = val
+		}
+	}
+
+	for _, iType := range []struct {
+		symbol string
+		field  goexec.GoOffset
+	}{
+		{
+			symbol: "go.opentelemetry.io/otel/trace.attributeOption",
+			field:  goexec.GoTracerAttributeOptOffset,
+		},
+		{
+			symbol: "*errors.errorString",
+			field:  goexec.GoErrorStringOffset,
+		},
+	} {
+		if offset, ok := offsets.ITypes[iType.symbol]; ok {
+			offTable.Table[iType.field] = offset
 		}
 	}
 
@@ -204,6 +249,10 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 		"net/http.(*conn).readRequest": {{
 			Start: p.bpfObjects.BeylaUprobeReadRequestStart,
 			End:   p.bpfObjects.BeylaUprobeReadRequestReturns,
+		}},
+		"net/http.(*body).Read": {{
+			Start: p.bpfObjects.BeylaUprobeBodyRead,
+			End:   p.bpfObjects.BeylaUprobeBodyReadReturn,
 		}},
 		"net/textproto.(*Reader).readContinuedLineSlice": {{
 			End: p.bpfObjects.BeylaUprobeReadContinuedLineSliceReturns,
@@ -368,6 +417,45 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 		}},
 		"github.com/Shopify/sarama.(*Broker).sendInternal": {{
 			Start: p.bpfObjects.BeylaUprobeSaramaSendInternal,
+		}},
+		// Go OTel SDK
+		"go.opentelemetry.io/otel/internal/global.(*tracer).Start": {{
+			Start: p.bpfObjects.BeylaUprobeTracerStartGlobal,
+			End:   p.bpfObjects.BeylaUprobeTracerStartReturns,
+		}},
+		"go.opentelemetry.io/auto/sdk.(*tracer).Start": {{
+			Start: p.bpfObjects.BeylaUprobeTracerStart,
+			End:   p.bpfObjects.BeylaUprobeTracerStartReturns,
+		}},
+		"go.opentelemetry.io/otel/internal/global.(*nonRecordingSpan).End": {{
+			Start: p.bpfObjects.BeylaUprobeNonRecordingSpanEnd,
+		}},
+		"go.opentelemetry.io/auto/sdk.(*span).End": {{
+			Start: p.bpfObjects.BeylaUprobeNonRecordingSpanEnd,
+		}},
+		"go.opentelemetry.io/otel/internal/global.(*nonRecordingSpan).SetStatus": {{
+			Start: p.bpfObjects.BeylaUprobeSetStatus,
+		}},
+		"go.opentelemetry.io/auto/sdk.(*span).SetStatus": {{
+			Start: p.bpfObjects.BeylaUprobeSetStatus,
+		}},
+		"go.opentelemetry.io/otel/internal/global.(*nonRecordingSpan).SetAttributes": {{
+			Start: p.bpfObjects.BeylaUprobeSetAttributes,
+		}},
+		"go.opentelemetry.io/auto/sdk.(*span).SetAttributes": {{
+			Start: p.bpfObjects.BeylaUprobeSetAttributes,
+		}},
+		"go.opentelemetry.io/otel/internal/global.(*nonRecordingSpan).SetName": {{
+			Start: p.bpfObjects.BeylaUprobeSetName,
+		}},
+		"go.opentelemetry.io/auto/sdk.(*span).SetName": {{
+			Start: p.bpfObjects.BeylaUprobeSetName,
+		}},
+		"go.opentelemetry.io/otel/internal/global.(*nonRecordingSpan).RecordError": {{
+			Start: p.bpfObjects.BeylaUprobeRecordError,
+		}},
+		"go.opentelemetry.io/auto/sdk.(*span).RecordError": {{
+			Start: p.bpfObjects.BeylaUprobeRecordError,
 		}},
 	}
 

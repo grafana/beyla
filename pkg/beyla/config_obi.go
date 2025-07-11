@@ -60,7 +60,7 @@ func SetupOBIEnvVars() {
 	// Temporary patch: Overrides telemetry_sdk_name in OBI until we are able
 	// to provide OBI with a mechanism to override resource & metric attributes
 	if ras := os.Getenv("OTEL_RESOURCE_ATTRIBUTES"); ras != "" {
-		os.Setenv("OTEL_RESOURCE_ATTRIBUTES", ras + ",telemetry.sdk.name=beyla")
+		os.Setenv("OTEL_RESOURCE_ATTRIBUTES", ras+",telemetry.sdk.name=beyla")
 	} else {
 		os.Setenv("OTEL_RESOURCE_ATTRIBUTES", "telemetry.sdk.name=beyla")
 	}

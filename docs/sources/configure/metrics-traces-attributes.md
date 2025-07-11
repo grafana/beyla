@@ -61,13 +61,15 @@ When a metric name matches multiple definitions using wildcards, exact matches t
 
 ## Distributed traces and context propagation
 
-The following configuration options are accessible under the `attributes.select` property:
+YAML section: `ebpf`
 
-| YAML<br>environment variable                                           | Description                                                                                                                                                                      | Type    | Default  |
-| ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | -------- |
-| `enable_context_propagation`<br>`BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION` | Deprecated. Use `context_propagation` instead. For more information, refer to the [enable context propagation section](#enable-context-propagation).                             | boolean | false    |
-| `context_propagation`<br>`BEYLA_BPF_CONTEXT_PROPAGATION`               | Controls trace context propagation method. Accepted: `all`, `headers`, `ip`, `disabled`. For more information, refer to the [context propagation section](#context-propagation). | string  | disabled |
-| `track_request_headers`<br>`BEYLA_BPF_TRACK_REQUEST_HEADERS`           | Track incoming `Traceparent` headers for trace spans. For more information, refer to the [track request headers section](#track-request-headers).                                | boolean | false    |
+You can configure the component under the `ebpf` section of your YAML configuration or via environment variables.
+
+| YAML<p>environment variable</p>                                           | Description                                                                                                                                                                      | Type    | Default  |
+| ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | -------- |
+| `enable_context_propagation`<p>`BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION`</p> | Deprecated. Use `context_propagation` instead. For more information, refer to the [enable context propagation section](#enable-context-propagation).                             | boolean | false    |
+| `context_propagation`<p>`BEYLA_BPF_CONTEXT_PROPAGATION`</p>               | Controls trace context propagation method. Accepted: `all`, `headers`, `ip`, `disabled`. For more information, refer to the [context propagation section](#context-propagation). | string  | disabled |
+| `track_request_headers`<p>`BEYLA_BPF_TRACK_REQUEST_HEADERS`</p>           | Track incoming `Traceparent` headers for trace spans. For more information, refer to the [track request headers section](#track-request-headers).                                | boolean | false    |
 
 ### Enable context propagation
 
@@ -110,13 +112,15 @@ Enabling this option may increase performance overhead in high request volume sc
 
 ### Other attributes
 
-| YAML option<br>Environment variable                    | Description                                                   | Type    | Default |
-| ------------------------------------------------------ | ------------------------------------------------------------- | ------- | ------- |
-| `heuristic_sql_detect`<br>`BEYLA_HEURISTIC_SQL_DETECT` | Enable heuristic SQL client detection. See below for details. | boolean | (false) |
+| YAML option<p>Environment variable</p>                    | Description                                                   | Type    | Default |
+| --------------------------------------------------------- | ------------------------------------------------------------- | ------- | ------- |
+| `heuristic_sql_detect`<p>`BEYLA_HEURISTIC_SQL_DETECT`</p> | Enable heuristic SQL client detection. See below for details. | boolean | (false) |
 
 The `heuristic sql detect` option lets Beyla detect SQL client requests by inspecting query statements, even if the protocol is not directly supported. By default, Beyla detects SQL client requests by their binary protocol format. If you use a database technology not directly supported by Beyla, you can enable this option to get database client telemetry. This option is not enabled by default, because it can create false positives, for example, if an application sends SQL text for logging through a TCP connection. Currently, Beyla natively supports the Postgres and MySQL binary protocols.
 
 ## Instance ID decoration
+
+YAML section: `attributes.instance_id`
 
 Beyla decorates metrics and traces with a unique instance ID string, identifying each instrumented application. By default, Beyla uses the host name that runs Beyla (can be a container or Pod name), followed by the PID of the instrumented process. You can override how the instance ID is composed in the `instance_id` YAML subsection under the `attributes` top-level section.
 
@@ -128,10 +132,10 @@ attributes:
     dns: false
 ```
 
-| YAML<br>environment variable             | Description                                                                                                                                                                               | Type    | Default |
-| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------- |
-| `dns`<br>`BEYLA_HOSTNAME_DNS_RESOLUTION` | If `true`, Beyla tries to resolve the local hostname against the network DNS. If `false`, uses local name. For more information, refer to the [dns section](#dns).                        | boolean | true    |
-| `override_hostname`<br>`BEYLA_HOSTNAME`  | If set, Beyla uses the provided string as the host part of the Instance ID. Overrides DNS resolution. For more information, refer to the [override hostname section](#override-hostname). | string  | (unset) |
+| YAML<p>environment variable</p>             | Description                                                                                                                                                                               | Type    | Default |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------- |
+| `dns`<p>`BEYLA_HOSTNAME_DNS_RESOLUTION`</p> | If `true`, Beyla tries to resolve the local hostname against the network DNS. If `false`, uses local name. For more information, refer to the [dns section](#dns).                        | boolean | true    |
+| `override_hostname`<p>`BEYLA_HOSTNAME`</p>  | If set, Beyla uses the provided string as the host part of the Instance ID. Overrides DNS resolution. For more information, refer to the [override hostname section](#override-hostname). | string  | (unset) |
 
 ### DNS
 
@@ -143,15 +147,31 @@ If set, Beyla uses the provided string as the host part of the Instance ID inste
 
 ## Kubernetes decorator
 
-| YAML<br>environment variable                                        | Description                                                                                                                                                                                   | Type           | Default        |
-| ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | -------------- |
-| `enable`<br>`BEYLA_KUBE_METADATA_ENABLE`                            | Enable or disable Kubernetes metadata decoration. Set to `autodetect` to enable if running in Kubernetes. For more information, refer to the [enable kubernetes section](#enable-kubernetes). | boolean/string | false          |
-| `kubeconfig_path`<br>`KUBECONFIG`                                   | Path to the Kubernetes config file. For more information, refer to the [kubeconfig path section](#kubeconfig-path).                                                                           | string         | ~/.kube/config |
-| `disable_informers`<br>`BEYLA_KUBE_DISABLE_INFORMERS`               | List of informers to disable (`node`, `service`). For more information, refer to the [disable informers section](#disable-informers).                                                         | string         | (empty)        |
-| `meta_restrict_local_node`<br>`BEYLA_KUBE_META_RESTRICT_LOCAL_NODE` | Restrict metadata to local node only. For more information, refer to the [meta restrict local node section](#meta-restrict-local-node).                                                       | boolean        | false          |
-| `informers_sync_timeout`<br>`BEYLA_KUBE_INFORMERS_SYNC_TIMEOUT`     | Maximum time to wait for Kubernetes metadata before starting. For more information, refer to the [informers sync timeout section](#informers-sync-timeout).                                   | Duration       | 30s            |
-| `informers_resync_period`<br>`BEYLA_KUBE_INFORMERS_RESYNC_PERIOD`   | Periodically resynchronize all Kubernetes metadata. For more information, refer to the [informers resync period section](#informers-resync-period).                                           | Duration       | 30m            |
-| `service_name_template`<br>`BEYLA_SERVICE_NAME_TEMPLATE`            | Go template for service names. For more information, refer to the [service name template section](#service-name-template).                                                                    | string         | (empty)        |
+YAML section: `attributes.kubernetes`
+
+You can configure the component under the `attributes.kubernetes` section of your YAML configuration or via environment variables.
+
+To enable this feature, you must provide extra permissions to the Beyla Pod. See the ["Configuring Kubernetes metadata decoration section" in the "Running Beyla in Kubernetes"](../../setup/kubernetes/) page.
+
+If you set this option to `true`, Beyla decorates metrics and traces with Kubernetes metadata. If you set it to `false`, Beyla disables the Kubernetes metadata decorator. If you set it to `autodetect`, Beyla tries to detect if it is running inside Kubernetes and enables metadata decoration if so.
+
+For example:
+
+```yaml
+attributes:
+  kubernetes:
+    enable: true
+```
+
+| YAML<p>environment variable</p>                                        | Description                                                                                                                                                                                   | Type           | Default        |
+| ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | -------------- |
+| `enable`<p>`BEYLA_KUBE_METADATA_ENABLE`</p>                            | Enable or disable Kubernetes metadata decoration. Set to `autodetect` to enable if running in Kubernetes. For more information, refer to the [enable kubernetes section](#enable-kubernetes). | boolean/string | false          |
+| `kubeconfig_path`<p>`KUBECONFIG`</p>                                   | Path to the Kubernetes configuration file. For more information, refer to the [Kubernetes configuration path section](#kubernete-configuration-path).                                         | string         | ~/.kube/config |
+| `disable_informers`<p>`BEYLA_KUBE_DISABLE_INFORMERS`</p>               | List of informers to disable (`node`, `service`). For more information, refer to the [disable informers section](#disable-informers).                                                         | string         | (empty)        |
+| `meta_restrict_local_node`<p>`BEYLA_KUBE_META_RESTRICT_LOCAL_NODE`</p> | Restrict metadata to local node only. For more information, refer to the [meta restrict local node section](#meta-restrict-local-node).                                                       | boolean        | false          |
+| `informers_sync_timeout`<p>`BEYLA_KUBE_INFORMERS_SYNC_TIMEOUT`</p>     | Maximum time to wait for Kubernetes metadata before starting. For more information, refer to the [informers sync timeout section](#informers-sync-timeout).                                   | Duration       | 30s            |
+| `informers_resync_period`<p>`BEYLA_KUBE_INFORMERS_RESYNC_PERIOD`</p>   | Periodically resynchronize all Kubernetes metadata. For more information, refer to the [informers resynchronization period section](#informers-resynchronization-period).                     | Duration       | 30m            |
+| `service_name_template`<p>`BEYLA_SERVICE_NAME_TEMPLATE`</p>            | Go template for service names. For more information, refer to the [service name template section](#service-name-template).                                                                    | string         | (empty)        |
 
 ### Enable kubernetes
 
@@ -169,19 +189,7 @@ If you run Beyla in a Kubernetes environment, you can configure it to decorate t
 - `k8s.pod.start_time`
 - `k8s.cluster.name`
 
-In YAML, this section is named `kubernetes` and is under the `attributes` top-level section. For example:
-
-```yaml
-attributes:
-  kubernetes:
-    enable: true
-```
-
-To enable this feature, you must provide extra permissions to the Beyla Pod. See the ["Configuring Kubernetes metadata decoration section" in the "Running Beyla in Kubernetes"](../../setup/kubernetes/) page.
-
-If you set this option to `true`, Beyla decorates metrics and traces with Kubernetes metadata. If you set it to `false`, Beyla disables the Kubernetes metadata decorator. If you set it to `autodetect`, Beyla tries to detect if it is running inside Kubernetes and enables metadata decoration if so.
-
-### Kubeconfig path
+### Kubernetes configuration path
 
 This is a standard Kubernetes configuration environment variable. Use it to tell Beyla where to find the Kubernetes configuration to communicate with the Kubernetes Cluster. Usually, you do not need to change this value.
 
@@ -207,7 +215,7 @@ This option decreases the memory used to store metadata, but some metrics such a
 
 This is the maximum time Beyla waits to get all the Kubernetes metadata before starting to decorate metrics and traces. If this timeout is reached, Beyla starts normally, but the metadata attributes might be incomplete until all the Kubernetes metadata is updated in the background.
 
-### Informers resync period
+### Informers resynchronization period
 
 Beyla immediately receives any update on resources' metadata. In addition, Beyla periodically resynchronizes all Kubernetes metadata at the frequency you specify with this property. Higher values reduce the load on the Kubernetes API service.
 
@@ -268,46 +276,47 @@ attributes:
 ```
 
 In this example:
+
 - Adding `k8s.app.version` to the `resource_labels` block causes the `k8s.app.version` label to appear in the metrics.
 - You can also define annotations with the prefix `resource.opentelemetry.io/` and suffix `k8s.app.version` in your Kubernetes manifests, these annotations are automatically included in the metrics.
 
 The following table describes the default group attributes.
 
-| Group              | Label                     |
-|---------------------|---------------------------------|
-| `k8s_app_meta`         | `k8s.namespace.name`  |
-| `k8s_app_meta`         | `k8s.pod.name` | 
-| `k8s_app_meta`         | `k8s.container.name` | 
-| `k8s_app_meta`         | `k8s.deployment.name` | 
-| `k8s_app_meta`         | `k8s.replicaset.name` | 
-| `k8s_app_meta`         | `k8s.daemonset.name` | 
-| `k8s_app_meta`         | `k8s.statefulset.name` | 
-| `k8s_app_meta`         | `k8s.node.name` | 
-| `k8s_app_meta`         | `k8s.pod.uid` | 
-| `k8s_app_meta`         | `k8s.pod.start_time` | 
-| `k8s_app_meta`         | `k8s.cluster.name` |
-| `k8s_app_meta`         | `k8s.owner.name` | 
+| Group          | Label                  |
+| -------------- | ---------------------- |
+| `k8s_app_meta` | `k8s.namespace.name`   |
+| `k8s_app_meta` | `k8s.pod.name`         |
+| `k8s_app_meta` | `k8s.container.name`   |
+| `k8s_app_meta` | `k8s.deployment.name`  |
+| `k8s_app_meta` | `k8s.replicaset.name`  |
+| `k8s_app_meta` | `k8s.daemonset.name`   |
+| `k8s_app_meta` | `k8s.statefulset.name` |
+| `k8s_app_meta` | `k8s.node.name`        |
+| `k8s_app_meta` | `k8s.pod.uid`          |
+| `k8s_app_meta` | `k8s.pod.start_time`   |
+| `k8s_app_meta` | `k8s.cluster.name`     |
+| `k8s_app_meta` | `k8s.owner.name`       |
 
 And the following table describes the metrics and their associated groups.
-| Group               | OTEL Metric                      | Prom Metric                    |
+| Group | OTEL Metric | Prom Metric |
 |---------------------|---------------------------------|---------------------------------|
-| `k8s_app_meta`         | `process.cpu.utilization`  | `process_cpu_utilization_ratio` |
-| `k8s_app_meta`         | `process.cpu.time` | `process_cpu_time_seconds_total` |
-| `k8s_app_meta`         | `process.memory.usage` | `process_memory_usage_bytes` |
-| `k8s_app_meta`         | `process.memory.virtual` | `process_memory_virtual_bytes` |
-| `k8s_app_meta`         | `process.disk.io` | `process_disk_io_bytes_total` |
-| `k8s_app_meta`         | `messaging.publish.duration` | `messaging_publish_duration_seconds` |
-| `k8s_app_meta`         | `messaging.process.duration` | `messaging_process_duration_seconds` |
-| `k8s_app_meta`         | `http.server.request.duration` | `http_server_request_duration_seconds` |
-| `k8s_app_meta`         | `http.server.request.body.size` | `http_server_request_body_size_bytes` |
-| `k8s_app_meta`         | `http.server.response.body.size` | `http_server_response_body_size_bytes` |
-| `k8s_app_meta`         | `http.client.request.duration` | `http_client_request_duration_seconds` |
-| `k8s_app_meta`         | `http.client.request.body.size` | `http_client_request_body_size_bytes` |
-| `k8s_app_meta`         | `http.client.response.body.size` | `http_client_response_body_size_bytes` |
-| `k8s_app_meta`         | `rpc.client.duration` | `rpc_client_duration_seconds` |
-| `k8s_app_meta`         | `rpc.server.duration` | `rpc_server_duration_seconds` |
-| `k8s_app_meta`         | `db.client.operation.duration` | `db_client_operation_duration_seconds` |
-| `k8s_app_meta`         | `gpu.kernel.launch.calls` | `gpu_kernel_launch_calls_total` |
-| `k8s_app_meta`         | `gpu.kernel.grid.size` | `gpu_kernel_grid_size_total` |
-| `k8s_app_meta`         | `gpu.kernel.block.size` | `gpu_kernel_block_size_total` |
-| `k8s_app_meta`         | `gpu.memory.allocations` | `gpu_memory_allocations_bytes_total` |
+| `k8s_app_meta` | `process.cpu.utilization` | `process_cpu_utilization_ratio` |
+| `k8s_app_meta` | `process.cpu.time` | `process_cpu_time_seconds_total` |
+| `k8s_app_meta` | `process.memory.usage` | `process_memory_usage_bytes` |
+| `k8s_app_meta` | `process.memory.virtual` | `process_memory_virtual_bytes` |
+| `k8s_app_meta` | `process.disk.io` | `process_disk_io_bytes_total` |
+| `k8s_app_meta` | `messaging.publish.duration` | `messaging_publish_duration_seconds` |
+| `k8s_app_meta` | `messaging.process.duration` | `messaging_process_duration_seconds` |
+| `k8s_app_meta` | `http.server.request.duration` | `http_server_request_duration_seconds` |
+| `k8s_app_meta` | `http.server.request.body.size` | `http_server_request_body_size_bytes` |
+| `k8s_app_meta` | `http.server.response.body.size` | `http_server_response_body_size_bytes` |
+| `k8s_app_meta` | `http.client.request.duration` | `http_client_request_duration_seconds` |
+| `k8s_app_meta` | `http.client.request.body.size` | `http_client_request_body_size_bytes` |
+| `k8s_app_meta` | `http.client.response.body.size` | `http_client_response_body_size_bytes` |
+| `k8s_app_meta` | `rpc.client.duration` | `rpc_client_duration_seconds` |
+| `k8s_app_meta` | `rpc.server.duration` | `rpc_server_duration_seconds` |
+| `k8s_app_meta` | `db.client.operation.duration` | `db_client_operation_duration_seconds` |
+| `k8s_app_meta` | `gpu.kernel.launch.calls` | `gpu_kernel_launch_calls_total` |
+| `k8s_app_meta` | `gpu.kernel.grid.size` | `gpu_kernel_grid_size_total` |
+| `k8s_app_meta` | `gpu.kernel.block.size` | `gpu_kernel_block_size_total` |
+| `k8s_app_meta` | `gpu.memory.allocations` | `gpu_memory_allocations_bytes_total` |

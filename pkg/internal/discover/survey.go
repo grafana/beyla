@@ -27,7 +27,7 @@ func SurveyCriteriaMatcherProvider(
 		Log:              slog.With("component", "obiDiscover.SurveyCriteriaMatcher"),
 		Criteria:         surveyCriteria(cfg),
 		ExcludeCriteria:  surveyExcludingCriteria(cfg),
-		ProcessHistory:   map[obiDiscover.PID]*services.ProcessInfo{},
+		ProcessHistory:   map[obiDiscover.PID]obiDiscover.ProcessMatch{},
 		Input:            input.Subscribe(),
 		Output:           output,
 		Namespace:        beylaNamespace,

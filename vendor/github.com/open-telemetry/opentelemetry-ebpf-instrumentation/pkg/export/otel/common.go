@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path"
+	"reflect"
 	"slices"
 	"strings"
 	"time"
@@ -51,6 +52,36 @@ const (
 	envMetricsHeaders  = "OTEL_EXPORTER_OTLP_METRICS_HEADERS"
 	envResourceAttrs   = "OTEL_RESOURCE_ATTRIBUTES"
 )
+
+func omitFieldsForYAML(input any, omitFields map[string]struct{}) map[string]any {
+	result := make(map[string]any)
+
+	val := reflect.ValueOf(input)
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+	typ := val.Type()
+
+	for i := 0; i < val.NumField(); i++ {
+		field := typ.Field(i)
+		yamlTag := field.Tag.Get("yaml")
+		if yamlTag == "" || yamlTag == "-" {
+			continue
+		}
+		yamlKey := yamlTag
+		if commaIdx := len(yamlTag); commaIdx != -1 {
+			yamlKey = yamlTag[:commaIdx]
+		}
+
+		if _, omit := omitFields[yamlKey]; !omit {
+			result[yamlKey] = val.Field(i).Interface()
+		} else {
+			result[yamlKey] = "***" // Indicate that the field is omitted
+		}
+	}
+
+	return result
+}
 
 // Buckets defines the histograms bucket boundaries, and allows users to
 // redefine them

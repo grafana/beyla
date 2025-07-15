@@ -113,6 +113,13 @@ type TracesConfig struct {
 	InjectHeaders func(dst map[string]string) `yaml:"-" env:"-"`
 }
 
+func (m TracesConfig) MarshalYAML() (any, error) {
+	omit := map[string]struct{}{
+		"endpoint": {},
+	}
+	return omitFieldsForYAML(m, omit), nil
+}
+
 type SpanAttr struct {
 	ValLength uint16
 	Vtype     uint8
@@ -280,6 +287,11 @@ func (tr *tracesOTELReceiver) processSpans(ctx context.Context, exp exporter.Tra
 	for _, spanGroup := range spanGroups {
 		if len(spanGroup) > 0 {
 			sample := spanGroup[0]
+
+			if !sample.Span.Service.ExportModes.CanExportTraces() {
+				continue
+			}
+
 			envResourceAttrs := ResourceAttrsFromEnv(&sample.Span.Service)
 			traces := generateTracesWithAttributes(tr.attributeCache, &sample.Span.Service, envResourceAttrs, tr.ctxInfo.HostID, spanGroup, tr.ctxInfo.ExtraResourceAttributes)
 			err := exp.ConsumeTraces(ctx, traces)

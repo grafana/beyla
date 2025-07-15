@@ -250,6 +250,10 @@ type Config struct {
 	// Grafana Alloy specific configuration
 	TracesReceiver TracesReceiverConfig `yaml:"-"`
 
+	// LogConfig enables the logging of the configuration on startup.
+	// nolint:undoc
+	LogConfig bool `yaml:"log_config" env:"BEYLA_LOG_CONFIG"`
+
 	// cached equivalent for the OBI conversion
 	obi *obi.Config `yaml:"-"`
 }

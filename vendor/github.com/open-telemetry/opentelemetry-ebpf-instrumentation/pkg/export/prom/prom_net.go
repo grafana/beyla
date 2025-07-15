@@ -98,10 +98,10 @@ func newNetReporter(
 		log.Debug("registering network flow bytes metric")
 		mr.flowAttrs = attributes.PrometheusGetters(
 			ebpf.RecordStringGetters,
-			provider.For(attributes.BeylaNetworkFlow))
+			provider.For(attributes.NetworkFlow))
 
 		mr.flowBytes = NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: attributes.BeylaNetworkFlow.Prom,
+			Name: attributes.NetworkFlow.Prom,
 			Help: "bytes submitted from a source network endpoint to a destination network endpoint",
 		}, labelNames(mr.flowAttrs)).MetricVec, clock.Time, cfg.Config.TTL)
 		register = append(register, mr.flowBytes)
@@ -111,10 +111,10 @@ func newNetReporter(
 		log.Debug("registering network inter-zone metric")
 		mr.interZoneAttrs = attributes.PrometheusGetters(
 			ebpf.RecordStringGetters,
-			provider.For(attributes.BeylaNetworkInterZone))
+			provider.For(attributes.NetworkInterZone))
 
 		mr.interZone = NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: attributes.BeylaNetworkInterZone.Prom,
+			Name: attributes.NetworkInterZone.Prom,
 			Help: "bytes submitted between different cloud availability zones",
 		}, labelNames(mr.interZoneAttrs)).MetricVec, clock.Time, cfg.Config.TTL)
 		register = append(register, mr.interZone)

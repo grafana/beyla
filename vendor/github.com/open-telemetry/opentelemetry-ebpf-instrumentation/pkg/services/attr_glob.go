@@ -70,6 +70,11 @@ type GlobAttributes struct {
 
 	// ContainersOnly restricts the discovery to processes which are running inside a container
 	ContainersOnly bool `yaml:"containers_only"`
+
+	// Configures what to export. Allowed values are 'metrics', 'traces',
+	// or an empty array (disabled). An unspecified value (nil) will use the
+	// default configuration value
+	ExportModes ExportModes `yaml:"exports"`
 }
 
 // GlobAttr provides a YAML handler for glob.Glob so the type can be parsed from YAML or environment variables
@@ -166,6 +171,8 @@ func (ga *GlobAttributes) RangePodAnnotations() iter.Seq2[string, StringMatcher]
 		}
 	}
 }
+
+func (ga *GlobAttributes) GetExportModes() ExportModes { return ga.ExportModes }
 
 type nilMatcher struct{}
 

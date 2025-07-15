@@ -425,7 +425,7 @@ func (c *Config) ExternalLogger(handler slog.Handler, debugMode bool) {
 // 2 - Contents of the provided file reader (nillable)
 // 3 - Environment variables
 func LoadConfig(file io.Reader) (*Config, error) {
-	SetupOBIEnvVars()
+	OverrideOBIGlobalConfig()
 	cfg := DefaultConfig
 	if file != nil {
 		cfgBuf, err := io.ReadAll(file)

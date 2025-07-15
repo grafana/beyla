@@ -53,6 +53,11 @@ const (
 	envResourceAttrs   = "OTEL_RESOURCE_ATTRIBUTES"
 )
 
+// VendorPrefix allows identifying some metrics (network, internal counters...)
+// as custom metrics, since at the moment they don't follow any semantic convention for them.
+// This value can be overridden when OBI is vendored as a library (e.g. from the OTEL collector)
+var VendorPrefix = "obi"
+
 func omitFieldsForYAML(input any, omitFields map[string]struct{}) map[string]any {
 	result := make(map[string]any)
 

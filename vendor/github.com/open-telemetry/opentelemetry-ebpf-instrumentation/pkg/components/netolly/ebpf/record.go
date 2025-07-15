@@ -56,8 +56,8 @@ type RecordAttrs struct {
 	DstZone string
 
 	Interface string
-	// BeylaIP provides information about the source of the flow (the Agent that traced it)
-	BeylaIP  string
+	// OBIIP provides information about the source of the flow (the Agent that traced it)
+	OBIIP    string
 	Metadata map[attr.Name]string
 }
 

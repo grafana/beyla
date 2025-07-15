@@ -387,7 +387,7 @@ github.com/munnerz/goautoneg
 # github.com/mxk/go-flowrate v0.0.0-20140419014527-cca7078d478f
 ## explicit
 github.com/mxk/go-flowrate/flowrate
-# github.com/open-telemetry/opentelemetry-ebpf-instrumentation v0.0.0-20250715064224-3b8378781fd4 => ./.obi-src
+# github.com/open-telemetry/opentelemetry-ebpf-instrumentation v0.0.0-20250715125306-db2937ddd037 => ./.obi-src
 ## explicit; go 1.24.1
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request
 github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/buildinfo

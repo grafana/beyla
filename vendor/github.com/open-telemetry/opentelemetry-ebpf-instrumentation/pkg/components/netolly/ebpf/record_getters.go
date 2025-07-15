@@ -20,8 +20,8 @@ const (
 func RecordGetters(name attr.Name) (attributes.Getter[*Record, attribute.KeyValue], bool) {
 	var getter attributes.Getter[*Record, attribute.KeyValue]
 	switch name {
-	case attr.BeylaIP:
-		getter = func(r *Record) attribute.KeyValue { return attribute.String(string(attr.BeylaIP), r.Attrs.BeylaIP) }
+	case attr.OBIIP:
+		getter = func(r *Record) attribute.KeyValue { return attribute.String(string(attr.OBIIP), r.Attrs.OBIIP) }
 	case attr.Transport:
 		getter = func(r *Record) attribute.KeyValue {
 			return attribute.String(string(attr.Transport), transport.Protocol(r.Id.TransportProtocol).String())

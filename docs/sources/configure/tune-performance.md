@@ -10,18 +10,20 @@ keywords:
 
 # Configure Beyla performance
 
+YAML section: `grafana.otlp`
+
 You can use the eBPF tracer to fine-tune Beyla performance.
 
 You can configure the component under the `ebpf` section of your YAML configuration or with environment variables.
 
-| YAML<br>environment variable                               | Description                                                                                                                                                   | Type    | Default |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------- |
-| `wakeup_len`<br>`BEYLA_BPF_WAKEUP_LEN`                     | Sets how many messages Beyla accumulates in the eBPF ringbuffer before sending a wake-up request to user space. Refer to [wakeup len](#wakeup-len).           | string  | (unset) |
-| `traffic_control_backend`<br>`BEYLA_BPF_TC_BACKEND`        | Selects the backend for attaching traffic control probes. Refer to the [traffic control backend](#traffic-control-backend) section for details.               | string  | `auto`  |
-| `http_request_timeout`<br>`BEYLA_BPF_HTTP_REQUEST_TIMEOUT` | Sets the time interval after which Beyla considers an HTTP request a timeout. Refer to the [http request timeout](#http-request-timeout) section for details. | string  | (0ms)   |
-| `high_request_volume`<br>`BEYLA_BPF_HIGH_REQUEST_VOLUME`   | Sends telemetry events as soon as Beyla detects a response. Refer to the [high request volume](#high-request-volume) section for details.                     | boolean | (false) |
+| YAML<p>environment variable</p>                               | Description                                                                                                                                                   | Type    | Default |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------- |
+| `wakeup_len`<p>`BEYLA_BPF_WAKEUP_LEN`</p>                     | Sets how many messages Beyla accumulates in the eBPF ring buffer before sending a wake-up request to user space. Refer to [wake up length](#wake-up-length).  | string  | (unset) |
+| `traffic_control_backend`<p>`BEYLA_BPF_TC_BACKEND`</p>        | Selects the backend for attaching traffic control probes. Refer to the [traffic control backend](#traffic-control-backend) section for details.               | string  | `auto`  |
+| `http_request_timeout`<p>`BEYLA_BPF_HTTP_REQUEST_TIMEOUT`</p> | Sets the time interval after which Beyla considers an HTTP request a timeout. Refer to the [HTTP request timeout](#http-request-timeout) section for details. | string  | (0ms)   |
+| `high_request_volume`<p>`BEYLA_BPF_HIGH_REQUEST_VOLUME`</p>   | Sends telemetry events as soon as Beyla detects a response. Refer to the [high request volume](#high-request-volume) section for details.                     | boolean | (false) |
 
-## Wakeup len
+## Wake up length
 
 Beyla accumulates messages in the eBPF ringbuffer and sends a wake-up request to user space when it reaches this value.
 
@@ -39,7 +41,7 @@ When set to `auto`, Beyla chooses the best backend for your kernel.
 Accepted backends: `tc`, `tcx`, and `auto`.
 If you leave this value empty or unset, Beyla uses `auto`.
 
-## Http request timeout
+## HTTP request timeout
 
 This option sets how long Beyla waits before considering an HTTP request a timeout.
 Beyla can report HTTP transactions that time out and never return.

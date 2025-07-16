@@ -140,7 +140,7 @@ func echoLowPort(rw http.ResponseWriter) {
 }
 
 func echoDist(rw http.ResponseWriter) {
-	requestURL := "http://pytestserver:8083/tracemetoo"
+	requestURL := "http://pytestserver:7773/tracemetoo"
 
 	slog.Debug("calling", "url", requestURL)
 

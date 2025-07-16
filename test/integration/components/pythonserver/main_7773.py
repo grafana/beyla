@@ -36,5 +36,5 @@ def users():
     return content
 
 if __name__ == '__main__':
-    print(f"Server running: port={8083} process_id={os.getpid()}")
-    app.run(host="localhost", port=8083, debug=False)
+    print(f"Server running: port={7773} process_id={os.getpid()}")
+    app.run(host="localhost", port=7773, debug=False)

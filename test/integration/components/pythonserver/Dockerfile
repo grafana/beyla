@@ -1,6 +1,6 @@
-# Dockerfile that will build a container that runs python flask with gunicorn on port 8080
+# Dockerfile that will build a container that runs python flask with gunicorn on port 7770
 FROM python:3.11.6-slim
-EXPOSE 8080
+EXPOSE 7770
 RUN pip install flask gunicorn requests
 # Alternative: RUN pip install flask uwsgi
 
@@ -12,4 +12,4 @@ COPY test/integration/components/pythonserver .
 
 CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:8380", "main:app", "--timeout", "90"]
 # setting largish timeout for the workers so we can test Beyla timeouts
-# CMD uwsgi --http 0.0.0.0:8080 --master -p 4 -w main:app
+# CMD uwsgi --http 0.0.0.0:7770 --master -p 4 -w main:app

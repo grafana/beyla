@@ -1,17 +1,17 @@
 name: Check Undocumented Fields
 
-on: {}
-  # Check undocumented fields failing since https://github.com/grafana/beyla/pull/2085
-  # TODO: fix
-#  pull_request:
-#    paths:
-#      - '**.go'
-#      - 'docs/**/*.md'
-#  push:
-#    branches: [ main ]
-#    paths:
-#      - '**.go'
-#      - 'docs/**/*.md'
+on:
+  pull_request:
+    paths:
+      - '**.go'
+      - 'docs/**/*.md'
+      - 'tools/doc-checker/**'
+  push:
+    branches: [ main ]
+    paths:
+      - '**.go'
+      - 'docs/**/*.md'
+      - 'tools/doc-checker/**'
 
 jobs:
   check-docs:

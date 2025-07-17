@@ -1,15 +1,17 @@
 name: Check Undocumented Fields
 
-on: {}
- pull_request:
-   paths:
-     - '**.go'
-     - 'docs/**/*.md'
- push:
-   branches: [ main ]
-   paths:
-     - '**.go'
-     - 'docs/**/*.md'
+on:
+  pull_request:
+    paths:
+      - '**.go'
+      - 'docs/**/*.md'
+      - 'tools/doc-checker/**'
+  push:
+    branches: [ main ]
+    paths:
+      - '**.go'
+      - 'docs/**/*.md'
+      - 'tools/doc-checker/**'
 
 jobs:
   check-docs:

@@ -74,11 +74,11 @@ func isStructType(expr ast.Expr) bool {
 		if ident, ok := t.X.(*ast.Ident); ok {
 			selector := t.Sel.Name
 			pkg := ident.Name
-			
+
 			if isKnownPackageStruct(pkg, selector) {
 				return true
 			}
-			
+
 			// General patterns
 			return isKnownStructName(selector)
 		}
@@ -95,7 +95,7 @@ func hasNoDocDirective(comments *ast.CommentGroup) bool {
 		text := strings.ReplaceAll(comment.Text, "// /", "//")
 		text = strings.ReplaceAll(text, "//  ", "//")
 		text = strings.ReplaceAll(text, "// ", "//")
-		if strings.Contains(text, "//nolint:doc") || strings.Contains(text, "//Deprecated") {
+		if strings.Contains(text, "//nolint:undoc") || strings.Contains(text, "//Deprecated") {
 			return true
 		}
 	}

@@ -250,6 +250,10 @@ type Config struct {
 	// Grafana Alloy specific configuration
 	TracesReceiver TracesReceiverConfig `yaml:"-"`
 
+	// LogConfig enables the logging of the configuration on startup.
+	// nolint:undoc
+	LogConfig bool `yaml:"log_config" env:"BEYLA_LOG_CONFIG"`
+
 	// cached equivalent for the OBI conversion
 	obi *obi.Config `yaml:"-"`
 }
@@ -425,7 +429,7 @@ func (c *Config) ExternalLogger(handler slog.Handler, debugMode bool) {
 // 2 - Contents of the provided file reader (nillable)
 // 3 - Environment variables
 func LoadConfig(file io.Reader) (*Config, error) {
-	SetupOBIEnvVars()
+	OverrideOBIGlobalConfig()
 	cfg := DefaultConfig
 	if file != nil {
 		cfgBuf, err := io.ReadAll(file)

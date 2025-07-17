@@ -93,6 +93,19 @@ func (b *TCBackend) UnmarshalText(text []byte) error {
 	return fmt.Errorf("invalid TCBakend value: '%s'", text)
 }
 
+func (b TCBackend) MarshalText() ([]byte, error) {
+	switch b {
+	case TCBackendTC:
+		return []byte("tc"), nil
+	case TCBackendTCX:
+		return []byte("tcx"), nil
+	case TCBackendAuto:
+		return []byte("auto"), nil
+	}
+
+	return nil, fmt.Errorf("invalid TCBakend value: %d", b)
+}
+
 func (b TCBackend) Valid() bool {
 	switch b {
 	case TCBackendTC, TCBackendTCX, TCBackendAuto:

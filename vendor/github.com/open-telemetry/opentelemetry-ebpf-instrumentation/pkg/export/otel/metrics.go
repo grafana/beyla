@@ -136,6 +136,13 @@ type MetricsConfig struct {
 	InjectHeaders func(dst map[string]string) `yaml:"-" env:"-"`
 }
 
+func (m MetricsConfig) MarshalYAML() (any, error) {
+	omit := map[string]struct{}{
+		"endpoint": {},
+	}
+	return omitFieldsForYAML(m, omit), nil
+}
+
 func (m *MetricsConfig) GetProtocol() Protocol {
 	if m.MetricsProtocol != "" {
 		return m.MetricsProtocol
@@ -1259,6 +1266,9 @@ func (mr *MetricsReporter) reportMetrics(_ context.Context) {
 		for i := range spans {
 			s := &spans[i]
 			if s.InternalSignal() {
+				continue
+			}
+			if !s.Service.ExportModes.CanExportMetrics() {
 				continue
 			}
 			// If we are ignoring this span because of route patterns, don't do anything

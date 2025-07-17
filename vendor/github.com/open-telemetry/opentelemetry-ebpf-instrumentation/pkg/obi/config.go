@@ -226,6 +226,9 @@ type Config struct {
 	//nolint:undoc
 	ProfilePort     int             `yaml:"profile_port" env:"OTEL_EBPF_PROFILE_PORT"`
 	InternalMetrics imetrics.Config `yaml:"internal_metrics"`
+
+	// LogConfig enables the logging of the configuration on startup.
+	LogConfig bool `yaml:"log_config" env:"OTEL_EBPF_LOG_CONFIG"`
 }
 
 // Attributes configures the decoration of some extra attributes that will be

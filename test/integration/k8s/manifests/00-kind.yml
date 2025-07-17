@@ -34,3 +34,5 @@ nodes:
         hostPort: 36686
       - containerPort: 5051
         hostPort: 30551
+      - containerPort: 7773
+        hostPort: 7773

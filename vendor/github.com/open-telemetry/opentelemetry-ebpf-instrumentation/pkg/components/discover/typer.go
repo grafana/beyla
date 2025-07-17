@@ -18,6 +18,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/obi"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/services"
 )
 
 type InstrumentedExecutable struct {
@@ -80,6 +81,35 @@ type typer struct {
 	instrumentableCache *lru.Cache[uint64, InstrumentedExecutable]
 }
 
+func makeServiceAttrs(processMatch *ProcessMatch) svc.Attrs {
+	var name string
+	var namespace string
+	var exportModes services.ExportModes
+
+	for _, s := range processMatch.Criteria {
+		if n := s.GetName(); n != "" {
+			name = n
+		}
+
+		if n := s.GetNamespace(); n != "" {
+			namespace = n
+		}
+
+		if m := s.GetExportModes(); m != nil {
+			exportModes = m
+		}
+	}
+
+	return svc.Attrs{
+		UID: svc.UID{
+			Name:      name,
+			Namespace: namespace,
+		},
+		ProcPID:     processMatch.Process.Pid,
+		ExportModes: exportModes,
+	}
+}
+
 // FilterClassify returns the Instrumentable types for each received ProcessMatch,
 // and filters out the processes that can't be instrumented (e.g. because of the lack
 // of instrumentation points)
@@ -93,13 +123,8 @@ func (t *typer) FilterClassify(evs []Event[ProcessMatch]) []Event[ebpf.Instrumen
 		ev := &evs[i]
 		switch evs[i].Type {
 		case EventCreated:
-			svcID := svc.Attrs{
-				UID: svc.UID{
-					Name:      ev.Obj.Criteria.GetName(),
-					Namespace: ev.Obj.Criteria.GetNamespace(),
-				},
-				ProcPID: ev.Obj.Process.Pid,
-			}
+			svcID := makeServiceAttrs(&ev.Obj)
+
 			if elfFile, err := exec.FindExecELF(ev.Obj.Process, svcID, t.k8sInformer.IsKubeEnabled()); err != nil {
 				t.log.Debug("error finding process ELF. Ignoring", "error", err)
 			} else {

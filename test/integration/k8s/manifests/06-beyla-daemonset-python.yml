@@ -13,7 +13,7 @@ data:
     log_level: debug
     discovery:
       instrument:
-        - open_ports: 8083
+        - open_ports: 7773
           namespace: integration-test
     routes:
       unmatched: heuristic

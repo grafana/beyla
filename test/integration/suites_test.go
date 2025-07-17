@@ -424,7 +424,7 @@ func TestSuite_PythonTLS(t *testing.T) {
 
 func TestSuite_PythonSelfReference(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-python-self.yml", path.Join(pathOutput, "test-suite-python-self.log"))
-	compose.Env = append(compose.Env, `BEYLA_OPEN_PORT=8081`, `BEYLA_EXECUTABLE_NAME=`)
+	compose.Env = append(compose.Env, `BEYLA_OPEN_PORT=7771`, `BEYLA_EXECUTABLE_NAME=`)
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("Python Traces with self-references", testHTTPTracesNestedSelfCalls)

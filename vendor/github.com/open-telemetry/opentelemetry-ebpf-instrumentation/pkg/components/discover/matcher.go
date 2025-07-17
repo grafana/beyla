@@ -34,7 +34,7 @@ func CriteriaMatcherProvider(
 		Log:              slog.With("component", "discover.CriteriaMatcher"),
 		Criteria:         FindingCriteria(cfg),
 		ExcludeCriteria:  ExcludingCriteria(cfg),
-		ProcessHistory:   map[PID]*services.ProcessInfo{},
+		ProcessHistory:   map[PID]ProcessMatch{},
 		Input:            input.Subscribe(),
 		Output:           output,
 		Namespace:        beylaNamespace,
@@ -52,7 +52,7 @@ type Matcher struct {
 	// ProcessHistory keeps track of the processes that have been already matched and submitted for
 	// instrumentation.
 	// This avoids keep inspecting again and again client processes each time they open a new connection port
-	ProcessHistory   map[PID]*services.ProcessInfo
+	ProcessHistory   map[PID]ProcessMatch
 	Input            <-chan []Event[ProcessAttrs]
 	Output           *msg.Queue[[]Event[ProcessMatch]]
 	Namespace        string
@@ -61,7 +61,7 @@ type Matcher struct {
 
 // ProcessMatch matches a found process with the first selection criteria it fulfilled.
 type ProcessMatch struct {
-	Criteria services.Selector
+	Criteria []services.Selector
 	Process  *services.ProcessInfo
 }
 
@@ -104,34 +104,61 @@ func (m *Matcher) filter(events []Event[ProcessAttrs]) []Event[ProcessMatch] {
 	return matches
 }
 
+func (m *Matcher) alreadyMatched(pid PID) bool {
+	_, ok := m.ProcessHistory[pid]
+	return ok
+}
+
+func (m *Matcher) matchCriteria(obj ProcessAttrs, proc *services.ProcessInfo) *ProcessMatch {
+	criteria := make([]services.Selector, 0, len(m.Criteria))
+
+	for i := range m.Criteria {
+		if m.matchProcess(&obj, proc, m.Criteria[i]) && !m.isExcluded(&obj, proc) {
+			criteria = append(criteria, m.Criteria[i])
+		}
+	}
+
+	if len(criteria) > 0 {
+		m.Log.Debug("found process", "pid", proc.Pid, "comm", proc.ExePath, "metadata",
+			obj.metadata, "podLabels", obj.podLabels, "criteria", criteria)
+
+		return &ProcessMatch{Criteria: criteria, Process: proc}
+	}
+
+	return nil
+}
+
 func (m *Matcher) filterCreated(obj ProcessAttrs) (Event[ProcessMatch], bool) {
-	if _, ok := m.ProcessHistory[obj.pid]; ok {
-		// this was already matched and submitted for inspection. Ignoring!
+	if m.alreadyMatched(obj.pid) {
 		return Event[ProcessMatch]{}, false
 	}
+
 	proc, err := processInfo(obj)
 	if err != nil {
 		m.Log.Debug("can't get information for process", "pid", obj.pid, "error", err)
 		return Event[ProcessMatch]{}, false
 	}
-	for i := range m.Criteria {
-		if m.matchProcess(&obj, proc, m.Criteria[i]) && !m.isExcluded(&obj, proc) {
-			m.Log.Debug("found process", "pid", proc.Pid, "comm", proc.ExePath, "metadata", obj.metadata, "podLabels", obj.podLabels, "criteria", m.Criteria[i])
-			m.ProcessHistory[obj.pid] = proc
-			return Event[ProcessMatch]{
-				Type: EventCreated,
-				Obj:  ProcessMatch{Criteria: m.Criteria[i], Process: proc},
-			}, true
-		}
+
+	if processMatch := m.matchCriteria(obj, proc); processMatch != nil {
+		m.ProcessHistory[obj.pid] = *processMatch
+
+		return Event[ProcessMatch]{
+			Type: EventCreated,
+			Obj:  *processMatch,
+		}, true
 	}
 
 	// We didn't match the process, but let's see if the parent PID is tracked, it might be the child hasn't opened the port yet
-	if _, ok := m.ProcessHistory[PID(proc.PPid)]; ok {
+	if procMatch, ok := m.ProcessHistory[PID(proc.PPid)]; ok {
 		m.Log.Debug("found process by matching the process parent id", "pid", proc.Pid, "ppid", proc.PPid, "comm", proc.ExePath, "metadata", obj.metadata)
-		m.ProcessHistory[obj.pid] = proc
+
+		procMatch.Process = proc
+
+		m.ProcessHistory[obj.pid] = procMatch
+
 		return Event[ProcessMatch]{
 			Type: EventCreated,
-			Obj:  ProcessMatch{Criteria: m.Criteria[0], Process: proc},
+			Obj:  procMatch,
 		}, true
 	}
 
@@ -139,16 +166,16 @@ func (m *Matcher) filterCreated(obj ProcessAttrs) (Event[ProcessMatch], bool) {
 }
 
 func (m *Matcher) filterDeleted(obj ProcessAttrs) (Event[ProcessMatch], bool) {
-	proc, ok := m.ProcessHistory[obj.pid]
+	procMatch, ok := m.ProcessHistory[obj.pid]
 	if !ok {
 		m.Log.Debug("deleted untracked process. Ignoring", "pid", obj.pid)
 		return Event[ProcessMatch]{}, false
 	}
 	delete(m.ProcessHistory, obj.pid)
-	m.Log.Debug("stopped process", "pid", proc.Pid, "comm", proc.ExePath)
+	m.Log.Debug("stopped process", "pid", procMatch.Process.Pid, "comm", procMatch.Process.ExePath)
 	return Event[ProcessMatch]{
 		Type: EventDeleted,
-		Obj:  ProcessMatch{Process: proc},
+		Obj:  procMatch,
 	}, true
 }
 

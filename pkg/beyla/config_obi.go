@@ -5,6 +5,9 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
+	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
+	otel2 "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/obi"
 
 	"github.com/grafana/beyla/v2/pkg/export/otel"
@@ -44,9 +47,10 @@ func overrideOBI(src *Config, dst *obi.Config) {
 	}
 }
 
-// SetupOBIEnvVars duplicates any BEYLA_ prefixed environment variables with the OTEL_EBPF_ prefix
-// and vice versa
-func SetupOBIEnvVars() {
+// OverrideOBIGlobalConfig overrides some OBI globals to adapt it to the Beyla configuration and naming conventions:
+// - duplicates any BEYLA_ prefixed environment variables with the OTEL_EBPF_ prefix
+// - overrides some custom global variables related to custom metric naming
+func OverrideOBIGlobalConfig() {
 	replacingPrefix := regexp.MustCompile("^BEYLA_(OTEL_)?")
 	for _, env := range os.Environ() {
 		newEnv := replacingPrefix.ReplaceAllString(env, "OTEL_EBPF_")
@@ -63,5 +67,18 @@ func SetupOBIEnvVars() {
 		os.Setenv("OTEL_RESOURCE_ATTRIBUTES", ras+",telemetry.sdk.name=beyla")
 	} else {
 		os.Setenv("OTEL_RESOURCE_ATTRIBUTES", "telemetry.sdk.name=beyla")
+	}
+	// Override global metric naming options
+	otel2.VendorPrefix = "beyla"
+	attr.OBIIP = "beyla.ip"
+	attributes.NetworkFlow = attributes.Name{
+		Section: "beyla.network.flow",
+		Prom:    "beyla_network_flow_bytes_total",
+		OTEL:    "beyla.network.flow.bytes",
+	}
+	attributes.NetworkInterZone = attributes.Name{
+		Section: "beyla.network.inter.zone",
+		Prom:    "beyla_network_inter_zone_bytes_total",
+		OTEL:    "beyla.network.inter.zone.bytes",
 	}
 }

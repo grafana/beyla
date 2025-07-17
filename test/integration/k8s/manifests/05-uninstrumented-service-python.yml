@@ -6,7 +6,7 @@ spec:
   selector:
     app: pytestserver
   ports:
-    - port: 8083
+    - port: 7773
       name: http0
       targetPort: http0
 ---
@@ -37,8 +37,8 @@ spec:
           image: pythontestserver:dev
           imagePullPolicy: Never # loaded into Kind from localhost
           ports:
-            - containerPort: 8083
-              hostPort: 8083
+            - containerPort: 7773
+              hostPort: 7773
               name: http0
           env:
             - name: LOG_LEVEL

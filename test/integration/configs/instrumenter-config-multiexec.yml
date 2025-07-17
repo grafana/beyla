@@ -27,7 +27,7 @@ discovery:
       open_ports: 8380      
     - namespace: multi-k
       name: python-service
-      open_ports: 8083  
+      open_ports: 7773
     - namespace: multi-k
       name: nodejs-service-ssl
       open_ports: 3033      

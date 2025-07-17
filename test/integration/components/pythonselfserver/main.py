@@ -12,7 +12,7 @@ app4 = Flask(__name__)
 # Disable SSL warnings for internal HTTPS calls (optional, for development only)
 requests.packages.urllib3.disable_warnings()
 
-# API for the first application (Port 8081)
+# API for the first application (Port 7771)
 @app1.route('/api1', methods=['GET'])
 def api1():
     try:
@@ -20,7 +20,7 @@ def api1():
         headers = dict(request.headers)
 
         # Internal HTTPS call to the second API
-        response = requests.get('https://localhost:8082/api2', headers=headers, verify=False)
+        response = requests.get('https://localhost:7772/api2', headers=headers, verify=False)
         return jsonify({
             "message": "Internal call to API2 succeeded",
             "api2_response": response.json()
@@ -28,7 +28,7 @@ def api1():
     except requests.exceptions.RequestException as e:
         return jsonify({"error": str(e)}), 500
 
-# API for the first application (Port 8082)
+# API for the first application (Port 7772)
 @app2.route('/api2', methods=['GET'])
 def api2():
     try:
@@ -36,7 +36,7 @@ def api2():
         headers = dict(request.headers)
 
         # Internal HTTP call to the third API
-        response = requests.get('http://localhost:8083/api3', headers=headers, verify=False)
+        response = requests.get('http://localhost:7773/api3', headers=headers, verify=False)
         return jsonify({
             "message": "Internal call to API3 succeeded",
             "api3_response": response.json()
@@ -48,7 +48,7 @@ def api2():
 def smoke():
     return Response(status=200)
 
-# API for the first application (Port 8083)
+# API for the first application (Port 7773)
 @app3.route('/api3', methods=['GET'])
 def api3():
     try:
@@ -56,7 +56,7 @@ def api3():
         headers = dict(request.headers)
 
         # Internal HTTPS call to the third API
-        response = requests.get('https://localhost:8084/api4', headers=headers, verify=False)
+        response = requests.get('https://localhost:7774/api4', headers=headers, verify=False)
         return jsonify({
             "message": "Internal call to API4 succeeded",
             "api4_response": response.json()
@@ -64,7 +64,7 @@ def api3():
     except requests.exceptions.RequestException as e:
         return jsonify({"error": str(e)}), 500
 
-# API for the second application (Port 8084)
+# API for the second application (Port 7774)
 @app4.route('/api4', methods=['GET'])
 def api2():
     return jsonify({"message": "Hello from API4!"}), 200
@@ -85,7 +85,7 @@ def run_app_ssl(app, port):
 
 if __name__ == '__main__':
     # Run both Flask apps on different ports in separate threads
-    Thread(target=run_app_ssl, args=(app1, 8081)).start()
-    Thread(target=run_app_ssl, args=(app2, 8082)).start()
-    Thread(target=run_app,     args=(app3, 8083)).start()
-    Thread(target=run_app_ssl, args=(app4, 8084)).start()
+    Thread(target=run_app_ssl, args=(app1, 7771)).start()
+    Thread(target=run_app_ssl, args=(app2, 7772)).start()
+    Thread(target=run_app,     args=(app3, 7773)).start()
+    Thread(target=run_app_ssl, args=(app4, 7774)).start()

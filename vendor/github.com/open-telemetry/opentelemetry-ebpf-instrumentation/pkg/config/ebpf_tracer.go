@@ -135,3 +135,18 @@ func (m *ContextPropagationMode) UnmarshalText(text []byte) error {
 
 	return fmt.Errorf("invalid value for context_propagation: '%s'", text)
 }
+
+func (m ContextPropagationMode) MarshalText() ([]byte, error) {
+	switch m {
+	case ContextPropagationAll:
+		return []byte("all"), nil
+	case ContextPropagationHeadersOnly:
+		return []byte("headers"), nil
+	case ContextPropagationIPOptionsOnly:
+		return []byte("ip"), nil
+	case ContextPropagationDisabled:
+		return []byte("disabled"), nil
+	}
+
+	return nil, fmt.Errorf("invalid context propagation mode: %d", m)
+}

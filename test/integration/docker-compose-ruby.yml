@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   testserver:
-    image: ghcr.io/open-telemetry/obi-testimg:rails${TESTSERVER_IMAGE_SUFFIX}-0.0.1
+    image: ghcr.io/open-telemetry/obi-testimg:rails${TESTSERVER_IMAGE_SUFFIX}-0.1.0
     ports:
       - "${TEST_SERVICE_PORTS}"
     environment:

@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   testserver:
-    image: ghcr.io/grafana/beyla-test/greeting-java-jar/0.0.1
+    image: ghcr.io/open-telemetry/obi-testimg:java-jar-0.1.0
     ports:
       - "8086:8085"
     environment:

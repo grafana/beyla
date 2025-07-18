@@ -3,8 +3,6 @@ module rolldice
 
 go 1.24
 
-toolchain go1.24
-
 require (
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.45.0
 	go.opentelemetry.io/otel v1.28.0

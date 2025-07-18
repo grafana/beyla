@@ -11,10 +11,11 @@ import (
 	"time"
 
 	"github.com/mariomac/guara/pkg/test"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/test/integration/components/docker"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/test/integration/components/jaeger"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/test/integration/components/prom"
 	"github.com/stretchr/testify/require"
+
+	"github.com/grafana/beyla/v2/test/integration/components/docker"
+	"github.com/grafana/beyla/v2/test/integration/components/jaeger"
+	"github.com/grafana/beyla/v2/test/integration/components/prom"
 )
 
 func testSelectiveExports(t *testing.T) {

@@ -81,14 +81,12 @@ type DiscoveryConfig struct {
 
 	// PollInterval specifies, for the poll service watcher, the interval time between
 	// process inspections
-	//nolint:undoc
 	PollInterval time.Duration `yaml:"poll_interval" env:"OTEL_EBPF_DISCOVERY_POLL_INTERVAL"`
 
 	// This can be enabled to use generic HTTP tracers only, no Go-specifics will be used:
 	SkipGoSpecificTracers bool `yaml:"skip_go_specific_tracers" env:"OTEL_EBPF_SKIP_GO_SPECIFIC_TRACERS"`
 
 	// Debugging only option. Make sure the kernel side doesn't filter any PIDs, force user space filtering.
-	//nolint:undoc
 	BPFPidFilterOff bool `yaml:"bpf_pid_filter_off" env:"OTEL_EBPF_BPF_PID_FILTER_OFF"`
 
 	// Disables instrumentation of services which are already instrumented

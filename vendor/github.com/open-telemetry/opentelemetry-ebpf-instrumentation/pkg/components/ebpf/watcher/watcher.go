@@ -71,7 +71,7 @@ func (p *Watcher) KProbes() map[string]ebpfcommon.ProbeDesc {
 	kprobes := map[string]ebpfcommon.ProbeDesc{
 		"sys_bind": {
 			Required: true,
-			Start:    p.bpfObjects.BeylaKprobeSysBind,
+			Start:    p.bpfObjects.ObiKprobeSysBind,
 		},
 	}
 

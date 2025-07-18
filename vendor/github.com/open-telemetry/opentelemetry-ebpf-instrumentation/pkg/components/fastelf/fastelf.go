@@ -10,12 +10,12 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// revive and stylecheck linters complain about underscores and casing, but
-// these are the caononical name for this constants, hence 'nolint'
+// revive linter complain about underscores and casing, but these are the
+// caononical name for this constants, hence 'nolint'
 
 const InvalidAddr = ^uint64(0)
 
-//nolint:revive,stylecheck,staticcheck,ST1003
+//nolint:revive,staticcheck
 const (
 	STT_NOTYPE  uint8 = 0  /* Unspecified type. */
 	STT_OBJECT  uint8 = 1  /* Data object. */
@@ -35,7 +35,7 @@ const (
 	STT_GNU_IFUNC uint8 = 10 /* Indirect code object. */
 )
 
-//nolint:revive,stylecheck,staticcheck,ST1003
+//nolint:revive,staticcheck
 const (
 	SHT_NULL           uint32 = 0          /* inactive */
 	SHT_PROGBITS       uint32 = 1          /* program defined information */
@@ -69,7 +69,7 @@ const (
 	SHT_HIUSER         uint32 = 0xffffffff /* specific indexes */
 )
 
-//nolint:revive,stylecheck,staticcheck,ST1003
+//nolint:revive,staticcheck
 const (
 	PT_NULL    uint32 = 0 /* Unused entry. */
 	PT_LOAD    uint32 = 1 /* Loadable segment. */
@@ -119,7 +119,7 @@ const (
 	PT_HIPROC uint32 = 0x7fffffff /* Last processor-specific type. */
 )
 
-//nolint:revive,stylecheck,staticcheck,ST1003
+//nolint:revive,staticcheck
 const (
 	PF_X        uint32 = 0x1        /* Executable. */
 	PF_W        uint32 = 0x2        /* Writable. */
@@ -128,7 +128,7 @@ const (
 	PF_MASKPROC uint32 = 0xf0000000 /* Processor-specific. */
 )
 
-//nolint:revive,stylecheck,staticcheck,ST1003
+//nolint:revive,staticcheck
 type Elf64_Ehdr struct {
 	Ident     [16]byte
 	Type      uint16
@@ -146,7 +146,7 @@ type Elf64_Ehdr struct {
 	Shstrndx  uint16
 }
 
-//nolint:revive,stylecheck,staticcheck,ST1003
+//nolint:revive,staticcheck
 type Elf64_Phdr struct {
 	Type   uint32
 	Flags  uint32
@@ -158,7 +158,7 @@ type Elf64_Phdr struct {
 	Align  uint64
 }
 
-//nolint:revive,stylecheck,staticcheck,ST1003
+//nolint:revive,staticcheck
 type Elf64_Shdr struct {
 	Name      uint32
 	Type      uint32
@@ -172,7 +172,7 @@ type Elf64_Shdr struct {
 	Entsize   uint64
 }
 
-//nolint:revive,stylecheck,staticcheck,ST1003
+//nolint:revive,staticcheck
 type Elf64_Sym struct {
 	Name  uint32
 	Info  uint8

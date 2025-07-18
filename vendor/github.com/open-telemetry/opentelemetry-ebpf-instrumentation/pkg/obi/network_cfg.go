@@ -80,18 +80,15 @@ type NetworkConfig struct {
 	// both the physical and a virtual interface).
 	// "first_come" will forward only flows from the first interface the flows are received from.
 	// Default value: first_come
-	//nolint:undoc
 	Deduper string `yaml:"deduper" env:"OTEL_EBPF_NETWORK_DEDUPER"`
 	// DeduperFCTTL specifies the expiry duration of the flows "first_come" deduplicator. After
 	// a flow hasn't been received for that expiry time, the deduplicator forgets it. That means
 	// that a flow from a connection that has been inactive during that period could be forwarded
 	// again from a different interface.
 	// If the value is not set, it will default to 2 * CacheActiveTimeout
-	//nolint:undoc
 	DeduperFCTTL time.Duration `yaml:"deduper_fc_ttl" env:"OTEL_EBPF_NETWORK_DEDUPER_FC_TTL"`
 	// Direction allows selecting which flows to trace according to its direction. Accepted values
 	// are "ingress", "egress" or "both" (default).
-	//nolint:undoc
 	Direction string `yaml:"direction" env:"OTEL_EBPF_NETWORK_DIRECTION"`
 	// Sampling holds the rate at which packets should be sampled and sent to the target collector.
 	// E.g. if set to 100, one out of 100 packets, on average, will be sent to the target collector.
@@ -101,18 +98,15 @@ type NetworkConfig struct {
 	// If the value is "watch", interfaces are traced immediately after they are created. This is
 	// the recommended setting for most configurations. "poll" value is a fallback mechanism that
 	// periodically queries the current network interfaces (frequency specified by ListenPollPeriod).
-	//nolint:undoc
 	ListenInterfaces string `yaml:"listen_interfaces" env:"OTEL_EBPF_NETWORK_LISTEN_INTERFACES"`
 	// ListenPollPeriod specifies the periodicity to query the network interfaces when the
 	// ListenInterfaces value is set to "poll".
-	//nolint:undoc
 	ListenPollPeriod time.Duration `yaml:"listen_poll_period" env:"OTEL_EBPF_NETWORK_LISTEN_POLL_PERIOD"`
 
 	// ReverseDNS allows flows that haven't been previously decorated with any source/destination name
 	// to override the name with the network hostname of the source and destination IPs.
 	// This is an experimental feature and it is not guaranteed to work on most virtualized environments
 	// for external traffic.
-	//nolint:undoc
 	ReverseDNS flow.ReverseDNS `yaml:"reverse_dns"`
 	// Print the network flows in the Standard Output, if true
 	Print bool `yaml:"print_flows" env:"OTEL_EBPF_NETWORK_PRINT_FLOWS"`

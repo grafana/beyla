@@ -15,19 +15,14 @@ import (
 // Config options of the Kubernetes Cache service. Check the "DefaultConfig" variable for a view of the default values.
 type Config struct {
 	// LogLevel can be one of: debug, info, warn, error
-	//nolint:undoc
 	LogLevel string `yaml:"log_level" env:"OTEL_EBPF_K8S_CACHE_LOG_LEVEL"`
 	// Port where the service is going to listen to
-	//nolint:undoc
 	Port int `yaml:"port" env:"OTEL_EBPF_K8S_CACHE_PORT"`
 	// MaxConnection is the maximum number of concurrent clients that the service can handle at the same time
-	//nolint:undoc
 	MaxConnections int `yaml:"max_connections" env:"OTEL_EBPF_K8S_CACHE_MAX_CONNECTIONS"`
 	// ProfilePort is the port where the pprof server is going to listen to. 0 (default) means disabled
-	//nolint:undoc
 	ProfilePort int `yaml:"profile_port" env:"OTEL_EBPF_K8S_CACHE_PROFILE_PORT"`
 	// InformerResyncPeriod is the time interval between complete resyncs of the informers
-	//nolint:undoc
 	InformerResyncPeriod time.Duration `yaml:"informer_resync_period" env:"OTEL_EBPF_K8S_CACHE_INFORMER_RESYNC_PERIOD"`
 
 	InternalMetrics instrument.InternalMetricsConfig `yaml:"internal_metrics"`

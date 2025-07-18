@@ -259,9 +259,9 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.ProbeDesc {
 			Required: true,
 			End:      p.bpfObjects.ObiKretprobeSysAccept4,
 		},
-		"sock_alloc": {
+		"security_socket_accept": {
 			Required: true,
-			End:      p.bpfObjects.ObiKretprobeSockAlloc,
+			Start:    p.bpfObjects.ObiKprobeSecuritySocketAccept,
 		},
 		"tcp_rcv_established": {
 			Required: true,

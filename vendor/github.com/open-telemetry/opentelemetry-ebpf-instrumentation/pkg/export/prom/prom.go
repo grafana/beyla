@@ -112,7 +112,6 @@ type PrometheusConfig struct {
 	Port int    `yaml:"port" env:"OTEL_EBPF_PROMETHEUS_PORT"`
 	Path string `yaml:"path" env:"OTEL_EBPF_PROMETHEUS_PATH"`
 
-	//nolint:undoc
 	DisableBuildInfo bool `yaml:"disable_build_info" env:"OTEL_EBPF_PROMETHEUS_DISABLE_BUILD_INFO"`
 
 	// Features of metrics that are can be exported. Accepted values are "application" and "network".
@@ -124,9 +123,8 @@ type PrometheusConfig struct {
 
 	// TTL is the time since a metric was updated for the last time until it is
 	// removed from the metrics set.
-	TTL time.Duration `yaml:"ttl" env:"OTEL_EBPF_PROMETHEUS_TTL"`
-	//nolint:undoc
-	SpanMetricsServiceCacheSize int `yaml:"service_cache_size"`
+	TTL                         time.Duration `yaml:"ttl" env:"OTEL_EBPF_PROMETHEUS_TTL"`
+	SpanMetricsServiceCacheSize int           `yaml:"service_cache_size"`
 
 	AllowServiceGraphSelfReferences bool `yaml:"allow_service_graph_self_references" env:"OTEL_EBPF_PROMETHEUS_ALLOW_SERVICE_GRAPH_SELF_REFERENCES"`
 

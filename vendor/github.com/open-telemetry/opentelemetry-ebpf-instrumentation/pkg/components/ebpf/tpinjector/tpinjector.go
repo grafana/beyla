@@ -56,7 +56,7 @@ func (p *Tracer) SetupTailCalls() {
 	}{
 		{
 			index: 0,
-			prog:  p.bpfObjects.BeylaPacketExtenderWriteMsgTp,
+			prog:  p.bpfObjects.ObiPacketExtenderWriteMsgTp,
 		},
 	} {
 		err := p.bpfObjects.ExtenderJumpTable.Update(uint32(tc.index), uint32(tc.prog.FD()), ebpf.UpdateAny)
@@ -117,7 +117,7 @@ func (p *Tracer) SocketFilters() []*ebpf.Program {
 func (p *Tracer) SockMsgs() []ebpfcommon.SockMsg {
 	return []ebpfcommon.SockMsg{
 		{
-			Program:  p.bpfObjects.BeylaPacketExtender,
+			Program:  p.bpfObjects.ObiPacketExtender,
 			MapFD:    p.bpfObjects.SockDir.FD(),
 			AttachAs: ebpf.AttachSkMsgVerdict,
 		},
@@ -127,7 +127,7 @@ func (p *Tracer) SockMsgs() []ebpfcommon.SockMsg {
 func (p *Tracer) SockOps() []ebpfcommon.SockOps {
 	return []ebpfcommon.SockOps{
 		{
-			Program:  p.bpfObjects.BeylaSockmapTracker,
+			Program:  p.bpfObjects.ObiSockmapTracker,
 			AttachAs: ebpf.AttachCGroupSockOps,
 		},
 	}

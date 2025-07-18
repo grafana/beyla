@@ -132,8 +132,8 @@ func (p *Tracer) startTC(ctx context.Context) {
 	p.ifaceManager = tcmanager.NewInterfaceManager()
 	p.tcManager = tcmanager.NewTCManager(p.cfg.EBPF.TCBackend)
 	p.tcManager.SetInterfaceManager(p.ifaceManager)
-	p.tcManager.AddProgram("tc/tc_egress", p.bpfObjects.BeylaAppEgress, tcmanager.AttachmentEgress)
-	p.tcManager.AddProgram("tc/tc_ingress", p.bpfObjects.BeylaAppIngress, tcmanager.AttachmentIngress)
+	p.tcManager.AddProgram("tc/tc_egress", p.bpfObjects.ObiAppEgress, tcmanager.AttachmentEgress)
+	p.tcManager.AddProgram("tc/tc_ingress", p.bpfObjects.ObiAppIngress, tcmanager.AttachmentIngress)
 
 	p.ifaceManager.Start(ctx)
 }

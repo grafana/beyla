@@ -94,7 +94,7 @@ func (p *Tracer) SetupTailCalls() {
 	}{
 		{
 			index: 0,
-			prog:  p.bpfObjects.BeylaReadJsonrpcMethod,
+			prog:  p.bpfObjects.ObiReadJsonrpcMethod,
 		},
 	} {
 		err := p.bpfObjects.JsonrpcJumpTable.Update(uint32(tc.index), uint32(tc.prog.FD()), ebpf.UpdateAny)
@@ -235,247 +235,247 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 	m := map[string][]*ebpfcommon.ProbeDesc{
 		// Go runtime
 		"runtime.newproc1": {{
-			Start: p.bpfObjects.BeylaUprobeProcNewproc1,
-			End:   p.bpfObjects.BeylaUprobeProcNewproc1Ret,
+			Start: p.bpfObjects.ObiUprobeProcNewproc1,
+			End:   p.bpfObjects.ObiUprobeProcNewproc1Ret,
 		}},
 		"runtime.goexit1": {{
-			Start: p.bpfObjects.BeylaUprobeProcGoexit1,
+			Start: p.bpfObjects.ObiUprobeProcGoexit1,
 		}},
 		// Go net/http
 		"net/http.serverHandler.ServeHTTP": {{
-			Start: p.bpfObjects.BeylaUprobeServeHTTP,
-			End:   p.bpfObjects.BeylaUprobeServeHTTPReturns,
+			Start: p.bpfObjects.ObiUprobeServeHTTP,
+			End:   p.bpfObjects.ObiUprobeServeHTTPReturns,
 		}},
 		"net/http.(*conn).readRequest": {{
-			Start: p.bpfObjects.BeylaUprobeReadRequestStart,
-			End:   p.bpfObjects.BeylaUprobeReadRequestReturns,
+			Start: p.bpfObjects.ObiUprobeReadRequestStart,
+			End:   p.bpfObjects.ObiUprobeReadRequestReturns,
 		}},
 		"net/http.(*body).Read": {{
-			Start: p.bpfObjects.BeylaUprobeBodyRead,
-			End:   p.bpfObjects.BeylaUprobeBodyReadReturn,
+			Start: p.bpfObjects.ObiUprobeBodyRead,
+			End:   p.bpfObjects.ObiUprobeBodyReadReturn,
 		}},
 		"net/textproto.(*Reader).readContinuedLineSlice": {{
-			End: p.bpfObjects.BeylaUprobeReadContinuedLineSliceReturns,
+			End: p.bpfObjects.ObiUprobeReadContinuedLineSliceReturns,
 		}},
 		"net/http.(*Transport).roundTrip": {{ // HTTP client, works with Client.Do as well as using the RoundTripper directly
-			Start: p.bpfObjects.BeylaUprobeRoundTrip,
-			End:   p.bpfObjects.BeylaUprobeRoundTripReturn,
+			Start: p.bpfObjects.ObiUprobeRoundTrip,
+			End:   p.bpfObjects.ObiUprobeRoundTripReturn,
 		}},
 		"golang.org/x/net/http2.(*ClientConn).roundTrip": {{ // http2 client after 0.22
-			Start: p.bpfObjects.BeylaUprobeHttp2RoundTrip,
-			End:   p.bpfObjects.BeylaUprobeRoundTripReturn, // return is the same as for http 1.1
+			Start: p.bpfObjects.ObiUprobeHttp2RoundTrip,
+			End:   p.bpfObjects.ObiUprobeRoundTripReturn, // return is the same as for http 1.1
 		}},
 		"golang.org/x/net/http2.(*ClientConn).RoundTrip": {{ // http2 client
-			Start: p.bpfObjects.BeylaUprobeHttp2RoundTrip,
-			End:   p.bpfObjects.BeylaUprobeRoundTripReturn, // return is the same as for http 1.1
+			Start: p.bpfObjects.ObiUprobeHttp2RoundTrip,
+			End:   p.bpfObjects.ObiUprobeRoundTripReturn, // return is the same as for http 1.1
 		}},
 		"net/http.(*http2ClientConn).RoundTrip": {{ // http2 client vendored in Go
-			Start: p.bpfObjects.BeylaUprobeHttp2RoundTrip,
-			End:   p.bpfObjects.BeylaUprobeRoundTripReturn, // return is the same as for http 1.1
+			Start: p.bpfObjects.ObiUprobeHttp2RoundTrip,
+			End:   p.bpfObjects.ObiUprobeRoundTripReturn, // return is the same as for http 1.1
 		}},
 		"golang.org/x/net/http2.(*ClientConn).writeHeaders": {{ // http2 client
-			Start: p.bpfObjects.BeylaUprobeHttp2WriteHeaders,
+			Start: p.bpfObjects.ObiUprobeHttp2WriteHeaders,
 		}},
 		"net/http.(*http2ClientConn).writeHeaders": {{ // http2 client vendored in Go, but used from http 1.1 transition
-			Start: p.bpfObjects.BeylaUprobeHttp2WriteHeadersVendored,
+			Start: p.bpfObjects.ObiUprobeHttp2WriteHeadersVendored,
 		}},
 		"golang.org/x/net/http2.(*responseWriterState).writeHeader": {{ // http2 server request done, capture the response code
-			Start: p.bpfObjects.BeylaUprobeHttp2ResponseWriterStateWriteHeader,
+			Start: p.bpfObjects.ObiUprobeHttp2ResponseWriterStateWriteHeader,
 		}},
 		"net/http.(*http2responseWriterState).writeHeader": {{ // same as above, vendored in go
-			Start: p.bpfObjects.BeylaUprobeHttp2ResponseWriterStateWriteHeader,
+			Start: p.bpfObjects.ObiUprobeHttp2ResponseWriterStateWriteHeader,
 		}},
 		"net/http.(*response).WriteHeader": {{
-			Start: p.bpfObjects.BeylaUprobeHttp2ResponseWriterStateWriteHeader, // http response code capture
+			Start: p.bpfObjects.ObiUprobeHttp2ResponseWriterStateWriteHeader, // http response code capture
 		}},
 		"golang.org/x/net/http2.(*serverConn).runHandler": {{
-			Start: p.bpfObjects.BeylaUprobeHttp2serverConnRunHandler, // http2 server connection tracking
+			Start: p.bpfObjects.ObiUprobeHttp2serverConnRunHandler, // http2 server connection tracking
 		}},
 		"net/http.(*http2serverConn).runHandler": {{
-			Start: p.bpfObjects.BeylaUprobeHttp2serverConnRunHandler, // http2 server connection tracking, vendored in go
+			Start: p.bpfObjects.ObiUprobeHttp2serverConnRunHandler, // http2 server connection tracking, vendored in go
 		}},
 		"golang.org/x/net/http2.(*serverConn).processHeaders": {{
-			Start: p.bpfObjects.BeylaUprobeHttp2ServerProcessHeaders, // http2 server request header parsing
+			Start: p.bpfObjects.ObiUprobeHttp2ServerProcessHeaders, // http2 server request header parsing
 		}},
 		"net/http.(*http2serverConn).processHeaders": {{
-			Start: p.bpfObjects.BeylaUprobeHttp2ServerProcessHeaders, // http2 server request header parsing, vendored in go
+			Start: p.bpfObjects.ObiUprobeHttp2ServerProcessHeaders, // http2 server request header parsing, vendored in go
 		}},
 		// tracking of tcp connections for black-box propagation
 		"net/http.(*conn).serve": {{ // http server
-			Start: p.bpfObjects.BeylaUprobeConnServe,
-			End:   p.bpfObjects.BeylaUprobeConnServeRet,
+			Start: p.bpfObjects.ObiUprobeConnServe,
+			End:   p.bpfObjects.ObiUprobeConnServeRet,
 		}},
 		"net.(*netFD).Read": {
 			{
-				Start: p.bpfObjects.BeylaUprobeNetFdRead,
+				Start: p.bpfObjects.ObiUprobeNetFdRead,
 			},
 		},
 		"net/http.(*persistConn).roundTrip": {{ // http client
-			Start: p.bpfObjects.BeylaUprobePersistConnRoundTrip,
+			Start: p.bpfObjects.ObiUprobePersistConnRoundTrip,
 		}},
 		// sql
 		"database/sql.(*DB).queryDC": {{
-			Start: p.bpfObjects.BeylaUprobeQueryDC,
-			End:   p.bpfObjects.BeylaUprobeQueryReturn,
+			Start: p.bpfObjects.ObiUprobeQueryDC,
+			End:   p.bpfObjects.ObiUprobeQueryReturn,
 		}},
 		"database/sql.(*DB).execDC": {{
-			Start: p.bpfObjects.BeylaUprobeExecDC,
-			End:   p.bpfObjects.BeylaUprobeQueryReturn,
+			Start: p.bpfObjects.ObiUprobeExecDC,
+			End:   p.bpfObjects.ObiUprobeQueryReturn,
 		}},
 		// Go gRPC
 		"google.golang.org/grpc.(*Server).handleStream": {{
-			Start: p.bpfObjects.BeylaUprobeServerHandleStream,
-			End:   p.bpfObjects.BeylaUprobeServerHandleStreamReturn,
+			Start: p.bpfObjects.ObiUprobeServerHandleStream,
+			End:   p.bpfObjects.ObiUprobeServerHandleStreamReturn,
 		}},
 		"google.golang.org/grpc/internal/transport.(*http2Server).WriteStatus": {{
-			Start: p.bpfObjects.BeylaUprobeTransportWriteStatus,
+			Start: p.bpfObjects.ObiUprobeTransportWriteStatus,
 		}},
 		// in grpc 1.69.0 they renamed the above WriteStatus to writeStatus lowercase
 		"google.golang.org/grpc/internal/transport.(*http2Server).writeStatus": {{
-			Start: p.bpfObjects.BeylaUprobeTransportWriteStatus,
+			Start: p.bpfObjects.ObiUprobeTransportWriteStatus,
 		}},
 		"google.golang.org/grpc.(*ClientConn).Invoke": {{
-			Start: p.bpfObjects.BeylaUprobeClientConnInvoke,
-			End:   p.bpfObjects.BeylaUprobeClientConnInvokeReturn,
+			Start: p.bpfObjects.ObiUprobeClientConnInvoke,
+			End:   p.bpfObjects.ObiUprobeClientConnInvokeReturn,
 		}},
 		"google.golang.org/grpc.(*ClientConn).NewStream": {{
-			Start: p.bpfObjects.BeylaUprobeClientConnNewStream,
-			End:   p.bpfObjects.BeylaUprobeClientConnNewStreamReturn,
+			Start: p.bpfObjects.ObiUprobeClientConnNewStream,
+			End:   p.bpfObjects.ObiUprobeClientConnNewStreamReturn,
 		}},
 		"google.golang.org/grpc.(*ClientConn).Close": {{
-			Start: p.bpfObjects.BeylaUprobeClientConnClose,
+			Start: p.bpfObjects.ObiUprobeClientConnClose,
 		}},
 		"google.golang.org/grpc.(*clientStream).RecvMsg": {{
-			End: p.bpfObjects.BeylaUprobeClientStreamRecvMsgReturn,
+			End: p.bpfObjects.ObiUprobeClientStreamRecvMsgReturn,
 		}},
 		"google.golang.org/grpc.(*clientStream).CloseSend": {{
-			End: p.bpfObjects.BeylaUprobeClientConnInvokeReturn,
+			End: p.bpfObjects.ObiUprobeClientConnInvokeReturn,
 		}},
 		"google.golang.org/grpc/internal/transport.(*http2Client).NewStream": {{
-			Start: p.bpfObjects.BeylaUprobeTransportHttp2ClientNewStream,
-			End:   p.bpfObjects.BeylaUprobeTransportHttp2ClientNewStreamReturns,
+			Start: p.bpfObjects.ObiUprobeTransportHttp2ClientNewStream,
+			End:   p.bpfObjects.ObiUprobeTransportHttp2ClientNewStreamReturns,
 		}},
 		"google.golang.org/grpc/internal/transport.(*http2Server).operateHeaders": {{
-			Start: p.bpfObjects.BeylaUprobeHttp2ServerOperateHeaders,
+			Start: p.bpfObjects.ObiUprobeHttp2ServerOperateHeaders,
 		}},
 		"google.golang.org/grpc/internal/transport.(*serverHandlerTransport).HandleStreams": {{
-			Start: p.bpfObjects.BeylaUprobeServerHandlerTransportHandleStreams,
+			Start: p.bpfObjects.ObiUprobeServerHandlerTransportHandleStreams,
 		}},
 		// Redis
 		"github.com/redis/go-redis/v9/internal/pool.(*Conn).WithWriter": {{
-			Start: p.bpfObjects.BeylaUprobeRedisWithWriter,
-			End:   p.bpfObjects.BeylaUprobeRedisWithWriterRet,
+			Start: p.bpfObjects.ObiUprobeRedisWithWriter,
+			End:   p.bpfObjects.ObiUprobeRedisWithWriterRet,
 		}},
 		"github.com/redis/go-redis/v9.(*baseClient)._process": {{
-			Start: p.bpfObjects.BeylaUprobeRedisProcess,
-			End:   p.bpfObjects.BeylaUprobeRedisProcessRet,
+			Start: p.bpfObjects.ObiUprobeRedisProcess,
+			End:   p.bpfObjects.ObiUprobeRedisProcessRet,
 		}},
 		"github.com/redis/go-redis/v9.(*baseClient).pipelineProcessCmds": {{
-			Start: p.bpfObjects.BeylaUprobeRedisProcess,
-			End:   p.bpfObjects.BeylaUprobeRedisProcessRet,
+			Start: p.bpfObjects.ObiUprobeRedisProcess,
+			End:   p.bpfObjects.ObiUprobeRedisProcessRet,
 		}},
 		"github.com/redis/go-redis/v9.(*baseClient).txPipelineProcessCmds": {{
-			Start: p.bpfObjects.BeylaUprobeRedisProcess,
-			End:   p.bpfObjects.BeylaUprobeRedisProcessRet,
+			Start: p.bpfObjects.ObiUprobeRedisProcess,
+			End:   p.bpfObjects.ObiUprobeRedisProcessRet,
 		}},
 		// Kafka Go
 		"github.com/segmentio/kafka-go.(*Writer).WriteMessages": {{ // runs on the same gorountine as other requests, finds traceparent info
-			Start: p.bpfObjects.BeylaUprobeWriterWriteMessages,
+			Start: p.bpfObjects.ObiUprobeWriterWriteMessages,
 		}},
 		"github.com/segmentio/kafka-go.(*Writer).produce": {{ // stores the current topic
-			Start: p.bpfObjects.BeylaUprobeWriterProduce,
+			Start: p.bpfObjects.ObiUprobeWriterProduce,
 		}},
 		"github.com/segmentio/kafka-go.(*Client).roundTrip": {{ // has the goroutine connection with (*Writer).produce and msg* connection with protocol.RoundTrip
-			Start: p.bpfObjects.BeylaUprobeClientRoundTrip,
+			Start: p.bpfObjects.ObiUprobeClientRoundTrip,
 		}},
 		"github.com/segmentio/kafka-go/protocol.RoundTrip": {{ // used for collecting the connection information
-			Start: p.bpfObjects.BeylaUprobeProtocolRoundtrip,
-			End:   p.bpfObjects.BeylaUprobeProtocolRoundtripRet,
+			Start: p.bpfObjects.ObiUprobeProtocolRoundtrip,
+			End:   p.bpfObjects.ObiUprobeProtocolRoundtripRet,
 		}},
 		"github.com/segmentio/kafka-go.(*reader).read": {{ // used for capturing the info for the fetch operations
-			Start: p.bpfObjects.BeylaUprobeReaderRead,
-			End:   p.bpfObjects.BeylaUprobeReaderReadRet,
+			Start: p.bpfObjects.ObiUprobeReaderRead,
+			End:   p.bpfObjects.ObiUprobeReaderReadRet,
 		}},
 		"github.com/segmentio/kafka-go.(*reader).sendMessage": {{ // to accurately measure the start time
-			Start: p.bpfObjects.BeylaUprobeReaderSendMessage,
+			Start: p.bpfObjects.ObiUprobeReaderSendMessage,
 		}},
 		// Kafka sarama
 		"github.com/IBM/sarama.(*Broker).write": {{
-			Start: p.bpfObjects.BeylaUprobeSaramaBrokerWrite,
+			Start: p.bpfObjects.ObiUprobeSaramaBrokerWrite,
 		}},
 		"github.com/IBM/sarama.(*responsePromise).handle": {{
-			Start: p.bpfObjects.BeylaUprobeSaramaResponsePromiseHandle,
+			Start: p.bpfObjects.ObiUprobeSaramaResponsePromiseHandle,
 		}},
 		"github.com/IBM/sarama.(*Broker).sendInternal": {{
-			Start: p.bpfObjects.BeylaUprobeSaramaSendInternal,
+			Start: p.bpfObjects.ObiUprobeSaramaSendInternal,
 		}},
 		"github.com/Shopify/sarama.(*Broker).write": {{
-			Start: p.bpfObjects.BeylaUprobeSaramaBrokerWrite,
+			Start: p.bpfObjects.ObiUprobeSaramaBrokerWrite,
 		}},
 		"github.com/Shopify/sarama.(*responsePromise).handle": {{
-			Start: p.bpfObjects.BeylaUprobeSaramaResponsePromiseHandle,
+			Start: p.bpfObjects.ObiUprobeSaramaResponsePromiseHandle,
 		}},
 		"github.com/Shopify/sarama.(*Broker).sendInternal": {{
-			Start: p.bpfObjects.BeylaUprobeSaramaSendInternal,
+			Start: p.bpfObjects.ObiUprobeSaramaSendInternal,
 		}},
 		// Go OTel SDK
 		"go.opentelemetry.io/otel/internal/global.(*tracer).Start": {{
-			Start: p.bpfObjects.BeylaUprobeTracerStartGlobal,
-			End:   p.bpfObjects.BeylaUprobeTracerStartReturns,
+			Start: p.bpfObjects.ObiUprobeTracerStartGlobal,
+			End:   p.bpfObjects.ObiUprobeTracerStartReturns,
 		}},
 		"go.opentelemetry.io/auto/sdk.(*tracer).Start": {{
-			Start: p.bpfObjects.BeylaUprobeTracerStart,
-			End:   p.bpfObjects.BeylaUprobeTracerStartReturns,
+			Start: p.bpfObjects.ObiUprobeTracerStart,
+			End:   p.bpfObjects.ObiUprobeTracerStartReturns,
 		}},
 		"go.opentelemetry.io/otel/internal/global.(*nonRecordingSpan).End": {{
-			Start: p.bpfObjects.BeylaUprobeNonRecordingSpanEnd,
+			Start: p.bpfObjects.ObiUprobeNonRecordingSpanEnd,
 		}},
 		"go.opentelemetry.io/auto/sdk.(*span).End": {{
-			Start: p.bpfObjects.BeylaUprobeNonRecordingSpanEnd,
+			Start: p.bpfObjects.ObiUprobeNonRecordingSpanEnd,
 		}},
 		"go.opentelemetry.io/otel/internal/global.(*nonRecordingSpan).SetStatus": {{
-			Start: p.bpfObjects.BeylaUprobeSetStatus,
+			Start: p.bpfObjects.ObiUprobeSetStatus,
 		}},
 		"go.opentelemetry.io/auto/sdk.(*span).SetStatus": {{
-			Start: p.bpfObjects.BeylaUprobeSetStatus,
+			Start: p.bpfObjects.ObiUprobeSetStatus,
 		}},
 		"go.opentelemetry.io/otel/internal/global.(*nonRecordingSpan).SetAttributes": {{
-			Start: p.bpfObjects.BeylaUprobeSetAttributes,
+			Start: p.bpfObjects.ObiUprobeSetAttributes,
 		}},
 		"go.opentelemetry.io/auto/sdk.(*span).SetAttributes": {{
-			Start: p.bpfObjects.BeylaUprobeSetAttributes,
+			Start: p.bpfObjects.ObiUprobeSetAttributes,
 		}},
 		"go.opentelemetry.io/otel/internal/global.(*nonRecordingSpan).SetName": {{
-			Start: p.bpfObjects.BeylaUprobeSetName,
+			Start: p.bpfObjects.ObiUprobeSetName,
 		}},
 		"go.opentelemetry.io/auto/sdk.(*span).SetName": {{
-			Start: p.bpfObjects.BeylaUprobeSetName,
+			Start: p.bpfObjects.ObiUprobeSetName,
 		}},
 		"go.opentelemetry.io/otel/internal/global.(*nonRecordingSpan).RecordError": {{
-			Start: p.bpfObjects.BeylaUprobeRecordError,
+			Start: p.bpfObjects.ObiUprobeRecordError,
 		}},
 		"go.opentelemetry.io/auto/sdk.(*span).RecordError": {{
-			Start: p.bpfObjects.BeylaUprobeRecordError,
+			Start: p.bpfObjects.ObiUprobeRecordError,
 		}},
 	}
 
 	if p.supportsContextPropagation() {
 		m["net/http.Header.writeSubset"] = []*ebpfcommon.ProbeDesc{{
-			Start: p.bpfObjects.BeylaUprobeWriteSubset, // http 1.x context propagation
+			Start: p.bpfObjects.ObiUprobeWriteSubset, // http 1.x context propagation
 		}}
 		m["golang.org/x/net/http2.(*Framer).WriteHeaders"] = []*ebpfcommon.ProbeDesc{
 			{ // http2 context propagation
-				Start: p.bpfObjects.BeylaUprobeHttp2FramerWriteHeaders,
-				End:   p.bpfObjects.BeylaUprobeHttp2FramerWriteHeadersReturns,
+				Start: p.bpfObjects.ObiUprobeHttp2FramerWriteHeaders,
+				End:   p.bpfObjects.ObiUprobeHttp2FramerWriteHeadersReturns,
 			},
 			{ // for grpc
-				Start: p.bpfObjects.BeylaUprobeGrpcFramerWriteHeaders,
-				End:   p.bpfObjects.BeylaUprobeGrpcFramerWriteHeadersReturns,
+				Start: p.bpfObjects.ObiUprobeGrpcFramerWriteHeaders,
+				End:   p.bpfObjects.ObiUprobeGrpcFramerWriteHeadersReturns,
 			},
 		}
 		m["net/http.(*http2Framer).WriteHeaders"] = []*ebpfcommon.ProbeDesc{{ // http2 context propagation
-			Start: p.bpfObjects.BeylaUprobeHttp2FramerWriteHeaders,
-			End:   p.bpfObjects.BeylaUprobeHttp2FramerWriteHeadersReturns,
+			Start: p.bpfObjects.ObiUprobeHttp2FramerWriteHeaders,
+			End:   p.bpfObjects.ObiUprobeHttp2FramerWriteHeadersReturns,
 		}}
 	}
 

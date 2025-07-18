@@ -111,11 +111,11 @@ func NewFlowFetcher(
 	tcManager.SetInterfaceManager(ifaceManager)
 
 	if egress {
-		tcManager.AddProgram("tc/egress_flow_parse", objects.BeylaEgressFlowParse, tcmanager.AttachmentEgress)
+		tcManager.AddProgram("tc/egress_flow_parse", objects.ObiEgressFlowParse, tcmanager.AttachmentEgress)
 	}
 
 	if ingress {
-		tcManager.AddProgram("tc/ingress_flow_parse", objects.BeylaIngressFlowParse, tcmanager.AttachmentIngress)
+		tcManager.AddProgram("tc/ingress_flow_parse", objects.ObiIngressFlowParse, tcmanager.AttachmentIngress)
 	}
 
 	fetcher := &FlowFetcher{
@@ -171,10 +171,10 @@ func (m *FlowFetcher) Close() error {
 
 func (m *FlowFetcher) closeObjects() []error {
 	var errs []error
-	if err := m.objects.BeylaEgressFlowParse.Close(); err != nil {
+	if err := m.objects.ObiEgressFlowParse.Close(); err != nil {
 		errs = append(errs, err)
 	}
-	if err := m.objects.BeylaIngressFlowParse.Close(); err != nil {
+	if err := m.objects.ObiIngressFlowParse.Close(); err != nil {
 		errs = append(errs, err)
 	}
 	if err := m.objects.AggregatedFlows.Close(); err != nil {

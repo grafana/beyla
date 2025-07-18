@@ -172,8 +172,7 @@ type Config struct {
 
 	Attributes Attributes `yaml:"attributes"`
 	// Routes is an optional node. If not set, data will be directly forwarded to exporters.
-	Routes *transform.RoutesConfig `yaml:"routes"`
-	//nolint:undoc
+	Routes       *transform.RoutesConfig       `yaml:"routes"`
 	NameResolver *transform.NameResolverConfig `yaml:"name_resolver"`
 	Metrics      otel.MetricsConfig            `yaml:"otel_metrics_export"`
 	Traces       otel.TracesConfig             `yaml:"otel_traces_export"`
@@ -187,7 +186,6 @@ type Config struct {
 	// AutoTargetExe selects the executable to instrument matching a Glob against the executable path.
 	// To set this value via YAML, use discovery > instrument.
 	// It also accepts OTEL_GO_AUTO_TARGET_EXE for compatibility with opentelemetry-go-instrumentation
-	//nolint:undoc
 	AutoTargetExe services.GlobAttr `env:"OTEL_EBPF_AUTO_TARGET_EXE,expand" envDefault:"${OTEL_GO_AUTO_TARGET_EXE}"`
 
 	// Port allows selecting the instrumented executable that owns the Port value. If this value is set (and
@@ -221,11 +219,9 @@ type Config struct {
 	// From this comment, the properties below will remain undocumented, as they
 	// are useful for development purposes. They might be helpful for customer support.
 
-	//nolint:undoc
-	ChannelBufferLen int `yaml:"channel_buffer_len" env:"OTEL_EBPF_CHANNEL_BUFFER_LEN"`
-	//nolint:undoc
-	ProfilePort     int             `yaml:"profile_port" env:"OTEL_EBPF_PROFILE_PORT"`
-	InternalMetrics imetrics.Config `yaml:"internal_metrics"`
+	ChannelBufferLen int             `yaml:"channel_buffer_len" env:"OTEL_EBPF_CHANNEL_BUFFER_LEN"`
+	ProfilePort      int             `yaml:"profile_port" env:"OTEL_EBPF_PROFILE_PORT"`
+	InternalMetrics  imetrics.Config `yaml:"internal_metrics"`
 
 	// LogConfig enables the logging of the configuration on startup.
 	LogConfig bool `yaml:"log_config" env:"OTEL_EBPF_LOG_CONFIG"`
@@ -243,10 +239,8 @@ type Attributes struct {
 
 type HostIDConfig struct {
 	// Override allows overriding the reported host.id in Beyla
-	//nolint:undoc
 	Override string `yaml:"override" env:"OTEL_EBPF_HOST_ID"`
 	// FetchTimeout specifies the timeout for trying to fetch the HostID from diverse Cloud Providers
-	//nolint:undoc
 	FetchTimeout time.Duration `yaml:"fetch_timeout" env:"OTEL_EBPF_HOST_ID_FETCH_TIMEOUT"`
 }
 

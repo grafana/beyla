@@ -2,16 +2,18 @@ package ebpfcommon
 
 import (
 	"fmt"
+	"log/slog"
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/ringbuf"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/sqlprune"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/config"
 )
 
 // ReadTCPRequestIntoSpan returns a request.Span from the provided ring buffer record
 //
 //nolint:cyclop
-func ReadTCPRequestIntoSpan(cfg *config.EBPFTracer, record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {
+func ReadTCPRequestIntoSpan(parseCtx *EBPFParseContext, cfg *config.EBPFTracer, record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {
 	event, err := ReinterpretCast[TCPRequestInfo](record.RawSample)
 	if err != nil {
 		return request.Span{}, true, err
@@ -21,72 +23,136 @@ func ReadTCPRequestIntoSpan(cfg *config.EBPFTracer, record *ringbuf.Record, filt
 		return request.Span{}, true, nil
 	}
 
+	var requestBuffer, responseBuffer []byte
+
 	l := int(event.Len)
 	if l < 0 || len(event.Buf) < l {
 		l = len(event.Buf)
 	}
+	requestBuffer = event.Buf[:l]
 
-	rl := int(event.RespLen)
-	if rl < 0 || len(event.Rbuf) < rl {
-		rl = len(event.Rbuf)
+	l = int(event.RespLen)
+	if l < 0 || len(event.Rbuf) < l {
+		l = len(event.Rbuf)
 	}
+	responseBuffer = event.Rbuf[:l]
 
-	b := event.Buf[:l]
-
-	if cfg.ProtocolDebug {
-		fmt.Printf("[>] %v\n", b)
-		fmt.Printf("[<] %v\n", event.Rbuf[:rl])
-	}
-
-	// Check if we have a SQL statement
-	op, table, sql, kind := detectSQLPayload(cfg.HeuristicSQLDetect, b)
-	if validSQL(op, table, kind) {
-		return TCPToSQLToSpan(event, op, table, sql, kind), false, nil
-	} else {
-		op, table, sql, kind = detectSQLPayload(cfg.HeuristicSQLDetect, event.Rbuf[:rl])
-		if validSQL(op, table, kind) {
-			reverseTCPEvent(event)
-
-			return TCPToSQLToSpan(event, op, table, sql, kind), false, nil
+	if event.HasLargeBuffers == 1 {
+		if b, ok := getTCPLargeBuffer(parseCtx, event.Tp.TraceId, event.Tp.SpanId, 0); ok {
+			requestBuffer = b
+		}
+		if b, ok := getTCPLargeBuffer(parseCtx, event.Tp.TraceId, event.Tp.SpanId, 1); ok {
+			responseBuffer = b
 		}
 	}
 
-	if maybeFastCGI(b) {
-		op, uri, status := detectFastCGI(b, event.Rbuf[:rl])
+	if cfg.ProtocolDebug {
+		fmt.Printf("[>] %v\n", requestBuffer)
+		fmt.Printf("[<] %v\n", responseBuffer)
+	}
+
+	// We might know already the protocol for this event
+	switch event.ProtocolType {
+	case ProtocolTypeMySQL: // MySQL
+		if len(requestBuffer) < sqlprune.MySQLHdrSize+1 {
+			slog.Warn("MySQL request too short, falling back to generic handler", "len", len(requestBuffer))
+			break
+		}
+
+		sqlCommand := sqlprune.SQLParseCommandID(request.DBMySQL, requestBuffer)
+		if sqlCommand == "" {
+			slog.Warn("MySQL command ID unhandled", "commandID", requestBuffer[sqlprune.MySQLHdrSize])
+			return request.Span{}, true, nil
+		}
+
+		var op, table string
+		stmt := string(requestBuffer[sqlprune.MySQLHdrSize+1:])
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("recovered from panic in SQLParseOperationAndTableNEW", "error", r)
+				op = ""
+				table = ""
+			}
+		}()
+
+		op, table = sqlprune.SQLParseOperationAndTableNEW(stmt)
+		if !validSQL(op, table, request.DBMySQL) {
+			slog.Warn("MySQL operation and/or table are invalid, falling back to generic handler", "stmt", stmt)
+			break
+		}
+
+		return TCPToSQLToSpan(event, op, table, stmt, request.DBMySQL, requestBuffer, responseBuffer, sqlCommand), false, nil
+	case ProtocolTypeUnknown:
+	default:
+	}
+
+	// Check if we have a SQL statement
+	op, table, sql, kind := detectSQLPayload(cfg.HeuristicSQLDetect, requestBuffer)
+	if validSQL(op, table, kind) {
+		return TCPToSQLToSpan(event, op, table, sql, kind, requestBuffer, responseBuffer, ""), false, nil
+	} else {
+		op, table, sql, kind = detectSQLPayload(cfg.HeuristicSQLDetect, responseBuffer)
+		if validSQL(op, table, kind) {
+			reverseTCPEvent(event)
+			return TCPToSQLToSpan(event, op, table, sql, kind, requestBuffer, responseBuffer, ""), false, nil
+		}
+	}
+
+	if maybeFastCGI(requestBuffer) {
+		op, uri, status := detectFastCGI(requestBuffer, responseBuffer)
 		if status >= 0 {
 			return TCPToFastCGIToSpan(event, op, uri, status), false, nil
 		}
 	}
 
+	var mongoRequest *MongoRequestValue
+	var moreToCome bool
+	_, _, err = ProcessMongoEvent(requestBuffer, int64(event.StartMonotimeNs), int64(event.EndMonotimeNs), event.ConnInfo, *parseCtx.mongoRequestCache)
+	if err == nil {
+		mongoRequest, moreToCome, err = ProcessMongoEvent(event.Rbuf[:l], int64(event.StartMonotimeNs), int64(event.EndMonotimeNs), event.ConnInfo, *parseCtx.mongoRequestCache)
+	}
+	if err == nil && !moreToCome && mongoRequest != nil {
+		mongoInfo, err := getMongoInfo(mongoRequest)
+		if err == nil {
+			mongoSpan := TCPToMongoToSpan(event, mongoInfo)
+			return mongoSpan, false, nil
+		}
+	}
+
 	switch {
-	case isRedis(b) && isRedis(event.Rbuf[:rl]):
-		op, text, ok := parseRedisRequest(string(b))
+	case isRedis(requestBuffer) && isRedis(responseBuffer):
+		op, text, ok := parseRedisRequest(string(requestBuffer))
 
 		if ok {
 			var status int
+			var redisErr request.DBError
 			if op == "" {
-				op, text, ok = parseRedisRequest(string(event.Rbuf[:rl]))
+				op, text, ok = parseRedisRequest(string(responseBuffer))
 				if !ok || op == "" {
 					return request.Span{}, true, nil // ignore if we couldn't parse it
 				}
 				// We've caught the event reversed in the middle of communication, let's
 				// reverse the event
 				reverseTCPEvent(event)
-				status = redisStatus(b)
+				redisErr, status = redisStatus(requestBuffer)
 			} else {
-				status = redisStatus(event.Rbuf[:rl])
+				redisErr, status = redisStatus(responseBuffer)
 			}
 
-			return TCPToRedisToSpan(event, op, text, status), false, nil
+			db, found := getRedisDB(event.ConnInfo, op, text, parseCtx.redisDBCache)
+			if !found {
+				db = -1 // if we don't have the db in cache, we assume it's not set
+			}
+			return TCPToRedisToSpan(event, op, text, status, db, redisErr), false, nil
 		}
 	default:
 		// Kafka and gRPC can look very similar in terms of bytes. We can mistake one for another.
 		// We try gRPC first because it's more reliable in detecting false gRPC sequences.
-		if isHTTP2(b, int(event.Len)) || isHTTP2(event.Rbuf[:rl], int(event.RespLen)) {
+		if isHTTP2(requestBuffer, int(event.Len)) || isHTTP2(responseBuffer, int(event.RespLen)) {
 			evCopy := *event
 			MisclassifiedEvents <- MisclassifiedEvent{EventType: EventTypeKHTTP2, TCPInfo: &evCopy}
 		} else {
-			k, err := ProcessPossibleKafkaEvent(event, b, event.Rbuf[:rl])
+			k, err := ProcessPossibleKafkaEvent(event, requestBuffer, responseBuffer)
 			if err == nil {
 				return TCPToKafkaToSpan(event, k), false, nil
 			}

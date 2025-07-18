@@ -2,8 +2,11 @@ package ebpfcommon
 
 import (
 	"bytes"
+	"strconv"
 	"strings"
 	"unsafe"
+
+	"github.com/hashicorp/golang-lru/v2/simplelru"
 
 	trace2 "go.opentelemetry.io/otel/trace"
 
@@ -13,6 +16,17 @@ import (
 )
 
 const minRedisFrameLen = 3
+
+var redisErrorCodes = [...]string{
+	"ERR ",
+	"WRONGTYPE ",
+	"MOVED ",
+	"ASK ",
+	"BUSY ",
+	"NOSCRIPT ",
+	"CLUSTERDOWN ",
+	"READONLY ",
+}
 
 func isRedis(buf []uint8) bool {
 	if len(buf) < minRedisFrameLen {
@@ -35,7 +49,8 @@ func isRedisOp(buf []uint8) bool {
 			return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '.' || c == ' ' || c == '-' || c == '_'
 		})
 	case '-':
-		return isRedisError(buf[1:])
+		_, isError := getRedisError(buf[1:])
+		return isError
 	case ':', '$', '*':
 		return crlfTerminatedMatch(buf[1:], func(c uint8) bool {
 			return (c >= '0' && c <= '9') || c == '-'
@@ -45,14 +60,21 @@ func isRedisOp(buf []uint8) bool {
 	return false
 }
 
-func isRedisError(buf []uint8) bool {
-	return bytes.HasPrefix(buf, []byte("ERR ")) ||
-		bytes.HasPrefix(buf, []byte("WRONGTYPE ")) ||
-		bytes.HasPrefix(buf, []byte("MOVED ")) ||
-		bytes.HasPrefix(buf, []byte("ASK ")) ||
-		bytes.HasPrefix(buf, []byte("BUSY ")) ||
-		bytes.HasPrefix(buf, []byte("NOSCRIPT ")) ||
-		bytes.HasPrefix(buf, []byte("CLUSTERDOWN "))
+func getRedisError(buf []uint8) (request.DBError, bool) {
+	description := strings.Trim(string(buf), "\r\n")
+	errorCode := ""
+
+	for _, redisErrorCode := range redisErrorCodes {
+		if bytes.HasPrefix(buf, []byte(redisErrorCode)) {
+			errorCode = strings.TrimSpace(redisErrorCode)
+			break
+		}
+	}
+	dbError := request.DBError{
+		Description: description,
+		ErrorCode:   errorCode,
+	}
+	return dbError, errorCode != ""
 }
 
 func crlfTerminatedMatch(buf []uint8, matches func(c uint8) bool) bool {
@@ -154,23 +176,50 @@ func parseRedisRequest(buf string) (string, string, bool) {
 		}
 	}
 
-	return op, text.String(), true
+	return op, strings.TrimSpace(text.String()), true
 }
 
-func redisStatus(buf []byte) int {
+func redisStatus(buf []byte) (request.DBError, int) {
 	status := 0
-	if isErr := isRedisError(buf); isErr {
+	firstChar := buf[0]
+	if firstChar != '-' {
+		return request.DBError{}, status
+	}
+	dbError, isError := getRedisError(buf[1:])
+	if isError {
 		status = 1
 	}
 
-	return status
+	return dbError, status
 }
 
-func TCPToRedisToSpan(trace *TCPRequestInfo, op, text string, status int) request.Span {
+func getRedisDB(connInfo BpfConnectionInfoT, op, text string, dbCache *simplelru.LRU[BpfConnectionInfoT, int]) (int, bool) {
+	if dbCache == nil {
+		return -1, false
+	}
+	db, found := dbCache.Get(connInfo)
+	switch strings.ToUpper(op) {
+	case "SELECT":
+		// get db number from text after first space
+		if text != "" {
+			parts := strings.Split(text, " ")
+			if len(parts) > 1 {
+				if dbNum, err := strconv.Atoi(parts[1]); err == nil && dbNum >= 0 {
+					dbCache.Add(connInfo, dbNum)
+				}
+			}
+		}
+	case "QUIT":
+		dbCache.Remove(connInfo)
+	}
+	return db, found
+}
+
+func TCPToRedisToSpan(trace *TCPRequestInfo, op, text string, status, db int, dbError request.DBError) request.Span {
 	peer := ""
 	hostname := ""
 	hostPort := 0
-
+	dbNamespace := ""
 	if trace.ConnInfo.S_port != 0 || trace.ConnInfo.D_port != 0 {
 		peer, hostname = (*BPFConnInfo)(unsafe.Pointer(&trace.ConnInfo)).reqHostInfo()
 		hostPort = int(trace.ConnInfo.D_port)
@@ -179,6 +228,11 @@ func TCPToRedisToSpan(trace *TCPRequestInfo, op, text string, status int) reques
 	reqType := request.EventTypeRedisClient
 	if trace.Direction == 0 {
 		reqType = request.EventTypeRedisServer
+	}
+
+	if db >= 0 {
+		// If we have a valid db number, we can use it as a namespace
+		dbNamespace = strconv.Itoa(db)
 	}
 
 	return request.Span{
@@ -203,6 +257,8 @@ func TCPToRedisToSpan(trace *TCPRequestInfo, op, text string, status int) reques
 			UserPID:   trace.Pid.UserPid,
 			Namespace: trace.Pid.Ns,
 		},
+		DBError:     dbError,
+		DBNamespace: dbNamespace,
 	}
 }
 

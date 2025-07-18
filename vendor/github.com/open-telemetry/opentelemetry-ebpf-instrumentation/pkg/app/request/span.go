@@ -10,6 +10,7 @@ import (
 
 	"github.com/gavv/monotime"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 	trace2 "go.opentelemetry.io/otel/trace"
 
@@ -35,6 +36,8 @@ const (
 	EventTypeKafkaServer
 	EventTypeGPUKernelLaunch
 	EventTypeGPUMalloc
+	EventTypeMongoClient
+	EventTypeManualSpan
 )
 
 const (
@@ -83,6 +86,10 @@ func (t EventType) String() string {
 		return "CUDALaunch"
 	case EventTypeGPUMalloc:
 		return "CUDAMalloc"
+	case EventTypeMongoClient:
+		return "MongoClient"
+	case EventTypeManualSpan:
+		return "CUSTOM"
 	default:
 		return fmt.Sprintf("UNKNOWN (%d)", t)
 	}
@@ -113,6 +120,17 @@ type PidInfo struct {
 	UserPID uint32
 	// Namespace for the PIDs
 	Namespace uint32
+}
+
+type DBError struct {
+	ErrorCode   string
+	Description string
+}
+
+type SQLError struct {
+	Code     uint16 `json:"code"`
+	SQLState string `json:"sqlState"`
+	Message  string `json:"message"`
 }
 
 // Span contains the information being submitted by the following nodes in the graph.
@@ -146,6 +164,10 @@ type Span struct {
 	OtherNamespace string         `json:"-"`
 	Statement      string         `json:"-"`
 	SubType        int            `json:"-"`
+	DBError        DBError        `json:"-"`
+	DBNamespace    string         `json:"-"`
+	SQLCommand     string         `json:"-"`
+	SQLError       *SQLError      `json:"-"`
 }
 
 func (s *Span) Inside(parent *Span) bool {
@@ -200,12 +222,28 @@ func spanAttributes(s *Span) SpanAttributes {
 			"serverPort": strconv.Itoa(s.HostPort),
 		}
 	case EventTypeSQLClient:
+		var (
+			code              uint16
+			sqlState, message string
+		)
+
+		if s.SQLError != nil {
+			code = s.SQLError.Code
+			sqlState = s.SQLError.SQLState
+			message = s.SQLError.Message
+		}
+
 		return SpanAttributes{
-			"serverAddr": SpanHost(s),
-			"serverPort": strconv.Itoa(s.HostPort),
-			"operation":  s.Method,
-			"table":      s.Path,
-			"statement":  s.Statement,
+			"serverAddr":       SpanHost(s),
+			"serverPort":       strconv.Itoa(s.HostPort),
+			"operation":        s.Method,
+			"table":            s.Path,
+			"statement":        s.Statement,
+			"sqlCommand":       s.SQLCommand,
+			"errorCode":        strconv.FormatUint(uint64(code), 10),
+			"sqlState":         sqlState,
+			"errorMessage":     message,
+			"errorDescription": s.SQLErrorDescription(),
 		}
 	case EventTypeRedisServer:
 		return SpanAttributes{
@@ -233,9 +271,34 @@ func spanAttributes(s *Span) SpanAttributes {
 		return SpanAttributes{
 			"size": strconv.FormatInt(s.ContentLength, 10),
 		}
+	case EventTypeMongoClient:
+		return SpanAttributes{
+			"serverAddr": SpanHost(s),
+			"serverPort": strconv.Itoa(s.HostPort),
+			"operation":  s.Method,
+			"table":      s.Path,
+		}
 	}
 
 	return SpanAttributes{}
+}
+
+func (s *Span) SQLErrorDescription() string {
+	if s.SQLError == nil {
+		return ""
+	}
+
+	if s.SQLCommand == "" {
+		return fmt.Sprintf(
+			"SQL Server errored: error_code=%d sql_state=%s message=%s",
+			s.SQLError.Code, s.SQLError.SQLState, s.SQLError.Message,
+		)
+	}
+
+	return fmt.Sprintf(
+		"SQL Server errored for command 'COM_%s': error_code=%d sql_state=%s message=%s",
+		s.SQLCommand, s.SQLError.Code, s.SQLError.SQLState, s.SQLError.Message,
+	)
 }
 
 func (s Span) MarshalJSON() ([]byte, error) {
@@ -310,7 +373,7 @@ func (s *Span) IsValid() bool {
 
 func (s *Span) IsClientSpan() bool {
 	switch s.Type {
-	case EventTypeGRPCClient, EventTypeHTTPClient, EventTypeRedisClient, EventTypeKafkaClient, EventTypeSQLClient:
+	case EventTypeGRPCClient, EventTypeHTTPClient, EventTypeRedisClient, EventTypeKafkaClient, EventTypeSQLClient, EventTypeMongoClient:
 		return true
 	}
 
@@ -329,13 +392,37 @@ func SpanStatusCode(span *Span) string {
 		return HTTPSpanStatusCode(span)
 	case EventTypeGRPC, EventTypeGRPCClient:
 		return GrpcSpanStatusCode(span)
-	case EventTypeSQLClient, EventTypeRedisClient, EventTypeRedisServer:
+	case EventTypeSQLClient, EventTypeRedisClient, EventTypeRedisServer, EventTypeMongoClient:
 		if span.Status != 0 {
 			return StatusCodeError
 		}
 		return StatusCodeUnset
+	case EventTypeManualSpan:
+		switch span.Status {
+		case int(codes.Error):
+			return StatusCodeError
+		case int(codes.Ok):
+			return StatusCodeOk
+		}
+		return StatusCodeUnset
 	}
 	return StatusCodeUnset
+}
+
+func SpanStatusMessage(span *Span) string {
+	switch span.Type {
+	case EventTypeRedisClient, EventTypeRedisServer, EventTypeMongoClient:
+		if span.Status != 0 && span.DBError.Description != "" {
+			return span.DBError.Description
+		}
+	case EventTypeSQLClient:
+		if span.Status != 0 && span.SQLError != nil {
+			return span.SQLErrorDescription()
+		}
+	case EventTypeManualSpan:
+		return span.Path
+	}
+	return ""
 }
 
 // HTTPSpanStatusCode https://opentelemetry.io/docs/specs/otel/trace/semantic_conventions/http/#status
@@ -404,7 +491,7 @@ func (s *Span) ServiceGraphKind() string {
 	switch s.Type {
 	case EventTypeHTTP, EventTypeGRPC, EventTypeKafkaServer, EventTypeRedisServer:
 		return "SPAN_KIND_SERVER"
-	case EventTypeHTTPClient, EventTypeGRPCClient, EventTypeSQLClient, EventTypeRedisClient:
+	case EventTypeHTTPClient, EventTypeGRPCClient, EventTypeSQLClient, EventTypeRedisClient, EventTypeMongoClient:
 		return "SPAN_KIND_CLIENT"
 	case EventTypeKafkaClient:
 		switch s.Method {
@@ -447,6 +534,20 @@ func (s *Span) TraceName() string {
 			return s.Method
 		}
 		return fmt.Sprintf("%s %s", s.Path, s.Method)
+	case EventTypeMongoClient:
+		if s.Path != "" && s.Method != "" {
+			// TODO for database operations like listCollections, we need to use s.DbNamespace instead of s.Path
+			return fmt.Sprintf("%s %s", s.Method, s.Path)
+		}
+		if s.Path != "" {
+			return s.Path
+		}
+		if s.Method != "" {
+			return s.Method
+		}
+		return semconv.DBSystemMongoDB.Value.AsString()
+	case EventTypeManualSpan:
+		return s.Method
 	}
 	return ""
 }

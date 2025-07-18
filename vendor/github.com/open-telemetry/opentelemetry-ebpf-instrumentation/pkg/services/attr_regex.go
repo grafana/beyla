@@ -76,6 +76,11 @@ type RegexSelector struct {
 
 	// Restrict the discovery to processes which are running inside a container
 	ContainersOnly bool `yaml:"containers_only"`
+
+	// Configures what to export. Allowed values are 'metrics', 'traces',
+	// or an empty array (disabled). An unspecified value (nil) will use the
+	// default configuration value
+	ExportModes ExportModes `yaml:"exports"`
 }
 
 // RegexpAttr stores a regular expression representing an executable file path.
@@ -83,8 +88,8 @@ type RegexpAttr struct {
 	re *regexp.Regexp
 }
 
-func NewPathRegexp(re *regexp.Regexp) RegexpAttr {
-	return RegexpAttr{re: re}
+func NewRegexp(pattern string) RegexpAttr {
+	return RegexpAttr{re: regexp.MustCompile(pattern)}
 }
 
 func (p *RegexpAttr) IsSet() bool {
@@ -105,6 +110,13 @@ func (p *RegexpAttr) UnmarshalYAML(value *yaml.Node) error {
 	}
 	p.re = re
 	return nil
+}
+
+func (p RegexpAttr) MarshalYAML() (any, error) {
+	if p.re != nil {
+		return p.re.String(), nil
+	}
+	return "", nil
 }
 
 func (p *RegexpAttr) UnmarshalText(text []byte) error {
@@ -163,3 +175,5 @@ func (a *RegexSelector) RangePodAnnotations() iter.Seq2[string, StringMatcher] {
 		}
 	}
 }
+
+func (a *RegexSelector) GetExportModes() ExportModes { return a.ExportModes }

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path"
+	"reflect"
 	"slices"
 	"strings"
 	"time"
@@ -52,6 +53,41 @@ const (
 	envResourceAttrs   = "OTEL_RESOURCE_ATTRIBUTES"
 )
 
+// VendorPrefix allows identifying some metrics (network, internal counters...)
+// as custom metrics, since at the moment they don't follow any semantic convention for them.
+// This value can be overridden when OBI is vendored as a library (e.g. from the OTEL collector)
+var VendorPrefix = "obi"
+
+func omitFieldsForYAML(input any, omitFields map[string]struct{}) map[string]any {
+	result := make(map[string]any)
+
+	val := reflect.ValueOf(input)
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+	typ := val.Type()
+
+	for i := 0; i < val.NumField(); i++ {
+		field := typ.Field(i)
+		yamlTag := field.Tag.Get("yaml")
+		if yamlTag == "" || yamlTag == "-" {
+			continue
+		}
+		yamlKey := yamlTag
+		if commaIdx := len(yamlTag); commaIdx != -1 {
+			yamlKey = yamlTag[:commaIdx]
+		}
+
+		if _, omit := omitFields[yamlKey]; !omit {
+			result[yamlKey] = val.Field(i).Interface()
+		} else {
+			result[yamlKey] = "***" // Indicate that the field is omitted
+		}
+	}
+
+	return result
+}
+
 // Buckets defines the histograms bucket boundaries, and allows users to
 // redefine them
 type Buckets struct {
@@ -84,7 +120,7 @@ func GetResourceAttrs(hostID string, service *svc.Attrs) []attribute.KeyValue {
 		// This attribute also allows that App O11y plugin shows this app as a Go application.
 		semconv.TelemetrySDKLanguageKey.String(service.SDKLanguage.String()),
 		// We set the SDK name as Beyla, so we can distinguish beyla generated metrics from other SDKs
-		semconv.TelemetrySDKNameKey.String("beyla"),
+		semconv.TelemetrySDKNameKey.String("opentelemetry-ebpf-instrumentation"),
 		semconv.TelemetrySDKVersion(buildinfo.Version),
 		semconv.HostName(service.HostName),
 		semconv.HostID(hostID),
@@ -182,11 +218,11 @@ func shouldIncludeAttribute(normalizedAttrName string, patterns []attributes.Inc
 
 func newResourceInternal(hostID string) *resource.Resource {
 	attrs := []attribute.KeyValue{
-		semconv.ServiceName("beyla"),
+		semconv.ServiceName("opentelemetry-ebpf-instrumentation"),
 		semconv.ServiceInstanceID(uuid.New().String()),
 		semconv.TelemetrySDKLanguageKey.String(semconv.TelemetrySDKLanguageGo.Value.AsString()),
 		// We set the SDK name as Beyla, so we can distinguish beyla generated metrics from other SDKs
-		semconv.TelemetrySDKNameKey.String("beyla"),
+		semconv.TelemetrySDKNameKey.String("opentelemetry-ebpf-instrumentation"),
 		semconv.HostID(hostID),
 	}
 

@@ -23,7 +23,7 @@ import (
 	"net"
 	"strings"
 
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/obi"
 )
 
 // dependencies that can be injected from testing
@@ -38,11 +38,11 @@ var (
 
 // fetchAgentIP guesses the non-loopback IP address of the Agent host, according to the
 // user-provided configuration:
-//   - If BeylaIP is provided, this value is used whatever is the real IP of the Agent.
+//   - If OBIIP is provided, this value is used whatever is the real IP of the Agent.
 //   - AgentIPIface specifies which interface this function should look into in order to pickup an address.
 //   - AgentIPType specifies which type of IP address should the agent pickup ("any" to pickup whichever
 //     ipv4 or ipv6 address is found first)
-func fetchAgentIP(cfg *beyla.NetworkConfig) (net.IP, error) {
+func fetchAgentIP(cfg *obi.NetworkConfig) (net.IP, error) {
 	if cfg.AgentIP != "" {
 		if ip := net.ParseIP(cfg.AgentIP); ip != nil {
 			return ip, nil

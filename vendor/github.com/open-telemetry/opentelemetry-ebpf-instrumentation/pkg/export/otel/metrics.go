@@ -101,7 +101,7 @@ type MetricsConfig struct {
 	MetricsProtocol Protocol `yaml:"-" env:"OTEL_EXPORTER_OTLP_METRICS_PROTOCOL"`
 
 	// InsecureSkipVerify is not standard, so we don't follow the same naming convention
-	InsecureSkipVerify bool `yaml:"insecure_skip_verify" env:"OTEL_EBPF_OTEL_INSECURE_SKIP_VERIFY"`
+	InsecureSkipVerify bool `yaml:"insecure_skip_verify" env:"OTEL_EBPF_INSECURE_SKIP_VERIFY"`
 
 	Buckets              Buckets `yaml:"buckets"`
 	HistogramAggregation string  `yaml:"histogram_aggregation" env:"OTEL_EXPORTER_OTLP_METRICS_DEFAULT_HISTOGRAM_AGGREGATION"`
@@ -112,21 +112,21 @@ type MetricsConfig struct {
 	// SDKLogLevel works independently from the global LogLevel because it prints GBs of logs in Debug mode
 	// and the Info messages leak internal details that are not usually valuable for the final user.
 	//nolint:undoc
-	SDKLogLevel string `yaml:"otel_sdk_log_level" env:"OTEL_EBPF_OTEL_SDK_LOG_LEVEL"`
+	SDKLogLevel string `yaml:"otel_sdk_log_level" env:"OTEL_EBPF_SDK_LOG_LEVEL"`
 
 	// Features of metrics that are can be exported. Accepted values are "application" and "network".
 	// envDefault is provided to avoid breaking changes
-	Features []string `yaml:"features" env:"OTEL_EBPF_OTEL_METRICS_FEATURES,expand" envDefault:"${OTEL_EBPF_OTEL_METRIC_FEATURES}"  envSeparator:","`
+	Features []string `yaml:"features" env:"OTEL_EBPF_METRICS_FEATURES,expand" envDefault:"${OTEL_EBPF_METRIC_FEATURES}"  envSeparator:","`
 
 	// Allows configuration of which instrumentations should be enabled, e.g. http, grpc, sql...
-	Instrumentations []string `yaml:"instrumentations" env:"OTEL_EBPF_OTEL_METRICS_INSTRUMENTATIONS" envSeparator:","`
+	Instrumentations []string `yaml:"instrumentations" env:"OTEL_EBPF_METRICS_INSTRUMENTATIONS" envSeparator:","`
 
 	// TTL is the time since a metric was updated for the last time until it is
 	// removed from the metrics set.
 	//nolint:undoc
-	TTL time.Duration `yaml:"ttl" env:"OTEL_EBPF_OTEL_METRICS_TTL"`
+	TTL time.Duration `yaml:"ttl" env:"OTEL_EBPF_METRICS_TTL"`
 
-	AllowServiceGraphSelfReferences bool `yaml:"allow_service_graph_self_references" env:"OTEL_EBPF_OTEL_ALLOW_SERVICE_GRAPH_SELF_REFERENCES"`
+	AllowServiceGraphSelfReferences bool `yaml:"allow_service_graph_self_references" env:"OTEL_EBPF_ALLOW_SERVICE_GRAPH_SELF_REFERENCES"`
 
 	// OTLPEndpointProvider allows overriding the OTLP Endpoint. It needs to return an endpoint and
 	// a boolean indicating if the endpoint is common for both traces and metrics
@@ -134,6 +134,13 @@ type MetricsConfig struct {
 
 	// InjectHeaders allows injecting custom headers to the HTTP OTLP exporter
 	InjectHeaders func(dst map[string]string) `yaml:"-" env:"-"`
+}
+
+func (m MetricsConfig) MarshalYAML() (any, error) {
+	omit := map[string]struct{}{
+		"endpoint": {},
+	}
+	return omitFieldsForYAML(m, omit), nil
 }
 
 func (m *MetricsConfig) GetProtocol() Protocol {
@@ -264,7 +271,7 @@ type MetricsReporter struct {
 }
 
 // Metrics is a set of metrics associated to a given OTEL MeterProvider.
-// There is a Metrics instance for each service/process instrumented by Beyla.
+// There is a Metrics instance for each service/process instrumented by OBI.
 type Metrics struct {
 	ctx                      context.Context
 	service                  *svc.Attrs
@@ -482,8 +489,12 @@ func (mr *MetricsReporter) otelMetricOptions(mlog *slog.Logger) []metric.Option 
 	return opts
 }
 
+func (mr *MetricsReporter) usesLegacySpanNames() bool {
+	return slices.Contains(mr.cfg.Features, FeatureSpan)
+}
+
 func (mr *MetricsReporter) spanMetricsLatencyName() string {
-	if slices.Contains(mr.cfg.Features, FeatureSpan) {
+	if mr.usesLegacySpanNames() {
 		return SpanMetricsLatency
 	}
 
@@ -517,7 +528,7 @@ func (mr *MetricsReporter) graphMetricOptions(mlog *slog.Logger) []metric.Option
 
 func (mr *MetricsReporter) setupTargetInfo(m *Metrics, meter instrument.Meter) error {
 	var err error
-	m.targetInfo, err = meter.Int64UpDownCounter(TargetInfo)
+	m.targetInfo, err = meter.Int64UpDownCounter(TargetInfo, instrument.WithDescription("Target metadata"))
 	if err != nil {
 		return fmt.Errorf("creating target info: %w", err)
 	}
@@ -650,7 +661,7 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 }
 
 func (mr *MetricsReporter) spanMetricsCallsName() string {
-	if slices.Contains(mr.cfg.Features, FeatureSpan) {
+	if mr.usesLegacySpanNames() {
 		return SpanMetricsCalls
 	}
 
@@ -703,7 +714,13 @@ func (mr *MetricsReporter) setupSpanMeters(m *Metrics, meter instrument.Meter) e
 
 	spanMetricAttrs := mr.spanMetricAttributes()
 
-	spanMetricsLatency, err := meter.Float64Histogram(mr.spanMetricsLatencyName())
+	instrumentOpts := []instrument.Float64HistogramOption{}
+
+	if !mr.usesLegacySpanNames() {
+		instrumentOpts = append(instrumentOpts, instrument.WithUnit("s"))
+	}
+
+	spanMetricsLatency, err := meter.Float64Histogram(mr.spanMetricsLatencyName(), instrumentOpts...)
 	if err != nil {
 		return fmt.Errorf("creating span metric histogram for latency: %w", err)
 	}
@@ -971,7 +988,7 @@ func (mr *MetricsReporter) tracesResourceAttributes(service *svc.Attrs) attribut
 		semconv.ServiceInstanceID(service.UID.Instance),
 		semconv.ServiceNamespace(service.UID.Namespace),
 		semconv.TelemetrySDKLanguageKey.String(service.SDKLanguage.String()),
-		semconv.TelemetrySDKNameKey.String("beyla"),
+		semconv.TelemetrySDKNameKey.String("opentelemetry-ebpf-instrumentation"),
 		request.SourceMetric("beyla"),
 		semconv.OSTypeKey.String("linux"),
 	}
@@ -1030,8 +1047,12 @@ func (mr *MetricsReporter) serviceGraphAttributes() []attributes.Field[*request.
 		})
 }
 
-func otelSpanAccepted(span *request.Span, mr *MetricsReporter) bool {
+func otelMetricsAccepted(span *request.Span, mr *MetricsReporter) bool {
 	return mr.cfg.OTelMetricsEnabled() && !span.Service.ExportsOTelMetrics()
+}
+
+func otelSpanMetricsAccepted(span *request.Span, mr *MetricsReporter) bool {
+	return mr.cfg.OTelMetricsEnabled() && !span.Service.ExportsOTelMetricsSpan()
 }
 
 //nolint:cyclop
@@ -1041,7 +1062,7 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 
 	ctx := trace.ContextWithSpanContext(r.ctx, trace.SpanContext{}.WithTraceID(span.TraceID).WithSpanID(span.SpanID).WithTraceFlags(trace.TraceFlags(span.TraceFlags)))
 
-	if otelSpanAccepted(span, mr) {
+	if otelMetricsAccepted(span, mr) {
 		switch span.Type {
 		case request.EventTypeHTTP:
 			if mr.is.HTTPEnabled() {
@@ -1074,7 +1095,7 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 				httpClientResponseSize, attrs := r.httpClientResponseSize.ForRecord(span)
 				httpClientResponseSize.Record(ctx, float64(span.ResponseBodyLength()), instrument.WithAttributeSet(attrs))
 			}
-		case request.EventTypeRedisServer, request.EventTypeRedisClient, request.EventTypeSQLClient:
+		case request.EventTypeRedisServer, request.EventTypeRedisClient, request.EventTypeSQLClient, request.EventTypeMongoClient:
 			if mr.is.DBEnabled() {
 				dbClientDuration, attrs := r.dbClientDuration.ForRecord(span)
 				dbClientDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
@@ -1109,39 +1130,60 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 		}
 	}
 
-	if mr.cfg.SpanMetricsEnabled() {
-		sml, attrs := r.spanMetricsLatency.ForRecord(span)
-		sml.Record(ctx, duration, instrument.WithAttributeSet(attrs))
+	if otelSpanMetricsAccepted(span, mr) {
+		if mr.cfg.SpanMetricsEnabled() {
+			sml, attrs := r.spanMetricsLatency.ForRecord(span)
+			sml.Record(ctx, duration, instrument.WithAttributeSet(attrs))
 
-		smct, attrs := r.spanMetricsCallsTotal.ForRecord(span)
-		smct.Add(ctx, 1, instrument.WithAttributeSet(attrs))
-	}
+			smct, attrs := r.spanMetricsCallsTotal.ForRecord(span)
+			smct.Add(ctx, 1, instrument.WithAttributeSet(attrs))
+		}
 
-	if mr.cfg.SpanMetricsSizesEnabled() {
-		smst, attrs := r.spanMetricsRequestSizeTotal.ForRecord(span)
-		smst.Add(ctx, float64(span.RequestBodyLength()), instrument.WithAttributeSet(attrs))
+		if mr.cfg.SpanMetricsSizesEnabled() {
+			smst, attrs := r.spanMetricsRequestSizeTotal.ForRecord(span)
+			smst.Add(ctx, float64(span.RequestBodyLength()), instrument.WithAttributeSet(attrs))
 
-		smst, attr := r.spanMetricsResponseSizeTotal.ForRecord(span)
-		smst.Add(ctx, float64(span.ResponseBodyLength()), instrument.WithAttributeSet(attr))
-	}
+			smst, attr := r.spanMetricsResponseSizeTotal.ForRecord(span)
+			smst.Add(ctx, float64(span.ResponseBodyLength()), instrument.WithAttributeSet(attr))
+		}
 
-	if mr.cfg.ServiceGraphMetricsEnabled() {
-		if !span.IsSelfReferenceSpan() || mr.cfg.AllowServiceGraphSelfReferences {
-			if span.IsClientSpan() {
-				sgc, attrs := r.serviceGraphClient.ForRecord(span)
-				sgc.Record(ctx, duration, instrument.WithAttributeSet(attrs))
-			} else {
-				sgs, attrs := r.serviceGraphServer.ForRecord(span)
-				sgs.Record(ctx, duration, instrument.WithAttributeSet(attrs))
-			}
-			sgt, attrs := r.serviceGraphTotal.ForRecord(span)
-			sgt.Add(ctx, 1, instrument.WithAttributeSet(attrs))
-			if request.SpanStatusCode(span) == request.StatusCodeError {
-				sgf, attrs := r.serviceGraphFailed.ForRecord(span)
-				sgf.Add(ctx, 1, instrument.WithAttributeSet(attrs))
+		if mr.cfg.ServiceGraphMetricsEnabled() {
+			if !span.IsSelfReferenceSpan() || mr.cfg.AllowServiceGraphSelfReferences {
+				if span.IsClientSpan() {
+					sgc, attrs := r.serviceGraphClient.ForRecord(span)
+					sgc.Record(ctx, duration, instrument.WithAttributeSet(attrs))
+					// If we managed to resolve the remote name only, we check to see
+					// we are not instrumenting the server service, then and only then,
+					// we generate client span count for service graph total
+					if ClientSpanToUninstrumentedService(&mr.pidTracker, span) {
+						sgt, attrs := r.serviceGraphTotal.ForRecord(span)
+						sgt.Add(ctx, 1, instrument.WithAttributeSet(attrs))
+					}
+				} else {
+					sgs, attrs := r.serviceGraphServer.ForRecord(span)
+					sgs.Record(ctx, duration, instrument.WithAttributeSet(attrs))
+					sgt, attrs := r.serviceGraphTotal.ForRecord(span)
+					sgt.Add(ctx, 1, instrument.WithAttributeSet(attrs))
+				}
+				if request.SpanStatusCode(span) == request.StatusCodeError {
+					sgf, attrs := r.serviceGraphFailed.ForRecord(span)
+					sgf.Add(ctx, 1, instrument.WithAttributeSet(attrs))
+				}
 			}
 		}
 	}
+}
+
+func ClientSpanToUninstrumentedService(tracker *PidServiceTracker, span *request.Span) bool {
+	if span.HostName != "" {
+		n := svc.ServiceNameNamespace{Name: span.HostName, Namespace: span.OtherNamespace}
+		return !tracker.IsTrackingServerService(n)
+	}
+	// If we haven't resolved a hostname, don't add this node to the service graph
+	// it will appear only in client requests. Essentially, in this case we have no
+	// idea if the service is instrumented or not, therefore we take the conservative
+	// approach to avoid double counting.
+	return false
 }
 
 func (mr *MetricsReporter) createTargetInfo(reporter *Metrics) {
@@ -1224,6 +1266,9 @@ func (mr *MetricsReporter) reportMetrics(_ context.Context) {
 		for i := range spans {
 			s := &spans[i]
 			if s.InternalSignal() {
+				continue
+			}
+			if !s.Service.ExportModes.CanExportMetrics() {
 				continue
 			}
 			// If we are ignoring this span because of route patterns, don't do anything

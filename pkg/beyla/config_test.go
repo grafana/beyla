@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gobwas/glob"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/tcmanager"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/imetrics"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/kube"
@@ -75,6 +74,11 @@ attributes:
       exclude: ["baz", "bae"]
   extra_group_attributes:
     k8s_app_meta: ["k8s.app.version"]
+discovery:
+  services:                                                                                                                                                                                                      
+    - k8s_namespace: .  
+  instrument:
+    - k8s_pod_name: "*"
 network:
   enable: true
   cidrs:
@@ -109,6 +113,9 @@ network:
 	nc.AgentIP = "1.2.3.4"
 	nc.CIDRs = cidr.Definitions{"10.244.0.0/16"}
 
+	nsNamespaceAttr := services.NewRegexp(".")
+	nsPodNameAttr := services.NewGlob("*")
+
 	metaSources := maps.Clone(kube.DefaultResourceLabels)
 	metaSources["service.namespace"] = []string{"huha.com/yeah"}
 	// uncache internal field
@@ -129,6 +136,10 @@ network:
 			TCBackend:                 tcmanager.TCBackendAuto,
 			ContextPropagationEnabled: false,
 			ContextPropagation:        config.ContextPropagationDisabled,
+			RedisDBCache: config.RedisDBCacheConfig{
+				Enabled: false,
+				MaxSize: 1000,
+			},
 		},
 		Grafana: otel.GrafanaConfig{
 			OTLP: otel.GrafanaOTLP{
@@ -201,7 +212,7 @@ network:
 				FetchTimeout: 4 * time.Second,
 			},
 			Select: attributes.Selection{
-				attributes.BeylaNetworkFlow.Section: attributes.InclusionLists{
+				attributes.NetworkFlow.Section: attributes.InclusionLists{
 					Include: []string{"foo", "bar"},
 					Exclude: []string{"baz", "bae"},
 				},
@@ -225,9 +236,15 @@ network:
 		},
 		Discovery: servicesextra.BeylaDiscoveryConfig{
 			ExcludeOTelInstrumentedServices: true,
+			Services: services.RegexDefinitionCriteria{{Metadata: map[string]*services.RegexpAttr{
+				"k8s_namespace": &nsNamespaceAttr,
+			}}},
+			Instrument: services.GlobDefinitionCriteria{{Metadata: map[string]*services.GlobAttr{
+				"k8s_pod_name": &nsPodNameAttr,
+			}}},
 			DefaultExcludeServices: services.RegexDefinitionCriteria{
 				services.RegexSelector{
-					Path: services.NewPathRegexp(regexp.MustCompile("(?:^|/)(beyla$|alloy$|otelcol[^/]*$)")),
+					Path: services.NewRegexp("(?:^|/)(beyla$|alloy$|prometheus-config-reloader$|otelcol[^/]*$)"),
 				},
 				services.RegexSelector{
 					Metadata: map[string]*services.RegexpAttr{"k8s_namespace": &k8sDefaultNamespacesRegex},
@@ -235,7 +252,7 @@ network:
 			},
 			DefaultExcludeInstrument: services.GlobDefinitionCriteria{
 				services.GlobAttributes{
-					Path: services.NewGlob(glob.MustCompile("{*beyla,*alloy,*ebpf-instrument,*otelcol,*otelcol-contrib,*otelcol-contrib[!/]*}")),
+					Path: services.NewGlob("{*beyla,*alloy,*prometheus-config-reloader,*ebpf-instrument,*otelcol,*otelcol-contrib,*otelcol-contrib[!/]*}"),
 				},
 				services.GlobAttributes{
 					Metadata: map[string]*services.GlobAttr{"k8s_namespace": &k8sDefaultNamespacesGlob},
@@ -515,6 +532,7 @@ func TestDefaultExclusionFilter(t *testing.T) {
 
 	assert.True(t, c[0].Path.MatchString("beyla"))
 	assert.True(t, c[0].Path.MatchString("alloy"))
+	assert.True(t, c[0].Path.MatchString("prometheus-config-reloader"))
 	assert.True(t, c[0].Path.MatchString("otelcol-contrib"))
 
 	assert.False(t, c[0].Path.MatchString("/usr/bin/beyla/test"))
@@ -523,6 +541,7 @@ func TestDefaultExclusionFilter(t *testing.T) {
 
 	assert.True(t, c[0].Path.MatchString("/beyla"))
 	assert.True(t, c[0].Path.MatchString("/alloy"))
+	assert.True(t, c[0].Path.MatchString("/bin/prometheus-config-reloader"))
 	assert.True(t, c[0].Path.MatchString("/otelcol-contrib"))
 
 	assert.True(t, c[0].Path.MatchString("/usr/bin/beyla"))
@@ -567,8 +586,8 @@ func TestOBIConfigConversion(t *testing.T) {
 	cfg.Metrics.MetricsEndpoint = "http://localhost:4318"
 	cfg.Discovery = servicesextra.BeylaDiscoveryConfig{
 		Instrument: services.GlobDefinitionCriteria{
-			{Path: services.NewGlob(glob.MustCompile("hello*"))},
-			{Path: services.NewGlob(glob.MustCompile("bye*"))},
+			{Path: services.NewGlob("hello*")},
+			{Path: services.NewGlob("bye*")},
 		},
 	}
 
@@ -578,8 +597,8 @@ func TestOBIConfigConversion(t *testing.T) {
 	assert.Equal(t, dst.Metrics.MetricsEndpoint, "http://localhost:4318")
 	assert.Equal(t,
 		services.GlobDefinitionCriteria{
-			{Path: services.NewGlob(glob.MustCompile("hello*"))},
-			{Path: services.NewGlob(glob.MustCompile("bye*"))},
+			{Path: services.NewGlob("hello*")},
+			{Path: services.NewGlob("bye*")},
 		},
 		dst.Discovery.Instrument)
 }

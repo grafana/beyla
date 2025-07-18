@@ -17,6 +17,13 @@ const (
 	ContextPropagationDisabled
 )
 
+type RedisDBCacheConfig struct {
+	// nolint:undoc
+	Enabled bool `yaml:"enabled" env:"BEYLA_BPF_REDIS_DB_CACHE_ENABLED"`
+	// nolint:undoc
+	MaxSize int `yaml:"max_size" env:"BEYLA_BPF_REDIS_DB_CACHE_MAX_SIZE"`
+}
+
 // EBPFTracer configuration for eBPF programs
 type EBPFTracer struct {
 	// Enables logging of eBPF program events
@@ -81,6 +88,25 @@ type EBPFTracer struct {
 	// Enables Java instrumentation with the OpenTelemetry JDK Agent
 	// nolint:undoc
 	UseOTelSDKForJava bool `yaml:"use_otel_sdk_for_java" env:"BEYLA_USE_OTEL_SDK_FOR_JAVA"`
+
+	// nolint:undoc
+	// TODO: document
+	RedisDBCache RedisDBCacheConfig `yaml:"redis_db_cache"`
+
+	// Limit max data buffer size per protocol.
+	// nolint:undoc
+	// TODO: document
+	BufferSizes EBPFBufferSizes `yaml:"buffer_sizes" env:"OTEL_EBPF_BPF_BUFFER_SIZES"`
+}
+
+type EBPFBufferSizes struct {
+	// MySQL data buffer size in bytes.
+	// Min: 128 bytes, Max: 8192 bytes.
+	// Valid values: 0, 128, 256, 512, 1024, 2048, 4096, 8192.
+	//
+	// Default: 0 (disabled).
+	// nolint:undoc
+	MySQL uint32 `yaml:"mysql" env:"OTEL_EBPF_BPF_BUFFER_SIZE_MYSQL"`
 }
 
 func (m *ContextPropagationMode) UnmarshalText(text []byte) error {

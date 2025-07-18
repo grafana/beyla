@@ -15,7 +15,6 @@ import (
 	"github.com/vishvananda/netlink"
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla"
 	ebpfcommon "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/common"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/goexec"
@@ -23,6 +22,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/netolly/ifaces"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/config"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/obi"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 )
 
@@ -33,7 +33,7 @@ import (
 
 type Tracer struct {
 	pidsFilter       ebpfcommon.ServiceFilter
-	cfg              *beyla.Config
+	cfg              *obi.Config
 	metrics          imetrics.Reporter
 	bpfObjects       BpfObjects
 	closers          []io.Closer
@@ -49,7 +49,7 @@ func tlog() *slog.Logger {
 	return slog.With("component", "generic.Tracer")
 }
 
-func New(pidFilter ebpfcommon.ServiceFilter, cfg *beyla.Config, metrics imetrics.Reporter) *Tracer {
+func New(pidFilter ebpfcommon.ServiceFilter, cfg *obi.Config, metrics imetrics.Reporter) *Tracer {
 	return &Tracer{
 		log:              tlog(),
 		cfg:              cfg,
@@ -175,6 +175,14 @@ func (p *Tracer) SetupTailCalls() {
 			index: 5,
 			prog:  p.bpfObjects.BeylaProtocolHttp2GrpcHandleEndFrame,
 		},
+		{
+			index: 6,
+			prog:  p.bpfObjects.BeylaProtocolMysql,
+		},
+		{
+			index: 7,
+			prog:  p.bpfObjects.BeylaHandleBufWithArgs,
+		},
 	} {
 		err := p.bpfObjects.JumpTable.Update(uint32(tc.index), uint32(tc.prog.FD()), ebpf.UpdateAny)
 		if err != nil {
@@ -216,6 +224,8 @@ func (p *Tracer) Constants() map[string]any {
 	} else {
 		m["disable_black_box_cp"] = uint32(0)
 	}
+
+	m["mysql_buffer_size"] = p.cfg.EBPF.BufferSizes.MySQL
 
 	return m
 }
@@ -276,7 +286,7 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.ProbeDesc {
 			Required: true,
 			Start:    p.bpfObjects.BeylaKprobeTcpClose,
 		},
-		"tcp_sendmsg_locked": {
+		"tcp_sendmsg": {
 			Required: true,
 			Start:    p.bpfObjects.BeylaKprobeTcpSendmsg,
 			End:      p.bpfObjects.BeylaKretprobeTcpSendmsg,
@@ -371,6 +381,12 @@ func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 			"ngx_event_connect_peer": {{
 				Required: false,
 				End:      p.bpfObjects.BeylaNgxEventConnectPeerRet,
+			}},
+		},
+		"node": {
+			"uv_fs_access": {{
+				Required: false,
+				Start:    p.bpfObjects.BeylaUvFsAccess,
 			}},
 		},
 	}
@@ -516,7 +532,7 @@ func (p *Tracer) watchForMisclassifedEvents(ctx context.Context) {
 			if e.EventType == ebpfcommon.EventTypeKHTTP2 {
 				if p.bpfObjects.OngoingHttp2Connections != nil {
 					err := p.bpfObjects.OngoingHttp2Connections.Put(
-						&BpfPidConnectionInfoT{Conn: BpfConnectionInfoT(e.TCPInfo.ConnInfo), Pid: e.TCPInfo.Pid.HostPid},
+						&BpfPidConnectionInfoT{Conn: bpfConnInfoT(e.TCPInfo.ConnInfo), Pid: e.TCPInfo.Pid.HostPid},
 						BpfHttp2ConnInfoDataT{Flags: e.TCPInfo.Ssl, Id: 0}, // no new connection flag (0x3)
 					)
 					if err != nil {
@@ -526,6 +542,16 @@ func (p *Tracer) watchForMisclassifedEvents(ctx context.Context) {
 			}
 		}
 	}
+}
+
+// Cilium 0.19.0+ is adding a new private field to all the BpfConnectionInfoT
+// implementations, so we can't directly do a type cast
+func bpfConnInfoT(src ebpfcommon.BpfConnectionInfoT) (dst BpfConnectionInfoT) {
+	dst.D_port = src.D_port
+	dst.D_addr = src.D_addr
+	dst.S_addr = src.S_addr
+	dst.S_port = src.S_port
+	return
 }
 
 func (p *Tracer) Required() bool {

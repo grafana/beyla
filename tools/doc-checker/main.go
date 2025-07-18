@@ -44,16 +44,43 @@ func findMarkdownFiles(root string) ([]string, error) {
 	return mdFiles, err
 }
 
+func isKnownStructName(name string) bool {
+	return strings.HasSuffix(name, "Config") ||
+		strings.HasSuffix(name, "Options") ||
+		strings.HasSuffix(name, "Decorator") ||
+		strings.HasSuffix(name, "Sampler") ||
+		strings.Contains(name, "OTLP") ||
+		name == "GrafanaOTLP"
+}
+
+func isKnownPackageStruct(pkg, selector string) bool {
+	// Known struct types from specific packages
+	if pkg == "otel" && selector == "Sampler" {
+		return true
+	}
+	if pkg == "transform" && strings.HasSuffix(selector, "Decorator") {
+		return true
+	}
+	return false
+}
+
 func isStructType(expr ast.Expr) bool {
 	switch t := expr.(type) {
 	case *ast.StructType:
 		return true
 	case *ast.Ident:
-		return strings.HasSuffix(t.Name, "Config") || strings.HasSuffix(t.Name, "Options")
+		return isKnownStructName(t.Name)
 	case *ast.SelectorExpr:
 		if ident, ok := t.X.(*ast.Ident); ok {
-			return strings.HasSuffix(ident.Name, "Config") || strings.HasSuffix(t.Sel.Name, "Config") ||
-				strings.HasSuffix(ident.Name, "Options") || strings.HasSuffix(t.Sel.Name, "Options")
+			selector := t.Sel.Name
+			pkg := ident.Name
+
+			if isKnownPackageStruct(pkg, selector) {
+				return true
+			}
+
+			// General patterns
+			return isKnownStructName(selector)
 		}
 	}
 	return false
@@ -264,7 +291,7 @@ func main() {
 		}
 		fmt.Printf("%sTo fix these errors either:%s\n", colorBold, colorReset)
 		fmt.Printf("  1. Add documentation for the fields in the docs/ directory\n")
-		fmt.Printf("  2. Add '// nolint:undoc' above the field to skip the check\n\n")
+		fmt.Printf("  2. Add '// nolint:doc' above the field to skip the check\n\n")
 		os.Exit(1)
 	}
 

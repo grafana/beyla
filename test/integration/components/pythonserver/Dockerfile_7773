@@ -1,0 +1,14 @@
+# Dockerfile that will build a container that runs python flask with gunicorn on port 7770
+FROM python:3.11.6-slim
+EXPOSE 7773
+RUN pip install flask gunicorn requests
+# Alternative: RUN pip install flask uwsgi
+
+# Set the working directory to /build
+WORKDIR /
+
+# Copy the source code into the image for building
+COPY test/integration/components/pythonserver .
+
+CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:7773", "main_7773:app"]
+# CMD uwsgi --http 0.0.0.0:7770 --master -p 4 -w main:app

@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/imetrics"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/pipe/global"
@@ -16,6 +15,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/prom"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/filter"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/obi"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/transform"
@@ -23,7 +23,7 @@ import (
 
 // builder with injectable instantiators for unit testing
 type graphFunctions struct {
-	config  *beyla.Config
+	config  *obi.Config
 	builder *swarm.Instancer
 	ctxInfo *global.ContextInfo
 }
@@ -32,7 +32,7 @@ type graphFunctions struct {
 // pipeline graph and returns it as a startable item
 func Build(
 	ctx context.Context,
-	config *beyla.Config,
+	config *obi.Config,
 	ctxInfo *global.ContextInfo,
 	tracesCh *msg.Queue[[]request.Span],
 	processEventsCh *msg.Queue[exec.ProcessEvent],
@@ -43,7 +43,7 @@ func Build(
 // private constructor that can be instantiated from tests to override the node providers
 // and offsets inspector
 func newGraphBuilder(
-	config *beyla.Config,
+	config *obi.Config,
 	ctxInfo *global.ContextInfo,
 	tracesCh *msg.Queue[[]request.Span],
 	processEventsCh *msg.Queue[exec.ProcessEvent],
@@ -73,24 +73,25 @@ func newGraphBuilder(
 		InstanceID:      config.Attributes.InstanceID,
 		TracesInput:     tracesCh,
 		DecoratedTraces: tracesReaderToRouter,
-	}))
+	}), swarm.WithID("ReadFromChannel"))
 
 	routerToKubeDecorator := newQueue()
 	swi.Add(transform.RoutesProvider(
 		config.Routes,
 		tracesReaderToRouter,
 		routerToKubeDecorator,
-	))
+	), swarm.WithID("Routes"))
 
 	kubeDecoratorToNameResolver := newQueue()
 	swi.Add(transform.KubeDecoratorProvider(
 		ctxInfo, &config.Attributes.Kubernetes,
 		routerToKubeDecorator, kubeDecoratorToNameResolver,
-	))
+	), swarm.WithID("KubeDecorator"))
 
 	nameResolverToAttrFilter := newQueue()
 	swi.Add(transform.NameResolutionProvider(ctxInfo, config.NameResolver,
-		kubeDecoratorToNameResolver, nameResolverToAttrFilter))
+		kubeDecoratorToNameResolver, nameResolverToAttrFilter),
+		swarm.WithID("NameResolution"))
 
 	// In vendored mode, the invoker might want to override the export queue for connecting their
 	// own exporters, otherwise we create a new queue
@@ -99,7 +100,8 @@ func newGraphBuilder(
 		exportableSpans = newQueue()
 	}
 	swi.Add(filter.ByAttribute(config.Filters.Application, nil, selectorCfg.ExtraGroupAttributesCfg, spanPtrPromGetters,
-		nameResolverToAttrFilter, exportableSpans))
+		nameResolverToAttrFilter, exportableSpans),
+		swarm.WithID("AttributesFilter"))
 
 	swi.Add(otel.ReportMetrics(
 		ctxInfo,
@@ -107,15 +109,17 @@ func newGraphBuilder(
 		selectorCfg,
 		exportableSpans,
 		processEventsCh,
-	))
+	), swarm.WithID("OTELMetricsExport"))
 
 	swi.Add(otel.TracesReceiver(
 		ctxInfo, config.Traces, config.Metrics.SpanMetricsEnabled(), selectorCfg, exportableSpans,
-	))
-	swi.Add(prom.PrometheusEndpoint(ctxInfo, &config.Prometheus, selectorCfg, exportableSpans, processEventsCh))
-	swi.Add(prom.BPFMetrics(ctxInfo, &config.Prometheus))
-
-	swi.Add(debug.PrinterNode(config.TracePrinter, exportableSpans))
+	), swarm.WithID("OTELTracesReceiver"))
+	swi.Add(prom.PrometheusEndpoint(ctxInfo, &config.Prometheus, selectorCfg, exportableSpans, processEventsCh),
+		swarm.WithID("PrometheusEndpoint"))
+	swi.Add(prom.BPFMetrics(ctxInfo, &config.Prometheus),
+		swarm.WithID("BPFMetrics"))
+	swi.Add(debug.PrinterNode(config.TracePrinter, exportableSpans),
+		swarm.WithID("PrinterNode"))
 
 	// The returned builder later invokes its "Build" function that, given
 	// the contents of the nodesMap struct, will instantiate

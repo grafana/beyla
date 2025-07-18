@@ -1,7 +1,7 @@
 # Build the autoinstrumenter binary
-ARG VER=main
+ARG GEN_IMG=ghcr.io/open-telemetry/obi-generator:latest
 
-FROM ghcr.io/grafana/beyla-ebpf-generator:$VER AS builder
+FROM $GEN_IMG AS builder
 
 # TODO: embed software version in executable
 
@@ -25,9 +25,11 @@ COPY LICENSE LICENSE
 COPY NOTICE NOTICE
 COPY third_party_licenses.csv third_party_licenses.csv
 
+# OBI's Makefile doesn't let to override BPF2GO env var: temporary hack until we can
+ENV TOOLS_DIR=/go/bin
+
 # Build
-RUN make obi-submodule
-RUN /generate.sh
+RUN make generate
 RUN make copy-obi-vendor
 RUN make compile
 

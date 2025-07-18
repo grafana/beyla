@@ -88,7 +88,7 @@ func NewSockFlowFetcher(
 
 	fd, err := unix.Socket(unix.AF_PACKET, unix.SOCK_RAW, int(htons(unix.ETH_P_ALL)))
 	if err == nil {
-		ssoErr := syscall.SetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_ATTACH_BPF, objects.BeylaSocketHttpFilter.FD())
+		ssoErr := syscall.SetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_ATTACH_BPF, objects.BeylaSocketFilter.FD())
 		if ssoErr != nil {
 			return nil, fmt.Errorf("loading and assigning BPF objects: %w", ssoErr)
 		}
@@ -145,7 +145,7 @@ func (m *SockFlowFetcher) Close() error {
 
 func (m *SockFlowFetcher) closeObjects() []error {
 	var errs []error
-	if err := m.objects.BeylaSocketHttpFilter.Close(); err != nil {
+	if err := m.objects.BeylaSocketFilter.Close(); err != nil {
 		errs = append(errs, err)
 	}
 	if err := m.objects.AggregatedFlows.Close(); err != nil {

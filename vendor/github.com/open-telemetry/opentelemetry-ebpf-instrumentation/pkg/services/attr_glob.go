@@ -70,15 +70,22 @@ type GlobAttributes struct {
 
 	// ContainersOnly restricts the discovery to processes which are running inside a container
 	ContainersOnly bool `yaml:"containers_only"`
+
+	// Configures what to export. Allowed values are 'metrics', 'traces',
+	// or an empty array (disabled). An unspecified value (nil) will use the
+	// default configuration value
+	ExportModes ExportModes `yaml:"exports"`
 }
 
 // GlobAttr provides a YAML handler for glob.Glob so the type can be parsed from YAML or environment variables
 type GlobAttr struct {
+	// str is kept for debugging/printing purposes
+	str  string
 	glob glob.Glob
 }
 
-func NewGlob(g glob.Glob) GlobAttr {
-	return GlobAttr{glob: g}
+func NewGlob(pattern string) GlobAttr {
+	return GlobAttr{str: pattern, glob: glob.MustCompile(pattern)}
 }
 
 func (p *GlobAttr) IsSet() bool {
@@ -98,8 +105,13 @@ func (p *GlobAttr) UnmarshalYAML(value *yaml.Node) error {
 	if err != nil {
 		return fmt.Errorf("invalid regular expression in node %s: %w", value.Tag, err)
 	}
+	p.str = value.Value
 	p.glob = re
 	return nil
+}
+
+func (p GlobAttr) MarshalYAML() (any, error) {
+	return p.str, nil
 }
 
 func (p *GlobAttr) UnmarshalText(text []byte) error {
@@ -159,6 +171,8 @@ func (ga *GlobAttributes) RangePodAnnotations() iter.Seq2[string, StringMatcher]
 		}
 	}
 }
+
+func (ga *GlobAttributes) GetExportModes() ExportModes { return ga.ExportModes }
 
 type nilMatcher struct{}
 

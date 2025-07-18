@@ -4,6 +4,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.25.0"
 
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/services"
 )
 
 type InstrumentableType int
@@ -49,10 +50,16 @@ func (it InstrumentableType) String() string {
 type idFlags uint8
 
 const (
-	autoName           idFlags = 0x1
-	exportsOTelMetrics idFlags = 0x2
-	exportsOTelTraces  idFlags = 0x4
+	autoName               idFlags = 0x1
+	exportsOTelMetrics     idFlags = 0x2
+	exportsOTelTraces      idFlags = 0x4
+	exportsOTelMetricsSpan idFlags = 0x8
 )
+
+type ServiceNameNamespace struct {
+	Name      string
+	Namespace string
+}
 
 // UID uniquely identifies a service instance across the whole system
 // according to the OpenTelemetry specification: (name, namespace, instance)
@@ -60,6 +67,10 @@ type UID struct {
 	Name      string
 	Namespace string
 	Instance  string
+}
+
+func (uid *UID) NameNamespace() ServiceNameNamespace {
+	return ServiceNameNamespace{Name: uid.Name, Namespace: uid.Namespace}
 }
 
 // Attrs stores the metadata attributes of a service/resource
@@ -84,6 +95,8 @@ type Attrs struct {
 	EnvVars map[string]string
 
 	flags idFlags
+
+	ExportModes services.ExportModes
 }
 
 func (i *Attrs) GetUID() UID {
@@ -123,6 +136,14 @@ func (i *Attrs) SetExportsOTelMetrics() {
 
 func (i *Attrs) ExportsOTelMetrics() bool {
 	return i.getFlag(exportsOTelMetrics)
+}
+
+func (i *Attrs) SetExportsOTelMetricsSpan() {
+	i.setFlag(exportsOTelMetricsSpan)
+}
+
+func (i *Attrs) ExportsOTelMetricsSpan() bool {
+	return i.getFlag(exportsOTelMetricsSpan)
 }
 
 func (i *Attrs) SetExportsOTelTraces() {

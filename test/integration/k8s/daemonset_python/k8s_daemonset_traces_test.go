@@ -31,7 +31,7 @@ func TestPythonBasicTracing(t *testing.T) {
 				var trace jaeger.Trace
 				var podID string
 				test.Eventually(t, testTimeout, func(t require.TestingT) {
-					resp, err := http.Get("http://localhost:38083/greeting")
+					resp, err := http.Get("http://localhost:7773/greeting")
 					require.NoError(t, err)
 					require.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -89,7 +89,7 @@ func TestPythonBasicTracing(t *testing.T) {
 
 				// We now use /smoke instead of /greeting to ensure we see those APIs after a restart
 				test.Eventually(t, testTimeout, func(t require.TestingT) {
-					resp, err := http.Get("http://localhost:38083/smoke")
+					resp, err := http.Get("http://localhost:7773/smoke")
 					require.NoError(t, err)
 					require.Equal(t, http.StatusOK, resp.StatusCode)
 

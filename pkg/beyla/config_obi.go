@@ -2,9 +2,13 @@ package beyla
 
 import (
 	"os"
+	"regexp"
 	"strings"
 
-	obi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
+	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
+	otel2 "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/obi"
 
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	cfgutil "github.com/grafana/beyla/v2/pkg/helpers/config"
@@ -14,7 +18,7 @@ func (c *Config) AsOBI() *obi.Config {
 	if c.obi == nil {
 		obiCfg := &obi.Config{}
 		cfgutil.Convert(c, obiCfg, map[string]string{
-			// here, some hints might be useful if we need to skip values that are non-existing in OBI,
+			// here, some hints might be useful if we need to skip values that are non-existing in Beyla Config,
 			// or, renamed. For example:
 			// ".Some.Renamed.FieldInDst": "NameInSrc",
 			// ".Some.Missing.FieldInSrc": cfgutil.SkipConversion,
@@ -43,31 +47,38 @@ func overrideOBI(src *Config, dst *obi.Config) {
 	}
 }
 
-// SetupOBIEnvVars duplicates any BEYLA_ prefixed environment variables with the OTEL_EBPF_ prefix
-// and vice versa
-func SetupOBIEnvVars() {
+// OverrideOBIGlobalConfig overrides some OBI globals to adapt it to the Beyla configuration and naming conventions:
+// - duplicates any BEYLA_ prefixed environment variables with the OTEL_EBPF_ prefix
+// - overrides some custom global variables related to custom metric naming
+func OverrideOBIGlobalConfig() {
+	replacingPrefix := regexp.MustCompile("^BEYLA_(OTEL_)?")
 	for _, env := range os.Environ() {
-		appended := appendAlternateEnvVar(env, "BEYLA_", "OTEL_EBPF_")
-		if !appended {
-			appendAlternateEnvVar(env, "OTEL_EBPF_", "BEYLA_")
-		}
-	}
-}
-
-func appendAlternateEnvVar(env, oldPrefix, altPrefix string) bool {
-	oldLen := len(oldPrefix)
-	if len(env) > (oldLen+1) && strings.HasPrefix(env, oldPrefix) {
-		eqIdx := strings.IndexByte(env, '=')
-		if eqIdx > (oldLen + 1) {
-			key := env[:eqIdx]
-			val := env[eqIdx+1:]
-			newKey := altPrefix + key[oldLen:]
-			// Only set if not already set
-			if os.Getenv(newKey) == "" {
-				os.Setenv(newKey, val)
+		newEnv := replacingPrefix.ReplaceAllString(env, "OTEL_EBPF_")
+		if parts := strings.SplitN(newEnv, "=", 2); len(parts) == 2 {
+			if os.Getenv(parts[0]) == "" {
+				// Set only if not already set
+				os.Setenv(parts[0], parts[1])
 			}
-			return true
 		}
 	}
-	return false
+	// Temporary patch: Overrides telemetry_sdk_name in OBI until we are able
+	// to provide OBI with a mechanism to override resource & metric attributes
+	if ras := os.Getenv("OTEL_RESOURCE_ATTRIBUTES"); ras != "" {
+		os.Setenv("OTEL_RESOURCE_ATTRIBUTES", ras+",telemetry.sdk.name=beyla")
+	} else {
+		os.Setenv("OTEL_RESOURCE_ATTRIBUTES", "telemetry.sdk.name=beyla")
+	}
+	// Override global metric naming options
+	otel2.VendorPrefix = "beyla"
+	attr.OBIIP = "beyla.ip"
+	attributes.NetworkFlow = attributes.Name{
+		Section: "beyla.network.flow",
+		Prom:    "beyla_network_flow_bytes_total",
+		OTEL:    "beyla.network.flow.bytes",
+	}
+	attributes.NetworkInterZone = attributes.Name{
+		Section: "beyla.network.inter.zone",
+		Prom:    "beyla_network_inter_zone_bytes_total",
+		OTEL:    "beyla.network.inter.zone.bytes",
+	}
 }

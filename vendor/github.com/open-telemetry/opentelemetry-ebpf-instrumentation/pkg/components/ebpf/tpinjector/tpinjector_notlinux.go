@@ -11,17 +11,17 @@ import (
 	"github.com/cilium/ebpf"
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla"
 	ebpfcommon "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/common"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/goexec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/obi"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 )
 
 type Tracer struct{}
 
-func New(_ *beyla.Config) *Tracer                                        { return nil }
+func New(_ *obi.Config) *Tracer                                          { return nil }
 func (p *Tracer) AllowPID(_, _ uint32, _ *svc.Attrs)                     {}
 func (p *Tracer) BlockPID(_, _ uint32)                                   {}
 func (p *Tracer) Load() (*ebpf.CollectionSpec, error)                    { return nil, nil }

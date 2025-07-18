@@ -10,6 +10,7 @@ const (
 	InstrumentationRedis = "redis"
 	InstrumentationKafka = "kafka"
 	InstrumentationGPU   = "gpu"
+	InstrumentationMongo = "mongo"
 )
 
 const (
@@ -20,6 +21,7 @@ const (
 	flagRedis
 	flagKafka
 	flagGPU
+	flagMongo
 )
 
 func strToFlag(str string) InstrumentationSelection {
@@ -38,6 +40,8 @@ func strToFlag(str string) InstrumentationSelection {
 		return flagKafka
 	case InstrumentationGPU:
 		return flagGPU
+	case InstrumentationMongo:
+		return flagMongo
 	}
 	return 0
 }
@@ -68,7 +72,7 @@ func (s InstrumentationSelection) RedisEnabled() bool {
 }
 
 func (s InstrumentationSelection) DBEnabled() bool {
-	return s.SQLEnabled() || s.RedisEnabled()
+	return s.SQLEnabled() || s.RedisEnabled() || s.MongoEnabled()
 }
 
 func (s InstrumentationSelection) KafkaEnabled() bool {
@@ -81,4 +85,8 @@ func (s InstrumentationSelection) MQEnabled() bool {
 
 func (s InstrumentationSelection) GPUEnabled() bool {
 	return s&flagGPU != 0
+}
+
+func (s InstrumentationSelection) MongoEnabled() bool {
+	return s&flagMongo != 0
 }

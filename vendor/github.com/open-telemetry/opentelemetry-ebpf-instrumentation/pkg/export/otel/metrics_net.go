@@ -43,10 +43,10 @@ func nmlog() *slog.Logger {
 // for network metrics.
 func getFilteredNetworkResourceAttrs(hostID string, attrSelector attributes.Selection) []attribute.KeyValue {
 	baseAttrs := []attribute.KeyValue{
-		semconv.ServiceName("beyla-network-flows"),
+		semconv.ServiceName(VendorPrefix + "-network-flows"),
 		semconv.ServiceInstanceID(uuid.New().String()),
 		semconv.TelemetrySDKLanguageKey.String(semconv.TelemetrySDKLanguageGo.Value.AsString()),
-		semconv.TelemetrySDKNameKey.String("beyla"),
+		semconv.TelemetrySDKNameKey.String("opentelemetry-ebpf-instrumentation"),
 		semconv.TelemetrySDKVersion(buildinfo.Version),
 	}
 
@@ -54,7 +54,7 @@ func getFilteredNetworkResourceAttrs(hostID string, attrSelector attributes.Sele
 		semconv.HostID(hostID),
 	}
 
-	return GetFilteredAttributesByPrefix(baseAttrs, attrSelector, extraAttrs, []string{"network.", "beyla.network"})
+	return GetFilteredAttributesByPrefix(baseAttrs, attrSelector, extraAttrs, []string{"network.", VendorPrefix + ".network"})
 }
 
 func createFilteredNetworkResource(hostID string, attrSelector attributes.Selection) *resource.Resource {
@@ -125,7 +125,7 @@ func newMetricsExporter(
 	}
 	if cfg.GloballyEnabled || cfg.Metrics.NetworkFlowBytesEnabled() {
 		log := log.With("metricFamily", "FlowBytes")
-		bytesMetric, err := ebpfEvents.Int64Counter(attributes.BeylaNetworkFlow.OTEL,
+		bytesMetric, err := ebpfEvents.Int64Counter(attributes.NetworkFlow.OTEL,
 			metric2.WithDescription("total bytes_sent value of network flows observed by probe since its launch"),
 			metric2.WithUnit("{bytes}"), // TODO: By?
 		)
@@ -137,14 +137,14 @@ func newMetricsExporter(
 		log.Debug("restricting attributes not in this list", "attributes", cfg.SelectorCfg.SelectionCfg)
 		attrs := attributes.OpenTelemetryGetters(
 			ebpf.RecordGetters,
-			attrProv.For(attributes.BeylaNetworkFlow))
+			attrProv.For(attributes.NetworkFlow))
 
 		nme.flowBytes = NewExpirer[*ebpf.Record, metric2.Int64Counter, float64](ctx, bytesMetric, attrs, clock.Time, cfg.Metrics.TTL)
 	}
 
 	if cfg.Metrics.NetworkInterzoneMetricsEnabled() {
 		log := log.With("metricFamily", "InterZoneBytes")
-		bytesMetric, err := ebpfEvents.Int64Counter(attributes.BeylaNetworkInterZone.OTEL,
+		bytesMetric, err := ebpfEvents.Int64Counter(attributes.NetworkInterZone.OTEL,
 			metric2.WithDescription("total bytes_sent value between Cloud availability zones"),
 			metric2.WithUnit("{bytes}"), // TODO: By?
 		)
@@ -155,7 +155,7 @@ func newMetricsExporter(
 		log.Debug("restricting attributes not in this list", "attributes", cfg.SelectorCfg.SelectionCfg)
 		attrs := attributes.OpenTelemetryGetters(
 			ebpf.RecordGetters,
-			attrProv.For(attributes.BeylaNetworkInterZone))
+			attrProv.For(attributes.NetworkInterZone))
 
 		nme.interZoneBytes = NewExpirer[*ebpf.Record, metric2.Int64Counter, float64](ctx, bytesMetric, attrs, clock.Time, cfg.Metrics.TTL)
 	}

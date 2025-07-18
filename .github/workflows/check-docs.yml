@@ -5,11 +5,13 @@ on:
     paths:
       - '**.go'
       - 'docs/**/*.md'
+      - 'tools/doc-checker/**'
   push:
     branches: [ main ]
     paths:
       - '**.go'
       - 'docs/**/*.md'
+      - 'tools/doc-checker/**'
 
 jobs:
   check-docs:

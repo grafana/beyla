@@ -42,7 +42,7 @@ func Decorate(agentIP net.IP, ifaceNamer InterfaceNamer, input *msg.Queue[[]*ebp
 		for flows := range in {
 			for _, flow := range flows {
 				flow.Attrs.Interface = ifaceNamer(int(flow.Id.IfIndex))
-				flow.Attrs.BeylaIP = ip
+				flow.Attrs.OBIIP = ip
 				if flow.Attrs.DstName == "" {
 					flow.Attrs.DstName = flow.Id.DstIP().IP().String()
 				}

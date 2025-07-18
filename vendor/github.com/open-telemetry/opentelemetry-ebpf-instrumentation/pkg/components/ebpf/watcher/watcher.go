@@ -10,10 +10,10 @@ import (
 	"github.com/cilium/ebpf"
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla"
 	ebpfcommon "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/common"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/ringbuf"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/config"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/obi"
 )
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type watch_info_t -target amd64,arm64 Bpf ../../../../bpf/watcher/watcher.c -- -I../../../../bpf
@@ -22,7 +22,7 @@ import (
 type BPFWatchInfo BpfWatchInfoT
 
 type Watcher struct {
-	cfg        *beyla.Config
+	cfg        *obi.Config
 	bpfObjects BpfObjects
 	closers    []io.Closer
 	log        *slog.Logger
@@ -41,7 +41,7 @@ type Event struct {
 	Payload uint32 // this will be either port or pid
 }
 
-func New(cfg *beyla.Config, events chan<- Event) *Watcher {
+func New(cfg *obi.Config, events chan<- Event) *Watcher {
 	log := slog.With("component", "watcher.Tracer")
 	return &Watcher{
 		log:    log,

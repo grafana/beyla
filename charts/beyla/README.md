@@ -28,6 +28,7 @@ eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network
 | config.data | object | `{"attributes":{"kubernetes":{"enable":true}},"filter":{"network":{"k8s_dst_owner_name":{"not_match":"{kube*,*jaeger-agent*,*prometheus*,*promtail*,*grafana-agent*}"},"k8s_src_owner_name":{"not_match":"{kube*,*jaeger-agent*,*prometheus*,*promtail*,*grafana-agent*}"}}},"prometheus_export":{"path":"/metrics","port":9090}}` | default value of beyla configuration |
 | config.name | string | `""` |  |
 | config.skipConfigMapCheck | bool | `false` | set to true, to skip the check around the ConfigMap creation |
+| contextPropagation | object | `{"enabled":true}` | Enables context propagation support. |
 | dnsPolicy | string | `"ClusterFirstWithHostNet"` | Determines how DNS resolution is handled for that pod. If `.Values.preset` is set to `network` or `.Values.config.data.network` is enabled, Beyla requires `hostNetwork` access, causing cluster service DNS resolution to fail. It is recommended not to change this if Beyla sends traces and metrics to Grafana components via k8s service. |
 | env | object | `{}` | extra environment variables |
 | envValueFrom | object | `{}` | extra environment variables to be set from resources such as k8s configMaps/secrets |

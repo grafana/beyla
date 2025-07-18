@@ -12,12 +12,12 @@ import (
 	"github.com/cilium/ebpf"
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla"
 	ebpfcommon "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/common"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/tcmanager"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/exec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/goexec"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/obi"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 )
 
@@ -25,7 +25,7 @@ import (
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 BpfDebug ../../../../bpf/tctracer/tctracer.c -- -I../../../../bpf -I../../../../bpf -DBPF_DEBUG -DBPF_DEBUG_TC
 
 type Tracer struct {
-	cfg          *beyla.Config
+	cfg          *obi.Config
 	bpfObjects   BpfObjects
 	closers      []io.Closer
 	log          *slog.Logger
@@ -33,7 +33,7 @@ type Tracer struct {
 	tcManager    tcmanager.TCManager
 }
 
-func New(cfg *beyla.Config) *Tracer {
+func New(cfg *obi.Config) *Tracer {
 	log := slog.With("component", "tc.Tracer")
 
 	return &Tracer{

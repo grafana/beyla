@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	obi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/obi"
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/v2/test/integration/components/docker"
@@ -280,7 +280,7 @@ func TestSuite_JavaOTelSDK(t *testing.T) {
 
 func TestSuite_Rust(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-rust.yml", path.Join(pathOutput, "test-suite-rust.log"))
-	compose.Env = append(compose.Env, `BEYLA_OPEN_PORT=8090`, `BEYLA_EXECUTABLE_NAME=`, `TEST_SERVICE_PORTS=8091:8090`, `TESTSERVER_IMAGE_VERSION=0.0.3`)
+	compose.Env = append(compose.Env, `BEYLA_OPEN_PORT=8090`, `BEYLA_EXECUTABLE_NAME=`, `TEST_SERVICE_PORTS=8091:8090`)
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("Rust RED metrics", testREDMetricsRustHTTP)
@@ -289,7 +289,7 @@ func TestSuite_Rust(t *testing.T) {
 
 func TestSuite_RustSSL(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-rust.yml", path.Join(pathOutput, "test-suite-rust-tls.log"))
-	compose.Env = append(compose.Env, `BEYLA_OPEN_PORT=8490`, `BEYLA_EXECUTABLE_NAME=`, `TEST_SERVICE_PORTS=8491:8490`, `TESTSERVER_IMAGE_SUFFIX=-ssl`, `TESTSERVER_IMAGE_VERSION=0.0.3`)
+	compose.Env = append(compose.Env, `BEYLA_OPEN_PORT=8490`, `BEYLA_EXECUTABLE_NAME=`, `TEST_SERVICE_PORTS=8491:8490`, `TESTSERVER_IMAGE_SUFFIX=-ssl`)
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("Rust RED metrics", testREDMetricsRustHTTPS)
@@ -301,7 +301,7 @@ func TestSuite_RustSSL(t *testing.T) {
 // client to attempt http connection.
 func TestSuite_RustHTTP2(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-rust.yml", path.Join(pathOutput, "test-suite-rust-http2.log"))
-	compose.Env = append(compose.Env, `BEYLA_OPEN_PORT=8490`, `BEYLA_EXECUTABLE_NAME=`, `TEST_SERVICE_PORTS=8491:8490`, `TESTSERVER_IMAGE_SUFFIX=-ssl`, `TESTSERVER_IMAGE_VERSION=0.0.1`)
+	compose.Env = append(compose.Env, `BEYLA_OPEN_PORT=8490`, `BEYLA_EXECUTABLE_NAME=`, `TEST_SERVICE_PORTS=8491:8490`, `TESTSERVER_IMAGE_SUFFIX=-ssl`)
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("Rust RED metrics", testREDMetricsRustHTTP2)
@@ -395,6 +395,15 @@ func TestSuite_PythonSQL(t *testing.T) {
 	require.NoError(t, compose.Close())
 }
 
+func TestSuite_PythonRedis(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-python-redis.yml", path.Join(pathOutput, "test-suite-python-redis.log"))
+	compose.Env = append(compose.Env, `BEYLA_OPEN_PORT=8080`, `BEYLA_EXECUTABLE_NAME=`, `TEST_SERVICE_PORTS=8381:8080`)
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+	t.Run("Python Redis metrics", testREDMetricsPythonRedisOnly)
+	require.NoError(t, compose.Close())
+}
+
 func TestSuite_PythonSQLSSL(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-python-sql-ssl.yml", path.Join(pathOutput, "test-suite-python-sql-ssl.log"))
 	compose.Env = append(compose.Env, `BEYLA_OPEN_PORT=8080`, `BEYLA_EXECUTABLE_NAME=`, `TEST_SERVICE_PORTS=8381:8080`)
@@ -415,7 +424,7 @@ func TestSuite_PythonTLS(t *testing.T) {
 
 func TestSuite_PythonSelfReference(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-python-self.yml", path.Join(pathOutput, "test-suite-python-self.log"))
-	compose.Env = append(compose.Env, `BEYLA_OPEN_PORT=8081`, `BEYLA_EXECUTABLE_NAME=`)
+	compose.Env = append(compose.Env, `BEYLA_OPEN_PORT=7771`, `BEYLA_EXECUTABLE_NAME=`)
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("Python Traces with self-references", testHTTPTracesNestedSelfCalls)

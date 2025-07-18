@@ -10,13 +10,13 @@ import (
 	"github.com/cilium/ebpf/link"
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers/maps"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/imetrics"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/nodejs"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/otelsdk"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/obi"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
 )
@@ -26,7 +26,7 @@ import (
 // instrumenting the executable
 type TraceAttacher struct {
 	log      *slog.Logger
-	Cfg      *beyla.Config
+	Cfg      *obi.Config
 	Metrics  imetrics.Reporter
 	beylaPID int
 

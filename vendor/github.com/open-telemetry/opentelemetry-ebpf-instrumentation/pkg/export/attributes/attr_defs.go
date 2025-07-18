@@ -80,7 +80,7 @@ func getDefinitions(
 		nil,
 		map[attr.Name]Default{
 			attr.Direction:      true,
-			attr.BeylaIP:        false,
+			attr.OBIIP:          false,
 			attr.Transport:      false,
 			attr.SrcAddress:     false,
 			attr.DstAddres:      false,
@@ -231,10 +231,10 @@ func getDefinitions(
 	)
 
 	return map[Section]AttrReportGroup{
-		BeylaNetworkFlow.Section: {
+		NetworkFlow.Section: {
 			SubGroups: []*AttrReportGroup{&networkAttributes, &networkCIDR, &networkKubeAttributes},
 		},
-		BeylaNetworkInterZone.Section: {
+		NetworkInterZone.Section: {
 			SubGroups: []*AttrReportGroup{&networkInterZone, &networkInterZoneCIDR, &networkInterZoneKube},
 		},
 		HTTPServerDuration.Section: {

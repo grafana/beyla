@@ -69,9 +69,13 @@ const (
 	K8sKind            = Name("k8s.kind")
 )
 
-// Beyla-specific network attributes
+// OBI-specific network attributes
+// obi.-prefixed attributes are a var instead of a constant to allow overriding the prefix
+// from components that vendor OBI as a library
+
+var OBIIP = Name("obi.ip")
+
 const (
-	BeylaIP    = Name("beyla.ip")
 	Transport  = Name("transport")
 	SrcAddress = Name("src.address")
 	DstAddres  = Name("dst.address")
@@ -135,7 +139,9 @@ const (
 // traces related attributes
 const (
 	// SQL
-	DBQueryText = Name("db.query.text")
+	DBQueryText          = Name("db.query.text")
+	DBResponseStatusCode = Name("db.response.status_code")
+	DBNamespace          = Name("db.namespace")
 )
 
 // Beyla specific GPU events

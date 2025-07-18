@@ -210,7 +210,7 @@ func (ctx *connectionContext) readLoop() {
 		_, msg, err := ctx.wsConn.ReadMessage()
 		if err != nil {
 			if !websocket.IsCloseError(err, websocket.CloseNormalClosure) {
-				ctx.log.Error("WebSocket read error", "error", err)
+				ctx.log.Debug("WebSocket read error", "error", err)
 			}
 
 			ctx.wsConn.Close()

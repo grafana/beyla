@@ -23,12 +23,12 @@ func HTTPHandler(log *slog.Logger, echoPort int) http.HandlerFunc {
 			DB:       0,  // use default DB
 		})
 
-		err := client.Set(ctx, "beyla", "rocks", 0).Err()
+		err := client.Set(ctx, "obi", "rocks", 0).Err()
 		if err != nil {
 			panic(err)
 		}
 
-		val, err := client.Get(ctx, "beyla").Result()
+		val, err := client.Get(ctx, "obi").Result()
 		if err != nil {
 			panic(err)
 		}

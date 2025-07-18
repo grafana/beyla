@@ -4,12 +4,9 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"regexp"
 	"time"
 
 	"github.com/caarlos0/env/v9"
-	"github.com/gobwas/glob"
-	obi "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/tcmanager"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/imetrics"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/kube"
@@ -22,6 +19,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/prom"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/filter"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubeflags"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/obi"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/services"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/transform"
 	otelconsumer "go.opentelemetry.io/collector/consumer"
@@ -57,8 +55,8 @@ const (
 	k8sAKSDefaultNamespacesGlob  = ",gatekeeper-system"
 )
 
-var k8sDefaultNamespacesRegex = services.NewPathRegexp(regexp.MustCompile("^kube-system$|^kube-node-lease$|^local-path-storage$|^grafana-alloy$|^cert-manager$|^monitoring$" + k8sGKEDefaultNamespacesRegex + k8sAKSDefaultNamespacesRegex))
-var k8sDefaultNamespacesGlob = services.NewGlob(glob.MustCompile("{kube-system,kube-node-lease,local-path-storage,grafana-alloy,cert-manager,monitoring" + k8sGKEDefaultNamespacesGlob + k8sAKSDefaultNamespacesGlob + "}"))
+var k8sDefaultNamespacesRegex = services.NewRegexp("^kube-system$|^kube-node-lease$|^local-path-storage$|^grafana-alloy$|^cert-manager$|^monitoring$" + k8sGKEDefaultNamespacesRegex + k8sAKSDefaultNamespacesRegex)
+var k8sDefaultNamespacesGlob = services.NewGlob("{kube-system,kube-node-lease,local-path-storage,grafana-alloy,cert-manager,monitoring" + k8sGKEDefaultNamespacesGlob + k8sAKSDefaultNamespacesGlob + "}")
 
 var DefaultConfig = Config{
 	ChannelBufferLen: 10,
@@ -72,6 +70,10 @@ var DefaultConfig = Config{
 		TCBackend:                 tcmanager.TCBackendAuto,
 		ContextPropagationEnabled: false,
 		ContextPropagation:        config.ContextPropagationDisabled,
+		RedisDBCache: config.RedisDBCacheConfig{
+			Enabled: false,
+			MaxSize: 1000,
+		},
 	},
 	Grafana: botel.GrafanaConfig{
 		OTLP: botel.GrafanaOTLP{
@@ -153,7 +155,7 @@ var DefaultConfig = Config{
 		ExcludeOTelInstrumentedServices: true,
 		DefaultExcludeServices: services.RegexDefinitionCriteria{
 			services.RegexSelector{
-				Path: services.NewPathRegexp(regexp.MustCompile("(?:^|/)(beyla$|alloy$|otelcol[^/]*$)")),
+				Path: services.NewRegexp("(?:^|/)(beyla$|alloy$|prometheus-config-reloader$|otelcol[^/]*$)"),
 			},
 			services.RegexSelector{
 				Metadata: map[string]*services.RegexpAttr{"k8s_namespace": &k8sDefaultNamespacesRegex},
@@ -161,7 +163,7 @@ var DefaultConfig = Config{
 		},
 		DefaultExcludeInstrument: services.GlobDefinitionCriteria{
 			services.GlobAttributes{
-				Path: services.NewGlob(glob.MustCompile("{*beyla,*alloy,*ebpf-instrument,*otelcol,*otelcol-contrib,*otelcol-contrib[!/]*}")),
+				Path: services.NewGlob("{*beyla,*alloy,*prometheus-config-reloader,*ebpf-instrument,*otelcol,*otelcol-contrib,*otelcol-contrib[!/]*}"),
 			},
 			services.GlobAttributes{
 				Metadata: map[string]*services.GlobAttr{"k8s_namespace": &k8sDefaultNamespacesGlob},
@@ -247,6 +249,10 @@ type Config struct {
 
 	// Grafana Alloy specific configuration
 	TracesReceiver TracesReceiverConfig `yaml:"-"`
+
+	// LogConfig enables the logging of the configuration on startup.
+	// nolint:undoc
+	LogConfig bool `yaml:"log_config" env:"BEYLA_LOG_CONFIG"`
 
 	// cached equivalent for the OBI conversion
 	obi *obi.Config `yaml:"-"`
@@ -423,7 +429,7 @@ func (c *Config) ExternalLogger(handler slog.Handler, debugMode bool) {
 // 2 - Contents of the provided file reader (nillable)
 // 3 - Environment variables
 func LoadConfig(file io.Reader) (*Config, error) {
-	SetupOBIEnvVars()
+	OverrideOBIGlobalConfig()
 	cfg := DefaultConfig
 	if file != nil {
 		cfgBuf, err := io.ReadAll(file)

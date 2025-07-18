@@ -10,10 +10,10 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/app/request"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/beyla"
 	ebpfcommon "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/common"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/ringbuf"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/config"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/obi"
 )
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type log_info_t -target amd64,arm64 BpfDebug ../../../../bpf/logger/logger.c -- -I../../../../bpf -DBPF_DEBUG
@@ -21,7 +21,7 @@ import (
 type BPFLogInfo BpfDebugLogInfoT
 
 type BPFLogger struct {
-	cfg        *beyla.Config
+	cfg        *obi.Config
 	bpfObjects BpfDebugObjects
 	closers    []io.Closer
 	log        *slog.Logger
@@ -31,7 +31,7 @@ type Event struct {
 	Log string
 }
 
-func New(cfg *beyla.Config) *BPFLogger {
+func New(cfg *obi.Config) *BPFLogger {
 	log := slog.With("component", "BPFLogger")
 	return &BPFLogger{
 		log: log,

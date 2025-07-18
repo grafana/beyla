@@ -1,9 +1,11 @@
 package services
 
 import (
+	"bytes"
 	"fmt"
 	"iter"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -91,6 +93,9 @@ type DiscoveryConfig struct {
 
 	// Disables instrumentation of services which are already instrumented
 	ExcludeOTelInstrumentedServices bool `yaml:"exclude_otel_instrumented_services" env:"OTEL_EBPF_EXCLUDE_OTEL_INSTRUMENTED_SERVICES"`
+
+	// Disables generation of span metrics of services which are already instrumented
+	ExcludeOTelInstrumentedServicesSpanMetrics bool `yaml:"exclude_otel_instrumented_services_span_metrics" env:"OTEL_EBPF_EXCLUDE_OTEL_INSTRUMENTED_SERVICES_SPAN_METRICS"`
 }
 
 func (c *DiscoveryConfig) Validate() error {
@@ -109,6 +114,70 @@ func (c *DiscoveryConfig) Validate() error {
 	return nil
 }
 
+type ExportMode uint8
+
+const (
+	ExportMetrics = ExportMode(iota)
+	ExportTraces
+)
+
+var textForMode = [...]string{
+	ExportMetrics: "metrics",
+	ExportTraces:  "traces",
+}
+
+func (e ExportMode) MarshalText() ([]byte, error) {
+	if int(e) < 0 || int(e) >= len(textForMode) {
+		return nil, fmt.Errorf("invalid ExportMode: %d", e)
+	}
+
+	return []byte(textForMode[e]), nil
+}
+
+func (e *ExportMode) UnmarshalText(text []byte) error {
+	s := string(text)
+
+	for i, v := range textForMode {
+		if v == s {
+			*e = ExportMode(i)
+			return nil
+		}
+	}
+
+	return fmt.Errorf("invalid value for export_mode: %q", s)
+}
+
+func (e ExportMode) String() string {
+	b, err := e.MarshalText()
+	if err != nil {
+		return "#INVALID!#"
+	}
+
+	return string(b)
+}
+
+type ExportModes []ExportMode
+
+func (modes ExportModes) CanExport(mode ExportMode) bool {
+	if modes == nil {
+		return true
+	}
+
+	return slices.Contains(modes, mode)
+}
+
+// CanExportTraces reports whether traces can be exported.
+// It's provided as a convenience function.
+func (modes ExportModes) CanExportTraces() bool {
+	return modes.CanExport(ExportTraces)
+}
+
+// CanExportMetrics reports whether metrics can be exported.
+// It's provided as a convenience function.
+func (modes ExportModes) CanExportMetrics() bool {
+	return modes.CanExport(ExportMetrics)
+}
+
 // Selector defines a generic interface for selecting service processes based on different criteria.
 type Selector interface {
 	// Deprecated: Name should be set in the instrumentation target via kube metadata or standard env vars
@@ -122,6 +191,7 @@ type Selector interface {
 	RangeMetadata() iter.Seq2[string, StringMatcher]
 	RangePodLabels() iter.Seq2[string, StringMatcher]
 	RangePodAnnotations() iter.Seq2[string, StringMatcher]
+	GetExportModes() ExportModes
 }
 
 // StringMatcher provides a generic interface to match string values against some matcher types: regex and glob
@@ -160,6 +230,21 @@ func (p *PortEnum) UnmarshalYAML(value *yaml.Node) error {
 		return fmt.Errorf("PortEnum: unexpected YAML node kind %d", value.Kind)
 	}
 	return p.UnmarshalText([]byte(value.Value))
+}
+
+func (p PortEnum) MarshalYAML() (any, error) {
+	sb := bytes.Buffer{}
+	for i, r := range p.Ranges {
+		if i > 0 {
+			sb.WriteByte(',')
+		}
+		sb.WriteString(strconv.Itoa(r.Start))
+		if r.End > 0 {
+			sb.WriteByte('-')
+			sb.WriteString(strconv.Itoa(r.End))
+		}
+	}
+	return sb.String(), nil
 }
 
 func (p *PortEnum) UnmarshalText(text []byte) error {

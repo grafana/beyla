@@ -1,7 +1,7 @@
 // Deprecated: This module will be moved to go.opentelemetry.io/auto/examples.
 module rolldice
 
-go 1.23.0
+go 1.24.0
 
 require (
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.45.0

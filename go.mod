@@ -23,7 +23,7 @@ require (
 	github.com/vladimirvivien/gexe v0.5.0
 	go.opentelemetry.io/collector/consumer v1.34.0
 	go.opentelemetry.io/collector/pdata v1.36.0
-	go.opentelemetry.io/obi v0.0.0-00010101000000-000000000000
+	go.opentelemetry.io/obi v0.0.0-20250721133745-502110d1c2c1
 	go.opentelemetry.io/otel v1.37.0
 	go.opentelemetry.io/otel/sdk v1.37.0
 	go.opentelemetry.io/otel/sdk/metric v1.37.0
@@ -108,7 +108,6 @@ require (
 	github.com/mostynb/go-grpc-compression v1.2.3 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/mxk/go-flowrate v0.0.0-20140419014527-cca7078d478f // indirect
-	github.com/open-telemetry/opentelemetry-ebpf-instrumentation v0.0.0-20250721130132-2d5ea0eafeee // indirect
 	github.com/pelletier/go-toml/v2 v2.2.2 // indirect
 	github.com/pierrec/lz4/v4 v4.1.22 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect

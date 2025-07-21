@@ -74,7 +74,7 @@ func SpanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 	case attr.SpanName:
 		getter = func(s *Span) attribute.KeyValue { return SpanNameMetric(s.TraceName()) }
 	case attr.Source:
-		getter = func(_ *Span) attribute.KeyValue { return SourceMetric("beyla") }
+		getter = func(_ *Span) attribute.KeyValue { return SourceMetric(attr.VendorPrefix) }
 	case attr.StatusCode:
 		getter = func(s *Span) attribute.KeyValue { return StatusCodeMetric(SpanStatusCode(s)) }
 	case attr.DBOperation:

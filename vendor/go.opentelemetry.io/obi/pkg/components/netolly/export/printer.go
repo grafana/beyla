@@ -9,9 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"go.opentelemetry.io/obi/pkg/export/otel"
-
 	"go.opentelemetry.io/obi/pkg/components/netolly/ebpf"
+	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 )
@@ -37,7 +36,7 @@ func printFlow(f *ebpf.Record) {
 	sb.WriteString("transport=")
 	sb.WriteString(strconv.Itoa(int(f.Id.TransportProtocol)))
 	sb.WriteByte(' ')
-	sb.WriteString(otel.VendorPrefix)
+	sb.WriteString(attr.VendorPrefix)
 	sb.WriteString(".ip=")
 	sb.WriteString(f.Attrs.OBIIP)
 	sb.WriteString(" iface=")

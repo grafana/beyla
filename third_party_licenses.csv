@@ -71,7 +71,6 @@ github.com/modern-go/reflect2,https://github.com/grafana/beyla/blob/HEAD/vendor/
 github.com/mostynb/go-grpc-compression,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/mostynb/go-grpc-compression/LICENSE,Apache-2.0
 github.com/munnerz/goautoneg,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/munnerz/goautoneg/LICENSE,BSD-3-Clause
 github.com/mxk/go-flowrate/flowrate,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/mxk/go-flowrate/LICENSE,BSD-3-Clause
-github.com/open-telemetry/opentelemetry-ebpf-instrumentation,Unknown,Apache-2.0
 github.com/pelletier/go-toml/v2,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/pelletier/go-toml/v2/LICENSE,MIT
 github.com/pierrec/lz4/v4,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/pierrec/lz4/v4/LICENSE,BSD-3-Clause
 github.com/pkg/errors,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/pkg/errors/LICENSE,BSD-2-Clause
@@ -134,6 +133,7 @@ go.opentelemetry.io/contrib/detectors/azure/azurevm,https://github.com/grafana/b
 go.opentelemetry.io/contrib/detectors/gcp,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/contrib/detectors/gcp/LICENSE,Apache-2.0
 go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc/LICENSE,Apache-2.0
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp/LICENSE,Apache-2.0
+go.opentelemetry.io/obi,Unknown,Apache-2.0
 go.opentelemetry.io/otel,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/otel/LICENSE,Apache-2.0
 go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc/LICENSE,Apache-2.0
 go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp/LICENSE,Apache-2.0
@@ -148,6 +148,8 @@ go.opentelemetry.io/otel/trace,https://github.com/grafana/beyla/blob/HEAD/vendor
 go.opentelemetry.io/proto/otlp,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/proto/otlp/LICENSE,Apache-2.0
 go.uber.org/multierr,https://github.com/grafana/beyla/blob/HEAD/vendor/go.uber.org/multierr/LICENSE.txt,MIT
 go.uber.org/zap,https://github.com/grafana/beyla/blob/HEAD/vendor/go.uber.org/zap/LICENSE,MIT
+go.yaml.in/yaml/v2,https://github.com/grafana/beyla/blob/HEAD/vendor/go.yaml.in/yaml/v2/LICENSE,Apache-2.0
+go.yaml.in/yaml/v3,https://github.com/grafana/beyla/blob/HEAD/vendor/go.yaml.in/yaml/v3/LICENSE,MIT
 golang.org/x/arch/x86/x86asm,https://github.com/grafana/beyla/blob/HEAD/vendor/golang.org/x/arch/LICENSE,BSD-3-Clause
 golang.org/x/crypto,https://github.com/grafana/beyla/blob/HEAD/vendor/golang.org/x/crypto/LICENSE,BSD-3-Clause
 golang.org/x/mod/semver,https://github.com/grafana/beyla/blob/HEAD/vendor/golang.org/x/mod/LICENSE,BSD-3-Clause
@@ -180,5 +182,3 @@ sigs.k8s.io/e2e-framework,https://github.com/grafana/beyla/blob/HEAD/vendor/sigs
 sigs.k8s.io/json,https://github.com/grafana/beyla/blob/HEAD/vendor/sigs.k8s.io/json/LICENSE,Apache-2.0
 sigs.k8s.io/structured-merge-diff/v4,https://github.com/grafana/beyla/blob/HEAD/vendor/sigs.k8s.io/structured-merge-diff/v4/LICENSE,Apache-2.0
 sigs.k8s.io/yaml,https://github.com/grafana/beyla/blob/HEAD/vendor/sigs.k8s.io/yaml/LICENSE,Apache-2.0
-sigs.k8s.io/yaml/goyaml.v2,https://github.com/grafana/beyla/blob/HEAD/vendor/sigs.k8s.io/yaml/goyaml.v2/LICENSE,Apache-2.0
-sigs.k8s.io/yaml/goyaml.v3,https://github.com/grafana/beyla/blob/HEAD/vendor/sigs.k8s.io/yaml/goyaml.v3/LICENSE,MIT

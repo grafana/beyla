@@ -26,9 +26,9 @@ import (
 	"path"
 	"testing"
 
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/helpers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/obi/pkg/components/helpers"
 )
 
 func TestLinuxProcess_CmdLine(t *testing.T) {

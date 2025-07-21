@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/obi"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/obi/pkg/obi"
 
 	"github.com/grafana/beyla/v2/test/integration/components/docker"
 )

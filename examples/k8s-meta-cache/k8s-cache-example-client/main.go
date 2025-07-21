@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubecache/informer"
+	"go.opentelemetry.io/obi/pkg/kubecache/informer"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )

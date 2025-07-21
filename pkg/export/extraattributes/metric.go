@@ -1,7 +1,7 @@
 package extraattributes
 
 import (
-	attributes "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
+	attributes "go.opentelemetry.io/obi/pkg/export/attributes"
 )
 
 var (

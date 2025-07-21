@@ -29,9 +29,9 @@ import (
 
 	"github.com/hashicorp/golang-lru/v2/simplelru"
 	"github.com/mariomac/guara/pkg/test"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/svc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/obi/pkg/components/svc"
 )
 
 func TestLinuxHarvester_IsPrivileged(t *testing.T) {

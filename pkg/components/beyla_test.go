@@ -3,8 +3,8 @@ package components
 import (
 	"testing"
 
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/transform"
 	"github.com/stretchr/testify/assert"
+	"go.opentelemetry.io/obi/pkg/transform"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 )

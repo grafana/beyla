@@ -76,6 +76,11 @@ const (
 // obi.-prefixed attributes are a var instead of a constant to allow overriding the prefix
 // from components that vendor OBI as a library
 
+// VendorPrefix allows identifying some metrics (network, internal counters...)
+// as custom metrics, since at the moment they don't follow any semantic convention for them.
+// This value can be overridden when OBI is vendored as a library (e.g. from the OTEL collector)
+var VendorPrefix = "obi"
+
 var OBIIP = Name("obi.ip")
 
 const (

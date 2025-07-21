@@ -7,7 +7,6 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
-	otel2 "go.opentelemetry.io/obi/pkg/export/otel"
 	"go.opentelemetry.io/obi/pkg/obi"
 
 	"github.com/grafana/beyla/v2/pkg/export/otel"
@@ -66,5 +65,18 @@ func SetupOBIEnvVars() {
 		os.Setenv("OTEL_RESOURCE_ATTRIBUTES", ras+",telemetry.sdk.name=beyla")
 	} else {
 		os.Setenv("OTEL_RESOURCE_ATTRIBUTES", "telemetry.sdk.name=beyla")
+	}
+	// Override global metric naming options
+	attr.VendorPrefix = "beyla"
+	attr.OBIIP = "beyla.ip"
+	attributes.NetworkFlow = attributes.Name{
+		Section: "beyla.network.flow",
+		Prom:    "beyla_network_flow_bytes_total",
+		OTEL:    "beyla.network.flow.bytes",
+	}
+	attributes.NetworkInterZone = attributes.Name{
+		Section: "beyla.network.inter.zone",
+		Prom:    "beyla_network_inter_zone_bytes_total",
+		OTEL:    "beyla.network.inter.zone.bytes",
 	}
 }

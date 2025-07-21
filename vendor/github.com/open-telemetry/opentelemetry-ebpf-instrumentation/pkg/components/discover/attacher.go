@@ -116,6 +116,10 @@ func (ta *TraceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 							if ok := ta.getTracer(&instr.Obj); ok {
 								ta.OutputTracerEvents.Send(Event[*ebpf.Instrumentable]{Type: EventCreated, Obj: &instr.Obj})
 							}
+
+							if instr.Obj.FileInfo.ELF != nil {
+								_ = instr.Obj.FileInfo.ELF.Close()
+							}
 						}
 					case EventDeleted:
 						ta.notifyProcessDeletion(&instr.Obj)

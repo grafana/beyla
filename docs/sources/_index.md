@@ -36,7 +36,7 @@ Beyla offers the following features:
 - auto-instrument applications written in various programming languages, for example: Go, C/C++, Rust, Python, Ruby, Java (including GraalVM Native), NodeJS, .NET, and others
 - efficient instrumentation and the low-overhead data capture with natively compiled code even for interpreted languages
 - vendor agnostic data exports in the OpenTelemetry format and as native Prometheus metrics
-- distributed traces for Go services
+- [distributed traces](./distributed-traces/) with Beyla 2
 - runs in any Linux environment
 - listen to the Kubernetes API to decorate metrics and traces with Pods and Services metadata
 - simple setup for Grafana customers already using Grafana Alloy

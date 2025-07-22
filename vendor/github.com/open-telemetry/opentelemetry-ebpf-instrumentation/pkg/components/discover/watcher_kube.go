@@ -152,13 +152,7 @@ func (wk *watcherKubeEnricher) enrichProcessEvent(processEvents []Event[ProcessA
 			}
 		case EventDeleted:
 			wk.log.Debug("process stopped", "pid", procEvent.Obj.pid)
-			wk.mt.Lock()
-			if cnt, ok := wk.containerByPID[procEvent.Obj.pid]; ok {
-				delete(wk.processByContainer, cnt.ContainerID)
-			}
-			delete(wk.containerByPID, procEvent.Obj.pid)
-			wk.store.DeleteProcess(uint32(procEvent.Obj.pid))
-			wk.mt.Unlock()
+			wk.onProcessTerminate(procEvent.Obj)
 			// no need to decorate deleted processes
 			eventsWithMeta = append(eventsWithMeta, procEvent)
 		}
@@ -187,6 +181,32 @@ func (wk *watcherKubeEnricher) onNewProcess(procInfo ProcessAttrs) (ProcessAttrs
 		procInfo = withMetadata(procInfo, pod.Meta)
 	}
 	return procInfo, true
+}
+
+func (wk *watcherKubeEnricher) onProcessTerminate(procInfo ProcessAttrs) {
+	wk.mt.Lock()
+	defer wk.mt.Unlock()
+
+	if cnt, ok := wk.containerByPID[procInfo.pid]; ok {
+		if pidProcInfos, ok := wk.processByContainer[cnt.ContainerID]; ok {
+			filtered := []ProcessAttrs{}
+
+			for _, pidProcInfo := range pidProcInfos {
+				if pidProcInfo.pid != procInfo.pid {
+					filtered = append(filtered, pidProcInfo)
+					continue
+				}
+				wk.log.Debug("removing process mapping", "container", cnt.ContainerID, "pid", pidProcInfo.pid)
+			}
+			if len(filtered) == 0 {
+				delete(wk.processByContainer, cnt.ContainerID)
+			} else {
+				wk.processByContainer[cnt.ContainerID] = filtered
+			}
+		}
+	}
+	delete(wk.containerByPID, procInfo.pid)
+	wk.store.DeleteProcess(uint32(procInfo.pid))
 }
 
 func (wk *watcherKubeEnricher) onNewPod(pod *informer.ObjectMeta) []Event[ProcessAttrs] {

@@ -5,30 +5,38 @@ package nodejs
 
 import (
 	"bufio"
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"net"
 	"net/http"
 	"os"
-	"sync"
 	"syscall"
 	"time"
 
 	"github.com/gorilla/websocket"
 )
 
-type message struct {
-	ID     int            `json:"id"`
-	Method string         `json:"method"`
-	Params map[string]any `json:"params,omitempty"`
-}
-
 type inspectorTarget struct {
 	WebSocketDebuggerURL string `json:"webSocketDebuggerUrl"`
+}
+
+type cdpRequest struct {
+	ID     int    `json:"id"`
+	Method string `json:"method"`
+	Params any    `json:"params,omitempty"`
+}
+
+type cdpResponse struct {
+	ID     int            `json:"id"`
+	Result map[string]any `json:"result,omitempty"`
+	Error  map[string]any `json:"error,omitempty"`
+}
+
+type evalParams struct {
+	Expression            string `json:"expression"`
+	IncludeCommandLineAPI bool   `json:"includeCommandLineAPI"`
 }
 
 // IMPORTANT: the code in this file needs to run in the network namespace of the
@@ -157,137 +165,74 @@ func upgradeConn(conn net.Conn, wsURL string) (*websocket.Conn, *http.Response, 
 	return wsConn, resp, err
 }
 
-type responseMap map[int]chan map[string]any
-
-type connectionContext struct {
-	idCount int
-	respMap responseMap
-	mu      sync.Mutex
-	wsConn  *websocket.Conn
-	ctx     context.Context
-	log     *slog.Logger
-}
-
-func newConnectionContext(context context.Context, wsConn *websocket.Conn, log *slog.Logger) *connectionContext {
-	return &connectionContext{
-		idCount: 0,
-		respMap: responseMap{},
-		mu:      sync.Mutex{},
-		wsConn:  wsConn,
-		ctx:     context,
-		log:     log,
-	}
-}
-
-func (ctx *connectionContext) send(method string, params map[string]any) (map[string]any, error) {
-	ch := make(chan map[string]any, 1)
-
-	ctx.idCount++
-
-	ctx.mu.Lock()
-	ctx.respMap[ctx.idCount] = ch
-	ctx.mu.Unlock()
-
-	if err := ctx.wsConn.WriteJSON(message{ID: ctx.idCount, Method: method, Params: params}); err != nil {
-		return nil, err
+func sendEvaluate(wsConn *websocket.Conn, exp string, id int) error {
+	req := cdpRequest{
+		ID:     id,
+		Method: "Runtime.evaluate",
+		Params: evalParams{
+			Expression:            exp,
+			IncludeCommandLineAPI: true,
+		},
 	}
 
-	select {
-	case resp := <-ch:
-		return resp, nil
-	case <-ctx.ctx.Done():
-		return nil, fmt.Errorf("timeout waiting for response to %d", ctx.idCount)
+	data, err := json.Marshal(req)
+	if err != nil {
+		return fmt.Errorf("failed to serialize request: %w", err)
 	}
-}
 
-func (ctx *connectionContext) sendEvaluate(expr string) (map[string]any, error) {
-	return ctx.send("Runtime.evaluate", map[string]any{
-		"expression":            expr,
-		"includeCommandLineAPI": true,
-		"silent":                false,
-	})
-}
+	if err := wsConn.WriteMessage(websocket.TextMessage, data); err != nil {
+		return fmt.Errorf("websocket write error: %w", err)
+	}
 
-func (ctx *connectionContext) readLoop() {
-	for {
-		_, msg, err := ctx.wsConn.ReadMessage()
-		if err != nil {
-			if !websocket.IsCloseError(err, websocket.CloseNormalClosure) {
-				ctx.log.Debug("WebSocket read error", "error", err)
-			}
+	_, msg, err := wsConn.ReadMessage()
+	if err != nil {
+		return fmt.Errorf("websocket read error: %w", err)
+	}
 
-			ctx.wsConn.Close()
-			return
-		}
+	var resp cdpResponse
 
-		var parsed map[string]any
+	if err := json.Unmarshal(msg, &resp); err != nil {
+		return fmt.Errorf("response unmarshal error: %w", err)
+	}
 
-		if err := json.Unmarshal(msg, &parsed); err != nil {
-			continue
-		}
+	if resp.Error != nil {
+		return fmt.Errorf("protocol error: %+v", resp.Error)
+	}
 
-		if idRaw, ok := parsed["id"]; ok {
-			id := int(idRaw.(float64))
-			ctx.mu.Lock()
-			ch, ok := ctx.respMap[id]
-			ctx.mu.Unlock()
+	result := resp.Result["result"]
 
-			if ok {
-				ch <- parsed
-			}
-
-		} else {
-			b, _ := json.MarshalIndent(parsed, "", "  ")
-			ctx.log.Debug("[event]", "payload", string(b))
+	if resultMap, ok := result.(map[string]any); ok {
+		if subtype, ok := resultMap["subtype"]; ok && subtype == "error" {
+			return fmt.Errorf("exception: %v", resultMap["description"])
 		}
 	}
+
+	if ed, ok := resp.Result["exceptionDetails"]; ok {
+		return fmt.Errorf("uncaught exception: %v", ed)
+	}
+
+	return nil
 }
 
-func (ctx *connectionContext) start() {
-	go ctx.readLoop()
-}
-
-func (i *NodeInjector) injectFileWS(wsConn *websocket.Conn, file string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
+func (i *NodeInjector) injectFileWS(wsConn *websocket.Conn) error {
 	defer func() {
-		_ = wsConn.WriteControl(
-			websocket.CloseMessage,
-			websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""),
-			time.Now().Add(time.Second),
-		)
+		_ = sendEvaluate(wsConn, "process._debugEnd();", 2)
 	}()
 
-	connCtx := newConnectionContext(ctx, wsConn, i.log)
+	script := string(_extractorBytes)
 
-	connCtx.start()
+	wrapped := fmt.Sprintf("(()=>{\n%s\n})()", script)
 
-	if _, err := connCtx.send("Runtime.enable", nil); err != nil {
-		return fmt.Errorf("failed to enable runtime: %w", err)
+	if err := sendEvaluate(wsConn, wrapped, 1); err != nil {
+		return err
 	}
-
-	res, err := connCtx.sendEvaluate(fmt.Sprintf("require(%q);", file))
-	if err != nil {
-		return fmt.Errorf("evaluation error: %w", err)
-	}
-
-	if result, ok := res["result"].(map[string]any); ok {
-		if ex, ok := result["exceptionDetails"]; ok {
-			return fmt.Errorf("injection failed: %+v", ex)
-		}
-	} else {
-		return errors.New("injection failed")
-	}
-
-	_, _ = connCtx.sendEvaluate("process._debugEnd();")
 
 	i.log.Info("Script successfully injected")
 
 	return nil
 }
 
-func (i *NodeInjector) injectFile(file string) error {
+func (i *NodeInjector) injectFile() error {
 	conn, err := connectWait("127.0.0.1", 9229, 5*time.Second, 200*time.Millisecond)
 	if err != nil {
 		return fmt.Errorf("failed to connect: %w", err)
@@ -307,9 +252,9 @@ func (i *NodeInjector) injectFile(file string) error {
 		return fmt.Errorf("failed to connect to inspector WebSocket: %w", err)
 	}
 
-	return i.injectFileWS(wsConn, file)
+	return i.injectFileWS(wsConn)
 }
 
-func (i *NodeInjector) inject(pid int, file string) error {
-	return withNetNS(pid, func() error { return i.injectFile(file) })
+func (i *NodeInjector) inject(pid int) error {
+	return withNetNS(pid, func() error { return i.injectFile() })
 }

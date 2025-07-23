@@ -52,6 +52,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
+	"go.opentelemetry.io/obi/pkg/services"
 )
 
 func tlog() *slog.Logger {
@@ -78,7 +79,7 @@ type TracesConfig struct {
 	// InsecureSkipVerify is not standard, so we don't follow the same naming convention
 	InsecureSkipVerify bool `yaml:"insecure_skip_verify" env:"OTEL_EBPF_INSECURE_SKIP_VERIFY"`
 
-	Sampler Sampler `yaml:"sampler"`
+	SamplerConfig services.SamplerConfig `yaml:"sampler"`
 
 	// Configuration options below this line will remain undocumented at the moment,
 	// but can be useful for performance-tuning of some customers.
@@ -253,7 +254,15 @@ func GroupSpans(ctx context.Context, spans []request.Span, traceAttrs map[attr.N
 
 		finalAttrs := TraceAttributes(span, traceAttrs)
 
-		sr := sampler.ShouldSample(trace.SamplingParameters{
+		spanSampler := func() trace.Sampler {
+			if span.Service.Sampler != nil {
+				return span.Service.Sampler
+			}
+
+			return sampler
+		}
+
+		sr := spanSampler().ShouldSample(trace.SamplingParameters{
 			ParentContext: ctx,
 			Name:          span.TraceName(),
 			TraceID:       span.TraceID,
@@ -325,7 +334,7 @@ func (tr *tracesOTELReceiver) provideLoop(ctx context.Context) {
 		traceAttrs[attr.SkipSpanMetrics] = struct{}{}
 	}
 
-	sampler := tr.cfg.Sampler.Implementation()
+	sampler := tr.cfg.SamplerConfig.Implementation()
 
 	for spans := range tr.input {
 		tr.processSpans(ctx, exp, spans, traceAttrs, sampler)

@@ -193,6 +193,7 @@ type Selector interface {
 	RangePodLabels() iter.Seq2[string, StringMatcher]
 	RangePodAnnotations() iter.Seq2[string, StringMatcher]
 	GetExportModes() ExportModes
+	GetSamplerConfig() *SamplerConfig
 }
 
 // StringMatcher provides a generic interface to match string values against some matcher types: regex and glob

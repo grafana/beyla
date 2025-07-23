@@ -12,6 +12,8 @@ import (
 
 	lru "github.com/hashicorp/golang-lru/v2"
 
+	"go.opentelemetry.io/otel/sdk/trace"
+
 	"go.opentelemetry.io/obi/pkg/components/ebpf"
 	"go.opentelemetry.io/obi/pkg/components/exec"
 	"go.opentelemetry.io/obi/pkg/components/goexec"
@@ -84,10 +86,19 @@ type typer struct {
 	instrumentableCache *lru.Cache[uint64, InstrumentedExecutable]
 }
 
+func samplerFromConfig(s *services.SamplerConfig) trace.Sampler {
+	if s != nil {
+		return s.Implementation()
+	}
+
+	return nil
+}
+
 func makeServiceAttrs(processMatch *ProcessMatch) svc.Attrs {
 	var name string
 	var namespace string
 	var exportModes services.ExportModes
+	var samplerConfig *services.SamplerConfig
 
 	for _, s := range processMatch.Criteria {
 		if n := s.GetName(); n != "" {
@@ -101,6 +112,10 @@ func makeServiceAttrs(processMatch *ProcessMatch) svc.Attrs {
 		if m := s.GetExportModes(); m != nil {
 			exportModes = m
 		}
+
+		if m := s.GetSamplerConfig(); m != nil {
+			samplerConfig = m
+		}
 	}
 
 	return svc.Attrs{
@@ -110,6 +125,7 @@ func makeServiceAttrs(processMatch *ProcessMatch) svc.Attrs {
 		},
 		ProcPID:     processMatch.Process.Pid,
 		ExportModes: exportModes,
+		Sampler:     samplerFromConfig(samplerConfig),
 	}
 }
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"io"
 	"log/slog"
 	"net/http"
@@ -14,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/kubecache"
 	"go.opentelemetry.io/obi/pkg/kubecache/instrument"
 	"go.opentelemetry.io/obi/pkg/kubecache/meta"

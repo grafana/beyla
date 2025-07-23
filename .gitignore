@@ -89,4 +89,4 @@ test/integration/components/gosql/qosql
 test/integration/components/testserver_1.17/vendor
 *_bpfel.go
 *_bpfel.o
-pkg/internal/otelsdk/grafana-opentelemetry-java.jar
+**/grafana-opentelemetry-java.jar

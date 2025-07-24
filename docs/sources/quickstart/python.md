@@ -43,13 +43,6 @@ Copy the **Environment Variables** and keep it for the next step.
 
 ## 4. Run Beyla with minimal configuration
 
-To run Beyla, first set the following environment variables:
-
-- The `OTEL_EXPORTER_OTLP_PROTOCOL`, `OTEL_EXPORTER_OTLP_ENDPOINT` and `OTEL_EXPORTER_OTLP_HEADERS`
-  variables copied from the previous step.
-
-For service discovery, you have two options:
-
 For service discovery, create a `config.yml` file:
 
 ```yml
@@ -58,6 +51,11 @@ discovery:
     - open_ports: 8080  # the port your service is using
 ```
 
+To run Beyla, first set the following environment variables:
+
+- The `OTEL_EXPORTER_OTLP_PROTOCOL`, `OTEL_EXPORTER_OTLP_ENDPOINT` and `OTEL_EXPORTER_OTLP_HEADERS`
+  variables copied from the previous step.
+
 To facilitate local testing, set the `BEYLA_TRACE_PRINTER=text` environment variable. When this option is set, Beyla prints traces in text format to the standard output.
 
 Beyla automatically reports the name of the process executable as service name: `python3`.
@@ -65,8 +63,6 @@ To override it, refer to the [override service name and namespace](../configure/
 documentation section.
 
 Notice: Beyla requires administrative (sudo) privileges, or at least it needs to be granted the `CAP_SYS_ADMIN` capability.
-
-**Using configuration file:**
 
 ```sh
 export BEYLA_TRACE_PRINTER=text

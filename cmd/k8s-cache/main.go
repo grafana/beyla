@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/kubecache"
 	"go.opentelemetry.io/obi/pkg/kubecache/instrument"
 	"go.opentelemetry.io/obi/pkg/kubecache/meta"
@@ -34,6 +35,8 @@ func main() {
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: &lvl,
 	})))
+
+	overrideOBIConfiguration()
 
 	slog.Info("Beyla's Kubernetes Metadata cache service", "Version", buildinfo.Version, "Revision", buildinfo.Revision)
 
@@ -99,4 +102,8 @@ func loadFromFile(configPath *string) *cfg.Config {
 	}
 
 	return config
+}
+
+func overrideOBIConfiguration() {
+	attr.VendorPrefix = "beyla"
 }

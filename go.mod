@@ -22,7 +22,7 @@ require (
 	github.com/stretchr/testify v1.10.0
 	github.com/vladimirvivien/gexe v0.5.0
 	go.opentelemetry.io/collector/consumer v1.34.0
-	go.opentelemetry.io/collector/pdata v1.36.0
+	go.opentelemetry.io/collector/pdata v1.36.1
 	go.opentelemetry.io/obi v0.0.0-20250721133745-502110d1c2c1
 	go.opentelemetry.io/otel v1.37.0
 	go.opentelemetry.io/otel/sdk v1.37.0
@@ -129,7 +129,7 @@ require (
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
 	go.opentelemetry.io/collector v0.128.0 // indirect
 	go.opentelemetry.io/collector/client v1.34.0 // indirect
-	go.opentelemetry.io/collector/component v1.36.0 // indirect
+	go.opentelemetry.io/collector/component v1.36.1 // indirect
 	go.opentelemetry.io/collector/config/configauth v0.128.0 // indirect
 	go.opentelemetry.io/collector/config/configcompression v1.34.0 // indirect
 	go.opentelemetry.io/collector/config/configgrpc v0.128.0 // indirect
@@ -152,10 +152,10 @@ require (
 	go.opentelemetry.io/collector/extension/extensionauth v1.34.0 // indirect
 	go.opentelemetry.io/collector/extension/extensionmiddleware v0.128.0 // indirect
 	go.opentelemetry.io/collector/extension/xextension v0.128.0 // indirect
-	go.opentelemetry.io/collector/featuregate v1.36.0 // indirect
-	go.opentelemetry.io/collector/internal/telemetry v0.130.0 // indirect
+	go.opentelemetry.io/collector/featuregate v1.36.1 // indirect
+	go.opentelemetry.io/collector/internal/telemetry v0.130.1 // indirect
 	go.opentelemetry.io/collector/pdata/pprofile v0.128.0 // indirect
-	go.opentelemetry.io/collector/pipeline v0.130.0 // indirect
+	go.opentelemetry.io/collector/pipeline v0.130.1 // indirect
 	go.opentelemetry.io/collector/pipeline/xpipeline v0.128.0 // indirect
 	go.opentelemetry.io/contrib/bridges/otelzap v0.12.0 // indirect
 	go.opentelemetry.io/contrib/detectors/aws/ec2 v1.28.0 // indirect

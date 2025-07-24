@@ -150,45 +150,17 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 }
 
 func (p *Tracer) SetupTailCalls() {
-	for _, tc := range []struct {
-		index int
-		prog  *ebpf.Program
-	}{
-		{
-			index: 0,
-			prog:  p.bpfObjects.ObiProtocolHttp,
-		},
-		{
-			index: 1,
-			prog:  p.bpfObjects.ObiProtocolHttp2,
-		},
-		{
-			index: 2,
-			prog:  p.bpfObjects.ObiProtocolTcp,
-		},
-		{
-			index: 3,
-			prog:  p.bpfObjects.ObiProtocolHttp2GrpcFrames,
-		},
-		{
-			index: 4,
-			prog:  p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrame,
-		},
-		{
-			index: 5,
-			prog:  p.bpfObjects.ObiProtocolHttp2GrpcHandleEndFrame,
-		},
-		{
-			index: 6,
-			prog:  p.bpfObjects.ObiProtocolMysql,
-		},
-		{
-			index: 7,
-			prog:  p.bpfObjects.ObiHandleBufWithArgs,
-		},
+	for i, prog := range []*ebpf.Program{
+		p.bpfObjects.ObiProtocolHttp,                      // 0
+		p.bpfObjects.ObiProtocolHttp2,                     // 1
+		p.bpfObjects.ObiProtocolTcp,                       // 2
+		p.bpfObjects.ObiProtocolHttp2GrpcFrames,           // 3
+		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrame, // 4
+		p.bpfObjects.ObiProtocolHttp2GrpcHandleEndFrame,   // 5
+		p.bpfObjects.ObiHandleBufWithArgs,                 // 6
 	} {
-		err := p.bpfObjects.JumpTable.Update(uint32(tc.index), uint32(tc.prog.FD()), ebpf.UpdateAny)
-		if err != nil {
+		p.log.Debug("loading program into tail call jump table", "index", i, "program", prog.String())
+		if err := p.bpfObjects.JumpTable.Update(uint32(i), uint32(prog.FD()), ebpf.UpdateAny); err != nil {
 			p.log.Error("error loading info tail call jump table", "error", err)
 		}
 	}
@@ -387,6 +359,12 @@ func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 			}},
 		},
 		"node": {
+			"uv_fs_access": {{
+				Required: false,
+				Start:    p.bpfObjects.ObiUvFsAccess,
+			}},
+		},
+		"libuv.so": {
 			"uv_fs_access": {{
 				Required: false,
 				Start:    p.bpfObjects.ObiUvFsAccess,

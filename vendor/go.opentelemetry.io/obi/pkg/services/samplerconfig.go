@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package otel
+package services
 
 import (
 	"log/slog"
@@ -13,12 +13,12 @@ import (
 // Sampler standard configuration
 // https://opentelemetry.io/docs/concepts/sdk-configuration/general-sdk-configuration/#otel_traces_sampler
 // We don't support, yet, the jaeger and xray samplers.
-type Sampler struct {
+type SamplerConfig struct {
 	Name string `yaml:"name" env:"OTEL_TRACES_SAMPLER"`
 	Arg  string `yaml:"arg" env:"OTEL_TRACES_SAMPLER_ARG"`
 }
 
-func (s *Sampler) Implementation() trace.Sampler {
+func (s *SamplerConfig) Implementation() trace.Sampler {
 	defaultSampler := func() trace.Sampler {
 		return trace.ParentBased(trace.AlwaysSample())
 	}

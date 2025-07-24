@@ -84,6 +84,8 @@ type RegexSelector struct {
 	// or an empty array (disabled). An unspecified value (nil) will use the
 	// default configuration value
 	ExportModes ExportModes `yaml:"exports"`
+
+	SamplerConfig *SamplerConfig `yaml:"sampler"`
 }
 
 // RegexpAttr stores a regular expression representing an executable file path.
@@ -180,3 +182,5 @@ func (a *RegexSelector) RangePodAnnotations() iter.Seq2[string, StringMatcher] {
 }
 
 func (a *RegexSelector) GetExportModes() ExportModes { return a.ExportModes }
+
+func (a *RegexSelector) GetSamplerConfig() *SamplerConfig { return a.SamplerConfig }

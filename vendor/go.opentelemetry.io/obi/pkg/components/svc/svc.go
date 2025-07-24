@@ -6,6 +6,8 @@ package svc
 import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.25.0"
 
+	"go.opentelemetry.io/otel/sdk/trace"
+
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/services"
 )
@@ -100,6 +102,8 @@ type Attrs struct {
 	flags idFlags
 
 	ExportModes services.ExportModes
+
+	Sampler trace.Sampler
 }
 
 func (i *Attrs) GetUID() UID {

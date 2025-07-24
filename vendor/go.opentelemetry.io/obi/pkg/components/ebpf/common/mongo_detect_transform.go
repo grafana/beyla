@@ -67,6 +67,7 @@ const (
 	commIsMaster          = "isMaster"
 	commPing              = "ping"
 	commIsWritablePrimary = "isWritablePrimary"
+	commAtlasVersion      = "atlasVersion"
 
 	commInsert = "insert"
 	commUpdate = "update"
@@ -470,7 +471,7 @@ func TCPToMongoToSpan(trace *TCPRequestInfo, info *mongoSpanInfo) request.Span {
 }
 
 func isHeartbeat(comm string) bool {
-	return comm == commHello || comm == commIsMaster || comm == commPing || comm == commIsWritablePrimary
+	return comm == commHello || comm == commIsMaster || comm == commPing || comm == commIsWritablePrimary || comm == commAtlasVersion
 }
 
 func isCollectionCommand(comm string) bool {

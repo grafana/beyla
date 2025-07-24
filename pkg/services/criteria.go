@@ -20,13 +20,11 @@ type BeylaDiscoveryConfig struct {
 	// ExcludeServices works analogously to Services, but the applications matching this section won't be instrumented
 	// even if they match the Services selection.
 	// Deprecated: Use ExcludeInstrument instead
-	//nolint:undoc
 	ExcludeServices services.RegexDefinitionCriteria `yaml:"exclude_services"`
 
 	// DefaultExcludeServices by default prevents self-instrumentation of Beyla as well as related services (Alloy and OpenTelemetry collector)
 	// It must be set to an empty string or a different value if self-instrumentation is desired.
 	// Deprecated: Use DefaultExcludeInstrument instead
-	//nolint:undoc
 	DefaultExcludeServices services.RegexDefinitionCriteria `yaml:"default_exclude_services"`
 
 	// Instrument selects the services to instrument via Globs. If this section is set,

@@ -10,7 +10,7 @@ keywords:
 
 # Configure Beyla service discovery
 
-The `BEYLA_AUTO_TARGET_EXE` environment variable and the `discovery.instrument` configuration section make it easier to configure Beyla to instrument services.
+The `discovery.instrument` configuration section allows you to configure Beyla to instrument services using various selection criteria.
 
 In some scenarios, Beyla instruments many services. For example, as a [Kubernetes DaemonSet](../../setup/kubernetes/) that instruments all the services in a node. The `discovery` YAML section lets you specify more granular selection criteria for the services Beyla can instrument.
 

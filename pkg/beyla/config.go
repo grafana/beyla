@@ -195,13 +195,13 @@ type Config struct {
 	TracePrinter debug.TracePrinter            `yaml:"trace_printer" env:"BEYLA_TRACE_PRINTER"`
 
 	// Exec allows selecting the instrumented executable whose complete path contains the Exec value.
-	// Deprecated: Use BEYLA_AUTO_TARGET_EXE
-	//nolint:undoc
+	// Deprecated: use discovery.services instead
 	Exec services.RegexpAttr `yaml:"executable_name" env:"BEYLA_EXECUTABLE_NAME"`
 
 	// AutoTargetExe selects the executable to instrument matching a Glob against the executable path.
 	// To set this value via YAML, use discovery > instrument.
 	// It also accepts BEYLA_AUTO_TARGET_EXE for compatibility with opentelemetry-go-instrumentation
+	// Deprecated: use discovery.services instead
 	AutoTargetExe services.GlobAttr `env:"BEYLA_AUTO_TARGET_EXE,expand" envDefault:"${OTEL_GO_AUTO_TARGET_EXE}"`
 
 	// Port allows selecting the instrumented executable that owns the Port value. If this value is set (and
@@ -215,11 +215,9 @@ type Config struct {
 	// Using env and envDefault is a trick to get the value either from one of either variables.
 	// Deprecated: Service name should be set in the instrumentation target (env vars, kube metadata...)
 	// as this is a reminiscence of past times when we only supported one executable per instance.
-	//nolint:undoc
 	ServiceName string `yaml:"service_name" env:"OTEL_SERVICE_NAME,expand" envDefault:"${BEYLA_SERVICE_NAME}"`
 	// Deprecated: Service namespace should be set in the instrumentation target (env vars, kube metadata...)
 	// as this is a reminiscence of past times when we only supported one executable per instance.
-	//nolint:undoc
 	ServiceNamespace string `yaml:"service_namespace" env:"BEYLA_SERVICE_NAMESPACE"`
 
 	// Discovery configuration

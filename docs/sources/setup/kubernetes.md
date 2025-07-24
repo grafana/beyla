@@ -229,6 +229,22 @@ In addition to the privilege requirements of the sidecar scenario,
 you will need to configure the auto-instrument pod template with the `hostPID: true`
 option enabled, so that it can access all the processes running on the same host.
 
+First, create a ConfigMap with the Beyla configuration for DaemonSet deployment:
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: beyla-daemonset-config
+data:
+  beyla-config.yml: |
+    discovery:
+      instrument:
+        - exe_path: "*/goblog"
+```
+
+Then deploy the DaemonSet:
+
 ```yaml
 ---
 apiVersion: apps/v1
@@ -254,14 +270,20 @@ spec:
           securityContext:
             privileged: true
           env:
-            # Select the executable by its name for DaemonSet deployment
-            - name: BEYLA_AUTO_TARGET_EXE
-              value: "*/goblog"
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: "http://grafana-alloy:4318"
               # required if you want kubernetes metadata decoration
             - name: BEYLA_KUBE_METADATA_ENABLE
               value: "true"
+            - name: BEYLA_CONFIG_PATH
+              value: "/config/beyla-config.yml"
+          volumeMounts:
+            - mountPath: /config
+              name: beyla-config
+      volumes:
+        - name: beyla-config
+          configMap:
+            name: beyla-daemonset-config
 ```
 
 ### Deploy Beyla unprivileged

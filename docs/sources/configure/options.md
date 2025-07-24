@@ -48,30 +48,12 @@ channel_buffer_len: 33
 ```
 
 | YAML<p>environment variable</p>                   | Description                                                                                                                                | Type    | Default    |
-| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------- | ---------- |
-| _(No YAML)_<p>`BEYLA_AUTO_TARGET_EXE`</p>         | Selects the process to instrument by [Glob](<https://en.wikipedia.org/wiki/Glob_(programming)>) matching against the full executable path. | string  | unset      |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------- | ---------- ||
 | `shutdown_timeout`<p>`BEYLA_SHUTDOWN_TIMEOUT`</p> | Sets the timeout for a graceful shutdown                                                                                                   | string  | "10s"      |
 | `log_level`<p>`BEYLA_LOG_LEVEL`</p>               | Sets process logger verbosity. Valid values: `DEBUG`, `INFO`, `WARN`, `ERROR`.                                                             | string  | `INFO`     |
 | `trace_printer`<p>`BEYLA_TRACE_PRINTER`</p>       | Prints instrumented traces to the standard output in a specified format, refer to [trace printer formats](#trace-printer-formats).         | string  | `disabled` |
 | `enforce_sys_caps`<p>`BEYLA_ENFORCE_SYS_CAPS`</p> | Controls how Beyla handles missing system capabilities at startup.                                                                         | boolean | `false`    |
 
-## Executable name matching
-
-This property accepts a [glob](<https://en.wikipedia.org/wiki/Glob_(programming)>) matched against the full executable command line, including the directory where the executable resides on the file system.
-Beyla selects one process, or multiple processes with similar characteristics.
-For more detailed process selection and grouping, refer to the [service discovery documentation](../service-discovery/).
-
-When you instrument by executable name, choose a non-ambiguous name that matches one executable on the target system.
-For example, if you set `BEYLA_AUTO_TARGET_EXE=*/server` and have two processes that match the Glob, Beyla selects both.
-Instead use the full application path for exact matches, for example `BEYLA_AUTO_TARGET_EXE=/opt/app/server` or `BEYLA_AUTO_TARGET_EXE=/server`.
-
-## Service name and namespace
-
-These configuration options are deprecated.
-
-Defining these properties is equivalent to adding a `name` entry to the [`discovery.instrument` YAML section](../service-discovery/).
-When a single instance of Beyla instruments multiple processes, they share the same service name even if they differ.
-To give multiple services different names, see how to [override the service name and namespace](../service-discovery/) in the service discovery documentation.
 
 ## Trace printer formats
 

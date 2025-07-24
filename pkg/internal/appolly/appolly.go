@@ -130,7 +130,12 @@ func (i *Instrumenter) instrumentedEventLoop(ctx context.Context, processEvents 
 		select {
 		case <-ctx.Done():
 			return
-		case ev := <-processEvents:
+		case ev, ok := <-processEvents:
+			if !ok {
+				log.Debug("processEvents channel closed, stopping")
+				return
+			}
+
 			switch ev.Type {
 			case obiDiscover.EventCreated:
 				pt := ev.Obj

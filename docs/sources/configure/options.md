@@ -50,7 +50,6 @@ channel_buffer_len: 33
 | YAML<p>environment variable</p>                   | Description                                                                                                                                | Type    | Default    |
 | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------- | ---------- |
 | _(No YAML)_<p>`BEYLA_AUTO_TARGET_EXE`</p>         | Selects the process to instrument by [Glob](<https://en.wikipedia.org/wiki/Glob_(programming)>) matching against the full executable path. | string  | unset      |
-| `open_port`<p>`BEYLA_OPEN_PORT`</p>               | Selects a process to instrument by open ports. Accepts comma-separated lists of ports and port ranges.                                     | string  | unset      |
 | `shutdown_timeout`<p>`BEYLA_SHUTDOWN_TIMEOUT`</p> | Sets the timeout for a graceful shutdown                                                                                                   | string  | "10s"      |
 | `log_level`<p>`BEYLA_LOG_LEVEL`</p>               | Sets process logger verbosity. Valid values: `DEBUG`, `INFO`, `WARN`, `ERROR`.                                                             | string  | `INFO`     |
 | `trace_printer`<p>`BEYLA_TRACE_PRINTER`</p>       | Prints instrumented traces to the standard output in a specified format, refer to [trace printer formats](#trace-printer-formats).         | string  | `disabled` |
@@ -65,29 +64,6 @@ For more detailed process selection and grouping, refer to the [service discover
 When you instrument by executable name, choose a non-ambiguous name that matches one executable on the target system.
 For example, if you set `BEYLA_AUTO_TARGET_EXE=*/server` and have two processes that match the Glob, Beyla selects both.
 Instead use the full application path for exact matches, for example `BEYLA_AUTO_TARGET_EXE=/opt/app/server` or `BEYLA_AUTO_TARGET_EXE=/server`.
-
-If you set both `BEYLA_AUTO_TARGET_EXE` and `BEYLA_OPEN_PORT` properties, Beyla selects only executables
-matching both selection criteria.
-
-## Open port matching
-
-This property accepts a comma-separated list of ports or port ranges. If an executable matches any of the ports Beyla selects it. For example:
-
-```
-BEYLA_OPEN_PORT=80,443,8000-8999
-```
-
-In this example, Beyla selects any executable that opens port `80`, `443`, or any port between `8000` and `8999`.
-It can select one process or multiple processes with similar characteristics.
-For more detailed process selection and grouping, follow the instructions in the [service discovery documentation](../service-discovery/).
-
-If an executable opens multiple ports, specifying one of those ports is enough for Beyla to instrument all HTTP/S and GRPC requests on all application ports.
-Currently, there's no way to limit instrumentation to requests on a specific port.
-
-If the specified port range is wide, for example `1-65535`, Beyla tries to execute all processes that own one of the ports in that range.
-
-If you set both `BEYLA_AUTO_TARGET_EXE` and `BEYLA_OPEN_PORT` properties, Beyla selects only executables
-matching both selection criteria.
 
 ## Service name and namespace
 

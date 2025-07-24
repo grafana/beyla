@@ -61,10 +61,17 @@ other languages).
 
 For getting started, we'll tell Beyla to instrument the service running on port 8080 (our example service) and expose metrics in Prometheus format on port 9400.
 
+Create a `config.yml` file:
+
+```yaml
+discovery:
+  instrument:
+    - open_ports: 8080
+```
+
 ```
 export BEYLA_PROMETHEUS_PORT=9400
-export BEYLA_OPEN_PORT=8080
-sudo -E ./beyla
+sudo -E beyla -config config.yml
 ```
 
 Now, you should see metrics on [http://localhost:9400/metrics](http://localhost:9400/metrics).

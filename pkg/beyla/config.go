@@ -208,6 +208,7 @@ type Config struct {
 	// different to zero), the value of the Exec property won't take effect.
 	// It's important to emphasize that if your process opens multiple HTTP/GRPC ports, the auto-instrumenter
 	// will instrument all the service calls in all the ports, not only the port specified here.
+	// Deprecated: use discovery.services instead
 	Port services.PortEnum `yaml:"open_port" env:"BEYLA_OPEN_PORT"`
 
 	// ServiceName is taken from either BEYLA_SERVICE_NAME env var or OTEL_SERVICE_NAME (for OTEL spec compatibility)

@@ -141,6 +141,22 @@ as a container (image available at `grafana/beyla:latest`). The
 auto-instrumentation tool is configured to forward metrics and traces to Grafana Alloy,
 which is accessible behind the `grafana-alloy` service in the same namespace:
 
+First, create a ConfigMap with the Beyla configuration:
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: beyla-config
+data:
+  beyla-config.yml: |
+    discovery:
+      instrument:
+        - open_ports: 8443
+```
+
+Then deploy the instrumented application with Beyla sidecar:
+
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -176,14 +192,20 @@ spec:
           securityContext: # Privileges are required to install the eBPF probes
             privileged: true
           env:
-            # The internal port of the goblog application container
-            - name: BEYLA_OPEN_PORT
-              value: "8443"
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: "http://grafana-alloy:4318"
               # required if you want kubernetes metadata decoration
             - name: BEYLA_KUBE_METADATA_ENABLE
               value: "true"
+            - name: BEYLA_CONFIG_PATH
+              value: "/config/beyla-config.yml"
+          volumeMounts:
+            - mountPath: /config
+              name: beyla-config
+      volumes:
+        - name: beyla-config
+          configMap:
+            name: beyla-config
 ```
 
 For more information about the different configuration options, check the
@@ -232,7 +254,7 @@ spec:
           securityContext:
             privileged: true
           env:
-            # Select the executable by its name instead of BEYLA_OPEN_PORT
+            # Select the executable by its name for DaemonSet deployment
             - name: BEYLA_AUTO_TARGET_EXE
               value: "*/goblog"
             - name: OTEL_EXPORTER_OTLP_ENDPOINT

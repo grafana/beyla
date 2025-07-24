@@ -37,11 +37,13 @@ docker run -p 18443:8443 --name goblog mariomac/goblog:dev
 
 The above command runs a simple HTTPS application. The process opens the container's internal port `8443`, which is then exposed at the host level as the port `18443`.
 
-Set environment variables to configure Beyla to print to stdout and listen to a port (container) to inspect the executable:
+Create a configuration file `config.yml` for Beyla:
 
-```sh
-export BEYLA_TRACE_PRINTER=text
-export BEYLA_OPEN_PORT=8443
+```yaml
+discovery:
+  instrument:
+    - open_ports: 8443  # the container internal port
+trace_printer: text
 ```
 
 Beyla needs to be run with the following settings:
@@ -49,14 +51,14 @@ Beyla needs to be run with the following settings:
 - in `--privileged` mode, or with `SYS_ADMIN` capability (despite `SYS_ADMIN` might
   not be enough privileges in some container environments)
 - a container PID namespace, with the option `--pid="container:goblog"`.
+- mount the configuration file into the container
 
 ```sh
 docker run --rm \
-  -e BEYLA_OPEN_PORT=8443 \
-  -e BEYLA_TRACE_PRINTER=text \
+  -v $(pwd)/config.yml:/config/config.yml \
   --pid="container:goblog" \
   --privileged \
-  grafana/beyla:latest
+  grafana/beyla:latest -config /config/config.yml
 ```
 
 After Beyla is running, open `https://localhost:18443` in your browser, use the app to generate test data, and verify that Beyla prints trace requests to stdout similar to:
@@ -77,7 +79,18 @@ For information on how to export traces and metrics, refer to the [configuration
 
 ## Docker Compose example
 
-The following Docker compose file replicates the same functionality of the Docker CLI example:
+The following Docker compose file replicates the same functionality of the Docker CLI example.
+
+First, create a `beyla-config.yml` file:
+
+```yaml
+discovery:
+  instrument:
+    - open_ports: 8443
+trace_printer: text
+```
+
+Then use this Docker Compose configuration:
 
 ```yaml
 version: "3.8"
@@ -95,9 +108,9 @@ services:
     image: grafana/beyla:latest
     pid: "service:goblog"
     privileged: true
-    environment:
-      BEYLA_TRACE_PRINTER: text
-      BEYLA_OPEN_PORT: 8443
+    volumes:
+      - ./beyla-config.yml:/config/beyla-config.yml
+    command: ["-config", "/config/beyla-config.yml"]
 ```
 
 Run the Docker compose file with the following command and use the app to generate traces:

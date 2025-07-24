@@ -184,7 +184,11 @@ Set the required capabilities and start Beyla:
 
 ```shell
 sudo setcap cap_bpf,cap_dac_read_search,cap_perfmon,cap_net_raw,cap_sys_ptrace+ep ./bin/beyla
-BEYLA_OPEN_PORT=8080 BEYLA_TRACE_PRINTER=text bin/beyla
+echo "discovery:
+  instrument:
+    - open_ports: 8080
+trace_printer: text" > config.yml
+bin/beyla -config config.yml
 ```
 
 ### Application observability with trace context propagation
@@ -203,7 +207,12 @@ Set the required capabilities and start Beyla:
 
 ```shell
 sudo setcap cap_bpf,cap_dac_read_search,cap_perfmon,cap_net_raw,cap_sys_ptrace,cap_net_admin+ep ./bin/beyla
-BEYLA_ENABLE_CONTEXT_PROPAGATION=all BEYLA_OPEN_PORT=8080 BEYLA_TRACE_PRINTER=text bin/beyla
+echo "discovery:
+  instrument:
+    - open_ports: 8080
+trace_printer: text
+enable_context_propagation: all" > config.yml
+bin/beyla -config config.yml
 ```
 
 ## Internal eBPF tracer capability requirement reference

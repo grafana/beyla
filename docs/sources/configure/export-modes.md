@@ -133,7 +133,7 @@ This tutorial assumes Beyla and Alloy are running natively on the same host, so 
 
 Install [Grafana Beyla](../../setup/) and download the example [configuration file](https://github.com/grafana/beyla/blob/main/docs/sources/configure/resources/instrumenter-config.yml).
 
-First, specify the executable to instrument. For a service executable running on port `443`, add the `open_port` property to the YAML document:
+First, specify the executable to instrument. For a service executable running on port `443`, add the `open_ports` property to the YAML document:
 
 ```yaml
 discovery:

@@ -45,13 +45,18 @@ Copy the **Environment Variables** and keep it for the next step.
 
 ## 4. Run Beyla with minimal configuration
 
+For service discovery, create a `config.yml` file:
+
+```yml
+discovery:
+  instrument:
+    - open_ports: 8080  # the port your service is using
+```
+
 To run Beyla, first set the following environment variables:
 
 - The `OTEL_EXPORTER_OTLP_PROTOCOL`, `OTEL_EXPORTER_OTLP_ENDPOINT` and `OTEL_EXPORTER_OTLP_HEADERS`
   variables copied from the previous step.
-- `BEYLA_OPEN_PORT`: the port the instrumented service is using
-  (for example, `80` or `443`). If using the example service in the
-  first section of this guide, set this variable to `8080`.
 
 To facilitate local testing, set the `BEYLA_TRACE_PRINTER=text` environment variable. When this option is set, Beyla prints traces in text format to the standard output.
 
@@ -62,12 +67,11 @@ documentation section.
 Notice: Beyla requires administrative (sudo) privileges, or at least it needs to be granted the `CAP_SYS_ADMIN` capability.
 
 ```sh
-export BEYLA_OPEN_PORT=8080
 export BEYLA_TRACE_PRINTER=text
 export OTEL_EXPORTER_OTLP_PROTOCOL="http/protobuf"
 export OTEL_EXPORTER_OTLP_ENDPOINT="https://otlp-gateway-prod-eu-west-0.grafana.net/otlp"
 export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Basic ...your-encoded-credentials..."
-sudo -E beyla
+sudo -E beyla -config config.yml
 ```
 
 ## 5. Test the service

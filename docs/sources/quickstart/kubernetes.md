@@ -31,9 +31,9 @@ to be instrumented.
 
 When Beyla is deployed as a regular operating system process that instrument other processes,
 the unique service selectors are the network port where the instrumented process should
-be listening to (can be specified with the `BEYLA_OPEN_PORT` environment variable) or
+be listening to (specified in the configuration file under `discovery.instrument.open_ports`) or
 a [Glob](https://en.wikipedia.org/wiki/Glob_(programming)) to match against the executable filename of the process to
-instrument (`BEYLA_AUTO_TARGET_EXE` environment variable).
+instrument (specified with `discovery.instrument.exe` or the `BEYLA_AUTO_TARGET_EXE` environment variable).
 
 To select multiple groups of processes, the Beyla YAML configuration file format
 provides a `discovery.instrument` section that accepts multiple selector groups:

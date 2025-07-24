@@ -5,6 +5,8 @@ import (
 	"runtime"
 	"time"
 
+	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
+
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/buildinfo"
@@ -38,7 +40,7 @@ func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusM
 	pr := &PrometheusReporter{
 		connector: manager,
 		tracerFlushes: prometheus.NewHistogram(prometheus.HistogramOpts{
-			Name:                            "beyla_ebpf_tracer_flushes",
+			Name:                            attr.VendorPrefix + "_ebpf_tracer_flushes",
 			Help:                            "Length of the groups of traces flushed from the eBPF tracer to the next pipeline stage",
 			Buckets:                         pipelineBufferLengths,
 			NativeHistogramBucketFactor:     1.1,
@@ -46,31 +48,31 @@ func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusM
 			NativeHistogramMinResetDuration: 1 * time.Hour,
 		}),
 		otelMetricExports: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "beyla_otel_metric_exports_total",
+			Name: attr.VendorPrefix + "_otel_metric_exports_total",
 			Help: "Length of the metric batches submitted to the remote OTEL collector",
 		}),
 		otelMetricExportErrs: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "beyla_otel_metric_export_errors_total",
+			Name: attr.VendorPrefix + "_otel_metric_export_errors_total",
 			Help: "Error count on each failed OTEL metric export",
 		}, []string{"error"}),
 		otelTraceExports: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "beyla_otel_trace_exports_total",
+			Name: attr.VendorPrefix + "_otel_trace_exports_total",
 			Help: "Length of the trace batches submitted to the remote OTEL collector",
 		}),
 		otelTraceExportErrs: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "beyla_otel_trace_export_errors_total",
+			Name: attr.VendorPrefix + "_otel_trace_export_errors_total",
 			Help: "Error count on each failed OTEL trace export",
 		}, []string{"error"}),
 		prometheusRequests: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "beyla_prometheus_http_requests_total",
+			Name: attr.VendorPrefix + "_prometheus_http_requests_total",
 			Help: "Requests towards the Prometheus Scrape endpoint",
 		}, []string{"port", "path"}),
 		instrumentedProcesses: prometheus.NewGaugeVec(prometheus.GaugeOpts{
-			Name: "beyla_instrumented_processes",
+			Name: attr.VendorPrefix + "_instrumented_processes",
 			Help: "Instrumented processes by Beyla",
 		}, []string{"process_name"}),
 		beylaInfo: prometheus.NewGauge(prometheus.GaugeOpts{
-			Name: "beyla_internal_build_info",
+			Name: attr.VendorPrefix + "_internal_build_info",
 			Help: "A metric with a constant '1' value labeled by version, revision, branch, " +
 				"goversion from which Beyla was built, the goos and goarch for the build.",
 			ConstLabels: map[string]string{

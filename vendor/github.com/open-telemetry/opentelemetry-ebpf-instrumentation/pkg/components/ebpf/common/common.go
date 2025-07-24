@@ -115,7 +115,7 @@ type MisclassifiedEvent struct {
 type EBPFParseContext struct {
 	h2c               *lru.Cache[uint64, h2Connection]
 	redisDBCache      *simplelru.LRU[BpfConnectionInfoT, int]
-	largeBuffers      *expirable.LRU[largeBufferKey, largeBuffer]
+	largeBuffers      *expirable.LRU[largeBufferKey, *largeBuffer]
 	mongoRequestCache *PendingMongoDBRequests
 }
 
@@ -135,7 +135,7 @@ func ptlog() *slog.Logger { return slog.With("component", "ebpf.ProcessTracer") 
 func NewEBPFParseContext(cfg *config.EBPFTracer) *EBPFParseContext {
 	var redisDBCache *simplelru.LRU[BpfConnectionInfoT, int]
 	h2c, _ := lru.New[uint64, h2Connection](1024 * 10)
-	largeBuffers := expirable.NewLRU[largeBufferKey, largeBuffer](1024, nil, 5*time.Minute)
+	largeBuffers := expirable.NewLRU[largeBufferKey, *largeBuffer](1024, nil, 5*time.Minute)
 
 	if cfg != nil && cfg.RedisDBCache.Enabled {
 		var err error
@@ -186,7 +186,7 @@ func ReadBPFTraceAsSpan(parseCtx *EBPFParseContext, cfg *config.EBPFTracer, reco
 	case EventTypeGoKafkaGo:
 		return ReadGoKafkaGoRequestIntoSpan(record)
 	case EventTypeTCPLargeBuffer:
-		return setTCPLargeBuffer(parseCtx, record)
+		return appendTCPLargeBuffer(parseCtx, record)
 	case EventOTelSDKGo:
 		return ReadGoOTelEventIntoSpan(record)
 	}

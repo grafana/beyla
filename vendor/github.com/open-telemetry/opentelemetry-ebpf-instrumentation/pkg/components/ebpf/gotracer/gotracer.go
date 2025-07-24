@@ -88,20 +88,6 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 }
 
 func (p *Tracer) SetupTailCalls() {
-	for _, tc := range []struct {
-		index int
-		prog  *ebpf.Program
-	}{
-		{
-			index: 0,
-			prog:  p.bpfObjects.BeylaReadJsonrpcMethod,
-		},
-	} {
-		err := p.bpfObjects.JsonrpcJumpTable.Update(uint32(tc.index), uint32(tc.prog.FD()), ebpf.UpdateAny)
-		if err != nil {
-			p.log.Error("error loading info tail call jump table", "error", err)
-		}
-	}
 }
 
 func (p *Tracer) Constants() map[string]any {
@@ -192,6 +178,8 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 		goexec.GrpcClientStreamStream,
 		// go manual spans
 		goexec.GoTracerDelegatePos,
+		// go jsonrpc
+		goexec.GoJsonrpcRequestHeaderServiceMethodPos,
 	} {
 		if val, ok := offsets.Field[field].(uint64); ok {
 			offTable.Table[field] = val
@@ -247,8 +235,13 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 			End:   p.bpfObjects.BeylaUprobeServeHTTPReturns,
 		}},
 		"net/http.(*conn).readRequest": {{
-			Start: p.bpfObjects.BeylaUprobeReadRequestStart,
-			End:   p.bpfObjects.BeylaUprobeReadRequestReturns,
+			Start: p.bpfObjects.ObiUprobeReadRequestStart,
+			End:   p.bpfObjects.ObiUprobeReadRequestReturns,
+		}},
+		// Go net/rpc/jsonrpc
+		"net/rpc/jsonrpc.(*serverCodec).ReadRequestHeader": {{
+			Start: p.bpfObjects.ObiUprobeJsonrpcReadRequestHeader,
+			End:   p.bpfObjects.ObiUprobeJsonrpcReadRequestHeaderReturns,
 		}},
 		"net/textproto.(*Reader).readContinuedLineSlice": {{
 			End: p.bpfObjects.BeylaUprobeReadContinuedLineSliceReturns,

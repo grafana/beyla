@@ -95,6 +95,8 @@ const (
 	GoTracerDelegatePos
 	GoTracerAttributeOptOffset
 	GoErrorStringOffset
+	// go jsonrpc
+	GoJsonrpcRequestHeaderServiceMethodPos
 )
 
 //go:embed offsets.json
@@ -285,6 +287,12 @@ var structMembers = map[string]structInfo{
 		fields: map[string]GoOffset{
 			"rwc":      CRwcPos,
 			"tlsState": CTlsPos,
+		},
+	},
+	"net/rpc.Request": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"ServiceMethod": GoJsonrpcRequestHeaderServiceMethodPos,
 		},
 	},
 	"google.golang.org/grpc/internal/transport.bufWriter": {

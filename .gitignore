@@ -87,3 +87,6 @@ test/integration/components/pythonserver/lib64
 test/integration/components/pythonserver/pyvenv.cfg
 test/integration/components/gosql/qosql
 test/integration/components/testserver_1.17/vendor
+*_bpfel.go
+*_bpfel.o
+**/grafana-opentelemetry-java.jar

@@ -260,8 +260,8 @@ type Consumer interface {
 
 type TracesReceiverConfig struct {
 	Traces           []Consumer
-	Sampler          otel.Sampler `yaml:"sampler"`
-	Instrumentations []string     `yaml:"instrumentations" env:"BEYLA_OTEL_TRACES_INSTRUMENTATIONS" envSeparator:","`
+	Sampler          services.SamplerConfig `yaml:"sampler"`
+	Instrumentations []string               `yaml:"instrumentations" env:"BEYLA_OTEL_TRACES_INSTRUMENTATIONS" envSeparator:","`
 }
 
 func (t TracesReceiverConfig) Enabled() bool {

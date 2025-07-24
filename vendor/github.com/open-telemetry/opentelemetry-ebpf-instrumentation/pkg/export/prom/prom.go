@@ -96,7 +96,7 @@ const (
 
 // metrics for Beyla statistics
 const (
-	BeylaBuildInfo = "beyla_build_info"
+	buildInfoSuffix = "_build_info"
 
 	LanguageLabel = "target_lang"
 )
@@ -414,7 +414,7 @@ func newReporter(
 		attrGPUKernelCalls:         attrGPUKernelLaunchCalls,
 		attrGPUMemoryAllocs:        attrGPUMemoryAllocations,
 		beylaInfo: NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
-			Name: BeylaBuildInfo,
+			Name: attr.VendorPrefix + buildInfoSuffix,
 			Help: "A metric with a constant '1' value labeled by version, revision, branch, " +
 				"goversion from which Beyla was built, the goos and goarch for the build, and the" +
 				"language of the reported services",

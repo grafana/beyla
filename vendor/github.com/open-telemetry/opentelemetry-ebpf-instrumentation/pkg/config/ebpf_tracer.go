@@ -92,7 +92,7 @@ type EBPFTracer struct {
 	RedisDBCache RedisDBCacheConfig `yaml:"redis_db_cache"`
 
 	// Limit max data buffer size per protocol.
-	BufferSizes EBPFBufferSizes `yaml:"buffer_sizes" env:"OTEL_EBPF_BPF_BUFFER_SIZES"`
+	BufferSizes EBPFBufferSizes `yaml:"buffer_sizes"`
 }
 
 type EBPFBufferSizes struct {

@@ -3,6 +3,8 @@ package instrument
 import (
 	"runtime"
 
+	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
+
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/buildinfo"
@@ -51,20 +53,20 @@ func prometheusInternalMetrics(
 	pr := &promInternalMetrics{
 		connector: manager,
 		informerEvents: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "beyla_kube_cache_informer_events_total",
+			Name: attr.VendorPrefix + "_kube_cache_informer_events_total",
 			Help: "How many metadata events has the informer received",
 		}, []string{"type"}),
 		connectedClients: prometheus.NewGauge(prometheus.GaugeOpts{
-			Name: "beyla_kube_cache_connected_clients",
+			Name: attr.VendorPrefix + "_kube_cache_connected_clients",
 			Help: "How many concurrent Beyla instances are connected to this cache service",
 		}),
 		clientMessages: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "beyla_kube_cache_client_messages_total",
+			Name: attr.VendorPrefix + "_kube_cache_client_messages_total",
 			Help: "How many notifications have been started to be submitted to" +
 				" the subscriber client",
 		}, []string{"status"}),
 		beylaCacheInfo: prometheus.NewGauge(prometheus.GaugeOpts{
-			Name: "beyla_kube_cache_internal_build_info",
+			Name: attr.VendorPrefix + "_kube_cache_internal_build_info",
 			Help: "A metric with a constant '1' value labeled by version, revision, branch, " +
 				"goversion from which Beyla was built, the goos and goarch for the build.",
 			ConstLabels: map[string]string{

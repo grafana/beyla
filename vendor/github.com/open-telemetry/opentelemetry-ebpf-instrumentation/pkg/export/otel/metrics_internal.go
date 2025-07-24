@@ -6,6 +6,8 @@ import (
 	"runtime"
 	"time"
 
+	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
+
 	"go.opentelemetry.io/otel/attribute"
 	instrument "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/sdk/metric"
@@ -42,9 +44,9 @@ func NewInternalMetricsReporter(ctx context.Context, ctxInfo *global.ContextInfo
 
 	res := newResourceInternal(ctxInfo.HostID)
 	provider := newInternalMeterProvider(res, &exporter, metrics.Interval)
-	meter := provider.Meter("beyla_internal")
+	meter := provider.Meter("obi_internal")
 	tracerFlushes, err := meter.Float64Histogram(
-		"beyla.ebpf.tracer.flushes",
+		attr.VendorPrefix+".ebpf.tracer.flushes",
 		instrument.WithDescription("Length of the groups of traces flushed from the eBPF tracer to the next pipeline stage"),
 		instrument.WithUnit("1"),
 	)
@@ -53,7 +55,7 @@ func NewInternalMetricsReporter(ctx context.Context, ctxInfo *global.ContextInfo
 	}
 
 	otelMetricExports, err := meter.Float64Counter(
-		"beyla.otel.metric.exports",
+		attr.VendorPrefix+".otel.metric.exports",
 		instrument.WithDescription("Length of the metric batches submitted to the remote OTEL collector"),
 	)
 	if err != nil {
@@ -61,7 +63,7 @@ func NewInternalMetricsReporter(ctx context.Context, ctxInfo *global.ContextInfo
 	}
 
 	otelMetricExportErrs, err := meter.Float64Counter(
-		"beyla.otel.metric.export.errors",
+		attr.VendorPrefix+".otel.metric.export.errors",
 		instrument.WithDescription("Error count on each failed OTEL metric export"),
 	)
 	if err != nil {
@@ -69,7 +71,7 @@ func NewInternalMetricsReporter(ctx context.Context, ctxInfo *global.ContextInfo
 	}
 
 	otelTraceExports, err := meter.Float64Counter(
-		"beyla.otel.trace.exports",
+		attr.VendorPrefix+".otel.trace.exports",
 		instrument.WithDescription("Length of the trace batches submitted to the remote OTEL collector"),
 	)
 	if err != nil {
@@ -77,7 +79,7 @@ func NewInternalMetricsReporter(ctx context.Context, ctxInfo *global.ContextInfo
 	}
 
 	otelTraceExportErrs, err := meter.Float64Counter(
-		"beyla.otel.trace.export.errors",
+		attr.VendorPrefix+".otel.trace.export.errors",
 		instrument.WithDescription("Error count on each failed OTEL trace export"),
 	)
 	if err != nil {
@@ -85,7 +87,7 @@ func NewInternalMetricsReporter(ctx context.Context, ctxInfo *global.ContextInfo
 	}
 
 	instrumentedProcesses, err := meter.Int64UpDownCounter(
-		"beyla.instrumented.processes",
+		attr.VendorPrefix+".instrumented.processes",
 		instrument.WithDescription("Instrumented processes by Beyla"),
 	)
 	if err != nil {
@@ -93,7 +95,7 @@ func NewInternalMetricsReporter(ctx context.Context, ctxInfo *global.ContextInfo
 	}
 
 	beylaInfo, err := meter.Int64Gauge(
-		"beyla.internal.build.info",
+		attr.VendorPrefix+".internal.build.info",
 		instrument.WithDescription("A metric with a constant '1' value labeled by version, revision, branch, goversion from which Beyla was built, the goos and goarch for the build."),
 	)
 	if err != nil {

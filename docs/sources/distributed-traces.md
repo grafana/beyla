@@ -24,6 +24,7 @@ Beyla reads any incoming trace context header values, tracks the program executi
 ## Implementation
 
 The trace context propagation is implemented in two different ways:
+
 1. By writing the outgoing header information at network level
 2. By writing the header information at library level for Go
 
@@ -45,8 +46,8 @@ ebpf:
 
 The context propagation at network level is implemented by writing the trace context information in the outgoing HTTP headers as well at the TCP/IP packet level.
 HTTP context propagation is fully compatible with any other OpenTelemetry based tracing library. This means that Beyla instrumented services correctly
-propagate the trace information, when sending to and receiving from services instrumented with the OpenTelemetry SDKs. We use 
-[Linux Traffic Control (TC)](https://en.wikipedia.org/wiki/Tc_(Linux)) to perform the adjustment of the network packets, which requires that other eBPF 
+propagate the trace information, when sending to and receiving from services instrumented with the OpenTelemetry SDKs. We use
+[Linux Traffic Control (TC)](https://en.wikipedia.org/wiki/Tc_(Linux)) to perform the adjustment of the network packets, which requires that other eBPF
 programs that use Linux Traffic Control chain properly with Beyla. For special considerations
 regarding Cilium CNI, consult our [Cilium Compatibility](../cilium-compatibility/) guide.
 
@@ -74,7 +75,7 @@ The following YAML snippet shows an example Beyla deployment configuration:
 ```yaml
     spec:
       serviceAccount: beyla
-      hostPID: true           # <-- Important. Required in DaemonSet mode so Beyla can discover all monitored processes 
+      hostPID: true           # <-- Important. Required in DaemonSet mode so Beyla can discover all monitored processes
       hostNetwork: true       # <-- Important. Required in DaemonSet mode so Beyla can see all network packets
       dnsPolicy: ClusterFirstWithHostNet
       containers:
@@ -105,7 +106,7 @@ The following YAML snippet shows an example Beyla deployment configuration:
               - NET_ADMIN           # <-- Important. Allows Beyla to inject HTTP and TCP context propagation information.
         volumeMounts:
           - name: cgroup
-            mountPath: /sys/fs/cgroup # <-- Important. Allows Beyla to monitor all newly sockets to track outgoing requests. 
+            mountPath: /sys/fs/cgroup # <-- Important. Allows Beyla to monitor all newly sockets to track outgoing requests.
           - mountPath: /config
             name: beyla-config
       tolerations:
@@ -116,7 +117,7 @@ The following YAML snippet shows an example Beyla deployment configuration:
       volumes:
       - name: beyla-config
         configMap:
-          name: beyla-config      
+          name: beyla-config
       - name: cgroup
         hostPath:
           path: /sys/fs/cgroup

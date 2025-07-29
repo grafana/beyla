@@ -139,4 +139,5 @@ Beyla can be [configured to report internal metrics](../configure/internal-metri
 | `beyla_otel_trace_export_errors_total` | CounterVec | Error count on each failed OTEL trace export, by error type                              |
 | `beyla_prometheus_http_requests_total` | CounterVec | Number of requests towards the Prometheus Scrape endpoint, faceted by HTTP port and path |
 | `beyla_instrumented_processes`        | GaugeVec    | Instrumented processes by Beyla, with process name                                       |
-| `beyla_internal_build_info`                    | GaugeVec    | Version information of the Beyla binary, including the build time and commit hash        |
+| `beyla_instrumentation_errors_total`  | CounterVec  | Total number of instrumentation errors by process and error type                         |
+| `beyla_internal_build_info`           | GaugeVec    | Version information of the Beyla binary, including the build time and commit hash        |

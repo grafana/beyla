@@ -51,6 +51,7 @@ type ProcessAttrs struct {
 	metadata       map[string]string
 	podLabels      map[string]string
 	podAnnotations map[string]string
+	processAge     time.Duration
 }
 
 func wplog() *slog.Logger {
@@ -211,9 +212,20 @@ func (pa *pollAccounter) watchForProcessEvents(ctx context.Context, log *slog.Lo
 	}
 }
 
+func (pa *pollAccounter) processTooNew(proc ProcessAttrs) bool {
+	_, existingProcess := pa.pids[proc.pid]
+	if existingProcess {
+		return false
+	}
+	// if we see duration of 0, it means we need to consider this process, since it was
+	// very likely forcibly scanned because of open ports event
+	return proc.processAge != time.Duration(0) && (proc.processAge < pa.cfg.Discovery.MinProcessAge)
+}
+
 // snapshot compares the current processes with the status of the previous poll
 // and forwards a list of process creation/deletion events
 func (pa *pollAccounter) snapshot(fetchedProcs map[PID]ProcessAttrs) []Event[ProcessAttrs] {
+	log := wplog()
 	var events []Event[ProcessAttrs]
 	currentPidPorts := make(map[pidPort]ProcessAttrs, len(fetchedProcs))
 	reportedProcs := map[PID]struct{}{}
@@ -224,22 +236,31 @@ func (pa *pollAccounter) snapshot(fetchedProcs map[PID]ProcessAttrs) []Event[Pro
 		// for example, if it's a client with ephemeral connections, which might be later matched by executable name
 		if len(proc.openPorts) == 0 {
 			if pa.checkNewProcessNotification(pid, reportedProcs, notReadyProcs) {
+				if pa.processTooNew(proc) {
+					log.Debug("delaying process analysis, too soon", "pid", pid, "age", proc.processAge)
+					notReadyProcs[pid] = struct{}{}
+					continue
+				}
 				events = append(events, Event[ProcessAttrs]{Type: EventCreated, Obj: proc})
+				log.Debug("process added", "pid", pid)
 			}
 		} else {
 			for _, port := range proc.openPorts {
 				if pa.checkNewProcessConnectionNotification(proc, port, currentPidPorts, reportedProcs, notReadyProcs) {
 					events = append(events, Event[ProcessAttrs]{Type: EventCreated, Obj: proc})
+					log.Debug("process added", "pid", pid, "port", port)
 					// skip checking new connections for that process
 					continue
 				}
 			}
 		}
 	}
+
 	// notify processes that are removed
 	for pid, proc := range pa.pids {
 		if _, ok := fetchedProcs[pid]; !ok {
 			events = append(events, Event[ProcessAttrs]{Type: EventDeleted, Obj: proc})
+			log.Debug("process removed", "pid", pid)
 		}
 	}
 
@@ -272,7 +293,7 @@ func executableReady(pid PID) (string, bool) {
 		return exePath, errors.Is(err, os.ErrNotExist)
 	}
 
-	return exePath, exePath != "/"
+	return exePath, (exePath != "/" && exePath != "")
 }
 
 func (pa *pollAccounter) checkNewProcessConnectionNotification(
@@ -326,19 +347,37 @@ func (pa *pollAccounter) checkNewProcessNotification(pid PID, reportedProcs, not
 	return false
 }
 
+// overridden in tests
+var processAgeFunc = processAge
+
+func processAge(pid int32) time.Duration {
+	age := time.Duration(0)
+	if proc, err := process.NewProcess(pid); err == nil {
+		if createTime, err := proc.CreateTime(); err == nil {
+			startTime := time.UnixMilli(createTime)
+			age = time.Since(startTime)
+		}
+	}
+
+	return age
+}
+
+// overridden in tests
+var processPidsFunc = process.Pids
+
 // fetchProcessConnections returns a map with the PIDs of all the running processes as a key,
 // and the open ports for the given process as a value
 func fetchProcessPorts(scanPorts bool) (map[PID]ProcessAttrs, error) {
 	log := wplog()
 	processes := map[PID]ProcessAttrs{}
-	pids, err := process.Pids()
+	pids, err := processPidsFunc()
 	if err != nil {
 		return nil, fmt.Errorf("can't get processes: %w", err)
 	}
 
 	for _, pid := range pids {
 		if !scanPorts {
-			processes[PID(pid)] = ProcessAttrs{pid: PID(pid), openPorts: []uint32{}}
+			processes[PID(pid)] = ProcessAttrs{pid: PID(pid), openPorts: []uint32{}, processAge: processAgeFunc(pid)}
 			continue
 		}
 		conns, err := net.ConnectionsPid("inet", pid)
@@ -351,7 +390,7 @@ func fetchProcessPorts(scanPorts bool) (map[PID]ProcessAttrs, error) {
 		for _, conn := range conns {
 			openPorts = append(openPorts, conn.Laddr.Port)
 		}
-		processes[PID(pid)] = ProcessAttrs{pid: PID(pid), openPorts: openPorts}
+		processes[PID(pid)] = ProcessAttrs{pid: PID(pid), openPorts: openPorts, processAge: time.Duration(0)}
 	}
 	return processes, nil
 }

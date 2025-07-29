@@ -137,23 +137,37 @@ func SQLParseOperationAndTableNEW(query string) (string, string) {
 	return "SELECT", tables[0]
 }
 
-func SQLParseError(buf []uint8) *request.SQLError {
+func SQLParseError(kind request.SQLKind, buf []uint8) *request.SQLError {
 	var sqlErr *request.SQLError
 
-	if sqlErr = parseMySQLError(buf); sqlErr != nil {
-		if validateMySQLError(sqlErr) {
-			return sqlErr
-		}
+	switch kind {
+	case request.DBMySQL:
+		sqlErr = parseMySQLError(buf)
+	case request.DBPostgres:
+		sqlErr = parsePostgresError(buf)
+	default:
+		return nil // unsupported SQL kind
 	}
 
-	return nil
+	return sqlErr
 }
 
 func SQLParseCommandID(kind request.SQLKind, buf []byte) string {
 	switch kind {
 	case request.DBMySQL:
 		return mysqlCommandIDToString(parseMySQLCommandID(buf))
+	case request.DBPostgres:
+		return postgresMessageTypeToString(parsePostgresMessageType(buf))
 	default:
 		return ""
+	}
+}
+
+func SQLParseStatementID(kind request.SQLKind, buf []byte) uint32 {
+	switch kind {
+	case request.DBMySQL:
+		return mysqlParseStatementID(buf)
+	default:
+		return 0
 	}
 }

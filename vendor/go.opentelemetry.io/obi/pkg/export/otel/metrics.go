@@ -425,8 +425,10 @@ func newMetricsReporter(
 			llog.Debug("evicting metrics reporter from cache")
 			v.cleanupAllMetricsInstances()
 
-			mr.deleteTracesTargetInfo(v)
-			mr.deleteTargetInfo(v)
+			if !mr.pidTracker.ServiceLive(id) {
+				mr.deleteTracesTargetInfo(v)
+				mr.deleteTargetInfo(v)
+			}
 
 			go func() {
 				if err := v.provider.ForceFlush(ctx); err != nil {

@@ -27,6 +27,7 @@ import (
 	ebpfcommon "go.opentelemetry.io/obi/pkg/components/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/components/exec"
 	"go.opentelemetry.io/obi/pkg/components/goexec"
+	"go.opentelemetry.io/obi/pkg/components/imetrics"
 )
 
 func ilog() *slog.Logger {
@@ -65,14 +66,16 @@ func (i *instrumenter) instrumentProbes(exe *link.Executable, probes map[string]
 		for _, probe := range probeArray {
 			log.Debug("going to instrument function", "function", symbolName, "programs", probe)
 
-			cls, err := uprobe(exe, probe)
+			cls, err := i.uprobe(exe, probe)
 
 			if err != nil {
 				closeAll(cls)
 
 				if probe.Required {
 					closeAll(closers)
-
+					if i.metrics != nil {
+						i.metrics.InstrumentationError(i.processName, imetrics.InstrumentationErrorAttachingUprobe)
+					}
 					return nil, fmt.Errorf("instrumenting function %q: %w", symbolName, err)
 				}
 
@@ -94,6 +97,9 @@ func (i *instrumenter) kprobes(p KprobesTracer) error {
 
 		if err := i.kprobe(kfunc, kprobes); err != nil {
 			if kprobes.Required {
+				if i.metrics != nil {
+					i.metrics.InstrumentationError(i.processName, imetrics.InstrumentationErrorAttachingKprobe)
+				}
 				return fmt.Errorf("instrumenting function %q: %w", kfunc, err)
 			}
 
@@ -109,6 +115,9 @@ func (i *instrumenter) kprobe(funcName string, programs ebpfcommon.ProbeDesc) er
 	if programs.Start != nil {
 		kp, err := link.Kprobe(funcName, programs.Start, nil)
 		if err != nil {
+			if i.metrics != nil {
+				i.metrics.InstrumentationError(i.processName, imetrics.InstrumentationErrorAttachingKprobe)
+			}
 			return fmt.Errorf("setting kprobe: %w", err)
 		}
 		i.closables = append(i.closables, kp)
@@ -119,6 +128,9 @@ func (i *instrumenter) kprobe(funcName string, programs ebpfcommon.ProbeDesc) er
 		// to productize it. Failure says: "neither debugfs nor tracefs are mounted".
 		kp, err := link.Kretprobe(funcName, programs.End, nil /*&link.KprobeOptions{RetprobeMaxActive: 1024}*/)
 		if err != nil {
+			if i.metrics != nil {
+				i.metrics.InstrumentationError(i.processName, imetrics.InstrumentationErrorAttachingKprobe)
+			}
 			return fmt.Errorf("setting kretprobe: %w", err)
 		}
 		i.closables = append(i.closables, kp)
@@ -259,7 +271,7 @@ func (i *instrumenter) uprobes(pid int32, p Tracer) error {
 	return nil
 }
 
-func uprobe(exe *link.Executable, probe *ebpfcommon.ProbeDesc) ([]io.Closer, error) {
+func (i *instrumenter) uprobe(exe *link.Executable, probe *ebpfcommon.ProbeDesc) ([]io.Closer, error) {
 	var closers []io.Closer
 
 	if probe.Start != nil {
@@ -267,6 +279,9 @@ func uprobe(exe *link.Executable, probe *ebpfcommon.ProbeDesc) ([]io.Closer, err
 			Address: probe.StartOffset,
 		})
 		if err != nil {
+			if i.metrics != nil {
+				i.metrics.InstrumentationError(i.processName, imetrics.InstrumentationErrorAttachingUprobe)
+			}
 			return closers, fmt.Errorf("setting uprobe (offset): %w", err)
 		}
 
@@ -275,6 +290,9 @@ func uprobe(exe *link.Executable, probe *ebpfcommon.ProbeDesc) ([]io.Closer, err
 
 	if probe.End != nil {
 		if len(probe.ReturnOffsets) == 0 {
+			if i.metrics != nil {
+				i.metrics.InstrumentationError(i.processName, imetrics.InstrumentationErrorAttachingUprobe)
+			}
 			return closers, errors.New("setting uretprobe (attaching to offset): missing return offsets")
 		}
 
@@ -283,6 +301,9 @@ func uprobe(exe *link.Executable, probe *ebpfcommon.ProbeDesc) ([]io.Closer, err
 				Address: offset,
 			})
 			if err != nil {
+				if i.metrics != nil {
+					i.metrics.InstrumentationError(i.processName, imetrics.InstrumentationErrorAttachingUprobe)
+				}
 				return closers, fmt.Errorf("setting uretprobe (attaching to offset): %w", err)
 			}
 
@@ -297,6 +318,9 @@ func (i *instrumenter) sockfilters(p Tracer) error {
 	for _, filter := range p.SocketFilters() {
 		fd, err := attachSocketFilter(filter)
 		if err != nil {
+			if i.metrics != nil {
+				i.metrics.InstrumentationError(i.processName, imetrics.InstrumentationErrorAttachingSockFilter)
+			}
 			return fmt.Errorf("attaching socket filter: %w", err)
 		}
 
@@ -328,6 +352,9 @@ func (i *instrumenter) sockmsgs(p Tracer) error {
 			Attach:  sockmsg.AttachAs,
 		})
 		if err != nil {
+			if i.metrics != nil {
+				i.metrics.InstrumentationError(i.processName, imetrics.InstrumentationErrorAttachingSockMsg)
+			}
 			return fmt.Errorf("attaching sock_msg program: %w", err)
 		}
 
@@ -341,6 +368,9 @@ func (i *instrumenter) sockops(p Tracer) error {
 	for _, sockops := range p.SockOps() {
 		cgroupPath, err := getCgroupPath()
 		if err != nil {
+			if i.metrics != nil {
+				i.metrics.InstrumentationError(i.processName, imetrics.InstrumentationErrorCgroupNotFound)
+			}
 			return fmt.Errorf("error getting cgroup path for sockops: %w", err)
 		}
 
@@ -352,6 +382,9 @@ func (i *instrumenter) sockops(p Tracer) error {
 			Program: sockops.Program,
 		})
 		if err != nil {
+			if i.metrics != nil {
+				i.metrics.InstrumentationError(i.processName, imetrics.InstrumentationErrorAttachingCgroup)
+			}
 			return fmt.Errorf("attaching sockops program: %w", err)
 		}
 
@@ -366,6 +399,9 @@ func (i *instrumenter) tracepoints(p KprobesTracer) error {
 		slog.Debug("going to add syscall", "function", sfunc, "probes", sprobes)
 
 		if err := i.tracepoint(sfunc, sprobes); err != nil {
+			if i.metrics != nil {
+				i.metrics.InstrumentationError(i.processName, imetrics.InstrumentationErrorInvalidTracepoint)
+			}
 			return fmt.Errorf("instrumenting function %q: %w", sfunc, err)
 		}
 		p.AddCloser(i.closables...)
@@ -377,11 +413,17 @@ func (i *instrumenter) tracepoints(p KprobesTracer) error {
 func (i *instrumenter) tracepoint(funcName string, programs ebpfcommon.ProbeDesc) error {
 	if programs.Start != nil {
 		if !strings.Contains(funcName, "/") {
+			if i.metrics != nil {
+				i.metrics.InstrumentationError(i.processName, imetrics.InstrumentationErrorInvalidTracepoint)
+			}
 			return errors.New("invalid tracepoint type, must contain / in the name to separate the type and function name")
 		}
 		parts := strings.Split(funcName, "/")
 		kp, err := link.Tracepoint(parts[0], parts[1], programs.Start, nil)
 		if err != nil {
+			if i.metrics != nil {
+				i.metrics.InstrumentationError(i.processName, imetrics.InstrumentationErrorInvalidTracepoint)
+			}
 			return fmt.Errorf("setting syscall: %w", err)
 		}
 		i.closables = append(i.closables, kp)

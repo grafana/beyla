@@ -140,6 +140,12 @@ network:
 				Enabled: false,
 				MaxSize: 1000,
 			},
+			BufferSizes: config.EBPFBufferSizes{
+				MySQL:    0,
+				Postgres: 0,
+			},
+			MySQLPreparedStatementsCacheSize: 1024,
+			MongoRequestsCacheSize:           1024,
 		},
 		Grafana: otel.GrafanaConfig{
 			OTLP: otel.GrafanaOTLP{
@@ -166,12 +172,11 @@ network:
 			TTL:                  5 * time.Minute,
 		},
 		Traces: obiotel.TracesConfig{
-			TracesProtocol:     obiotel.ProtocolHTTPProtobuf,
-			CommonEndpoint:     "localhost:3131",
-			TracesEndpoint:     "localhost:3232",
-			MaxQueueSize:       4096,
-			MaxExportBatchSize: 4096,
-			ReportersCacheLen:  ReporterLRUSize,
+			TracesProtocol:    obiotel.ProtocolHTTPProtobuf,
+			CommonEndpoint:    "localhost:3131",
+			TracesEndpoint:    "localhost:3232",
+			MaxQueueSize:      4096,
+			ReportersCacheLen: ReporterLRUSize,
 			Instrumentations: []string{
 				instrumentations.InstrumentationALL,
 			},
@@ -236,6 +241,7 @@ network:
 		},
 		Discovery: servicesextra.BeylaDiscoveryConfig{
 			ExcludeOTelInstrumentedServices: true,
+			MinProcessAge:                   5 * time.Second,
 			Services: services.RegexDefinitionCriteria{{Metadata: map[string]*services.RegexpAttr{
 				"k8s_namespace": &nsNamespaceAttr,
 			}}},

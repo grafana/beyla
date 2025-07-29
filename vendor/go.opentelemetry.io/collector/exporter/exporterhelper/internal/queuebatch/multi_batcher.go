@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/exporter/exporterhelper/internal/queue"
 	"go.opentelemetry.io/collector/exporter/exporterhelper/internal/request"
 	"go.opentelemetry.io/collector/exporter/exporterhelper/internal/sender"
 )
@@ -16,7 +17,6 @@ var _ Batcher[request.Request] = (*multiBatcher)(nil)
 type multiBatcher struct {
 	cfg         BatchConfig
 	wp          *workerPool
-	sizerType   request.SizerType
 	sizer       request.Sizer[request.Request]
 	partitioner Partitioner[request.Request]
 	consumeFunc sender.SendFunc[request.Request]
@@ -25,7 +25,6 @@ type multiBatcher struct {
 
 func newMultiBatcher(
 	bCfg BatchConfig,
-	sizerType request.SizerType,
 	sizer request.Sizer[request.Request],
 	wp *workerPool,
 	partitioner Partitioner[request.Request],
@@ -34,7 +33,6 @@ func newMultiBatcher(
 	return &multiBatcher{
 		cfg:         bCfg,
 		wp:          wp,
-		sizerType:   sizerType,
 		sizer:       sizer,
 		partitioner: partitioner,
 		consumeFunc: next,
@@ -48,7 +46,7 @@ func (mb *multiBatcher) getPartition(ctx context.Context, req request.Request) *
 	if found {
 		return s.(*partitionBatcher)
 	}
-	newS := newPartitionBatcher(mb.cfg, mb.sizerType, mb.sizer, mb.wp, mb.consumeFunc)
+	newS := newPartitionBatcher(mb.cfg, mb.sizer, mb.wp, mb.consumeFunc)
 	_ = newS.Start(ctx, nil)
 	s, loaded := mb.shards.LoadOrStore(key, newS)
 	// If not loaded, there was a race condition in adding the new shard. Shutdown the newly created shard.
@@ -62,7 +60,7 @@ func (mb *multiBatcher) Start(context.Context, component.Host) error {
 	return nil
 }
 
-func (mb *multiBatcher) Consume(ctx context.Context, req request.Request, done Done) {
+func (mb *multiBatcher) Consume(ctx context.Context, req request.Request, done queue.Done) {
 	shard := mb.getPartition(ctx, req)
 	shard.Consume(ctx, req, done)
 }

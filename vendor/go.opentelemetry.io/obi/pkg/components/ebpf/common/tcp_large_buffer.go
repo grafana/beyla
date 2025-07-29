@@ -4,6 +4,8 @@
 package ebpfcommon
 
 import (
+	"errors"
+	"fmt"
 	"unsafe"
 
 	"go.opentelemetry.io/obi/pkg/app/request"
@@ -21,6 +23,11 @@ type (
 	}
 )
 
+const (
+	largeBufferActionInit = iota
+	largeBufferActionAppend
+)
+
 func appendTCPLargeBuffer(parseCtx *EBPFParseContext, record *ringbuf.Record) (request.Span, bool, error) {
 	hdrSize := uint32(unsafe.Sizeof(TCPLargeBufferHeader{})) - uint32(unsafe.Sizeof(uintptr(0))) // Remove `buf` placeholder
 
@@ -35,16 +42,21 @@ func appendTCPLargeBuffer(parseCtx *EBPFParseContext, record *ringbuf.Record) (r
 		direction: event.Direction,
 	}
 
-	lb, ok := parseCtx.largeBuffers.Get(key)
-	if ok && event.Action == 1 {
-		// LargeBufActionAppend
-		lb.buf = append(lb.buf, record.RawSample[hdrSize:hdrSize+event.Len]...)
-	} else {
+	switch event.Action {
+	case largeBufferActionInit:
 		newBuffer := make([]byte, event.Len)
 		copy(newBuffer, record.RawSample[hdrSize:])
 		parseCtx.largeBuffers.Add(key, &largeBuffer{
 			buf: newBuffer,
 		})
+	case largeBufferActionAppend:
+		lb, ok := parseCtx.largeBuffers.Get(key)
+		if !ok {
+			return request.Span{}, true, errors.New("existing large buffer not found for append action")
+		}
+		lb.buf = append(lb.buf, record.RawSample[hdrSize:hdrSize+event.Len]...)
+	default:
+		return request.Span{}, true, fmt.Errorf("invalid large buffer action: %d", event.Action)
 	}
 
 	return request.Span{}, true, nil

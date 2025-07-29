@@ -57,6 +57,11 @@ func parseMySQLError(buf []uint8) *request.SQLError {
 	sqlErr.Code = binary.LittleEndian.Uint16(buf[offset : offset+2])
 	offset += 2
 
+	// https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html
+	if sqlErr.Code < 1002 || sqlErr.Code > 4167 {
+		return nil // Invalid error code
+	}
+
 	if sqlErr.Code != MySQLProgressReporting {
 		if buf[offset] == MySQLStateMarker {
 			// Skip the SQL state marker
@@ -72,21 +77,23 @@ func parseMySQLError(buf []uint8) *request.SQLError {
 	return &sqlErr
 }
 
-// https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html
-func validateMySQLError(sqlErr *request.SQLError) bool {
-	return sqlErr.Code >= 1002 && sqlErr.Code <= 4167 && sqlErr.Message != ""
-}
-
 func mysqlCommandIDToString(commandID uint8) string {
 	switch commandID {
 	case 0x3:
 		return "QUERY"
-	// TODO(matt): prepared statements
-	// case 0x16:
-	// 	return "STMT_PREPARE"
-	// case 0x17:
-	// 	return "STMT_EXECUTE"
+	case 0x16:
+		return "STMT_PREPARE"
+	case 0x17:
+		return "STMT_EXECUTE"
 	default:
 		return ""
 	}
+}
+
+func mysqlParseStatementID(buf []byte) uint32 {
+	if len(buf) < MySQLHdrSize+1 {
+		return 0
+	}
+	// The statement ID is a 4-byte little-endian integer after the header and command ID
+	return binary.LittleEndian.Uint32(buf[MySQLHdrSize+1:])
 }

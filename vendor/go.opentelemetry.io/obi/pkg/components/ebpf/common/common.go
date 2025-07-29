@@ -63,6 +63,7 @@ const (
 const (
 	ProtocolTypeUnknown uint8 = iota
 	ProtocolTypeMySQL
+	ProtocolTypePostgres
 )
 
 var IntegrityModeOverride = false
@@ -116,10 +117,11 @@ type MisclassifiedEvent struct {
 }
 
 type EBPFParseContext struct {
-	h2c               *lru.Cache[uint64, h2Connection]
-	redisDBCache      *simplelru.LRU[BpfConnectionInfoT, int]
-	largeBuffers      *expirable.LRU[largeBufferKey, *largeBuffer]
-	mongoRequestCache *PendingMongoDBRequests
+	h2c                     *lru.Cache[uint64, h2Connection]
+	redisDBCache            *simplelru.LRU[BpfConnectionInfoT, int]
+	largeBuffers            *expirable.LRU[largeBufferKey, *largeBuffer]
+	mongoRequestCache       PendingMongoDBRequests
+	mysqlPreparedStatements *simplelru.LRU[mysqlPreparedStatementsKey, string]
 }
 
 type EBPFEventContext struct {
@@ -136,24 +138,39 @@ var MisclassifiedEvents = make(chan MisclassifiedEvent)
 func ptlog() *slog.Logger { return slog.With("component", "ebpf.ProcessTracer") }
 
 func NewEBPFParseContext(cfg *config.EBPFTracer) *EBPFParseContext {
-	var redisDBCache *simplelru.LRU[BpfConnectionInfoT, int]
+	var (
+		err                     error
+		redisDBCache            *simplelru.LRU[BpfConnectionInfoT, int]
+		mysqlPreparedStatements *simplelru.LRU[mysqlPreparedStatementsKey, string]
+		mongoRequestCache       PendingMongoDBRequests
+	)
+
 	h2c, _ := lru.New[uint64, h2Connection](1024 * 10)
 	largeBuffers := expirable.NewLRU[largeBufferKey, *largeBuffer](1024, nil, 5*time.Minute)
 
-	if cfg != nil && cfg.RedisDBCache.Enabled {
-		var err error
-		redisDBCache, err = simplelru.NewLRU[BpfConnectionInfoT, int](cfg.RedisDBCache.MaxSize, nil)
-		if err != nil {
-			ptlog().Error("failed to create Redis DB cache", "error", err)
-			redisDBCache = nil
+	if cfg != nil {
+		if cfg.RedisDBCache.Enabled {
+			redisDBCache, err = simplelru.NewLRU[BpfConnectionInfoT, int](cfg.RedisDBCache.MaxSize, nil)
+			if err != nil {
+				ptlog().Error("failed to create Redis DB cache", "error", err)
+				redisDBCache = nil
+			}
 		}
+
+		mysqlPreparedStatements, err = simplelru.NewLRU[mysqlPreparedStatementsKey, string](cfg.MySQLPreparedStatementsCacheSize, nil)
+		if err != nil {
+			ptlog().Error("failed to create MySQL prepared statements cache", "error", err)
+		}
+
+		mongoRequestCache = expirable.NewLRU[MongoRequestKey, *MongoRequestValue](cfg.MongoRequestsCacheSize, nil, 0)
 	}
-	mongoRequestCache := expirable.NewLRU[MongoRequestKey, *MongoRequestValue](1000, nil, 0)
+
 	return &EBPFParseContext{
-		h2c:               h2c,
-		redisDBCache:      redisDBCache,
-		largeBuffers:      largeBuffers,
-		mongoRequestCache: &mongoRequestCache,
+		h2c:                     h2c,
+		redisDBCache:            redisDBCache,
+		largeBuffers:            largeBuffers,
+		mongoRequestCache:       mongoRequestCache,
+		mysqlPreparedStatements: mysqlPreparedStatements,
 	}
 }
 

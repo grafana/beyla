@@ -12,6 +12,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/app/request"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/components/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/components/exec"
+	"go.opentelemetry.io/obi/pkg/components/imetrics"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 )
 
@@ -23,7 +24,7 @@ type instrumenter struct{}
 func (pt *ProcessTracer) Run(_ context.Context, _ *ebpfcommon.EBPFEventContext, _ *msg.Queue[[]request.Span]) {
 }
 
-func NewProcessTracer(_ ProcessTracerType, _ []Tracer, _ time.Duration) *ProcessTracer {
+func NewProcessTracer(_ ProcessTracerType, _ []Tracer, _ time.Duration, _ imetrics.Reporter) *ProcessTracer {
 	return nil
 }
 

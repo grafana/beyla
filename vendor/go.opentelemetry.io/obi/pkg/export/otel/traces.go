@@ -1,9 +1,6 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-// TODO: remove this after batching API becomes stable
-//
-//nolint:staticcheck
 package otel
 
 import (
@@ -19,6 +16,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"go.opentelemetry.io/collector/config/configoptional"
 
 	expirable2 "github.com/hashicorp/golang-lru/v2/expirable"
 	"go.opentelemetry.io/otel/attribute"
@@ -83,9 +82,8 @@ type TracesConfig struct {
 
 	// Configuration options below this line will remain undocumented at the moment,
 	// but can be useful for performance-tuning of some customers.
-	MaxExportBatchSize int           `yaml:"max_export_batch_size" env:"OTEL_EBPF_OTLP_TRACES_MAX_EXPORT_BATCH_SIZE"`
-	MaxQueueSize       int           `yaml:"max_queue_size" env:"OTEL_EBPF_OTLP_TRACES_MAX_QUEUE_SIZE"`
-	BatchTimeout       time.Duration `yaml:"batch_timeout" env:"OTEL_EBPF_OTLP_TRACES_BATCH_TIMEOUT"`
+	MaxQueueSize int           `yaml:"max_queue_size" env:"OTEL_EBPF_OTLP_TRACES_MAX_QUEUE_SIZE"`
+	BatchTimeout time.Duration `yaml:"batch_timeout" env:"OTEL_EBPF_OTLP_TRACES_BATCH_TIMEOUT"`
 
 	// Configuration options for BackOffConfig of the traces exporter.
 	// See https://github.com/open-telemetry/opentelemetry-collector/blob/main/config/configretry/backoff.go
@@ -355,15 +353,22 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig) (exporter.Traces, 
 		}
 		factory := otlphttpexporter.NewFactory()
 		config := factory.CreateDefaultConfig().(*otlphttpexporter.Config)
-		// Experimental API for batching
-		// See: https://github.com/open-telemetry/opentelemetry-collector/issues/8122
-		batchCfg := exporterhelper.NewDefaultBatcherConfig()
+		queueConfig := exporterhelper.NewDefaultQueueConfig()
+		queueConfig.Sizer = exporterhelper.RequestSizerTypeItems
+		batchCfg := exporterhelper.BatchConfig{
+			Sizer: queueConfig.Sizer,
+		}
+		if cfg.MaxQueueSize > 0 || cfg.BatchTimeout > 0 {
+			queueConfig.Enabled = true
+		}
 		if cfg.MaxQueueSize > 0 {
-			batchCfg.SizeConfig.MaxSize = int64(cfg.MaxExportBatchSize)
+			batchCfg.MaxSize = int64(cfg.MaxQueueSize)
 		}
 		if cfg.BatchTimeout > 0 {
 			batchCfg.FlushTimeout = cfg.BatchTimeout
 		}
+		queueConfig.Batch = configoptional.Some(batchCfg)
+		config.QueueConfig = queueConfig
 		config.RetryConfig = getRetrySettings(cfg)
 		config.ClientConfig = confighttp.ClientConfig{
 			Endpoint: opts.Scheme + "://" + opts.Endpoint + opts.BaseURLPath,
@@ -387,7 +392,6 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig) (exporter.Traces, 
 			exporterhelper.WithShutdown(exporter.Shutdown),
 			exporterhelper.WithCapabilities(consumer.Capabilities{MutatesData: false}),
 			exporterhelper.WithQueue(config.QueueConfig),
-			exporterhelper.WithBatcher(batchCfg),
 			exporterhelper.WithRetry(config.RetryConfig))
 	case ProtocolGRPC:
 		slog.Debug("instantiating GRPC TracesReporter", "protocol", proto)
@@ -404,15 +408,22 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig) (exporter.Traces, 
 		}
 		factory := otlpexporter.NewFactory()
 		config := factory.CreateDefaultConfig().(*otlpexporter.Config)
-		// Experimental API for batching
-		// See: https://github.com/open-telemetry/opentelemetry-collector/issues/8122
-		if cfg.MaxExportBatchSize > 0 {
-			config.BatcherConfig.Enabled = true
-			config.BatcherConfig.SizeConfig.MaxSize = int64(cfg.MaxExportBatchSize)
+		queueConfig := exporterhelper.NewDefaultQueueConfig()
+		queueConfig.Sizer = exporterhelper.RequestSizerTypeItems
+		batchCfg := exporterhelper.BatchConfig{
+			Sizer: queueConfig.Sizer,
+		}
+		if cfg.MaxQueueSize > 0 || cfg.BatchTimeout > 0 {
+			queueConfig.Enabled = true
+		}
+		if cfg.MaxQueueSize > 0 {
+			batchCfg.MaxSize = int64(cfg.MaxQueueSize)
 		}
 		if cfg.BatchTimeout > 0 {
-			config.BatcherConfig.FlushTimeout = cfg.BatchTimeout
+			batchCfg.FlushTimeout = cfg.BatchTimeout
 		}
+		queueConfig.Batch = configoptional.Some(batchCfg)
+		config.QueueConfig = queueConfig
 		config.RetryConfig = getRetrySettings(cfg)
 		config.ClientConfig = configgrpc.ClientConfig{
 			Endpoint: endpoint.String(),

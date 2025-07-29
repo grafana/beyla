@@ -291,16 +291,23 @@ func (s *Span) SQLErrorDescription() string {
 		return ""
 	}
 
+	var codeString string
+	if s.SQLError.Code == 0 {
+		codeString = "NA"
+	} else {
+		codeString = strconv.FormatUint(uint64(s.SQLError.Code), 10)
+	}
+
 	if s.SQLCommand == "" {
 		return fmt.Sprintf(
-			"SQL Server errored: error_code=%d sql_state=%s message=%s",
-			s.SQLError.Code, s.SQLError.SQLState, s.SQLError.Message,
+			"SQL Server errored: error_code=%s sql_state=%s message=%s",
+			codeString, s.SQLError.SQLState, s.SQLError.Message,
 		)
 	}
 
 	return fmt.Sprintf(
-		"SQL Server errored for command 'COM_%s': error_code=%d sql_state=%s message=%s",
-		s.SQLCommand, s.SQLError.Code, s.SQLError.SQLState, s.SQLError.Message,
+		"SQL Server errored for command 'COM_%s': error_code=%s sql_state=%s message=%s",
+		s.SQLCommand, codeString, s.SQLError.SQLState, s.SQLError.Message,
 	)
 }
 

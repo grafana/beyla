@@ -26,6 +26,7 @@ import (
 	convenience "go.opentelemetry.io/obi/pkg/components/ebpf/convenience"
 	"go.opentelemetry.io/obi/pkg/components/exec"
 	"go.opentelemetry.io/obi/pkg/components/goexec"
+	"go.opentelemetry.io/obi/pkg/components/imetrics"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 )
 
@@ -34,10 +35,12 @@ const PinInternal = ebpf.PinType(100)
 func ptlog() *slog.Logger { return slog.With("component", "ebpf.ProcessTracer") }
 
 type instrumenter struct {
-	offsets   *goexec.Offsets
-	exe       *link.Executable
-	closables []io.Closer
-	modules   map[uint64]struct{}
+	offsets     *goexec.Offsets
+	exe         *link.Executable
+	closables   []io.Closer
+	modules     map[uint64]struct{}
+	metrics     imetrics.Reporter
+	processName string
 }
 
 func roundToNearestMultiple(x, n uint32) uint32 {
@@ -105,12 +108,13 @@ func unloadInternalMaps(eventContext *common.EBPFEventContext) {
 	eventContext.EBPFMaps = make(map[string]*ebpf.Map)
 }
 
-func NewProcessTracer(tracerType ProcessTracerType, programs []Tracer, shutdownTimeout time.Duration) *ProcessTracer {
+func NewProcessTracer(tracerType ProcessTracerType, programs []Tracer, shutdownTimeout time.Duration, metrics imetrics.Reporter) *ProcessTracer {
 	return &ProcessTracer{
 		Programs:        programs,
 		Type:            tracerType,
 		Instrumentables: map[uint64]*instrumenter{},
 		shutdownTimeout: shutdownTimeout,
+		metrics:         metrics,
 	}
 }
 
@@ -304,9 +308,11 @@ func (pt *ProcessTracer) NewExecutableInstance(ie *Instrumentable) error {
 
 func (pt *ProcessTracer) NewExecutable(exe *link.Executable, ie *Instrumentable) error {
 	i := instrumenter{
-		exe:     exe,
-		offsets: ie.Offsets, // this is needed for the function offsets, not fields
-		modules: map[uint64]struct{}{},
+		exe:         exe,
+		offsets:     ie.Offsets, // this is needed for the function offsets, not fields
+		modules:     map[uint64]struct{}{},
+		metrics:     pt.metrics,
+		processName: ie.FileInfo.CmdExePath,
 	}
 
 	for _, p := range pt.Programs {

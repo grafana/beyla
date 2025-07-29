@@ -11,6 +11,7 @@ import (
 	"go.uber.org/multierr"
 
 	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/exporter/exporterhelper/internal/queue"
 	"go.opentelemetry.io/collector/exporter/exporterhelper/internal/request"
 	"go.opentelemetry.io/collector/exporter/exporterhelper/internal/sender"
 )
@@ -27,7 +28,6 @@ type batch struct {
 type partitionBatcher struct {
 	cfg            BatchConfig
 	wp             *workerPool
-	sizerType      request.SizerType
 	sizer          request.Sizer[request.Request]
 	consumeFunc    sender.SendFunc[request.Request]
 	stopWG         sync.WaitGroup
@@ -39,7 +39,6 @@ type partitionBatcher struct {
 
 func newPartitionBatcher(
 	cfg BatchConfig,
-	sizerType request.SizerType,
 	sizer request.Sizer[request.Request],
 	wp *workerPool,
 	next sender.SendFunc[request.Request],
@@ -47,7 +46,6 @@ func newPartitionBatcher(
 	return &partitionBatcher{
 		cfg:         cfg,
 		wp:          wp,
-		sizerType:   sizerType,
 		sizer:       sizer,
 		consumeFunc: next,
 		shutdownCh:  make(chan struct{}, 1),
@@ -60,11 +58,11 @@ func (qb *partitionBatcher) resetTimer() {
 	}
 }
 
-func (qb *partitionBatcher) Consume(ctx context.Context, req request.Request, done Done) {
+func (qb *partitionBatcher) Consume(ctx context.Context, req request.Request, done queue.Done) {
 	qb.currentBatchMu.Lock()
 
 	if qb.currentBatch == nil {
-		reqList, mergeSplitErr := req.MergeSplit(ctx, int(qb.cfg.MaxSize), qb.sizerType, nil)
+		reqList, mergeSplitErr := req.MergeSplit(ctx, int(qb.cfg.MaxSize), qb.cfg.Sizer, nil)
 		if mergeSplitErr != nil || len(reqList) == 0 {
 			done.OnDone(mergeSplitErr)
 			qb.currentBatchMu.Unlock()
@@ -98,7 +96,7 @@ func (qb *partitionBatcher) Consume(ctx context.Context, req request.Request, do
 		return
 	}
 
-	reqList, mergeSplitErr := qb.currentBatch.req.MergeSplit(ctx, int(qb.cfg.MaxSize), qb.sizerType, req)
+	reqList, mergeSplitErr := qb.currentBatch.req.MergeSplit(ctx, int(qb.cfg.MaxSize), qb.cfg.Sizer, req)
 	// If failed to merge signal all Done callbacks from the current batch as well as the current request and reset the current batch.
 	if mergeSplitErr != nil || len(reqList) == 0 {
 		done.OnDone(mergeSplitErr)
@@ -203,7 +201,7 @@ func (qb *partitionBatcher) flushCurrentBatchIfNecessary() {
 }
 
 // flush starts a goroutine that calls consumeFunc. It blocks until a worker is available if necessary.
-func (qb *partitionBatcher) flush(ctx context.Context, req request.Request, done Done) {
+func (qb *partitionBatcher) flush(ctx context.Context, req request.Request, done queue.Done) {
 	qb.stopWG.Add(1)
 	qb.wp.execute(func() {
 		defer qb.stopWG.Done()
@@ -229,7 +227,7 @@ func (wp *workerPool) execute(f func()) {
 	wp.workers <- struct{}{}
 }
 
-type multiDone []Done
+type multiDone []queue.Done
 
 func (mdc multiDone) OnDone(err error) {
 	for _, d := range mdc {
@@ -238,13 +236,13 @@ func (mdc multiDone) OnDone(err error) {
 }
 
 type refCountDone struct {
-	done     Done
+	done     queue.Done
 	mu       sync.Mutex
 	refCount int64
 	err      error
 }
 
-func newRefCountDone(done Done, refCount int64) Done {
+func newRefCountDone(done queue.Done, refCount int64) queue.Done {
 	return &refCountDone{
 		done:     done,
 		refCount: refCount,

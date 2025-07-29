@@ -156,7 +156,6 @@ func (ta *TraceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 		ta.log.Debug(".done", "success", ok)
 		return ok
 	}
-
 	ta.log.Info("instrumenting process",
 		"cmd", ie.FileInfo.CmdExePath,
 		"pid", ie.FileInfo.Pid,
@@ -164,7 +163,6 @@ func (ta *TraceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 		"type", ie.Type,
 		"service", ie.FileInfo.Service.UID.Name,
 	)
-	ta.Metrics.InstrumentProcess(ie.FileInfo.ExecutableName())
 
 	// builds a tracer for that executable
 	var programs []ebpf.Tracer
@@ -203,6 +201,7 @@ func (ta *TraceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 	}
 	if len(programs) == 0 {
 		ta.log.Warn("no instrumentable functions found. Ignoring", "pid", ie.FileInfo.Pid, "cmd", ie.FileInfo.CmdExePath)
+		ta.Metrics.InstrumentationError(ie.FileInfo.ExecutableName(), imetrics.InstrumentationErrorNoInstrumentableFunctionsFound)
 		return false
 	}
 
@@ -212,19 +211,22 @@ func (ta *TraceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 	// to allow loading it from different container/pods in containerized environments
 	exe, ok := ta.loadExecutable(ie)
 	if !ok {
+		ta.Metrics.InstrumentationError(ie.FileInfo.ExecutableName(), imetrics.InstrumentationErrorInspectionFailed)
 		return false
 	}
 
-	tracer := ebpf.NewProcessTracer(tracerType, programs, ta.Cfg.ShutdownTimeout)
+	tracer := ebpf.NewProcessTracer(tracerType, programs, ta.Cfg.ShutdownTimeout, ta.Metrics)
 
 	if err := tracer.Init(ta.EbpfEventContext); err != nil {
 		ta.log.Error("couldn't trace process. Stopping process tracer", "error", err)
+		ta.Metrics.InstrumentationError(ie.FileInfo.ExecutableName(), imetrics.InstrumentationErrorInspectionFailed)
 		return false
 	}
 
 	ie.Tracer = tracer
 
 	if err := tracer.NewExecutable(exe, ie); err != nil {
+		ta.Metrics.InstrumentationError(ie.FileInfo.ExecutableName(), imetrics.InstrumentationErrorAttachingUprobe)
 		return false
 	}
 
@@ -245,6 +247,7 @@ func (ta *TraceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 	} else {
 		ta.reusableGoTracer = tracer
 	}
+	ta.Metrics.InstrumentProcess(ie.FileInfo.ExecutableName())
 	ta.log.Debug(".done")
 	return true
 }
@@ -291,6 +294,7 @@ func (ta *TraceAttacher) reuseTracer(tracer *ebpf.ProcessTracer, ie *ebpf.Instru
 
 	ta.monitorPIDs(tracer, ie)
 	ta.existingTracers[ie.FileInfo.Ino] = tracer
+	ta.Metrics.InstrumentProcess(ie.FileInfo.ExecutableName())
 
 	return true
 }

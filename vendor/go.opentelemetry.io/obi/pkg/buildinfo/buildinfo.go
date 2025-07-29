@@ -4,6 +4,7 @@
 package buildinfo
 
 // Version and Revision variables are overridden at build time with Git repository information
+// They can be also overridden at runtime by any software component vendoring OBI as library
 var (
 	Version  = "unset"
 	Revision = "unset"

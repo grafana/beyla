@@ -121,7 +121,7 @@ const (
 	K8sDstNodeName  = Name("k8s.dst.node.name")
 )
 
-// other beyla-specific attributes
+// other OBI-specific attributes
 const (
 	// Instance and Job are only explicitly used in the Prometheus
 	// exporter, as the OpenTelemetry SDK already sets them implicitly.
@@ -142,6 +142,9 @@ const (
 
 	ServiceInstanceID = Name(semconv.ServiceInstanceIDKey)
 	SkipSpanMetrics   = Name("span.metrics.skip")
+
+	VendorVersionSuffix  = Name(".version")
+	VendorRevisionSuffix = Name(".revision")
 )
 
 // traces related attributes

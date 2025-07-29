@@ -36,6 +36,7 @@ type PrometheusReporter struct {
 	otelTraceExportErrs   *prometheus.CounterVec
 	prometheusRequests    *prometheus.CounterVec
 	instrumentedProcesses *prometheus.GaugeVec
+	instrumentationErrors *prometheus.CounterVec
 	beylaInfo             prometheus.Gauge
 }
 
@@ -74,6 +75,10 @@ func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusM
 			Name: attr.VendorPrefix + "_instrumented_processes",
 			Help: "Instrumented processes by Beyla",
 		}, []string{"process_name"}),
+		instrumentationErrors: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: attr.VendorPrefix + "_instrumentation_errors_total",
+			Help: "Total number of instrumentation errors by process and error type",
+		}, []string{"process_name", "error_type"}),
 		beylaInfo: prometheus.NewGauge(prometheus.GaugeOpts{
 			Name: attr.VendorPrefix + "_internal_build_info",
 			Help: "A metric with a constant '1' value labeled by version, revision, branch, " +
@@ -95,6 +100,7 @@ func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusM
 			pr.otelTraceExportErrs,
 			pr.prometheusRequests,
 			pr.instrumentedProcesses,
+			pr.instrumentationErrors,
 			pr.beylaInfo)
 	} else {
 		manager.Register(cfg.Port, cfg.Path,
@@ -105,6 +111,7 @@ func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusM
 			pr.otelTraceExportErrs,
 			pr.prometheusRequests,
 			pr.instrumentedProcesses,
+			pr.instrumentationErrors,
 			pr.beylaInfo)
 	}
 
@@ -148,4 +155,8 @@ func (p *PrometheusReporter) InstrumentProcess(processName string) {
 
 func (p *PrometheusReporter) UninstrumentProcess(processName string) {
 	p.instrumentedProcesses.WithLabelValues(processName).Dec()
+}
+
+func (p *PrometheusReporter) InstrumentationError(processName string, errorType string) {
+	p.instrumentationErrors.WithLabelValues(processName, errorType).Inc()
 }

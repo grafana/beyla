@@ -29,6 +29,7 @@ type InternalMetricsReporter struct {
 	otelTraceExports      instrument.Float64Counter
 	otelTraceExportErrs   instrument.Float64Counter
 	instrumentedProcesses instrument.Int64UpDownCounter
+	instrumentationErrors instrument.Int64Counter
 	beylaInfo             instrument.Int64Gauge
 }
 
@@ -97,6 +98,14 @@ func NewInternalMetricsReporter(ctx context.Context, ctxInfo *global.ContextInfo
 		return nil, err
 	}
 
+	instrumentationErrors, err := meter.Int64Counter(
+		attr.VendorPrefix+".instrumentation.errors",
+		instrument.WithDescription("Count of instrumentation errors by process and error type"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	beylaInfo, err := meter.Int64Gauge(
 		attr.VendorPrefix+".internal.build.info",
 		instrument.WithDescription("A metric with a constant '1' value labeled by version, revision, branch, goversion from which Beyla was built, the goos and goarch for the build."),
@@ -113,6 +122,7 @@ func NewInternalMetricsReporter(ctx context.Context, ctxInfo *global.ContextInfo
 		otelTraceExports:      otelTraceExports,
 		otelTraceExportErrs:   otelTraceExportErrs,
 		instrumentedProcesses: instrumentedProcesses,
+		instrumentationErrors: instrumentationErrors,
 		beylaInfo:             beylaInfo,
 	}, nil
 }
@@ -157,4 +167,11 @@ func (p *InternalMetricsReporter) InstrumentProcess(processName string) {
 
 func (p *InternalMetricsReporter) UninstrumentProcess(processName string) {
 	p.instrumentedProcesses.Add(p.ctx, -1, instrument.WithAttributes(attribute.String("process_name", processName)))
+}
+
+func (p *InternalMetricsReporter) InstrumentationError(processName, errorType string) {
+	p.instrumentationErrors.Add(p.ctx, 1, instrument.WithAttributes(
+		attribute.String("process_name", processName),
+		attribute.String("error_type", errorType),
+	))
 }

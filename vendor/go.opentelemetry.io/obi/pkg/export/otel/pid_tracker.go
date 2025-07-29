@@ -64,6 +64,15 @@ func (p *PidServiceTracker) RemovePID(pid int32) (bool, svc.UID) {
 	return false, svc.UID{}
 }
 
+func (p *PidServiceTracker) ServiceLive(uid svc.UID) bool {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	_, exists := p.servicePIDs[uid]
+
+	return exists
+}
+
 func (p *PidServiceTracker) IsTrackingServerService(n svc.ServiceNameNamespace) bool {
 	_, ok := p.names[n]
 	return ok

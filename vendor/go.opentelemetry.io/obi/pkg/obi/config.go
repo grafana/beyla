@@ -75,8 +75,11 @@ var DefaultConfig = Config{
 			MaxSize: 1000,
 		},
 		BufferSizes: config.EBPFBufferSizes{
-			MySQL: 0,
+			MySQL:    0,
+			Postgres: 0,
 		},
+		MySQLPreparedStatementsCacheSize: 1024,
+		MongoRequestsCacheSize:           1024,
 	},
 	NameResolver: &transform.NameResolverConfig{
 		Sources:  []string{"k8s"},
@@ -98,11 +101,10 @@ var DefaultConfig = Config{
 		TTL: defaultMetricsTTL,
 	},
 	Traces: otel.TracesConfig{
-		Protocol:           otel.ProtocolUnset,
-		TracesProtocol:     otel.ProtocolUnset,
-		MaxQueueSize:       4096,
-		MaxExportBatchSize: 4096,
-		ReportersCacheLen:  ReporterLRUSize,
+		Protocol:          otel.ProtocolUnset,
+		TracesProtocol:    otel.ProtocolUnset,
+		MaxQueueSize:      4096,
+		ReportersCacheLen: ReporterLRUSize,
 		Instrumentations: []string{
 			instrumentations.InstrumentationALL,
 		},
@@ -162,6 +164,7 @@ var DefaultConfig = Config{
 				Metadata: map[string]*services.GlobAttr{"k8s_namespace": &k8sDefaultNamespacesGlob},
 			},
 		},
+		MinProcessAge: 5 * time.Second,
 	},
 }
 

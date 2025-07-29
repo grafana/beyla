@@ -9,9 +9,6 @@ import (
 	"log/slog"
 	"time"
 
-	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
-
-	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/attribute"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -21,6 +18,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/components/netolly/ebpf"
 	"go.opentelemetry.io/obi/pkg/components/pipe/global"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
+	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/expire"
 	"go.opentelemetry.io/obi/pkg/export/otel/metric"
 	metric2 "go.opentelemetry.io/obi/pkg/export/otel/metric/api/metric"
@@ -48,11 +46,8 @@ func nmlog() *slog.Logger {
 // for network metrics.
 func getFilteredNetworkResourceAttrs(hostID string, attrSelector attributes.Selection) []attribute.KeyValue {
 	baseAttrs := []attribute.KeyValue{
-		semconv.ServiceName(attr.VendorPrefix + "-network-flows"),
-		semconv.ServiceInstanceID(uuid.New().String()),
-		semconv.TelemetrySDKLanguageKey.String(semconv.TelemetrySDKLanguageGo.Value.AsString()),
-		semconv.TelemetrySDKNameKey.String("opentelemetry-ebpf-instrumentation"),
-		semconv.TelemetrySDKVersion(buildinfo.Version),
+		attribute.String(attr.VendorPrefix+string(attr.VendorVersionSuffix), buildinfo.Version),
+		attribute.String(attr.VendorPrefix+string(attr.VendorRevisionSuffix), buildinfo.Revision),
 	}
 
 	extraAttrs := []attribute.KeyValue{

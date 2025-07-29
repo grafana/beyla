@@ -15,6 +15,7 @@ import (
 	ebpfcommon "go.opentelemetry.io/obi/pkg/components/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/components/exec"
 	"go.opentelemetry.io/obi/pkg/components/goexec"
+	"go.opentelemetry.io/obi/pkg/components/imetrics"
 	"go.opentelemetry.io/obi/pkg/components/svc"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 )
@@ -139,6 +140,7 @@ const (
 // in the ELF file.
 type ProcessTracer struct {
 	log      *slog.Logger
+	metrics  imetrics.Reporter
 	Programs []Tracer
 
 	shutdownTimeout time.Duration

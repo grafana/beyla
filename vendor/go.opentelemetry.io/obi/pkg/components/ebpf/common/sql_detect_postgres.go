@@ -7,7 +7,11 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
+
+	"go.opentelemetry.io/obi/pkg/app/request"
+	"go.opentelemetry.io/obi/pkg/components/sqlprune"
 )
 
 const (
@@ -167,4 +171,39 @@ func postgresPreparedStatements(b []byte) (string, string, string) {
 	}
 
 	return op, table, sql
+}
+
+func handlePostgres(_ *EBPFParseContext, event *TCPRequestInfo, requestBuffer, responseBuffer []byte) (request.Span, error) {
+	var (
+		op, table, stmt string
+		span            request.Span
+	)
+
+	if len(requestBuffer) < sqlprune.PostgresHdrSize+1 {
+		slog.Warn("Postgres request too short")
+		return span, errFallback
+	}
+	if len(responseBuffer) < sqlprune.PostgresHdrSize+1 {
+		slog.Warn("Postgres response too short")
+		return span, errFallback
+	}
+
+	sqlCommand := sqlprune.SQLParseCommandID(request.DBPostgres, requestBuffer)
+	sqlError := sqlprune.SQLParseError(request.DBPostgres, responseBuffer)
+
+	switch sqlCommand {
+	// TODO(matt): prepared statements
+	case "QUERY":
+		op, table, stmt = detectSQL(string(requestBuffer[sqlprune.PostgresHdrSize:]))
+	default:
+		slog.Warn("Postgres message type unhandled", "messageType", requestBuffer[sqlprune.PostgresHdrSize])
+		return span, errFallback
+	}
+
+	if !validSQL(op, table, request.DBPostgres) {
+		slog.Warn("Postgres operation and/or table are invalid", "stmt", stmt)
+		return span, errFallback
+	}
+
+	return TCPToSQLToSpan(event, op, table, stmt, request.DBPostgres, sqlCommand, sqlError), nil
 }

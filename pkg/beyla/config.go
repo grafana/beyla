@@ -74,6 +74,12 @@ var DefaultConfig = Config{
 			Enabled: false,
 			MaxSize: 1000,
 		},
+		BufferSizes: config.EBPFBufferSizes{
+			MySQL:    0,
+			Postgres: 0,
+		},
+		MySQLPreparedStatementsCacheSize: 1024,
+		MongoRequestsCacheSize:           1024,
 	},
 	Grafana: botel.GrafanaConfig{
 		OTLP: botel.GrafanaOTLP{
@@ -152,6 +158,7 @@ var DefaultConfig = Config{
 	},
 	Discovery: servicesextra.BeylaDiscoveryConfig{
 		ExcludeOTelInstrumentedServices: true,
+		MinProcessAge:                   5 * time.Second,
 		DefaultExcludeServices: services.RegexDefinitionCriteria{
 			services.RegexSelector{
 				Path: services.NewRegexp("(?:^|/)(beyla$|alloy$|prometheus-config-reloader$|otelcol[^/]*$)"),

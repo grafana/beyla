@@ -96,7 +96,15 @@ type EBPFTracer struct {
 	// Limit max data buffer size per protocol.
 	// nolint:undoc
 	// TODO: document
-	BufferSizes EBPFBufferSizes `yaml:"buffer_sizes" env:"OTEL_EBPF_BPF_BUFFER_SIZES"`
+	BufferSizes EBPFBufferSizes `yaml:"buffer_sizes" env:"BEYLA_BPF_BUFFER_SIZES"`
+
+	// MySQL prepared statements cache size.
+	// nolint:undoc
+	MySQLPreparedStatementsCacheSize int `yaml:"mysql_prepared_statements_cache_size" env:"BEYLA_MYSQL_PREPARED_STATEMENTS_CACHE_SIZE"`
+
+	// MongoDB requests cache size.
+	// nolint:undoc
+	MongoRequestsCacheSize int `yaml:"mongo_requests_cache_size" env:"BEYLA_MONGO_REQUESTS_CACHE_SIZE"`
 }
 
 type EBPFBufferSizes struct {
@@ -106,7 +114,14 @@ type EBPFBufferSizes struct {
 	//
 	// Default: 0 (disabled).
 	// nolint:undoc
-	MySQL uint32 `yaml:"mysql" env:"OTEL_EBPF_BPF_BUFFER_SIZE_MYSQL"`
+	MySQL uint32 `yaml:"mysql" env:"BEYLA_BPF_BUFFER_SIZE_MYSQL"`
+	// Postgres data buffer size in bytes.
+	// Min: 128 bytes, Max: 8192 bytes.
+	// Valid values: 0, 128, 256, 512, 1024, 2048, 4096, 8192.
+	//
+	// Default: 0 (disabled).
+	// nolint:undoc
+	Postgres uint32 `yaml:"postgres" env:"BEYLA_BPF_BUFFER_SIZE_POSTGRES"`
 }
 
 func (m *ContextPropagationMode) UnmarshalText(text []byte) error {

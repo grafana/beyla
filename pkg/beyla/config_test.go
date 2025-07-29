@@ -140,6 +140,12 @@ network:
 				Enabled: false,
 				MaxSize: 1000,
 			},
+			BufferSizes: config.EBPFBufferSizes{
+				MySQL:    0,
+				Postgres: 0,
+			},
+			MySQLPreparedStatementsCacheSize: 1024,
+			MongoRequestsCacheSize:           1024,
 		},
 		Grafana: otel.GrafanaConfig{
 			OTLP: otel.GrafanaOTLP{
@@ -235,6 +241,7 @@ network:
 		},
 		Discovery: servicesextra.BeylaDiscoveryConfig{
 			ExcludeOTelInstrumentedServices: true,
+			MinProcessAge:                   5 * time.Second,
 			Services: services.RegexDefinitionCriteria{{Metadata: map[string]*services.RegexpAttr{
 				"k8s_namespace": &nsNamespaceAttr,
 			}}},

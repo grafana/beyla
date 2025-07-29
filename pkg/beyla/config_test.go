@@ -170,7 +170,6 @@ network:
 			CommonEndpoint:     "localhost:3131",
 			TracesEndpoint:     "localhost:3232",
 			MaxQueueSize:       4096,
-			MaxExportBatchSize: 4096,
 			ReportersCacheLen:  ReporterLRUSize,
 			Instrumentations: []string{
 				instrumentations.InstrumentationALL,

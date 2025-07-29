@@ -166,11 +166,11 @@ network:
 			TTL:                  5 * time.Minute,
 		},
 		Traces: obiotel.TracesConfig{
-			TracesProtocol:     obiotel.ProtocolHTTPProtobuf,
-			CommonEndpoint:     "localhost:3131",
-			TracesEndpoint:     "localhost:3232",
-			MaxQueueSize:       4096,
-			ReportersCacheLen:  ReporterLRUSize,
+			TracesProtocol:    obiotel.ProtocolHTTPProtobuf,
+			CommonEndpoint:    "localhost:3131",
+			TracesEndpoint:    "localhost:3232",
+			MaxQueueSize:      4096,
+			ReportersCacheLen: ReporterLRUSize,
 			Instrumentations: []string{
 				instrumentations.InstrumentationALL,
 			},

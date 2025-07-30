@@ -30,7 +30,7 @@ jobs:
           git config --local user.name "GitHub Actions"
 
       - name: Generate eBPF binaries
-        run: make docker-generate
+        run: make vendor-obi
 
       - name: Force add generated binaries
         run: |

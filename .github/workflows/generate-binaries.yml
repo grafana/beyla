@@ -34,10 +34,10 @@ jobs:
 
       - name: Force add generated binaries
         run: |
-          # Force add the binary files that might be gitignored
-          find . -name "*_bpfel.o" -type f -exec git add -f {} \;
-          find . -name "*_bpfel.go" -type f -exec git add -f {} \;
-          find . -name "grafana-opentelemetry-java.jar" -type f -exec git add -f {} \;
+          # Force add the binary files that might be gitignored, but exclude submodules
+          find . -name "*_bpfel.o" -type f -not -path "./.obi-src/*" -exec git add -f {} \;
+          find . -name "*_bpfel.go" -type f -not -path "./.obi-src/*" -exec git add -f {} \;
+          find . -name "grafana-opentelemetry-java.jar" -not -path "./.obi-src/*" -type f -exec git add -f {} \;
           
           # If no changes, create a dummy file to verify workflow execution
           if [[ -z $(git status --porcelain) ]]; then
@@ -112,9 +112,9 @@ jobs:
               git checkout "${our_commit}" -- "**/*_bpfel.o" "**/*_bpfel.go" "**/grafana-opentelemetry-java.jar" 2>/dev/null || true
               
               # Now add them to the updated branch
-              find . -name "*_bpfel.o" -type f -exec git add -f {} \;
-              find . -name "*_bpfel.go" -type f -exec git add -f {} \;
-              find . -name "grafana-opentelemetry-java.jar" -type f -exec git add -f {} \;
+              find . -name "*_bpfel.o" -type f -not -path "./.obi-src/*" -exec git add -f {} \;
+              find . -name "*_bpfel.go" -type f -not -path "./.obi-src/*" -exec git add -f {} \;
+              find . -name "grafana-opentelemetry-java.jar" -not -path "./.obi-src/*" -type f -exec git add -f {} \;
               
               # Check if we have changes to commit
               if ! git diff --staged --quiet; then

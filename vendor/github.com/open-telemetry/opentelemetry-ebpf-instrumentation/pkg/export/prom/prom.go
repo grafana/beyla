@@ -818,6 +818,9 @@ func (r *metricsReporter) observe(span *request.Span) {
 	if r.otelSpanFiltered(span) {
 		return
 	}
+	if !span.Service.ExportModes.CanExportMetrics() {
+		return
+	}
 	t := span.Timings()
 	r.beylaInfo.WithLabelValues(span.Service.SDKLanguage.String()).Metric.Set(1.0)
 	if r.cfg.HostMetricsEnabled() {

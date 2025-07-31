@@ -157,7 +157,10 @@ func (wk *watcherKubeEnricher) enrichProcessEvent(processEvents []Event[ProcessA
 			eventsWithMeta = append(eventsWithMeta, procEvent)
 		}
 	}
-	wk.output.Send(eventsWithMeta)
+
+	if len(eventsWithMeta) > 0 {
+		wk.output.Send(eventsWithMeta)
+	}
 }
 
 func (wk *watcherKubeEnricher) onNewProcess(procInfo ProcessAttrs) (ProcessAttrs, bool) {

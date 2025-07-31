@@ -76,6 +76,13 @@ type RegexSelector struct {
 
 	// Restrict the discovery to processes which are running inside a container
 	ContainersOnly bool `yaml:"containers_only"`
+
+	// Configures what to export. Allowed values are 'metrics', 'traces',
+	// or an empty array (disabled). An unspecified value (nil) will use the
+	// default configuration value
+	ExportModes ExportModes `yaml:"exports"`
+
+	SamplerConfig *SamplerConfig `yaml:"sampler"`
 }
 
 // RegexpAttr stores a regular expression representing an executable file path.
@@ -167,3 +174,7 @@ func (a *RegexSelector) RangePodAnnotations() iter.Seq2[string, StringMatcher] {
 		}
 	}
 }
+
+func (a *RegexSelector) GetExportModes() ExportModes { return a.ExportModes }
+
+func (a *RegexSelector) GetSamplerConfig() *SamplerConfig { return a.SamplerConfig }

@@ -21,7 +21,7 @@ import (
 //   - worker 1:
 //     testserver [go app] port: 8080
 //   - worker 2:
-//     pythonserver [python app] port: 8083
+//     pythonserver [python app] port: 7773
 //     ruby on rails [ruby app] port: 3040
 //
 // The call flow is as follows:

@@ -72,10 +72,10 @@ services:
   pytestserver:
     build:
       context: ../..
-      dockerfile: test/integration/components/pythonserver/Dockerfile_8083
+      dockerfile: test/integration/components/pythonserver/Dockerfile_7773
     image: hatest-testserver-python
     ports:
-      - 8183:8083
+      - 7773:7773
 
   ntestserverssl:
     build:

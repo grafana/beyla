@@ -1,6 +1,6 @@
-# Dockerfile that will build a container that runs python flask 8081
+# Dockerfile that will build a container that runs python flask 7771
 FROM python:3.11.6-slim
-EXPOSE 8081 8082 8083 8084
+EXPOSE 7771 7772 7773 7774
 RUN pip install flask gunicorn requests
 
 # Set the working directory to /build

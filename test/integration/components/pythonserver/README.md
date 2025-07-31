@@ -16,11 +16,11 @@ python main.py
 ### Running in production mode
 
 ```bash
-gunicorn -w 4 -b 0.0.0.0:8080 'main:app'
+gunicorn -w 4 -b 0.0.0.0:7770 'main:app'
 ```
 
 ### Running in production SSL mode
 
 ```bash
-gunicorn --keyfile server.key --certfile server.crt -w 4 -b 0.0.0.0:8080 'main:app'
+gunicorn --keyfile server.key --certfile server.crt -w 4 -b 0.0.0.0:7770 'main:app'
 ```

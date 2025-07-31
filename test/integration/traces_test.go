@@ -652,7 +652,7 @@ func testNestedHTTPTracesKProbes(t *testing.T, extended bool) {
 
 	waitForTestComponents(t, "http://localhost:3031")                 // nodejs
 	waitForTestComponents(t, "http://localhost:8080")                 // go
-	waitForTestComponents(t, "http://localhost:8183")                 // python
+	waitForTestComponents(t, "http://localhost:7773")                 // python
 	waitForRubyTestComponents(t, "http://localhost:3041")             // ruby
 	waitForTestComponentsSub(t, "http://localhost:8086", "/greeting") // java
 	waitForTestComponents(t, "http://localhost:8091")                 // rust
@@ -779,7 +779,7 @@ func testNestedHTTPTracesKProbes(t *testing.T, extended bool) {
 			jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
 			jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(200)},
 			jaeger.Tag{Key: "url.path", Type: "string", Value: "/tracemetoo"},
-			jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(8083)},
+			jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(7773)},
 			jaeger.Tag{Key: "http.route", Type: "string", Value: "/tracemetoo"},
 			jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
 		)
@@ -964,10 +964,10 @@ func testNestedHTTPSTracesKProbes(t *testing.T) {
 func testHTTPTracesNestedSelfCalls(t *testing.T) {
 	var parentID string
 
-	waitForTestComponentsRoute(t, "http://localhost:8083", "/smoke")
+	waitForTestComponentsRoute(t, "http://localhost:7773", "/smoke")
 
 	// Run a request, since we have a single app, we should see always all requests
-	doHTTPGet(t, "https://localhost:8081/api1", 200)
+	doHTTPGet(t, "https://localhost:7771/api1", 200)
 
 	var trace jaeger.Trace
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
@@ -997,7 +997,7 @@ func testHTTPTracesNestedSelfCalls(t *testing.T) {
 		jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
 		jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(200)},
 		jaeger.Tag{Key: "url.path", Type: "string", Value: "/api1"},
-		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(8081)},
+		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(7771)},
 		jaeger.Tag{Key: "http.route", Type: "string", Value: "/api1"},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
 	)
@@ -1011,7 +1011,7 @@ func testHTTPTracesNestedSelfCalls(t *testing.T) {
 		jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
 		jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(200)},
 		jaeger.Tag{Key: "url.path", Type: "string", Value: "/api2"},
-		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(8082)},
+		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(7772)},
 		jaeger.Tag{Key: "http.route", Type: "string", Value: "/api2"},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
 	)
@@ -1025,7 +1025,7 @@ func testHTTPTracesNestedSelfCalls(t *testing.T) {
 		jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
 		jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(200)},
 		jaeger.Tag{Key: "url.path", Type: "string", Value: "/api3"},
-		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(8083)},
+		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(7773)},
 		jaeger.Tag{Key: "http.route", Type: "string", Value: "/api3"},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
 	)
@@ -1039,7 +1039,7 @@ func testHTTPTracesNestedSelfCalls(t *testing.T) {
 		jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
 		jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(200)},
 		jaeger.Tag{Key: "url.path", Type: "string", Value: "/api4"},
-		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(8084)},
+		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(7774)},
 		jaeger.Tag{Key: "http.route", Type: "string", Value: "/api4"},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
 	)

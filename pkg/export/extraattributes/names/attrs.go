@@ -3,7 +3,7 @@
 package names
 
 import (
-	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
+	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 	semconv2 "go.opentelemetry.io/otel/semconv/v1.25.0"
 )

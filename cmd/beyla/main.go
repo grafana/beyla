@@ -13,7 +13,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/obi"
+	"go.opentelemetry.io/obi/pkg/obi"
 	otelsdk "go.opentelemetry.io/otel/sdk"
 
 	_ "github.com/grafana/pyroscope-go/godeltaprof/http/pprof"

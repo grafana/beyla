@@ -3,7 +3,7 @@ package services
 import (
 	"time"
 
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/services"
+	"go.opentelemetry.io/obi/pkg/services"
 )
 
 // DiscoveryConfig for the discover.ProcessFinder pipeline

@@ -206,13 +206,13 @@ docker-generate: obi-submodule
 .PHONY: copy-obi-vendor
 copy-obi-vendor:
 	@echo "### Vendoring OBI submodule..."
-	go get github.com/open-telemetry/opentelemetry-ebpf-instrumentation
+	go get go.opentelemetry.io/obi
 	go mod vendor
 
 .PHONY: vendor-obi
 vendor-obi: obi-submodule docker-generate
 	@echo "### Vendoring OBI submodule..."
-	go get github.com/open-telemetry/opentelemetry-ebpf-instrumentation
+	go get go.opentelemetry.io/obi
 	go mod vendor
 
 .PHONY: verify

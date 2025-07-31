@@ -13,10 +13,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubecache"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubecache/instrument"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubecache/meta"
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/kubecache/service"
+	"go.opentelemetry.io/obi/pkg/kubecache"
+	"go.opentelemetry.io/obi/pkg/kubecache/instrument"
+	"go.opentelemetry.io/obi/pkg/kubecache/meta"
+	"go.opentelemetry.io/obi/pkg/kubecache/service"
 
 	_ "github.com/grafana/pyroscope-go/godeltaprof/http/pprof"
 

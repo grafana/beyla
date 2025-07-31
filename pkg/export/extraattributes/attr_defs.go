@@ -1,8 +1,8 @@
 package extraattributes
 
 import (
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes"
-	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
+	"go.opentelemetry.io/obi/pkg/export/attributes"
+	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 
 	names "github.com/grafana/beyla/v2/pkg/export/extraattributes/names"
 )

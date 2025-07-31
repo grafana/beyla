@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/ebpf/tcmanager"
+	"go.opentelemetry.io/obi/pkg/components/ebpf/tcmanager"
 )
 
 type ContextPropagationMode uint8

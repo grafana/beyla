@@ -49,6 +49,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/msg"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/pipe/swarm"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/services"
 )
 
 func tlog() *slog.Logger {
@@ -75,7 +76,7 @@ type TracesConfig struct {
 	// InsecureSkipVerify is not standard, so we don't follow the same naming convention
 	InsecureSkipVerify bool `yaml:"insecure_skip_verify" env:"OTEL_EBPF_INSECURE_SKIP_VERIFY"`
 
-	Sampler Sampler `yaml:"sampler"`
+	SamplerConfig services.SamplerConfig `yaml:"sampler"`
 
 	// Configuration options below this line will remain undocumented at the moment,
 	// but can be useful for performance-tuning of some customers.
@@ -251,7 +252,15 @@ func GroupSpans(ctx context.Context, spans []request.Span, traceAttrs map[attr.N
 
 		finalAttrs := TraceAttributes(span, traceAttrs)
 
-		sr := sampler.ShouldSample(trace.SamplingParameters{
+		spanSampler := func() trace.Sampler {
+			if span.Service.Sampler != nil {
+				return span.Service.Sampler
+			}
+
+			return sampler
+		}
+
+		sr := spanSampler().ShouldSample(trace.SamplingParameters{
 			ParentContext: ctx,
 			Name:          span.TraceName(),
 			TraceID:       span.TraceID,
@@ -280,6 +289,11 @@ func (tr *tracesOTELReceiver) processSpans(ctx context.Context, exp exporter.Tra
 	for _, spanGroup := range spanGroups {
 		if len(spanGroup) > 0 {
 			sample := spanGroup[0]
+
+			if !sample.Span.Service.ExportModes.CanExportTraces() {
+				continue
+			}
+
 			envResourceAttrs := ResourceAttrsFromEnv(&sample.Span.Service)
 			traces := generateTracesWithAttributes(tr.attributeCache, &sample.Span.Service, envResourceAttrs, tr.ctxInfo.HostID, spanGroup, tr.ctxInfo.ExtraResourceAttributes)
 			err := exp.ConsumeTraces(ctx, traces)
@@ -318,7 +332,7 @@ func (tr *tracesOTELReceiver) provideLoop(ctx context.Context) {
 		traceAttrs[attr.SkipSpanMetrics] = struct{}{}
 	}
 
-	sampler := tr.cfg.Sampler.Implementation()
+	sampler := tr.cfg.SamplerConfig.Implementation()
 
 	for spans := range tr.input {
 		tr.processSpans(ctx, exp, spans, traceAttrs, sampler)

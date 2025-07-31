@@ -3,7 +3,10 @@ package svc
 import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.25.0"
 
+	"go.opentelemetry.io/otel/sdk/trace"
+
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/services"
 )
 
 type InstrumentableType int
@@ -94,6 +97,10 @@ type Attrs struct {
 	EnvVars map[string]string
 
 	flags idFlags
+
+	ExportModes services.ExportModes
+
+	Sampler trace.Sampler
 }
 
 func (i *Attrs) GetUID() UID {

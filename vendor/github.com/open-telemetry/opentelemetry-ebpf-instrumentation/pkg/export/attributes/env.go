@@ -1,26 +1,41 @@
+// Copyright The OpenTelemetry Authors
+// SPDX-License-Identifier: Apache-2.0
+
 package attributes
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/components/util"
+)
 
 type VarHandler func(k string, v string)
 
 func ParseOTELResourceVariable(envVar string, handler VarHandler) {
-	// split all the comma-separated key=value entries
-	for _, entry := range strings.Split(envVar, ",") {
-		// split only by the first '=' appearance, as values might
-		// have base64 '=' padding symbols
-		keyVal := strings.SplitN(entry, "=", 2)
-		if len(keyVal) < 2 {
+	variables := util.NewSplitIterator(envVar, ",")
+
+	for {
+		variable, eof := variables.Next()
+
+		if eof {
+			break
+		}
+
+		variable = strings.TrimSuffix(variable, ",")
+
+		key, value, found := strings.Cut(variable, "=")
+
+		if !found {
 			continue
 		}
 
-		k := strings.TrimSpace(keyVal[0])
-		v := strings.TrimSpace(keyVal[1])
+		key = strings.TrimSpace(key)
+		value = strings.TrimSpace(value)
 
-		if k == "" || v == "" {
+		if key == "" || value == "" {
 			continue
 		}
 
-		handler(strings.TrimSpace(keyVal[0]), strings.TrimSpace(keyVal[1]))
+		handler(key, value)
 	}
 }

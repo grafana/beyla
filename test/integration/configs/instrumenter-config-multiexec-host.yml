@@ -25,7 +25,7 @@ discovery:
       open_ports: 8380      
     - namespace: multi-k
       name: python-service
-      open_ports: 8083  
+      open_ports: 7773
     - namespace: multi-k
       name: nodejs-service-ssl
       open_ports: 3033      
@@ -44,6 +44,9 @@ discovery:
     - namespace: multi-k
       name: rust-service
       open_ports: 8090
+    - namespace: multi-k
+      exe_path: "*{docker-proxy}"
+      exports: [] # test exports field, do not export docker-proxy metrics or traces
 attributes:
   kubernetes:
     enable: true

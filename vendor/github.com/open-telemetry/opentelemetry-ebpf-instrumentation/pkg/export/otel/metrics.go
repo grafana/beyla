@@ -1261,6 +1261,9 @@ func (mr *MetricsReporter) reportMetrics(_ context.Context) {
 			if s.InternalSignal() {
 				continue
 			}
+			if !s.Service.ExportModes.CanExportMetrics() {
+				continue
+			}
 			// If we are ignoring this span because of route patterns, don't do anything
 			if request.IgnoreMetrics(s) {
 				continue

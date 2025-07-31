@@ -7,10 +7,10 @@ services:
       dockerfile: test/integration/components/pythonselfserver/Dockerfile
     image: hatest-testserver-python
     ports:
-      - 8081:8081
-      - 8082:8082
-      - 8083:8083
-      - 8084:8084
+      - 7771:7771
+      - 7772:7772
+      - 7773:7773
+      - 7774:7774
       - 8999:8999
     environment:
       OTEL_SERVICE_NAME: "python-self"

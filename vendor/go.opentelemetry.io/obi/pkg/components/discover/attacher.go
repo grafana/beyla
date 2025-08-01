@@ -8,12 +8,11 @@ import (
 	"log/slog"
 	"os"
 
-	ebpfcommon "go.opentelemetry.io/obi/pkg/components/ebpf/common"
-
 	"github.com/cilium/ebpf/link"
 
 	"go.opentelemetry.io/obi/pkg/app/request"
 	"go.opentelemetry.io/obi/pkg/components/ebpf"
+	ebpfcommon "go.opentelemetry.io/obi/pkg/components/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/components/helpers/maps"
 	"go.opentelemetry.io/obi/pkg/components/imetrics"
 	"go.opentelemetry.io/obi/pkg/components/nodejs"

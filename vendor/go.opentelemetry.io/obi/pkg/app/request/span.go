@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/gavv/monotime"
+
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
@@ -37,10 +38,11 @@ const (
 	EventTypeKafkaClient
 	EventTypeRedisServer
 	EventTypeKafkaServer
-	EventTypeGPUKernelLaunch
-	EventTypeGPUMalloc
 	EventTypeMongoClient
 	EventTypeManualSpan
+	EventTypeGPUKernelLaunch
+	EventTypeGPUMalloc
+	EventTypeGPUMemcpy
 )
 
 const (
@@ -89,6 +91,8 @@ func (t EventType) String() string {
 		return "CUDALaunch"
 	case EventTypeGPUMalloc:
 		return "CUDAMalloc"
+	case EventTypeGPUMemcpy:
+		return "CUDAMemcpy"
 	case EventTypeMongoClient:
 		return "MongoClient"
 	case EventTypeManualSpan:

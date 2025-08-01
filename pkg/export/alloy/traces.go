@@ -13,7 +13,8 @@ import (
 	attributes "go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
-	"go.opentelemetry.io/obi/pkg/export/otel"
+	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
+	"go.opentelemetry.io/obi/pkg/export/otel/tracesgen"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 	"go.opentelemetry.io/otel/attribute"
@@ -60,7 +61,7 @@ type tracesReceiver struct {
 
 func (tr *tracesReceiver) fetchConstantAttributes(selectorCfg *attributes.SelectorConfig) error {
 	var err error
-	tr.traceAttrs, err = otel.GetUserSelectedAttributes(selectorCfg)
+	tr.traceAttrs, err = tracesgen.UserSelectedAttributes(selectorCfg)
 	if err != nil {
 		return err
 	}
@@ -82,7 +83,7 @@ func (tr *tracesReceiver) provideLoop(ctx context.Context) {
 			if !ok {
 				return
 			}
-			spanGroups := otel.GroupSpans(ctx, spans, tr.traceAttrs, sampler, tr.is)
+			spanGroups := tracesgen.GroupSpans(ctx, spans, tr.traceAttrs, sampler, tr.is)
 			for _, spanGroup := range spanGroups {
 				if len(spanGroup) > 0 {
 					sample := spanGroup[0]
@@ -90,9 +91,9 @@ func (tr *tracesReceiver) provideLoop(ctx context.Context) {
 						continue
 					}
 
-					envResourceAttrs := otel.ResourceAttrsFromEnv(&sample.Span.Service)
+					envResourceAttrs := otelcfg.ResourceAttrsFromEnv(&sample.Span.Service)
 					for _, tc := range tr.cfg.Traces {
-						traces := otel.GenerateTraces(tr.attributeCache, &sample.Span.Service, envResourceAttrs, tr.hostID, spanGroup)
+						traces := tracesgen.GenerateTracesWithAttributes(tr.attributeCache, &sample.Span.Service, envResourceAttrs, tr.hostID, spanGroup, ReporterName)
 						err := tc.ConsumeTraces(ctx, traces)
 						if err != nil {
 							slog.Error("error sending trace to consumer", "error", err)

@@ -22,13 +22,14 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/expire"
 	"go.opentelemetry.io/obi/pkg/export/otel/metric"
 	metric2 "go.opentelemetry.io/obi/pkg/export/otel/metric/api/metric"
+	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 )
 
 // NetMetricsConfig extends MetricsConfig for Network Metrics
 type NetMetricsConfig struct {
-	Metrics     *MetricsConfig
+	Metrics     *otelcfg.MetricsConfig
 	SelectorCfg *attributes.SelectorConfig
 	// Deprecated: to be removed in Beyla 3.0 with OTEL_EBPF_NETWORK_METRICS bool flag
 	GloballyEnabled bool
@@ -54,7 +55,7 @@ func getFilteredNetworkResourceAttrs(hostID string, attrSelector attributes.Sele
 		semconv.HostID(hostID),
 	}
 
-	return GetFilteredAttributesByPrefix(baseAttrs, attrSelector, extraAttrs, []string{"network.", attr.VendorPrefix + ".network"})
+	return otelcfg.GetFilteredAttributesByPrefix(baseAttrs, attrSelector, extraAttrs, []string{"network.", attr.VendorPrefix + ".network"})
 }
 
 func createFilteredNetworkResource(hostID string, attrSelector attributes.Selection) *resource.Resource {
@@ -101,7 +102,7 @@ func newMetricsExporter(
 ) (*netMetricsExporter, error) {
 	log := nmlog()
 	log.Debug("instantiating network metrics exporter provider")
-	exporter, err := InstantiateMetricsExporter(context.Background(), cfg.Metrics, log)
+	exporter, err := ctxInfo.OTELMetricsExporter.Instantiate(ctx)
 	if err != nil {
 		log.Error("can't instantiate metrics exporter", "error", err)
 		return nil, err

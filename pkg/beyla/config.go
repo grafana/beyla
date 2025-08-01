@@ -17,6 +17,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/debug"
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
 	"go.opentelemetry.io/obi/pkg/export/otel"
+	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/export/prom"
 	"go.opentelemetry.io/obi/pkg/filter"
 	"go.opentelemetry.io/obi/pkg/kubeflags"
@@ -58,6 +59,9 @@ const (
 var k8sDefaultNamespacesRegex = services.NewRegexp("^kube-system$|^kube-node-lease$|^local-path-storage$|^grafana-alloy$|^cert-manager$|^monitoring$" + k8sGKEDefaultNamespacesRegex + k8sAKSDefaultNamespacesRegex)
 var k8sDefaultNamespacesGlob = services.NewGlob("{kube-system,kube-node-lease,local-path-storage,grafana-alloy,cert-manager,monitoring" + k8sGKEDefaultNamespacesGlob + k8sAKSDefaultNamespacesGlob + "}")
 
+var k8sDefaultNamespacesSurveyOnRegex = services.NewRegexp("^kube-system$|^kube-node-lease$|^local-path-storage$|^cert-manager$|" + k8sGKEDefaultNamespacesRegex + k8sAKSDefaultNamespacesRegex)
+var k8sDefaultNamespacesSurveyOnGlob = services.NewGlob("{kube-system,kube-node-lease,local-path-storage,cert-manager" + k8sGKEDefaultNamespacesGlob + k8sAKSDefaultNamespacesGlob + "}")
+
 var DefaultConfig = Config{
 	ChannelBufferLen: 10,
 	LogLevel:         "INFO",
@@ -92,23 +96,23 @@ var DefaultConfig = Config{
 		CacheLen: 1024,
 		CacheTTL: 5 * time.Minute,
 	},
-	Metrics: otel.MetricsConfig{
-		Protocol:        otel.ProtocolUnset,
-		MetricsProtocol: otel.ProtocolUnset,
+	Metrics: otelcfg.MetricsConfig{
+		Protocol:        otelcfg.ProtocolUnset,
+		MetricsProtocol: otelcfg.ProtocolUnset,
 		// Matches Alloy and Grafana recommended scrape interval
 		OTELIntervalMS:       60_000,
-		Buckets:              otel.DefaultBuckets,
+		Buckets:              otelcfg.DefaultBuckets,
 		ReportersCacheLen:    ReporterLRUSize,
 		HistogramAggregation: otel.AggregationExplicit,
-		Features:             []string{otel.FeatureApplication},
+		Features:             []string{otelcfg.FeatureApplication},
 		Instrumentations: []string{
 			instrumentations.InstrumentationALL,
 		},
 		TTL: defaultMetricsTTL,
 	},
-	Traces: otel.TracesConfig{
-		Protocol:          otel.ProtocolUnset,
-		TracesProtocol:    otel.ProtocolUnset,
+	Traces: otelcfg.TracesConfig{
+		Protocol:          otelcfg.ProtocolUnset,
+		TracesProtocol:    otelcfg.ProtocolUnset,
 		MaxQueueSize:      4096,
 		ReportersCacheLen: ReporterLRUSize,
 		Instrumentations: []string{
@@ -117,8 +121,8 @@ var DefaultConfig = Config{
 	},
 	Prometheus: prom.PrometheusConfig{
 		Path:     "/metrics",
-		Buckets:  otel.DefaultBuckets,
-		Features: []string{otel.FeatureApplication},
+		Buckets:  otelcfg.DefaultBuckets,
+		Features: []string{otelcfg.FeatureApplication},
 		Instrumentations: []string{
 			instrumentations.InstrumentationALL,
 		},
@@ -195,8 +199,8 @@ type Config struct {
 	Routes *transform.RoutesConfig `yaml:"routes"`
 	// nolint:undoc
 	NameResolver *transform.NameResolverConfig `yaml:"name_resolver"`
-	Metrics      otel.MetricsConfig            `yaml:"otel_metrics_export"`
-	Traces       otel.TracesConfig             `yaml:"otel_traces_export"`
+	Metrics      otelcfg.MetricsConfig         `yaml:"otel_metrics_export"`
+	Traces       otelcfg.TracesConfig          `yaml:"otel_traces_export"`
 	Prometheus   prom.PrometheusConfig         `yaml:"prometheus_export"`
 	TracePrinter debug.TracePrinter            `yaml:"trace_printer" env:"BEYLA_TRACE_PRINTER"`
 

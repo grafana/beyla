@@ -24,7 +24,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/components/ebpf"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/components/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/components/svc"
-	"go.opentelemetry.io/obi/pkg/export/otel"
+	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/obi"
 )
 
@@ -148,12 +148,12 @@ func otlpOptions(cfg *obi.Config) (map[string]string, error) {
 		options["otel.exporter.otlp.endpoint"] = tracesEndpoint
 		options["otel.exporter.otlp.protocol"] = string(cfg.Traces.GetProtocol())
 		options["otel.metric.export.interval"] = strconv.Itoa(int(cfg.Metrics.GetInterval().Milliseconds()))
-		maps.Copy(options, otel.HeadersFromEnv("OTEL_EXPORTER_OTLP_HEADERS"))
+		maps.Copy(options, otelcfg.HeadersFromEnv("OTEL_EXPORTER_OTLP_HEADERS"))
 	} else {
 		if cfg.Traces.Enabled() {
 			options["otel.exporter.otlp.traces.endpoint"] = tracesEndpoint
 			options["otel.exporter.otlp.traces.protocol"] = string(cfg.Traces.GetProtocol())
-			maps.Copy(options, otel.HeadersFromEnv("OTEL_EXPORTER_OTLP_TRACES_HEADERS"))
+			maps.Copy(options, otelcfg.HeadersFromEnv("OTEL_EXPORTER_OTLP_TRACES_HEADERS"))
 		} else {
 			options["otel.traces.exporter"] = "none"
 		}
@@ -162,7 +162,7 @@ func otlpOptions(cfg *obi.Config) (map[string]string, error) {
 			options["otel.exporter.otlp.metrics.endpoint"] = metricsEndpoint
 			options["otel.exporter.otlp.metrics.protocol"] = string(cfg.Metrics.GetProtocol())
 			options["otel.metric.export.interval"] = strconv.Itoa(int(cfg.Metrics.GetInterval().Milliseconds()))
-			maps.Copy(options, otel.HeadersFromEnv("OTEL_EXPORTER_OTLP_METRICS_HEADERS"))
+			maps.Copy(options, otelcfg.HeadersFromEnv("OTEL_EXPORTER_OTLP_METRICS_HEADERS"))
 		} else {
 			options["otel.metrics.exporter"] = "none"
 		}

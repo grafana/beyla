@@ -16,13 +16,11 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/hashicorp/golang-lru/v2/simplelru"
-
-	lru "github.com/hashicorp/golang-lru/v2"
-	"github.com/hashicorp/golang-lru/v2/expirable"
-
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
+	lru "github.com/hashicorp/golang-lru/v2"
+	"github.com/hashicorp/golang-lru/v2/expirable"
+	"github.com/hashicorp/golang-lru/v2/simplelru"
 
 	"go.opentelemetry.io/obi/pkg/app/request"
 	"go.opentelemetry.io/obi/pkg/components/ebpf/ringbuf"

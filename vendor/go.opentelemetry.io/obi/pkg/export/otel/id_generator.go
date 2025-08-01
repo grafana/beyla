@@ -19,59 +19,11 @@
 package otel
 
 import (
-	"context"
 	"encoding/binary"
 	"math/rand/v2"
 
 	"go.opentelemetry.io/otel/trace"
 )
-
-type (
-	BeylaIDGenerator struct{}
-	traceAndSpanKey  struct{}
-	traceOnlyKey     struct{}
-)
-
-type idPair struct {
-	traceID trace.TraceID
-	spanID  trace.SpanID
-}
-
-func ContextWithTraceParent(parent context.Context, traceID trace.TraceID, spanID trace.SpanID) context.Context {
-	return context.WithValue(parent, traceAndSpanKey{}, idPair{traceID: traceID, spanID: spanID})
-}
-
-func ContextWithTrace(parent context.Context, traceID trace.TraceID) context.Context {
-	return context.WithValue(parent, traceOnlyKey{}, traceID)
-}
-
-func currentTraceAndSpan(ctx context.Context) *idPair {
-	val := ctx.Value(traceAndSpanKey{})
-	if val == nil {
-		return nil
-	}
-
-	holder, ok := val.(idPair)
-	if !ok {
-		return nil
-	}
-
-	return &holder
-}
-
-func currentTrace(ctx context.Context) *trace.TraceID {
-	val := ctx.Value(traceOnlyKey{})
-	if val == nil {
-		return nil
-	}
-
-	holder, ok := val.(trace.TraceID)
-	if !ok {
-		return nil
-	}
-
-	return &holder
-}
 
 func RandomTraceID() trace.TraceID {
 	t := trace.TraceID{}
@@ -91,26 +43,4 @@ func RandomSpanID() trace.SpanID {
 	}
 
 	return t
-}
-
-func (e *BeylaIDGenerator) NewIDs(ctx context.Context) (trace.TraceID, trace.SpanID) {
-	pair := currentTraceAndSpan(ctx)
-	if pair == nil || !pair.traceID.IsValid() || !pair.spanID.IsValid() {
-		traceID := currentTrace(ctx)
-		if traceID != nil {
-			return *traceID, RandomSpanID()
-		}
-		return RandomTraceID(), RandomSpanID()
-	}
-
-	return pair.traceID, pair.spanID
-}
-
-func (e *BeylaIDGenerator) NewSpanID(ctx context.Context, _ trace.TraceID) trace.SpanID {
-	pair := currentTraceAndSpan(ctx)
-	if pair == nil || !pair.spanID.IsValid() {
-		return RandomSpanID()
-	}
-
-	return pair.spanID
 }

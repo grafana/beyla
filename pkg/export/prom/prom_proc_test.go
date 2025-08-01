@@ -15,7 +15,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/components/pipe/global"
 	"go.opentelemetry.io/obi/pkg/components/svc"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
-	obiotel "go.opentelemetry.io/obi/pkg/export/otel"
+	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/export/prom"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 
@@ -47,7 +47,7 @@ func TestProcPrometheusEndpoint_AggregatedMetrics(t *testing.T) {
 			Path:                        "/metrics",
 			TTL:                         3 * time.Minute,
 			SpanMetricsServiceCacheSize: 10,
-			Features:                    []string{obiotel.FeatureApplication, otel.FeatureProcess},
+			Features:                    []string{otelcfg.FeatureApplication, otel.FeatureProcess},
 		}, SelectorCfg: &attributes.SelectorConfig{
 			SelectionCfg: attributes.Selection{
 				extraattributes.ProcessCPUTime.Section:        attribs,
@@ -136,7 +136,7 @@ func TestProcPrometheusEndpoint_DisaggregatedMetrics(t *testing.T) {
 			Path:                        "/metrics",
 			TTL:                         3 * time.Minute,
 			SpanMetricsServiceCacheSize: 10,
-			Features:                    []string{obiotel.FeatureApplication, otel.FeatureProcess},
+			Features:                    []string{otelcfg.FeatureApplication, otel.FeatureProcess},
 		}, SelectorCfg: &attributes.SelectorConfig{
 			SelectionCfg: attributes.Selection{
 				extraattributes.ProcessCPUTime.Section:        attribs,

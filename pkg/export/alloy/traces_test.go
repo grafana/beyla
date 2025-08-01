@@ -19,7 +19,6 @@ import (
 	attributes "go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
-	"go.opentelemetry.io/obi/pkg/export/otel"
 	"go.opentelemetry.io/obi/pkg/services"
 	"go.opentelemetry.io/otel/attribute"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -318,12 +317,12 @@ func generateTracesForSpans(t *testing.T, tr *tracesReceiver, spans []request.Sp
 	err := tr.fetchConstantAttributes(&attributes.SelectorConfig{})
 	assert.NoError(t, err)
 
-	spanGroups := otel.GroupSpans(context.Background(), spans, tr.traceAttrs, sdktrace.AlwaysSample(), tr.is)
+	spanGroups := tracesgen.GroupSpans(context.Background(), spans, tr.traceAttrs, sdktrace.AlwaysSample(), tr.is)
 	for _, spanGroup := range spanGroups {
 		if len(spanGroup) > 0 {
 			sample := spanGroup[0]
-			envResourceAttrs := otel.ResourceAttrsFromEnv(&sample.Span.Service)
-			traces := otel.GenerateTraces(cache, &sample.Span.Service, envResourceAttrs, tr.hostID, spanGroup)
+			envResourceAttrs := tracesgen.ResourceAttrsFromEnv(&sample.Span.Service)
+			traces := tracesgen.GenerateTraces(cache, &sample.Span.Service, envResourceAttrs, tr.hostID, spanGroup, ReporterName)
 			res = append(res, traces)
 		}
 	}

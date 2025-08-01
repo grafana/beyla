@@ -116,19 +116,10 @@ func ReadTCPRequestIntoSpan(parseCtx *EBPFParseContext, cfg *config.EBPFTracer, 
 			return TCPToFastCGIToSpan(event, op, uri, status), false, nil
 		}
 	}
-
-	var mongoRequest *MongoRequestValue
-	var moreToCome bool
-	_, _, err = ProcessMongoEvent(requestBuffer, int64(event.StartMonotimeNs), int64(event.EndMonotimeNs), event.ConnInfo, parseCtx.mongoRequestCache)
-	if err == nil {
-		mongoRequest, moreToCome, err = ProcessMongoEvent(responseBuffer, int64(event.StartMonotimeNs), int64(event.EndMonotimeNs), event.ConnInfo, parseCtx.mongoRequestCache)
-	}
-	if err == nil && !moreToCome && mongoRequest != nil {
-		mongoInfo, err := getMongoInfo(mongoRequest)
-		if err == nil {
-			mongoSpan := TCPToMongoToSpan(event, mongoInfo)
-			return mongoSpan, false, nil
-		}
+	mongoInfo := mongoInfoFromEvent(event, requestBuffer, responseBuffer, parseCtx.mongoRequestCache)
+	if mongoInfo != nil {
+		mongoSpan := TCPToMongoToSpan(event, mongoInfo)
+		return mongoSpan, false, nil
 	}
 
 	switch {

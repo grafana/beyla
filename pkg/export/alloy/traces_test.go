@@ -6,6 +6,7 @@ import (
 	"math/rand/v2"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -16,7 +17,9 @@ import (
 	attr "github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/attributes/names"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/instrumentations"
 	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/export/otel"
+	"github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pkg/services"
 	"github.com/stretchr/testify/assert"
+	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.opentelemetry.io/otel/attribute"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -156,6 +159,137 @@ func TestTraceGrouping(t *testing.T) {
 		traces := generateTracesForSpans(t, receiver, spans)
 		assert.Equal(t, 1, len(traces))
 	})
+}
+
+func TestTracesExportModeFiltering(t *testing.T) {
+	start := time.Now()
+	traceID := randomTraceID()
+
+	// Service with no export modes (defaults to allowing all exports)
+	svcDefault := svc.Attrs{
+		UID: svc.UID{Name: "default-service"},
+	}
+
+	// Service explicitly configured to not export traces
+	svcNoTraces := svc.Attrs{
+		UID:         svc.UID{Name: "no-traces-service"},
+		ExportModes: []services.ExportMode{services.ExportMetrics}, // Only metrics, no traces
+	}
+
+	// Service explicitly configured to export traces
+	svcWithTraces := svc.Attrs{
+		UID:         svc.UID{Name: "traces-service"},
+		ExportModes: []services.ExportMode{services.ExportTraces, services.ExportMetrics},
+	}
+
+	tests := []struct {
+		name           string
+		service        svc.Attrs
+		expectedTraces int
+		description    string
+	}{
+		{
+			name:           "Default service allows trace export",
+			service:        svcDefault,
+			expectedTraces: 1,
+			description:    "Service with nil ExportModes should allow trace export",
+		},
+		{
+			name:           "Service with no trace export mode filters traces",
+			service:        svcNoTraces,
+			expectedTraces: 0,
+			description:    "Service configured to export only metrics should filter out traces",
+		},
+		{
+			name:           "Service with trace export mode allows traces",
+			service:        svcWithTraces,
+			expectedTraces: 1,
+			description:    "Service explicitly configured to export traces should allow trace export",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			span := request.Span{
+				Type:         request.EventTypeHTTP,
+				RequestStart: start.UnixNano(),
+				Start:        start.Add(time.Second).UnixNano(),
+				End:          start.Add(3 * time.Second).UnixNano(),
+				Method:       "GET",
+				Route:        "/test",
+				Status:       200,
+				Service:      tt.service,
+				TraceID:      traceID,
+			}
+
+			// Create a mock consumer to capture traces
+			mockConsumer := &mockTraceConsumer{}
+			receiver := makeTracesTestReceiverWithConsumer(mockConsumer)
+
+			// Test the actual provideLoop method
+			testProvideLoopWithSpans(receiver, mockConsumer, []request.Span{span})
+
+			assert.Equal(t, tt.expectedTraces, len(mockConsumer.getConsumedTraces()), tt.description)
+		})
+	}
+}
+
+// mockTraceConsumer captures traces for testing
+type mockTraceConsumer struct {
+	consumedTraces []ptrace.Traces
+	mu             sync.Mutex
+}
+
+func (m *mockTraceConsumer) ConsumeTraces(_ context.Context, traces ptrace.Traces) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.consumedTraces = append(m.consumedTraces, traces)
+	return nil
+}
+
+func (m *mockTraceConsumer) Capabilities() consumer.Capabilities {
+	return consumer.Capabilities{MutatesData: false}
+}
+
+func (m *mockTraceConsumer) getConsumedTraces() []ptrace.Traces {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	result := make([]ptrace.Traces, len(m.consumedTraces))
+	copy(result, m.consumedTraces)
+	return result
+}
+
+func testProvideLoopWithSpans(receiver *tracesReceiver, _ *mockTraceConsumer, traces []request.Span) {
+	// Create a channel to send traces to provideLoop
+	tracesCh := make(chan []request.Span, 1)
+	tracesCh <- traces
+	close(tracesCh)
+
+	// Set up the receiver input channel
+	receiver.input = tracesCh
+
+	// Run the provideLoop briefly
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	receiver.provideLoop(ctx)
+}
+
+func makeTracesTestReceiverWithConsumer(mockConsumer *mockTraceConsumer) *tracesReceiver {
+	cfg := &beyla.TracesReceiverConfig{
+		Traces:  []beyla.Consumer{mockConsumer},
+		Sampler: services.SamplerConfig{}, // Set default sampler directly
+	}
+
+	return &tracesReceiver{
+		cfg:    cfg,
+		hostID: "Alloy",
+		is: instrumentations.NewInstrumentationSelection([]string{
+			instrumentations.InstrumentationALL,
+		}),
+		traceAttrs:     make(map[attr.Name]struct{}),
+		attributeCache: expirable2.NewLRU[svc.UID, []attribute.KeyValue](1024, nil, 5*time.Minute),
+	}
 }
 
 func makeTracesTestReceiver() *tracesReceiver {

@@ -688,7 +688,7 @@ go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp/internal/request
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp/internal/semconv
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp/internal/semconvutil
-# go.opentelemetry.io/obi v0.0.0-20250801160756-2f66fb38c860 => ./.obi-src
+# go.opentelemetry.io/obi v0.0.0-20250801175909-0c529227fb4c => ./.obi-src
 ## explicit; go 1.24.0
 go.opentelemetry.io/obi/pkg/app/request
 go.opentelemetry.io/obi/pkg/buildinfo
@@ -743,6 +743,7 @@ go.opentelemetry.io/obi/pkg/export/debug
 go.opentelemetry.io/obi/pkg/export/expire
 go.opentelemetry.io/obi/pkg/export/instrumentations
 go.opentelemetry.io/obi/pkg/export/otel
+go.opentelemetry.io/obi/pkg/export/otel/idgen
 go.opentelemetry.io/obi/pkg/export/otel/metric
 go.opentelemetry.io/obi/pkg/export/otel/metric/api/metric
 go.opentelemetry.io/obi/pkg/export/otel/metric/components
@@ -751,6 +752,7 @@ go.opentelemetry.io/obi/pkg/export/otel/metric/components/exemplar
 go.opentelemetry.io/obi/pkg/export/otel/metric/components/x
 go.opentelemetry.io/obi/pkg/export/otel/metric/global
 go.opentelemetry.io/obi/pkg/export/otel/otelcfg
+go.opentelemetry.io/obi/pkg/export/otel/tracesgen
 go.opentelemetry.io/obi/pkg/export/prom
 go.opentelemetry.io/obi/pkg/filter
 go.opentelemetry.io/obi/pkg/kubecache

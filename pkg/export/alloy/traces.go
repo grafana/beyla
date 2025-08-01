@@ -20,6 +20,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
+	"github.com/grafana/beyla/v2/pkg/export/otel"
 )
 
 // TracesReceiver creates a terminal node that consumes request.Spans and sends OpenTelemetry traces to the configured consumers.
@@ -93,7 +94,7 @@ func (tr *tracesReceiver) provideLoop(ctx context.Context) {
 
 					envResourceAttrs := otelcfg.ResourceAttrsFromEnv(&sample.Span.Service)
 					for _, tc := range tr.cfg.Traces {
-						traces := tracesgen.GenerateTracesWithAttributes(tr.attributeCache, &sample.Span.Service, envResourceAttrs, tr.hostID, spanGroup, ReporterName)
+						traces := tracesgen.GenerateTracesWithAttributes(tr.attributeCache, &sample.Span.Service, envResourceAttrs, tr.hostID, spanGroup, otel.ReporterName)
 						err := tc.ConsumeTraces(ctx, traces)
 						if err != nil {
 							slog.Error("error sending trace to consumer", "error", err)

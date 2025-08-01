@@ -14,6 +14,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.opentelemetry.io/obi/pkg/app/request"
 	"go.opentelemetry.io/obi/pkg/components/svc"
+	"go.opentelemetry.io/obi/pkg/services"
 	attributes "go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
@@ -156,6 +157,75 @@ func TestTraceGrouping(t *testing.T) {
 		traces := generateTracesForSpans(t, receiver, spans)
 		assert.Equal(t, 1, len(traces))
 	})
+}
+
+func TestTracesExportModeFiltering(t *testing.T) {
+	start := time.Now()
+	traceID := randomTraceID()
+
+	// Service with no export modes (defaults to allowing all exports)
+	svcDefault := svc.Attrs{
+		UID: svc.UID{Name: "default-service"},
+	}
+
+	// Service explicitly configured to not export traces
+	svcNoTraces := svc.Attrs{
+		UID:         svc.UID{Name: "no-traces-service"},
+		ExportModes: []services.ExportMode{services.ExportMetrics}, // Only metrics, no traces
+	}
+
+	// Service explicitly configured to export traces
+	svcWithTraces := svc.Attrs{
+		UID:         svc.UID{Name: "traces-service"},
+		ExportModes: []services.ExportMode{services.ExportTraces, services.ExportMetrics},
+	}
+
+	tests := []struct {
+		name           string
+		service        svc.Attrs
+		expectedTraces int
+		description    string
+	}{
+		{
+			name:           "Default service allows trace export",
+			service:        svcDefault,
+			expectedTraces: 1,
+			description:    "Service with nil ExportModes should allow trace export",
+		},
+		{
+			name:           "Service with no trace export mode filters traces",
+			service:        svcNoTraces,
+			expectedTraces: 0,
+			description:    "Service configured to export only metrics should filter out traces",
+		},
+		{
+			name:           "Service with trace export mode allows traces",
+			service:        svcWithTraces,
+			expectedTraces: 1,
+			description:    "Service explicitly configured to export traces should allow trace export",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			span := request.Span{
+				Type:         request.EventTypeHTTP,
+				RequestStart: start.UnixNano(),
+				Start:        start.Add(time.Second).UnixNano(),
+				End:          start.Add(3 * time.Second).UnixNano(),
+				Method:       "GET",
+				Route:        "/test",
+				Status:       200,
+				Service:      tt.service,
+				TraceID:      traceID,
+			}
+
+			receiver := makeTracesTestReceiver()
+			traces := generateTracesForSpans(t, receiver, []request.Span{span})
+			
+			assert.Equal(t, tt.expectedTraces, len(traces), tt.description)
+		})
+	}
 }
 
 func makeTracesTestReceiver() *tracesReceiver {

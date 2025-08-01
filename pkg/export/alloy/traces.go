@@ -36,10 +36,8 @@ func TracesReceiver(
 
 		tr := &tracesReceiver{
 			cfg: cfg, hostID: ctxInfo.HostID, spanMetricsEnabled: spanMetricsEnabled,
-			input: input.Subscribe(),
-			is: instrumentations.NewInstrumentationSelection([]string{
-				instrumentations.InstrumentationALL,
-			}),
+			input:          input.Subscribe(),
+			is:             instrumentations.NewInstrumentationSelection(cfg.Instrumentations),
 			attributeCache: expirable2.NewLRU[svc.UID, []attribute.KeyValue](1024, nil, 5*time.Minute),
 		}
 		// Get user attributes

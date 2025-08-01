@@ -1,10 +1,61 @@
 package services
 
 import (
+	"reflect"
 	"time"
 
 	"go.opentelemetry.io/obi/pkg/services"
 )
+
+const (
+	k8sGKEDefaultNamespacesRegex = "|^gke-connect$|^gke-gmp-system$|^gke-managed-cim$|^gke-managed-filestorecsi$|^gke-managed-metrics-server$|^gke-managed-system$|^gke-system$|^gke-managed-volumepopulator$"
+	k8sGKEDefaultNamespacesGlob  = ",gke-connect,gke-gmp-system,gke-managed-cim,gke-managed-filestorecsi,gke-managed-metrics-server,gke-managed-system,gke-system,gke-managed-volumepopulator"
+)
+
+const (
+	k8sAKSDefaultNamespacesRegex = "|^gatekeeper-system"
+	k8sAKSDefaultNamespacesGlob  = ",gatekeeper-system"
+)
+
+var k8sDefaultNamespacesRegex = services.NewRegexp("^kube-system$|^kube-node-lease$|^local-path-storage$|^grafana-alloy$|^cert-manager$|^monitoring$" + k8sGKEDefaultNamespacesRegex + k8sAKSDefaultNamespacesRegex)
+var k8sDefaultNamespacesGlob = services.NewGlob("{kube-system,kube-node-lease,local-path-storage,grafana-alloy,cert-manager,monitoring" + k8sGKEDefaultNamespacesGlob + k8sAKSDefaultNamespacesGlob + "}")
+
+var k8sDefaultNamespacesWithSurveyRegex = services.NewRegexp("^kube-system$|^kube-node-lease$|^local-path-storage$|^cert-manager$|" + k8sGKEDefaultNamespacesRegex + k8sAKSDefaultNamespacesRegex)
+var k8sDefaultNamespacesWithSurveyGlob = services.NewGlob("{kube-system,kube-node-lease,local-path-storage,cert-manager" + k8sGKEDefaultNamespacesGlob + k8sAKSDefaultNamespacesGlob + "}")
+
+var DefaultExcludeServices = services.RegexDefinitionCriteria{
+	services.RegexSelector{
+		Path: services.NewRegexp("(?:^|/)(beyla$|alloy$|prometheus-config-reloader$|otelcol[^/]*$)"),
+	},
+	services.RegexSelector{
+		Metadata: map[string]*services.RegexpAttr{"k8s_namespace": &k8sDefaultNamespacesRegex},
+	},
+}
+var DefaultExcludeServicesWithSurvey = services.RegexDefinitionCriteria{
+	services.RegexSelector{
+		Path: services.NewRegexp("(?:^|/)(beyla$|alloy$|prometheus-config-reloader$|otelcol[^/]*$)"),
+	},
+	services.RegexSelector{
+		Metadata: map[string]*services.RegexpAttr{"k8s_namespace": &k8sDefaultNamespacesWithSurveyRegex},
+	},
+}
+
+var DefaultExcludeInstrument = services.GlobDefinitionCriteria{
+	services.GlobAttributes{
+		Path: services.NewGlob("{*beyla,*alloy,*prometheus-config-reloader,*ebpf-instrument,*otelcol,*otelcol-contrib,*otelcol-contrib[!/]*}"),
+	},
+	services.GlobAttributes{
+		Metadata: map[string]*services.GlobAttr{"k8s_namespace": &k8sDefaultNamespacesGlob},
+	},
+}
+var DefaultExcludeInstrumentWithSurvey = services.GlobDefinitionCriteria{
+	services.GlobAttributes{
+		Path: services.NewGlob("{*beyla,*alloy,*prometheus-config-reloader,*ebpf-instrument,*otelcol,*otelcol-contrib,*otelcol-contrib[!/]*}"),
+	},
+	services.GlobAttributes{
+		Metadata: map[string]*services.GlobAttr{"k8s_namespace": &k8sDefaultNamespacesWithSurveyGlob},
+	},
+}
 
 // DiscoveryConfig for the discover.ProcessFinder pipeline
 type BeylaDiscoveryConfig struct {
@@ -68,6 +119,14 @@ type BeylaDiscoveryConfig struct {
 
 func (d *BeylaDiscoveryConfig) SurveyEnabled() bool {
 	return len(d.Survey) > 0
+}
+
+func (d *BeylaDiscoveryConfig) OverrideDefaultExcludeForSurvey() {
+	if reflect.DeepEqual(d.DefaultExcludeServices, DefaultExcludeServices) &&
+		reflect.DeepEqual(d.DefaultExcludeInstrument, DefaultExcludeInstrument) {
+		d.DefaultExcludeServices = DefaultExcludeServicesWithSurvey
+		d.DefaultExcludeInstrument = DefaultExcludeInstrumentWithSurvey
+	}
 }
 
 func (d *BeylaDiscoveryConfig) AppDiscoveryEnabled() bool {

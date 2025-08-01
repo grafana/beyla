@@ -46,22 +46,6 @@ const (
 	defaultMetricsTTL = 5 * time.Minute
 )
 
-const (
-	k8sGKEDefaultNamespacesRegex = "|^gke-connect$|^gke-gmp-system$|^gke-managed-cim$|^gke-managed-filestorecsi$|^gke-managed-metrics-server$|^gke-managed-system$|^gke-system$|^gke-managed-volumepopulator$"
-	k8sGKEDefaultNamespacesGlob  = ",gke-connect,gke-gmp-system,gke-managed-cim,gke-managed-filestorecsi,gke-managed-metrics-server,gke-managed-system,gke-system,gke-managed-volumepopulator"
-)
-
-const (
-	k8sAKSDefaultNamespacesRegex = "|^gatekeeper-system"
-	k8sAKSDefaultNamespacesGlob  = ",gatekeeper-system"
-)
-
-var k8sDefaultNamespacesRegex = services.NewRegexp("^kube-system$|^kube-node-lease$|^local-path-storage$|^grafana-alloy$|^cert-manager$|^monitoring$" + k8sGKEDefaultNamespacesRegex + k8sAKSDefaultNamespacesRegex)
-var k8sDefaultNamespacesGlob = services.NewGlob("{kube-system,kube-node-lease,local-path-storage,grafana-alloy,cert-manager,monitoring" + k8sGKEDefaultNamespacesGlob + k8sAKSDefaultNamespacesGlob + "}")
-
-var k8sDefaultNamespacesSurveyOnRegex = services.NewRegexp("^kube-system$|^kube-node-lease$|^local-path-storage$|^cert-manager$|" + k8sGKEDefaultNamespacesRegex + k8sAKSDefaultNamespacesRegex)
-var k8sDefaultNamespacesSurveyOnGlob = services.NewGlob("{kube-system,kube-node-lease,local-path-storage,cert-manager" + k8sGKEDefaultNamespacesGlob + k8sAKSDefaultNamespacesGlob + "}")
-
 var DefaultConfig = Config{
 	ChannelBufferLen: 10,
 	LogLevel:         "INFO",
@@ -163,22 +147,8 @@ var DefaultConfig = Config{
 	Discovery: servicesextra.BeylaDiscoveryConfig{
 		ExcludeOTelInstrumentedServices: true,
 		MinProcessAge:                   5 * time.Second,
-		DefaultExcludeServices: services.RegexDefinitionCriteria{
-			services.RegexSelector{
-				Path: services.NewRegexp("(?:^|/)(beyla$|alloy$|prometheus-config-reloader$|otelcol[^/]*$)"),
-			},
-			services.RegexSelector{
-				Metadata: map[string]*services.RegexpAttr{"k8s_namespace": &k8sDefaultNamespacesRegex},
-			},
-		},
-		DefaultExcludeInstrument: services.GlobDefinitionCriteria{
-			services.GlobAttributes{
-				Path: services.NewGlob("{*beyla,*alloy,*prometheus-config-reloader,*ebpf-instrument,*otelcol,*otelcol-contrib,*otelcol-contrib[!/]*}"),
-			},
-			services.GlobAttributes{
-				Metadata: map[string]*services.GlobAttr{"k8s_namespace": &k8sDefaultNamespacesGlob},
-			},
-		},
+		DefaultExcludeServices:          servicesextra.DefaultExcludeServices,
+		DefaultExcludeInstrument:        servicesextra.DefaultExcludeInstrument,
 	},
 }
 
@@ -454,6 +424,10 @@ func LoadConfig(file io.Reader) (*Config, error) {
 	}
 	if err := env.Parse(&cfg); err != nil {
 		return nil, fmt.Errorf("reading env vars: %w", err)
+	}
+
+	if cfg.Discovery.SurveyEnabled() {
+		cfg.Discovery.OverrideDefaultExcludeForSurvey()
 	}
 
 	return &cfg, nil

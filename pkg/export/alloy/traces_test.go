@@ -12,6 +12,7 @@ import (
 
 	expirable2 "github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.opentelemetry.io/obi/pkg/app/request"
@@ -25,8 +26,6 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
-
-	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"

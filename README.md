@@ -95,6 +95,7 @@ See [Documentation](https://grafana.com/docs/beyla/) and the [tutorials](https:/
 | SQL                                           | ✅         |
 | Redis                                         | ✅         |
 | Kafka                                         | ✅         |
+| MongoDB                                       | ✅         |
 
 The Go instrumentation is limited to certain specific libraries.
 

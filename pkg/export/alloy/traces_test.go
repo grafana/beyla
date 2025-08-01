@@ -14,11 +14,11 @@ import (
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.opentelemetry.io/obi/pkg/app/request"
 	"go.opentelemetry.io/obi/pkg/components/svc"
-	"go.opentelemetry.io/obi/pkg/services"
 	attributes "go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
 	"go.opentelemetry.io/obi/pkg/export/otel"
+	"go.opentelemetry.io/obi/pkg/services"
 	"go.opentelemetry.io/otel/attribute"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
@@ -222,7 +222,7 @@ func TestTracesExportModeFiltering(t *testing.T) {
 
 			receiver := makeTracesTestReceiver()
 			traces := generateTracesForSpans(t, receiver, []request.Span{span})
-			
+
 			assert.Equal(t, tt.expectedTraces, len(traces), tt.description)
 		})
 	}

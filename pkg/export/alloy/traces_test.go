@@ -225,10 +225,10 @@ func TestTracesExportModeFiltering(t *testing.T) {
 			// Create a mock consumer to capture traces
 			mockConsumer := &mockTraceConsumer{}
 			receiver := makeTracesTestReceiverWithConsumer(mockConsumer)
-			
+
 			// Test the actual provideLoop method
 			testProvideLoopWithSpans(receiver, mockConsumer, []request.Span{span})
-			
+
 			assert.Equal(t, tt.expectedTraces, len(mockConsumer.getConsumedTraces()), tt.description)
 		})
 	}
@@ -290,32 +290,6 @@ func makeTracesTestReceiverWithConsumer(mockConsumer *mockTraceConsumer) *traces
 		traceAttrs:     make(map[attr.Name]struct{}),
 		attributeCache: expirable2.NewLRU[svc.UID, []attribute.KeyValue](1024, nil, 5*time.Minute),
 	}
-}
-
-// generateTracesForSpansWithExportModeFiltering simulates the actual provideLoop logic
-// including the ExportModes.CanExportTraces() check
-func generateTracesForSpansWithExportModeFiltering(t *testing.T, tr *tracesReceiver, spans []request.Span) []ptrace.Traces {
-	res := []ptrace.Traces{}
-	err := tr.fetchConstantAttributes(&attributes.SelectorConfig{})
-	assert.NoError(t, err)
-
-	sampler := sdktrace.AlwaysSample()
-	spanGroups := otel.GroupSpans(context.Background(), spans, tr.traceAttrs, sampler, tr.is)
-	for _, spanGroup := range spanGroups {
-		if len(spanGroup) > 0 {
-			sample := spanGroup[0]
-			// This is the key check we're testing - mirrors the logic in provideLoop
-			if !sample.Span.Service.ExportModes.CanExportTraces() {
-				continue
-			}
-
-			envResourceAttrs := otel.ResourceAttrsFromEnv(&sample.Span.Service)
-			traces := otel.GenerateTraces(cache, &sample.Span.Service, envResourceAttrs, tr.hostID, spanGroup)
-			res = append(res, traces)
-		}
-	}
-
-	return res
 }
 
 func makeTracesTestReceiver() *tracesReceiver {

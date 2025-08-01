@@ -36,10 +36,8 @@ func TracesReceiver(
 
 		tr := &tracesReceiver{
 			cfg: cfg, hostID: ctxInfo.HostID, spanMetricsEnabled: spanMetricsEnabled,
-			input: input.Subscribe(),
-			is: instrumentations.NewInstrumentationSelection([]string{
-				instrumentations.InstrumentationALL,
-			}),
+			input:          input.Subscribe(),
+			is:             instrumentations.NewInstrumentationSelection(cfg.Instrumentations),
 			attributeCache: expirable2.NewLRU[svc.UID, []attribute.KeyValue](1024, nil, 5*time.Minute),
 		}
 		// Get user attributes
@@ -88,6 +86,10 @@ func (tr *tracesReceiver) provideLoop(ctx context.Context) {
 			for _, spanGroup := range spanGroups {
 				if len(spanGroup) > 0 {
 					sample := spanGroup[0]
+					if !sample.Span.Service.ExportModes.CanExportTraces() {
+						continue
+					}
+
 					envResourceAttrs := otel.ResourceAttrsFromEnv(&sample.Span.Service)
 					for _, tc := range tr.cfg.Traces {
 						traces := otel.GenerateTraces(tr.attributeCache, &sample.Span.Service, envResourceAttrs, tr.hostID, spanGroup)

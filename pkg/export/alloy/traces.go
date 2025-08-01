@@ -88,6 +88,10 @@ func (tr *tracesReceiver) provideLoop(ctx context.Context) {
 			for _, spanGroup := range spanGroups {
 				if len(spanGroup) > 0 {
 					sample := spanGroup[0]
+					if !sample.Span.Service.ExportModes.CanExportTraces() {
+						continue
+					}
+
 					envResourceAttrs := otel.ResourceAttrsFromEnv(&sample.Span.Service)
 					for _, tc := range tr.cfg.Traces {
 						traces := otel.GenerateTraces(tr.attributeCache, &sample.Span.Service, envResourceAttrs, tr.hostID, spanGroup)

@@ -253,7 +253,7 @@ network:
 					Path: services.NewRegexp("(?:^|/)(beyla$|alloy$|prometheus-config-reloader$|otelcol[^/]*$)"),
 				},
 				services.RegexSelector{
-					Metadata: map[string]*services.RegexpAttr{"k8s_namespace": &k8sDefaultNamespacesRegex},
+					Metadata: map[string]*services.RegexpAttr{"k8s_namespace": &servicesextra.K8sDefaultNamespacesRegex},
 				},
 			},
 			DefaultExcludeInstrument: services.GlobDefinitionCriteria{
@@ -261,7 +261,7 @@ network:
 					Path: services.NewGlob("{*beyla,*alloy,*prometheus-config-reloader,*ebpf-instrument,*otelcol,*otelcol-contrib,*otelcol-contrib[!/]*}"),
 				},
 				services.GlobAttributes{
-					Metadata: map[string]*services.GlobAttr{"k8s_namespace": &k8sDefaultNamespacesGlob},
+					Metadata: map[string]*services.GlobAttr{"k8s_namespace": &servicesextra.K8sDefaultNamespacesGlob},
 				},
 			},
 		},
@@ -607,6 +607,27 @@ func TestOBIConfigConversion(t *testing.T) {
 			{Path: services.NewGlob("bye*")},
 		},
 		dst.Discovery.Instrument)
+}
+
+func TestConfigSurveyOverridesExcludeDefaults(t *testing.T) {
+	userConfig := bytes.NewBufferString(`executable_name: foo
+trace_printer: text
+routes:
+  unmatched: heuristic
+  wildcard_char: "*"
+discovery:
+  services:
+    - exe_path: python
+      containers_only: true
+  survey:
+    - exe_path: .
+      containers_only: true
+`)
+	cfg, err := LoadConfig(userConfig)
+	require.NoError(t, err)
+	require.NoError(t, cfg.Validate())
+	assert.Equal(t, servicesextra.DefaultExcludeServicesWithSurvey, cfg.Discovery.DefaultExcludeServices)
+	assert.Equal(t, servicesextra.DefaultExcludeInstrumentWithSurvey, cfg.Discovery.DefaultExcludeInstrument)
 }
 
 func loadConfig(t *testing.T, env envMap) *Config {

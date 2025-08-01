@@ -240,7 +240,7 @@ type mockTraceConsumer struct {
 	mu             sync.Mutex
 }
 
-func (m *mockTraceConsumer) ConsumeTraces(ctx context.Context, traces ptrace.Traces) error {
+func (m *mockTraceConsumer) ConsumeTraces(_ context.Context, traces ptrace.Traces) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.consumedTraces = append(m.consumedTraces, traces)
@@ -259,7 +259,7 @@ func (m *mockTraceConsumer) getConsumedTraces() []ptrace.Traces {
 	return result
 }
 
-func testProvideLoopWithSpans(receiver *tracesReceiver, mockConsumer *mockTraceConsumer, traces []request.Span) {
+func testProvideLoopWithSpans(receiver *tracesReceiver, _ *mockTraceConsumer, traces []request.Span) {
 	// Create a channel to send traces to provideLoop
 	tracesCh := make(chan []request.Span, 1)
 	tracesCh <- traces

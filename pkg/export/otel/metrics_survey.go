@@ -11,6 +11,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/otel"
 	"go.opentelemetry.io/obi/pkg/export/otel/metric"
 	instrument "go.opentelemetry.io/obi/pkg/export/otel/metric/api/metric"
+	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 	"go.opentelemetry.io/otel/attribute"
@@ -24,7 +25,7 @@ func smlog() *slog.Logger {
 
 type SurveyMetricsReporter struct {
 	log *slog.Logger
-	cfg *otel.MetricsConfig
+	cfg *otelcfg.MetricsConfig
 
 	provider *metric.MeterProvider
 
@@ -39,14 +40,14 @@ type SurveyMetricsReporter struct {
 
 func SurveyInfoMetrics(
 	ctxInfo *global.ContextInfo,
-	cfg *otel.MetricsConfig,
+	cfg *otelcfg.MetricsConfig,
 	processEventCh *msg.Queue[exec.ProcessEvent],
 ) swarm.InstanceFunc {
 	return func(ctx context.Context) (swarm.RunFunc, error) {
 		if !cfg.Enabled() {
 			return swarm.EmptyRunFunc()
 		}
-		otel.SetupInternalOTELSDKLogger(cfg.SDKLogLevel)
+		otelcfg.SetupInternalOTELSDKLogger(cfg.SDKLogLevel)
 
 		mr, err := newSurveyMetricsReporter(ctx, ctxInfo, cfg, processEventCh)
 		if err != nil {
@@ -58,7 +59,7 @@ func SurveyInfoMetrics(
 }
 
 func newSurveyMetricsReporter(
-	ctx context.Context, ctxInfo *global.ContextInfo, cfg *otel.MetricsConfig,
+	ctx context.Context, ctxInfo *global.ContextInfo, cfg *otelcfg.MetricsConfig,
 	processEventsQueue *msg.Queue[exec.ProcessEvent],
 ) (*SurveyMetricsReporter, error) {
 	log := smlog()
@@ -73,7 +74,7 @@ func newSurveyMetricsReporter(
 	log.Debug("creating new Survey Metrics reporter")
 
 	var err error
-	smr.exporter, err = otel.InstantiateMetricsExporter(ctx, cfg, log)
+	smr.exporter, err = ctxInfo.OTELMetricsExporter.Instantiate(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("instantiating OTEL Survey metrics exporter: %w", err)
 	}
@@ -131,7 +132,7 @@ func (smr *SurveyMetricsReporter) disassociatePIDFromService(pid int32) (bool, s
 }
 
 func (smr *SurveyMetricsReporter) createSurveyInfo(ctx context.Context, service *svc.Attrs) {
-	resourceAttributes := append(otel.GetAppResourceAttrs(smr.hostID, service), otel.ResourceAttrsFromEnv(service)...)
+	resourceAttributes := append(otelcfg.GetAppResourceAttrs(smr.hostID, service), otelcfg.ResourceAttrsFromEnv(service)...)
 	smr.log.Debug("Creating survey_info", "attrs", resourceAttributes)
 	attrOpt := instrument.WithAttributeSet(attribute.NewSet(resourceAttributes...))
 	smr.surveyInfo.Add(ctx, 1, attrOpt)

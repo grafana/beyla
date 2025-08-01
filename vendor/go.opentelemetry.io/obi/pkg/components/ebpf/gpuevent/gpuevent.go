@@ -4,10 +4,8 @@
 package gpuevent
 
 import (
-	"bytes"
 	"context"
 	"debug/elf"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -31,12 +29,13 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 )
 
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type gpu_kernel_launch_t -type gpu_malloc_t -target amd64,arm64 Bpf ../../../../bpf/gpuevent/gpuevent.c -- -I../../../../bpf
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type gpu_kernel_launch_t -type gpu_malloc_t -target amd64,arm64 BpfDebug ../../../../bpf/gpuevent/gpuevent.c -- -I../../../../bpf -DBPF_DEBUG
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type gpu_kernel_launch_t -type gpu_malloc_t -type gpu_memcpy_t -target amd64,arm64 Bpf ../../../../bpf/gpuevent/gpuevent.c -- -I../../../../bpf
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type gpu_kernel_launch_t -type gpu_malloc_t -type gpu_memcpy_t -target amd64,arm64 BpfDebug ../../../../bpf/gpuevent/gpuevent.c -- -I../../../../bpf -DBPF_DEBUG
 
 const (
 	EventTypeKernelLaunch = 1 // EVENT_GPU_KERNEL_LAUNCH
 	EventTypeMalloc       = 2 // EVENT_GPU_MALLOC
+	EventTypeMemcpy       = 3 // EVENT_GPU_MEMCPY
 )
 
 type pidKey struct {
@@ -55,6 +54,7 @@ type moduleOffsets map[uint64]*SymbolTree
 type (
 	GPUKernelLaunchInfo BpfGpuKernelLaunchT
 	GPUMallocInfo       BpfGpuMallocT
+	GPUMemcpyInfo       BpfGpuMemcpyT
 )
 
 // TODO: We have a way to bring ELF file information to this Tracer struct
@@ -165,6 +165,12 @@ func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 			"cudaMalloc": {{
 				Start: p.bpfObjects.HandleCudaMalloc,
 			}},
+			"cudaMemcpy": {{
+				Start: p.bpfObjects.HandleCudaMemcpy,
+			}},
+			"cudaMemcpyAsync": {{
+				Start: p.bpfObjects.HandleCudaMemcpy,
+			}},
 		},
 	}
 }
@@ -234,19 +240,19 @@ func (p *Tracer) Run(ctx context.Context, ebpfEventContext *ebpfcommon.EBPFEvent
 }
 
 func (p *Tracer) processCudaEvent(_ *ebpfcommon.EBPFParseContext, _ *config.EBPFTracer, record *ringbuf.Record, _ ebpfcommon.ServiceFilter) (request.Span, bool, error) {
-	var eventType uint8
-
-	// we read the type first, depending on the type we decide what kind of record we have
-	err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &eventType)
-	if err != nil {
-		return request.Span{}, true, err
+	if len(record.RawSample) == 0 {
+		return request.Span{}, true, errors.New("invalid ringbuffer record size")
 	}
+
+	eventType := record.RawSample[0]
 
 	switch eventType {
 	case EventTypeKernelLaunch:
 		return p.readGPUKernelLaunchIntoSpan(record)
 	case EventTypeMalloc:
 		return p.readGPUMallocIntoSpan(record)
+	case EventTypeMemcpy:
+		return p.readGPUMemcpyIntoSpan(record)
 	default:
 		p.log.Error("unknown cuda event")
 	}
@@ -255,8 +261,8 @@ func (p *Tracer) processCudaEvent(_ *ebpfcommon.EBPFParseContext, _ *config.EBPF
 }
 
 func (p *Tracer) readGPUMallocIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
-	var event GPUMallocInfo
-	if err := binary.Read(bytes.NewReader(record.RawSample), binary.LittleEndian, &event); err != nil {
+	event, err := ebpfcommon.ReinterpretCast[GPUMallocInfo](record.RawSample)
+	if err != nil {
 		return request.Span{}, true, err
 	}
 
@@ -265,18 +271,41 @@ func (p *Tracer) readGPUMallocIntoSpan(record *ringbuf.Record) (request.Span, bo
 
 	return request.Span{
 		Type:          request.EventTypeGPUMalloc,
-		ContentLength: int64(event.Size),
+		ContentLength: event.Size,
+		Pid: request.PidInfo{
+			HostPID:   event.PidInfo.HostPid,
+			UserPID:   event.PidInfo.UserPid,
+			Namespace: event.PidInfo.Ns,
+		},
 	}, false, nil
 }
 
-func (p *Tracer) readGPUKernelLaunchIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
-	var event GPUKernelLaunchInfo
-	if err := binary.Read(bytes.NewReader(record.RawSample), binary.LittleEndian, &event); err != nil {
+func (p *Tracer) readGPUMemcpyIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
+	event, err := ebpfcommon.ReinterpretCast[GPUMemcpyInfo](record.RawSample)
+	if err != nil {
 		return request.Span{}, true, err
 	}
 
 	// Log the GPU Kernel Launch event
-	p.log.Info("GPU Kernel Launch", "event", event)
+	p.log.Debug("GPU Memcpy", "event", event)
+
+	return request.Span{
+		Type:          request.EventTypeGPUMemcpy,
+		ContentLength: event.Size,
+		SubType:       int(event.Kind),
+		Pid: request.PidInfo{
+			HostPID:   event.PidInfo.HostPid,
+			UserPID:   event.PidInfo.UserPid,
+			Namespace: event.PidInfo.Ns,
+		},
+	}, false, nil
+}
+
+func (p *Tracer) readGPUKernelLaunchIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
+	event, err := ebpfcommon.ReinterpretCast[GPUKernelLaunchInfo](record.RawSample)
+	if err != nil {
+		return request.Span{}, true, err
+	}
 
 	// Find the symbol for the kernel launch
 	symbol, ok := p.symForAddr(int32(event.PidInfo.UserPid), event.PidInfo.Ns, event.KernFuncOff)
@@ -284,12 +313,20 @@ func (p *Tracer) readGPUKernelLaunchIntoSpan(record *ringbuf.Record) (request.Sp
 		return request.Span{}, true, fmt.Errorf("failed to find symbol for kernel launch at address %d, pid %d", event.KernFuncOff, event.PidInfo.UserPid)
 	}
 
+	// Log the GPU Kernel Launch event
+	p.log.Debug("GPU Kernel Launch", "symbol", symbol, "event", event)
+
 	return request.Span{
 		Type:          request.EventTypeGPUKernelLaunch,
 		Method:        p.symToName(symbol),
-		Path:          p.callStack(&event),
+		Path:          p.callStack(event),
 		ContentLength: int64(event.GridX * event.GridY * event.GridZ),
 		SubType:       int(event.BlockX * event.BlockY * event.BlockZ),
+		Pid: request.PidInfo{
+			HostPID:   event.PidInfo.HostPid,
+			UserPID:   event.PidInfo.UserPid,
+			Namespace: event.PidInfo.Ns,
+		},
 	}, false, nil
 }
 

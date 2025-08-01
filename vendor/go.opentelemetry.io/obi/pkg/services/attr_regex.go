@@ -83,7 +83,7 @@ type RegexSelector struct {
 	// Configures what to export. Allowed values are 'metrics', 'traces',
 	// or an empty array (disabled). An unspecified value (nil) will use the
 	// default configuration value
-	ExportModes ExportModes `yaml:"exports"`
+	ExportModes *ExportModes `yaml:"exports"`
 
 	SamplerConfig *SamplerConfig `yaml:"sampler"`
 }
@@ -181,6 +181,6 @@ func (a *RegexSelector) RangePodAnnotations() iter.Seq2[string, StringMatcher] {
 	}
 }
 
-func (a *RegexSelector) GetExportModes() ExportModes { return a.ExportModes }
+func (a *RegexSelector) GetExportModes() *ExportModes { return a.ExportModes }
 
 func (a *RegexSelector) GetSamplerConfig() *SamplerConfig { return a.SamplerConfig }

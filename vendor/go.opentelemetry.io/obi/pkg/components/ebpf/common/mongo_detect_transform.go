@@ -12,6 +12,7 @@ import (
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	"go.mongodb.org/mongo-driver/v2/bson"
+
 	trace2 "go.opentelemetry.io/otel/trace"
 
 	"go.opentelemetry.io/obi/pkg/app/request"
@@ -347,6 +348,27 @@ The first 16 bits (0-15) are required and parsers MUST Error if an unknown bit i
 func validateFlagBits(flagBits int32) error {
 	if uint16(flagBits&0xFFFF)&^allowedFlags != 0 {
 		return fmt.Errorf("invalid MongoDB flag bits: %d, allowed bits are: %d", flagBits, allowedFlags)
+	}
+	return nil
+}
+
+func mongoInfoFromEvent(event *TCPRequestInfo, requestBuffer []byte, responseBuffer []byte, mongoRequestCache PendingMongoDBRequests) *mongoSpanInfo {
+	if event.Direction == 0 {
+		return nil
+	}
+	var mongoRequest *MongoRequestValue
+	var moreToCome bool
+	_, _, err := ProcessMongoEvent(requestBuffer, int64(event.StartMonotimeNs), int64(event.EndMonotimeNs), event.ConnInfo, mongoRequestCache)
+	if err != nil {
+		return nil
+	}
+	mongoRequest, moreToCome, err = ProcessMongoEvent(responseBuffer, int64(event.StartMonotimeNs), int64(event.EndMonotimeNs), event.ConnInfo, mongoRequestCache)
+	if err != nil || mongoRequest == nil || moreToCome {
+		return nil
+	}
+	mongoInfo, err := getMongoInfo(mongoRequest)
+	if err == nil {
+		return mongoInfo
 	}
 	return nil
 }

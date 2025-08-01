@@ -97,7 +97,7 @@ func samplerFromConfig(s *services.SamplerConfig) trace.Sampler {
 func makeServiceAttrs(processMatch *ProcessMatch) svc.Attrs {
 	var name string
 	var namespace string
-	var exportModes services.ExportModes
+	var exportModes *services.ExportModes
 	var samplerConfig *services.SamplerConfig
 
 	for _, s := range processMatch.Criteria {

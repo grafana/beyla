@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package otel
+package otelcfg
 
 import (
 	"context"
@@ -16,17 +16,16 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	"github.com/google/uuid"
 	"github.com/hashicorp/golang-lru/v2/simplelru"
+	"google.golang.org/grpc/credentials"
+
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
-	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
-	"google.golang.org/grpc/credentials"
 
 	"go.opentelemetry.io/obi/pkg/buildinfo"
 	"go.opentelemetry.io/obi/pkg/components/svc"
@@ -54,6 +53,22 @@ const (
 	envTracesHeaders   = "OTEL_EXPORTER_OTLP_TRACES_HEADERS"
 	envMetricsHeaders  = "OTEL_EXPORTER_OTLP_METRICS_HEADERS"
 	envResourceAttrs   = "OTEL_RESOURCE_ATTRIBUTES"
+)
+
+const (
+	UsualPortGRPC = "4317"
+	UsualPortHTTP = "4318"
+
+	FeatureNetwork          = "network"
+	FeatureNetworkInterZone = "network_inter_zone"
+	FeatureApplication      = "application"
+	FeatureSpan             = "application_span"
+	FeatureSpanOTel         = "application_span_otel"
+	FeatureSpanSizes        = "application_span_sizes"
+	FeatureGraph            = "application_service_graph"
+	FeatureProcess          = "application_process"
+	FeatureApplicationHost  = "application_host"
+	FeatureEBPF             = "ebpf"
 )
 
 func omitFieldsForYAML(input any, omitFields map[string]struct{}) map[string]any {
@@ -214,19 +229,6 @@ func shouldIncludeAttribute(normalizedAttrName string, patterns []attributes.Inc
 	return true
 }
 
-func newResourceInternal(hostID string) *resource.Resource {
-	attrs := []attribute.KeyValue{
-		semconv.ServiceName("opentelemetry-ebpf-instrumentation"),
-		semconv.ServiceInstanceID(uuid.New().String()),
-		semconv.TelemetrySDKLanguageKey.String(semconv.TelemetrySDKLanguageGo.Value.AsString()),
-		// We set the SDK name as Beyla, so we can distinguish beyla generated metrics from other SDKs
-		semconv.TelemetrySDKNameKey.String("opentelemetry-ebpf-instrumentation"),
-		semconv.HostID(hostID),
-	}
-
-	return resource.NewWithAttributes(semconv.SchemaURL, attrs...)
-}
-
 // ReporterPool keeps an LRU cache of different OTEL reporters given a service name.
 type ReporterPool[K uidGetter, T any] struct {
 	pool *simplelru.LRU[svc.UID, *expirable[T]]
@@ -342,7 +344,7 @@ func (rp *ReporterPool[K, T]) get(uid svc.UID, service K) (*expirable[T], error)
 }
 
 // Intermediate representation of option functions suitable for testing
-type otlpOptions struct {
+type OTLPOptions struct {
 	Scheme   string
 	Endpoint string
 	Insecure bool
@@ -354,7 +356,7 @@ type otlpOptions struct {
 	Headers       map[string]string
 }
 
-func (o *otlpOptions) AsMetricHTTP() []otlpmetrichttp.Option {
+func (o *OTLPOptions) AsMetricHTTP() []otlpmetrichttp.Option {
 	opts := []otlpmetrichttp.Option{
 		otlpmetrichttp.WithEndpoint(o.Endpoint),
 	}
@@ -373,7 +375,7 @@ func (o *otlpOptions) AsMetricHTTP() []otlpmetrichttp.Option {
 	return opts
 }
 
-func (o *otlpOptions) AsMetricGRPC() []otlpmetricgrpc.Option {
+func (o *OTLPOptions) AsMetricGRPC() []otlpmetricgrpc.Option {
 	opts := []otlpmetricgrpc.Option{
 		otlpmetricgrpc.WithEndpoint(o.Endpoint),
 	}
@@ -389,7 +391,7 @@ func (o *otlpOptions) AsMetricGRPC() []otlpmetricgrpc.Option {
 	return opts
 }
 
-func (o *otlpOptions) AsTraceHTTP() []otlptracehttp.Option {
+func (o *OTLPOptions) AsTraceHTTP() []otlptracehttp.Option {
 	opts := []otlptracehttp.Option{
 		otlptracehttp.WithEndpoint(o.Endpoint),
 	}
@@ -408,7 +410,7 @@ func (o *otlpOptions) AsTraceHTTP() []otlptracehttp.Option {
 	return opts
 }
 
-func (o *otlpOptions) AsTraceGRPC() []otlptracegrpc.Option {
+func (o *OTLPOptions) AsTraceGRPC() []otlptracegrpc.Option {
 	opts := []otlptracegrpc.Option{
 		otlptracegrpc.WithEndpoint(o.Endpoint),
 	}
@@ -536,12 +538,4 @@ func ResolveOTLPEndpoint(endpoint, common string) (string, bool) {
 	}
 
 	return "", false
-}
-
-// getFilteredMetricResourceAttrs returns filtered resource attributes for metrics.
-// It applies filtering to extra attributes while preserving base attributes.
-// This is especially useful for RED metrics and span metrics where we want to control
-// which attributes are included in the metrics.
-func getFilteredMetricResourceAttrs(baseAttrs []attribute.KeyValue, attrSelector attributes.Selection, extraAttrs []attribute.KeyValue, metricTypes []string) []attribute.KeyValue {
-	return GetFilteredAttributesByPrefix(baseAttrs, attrSelector, extraAttrs, metricTypes)
 }

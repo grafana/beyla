@@ -11,7 +11,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/components/svc"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
-	"go.opentelemetry.io/obi/pkg/export/otel"
+	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/test/collector"
 
@@ -35,11 +35,11 @@ func TestProcMetrics_Disaggregated(t *testing.T) {
 	procsInput := msg.NewQueue[[]*process.Status](msg.ChannelBufferLen(10))
 	otelExporter, err := ProcMetricsExporterProvider(
 		&global.ContextInfo{}, &ProcMetricsConfig{
-			Metrics: &otel.MetricsConfig{
+			Metrics: &otelcfg.MetricsConfig{
 				ReportersCacheLen: 100,
 				CommonEndpoint:    otlp.ServerEndpoint,
-				MetricsProtocol:   otel.ProtocolHTTPProtobuf,
-				Features:          []string{otel.FeatureApplication, FeatureProcess},
+				MetricsProtocol:   otelcfg.ProtocolHTTPProtobuf,
+				Features:          []string{otelcfg.FeatureApplication, FeatureProcess},
 				TTL:               3 * time.Minute,
 				Instrumentations: []string{
 					instrumentations.InstrumentationALL,

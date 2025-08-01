@@ -10,7 +10,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/app/request"
 	"go.opentelemetry.io/obi/pkg/components/exec"
 	"go.opentelemetry.io/obi/pkg/components/svc"
-	"go.opentelemetry.io/obi/pkg/export/otel"
+	"go.opentelemetry.io/obi/pkg/export/otel/idgen"
 	"go.opentelemetry.io/obi/pkg/services"
 )
 
@@ -110,11 +110,11 @@ func (pf *PIDsFilter) CurrentPIDs(t PIDType) map[uint32]map[uint32]svc.Attrs {
 
 func (pf *PIDsFilter) normalizeTraceContext(span *request.Span) {
 	if !span.TraceID.IsValid() {
-		span.TraceID = otel.RandomTraceID()
+		span.TraceID = idgen.RandomTraceID()
 		span.TraceFlags = 1
 	}
 	if !span.SpanID.IsValid() {
-		span.SpanID = otel.RandomSpanID()
+		span.SpanID = idgen.RandomSpanID()
 	}
 }
 

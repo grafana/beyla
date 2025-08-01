@@ -10,7 +10,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/components/ebpf"
 	"go.opentelemetry.io/obi/pkg/components/exec"
 	"go.opentelemetry.io/obi/pkg/components/pipe/global"
-	"go.opentelemetry.io/obi/pkg/export/otel"
+	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 )
@@ -23,7 +23,7 @@ func TestProcessEventsLoopDoesntBlock(t *testing.T) {
 		},
 		&beyla.Config{
 			ChannelBufferLen: 1,
-			Traces: otel.TracesConfig{
+			Traces: otelcfg.TracesConfig{
 				TracesEndpoint: "http://something",
 			},
 		},

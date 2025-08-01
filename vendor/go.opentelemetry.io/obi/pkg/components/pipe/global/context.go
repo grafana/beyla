@@ -11,6 +11,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/components/imetrics"
 	kube2 "go.opentelemetry.io/obi/pkg/components/kube"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
+	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 )
 
@@ -39,6 +40,9 @@ type ContextInfo struct {
 
 	// ExtraResourceAttributes allows extending (or overriding) the reported resource attributes in the traces exporters
 	ExtraResourceAttributes []attribute.KeyValue
+
+	// OTELMetricsExporter allows sharing the same OTEL exporter through diverse metrics export nodes (Application, Network...)
+	OTELMetricsExporter *otelcfg.MetricsExporterInstancer
 }
 
 // AppO11y stores context information that is only required for application observability.

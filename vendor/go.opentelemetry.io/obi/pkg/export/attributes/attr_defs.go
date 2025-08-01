@@ -315,6 +315,12 @@ func getDefinitions(
 			SubGroups:  []*AttrReportGroup{&appAttributes, &appKubeAttributes},
 			Attributes: map[attr.Name]Default{},
 		},
+		GPUMemoryCopies.Section: {
+			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes},
+			Attributes: map[attr.Name]Default{
+				attr.CudaMemcpyKind: true,
+			},
+		},
 		// span and service graph metrics don't yet implement attribute selection,
 		// but their values can still be filtered, so we list them here just to
 		// make the filter recognize its attributes

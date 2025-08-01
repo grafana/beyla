@@ -15,6 +15,7 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/obi"
 	otelsdk "go.opentelemetry.io/otel/sdk"
+	"gopkg.in/yaml.v3"
 
 	_ "github.com/grafana/pyroscope-go/godeltaprof/http/pprof"
 
@@ -70,6 +71,15 @@ func main() {
 			err := http.ListenAndServe(fmt.Sprintf(":%d", config.ProfilePort), nil)
 			slog.Error("PProf HTTP listener stopped working", "error", err)
 		}()
+	}
+
+	if config.LogConfig {
+		configYaml, err := yaml.Marshal(config)
+		if err != nil {
+			slog.Warn("can't marshal configuration to YAML", "error", err)
+		}
+		slog.Info("Running Beyla with configuration")
+		fmt.Println(string(configYaml))
 	}
 
 	// Adding shutdown hook for graceful stop.

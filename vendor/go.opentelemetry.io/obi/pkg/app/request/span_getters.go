@@ -114,6 +114,8 @@ func SpanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 		}
 	case attr.CudaKernelName:
 		getter = func(span *Span) attribute.KeyValue { return CudaKernel(span.Method) }
+	case attr.CudaMemcpyKind:
+		getter = func(span *Span) attribute.KeyValue { return CudaMemcpy(span.SubType) }
 	}
 	// default: unlike the Prometheus getters, we don't check here for service name nor k8s metadata
 	// because they are already attributes of the Resource instead of the attributes.
@@ -211,6 +213,8 @@ func SpanPromGetters(attrName attr.Name) (attributes.Getter[*Span, string], bool
 		getter = func(s *Span) string { return s.Service.UID.Namespace }
 	case attr.CudaKernelName:
 		getter = func(s *Span) string { return s.Method }
+	case attr.CudaMemcpyKind:
+		getter = func(s *Span) string { return CudaMemcpyName(s.SubType) }
 	default:
 		getter = func(s *Span) string { return s.Service.Metadata[attrName] }
 	}

@@ -23,7 +23,7 @@ import (
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/debug"
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
-	obiotel "go.opentelemetry.io/obi/pkg/export/otel"
+	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/export/prom"
 	"go.opentelemetry.io/obi/pkg/kubeflags"
 	"go.opentelemetry.io/obi/pkg/services"
@@ -153,16 +153,16 @@ network:
 			},
 		},
 		NetworkFlows: nc,
-		Metrics: obiotel.MetricsConfig{
+		Metrics: otelcfg.MetricsConfig{
 			OTELIntervalMS:    60_000,
 			CommonEndpoint:    "localhost:3131",
 			MetricsEndpoint:   "localhost:3030",
-			MetricsProtocol:   obiotel.ProtocolHTTPProtobuf,
+			MetricsProtocol:   otelcfg.ProtocolHTTPProtobuf,
 			ReportersCacheLen: ReporterLRUSize,
-			Buckets: obiotel.Buckets{
+			Buckets: otelcfg.Buckets{
 				DurationHistogram:     []float64{0, 1, 2},
-				RequestSizeHistogram:  obiotel.DefaultBuckets.RequestSizeHistogram,
-				ResponseSizeHistogram: obiotel.DefaultBuckets.ResponseSizeHistogram,
+				RequestSizeHistogram:  otelcfg.DefaultBuckets.RequestSizeHistogram,
+				ResponseSizeHistogram: otelcfg.DefaultBuckets.ResponseSizeHistogram,
 			},
 			Features: []string{"application"},
 			Instrumentations: []string{
@@ -171,8 +171,8 @@ network:
 			HistogramAggregation: "base2_exponential_bucket_histogram",
 			TTL:                  5 * time.Minute,
 		},
-		Traces: obiotel.TracesConfig{
-			TracesProtocol:    obiotel.ProtocolHTTPProtobuf,
+		Traces: otelcfg.TracesConfig{
+			TracesProtocol:    otelcfg.ProtocolHTTPProtobuf,
 			CommonEndpoint:    "localhost:3131",
 			TracesEndpoint:    "localhost:3232",
 			MaxQueueSize:      4096,
@@ -183,14 +183,14 @@ network:
 		},
 		Prometheus: prom.PrometheusConfig{
 			Path:     "/metrics",
-			Features: []string{obiotel.FeatureApplication},
+			Features: []string{otelcfg.FeatureApplication},
 			Instrumentations: []string{
 				instrumentations.InstrumentationALL,
 			},
 			TTL:                         time.Second,
 			SpanMetricsServiceCacheSize: 10000,
-			Buckets: obiotel.Buckets{
-				DurationHistogram:     obiotel.DefaultBuckets.DurationHistogram,
+			Buckets: otelcfg.Buckets{
+				DurationHistogram:     otelcfg.DefaultBuckets.DurationHistogram,
 				RequestSizeHistogram:  []float64{0, 10, 20, 22},
 				ResponseSizeHistogram: []float64{0, 10, 20, 22},
 			}},
@@ -253,7 +253,7 @@ network:
 					Path: services.NewRegexp("(?:^|/)(beyla$|alloy$|prometheus-config-reloader$|otelcol[^/]*$)"),
 				},
 				services.RegexSelector{
-					Metadata: map[string]*services.RegexpAttr{"k8s_namespace": &k8sDefaultNamespacesRegex},
+					Metadata: map[string]*services.RegexpAttr{"k8s_namespace": &servicesextra.K8sDefaultNamespacesRegex},
 				},
 			},
 			DefaultExcludeInstrument: services.GlobDefinitionCriteria{
@@ -261,7 +261,7 @@ network:
 					Path: services.NewGlob("{*beyla,*alloy,*prometheus-config-reloader,*ebpf-instrument,*otelcol,*otelcol-contrib,*otelcol-contrib[!/]*}"),
 				},
 				services.GlobAttributes{
-					Metadata: map[string]*services.GlobAttr{"k8s_namespace": &k8sDefaultNamespacesGlob},
+					Metadata: map[string]*services.GlobAttr{"k8s_namespace": &servicesextra.K8sDefaultNamespacesGlob},
 				},
 			},
 		},
@@ -607,6 +607,27 @@ func TestOBIConfigConversion(t *testing.T) {
 			{Path: services.NewGlob("bye*")},
 		},
 		dst.Discovery.Instrument)
+}
+
+func TestConfigSurveyOverridesExcludeDefaults(t *testing.T) {
+	userConfig := bytes.NewBufferString(`executable_name: foo
+trace_printer: text
+routes:
+  unmatched: heuristic
+  wildcard_char: "*"
+discovery:
+  services:
+    - exe_path: python
+      containers_only: true
+  survey:
+    - exe_path: .
+      containers_only: true
+`)
+	cfg, err := LoadConfig(userConfig)
+	require.NoError(t, err)
+	require.NoError(t, cfg.Validate())
+	assert.Equal(t, servicesextra.DefaultExcludeServicesWithSurvey, cfg.Discovery.DefaultExcludeServices)
+	assert.Equal(t, servicesextra.DefaultExcludeInstrumentWithSurvey, cfg.Discovery.DefaultExcludeInstrument)
 }
 
 func loadConfig(t *testing.T, env envMap) *Config {

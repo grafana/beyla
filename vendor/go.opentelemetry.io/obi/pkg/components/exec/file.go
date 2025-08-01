@@ -29,9 +29,10 @@ type FileInfo struct {
 }
 
 const (
-	envServiceName   = "OTEL_SERVICE_NAME"
-	envResourceAttrs = "OTEL_RESOURCE_ATTRIBUTES"
-	serviceNameKey   = "service.name"
+	envServiceName      = "OTEL_SERVICE_NAME"
+	envResourceAttrs    = "OTEL_RESOURCE_ATTRIBUTES"
+	serviceNameKey      = "service.name"
+	serviceNamespaceKey = "service.namespace"
 )
 
 func (fi *FileInfo) ExecutableName() string {
@@ -75,24 +76,34 @@ func FindExecELF(p *services.ProcessInfo, svcID svc.Attrs, k8sEnabled bool) (*Fi
 		return nil, err
 	}
 
-	file.Service.EnvVars = envVars
-	if svcName, ok := file.Service.EnvVars[envServiceName]; ok {
-		// If Kubernetes is enabled we use the K8S metadata as the source of truth
-		if !k8sEnabled {
-			file.Service.UID.Name = svcName
-		}
+	file.Service = setServiceEnvVariables(file.Service, envVars, k8sEnabled)
+
+	return &file, nil
+}
+
+func setServiceEnvVariables(service svc.Attrs, envVars map[string]string, k8sEnabled bool) svc.Attrs {
+	service.EnvVars = envVars
+	// If Kubernetes is enabled we use the K8S metadata as the source of truth
+	// including the k8s supplied environment variables
+	if k8sEnabled {
+		return service
+	}
+	if svcName, ok := service.EnvVars[envServiceName]; ok {
+		service.UID.Name = svcName
 	} else {
-		if resourceAttrs, ok := file.Service.EnvVars[envResourceAttrs]; ok {
+		if resourceAttrs, ok := service.EnvVars[envResourceAttrs]; ok {
 			allVars := map[string]string{}
 			collect := func(k string, v string) {
 				allVars[k] = v
 			}
 			attributes.ParseOTELResourceVariable(resourceAttrs, collect)
 			if result, ok := allVars[serviceNameKey]; ok {
-				file.Service.UID.Name = result
+				service.UID.Name = result
+			} else if result, ok := allVars[serviceNamespaceKey]; ok {
+				service.UID.Namespace = result
 			}
 		}
 	}
 
-	return &file, nil
+	return service
 }

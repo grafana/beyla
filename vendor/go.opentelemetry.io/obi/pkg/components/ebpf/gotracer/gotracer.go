@@ -21,6 +21,7 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf"
+
 	"go.opentelemetry.io/otel/attribute"
 
 	"go.opentelemetry.io/obi/pkg/app/request"

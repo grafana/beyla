@@ -9,15 +9,18 @@ import (
 	"runtime"
 	"time"
 
-	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
+	"github.com/google/uuid"
 
 	"go.opentelemetry.io/otel/attribute"
 	instrument "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
+	semconv "go.opentelemetry.io/otel/semconv/v1.34.0"
 
 	"go.opentelemetry.io/obi/pkg/buildinfo"
 	"go.opentelemetry.io/obi/pkg/components/pipe/global"
+	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
+	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 )
 
 // InternalMetricsReporter is an internal metrics Reporter that exports to OTEL
@@ -37,10 +40,10 @@ func imlog() *slog.Logger {
 	return slog.With("component", "otel.InternalMetricsReporter")
 }
 
-func NewInternalMetricsReporter(ctx context.Context, ctxInfo *global.ContextInfo, metrics *MetricsConfig) (*InternalMetricsReporter, error) {
+func NewInternalMetricsReporter(ctx context.Context, ctxInfo *global.ContextInfo, metrics *otelcfg.MetricsConfig) (*InternalMetricsReporter, error) {
 	log := imlog()
 	log.Debug("instantiating internal metrics exporter provider")
-	exporter, err := InstantiateMetricsExporter(ctx, metrics, log)
+	exporter, err := ctxInfo.OTELMetricsExporter.Instantiate(ctx)
 	if err != nil {
 		log.Error("can't instantiate metrics exporter", "error", err)
 		return nil, err
@@ -174,4 +177,17 @@ func (p *InternalMetricsReporter) InstrumentationError(processName, errorType st
 		attribute.String("process_name", processName),
 		attribute.String("error_type", errorType),
 	))
+}
+
+func newResourceInternal(hostID string) *resource.Resource {
+	attrs := []attribute.KeyValue{
+		semconv.ServiceName("opentelemetry-ebpf-instrumentation"),
+		semconv.ServiceInstanceID(uuid.New().String()),
+		semconv.TelemetrySDKLanguageKey.String(semconv.TelemetrySDKLanguageGo.Value.AsString()),
+		// We set the SDK name as Beyla, so we can distinguish beyla generated metrics from other SDKs
+		semconv.TelemetrySDKNameKey.String("opentelemetry-ebpf-instrumentation"),
+		semconv.HostID(hostID),
+	}
+
+	return resource.NewWithAttributes(semconv.SchemaURL, attrs...)
 }

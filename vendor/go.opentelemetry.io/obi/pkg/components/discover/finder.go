@@ -7,10 +7,9 @@ import (
 	"context"
 	"fmt"
 
-	ebpfcommon "go.opentelemetry.io/obi/pkg/components/ebpf/common"
-
 	"go.opentelemetry.io/obi/pkg/app/request"
 	"go.opentelemetry.io/obi/pkg/components/ebpf"
+	ebpfcommon "go.opentelemetry.io/obi/pkg/components/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/components/ebpf/generictracer"
 	"go.opentelemetry.io/obi/pkg/components/ebpf/gotracer"
 	"go.opentelemetry.io/obi/pkg/components/ebpf/gpuevent"

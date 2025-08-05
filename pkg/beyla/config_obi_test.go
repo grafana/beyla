@@ -62,7 +62,7 @@ grafana:
 `, metricServer.URL)))
 	require.NoError(t, err)
 
-	instancer := &otelcfg.MetricsExporterInstancer{Cfg: &config.Metrics}
+	instancer := &otelcfg.MetricsExporterInstancer{Cfg: &config.AsOBI().Metrics}
 
 	// WHEN the metrics exporter starts to send metrics
 	export, err := instancer.Instantiate(t.Context())

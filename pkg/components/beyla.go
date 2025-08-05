@@ -167,7 +167,7 @@ func buildCommonContextInfo(
 			ServiceNameTemplate: templ,
 		}),
 		ExtraResourceAttributes: []attribute.KeyValue{semconv.OTelLibraryName(otel.ReporterName)},
-		OTELMetricsExporter:     &otelcfg.MetricsExporterInstancer{Cfg: &config.Metrics},
+		OTELMetricsExporter:     &otelcfg.MetricsExporterInstancer{Cfg: &config.AsOBI().Metrics},
 	}
 	if config.Attributes.HostID.Override == "" {
 		ctxInfo.FetchHostID(ctx, config.Attributes.HostID.FetchTimeout)

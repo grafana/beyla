@@ -27,9 +27,9 @@ data:
     {{- if eq .Values.preset "application" }}
     {{- if not .Values.config.data.discovery }}
     discovery:
-      services:
+      instrument:
         - k8s_namespace: .
-      exclude_services:
+      exclude_instrument:
         - exe_path: ".*alloy.*|.*otelcol.*|.*beyla.*"
     {{- end }}
     {{- end }}

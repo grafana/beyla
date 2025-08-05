@@ -118,6 +118,7 @@ The list of instrumentation areas Beyla can collection data from:
 - `sql`: SQL database client call metrics
 - `redis`: Redis client/server database metrics
 - `kafka`: Kafka client/server message queue metrics
+- `mongodb`: MongoDB client/server database metrics
 
 For example, setting the `instrumentations` option to: `http,grpc` enables the collection of `HTTP/HTTPS/HTTP2` and `gRPC` application metrics, and disables other instrumentation.
 
@@ -160,6 +161,7 @@ The list of instrumentation areas Beyla can collection data from:
 - `sql`: SQL database client call traces
 - `redis`: Redis client/server database traces
 - `kafka`: Kafka client/server message queue traces
+- `mongodb`: MongoDB client/server database traces
 
 For example, setting the `instrumentations` option to: `http,grpc` enables the collection of `HTTP/HTTPS/HTTP2` and `gRPC` application traces, and disables other instrumentation.
 

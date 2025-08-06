@@ -28,7 +28,7 @@ data:
     {{- if not .Values.config.data.discovery }}
     discovery:
       instrument:
-        - k8s_namespace: .
+        - k8s_namespace: *
       exclude_instrument:
         - exe_path: ".*alloy.*|.*otelcol.*|.*beyla.*"
     {{- end }}

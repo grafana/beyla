@@ -12,11 +12,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"go.opentelemetry.io/obi/pkg/components/helpers/sync"
-
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/peer"
 
+	"go.opentelemetry.io/obi/pkg/components/helpers/sync"
 	"go.opentelemetry.io/obi/pkg/kubecache"
 	"go.opentelemetry.io/obi/pkg/kubecache/informer"
 	"go.opentelemetry.io/obi/pkg/kubecache/instrument"

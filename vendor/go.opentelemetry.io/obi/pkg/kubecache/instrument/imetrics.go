@@ -6,12 +6,11 @@ package instrument
 import (
 	"runtime"
 
-	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
-
 	"github.com/prometheus/client_golang/prometheus"
 
 	"go.opentelemetry.io/obi/pkg/buildinfo"
 	"go.opentelemetry.io/obi/pkg/components/connector"
+	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 )
 
 // InternalMetrics accounts diverse events of the Beyla Cache service

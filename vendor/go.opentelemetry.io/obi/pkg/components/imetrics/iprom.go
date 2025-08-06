@@ -8,12 +8,11 @@ import (
 	"runtime"
 	"time"
 
-	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
-
 	"github.com/prometheus/client_golang/prometheus"
 
 	"go.opentelemetry.io/obi/pkg/buildinfo"
 	"go.opentelemetry.io/obi/pkg/components/connector"
+	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 )
 
 // pipelineBufferLengths buckets for histogram metrics about the number of traces submitted from one stage to another

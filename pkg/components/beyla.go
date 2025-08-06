@@ -15,6 +15,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/components/pipe/global"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	obiotel "go.opentelemetry.io/obi/pkg/export/otel"
+	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/otel/attribute"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 	"golang.org/x/sync/errgroup"
@@ -166,6 +167,7 @@ func buildCommonContextInfo(
 			ServiceNameTemplate: templ,
 		}),
 		ExtraResourceAttributes: []attribute.KeyValue{semconv.OTelLibraryName(otel.ReporterName)},
+		OTELMetricsExporter:     &otelcfg.MetricsExporterInstancer{Cfg: &config.AsOBI().Metrics},
 	}
 	if config.Attributes.HostID.Override == "" {
 		ctxInfo.FetchHostID(ctx, config.Attributes.HostID.FetchTimeout)

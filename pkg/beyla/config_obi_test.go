@@ -2,7 +2,6 @@ package beyla
 
 import (
 	"fmt"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -17,6 +16,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/components/pipe/global"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	"go.opentelemetry.io/obi/pkg/export/otel"
+	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 )
@@ -62,8 +62,10 @@ grafana:
 `, metricServer.URL)))
 	require.NoError(t, err)
 
+	instancer := &otelcfg.MetricsExporterInstancer{Cfg: &config.AsOBI().Metrics}
+
 	// WHEN the metrics exporter starts to send metrics
-	export, err := otel.InstantiateMetricsExporter(t.Context(), &config.AsOBI().Metrics, slog.Default())
+	export, err := instancer.Instantiate(t.Context())
 	require.NoError(t, err)
 	_ = export.Export(t.Context(), &metricdata.ResourceMetrics{})
 

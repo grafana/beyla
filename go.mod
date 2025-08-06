@@ -23,7 +23,7 @@ require (
 	github.com/vladimirvivien/gexe v0.5.0
 	go.opentelemetry.io/collector/consumer v1.36.1
 	go.opentelemetry.io/collector/pdata v1.36.1
-	go.opentelemetry.io/obi v0.0.0-20250728223713-45a728521fd3
+	go.opentelemetry.io/obi v0.0.0-20250801175909-0c529227fb4c
 	go.opentelemetry.io/otel v1.37.0
 	go.opentelemetry.io/otel/sdk v1.37.0
 	go.opentelemetry.io/otel/sdk/metric v1.37.0

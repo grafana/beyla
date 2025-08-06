@@ -26,6 +26,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/expire"
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
 	"go.opentelemetry.io/obi/pkg/export/otel"
+	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 )
@@ -122,7 +123,7 @@ type PrometheusConfig struct {
 	// Allows configuration of which instrumentations should be enabled, e.g. http, grpc, sql...
 	Instrumentations []string `yaml:"instrumentations" env:"OTEL_EBPF_PROMETHEUS_INSTRUMENTATIONS" envSeparator:","`
 
-	Buckets otel.Buckets `yaml:"buckets"`
+	Buckets otelcfg.Buckets `yaml:"buckets"`
 
 	// TTL is the time since a metric was updated for the last time until it is
 	// removed from the metrics set.
@@ -150,27 +151,27 @@ func (p *PrometheusConfig) AnySpanMetricsEnabled() bool {
 }
 
 func (p *PrometheusConfig) SpanMetricsSizesEnabled() bool {
-	return slices.Contains(p.Features, otel.FeatureSpanSizes)
+	return slices.Contains(p.Features, otelcfg.FeatureSpanSizes)
 }
 
 func (p *PrometheusConfig) SpanMetricsEnabled() bool {
-	return slices.Contains(p.Features, otel.FeatureSpan) || slices.Contains(p.Features, otel.FeatureSpanOTel)
+	return slices.Contains(p.Features, otelcfg.FeatureSpan) || slices.Contains(p.Features, otelcfg.FeatureSpanOTel)
 }
 
 func (p *PrometheusConfig) InvalidSpanMetricsConfig() bool {
-	return slices.Contains(p.Features, otel.FeatureSpan) && slices.Contains(p.Features, otel.FeatureSpanOTel)
+	return slices.Contains(p.Features, otelcfg.FeatureSpan) && slices.Contains(p.Features, otelcfg.FeatureSpanOTel)
 }
 
 func (p *PrometheusConfig) HostMetricsEnabled() bool {
-	return slices.Contains(p.Features, otel.FeatureApplicationHost)
+	return slices.Contains(p.Features, otelcfg.FeatureApplicationHost)
 }
 
 func (p *PrometheusConfig) OTelMetricsEnabled() bool {
-	return slices.Contains(p.Features, otel.FeatureApplication)
+	return slices.Contains(p.Features, otelcfg.FeatureApplication)
 }
 
 func (p *PrometheusConfig) ServiceGraphMetricsEnabled() bool {
-	return slices.Contains(p.Features, otel.FeatureGraph)
+	return slices.Contains(p.Features, otelcfg.FeatureGraph)
 }
 
 func (p *PrometheusConfig) NetworkMetricsEnabled() bool {
@@ -178,15 +179,15 @@ func (p *PrometheusConfig) NetworkMetricsEnabled() bool {
 }
 
 func (p *PrometheusConfig) NetworkFlowBytesEnabled() bool {
-	return slices.Contains(p.Features, otel.FeatureNetwork)
+	return slices.Contains(p.Features, otelcfg.FeatureNetwork)
 }
 
 func (p *PrometheusConfig) NetworkInterzoneMetricsEnabled() bool {
-	return slices.Contains(p.Features, otel.FeatureNetworkInterZone)
+	return slices.Contains(p.Features, otelcfg.FeatureNetworkInterZone)
 }
 
 func (p *PrometheusConfig) EBPFEnabled() bool {
-	return slices.Contains(p.Features, otel.FeatureEBPF)
+	return slices.Contains(p.Features, otelcfg.FeatureEBPF)
 }
 
 func (p *PrometheusConfig) EndpointEnabled() bool {
@@ -234,6 +235,7 @@ type metricsReporter struct {
 	attrGPUMemoryAllocs        []attributes.Field[*request.Span, string]
 	attrGPUKernelGridSize      []attributes.Field[*request.Span, string]
 	attrGPUKernelBlockSize     []attributes.Field[*request.Span, string]
+	attrGPUMemoryCopies        []attributes.Field[*request.Span, string]
 
 	// trace span metrics
 	spanMetricsLatency           *Expirer[prometheus.Histogram]
@@ -254,6 +256,7 @@ type metricsReporter struct {
 	gpuMemoryAllocsTotal *Expirer[prometheus.Counter]
 	gpuKernelGridSize    *Expirer[prometheus.Histogram]
 	gpuKernelBlockSize   *Expirer[prometheus.Histogram]
+	gpuMemoryCopySize    *Expirer[prometheus.Histogram]
 
 	promConnect *connector.PrometheusManager
 
@@ -292,7 +295,7 @@ func PrometheusEndpoint(
 }
 
 func (p *PrometheusConfig) spanMetricsLatencyName() string {
-	if slices.Contains(p.Features, otel.FeatureSpan) {
+	if slices.Contains(p.Features, otelcfg.FeatureSpan) {
 		return SpanMetricsLatency
 	}
 
@@ -300,7 +303,7 @@ func (p *PrometheusConfig) spanMetricsLatencyName() string {
 }
 
 func (p *PrometheusConfig) spanMetricsCallsName() string {
-	if slices.Contains(p.Features, otel.FeatureSpan) {
+	if slices.Contains(p.Features, otelcfg.FeatureSpan) {
 		return SpanMetricsCalls
 	}
 
@@ -371,6 +374,7 @@ func newReporter(
 	var attrGPUMemoryAllocations []attributes.Field[*request.Span, string]
 	var attrGPUKernelGridSize []attributes.Field[*request.Span, string]
 	var attrGPUKernelBlockSize []attributes.Field[*request.Span, string]
+	var attrGPUMemoryCopies []attributes.Field[*request.Span, string]
 
 	if is.GPUEnabled() {
 		attrGPUKernelLaunchCalls = attributes.PrometheusGetters(request.SpanPromGetters,
@@ -381,6 +385,8 @@ func newReporter(
 			attrsProvider.For(attributes.GPUKernelGridSize))
 		attrGPUKernelBlockSize = attributes.PrometheusGetters(request.SpanPromGetters,
 			attrsProvider.For(attributes.GPUKernelBlockSize))
+		attrGPUMemoryCopies = attributes.PrometheusGetters(request.SpanPromGetters,
+			attrsProvider.For(attributes.GPUMemoryCopies))
 	}
 
 	clock := expire.NewCachedClock(timeNow)
@@ -414,6 +420,9 @@ func newReporter(
 		attrHTTPClientResponseSize: attrHTTPClientResponseSize,
 		attrGPUKernelCalls:         attrGPUKernelLaunchCalls,
 		attrGPUMemoryAllocs:        attrGPUMemoryAllocations,
+		attrGPUKernelGridSize:      attrGPUKernelGridSize,
+		attrGPUKernelBlockSize:     attrGPUKernelBlockSize,
+		attrGPUMemoryCopies:        attrGPUMemoryCopies,
 		beylaInfo: NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: attr.VendorPrefix + buildInfoSuffix,
 			Help: "A metric with a constant '1' value labeled by version, revision, branch, " +
@@ -645,6 +654,16 @@ func newReporter(
 				NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
 			}, labelNames(attrGPUKernelBlockSize)).MetricVec, clock.Time, cfg.TTL)
 		}),
+		gpuMemoryCopySize: optionalHistogramProvider(is.GPUEnabled(), func() *Expirer[prometheus.Histogram] {
+			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
+				Name:                            attributes.GPUMemoryCopies.Prom,
+				Help:                            "amount of GPU to and from memory copies",
+				Buckets:                         cfg.Buckets.RequestSizeHistogram,
+				NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
+				NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
+				NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
+			}, labelNames(attrGPUMemoryCopies)).MetricVec, clock.Time, cfg.TTL)
+		}),
 	}
 
 	registeredMetrics := []prometheus.Collector{mr.targetInfo}
@@ -723,6 +742,7 @@ func newReporter(
 			mr.gpuMemoryAllocsTotal,
 			mr.gpuKernelGridSize,
 			mr.gpuKernelBlockSize,
+			mr.gpuMemoryCopySize,
 		)
 	}
 
@@ -903,6 +923,12 @@ func (r *metricsReporter) observe(span *request.Span) {
 				r.gpuMemoryAllocsTotal.WithLabelValues(
 					labelValues(span, r.attrGPUMemoryAllocs)...,
 				).Metric.Add(float64(span.ContentLength))
+			}
+		case request.EventTypeGPUMemcpy:
+			if r.is.GPUEnabled() {
+				r.gpuMemoryCopySize.WithLabelValues(
+					labelValues(span, r.attrGPUMemoryCopies)...,
+				).Metric.Observe(float64(span.ContentLength))
 			}
 		}
 	}

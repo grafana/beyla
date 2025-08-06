@@ -12,8 +12,9 @@ import (
 	"unsafe"
 
 	lru "github.com/hashicorp/golang-lru/v2"
-	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/net/http2"
+
+	"go.opentelemetry.io/otel/trace"
 
 	"go.opentelemetry.io/obi/pkg/app/request"
 	"go.opentelemetry.io/obi/pkg/components/ebpf/bhpack"

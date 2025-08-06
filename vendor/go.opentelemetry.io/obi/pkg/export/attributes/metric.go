@@ -109,6 +109,11 @@ var (
 		Prom:    "gpu_memory_allocations_bytes_total",
 		OTEL:    "gpu.memory.allocations",
 	}
+	GPUMemoryCopies = Name{
+		Section: "gpu.memory.copies",
+		Prom:    "gpu_memory_copies_bytes_total",
+		OTEL:    "gpu.memory.copies",
+	}
 )
 
 // normalizeMetric will facilitate the user-input in the attributes.enable section.

@@ -544,10 +544,6 @@ func objLastUpdateTime(
 	return lastStatus.Unix()
 }
 
-func headlessService(om *informer.ObjectMeta) bool {
-	return len(om.Ips) == 0 && om.Kind == "Service"
-}
-
 func (inf *Informers) ipInfoEventHandler(ctx context.Context) *cache.ResourceEventHandlerFuncs {
 	metrics := instrument.FromContext(ctx)
 	log := inf.log.With("func", "ipInfoEventHandler")
@@ -556,10 +552,6 @@ func (inf *Informers) ipInfoEventHandler(ctx context.Context) *cache.ResourceEve
 			metrics.InformerNew()
 			em := obj.(*indexableEntity).EncodedMeta
 			log.Debug("AddFunc", "kind", em.Kind, "name", em.Name, "ips", em.Ips)
-			// ignore headless services from being added
-			if headlessService(em) {
-				return
-			}
 			inf.Notify(&informer.Event{
 				Type:     informer.EventType_CREATED,
 				Resource: em,
@@ -570,10 +562,6 @@ func (inf *Informers) ipInfoEventHandler(ctx context.Context) *cache.ResourceEve
 			nie := newObj.(*indexableEntity)
 			newEM := nie.EncodedMeta
 			oldEM := oldObj.(*indexableEntity).EncodedMeta
-			// ignore headless services from being added
-			if headlessService(newEM) && headlessService(oldEM) {
-				return
-			}
 			if unchanged(oldEM, newEM) {
 				return
 			}
@@ -610,10 +598,41 @@ func (inf *Informers) ipInfoEventHandler(ctx context.Context) *cache.ResourceEve
 	}
 }
 
+func containerInfoEquals(c1, c2 *informer.ContainerInfo) bool {
+	if c1 == c2 {
+		return true
+	}
+
+	if c1 == nil || c2 == nil {
+		return false
+	}
+
+	return c1.Id == c2.Id &&
+		c1.Name == c2.Name &&
+		maps.Equal(c1.Env, c2.Env)
+}
+
+func podInfoEquals(p1, p2 *informer.PodInfo) bool {
+	if p1 == p2 {
+		return true
+	}
+
+	if p1 == nil || p2 == nil {
+		return false
+	}
+
+	return p1.Uid == p2.Uid &&
+		p1.NodeName == p2.NodeName &&
+		p1.StartTimeStr == p2.StartTimeStr &&
+		p1.HostIp == p2.HostIp &&
+		slices.EqualFunc(p1.Containers, p2.Containers, containerInfoEquals)
+}
+
 // unchanged compares the relevant fields from two versions of an object and returns whether they are
 // different. It only compares fields that could effectively mutate during the life of a Pod, Service or Node
 func unchanged(o, n *informer.ObjectMeta) bool {
 	return slices.Equal(o.Ips, n.Ips) &&
 		maps.Equal(o.Labels, n.Labels) &&
-		maps.Equal(o.Annotations, n.Annotations)
+		maps.Equal(o.Annotations, n.Annotations) &&
+		podInfoEquals(o.Pod, n.Pod)
 }

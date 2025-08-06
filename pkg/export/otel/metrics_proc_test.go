@@ -11,7 +11,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/components/svc"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
-	"go.opentelemetry.io/obi/pkg/export/otel"
+	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/test/collector"
 
@@ -32,19 +32,22 @@ func TestProcMetrics_Disaggregated(t *testing.T) {
 	includedAttributes := attributes.InclusionLists{
 		Include: []string{"process_command", "cpu_mode", "disk_io_direction", "network_io_direction"},
 	}
+	mCfg := otelcfg.MetricsConfig{
+		ReportersCacheLen: 100,
+		CommonEndpoint:    otlp.ServerEndpoint,
+		MetricsProtocol:   otelcfg.ProtocolHTTPProtobuf,
+		Features:          []string{otelcfg.FeatureApplication, FeatureProcess},
+		TTL:               3 * time.Minute,
+		Instrumentations: []string{
+			instrumentations.InstrumentationALL,
+		},
+	}
+	instancer := &otelcfg.MetricsExporterInstancer{Cfg: &mCfg}
+
 	procsInput := msg.NewQueue[[]*process.Status](msg.ChannelBufferLen(10))
 	otelExporter, err := ProcMetricsExporterProvider(
-		&global.ContextInfo{}, &ProcMetricsConfig{
-			Metrics: &otel.MetricsConfig{
-				ReportersCacheLen: 100,
-				CommonEndpoint:    otlp.ServerEndpoint,
-				MetricsProtocol:   otel.ProtocolHTTPProtobuf,
-				Features:          []string{otel.FeatureApplication, FeatureProcess},
-				TTL:               3 * time.Minute,
-				Instrumentations: []string{
-					instrumentations.InstrumentationALL,
-				},
-			}, SelectorCfg: &attributes.SelectorConfig{
+		&global.ContextInfo{OTELMetricsExporter: instancer}, &ProcMetricsConfig{
+			Metrics: &mCfg, SelectorCfg: &attributes.SelectorConfig{
 				SelectionCfg: attributes.Selection{
 					extraattributes.ProcessCPUTime.Section:        includedAttributes,
 					extraattributes.ProcessCPUUtilization.Section: includedAttributes,

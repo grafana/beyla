@@ -15,7 +15,6 @@ permissions:
 jobs:
   restart-noteldemo:
     runs-on: ubuntu-latest
-    if: github.event.before != '0000000000000000000000000000000000000000' # Skip initial repository creation
     
     steps:
       - id: get-vault-secrets

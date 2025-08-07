@@ -806,7 +806,7 @@ func (r *metricsReporter) otelMetricsObserved(span *request.Span) bool {
 }
 
 func (r *metricsReporter) otelSpanMetricsObserved(span *request.Span) bool {
-	return r.cfg.OTelMetricsEnabled() && !span.Service.ExportsOTelMetricsSpan()
+	return r.cfg.AnySpanMetricsEnabled() && !span.Service.ExportsOTelMetricsSpan()
 }
 
 func (r *metricsReporter) otelSpanFiltered(span *request.Span) bool {

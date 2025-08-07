@@ -28,9 +28,7 @@ data:
     {{- if not .Values.config.data.discovery }}
     discovery:
       instrument:
-        - k8s_namespace: *
-      exclude_instrument:
-        - exe_path: ".*alloy.*|.*otelcol.*|.*beyla.*"
+        - k8s_namespace: "*"
     {{- end }}
     {{- end }}
   {{- toYaml .Values.config.data | nindent 4}}

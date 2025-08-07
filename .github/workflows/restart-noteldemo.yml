@@ -20,6 +20,7 @@ jobs:
       - id: get-vault-secrets
         uses: grafana/shared-workflows/actions/get-vault-secrets@get-vault-secrets/v1.2.1
         with:
+          vault_instance: dev
           repo_secrets: |
             AWS_ROLE_ARN=noteldemo:aws-role-arn
             AWS_REGION=noteldemo:aws-region

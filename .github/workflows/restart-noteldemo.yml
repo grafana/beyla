@@ -1,0 +1,53 @@
+name: Restart Demo Cluster Pods
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  restart-noteldemo:
+    runs-on: ubuntu-latest
+    if: github.event.before != '0000000000000000000000000000000000000000' # Skip initial repository creation
+    
+    steps:
+      - id: get-vault-secrets
+        uses: grafana/shared-workflows/actions/get-vault-secrets@get-vault-secrets/v1.2.1
+        with:
+          repo_secrets: |
+            AWS_ROLE_ARN=noteldemo:aws-role-arn
+            AWS_REGION=noteldemo:aws-region
+            EKS_CLUSTER_NAME=noteldemo:eks-cluster-name
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4
+        with:
+          role-to-assume: ${{ steps.get-vault-secrets.outputs.AWS_ROLE_ARN }}
+          role-session-name: beyla-demo-restart
+          aws-region: ${{ steps.get-vault-secrets.outputs.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --region ${{ steps.get-vault-secrets.outputs.AWS_REGION }} --name ${{ steps.get-vault-secrets.outputs.EKS_CLUSTER_NAME }}
+
+      - name: Restart beyla daemonset
+        run: |
+          echo "Restarting grafana-k8s-monitoring-beyla daemonset in default namespace"
+          kubectl rollout restart daemonset/grafana-k8s-monitoring-beyla -n default
+          
+          echo "Waiting for daemonset rollout to complete..."
+          kubectl rollout status daemonset/grafana-k8s-monitoring-beyla -n default --timeout=300s
+          
+          echo "Beyla daemonset restart completed successfully"
+
+      - name: Verify beyla pod status
+        run: |
+          echo "Current beyla pod status:"
+          kubectl get pods -l app.kubernetes.io/name=beyla -n default

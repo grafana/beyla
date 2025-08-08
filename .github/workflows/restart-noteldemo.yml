@@ -37,7 +37,17 @@ jobs:
 
       - name: Update kubeconfig
         run: |
+          echo "Updating kubeconfig for EKS cluster..."
           aws eks update-kubeconfig --region ${{ fromJSON(steps.get-vault-secrets.outputs.secrets).AWS_REGION }} --name ${{ fromJSON(steps.get-vault-secrets.outputs.secrets).EKS_CLUSTER_NAME }}
+          
+          echo "Current kubectl context:"
+          kubectl config current-context
+          
+          echo "Testing kubectl access..."
+          kubectl auth can-i get pods -n default
+          
+          echo "Checking AWS caller identity:"
+          aws sts get-caller-identity
 
       - name: Restart beyla daemonset
         run: |

@@ -1,0 +1,65 @@
+name: Restart Demo Cluster Pods
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  restart-noteldemo:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - id: get-vault-secrets
+        uses: grafana/shared-workflows/actions/get-vault-secrets@get-vault-secrets/v1.2.1
+        with:
+          vault_instance: ops
+          export_env: false
+          repo_secrets: |
+            AWS_ROLE_ARN=noteldemo:aws-role-arn
+            AWS_REGION=noteldemo:aws-region
+            EKS_CLUSTER_NAME=noteldemo:eks-cluster-name
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4
+        with:
+          role-to-assume: ${{ fromJSON(steps.get-vault-secrets.outputs.secrets).AWS_ROLE_ARN }}
+          role-session-name: beyla-demo-restart
+          aws-region: ${{ fromJSON(steps.get-vault-secrets.outputs.secrets).AWS_REGION }}
+          # Force workflow refresh
+
+      - name: Update kubeconfig
+        run: |
+          echo "Updating kubeconfig for EKS cluster..."
+          aws eks update-kubeconfig --region ${{ fromJSON(steps.get-vault-secrets.outputs.secrets).AWS_REGION }} --name ${{ fromJSON(steps.get-vault-secrets.outputs.secrets).EKS_CLUSTER_NAME }}
+          
+          echo "Current kubectl context:"
+          kubectl config current-context
+          
+          echo "Testing kubectl access..."
+          kubectl auth can-i get pods -n default
+          
+          echo "Checking AWS caller identity:"
+          aws sts get-caller-identity
+
+      - name: Restart beyla daemonset
+        run: |
+          echo "Restarting grafana-k8s-monitoring-beyla daemonset in default namespace"
+          kubectl rollout restart daemonset/grafana-k8s-monitoring-beyla -n default
+          
+          echo "Waiting for daemonset rollout to complete..."
+          kubectl rollout status daemonset/grafana-k8s-monitoring-beyla -n default --timeout=300s
+          
+          echo "Beyla daemonset restart completed successfully"
+
+      - name: Verify beyla pod status
+        run: |
+          echo "Current beyla pod status:"
+          kubectl get pods -l app.kubernetes.io/name=beyla -n default

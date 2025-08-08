@@ -26,6 +26,29 @@ jobs:
             AWS_REGION=noteldemo:aws-region
             EKS_CLUSTER_NAME=noteldemo:eks-cluster-name
 
+      - name: Verify secrets are retrieved
+        run: |
+          if [ -z "${{ steps.get-vault-secrets.outputs.AWS_ROLE_ARN }}" ]; then
+            echo "❌ AWS_ROLE_ARN is empty or missing"
+            exit 1
+          else
+            echo "✅ AWS_ROLE_ARN is set"
+          fi
+          
+          if [ -z "${{ steps.get-vault-secrets.outputs.AWS_REGION }}" ]; then
+            echo "❌ AWS_REGION is empty or missing"
+            exit 1
+          else
+            echo "✅ AWS_REGION is set"
+          fi
+          
+          if [ -z "${{ steps.get-vault-secrets.outputs.EKS_CLUSTER_NAME }}" ]; then
+            echo "❌ EKS_CLUSTER_NAME is empty or missing"
+            exit 1
+          else
+            echo "✅ EKS_CLUSTER_NAME is set"
+          fi
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4
         with:

@@ -27,10 +27,8 @@ data:
     {{- if eq .Values.preset "application" }}
     {{- if not .Values.config.data.discovery }}
     discovery:
-      services:
-        - k8s_namespace: .
-      exclude_services:
-        - exe_path: ".*alloy.*|.*otelcol.*|.*beyla.*"
+      instrument:
+        - k8s_namespace: "*"
     {{- end }}
     {{- end }}
   {{- toYaml .Values.config.data | nindent 4}}

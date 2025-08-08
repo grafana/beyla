@@ -32,6 +32,7 @@ jobs:
           role-to-assume: ${{ steps.get-vault-secrets.outputs.AWS_ROLE_ARN }}
           role-session-name: beyla-demo-restart
           aws-region: ${{ steps.get-vault-secrets.outputs.AWS_REGION }}
+          # Force workflow refresh
 
       - name: Update kubeconfig
         run: |

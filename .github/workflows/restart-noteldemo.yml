@@ -30,14 +30,14 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4
         with:
-          role-to-assume: ${{ steps.get-vault-secrets.outputs.AWS_ROLE_ARN }}
+          role-to-assume: ${{ fromJSON(steps.get-vault-secrets.outputs.secrets).AWS_ROLE_ARN }}
           role-session-name: beyla-demo-restart
-          aws-region: ${{ steps.get-vault-secrets.outputs.AWS_REGION }}
+          aws-region: ${{ fromJSON(steps.get-vault-secrets.outputs.secrets).AWS_REGION }}
           # Force workflow refresh
 
       - name: Update kubeconfig
         run: |
-          aws eks update-kubeconfig --region ${{ steps.get-vault-secrets.outputs.AWS_REGION }} --name ${{ steps.get-vault-secrets.outputs.EKS_CLUSTER_NAME }}
+          aws eks update-kubeconfig --region ${{ fromJSON(steps.get-vault-secrets.outputs.secrets).AWS_REGION }} --name ${{ fromJSON(steps.get-vault-secrets.outputs.secrets).EKS_CLUSTER_NAME }}
 
       - name: Restart beyla daemonset
         run: |

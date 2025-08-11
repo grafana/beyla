@@ -41,9 +41,11 @@ jobs:
           aws eks update-kubeconfig --region ${{ fromJSON(steps.get-vault-secrets.outputs.secrets).AWS_REGION }} --name ${{ fromJSON(steps.get-vault-secrets.outputs.secrets).EKS_CLUSTER_NAME }}
 
       - name: Update beyla image
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
         run: |
-          echo "Updating beyla daemonset to use image tag: ${{ inputs.image_tag }}"
-          kubectl set image daemonset/grafana-k8s-monitoring-beyla beyla=grafana/beyla:${{ inputs.image_tag }} -n default
+          echo "Updating beyla daemonset to use image tag: $IMAGE_TAG"
+          kubectl set image daemonset/grafana-k8s-monitoring-beyla beyla=grafana/beyla:$IMAGE_TAG -n default
           
           echo "Waiting for daemonset rollout to complete..."
           kubectl rollout status daemonset/grafana-k8s-monitoring-beyla -n default --timeout=300s
@@ -51,6 +53,8 @@ jobs:
           echo "Beyla daemonset update completed successfully"
 
       - name: Verify beyla deployment
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
         run: |
           echo "Current beyla pod status:"
           kubectl get pods -l app.kubernetes.io/name=beyla -n default
@@ -59,4 +63,4 @@ jobs:
           kubectl get daemonset/grafana-k8s-monitoring-beyla -n default -o jsonpath='{.spec.template.spec.containers[0].image}'
           echo ""
           
-          echo "✅ Updated beyla daemonset to image: grafana/beyla:${{ inputs.image_tag }}"
+          echo "✅ Updated beyla daemonset to image: grafana/beyla:$IMAGE_TAG"

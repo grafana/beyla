@@ -48,6 +48,7 @@ jobs:
           kubectl set image daemonset/grafana-k8s-monitoring-beyla beyla=grafana/beyla:$IMAGE_TAG -n default
           
           echo "Waiting for daemonset rollout to complete..."
+          kubectl rollout restart daemonset/grafana-k8s-monitoring-beyla -n default
           kubectl rollout status daemonset/grafana-k8s-monitoring-beyla -n default --timeout=300s
           
           echo "Beyla daemonset update completed successfully"

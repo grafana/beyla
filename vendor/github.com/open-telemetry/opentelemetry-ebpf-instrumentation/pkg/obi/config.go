@@ -370,6 +370,13 @@ func (c *Config) Enabled(feature Feature) bool {
 	return false
 }
 
+func (c *Config) SpanMetricsEnabledForTraces() bool {
+	otelSpanMetricsEnabled := c.Metrics.Enabled() && c.Metrics.AnySpanMetricsEnabled()
+	promSpanMetricsEnabled := c.Prometheus.Enabled() && c.Prometheus.AnySpanMetricsEnabled()
+
+	return otelSpanMetricsEnabled || promSpanMetricsEnabled
+}
+
 // ExternalLogger sets the logging capabilities of OBI.
 // Used for integrating Beyla with an external logging system (for example Alloy)
 // TODO: maybe this method has too many responsibilities, as it affects the global logger.

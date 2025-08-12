@@ -1,0 +1,67 @@
+name: Deploy Beyla to Demo Cluster
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Beyla image tag to deploy (e.g., main, v1.8.4, latest)'
+        required: true
+        default: 'main'
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  restart-noteldemo:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - id: get-vault-secrets
+        uses: grafana/shared-workflows/actions/get-vault-secrets@get-vault-secrets/v1.2.1
+        with:
+          vault_instance: ops
+          export_env: false
+          repo_secrets: |
+            AWS_ROLE_ARN=noteldemo:aws-role-arn
+            AWS_REGION=noteldemo:aws-region
+            EKS_CLUSTER_NAME=noteldemo:eks-cluster-name
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4
+        with:
+          role-to-assume: ${{ fromJSON(steps.get-vault-secrets.outputs.secrets).AWS_ROLE_ARN }}
+          role-session-name: beyla-demo-restart
+          aws-region: ${{ fromJSON(steps.get-vault-secrets.outputs.secrets).AWS_REGION }}
+          # Force workflow refresh
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --region ${{ fromJSON(steps.get-vault-secrets.outputs.secrets).AWS_REGION }} --name ${{ fromJSON(steps.get-vault-secrets.outputs.secrets).EKS_CLUSTER_NAME }}
+
+      - name: Update beyla image
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          echo "Updating beyla daemonset to use image tag: $IMAGE_TAG"
+          kubectl set image daemonset/grafana-k8s-monitoring-beyla beyla=grafana/beyla:$IMAGE_TAG -n default
+          
+          echo "Waiting for daemonset rollout to complete..."
+          kubectl rollout restart daemonset/grafana-k8s-monitoring-beyla -n default
+          kubectl rollout status daemonset/grafana-k8s-monitoring-beyla -n default --timeout=300s
+          
+          echo "Beyla daemonset update completed successfully"
+
+      - name: Verify beyla deployment
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          echo "Current beyla pod status:"
+          kubectl get pods -l app.kubernetes.io/name=beyla -n default
+          
+          echo "Current beyla image:"
+          kubectl get daemonset/grafana-k8s-monitoring-beyla -n default -o jsonpath='{.spec.template.spec.containers[0].image}'
+          echo ""
+          
+          echo "✅ Updated beyla daemonset to image: grafana/beyla:$IMAGE_TAG"

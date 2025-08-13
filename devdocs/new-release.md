@@ -111,8 +111,18 @@ Vendor the Grafana OBI to build the binaries:
 make vendor-obi
 ```
 
-Commit all your file changes and make a PR to ensure your changes
-run clear with the Beyla release CI.
+Commit all your file changes and make a PR to the release branch to ensure your changes run clear with the Beyla release CI.
+
+### Step 5: Release the new Beyla version
+
+Once all changes are made and tested, we can release the new Beyla version. This involves creating a new Git tag and pushing it to the Beyla repository. Checkout to the release branch and run the following commands:
+
+```
+git tag vX.Y.Z
+git push origin vX.Y.Z
+```
+
+Once the tag is pushed, we can create a new release in the Beyla repository.
 
 ## Fixes to the release branches
 

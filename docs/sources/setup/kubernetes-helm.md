@@ -89,15 +89,16 @@ helm upgrade beyla grafana/beyla -f helm-beyla.yml
 
 ## Configuring Beyla metadata
 
-If Beyla exports the data using the Prometheus exporter, you might need to override the Beyla Pod
-annotations to let it be discoverable by your Prometheus scraper. You can add the following
-section to the example `helm-beyla.yml` file:
+If Beyla exports the data using the Prometheus exporter, you can expose its metrics 
+by creating a Kubernetes Service and configuring a ServiceMonitor, allowing your Prometheus scraper to discover it. 
+You can add the following section to the example `helm-beyla.yml` file:
 
 ```yaml
-podAnnotations:
-  prometheus.io/scrape: "true"
-  prometheus.io/path: "/metrics"
-  prometheus.io/port: "9090"
+service:
+  enabled: true
+
+serviceMonitor:
+  enabled: true
 ```
 
 Analogously, the Helm chart allows overriding names, labels, and annotations for

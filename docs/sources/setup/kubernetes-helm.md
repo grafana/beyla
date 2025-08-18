@@ -91,7 +91,7 @@ helm upgrade beyla grafana/beyla -f helm-beyla.yml
 
 If Beyla exports the data using the Prometheus exporter, you can expose its metrics 
 by creating a Kubernetes Service and configuring a ServiceMonitor, allowing your Prometheus scraper to discover it. 
-You can add the following section to the example `helm-beyla.yml` file:
+To enable this feature, edit your `helm-beyla.yml` file to include the following configuration:
 
 ```yaml
 service:

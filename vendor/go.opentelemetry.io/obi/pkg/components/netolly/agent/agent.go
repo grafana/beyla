@@ -25,12 +25,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"net"
 	"time"
 
-	"go.opentelemetry.io/obi/pkg/components/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/components/ebpf/tcmanager"
 	"go.opentelemetry.io/obi/pkg/components/netolly/ebpf"
 	"go.opentelemetry.io/obi/pkg/components/netolly/flow"
@@ -88,8 +86,6 @@ func (s Status) String() string {
 	}
 }
 
-var errShutdownTimeout = errors.New("graceful shutdown has timed out while waiting for eBPF network infrastructure to finish")
-
 // Flows reporting agent
 type Flows struct {
 	cfg     *obi.Config
@@ -98,25 +94,12 @@ type Flows struct {
 
 	// input data providers
 	ifaceManager *tcmanager.InterfaceManager
-	ebpf         ebpfFlowFetcher
+	ebpf         *ebpf.SockFlowFetcher
 
 	// processing nodes to be wired in the buildPipeline method
-	mapTracer *flow.MapTracer
-	rbTracer  *flow.RingBufTracer
-
-	// elements used to decorate flows with extra information
-	interfaceNamer flow.InterfaceNamer
-	agentIP        net.IP
+	rbTracer *flow.RingBufTracer
 
 	status Status
-}
-
-// ebpfFlowFetcher abstracts the interface of ebpf.FlowFetcher to allow dependency injection in tests
-type ebpfFlowFetcher interface {
-	io.Closer
-
-	LookupAndDeleteMap() map[ebpf.NetFlowId][]ebpf.NetFlowMetrics
-	ReadRingBuf() (ringbuf.Record, error)
 }
 
 // FlowsAgent instantiates a new agent, given a configuration.
@@ -138,29 +121,16 @@ func FlowsAgent(ctxInfo *global.ContextInfo, cfg *obi.Config) (*Flows, error) {
 
 	alog.Debug("agent IP: " + agentIP.String())
 
-	fetcher, err := newFetcher(cfg, alog, ifaceManager)
+	fetcher, err := ebpf.NewSockFlowFetcher(cfg.NetworkFlows.RingBufferSize,
+		cfg.NetworkFlows.RingBufferFlushPeriod,
+		cfg.NetworkFlows.MaxFlowDuration,
+		cfg.NetworkFlows.Protocols,
+		cfg.NetworkFlows.ExcludeProtocols)
 	if err != nil {
 		return nil, err
 	}
 
 	return flowsAgent(ctxInfo, cfg, fetcher, agentIP, ifaceManager)
-}
-
-func newFetcher(cfg *obi.Config, alog *slog.Logger, ifaceManager *tcmanager.InterfaceManager) (ebpfFlowFetcher, error) {
-	switch cfg.NetworkFlows.Source {
-	case obi.EbpfSourceSock:
-		alog.Info("using socket filter for collecting network events")
-
-		return ebpf.NewSockFlowFetcher(cfg.NetworkFlows.Sampling, cfg.NetworkFlows.CacheMaxFlows)
-	case obi.EbpfSourceTC:
-		alog.Info("using kernel Traffic Control for collecting network events")
-		ingress, egress := flowDirections(&cfg.NetworkFlows)
-
-		return ebpf.NewFlowFetcher(cfg.NetworkFlows.Sampling, cfg.NetworkFlows.CacheMaxFlows,
-			ingress, egress, ifaceManager, cfg.EBPF.TCBackend)
-	}
-
-	return nil, errors.New("unknown network configuration eBPF source specified, allowed options are [tc, socket_filter]")
 }
 
 func monitorMode(cfg *obi.Config, alog *slog.Logger) tcmanager.MonitorMode {
@@ -186,7 +156,7 @@ func monitorMode(cfg *obi.Config, alog *slog.Logger) tcmanager.MonitorMode {
 func flowsAgent(
 	ctxInfo *global.ContextInfo,
 	cfg *obi.Config,
-	fetcher ebpfFlowFetcher,
+	fetcher *ebpf.SockFlowFetcher,
 	agentIP net.IP,
 	ifaceManager *tcmanager.InterfaceManager,
 ) (*Flows, error) {
@@ -206,34 +176,19 @@ func flowsAgent(
 		return iface
 	}
 
-	mapTracer := flow.NewMapTracer(fetcher, cfg.NetworkFlows.CacheActiveTimeout)
-	rbTracer := flow.NewRingBufTracer(fetcher, mapTracer, cfg.NetworkFlows.CacheActiveTimeout)
+	rbTracer, err := flow.NewRingBufTracer(fetcher, cfg,
+		ctxInfo.K8sInformer, agentIP.String(), interfaceNamer)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create ring buffer tracer: %w", err)
+	}
 
 	return &Flows{
-		ctxInfo:        ctxInfo,
-		ebpf:           fetcher,
-		ifaceManager:   ifaceManager,
-		cfg:            cfg,
-		mapTracer:      mapTracer,
-		rbTracer:       rbTracer,
-		agentIP:        agentIP,
-		interfaceNamer: interfaceNamer,
+		ctxInfo:      ctxInfo,
+		ebpf:         fetcher,
+		ifaceManager: ifaceManager,
+		cfg:          cfg,
+		rbTracer:     rbTracer,
 	}, nil
-}
-
-func flowDirections(cfg *obi.NetworkConfig) (ingress, egress bool) {
-	switch cfg.Direction {
-	case directionIngress:
-		return true, false
-	case directionEgress:
-		return false, true
-	case directionBoth:
-		return true, true
-	default:
-		alog().Warn("unknown DIRECTION. Tracing both ingress and egress traffic",
-			"direction", cfg.Direction)
-		return true, true
-	}
 }
 
 // Run a Flows agent
@@ -293,7 +248,7 @@ func (f *Flows) stop() error {
 
 	select {
 	case <-time.After(f.cfg.ShutdownTimeout):
-		return errShutdownTimeout
+		return errors.New("graceful shutdown has timed out while waiting for eBPF network infrastructure to finish")
 	case err := <-stopped:
 		// err might be nil
 		return err

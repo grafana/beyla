@@ -21,7 +21,7 @@ package beyla
 import (
 	"time"
 
-	"go.opentelemetry.io/obi/pkg/components/netolly/flow"
+	"go.opentelemetry.io/obi/pkg/components/netolly/rdns"
 	"go.opentelemetry.io/obi/pkg/components/netolly/transform/cidr"
 )
 
@@ -68,27 +68,22 @@ type NetworkConfig struct {
 	// ExcludeProtocols causes Beyla to drop flows whose transport protocol is in this list.
 	// If the Protocols list is already defined, ExcludeProtocols has no effect.
 	ExcludeProtocols []string `yaml:"exclude_protocols" env:"BEYLA_NETWORK_EXCLUDE_PROTOCOLS" envSeparator:","`
-	// CacheMaxFlows specifies how many flows can be accumulated in the accounting cache before
-	// being flushed for its later export. Default value is 5000.
-	// Decrease it if you see the "received message larger than max" error in Beyla logs.
-	CacheMaxFlows int `yaml:"cache_max_flows" env:"BEYLA_NETWORK_CACHE_MAX_FLOWS"`
-	// CacheActiveTimeout specifies the maximum duration that flows are kept in the accounting
-	// cache before being flushed for its later export.
-	CacheActiveTimeout time.Duration `yaml:"cache_active_timeout" env:"BEYLA_NETWORK_CACHE_ACTIVE_TIMEOUT"`
-	// Deduper specifies the deduper type. Accepted values are "none" (disabled) and "first_come".
-	// When enabled, it will detect duplicate flows (flows that have been detected e.g. through
-	// both the physical and a virtual interface).
-	// "first_come" will forward only flows from the first interface the flows are received from.
-	// Default value: first_come
-	// nolint:undoc
-	Deduper string `yaml:"deduper" env:"BEYLA_NETWORK_DEDUPER"`
-	// DeduperFCTTL specifies the expiry duration of the flows "first_come" deduplicator. After
-	// a flow hasn't been received for that expiry time, the deduplicator forgets it. That means
-	// that a flow from a connection that has been inactive during that period could be forwarded
-	// again from a different interface.
-	// If the value is not set, it will default to 2 * CacheActiveTimeout
-	// nolint:undoc
-	DeduperFCTTL time.Duration `yaml:"deduper_fc_ttl" env:"BEYLA_NETWORK_DEDUPER_FC_TTL"`
+
+	// The size of the ring buffer in MB used to queue the network flows. Defaults
+	// to 16 MB. Values will be adjusted to be a power of 2 of at least the OS
+	// page size.
+	RingBufferSize uint32 `yaml:"ring_buffer_size" env:"BEYLA_NETWORK_RING_BUFFER_SIZE"`
+
+	// Specifies the periodicity in which events are flushed from the ring
+	// buffer to userspace. Defaults to 10 seconds.
+	RingBufferFlushPeriod time.Duration `yaml:"ring_buffer_flush_period" env:"BEYLA_NETWORK_RING_BUFFER_FLUSH_PERIOD"`
+
+	// The maximum duration we hold on to a flow before exporting it. Flows
+	// are usually flushed when their connection terminates, which can be
+	// problematic for very long-last flows/connections (such as connections
+	// being kept-alive). Flows that have been alive for more than
+	// MaxFlowDuration will be flushed and reset. Defaults to 60 seconds.
+	MaxFlowDuration time.Duration `yaml:"max_flow_duration" env:"BEYLA_NETWORK_MAX_FLOW_DURATION"`
 	// Direction allows selecting which flows to trace according to its direction. Accepted values
 	// are "ingress", "egress" or "both" (default).
 	// nolint:undoc
@@ -113,7 +108,7 @@ type NetworkConfig struct {
 	// This is an experimental feature and it is not guaranteed to work on most virtualized environments
 	// for external traffic.
 	// nolint:undoc
-	ReverseDNS flow.ReverseDNS `yaml:"reverse_dns"`
+	ReverseDNS rdns.ReverseDNS `yaml:"reverse_dns"`
 	// Print the network flows in the Standard Output, if true
 	Print bool `yaml:"print_flows" env:"BEYLA_NETWORK_PRINT_FLOWS"`
 
@@ -131,14 +126,14 @@ var defaultNetworkConfig = NetworkConfig{
 	AgentIPIface:       "external",
 	AgentIPType:        "any",
 	ExcludeInterfaces:  []string{"lo"},
-	CacheMaxFlows:      5000,
-	CacheActiveTimeout: 5 * time.Second,
-	Deduper:            flow.DeduperFirstCome,
+	RingBufferSize:        16,
+	RingBufferFlushPeriod: 10 * time.Second,
+	MaxFlowDuration:       60 * time.Second,
 	Direction:          "both",
 	ListenInterfaces:   "watch",
 	ListenPollPeriod:   10 * time.Second,
-	ReverseDNS: flow.ReverseDNS{
-		Type:     flow.ReverseDNSNone,
+	ReverseDNS: rdns.ReverseDNS{
+		Type:     rdns.ReverseDNSNone,
 		CacheLen: 256,
 		CacheTTL: time.Hour,
 	},

@@ -25,8 +25,6 @@ import (
 	"encoding/binary"
 	"io"
 	"net"
-
-	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 )
 
 // IPAddr encodes v4 and v6 IPs with a fixed length.
@@ -47,26 +45,30 @@ type Record struct {
 }
 
 type RecordAttrs struct {
-	// SrcName and DstName might be set from several sources along the processing/decoration pipeline:
-	// - K8s entity
-	// - Host name
-	// - IP
-	SrcName string
-	DstName string
+	K8sClusterName string
+	OBIIP          string
+	Interface      string
+	Src            InnerAttrs
+	Dst            InnerAttrs
+}
 
-	// SrcZone and DstZone represent the Cloud availability zones of the source and destination
-	SrcZone string
-	DstZone string
-
-	Interface string
-	// OBIIP provides information about the source of the flow (the Agent that traced it)
-	OBIIP    string
-	Metadata map[attr.Name]string
+type InnerAttrs struct {
+	Namespace  string
+	Name       string
+	Type       string
+	OwnerName  string
+	OwnerType  string
+	OnwerIP    string
+	NodeIP     string
+	NodeName   string
+	TargetName string
+	TargetZone string
+	CIDR       string
 }
 
 func NewRecord(
-	key NetFlowId,
-	metrics NetFlowMetrics,
+	key NetFlowIdT,
+	metrics NetFlowMetricsT,
 ) *Record {
 	return &Record{
 		NetFlowRecordT: NetFlowRecordT{
@@ -76,30 +78,52 @@ func NewRecord(
 	}
 }
 
-func (fm *NetFlowMetrics) Accumulate(src *NetFlowMetrics) {
-	// time == 0 if the value has not been yet set
-	if fm.StartMonoTimeNs == 0 || fm.StartMonoTimeNs > src.StartMonoTimeNs {
-		fm.StartMonoTimeNs = src.StartMonoTimeNs
-		// set IfaceDirection here, because the correct value is in the first packet only
-		fm.IfaceDirection = src.IfaceDirection
-		fm.Initiator = src.Initiator
+func (fi *NetFlowRecordT) SrcIP() *IPAddr {
+	if fi.Metrics.IfaceDirection == DirectionEgress {
+		return (*IPAddr)(&fi.Id.LocalIp.In6U.U6Addr8)
 	}
-	if fm.EndMonoTimeNs == 0 || fm.EndMonoTimeNs < src.EndMonoTimeNs {
-		fm.EndMonoTimeNs = src.EndMonoTimeNs
-	}
-	fm.Bytes += src.Bytes
-	fm.Packets += src.Packets
-	fm.Flags |= src.Flags
+
+	return (*IPAddr)(&fi.Id.RemoteIp.In6U.U6Addr8)
 }
 
-// SrcIP is never null. Returned as pointer for efficiency.
-func (fi *NetFlowId) SrcIP() *IPAddr {
-	return (*IPAddr)(&fi.SrcIp.In6U.U6Addr8)
+func (fi *NetFlowRecordT) SrcPort() uint16 {
+	if fi.Metrics.IfaceDirection == DirectionEgress {
+		return fi.Id.LocalPort
+	}
+
+	return fi.Id.RemotePort
 }
 
-// DstIP is never null. Returned as pointer for efficiency.
-func (fi *NetFlowId) DstIP() *IPAddr {
-	return (*IPAddr)(&fi.DstIp.In6U.U6Addr8)
+func (fi *NetFlowRecordT) DstIP() *IPAddr {
+	if fi.Metrics.IfaceDirection == DirectionEgress {
+		return (*IPAddr)(&fi.Id.RemoteIp.In6U.U6Addr8)
+	}
+
+	return (*IPAddr)(&fi.Id.LocalIp.In6U.U6Addr8)
+}
+
+func (fi *NetFlowRecordT) DstPort() uint16 {
+	if fi.Metrics.IfaceDirection == DirectionEgress {
+		return fi.Id.RemotePort
+	}
+
+	return fi.Id.LocalPort
+}
+
+func (fi *NetFlowRecordT) ClientPort() uint16 {
+	if fi.Metrics.StartDirection == DirectionEgress {
+		return fi.Id.LocalPort
+	}
+
+	return fi.Id.RemotePort
+}
+
+func (fi *NetFlowRecordT) ServerPort() uint16 {
+	if fi.Metrics.StartDirection == DirectionEgress {
+		return fi.Id.RemotePort
+	}
+
+	return fi.Id.LocalPort
 }
 
 // IP returns the net.IP equivalent object

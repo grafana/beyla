@@ -79,8 +79,9 @@ var DefaultConfig = Config{
 			MySQL:    0,
 			Postgres: 0,
 		},
-		MySQLPreparedStatementsCacheSize: 1024,
-		MongoRequestsCacheSize:           1024,
+		MySQLPreparedStatementsCacheSize:    1024,
+		PostgresPreparedStatementsCacheSize: 1024,
+		MongoRequestsCacheSize:              1024,
 	},
 	NameResolver: &transform.NameResolverConfig{
 		Sources:  []string{"k8s"},
@@ -372,6 +373,13 @@ func (c *Config) Enabled(feature Feature) bool {
 			c.Exec.IsSet() || len(c.Discovery.Services) > 0
 	}
 	return false
+}
+
+func (c *Config) SpanMetricsEnabledForTraces() bool {
+	otelSpanMetricsEnabled := c.Metrics.Enabled() && c.Metrics.AnySpanMetricsEnabled()
+	promSpanMetricsEnabled := c.Prometheus.Enabled() && c.Prometheus.AnySpanMetricsEnabled()
+
+	return otelSpanMetricsEnabled || promSpanMetricsEnabled
 }
 
 // ExternalLogger sets the logging capabilities of OBI.

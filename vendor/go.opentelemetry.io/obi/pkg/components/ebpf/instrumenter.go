@@ -432,6 +432,27 @@ func (i *instrumenter) tracepoint(funcName string, programs ebpfcommon.ProbeDesc
 	return nil
 }
 
+func (i *instrumenter) iters(p Tracer) error {
+	for _, iter := range p.Iters() {
+		slog.Debug("Attaching iterator", "program", iter.Program.String())
+
+		lnk, err := link.AttachIter(link.IterOptions{
+			Program: iter.Program,
+		})
+		if err != nil {
+			if i.metrics != nil {
+				i.metrics.InstrumentationError(i.processName, imetrics.InstrumentationErrorAttachingIter)
+			}
+			return fmt.Errorf("attaching iterator: %w", err)
+		}
+		iter.Link = lnk
+
+		p.AddCloser(iter.Link)
+	}
+
+	return nil
+}
+
 func (i *instrumenter) hasModule(ino uint64) bool {
 	slog.Debug("looking up module", "instrumenter", i, "ino", ino)
 	_, ok := i.modules[ino]

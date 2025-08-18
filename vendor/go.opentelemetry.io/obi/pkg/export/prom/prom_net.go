@@ -47,13 +47,13 @@ type netMetricsReporter struct {
 
 	clock *expire.CachedClock
 
-	input <-chan []*ebpf.Record
+	input <-chan ebpf.Record
 }
 
 func NetPrometheusEndpoint(
 	ctxInfo *global.ContextInfo,
 	cfg *NetPrometheusConfig,
-	input *msg.Queue[[]*ebpf.Record],
+	input *msg.Queue[ebpf.Record],
 ) swarm.InstanceFunc {
 	return func(_ context.Context) (swarm.RunFunc, error) {
 		if !cfg.Enabled() {
@@ -74,7 +74,7 @@ func NetPrometheusEndpoint(
 func newNetReporter(
 	ctxInfo *global.ContextInfo,
 	cfg *NetPrometheusConfig,
-	input *msg.Queue[[]*ebpf.Record],
+	input *msg.Queue[ebpf.Record],
 ) (*netMetricsReporter, error) {
 	group := ctxInfo.MetricAttributeGroups
 	// this property can't be set inside the ConfiguredGroups function, otherwise the
@@ -139,14 +139,12 @@ func (r *netMetricsReporter) reportMetrics(ctx context.Context) {
 }
 
 func (r *netMetricsReporter) collectMetrics(_ context.Context) {
-	for flows := range r.input {
+	for flow := range r.input {
 		// clock needs to be updated to let the expirer
 		// remove the old metrics
 		r.clock.Update()
-		for _, flow := range flows {
-			r.observeFlowBytes(flow)
-			r.observeInterZone(flow)
-		}
+		r.observeFlowBytes(&flow)
+		r.observeInterZone(&flow)
 	}
 }
 
@@ -159,7 +157,7 @@ func (r *netMetricsReporter) observeFlowBytes(flow *ebpf.Record) {
 }
 
 func (r *netMetricsReporter) observeInterZone(flow *ebpf.Record) {
-	if r.interZone == nil || flow.Attrs.SrcZone == flow.Attrs.DstZone {
+	if r.interZone == nil || flow.Attrs.Src.TargetZone == flow.Attrs.Dst.TargetZone {
 		return
 	}
 	r.interZone.WithLabelValues(labelValues(flow, r.interZoneAttrs)...).

@@ -10,9 +10,21 @@ import (
 	"log/slog"
 	"strings"
 
+	"golang.org/x/sys/unix"
+
 	"go.opentelemetry.io/obi/pkg/app/request"
 	"go.opentelemetry.io/obi/pkg/components/sqlprune"
 )
+
+type postgresPreparedStatementsKey struct {
+	connInfo BpfConnectionInfoT
+	stmtName string
+}
+
+type postgresPortalsKey struct {
+	connInfo   BpfConnectionInfoT
+	portalName string
+}
 
 const (
 	kPostgresBind    = byte('B')
@@ -173,8 +185,57 @@ func postgresPreparedStatements(b []byte) (string, string, string) {
 	return op, table, sql
 }
 
-func handlePostgres(_ *EBPFParseContext, event *TCPRequestInfo, requestBuffer, responseBuffer []byte) (request.Span, error) {
+type postgresMessage struct {
+	typ  string
+	data []byte
+}
+
+type postgresMessageIterator struct {
+	buf []byte
+	err error
+	eof bool
+}
+
+func (it *postgresMessageIterator) isEOF() bool {
+	return it.eof
+}
+
+func (it *postgresMessageIterator) next() (msg postgresMessage) {
+	if it.err != nil || len(it.buf) == 0 {
+		it.eof = true
+		return
+	}
+	if len(it.buf) < sqlprune.PostgresHdrSize {
+		it.err = errors.New("remaining buffer too short for message header")
+		return
+	}
+
+	msgType := sqlprune.SQLParseCommandID(request.DBPostgres, it.buf)
+	it.buf = it.buf[1:]
+	size := int32(binary.BigEndian.Uint32(it.buf[:4]))
+	it.buf = it.buf[4:]
+
+	if size < sqlprune.PostgresHdrSize-1 {
+		it.err = errors.New("malformed Postgres message")
+		return
+	}
+
+	payloadSize := size - sqlprune.PostgresHdrSize + 1
+	if len(it.buf) < int(payloadSize) {
+		it.err = fmt.Errorf("remaining buffer too short for message data: expected %d bytes, got %d", payloadSize, len(it.buf))
+		return
+	}
+
+	data := it.buf[:payloadSize]
+	it.buf = it.buf[payloadSize:]
+
+	msg = postgresMessage{typ: msgType, data: data}
+	return
+}
+
+func handlePostgres(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBuffer, responseBuffer []byte) (request.Span, error) {
 	var (
+		hasSpan         bool
 		op, table, stmt string
 		span            request.Span
 	)
@@ -188,22 +249,91 @@ func handlePostgres(_ *EBPFParseContext, event *TCPRequestInfo, requestBuffer, r
 		return span, errFallback
 	}
 
-	sqlCommand := sqlprune.SQLParseCommandID(request.DBPostgres, requestBuffer)
-	sqlError := sqlprune.SQLParseError(request.DBPostgres, responseBuffer)
+	var (
+		msg      postgresMessage
+		it       = &postgresMessageIterator{buf: requestBuffer}
+		sqlError = sqlprune.SQLParseError(request.DBPostgres, responseBuffer)
+	)
 
-	switch sqlCommand {
-	// TODO(matt): prepared statements
-	case "QUERY":
-		op, table, stmt = detectSQL(string(requestBuffer[sqlprune.PostgresHdrSize:]))
-	default:
-		slog.Warn("Postgres message type unhandled", "messageType", requestBuffer[sqlprune.PostgresHdrSize])
-		return span, errFallback
+Loop:
+	for {
+		if msg = it.next(); it.isEOF() {
+			break
+		}
+		if it.err != nil {
+			slog.Warn("failed to parse Postgres request messages", "error", it.err)
+			return span, errFallback
+		}
+
+		switch msg.typ {
+		case "QUERY":
+			op, table, stmt = detectSQL(string(msg.data))
+			hasSpan = true
+			break Loop
+		case "PARSE":
+			// On the PARSE command, the statement name is the first 4 bytes after the header and command ID
+			// in the request buffer.
+			stmtName := unix.ByteSliceToString(msg.data)
+			stmtNameLen := len(stmtName)
+			_, _, stmt = detectSQL(string(msg.data[stmtNameLen:]))
+
+			parseCtx.postgresPreparedStatements.Add(postgresPreparedStatementsKey{
+				connInfo: event.ConnInfo,
+				stmtName: stmtName,
+			}, stmt)
+
+			continue
+		case "BIND":
+			portal := unix.ByteSliceToString(msg.data)
+			portalLen := len(portal) + 1 // +1 for the null terminator
+			stmtName := unix.ByteSliceToString(msg.data[portalLen:])
+
+			parseCtx.postgresPortals.Add(postgresPortalsKey{
+				connInfo:   event.ConnInfo,
+				portalName: portal,
+			}, stmtName)
+
+			continue
+		case "EXECUTE":
+			portalKey := postgresPortalsKey{
+				connInfo:   event.ConnInfo,
+				portalName: unix.ByteSliceToString(msg.data),
+			}
+
+			stmtName, found := parseCtx.postgresPortals.Get(portalKey)
+			if !found {
+				slog.Debug("Postgres EXECUTE command with unknown portal", "portal", portalKey.portalName)
+				continue
+			}
+
+			preparedStmtKey := postgresPreparedStatementsKey{
+				connInfo: event.ConnInfo,
+				stmtName: stmtName,
+			}
+
+			stmt, found = parseCtx.postgresPreparedStatements.Get(preparedStmtKey)
+			if !found {
+				slog.Debug("Postgres EXECUTE command with unknown statement", "stmtName", stmtName)
+				continue
+			}
+
+			op, table = sqlprune.SQLParseOperationAndTable(stmt)
+			hasSpan = true
+			break Loop
+		default:
+			continue
+		}
+	}
+
+	if !hasSpan {
+		return span, errIgnore
 	}
 
 	if !validSQL(op, table, request.DBPostgres) {
-		slog.Warn("Postgres operation and/or table are invalid", "stmt", stmt)
+		// This can happen for stuff like 'BEGIN', etc.
+		slog.Debug("Postgres operation and/or table are invalid", "stmt", stmt)
 		return span, errFallback
 	}
 
-	return TCPToSQLToSpan(event, op, table, stmt, request.DBPostgres, sqlCommand, sqlError), nil
+	return TCPToSQLToSpan(event, op, table, stmt, request.DBPostgres, msg.typ, sqlError), nil
 }

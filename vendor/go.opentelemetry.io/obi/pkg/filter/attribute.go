@@ -53,6 +53,10 @@ type filter[T any] struct {
 	output   *msg.Queue[[]T]
 }
 
+type ElementFilter[T any] struct {
+	matchers []Matcher[T]
+}
+
 func newFilter[T any](
 	config AttributeFamilyConfig,
 	extraDefinitionsProvider func(groups attributes.AttrGroups, extraGroupAttributes attributes.GroupAttributes) map[attributes.Section]attributes.AttrReportGroup,
@@ -84,6 +88,38 @@ func newFilter[T any](
 		matchers = append(matchers, matcher)
 	}
 	return &filter[T]{matchers: matchers, input: input.Subscribe(), output: output}, nil
+}
+
+func NewElementFilter[T any](
+	config AttributeFamilyConfig,
+	extraDefinitionsProvider func(groups attributes.AttrGroups, extraGroupAttributes attributes.GroupAttributes) map[attributes.Section]attributes.AttrReportGroup,
+	extraGroupAttributesCfg map[string][]attr.Name,
+	getters attributes.NamedGetters[T, string],
+) (*ElementFilter[T], error) {
+	// Internally, from code, we use the OTEL-like naming (attr.Name) for the attributes,
+	// which usually uses dot-separation but sometimes also use underscore.
+	// Since we allow users to specify metrics in both formats, we convert any user-provided
+	// attributes to Prometheus-like, which uniquely uses underscores.
+	// Then, to validate the user-provided input, we map the prom-like attributes to
+	// our internal representation.
+	attrProm2Normal := map[string]attr.Name{}
+	for normalizedName := range attributes.AllAttributeNames(extraDefinitionsProvider, extraGroupAttributesCfg) {
+		attrProm2Normal[normalizedName.Prom()] = normalizedName
+	}
+	// Validate and build Matcher implementations for the user-provided attributes.
+	var matchers []Matcher[T]
+	for attrStr, match := range config {
+		normalAttr, ok := attrProm2Normal[attr.Name(attrStr).Prom()]
+		if !ok {
+			return nil, fmt.Errorf("attribute filter: unknown attribute name %q", attrStr)
+		}
+		matcher, err := buildMatcher(getters, normalAttr, &match)
+		if err != nil {
+			return nil, fmt.Errorf("trying to filter by attribute %s: %w", attrStr, err)
+		}
+		matchers = append(matchers, matcher)
+	}
+	return &ElementFilter[T]{matchers: matchers}, nil
 }
 
 // buildMatcher returns a Matcher given an attribute name, the user-provided MatchDefinition, and the provided
@@ -141,4 +177,14 @@ batchLoop:
 		w++
 	}
 	return batch[:w]
+}
+
+func (f *ElementFilter[T]) Allow(t T) bool {
+	for m := range f.matchers {
+		if !f.matchers[m].Matches(t) {
+			return false
+		}
+	}
+
+	return true
 }

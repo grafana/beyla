@@ -20,68 +20,169 @@
 package ebpf
 
 import (
-	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
-	"syscall"
-	"unsafe"
+	"time"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/rlimit"
-	"golang.org/x/sys/unix"
+	"github.com/containers/common/pkg/cgroupv2"
 
-	convenience "go.opentelemetry.io/obi/pkg/components/ebpf/convenience"
 	"go.opentelemetry.io/obi/pkg/components/ebpf/ringbuf"
+	"go.opentelemetry.io/obi/pkg/components/netolly/flow/transport"
 )
 
 // $BPF_CLANG and $BPF_CFLAGS are set by the Makefile.
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type flow_metrics_t -type flow_id_t  -type flow_record_t -target amd64,arm64 NetSk ../../../../bpf/netolly/flows_sock.c -- -I../../../../bpf
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type flow_metrics_t -type flow_id_t  -type flow_record_t -target amd64,arm64 Net ../../../../bpf/netolly/flows_sock.c -- -I../../../../bpf
 
-// SockFlowFetcher reads and forwards the Flows from the eBPF kernel space with a socket filter implementation.
-// It provides access both to flows that are aggregated in the kernel space (via PerfCPU hashmap)
-// and to flows that are forwarded by the kernel via ringbuffer because could not be aggregated
-// in the map
 type SockFlowFetcher struct {
 	log           *slog.Logger
-	objects       *NetSkObjects
+	objects       *NetObjects
 	ringbufReader *ringbuf.Reader
-	cacheMaxSize  int
+	links         []link.Link
 }
 
-func NewSockFlowFetcher(
-	sampling, cacheMaxSize int,
+func tlog() *slog.Logger {
+	return slog.With("component", "ebpf.FlowFetcher")
+}
+
+func getCgroupPath() (string, error) {
+	cgroupPath := "/sys/fs/cgroup"
+
+	enabled, err := cgroupv2.Enabled()
+	if !enabled {
+		if _, pathErr := os.Stat(filepath.Join(cgroupPath, "unified")); pathErr == nil {
+			slog.Debug("discovered hybrid cgroup hierarchy, will attempt to attach sockops")
+			return filepath.Join(cgroupPath, "unified"), nil
+		}
+		return "", errors.New("failed to find unified cgroup hierarchy: sockops cannot be used with cgroups v1")
+	}
+	return cgroupPath, err
+}
+
+func attachCgroup(program *ebpf.Program, attachType ebpf.AttachType, cgroupPath string) (link.Link, error) {
+	l, err := link.AttachCgroup(link.CgroupOptions{
+		Path:    cgroupPath,
+		Attach:  attachType,
+		Program: program,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("attaching cgroup program: %w", err)
+	}
+
+	return l, nil
+}
+
+func effectiveRingBufferSize(size uint32) uint32 {
+	page := uint32(os.Getpagesize())
+
+	// ensure size is at least the system page size.
+	if size < page {
+		size = page
+	}
+
+	// if size is already a power of two, this trick will leave it unchanged.
+	// decrement size so powers of two won't get rounded up.
+	size--
+
+	// fill all bits to the right with 1s
+	// this propagates the highest set bit to all lower bits.
+	size |= size >> 1
+	size |= size >> 2
+	size |= size >> 4
+	size |= size >> 8
+	size |= size >> 16
+
+	// increment to get the next power of two.
+	size++
+
+	return size
+}
+
+func parseProtocolList(list []string) ([]transport.Protocol, error) {
+	if len(list) == 0 {
+		return []transport.Protocol{}, nil
+	}
+
+	ret := make([]transport.Protocol, 0, len(list))
+
+	for _, s := range list {
+		p, err := transport.ParseProtocol(s)
+		if err != nil {
+			return nil, err
+		}
+
+		ret = append(ret, p)
+	}
+
+	return ret, nil
+}
+
+func assignProtocolList(m *ebpf.Map, list []transport.Protocol) error {
+	for _, proto := range list {
+		if err := m.Put(uint32(proto), uint8(1)); err != nil {
+			return fmt.Errorf("error writing map: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func NewSockFlowFetcher(rbSizeMB uint32, flushPeriod, flowDuration time.Duration,
+	protocolWhitelist, protocolBlacklist []string,
 ) (*SockFlowFetcher, error) {
+	protoWl, err := parseProtocolList(protocolWhitelist)
+	if err != nil {
+		return nil, fmt.Errorf("invalid protocol whitelist: %w", err)
+	}
+
+	protoBl, err := parseProtocolList(protocolBlacklist)
+	if err != nil {
+		return nil, fmt.Errorf("invalid protocol blacklist: %w", err)
+	}
+
 	tlog := tlog()
 	if err := rlimit.RemoveMemlock(); err != nil {
 		tlog.Warn("can't remove mem lock. The agent could not be able to start eBPF programs",
 			"error", err)
 	}
 
-	objects := NetSkObjects{}
-	spec, err := LoadNetSk()
+	objects := NetObjects{}
+
+	spec, err := LoadNet()
 	if err != nil {
 		return nil, fmt.Errorf("loading BPF data: %w", err)
 	}
 
-	// Resize aggregated flows and flow directions maps according to user-provided configuration
-	spec.Maps[aggregatedFlowsMap].MaxEntries = uint32(cacheMaxSize)
-	spec.Maps[flowDirectionsMap].MaxEntries = uint32(cacheMaxSize)
-	spec.Maps[connInitiatorsMap].MaxEntries = uint32(cacheMaxSize)
+	ringBufferSize := effectiveRingBufferSize(rbSizeMB * 1024 * 1024)
 
-	traceMsgs := 0
-	if tlog.Enabled(context.TODO(), slog.LevelDebug) {
-		traceMsgs = 1
+	spec.Maps["direct_flows"].MaxEntries = ringBufferSize
+
+	if err := spec.Variables["k_max_rb_size"].Set(ringBufferSize); err != nil {
+		return nil, errors.New("failed to set ring buffer size")
 	}
-	if err := convenience.RewriteConstants(spec, map[string]any{
-		constSampling:      uint32(sampling),
-		constTraceMessages: uint8(traceMsgs),
-	}); err != nil {
-		return nil, fmt.Errorf("rewriting BPF constants definition: %w", err)
+
+	if err := spec.Variables["k_rb_flush_period"].Set(uint64(flushPeriod)); err != nil {
+		return nil, errors.New("failed to set ring buffer flush period")
 	}
+
+	if err := spec.Variables["k_max_flow_duration"].Set(uint64(flowDuration)); err != nil {
+		return nil, errors.New("failed to set flow duration")
+	}
+
+	if err := spec.Variables["k_protocol_wl_empty"].Set(len(protocolWhitelist) == 0); err != nil {
+		return nil, errors.New("failed to set flow duration")
+	}
+
+	if err := spec.Variables["k_protocol_bl_empty"].Set(len(protocolBlacklist) == 0); err != nil {
+		return nil, errors.New("failed to set flow duration")
+	}
+
 	if err := spec.LoadAndAssign(&objects, &ebpf.CollectionOptions{
 		Programs: ebpf.ProgramOptions{LogSizeStart: 640 * 1024},
 	}); err != nil {
@@ -89,14 +190,33 @@ func NewSockFlowFetcher(
 		return nil, fmt.Errorf("loading and assigning BPF objects: %w", err)
 	}
 
-	fd, err := unix.Socket(unix.AF_PACKET, unix.SOCK_RAW, int(htons(unix.ETH_P_ALL)))
-	if err == nil {
-		ssoErr := syscall.SetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_ATTACH_BPF, objects.ObiSocketFilter.FD())
-		if ssoErr != nil {
-			return nil, fmt.Errorf("loading and assigning BPF objects: %w", ssoErr)
+	if err := assignProtocolList(objects.ProtocolWhitelist, protoWl); err != nil {
+		return nil, err
+	}
+
+	if err := assignProtocolList(objects.ProtocolBlacklist, protoBl); err != nil {
+		return nil, err
+	}
+
+	cgroupPath, err := getCgroupPath()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get cgroup path: %w", err)
+	}
+
+	links := []link.Link{}
+
+	for prog, attachType := range map[*ebpf.Program]ebpf.AttachType{
+		objects.ObiSockEgress:  ebpf.AttachCGroupInetEgress,
+		objects.ObiSockIngress: ebpf.AttachCGroupInetIngress,
+		objects.ObiSockRelease: ebpf.AttachCgroupInetSockRelease,
+		objects.ObiSockOps:     ebpf.AttachCGroupSockOps,
+	} {
+		lnk, err := attachCgroup(prog, attachType, cgroupPath)
+		if err != nil {
+			return nil, fmt.Errorf("error attaching cgroup program: %w", err)
 		}
-	} else {
-		return nil, fmt.Errorf("loading and assigning BPF objects: %w", err)
+
+		links = append(links, lnk)
 	}
 
 	// read events from socket filter ringbuffer
@@ -104,11 +224,12 @@ func NewSockFlowFetcher(
 	if err != nil {
 		return nil, fmt.Errorf("accessing to ringbuffer: %w", err)
 	}
+
 	return &SockFlowFetcher{
 		log:           tlog,
 		objects:       &objects,
 		ringbufReader: flows,
-		cacheMaxSize:  cacheMaxSize,
+		links:         links,
 	}, nil
 }
 
@@ -123,6 +244,10 @@ func printVerifierErrorInfo(err error) {
 func (m *SockFlowFetcher) Close() error {
 	m.log.Debug("unregistering eBPF objects")
 
+	for _, l := range m.links {
+		l.Close()
+	}
+
 	var errs []error
 	// m.ringbufReader.Read is a blocking operation, so we need to close the ring buffer
 	// from another goroutine to avoid the system not being able to exit if there
@@ -132,9 +257,13 @@ func (m *SockFlowFetcher) Close() error {
 			errs = append(errs, err)
 		}
 	}
+
 	if m.objects != nil {
-		errs = append(errs, m.closeObjects()...)
+		if err := m.objects.DirectFlows.Close(); err != nil {
+			errs = append(errs, err)
+		}
 	}
+
 	if len(errs) == 0 {
 		return nil
 	}
@@ -146,67 +275,6 @@ func (m *SockFlowFetcher) Close() error {
 	return errors.New(`errors: "` + strings.Join(errStrings, `", "`) + `"`)
 }
 
-func (m *SockFlowFetcher) closeObjects() []error {
-	var errs []error
-	if err := m.objects.ObiSocketFilter.Close(); err != nil {
-		errs = append(errs, err)
-	}
-	if err := m.objects.AggregatedFlows.Close(); err != nil {
-		errs = append(errs, err)
-	}
-	if err := m.objects.DirectFlows.Close(); err != nil {
-		errs = append(errs, err)
-	}
-	m.objects = nil
-	return errs
-}
-
-func (m *SockFlowFetcher) ReadRingBuf() (ringbuf.Record, error) {
-	return m.ringbufReader.Read()
-}
-
-// LookupAndDeleteMap reads all the entries from the eBPF map and removes them from it.
-// It returns a map where the key
-// For synchronization purposes, we get/delete a whole snapshot of the flows map.
-// This way we avoid missing packets that could be updated on the
-// ebpf side while we process/aggregate them here
-// Changing this method invocation by BatchLookupAndDelete could improve performance
-// TODO: detect whether BatchLookupAndDelete is supported (Kernel>=5.6) and use it selectively
-// Supported Lookup/Delete operations by kernel: https://github.com/iovisor/bcc/blob/master/docs/kernel-versions.md
-// Race conditions here causes that some flows are lost in high-load scenarios
-func (m *SockFlowFetcher) LookupAndDeleteMap() map[NetFlowId][]NetFlowMetrics {
-	flowMap := m.objects.AggregatedFlows
-
-	iterator := flowMap.Iterate()
-	flows := make(map[NetFlowId][]NetFlowMetrics, m.cacheMaxSize)
-
-	id := NetFlowId{}
-	var metrics []NetFlowMetrics
-	// Changing Iterate+Delete by LookupAndDelete would prevent some possible race conditions
-	// TODO: detect whether LookupAndDelete is supported (Kernel>=4.20) and use it selectively
-	for iterator.Next(&id, &metrics) {
-		if err := flowMap.Delete(id); err != nil {
-			m.log.Debug("couldn't delete flow entry", "flowId", id, "error", err)
-		}
-		// We observed that eBFP PerCPU map might insert multiple times the same key in the map
-		// (probably due to race conditions) so we need to re-join metrics again at userspace
-		// TODO: instrument how many times the keys are is repeated in the same eviction
-		flows[id] = append(flows[id], metrics...)
-	}
-	return flows
-}
-
-func isLittleEndian() bool {
-	var a uint16 = 1
-
-	return *(*byte)(unsafe.Pointer(&a)) == 1
-}
-
-func htons(a uint16) uint16 {
-	if isLittleEndian() {
-		var arr [2]byte
-		binary.LittleEndian.PutUint16(arr[:], a)
-		return binary.BigEndian.Uint16(arr[:])
-	}
-	return a
+func (m *SockFlowFetcher) ReadInto(rec *ringbuf.Record) error {
+	return m.ringbufReader.ReadInto(rec)
 }

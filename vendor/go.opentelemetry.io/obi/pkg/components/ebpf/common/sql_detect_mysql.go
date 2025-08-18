@@ -146,12 +146,12 @@ func handleMySQL(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBuffe
 	case "QUERY":
 		op, table, stmt = detectSQL(string(requestBuffer[sqlprune.MySQLHdrSize+1:]))
 	default:
-		slog.Warn("MySQL command ID unhandled", "commandID", requestBuffer[sqlprune.MySQLHdrSize])
+		slog.Debug("MySQL command ID unhandled", "commandID", requestBuffer[sqlprune.MySQLHdrSize])
 		return span, errFallback
 	}
 
 	if !validSQL(op, table, request.DBMySQL) {
-		slog.Warn("MySQL operation and/or table are invalid", "stmt", stmt)
+		slog.Debug("MySQL operation and/or table are invalid", "stmt", stmt)
 		return span, errFallback
 	}
 

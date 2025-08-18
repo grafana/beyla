@@ -13,7 +13,7 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 
-	"go.opentelemetry.io/obi/pkg/components/netolly/ifaces"
+	"go.opentelemetry.io/obi/pkg/components/ebpf/tcmanager/ifaces"
 )
 
 type attachedProg struct {

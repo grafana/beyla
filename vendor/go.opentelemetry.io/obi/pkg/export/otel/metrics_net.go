@@ -75,11 +75,11 @@ type netMetricsExporter struct {
 	interZoneBytes *Expirer[*ebpf.Record, metric2.Int64Counter, float64]
 	clock          *expire.CachedClock
 	expireTTL      time.Duration
-	in             <-chan []*ebpf.Record
+	in             <-chan ebpf.Record
 }
 
 func NetMetricsExporterProvider(
-	ctxInfo *global.ContextInfo, cfg *NetMetricsConfig, input *msg.Queue[[]*ebpf.Record],
+	ctxInfo *global.ContextInfo, cfg *NetMetricsConfig, input *msg.Queue[ebpf.Record],
 ) swarm.InstanceFunc {
 	return func(ctx context.Context) (swarm.RunFunc, error) {
 		if !cfg.Enabled() {
@@ -98,7 +98,7 @@ func NetMetricsExporterProvider(
 }
 
 func newMetricsExporter(
-	ctx context.Context, ctxInfo *global.ContextInfo, cfg *NetMetricsConfig, input *msg.Queue[[]*ebpf.Record],
+	ctx context.Context, ctxInfo *global.ContextInfo, cfg *NetMetricsConfig, input *msg.Queue[ebpf.Record],
 ) (*netMetricsExporter, error) {
 	log := nmlog()
 	log.Debug("instantiating network metrics exporter provider")
@@ -166,17 +166,15 @@ func newMetricsExporter(
 }
 
 func (me *netMetricsExporter) Do(ctx context.Context) {
-	for i := range me.in {
+	for v := range me.in {
 		me.clock.Update()
-		for _, v := range i {
-			if me.flowBytes != nil {
-				flowBytes, attrs := me.flowBytes.ForRecord(v)
-				flowBytes.Add(ctx, int64(v.Metrics.Bytes), metric2.WithAttributeSet(attrs))
-			}
-			if me.interZoneBytes != nil && v.Attrs.SrcZone != v.Attrs.DstZone {
-				izBytes, attrs := me.interZoneBytes.ForRecord(v)
-				izBytes.Add(ctx, int64(v.Metrics.Bytes), metric2.WithAttributeSet(attrs))
-			}
+		if me.flowBytes != nil {
+			flowBytes, attrs := me.flowBytes.ForRecord(&v)
+			flowBytes.Add(ctx, int64(v.Metrics.Bytes), metric2.WithAttributeSet(attrs))
+		}
+		if me.interZoneBytes != nil && v.Attrs.Src.TargetZone != v.Attrs.Dst.TargetZone {
+			izBytes, attrs := me.interZoneBytes.ForRecord(&v)
+			izBytes.Add(ctx, int64(v.Metrics.Bytes), metric2.WithAttributeSet(attrs))
 		}
 	}
 }

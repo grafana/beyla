@@ -4,7 +4,6 @@
 package cidr
 
 import (
-	"context"
 	"fmt"
 	"log/slog"
 	"net"
@@ -12,9 +11,6 @@ import (
 	"github.com/yl2chen/cidranger"
 
 	"go.opentelemetry.io/obi/pkg/components/netolly/ebpf"
-	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
-	"go.opentelemetry.io/obi/pkg/pipe/msg"
-	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 )
 
 func glog() *slog.Logger {
@@ -33,28 +29,35 @@ type ipGrouper struct {
 	ranger cidranger.Ranger
 }
 
-func DecoratorProvider(g Definitions, input, output *msg.Queue[[]*ebpf.Record]) swarm.InstanceFunc {
-	return func(_ context.Context) (swarm.RunFunc, error) {
-		if !g.Enabled() {
-			return swarm.Bypass(input, output)
-		}
-		grouper, err := newIPGrouper(g)
-		if err != nil {
-			return nil, fmt.Errorf("instantiating IP grouper: %w", err)
-		}
-		in := input.Subscribe()
-		return func(_ context.Context) {
-			defer output.Close()
-			glog().Debug("starting node")
-			for flows := range in {
-				for _, flow := range flows {
-					grouper.decorate(flow)
-				}
-				output.Send(flows)
-			}
-			glog().Debug("stopping node")
-		}, nil
+type CIDRDecorator struct {
+	grouper ipGrouper
+	enabled bool
+}
+
+func (d *CIDRDecorator) Decorate(r *ebpf.Record) {
+	if !d.enabled {
+		return
 	}
+
+	d.grouper.decorate(r)
+}
+
+func NewCIDRDecorator(g Definitions) (*CIDRDecorator, error) {
+	d := &CIDRDecorator{
+		enabled: g.Enabled(),
+	}
+
+	if !d.enabled {
+		return d, nil
+	}
+
+	var err error
+	d.grouper, err = newIPGrouper(g)
+	if err != nil {
+		return nil, fmt.Errorf("instantiating IP grouper: %w", err)
+	}
+
+	return d, nil
 }
 
 type customRangerEntry struct {
@@ -90,13 +93,10 @@ func (g *ipGrouper) CIDR(ip net.IP) string {
 }
 
 func (g *ipGrouper) decorate(flow *ebpf.Record) {
-	if flow.Attrs.Metadata == nil {
-		flow.Attrs.Metadata = map[attr.Name]string{}
+	if srcCIDR := g.CIDR(flow.SrcIP().IP()); srcCIDR != "" {
+		flow.Attrs.Src.CIDR = srcCIDR
 	}
-	if srcCIDR := g.CIDR(flow.Id.SrcIP().IP()); srcCIDR != "" {
-		flow.Attrs.Metadata[attr.SrcCIDR] = srcCIDR
-	}
-	if dstCIDR := g.CIDR(flow.Id.DstIP().IP()); dstCIDR != "" {
-		flow.Attrs.Metadata[attr.DstCIDR] = dstCIDR
+	if dstCIDR := g.CIDR(flow.DstIP().IP()); dstCIDR != "" {
+		flow.Attrs.Dst.CIDR = dstCIDR
 	}
 }

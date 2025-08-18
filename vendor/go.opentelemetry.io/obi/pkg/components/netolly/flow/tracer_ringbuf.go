@@ -1,4 +1,5 @@
 // Copyright The OpenTelemetry Authors
+
 // SPDX-License-Identifier: Apache-2.0
 
 // Copyright Red Hat / IBM
@@ -22,17 +23,20 @@
 package flow
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"log/slog"
-	"sync/atomic"
-	"syscall"
-	"time"
 
+	ebpfcommon "go.opentelemetry.io/obi/pkg/components/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/components/ebpf/ringbuf"
+	"go.opentelemetry.io/obi/pkg/components/kube"
 	"go.opentelemetry.io/obi/pkg/components/netolly/ebpf"
+	"go.opentelemetry.io/obi/pkg/components/netolly/rdns"
+	"go.opentelemetry.io/obi/pkg/components/netolly/transform/cidr"
+	"go.opentelemetry.io/obi/pkg/components/netolly/transform/k8s"
+	"go.opentelemetry.io/obi/pkg/filter"
+	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 )
@@ -41,115 +45,112 @@ func rtlog() *slog.Logger {
 	return slog.With("component", "flow.RingBufTracer")
 }
 
-// RingBufTracer receives single-packet flows via ringbuffer (usually, these that couldn't be
-// added in the eBPF kernel space due to the map being full or busy) and submits them to the
-// userspace Aggregator map
 type RingBufTracer struct {
-	mapFlusher mapFlusher
-	ringBuffer ringBufReader
-	stats      stats
+	cfg           *obi.Config
+	flowFetcher   ebpf.FlowFetcher
+	k8sInformer   *kube.MetadataProvider
+	k8sDecorator  *k8s.Decorator
+	rdnsEnricher  *rdns.ReverseDNSEnricher
+	cidrDecorator *cidr.CIDRDecorator
+	flowDecorator *FlowDecorator
+	flowFilter    *filter.ElementFilter[*ebpf.Record]
+	rec           *ebpf.Record
 }
 
-type ringBufReader interface {
-	ReadRingBuf() (ringbuf.Record, error)
-}
-
-// stats supports atomic logging of ringBuffer metrics
-type stats struct {
-	loggingTimeout time.Duration
-	isForwarding   int32
-	forwardedFlows int32
-	mapFullErrs    int32
-}
-
-type mapFlusher interface {
-	Flush()
-}
-
-func NewRingBufTracer(
-	reader ringBufReader, flusher mapFlusher, logTimeout time.Duration,
-) *RingBufTracer {
-	return &RingBufTracer{
-		mapFlusher: flusher,
-		ringBuffer: reader,
-		stats:      stats{loggingTimeout: logTimeout},
+func NewRingBufTracer(fetcher ebpf.FlowFetcher,
+	cfg *obi.Config,
+	k8sInformer *kube.MetadataProvider,
+	agentIP string,
+	ifaceNamer InterfaceNamer,
+) (*RingBufTracer, error) {
+	flowFilter, err := filter.NewElementFilter[*ebpf.Record](cfg.Filters.Network,
+		nil, cfg.Attributes.ExtraGroupAttributes, ebpf.RecordStringGetters)
+	if err != nil {
+		return nil, fmt.Errorf("error instantiating flow filter: %w", err)
 	}
+
+	return &RingBufTracer{
+		cfg:           cfg,
+		flowFetcher:   fetcher,
+		k8sInformer:   k8sInformer,
+		flowDecorator: NewFlowDecorator(agentIP, ifaceNamer),
+		flowFilter:    flowFilter,
+		rec:           &ebpf.Record{},
+	}, nil
 }
 
-func (m *RingBufTracer) TraceLoop(out *msg.Queue[[]*ebpf.Record]) swarm.RunFunc {
-	return func(ctx context.Context) {
-		defer out.MarkCloseable()
-		rtlog := rtlog()
-		debugging := rtlog.Enabled(ctx, slog.LevelDebug)
-		for {
-			select {
-			case <-ctx.Done():
-				rtlog.Debug("exiting trace loop due to context cancellation")
-				return
-			default:
-				if err := m.listenAndForwardRingBuffer(debugging, out); err != nil {
-					if errors.Is(err, ringbuf.ErrClosed) {
-						rtlog.Debug("Received signal, exiting..")
-						return
-					}
-					rtlog.Warn("ignoring flow event", "error", err)
-					continue
+func (m *RingBufTracer) ringbufferLoop(ctx context.Context, out *msg.Queue[ebpf.Record]) {
+	defer out.MarkCloseable()
+
+	rtlog := rtlog()
+
+	var err error
+	m.k8sDecorator, err = k8s.NewDecorator(ctx, &m.cfg.Attributes.Kubernetes, m.k8sInformer)
+	if err != nil {
+		rtlog.Error("error creating k8s decorator", "error", err)
+		return
+	}
+
+	m.rdnsEnricher, err = rdns.NewReverseDNSEnricher(ctx, &m.cfg.NetworkFlows.ReverseDNS)
+	if err != nil {
+		rtlog.Error("error creating rdns enricher", "error", err)
+		return
+	}
+
+	m.cidrDecorator, err = cidr.NewCIDRDecorator(m.cfg.NetworkFlows.CIDRs)
+	if err != nil {
+		rtlog.Error("error creating CIDR decorator ", "error", err)
+		return
+	}
+
+	var rec ringbuf.Record
+
+	for {
+		select {
+		case <-ctx.Done():
+			rtlog.Debug("exiting trace loop due to context cancellation")
+			return
+		default:
+			if err := m.flowFetcher.ReadInto(&rec); err != nil {
+				if errors.Is(err, ringbuf.ErrClosed) {
+					rtlog.Debug("Received signal, exiting..")
+					return
 				}
+
+				rtlog.Warn("ignoring flow event", "error", err)
+				continue
 			}
+
+			event, err := ebpfcommon.ReinterpretCast[ebpf.NetFlowRecordT](rec.RawSample)
+			if err != nil {
+				continue
+			}
+
+			m.handleEvent(event, out)
 		}
 	}
 }
 
-func (m *RingBufTracer) listenAndForwardRingBuffer(debugging bool, forwardCh *msg.Queue[[]*ebpf.Record]) error {
-	event, err := m.ringBuffer.ReadRingBuf()
-	if err != nil {
-		return fmt.Errorf("reading from ring buffer: %w", err)
-	}
-	// Parses the ringbuf event entry into an Event structure.
-	readFlow, err := ebpf.ReadFrom(bytes.NewBuffer(event.RawSample))
-	if err != nil {
-		return fmt.Errorf("parsing data received from the ring buffer: %w", err)
-	}
-	mapFullError := readFlow.Metrics.Errno == uint8(syscall.E2BIG)
-	if debugging {
-		m.stats.logRingBufferFlows(mapFullError)
-	}
-	// if the flow was received due to lack of space in the eBPF map
-	// forces a flow's eviction to leave room for new flows in the ebpf cache
-	if mapFullError {
-		m.mapFlusher.Flush()
+func (m *RingBufTracer) handleEvent(event *ebpf.NetFlowRecordT, out *msg.Queue[ebpf.Record]) {
+	*m.rec = ebpf.Record{NetFlowRecordT: *event}
+
+	if !m.k8sDecorator.Decorate(m.rec) {
+		return
 	}
 
-	forwardCh.Send([]*ebpf.Record{{
-		NetFlowRecordT: readFlow,
-	}})
+	m.rdnsEnricher.Enrich(m.rec)
+	m.cidrDecorator.Decorate(m.rec)
+	m.flowDecorator.Decorate(m.rec)
 
-	return nil
+	if !m.flowFilter.Allow(m.rec) {
+		return
+	}
+
+	out.Send(*m.rec)
 }
 
-// logRingBufferFlows avoids flooding logs on long series of evicted flows by grouping how
-// many flows are forwarded
-func (m *stats) logRingBufferFlows(mapFullErr bool) {
-	atomic.AddInt32(&m.forwardedFlows, 1)
-	if mapFullErr {
-		atomic.AddInt32(&m.mapFullErrs, 1)
-	}
-	if atomic.CompareAndSwapInt32(&m.isForwarding, 0, 1) {
-		go func() {
-			time.Sleep(m.loggingTimeout)
-			mfe := atomic.LoadInt32(&m.mapFullErrs)
-			l := rtlog().With(
-				"flows", atomic.LoadInt32(&m.forwardedFlows),
-				"mapFullErrs", mfe,
-			)
-			if mfe == 0 {
-				l.Debug("received flows via ringbuffer")
-			} else {
-				l.Debug("received flows via ringbuffer due to Map Full. You might want to increase the OTEL_EBPF_NETWORK_CACHE_MAX_FLOWS value")
-			}
-			atomic.StoreInt32(&m.forwardedFlows, 0)
-			atomic.StoreInt32(&m.isForwarding, 0)
-			atomic.StoreInt32(&m.mapFullErrs, 0)
-		}()
+func (m *RingBufTracer) TraceLoop(out *msg.Queue[ebpf.Record]) swarm.RunFunc {
+	return func(ctx context.Context) {
+		m.ringbufferLoop(ctx, out)
 	}
 }

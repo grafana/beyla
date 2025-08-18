@@ -24,7 +24,7 @@ package obi
 import (
 	"time"
 
-	"go.opentelemetry.io/obi/pkg/components/netolly/flow"
+	"go.opentelemetry.io/obi/pkg/components/netolly/rdns"
 	"go.opentelemetry.io/obi/pkg/components/netolly/transform/cidr"
 )
 
@@ -52,56 +52,62 @@ type NetworkConfig struct {
 	// or name:<interface name> (e.g. name:eth0).
 	// If the AgentIP configuration property is set, this property has no effect.
 	AgentIPIface string `yaml:"agent_ip_iface" env:"OTEL_EBPF_NETWORK_AGENT_IP_IFACE"`
+
 	// AgentIPType specifies which type of IP address (IPv4 or IPv6 or any) should the agent report
 	// in the AgentID field of each flow. Accepted values are: any (default), ipv4, ipv6.
 	// If the AgentIP configuration property is set, this property has no effect.
 	AgentIPType string `yaml:"agent_ip_type" env:"OTEL_EBPF_NETWORK_AGENT_IP_TYPE"`
+
 	// Interfaces contains the interface names from where flows will be collected. If empty, the agent
 	// will fetch all the interfaces in the system, excepting the ones listed in ExcludeInterfaces.
 	// If an entry is enclosed by slashes (e.g. `/br-/`), it will match as regular expression,
 	// otherwise it will be matched as a case-sensitive string.
 	Interfaces []string `yaml:"interfaces" env:"OTEL_EBPF_NETWORK_INTERFACES" envSeparator:","`
+
 	// ExcludeInterfaces contains the interface names that will be excluded from flow tracing. Default:
 	// "lo" (loopback).
 	// If an entry is enclosed by slashes (e.g. `/br-/`), it will match as regular expression,
 	// otherwise it will be matched as a case-sensitive string.
 	ExcludeInterfaces []string `yaml:"exclude_interfaces" env:"OTEL_EBPF_NETWORK_EXCLUDE_INTERFACES" envSeparator:","`
+
 	// Protocols causes Beyla to drop flows whose transport protocol is not in this list.
 	Protocols []string `yaml:"protocols" env:"OTEL_EBPF_NETWORK_PROTOCOLS" envSeparator:","`
+
 	// ExcludeProtocols causes Beyla to drop flows whose transport protocol is in this list.
 	// If the Protocols list is already defined, ExcludeProtocols has no effect.
 	ExcludeProtocols []string `yaml:"exclude_protocols" env:"OTEL_EBPF_NETWORK_EXCLUDE_PROTOCOLS" envSeparator:","`
-	// CacheMaxFlows specifies how many flows can be accumulated in the accounting cache before
-	// being flushed for its later export. Default value is 5000.
-	// Decrease it if you see the "received message larger than max" error in Beyla logs.
-	CacheMaxFlows int `yaml:"cache_max_flows" env:"OTEL_EBPF_NETWORK_CACHE_MAX_FLOWS"`
-	// CacheActiveTimeout specifies the maximum duration that flows are kept in the accounting
-	// cache before being flushed for its later export.
-	CacheActiveTimeout time.Duration `yaml:"cache_active_timeout" env:"OTEL_EBPF_NETWORK_CACHE_ACTIVE_TIMEOUT"`
-	// Deduper specifies the deduper type. Accepted values are "none" (disabled) and "first_come".
-	// When enabled, it will detect duplicate flows (flows that have been detected e.g. through
-	// both the physical and a virtual interface).
-	// "first_come" will forward only flows from the first interface the flows are received from.
-	// Default value: first_come
-	Deduper string `yaml:"deduper" env:"OTEL_EBPF_NETWORK_DEDUPER"`
-	// DeduperFCTTL specifies the expiry duration of the flows "first_come" deduplicator. After
-	// a flow hasn't been received for that expiry time, the deduplicator forgets it. That means
-	// that a flow from a connection that has been inactive during that period could be forwarded
-	// again from a different interface.
-	// If the value is not set, it will default to 2 * CacheActiveTimeout
-	DeduperFCTTL time.Duration `yaml:"deduper_fc_ttl" env:"OTEL_EBPF_NETWORK_DEDUPER_FC_TTL"`
+
+	// The size of the ring buffer in MB used to queue the network flows. Defaults
+	// to 16 MB. Values will be adjusted to be a power of 2 of at least the OS
+	// page size.
+	RingBufferSize uint32 `yaml:"ring_buffer_size" env:"OTEL_EBPF_NETWORK_RING_BUFFER_SIZE"`
+
+	// Specifies the periodicity in which events are flushed from the ring
+	// buffer to userspace. Defaults to 10 seconds.
+	RingBufferFlushPeriod time.Duration `yaml:"ring_buffer_flush_period" env:"OTEL_EBPF_NETWORK_RING_BUFFER_FLUSH_PERIOD"`
+
+	// The maximum duration we hold on to a flow before exporting it. Flows
+	// are usually flushed when their connection terminates, which can be
+	// problematic for very long-last flows/connections (such as connections
+	// being kept-alive). Flows that have been alive for more than
+	// MaxFlowDuration will be flushed and reset. Defaults to 60 seconds.
+	MaxFlowDuration time.Duration `yaml:"max_flow_duration" env:"OTEL_EBPF_NETWORK_MAX_FLOW_DURATION"`
+
 	// Direction allows selecting which flows to trace according to its direction. Accepted values
 	// are "ingress", "egress" or "both" (default).
 	Direction string `yaml:"direction" env:"OTEL_EBPF_NETWORK_DIRECTION"`
+
 	// Sampling holds the rate at which packets should be sampled and sent to the target collector.
 	// E.g. if set to 100, one out of 100 packets, on average, will be sent to the target collector.
 	Sampling int `yaml:"sampling" env:"OTEL_EBPF_NETWORK_SAMPLING"`
+
 	// ListenInterfaces specifies the mechanism used by the agent to listen for added or removed
 	// network interfaces. Accepted values are "watch" (default) or "poll".
 	// If the value is "watch", interfaces are traced immediately after they are created. This is
 	// the recommended setting for most configurations. "poll" value is a fallback mechanism that
 	// periodically queries the current network interfaces (frequency specified by ListenPollPeriod).
 	ListenInterfaces string `yaml:"listen_interfaces" env:"OTEL_EBPF_NETWORK_LISTEN_INTERFACES"`
+
 	// ListenPollPeriod specifies the periodicity to query the network interfaces when the
 	// ListenInterfaces value is set to "poll".
 	ListenPollPeriod time.Duration `yaml:"listen_poll_period" env:"OTEL_EBPF_NETWORK_LISTEN_POLL_PERIOD"`
@@ -110,7 +116,8 @@ type NetworkConfig struct {
 	// to override the name with the network hostname of the source and destination IPs.
 	// This is an experimental feature and it is not guaranteed to work on most virtualized environments
 	// for external traffic.
-	ReverseDNS flow.ReverseDNS `yaml:"reverse_dns"`
+	ReverseDNS rdns.ReverseDNS `yaml:"reverse_dns"`
+
 	// Print the network flows in the Standard Output, if true
 	Print bool `yaml:"print_flows" env:"OTEL_EBPF_NETWORK_PRINT_FLOWS"`
 
@@ -124,18 +131,18 @@ type NetworkConfig struct {
 }
 
 var defaultNetworkConfig = NetworkConfig{
-	Source:             EbpfSourceSock,
-	AgentIPIface:       "external",
-	AgentIPType:        "any",
-	ExcludeInterfaces:  []string{"lo"},
-	CacheMaxFlows:      5000,
-	CacheActiveTimeout: 5 * time.Second,
-	Deduper:            flow.DeduperFirstCome,
-	Direction:          "both",
-	ListenInterfaces:   "watch",
-	ListenPollPeriod:   10 * time.Second,
-	ReverseDNS: flow.ReverseDNS{
-		Type:     flow.ReverseDNSNone,
+	Source:                EbpfSourceSock,
+	AgentIPIface:          "external",
+	AgentIPType:           "any",
+	ExcludeInterfaces:     []string{"lo"},
+	RingBufferSize:        16,
+	RingBufferFlushPeriod: 10 * time.Second,
+	MaxFlowDuration:       60 * time.Second,
+	Direction:             "both",
+	ListenInterfaces:      "watch",
+	ListenPollPeriod:      10 * time.Second,
+	ReverseDNS: rdns.ReverseDNS{
+		Type:     rdns.ReverseDNSNone,
 		CacheLen: 256,
 		CacheTTL: time.Hour,
 	},

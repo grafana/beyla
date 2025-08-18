@@ -30,10 +30,7 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/components/kube"
 	"go.opentelemetry.io/obi/pkg/components/netolly/ebpf"
-	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/kubecache/informer"
-	"go.opentelemetry.io/obi/pkg/pipe/msg"
-	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 	"go.opentelemetry.io/obi/pkg/transform"
 )
 
@@ -55,39 +52,6 @@ const alreadyLoggedIPsCacheLen = 256
 
 func log() *slog.Logger { return slog.With("component", "k8s.MetadataDecorator") }
 
-func MetadataDecoratorProvider(
-	ctx context.Context,
-	cfg *transform.KubernetesDecorator,
-	k8sInformer *kube.MetadataProvider,
-	input, output *msg.Queue[[]*ebpf.Record],
-) swarm.InstanceFunc {
-	return func(_ context.Context) (swarm.RunFunc, error) {
-		if !k8sInformer.IsKubeEnabled() {
-			return swarm.Bypass(input, output)
-		}
-		nt, err := newDecorator(ctx, cfg, k8sInformer)
-		if err != nil {
-			return nil, fmt.Errorf("instantiating k8s.MetadataDecorator: %w", err)
-		}
-		var decorate func([]*ebpf.Record) []*ebpf.Record
-		if cfg.DropExternal {
-			log().Debug("will drop external flows")
-			decorate = nt.decorateMightDrop
-		} else {
-			decorate = nt.decorateNoDrop
-		}
-		in := input.Subscribe()
-		return func(_ context.Context) {
-			defer output.Close()
-			log().Debug("starting network transformation loop")
-			for flows := range in {
-				output.Send(decorate(flows))
-			}
-			log().Debug("stopping network transformation loop")
-		}, nil
-	}
-}
-
 type decorator struct {
 	log              *slog.Logger
 	alreadyLoggedIPs *simplelru.LRU[string, struct{}]
@@ -95,37 +59,66 @@ type decorator struct {
 	clusterName      string
 }
 
-func (n *decorator) decorateNoDrop(flows []*ebpf.Record) []*ebpf.Record {
-	for _, flow := range flows {
-		n.transform(flow)
-	}
-	return flows
+type Decorator struct {
+	decorator    *decorator
+	Enabled      bool
+	DropExternal bool
 }
 
-func (n *decorator) decorateMightDrop(flows []*ebpf.Record) []*ebpf.Record {
-	out := make([]*ebpf.Record, 0, len(flows))
-	for _, flow := range flows {
-		if n.transform(flow) {
-			out = append(out, flow)
-		}
+func NewDecorator(ctx context.Context, cfg *transform.KubernetesDecorator,
+	k8sInformer *kube.MetadataProvider,
+) (*Decorator, error) {
+	d := &Decorator{
+		Enabled:      k8sInformer.IsKubeEnabled(),
+		DropExternal: cfg.DropExternal,
 	}
-	return out
+
+	if !d.Enabled {
+		return d, nil
+	}
+
+	nt, err := newDecorator(ctx, cfg, k8sInformer)
+	if err != nil {
+		return nil, fmt.Errorf("instantiating k8s.MetadataDecorator: %w", err)
+	}
+
+	d.decorator = nt
+
+	return d, nil
+}
+
+func (d *Decorator) Decorate(r *ebpf.Record) bool {
+	if !d.Enabled {
+		return true
+	}
+
+	if d.DropExternal {
+		return d.decorator.decorateMightDrop(r)
+	}
+
+	return d.decorator.decorateNoDrop(r)
+}
+
+func (n *decorator) decorateNoDrop(flow *ebpf.Record) bool {
+	n.transform(flow)
+	return true
+}
+
+func (n *decorator) decorateMightDrop(flow *ebpf.Record) bool {
+	return n.transform(flow)
 }
 
 func (n *decorator) transform(flow *ebpf.Record) bool {
-	if flow.Attrs.Metadata == nil {
-		flow.Attrs.Metadata = map[attr.Name]string{}
-	}
 	if n.clusterName != "" {
-		flow.Attrs.Metadata[(attr.K8sClusterName)] = n.clusterName
+		flow.Attrs.K8sClusterName = n.clusterName
 	}
-	srcOk := n.decorate(flow, attrPrefixSrc, flow.Id.SrcIP().IP().String())
-	dstOk := n.decorate(flow, attrPrefixDst, flow.Id.DstIP().IP().String())
+	srcOk := n.decorate(&flow.Attrs.Src, flow.SrcIP().IP().String())
+	dstOk := n.decorate(&flow.Attrs.Dst, flow.DstIP().IP().String())
 	return srcOk && dstOk
 }
 
 // decorate the flow with Kube metadata. Returns false if there is no metadata found for such IP
-func (n *decorator) decorate(flow *ebpf.Record, prefix, ip string) bool {
+func (n *decorator) decorate(attrs *ebpf.InnerAttrs, ip string) bool {
 	cachedObj := n.kube.ObjectMetaByIP(ip)
 	if cachedObj == nil {
 		if n.log.Enabled(context.TODO(), slog.LevelDebug) {
@@ -143,34 +136,28 @@ func (n *decorator) decorate(flow *ebpf.Record, prefix, ip string) bool {
 		ownerName, ownerKind = owner.Name, owner.Kind
 	}
 
-	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixNs)] = meta.Namespace
-	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixName)] = meta.Name
-	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixType)] = meta.Kind
-	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixOwnerName)] = ownerName
-	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixOwnerType)] = ownerKind
+	attrs.Namespace = meta.Namespace
+	attrs.Name = meta.Name
+	attrs.Type = meta.Kind
+	attrs.OwnerName = ownerName
+	attrs.OwnerType = ownerKind
 
-	n.nodeLabels(flow, prefix, meta)
+	n.nodeLabels(attrs, meta)
 
-	// decorate other names from metadata, if required
-	if prefix == attrPrefixDst {
-		if flow.Attrs.DstName == "" {
-			flow.Attrs.DstName = meta.Name
-		}
-	} else {
-		if flow.Attrs.SrcName == "" {
-			flow.Attrs.SrcName = meta.Name
-		}
+	if attrs.TargetName == "" {
+		attrs.TargetName = meta.Name
 	}
+
 	return true
 }
 
-func (n *decorator) nodeLabels(flow *ebpf.Record, prefix string, meta *informer.ObjectMeta) {
+func (n *decorator) nodeLabels(attrs *ebpf.InnerAttrs, meta *informer.ObjectMeta) {
 	var nodeLabels map[string]string
 	// add any other ownership label (they might be several, e.g. replicaset and deployment)
 	if meta.Pod != nil && meta.Pod.HostIp != "" {
-		flow.Attrs.Metadata[attr.Name(prefix+attrSuffixHostIP)] = meta.Pod.HostIp
+		attrs.NodeIP = meta.Pod.HostIp
 		if host := n.kube.ObjectMetaByIP(meta.Pod.HostIp); host != nil {
-			flow.Attrs.Metadata[attr.Name(prefix+attrSuffixHostName)] = host.Meta.Name
+			attrs.NodeName = host.Meta.Name
 			nodeLabels = host.Meta.Labels
 		}
 	} else if meta.Kind == "Node" {
@@ -180,11 +167,7 @@ func (n *decorator) nodeLabels(flow *ebpf.Record, prefix string, meta *informer.
 		// this isn't strictly a Kubernetes attribute, but in Kubernetes
 		// clusters this information is inferred from Node annotations
 		if zone, ok := nodeLabels[cloudZoneLabel]; ok {
-			if prefix == attrPrefixDst {
-				flow.Attrs.DstZone = zone
-			} else {
-				flow.Attrs.SrcZone = zone
-			}
+			attrs.TargetZone = zone
 		}
 	}
 }

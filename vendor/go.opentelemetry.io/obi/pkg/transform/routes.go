@@ -6,10 +6,12 @@ package transform
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 
 	"go.opentelemetry.io/obi/pkg/app/request"
 	"go.opentelemetry.io/obi/pkg/components/transform/route"
+	"go.opentelemetry.io/obi/pkg/components/transform/route/clusterurl"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 )
@@ -68,9 +70,10 @@ func RoutesProvider(rc *RoutesConfig, input, output *msg.Queue[[]request.Span]) 
 }
 
 type routerNode struct {
-	config *RoutesConfig
-	input  *msg.Queue[[]request.Span]
-	output *msg.Queue[[]request.Span]
+	config     *RoutesConfig
+	classifier *clusterurl.ClusterURLClassifier
+	input      *msg.Queue[[]request.Span]
+	output     *msg.Queue[[]request.Span]
 }
 
 func (rn *routerNode) provideRoutes(_ context.Context) (swarm.RunFunc, error) {
@@ -80,7 +83,7 @@ func (rn *routerNode) provideRoutes(_ context.Context) (swarm.RunFunc, error) {
 	}
 
 	// set default value for Unmatch action
-	unmatchAction, err := chooseUnmatchPolicy(rc)
+	unmatchAction, err := chooseUnmatchPolicy(rn)
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +123,7 @@ func (rn *routerNode) provideRoutes(_ context.Context) (swarm.RunFunc, error) {
 					if routesEnabled {
 						s.Route = matcher.Find(s.Path)
 					}
-					unmatchAction(rc, s)
+					unmatchAction(rn, s)
 				}
 				out.Send(spans)
 			}
@@ -128,8 +131,9 @@ func (rn *routerNode) provideRoutes(_ context.Context) (swarm.RunFunc, error) {
 	}, nil
 }
 
-func chooseUnmatchPolicy(rc *RoutesConfig) (func(rc *RoutesConfig, span *request.Span), error) {
-	var unmatchAction func(rc *RoutesConfig, span *request.Span)
+func chooseUnmatchPolicy(rn *routerNode) (func(rn *routerNode, span *request.Span), error) {
+	var unmatchAction func(rn *routerNode, span *request.Span)
+	rc := rn.config
 
 	switch rc.Unmatch {
 	case UnmatchWildcard, "":
@@ -150,10 +154,15 @@ func chooseUnmatchPolicy(rc *RoutesConfig) (func(rc *RoutesConfig, span *request
 	case UnmatchPath:
 		unmatchAction = setUnmatchToPath
 	case UnmatchHeuristic:
-		err := route.InitAutoClassifier()
-		if err != nil {
-			return nil, err
+		classifierCfg := clusterurl.DefaultConfig()
+		if rc.WildcardChar != "" {
+			classifierCfg.ReplaceWith = rc.WildcardChar[0]
 		}
+		classifier, err := clusterurl.NewClusterURLClassifier(classifierCfg)
+		if err != nil {
+			return nil, fmt.Errorf("chooseUnmatchPolicy: unable to create cluster URL classifier: %w", err)
+		}
+		rn.classifier = classifier
 		unmatchAction = classifyFromPath
 	default:
 		slog.With("component", "RoutesProvider").
@@ -165,23 +174,23 @@ func chooseUnmatchPolicy(rc *RoutesConfig) (func(rc *RoutesConfig, span *request
 	return unmatchAction, nil
 }
 
-func leaveUnmatchEmpty(_ *RoutesConfig, _ *request.Span) {}
+func leaveUnmatchEmpty(_ *routerNode, _ *request.Span) {}
 
-func setUnmatchToWildcard(_ *RoutesConfig, str *request.Span) {
+func setUnmatchToWildcard(_ *routerNode, str *request.Span) {
 	if str.Route == "" {
 		str.Route = wildCard
 	}
 }
 
-func setUnmatchToPath(_ *RoutesConfig, str *request.Span) {
+func setUnmatchToPath(_ *routerNode, str *request.Span) {
 	if str.Route == "" {
 		str.Route = str.Path
 	}
 }
 
-func classifyFromPath(rc *RoutesConfig, s *request.Span) {
+func classifyFromPath(rc *routerNode, s *request.Span) {
 	if s.Route == "" && (s.Type == request.EventTypeHTTP || s.Type == request.EventTypeHTTPClient) {
-		s.Route = route.ClusterPath(s.Path, rc.WildcardChar[0])
+		s.Route = rc.classifier.ClusterURL(s.Path)
 	}
 }
 

@@ -361,7 +361,7 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 				attrs = append(attrs, request.DBCollectionName(table))
 			}
 		}
-		if span.Status == 1 {
+		if span.Status == 1 && span.SQLError != nil {
 			attrs = append(attrs, request.DBResponseStatusCode(strconv.Itoa(int(span.SQLError.Code))))
 			attrs = append(attrs, request.ErrorType(span.SQLError.SQLState))
 		}

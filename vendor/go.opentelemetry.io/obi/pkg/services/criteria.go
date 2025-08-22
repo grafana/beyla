@@ -131,7 +131,7 @@ type Selector interface {
 	RangeMetadata() iter.Seq2[string, StringMatcher]
 	RangePodLabels() iter.Seq2[string, StringMatcher]
 	RangePodAnnotations() iter.Seq2[string, StringMatcher]
-	GetExportModes() *ExportModes
+	GetExportModes() ExportModes
 	GetSamplerConfig() *SamplerConfig
 }
 

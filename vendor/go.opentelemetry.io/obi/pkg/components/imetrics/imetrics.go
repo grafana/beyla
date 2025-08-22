@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-// Package imetrics supports recording and submission of internal metrics from Beyla
+// Package imetrics supports recording and submission of internal metrics
 package imetrics
 
 import (
@@ -26,6 +26,7 @@ const (
 	InstrumentationErrorAttachingCgroup                = "attaching_cgroup"
 	InstrumentationErrorAttachingKprobe                = "attaching_kprobe"
 	InstrumentationErrorAttachingUprobe                = "attaching_uprobe"
+	InstrumentationErrorAttachingIter                  = "attaching_iter"
 	InstrumentationErrorInvalidTracepoint              = "invalid_tracepoint"
 )
 
@@ -68,18 +69,24 @@ type Reporter interface {
 	UninstrumentProcess(processName string)
 	// InstrumentationError is invoked every time an instrumentation attempt fails
 	InstrumentationError(processName string, errorType string)
+	// AvoidInstrumentationMetrics is invoked every time a service is avoided due to OTLP metrics detection
+	AvoidInstrumentationMetrics(serviceName, serviceNamespace, serviceInstanceID string)
+	// AvoidInstrumentationTraces is invoked every time a service is avoided due to OTLP traces detection
+	AvoidInstrumentationTraces(serviceName, serviceNamespace, serviceInstanceID string)
 }
 
 // NoopReporter is a metrics Reporter that just does nothing
 type NoopReporter struct{}
 
-func (n NoopReporter) Start(_ context.Context)          {}
-func (n NoopReporter) TracerFlush(_ int)                {}
-func (n NoopReporter) OTELMetricExport(_ int)           {}
-func (n NoopReporter) OTELMetricExportError(_ error)    {}
-func (n NoopReporter) OTELTraceExport(_ int)            {}
-func (n NoopReporter) OTELTraceExportError(_ error)     {}
-func (n NoopReporter) PrometheusRequest(_, _ string)    {}
-func (n NoopReporter) InstrumentProcess(_ string)       {}
-func (n NoopReporter) UninstrumentProcess(_ string)     {}
-func (n NoopReporter) InstrumentationError(_, _ string) {}
+func (n NoopReporter) Start(_ context.Context)                    {}
+func (n NoopReporter) TracerFlush(_ int)                          {}
+func (n NoopReporter) OTELMetricExport(_ int)                     {}
+func (n NoopReporter) OTELMetricExportError(_ error)              {}
+func (n NoopReporter) OTELTraceExport(_ int)                      {}
+func (n NoopReporter) OTELTraceExportError(_ error)               {}
+func (n NoopReporter) PrometheusRequest(_, _ string)              {}
+func (n NoopReporter) InstrumentProcess(_ string)                 {}
+func (n NoopReporter) UninstrumentProcess(_ string)               {}
+func (n NoopReporter) InstrumentationError(_, _ string)           {}
+func (n NoopReporter) AvoidInstrumentationMetrics(_, _, _ string) {}
+func (n NoopReporter) AvoidInstrumentationTraces(_, _, _ string)  {}

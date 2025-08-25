@@ -85,8 +85,8 @@ attributes:
 ```
 
 This configuration provides detailed visibility into which specific pods and nodes are generating inter-zone traffic,
-helping you optimize your application topology and reduce cross-zone costs. Note that adding more attributes will
-increase the metric cardinality.
+helping you optimize your application topology and reduce cross-zone costs. Note that adding more attributes
+increases the metric cardinality.
 
 
 ## PromQL queries to measure inter-zone traffic

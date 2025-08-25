@@ -118,7 +118,9 @@ func (i *Instrumenter) FindAndInstrument(ctx context.Context) error {
 
 	// In background, listen indefinitely for each new process and run its
 	// associated ebpf.ProcessTracer once it is found.
-	go i.instrumentedEventLoop(ctx, processEvents)
+	if processEvents != nil {
+		go i.instrumentedEventLoop(ctx, processEvents)
+	}
 
 	// TODO: wait until all the resources have been freed/unmounted
 	return nil

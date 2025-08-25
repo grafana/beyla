@@ -237,6 +237,7 @@ type Config struct {
 	// nolint:undoc
 	LogConfig bool `yaml:"log_config" env:"BEYLA_LOG_CONFIG"`
 
+	// nolint:undoc
 	NodeJS obi.NodeJSConfig `yaml:"nodejs"`
 
 	// cached equivalent for the OBI conversion

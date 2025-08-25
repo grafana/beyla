@@ -61,6 +61,34 @@ otel_metrics_export:
     - network_inter_zone
 ```
 
+By default, the `beyla.network.inter.zone` metric includes only high-level attributes such as zone information and 
+source/destination owner names to keep metric cardinality low. However, you might want to analyze inter-zone traffic 
+at a finer granular level, such as by individual pods or nodes, to identify specific sources of cross-zone communication. 
+
+To include additional attributes for more detailed analysis, you can configure attribute selection specifically 
+for the inter-zone metric:
+
+```yaml
+attributes:
+  select:
+    beyla_network_inter_zone_bytes:
+      include:
+        - k8s.src.namespace
+        - k8s.src.pod.name
+        - k8s.src.node.name
+        - k8s.dst.namespace
+        - k8s.dst.pod.name
+        - k8s.dst.node.name
+        - k8s.cluster.name
+        - src.zone
+        - dst.zone
+```
+
+This configuration provides detailed visibility into which specific pods and nodes are generating inter-zone traffic,
+helping you optimize your application topology and reduce cross-zone costs. Note that adding more attributes will
+increase the metric cardinality.
+
+
 ## PromQL queries to measure inter-zone traffic
 
 Assuming that both `network` and `network_inter_zone` metric families are enabled, you can use the following PromQL queries

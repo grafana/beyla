@@ -9,10 +9,12 @@ import (
 	"go.opentelemetry.io/obi/pkg/components/exec"
 	"go.opentelemetry.io/obi/pkg/components/pipe"
 	"go.opentelemetry.io/obi/pkg/components/pipe/global"
+	"go.opentelemetry.io/obi/pkg/export/attributes"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
+	"github.com/grafana/beyla/v2/pkg/export/alloy"
 )
 
 func ilog() *slog.Logger {
@@ -51,6 +53,14 @@ func Build(ctx context.Context, config *beyla.Config, ctxInfo *global.ContextInf
 	// process subpipeline optionally starts another pipeline only to collect and export data
 	// about the processes of an instrumented application
 	swi.Add(ProcessMetricsSwarmInstancer(ctxInfo, config, ctxInfo.OverrideAppExportQueue))
+
+	selectorCfg := &attributes.SelectorConfig{
+		SelectionCfg:            config.Attributes.Select,
+		ExtraGroupAttributesCfg: config.Attributes.ExtraGroupAttributes,
+	}
+
+	swi.Add(alloy.TracesReceiver(ctxInfo, &config.TracesReceiver, config.Metrics.SpanMetricsEnabled(),
+		selectorCfg, ctxInfo.OverrideAppExportQueue))
 
 	return swi.Instance(ctx)
 }

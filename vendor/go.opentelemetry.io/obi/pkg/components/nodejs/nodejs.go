@@ -27,7 +27,7 @@ func NewNodeInjector(cfg *obi.Config) *NodeInjector {
 }
 
 func (i *NodeInjector) Enabled() bool {
-	return i.cfg.Traces.Enabled() || i.cfg.TracePrinter.Enabled()
+	return i.cfg.NodeJS.Enabled && (i.cfg.Traces.Enabled() || i.cfg.TracePrinter.Enabled())
 }
 
 func (i *NodeInjector) NewExecutable(ie *ebpf.Instrumentable) {

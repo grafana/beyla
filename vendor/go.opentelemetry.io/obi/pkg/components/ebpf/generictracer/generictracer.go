@@ -6,7 +6,10 @@
 package generictracer
 
 import (
+	"bufio"
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"sync"
@@ -14,6 +17,7 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/link"
 	"github.com/gavv/monotime"
 	"github.com/vishvananda/netlink"
 
@@ -46,6 +50,7 @@ type Tracer struct {
 	ingressFilters   map[ifaces.Interface]*netlink.BpfFilter
 	instrumentedLibs ebpfcommon.InstrumentedLibsT
 	libsMux          sync.Mutex
+	iters            []*ebpfcommon.Iter
 }
 
 func tlog() *slog.Logger {
@@ -63,6 +68,7 @@ func New(pidFilter ebpfcommon.ServiceFilter, cfg *obi.Config, metrics imetrics.R
 		ingressFilters:   map[ifaces.Interface]*netlink.BpfFilter{},
 		instrumentedLibs: make(ebpfcommon.InstrumentedLibsT),
 		libsMux:          sync.Mutex{},
+		iters:            []*ebpfcommon.Iter{},
 	}
 }
 
@@ -298,6 +304,10 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.ProbeDesc {
 			Start:    p.bpfObjects.ObiKprobeUnixStreamSendmsg,
 			End:      p.bpfObjects.ObiKretprobeUnixStreamSendmsg,
 		},
+		"inet_csk_listen_stop": {
+			Required: true,
+			Start:    p.bpfObjects.ObiKprobeInetCskListenStop,
+		},
 	}
 
 	if p.cfg.EBPF.ContextPropagation != config.ContextPropagationDisabled {
@@ -382,6 +392,18 @@ func (p *Tracer) SockMsgs() []ebpfcommon.SockMsg { return nil }
 
 func (p *Tracer) SockOps() []ebpfcommon.SockOps { return nil }
 
+func (p *Tracer) Iters() []*ebpfcommon.Iter {
+	if len(p.iters) == 0 {
+		p.iters = []*ebpfcommon.Iter{
+			{
+				Program: p.bpfObjects.ObiIterTcp,
+			},
+		}
+	}
+
+	return p.iters
+}
+
 func (p *Tracer) RecordInstrumentedLib(id uint64, closers []io.Closer) {
 	p.libsMux.Lock()
 	defer p.libsMux.Unlock()
@@ -436,6 +458,14 @@ func (p *Tracer) Run(ctx context.Context, ebpfEventContext *ebpfcommon.EBPFEvent
 	go p.watchForMisclassifedEvents(ctx)
 	go p.lookForTimeouts(ctx, timeoutTicker, eventsChan)
 	defer timeoutTicker.Stop()
+
+	for _, it := range p.Iters() {
+		if it.Program == p.bpfObjects.ObiIterTcp {
+			if err := p.runIterator(it); err != nil {
+				p.log.Error("error running TCP iterator", "error", err)
+			}
+		}
+	}
 
 	p.log.Info("Launching p.Tracer")
 
@@ -524,6 +554,31 @@ func (p *Tracer) watchForMisclassifedEvents(ctx context.Context) {
 			}
 		}
 	}
+}
+
+func (p *Tracer) runIterator(it *ebpfcommon.Iter) error {
+	p.log.Debug("Running iterator", "iterator", it.Program.String())
+
+	if it.Link == nil {
+		return errors.New("iterator link is nil")
+	}
+
+	rd, err := it.Link.(*link.Iter).Open()
+	if err != nil {
+		return fmt.Errorf("open iterator: %w", err)
+	}
+	defer rd.Close()
+
+	scanner := bufio.NewScanner(rd)
+	for scanner.Scan() {
+		p.log.Debug("Iterator output", "line", scanner.Text(), "iterator", it.Program.String())
+	}
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("read iterator: %w", err)
+	}
+	p.log.Debug("Iterator finished", "iterator", it.Program.String())
+
+	return nil
 }
 
 // Cilium 0.19.0+ is adding a new private field to all the BpfConnectionInfoT

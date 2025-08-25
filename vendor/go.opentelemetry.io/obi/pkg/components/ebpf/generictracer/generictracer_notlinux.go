@@ -38,6 +38,7 @@ func (p *Tracer) Tracepoints() map[string]ebpfcommon.ProbeDesc                  
 func (p *Tracer) SocketFilters() []*ebpf.Program                                 { return nil }
 func (p *Tracer) SockMsgs() []ebpfcommon.SockMsg                                 { return nil }
 func (p *Tracer) SockOps() []ebpfcommon.SockOps                                  { return nil }
+func (p *Tracer) Iters() []*ebpfcommon.Iter                                      { return nil }
 func (p *Tracer) RecordInstrumentedLib(_ uint64, _ []io.Closer)                  {}
 func (p *Tracer) AddInstrumentedLibRef(_ uint64)                                 {}
 func (p *Tracer) UnlinkInstrumentedLib(_ uint64)                                 {}

@@ -12,39 +12,61 @@ import (
 )
 
 const (
-	exportMetrics = maps.Bits(1 << iota)
-	exportTraces
+	// if the corresponding bit is set to 1, this means that this signal
+	// is not going to be emitted
+	blockMetrics = maps.Bits(1 << iota)
+	blockTraces
 )
 
 var modeForText = map[string]maps.Bits{
-	"metrics": exportMetrics,
-	"traces":  exportTraces,
+	"metrics": blockMetrics,
+	"traces":  blockTraces,
 }
 
+const (
+	// the zero-value of ExportModes (blockSignal == 0) means that the value is unset.
+	// This is, all the signals are allowed.
+	// In the corresponding YAML is a null or undefined value
+	unset = maps.Bits(0)
+	// the -1 (all bits to one) value of ExportModes means that the value is set to
+	// an empty set: all the signals are blocked.
+	// In the corresponding YAML it's an empty sequence []
+	blockAll = maps.Bits(^uint(0))
+)
+
+// ExportModeUnset corresponds to an undefined export mode in the configuration YAML
+// (null or undefined value). This means that all the signals (traces, metrics) are
+// going to be exported
+var ExportModeUnset = ExportModes{blockSignal: unset}
+
+// ExportModes specifies which signals are going to be exported for a given service,
+// via the public methods CanExportTraces and CanExportMetrics.
+// Internally, it has three modes of operation depending on how it is defined in the YAML:
+//   - When it is undefined or null in the YAML, it will allow exporting all the signals
+//     (as no blocking signals are defined)
+//   - When it is defined as an empty list in the YAML, it will block all the signals. No
+//     metrics nor traces are exported.
+//   - When it is defined as a non-empty list, it will only allow the explicitly specified signals.
 type ExportModes struct {
-	items maps.Bits
-}
-
-func (modes *ExportModes) canExport(mode maps.Bits) bool {
-	if modes == nil {
-		return true
-	}
-	return modes.items.Has(mode)
+	blockSignal maps.Bits
 }
 
 // CanExportTraces reports whether traces can be exported.
 // It's provided as a convenience function.
-func (modes *ExportModes) CanExportTraces() bool {
-	return modes.canExport(exportTraces)
+func (modes ExportModes) CanExportTraces() bool {
+	return !modes.blockSignal.Has(blockTraces)
 }
 
 // CanExportMetrics reports whether metrics can be exported.
 // It's provided as a convenience function.
-func (modes *ExportModes) CanExportMetrics() bool {
-	return modes.canExport(exportMetrics)
+func (modes ExportModes) CanExportMetrics() bool {
+	return !modes.blockSignal.Has(blockMetrics)
 }
 
 func (modes *ExportModes) UnmarshalYAML(value *yaml.Node) error {
+	// by default, everything is blocked, and we will unblock each signal
+	// as long as we parse them in the YAML
+	modes.blockSignal = blockAll
 	if value.Kind != yaml.SequenceNode {
 		return fmt.Errorf("ExportModes: unexpected YAML node kind %d", value.Kind)
 	}
@@ -55,33 +77,27 @@ func (modes *ExportModes) UnmarshalYAML(value *yaml.Node) error {
 		if mode, ok := modeForText[inner.Value]; !ok {
 			return fmt.Errorf("ExportModes[%d]: unknown export mode %q", i, inner.Value)
 		} else {
-			modes.items |= mode
+			// a given signal is defined. Remove it from the blocking list
+			modes.blockSignal ^= mode
 		}
 	}
-	return modes.UnmarshalText([]byte(value.Value))
-}
-
-func (modes *ExportModes) UnmarshalText(text []byte) error {
-	var options []string
-	if err := yaml.Unmarshal(text, &options); err != nil {
-		return fmt.Errorf("invalid export_modes: %w", err)
-	}
-	if options == nil {
-		return nil
-	}
-	modes.items = maps.MappedBits(options, modeForText)
 	return nil
 }
 
-func (modes *ExportModes) MarshalYAML() (any, error) {
-	if modes == nil {
+func (modes ExportModes) MarshalYAML() (any, error) {
+	if modes.blockSignal == unset {
 		return nil, nil
 	}
 	node := yaml.Node{
 		Kind: yaml.SequenceNode,
 	}
+	// return an empty sequence, in opposition of "null" in the unset case
+	if modes.blockSignal == blockAll {
+		return node, nil
+	}
 	for text, mode := range modeForText {
-		if modes.items.Has(mode) {
+		// the given signal is not explicitly blocked, so we can list it as allowed
+		if !modes.blockSignal.Has(mode) {
 			node.Content = append(node.Content, &yaml.Node{
 				Kind:  yaml.ScalarNode,
 				Value: text,
@@ -89,17 +105,4 @@ func (modes *ExportModes) MarshalYAML() (any, error) {
 		}
 	}
 	return node, nil
-}
-
-func (modes *ExportModes) MarshalText() ([]byte, error) {
-	var options []string
-	if modes != nil {
-		options = make([]string, 0, len(modeForText))
-		for text, mode := range modeForText {
-			if modes.items.Has(mode) {
-				options = append(options, text)
-			}
-		}
-	}
-	return yaml.Marshal(options)
 }

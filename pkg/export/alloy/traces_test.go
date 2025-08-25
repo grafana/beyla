@@ -175,7 +175,7 @@ func TestTracesExportModeFiltering(t *testing.T) {
 	}
 
 	type tcConf struct {
-		Exports *services.ExportModes
+		Exports services.ExportModes
 	}
 
 	var tcMetrics tcConf

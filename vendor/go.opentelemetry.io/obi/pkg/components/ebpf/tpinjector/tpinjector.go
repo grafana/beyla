@@ -136,6 +136,10 @@ func (p *Tracer) SockOps() []ebpfcommon.SockOps {
 	}
 }
 
+func (p *Tracer) Iters() []*ebpfcommon.Iter {
+	return nil
+}
+
 func (p *Tracer) RecordInstrumentedLib(uint64, []io.Closer) {}
 
 func (p *Tracer) AddInstrumentedLibRef(uint64) {}

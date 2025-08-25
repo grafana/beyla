@@ -492,6 +492,8 @@ func (p *Tracer) SockMsgs() []ebpfcommon.SockMsg { return nil }
 
 func (p *Tracer) SockOps() []ebpfcommon.SockOps { return nil }
 
+func (p *Tracer) Iters() []*ebpfcommon.Iter { return nil }
+
 func (p *Tracer) RecordInstrumentedLib(_ uint64, _ []io.Closer) {}
 
 func (p *Tracer) AddInstrumentedLibRef(_ uint64) {}

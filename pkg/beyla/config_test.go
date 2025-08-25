@@ -26,6 +26,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/export/prom"
 	"go.opentelemetry.io/obi/pkg/kubeflags"
+	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/services"
 	"go.opentelemetry.io/obi/pkg/transform"
 
@@ -265,6 +266,7 @@ network:
 				},
 			},
 		},
+		NodeJS: obi.NodeJSConfig{Enabled: true},
 	}, cfg)
 }
 

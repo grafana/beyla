@@ -122,7 +122,7 @@ func newGraphBuilder(
 	), swarm.WithID("OTELSvcGraphMetricsExport"))
 
 	swi.Add(otel.TracesReceiver(
-		ctxInfo, config.Traces, config.Metrics.SpanMetricsEnabled(), selectorCfg, exportableSpans,
+		ctxInfo, config.Traces, config.SpanMetricsEnabledForTraces(), selectorCfg, exportableSpans,
 	), swarm.WithID("OTELTracesReceiver"))
 	swi.Add(prom.PrometheusEndpoint(ctxInfo, &config.Prometheus, selectorCfg, exportableSpans, processEventsCh),
 		swarm.WithID("PrometheusEndpoint"))

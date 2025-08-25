@@ -121,7 +121,7 @@ func (m *MetricsConfig) EndpointEnabled() bool {
 }
 
 func (m *MetricsConfig) AnySpanMetricsEnabled() bool {
-	return m.SpanMetricsEnabled() || m.SpanMetricsSizesEnabled()
+	return m.SpanMetricsEnabled() || m.SpanMetricsSizesEnabled() || m.ServiceGraphMetricsEnabled()
 }
 
 func (m *MetricsConfig) SpanMetricsSizesEnabled() bool {

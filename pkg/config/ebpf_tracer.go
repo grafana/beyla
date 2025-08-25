@@ -105,6 +105,10 @@ type EBPFTracer struct {
 	// MongoDB requests cache size.
 	// nolint:undoc
 	MongoRequestsCacheSize int `yaml:"mongo_requests_cache_size" env:"BEYLA_MONGO_REQUESTS_CACHE_SIZE"`
+
+	// Postgres prepared statements cache size.
+	// nolint:undoc
+	PostgresPreparedStatementsCacheSize int `yaml:"postgres_prepared_statements_cache_size" env:"BEYLA_POSTGRES_PREPARED_STATEMENTS_CACHE_SIZE"`
 }
 
 type EBPFBufferSizes struct {

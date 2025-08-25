@@ -9,6 +9,7 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/app/request"
 	"go.opentelemetry.io/obi/pkg/components/exec"
+	"go.opentelemetry.io/obi/pkg/components/imetrics"
 	"go.opentelemetry.io/obi/pkg/components/svc"
 	"go.opentelemetry.io/obi/pkg/export/otel/idgen"
 	"go.opentelemetry.io/obi/pkg/services"
@@ -49,20 +50,22 @@ type PIDsFilter struct {
 	mux            *sync.RWMutex
 	ignoreOtel     bool
 	ignoreOtelSpan bool
+	metrics        imetrics.Reporter
 }
 
-func newPIDsFilter(c *services.DiscoveryConfig, log *slog.Logger) *PIDsFilter {
+func newPIDsFilter(c *services.DiscoveryConfig, log *slog.Logger, metrics imetrics.Reporter) *PIDsFilter {
 	return &PIDsFilter{
 		log:            log,
 		current:        map[uint32]map[uint32]PIDInfo{},
 		mux:            &sync.RWMutex{},
 		ignoreOtel:     c.ExcludeOTelInstrumentedServices,
 		ignoreOtelSpan: c.ExcludeOTelInstrumentedServicesSpanMetrics,
+		metrics:        metrics,
 	}
 }
 
-func CommonPIDsFilter(c *services.DiscoveryConfig) ServiceFilter {
-	return newPIDsFilter(c, slog.With("component", "ebpfCommon.CommonPIDsFilter"))
+func CommonPIDsFilter(c *services.DiscoveryConfig, metrics imetrics.Reporter) ServiceFilter {
+	return newPIDsFilter(c, slog.With("component", "ebpfCommon.CommonPIDsFilter"), metrics)
 }
 
 func (pf *PIDsFilter) AllowPID(pid, ns uint32, svc *svc.Attrs, pidType PIDType) {
@@ -139,10 +142,10 @@ func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 		// of container layers. The Host PID is always the outer most layer.
 		if info, pidExists := ns[span.Pid.UserPID]; pidExists {
 			if pf.ignoreOtel {
-				checkIfExportsOTel(info.service, span)
+				pf.checkIfExportsOTel(info.service, span)
 			}
 			if pf.ignoreOtelSpan {
-				checkIfExportsOTelSpanMetrics(info.service, span)
+				pf.checkIfExportsOTelSpanMetrics(info.service, span)
 			}
 			inputSpans[i].Service = *info.service
 			pf.normalizeTraceContext(&inputSpans[i])
@@ -215,16 +218,41 @@ func (pf *IdentityPidsFilter) Filter(inputSpans []request.Span) []request.Span {
 	return inputSpans
 }
 
-func checkIfExportsOTel(svc *svc.Attrs, span *request.Span) {
-	if span.IsExportMetricsSpan() {
+func (pf *PIDsFilter) checkIfExportsOTel(svc *svc.Attrs, span *request.Span) {
+	if span.IsExportMetricsSpan() && !svc.ExportsOTelMetrics() {
 		svc.SetExportsOTelMetrics()
-	} else if span.IsExportTracesSpan() {
+		pf.reportAvoidedService(svc, "metrics")
+	} else if span.IsExportTracesSpan() && !svc.ExportsOTelTraces() {
 		svc.SetExportsOTelTraces()
+		pf.reportAvoidedService(svc, "traces")
 	}
 }
 
-func checkIfExportsOTelSpanMetrics(svc *svc.Attrs, span *request.Span) {
-	if span.IsExportTracesSpan() {
+func (pf *PIDsFilter) checkIfExportsOTelSpanMetrics(svc *svc.Attrs, span *request.Span) {
+	if span.IsExportTracesSpan() && !svc.ExportsOTelMetricsSpan() {
 		svc.SetExportsOTelMetricsSpan()
+		pf.reportAvoidedService(svc, "metrics_span")
+	}
+}
+
+// reportAvoidedService calls the appropriate internal metrics method based on telemetry type
+func (pf *PIDsFilter) reportAvoidedService(svc *svc.Attrs, telemetryType string) {
+	if _, ok := pf.metrics.(imetrics.NoopReporter); ok || pf.metrics == nil {
+		return
+	}
+
+	// Extract service attributes
+	serviceName := svc.UID.Name
+	serviceNamespace := svc.UID.Namespace
+	serviceInstance := svc.UID.Instance
+
+	switch telemetryType {
+	case "metrics":
+		pf.metrics.AvoidInstrumentationMetrics(serviceName, serviceNamespace, serviceInstance)
+	case "traces":
+		pf.metrics.AvoidInstrumentationTraces(serviceName, serviceNamespace, serviceInstance)
+	case "metrics_span":
+		// For metrics_span, we call the metrics method since it's related to metrics export
+		pf.metrics.AvoidInstrumentationMetrics(serviceName, serviceNamespace, serviceInstance)
 	}
 }

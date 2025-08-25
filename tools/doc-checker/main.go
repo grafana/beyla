@@ -291,7 +291,7 @@ func main() {
 		}
 		fmt.Printf("%sTo fix these errors either:%s\n", colorBold, colorReset)
 		fmt.Printf("  1. Add documentation for the fields in the docs/ directory\n")
-		fmt.Printf("  2. Add '// nolint:doc' above the field to skip the check\n\n")
+		fmt.Printf("  2. Add '// nolint:undoc' above the field to skip the check\n\n")
 		os.Exit(1)
 	}
 

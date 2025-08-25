@@ -29,6 +29,7 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/buildinfo"
 	"go.opentelemetry.io/obi/pkg/components/svc"
+	"go.opentelemetry.io/obi/pkg/config"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	"go.opentelemetry.io/obi/pkg/export/expire"
 )
@@ -515,7 +516,8 @@ func parseOTELEnvVar(svc *svc.Attrs, varName string, handler attributes.VarHandl
 		return
 	}
 
-	attributes.ParseOTELResourceVariable(envVar, handler)
+	expandedValue := string(config.ReplaceEnv([]byte(envVar)))
+	attributes.ParseOTELResourceVariable(expandedValue, handler)
 }
 
 func ResourceAttrsFromEnv(svc *svc.Attrs) []attribute.KeyValue {

@@ -18,6 +18,11 @@ var (
 	errIgnore   = errors.New("ignoring event")
 )
 
+const (
+	packetTypeRequest  = 1
+	packetTypeResponse = 2
+)
+
 // ReadTCPRequestIntoSpan returns a request.Span from the provided ring buffer record
 //
 //nolint:cyclop
@@ -42,19 +47,6 @@ func ReadTCPRequestIntoSpan(parseCtx *EBPFParseContext, cfg *config.EBPFTracer, 
 	switch event.ProtocolType {
 	case ProtocolTypeMySQL:
 		span, err := handleMySQL(parseCtx, event, requestBuffer, responseBuffer)
-		if err != nil {
-			// First, try to reverse the event and buffers
-			var err2 error
-			reverseTCPEvent(event)
-			tmpRequestBuffer := responseBuffer
-			tmpResponseBuffer := requestBuffer
-			span, err2 = handleMySQL(parseCtx, event, tmpRequestBuffer, tmpResponseBuffer)
-			if err2 == nil {
-				return span, false, nil
-			}
-		}
-
-		// Proceed with error handling for the original buffers
 		if errors.Is(err, errFallback) {
 			slog.Debug("MySQL: falling back to generic handler")
 			break
@@ -69,19 +61,6 @@ func ReadTCPRequestIntoSpan(parseCtx *EBPFParseContext, cfg *config.EBPFTracer, 
 		return span, false, nil
 	case ProtocolTypePostgres:
 		span, err := handlePostgres(parseCtx, event, requestBuffer, responseBuffer)
-		if err != nil {
-			// First, try to reverse the event and buffers
-			var err2 error
-			reverseTCPEvent(event)
-			tmpRequestBuffer := responseBuffer
-			tmpResponseBuffer := requestBuffer
-			span, err2 = handlePostgres(parseCtx, event, tmpRequestBuffer, tmpResponseBuffer)
-			if err2 == nil {
-				return span, false, nil
-			}
-		}
-
-		// Proceed with error handling for the original buffers
 		if errors.Is(err, errFallback) {
 			slog.Debug("Postgres: falling back to generic handler")
 			break
@@ -179,10 +158,10 @@ func getBuffers(parseCtx *EBPFParseContext, event *TCPRequestInfo) (req []byte, 
 	resp = event.Rbuf[:l]
 
 	if event.HasLargeBuffers == 1 {
-		if b, ok := extractTCPLargeBuffer(parseCtx, event.Tp.TraceId, event.Tp.SpanId, 0); ok {
+		if b, ok := extractTCPLargeBuffer(parseCtx, event.Tp.TraceId, event.Tp.SpanId, packetTypeRequest); ok {
 			req = b
 		}
-		if b, ok := extractTCPLargeBuffer(parseCtx, event.Tp.TraceId, event.Tp.SpanId, 1); ok {
+		if b, ok := extractTCPLargeBuffer(parseCtx, event.Tp.TraceId, event.Tp.SpanId, packetTypeResponse); ok {
 			resp = b
 		}
 	}

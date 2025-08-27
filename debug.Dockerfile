@@ -1,4 +1,4 @@
-FROM golang:1.25-alpine
+FROM golang:1.25-alpine as builder
 
 ARG TARGETARCH
 
@@ -23,10 +23,16 @@ COPY third_party_licenses.csv third_party_licenses.csv
 # OBI's Makefile doesn't let to override BPF2GO env var: temporary hack until we can
 ENV TOOLS_DIR=/go/bin
 
-RUN go install github.com/go-delve/delve/cmd/dlv@latest
-
-# Build
 # Prior to using this debug.Dockerfile, you should manually run `make generate copy-obi-vendor`
 RUN make debug
 
-ENTRYPOINT [ "dlv", "--listen=:2345", "--headless=true", "--api-version=2", "--accept-multiclient", "exec", "bin/beyla" ]
+FROM golang:1.25-alpine
+
+WORKDIR /
+
+RUN go install github.com/go-delve/delve/cmd/dlv@latest
+
+COPY --from=builder /src/bin/beyla /
+COPY --from=builder /etc/ssl/certs /etc/ssl/certs
+
+ENTRYPOINT [ "dlv", "--listen=:2345", "--headless=true", "--api-version=2", "--accept-multiclient", "exec", "/beyla" ]

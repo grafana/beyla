@@ -24,6 +24,8 @@ test/cmd/pingserver/server
 *.log
 **/.vscode
 .idea/
+.claude
+
 test/cmd/grpc/server/server
 test/cmd/grpc/client/client
 

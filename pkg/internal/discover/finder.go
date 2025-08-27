@@ -22,6 +22,7 @@ import (
 type ProcessFinder struct {
 	cfg              *beyla.Config
 	ctxInfo          *global.ContextInfo
+	ebpfEventContext *ebpfcommon.EBPFEventContext
 	obiProcessFinder *obiDiscover.ProcessFinder
 }
 
@@ -32,13 +33,44 @@ func NewProcessFinder(
 	ebpfEventContext *ebpfcommon.EBPFEventContext) *ProcessFinder {
 	return &ProcessFinder{
 		cfg: cfg, ctxInfo: ctxInfo,
+		ebpfEventContext: ebpfEventContext,
 		obiProcessFinder: obiDiscover.NewProcessFinder(cfg.AsOBI(), ctxInfo, tracesInput, ebpfEventContext),
 	}
 }
 
+func (pf *ProcessFinder) startSuveyPipeline(ctx context.Context) (<-chan obiDiscover.Event[*ebpf.Instrumentable], error) {
+	swi := swarm.Instancer{}
+	processEvents := msg.NewQueue[[]obiDiscover.Event[obiDiscover.ProcessAttrs]](msg.ChannelBufferLen(pf.cfg.ChannelBufferLen))
+
+	obiCfg := pf.cfg.AsOBI()
+
+	swi.Add(swarm.DirectInstance(obiDiscover.ProcessWatcherFunc(obiCfg, pf.ebpfEventContext, processEvents)),
+		swarm.WithID("ProcessWatcher"))
+
+	enrichedProcessEvents := msg.NewQueue[[]obiDiscover.Event[obiDiscover.ProcessAttrs]](msg.ChannelBufferLen(pf.cfg.ChannelBufferLen))
+
+	swi.Add(obiDiscover.WatcherKubeEnricherProvider(pf.ctxInfo.K8sInformer, processEvents, enrichedProcessEvents),
+		swarm.WithID("WatcherKubeEnricher"))
+
+	pf.connectSurveySubPipeline(&swi, enrichedProcessEvents)
+
+	pipeline, err := swi.Instance(ctx)
+
+	if err != nil {
+		return nil, fmt.Errorf("can't instantiate obiDiscovery.ProcessFinder pipeline: %w", err)
+	}
+
+	log := slog.With("component", "discovery.ProcessFinder")
+	log.Debug("starting survey mode pipeline")
+
+	pipeline.Start(ctx)
+
+	return nil, nil
+}
+
 // Start the ProcessFinder pipeline in background. It returns a channel where each new obiDiscovered
 // ebpf.ProcessTracer will be notified.
-func (pf *ProcessFinder) Start(ctx context.Context) (<-chan obiDiscover.Event[*ebpf.Instrumentable], error) {
+func (pf *ProcessFinder) startMixedPipeline(ctx context.Context) (<-chan obiDiscover.Event[*ebpf.Instrumentable], error) {
 
 	enrichedProcessEvents := msg.NewQueue[[]obiDiscover.Event[obiDiscover.ProcessAttrs]](msg.ChannelBufferLen(pf.cfg.ChannelBufferLen))
 	swi := swarm.Instancer{}
@@ -69,6 +101,21 @@ func (pf *ProcessFinder) Start(ctx context.Context) (<-chan obiDiscover.Event[*e
 	log.Debug("starting OBI internal ProcessFinder pipeline")
 	pipeline.Start(ctx)
 	return tracerEventsCh, nil
+}
+
+func (pf *ProcessFinder) Start(ctx context.Context) (<-chan obiDiscover.Event[*ebpf.Instrumentable], error) {
+	if pf.IsInstrumentationEnabled() {
+		return pf.startMixedPipeline(ctx)
+	}
+
+	return pf.startSuveyPipeline(ctx)
+}
+
+func (pf *ProcessFinder) IsInstrumentationEnabled() bool {
+	c := pf.cfg
+
+	return c.Port.Len() > 0 || c.AutoTargetExe.IsSet() || c.Exec.IsSet() ||
+		c.Exec.IsSet() || c.Discovery.AppDiscoveryEnabled()
 }
 
 // connects the survey sub-pipeline to the pipe of kube enriched events, and forwards

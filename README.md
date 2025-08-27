@@ -201,6 +201,19 @@ git add .
 (`git add .` is really important, otherwise when you try to recompile the code, the `obi-src` submodule might be
 reverted to its original status).
 
+#### Developing with a local, development branch of opentelemetry-ebpf-instrumentation
+
+Temporarily go to `go.mod` and change the first `replace` directive by your local OBI folder. For example:
+
+```diff
+-replace go.opentelemetry.io/obi => ./.obi-src
++replace go.opentelemetry.io/obi => ../opentelemetry-ebpf-instrumentation
+```
+
+Build the docker image with `make dev-image-build`.
+
+⚠️ Before pushing your changes to our GitHub repo, don't forget to revert the `replace` directive in `go.mod`! 
+
 #### Formatting and linting code
 
 Beyla uses linters to enforce our coding style and best practices:

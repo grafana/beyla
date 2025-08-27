@@ -2,7 +2,8 @@
 CMD ?= beyla
 MAIN_GO_FILE ?= cmd/$(CMD)/main.go
 
-OBI_MODULE := ./.obi-src
+# populated from go.mod replace, as you might need to temporarily change it during development
+OBI_MODULE ?= $(shell sh -c "echo $$(grep 'replace go.opentelemetry.io/obi =>' go.mod | awk '{print $$4}')")
 
 CACHE_CMD ?= k8s-cache
 CACHE_MAIN_GO_FILE ?= cmd/$(CACHE_CMD)/main.go
@@ -17,9 +18,10 @@ BUILDINFO_PKG ?= github.com/grafana/beyla/v2/pkg/buildinfo
 TEST_OUTPUT ?= ./testoutput
 
 IMG_REGISTRY ?= docker.io
-# Set your registry username. CI will set 'grafana' but you mustn't use it for manual pushing.
-IMG_ORG ?=
+# Set your registry username. You mustn't use 'grafana' for manual pushing.
+IMG_ORG ?= grafana
 IMG_NAME ?= beyla
+
 # Container image creation creation
 VERSION ?= dev
 IMG = $(IMG_REGISTRY)/$(IMG_ORG)/$(IMG_NAME):$(VERSION)
@@ -194,13 +196,14 @@ generate: export BPF2GO := $(BPF2GO)
 generate: export GOFLAGS := "-mod=mod"
 generate: obi-submodule
 	@echo "### Generating files..."
-	@OTEL_EBPF_GENFILES_RUN_LOCALLY=1 go generate ./.obi-src/cmd/obi-genfiles/obi_genfiles.go
+	@OTEL_EBPF_GENFILES_RUN_LOCALLY=1 go generate $(OBI_MODULE)/cmd/obi-genfiles/obi_genfiles.go
 	@cd $(OBI_MODULE) && make generate
 
 .PHONY: docker-generate
 docker-generate: export GOFLAGS := "-mod=mod"
 docker-generate: obi-submodule
-	@OTEL_EBPF_GENFILES_GEN_IMG=$(GEN_IMG) go generate ./.obi-src/cmd/obi-genfiles/obi_genfiles.go
+	@echo "### Generating files (submodule:  $(OBI_MODULE))"
+	@OTEL_EBPF_GENFILES_GEN_IMG=$(GEN_IMG) go generate $(OBI_MODULE)/cmd/obi-genfiles/obi_genfiles.go
 	@cd $(OBI_MODULE) && make docker-generate
 
 .PHONY: copy-obi-vendor
@@ -277,6 +280,12 @@ image-build: vendor-obi
 	$(call check_defined, IMG_ORG, Your Docker repository user name)
 	@echo "### Building the auto-instrumenter image"
 	$(OCI_BIN) buildx build --build-arg GEN_IMG="$(GEN_IMG)" --platform linux/amd64,linux/arm64 -t ${IMG} .
+
+.PHONY: dev-image-build
+dev-image-build: vendor-obi
+	$(call check_defined, IMG_ORG, Your Docker repository user name)
+	@echo "### Building the auto-instrumenter dev image"
+	$(OCI_BIN) buildx build --build-arg GEN_IMG="$(GEN_IMG)" --build-arg DEV_OBI=1 -t ${IMG} .
 
 .PHONY: prepare-integration-test
 prepare-integration-test: vendor-obi

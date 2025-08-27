@@ -79,7 +79,7 @@ attributes:
         - k8s.cluster.name
         - src.zone
         - dst.zone
-\```
+```
 
 This configuration provides detailed visibility into which specific pods and nodes generate inter-zone traffic, helping you optimize your application topology and reduce cross-zone costs.
 

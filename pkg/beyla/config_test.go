@@ -145,8 +145,9 @@ network:
 				MySQL:    0,
 				Postgres: 0,
 			},
-			MySQLPreparedStatementsCacheSize: 1024,
-			MongoRequestsCacheSize:           1024,
+			MySQLPreparedStatementsCacheSize:    1024,
+			MongoRequestsCacheSize:              1024,
+			PostgresPreparedStatementsCacheSize: 1024,
 		},
 		Grafana: otel.GrafanaConfig{
 			OTLP: otel.GrafanaOTLP{

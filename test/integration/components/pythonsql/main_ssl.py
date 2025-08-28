@@ -23,7 +23,7 @@ async def root():
         )
 
     cur = conn.cursor()
-    cur.execute("SELECT * from accounting.contacts WHERE id=1")
+    cur.execute("SELECT * FROM accounting.contacts WHERE id=1")
 
     row = cur.fetchone()
 
@@ -43,7 +43,7 @@ async def root():
         )
 
     cur = conn.cursor()
-    cur.execute("SELECT * from accounting.contacts WHERE id=%s", [1])
+    cur.execute("SELECT * FROM accounting.contacts WHERE id=%s", [1])
 
     row = cur.fetchone()
 

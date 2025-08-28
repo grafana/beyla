@@ -44,7 +44,7 @@
       "conn": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.45.2"
+          "newest": "1.46.0"
         },
         "offsets": [
           {
@@ -56,7 +56,7 @@
       "correlationID": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.45.2"
+          "newest": "1.46.0"
         },
         "offsets": [
           {
@@ -70,7 +70,7 @@
       "Conn": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.45.2"
+          "newest": "1.46.0"
         },
         "offsets": [
           {
@@ -84,7 +84,7 @@
       "correlationID": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.45.2"
+          "newest": "1.46.0"
         },
         "offsets": [
           {

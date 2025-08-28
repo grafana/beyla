@@ -69,7 +69,7 @@ func newGraphBuilder(
 	}
 
 	// Second, we register instancers for each pipe node, as well as communication queues between them
-	// TODO: consider moving the queues to a publis structure so when Beyla is used as library, other components can
+	// TODO: consider moving the queues to a public structure so when Beyla is used as library, other components can
 	// listen to the messages and expanding the Pipeline
 	tracesReaderToRouter := newQueue()
 	swi.Add(traces.ReadFromChannel(&traces.ReadDecorator{
@@ -106,26 +106,37 @@ func newGraphBuilder(
 		nameResolverToAttrFilter, exportableSpans),
 		swarm.WithID("AttributesFilter"))
 
+	// Use IP filtering for metrics only when needed
+	var metricsQueue *msg.Queue[[]request.Span]
+	if config.Metrics.DropUnresolvedIPs {
+		IPFilteredSpans := newQueue()
+		swi.Add(transform.IPsFilter(&config.Metrics, exportableSpans, IPFilteredSpans),
+			swarm.WithID("IPsFilter"))
+		metricsQueue = IPFilteredSpans
+	} else {
+		metricsQueue = exportableSpans
+	}
+
 	swi.Add(otel.ReportMetrics(
 		ctxInfo,
 		&config.Metrics,
 		selectorCfg,
-		exportableSpans,
+		metricsQueue,
 		processEventsCh,
 	), swarm.WithID("OTELMetricsExport"))
 
 	swi.Add(otel.ReportSvcGraphMetrics(
 		ctxInfo,
 		&config.Metrics,
-		exportableSpans,
+		metricsQueue,
 		processEventsCh,
 	), swarm.WithID("OTELSvcGraphMetricsExport"))
+	swi.Add(prom.PrometheusEndpoint(ctxInfo, &config.Prometheus, selectorCfg, metricsQueue, processEventsCh),
+		swarm.WithID("PrometheusEndpoint"))
 
 	swi.Add(otel.TracesReceiver(
 		ctxInfo, config.Traces, config.SpanMetricsEnabledForTraces(), selectorCfg, exportableSpans,
 	), swarm.WithID("OTELTracesReceiver"))
-	swi.Add(prom.PrometheusEndpoint(ctxInfo, &config.Prometheus, selectorCfg, exportableSpans, processEventsCh),
-		swarm.WithID("PrometheusEndpoint"))
 	swi.Add(prom.BPFMetrics(ctxInfo, &config.Prometheus),
 		swarm.WithID("BPFMetrics"))
 	swi.Add(debug.PrinterNode(config.TracePrinter, exportableSpans),

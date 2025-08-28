@@ -100,7 +100,8 @@ var DefaultConfig = Config{
 		Instrumentations: []string{
 			instrumentations.InstrumentationALL,
 		},
-		TTL: defaultMetricsTTL,
+		DropUnresolvedIPs: true,
+		TTL:               defaultMetricsTTL,
 	},
 	Traces: otelcfg.TracesConfig{
 		Protocol:          otelcfg.ProtocolUnset,
@@ -120,6 +121,7 @@ var DefaultConfig = Config{
 		},
 		TTL:                         defaultMetricsTTL,
 		SpanMetricsServiceCacheSize: 10000,
+		DropUnresolvedIPs:           true,
 	},
 	TracePrinter: debug.TracePrinterDisabled,
 	InternalMetrics: imetrics.Config{
@@ -235,10 +237,17 @@ type Config struct {
 	InternalMetrics  imetrics.Config `yaml:"internal_metrics"`
 
 	// LogConfig enables the logging of the configuration on startup.
-	LogConfig bool `yaml:"log_config" env:"OTEL_EBPF_LOG_CONFIG"`
+	LogConfig LogConfigOption `yaml:"log_config" env:"OTEL_EBPF_LOG_CONFIG"`
 
 	NodeJS NodeJSConfig `yaml:"nodejs"`
 }
+
+type LogConfigOption string
+
+const (
+	LogConfigOptionYAML = LogConfigOption("yaml")
+	LogConfigOptionJSON = LogConfigOption("json")
+)
 
 // Attributes configures the decoration of some extra attributes that will be
 // added to each span

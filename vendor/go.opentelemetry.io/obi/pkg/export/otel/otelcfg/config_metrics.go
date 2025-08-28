@@ -55,6 +55,9 @@ type MetricsConfig struct {
 
 	AllowServiceGraphSelfReferences bool `yaml:"allow_service_graph_self_references" env:"OTEL_EBPF_ALLOW_SERVICE_GRAPH_SELF_REFERENCES"`
 
+	// DropUnresolvedIPs drops metrics that contain unresolved IP addresses to reduce cardinality
+	DropUnresolvedIPs bool `yaml:"drop_unresolved_ips" env:"OTEL_EBPF_DROP_UNRESOLVED_IPS"`
+
 	// OTLPEndpointProvider allows overriding the OTLP Endpoint. It needs to return an endpoint and
 	// a boolean indicating if the endpoint is common for both traces and metrics
 	OTLPEndpointProvider func() (string, bool) `yaml:"-" env:"-"`

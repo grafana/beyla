@@ -235,7 +235,7 @@ type Config struct {
 
 	// LogConfig enables the logging of the configuration on startup.
 	// nolint:undoc
-	LogConfig bool `yaml:"log_config" env:"BEYLA_LOG_CONFIG"`
+	LogConfig obi.LogConfigOption `yaml:"log_config" env:"BEYLA_LOG_CONFIG"`
 
 	// nolint:undoc
 	NodeJS obi.NodeJSConfig `yaml:"nodejs"`

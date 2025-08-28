@@ -44,6 +44,7 @@ services:
       BEYLA_LOG_LEVEL: "DEBUG"
       BEYLA_BPF_DEBUG: "true"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://collector:4318"
+      BEYLA_BPF_BUFFER_SIZE_POSTGRES: 512
     depends_on:
       testserver:
         condition: service_started

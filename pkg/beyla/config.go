@@ -66,8 +66,9 @@ var DefaultConfig = Config{
 			MySQL:    0,
 			Postgres: 0,
 		},
-		MySQLPreparedStatementsCacheSize: 1024,
-		MongoRequestsCacheSize:           1024,
+		MySQLPreparedStatementsCacheSize:    1024,
+		MongoRequestsCacheSize:              1024,
+		PostgresPreparedStatementsCacheSize: 1024,
 	},
 	Grafana: botel.GrafanaConfig{
 		OTLP: botel.GrafanaOTLP{
@@ -235,7 +236,7 @@ type Config struct {
 
 	// LogConfig enables the logging of the configuration on startup.
 	// nolint:undoc
-	LogConfig bool `yaml:"log_config" env:"BEYLA_LOG_CONFIG"`
+	LogConfig obi.LogConfigOption `yaml:"log_config" env:"BEYLA_LOG_CONFIG"`
 
 	// nolint:undoc
 	NodeJS obi.NodeJSConfig `yaml:"nodejs"`

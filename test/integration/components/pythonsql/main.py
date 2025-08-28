@@ -1,76 +1,59 @@
 from fastapi import FastAPI
 import os
 import uvicorn
-import psycopg2
+import psycopg
 
 app = FastAPI()
 
-conn = None
+DB_CONFIG = {
+    "dbname": "sqltest",
+    "user": "postgres",
+    "password": "postgres",
+    "host": "sqlserver",
+    "port": "5432",
+}
 
 @app.get("/query")
-async def root():
-    global conn
-    if conn is None:
-        conn = psycopg2.connect(
-            dbname="sqltest",
-            user="postgres",
-            password="postgres",
-            host="sqlserver",
-            port="5432"
-        )
-
+async def query():
+    conn = psycopg.connect(**DB_CONFIG)
     cur = conn.cursor()
-    cur.execute("SELECT * from accounting.contacts WHERE id=1")
-
-    row = cur.fetchone()
-
-    return row
+    cur.execute("SELECT * FROM accounting.contacts WHERE id = 1")
+    cur.close()
+    conn.close()
+    return {"status": "OK"}
 
 @app.get("/argquery")
-async def root():
-    global conn
-    if conn is None:
-        conn = psycopg2.connect(
-            dbname="sqltest",
-            user="postgres",
-            password="postgres",
-            host="sqlserver",
-            port="5432"
-        )
-
+async def argquery():
+    conn = psycopg.connect(**DB_CONFIG)
     cur = conn.cursor()
-    cur.execute("SELECT * from accounting.contacts WHERE id=%s", [1])
+    cur.execute("SELECT * FROM accounting.contacts WHERE id = %s", (1,))
+    cur.close()
+    conn.close()
+    return {"status": "OK"}
 
-    row = cur.fetchone()
-
-    return row
-
-gCurr = None
-
+# Use psycopg3 + prepare=True to test prepared statements
+#
+# https://github.com/psycopg/psycopg/discussions/492
 @app.get("/prepquery")
-async def root():
-    global conn
-    global gCurr
-    if conn is None:
-        conn = psycopg2.connect(
-            dbname="sqltest",
-            user="postgres",
-            password="postgres",
-            host="sqlserver",
-            port="5432"
-        )
+async def prepquery():
+    conn = psycopg.connect(**DB_CONFIG)
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM accounting.contacts WHERE id = %s", (1,), prepare=True)
+    cur.close()
+    conn.close()
+    return {"status": "OK"}
 
-    if gCurr is None:
-        gCurr = conn.cursor()
-        gCurr.execute(
-            "prepare my_contacts as "
-            "SELECT * from accounting.contacts WHERE id = $1")
-    
-    gCurr.execute("execute my_contacts (%s)", (1,))
-
-    row = gCurr.fetchone()
-
-    return row
+@app.get("/error")
+async def error():
+    conn = psycopg.connect(**DB_CONFIG)
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT * FROM obi.nonexisting")
+    except Exception:
+        pass
+    cur.close()
+    conn.close()
+    return {"status": "OK"}
 
 if __name__ == "__main__":
     print(f"Server running: port={8080} process_id={os.getpid()}")

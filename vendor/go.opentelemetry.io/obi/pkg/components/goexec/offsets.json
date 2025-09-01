@@ -216,7 +216,7 @@
       "delegate": {
         "versions": {
           "oldest": "1.10.0",
-          "newest": "1.37.0"
+          "newest": "1.38.0"
         },
         "offsets": [
           {

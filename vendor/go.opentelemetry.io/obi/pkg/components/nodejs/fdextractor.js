@@ -20,6 +20,9 @@ const { AsyncLocalStorage } = require('async_hooks');
 
 const debug_enabled = false;
 
+console.log('OpenTelemetry eBPF Instrumentation has injected instrumentation via the NodeJS debugger');
+console.log('The debugger will be deactivated again and closed');
+
 // ALS store holds only incomingFd
 const als = new AsyncLocalStorage();
 

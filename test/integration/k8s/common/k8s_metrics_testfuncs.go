@@ -180,6 +180,29 @@ func FeatureHTTPMetricsDecoration(manifest string, overrideAttrs map[string]stri
 	).Feature()
 }
 
+// FeatureGraphMetricsOverridingClientNameNs that, when the OTEL environment variables override
+// the service name or namespace, service graph metrics report such value instad of the k8s_owner_name.
+func FeatureGraphMetricsOverridingClientNameNs(manifest, podName string, env map[string]string) features.Feature {
+	pinger := kube.Template[Pinger]{
+		TemplateFile: manifest,
+		Data: Pinger{
+			PodName:   podName,
+			TargetURL: "http://testserver:8080/iping",
+			Env:       env,
+		},
+	}
+	expectedServerNS := "integration-test"
+	expectedServerName := "testserver"
+
+	return features.New("Service Graph Metrics for Pods defining service name in env vars: "+podName).
+		Setup(pinger.Deploy()).
+		Teardown(pinger.Delete()).
+		Assess("client and client_service_namespace are properly populated",
+			testMetricsDecoration(spanGraphMetrics, `{server="`+expectedServerName+`",server_service_namespace="`+
+				expectedServerNS+`",client="otel-client",client_service_namespace="otel-namespace"}`, nil),
+		).Feature()
+}
+
 func attributeMap(original, override map[string]string, fields ...string) map[string]string {
 	result := make(map[string]string, len(original))
 	for _, f := range fields {
@@ -324,8 +347,8 @@ func testMetricsDecoration(
 				test.Eventually(t, testTimeout, func(t require.TestingT) {
 					var err error
 					results, err = pq.Query(metric + queryArgs)
-					require.NoError(t, err)
-					require.NotEmpty(t, results)
+					require.NoErrorf(t, err, "failed to query Prometheus for metric %s", metric+queryArgs)
+					require.NotEmptyf(t, results, "no results for metric %s", metric+queryArgs)
 				})
 
 				for _, r := range results {

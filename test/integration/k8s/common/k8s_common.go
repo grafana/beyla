@@ -27,4 +27,5 @@ var (
 type Pinger struct {
 	PodName   string
 	TargetURL string
+	Env       map[string]string
 }

@@ -269,6 +269,7 @@ type Attributes struct {
 	HostID               HostIDConfig                  `yaml:"host_id"`
 	ExtraGroupAttributes map[string][]attr.Name        `yaml:"extra_group_attributes"`
 	// DropMetricsUnresolvedIPs drops metrics that contain unresolved IP addresses to reduce cardinality
+	// nolint:undoc FIXME: the yaml option should read // drop_metrics_unresolved_ips - need to fix upstream first
 	DropMetricsUnresolvedIPs bool `yaml:"drop_metric_unresolved_ips" env:"BEYLA_DROP_METRIC_UNRESOLVED_IPS"`
 }
 

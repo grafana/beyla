@@ -9,14 +9,13 @@ import (
 	"strings"
 
 	"go.opentelemetry.io/obi/pkg/app/request"
-	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 )
 
-func IPsFilter(mc *otelcfg.MetricsConfig, input, output *msg.Queue[[]request.Span]) swarm.InstanceFunc {
+func IPsFilter(dropUnresolvedIPs bool, input, output *msg.Queue[[]request.Span]) swarm.InstanceFunc {
 	return func(_ context.Context) (swarm.RunFunc, error) {
-		if !mc.DropUnresolvedIPs {
+		if !dropUnresolvedIPs {
 			return swarm.Bypass(input, output)
 		}
 		in := input.Subscribe()

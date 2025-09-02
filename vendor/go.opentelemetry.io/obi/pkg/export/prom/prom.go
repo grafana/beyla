@@ -123,9 +123,6 @@ type PrometheusConfig struct {
 	// Allows configuration of which instrumentations should be enabled, e.g. http, grpc, sql...
 	Instrumentations []string `yaml:"instrumentations" env:"OTEL_EBPF_PROMETHEUS_INSTRUMENTATIONS" envSeparator:","`
 
-	// DropUnresolvedIPs drops metrics that contain unresolved IP addresses to reduce cardinality
-	DropUnresolvedIPs bool `yaml:"drop_unresolved_ips" env:"OTEL_EBPF_PROMETHEUS_DROP_UNRESOLVED_IPS"`
-
 	Buckets otelcfg.Buckets `yaml:"buckets"`
 
 	// TTL is the time since a metric was updated for the last time until it is

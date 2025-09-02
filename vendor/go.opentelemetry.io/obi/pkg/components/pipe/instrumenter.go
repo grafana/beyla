@@ -106,41 +106,45 @@ func newGraphBuilder(
 		nameResolverToAttrFilter, exportableSpans),
 		swarm.WithID("AttributesFilter"))
 
-	// Use IP filtering for metrics only when needed
-	var metricsQueue *msg.Queue[[]request.Span]
-	if config.Metrics.DropUnresolvedIPs {
-		IPFilteredSpans := newQueue()
-		swi.Add(transform.IPsFilter(&config.Metrics, exportableSpans, IPFilteredSpans),
+	swi.Add(otel.TracesReceiver(
+		ctxInfo, config.Traces, config.SpanMetricsEnabledForTraces(), selectorCfg, exportableSpans,
+	), swarm.WithID("OTELTracesReceiver"))
+	swi.Add(debug.PrinterNode(config.TracePrinter, exportableSpans),
+		swarm.WithID("PrinterNode"))
+
+	// ipDroppedMetrics is only passed to the metrics export nodes
+	// nodes exporting/printing traces will still get the unfiltered exportableSpans queue
+	ipDroppedMetrics := exportableSpans
+	if config.Attributes.DropMetricsUnresolvedIPs {
+		// unlike the other nodes, we need to conditionally instantiate the queue because
+		// if IPsFilter internally bypasses the exportableSpans queue to ipDroppedMetrics,
+		// then exportableSpans could not be used by the TracesReceiver nodes
+		// TODO: fix Queue to support both bypassing and exporting
+		ipDroppedMetrics = newQueue()
+		swi.Add(transform.IPsFilter(config.Attributes.DropMetricsUnresolvedIPs, exportableSpans, ipDroppedMetrics),
 			swarm.WithID("IPsFilter"))
-		metricsQueue = IPFilteredSpans
-	} else {
-		metricsQueue = exportableSpans
 	}
 
 	swi.Add(otel.ReportMetrics(
 		ctxInfo,
 		&config.Metrics,
 		selectorCfg,
-		metricsQueue,
+		ipDroppedMetrics,
 		processEventsCh,
 	), swarm.WithID("OTELMetricsExport"))
 
 	swi.Add(otel.ReportSvcGraphMetrics(
 		ctxInfo,
 		&config.Metrics,
-		metricsQueue,
+		ipDroppedMetrics,
 		processEventsCh,
 	), swarm.WithID("OTELSvcGraphMetricsExport"))
-	swi.Add(prom.PrometheusEndpoint(ctxInfo, &config.Prometheus, selectorCfg, metricsQueue, processEventsCh),
+
+	swi.Add(prom.PrometheusEndpoint(ctxInfo, &config.Prometheus, selectorCfg, ipDroppedMetrics, processEventsCh),
 		swarm.WithID("PrometheusEndpoint"))
 
-	swi.Add(otel.TracesReceiver(
-		ctxInfo, config.Traces, config.SpanMetricsEnabledForTraces(), selectorCfg, exportableSpans,
-	), swarm.WithID("OTELTracesReceiver"))
 	swi.Add(prom.BPFMetrics(ctxInfo, &config.Prometheus),
 		swarm.WithID("BPFMetrics"))
-	swi.Add(debug.PrinterNode(config.TracePrinter, exportableSpans),
-		swarm.WithID("PrinterNode"))
 
 	// The returned builder later invokes its "Build" function that, given
 	// the contents of the nodesMap struct, will instantiate

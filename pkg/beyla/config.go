@@ -135,6 +135,7 @@ var DefaultConfig = Config{
 		HostID: HostIDConfig{
 			FetchTimeout: 500 * time.Millisecond,
 		},
+		DropMetricsUnresolvedIPs: true,
 	},
 	Routes: &transform.RoutesConfig{
 		Unmatch:      transform.UnmatchDefault,
@@ -267,6 +268,8 @@ type Attributes struct {
 	Select               attributes.Selection          `yaml:"select"`
 	HostID               HostIDConfig                  `yaml:"host_id"`
 	ExtraGroupAttributes map[string][]attr.Name        `yaml:"extra_group_attributes"`
+	// DropMetricsUnresolvedIPs drops metrics that contain unresolved IP addresses to reduce cardinality
+	DropMetricsUnresolvedIPs bool `yaml:"drop_metric_unresolved_ips" env:"BEYLA_DROP_METRIC_UNRESOLVED_IPS"`
 }
 
 type HostIDConfig struct {

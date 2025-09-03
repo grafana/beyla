@@ -1,4 +1,5 @@
 # Main binary configuration
+# test
 CMD ?= beyla
 MAIN_GO_FILE ?= cmd/$(CMD)/main.go
 

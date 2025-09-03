@@ -59,6 +59,10 @@ In the previous example, all metrics with a name starting with `http_` or `http.
 
 When a metric name matches multiple definitions using wildcards, exact matches take precedence over wildcard matches.
 
+## Reduce IP-related cardinality
+
+The `drop_metric_unresolved_ips` option, when enabled, clears attributes containing IP addresses that couldn't be resolved to hostnames.
+
 ## Distributed traces and context propagation
 
 YAML section: `ebpf`

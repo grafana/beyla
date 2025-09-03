@@ -40,12 +40,6 @@ The Initial Developer of some parts of the product, which are copied from, deriv
 inspired by Meta strobelight (https://github.com/facebookincubator/strobelight).
 Copyright Meta.
 
-Grafana Beyla uses third-party libraries or other resources that may be
-distributed under licenses different than the Grafana Beyla software. The licenses for 
-these third-party libraries are listed in the attached third_party_licenses.csv file 
-and is part of this notice. Unless otherwise specified the copyright of the third party
-libraries belongs to the authors of the third party libraries.
-
 In the event that we accidentally failed to list a required notice, please
 bring it to our attention by opening a GitHub issue at 
 https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation/issues.

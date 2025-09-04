@@ -7,8 +7,13 @@ permissions:
   contents: read
 
 jobs:
-  build-multiarch:
+  build:
     runs-on: ubuntu-latest-8-cores
+
+    strategy:
+      matrix:
+        platform: [linux/amd64] # linux/arm64 is too slow on GitHub Actions.
+        file: [Dockerfile, k8scache.Dockerfile]
 
     steps:
       - id: checkout
@@ -19,22 +24,9 @@ jobs:
         uses: grafana/shared-workflows/actions/build-push-to-dockerhub@fa48192dac470ae356b3f7007229f3ac28c48a25 # main
         with:
           context: .
+          file: ${{ matrix.file }}
           platforms: |-
-            "linux/amd64"
-            "linux/arm64"
-          tags: |-
-            "pr-test"
-          push: false
-
-      - id: docker-build-cache
-        uses: grafana/shared-workflows/actions/build-push-to-dockerhub@fa48192dac470ae356b3f7007229f3ac28c48a25 # main
-        with:
-          repository: grafana/beyla-k8s-cache
-          file: k8scache.Dockerfile
-          context: .
-          platforms: |-
-            "linux/amd64"
-            "linux/arm64"
+            ${{ matrix.platform }}
           tags: |-
             "pr-test"
           push: false

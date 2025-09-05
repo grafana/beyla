@@ -243,7 +243,7 @@ dev: prereqs generate compile-for-coverage
 .PHONY: compile-for-coverage compile-cache-for-coverage
 compile-for-coverage:
 	@echo "### Compiling project to generate coverage profiles"
-	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -cover -a -o bin/$(CMD) $(MAIN_GO_FILE)
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -ldflags="-X '$(BUILDINFO_PKG).Version=test-$(RELEASE_VERSION)' -X '$(BUILDINFO_PKG).Revision=test-$(RELEASE_REVISION)'" -cover -a -o bin/$(CMD) $(MAIN_GO_FILE)
 compile-cache-for-coverage:
 	@echo "### Compiling K8s cache service to generate coverage profiles"
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -cover -a -o bin/$(CACHE_CMD) $(CACHE_MAIN_GO_FILE)

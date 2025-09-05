@@ -150,6 +150,7 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
 		{Key: "telemetry.sdk.language", Type: "string", Value: "go"},
 		{Key: "telemetry.sdk.name", Type: "string", Value: "beyla"},
 		{Key: "service.namespace", Type: "string", Value: "integration-test"},
+		{Key: "telemetry.sdk.version", Type: "string", Value: "^test-"},
 		serviceInstance,
 	}, process.Tags)
 	assert.Empty(t, sd, sd.String())

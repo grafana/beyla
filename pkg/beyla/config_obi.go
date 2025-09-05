@@ -5,10 +5,12 @@ import (
 	"regexp"
 	"strings"
 
+	obibuildinfo "go.opentelemetry.io/obi/pkg/buildinfo"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/obi"
 
+	"github.com/grafana/beyla/v2/pkg/buildinfo"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	cfgutil "github.com/grafana/beyla/v2/pkg/helpers/config"
 )
@@ -68,6 +70,8 @@ func OverrideOBIGlobalConfig() {
 		os.Setenv("OTEL_RESOURCE_ATTRIBUTES", "telemetry.sdk.name=beyla")
 	}
 	// Override global metric naming options
+	obibuildinfo.Version = buildinfo.Version
+	obibuildinfo.Revision = buildinfo.Revision
 	attr.VendorPrefix = "beyla"
 	attr.OBIIP = "beyla.ip"
 	attributes.NetworkFlow = attributes.Name{

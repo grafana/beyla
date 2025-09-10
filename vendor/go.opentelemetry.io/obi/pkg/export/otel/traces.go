@@ -146,10 +146,6 @@ func (tr *tracesOTELReceiver) provideLoop(ctx context.Context) {
 		return
 	}
 
-	if tr.spanMetricsEnabled {
-		traceAttrs[attr.SkipSpanMetrics] = struct{}{}
-	}
-
 	sampler := tr.cfg.SamplerConfig.Implementation()
 
 	for spans := range tr.input {

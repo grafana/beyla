@@ -66,8 +66,9 @@ var DefaultConfig = Config{
 			MySQL:    0,
 			Postgres: 0,
 		},
-		MySQLPreparedStatementsCacheSize: 1024,
-		MongoRequestsCacheSize:           1024,
+		MySQLPreparedStatementsCacheSize:    1024,
+		MongoRequestsCacheSize:              1024,
+		PostgresPreparedStatementsCacheSize: 1024,
 	},
 	Grafana: botel.GrafanaConfig{
 		OTLP: botel.GrafanaOTLP{
@@ -134,6 +135,7 @@ var DefaultConfig = Config{
 		HostID: HostIDConfig{
 			FetchTimeout: 500 * time.Millisecond,
 		},
+		DropMetricsUnresolvedIPs: true,
 	},
 	Routes: &transform.RoutesConfig{
 		Unmatch:      transform.UnmatchDefault,
@@ -149,6 +151,9 @@ var DefaultConfig = Config{
 		MinProcessAge:                   5 * time.Second,
 		DefaultExcludeServices:          servicesextra.DefaultExcludeServices,
 		DefaultExcludeInstrument:        servicesextra.DefaultExcludeInstrument,
+	},
+	NodeJS: obi.NodeJSConfig{
+		Enabled: true,
 	},
 }
 
@@ -232,7 +237,10 @@ type Config struct {
 
 	// LogConfig enables the logging of the configuration on startup.
 	// nolint:undoc
-	LogConfig bool `yaml:"log_config" env:"BEYLA_LOG_CONFIG"`
+	LogConfig obi.LogConfigOption `yaml:"log_config" env:"BEYLA_LOG_CONFIG"`
+
+	// nolint:undoc
+	NodeJS obi.NodeJSConfig `yaml:"nodejs"`
 
 	// cached equivalent for the OBI conversion
 	obi *obi.Config `yaml:"-"`
@@ -260,6 +268,9 @@ type Attributes struct {
 	Select               attributes.Selection          `yaml:"select"`
 	HostID               HostIDConfig                  `yaml:"host_id"`
 	ExtraGroupAttributes map[string][]attr.Name        `yaml:"extra_group_attributes"`
+	// DropMetricsUnresolvedIPs drops metrics that contain unresolved IP addresses to reduce cardinality
+	// nolint:undoc FIXME: the yaml option should read // drop_metrics_unresolved_ips - need to fix upstream first
+	DropMetricsUnresolvedIPs bool `yaml:"drop_metric_unresolved_ips" env:"BEYLA_DROP_METRIC_UNRESOLVED_IPS"`
 }
 
 type HostIDConfig struct {

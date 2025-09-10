@@ -33,7 +33,8 @@ type InternalMetricsReporter struct {
 	otelTraceExportErrs   instrument.Float64Counter
 	instrumentedProcesses instrument.Int64UpDownCounter
 	instrumentationErrors instrument.Int64Counter
-	beylaInfo             instrument.Int64Gauge
+	avoidedServices       instrument.Int64Gauge
+	buildInfo             instrument.Int64Gauge
 }
 
 func imlog() *slog.Logger {
@@ -95,7 +96,7 @@ func NewInternalMetricsReporter(ctx context.Context, ctxInfo *global.ContextInfo
 
 	instrumentedProcesses, err := meter.Int64UpDownCounter(
 		attr.VendorPrefix+".instrumented.processes",
-		instrument.WithDescription("Instrumented processes by Beyla"),
+		instrument.WithDescription("Total number of instrumented processes by process name"),
 	)
 	if err != nil {
 		return nil, err
@@ -103,15 +104,23 @@ func NewInternalMetricsReporter(ctx context.Context, ctxInfo *global.ContextInfo
 
 	instrumentationErrors, err := meter.Int64Counter(
 		attr.VendorPrefix+".instrumentation.errors",
-		instrument.WithDescription("Count of instrumentation errors by process and error type"),
+		instrument.WithDescription("Total number of instrumentation errors by process name and error type"),
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	beylaInfo, err := meter.Int64Gauge(
+	avoidedServices, err := meter.Int64Gauge(
+		attr.VendorPrefix+".avoided.services",
+		instrument.WithDescription("Services avoided due to existing OpenTelemetry instrumentation"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	buildInfo, err := meter.Int64Gauge(
 		attr.VendorPrefix+".internal.build.info",
-		instrument.WithDescription("A metric with a constant '1' value labeled by version, revision, branch, goversion from which Beyla was built, the goos and goarch for the build."),
+		instrument.WithDescription("A metric with a constant '1' value labeled by version, revision, branch, goversion, goos and goarch during build."),
 	)
 	if err != nil {
 		return nil, err
@@ -126,7 +135,8 @@ func NewInternalMetricsReporter(ctx context.Context, ctxInfo *global.ContextInfo
 		otelTraceExportErrs:   otelTraceExportErrs,
 		instrumentedProcesses: instrumentedProcesses,
 		instrumentationErrors: instrumentationErrors,
-		beylaInfo:             beylaInfo,
+		avoidedServices:       avoidedServices,
+		buildInfo:             buildInfo,
 	}, nil
 }
 
@@ -138,7 +148,7 @@ func newInternalMeterProvider(res *resource.Resource, exporter *metric.Exporter,
 }
 
 func (p *InternalMetricsReporter) Start(ctx context.Context) {
-	p.beylaInfo.Record(ctx, 1, instrument.WithAttributes(attribute.String("goarch", runtime.GOARCH), attribute.String("goos", runtime.GOOS), attribute.String("goversion", runtime.Version()), attribute.String("version", buildinfo.Version), attribute.String("revision", buildinfo.Revision)))
+	p.buildInfo.Record(ctx, 1, instrument.WithAttributes(attribute.String("goarch", runtime.GOARCH), attribute.String("goos", runtime.GOOS), attribute.String("goversion", runtime.Version()), attribute.String("version", buildinfo.Version), attribute.String("revision", buildinfo.Revision)))
 }
 
 func (p *InternalMetricsReporter) TracerFlush(length int) {
@@ -184,10 +194,28 @@ func newResourceInternal(hostID string) *resource.Resource {
 		semconv.ServiceName("opentelemetry-ebpf-instrumentation"),
 		semconv.ServiceInstanceID(uuid.New().String()),
 		semconv.TelemetrySDKLanguageKey.String(semconv.TelemetrySDKLanguageGo.Value.AsString()),
-		// We set the SDK name as Beyla, so we can distinguish beyla generated metrics from other SDKs
 		semconv.TelemetrySDKNameKey.String("opentelemetry-ebpf-instrumentation"),
 		semconv.HostID(hostID),
 	}
 
 	return resource.NewWithAttributes(semconv.SchemaURL, attrs...)
+}
+
+func (p *InternalMetricsReporter) recordAvoidedService(serviceName, serviceNamespace, serviceInstanceID, telemetryType string) {
+	attrs := []attribute.KeyValue{
+		semconv.ServiceName(serviceName),
+		semconv.ServiceNamespace(serviceNamespace),
+		semconv.ServiceInstanceID(serviceInstanceID),
+		attribute.String("telemetry.type", telemetryType),
+	}
+
+	p.avoidedServices.Record(p.ctx, 1, instrument.WithAttributes(attrs...))
+}
+
+func (p *InternalMetricsReporter) AvoidInstrumentationMetrics(serviceName, serviceNamespace, serviceInstanceID string) {
+	p.recordAvoidedService(serviceName, serviceNamespace, serviceInstanceID, "metrics")
+}
+
+func (p *InternalMetricsReporter) AvoidInstrumentationTraces(serviceName, serviceNamespace, serviceInstanceID string) {
+	p.recordAvoidedService(serviceName, serviceNamespace, serviceInstanceID, "traces")
 }

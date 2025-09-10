@@ -26,6 +26,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/export/prom"
 	"go.opentelemetry.io/obi/pkg/kubeflags"
+	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/services"
 	"go.opentelemetry.io/obi/pkg/transform"
 
@@ -57,6 +58,7 @@ prometheus_export:
     request_size_histogram: [0, 10, 20, 22]
     response_size_histogram: [0, 10, 20, 22]
 attributes:
+  drop_metric_unresolved_ips: false
   kubernetes:
     kubeconfig_path: /foo/bar
     enable: true
@@ -144,8 +146,9 @@ network:
 				MySQL:    0,
 				Postgres: 0,
 			},
-			MySQLPreparedStatementsCacheSize: 1024,
-			MongoRequestsCacheSize:           1024,
+			MySQLPreparedStatementsCacheSize:    1024,
+			MongoRequestsCacheSize:              1024,
+			PostgresPreparedStatementsCacheSize: 1024,
 		},
 		Grafana: otel.GrafanaConfig{
 			OTLP: otel.GrafanaOTLP{
@@ -265,6 +268,7 @@ network:
 				},
 			},
 		},
+		NodeJS: obi.NodeJSConfig{Enabled: true},
 	}, cfg)
 }
 

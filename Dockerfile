@@ -7,6 +7,13 @@ FROM $GEN_IMG AS builder
 
 ARG TARGETARCH
 
+# set it to a non-empty value if you are building this image
+# from a custom, local OBI repository
+# In that case, you must run `make generate copy-obi-vendor`
+# manually, before building this image.
+# Or directly run`make dev-image-build`
+ARG DEV_OBI
+
 ENV GOARCH=$TARGETARCH
 
 WORKDIR /src
@@ -29,8 +36,10 @@ COPY third_party_licenses.csv third_party_licenses.csv
 ENV TOOLS_DIR=/go/bin
 
 # Build
-RUN make generate
-RUN make copy-obi-vendor
+RUN if [ -z "${DEV_OBI}" ]; then \
+    make generate && \
+    make copy-obi-vendor \
+    ; fi
 RUN make compile
 
 # Create final image from minimal + built binary

@@ -109,17 +109,24 @@ type SockMsg struct {
 	AttachAs ebpf.AttachType
 }
 
+type Iter struct {
+	Program *ebpf.Program
+	Link    link.Link
+}
+
 type MisclassifiedEvent struct {
 	EventType int
 	TCPInfo   *TCPRequestInfo
 }
 
 type EBPFParseContext struct {
-	h2c                     *lru.Cache[uint64, h2Connection]
-	redisDBCache            *simplelru.LRU[BpfConnectionInfoT, int]
-	largeBuffers            *expirable.LRU[largeBufferKey, *largeBuffer]
-	mongoRequestCache       PendingMongoDBRequests
-	mysqlPreparedStatements *simplelru.LRU[mysqlPreparedStatementsKey, string]
+	h2c                        *lru.Cache[uint64, h2Connection]
+	redisDBCache               *simplelru.LRU[BpfConnectionInfoT, int]
+	largeBuffers               *expirable.LRU[largeBufferKey, *largeBuffer]
+	mongoRequestCache          PendingMongoDBRequests
+	mysqlPreparedStatements    *simplelru.LRU[mysqlPreparedStatementsKey, string]
+	postgresPreparedStatements *simplelru.LRU[postgresPreparedStatementsKey, string]
+	postgresPortals            *simplelru.LRU[postgresPortalsKey, string]
 }
 
 type EBPFEventContext struct {
@@ -137,10 +144,12 @@ func ptlog() *slog.Logger { return slog.With("component", "ebpf.ProcessTracer") 
 
 func NewEBPFParseContext(cfg *config.EBPFTracer) *EBPFParseContext {
 	var (
-		err                     error
-		redisDBCache            *simplelru.LRU[BpfConnectionInfoT, int]
-		mysqlPreparedStatements *simplelru.LRU[mysqlPreparedStatementsKey, string]
-		mongoRequestCache       PendingMongoDBRequests
+		err                        error
+		redisDBCache               *simplelru.LRU[BpfConnectionInfoT, int]
+		mysqlPreparedStatements    *simplelru.LRU[mysqlPreparedStatementsKey, string]
+		postgresPreparedStatements *simplelru.LRU[postgresPreparedStatementsKey, string]
+		postgresPortals            *simplelru.LRU[postgresPortalsKey, string]
+		mongoRequestCache          PendingMongoDBRequests
 	)
 
 	h2c, _ := lru.New[uint64, h2Connection](1024 * 10)
@@ -160,15 +169,27 @@ func NewEBPFParseContext(cfg *config.EBPFTracer) *EBPFParseContext {
 			ptlog().Error("failed to create MySQL prepared statements cache", "error", err)
 		}
 
+		postgresPreparedStatements, err = simplelru.NewLRU[postgresPreparedStatementsKey, string](cfg.PostgresPreparedStatementsCacheSize, nil)
+		if err != nil {
+			ptlog().Error("failed to create Postgres prepared statements cache", "error", err)
+		}
+
+		postgresPortals, err = simplelru.NewLRU[postgresPortalsKey, string](cfg.PostgresPreparedStatementsCacheSize, nil)
+		if err != nil {
+			ptlog().Error("failed to create Postgres portals cache", "error", err)
+		}
+
 		mongoRequestCache = expirable.NewLRU[MongoRequestKey, *MongoRequestValue](cfg.MongoRequestsCacheSize, nil, 0)
 	}
 
 	return &EBPFParseContext{
-		h2c:                     h2c,
-		redisDBCache:            redisDBCache,
-		largeBuffers:            largeBuffers,
-		mongoRequestCache:       mongoRequestCache,
-		mysqlPreparedStatements: mysqlPreparedStatements,
+		h2c:                        h2c,
+		redisDBCache:               redisDBCache,
+		largeBuffers:               largeBuffers,
+		mongoRequestCache:          mongoRequestCache,
+		mysqlPreparedStatements:    mysqlPreparedStatements,
+		postgresPreparedStatements: postgresPreparedStatements,
+		postgresPortals:            postgresPortals,
 	}
 }
 

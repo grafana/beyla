@@ -15,7 +15,7 @@ expected:
             db.operation.name: SELECT
             db.collection.name: actor
             db.system.name: mysql
-            db.query.text: "SELECT * from actor WHERE actor_id=1"
+            db.query.text: "SELECT * FROM actor WHERE actor_id=1"
   metrics:
     - promql: 'db_client_operation_duration_sum{db_system_name="mysql"}'
       value: "> 0"

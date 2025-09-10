@@ -64,7 +64,7 @@ For the inter-zone bytes metric, the default attributes are `k8s.cluster.name`, 
 | `k8s.dst.node.name` / `k8s_dst.node_name`   | Name of the destination Node                                                                                                                                                        |
 | `k8s.cluster.name` / `k8s_cluster_name`     | Name of the Kubernetes cluster. Beyla can auto-detect it on Google Cloud, Microsoft Azure, and Amazon Web Services. For other providers, set the `BEYLA_KUBE_CLUSTER_NAME` property |
 | `src.zone` / `src_zone`                     | Name of the source Cloud Availability Zone                                                                                                                                          |
-| `dsg.zone` / `dst_zone`                     | Name of the destination Cloud Availability Zone                                                                                                                                     |
+| `dst.zone` / `dst_zone`                     | Name of the destination Cloud Availability Zone                                                                                                                                     |
 
 ### How to specify reported attributes
 

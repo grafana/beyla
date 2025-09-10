@@ -3,7 +3,7 @@ docker-compose:
   files:
     - ../docker-compose-beyla-sql.yml
 input:
-  - path: '/argquery'
+  - path: '/prepquery'
 
 interval: 500ms
 expected:

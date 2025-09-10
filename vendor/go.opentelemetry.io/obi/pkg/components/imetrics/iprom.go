@@ -36,7 +36,8 @@ type PrometheusReporter struct {
 	prometheusRequests    *prometheus.CounterVec
 	instrumentedProcesses *prometheus.GaugeVec
 	instrumentationErrors *prometheus.CounterVec
-	beylaInfo             prometheus.Gauge
+	avoidedServices       *prometheus.GaugeVec
+	buildInfo             prometheus.Gauge
 }
 
 func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusManager, registry *prometheus.Registry) *PrometheusReporter {
@@ -72,16 +73,20 @@ func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusM
 		}, []string{"port", "path"}),
 		instrumentedProcesses: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: attr.VendorPrefix + "_instrumented_processes",
-			Help: "Instrumented processes by Beyla",
+			Help: "Total number of instrumented processes by process name",
 		}, []string{"process_name"}),
 		instrumentationErrors: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: attr.VendorPrefix + "_instrumentation_errors_total",
-			Help: "Total number of instrumentation errors by process and error type",
+			Help: "Total number of instrumentation errors by process name and error type",
 		}, []string{"process_name", "error_type"}),
-		beylaInfo: prometheus.NewGauge(prometheus.GaugeOpts{
+		avoidedServices: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: attr.VendorPrefix + "_avoided_services",
+			Help: "Services avoided due to existing OpenTelemetry instrumentation",
+		}, []string{"service_name", "service_namespace", "service_instance_id", "telemetry_type"}),
+		buildInfo: prometheus.NewGauge(prometheus.GaugeOpts{
 			Name: attr.VendorPrefix + "_internal_build_info",
 			Help: "A metric with a constant '1' value labeled by version, revision, branch, " +
-				"goversion from which Beyla was built, the goos and goarch for the build.",
+				"goversion, goos and goarch during build.",
 			ConstLabels: map[string]string{
 				"goarch":    runtime.GOARCH,
 				"goos":      runtime.GOOS,
@@ -100,7 +105,8 @@ func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusM
 			pr.prometheusRequests,
 			pr.instrumentedProcesses,
 			pr.instrumentationErrors,
-			pr.beylaInfo)
+			pr.avoidedServices,
+			pr.buildInfo)
 	} else {
 		manager.Register(cfg.Port, cfg.Path,
 			pr.tracerFlushes,
@@ -111,7 +117,8 @@ func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusM
 			pr.prometheusRequests,
 			pr.instrumentedProcesses,
 			pr.instrumentationErrors,
-			pr.beylaInfo)
+			pr.avoidedServices,
+			pr.buildInfo)
 	}
 
 	return pr
@@ -121,7 +128,7 @@ func (p *PrometheusReporter) Start(ctx context.Context) {
 	if p.connector != nil {
 		p.connector.StartHTTP(ctx)
 	}
-	p.beylaInfo.Set(1)
+	p.buildInfo.Set(1)
 }
 
 func (p *PrometheusReporter) TracerFlush(length int) {
@@ -158,4 +165,16 @@ func (p *PrometheusReporter) UninstrumentProcess(processName string) {
 
 func (p *PrometheusReporter) InstrumentationError(processName string, errorType string) {
 	p.instrumentationErrors.WithLabelValues(processName, errorType).Inc()
+}
+
+func (p *PrometheusReporter) recordAvoidedService(serviceName, serviceNamespace, serviceInstanceID, telemetryType string) {
+	p.avoidedServices.WithLabelValues(serviceName, serviceNamespace, serviceInstanceID, telemetryType).Set(1)
+}
+
+func (p *PrometheusReporter) AvoidInstrumentationMetrics(serviceName, serviceNamespace, serviceInstanceID string) {
+	p.recordAvoidedService(serviceName, serviceNamespace, serviceInstanceID, "metrics")
+}
+
+func (p *PrometheusReporter) AvoidInstrumentationTraces(serviceName, serviceNamespace, serviceInstanceID string) {
+	p.recordAvoidedService(serviceName, serviceNamespace, serviceInstanceID, "traces")
 }

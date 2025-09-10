@@ -41,6 +41,9 @@ var cgroupFormats = []*regexp.Regexp{
 	// Containerd: /kubepods.slice/kubepods-burstable.slice/kubepods-burstable-pod7260904bbd08e72e4dff95d9fccd2ee8.slice/cri-containerd-d36686f9785534531160dc936aec9d711a26eb37f4fc7752a2ae27d0a24345c1.scope
 	regexp.MustCompile(`^\d+:.*:/kubepods.*([0-9a-f]{64})`),
 
+	// formats for other Cgroup v2 implementations
+	regexp.MustCompile(`^\d+:.*:/k8s\.io/([0-9a-f]{64})`),
+
 	// as fallback, other formats for cgroup which might appear in other Docker implementations
 	// 0::/../../pode039200acb850c82bb901653cc38ff6e/58452031ab6dcaa4fe3ff91f8a46fd41a4a2405586f3cf3d5cb9c93b5bcf62cc
 	regexp.MustCompile(`^\d+:.*:.*/.*/.*/([0-9a-fA-F]{64})`),

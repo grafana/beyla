@@ -20,7 +20,7 @@ async def root():
         )
 
     cur = conn.cursor()
-    cur.execute("SELECT * from actor WHERE actor_id=1")
+    cur.execute("SELECT * FROM actor WHERE actor_id=1")
 
     row = cur.fetchone()
 
@@ -39,7 +39,7 @@ async def root():
         )
 
     cur = conn.cursor()
-    cur.execute("SELECT * from actor WHERE actor_id=%s", [1])
+    cur.execute("SELECT * FROM actor WHERE actor_id=%s", [1])
 
     row = cur.fetchone()
 
@@ -71,6 +71,28 @@ async def root():
     row = gCurr.fetchone()
 
     return row
+
+@app.get("/error")
+async def root():
+    global conn
+    if conn is None:
+        conn = mysql.connector.connect(
+            database="sakila",
+            user="sakila",
+            password="p_ssW0rd",
+            host="sqlserver",
+            port="3306"
+        )
+
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT * FROM obi.nonexisting")
+    except Exception as e:
+        conn.rollback()
+    finally:
+        cur.close()
+
+    return ""
 
 if __name__ == "__main__":
     print(f"Server running: port={8080} process_id={os.getpid()}")

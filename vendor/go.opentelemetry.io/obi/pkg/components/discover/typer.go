@@ -99,6 +99,7 @@ func makeServiceAttrs(processMatch *ProcessMatch) svc.Attrs {
 	var namespace string
 	exportModes := services.ExportModeUnset
 	var samplerConfig *services.SamplerConfig
+	var routesConfig *services.CustomRoutesConfig
 
 	for _, s := range processMatch.Criteria {
 		if n := s.GetName(); n != "" {
@@ -116,9 +117,13 @@ func makeServiceAttrs(processMatch *ProcessMatch) svc.Attrs {
 		if m := s.GetSamplerConfig(); m != nil {
 			samplerConfig = m
 		}
+
+		if m := s.GetRoutesConfig(); m != nil {
+			routesConfig = m
+		}
 	}
 
-	return svc.Attrs{
+	s := svc.Attrs{
 		UID: svc.UID{
 			Name:      name,
 			Namespace: namespace,
@@ -127,6 +132,12 @@ func makeServiceAttrs(processMatch *ProcessMatch) svc.Attrs {
 		ExportModes: exportModes,
 		Sampler:     samplerFromConfig(samplerConfig),
 	}
+
+	if routesConfig != nil {
+		s.SetCustomRoutes(routesConfig)
+	}
+
+	return s
 }
 
 // FilterClassify returns the Instrumentable types for each received ProcessMatch,

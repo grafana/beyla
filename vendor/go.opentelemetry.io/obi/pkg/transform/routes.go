@@ -123,6 +123,22 @@ func (rn *routerNode) provideRoutes(_ context.Context) (swarm.RunFunc, error) {
 					if routesEnabled {
 						s.Route = matcher.Find(s.Path)
 					}
+					if s.Route == "" && s.IsHTTPSpan() {
+						if s.IsClientSpan() {
+							if s.Service.CustomOutRouteMatcher != nil {
+								s.Route = s.Service.CustomOutRouteMatcher.Find(s.Path)
+							}
+						} else {
+							if s.Service.CustomInRouteMatcher != nil {
+								s.Route = s.Service.CustomInRouteMatcher.Find(s.Path)
+							}
+						}
+
+						if s.Route == "" && s.Service.HarvestedRouteMatcher != nil {
+							s.Route = s.Service.HarvestedRouteMatcher.Find(s.Path)
+						}
+					}
+
 					unmatchAction(rn, s)
 				}
 				out.Send(spans)
@@ -189,7 +205,7 @@ func setUnmatchToPath(_ *routerNode, str *request.Span) {
 }
 
 func classifyFromPath(rc *routerNode, s *request.Span) {
-	if s.Route == "" && (s.Type == request.EventTypeHTTP || s.Type == request.EventTypeHTTPClient) {
+	if s.Route == "" && s.IsHTTPSpan() {
 		s.Route = rc.classifier.ClusterURL(s.Path)
 	}
 }

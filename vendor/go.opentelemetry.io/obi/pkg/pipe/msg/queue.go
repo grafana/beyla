@@ -10,15 +10,13 @@ import (
 )
 
 type queueConfig struct {
-	channelBufferLen       int
-	discardIfNoSubscribers bool
-	closingAttempts        int
+	channelBufferLen int
+	closingAttempts  int
 }
 
 var defaultQueueConfig = queueConfig{
-	channelBufferLen:       1,
-	discardIfNoSubscribers: false,
-	closingAttempts:        1,
+	channelBufferLen: 1,
+	closingAttempts:  1,
 }
 
 // QueueOpts allow configuring some operation of a queue
@@ -28,16 +26,6 @@ type QueueOpts func(*queueConfig)
 func ChannelBufferLen(l int) QueueOpts {
 	return func(c *queueConfig) {
 		c.channelBufferLen = l
-	}
-}
-
-// NotBlockIfNoSubscribers will prevent the Send operation to block when there are
-// no subscribers to the channel.
-// This is useful to define connections to destination nodes that are optional and
-// might not be instantiated.
-func NotBlockIfNoSubscribers() QueueOpts {
-	return func(c *queueConfig) {
-		c.discardIfNoSubscribers = true
 	}
 }
 
@@ -60,17 +48,11 @@ type Queue[T any] struct {
 	mt  sync.Mutex
 	cfg *queueConfig
 
-	// in blocking channels, dsts will be at least 1 even if subscribers are 0
-	// this channel will hold submitted data at least until someone subscribes and
-	// reads it. This can block the sender if no one subscribes to the channel
-	subscribers      int
 	dsts             []chan T
 	remainingClosers int
 
-	// double-linked list of bypassing queues
-	// For simplicity, a Queue instance:
-	// - can't bypass to a queue and having other dsts
-	// - can only bypass to a single queue, despite multiple queues can bypass to it
+	// linked list of bypassing queues
+	// For simplicity, a Queue instance can only bypass to a single queue, despite multiple queues can bypass to it
 	bypassTo *Queue[T]
 	closed   atomic.Bool
 }
@@ -81,11 +63,7 @@ func NewQueue[T any](opts ...QueueOpts) *Queue[T] {
 	for _, opt := range opts {
 		opt(&cfg)
 	}
-	var dsts []chan T
-	if !cfg.discardIfNoSubscribers {
-		dsts = []chan T{make(chan T, cfg.channelBufferLen)}
-	}
-	return &Queue[T]{cfg: &cfg, dsts: dsts, remainingClosers: cfg.closingAttempts}
+	return &Queue[T]{cfg: &cfg, remainingClosers: cfg.closingAttempts}
 }
 
 func (q *Queue[T]) config() *queueConfig {
@@ -96,10 +74,12 @@ func (q *Queue[T]) config() *queueConfig {
 }
 
 // Send a message to all subscribers of this queue.
-// If there are no subscribers and the internal channel is full,
-// the sender might block unless the Queue has been instantiated
-// with the NotBlockIfNoSubscribers option. In that case,
-// the message will be lost and the sender will not be blocked.
+// If there are no subscribers at the moment of sending the message, the message will be lost.
+// If there are subscribers, the message will be stored on their respective internal channels
+// until it is read by the subscribers.
+// If a subscriber is blocked, its internal channel might be full and
+// the Send operation would block for all the subscribers until all the internal channels
+// of the Queue room for a new message.
 func (q *Queue[T]) Send(o T) {
 	q.assertNotClosed()
 	if q.bypassTo != nil {
@@ -113,9 +93,7 @@ func (q *Queue[T]) Send(o T) {
 
 // Subscribe to this queue. This will return a channel that will receive messages.
 // It's important to notice that, if Subscribe is invoked after Send, the sent message
-// will be lost, or forwarded to other subscribed but not to the channel resulting from the
-// last invocation.
-// You can't subscribe to a queue that is bypassing to another queue.
+// will be lost.
 // Concurrent invocations to Subscribe and Bypass are thread-safe between them, so you can be
 // sure that any subscriber will get its own effective channel. But invocations to Subscribe are not
 // thread-safe with the Send method. This means that concurrent invocations to Subscribe and Send might
@@ -124,20 +102,19 @@ func (q *Queue[T]) Subscribe() <-chan T {
 	q.assertNotClosed()
 	q.mt.Lock()
 	defer q.mt.Unlock()
-	q.assertNotBypassing()
 
-	// might be that subscribers <= len(dsts), for example when the queue is new
-	// and has a channel to block sender before subscribers are added
-	q.subscribers++
-	if q.subscribers > len(q.dsts) {
-		q.dsts = append(q.dsts, make(chan T, q.config().channelBufferLen))
+	if q.bypassTo != nil {
+		return q.bypassTo.Subscribe()
 	}
-	return q.dsts[q.subscribers-1]
+
+	ch := make(chan T, q.config().channelBufferLen)
+	q.dsts = append(q.dsts, ch)
+	return ch
 }
 
 // Bypass allows this queue to bypass messages to another queue. This means that
 // messages sent to this queue will also be sent to the other queue.
-// This operation is not thread-safe and does not control for graph cycles.
+// This operation does not control for graph cycles. It might result in an internal mutex deadlock.
 func (q *Queue[T]) Bypass(to *Queue[T]) {
 	q.assertNotClosed()
 	q.mt.Lock()
@@ -146,7 +123,21 @@ func (q *Queue[T]) Bypass(to *Queue[T]) {
 		panic("this queue can't bypass to itself")
 	}
 	q.assertNotBypassing()
+
 	q.bypassTo = to
+	// will copy all the subscribers of the queue to the last queue in the
+	// bypassing chain
+	last := to
+	last.mt.Lock()
+	for last.bypassTo != nil {
+		l := last
+		last = last.bypassTo
+		last.mt.Lock()
+		l.mt.Unlock()
+	}
+	last.dsts = append(last.dsts, q.dsts...)
+	q.dsts = nil
+	last.mt.Unlock()
 }
 
 // Close all the subscribers of this queue. This will close all the channels

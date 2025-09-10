@@ -82,6 +82,7 @@ var DefaultConfig = Config{
 		MySQLPreparedStatementsCacheSize:    1024,
 		PostgresPreparedStatementsCacheSize: 1024,
 		MongoRequestsCacheSize:              1024,
+		KafkaTopicUUIDCacheSize:             1024,
 	},
 	NameResolver: &transform.NameResolverConfig{
 		Sources:  []string{"k8s"},
@@ -142,7 +143,8 @@ var DefaultConfig = Config{
 		HostID: HostIDConfig{
 			FetchTimeout: 500 * time.Millisecond,
 		},
-		DropMetricsUnresolvedIPs: true,
+		DropMetricsUnresolvedIPs:       true,
+		MetricSpanNameAggregationLimit: 100,
 	},
 	Routes: &transform.RoutesConfig{
 		Unmatch:      transform.UnmatchDefault,
@@ -256,8 +258,14 @@ type Attributes struct {
 	Select               attributes.Selection          `yaml:"select"`
 	HostID               HostIDConfig                  `yaml:"host_id"`
 	ExtraGroupAttributes map[string][]attr.Name        `yaml:"extra_group_attributes"`
+
 	// DropMetricsUnresolvedIPs drops metrics that contain unresolved IP addresses to reduce cardinality
 	DropMetricsUnresolvedIPs bool `yaml:"drop_metric_unresolved_ips" env:"OTEL_EBPF_DROP_METRIC_UNRESOLVED_IPS"`
+
+	// MetricSpanNameAggregationLimit works PER SERVICE and only relates to span_metrics.
+	// When the span_name cardinality surpasses this limit, the span_name will be reported as AGGREGATED.
+	// If the value <= 0, it is disabled.
+	MetricSpanNameAggregationLimit int `yaml:"metric_span_names_limit" env:"OTEL_EBPF_METRIC_SPAN_NAMES_LIMIT"`
 }
 
 type HostIDConfig struct {

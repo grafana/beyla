@@ -6,6 +6,7 @@ package filter
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/gobwas/glob"
 
@@ -14,6 +15,10 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 )
+
+func aflog() *slog.Logger {
+	return slog.With("component", "filter.ByAttribute")
+}
 
 // AttributesConfig stores the user-provided section for filtering either Application or Network
 // records by attribute values
@@ -115,13 +120,19 @@ func buildMatcher[T any](getters attributes.NamedGetters[T, string], attribute a
 }
 
 // main pipeline node loop
-func (f *filter[T]) doFilter(_ context.Context) {
+func (f *filter[T]) doFilter(ctx context.Context) {
 	// output channel must be closed so later stages in the pipeline can finish in cascade
 	defer f.output.Close()
 
-	for i := range f.input {
-		if i = f.filterBatch(i); len(i) > 0 {
-			f.output.Send(i)
+	for {
+		select {
+		case <-ctx.Done():
+			aflog().Debug("context done, stopping filter")
+			return
+		case attrs := <-f.input:
+			if attrs = f.filterBatch(attrs); len(attrs) > 0 {
+				f.output.Send(attrs)
+			}
 		}
 	}
 }

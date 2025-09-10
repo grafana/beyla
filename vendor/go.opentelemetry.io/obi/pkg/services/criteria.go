@@ -26,7 +26,8 @@ const (
 	AttrCronJobName     = "k8s_cronjob_name"
 	// AttrOwnerName would be a generic search criteria that would
 	// match against deployment, replicaset, daemonset and statefulset names
-	AttrOwnerName = "k8s_owner_name"
+	AttrOwnerName     = "k8s_owner_name"
+	AttrContainerName = "k8s_container_name"
 )
 
 // any attribute name not in this set will cause an error during the YAML unmarshalling
@@ -40,6 +41,7 @@ var allowedAttributeNames = map[string]struct{}{
 	AttrJobName:         {},
 	AttrCronJobName:     {},
 	AttrOwnerName:       {},
+	AttrContainerName:   {},
 }
 
 // ProcessInfo stores some relevant information about a running process
@@ -133,6 +135,7 @@ type Selector interface {
 	RangePodAnnotations() iter.Seq2[string, StringMatcher]
 	GetExportModes() ExportModes
 	GetSamplerConfig() *SamplerConfig
+	GetRoutesConfig() *CustomRoutesConfig
 }
 
 // StringMatcher provides a generic interface to match string values against some matcher types: regex and glob

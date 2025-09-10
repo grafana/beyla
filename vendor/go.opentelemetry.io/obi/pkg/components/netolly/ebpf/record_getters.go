@@ -114,7 +114,7 @@ func RecordStringGetters(name attr.Name) (attributes.Getter[*Record, string], bo
 	return nil, false
 }
 
-func ifaceDirectionStr(direction uint8) string {
+func ifaceDirectionStr(direction uint64) string {
 	switch direction {
 	case DirectionIngress:
 		return "ingress"

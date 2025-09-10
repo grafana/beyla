@@ -5,6 +5,7 @@ package transform
 
 import (
 	"context"
+	"log/slog"
 	"net"
 	"strings"
 
@@ -13,23 +14,33 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 )
 
+func ipslog() *slog.Logger {
+	return slog.With("component", "transform.IPsFilter")
+}
+
 func IPsFilter(dropUnresolvedIPs bool, input, output *msg.Queue[[]request.Span]) swarm.InstanceFunc {
 	return func(_ context.Context) (swarm.RunFunc, error) {
 		if !dropUnresolvedIPs {
 			return swarm.Bypass(input, output)
 		}
 		in := input.Subscribe()
-		return func(_ context.Context) {
+		return func(ctx context.Context) {
 			defer output.Close()
-			for spans := range in {
-				copiedSpans := make([]request.Span, len(spans))
-				copy(copiedSpans, spans)
-
-				for i := range copiedSpans {
-					span := &copiedSpans[i]
-					filterIPsFromSpan(span)
+			for {
+				select {
+				case <-ctx.Done():
+					ipslog().Debug("context done. Stopping")
+					return
+				case spans, ok := <-in:
+					if !ok {
+						ipslog().Debug("input channel closed, stopping")
+						return
+					}
+					for i := range spans {
+						filterIPsFromSpan(&spans[i])
+					}
+					output.Send(spans)
 				}
-				output.Send(copiedSpans)
 			}
 		}, nil
 	}

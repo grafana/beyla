@@ -26,12 +26,6 @@ func ilog() *slog.Logger {
 // Build instantiates the whole instrumentation --> processing --> submit
 // pipeline graph and returns it as a startable item
 func Build(ctx context.Context, config *beyla.Config, ctxInfo *global.ContextInfo, tracesCh *msg.Queue[[]request.Span], processEventsCh *msg.Queue[exec.ProcessEvent]) (*swarm.Runner, error) {
-
-	if ctxInfo.OverrideAppExportQueue == nil {
-		ctxInfo.OverrideAppExportQueue = msg.NewQueue[[]request.Span](
-			msg.ChannelBufferLen(config.ChannelBufferLen),
-		)
-	}
 	// a swarm containing two swarms
 	// 1. OBI's actual pipe.Build swarm
 	// 2. the process metrics swarm pipeline, connected to the output of (1)
@@ -78,24 +72,19 @@ func processSubpipeline(swi *swarm.Instancer, ctxInfo *global.ContextInfo, confi
 // Beyla, as it lacks the metadata from the remote clusters.
 func clusterConnectorsSubpipeline(swi *swarm.Instancer, ctxInfo *global.ContextInfo, config *beyla.Config) {
 	// if config.ConnectClusters
-	// TODO: make sure external spans are not submitted via the regular pipeline
 	externalTraces := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(config.ChannelBufferLen))
 	swi.Add(traces.SelectExternal(
 		ctxInfo.OverrideAppExportQueue,
 		externalTraces,
 	))
 
-	// aqui hay que zurular mejor nuestro propio traces receiver
-	swi.Add(alloy.TracesReceiver(ctxInfo, &beyla.TracesReceiverConfig{
-		Traces:           config.TracesReceiver.Traces,
-		Instrumentations: config.TracesReceiver.Instrumentations,
-		Sampler:          services.SamplerConfig{
-			Name: "always_off", // parentbased_always_on?
-		},
-	}, false,
-		&attributes.SelectorConfig{
-			SelectionCfg:            config.Attributes.Select,
-			ExtraGroupAttributesCfg: config.Attributes.ExtraGroupAttributes,
+	swi.Add(alloy.ExternalTracesReceiver(ctxInfo,
+		&beyla.TracesReceiverConfig{
+			Traces:           config.TracesReceiver.Traces,
+			Instrumentations: config.TracesReceiver.Instrumentations,
+			Sampler: services.SamplerConfig{
+				Name: "always_off", // parentbased_always_on?
+			},
 		},
 		ctxInfo.OverrideAppExportQueue,
 	))

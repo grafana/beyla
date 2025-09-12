@@ -39,7 +39,6 @@ func filter(spans []request.Span) []request.Span {
 	for _, span := range spans {
 		if isExternalSelectable(&span) {
 			externalSpan := span
-			externalSpan.Service.Metadata["chirrifluski"] = "tracatra"
 			extern = append(extern, externalSpan)
 		}
 	}

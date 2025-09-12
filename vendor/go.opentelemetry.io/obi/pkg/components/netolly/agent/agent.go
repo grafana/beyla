@@ -101,8 +101,7 @@ type Flows struct {
 	ebpf         ebpfFlowFetcher
 
 	// processing nodes to be wired in the buildPipeline method
-	mapTracer *flow.MapTracer
-	rbTracer  *flow.RingBufTracer
+	rbTracer *flow.RingBufTracer
 
 	// elements used to decorate flows with extra information
 	interfaceNamer flow.InterfaceNamer
@@ -115,8 +114,7 @@ type Flows struct {
 type ebpfFlowFetcher interface {
 	io.Closer
 
-	LookupAndDeleteMap() map[ebpf.NetFlowId][]ebpf.NetFlowMetrics
-	ReadRingBuf() (ringbuf.Record, error)
+	ReadInto(*ringbuf.Record) error
 }
 
 // FlowsAgent instantiates a new agent, given a configuration.
@@ -151,13 +149,30 @@ func newFetcher(cfg *obi.Config, alog *slog.Logger, ifaceManager *tcmanager.Inte
 	case obi.EbpfSourceSock:
 		alog.Info("using socket filter for collecting network events")
 
-		return ebpf.NewSockFlowFetcher(cfg.NetworkFlows.Sampling, cfg.NetworkFlows.CacheMaxFlows)
+		return ebpf.NewSockFlowFetcher(cfg.NetworkFlows.Sampling,
+			cfg.NetworkFlows.CacheMaxFlows,
+			cfg.NetworkFlows.RingBufferSize,
+			cfg.NetworkFlows.RingBufferFlushPeriod,
+			cfg.NetworkFlows.MaxFlowDuration,
+			cfg.NetworkFlows.Protocols,
+			cfg.NetworkFlows.ExcludeProtocols,
+		)
 	case obi.EbpfSourceTC:
 		alog.Info("using kernel Traffic Control for collecting network events")
 		ingress, egress := flowDirections(&cfg.NetworkFlows)
 
-		return ebpf.NewFlowFetcher(cfg.NetworkFlows.Sampling, cfg.NetworkFlows.CacheMaxFlows,
-			ingress, egress, ifaceManager, cfg.EBPF.TCBackend)
+		return ebpf.NewFlowFetcher(cfg.NetworkFlows.Sampling,
+			cfg.NetworkFlows.CacheMaxFlows,
+			ingress,
+			egress,
+			ifaceManager,
+			cfg.EBPF.TCBackend,
+			cfg.NetworkFlows.RingBufferSize,
+			cfg.NetworkFlows.RingBufferFlushPeriod,
+			cfg.NetworkFlows.MaxFlowDuration,
+			cfg.NetworkFlows.Protocols,
+			cfg.NetworkFlows.ExcludeProtocols,
+		)
 	}
 
 	return nil, errors.New("unknown network configuration eBPF source specified, allowed options are [tc, socket_filter]")
@@ -206,15 +221,13 @@ func flowsAgent(
 		return iface
 	}
 
-	mapTracer := flow.NewMapTracer(fetcher, cfg.NetworkFlows.CacheActiveTimeout)
-	rbTracer := flow.NewRingBufTracer(fetcher, mapTracer, cfg.NetworkFlows.CacheActiveTimeout)
+	rbTracer := flow.NewRingBufTracer(fetcher)
 
 	return &Flows{
 		ctxInfo:        ctxInfo,
 		ebpf:           fetcher,
 		ifaceManager:   ifaceManager,
 		cfg:            cfg,
-		mapTracer:      mapTracer,
 		rbTracer:       rbTracer,
 		agentIP:        agentIP,
 		interfaceNamer: interfaceNamer,

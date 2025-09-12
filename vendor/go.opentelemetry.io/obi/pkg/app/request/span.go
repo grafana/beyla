@@ -140,6 +140,11 @@ type SQLError struct {
 	Message  string `json:"message"`
 }
 
+type MessagingInfo struct {
+	Offset    int64 `json:"offset"`
+	Partition int   `json:"partition"`
+}
+
 // Span contains the information being submitted by the following nodes in the graph.
 // It enables comfortable handling of data from Go.
 // REMINDER: any attribute here must be also added to the functions SpanOTELGetters,
@@ -175,6 +180,11 @@ type Span struct {
 	DBNamespace    string         `json:"-"`
 	SQLCommand     string         `json:"-"`
 	SQLError       *SQLError      `json:"-"`
+	MessagingInfo  *MessagingInfo `json:"-"`
+
+	// OverrideTraceName is set under some conditions, like spanmetrics reaching the maximum
+	// cardinality for trace names.
+	OverrideTraceName string `json:"-"`
 }
 
 func (s *Span) Inside(parent *Span) bool {
@@ -260,13 +270,21 @@ func spanAttributes(s *Span) SpanAttributes {
 			"statement":  s.Statement,
 			"query":      s.Path,
 		}
-	case EventTypeKafkaServer:
-		return SpanAttributes{
+	case EventTypeKafkaServer, EventTypeKafkaClient:
+		attrs := SpanAttributes{
 			"serverAddr": SpanHost(s),
 			"serverPort": strconv.Itoa(s.HostPort),
 			"operation":  s.Method,
-			"clientId":   s.OtherNamespace,
+			"clientId":   s.Statement,
+			"topic":      s.Path,
 		}
+		if s.MessagingInfo != nil {
+			attrs["partition"] = strconv.FormatUint(uint64(s.MessagingInfo.Partition), 10)
+			if s.Method == MessagingProcess {
+				attrs["offset"] = strconv.FormatUint(uint64(s.MessagingInfo.Offset), 10)
+			}
+		}
+		return attrs
 	case EventTypeGPUKernelLaunch:
 		return SpanAttributes{
 			"function":  s.Method,
@@ -394,6 +412,10 @@ func (s *Span) IsClientSpan() bool {
 	return false
 }
 
+func (s *Span) IsHTTPSpan() bool {
+	return s.Type == EventTypeHTTP || s.Type == EventTypeHTTPClient
+}
+
 const (
 	StatusCodeUnset = "STATUS_CODE_UNSET"
 	StatusCodeError = "STATUS_CODE_ERROR"
@@ -519,6 +541,9 @@ func (s *Span) ServiceGraphKind() string {
 }
 
 func (s *Span) TraceName() string {
+	if s.OverrideTraceName != "" {
+		return s.OverrideTraceName
+	}
 	switch s.Type {
 	case EventTypeHTTP, EventTypeHTTPClient:
 		name := s.Method
@@ -547,11 +572,11 @@ func (s *Span) TraceName() string {
 		if s.Path == "" {
 			return s.Method
 		}
-		return fmt.Sprintf("%s %s", s.Path, s.Method)
+		return s.Method + " " + s.Path
 	case EventTypeMongoClient:
 		if s.Path != "" && s.Method != "" {
 			// TODO for database operations like listCollections, we need to use s.DbNamespace instead of s.Path
-			return fmt.Sprintf("%s %s", s.Method, s.Path)
+			return s.Method + " " + s.Path
 		}
 		if s.Path != "" {
 			return s.Path

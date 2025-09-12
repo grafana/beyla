@@ -69,15 +69,18 @@ var MetricTypes = []string{
 // MetricsReporter implements the graph node that receives request.Span
 // instances and forwards them as OTEL metrics.
 type MetricsReporter struct {
-	ctx        context.Context
-	cfg        *otelcfg.MetricsConfig
-	hostID     string
-	attributes *attributes.AttrSelector
-	exporter   sdkmetric.Exporter
-	reporters  otelcfg.ReporterPool[*svc.Attrs, *Metrics]
-	hostInfo   *Expirer[*request.Span, instrument.Int64Gauge, int64]
-	pidTracker PidServiceTracker
-	is         instrumentations.InstrumentationSelection
+	ctx              context.Context
+	cfg              *otelcfg.MetricsConfig
+	hostID           string
+	attributes       *attributes.AttrSelector
+	exporter         sdkmetric.Exporter
+	reporters        otelcfg.ReporterPool[*svc.Attrs, *Metrics]
+	hostInfo         *Expirer[*request.Span, instrument.Int64Gauge, int64]
+	targetInfo       instrument.Int64UpDownCounter
+	tracesTargetInfo instrument.Int64UpDownCounter
+	pidTracker       PidServiceTracker
+	is               instrumentations.InstrumentationSelection
+	targetMetrics    map[svc.UID]*TargetMetrics
 
 	// user-selected fields for each of the reported metrics
 	attrHTTPDuration           []attributes.Field[*request.Span, attribute.KeyValue]
@@ -106,11 +109,9 @@ type MetricsReporter struct {
 // Metrics is a set of metrics associated to a given OTEL MeterProvider.
 // There is a Metrics instance for each service/process instrumented by OBI.
 type Metrics struct {
-	ctx                      context.Context
-	service                  *svc.Attrs
-	provider                 *metric.MeterProvider
-	resourceAttributes       []attribute.KeyValue
-	tracesResourceAttributes attribute.Set
+	ctx      context.Context
+	service  *svc.Attrs
+	provider *metric.MeterProvider
 
 	// IMPORTANT! Don't forget to clean each Expirer in cleanupAllMetricsInstances method
 	httpDuration           *Expirer[*request.Span, instrument.Float64Histogram, float64]
@@ -129,13 +130,16 @@ type Metrics struct {
 	spanMetricsCallsTotal        *Expirer[*request.Span, instrument.Int64Counter, int64]
 	spanMetricsRequestSizeTotal  *Expirer[*request.Span, instrument.Float64Counter, float64]
 	spanMetricsResponseSizeTotal *Expirer[*request.Span, instrument.Float64Counter, float64]
-	targetInfo                   instrument.Int64UpDownCounter
-	tracesTargetInfo             instrument.Int64UpDownCounter
 	gpuKernelCallsTotal          *Expirer[*request.Span, instrument.Int64Counter, int64]
 	gpuMemoryAllocsTotal         *Expirer[*request.Span, instrument.Int64Counter, int64]
 	gpuKernelGridSize            *Expirer[*request.Span, instrument.Float64Histogram, float64]
 	gpuKernelBlockSize           *Expirer[*request.Span, instrument.Float64Histogram, float64]
 	gpuMemoryCopySize            *Expirer[*request.Span, instrument.Float64Histogram, float64]
+}
+
+type TargetMetrics struct {
+	resourceAttributes       attribute.Set
+	tracesResourceAttributes attribute.Set
 }
 
 func ReportMetrics(
@@ -188,6 +192,7 @@ func newMetricsReporter(
 		ctx:                 ctx,
 		cfg:                 cfg,
 		is:                  is,
+		targetMetrics:       map[svc.UID]*TargetMetrics{},
 		attributes:          attribProvider,
 		hostID:              ctxInfo.HostID,
 		input:               input.Subscribe(),
@@ -251,8 +256,7 @@ func newMetricsReporter(
 			v.cleanupAllMetricsInstances()
 
 			if !mr.pidTracker.ServiceLive(id) {
-				mr.deleteTracesTargetInfo(v)
-				mr.deleteTargetInfo(v)
+				mr.deleteTargetMetrics(&id)
 			}
 
 			go func() {
@@ -270,13 +274,22 @@ func newMetricsReporter(
 
 	mr.pidTracker = NewPidServiceTracker()
 
+	systemMetrics := mr.newMetricsInstance(nil)
+	systemMeter := systemMetrics.provider.Meter(reporterName)
+
 	if cfg.HostMetricsEnabled() {
-		hostMetrics := mr.newMetricsInstance(nil)
-		hostMeter := hostMetrics.provider.Meter(reporterName)
-		err := mr.setupHostInfoMeter(hostMeter)
+		err := mr.setupHostInfoMeter(systemMeter)
 		if err != nil {
 			return nil, fmt.Errorf("setting up host metrics: %w", err)
 		}
+	}
+
+	if err := mr.setupTargetInfo(systemMeter); err != nil {
+		return nil, fmt.Errorf("setting up target info: %w", err)
+	}
+
+	if err := mr.setupTracesTargetInfo(systemMeter); err != nil {
+		return nil, fmt.Errorf("setting up traces target info: %w", err)
 	}
 
 	return &mr, nil
@@ -348,9 +361,9 @@ func (mr *MetricsReporter) spanMetricOptions(mlog *slog.Logger) []metric.Option 
 	}
 }
 
-func (mr *MetricsReporter) setupTargetInfo(m *Metrics, meter instrument.Meter) error {
+func (mr *MetricsReporter) setupTargetInfo(meter instrument.Meter) error {
 	var err error
-	m.targetInfo, err = meter.Int64UpDownCounter(TargetInfo, instrument.WithDescription("Target metadata"))
+	mr.targetInfo, err = meter.Int64UpDownCounter(TargetInfo, instrument.WithDescription("Target metadata"))
 	if err != nil {
 		return fmt.Errorf("creating target info: %w", err)
 	}
@@ -523,10 +536,10 @@ func (mr *MetricsReporter) setupSpanSizeMeters(m *Metrics, meter instrument.Mete
 	return nil
 }
 
-func (mr *MetricsReporter) setupTracesTargetInfo(m *Metrics, meter instrument.Meter) error {
+func (mr *MetricsReporter) setupTracesTargetInfo(meter instrument.Meter) error {
 	var err error
 
-	m.tracesTargetInfo, err = meter.Int64UpDownCounter(TracesTargetInfo)
+	mr.tracesTargetInfo, err = meter.Int64UpDownCounter(TracesTargetInfo)
 	if err != nil {
 		return fmt.Errorf("creating span metric traces target info: %w", err)
 	}
@@ -604,10 +617,8 @@ func (mr *MetricsReporter) newMetricsInstance(service *svc.Attrs) Metrics {
 	opts = append(opts, mr.spanMetricOptions(mlog)...)
 
 	return Metrics{
-		ctx:                      mr.ctx,
-		service:                  service,
-		resourceAttributes:       resourceAttributes,
-		tracesResourceAttributes: mr.tracesResourceAttributes(service),
+		ctx:     mr.ctx,
+		service: service,
 		provider: metric.NewMeterProvider(
 			opts...,
 		),
@@ -624,20 +635,8 @@ func (mr *MetricsReporter) newMetricSet(service *svc.Attrs) (*Metrics, error) {
 	meter := m.provider.Meter(reporterName)
 	var err error
 
-	// Target info is created for every type of OTel metrics
-	if err = mr.setupTargetInfo(&m, meter); err != nil {
-		return nil, err
-	}
-
 	if mr.cfg.OTelMetricsEnabled() {
 		err = mr.setupOtelMeters(&m, meter)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if mr.cfg.AnySpanMetricsEnabled() {
-		err = mr.setupTracesTargetInfo(&m, meter)
 		if err != nil {
 			return nil, err
 		}
@@ -746,14 +745,6 @@ func (mr *MetricsReporter) tracesResourceAttributes(service *svc.Attrs) attribut
 
 	filteredAttrs := otelcfg.GetFilteredAttributesByPrefix(baseAttrs, mr.userAttribSelection, extraAttrs, MetricTypes)
 	return attribute.NewSet(filteredAttrs...)
-}
-
-func (mr *MetricsReporter) metricHostAttributes() attribute.Set {
-	attrs := []attribute.KeyValue{
-		GrafanaHostIDKey.String(mr.hostID),
-	}
-
-	return attribute.NewSet(attrs...)
 }
 
 // spanMetricAttributes follow a given specification, so their attribute getters are predefined and can't be
@@ -886,34 +877,45 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 	}
 }
 
-func (mr *MetricsReporter) createTargetInfo(reporter *Metrics) {
+func (mr *MetricsReporter) createTargetInfo(attrs *attribute.Set) {
 	mlog().Debug("Creating target_info")
-	attrOpt := instrument.WithAttributeSet(attribute.NewSet(reporter.resourceAttributes...))
-	reporter.targetInfo.Add(mr.ctx, 1, attrOpt)
+
+	attrOpt := instrument.WithAttributeSet(*attrs)
+
+	mr.targetInfo.Add(mr.ctx, 1, attrOpt)
 }
 
-func (mr *MetricsReporter) deleteTargetInfo(reporter *Metrics) {
-	mlog().Debug("Deleting target_info for", "attrs", reporter.resourceAttributes)
-	attrOpt := instrument.WithAttributeSet(attribute.NewSet(reporter.resourceAttributes...))
-	reporter.targetInfo.Remove(mr.ctx, attrOpt)
+func (mr *MetricsReporter) deleteTargetInfo(attrs *attribute.Set) {
+	if attrs == nil {
+		return
+	}
+
+	mlog().Debug("Deleting target_info for", "attrs", attrs)
+	attrOpt := instrument.WithAttributeSet(*attrs)
+	mr.targetInfo.Remove(mr.ctx, attrOpt)
 }
 
-func (mr *MetricsReporter) createTracesTargetInfo(reporter *Metrics) {
+func (mr *MetricsReporter) createTracesTargetInfo(attrs *attribute.Set) {
 	if !mr.cfg.AnySpanMetricsEnabled() {
 		return
 	}
+
 	mlog().Debug("Creating traces_target_info")
-	attrOpt := instrument.WithAttributeSet(reporter.tracesResourceAttributes)
-	reporter.tracesTargetInfo.Add(mr.ctx, 1, attrOpt)
+
+	attrOpt := instrument.WithAttributeSet(*attrs)
+
+	mr.tracesTargetInfo.Add(mr.ctx, 1, attrOpt)
 }
 
-func (mr *MetricsReporter) deleteTracesTargetInfo(reporter *Metrics) {
-	if !mr.cfg.AnySpanMetricsEnabled() {
+func (mr *MetricsReporter) deleteTracesTargetInfo(attrs *attribute.Set) {
+	if attrs == nil || !mr.cfg.AnySpanMetricsEnabled() {
 		return
 	}
-	mlog().Debug("Deleting traces_target_info for", "attrs", reporter.resourceAttributes)
-	attrOpt := instrument.WithAttributeSet(reporter.tracesResourceAttributes)
-	reporter.tracesTargetInfo.Remove(mr.ctx, attrOpt)
+
+	mlog().Debug("Deleting traces_target_info for", "attrs", attrs)
+
+	attrOpt := instrument.WithAttributeSet(*attrs)
+	mr.tracesTargetInfo.Remove(mr.ctx, attrOpt)
 }
 
 func (mr *MetricsReporter) setupPIDToServiceRelationship(pid int32, uid svc.UID) {
@@ -947,36 +949,86 @@ func (mr *MetricsReporter) reportMetrics(ctx context.Context) {
 	}
 }
 
-func (mr *MetricsReporter) onProcessEvent(pe *exec.ProcessEvent) {
-	mr.log.Debug("Received new process event", "event type", pe.Type, "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
+func (mr *MetricsReporter) resourceAttrsForService(service *svc.Attrs) []attribute.KeyValue {
+	attrs := []attribute.KeyValue{
+		attribute.String(string(attr.Instance), service.UID.Instance),
+		attribute.String(string(attr.Job), service.Job()),
+	}
 
-	reporter, err := mr.reporters.For(&pe.File.Service)
-	// If we are receiving a delete event, the service may come without kubernetes information, which
-	// is why we record the original service info. Delete look up the data from the pid tracker.
-	if err != nil {
-		mr.log.Error("unexpected error creating OTEL resource. Ignoring metric",
-			"error", err, "service", pe.File.Service.UID)
+	attrs = append(attrs, otelcfg.GetAppResourceAttrs(mr.hostID, service)...)
+	return append(attrs, otelcfg.ResourceAttrsFromEnv(service)...)
+}
+
+func (mr *MetricsReporter) ensureTargetMetrics(service *svc.Attrs) *TargetMetrics {
+	if service == nil {
+		return nil
+	}
+
+	if targetMetrics, ok := mr.targetMetrics[service.UID]; ok {
+		return targetMetrics
+	}
+
+	targetMetrics := &TargetMetrics{}
+
+	targetMetrics.resourceAttributes = attribute.NewSet(mr.resourceAttrsForService(service)...)
+
+	if mr.cfg.AnySpanMetricsEnabled() {
+		targetMetrics.tracesResourceAttributes = mr.tracesResourceAttributes(service)
+	} else {
+		targetMetrics.tracesResourceAttributes = *attribute.EmptySet()
+	}
+
+	mr.targetMetrics[service.UID] = targetMetrics
+
+	return targetMetrics
+}
+
+func (mr *MetricsReporter) createTargetMetrics(service *svc.Attrs) {
+	if service == nil {
 		return
 	}
 
+	targetMetrics := mr.ensureTargetMetrics(service)
+
+	if targetMetrics == nil {
+		return
+	}
+
+	mr.createTargetInfo(&targetMetrics.resourceAttributes)
+	mr.createTracesTargetInfo(&targetMetrics.tracesResourceAttributes)
+}
+
+func (mr *MetricsReporter) deleteTargetMetrics(uid *svc.UID) {
+	if uid == nil {
+		return
+	}
+
+	targetMetrics, ok := mr.targetMetrics[*uid]
+
+	if !ok {
+		return
+	}
+
+	mr.deleteTargetInfo(&targetMetrics.resourceAttributes)
+	mr.deleteTracesTargetInfo(&targetMetrics.tracesResourceAttributes)
+
+	delete(mr.targetMetrics, *uid)
+}
+
+func (mr *MetricsReporter) onProcessEvent(pe *exec.ProcessEvent) {
+	mr.log.Debug("Received new process event", "event type", pe.Type, "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
+
 	if pe.Type == exec.ProcessEventCreated {
-		mr.createTargetInfo(reporter)
-		mr.createTracesTargetInfo(reporter)
+		mr.createTargetMetrics(&pe.File.Service)
 		mr.setupPIDToServiceRelationship(pe.File.Pid, pe.File.Service.UID)
 	} else {
 		if deleted, origUID := mr.disassociatePIDFromService(pe.File.Pid); deleted {
 			// We only need the UID to look up in the pool, no need to cache
 			// the whole of the attrs in the pidTracker
-			svc := svc.Attrs{UID: origUID}
-			reporter, err = mr.reporters.For(&svc)
-			if err != nil {
-				mr.log.Error("unexpected error creating OTEL resource. Ignoring metric",
-					"error", err, "service", pe.File.Service.UID)
-				return
-			}
-			mlog().Debug("deleting infos for", "pid", pe.File.Pid, "attrs", reporter.service)
-			mr.deleteTracesTargetInfo(reporter)
-			mr.deleteTargetInfo(reporter)
+			mlog().Debug("deleting infos for", "pid", pe.File.Pid, "attrs", origUID)
+
+			mr.deleteTargetMetrics(&origUID)
+
 			if mr.cfg.HostMetricsEnabled() && mr.pidTracker.Count() == 0 {
 				mlog().Debug("No more PIDs tracked, expiring host info metric")
 				mr.hostInfo.RemoveAllMetrics(mr.ctx)

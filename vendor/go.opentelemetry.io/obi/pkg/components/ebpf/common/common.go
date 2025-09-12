@@ -23,6 +23,7 @@ import (
 	"github.com/hashicorp/golang-lru/v2/simplelru"
 
 	"go.opentelemetry.io/obi/pkg/app/request"
+	"go.opentelemetry.io/obi/pkg/components/ebpf/common/kafkaparser"
 	"go.opentelemetry.io/obi/pkg/components/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/config"
 )
@@ -127,6 +128,7 @@ type EBPFParseContext struct {
 	mysqlPreparedStatements    *simplelru.LRU[mysqlPreparedStatementsKey, string]
 	postgresPreparedStatements *simplelru.LRU[postgresPreparedStatementsKey, string]
 	postgresPortals            *simplelru.LRU[postgresPortalsKey, string]
+	kafkaTopicUUIDToName       *simplelru.LRU[kafkaparser.UUID, string]
 }
 
 type EBPFEventContext struct {
@@ -149,6 +151,7 @@ func NewEBPFParseContext(cfg *config.EBPFTracer) *EBPFParseContext {
 		mysqlPreparedStatements    *simplelru.LRU[mysqlPreparedStatementsKey, string]
 		postgresPreparedStatements *simplelru.LRU[postgresPreparedStatementsKey, string]
 		postgresPortals            *simplelru.LRU[postgresPortalsKey, string]
+		kafkaTopicUUIDToName       *simplelru.LRU[kafkaparser.UUID, string]
 		mongoRequestCache          PendingMongoDBRequests
 	)
 
@@ -179,6 +182,11 @@ func NewEBPFParseContext(cfg *config.EBPFTracer) *EBPFParseContext {
 			ptlog().Error("failed to create Postgres portals cache", "error", err)
 		}
 
+		kafkaTopicUUIDToName, err = simplelru.NewLRU[kafkaparser.UUID, string](cfg.KafkaTopicUUIDCacheSize, nil)
+		if err != nil {
+			ptlog().Error("failed to create Kafka topic UUID to name cache", "error", err)
+		}
+
 		mongoRequestCache = expirable.NewLRU[MongoRequestKey, *MongoRequestValue](cfg.MongoRequestsCacheSize, nil, 0)
 	}
 
@@ -190,6 +198,7 @@ func NewEBPFParseContext(cfg *config.EBPFTracer) *EBPFParseContext {
 		mysqlPreparedStatements:    mysqlPreparedStatements,
 		postgresPreparedStatements: postgresPreparedStatements,
 		postgresPortals:            postgresPortals,
+		kafkaTopicUUIDToName:       kafkaTopicUUIDToName,
 	}
 }
 

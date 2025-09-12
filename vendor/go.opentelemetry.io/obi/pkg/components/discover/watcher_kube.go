@@ -184,7 +184,7 @@ func (wk *watcherKubeEnricher) onNewProcess(procInfo ProcessAttrs) (ProcessAttrs
 
 	if pod := wk.store.PodByContainerID(containerInfo.ContainerID); pod != nil {
 		wk.log.Debug("matched process with running container", "pid", procInfo.pid, "container", containerInfo.ContainerID)
-		procInfo = withMetadata(procInfo, pod.Meta)
+		procInfo = withMetadata(procInfo, pod.Meta, containerInfo.ContainerID)
 	}
 	return procInfo, true
 }
@@ -226,7 +226,7 @@ func (wk *watcherKubeEnricher) onNewPod(pod *informer.ObjectMeta) []Event[Proces
 				wk.log.Debug("matched pod with running process", "container", cnt.Id, "pid", procInfo.pid)
 				events = append(events, Event[ProcessAttrs]{
 					Type: EventCreated,
-					Obj:  withMetadata(procInfo, pod),
+					Obj:  withMetadata(procInfo, pod, cnt.Id),
 				})
 			}
 		}
@@ -260,7 +260,7 @@ func (wk *watcherKubeEnricher) getContainerInfo(pid PID) (container.Info, error)
 }
 
 // withMetadata returns a copy with a new map to avoid race conditions in later stages of the pipeline
-func withMetadata(pp ProcessAttrs, info *informer.ObjectMeta) ProcessAttrs {
+func withMetadata(pp ProcessAttrs, info *informer.ObjectMeta, containerID string) ProcessAttrs {
 	ownerName := info.Name
 	if topOwner := kube.TopOwner(info.Pod); topOwner != nil {
 		ownerName = topOwner.Name
@@ -278,6 +278,15 @@ func withMetadata(pp ProcessAttrs, info *informer.ObjectMeta) ProcessAttrs {
 	// add any other owner name (they might be several, e.g. replicaset and deployment)
 	for _, owner := range info.Pod.Owners {
 		ret.metadata[transform.OwnerLabelName(owner.Kind).Prom()] = owner.Name
+	}
+	if containerID == "" {
+		return ret
+	}
+	for _, podContainer := range info.Pod.Containers {
+		if podContainer.Id == containerID {
+			ret.metadata[services.AttrContainerName] = podContainer.Name
+			break
+		}
 	}
 	return ret
 }

@@ -264,14 +264,6 @@ func (mr *SvcGraphMetricsReporter) tracesResourceAttributes(service *svc.Attrs) 
 	return attribute.NewSet(filteredAttrs...)
 }
 
-func (mr *SvcGraphMetricsReporter) metricHostAttributes() attribute.Set {
-	attrs := []attribute.KeyValue{
-		GrafanaHostIDKey.String(mr.hostID),
-	}
-
-	return attribute.NewSet(attrs...)
-}
-
 func serviceGraphGetters() []attributes.Field[*request.Span, attribute.KeyValue] {
 	return attributes.OpenTelemetryGetters(
 		request.SpanOTELGetters, []attr.Name{

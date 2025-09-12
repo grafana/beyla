@@ -80,6 +80,8 @@ type GlobAttributes struct {
 	ExportModes ExportModes `yaml:"exports"`
 
 	SamplerConfig *SamplerConfig `yaml:"sampler"`
+
+	Routes *CustomRoutesConfig `yaml:"routes"`
 }
 
 // GlobAttr provides a YAML handler for glob.Glob so the type can be parsed from YAML or environment variables
@@ -180,6 +182,8 @@ func (ga *GlobAttributes) RangePodAnnotations() iter.Seq2[string, StringMatcher]
 func (ga *GlobAttributes) GetExportModes() ExportModes { return ga.ExportModes }
 
 func (ga *GlobAttributes) GetSamplerConfig() *SamplerConfig { return ga.SamplerConfig }
+
+func (ga *GlobAttributes) GetRoutesConfig() *CustomRoutesConfig { return ga.Routes }
 
 type nilMatcher struct{}
 

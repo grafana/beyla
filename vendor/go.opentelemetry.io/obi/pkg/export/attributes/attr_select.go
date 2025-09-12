@@ -8,7 +8,6 @@ import (
 	"path"
 	"slices"
 	"strings"
-	"sync"
 
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 )
@@ -17,9 +16,6 @@ import (
 // The key is the metric name (either in Prometheus or OpenTelemetry format)
 // The value is the enumeration of included/excluded attribute globs
 type Selection map[Section]InclusionLists
-
-// selectionMutex is a package-level mutex to protect Selection operations.
-var selectionMutex sync.RWMutex
 
 type InclusionLists struct {
 	// Include is a list of metric attributes that have to be reported. It can be an attribute
@@ -70,9 +66,6 @@ func (incl Selection) Normalize() {
 		return
 	}
 
-	selectionMutex.Lock()
-	defer selectionMutex.Unlock()
-
 	normalized := map[Section]InclusionLists{}
 	for metricName, allowedAttrs := range incl {
 		normalized[normalizeMetric(metricName)] = allowedAttrs
@@ -90,9 +83,6 @@ func (incl Selection) Matching(metricName Name) []InclusionLists {
 	if incl == nil {
 		return nil
 	}
-
-	selectionMutex.RLock()
-	defer selectionMutex.RUnlock()
 
 	var matchingMetricGlobs []Section
 	for glob := range incl {

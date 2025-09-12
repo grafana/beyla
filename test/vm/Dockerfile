@@ -1,4 +1,4 @@
-FROM golang:1.24.1-alpine
+FROM golang:1.25.0-alpine
 
 # this is the toplevel Makefile target to be invoked
 # see the contents of 'startup.sh' at the end of this file

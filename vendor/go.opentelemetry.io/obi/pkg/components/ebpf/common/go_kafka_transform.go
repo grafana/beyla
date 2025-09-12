@@ -18,9 +18,9 @@ func ReadGoSaramaRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, er
 		return request.Span{}, true, err
 	}
 
-	info, err := ProcessKafkaRequest(event.Buf[:])
+	info, ignore, err := ProcessKafkaRequest(event.Buf[:], nil)
 
-	if err == nil {
+	if err == nil && !ignore {
 		return GoKafkaSaramaToSpan(event, info), false, nil
 	}
 
@@ -31,7 +31,6 @@ func GoKafkaSaramaToSpan(event *GoSaramaClientInfo, data *KafkaInfo) request.Spa
 	peer := ""
 	hostname := ""
 	hostPort := 0
-
 	if event.Conn.S_port != 0 || event.Conn.D_port != 0 {
 		peer, hostname = (*BPFConnInfo)(unsafe.Pointer(&event.Conn)).reqHostInfo()
 		hostPort = int(event.Conn.D_port)

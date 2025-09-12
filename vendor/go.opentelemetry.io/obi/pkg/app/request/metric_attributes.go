@@ -91,6 +91,14 @@ func DBResponseStatusCode(val string) attribute.KeyValue {
 	return attribute.Key(attr.DBResponseStatusCode).String(val)
 }
 
+func MessagingPartition(val int) attribute.KeyValue {
+	return attribute.Key(attr.MessagingPartition).Int(val)
+}
+
+func MessagingKafkaOffset(val int64) attribute.KeyValue {
+	return attribute.Key(attr.MessagingKafkaOffset).Int64(val)
+}
+
 func DBCollectionName(val string) attribute.KeyValue {
 	return attribute.Key(attr.DBCollectionName).String(val)
 }

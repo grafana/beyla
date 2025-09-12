@@ -95,7 +95,9 @@ type AttrSelector struct {
 }
 
 // NewAttrSelector returns an AttrSelector instance based on the user-provided attributes Selection
-// and the auto-detected attribute AttrGroups
+// and the auto-detected attribute AttrGroups.
+// NewAttrSelector assumes that the passed SelectorConfig is already normalized (has already invoked
+// its method Normalize on its Selection internal field)
 func NewAttrSelector(
 	groups AttrGroups,
 	cfg *SelectorConfig,
@@ -103,6 +105,7 @@ func NewAttrSelector(
 	return NewCustomAttrSelector(groups, cfg, getDefinitions)
 }
 
+// NewCustomAttrSelector is required for extensions of OBI with other metric types
 func NewCustomAttrSelector(
 	groups AttrGroups,
 	cfg *SelectorConfig,

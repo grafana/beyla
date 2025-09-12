@@ -13,14 +13,14 @@ import (
 
 const (
 	MySQLHdrSize                  = 4
-	MySQLErrMinLen                = 7
+	MySQLErrMinLen                = 8
 	MySQLErrPacketMarker   byte   = 0xff
 	MySQLStateMarker       byte   = '#'
 	MySQLProgressReporting uint16 = 0xffff
 )
 
 func parseMySQLCommandID(buf []uint8) uint8 {
-	if len(buf) < MySQLHdrSize {
+	if len(buf) < MySQLHdrSize+1 {
 		return 0
 	}
 	// The first byte after the header is the command ID
@@ -64,6 +64,9 @@ func parseMySQLError(buf []uint8) *request.SQLError {
 
 	if sqlErr.Code != MySQLProgressReporting {
 		if buf[offset] == MySQLStateMarker {
+			if len(buf) < (MySQLErrMinLen + 6) {
+				return nil
+			}
 			// Skip the SQL state marker
 			offset++
 			// Read the SQL state
@@ -91,7 +94,7 @@ func mysqlCommandIDToString(commandID uint8) string {
 }
 
 func mysqlParseStatementID(buf []byte) uint32 {
-	if len(buf) < MySQLHdrSize+1 {
+	if len(buf) < MySQLHdrSize+1+4 {
 		return 0
 	}
 	// The statement ID is a 4-byte little-endian integer after the header and command ID

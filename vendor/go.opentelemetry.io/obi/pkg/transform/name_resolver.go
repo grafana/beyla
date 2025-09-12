@@ -6,6 +6,7 @@ package transform
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net"
 	"strings"
 	"time"
@@ -21,6 +22,10 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 )
+
+func nrlog() *slog.Logger {
+	return slog.With("component", "transform.NameResolver")
+}
 
 const (
 	ResolverDNS = maps.Bits(1 << iota)
@@ -97,16 +102,24 @@ func nameResolver(ctx context.Context, ctxInfo *global.ContextInfo, cfg *NameRes
 	}
 
 	in := input.Subscribe()
-	return func(_ context.Context) {
+	return func(ctx context.Context) {
 		// output channel must be closed so later stages in the pipeline can finish in cascade
 		defer output.Close()
-
-		for spans := range in {
-			for i := range spans {
-				s := &spans[i]
-				nr.resolveNames(s)
+		for {
+			select {
+			case <-ctx.Done():
+				nrlog().Debug("context done. Stopping")
+				return
+			case spans, ok := <-in:
+				if !ok {
+					nrlog().Debug("input channel closed, stopping")
+					return
+				}
+				for i := range spans {
+					nr.resolveNames(&spans[i])
+				}
+				output.Send(spans)
 			}
-			output.Send(spans)
 		}
 	}, nil
 }

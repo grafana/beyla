@@ -47,7 +47,7 @@ func instrumentableFromSymbolName(symbol string) svc.InstrumentableType {
 		return svc.InstrumentableRust
 	}
 	if strings.HasPrefix(symbol, "JVM_") || strings.HasPrefix(symbol, "graal_") {
-		return svc.InstrumentableJava
+		return svc.InstrumentableJavaNative
 	}
 
 	return svc.InstrumentableGeneric

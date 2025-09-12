@@ -42,7 +42,8 @@ type MetricsConfig struct {
 	// and the Info messages leak internal details that are not usually valuable for the final user.
 	SDKLogLevel string `yaml:"otel_sdk_log_level" env:"OTEL_EBPF_SDK_LOG_LEVEL"`
 
-	// Features of metrics that are can be exported. Accepted values are "application" and "network".
+	// Features of metrics that are can be exported. Accepted values: application, network, application_process,
+	// application_span, application_service_graph, ...
 	// envDefault is provided to avoid breaking changes
 	Features []string `yaml:"features" env:"OTEL_EBPF_METRICS_FEATURES,expand" envDefault:"${OTEL_EBPF_METRIC_FEATURES}"  envSeparator:","`
 

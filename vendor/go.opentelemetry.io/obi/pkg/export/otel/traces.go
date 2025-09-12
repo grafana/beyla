@@ -44,6 +44,10 @@ import (
 
 const reporterName = "go.opentelemetry.io/obi"
 
+func otlog() *slog.Logger {
+	return slog.With("component", "otel.TracesReceiver")
+}
+
 func makeTracesReceiver(
 	cfg otelcfg.TracesConfig,
 	spanMetricsEnabled bool,
@@ -147,9 +151,14 @@ func (tr *tracesOTELReceiver) provideLoop(ctx context.Context) {
 	}
 
 	sampler := tr.cfg.SamplerConfig.Implementation()
-
-	for spans := range tr.input {
-		tr.processSpans(ctx, exp, spans, traceAttrs, sampler)
+	for {
+		select {
+		case <-ctx.Done():
+			otlog().Debug("context done, stopping traces reporting")
+			return
+		case spans := <-tr.input:
+			tr.processSpans(ctx, exp, spans, traceAttrs, sampler)
+		}
 	}
 }
 

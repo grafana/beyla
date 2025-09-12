@@ -123,6 +123,11 @@ func (csf *ClusterURLClassifier) ClusterURL(path string) string {
 		}
 	}
 
+	// this can happen if we have path with ?, & or # and all invalid chars, but no /
+	if len(p) == 0 {
+		return ""
+	}
+
 	if skip {
 		p[sPos] = csf.cfg.ReplaceWith
 		sPos++

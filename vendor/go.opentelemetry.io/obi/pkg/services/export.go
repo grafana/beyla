@@ -51,6 +51,10 @@ type ExportModes struct {
 	blockSignal maps.Bits
 }
 
+func NewExportModes() ExportModes {
+	return ExportModes{blockSignal: blockAll}
+}
+
 // CanExportTraces reports whether traces can be exported.
 // It's provided as a convenience function.
 func (modes ExportModes) CanExportTraces() bool {
@@ -61,6 +65,19 @@ func (modes ExportModes) CanExportTraces() bool {
 // It's provided as a convenience function.
 func (modes ExportModes) CanExportMetrics() bool {
 	return !modes.blockSignal.Has(blockMetrics)
+}
+
+// Allow ExportModes to be pragmatically constructed:
+//
+//  modes := NewExportModes()
+//  modes.AllowMetrics() // export metrics only
+
+func (modes *ExportModes) AllowTraces() {
+	modes.blockSignal ^= blockTraces
+}
+
+func (modes *ExportModes) AllowMetrics() {
+	modes.blockSignal ^= blockMetrics
 }
 
 func (modes *ExportModes) UnmarshalYAML(value *yaml.Node) error {

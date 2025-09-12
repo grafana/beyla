@@ -397,6 +397,12 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 			semconv.MessagingClientID(span.Statement),
 			operation,
 		}
+		if span.MessagingInfo != nil {
+			attrs = append(attrs, request.MessagingPartition(span.MessagingInfo.Partition))
+			if span.Method == request.MessagingProcess {
+				attrs = append(attrs, request.MessagingKafkaOffset(span.MessagingInfo.Offset))
+			}
+		}
 	case request.EventTypeMongoClient:
 		attrs = []attribute.KeyValue{
 			request.ServerAddr(request.HostAsServer(span)),

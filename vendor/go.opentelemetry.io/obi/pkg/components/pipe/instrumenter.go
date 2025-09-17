@@ -64,34 +64,34 @@ func newGraphBuilder(
 		ExtraGroupAttributesCfg: config.Attributes.ExtraGroupAttributes,
 	}
 
-	newQueue := func() *msg.Queue[[]request.Span] {
-		return msg.NewQueue[[]request.Span](msg.ChannelBufferLen(config.ChannelBufferLen))
+	newQueue := func(name string) *msg.Queue[[]request.Span] {
+		return msg.NewQueue[[]request.Span](msg.ChannelBufferLen(config.ChannelBufferLen), msg.Name(name))
 	}
 
 	// Second, we register instancers for each pipe node, as well as communication queues between them
-	// TODO: consider moving the queues to a public structure so when Beyla is used as library, other components can
+	// TODO: consider moving the queues to a public structure so when OBI is used as library, other components can
 	// listen to the messages and expanding the Pipeline
-	tracesReaderToRouter := newQueue()
+	tracesReaderToRouter := newQueue("tracesReaderToRouter")
 	swi.Add(traces.ReadFromChannel(&traces.ReadDecorator{
 		InstanceID:      config.Attributes.InstanceID,
 		TracesInput:     tracesCh,
 		DecoratedTraces: tracesReaderToRouter,
 	}), swarm.WithID("ReadFromChannel"))
 
-	routerToKubeDecorator := newQueue()
+	routerToKubeDecorator := newQueue("routerToKubeDecorator")
 	swi.Add(transform.RoutesProvider(
 		config.Routes,
 		tracesReaderToRouter,
 		routerToKubeDecorator,
 	), swarm.WithID("Routes"))
 
-	kubeDecoratorToNameResolver := newQueue()
+	kubeDecoratorToNameResolver := newQueue("kubeDecoratorToNameResolver")
 	swi.Add(transform.KubeDecoratorProvider(
 		ctxInfo, &config.Attributes.Kubernetes,
 		routerToKubeDecorator, kubeDecoratorToNameResolver,
 	), swarm.WithID("KubeDecorator"))
 
-	nameResolverToAttrFilter := newQueue()
+	nameResolverToAttrFilter := newQueue("nameResolverToAttrFilter")
 	swi.Add(transform.NameResolutionProvider(ctxInfo, config.NameResolver,
 		kubeDecoratorToNameResolver, nameResolverToAttrFilter),
 		swarm.WithID("NameResolution"))
@@ -100,10 +100,14 @@ func newGraphBuilder(
 	// own exporters, otherwise we create a new queue
 	exportableSpans := ctxInfo.OverrideAppExportQueue
 	if exportableSpans == nil {
-		exportableSpans = newQueue()
+		exportableSpans = newQueue("exportableSpans")
 	}
-	swi.Add(filter.ByAttribute(config.Filters.Application, nil, selectorCfg.ExtraGroupAttributesCfg, spanPtrPromGetters,
-		nameResolverToAttrFilter, exportableSpans),
+	swi.Add(filter.ByAttribute(config.Filters.Application,
+		nil,
+		selectorCfg.ExtraGroupAttributesCfg,
+		spanPtrPromGetters(config),
+		nameResolverToAttrFilter,
+		exportableSpans),
 		swarm.WithID("AttributesFilter"))
 
 	swi.Add(otel.TracesReceiver(
@@ -112,36 +116,15 @@ func newGraphBuilder(
 	swi.Add(debug.PrinterNode(config.TracePrinter, exportableSpans),
 		swarm.WithID("PrinterNode"))
 
-	// ipDroppedMetrics is only passed to the metrics export nodes
-	// nodes exporting/printing traces will still get the unfiltered exportableSpans queue
-	ipDroppedMetrics := exportableSpans
-	if config.Attributes.DropMetricsUnresolvedIPs {
-		// unlike the other nodes, we need to conditionally instantiate the queue because
-		// if IPsFilter internally bypasses the exportableSpans queue to ipDroppedMetrics,
-		// then exportableSpans could not be used by the TracesReceiver nodes
-		// TODO: fix Queue to support both bypassing and exporting
-		ipDroppedMetrics = newQueue()
-		swi.Add(transform.IPsFilter(config.Attributes.DropMetricsUnresolvedIPs, exportableSpans, ipDroppedMetrics),
-			swarm.WithID("IPsFilter"))
+	// some nodes (ipNodesFilter, span name limiter...) are only passed to the metrics export nodes.
+	// Nodes directly handling raw traces will still get the unfiltered exportableSpans queue.
+	// If no metrics exporter is configured, we will not start the metrics subpipeline to save resources.
+	exportingMetrics := config.Metrics.Enabled() ||
+		config.Metrics.ServiceGraphMetricsEnabled() ||
+		config.Prometheus.Enabled()
+	if exportingMetrics {
+		setupMetricsSubPipeline(config, ctxInfo, swi, exportableSpans, selectorCfg, processEventsCh)
 	}
-
-	swi.Add(otel.ReportMetrics(
-		ctxInfo,
-		&config.Metrics,
-		selectorCfg,
-		ipDroppedMetrics,
-		processEventsCh,
-	), swarm.WithID("OTELMetricsExport"))
-
-	swi.Add(otel.ReportSvcGraphMetrics(
-		ctxInfo,
-		&config.Metrics,
-		ipDroppedMetrics,
-		processEventsCh,
-	), swarm.WithID("OTELSvcGraphMetricsExport"))
-
-	swi.Add(prom.PrometheusEndpoint(ctxInfo, &config.Prometheus, selectorCfg, ipDroppedMetrics, processEventsCh),
-		swarm.WithID("PrometheusEndpoint"))
 
 	swi.Add(prom.BPFMetrics(ctxInfo, &config.Prometheus),
 		swarm.WithID("BPFMetrics"))
@@ -151,6 +134,52 @@ func newGraphBuilder(
 	// and interconnect each node according to the SendTo invocations in the
 	// Connect() method of the nodesMap.
 	return gb
+}
+
+func setupMetricsSubPipeline(
+	config *obi.Config,
+	ctxInfo *global.ContextInfo,
+	swi *swarm.Instancer,
+	exportableSpans *msg.Queue[[]request.Span],
+	selectorCfg *attributes.SelectorConfig,
+	processEventsCh *msg.Queue[exec.ProcessEvent],
+) {
+	newQueue := func(name string) *msg.Queue[[]request.Span] {
+		return msg.NewQueue[[]request.Span](msg.ChannelBufferLen(config.ChannelBufferLen), msg.Name(name))
+	}
+
+	spanNameAggregatedMetrics := newQueue("spanNameAggregatedMetrics")
+	swi.Add(transform.SpanNameLimiter(transform.SpanNameLimiterConfig{
+		Limit: config.Attributes.MetricSpanNameAggregationLimit,
+		OTEL:  &config.Metrics,
+		Prom:  &config.Prometheus,
+	}, exportableSpans, spanNameAggregatedMetrics))
+
+	swi.Add(otel.ReportMetrics(
+		ctxInfo,
+		&config.Metrics,
+		selectorCfg,
+		config.Attributes.RenameUnresolvedHosts,
+		spanNameAggregatedMetrics,
+		processEventsCh,
+	), swarm.WithID("OTELMetricsExport"))
+
+	swi.Add(otel.ReportSvcGraphMetrics(
+		ctxInfo,
+		&config.Metrics,
+		config.Attributes.RenameUnresolvedHosts,
+		spanNameAggregatedMetrics,
+		processEventsCh,
+	), swarm.WithID("OTELSvcGraphMetricsExport"))
+
+	swi.Add(prom.PrometheusEndpoint(
+		ctxInfo,
+		&config.Prometheus,
+		selectorCfg,
+		config.Attributes.RenameUnresolvedHosts,
+		spanNameAggregatedMetrics,
+		processEventsCh,
+	), swarm.WithID("PrometheusEndpoint"))
 }
 
 func (gb *graphFunctions) buildGraph(ctx context.Context) (*Instrumenter, error) {
@@ -180,12 +209,15 @@ func (i *Instrumenter) Start(ctx context.Context) <-chan error {
 	return i.graph.Done()
 }
 
-// spanPtrPromGetters adapts the invocation of SpanPromGetters to work with a request.Span value
+// spanPtrPromGetters adapts the invocation of spanPromGetters to work with a request.Span value
 // instead of a *request.Span pointer. This is a convenience method created to avoid having to
 // rewrite the pipeline types from []request.Span types to []*request.Span
-func spanPtrPromGetters(name attr.Name) (attributes.Getter[request.Span, string], bool) {
-	if ptrGetter, ok := request.SpanPromGetters(name); ok {
-		return func(span request.Span) string { return ptrGetter(&span) }, true
+func spanPtrPromGetters(cfg *obi.Config) attributes.NamedGetters[request.Span, string] {
+	getter := request.SpanPromGetters(cfg.Attributes.RenameUnresolvedHosts)
+	return func(name attr.Name) (attributes.Getter[request.Span, string], bool) {
+		if ptrGetter, ok := getter(name); ok {
+			return func(span request.Span) string { return ptrGetter(&span) }, true
+		}
+		return nil, false
 	}
-	return nil, false
 }

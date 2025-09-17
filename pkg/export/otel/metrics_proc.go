@@ -160,7 +160,7 @@ func newProcMetricsExporter(
 			attrProv.For(extraattributes.ProcessMemoryVirtual)),
 		attrDisk:        attrDisk,
 		attrNet:         attrNet,
-		procStatusInput: input.Subscribe(),
+		procStatusInput: input.Subscribe(msg.SubscriberName("procStatusInput")),
 	}
 	if slices.Contains(cpuTimeNames, extranames.ProcCPUMode) {
 		mr.cpuTimeObserver = cpuTimeDisaggregatedObserver

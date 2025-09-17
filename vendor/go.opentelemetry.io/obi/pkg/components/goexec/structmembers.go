@@ -23,11 +23,10 @@ func log() *slog.Logger {
 // this const table must match what's in go_offsets.h
 type GoOffset uint32
 
-const GoOffsetsTableSize = 30
-
 var (
-	grpcOneSixZero = version.Must(version.NewVersion("1.60.0"))
-	grpcOneSixNine = version.Must(version.NewVersion("1.69.0"))
+	grpcOneSixZero      = version.Must(version.NewVersion("1.60.0"))
+	grpcOneSixNine      = version.Must(version.NewVersion("1.69.0"))
+	mongoOneThirteenOne = version.Must(version.NewVersion("1.13.1"))
 )
 
 const (
@@ -100,6 +99,11 @@ const (
 	GoErrorStringOffset
 	// go jsonrpc
 	GoJsonrpcRequestHeaderServiceMethodPos
+	// go mongodb
+	MongoConnNamePos
+	MongoOpNamePos
+	MongoOpDBPos
+	MongoOneThirteenOne
 )
 
 //go:embed offsets.json
@@ -376,6 +380,32 @@ var structMembers = map[string]structInfo{
 			"delegate": GoTracerDelegatePos,
 		},
 	},
+	"go.mongodb.org/mongo-driver/mongo.Collection": {
+		lib: "go.mongodb.org/mongo-driver",
+		fields: map[string]GoOffset{
+			"name": MongoConnNamePos,
+		},
+	},
+	"go.mongodb.org/mongo-driver/x/mongo/driver.Operation": {
+		lib: "go.mongodb.org/mongo-driver",
+		fields: map[string]GoOffset{
+			"Name":     MongoOpNamePos,
+			"Database": MongoOpDBPos,
+		},
+	},
+	"go.mongodb.org/mongo-driver/v2/mongo.Collection": {
+		lib: "go.mongodb.org/mongo-driver",
+		fields: map[string]GoOffset{
+			"name": MongoConnNamePos,
+		},
+	},
+	"go.mongodb.org/mongo-driver/v2/x/mongo/driver.Operation": {
+		lib: "go.mongodb.org/mongo-driver",
+		fields: map[string]GoOffset{
+			"Name":     MongoOpNamePos,
+			"Database": MongoOpDBPos,
+		},
+	},
 }
 
 func structMemberOffsets(elfFile *elf.File) (FieldOffsets, error) {
@@ -408,7 +438,8 @@ func structMemberOffsets(elfFile *elf.File) (FieldOffsets, error) {
 
 func offsetsForLibVersions(fieldOffsets FieldOffsets, libVersions map[string]string, log *slog.Logger) FieldOffsets {
 	for lib, ver := range libVersions {
-		if lib == "google.golang.org/grpc" {
+		switch lib {
+		case "google.golang.org/grpc":
 			ver = cleanLibVersion(ver, true, lib, log)
 
 			if v, err := version.NewVersion(ver); err == nil {
@@ -424,6 +455,16 @@ func offsetsForLibVersions(fieldOffsets FieldOffsets, libVersions map[string]str
 				}
 			} else {
 				log.Debug("can't parse version for", "library", lib)
+			}
+		case "go.mongodb.org/mongo-driver":
+			ver = cleanLibVersion(ver, true, lib, log)
+
+			if v, err := version.NewVersion(ver); err == nil {
+				if v.GreaterThanOrEqual(mongoOneThirteenOne) {
+					fieldOffsets[MongoOneThirteenOne] = uint64(1)
+				} else {
+					fieldOffsets[MongoOneThirteenOne] = uint64(0)
+				}
 			}
 		}
 	}

@@ -27,20 +27,24 @@ type PrometheusConfig struct {
 
 // PrometheusReporter is an internal metrics Reporter that exports to Prometheus
 type PrometheusReporter struct {
-	connector             *connector.PrometheusManager
-	tracerFlushes         prometheus.Histogram
-	otelMetricExports     prometheus.Counter
-	otelMetricExportErrs  *prometheus.CounterVec
-	otelTraceExports      prometheus.Counter
-	otelTraceExportErrs   *prometheus.CounterVec
-	prometheusRequests    *prometheus.CounterVec
-	instrumentedProcesses *prometheus.GaugeVec
-	instrumentationErrors *prometheus.CounterVec
-	avoidedServices       *prometheus.GaugeVec
-	buildInfo             prometheus.Gauge
+	connector                        *connector.PrometheusManager
+	tracerFlushes                    prometheus.Histogram
+	otelMetricExports                prometheus.Counter
+	otelMetricExportErrs             *prometheus.CounterVec
+	otelTraceExports                 prometheus.Counter
+	otelTraceExportErrs              *prometheus.CounterVec
+	prometheusRequests               *prometheus.CounterVec
+	instrumentedProcesses            *prometheus.GaugeVec
+	instrumentationErrors            *prometheus.CounterVec
+	avoidedServices                  *prometheus.GaugeVec
+	buildInfo                        prometheus.Gauge
+	bpfProbeLatencies                *prometheus.HistogramVec
+	bpfMapEntries                    *prometheus.GaugeVec
+	bpfMapMaxEntries                 *prometheus.GaugeVec
+	bpfInternalMetricsScrapeInterval int
 }
 
-func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusManager, registry *prometheus.Registry) *PrometheusReporter {
+func NewPrometheusReporter(cfg *Config, manager *connector.PrometheusManager, registry *prometheus.Registry) *PrometheusReporter {
 	pr := &PrometheusReporter{
 		connector: manager,
 		tracerFlushes: prometheus.NewHistogram(prometheus.HistogramOpts{
@@ -95,6 +99,20 @@ func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusM
 				"revision":  buildinfo.Revision,
 			},
 		}),
+		bpfProbeLatencies: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    attr.VendorPrefix + "_bpf_probe_latency_seconds",
+			Help:    "Latency of the BPF probes in seconds",
+			Buckets: BpfLatenciesBuckets,
+		}, []string{"probe_id", "probe_type", "probe_name"}),
+		bpfMapEntries: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: attr.VendorPrefix + "_bpf_map_entries_total",
+			Help: "Total number of entries in the BPF maps",
+		}, []string{"map_id", "map_name", "map_type"}),
+		bpfMapMaxEntries: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: attr.VendorPrefix + "_bpf_map_max_entries_total",
+			Help: "Maximum number of entries in the BPF maps",
+		}, []string{"map_id", "map_name", "map_type"}),
+		bpfInternalMetricsScrapeInterval: cfg.BpfMetricScrapeIntervalSeconds,
 	}
 	if registry != nil {
 		registry.MustRegister(pr.tracerFlushes,
@@ -106,9 +124,12 @@ func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusM
 			pr.instrumentedProcesses,
 			pr.instrumentationErrors,
 			pr.avoidedServices,
-			pr.buildInfo)
+			pr.buildInfo,
+			pr.bpfProbeLatencies,
+			pr.bpfMapEntries,
+			pr.bpfMapMaxEntries)
 	} else {
-		manager.Register(cfg.Port, cfg.Path,
+		manager.Register(cfg.Prometheus.Port, cfg.Prometheus.Path,
 			pr.tracerFlushes,
 			pr.otelMetricExports,
 			pr.otelMetricExportErrs,
@@ -118,7 +139,10 @@ func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusM
 			pr.instrumentedProcesses,
 			pr.instrumentationErrors,
 			pr.avoidedServices,
-			pr.buildInfo)
+			pr.buildInfo,
+			pr.bpfProbeLatencies,
+			pr.bpfMapEntries,
+			pr.bpfMapMaxEntries)
 	}
 
 	return pr
@@ -177,4 +201,20 @@ func (p *PrometheusReporter) AvoidInstrumentationMetrics(serviceName, serviceNam
 
 func (p *PrometheusReporter) AvoidInstrumentationTraces(serviceName, serviceNamespace, serviceInstanceID string) {
 	p.recordAvoidedService(serviceName, serviceNamespace, serviceInstanceID, "traces")
+}
+
+func (p *PrometheusReporter) BpfProbeLatency(probeID, probeType, probeName string, latencySeconds float64) {
+	p.bpfProbeLatencies.WithLabelValues(probeID, probeType, probeName).Observe(latencySeconds)
+}
+
+func (p *PrometheusReporter) BpfMapEntries(mapID, mapName, mapType string, entriesTotal int) {
+	p.bpfMapEntries.WithLabelValues(mapID, mapName, mapType).Set(float64(entriesTotal))
+}
+
+func (p *PrometheusReporter) BpfMapMaxEntries(mapID, mapName, mapType string, maxEntries int) {
+	p.bpfMapMaxEntries.WithLabelValues(mapID, mapName, mapType).Set(float64(maxEntries))
+}
+
+func (p PrometheusReporter) GetBpfInternalMetricsScrapeInterval() int {
+	return p.bpfInternalMetricsScrapeInterval
 }

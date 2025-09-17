@@ -18,6 +18,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.34.0"
 
 	"go.opentelemetry.io/obi/pkg/buildinfo"
+	"go.opentelemetry.io/obi/pkg/components/imetrics"
 	"go.opentelemetry.io/obi/pkg/components/pipe/global"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
@@ -25,23 +26,27 @@ import (
 
 // InternalMetricsReporter is an internal metrics Reporter that exports to OTEL
 type InternalMetricsReporter struct {
-	ctx                   context.Context
-	tracerFlushes         instrument.Float64Histogram
-	otelMetricExports     instrument.Float64Counter
-	otelMetricExportErrs  instrument.Float64Counter
-	otelTraceExports      instrument.Float64Counter
-	otelTraceExportErrs   instrument.Float64Counter
-	instrumentedProcesses instrument.Int64UpDownCounter
-	instrumentationErrors instrument.Int64Counter
-	avoidedServices       instrument.Int64Gauge
-	buildInfo             instrument.Int64Gauge
+	ctx                              context.Context
+	tracerFlushes                    instrument.Float64Histogram
+	otelMetricExports                instrument.Float64Counter
+	otelMetricExportErrs             instrument.Float64Counter
+	otelTraceExports                 instrument.Float64Counter
+	otelTraceExportErrs              instrument.Float64Counter
+	instrumentedProcesses            instrument.Int64UpDownCounter
+	instrumentationErrors            instrument.Int64Counter
+	avoidedServices                  instrument.Int64Gauge
+	buildInfo                        instrument.Int64Gauge
+	bpfProbeLatencies                instrument.Float64Histogram
+	bpfMapEntries                    instrument.Int64Gauge
+	bpfMapMaxEntries                 instrument.Int64Gauge
+	bpfInternalMetricsScrapeInterval int
 }
 
 func imlog() *slog.Logger {
 	return slog.With("component", "otel.InternalMetricsReporter")
 }
 
-func NewInternalMetricsReporter(ctx context.Context, ctxInfo *global.ContextInfo, metrics *otelcfg.MetricsConfig) (*InternalMetricsReporter, error) {
+func NewInternalMetricsReporter(ctx context.Context, ctxInfo *global.ContextInfo, metrics *otelcfg.MetricsConfig, internalMetrics *imetrics.Config) (*InternalMetricsReporter, error) {
 	log := imlog()
 	log.Debug("instantiating internal metrics exporter provider")
 	exporter, err := ctxInfo.OTELMetricsExporter.Instantiate(ctx)
@@ -126,17 +131,48 @@ func NewInternalMetricsReporter(ctx context.Context, ctxInfo *global.ContextInfo
 		return nil, err
 	}
 
+	// TODO should it be ebpf like the others, or bpf like the original one?
+	bpfProbeLatencies, err := meter.Float64Histogram(
+		attr.VendorPrefix+".bpf.probe.latency_seconds",
+		instrument.WithDescription("Latency of the eBPF probe in seconds"),
+		instrument.WithUnit("1"),
+		instrument.WithExplicitBucketBoundaries(
+			imetrics.BpfLatenciesBuckets...,
+		),
+	)
+	if err != nil {
+		return nil, err
+	}
+	bpfMapEntries, err := meter.Int64Gauge(
+		attr.VendorPrefix+".bpf.map.entries_total",
+		instrument.WithDescription("Number of entries in the eBPF map"),
+	)
+	if err != nil {
+		return nil, err
+	}
+	bpfMapMaxEntries, err := meter.Int64Gauge(
+		attr.VendorPrefix+".bpf.map.max_entries_total",
+		instrument.WithDescription("Max number of entries in the eBPF map"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	return &InternalMetricsReporter{
-		ctx:                   ctx,
-		tracerFlushes:         tracerFlushes,
-		otelMetricExports:     otelMetricExports,
-		otelMetricExportErrs:  otelMetricExportErrs,
-		otelTraceExports:      otelTraceExports,
-		otelTraceExportErrs:   otelTraceExportErrs,
-		instrumentedProcesses: instrumentedProcesses,
-		instrumentationErrors: instrumentationErrors,
-		avoidedServices:       avoidedServices,
-		buildInfo:             buildInfo,
+		ctx:                              ctx,
+		tracerFlushes:                    tracerFlushes,
+		otelMetricExports:                otelMetricExports,
+		otelMetricExportErrs:             otelMetricExportErrs,
+		otelTraceExports:                 otelTraceExports,
+		otelTraceExportErrs:              otelTraceExportErrs,
+		instrumentedProcesses:            instrumentedProcesses,
+		instrumentationErrors:            instrumentationErrors,
+		avoidedServices:                  avoidedServices,
+		buildInfo:                        buildInfo,
+		bpfProbeLatencies:                bpfProbeLatencies,
+		bpfMapEntries:                    bpfMapEntries,
+		bpfMapMaxEntries:                 bpfMapMaxEntries,
+		bpfInternalMetricsScrapeInterval: internalMetrics.BpfMetricScrapeIntervalSeconds,
 	}, nil
 }
 
@@ -218,4 +254,36 @@ func (p *InternalMetricsReporter) AvoidInstrumentationMetrics(serviceName, servi
 
 func (p *InternalMetricsReporter) AvoidInstrumentationTraces(serviceName, serviceNamespace, serviceInstanceID string) {
 	p.recordAvoidedService(serviceName, serviceNamespace, serviceInstanceID, "traces")
+}
+
+func (p *InternalMetricsReporter) BpfProbeLatency(probeID, probeType, probeName string, latencySeconds float64) {
+	attrs := []attribute.KeyValue{
+		attribute.String("bpf.probe.id", probeID),
+		attribute.String("bpf.probe.type", probeType),
+		attribute.String("bpf.probe.name", probeName),
+	}
+
+	p.bpfProbeLatencies.Record(p.ctx, latencySeconds, instrument.WithAttributes(attrs...))
+}
+
+func (p *InternalMetricsReporter) BpfMapEntries(mapID, mapName, mapType string, entriesTotal int) {
+	attrs := []attribute.KeyValue{
+		attribute.String("bpf.map.id", mapID),
+		attribute.String("bpf.map.type", mapType),
+		attribute.String("bpf.map.name", mapName),
+	}
+	p.bpfMapEntries.Record(p.ctx, int64(entriesTotal), instrument.WithAttributes(attrs...))
+}
+
+func (p *InternalMetricsReporter) BpfMapMaxEntries(mapID, mapName, mapType string, maxEntries int) {
+	attrs := []attribute.KeyValue{
+		attribute.String("bpf.map.id", mapID),
+		attribute.String("bpf.map.type", mapType),
+		attribute.String("bpf.map.name", mapName),
+	}
+	p.bpfMapMaxEntries.Record(p.ctx, int64(maxEntries), instrument.WithAttributes(attrs...))
+}
+
+func (p InternalMetricsReporter) GetBpfInternalMetricsScrapeInterval() int {
+	return p.bpfInternalMetricsScrapeInterval
 }

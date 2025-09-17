@@ -21,7 +21,7 @@ func FlowPrinterProvider(enabled bool, input *msg.Queue[[]*ebpf.Record]) swarm.R
 		return func(_ context.Context) {}
 	}
 
-	in := input.Subscribe()
+	in := input.Subscribe(msg.SubscriberName("FlowPrinter"))
 	return func(_ context.Context) {
 		for flows := range in {
 			for _, flow := range flows {

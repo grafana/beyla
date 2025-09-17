@@ -89,6 +89,26 @@ type NetworkConfig struct {
 	// If the value is not set, it will default to 2 * CacheActiveTimeout
 	// nolint:undoc
 	DeduperFCTTL time.Duration `yaml:"deduper_fc_ttl" env:"BEYLA_NETWORK_DEDUPER_FC_TTL"`
+
+	// The size of the ring buffer in MB used to queue the network flows. Defaults
+	// to 16 MB. Values will be adjusted to be a power of 2 of at least the OS
+	// page size.
+	// nolint:undoc
+	RingBufferSize uint32 `yaml:"ring_buffer_size" env:"BEYLA_NETWORK_RING_BUFFER_SIZE"`
+
+	// Specifies the periodicity in which events are flushed from the ring
+	// buffer to userspace. Defaults to 10 seconds.
+	// nolint:undoc
+	RingBufferFlushPeriod time.Duration `yaml:"ring_buffer_flush_period" env:"BEYLA_NETWORK_RING_BUFFER_FLUSH_PERIOD"`
+
+	// The maximum duration we hold on to a flow before exporting it. Flows
+	// are usually flushed when their connection terminates, which can be
+	// problematic for very long-last flows/connections (such as connections
+	// being kept-alive). Flows that have been alive for more than
+	// MaxFlowDuration will be flushed and reset. Defaults to 60 seconds.
+	// nolint:undoc
+	MaxFlowDuration time.Duration `yaml:"max_flow_duration" env:"BEYLA_NETWORK_MAX_FLOW_DURATION"`
+
 	// Direction allows selecting which flows to trace according to its direction. Accepted values
 	// are "ingress", "egress" or "both" (default).
 	// nolint:undoc
@@ -127,16 +147,19 @@ type NetworkConfig struct {
 }
 
 var defaultNetworkConfig = NetworkConfig{
-	Source:             EbpfSourceSock,
-	AgentIPIface:       "external",
-	AgentIPType:        "any",
-	ExcludeInterfaces:  []string{"lo"},
-	CacheMaxFlows:      5000,
-	CacheActiveTimeout: 5 * time.Second,
-	Deduper:            flow.DeduperFirstCome,
-	Direction:          "both",
-	ListenInterfaces:   "watch",
-	ListenPollPeriod:   10 * time.Second,
+	Source:                EbpfSourceSock,
+	AgentIPIface:          "external",
+	AgentIPType:           "any",
+	ExcludeInterfaces:     []string{"lo"},
+	CacheMaxFlows:         5000,
+	CacheActiveTimeout:    5 * time.Second,
+	Deduper:               flow.DeduperFirstCome,
+	RingBufferSize:        16,
+	RingBufferFlushPeriod: 10 * time.Second,
+	MaxFlowDuration:       60 * time.Second,
+	Direction:             "both",
+	ListenInterfaces:      "watch",
+	ListenPollPeriod:      10 * time.Second,
 	ReverseDNS: flow.ReverseDNS{
 		Type:     flow.ReverseDNSNone,
 		CacheLen: 256,

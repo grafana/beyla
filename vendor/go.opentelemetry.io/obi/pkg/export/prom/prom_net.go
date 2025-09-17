@@ -129,7 +129,7 @@ func newNetReporter(
 		mr.promConnect.Register(cfg.Config.Port, cfg.Config.Path, register...)
 	}
 
-	mr.input = input.Subscribe()
+	mr.input = input.Subscribe(msg.SubscriberName("prom.NetReporterInput"))
 	return mr, nil
 }
 

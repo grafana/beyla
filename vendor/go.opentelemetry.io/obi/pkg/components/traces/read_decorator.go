@@ -14,6 +14,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/components/traces/hostname"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
+	"go.opentelemetry.io/obi/pkg/pipe/swarm/swarms"
 )
 
 func rlog() *slog.Logger {
@@ -48,7 +49,7 @@ type decorator func(s *svc.Attrs, pid int)
 
 func ReadFromChannel(r *ReadDecorator) swarm.InstanceFunc {
 	decorate := hostNamePIDDecorator(&r.InstanceID)
-	tracesInput := r.TracesInput.Subscribe()
+	tracesInput := r.TracesInput.Subscribe(msg.SubscriberName("traces.ReadDecorator"))
 	return swarm.DirectInstance(func(ctx context.Context) {
 		// output channel must be closed so later stages in the pipeline can finish in cascade
 		defer r.DecoratedTraces.Close()
@@ -99,25 +100,16 @@ func HostProcessEventDecoratorProvider(
 ) swarm.InstanceFunc {
 	return func(_ context.Context) (swarm.RunFunc, error) {
 		decorate := hostNamePIDDecorator(cfg)
-		in := input.Subscribe()
+		in := input.Subscribe(msg.SubscriberName("HostProcessEventDecorator"))
 		// if kubernetes decoration is disabled, we just bypass the node
 		log := rlog().With("function", "HostProcessEventDecoratorProvider")
 		return func(ctx context.Context) {
 			defer output.Close()
-			for {
-				select {
-				case pe, ok := <-in:
-					if !ok {
-						return
-					}
-					decorate(&pe.File.Service, int(pe.File.Pid))
-					log.Debug("host decorating event", "event", pe, "ns", pe.File.Ns, "procPID", pe.File.Pid, "procPPID", pe.File.Ppid, "service", pe.File.Service.UID)
-					output.Send(pe)
-				case <-ctx.Done():
-					log.Debug("context canceled. Exiting HostProcessEventDecorator")
-					return
-				}
-			}
+			swarms.ForEachInput(ctx, in, log.Debug, func(pe exec.ProcessEvent) {
+				decorate(&pe.File.Service, int(pe.File.Pid))
+				log.Debug("host decorating event", "event", pe, "ns", pe.File.Ns, "procPID", pe.File.Pid, "procPPID", pe.File.Ppid, "service", pe.File.Service.UID)
+				output.Send(pe)
+			})
 		}, nil
 	}
 }

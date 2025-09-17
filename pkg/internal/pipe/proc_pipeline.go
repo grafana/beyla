@@ -40,7 +40,7 @@ func ProcessMetricsSwarmInstancer(
 	}
 	// needs to be instantiated here to make sure all the messages from the
 	// vendored OBI app swarm are catched
-	appInputSpansCh := appInputSpans.Subscribe()
+	appInputSpansCh := appInputSpans.Subscribe(msg.SubscriberName("appInputSpans"))
 	return func(ctx context.Context) (swarm.RunFunc, error) {
 		selectorCfg := &attributes.SelectorConfig{
 			SelectionCfg:            cfg.Attributes.Select,
@@ -48,7 +48,8 @@ func ProcessMetricsSwarmInstancer(
 		}
 
 		// communication channel between the process collector and the metrics exporters
-		processCollectStatus := msg.NewQueue[[]*process.Status](msg.ChannelBufferLen(cfg.ChannelBufferLen))
+		processCollectStatus := msg.NewQueue[[]*process.Status](
+			msg.ChannelBufferLen(cfg.ChannelBufferLen), msg.Name("processCollectStatus"))
 
 		builder := swarm.Instancer{}
 		builder.Add(process.NewCollectorProvider(

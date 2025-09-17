@@ -29,6 +29,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
+	"go.opentelemetry.io/obi/pkg/pipe/swarm/swarms"
 )
 
 // injectable function reference for testing
@@ -276,6 +277,7 @@ func PrometheusEndpoint(
 	ctxInfo *global.ContextInfo,
 	cfg *PrometheusConfig,
 	selectorCfg *attributes.SelectorConfig,
+	unresolvedHostTag string,
 	input *msg.Queue[[]request.Span],
 	processEventCh *msg.Queue[exec.ProcessEvent],
 ) swarm.InstanceFunc {
@@ -283,7 +285,7 @@ func PrometheusEndpoint(
 		if !cfg.Enabled() {
 			return swarm.EmptyRunFunc()
 		}
-		reporter, err := newReporter(ctxInfo, cfg, selectorCfg, input, processEventCh)
+		reporter, err := newReporter(ctxInfo, cfg, selectorCfg, unresolvedHostTag, input, processEventCh)
 		if err != nil {
 			return nil, fmt.Errorf("instantiating Prometheus endpoint: %w", err)
 		}
@@ -315,6 +317,7 @@ func newReporter(
 	ctxInfo *global.ContextInfo,
 	cfg *PrometheusConfig,
 	selectorCfg *attributes.SelectorConfig,
+	unresolvedHostTag string,
 	input *msg.Queue[[]request.Span],
 	processEventCh *msg.Queue[exec.ProcessEvent],
 ) (*metricsReporter, error) {
@@ -330,43 +333,45 @@ func newReporter(
 
 	var attrHTTPDuration, attrHTTPClientDuration, attrHTTPRequestSize, attrHTTPResponseSize, attrHTTPClientRequestSize, attrHTTPClientResponseSize []attributes.Field[*request.Span, string]
 
+	attributeGetters := request.SpanPromGetters(unresolvedHostTag)
+
 	if is.HTTPEnabled() {
-		attrHTTPDuration = attributes.PrometheusGetters(request.SpanPromGetters,
+		attrHTTPDuration = attributes.PrometheusGetters(attributeGetters,
 			attrsProvider.For(attributes.HTTPServerDuration))
-		attrHTTPClientDuration = attributes.PrometheusGetters(request.SpanPromGetters,
+		attrHTTPClientDuration = attributes.PrometheusGetters(attributeGetters,
 			attrsProvider.For(attributes.HTTPClientDuration))
-		attrHTTPRequestSize = attributes.PrometheusGetters(request.SpanPromGetters,
+		attrHTTPRequestSize = attributes.PrometheusGetters(attributeGetters,
 			attrsProvider.For(attributes.HTTPServerRequestSize))
-		attrHTTPResponseSize = attributes.PrometheusGetters(request.SpanPromGetters,
+		attrHTTPResponseSize = attributes.PrometheusGetters(attributeGetters,
 			attrsProvider.For(attributes.HTTPServerResponseSize))
-		attrHTTPClientRequestSize = attributes.PrometheusGetters(request.SpanPromGetters,
+		attrHTTPClientRequestSize = attributes.PrometheusGetters(attributeGetters,
 			attrsProvider.For(attributes.HTTPClientRequestSize))
-		attrHTTPClientResponseSize = attributes.PrometheusGetters(request.SpanPromGetters,
+		attrHTTPClientResponseSize = attributes.PrometheusGetters(attributeGetters,
 			attrsProvider.For(attributes.HTTPClientResponseSize))
 	}
 
 	var attrGRPCDuration, attrGRPCClientDuration []attributes.Field[*request.Span, string]
 
 	if is.GRPCEnabled() {
-		attrGRPCDuration = attributes.PrometheusGetters(request.SpanPromGetters,
+		attrGRPCDuration = attributes.PrometheusGetters(attributeGetters,
 			attrsProvider.For(attributes.RPCServerDuration))
-		attrGRPCClientDuration = attributes.PrometheusGetters(request.SpanPromGetters,
+		attrGRPCClientDuration = attributes.PrometheusGetters(attributeGetters,
 			attrsProvider.For(attributes.RPCClientDuration))
 	}
 
 	var attrDBClientDuration []attributes.Field[*request.Span, string]
 
 	if is.DBEnabled() {
-		attrDBClientDuration = attributes.PrometheusGetters(request.SpanPromGetters,
+		attrDBClientDuration = attributes.PrometheusGetters(attributeGetters,
 			attrsProvider.For(attributes.DBClientDuration))
 	}
 
 	var attrMessagingProcessDuration, attrMessagingPublishDuration []attributes.Field[*request.Span, string]
 
 	if is.MQEnabled() {
-		attrMessagingPublishDuration = attributes.PrometheusGetters(request.SpanPromGetters,
+		attrMessagingPublishDuration = attributes.PrometheusGetters(attributeGetters,
 			attrsProvider.For(attributes.MessagingPublishDuration))
-		attrMessagingProcessDuration = attributes.PrometheusGetters(request.SpanPromGetters,
+		attrMessagingProcessDuration = attributes.PrometheusGetters(attributeGetters,
 			attrsProvider.For(attributes.MessagingProcessDuration))
 	}
 
@@ -377,15 +382,15 @@ func newReporter(
 	var attrGPUMemoryCopies []attributes.Field[*request.Span, string]
 
 	if is.GPUEnabled() {
-		attrGPUKernelLaunchCalls = attributes.PrometheusGetters(request.SpanPromGetters,
+		attrGPUKernelLaunchCalls = attributes.PrometheusGetters(attributeGetters,
 			attrsProvider.For(attributes.GPUKernelLaunchCalls))
-		attrGPUMemoryAllocations = attributes.PrometheusGetters(request.SpanPromGetters,
+		attrGPUMemoryAllocations = attributes.PrometheusGetters(attributeGetters,
 			attrsProvider.For(attributes.GPUMemoryAllocations))
-		attrGPUKernelGridSize = attributes.PrometheusGetters(request.SpanPromGetters,
+		attrGPUKernelGridSize = attributes.PrometheusGetters(attributeGetters,
 			attrsProvider.For(attributes.GPUKernelGridSize))
-		attrGPUKernelBlockSize = attributes.PrometheusGetters(request.SpanPromGetters,
+		attrGPUKernelBlockSize = attributes.PrometheusGetters(attributeGetters,
 			attrsProvider.For(attributes.GPUKernelBlockSize))
-		attrGPUMemoryCopies = attributes.PrometheusGetters(request.SpanPromGetters,
+		attrGPUMemoryCopies = attributes.PrometheusGetters(attributeGetters,
 			attrsProvider.For(attributes.GPUMemoryCopies))
 	}
 
@@ -395,8 +400,8 @@ func newReporter(
 	// executable inspector
 	extraMetadataLabels := parseExtraMetadata(cfg.ExtraResourceLabels)
 	mr := &metricsReporter{
-		input:                      input.Subscribe(),
-		processEvents:              processEventCh.Subscribe(),
+		input:                      input.Subscribe(msg.SubscriberName("prom.InputSpans")),
+		processEvents:              processEventCh.Subscribe(msg.SubscriberName("prom.ProcessEvents")),
 		serviceMap:                 map[svc.UID]svc.Attrs{},
 		pidsTracker:                otel.NewPidServiceTracker(),
 		ctxInfo:                    ctxInfo,
@@ -804,22 +809,14 @@ func (r *metricsReporter) reportMetrics(ctx context.Context) {
 
 func (r *metricsReporter) collectMetrics(ctx context.Context) {
 	go r.watchForProcessEvents(ctx)
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case spans, ok := <-r.input:
-			if !ok {
-				return
-			}
-			// clock needs to be updated to let the expirer
-			// remove the old metrics
-			r.clock.Update()
-			for i := range spans {
-				r.observe(&spans[i])
-			}
+	swarms.ForEachInput(ctx, r.input, nil, func(spans []request.Span) {
+		// clock needs to be updated to let the expirer
+		// remove the old metrics
+		r.clock.Update()
+		for i := range spans {
+			r.observe(&spans[i])
 		}
-	}
+	})
 }
 
 func (r *metricsReporter) otelMetricsObserved(span *request.Span) bool {
@@ -1159,36 +1156,26 @@ func (r *metricsReporter) disassociatePIDFromService(pid int32) (bool, svc.UID) 
 
 func (r *metricsReporter) watchForProcessEvents(ctx context.Context) {
 	log := mlog().With("function", "watchForProcessEvents")
-	for {
-		select {
-		case pe, ok := <-r.processEvents:
-			if !ok {
-				log.Debug("process channel closed. Exiting")
-				return
-			}
-			log.Debug("Received new process event", "event type", pe.Type, "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
-			uid := pe.File.Service.UID
+	swarms.ForEachInput(ctx, r.processEvents, log.Debug, func(pe exec.ProcessEvent) {
+		log.Debug("Received new process event", "event type", pe.Type, "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
+		uid := pe.File.Service.UID
 
-			if pe.Type == exec.ProcessEventCreated {
-				r.createTargetInfo(&pe.File.Service)
-				r.createTracesTargetInfo(&pe.File.Service)
-				r.serviceMap[uid] = pe.File.Service
-				r.setupPIDToServiceRelationship(pe.File.Pid, uid)
-			} else {
-				if deleted, origUID := r.disassociatePIDFromService(pe.File.Pid); deleted {
-					mlog().Debug("deleting infos for", "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
-					r.deleteTargetInfo(origUID, &pe.File.Service)
-					r.deleteTracesTargetInfo(origUID, &pe.File.Service)
-					if r.cfg.HostMetricsEnabled() && r.pidsTracker.Count() == 0 {
-						mlog().Debug("No more PIDs tracked, expiring host info metric")
-						r.tracesHostInfo.entries.DeleteAll()
-					}
-					delete(r.serviceMap, origUID)
+		if pe.Type == exec.ProcessEventCreated {
+			r.createTargetInfo(&pe.File.Service)
+			r.createTracesTargetInfo(&pe.File.Service)
+			r.serviceMap[uid] = pe.File.Service
+			r.setupPIDToServiceRelationship(pe.File.Pid, uid)
+		} else {
+			if deleted, origUID := r.disassociatePIDFromService(pe.File.Pid); deleted {
+				mlog().Debug("deleting infos for", "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
+				r.deleteTargetInfo(origUID, &pe.File.Service)
+				r.deleteTracesTargetInfo(origUID, &pe.File.Service)
+				if r.cfg.HostMetricsEnabled() && r.pidsTracker.Count() == 0 {
+					mlog().Debug("No more PIDs tracked, expiring host info metric")
+					r.tracesHostInfo.entries.DeleteAll()
 				}
+				delete(r.serviceMap, origUID)
 			}
-		case <-ctx.Done():
-			log.Debug("Context done. Exiting")
-			return
 		}
-	}
+	})
 }

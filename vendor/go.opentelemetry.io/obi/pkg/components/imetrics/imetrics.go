@@ -16,6 +16,23 @@ const (
 	InternalMetricsExporterOTEL       = InternalMetricsExporter("otel")
 )
 
+var BpfLatenciesBuckets = []float64{
+	0.0000001,
+	0.0000005,
+	0.000001,
+	0.000002,
+	0.000005,
+	0.00001,
+	0.00002,
+	0.00005,
+	0.0001,
+	0.0002,
+	0.0005,
+	0.001,
+	0.002,
+	0.005,
+}
+
 // Instrumentation status constants for the instrumented_processes metric
 const (
 	InstrumentationErrorInspectionFailed               = "inspection_failed"
@@ -41,8 +58,9 @@ func (t InternalMetricsExporter) Valid() bool {
 
 // Config options for the different metrics exporters
 type Config struct {
-	Prometheus PrometheusConfig        `yaml:"prometheus,omitempty"`
-	Exporter   InternalMetricsExporter `yaml:"exporter,omitempty" env:"OTEL_EBPF_INTERNAL_METRICS_EXPORTER"`
+	Prometheus                     PrometheusConfig        `yaml:"prometheus,omitempty"`
+	Exporter                       InternalMetricsExporter `yaml:"exporter,omitempty" env:"OTEL_EBPF_INTERNAL_METRICS_EXPORTER"`
+	BpfMetricScrapeIntervalSeconds int                     `yaml:"bpf_metric_scrape_interval_seconds" env:"OTEL_EBPF_BPF_METRIC_SCRAPE_INTERVAL_SECONDS"`
 }
 
 // Reporter of internal metrics
@@ -73,6 +91,14 @@ type Reporter interface {
 	AvoidInstrumentationMetrics(serviceName, serviceNamespace, serviceInstanceID string)
 	// AvoidInstrumentationTraces is invoked every time a service is avoided due to OTLP traces detection
 	AvoidInstrumentationTraces(serviceName, serviceNamespace, serviceInstanceID string)
+	// BpfProbeLatency is invoked every time a BPF probe latency is recorded
+	BpfProbeLatency(probeID, probeType, probeName string, latencySeconds float64)
+	// BpfMapEntries is invoked every time a BPF map size is recorded
+	BpfMapEntries(mapID, mapName, mapType string, entriesTotal int)
+	// BpfMapMaxEntries is invoked every time a BPF map max size is recorded
+	BpfMapMaxEntries(mapID, mapName, mapType string, maxEntries int)
+	// GetBpfInternalMetricsScrapeInterval returns the configured scrape interval for BPF internal metrics
+	GetBpfInternalMetricsScrapeInterval() int
 }
 
 // NoopReporter is a metrics Reporter that just does nothing
@@ -90,3 +116,7 @@ func (n NoopReporter) UninstrumentProcess(_ string)               {}
 func (n NoopReporter) InstrumentationError(_, _ string)           {}
 func (n NoopReporter) AvoidInstrumentationMetrics(_, _, _ string) {}
 func (n NoopReporter) AvoidInstrumentationTraces(_, _, _ string)  {}
+func (n NoopReporter) BpfProbeLatency(_, _, _ string, _ float64)  {}
+func (n NoopReporter) BpfMapEntries(_, _, _ string, _ int)        {}
+func (n NoopReporter) BpfMapMaxEntries(_, _, _ string, _ int)     {}
+func (n NoopReporter) GetBpfInternalMetricsScrapeInterval() int   { return 0 }

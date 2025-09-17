@@ -25,7 +25,7 @@ func SurveyEventGenerator(
 ) swarm.InstanceFunc {
 	m := &surveyor{
 		log:    slog.With("component", "discover.SurveyEventGenerator"),
-		input:  input.Subscribe(),
+		input:  input.Subscribe(msg.SubscriberName("surveyEventInput")),
 		output: output,
 	}
 	return func(ctx context.Context) (swarm.RunFunc, error) {

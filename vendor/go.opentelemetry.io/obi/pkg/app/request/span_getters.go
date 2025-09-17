@@ -4,8 +4,6 @@
 package request
 
 import (
-	"strconv"
-
 	"go.opentelemetry.io/otel/attribute"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
@@ -13,11 +11,11 @@ import (
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 )
 
-// SpanOTELGetters returns the attributes.Getter function that returns the
+// spanOTELGetters returns the attributes.Getter function that returns the
 // OTEL attribute.KeyValue of a given attribute name.
 //
 //nolint:cyclop
-func SpanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValue], bool) {
+func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValue], bool) {
 	var getter attributes.Getter[*Span, attribute.KeyValue]
 	switch name {
 	case attr.Client:
@@ -122,101 +120,15 @@ func SpanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 	return getter, getter != nil
 }
 
-// SpanPromGetters returns the attributes.Getter function that returns the
+// spanPromGetters returns the attributes.Getter function that returns the
 // Prometheus string value of a given attribute name.
 //
 //nolint:cyclop
-func SpanPromGetters(attrName attr.Name) (attributes.Getter[*Span, string], bool) {
-	var getter attributes.Getter[*Span, string]
-	switch attrName {
-	case attr.HTTPRequestMethod:
-		getter = func(s *Span) string { return s.Method }
-	case attr.HTTPResponseStatusCode:
-		getter = func(s *Span) string { return strconv.Itoa(s.Status) }
-	case attr.HTTPRoute:
-		getter = func(s *Span) string { return s.Route }
-	case attr.HTTPUrlPath:
-		getter = func(s *Span) string { return s.Path }
-	case attr.Client, attr.ClientAddr:
-		getter = PeerAsClient
-	case attr.Server, attr.ServerAddr:
-		getter = func(s *Span) string {
-			if s.Type == EventTypeHTTPClient {
-				return HTTPClientHost(s)
-			}
-			return HostAsServer(s)
-		}
-	case attr.ServerPort:
-		getter = func(s *Span) string { return strconv.Itoa(s.HostPort) }
-	case attr.RPCMethod:
-		getter = func(s *Span) string { return s.Path }
-	case attr.RPCSystem:
-		getter = func(_ *Span) string { return "grpc" }
-	case attr.RPCGRPCStatusCode:
-		getter = func(s *Span) string { return strconv.Itoa(s.Status) }
-	case attr.DBOperation:
-		getter = func(span *Span) string { return span.Method }
-	case attr.ErrorType:
-		getter = func(span *Span) string {
-			if SpanStatusCode(span) == StatusCodeError {
-				return "error"
-			}
-			return ""
-		}
-	case attr.DBSystemName:
-		getter = func(span *Span) string {
-			switch span.Type {
-			case EventTypeSQLClient:
-				return span.DBSystemName().Value.AsString()
-			case EventTypeRedisClient, EventTypeRedisServer:
-				return semconv.DBSystemRedis.Value.AsString()
-			case EventTypeMongoClient:
-				return semconv.DBSystemMongoDB.Value.AsString()
-			}
-			return "unknown"
-		}
-	case attr.DBCollectionName:
-		getter = func(span *Span) string {
-			if span.Type == EventTypeSQLClient {
-				return span.DBSystemName().Value.AsString()
-			}
-			if span.Type == EventTypeMongoClient {
-				return span.Path
-			}
-			return ""
-		}
-	case attr.MessagingSystem:
-		getter = func(span *Span) string {
-			if span.Type == EventTypeKafkaClient || span.Type == EventTypeKafkaServer {
-				return "kafka"
-			}
-			return "unknown"
-		}
-	case attr.MessagingDestination:
-		getter = func(span *Span) string {
-			if span.Type == EventTypeKafkaClient || span.Type == EventTypeKafkaServer {
-				return span.Path
-			}
-			return ""
-		}
-	case attr.ServiceInstanceID:
-		getter = func(s *Span) string { return s.Service.UID.Instance }
-	// resource metadata values below. Unlike OTEL, they are included here because they
-	// belong to the metric, instead of the Resource
-	case attr.Instance:
-		getter = func(s *Span) string { return s.Service.UID.Instance }
-	case attr.Job:
-		getter = func(s *Span) string { return s.Service.Job() }
-	case attr.ServiceName:
-		getter = func(s *Span) string { return s.Service.UID.Name }
-	case attr.ServiceNamespace:
-		getter = func(s *Span) string { return s.Service.UID.Namespace }
-	case attr.CudaKernelName:
-		getter = func(s *Span) string { return s.Method }
-	case attr.CudaMemcpyKind:
-		getter = func(s *Span) string { return CudaMemcpyName(s.SubType) }
-	default:
-		getter = func(s *Span) string { return s.Service.Metadata[attrName] }
+func spanPromGetters(attrName attr.Name) (attributes.Getter[*Span, string], bool) {
+	if otelGetter, ok := spanOTELGetters(attrName); ok {
+		return func(span *Span) string { return otelGetter(span).Value.Emit() }, true
 	}
-	return getter, getter != nil
+	// unlike the OTEL getters, when the attribute is not found, we need to look for it
+	// in the metadata section
+	return func(s *Span) string { return s.Service.Metadata[attrName] }, true
 }

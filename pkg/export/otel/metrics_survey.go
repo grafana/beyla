@@ -68,7 +68,7 @@ func newSurveyMetricsReporter(
 		cfg:           cfg,
 		hostID:        ctxInfo.HostID,
 		serviceMap:    map[svc.UID][]attribute.KeyValue{},
-		processEvents: processEventsQueue.Subscribe(),
+		processEvents: processEventsQueue.Subscribe(msg.SubscriberName("processEvents")),
 		pidTracker:    otel.NewPidServiceTracker(),
 	}
 	log.Debug("creating new Survey Metrics reporter")

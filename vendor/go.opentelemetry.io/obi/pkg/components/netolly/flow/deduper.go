@@ -90,7 +90,7 @@ func DeduperProvider(dd *Deduper, input, output *msg.Queue[[]*ebpf.Record]) swar
 			entries: list.New(),
 			ifaces:  map[ebpf.NetFlowId]*list.Element{},
 		}
-		in := input.Subscribe()
+		in := input.Subscribe(msg.SubscriberName("flow.Deduper"))
 		return func(_ context.Context) {
 			defer output.Close()
 			for records := range in {

@@ -12,6 +12,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/components/kube"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
+	"go.opentelemetry.io/obi/pkg/pipe/swarm/swarms"
 )
 
 // ContainerDBUpdaterProvider is a stage in the Process Finder pipeline that will be
@@ -28,7 +29,7 @@ func ContainerDBUpdaterProvider(
 		if err != nil {
 			return nil, fmt.Errorf("instantiating ContainerDBUpdater: %w", err)
 		}
-		return updateLoop(store, input.Subscribe(), output), nil
+		return updateLoop(store, input.Subscribe(msg.SubscriberName("ContainerDBUpdater")), output), nil
 	}
 }
 
@@ -36,9 +37,9 @@ func updateLoop(
 	db *kube.Store, in <-chan []Event[ebpf.Instrumentable], out *msg.Queue[[]Event[ebpf.Instrumentable]],
 ) swarm.RunFunc {
 	log := slog.With("component", "ContainerDBUpdater")
-	return func(_ context.Context) {
+	return func(ctx context.Context) {
 		defer out.Close()
-		for instrumentables := range in {
+		swarms.ForEachInput(ctx, in, log.Debug, func(instrumentables []Event[ebpf.Instrumentable]) {
 			for i := range instrumentables {
 				ev := &instrumentables[i]
 				switch ev.Type {
@@ -51,6 +52,6 @@ func updateLoop(
 				}
 			}
 			out.Send(instrumentables)
-		}
+		})
 	}
 }

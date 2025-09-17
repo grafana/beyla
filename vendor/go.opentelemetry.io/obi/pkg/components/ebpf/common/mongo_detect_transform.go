@@ -16,6 +16,7 @@ import (
 	trace2 "go.opentelemetry.io/otel/trace"
 
 	"go.opentelemetry.io/obi/pkg/app/request"
+	"go.opentelemetry.io/obi/pkg/components/ebpf/ringbuf"
 )
 
 type mongoSpanInfo struct {
@@ -557,4 +558,67 @@ func findDoubleInBson(doc bson.D, key string) (float64, bool) {
 		return 0, false
 	}
 	return doubleValue, true
+}
+
+func opAndCollectionFromEvent(event *GoMongoClientInfo) (string, string) {
+	coll := cstr(event.Coll[:])
+	db := cstr(event.Db[:])
+
+	if db != "" {
+		if coll == "" {
+			coll = db
+		} else {
+			coll = db + "." + coll
+		}
+	}
+
+	op := cstr(event.Op[:])
+
+	return op, coll
+}
+
+func ReadGoMongoRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
+	event, err := ReinterpretCast[GoMongoClientInfo](record.RawSample)
+	if err != nil {
+		return request.Span{}, true, err
+	}
+
+	peer := ""
+	hostname := ""
+	hostPort := 0
+
+	if event.Conn.S_port != 0 || event.Conn.D_port != 0 {
+		peer, hostname = (*BPFConnInfo)(unsafe.Pointer(&event.Conn)).reqHostInfo()
+		hostPort = int(event.Conn.D_port)
+	}
+
+	op, coll := opAndCollectionFromEvent(event)
+
+	// Mongo client sends these dummy hello requests all the time
+	if op == "" {
+		return request.Span{}, true, nil
+	}
+
+	return request.Span{
+		Type:          request.EventTypeMongoClient, // always client for Go
+		Method:        op,
+		Path:          coll,
+		Peer:          peer,
+		Host:          hostname,
+		HostPort:      hostPort,
+		ContentLength: 0,
+		RequestStart:  int64(event.StartMonotimeNs),
+		Start:         int64(event.StartMonotimeNs),
+		End:           int64(event.EndMonotimeNs),
+		Status:        int(event.Err),
+		TraceID:       trace2.TraceID(event.Tp.TraceId),
+		SpanID:        trace2.SpanID(event.Tp.SpanId),
+		ParentSpanID:  trace2.SpanID(event.Tp.ParentId),
+		TraceFlags:    event.Tp.Flags,
+		Pid: request.PidInfo{
+			HostPID:   event.Pid.HostPid,
+			UserPID:   event.Pid.UserPid,
+			Namespace: event.Pid.Ns,
+		},
+	}, false, nil
 }

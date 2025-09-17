@@ -41,7 +41,7 @@ type PrometheusReporter struct {
 	bpfProbeLatencies                *prometheus.HistogramVec
 	bpfMapEntries                    *prometheus.GaugeVec
 	bpfMapMaxEntries                 *prometheus.GaugeVec
-	bpfInternalMetricsScrapeInterval int
+	bpfInternalMetricsScrapeInterval time.Duration
 }
 
 func NewPrometheusReporter(cfg *Config, manager *connector.PrometheusManager, registry *prometheus.Registry) *PrometheusReporter {
@@ -112,7 +112,7 @@ func NewPrometheusReporter(cfg *Config, manager *connector.PrometheusManager, re
 			Name: attr.VendorPrefix + "_bpf_map_max_entries_total",
 			Help: "Maximum number of entries in the BPF maps",
 		}, []string{"map_id", "map_name", "map_type"}),
-		bpfInternalMetricsScrapeInterval: cfg.BpfMetricScrapeIntervalSeconds,
+		bpfInternalMetricsScrapeInterval: cfg.BpfMetricScrapeInterval,
 	}
 	if registry != nil {
 		registry.MustRegister(pr.tracerFlushes,
@@ -215,6 +215,6 @@ func (p *PrometheusReporter) BpfMapMaxEntries(mapID, mapName, mapType string, ma
 	p.bpfMapMaxEntries.WithLabelValues(mapID, mapName, mapType).Set(float64(maxEntries))
 }
 
-func (p PrometheusReporter) GetBpfInternalMetricsScrapeInterval() int {
+func (p *PrometheusReporter) BpfInternalMetricsScrapeInterval() time.Duration {
 	return p.bpfInternalMetricsScrapeInterval
 }

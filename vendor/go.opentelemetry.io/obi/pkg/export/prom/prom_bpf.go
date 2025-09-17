@@ -126,7 +126,7 @@ func (bc *BPFCollector) reportMetrics(ctx context.Context) {
 }
 
 func (bc *BPFCollector) collectInternalMetrics(ctx context.Context) {
-	ticker := time.NewTicker(time.Duration(bc.internalMetrics.GetBpfInternalMetricsScrapeInterval()) * time.Second)
+	ticker := time.NewTicker(bc.internalMetrics.BpfInternalMetricsScrapeInterval())
 	defer ticker.Stop()
 	for {
 		select {

@@ -175,6 +175,10 @@ type Span struct {
 	DBNamespace    string         `json:"-"`
 	SQLCommand     string         `json:"-"`
 	SQLError       *SQLError      `json:"-"`
+
+	// OverrideTraceName is set under some conditions, like spanmetrics reaching the maximum
+	// cardinality for trace names.
+	OverrideTraceName string `json:"-"`
 }
 
 func (s *Span) Inside(parent *Span) bool {
@@ -519,6 +523,9 @@ func (s *Span) ServiceGraphKind() string {
 }
 
 func (s *Span) TraceName() string {
+	if s.OverrideTraceName != "" {
+		return s.OverrideTraceName
+	}
 	switch s.Type {
 	case EventTypeHTTP, EventTypeHTTPClient:
 		name := s.Method

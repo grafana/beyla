@@ -22,14 +22,10 @@ func IPsFilter(dropUnresolvedIPs bool, input, output *msg.Queue[[]request.Span])
 		return func(_ context.Context) {
 			defer output.Close()
 			for spans := range in {
-				copiedSpans := make([]request.Span, len(spans))
-				copy(copiedSpans, spans)
-
-				for i := range copiedSpans {
-					span := &copiedSpans[i]
-					filterIPsFromSpan(span)
+				for i := range spans {
+					filterIPsFromSpan(&spans[i])
 				}
-				output.Send(copiedSpans)
+				output.Send(spans)
 			}
 		}, nil
 	}

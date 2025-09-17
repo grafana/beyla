@@ -271,6 +271,12 @@ type Attributes struct {
 	// DropMetricsUnresolvedIPs drops metrics that contain unresolved IP addresses to reduce cardinality
 	// nolint:undoc FIXME: the yaml option should read // drop_metrics_unresolved_ips - need to fix upstream first
 	DropMetricsUnresolvedIPs bool `yaml:"drop_metric_unresolved_ips" env:"BEYLA_DROP_METRIC_UNRESOLVED_IPS"`
+
+	// MetricSpanNameAggregationLimit works PER SERVICE and only relates to span_metrics.
+	// When the span_name cardinality surpasses this limit, the span_name will be reported as AGGREGATED.
+	// If the value <= 0, it is disabled.
+	//nolint:undoc
+	MetricSpanNameAggregationLimit int `yaml:"metric_span_names_limit" env:"BEYLA_METRIC_SPAN_NAMES_LIMIT"`
 }
 
 type HostIDConfig struct {

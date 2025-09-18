@@ -43,27 +43,37 @@ func (rm *PartialRouteMatcher) Find(path string) string {
 	}
 
 	tokens := tokenize(path)
-	return rm.findCombined(tokens, 0, []string{})
+	return rm.findCombined(tokens, 0, make([]string, len(tokens)), 0)
 }
 
 // findCombined tries to match the full path using combinations of partial matches from different roots
-func (rm *PartialRouteMatcher) findCombined(tokens []string, startIdx int, matchedParts []string) string {
+func (rm *PartialRouteMatcher) findCombined(tokens []string, startIdx int, matchedParts []string, matchedLen int) string {
 	// If we've consumed all tokens, we found a complete match
 	if startIdx >= len(tokens) {
-		if len(matchedParts) > 0 {
-			return strings.Join(matchedParts, "")
+		if matchedLen > 0 {
+			return strings.Join(matchedParts[:matchedLen], "")
 		}
 		return ""
+	}
+
+	newMatchedParts := matchedParts
+
+	// This check is here for ensuring that we don't run into unexpected condition where
+	// the original tokens slice is shorter than the parts slice. In practice, this should
+	// never happen, the tokens will always be >= to the number of parts. However, if we
+	// encounter unexpected pattern and we don't expand the array we'll hit a panic.
+	if matchedLen == len(matchedParts) {
+		newMatchedParts = make([]string, len(matchedParts)+1)
+		copy(newMatchedParts, matchedParts)
 	}
 
 	// Try each root tree for partial matching from current position
 	for _, root := range rm.roots {
 		if partialMatch, consumed := rm.findPartial(tokens[startIdx:], root); partialMatch != "" && consumed > 0 {
 			// Found a partial match, try to match the rest
-			newMatchedParts := make([]string, len(matchedParts)+1)
-			copy(newMatchedParts, matchedParts)
-			newMatchedParts[len(matchedParts)] = partialMatch
-			if result := rm.findCombined(tokens, startIdx+consumed, newMatchedParts); result != "" {
+			newMatchedParts[matchedLen] = partialMatch
+
+			if result := rm.findCombined(tokens, startIdx+consumed, newMatchedParts, matchedLen+1); result != "" {
 				return result
 			}
 		}

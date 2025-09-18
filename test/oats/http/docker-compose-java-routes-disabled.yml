@@ -1,43 +1,18 @@
 services:
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.6.1
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
-    ports:
-      - "2181:2181"
-
-  kafka:
-    image: confluentinc/cp-kafka:7.6.1
-    depends_on:
-      - zookeeper
-    environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9093
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-    ports:
-      - "9092:9092"
-      - "9093:9093"
   testserver:
     build:
       context: ../../..
-      dockerfile: ./test/integration/components/javakafka/Dockerfile
+      dockerfile: ./test/integration/components/javatestserver/Dockerfile_jar
     image: javakafka
     ports:
-      - "8080:8080"
-    depends_on:
-      kafka:
-        condition: service_started
+      - "8080:8085"
   # eBPF auto instrumenter
   autoinstrumenter:
     build:
       context: ../../..
       dockerfile: ./test/integration/components/beyla/Dockerfile
     command:
-      - --config=/configs/instrumenter-config-traces.yml
+      - --config=/configs/instrumenter-config-traces-routes-disabled.yml
     volumes:
       - {{ .ConfigDir }}:/configs
       - ./testoutput/run:/var/run/beyla
@@ -49,7 +24,7 @@ services:
       GOCOVERDIR: "/coverage"
       BEYLA_TRACE_PRINTER: "text"
       #BEYLA_EXECUTABLE_PATH: "java"
-      BEYLA_OPEN_PORT: {{ .ApplicationPort }}
+      BEYLA_OPEN_PORT: "8085"
       BEYLA_SERVICE_NAMESPACE: "integration-test"
       BEYLA_METRICS_INTERVAL: "10ms"
       BEYLA_BPF_BATCH_TIMEOUT: "10ms"

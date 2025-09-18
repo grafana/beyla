@@ -1,36 +1,16 @@
 services:
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.6.1
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
+  mongo:
+    image: mongo:8.0.10@sha256:98028cf281bb5d49ace5e1ddbd4509e8f1382fe80ef1cf101eeefdc106d76cd4
     ports:
-      - "2181:2181"
+      - "27017:27017"
 
-  kafka:
-    image: confluentinc/cp-kafka:7.6.1
-    depends_on:
-      - zookeeper
-    environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9093
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-    ports:
-      - "9092:9092"
-      - "9093:9093"
   testserver:
     build:
       context: ../../..
-      dockerfile: ./test/integration/components/javakafka/Dockerfile
-    image: javakafka
+      dockerfile: ./test/integration/components/gomongo/Dockerfile
+    image: gomongo
     ports:
       - "8080:8080"
-    depends_on:
-      kafka:
-        condition: service_started
   # eBPF auto instrumenter
   autoinstrumenter:
     build:
@@ -48,8 +28,7 @@ services:
     environment:
       GOCOVERDIR: "/coverage"
       BEYLA_TRACE_PRINTER: "text"
-      #BEYLA_EXECUTABLE_PATH: "java"
-      BEYLA_OPEN_PORT: {{ .ApplicationPort }}
+      BEYLA_OPEN_PORT: "8080"
       BEYLA_SERVICE_NAMESPACE: "integration-test"
       BEYLA_METRICS_INTERVAL: "10ms"
       BEYLA_BPF_BATCH_TIMEOUT: "10ms"

@@ -1,0 +1,8 @@
+routes:
+  patterns:
+    - /create-trace
+    - /smoke
+  unmatched: path
+discovery:
+  disabled_route_harvesters:
+    - java

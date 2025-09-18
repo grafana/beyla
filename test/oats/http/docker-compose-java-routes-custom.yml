@@ -1,27 +1,18 @@
 services:
-  # Use postgres as a test SQL server
-  redis:
-    image: redis:latest@sha256:acb90ced0bd769b7c04cb4c32c4494ba7b3e0ee068bdbfff0eeb0d31c2a21078
-    ports:
-      - "6379:6379"
-  # Simple python HTTP server, which exposes one endpoint /query that does a few redis queries
   testserver:
     build:
-      context: ../../integration/components/pythonredis
-      dockerfile: Dockerfile
-    image: pyredisclient
+      context: ../../..
+      dockerfile: ./test/integration/components/javatestserver/Dockerfile_jar
+    image: javakafka
     ports:
-      - "8080:8080"
-    depends_on:
-      redis:
-        condition: service_started
+      - "8080:8085"
   # eBPF auto instrumenter
   autoinstrumenter:
     build:
       context: ../../..
       dockerfile: ./test/integration/components/beyla/Dockerfile
     command:
-      - --config=/configs/instrumenter-config-traces.yml
+      - --config=/configs/instrumenter-config-traces-custom-routes.yml
     volumes:
       - {{ .ConfigDir }}:/configs
       - ./testoutput/run:/var/run/beyla
@@ -32,8 +23,6 @@ services:
     environment:
       GOCOVERDIR: "/coverage"
       BEYLA_TRACE_PRINTER: "text"
-      BEYLA_OPEN_PORT: {{ .ApplicationPort }}
-      BEYLA_SERVICE_NAMESPACE: "integration-test"
       BEYLA_METRICS_INTERVAL: "10ms"
       BEYLA_BPF_BATCH_TIMEOUT: "10ms"
       BEYLA_LOG_LEVEL: "DEBUG"

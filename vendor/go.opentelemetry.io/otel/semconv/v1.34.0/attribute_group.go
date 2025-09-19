@@ -827,7 +827,7 @@ const (
 	// of the [AWS Lambda EvenSource Mapping]. An event source is mapped to a lambda
 	// function. It's contents are read by Lambda and used to trigger a function.
 	// This isn't available in the lambda execution context or the lambda runtime
-	// environtment. This is going to be populated by the AWS SDK for each language
+	// environment. This is going to be populated by the AWS SDK for each language
 	// when that UUID is present. Some of these operations are
 	// Create/Delete/Get/List/Update EventSourceMapping.
 	//

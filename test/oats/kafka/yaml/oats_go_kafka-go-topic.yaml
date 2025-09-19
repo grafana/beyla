@@ -10,7 +10,7 @@ expected:
   traces:
     - traceql: '{ .messaging.operation.type = "publish" && .messaging.destination.name="logging"}'
       spans:
-        - name: 'logging publish'
+        - name: 'publish logging'
           attributes:
             messaging.destination.name: logging
             messaging.operation.type: publish
@@ -18,7 +18,7 @@ expected:
             server.port: "9092"
     - traceql: '{ .messaging.operation.type = "process" && .messaging.destination.name="logging"}'
       spans:
-        - name: 'logging process'
+        - name: 'process logging'
           attributes:
             messaging.destination.name: logging
             messaging.operation.type: process

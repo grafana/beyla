@@ -69,6 +69,7 @@ var DefaultConfig = Config{
 		MySQLPreparedStatementsCacheSize:    1024,
 		MongoRequestsCacheSize:              1024,
 		PostgresPreparedStatementsCacheSize: 1024,
+		KafkaTopicUUIDCacheSize:             1024,
 	},
 	Grafana: botel.GrafanaConfig{
 		OTLP: botel.GrafanaOTLP{
@@ -121,6 +122,7 @@ var DefaultConfig = Config{
 			Port: 0, // disabled by default
 			Path: "/internal/metrics",
 		},
+		BpfMetricScrapeInterval: 15 * time.Second,
 	},
 	Attributes: Attributes{
 		InstanceID: traces.InstanceIDConfig{
@@ -135,7 +137,8 @@ var DefaultConfig = Config{
 		HostID: HostIDConfig{
 			FetchTimeout: 500 * time.Millisecond,
 		},
-		DropMetricsUnresolvedIPs: true,
+		RenameUnresolvedHosts:          "unresolved",
+		MetricSpanNameAggregationLimit: 100,
 	},
 	Routes: &transform.RoutesConfig{
 		Unmatch:      transform.UnmatchDefault,
@@ -151,6 +154,8 @@ var DefaultConfig = Config{
 		MinProcessAge:                   5 * time.Second,
 		DefaultExcludeServices:          servicesextra.DefaultExcludeServices,
 		DefaultExcludeInstrument:        servicesextra.DefaultExcludeInstrument,
+		DefaultOtlpGRPCPort:             4317,
+		RouteHarvesterTimeout:           10 * time.Second,
 	},
 	NodeJS: obi.NodeJSConfig{
 		Enabled: true,
@@ -268,9 +273,18 @@ type Attributes struct {
 	Select               attributes.Selection          `yaml:"select"`
 	HostID               HostIDConfig                  `yaml:"host_id"`
 	ExtraGroupAttributes map[string][]attr.Name        `yaml:"extra_group_attributes"`
-	// DropMetricsUnresolvedIPs drops metrics that contain unresolved IP addresses to reduce cardinality
-	// nolint:undoc FIXME: the yaml option should read // drop_metrics_unresolved_ips - need to fix upstream first
-	DropMetricsUnresolvedIPs bool `yaml:"drop_metric_unresolved_ips" env:"BEYLA_DROP_METRIC_UNRESOLVED_IPS"`
+
+	// RenameUnresolvedHosts will replace HostName and PeerName attributes when they are empty or contain
+	// unresolved IP addresses to reduce cardinality.
+	// Set this value to the empty string to disable this feature.
+	// nolint:undoc
+	RenameUnresolvedHosts string `yaml:"rename_unresolved_hosts" env:"BEYLA_RENAME_UNRESOLVED_HOSTS"`
+
+	// MetricSpanNameAggregationLimit works PER SERVICE and only relates to span_metrics.
+	// When the span_name cardinality surpasses this limit, the span_name will be reported as AGGREGATED.
+	// If the value <= 0, it is disabled.
+	// nolint:undoc
+	MetricSpanNameAggregationLimit int `yaml:"metric_span_names_limit" env:"BEYLA_METRIC_SPAN_NAMES_LIMIT"`
 }
 
 type HostIDConfig struct {

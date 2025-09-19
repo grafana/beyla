@@ -10,14 +10,14 @@ expected:
   traces:
     - traceql: '{ .messaging.operation.type = "process" }'
       spans:
-        - name: 'regex:process$'
+        - name: 'regex:^process'
           attributes:
             messaging.operation.type: process
             messaging.system: kafka
             server.port: "9092"
     - traceql: '{ .messaging.operation.type = "publish" }'
       spans:
-        - name: 'regex:publish$'
+        - name: 'regex:^publish'
           attributes:
             messaging.operation.type: publish
             messaging.system: kafka
@@ -35,4 +35,3 @@ expected:
       value: "== 0"
     - promql: 'messaging_process_duration_bucket{le="10"}'
       value: "> 0"
-

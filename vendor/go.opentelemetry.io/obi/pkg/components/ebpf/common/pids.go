@@ -45,22 +45,24 @@ type ServiceFilter interface {
 // be forwarded. Its Filter method filters the request.Span instances whose
 // PIDs are not in the allowed list.
 type PIDsFilter struct {
-	log            *slog.Logger
-	current        map[uint32]map[uint32]PIDInfo
-	mux            *sync.RWMutex
-	ignoreOtel     bool
-	ignoreOtelSpan bool
-	metrics        imetrics.Reporter
+	log                 *slog.Logger
+	current             map[uint32]map[uint32]PIDInfo
+	mux                 *sync.RWMutex
+	ignoreOtel          bool
+	ignoreOtelSpan      bool
+	defaultOtlpGRPCPort int
+	metrics             imetrics.Reporter
 }
 
 func newPIDsFilter(c *services.DiscoveryConfig, log *slog.Logger, metrics imetrics.Reporter) *PIDsFilter {
 	return &PIDsFilter{
-		log:            log,
-		current:        map[uint32]map[uint32]PIDInfo{},
-		mux:            &sync.RWMutex{},
-		ignoreOtel:     c.ExcludeOTelInstrumentedServices,
-		ignoreOtelSpan: c.ExcludeOTelInstrumentedServicesSpanMetrics,
-		metrics:        metrics,
+		log:                 log,
+		current:             map[uint32]map[uint32]PIDInfo{},
+		mux:                 &sync.RWMutex{},
+		ignoreOtel:          c.ExcludeOTelInstrumentedServices,
+		ignoreOtelSpan:      c.ExcludeOTelInstrumentedServicesSpanMetrics,
+		defaultOtlpGRPCPort: c.DefaultOtlpGRPCPort,
+		metrics:             metrics,
 	}
 }
 
@@ -142,10 +144,10 @@ func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 		// of container layers. The Host PID is always the outer most layer.
 		if info, pidExists := ns[span.Pid.UserPID]; pidExists {
 			if pf.ignoreOtel {
-				pf.checkIfExportsOTel(info.service, span)
+				pf.checkIfExportsOTel(info.service, span, pf.defaultOtlpGRPCPort)
 			}
 			if pf.ignoreOtelSpan {
-				pf.checkIfExportsOTelSpanMetrics(info.service, span)
+				pf.checkIfExportsOTelSpanMetrics(info.service, span, pf.defaultOtlpGRPCPort)
 			}
 			inputSpans[i].Service = *info.service
 			pf.normalizeTraceContext(&inputSpans[i])
@@ -218,18 +220,18 @@ func (pf *IdentityPidsFilter) Filter(inputSpans []request.Span) []request.Span {
 	return inputSpans
 }
 
-func (pf *PIDsFilter) checkIfExportsOTel(svc *svc.Attrs, span *request.Span) {
-	if span.IsExportMetricsSpan() && !svc.ExportsOTelMetrics() {
+func (pf *PIDsFilter) checkIfExportsOTel(svc *svc.Attrs, span *request.Span, defaultOtlpGRPCPort int) {
+	if !svc.ExportsOTelMetrics() && span.IsExportMetricsSpan(defaultOtlpGRPCPort) {
 		svc.SetExportsOTelMetrics()
 		pf.reportAvoidedService(svc, "metrics")
-	} else if span.IsExportTracesSpan() && !svc.ExportsOTelTraces() {
+	} else if !svc.ExportsOTelTraces() && span.IsExportTracesSpan(defaultOtlpGRPCPort) {
 		svc.SetExportsOTelTraces()
 		pf.reportAvoidedService(svc, "traces")
 	}
 }
 
-func (pf *PIDsFilter) checkIfExportsOTelSpanMetrics(svc *svc.Attrs, span *request.Span) {
-	if span.IsExportTracesSpan() && !svc.ExportsOTelMetricsSpan() {
+func (pf *PIDsFilter) checkIfExportsOTelSpanMetrics(svc *svc.Attrs, span *request.Span, defaultOtlpGRPCPort int) {
+	if span.IsExportTracesSpan(defaultOtlpGRPCPort) && !svc.ExportsOTelMetricsSpan() {
 		svc.SetExportsOTelMetricsSpan()
 		pf.reportAvoidedService(svc, "metrics_span")
 	}

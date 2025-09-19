@@ -156,7 +156,7 @@ func newProcReporter(ctxInfo *global.ContextInfo, cfg *ProcPrometheusConfig, inp
 			Name: extraattributes.ProcessNetIO.Prom,
 			Help: "Network bytes transferred",
 		}, netLblNames).MetricVec, clock.Time, cfg.Metrics.TTL),
-		procStatusInput: input.Subscribe(),
+		procStatusInput: input.Subscribe(msg.SubscriberName("procStatusInput")),
 	}
 
 	if cpuTimeHasState {

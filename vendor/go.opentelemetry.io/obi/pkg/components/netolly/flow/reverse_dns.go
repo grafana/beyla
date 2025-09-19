@@ -68,7 +68,7 @@ func ReverseDNSProvider(cfg *ReverseDNS, input, output *msg.Queue[[]*ebpf.Record
 		cache := expirable.NewLRU[ebpf.IPAddr, string](cfg.CacheLen, nil, cfg.CacheTTL)
 
 		log := rdlog()
-		in := input.Subscribe()
+		in := input.Subscribe(msg.SubscriberName("flow.ReverseDNS"))
 		return func(_ context.Context) {
 			defer output.Close()
 			log.Debug("starting reverse DNS node")

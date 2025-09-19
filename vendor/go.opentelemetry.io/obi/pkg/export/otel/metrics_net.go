@@ -161,7 +161,7 @@ func newMetricsExporter(
 		nme.interZoneBytes = NewExpirer[*ebpf.Record, metric2.Int64Counter, float64](ctx, bytesMetric, attrs, clock.Time, cfg.Metrics.TTL)
 	}
 
-	nme.in = input.Subscribe()
+	nme.in = input.Subscribe(msg.SubscriberName("otel.NetMetricsExporter"))
 	return nme, nil
 }
 

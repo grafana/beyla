@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest-8-cores
     strategy:
       matrix:
-        go: [ '1.24' ]
+        go: [ '1.25' ]
     # Set restrictive permissions at workflow level
     permissions:
       contents: read

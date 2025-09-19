@@ -14,9 +14,13 @@ import (
 // More formats will be appended at some point
 var wildcard = regexp.MustCompile(`^((:\w*)|(\{\w*}))$`)
 
+type Matcher interface {
+	Find(string) string
+}
+
 // Matcher allows matching a given URL path towards a set of framework-like provided
 // patterns.
-type Matcher struct {
+type CompleteRouteMatcher struct {
 	root *node
 }
 
@@ -38,17 +42,17 @@ type node struct {
 
 // NewMatcher creates a new Matcher that would allow validating given URL paths towards
 // the provided set of routes
-func NewMatcher(routes []string) Matcher {
-	m := Matcher{root: &node{Child: map[string]*node{}}}
+func NewMatcher(routes []string) *CompleteRouteMatcher {
+	m := CompleteRouteMatcher{root: &node{Child: map[string]*node{}}}
 	for _, route := range routes {
 		appendRoute(route, tokenize(route), m.root)
 	}
-	return m
+	return &m
 }
 
 // Find the router pattern that would match a given URL path, or empty if no pattern
 // matches it.
-func (rm *Matcher) Find(path string) string {
+func (rm *CompleteRouteMatcher) Find(path string) string {
 	return find(tokenize(path), rm.root)
 }
 

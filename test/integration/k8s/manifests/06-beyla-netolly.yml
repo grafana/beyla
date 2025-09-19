@@ -86,3 +86,9 @@ spec:
             # should have no effect
             - name: BEYLA_KUBE_META_RESTRICT_LOCAL_NODE
               value: "true"
+            - name: BEYLA_NETWORK_RING_BUFFER_FLUSH_PERIOD
+              value: "1s"
+            - name: BEYLA_NETWORK_MAX_FLOW_DURATION
+              value: "1s"
+            - name: OTEL_METRIC_EXPORT_INTERVAL
+              value: "5000"

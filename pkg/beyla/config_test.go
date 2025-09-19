@@ -149,6 +149,7 @@ network:
 			MySQLPreparedStatementsCacheSize:    1024,
 			MongoRequestsCacheSize:              1024,
 			PostgresPreparedStatementsCacheSize: 1024,
+			KafkaTopicUUIDCacheSize:             1024,
 		},
 		Grafana: otel.GrafanaConfig{
 			OTLP: otel.GrafanaOTLP{
@@ -203,6 +204,7 @@ network:
 				Port: 3210,
 				Path: "/internal/metrics",
 			},
+			BpfMetricScrapeInterval: 15 * time.Second,
 		},
 		Attributes: Attributes{
 			InstanceID: traces.InstanceIDConfig{
@@ -228,6 +230,8 @@ network:
 			ExtraGroupAttributes: map[string][]attr.Name{
 				"k8s_app_meta": {"k8s.app.version"},
 			},
+			RenameUnresolvedHosts:          "unresolved",
+			MetricSpanNameAggregationLimit: 100,
 		},
 		Routes: &transform.RoutesConfig{
 			Unmatch:      transform.UnmatchHeuristic,
@@ -267,6 +271,8 @@ network:
 					Metadata: map[string]*services.GlobAttr{"k8s_namespace": &servicesextra.K8sDefaultNamespacesGlob},
 				},
 			},
+			DefaultOtlpGRPCPort:   4317,
+			RouteHarvesterTimeout: 10 * time.Second,
 		},
 		NodeJS: obi.NodeJSConfig{Enabled: true},
 	}, cfg)

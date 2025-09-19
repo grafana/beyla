@@ -38,7 +38,7 @@ func TracesReceiver(
 
 		tr := &tracesReceiver{
 			cfg: cfg, hostID: ctxInfo.HostID, spanMetricsEnabled: spanMetricsEnabled,
-			input:          input.Subscribe(),
+			input:          input.Subscribe(msg.SubscriberName("alloyTracesInput")),
 			is:             instrumentations.NewInstrumentationSelection(cfg.Instrumentations),
 			attributeCache: expirable2.NewLRU[svc.UID, []attribute.KeyValue](1024, nil, 5*time.Minute),
 		}

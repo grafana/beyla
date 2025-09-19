@@ -28,7 +28,7 @@ func SurveyCriteriaMatcherProvider(
 		Criteria:         surveyCriteria(cfg),
 		ExcludeCriteria:  surveyExcludingCriteria(cfg),
 		ProcessHistory:   map[obiDiscover.PID]obiDiscover.ProcessMatch{},
-		Input:            input.Subscribe(),
+		Input:            input.Subscribe(msg.SubscriberName("surveyInput")),
 		Output:           output,
 		Namespace:        beylaNamespace,
 		HasHostPidAccess: hasHostPidAccess(),

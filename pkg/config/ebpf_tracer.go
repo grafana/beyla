@@ -109,6 +109,10 @@ type EBPFTracer struct {
 	// Postgres prepared statements cache size.
 	// nolint:undoc
 	PostgresPreparedStatementsCacheSize int `yaml:"postgres_prepared_statements_cache_size" env:"BEYLA_POSTGRES_PREPARED_STATEMENTS_CACHE_SIZE"`
+
+	// Kafka Topic UUID to Name cache size.
+	// nolint:undoc
+	KafkaTopicUUIDCacheSize int `yaml:"kafka_topic_uuid_cache_size" env:"OTEL_KAFKA_TOPIC_UUID_CACHE_SIZE"`
 }
 
 type EBPFBufferSizes struct {

@@ -1,6 +1,6 @@
-module github.com/grafana/beyla/test/oats
+module github.com/grafana/beyla/test/oats/sql
 
-go 1.24.1
+go 1.25.1
 
 require (
 	github.com/grafana/oats v0.0.3

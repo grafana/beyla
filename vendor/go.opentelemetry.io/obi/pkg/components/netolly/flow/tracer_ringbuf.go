@@ -22,15 +22,11 @@
 package flow
 
 import (
-	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
-	"sync/atomic"
-	"syscall"
-	"time"
 
+	ebpfcommon "go.opentelemetry.io/obi/pkg/components/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/components/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/components/netolly/ebpf"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
@@ -45,34 +41,16 @@ func rtlog() *slog.Logger {
 // added in the eBPF kernel space due to the map being full or busy) and submits them to the
 // userspace Aggregator map
 type RingBufTracer struct {
-	mapFlusher mapFlusher
 	ringBuffer ringBufReader
-	stats      stats
 }
 
 type ringBufReader interface {
-	ReadRingBuf() (ringbuf.Record, error)
+	ReadInto(*ringbuf.Record) error
 }
 
-// stats supports atomic logging of ringBuffer metrics
-type stats struct {
-	loggingTimeout time.Duration
-	isForwarding   int32
-	forwardedFlows int32
-	mapFullErrs    int32
-}
-
-type mapFlusher interface {
-	Flush()
-}
-
-func NewRingBufTracer(
-	reader ringBufReader, flusher mapFlusher, logTimeout time.Duration,
-) *RingBufTracer {
+func NewRingBufTracer(reader ringBufReader) *RingBufTracer {
 	return &RingBufTracer{
-		mapFlusher: flusher,
 		ringBuffer: reader,
-		stats:      stats{loggingTimeout: logTimeout},
 	}
 }
 
@@ -80,76 +58,34 @@ func (m *RingBufTracer) TraceLoop(out *msg.Queue[[]*ebpf.Record]) swarm.RunFunc 
 	return func(ctx context.Context) {
 		defer out.MarkCloseable()
 		rtlog := rtlog()
-		debugging := rtlog.Enabled(ctx, slog.LevelDebug)
+
+		var rec ringbuf.Record
+
 		for {
 			select {
 			case <-ctx.Done():
 				rtlog.Debug("exiting trace loop due to context cancellation")
 				return
 			default:
-				if err := m.listenAndForwardRingBuffer(debugging, out); err != nil {
+				if err := m.ringBuffer.ReadInto(&rec); err != nil {
 					if errors.Is(err, ringbuf.ErrClosed) {
 						rtlog.Debug("Received signal, exiting..")
 						return
 					}
+
 					rtlog.Warn("ignoring flow event", "error", err)
 					continue
 				}
+
+				event, err := ebpfcommon.ReinterpretCast[ebpf.NetFlowRecordT](rec.RawSample)
+				if err != nil {
+					continue
+				}
+
+				out.Send([]*ebpf.Record{{
+					NetFlowRecordT: *event,
+				}})
 			}
 		}
-	}
-}
-
-func (m *RingBufTracer) listenAndForwardRingBuffer(debugging bool, forwardCh *msg.Queue[[]*ebpf.Record]) error {
-	event, err := m.ringBuffer.ReadRingBuf()
-	if err != nil {
-		return fmt.Errorf("reading from ring buffer: %w", err)
-	}
-	// Parses the ringbuf event entry into an Event structure.
-	readFlow, err := ebpf.ReadFrom(bytes.NewBuffer(event.RawSample))
-	if err != nil {
-		return fmt.Errorf("parsing data received from the ring buffer: %w", err)
-	}
-	mapFullError := readFlow.Metrics.Errno == uint8(syscall.E2BIG)
-	if debugging {
-		m.stats.logRingBufferFlows(mapFullError)
-	}
-	// if the flow was received due to lack of space in the eBPF map
-	// forces a flow's eviction to leave room for new flows in the ebpf cache
-	if mapFullError {
-		m.mapFlusher.Flush()
-	}
-
-	forwardCh.Send([]*ebpf.Record{{
-		NetFlowRecordT: readFlow,
-	}})
-
-	return nil
-}
-
-// logRingBufferFlows avoids flooding logs on long series of evicted flows by grouping how
-// many flows are forwarded
-func (m *stats) logRingBufferFlows(mapFullErr bool) {
-	atomic.AddInt32(&m.forwardedFlows, 1)
-	if mapFullErr {
-		atomic.AddInt32(&m.mapFullErrs, 1)
-	}
-	if atomic.CompareAndSwapInt32(&m.isForwarding, 0, 1) {
-		go func() {
-			time.Sleep(m.loggingTimeout)
-			mfe := atomic.LoadInt32(&m.mapFullErrs)
-			l := rtlog().With(
-				"flows", atomic.LoadInt32(&m.forwardedFlows),
-				"mapFullErrs", mfe,
-			)
-			if mfe == 0 {
-				l.Debug("received flows via ringbuffer")
-			} else {
-				l.Debug("received flows via ringbuffer due to Map Full. You might want to increase the OTEL_EBPF_NETWORK_CACHE_MAX_FLOWS value")
-			}
-			atomic.StoreInt32(&m.forwardedFlows, 0)
-			atomic.StoreInt32(&m.isForwarding, 0)
-			atomic.StoreInt32(&m.mapFullErrs, 0)
-		}()
 	}
 }

@@ -72,7 +72,7 @@ func newSurveyReporter(
 	extraMetadataLabels := parseExtraMetadata(cfg.ExtraResourceLabels)
 
 	mr := &surveyMetricsReporter{
-		processEvents: processEventCh.Subscribe(),
+		processEvents: processEventCh.Subscribe(msg.SubscriberName("processEvents")),
 		serviceMap:    map[svc.UID]svc.Attrs{},
 		pidsTracker:   otel.NewPidServiceTracker(),
 		hostID:        ctxInfo.HostID,

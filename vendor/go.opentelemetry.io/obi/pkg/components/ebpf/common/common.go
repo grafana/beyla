@@ -23,11 +23,12 @@ import (
 	"github.com/hashicorp/golang-lru/v2/simplelru"
 
 	"go.opentelemetry.io/obi/pkg/app/request"
+	"go.opentelemetry.io/obi/pkg/components/ebpf/common/kafkaparser"
 	"go.opentelemetry.io/obi/pkg/components/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/config"
 )
 
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 -type http_request_trace -type sql_request_trace -type http_info_t -type connection_info_t -type http2_grpc_request_t -type tcp_req_t -type kafka_client_req_t -type kafka_go_req_t -type redis_client_req_t -type tcp_large_buffer_t -type otel_span_t Bpf ../../../../bpf/common/common.c -- -I../../../../bpf
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 -type http_request_trace -type sql_request_trace -type http_info_t -type connection_info_t -type http2_grpc_request_t -type tcp_req_t -type kafka_client_req_t -type kafka_go_req_t -type redis_client_req_t -type tcp_large_buffer_t -type otel_span_t -type mongo_go_client_req_t Bpf ../../../../bpf/common/common.c -- -I../../../../bpf
 
 // HTTPRequestTrace contains information from an HTTP request as directly received from the
 // eBPF layer. This contains low-level C structures for accurate binary read from ring buffer.
@@ -42,6 +43,7 @@ type (
 	GoKafkaGoClientInfo  BpfKafkaGoReqT
 	TCPLargeBufferHeader BpfTcpLargeBufferT
 	GoOTelSpanTrace      BpfOtelSpanT
+	GoMongoClientInfo    BpfMongoGoClientReqT
 )
 
 const (
@@ -54,7 +56,7 @@ const (
 	EventTypeGoKafkaGo      = 11 // Kafka-Go client from Segment-io
 	EventTypeTCPLargeBuffer = 12 // Dynamically sized TCP buffers
 	EventOTelSDKGo          = 13 // OTel SDK manual span
-
+	EventTypeGoMongo        = 14 // Go MongoDB spans
 )
 
 // Kernel-side classification
@@ -127,6 +129,7 @@ type EBPFParseContext struct {
 	mysqlPreparedStatements    *simplelru.LRU[mysqlPreparedStatementsKey, string]
 	postgresPreparedStatements *simplelru.LRU[postgresPreparedStatementsKey, string]
 	postgresPortals            *simplelru.LRU[postgresPortalsKey, string]
+	kafkaTopicUUIDToName       *simplelru.LRU[kafkaparser.UUID, string]
 }
 
 type EBPFEventContext struct {
@@ -149,6 +152,7 @@ func NewEBPFParseContext(cfg *config.EBPFTracer) *EBPFParseContext {
 		mysqlPreparedStatements    *simplelru.LRU[mysqlPreparedStatementsKey, string]
 		postgresPreparedStatements *simplelru.LRU[postgresPreparedStatementsKey, string]
 		postgresPortals            *simplelru.LRU[postgresPortalsKey, string]
+		kafkaTopicUUIDToName       *simplelru.LRU[kafkaparser.UUID, string]
 		mongoRequestCache          PendingMongoDBRequests
 	)
 
@@ -179,6 +183,11 @@ func NewEBPFParseContext(cfg *config.EBPFTracer) *EBPFParseContext {
 			ptlog().Error("failed to create Postgres portals cache", "error", err)
 		}
 
+		kafkaTopicUUIDToName, err = simplelru.NewLRU[kafkaparser.UUID, string](cfg.KafkaTopicUUIDCacheSize, nil)
+		if err != nil {
+			ptlog().Error("failed to create Kafka topic UUID to name cache", "error", err)
+		}
+
 		mongoRequestCache = expirable.NewLRU[MongoRequestKey, *MongoRequestValue](cfg.MongoRequestsCacheSize, nil, 0)
 	}
 
@@ -190,6 +199,7 @@ func NewEBPFParseContext(cfg *config.EBPFTracer) *EBPFParseContext {
 		mysqlPreparedStatements:    mysqlPreparedStatements,
 		postgresPreparedStatements: postgresPreparedStatements,
 		postgresPortals:            postgresPortals,
+		kafkaTopicUUIDToName:       kafkaTopicUUIDToName,
 	}
 }
 
@@ -222,6 +232,8 @@ func ReadBPFTraceAsSpan(parseCtx *EBPFParseContext, cfg *config.EBPFTracer, reco
 		return ReadGoSaramaRequestIntoSpan(record)
 	case EventTypeGoRedis:
 		return ReadGoRedisRequestIntoSpan(record)
+	case EventTypeGoMongo:
+		return ReadGoMongoRequestIntoSpan(record)
 	case EventTypeGoKafkaGo:
 		return ReadGoKafkaGoRequestIntoSpan(record)
 	case EventTypeTCPLargeBuffer:

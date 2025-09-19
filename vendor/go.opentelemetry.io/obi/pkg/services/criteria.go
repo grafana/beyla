@@ -26,7 +26,8 @@ const (
 	AttrCronJobName     = "k8s_cronjob_name"
 	// AttrOwnerName would be a generic search criteria that would
 	// match against deployment, replicaset, daemonset and statefulset names
-	AttrOwnerName = "k8s_owner_name"
+	AttrOwnerName     = "k8s_owner_name"
+	AttrContainerName = "k8s_container_name"
 )
 
 // any attribute name not in this set will cause an error during the YAML unmarshalling
@@ -40,6 +41,7 @@ var allowedAttributeNames = map[string]struct{}{
 	AttrJobName:         {},
 	AttrCronJobName:     {},
 	AttrOwnerName:       {},
+	AttrContainerName:   {},
 }
 
 // ProcessInfo stores some relevant information about a running process
@@ -94,12 +96,20 @@ type DiscoveryConfig struct {
 	// Disables instrumentation of services which are already instrumented
 	ExcludeOTelInstrumentedServices bool `yaml:"exclude_otel_instrumented_services" env:"OTEL_EBPF_EXCLUDE_OTEL_INSTRUMENTED_SERVICES"`
 
+	// DefaultOtlpGRPCPort specifies the default OTLP gRPC port (4317) to fallback on when missing environment variables on service, for
+	// checking for grpc export requests, defaults to 4317
+	DefaultOtlpGRPCPort int `yaml:"default_otlp_grpc_port" env:"OTEL_EBPF_DEFAULT_OTLP_GRPC_PORT"`
+
 	// Min process age to be considered for discovery.
 	//nolint:undoc
 	MinProcessAge time.Duration `yaml:"min_process_age" env:"OTEL_EBPF_MIN_PROCESS_AGE"`
 
 	// Disables generation of span metrics of services which are already instrumented
 	ExcludeOTelInstrumentedServicesSpanMetrics bool `yaml:"exclude_otel_instrumented_services_span_metrics" env:"OTEL_EBPF_EXCLUDE_OTEL_INSTRUMENTED_SERVICES_SPAN_METRICS"`
+
+	RouteHarvesterTimeout time.Duration `yaml:"route_harvester_timeout" env:"OTEL_EBPF_ROUTE_HARVESTER_TIMEOUT"`
+
+	DisabledRouteHarvesters []string `yaml:"disabled_route_harvesters"`
 }
 
 func (c *DiscoveryConfig) Validate() error {
@@ -133,6 +143,7 @@ type Selector interface {
 	RangePodAnnotations() iter.Seq2[string, StringMatcher]
 	GetExportModes() ExportModes
 	GetSamplerConfig() *SamplerConfig
+	GetRoutesConfig() *CustomRoutesConfig
 }
 
 // StringMatcher provides a generic interface to match string values against some matcher types: regex and glob

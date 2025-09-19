@@ -1,7 +1,7 @@
 # Development version of the beyla Dockerfile that compiles for coverage
 # and allows retrieving coverage files.
 # The production-ready minimal image is in the project root's dockerfile.
-FROM golang:1.24 AS builder
+FROM golang:1.25 AS builder
 
 ARG TARGETARCH
 

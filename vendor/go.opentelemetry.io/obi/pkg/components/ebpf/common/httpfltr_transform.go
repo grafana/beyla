@@ -30,7 +30,7 @@ func httpInfoToSpan(info *HTTPInfo) request.Span {
 		HostPort:       int(info.ConnInfo.D_port),
 		ContentLength:  int64(info.Len),
 		ResponseLength: int64(info.RespLen),
-		RequestStart:   int64(info.StartMonotimeNs),
+		RequestStart:   int64(info.ReqMonotimeNs),
 		Start:          int64(info.StartMonotimeNs),
 		End:            int64(info.EndMonotimeNs),
 		Status:         int(info.Status),

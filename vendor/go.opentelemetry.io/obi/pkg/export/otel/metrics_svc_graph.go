@@ -75,6 +75,7 @@ type SvcGraphMetrics struct {
 func ReportSvcGraphMetrics(
 	ctxInfo *global.ContextInfo,
 	cfg *otelcfg.MetricsConfig,
+	renameUnresolved string,
 	input *msg.Queue[[]request.Span],
 	processEvents *msg.Queue[exec.ProcessEvent],
 ) swarm.InstanceFunc {
@@ -88,6 +89,7 @@ func ReportSvcGraphMetrics(
 			ctx,
 			ctxInfo,
 			cfg,
+			renameUnresolved,
 			input,
 			processEvents,
 		)
@@ -103,6 +105,7 @@ func newSvcGraphMetricsReporter(
 	ctx context.Context,
 	ctxInfo *global.ContextInfo,
 	cfg *otelcfg.MetricsConfig,
+	renameUnresolved string,
 	input *msg.Queue[[]request.Span],
 	processEventCh *msg.Queue[exec.ProcessEvent],
 ) (*SvcGraphMetricsReporter, error) {
@@ -115,9 +118,9 @@ func newSvcGraphMetricsReporter(
 		cfg:              cfg,
 		is:               is,
 		hostID:           ctxInfo.HostID,
-		input:            input.Subscribe(),
-		processEvents:    processEventCh.Subscribe(),
-		metricAttributes: serviceGraphGetters(),
+		input:            input.Subscribe(msg.SubscriberName("otel.SvcGraphMetricsReporter.input")),
+		processEvents:    processEventCh.Subscribe(msg.SubscriberName("otel.SvcGraphMetricsReporter.processEvents")),
+		metricAttributes: serviceGraphGetters(renameUnresolved),
 		log:              log,
 	}
 
@@ -264,17 +267,9 @@ func (mr *SvcGraphMetricsReporter) tracesResourceAttributes(service *svc.Attrs) 
 	return attribute.NewSet(filteredAttrs...)
 }
 
-func (mr *SvcGraphMetricsReporter) metricHostAttributes() attribute.Set {
-	attrs := []attribute.KeyValue{
-		GrafanaHostIDKey.String(mr.hostID),
-	}
-
-	return attribute.NewSet(attrs...)
-}
-
-func serviceGraphGetters() []attributes.Field[*request.Span, attribute.KeyValue] {
+func serviceGraphGetters(renameUnresolved string) []attributes.Field[*request.Span, attribute.KeyValue] {
 	return attributes.OpenTelemetryGetters(
-		request.SpanOTELGetters, []attr.Name{
+		request.SpanOTELGetters(renameUnresolved), []attr.Name{
 			attr.Client,
 			attr.ClientNamespace,
 			attr.Server,

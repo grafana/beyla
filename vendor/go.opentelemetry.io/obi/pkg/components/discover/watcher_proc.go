@@ -9,12 +9,16 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"math"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/shirou/gopsutil/v3/net"
 	"github.com/shirou/gopsutil/v3/process"
+	"github.com/tklauser/go-sysconf"
 
 	"go.opentelemetry.io/obi/pkg/components/ebpf"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/components/ebpf/common"
@@ -23,11 +27,13 @@ import (
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
+	"go.opentelemetry.io/obi/pkg/pipe/swarm/swarms"
 	"go.opentelemetry.io/obi/pkg/services"
 )
 
 const (
 	defaultPollInterval = 5 * time.Second
+	emptyDuration       = time.Duration(0)
 )
 
 type WatchEventType int
@@ -192,24 +198,19 @@ func portOfInterest(criteria []services.Selector, port int) bool {
 }
 
 func (pa *pollAccounter) watchForProcessEvents(ctx context.Context, log *slog.Logger, events <-chan watcher.Event) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case e := <-events:
-			switch e.Type {
-			case watcher.Ready:
-				pa.bpfWatcherIsReady()
-			case watcher.NewPort:
-				port := int(e.Payload)
-				if pa.cfg.Port.Matches(port) || portOfInterest(pa.findingCriteria, port) {
-					pa.refetchPorts()
-				}
-			default:
-				log.Warn("Unknown ebpf process watch event", "type", e.Type)
+	swarms.ForEachInput(ctx, events, log.Debug, func(e watcher.Event) {
+		switch e.Type {
+		case watcher.Ready:
+			pa.bpfWatcherIsReady()
+		case watcher.NewPort:
+			port := int(e.Payload)
+			if pa.cfg.Port.Matches(port) || portOfInterest(pa.findingCriteria, port) {
+				pa.refetchPorts()
 			}
+		default:
+			log.Warn("Unknown ebpf process watch event", "type", e.Type)
 		}
-	}
+	})
 }
 
 func (pa *pollAccounter) processTooNew(proc ProcessAttrs) bool {
@@ -350,16 +351,102 @@ func (pa *pollAccounter) checkNewProcessNotification(pid PID, reportedProcs, not
 // overridden in tests
 var processAgeFunc = processAge
 
-func processAge(pid int32) time.Duration {
-	age := time.Duration(0)
-	if proc, err := process.NewProcess(pid); err == nil {
-		if createTime, err := proc.CreateTime(); err == nil {
-			startTime := time.UnixMilli(createTime)
-			age = time.Since(startTime)
+// see https://man7.org/linux/man-pages/man5/proc_pid_stat.5.html
+func parseProcStatField(buf string, field int) string {
+	inParens := false
+
+	// field 2 is the comm, which is deliminated by parens and can contain
+	// whitespace, e.g. (foo bar) - this function accounts for that
+	f := func(c rune) bool {
+		if c == '(' {
+			inParens = true
+			return true
 		}
+
+		if inParens {
+			if c == ')' {
+				inParens = false
+				return true
+			}
+
+			return false
+		}
+
+		return c == ' '
 	}
 
-	return age
+	i := 1
+
+	for word := range strings.FieldsFuncSeq(buf, f) {
+		if i == field {
+			return word
+		}
+
+		i++
+	}
+
+	return ""
+}
+
+func getProcStatField(pid int32, field int) string {
+	path := fmt.Sprintf("/proc/%d/stat", pid)
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+
+	return parseProcStatField(string(data), field)
+}
+
+func ticksToNanosecond(ticks uint64) uint64 {
+	clkTck, err := sysconf.Sysconf(sysconf.SC_CLK_TCK)
+	if err != nil {
+		clkTck = 100 // default for Linux
+	}
+
+	return ticks * 1e9 / uint64(clkTck)
+}
+
+func nsToDuration(ns uint64) time.Duration {
+	if ns > math.MaxInt64 {
+		return time.Duration(math.MaxInt64) // clamp
+	}
+
+	return time.Duration(ns)
+}
+
+func getProcStartTime(pid int32) uint64 {
+	const startTimePos = 22
+
+	val := getProcStatField(pid, startTimePos)
+
+	if val == "" {
+		return 0
+	}
+
+	startTimeTicks, err := strconv.ParseUint(val, 10, 64)
+	if err != nil {
+		return 0
+	}
+
+	return ticksToNanosecond(startTimeTicks)
+}
+
+func processAge(pid int32) time.Duration {
+	procStartTime := getProcStartTime(pid)
+
+	if procStartTime == 0 {
+		return emptyDuration
+	}
+
+	now := currentTime()
+
+	if now < procStartTime {
+		return emptyDuration
+	}
+
+	return nsToDuration(now - procStartTime)
 }
 
 // overridden in tests

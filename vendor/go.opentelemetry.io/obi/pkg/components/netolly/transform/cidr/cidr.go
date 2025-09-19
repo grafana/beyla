@@ -15,6 +15,7 @@ import (
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
+	"go.opentelemetry.io/obi/pkg/pipe/swarm/swarms"
 )
 
 func glog() *slog.Logger {
@@ -42,17 +43,15 @@ func DecoratorProvider(g Definitions, input, output *msg.Queue[[]*ebpf.Record]) 
 		if err != nil {
 			return nil, fmt.Errorf("instantiating IP grouper: %w", err)
 		}
-		in := input.Subscribe()
-		return func(_ context.Context) {
+		in := input.Subscribe(msg.SubscriberName("cidr.Decorator"))
+		return func(ctx context.Context) {
 			defer output.Close()
-			glog().Debug("starting node")
-			for flows := range in {
+			swarms.ForEachInput(ctx, in, glog().Debug, func(flows []*ebpf.Record) {
 				for _, flow := range flows {
 					grouper.decorate(flow)
 				}
 				output.Send(flows)
-			}
-			glog().Debug("stopping node")
+			})
 		}, nil
 	}
 }

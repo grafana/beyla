@@ -28,6 +28,7 @@ func Build(ctx context.Context, config *beyla.Config, ctxInfo *global.ContextInf
 	if ctxInfo.OverrideAppExportQueue == nil {
 		ctxInfo.OverrideAppExportQueue = msg.NewQueue[[]request.Span](
 			msg.ChannelBufferLen(config.ChannelBufferLen),
+			msg.Name("overriddenAppExportQueue"),
 		)
 	}
 	// a swarm containing two swarms

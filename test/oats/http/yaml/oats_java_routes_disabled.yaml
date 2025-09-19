@@ -1,0 +1,15 @@
+docker-compose:
+  generator: generic
+  files:
+    - ../docker-compose-java-routes-disabled.yml
+input:
+  - path: "/greeting123/obitest"
+interval: 500ms
+expected:
+  traces:
+    - traceql: '{ .http.route = "/greeting123/obitest" }'
+      spans:
+        - name: "GET /greeting123/obitest"
+          attributes:
+            server.port: "8085"
+            url.path: "/greeting123/obitest"

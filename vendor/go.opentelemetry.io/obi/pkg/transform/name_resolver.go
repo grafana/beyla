@@ -6,6 +6,7 @@ package transform
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net"
 	"strings"
 	"time"
@@ -20,7 +21,12 @@ import (
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
+	"go.opentelemetry.io/obi/pkg/pipe/swarm/swarms"
 )
+
+func nrlog() *slog.Logger {
+	return slog.With("component", "transform.NameResolver")
+}
 
 const (
 	ResolverDNS = maps.Bits(1 << iota)
@@ -96,18 +102,16 @@ func nameResolver(ctx context.Context, ctxInfo *global.ContextInfo, cfg *NameRes
 		sources: sources,
 	}
 
-	in := input.Subscribe()
-	return func(_ context.Context) {
+	in := input.Subscribe(msg.SubscriberName("transform.NameResolver"))
+	return func(ctx context.Context) {
 		// output channel must be closed so later stages in the pipeline can finish in cascade
 		defer output.Close()
-
-		for spans := range in {
+		swarms.ForEachInput(ctx, in, nrlog().Debug, func(spans []request.Span) {
 			for i := range spans {
-				s := &spans[i]
-				nr.resolveNames(s)
+				nr.resolveNames(&spans[i])
 			}
 			output.Send(spans)
-		}
+		})
 	}, nil
 }
 

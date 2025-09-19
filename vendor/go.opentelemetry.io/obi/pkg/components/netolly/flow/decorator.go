@@ -28,6 +28,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/components/netolly/ebpf"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
+	"go.opentelemetry.io/obi/pkg/pipe/swarm/swarms"
 )
 
 type InterfaceNamer func(ifIndex int) string
@@ -39,10 +40,10 @@ type InterfaceNamer func(ifIndex int) string
 // - If there is no source or destination hostname, the source IP and destination
 func Decorate(agentIP net.IP, ifaceNamer InterfaceNamer, input *msg.Queue[[]*ebpf.Record], output *msg.Queue[[]*ebpf.Record]) swarm.RunFunc {
 	ip := agentIP.String()
-	in := input.Subscribe()
-	return func(_ context.Context) {
+	in := input.Subscribe(msg.SubscriberName("flow.Decorate"))
+	return func(ctx context.Context) {
 		defer output.Close()
-		for flows := range in {
+		swarms.ForEachInput(ctx, in, nil, func(flows []*ebpf.Record) {
 			for _, flow := range flows {
 				flow.Attrs.Interface = ifaceNamer(int(flow.Id.IfIndex))
 				flow.Attrs.OBIIP = ip
@@ -54,6 +55,6 @@ func Decorate(agentIP net.IP, ifaceNamer InterfaceNamer, input *msg.Queue[[]*ebp
 				}
 			}
 			output.Send(flows)
-		}
+		})
 	}
 }

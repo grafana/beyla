@@ -134,7 +134,10 @@ func ReadTCPRequestIntoSpan(parseCtx *EBPFParseContext, cfg *config.EBPFTracer, 
 			evCopy := *event
 			MisclassifiedEvents <- MisclassifiedEvent{EventType: EventTypeKHTTP2, TCPInfo: &evCopy}
 		} else {
-			k, err := ProcessPossibleKafkaEvent(event, requestBuffer, responseBuffer)
+			k, ignore, err := ProcessPossibleKafkaEvent(event, requestBuffer, responseBuffer, parseCtx.kafkaTopicUUIDToName)
+			if ignore {
+				return request.Span{}, true, nil // parsed kafka event, but we don't want to create a span for it
+			}
 			if err == nil {
 				return TCPToKafkaToSpan(event, k), false, nil
 			}

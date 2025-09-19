@@ -94,9 +94,10 @@ func testSelectiveExports(t *testing.T) {
 
 func TestDiscoverySection(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-discovery.yml", path.Join(pathOutput, "test-suite-discovery.log"))
+	require.NoError(t, err)
+
 	// we are going to setup discovery directly in the configuration file
 	compose.Env = append(compose.Env, `BEYLA_EXECUTABLE_PATH=`, `BEYLA_OPEN_PORT=`)
-	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 
 	t.Run("Selective exports", testSelectiveExports)

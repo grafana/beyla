@@ -48,7 +48,6 @@ github.com/gobwas/glob,https://github.com/grafana/beyla/blob/HEAD/vendor/github.
 github.com/gogo/protobuf,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/gogo/protobuf/LICENSE,BSD-3-Clause
 github.com/golang/snappy,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/golang/snappy/LICENSE,BSD-3-Clause
 github.com/google/gnostic-models,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/google/gnostic-models/LICENSE,Apache-2.0
-github.com/google/go-cmp/cmp,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/google/go-cmp/LICENSE,BSD-3-Clause
 github.com/google/go-tpm,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/google/go-tpm/LICENSE,Apache-2.0
 github.com/google/uuid,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/google/uuid/LICENSE,BSD-3-Clause
 github.com/gorilla/mux,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/gorilla/mux/LICENSE,BSD-3-Clause
@@ -197,5 +196,5 @@ sigs.k8s.io/controller-runtime/pkg,https://github.com/grafana/beyla/blob/HEAD/ve
 sigs.k8s.io/e2e-framework,https://github.com/grafana/beyla/blob/HEAD/vendor/sigs.k8s.io/e2e-framework/LICENSE,Apache-2.0
 sigs.k8s.io/json,https://github.com/grafana/beyla/blob/HEAD/vendor/sigs.k8s.io/json/LICENSE,Apache-2.0
 sigs.k8s.io/randfill,https://github.com/grafana/beyla/blob/HEAD/vendor/sigs.k8s.io/randfill/LICENSE,Apache-2.0
-sigs.k8s.io/structured-merge-diff/v4,https://github.com/grafana/beyla/blob/HEAD/vendor/sigs.k8s.io/structured-merge-diff/v4/LICENSE,Apache-2.0
+sigs.k8s.io/structured-merge-diff/v6,https://github.com/grafana/beyla/blob/HEAD/vendor/sigs.k8s.io/structured-merge-diff/v6/LICENSE,Apache-2.0
 sigs.k8s.io/yaml,https://github.com/grafana/beyla/blob/HEAD/vendor/sigs.k8s.io/yaml/LICENSE,Apache-2.0

@@ -24,7 +24,7 @@ jobs:
       uses: actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b # v5
       with:
         cache: false  # Disable caching to avoid extraction conflicts
-        go-version: '>=1.24'
+        go-version: '>=1.25'
         check-latest: true
     - name: "Update offsets"
       run: make update-offsets

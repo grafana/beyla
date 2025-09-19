@@ -91,11 +91,11 @@ func handleMySQL(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBuffe
 	)
 
 	if len(requestBuffer) < sqlprune.MySQLHdrSize+1 {
-		slog.Warn("MySQL request too short")
+		slog.Debug("MySQL request too short")
 		return span, errFallback
 	}
 	if len(responseBuffer) < sqlprune.MySQLHdrSize+1 {
-		slog.Warn("MySQL response too short")
+		slog.Debug("MySQL response too short")
 		return span, errFallback
 	}
 
@@ -113,7 +113,7 @@ func handleMySQL(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBuffe
 		// in the response buffer.
 		stmtID := sqlprune.SQLParseStatementID(request.DBMySQL, responseBuffer)
 		if stmtID == 0 {
-			slog.Warn("MySQL PREPARE command with invalid statement ID")
+			slog.Debug("MySQL PREPARE command with invalid statement ID")
 			return span, errFallback
 		}
 
@@ -129,7 +129,7 @@ func handleMySQL(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBuffe
 		// in the request buffer.
 		stmtID := sqlprune.SQLParseStatementID(request.DBMySQL, requestBuffer)
 		if stmtID == 0 {
-			slog.Warn("MySQL EXECUTE command with invalid statement ID")
+			slog.Debug("MySQL EXECUTE command with invalid statement ID")
 			return span, errFallback
 		}
 

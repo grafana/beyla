@@ -17,6 +17,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
+	"go.opentelemetry.io/obi/pkg/pipe/swarm/swarms"
 	"go.opentelemetry.io/obi/pkg/services"
 )
 
@@ -38,7 +39,7 @@ func CriteriaMatcherProvider(
 		Criteria:         FindingCriteria(cfg),
 		ExcludeCriteria:  ExcludingCriteria(cfg),
 		ProcessHistory:   map[PID]ProcessMatch{},
-		Input:            input.Subscribe(),
+		Input:            input.Subscribe(msg.SubscriberName("discover.CriteriaMatcher")),
 		Output:           output,
 		Namespace:        beylaNamespace,
 		HasHostPidAccess: hasHostPidAccess(),
@@ -71,24 +72,14 @@ type ProcessMatch struct {
 func (m *Matcher) Run(ctx context.Context) {
 	defer m.Output.Close()
 	m.Log.Debug("starting criteria matcher node")
-	for {
-		select {
-		case <-ctx.Done():
-			m.Log.Debug("context cancelled, stopping criteria matcher node")
-			return
-		case i, ok := <-m.Input:
-			if !ok {
-				m.Log.Debug("input channel closed, stopping criteria matcher node")
-				return
-			}
-			m.Log.Debug("filtering processes", "len", len(i))
-			o := m.filter(i)
-			m.Log.Debug("processes matching selection criteria", "len", len(o))
-			if len(o) > 0 {
-				m.Output.Send(o)
-			}
+	swarms.ForEachInput(ctx, m.Input, m.Log.Debug, func(i []Event[ProcessAttrs]) {
+		m.Log.Debug("filtering processes", "len", len(i))
+		o := m.filter(i)
+		m.Log.Debug("processes matching selection criteria", "len", len(o))
+		if len(o) > 0 {
+			m.Output.Send(o)
 		}
-	}
+	})
 }
 
 func (m *Matcher) filter(events []Event[ProcessAttrs]) []Event[ProcessMatch] {

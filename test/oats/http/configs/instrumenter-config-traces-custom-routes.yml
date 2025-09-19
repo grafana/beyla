@@ -1,0 +1,13 @@
+discovery:
+  services:
+    - namespace: integration-test
+      name: java-serv
+      open_ports: 8085
+      routes:
+        incoming:
+          - /greeting123/{bla}
+routes:
+  patterns:
+    - /create-trace
+    - /smoke
+  unmatched: path

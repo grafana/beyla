@@ -92,7 +92,7 @@ func KubeDecoratorProvider(
 		decorator := &metadataDecorator{
 			db:          metaStore,
 			clusterName: KubeClusterName(ctx, cfg, ctxInfo.K8sInformer),
-			input:       input.Subscribe(),
+			input:       input.Subscribe(msg.SubscriberName("transform.KubeDecorator")),
 			output:      output,
 		}
 		return decorator.nodeLoop, nil
@@ -115,7 +115,7 @@ func KubeProcessEventDecoratorProvider(
 		decorator := &procEventMetadataDecorator{
 			db:          metaStore,
 			clusterName: KubeClusterName(ctx, cfg, ctxInfo.K8sInformer),
-			input:       input.Subscribe(),
+			input:       input.Subscribe(msg.SubscriberName("transform.KubeProcessEventDecorator")),
 			output:      output,
 		}
 		return decorator.k8sLoop, nil
@@ -136,18 +136,27 @@ type procEventMetadataDecorator struct {
 	output      *msg.Queue[exec.ProcessEvent]
 }
 
-func (md *metadataDecorator) nodeLoop(_ context.Context) {
+func (md *metadataDecorator) nodeLoop(ctx context.Context) {
 	// output channel must be closed so later stages in the pipeline can finish in cascade
 	defer md.output.Close()
 	klog().Debug("starting kubernetes span decoration loop")
-	for spans := range md.input {
-		// in-place decoration and forwarding
-		for i := range spans {
-			md.do(&spans[i])
+	for {
+		select {
+		case <-ctx.Done():
+			klog().Debug("context done, stopping kubernetes span decoration loop")
+			return
+		case spans, ok := <-md.input:
+			if !ok {
+				klog().Debug("input channel closed, stopping kubernetes span decoration loop")
+				return
+			}
+			// in-place decoration and forwarding
+			for i := range spans {
+				md.do(&spans[i])
+			}
+			md.output.Send(spans)
 		}
-		md.output.Send(spans)
 	}
-	klog().Debug("stopping kubernetes span decoration loop")
 }
 
 func (md *procEventMetadataDecorator) k8sLoop(ctx context.Context) {

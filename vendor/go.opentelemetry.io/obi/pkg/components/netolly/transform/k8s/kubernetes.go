@@ -34,6 +34,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/kubecache/informer"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
+	"go.opentelemetry.io/obi/pkg/pipe/swarm/swarms"
 	"go.opentelemetry.io/obi/pkg/transform"
 )
 
@@ -76,14 +77,12 @@ func MetadataDecoratorProvider(
 		} else {
 			decorate = nt.decorateNoDrop
 		}
-		in := input.Subscribe()
-		return func(_ context.Context) {
+		in := input.Subscribe(msg.SubscriberName("k8s.MetadataDecorator"))
+		return func(ctx context.Context) {
 			defer output.Close()
-			log().Debug("starting network transformation loop")
-			for flows := range in {
+			swarms.ForEachInput(ctx, in, log().Debug, func(flows []*ebpf.Record) {
 				output.Send(decorate(flows))
-			}
-			log().Debug("stopping network transformation loop")
+			})
 		}, nil
 	}
 }

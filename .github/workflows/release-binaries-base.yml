@@ -18,7 +18,7 @@ jobs:
     runs-on: ${{inputs.runner}}
     strategy:
       matrix:
-        go: [ '1.24' ]
+        go: [ '1.25' ]
     permissions:
       contents: write
     steps:

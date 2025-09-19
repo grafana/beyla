@@ -10,7 +10,7 @@ expected:
   traces:
     - traceql: '{ .messaging.operation.type = "process" }'
       spans:
-        - name: 'my-topic process'
+        - name: 'process my-topic'
           allow-duplicates: true
           attributes:
             messaging.destination.name: my-topic
@@ -19,7 +19,7 @@ expected:
             server.port: "9092"
     - traceql: '{ .messaging.operation.type = "publish" }'
       spans:
-        - name: 'my-topic publish'
+        - name: 'publish my-topic'
           attributes:
             messaging.destination.name: my-topic
             messaging.operation.type: publish

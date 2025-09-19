@@ -395,6 +395,24 @@ func TestSuite_PythonSQL(t *testing.T) {
 	require.NoError(t, compose.Close())
 }
 
+func TestSuite_PythonKafka(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-python-kafka.yml", path.Join(pathOutput, "test-suite-python-kafka.log"))
+	compose.Env = append(compose.Env, `BEYLA_OPEN_PORT=8080`, `BEYLA_EXECUTABLE_PATH=`, `TEST_SERVICE_PORTS=8381:8080`)
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+	t.Run("Python Kafka tests", testREDMetricsPythonKafkaOnly)
+	require.NoError(t, compose.Close())
+}
+
+func TestSuite_JavaKafka(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-java-kafka-400.yml", path.Join(pathOutput, "test-suite-java-kafka.log"))
+	compose.Env = append(compose.Env, `BEYLA_OPEN_PORT=8080`, `BEYLA_EXECUTABLE_PATH=`, `TEST_SERVICE_PORTS=8381:8080`)
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+	t.Run("Java Kafka 4.0.0 tests", testJavaKafka)
+	require.NoError(t, compose.Close())
+}
+
 func TestSuite_PythonRedis(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-python-redis.yml", path.Join(pathOutput, "test-suite-python-redis.log"))
 	compose.Env = append(compose.Env, `BEYLA_OPEN_PORT=8080`, `BEYLA_EXECUTABLE_NAME=`, `TEST_SERVICE_PORTS=8381:8080`)

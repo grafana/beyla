@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/internal/appolly/traces"
 	"go.opentelemetry.io/obi/pkg/app/request"
 	"go.opentelemetry.io/obi/pkg/components/exec"
@@ -46,32 +47,27 @@ func Build(ctx context.Context, config *beyla.Config, ctxInfo *global.ContextInf
 		}, nil
 	})
 
-	processSubpipeline(swi, ctxInfo, config)
-
-	clusterConnectorsSubpipeline(swi, ctxInfo, config)
-
-	return swi.Instance(ctx)
-}
-
-// processSubpipeline optionally starts another pipeline only to collect and export data
-// about the processes of an instrumented application
-func processSubpipeline(swi *swarm.Instancer, ctxInfo *global.ContextInfo, config *beyla.Config) {
-	swi.Add(ProcessMetricsSwarmInstancer(ctxInfo, config, ctxInfo.OverrideAppExportQueue))
-
 	selectorCfg := &attributes.SelectorConfig{
 		SelectionCfg:            config.Attributes.Select,
 		ExtraGroupAttributesCfg: config.Attributes.ExtraGroupAttributes,
 	}
-
 	swi.Add(alloy.TracesReceiver(ctxInfo, &config.TracesReceiver, config.Metrics.SpanMetricsEnabled(),
 		selectorCfg, ctxInfo.OverrideAppExportQueue))
+
+
+	clusterConnectorsSubpipeline(swi, ctxInfo, config)
+
+	swi.Add(ProcessMetricsSwarmInstancer(ctxInfo, config, ctxInfo.OverrideAppExportQueue))
+
+	return swi.Instance(ctx)
 }
+
 
 // clusterConnectorsSubpipeline will submit "connector" traces that are identified as cluster-external.
 // Tempo will use them to compose inter-cluster service graph connections that otherwise couldn't be composed by
 // Beyla, as it lacks the metadata from the remote clusters.
 func clusterConnectorsSubpipeline(swi *swarm.Instancer, ctxInfo *global.ContextInfo, config *beyla.Config) {
-	// if config.ConnectClusters
+	// TODO: if config.ConnectClusters
 	externalTraces := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(config.ChannelBufferLen))
 	swi.Add(traces.SelectExternal(
 		ctxInfo.OverrideAppExportQueue,
@@ -88,4 +84,9 @@ func clusterConnectorsSubpipeline(swi *swarm.Instancer, ctxInfo *global.ContextI
 		},
 		ctxInfo.OverrideAppExportQueue,
 	))
+
+	swi.Add(otel.ConnectionSpansExport(ctxInfo,
+		&config.Traces,
+
+		))
 }

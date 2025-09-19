@@ -17,6 +17,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/otel/tracesgen"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
+	"go.opentelemetry.io/obi/pkg/pipe/swarm/swarms"
 	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
@@ -76,14 +77,8 @@ func (tr *tracesReceiver) fetchConstantAttributes(selectorCfg *attributes.Select
 func (tr *tracesReceiver) provideLoop(ctx context.Context) {
 	sampler := tr.cfg.Sampler.Implementation()
 
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case spans, ok := <-tr.input:
-			if !ok {
-				return
-			}
+	swarms.ForEachInput(ctx, tr.input, slog.With("component", "alloy.TracesReceiver").Debug,
+		func(spans []request.Span) {
 			spanGroups := tracesgen.GroupSpans(ctx, spans, tr.traceAttrs, sampler, tr.is)
 			for _, spanGroup := range spanGroups {
 				if len(spanGroup) > 0 {
@@ -102,6 +97,5 @@ func (tr *tracesReceiver) provideLoop(ctx context.Context) {
 					}
 				}
 			}
-		}
-	}
+		})
 }

@@ -165,7 +165,7 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
 	var tq jaeger.TracesQuery
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
 	traces := tq.FindBySpan(jaeger.Tag{Key: "url.path", Type: "string", Value: "/metrics"})
-	require.Len(t, traces, 0)
+	require.Empty(t, traces)
 }
 
 func testGRPCTraces(t *testing.T) {
@@ -665,11 +665,11 @@ func testNestedHTTPTracesKProbes(t *testing.T, extended bool) {
 		doHTTPGet(t, "http://localhost:8091/dist", 200)
 	}
 
-	// rust   -> java     -> nodejs   -> go            -> python      -> rails
-	// /dist2 -> /jtrace2 -> /traceme -> /gotracemetoo -> /tracemetoo -> /users
+	// rust   -> java     -> nodejs   -> go            -> go jsonrpc -> python      -> rails
+	// /dist2 -> /jtrace2 -> /traceme -> /gotracemetoo -> /jsonrpc   -> /tracemetoo -> /users
 
 	// Get the first 5 traces
-	var multipleTraces []jaeger.Trace
+	// we might need to repeat until the traces include all the inner spans
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		resp, err := http.Get(jaegerQueryURL + "?service=rust-service&operation=GET%20%2Fdist")
 		require.NoError(t, err)
@@ -681,131 +681,130 @@ func testNestedHTTPTracesKProbes(t *testing.T, extended bool) {
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
 		traces := tq.FindBySpan(jaeger.Tag{Key: "url.path", Type: "string", Value: "/dist"})
 		require.LessOrEqual(t, 5, len(traces))
-		multipleTraces = traces
-	}, test.Interval(500*time.Millisecond))
 
-	// Ensure all 5 traces have proper full chain
-	for _, trace := range multipleTraces {
-		// Check the information of the rust parent span
-		res := trace.FindByOperationName("GET /dist", "server")
-		require.Len(t, res, 1)
-		parent := res[0]
-		require.NotEmpty(t, parent.TraceID)
-		traceID = parent.TraceID
-		require.NotEmpty(t, parent.SpanID)
-		// check duration is at least 2us
-		assert.Less(t, (2 * time.Microsecond).Microseconds(), parent.Duration)
-		// check span attributes
-		sd := parent.Diff(
-			jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
-			jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(200)},
-			jaeger.Tag{Key: "url.path", Type: "string", Value: "/dist"},
-			jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(8090)},
-			jaeger.Tag{Key: "http.route", Type: "string", Value: "/dist"},
-			jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
-		)
-		assert.Empty(t, sd, sd.String())
+		// Validate each service individually with retries
+		for _, trace := range traces {
+			// Check the information of the rust parent span
+			res := trace.FindByOperationName("GET /dist", "server")
+			require.Len(t, res, 1)
+			parent := res[0]
+			require.NotEmpty(t, parent.TraceID)
+			traceID = parent.TraceID
+			require.NotEmpty(t, parent.SpanID)
+			// check duration is at least 2us
+			assert.Less(t, (2 * time.Microsecond).Microseconds(), parent.Duration)
+			// check span attributes
+			sd := parent.Diff(
+				jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
+				jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(200)},
+				jaeger.Tag{Key: "url.path", Type: "string", Value: "/dist"},
+				jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(8090)},
+				jaeger.Tag{Key: "http.route", Type: "string", Value: "/dist"},
+				jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
+			)
+			assert.Empty(t, sd, sd.String())
 
-		// Check the information of the java parent span
-		res = trace.FindByOperationName("GET /jtrace", "server")
-		require.Len(t, res, 1)
-		parent = res[0]
-		require.NotEmpty(t, parent.TraceID)
-		require.Equal(t, traceID, parent.TraceID)
-		require.NotEmpty(t, parent.SpanID)
-		// check duration is at least 2us
-		assert.Less(t, (2 * time.Microsecond).Microseconds(), parent.Duration)
-		// check span attributes
-		sd = parent.Diff(
-			jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
-			jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(200)},
-			jaeger.Tag{Key: "url.path", Type: "string", Value: "/jtrace"},
-			jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(8085)},
-			jaeger.Tag{Key: "http.route", Type: "string", Value: "/jtrace"},
-			jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
-		)
-		assert.Empty(t, sd, sd.String())
+			// Check the information of the java parent span
+			res = trace.FindByOperationName("GET /jtrace", "server")
+			require.Len(t, res, 1)
+			parent = res[0]
+			require.NotEmpty(t, parent.TraceID)
+			require.Equal(t, traceID, parent.TraceID)
+			require.NotEmpty(t, parent.SpanID)
+			// check duration is at least 2us
+			assert.Less(t, (2 * time.Microsecond).Microseconds(), parent.Duration)
+			// check span attributes
+			sd = parent.Diff(
+				jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
+				jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(200)},
+				jaeger.Tag{Key: "url.path", Type: "string", Value: "/jtrace"},
+				jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(8085)},
+				jaeger.Tag{Key: "http.route", Type: "string", Value: "/jtrace"},
+				jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
+			)
+			assert.Empty(t, sd, sd.String())
 
-		// Check the information of the nodejs parent span
-		res = trace.FindByOperationName("GET /traceme", "server")
-		require.Len(t, res, 1)
-		parent = res[0]
-		require.NotEmpty(t, parent.TraceID)
-		require.Equal(t, traceID, parent.TraceID)
-		require.NotEmpty(t, parent.SpanID)
-		// check duration is at least 2us
-		assert.Less(t, (2 * time.Microsecond).Microseconds(), parent.Duration)
-		// check span attributes
-		sd = parent.Diff(
-			jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
-			jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(200)},
-			jaeger.Tag{Key: "url.path", Type: "string", Value: "/traceme"},
-			jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(3030)},
-			jaeger.Tag{Key: "http.route", Type: "string", Value: "/traceme"},
-			jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
-		)
-		assert.Empty(t, sd, sd.String())
+			// Check the information of the nodejs parent span
+			res = trace.FindByOperationName("GET /traceme", "server")
+			require.Len(t, res, 1)
+			parent = res[0]
+			require.NotEmpty(t, parent.TraceID)
+			require.Equal(t, traceID, parent.TraceID)
+			require.NotEmpty(t, parent.SpanID)
+			// check duration is at least 2us
+			assert.Less(t, (2 * time.Microsecond).Microseconds(), parent.Duration)
+			// check span attributes
+			sd = parent.Diff(
+				jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
+				jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(200)},
+				jaeger.Tag{Key: "url.path", Type: "string", Value: "/traceme"},
+				jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(3030)},
+				jaeger.Tag{Key: "http.route", Type: "string", Value: "/traceme"},
+				jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
+			)
+			assert.Empty(t, sd, sd.String())
 
-		// Check the information of the go parent span
-		res = trace.FindByOperationName("GET /gotracemetoo", "server")
-		require.Len(t, res, 1)
-		parent = res[0]
-		require.NotEmpty(t, parent.TraceID)
-		traceID = parent.TraceID // we reset the traceID here
-		require.NotEmpty(t, parent.SpanID)
-		// check duration is at least 2us
-		assert.Less(t, (2 * time.Microsecond).Microseconds(), parent.Duration)
-		// check span attributes
-		sd = parent.Diff(
-			jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
-			jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(200)},
-			jaeger.Tag{Key: "url.path", Type: "string", Value: "/gotracemetoo"},
-			jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(8080)},
-			jaeger.Tag{Key: "http.route", Type: "string", Value: "/gotracemetoo"},
-			jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
-		)
-		assert.Empty(t, sd, sd.String())
+			// Check the information of the go parent span
+			res = trace.FindByOperationName("GET /gotracemetoo", "server")
+			require.Len(t, res, 1)
+			parent = res[0]
+			require.NotEmpty(t, parent.TraceID)
+			traceID = parent.TraceID // we reset the traceID here
+			require.NotEmpty(t, parent.SpanID)
+			// check duration is at least 2us
+			assert.Less(t, (2 * time.Microsecond).Microseconds(), parent.Duration)
+			// check span attributes
+			sd = parent.Diff(
+				jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
+				jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(200)},
+				jaeger.Tag{Key: "url.path", Type: "string", Value: "/gotracemetoo"},
+				jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(8080)},
+				jaeger.Tag{Key: "http.route", Type: "string", Value: "/gotracemetoo"},
+				jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
+			)
+			assert.Empty(t, sd, sd.String())
 
-		// Check the information of the python parent span
-		res = trace.FindByOperationName("GET /tracemetoo", "server")
-		require.Len(t, res, 1)
-		parent = res[0]
-		require.NotEmpty(t, parent.TraceID)
-		require.Equal(t, traceID, parent.TraceID)
-		require.NotEmpty(t, parent.SpanID)
-		// check duration is at least 2us
-		assert.Less(t, (2 * time.Microsecond).Microseconds(), parent.Duration)
-		// check span attributes
-		sd = parent.Diff(
-			jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
-			jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(200)},
-			jaeger.Tag{Key: "url.path", Type: "string", Value: "/tracemetoo"},
-			jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(7773)},
-			jaeger.Tag{Key: "http.route", Type: "string", Value: "/tracemetoo"},
-			jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
-		)
-		assert.Empty(t, sd, sd.String())
+			// Check the information of the python parent span
+			res = trace.FindByOperationName("GET /tracemetoo", "server")
+			require.Len(t, res, 1)
+			parent = res[0]
+			require.NotEmpty(t, parent.TraceID)
+			require.Equal(t, traceID, parent.TraceID)
+			require.NotEmpty(t, parent.SpanID)
+			// check duration is at least 2us
+			assert.Less(t, (2 * time.Microsecond).Microseconds(), parent.Duration)
+			// check span attributes
+			sd = parent.Diff(
+				jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
+				jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(200)},
+				jaeger.Tag{Key: "url.path", Type: "string", Value: "/tracemetoo"},
+				jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(7773)},
+				jaeger.Tag{Key: "http.route", Type: "string", Value: "/tracemetoo"},
+				jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
+			)
+			assert.Empty(t, sd, sd.String())
 
-		// Check the information of the rails parent span
-		res = trace.FindByOperationName("GET /users", "server")
-		require.Len(t, res, 1)
-		parent = res[0]
-		require.NotEmpty(t, parent.TraceID)
-		require.Equal(t, traceID, parent.TraceID)
-		require.NotEmpty(t, parent.SpanID)
-		// check duration is at least 2us
-		assert.Less(t, (2 * time.Microsecond).Microseconds(), parent.Duration)
-		// check span attributes
-		sd = parent.Diff(
-			jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
-			jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(403)}, // something config missing in rails, but 403 is OK :)
-			jaeger.Tag{Key: "url.path", Type: "string", Value: "/users"},
-			jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(3040)},
-			jaeger.Tag{Key: "http.route", Type: "string", Value: "/users"},
-			jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
-		)
-		assert.Empty(t, sd, sd.String())
-	}
+			// Check the information of the rails parent span
+			res = trace.FindByOperationName("GET /users", "server")
+			require.Len(t, res, 1)
+			parent = res[0]
+			require.NotEmpty(t, parent.TraceID)
+			require.Equal(t, traceID, parent.TraceID)
+			require.NotEmpty(t, parent.SpanID)
+			// check duration is at least 2us
+			assert.Less(t, (2 * time.Microsecond).Microseconds(), parent.Duration)
+			// check span attributes
+			sd = parent.Diff(
+				jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
+				jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(403)}, // something config missing in rails, but 403 is OK :)
+				jaeger.Tag{Key: "url.path", Type: "string", Value: "/users"},
+				jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(3040)},
+				jaeger.Tag{Key: "http.route", Type: "string", Value: "/users"},
+				jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
+			)
+			assert.Empty(t, sd, sd.String())
+		}
+	})
 
 	if extended {
 		// test now with a different version of Java thread pool
@@ -837,45 +836,51 @@ func ensureTracesMatch(t *testing.T, urlPath string) {
 
 	// Ensure all 5 traces have proper full chain Java -> Node
 	for _, trace := range multipleTraces {
-		// Check the information of the java parent span
-		res := trace.FindByOperationName("GET /"+urlPath, "server")
-		require.Len(t, res, 1)
-		parent := res[0]
-		require.NotEmpty(t, parent.TraceID)
-		traceID := parent.TraceID
-		require.NotEmpty(t, parent.SpanID)
-		// check duration is at least 2us
-		assert.Less(t, (2 * time.Microsecond).Microseconds(), parent.Duration)
-		// check span attributes
-		sd := parent.Diff(
-			jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
-			jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(200)},
-			jaeger.Tag{Key: "url.path", Type: "string", Value: "/" + urlPath},
-			jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(8085)},
-			jaeger.Tag{Key: "http.route", Type: "string", Value: "/" + urlPath},
-			jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
-		)
-		assert.Empty(t, sd, sd.String())
+		var traceID string
 
-		// Check the information of the nodejs parent span
-		res = trace.FindByOperationName("GET /traceme", "server")
-		require.Len(t, res, 1)
-		parent = res[0]
-		require.NotEmpty(t, parent.TraceID)
-		require.Equal(t, traceID, parent.TraceID)
-		require.NotEmpty(t, parent.SpanID)
-		// check duration is at least 2us
-		assert.Less(t, (2 * time.Microsecond).Microseconds(), parent.Duration)
-		// check span attributes
-		sd = parent.Diff(
-			jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
-			jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(200)},
-			jaeger.Tag{Key: "url.path", Type: "string", Value: "/traceme"},
-			jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(3030)},
-			jaeger.Tag{Key: "http.route", Type: "string", Value: "/traceme"},
-			jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
-		)
-		assert.Empty(t, sd, sd.String())
+		// Check the information of the java parent span with retry
+		test.Eventually(t, testTimeout, func(t require.TestingT) {
+			res := trace.FindByOperationName("GET /"+urlPath, "server")
+			require.Len(t, res, 1)
+			parent := res[0]
+			require.NotEmpty(t, parent.TraceID)
+			traceID = parent.TraceID
+			require.NotEmpty(t, parent.SpanID)
+			// check duration is at least 2us
+			assert.Less(t, (2 * time.Microsecond).Microseconds(), parent.Duration)
+			// check span attributes
+			sd := parent.Diff(
+				jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
+				jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(200)},
+				jaeger.Tag{Key: "url.path", Type: "string", Value: "/" + urlPath},
+				jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(8085)},
+				jaeger.Tag{Key: "http.route", Type: "string", Value: "/" + urlPath},
+				jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
+			)
+			assert.Empty(t, sd, sd.String())
+		}, test.Interval(30*time.Millisecond))
+
+		// Check the information of the nodejs parent span with retry
+		test.Eventually(t, testTimeout, func(t require.TestingT) {
+			res := trace.FindByOperationName("GET /traceme", "server")
+			require.NotEmpty(t, res)
+			parent := res[0]
+			require.NotEmpty(t, parent.TraceID)
+			require.Equal(t, traceID, parent.TraceID)
+			require.NotEmpty(t, parent.SpanID)
+			// check duration is at least 2us
+			assert.Less(t, (2 * time.Microsecond).Microseconds(), parent.Duration)
+			// check span attributes
+			sd := parent.Diff(
+				jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
+				jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(200)},
+				jaeger.Tag{Key: "url.path", Type: "string", Value: "/traceme"},
+				jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(3030)},
+				jaeger.Tag{Key: "http.route", Type: "string", Value: "/traceme"},
+				jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
+			)
+			assert.Empty(t, sd, sd.String())
+		}, test.Interval(30*time.Millisecond))
 	}
 }
 
@@ -983,68 +988,96 @@ func testHTTPTracesNestedSelfCalls(t *testing.T) {
 		traces := tq.FindBySpan(jaeger.Tag{Key: "url.path", Type: "string", Value: "/api1"})
 		require.NotEmpty(t, traces)
 		trace = traces[0]
+
+		// Check the information of the parent span
+		res := trace.FindByOperationName("GET /api1", "")
+		require.Len(t, res, 1)
+		server := res[0]
+		require.NotEmpty(t, server.TraceID)
+		require.NotEmpty(t, server.SpanID)
+		parentID = server.SpanID
+
+		// check span attributes
+		sd := server.Diff(
+			jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
+			jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(200)},
+			jaeger.Tag{Key: "url.path", Type: "string", Value: "/api1"},
+			jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(7771)},
+			jaeger.Tag{Key: "http.route", Type: "string", Value: "/api1"},
+			jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
+		)
+		assert.Empty(t, sd, sd.String())
+
+		children := trace.ChildrenOf(parentID)
+		require.GreaterOrEqual(t, len(children), 1)
+
+		// We've created the in-queue and processing spans
+		for _, c := range children {
+			children = trace.ChildrenOf(c.SpanID)
+			if len(children) > 0 {
+				break
+			}
+		}
+
+		require.Len(t, children, 1)
+		child := children[0]
+
+		sd = child.Diff(
+			jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
+			jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(200)},
+			jaeger.Tag{Key: "url.path", Type: "string", Value: "/api2"},
+			jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(7772)},
+			jaeger.Tag{Key: "http.route", Type: "string", Value: "/api2"},
+			jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
+		)
+		assert.Empty(t, sd, sd.String())
+
+		children = trace.ChildrenOf(child.SpanID)
+		require.GreaterOrEqual(t, len(children), 1)
+
+		for _, c := range children {
+			children = trace.ChildrenOf(c.SpanID)
+			if len(children) > 0 {
+				break
+			}
+		}
+
+		require.Len(t, children, 1)
+		child = children[0]
+
+		sd = child.Diff(
+			jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
+			jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(200)},
+			jaeger.Tag{Key: "url.path", Type: "string", Value: "/api3"},
+			jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(7773)},
+			jaeger.Tag{Key: "http.route", Type: "string", Value: "/api3"},
+			jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
+		)
+		assert.Empty(t, sd, sd.String())
+
+		children = trace.ChildrenOf(child.SpanID)
+		require.GreaterOrEqual(t, len(children), 1)
+
+		for _, c := range children {
+			children = trace.ChildrenOf(c.SpanID)
+			if len(children) > 0 {
+				break
+			}
+		}
+
+		require.Len(t, children, 1)
+		child = children[0]
+
+		sd = child.Diff(
+			jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
+			jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(200)},
+			jaeger.Tag{Key: "url.path", Type: "string", Value: "/api4"},
+			jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(7774)},
+			jaeger.Tag{Key: "http.route", Type: "string", Value: "/api4"},
+			jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
+		)
+		assert.Empty(t, sd, sd.String())
 	}, test.Interval(100*time.Millisecond))
-
-	// Check the information of the parent span
-	res := trace.FindByOperationName("GET /api1", "")
-	require.Len(t, res, 1)
-	server := res[0]
-	require.NotEmpty(t, server.TraceID)
-	require.NotEmpty(t, server.SpanID)
-	parentID = server.SpanID
-
-	// check span attributes
-	sd := server.Diff(
-		jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
-		jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(200)},
-		jaeger.Tag{Key: "url.path", Type: "string", Value: "/api1"},
-		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(7771)},
-		jaeger.Tag{Key: "http.route", Type: "string", Value: "/api1"},
-		jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
-	)
-	assert.Empty(t, sd, sd.String())
-
-	children := trace.ChildrenOf(parentID)
-	require.Len(t, children, 1)
-	child := children[0]
-
-	sd = child.Diff(
-		jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
-		jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(200)},
-		jaeger.Tag{Key: "url.path", Type: "string", Value: "/api2"},
-		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(7772)},
-		jaeger.Tag{Key: "http.route", Type: "string", Value: "/api2"},
-		jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
-	)
-	assert.Empty(t, sd, sd.String())
-
-	children = trace.ChildrenOf(child.SpanID)
-	require.Len(t, children, 1)
-	child = children[0]
-
-	sd = child.Diff(
-		jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
-		jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(200)},
-		jaeger.Tag{Key: "url.path", Type: "string", Value: "/api3"},
-		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(7773)},
-		jaeger.Tag{Key: "http.route", Type: "string", Value: "/api3"},
-		jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
-	)
-	assert.Empty(t, sd, sd.String())
-
-	children = trace.ChildrenOf(child.SpanID)
-	require.Len(t, children, 1)
-	child = children[0]
-
-	sd = child.Diff(
-		jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
-		jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(200)},
-		jaeger.Tag{Key: "url.path", Type: "string", Value: "/api4"},
-		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(7774)},
-		jaeger.Tag{Key: "http.route", Type: "string", Value: "/api4"},
-		jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
-	)
-	assert.Empty(t, sd, sd.String())
 }
 
 func testHTTPTracesNestedNodeJSDistCalls(t *testing.T) {
@@ -1090,6 +1123,31 @@ func testHTTPTracesNestedNodeJSDistCalls(t *testing.T) {
 	assert.Empty(t, sd, sd.String())
 
 	children := trace.ChildrenOf(parentID)
+	require.GreaterOrEqual(t, len(children), 2)
+
+	res = trace.FindByOperationName("processing", "internal")
+
+	var processing *jaeger.Span
+
+	if len(res) > 0 {
+		for i := range res {
+			r := &res[i]
+			// Check parenthood
+			p, ok := trace.ParentOf(r)
+
+			if ok {
+				if p.TraceID == server.TraceID && p.SpanID == server.SpanID {
+					processing = r
+					break
+				}
+			}
+		}
+	}
+
+	if processing != nil {
+		children = trace.ChildrenOf(processing.SpanID)
+	}
+
 	require.Len(t, children, 3)
 
 	seenP := false

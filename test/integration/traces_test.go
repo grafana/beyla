@@ -967,6 +967,7 @@ func testNestedHTTPSTracesKProbes(t *testing.T) {
 	assert.Empty(t, sd, sd.String())
 }
 
+// nolint:gocritic
 func testHTTPTracesNestedSelfCalls(t *testing.T) {
 	var parentID string
 

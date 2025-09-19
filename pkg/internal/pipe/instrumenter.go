@@ -78,7 +78,7 @@ func clusterConnectorsSubpipeline(swi *swarm.Instancer, ctxInfo *global.ContextI
 		externalTraces,
 	))
 
-	swi.Add(alloy.ExternalTracesReceiver(ctxInfo,
+	swi.Add(alloy.ConnectionSpansReceiver(ctxInfo,
 		&beyla.TracesReceiverConfig{
 			Traces:           config.TracesReceiver.Traces,
 			Instrumentations: config.TracesReceiver.Instrumentations,

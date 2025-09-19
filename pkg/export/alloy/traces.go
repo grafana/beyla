@@ -6,11 +6,11 @@ import (
 	"log/slog"
 	"time"
 
-	expirable2 "github.com/hashicorp/golang-lru/v2/expirable"
+	"github.com/hashicorp/golang-lru/v2/expirable"
 	"go.opentelemetry.io/obi/pkg/app/request"
 	"go.opentelemetry.io/obi/pkg/components/pipe/global"
 	"go.opentelemetry.io/obi/pkg/components/svc"
-	attributes "go.opentelemetry.io/obi/pkg/export/attributes"
+	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
@@ -41,7 +41,7 @@ func TracesReceiver(
 			cfg: cfg, hostID: ctxInfo.HostID, spanMetricsEnabled: spanMetricsEnabled,
 			input:          input.Subscribe(msg.SubscriberName("alloyTracesInput")),
 			is:             instrumentations.NewInstrumentationSelection(cfg.Instrumentations),
-			attributeCache: expirable2.NewLRU[svc.UID, []attribute.KeyValue](1024, nil, 5*time.Minute),
+			attributeCache: expirable.NewLRU[svc.UID, []attribute.KeyValue](1024, nil, 5*time.Minute),
 		}
 		// Get user attributes
 		if err := tr.fetchConstantAttributes(selectorCfg); err != nil {
@@ -58,7 +58,7 @@ type tracesReceiver struct {
 	is                 instrumentations.InstrumentationSelection
 	input              <-chan []request.Span
 	traceAttrs         map[attr.Name]struct{}
-	attributeCache     *expirable2.LRU[svc.UID, []attribute.KeyValue]
+	attributeCache     *expirable.LRU[svc.UID, []attribute.KeyValue]
 }
 
 func (tr *tracesReceiver) fetchConstantAttributes(selectorCfg *attributes.SelectorConfig) error {

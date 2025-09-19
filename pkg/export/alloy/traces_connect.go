@@ -2,16 +2,16 @@ package alloy
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"time"
 
-	expirable2 "github.com/hashicorp/golang-lru/v2/expirable"
+	"github.com/grafana/beyla/v2/pkg/beyla"
+	"github.com/grafana/beyla/v2/pkg/export/otel"
+	"github.com/hashicorp/golang-lru/v2/expirable"
 	"go.opentelemetry.io/obi/pkg/app/request"
 	"go.opentelemetry.io/obi/pkg/components/pipe/global"
 	"go.opentelemetry.io/obi/pkg/components/svc"
-	attributes "go.opentelemetry.io/obi/pkg/export/attributes"
-	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
+	"go.opentelemetry.io/obi/pkg/export/attributes"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/export/otel/tracesgen"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
@@ -19,24 +19,18 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/swarm/swarms"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/sdk/trace"
-	trace2 "go.opentelemetry.io/otel/trace"
-
-	"github.com/grafana/beyla/v2/pkg/beyla"
-	"github.com/grafana/beyla/v2/pkg/export/otel"
 )
 
 func etrlog() *slog.Logger {
-	return slog.With("component", "ExternalTracesReceiver")
+	return slog.With("component", "ConnectionSpansReceiver")
 }
 
-var BeylaExternSpan = attribute.KeyValue{Key: "beyla.span.type", Value: attribute.StringValue("external")}
-
-// ExternalTracesReceiver creates a terminal node that forwards the received traces as inter-cluster connection
+// ConnectionSpansReceiver creates a terminal node that forwards the received traces as inter-cluster connection
 // traces. They only include minimal information about the source and destination services as well as the
 // trace ID, so tempo can use them to build service graph metrics that otherwise could not be created by Beyla.
 // It also adds the "beyla.span.type" attribute with the value "external" to all traces, so Tempo would later
 // remove them.
-func ExternalTracesReceiver(
+func ConnectionSpansReceiver(
 	ctxInfo *global.ContextInfo,
 	cfg *beyla.TracesReceiverConfig,
 	input *msg.Queue[[]request.Span],
@@ -46,29 +40,29 @@ func ExternalTracesReceiver(
 			return swarm.EmptyRunFunc()
 		}
 
-		tr := &externalTracesReceiver{
-			hostID:         ctxInfo.HostID,
-			input:          input.Subscribe(),
-			samplerImpl:    cfg.Sampler.Implementation(),
-			attributeGetters : connectionSpanAttributes(),
-			traceConsumers: cfg.Traces,
+		tr := &connectionSpansReceiver{
+			hostID:            ctxInfo.HostID,
+			input:             input.Subscribe(),
+			samplerImpl:       cfg.Sampler.Implementation(),
+			attributeGetters : otel.ConnectionSpanAttributes(),
+			traceConsumers:    cfg.Traces,
 			// TODO: share it with the other metrics receivers
-			attributeCache: expirable2.NewLRU[svc.UID, []attribute.KeyValue](1024, nil, 5*time.Minute),
+			attributeCache: expirable.NewLRU[svc.UID, []attribute.KeyValue](1024, nil, 5*time.Minute),
 		}
 		return tr.provideLoop, nil
 	}
 }
 
-type externalTracesReceiver struct {
+type connectionSpansReceiver struct {
 	samplerImpl     trace.Sampler
 	hostID          string
 	input           <-chan []request.Span
 	traceConsumers  []beyla.Consumer
-	attributeCache  *expirable2.LRU[svc.UID, []attribute.KeyValue]
+	attributeCache  *expirable.LRU[svc.UID, []attribute.KeyValue]
 	attributeGetters []attributes.Getter[*request.Span, attribute.KeyValue]
 }
 
-func (tr *externalTracesReceiver) provideLoop(ctx context.Context) {
+func (tr *connectionSpansReceiver) provideLoop(ctx context.Context) {
 	swarms.ForEachInput(ctx, tr.input, etrlog().Debug, func(spans []request.Span) {
 		for _, spanGroup := range  tr.groupExternSpans(ctx, spans) {
 			if len(spanGroup) > 0 {
@@ -90,25 +84,8 @@ func (tr *externalTracesReceiver) provideLoop(ctx context.Context) {
 	})
 }
 
-// connection spans do not use any user-defined set of attributes but a reduced set of attributes
-// that will be exclusively used from Tempo to create inter-cluster service graph metrics
-func connectionSpanAttributes() []attributes.Getter[*request.Span, attribute.KeyValue] {
-	functionalGetters := request.SpanOTELGetters("")
-	attributeValueGetters := make([]attributes.Getter[*request.Span, attribute.KeyValue], 0, 5)
-	for _, name := range []attr.Name{attr.Client, attr.Server, attr.ClientAddr, attr.ServerAddr} {
-		getter, ok := functionalGetters(name)
-		if !ok {
-			// BUG! Check switch inside SpanOTELGetters
-			panic(fmt.Sprintf("attribute %s not found in SpanOTELGetters", name))
-		}
-		attributeValueGetters = append(attributeValueGetters, getter)
-	}
-	return append(attributeValueGetters, func(*request.Span) attribute.KeyValue {
-		return BeylaExternSpan
-	})
-}
 
-func (tr *externalTracesReceiver) groupExternSpans(ctx context.Context, spans []request.Span) map[svc.UID][]tracesgen.TraceSpanAndAttributes {
+func (tr *connectionSpansReceiver) groupExternSpans(ctx context.Context, spans []request.Span) map[svc.UID][]tracesgen.TraceSpanAndAttributes {
 	spanGroups := map[svc.UID][]tracesgen.TraceSpanAndAttributes{}
 
 	for i := range spans {
@@ -133,7 +110,7 @@ func (tr *externalTracesReceiver) groupExternSpans(ctx context.Context, spans []
 			ParentContext: ctx,
 			Name:          span.TraceName(),
 			TraceID:       span.TraceID,
-			Kind:          spanKind(span),
+			Kind:          otel.SpanKind(span),
 			Attributes:    finalAttrs,
 		})
 
@@ -152,19 +129,3 @@ func (tr *externalTracesReceiver) groupExternSpans(ctx context.Context, spans []
 	return spanGroups
 }
 
-func spanKind(span *request.Span) trace2.SpanKind {
-	switch span.Type {
-	case request.EventTypeHTTP, request.EventTypeGRPC, request.EventTypeRedisServer, request.EventTypeKafkaServer:
-		return trace2.SpanKindServer
-	case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient, request.EventTypeRedisClient, request.EventTypeMongoClient:
-		return trace2.SpanKindClient
-	case request.EventTypeKafkaClient:
-		switch span.Method {
-		case request.MessagingPublish:
-			return trace2.SpanKindProducer
-		case request.MessagingProcess:
-			return trace2.SpanKindConsumer
-		}
-	}
-	return trace2.SpanKindInternal
-}

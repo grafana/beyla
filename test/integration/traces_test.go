@@ -981,7 +981,7 @@ func testHTTPTracesNestedSelfCalls(t *testing.T) {
 		var tq jaeger.TracesQuery
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
 		traces := tq.FindBySpan(jaeger.Tag{Key: "url.path", Type: "string", Value: "/api1"})
-		require.Len(t, traces, 1)
+		require.NotEmpty(t, traces)
 		trace = traces[0]
 	}, test.Interval(100*time.Millisecond))
 

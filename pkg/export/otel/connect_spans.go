@@ -34,6 +34,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/trace"
+	trace2 "go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/zap"
 )
@@ -106,18 +107,37 @@ type tracesOTELReceiver struct {
 var noAttrs = make(map[attr.Name]struct{})
 
 func (tr *tracesOTELReceiver) processSpans(ctx context.Context, exp exporter.Traces, spans []request.Span, sampler trace.Sampler) {
-	spanGroups := tracesgen.GroupSpans(ctx, spans, noAttrs, sampler, tr.is)
 
+	// yo creo que esto no hace falta aqui sino que podemos meter nuestra propia cosa
+	spanGroups := tr.extractConnectionSpans(ctx, spans, noAttrs, sampler)
 	for _, spanGroup := range spanGroups {
 		if len(spanGroup) > 0 {
-			sample := spanGroup[0]
+			sample := &spanGroup[0]
 
 			if !sample.Span.Service.ExportModes.CanExportTraces() {
 				continue
 			}
 
+			// append external attribute
+			sample.Attributes = make([]attribute.KeyValue, 0, len(tr.attributeProvider))
+			for _, getter := range tr.attributeProvider {
+				sample.Attributes = append(sample.Attributes, getter(sample.Span))
+			}
+
+			// TODO: send only one span, disconnect it from other traces
+			// set attributes for src and dst
+
 			envResourceAttrs := otelcfg.ResourceAttrsFromEnv(&sample.Span.Service)
-			traces := tracesgen.GenerateTracesWithAttributes(tr.attributeCache, &sample.Span.Service, envResourceAttrs, tr.ctxInfo.HostID, spanGroup, ReporterName, tr.ctxInfo.ExtraResourceAttributes...)
+
+			traces := tracesgen.GenerateTracesWithAttributes(
+				tr.attributeCache,
+				&sample.Span.Service,
+				envResourceAttrs,
+				tr.ctxInfo.HostID,
+				spanGroup,
+				ReporterName,
+				tr.ctxInfo.ExtraResourceAttributes...)
+
 			err := exp.ConsumeTraces(ctx, traces)
 			if err != nil {
 				tr.log.Error("error sending trace to consumer", "error", err)
@@ -293,4 +313,68 @@ func convertHeaders(headers map[string]string) map[string]configopaque.String {
 		opaqueHeaders[key] = configopaque.String(value)
 	}
 	return opaqueHeaders
+}
+
+
+func (tr *tracesOTELReceiver) extractConnectionSpans(ctx context.Context, spans []request.Span, traceAttrs map[attr.Name]struct{}, sampler trace.Sampler) map[svc.UID][]tracesgen.TraceSpanAndAttributes {
+	spanGroups := map[svc.UID][]tracesgen.TraceSpanAndAttributes{}
+
+	for i := range spans {
+		span := &spans[i]
+		if span.InternalSignal() {
+			continue
+		}
+		if tracesgen.SpanDiscarded(span, tr.is) {
+			continue
+		}
+
+		spanSampler := func() trace.Sampler {
+			if span.Service.Sampler != nil {
+				return span.Service.Sampler
+			}
+
+			return sampler
+		}
+
+		finalAttrs := make([]attribute.KeyValue, 0, len(tr.attributeProvider))
+		for _, getter := range tr.attributeProvider {
+			finalAttrs = append(finalAttrs, getter(span))
+		}
+
+		sr := spanSampler().ShouldSample(trace.SamplingParameters{
+			ParentContext: ctx,
+			Name:          span.TraceName(),
+			TraceID:       span.TraceID,
+			Kind:          spanKind(span),
+			Attributes:    finalAttrs,
+		})
+
+		if sr.Decision == trace.Drop {
+			continue
+		}
+
+		group := spanGroups[span.Service.UID]
+		group = append(group, tracesgen.TraceSpanAndAttributes{Span: span, Attributes: finalAttrs})
+		spanGroups[span.Service.UID] = group
+	}
+
+	return spanGroups
+}
+
+// TODO: this function is replicated from OBI. Make it public in OBI and invoke it from here
+func spanKind(span *request.Span) trace2.SpanKind {
+	switch span.Type {
+	case request.EventTypeHTTP, request.EventTypeGRPC, request.EventTypeRedisServer, request.EventTypeKafkaServer:
+		return trace2.SpanKindServer
+	case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient, request.EventTypeRedisClient, request.EventTypeMongoClient:
+		return trace2.SpanKindClient
+	case request.EventTypeKafkaClient:
+		switch span.Method {
+		case request.MessagingPublish:
+			return trace2.SpanKindProducer
+		case request.MessagingProcess:
+			return trace2.SpanKindConsumer
+		}
+	}
+	return trace2.SpanKindInternal
 }

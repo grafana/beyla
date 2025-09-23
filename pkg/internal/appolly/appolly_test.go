@@ -4,22 +4,24 @@ import (
 	"context"
 	"testing"
 
+	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/stretchr/testify/assert"
+	"go.opentelemetry.io/obi/pkg/app/request"
 	"go.opentelemetry.io/obi/pkg/components/connector"
 	"go.opentelemetry.io/obi/pkg/components/discover"
 	"go.opentelemetry.io/obi/pkg/components/ebpf"
 	"go.opentelemetry.io/obi/pkg/components/exec"
 	"go.opentelemetry.io/obi/pkg/components/pipe/global"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
-
-	"github.com/grafana/beyla/v2/pkg/beyla"
+	"go.opentelemetry.io/obi/pkg/pipe/msg"
 )
 
 func TestProcessEventsLoopDoesntBlock(t *testing.T) {
 	instr, err := New(
 		context.Background(),
 		&global.ContextInfo{
-			Prometheus: &connector.PrometheusManager{},
+			Prometheus:             &connector.PrometheusManager{},
+			OverrideAppExportQueue: msg.NewQueue[[]request.Span](msg.Name("test"), msg.ChannelBufferLen(1)),
 		},
 		&beyla.Config{
 			ChannelBufferLen: 1,

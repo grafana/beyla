@@ -2,8 +2,10 @@ package traces
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"log/slog"
-	"net"
+	"net/netip"
 
 	"go.opentelemetry.io/obi/pkg/app/request"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
@@ -38,8 +40,11 @@ func filter(spans []request.Span) []request.Span {
 	var extern []request.Span
 	for _, span := range spans {
 		if isExternalSelectable(&span) {
-			externalSpan := span
-			extern = append(extern, externalSpan)
+			bytes, err := json.Marshal(span)
+			fmt.Println("---", err)
+			fmt.Println(string(bytes))
+			fmt.Println("---")
+			extern = append(extern, span)
 		}
 	}
 	return extern
@@ -49,8 +54,10 @@ func filter(spans []request.Span) []request.Span {
 // TODO: We might need to add extra ResolvedHostName and ResolvedPeerName fields to the Span struct
 func isExternalSelectable(span *request.Span) bool {
 	return span.TraceID.IsValid() && // what about span.ParentSpanID?
-		((span.HostName != "" && net.ParseIP(span.HostName) != nil) ||
-			(span.HostName == "" && span.Host != "" && net.ParseIP(span.Host) != nil) ||
-			(span.PeerName != "" && net.ParseIP(span.PeerName) != nil) ||
-			(span.PeerName == "" && span.Peer != "" && net.ParseIP(span.Peer) != nil))
+		validPublicIP(span.PeerName)
+}
+
+func validPublicIP(ip string) bool {
+	addr, err := netip.ParseAddr(ip)
+	return err == nil && addr.IsValid() && !addr.IsPrivate()
 }

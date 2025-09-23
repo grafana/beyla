@@ -54,14 +54,12 @@ func Build(ctx context.Context, config *beyla.Config, ctxInfo *global.ContextInf
 	swi.Add(alloy.TracesReceiver(ctxInfo, &config.TracesReceiver, config.Metrics.SpanMetricsEnabled(),
 		selectorCfg, ctxInfo.OverrideAppExportQueue))
 
-
 	clusterConnectorsSubpipeline(swi, ctxInfo, config)
 
 	swi.Add(ProcessMetricsSwarmInstancer(ctxInfo, config, ctxInfo.OverrideAppExportQueue))
 
 	return swi.Instance(ctx)
 }
-
 
 // clusterConnectorsSubpipeline will submit "connector" traces that are identified as cluster-external.
 // Tempo will use them to compose inter-cluster service graph connections that otherwise couldn't be composed by
@@ -82,11 +80,10 @@ func clusterConnectorsSubpipeline(swi *swarm.Instancer, ctxInfo *global.ContextI
 				Name: "always_off", // parentbased_always_on?
 			},
 		},
-		ctxInfo.OverrideAppExportQueue,
+		externalTraces,
 	))
 
 	swi.Add(otel.ConnectionSpansExport(ctxInfo,
 		&config.Traces,
-
-		))
+		externalTraces))
 }

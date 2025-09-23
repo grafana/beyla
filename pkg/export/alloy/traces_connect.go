@@ -41,11 +41,11 @@ func ConnectionSpansReceiver(
 		}
 
 		tr := &connectionSpansReceiver{
-			hostID:            ctxInfo.HostID,
-			input:             input.Subscribe(),
-			samplerImpl:       cfg.Sampler.Implementation(),
-			attributeGetters : otel.ConnectionSpanAttributes(),
-			traceConsumers:    cfg.Traces,
+			hostID:           ctxInfo.HostID,
+			input:            input.Subscribe(),
+			samplerImpl:      cfg.Sampler.Implementation(),
+			attributeGetters: otel.ConnectionSpanAttributes(),
+			traceConsumers:   cfg.Traces,
 			// TODO: share it with the other metrics receivers
 			attributeCache: expirable.NewLRU[svc.UID, []attribute.KeyValue](1024, nil, 5*time.Minute),
 		}
@@ -54,17 +54,17 @@ func ConnectionSpansReceiver(
 }
 
 type connectionSpansReceiver struct {
-	samplerImpl     trace.Sampler
-	hostID          string
-	input           <-chan []request.Span
-	traceConsumers  []beyla.Consumer
-	attributeCache  *expirable.LRU[svc.UID, []attribute.KeyValue]
+	samplerImpl      trace.Sampler
+	hostID           string
+	input            <-chan []request.Span
+	traceConsumers   []beyla.Consumer
+	attributeCache   *expirable.LRU[svc.UID, []attribute.KeyValue]
 	attributeGetters []attributes.Getter[*request.Span, attribute.KeyValue]
 }
 
 func (tr *connectionSpansReceiver) provideLoop(ctx context.Context) {
 	swarms.ForEachInput(ctx, tr.input, etrlog().Debug, func(spans []request.Span) {
-		for _, spanGroup := range  tr.groupExternSpans(ctx, spans) {
+		for _, spanGroup := range tr.groupExternSpans(ctx, spans) {
 			if len(spanGroup) > 0 {
 				sample := spanGroup[0]
 				if !sample.Span.Service.ExportModes.CanExportTraces() {
@@ -83,7 +83,6 @@ func (tr *connectionSpansReceiver) provideLoop(ctx context.Context) {
 		}
 	})
 }
-
 
 func (tr *connectionSpansReceiver) groupExternSpans(ctx context.Context, spans []request.Span) map[svc.UID][]tracesgen.TraceSpanAndAttributes {
 	spanGroups := map[svc.UID][]tracesgen.TraceSpanAndAttributes{}
@@ -128,4 +127,3 @@ func (tr *connectionSpansReceiver) groupExternSpans(ctx context.Context, spans [
 
 	return spanGroups
 }
-

@@ -44,6 +44,7 @@ func ConnectionSpansReceiver(
 			samplerImpl:      cfg.Sampler.Implementation(),
 			attributeGetters: otel.ConnectionSpanAttributes(),
 			traceConsumers:   cfg.Traces,
+			selector:         instrumentations.NewInstrumentationSelection(cfg.Instrumentations),
 		}
 		return tr.provideLoop, nil
 	}

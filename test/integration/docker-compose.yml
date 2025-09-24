@@ -50,6 +50,7 @@ services:
       BEYLA_PROCESSES_INTERVAL: "100ms"
       BEYLA_HOSTNAME: "beyla"
       BEYLA_DROP_METRIC_UNRESOLVED_IPS: "false"
+      BEYLA_OTLP_TRACES_BATCH_TIMEOUT: "1ms"
     ports:
       - "8999:8999" # Prometheus scrape port, if enabled via config
 

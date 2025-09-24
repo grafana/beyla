@@ -88,6 +88,7 @@ func TestGrafanaHeadersOverride_Traces(t *testing.T) {
 	config, err := LoadConfig(strings.NewReader(fmt.Sprintf(`
 otel_traces_export:
   endpoint: "%s"
+  batch_timeout: "10ms"
 grafana:
   otlp:
     cloud_submit: ["traces"]

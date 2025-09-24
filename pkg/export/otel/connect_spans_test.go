@@ -37,6 +37,7 @@ func TestConnection_Spans(t *testing.T) {
 		},
 		input,
 	)(t.Context())
+	require.NoError(t, err)
 	go cse(t.Context())
 	testutil.ChannelEmpty(t, traces, 10*time.Millisecond)
 

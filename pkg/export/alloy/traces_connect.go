@@ -3,16 +3,14 @@ package alloy
 import (
 	"context"
 	"log/slog"
-	"time"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
-	"github.com/hashicorp/golang-lru/v2/expirable"
 	"go.opentelemetry.io/obi/pkg/app/request"
 	"go.opentelemetry.io/obi/pkg/components/pipe/global"
 	"go.opentelemetry.io/obi/pkg/components/svc"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
-	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
+	"go.opentelemetry.io/obi/pkg/export/instrumentations"
 	"go.opentelemetry.io/obi/pkg/export/otel/tracesgen"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
@@ -22,7 +20,7 @@ import (
 )
 
 func etrlog() *slog.Logger {
-	return slog.With("component", "ConnectionSpansReceiver")
+	return slog.With("component", "alloy.ConnectionSpansReceiver")
 }
 
 // ConnectionSpansReceiver creates a terminal node that forwards the received traces as inter-cluster connection
@@ -46,8 +44,6 @@ func ConnectionSpansReceiver(
 			samplerImpl:      cfg.Sampler.Implementation(),
 			attributeGetters: otel.ConnectionSpanAttributes(),
 			traceConsumers:   cfg.Traces,
-			// TODO: share it with the other metrics receivers
-			attributeCache: expirable.NewLRU[svc.UID, []attribute.KeyValue](1024, nil, 5*time.Minute),
 		}
 		return tr.provideLoop, nil
 	}
@@ -58,8 +54,8 @@ type connectionSpansReceiver struct {
 	hostID           string
 	input            <-chan []request.Span
 	traceConsumers   []beyla.Consumer
-	attributeCache   *expirable.LRU[svc.UID, []attribute.KeyValue]
 	attributeGetters []attributes.Getter[*request.Span, attribute.KeyValue]
+	selector         instrumentations.InstrumentationSelection
 }
 
 func (tr *connectionSpansReceiver) provideLoop(ctx context.Context) {
@@ -71,9 +67,8 @@ func (tr *connectionSpansReceiver) provideLoop(ctx context.Context) {
 					continue
 				}
 
-				envResourceAttrs := otelcfg.ResourceAttrsFromEnv(&sample.Span.Service)
 				for _, tc := range tr.traceConsumers {
-					traces := tracesgen.GenerateTracesWithAttributes(tr.attributeCache, &sample.Span.Service, envResourceAttrs, tr.hostID, spanGroup, otel.ReporterName)
+					traces := otel.GenerateConnectSpans(tr.hostID, sample.Span, spanGroup)
 					err := tc.ConsumeTraces(ctx, traces)
 					if err != nil {
 						slog.Error("error sending trace to consumer", "error", err)
@@ -85,45 +80,5 @@ func (tr *connectionSpansReceiver) provideLoop(ctx context.Context) {
 }
 
 func (tr *connectionSpansReceiver) groupExternSpans(ctx context.Context, spans []request.Span) map[svc.UID][]tracesgen.TraceSpanAndAttributes {
-	spanGroups := map[svc.UID][]tracesgen.TraceSpanAndAttributes{}
-
-	for i := range spans {
-		span := &spans[i]
-		if span.InternalSignal() {
-			continue
-		}
-
-		// a span can override the sampler
-		sampler := tr.samplerImpl
-		if span.Service.Sampler != nil {
-			sampler = span.Service.Sampler
-		}
-
-		// get the values for the span attributes
-		finalAttrs := make([]attribute.KeyValue, 0, 5)
-		for _, getter := range tr.attributeGetters {
-			finalAttrs = append(finalAttrs, getter(span))
-		}
-
-		sr := sampler.ShouldSample(trace.SamplingParameters{
-			ParentContext: ctx,
-			Name:          span.TraceName(),
-			TraceID:       span.TraceID,
-			Kind:          otel.SpanKind(span),
-			Attributes:    finalAttrs,
-		})
-
-		if sr.Decision == trace.Drop {
-			continue
-		}
-
-		group, ok := spanGroups[span.Service.UID]
-		if !ok {
-			group = []tracesgen.TraceSpanAndAttributes{}
-		}
-		group = append(group, tracesgen.TraceSpanAndAttributes{Span: span, Attributes: finalAttrs})
-		spanGroups[span.Service.UID] = group
-	}
-
-	return spanGroups
+	return otel.GroupConnectionSpans(ctx, spans, tr.samplerImpl, tr.selector, tr.attributeGetters)
 }

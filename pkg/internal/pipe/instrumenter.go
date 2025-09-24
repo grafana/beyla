@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
 
 	"github.com/grafana/beyla/v2/pkg/export/otel"
+	"github.com/grafana/beyla/v2/pkg/export/otel/spanscfg"
 	"github.com/grafana/beyla/v2/pkg/internal/appolly/traces"
 	"go.opentelemetry.io/obi/pkg/app/request"
 	"go.opentelemetry.io/obi/pkg/components/exec"
@@ -65,7 +67,10 @@ func Build(ctx context.Context, config *beyla.Config, ctxInfo *global.ContextInf
 // Tempo will use them to compose inter-cluster service graph connections that otherwise couldn't be composed by
 // Beyla, as it lacks the metadata from the remote clusters.
 func clusterConnectorsSubpipeline(swi *swarm.Instancer, ctxInfo *global.ContextInfo, config *beyla.Config) {
-	// TODO: if config.ConnectClusters
+	if !slices.Contains(config.Topology.Spans, spanscfg.TopologyInterCluster) {
+		return
+	}
+
 	externalTraces := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(config.ChannelBufferLen))
 	swi.Add(traces.SelectExternal(
 		ctxInfo.OverrideAppExportQueue,

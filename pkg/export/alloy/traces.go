@@ -6,18 +6,17 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/hashicorp/golang-lru/v2/expirable"
+	expirable2 "github.com/hashicorp/golang-lru/v2/expirable"
 	"go.opentelemetry.io/obi/pkg/app/request"
 	"go.opentelemetry.io/obi/pkg/components/pipe/global"
 	"go.opentelemetry.io/obi/pkg/components/svc"
-	"go.opentelemetry.io/obi/pkg/export/attributes"
+	attributes "go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/export/otel/tracesgen"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
-	"go.opentelemetry.io/obi/pkg/pipe/swarm/swarms"
 	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
@@ -41,7 +40,7 @@ func TracesReceiver(
 			cfg: cfg, hostID: ctxInfo.HostID, spanMetricsEnabled: spanMetricsEnabled,
 			input:          input.Subscribe(msg.SubscriberName("alloyTracesInput")),
 			is:             instrumentations.NewInstrumentationSelection(cfg.Instrumentations),
-			attributeCache: expirable.NewLRU[svc.UID, []attribute.KeyValue](1024, nil, 5*time.Minute),
+			attributeCache: expirable2.NewLRU[svc.UID, []attribute.KeyValue](1024, nil, 5*time.Minute),
 		}
 		// Get user attributes
 		if err := tr.fetchConstantAttributes(selectorCfg); err != nil {
@@ -58,7 +57,7 @@ type tracesReceiver struct {
 	is                 instrumentations.InstrumentationSelection
 	input              <-chan []request.Span
 	traceAttrs         map[attr.Name]struct{}
-	attributeCache     *expirable.LRU[svc.UID, []attribute.KeyValue]
+	attributeCache     *expirable2.LRU[svc.UID, []attribute.KeyValue]
 }
 
 func (tr *tracesReceiver) fetchConstantAttributes(selectorCfg *attributes.SelectorConfig) error {
@@ -77,8 +76,14 @@ func (tr *tracesReceiver) fetchConstantAttributes(selectorCfg *attributes.Select
 func (tr *tracesReceiver) provideLoop(ctx context.Context) {
 	sampler := tr.cfg.Sampler.Implementation()
 
-	swarms.ForEachInput(ctx, tr.input, slog.With("component", "alloy.TracesReceiver").Debug,
-		func(spans []request.Span) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case spans, ok := <-tr.input:
+			if !ok {
+				return
+			}
 			spanGroups := tracesgen.GroupSpans(ctx, spans, tr.traceAttrs, sampler, tr.is)
 			for _, spanGroup := range spanGroups {
 				if len(spanGroup) > 0 {
@@ -97,5 +102,6 @@ func (tr *tracesReceiver) provideLoop(ctx context.Context) {
 					}
 				}
 			}
-		})
+		}
+	}
 }

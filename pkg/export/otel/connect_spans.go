@@ -36,7 +36,6 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.25.0"
-	trace2 "go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/zap"
 )
@@ -104,7 +103,7 @@ type connectionSpansExport struct {
 }
 
 func (tr *connectionSpansExport) processSpans(ctx context.Context, exp exporter.Traces, spans []request.Span, sampler trace.Sampler) {
-	spanGroups := tr.groupConnectionSpans(ctx, spans, sampler)
+	spanGroups := GroupConnectionSpans(ctx, spans, sampler, tr.is, tr.attributeProvider)
 	for _, spanGroup := range spanGroups {
 		if len(spanGroup) > 0 {
 			sample := &spanGroup[0]
@@ -120,8 +119,7 @@ func (tr *connectionSpansExport) processSpans(ctx context.Context, exp exporter.
 			}
 
 			// set attributes for src and dst
-			traces := tr.generateConnectSpans(sample.Span, spanGroup)
-
+			traces := GenerateConnectSpans(tr.ctxInfo.HostID, sample.Span, spanGroup)
 			err := exp.ConsumeTraces(ctx, traces)
 			if err != nil {
 				tr.log.Error("error sending trace to consumer", "error", err)
@@ -299,7 +297,13 @@ func convertHeaders(headers map[string]string) map[string]configopaque.String {
 	return opaqueHeaders
 }
 
-func (tr *connectionSpansExport) groupConnectionSpans(ctx context.Context, spans []request.Span, sampler trace.Sampler) map[svc.UID][]tracesgen.TraceSpanAndAttributes {
+func GroupConnectionSpans(
+	ctx context.Context,
+	spans []request.Span,
+	sampler trace.Sampler,
+	selector instrumentations.InstrumentationSelection,
+	attributeProvider []attributes.Getter[*request.Span, attribute.KeyValue],
+) map[svc.UID][]tracesgen.TraceSpanAndAttributes {
 	spanGroups := map[svc.UID][]tracesgen.TraceSpanAndAttributes{}
 
 	for i := range spans {
@@ -307,7 +311,7 @@ func (tr *connectionSpansExport) groupConnectionSpans(ctx context.Context, spans
 		if span.InternalSignal() {
 			continue
 		}
-		if tracesgen.SpanDiscarded(span, tr.is) {
+		if tracesgen.SpanDiscarded(span, selector) {
 			continue
 		}
 
@@ -319,8 +323,8 @@ func (tr *connectionSpansExport) groupConnectionSpans(ctx context.Context, spans
 			return sampler
 		}
 
-		finalAttrs := make([]attribute.KeyValue, 0, len(tr.attributeProvider))
-		for _, getter := range tr.attributeProvider {
+		finalAttrs := make([]attribute.KeyValue, 0, len(attributeProvider))
+		for _, getter := range attributeProvider {
 			finalAttrs = append(finalAttrs, getter(span))
 		}
 
@@ -328,7 +332,7 @@ func (tr *connectionSpansExport) groupConnectionSpans(ctx context.Context, spans
 			ParentContext: ctx,
 			Name:          span.TraceName(),
 			TraceID:       span.TraceID,
-			Kind:          spanKind(span),
+			Kind:          SpanKind(span),
 			Attributes:    finalAttrs,
 		})
 
@@ -344,25 +348,8 @@ func (tr *connectionSpansExport) groupConnectionSpans(ctx context.Context, spans
 	return spanGroups
 }
 
-// TODO: this function is replicated from OBI. Make it public in OBI and invoke it from here
-func spanKind(span *request.Span) trace2.SpanKind {
-	switch span.Type {
-	case request.EventTypeHTTP, request.EventTypeGRPC, request.EventTypeRedisServer, request.EventTypeKafkaServer:
-		return trace2.SpanKindServer
-	case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient, request.EventTypeRedisClient, request.EventTypeMongoClient:
-		return trace2.SpanKindClient
-	case request.EventTypeKafkaClient:
-		switch span.Method {
-		case request.MessagingPublish:
-			return trace2.SpanKindProducer
-		case request.MessagingProcess:
-			return trace2.SpanKindConsumer
-		}
-	}
-	return trace2.SpanKindInternal
-}
-
-func (tr *connectionSpansExport) generateConnectSpans(
+func GenerateConnectSpans(
+	hostID string,
 	span *request.Span,
 	spans []tracesgen.TraceSpanAndAttributes,
 ) ptrace.Traces {
@@ -370,7 +357,7 @@ func (tr *connectionSpansExport) generateConnectSpans(
 	rs := traces.ResourceSpans().AppendEmpty()
 	// set trace Resource attributes
 	// TODO: check if we can remove some of them
-	resourceAttrs := otelcfg.GetAppResourceAttrs(tr.ctxInfo.HostID, &span.Service)
+	resourceAttrs := otelcfg.GetAppResourceAttrs(hostID, &span.Service)
 	resourceAttrs = append(resourceAttrs, otelcfg.ResourceAttrsFromEnv(&span.Service)...)
 	// Override OBI library name by Beyla
 	resourceAttrsMap := tracesgen.AttrsToMap(resourceAttrs)
@@ -400,7 +387,7 @@ func (tr *connectionSpansExport) generateConnectSpans(
 		// Create a parent span for the whole request session
 		s := ss.Spans().AppendEmpty()
 		s.SetName(span.TraceName())
-		s.SetKind(ptrace.SpanKind(spanKind(span)))
+		s.SetKind(ptrace.SpanKind(SpanKind(span)))
 		s.SetStartTimestamp(pcommon.NewTimestampFromTime(start))
 
 		// Set trace and span IDs

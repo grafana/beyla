@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"time"
 
-	expirable2 "github.com/hashicorp/golang-lru/v2/expirable"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/configgrpc"
 	"go.opentelemetry.io/collector/config/confighttp"
@@ -20,12 +19,14 @@ import (
 	"go.opentelemetry.io/collector/exporter/otlpexporter"
 	"go.opentelemetry.io/collector/exporter/otlphttpexporter"
 	"go.opentelemetry.io/collector/pdata/pcommon"
+	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.opentelemetry.io/obi/pkg/app/request"
 	"go.opentelemetry.io/obi/pkg/components/pipe/global"
 	"go.opentelemetry.io/obi/pkg/components/svc"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
+	"go.opentelemetry.io/obi/pkg/export/otel/idgen"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/export/otel/tracesgen"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
@@ -34,6 +35,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.25.0"
 	trace2 "go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/zap"
@@ -41,7 +43,7 @@ import (
 
 // TODO: integrate with Beyla internal metrics
 
-var beylaSpan = attribute.KeyValue{Key: "beyla.span.type", Value: attribute.StringValue("external")}
+var beylaSpan = attribute.KeyValue{Key: "beyla.topology", Value: attribute.StringValue("external")}
 
 // ConnectionSpanAttributes do not use any user-defined set of attributes but a reduced set of attributes
 // that will be exclusively used from Tempo to create inter-cluster service graph metrics
@@ -81,35 +83,28 @@ func makeConnectionSpansExport(
 	cfg *otelcfg.TracesConfig,
 	ctxInfo *global.ContextInfo,
 	input *msg.Queue[[]request.Span],
-) *tracesOTELReceiver {
-	return &tracesOTELReceiver{
+) *connectionSpansExport {
+	return &connectionSpansExport{
 		log:               slog.With("component", "otel.ConnectionSpansExport"),
 		cfg:               cfg,
 		ctxInfo:           ctxInfo,
 		attributeProvider: ConnectionSpanAttributes(),
 		is:                instrumentations.NewInstrumentationSelection(cfg.Instrumentations),
 		input:             input.Subscribe(msg.SubscriberName("otel.ConnectionSpansExport")),
-		attributeCache:    expirable2.NewLRU[svc.UID, []attribute.KeyValue](1024, nil, 5*time.Minute),
 	}
 }
 
-type tracesOTELReceiver struct {
+type connectionSpansExport struct {
 	log               *slog.Logger
 	cfg               *otelcfg.TracesConfig
 	ctxInfo           *global.ContextInfo
 	is                instrumentations.InstrumentationSelection
-	attributeCache    *expirable2.LRU[svc.UID, []attribute.KeyValue]
 	input             <-chan []request.Span
 	attributeProvider []attributes.Getter[*request.Span, attribute.KeyValue]
 }
 
-// prevents null pointer exception in tracesgen.GroupSpans
-var noAttrs = make(map[attr.Name]struct{})
-
-func (tr *tracesOTELReceiver) processSpans(ctx context.Context, exp exporter.Traces, spans []request.Span, sampler trace.Sampler) {
-
-	// yo creo que esto no hace falta aqui sino que podemos meter nuestra propia cosa
-	spanGroups := tr.extractConnectionSpans(ctx, spans, noAttrs, sampler)
+func (tr *connectionSpansExport) processSpans(ctx context.Context, exp exporter.Traces, spans []request.Span, sampler trace.Sampler) {
+	spanGroups := tr.groupConnectionSpans(ctx, spans, sampler)
 	for _, spanGroup := range spanGroups {
 		if len(spanGroup) > 0 {
 			sample := &spanGroup[0]
@@ -124,19 +119,8 @@ func (tr *tracesOTELReceiver) processSpans(ctx context.Context, exp exporter.Tra
 				sample.Attributes = append(sample.Attributes, getter(sample.Span))
 			}
 
-			// TODO: send only one span, disconnect it from other traces
 			// set attributes for src and dst
-
-			envResourceAttrs := otelcfg.ResourceAttrsFromEnv(&sample.Span.Service)
-
-			traces := tracesgen.GenerateTracesWithAttributes(
-				tr.attributeCache,
-				&sample.Span.Service,
-				envResourceAttrs,
-				tr.ctxInfo.HostID,
-				spanGroup,
-				ReporterName,
-				tr.ctxInfo.ExtraResourceAttributes...)
+			traces := tr.generateConnectSpans(sample.Span, spanGroup)
 
 			err := exp.ConsumeTraces(ctx, traces)
 			if err != nil {
@@ -146,7 +130,7 @@ func (tr *tracesOTELReceiver) processSpans(ctx context.Context, exp exporter.Tra
 	}
 }
 
-func (tr *tracesOTELReceiver) provideLoop(ctx context.Context) {
+func (tr *connectionSpansExport) provideLoop(ctx context.Context) {
 	exp, err := tr.getTracesExporter(ctx)
 	if err != nil {
 		tr.log.Error("error creating traces exporter", "error", err)
@@ -171,7 +155,7 @@ func (tr *tracesOTELReceiver) provideLoop(ctx context.Context) {
 }
 
 //nolint:cyclop
-func (tr *tracesOTELReceiver) getTracesExporter(ctx context.Context) (exporter.Traces, error) {
+func (tr *connectionSpansExport) getTracesExporter(ctx context.Context) (exporter.Traces, error) {
 	switch proto := tr.cfg.GetProtocol(); proto {
 	case otelcfg.ProtocolHTTPJSON, otelcfg.ProtocolHTTPProtobuf, "": // zero value defaults to HTTP for backwards-compatibility
 		tr.log.Debug("instantiating HTTP TracesReporter", "protocol", proto)
@@ -315,8 +299,7 @@ func convertHeaders(headers map[string]string) map[string]configopaque.String {
 	return opaqueHeaders
 }
 
-
-func (tr *tracesOTELReceiver) extractConnectionSpans(ctx context.Context, spans []request.Span, traceAttrs map[attr.Name]struct{}, sampler trace.Sampler) map[svc.UID][]tracesgen.TraceSpanAndAttributes {
+func (tr *connectionSpansExport) groupConnectionSpans(ctx context.Context, spans []request.Span, sampler trace.Sampler) map[svc.UID][]tracesgen.TraceSpanAndAttributes {
 	spanGroups := map[svc.UID][]tracesgen.TraceSpanAndAttributes{}
 
 	for i := range spans {
@@ -377,4 +360,76 @@ func spanKind(span *request.Span) trace2.SpanKind {
 		}
 	}
 	return trace2.SpanKindInternal
+}
+
+func (tr *connectionSpansExport) generateConnectSpans(
+	span *request.Span,
+	spans []tracesgen.TraceSpanAndAttributes,
+) ptrace.Traces {
+	traces := ptrace.NewTraces()
+	rs := traces.ResourceSpans().AppendEmpty()
+	// set trace Resource attributes
+	// TODO: check if we can remove some of them
+	resourceAttrs := otelcfg.GetAppResourceAttrs(tr.ctxInfo.HostID, &span.Service)
+	resourceAttrs = append(resourceAttrs, otelcfg.ResourceAttrsFromEnv(&span.Service)...)
+	// Override OBI library name by Beyla
+	resourceAttrsMap := tracesgen.AttrsToMap(resourceAttrs)
+	resourceAttrsMap.PutStr(string(semconv.OTelLibraryNameKey), ReporterName)
+	resourceAttrsMap.MoveTo(rs.Resource().Attributes())
+
+	for _, spanWithAttributes := range spans {
+		span := spanWithAttributes.Span
+		attrs := spanWithAttributes.Attributes
+
+		ss := rs.ScopeSpans().AppendEmpty()
+
+		timing := span.Timings()
+		start := spanStartTime(timing)
+
+		traceID := pcommon.TraceID(span.TraceID)
+		spanID := pcommon.SpanID(idgen.RandomSpanID())
+		// This should never happen
+		if traceID.IsEmpty() {
+			traceID = pcommon.TraceID(idgen.RandomTraceID())
+		}
+
+		if span.SpanID.IsValid() {
+			spanID = pcommon.SpanID(span.SpanID)
+		}
+
+		// Create a parent span for the whole request session
+		s := ss.Spans().AppendEmpty()
+		s.SetName(span.TraceName())
+		s.SetKind(ptrace.SpanKind(spanKind(span)))
+		s.SetStartTimestamp(pcommon.NewTimestampFromTime(start))
+
+		// Set trace and span IDs
+		s.SetSpanID(spanID)
+		s.SetTraceID(traceID)
+		if span.ParentSpanID.IsValid() {
+			s.SetParentSpanID(pcommon.SpanID(span.ParentSpanID))
+		}
+
+		// Set span attributes
+		m := tracesgen.AttrsToMap(attrs)
+		m.MoveTo(s.Attributes())
+
+		// Set status code
+		statusCode := tracesgen.CodeToStatusCode(request.SpanStatusCode(span))
+		s.Status().SetCode(statusCode)
+		statusMessage := request.SpanStatusMessage(span)
+		if statusMessage != "" {
+			s.Status().SetMessage(statusMessage)
+		}
+		s.SetEndTimestamp(pcommon.NewTimestampFromTime(timing.End))
+	}
+	return traces
+}
+
+func spanStartTime(t request.Timings) time.Time {
+	realStart := t.RequestStart
+	if t.Start.Before(realStart) {
+		realStart = t.Start
+	}
+	return realStart
 }

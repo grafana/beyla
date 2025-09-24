@@ -40,10 +40,8 @@ func filter(spans []request.Span) []request.Span {
 	var extern []request.Span
 	for _, span := range spans {
 		if isExternalSelectable(&span) {
-			bytes, err := json.Marshal(span)
-			fmt.Println("---", err)
-			fmt.Println(string(bytes))
-			fmt.Println("---")
+			bytes, _ := json.Marshal(span)
+			fmt.Println("---", string(bytes))
 			extern = append(extern, span)
 		}
 	}
@@ -53,8 +51,10 @@ func filter(spans []request.Span) []request.Span {
 // this code might not work if the reverse DNS is enabled and it hits a known host name.
 // TODO: We might need to add extra ResolvedHostName and ResolvedPeerName fields to the Span struct
 func isExternalSelectable(span *request.Span) bool {
-	return span.TraceID.IsValid() && // what about span.ParentSpanID?
-		validPublicIP(span.PeerName)
+	isClient := span.IsClientSpan()
+	return span.TraceID.IsValid() &&
+		((!isClient && validPublicIP(span.PeerName)) ||
+			(isClient && validPublicIP(span.HostName)))
 }
 
 func validPublicIP(ip string) bool {

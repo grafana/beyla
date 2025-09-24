@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   testserver:
@@ -35,6 +35,7 @@ services:
       BEYLA_PROMETHEUS_FEATURES: "application,application_span,application_process"
       BEYLA_DISCOVERY_POLL_INTERVAL: 500ms
       BEYLA_EXECUTABLE_NAME: "${BEYLA_EXECUTABLE_NAME}"
+      BEYLA_OTLP_TRACES_BATCH_TIMEOUT: "1ms"
       BEYLA_SERVICE_NAMESPACE: "integration-test"
       BEYLA_METRICS_INTERVAL: "10ms"
       BEYLA_BPF_BATCH_TIMEOUT: "10ms"
@@ -55,14 +56,14 @@ services:
         limits:
           memory: 125M
     restart: unless-stopped
-    command: [ "--config=/etc/otelcol-config/otelcol-config.yml" ]
+    command: ["--config=/etc/otelcol-config/otelcol-config.yml"]
     volumes:
       - ./configs/:/etc/otelcol-config
     ports:
-      - "4317"          # OTLP over gRPC receiver
-      - "4318"          # OTLP over HTTP receiver
-      - "9464"          # Prometheus exporter
-      - "8888"          # metrics endpoint
+      - "4317" # OTLP over gRPC receiver
+      - "4318" # OTLP over HTTP receiver
+      - "9464" # Prometheus exporter
+      - "8888" # metrics endpoint
     depends_on:
       autoinstrumenter:
         condition: service_started
@@ -86,11 +87,10 @@ services:
     image: jaegertracing/all-in-one:1.57
     ports:
       - "16686:16686" # Query frontend
-      - "4317"        # OTEL GRPC traces collector
-      - "4318"        # OTEL HTTP traces collector
+      - "4317" # OTEL GRPC traces collector
+      - "4318" # OTEL HTTP traces collector
     environment:
       - COLLECTOR_OTLP_ENABLED=true
       - LOG_LEVEL=debug
-
 # curl http://localhost:16686/api/services
 # curl http://localhost:16686/api/traces?service=testserver

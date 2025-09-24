@@ -179,6 +179,7 @@ network:
 			CommonEndpoint:    "localhost:3131",
 			TracesEndpoint:    "localhost:3232",
 			MaxQueueSize:      4096,
+			BatchTimeout:      15 * time.Second,
 			ReportersCacheLen: ReporterLRUSize,
 			Instrumentations: []string{
 				instrumentations.InstrumentationALL,
@@ -196,7 +197,8 @@ network:
 				DurationHistogram:     otelcfg.DefaultBuckets.DurationHistogram,
 				RequestSizeHistogram:  []float64{0, 10, 20, 22},
 				ResponseSizeHistogram: []float64{0, 10, 20, 22},
-			}},
+			},
+		},
 		InternalMetrics: imetrics.Config{
 			Exporter: imetrics.InternalMetricsExporterDisabled,
 			Prometheus: imetrics.PrometheusConfig{

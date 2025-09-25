@@ -788,6 +788,7 @@ go.opentelemetry.io/obi/pkg/components/rdns/store
 go.opentelemetry.io/obi/pkg/components/split
 go.opentelemetry.io/obi/pkg/components/sqlprune
 go.opentelemetry.io/obi/pkg/components/svc
+go.opentelemetry.io/obi/pkg/components/testutil
 go.opentelemetry.io/obi/pkg/components/traces
 go.opentelemetry.io/obi/pkg/components/traces/hostname
 go.opentelemetry.io/obi/pkg/components/transform/route

@@ -11,17 +11,20 @@ import (
 	"time"
 
 	expirable2 "github.com/hashicorp/golang-lru/v2/expirable"
+	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.opentelemetry.io/obi/pkg/app/request"
+	"go.opentelemetry.io/obi/pkg/components/pipe/global"
 	"go.opentelemetry.io/obi/pkg/components/svc"
-	attributes "go.opentelemetry.io/obi/pkg/export/attributes"
+	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/export/otel/tracesgen"
+	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/services"
 	"go.opentelemetry.io/otel/attribute"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -248,6 +251,84 @@ func TestTracesExportModeFiltering(t *testing.T) {
 			assert.Equal(t, tt.expectedTraces, len(mockConsumer.getConsumedTraces()), tt.description)
 		})
 	}
+}
+
+func TestConnectTraces(t *testing.T) {
+	mts := &mockTraceConsumer{}
+	input := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
+	csr, err := ConnectionSpansReceiver(
+		&global.ContextInfo{HostID: "the-host"},
+		&beyla.TracesReceiverConfig{
+			Sampler:          services.SamplerConfig{Name: "always_on"},
+			Traces:           []beyla.Consumer{mts},
+			Instrumentations: []string{instrumentations.InstrumentationALL},
+		},
+		input,
+	)(t.Context())
+	require.NoError(t, err)
+	go csr(t.Context())
+
+	require.Empty(t, mts.getConsumedTraces(), "No traces should be consumed yet")
+
+	input.Send([]request.Span{{
+		Type:     request.EventTypeHTTP,
+		Method:   "GET",
+		Route:    "/foo",
+		Start:    123,
+		End:      456,
+		Service:  svc.Attrs{UID: svc.UID{Name: "foo"}},
+		Host:     "1.2.3.4",
+		HostName: "foo.com",
+		Peer:     "4.2.3.1",
+		PeerName: "4.2.3.1",
+	}, {
+		Type:     request.EventTypeHTTPClient,
+		Method:   "POST",
+		Route:    "/bar",
+		Start:    321,
+		End:      654,
+		Service:  svc.Attrs{UID: svc.UID{Name: "foo"}},
+		Host:     "1.2.3.4",
+		HostName: "foo.com",
+		Peer:     "3.3.2.6",
+		PeerName: "3.3.2.6",
+	}})
+
+	test.Eventually(t, 5*time.Second, func(t require.TestingT) {
+		require.NotEmpty(t, mts.getConsumedTraces())
+	})
+	grouped := mts.getConsumedTraces()
+	require.Len(t, grouped, 1)
+
+	group := grouped[0]
+	require.Equal(t, 1, group.ResourceSpans().Len(),
+		"both spans should have been recorded in the same resource")
+	spans := group.ResourceSpans().At(0).ScopeSpans()
+	require.Equal(t, 2, spans.Len(),
+		"expected to have received two spans")
+	span := spans.At(0).Spans()
+	require.Equal(t, 1, span.Len())
+	sp := span.At(0)
+	assert.Equal(t, "GET /foo", sp.Name())
+	assert.Equal(t, map[string]any{
+		"client":         "4.2.3.1",
+		"client.address": "4.2.3.1",
+		"server":         "foo.com",
+		"server.address": "foo.com",
+		"beyla.topology": "external",
+	}, sp.Attributes().AsRaw())
+
+	span = spans.At(1).Spans()
+	require.Equal(t, 1, span.Len())
+	sp = span.At(0)
+	assert.Equal(t, "POST /bar", sp.Name())
+	assert.Equal(t, map[string]any{
+		"server":         "foo.com",
+		"server.address": "foo.com",
+		"client":         "3.3.2.6",
+		"client.address": "3.3.2.6",
+		"beyla.topology": "external",
+	}, sp.Attributes().AsRaw())
 }
 
 // mockTraceConsumer captures traces for testing

@@ -7,6 +7,7 @@ import (
 	"sync"
 	"text/template"
 
+	"go.opentelemetry.io/obi/pkg/app/request"
 	"go.opentelemetry.io/obi/pkg/components/connector"
 	"go.opentelemetry.io/obi/pkg/components/imetrics"
 	"go.opentelemetry.io/obi/pkg/components/kube"
@@ -16,6 +17,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	obiotel "go.opentelemetry.io/obi/pkg/export/otel"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
+	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/otel/attribute"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 	"golang.org/x/sync/errgroup"
@@ -168,6 +170,10 @@ func buildCommonContextInfo(
 		}),
 		ExtraResourceAttributes: []attribute.KeyValue{semconv.OTelLibraryName(otel.ReporterName)},
 		OTELMetricsExporter:     &otelcfg.MetricsExporterInstancer{Cfg: &config.AsOBI().Metrics},
+		OverrideAppExportQueue: msg.NewQueue[[]request.Span](
+			msg.ChannelBufferLen(config.ChannelBufferLen),
+			msg.Name("overriddenAppExportQueue"),
+		),
 	}
 	if config.Attributes.HostID.Override == "" {
 		ctxInfo.FetchHostID(ctx, config.Attributes.HostID.FetchTimeout)

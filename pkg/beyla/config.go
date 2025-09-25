@@ -7,12 +7,13 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v9"
+	"github.com/grafana/beyla/v2/pkg/export/otel/spanscfg"
 	otelconsumer "go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/obi/pkg/components/ebpf/tcmanager"
 	"go.opentelemetry.io/obi/pkg/components/imetrics"
 	"go.opentelemetry.io/obi/pkg/components/kube"
 	"go.opentelemetry.io/obi/pkg/components/traces"
-	attributes "go.opentelemetry.io/obi/pkg/export/attributes"
+	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/debug"
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
@@ -246,6 +247,10 @@ type Config struct {
 
 	// nolint:undoc
 	NodeJS obi.NodeJSConfig `yaml:"nodejs"`
+
+	// Topology enables extra topology-related features, such as inter-cluster connection spans.
+	// nolint:undoc
+	Topology spanscfg.Topology `yaml:"topology"`
 
 	// cached equivalent for the OBI conversion
 	obi *obi.Config `yaml:"-"`

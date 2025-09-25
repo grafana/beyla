@@ -4,7 +4,13 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
 
+	"github.com/grafana/beyla/v2/pkg/beyla"
+	"github.com/grafana/beyla/v2/pkg/export/alloy"
+	"github.com/grafana/beyla/v2/pkg/export/otel"
+	"github.com/grafana/beyla/v2/pkg/export/otel/spanscfg"
+	"github.com/grafana/beyla/v2/pkg/internal/appolly/traces"
 	"go.opentelemetry.io/obi/pkg/app/request"
 	"go.opentelemetry.io/obi/pkg/components/exec"
 	"go.opentelemetry.io/obi/pkg/components/pipe"
@@ -12,9 +18,6 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
-
-	"github.com/grafana/beyla/v2/pkg/beyla"
-	"github.com/grafana/beyla/v2/pkg/export/alloy"
 )
 
 func ilog() *slog.Logger {
@@ -24,13 +27,6 @@ func ilog() *slog.Logger {
 // Build instantiates the whole instrumentation --> processing --> submit
 // pipeline graph and returns it as a startable item
 func Build(ctx context.Context, config *beyla.Config, ctxInfo *global.ContextInfo, tracesCh *msg.Queue[[]request.Span], processEventsCh *msg.Queue[exec.ProcessEvent]) (*swarm.Runner, error) {
-
-	if ctxInfo.OverrideAppExportQueue == nil {
-		ctxInfo.OverrideAppExportQueue = msg.NewQueue[[]request.Span](
-			msg.ChannelBufferLen(config.ChannelBufferLen),
-			msg.Name("overriddenAppExportQueue"),
-		)
-	}
 	// a swarm containing two swarms
 	// 1. OBI's actual pipe.Build swarm
 	// 2. the process metrics swarm pipeline, connected to the output of (1)
@@ -51,17 +47,43 @@ func Build(ctx context.Context, config *beyla.Config, ctxInfo *global.ContextInf
 		}, nil
 	})
 
-	// process subpipeline optionally starts another pipeline only to collect and export data
-	// about the processes of an instrumented application
-	swi.Add(ProcessMetricsSwarmInstancer(ctxInfo, config, ctxInfo.OverrideAppExportQueue))
-
 	selectorCfg := &attributes.SelectorConfig{
 		SelectionCfg:            config.Attributes.Select,
 		ExtraGroupAttributesCfg: config.Attributes.ExtraGroupAttributes,
 	}
-
 	swi.Add(alloy.TracesReceiver(ctxInfo, &config.TracesReceiver, config.Metrics.SpanMetricsEnabled(),
 		selectorCfg, ctxInfo.OverrideAppExportQueue))
 
+	clusterConnectorsSubpipeline(swi, ctxInfo, config)
+
+	swi.Add(ProcessMetricsSwarmInstancer(ctxInfo, config, ctxInfo.OverrideAppExportQueue))
+
 	return swi.Instance(ctx)
+}
+
+// clusterConnectorsSubpipeline will submit "connector" traces that are identified as cluster-external.
+// Tempo will use them to compose inter-cluster service graph connections that otherwise couldn't be composed by
+// Beyla, as it lacks the metadata from the remote clusters.
+func clusterConnectorsSubpipeline(swi *swarm.Instancer, ctxInfo *global.ContextInfo, config *beyla.Config) {
+	if !slices.Contains(config.Topology.Spans, spanscfg.TopologyInterCluster) {
+		return
+	}
+
+	externalTraces := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(config.ChannelBufferLen))
+	swi.Add(traces.SelectExternal(
+		ctxInfo.OverrideAppExportQueue,
+		externalTraces,
+	))
+
+	swi.Add(alloy.ConnectionSpansReceiver(ctxInfo,
+		&beyla.TracesReceiverConfig{
+			Traces:           config.TracesReceiver.Traces,
+			Instrumentations: config.TracesReceiver.Instrumentations,
+		},
+		externalTraces,
+	))
+
+	swi.Add(otel.ConnectionSpansExport(ctxInfo,
+		&config.Traces,
+		externalTraces))
 }

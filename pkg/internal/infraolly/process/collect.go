@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/golang-lru/v2/simplelru"
+
 	"go.opentelemetry.io/obi/pkg/app/request"
 	"go.opentelemetry.io/obi/pkg/components/svc"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"

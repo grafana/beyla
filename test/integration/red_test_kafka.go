@@ -14,7 +14,6 @@ import (
 	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
 	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/grafana/beyla/v2/test/integration/components/jaeger"

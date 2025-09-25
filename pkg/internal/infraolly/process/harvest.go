@@ -33,6 +33,7 @@ import (
 
 	"github.com/hashicorp/golang-lru/v2/simplelru"
 	"github.com/shirou/gopsutil/v3/process"
+
 	"go.opentelemetry.io/obi/pkg/components/svc"
 )
 

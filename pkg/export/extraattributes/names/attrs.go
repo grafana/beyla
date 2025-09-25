@@ -3,9 +3,10 @@
 package names
 
 import (
-	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 	semconv2 "go.opentelemetry.io/otel/semconv/v1.25.0"
+
+	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 )
 
 // Process Metrics following OTEL 1.26 experimental conventions

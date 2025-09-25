@@ -7,8 +7,9 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v9"
-	"github.com/grafana/beyla/v2/pkg/export/otel/spanscfg"
 	otelconsumer "go.opentelemetry.io/collector/consumer"
+	"gopkg.in/yaml.v3"
+
 	"go.opentelemetry.io/obi/pkg/components/ebpf/tcmanager"
 	"go.opentelemetry.io/obi/pkg/components/imetrics"
 	"go.opentelemetry.io/obi/pkg/components/kube"
@@ -25,10 +26,10 @@ import (
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/services"
 	"go.opentelemetry.io/obi/pkg/transform"
-	"gopkg.in/yaml.v3"
 
 	"github.com/grafana/beyla/v2/pkg/config"
 	botel "github.com/grafana/beyla/v2/pkg/export/otel"
+	"github.com/grafana/beyla/v2/pkg/export/otel/spanscfg"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
 	servicesextra "github.com/grafana/beyla/v2/pkg/services"
 )

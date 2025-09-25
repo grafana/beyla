@@ -147,7 +147,7 @@ go.opentelemetry.io/contrib/detectors/azure/azurevm,https://github.com/grafana/b
 go.opentelemetry.io/contrib/detectors/gcp,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/contrib/detectors/gcp/LICENSE,Apache-2.0
 go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc/LICENSE,Apache-2.0
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp/LICENSE,Apache-2.0
-go.opentelemetry.io/obi,Unknown,Apache-2.0
+go.opentelemetry.io/obi/pkg,Unknown,Apache-2.0
 go.opentelemetry.io/otel,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/otel/LICENSE,Apache-2.0
 go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc/LICENSE,Apache-2.0
 go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp/LICENSE,Apache-2.0

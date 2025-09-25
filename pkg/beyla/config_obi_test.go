@@ -12,13 +12,14 @@ import (
 	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
+
 	"go.opentelemetry.io/obi/pkg/app/request"
 	"go.opentelemetry.io/obi/pkg/components/pipe/global"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	"go.opentelemetry.io/obi/pkg/export/otel"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
-	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 )
 
 func TestGrafanaEndpointOverride(t *testing.T) {

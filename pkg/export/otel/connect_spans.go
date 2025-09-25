@@ -20,6 +20,12 @@ import (
 	"go.opentelemetry.io/collector/exporter/otlphttpexporter"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/ptrace"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/sdk/metric"
+	semconv "go.opentelemetry.io/otel/semconv/v1.25.0"
+	"go.opentelemetry.io/otel/trace/noop"
+	"go.uber.org/zap"
+
 	"go.opentelemetry.io/obi/pkg/app/request"
 	"go.opentelemetry.io/obi/pkg/components/pipe/global"
 	"go.opentelemetry.io/obi/pkg/components/svc"
@@ -32,11 +38,6 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm/swarms"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/sdk/metric"
-	semconv "go.opentelemetry.io/otel/semconv/v1.25.0"
-	"go.opentelemetry.io/otel/trace/noop"
-	"go.uber.org/zap"
 )
 
 // TODO: integrate with Beyla internal metrics

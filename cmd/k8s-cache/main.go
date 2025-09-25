@@ -13,13 +13,13 @@ import (
 	"syscall"
 	"time"
 
+	_ "github.com/grafana/pyroscope-go/godeltaprof/http/pprof"
+
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/kubecache"
 	"go.opentelemetry.io/obi/pkg/kubecache/instrument"
 	"go.opentelemetry.io/obi/pkg/kubecache/meta"
 	"go.opentelemetry.io/obi/pkg/kubecache/service"
-
-	_ "github.com/grafana/pyroscope-go/godeltaprof/http/pprof"
 
 	"github.com/grafana/beyla/v2/cmd/k8s-cache/cfg"
 	"github.com/grafana/beyla/v2/pkg/buildinfo"

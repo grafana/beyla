@@ -6,11 +6,6 @@ import (
 	"log/slog"
 	"slices"
 
-	"github.com/grafana/beyla/v2/pkg/beyla"
-	"github.com/grafana/beyla/v2/pkg/export/alloy"
-	"github.com/grafana/beyla/v2/pkg/export/otel"
-	"github.com/grafana/beyla/v2/pkg/export/otel/spanscfg"
-	"github.com/grafana/beyla/v2/pkg/internal/appolly/traces"
 	"go.opentelemetry.io/obi/pkg/app/request"
 	"go.opentelemetry.io/obi/pkg/components/exec"
 	"go.opentelemetry.io/obi/pkg/components/pipe"
@@ -18,6 +13,12 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
+
+	"github.com/grafana/beyla/v2/pkg/beyla"
+	"github.com/grafana/beyla/v2/pkg/export/alloy"
+	"github.com/grafana/beyla/v2/pkg/export/otel"
+	"github.com/grafana/beyla/v2/pkg/export/otel/spanscfg"
+	"github.com/grafana/beyla/v2/pkg/internal/appolly/traces"
 )
 
 func ilog() *slog.Logger {

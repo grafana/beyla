@@ -7,6 +7,11 @@ import (
 	"slices"
 	"strconv"
 
+	"go.opentelemetry.io/otel/attribute"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/resource"
+	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
+
 	"go.opentelemetry.io/obi/pkg/components/pipe/global"
 	"go.opentelemetry.io/obi/pkg/components/svc"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
@@ -17,10 +22,6 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
-	"go.opentelemetry.io/otel/attribute"
-	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
-	"go.opentelemetry.io/otel/sdk/resource"
-	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
 	"github.com/grafana/beyla/v2/pkg/export/extraattributes"
 	extranames "github.com/grafana/beyla/v2/pkg/export/extraattributes/names"

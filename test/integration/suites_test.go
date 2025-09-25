@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
 	"go.opentelemetry.io/obi/pkg/obi"
 
 	"github.com/grafana/beyla/v2/test/integration/components/docker"

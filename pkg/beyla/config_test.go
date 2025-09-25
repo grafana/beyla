@@ -14,6 +14,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"go.opentelemetry.io/obi/pkg/components/ebpf/tcmanager"
 	"go.opentelemetry.io/obi/pkg/components/imetrics"
 	"go.opentelemetry.io/obi/pkg/components/kube"

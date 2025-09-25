@@ -5,10 +5,11 @@ import (
 	"strconv"
 	"strings"
 
+	"go.opentelemetry.io/otel/attribute"
+
 	"go.opentelemetry.io/obi/pkg/components/svc"
 	attributes "go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
-	"go.opentelemetry.io/otel/attribute"
 
 	extranames "github.com/grafana/beyla/v2/pkg/export/extraattributes/names"
 )

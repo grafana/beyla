@@ -6,6 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/prometheus/client_golang/prometheus"
+
 	"go.opentelemetry.io/obi/pkg/components/connector"
 	"go.opentelemetry.io/obi/pkg/components/exec"
 	"go.opentelemetry.io/obi/pkg/components/pipe/global"

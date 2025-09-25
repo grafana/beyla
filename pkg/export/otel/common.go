@@ -3,8 +3,9 @@ package otel
 import (
 	"time"
 
-	"go.opentelemetry.io/obi/pkg/app/request"
 	trace2 "go.opentelemetry.io/otel/trace"
+
+	"go.opentelemetry.io/obi/pkg/app/request"
 )
 
 var timeNow = time.Now

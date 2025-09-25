@@ -4,8 +4,8 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/grafana/beyla/v2/pkg/beyla"
-	"github.com/grafana/beyla/v2/pkg/export/otel"
+	"go.opentelemetry.io/otel/attribute"
+
 	"go.opentelemetry.io/obi/pkg/app/request"
 	"go.opentelemetry.io/obi/pkg/components/pipe/global"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
@@ -13,7 +13,9 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm/swarms"
-	"go.opentelemetry.io/otel/attribute"
+
+	"github.com/grafana/beyla/v2/pkg/beyla"
+	"github.com/grafana/beyla/v2/pkg/export/otel"
 )
 
 func etrlog() *slog.Logger {

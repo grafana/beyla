@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"go.opentelemetry.io/obi/pkg/app/request"
 	"go.opentelemetry.io/obi/pkg/components/pipe/global"
 	"go.opentelemetry.io/obi/pkg/components/svc"
@@ -14,7 +15,8 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/services"
-	"go.opentelemetry.io/obi/test/collector"
+
+	"github.com/grafana/beyla/v2/pkg/test/collector"
 )
 
 func TestConnection_Spans(t *testing.T) {

@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/stretchr/testify/assert"
+
 	"go.opentelemetry.io/obi/pkg/app/request"
 	"go.opentelemetry.io/obi/pkg/components/connector"
 	"go.opentelemetry.io/obi/pkg/components/discover"
@@ -14,6 +14,8 @@ import (
 	"go.opentelemetry.io/obi/pkg/components/pipe/global"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
+
+	"github.com/grafana/beyla/v2/pkg/beyla"
 )
 
 func TestProcessEventsLoopDoesntBlock(t *testing.T) {

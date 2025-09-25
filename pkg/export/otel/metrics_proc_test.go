@@ -4,10 +4,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/grafana/beyla/v2/pkg/test/collector"
 	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"go.opentelemetry.io/obi/pkg/components/pipe/global"
 	"go.opentelemetry.io/obi/pkg/components/svc"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
@@ -17,6 +17,7 @@ import (
 
 	"github.com/grafana/beyla/v2/pkg/export/extraattributes"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
+	"github.com/grafana/beyla/v2/pkg/test/collector"
 )
 
 const timeout = 3 * time.Second

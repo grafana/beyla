@@ -1,9 +1,9 @@
 version: "2"
-issues:
-  formatters:
-    enable:
-      - gci
-      - gofumpt
+
+formatters:
+  enable:
+    - gofmt
+    - gci
   settings:
     gofmt:
       # simplify code: gofmt with `-s` option, true by default
@@ -23,28 +23,28 @@ run:
 linters:
   exclusions:
     paths:
-    - ^configs
-    - ^docs
-    - ^.obi-src
-    - ^vendor
+      - ^configs
+      - ^docs
+      - ^.obi-src
+      - ^vendor
     presets:
       - std-error-handling
     # Log a warning if an exclusion rule is unused.
     warn-unused: true
     rules:
-    # revive returns false indent-error-flow errors in some cases where
-    # an "else" clause is required to access the if condition context
-    - path: .*
-      linters:
-        - revive
-      text: indent-error-flow
+      # revive returns false indent-error-flow errors in some cases where
+      # an "else" clause is required to access the if condition context
+      - path: .*
+        linters:
+          - revive
+        text: indent-error-flow
 
-    # exclude deprecated API usage errors. If we deprecate some properties is because we don't want to remove them
-    # (hide/undocument them, but keep supporting them until the next major version)
-    - path: .*
-      linters:
-        - staticcheck
-      text: "SA1019:"
+      # exclude deprecated API usage errors. If we deprecate some properties is because we don't want to remove them
+      # (hide/undocument them, but keep supporting them until the next major version)
+      - path: .*
+        linters:
+          - staticcheck
+        text: "SA1019:"
 
   enable:
     - errcheck

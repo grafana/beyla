@@ -188,6 +188,7 @@ generate: obi-submodule
 docker-generate: export GOFLAGS := "-mod=mod"
 docker-generate: obi-submodule
 	@echo "### Generating files (submodule:  $(OBI_MODULE))"
+	@$(OCI_BIN) pull $(GEN_IMG)
 	@OTEL_EBPF_GENFILES_GEN_IMG=$(GEN_IMG) go generate $(OBI_MODULE)/cmd/obi-genfiles/obi_genfiles.go
 	@cd $(OBI_MODULE) && make docker-generate
 

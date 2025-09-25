@@ -79,6 +79,6 @@ spec:
             - name: BEYLA_OTEL_METRICS_FEATURES
               value: "application,application_process"
             - name: BEYLA_NAME_RESOLVER_SOURCES
-              value: "dns,k8s"
+              value: "k8s"
             - name: BEYLA_TOPOLOGY_SPANS
               value: "inter_cluster"

@@ -34,10 +34,6 @@ func TestSelectExternal(t *testing.T) {
 		Type: request.EventTypeHTTPClient, Method: "POST", Route: "/bae",
 		PeerName: "1.2.3.4", HostName: "foo.com",
 		TraceID: [16]byte{4},
-	}, { // TO BE EXCLUDED (IP is local)
-		Type: request.EventTypeHTTPClient, Method: "POST", Route: "/bae",
-		PeerName: "foo.com", HostName: "10.99.32.11",
-		TraceID: [16]byte{5},
 	}, { // TO BE EXCLUDED (Trace ID is not valid)
 		Type: request.EventTypeHTTP, Method: "GET", Route: "/foo",
 		PeerName: "1.2.3.4", HostName: "foo.com",

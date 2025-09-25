@@ -250,7 +250,7 @@ type Config struct {
 
 	// Topology enables extra topology-related features, such as inter-cluster connection spans.
 	// nolint:undoc
-	Topology spanscfg.Topology
+	Topology spanscfg.Topology `yaml:"topology"`
 
 	// cached equivalent for the OBI conversion
 	obi *obi.Config `yaml:"-"`

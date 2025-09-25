@@ -47,5 +47,5 @@ func isExternalSelectable(span *request.Span) bool {
 
 func validPublicIP(ip string) bool {
 	addr, err := netip.ParseAddr(ip)
-	return err == nil && addr.IsValid() && !addr.IsPrivate()
+	return err == nil && addr.IsValid()
 }

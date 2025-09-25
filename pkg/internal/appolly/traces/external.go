@@ -12,7 +12,7 @@ import (
 )
 
 // SelectExternal node filters spans whose source or destination could not be
-// resolved, indicating that they mighg belong to connections from/to external
+// resolved, indicating that they might belong to connections from/to external
 // services.
 func SelectExternal(input, out *msg.Queue[[]request.Span]) swarm.InstanceFunc {
 	in := input.Subscribe()
@@ -41,11 +41,11 @@ func filter(spans []request.Span) []request.Span {
 func isExternalSelectable(span *request.Span) bool {
 	isClient := span.IsClientSpan()
 	return span.TraceID.IsValid() &&
-		((!isClient && validPublicIP(span.PeerName)) ||
-			(isClient && validPublicIP(span.HostName)))
+		((!isClient && validIP(span.PeerName)) ||
+			(isClient && validIP(span.HostName)))
 }
 
-func validPublicIP(ip string) bool {
+func validIP(ip string) bool {
 	addr, err := netip.ParseAddr(ip)
 	return err == nil && addr.IsValid()
 }

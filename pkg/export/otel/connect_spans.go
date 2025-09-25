@@ -34,7 +34,6 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/swarm/swarms"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/sdk/metric"
-	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.25.0"
 	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/zap"
@@ -102,8 +101,8 @@ type connectionSpansExport struct {
 	attributeProvider []attributes.Getter[*request.Span, attribute.KeyValue]
 }
 
-func (tr *connectionSpansExport) processSpans(ctx context.Context, exp exporter.Traces, spans []request.Span, sampler trace.Sampler) {
-	spanGroups := GroupConnectionSpans(ctx, spans, sampler, tr.is, tr.attributeProvider)
+func (tr *connectionSpansExport) processSpans(ctx context.Context, exp exporter.Traces, spans []request.Span) {
+	spanGroups := GroupConnectionSpans(spans, tr.is, tr.attributeProvider)
 	for _, spanGroup := range spanGroups {
 		if len(spanGroup) > 0 {
 			sample := &spanGroup[0]
@@ -146,9 +145,8 @@ func (tr *connectionSpansExport) provideLoop(ctx context.Context) {
 		return
 	}
 
-	sampler := tr.cfg.SamplerConfig.Implementation()
 	swarms.ForEachInput(ctx, tr.input, tr.log.Debug, func(spans []request.Span) {
-		tr.processSpans(ctx, exp, spans, sampler)
+		tr.processSpans(ctx, exp, spans)
 	})
 }
 
@@ -298,9 +296,7 @@ func convertHeaders(headers map[string]string) map[string]configopaque.String {
 }
 
 func GroupConnectionSpans(
-	ctx context.Context,
 	spans []request.Span,
-	sampler trace.Sampler,
 	selector instrumentations.InstrumentationSelection,
 	attributeProvider []attributes.Getter[*request.Span, attribute.KeyValue],
 ) map[svc.UID][]tracesgen.TraceSpanAndAttributes {
@@ -315,29 +311,9 @@ func GroupConnectionSpans(
 			continue
 		}
 
-		spanSampler := func() trace.Sampler {
-			if span.Service.Sampler != nil {
-				return span.Service.Sampler
-			}
-
-			return sampler
-		}
-
 		finalAttrs := make([]attribute.KeyValue, 0, len(attributeProvider))
 		for _, getter := range attributeProvider {
 			finalAttrs = append(finalAttrs, getter(span))
-		}
-
-		sr := spanSampler().ShouldSample(trace.SamplingParameters{
-			ParentContext: ctx,
-			Name:          span.TraceName(),
-			TraceID:       span.TraceID,
-			Kind:          SpanKind(span),
-			Attributes:    finalAttrs,
-		})
-
-		if sr.Decision == trace.Drop {
-			continue
 		}
 
 		group := spanGroups[span.Service.UID]

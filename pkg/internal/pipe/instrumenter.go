@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"slices"
 
+	"github.com/grafana/beyla/v2/pkg/beyla"
+	"github.com/grafana/beyla/v2/pkg/export/alloy"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/export/otel/spanscfg"
 	"github.com/grafana/beyla/v2/pkg/internal/appolly/traces"
@@ -16,10 +18,6 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
-	"go.opentelemetry.io/obi/pkg/services"
-
-	"github.com/grafana/beyla/v2/pkg/beyla"
-	"github.com/grafana/beyla/v2/pkg/export/alloy"
 )
 
 func ilog() *slog.Logger {
@@ -81,9 +79,6 @@ func clusterConnectorsSubpipeline(swi *swarm.Instancer, ctxInfo *global.ContextI
 		&beyla.TracesReceiverConfig{
 			Traces:           config.TracesReceiver.Traces,
 			Instrumentations: config.TracesReceiver.Instrumentations,
-			Sampler: services.SamplerConfig{
-				Name: "always_off", // parentbased_always_on?
-			},
 		},
 		externalTraces,
 	))

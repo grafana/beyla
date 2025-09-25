@@ -8,15 +8,12 @@ import (
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"go.opentelemetry.io/obi/pkg/app/request"
 	"go.opentelemetry.io/obi/pkg/components/pipe/global"
-	"go.opentelemetry.io/obi/pkg/components/svc"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
-	"go.opentelemetry.io/obi/pkg/export/otel/tracesgen"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm/swarms"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/sdk/trace"
 )
 
 func etrlog() *slog.Logger {
@@ -41,7 +38,6 @@ func ConnectionSpansReceiver(
 		tr := &connectionSpansReceiver{
 			hostID:           ctxInfo.HostID,
 			input:            input.Subscribe(),
-			samplerImpl:      cfg.Sampler.Implementation(),
 			attributeGetters: otel.ConnectionSpanAttributes(),
 			traceConsumers:   cfg.Traces,
 			selector:         instrumentations.NewInstrumentationSelection(cfg.Instrumentations),
@@ -51,7 +47,6 @@ func ConnectionSpansReceiver(
 }
 
 type connectionSpansReceiver struct {
-	samplerImpl      trace.Sampler
 	hostID           string
 	input            <-chan []request.Span
 	traceConsumers   []beyla.Consumer
@@ -61,7 +56,7 @@ type connectionSpansReceiver struct {
 
 func (tr *connectionSpansReceiver) provideLoop(ctx context.Context) {
 	swarms.ForEachInput(ctx, tr.input, etrlog().Debug, func(spans []request.Span) {
-		for _, spanGroup := range tr.groupExternSpans(ctx, spans) {
+		for _, spanGroup := range otel.GroupConnectionSpans(spans, tr.selector, tr.attributeGetters) {
 			if len(spanGroup) > 0 {
 				sample := spanGroup[0]
 				if !sample.Span.Service.ExportModes.CanExportTraces() {
@@ -78,8 +73,4 @@ func (tr *connectionSpansReceiver) provideLoop(ctx context.Context) {
 			}
 		}
 	})
-}
-
-func (tr *connectionSpansReceiver) groupExternSpans(ctx context.Context, spans []request.Span) map[svc.UID][]tracesgen.TraceSpanAndAttributes {
-	return otel.GroupConnectionSpans(ctx, spans, tr.samplerImpl, tr.selector, tr.attributeGetters)
 }

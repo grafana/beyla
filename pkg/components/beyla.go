@@ -7,8 +7,11 @@ import (
 	"sync"
 	"text/template"
 
+	"go.opentelemetry.io/otel/attribute"
+	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 	"golang.org/x/sync/errgroup"
 
+	"go.opentelemetry.io/obi/pkg/app/request"
 	"go.opentelemetry.io/obi/pkg/components/connector"
 	"go.opentelemetry.io/obi/pkg/components/imetrics"
 	"go.opentelemetry.io/obi/pkg/components/kube"
@@ -18,8 +21,10 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	obiotel "go.opentelemetry.io/obi/pkg/export/otel"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
+	"go.opentelemetry.io/obi/pkg/pipe/msg"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
+	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/internal/appolly"
 )
 
@@ -176,8 +181,13 @@ func buildCommonContextInfo(
 
 	promMgr := &connector.PrometheusManager{}
 	ctxInfo := &global.ContextInfo{
-		Prometheus:          promMgr,
-		OTELMetricsExporter: &otelcfg.MetricsExporterInstancer{Cfg: &config.Metrics},
+		Prometheus:              promMgr,
+		OTELMetricsExporter:     &otelcfg.MetricsExporterInstancer{Cfg: &config.Metrics},
+		ExtraResourceAttributes: []attribute.KeyValue{semconv.OTelLibraryName(otel.ReporterName)},
+		OverrideAppExportQueue: msg.NewQueue[[]request.Span](
+			msg.ChannelBufferLen(config.ChannelBufferLen),
+			msg.Name("overriddenAppExportQueue"),
+		),
 	}
 
 	if config.Attributes.HostID.Override == "" {

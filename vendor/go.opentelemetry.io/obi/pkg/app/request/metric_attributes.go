@@ -219,3 +219,11 @@ func CudaMemcpyName(val int) string {
 func CudaMemcpy(val int) attribute.KeyValue {
 	return attribute.Key(attr.CudaMemcpyKind).String(CudaMemcpyName(val))
 }
+
+func Job(val string) attribute.KeyValue {
+	return attribute.Key(attr.MessagingOpType).String(val)
+}
+
+func Instance(val string) attribute.KeyValue {
+	return attribute.Key(attr.MessagingOpType).String(val)
+}

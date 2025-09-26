@@ -105,6 +105,10 @@ type MetricsReporter struct {
 	processEvents              <-chan exec.ProcessEvent
 
 	log *slog.Logger
+
+	// testing support
+	createEventMetrics func(targetMetrics *TargetMetrics)
+	deleteEventMetrics func(targetMetrics *TargetMetrics)
 }
 
 // Metrics is a set of metrics associated to a given OTEL MeterProvider.
@@ -205,6 +209,9 @@ func newMetricsReporter(
 		log:                 mlog(),
 		attrGetters:         request.SpanOTELGetters(renameUnresolved),
 	}
+
+	mr.createEventMetrics = mr.createTargetMetricData
+	mr.deleteEventMetrics = mr.deleteTargetMetricData
 
 	// initialize attribute getters
 	if is.HTTPEnabled() {
@@ -988,6 +995,11 @@ func (mr *MetricsReporter) ensureTargetMetrics(service *svc.Attrs) *TargetMetric
 	return targetMetrics
 }
 
+func (mr *MetricsReporter) createTargetMetricData(targetMetrics *TargetMetrics) {
+	mr.createTargetInfo(&targetMetrics.resourceAttributes)
+	mr.createTracesTargetInfo(&targetMetrics.tracesResourceAttributes)
+}
+
 func (mr *MetricsReporter) createTargetMetrics(service *svc.Attrs) {
 	if service == nil {
 		return
@@ -999,8 +1011,12 @@ func (mr *MetricsReporter) createTargetMetrics(service *svc.Attrs) {
 		return
 	}
 
-	mr.createTargetInfo(&targetMetrics.resourceAttributes)
-	mr.createTracesTargetInfo(&targetMetrics.tracesResourceAttributes)
+	mr.createEventMetrics(targetMetrics)
+}
+
+func (mr *MetricsReporter) deleteTargetMetricData(targetMetrics *TargetMetrics) {
+	mr.deleteTargetInfo(&targetMetrics.resourceAttributes)
+	mr.deleteTracesTargetInfo(&targetMetrics.tracesResourceAttributes)
 }
 
 func (mr *MetricsReporter) deleteTargetMetrics(uid *svc.UID) {
@@ -1014,8 +1030,7 @@ func (mr *MetricsReporter) deleteTargetMetrics(uid *svc.UID) {
 		return
 	}
 
-	mr.deleteTargetInfo(&targetMetrics.resourceAttributes)
-	mr.deleteTracesTargetInfo(&targetMetrics.tracesResourceAttributes)
+	mr.deleteEventMetrics(targetMetrics)
 
 	delete(mr.targetMetrics, *uid)
 }
@@ -1024,6 +1039,27 @@ func (mr *MetricsReporter) onProcessEvent(pe *exec.ProcessEvent) {
 	mr.log.Debug("Received new process event", "event type", pe.Type, "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
 
 	if pe.Type == exec.ProcessEventCreated {
+		uid := pe.File.Service.UID
+
+		// Handle the case when the PID changed its feathers, e.g. got new metadata impacting the service name.
+		// There's no new PID, just an update to the metadata.
+		if staleUID, exists := mr.pidTracker.TracksPID(pe.File.Pid); exists && !staleUID.Equals(&uid) {
+			mr.log.Debug("updating older service definition", "from", staleUID, "new", uid)
+			mr.pidTracker.ReplaceUID(staleUID, uid)
+			mr.deleteTargetMetrics(&staleUID)
+			mr.createTargetMetrics(&pe.File.Service)
+			// we don't setup the pid again, we just replaced the metrics it's associated with
+			return
+		}
+
+		// Handle the case when we have new labels for same service
+		// It could be a brand new PID with this information, so we fall through after deleting
+		// the old target info
+		if _, ok := mr.targetMetrics[uid]; ok {
+			mr.log.Debug("updating stale attributes for", "service", uid)
+			mr.deleteTargetMetrics(&uid)
+		}
+
 		mr.createTargetMetrics(&pe.File.Service)
 		mr.setupPIDToServiceRelationship(pe.File.Pid, pe.File.Service.UID)
 	} else {

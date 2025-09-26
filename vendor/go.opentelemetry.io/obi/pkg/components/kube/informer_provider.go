@@ -323,7 +323,7 @@ func loadKubeConfig(kubeConfigPath string) (*rest.Config, error) {
 	// fallback: use in-cluster config
 	config, err = rest.InClusterConfig()
 	if err != nil {
-		return nil, fmt.Errorf("can't access kubenetes. Tried using config from: "+
+		return nil, fmt.Errorf("can't access kubernetes. Tried using config from: "+
 			"config parameter, %s env, homedir and InClusterConfig. Got: %w",
 			kubeConfigEnvVariable, err)
 	}

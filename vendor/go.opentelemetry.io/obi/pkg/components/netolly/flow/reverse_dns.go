@@ -14,8 +14,8 @@ import (
 	"github.com/hashicorp/golang-lru/v2/expirable"
 
 	"go.opentelemetry.io/obi/pkg/components/netolly/ebpf"
-	"go.opentelemetry.io/obi/pkg/components/rdns/ebpf/xdp"
-	"go.opentelemetry.io/obi/pkg/components/rdns/store"
+	"go.opentelemetry.io/obi/pkg/internal/rdns/ebpf/xdp"
+	"go.opentelemetry.io/obi/pkg/internal/rdns/store"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 )

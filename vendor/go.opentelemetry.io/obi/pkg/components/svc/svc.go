@@ -7,8 +7,8 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.25.0"
 
-	route "go.opentelemetry.io/obi/pkg/components/transform/route"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
+	"go.opentelemetry.io/obi/pkg/internal/transform/route"
 	"go.opentelemetry.io/obi/pkg/services"
 )
 
@@ -81,6 +81,10 @@ type UID struct {
 
 func (uid *UID) NameNamespace() ServiceNameNamespace {
 	return ServiceNameNamespace{Name: uid.Name, Namespace: uid.Namespace}
+}
+
+func (uid *UID) Equals(other *UID) bool {
+	return uid.Name == other.Name && uid.Namespace == other.Namespace && uid.Instance == other.Instance
 }
 
 // Attrs stores the metadata attributes of a service/resource

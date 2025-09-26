@@ -8,8 +8,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"go.opentelemetry.io/obi/pkg/app/request"
-	"go.opentelemetry.io/obi/pkg/components/testutil"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
+
+	"github.com/grafana/beyla/v2/pkg/internal/testutil"
 )
 
 func TestSelectExternal(t *testing.T) {

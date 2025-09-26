@@ -348,8 +348,13 @@ func (pa *pollAccounter) checkNewProcessNotification(pid PID, reportedProcs, not
 	return false
 }
 
+func makeProcessAgeFunc() func(int32) time.Duration {
+	r := procStatReader{}
+	return r.processAge
+}
+
 // overridden in tests
-var processAgeFunc = processAge
+var processAgeFunc = makeProcessAgeFunc()
 
 // see https://man7.org/linux/man-pages/man5/proc_pid_stat.5.html
 func parseProcStatField(buf string, field int) string {
@@ -388,15 +393,26 @@ func parseProcStatField(buf string, field int) string {
 	return ""
 }
 
-func getProcStatField(pid int32, field int) string {
+type procStatReader struct {
+	buf [4096]byte // 4KB buffer: safely fits /proc/self/stat (~52 fields * 20 chars + comm + spaces)
+}
+
+func (r *procStatReader) getProcStatField(pid int32, field int) string {
 	path := fmt.Sprintf("/proc/%d/stat", pid)
 
-	data, err := os.ReadFile(path)
+	f, err := os.Open(path)
 	if err != nil {
 		return ""
 	}
 
-	return parseProcStatField(string(data), field)
+	defer f.Close()
+
+	nbytes, err := f.Read(r.buf[:])
+	if err != nil {
+		return ""
+	}
+
+	return parseProcStatField(string(r.buf[:nbytes]), field)
 }
 
 func ticksToNanosecond(ticks uint64) uint64 {
@@ -416,10 +432,10 @@ func nsToDuration(ns uint64) time.Duration {
 	return time.Duration(ns)
 }
 
-func getProcStartTime(pid int32) uint64 {
+func (r *procStatReader) getProcStartTime(pid int32) uint64 {
 	const startTimePos = 22
 
-	val := getProcStatField(pid, startTimePos)
+	val := r.getProcStatField(pid, startTimePos)
 
 	if val == "" {
 		return 0
@@ -433,8 +449,8 @@ func getProcStartTime(pid int32) uint64 {
 	return ticksToNanosecond(startTimeTicks)
 }
 
-func processAge(pid int32) time.Duration {
-	procStartTime := getProcStartTime(pid)
+func (r *procStatReader) processAge(pid int32) time.Duration {
+	procStartTime := r.getProcStartTime(pid)
 
 	if procStartTime == 0 {
 		return emptyDuration

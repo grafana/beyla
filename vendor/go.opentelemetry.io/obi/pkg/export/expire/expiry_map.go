@@ -69,6 +69,11 @@ func (ex *ExpiryMap[T]) GetOrCreate(lbls []string, instancer func() T) T {
 
 // DeleteExpired entries and return their label set
 func (ex *ExpiryMap[T]) DeleteExpired() []T {
+	// If TTL is 0, disable expiration completely
+	if ex.ttl == 0 {
+		return nil
+	}
+
 	var delKeys []string
 	var delEntries []T
 	ex.mt.RLock()

@@ -17,6 +17,7 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/link"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/hashicorp/golang-lru/v2/expirable"
@@ -223,7 +224,7 @@ func ReadBPFTraceAsSpan(parseCtx *EBPFParseContext, cfg *config.EBPFTracer, reco
 	case EventTypeSQL:
 		return ReadSQLRequestTraceAsSpan(record)
 	case EventTypeKHTTP:
-		return ReadHTTPInfoIntoSpan(record, filter)
+		return ReadHTTPInfoIntoSpan(parseCtx, record, filter)
 	case EventTypeKHTTP2:
 		return ReadHTTP2InfoIntoSpan(parseCtx, record, filter)
 	case EventTypeTCP:
@@ -311,6 +312,26 @@ func SupportsEBPFLoops(log *slog.Logger, overrideKernelVersion bool) bool {
 	}
 	kernelMajor, kernelMinor := KernelVersion()
 	return kernelMajor > 5 || (kernelMajor == 5 && kernelMinor >= 17)
+}
+
+func FixupSpec(spec *ebpf.CollectionSpec, overrideKernelVersion bool) {
+	if !SupportsEBPFLoops(ptlog(), overrideKernelVersion) {
+		// Hack: instead of redefining bpf2go generated struct for mutually exclusive conditional programs,
+		// use one predefined field name to store either of them.
+		spec.Programs["obi_protocol_http"] = spec.Programs["obi_protocol_http_legacy"]
+		spec.Programs["obi_protocol_http"].Name = "obi_protocol_http"
+	}
+	// Hack: insert a dummy unused program in order to be able to use bpf2go generated struct to load
+	// the collection.
+	spec.Programs["obi_protocol_http_legacy"] = &ebpf.ProgramSpec{
+		Name: "obi_dummy",
+		Type: ebpf.Kprobe,
+		Instructions: asm.Instructions{
+			asm.Mov.Imm(asm.R0, 0),
+			asm.Return(),
+		},
+		License: "MIT",
+	}
 }
 
 // Injectable for tests

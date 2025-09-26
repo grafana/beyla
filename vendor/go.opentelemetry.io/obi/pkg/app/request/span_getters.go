@@ -128,11 +128,11 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 // Prometheus string value of a given attribute name.
 //
 //nolint:cyclop
-func spanPromGetters(attrName attr.Name) (attributes.Getter[*Span, string], bool) {
+func spanPromGetters(attrName attr.Name) attributes.Getter[*Span, string] {
 	if otelGetter, ok := spanOTELGetters(attrName); ok {
-		return func(span *Span) string { return otelGetter(span).Value.Emit() }, true
+		return func(span *Span) string { return otelGetter(span).Value.Emit() }
 	}
 	// unlike the OTEL getters, when the attribute is not found, we need to look for it
 	// in the metadata section
-	return func(s *Span) string { return s.Service.Metadata[attrName] }, true
+	return func(s *Span) string { return s.Service.Metadata[attrName] }
 }

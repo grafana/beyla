@@ -199,6 +199,7 @@ func getTracesExporter(ctx context.Context, cfg otelcfg.TracesConfig, im imetric
 		}
 		if cfg.BatchTimeout > 0 {
 			batchCfg.FlushTimeout = cfg.BatchTimeout
+			batchCfg.MinSize = int64(cfg.MaxQueueSize)
 		}
 		queueConfig.Batch = configoptional.Some(batchCfg)
 		config.QueueConfig = queueConfig

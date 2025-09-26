@@ -115,7 +115,6 @@ func buildServiceNameTemplate(config *beyla.Config) (*template.Template, error) 
 		var err error
 
 		templ, err = template.New("serviceNameTemplate").Parse(config.Attributes.Kubernetes.ServiceNameTemplate)
-
 		if err != nil {
 			return nil, fmt.Errorf("unable to parse service name template: %w", err)
 		}
@@ -124,12 +123,38 @@ func buildServiceNameTemplate(config *beyla.Config) (*template.Template, error) 
 	return templ, nil
 }
 
+func internalMetrics(
+	ctx context.Context,
+	config *beyla.Config,
+	ctxInfo *global.ContextInfo,
+	promMgr *connector.PrometheusManager,
+) (imetrics.Reporter, error) {
+	switch {
+	case config.InternalMetrics.Exporter == imetrics.InternalMetricsExporterOTEL:
+		slog.Debug("reporting internal metrics as OpenTelemetry")
+		return obiotel.NewInternalMetricsReporter(ctx, ctxInfo, &config.Metrics, &config.InternalMetrics)
+	case config.InternalMetrics.Exporter == imetrics.InternalMetricsExporterPrometheus || config.InternalMetrics.Prometheus.Port != 0:
+		slog.Debug("reporting internal metrics as Prometheus")
+		metrics := imetrics.NewPrometheusReporter(&config.InternalMetrics, promMgr, nil)
+		// Prometheus manager also has its own internal metrics, so we need to pass the imetrics reporter
+		// TODO: remove this dependency cycle and let prommgr to create and return the PrometheusReporter
+		promMgr.InstrumentWith(metrics)
+		return metrics, nil
+	case config.Prometheus.Registry != nil:
+		slog.Debug("reporting internal metrics with Prometheus Registry")
+		return imetrics.NewPrometheusReporter(&config.InternalMetrics, nil, config.Prometheus.Registry), nil
+	default:
+		slog.Debug("not reporting internal metrics")
+		return imetrics.NoopReporter{}, nil
+	}
+}
+
 // BuildContextInfo populates some globally shared components and properties
 // from the user-provided configuration
+// nolint:cyclop
 func buildCommonContextInfo(
 	ctx context.Context, config *beyla.Config,
 ) (*global.ContextInfo, error) {
-
 	// merging deprecated resource labels definition for backwards compatibility
 	resourceLabels := config.Attributes.Kubernetes.ResourceLabels
 	if resourceLabels == nil {
@@ -150,60 +175,42 @@ func buildCommonContextInfo(
 	}
 
 	templ, err := buildServiceNameTemplate(config)
-
 	if err != nil {
 		return nil, err
 	}
 
 	promMgr := &connector.PrometheusManager{}
 	ctxInfo := &global.ContextInfo{
-		Prometheus: promMgr,
-		K8sInformer: kube.NewMetadataProvider(kube.MetadataConfig{
-			Enable:              config.Attributes.Kubernetes.Enable,
-			KubeConfigPath:      config.Attributes.Kubernetes.KubeconfigPath,
-			SyncTimeout:         config.Attributes.Kubernetes.InformersSyncTimeout,
-			ResyncPeriod:        config.Attributes.Kubernetes.InformersResyncPeriod,
-			DisabledInformers:   config.Attributes.Kubernetes.DisableInformers,
-			MetaCacheAddr:       config.Attributes.Kubernetes.MetaCacheAddress,
-			ResourceLabels:      resourceLabels,
-			RestrictLocalNode:   config.Attributes.Kubernetes.MetaRestrictLocalNode,
-			ServiceNameTemplate: templ,
-		}),
+		Prometheus:              promMgr,
+		OTELMetricsExporter:     &otelcfg.MetricsExporterInstancer{Cfg: &config.Metrics},
 		ExtraResourceAttributes: []attribute.KeyValue{semconv.OTelLibraryName(otel.ReporterName)},
-		OTELMetricsExporter:     &otelcfg.MetricsExporterInstancer{Cfg: &config.AsOBI().Metrics},
 		OverrideAppExportQueue: msg.NewQueue[[]request.Span](
 			msg.ChannelBufferLen(config.ChannelBufferLen),
 			msg.Name("overriddenAppExportQueue"),
 		),
 	}
+
 	if config.Attributes.HostID.Override == "" {
 		ctxInfo.FetchHostID(ctx, config.Attributes.HostID.FetchTimeout)
 	} else {
 		ctxInfo.HostID = config.Attributes.HostID.Override
 	}
-	switch {
-	case config.InternalMetrics.Exporter == imetrics.InternalMetricsExporterOTEL:
-		var err error
-		slog.Debug("reporting internal metrics as OpenTelemetry")
-		ctxInfo.Metrics, err = obiotel.NewInternalMetricsReporter(ctx, ctxInfo, &config.Metrics, &config.InternalMetrics)
-		if err != nil {
-			return nil, fmt.Errorf("can't start OpenTelemetry metrics: %w", err)
-		}
-	case config.InternalMetrics.Exporter == imetrics.InternalMetricsExporterPrometheus || config.InternalMetrics.Prometheus.Port != 0:
-		slog.Debug("reporting internal metrics as Prometheus")
-		obiCfg := config.AsOBI()
-		ctxInfo.Metrics = imetrics.NewPrometheusReporter(&obiCfg.InternalMetrics, promMgr, nil)
-		// Prometheus manager also has its own internal metrics, so we need to pass the imetrics reporter
-		// TODO: remove this dependency cycle and let prommgr to create and return the PrometheusReporter
-		promMgr.InstrumentWith(ctxInfo.Metrics)
-	case config.Prometheus.Registry != nil:
-		slog.Debug("reporting internal metrics with Prometheus Registry")
-		obiCfg := config.AsOBI()
-		ctxInfo.Metrics = imetrics.NewPrometheusReporter(&obiCfg.InternalMetrics, nil, config.Prometheus.Registry)
-	default:
-		slog.Debug("not reporting internal metrics")
-		ctxInfo.Metrics = imetrics.NoopReporter{}
+	ctxInfo.Metrics, err = internalMetrics(ctx, config, ctxInfo, promMgr)
+	if err != nil {
+		return nil, fmt.Errorf("can't create internal metrics: %w", err)
 	}
+
+	ctxInfo.K8sInformer = kube.NewMetadataProvider(kube.MetadataConfig{
+		Enable:              config.Attributes.Kubernetes.Enable,
+		KubeConfigPath:      config.Attributes.Kubernetes.KubeconfigPath,
+		SyncTimeout:         config.Attributes.Kubernetes.InformersSyncTimeout,
+		ResyncPeriod:        config.Attributes.Kubernetes.InformersResyncPeriod,
+		DisabledInformers:   config.Attributes.Kubernetes.DisableInformers,
+		MetaCacheAddr:       config.Attributes.Kubernetes.MetaCacheAddress,
+		ResourceLabels:      resourceLabels,
+		RestrictLocalNode:   config.Attributes.Kubernetes.MetaRestrictLocalNode,
+		ServiceNameTemplate: templ,
+	}, ctxInfo.Metrics)
 
 	attributeGroups(config, ctxInfo)
 

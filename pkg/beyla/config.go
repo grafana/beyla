@@ -65,6 +65,7 @@ var DefaultConfig = Config{
 			MaxSize: 1000,
 		},
 		BufferSizes: config.EBPFBufferSizes{
+			HTTP:     0,
 			MySQL:    0,
 			Postgres: 0,
 		},
@@ -140,6 +141,8 @@ var DefaultConfig = Config{
 			FetchTimeout: 500 * time.Millisecond,
 		},
 		RenameUnresolvedHosts:          "unresolved",
+		RenameUnresolvedHostsOutgoing:  "outgoing",
+		RenameUnresolvedHostsIncoming:  "incoming",
 		MetricSpanNameAggregationLimit: 100,
 	},
 	Routes: &transform.RoutesConfig{
@@ -285,6 +288,10 @@ type Attributes struct {
 	// Set this value to the empty string to disable this feature.
 	// nolint:undoc
 	RenameUnresolvedHosts string `yaml:"rename_unresolved_hosts" env:"BEYLA_RENAME_UNRESOLVED_HOSTS"`
+	// nolint:undoc
+	RenameUnresolvedHostsOutgoing string `yaml:"rename_unresolved_hosts_outgoing" env:"BEYLA_RENAME_UNRESOLVED_HOSTS_OUTGOING"`
+	// nolint:undoc
+	RenameUnresolvedHostsIncoming string `yaml:"rename_unresolved_hosts_incoming" env:"BEYLA_RENAME_UNRESOLVED_HOSTS_INCOMING"`
 
 	// MetricSpanNameAggregationLimit works PER SERVICE and only relates to span_metrics.
 	// When the span_name cardinality surpasses this limit, the span_name will be reported as AGGREGATED.

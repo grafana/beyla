@@ -5,6 +5,7 @@ package ebpfcommon
 
 import (
 	"bytes"
+	"log/slog"
 	"net"
 	"strconv"
 	"strings"
@@ -64,7 +65,7 @@ type HTTPInfo struct {
 	HeaderHost string
 }
 
-func ReadHTTPInfoIntoSpan(record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {
+func ReadHTTPInfoIntoSpan(parseCtx *EBPFParseContext, record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {
 	event, err := ReinterpretCast[BPFHTTPInfo](record.RawSample)
 	if err != nil {
 		return request.Span{}, true, err
@@ -75,15 +76,27 @@ func ReadHTTPInfoIntoSpan(record *ringbuf.Record, filter ServiceFilter) (request
 		return request.Span{}, true, nil
 	}
 
-	return HTTPInfoEventToSpan(event)
+	return HTTPInfoEventToSpan(parseCtx, event)
 }
 
-func HTTPInfoEventToSpan(event *BPFHTTPInfo) (request.Span, bool, error) {
+func HTTPInfoEventToSpan(parseCtx *EBPFParseContext, event *BPFHTTPInfo) (request.Span, bool, error) {
 	result := HTTPInfo{BPFHTTPInfo: *event}
 
-	var bufHost string
-	var bufPort int
-	parsedHost := false
+	var (
+		bufHost       string
+		bufPort       int
+		parsedHost    bool
+		requestBuffer = event.Buf[:]
+	)
+
+	if event.HasLargeBuffers == 1 {
+		b, ok := extractTCPLargeBuffer(parseCtx, event.Tp.TraceId, event.Tp.SpanId, packetTypeRequest)
+		if ok {
+			requestBuffer = b
+		} else {
+			slog.Debug("missing large buffer for HTTP request", "traceID", event.Tp.TraceId, "spanID", event.Tp.SpanId)
+		}
+	}
 
 	// When we can't find the connection info, we signal that through making the
 	// source and destination ports equal to max short. E.g. async SSL
@@ -92,7 +105,7 @@ func HTTPInfoEventToSpan(event *BPFHTTPInfo) (request.Span, bool, error) {
 		result.Host = target
 		result.Peer = source
 	} else {
-		bufHost, bufPort = event.hostFromBuf()
+		bufHost, bufPort = httpHostFromBuf(requestBuffer)
 		parsedHost = true
 
 		if bufPort >= 0 {
@@ -100,11 +113,11 @@ func HTTPInfoEventToSpan(event *BPFHTTPInfo) (request.Span, bool, error) {
 			result.ConnInfo.D_port = uint16(bufPort)
 		}
 	}
-	result.URL = event.url()
-	result.Method = event.method()
+	result.URL = httpURLFromBuf(requestBuffer)
+	result.Method = httpMethodFromBuf(requestBuffer)
 
 	if request.EventType(result.Type) == request.EventTypeHTTPClient && !parsedHost {
-		bufHost, _ = event.hostFromBuf()
+		bufHost, _ = httpHostFromBuf(requestBuffer)
 	}
 
 	result.HeaderHost = bufHost
@@ -112,14 +125,14 @@ func HTTPInfoEventToSpan(event *BPFHTTPInfo) (request.Span, bool, error) {
 	return httpInfoToSpan(&result), false, nil
 }
 
-func (event *BPFHTTPInfo) url() string {
-	buf := string(event.Buf[:])
+func httpURLFromBuf(req []byte) string {
+	buf := string(req)
 	space := strings.Index(buf, " ")
 	if space < 0 {
 		return ""
 	}
 
-	bufEnd := bytes.IndexByte(event.Buf[:], 0) // We assume the buffer was zero initialized in eBPF
+	bufEnd := bytes.IndexByte(req, 0) // We assume the buffer was zero initialized in eBPF
 	if bufEnd < 0 {
 		bufEnd = len(buf)
 	}
@@ -141,8 +154,8 @@ func (event *BPFHTTPInfo) url() string {
 	return buf[space+1 : end]
 }
 
-func (event *BPFHTTPInfo) method() string {
-	buf := string(event.Buf[:])
+func httpMethodFromBuf(req []byte) string {
+	buf := string(req)
 	space := strings.Index(buf, " ")
 	if space < 0 {
 		return ""
@@ -151,8 +164,8 @@ func (event *BPFHTTPInfo) method() string {
 	return buf[:space]
 }
 
-func (event *BPFHTTPInfo) hostFromBuf() (string, int) {
-	buf := cstr(event.Buf[:])
+func httpHostFromBuf(req []byte) (string, int) {
+	buf := cstr(req)
 
 	host := "Host: "
 	idx := strings.Index(buf, host)

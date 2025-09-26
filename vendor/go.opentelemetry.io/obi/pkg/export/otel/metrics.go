@@ -151,7 +151,7 @@ func ReportMetrics(
 	ctxInfo *global.ContextInfo,
 	cfg *otelcfg.MetricsConfig,
 	selectorCfg *attributes.SelectorConfig,
-	renameUnresolved string,
+	unresolved request.UnresolvedNames,
 	input *msg.Queue[[]request.Span],
 	processEventCh *msg.Queue[exec.ProcessEvent],
 ) swarm.InstanceFunc {
@@ -166,7 +166,7 @@ func ReportMetrics(
 			ctxInfo,
 			cfg,
 			selectorCfg,
-			renameUnresolved,
+			unresolved,
 			input,
 			processEventCh,
 		)
@@ -183,7 +183,7 @@ func newMetricsReporter(
 	ctxInfo *global.ContextInfo,
 	cfg *otelcfg.MetricsConfig,
 	selectorCfg *attributes.SelectorConfig,
-	renameUnresolved string,
+	unresolved request.UnresolvedNames,
 	input *msg.Queue[[]request.Span],
 	processEventCh *msg.Queue[exec.ProcessEvent],
 ) (*MetricsReporter, error) {
@@ -207,7 +207,7 @@ func newMetricsReporter(
 		processEvents:       processEventCh.Subscribe(msg.SubscriberName("otelMetrics.ProcessEvents")),
 		userAttribSelection: selectorCfg.SelectionCfg,
 		log:                 mlog(),
-		attrGetters:         request.SpanOTELGetters(renameUnresolved),
+		attrGetters:         request.SpanOTELGetters(unresolved),
 	}
 
 	mr.createEventMetrics = mr.createTargetMetricData

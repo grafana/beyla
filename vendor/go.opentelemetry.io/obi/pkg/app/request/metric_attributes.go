@@ -136,12 +136,20 @@ func SpanPeer(span *Span) string {
 	return span.Peer
 }
 
-func HTTPClientHost(span *Span) string {
+func HostFromSchemeHost(span *Span) string {
 	if strings.Index(span.Statement, SchemeHostSeparator) > 0 {
 		schemeHost := strings.Split(span.Statement, SchemeHostSeparator)
 		if schemeHost[1] != "" {
 			return schemeHost[1]
 		}
+	}
+
+	return ""
+}
+
+func HTTPClientHost(span *Span) string {
+	if host := HostFromSchemeHost(span); host != "" {
+		return host
 	}
 
 	return HostAsServer(span)

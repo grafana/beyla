@@ -588,6 +588,7 @@ func (p *Tracer) AlreadyInstrumentedLib(_ uint64) bool {
 func (p *Tracer) Run(ctx context.Context, ebpfEventContext *ebpfcommon.EBPFEventContext, eventsChan *msg.Queue[[]request.Span]) {
 	ebpfcommon.SharedRingbuf(
 		ebpfEventContext,
+		ebpfcommon.NewEBPFParseContext(p.cfg),
 		p.cfg,
 		p.pidsFilter,
 		p.bpfObjects.Events,

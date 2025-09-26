@@ -155,11 +155,17 @@ func setupMetricsSubPipeline(
 		Prom:  &config.Prometheus,
 	}, exportableSpans, spanNameAggregatedMetrics))
 
+	unresolvedCfg := request.UnresolvedNames{
+		Generic:  config.Attributes.RenameUnresolvedHosts,
+		Outgoing: config.Attributes.RenameUnresolvedHostsOutgoing,
+		Incoming: config.Attributes.RenameUnresolvedHostsIncoming,
+	}
+
 	swi.Add(otel.ReportMetrics(
 		ctxInfo,
 		&config.Metrics,
 		selectorCfg,
-		config.Attributes.RenameUnresolvedHosts,
+		unresolvedCfg,
 		spanNameAggregatedMetrics,
 		processEventsCh,
 	), swarm.WithID("OTELMetricsExport"))
@@ -167,7 +173,7 @@ func setupMetricsSubPipeline(
 	swi.Add(otel.ReportSvcGraphMetrics(
 		ctxInfo,
 		&config.Metrics,
-		config.Attributes.RenameUnresolvedHosts,
+		unresolvedCfg,
 		spanNameAggregatedMetrics,
 		processEventsCh,
 	), swarm.WithID("OTELSvcGraphMetricsExport"))
@@ -176,7 +182,7 @@ func setupMetricsSubPipeline(
 		ctxInfo,
 		&config.Prometheus,
 		selectorCfg,
-		config.Attributes.RenameUnresolvedHosts,
+		unresolvedCfg,
 		spanNameAggregatedMetrics,
 		processEventsCh,
 	), swarm.WithID("PrometheusEndpoint"))
@@ -213,7 +219,13 @@ func (i *Instrumenter) Start(ctx context.Context) <-chan error {
 // instead of a *request.Span pointer. This is a convenience method created to avoid having to
 // rewrite the pipeline types from []request.Span types to []*request.Span
 func spanPtrPromGetters(cfg *obi.Config) attributes.NamedGetters[request.Span, string] {
-	getter := request.SpanPromGetters(cfg.Attributes.RenameUnresolvedHosts)
+	unresolvedCfg := request.UnresolvedNames{
+		Generic:  cfg.Attributes.RenameUnresolvedHosts,
+		Outgoing: cfg.Attributes.RenameUnresolvedHostsOutgoing,
+		Incoming: cfg.Attributes.RenameUnresolvedHostsIncoming,
+	}
+
+	getter := request.SpanPromGetters(unresolvedCfg)
 	return func(name attr.Name) (attributes.Getter[request.Span, string], bool) {
 		if ptrGetter, ok := getter(name); ok {
 			return func(span request.Span) string { return ptrGetter(&span) }, true

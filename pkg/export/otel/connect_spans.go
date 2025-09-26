@@ -46,8 +46,8 @@ var beylaSpan = attribute.KeyValue{Key: "beyla.topology", Value: attribute.Strin
 
 // ConnectionSpanAttributes do not use any user-defined set of attributes but a reduced set of attributes
 // that will be exclusively used from Tempo to create inter-cluster service graph metrics
-func ConnectionSpanAttributes() []attributes.Getter[*request.Span, attribute.KeyValue] {
-	functionalGetters := request.SpanOTELGetters("")
+func ConnectionSpanAttributes(unresolvedNames request.UnresolvedNames) []attributes.Getter[*request.Span, attribute.KeyValue] {
+	functionalGetters := request.SpanOTELGetters(unresolvedNames)
 	attributeValueGetters := make([]attributes.Getter[*request.Span, attribute.KeyValue], 0, 5)
 	for _, name := range []attr.Name{attr.Client, attr.Server, attr.ClientAddr, attr.ServerAddr} {
 		getter, ok := functionalGetters(name)
@@ -67,19 +67,21 @@ func ConnectionSpanAttributes() []attributes.Getter[*request.Span, attribute.Key
 func ConnectionSpansExport(
 	ctxInfo *global.ContextInfo,
 	cfg *otelcfg.TracesConfig,
+	unresolvedNames request.UnresolvedNames,
 	input *msg.Queue[[]request.Span],
 ) swarm.InstanceFunc {
 	return func(_ context.Context) (swarm.RunFunc, error) {
 		if !cfg.Enabled() {
 			return swarm.EmptyRunFunc()
 		}
-		tr := makeConnectionSpansExport(cfg, ctxInfo, input)
+		tr := makeConnectionSpansExport(cfg, unresolvedNames, ctxInfo, input)
 		return tr.provideLoop, nil
 	}
 }
 
 func makeConnectionSpansExport(
 	cfg *otelcfg.TracesConfig,
+	unresolvedNames request.UnresolvedNames,
 	ctxInfo *global.ContextInfo,
 	input *msg.Queue[[]request.Span],
 ) *connectionSpansExport {
@@ -87,7 +89,7 @@ func makeConnectionSpansExport(
 		log:               slog.With("component", "otel.ConnectionSpansExport"),
 		cfg:               cfg,
 		ctxInfo:           ctxInfo,
-		attributeProvider: ConnectionSpanAttributes(),
+		attributeProvider: ConnectionSpanAttributes(unresolvedNames),
 		is:                instrumentations.NewInstrumentationSelection(cfg.Instrumentations),
 		input:             input.Subscribe(msg.SubscriberName("otel.ConnectionSpansExport")),
 	}

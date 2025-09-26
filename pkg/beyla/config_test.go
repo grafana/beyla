@@ -59,7 +59,6 @@ prometheus_export:
     request_size_histogram: [0, 10, 20, 22]
     response_size_histogram: [0, 10, 20, 22]
 attributes:
-  drop_metric_unresolved_ips: false
   kubernetes:
     kubeconfig_path: /foo/bar
     enable: true
@@ -144,6 +143,7 @@ network:
 				MaxSize: 1000,
 			},
 			BufferSizes: config.EBPFBufferSizes{
+				HTTP:     0,
 				MySQL:    0,
 				Postgres: 0,
 			},
@@ -198,7 +198,8 @@ network:
 				DurationHistogram:     otelcfg.DefaultBuckets.DurationHistogram,
 				RequestSizeHistogram:  []float64{0, 10, 20, 22},
 				ResponseSizeHistogram: []float64{0, 10, 20, 22},
-			}},
+			},
+		},
 		InternalMetrics: imetrics.Config{
 			Exporter: imetrics.InternalMetricsExporterDisabled,
 			Prometheus: imetrics.PrometheusConfig{
@@ -232,6 +233,8 @@ network:
 				"k8s_app_meta": {"k8s.app.version"},
 			},
 			RenameUnresolvedHosts:          "unresolved",
+			RenameUnresolvedHostsOutgoing:  "outgoing",
+			RenameUnresolvedHostsIncoming:  "incoming",
 			MetricSpanNameAggregationLimit: 100,
 		},
 		Routes: &transform.RoutesConfig{

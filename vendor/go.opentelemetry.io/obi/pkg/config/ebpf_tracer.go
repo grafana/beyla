@@ -25,6 +25,8 @@ const (
 	ContextPropagationDisabled
 )
 
+const bufferSizeMax = 8192
+
 // EBPFTracer configuration for eBPF programs
 type EBPFTracer struct {
 	// Enables logging of eBPF program events
@@ -102,36 +104,26 @@ type EBPFTracer struct {
 	MongoRequestsCacheSize int `yaml:"mongo_requests_cache_size" env:"OTEL_EBPF_BPF_MONGO_REQUESTS_CACHE_SIZE"`
 }
 
+// Per-protocol data buffer size in bytes.
+// Max: 8192 bytes.
+// Default: 0 (disabled).
 type EBPFBufferSizes struct {
-	// MySQL data buffer size in bytes.
-	// Min: 128 bytes, Max: 8192 bytes.
-	// Valid values: 0, 128, 256, 512, 1024, 2048, 4096, 8192.
-	//
-	// Default: 0 (disabled).
-	MySQL uint32 `yaml:"mysql" env:"OTEL_EBPF_BPF_BUFFER_SIZE_MYSQL"`
-	// Postgres data buffer size in bytes.
-	// Min: 128 bytes, Max: 8192 bytes.
-	// Valid values: 0, 128, 256, 512, 1024, 2048, 4096, 8192.
-	//
-	// Default: 0 (disabled).
+	HTTP     uint32 `yaml:"http" env:"OTEL_EBPF_BPF_BUFFER_SIZE_HTTP"`
+	MySQL    uint32 `yaml:"mysql" env:"OTEL_EBPF_BPF_BUFFER_SIZE_MYSQL"`
 	Postgres uint32 `yaml:"postgres" env:"OTEL_EBPF_BPF_BUFFER_SIZE_POSTGRES"`
 }
 
 func (c *EBPFTracer) Validate() error {
 	// TODO(matt): validate all the existing attributes
 
-	switch c.BufferSizes.MySQL {
-	case 0, 128, 256, 512, 1024, 2048, 4096, 8192:
-		// valid sizes
-	default:
-		return fmt.Errorf("invalid MySQL buffer size: %d, must be one of 0, 128, 256, 512, 1024, 2048, 4096, 8192", c.BufferSizes.MySQL)
+	if c.BufferSizes.HTTP > bufferSizeMax {
+		return fmt.Errorf("buffer size too large (HTTP): %d, max is %d", c.BufferSizes.HTTP, bufferSizeMax)
 	}
-
-	switch c.BufferSizes.Postgres {
-	case 0, 128, 256, 512, 1024, 2048, 4096, 8192:
-		// valid sizes
-	default:
-		return fmt.Errorf("invalid Postgres buffer size: %d, must be one of 0, 128, 256, 512, 1024, 2048, 4096, 8192", c.BufferSizes.Postgres)
+	if c.BufferSizes.MySQL > bufferSizeMax {
+		return fmt.Errorf("buffer size too large (MySQL): %d, max is %d", c.BufferSizes.MySQL, bufferSizeMax)
+	}
+	if c.BufferSizes.Postgres > bufferSizeMax {
+		return fmt.Errorf("buffer size too large (Postgres): %d, max is %d", c.BufferSizes.Postgres, bufferSizeMax)
 	}
 
 	return nil

@@ -37,6 +37,7 @@ func TestConnection_Spans(t *testing.T) {
 			MaxQueueSize:  4096,
 			BatchTimeout:  10 * time.Millisecond,
 		},
+		request.UnresolvedNames{},
 		input,
 	)(t.Context())
 	require.NoError(t, err)

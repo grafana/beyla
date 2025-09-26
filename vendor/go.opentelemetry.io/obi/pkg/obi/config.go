@@ -76,6 +76,7 @@ var DefaultConfig = Config{
 			MaxSize: 1000,
 		},
 		BufferSizes: config.EBPFBufferSizes{
+			HTTP:     0,
 			MySQL:    0,
 			Postgres: 0,
 		},
@@ -83,6 +84,7 @@ var DefaultConfig = Config{
 		PostgresPreparedStatementsCacheSize: 1024,
 		MongoRequestsCacheSize:              1024,
 		KafkaTopicUUIDCacheSize:             1024,
+		OverrideBPFLoopEnabled:              false,
 	},
 	NameResolver: &transform.NameResolverConfig{
 		Sources:  []string{"k8s"},
@@ -107,6 +109,7 @@ var DefaultConfig = Config{
 		Protocol:          otelcfg.ProtocolUnset,
 		TracesProtocol:    otelcfg.ProtocolUnset,
 		MaxQueueSize:      4096,
+		BatchTimeout:      15 * time.Second,
 		ReportersCacheLen: ReporterLRUSize,
 		Instrumentations: []string{
 			instrumentations.InstrumentationALL,
@@ -145,6 +148,8 @@ var DefaultConfig = Config{
 			FetchTimeout: 500 * time.Millisecond,
 		},
 		RenameUnresolvedHosts:          "unresolved",
+		RenameUnresolvedHostsOutgoing:  "outgoing",
+		RenameUnresolvedHostsIncoming:  "incoming",
 		MetricSpanNameAggregationLimit: 100,
 	},
 	Routes: &transform.RoutesConfig{
@@ -265,7 +270,9 @@ type Attributes struct {
 	// RenameUnresolvedHosts will replace HostName and PeerName attributes when they are empty or contain
 	// unresolved IP addresses to reduce cardinality.
 	// Set this value to the empty string to disable this feature.
-	RenameUnresolvedHosts string `yaml:"rename_unresolved_hosts" env:"OTEL_EBPF_RENAME_UNRESOLVED_HOSTS"`
+	RenameUnresolvedHosts         string `yaml:"rename_unresolved_hosts" env:"OTEL_EBPF_RENAME_UNRESOLVED_HOSTS"`
+	RenameUnresolvedHostsOutgoing string `yaml:"rename_unresolved_hosts_outgoing" env:"OTEL_EBPF_RENAME_UNRESOLVED_HOSTS_OUTGOING"`
+	RenameUnresolvedHostsIncoming string `yaml:"rename_unresolved_hosts_incoming" env:"OTEL_EBPF_RENAME_UNRESOLVED_HOSTS_INCOMING"`
 
 	// MetricSpanNameAggregationLimit works PER SERVICE and only relates to span_metrics.
 	// When the span_name cardinality surpasses this limit, the span_name will be reported as AGGREGATED.

@@ -12,9 +12,11 @@ import (
 	"strings"
 	"sync"
 	"text/template"
+	"time"
 
 	"go.opentelemetry.io/obi/pkg/components/helpers/container"
 	"go.opentelemetry.io/obi/pkg/components/helpers/maps"
+	"go.opentelemetry.io/obi/pkg/components/imetrics"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/kubecache/informer"
@@ -114,6 +116,9 @@ type Store struct {
 
 	// A go template that, if set, is used to create the service name
 	serviceNameTemplate *template.Template
+
+	cacheSynced bool
+	metrics     imetrics.Reporter
 }
 
 type CachedObjMeta struct {
@@ -121,7 +126,12 @@ type CachedObjMeta struct {
 	OTELResourceMeta map[attr.Name]string
 }
 
-func NewStore(kubeMetadata meta.Notifier, resourceLabels ResourceLabels, serviceNameTemplate *template.Template) *Store {
+func NewStore(
+	kubeMetadata meta.Notifier,
+	resourceLabels ResourceLabels,
+	serviceNameTemplate *template.Template,
+	internalMetrics imetrics.Reporter,
+) *Store {
 	log := dblog()
 
 	db := &Store{
@@ -138,6 +148,7 @@ func NewStore(kubeMetadata meta.Notifier, resourceLabels ResourceLabels, service
 		BaseNotifier:        meta.NewBaseNotifier(log),
 		resourceLabels:      resourceLabels,
 		serviceNameTemplate: serviceNameTemplate,
+		metrics:             internalMetrics,
 	}
 	kubeMetadata.Subscribe(db)
 	return db
@@ -195,6 +206,12 @@ func (s *Store) cacheResourceMetadata(meta *informer.ObjectMeta) *CachedObjMeta 
 // On is invoked by the informer when a new Kube object is created, updated or deleted.
 // It will forward the notification to all the Store subscribers
 func (s *Store) On(event *informer.Event) error {
+	// During cache startup, it is expected that the informer receives metadata from old events,
+	// so we don't measure lag until all the cache has been synced
+	if s.cacheSynced {
+		lag := time.Since(time.Unix(event.Resource.StatusTimeEpoch, 0))
+		s.metrics.InformerLag(lag.Seconds())
+	}
 	switch event.Type {
 	case informer.EventType_CREATED:
 		s.addObjectMeta(event.Resource)
@@ -202,6 +219,8 @@ func (s *Store) On(event *informer.Event) error {
 		s.updateObjectMeta(event.Resource)
 	case informer.EventType_DELETED:
 		s.deleteObjectMeta(event.Resource)
+	case informer.EventType_SYNC_FINISHED:
+		s.cacheSynced = true
 	}
 	s.Notify(event)
 	return nil

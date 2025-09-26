@@ -40,6 +40,7 @@ type InternalMetricsReporter struct {
 	bpfMapEntries                    instrument.Int64Gauge
 	bpfMapMaxEntries                 instrument.Int64Gauge
 	bpfInternalMetricsScrapeInterval time.Duration
+	informerLag                      instrument.Float64Histogram
 }
 
 func imlog() *slog.Logger {
@@ -284,6 +285,10 @@ func (p *InternalMetricsReporter) BpfMapMaxEntries(mapID, mapName, mapType strin
 	p.bpfMapMaxEntries.Record(p.ctx, int64(maxEntries), instrument.WithAttributes(attrs...))
 }
 
-func (p InternalMetricsReporter) BpfInternalMetricsScrapeInterval() time.Duration {
+func (p *InternalMetricsReporter) BpfInternalMetricsScrapeInterval() time.Duration {
 	return p.bpfInternalMetricsScrapeInterval
+}
+
+func (p *InternalMetricsReporter) InformerLag(seconds float64) {
+	p.informerLag.Record(p.ctx, seconds)
 }

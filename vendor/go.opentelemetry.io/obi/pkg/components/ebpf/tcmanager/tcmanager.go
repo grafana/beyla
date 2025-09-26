@@ -93,7 +93,7 @@ func (b *TCBackend) UnmarshalText(text []byte) error {
 		return nil
 	}
 
-	return fmt.Errorf("invalid TCBakend value: '%s'", text)
+	return fmt.Errorf("invalid TCBackend value: '%s'", text)
 }
 
 func (b TCBackend) MarshalText() ([]byte, error) {
@@ -106,7 +106,7 @@ func (b TCBackend) MarshalText() ([]byte, error) {
 		return []byte("auto"), nil
 	}
 
-	return nil, fmt.Errorf("invalid TCBakend value: %d", b)
+	return nil, fmt.Errorf("invalid TCBackend value: %d", b)
 }
 
 func (b TCBackend) Valid() bool {

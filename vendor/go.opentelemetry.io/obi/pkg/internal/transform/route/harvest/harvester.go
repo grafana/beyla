@@ -11,7 +11,7 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/components/exec"
 	"go.opentelemetry.io/obi/pkg/components/svc"
-	"go.opentelemetry.io/obi/pkg/components/transform/route"
+	route2 "go.opentelemetry.io/obi/pkg/internal/transform/route"
 )
 
 type RouteHarvester struct {
@@ -113,12 +113,12 @@ func (h *RouteHarvester) HarvestRoutes(fileInfo *exec.FileInfo) (*RouteHarvester
 	}
 }
 
-func RouteMatcherFromResult(r RouteHarvesterResult) route.Matcher {
+func RouteMatcherFromResult(r RouteHarvesterResult) route2.Matcher {
 	switch r.Kind {
 	case CompleteRoutes:
-		return route.NewMatcher(r.Routes)
+		return route2.NewMatcher(r.Routes)
 	case PartialRoutes:
-		return route.NewPartialRouteMatcher(r.Routes)
+		return route2.NewPartialRouteMatcher(r.Routes)
 	}
 
 	return nil

@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"os"
 
-	"go.opentelemetry.io/obi/pkg/components/fastelf"
 	"go.opentelemetry.io/obi/pkg/components/svc"
+	"go.opentelemetry.io/obi/pkg/internal/fastelf"
 )
 
 func FindProcLanguage(pid int32) svc.InstrumentableType {

@@ -25,8 +25,8 @@ import (
 	common "go.opentelemetry.io/obi/pkg/components/ebpf/common"
 	convenience "go.opentelemetry.io/obi/pkg/components/ebpf/convenience"
 	"go.opentelemetry.io/obi/pkg/components/exec"
-	"go.opentelemetry.io/obi/pkg/components/goexec"
 	"go.opentelemetry.io/obi/pkg/components/imetrics"
+	"go.opentelemetry.io/obi/pkg/internal/goexec"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 )
 

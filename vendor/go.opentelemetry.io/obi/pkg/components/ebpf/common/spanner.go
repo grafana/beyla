@@ -11,7 +11,7 @@ import (
 	trace2 "go.opentelemetry.io/otel/trace"
 
 	"go.opentelemetry.io/obi/pkg/app/request"
-	"go.opentelemetry.io/obi/pkg/components/sqlprune"
+	"go.opentelemetry.io/obi/pkg/internal/sqlprune"
 )
 
 func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {

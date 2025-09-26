@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"go.opentelemetry.io/obi/pkg/components/ebpf/ringbuf"
-	"go.opentelemetry.io/obi/pkg/components/rdns/store"
+	"go.opentelemetry.io/obi/pkg/internal/rdns/store"
 )
 
 func log() *slog.Logger {

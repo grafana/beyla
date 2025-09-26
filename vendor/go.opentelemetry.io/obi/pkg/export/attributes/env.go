@@ -6,7 +6,7 @@ package attributes
 import (
 	"strings"
 
-	"go.opentelemetry.io/obi/pkg/components/split"
+	"go.opentelemetry.io/obi/pkg/internal/split"
 )
 
 type VarHandler func(k string, v string)

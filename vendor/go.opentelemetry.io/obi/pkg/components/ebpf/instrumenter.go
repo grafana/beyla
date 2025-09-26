@@ -20,14 +20,14 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
-	v2 "github.com/containers/common/pkg/cgroupv2"
+	"github.com/containers/common/pkg/cgroupv2"
 	"github.com/prometheus/procfs"
 	"golang.org/x/sys/unix"
 
 	ebpfcommon "go.opentelemetry.io/obi/pkg/components/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/components/exec"
-	"go.opentelemetry.io/obi/pkg/components/goexec"
 	"go.opentelemetry.io/obi/pkg/components/imetrics"
+	"go.opentelemetry.io/obi/pkg/internal/goexec"
 )
 
 func ilog() *slog.Logger {
@@ -486,7 +486,7 @@ func processMaps(pid int32) ([]*procfs.ProcMap, error) {
 func getCgroupPath() (string, error) {
 	cgroupPath := "/sys/fs/cgroup"
 
-	enabled, err := v2.Enabled()
+	enabled, err := cgroupv2.Enabled()
 	if !enabled {
 		if _, pathErr := os.Stat(filepath.Join(cgroupPath, "unified")); pathErr == nil {
 			slog.Debug("discovered hybrid cgroup hierarchy, will attempt to attach sockops")

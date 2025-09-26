@@ -15,7 +15,7 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/app/request"
 	"go.opentelemetry.io/obi/pkg/components/ebpf/ringbuf"
-	"go.opentelemetry.io/obi/pkg/components/split"
+	"go.opentelemetry.io/obi/pkg/internal/split"
 )
 
 const minRedisFrameLen = 3

@@ -85,6 +85,7 @@ const (
 	sourceKey            = "source"
 	telemetryLanguageKey = "telemetry_sdk_language"
 	telemetrySDKKey      = "telemetry_sdk_name"
+	telemetrySDKVersion  = "telemetry_sdk_version"
 
 	clientKey          = "client"
 	clientNamespaceKey = "client_service_namespace"
@@ -271,6 +272,10 @@ type metricsReporter struct {
 
 	serviceMap  map[svc.UID]svc.Attrs
 	pidsTracker otel.PidServiceTracker
+
+	// for testing purposes
+	createEventMetrics func(service *svc.Attrs)
+	deleteEventMetrics func(service *svc.Attrs)
 }
 
 func PrometheusEndpoint(
@@ -671,6 +676,10 @@ func newReporter(
 		}),
 	}
 
+	// testing aid
+	mr.deleteEventMetrics = mr.deleteTargetInfoMetrics
+	mr.createEventMetrics = mr.createTargetInfos
+
 	registeredMetrics := []prometheus.Collector{mr.targetInfo}
 
 	if !mr.cfg.DisableBuildInfo {
@@ -1022,6 +1031,7 @@ func labelNamesTargetInfo(kubeEnabled bool, extraMetadataLabelNames []attr.Name)
 		serviceJobKey,
 		telemetryLanguageKey,
 		telemetrySDKKey,
+		telemetrySDKVersion,
 		sourceKey,
 		osTypeKey,
 	}
@@ -1047,6 +1057,7 @@ func (r *metricsReporter) labelValuesTargetInfo(service *svc.Attrs) []string {
 		service.Job(),
 		service.SDKLanguage.String(),
 		attr.VendorPrefix,
+		buildinfo.Version,
 		attr.VendorPrefix,
 		"linux",
 	}
@@ -1133,16 +1144,16 @@ func (r *metricsReporter) origService(uid svc.UID, service *svc.Attrs) *svc.Attr
 	return orig
 }
 
-func (r *metricsReporter) deleteTargetInfo(uid svc.UID, service *svc.Attrs) {
-	targetInfoLabelValues := r.labelValuesTargetInfo(r.origService(uid, service))
+func (r *metricsReporter) deleteTargetInfoMetric(service *svc.Attrs) {
+	targetInfoLabelValues := r.labelValuesTargetInfo(service)
 	r.targetInfo.DeleteLabelValues(targetInfoLabelValues...)
 }
 
-func (r *metricsReporter) deleteTracesTargetInfo(uid svc.UID, service *svc.Attrs) {
+func (r *metricsReporter) deleteTracesTargetInfoMetric(service *svc.Attrs) {
 	if !r.cfg.AnySpanMetricsEnabled() {
 		return
 	}
-	targetInfoLabelValues := r.labelValuesTargetInfo(r.origService(uid, service))
+	targetInfoLabelValues := r.labelValuesTargetInfo(service)
 	r.tracesTargetInfo.DeleteLabelValues(targetInfoLabelValues...)
 }
 
@@ -1154,28 +1165,68 @@ func (r *metricsReporter) disassociatePIDFromService(pid int32) (bool, svc.UID) 
 	return r.pidsTracker.RemovePID(pid)
 }
 
+func (r *metricsReporter) createTargetInfos(service *svc.Attrs) {
+	r.createTargetInfo(service)
+	r.createTracesTargetInfo(service)
+}
+
+func (r *metricsReporter) deleteTargetInfoMetrics(service *svc.Attrs) {
+	r.deleteTargetInfoMetric(service)
+	r.deleteTracesTargetInfoMetric(service)
+}
+
+func (r *metricsReporter) deleteTargetInfos(uid svc.UID, service *svc.Attrs) {
+	r.deleteEventMetrics(r.origService(uid, service))
+}
+
+func (r *metricsReporter) handleProcessEvent(pe exec.ProcessEvent, log *slog.Logger) {
+	log.Debug("Received new process event", "event type", pe.Type, "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
+	uid := pe.File.Service.UID
+
+	if pe.Type == exec.ProcessEventCreated {
+		// Handle the case when the PID changed its feathers, e.g. got new metadata impacting the service name.
+		// There's no new PID, just an update to the metadata.
+		if staleUID, exists := r.pidsTracker.TracksPID(pe.File.Pid); exists && !staleUID.Equals(&uid) {
+			log.Debug("updating older service definition", "from", staleUID, "new", uid)
+			r.pidsTracker.ReplaceUID(staleUID, uid)
+			if origAttrs, ok := r.serviceMap[staleUID]; ok {
+				log.Debug("updating service attributes for", "service", uid)
+				r.deleteEventMetrics(&origAttrs)
+				delete(r.serviceMap, staleUID)
+				r.serviceMap[uid] = pe.File.Service
+				r.createEventMetrics(&pe.File.Service)
+				// we don't setup the pid again, we just replaced the metrics it's associated with
+			}
+			return
+		}
+
+		// Handle the case when we have new labels for same service
+		// It could be a brand new PID with this information, so we fall through after deleting
+		// the old target info
+		if origAttrs, ok := r.serviceMap[uid]; ok {
+			log.Debug("updating stale attributes for", "service", uid)
+			r.deleteEventMetrics(&origAttrs)
+		}
+
+		r.createEventMetrics(&pe.File.Service)
+		r.serviceMap[uid] = pe.File.Service
+		r.setupPIDToServiceRelationship(pe.File.Pid, uid)
+	} else {
+		if deleted, origUID := r.disassociatePIDFromService(pe.File.Pid); deleted {
+			mlog().Debug("deleting infos for", "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
+			r.deleteTargetInfos(origUID, &pe.File.Service)
+			if r.cfg.HostMetricsEnabled() && r.pidsTracker.Count() == 0 {
+				mlog().Debug("No more PIDs tracked, expiring host info metric")
+				r.tracesHostInfo.entries.DeleteAll()
+			}
+			delete(r.serviceMap, origUID)
+		}
+	}
+}
+
 func (r *metricsReporter) watchForProcessEvents(ctx context.Context) {
 	log := mlog().With("function", "watchForProcessEvents")
 	swarms.ForEachInput(ctx, r.processEvents, log.Debug, func(pe exec.ProcessEvent) {
-		log.Debug("Received new process event", "event type", pe.Type, "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
-		uid := pe.File.Service.UID
-
-		if pe.Type == exec.ProcessEventCreated {
-			r.createTargetInfo(&pe.File.Service)
-			r.createTracesTargetInfo(&pe.File.Service)
-			r.serviceMap[uid] = pe.File.Service
-			r.setupPIDToServiceRelationship(pe.File.Pid, uid)
-		} else {
-			if deleted, origUID := r.disassociatePIDFromService(pe.File.Pid); deleted {
-				mlog().Debug("deleting infos for", "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
-				r.deleteTargetInfo(origUID, &pe.File.Service)
-				r.deleteTracesTargetInfo(origUID, &pe.File.Service)
-				if r.cfg.HostMetricsEnabled() && r.pidsTracker.Count() == 0 {
-					mlog().Debug("No more PIDs tracked, expiring host info metric")
-					r.tracesHostInfo.entries.DeleteAll()
-				}
-				delete(r.serviceMap, origUID)
-			}
-		}
+		r.handleProcessEvent(pe, log)
 	})
 }

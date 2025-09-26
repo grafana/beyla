@@ -83,7 +83,8 @@ func TestTraceSkipSpanMetrics(t *testing.T) {
 	spans := []request.Span{}
 	start := time.Now()
 	for i := 0; i < 10; i++ {
-		span := request.Span{Type: request.EventTypeHTTP,
+		span := request.Span{
+			Type:         request.EventTypeHTTP,
 			RequestStart: start.UnixNano(),
 			Start:        start.Add(time.Second).UnixNano(),
 			End:          start.Add(3 * time.Second).UnixNano(),
@@ -148,7 +149,8 @@ func TestTraceGrouping(t *testing.T) {
 	spans := []request.Span{}
 	start := time.Now()
 	for i := 0; i < 10; i++ {
-		span := request.Span{Type: request.EventTypeHTTP,
+		span := request.Span{
+			Type:         request.EventTypeHTTP,
 			RequestStart: start.UnixNano(),
 			Start:        start.Add(time.Second).UnixNano(),
 			End:          start.Add(3 * time.Second).UnixNano(),
@@ -259,10 +261,12 @@ func TestConnectTraces(t *testing.T) {
 	input := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
 	csr, err := ConnectionSpansReceiver(
 		&global.ContextInfo{HostID: "the-host"},
-		&beyla.TracesReceiverConfig{
-			Sampler:          services.SamplerConfig{Name: "always_on"},
-			Traces:           []beyla.Consumer{mts},
-			Instrumentations: []string{instrumentations.InstrumentationALL},
+		&beyla.Config{
+			TracesReceiver: beyla.TracesReceiverConfig{
+				Sampler:          services.SamplerConfig{Name: "always_on"},
+				Traces:           []beyla.Consumer{mts},
+				Instrumentations: []string{instrumentations.InstrumentationALL},
+			},
 		},
 		input,
 	)(t.Context())

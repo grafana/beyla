@@ -146,6 +146,7 @@ func internalMetrics(
 
 // BuildContextInfo populates some globally shared components and properties
 // from the user-provided configuration
+// nolint:cyclop
 func buildCommonContextInfo(
 	ctx context.Context, config *beyla.Config,
 ) (*global.ContextInfo, error) {

@@ -141,29 +141,35 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 
 	if p.cfg.EBPF.TrackRequestHeaders ||
 		p.cfg.EBPF.ContextPropagation != config.ContextPropagationDisabled {
-		if ebpfcommon.SupportsEBPFLoops(p.log, p.cfg.EBPF.OverrideBPFLoopEnabled) {
-			p.log.Info("Found compatible Linux kernel, enabling trace information parsing")
-			loader = LoadBpfTP
-			if p.cfg.EBPF.BpfDebug {
-				loader = LoadBpfTPDebug
-			}
-		} else {
-			p.log.Info("Found incompatible Linux kernel, disabling trace information parsing")
+		loader = LoadBpfTP
+		if p.cfg.EBPF.BpfDebug {
+			loader = LoadBpfTPDebug
 		}
+
+		p.log.Info("Enabling trace information parsing", "bpf_loop_enabled", ebpfcommon.SupportsEBPFLoops(p.log, p.cfg.EBPF.OverrideBPFLoopEnabled))
 	}
 
-	return loader()
+	spec, err := loader()
+	if err != nil {
+		return nil, fmt.Errorf("can't load bpf collection from reader: %w", err)
+	}
+
+	ebpfcommon.FixupSpec(spec, p.cfg.EBPF.OverrideBPFLoopEnabled)
+
+	return spec, err
 }
 
 func (p *Tracer) SetupTailCalls() {
 	for i, prog := range []*ebpf.Program{
 		p.bpfObjects.ObiProtocolHttp,                      // 0
-		p.bpfObjects.ObiProtocolHttp2,                     // 1
-		p.bpfObjects.ObiProtocolTcp,                       // 2
-		p.bpfObjects.ObiProtocolHttp2GrpcFrames,           // 3
-		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrame, // 4
-		p.bpfObjects.ObiProtocolHttp2GrpcHandleEndFrame,   // 5
-		p.bpfObjects.ObiHandleBufWithArgs,                 // 6
+		p.bpfObjects.ObiContinueProtocolHttp,              // 1
+		p.bpfObjects.ObiContinue2ProtocolHttp,             // 2
+		p.bpfObjects.ObiProtocolHttp2,                     // 3
+		p.bpfObjects.ObiProtocolTcp,                       // 4
+		p.bpfObjects.ObiProtocolHttp2GrpcFrames,           // 5
+		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrame, // 6
+		p.bpfObjects.ObiProtocolHttp2GrpcHandleEndFrame,   // 7
+		p.bpfObjects.ObiHandleBufWithArgs,                 // 8
 	} {
 		p.log.Debug("loading program into tail call jump table", "index", i, "program", prog.String())
 		if err := p.bpfObjects.JumpTable.Update(uint32(i), uint32(prog.FD()), ebpf.UpdateAny); err != nil {
@@ -206,6 +212,7 @@ func (p *Tracer) Constants() map[string]any {
 		m["disable_black_box_cp"] = uint32(0)
 	}
 
+	m["http_buffer_size"] = p.cfg.EBPF.BufferSizes.HTTP
 	m["mysql_buffer_size"] = p.cfg.EBPF.BufferSizes.MySQL
 	m["postgres_buffer_size"] = p.cfg.EBPF.BufferSizes.Postgres
 
@@ -349,6 +356,11 @@ func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 				Start:    p.bpfObjects.ObiUprobeSslReadEx,
 				End:      p.bpfObjects.ObiUretprobeSslReadEx,
 			}},
+			"SSL_write_ex2": {{
+				Required: false,
+				Start:    p.bpfObjects.ObiUprobeSslWriteEx,
+				End:      p.bpfObjects.ObiUretprobeSslWriteEx,
+			}},
 			"SSL_write_ex": {{
 				Required: false,
 				Start:    p.bpfObjects.ObiUprobeSslWriteEx,
@@ -454,9 +466,10 @@ func (p *Tracer) Run(ctx context.Context, ebpfEventContext *ebpfcommon.EBPFEvent
 	}
 
 	timeoutTicker := time.NewTicker(2 * time.Second)
+	parseContext := ebpfcommon.NewEBPFParseContext(&p.cfg.EBPF)
 
 	go p.watchForMisclassifedEvents(ctx)
-	go p.lookForTimeouts(ctx, timeoutTicker, eventsChan)
+	go p.lookForTimeouts(ctx, parseContext, timeoutTicker, eventsChan)
 	defer timeoutTicker.Stop()
 
 	for _, it := range p.Iters() {
@@ -471,6 +484,7 @@ func (p *Tracer) Run(ctx context.Context, ebpfEventContext *ebpfcommon.EBPFEvent
 
 	ebpfcommon.SharedRingbuf(
 		ebpfEventContext,
+		parseContext,
 		&p.cfg.EBPF,
 		p.pidsFilter,
 		p.bpfObjects.Events,
@@ -486,7 +500,7 @@ func kernelTime(ktime uint64) time.Time {
 }
 
 //nolint:cyclop
-func (p *Tracer) lookForTimeouts(ctx context.Context, ticker *time.Ticker, eventsChan *msg.Queue[[]request.Span]) {
+func (p *Tracer) lookForTimeouts(ctx context.Context, parseCtx *ebpfcommon.EBPFParseContext, ticker *time.Ticker, eventsChan *msg.Queue[[]request.Span]) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -504,7 +518,7 @@ func (p *Tracer) lookForTimeouts(ctx context.Context, ticker *time.Ticker, event
 					if v.EndMonotimeNs != 0 && t.After(kernelTime(v.EndMonotimeNs).Add(2*time.Second)) {
 						// Must use unsafe here, the two bpfHttpInfoTs are the same but generated from different
 						// ebpf2go outputs
-						s, ignore, err := ebpfcommon.HTTPInfoEventToSpan((*ebpfcommon.BPFHTTPInfo)(unsafe.Pointer(&v)))
+						s, ignore, err := ebpfcommon.HTTPInfoEventToSpan(parseCtx, (*ebpfcommon.BPFHTTPInfo)(unsafe.Pointer(&v)))
 						if !ignore && err == nil {
 							eventsChan.Send(p.pidsFilter.Filter([]request.Span{s}))
 						}
@@ -514,7 +528,7 @@ func (p *Tracer) lookForTimeouts(ctx context.Context, ticker *time.Ticker, event
 					} else if v.EndMonotimeNs == 0 && p.cfg.EBPF.HTTPRequestTimeout.Milliseconds() > 0 && t.After(kernelTime(v.StartMonotimeNs).Add(p.cfg.EBPF.HTTPRequestTimeout)) {
 						// If we don't have a request finish with endTime by the configured request timeout, terminate the
 						// waiting request with a timeout 408
-						s, ignore, err := ebpfcommon.HTTPInfoEventToSpan((*ebpfcommon.BPFHTTPInfo)(unsafe.Pointer(&v)))
+						s, ignore, err := ebpfcommon.HTTPInfoEventToSpan(parseCtx, (*ebpfcommon.BPFHTTPInfo)(unsafe.Pointer(&v)))
 
 						if !ignore && err == nil {
 							s.Status = 408 // timeout

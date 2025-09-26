@@ -202,14 +202,14 @@ func (bc *BPFCollector) getProbeMetrics() []ProbeMetrics {
 
 		program, err := ebpf.NewProgramFromID(id)
 		if err != nil {
-			bc.log.Error("failed to load program", "ID", id, "error", err)
+			bc.log.Debug("failed to load program", "ID", id, "error", err)
 			continue
 		}
 		defer program.Close()
 
 		info, err := program.Info()
 		if err != nil {
-			bc.log.Error("failed to get program info", "ID", id, "error", err)
+			bc.log.Debug("failed to get program info", "ID", id, "error", err)
 			continue
 		}
 
@@ -224,7 +224,7 @@ func (bc *BPFCollector) getProbeMetrics() []ProbeMetrics {
 
 		stats, err := program.Stats()
 		if err != nil {
-			bc.log.Error("failed to get program stats", "ID", id, "error", err)
+			bc.log.Debug("failed to get program stats", "ID", id, "error", err)
 			continue
 		}
 
@@ -262,7 +262,7 @@ func (bc *BPFCollector) getProbeMetrics() []ProbeMetrics {
 func getFuncName(info *ebpf.ProgramInfo, id ebpf.ProgramID, log *slog.Logger) string {
 	funcInfos, err := info.FuncInfos()
 	if err != nil {
-		log.Error("failed to get program func infos", "ID", id, "error", err)
+		log.Debug("failed to get program func infos", "ID", id, "error", err)
 		return info.Name
 	}
 
@@ -285,14 +285,14 @@ func (bc *BPFCollector) getMapMetrics() []BpfMapMetrics {
 
 		m, err := ebpf.NewMapFromID(id)
 		if err != nil {
-			bc.log.Error("failed to load map", "ID", id, "error", err)
+			bc.log.Debug("failed to load map", "ID", id, "error", err)
 			continue
 		}
 		defer m.Close()
 
 		info, err := m.Info()
 		if err != nil {
-			bc.log.Error("failed to get map info", "ID", id, "error", err)
+			bc.log.Debug("failed to get map info", "ID", id, "error", err)
 			continue
 		}
 

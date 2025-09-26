@@ -126,7 +126,7 @@ func listenAndServe(ctx context.Context, port int, handler http.Handler) {
 			log.Error("Prometheus endpoint service ended unexpectedly", "error", err)
 			err = syscall.Kill(os.Getpid(), syscall.SIGINT) // interrupt for graceful shutdown, instead of os.Exit
 			if err != nil {
-				log.Error("unable to terminate Beyla", "error", err)
+				log.Error("unable to terminate", "error", err)
 			}
 		}
 	}()

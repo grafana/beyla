@@ -5,6 +5,7 @@ package instrument
 
 import (
 	"runtime"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -26,19 +27,22 @@ type InternalMetrics interface {
 	MessageSucceed()
 	MessageTimeout()
 	MessageError()
+
+	ForwardLag(seconds float64)
 }
 
 type noopMetrics struct{}
 
-func (n noopMetrics) InformerNew()      {}
-func (n noopMetrics) InformerUpdate()   {}
-func (n noopMetrics) InformerDelete()   {}
-func (n noopMetrics) ClientConnect()    {}
-func (n noopMetrics) ClientDisconnect() {}
-func (n noopMetrics) MessageSubmit()    {}
-func (n noopMetrics) MessageSucceed()   {}
-func (n noopMetrics) MessageTimeout()   {}
-func (n noopMetrics) MessageError()     {}
+func (n noopMetrics) InformerNew()       {}
+func (n noopMetrics) InformerUpdate()    {}
+func (n noopMetrics) InformerDelete()    {}
+func (n noopMetrics) ClientConnect()     {}
+func (n noopMetrics) ClientDisconnect()  {}
+func (n noopMetrics) MessageSubmit()     {}
+func (n noopMetrics) MessageSucceed()    {}
+func (n noopMetrics) MessageTimeout()    {}
+func (n noopMetrics) MessageError()      {}
+func (n noopMetrics) ForwardLag(float64) {}
 
 type promInternalMetrics struct {
 	connector        *connector.PrometheusManager
@@ -46,6 +50,7 @@ type promInternalMetrics struct {
 	connectedClients prometheus.Gauge
 	clientMessages   *prometheus.CounterVec
 	beylaCacheInfo   prometheus.Gauge
+	informerLag      prometheus.Histogram
 }
 
 func prometheusInternalMetrics(
@@ -79,15 +84,29 @@ func prometheusInternalMetrics(
 				"revision":  buildinfo.Revision,
 			},
 		}),
+		informerLag: prometheus.NewHistogram(prometheus.HistogramOpts{
+			Name: attr.VendorPrefix + "_informer_receive_lag_seconds",
+			Help: "How long, in seconds, it takes since a Kubernetes event happens until it received by this OBI instance",
+			// Since K8s stores the timestamps with second precision, we initially provide buckets larger than 0.5s
+			Buckets:                         []float64{0.5, 1, 2, 4, 8, 16, 32, 64, 128, 256},
+			NativeHistogramBucketFactor:     2,
+			NativeHistogramMaxExemplars:     20,
+			NativeHistogramMinResetDuration: 10 * time.Minute,
+		}),
 	}
 	pr.beylaCacheInfo.Set(1)
 	manager.Register(cfg.Port, cfg.Path,
 		pr.informerEvents,
 		pr.connectedClients,
 		pr.clientMessages,
-		pr.beylaCacheInfo)
+		pr.beylaCacheInfo,
+		pr.informerLag)
 
 	return pr
+}
+
+func (n *promInternalMetrics) ForwardLag(seconds float64) {
+	n.informerLag.Observe(seconds)
 }
 
 func (n *promInternalMetrics) InformerNew() {
@@ -124,4 +143,8 @@ func (n *promInternalMetrics) MessageTimeout() {
 
 func (n *promInternalMetrics) MessageError() {
 	n.clientMessages.WithLabelValues("error").Inc()
+}
+
+func (n *promInternalMetrics) InformerLag(seconds float64) {
+	n.informerLag.Observe(seconds)
 }

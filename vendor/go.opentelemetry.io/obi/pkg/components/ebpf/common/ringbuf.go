@@ -56,6 +56,7 @@ type ringBufForwarder struct {
 // instances.
 func SharedRingbuf(
 	eventContext *EBPFEventContext,
+	parseContext *EBPFParseContext,
 	cfg *config.EBPFTracer,
 	filter ServiceFilter,
 	ringbuffer *ebpf.Map,
@@ -75,7 +76,7 @@ func SharedRingbuf(
 		cfg: cfg, logger: log, ringbuffer: ringbuffer,
 		closers: nil, reader: ReadBPFTraceAsSpan,
 		filter: filter, metrics: metrics,
-		parseContext: NewEBPFParseContext(cfg),
+		parseContext: parseContext,
 	}
 	eventContext.SharedRingBuffer = &rbf
 	return eventContext.SharedRingBuffer.sharedReadAndForward

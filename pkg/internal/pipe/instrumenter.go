@@ -69,9 +69,20 @@ func clusterConnectorsSubpipeline(swi *swarm.Instancer, ctxInfo *global.ContextI
 	if !slices.Contains(config.Topology.Spans, spanscfg.TopologyInterCluster) {
 		return
 	}
+	// we currently only support this feature for Kubernetes clusters
+	if ctxInfo.K8sInformer == nil || !ctxInfo.K8sInformer.IsKubeEnabled() {
+		return
+	}
+
+	store, err := ctxInfo.K8sInformer.Get(context.Background())
+	if err != nil {
+		ilog().Error("can't get Kubernetes store. Connection spans feature is disabled", "error", err)
+		return
+	}
 
 	externalTraces := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(config.ChannelBufferLen))
 	swi.Add(traces.SelectExternal(
+		func(ip string) bool { return store.ObjectMetaByIP(ip) != nil },
 		ctxInfo.OverrideAppExportQueue,
 		externalTraces,
 	))

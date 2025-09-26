@@ -202,30 +202,6 @@ func buildCommonContextInfo(
 		ServiceNameTemplate: templ,
 	}, ctxInfo.Metrics)
 
-	switch {
-	case config.InternalMetrics.Exporter == imetrics.InternalMetricsExporterOTEL:
-		var err error
-		slog.Debug("reporting internal metrics as OpenTelemetry")
-		ctxInfo.Metrics, err = obiotel.NewInternalMetricsReporter(ctx, ctxInfo, &config.Metrics, &config.InternalMetrics)
-		if err != nil {
-			return nil, fmt.Errorf("can't start OpenTelemetry metrics: %w", err)
-		}
-	case config.InternalMetrics.Exporter == imetrics.InternalMetricsExporterPrometheus || config.InternalMetrics.Prometheus.Port != 0:
-		slog.Debug("reporting internal metrics as Prometheus")
-		obiCfg := config.AsOBI()
-		ctxInfo.Metrics = imetrics.NewPrometheusReporter(&obiCfg.InternalMetrics, promMgr, nil)
-		// Prometheus manager also has its own internal metrics, so we need to pass the imetrics reporter
-		// TODO: remove this dependency cycle and let prommgr to create and return the PrometheusReporter
-		promMgr.InstrumentWith(ctxInfo.Metrics)
-	case config.Prometheus.Registry != nil:
-		slog.Debug("reporting internal metrics with Prometheus Registry")
-		obiCfg := config.AsOBI()
-		ctxInfo.Metrics = imetrics.NewPrometheusReporter(&obiCfg.InternalMetrics, nil, config.Prometheus.Registry)
-	default:
-		slog.Debug("not reporting internal metrics")
-		ctxInfo.Metrics = imetrics.NoopReporter{}
-	}
-
 	attributeGroups(config, ctxInfo)
 
 	return ctxInfo, nil

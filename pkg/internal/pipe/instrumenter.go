@@ -62,6 +62,14 @@ func Build(ctx context.Context, config *beyla.Config, ctxInfo *global.ContextInf
 	return swi.Instance(ctx)
 }
 
+func unresolvedNames(cfg *beyla.Config) request.UnresolvedNames {
+	return request.UnresolvedNames{
+		Generic:  cfg.Attributes.RenameUnresolvedHosts,
+		Outgoing: cfg.Attributes.RenameUnresolvedHostsOutgoing,
+		Incoming: cfg.Attributes.RenameUnresolvedHostsIncoming,
+	}
+}
+
 // clusterConnectorsSubpipeline will submit "connector" traces that are identified as cluster-external.
 // Tempo will use them to compose inter-cluster service graph connections that otherwise couldn't be composed by
 // Beyla, as it lacks the metadata from the remote clusters.
@@ -88,14 +96,12 @@ func clusterConnectorsSubpipeline(swi *swarm.Instancer, ctxInfo *global.ContextI
 	))
 
 	swi.Add(alloy.ConnectionSpansReceiver(ctxInfo,
-		&beyla.TracesReceiverConfig{
-			Traces:           config.TracesReceiver.Traces,
-			Instrumentations: config.TracesReceiver.Instrumentations,
-		},
+		config,
 		externalTraces,
 	))
 
 	swi.Add(otel.ConnectionSpansExport(ctxInfo,
 		&config.Traces,
+		unresolvedNames(config),
 		externalTraces))
 }

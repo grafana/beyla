@@ -29,20 +29,26 @@ func etrlog() *slog.Logger {
 // remove them.
 func ConnectionSpansReceiver(
 	ctxInfo *global.ContextInfo,
-	cfg *beyla.TracesReceiverConfig,
+	cfg *beyla.Config,
 	input *msg.Queue[[]request.Span],
 ) swarm.InstanceFunc {
 	return func(_ context.Context) (swarm.RunFunc, error) {
-		if !cfg.Enabled() {
+		if !cfg.TracesReceiver.Enabled() {
 			return swarm.EmptyRunFunc()
+		}
+
+		unresolvedNames := request.UnresolvedNames{
+			Generic:  cfg.Attributes.RenameUnresolvedHosts,
+			Outgoing: cfg.Attributes.RenameUnresolvedHostsOutgoing,
+			Incoming: cfg.Attributes.RenameUnresolvedHostsIncoming,
 		}
 
 		tr := &connectionSpansReceiver{
 			hostID:           ctxInfo.HostID,
 			input:            input.Subscribe(),
-			attributeGetters: otel.ConnectionSpanAttributes(),
-			traceConsumers:   cfg.Traces,
-			selector:         instrumentations.NewInstrumentationSelection(cfg.Instrumentations),
+			attributeGetters: otel.ConnectionSpanAttributes(unresolvedNames),
+			traceConsumers:   cfg.TracesReceiver.Traces,
+			selector:         instrumentations.NewInstrumentationSelection(cfg.TracesReceiver.Instrumentations),
 		}
 		return tr.provideLoop, nil
 	}

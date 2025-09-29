@@ -9,6 +9,7 @@ import (
 	"github.com/mariomac/guara/pkg/test"
 	io_prometheus_client "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
+	"github.com/prometheus/common/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -45,7 +46,7 @@ func testInternalPrometheusExport(t *testing.T) {
 }
 
 func metricValue(t require.TestingT, metricName string, labels map[string]string) int {
-	parser := expfmt.TextParser{}
+	parser := expfmt.NewTextParser(model.NameValidationScheme)
 	resp, err := http.Get(internalPrometheusMetricsURL)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode)

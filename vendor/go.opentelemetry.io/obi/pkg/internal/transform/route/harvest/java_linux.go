@@ -3,6 +3,39 @@
 
 package harvest
 
-import "github.com/grafana/jvmtools/jvm"
+import (
+	"os"
+	"syscall"
 
-var jvmAttachFunc = jvm.Jattach
+	"github.com/grafana/jvmtools/jvm"
+	"github.com/grafana/jvmtools/util"
+)
+
+var (
+	jvmAttachFunc        = jvm.Jattach
+	jvmAttachInitFunc    = initAttach
+	jvmAttachCleanupFunc = cleanupAttach
+)
+
+func initAttach() (int, int, int) {
+	myUID := syscall.Geteuid()
+	myGID := syscall.Getegid()
+	myPID := os.Getpid()
+
+	return myUID, myGID, myPID
+}
+
+func cleanupAttach(myUID, myGID, myPID int) error {
+	if err := syscall.Setegid(myUID); err != nil {
+		return err
+	}
+	if err := syscall.Seteuid(myGID); err != nil {
+		return err
+	}
+
+	util.EnterNS(myPID, "net")
+	util.EnterNS(myPID, "ipc")
+	util.EnterNS(myPID, "mnt")
+
+	return nil
+}

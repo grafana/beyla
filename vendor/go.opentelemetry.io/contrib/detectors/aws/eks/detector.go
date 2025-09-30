@@ -1,22 +1,23 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
+// Package eks provides a resource detector for AWS EKS.
 package eks // import "go.opentelemetry.io/contrib/detectors/aws/eks"
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"regexp"
 	"strings"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/sdk/resource"
+	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/sdk/resource"
-	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 )
 
 const (
@@ -33,7 +34,7 @@ const (
 // detectorUtils is used for testing the resourceDetector by abstracting functions that rely on external systems.
 type detectorUtils interface {
 	fileExists(filename string) bool
-	getConfigMap(ctx context.Context, namespace string, name string) (map[string]string, error)
+	getConfigMap(ctx context.Context, namespace, name string) (map[string]string, error)
 	getContainerID() (string, error)
 }
 
@@ -54,6 +55,9 @@ var _ resource.Detector = (*resourceDetector)(nil)
 // Compile time assertion that eksDetectorUtils implements the detectorUtils interface.
 var _ detectorUtils = (*eksDetectorUtils)(nil)
 
+// is this going to stop working with 1.20 when Docker is deprecated?
+var containerIDRegex = regexp.MustCompile(`^.*/docker/(.+)$`)
+
 // NewResourceDetector returns a resource detector that will detect AWS EKS resources.
 func NewResourceDetector() resource.Detector {
 	utils, err := newK8sDetectorUtils()
@@ -63,6 +67,10 @@ func NewResourceDetector() resource.Detector {
 // Detect returns a Resource describing the Amazon EKS environment being run in.
 func (detector *resourceDetector) Detect(ctx context.Context) (*resource.Resource, error) {
 	if detector.err != nil {
+		if errors.Is(detector.err, rest.ErrNotInCluster) {
+			return resource.Empty(), nil
+		}
+
 		return nil, detector.err
 	}
 
@@ -130,7 +138,7 @@ func newK8sDetectorUtils() (*eksDetectorUtils, error) {
 	// Create clientset using generated configuration
 	clientset, err := kubernetes.NewForConfig(confs)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create clientset for Kubernetes client")
+		return nil, errors.New("failed to create clientset for Kubernetes client")
 	}
 
 	return &eksDetectorUtils{clientset: clientset}, nil
@@ -142,13 +150,13 @@ func isK8s(utils detectorUtils) bool {
 }
 
 // fileExists checks if a file with a given filename exists.
-func (eksUtils eksDetectorUtils) fileExists(filename string) bool {
+func (eksDetectorUtils) fileExists(filename string) bool {
 	info, err := os.Stat(filename)
 	return err == nil && !info.IsDir()
 }
 
 // getConfigMap retrieves the configuration map from the k8s API.
-func (eksUtils eksDetectorUtils) getConfigMap(ctx context.Context, namespace string, name string) (map[string]string, error) {
+func (eksUtils eksDetectorUtils) getConfigMap(ctx context.Context, namespace, name string) (map[string]string, error) {
 	cm, err := eksUtils.clientset.CoreV1().ConfigMaps(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve ConfigMap %s/%s: %w", namespace, name, err)
@@ -168,22 +176,16 @@ func getClusterName(ctx context.Context, utils detectorUtils) (string, error) {
 }
 
 // getContainerID returns the containerID if currently running within a container.
-func (eksUtils eksDetectorUtils) getContainerID() (string, error) {
+func (eksDetectorUtils) getContainerID() (string, error) {
 	fileData, err := os.ReadFile(defaultCgroupPath)
 	if err != nil {
 		return "", fmt.Errorf("getContainerID() error: cannot read file with path %s: %w", defaultCgroupPath, err)
 	}
 
-	// is this going to stop working with 1.20 when Docker is deprecated?
-	r, err := regexp.Compile(`^.*/docker/(.+)$`)
-	if err != nil {
-		return "", err
-	}
-
 	// Retrieve containerID from file
 	splitData := strings.Split(strings.TrimSpace(string(fileData)), "\n")
 	for _, str := range splitData {
-		if r.MatchString(str) {
+		if containerIDRegex.MatchString(str) {
 			return str[len(str)-containerIDLength:], nil
 		}
 	}

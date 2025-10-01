@@ -112,11 +112,31 @@ func (smr *SurveyMetricsReporter) watchForProcessEvents(ctx context.Context) {
 				if deleted, origUID := smr.disassociatePIDFromService(pe.File.Pid); deleted {
 					// We only need the UID to look up in the pool, no need to cache
 					// the whole of the attrs in the pidTracker
-					svc := svc.Attrs{UID: origUID}
 					log.Debug("deleting survey_info", "origuid", origUID)
-					smr.deleteSurveyInfo(ctx, &svc)
+					smr.deleteSurveyInfo(ctx, origUID)
 				}
 			case exec.ProcessEventCreated:
+				uid := pe.File.Service.UID
+
+				// Handle the case when the PID changed its feathers, e.g. got new metadata impacting the service name.
+				// There's no new PID, just an update to the metadata.
+				if staleUID, exists := smr.pidTracker.TracksPID(pe.File.Pid); exists && !staleUID.Equals(&uid) {
+					smr.log.Debug("updating older service definition", "from", staleUID, "new", uid)
+					smr.pidTracker.ReplaceUID(staleUID, uid)
+					smr.deleteSurveyInfo(ctx, staleUID)
+					smr.createSurveyInfo(ctx, &pe.File.Service)
+					// we don't setup the pid again, we just replaced the metrics it's associated with
+					return
+				}
+
+				// Handle the case when we have new labels for same service
+				// It could be a brand new PID with this information, so we fall through after deleting
+				// the old target info
+				if _, ok := smr.serviceMap[uid]; ok {
+					smr.log.Debug("updating stale attributes for", "service", uid)
+					smr.deleteSurveyInfo(ctx, uid)
+				}
+
 				smr.createSurveyInfo(ctx, &pe.File.Service)
 				smr.setupPIDToServiceRelationship(pe.File.Pid, pe.File.Service.UID)
 			}
@@ -140,14 +160,14 @@ func (smr *SurveyMetricsReporter) createSurveyInfo(ctx context.Context, service 
 	smr.serviceMap[service.UID] = resourceAttributes
 }
 
-func (smr *SurveyMetricsReporter) deleteSurveyInfo(ctx context.Context, s *svc.Attrs) {
-	attrs, ok := smr.serviceMap[s.UID]
+func (smr *SurveyMetricsReporter) deleteSurveyInfo(ctx context.Context, uid svc.UID) {
+	attrs, ok := smr.serviceMap[uid]
 	if !ok {
-		smr.log.Debug("No service map", "UID", s.UID)
+		smr.log.Debug("No service map", "UID", uid)
 		return
 	}
 	smr.log.Debug("Deleting survey_info for", "attrs", attrs)
 	attrOpt := instrument.WithAttributeSet(attribute.NewSet(attrs...))
 	smr.surveyInfo.Remove(ctx, attrOpt)
-	delete(smr.serviceMap, s.UID)
+	delete(smr.serviceMap, uid)
 }

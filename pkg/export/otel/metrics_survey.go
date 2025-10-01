@@ -37,6 +37,10 @@ type SurveyMetricsReporter struct {
 	exporter      sdkmetric.Exporter
 	pidTracker    otel.PidServiceTracker
 	serviceMap    map[svc.UID][]attribute.KeyValue
+
+	// testing support
+	createEventMetrics func(ctx context.Context, service *svc.Attrs)
+	deleteEventMetrics func(ctx context.Context, uid svc.UID)
 }
 
 func SurveyInfoMetrics(
@@ -80,6 +84,9 @@ func newSurveyMetricsReporter(
 		return nil, fmt.Errorf("instantiating OTEL Survey metrics exporter: %w", err)
 	}
 
+	smr.createEventMetrics = smr.createSurveyInfo
+	smr.deleteEventMetrics = smr.deleteSurveyInfo
+
 	smr.provider = metric.NewMeterProvider(
 		metric.WithResource(resource.Empty()),
 		metric.WithReader(metric.NewPeriodicReader(smr.exporter,
@@ -94,6 +101,45 @@ func newSurveyMetricsReporter(
 	return smr, nil
 }
 
+func (smr *SurveyMetricsReporter) onProcessEvent(ctx context.Context, pe *exec.ProcessEvent) {
+	log := smr.log.With("event_type", pe.Type, "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
+	log.Debug("process event received")
+
+	switch pe.Type {
+	case exec.ProcessEventTerminated:
+		if deleted, origUID := smr.disassociatePIDFromService(pe.File.Pid); deleted {
+			// We only need the UID to look up in the pool, no need to cache
+			// the whole of the attrs in the pidTracker
+			log.Debug("deleting survey_info", "origuid", origUID)
+			smr.deleteEventMetrics(ctx, origUID)
+		}
+	case exec.ProcessEventCreated:
+		uid := pe.File.Service.UID
+
+		// Handle the case when the PID changed its feathers, e.g. got new metadata impacting the service name.
+		// There's no new PID, just an update to the metadata.
+		if staleUID, exists := smr.pidTracker.TracksPID(pe.File.Pid); exists && !staleUID.Equals(&uid) {
+			smr.log.Debug("updating older service definition", "from", staleUID, "new", uid)
+			smr.pidTracker.ReplaceUID(staleUID, uid)
+			smr.deleteEventMetrics(ctx, staleUID)
+			smr.createEventMetrics(ctx, &pe.File.Service)
+			// we don't setup the pid again, we just replaced the metrics it's associated with
+			return
+		}
+
+		// Handle the case when we have new labels for same service
+		// It could be a brand new PID with this information, so we fall through after deleting
+		// the old target info
+		if _, ok := smr.serviceMap[uid]; ok {
+			smr.log.Debug("updating stale attributes for", "service", uid)
+			smr.deleteEventMetrics(ctx, uid)
+		}
+
+		smr.createEventMetrics(ctx, &pe.File.Service)
+		smr.setupPIDToServiceRelationship(pe.File.Pid, pe.File.Service.UID)
+	}
+}
+
 func (smr *SurveyMetricsReporter) watchForProcessEvents(ctx context.Context) {
 	for {
 		select {
@@ -104,42 +150,7 @@ func (smr *SurveyMetricsReporter) watchForProcessEvents(ctx context.Context) {
 				return
 			}
 
-			log := smr.log.With("event_type", pe.Type, "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
-			log.Debug("process event received")
-
-			switch pe.Type {
-			case exec.ProcessEventTerminated:
-				if deleted, origUID := smr.disassociatePIDFromService(pe.File.Pid); deleted {
-					// We only need the UID to look up in the pool, no need to cache
-					// the whole of the attrs in the pidTracker
-					log.Debug("deleting survey_info", "origuid", origUID)
-					smr.deleteSurveyInfo(ctx, origUID)
-				}
-			case exec.ProcessEventCreated:
-				uid := pe.File.Service.UID
-
-				// Handle the case when the PID changed its feathers, e.g. got new metadata impacting the service name.
-				// There's no new PID, just an update to the metadata.
-				if staleUID, exists := smr.pidTracker.TracksPID(pe.File.Pid); exists && !staleUID.Equals(&uid) {
-					smr.log.Debug("updating older service definition", "from", staleUID, "new", uid)
-					smr.pidTracker.ReplaceUID(staleUID, uid)
-					smr.deleteSurveyInfo(ctx, staleUID)
-					smr.createSurveyInfo(ctx, &pe.File.Service)
-					// we don't setup the pid again, we just replaced the metrics it's associated with
-					return
-				}
-
-				// Handle the case when we have new labels for same service
-				// It could be a brand new PID with this information, so we fall through after deleting
-				// the old target info
-				if _, ok := smr.serviceMap[uid]; ok {
-					smr.log.Debug("updating stale attributes for", "service", uid)
-					smr.deleteSurveyInfo(ctx, uid)
-				}
-
-				smr.createSurveyInfo(ctx, &pe.File.Service)
-				smr.setupPIDToServiceRelationship(pe.File.Pid, pe.File.Service.UID)
-			}
+			smr.onProcessEvent(ctx, &pe)
 		}
 	}
 }
@@ -152,8 +163,12 @@ func (smr *SurveyMetricsReporter) disassociatePIDFromService(pid int32) (bool, s
 	return smr.pidTracker.RemovePID(pid)
 }
 
+func (smr *SurveyMetricsReporter) attrsFromService(service *svc.Attrs) []attribute.KeyValue {
+	return append(otelcfg.GetAppResourceAttrs(smr.hostID, service), otelcfg.ResourceAttrsFromEnv(service)...)
+}
+
 func (smr *SurveyMetricsReporter) createSurveyInfo(ctx context.Context, service *svc.Attrs) {
-	resourceAttributes := append(otelcfg.GetAppResourceAttrs(smr.hostID, service), otelcfg.ResourceAttrsFromEnv(service)...)
+	resourceAttributes := smr.attrsFromService(service)
 	smr.log.Debug("Creating survey_info", "attrs", resourceAttributes)
 	attrOpt := instrument.WithAttributeSet(attribute.NewSet(resourceAttributes...))
 	smr.surveyInfo.Add(ctx, 1, attrOpt)

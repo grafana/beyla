@@ -25,6 +25,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"time"
 
 	ebpfcommon "go.opentelemetry.io/obi/pkg/components/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/components/ebpf/ringbuf"
@@ -41,16 +42,18 @@ func rtlog() *slog.Logger {
 // added in the eBPF kernel space due to the map being full or busy) and submits them to the
 // userspace Aggregator map
 type RingBufTracer struct {
-	ringBuffer ringBufReader
+	ringBuffer    ringBufReader
+	flushInterval time.Duration
 }
 
 type ringBufReader interface {
 	ReadInto(*ringbuf.Record) error
 }
 
-func NewRingBufTracer(reader ringBufReader) *RingBufTracer {
+func NewRingBufTracer(reader ringBufReader, flushInterval time.Duration) *RingBufTracer {
 	return &RingBufTracer{
-		ringBuffer: reader,
+		ringBuffer:    reader,
+		flushInterval: flushInterval,
 	}
 }
 
@@ -61,11 +64,28 @@ func (m *RingBufTracer) TraceLoop(out *msg.Queue[[]*ebpf.Record]) swarm.RunFunc 
 
 		var rec ringbuf.Record
 
+		ticker := time.NewTicker(m.flushInterval)
+		defer ticker.Stop()
+
+		// this serves as a buffer to be able to batch enqueue flows into the output queue.
+		// queue channel sizes may not scale well and enqueue operations can be quite expensive
+		// given this is a very high throughput path, we start with a 1MB buffer, which will
+		// increase automatically if necessary - use OTEL_EBPF_NETWORK_SAMPLING to properly control
+		// event throughput and the memory pressure
+		flows := make([]*ebpf.Record, 0, 1048576)
+
 		for {
 			select {
 			case <-ctx.Done():
 				rtlog.Debug("exiting trace loop due to context cancellation")
 				return
+			case <-ticker.C:
+				if len(flows) > 0 {
+					out.Send(append([]*ebpf.Record(nil), flows...))
+
+					// this ensures the buffer is recycled / no reallocs
+					flows = flows[:0]
+				}
 			default:
 				if err := m.ringBuffer.ReadInto(&rec); err != nil {
 					if errors.Is(err, ringbuf.ErrClosed) {
@@ -82,9 +102,7 @@ func (m *RingBufTracer) TraceLoop(out *msg.Queue[[]*ebpf.Record]) swarm.RunFunc 
 					continue
 				}
 
-				out.Send([]*ebpf.Record{{
-					NetFlowRecordT: *event,
-				}})
+				flows = append(flows, &ebpf.Record{NetFlowRecordT: *event})
 			}
 		}
 	}

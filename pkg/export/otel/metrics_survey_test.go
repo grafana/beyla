@@ -7,14 +7,12 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
 	"go.opentelemetry.io/otel/attribute"
 
 	"go.opentelemetry.io/obi/pkg/components/exec"
 	"go.opentelemetry.io/obi/pkg/components/svc"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	obiotel "go.opentelemetry.io/obi/pkg/export/otel"
-
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 )
 

@@ -5,11 +5,11 @@ import (
 	"log/slog"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"go.opentelemetry.io/obi/pkg/components/exec"
 	"go.opentelemetry.io/obi/pkg/components/svc"
 	"go.opentelemetry.io/obi/pkg/export/otel"
-
-	"github.com/stretchr/testify/assert"
 )
 
 type mockEventMetrics struct {

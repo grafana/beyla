@@ -74,6 +74,8 @@ func (m *RingBufTracer) TraceLoop(out *msg.Queue[[]*ebpf.Record]) swarm.RunFunc 
 		// event throughput and the memory pressure
 		flows := make([]*ebpf.Record, 0, 1048576)
 
+		printLog := true
+
 		for {
 			select {
 			case <-ctx.Done():
@@ -81,7 +83,16 @@ func (m *RingBufTracer) TraceLoop(out *msg.Queue[[]*ebpf.Record]) swarm.RunFunc 
 				return
 			case <-ticker.C:
 				if len(flows) > 0 {
-					out.Send(append([]*ebpf.Record(nil), flows...))
+					// this will drop the flows if the queue is full / stalled
+					// when that happens, it is safe to assume that no
+					// important information is lost, as this pretty much
+					// works as a fallback sampling mechanism
+					if !out.TrySend(append([]*ebpf.Record(nil), flows...)) && printLog {
+						// TODO: perhaps print drop stats?
+
+						rtlog.Info("Network flows dropped. Consider adjusting the sampling rate")
+						printLog = false
+					}
 
 					// this ensures the buffer is recycled / no reallocs
 					flows = flows[:0]

@@ -96,10 +96,19 @@ func NewQueue[T any](opts ...QueueOpts) *Queue[T] {
 // If there are subscribers, the message will be stored on their respective internal channels
 // until it is read by the subscribers.
 // If a subscriber is blocked, its internal channel might be full and
-// the Send operation would block for all the subscribers until all the internal channels
-// of the Queue room for a new message.
+// the Send operation will panic.
 func (q *Queue[T]) Send(o T) {
 	q.chainedSend(o, []string{q.cfg.name})
+}
+
+// TrySend sends a message to all subscribers of this queue.
+// If there are no subscribers at the moment of sending the message, the message will be lost.
+// If there are subscribers, the message will be stored on their respective internal channels
+// until it is read by the subscribers. In these cases, TrySend returns true.
+// If a subscriber is blocked, its internal channel might be full and
+// the TrySend operation will drop the message and return false.
+func (q *Queue[T]) TrySend(o T) bool {
+	return q.tryChainedSend(o, []string{q.cfg.name})
 }
 
 func (q *Queue[T]) chainedSend(o T, bypassPath []string) {
@@ -124,6 +133,29 @@ func (q *Queue[T]) chainedSend(o T, bypassPath []string) {
 				strings.Join(bypassPath, "->"), d.name))
 		}
 	}
+}
+
+func (q *Queue[T]) tryChainedSend(o T, bypassPath []string) bool {
+	q.assertNotClosed()
+	if q.bypassTo != nil {
+		return q.bypassTo.tryChainedSend(o, append(bypassPath, q.bypassTo.cfg.name))
+	}
+
+	// this can happen in dead paths (which are valid for disabled pipeline branches),
+	// exiting early to save timeout management
+	if len(q.dsts) == 0 {
+		return true
+	}
+	for _, d := range q.dsts {
+		select {
+		case d.ch <- o:
+			// good!
+		default:
+			return false
+		}
+	}
+
+	return true
 }
 
 type subscribeOpts struct {

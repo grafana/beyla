@@ -20,6 +20,10 @@ import (
 )
 
 // mockable functions for testing
+var newMapTracer = func(f *Flows, out *msg.Queue[[]*ebpf.Record]) swarm.RunFunc {
+	return f.mapTracer.TraceLoop(out)
+}
+
 var newRingBufTracer = func(f *Flows, out *msg.Queue[[]*ebpf.Record]) swarm.RunFunc {
 	return f.rbTracer.TraceLoop(out)
 }
@@ -42,6 +46,7 @@ func (f *Flows) buildPipeline(ctx context.Context) (*swarm.Runner, error) {
 		msg.ChannelBufferLen(f.cfg.ChannelBufferLen),
 		msg.Name("ebpfFlows"),
 	)
+	swi.Add(swarm.DirectInstance(newMapTracer(f, ebpfFlows)), swarm.WithID("MapTracer"))
 	swi.Add(swarm.DirectInstance(newRingBufTracer(f, ebpfFlows)), swarm.WithID("RingBufTracer"))
 
 	newQueue := func(name string) *msg.Queue[[]*ebpf.Record] {
@@ -51,12 +56,16 @@ func (f *Flows) buildPipeline(ctx context.Context) (*swarm.Runner, error) {
 	// Middle nodes: transforming flow records and passing them to the next stage in the pipeline.
 	// Many of the nodes here are not mandatory. It's decision of each InstanceFunc to decide
 	// whether the node needs to be instantiated or just bypass their input/output channels.
+	protocolFilteredEbpfFlows := msg.NewQueue[[]*ebpf.Record](msg.ChannelBufferLen(f.cfg.ChannelBufferLen))
+	swi.Add(flow.ProtocolFilterProvider(f.cfg.NetworkFlows.Protocols, f.cfg.NetworkFlows.ExcludeProtocols,
+		ebpfFlows, protocolFilteredEbpfFlows), swarm.WithID("ProtocolFilter"))
+
 	dedupedEBPFFlows := newQueue("dedupedEBPFFlows")
 	swi.Add(flow.DeduperProvider(&flow.Deduper{
 		Type:               f.cfg.NetworkFlows.Deduper,
 		FCTTL:              f.cfg.NetworkFlows.DeduperFCTTL,
 		CacheActiveTimeout: f.cfg.NetworkFlows.CacheActiveTimeout,
-	}, ebpfFlows, dedupedEBPFFlows), swarm.WithID("FlowDeduper"))
+	}, protocolFilteredEbpfFlows, dedupedEBPFFlows), swarm.WithID("FlowDeduper"))
 
 	kubeDecoratedFlows := newQueue("kubeDecoratedFlows")
 	swi.Add(k8s.MetadataDecoratorProvider(ctx, &f.cfg.Attributes.Kubernetes, f.ctxInfo.K8sInformer,

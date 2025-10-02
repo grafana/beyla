@@ -64,6 +64,34 @@ type RecordAttrs struct {
 	Metadata map[attr.Name]string
 }
 
+func NewRecord(
+	key NetFlowId,
+	metrics NetFlowMetrics,
+) *Record {
+	return &Record{
+		NetFlowRecordT: NetFlowRecordT{
+			Id:      key,
+			Metrics: metrics,
+		},
+	}
+}
+
+func (fm *NetFlowMetrics) Accumulate(src *NetFlowMetrics) {
+	// time == 0 if the value has not been yet set
+	if fm.StartMonoTimeNs == 0 || fm.StartMonoTimeNs > src.StartMonoTimeNs {
+		fm.StartMonoTimeNs = src.StartMonoTimeNs
+		// set IfaceDirection here, because the correct value is in the first packet only
+		fm.IfaceDirection = src.IfaceDirection
+		fm.Initiator = src.Initiator
+	}
+	if fm.EndMonoTimeNs == 0 || fm.EndMonoTimeNs < src.EndMonoTimeNs {
+		fm.EndMonoTimeNs = src.EndMonoTimeNs
+	}
+	fm.Bytes += src.Bytes
+	fm.Packets += src.Packets
+	fm.Flags |= src.Flags
+}
+
 // SrcIP is never null. Returned as pointer for efficiency.
 func (fi *NetFlowId) SrcIP() *IPAddr {
 	return (*IPAddr)(&fi.SrcIp.In6U.U6Addr8)

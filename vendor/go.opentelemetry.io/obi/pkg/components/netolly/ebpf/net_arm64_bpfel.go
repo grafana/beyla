@@ -63,13 +63,15 @@ type NetFlowMetrics NetFlowMetricsT
 
 type NetFlowMetricsT struct {
 	_               structs.HostLayout
-	Packets         uint64
 	Bytes           uint64
 	StartMonoTimeNs uint64
 	EndMonoTimeNs   uint64
+	Packets         uint32
+	Flags           uint16
 	IfaceDirection  uint8
 	Initiator       uint8
-	Pad             [6]uint8
+	Errno           uint8
+	Pad             [7]uint8
 }
 
 type NetFlowRecordT struct {
@@ -129,12 +131,10 @@ type NetProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type NetMapSpecs struct {
-	AggregatedFlows   *ebpf.MapSpec `ebpf:"aggregated_flows"`
-	ConnInitiators    *ebpf.MapSpec `ebpf:"conn_initiators"`
-	DirectFlows       *ebpf.MapSpec `ebpf:"direct_flows"`
-	FlowDirections    *ebpf.MapSpec `ebpf:"flow_directions"`
-	ProtocolBlacklist *ebpf.MapSpec `ebpf:"protocol_blacklist"`
-	ProtocolWhitelist *ebpf.MapSpec `ebpf:"protocol_whitelist"`
+	AggregatedFlows *ebpf.MapSpec `ebpf:"aggregated_flows"`
+	ConnInitiators  *ebpf.MapSpec `ebpf:"conn_initiators"`
+	DirectFlows     *ebpf.MapSpec `ebpf:"direct_flows"`
+	FlowDirections  *ebpf.MapSpec `ebpf:"flow_directions"`
 }
 
 // NetVariableSpecs contains global variables before they are loaded into the kernel.
@@ -142,12 +142,8 @@ type NetMapSpecs struct {
 // It can be passed ebpf.CollectionSpec.Assign.
 type NetVariableSpecs struct {
 	Ip4in6            *ebpf.VariableSpec `ebpf:"ip4in6"`
-	K_maxFlowDuration *ebpf.VariableSpec `ebpf:"k_max_flow_duration"`
-	K_maxRbSize       *ebpf.VariableSpec `ebpf:"k_max_rb_size"`
-	K_protocolBlEmpty *ebpf.VariableSpec `ebpf:"k_protocol_bl_empty"`
-	K_protocolWlEmpty *ebpf.VariableSpec `ebpf:"k_protocol_wl_empty"`
-	K_rbFlushPeriod   *ebpf.VariableSpec `ebpf:"k_rb_flush_period"`
 	Sampling          *ebpf.VariableSpec `ebpf:"sampling"`
+	TraceMessages     *ebpf.VariableSpec `ebpf:"trace_messages"`
 	UnusedFlowId      *ebpf.VariableSpec `ebpf:"unused_flow_id"`
 	UnusedFlowMetrics *ebpf.VariableSpec `ebpf:"unused_flow_metrics"`
 	UnusedFlowRecord  *ebpf.VariableSpec `ebpf:"unused_flow_record"`
@@ -173,12 +169,10 @@ func (o *NetObjects) Close() error {
 //
 // It can be passed to LoadNetObjects or ebpf.CollectionSpec.LoadAndAssign.
 type NetMaps struct {
-	AggregatedFlows   *ebpf.Map `ebpf:"aggregated_flows"`
-	ConnInitiators    *ebpf.Map `ebpf:"conn_initiators"`
-	DirectFlows       *ebpf.Map `ebpf:"direct_flows"`
-	FlowDirections    *ebpf.Map `ebpf:"flow_directions"`
-	ProtocolBlacklist *ebpf.Map `ebpf:"protocol_blacklist"`
-	ProtocolWhitelist *ebpf.Map `ebpf:"protocol_whitelist"`
+	AggregatedFlows *ebpf.Map `ebpf:"aggregated_flows"`
+	ConnInitiators  *ebpf.Map `ebpf:"conn_initiators"`
+	DirectFlows     *ebpf.Map `ebpf:"direct_flows"`
+	FlowDirections  *ebpf.Map `ebpf:"flow_directions"`
 }
 
 func (m *NetMaps) Close() error {
@@ -187,8 +181,6 @@ func (m *NetMaps) Close() error {
 		m.ConnInitiators,
 		m.DirectFlows,
 		m.FlowDirections,
-		m.ProtocolBlacklist,
-		m.ProtocolWhitelist,
 	)
 }
 
@@ -197,12 +189,8 @@ func (m *NetMaps) Close() error {
 // It can be passed to LoadNetObjects or ebpf.CollectionSpec.LoadAndAssign.
 type NetVariables struct {
 	Ip4in6            *ebpf.Variable `ebpf:"ip4in6"`
-	K_maxFlowDuration *ebpf.Variable `ebpf:"k_max_flow_duration"`
-	K_maxRbSize       *ebpf.Variable `ebpf:"k_max_rb_size"`
-	K_protocolBlEmpty *ebpf.Variable `ebpf:"k_protocol_bl_empty"`
-	K_protocolWlEmpty *ebpf.Variable `ebpf:"k_protocol_wl_empty"`
-	K_rbFlushPeriod   *ebpf.Variable `ebpf:"k_rb_flush_period"`
 	Sampling          *ebpf.Variable `ebpf:"sampling"`
+	TraceMessages     *ebpf.Variable `ebpf:"trace_messages"`
 	UnusedFlowId      *ebpf.Variable `ebpf:"unused_flow_id"`
 	UnusedFlowMetrics *ebpf.Variable `ebpf:"unused_flow_metrics"`
 	UnusedFlowRecord  *ebpf.Variable `ebpf:"unused_flow_record"`

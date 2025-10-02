@@ -81,7 +81,7 @@ func MetadataDecoratorProvider(
 		return func(ctx context.Context) {
 			defer output.Close()
 			swarms.ForEachInput(ctx, in, log().Debug, func(flows []*ebpf.Record) {
-				output.Send(decorate(flows))
+				output.TrySend(decorate(flows))
 			})
 		}, nil
 	}

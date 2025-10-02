@@ -50,7 +50,7 @@ func DecoratorProvider(g Definitions, input, output *msg.Queue[[]*ebpf.Record]) 
 				for _, flow := range flows {
 					grouper.decorate(flow)
 				}
-				output.Send(flows)
+				output.TrySend(flows)
 			})
 		}, nil
 	}

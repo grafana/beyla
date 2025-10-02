@@ -81,7 +81,7 @@ func ReverseDNSProvider(cfg *ReverseDNS, input, output *msg.Queue[[]*ebpf.Record
 						flow.Attrs.DstName = optGetName(log, cache, flow.Id.DstIp.In6U.U6Addr8)
 					}
 				}
-				output.Send(flows)
+				output.TrySend(flows)
 			}
 		}, nil
 	}

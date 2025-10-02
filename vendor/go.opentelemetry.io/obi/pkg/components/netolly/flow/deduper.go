@@ -109,7 +109,7 @@ func DeduperProvider(dd *Deduper, input, output *msg.Queue[[]*ebpf.Record]) swar
 					fwd = append(fwd, record)
 				}
 				if len(fwd) > 0 {
-					output.Send(fwd)
+					output.TrySend(fwd)
 				}
 			}
 		}, nil

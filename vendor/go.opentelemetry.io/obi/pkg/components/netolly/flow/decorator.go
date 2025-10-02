@@ -54,7 +54,7 @@ func Decorate(agentIP net.IP, ifaceNamer InterfaceNamer, input *msg.Queue[[]*ebp
 					flow.Attrs.SrcName = flow.Id.SrcIP().IP().String()
 				}
 			}
-			output.Send(flows)
+			output.TrySend(flows)
 		})
 	}
 }

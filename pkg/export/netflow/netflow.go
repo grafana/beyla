@@ -8,11 +8,13 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
+	"github.com/gavv/monotime"
+	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/vmware/go-ipfix/pkg/entities"
 	"github.com/vmware/go-ipfix/pkg/exporter"
 	"github.com/vmware/go-ipfix/pkg/registry"
-
 	"go.opentelemetry.io/obi/pkg/components/netolly/ebpf"
 	"go.opentelemetry.io/obi/pkg/components/pipe/global"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
@@ -20,8 +22,6 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm/swarms"
-
-	"github.com/grafana/beyla/v2/pkg/beyla"
 )
 
 func ilog() *slog.Logger {
@@ -42,9 +42,11 @@ type netFlowExporter struct {
 func Exporter(
 	ctxInfo *global.ContextInfo,
 	cfg *beyla.Config,
-	input *msg.Queue[[]*ebpf.Record],
 ) swarm.InstanceFunc {
 	return func(ctx context.Context) (swarm.RunFunc, error) {
+		if !cfg.NetFlowExport.Enabled() {
+			return swarm.EmptyRunFunc()
+		}
 		log := ilog()
 		log.Debug("instantiating NetFlow exporter",
 			"collectorAddress", cfg.NetFlowExport.CollectorAddress,
@@ -56,7 +58,7 @@ func Exporter(
 			CollectorAddress:    cfg.NetFlowExport.CollectorAddress,
 			CollectorProtocol:   cfg.NetFlowExport.CollectorTransport,
 			ObservationDomainID: 1,
-			TempRefTimeout:      1,
+			TempRefTimeout:      10,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize NetFlow exporter: %w", err)
@@ -64,7 +66,7 @@ func Exporter(
 
 		exp := &netFlowExporter{
 			log:      ilog(),
-			input:    input.Subscribe(msg.SubscriberName("netflow.Exporter")),
+			input:    ctxInfo.OverrideNetExportQueue.Subscribe(msg.SubscriberName("netflow.Exporter")),
 			exporter: exporter,
 		}
 		attrProv, err := attributes.NewAttrSelector(ctxInfo.MetricAttributeGroups, &attributes.SelectorConfig{
@@ -184,10 +186,19 @@ type netFlowAttributes struct {
 	setters  []func(*ebpf.Record, entities.InfoElementWithValue)
 }
 
+const (
+	ExtraAttrFlowStart attr.Name = "flow_start"
+	ExtraAttrFlowEnd   attr.Name = "flow_end"
+	ExtraAttrFlowBytes attr.Name = "flow_bytes"
+	ExtraAttrFlowPkts  attr.Name = "flow_pkts"
+)
+
 func (e *netFlowExporter) netFlowAttributeGetters(attrDefs []attr.Name, ipv4 bool) netFlowAttributes {
+	// need to add some extra attributes that are not defined as OBI metric attributes
+	attrDefs = append(attrDefs, ExtraAttrFlowStart, ExtraAttrFlowEnd, ExtraAttrFlowPkts, ExtraAttrFlowBytes)
 	nfa := netFlowAttributes{
-		entities: make([]entities.InfoElementWithValue, 0, len(attrDefs)),
-		setters:  make([]func(*ebpf.Record, entities.InfoElementWithValue), 0, len(attrDefs)),
+		entities: make([]entities.InfoElementWithValue, 0, len(attrDefs)+2),
+		setters:  make([]func(*ebpf.Record, entities.InfoElementWithValue), 0, len(attrDefs)+2),
 	}
 	for _, name := range attrDefs {
 		if err := addObiToNetFlowAttrName(name, ipv4, &nfa); err != nil {
@@ -199,6 +210,14 @@ func (e *netFlowExporter) netFlowAttributeGetters(attrDefs []attr.Name, ipv4 boo
 
 func attrNameToEntityName(name attr.Name, ipv4 bool) string {
 	switch name {
+	case ExtraAttrFlowStart:
+		return "flowStartMilliseconds"
+	case ExtraAttrFlowEnd:
+		return "flowEndMilliseconds"
+	case ExtraAttrFlowBytes:
+		return "octetDeltaCount"
+	case ExtraAttrFlowPkts:
+		return "packetDeltaCount"
 	case attr.Transport:
 		return "protocolIdentifier"
 	case attr.SrcAddress:
@@ -238,6 +257,26 @@ func addObiToNetFlowAttrName(name attr.Name, ipv4 bool, dst *netFlowAttributes) 
 	}
 	dst.entities = append(dst.entities, elem)
 	switch name {
+	case ExtraAttrFlowStart:
+		dst.setters = append(dst.setters, func(r *ebpf.Record, v entities.InfoElementWithValue) {
+			// TODO: improve and optimize
+			startDelta := monotime.Now() - time.Duration(r.Metrics.StartMonoTimeNs)*time.Nanosecond
+			v.SetUnsigned64Value(uint64(time.Now().Add(-startDelta).UnixMilli()))
+		})
+	case ExtraAttrFlowEnd:
+		dst.setters = append(dst.setters, func(r *ebpf.Record, v entities.InfoElementWithValue) {
+			// TODO: improve and optimize
+			endDelta := monotime.Now() - time.Duration(r.Metrics.EndMonoTimeNs)*time.Nanosecond
+			v.SetUnsigned64Value(uint64(time.Now().Add(-endDelta).UnixMilli()))
+		})
+	case ExtraAttrFlowBytes:
+		dst.setters = append(dst.setters, func(r *ebpf.Record, v entities.InfoElementWithValue) {
+			v.SetUnsigned64Value(r.Metrics.Bytes)
+		})
+	case ExtraAttrFlowPkts:
+		dst.setters = append(dst.setters, func(r *ebpf.Record, v entities.InfoElementWithValue) {
+			v.SetUnsigned64Value(uint64(r.Metrics.Packets))
+		})
 	case attr.Transport:
 		dst.setters = append(dst.setters, func(r *ebpf.Record, v entities.InfoElementWithValue) {
 			v.SetUnsigned8Value(r.Id.TransportProtocol)

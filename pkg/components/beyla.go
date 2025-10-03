@@ -7,6 +7,9 @@ import (
 	"sync"
 	"text/template"
 
+	"github.com/grafana/beyla/v2/pkg/export/netflow"
+	"go.opentelemetry.io/obi/pkg/components/netolly/ebpf"
+	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 	"go.opentelemetry.io/otel/attribute"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 	"golang.org/x/sync/errgroup"
@@ -92,19 +95,28 @@ func setupAppO11y(ctx context.Context, ctxInfo *global.ContextInfo, config *beyl
 }
 
 func setupNetO11y(ctx context.Context, ctxInfo *global.ContextInfo, cfg *beyla.Config) error {
-	slog.Info("starting Beyla in Network metrics mode")
-	flowsAgent, err := agent.FlowsAgent(ctxInfo, cfg.AsOBI())
+	swi := &swarm.Instancer{}
+	swi.Add(func(ctx context.Context) (swarm.RunFunc, error) {
+		slog.Info("starting Beyla in Network metrics mode")
+		flowsAgent, err := agent.FlowsAgent(ctxInfo, cfg.AsOBI())
+		if err != nil {
+			return nil, fmt.Errorf("can't start network metrics capture: %w", err)
+		}
+		return func(ctx context.Context) {
+			if err := flowsAgent.Run(ctx); err != nil {
+				slog.Debug("can't run network metrics capture", "error", err)
+				// TODO: reorganize OBI internally so any error-prone function is moved to `agent.FlowsAgent`
+			}
+		}, nil
+	}, swarm.WithID("OBINetO11y"))
+	swi.Add(netflow.Exporter(ctxInfo, cfg ), swarm.WithID("NetFlowExporter"))
+
+	inst, err := swi.Instance(ctx)
 	if err != nil {
-		slog.Debug("can't start network metrics capture", "error", err)
 		return fmt.Errorf("can't start network metrics capture: %w", err)
 	}
-
-	err = flowsAgent.Run(ctx)
-	if err != nil {
-		slog.Debug("can't run network metrics capture", "error", err)
-		return fmt.Errorf("can't run network metrics capture: %w", err)
-	}
-
+	inst.Start(ctx)
+	<-ctx.Done()
 	return nil
 }
 
@@ -187,6 +199,10 @@ func buildCommonContextInfo(
 		OverrideAppExportQueue: msg.NewQueue[[]request.Span](
 			msg.ChannelBufferLen(config.ChannelBufferLen),
 			msg.Name("overriddenAppExportQueue"),
+		),
+		OverrideNetExportQueue: msg.NewQueue[[]*ebpf.Record](
+			msg.ChannelBufferLen(config.ChannelBufferLen),
+			msg.Name("overriddenNetExportQueue"),
 		),
 	}
 

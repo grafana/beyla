@@ -19,7 +19,6 @@ github.com/aws/smithy-go/internal/sync/singleflight,https://github.com/grafana/b
 github.com/beorn7/perks/quantile,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/beorn7/perks/LICENSE,MIT
 github.com/blang/semver/v4,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/blang/semver/v4/LICENSE,MIT
 github.com/caarlos0/env/v9,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/caarlos0/env/v9/LICENSE.md,MIT
-github.com/cenkalti/backoff/v4,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/cenkalti/backoff/v4/LICENSE,MIT
 github.com/cenkalti/backoff/v5,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/cenkalti/backoff/v5/LICENSE,MIT
 github.com/cespare/xxhash/v2,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/cespare/xxhash/v2/LICENSE.txt,MIT
 github.com/cilium/ebpf,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/cilium/ebpf/LICENSE,MIT
@@ -40,6 +39,17 @@ github.com/go-logr/stdr,https://github.com/grafana/beyla/blob/HEAD/vendor/github
 github.com/go-openapi/jsonpointer,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/go-openapi/jsonpointer/LICENSE,Apache-2.0
 github.com/go-openapi/jsonreference,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/go-openapi/jsonreference/LICENSE,Apache-2.0
 github.com/go-openapi/swag,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/go-openapi/swag/LICENSE,Apache-2.0
+github.com/go-openapi/swag/cmdutils,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/go-openapi/swag/cmdutils/LICENSE,Apache-2.0
+github.com/go-openapi/swag/conv,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/go-openapi/swag/conv/LICENSE,Apache-2.0
+github.com/go-openapi/swag/fileutils,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/go-openapi/swag/fileutils/LICENSE,Apache-2.0
+github.com/go-openapi/swag/jsonname,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/go-openapi/swag/jsonname/LICENSE,Apache-2.0
+github.com/go-openapi/swag/jsonutils,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/go-openapi/swag/jsonutils/LICENSE,Apache-2.0
+github.com/go-openapi/swag/loading,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/go-openapi/swag/loading/LICENSE,Apache-2.0
+github.com/go-openapi/swag/mangling,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/go-openapi/swag/mangling/LICENSE,Apache-2.0
+github.com/go-openapi/swag/netutils,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/go-openapi/swag/netutils/LICENSE,Apache-2.0
+github.com/go-openapi/swag/stringutils,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/go-openapi/swag/stringutils/LICENSE,Apache-2.0
+github.com/go-openapi/swag/typeutils,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/go-openapi/swag/typeutils/LICENSE,Apache-2.0
+github.com/go-openapi/swag/yamlutils,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/go-openapi/swag/yamlutils/LICENSE,Apache-2.0
 github.com/go-playground/locales,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/go-playground/locales/LICENSE,MIT
 github.com/go-playground/universal-translator,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/go-playground/universal-translator/LICENSE,MIT
 github.com/go-playground/validator/v10,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/go-playground/validator/v10/LICENSE,MIT
@@ -61,7 +71,6 @@ github.com/hashicorp/go-version,https://github.com/grafana/beyla/blob/HEAD/vendo
 github.com/hashicorp/golang-lru/v2,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/hashicorp/golang-lru/v2/LICENSE,MPL-2.0
 github.com/hashicorp/golang-lru/v2/simplelru,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/hashicorp/golang-lru/v2/simplelru/LICENSE_list,BSD-3-Clause
 github.com/ianlancetaylor/demangle,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/ianlancetaylor/demangle/LICENSE,BSD-3-Clause
-github.com/josharian/intern,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/josharian/intern/license.md,MIT
 github.com/json-iterator/go,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/json-iterator/go/LICENSE,MIT
 github.com/klauspost/compress,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/klauspost/compress/LICENSE,Apache-2.0
 github.com/klauspost/compress/internal/snapref,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/klauspost/compress/internal/snapref/LICENSE,BSD-3-Clause
@@ -70,7 +79,6 @@ github.com/knadh/koanf/maps,https://github.com/grafana/beyla/blob/HEAD/vendor/gi
 github.com/knadh/koanf/providers/confmap,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/knadh/koanf/providers/confmap/LICENSE,MIT
 github.com/knadh/koanf/v2,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/knadh/koanf/v2/LICENSE,MIT
 github.com/leodido/go-urn,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/leodido/go-urn/LICENSE,MIT
-github.com/mailru/easyjson,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/mailru/easyjson/LICENSE,MIT
 github.com/mariomac/guara/pkg/test,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/mariomac/guara/LICENSE,Apache-2.0
 github.com/mattn/go-isatty,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/mattn/go-isatty/LICENSE,MIT
 github.com/mitchellh/copystructure,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/mitchellh/copystructure/LICENSE,MIT
@@ -124,6 +132,7 @@ go.opentelemetry.io/collector/consumer/consumererror,https://github.com/grafana/
 go.opentelemetry.io/collector/consumer/consumererror/xconsumererror,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/collector/consumer/consumererror/xconsumererror/LICENSE,Apache-2.0
 go.opentelemetry.io/collector/consumer/xconsumer,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/collector/consumer/xconsumer/LICENSE,Apache-2.0
 go.opentelemetry.io/collector/exporter,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/collector/exporter/LICENSE,Apache-2.0
+go.opentelemetry.io/collector/exporter/exporterhelper,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/collector/exporter/exporterhelper/LICENSE,Apache-2.0
 go.opentelemetry.io/collector/exporter/exporterhelper/xexporterhelper,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/collector/exporter/exporterhelper/xexporterhelper/LICENSE,Apache-2.0
 go.opentelemetry.io/collector/exporter/otlpexporter,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/collector/exporter/otlpexporter/LICENSE,Apache-2.0
 go.opentelemetry.io/collector/exporter/otlphttpexporter,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/collector/exporter/otlphttpexporter/LICENSE,Apache-2.0

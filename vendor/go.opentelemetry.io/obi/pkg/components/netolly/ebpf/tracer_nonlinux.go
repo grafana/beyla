@@ -30,6 +30,10 @@ func (m *FlowFetcher) Close() error {
 	return nil
 }
 
-func (m *FlowFetcher) ReadInto(*ringbuf.Record) error {
+func (m *FlowFetcher) ReadRingBuf() (ringbuf.Record, error) {
+	return ringbuf.Record{}, nil
+}
+
+func (m *FlowFetcher) LookupAndDeleteMap() map[NetFlowId][]NetFlowMetrics {
 	return nil
 }

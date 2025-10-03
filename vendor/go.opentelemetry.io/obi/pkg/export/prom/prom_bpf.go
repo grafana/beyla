@@ -16,6 +16,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/components/connector"
 	"go.opentelemetry.io/obi/pkg/components/imetrics"
 	"go.opentelemetry.io/obi/pkg/components/pipe/global"
+	"go.opentelemetry.io/obi/pkg/export/otel"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 )
 
@@ -70,11 +71,9 @@ func BPFMetrics(
 	}
 }
 
-func internalMetricsEnabled(internalMetrics imetrics.Reporter) bool {
-	if _, ok := internalMetrics.(imetrics.NoopReporter); ok || internalMetrics == nil {
-		return false
-	}
-	return true
+func internalMetricsOTELEnabled(internalMetrics imetrics.Reporter) bool {
+	_, ok := internalMetrics.(*otel.InternalMetricsReporter)
+	return ok
 }
 
 func promMetricsEnabled(cfg *PrometheusConfig) bool {
@@ -82,7 +81,7 @@ func promMetricsEnabled(cfg *PrometheusConfig) bool {
 }
 
 func bpfCollectorEnabled(cfg *PrometheusConfig, internalMetrics imetrics.Reporter) bool {
-	return promMetricsEnabled(cfg) || internalMetricsEnabled(internalMetrics)
+	return promMetricsEnabled(cfg) || internalMetricsOTELEnabled(internalMetrics)
 }
 
 func newBPFCollector(ctxInfo *global.ContextInfo, cfg *PrometheusConfig) *BPFCollector {

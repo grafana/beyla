@@ -28,6 +28,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/transform"
 
 	"github.com/grafana/beyla/v2/pkg/config"
+	"github.com/grafana/beyla/v2/pkg/export/netflow/cfg"
 	botel "github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/export/otel/spanscfg"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
@@ -118,6 +119,9 @@ var DefaultConfig = Config{
 		TTL:                         defaultMetricsTTL,
 		SpanMetricsServiceCacheSize: 10000,
 	},
+	NetFlowExport: cfg.NetFlowConfig{
+		CollectorTransport: "tcp",
+	},
 	TracePrinter: debug.TracePrinterDisabled,
 	InternalMetrics: imetrics.Config{
 		Exporter: imetrics.InternalMetricsExporterDisabled,
@@ -183,11 +187,12 @@ type Config struct {
 	// Routes is an optional node. If not set, data will be directly forwarded to exporters.
 	Routes *transform.RoutesConfig `yaml:"routes"`
 	// nolint:undoc
-	NameResolver *transform.NameResolverConfig `yaml:"name_resolver"`
-	Metrics      otelcfg.MetricsConfig         `yaml:"otel_metrics_export"`
-	Traces       otelcfg.TracesConfig          `yaml:"otel_traces_export"`
-	Prometheus   prom.PrometheusConfig         `yaml:"prometheus_export"`
-	TracePrinter debug.TracePrinter            `yaml:"trace_printer" env:"BEYLA_TRACE_PRINTER"`
+	NameResolver  *transform.NameResolverConfig `yaml:"name_resolver"`
+	Metrics       otelcfg.MetricsConfig         `yaml:"otel_metrics_export"`
+	Traces        otelcfg.TracesConfig          `yaml:"otel_traces_export"`
+	Prometheus    prom.PrometheusConfig         `yaml:"prometheus_export"`
+	TracePrinter  debug.TracePrinter            `yaml:"trace_printer" env:"BEYLA_TRACE_PRINTER"`
+	NetFlowExport cfg.NetFlowConfig             `yaml:"netflow_export"`
 
 	// Exec allows selecting the instrumented executable whose complete path contains the Exec value.
 	// Deprecated: Use BEYLA_AUTO_TARGET_EXE
@@ -358,10 +363,10 @@ func (c *Config) Validate() error {
 	}
 
 	if c.Enabled(FeatureNetO11y) && !c.Grafana.OTLP.MetricsEnabled() && !c.Metrics.Enabled() &&
-		!c.Prometheus.Enabled() && !c.NetworkFlows.Print {
+		!c.Prometheus.Enabled() && !c.NetworkFlows.Print  && !c.NetFlowExport.Enabled() {
 		return ConfigError("enabling network metrics requires to enable at least the OpenTelemetry" +
 			" metrics exporter: grafana, otel_metrics_export or prometheus_export sections in the YAML configuration file; or the" +
-			" OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_METRICS_ENDPOINT or BEYLA_PROMETHEUS_PORT environment variables. For debugging" +
+			" OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_METRICS_ENDPOINT, BEYLA_NETFLOW_COLLECTOR_ADDRESS or BEYLA_PROMETHEUS_PORT environment variables. For debugging" +
 			" purposes, you can also set BEYLA_NETWORK_PRINT_FLOWS=true")
 	}
 
@@ -372,9 +377,10 @@ func (c *Config) Validate() error {
 	if c.Enabled(FeatureAppO11y) && !c.TracePrinter.Enabled() &&
 		!c.Grafana.OTLP.MetricsEnabled() && !c.Grafana.OTLP.TracesEnabled() &&
 		!c.Metrics.Enabled() && !c.Traces.Enabled() &&
-		!c.Prometheus.Enabled() && !c.TracePrinter.Enabled() {
+		!c.Prometheus.Enabled() && !c.TracePrinter.Enabled() &&
+		!c.NetFlowExport.Enabled() {
 		return ConfigError("you need to define at least one exporter: trace_printer," +
-			" grafana, otel_metrics_export, otel_traces_export or prometheus_export")
+			" grafana, otel_metrics_export, otel_traces_export, netflow_export or prometheus_export")
 	}
 
 	if c.Enabled(FeatureAppO11y) &&
@@ -419,7 +425,8 @@ func (c *Config) willUseTC() bool {
 func (c *Config) Enabled(feature Feature) bool {
 	switch feature {
 	case FeatureNetO11y:
-		return c.NetworkFlows.Enable || c.promNetO11yEnabled() || c.otelNetO11yEnabled()
+		return c.NetworkFlows.Enable || c.promNetO11yEnabled() || c.otelNetO11yEnabled() ||
+			c.NetFlowExport.Enabled()
 	case FeatureAppO11y:
 		return c.Port.Len() > 0 || c.AutoTargetExe.IsSet() || c.Exec.IsSet() ||
 			c.Exec.IsSet() || c.Discovery.AppDiscoveryEnabled() || c.Discovery.SurveyEnabled()

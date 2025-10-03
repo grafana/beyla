@@ -92,7 +92,10 @@ func (f *Flows) buildPipeline(ctx context.Context) (*swarm.Runner, error) {
 		return flow.Decorate(f.agentIP, ifaceNamer, cidrDecoratedFlows, decoratedFlows), nil
 	}, swarm.WithID("FlowDecorator"))
 
-	filteredFlows := newQueue("filteredFlows")
+	filteredFlows := f.ctxInfo.OverrideNetExportQueue
+	if filteredFlows == nil {
+		filteredFlows = newQueue("filteredFlows")
+	}
 	swi.Add(filter.ByAttribute(f.cfg.Filters.Network, nil, selectorCfg.ExtraGroupAttributesCfg, ebpf.RecordStringGetters, decoratedFlows, filteredFlows),
 		swarm.WithID("AttributeFilter"))
 

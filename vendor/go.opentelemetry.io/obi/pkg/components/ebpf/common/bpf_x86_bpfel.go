@@ -86,7 +86,7 @@ type BpfHttpInfoT struct {
 	Pad             [5]uint8
 }
 
-type BpfHttpRequestTrace struct {
+type BpfHttpRequestTraceT struct {
 	_                 structs.HostLayout
 	Type              uint8
 	Pad0              [1]uint8
@@ -272,7 +272,7 @@ type BpfRedisClientReqT struct {
 	}
 }
 
-type BpfSqlRequestTrace struct {
+type BpfSqlRequestTraceT struct {
 	_      structs.HostLayout
 	Type   uint8
 	Pad    [1]uint8

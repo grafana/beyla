@@ -26,5 +26,6 @@ func (s *SockFlowFetcher) ReadRingBuf() (ringbuf.Record, error) {
 func NewSockFlowFetcher(
 	_, _ int,
 ) (*SockFlowFetcher, error) {
+	// avoids linter complaining
 	return nil, nil
 }

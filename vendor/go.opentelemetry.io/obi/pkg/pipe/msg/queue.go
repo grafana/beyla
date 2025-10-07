@@ -6,6 +6,7 @@ package msg
 
 import (
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -14,7 +15,7 @@ import (
 
 // if a Send operation takes more than this time, we panic informing about a deadlock
 // in the user-provide pipeline
-const sendTimeout = 20 * time.Second
+const defaultSendTimeout = 20 * time.Second
 
 const unnamed = "(unnamed)"
 
@@ -22,12 +23,14 @@ type queueConfig struct {
 	channelBufferLen int
 	closingAttempts  int
 	name             string
+	sendTimeout      time.Duration
 }
 
 var defaultQueueConfig = queueConfig{
 	channelBufferLen: 1,
 	closingAttempts:  1,
 	name:             unnamed,
+	sendTimeout:      defaultSendTimeout,
 }
 
 // QueueOpts allow configuring some operation of a queue
@@ -44,6 +47,17 @@ func ChannelBufferLen(l int) QueueOpts {
 func Name(name string) QueueOpts {
 	return func(c *queueConfig) {
 		c.name = name
+	}
+}
+
+// SendTimeout sets the timeout for Send operations. This is useful for detecting
+// deadlocks derived from a wrong Pipeline construction. It panics if after
+// a send operation, the channel is blocked for more than this timeout.
+// Some nodes might require too long to initialize. For example the Kubernetes Decorator
+// at start, has to download a whole snapshot
+func SendTimeout(to time.Duration) QueueOpts {
+	return func(c *queueConfig) {
+		c.sendTimeout = to
 	}
 }
 
@@ -88,7 +102,7 @@ func NewQueue[T any](opts ...QueueOpts) *Queue[T] {
 	for _, opt := range opts {
 		opt(&cfg)
 	}
-	return &Queue[T]{cfg: &cfg, remainingClosers: cfg.closingAttempts, sendTimeout: time.NewTimer(sendTimeout)}
+	return &Queue[T]{cfg: &cfg, remainingClosers: cfg.closingAttempts, sendTimeout: time.NewTimer(cfg.sendTimeout)}
 }
 
 // Send a message to all subscribers of this queue.
@@ -114,11 +128,36 @@ func (q *Queue[T]) chainedSend(o T, bypassPath []string) {
 	if len(q.dsts) == 0 {
 		return
 	}
-	q.sendTimeout.Reset(sendTimeout)
+
+	// instead of directly panicking in sendTimeout, we first warn at 0.75*sendTimeout,
+	// to get logged about other blocked senders before panicking
+	q.sendTimeout.Reset(3 * q.cfg.sendTimeout / 4)
+	var blocked []dst[T]
 	for _, d := range q.dsts {
 		select {
 		case d.ch <- o:
-		// good!
+			// good!
+		case <-q.sendTimeout.C:
+			slog.With(
+				"timeout", q.cfg.sendTimeout,
+				"queueLen", len(d.ch), "queueCap", cap(d.ch),
+				"sendPath", strings.Join(bypassPath, "->"),
+				"dstName", d.name).
+				Warn("subscriber channel is taking too long to respond")
+			// reset timeout to a small amount to detect any other possible blocked subscriber
+			q.sendTimeout.Reset(time.Second)
+			blocked = append(blocked, d)
+		}
+	}
+	if len(blocked) == 0 {
+		return
+	}
+	// if we confirm that the blocker candidates are actually blocked, we panic
+	q.sendTimeout.Reset(q.cfg.sendTimeout / 4)
+	for _, d := range blocked {
+		select {
+		case d.ch <- o:
+			// good!
 		case <-q.sendTimeout.C:
 			panic(fmt.Sprintf("sending through queue path %s. Subscriber channel %s is blocked",
 				strings.Join(bypassPath, "->"), d.name))

@@ -241,11 +241,11 @@ func handlePostgres(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBu
 	)
 
 	if len(requestBuffer) < sqlprune2.PostgresHdrSize+1 {
-		slog.Warn("Postgres request too short")
+		slog.Debug("Postgres request too short")
 		return span, errFallback
 	}
 	if len(responseBuffer) < sqlprune2.PostgresHdrSize+1 {
-		slog.Warn("Postgres response too short")
+		slog.Debug("Postgres response too short")
 		return span, errFallback
 	}
 

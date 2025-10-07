@@ -10,6 +10,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/components/connector"
 	"go.opentelemetry.io/obi/pkg/components/imetrics"
 	kube2 "go.opentelemetry.io/obi/pkg/components/kube"
+	"go.opentelemetry.io/obi/pkg/components/netolly/ebpf"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
@@ -35,8 +36,17 @@ type ContextInfo struct {
 	// K8sInformer enables direct access to the Kubernetes API
 	K8sInformer *kube2.MetadataProvider
 
-	// OverrideAppExportQueue
+	// OverrideAppExportQueue allows overriding the output queue of the application exporter
+	// to connect your own application exporters outside the OBI code base. If left unset, OBI will
+	// create its own private queue.
+	// This is useful when OBI runs in vendored mode
 	OverrideAppExportQueue *msg.Queue[[]request.Span]
+
+	// OverrideNetExportQueue allows overriding the output queue of the network exporter
+	// to connect your own network exporters outside the OBI code base. If left unset, OBI will
+	// create its own private queue.
+	// This is useful when OBI runs in vendored mode
+	OverrideNetExportQueue *msg.Queue[[]*ebpf.Record]
 
 	// ExtraResourceAttributes allows extending (or overriding) the reported resource attributes in the traces exporters
 	ExtraResourceAttributes []attribute.KeyValue

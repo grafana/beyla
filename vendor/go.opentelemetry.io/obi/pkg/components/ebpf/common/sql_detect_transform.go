@@ -5,7 +5,6 @@ package ebpfcommon
 
 import (
 	"strings"
-	"unsafe"
 
 	trace2 "go.opentelemetry.io/otel/trace"
 
@@ -101,7 +100,7 @@ func TCPToSQLToSpan(trace *TCPRequestInfo, op, table, sql string, kind request.S
 	)
 
 	if trace.ConnInfo.S_port != 0 || trace.ConnInfo.D_port != 0 {
-		peer, hostname = (*BPFConnInfo)(unsafe.Pointer(&trace.ConnInfo)).reqHostInfo()
+		peer, hostname = (*BPFConnInfo)(&trace.ConnInfo).reqHostInfo()
 		peerPort = int(trace.ConnInfo.S_port)
 		hostPort = int(trace.ConnInfo.D_port)
 	}

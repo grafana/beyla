@@ -29,13 +29,13 @@ import (
 	"go.opentelemetry.io/obi/pkg/config"
 )
 
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 -type http_request_trace -type sql_request_trace -type http_info_t -type connection_info_t -type http2_grpc_request_t -type tcp_req_t -type kafka_client_req_t -type kafka_go_req_t -type redis_client_req_t -type tcp_large_buffer_t -type otel_span_t -type mongo_go_client_req_t Bpf ../../../../bpf/common/common.c -- -I../../../../bpf
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 -type http_request_trace_t -type sql_request_trace_t -type http_info_t -type connection_info_t -type http2_grpc_request_t -type tcp_req_t -type kafka_client_req_t -type kafka_go_req_t -type redis_client_req_t -type tcp_large_buffer_t -type otel_span_t -type mongo_go_client_req_t Bpf ../../../../bpf/common/common.c -- -I../../../../bpf
 
 // HTTPRequestTrace contains information from an HTTP request as directly received from the
 // eBPF layer. This contains low-level C structures for accurate binary read from ring buffer.
 type (
-	HTTPRequestTrace     BpfHttpRequestTrace
-	SQLRequestTrace      BpfSqlRequestTrace
+	HTTPRequestTrace     BpfHttpRequestTraceT
+	SQLRequestTrace      BpfSqlRequestTraceT
 	BPFHTTPInfo          BpfHttpInfoT
 	BPFConnInfo          BpfConnectionInfoT
 	TCPRequestInfo       BpfTcpReqT
@@ -58,6 +58,7 @@ const (
 	EventTypeTCPLargeBuffer = 12 // Dynamically sized TCP buffers
 	EventOTelSDKGo          = 13 // OTel SDK manual span
 	EventTypeGoMongo        = 14 // Go MongoDB spans
+	EventTypeFailedConnect  = 15 // Failed Connections
 )
 
 // Kernel-side classification
@@ -65,6 +66,7 @@ const (
 	ProtocolTypeUnknown uint8 = iota
 	ProtocolTypeMySQL
 	ProtocolTypePostgres
+	ProtocolTypeFailedConnect
 )
 
 var IntegrityModeOverride = false
@@ -241,6 +243,8 @@ func ReadBPFTraceAsSpan(parseCtx *EBPFParseContext, cfg *config.EBPFTracer, reco
 		return appendTCPLargeBuffer(parseCtx, record)
 	case EventOTelSDKGo:
 		return ReadGoOTelEventIntoSpan(record)
+	case EventTypeFailedConnect:
+		return ReadFailedConnectIntoSpan(record, filter)
 	}
 
 	event, err := ReinterpretCast[HTTPRequestTrace](record.RawSample)

@@ -142,8 +142,6 @@ github.com/bytedance/sonic/loader/internal/rt
 # github.com/caarlos0/env/v9 v9.0.0
 ## explicit; go 1.17
 github.com/caarlos0/env/v9
-# github.com/cenkalti/backoff/v4 v4.3.0
-## explicit; go 1.18
 # github.com/cenkalti/backoff/v5 v5.0.3
 ## explicit; go 1.23
 github.com/cenkalti/backoff/v5
@@ -386,8 +384,6 @@ github.com/hashicorp/golang-lru/v2/simplelru
 # github.com/ianlancetaylor/demangle v0.0.0-20250628045327-2d64ad6b7ec5
 ## explicit; go 1.13
 github.com/ianlancetaylor/demangle
-# github.com/josharian/intern v1.0.0
-## explicit; go 1.5
 # github.com/json-iterator/go v1.1.12
 ## explicit; go 1.12
 github.com/json-iterator/go
@@ -422,8 +418,6 @@ github.com/leodido/go-urn/scim/schema
 # github.com/lufia/plan9stats v0.0.0-20250827001030-24949be3fa54
 ## explicit; go 1.21
 github.com/lufia/plan9stats
-# github.com/mailru/easyjson v0.9.1
-## explicit; go 1.20
 # github.com/mariomac/guara v0.0.0-20250408105519-1e4dbdfb7136
 ## explicit; go 1.18
 github.com/mariomac/guara/pkg/test
@@ -774,7 +768,7 @@ go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc/inte
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp/internal/request
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp/internal/semconv
-# go.opentelemetry.io/obi v0.0.0-20251002070821-33fea61ada6a => ./.obi-src
+# go.opentelemetry.io/obi v0.0.0-20251007070432-e1a412f8b605 => ./.obi-src
 ## explicit; go 1.25.0
 go.opentelemetry.io/obi/pkg/app/request
 go.opentelemetry.io/obi/pkg/buildinfo
@@ -1106,7 +1100,7 @@ google.golang.org/grpc/serviceconfig
 google.golang.org/grpc/stats
 google.golang.org/grpc/status
 google.golang.org/grpc/tap
-# google.golang.org/protobuf v1.36.9
+# google.golang.org/protobuf v1.36.10
 ## explicit; go 1.23
 google.golang.org/protobuf/encoding/protodelim
 google.golang.org/protobuf/encoding/protojson

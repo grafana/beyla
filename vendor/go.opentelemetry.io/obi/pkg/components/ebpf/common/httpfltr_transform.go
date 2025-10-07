@@ -90,7 +90,7 @@ func HTTPInfoEventToSpan(parseCtx *EBPFParseContext, event *BPFHTTPInfo) (reques
 	)
 
 	if event.HasLargeBuffers == 1 {
-		b, ok := extractTCPLargeBuffer(parseCtx, event.Tp.TraceId, event.Tp.SpanId, packetTypeRequest)
+		b, ok := extractTCPLargeBuffer(parseCtx, event.Tp.TraceId, packetTypeRequest, directionSend, event.ConnInfo)
 		if ok {
 			requestBuffer = b
 		} else {

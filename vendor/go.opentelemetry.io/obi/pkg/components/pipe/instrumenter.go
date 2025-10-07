@@ -78,7 +78,12 @@ func newGraphBuilder(
 		DecoratedTraces: tracesReaderToRouter,
 	}), swarm.WithID("ReadFromChannel"))
 
-	routerToKubeDecorator := newQueue("routerToKubeDecorator")
+	routerToKubeDecorator := msg.NewQueue[[]request.Span](
+		msg.ChannelBufferLen(config.ChannelBufferLen),
+		msg.Name("routerToKubeDecorator"),
+		// make sure that we are able to wait for the informer sync timeout before failing the pipeline
+		// if a message gets bocked while the Kube decorator starts
+		msg.SendTimeout(config.Attributes.Kubernetes.InformersSyncTimeout+20*time.Second))
 	swi.Add(transform.RoutesProvider(
 		config.Routes,
 		tracesReaderToRouter,

@@ -6,8 +6,6 @@
 package ebpf
 
 import (
-	"time"
-
 	"go.opentelemetry.io/obi/pkg/components/ebpf/ringbuf"
 )
 
@@ -27,12 +25,7 @@ func (s *SockFlowFetcher) ReadRingBuf() (ringbuf.Record, error) {
 
 func NewSockFlowFetcher(
 	_, _ int,
-	_ uint32,
-	_, _ time.Duration,
-	_, _ []string,
 ) (*SockFlowFetcher, error) {
 	// avoids linter complaining
-	_ = parseProtocolList
-	_ = assignProtocolList
 	return nil, nil
 }

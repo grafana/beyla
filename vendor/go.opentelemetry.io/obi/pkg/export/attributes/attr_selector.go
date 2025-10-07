@@ -111,7 +111,6 @@ func NewCustomAttrSelector(
 	cfg *SelectorConfig,
 	extraDefinitionsProvider func(groups AttrGroups, extraGroupAttributes GroupAttributes) map[Section]AttrReportGroup,
 ) (*AttrSelector, error) {
-	cfg.SelectionCfg.Normalize()
 	extraGroupAttributes := NewGroupAttributes(cfg.ExtraGroupAttributesCfg)
 
 	definitions := getDefinitions(groups, extraGroupAttributes)

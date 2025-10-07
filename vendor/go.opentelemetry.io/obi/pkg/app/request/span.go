@@ -44,6 +44,7 @@ const (
 	EventTypeGPUKernelLaunch
 	EventTypeGPUMalloc
 	EventTypeGPUMemcpy
+	EventTypeFailedConnect
 )
 
 const (
@@ -108,6 +109,8 @@ func (t EventType) String() string {
 		return "MongoClient"
 	case EventTypeManualSpan:
 		return "CUSTOM"
+	case EventTypeFailedConnect:
+		return "CONNECTION ERR"
 	default:
 		return fmt.Sprintf("UNKNOWN (%d)", t)
 	}
@@ -416,7 +419,7 @@ func (s *Span) IsValid() bool {
 
 func (s *Span) IsClientSpan() bool {
 	switch s.Type {
-	case EventTypeGRPCClient, EventTypeHTTPClient, EventTypeRedisClient, EventTypeKafkaClient, EventTypeSQLClient, EventTypeMongoClient:
+	case EventTypeGRPCClient, EventTypeHTTPClient, EventTypeRedisClient, EventTypeKafkaClient, EventTypeSQLClient, EventTypeMongoClient, EventTypeFailedConnect:
 		return true
 	}
 
@@ -452,6 +455,8 @@ func SpanStatusCode(span *Span) string {
 			return StatusCodeOk
 		}
 		return StatusCodeUnset
+	case EventTypeFailedConnect:
+		return StatusCodeError
 	}
 	return StatusCodeUnset
 }
@@ -538,7 +543,7 @@ func (s *Span) ServiceGraphKind() string {
 	switch s.Type {
 	case EventTypeHTTP, EventTypeGRPC, EventTypeKafkaServer, EventTypeRedisServer:
 		return "SPAN_KIND_SERVER"
-	case EventTypeHTTPClient, EventTypeGRPCClient, EventTypeSQLClient, EventTypeRedisClient, EventTypeMongoClient:
+	case EventTypeHTTPClient, EventTypeGRPCClient, EventTypeSQLClient, EventTypeRedisClient, EventTypeMongoClient, EventTypeFailedConnect:
 		return "SPAN_KIND_CLIENT"
 	case EventTypeKafkaClient:
 		switch s.Method {
@@ -598,6 +603,8 @@ func (s *Span) TraceName() string {
 		return semconv.DBSystemMongoDB.Value.AsString()
 	case EventTypeManualSpan:
 		return s.Method
+	case EventTypeFailedConnect:
+		return "CONNECT"
 	}
 	return ""
 }

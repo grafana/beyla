@@ -31,6 +31,8 @@ import (
 // RunBeyla in the foreground process. This is a blocking function and won't exit
 // until both the AppO11y and NetO11y components end
 func RunBeyla(ctx context.Context, cfg *beyla.Config) error {
+	normalizeConfig(cfg)
+
 	ctxInfo, err := buildCommonContextInfo(ctx, cfg)
 	if err != nil {
 		return fmt.Errorf("can't build common context info: %w", err)
@@ -65,6 +67,11 @@ func RunBeyla(ctx context.Context, cfg *beyla.Config) error {
 	}
 
 	return nil
+}
+
+// normalizeConfig normalizes user input to a common set of assumptions that are global to Beyla
+func normalizeConfig(c *beyla.Config) {
+	c.Attributes.Select.Normalize()
 }
 
 func setupAppO11y(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config) error {

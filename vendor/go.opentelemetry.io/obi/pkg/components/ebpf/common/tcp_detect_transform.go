@@ -21,6 +21,9 @@ var (
 const (
 	packetTypeRequest  = 1
 	packetTypeResponse = 2
+
+	directionRecv = 0
+	directionSend = 1
 )
 
 // ReadTCPRequestIntoSpan returns a request.Span from the provided ring buffer record
@@ -161,10 +164,10 @@ func getBuffers(parseCtx *EBPFParseContext, event *TCPRequestInfo) (req []byte, 
 	resp = event.Rbuf[:l]
 
 	if event.HasLargeBuffers == 1 {
-		if b, ok := extractTCPLargeBuffer(parseCtx, event.Tp.TraceId, event.Tp.SpanId, packetTypeRequest); ok {
+		if b, ok := extractTCPLargeBuffer(parseCtx, event.Tp.TraceId, packetTypeRequest, directionSend, event.ConnInfo); ok {
 			req = b
 		}
-		if b, ok := extractTCPLargeBuffer(parseCtx, event.Tp.TraceId, event.Tp.SpanId, packetTypeResponse); ok {
+		if b, ok := extractTCPLargeBuffer(parseCtx, event.Tp.TraceId, packetTypeResponse, directionRecv, event.ConnInfo); ok {
 			resp = b
 		}
 	}

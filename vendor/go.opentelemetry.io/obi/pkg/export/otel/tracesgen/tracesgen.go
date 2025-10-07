@@ -278,6 +278,8 @@ func acceptSpan(is instrumentations.InstrumentationSelection, span *request.Span
 		return is.MongoEnabled()
 	case request.EventTypeManualSpan:
 		return true
+	case request.EventTypeFailedConnect:
+		return true
 	}
 
 	return false
@@ -424,6 +426,12 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 		}
 	case request.EventTypeManualSpan:
 		attrs = manualSpanAttributes(span)
+	case request.EventTypeFailedConnect:
+		attrs = []attribute.KeyValue{
+			request.ClientAddr(request.PeerAsClient(span)),
+			request.ServerAddr(request.SpanHost(span)),
+			request.ServerPort(span.HostPort),
+		}
 	}
 
 	if _, ok := optionalAttrs[attr.SkipSpanMetrics]; ok {
@@ -437,7 +445,7 @@ func spanKind(span *request.Span) trace2.SpanKind {
 	switch span.Type {
 	case request.EventTypeHTTP, request.EventTypeGRPC, request.EventTypeRedisServer, request.EventTypeKafkaServer:
 		return trace2.SpanKindServer
-	case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient, request.EventTypeRedisClient, request.EventTypeMongoClient:
+	case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient, request.EventTypeRedisClient, request.EventTypeMongoClient, request.EventTypeFailedConnect:
 		return trace2.SpanKindClient
 	case request.EventTypeKafkaClient:
 		switch span.Method {

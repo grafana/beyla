@@ -23,6 +23,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/kubeflags"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
+	"go.opentelemetry.io/obi/pkg/pipe/swarm/swarms"
 )
 
 var containerInfoForPID = container.InfoForPID
@@ -144,24 +145,13 @@ type metadataDecorator struct {
 func (md *metadataDecorator) nodeLoop(ctx context.Context) {
 	// output channel must be closed so later stages in the pipeline can finish in cascade
 	defer md.output.Close()
-	klog().Debug("starting kubernetes span decoration loop")
-	for {
-		select {
-		case <-ctx.Done():
-			klog().Debug("context done, stopping kubernetes span decoration loop")
-			return
-		case spans, ok := <-md.input:
-			if !ok {
-				klog().Debug("input channel closed, stopping kubernetes span decoration loop")
-				return
-			}
-			// in-place decoration and forwarding
-			for i := range spans {
-				md.do(&spans[i])
-			}
-			md.output.Send(spans)
+	swarms.ForEachInput(ctx, md.input, klog().Debug, func(spans []request.Span) {
+		// in-place decoration and forwarding
+		for i := range spans {
+			md.do(&spans[i])
 		}
-	}
+		md.output.Send(spans)
+	})
 }
 
 func (md *metadataDecorator) do(span *request.Span) {
@@ -172,11 +162,15 @@ func (md *metadataDecorator) do(span *request.Span) {
 		span.Service.Metadata = map[attr.Name]string{}
 	}
 	// override the peer and host names from Kubernetes metadata, if found
-	if name, _ := md.db.ServiceNameNamespaceForIP(span.Host); name != "" {
-		span.HostName = name
+	if span.Host != "" {
+		if name, _ := md.db.ServiceNameNamespaceForIP(span.Host); name != "" {
+			span.HostName = name
+		}
 	}
-	if name, _ := md.db.ServiceNameNamespaceForIP(span.Peer); name != "" {
-		span.PeerName = name
+	if span.Peer != "" {
+		if name, _ := md.db.ServiceNameNamespaceForIP(span.Peer); name != "" {
+			span.PeerName = name
+		}
 	}
 }
 

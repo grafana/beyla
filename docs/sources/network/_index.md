@@ -93,4 +93,4 @@ attributes:
 In this example, the bytes metric is the aggregated by the source and destination owners. This is, all the
 pods from a given Deployment/StatefulSet/ReplicaSet/DaemonSet.
 
-For more information about the `attributes.select` section, check the [Configuration options](../configure/options/).
+For more information about the `attributes.select` section, check the [Metrics attributes](../configure/metrics-traces-attributes/).

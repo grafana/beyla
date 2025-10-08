@@ -22,7 +22,7 @@ IMG_REGISTRY ?= docker.io
 IMG_ORG ?= grafana
 IMG_NAME ?= beyla
 
-# Container image creation creation
+# Container image creation
 VERSION ?= dev
 IMG = $(IMG_REGISTRY)/$(IMG_ORG)/$(IMG_NAME):$(VERSION)
 

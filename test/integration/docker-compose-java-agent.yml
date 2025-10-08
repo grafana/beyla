@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   testserver:
@@ -33,6 +33,7 @@ services:
       OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME}"
       BEYLA_SERVICE_NAMESPACE: "integration-test"
       OTEL_METRIC_EXPORT_INTERVAL: "10"
+      BEYLA_OTLP_TRACES_BATCH_TIMEOUT: "1ms"
       BEYLA_BPF_BATCH_TIMEOUT: "10ms"
       BEYLA_LOG_LEVEL: "DEBUG"
       BEYLA_BPF_DEBUG: "TRUE"
@@ -51,14 +52,14 @@ services:
         limits:
           memory: 125M
     restart: unless-stopped
-    command: [ "--config=/etc/otelcol-config/otelcol-config.yml" ]
+    command: ["--config=/etc/otelcol-config/otelcol-config.yml"]
     volumes:
       - ./configs/:/etc/otelcol-config
     ports:
-      - "4317"          # OTLP over gRPC receiver
-      - "4318:4318"     # OTLP over HTTP receiver
-      - "9464"          # Prometheus exporter
-      - "8888"          # metrics endpoint
+      - "4317" # OTLP over gRPC receiver
+      - "4318:4318" # OTLP over HTTP receiver
+      - "9464" # Prometheus exporter
+      - "8888" # metrics endpoint
     depends_on:
       prometheus:
         condition: service_started

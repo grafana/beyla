@@ -256,7 +256,7 @@ func (md *procEventMetadataDecorator) ID() string { return "unique-proc-event-me
 
 func (md *procEventMetadataDecorator) On(event *informer.Event) error {
 	// ignoring updates on non-pod resources
-	if event.GetResource().GetPod() == nil {
+	if event.Resource == nil || event.GetResource().GetPod() == nil {
 		return nil
 	}
 	switch event.Type {

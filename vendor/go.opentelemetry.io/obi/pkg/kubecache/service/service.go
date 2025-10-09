@@ -141,7 +141,7 @@ func (o *connection) FromEpoch() int64 {
 func (o *connection) On(event *informer.Event) error {
 	// the client asked for events happening after their last successfully received event
 	// so ignore older events to save memory and network
-	if event.Type != informer.EventType_SYNC_FINISHED && event.Resource.StatusTimeEpoch < o.fromEpoch {
+	if event.Type != informer.EventType_SYNC_FINISHED && event.Resource != nil && event.Resource.StatusTimeEpoch < o.fromEpoch {
 		return nil
 	}
 	o.metrics.MessageSubmit()

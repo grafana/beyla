@@ -768,7 +768,7 @@ go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc/inte
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp/internal/request
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp/internal/semconv
-# go.opentelemetry.io/obi v0.0.0-20251007070432-e1a412f8b605 => ./.obi-src
+# go.opentelemetry.io/obi v0.0.0-20251009072749-c5aab5b371a7 => ../opentelemetry-ebpf-instrumentation
 ## explicit; go 1.25.0
 go.opentelemetry.io/obi/pkg/app/request
 go.opentelemetry.io/obi/pkg/buildinfo
@@ -807,8 +807,6 @@ go.opentelemetry.io/obi/pkg/components/netolly/transform/k8s
 go.opentelemetry.io/obi/pkg/components/pipe
 go.opentelemetry.io/obi/pkg/components/pipe/global
 go.opentelemetry.io/obi/pkg/components/svc
-go.opentelemetry.io/obi/pkg/components/traces
-go.opentelemetry.io/obi/pkg/components/traces/hostname
 go.opentelemetry.io/obi/pkg/config
 go.opentelemetry.io/obi/pkg/export/attributes
 go.opentelemetry.io/obi/pkg/export/attributes/names
@@ -836,6 +834,8 @@ go.opentelemetry.io/obi/pkg/internal/rdns/ebpf/xdp
 go.opentelemetry.io/obi/pkg/internal/rdns/store
 go.opentelemetry.io/obi/pkg/internal/split
 go.opentelemetry.io/obi/pkg/internal/sqlprune
+go.opentelemetry.io/obi/pkg/internal/traces
+go.opentelemetry.io/obi/pkg/internal/traces/hostname
 go.opentelemetry.io/obi/pkg/internal/transform/route
 go.opentelemetry.io/obi/pkg/internal/transform/route/clusterurl
 go.opentelemetry.io/obi/pkg/internal/transform/route/harvest
@@ -851,6 +851,8 @@ go.opentelemetry.io/obi/pkg/pipe/msg
 go.opentelemetry.io/obi/pkg/pipe/swarm
 go.opentelemetry.io/obi/pkg/pipe/swarm/swarms
 go.opentelemetry.io/obi/pkg/services
+go.opentelemetry.io/obi/pkg/traces
+go.opentelemetry.io/obi/pkg/traces/tracescfg
 go.opentelemetry.io/obi/pkg/transform
 # go.opentelemetry.io/otel v1.38.0
 ## explicit; go 1.23.0
@@ -1631,4 +1633,4 @@ sigs.k8s.io/structured-merge-diff/v6/value
 ## explicit; go 1.22
 sigs.k8s.io/yaml
 sigs.k8s.io/yaml/goyaml.v2
-# go.opentelemetry.io/obi => ./.obi-src
+# go.opentelemetry.io/obi => ../opentelemetry-ebpf-instrumentation

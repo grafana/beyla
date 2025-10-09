@@ -19,7 +19,6 @@ import (
 	"go.opentelemetry.io/obi/pkg/components/imetrics"
 	"go.opentelemetry.io/obi/pkg/components/kube"
 	"go.opentelemetry.io/obi/pkg/components/netolly/transform/cidr"
-	"go.opentelemetry.io/obi/pkg/components/traces"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/debug"
@@ -29,6 +28,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/kubeflags"
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/services"
+	"go.opentelemetry.io/obi/pkg/traces/tracescfg"
 	"go.opentelemetry.io/obi/pkg/transform"
 
 	"github.com/grafana/beyla/v2/pkg/config"
@@ -209,7 +209,7 @@ network:
 			BpfMetricScrapeInterval: 15 * time.Second,
 		},
 		Attributes: Attributes{
-			InstanceID: traces.InstanceIDConfig{
+			InstanceID: tracescfg.InstanceIDConfig{
 				HostnameDNSResolution: true,
 			},
 			Kubernetes: transform.KubernetesDecorator{

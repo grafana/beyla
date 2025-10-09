@@ -2,4 +2,4 @@ changelog:
   categories:
     - title: Release notes being automatically generated after release. Please wait a minute
       labels:
-        - "*"
+        - "dont-match-anything-so-nothing-is-added-here"

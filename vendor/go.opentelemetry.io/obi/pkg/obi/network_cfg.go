@@ -24,8 +24,9 @@ package obi
 import (
 	"time"
 
-	"go.opentelemetry.io/obi/pkg/components/netolly/flow"
-	"go.opentelemetry.io/obi/pkg/components/netolly/transform/cidr"
+	"go.opentelemetry.io/obi/pkg/internal/netolly/flow"
+	"go.opentelemetry.io/obi/pkg/netolly/cidr"
+	"go.opentelemetry.io/obi/pkg/netolly/flowdef"
 )
 
 const (
@@ -123,14 +124,14 @@ type NetworkConfig struct {
 	CIDRs cidr.Definitions `yaml:"cidrs" env:"OTEL_EBPF_NETWORK_CIDRS" envSeparator:","`
 }
 
-var defaultNetworkConfig = NetworkConfig{
+var DefaultNetworkConfig = NetworkConfig{
 	Source:             EbpfSourceSock,
 	AgentIPIface:       "external",
 	AgentIPType:        "any",
 	ExcludeInterfaces:  []string{"lo"},
 	CacheMaxFlows:      5000,
 	CacheActiveTimeout: 5 * time.Second,
-	Deduper:            flow.DeduperFirstCome,
+	Deduper:            flowdef.DeduperFirstCome,
 	Direction:          "both",
 	ListenInterfaces:   "watch",
 	ListenPollPeriod:   10 * time.Second,

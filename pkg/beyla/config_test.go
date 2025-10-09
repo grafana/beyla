@@ -15,10 +15,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"go.opentelemetry.io/obi/pkg/components/ebpf/tcmanager"
 	"go.opentelemetry.io/obi/pkg/components/imetrics"
 	"go.opentelemetry.io/obi/pkg/components/kube"
-	"go.opentelemetry.io/obi/pkg/components/netolly/transform/cidr"
+	obiconfig "go.opentelemetry.io/obi/pkg/config"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/debug"
@@ -26,12 +25,11 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/export/prom"
 	"go.opentelemetry.io/obi/pkg/kubeflags"
+	"go.opentelemetry.io/obi/pkg/netolly/cidr"
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/services"
-	"go.opentelemetry.io/obi/pkg/traces/tracescfg"
 	"go.opentelemetry.io/obi/pkg/transform"
 
-	"github.com/grafana/beyla/v2/pkg/config"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
 	servicesextra "github.com/grafana/beyla/v2/pkg/services"
@@ -110,7 +108,7 @@ network:
 	assert.False(t, cfg.Port.Matches(8078))
 	assert.False(t, cfg.Port.Matches(8098))
 
-	nc := defaultNetworkConfig
+	nc := obi.DefaultNetworkConfig
 	nc.Enable = true
 	nc.AgentIP = "1.2.3.4"
 	nc.CIDRs = cidr.Definitions{"10.244.0.0/16"}
@@ -131,18 +129,18 @@ network:
 		ShutdownTimeout:  30 * time.Second,
 		EnforceSysCaps:   false,
 		TracePrinter:     "json",
-		EBPF: config.EBPFTracer{
+		EBPF: obiconfig.EBPFTracer{
 			BatchLength:               100,
 			BatchTimeout:              time.Second,
 			HTTPRequestTimeout:        0,
-			TCBackend:                 tcmanager.TCBackendAuto,
+			TCBackend:                 obiconfig.TCBackendAuto,
 			ContextPropagationEnabled: false,
-			ContextPropagation:        config.ContextPropagationDisabled,
-			RedisDBCache: config.RedisDBCacheConfig{
+			ContextPropagation:        obiconfig.ContextPropagationDisabled,
+			RedisDBCache: obiconfig.RedisDBCacheConfig{
 				Enabled: false,
 				MaxSize: 1000,
 			},
-			BufferSizes: config.EBPFBufferSizes{
+			BufferSizes: obiconfig.EBPFBufferSizes{
 				HTTP:     0,
 				MySQL:    0,
 				Postgres: 0,
@@ -209,7 +207,7 @@ network:
 			BpfMetricScrapeInterval: 15 * time.Second,
 		},
 		Attributes: Attributes{
-			InstanceID: tracescfg.InstanceIDConfig{
+			InstanceID: obiconfig.InstanceIDConfig{
 				HostnameDNSResolution: true,
 			},
 			Kubernetes: transform.KubernetesDecorator{
@@ -517,7 +515,7 @@ time=\S+ level=DEBUG msg=debug arg=debug$`),
 		debugMode: true,
 		expectedCfg: Config{
 			TracePrinter: debug.TracePrinterText,
-			EBPF:         config.EBPFTracer{BpfDebug: true, ProtocolDebug: true},
+			EBPF:         obiconfig.EBPFTracer{BpfDebug: true, ProtocolDebug: true},
 		},
 	}, {
 		name: "debug log with network flows",
@@ -531,12 +529,12 @@ time=\S+ level=DEBUG msg=debug arg=debug$`),
 		debugMode: true,
 		expectedCfg: Config{
 			TracePrinter: debug.TracePrinterText,
-			EBPF:         config.EBPFTracer{BpfDebug: true, ProtocolDebug: true},
-			NetworkFlows: NetworkConfig{Enable: true, Print: true},
+			EBPF:         obiconfig.EBPFTracer{BpfDebug: true, ProtocolDebug: true},
+			NetworkFlows: obi.NetworkConfig{Enable: true, Print: true},
 		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg := Config{NetworkFlows: NetworkConfig{Enable: tc.networkEnable}}
+			cfg := Config{NetworkFlows: obi.NetworkConfig{Enable: tc.networkEnable}}
 			out := &bytes.Buffer{}
 			cfg.ExternalLogger(tc.handler(out), tc.debugMode)
 			slog.Info("information", "arg", "info")

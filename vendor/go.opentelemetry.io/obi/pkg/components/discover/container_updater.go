@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"log/slog"
 
-	"go.opentelemetry.io/obi/pkg/components/ebpf"
 	"go.opentelemetry.io/obi/pkg/components/kube"
+	"go.opentelemetry.io/obi/pkg/ebpf"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm/swarms"

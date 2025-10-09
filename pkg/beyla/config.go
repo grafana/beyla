@@ -10,9 +10,10 @@ import (
 	otelconsumer "go.opentelemetry.io/collector/consumer"
 	"gopkg.in/yaml.v3"
 
-	"go.opentelemetry.io/obi/pkg/components/ebpf/tcmanager"
 	"go.opentelemetry.io/obi/pkg/components/imetrics"
 	"go.opentelemetry.io/obi/pkg/components/kube"
+	obicfg "go.opentelemetry.io/obi/pkg/config"
+	"go.opentelemetry.io/obi/pkg/ebpf/tcmanager"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/debug"
@@ -24,7 +25,6 @@ import (
 	"go.opentelemetry.io/obi/pkg/kubeflags"
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/services"
-	"go.opentelemetry.io/obi/pkg/traces/tracescfg"
 	"go.opentelemetry.io/obi/pkg/transform"
 
 	"github.com/grafana/beyla/v2/pkg/config"
@@ -53,18 +53,18 @@ var DefaultConfig = Config{
 	LogLevel:         "INFO",
 	ShutdownTimeout:  10 * time.Second,
 	EnforceSysCaps:   false,
-	EBPF: config.EBPFTracer{
+	EBPF: obicfg.EBPFTracer{
 		BatchLength:               100,
 		BatchTimeout:              time.Second,
 		HTTPRequestTimeout:        0,
-		TCBackend:                 tcmanager.TCBackendAuto,
+		TCBackend:                 obicfg.TCBackendAuto,
 		ContextPropagationEnabled: false,
-		ContextPropagation:        config.ContextPropagationDisabled,
-		RedisDBCache: config.RedisDBCacheConfig{
+		ContextPropagation:        obicfg.ContextPropagationDisabled,
+		RedisDBCache: obicfg.RedisDBCacheConfig{
 			Enabled: false,
 			MaxSize: 1000,
 		},
-		BufferSizes: config.EBPFBufferSizes{
+		BufferSizes: obicfg.EBPFBufferSizes{
 			HTTP:     0,
 			MySQL:    0,
 			Postgres: 0,
@@ -128,7 +128,7 @@ var DefaultConfig = Config{
 		BpfMetricScrapeInterval: 15 * time.Second,
 	},
 	Attributes: Attributes{
-		InstanceID: tracescfg.InstanceIDConfig{
+		InstanceID: obicfg.InstanceIDConfig{
 			HostnameDNSResolution: true,
 		},
 		Kubernetes: transform.KubernetesDecorator{
@@ -149,7 +149,7 @@ var DefaultConfig = Config{
 		Unmatch:      transform.UnmatchDefault,
 		WildcardChar: "*",
 	},
-	NetworkFlows: defaultNetworkConfig,
+	NetworkFlows: obi.DefaultNetworkConfig,
 	Processes: process.CollectConfig{
 		RunMode:  process.RunModePrivileged,
 		Interval: 5 * time.Second,
@@ -168,10 +168,10 @@ var DefaultConfig = Config{
 }
 
 type Config struct {
-	EBPF config.EBPFTracer `yaml:"ebpf"`
+	EBPF obicfg.EBPFTracer `yaml:"ebpf"`
 
 	// NetworkFlows configuration for Network Observability feature
-	NetworkFlows NetworkConfig `yaml:"network"`
+	NetworkFlows obi.NetworkConfig `yaml:"network"`
 
 	// Grafana overrides some values of the otel.MetricsConfig and otel.TracesConfig below
 	// for a simpler submission of OTEL metrics to Grafana Cloud
@@ -278,7 +278,7 @@ func (t TracesReceiverConfig) Enabled() bool {
 // added to each span
 type Attributes struct {
 	Kubernetes           transform.KubernetesDecorator `yaml:"kubernetes"`
-	InstanceID           tracescfg.InstanceIDConfig    `yaml:"instance_id"`
+	InstanceID           obicfg.InstanceIDConfig       `yaml:"instance_id"`
 	Select               attributes.Selection          `yaml:"select"`
 	HostID               HostIDConfig                  `yaml:"host_id"`
 	ExtraGroupAttributes map[string][]attr.Name        `yaml:"extra_group_attributes"`
@@ -334,7 +334,7 @@ func (c *Config) Validate() error {
 
 	// nolint:staticcheck
 	// remove after deleting ContextPropagationEnabled
-	if c.EBPF.ContextPropagationEnabled && c.EBPF.ContextPropagation != config.ContextPropagationDisabled {
+	if c.EBPF.ContextPropagationEnabled && c.EBPF.ContextPropagation != obicfg.ContextPropagationDisabled {
 		return ConfigError("context_propagation_enabled and context_propagation are mutually exclusive")
 	}
 
@@ -344,7 +344,7 @@ func (c *Config) Validate() error {
 	if c.EBPF.ContextPropagationEnabled {
 		slog.Warn("DEPRECATION NOTICE: 'context_propagation_enabled' configuration option has been " +
 			"deprecated and will be removed in the future - use 'context_propagation' instead")
-		c.EBPF.ContextPropagation = config.ContextPropagationAll
+		c.EBPF.ContextPropagation = obicfg.ContextPropagationAll
 	}
 
 	if c.willUseTC() {
@@ -409,10 +409,10 @@ func (c *Config) otelNetO11yEnabled() bool {
 func (c *Config) willUseTC() bool {
 	// nolint:staticcheck
 	// remove after deleting ContextPropagationEnabled
-	return c.EBPF.ContextPropagation == config.ContextPropagationAll ||
-		c.EBPF.ContextPropagation == config.ContextPropagationIPOptionsOnly ||
+	return c.EBPF.ContextPropagation == obicfg.ContextPropagationAll ||
+		c.EBPF.ContextPropagation == obicfg.ContextPropagationIPOptionsOnly ||
 		c.EBPF.ContextPropagationEnabled ||
-		(c.Enabled(FeatureNetO11y) && c.NetworkFlows.Source == EbpfSourceTC)
+		(c.Enabled(FeatureNetO11y) && c.NetworkFlows.Source == obi.EbpfSourceTC)
 }
 
 // Enabled checks if a given Beyla feature is enabled according to the global configuration

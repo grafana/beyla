@@ -11,7 +11,7 @@ import (
 
 	"github.com/cilium/ebpf/link"
 
-	"go.opentelemetry.io/obi/pkg/components/ebpf/ringbuf"
+	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
 )
 
 // tracer represents the main structure for DNS response tracking.

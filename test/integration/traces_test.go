@@ -987,7 +987,7 @@ func testHTTPTracesNestedSelfCalls(t *testing.T) {
 		var tq jaeger.TracesQuery
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
 		traces := tq.FindBySpan(jaeger.Tag{Key: "url.path", Type: "string", Value: "/api1"})
-		require.NotEmpty(t, traces)
+		require.Len(t, traces, 1)
 		trace = traces[0]
 
 		// Check the information of the parent span
@@ -1020,8 +1020,19 @@ func testHTTPTracesNestedSelfCalls(t *testing.T) {
 			}
 		}
 
-		require.Len(t, children, 1)
-		child := children[0]
+		require.GreaterOrEqual(t, len(children), 1)
+		child := jaeger.Span{}
+
+		for _, c := range children {
+			// This python app tries first to connect to IP V6, fails and then tries IPV4
+			if c.OperationName == "CONNECT" {
+				continue
+			}
+			child = c
+			break
+		}
+
+		assert.NotEmpty(t, child.OperationName)
 
 		sd = child.Diff(
 			jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
@@ -1043,8 +1054,19 @@ func testHTTPTracesNestedSelfCalls(t *testing.T) {
 			}
 		}
 
-		require.Len(t, children, 1)
-		child = children[0]
+		require.GreaterOrEqual(t, len(children), 1)
+		child = jaeger.Span{}
+
+		for _, c := range children {
+			// This python app tries first to connect to IP V6, fails and then tries IPV4
+			if c.OperationName == "CONNECT" {
+				continue
+			}
+			child = c
+			break
+		}
+
+		assert.NotEmpty(t, child.OperationName)
 
 		sd = child.Diff(
 			jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
@@ -1066,8 +1088,19 @@ func testHTTPTracesNestedSelfCalls(t *testing.T) {
 			}
 		}
 
-		require.Len(t, children, 1)
-		child = children[0]
+		require.GreaterOrEqual(t, len(children), 1)
+		child = jaeger.Span{}
+
+		for _, c := range children {
+			// This python app tries first to connect to IP V6, fails and then tries IPV4
+			if c.OperationName == "CONNECT" {
+				continue
+			}
+			child = c
+			break
+		}
+
+		assert.NotEmpty(t, child.OperationName)
 
 		sd = child.Diff(
 			jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},

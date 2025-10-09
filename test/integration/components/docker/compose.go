@@ -6,8 +6,10 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path"
+	"path/filepath"
 	"strings"
+
+	"github.com/grafana/beyla/v2/test/tools"
 )
 
 type Compose struct {
@@ -28,15 +30,20 @@ func ComposeSuite(composeFile, logFile string) (*Compose, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Construct the full path to the Docker Compose file
+	projectRoot := tools.ProjectDir()
+	composePath := filepath.Join(projectRoot, "test", "integration", composeFile)
+
 	return &Compose{
-		Path:   path.Join(composeFile),
+		Path:   composePath,
 		Logger: logs,
 		Env:    defaultEnv(),
 	}, nil
 }
 
 func (c *Compose) Up() error {
-	return c.command("up", "--build", "--detach")
+	return c.command("up", "--build", "--detach", "--quiet-pull")
 }
 
 func (c *Compose) Logs() error {
@@ -52,7 +59,7 @@ func (c *Compose) Remove() error {
 }
 
 func (c *Compose) command(args ...string) error {
-	cmdArgs := []string{"compose", "-f", c.Path}
+	cmdArgs := []string{"compose", "--ansi", "never", "-f", c.Path}
 	cmdArgs = append(cmdArgs, args...)
 	cmd := exec.Command("docker", cmdArgs...)
 	cmd.Env = c.Env

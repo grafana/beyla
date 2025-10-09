@@ -161,8 +161,21 @@ func (k *Kind) Run(m *testing.M) {
 			k.exportAllTraces(),
 			k.deleteLabeled(),
 			envfuncs.DestroyCluster(k.clusterName),
+			k.cleanupDocker(),
 		).Run(m)
 	log.With("returnCode", code).Info("tests finished run")
+}
+
+// cleanupDocker prunes docker resources after the cluster is destroyed to save disk space
+func (k *Kind) cleanupDocker() env.Func {
+	return func(ctx context.Context, _ *envconf.Config) (context.Context, error) {
+		log := log()
+		log.Info("cleaning up docker resources to save disk space")
+		exe := gexe.New()
+		out := exe.Run("docker system prune -af --volumes")
+		log.With("out", out).Info("docker cleanup completed")
+		return ctx, nil
+	}
 }
 
 // export logs into the e2e-logs folder of the base directory.

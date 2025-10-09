@@ -1,11 +1,5 @@
 changelog:
   categories:
-    - title: Breaking changes 🔨
-      labels:
-        - breaking-change
-    - title: Bug fixes 🐛
-      labels:
-        - bug
-    - title: Other changes/additions
+    - title: Release notes being automatically generated after release. Please wait a minute
       labels:
         - "*"

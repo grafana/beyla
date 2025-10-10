@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"os"
 	"path"
 	"path/filepath"
 	"runtime"
@@ -8,6 +9,11 @@ import (
 
 // ProjectDir returns the path of the project's root folder
 func ProjectDir() string {
+	// Check for environment variable override (useful for pre-compiled binaries)
+	if projectDir := os.Getenv("TEST_PROJECT_DIR"); projectDir != "" {
+		return filepath.Clean(projectDir)
+	}
+
 	_, thisFile, _, ok := runtime.Caller(0)
 	if !ok {
 		panic("can't get runtime caller(0) file path")

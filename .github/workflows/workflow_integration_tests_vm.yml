@@ -1,56 +1,114 @@
 name: Pull request integration tests on VM
 
 on:
-  workflow_call:
-    inputs:
-      arch:
-        description: 'Target architecture to run the tests'
-        required: true
-        type: string
-      kernel-version:
-        description: 'Kernel version to use when running the tests'
-        required: true
-        type: string
-      timeout-minutes:
-        description: 'Timeout in minutes before the test is terminated'
-        required: false
-        type: number
-        default: 60
+  push:
+    branches: ["main", "release-*"]
+    paths: ["bpf/**"]
+  pull_request:
+    branches: ["main", "release-*"]
+    paths: ["bpf/**"]
+
+permissions:
+  contents: read
+
 jobs:
-  test:
-    name: test
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        go: [ '1.25' ]
+  vm-test-matrix:
+    name: "Build VM integration matrix"
+    runs-on: ubuntu-x64-small
+    outputs:
+      matrix: ${{ steps.build-matrix.outputs.matrix }}
     steps:
-      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
-          persist-credentials: 'false'
-      - name: Clean up disk space
+          persist-credentials: false
+
+      - name: build matrix
+        id: build-matrix
+        env:
+          # 3 partitions, one for each of: TestMultiProcess, TestMultiProcessAppCP, TestMultiProcessAppCPNoIP
+          PARTITIONS: 3
+          TEST_TAGS: integration
         run: |
-          docker system prune -af
-          docker volume prune -f
-      - name: Install QEMU
+          echo -n "matrix=" >> $GITHUB_OUTPUT
+          make vm-integration-test-matrix-json >> $GITHUB_OUTPUT
+
+  test:
+    name: kernel ${{ matrix.kernel.kernel-version }} ${{ matrix.kernel.arch }} ${{ matrix.test.description }}
+    needs: vm-test-matrix
+    permissions:
+      contents: read
+      pull-requests: write
+      # required for CODECOV token
+      id-token: write
+      checks: write
+      # Required for uploading artifacts
+      actions: write
+    runs-on: ubuntu-latest-16-cores
+    strategy:
+      fail-fast: false
+      matrix:
+        kernel:
+          - kernel-version: "5.15.152"
+            arch: "x86_64"
+          # 6.10.6 not needed as GitHub runners are already on 6.11
+          # - kernel-version: "6.10.6"
+          #   arch: "x86_64"
+        test: ${{ fromJson(needs.vm-test-matrix.outputs.matrix).include }}
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version: "1.25"
+          cache: false
+
+      - name: Generate files
+        run: make prereqs vendor-obi
+
+      - name: Install QEMU and musl-tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends qemu-utils qemu-system-x86
-      - name: Run VM integration tests
+          sudo apt-get install -y --no-install-recommends qemu-utils qemu-system-x86 musl-tools
+
+      - name: Pre-compile Go integration tests
         run: |
-          make vendor-obi
-          sudo make -C test/vm && [ -f testoutput/success ]
+          mkdir compiled-tests
+          CC=musl-gcc CGO_ENABLED=1 go test -c -tags=integration -mod vendor -ldflags="-s -w" -o compiled-tests/ ./test/integration/...
+
+      - name: Run VM integration tests (${{ matrix.test.description }})
+        timeout-minutes: 60
         env:
-          KERNEL_VER: ${{ inputs.kernel-version }}
-          ARCH: ${{ inputs.arch }}
-        timeout-minutes: ${{ inputs.timeout-minutes }}
-      - name: Upload integration test logs
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        if: always()
-        with:
-          name: Test Logs
-          path: |
-            testoutput/*.log
-            testoutput/kind
+          # zizmor template-injection fixes: pass data as env vars
+          MATRIX_ID: ${{ matrix.test.id }}
+          MATRIX_JSON: ${{ toJson(matrix.test) }}
+          MATRIX_TEST_PATTERN: ${{ matrix.test.test_pattern }}
+          RUN_NUMBER: ${{ github.run_number }}
+          ARCH: ${{ matrix.kernel.arch }}
+          KERNEL_VERSION: ${{ matrix.kernel.kernel-version }}
+        run: |
+          echo "VM Partition for kernel $KERNEL_VERSION"
+          echo "${MATRIX_JSON}"
+
+          if [ -z "${MATRIX_TEST_PATTERN}" ]; then
+            echo "Error: Test pattern is empty for shard $MATRIX_ID"
+            exit 1
+          fi
+
+          # Run VM tests with pre-compiled tests
+          sudo make -C test/vm \
+            KERNEL_VER=${KERNEL_VERSION} \
+            ARCH=${ARCH} \
+            TEST_PATTERN="${MATRIX_TEST_PATTERN}" \
+            RUN_NUMBER="${RUN_NUMBER}" \
+            PRECOMPILED_TESTS_DIR="$(pwd)/compiled-tests" \
+            && [ -f testoutput/success ]
+
+      - name: Process coverage data
+        run: make itest-coverage-data
+
       - id: get-codecov-token
         uses: grafana/shared-workflows/actions/get-vault-secrets@get-vault-secrets/v1.2.1
         continue-on-error: true
@@ -58,9 +116,21 @@ jobs:
           # Secrets placed in the ci/repo/grafana/beyla/codecov path in Vault
           repo_secrets: |
             CODECOV_TOKEN=codecov:token
+
       - name: Report coverage
-        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4
-        continue-on-error: true
+        uses: codecov/codecov-action@5a1091511ad55cbe89839c7260b706298ca349f7 # v5.5.1
+        env:
+          ARCH: ${{ matrix.kernel.arch }}
+          KERNEL_VERSION: ${{ matrix.kernel.kernel-version }}
         with:
-          file: ./testoutput/itest-covdata.txt
-          flags: integration-test-vm-${{ inputs.arch }}-${{ inputs.kernel-version }}
+          files: ./testoutput/itest-covdata.txt
+          flags: integration-test-vm-${ARCH}-${KERNEL_VERSION}
+
+      - name: Upload integration test logs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: vm-test-logs-${{ github.run_number }}-${{ matrix.kernel.kernel-version }}-${{ matrix.test.id }}
+          path: |
+            testoutput/*.log
+            testoutput/kind

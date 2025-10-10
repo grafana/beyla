@@ -24,8 +24,8 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 )
 
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 Bpf ../../../bpf/tctracer/tctracer.c -- -I../../../bpf -I../../../bpf
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 BpfDebug ../../../bpf/tctracer/tctracer.c -- -I../../../bpf -I../../../bpf -DBPF_DEBUG -DBPF_DEBUG_TC
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 Bpf ../../../../bpf/tctracer/tctracer.c -- -I../../../../bpf -I../../../../bpf
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 BpfDebug ../../../../bpf/tctracer/tctracer.c -- -I../../../../bpf -I../../../../bpf -DBPF_DEBUG -DBPF_DEBUG_TC
 
 type Tracer struct {
 	cfg          *obi.Config

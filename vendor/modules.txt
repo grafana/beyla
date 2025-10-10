@@ -768,7 +768,7 @@ go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc/inte
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp/internal/request
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp/internal/semconv
-# go.opentelemetry.io/obi v0.0.0-20251009072749-c5aab5b371a7 => ../opentelemetry-ebpf-instrumentation
+# go.opentelemetry.io/obi v0.0.0-20251009145850-a086ec09ef1b => ./.obi-src
 ## explicit; go 1.25.0
 go.opentelemetry.io/obi/pkg/app/request
 go.opentelemetry.io/obi/pkg/buildinfo
@@ -1634,4 +1634,4 @@ sigs.k8s.io/structured-merge-diff/v6/value
 ## explicit; go 1.22
 sigs.k8s.io/yaml
 sigs.k8s.io/yaml/goyaml.v2
-# go.opentelemetry.io/obi => ../opentelemetry-ebpf-instrumentation
+# go.opentelemetry.io/obi => ./.obi-src

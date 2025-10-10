@@ -2,44 +2,72 @@ name: PR OATS test
 
 on:
   push:
-    branches: [ 'main', 'release-*' ]
+    branches: ["main", "release-*"]
   pull_request:
-    branches: [ 'main', 'release-*' ]
+    branches: ["main", "release-*"]
 
+permissions:
+  contents: read
 
 jobs:
+  test-matrix:
+    name: "Build oats matrix"
+    runs-on: ubuntu-x64-small
+    outputs:
+      matrix: ${{ steps.build-matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+
+      - name: build matrix
+        id: build-matrix
+        run: |
+          echo -n "matrix=" >> $GITHUB_OUTPUT
+          make oats-integration-test-matrix-json >> $GITHUB_OUTPUT
+
   test:
-    name: test
-    runs-on: ubuntu-latest-8-cores
+    name: ${{ matrix.basename }}
+    needs: test-matrix
+    runs-on: ubuntu-latest
     strategy:
-      matrix:
-        go: [ '1.25' ]
+      fail-fast: false
+      matrix: ${{ fromJson(needs.test-matrix.outputs.matrix) }}
     # Set restrictive permissions at workflow level
     permissions:
       contents: read
+      pull-requests: write
       # required for CODECOV token
       id-token: write
+      checks: write
+      # Required for uploading artifacts
+      actions: write
     steps:
-      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           persist-credentials: false
+
       - name: Set up Go
-        uses: actions/setup-go@be3c94b385c4f180051c996d336f57a34c397495 # v3
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
-          cache: false  # Disable caching to avoid extraction conflicts
-          go-version: ${{ matrix.go }}
-      - name: Clean up disk space
-        run: |
-          docker system prune -af
-          docker volume prune -f
+          go-version: "1.25"
+          cache: false
+
       - name: Run oats tests
-        run: make oats-test
+        env:
+          MATRIX_BASENAME: ${{ matrix.basename }}
+        run: make oats-test-$MATRIX_BASENAME
+
       - name: Upload oats test logs
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
-          name: Oats test logs
-          path: test/oats/*/build/*
+          name: Oats test logs - ${{ matrix.basename }}
+          path: test/oats/${{ matrix.basename }}/build/*
+
+      - name: Process coverage data
+        run: make itest-coverage-data
+
       - id: get-codecov-token
         uses: grafana/shared-workflows/actions/get-vault-secrets@get-vault-secrets/v1.2.1
         continue-on-error: true
@@ -47,9 +75,9 @@ jobs:
           # Secrets placed in the ci/repo/grafana/beyla/codecov path in Vault
           repo_secrets: |
             CODECOV_TOKEN=codecov:token
+
       - name: Report coverage
-        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4
-        continue-on-error: true
+        uses: codecov/codecov-action@5a1091511ad55cbe89839c7260b706298ca349f7 # v5.5.1
         with:
-          file: ./testoutput/itest-covdata.txt
+          files: ./testoutput/itest-covdata.txt
           flags: oats-test

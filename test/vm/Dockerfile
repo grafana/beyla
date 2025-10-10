@@ -3,43 +3,37 @@ FROM golang:1.25.1-alpine
 # this is the toplevel Makefile target to be invoked
 # see the contents of 'startup.sh' at the end of this file
 ARG target=run-integration-test-vm
+ARG test_pattern=TestMultiProcess
+ARG run_number=1
 
-RUN apk update
-RUN apk add --no-cache bash
-RUN apk add --no-cache openrc
-RUN apk add --no-cache docker
-RUN apk add --no-cache docker-compose
-RUN apk add --no-cache git
-RUN apk add --no-cache make
-RUN apk add --no-cache agetty
-RUN apk add --no-cache openssh
-RUN apk add --no-cache shadow
-RUN ssh-keygen -A
+RUN apk update && apk add --no-cache \
+    agetty \
+    bash \
+    docker \
+    docker-compose \
+    git \
+    make \
+    openrc \
+    openssh \
+    shadow
 
-# the default root password is 'root'
-RUN echo "root:root" | chpasswd
-RUN sed -i 's/^#PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config
-
-RUN rc-update add localmount default
-RUN rc-update add docker default
-
-# not strictly required, but useful for debugging
-RUN rc-update add sshd default
-
-# enable auto root login
-RUN echo ttyS0::respawn:/sbin/agetty --autologin root ttyS0 vt100 >> /etc/inittab
-
-RUN mkdir -p /overlay/upper/testoutput /overlay/work
-RUN mkdir /build
-RUN mkdir /beyla
+RUN ssh-keygen -A && \
+    echo "root:root" | chpasswd && \
+    sed -i 's/^#PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config && \
+    rc-update add localmount default && \
+    rc-update add docker default && \
+    rc-update add sshd default && \
+    echo ttyS0::respawn:/sbin/agetty --autologin root ttyS0 vt100 >> /etc/inittab && \
+    mkdir -p /overlay/upper/testoutput /overlay/work /build /beyla /precompiled-tests
 
 RUN cat <<EOF >> /etc/fstab
-beyla   /beyla             9p       trans=virtio,version=9p2000.L                                  0  0
-overlay /build             overlay  lowerdir=/beyla,upperdir=/overlay/upper,workdir=/overlay/work  0  0
-tmpfs   /tmp               tmpfs    rw,nodev,nosuid                                                0  0
-devpts  /dev/pts           devpts   defaults                                                       0  0
-tmpfs   /run               tmpfs    defaults,size=4G                                               0  0
-testout /build/testoutput  9p       trans=virtio,version=9p2000.L                                  0  0
+beyla        /beyla             9p      trans=virtio,version=9p2000.L                                  0  0
+overlay      /build             overlay lowerdir=/beyla,upperdir=/overlay/upper,workdir=/overlay/work  0  0
+tmpfs        /tmp               tmpfs   rw,nodev,nosuid                                                0  0
+devpts       /dev/pts           devpts  defaults                                                       0  0
+tmpfs        /run               tmpfs   defaults,size=4G                                               0  0
+testout      /build/testoutput  9p      trans=virtio,version=9p2000.L                                  0  0
+precompiled  /precompiled-tests 9p      trans=virtio,version=9p2000.L                                  0  0
 EOF
 
 RUN echo beyla > /etc/hostname
@@ -71,8 +65,24 @@ RUN cat <<EOF > /startup.sh
 
 export PATH=$PATH:/usr/local/go/bin
 
+# Fix Git ownership issues
+git config --global --add safe.directory /build
+
+# Wait for Docker service to be ready
+while ! docker info >/dev/null 2>&1; do
+    echo "Waiting for Docker daemon to start..."
+    sleep 1
+done
+echo "Docker daemon is ready"
+
 if [[ -n "$target" ]]; then
-    cd /build && make $target && touch /build/testoutput/success
+    echo "=== Starting test execution ==="
+    echo "Current directory: $(pwd)"
+
+    # Set project directory for pre-compiled binaries
+    export TEST_PROJECT_DIR=/build
+
+    cd /build && make $target TEST_PATTERN="$test_pattern" RUN_NUMBER="$run_number" && touch /build/testoutput/success
     poweroff
 else
     echo "Entering interactive mode"

@@ -55,6 +55,7 @@ services:
       BEYLA_OTEL_TRACES_INSTRUMENTATIONS: "sql"
       BEYLA_OTEL_METRICS_INSTRUMENTATIONS: "sql"
       BEYLA_OTEL_METRICS_FEATURES: "application"
+      BEYLA_OTLP_TRACES_BATCH_TIMEOUT: "1ms"
     depends_on:
       testserver:
         condition: service_started

@@ -42,6 +42,7 @@ services:
       BEYLA_LOG_LEVEL: "DEBUG"
       BEYLA_BPF_DEBUG: "TRUE"
       BEYLA_HOSTNAME: "beyla"
+      BEYLA_OTLP_TRACES_BATCH_TIMEOUT: "1ms"
 
   # OpenTelemetry Collector for Metrics. For Traces, we use directly Jaeger
   otelcol:

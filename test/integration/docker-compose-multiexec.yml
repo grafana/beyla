@@ -8,6 +8,7 @@ services:
     image: hatest-testserver
     ports:
       - "8080:8080"
+      - "8088:8088"
     environment:
       LOG_LEVEL: DEBUG
     depends_on:

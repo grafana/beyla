@@ -16,7 +16,7 @@ import (
 
 func testREDMetricsForNodeHTTPLibrary(t *testing.T, url, urlPath, comm, namespace string) {
 	jsonBody, err := os.ReadFile(path.Join(pathRoot, "test", "integration", "components", "rusttestserver", "mid_data.json"))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.GreaterOrEqual(t, len(jsonBody), 100)
 
 	// Call 3 times the instrumented service, forcing it to:

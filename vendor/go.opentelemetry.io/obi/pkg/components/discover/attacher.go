@@ -13,11 +13,11 @@ import (
 	"github.com/cilium/ebpf/rlimit"
 
 	"go.opentelemetry.io/obi/pkg/app/request"
-	"go.opentelemetry.io/obi/pkg/components/ebpf"
-	ebpfcommon "go.opentelemetry.io/obi/pkg/components/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/components/helpers/maps"
 	"go.opentelemetry.io/obi/pkg/components/imetrics"
 	"go.opentelemetry.io/obi/pkg/components/svc"
+	"go.opentelemetry.io/obi/pkg/ebpf"
+	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/internal/nodejs"
 	"go.opentelemetry.io/obi/pkg/internal/otelsdk"
 	"go.opentelemetry.io/obi/pkg/internal/transform/route/harvest"

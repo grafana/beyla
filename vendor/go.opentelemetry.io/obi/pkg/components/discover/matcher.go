@@ -13,7 +13,7 @@ import (
 
 	"github.com/shirou/gopsutil/v3/process"
 
-	ebpfcommon "go.opentelemetry.io/obi/pkg/components/ebpf/common"
+	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"

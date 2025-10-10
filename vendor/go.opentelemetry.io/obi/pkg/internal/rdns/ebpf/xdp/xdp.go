@@ -12,7 +12,7 @@ import (
 	"os"
 	"time"
 
-	"go.opentelemetry.io/obi/pkg/components/ebpf/ringbuf"
+	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/internal/rdns/store"
 )
 

@@ -11,9 +11,9 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	ebpfcommon "go.opentelemetry.io/obi/pkg/components/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/components/helpers"
 	ebpfcfg "go.opentelemetry.io/obi/pkg/config"
+	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 )
 
 // Minimum required Kernel version: 4.18

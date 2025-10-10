@@ -12,11 +12,10 @@ import (
 	"github.com/caarlos0/env/v9"
 	"gopkg.in/yaml.v3"
 
-	"go.opentelemetry.io/obi/pkg/components/ebpf/tcmanager"
 	"go.opentelemetry.io/obi/pkg/components/imetrics"
 	"go.opentelemetry.io/obi/pkg/components/kube"
-	"go.opentelemetry.io/obi/pkg/components/traces"
 	"go.opentelemetry.io/obi/pkg/config"
+	"go.opentelemetry.io/obi/pkg/ebpf/tcmanager"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/debug"
@@ -68,7 +67,7 @@ var DefaultConfig = Config{
 		BatchLength:               100,
 		BatchTimeout:              time.Second,
 		HTTPRequestTimeout:        0,
-		TCBackend:                 tcmanager.TCBackendAuto,
+		TCBackend:                 config.TCBackendAuto,
 		ContextPropagationEnabled: false,
 		ContextPropagation:        config.ContextPropagationDisabled,
 		RedisDBCache: config.RedisDBCacheConfig{
@@ -135,7 +134,7 @@ var DefaultConfig = Config{
 		BpfMetricScrapeInterval: 15 * time.Second,
 	},
 	Attributes: Attributes{
-		InstanceID: traces.InstanceIDConfig{
+		InstanceID: config.InstanceIDConfig{
 			HostnameDNSResolution: true,
 		},
 		Kubernetes: transform.KubernetesDecorator{
@@ -156,7 +155,7 @@ var DefaultConfig = Config{
 		Unmatch:      transform.UnmatchDefault,
 		WildcardChar: "*",
 	},
-	NetworkFlows: defaultNetworkConfig,
+	NetworkFlows: DefaultNetworkConfig,
 	Discovery: services.DiscoveryConfig{
 		ExcludeOTelInstrumentedServices: true,
 		DefaultExcludeServices: services.RegexDefinitionCriteria{
@@ -262,7 +261,7 @@ const (
 // added to each span
 type Attributes struct {
 	Kubernetes           transform.KubernetesDecorator `yaml:"kubernetes"`
-	InstanceID           traces.InstanceIDConfig       `yaml:"instance_id"`
+	InstanceID           config.InstanceIDConfig       `yaml:"instance_id"`
 	Select               attributes.Selection          `yaml:"select"`
 	HostID               HostIDConfig                  `yaml:"host_id"`
 	ExtraGroupAttributes map[string][]attr.Name        `yaml:"extra_group_attributes"`

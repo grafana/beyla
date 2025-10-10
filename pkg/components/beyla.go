@@ -15,12 +15,12 @@ import (
 	"go.opentelemetry.io/obi/pkg/components/connector"
 	"go.opentelemetry.io/obi/pkg/components/imetrics"
 	"go.opentelemetry.io/obi/pkg/components/kube"
-	"go.opentelemetry.io/obi/pkg/components/netolly/agent"
-	"go.opentelemetry.io/obi/pkg/components/netolly/flow"
 	"go.opentelemetry.io/obi/pkg/components/pipe/global"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	obiotel "go.opentelemetry.io/obi/pkg/export/otel"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
+	"go.opentelemetry.io/obi/pkg/netolly/agent"
+	"go.opentelemetry.io/obi/pkg/netolly/flowdef"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
@@ -233,7 +233,7 @@ func attributeGroups(config *beyla.Config, ctxInfo *global.ContextInfo) {
 	if config.Routes != nil {
 		ctxInfo.MetricAttributeGroups.Add(attributes.GroupHTTPRoutes)
 	}
-	if config.NetworkFlows.Deduper == flow.DeduperNone {
+	if config.NetworkFlows.Deduper == flowdef.DeduperNone {
 		ctxInfo.MetricAttributeGroups.Add(attributes.GroupNetIfaceDirection)
 	}
 	if config.NetworkFlows.CIDRs.Enabled() {

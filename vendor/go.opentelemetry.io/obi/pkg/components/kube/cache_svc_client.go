@@ -44,7 +44,7 @@ func (sc *cacheSvcClient) ID() string {
 func (sc *cacheSvcClient) On(event *informer.Event) error {
 	// we can safely assume that server-side events are ordered
 	// by timestamp
-	if event.GetType() != informer.EventType_SYNC_FINISHED {
+	if event.GetType() != informer.EventType_SYNC_FINISHED && event.Resource != nil {
 		sc.lastEventTSEpoch = event.Resource.StatusTimeEpoch
 	}
 	return nil

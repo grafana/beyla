@@ -9,8 +9,8 @@ import (
 	"log/slog"
 	"syscall"
 
-	"go.opentelemetry.io/obi/pkg/components/ebpf"
 	"go.opentelemetry.io/obi/pkg/components/svc"
+	"go.opentelemetry.io/obi/pkg/ebpf"
 	"go.opentelemetry.io/obi/pkg/obi"
 )
 

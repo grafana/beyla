@@ -206,6 +206,17 @@ func (s *Store) cacheResourceMetadata(meta *informer.ObjectMeta) *CachedObjMeta 
 // On is invoked by the informer when a new Kube object is created, updated or deleted.
 // It will forward the notification to all the Store subscribers
 func (s *Store) On(event *informer.Event) error {
+	defer s.Notify(event)
+
+	if event.Type == informer.EventType_SYNC_FINISHED {
+		s.cacheSynced = true
+		return nil
+	}
+
+	if event.Resource == nil {
+		return nil
+	}
+
 	// During cache startup, it is expected that the informer receives metadata from old events,
 	// so we don't measure lag until all the cache has been synced
 	if s.cacheSynced {
@@ -219,10 +230,7 @@ func (s *Store) On(event *informer.Event) error {
 		s.updateObjectMeta(event.Resource)
 	case informer.EventType_DELETED:
 		s.deleteObjectMeta(event.Resource)
-	case informer.EventType_SYNC_FINISHED:
-		s.cacheSynced = true
 	}
-	s.Notify(event)
 	return nil
 }
 

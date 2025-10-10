@@ -15,7 +15,6 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
 	"go.opentelemetry.io/obi/pkg/buildinfo"
-	"go.opentelemetry.io/obi/pkg/components/netolly/ebpf"
 	"go.opentelemetry.io/obi/pkg/components/pipe/global"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
@@ -23,6 +22,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/otel/metric"
 	metric2 "go.opentelemetry.io/obi/pkg/export/otel/metric/api/metric"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
+	"go.opentelemetry.io/obi/pkg/internal/netolly/ebpf"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 )

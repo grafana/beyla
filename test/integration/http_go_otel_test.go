@@ -63,7 +63,7 @@ func testForHTTPGoOTelLibrary(t *testing.T, route, svcNs string) {
 		var tq jaeger.TracesQuery
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
 		traces := tq.FindBySpan(jaeger.Tag{Key: "url.path", Type: "string", Value: "/" + slug})
-		assert.LessOrEqual(t, 1, len(traces))
+		require.NotEmpty(t, traces)
 		trace = traces[0]
 		require.Len(t, trace.Spans, 3) // parent - in queue - processing
 	}, test.Interval(100*time.Millisecond))
@@ -107,7 +107,7 @@ func testInstrumentationMissing(t *testing.T, route, svcNs string) {
 			`http_route="` + route + `",` +
 			`url_path="` + route + `"}`)
 		require.NoError(t, err)
-		require.Equal(t, len(results), 0)
+		require.Empty(t, results)
 	})
 
 	slug := route[1:]
@@ -122,7 +122,7 @@ func testInstrumentationMissing(t *testing.T, route, svcNs string) {
 		var tq jaeger.TracesQuery
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
 		traces := tq.FindBySpan(jaeger.Tag{Key: "url.path", Type: "string", Value: "/" + slug})
-		require.Equal(t, len(traces), 0)
+		require.Empty(t, traces)
 	}, test.Interval(100*time.Millisecond))
 }
 

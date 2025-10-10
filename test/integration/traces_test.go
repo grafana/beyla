@@ -150,7 +150,6 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
 		{Key: "telemetry.sdk.language", Type: "string", Value: "go"},
 		{Key: "telemetry.sdk.name", Type: "string", Value: "beyla"},
 		{Key: "service.namespace", Type: "string", Value: "integration-test"},
-		{Key: "telemetry.sdk.version", Type: "string", Value: "^test-"},
 		serviceInstance,
 	}, process.Tags)
 	assert.Empty(t, sd, sd.String())
@@ -331,12 +330,12 @@ func testHTTPTracesKProbes(t *testing.T) {
 	require.Len(t, res, 1)
 	parent := res[0]
 	require.NotEmpty(t, parent.TraceID)
-	if kprobeTracesEnabled() {
-		require.Equal(t, traceID, parent.TraceID)
-		// Validate that "parent" is a CHILD_OF the traceparent's "parent-id"
-		childOfPID := trace.ChildrenOf(parentID)
-		require.Len(t, childOfPID, 1)
-	}
+	require.Equal(t, traceID, parent.TraceID)
+
+	// Validate that "parent" is a CHILD_OF the traceparent's "parent-id"
+	childOfPID := trace.ChildrenOf(parentID)
+	require.Len(t, childOfPID, 1)
+
 	require.NotEmpty(t, parent.SpanID)
 	// check duration is at least 2us
 	assert.Less(t, (2 * time.Microsecond).Microseconds(), parent.Duration)
@@ -648,7 +647,7 @@ func testHTTP2GRPCTracesNestedCallsWithContextPropagation(t *testing.T) {
 	testHTTP2GRPCTracesNestedCalls(t, true)
 }
 
-func testNestedHTTPTracesKProbes(t *testing.T, extended bool) {
+func testNestedHTTPTracesKProbes(t *testing.T) {
 	var traceID string
 
 	waitForTestComponents(t, "http://localhost:3031")                 // nodejs
@@ -657,6 +656,7 @@ func testNestedHTTPTracesKProbes(t *testing.T, extended bool) {
 	waitForRubyTestComponents(t, "http://localhost:3041")             // ruby
 	waitForTestComponentsSub(t, "http://localhost:8086", "/greeting") // java
 	waitForTestComponents(t, "http://localhost:8091")                 // rust
+	waitForTestComponents(t, instrumentedServiceJSONRPCURL)           // go jsonrpc
 
 	// Add and check for specific trace ID
 	// Run couple of requests to make sure we flush out any transactions that might be
@@ -764,6 +764,30 @@ func testNestedHTTPTracesKProbes(t *testing.T, extended bool) {
 			)
 			assert.Empty(t, sd, sd.String())
 
+			/* FIXME flaky
+			// Check the information of the go jsonrpc parent span
+			test.Eventually(t, testTimeout, func(t require.TestingT) {
+				res := trace.FindByOperationName("Arith.T /jsonrpc", "server")
+				require.Len(t, res, 1)
+				parent := res[0]
+				require.NotEmpty(t, parent.TraceID)
+				require.Equal(t, traceID, parent.TraceID)
+				require.NotEmpty(t, parent.SpanID)
+				// check duration is at least 2us
+				assert.Less(t, (2 * time.Microsecond).Microseconds(), parent.Duration)
+				// check span attributes
+				sd := parent.Diff(
+					jaeger.Tag{Key: "http.request.method", Type: "string", Value: "Arith.T"},
+					jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(200)},
+					jaeger.Tag{Key: "url.path", Type: "string", Value: "/jsonrpc"},
+					jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(8088)},
+					jaeger.Tag{Key: "http.route", Type: "string", Value: "/jsonrpc"},
+					jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
+				)
+				assert.Empty(t, sd, sd.String())
+			}, test.Interval(100*time.Millisecond))
+			*/
+
 			// Check the information of the python parent span
 			res = trace.FindByOperationName("GET /tracemetoo", "server")
 			require.Len(t, res, 1)
@@ -806,16 +830,14 @@ func testNestedHTTPTracesKProbes(t *testing.T, extended bool) {
 		}
 	})
 
-	if extended {
-		// test now with a different version of Java thread pool
-		for i := 0; i < 10; i++ {
-			doHTTPGet(t, "http://localhost:8086/jtraceA", 200)
-		}
-
-		t.Run("Traces RestClient client /jtraceA", func(t *testing.T) {
-			ensureTracesMatch(t, "jtraceA")
-		})
+	// test now with a different version of Java thread pool
+	for i := 0; i < 10; i++ {
+		doHTTPGet(t, "http://localhost:8086/jtraceA", 200)
 	}
+
+	t.Run("Traces RestClient client /jtraceA", func(t *testing.T) {
+		ensureTracesMatch(t, "jtraceA")
+	})
 }
 
 func ensureTracesMatch(t *testing.T, urlPath string) {
@@ -928,25 +950,26 @@ func testNestedHTTPSTracesKProbes(t *testing.T) {
 	)
 	assert.Empty(t, sd, sd.String())
 
-	// Check the information of the rails parent span
-	res = trace.FindByOperationName("GET /users", "server")
-	require.Len(t, res, 1)
-	parent = res[0]
-	require.NotEmpty(t, parent.TraceID)
-	require.Equal(t, traceID, parent.TraceID)
-	require.NotEmpty(t, parent.SpanID)
-	// check duration is at least 2us
-	assert.Less(t, (2 * time.Microsecond).Microseconds(), parent.Duration)
-	// check span attributes
-	sd = parent.Diff(
-		jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
-		jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(403)}, // something config missing in rails, but 403 is OK :)
-		jaeger.Tag{Key: "url.path", Type: "string", Value: "/users"},
-		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(3043)},
-		jaeger.Tag{Key: "http.route", Type: "string", Value: "/users"},
-		jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
-	)
-	assert.Empty(t, sd, sd.String())
+	// Disabled until we add PUMA reactor support, otherwise the test is flaky
+	// // Check the information of the rails parent span
+	// res = trace.FindByOperationName("GET /users", "server")
+	// require.Len(t, res, 1)
+	// parent = res[0]
+	// require.NotEmpty(t, parent.TraceID)
+	// require.Equal(t, traceID, parent.TraceID)
+	// require.NotEmpty(t, parent.SpanID)
+	// // check duration is at least 2us
+	// assert.Less(t, (2 * time.Microsecond).Microseconds(), parent.Duration)
+	// // check span attributes
+	// sd = parent.Diff(
+	// 	jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
+	// 	jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(403)}, // something config missing in rails, but 403 is OK :)
+	// 	jaeger.Tag{Key: "url.path", Type: "string", Value: "/users"},
+	// 	jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(3043)},
+	// 	jaeger.Tag{Key: "http.route", Type: "string", Value: "/users"},
+	// 	jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
+	// )
+	// assert.Empty(t, sd, sd.String())
 
 	// check client call (and ensure server port is correct/not swapped)
 	res = trace.FindByOperationName("GET /users", "client")

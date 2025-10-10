@@ -19,25 +19,7 @@ import (
 )
 
 func testSelectiveExports(t *testing.T) {
-	waitForTestComponents(t, "http://localhost:5000")
-	waitForTestComponents(t, "http://localhost:5002")
 	waitForTestComponents(t, "http://localhost:5003")
-
-	// give enough time for the NodeJS injector to finish
-	// TODO: once we implement the instrumentation status query API, replace
-	// this with  a proper check to see if the target process has finished
-	// being instrumented
-	time.Sleep(60 * time.Second)
-
-	// Run couple of requests to make sure we flush out any transactions that might be
-	// stuck because of our tracking of full request times
-	for i := 0; i < 10; i++ {
-		doHTTPGet(t, "http://localhost:5000/a", 200)
-		doHTTPGet(t, "http://localhost:5001/b", 200)
-	}
-
-	// wait a bit for the transactions to flush
-	time.Sleep(20 * time.Second)
 
 	getTraces := func(service string, path string) []jaeger.Trace {
 		query := "http://localhost:16686/api/traces?service=" + service
@@ -56,6 +38,23 @@ func testSelectiveExports(t *testing.T) {
 		traces := tq.FindBySpan(jaeger.Tag{Key: "url.path", Type: "string", Value: path})
 
 		return traces
+	}
+
+	// give enough time for the NodeJS injector to finish
+	// TODO: once we implement the instrumentation status query API, replace
+	// this with  a proper check to see if the target process has finished
+	// being instrumented
+	test.Eventually(t, 3*time.Minute, func(t require.TestingT) {
+		doHTTPGet(t, "http://localhost:5001/b", 200)
+		bTraces := getTraces("service-b", "/b")
+		require.NotNil(t, bTraces)
+	})
+
+	// Run couple of requests to make sure we flush out any transactions that might be
+	// stuck because of our tracking of full request times
+	for i := 0; i < 10; i++ {
+		doHTTPGet(t, "http://localhost:5000/a", 200)
+		doHTTPGet(t, "http://localhost:5001/b", 200)
 	}
 
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
@@ -81,12 +80,14 @@ func testSelectiveExports(t *testing.T) {
 		return results
 	}
 
-	aMetrics := getMetrics("/a")
+	test.Eventually(t, 10*time.Second, func(t require.TestingT) {
+		require.NotEmpty(t, getMetrics("/a"))
+	})
+
 	bMetrics := getMetrics("/b")
 	cMetrics := getMetrics("/c")
 	dMetrics := getMetrics("/d")
 
-	require.NotEmpty(t, aMetrics)
 	require.NotEmpty(t, bMetrics)
 	require.Empty(t, cMetrics)
 	require.NotEmpty(t, dMetrics)

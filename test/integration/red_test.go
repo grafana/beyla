@@ -28,6 +28,7 @@ const (
 	instrumentedServiceGorillaMidURL  = "http://localhost:8083"
 	instrumentedServiceGorillaMid2URL = "http://localhost:8087"
 	instrumentedServiceStdTLSURL      = "https://localhost:8383"
+	instrumentedServiceJSONRPCURL     = "http://localhost:8088"
 	prometheusHostPort                = "localhost:9090"
 	jaegerQueryURL                    = "http://localhost:16686/api/traces"
 
@@ -96,12 +97,12 @@ func testREDMetricsShortHTTP(t *testing.T) {
 func testExemplarsExist(t *testing.T) {
 	url := "http://" + prometheusHostPort + "/api/v1/query_exemplars?query=http_server_request_duration_seconds_bucket"
 
-	var qtr = &http.Transport{
+	qtr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
-	var qClient = &http.Client{Transport: qtr}
+	qClient := &http.Client{Transport: qtr}
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
 	require.NoError(t, err)
 	r, err := qClient.Do(req)
 	require.NoError(t, err)
@@ -794,7 +795,7 @@ func testREDMetricsForHTTPLibraryNoRoute(t *testing.T, url, svcName string) {
 	// Check that we never recorded any /metrics calls
 	results, err = pq.Query(`http_server_request_duration_seconds_count{http_route="/metrics"}`)
 	require.NoError(t, err)
-	require.Equal(t, len(results), 0)
+	require.Empty(t, results)
 }
 
 func testREDMetricsHTTPNoRoute(t *testing.T) {

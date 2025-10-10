@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/v2/test/integration/components/prom"
+	"github.com/grafana/beyla/v2/test/tools"
 )
 
 func testREDMetricsForNetHTTPLibrary(t *testing.T, url string, comm string) {
@@ -36,7 +37,7 @@ func testREDMetricsForNetHTTPLibrary(t *testing.T, url string, comm string) {
 		require.NoError(t, err)
 		enoughPromResults(t, results)
 		val := totalPromCount(t, results)
-		assert.LessOrEqual(t, 3, val)
+		assert.LessOrEqual(t, 2, val, "received:", tools.ToJSON(val))
 		if len(results) > 0 {
 			res := results[0]
 			addr := res.Metric["client_address"]

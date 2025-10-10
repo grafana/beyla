@@ -73,7 +73,7 @@ func testClientWithMethodAndStatusCode(t *testing.T, method string, statusCode i
 
 	addr, ok = jaeger.FindIn(parent.Tags, "server.port")
 	assert.True(t, ok)
-	assert.Equal(t, float64(443), addr.Value)
+	assert.EqualValues(t, 443, addr.Value)
 }
 
 func testREDMetricsForClientHTTPLibrary(t *testing.T) {

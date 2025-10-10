@@ -300,14 +300,51 @@ run-integration-test-k8s:
 
 .PHONY: run-integration-test-vm
 run-integration-test-vm:
-	@echo "### Running integration tests"
-	go test -p 1 -failfast -v -timeout 90m -mod vendor -a ./test/integration/... --tags=integration -run "^TestMultiProcess"
+	@echo "### Running integration tests (pattern: $(TEST_PATTERN))"
+	@TEST_TIMEOUT="60m"; \
+	TEST_PARALLEL="1"; \
+	if [ -f "/precompiled-tests/integration.test" ]; then \
+		echo "Using pre-compiled integration tests"; \
+		chmod +x /precompiled-tests/integration.test; \
+		/precompiled-tests/integration.test \
+			-test.parallel=$$TEST_PARALLEL \
+			-test.timeout=$$TEST_TIMEOUT \
+			-test.failfast \
+			-test.v \
+			-test.run="^($(TEST_PATTERN))\$$"; \
+	else \
+		echo "Pre-compiled tests not found, compiling in VM"; \
+		go test \
+			-p $$TEST_PARALLEL \
+			-timeout $$TEST_TIMEOUT \
+			-failfast \
+			-v -a \
+			-mod vendor \
+			-tags=integration \
+			-run="^($(TEST_PATTERN))\$$" ./test/integration/...; \
+	fi
 
 .PHONY: run-integration-test-arm
 run-integration-test-arm:
 	@echo "### Running integration tests"
 	go clean -testcache
 	go test -p 1 -failfast -v -timeout 90m -mod vendor -a ./test/integration/... --tags=integration -run "^TestMultiProcess"
+
+.PHONY: integration-test-matrix-json
+integration-test-matrix-json:
+	@./scripts/generate-integration-matrix.sh "$${TEST_TAGS:-integration}" test/integration "$${PARTITIONS:-5}"
+
+.PHONY: vm-integration-test-matrix-json
+vm-integration-test-matrix-json:
+	@./scripts/generate-integration-matrix.sh "$${TEST_TAGS:-integration}" test/integration "$${PARTITIONS:-3}" "TestMultiProcess"
+
+.PHONY: k8s-integration-test-matrix-json
+k8s-integration-test-matrix-json:
+	@./scripts/generate-dir-matrix.sh test/integration/k8s common
+
+.PHONY: oats-integration-test-matrix-json
+oats-integration-test-matrix-json:
+	@./scripts/generate-dir-matrix.sh test/oats
 
 .PHONY: integration-test
 integration-test: prereqs prepare-integration-test
@@ -365,8 +402,13 @@ oats-test-http: oats-prereq
 	mkdir -p test/oats/http/$(TEST_OUTPUT)/run
 	cd test/oats/http && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
 
+.PHONY: oats-test-mongo
+oats-test-mongo: oats-prereq
+	mkdir -p test/oats/mongo/$(TEST_OUTPUT)/run
+	cd test/oats/mongo && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
+
 .PHONY: oats-test
-oats-test: oats-test-sql oats-test-redis oats-test-kafka oats-test-http
+oats-test: oats-test-sql oats-test-mongo oats-test-redis oats-test-kafka oats-test-http
 	$(MAKE) itest-coverage-data
 
 .PHONY: oats-test-debug

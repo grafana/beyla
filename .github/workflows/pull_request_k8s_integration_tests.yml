@@ -2,51 +2,99 @@ name: Pull request K8s integration tests
 
 on:
   push:
-    branches: [ 'main', 'release-*' ]
+    branches: ["main", "release-*"]
   pull_request:
-    branches: [ 'main', 'release-*' ]
+    branches: ["main", "release-*"]
 
 # Set restrictive permissions at workflow level
 permissions:
   contents: read
 
 jobs:
+  test-matrix:
+    name: "Build integration_k8s matrix"
+    runs-on: ubuntu-x64-small
+    outputs:
+      matrix: ${{ steps.build-matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+
+      - name: build matrix
+        id: build-matrix
+        run: |
+          echo -n "matrix=" >> $GITHUB_OUTPUT
+          make k8s-integration-test-matrix-json >> $GITHUB_OUTPUT
+
   test:
-    name: test
-    runs-on: ubuntu-latest-8-cores
+    name: ${{ matrix.basename }}
+    needs: test-matrix
+    runs-on: ubuntu-latest
     # Grant specific permissions needed only for this job
     permissions:
       contents: read
       pull-requests: write
       # required for CODECOV token
       id-token: write
+      checks: write
+      # Required for uploading artifacts
+      actions: write
     strategy:
-      matrix:
-        go: [ '1.25' ]
+      fail-fast: false
+      matrix: ${{ fromJson(needs.test-matrix.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           persist-credentials: false
+
       - name: Set up Go
-        uses: actions/setup-go@be3c94b385c4f180051c996d336f57a34c397495 # v3
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
-          cache: false  # Disable caching to avoid extraction conflicts
-          go-version: ${{ matrix.go }}
-      - name: Clean up disk space
-        run: |
-          docker system prune -af
-          docker volume prune -f
+          go-version: "1.25"
+          cache: false
+
+      - name: Generate files
+        run: make prereqs vendor-obi
+
+      - name: Install gotestsum
+        run: go install gotest.tools/gotestsum@v1.12.3
+
+      - name: Check disk usage before tests
+        run: df -h
+
+      - name: Print working directory
+        run: pwd
+
       - name: Run integration tests
-        run: make docker-generate integration-test-k8s
-        timeout-minutes: 60
-      - name: Upload integration test logs
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        if: always()
-        with:
-          name: K8s test Logs
-          path: |
-            testoutput/*.log
-            testoutput/kind
+        timeout-minutes: 35
+        env:
+          # zizmor template-injection fixes: pass data as env vars
+          MATRIX_ID: ${{ matrix.id }}
+          MATRIX_JSON: ${{ toJson(matrix) }}
+          MATRIX_TEST_PATTERN: ${{ matrix.test_pattern }}
+          RUN_NUMBER: ${{ github.run_number }}
+          TEST_TAGS: integration_k8s
+        run: |
+          echo Partition
+          echo "${MATRIX_JSON}"
+
+          if [ -z "${MATRIX_TEST_PATTERN}" ]; then
+            echo "Error: Test pattern is empty for shard $MATRIX_ID"
+            exit 1
+          fi
+
+          mkdir reports
+
+          ~/go/bin/gotestsum -ftestname \
+              --jsonfile=reports/test-run-"${RUN_NUMBER}"-"${MATRIX_ID}".log \
+              -- -race -tags=${TEST_TAGS} -timeout 30m \
+              -mod vendor \
+              ${MATRIX_TEST_PATTERN}
+
+      - name: Process coverage data
+        run: make itest-coverage-data
+
       - id: get-codecov-token
         uses: grafana/shared-workflows/actions/get-vault-secrets@get-vault-secrets/v1.2.1
         continue-on-error: true
@@ -54,9 +102,30 @@ jobs:
           # Secrets placed in the ci/repo/grafana/beyla/codecov path in Vault
           repo_secrets: |
             CODECOV_TOKEN=codecov:token
+
       - name: Report coverage
-        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4
-        continue-on-error: true
+        uses: codecov/codecov-action@5a1091511ad55cbe89839c7260b706298ca349f7 # v5.5.1
         with:
-          file: ./testoutput/itest-covdata.txt
+          files: ./testoutput/itest-covdata.txt
           flags: k8s-integration-test
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: go-test-reports-${{ matrix.basename }}-${{ github.run_number }}
+          path: reports/*.log
+          retention-days: 5
+
+      - name: Upload test logs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: go-test-logs-${{ matrix.basename }}-${{ github.run_number }}
+          path: |
+            testoutput/*.log
+            testoutput/kind
+
+      - name: Check final disk usage
+        if: always()
+        run: df -h

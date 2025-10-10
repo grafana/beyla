@@ -34,7 +34,7 @@ func Build(logger io.WriteCloser, rootPath string, imgs ...ImageBuild) error {
 func pullDockerfile(logger io.WriteCloser, ilog *slog.Logger, img ImageBuild) error {
 	ilog.Info("pulling Dockerfile")
 
-	cmd := exec.Command("docker", "pull", img.Tag)
+	cmd := exec.Command("docker", "pull", "--quiet", img.Tag)
 	if logger != nil {
 		cmd.Stdout = logger
 		cmd.Stderr = logger
@@ -49,7 +49,7 @@ func pullDockerfile(logger io.WriteCloser, ilog *slog.Logger, img ImageBuild) er
 func buildDockerfile(logger io.WriteCloser, rootPath string, ilog *slog.Logger, img ImageBuild) error {
 	ilog.Info("building Dockerfile")
 
-	cmd := exec.Command("docker", "build", "-t", img.Tag, "-f", img.Dockerfile, rootPath)
+	cmd := exec.Command("docker", "build", "--quiet", "-t", img.Tag, "-f", img.Dockerfile, rootPath)
 	if logger != nil {
 		cmd.Stdout = logger
 		cmd.Stderr = logger

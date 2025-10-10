@@ -29,6 +29,7 @@ func TestMain(m *testing.M) {
 	if err := docker.Build(os.Stdout, tools.ProjectDir(),
 		docker.ImageBuild{Tag: "testserver:dev", Dockerfile: k8s.DockerfileTestServer},
 		docker.ImageBuild{Tag: "beyla:dev", Dockerfile: k8s.DockerfileBeyla},
+		docker.ImageBuild{Tag: "grpcpinger:dev", Dockerfile: k8s.DockerfilePinger},
 		docker.ImageBuild{Tag: "quay.io/prometheus/prometheus:v2.55.1"},
 		docker.ImageBuild{Tag: "otel/opentelemetry-collector-contrib:0.103.0"},
 		docker.ImageBuild{Tag: "jaegertracing/all-in-one:1.57"},

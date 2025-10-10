@@ -75,4 +75,3 @@ linters:
         - commentedOutCode
     cyclop:
       max-complexity: 12
-

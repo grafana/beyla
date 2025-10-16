@@ -44,7 +44,7 @@ func doHTTPPost(t *testing.T, path string, status int, jsonBody []byte) {
 	require.Equal(t, status, r.StatusCode)
 }
 
-func doHTTPGet(t *testing.T, path string, status int) {
+func doHTTPGet(t require.TestingT, path string, status int) {
 	// Random fake body to cause the request to have some size (38 bytes)
 	jsonBody := []byte(`{"productId": 123456, "quantity": 100}`)
 

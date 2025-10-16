@@ -12,6 +12,7 @@ import (
 	"github.com/grafana/beyla/v2/test/integration/components/testserver/gorillamid"
 	"github.com/grafana/beyla/v2/test/integration/components/testserver/gorillamid2"
 	grpctest "github.com/grafana/beyla/v2/test/integration/components/testserver/grpc/server"
+	"github.com/grafana/beyla/v2/test/integration/components/testserver/jsonrpc"
 	"github.com/grafana/beyla/v2/test/integration/components/testserver/std"
 )
 
@@ -35,6 +36,7 @@ type config struct {
 	GorillaMid2Port int    `env:"GORILLA_MID2_PORT" envDefault:"8087"`
 	GRPCPort        int    `env:"GRPC_PORT" envDefault:"5051"`
 	GRPCTLSPort     int    `env:"GRPC_TLS_PORT" envDefault:"50051"`
+	JSONRPCPort     int    `env:"JSRONRPC_PORT" envDefault:"8088"`
 	LogLevel        string `env:"LOG_LEVEL" envDefault:"INFO"`
 }
 
@@ -85,6 +87,11 @@ func main() {
 		if err != nil {
 			slog.Error("HTTP server has unexpectedly stopped", "error", err)
 		}
+		close(wait)
+	}()
+
+	go func() {
+		jsonrpc.Setup(cfg.JSONRPCPort)
 		close(wait)
 	}()
 

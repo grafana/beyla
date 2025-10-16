@@ -116,9 +116,7 @@ func NewCustomAttrSelector(
 	definitions := getDefinitions(groups, extraGroupAttributes)
 
 	if extraDefinitionsProvider != nil {
-		for section, group := range extraDefinitionsProvider(groups, extraGroupAttributes) {
-			definitions[section] = group
-		}
+		maps.Copy(definitions, extraDefinitionsProvider(groups, extraGroupAttributes))
 	}
 
 	// TODO: validate

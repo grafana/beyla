@@ -79,7 +79,7 @@ func parseDNSMessage(rawData []byte) *dnsMessage {
 // Returns nil if any question is malformed.
 func parseQSections(data *bytes.Buffer, qdcount uint16) []*question {
 	questions := make([]*question, 0, qdcount)
-	for i := uint16(0); i < qdcount; i++ {
+	for range qdcount {
 		q := parseQSection(data)
 		if q == nil {
 			break
@@ -144,7 +144,7 @@ func parseSectionLabel(data *bytes.Buffer) string {
 func parseRecords(data *bytes.Buffer, base []byte, count uint16) []*record {
 	records := make([]*record, 0, count)
 
-	for i := uint16(0); i < count; i++ {
+	for range count {
 		r := parseRecord(data, base)
 		if r == nil {
 			break

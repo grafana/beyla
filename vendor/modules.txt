@@ -547,6 +547,12 @@ github.com/twitchyliquid64/golang-asm/unsafeheader
 # github.com/ugorji/go/codec v1.2.12
 ## explicit; go 1.11
 github.com/ugorji/go/codec
+# github.com/vektah/gqlparser/v2 v2.5.30
+## explicit; go 1.22
+github.com/vektah/gqlparser/v2/ast
+github.com/vektah/gqlparser/v2/gqlerror
+github.com/vektah/gqlparser/v2/lexer
+github.com/vektah/gqlparser/v2/parser
 # github.com/vishvananda/netlink v1.3.1
 ## explicit; go 1.12
 github.com/vishvananda/netlink
@@ -768,7 +774,7 @@ go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc/inte
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp/internal/request
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp/internal/semconv
-# go.opentelemetry.io/obi v0.0.0-20251009145850-a086ec09ef1b => ./.obi-src
+# go.opentelemetry.io/obi v0.0.0-20251013143511-10fd81bc8389 => ./.obi-src
 ## explicit; go 1.25.0
 go.opentelemetry.io/obi/pkg/app/request
 go.opentelemetry.io/obi/pkg/buildinfo
@@ -788,6 +794,7 @@ go.opentelemetry.io/obi/pkg/components/svc
 go.opentelemetry.io/obi/pkg/config
 go.opentelemetry.io/obi/pkg/ebpf
 go.opentelemetry.io/obi/pkg/ebpf/common
+go.opentelemetry.io/obi/pkg/ebpf/common/http
 go.opentelemetry.io/obi/pkg/ebpf/tcmanager
 go.opentelemetry.io/obi/pkg/export/attributes
 go.opentelemetry.io/obi/pkg/export/attributes/names

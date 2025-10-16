@@ -67,7 +67,7 @@ func skipMetadataResponseBrokers(pkt []byte, header *KafkaRequestHeader, offset 
 	if err != nil {
 		return 0, err
 	}
-	for i := 0; i < brokersLen; i++ {
+	for range brokersLen {
 		offset, err = skipBytes(pkt, offset, Int32Len) // node_id
 		if err != nil {
 			return 0, err
@@ -105,7 +105,7 @@ func parsMetadataTopics(pkt []byte, header *KafkaRequestHeader, offset int) ([]*
 	}
 	var topics []*MetadataTopic
 	var topic *MetadataTopic
-	for i := 0; i < topicsLen; i++ {
+	for i := range topicsLen {
 		topic, offset, err = parseMetadataTopic(pkt, header, offset, i == topicsLen-1)
 		if err != nil {
 			// return the Topics parsed so far, even if one topic failed

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"os"
 	"sync"
 )
@@ -237,9 +238,7 @@ func (r *fallbackResolver) notifyObservers(change ChangeType) {
 	// copy map so we don't change while iterating
 	observers := make(map[string]chan<- ChangeNotification)
 	r.Lock()
-	for name, ch := range r.observers {
-		observers[name] = ch
-	}
+	maps.Copy(observers, r.observers)
 	r.Unlock()
 
 	log := logger()

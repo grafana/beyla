@@ -61,7 +61,7 @@ func InfoForPID(pid uint32) (Info, error) {
 		return Info{}, fmt.Errorf("reading %s: %w", cgroupFile, err)
 	}
 
-	for _, cgroupEntry := range bytes.Split(cgroupBytes, []byte{'\n'}) {
+	for cgroupEntry := range bytes.SplitSeq(cgroupBytes, []byte{'\n'}) {
 		if cgroupID, ok := findCgroup(string(cgroupEntry)); ok {
 			return Info{PIDNamespace: ns, ContainerID: cgroupID}, nil
 		}

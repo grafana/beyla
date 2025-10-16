@@ -86,20 +86,21 @@ func (l *spanNameLimiter) doLimit(ctx context.Context) {
 			removed := l.spanNamesCount.ExpireAll()
 			l.log.Debug("inactive services expired", "len", removed)
 		case spans := <-l.in:
-			l.aggregate(spans)
-			l.out.Send(spans)
+			l.out.Send(l.aggregate(spans))
 		}
 	}
 }
 
-func (l *spanNameLimiter) aggregate(spans []request.Span) {
+func (l *spanNameLimiter) aggregate(spans []request.Span) []request.Span {
 	// assuming many spans from the same service could come in a row
 	// we can slightly optimize by avoiding the cache lookup for each span
 	var lastKey svc.ServiceNameNamespace
 	lastCount := &routesCount{}
 
-	for i := range spans {
-		span := &spans[i]
+	output := spans
+	alreadyCopying := false
+	for i := 0; i < len(output); i++ {
+		span := &output[i]
 		if key := span.Service.UID.NameNamespace(); key != lastKey {
 			lastKey = key
 			count, ok := l.spanNamesCount.Get(key)
@@ -110,6 +111,17 @@ func (l *spanNameLimiter) aggregate(spans []request.Span) {
 			lastCount = count
 		}
 		if lastCount.limitReached {
+			if !alreadyCopying {
+				// optimization to minimize memory generation:
+				// we only copy the input spans slice if we need to modify it to mark any
+				// as aggregated (since we need to keep the original slice to report traces
+				// unaggregated).
+				// If no modification is needed, we keep using the original slice.
+				alreadyCopying = true
+				output = make([]request.Span, len(spans))
+				copy(output, spans)
+				span = &output[i]
+			}
 			span.OverrideTraceName = aggregatedMark
 			continue
 		}
@@ -120,4 +132,5 @@ func (l *spanNameLimiter) aggregate(spans []request.Span) {
 			lastCount.limitReached = true
 		}
 	}
+	return output
 }

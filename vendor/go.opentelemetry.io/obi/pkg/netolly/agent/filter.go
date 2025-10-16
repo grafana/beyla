@@ -24,6 +24,7 @@ package agent
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -88,10 +89,8 @@ func (itf *interfaceFilter) Allowed(name string) bool {
 		return false
 	}
 	// if the interface matches the allow lists, we still need to check that is not excluded
-	for _, match := range itf.excludedMatches {
-		if name == match {
-			return false
-		}
+	if slices.Contains(itf.excludedMatches, name) {
+		return false
 	}
 	for _, re := range itf.excludedRegexpes {
 		if re.MatchString(name) {

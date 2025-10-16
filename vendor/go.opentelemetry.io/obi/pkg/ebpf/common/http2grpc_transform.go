@@ -335,12 +335,10 @@ func http2FromBuffers(parseContext *EBPFParseContext, event *BPFHTTP2Info) (requ
 			if strings.Contains(err.Error(), "unexpected EOF") && bLen > frameHeaderLen {
 				fh, err := readFrameHeader(event.Data[:bLen])
 				if err == nil && fh.Length > uint32(bLen-frameHeaderLen) {
-					newLen := bLen - frameHeaderLen
-					// If we ever use more than 256 for the buffers we have to
-					// change this to encode properly in more than 1 byte
-					if newLen > 255 {
-						newLen = 255
-					}
+					newLen := min(
+						// If we ever use more than 256 for the buffers we have to
+						// change this to encode properly in more than 1 byte
+						bLen-frameHeaderLen, 255)
 					event.Data[0] = 0
 					event.Data[1] = 0
 					event.Data[2] = uint8(newLen)
@@ -472,11 +470,8 @@ func isInvalidFrame(frame *frameHeader) bool {
 
 func isLikelyHTTP2(data []uint8, eventLen int) bool {
 	pos := 0
-	l := eventLen
-	if l > len(data) {
-		l = len(data)
-	}
-	for i := 0; i < 8; i++ {
+	l := min(eventLen, len(data))
+	for range 8 {
 		if pos > l-frameHeaderLen {
 			break
 		}

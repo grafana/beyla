@@ -112,6 +112,11 @@ func DBSystemName(val string) attribute.KeyValue {
 	return attribute.Key(attr.DBSystemName).String(val)
 }
 
+func GraphqlOperationType(val string) attribute.KeyValue {
+	// TODO: replace once it's available in semconv
+	return attribute.Key(attr.GraphQLOperationType).String(val)
+}
+
 func ErrorType(val string) attribute.KeyValue {
 	return attribute.Key(attr.ErrorType).String(val)
 }

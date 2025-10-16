@@ -133,6 +133,7 @@ type EBPFParseContext struct {
 	postgresPreparedStatements *simplelru.LRU[postgresPreparedStatementsKey, string]
 	postgresPortals            *simplelru.LRU[postgresPortalsKey, string]
 	kafkaTopicUUIDToName       *simplelru.LRU[kafkaparser.UUID, string]
+	payloadExtraction          config.PayloadExtraction
 }
 
 type EBPFEventContext struct {
@@ -157,6 +158,7 @@ func NewEBPFParseContext(cfg *config.EBPFTracer) *EBPFParseContext {
 		postgresPortals            *simplelru.LRU[postgresPortalsKey, string]
 		kafkaTopicUUIDToName       *simplelru.LRU[kafkaparser.UUID, string]
 		mongoRequestCache          PendingMongoDBRequests
+		payloadExtraction          config.PayloadExtraction
 	)
 
 	h2c, _ := lru.New[uint64, h2Connection](1024 * 10)
@@ -192,6 +194,8 @@ func NewEBPFParseContext(cfg *config.EBPFTracer) *EBPFParseContext {
 		}
 
 		mongoRequestCache = expirable.NewLRU[MongoRequestKey, *MongoRequestValue](cfg.MongoRequestsCacheSize, nil, 0)
+
+		payloadExtraction = cfg.PayloadExtraction
 	}
 
 	return &EBPFParseContext{
@@ -203,6 +207,7 @@ func NewEBPFParseContext(cfg *config.EBPFTracer) *EBPFParseContext {
 		postgresPreparedStatements: postgresPreparedStatements,
 		postgresPortals:            postgresPortals,
 		kafkaTopicUUIDToName:       kafkaTopicUUIDToName,
+		payloadExtraction:          payloadExtraction,
 	}
 }
 
@@ -403,4 +408,28 @@ func (connInfo *BPFConnInfo) reqHostInfo() (source, target string) {
 	}
 
 	return srcStr, dstStr
+}
+
+func isClientEvent(et uint8) bool {
+	switch request.EventType(et) {
+	case request.EventTypeGRPCClient, request.EventTypeHTTPClient, request.EventTypeRedisClient,
+		request.EventTypeKafkaClient, request.EventTypeSQLClient, request.EventTypeMongoClient,
+		request.EventTypeFailedConnect:
+		return true
+	}
+
+	return false
+}
+
+func directionByPacketType(pt uint8, isClient bool) uint8 {
+	if isClient {
+		if pt == packetTypeRequest {
+			return directionSend
+		}
+		return directionRecv
+	}
+	if pt == packetTypeRequest {
+		return directionRecv
+	}
+	return directionSend
 }

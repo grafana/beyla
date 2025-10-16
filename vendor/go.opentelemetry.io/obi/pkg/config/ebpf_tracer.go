@@ -4,7 +4,9 @@
 package config
 
 import (
+	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 )
@@ -34,11 +36,13 @@ type EBPFTracer struct {
 	// before sending a wakeup request.
 	// High values of WakeupLen could add a noticeable metric delay in services with low
 	// requests/second.
+	// Must be at least 0
 	// TODO: see if there is a way to force eBPF to wakeup userspace on timeout
 	WakeupLen int `yaml:"wakeup_len" env:"OTEL_EBPF_BPF_WAKEUP_LEN"`
 
 	// BatchLength allows specifying how many traces will be batched at the initial
 	// stage before being forwarded to the next stage
+	// Must be at least 1
 	BatchLength int `yaml:"batch_length" env:"OTEL_EBPF_BPF_BATCH_LENGTH"`
 
 	// BatchTimeout specifies the timeout to forward the data batch if it didn't
@@ -49,6 +53,7 @@ type EBPFTracer struct {
 	// headers to process any 'Traceparent' fields.
 	TrackRequestHeaders bool `yaml:"track_request_headers" env:"OTEL_EBPF_BPF_TRACK_REQUEST_HEADERS"`
 
+	// Must be at least 0
 	HTTPRequestTimeout time.Duration `yaml:"http_request_timeout" env:"OTEL_EBPF_BPF_HTTP_REQUEST_TIMEOUT"`
 
 	// Deprecated: equivalent to ContextPropagationAll
@@ -100,6 +105,9 @@ type EBPFTracer struct {
 
 	// MongoDB requests cache size.
 	MongoRequestsCacheSize int `yaml:"mongo_requests_cache_size" env:"OTEL_EBPF_BPF_MONGO_REQUESTS_CACHE_SIZE"`
+
+	// Configure data extraction/parsing based on protocol
+	PayloadExtraction PayloadExtraction `yaml:"payload_extraction"`
 }
 
 // Per-protocol data buffer size in bytes.
@@ -112,16 +120,61 @@ type EBPFBufferSizes struct {
 }
 
 func (c *EBPFTracer) Validate() error {
-	// TODO(matt): validate all the existing attributes
+	// WakeupLen is used to calculate the wakeup_data_bytes for the ringbuf
+	if c.WakeupLen < 0 {
+		return errors.New("ebpf.wakeup_len in the YAML configuration file or OTEL_EBPF_BPF_WAKEUP_LEN must be at least 1")
+	}
+	if c.BatchLength < 1 {
+		return errors.New("ebpf.batch_length in the YAML configuration file or OTEL_EBPF_BPF_BATCH_LENGTH must be at least 1")
+	}
 
-	if c.BufferSizes.HTTP > bufferSizeMax {
-		return fmt.Errorf("buffer size too large (HTTP): %d, max is %d", c.BufferSizes.HTTP, bufferSizeMax)
+	if c.BatchTimeout <= 0 {
+		return errors.New("ebpf.batch_timeout in the YAML configuration file or OTEL_EBPF_BPF_BATCH_TIMEOUT must be greater than 0")
 	}
-	if c.BufferSizes.MySQL > bufferSizeMax {
-		return fmt.Errorf("buffer size too large (MySQL): %d, max is %d", c.BufferSizes.MySQL, bufferSizeMax)
+
+	if c.HTTPRequestTimeout < 0 {
+		return errors.New("ebpf.http_request_timeout in the YAML configuration file or OTEL_EBPF_BPF_HTTP_REQUEST_TIMEOUT must be greater than or equal to 0")
 	}
-	if c.BufferSizes.Postgres > bufferSizeMax {
-		return fmt.Errorf("buffer size too large (Postgres): %d, max is %d", c.BufferSizes.Postgres, bufferSizeMax)
+
+	if !c.TCBackend.Valid() {
+		return errors.New("invalid ebpf.traffic_control_backend in the YAML configuration file or OTEL_EBPF_BPF_TC_BACKEND value, must be 'tc' or 'tcx' or 'auto'")
+	}
+
+	// remove after deleting ContextPropagationEnabled
+	if c.ContextPropagationEnabled && c.ContextPropagation != ContextPropagationDisabled {
+		return errors.New("ebpf.enable_context_propagation and ebpf.context_propagation in the YAML configuration file or OTEL_EBPF_BPF_ENABLE_CONTEXT_PROPAGATION and OTEL_EBPF_BPF_CONTEXT_PROPAGATION are mutually exclusive")
+	}
+
+	// TODO deprecated (REMOVE)
+	// remove after deleting ContextPropagationEnabled
+	if c.ContextPropagationEnabled {
+		slog.Warn("DEPRECATION NOTICE: 'ebpf.enable_context_propagation' configuration option has been " +
+			"deprecated and will be removed in the future - use 'ebpf.context_propagation' instead")
+		c.ContextPropagation = ContextPropagationAll
+	}
+
+	if err := c.RedisDBCache.Validate(); err != nil {
+		return err
+	}
+
+	if err := c.BufferSizes.Validate(); err != nil {
+		return err
+	}
+
+	if c.MySQLPreparedStatementsCacheSize <= 0 {
+		return errors.New("ebpf.mysql_prepared_statements_cache_size in the YAML configuration file or OTEL_EBPF_BPF_MYSQL_PREPARED_STATEMENTS_CACHE_SIZE must be greater than 0")
+	}
+
+	if c.PostgresPreparedStatementsCacheSize <= 0 {
+		return errors.New("ebpf.postgres_prepared_statements_cache_size in the YAML configuration file or OTEL_EBPF_BPF_POSTGRES_PREPARED_STATEMENTS_CACHE_SIZE must be greater than 0")
+	}
+
+	if c.KafkaTopicUUIDCacheSize <= 0 {
+		return errors.New("ebpf.kafka_topic_uuid_cache_size in the YAML configuration file or OTEL_KAFKA_TOPIC_UUID_CACHE_SIZE must be greater than 0")
+	}
+
+	if c.MongoRequestsCacheSize <= 0 {
+		return errors.New("ebpf.mongo_requests_cache_size in the YAML configuration file or OTEL_EBPF_BPF_MONGO_REQUESTS_CACHE_SIZE must be greater than 0")
 	}
 
 	return nil
@@ -159,4 +212,24 @@ func (m ContextPropagationMode) MarshalText() ([]byte, error) {
 	}
 
 	return nil, fmt.Errorf("invalid context propagation mode: %d", m)
+}
+
+func (r RedisDBCacheConfig) Validate() error {
+	if r.MaxSize <= 0 {
+		return errors.New("ebpf.redis_db_cache.max_size in the YAML configuration file or OTEL_EBPF_BPF_REDIS_DB_CACHE_MAX_SIZE must be greater than 0")
+	}
+	return nil
+}
+
+func (b EBPFBufferSizes) Validate() error {
+	if b.HTTP > bufferSizeMax {
+		return fmt.Errorf("ebpf.buffer_sizes.http in YAML configuration file or OTEL_EBPF_BPF_BUFFER_SIZE_HTTP too large: %d, max is %d", b.HTTP, bufferSizeMax)
+	}
+	if b.MySQL > bufferSizeMax {
+		return fmt.Errorf("ebpf.buffer_sizes.mysql in YAML configuration file or OTEL_EBPF_BPF_BUFFER_SIZE_MYSQL too large: %d, max is %d", b.MySQL, bufferSizeMax)
+	}
+	if b.Postgres > bufferSizeMax {
+		return fmt.Errorf("ebpf.buffer_sizes.postgres in YAML configuration file or OTEL_EBPF_BPF_BUFFER_SIZE_POSTGRES too large: %d, max is %d", b.Postgres, bufferSizeMax)
+	}
+	return nil
 }

@@ -55,6 +55,9 @@ const (
 	MessagingOpType        = Name("messaging.operation.type")
 	MessagingSystem        = Name(semconv.MessagingSystemKey)
 	MessagingDestination   = Name(semconv.MessagingDestinationNameKey)
+	GraphQLDocument        = Name(semconv.GraphqlDocumentKey)
+	GraphQLOperationName   = Name(semconv.GraphqlOperationNameKey)
+	GraphQLOperationType   = Name(semconv.GraphqlOperationTypeKey)
 
 	K8sNamespaceName   = Name("k8s.namespace.name")
 	K8sPodName         = Name("k8s.pod.name")

@@ -118,6 +118,27 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 		getter = func(span *Span) attribute.KeyValue { return Job(span.Service.Job()) }
 	case attr.Instance:
 		getter = func(span *Span) attribute.KeyValue { return Job(span.Service.UID.Instance) }
+	case attr.GraphQLDocument:
+		getter = func(s *Span) attribute.KeyValue {
+			if s.Type == EventTypeHTTP && s.SubType == HTTPSubtypeGraphQL && s.GraphQL != nil {
+				return semconv.GraphqlDocument(s.GraphQL.Document)
+			}
+			return semconv.GraphqlDocument("")
+		}
+	case attr.GraphQLOperationName:
+		getter = func(s *Span) attribute.KeyValue {
+			if s.Type == EventTypeHTTP && s.SubType == HTTPSubtypeGraphQL && s.GraphQL != nil {
+				return semconv.GraphqlOperationName(s.GraphQL.OperationName)
+			}
+			return semconv.GraphqlOperationName("")
+		}
+	case attr.GraphQLOperationType:
+		getter = func(s *Span) attribute.KeyValue {
+			if s.Type == EventTypeHTTP && s.SubType == HTTPSubtypeGraphQL && s.GraphQL != nil {
+				return GraphqlOperationType(s.GraphQL.OperationType)
+			}
+			return GraphqlOperationType("")
+		}
 	}
 	// default: unlike the Prometheus getters, we don't check here for service name nor k8s metadata
 	// because they are already attributes of the Resource instead of the attributes.

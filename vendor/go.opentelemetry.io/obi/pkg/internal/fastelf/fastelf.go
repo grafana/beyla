@@ -335,7 +335,7 @@ func (ctx *ElfContext) HasSymbol(symbol string) bool {
 
 		symCount := int(sec.Size / sec.Entsize)
 
-		for i := 0; i < symCount; i++ {
+		for i := range symCount {
 			sym := ReadStruct[Elf64_Sym](ctx.Data, int(sec.Offset)+i*int(sec.Entsize))
 
 			if sym == nil || SymType(sym.Info) != STT_FUNC || sym.Size == 0 || sym.Value == 0 {

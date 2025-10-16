@@ -311,6 +311,11 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 		if span.Route != "" {
 			attrs = append(attrs, semconv.HTTPRoute(span.Route))
 		}
+		if span.SubType == request.HTTPSubtypeGraphQL && span.GraphQL != nil {
+			attrs = append(attrs, semconv.GraphqlDocument(span.GraphQL.Document))
+			attrs = append(attrs, semconv.GraphqlOperationName(span.GraphQL.OperationName))
+			attrs = append(attrs, request.GraphqlOperationType(span.GraphQL.OperationType))
+		}
 	case request.EventTypeGRPC:
 		attrs = []attribute.KeyValue{
 			semconv.RPCMethod(span.Path),

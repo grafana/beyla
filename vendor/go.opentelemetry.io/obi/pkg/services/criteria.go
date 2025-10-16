@@ -204,7 +204,7 @@ func (p *PortEnum) UnmarshalText(text []byte) error {
 	if !validPortEnum.MatchString(val) {
 		return fmt.Errorf("invalid port range %q. Must be a comma-separated list of numeric ports or port ranges (e.g. 8000-8999)", val)
 	}
-	for _, entry := range strings.Split(val, ",") {
+	for entry := range strings.SplitSeq(val, ",") {
 		e := PortRange{}
 		ports := strings.Split(entry, "-")
 		// don't need to check integer parsing, as we already did it via regular expression

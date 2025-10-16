@@ -34,7 +34,7 @@ require (
 	go.opentelemetry.io/collector/exporter/otlpexporter v0.136.0
 	go.opentelemetry.io/collector/exporter/otlphttpexporter v0.136.0
 	go.opentelemetry.io/collector/pdata v1.42.0
-	go.opentelemetry.io/obi v0.0.0-20251009145850-a086ec09ef1b
+	go.opentelemetry.io/obi v0.0.0-20251013143511-10fd81bc8389
 	go.opentelemetry.io/otel v1.38.0
 	go.opentelemetry.io/otel/sdk v1.38.0
 	go.opentelemetry.io/otel/sdk/metric v1.38.0
@@ -150,6 +150,7 @@ require (
 	github.com/tklauser/numcpus v0.10.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.12 // indirect
+	github.com/vektah/gqlparser/v2 v2.5.30 // indirect
 	github.com/vishvananda/netlink v1.3.1 // indirect
 	github.com/vishvananda/netns v0.0.5 // indirect
 	github.com/x448/float16 v0.8.4 // indirect

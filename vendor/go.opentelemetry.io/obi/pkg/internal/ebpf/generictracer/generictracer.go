@@ -252,10 +252,6 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.ProbeDesc {
 			Required: true,
 			Start:    p.bpfObjects.ObiKprobeSecuritySocketAccept,
 		},
-		"tcp_rcv_established": {
-			Required: true,
-			Start:    p.bpfObjects.ObiKprobeTcpRcvEstablished,
-		},
 		// Tracking of HTTP client calls, by tapping into connect
 		"sys_connect": {
 			Required: true,
@@ -371,6 +367,22 @@ func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 				End:      p.bpfObjects.ObiUretprobeSslWriteEx,
 			}},
 			"SSL_shutdown": {{
+				Required: false,
+				Start:    p.bpfObjects.ObiUprobeSslShutdown,
+			}},
+		},
+		"libSystem.Security.Cryptography.Native.OpenSsl.so": {
+			"CryptoNative_SslRead": {{
+				Required: false,
+				Start:    p.bpfObjects.ObiUprobeSslRead,
+				End:      p.bpfObjects.ObiUretprobeSslRead,
+			}},
+			"CryptoNative_SslWrite": {{
+				Required: false,
+				Start:    p.bpfObjects.ObiUprobeSslWrite,
+				End:      p.bpfObjects.ObiUretprobeSslWrite,
+			}},
+			"CryptoNative_SslShutdown": {{
 				Required: false,
 				Start:    p.bpfObjects.ObiUprobeSslShutdown,
 			}},

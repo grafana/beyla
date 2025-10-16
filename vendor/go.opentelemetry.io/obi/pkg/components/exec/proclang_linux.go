@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 
 	"go.opentelemetry.io/obi/pkg/components/svc"
 	"go.opentelemetry.io/obi/pkg/internal/fastelf"
@@ -76,13 +77,7 @@ func findLanguageFromElf(filePath string) svc.InstrumentableType {
 }
 
 func contains(slice []string, value string) bool {
-	for _, v := range slice {
-		if v == value {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(slice, value)
 }
 
 func collectSymbols(f *elf.File, syms []elf.Symbol, addresses map[string]Sym, symbolNames []string) {
@@ -153,7 +148,7 @@ func matchExeSymbols(ctx *fastelf.ElfContext) svc.InstrumentableType {
 
 		symCount := int(sec.Size / sec.Entsize)
 
-		for i := 0; i < symCount; i++ {
+		for i := range symCount {
 			sym := fastelf.ReadStruct[fastelf.Elf64_Sym](ctx.Data, int(sec.Offset)+i*int(sec.Entsize))
 
 			if sym == nil ||

@@ -70,10 +70,7 @@ func parsePostgresBindCommand(buf []byte) (string, string, []string, error) {
 	portal := []byte{}
 	args := []string{}
 
-	size := int(binary.BigEndian.Uint32(buf[1:5]))
-	if size > len(buf) {
-		size = len(buf)
-	}
+	size := min(int(binary.BigEndian.Uint32(buf[1:5])), len(buf))
 	ptr := 5
 
 	// parse statement, zero terminated string
@@ -127,7 +124,7 @@ func parsePostgresBindCommand(buf []byte) (string, string, []string, error) {
 		argLen := int(binary.BigEndian.Uint32(buf[ptr : ptr+4]))
 		ptr += 4
 		arg := []byte{}
-		for j := 0; j < argLen; j++ {
+		for range argLen {
 			if ptr >= size {
 				break
 			}
@@ -141,10 +138,7 @@ func parsePostgresBindCommand(buf []byte) (string, string, []string, error) {
 }
 
 func parsePosgresQueryCommand(buf []byte) (string, error) {
-	size := int(binary.BigEndian.Uint32(buf[1:5]))
-	if size > len(buf) {
-		size = len(buf)
-	}
+	size := min(int(binary.BigEndian.Uint32(buf[1:5])), len(buf))
 	ptr := 5
 
 	if ptr > size {

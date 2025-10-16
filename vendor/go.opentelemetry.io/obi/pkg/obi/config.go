@@ -84,6 +84,13 @@ var DefaultConfig = Config{
 		MongoRequestsCacheSize:              1024,
 		KafkaTopicUUIDCacheSize:             1024,
 		OverrideBPFLoopEnabled:              false,
+		PayloadExtraction: config.PayloadExtraction{
+			HTTP: config.HTTPConfig{
+				GraphQL: config.GraphQLConfig{
+					Enabled: false,
+				},
+			},
+		},
 	},
 	NameResolver: &transform.NameResolverConfig{
 		Sources:  []string{"k8s"},
@@ -310,25 +317,6 @@ func (c *Config) Validate() error {
 			"or 'otel_metrics_export: { features: [network,application] }' in the YAML configuration file. " +
 			"Enable Prometheus export features using the 'OTEL_EBPF_PROMETHEUS_FEATURES=network,application' environment variable " +
 			"or 'prometheus_export: { features: [network,application] }' in the YAML configuration file.")
-	}
-	if c.EBPF.BatchLength == 0 {
-		return ConfigError("OTEL_EBPF_BPF_BATCH_LENGTH must be at least 1")
-	}
-	if !c.EBPF.TCBackend.Valid() {
-		return ConfigError("Invalid OTEL_EBPF_BPF_TC_BACKEND value")
-	}
-
-	// remove after deleting ContextPropagationEnabled
-	if c.EBPF.ContextPropagationEnabled && c.EBPF.ContextPropagation != config.ContextPropagationDisabled {
-		return ConfigError("context_propagation_enabled and context_propagation are mutually exclusive")
-	}
-
-	// TODO deprecated (REMOVE)
-	// remove after deleting ContextPropagationEnabled
-	if c.EBPF.ContextPropagationEnabled {
-		slog.Warn("DEPRECATION NOTICE: 'context_propagation_enabled' configuration option has been " +
-			"deprecated and will be removed in the future - use 'context_propagation' instead")
-		c.EBPF.ContextPropagation = config.ContextPropagationAll
 	}
 
 	if c.willUseTC() {

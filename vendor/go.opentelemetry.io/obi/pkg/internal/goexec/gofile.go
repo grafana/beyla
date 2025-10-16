@@ -149,10 +149,7 @@ func dataStart(f *elf.File) uint64 {
 func readData(f *elf.File, addr, size uint64) ([]byte, error) {
 	for _, prog := range f.Progs {
 		if prog.Vaddr <= addr && addr <= prog.Vaddr+prog.Filesz-1 {
-			n := prog.Vaddr + prog.Filesz - addr
-			if n > size {
-				n = size
-			}
+			n := min(prog.Vaddr+prog.Filesz-addr, size)
 			data := make([]byte, n)
 			_, err := prog.ReadAt(data, int64(addr-prog.Vaddr))
 			if err != nil {

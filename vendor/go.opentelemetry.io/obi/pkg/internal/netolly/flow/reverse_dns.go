@@ -38,12 +38,12 @@ type ReverseDNS struct {
 	// Type of ReverseDNS. Values are "none" (default), "local" and "ebpf"
 	Type string `yaml:"type" env:"OTEL_EBPF_NETWORK_REVERSE_DNS_TYPE"`
 
-	// CacheLen only applies to the "local" ReverseDNS type. It
+	// CacheLen only applies to the "local" and "ebpf" ReverseDNS type. It
 	// specifies the max size of the LRU cache that is checked before
 	// performing the name lookup. Default: 256
 	CacheLen int `yaml:"cache_len" env:"OTEL_EBPF_NETWORK_REVERSE_DNS_CACHE_LEN"`
 
-	// CacheTTL only applies to the "local" ReverseDNS type. It
+	// CacheTTL only applies to the "local" and "ebpf" ReverseDNS type. It
 	// specifies the time-to-live of a cached IP->hostname entry. After the
 	// cached entry becomes older than this time, the IP->hostname entry will be looked
 	// up again.

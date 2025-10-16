@@ -114,7 +114,7 @@ func parseFetchTopics(pkt []byte, header *KafkaRequestHeader, offset Offset) ([]
 	}
 	var topics []*FetchTopic
 	var topic *FetchTopic
-	for i := 0; i < topicsLen; i++ {
+	for range topicsLen {
 		topic, offset, err = parseFetchTopic(pkt, header, offset)
 		if err != nil {
 			// return the Topics parsed so far, even if one topic failed

@@ -117,7 +117,7 @@ func skipTaggedFields(pkt []byte, header *KafkaRequestHeader, offset Offset) (Of
 		return 0, err
 	}
 
-	for i := 0; i < taggedFieldsLen; i++ {
+	for range taggedFieldsLen {
 		_, offset, err = readUnsignedVarint(pkt[offset:], offset) // read tag ID
 		if err != nil {
 			return 0, err
@@ -241,7 +241,7 @@ func readString(pkt []byte, header *KafkaRequestHeader, offset Offset, nullable 
 }
 
 func validateKafkaString(pkt []byte, size int) bool {
-	for j := 0; j < size; j++ {
+	for j := range size {
 		ch := pkt[j]
 		if ('a' <= ch && ch <= 'z') || ('A' <= ch && ch <= 'Z') || ('0' <= ch && ch <= '9') || ch == '.' || ch == '_' || ch == '-' {
 			continue
@@ -288,7 +288,7 @@ func readStringLength(pkt []byte, header *KafkaRequestHeader, offset Offset, nul
 func readUnsignedVarint(data []byte, offset Offset) (int, Offset, error) {
 	value := 0
 	i := 0
-	for idx := 0; idx < len(data); idx++ {
+	for idx := range data {
 		if idx > len(data) {
 			return 0, 0, errors.New("offset exceeds data length")
 		}

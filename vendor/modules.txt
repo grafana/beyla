@@ -768,7 +768,7 @@ go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc/inte
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp/internal/request
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp/internal/semconv
-# go.opentelemetry.io/obi v0.0.0-20251020165748-e6834ed24761 => ./.obi-src
+# go.opentelemetry.io/obi v0.0.0-20251020181413-b62a788abdb6 => ./.obi-src
 ## explicit; go 1.25.0
 go.opentelemetry.io/obi/pkg/app/request
 go.opentelemetry.io/obi/pkg/buildinfo

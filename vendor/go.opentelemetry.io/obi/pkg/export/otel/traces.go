@@ -119,6 +119,10 @@ func (tr *tracesOTELReceiver) processSpans(ctx context.Context, exp exporter.Tra
 			}
 
 			envResourceAttrs := otelcfg.ResourceAttrsFromEnv(&sample.Span.Service)
+			if tr.spanMetricsEnabled {
+				envResourceAttrs = append(envResourceAttrs, attribute.Bool(string(attr.SkipSpanMetrics.OTEL()), true))
+			}
+
 			traces := tracesgen.GenerateTracesWithAttributes(tr.attributeCache, &sample.Span.Service, envResourceAttrs, tr.ctxInfo.HostID, spanGroup, reporterName, tr.ctxInfo.ExtraResourceAttributes...)
 			err := exp.ConsumeTraces(ctx, traces)
 			if err != nil {
@@ -256,6 +260,7 @@ func getTracesExporter(ctx context.Context, cfg otelcfg.TracesConfig, im imetric
 		}
 		if cfg.BatchTimeout > 0 {
 			batchCfg.FlushTimeout = cfg.BatchTimeout
+			batchCfg.MinSize = int64(cfg.MaxQueueSize)
 		}
 		queueConfig.Batch = configoptional.Some(batchCfg)
 		config.QueueConfig = queueConfig

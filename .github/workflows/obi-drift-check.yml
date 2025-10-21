@@ -34,6 +34,14 @@ jobs:
           go-version-file: "go.mod"
           cache: false # Disable caching to avoid extraction conflicts
 
+      - name: Verify submodule and directories
+        run: |
+          echo "Checking .obi-src directory..."
+          ls -la .obi-src/ || echo ".obi-src not found"
+          echo "Checking test directories..."
+          ls -la .obi-src/test/integration/*.go 2>/dev/null | head -5 || echo "No Go files in .obi-src/test/integration"
+          ls -la test/integration/*.go 2>/dev/null | head -5 || echo "No Go files in test/integration"
+
       # For PRs: Check for drift and fail if detected
       - name: Check for OBI drift (PRs only)
         if: github.event_name == 'pull_request'
@@ -100,8 +108,18 @@ jobs:
             echo "drift_detected=true" >> $GITHUB_OUTPUT
             
             # Run sync - this should succeed even if drift was found
-            if ! ./scripts/check-obi-drift.sh --sync; then
-              echo "Error: Sync failed"
+            set +e
+            set -x  # Enable verbose output
+            ./scripts/check-obi-drift.sh --sync
+            sync_exit=$?
+            set +x
+            set -e
+            
+            if [[ $sync_exit -ne 0 ]]; then
+              echo "Error: Sync failed with exit code $sync_exit"
+              echo "Checking for potential issues..."
+              echo "Go version: $(go version)"
+              echo "Scripts directory: $(ls -la scripts/)"
               exit 1
             fi
             

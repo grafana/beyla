@@ -70,8 +70,8 @@ eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network
 | preset | string | `"application"` | Preconfigures some default properties for network or application observability. Accepted values are "network" or "application". |
 | priorityClassName | string | `""` |  |
 | privileged | bool | `true` | If set to false, deploys an unprivileged / less privileged setup. |
-| rbac.create | bool | `true` | Whether to create RBAC resources for Belya |
-| rbac.extraClusterRoleRules | list | `[]` | Extra custer roles to be created for Belya |
+| rbac.create | bool | `true` | Whether to create RBAC resources for Beyla |
+| rbac.extraClusterRoleRules | list | `[]` | Extra cluster roles to be created for Beyla |
 | resources | object | `{}` |  |
 | securityContext | object | `{"privileged":true}` | Security context for privileged setup. |
 | service.annotations | object | `{}` | Service annotations. |

@@ -1,6 +1,8 @@
 discovery:
   survey:
     - k8s_namespace: "*"
+  exclude_instrument:
+    - k8s_container_name: "beyla"
 routes:
   patterns:
     - /basic/:rnd

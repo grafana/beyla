@@ -2,13 +2,13 @@ name: OBI Drift Check
 
 on:
   push:
-    # branches: ["main"]
-    # paths:
-    #   - ".obi-src"
+    branches: ["main"]
+    paths:
+      - ".obi-src"
   pull_request:
     branches: ["main", "release-*"]
-    # paths:
-    #   - ".obi-src"
+    paths:
+      - ".obi-src"
   workflow_dispatch:
 
 # Set restrictive permissions at workflow level
@@ -33,14 +33,6 @@ jobs:
         with:
           go-version-file: "go.mod"
           cache: false # Disable caching to avoid extraction conflicts
-
-      - name: Verify submodule and directories
-        run: |
-          echo "Checking .obi-src directory..."
-          ls -la .obi-src/ || echo ".obi-src not found"
-          echo "Checking test directories..."
-          ls -la .obi-src/test/integration/*.go 2>/dev/null | head -5 || echo "No Go files in .obi-src/test/integration"
-          ls -la test/integration/*.go 2>/dev/null | head -5 || echo "No Go files in test/integration"
 
       # For PRs: Check for drift and fail if detected
       - name: Check for OBI drift (PRs only)
@@ -94,10 +86,10 @@ jobs:
 
       # For main branch and manual runs: Sync changes and create PR if needed
       - name: Check for OBI drift (main only)
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
         id: check-main
         run: |
-          set +e  # Don't exit on error, we'll handle it
+          set +e
           ./scripts/check-obi-drift.sh
           check_exit=$?
           set -e
@@ -107,26 +99,8 @@ jobs:
           else
             echo "drift_detected=true" >> $GITHUB_OUTPUT
             
-            # Run sync - capture full output for debugging
-            set +e
-            bash -x ./scripts/check-obi-drift.sh --sync 2>&1 | tee sync_output.log
-            sync_exit=${PIPESTATUS[0]}
-            set -e
-            
-            if [[ $sync_exit -ne 0 ]]; then
-              echo "Error: Sync failed with exit code $sync_exit"
-              echo ""
-              echo "=== Full sync output ==="
-              cat sync_output.log
-              echo ""
-              echo "=== Checking environment ==="
-              echo "Go version: $(go version)"
-              echo "Working directory: $(pwd)"
-              echo "Can compile replace-function.go?"
-              cd scripts && go run replace-function.go --help 2>&1 || echo "Failed to run replace-function.go"
-              cd ..
-              exit 1
-            fi
+            # Run sync
+            ./scripts/check-obi-drift.sh --sync
             
             # Check if sync created any changes
             if git diff --quiet test/integration/; then
@@ -137,7 +111,7 @@ jobs:
           fi
 
       - name: Create/update PR for synced changes (main only)
-        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && steps.check-main.outputs.has_changes == 'true'
+        if: ((github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch') && steps.check-main.outputs.has_changes == 'true'
         uses: peter-evans/create-pull-request@4e1beaa7521e8b457b572c090b25bd3db56bf1c5 # v5
         with:
           commit-message: "Sync test functions from OBI"

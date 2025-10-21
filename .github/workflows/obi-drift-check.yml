@@ -2,9 +2,9 @@ name: OBI Drift Check
 
 on:
   push:
-    branches: ["main"]
-    paths:
-      - ".obi-src"
+    # branches: ["main"]
+    # paths:
+    #   - ".obi-src"
   pull_request:
     branches: ["main", "release-*"]
     # paths:
@@ -86,7 +86,7 @@ jobs:
 
       # For main branch and manual runs: Sync changes and create PR if needed
       - name: Check for OBI drift (main)
-        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         id: check-main
         run: |
           if ./scripts/check-obi-drift.sh; then
@@ -105,7 +105,7 @@ jobs:
           fi
 
       - name: Create/update PR for synced changes
-        if: ((github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch') && steps.check-main.outputs.has_changes == 'true'
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && steps.check-main.outputs.has_changes == 'true'
         uses: peter-evans/create-pull-request@4e1beaa7521e8b457b572c090b25bd3db56bf1c5 # v5
         with:
           commit-message: "Sync test functions from OBI"

@@ -162,5 +162,3 @@ spec:
       volumes:
         - name: tmp-rails
           emptyDir: {}
----
-

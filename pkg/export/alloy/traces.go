@@ -94,6 +94,11 @@ func (tr *tracesReceiver) provideLoop(ctx context.Context) {
 					}
 
 					envResourceAttrs := otelcfg.ResourceAttrsFromEnv(&sample.Span.Service)
+
+					if tr.spanMetricsEnabled {
+						envResourceAttrs = append(envResourceAttrs, attribute.Bool(string(attr.SkipSpanMetrics.OTEL()), true))
+					}
+
 					for _, tc := range tr.cfg.Traces {
 						traces := tracesgen.GenerateTracesWithAttributes(tr.attributeCache, &sample.Span.Service, envResourceAttrs, tr.hostID, spanGroup, otel.ReporterName)
 						err := tc.ConsumeTraces(ctx, traces)

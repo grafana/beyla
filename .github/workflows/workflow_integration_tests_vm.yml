@@ -110,7 +110,7 @@ jobs:
         run: make itest-coverage-data
 
       - id: get-codecov-token
-        uses: grafana/shared-workflows/actions/get-vault-secrets@get-vault-secrets/v1.2.1
+        uses: grafana/shared-workflows/actions/get-vault-secrets@9f37f656e063f0ad0b0bfc38d49894b57d363936 # get-vault-secrets/v1.2.1
         continue-on-error: true
         with:
           # Secrets placed in the ci/repo/grafana/beyla/codecov path in Vault

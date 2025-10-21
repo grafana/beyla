@@ -44,6 +44,20 @@ func testREDMetricsForNetHTTPLibrary(t *testing.T, url string, comm string) {
 			assert.NotNil(t, addr)
 		}
 	})
+
+	// Eventually, Prometheus would make this query visible
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		var err error
+		results, err = pq.Query(`http_client_request_duration_seconds_count{` +
+			`http_request_method="GET",` +
+			`http_response_status_code="200",` +
+			`service_namespace="integration-test",` +
+			`service_name="` + comm + `"}`)
+		require.NoError(t, err)
+		enoughPromResults(t, results)
+		val := totalPromCount(t, results)
+		assert.LessOrEqual(t, 2, val, "received:", tools.ToJSON(val))
+	})
 }
 
 func testREDMetricsDotNetHTTP(t *testing.T) {

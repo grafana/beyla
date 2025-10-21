@@ -1,0 +1,134 @@
+name: OBI Drift Check
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - ".obi-src"
+  pull_request:
+    branches: ["main", "release-*"]
+    # paths:
+    #   - ".obi-src"
+  workflow_dispatch:
+
+# Set restrictive permissions at workflow level
+permissions:
+  contents: read
+
+jobs:
+  check-drift:
+    runs-on: ubuntu-x64-small
+    permissions:
+      contents: write # Needed for creating commits and PRs
+      pull-requests: write # Needed for creating PRs and comments
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+          submodules: true # Initialize submodules to get .obi-src content
+
+      - name: Set up Go
+        uses: actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b # v5
+        with:
+          go-version-file: "go.mod"
+          cache: false # Disable caching to avoid extraction conflicts
+
+      # For PRs: Check for drift and fail if detected
+      - name: Check for OBI drift (PR)
+        if: github.event_name == 'pull_request'
+        id: check-pr
+        run: |
+          if ./scripts/check-obi-drift.sh; then
+            echo "drift_detected=false" >> $GITHUB_OUTPUT
+          else
+            echo "drift_detected=true" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+      - name: Comment on PR with instructions
+        if: github.event_name == 'pull_request' && failure() && steps.check-pr.outputs.drift_detected == 'true'
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
+        with:
+          script: |
+            const comment = `## ⚠️ OBI Drift Detected
+
+            The \`.obi-src\` submodule has been updated, but there are test functions that have drifted between Beyla and OBI.
+
+            ### To fix this issue:
+
+            1. Run the sync script locally on your branch:
+               \`\`\`bash
+               make vendor-obi
+               ./scripts/check-obi-drift.sh --sync
+               \`\`\`
+
+            2. Review the changes:
+               \`\`\`bash
+               git diff test/integration/
+               \`\`\`
+
+            3. Commit and push the changes:
+               \`\`\`bash
+               git add test/integration/
+               git commit -m "Sync tests from OBI"
+               git push
+               \`\`\`
+
+            This check will pass once the drift is resolved.`;
+
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: comment
+            });
+
+      # For main branch and manual runs: Sync changes and create PR if needed
+      - name: Check for OBI drift (main)
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+        id: check-main
+        run: |
+          if ./scripts/check-obi-drift.sh; then
+            echo "drift_detected=false" >> $GITHUB_OUTPUT
+          else
+            echo "drift_detected=true" >> $GITHUB_OUTPUT
+            echo "Drift detected, syncing..."
+            ./scripts/check-obi-drift.sh --sync
+            if git diff --quiet test/integration/; then
+              echo "has_changes=false" >> $GITHUB_OUTPUT
+              echo "No changes after sync"
+            else
+              echo "has_changes=true" >> $GITHUB_OUTPUT
+              echo "Changes applied"
+            fi
+          fi
+
+      - name: Create/update PR for synced changes
+        if: ((github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch') && steps.check-main.outputs.has_changes == 'true'
+        uses: peter-evans/create-pull-request@4e1beaa7521e8b457b572c090b25bd3db56bf1c5 # v5
+        with:
+          commit-message: "Sync test functions from OBI"
+          title: "Sync test functions from OBI after submodule update"
+          body: |
+            ## Automatic OBI Drift Sync
+
+            This PR was automatically created because the `.obi-src` submodule was updated on the main branch
+            and test function drift was detected.
+
+            The following changes have been automatically applied:
+            - Test functions in `test/integration/` have been synchronized with their OBI counterparts
+            - Import paths and service names have been transformed appropriately
+
+            ### What to do next:
+
+            1. Review the changes to ensure they are correct
+            2. Run integration tests to verify functionality
+            3. Merge this PR once approved
+
+            ---
+            _This PR was created by the [OBI Drift Check workflow](.github/workflows/obi-drift-check.yml)_
+          base: main
+          branch: obi-drift-sync-auto
+          labels: automated-pr,obi-sync
+          delete-branch: true

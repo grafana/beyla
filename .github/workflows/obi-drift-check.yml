@@ -107,19 +107,24 @@ jobs:
           else
             echo "drift_detected=true" >> $GITHUB_OUTPUT
             
-            # Run sync - this should succeed even if drift was found
+            # Run sync - capture full output for debugging
             set +e
-            set -x  # Enable verbose output
-            ./scripts/check-obi-drift.sh --sync
+            ./scripts/check-obi-drift.sh --sync 2>&1 | tee sync_output.log
             sync_exit=$?
-            set +x
             set -e
             
             if [[ $sync_exit -ne 0 ]]; then
               echo "Error: Sync failed with exit code $sync_exit"
-              echo "Checking for potential issues..."
+              echo ""
+              echo "=== Full sync output ==="
+              cat sync_output.log
+              echo ""
+              echo "=== Checking environment ==="
               echo "Go version: $(go version)"
-              echo "Scripts directory: $(ls -la scripts/)"
+              echo "Working directory: $(pwd)"
+              echo "Can compile replace-function.go?"
+              cd scripts && go run replace-function.go --help 2>&1 || echo "Failed to run replace-function.go"
+              cd ..
               exit 1
             fi
             

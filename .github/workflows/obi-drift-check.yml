@@ -35,7 +35,7 @@ jobs:
           cache: false # Disable caching to avoid extraction conflicts
 
       # For PRs: Check for drift and fail if detected
-      - name: Check for OBI drift (PR)
+      - name: Check for OBI drift (PRs only)
         if: github.event_name == 'pull_request'
         id: check-pr
         run: |
@@ -46,7 +46,7 @@ jobs:
             exit 1
           fi
 
-      - name: Comment on PR with instructions
+      - name: Comment on PR with instructions (PRs only)
         if: github.event_name == 'pull_request' && failure() && steps.check-pr.outputs.drift_detected == 'true'
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
         with:
@@ -85,26 +85,35 @@ jobs:
             });
 
       # For main branch and manual runs: Sync changes and create PR if needed
-      - name: Check for OBI drift (main)
+      - name: Check for OBI drift (main only)
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         id: check-main
         run: |
-          if ./scripts/check-obi-drift.sh; then
+          set +e  # Don't exit on error, we'll handle it
+          ./scripts/check-obi-drift.sh
+          check_exit=$?
+          set -e
+
+          if [[ $check_exit -eq 0 ]]; then
             echo "drift_detected=false" >> $GITHUB_OUTPUT
           else
             echo "drift_detected=true" >> $GITHUB_OUTPUT
-            echo "Drift detected, syncing..."
-            ./scripts/check-obi-drift.sh --sync
+            
+            # Run sync - this should succeed even if drift was found
+            if ! ./scripts/check-obi-drift.sh --sync; then
+              echo "Error: Sync failed"
+              exit 1
+            fi
+            
+            # Check if sync created any changes
             if git diff --quiet test/integration/; then
               echo "has_changes=false" >> $GITHUB_OUTPUT
-              echo "No changes after sync"
             else
               echo "has_changes=true" >> $GITHUB_OUTPUT
-              echo "Changes applied"
             fi
           fi
 
-      - name: Create/update PR for synced changes
+      - name: Create/update PR for synced changes (main only)
         if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && steps.check-main.outputs.has_changes == 'true'
         uses: peter-evans/create-pull-request@4e1beaa7521e8b457b572c090b25bd3db56bf1c5 # v5
         with:

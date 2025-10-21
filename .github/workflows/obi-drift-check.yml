@@ -2,7 +2,7 @@ name: OBI Drift Check
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "release-*"]
     paths:
       - ".obi-src"
   pull_request:
@@ -19,8 +19,8 @@ jobs:
   check-drift:
     runs-on: ubuntu-x64-small
     permissions:
-      contents: write # Needed for creating commits and PRs
-      pull-requests: write # Needed for creating PRs and comments
+      contents: read
+      pull-requests: write # Needed for PR comments
     steps:
       - name: Checkout repo
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -34,20 +34,17 @@ jobs:
           go-version-file: "go.mod"
           cache: false # Disable caching to avoid extraction conflicts
 
-      # For PRs: Check for drift and fail if detected
-      - name: Check for OBI drift (PRs only)
-        if: github.event_name == 'pull_request'
-        id: check-pr
+      - name: Check for OBI drift
+        id: check-drift
         run: |
-          if ./scripts/check-obi-drift.sh; then
-            echo "drift_detected=false" >> $GITHUB_OUTPUT
-          else
+          if ! ./scripts/check-obi-drift.sh; then
             echo "drift_detected=true" >> $GITHUB_OUTPUT
             exit 1
           fi
+          echo "drift_detected=false" >> $GITHUB_OUTPUT
 
-      - name: Comment on PR with instructions (PRs only)
-        if: github.event_name == 'pull_request' && failure() && steps.check-pr.outputs.drift_detected == 'true'
+      - name: Comment on PR with instructions
+        if: github.event_name == 'pull_request' && failure() && steps.check-drift.outputs.drift_detected == 'true'
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
         with:
           script: |
@@ -83,58 +80,3 @@ jobs:
               issue_number: context.issue.number,
               body: comment
             });
-
-      # For main branch and manual runs: Sync changes and create PR if needed
-      - name: Check for OBI drift (main only)
-        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
-        id: check-main
-        run: |
-          set +e
-          ./scripts/check-obi-drift.sh
-          check_exit=$?
-          set -e
-
-          if [[ $check_exit -eq 0 ]]; then
-            echo "drift_detected=false" >> $GITHUB_OUTPUT
-          else
-            echo "drift_detected=true" >> $GITHUB_OUTPUT
-            
-            # Run sync
-            ./scripts/check-obi-drift.sh --sync
-            
-            # Check if sync created any changes
-            if git diff --quiet test/integration/; then
-              echo "has_changes=false" >> $GITHUB_OUTPUT
-            else
-              echo "has_changes=true" >> $GITHUB_OUTPUT
-            fi
-          fi
-
-      - name: Create/update PR for synced changes (main only)
-        if: ((github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch') && steps.check-main.outputs.has_changes == 'true'
-        uses: peter-evans/create-pull-request@4e1beaa7521e8b457b572c090b25bd3db56bf1c5 # v5
-        with:
-          commit-message: "Sync test functions from OBI"
-          title: "Sync test functions from OBI after submodule update"
-          body: |
-            ## Automatic OBI Drift Sync
-
-            This PR was automatically created because the `.obi-src` submodule was updated on the main branch
-            and test function drift was detected.
-
-            The following changes have been automatically applied:
-            - Test functions in `test/integration/` have been synchronized with their OBI counterparts
-            - Import paths and service names have been transformed appropriately
-
-            ### What to do next:
-
-            1. Review the changes to ensure they are correct
-            2. Run integration tests to verify functionality
-            3. Merge this PR once approved
-
-            ---
-            _This PR was created by the [OBI Drift Check workflow](.github/workflows/obi-drift-check.yml)_
-          base: main
-          branch: obi-drift-sync-auto
-          labels: automated-pr,obi-sync
-          delete-branch: true

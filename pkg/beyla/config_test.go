@@ -273,6 +273,9 @@ network:
 				services.GlobAttributes{
 					Metadata: map[string]*services.GlobAttr{"k8s_namespace": &servicesextra.K8sDefaultNamespacesGlob},
 				},
+				services.GlobAttributes{
+					Metadata: map[string]*services.GlobAttr{"k8s_container_name": &servicesextra.K8sDefaultExcludeContainerNamesGlob},
+				},
 			},
 			DefaultOtlpGRPCPort:   4317,
 			RouteHarvesterTimeout: 10 * time.Second,

@@ -90,7 +90,7 @@ func TestMultiProcess(t *testing.T) {
 
 	if kprobeTracesEnabled() {
 		t.Run("Nested traces with kprobes: rust -> java -> node -> go -> python -> rails", func(t *testing.T) {
-			testNestedHTTPTracesKProbes(t, true)
+			testNestedHTTPTracesKProbes(t)
 		})
 
 		t.Run("Nested traces with kprobes: SSL node python rails", func(t *testing.T) {
@@ -114,7 +114,7 @@ func TestMultiProcessAppCP(t *testing.T) {
 
 	if kprobeTracesEnabled() {
 		t.Run("Nested traces with kprobes: rust -> java -> node -> go -> python -> rails", func(t *testing.T) {
-			testNestedHTTPTracesKProbes(t, true)
+			testNestedHTTPTracesKProbes(t)
 		})
 	}
 	require.NoError(t, compose.Close())
@@ -130,7 +130,7 @@ func TestMultiProcessAppCPNoIP(t *testing.T) {
 
 	if kprobeTracesEnabled() {
 		t.Run("Nested traces with kprobes: rust -> java -> node -> go -> python -> rails", func(t *testing.T) {
-			testNestedHTTPTracesKProbes(t, true)
+			testNestedHTTPTracesKProbes(t)
 		})
 	}
 	require.NoError(t, compose.Close())

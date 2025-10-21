@@ -160,7 +160,6 @@ func testHTTPTracesNestedNginx(t *testing.T) {
 			require.NotEmpty(t, client.TraceID)
 			require.Equal(t, server.TraceID, client.TraceID)
 			require.NotEmpty(t, client.SpanID)
-
 		}, test.Interval(100*time.Millisecond))
 	}
 }

@@ -20,7 +20,7 @@ import (
 
 func testREDMetricsForRustHTTPLibrary(t *testing.T, url, comm, namespace string, port int, notraces bool) {
 	jsonBody, err := os.ReadFile(path.Join(pathRoot, "test", "integration", "components", "rusttestserver", "mid_data.json"))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.GreaterOrEqual(t, len(jsonBody), 100)
 
 	urlPath := "/greeting"
@@ -84,12 +84,12 @@ func testREDMetricsForRustHTTPLibrary(t *testing.T, url, comm, namespace string,
 	require.Len(t, res, 1)
 	parent := res[0]
 	require.NotEmpty(t, parent.TraceID)
-	if kprobeTracesEnabled() {
-		require.Equal(t, traceID, parent.TraceID)
-		// Validate that "parent" is a CHILD_OF the traceparent's "parent-id"
-		childOfPID := trace.ChildrenOf(parentID)
-		require.Len(t, childOfPID, 1)
-	}
+	require.Equal(t, traceID, parent.TraceID)
+
+	// Validate that "parent" is a CHILD_OF the traceparent's "parent-id"
+	childOfPID := trace.ChildrenOf(parentID)
+	require.Len(t, childOfPID, 1)
+
 	require.NotEmpty(t, parent.SpanID)
 	// check duration is at least 2us
 	assert.Less(t, (2 * time.Microsecond).Microseconds(), parent.Duration)
@@ -219,7 +219,7 @@ func checkReportedRustEvents(t *testing.T, comm, namespace string, numEvents int
 
 func testREDMetricsForRustHTTP2Library(t *testing.T, url, comm, namespace string) {
 	jsonBody, err := os.ReadFile(path.Join(pathRoot, "test", "integration", "components", "rusttestserver", "mid_data.json"))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.GreaterOrEqual(t, len(jsonBody), 100)
 
 	urlPath := "/greeting"

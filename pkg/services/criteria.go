@@ -22,6 +22,7 @@ var K8sDefaultNamespacesGlob = services.NewGlob("{kube-system,kube-node-lease,lo
 
 var K8sDefaultNamespacesWithSurveyRegex = services.NewRegexp("^kube-system$|^kube-node-lease$|^local-path-storage$|^cert-manager$" + k8sGKEDefaultNamespacesRegex + k8sAKSDefaultNamespacesRegex)
 var K8sDefaultNamespacesWithSurveyGlob = services.NewGlob("{kube-system,kube-node-lease,local-path-storage,cert-manager" + k8sGKEDefaultNamespacesGlob + k8sAKSDefaultNamespacesGlob + "}")
+var K8sDefaultExcludeContainerNamesGlob = services.NewGlob("{beyla,ebpf-instrument,alloy,prometheus-config-reloader,otelcol,otelcol-contrib}")
 
 var DefaultExcludeServices = services.RegexDefinitionCriteria{
 	services.RegexSelector{
@@ -47,6 +48,9 @@ var DefaultExcludeInstrument = services.GlobDefinitionCriteria{
 	services.GlobAttributes{
 		Metadata: map[string]*services.GlobAttr{"k8s_namespace": &K8sDefaultNamespacesGlob},
 	},
+	services.GlobAttributes{
+		Metadata: map[string]*services.GlobAttr{"k8s_container_name": &K8sDefaultExcludeContainerNamesGlob},
+	},
 }
 var DefaultExcludeInstrumentWithSurvey = services.GlobDefinitionCriteria{
 	services.GlobAttributes{
@@ -54,6 +58,9 @@ var DefaultExcludeInstrumentWithSurvey = services.GlobDefinitionCriteria{
 	},
 	services.GlobAttributes{
 		Metadata: map[string]*services.GlobAttr{"k8s_namespace": &K8sDefaultNamespacesWithSurveyGlob},
+	},
+	services.GlobAttributes{
+		Metadata: map[string]*services.GlobAttr{"k8s_container_name": &K8sDefaultExcludeContainerNamesGlob},
 	},
 }
 

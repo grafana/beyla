@@ -163,9 +163,9 @@ main() {
     local drifted=0
     
     for func in $common_funcs; do
-        ((total++))
+        total=$((total + 1))
         if ! check_drift "$func"; then
-            ((drifted++))
+            drifted=$((drifted + 1))
         fi
     done
     

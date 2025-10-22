@@ -1,0 +1,35 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:best-practices",
+    "helpers:pinGitHubActionDigestsToSemver"
+  ],
+  "ignorePaths": [
+    "NOTICES/**"
+  ],
+  "packageRules": [
+    {
+      "groupName": "all patch and digest versions",
+      "matchUpdateTypes": ["patch", "digest"],
+      "schedule": ["before 8am on Monday"],
+      // group all patches in a single PR
+      "matchPackageNames": [
+        "*"
+      ]
+    },
+    {
+      "matchUpdateTypes": ["minor", "major"],
+      "schedule": ["before 8am on Monday"]
+    },
+    {
+      "description": "Disable Go 1.17 testserver updates",
+      "matchFileNames": ["test/integration/components/testserver_1.17/Dockerfile"],
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["golang"],
+      "enabled": false
+    }
+  ],
+  "labels": [
+    "dependencies"
+  ]
+}

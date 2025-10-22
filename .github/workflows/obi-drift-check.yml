@@ -1,0 +1,82 @@
+name: OBI Drift Check
+
+on:
+  push:
+    branches: ["main", "release-*"]
+    paths:
+      - ".obi-src"
+  pull_request:
+    branches: ["main", "release-*"]
+    paths:
+      - ".obi-src"
+  workflow_dispatch:
+
+# Set restrictive permissions at workflow level
+permissions:
+  contents: read
+
+jobs:
+  check-drift:
+    runs-on: ubuntu-x64-small
+    permissions:
+      contents: read
+      pull-requests: write # Needed for PR comments
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+          submodules: true # Initialize submodules to get .obi-src content
+
+      - name: Set up Go
+        uses: actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b # v5
+        with:
+          go-version-file: "go.mod"
+          cache: false # Disable caching to avoid extraction conflicts
+
+      - name: Check for OBI drift
+        id: check-drift
+        run: |
+          if ! ./scripts/check-obi-drift.sh; then
+            echo "drift_detected=true" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          echo "drift_detected=false" >> $GITHUB_OUTPUT
+
+      - name: Comment on PR with instructions
+        if: github.event_name == 'pull_request' && failure() && steps.check-drift.outputs.drift_detected == 'true'
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
+        with:
+          script: |
+            const comment = `## ⚠️ OBI Drift Detected
+
+            The \`.obi-src\` submodule has been updated, but there are test functions that have drifted between Beyla and OBI.
+
+            ### To fix this issue:
+
+            1. Run the sync script locally on your branch:
+               \`\`\`bash
+               make vendor-obi
+               ./scripts/check-obi-drift.sh --sync
+               \`\`\`
+
+            2. Review the changes:
+               \`\`\`bash
+               git diff test/integration/
+               \`\`\`
+
+            3. Commit and push the changes:
+               \`\`\`bash
+               git add test/integration/
+               git commit -m "Sync tests from OBI"
+               git push
+               \`\`\`
+
+            This check will pass once the drift is resolved.`;
+
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: comment
+            });

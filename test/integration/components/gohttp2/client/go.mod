@@ -2,7 +2,6 @@ module http2client
 
 go 1.25.1
 
-require (
-	golang.org/x/net v0.20.0 // indirect
-	golang.org/x/text v0.14.0 // indirect
-)
+require golang.org/x/net v0.38.0
+
+require golang.org/x/text v0.23.0 // indirect

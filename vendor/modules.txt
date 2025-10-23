@@ -779,7 +779,6 @@ go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp/internal/semconv
 go.opentelemetry.io/obi/pkg/app/request
 go.opentelemetry.io/obi/pkg/buildinfo
 go.opentelemetry.io/obi/pkg/components/connector
-go.opentelemetry.io/obi/pkg/components/exec
 go.opentelemetry.io/obi/pkg/components/helpers
 go.opentelemetry.io/obi/pkg/components/helpers/cache
 go.opentelemetry.io/obi/pkg/components/helpers/container
@@ -792,6 +791,7 @@ go.opentelemetry.io/obi/pkg/components/pipe/global
 go.opentelemetry.io/obi/pkg/components/svc
 go.opentelemetry.io/obi/pkg/config
 go.opentelemetry.io/obi/pkg/discover
+go.opentelemetry.io/obi/pkg/discover/exec
 go.opentelemetry.io/obi/pkg/ebpf
 go.opentelemetry.io/obi/pkg/ebpf/common
 go.opentelemetry.io/obi/pkg/ebpf/common/http
@@ -836,6 +836,7 @@ go.opentelemetry.io/obi/pkg/internal/netolly/ifaces
 go.opentelemetry.io/obi/pkg/internal/netolly/transform/k8s
 go.opentelemetry.io/obi/pkg/internal/nodejs
 go.opentelemetry.io/obi/pkg/internal/otelsdk
+go.opentelemetry.io/obi/pkg/internal/procs
 go.opentelemetry.io/obi/pkg/internal/rdns/ebpf/xdp
 go.opentelemetry.io/obi/pkg/internal/rdns/store
 go.opentelemetry.io/obi/pkg/internal/split

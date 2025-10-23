@@ -12,7 +12,7 @@ import (
 	"log/slog"
 	"strings"
 
-	"go.opentelemetry.io/obi/pkg/components/exec"
+	"go.opentelemetry.io/obi/pkg/internal/procs"
 )
 
 func isSupportedGoBinary(elfF *elf.File) error {
@@ -48,12 +48,12 @@ func instrumentationPoints(elfF *elf.File, funcNames []string) (map[string]FuncO
 
 	gosyms := elfF.Section(".gosymtab")
 
-	var allSyms map[string]exec.Sym
+	var allSyms map[string]procs.Sym
 
 	// no go symbols in the executable, maybe it's statically linked
 	// find regular elf symbols
 	if gosyms == nil {
-		allSyms, _ = exec.FindExeSymbols(elfF, funcNames)
+		allSyms, _ = procs.FindExeSymbols(elfF, funcNames)
 	}
 
 	// check which functions in the symbol table correspond to any of the functions
@@ -89,7 +89,7 @@ func instrumentationPoints(elfF *elf.File, funcNames []string) (map[string]FuncO
 	return allOffsets, nil
 }
 
-func handleStaticSymbol(fName string, allOffsets map[string]FuncOffsets, allSyms map[string]exec.Sym, ilog *slog.Logger) {
+func handleStaticSymbol(fName string, allOffsets map[string]FuncOffsets, allSyms map[string]procs.Sym, ilog *slog.Logger) {
 	s, ok := allSyms[fName]
 
 	if ok && s.Prog != nil {

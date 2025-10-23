@@ -14,12 +14,13 @@ import (
 
 	"go.opentelemetry.io/otel/sdk/trace"
 
-	"go.opentelemetry.io/obi/pkg/components/exec"
 	"go.opentelemetry.io/obi/pkg/components/imetrics"
 	"go.opentelemetry.io/obi/pkg/components/kube"
 	"go.opentelemetry.io/obi/pkg/components/svc"
+	"go.opentelemetry.io/obi/pkg/discover/exec"
 	"go.opentelemetry.io/obi/pkg/ebpf"
 	"go.opentelemetry.io/obi/pkg/internal/goexec"
+	"go.opentelemetry.io/obi/pkg/internal/procs"
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
@@ -147,7 +148,7 @@ func (t *typer) FilterClassify(evs []Event[ProcessMatch]) []Event[ebpf.Instrumen
 		case EventCreated:
 			svcID := makeServiceAttrs(&ev.Obj)
 
-			if elfFile, err := exec.FindExecELF(ev.Obj.Process, svcID, t.k8sInformer.IsKubeEnabled()); err != nil {
+			if elfFile, err := findExecElf(ev.Obj.Process, svcID, t.k8sInformer.IsKubeEnabled()); err != nil {
 				t.log.Debug("error finding process ELF. Ignoring", "error", err)
 			} else {
 				t.currentPids[ev.Obj.Process.Pid] = elfFile
@@ -219,7 +220,7 @@ func (t *typer) asInstrumentable(execElf *exec.FileInfo) ebpf.Instrumentable {
 		parent, ok = t.currentPids[parent.Ppid]
 	}
 
-	detectedType := exec.FindProcLanguage(execElf.Pid)
+	detectedType := procs.FindProcLanguage(execElf.Pid)
 
 	if detectedType == svc.InstrumentableGolang && err == nil {
 		log.Warn("ELF binary appears to be a Go program, but no offsets were found",

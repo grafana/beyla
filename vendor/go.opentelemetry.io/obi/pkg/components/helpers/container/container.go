@@ -11,13 +11,13 @@ import (
 	"regexp"
 	"strconv"
 
-	"go.opentelemetry.io/obi/pkg/components/exec"
+	"go.opentelemetry.io/obi/pkg/internal/procs"
 )
 
 // injectable values for testing
 var (
 	procRoot        = "/proc/"
-	namespaceFinder = exec.FindNamespace
+	namespaceFinder = procs.FindNamespace
 )
 
 // Info that we need to keep from a container: its ContainerID in Kubernetes and

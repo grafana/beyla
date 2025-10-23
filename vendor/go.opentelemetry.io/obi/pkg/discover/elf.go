@@ -1,32 +1,17 @@
-// Copyright The OpenTelemetry Authors
-// SPDX-License-Identifier: Apache-2.0
-
-// Package goexec provides the utilities to analyze the executable code
-package exec
+package discover
 
 import (
 	"debug/elf"
 	"fmt"
 	"os"
-	"strings"
 	"syscall"
 
 	"go.opentelemetry.io/obi/pkg/components/svc"
+	"go.opentelemetry.io/obi/pkg/discover/exec"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
+	"go.opentelemetry.io/obi/pkg/internal/procs"
 	"go.opentelemetry.io/obi/pkg/services"
 )
-
-type FileInfo struct {
-	Service svc.Attrs
-
-	CmdExePath     string
-	ProExeLinkPath string
-	ELF            *elf.File
-	Pid            int32
-	Ppid           int32
-	Ino            uint64
-	Ns             uint32
-}
 
 const (
 	envServiceName      = "OTEL_SERVICE_NAME"
@@ -35,19 +20,14 @@ const (
 	serviceNamespaceKey = "service.namespace"
 )
 
-func (fi *FileInfo) ExecutableName() string {
-	parts := strings.Split(fi.CmdExePath, "/")
-	return parts[len(parts)-1]
-}
-
-func FindExecELF(p *services.ProcessInfo, svcID svc.Attrs, k8sEnabled bool) (*FileInfo, error) {
+func findExecElf(p *services.ProcessInfo, svcID svc.Attrs, k8sEnabled bool) (*exec.FileInfo, error) {
 	// In container environments or K8s, we can't just open the executable exe path, because it might
 	// be in the volume of another pod/container. We need to access it through the /proc/<pid>/exe symbolic link
-	ns, err := FindNamespace(p.Pid)
+	ns, err := procs.FindNamespace(p.Pid)
 	if err != nil {
 		return nil, fmt.Errorf("can't find namespace for PID=%d: %w", p.Pid, err)
 	}
-	file := FileInfo{
+	file := exec.FileInfo{
 		Service:    svcID,
 		CmdExePath: p.ExePath,
 		// TODO: allow overriding /proc root folder
@@ -71,7 +51,7 @@ func FindExecELF(p *services.ProcessInfo, svcID svc.Attrs, k8sEnabled bool) (*Fi
 		return nil, err
 	}
 
-	envVars, err := EnvVars(p.Pid)
+	envVars, err := procs.EnvVars(p.Pid)
 	if err != nil {
 		return nil, err
 	}

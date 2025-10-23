@@ -24,10 +24,10 @@ import (
 	"github.com/prometheus/procfs"
 	"golang.org/x/sys/unix"
 
-	"go.opentelemetry.io/obi/pkg/components/exec"
 	"go.opentelemetry.io/obi/pkg/components/imetrics"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/internal/goexec"
+	"go.opentelemetry.io/obi/pkg/internal/procs"
 )
 
 func ilog() *slog.Logger {
@@ -150,7 +150,7 @@ func (i *instrumenter) uprobeModules(p Tracer, pid int32, maps []*procfs.ProcMap
 
 	for lib, pMap := range p.UProbes() {
 		log.Debug("finding library", "lib", lib)
-		libMap := exec.LibPath(lib, maps)
+		libMap := procs.LibPath(lib, maps)
 		instrPath := exePath
 
 		instrumentedIno := exeIno
@@ -482,7 +482,7 @@ func htons(a uint16) uint16 {
 }
 
 func processMaps(pid int32) ([]*procfs.ProcMap, error) {
-	return exec.FindLibMaps(pid)
+	return procs.FindLibMaps(pid)
 }
 
 func getCgroupPath() (string, error) {
@@ -524,7 +524,7 @@ func gatherOffsets(instrPath string, probes map[string][]*ebpfcommon.ProbeDesc, 
 func gatherOffsetsImpl(elfFile *elf.File, probes map[string][]*ebpfcommon.ProbeDesc,
 	instrPath string, log *slog.Logger,
 ) error {
-	syms, err := exec.FindExeSymbols(elfFile, symbolNames(probes))
+	syms, err := procs.FindExeSymbols(elfFile, symbolNames(probes))
 	if err != nil {
 		return fmt.Errorf("failed to lookup symbols for %s: %w", instrPath, err)
 	}
@@ -576,7 +576,7 @@ func (i *instrumenter) gatherGoOffsets(goProbes map[string][]*ebpfcommon.ProbeDe
 	}
 }
 
-func readSymbolData(sym *exec.Sym) []byte {
+func readSymbolData(sym *procs.Sym) []byte {
 	if sym.Prog == nil {
 		return nil
 	}

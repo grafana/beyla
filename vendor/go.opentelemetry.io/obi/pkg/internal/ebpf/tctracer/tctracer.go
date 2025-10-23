@@ -74,7 +74,9 @@ func (p *Tracer) SetupTailCalls() {
 }
 
 func (p *Tracer) Constants() map[string]any {
-	return nil
+	return map[string]any{
+		"max_transaction_time": uint64(p.cfg.EBPF.MaxTransactionTime.Nanoseconds()),
+	}
 }
 
 func (p *Tracer) RegisterOffsets(_ *exec.FileInfo, _ *goexec.Offsets) {}

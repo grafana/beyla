@@ -4,7 +4,7 @@ import (
 	"log/slog"
 	"os"
 
-	obiDiscover "go.opentelemetry.io/obi/pkg/components/discover"
+	obiDiscover "go.opentelemetry.io/obi/pkg/discover"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"

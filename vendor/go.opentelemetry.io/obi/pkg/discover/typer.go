@@ -27,7 +27,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/services"
 )
 
-type InstrumentedExecutable struct {
+type instrumentedExecutable struct {
 	Type                 svc.InstrumentableType
 	Offsets              *goexec.Offsets
 	InstrumentationError error
@@ -43,7 +43,7 @@ func ExecTyperProvider(
 	input *msg.Queue[[]Event[ProcessMatch]],
 	output *msg.Queue[[]Event[ebpf.Instrumentable]],
 ) swarm.InstanceFunc {
-	instrumentableCache, _ := lru.New[uint64, InstrumentedExecutable](100)
+	instrumentableCache, _ := lru.New[uint64, instrumentedExecutable](100)
 
 	t := typer{
 		cfg:                 cfg,
@@ -75,7 +75,7 @@ type typer struct {
 	log                 *slog.Logger
 	currentPids         map[int32]*exec.FileInfo
 	allGoFunctions      []string
-	instrumentableCache *lru.Cache[uint64, InstrumentedExecutable]
+	instrumentableCache *lru.Cache[uint64, instrumentedExecutable]
 }
 
 func samplerFromConfig(s *services.SamplerConfig) trace.Sampler {
@@ -192,7 +192,7 @@ func (t *typer) asInstrumentable(execElf *exec.FileInfo) ebpf.Instrumentable {
 		// we found go offsets, let's see if this application is not a proxy
 		if !isGoProxy(offsets) {
 			log.Debug("identified as a Go service or client")
-			t.instrumentableCache.Add(execElf.Ino, InstrumentedExecutable{Type: svc.InstrumentableGolang, Offsets: offsets})
+			t.instrumentableCache.Add(execElf.Ino, instrumentedExecutable{Type: svc.InstrumentableGolang, Offsets: offsets})
 			return ebpf.Instrumentable{Type: svc.InstrumentableGolang, FileInfo: execElf, Offsets: offsets}
 		}
 
@@ -232,7 +232,7 @@ func (t *typer) asInstrumentable(execElf *exec.FileInfo) ebpf.Instrumentable {
 		"child", child, "language", detectedType.String())
 	// Return the instrumentable without offsets, as it is identified as a generic
 	// (or non-instrumentable Go proxy) executable
-	t.instrumentableCache.Add(execElf.Ino, InstrumentedExecutable{Type: detectedType, Offsets: nil, InstrumentationError: err})
+	t.instrumentableCache.Add(execElf.Ino, instrumentedExecutable{Type: detectedType, Offsets: nil, InstrumentationError: err})
 	return ebpf.Instrumentable{Type: detectedType, Offsets: nil, FileInfo: execElf, ChildPids: child, InstrumentationError: err}
 }
 

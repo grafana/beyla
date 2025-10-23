@@ -70,7 +70,7 @@ func (p *Tracer) SetupTailCalls() {
 }
 
 func (p *Tracer) Constants() map[string]any {
-	m := make(map[string]any, 1)
+	m := make(map[string]any, 2)
 
 	// The eBPF side does some basic filtering of events that do not belong to
 	// processes which we monitor. We filter more accurately in the userspace, but
@@ -81,6 +81,8 @@ func (p *Tracer) Constants() map[string]any {
 	} else {
 		m["filter_pids"] = int32(1)
 	}
+
+	m["max_transaction_time"] = uint64(p.cfg.EBPF.MaxTransactionTime.Nanoseconds())
 
 	return m
 }

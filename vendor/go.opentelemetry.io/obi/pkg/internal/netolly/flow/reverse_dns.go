@@ -36,18 +36,18 @@ var netLookupAddr = net.LookupAddr
 // from the documentation. This means that it does not impact in the overall Beyla performance.
 type ReverseDNS struct {
 	// Type of ReverseDNS. Values are "none" (default), "local" and "ebpf"
-	Type string `yaml:"type" env:"OTEL_EBPF_NETWORK_REVERSE_DNS_TYPE"`
+	Type string `yaml:"type" env:"OTEL_EBPF_NETWORK_REVERSE_DNS_TYPE" validate:"oneof=none local ebpf"`
 
 	// CacheLen only applies to the "local" and "ebpf" ReverseDNS type. It
 	// specifies the max size of the LRU cache that is checked before
 	// performing the name lookup. Default: 256
-	CacheLen int `yaml:"cache_len" env:"OTEL_EBPF_NETWORK_REVERSE_DNS_CACHE_LEN"`
+	CacheLen int `yaml:"cache_len" env:"OTEL_EBPF_NETWORK_REVERSE_DNS_CACHE_LEN" validate:"gte=0"`
 
 	// CacheTTL only applies to the "local" and "ebpf" ReverseDNS type. It
 	// specifies the time-to-live of a cached IP->hostname entry. After the
 	// cached entry becomes older than this time, the IP->hostname entry will be looked
 	// up again.
-	CacheTTL time.Duration `yaml:"cache_expiry" env:"OTEL_EBPF_NETWORK_REVERSE_DNS_CACHE_TTL"`
+	CacheTTL time.Duration `yaml:"cache_expiry" env:"OTEL_EBPF_NETWORK_REVERSE_DNS_CACHE_TTL" validate:"gte=0"`
 }
 
 func (r ReverseDNS) Enabled() bool {

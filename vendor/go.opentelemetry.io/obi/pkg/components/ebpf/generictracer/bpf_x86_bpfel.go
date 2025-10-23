@@ -392,7 +392,6 @@ type BpfProgramSpecs struct {
 	ObiKprobeTcpClose                    *ebpf.ProgramSpec `ebpf:"obi_kprobe_tcp_close"`
 	ObiKprobeTcpConnect                  *ebpf.ProgramSpec `ebpf:"obi_kprobe_tcp_connect"`
 	ObiKprobeTcpRateCheckAppLimited      *ebpf.ProgramSpec `ebpf:"obi_kprobe_tcp_rate_check_app_limited"`
-	ObiKprobeTcpRcvEstablished           *ebpf.ProgramSpec `ebpf:"obi_kprobe_tcp_rcv_established"`
 	ObiKprobeTcpRecvmsg                  *ebpf.ProgramSpec `ebpf:"obi_kprobe_tcp_recvmsg"`
 	ObiKprobeTcpSendmsg                  *ebpf.ProgramSpec `ebpf:"obi_kprobe_tcp_sendmsg"`
 	ObiKprobeUnixStreamRecvmsg           *ebpf.ProgramSpec `ebpf:"obi_kprobe_unix_stream_recvmsg"`
@@ -691,7 +690,6 @@ type BpfPrograms struct {
 	ObiKprobeTcpClose                    *ebpf.Program `ebpf:"obi_kprobe_tcp_close"`
 	ObiKprobeTcpConnect                  *ebpf.Program `ebpf:"obi_kprobe_tcp_connect"`
 	ObiKprobeTcpRateCheckAppLimited      *ebpf.Program `ebpf:"obi_kprobe_tcp_rate_check_app_limited"`
-	ObiKprobeTcpRcvEstablished           *ebpf.Program `ebpf:"obi_kprobe_tcp_rcv_established"`
 	ObiKprobeTcpRecvmsg                  *ebpf.Program `ebpf:"obi_kprobe_tcp_recvmsg"`
 	ObiKprobeTcpSendmsg                  *ebpf.Program `ebpf:"obi_kprobe_tcp_sendmsg"`
 	ObiKprobeUnixStreamRecvmsg           *ebpf.Program `ebpf:"obi_kprobe_unix_stream_recvmsg"`
@@ -741,7 +739,6 @@ func (p *BpfPrograms) Close() error {
 		p.ObiKprobeTcpClose,
 		p.ObiKprobeTcpConnect,
 		p.ObiKprobeTcpRateCheckAppLimited,
-		p.ObiKprobeTcpRcvEstablished,
 		p.ObiKprobeTcpRecvmsg,
 		p.ObiKprobeTcpSendmsg,
 		p.ObiKprobeUnixStreamRecvmsg,

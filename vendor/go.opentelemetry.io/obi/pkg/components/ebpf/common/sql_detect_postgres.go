@@ -118,6 +118,10 @@ func parsePostgresBindCommand(buf []byte) (string, string, []string, error) {
 		ptr += 2
 	}
 
+	if ptr+2 >= size {
+		return string(statement), string(portal), args, errors.New("too short, while parsing format codes")
+	}
+
 	params := int16(binary.BigEndian.Uint16(buf[ptr : ptr+2]))
 	ptr += 2
 	for i := 0; i < int(params); i++ {

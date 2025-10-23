@@ -536,7 +536,7 @@ func (p *Tracer) lookForTimeouts(ctx context.Context, parseCtx *ebpfcommon.EBPFP
 					// but it hasn't been posted yet, likely missed by the logic that looks at finishing requests
 					// where we track the full response. If we haven't updated the EndMonotimeNs in more than some
 					// short interval, we are likely not going to finish this request from eBPF, so let's do it here.
-					if v.EndMonotimeNs != 0 && t.After(kernelTime(v.EndMonotimeNs).Add(2*time.Second)) {
+					if v.EndMonotimeNs != 0 && v.Submitted == 0 && t.After(kernelTime(v.EndMonotimeNs).Add(2*time.Second)) {
 						// Must use unsafe here, the two bpfHttpInfoTs are the same but generated from different
 						// ebpf2go outputs
 						s, ignore, err := ebpfcommon.HTTPInfoEventToSpan(parseCtx, (*ebpfcommon.BPFHTTPInfo)(unsafe.Pointer(&v)))

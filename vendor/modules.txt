@@ -774,16 +774,11 @@ go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc/inte
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp/internal/request
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp/internal/semconv
-# go.opentelemetry.io/obi v0.0.0-20251023073643-d71d07a6a4d2 => ./.obi-src
+# go.opentelemetry.io/obi v0.0.0-20251023135336-d5006693a7ce => ./.obi-src
 ## explicit; go 1.25.0
 go.opentelemetry.io/obi/pkg/app/request
 go.opentelemetry.io/obi/pkg/buildinfo
 go.opentelemetry.io/obi/pkg/components/connector
-go.opentelemetry.io/obi/pkg/components/helpers
-go.opentelemetry.io/obi/pkg/components/helpers/cache
-go.opentelemetry.io/obi/pkg/components/helpers/container
-go.opentelemetry.io/obi/pkg/components/helpers/maps
-go.opentelemetry.io/obi/pkg/components/helpers/sync
 go.opentelemetry.io/obi/pkg/components/imetrics
 go.opentelemetry.io/obi/pkg/components/kube
 go.opentelemetry.io/obi/pkg/components/pipe
@@ -828,6 +823,11 @@ go.opentelemetry.io/obi/pkg/internal/ebpf/tpinjector
 go.opentelemetry.io/obi/pkg/internal/ebpf/watcher
 go.opentelemetry.io/obi/pkg/internal/fastelf
 go.opentelemetry.io/obi/pkg/internal/goexec
+go.opentelemetry.io/obi/pkg/internal/helpers
+go.opentelemetry.io/obi/pkg/internal/helpers/cache
+go.opentelemetry.io/obi/pkg/internal/helpers/container
+go.opentelemetry.io/obi/pkg/internal/helpers/maps
+go.opentelemetry.io/obi/pkg/internal/helpers/sync
 go.opentelemetry.io/obi/pkg/internal/netolly/ebpf
 go.opentelemetry.io/obi/pkg/internal/netolly/export
 go.opentelemetry.io/obi/pkg/internal/netolly/flow

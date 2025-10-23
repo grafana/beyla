@@ -11,6 +11,7 @@ import (
 // The Dequeue operation is blocked until there is any content in the queue.
 // You can see a Queue as a channel with infinite capacity where you can keep sending
 // elements without getting blocked.
+// TODO: can we replace this by channel-based msg.Queue?
 type Queue[T any] struct {
 	head  *node[T]
 	tail  *node[T]

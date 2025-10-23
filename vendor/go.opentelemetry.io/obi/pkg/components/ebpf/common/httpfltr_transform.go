@@ -178,8 +178,10 @@ func httpHostFromBuf(req []byte) (string, int) {
 
 	rIdx := strings.Index(buf, "\r")
 
+	// only parse full host information, partial may
+	// get the wrong name or wrong port
 	if rIdx < 0 {
-		rIdx = len(buf)
+		return "", -1
 	}
 
 	host, portStr, err := net.SplitHostPort(buf[:rIdx])

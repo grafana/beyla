@@ -27,8 +27,8 @@ var (
 	osPidFunc            = os.Getpid
 )
 
-// CriteriaMatcherProvider filters the processes that match the discovery criteria.
-func CriteriaMatcherProvider(
+// criteriaMatcherProvider filters the processes that match the discovery criteria.
+func criteriaMatcherProvider(
 	cfg *obi.Config,
 	input *msg.Queue[[]Event[ProcessAttrs]],
 	output *msg.Queue[[]Event[ProcessMatch]],

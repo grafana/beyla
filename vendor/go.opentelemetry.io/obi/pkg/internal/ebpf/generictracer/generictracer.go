@@ -22,10 +22,10 @@ import (
 	"github.com/vishvananda/netlink"
 
 	"go.opentelemetry.io/obi/pkg/app/request"
-	"go.opentelemetry.io/obi/pkg/components/exec"
 	"go.opentelemetry.io/obi/pkg/components/imetrics"
 	"go.opentelemetry.io/obi/pkg/components/svc"
 	"go.opentelemetry.io/obi/pkg/config"
+	"go.opentelemetry.io/obi/pkg/discover/exec"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/internal/goexec"
 	"go.opentelemetry.io/obi/pkg/internal/netolly/ifaces"
@@ -178,45 +178,50 @@ func (p *Tracer) SetupTailCalls() {
 	}
 }
 
-func (p *Tracer) Constants() map[string]any {
+func GenericTracerConstants(cfg *obi.Config) map[string]any {
 	m := make(map[string]any, 2)
 
-	m["wakeup_data_bytes"] = uint32(p.cfg.EBPF.WakeupLen) * uint32(unsafe.Sizeof(ebpfcommon.HTTPRequestTrace{}))
+	m["wakeup_data_bytes"] = uint32(cfg.EBPF.WakeupLen) * uint32(unsafe.Sizeof(ebpfcommon.HTTPRequestTrace{}))
 
 	// The eBPF side does some basic filtering of events that do not belong to
 	// processes which we monitor. We filter more accurately in the userspace, but
 	// for performance reasons we enable the PID based filtering in eBPF.
 	// This must match httpfltr.go, otherwise we get partial events in userspace.
-	if p.cfg.Discovery.BPFPidFilterOff {
+	if cfg.Discovery.BPFPidFilterOff {
 		m["filter_pids"] = int32(0)
 	} else {
 		m["filter_pids"] = int32(1)
 	}
 
-	if p.cfg.EBPF.TrackRequestHeaders ||
-		p.cfg.EBPF.ContextPropagation != config.ContextPropagationDisabled {
+	if cfg.EBPF.TrackRequestHeaders ||
+		cfg.EBPF.ContextPropagation != config.ContextPropagationDisabled {
 		m["capture_header_buffer"] = int32(1)
 	} else {
 		m["capture_header_buffer"] = int32(0)
 	}
 
-	if p.cfg.EBPF.HighRequestVolume {
+	if cfg.EBPF.HighRequestVolume {
 		m["high_request_volume"] = uint32(1)
 	} else {
 		m["high_request_volume"] = uint32(0)
 	}
 
-	if p.cfg.EBPF.DisableBlackBoxCP {
+	if cfg.EBPF.DisableBlackBoxCP {
 		m["disable_black_box_cp"] = uint32(1)
 	} else {
 		m["disable_black_box_cp"] = uint32(0)
 	}
 
-	m["http_buffer_size"] = p.cfg.EBPF.BufferSizes.HTTP
-	m["mysql_buffer_size"] = p.cfg.EBPF.BufferSizes.MySQL
-	m["postgres_buffer_size"] = p.cfg.EBPF.BufferSizes.Postgres
+	m["http_buffer_size"] = cfg.EBPF.BufferSizes.HTTP
+	m["mysql_buffer_size"] = cfg.EBPF.BufferSizes.MySQL
+	m["postgres_buffer_size"] = cfg.EBPF.BufferSizes.Postgres
+	m["max_transaction_time"] = uint64(cfg.EBPF.MaxTransactionTime.Nanoseconds())
 
 	return m
+}
+
+func (p *Tracer) Constants() map[string]any {
+	return GenericTracerConstants(p.cfg)
 }
 
 func (p *Tracer) RegisterOffsets(_ *exec.FileInfo, _ *goexec.Offsets) {}
@@ -531,7 +536,7 @@ func (p *Tracer) lookForTimeouts(ctx context.Context, parseCtx *ebpfcommon.EBPFP
 					// but it hasn't been posted yet, likely missed by the logic that looks at finishing requests
 					// where we track the full response. If we haven't updated the EndMonotimeNs in more than some
 					// short interval, we are likely not going to finish this request from eBPF, so let's do it here.
-					if v.EndMonotimeNs != 0 && t.After(kernelTime(v.EndMonotimeNs).Add(2*time.Second)) {
+					if v.EndMonotimeNs != 0 && v.Submitted == 0 && t.After(kernelTime(v.EndMonotimeNs).Add(2*time.Second)) {
 						// Must use unsafe here, the two bpfHttpInfoTs are the same but generated from different
 						// ebpf2go outputs
 						s, ignore, err := ebpfcommon.HTTPInfoEventToSpan(parseCtx, (*ebpfcommon.BPFHTTPInfo)(unsafe.Pointer(&v)))

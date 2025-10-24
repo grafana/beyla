@@ -14,11 +14,11 @@ import (
 	"text/template"
 	"time"
 
-	"go.opentelemetry.io/obi/pkg/components/helpers/container"
-	"go.opentelemetry.io/obi/pkg/components/helpers/maps"
 	"go.opentelemetry.io/obi/pkg/components/imetrics"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
+	"go.opentelemetry.io/obi/pkg/internal/helpers/container"
+	"go.opentelemetry.io/obi/pkg/internal/helpers/maps"
 	"go.opentelemetry.io/obi/pkg/kubecache/informer"
 	"go.opentelemetry.io/obi/pkg/kubecache/meta"
 )
@@ -206,6 +206,10 @@ func (s *Store) cacheResourceMetadata(meta *informer.ObjectMeta) *CachedObjMeta 
 // On is invoked by the informer when a new Kube object is created, updated or deleted.
 // It will forward the notification to all the Store subscribers
 func (s *Store) On(event *informer.Event) error {
+	if event == nil {
+		return nil
+	}
+
 	defer s.Notify(event)
 
 	if event.Type == informer.EventType_SYNC_FINISHED {

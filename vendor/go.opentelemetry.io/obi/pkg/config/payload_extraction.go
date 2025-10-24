@@ -14,5 +14,5 @@ type HTTPConfig struct {
 
 type GraphQLConfig struct {
 	// Enable GraphQL payload extraction and parsing
-	Enabled bool `yaml:"enabled" env:"OTEL_EBPF_HTTP_GRAPHQL_ENABLED"`
+	Enabled bool `yaml:"enabled" env:"OTEL_EBPF_HTTP_GRAPHQL_ENABLED"  validate:"boolean"`
 }

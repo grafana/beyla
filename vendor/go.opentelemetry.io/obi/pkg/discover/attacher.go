@@ -13,11 +13,11 @@ import (
 	"github.com/cilium/ebpf/rlimit"
 
 	"go.opentelemetry.io/obi/pkg/app/request"
-	"go.opentelemetry.io/obi/pkg/components/helpers/maps"
 	"go.opentelemetry.io/obi/pkg/components/imetrics"
 	"go.opentelemetry.io/obi/pkg/components/svc"
 	"go.opentelemetry.io/obi/pkg/ebpf"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
+	"go.opentelemetry.io/obi/pkg/internal/helpers/maps"
 	"go.opentelemetry.io/obi/pkg/internal/nodejs"
 	"go.opentelemetry.io/obi/pkg/internal/otelsdk"
 	"go.opentelemetry.io/obi/pkg/internal/transform/route/harvest"
@@ -27,10 +27,10 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/swarm/swarms"
 )
 
-// TraceAttacher creates the available trace.Tracer implementations (Go HTTP tracer, GRPC tracer, Generic tracer...)
+// traceAttacher creates the available trace.Tracer implementations (Go HTTP tracer, GRPC tracer, Generic tracer...)
 // for each received Instrumentable process and forwards an ebpf.ProcessTracer instance ready to run and start
 // instrumenting the executable
-type TraceAttacher struct {
+type traceAttacher struct {
 	log     *slog.Logger
 	Cfg     *obi.Config
 	Metrics imetrics.Reporter
@@ -56,7 +56,7 @@ type TraceAttacher struct {
 	// from the Process metrics pipeline even before it starts to do/receive requests.
 	SpanSignalsShortcut *msg.Queue[[]request.Span]
 
-	// InputInstrumentables is the input channel for the TraceAttacher, where it receives information
+	// InputInstrumentables is the input channel for the traceAttacher, where it receives information
 	// about the instrumentables that traversed the whole process discovery pipeline, so they need to
 	// be instrumented.
 	InputInstrumentables *msg.Queue[[]Event[ebpf.Instrumentable]]
@@ -72,12 +72,12 @@ type TraceAttacher struct {
 	routeHarvester *harvest.RouteHarvester
 }
 
-func TraceAttacherProvider(ta *TraceAttacher) swarm.InstanceFunc {
+func traceAttacherProvider(ta *traceAttacher) swarm.InstanceFunc {
 	return ta.attacherLoop
 }
 
-func (ta *TraceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) {
-	ta.log = slog.With("component", "discover.TraceAttacher")
+func (ta *traceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) {
+	ta.log = slog.With("component", "discover.traceAttacher")
 	ta.existingTracers = map[uint64]*ebpf.ProcessTracer{}
 	ta.sdkInjector = otelsdk.NewSDKInjector(ta.Cfg)
 	ta.nodeInjector = nodejs.NewNodeInjector(ta.Cfg)
@@ -91,7 +91,7 @@ func (ta *TraceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 		return nil, err
 	}
 
-	in := ta.InputInstrumentables.Subscribe(msg.SubscriberName("TraceAttacher"))
+	in := ta.InputInstrumentables.Subscribe(msg.SubscriberName("traceAttacher"))
 	return func(ctx context.Context) {
 		defer ta.OutputTracerEvents.Close()
 		swarms.ForEachInput(ctx, in, ta.log.Debug, func(instrumentables []Event[ebpf.Instrumentable]) {
@@ -128,7 +128,7 @@ func (ta *TraceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 }
 
 //nolint:cyclop
-func (ta *TraceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
+func (ta *traceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 	if tracer, ok := ta.existingTracers[ie.FileInfo.Ino]; ok {
 		ta.log.Debug("new process for already instrumented executable",
 			"pid", ie.FileInfo.Pid,
@@ -251,7 +251,7 @@ func (ta *TraceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 	return true
 }
 
-func (ta *TraceAttacher) withCommonTracersGroup(tracers []ebpf.Tracer) []ebpf.Tracer {
+func (ta *traceAttacher) withCommonTracersGroup(tracers []ebpf.Tracer) []ebpf.Tracer {
 	if ta.commonTracersLoaded {
 		return tracers
 	}
@@ -262,7 +262,7 @@ func (ta *TraceAttacher) withCommonTracersGroup(tracers []ebpf.Tracer) []ebpf.Tr
 	return tracers
 }
 
-func (ta *TraceAttacher) harvestRoutes(ie *ebpf.Instrumentable, reused bool) {
+func (ta *traceAttacher) harvestRoutes(ie *ebpf.Instrumentable, reused bool) {
 	routes, err := ta.routeHarvester.HarvestRoutes(ie.FileInfo)
 	if err != nil {
 		ta.log.Info("encountered error harvesting routes", "error", err, "pid", ie.FileInfo.Pid, "cmd", ie.FileInfo.CmdExePath)
@@ -273,7 +273,7 @@ func (ta *TraceAttacher) harvestRoutes(ie *ebpf.Instrumentable, reused bool) {
 	}
 }
 
-func (ta *TraceAttacher) loadExecutable(ie *ebpf.Instrumentable) (*link.Executable, bool) {
+func (ta *traceAttacher) loadExecutable(ie *ebpf.Instrumentable) (*link.Executable, bool) {
 	// Instead of the executable file in the disk, we pass the /proc/<pid>/exec
 	// to allow loading it from different container/pods in containerized environments
 	exe, err := link.OpenExecutable(ie.FileInfo.ProExeLinkPath)
@@ -286,7 +286,7 @@ func (ta *TraceAttacher) loadExecutable(ie *ebpf.Instrumentable) (*link.Executab
 	return exe, true
 }
 
-func (ta *TraceAttacher) reuseTracer(tracer *ebpf.ProcessTracer, ie *ebpf.Instrumentable) bool {
+func (ta *traceAttacher) reuseTracer(tracer *ebpf.ProcessTracer, ie *ebpf.Instrumentable) bool {
 	exe, ok := ta.loadExecutable(ie)
 	if !ok {
 		return false
@@ -309,7 +309,7 @@ func (ta *TraceAttacher) reuseTracer(tracer *ebpf.ProcessTracer, ie *ebpf.Instru
 	return true
 }
 
-func (ta *TraceAttacher) updateTracerProbes(tracer *ebpf.ProcessTracer, ie *ebpf.Instrumentable) bool {
+func (ta *traceAttacher) updateTracerProbes(tracer *ebpf.ProcessTracer, ie *ebpf.Instrumentable) bool {
 	if err := tracer.NewExecutableInstance(ie); err != nil {
 		ta.log.Debug("Failed to attach uprobes", "pid", ie.FileInfo.Pid, "error", err)
 	}
@@ -325,7 +325,7 @@ func (ta *TraceAttacher) updateTracerProbes(tracer *ebpf.ProcessTracer, ie *ebpf
 	return true
 }
 
-func (ta *TraceAttacher) monitorPIDs(tracer *ebpf.ProcessTracer, ie *ebpf.Instrumentable) {
+func (ta *traceAttacher) monitorPIDs(tracer *ebpf.ProcessTracer, ie *ebpf.Instrumentable) {
 	ie.CopyToServiceAttributes()
 
 	// allowing the tracer to forward traces from the discovered PID and its children processes
@@ -356,7 +356,7 @@ func (ta *TraceAttacher) monitorPIDs(tracer *ebpf.ProcessTracer, ie *ebpf.Instru
 	}
 }
 
-func (ta *TraceAttacher) notifyProcessDeletion(ie *ebpf.Instrumentable) {
+func (ta *traceAttacher) notifyProcessDeletion(ie *ebpf.Instrumentable) {
 	if tracer, ok := ta.existingTracers[ie.FileInfo.Ino]; ok {
 		ta.log.Info("process ended for already instrumented executable",
 			"cmd", ie.FileInfo.CmdExePath,
@@ -384,11 +384,11 @@ func (ta *TraceAttacher) notifyProcessDeletion(ie *ebpf.Instrumentable) {
 	}
 }
 
-func (ta *TraceAttacher) sdkInjectionPossible(ie *ebpf.Instrumentable) bool {
+func (ta *traceAttacher) sdkInjectionPossible(ie *ebpf.Instrumentable) bool {
 	return ta.sdkInjector.Enabled() && ie.Type == svc.InstrumentableJava
 }
 
-func (ta *TraceAttacher) init() error {
+func (ta *traceAttacher) init() error {
 	if err := rlimit.RemoveMemlock(); err != nil {
 		return fmt.Errorf("removing memory lock: %w", err)
 	}

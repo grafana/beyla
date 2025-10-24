@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package exec
+package procs
 
 func FindNamespace(_ int32) (uint32, error) {
 	// convenience method to allow unit tests compiling in Darwin

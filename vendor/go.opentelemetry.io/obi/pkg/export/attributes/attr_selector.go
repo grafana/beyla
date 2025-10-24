@@ -9,8 +9,8 @@ import (
 	"maps"
 	"slices"
 
-	maps2 "go.opentelemetry.io/obi/pkg/components/helpers/maps"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
+	maps2 "go.opentelemetry.io/obi/pkg/internal/helpers/maps"
 )
 
 func alog() *slog.Logger {

@@ -18,13 +18,14 @@ import (
 	"github.com/prometheus/procfs"
 
 	"go.opentelemetry.io/obi/pkg/app/request"
-	"go.opentelemetry.io/obi/pkg/components/exec"
 	"go.opentelemetry.io/obi/pkg/components/imetrics"
 	"go.opentelemetry.io/obi/pkg/components/svc"
 	"go.opentelemetry.io/obi/pkg/config"
+	"go.opentelemetry.io/obi/pkg/discover/exec"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/internal/goexec"
+	"go.opentelemetry.io/obi/pkg/internal/procs"
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 )
@@ -120,6 +121,8 @@ func (p *Tracer) Constants() map[string]any {
 	} else {
 		m["filter_pids"] = int32(1)
 	}
+
+	m["max_transaction_time"] = uint64(p.cfg.EBPF.MaxTransactionTime.Nanoseconds())
 
 	return m
 }
@@ -354,7 +357,7 @@ func (p *Tracer) callStack(event *GPUKernelLaunchInfo) string {
 }
 
 func (p *Tracer) processCudaLibFileInfo(info *exec.FileInfo, lib string, maps []*procfs.ProcMap, symMods moduleOffsets) (*SymbolTree, *procfs.ProcMap, bool) {
-	cudaMap := exec.LibPathPlain(lib, maps)
+	cudaMap := procs.LibPathPlain(lib, maps)
 
 	if cudaMap == nil {
 		return nil, nil, false
@@ -394,7 +397,7 @@ func (p *Tracer) discoverModule(info *exec.FileInfo, maps []*procfs.ProcMap, sym
 }
 
 func (p *Tracer) processCudaFileInfo(info *exec.FileInfo) {
-	maps, err := exec.FindLibMaps(info.Pid)
+	maps, err := procs.FindLibMaps(info.Pid)
 	if err != nil {
 		p.log.Error("failed to find pid maps", "error", err)
 		return
@@ -451,7 +454,7 @@ func (p *Tracer) establishCudaPID(pid uint32, fi *exec.FileInfo, mods []*procfs.
 		return
 	}
 
-	allPids, err := exec.FindNamespacedPids(int32(pid))
+	allPids, err := procs.FindNamespacedPids(int32(pid))
 	if err != nil {
 		p.log.Error("Error finding namespaced pids", "error", err)
 		return

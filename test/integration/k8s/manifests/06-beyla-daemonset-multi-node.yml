@@ -20,6 +20,8 @@ data:
         - exe_path: "/testserver"
           namespace: integration-test
     routes:
+      patterns:
+        - /jsonrpc
       unmatched: heuristic
     otel_metrics_export:
       endpoint: http://otelcol:4318
@@ -42,7 +44,7 @@ spec:
         # kind, to force Beyla writing the coverage data
         teardown: delete
     spec:
-      hostPID: true  #important!
+      hostPID: true #important!
       serviceAccountName: beyla
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
@@ -63,9 +65,9 @@ spec:
             readOnlyRootFilesystem: true
             capabilities:
               add:
-                - SYS_ADMIN     # <-- Important. Required for most eBPF probes to function correctly. TODO: We can break this down more
-                - SYS_PTRACE    # <-- Important. Allows Beyla to access the container namespaces and inspect executables.
-                - NET_ADMIN     # <-- Important. Allows Beyla to attach the Linux TC (Traffic Control) probes
+                - SYS_ADMIN # <-- Important. Required for most eBPF probes to function correctly. TODO: We can break this down more
+                - SYS_PTRACE # <-- Important. Allows Beyla to access the container namespaces and inspect executables.
+                - NET_ADMIN # <-- Important. Allows Beyla to attach the Linux TC (Traffic Control) probes
           volumeMounts:
             - mountPath: /config
               name: beyla-config
@@ -80,10 +82,11 @@ spec:
               value: "10ms"
             - name: BEYLA_BPF_BATCH_TIMEOUT
               value: "10ms"
+            - name: BEYLA_OTLP_TRACES_BATCH_TIMEOUT
+              value: "1ms"
             - name: BEYLA_NAME_RESOLVER_SOURCES
               value: "dns,k8s"
             - name: BEYLA_BPF_CONTEXT_PROPAGATION
               value: "all"
             - name: BEYLA_BPF_DEBUG
               value: "true"
-

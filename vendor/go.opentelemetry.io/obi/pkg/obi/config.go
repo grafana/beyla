@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v9"
+	"github.com/go-playground/validator/v10"
 	"gopkg.in/yaml.v3"
 
 	"go.opentelemetry.io/obi/pkg/components/imetrics"
@@ -29,9 +30,16 @@ import (
 	"go.opentelemetry.io/obi/pkg/transform"
 )
 
+// CustomValidations is a map of tag:function for custom validations
+type CustomValidations map[string]validator.Func
+
+const (
+	validationTagAgentIPIface = "agentIPIface"
+)
+
 const ReporterLRUSize = 256
 
-// Features that can be enabled in Beyla (can be at the same time): App O11y and/or Net O11y
+// Features that can be enabled in OBI (can be at the same time): App O11y and/or Net O11y
 type Feature uint
 
 const (
@@ -91,6 +99,7 @@ var DefaultConfig = Config{
 				},
 			},
 		},
+		MaxTransactionTime: 5 * time.Minute,
 	},
 	NameResolver: &transform.NameResolverConfig{
 		Sources:  []string{"k8s"},
@@ -240,7 +249,7 @@ type Config struct {
 	ShutdownTimeout time.Duration `yaml:"shutdown_timeout" env:"OTEL_EBPF_SHUTDOWN_TIMEOUT"`
 
 	// Check for required system capabilities and bail if they are not
-	// present. If set to 'false', Beyla will still print a list of missing
+	// present. If set to 'false', OBI will still print a list of missing
 	// capabilities, but the execution will continue
 	EnforceSysCaps bool `yaml:"enforce_sys_caps" env:"OTEL_EBPF_ENFORCE_SYS_CAPS"`
 
@@ -287,7 +296,7 @@ type Attributes struct {
 }
 
 type HostIDConfig struct {
-	// Override allows overriding the reported host.id in Beyla
+	// Override allows overriding the reported host.id in OBI
 	Override string `yaml:"override" env:"OTEL_EBPF_HOST_ID"`
 	// FetchTimeout specifies the timeout for trying to fetch the HostID from diverse Cloud Providers
 	FetchTimeout time.Duration `yaml:"fetch_timeout" env:"OTEL_EBPF_HOST_ID_FETCH_TIMEOUT"`
@@ -307,6 +316,21 @@ func (e ConfigError) Error() string {
 //
 //nolint:cyclop
 func (c *Config) Validate() error {
+	validate := validator.New(validator.WithRequiredStructEnabled())
+
+	// for future custom validations
+	customValidations := CustomValidations{
+		validationTagAgentIPIface: ValidateAgentIPIface,
+	}
+
+	if err := registerCustomValidations(validate, customValidations); err != nil {
+		return ConfigError("error registering custom validations: " + err.Error())
+	}
+
+	if err := validate.Struct(c); err != nil {
+		return ConfigError(err.Error())
+	}
+
 	if err := c.Discovery.Validate(); err != nil {
 		return ConfigError(err.Error())
 	}
@@ -366,9 +390,8 @@ func (c *Config) Validate() error {
 		return ConfigError("you can't enable OTEL internal metrics without enabling OTEL metrics")
 	}
 
-	if err := c.EBPF.Validate(); err != nil {
-		return ConfigError(err.Error())
-	}
+	// TODO deprecated (REMOVE)
+	c.EBPF.IsContextPropagationEnabled()
 
 	return nil
 }
@@ -389,7 +412,7 @@ func (c *Config) willUseTC() bool {
 		(c.Enabled(FeatureNetO11y) && c.NetworkFlows.Source == EbpfSourceTC)
 }
 
-// Enabled checks if a given Beyla feature is enabled according to the global configuration
+// Enabled checks if a given OBI feature is enabled according to the global configuration
 func (c *Config) Enabled(feature Feature) bool {
 	switch feature {
 	case FeatureNetO11y:
@@ -409,7 +432,7 @@ func (c *Config) SpanMetricsEnabledForTraces() bool {
 }
 
 // ExternalLogger sets the logging capabilities of OBI.
-// Used for integrating Beyla with an external logging system (for example Alloy)
+// Used for integrating OBI with an external logging system (for example Alloy)
 // TODO: maybe this method has too many responsibilities, as it affects the global logger.
 func (c *Config) ExternalLogger(handler slog.Handler, debugMode bool) {
 	slog.SetDefault(slog.New(handler))
@@ -445,4 +468,13 @@ func LoadConfig(file io.Reader) (*Config, error) {
 	}
 
 	return &cfg, nil
+}
+
+func registerCustomValidations(validate *validator.Validate, customValidations CustomValidations) error {
+	for k, v := range customValidations {
+		if err := validate.RegisterValidation(k, v); err != nil {
+			return fmt.Errorf("cannot add validation with the given tag %q: %w", k, err)
+		}
+	}
+	return nil
 }

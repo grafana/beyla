@@ -8,10 +8,10 @@ import (
 	"sync"
 
 	"go.opentelemetry.io/obi/pkg/app/request"
-	"go.opentelemetry.io/obi/pkg/components/exec"
 	"go.opentelemetry.io/obi/pkg/components/imetrics"
 	"go.opentelemetry.io/obi/pkg/components/svc"
 	"go.opentelemetry.io/obi/pkg/export/otel/idgen"
+	"go.opentelemetry.io/obi/pkg/internal/procs"
 	"go.opentelemetry.io/obi/pkg/services"
 )
 
@@ -25,7 +25,7 @@ const (
 // injectable functions (can be replaced in tests). It reads the
 // current process namespace from the /proc filesystem. It is required to
 // choose to filter traces using whether the User-space or Host-space PIDs
-var readNamespacePIDs = exec.FindNamespacedPids
+var readNamespacePIDs = procs.FindNamespacedPids
 
 type PIDInfo struct {
 	service        *svc.Attrs

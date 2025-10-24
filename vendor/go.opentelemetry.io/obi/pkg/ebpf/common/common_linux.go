@@ -13,7 +13,7 @@ import (
 	"github.com/cilium/ebpf/link"
 	"golang.org/x/sys/unix"
 
-	"go.opentelemetry.io/obi/pkg/components/helpers"
+	"go.opentelemetry.io/obi/pkg/internal/helpers"
 )
 
 func (f *Filter) Close() error {

@@ -85,7 +85,7 @@ func (pf *ProcessFinder) Start(ctx context.Context, opts ...ProcessFinderStartOp
 
 	criteriaFilteredEvents := msg.NewQueue[[]Event[ProcessMatch]](
 		msg.ChannelBufferLen(pf.cfg.ChannelBufferLen), msg.Name("criteriaFilteredEvents"))
-	swi.Add(CriteriaMatcherProvider(pf.cfg, enrichedProcessEvents, criteriaFilteredEvents),
+	swi.Add(criteriaMatcherProvider(pf.cfg, enrichedProcessEvents, criteriaFilteredEvents),
 		swarm.WithID("CriteriaMatcher"))
 
 	executableTypes := msg.NewQueue[[]Event[ebpf.Instrumentable]](
@@ -101,7 +101,7 @@ func (pf *ProcessFinder) Start(ctx context.Context, opts ...ProcessFinderStartOp
 	swi.Add(ContainerDBUpdaterProvider(pf.ctxInfo.K8sInformer, executableTypes, storedExecutableTypes),
 		swarm.WithID("ContainerDBUpdater"))
 
-	swi.Add(TraceAttacherProvider(&TraceAttacher{
+	swi.Add(traceAttacherProvider(&traceAttacher{
 		Cfg:                 pf.cfg,
 		OutputTracerEvents:  tracerEvents,
 		Metrics:             pf.ctxInfo.Metrics,
@@ -109,7 +109,7 @@ func (pf *ProcessFinder) Start(ctx context.Context, opts ...ProcessFinderStartOp
 
 		InputInstrumentables: storedExecutableTypes,
 		EbpfEventContext:     pf.ebpfEventContext,
-	}), swarm.WithID("TraceAttacher"))
+	}), swarm.WithID("traceAttacher"))
 
 	pipeline, err := swi.Instance(ctx)
 	if err != nil {

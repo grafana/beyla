@@ -11,18 +11,14 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"go.opentelemetry.io/obi/pkg/components/imetrics"
-	"go.opentelemetry.io/obi/pkg/components/kube"
 	obicfg "go.opentelemetry.io/obi/pkg/config"
 	"go.opentelemetry.io/obi/pkg/ebpf/tcmanager"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/debug"
-	"go.opentelemetry.io/obi/pkg/export/instrumentations"
-	"go.opentelemetry.io/obi/pkg/export/otel"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/export/prom"
 	"go.opentelemetry.io/obi/pkg/filter"
-	"go.opentelemetry.io/obi/pkg/kubeflags"
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/services"
 	"go.opentelemetry.io/obi/pkg/transform"
@@ -44,129 +40,23 @@ const (
 	FeatureNetO11y
 )
 
-const (
-	defaultMetricsTTL = 5 * time.Minute
-)
-
-var DefaultConfig = Config{
-	ChannelBufferLen: 10,
-	LogLevel:         "INFO",
-	ShutdownTimeout:  10 * time.Second,
-	EnforceSysCaps:   false,
-	EBPF: obicfg.EBPFTracer{
-		BatchLength:               100,
-		BatchTimeout:              time.Second,
-		HTTPRequestTimeout:        0,
-		TCBackend:                 obicfg.TCBackendAuto,
-		ContextPropagationEnabled: false,
-		ContextPropagation:        obicfg.ContextPropagationDisabled,
-		RedisDBCache: obicfg.RedisDBCacheConfig{
-			Enabled: false,
-			MaxSize: 1000,
-		},
-		BufferSizes: obicfg.EBPFBufferSizes{
-			HTTP:     0,
-			MySQL:    0,
-			Postgres: 0,
-		},
-		MySQLPreparedStatementsCacheSize:    1024,
-		MongoRequestsCacheSize:              1024,
-		PostgresPreparedStatementsCacheSize: 1024,
-		KafkaTopicUUIDCacheSize:             1024,
-		MaxTransactionTime:                  5 * time.Minute,
-	},
-	Grafana: botel.GrafanaConfig{
+// DefaultConfig loads OBI's default configuration, and converts it to Beyla's Config type,
+// overriding here any value that differs from the OBI defaults
+func DefaultConfig() *Config {
+	def := FromOBI(&obi.DefaultConfig)
+	def.Grafana = botel.GrafanaConfig{
 		OTLP: botel.GrafanaOTLP{
 			// by default we will only submit traces, assuming span2metrics will do the metrics conversion
 			Submit: []string{"traces"},
 		},
-	},
-	NameResolver: &transform.NameResolverConfig{
-		Sources:  []string{"k8s"},
-		CacheLen: 1024,
-		CacheTTL: 5 * time.Minute,
-	},
-	Metrics: otelcfg.MetricsConfig{
-		Protocol:        otelcfg.ProtocolUnset,
-		MetricsProtocol: otelcfg.ProtocolUnset,
-		// Matches Alloy and Grafana recommended scrape interval
-		OTELIntervalMS:       60_000,
-		Buckets:              otelcfg.DefaultBuckets,
-		ReportersCacheLen:    ReporterLRUSize,
-		HistogramAggregation: otel.AggregationExplicit,
-		Features:             []string{otelcfg.FeatureApplication},
-		Instrumentations: []string{
-			instrumentations.InstrumentationALL,
-		},
-		TTL: defaultMetricsTTL,
-	},
-	Traces: otelcfg.TracesConfig{
-		Protocol:          otelcfg.ProtocolUnset,
-		TracesProtocol:    otelcfg.ProtocolUnset,
-		MaxQueueSize:      4096,
-		BatchTimeout:      15 * time.Second,
-		ReportersCacheLen: ReporterLRUSize,
-		Instrumentations: []string{
-			instrumentations.InstrumentationALL,
-		},
-	},
-	Prometheus: prom.PrometheusConfig{
-		Path:     "/metrics",
-		Buckets:  otelcfg.DefaultBuckets,
-		Features: []string{otelcfg.FeatureApplication},
-		Instrumentations: []string{
-			instrumentations.InstrumentationALL,
-		},
-		TTL:                         defaultMetricsTTL,
-		SpanMetricsServiceCacheSize: 10000,
-	},
-	TracePrinter: debug.TracePrinterDisabled,
-	InternalMetrics: imetrics.Config{
-		Exporter: imetrics.InternalMetricsExporterDisabled,
-		Prometheus: imetrics.PrometheusConfig{
-			Port: 0, // disabled by default
-			Path: "/internal/metrics",
-		},
-		BpfMetricScrapeInterval: 15 * time.Second,
-	},
-	Attributes: Attributes{
-		InstanceID: obicfg.InstanceIDConfig{
-			HostnameDNSResolution: true,
-		},
-		Kubernetes: transform.KubernetesDecorator{
-			Enable:                kubeflags.EnabledDefault,
-			InformersSyncTimeout:  30 * time.Second,
-			InformersResyncPeriod: 30 * time.Minute,
-			ResourceLabels:        kube.DefaultResourceLabels,
-		},
-		HostID: HostIDConfig{
-			FetchTimeout: 500 * time.Millisecond,
-		},
-		RenameUnresolvedHosts:          "unresolved",
-		RenameUnresolvedHostsOutgoing:  "outgoing",
-		RenameUnresolvedHostsIncoming:  "incoming",
-		MetricSpanNameAggregationLimit: 100,
-	},
-	Routes: &transform.RoutesConfig{
-		Unmatch:      transform.UnmatchDefault,
-		WildcardChar: "*",
-	},
-	NetworkFlows: obi.DefaultNetworkConfig,
-	Processes: process.CollectConfig{
+	}
+	def.Processes = process.CollectConfig{
 		RunMode:  process.RunModePrivileged,
 		Interval: 5 * time.Second,
-	},
-	Discovery: servicesextra.BeylaDiscoveryConfig{
-		ExcludeOTelInstrumentedServices: true,
-		MinProcessAge:                   5 * time.Second,
-		DefaultExcludeServices:          servicesextra.DefaultExcludeServices,
-		DefaultExcludeInstrument:        servicesextra.DefaultExcludeInstrument,
-		DefaultOtlpGRPCPort:             4317,
-		RouteHarvesterTimeout:           10 * time.Second,
-	},
-	NodeJS: obi.NodeJSConfig{
-		Enabled: true,
-	},
+	}
+	def.Discovery.DefaultExcludeServices = servicesextra.DefaultExcludeServices
+	def.Discovery.DefaultExcludeInstrument = servicesextra.DefaultExcludeInstrument
+	return def
 }
 
 type Config struct {
@@ -450,7 +340,7 @@ func (c *Config) ExternalLogger(handler slog.Handler, debugMode bool) {
 // 3 - Environment variables
 func LoadConfig(file io.Reader) (*Config, error) {
 	OverrideOBIGlobalConfig()
-	cfg := DefaultConfig
+	cfg := DefaultConfig()
 	if file != nil {
 		cfgBuf, err := io.ReadAll(file)
 		if err != nil {
@@ -458,11 +348,11 @@ func LoadConfig(file io.Reader) (*Config, error) {
 		}
 		// replaces environment variables in YAML file
 		cfgBuf = config.ReplaceEnv(cfgBuf)
-		if err := yaml.Unmarshal(cfgBuf, &cfg); err != nil {
+		if err := yaml.Unmarshal(cfgBuf, cfg); err != nil {
 			return nil, fmt.Errorf("parsing YAML configuration: %w", err)
 		}
 	}
-	if err := env.Parse(&cfg); err != nil {
+	if err := env.Parse(cfg); err != nil {
 		return nil, fmt.Errorf("reading env vars: %w", err)
 	}
 
@@ -470,5 +360,5 @@ func LoadConfig(file io.Reader) (*Config, error) {
 		cfg.Discovery.OverrideDefaultExcludeForSurvey()
 	}
 
-	return &cfg, nil
+	return cfg, nil
 }

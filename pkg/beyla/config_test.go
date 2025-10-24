@@ -553,7 +553,7 @@ time=\S+ level=DEBUG msg=debug arg=debug$`),
 }
 
 func TestDefaultExclusionFilter(t *testing.T) {
-	c := DefaultConfig.Discovery.DefaultExcludeServices
+	c := DefaultConfig().Discovery.DefaultExcludeServices
 
 	assert.True(t, c[0].Path.MatchString("beyla"))
 	assert.True(t, c[0].Path.MatchString("alloy"))
@@ -606,7 +606,7 @@ func TestWillUseTC(t *testing.T) {
 }
 
 func TestOBIConfigConversion(t *testing.T) {
-	cfg := DefaultConfig
+	cfg := DefaultConfig()
 	cfg.Prometheus.Port = 6060
 	cfg.Metrics.MetricsEndpoint = "http://localhost:4318"
 	cfg.Discovery = servicesextra.BeylaDiscoveryConfig{

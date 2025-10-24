@@ -90,6 +90,8 @@ network:
 	t.Setenv("OTEL_SERVICE_NAME", "svc-name")
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "localhost:3131")
 	t.Setenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "localhost:3232")
+	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_PROTOCOL", "http/protobuf")
+	t.Setenv("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL", "http/protobuf")
 	t.Setenv("BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT", "3210")
 	t.Setenv("GRAFANA_CLOUD_SUBMIT", "metrics,traces")
 	t.Setenv("KUBECONFIG", "/foo/bar")
@@ -149,6 +151,7 @@ network:
 			MongoRequestsCacheSize:              1024,
 			PostgresPreparedStatementsCacheSize: 1024,
 			KafkaTopicUUIDCacheSize:             1024,
+			MaxTransactionTime:                  5 * time.Minute,
 		},
 		Grafana: otel.GrafanaConfig{
 			OTLP: otel.GrafanaOTLP{

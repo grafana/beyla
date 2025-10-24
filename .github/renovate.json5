@@ -25,7 +25,8 @@
       "description": "Disable Go 1.17 testserver updates",
       "matchFileNames": [
         "test/integration/components/testserver_1.17/Dockerfile",
-        "test/integration/components/testserver_1.17/go.mod"
+        "test/integration/components/testserver_1.17/go.mod",
+        "test/integration/components/testserver_1.17/go.sum"
       ],
       "matchDatasources": ["docker"],
       "matchPackageNames": ["golang"],

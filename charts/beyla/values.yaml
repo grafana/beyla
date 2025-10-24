@@ -35,9 +35,9 @@ namespaceOverride: ""
 # annotations: {}
 
 rbac:
-  # -- Whether to create RBAC resources for Belya
+  # -- Whether to create RBAC resources for Beyla
   create: true
-  # -- Extra custer roles to be created for Belya
+  # -- Extra cluster roles to be created for Beyla
   extraClusterRoleRules: []
   # - apiGroups: []
   #   resources: []

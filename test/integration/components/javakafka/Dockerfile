@@ -1,4 +1,4 @@
-FROM ghcr.io/graalvm/native-image:ol8-java17-22 AS javabuilder
+FROM ghcr.io/graalvm/native-image:ol8-java17-22@sha256:d55ebb6eec6751b87ce9d34ab1004fa088d227d90d3edb4d9b3a994e54ac285a AS javabuilder
 
 # Install tar and gzip to extract the Maven binaries
 RUN microdnf update \
@@ -29,7 +29,7 @@ RUN ./mvnw -version
 RUN ./mvnw -Pnative native:compile
 
 # The App Image
-FROM debian:bookworm-slim
+FROM debian:bookworm-slim@sha256:78d2f66e0fec9e5a39fb2c72ea5e052b548df75602b5215ed01a17171529f706
 
 EXPOSE 8080
 

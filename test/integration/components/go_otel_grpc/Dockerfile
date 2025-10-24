@@ -1,6 +1,6 @@
 # Build the testserver binary
 # Docker command must be invoked from the project root directory
-FROM golang:1.25 AS builder
+FROM golang:1.25@sha256:8c945d3e25320e771326dafc6fb72ecae5f87b0f29328cbbd87c4dff506c9135 AS builder
 
 ARG TARGETARCH
 
@@ -15,7 +15,7 @@ COPY test/integration/components/go_otel_grpc/ .
 RUN go build -o rolldice main.go
 
 # Create final image from minimal + built binary
-FROM debian:bookworm-slim
+FROM debian:bookworm-slim@sha256:78d2f66e0fec9e5a39fb2c72ea5e052b548df75602b5215ed01a17171529f706
 
 WORKDIR /
 COPY --from=builder /src/rolldice .

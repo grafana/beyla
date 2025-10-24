@@ -73,6 +73,7 @@ var DefaultConfig = Config{
 		MongoRequestsCacheSize:              1024,
 		PostgresPreparedStatementsCacheSize: 1024,
 		KafkaTopicUUIDCacheSize:             1024,
+		MaxTransactionTime:                  5 * time.Minute,
 	},
 	Grafana: botel.GrafanaConfig{
 		OTLP: botel.GrafanaOTLP{

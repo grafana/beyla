@@ -17,12 +17,12 @@ import (
 func TestRunDontPanic(t *testing.T) {
 	type testCase struct {
 		description    string
-		configProvider func() beyla.Config
+		configProvider func() *beyla.Config
 	}
 	testCases := []testCase{{
 		description: "otel endpoint but feature excluded",
-		configProvider: func() beyla.Config {
-			cfg := beyla.DefaultConfig
+		configProvider: func() *beyla.Config {
+			cfg := beyla.DefaultConfig()
 			cfg.Metrics.Features = []string{"application"}
 			cfg.NetworkFlows.Enable = true
 			cfg.Metrics.CommonEndpoint = "http://localhost"
@@ -30,8 +30,8 @@ func TestRunDontPanic(t *testing.T) {
 		},
 	}, {
 		description: "prom endpoint but feature excluded",
-		configProvider: func() beyla.Config {
-			cfg := beyla.DefaultConfig
+		configProvider: func() *beyla.Config {
+			cfg := beyla.DefaultConfig()
 			cfg.Prometheus.Features = []string{"application"}
 			cfg.NetworkFlows.Enable = true
 			cfg.Prometheus.Port = 9090
@@ -39,8 +39,8 @@ func TestRunDontPanic(t *testing.T) {
 		},
 	}, {
 		description: "otel endpoint, otel feature excluded, but prom enabled",
-		configProvider: func() beyla.Config {
-			cfg := beyla.DefaultConfig
+		configProvider: func() *beyla.Config {
+			cfg := beyla.DefaultConfig()
 			cfg.Metrics.Features = []string{"application"}
 			cfg.NetworkFlows.Enable = true
 			cfg.Metrics.CommonEndpoint = "http://localhost"
@@ -49,8 +49,8 @@ func TestRunDontPanic(t *testing.T) {
 		},
 	}, {
 		description: "all endpoints, all features excluded",
-		configProvider: func() beyla.Config {
-			cfg := beyla.DefaultConfig
+		configProvider: func() *beyla.Config {
+			cfg := beyla.DefaultConfig()
 			cfg.NetworkFlows.Enable = true
 			cfg.Prometheus.Port = 9090
 			cfg.Prometheus.Features = []string{"application"}
@@ -65,7 +65,7 @@ func TestRunDontPanic(t *testing.T) {
 			require.NoError(t, cfg.Validate())
 
 			require.NotPanics(t, func() {
-				_ = RunBeyla(t.Context(), &cfg)
+				_ = RunBeyla(t.Context(), cfg)
 			})
 		})
 	}

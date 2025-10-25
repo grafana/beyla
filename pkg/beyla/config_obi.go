@@ -15,6 +15,21 @@ import (
 	cfgutil "github.com/grafana/beyla/v2/pkg/helpers/config"
 )
 
+func FromOBI(c *obi.Config) *Config {
+	cfg := &Config{}
+	cfgutil.Convert(c, cfg, map[string]string{
+		// Fields that do not exist in OBI Config are marked for skipping,
+		// to avoid that convert panics,
+		".obi":              cfgutil.SkipConversion,
+		".TracesReceiver":   cfgutil.SkipConversion,
+		".Processes":        cfgutil.SkipConversion,
+		".Grafana":          cfgutil.SkipConversion,
+		".Topology":         cfgutil.SkipConversion,
+		".Discovery.Survey": cfgutil.SkipConversion,
+	})
+	return cfg
+}
+
 func (c *Config) AsOBI() *obi.Config {
 	if c.obi == nil {
 		obiCfg := &obi.Config{}

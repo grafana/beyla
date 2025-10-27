@@ -1,6 +1,6 @@
 # Build the testserver binary
 # Docker command must be invoked from the project root directory
-FROM golang:1.25@sha256:8c945d3e25320e771326dafc6fb72ecae5f87b0f29328cbbd87c4dff506c9135 AS builder
+FROM golang:1.25@sha256:6bac879c5b77e0fc9c556a5ed8920e89dab1709bd510a854903509c828f67f96 AS builder
 
 ARG TARGETARCH
 

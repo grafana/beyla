@@ -14,7 +14,7 @@ services:
       - php-fpm
 
   php-fpm:
-    image: php:fpm@sha256:231ab3ac3db542e1d019a35abee1bd106d278a5712d1dc2bb4fbe103de016792
+    image: php:fpm@sha256:27bc40d40e6a6db1e64f6ab058f2d5b13ba071473979ec96c67cee6581105283
     mem_limit: 512m
     container_name: hatest-php-fpm
     volumes:

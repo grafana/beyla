@@ -1,4 +1,4 @@
-FROM golang:1.25.1-alpine@sha256:b6ed3fd0452c0e9bcdef5597f29cc1418f61672e9d3a2f55bf02e7222c014abd
+FROM golang:1.25.3-alpine@sha256:aee43c3ccbf24fdffb7295693b6e33b21e01baec1b2a55acc351fde345e9ec34
 
 # this is the toplevel Makefile target to be invoked
 # see the contents of 'startup.sh' at the end of this file

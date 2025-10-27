@@ -21,7 +21,7 @@ jobs:
         with:
           persist-credentials: 'false'
       - id: docker-build-beyla
-        uses: grafana/shared-workflows/actions/build-push-to-dockerhub@fa48192dac470ae356b3f7007229f3ac28c48a25 # main
+        uses: grafana/shared-workflows/actions/build-push-to-dockerhub@1505e636012dd46b52e6eb87e82bcce0e1bbf04d # main
         with:
           context: .
           file: ${{ matrix.file }}

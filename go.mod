@@ -11,7 +11,7 @@ require (
 	github.com/gin-gonic/gin v1.10.1
 	github.com/goccy/go-json v0.10.5
 	github.com/gorilla/mux v1.8.1
-	github.com/grafana/pyroscope-go/godeltaprof v0.1.8
+	github.com/grafana/pyroscope-go/godeltaprof v0.1.9
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/mariomac/guara v0.0.0-20250408105519-1e4dbdfb7136
 	github.com/pkg/errors v0.9.1

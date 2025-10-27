@@ -28,8 +28,8 @@
         "test/integration/components/testserver_1.17/go.mod",
         "test/integration/components/testserver_1.17/go.sum"
       ],
-      "matchDatasources": ["docker"],
-      "matchPackageNames": ["golang"],
+      "matchDatasources": ["*"],
+      "matchPackageNames": ["*"],
       "enabled": false
     }
   ],

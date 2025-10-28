@@ -20,9 +20,9 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"go.opentelemetry.io/obi/pkg/imetrics"
-	"go.opentelemetry.io/obi/pkg/kubecache/meta"
-	"go.opentelemetry.io/obi/pkg/kubeflags"
+	"go.opentelemetry.io/obi/pkg/export/imetrics"
+	"go.opentelemetry.io/obi/pkg/kube/kubecache/meta"
+	"go.opentelemetry.io/obi/pkg/kube/kubeflags"
 )
 
 const (

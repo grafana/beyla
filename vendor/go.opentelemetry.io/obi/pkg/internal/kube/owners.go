@@ -5,7 +5,7 @@ package kube
 
 import (
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
-	"go.opentelemetry.io/obi/pkg/kubecache/informer"
+	"go.opentelemetry.io/obi/pkg/kube/kubecache/informer"
 )
 
 // TopOwner assumes that the owners slice as returned by the informers' cache library,

@@ -774,23 +774,27 @@ go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc/inte
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp/internal/request
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp/internal/semconv
-# go.opentelemetry.io/obi v0.0.0-20251028095109-23021b2ac9bb => ./.obi-src
+# go.opentelemetry.io/obi v0.0.0-20251028153421-22f6313eb6a9 => ./.obi-src
 ## explicit; go 1.25.0
-go.opentelemetry.io/obi/pkg/app/request
-go.opentelemetry.io/obi/pkg/app/svc
+go.opentelemetry.io/obi/pkg/appolly
+go.opentelemetry.io/obi/pkg/appolly/app/request
+go.opentelemetry.io/obi/pkg/appolly/app/svc
+go.opentelemetry.io/obi/pkg/appolly/discover
+go.opentelemetry.io/obi/pkg/appolly/discover/exec
+go.opentelemetry.io/obi/pkg/appolly/services
+go.opentelemetry.io/obi/pkg/appolly/traces
 go.opentelemetry.io/obi/pkg/buildinfo
 go.opentelemetry.io/obi/pkg/config
-go.opentelemetry.io/obi/pkg/connector
-go.opentelemetry.io/obi/pkg/discover
-go.opentelemetry.io/obi/pkg/discover/exec
 go.opentelemetry.io/obi/pkg/ebpf
 go.opentelemetry.io/obi/pkg/ebpf/common
 go.opentelemetry.io/obi/pkg/ebpf/common/http
 go.opentelemetry.io/obi/pkg/ebpf/tcmanager
 go.opentelemetry.io/obi/pkg/export/attributes
 go.opentelemetry.io/obi/pkg/export/attributes/names
+go.opentelemetry.io/obi/pkg/export/connector
 go.opentelemetry.io/obi/pkg/export/debug
 go.opentelemetry.io/obi/pkg/export/expire
+go.opentelemetry.io/obi/pkg/export/imetrics
 go.opentelemetry.io/obi/pkg/export/instrumentations
 go.opentelemetry.io/obi/pkg/export/otel
 go.opentelemetry.io/obi/pkg/export/otel/idgen
@@ -805,7 +809,6 @@ go.opentelemetry.io/obi/pkg/export/otel/otelcfg
 go.opentelemetry.io/obi/pkg/export/otel/tracesgen
 go.opentelemetry.io/obi/pkg/export/prom
 go.opentelemetry.io/obi/pkg/filter
-go.opentelemetry.io/obi/pkg/imetrics
 go.opentelemetry.io/obi/pkg/internal/ebpf/bhpack
 go.opentelemetry.io/obi/pkg/internal/ebpf/convenience
 go.opentelemetry.io/obi/pkg/internal/ebpf/generictracer
@@ -845,24 +848,21 @@ go.opentelemetry.io/obi/pkg/internal/transform/route
 go.opentelemetry.io/obi/pkg/internal/transform/route/clusterurl
 go.opentelemetry.io/obi/pkg/internal/transform/route/harvest
 go.opentelemetry.io/obi/pkg/kube
-go.opentelemetry.io/obi/pkg/kubecache
-go.opentelemetry.io/obi/pkg/kubecache/informer
-go.opentelemetry.io/obi/pkg/kubecache/instrument
-go.opentelemetry.io/obi/pkg/kubecache/meta
-go.opentelemetry.io/obi/pkg/kubecache/meta/cni
-go.opentelemetry.io/obi/pkg/kubecache/service
-go.opentelemetry.io/obi/pkg/kubeflags
+go.opentelemetry.io/obi/pkg/kube/kubecache
+go.opentelemetry.io/obi/pkg/kube/kubecache/informer
+go.opentelemetry.io/obi/pkg/kube/kubecache/instrument
+go.opentelemetry.io/obi/pkg/kube/kubecache/meta
+go.opentelemetry.io/obi/pkg/kube/kubecache/meta/cni
+go.opentelemetry.io/obi/pkg/kube/kubecache/service
+go.opentelemetry.io/obi/pkg/kube/kubeflags
 go.opentelemetry.io/obi/pkg/netolly/agent
 go.opentelemetry.io/obi/pkg/netolly/cidr
 go.opentelemetry.io/obi/pkg/netolly/flowdef
 go.opentelemetry.io/obi/pkg/obi
-go.opentelemetry.io/obi/pkg/pipe
 go.opentelemetry.io/obi/pkg/pipe/global
 go.opentelemetry.io/obi/pkg/pipe/msg
 go.opentelemetry.io/obi/pkg/pipe/swarm
 go.opentelemetry.io/obi/pkg/pipe/swarm/swarms
-go.opentelemetry.io/obi/pkg/services
-go.opentelemetry.io/obi/pkg/traces
 go.opentelemetry.io/obi/pkg/transform
 # go.opentelemetry.io/otel v1.38.0
 ## explicit; go 1.23.0

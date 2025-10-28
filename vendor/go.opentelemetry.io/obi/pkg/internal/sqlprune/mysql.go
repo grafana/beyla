@@ -8,7 +8,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"go.opentelemetry.io/obi/pkg/app/request"
+	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 )
 
 const (

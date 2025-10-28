@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"go.opentelemetry.io/obi/pkg/discover/exec"
+	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 )
 
 type Offsets struct {

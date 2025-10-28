@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"go.opentelemetry.io/obi/pkg/app/svc"
+	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 )
 
 var (

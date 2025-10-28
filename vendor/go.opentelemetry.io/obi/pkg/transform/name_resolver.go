@@ -14,11 +14,11 @@ import (
 	"github.com/hashicorp/golang-lru/v2/expirable"
 
 	"go.opentelemetry.io/obi/pkg/app/request"
-	kube2 "go.opentelemetry.io/obi/pkg/components/kube"
-	"go.opentelemetry.io/obi/pkg/components/pipe/global"
-	"go.opentelemetry.io/obi/pkg/components/svc"
+	"go.opentelemetry.io/obi/pkg/app/svc"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/internal/helpers/maps"
+	"go.opentelemetry.io/obi/pkg/kube"
+	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm/swarms"
@@ -57,7 +57,7 @@ type NameResolverConfig struct {
 type NameResolver struct {
 	cache *expirable.LRU[string, string]
 	cfg   *NameResolverConfig
-	db    *kube2.Store
+	db    *kube.Store
 
 	sources maps.Bits
 }
@@ -80,7 +80,7 @@ func nameResolver(ctx context.Context, ctxInfo *global.ContextInfo, cfg *NameRes
 ) (swarm.RunFunc, error) {
 	sources := resolverSources(cfg.Sources)
 
-	var kubeStore *kube2.Store
+	var kubeStore *kube.Store
 	if ctxInfo.K8sInformer.IsKubeEnabled() {
 		var err error
 		kubeStore, err = ctxInfo.K8sInformer.Get(ctx)

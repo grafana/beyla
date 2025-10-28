@@ -6,7 +6,7 @@ package otel
 import (
 	"sync"
 
-	"go.opentelemetry.io/obi/pkg/components/svc"
+	"go.opentelemetry.io/obi/pkg/app/svc"
 )
 
 type PidServiceTracker struct {

@@ -27,8 +27,8 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
+	"go.opentelemetry.io/obi/pkg/app/svc"
 	"go.opentelemetry.io/obi/pkg/buildinfo"
-	"go.opentelemetry.io/obi/pkg/components/svc"
 	"go.opentelemetry.io/obi/pkg/config"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	"go.opentelemetry.io/obi/pkg/export/expire"

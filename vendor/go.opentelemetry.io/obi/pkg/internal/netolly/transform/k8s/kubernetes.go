@@ -28,9 +28,10 @@ import (
 
 	"github.com/hashicorp/golang-lru/v2/simplelru"
 
-	"go.opentelemetry.io/obi/pkg/components/kube"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
+	ikube "go.opentelemetry.io/obi/pkg/internal/kube"
 	"go.opentelemetry.io/obi/pkg/internal/netolly/ebpf"
+	"go.opentelemetry.io/obi/pkg/kube"
 	"go.opentelemetry.io/obi/pkg/kubecache/informer"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
@@ -138,7 +139,7 @@ func (n *decorator) decorate(flow *ebpf.Record, prefix, ip string) bool {
 	}
 	meta := cachedObj.Meta
 	ownerName, ownerKind := meta.Name, meta.Kind
-	if owner := kube.TopOwner(meta.Pod); owner != nil {
+	if owner := ikube.TopOwner(meta.Pod); owner != nil {
 		ownerName, ownerKind = owner.Name, owner.Kind
 	}
 

@@ -24,8 +24,8 @@ import (
 	"github.com/prometheus/procfs"
 	"golang.org/x/sys/unix"
 
-	"go.opentelemetry.io/obi/pkg/components/imetrics"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
+	"go.opentelemetry.io/obi/pkg/imetrics"
 	"go.opentelemetry.io/obi/pkg/internal/goexec"
 	"go.opentelemetry.io/obi/pkg/internal/procs"
 )

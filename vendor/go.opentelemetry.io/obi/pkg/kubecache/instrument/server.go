@@ -6,7 +6,7 @@ package instrument
 import (
 	"context"
 
-	"go.opentelemetry.io/obi/pkg/components/connector"
+	"go.opentelemetry.io/obi/pkg/connector"
 )
 
 const defaultMetricsPath = "/metrics"

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"go.opentelemetry.io/obi/pkg/components/svc"
+	"go.opentelemetry.io/obi/pkg/app/svc"
 	"go.opentelemetry.io/obi/pkg/discover/exec"
 	route2 "go.opentelemetry.io/obi/pkg/internal/transform/route"
 )

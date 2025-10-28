@@ -50,6 +50,7 @@ const (
 	ErrorType              = Name("error.type")
 	RPCMethod              = Name(semconv.RPCMethodKey)
 	RPCSystem              = Name(semconv.RPCSystemKey)
+	RPCService             = Name(semconv.RPCServiceKey)
 	RPCGRPCStatusCode      = Name(semconv.RPCGRPCStatusCodeKey)
 	HTTPRoute              = Name(semconv.HTTPRouteKey)
 	MessagingOpType        = Name("messaging.operation.type")
@@ -160,6 +161,18 @@ const (
 	// Messaging
 	MessagingPartition   = Name("messaging.destination.partition.id")
 	MessagingKafkaOffset = Name("messaging.kafka.offset")
+
+	// Elasticsearch
+	ElasticsearchNodeName = Name("elasticsearch.node.name")
+
+	// AWS
+	AWSRequestID         = Name("aws.request_id")
+	AWSExtendedRequestID = Name("aws.extended_request_id")
+	AWSS3Bucket          = Name("aws.s3.bucket")
+	AWSS3Key             = Name("aws.s3.key")
+
+	// Cloud
+	CloudRegion = Name(semconv.CloudRegionKey)
 )
 
 // Beyla specific GPU events

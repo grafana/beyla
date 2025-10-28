@@ -44,7 +44,7 @@
       "conn": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.46.2"
+          "newest": "1.46.3"
         },
         "offsets": [
           {
@@ -56,7 +56,7 @@
       "correlationID": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.46.2"
+          "newest": "1.46.3"
         },
         "offsets": [
           {
@@ -70,7 +70,7 @@
       "Conn": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.46.2"
+          "newest": "1.46.3"
         },
         "offsets": [
           {
@@ -84,7 +84,7 @@
       "correlationID": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.46.2"
+          "newest": "1.46.3"
         },
         "offsets": [
           {
@@ -152,7 +152,7 @@
       "bw": {
         "versions": {
           "oldest": "9.0.0",
-          "newest": "9.14.1"
+          "newest": "9.16.0"
         },
         "offsets": [
           {
@@ -166,6 +166,10 @@
           {
             "offset": 32,
             "since": "9.7.0"
+          },
+          {
+            "offset": 40,
+            "since": "9.16.0"
           }
         ]
       }

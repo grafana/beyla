@@ -8,7 +8,7 @@ import (
 	"debug/elf"
 	"strings"
 
-	"go.opentelemetry.io/obi/pkg/components/svc"
+	"go.opentelemetry.io/obi/pkg/app/svc"
 )
 
 type FileInfo struct {

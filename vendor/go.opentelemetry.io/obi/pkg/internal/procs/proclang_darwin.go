@@ -6,7 +6,7 @@ package procs
 import (
 	"debug/elf"
 
-	"go.opentelemetry.io/obi/pkg/components/svc"
+	"go.opentelemetry.io/obi/pkg/app/svc"
 )
 
 func FindProcLanguage(_ int32) svc.InstrumentableType {

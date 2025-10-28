@@ -13,8 +13,6 @@ import (
 	"github.com/go-playground/validator/v10"
 	"gopkg.in/yaml.v3"
 
-	"go.opentelemetry.io/obi/pkg/components/imetrics"
-	"go.opentelemetry.io/obi/pkg/components/kube"
 	"go.opentelemetry.io/obi/pkg/config"
 	"go.opentelemetry.io/obi/pkg/ebpf/tcmanager"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
@@ -25,6 +23,8 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/export/prom"
 	"go.opentelemetry.io/obi/pkg/filter"
+	imetrics2 "go.opentelemetry.io/obi/pkg/imetrics"
+	"go.opentelemetry.io/obi/pkg/kube"
 	"go.opentelemetry.io/obi/pkg/kubeflags"
 	"go.opentelemetry.io/obi/pkg/services"
 	"go.opentelemetry.io/obi/pkg/transform"
@@ -97,6 +97,12 @@ var DefaultConfig = Config{
 				GraphQL: config.GraphQLConfig{
 					Enabled: false,
 				},
+				Elasticsearch: config.ElasticsearchConfig{
+					Enabled: false,
+				},
+				AWS: config.AWSConfig{
+					Enabled: false,
+				},
 			},
 		},
 		MaxTransactionTime: 5 * time.Minute,
@@ -141,9 +147,9 @@ var DefaultConfig = Config{
 		SpanMetricsServiceCacheSize: 10000,
 	},
 	TracePrinter: debug.TracePrinterDisabled,
-	InternalMetrics: imetrics.Config{
-		Exporter: imetrics.InternalMetricsExporterDisabled,
-		Prometheus: imetrics.PrometheusConfig{
+	InternalMetrics: imetrics2.Config{
+		Exporter: imetrics2.InternalMetricsExporterDisabled,
+		Prometheus: imetrics2.PrometheusConfig{
 			Port: 0, // disabled by default
 			Path: "/internal/metrics",
 		},
@@ -256,9 +262,9 @@ type Config struct {
 	// From this comment, the properties below will remain undocumented, as they
 	// are useful for development purposes. They might be helpful for customer support.
 
-	ChannelBufferLen int             `yaml:"channel_buffer_len" env:"OTEL_EBPF_CHANNEL_BUFFER_LEN"`
-	ProfilePort      int             `yaml:"profile_port" env:"OTEL_EBPF_PROFILE_PORT"`
-	InternalMetrics  imetrics.Config `yaml:"internal_metrics"`
+	ChannelBufferLen int              `yaml:"channel_buffer_len" env:"OTEL_EBPF_CHANNEL_BUFFER_LEN"`
+	ProfilePort      int              `yaml:"profile_port" env:"OTEL_EBPF_PROFILE_PORT"`
+	InternalMetrics  imetrics2.Config `yaml:"internal_metrics"`
 
 	// LogConfig enables the logging of the configuration on startup.
 	LogConfig LogConfigOption `yaml:"log_config" env:"OTEL_EBPF_LOG_CONFIG"`
@@ -383,10 +389,10 @@ func (c *Config) Validate() error {
 		return ConfigError("wildcard_char can only be a single character, multiple characters are not allowed")
 	}
 
-	if c.InternalMetrics.Exporter == imetrics.InternalMetricsExporterOTEL && c.InternalMetrics.Prometheus.Port != 0 {
+	if c.InternalMetrics.Exporter == imetrics2.InternalMetricsExporterOTEL && c.InternalMetrics.Prometheus.Port != 0 {
 		return ConfigError("you can't enable both OTEL and Prometheus internal metrics")
 	}
-	if c.InternalMetrics.Exporter == imetrics.InternalMetricsExporterOTEL && !c.Metrics.Enabled() {
+	if c.InternalMetrics.Exporter == imetrics2.InternalMetricsExporterOTEL && !c.Metrics.Enabled() {
 		return ConfigError("you can't enable OTEL internal metrics without enabling OTEL metrics")
 	}
 

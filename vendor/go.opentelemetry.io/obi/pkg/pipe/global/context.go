@@ -7,12 +7,12 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 
 	"go.opentelemetry.io/obi/pkg/app/request"
-	"go.opentelemetry.io/obi/pkg/components/connector"
-	"go.opentelemetry.io/obi/pkg/components/imetrics"
-	kube2 "go.opentelemetry.io/obi/pkg/components/kube"
+	"go.opentelemetry.io/obi/pkg/connector"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
+	"go.opentelemetry.io/obi/pkg/imetrics"
 	"go.opentelemetry.io/obi/pkg/internal/netolly/ebpf"
+	"go.opentelemetry.io/obi/pkg/kube"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 )
 
@@ -34,7 +34,7 @@ type ContextInfo struct {
 	// in the metric exporters
 	MetricAttributeGroups attributes.AttrGroups
 	// K8sInformer enables direct access to the Kubernetes API
-	K8sInformer *kube2.MetadataProvider
+	K8sInformer *kube.MetadataProvider
 
 	// OverrideAppExportQueue allows overriding the output queue of the application exporter
 	// to connect your own application exporters outside the OBI code base. If left unset, OBI will

@@ -47,9 +47,26 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 	case attr.ServerPort:
 		getter = func(s *Span) attribute.KeyValue { return ServerPort(s.HostPort) }
 	case attr.RPCMethod:
-		getter = func(s *Span) attribute.KeyValue { return semconv.RPCMethod(s.Path) }
+		getter = func(s *Span) attribute.KeyValue {
+			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeAWSS3 && s.AWS != nil {
+				return semconv.RPCMethod(s.AWS.S3.Method)
+			}
+			return semconv.RPCMethod(s.Path)
+		}
 	case attr.RPCSystem:
-		getter = func(_ *Span) attribute.KeyValue { return semconv.RPCSystemGRPC }
+		getter = func(s *Span) attribute.KeyValue {
+			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeAWSS3 {
+				return RPCSystem("aws-api")
+			}
+			return semconv.RPCSystemGRPC
+		}
+	case attr.RPCService:
+		getter = func(s *Span) attribute.KeyValue {
+			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeAWSS3 {
+				return semconv.RPCService("S3")
+			}
+			return semconv.RPCService("")
+		}
 	case attr.RPCGRPCStatusCode:
 		getter = func(s *Span) attribute.KeyValue { return semconv.RPCGRPCStatusCodeKey.Int(s.Status) }
 	case attr.Server:
@@ -86,9 +103,15 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 				return DBSystemName(semconv.DBSystemRedis.Value.AsString())
 			case EventTypeMongoClient:
 				return DBSystemName(semconv.DBSystemMongoDB.Value.AsString())
+			case EventTypeHTTPClient:
+				if span.SubType == HTTPSubtypeElasticsearch {
+					return DBSystemName(semconv.DBSystemElasticsearch.Value.AsString())
+				}
 			}
 			return DBSystemName("unknown")
 		}
+	case attr.DBNamespace:
+		getter = func(span *Span) attribute.KeyValue { return DBNamespace(span.DBNamespace) }
 	case attr.ErrorType:
 		getter = func(span *Span) attribute.KeyValue {
 			if SpanStatusCode(span) == StatusCodeError {
@@ -138,6 +161,62 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 				return GraphqlOperationType(s.GraphQL.OperationType)
 			}
 			return GraphqlOperationType("")
+		}
+	case attr.ElasticsearchNodeName:
+		getter = func(s *Span) attribute.KeyValue {
+			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeElasticsearch && s.Elasticsearch != nil {
+				return ElasticsearchNodeName(s.Elasticsearch.NodeName)
+			}
+			return ElasticsearchNodeName("")
+		}
+	case attr.DBCollectionName:
+		getter = func(s *Span) attribute.KeyValue {
+			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeElasticsearch && s.Elasticsearch != nil {
+				return DBCollectionName(s.Elasticsearch.DBCollectionName)
+			}
+			return DBCollectionName("")
+		}
+	case attr.DBQueryText:
+		getter = func(s *Span) attribute.KeyValue {
+			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeElasticsearch && s.Elasticsearch != nil {
+				return DBQueryText(s.Elasticsearch.DBQueryText)
+			}
+			return DBQueryText("")
+		}
+	case attr.AWSRequestID:
+		getter = func(s *Span) attribute.KeyValue {
+			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeAWSS3 && s.AWS != nil {
+				return AWSRequestID(s.AWS.S3.RequestID)
+			}
+			return AWSRequestID("")
+		}
+	case attr.AWSExtendedRequestID:
+		getter = func(s *Span) attribute.KeyValue {
+			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeAWSS3 && s.AWS != nil {
+				return AWSExtendedRequestID(s.AWS.S3.ExtendedRequestID)
+			}
+			return AWSExtendedRequestID("")
+		}
+	case attr.AWSS3Bucket:
+		getter = func(s *Span) attribute.KeyValue {
+			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeAWSS3 && s.AWS != nil {
+				return AWSS3Bucket(s.AWS.S3.Bucket)
+			}
+			return AWSS3Bucket("")
+		}
+	case attr.AWSS3Key:
+		getter = func(s *Span) attribute.KeyValue {
+			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeAWSS3 && s.AWS != nil {
+				return AWSS3Key(s.AWS.S3.Key)
+			}
+			return AWSS3Key("")
+		}
+	case attr.CloudRegion:
+		getter = func(s *Span) attribute.KeyValue {
+			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeAWSS3 && s.AWS != nil {
+				return CloudRegion(s.AWS.S3.Region)
+			}
+			return CloudRegion("")
 		}
 	}
 	// default: unlike the Prometheus getters, we don't check here for service name nor k8s metadata

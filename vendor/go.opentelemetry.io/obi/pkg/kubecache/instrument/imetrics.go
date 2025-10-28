@@ -10,7 +10,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"go.opentelemetry.io/obi/pkg/buildinfo"
-	"go.opentelemetry.io/obi/pkg/components/connector"
+	"go.opentelemetry.io/obi/pkg/connector"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 )
 

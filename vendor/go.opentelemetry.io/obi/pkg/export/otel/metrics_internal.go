@@ -18,10 +18,10 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.34.0"
 
 	"go.opentelemetry.io/obi/pkg/buildinfo"
-	"go.opentelemetry.io/obi/pkg/components/imetrics"
-	"go.opentelemetry.io/obi/pkg/components/pipe/global"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
+	"go.opentelemetry.io/obi/pkg/imetrics"
+	"go.opentelemetry.io/obi/pkg/pipe/global"
 )
 
 // InternalMetricsReporter is an internal metrics Reporter that exports to OTEL

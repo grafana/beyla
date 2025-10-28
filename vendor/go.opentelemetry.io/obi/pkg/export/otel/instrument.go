@@ -11,7 +11,7 @@ import (
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 
-	"go.opentelemetry.io/obi/pkg/imetrics"
+	"go.opentelemetry.io/obi/pkg/export/imetrics"
 )
 
 // instrumentedMetricsExporter wraps an otel metrics exporter to account some internal metrics

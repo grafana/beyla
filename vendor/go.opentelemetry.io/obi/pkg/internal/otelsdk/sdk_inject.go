@@ -21,7 +21,7 @@ import (
 
 	"github.com/grafana/jvmtools/jvm"
 
-	"go.opentelemetry.io/obi/pkg/app/svc"
+	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/ebpf"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"

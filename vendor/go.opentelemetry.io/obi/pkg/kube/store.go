@@ -16,12 +16,12 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
-	"go.opentelemetry.io/obi/pkg/imetrics"
+	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	"go.opentelemetry.io/obi/pkg/internal/helpers/container"
 	"go.opentelemetry.io/obi/pkg/internal/helpers/maps"
 	"go.opentelemetry.io/obi/pkg/internal/kube"
-	"go.opentelemetry.io/obi/pkg/kubecache/informer"
-	"go.opentelemetry.io/obi/pkg/kubecache/meta"
+	"go.opentelemetry.io/obi/pkg/kube/kubecache/informer"
+	"go.opentelemetry.io/obi/pkg/kube/kubecache/meta"
 )
 
 func dblog() *slog.Logger {

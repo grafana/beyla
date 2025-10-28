@@ -32,7 +32,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"go.opentelemetry.io/obi/pkg/app/svc"
+	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 )
 
 func TestLinuxHarvester_IsPrivileged(t *testing.T) {

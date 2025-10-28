@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"time"
 
-	"go.opentelemetry.io/obi/pkg/services"
+	"go.opentelemetry.io/obi/pkg/appolly/services"
 )
 
 const (

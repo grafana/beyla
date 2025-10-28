@@ -12,8 +12,8 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"go.opentelemetry.io/obi/pkg/app/request"
-	sqlprune2 "go.opentelemetry.io/obi/pkg/internal/sqlprune"
+	"go.opentelemetry.io/obi/pkg/appolly/app/request"
+	"go.opentelemetry.io/obi/pkg/internal/sqlprune"
 )
 
 type postgresPreparedStatementsKey struct {
@@ -203,22 +203,22 @@ func (it *postgresMessageIterator) next() (msg postgresMessage) {
 		it.eof = true
 		return
 	}
-	if len(it.buf) < sqlprune2.PostgresHdrSize {
+	if len(it.buf) < sqlprune.PostgresHdrSize {
 		it.err = errors.New("remaining buffer too short for message header")
 		return
 	}
 
-	msgType := sqlprune2.SQLParseCommandID(request.DBPostgres, it.buf)
+	msgType := sqlprune.SQLParseCommandID(request.DBPostgres, it.buf)
 	it.buf = it.buf[1:]
 	size := int32(binary.BigEndian.Uint32(it.buf[:4]))
 	it.buf = it.buf[4:]
 
-	if size < sqlprune2.PostgresHdrSize-1 {
+	if size < sqlprune.PostgresHdrSize-1 {
 		it.err = errors.New("malformed Postgres message")
 		return
 	}
 
-	payloadSize := size - sqlprune2.PostgresHdrSize + 1
+	payloadSize := size - sqlprune.PostgresHdrSize + 1
 	if len(it.buf) < int(payloadSize) {
 		it.err = fmt.Errorf("remaining buffer too short for message data: expected %d bytes, got %d", payloadSize, len(it.buf))
 		return
@@ -238,11 +238,11 @@ func handlePostgres(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBu
 		span            request.Span
 	)
 
-	if len(requestBuffer) < sqlprune2.PostgresHdrSize+1 {
+	if len(requestBuffer) < sqlprune.PostgresHdrSize+1 {
 		slog.Debug("Postgres request too short")
 		return span, errFallback
 	}
-	if len(responseBuffer) < sqlprune2.PostgresHdrSize+1 {
+	if len(responseBuffer) < sqlprune.PostgresHdrSize+1 {
 		slog.Debug("Postgres response too short")
 		return span, errFallback
 	}
@@ -250,7 +250,7 @@ func handlePostgres(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBu
 	var (
 		msg      postgresMessage
 		it       = &postgresMessageIterator{buf: requestBuffer}
-		sqlError = sqlprune2.SQLParseError(request.DBPostgres, responseBuffer)
+		sqlError = sqlprune.SQLParseError(request.DBPostgres, responseBuffer)
 	)
 
 Loop:
@@ -315,7 +315,7 @@ Loop:
 				continue
 			}
 
-			op, table = sqlprune2.SQLParseOperationAndTable(stmt)
+			op, table = sqlprune.SQLParseOperationAndTable(stmt)
 			hasSpan = true
 			break Loop
 		default:

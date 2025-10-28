@@ -6,9 +6,7 @@ package ebpfcommon
 import (
 	"strings"
 
-	trace2 "go.opentelemetry.io/otel/trace"
-
-	"go.opentelemetry.io/obi/pkg/app/request"
+	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/internal/sqlprune"
 )
 
@@ -122,9 +120,9 @@ func TCPToSQLToSpan(trace *TCPRequestInfo, op, table, sql string, kind request.S
 		Start:         int64(trace.StartMonotimeNs),
 		End:           int64(trace.EndMonotimeNs),
 		Status:        status,
-		TraceID:       trace2.TraceID(trace.Tp.TraceId),
-		SpanID:        trace2.SpanID(trace.Tp.SpanId),
-		ParentSpanID:  trace2.SpanID(trace.Tp.ParentId),
+		TraceID:       trace.Tp.TraceId,
+		SpanID:        trace.Tp.SpanId,
+		ParentSpanID:  trace.Tp.ParentId,
 		TraceFlags:    trace.Tp.Flags,
 		Pid: request.PidInfo{
 			HostPID:   trace.Pid.HostPid,

@@ -23,7 +23,7 @@ import (
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/hashicorp/golang-lru/v2/simplelru"
 
-	"go.opentelemetry.io/obi/pkg/app/request"
+	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/config"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/kafkaparser"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"

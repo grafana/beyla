@@ -9,9 +9,7 @@ import (
 
 	"github.com/hashicorp/golang-lru/v2/simplelru"
 
-	trace2 "go.opentelemetry.io/otel/trace"
-
-	"go.opentelemetry.io/obi/pkg/app/request"
+	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/kafkaparser"
 )
 
@@ -197,9 +195,9 @@ func TCPToKafkaToSpan(trace *TCPRequestInfo, data *KafkaInfo) request.Span {
 		Start:         int64(trace.StartMonotimeNs),
 		End:           int64(trace.EndMonotimeNs),
 		Status:        0,
-		TraceID:       trace2.TraceID(trace.Tp.TraceId),
-		SpanID:        trace2.SpanID(trace.Tp.SpanId),
-		ParentSpanID:  trace2.SpanID(trace.Tp.ParentId),
+		TraceID:       trace.Tp.TraceId,
+		SpanID:        trace.Tp.SpanId,
+		ParentSpanID:  trace.Tp.ParentId,
 		TraceFlags:    trace.Tp.Flags,
 		Pid: request.PidInfo{
 			HostPID:   trace.Pid.HostPid,

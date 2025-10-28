@@ -13,7 +13,7 @@ import (
 	"net/http"
 	"strings"
 
-	"go.opentelemetry.io/obi/pkg/app/request"
+	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 )
 
 // elasticsearchOperation contains only fields related to elasticsearch

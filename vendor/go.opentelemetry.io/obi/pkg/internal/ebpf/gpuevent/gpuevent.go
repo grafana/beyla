@@ -17,12 +17,12 @@ import (
 	"github.com/ianlancetaylor/demangle"
 	"github.com/prometheus/procfs"
 
-	"go.opentelemetry.io/obi/pkg/app/request"
-	"go.opentelemetry.io/obi/pkg/app/svc"
+	"go.opentelemetry.io/obi/pkg/appolly/app/request"
+	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
+	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	"go.opentelemetry.io/obi/pkg/config"
-	"go.opentelemetry.io/obi/pkg/discover/exec"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
-	"go.opentelemetry.io/obi/pkg/imetrics"
+	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/internal/goexec"
 	"go.opentelemetry.io/obi/pkg/internal/procs"
@@ -121,8 +121,6 @@ func (p *Tracer) Constants() map[string]any {
 	} else {
 		m["filter_pids"] = int32(1)
 	}
-
-	m["max_transaction_time"] = uint64(p.cfg.EBPF.MaxTransactionTime.Nanoseconds())
 
 	return m
 }

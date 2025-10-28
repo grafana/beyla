@@ -9,9 +9,9 @@ import (
 	"fmt"
 	"log/slog"
 
-	"go.opentelemetry.io/obi/pkg/app/request"
+	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/internal/transform/route"
-	clusterurl2 "go.opentelemetry.io/obi/pkg/internal/transform/route/clusterurl"
+	"go.opentelemetry.io/obi/pkg/internal/transform/route/clusterurl"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm/swarms"
@@ -72,7 +72,7 @@ func RoutesProvider(rc *RoutesConfig, input, output *msg.Queue[[]request.Span]) 
 
 type routerNode struct {
 	config     *RoutesConfig
-	classifier *clusterurl2.ClusterURLClassifier
+	classifier *clusterurl.ClusterURLClassifier
 	input      *msg.Queue[[]request.Span]
 	output     *msg.Queue[[]request.Span]
 }
@@ -166,11 +166,11 @@ func chooseUnmatchPolicy(rn *routerNode) (func(rn *routerNode, span *request.Spa
 	case UnmatchPath:
 		unmatchAction = setUnmatchToPath
 	case UnmatchHeuristic:
-		classifierCfg := clusterurl2.DefaultConfig()
+		classifierCfg := clusterurl.DefaultConfig()
 		if rc.WildcardChar != "" {
 			classifierCfg.ReplaceWith = rc.WildcardChar[0]
 		}
-		classifier, err := clusterurl2.NewClusterURLClassifier(classifierCfg)
+		classifier, err := clusterurl.NewClusterURLClassifier(classifierCfg)
 		if err != nil {
 			return nil, fmt.Errorf("chooseUnmatchPolicy: unable to create cluster URL classifier: %w", err)
 		}

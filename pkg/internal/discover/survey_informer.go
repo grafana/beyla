@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 
-	obiDiscover "go.opentelemetry.io/obi/pkg/discover"
-	"go.opentelemetry.io/obi/pkg/discover/exec"
+	obiDiscover "go.opentelemetry.io/obi/pkg/appolly/discover"
+	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	"go.opentelemetry.io/obi/pkg/ebpf"
 	"go.opentelemetry.io/obi/pkg/kube"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"

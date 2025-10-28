@@ -4,11 +4,11 @@ import (
 	"log/slog"
 	"os"
 
-	obiDiscover "go.opentelemetry.io/obi/pkg/discover"
+	obiDiscover "go.opentelemetry.io/obi/pkg/appolly/discover"
+	"go.opentelemetry.io/obi/pkg/appolly/services"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
-	"go.opentelemetry.io/obi/pkg/services"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 )

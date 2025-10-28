@@ -4,6 +4,7 @@
 package kube
 
 import (
+	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/kubecache/informer"
 )
 
@@ -15,4 +16,11 @@ func TopOwner(pod *informer.PodInfo) *informer.Owner {
 		return nil
 	}
 	return pod.Owners[len(pod.Owners)-1]
+}
+
+// CachedObjMeta is a wrapper around the informer.ObjectMeta that also contains
+// the OTEL resource metadata.
+type CachedObjMeta struct {
+	Meta             *informer.ObjectMeta
+	OTELResourceMeta map[attr.Name]string
 }

@@ -10,7 +10,7 @@ import (
 	"os"
 	"slices"
 
-	"go.opentelemetry.io/obi/pkg/components/svc"
+	"go.opentelemetry.io/obi/pkg/app/svc"
 	"go.opentelemetry.io/obi/pkg/internal/fastelf"
 )
 

@@ -19,7 +19,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 	trace2 "go.opentelemetry.io/otel/trace"
 
-	"go.opentelemetry.io/obi/pkg/components/svc"
+	"go.opentelemetry.io/obi/pkg/app/svc"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 )
 
@@ -77,8 +77,10 @@ const (
 )
 
 const (
-	HTTPSubtypeNone    = 0 // http
-	HTTPSubtypeGraphQL = 1 // http + graphql
+	HTTPSubtypeNone          = 0 // http
+	HTTPSubtypeGraphQL       = 1 // http + graphql
+	HTTPSubtypeElasticsearch = 2 // http + elasticsearch
+	HTTPSubtypeAWSS3         = 3 // http + aws s3
 )
 
 //nolint:cyclop
@@ -170,6 +172,27 @@ type GraphQL struct {
 	OperationType string `json:"operationType"`
 }
 
+type Elasticsearch struct {
+	DBCollectionName string `json:"dbCollectionName"`
+	NodeName         string `json:"nodeName"`
+	DBOperationName  string `json:"dbOperationName"`
+	DBQueryText      string `json:"dbQueryText"`
+}
+
+type AWS struct {
+	// https://opentelemetry.io/docs/specs/semconv/object-stores/s3/
+	S3 AWSS3 `json:"s3"`
+}
+
+type AWSS3 struct {
+	RequestID         string `json:"requestId"`
+	ExtendedRequestID string `json:"extendedRequestId"`
+	Region            string `json:"region"`
+	Method            string `json:"method"`
+	Bucket            string `json:"bucket"`
+	Key               string `json:"key"`
+}
+
 // Span contains the information being submitted by the following nodes in the graph.
 // It enables comfortable handling of data from Go.
 // REMINDER: any attribute here must be also added to the functions SpanOTELGetters,
@@ -207,6 +230,8 @@ type Span struct {
 	SQLError       *SQLError      `json:"-"`
 	MessagingInfo  *MessagingInfo `json:"-"`
 	GraphQL        *GraphQL       `json:"-"`
+	Elasticsearch  *Elasticsearch `json:"-"`
+	AWS            *AWS           `json:"-"`
 
 	// OverrideTraceName is set under some conditions, like spanmetrics reaching the maximum
 	// cardinality for trace names.
@@ -247,7 +272,7 @@ func spanAttributes(s *Span) SpanAttributes {
 		}
 		return attrs
 	case EventTypeHTTPClient:
-		return SpanAttributes{
+		attrs := SpanAttributes{
 			"method":     s.Method,
 			"status":     strconv.Itoa(s.Status),
 			"url":        s.Path,
@@ -255,6 +280,21 @@ func spanAttributes(s *Span) SpanAttributes {
 			"serverAddr": SpanHost(s),
 			"serverPort": strconv.Itoa(s.HostPort),
 		}
+		if s.SubType == HTTPSubtypeElasticsearch && s.Elasticsearch != nil {
+			attrs["dbCollectionName"] = s.Elasticsearch.DBCollectionName
+			attrs["nodeName"] = s.Elasticsearch.NodeName
+			attrs["dbOperationName"] = s.Elasticsearch.DBOperationName
+			attrs["dbQueryText"] = s.Elasticsearch.DBQueryText
+		}
+		if s.SubType == HTTPSubtypeAWSS3 && s.AWS != nil {
+			attrs["awsRequestID"] = s.AWS.S3.RequestID
+			attrs["awsExtendedRequestID"] = s.AWS.S3.ExtendedRequestID
+			attrs["awsRegion"] = s.AWS.S3.Region
+			attrs["awsS3Method"] = s.AWS.S3.Method
+			attrs["awsS3Bucket"] = s.AWS.S3.Bucket
+			attrs["awsS3Key"] = s.AWS.S3.Key
+		}
+		return attrs
 	case EventTypeGRPC:
 		return SpanAttributes{
 			"method":     s.Path,
@@ -585,6 +625,31 @@ func (s *Span) TraceName() string {
 				return "GraphQL " + s.GraphQL.OperationType
 			} else {
 				return "GraphQL Operation"
+			}
+		}
+		if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeElasticsearch && s.Elasticsearch != nil {
+			dbOperationName := s.Elasticsearch.DBOperationName
+			// https://opentelemetry.io/docs/specs/semconv/database/database-spans/#name
+			if dbOperationName == "" {
+				return "elasticsearch"
+			}
+			switch {
+			case s.Elasticsearch.DBCollectionName != "":
+				return dbOperationName + " " + s.Elasticsearch.DBCollectionName
+			case s.DBNamespace != "":
+				return dbOperationName + " " + s.DBNamespace
+			case s.Host != "" && s.HostPort != 0:
+				return dbOperationName + " " + s.Host + ":" + strconv.Itoa(s.HostPort)
+			default:
+				return dbOperationName
+			}
+		}
+
+		if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeAWSS3 && s.AWS != nil {
+			if s.AWS.S3.Method != "" {
+				return "s3." + s.AWS.S3.Method
+			} else {
+				return "s3.Operation"
 			}
 		}
 

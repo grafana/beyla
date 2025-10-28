@@ -774,17 +774,13 @@ go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc/inte
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp/internal/request
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp/internal/semconv
-# go.opentelemetry.io/obi v0.0.0-20251024100244-ab3df8fd9f7e => ./.obi-src
+# go.opentelemetry.io/obi v0.0.0-20251028095109-23021b2ac9bb => ./.obi-src
 ## explicit; go 1.25.0
 go.opentelemetry.io/obi/pkg/app/request
+go.opentelemetry.io/obi/pkg/app/svc
 go.opentelemetry.io/obi/pkg/buildinfo
-go.opentelemetry.io/obi/pkg/components/connector
-go.opentelemetry.io/obi/pkg/components/imetrics
-go.opentelemetry.io/obi/pkg/components/kube
-go.opentelemetry.io/obi/pkg/components/pipe
-go.opentelemetry.io/obi/pkg/components/pipe/global
-go.opentelemetry.io/obi/pkg/components/svc
 go.opentelemetry.io/obi/pkg/config
+go.opentelemetry.io/obi/pkg/connector
 go.opentelemetry.io/obi/pkg/discover
 go.opentelemetry.io/obi/pkg/discover/exec
 go.opentelemetry.io/obi/pkg/ebpf
@@ -809,6 +805,7 @@ go.opentelemetry.io/obi/pkg/export/otel/otelcfg
 go.opentelemetry.io/obi/pkg/export/otel/tracesgen
 go.opentelemetry.io/obi/pkg/export/prom
 go.opentelemetry.io/obi/pkg/filter
+go.opentelemetry.io/obi/pkg/imetrics
 go.opentelemetry.io/obi/pkg/internal/ebpf/bhpack
 go.opentelemetry.io/obi/pkg/internal/ebpf/convenience
 go.opentelemetry.io/obi/pkg/internal/ebpf/generictracer
@@ -828,6 +825,7 @@ go.opentelemetry.io/obi/pkg/internal/helpers/cache
 go.opentelemetry.io/obi/pkg/internal/helpers/container
 go.opentelemetry.io/obi/pkg/internal/helpers/maps
 go.opentelemetry.io/obi/pkg/internal/helpers/sync
+go.opentelemetry.io/obi/pkg/internal/kube
 go.opentelemetry.io/obi/pkg/internal/netolly/ebpf
 go.opentelemetry.io/obi/pkg/internal/netolly/export
 go.opentelemetry.io/obi/pkg/internal/netolly/flow
@@ -846,6 +844,7 @@ go.opentelemetry.io/obi/pkg/internal/traces/hostname
 go.opentelemetry.io/obi/pkg/internal/transform/route
 go.opentelemetry.io/obi/pkg/internal/transform/route/clusterurl
 go.opentelemetry.io/obi/pkg/internal/transform/route/harvest
+go.opentelemetry.io/obi/pkg/kube
 go.opentelemetry.io/obi/pkg/kubecache
 go.opentelemetry.io/obi/pkg/kubecache/informer
 go.opentelemetry.io/obi/pkg/kubecache/instrument
@@ -857,6 +856,8 @@ go.opentelemetry.io/obi/pkg/netolly/agent
 go.opentelemetry.io/obi/pkg/netolly/cidr
 go.opentelemetry.io/obi/pkg/netolly/flowdef
 go.opentelemetry.io/obi/pkg/obi
+go.opentelemetry.io/obi/pkg/pipe
+go.opentelemetry.io/obi/pkg/pipe/global
 go.opentelemetry.io/obi/pkg/pipe/msg
 go.opentelemetry.io/obi/pkg/pipe/swarm
 go.opentelemetry.io/obi/pkg/pipe/swarm/swarms

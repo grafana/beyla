@@ -6,6 +6,8 @@ package ebpfcommon
 import (
 	"bufio"
 	"bytes"
+	"errors"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -98,8 +100,22 @@ func httpRequestResponseToSpan(parseCtx *EBPFParseContext, event *BPFHTTPInfo, r
 		Statement: req.URL.Scheme + request.SchemeHostSeparator + req.Host,
 	}
 
+	if isClientEvent(event.Type) && parseCtx != nil && parseCtx.payloadExtraction.HTTP.AWS.Enabled {
+		span, ok := ebpfhttp.AWSS3Span(&httpSpan, req, resp)
+		if ok {
+			return span
+		}
+	}
+
 	if !isClientEvent(event.Type) && parseCtx != nil && parseCtx.payloadExtraction.HTTP.GraphQL.Enabled {
 		span, ok := ebpfhttp.GraphQLSpan(&httpSpan, req, resp)
+		if ok {
+			return span
+		}
+	}
+
+	if isClientEvent(event.Type) && parseCtx != nil && parseCtx.payloadExtraction.HTTP.Elasticsearch.Enabled {
+		span, ok := ebpfhttp.ElasticsearchSpan(&httpSpan, req, resp)
 		if ok {
 			return span
 		}
@@ -148,7 +164,7 @@ func HTTPInfoEventToSpan(parseCtx *EBPFParseContext, event *BPFHTTPInfo) (reques
 		requestBuffer = event.Buf[:]
 	}
 
-	if parseCtx != nil && !parseCtx.payloadExtraction.HTTP.GraphQL.Enabled {
+	if parseCtx != nil && !parseCtx.payloadExtraction.Enabled() {
 		// There's no need to parse HTTP headers/body,
 		// create the span directly.
 		return httpRequestToSpan(event, requestBuffer), false, nil
@@ -160,7 +176,7 @@ func HTTPInfoEventToSpan(parseCtx *EBPFParseContext, event *BPFHTTPInfo) (reques
 	}
 
 	req, err := http.ReadRequest(bufio.NewReader(bytes.NewReader(requestBuffer)))
-	resp, err2 := http.ReadResponse(bufio.NewReader(bytes.NewReader(responseBuffer)), req)
+	resp, err2 := httpSafeParseResponse(responseBuffer, req)
 	if err != nil || err2 != nil {
 		slog.Debug("error while parsing http request or response, falling back to manual HTTP info parsing", "reqErr", err, "respErr", err2)
 		return httpRequestToSpan(event, requestBuffer), false, nil
@@ -169,6 +185,21 @@ func HTTPInfoEventToSpan(parseCtx *EBPFParseContext, event *BPFHTTPInfo) (reques
 	defer resp.Body.Close()
 
 	return httpRequestResponseToSpan(parseCtx, event, req, resp), false, nil
+}
+
+// HTTP response buffers might have been sent incomplete, before the full body.
+// Try to parse the original buffer first, if an EOF is encountered, append an empty
+// body to the buffer and try again.
+func httpSafeParseResponse(responseBuffer []byte, req *http.Request) (*http.Response, error) {
+	rd := bufio.NewReader(bytes.NewReader(responseBuffer))
+	resp, err := http.ReadResponse(rd, req)
+	if err != nil && errors.Is(err, io.ErrUnexpectedEOF) {
+		// Append empty body and try again
+		responseBuffer := append(responseBuffer, []byte("\r\n\r\n")...)
+		rd = bufio.NewReader(bytes.NewReader(responseBuffer))
+		return http.ReadResponse(rd, req)
+	}
+	return resp, nil
 }
 
 func httpRequestToSpan(event *BPFHTTPInfo, requestBuffer []byte) request.Span {

@@ -12,15 +12,16 @@ import (
 	"time"
 
 	"go.opentelemetry.io/obi/pkg/app/request"
-	"go.opentelemetry.io/obi/pkg/components/kube"
-	"go.opentelemetry.io/obi/pkg/components/pipe/global"
-	"go.opentelemetry.io/obi/pkg/components/svc"
+	"go.opentelemetry.io/obi/pkg/app/svc"
 	"go.opentelemetry.io/obi/pkg/discover/exec"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/internal/helpers/container"
 	maps2 "go.opentelemetry.io/obi/pkg/internal/helpers/maps"
+	ikube "go.opentelemetry.io/obi/pkg/internal/kube"
+	"go.opentelemetry.io/obi/pkg/kube"
 	"go.opentelemetry.io/obi/pkg/kubecache/informer"
 	"go.opentelemetry.io/obi/pkg/kubeflags"
+	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm/swarms"
@@ -356,13 +357,13 @@ func (md *procEventMetadataDecorator) cleanupPodData(pod *informer.ObjectMeta) {
 // AppendKubeMetadata populates some metadata values in the passed svc.Attrs.
 // This method should be invoked by any entity willing to follow a common policy for
 // setting metadata attributes. For example this metadataDecorator or the survey informer
-func AppendKubeMetadata(db *kube.Store, svc *svc.Attrs, meta *kube.CachedObjMeta, clusterName, containerName string) {
+func AppendKubeMetadata(db *kube.Store, svc *svc.Attrs, meta *ikube.CachedObjMeta, clusterName, containerName string) {
 	if meta.Meta.Pod == nil {
 		// if this message happen, there is a bug
 		klog().Debug("pod metadata for is nil. Ignoring decoration", "meta", meta)
 		return
 	}
-	topOwner := kube.TopOwner(meta.Meta.Pod)
+	topOwner := ikube.TopOwner(meta.Meta.Pod)
 	name, namespace := db.ServiceNameNamespaceForMetadata(meta.Meta, containerName)
 	// If the user has not defined criteria values for the reported
 	// service name and namespace, we will automatically set it from

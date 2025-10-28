@@ -14,11 +14,12 @@ import (
 	"text/template"
 	"time"
 
-	"go.opentelemetry.io/obi/pkg/components/imetrics"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
+	"go.opentelemetry.io/obi/pkg/imetrics"
 	"go.opentelemetry.io/obi/pkg/internal/helpers/container"
 	"go.opentelemetry.io/obi/pkg/internal/helpers/maps"
+	"go.opentelemetry.io/obi/pkg/internal/kube"
 	"go.opentelemetry.io/obi/pkg/kubecache/informer"
 	"go.opentelemetry.io/obi/pkg/kubecache/meta"
 )
@@ -32,7 +33,7 @@ const (
 	serviceNamespaceKey = "service.namespace"
 )
 
-type OTelServiceNamePair struct {
+type otelServiceNamePair struct {
 	Name      string
 	Namespace string
 }
@@ -95,17 +96,17 @@ type Store struct {
 	namespaces maps.Map2[uint32, uint32, *container.Info]
 
 	// container ID to pod matcher
-	podsByContainer map[string]*CachedObjMeta
+	podsByContainer map[string]*kube.CachedObjMeta
 	// first key: pod owner ID, second key: container ID
 	containersByOwner maps.Map2[string, string, *informer.ContainerInfo]
 
 	// ip to generic IP info (Node, Service, *including* Pods)
-	objectMetaByIP map[string]*CachedObjMeta
+	objectMetaByIP map[string]*kube.CachedObjMeta
 	// used to track the changed/removed IPs of a given object
 	// and remove them from objectMetaByIP on update or deletion
-	objectMetaByQName map[qualifiedName]*CachedObjMeta
+	objectMetaByQName map[qualifiedName]*kube.CachedObjMeta
 	// todo: can be probably removed as objectMetaByIP already caches the service name/namespace
-	otelServiceInfoByIP map[string]OTelServiceNamePair
+	otelServiceInfoByIP map[string]otelServiceNamePair
 
 	// Instead of subscribing to the informer directly, the rest of components
 	// will subscribe to this store, to make sure that any "new object" notification
@@ -121,11 +122,6 @@ type Store struct {
 	metrics     imetrics.Reporter
 }
 
-type CachedObjMeta struct {
-	Meta             *informer.ObjectMeta
-	OTELResourceMeta map[attr.Name]string
-}
-
 func NewStore(
 	kubeMetadata meta.Notifier,
 	resourceLabels ResourceLabels,
@@ -138,12 +134,12 @@ func NewStore(
 		log:                 log,
 		containerIDs:        maps.Map2[string, uint32, *container.Info]{},
 		namespaces:          maps.Map2[uint32, uint32, *container.Info]{},
-		podsByContainer:     map[string]*CachedObjMeta{},
+		podsByContainer:     map[string]*kube.CachedObjMeta{},
 		containerByPID:      map[uint32]*container.Info{},
-		objectMetaByIP:      map[string]*CachedObjMeta{},
-		objectMetaByQName:   map[qualifiedName]*CachedObjMeta{},
+		objectMetaByIP:      map[string]*kube.CachedObjMeta{},
+		objectMetaByQName:   map[qualifiedName]*kube.CachedObjMeta{},
 		containersByOwner:   maps.Map2[string, string, *informer.ContainerInfo]{},
-		otelServiceInfoByIP: map[string]OTelServiceNamePair{},
+		otelServiceInfoByIP: map[string]otelServiceNamePair{},
 		metadataNotifier:    kubeMetadata,
 		BaseNotifier:        meta.NewBaseNotifier(log),
 		resourceLabels:      resourceLabels,
@@ -160,9 +156,9 @@ func (s *Store) ID() string { return "unique-metadata-observer" }
 // 1. Resource attributes set via OTEL_RESOURCE_ATTRIBUTES and OTEL_SERVICE_NAME* environment variables
 // 2. Resource attributes set via annotations (with the resource.opentelemetry.io/ prefix)
 // 3. Resource attributes set via labels (e.g. app.kubernetes.io/name)
-func (s *Store) cacheResourceMetadata(meta *informer.ObjectMeta) *CachedObjMeta {
+func (s *Store) cacheResourceMetadata(meta *informer.ObjectMeta) *kube.CachedObjMeta {
 	// store metadata from labels, if set
-	com := CachedObjMeta{
+	com := kube.CachedObjMeta{
 		Meta:             meta,
 		OTELResourceMeta: map[attr.Name]string{},
 	}
@@ -301,7 +297,7 @@ func (s *Store) unlockedAddObjectMeta(meta *informer.ObjectMeta) {
 		s.objectMetaByIP[ip] = cmeta
 	}
 
-	s.otelServiceInfoByIP = map[string]OTelServiceNamePair{}
+	s.otelServiceInfoByIP = map[string]otelServiceNamePair{}
 
 	if meta.Pod != nil {
 		oID := fetchOwnerID(meta)
@@ -326,7 +322,7 @@ func (s *Store) deleteObjectMeta(meta *informer.ObjectMeta) {
 	defer s.access.Unlock()
 	// clean up the IP to service cache, we have to clean everything since
 	// Otel variables on specific pods can change the outcome.
-	s.otelServiceInfoByIP = map[string]OTelServiceNamePair{}
+	s.otelServiceInfoByIP = map[string]otelServiceNamePair{}
 
 	// cleanup both the objectMeta information from the received event
 	// as well as from any previous snapshot in the system whose IPs and/or
@@ -365,21 +361,21 @@ func (s *Store) unlockedDeleteObjectMeta(meta *informer.ObjectMeta) {
 
 func fetchOwnerID(meta *informer.ObjectMeta) string {
 	ownerName := meta.Name
-	if owner := TopOwner(meta.Pod); owner != nil {
+	if owner := kube.TopOwner(meta.Pod); owner != nil {
 		ownerName = owner.Name
 	}
 	oID := ownerID(meta.Namespace, ownerName)
 	return oID
 }
 
-func (s *Store) PodByContainerID(cid string) *CachedObjMeta {
+func (s *Store) PodByContainerID(cid string) *kube.CachedObjMeta {
 	s.access.RLock()
 	defer s.access.RUnlock()
 	return s.podsByContainer[cid]
 }
 
 // PodContainerByPIDNs second return value: container Name
-func (s *Store) PodContainerByPIDNs(pidns uint32) (*CachedObjMeta, string) {
+func (s *Store) PodContainerByPIDNs(pidns uint32) (*kube.CachedObjMeta, string) {
 	s.access.RLock()
 	defer s.access.RUnlock()
 	if infos, ok := s.namespaces[pidns]; ok {
@@ -400,7 +396,7 @@ func (s *Store) PodContainerByPIDNs(pidns uint32) (*CachedObjMeta, string) {
 	return nil, ""
 }
 
-func (s *Store) ObjectMetaByIP(ip string) *CachedObjMeta {
+func (s *Store) ObjectMetaByIP(ip string) *kube.CachedObjMeta {
 	s.access.RLock()
 	defer s.access.RUnlock()
 	return s.objectMetaByIP[ip]
@@ -449,7 +445,7 @@ func (s *Store) ServiceNameNamespaceForIP(ip string) (string, string) {
 		name, namespace = s.serviceNameNamespaceOwnerID(om.Meta, "")
 	}
 
-	s.otelServiceInfoByIP[ip] = OTelServiceNamePair{Name: name, Namespace: namespace}
+	s.otelServiceInfoByIP[ip] = otelServiceNamePair{Name: name, Namespace: namespace}
 
 	return name, namespace
 }
@@ -497,7 +493,7 @@ func (s *Store) serviceNameNamespaceOwnerID(om *informer.ObjectMeta, containerNa
 		s.resourceLabels["service.name"],
 	); nameFromMeta != "" {
 		serviceName = nameFromMeta
-	} else if own := TopOwner(om.Pod); own != nil {
+	} else if own := kube.TopOwner(om.Pod); own != nil {
 		serviceName = own.Name
 	}
 	if envName, ok := s.serviceNamespaceFromEnv(om, containerName); ok {

@@ -16,6 +16,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/attribute"
 
+	ti "go.opentelemetry.io/obi/pkg/test/integration"
+
 	"github.com/grafana/beyla/v2/test/integration/components/jaeger"
 	"github.com/grafana/beyla/v2/test/integration/components/prom"
 )
@@ -34,7 +36,7 @@ func runKafkaTestCase(t *testing.T, testCase TestCase) {
 		err     error
 	)
 
-	doHTTPGet(t, url+"/"+urlPath, 200)
+	ti.DoHTTPGet(t, url+"/"+urlPath, 200)
 
 	// Ensure we don't see any http requests
 	results, err = pq.Query(`http_server_request_duration_seconds_count{}`)

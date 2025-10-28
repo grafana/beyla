@@ -1,4 +1,5 @@
-//go:build integration
+// Copyright The OpenTelemetry Authors
+// SPDX-License-Identifier: Apache-2.0
 
 package integration
 
@@ -15,16 +16,21 @@ import (
 )
 
 const (
-	flushesMetricName            = "beyla_ebpf_tracer_flushes"
-	promRequestsMetricName       = "beyla_prometheus_http_requests_total"
+	flushesMetricName            = "_ebpf_tracer_flushes"
+	promRequestsMetricName       = "_prometheus_http_requests_total"
 	internalPrometheusMetricsURL = "http://localhost:8999/internal/metrics"
 )
 
-func testInternalPrometheusExport(t *testing.T) {
+// InternalPrometheusExport tests that internal metrics are properly exposed and updated
+func InternalPrometheusExport(t *testing.T, config *TestConfig) {
+	// Use config-specific metric names
+	flushesMetricName := config.MetricPrefix + flushesMetricName
+	promRequestsMetricName := config.MetricPrefix + promRequestsMetricName
+
 	// tests that internal metrics are properly exposed and updated
 	initialFlushedRecords := metricValue(t, flushesMetricName, nil)
 	for i := 0; i < 7; i++ {
-		doHTTPGet(t, instrumentedServiceStdURL+"/testing/some/flushes", http.StatusOK)
+		DoHTTPGet(t, instrumentedServiceStdURL+"/testing/some/flushes", http.StatusOK)
 	}
 	eventuallyIterations := 0
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
@@ -46,7 +52,7 @@ func testInternalPrometheusExport(t *testing.T) {
 }
 
 func metricValue(t require.TestingT, metricName string, labels map[string]string) int {
-	parser := expfmt.NewTextParser(model.NameValidationScheme)
+	parser := expfmt.NewTextParser(model.UTF8Validation)
 	resp, err := http.Get(internalPrometheusMetricsURL)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -61,7 +67,7 @@ func metricValue(t require.TestingT, metricName string, labels map[string]string
 	require.Len(t, matchingMetrics, 1,
 		"labels set matched multiple metrics. You must refine the search to match only one")
 	val := getVal(matchingMetrics[0])
-	require.NotNilf(t, val, "original value", matchingMetrics[0])
+	require.NotNil(t, val, "original value", matchingMetrics[0])
 	return int(*val)
 }
 

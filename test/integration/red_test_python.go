@@ -10,6 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	ti "go.opentelemetry.io/obi/pkg/test/integration"
+
 	"github.com/grafana/beyla/v2/test/integration/components/prom"
 )
 
@@ -20,7 +22,7 @@ func testREDMetricsForPythonHTTPLibrary(t *testing.T, url, comm, namespace strin
 	// - take a large JSON file
 	// - returning a 200 code
 	for i := 0; i < 4; i++ {
-		doHTTPGet(t, url+urlPath, 200)
+		ti.DoHTTPGet(t, url+urlPath, 200)
 	}
 
 	// Eventually, Prometheus would make this query visible

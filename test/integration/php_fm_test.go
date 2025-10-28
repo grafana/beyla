@@ -14,6 +14,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	ti "go.opentelemetry.io/obi/pkg/test/integration"
+
 	"github.com/grafana/beyla/v2/test/integration/components/docker"
 	"github.com/grafana/beyla/v2/test/integration/components/jaeger"
 	"github.com/grafana/beyla/v2/test/integration/components/prom"
@@ -40,7 +42,7 @@ func testREDMetricsForPHPHTTPLibrary(t *testing.T, url string, nginx, php string
 	// - process multiple calls in a row with, one more than we might need
 	// - returning a 200 code
 	for i := 0; i < 4; i++ {
-		doHTTPGet(t, fmt.Sprintf("%s%s", url, path), 200)
+		ti.DoHTTPGet(t, fmt.Sprintf("%s%s", url, path), 200)
 	}
 
 	// Eventually, Prometheus would make this query visible
@@ -125,7 +127,7 @@ func TestPHPFM(t *testing.T) {
 
 func testHTTPTracesPHP(t *testing.T) {
 	for i := 0; i < 4; i++ {
-		doHTTPGet(t, "http://localhost:8080/", 200)
+		ti.DoHTTPGet(t, "http://localhost:8080/", 200)
 	}
 
 	var trace jaeger.Trace

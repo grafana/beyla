@@ -10,6 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	ti "go.opentelemetry.io/obi/pkg/test/integration"
+
 	"github.com/grafana/beyla/v2/test/integration/components/prom"
 )
 
@@ -29,7 +31,7 @@ func testREDMetricsForElixirHTTPLibrary(t *testing.T, url string, comm string) {
 	// - process multiple calls in a row with, one more than we might need
 	// - returning a 200 code
 	for i := 0; i < 4; i++ {
-		doHTTPGet(t, fmt.Sprintf("%s%s/%d", url, path, i), 200)
+		ti.DoHTTPGet(t, fmt.Sprintf("%s%s/%d", url, path, i), 200)
 	}
 
 	// Eventually, Prometheus would make this query visible

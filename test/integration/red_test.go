@@ -17,6 +17,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	ti "go.opentelemetry.io/obi/pkg/test/integration"
+
 	"github.com/grafana/beyla/v2/test/integration/components/prom"
 	grpcclient "github.com/grafana/beyla/v2/test/integration/components/testserver/grpc/client"
 )
@@ -276,11 +278,11 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 	// - take at least 30ms to respond
 	// - returning a 404 code
 	for i := 0; i < 4; i++ {
-		doHTTPGet(t, url+"/metrics", 200)
-		doHTTPGet(t, url+path+"?delay=30ms&status=404", 404)
+		ti.DoHTTPGet(t, url+"/metrics", 200)
+		ti.DoHTTPGet(t, url+path+"?delay=30ms&status=404", 404)
 		if url == instrumentedServiceGorillaURL {
-			doHTTPGet(t, url+"/echo", 203)
-			doHTTPGet(t, url+"/echoCall", 204)
+			ti.DoHTTPGet(t, url+"/echo", 203)
+			ti.DoHTTPGet(t, url+"/echoCall", 204)
 		}
 	}
 
@@ -565,10 +567,10 @@ func testREDMetricsForHTTPLibraryNoRoute(t *testing.T, url, svcName string) {
 	// - take at least 30ms to respond
 	// - returning a 404 code
 	for i := 0; i < 3; i++ {
-		doHTTPGet(t, url+"/metrics", 200)
-		doHTTPGet(t, url+path+"?delay=30ms&status=404", 404)
-		doHTTPGet(t, url+"/echo", 203)
-		doHTTPGet(t, url+"/echoCall", 204)
+		ti.DoHTTPGet(t, url+"/metrics", 200)
+		ti.DoHTTPGet(t, url+path+"?delay=30ms&status=404", 404)
+		ti.DoHTTPGet(t, url+"/echo", 203)
+		ti.DoHTTPGet(t, url+"/echoCall", 204)
 	}
 
 	// Eventually, Prometheus would make this query visible
@@ -827,7 +829,7 @@ func testREDMetricsForGoBasicOnly(t *testing.T, url string, comm string) {
 	// - take at least 30ms to respond
 	// - returning a 204 code
 	for i := 0; i < 4; i++ {
-		doHTTPGet(t, url+path+"?delay=30", 200)
+		ti.DoHTTPGet(t, url+path+"?delay=30", 200)
 	}
 
 	commMatch := `service_name="` + comm + `",`

@@ -72,6 +72,22 @@ sync_function() {
     echo "  ✓ Synced $func in ${beyla_file##*/}"
 }
 
+# Check if a function uses the shared test package
+is_using_shared_package() {
+    local func="$1"
+    local file="$2"
+    
+    # Check if the file imports OBI's shared test integration package
+    if grep -q "go\.opentelemetry\.io/obi/pkg/test/integration" "$file"; then
+        # Check if the function body uses testConfig() or other shared package functions
+        local func_body=$(extract_function "$func" "$file")
+        if echo "$func_body" | grep -qE "(testConfig\(\)|[[:alpha:]]+\.[A-Z][[:alpha:]]*\()"; then
+            return 0  # Uses shared package
+        fi
+    fi
+    return 1  # Not using shared package
+}
+
 # Compare function implementations
 check_drift() {
     local func="$1"
@@ -82,6 +98,12 @@ check_drift() {
     
     if [[ -z "$beyla_file" ]] || [[ -z "$obi_file" ]]; then
         return 0  # Skip if not found in both
+    fi
+    
+    # Check if Beyla's version uses the shared test package
+    if is_using_shared_package "$func" "$beyla_file"; then
+        # Function has been migrated to use shared package - no drift possible
+        return 0
     fi
     
     # Extract function bodies
@@ -149,6 +171,29 @@ When --sync is used:
 EOF
 }
 
+# Count inline usage of shared package functions in test suites
+count_inline_shared_usage() {
+    # Count unique shared package function calls by extracting the actual import alias
+    # First, find a file that imports the package and extract the alias
+    local alias=""
+    for file in "$BEYLA_DIR"/*.go; do
+        alias=$(grep "go\.opentelemetry\.io/obi/pkg/test/integration" "$file" 2>/dev/null | \
+            sed -n 's/^[[:space:]]*\([[:alpha:]][[:alnum:]]*\)[[:space:]]*"go\.opentelemetry\.io\/obi\/pkg\/test\/integration".*/\1/p' | head -1)
+        if [[ -n "$alias" ]]; then
+            break
+        fi
+    done
+    
+    if [[ -z "$alias" ]]; then
+        echo "0"
+        return
+    fi
+    
+    # Now search all files at once for function calls using that alias
+    grep -roh "${alias}\.[A-Z][[:alpha:]]*(" "$BEYLA_DIR"/*.go 2>/dev/null | \
+        sed 's/($//' | sort -u | wc -l | tr -d ' ' || echo "0"
+}
+
 # Main
 main() {
     if [[ "$SYNC_MODE" == "true" ]]; then
@@ -161,15 +206,31 @@ main() {
     local common_funcs=$(find_common_functions)
     local total=0
     local drifted=0
+    local migrated=0
     
     for func in $common_funcs; do
         total=$((total + 1))
-        if ! check_drift "$func"; then
+        
+        # Check if migrated to shared package
+        local beyla_file=$(find_function_file "$func" "$BEYLA_DIR")
+        if [[ -n "$beyla_file" ]] && is_using_shared_package "$func" "$beyla_file"; then
+            migrated=$((migrated + 1))
+        elif ! check_drift "$func"; then
             drifted=$((drifted + 1))
         fi
     done
     
-    echo "Summary: $drifted/$total test functions have drifted from OBI"
+    # Count inline usage of shared package (e.g., ti.InternalPrometheusExport)
+    local inline_shared=$(count_inline_shared_usage)
+    
+    echo "Summary:"
+    echo "  - Total common functions: $total"
+    echo "  - Migrated to shared package: $migrated (wrapper functions)"
+    if [[ $inline_shared -gt 0 ]]; then
+        echo "  - Using shared package inline: $inline_shared (direct calls)"
+    fi
+    echo "  - Drifted from OBI: $drifted"
+    echo "  - In sync: $((total - migrated - drifted))"
     
     if [[ $drifted -gt 0 ]]; then
         echo ""
@@ -183,6 +244,9 @@ main() {
         else
             echo "To sync these changes automatically:"
             echo "  $0 --sync"
+            echo ""
+            echo "To migrate a function to use the shared package instead:"
+            echo "  See test/integration/suites_test.go for inline usage example"
             echo ""
             echo "To see full diff for a function:"
             echo "  diff -u test/integration/traces_test.go .obi-src/test/integration/traces_test.go"

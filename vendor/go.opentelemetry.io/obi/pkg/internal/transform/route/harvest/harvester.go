@@ -85,8 +85,9 @@ func (h *RouteHarvester) HarvestRoutes(fileInfo *exec.FileInfo) (*RouteHarvester
 		defer runtime.UnlockOSThread()
 		myUID, myGID, myPID := jvmAttachInitFunc()
 		defer func() {
-			err := jvmAttachCleanupFunc(myUID, myGID, myPID)
-			h.log.Error("route harvesting cleanup failed", "error", err)
+			if err := jvmAttachCleanupFunc(myUID, myGID, myPID); err != nil {
+				h.log.Error("route harvesting cleanup failed", "error", err)
+			}
 		}()
 	}
 

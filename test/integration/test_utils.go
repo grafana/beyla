@@ -44,19 +44,6 @@ func doHTTPPost(t *testing.T, path string, status int, jsonBody []byte) {
 	require.Equal(t, status, r.StatusCode)
 }
 
-func doHTTPGet(t require.TestingT, path string, status int) {
-	// Random fake body to cause the request to have some size (38 bytes)
-	jsonBody := []byte(`{"productId": 123456, "quantity": 100}`)
-
-	req, err := http.NewRequest(http.MethodGet, path, bytes.NewReader(jsonBody))
-	require.NoError(t, err)
-	req.Header.Set("Content-Type", "application/json")
-
-	r, err := testHTTPClient.Do(req)
-	require.NoError(t, err)
-	require.Equal(t, status, r.StatusCode)
-}
-
 // nolint:errcheck
 func doHTTPGetWithTimeout(t *testing.T, path string, timeout time.Duration) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)

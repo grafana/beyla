@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"go.opentelemetry.io/obi/pkg/obi"
+	ti "go.opentelemetry.io/obi/pkg/test/integration"
 
 	"github.com/grafana/beyla/v2/test/integration/components/docker"
 )
@@ -26,13 +27,16 @@ func TestSuite(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose.yml", path.Join(pathOutput, "test-suite.log"))
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
+
+	config := testConfig()
+
 	t.Run("RED metrics", testREDMetricsHTTP)
 	t.Run("HTTP traces", testHTTPTraces)
 	t.Run("HTTP traces (no traceID)", testHTTPTracesNoTraceID)
 	t.Run("GRPC traces", testGRPCTraces)
 	t.Run("GRPC RED metrics", testREDMetricsGRPC)
 	t.Run("GRPC TLS RED metrics", testREDMetricsGRPCTLS)
-	t.Run("Internal Prometheus metrics", testInternalPrometheusExport)
+	t.Run("Internal Prometheus metrics", func(t *testing.T) { ti.InternalPrometheusExport(t, config) })
 	t.Run("Exemplars exist", testExemplarsExist)
 	t.Run("Testing Host Info metric", testHostInfo)
 
@@ -99,11 +103,14 @@ func TestSuite_NoDebugInfo(t *testing.T) {
 	compose.Env = append(compose.Env, `TESTSERVER_DOCKERFILE_SUFFIX=_nodebug`)
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
+
+	config := testConfig()
+
 	t.Run("RED metrics", testREDMetricsHTTP)
 	t.Run("HTTP traces", testHTTPTraces)
 	t.Run("GRPC traces", testGRPCTraces)
 	t.Run("GRPC RED metrics", testREDMetricsGRPC)
-	t.Run("Internal Prometheus metrics", testInternalPrometheusExport)
+	t.Run("Internal Prometheus metrics", func(t *testing.T) { ti.InternalPrometheusExport(t, config) })
 
 	require.NoError(t, compose.Close())
 }
@@ -114,11 +121,14 @@ func TestSuite_StaticCompilation(t *testing.T) {
 	compose.Env = append(compose.Env, `TESTSERVER_DOCKERFILE_SUFFIX=_static`)
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
+
+	config := testConfig()
+
 	t.Run("RED metrics", testREDMetricsHTTP)
 	t.Run("HTTP traces", testHTTPTraces)
 	t.Run("GRPC traces", testGRPCTraces)
 	t.Run("GRPC RED metrics", testREDMetricsGRPC)
-	t.Run("Internal Prometheus metrics", testInternalPrometheusExport)
+	t.Run("Internal Prometheus metrics", func(t *testing.T) { ti.InternalPrometheusExport(t, config) })
 
 	require.NoError(t, compose.Close())
 }
@@ -128,11 +138,14 @@ func TestSuite_OldestGoVersion(t *testing.T) {
 	compose.Env = []string{`OTEL_GO_AUTO_TARGET_EXE=*testserver`}
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
+
+	config := testConfig()
+
 	t.Run("RED metrics", testREDMetricsOldHTTP)
 	t.Run("HTTP traces", testHTTPTraces)
 	t.Run("GRPC traces", testGRPCTraces)
 	t.Run("GRPC RED metrics", testREDMetricsGRPC)
-	t.Run("Internal Prometheus metrics", testInternalPrometheusExport)
+	t.Run("Internal Prometheus metrics", func(t *testing.T) { ti.InternalPrometheusExport(t, config) })
 
 	require.NoError(t, compose.Close())
 }
@@ -190,11 +203,14 @@ func TestSuite_OpenPort(t *testing.T) {
 	compose.Env = append(compose.Env, `BEYLA_OPEN_PORT=8080`, `BEYLA_EXECUTABLE_NAME=`)
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
+
+	config := testConfig()
+
 	t.Run("RED metrics", testREDMetricsHTTP)
 	t.Run("HTTP traces", testHTTPTraces)
 	t.Run("GRPC traces", testGRPCTraces)
 	t.Run("GRPC RED metrics", testREDMetricsGRPC)
-	t.Run("Internal Prometheus metrics", testInternalPrometheusExport)
+	t.Run("Internal Prometheus metrics", func(t *testing.T) { ti.InternalPrometheusExport(t, config) })
 
 	require.NoError(t, compose.Close())
 }
@@ -220,9 +236,11 @@ func TestSuite_PrometheusScrape(t *testing.T) {
 		"process_command":         "testserver",
 		"process_command_line":    "/testserver",
 	}))
+	config := testConfig()
+
 	t.Run("RED metrics", testREDMetricsHTTP)
 	t.Run("GRPC RED metrics", testREDMetricsGRPC)
-	t.Run("Internal Prometheus metrics", testInternalPrometheusExport)
+	t.Run("Internal Prometheus metrics", func(t *testing.T) { ti.InternalPrometheusExport(t, config) })
 	t.Run("Testing Beyla Build Info metric", testPrometheusBeylaBuildInfo)
 	t.Run("Testing for no Beyla self metrics", testPrometheusNoBeylaEvents)
 	t.Run("Testing BPF metrics", testPrometheusBPFMetrics)
@@ -468,8 +486,10 @@ func TestSuite_DisableKeepAlives(t *testing.T) {
 	setHTTPClientDisableKeepAlives(true)
 	t.Run("RED metrics", testREDMetricsHTTP)
 
+	config := testConfig()
+
 	t.Run("HTTP DisableKeepAlives traces", testHTTPTraces)
-	t.Run("Internal Prometheus DisableKeepAlives metrics", testInternalPrometheusExport)
+	t.Run("Internal Prometheus DisableKeepAlives metrics", func(t *testing.T) { ti.InternalPrometheusExport(t, config) })
 	// Reset to defaults for any tests run afterward
 	setHTTPClientDisableKeepAlives(false)
 

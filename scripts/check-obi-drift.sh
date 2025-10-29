@@ -77,11 +77,14 @@ is_using_shared_package() {
     local func="$1"
     local file="$2"
     
-    # Check if the file imports OBI's shared test integration package
-    if grep -q "go\.opentelemetry\.io/obi/pkg/test/integration" "$file"; then
-        # Check if the function body uses testConfig() or other shared package functions
+    # Check if the file imports OBI's shared test integration package and extract the alias
+    local alias=$(grep "go\.opentelemetry\.io/obi/pkg/test/integration" "$file" 2>/dev/null | \
+        sed -n 's/^[[:space:]]*\([[:alpha:]][[:alnum:]]*\)[[:space:]]*"go\.opentelemetry\.io\/obi\/pkg\/test\/integration".*/\1/p' | head -1)
+    
+    if [[ -n "$alias" ]]; then
+        # Check if the function body actually uses the shared package via the alias
         local func_body=$(extract_function "$func" "$file")
-        if echo "$func_body" | grep -qE "(testConfig\(\)|[[:alpha:]]+\.[A-Z][[:alpha:]]*\()"; then
+        if echo "$func_body" | grep -qE "${alias}\.[A-Z][[:alpha:]]*\("; then
             return 0  # Uses shared package
         fi
     fi
@@ -206,15 +209,15 @@ main() {
     local common_funcs=$(find_common_functions)
     local total=0
     local drifted=0
-    local migrated=0
     
     for func in $common_funcs; do
         total=$((total + 1))
         
-        # Check if migrated to shared package
+        # Check if drifted (skip if using shared package, as those can't drift)
         local beyla_file=$(find_function_file "$func" "$BEYLA_DIR")
         if [[ -n "$beyla_file" ]] && is_using_shared_package "$func" "$beyla_file"; then
-            migrated=$((migrated + 1))
+            # Function uses shared package - skip drift check
+            continue
         elif ! check_drift "$func"; then
             drifted=$((drifted + 1))
         fi
@@ -225,12 +228,11 @@ main() {
     
     echo "Summary:"
     echo "  - Total common functions: $total"
-    echo "  - Migrated to shared package: $migrated (wrapper functions)"
     if [[ $inline_shared -gt 0 ]]; then
-        echo "  - Using shared package inline: $inline_shared (direct calls)"
+        echo "  - Using shared package: $inline_shared unique function calls"
     fi
     echo "  - Drifted from OBI: $drifted"
-    echo "  - In sync: $((total - migrated - drifted))"
+    echo "  - In sync: $((total - drifted))"
     
     if [[ $drifted -gt 0 ]]; then
         echo ""

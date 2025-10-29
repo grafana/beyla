@@ -9,6 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	ti "go.opentelemetry.io/obi/pkg/test/integration"
+
 	"github.com/grafana/beyla/v2/test/integration/components/prom"
 	"github.com/grafana/beyla/v2/test/tools"
 )
@@ -20,7 +22,7 @@ func testREDMetricsForNetHTTPLibrary(t *testing.T, url string, comm string) {
 	// - take a large JSON file
 	// - returning a 200 code
 	for i := 0; i < 4; i++ {
-		doHTTPGet(t, url+urlPath, 200)
+		ti.DoHTTPGet(t, url+urlPath, 200)
 	}
 
 	// Eventually, Prometheus would make this query visible
@@ -80,7 +82,7 @@ func testREDMetricsForNetHTTPSLibrary(t *testing.T, url string, comm string) {
 	// - take at least 30ms to respond
 	// - returning a 204 code
 	for i := 0; i < 4; i++ {
-		doHTTPGet(t, url+path, 200)
+		ti.DoHTTPGet(t, url+path, 200)
 	}
 
 	// Eventually, Prometheus would make this query visible

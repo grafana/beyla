@@ -26,10 +26,10 @@ func initAttach() (int, int, int) {
 }
 
 func cleanupAttach(myUID, myGID, myPID int) error {
-	if err := syscall.Setegid(myUID); err != nil {
+	if err := syscall.Seteuid(myUID); err != nil {
 		return err
 	}
-	if err := syscall.Seteuid(myGID); err != nil {
+	if err := syscall.Setegid(myGID); err != nil {
 		return err
 	}
 

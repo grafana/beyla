@@ -863,6 +863,7 @@ go.opentelemetry.io/obi/pkg/pipe/global
 go.opentelemetry.io/obi/pkg/pipe/msg
 go.opentelemetry.io/obi/pkg/pipe/swarm
 go.opentelemetry.io/obi/pkg/pipe/swarm/swarms
+go.opentelemetry.io/obi/pkg/test/integration
 go.opentelemetry.io/obi/pkg/transform
 # go.opentelemetry.io/otel v1.38.0
 ## explicit; go 1.23.0

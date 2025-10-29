@@ -234,7 +234,7 @@
       "name": {
         "versions": {
           "oldest": "2.0.1",
-          "newest": "2.3.1"
+          "newest": "2.4.0"
         },
         "offsets": [
           {
@@ -248,7 +248,7 @@
       "Database": {
         "versions": {
           "oldest": "2.0.1",
-          "newest": "2.3.1"
+          "newest": "2.4.0"
         },
         "offsets": [
           {
@@ -260,7 +260,7 @@
       "Name": {
         "versions": {
           "oldest": "2.0.1",
-          "newest": "2.3.1"
+          "newest": "2.4.0"
         },
         "offsets": [
           {

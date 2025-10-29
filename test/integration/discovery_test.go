@@ -13,6 +13,8 @@ import (
 	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/require"
 
+	ti "go.opentelemetry.io/obi/pkg/test/integration"
+
 	"github.com/grafana/beyla/v2/test/integration/components/docker"
 	"github.com/grafana/beyla/v2/test/integration/components/jaeger"
 	"github.com/grafana/beyla/v2/test/integration/components/prom"
@@ -45,7 +47,7 @@ func testSelectiveExports(t *testing.T) {
 	// this with  a proper check to see if the target process has finished
 	// being instrumented
 	test.Eventually(t, 3*time.Minute, func(t require.TestingT) {
-		doHTTPGet(t, "http://localhost:5001/b", 200)
+		ti.DoHTTPGet(t, "http://localhost:5001/b", 200)
 		bTraces := getTraces("service-b", "/b")
 		require.NotNil(t, bTraces)
 	})
@@ -53,8 +55,8 @@ func testSelectiveExports(t *testing.T) {
 	// Run couple of requests to make sure we flush out any transactions that might be
 	// stuck because of our tracking of full request times
 	for i := 0; i < 10; i++ {
-		doHTTPGet(t, "http://localhost:5000/a", 200)
-		doHTTPGet(t, "http://localhost:5001/b", 200)
+		ti.DoHTTPGet(t, "http://localhost:5000/a", 200)
+		ti.DoHTTPGet(t, "http://localhost:5001/b", 200)
 	}
 
 	test.Eventually(t, testTimeout, func(t require.TestingT) {

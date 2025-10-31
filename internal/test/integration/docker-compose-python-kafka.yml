@@ -33,7 +33,7 @@ services:
 
   testserver:
     build:
-      context: ../../test/integration/components/pythonkafka/
+      context: ../../../test/integration/components/pythonkafka/
       dockerfile: Dockerfile
     image: hatest-testserver-python-kafka
     ports:
@@ -46,7 +46,7 @@ services:
 
   autoinstrumenter:
     build:
-      context: ../..
+      context: ../../..
       dockerfile: ./internal/test/integration/components/beyla/Dockerfile
     volumes:
       - ./configs/:/configs

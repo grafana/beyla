@@ -3,7 +3,7 @@ version: "3.8"
 services:
   nodeclient:
     build:
-      context: ../..
+      context: ../../..
       dockerfile: internal/test/integration/components/nodeclient/Dockerfile
     image: hatest-nodeclient
     command:
@@ -17,7 +17,7 @@ services:
 
   autoinstrumenter:
     build:
-      context: ../..
+      context: ../../..
       dockerfile: ./internal/test/integration/components/beyla/Dockerfile
     command:
       - --config=/configs/instrumenter-config${INSTRUMENTER_CONFIG_SUFFIX}.yml

@@ -7,7 +7,7 @@ services:
   # Simple python HTTP server, which exposes one endpoint /query that does a few redis queries
   testserver:
     build:
-      context: ../../..
+      context: ../../../..
       dockerfile: ./internal/test/integration/components/goredis/Dockerfile
     image: goredisclient
     ports:
@@ -18,7 +18,7 @@ services:
   # eBPF auto instrumenter
   autoinstrumenter:
     build:
-      context: ../../..
+      context: ../../../..
       dockerfile: ./internal/test/integration/components/beyla/Dockerfile
     command:
       - --config=/configs/instrumenter-config-traces.yml

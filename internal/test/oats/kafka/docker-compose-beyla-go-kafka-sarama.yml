@@ -31,7 +31,7 @@ services:
   # Go HTTP server based on the Sarama Kafka examples
   testserver:
     build:
-      context: ../../..
+      context: ../../../..
       dockerfile: ./internal/test/integration/components/gokafka/Dockerfile
     image: gokafka
     ports:
@@ -42,7 +42,7 @@ services:
   # eBPF auto instrumenter
   autoinstrumenter:
     build:
-      context: ../../..
+      context: ../../../..
       dockerfile: ./internal/test/integration/components/beyla/Dockerfile
     command:
       - --config=/configs/instrumenter-config-traces.yml

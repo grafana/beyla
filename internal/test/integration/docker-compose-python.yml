@@ -3,7 +3,7 @@ version: "3.8"
 services:
   testserver:
     build:
-      context: ../..
+      context: ../../..
       dockerfile: internal/test/integration/components/pythonserver/Dockerfile${TESTSERVER_DOCKERFILE_SUFFIX}
     image: hatest-testserver-python
     ports:
@@ -14,7 +14,7 @@ services:
 
   autoinstrumenter:
     build:
-      context: ../..
+      context: ../../..
       dockerfile: ./internal/test/integration/components/beyla/Dockerfile
     volumes:
       - ./configs/:/configs

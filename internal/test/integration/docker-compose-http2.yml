@@ -3,7 +3,7 @@ version: "3.8"
 services:
   testclient:
     build:
-      context: ../..
+      context: ../../..
       dockerfile: internal/test/integration/components/gohttp2/client/Dockerfile
     image: hatest-testclient
     environment:
@@ -14,7 +14,7 @@ services:
 
   testserver:
     build:
-      context: ../..
+      context: ../../..
       dockerfile: internal/test/integration/components/gohttp2/server/Dockerfile
     image: hatest-server
     ports:
@@ -27,7 +27,7 @@ services:
 
   autoinstrumenter:
     build:
-      context: ../..
+      context: ../../..
       dockerfile: ./internal/test/integration/components/beyla/Dockerfile
     command:
       - --config=/configs/instrumenter-config-http2.yml

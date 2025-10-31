@@ -6,7 +6,7 @@ services:
 
   testserver:
     build:
-      context: ../../..
+      context: ../../../..
       dockerfile: ./internal/test/integration/components/gomongov2/Dockerfile
     image: gomongo
     ports:
@@ -14,7 +14,7 @@ services:
   # eBPF auto instrumenter
   autoinstrumenter:
     build:
-      context: ../../..
+      context: ../../../..
       dockerfile: ./internal/test/integration/components/beyla/Dockerfile
     command:
       - --config=/configs/instrumenter-config-traces.yml

@@ -3,7 +3,7 @@ version: "3.8"
 services:
   nodeserver:
     build:
-      context: ../..
+      context: ../../..
       dockerfile: internal/test/integration/components/nodemultiproc/Dockerfile
     image: nodemultiproc
     ports:
@@ -21,7 +21,7 @@ services:
 
   autoinstrumenter:
     build:
-      context: ../..
+      context: ../../..
       dockerfile: ./internal/test/integration/components/beyla/Dockerfile
     command:
       - --config=/configs/instrumenter-config-discovery.yml

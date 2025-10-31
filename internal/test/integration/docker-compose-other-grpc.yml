@@ -4,7 +4,7 @@ services:
   # old gRPC
   backend:
     build:
-      context: ../..
+      context: ../../..
       dockerfile: internal/test/integration/components/old_grpc/backend/Dockerfile
     image: hatest-backend
     ports:
@@ -15,7 +15,7 @@ services:
   # old gRPC
   worker:
     build:
-      context: ../..
+      context: ../../..
       dockerfile: internal/test/integration/components/old_grpc/worker/Dockerfile
     image: hatest-worker
     ports:
@@ -24,7 +24,7 @@ services:
   # gRPC client going nowhere
   grpcpinger:
     build:
-      context: ../../
+      context: ../../../
       dockerfile: internal/test/integration/components/grpcpinger/Dockerfile
     image: hatest-grpcpinger
     environment:
@@ -32,7 +32,7 @@ services:
 
   autoinstrumenter:
     build:
-      context: ../..
+      context: ../../..
       dockerfile: ./internal/test/integration/components/beyla/Dockerfile
     command:
       - --config=/configs/instrumenter-config-other-grpc.yml

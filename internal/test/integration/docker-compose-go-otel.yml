@@ -3,7 +3,7 @@ version: "3.8"
 services:
   testserver:
     build:
-      context: ../..
+      context: ../../..
       dockerfile: internal/test/integration/components/go_otel/Dockerfile
     image: hatest-testserver
     ports:
@@ -15,7 +15,7 @@ services:
 
   autoinstrumenter:
     build:
-      context: ../..
+      context: ../../..
       dockerfile: ./internal/test/integration/components/beyla/Dockerfile
     command:
       - --config=/configs/instrumenter-config-go-otel.yml

@@ -3,13 +3,13 @@ version: "3.8"
 services:
   redis:
     build:
-      context: ../../test/integration/components/redis/
+      context: ../../../test/integration/components/redis/
       dockerfile: Dockerfile
     image: redis
 
   testserver:
     build:
-      context: ../../test/integration/components/pythonredis/
+      context: ../../../test/integration/components/pythonredis/
       dockerfile: Dockerfile
     image: hatest-testserver-python-redis
     ports:
@@ -21,7 +21,7 @@ services:
         condition: service_started
   autoinstrumenter:
     build:
-      context: ../..
+      context: ../../..
       dockerfile: ./internal/test/integration/components/beyla/Dockerfile
     volumes:
       - ./configs/:/configs

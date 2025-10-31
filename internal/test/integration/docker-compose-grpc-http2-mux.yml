@@ -3,7 +3,7 @@ version: "3.8"
 services:
   testclient:
     build:
-      context: ../..
+      context: ../../..
       dockerfile: internal/test/integration/components/go_grpc_server_mux/Dockerfile_pinger${TEST_SUFFIX}
     image: hatest-testclient
     environment:
@@ -27,7 +27,7 @@ services:
 
   autoinstrumenter:
     build:
-      context: ../..
+      context: ../../..
       dockerfile: ./internal/test/integration/components/beyla/Dockerfile
     command:
       - --config=/configs/instrumenter-config-grpc-http2-mux.yml

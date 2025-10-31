@@ -3,7 +3,7 @@ version: "3.8"
 services:
   testserver:
     build:
-      context: ../..
+      context: ../../..
       dockerfile: internal/test/integration/components/testserver/Dockerfile${TESTSERVER_DOCKERFILE_SUFFIX}
     image: hatest-testserver
     ports:
@@ -20,7 +20,7 @@ services:
 
   autoinstrumenter:
     build:
-      context: ../..
+      context: ../../..
       dockerfile: ./internal/test/integration/components/beyla/Dockerfile
     command:
       - --config=/configs/instrumenter-config${INSTRUMENTER_CONFIG_SUFFIX}.yml

@@ -3,7 +3,7 @@ version: "3.8"
 services:
   testserver:
     build:
-      context: ../..
+      context: ../../..
       dockerfile: internal/test/integration/components/testserver/Dockerfile
     image: hatest-testserver
     ports:
@@ -28,7 +28,7 @@ services:
 
   testserver1:
     build:
-      context: ../..
+      context: ../../..
       dockerfile: internal/test/integration/components/testserver/Dockerfile_rename1
     image: hatest-testserver1
     ports:
@@ -41,7 +41,7 @@ services:
   # of metrics when they come from the same executable file
   testserver-duplicate:
     build:
-      context: ../..
+      context: ../../..
       dockerfile: internal/test/integration/components/testserver/Dockerfile_duplicate
     image: hatest-testserver-duplicate
     ports:
@@ -64,7 +64,7 @@ services:
 
   pytestserverssl:
     build:
-      context: ../..
+      context: ../../..
       dockerfile: internal/test/integration/components/pythonserver/Dockerfile_tls
     image: hatest-testserver-python-ssl
     ports:
@@ -72,7 +72,7 @@ services:
 
   pytestserver:
     build:
-      context: ../..
+      context: ../../..
       dockerfile: internal/test/integration/components/pythonserver/Dockerfile_7773
     image: hatest-testserver-python
     ports:
@@ -80,7 +80,7 @@ services:
 
   ntestserverssl:
     build:
-      context: ../..
+      context: ../../..
       dockerfile: internal/test/integration/components/nodejsserver/Dockerfile
     image: hatest-testserver-node-ssl
     command:
@@ -91,7 +91,7 @@ services:
 
   ntestserver:
     build:
-      context: ../..
+      context: ../../..
       dockerfile: internal/test/integration/components/nodejsserver/Dockerfile
     image: hatest-testserver-node
     command:
@@ -117,7 +117,7 @@ services:
 
   autoinstrumenter:
     build:
-      context: ../..
+      context: ../../..
       dockerfile: ./internal/test/integration/components/beyla/Dockerfile
     command:
       - --config=/configs/instrumenter-config-multiexec-host.yml

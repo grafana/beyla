@@ -3,7 +3,7 @@ version: "3.8"
 services:
   testserver_b:
     build:
-      context: ../..
+      context: ../../..
       dockerfile: internal/test/integration/components/nodejsdist/Dockerfile_b
     image: hatest-testserver-nodejs-b
     ports:
@@ -16,7 +16,7 @@ services:
 
   testserver_r:
     build:
-      context: ../..
+      context: ../../..
       dockerfile: internal/test/integration/components/nodejsdist/Dockerfile_r
     image: hatest-testserver-nodejs-r
     ports:
@@ -29,7 +29,7 @@ services:
 
   autoinstrumenter:
     build:
-      context: ../..
+      context: ../../..
       dockerfile: ./internal/test/integration/components/beyla/Dockerfile
     volumes:
       - ./configs/:/configs

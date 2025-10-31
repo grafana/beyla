@@ -6,7 +6,7 @@ TARBALL ?= /tmp/rootfs.tar
 # do NOT put ROOT_IMG on a tmpfs backed fs
 ROOT_IMG ?= $(WORKDIR)/rootfs.qcow2
 ROOT_IMAGE_RAW ?= $(WORKDIR)/rootfs.raw
-REPO_ROOT ?= ../..
+REPO_ROOT ?= ../../..
 TARGET_TEST ?= run-integration-test-vm
 TEST_PATTERN ?= TestMultiProcess
 RUN_NUMBER ?= 1

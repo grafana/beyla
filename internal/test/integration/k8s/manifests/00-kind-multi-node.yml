@@ -16,7 +16,7 @@ nodes:
       - hostPath: ../../configs
         containerPath: /configs
       # testoutput folder to store coverage data
-      - hostPath: ../../../../testoutput
+      - hostPath: ../../../../../testoutput
         containerPath: /testoutput
     extraPortMappings:
       # to avoid having to do port-forwarding from the Go client (a bit cumbersome process),
@@ -40,7 +40,7 @@ nodes:
       - hostPath: ../../configs
         containerPath: /configs
       # testoutput folder to store coverage data
-      - hostPath: ../../../../testoutput
+      - hostPath: ../../../../../testoutput
         containerPath: /testoutput
   - role: worker
     kubeadmConfigPatches:
@@ -54,7 +54,7 @@ nodes:
       - hostPath: ../../configs
         containerPath: /configs
       # testoutput folder to store coverage data
-      - hostPath: ../../../../testoutput
+      - hostPath: ../../../../../testoutput
         containerPath: /testoutput
     extraPortMappings:
       # to avoid having to do port-forwarding from the Go client (a bit cumbersome process),
@@ -76,5 +76,5 @@ nodes:
       - hostPath: ../../configs
         containerPath: /configs
       # testoutput folder to store coverage data
-      - hostPath: ../../../../testoutput
+      - hostPath: ../../../../../testoutput
         containerPath: /testoutput

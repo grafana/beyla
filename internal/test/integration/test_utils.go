@@ -46,7 +46,7 @@ func doHTTPPost(t *testing.T, path string, status int, jsonBody []byte) {
 
 // nolint:errcheck
 func doHTTPGetWithTimeout(t *testing.T, path string, timeout time.Duration) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(t.Context(), timeout)
 	defer cancel()
 
 	// Random fake body to cause the request to have some size (38 bytes)
@@ -84,7 +84,7 @@ func doHTTPGetFullResponse(t *testing.T, path string, status int) {
 	require.Equal(t, status, r.StatusCode)
 	body, err := io.ReadAll(r.Body)
 	require.NoError(t, err)
-	require.Greater(t, len(body), 0)
+	require.NotEmpty(t, body)
 }
 
 func doHTTPGetWithTraceparent(t *testing.T, path string, status int, traceparent string) {
@@ -122,11 +122,11 @@ func createTraceparent(traceID string, parentID string) string {
 }
 
 func waitForTestComponentsSub(t *testing.T, url, subpath string) {
-	waitForTestComponentsSubWithTime(t, url, subpath, 1)
+	waitForTestComponentsSubWithTime(t, url, subpath, 2)
 }
 
 func waitForTestComponentsSubStatus(t *testing.T, url, subpath string, status int) {
-	waitForTestComponentsSubWithTimeAndCode(t, url, subpath, status, 1)
+	waitForTestComponentsSubWithTimeAndCode(t, url, subpath, status, 2)
 }
 
 // does a smoke test to verify that all the components that started
@@ -135,7 +135,7 @@ func waitForTestComponentsSubWithTime(t *testing.T, url, subpath string, minutes
 	pq := prom.Client{HostPort: prometheusHostPort}
 	test.Eventually(t, time.Duration(minutes)*time.Minute, func(t require.TestingT) {
 		// first, verify that the test service endpoint is healthy
-		req, err := http.NewRequest("GET", url+subpath, nil)
+		req, err := http.NewRequest(http.MethodGet, url+subpath, nil)
 		require.NoError(t, err)
 		r, err := testHTTPClient.Do(req)
 		require.NoError(t, err)
@@ -154,7 +154,7 @@ func waitForTestComponentsSubWithTimeAndCode(t *testing.T, url, subpath string, 
 	pq := prom.Client{HostPort: prometheusHostPort}
 	test.Eventually(t, time.Duration(minutes)*time.Minute, func(t require.TestingT) {
 		// first, verify that the test service endpoint is healthy
-		req, err := http.NewRequest("GET", url+subpath, nil)
+		req, err := http.NewRequest(http.MethodGet, url+subpath, nil)
 		require.NoError(t, err)
 		r, err := testHTTPClient.Do(req)
 		require.NoError(t, err)
@@ -173,7 +173,7 @@ func waitForTestComponentsRoute(t *testing.T, url, route string) {
 	pq := prom.Client{HostPort: prometheusHostPort}
 	test.Eventually(t, time.Duration(1)*time.Minute, func(t require.TestingT) {
 		// first, verify that the test service endpoint is healthy
-		req, err := http.NewRequest("GET", url+route, nil)
+		req, err := http.NewRequest(http.MethodGet, url+route, nil)
 		require.NoError(t, err)
 		r, err := testHTTPClient.Do(req)
 		require.NoError(t, err)
@@ -200,7 +200,7 @@ func waitForSQLTestComponentsWithDB(t *testing.T, url, subpath, db string) {
 	pq := prom.Client{HostPort: prometheusHostPort}
 	test.Eventually(t, 1*time.Minute, func(t require.TestingT) {
 		// first, verify that the test service endpoint is healthy
-		req, err := http.NewRequest("GET", url+subpath, nil)
+		req, err := http.NewRequest(http.MethodGet, url+subpath, nil)
 		require.NoError(t, err)
 		r, err := testHTTPClient.Do(req)
 		require.NoError(t, err)
@@ -273,7 +273,7 @@ func waitForTestComponentsHTTP2Sub(t *testing.T, url, subpath string, minutes in
 	pq := prom.Client{HostPort: prometheusHostPort}
 	test.Eventually(t, time.Duration(minutes)*time.Minute, func(t require.TestingT) {
 		// first, verify that the test service endpoint is healthy
-		req, err := http.NewRequest("GET", url+subpath, nil)
+		req, err := http.NewRequest(http.MethodGet, url+subpath, nil)
 		require.NoError(t, err)
 		tr := &http2.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},

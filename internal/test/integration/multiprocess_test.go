@@ -159,7 +159,6 @@ func checkReportedOnlyOnce(t *testing.T, baseURL, serviceName string) {
 		require.Len(t, results, 1)
 		assert.Equal(t, 3, totalPromCount(t, results))
 	}, test.Interval(1000*time.Millisecond))
-
 }
 
 func checkInstrumentedProcessesMetric(t *testing.T) {
@@ -180,11 +179,10 @@ func checkInstrumentedProcessesMetric(t *testing.T) {
 		for processName, expectedCount := range processes {
 			results, err := pq.Query(fmt.Sprintf(`beyla_instrumented_processes{process_name="%s"}`, processName))
 			require.NoError(t, err)
+			require.NotEmpty(t, results, "Expected to find instrumented processes metric for %s", processName)
 			value, err := strconv.Atoi(results[0].Value[1].(string))
 			require.NoError(t, err)
 			assert.Equal(t, expectedCount, value)
 		}
-
 	}, test.Interval(1000*time.Millisecond))
-
 }

@@ -175,7 +175,7 @@ func getNetFlows(t *testing.T) []prom.Result {
 	pq := prom.Client{HostPort: prometheusHostPort}
 	test.Eventually(t, 4*testTimeout, func(t require.TestingT) {
 		// first, verify that the test service endpoint is healthy
-		req, err := http.NewRequest("GET", instrumentedServiceStdURL, nil)
+		req, err := http.NewRequest(http.MethodGet, instrumentedServiceStdURL, nil)
 		require.NoError(t, err)
 		r, err := testHTTPClient.Do(req)
 		require.NoError(t, err)
@@ -201,7 +201,7 @@ func getDirectionNetFlows(t *testing.T) []prom.Result {
 	}, test.Interval(time.Second))
 
 	// make a few calls to the testserver, which will call testserver2 with a source port lower than a destination port (7000 -> 8080)
-	req, err := http.NewRequest("GET", "http://localhost:8080/echoLowPort", nil)
+	req, err := http.NewRequest(http.MethodGet, "http://localhost:8080/echoLowPort", nil)
 	require.NoError(t, err)
 	clientBytes, serverBytes := callAndCheckMetrics(t, req, pq, 0, 0)
 	clientBytes, serverBytes = callAndCheckMetrics(t, req, pq, clientBytes, serverBytes)

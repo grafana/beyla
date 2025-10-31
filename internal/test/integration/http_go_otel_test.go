@@ -153,7 +153,7 @@ func otelWaitForTestComponents(t *testing.T, url, subpath string) {
 	pq := prom.Client{HostPort: prometheusHostPort}
 	test.Eventually(t, 1*time.Minute, func(t require.TestingT) {
 		// first, verify that the test service endpoint is healthy
-		req, err := http.NewRequest("GET", url+subpath, nil)
+		req, err := http.NewRequest(http.MethodGet, url+subpath, nil)
 		require.NoError(t, err)
 		r, err := testHTTPClient.Do(req)
 		require.NoError(t, err)
@@ -244,7 +244,7 @@ func TestHTTPGoOTelInstrumentedAppGRPC(t *testing.T) {
 func otelWaitForTestComponentsTraces(t *testing.T, url, subpath string) {
 	test.Eventually(t, 1*time.Minute, func(t require.TestingT) {
 		// first, verify that the test service endpoint is healthy
-		req, err := http.NewRequest("GET", url+subpath, nil)
+		req, err := http.NewRequest(http.MethodGet, url+subpath, nil)
 		require.NoError(t, err)
 		r, err := testHTTPClient.Do(req)
 		require.NoError(t, err)

@@ -1,7 +1,9 @@
 name: Documentation CI
 on:
   pull_request:
-    paths: ["docs/sources/**"]
+    paths:
+      - "docs/sources/**"
+      - ".github/workflows/vale.yml"
   workflow_dispatch:
 
 permissions:

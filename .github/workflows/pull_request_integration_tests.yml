@@ -3,8 +3,32 @@ name: Pull request integration tests
 on:
   push:
     branches: ["main", "release-*"]
+    paths:
+      - "**.go"
+      - "go.mod"
+      - "go.sum"
+      - "bpf/**"
+      - "internal/**"
+      - "pkg/**"
+      - "cmd/**"
+      - "vendor/**"
+      - "Makefile"
+      - "scripts/generate-integration-matrix.sh"
+      - ".github/workflows/pull_request_integration_tests.yml"
   pull_request:
     branches: ["main", "release-*"]
+    paths:
+      - "**.go"
+      - "go.mod"
+      - "go.sum"
+      - "bpf/**"
+      - "internal/**"
+      - "pkg/**"
+      - "cmd/**"
+      - "vendor/**"
+      - "Makefile"
+      - "scripts/generate-integration-matrix.sh"
+      - ".github/workflows/pull_request_integration_tests.yml"
 
 # Set restrictive permissions at workflow level
 permissions:

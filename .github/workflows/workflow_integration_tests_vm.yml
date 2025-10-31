@@ -3,10 +3,18 @@ name: Pull request integration tests on VM
 on:
   push:
     branches: ["main", "release-*"]
-    paths: ["bpf/**"]
+    paths:
+      - ".github/workflows/workflow_integration_tests_vm.yml"
+      - "bpf/**"
+      - "internal/**"
+      - "scripts/generate-integration-matrix.sh"
   pull_request:
     branches: ["main", "release-*"]
-    paths: ["bpf/**"]
+    paths:
+      - ".github/workflows/workflow_integration_tests_vm.yml"
+      - "bpf/**"
+      - "internal/**"
+      - "scripts/generate-integration-matrix.sh"
 
 permissions:
   contents: read

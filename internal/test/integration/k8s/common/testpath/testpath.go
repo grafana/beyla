@@ -3,7 +3,7 @@ package testpath
 import "path"
 
 var (
-	Root            = path.Join("..", "..", "..", "..")
+	Root            = path.Join("..", "..", "..", "..", "..")
 	Output          = path.Join(Root, "testoutput")
 	KindLogs        = path.Join(Output, "kind")
 	IntegrationTest = path.Join(Root, "internal", "test", "integration")

@@ -22,7 +22,7 @@ func ProjectDir() string {
 
 	// If we move this file path, this probably will need to change
 	// Unit tests are provided to avoid a file move to break other tests
-	projectDirFromHere := path.Join(thisDir, "..", "..")
+	projectDirFromHere := path.Join(thisDir, "..", "..", "..")
 
 	abs, err := filepath.Abs(projectDirFromHere)
 	if err != nil {

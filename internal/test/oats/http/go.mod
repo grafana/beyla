@@ -1,4 +1,4 @@
-module github.com/grafana/beyla/test/oats/http
+module github.com/grafana/beyla/internal/test/oats/http
 
 go 1.25.1
 

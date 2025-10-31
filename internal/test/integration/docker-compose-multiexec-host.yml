@@ -4,7 +4,7 @@ services:
   testserver:
     build:
       context: ../..
-      dockerfile: test/integration/components/testserver/Dockerfile
+      dockerfile: internal/test/integration/components/testserver/Dockerfile
     image: hatest-testserver
     ports:
       - "8080:8080"
@@ -29,7 +29,7 @@ services:
   testserver1:
     build:
       context: ../..
-      dockerfile: test/integration/components/testserver/Dockerfile_rename1
+      dockerfile: internal/test/integration/components/testserver/Dockerfile_rename1
     image: hatest-testserver1
     ports:
       - "8900:8900"
@@ -42,7 +42,7 @@ services:
   testserver-duplicate:
     build:
       context: ../..
-      dockerfile: test/integration/components/testserver/Dockerfile_duplicate
+      dockerfile: internal/test/integration/components/testserver/Dockerfile_duplicate
     image: hatest-testserver-duplicate
     ports:
       - "18080:18080"
@@ -65,7 +65,7 @@ services:
   pytestserverssl:
     build:
       context: ../..
-      dockerfile: test/integration/components/pythonserver/Dockerfile_tls
+      dockerfile: internal/test/integration/components/pythonserver/Dockerfile_tls
     image: hatest-testserver-python-ssl
     ports:
       - 8381:8380
@@ -73,7 +73,7 @@ services:
   pytestserver:
     build:
       context: ../..
-      dockerfile: test/integration/components/pythonserver/Dockerfile_7773
+      dockerfile: internal/test/integration/components/pythonserver/Dockerfile_7773
     image: hatest-testserver-python
     ports:
       - 7773:7773
@@ -81,7 +81,7 @@ services:
   ntestserverssl:
     build:
       context: ../..
-      dockerfile: test/integration/components/nodejsserver/Dockerfile
+      dockerfile: internal/test/integration/components/nodejsserver/Dockerfile
     image: hatest-testserver-node-ssl
     command:
       - node
@@ -92,7 +92,7 @@ services:
   ntestserver:
     build:
       context: ../..
-      dockerfile: test/integration/components/nodejsserver/Dockerfile
+      dockerfile: internal/test/integration/components/nodejsserver/Dockerfile
     image: hatest-testserver-node
     command:
       - node
@@ -118,7 +118,7 @@ services:
   autoinstrumenter:
     build:
       context: ../..
-      dockerfile: ./test/integration/components/beyla/Dockerfile
+      dockerfile: ./internal/test/integration/components/beyla/Dockerfile
     command:
       - --config=/configs/instrumenter-config-multiexec-host.yml
     volumes:

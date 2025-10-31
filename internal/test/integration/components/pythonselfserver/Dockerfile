@@ -7,6 +7,6 @@ RUN pip install flask gunicorn requests
 WORKDIR /
 
 # Copy the source code into the image for building
-COPY test/integration/components/pythonselfserver .
+COPY internal/test/integration/components/pythonselfserver .
 
 CMD ["python", "main.py"]

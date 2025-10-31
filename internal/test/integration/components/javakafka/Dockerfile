@@ -17,10 +17,10 @@ ENV JAVA_HOME /usr/lib64/graalvm/graalvm22-ce-java17
 WORKDIR /build
 
 # Copy the source code into the image for building
-COPY test/integration/components/javakafka/.mvn .mvn/
-COPY test/integration/components/javakafka/mvnw mvnw
-COPY test/integration/components/javakafka/src src/
-COPY test/integration/components/javakafka/pom.xml pom.xml
+COPY internal/test/integration/components/javakafka/.mvn .mvn/
+COPY internal/test/integration/components/javakafka/mvnw mvnw
+COPY internal/test/integration/components/javakafka/src src/
+COPY internal/test/integration/components/javakafka/pom.xml pom.xml
 
 RUN java -version
 RUN ./mvnw -version

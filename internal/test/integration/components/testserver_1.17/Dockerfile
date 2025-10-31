@@ -9,7 +9,7 @@ ENV GOARCH=$TARGETARCH
 WORKDIR /src
 
 # Copy the go manifests and source
-COPY test/integration/components/testserver_1.17/ .
+COPY internal/test/integration/components/testserver_1.17/ .
 
 # Build
 RUN go build -o testserver testserver.go

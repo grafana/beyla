@@ -21,8 +21,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/grafana/beyla/v2/test/integration/components/testserver/arg"
-	pb "github.com/grafana/beyla/v2/test/integration/components/testserver/grpc/routeguide"
+	"github.com/grafana/beyla/v2/internal/test/integration/components/testserver/arg"
+	pb "github.com/grafana/beyla/v2/internal/test/integration/components/testserver/grpc/routeguide"
 )
 
 var y2k = time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)

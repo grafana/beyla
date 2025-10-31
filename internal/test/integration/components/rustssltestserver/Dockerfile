@@ -10,8 +10,8 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 WORKDIR /build
 
 # Copy the source code into the image for building
-COPY test/integration/components/rustssltestserver .
-COPY test/integration/components/rusttestserver/large_data.json .
+COPY internal/test/integration/components/rustssltestserver .
+COPY internal/test/integration/components/rusttestserver/large_data.json .
 
 # Build
 RUN cargo build --release

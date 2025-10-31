@@ -5,6 +5,6 @@ FROM fullstorydev/grpcurl:latest-alpine@sha256:4614424ed58e9b9837c48b6b8eadb9ef4
 WORKDIR /
 
 # Copy the run script
-COPY test/integration/components/go_grpc_server_mux/ping.sh .
+COPY internal/test/integration/components/go_grpc_server_mux/ping.sh .
 
 ENTRYPOINT [ "/bin/sh", "/ping.sh" ]

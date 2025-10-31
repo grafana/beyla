@@ -5,7 +5,7 @@ services:
   backend:
     build:
       context: ../..
-      dockerfile: test/integration/components/old_grpc/backend/Dockerfile
+      dockerfile: internal/test/integration/components/old_grpc/backend/Dockerfile
     image: hatest-backend
     ports:
       - "8080:8080"
@@ -16,7 +16,7 @@ services:
   worker:
     build:
       context: ../..
-      dockerfile: test/integration/components/old_grpc/worker/Dockerfile
+      dockerfile: internal/test/integration/components/old_grpc/worker/Dockerfile
     image: hatest-worker
     ports:
       - "5000:5000"
@@ -25,7 +25,7 @@ services:
   grpcpinger:
     build:
       context: ../../
-      dockerfile: test/integration/components/grpcpinger/Dockerfile
+      dockerfile: internal/test/integration/components/grpcpinger/Dockerfile
     image: hatest-grpcpinger
     environment:
       TARGET_URL: "localhost:12345"
@@ -33,7 +33,7 @@ services:
   autoinstrumenter:
     build:
       context: ../..
-      dockerfile: ./test/integration/components/beyla/Dockerfile
+      dockerfile: ./internal/test/integration/components/beyla/Dockerfile
     command:
       - --config=/configs/instrumenter-config-other-grpc.yml
     volumes:

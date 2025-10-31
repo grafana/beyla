@@ -2,7 +2,7 @@ services:
   testserver:
     build:
       context: ../../..
-      dockerfile: ./test/integration/components/javatestserver/Dockerfile_jar
+      dockerfile: ./internal/test/integration/components/javatestserver/Dockerfile_jar
     image: javakafka
     ports:
       - "8080:8085"
@@ -10,7 +10,7 @@ services:
   autoinstrumenter:
     build:
       context: ../../..
-      dockerfile: ./test/integration/components/beyla/Dockerfile
+      dockerfile: ./internal/test/integration/components/beyla/Dockerfile
     command:
       - --config=/configs/instrumenter-config-traces.yml
     volumes:

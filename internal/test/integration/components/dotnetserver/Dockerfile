@@ -4,7 +4,7 @@ FROM mcr.microsoft.com/dotnet/sdk:7.0@sha256:d32bd65cf5843f413e81f5d917057c82da9
 WORKDIR /build
 
 # Copy the source code into the image for building
-COPY test/integration/components/dotnetserver .
+COPY internal/test/integration/components/dotnetserver .
 
 RUN dotnet dev-certs https
 RUN dotnet build

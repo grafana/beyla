@@ -9,7 +9,7 @@ ENV GOARCH=$TARGETARCH
 WORKDIR /src
 
 # Copy the go manifests and source
-COPY test/integration/components/go_otel_grpc/ .
+COPY internal/test/integration/components/go_otel_grpc/ .
 
 # Build
 RUN go build -o rolldice main.go

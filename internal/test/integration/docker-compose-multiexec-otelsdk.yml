@@ -2,7 +2,7 @@ services:
   testserver:
     build:
       context: ../..
-      dockerfile: test/integration/components/testserver/Dockerfile
+      dockerfile: internal/test/integration/components/testserver/Dockerfile
     image: hatest-testserver
     ports:
       - "8080:8080"
@@ -21,20 +21,20 @@ services:
   testserver1:
     build:
       context: ../..
-      dockerfile: test/integration/components/testserver/Dockerfile_rename1
+      dockerfile: internal/test/integration/components/testserver/Dockerfile_rename1
     image: hatest-testserver1
     ports:
       - "8900:8900"
     environment:
       LOG_LEVEL: DEBUG
-      
+
   # image that runs two instances of the 'testserver' executable
   # Used to test the deduplication
   # of metrics when they come from the same executable file
   testserver-duplicate:
     build:
       context: ../..
-      dockerfile: test/integration/components/testserver/Dockerfile_duplicate
+      dockerfile: internal/test/integration/components/testserver/Dockerfile_duplicate
     image: hatest-testserver-duplicate
     ports:
       - "18080:18080"
@@ -57,7 +57,7 @@ services:
   pytestserverssl:
     build:
       context: ../..
-      dockerfile: test/integration/components/pythonserver/Dockerfile_tls
+      dockerfile: internal/test/integration/components/pythonserver/Dockerfile_tls
     image: hatest-testserver-python-ssl
     ports:
       - 8381:8380
@@ -65,7 +65,7 @@ services:
   pytestserver:
     build:
       context: ../..
-      dockerfile: test/integration/components/pythonserver/Dockerfile_8083
+      dockerfile: internal/test/integration/components/pythonserver/Dockerfile_8083
     image: hatest-testserver-python
     ports:
       - 8183:8083
@@ -73,7 +73,7 @@ services:
   ntestserverssl:
     build:
       context: ../..
-      dockerfile: test/integration/components/nodejsserver/Dockerfile
+      dockerfile: internal/test/integration/components/nodejsserver/Dockerfile
     image: hatest-testserver-node-ssl
     command:
       - node
@@ -86,7 +86,7 @@ services:
   ntestserver:
     build:
       context: ../..
-      dockerfile: test/integration/components/nodejsserver/Dockerfile_otel
+      dockerfile: internal/test/integration/components/nodejsserver/Dockerfile_otel
     image: hatest-testserver-node
     ports:
       - 3031:3030
@@ -103,7 +103,7 @@ services:
     image: ghcr.io/open-telemetry/obi-testimg:rails-ssl-0.1.0@sha256:29bf8491610b55ec786d7fa19b8d59d79b01cd3df74ec39c0752e3f5952926b8
     ports:
       - 3044:3043
-        
+
   jtestserver:
     image: ghcr.io/open-telemetry/obi-testimg:java-jar-0.1.0@sha256:5008adf6a82209ef08fddf24c21a9f7f37255265b17778e33abfe5e569483011
     ports:

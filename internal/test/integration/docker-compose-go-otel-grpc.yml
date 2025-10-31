@@ -4,7 +4,7 @@ services:
   testserver:
     build:
       context: ../..
-      dockerfile: test/integration/components/go_otel_grpc/Dockerfile
+      dockerfile: internal/test/integration/components/go_otel_grpc/Dockerfile
     image: hatest-testserver
     ports:
       - "8080:8080"
@@ -16,7 +16,7 @@ services:
   autoinstrumenter:
     build:
       context: ../..
-      dockerfile: ./test/integration/components/beyla/Dockerfile
+      dockerfile: ./internal/test/integration/components/beyla/Dockerfile
     command:
       - --config=/configs/instrumenter-config-go-otel-grpc.yml
     volumes:

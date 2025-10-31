@@ -14,9 +14,9 @@ RUN usermod -aG adm www-data
 
 RUN mkdir /etc/nginx/sites-available && mkdir /etc/nginx/sites-enabled
 
-COPY test/integration/components/php/unix_sock_sql/config/nginx/nginx.conf /etc/nginx/nginx.conf
-COPY test/integration/components/php/unix_sock_sql/config/nginx/sites-available /etc/nginx/sites-available
-COPY --chown=www-data:www-data test/integration/components/php/unix_sock_sql/src/ /var/www/html/
+COPY internal/test/integration/components/php/unix_sock_sql/config/nginx/nginx.conf /etc/nginx/nginx.conf
+COPY internal/test/integration/components/php/unix_sock_sql/config/nginx/sites-available /etc/nginx/sites-available
+COPY --chown=www-data:www-data internal/test/integration/components/php/unix_sock_sql/src/ /var/www/html/
  
 RUN  ln -s /etc/nginx/sites-available/default.conf /etc/nginx/sites-enabled/  
 

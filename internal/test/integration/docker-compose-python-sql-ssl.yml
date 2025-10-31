@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   sqlserver:
@@ -28,7 +28,7 @@ services:
   autoinstrumenter:
     build:
       context: ../..
-      dockerfile: ./test/integration/components/beyla/Dockerfile
+      dockerfile: ./internal/test/integration/components/beyla/Dockerfile
     volumes:
       - ./configs/:/configs
       - ./system/sys/kernel/security:/sys/kernel/security
@@ -68,14 +68,14 @@ services:
         limits:
           memory: 125M
     restart: unless-stopped
-    command: [ "--config=/etc/otelcol-config/otelcol-config.yml" ]
+    command: ["--config=/etc/otelcol-config/otelcol-config.yml"]
     volumes:
       - ./configs/:/etc/otelcol-config
     ports:
-      - "4317"          # OTLP over gRPC receiver
-      - "4318:4318"     # OTLP over HTTP receiver
-      - "9464"          # Prometheus exporter
-      - "8888"          # metrics endpoint
+      - "4317" # OTLP over gRPC receiver
+      - "4318:4318" # OTLP over HTTP receiver
+      - "9464" # Prometheus exporter
+      - "8888" # metrics endpoint
     depends_on:
       prometheus:
         condition: service_started
@@ -97,11 +97,10 @@ services:
     image: jaegertracing/all-in-one:1.57@sha256:8f165334f418ca53691ce358c19b4244226ed35c5d18408c5acf305af2065fb9
     ports:
       - "16686:16686" # Query frontend
-      - "4317"        # OTEL GRPC traces collector
-      - "4318"        # OTEL HTTP traces collector
+      - "4317" # OTEL GRPC traces collector
+      - "4318" # OTEL HTTP traces collector
     environment:
       - COLLECTOR_OTLP_ENABLED=true
       - LOG_LEVEL=debug
-
 # curl http://localhost:16686/api/services
 # curl http://localhost:16686/api/traces?service=testserver

@@ -10,10 +10,10 @@ ARG USER_HOME_DIR="/cache"
 WORKDIR /build
 
 # Copy the source code into the image for building
-COPY test/integration/components/javakafka/.mvn .mvn/
-COPY test/integration/components/javakafka/mvnw mvnw
-COPY test/integration/components/javatestserver/src src/
-COPY test/integration/components/javatestserver/pom.xml pom.xml
+COPY internal/test/integration/components/javakafka/.mvn .mvn/
+COPY internal/test/integration/components/javakafka/mvnw mvnw
+COPY internal/test/integration/components/javatestserver/src src/
+COPY internal/test/integration/components/javatestserver/pom.xml pom.xml
 
 RUN java -version
 RUN ./mvnw -version

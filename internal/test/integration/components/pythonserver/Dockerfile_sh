@@ -8,7 +8,7 @@ RUN pip install flask gunicorn requests
 WORKDIR /
 
 # Copy the source code into the image for building
-COPY test/integration/components/pythonserver .
+COPY internal/test/integration/components/pythonserver .
 
 CMD ["bash", "/run.sh"]
 # CMD uwsgi --http 0.0.0.0:7770 --master -p 4 -w main:app

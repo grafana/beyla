@@ -15,7 +15,7 @@ COPY go.mod go.mod
 COPY go.sum go.sum
 
 # Build
-RUN go build -o httppinger ./test/integration/components/httppinger/httppinger.go
+RUN go build -o httppinger ./internal/test/integration/components/httppinger/httppinger.go
 
 # Create final image from minimal + built binary
 FROM debian:bookworm-slim@sha256:78d2f66e0fec9e5a39fb2c72ea5e052b548df75602b5215ed01a17171529f706

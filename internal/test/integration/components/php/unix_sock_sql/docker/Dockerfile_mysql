@@ -6,8 +6,8 @@ RUN chmod 1777 /tmp
 RUN usermod -u 1000 mysql
 RUN groupmod -g 1000 mysql
 
-COPY test/integration/components/php/unix_sock_sql/docker/init_sql/ /docker-entrypoint-initdb.d/
-COPY test/integration/components/php/unix_sock_sql/config/mysql/custom.cnf /etc/mysql/conf.d/
+COPY internal/test/integration/components/php/unix_sock_sql/docker/init_sql/ /docker-entrypoint-initdb.d/
+COPY internal/test/integration/components/php/unix_sock_sql/config/mysql/custom.cnf /etc/mysql/conf.d/
 
 RUN rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 

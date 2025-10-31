@@ -30,7 +30,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 
-	pb "github.com/grafana/beyla/v2/test/integration/components/testserver/grpc/routeguide"
+	pb "github.com/grafana/beyla/v2/internal/test/integration/components/testserver/grpc/routeguide"
 )
 
 var logs = slog.With("component", "grpc.Client")

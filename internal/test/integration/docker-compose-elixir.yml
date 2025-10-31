@@ -4,7 +4,7 @@ services:
   testserver:
     build:
       context: ../..
-      dockerfile: test/integration/components/elixir/Dockerfile
+      dockerfile: internal/test/integration/components/elixir/Dockerfile
     image: hatest-testserver-elixir
     ports:
       - "4000:4000"
@@ -15,7 +15,7 @@ services:
   autoinstrumenter:
     build:
       context: ../..
-      dockerfile: ./test/integration/components/beyla/Dockerfile
+      dockerfile: ./internal/test/integration/components/beyla/Dockerfile
     command:
       - --config=/configs/instrumenter-config-elixir.yml
     volumes:

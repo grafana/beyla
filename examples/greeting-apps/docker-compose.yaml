@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   nginx:
@@ -23,7 +23,7 @@ services:
       - ./configs/:/configs
       - ./system/sys/kernel/security:/sys/kernel/security
     container_name: demo-nginxbeyla
-    privileged: true 
+    privileged: true
     network_mode: "service:nginx"
     pid: "service:nginx"
     environment:
@@ -39,7 +39,7 @@ services:
         condition: service_started
 
   # Go test server
-  # Test server source can be found at test/integration/components/testserver
+  # Test server source can be found at internal/test/integration/components/testserver
   gotestserver:
     image: ghcr.io/grafana/beyla-demo/greeting-go/0.0.1@sha256:01da627c6f52e6f18440660a7f4c73af9c1f84667f6b8f3ff1826ea3cf0610a9
     container_name: demo-gotestserver
@@ -53,7 +53,7 @@ services:
       - ./configs/:/configs
       - ./system/sys/kernel/security:/sys/kernel/security
     container_name: demo-gobeyla
-    privileged: true 
+    privileged: true
     network_mode: "service:gotestserver"
     pid: "service:gotestserver"
     environment:
@@ -69,7 +69,7 @@ services:
         condition: service_started
 
   # Java Spring Boot 3.0 GraalVM Native Image test server
-  # Test server source can be found at test/integration/components/javatestserver
+  # Test server source can be found at internal/test/integration/components/javatestserver
   javatestserver:
     image: ghcr.io/grafana/beyla-demo/greeting-graalvm-native/0.0.1@sha256:52d1fb320b5d644e0742cf9295b29cbbbf264c39b7ee74087147009bad9a3546
     container_name: demo-javatestserver
@@ -83,7 +83,7 @@ services:
       - ./configs/:/configs
       - ./system/sys/kernel/security:/sys/kernel/security
     container_name: demo-javabeyla
-    privileged: true 
+    privileged: true
     network_mode: "service:javatestserver"
     pid: "service:javatestserver"
     environment:
@@ -99,7 +99,7 @@ services:
         condition: service_started
 
   # Rust Actix test server
-  # Test server source can be found at test/integration/components/rusttestserver
+  # Test server source can be found at internal/test/integration/components/rusttestserver
   rusttestserver:
     image: ghcr.io/grafana/beyla-demo/greeting-actix-rust/0.0.1@sha256:92d58004021fc9ade85670221b8c55f26535c4cb496891a6520526234eabb990
     container_name: demo-rusttestserver
@@ -113,7 +113,7 @@ services:
       - ./configs/:/configs
       - ./system/sys/kernel/security:/sys/kernel/security
     container_name: demo-rustbeyla
-    privileged: true 
+    privileged: true
     network_mode: "service:rusttestserver"
     pid: "service:rusttestserver"
     environment:
@@ -148,7 +148,7 @@ services:
     image: grafana/tempo@sha256:f11e4d5bde8738f549823539acc7b7f50996c7f5fbba61a70798222eb424d8b4
     container_name: demo-tempo
     command:
-      - -config.file 
+      - -config.file
       - /etc/tempo/tempo-config.yaml
     volumes:
       - ./configs/:/etc/tempo

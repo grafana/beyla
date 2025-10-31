@@ -1,4 +1,4 @@
-module github.com/grafana/beyla/test/oats/redis
+module github.com/grafana/beyla/internal/test/oats/redis
 
 go 1.25.1
 

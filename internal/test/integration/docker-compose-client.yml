@@ -4,7 +4,7 @@ services:
   testserver:
     build:
       context: ../..
-      dockerfile: test/integration/components/pingclient/Dockerfile
+      dockerfile: internal/test/integration/components/pingclient/Dockerfile
     image: hatest-pingclient
     environment:
       LOG_LEVEL: DEBUG
@@ -12,7 +12,7 @@ services:
   autoinstrumenter:
     build:
       context: ../..
-      dockerfile: ./test/integration/components/beyla/Dockerfile
+      dockerfile: ./internal/test/integration/components/beyla/Dockerfile
     command:
       - --config=/configs/instrumenter-config${INSTRUMENTER_CONFIG_SUFFIX}.yml
     volumes:

@@ -2,7 +2,7 @@ services:
   nginx:
     build:
       context: ../..
-      dockerfile: ./test/integration/components/php/unix_sock_sql/docker/Dockerfile_nginx
+      dockerfile: ./internal/test/integration/components/php/unix_sock_sql/docker/Dockerfile_nginx
     container_name: hatest-nginx
     ports:
       - 8080:80
@@ -18,7 +18,7 @@ services:
   php:
     build:
       context: ../..
-      dockerfile: ./test/integration/components/php/unix_sock_sql/docker/Dockerfile_php
+      dockerfile: ./internal/test/integration/components/php/unix_sock_sql/docker/Dockerfile_php
     container_name: hatest-php
     ports:
       - 9000:9000
@@ -34,7 +34,7 @@ services:
   mysql:
     build:
       context: ../..
-      dockerfile: ./test/integration/components/php/unix_sock_sql/docker/Dockerfile_mysql
+      dockerfile: ./internal/test/integration/components/php/unix_sock_sql/docker/Dockerfile_mysql
     container_name: hatest-mysql
     ports:
       - 3306:3306
@@ -46,7 +46,7 @@ services:
   autoinstrumenter:
     build:
       context: ../..
-      dockerfile: ./test/integration/components/beyla/Dockerfile
+      dockerfile: ./internal/test/integration/components/beyla/Dockerfile
     command:
       - --config=/configs/instrumenter-config-php.yml
     volumes:

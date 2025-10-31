@@ -11,7 +11,7 @@ import (
 
 	ti "go.opentelemetry.io/obi/pkg/test/integration"
 
-	"github.com/grafana/beyla/v2/test/integration/components/prom"
+	"github.com/grafana/beyla/v2/internal/test/integration/components/prom"
 )
 
 // does a smoke test to verify that all the components that started

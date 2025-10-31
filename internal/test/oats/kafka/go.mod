@@ -1,4 +1,4 @@
-module github.com/grafana/beyla/test/oats/kafka
+module github.com/grafana/beyla/internal/test/oats/kafka
 
 go 1.25.1
 

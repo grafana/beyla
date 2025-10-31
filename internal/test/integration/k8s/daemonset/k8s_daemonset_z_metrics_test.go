@@ -5,7 +5,7 @@ package otel
 import (
 	"testing"
 
-	k8s "github.com/grafana/beyla/v2/test/integration/k8s/common"
+	k8s "github.com/grafana/beyla/v2/internal/test/integration/k8s/common"
 )
 
 // to find process information in the prometheus database,

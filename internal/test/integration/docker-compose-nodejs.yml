@@ -4,7 +4,7 @@ services:
   testserver:
     build:
       context: ../..
-      dockerfile: test/integration/components/nodejsserver/Dockerfile
+      dockerfile: internal/test/integration/components/nodejsserver/Dockerfile
     image: hatest-testserver-node
     command:
       - node
@@ -19,7 +19,7 @@ services:
   autoinstrumenter:
     build:
       context: ../..
-      dockerfile: ./test/integration/components/beyla/Dockerfile
+      dockerfile: ./internal/test/integration/components/beyla/Dockerfile
     command:
       - --config=/configs/instrumenter-config-node.yml
     volumes:
@@ -92,4 +92,3 @@ services:
     environment:
       - COLLECTOR_OTLP_ENABLED=true
       - LOG_LEVEL=debug
-

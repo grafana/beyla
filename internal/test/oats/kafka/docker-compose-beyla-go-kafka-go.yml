@@ -32,7 +32,7 @@ services:
   testserver:
     build:
       context: ../../..
-      dockerfile: ./test/integration/components/gokafka-seg/Dockerfile
+      dockerfile: ./internal/test/integration/components/gokafka-seg/Dockerfile
     image: gokafka
     ports:
       - "8080:8080"
@@ -43,7 +43,7 @@ services:
   autoinstrumenter:
     build:
       context: ../../..
-      dockerfile: ./test/integration/components/beyla/Dockerfile
+      dockerfile: ./internal/test/integration/components/beyla/Dockerfile
     command:
       - --config=/configs/instrumenter-config-traces.yml
     volumes:

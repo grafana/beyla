@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/grafana/beyla/v2/test/tools"
+	"github.com/grafana/beyla/v2/internal/test/tools"
 )
 
 type Compose struct {

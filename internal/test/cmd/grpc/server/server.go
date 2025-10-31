@@ -31,7 +31,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
 
-	pb "github.com/grafana/beyla/v2/test/cmd/grpc/routeguide"
+	pb "github.com/grafana/beyla/v2/internal/test/cmd/grpc/routeguide"
 )
 
 var (

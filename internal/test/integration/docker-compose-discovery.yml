@@ -4,7 +4,7 @@ services:
   nodeserver:
     build:
       context: ../..
-      dockerfile: test/integration/components/nodemultiproc/Dockerfile
+      dockerfile: internal/test/integration/components/nodemultiproc/Dockerfile
     image: nodemultiproc
     ports:
       - "5000:5000"
@@ -22,7 +22,7 @@ services:
   autoinstrumenter:
     build:
       context: ../..
-      dockerfile: ./test/integration/components/beyla/Dockerfile
+      dockerfile: ./internal/test/integration/components/beyla/Dockerfile
     command:
       - --config=/configs/instrumenter-config-discovery.yml
     volumes:

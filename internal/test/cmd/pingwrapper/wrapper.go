@@ -15,7 +15,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	pb "github.com/grafana/beyla/v2/test/cmd/grpc/routeguide"
+	pb "github.com/grafana/beyla/v2/internal/test/cmd/grpc/routeguide"
 )
 
 const (

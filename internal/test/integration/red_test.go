@@ -19,8 +19,8 @@ import (
 
 	ti "go.opentelemetry.io/obi/pkg/test/integration"
 
-	"github.com/grafana/beyla/v2/test/integration/components/prom"
-	grpcclient "github.com/grafana/beyla/v2/test/integration/components/testserver/grpc/client"
+	"github.com/grafana/beyla/v2/internal/test/integration/components/prom"
+	grpcclient "github.com/grafana/beyla/v2/internal/test/integration/components/testserver/grpc/client"
 )
 
 const (

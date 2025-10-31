@@ -4,7 +4,7 @@ FROM ruby:3.0.2@sha256:15dd21ae353c5f4faebed038d9d131c47b9fd84c14be8c3cfbc750204
 WORKDIR /build
 
 # Copy the source code into the image for building
-COPY test/integration/components/rubytestserver/testapi .
+COPY internal/test/integration/components/rubytestserver/testapi .
 
 # Install Rails 
 RUN gem install rails

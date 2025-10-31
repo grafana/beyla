@@ -4,7 +4,7 @@ services:
   testserver:
     build:
       context: ../..
-      dockerfile: test/integration/components/dotnetserver/Dockerfile
+      dockerfile: internal/test/integration/components/dotnetserver/Dockerfile
     image: hatest-testserver
     ports:
       - 5267:5266
@@ -16,7 +16,7 @@ services:
   autoinstrumenter:
     build:
       context: ../..
-      dockerfile: ./test/integration/components/beyla/Dockerfile${INSTRUMENT_DOCKERFILE_SUFFIX}
+      dockerfile: ./internal/test/integration/components/beyla/Dockerfile${INSTRUMENT_DOCKERFILE_SUFFIX}
     entrypoint:
       - /beyla${INSTRUMENT_COMMAND_SUFFIX}
     command:

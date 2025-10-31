@@ -9,7 +9,7 @@ ENV GOARCH=$TARGETARCH
 WORKDIR /src
 
 # Copy the go manifests and source
-COPY test/integration/components/goredis/ .
+COPY internal/test/integration/components/goredis/ .
 
 # Build
 RUN go build -o testserver main.go

@@ -19,9 +19,9 @@ EXPOSE 9000
 
 RUN install -d -m 0755 -o www-data -g www-data /run/php-fpm
 
-COPY --chown=www-data:www-data test/integration/components/php/unix_sock_sql/src/ /var/www/html/
-COPY test/integration/components/php/unix_sock_sql/config/php/ /usr/local/etc/
-COPY test/integration/components/php/unix_sock_sql/config/php/php/php.ini  /usr/local/etc/php/
+COPY --chown=www-data:www-data internal/test/integration/components/php/unix_sock_sql/src/ /var/www/html/
+COPY internal/test/integration/components/php/unix_sock_sql/config/php/ /usr/local/etc/
+COPY internal/test/integration/components/php/unix_sock_sql/config/php/php/php.ini  /usr/local/etc/php/
 
 RUN install -d -m 0755 -o www-data -g www-data /var/lib/php/sessions
 

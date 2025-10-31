@@ -4,7 +4,7 @@ services:
   testclient:
     build:
       context: ../..
-      dockerfile: test/integration/components/gohttp2/client/Dockerfile
+      dockerfile: internal/test/integration/components/gohttp2/client/Dockerfile
     image: hatest-testclient
     environment:
       TARGET_URL: "https://testserver:7373"
@@ -15,7 +15,7 @@ services:
   testserver:
     build:
       context: ../..
-      dockerfile: test/integration/components/gohttp2/server/Dockerfile
+      dockerfile: internal/test/integration/components/gohttp2/server/Dockerfile
     image: hatest-server
     ports:
       - "7373:7373"
@@ -28,7 +28,7 @@ services:
   autoinstrumenter:
     build:
       context: ../..
-      dockerfile: ./test/integration/components/beyla/Dockerfile
+      dockerfile: ./internal/test/integration/components/beyla/Dockerfile
     command:
       - --config=/configs/instrumenter-config-http2.yml
     volumes:

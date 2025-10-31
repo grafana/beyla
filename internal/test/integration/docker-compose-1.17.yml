@@ -4,7 +4,7 @@ services:
   testserver:
     build:
       context: ../..
-      dockerfile: test/integration/components/testserver_1.17/Dockerfile
+      dockerfile: internal/test/integration/components/testserver_1.17/Dockerfile
     image: hatest-testserver
     ports:
       - "8080:8080"
@@ -19,7 +19,7 @@ services:
   autoinstrumenter:
     build:
       context: ../..
-      dockerfile: ./test/integration/components/beyla/Dockerfile
+      dockerfile: ./internal/test/integration/components/beyla/Dockerfile
     command:
       - --config=/configs/instrumenter-config${INSTRUMENTER_CONFIG_SUFFIX}.yml
     volumes:

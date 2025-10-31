@@ -24,7 +24,7 @@ services:
   testserver:
     build:
       context: ../..
-      dockerfile: ./test/integration/components/javakafka/Dockerfile_400
+      dockerfile: ./internal/test/integration/components/javakafka/Dockerfile_400
     image: hatest-testserver-java-kafka
     ports:
       - "${TEST_SERVICE_PORTS}"
@@ -37,7 +37,7 @@ services:
   autoinstrumenter:
     build:
       context: ../..
-      dockerfile: ./test/integration/components/beyla/Dockerfile
+      dockerfile: ./internal/test/integration/components/beyla/Dockerfile
     volumes:
       - ./configs/:/configs
       - ./system/sys/kernel/security:/sys/kernel/security

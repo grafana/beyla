@@ -1,4 +1,4 @@
-module github.com/grafana/beyla/test/oats/sql
+module github.com/grafana/beyla/internal/test/oats/sql
 
 go 1.25.1
 

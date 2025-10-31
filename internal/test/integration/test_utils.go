@@ -21,8 +21,8 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"golang.org/x/net/http2"
 
-	"github.com/grafana/beyla/v2/test/integration/components/jaeger"
-	"github.com/grafana/beyla/v2/test/integration/components/prom"
+	"github.com/grafana/beyla/v2/internal/test/integration/components/jaeger"
+	"github.com/grafana/beyla/v2/internal/test/integration/components/prom"
 )
 
 var tr = &http.Transport{

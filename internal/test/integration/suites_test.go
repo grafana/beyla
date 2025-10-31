@@ -14,7 +14,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/obi"
 	ti "go.opentelemetry.io/obi/pkg/test/integration"
 
-	"github.com/grafana/beyla/v2/test/integration/components/docker"
+	"github.com/grafana/beyla/v2/internal/test/integration/components/docker"
 )
 
 func kprobeTracesEnabled() bool {

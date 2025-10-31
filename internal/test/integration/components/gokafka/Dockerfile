@@ -9,7 +9,7 @@ ENV GOARCH=$TARGETARCH
 WORKDIR /src
 
 # Copy the go manifests and source
-COPY test/integration/components/gokafka/ .
+COPY internal/test/integration/components/gokafka/ .
 
 # Build
 RUN go build -o testserver main.go

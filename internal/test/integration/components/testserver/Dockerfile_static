@@ -16,7 +16,7 @@ COPY go.mod go.mod
 COPY go.sum go.sum
 
 # Build/link statically with CGO, external static linking
-RUN go build -tags -a -ldflags '-linkmode external -extldflags "-static"' -o testserver ./test/integration/components/testserver/testserver.go
+RUN go build -tags -a -ldflags '-linkmode external -extldflags "-static"' -o testserver ./internal/test/integration/components/testserver/testserver.go
 
 # Create final image from minimal + built binary
 #TODO: use minimal image

@@ -142,7 +142,7 @@ otel_traces_export:
 | `endpoint`<p>`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`<p>`OTEL_EXPORTER_OTLP_ENDPOINT`</p> | The endpoint Beyla sends traces to. When using `OTEL_EXPORTER_OTLP_ENDPOINT`, Beyla follows the OpenTelemetry standard and automatically adds `/v1/traces` path to the URL. If you don't want this to happen, use the traces specific setting.                                                            | URL             |                          |
 | `protocol`<p>`OTEL_EXPORTER_OTLP_TRACES_PROTOCOL`<p>`OTEL_EXPORTER_OTLP_PROTOCOL`</p> | The protocol transport/encoding of the OpenTelemetry endpoint, refer to [traces export protocol](#traces-export-protocol). [Accepted values](https://opentelemetry.io/docs/concepts/sdk-configuration/otlp-exporter-configuration/#otel_exporter_otlp_protocol) `http/json`, `http/protobuf`, and `grpc`. | string          | Inferred from port usage |
 | `insecure_skip_verify`<p>`BEYLA_OTEL_INSECURE_SKIP_VERIFY`</p>                        | If `true`, Beyla skips verifying and accepts any server certificate. Only override this setting for non-production environments.                                                                                                                                                                          | boolean         | `false`                  |
-| `instrumentations`<p>`BEYLA_OTEL_TRACES_INSTRUMENTATIONS`</p>                         | The list of instrumentation Beyla collects data for, refer to [traces instrumentation](#traces-instrumentation) section.                                                                                                                                                                                  | list of strings | `["*"]`                  |
+| `instrumentations`<p>`BEYLA_OTEL_TRACES_INSTRUMENTATIONS`</p>                         | The list of instrumentation Beyla collects data for, refer to [traces instrumentation](#traces-instrumentation) section.                                                                                                                                                                                  | list of strings | `["http", "grpc", "sql", "redis", "kafka", "mongo"]` |
 
 ### Traces export protocol
 
@@ -161,9 +161,13 @@ The list of instrumentation areas Beyla can collection data from:
 - `sql`: SQL database client call traces
 - `redis`: Redis client/server database traces
 - `kafka`: Kafka client/server message queue traces
-- `mongodb`: MongoDB client/server database traces
+- `mongo`: MongoDB client/server database traces
+- `dns`: DNS request traces (not enabled by default)
+- `gpu`: GPU operation traces (not enabled by default)
 
 For example, setting the `instrumentations` option to: `http,grpc` enables the collection of `HTTP/HTTPS/HTTP2` and `gRPC` application traces, and disables other instrumentation.
+
+**Note**: By default, Beyla enables the most commonly used instrumentations (`http`, `grpc`, `sql`, `redis`, `kafka`, `mongo`). DNS and GPU traces are not enabled by default to reduce overhead, but can be explicitly enabled if needed.
 
 ## Prometheus exporter component
 

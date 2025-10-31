@@ -188,7 +188,7 @@ func testREDMetricsRustHTTPS(t *testing.T) {
 }
 
 func checkReportedRustEvents(t *testing.T, comm, namespace string, numEvents int) {
-	jsonBody, err := os.ReadFile(path.Join(pathRoot, "test", "integration", "components", "rusttestserver", "mid_data.json"))
+	jsonBody, err := os.ReadFile(path.Join(pathRoot, "internal", "test", "integration", "components", "rusttestserver", "mid_data.json"))
 	assert.NoError(t, err)
 	assert.GreaterOrEqual(t, len(jsonBody), 100)
 

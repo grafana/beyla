@@ -33,7 +33,7 @@ func ComposeSuite(composeFile, logFile string) (*Compose, error) {
 
 	// Construct the full path to the Docker Compose file
 	projectRoot := tools.ProjectDir()
-	composePath := filepath.Join(projectRoot, "test", "integration", composeFile)
+	composePath := filepath.Join(projectRoot, "internal", "test", "integration", composeFile)
 
 	return &Compose{
 		Path:   composePath,

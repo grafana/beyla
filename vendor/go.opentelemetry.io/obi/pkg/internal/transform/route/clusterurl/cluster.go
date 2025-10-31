@@ -162,8 +162,26 @@ func (csf *ClusterURLClassifier) okWord(w string) bool {
 	if ok {
 		return ok
 	}
-	if gibberish.IsGibberish(w, csf.classifier) {
-		return false
+
+	start := 0
+	for i, c := range w {
+		if c == '-' || c == '_' || c == '.' {
+			if i == start {
+				return false
+			}
+
+			if gibberish.IsGibberish(w[start:i], csf.classifier) {
+				return false
+			}
+
+			start = i + 1
+		}
+	}
+
+	if start < len(w) {
+		if gibberish.IsGibberish(w[start:], csf.classifier) {
+			return false
+		}
 	}
 
 	csf.cache.Add(w, true)

@@ -6,25 +6,6 @@ package xdp
 // types here are mostly used for debugging purposes
 // TODO: consider removing some types and functions here to simplify the code, as they remain mostly unused
 
-const (
-	TypeA     = 1
-	TypeNS    = 2
-	TypeMD    = 3
-	TypeMF    = 4
-	TypeCNAME = 5
-	TypeSOA   = 6
-	TypeMB    = 7
-	TypeMG    = 8
-	TypeMR    = 9
-	TypeNULL  = 10
-	TypeWKS   = 11
-	TypePTR   = 12
-	TypeHINFO = 13
-	TypeMINFO = 14
-	TypeMX    = 15
-	TypeTXT   = 16
-)
-
 type question struct {
 	qName  string
 	qType  uint16

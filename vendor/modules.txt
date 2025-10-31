@@ -787,6 +787,7 @@ go.opentelemetry.io/obi/pkg/buildinfo
 go.opentelemetry.io/obi/pkg/config
 go.opentelemetry.io/obi/pkg/ebpf
 go.opentelemetry.io/obi/pkg/ebpf/common
+go.opentelemetry.io/obi/pkg/ebpf/common/dnsparser
 go.opentelemetry.io/obi/pkg/ebpf/common/http
 go.opentelemetry.io/obi/pkg/ebpf/tcmanager
 go.opentelemetry.io/obi/pkg/export/attributes
@@ -983,7 +984,7 @@ go.yaml.in/yaml/v3
 ## explicit; go 1.24.0
 golang.org/x/arch/arm64/arm64asm
 golang.org/x/arch/x86/x86asm
-# golang.org/x/crypto v0.42.0
+# golang.org/x/crypto v0.43.0
 ## explicit; go 1.24.0
 golang.org/x/crypto/chacha20
 golang.org/x/crypto/chacha20poly1305
@@ -996,8 +997,9 @@ golang.org/x/crypto/sha3
 # golang.org/x/mod v0.28.0
 ## explicit; go 1.24.0
 golang.org/x/mod/semver
-# golang.org/x/net v0.44.0
+# golang.org/x/net v0.46.0
 ## explicit; go 1.24.0
+golang.org/x/net/dns/dnsmessage
 golang.org/x/net/html
 golang.org/x/net/html/atom
 golang.org/x/net/http/httpguts
@@ -1019,17 +1021,17 @@ golang.org/x/oauth2/internal
 # golang.org/x/sync v0.17.0
 ## explicit; go 1.24.0
 golang.org/x/sync/errgroup
-# golang.org/x/sys v0.36.0
+# golang.org/x/sys v0.37.0
 ## explicit; go 1.24.0
 golang.org/x/sys/cpu
 golang.org/x/sys/plan9
 golang.org/x/sys/unix
 golang.org/x/sys/windows
 golang.org/x/sys/windows/registry
-# golang.org/x/term v0.35.0
+# golang.org/x/term v0.36.0
 ## explicit; go 1.24.0
 golang.org/x/term
-# golang.org/x/text v0.29.0
+# golang.org/x/text v0.30.0
 ## explicit; go 1.24.0
 golang.org/x/text/internal/language
 golang.org/x/text/internal/language/compact

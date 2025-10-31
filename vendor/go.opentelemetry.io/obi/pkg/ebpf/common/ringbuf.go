@@ -89,13 +89,14 @@ func ForwardRingbuf(
 	reader func(*EBPFParseContext, *config.EBPFTracer, *ringbuf.Record, ServiceFilter) (request.Span, bool, error),
 	logger *slog.Logger,
 	metrics imetrics.Reporter,
+	spansChan *msg.Queue[[]request.Span],
 	closers ...io.Closer,
 ) func(context.Context, *msg.Queue[[]request.Span]) {
 	rbf := ringBufForwarder{
 		cfg: cfg, logger: logger, ringbuffer: ringbuffer,
 		closers: closers, reader: reader,
 		filter: filter, metrics: metrics,
-		parseContext: NewEBPFParseContext(cfg),
+		parseContext: NewEBPFParseContext(cfg, spansChan, filter),
 	}
 	return rbf.readAndForward
 }

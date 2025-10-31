@@ -76,6 +76,7 @@ var DefaultConfig = Config{
 		BatchTimeout:              time.Second,
 		HTTPRequestTimeout:        0,
 		TCBackend:                 config.TCBackendAuto,
+		DNSRequestTimeout:         5 * time.Second,
 		ContextPropagationEnabled: false,
 		ContextPropagation:        config.ContextPropagationDisabled,
 		RedisDBCache: config.RedisDBCacheConfig{
@@ -133,7 +134,13 @@ var DefaultConfig = Config{
 		BatchTimeout:      15 * time.Second,
 		ReportersCacheLen: ReporterLRUSize,
 		Instrumentations: []string{
-			instrumentations.InstrumentationALL,
+			instrumentations.InstrumentationHTTP,
+			instrumentations.InstrumentationGRPC,
+			instrumentations.InstrumentationSQL,
+			instrumentations.InstrumentationRedis,
+			instrumentations.InstrumentationKafka,
+			instrumentations.InstrumentationMongo,
+			// no traces for DNS and GPU by default
 		},
 	},
 	Prometheus: prom.PrometheusConfig{

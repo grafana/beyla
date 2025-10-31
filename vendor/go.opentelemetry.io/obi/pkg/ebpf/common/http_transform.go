@@ -72,6 +72,9 @@ func httpInfoToSpanLegacy(info *HTTPInfo) request.Span {
 }
 
 func httpRequestResponseToSpan(parseCtx *EBPFParseContext, event *BPFHTTPInfo, req *http.Request, resp *http.Response) request.Span {
+	defer req.Body.Close()
+	defer resp.Body.Close()
+
 	peer, host := (*BPFConnInfo)(&event.ConnInfo).reqHostInfo()
 
 	httpSpan := request.Span{
@@ -102,6 +105,11 @@ func httpRequestResponseToSpan(parseCtx *EBPFParseContext, event *BPFHTTPInfo, r
 
 	if isClientEvent(event.Type) && parseCtx != nil && parseCtx.payloadExtraction.HTTP.AWS.Enabled {
 		span, ok := ebpfhttp.AWSS3Span(&httpSpan, req, resp)
+		if ok {
+			return span
+		}
+
+		span, ok = ebpfhttp.AWSSQSSpan(&httpSpan, req, resp)
 		if ok {
 			return span
 		}
@@ -181,8 +189,6 @@ func HTTPInfoEventToSpan(parseCtx *EBPFParseContext, event *BPFHTTPInfo) (reques
 		slog.Debug("error while parsing http request or response, falling back to manual HTTP info parsing", "reqErr", err, "respErr", err2)
 		return httpRequestToSpan(event, requestBuffer), false, nil
 	}
-	defer req.Body.Close()
-	defer resp.Body.Close()
 
 	return httpRequestResponseToSpan(parseCtx, event, req, resp), false, nil
 }

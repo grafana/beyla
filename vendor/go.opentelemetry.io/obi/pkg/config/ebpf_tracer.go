@@ -111,6 +111,9 @@ type EBPFTracer struct {
 	// Some programs (e.g. load generators) keep on generating requests from the same thread in perpetuity,
 	// which can generate very large traces. We want to mark the parent trace as invalid if this happens.
 	MaxTransactionTime time.Duration `yaml:"max_transaction_time" env:"OTEL_EBPF_BPF_MAX_TRANSACTION_TIME"`
+
+	// DNS timeout after which we report failed event
+	DNSRequestTimeout time.Duration `yaml:"dns_request_timeout" env:"OTEL_EBPF_BPF_DNS_REQUEST_TIMEOUT"`
 }
 
 // Per-protocol data buffer size in bytes.

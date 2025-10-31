@@ -233,6 +233,7 @@ type metricsReporter struct {
 	attrGPUKernelBlockSize     []attributes.Field[*request.Span, string]
 	attrGPUMemoryCopies        []attributes.Field[*request.Span, string]
 	attrSvcGraph               []attributes.Field[*request.Span, string]
+	attrDNSLookupDuration      []attributes.Field[*request.Span, string]
 
 	// trace span metrics
 	spanMetricsLatency           *Expirer[prometheus.Histogram]
@@ -254,6 +255,9 @@ type metricsReporter struct {
 	gpuKernelGridSize    *Expirer[prometheus.Histogram]
 	gpuKernelBlockSize   *Expirer[prometheus.Histogram]
 	gpuMemoryCopySize    *Expirer[prometheus.Histogram]
+
+	// dns related metrics
+	dnsLookupDuration *Expirer[prometheus.Histogram]
 
 	promConnect *connector.PrometheusManager
 
@@ -394,6 +398,13 @@ func newReporter(
 			attrsProvider.For(attributes.GPUMemoryCopies))
 	}
 
+	var attrDNSLookupDuration []attributes.Field[*request.Span, string]
+
+	if is.DNSEnabled() {
+		attrDNSLookupDuration = attributes.PrometheusGetters(attributeGetters,
+			attrsProvider.For(attributes.DNSLookupDuration))
+	}
+
 	if cfg.ServiceGraphMetricsEnabled() {
 		attrSvcGraph = attributes.PrometheusGetters(attributeGetters, []attr.Name{attr.Client, attr.ClientNamespace, attr.Server, attr.ServerNamespace, attr.Source})
 	}
@@ -432,6 +443,7 @@ func newReporter(
 		attrGPUKernelGridSize:      attrGPUKernelGridSize,
 		attrGPUKernelBlockSize:     attrGPUKernelBlockSize,
 		attrGPUMemoryCopies:        attrGPUMemoryCopies,
+		attrDNSLookupDuration:      attrDNSLookupDuration,
 		attrSvcGraph:               attrSvcGraph,
 		beylaInfo: NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: attr.VendorPrefix + buildInfoSuffix,
@@ -674,6 +686,16 @@ func newReporter(
 				NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
 			}, labelNames(attrGPUMemoryCopies)).MetricVec, clock.Time, cfg.TTL)
 		}),
+		dnsLookupDuration: optionalHistogramProvider(is.DNSEnabled(), func() *Expirer[prometheus.Histogram] {
+			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
+				Name:                            attributes.DNSLookupDuration.Prom,
+				Help:                            "measures the time taken to perform a DNS lookup",
+				Buckets:                         cfg.Buckets.DurationHistogram,
+				NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
+				NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
+				NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
+			}, labelNames(attrDNSLookupDuration)).MetricVec, clock.Time, cfg.TTL)
+		}),
 	}
 
 	// testing aid
@@ -716,6 +738,10 @@ func newReporter(
 				mr.msgProcessDuration,
 				mr.msgPublishDuration,
 			)
+		}
+
+		if is.DNSEnabled() {
+			registeredMetrics = append(registeredMetrics, mr.dnsLookupDuration)
 		}
 	}
 
@@ -935,6 +961,12 @@ func (r *metricsReporter) observe(span *request.Span) {
 				r.gpuMemoryCopySize.WithLabelValues(
 					labelValues(span, r.attrGPUMemoryCopies)...,
 				).Metric.Observe(float64(span.ContentLength))
+			}
+		case request.EventTypeDNS:
+			if r.is.DNSEnabled() {
+				r.dnsLookupDuration.WithLabelValues(
+					labelValues(span, r.attrDNSLookupDuration)...,
+				).Metric.Observe(duration)
 			}
 		}
 	}

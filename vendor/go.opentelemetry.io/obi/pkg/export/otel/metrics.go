@@ -100,6 +100,7 @@ type MetricsReporter struct {
 	attrGPUKernelBlockSize     []attributes.Field[*request.Span, attribute.KeyValue]
 	attrGPUMemoryAllocations   []attributes.Field[*request.Span, attribute.KeyValue]
 	attrGPUMemoryCopies        []attributes.Field[*request.Span, attribute.KeyValue]
+	attrDNSLookupDuration      []attributes.Field[*request.Span, attribute.KeyValue]
 	userAttribSelection        attributes.Selection
 	input                      <-chan []request.Span
 	processEvents              <-chan exec.ProcessEvent
@@ -135,11 +136,14 @@ type Metrics struct {
 	spanMetricsCallsTotal        *Expirer[*request.Span, instrument.Int64Counter, int64]
 	spanMetricsRequestSizeTotal  *Expirer[*request.Span, instrument.Float64Counter, float64]
 	spanMetricsResponseSizeTotal *Expirer[*request.Span, instrument.Float64Counter, float64]
-	gpuKernelCallsTotal          *Expirer[*request.Span, instrument.Int64Counter, int64]
-	gpuMemoryAllocsTotal         *Expirer[*request.Span, instrument.Int64Counter, int64]
-	gpuKernelGridSize            *Expirer[*request.Span, instrument.Float64Histogram, float64]
-	gpuKernelBlockSize           *Expirer[*request.Span, instrument.Float64Histogram, float64]
-	gpuMemoryCopySize            *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	// cuda/gpu
+	gpuKernelCallsTotal  *Expirer[*request.Span, instrument.Int64Counter, int64]
+	gpuMemoryAllocsTotal *Expirer[*request.Span, instrument.Int64Counter, int64]
+	gpuKernelGridSize    *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	gpuKernelBlockSize   *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	gpuMemoryCopySize    *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	// dns
+	dnsLookupDuration *Expirer[*request.Span, instrument.Float64Histogram, float64]
 }
 
 type TargetMetrics struct {
@@ -259,6 +263,11 @@ func newMetricsReporter(
 			mr.attrGetters, mr.attributes.For(attributes.GPUKernelBlockSize))
 		mr.attrGPUMemoryCopies = attributes.OpenTelemetryGetters(
 			mr.attrGetters, mr.attributes.For(attributes.GPUMemoryCopies))
+	}
+
+	if is.DNSEnabled() {
+		mr.attrDNSLookupDuration = attributes.OpenTelemetryGetters(
+			mr.attrGetters, mr.attributes.For(attributes.DNSLookupDuration))
 	}
 
 	mr.reporters = otelcfg.NewReporterPool[*svc.Attrs, *Metrics](cfg.ReportersCacheLen, cfg.TTL, timeNow,
@@ -509,6 +518,15 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 		}
 		m.gpuMemoryCopySize = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
 			m.ctx, gpuMemoryCopySize, mr.attrGPUMemoryCopies, timeNow, mr.cfg.TTL)
+	}
+
+	if mr.is.DNSEnabled() {
+		dnsLookupDuration, err := meter.Float64Histogram(attributes.DNSLookupDuration.OTEL, instrument.WithUnit("s"))
+		if err != nil {
+			return fmt.Errorf("creating dns lookup duration histogram: %w", err)
+		}
+		m.dnsLookupDuration = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
+			m.ctx, dnsLookupDuration, mr.attrDNSLookupDuration, timeNow, mr.cfg.TTL)
 	}
 
 	return nil
@@ -866,6 +884,11 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 			if mr.is.GPUEnabled() {
 				gmem, attrs := r.gpuMemoryCopySize.ForRecord(span)
 				gmem.Record(r.ctx, float64(span.ContentLength), instrument.WithAttributeSet(attrs))
+			}
+		case request.EventTypeDNS:
+			if mr.is.DNSEnabled() {
+				dnsDuration, attrs := r.dnsLookupDuration.ForRecord(span)
+				dnsDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
 			}
 		}
 	}

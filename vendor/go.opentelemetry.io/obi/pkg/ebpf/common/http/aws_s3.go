@@ -6,22 +6,11 @@ package ebpfcommon
 import (
 	"bytes"
 	"errors"
-	"fmt"
-	"io"
 	"net/http"
-	"regexp"
 	"strings"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 )
-
-const (
-	requestIDHeader         = "x-amz-request-id"
-	requestIDHeader2        = "x-amz-requestid"
-	extendedRequestIDHeader = "x-amz-id-2"
-)
-
-var awsRegionRgx = regexp.MustCompile(`(?:^|\.)([a-z]{2}-[a-z]+-\d)\.amazonaws\.com$`)
 
 func AWSS3Span(baseSpan *request.Span, req *http.Request, resp *http.Response) (request.Span, bool) {
 	s3, err := parseAWSS3(req, resp)
@@ -41,34 +30,19 @@ func AWSS3Span(baseSpan *request.Span, req *http.Request, resp *http.Response) (
 func parseAWSS3(req *http.Request, resp *http.Response) (request.AWSS3, error) {
 	s3 := request.AWSS3{}
 
-	reqB, err := io.ReadAll(req.Body)
+	var err error
+	s3.Meta, err = parseAWSMeta(req, resp)
 	if err != nil {
-		return s3, fmt.Errorf("read S3 request body: %w", err)
+		return s3, err
 	}
-	req.Body = io.NopCloser(bytes.NewBuffer(reqB))
-
-	respB, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return s3, fmt.Errorf("read S3 response body: %w", err)
+	if s3.Meta.ExtendedRequestID == "" {
+		return s3, errors.New("missing x-amz-id-2 header")
 	}
-	resp.Body = io.NopCloser(bytes.NewBuffer(respB))
-
-	for k, v := range resp.Header {
-		lk := strings.ToLower(k)
-		if lk == requestIDHeader || lk == requestIDHeader2 {
-			s3.RequestID = v[0]
-		}
-		if lk == extendedRequestIDHeader {
-			s3.ExtendedRequestID = v[0]
-		}
-	}
-	if s3.RequestID == "" {
-		return s3, errors.New("missing x-amz-request-id header")
-	}
-
 	s3.Bucket, s3.Key = parseS3bucketKey(req.URL.Path)
-	s3.Region = parseAWSRegion(req)
 	s3.Method = inferS3Method(req)
+	if s3.Method == "" {
+		return s3, errors.New("unable to parse s3 operation")
+	}
 
 	return s3, nil
 }
@@ -84,14 +58,6 @@ func parseS3bucketKey(path string) (string, string) {
 		key = string(parts[2])
 	}
 	return bucket, key
-}
-
-func parseAWSRegion(req *http.Request) string {
-	match := awsRegionRgx.FindStringSubmatch(req.URL.Host)
-	if len(match) >= 2 {
-		return match[1]
-	}
-	return ""
 }
 
 // This is a naive inference of S3 operations based on HTTP method and URL path/query

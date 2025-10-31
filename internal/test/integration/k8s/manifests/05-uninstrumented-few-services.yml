@@ -151,7 +151,7 @@ spec:
       containers:
         - name: utestserver
           image: "ghcr.io/open-telemetry/obi-testimg:rails-0.1.0"
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 3040
               hostPort: 3040

@@ -31,11 +31,6 @@ func TestMain(m *testing.M) {
 		docker.ImageBuild{Tag: "testserver:dev", Dockerfile: k8s.DockerfileTestServer},
 		docker.ImageBuild{Tag: "pythontestserver:dev", Dockerfile: k8s.DockerfilePythonTestServer},
 		docker.ImageBuild{Tag: "beyla:dev", Dockerfile: k8s.DockerfileBeyla},
-		// Pull public images but don't pre-load them into Kind nodes
-		// Kubernetes will pull them only to the nodes where they're scheduled
-		docker.ImageBuild{Tag: "otel/opentelemetry-collector-contrib:0.104.0"},
-		docker.ImageBuild{Tag: "jaegertracing/all-in-one:1.57"},
-		docker.ImageBuild{Tag: "ghcr.io/open-telemetry/obi-testimg:rails-0.1.0"},
 	); err != nil {
 		slog.Error("can't build docker images", "error", err)
 		os.Exit(-1)
@@ -43,7 +38,6 @@ func TestMain(m *testing.M) {
 
 	cluster = kube.NewKind("test-kind-cluster-otel-multi",
 		kube.KindConfig(testpath.Manifests+"/00-kind-multi-node.yml"),
-		// Only pre-load locally built images
 		kube.LocalImage("testserver:dev"),
 		kube.LocalImage("pythontestserver:dev"),
 		kube.LocalImage("beyla:dev"),

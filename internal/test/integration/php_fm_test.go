@@ -190,7 +190,7 @@ func TestPHPFMUnixSock(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 
-	t.Run("PHP-FM RED metrics", testTracesPHPFPM)
+	t.Run("PHP-FM Traces", testTracesPHPFPM)
 
 	require.NoError(t, compose.Close())
 }

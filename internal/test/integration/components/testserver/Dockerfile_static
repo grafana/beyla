@@ -11,7 +11,7 @@ WORKDIR /src
 
 # Copy the go manifests and source
 COPY vendor/ vendor/
-COPY test/ test/
+COPY internal/test/ internal/test/
 COPY go.mod go.mod
 COPY go.sum go.sum
 
@@ -24,8 +24,8 @@ FROM debian:12@sha256:26f2a7cab45014541c65f9d140ccfa6aaefbb49686c6759bea9c6f7f5b
 
 WORKDIR /
 RUN mkdir -p x509
-COPY --from=builder /src/test/integration/components/testserver/x509/server_test_cert.pem x509
-COPY --from=builder /src/test/integration/components/testserver/x509/server_test_key.pem x509
+COPY --from=builder /src/internal/test/integration/components/testserver/x509/server_test_cert.pem x509
+COPY --from=builder /src/internal/test/integration/components/testserver/x509/server_test_key.pem x509
 COPY --from=builder /src/testserver .
 USER 0:0
 

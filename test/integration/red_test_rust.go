@@ -19,7 +19,7 @@ import (
 )
 
 func testREDMetricsForRustHTTPLibrary(t *testing.T, url, comm, namespace string, port int, notraces bool) {
-	jsonBody, err := os.ReadFile(path.Join(pathRoot, "test", "integration", "components", "rusttestserver", "mid_data.json"))
+	jsonBody, err := os.ReadFile(path.Join(pathRoot, "internal", "test", "integration", "components", "rusttestserver", "mid_data.json"))
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, len(jsonBody), 100)
 
@@ -218,7 +218,7 @@ func checkReportedRustEvents(t *testing.T, comm, namespace string, numEvents int
 }
 
 func testREDMetricsForRustHTTP2Library(t *testing.T, url, comm, namespace string) {
-	jsonBody, err := os.ReadFile(path.Join(pathRoot, "test", "integration", "components", "rusttestserver", "mid_data.json"))
+	jsonBody, err := os.ReadFile(path.Join(pathRoot, "internal", "test", "integration", "components", "rusttestserver", "mid_data.json"))
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, len(jsonBody), 100)
 

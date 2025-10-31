@@ -8,7 +8,7 @@
 
 set -euo pipefail
 
-OBI_DIR=".obi-src/test/integration"
+OBI_DIR=".obi-src/internal/test/integration"
 BEYLA_DIR="test/integration"
 SYNC_MODE=false
 
@@ -251,7 +251,7 @@ main() {
             echo "  See test/integration/suites_test.go for inline usage example"
             echo ""
             echo "To see full diff for a function:"
-            echo "  diff -u test/integration/traces_test.go .obi-src/test/integration/traces_test.go"
+            echo "  diff -u test/integration/traces_test.go .obi-src/internal/test/integration/traces_test.go"
             exit 1
         fi
     fi

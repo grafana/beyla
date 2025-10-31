@@ -15,7 +15,7 @@ import (
 )
 
 func testREDMetricsForNodeHTTPLibrary(t *testing.T, url, urlPath, comm, namespace string) {
-	jsonBody, err := os.ReadFile(path.Join(pathRoot, "test", "integration", "components", "rusttestserver", "mid_data.json"))
+	jsonBody, err := os.ReadFile(path.Join(pathRoot, "internal", "test", "integration", "components", "rusttestserver", "mid_data.json"))
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, len(jsonBody), 100)
 

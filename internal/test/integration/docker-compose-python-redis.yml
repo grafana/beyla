@@ -3,13 +3,13 @@ version: "3.8"
 services:
   redis:
     build:
-      context: ../../../test/integration/components/redis/
+      context: ../../../internal/test/integration/components/redis/
       dockerfile: Dockerfile
     image: redis
 
   testserver:
     build:
-      context: ../../../test/integration/components/pythonredis/
+      context: ../../../internal/test/integration/components/pythonredis/
       dockerfile: Dockerfile
     image: hatest-testserver-python-redis
     ports:

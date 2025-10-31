@@ -33,7 +33,7 @@ services:
 
   testserver:
     build:
-      context: ../../../test/integration/components/pythonkafka/
+      context: ../../../internal/test/integration/components/pythonkafka/
       dockerfile: Dockerfile
     image: hatest-testserver-python-kafka
     ports:

@@ -3,7 +3,7 @@ version: "3.8"
 services:
   sqlserver:
     build:
-      context: ../../../test/integration/components/postgresql/
+      context: ../../../internal/test/integration/components/postgresql/
       dockerfile: Dockerfile
     image: postgres
     environment:
@@ -13,7 +13,7 @@ services:
 
   testserver:
     build:
-      context: ../../../test/integration/components/pythonsql/
+      context: ../../../internal/test/integration/components/pythonsql/
       dockerfile: Dockerfile
     image: hatest-testserver-python-sql
     ports:

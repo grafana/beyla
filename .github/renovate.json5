@@ -1,39 +1,30 @@
 {
-  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:best-practices",
-    "helpers:pinGitHubActionDigestsToSemver"
-  ],
-  "ignorePaths": [
-    "NOTICES/**"
-  ],
-  "packageRules": [
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  extends: ["config:best-practices", "helpers:pinGitHubActionDigestsToSemver"],
+  ignorePaths: ["NOTICES/**"],
+  packageRules: [
     {
-      "groupName": "all patch and digest versions",
-      "matchUpdateTypes": ["patch", "digest"],
-      "schedule": ["before 8am on Monday"],
+      groupName: "all patch and digest versions",
+      matchUpdateTypes: ["patch", "digest"],
+      schedule: ["before 8am on Monday"],
       // group all patches in a single PR
-      "matchPackageNames": [
-        "*"
-      ]
+      matchPackageNames: ["*"],
     },
     {
-      "matchUpdateTypes": ["minor", "major"],
-      "schedule": ["before 8am on Monday"]
+      matchUpdateTypes: ["minor", "major"],
+      schedule: ["before 8am on Monday"],
     },
     {
-      "description": "Disable Go 1.17 testserver updates",
-      "matchFileNames": [
-        "test/integration/components/testserver_1.17/Dockerfile",
-        "test/integration/components/testserver_1.17/go.mod",
-        "test/integration/components/testserver_1.17/go.sum"
+      description: "Disable Go 1.17 testserver updates",
+      matchFileNames: [
+        "internal/test/integration/components/testserver_1.17/Dockerfile",
+        "internal/test/integration/components/testserver_1.17/go.mod",
+        "internal/test/integration/components/testserver_1.17/go.sum",
       ],
-      "matchDatasources": ["*"],
-      "matchPackageNames": ["*"],
-      "enabled": false
-    }
+      matchDatasources: ["*"],
+      matchPackageNames: ["*"],
+      enabled: false,
+    },
   ],
-  "labels": [
-    "dependencies"
-  ]
+  labels: ["dependencies"],
 }

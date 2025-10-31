@@ -15,8 +15,8 @@ services:
     volumes:
       - ./configs/:/configs
       - ./system/sys/kernel/security:/sys/kernel/security
-      - ../../testoutput:/coverage
-      - ../../testoutput/run-netolly:/var/run/beyla
+      - ../../../testoutput:/coverage
+      - ../../../testoutput/run-netolly:/var/run/beyla
     image: hatest-autoinstrumenter
     privileged: true
     network_mode: host

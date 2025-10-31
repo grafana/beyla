@@ -125,8 +125,8 @@ services:
       - ./configs/:/configs
       - ./system/sys/kernel/security:/sys/kernel/security
       - /sys/fs/cgroup:/sys/fs/cgroup
-      - ../../testoutput:/coverage
-      - ../../testoutput/run-multi:/var/run/beyla
+      - ../../../testoutput:/coverage
+      - ../../../testoutput/run-multi:/var/run/beyla
     image: hatest-autoinstrumenter
     privileged: true # in some environments (not GH Pull Requests) you can set it to false and then cap_add: [ SYS_ADMIN ]
     network_mode: "host"

@@ -15,8 +15,8 @@ services:
     volumes:
       - ./configs/:/configs
       - ./system/sys/kernel/security:/sys/kernel/security
-      - ../../testoutput:/coverage
-      - ../../testoutput/run-java-host:/var/run/beyla
+      - ../../../testoutput:/coverage
+      - ../../../testoutput/run-java-host:/var/run/beyla
     image: hatest-javaautoinstrumenter
     privileged: true # in some environments (not GH Pull Requests) you can set it to false and then cap_add: [ SYS_ADMIN ]
     network_mode: "host"

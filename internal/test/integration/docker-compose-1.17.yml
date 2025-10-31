@@ -24,8 +24,8 @@ services:
       - --config=/configs/instrumenter-config${INSTRUMENTER_CONFIG_SUFFIX}.yml
     volumes:
       - ./configs/:/configs
-      - ../../testoutput:/coverage
-      - ../../testoutput/run-1.17:/var/run/beyla
+      - ../../../testoutput:/coverage
+      - ../../../testoutput/run-1.17:/var/run/beyla
     image: hatest-autoinstrumenter
     privileged: true # in some environments (not GH Pull Requests) you can set it to false and then cap_add: [ SYS_ADMIN ]
     pid: "service:testserver"

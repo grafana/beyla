@@ -152,6 +152,7 @@ network:
 			PostgresPreparedStatementsCacheSize: 1024,
 			KafkaTopicUUIDCacheSize:             1024,
 			MaxTransactionTime:                  5 * time.Minute,
+			DNSRequestTimeout:                   5 * time.Second,
 		},
 		Grafana: otel.GrafanaConfig{
 			OTLP: otel.GrafanaOTLP{
@@ -185,7 +186,12 @@ network:
 			BatchTimeout:      15 * time.Second,
 			ReportersCacheLen: ReporterLRUSize,
 			Instrumentations: []string{
-				instrumentations.InstrumentationALL,
+				instrumentations.InstrumentationHTTP,
+				instrumentations.InstrumentationGRPC,
+				instrumentations.InstrumentationSQL,
+				instrumentations.InstrumentationRedis,
+				instrumentations.InstrumentationKafka,
+				instrumentations.InstrumentationMongo,
 			},
 		},
 		Prometheus: prom.PrometheusConfig{

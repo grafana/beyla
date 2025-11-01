@@ -8,17 +8,20 @@
 
 set -euo pipefail
 
-OBI_DIR=".obi-src/test/integration"
-BEYLA_DIR="test/integration"
+OBI_DIR=".obi-src/internal/test/integration"
+BEYLA_DIR="internal/test/integration"
 SYNC_MODE=false
 
-# Find test functions that exist in both Beyla and OBI
+# Find test functions and helper functions that exist in both Beyla and OBI
 find_common_functions() {
     # Get function names from both directories
-    local beyla_funcs=$(grep -rh "^func test[a-zA-Z0-9_]*(" "$BEYLA_DIR"/*.go 2>/dev/null | \
+    # Match both test functions (testXxx) and test helper functions (functions taking *testing.T)
+    local beyla_funcs=$(grep -rh "^func [a-z][a-zA-Z0-9_]*(" "$BEYLA_DIR"/*.go 2>/dev/null | \
+        grep -E '\*testing\.(T|B)\b' | \
         sed 's/^func \([a-zA-Z0-9_]*\).*/\1/' | sort -u)
     
-    local obi_funcs=$(grep -rh "^func test[a-zA-Z0-9_]*(" "$OBI_DIR"/*.go 2>/dev/null | \
+    local obi_funcs=$(grep -rh "^func [a-z][a-zA-Z0-9_]*(" "$OBI_DIR"/*.go 2>/dev/null | \
+        grep -E '\*testing\.(T|B)\b' | \
         sed 's/^func \([a-zA-Z0-9_]*\).*/\1/' | sort -u)
     
     # Find common functions
@@ -240,18 +243,18 @@ main() {
             echo "✓ Synced $drifted functions from OBI"
             echo ""
             echo "Next steps:"
-            echo "  1. Review changes: git diff test/integration/"
-            echo "  2. Run tests: go test -tags=integration ./test/integration/..."
-            echo "  3. Create PR: git add test/integration/ && git commit -m 'Sync tests from OBI'"
+            echo "  1. Review changes: git diff internal/test/integration/"
+            echo "  2. Run tests: go test -tags=integration ./internal/test/integration/..."
+            echo "  3. Create PR: git add internal/test/integration/ && git commit -m 'Sync tests from OBI'"
         else
             echo "To sync these changes automatically:"
             echo "  $0 --sync"
             echo ""
             echo "To migrate a function to use the shared package instead:"
-            echo "  See test/integration/suites_test.go for inline usage example"
+            echo "  See internal/test/integration/suites_test.go for inline usage example"
             echo ""
             echo "To see full diff for a function:"
-            echo "  diff -u test/integration/traces_test.go .obi-src/test/integration/traces_test.go"
+            echo "  diff -u internal/test/integration/traces_test.go .obi-src/internal/test/integration/traces_test.go"
             exit 1
         fi
     fi

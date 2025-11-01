@@ -96,6 +96,7 @@ func (p *Watcher) Run(ctx context.Context) {
 		p.processWatchEvent,
 		p.log,
 		nil,
+		nil,
 		append(p.closers, &p.bpfObjects)...,
 	)(ctx, nil)
 }

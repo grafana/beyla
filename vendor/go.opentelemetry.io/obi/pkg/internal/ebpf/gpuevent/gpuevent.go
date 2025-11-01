@@ -238,6 +238,7 @@ func (p *Tracer) Run(ctx context.Context, ebpfEventContext *ebpfcommon.EBPFEvent
 		p.processCudaEvent,
 		p.log,
 		p.metrics,
+		eventsChan,
 		append(p.closers, &p.bpfObjects)...,
 	)(ctx, eventsChan)
 }

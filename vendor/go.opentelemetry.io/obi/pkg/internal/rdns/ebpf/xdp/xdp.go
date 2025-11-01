@@ -12,6 +12,7 @@ import (
 	"os"
 	"time"
 
+	"go.opentelemetry.io/obi/pkg/ebpf/common/dnsparser"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/internal/rdns/store"
 )
@@ -93,7 +94,7 @@ func handleDNSMessage(rd *ringbuf.Record) *store.DNSEntry {
 	}
 
 	for _, answer := range dnsMessage.answers {
-		if answer.typ != TypeA {
+		if answer.typ != uint16(dnsparser.TypeA) {
 			continue
 		}
 

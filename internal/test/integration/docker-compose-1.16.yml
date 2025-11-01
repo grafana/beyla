@@ -1,0 +1,79 @@
+version: "3.8"
+
+services:
+  testserver:
+    image: ghcr.io/grafana/beyla-test/testserver-go-1.16/0.0.1@sha256:f75957209bed6aed698c227879a1575f7c4beb65086de517a2689d57143de87e
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+      - "8082:8082"
+      - "8083:8083"
+      - "8087:8087"
+      - "5051:5051"
+    environment:
+      LOG_LEVEL: DEBUG
+
+  autoinstrumenter:
+    build:
+      context: ../../..
+      dockerfile: ./internal/test/integration/components/beyla/Dockerfile
+    volumes:
+      - ./configs/:/configs
+      - ../../../testoutput:/coverage
+      - ../../../testoutput/run-1.16:/var/run/beyla
+    image: hatest-autoinstrumenter
+    privileged: true # in some environments (not GH Pull Requests) you can set it to false and then cap_add: [ SYS_ADMIN ]
+    pid: "service:testserver"
+    environment:
+      BEYLA_CONFIG_PATH: "/configs/instrumenter-config-java.yml"
+      GOCOVERDIR: "/coverage"
+      BEYLA_OTEL_METRICS_FEATURES: "application,application_span"
+      BEYLA_TRACE_PRINTER: "text"
+      BEYLA_OPEN_PORT: 8080
+      BEYLA_DISCOVERY_POLL_INTERVAL: 500ms
+      BEYLA_OTLP_TRACES_BATCH_TIMEOUT: "1ms"
+      BEYLA_SERVICE_NAMESPACE: "integration-test"
+      BEYLA_METRICS_INTERVAL: "10ms"
+      BEYLA_BPF_BATCH_TIMEOUT: "10ms"
+      BEYLA_LOG_LEVEL: "DEBUG"
+      BEYLA_BPF_DEBUG: "TRUE"
+      BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT: 8999
+      BEYLA_HOSTNAME: "beyla"
+    ports:
+      - "8999:8999" # Prometheus scrape port, if enabled via config
+
+  # OpenTelemetry Collector for Metrics. For Traces, we use directly Jaeger
+  otelcol:
+    image: otel/opentelemetry-collector-contrib:0.104.0@sha256:e07e325e303e86f4a87a617491e921b579a92da6d404007394757ac910bf9587
+    container_name: otel-col
+    deploy:
+      resources:
+        limits:
+          memory: 125M
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol-config/otelcol-config.yml"]
+    volumes:
+      - ./configs/:/etc/otelcol-config
+    ports:
+      - "4317" # OTLP over gRPC receiver
+      - "4318" # OTLP over HTTP receiver
+      - "9464" # Prometheus exporter
+      - "8888" # metrics endpoint
+    depends_on:
+      autoinstrumenter:
+        condition: service_started
+      prometheus:
+        condition: service_started
+
+  # Prometheus
+  prometheus:
+    image: quay.io/prometheus/prometheus:v2.55.1@sha256:2659f4c2ebb718e7695cb9b25ffa7d6be64db013daba13e05c875451cf51b0d3
+    container_name: prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus-config${PROM_CONFIG_SUFFIX}.yml
+      - --web.enable-lifecycle
+      - --web.route-prefix=/
+    volumes:
+      - ./configs/:/etc/prometheus
+    ports:
+      - "9090:9090"

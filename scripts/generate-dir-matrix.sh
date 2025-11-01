@@ -8,7 +8,7 @@
 set -e
 
 # Find all test directories
-SEARCH_DIR="${1:-test/integration/k8s}"
+SEARCH_DIR="${1:-internal/test/integration/k8s}"
 EXCLUDE_PATTERN="${2:-common}"
 TEST_DIRS=$(find "$SEARCH_DIR" -name "*_test.go" | grep -v "$EXCLUDE_PATTERN" | sort | xargs dirname | xargs basename -a | sort -u)
 

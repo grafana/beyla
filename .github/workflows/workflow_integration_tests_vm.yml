@@ -3,10 +3,18 @@ name: Pull request integration tests on VM
 on:
   push:
     branches: ["main", "release-*"]
-    paths: ["bpf/**"]
+    paths:
+      - ".github/workflows/workflow_integration_tests_vm.yml"
+      - "bpf/**"
+      - "internal/**"
+      - "scripts/generate-integration-matrix.sh"
   pull_request:
     branches: ["main", "release-*"]
-    paths: ["bpf/**"]
+    paths:
+      - ".github/workflows/workflow_integration_tests_vm.yml"
+      - "bpf/**"
+      - "internal/**"
+      - "scripts/generate-integration-matrix.sh"
 
 permissions:
   contents: read
@@ -76,7 +84,7 @@ jobs:
       - name: Pre-compile Go integration tests
         run: |
           mkdir compiled-tests
-          CC=musl-gcc CGO_ENABLED=1 go test -c -tags=integration -mod vendor -ldflags="-s -w" -o compiled-tests/ ./test/integration/...
+          CC=musl-gcc CGO_ENABLED=1 go test -c -tags=integration -mod vendor -ldflags="-s -w" -o compiled-tests/ ./internal/test/integration/...
 
       - name: Run VM integration tests (${{ matrix.test.description }})
         timeout-minutes: 60
@@ -98,7 +106,7 @@ jobs:
           fi
 
           # Run VM tests with pre-compiled tests
-          sudo make -C test/vm \
+          sudo make -C internal/test/vm \
             KERNEL_VER=${KERNEL_VERSION} \
             ARCH=${ARCH} \
             TEST_PATTERN="${MATRIX_TEST_PATTERN}" \

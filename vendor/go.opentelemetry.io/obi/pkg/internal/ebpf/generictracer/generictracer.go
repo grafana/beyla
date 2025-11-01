@@ -272,6 +272,10 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.ProbeDesc {
 			Required: true,
 			Start:    p.bpfObjects.ObiKprobeTcpConnect,
 		},
+		"udp_sendmsg": {
+			Required: true,
+			Start:    p.bpfObjects.ObiKprobeUdpSendmsg,
+		},
 		"tcp_close": {
 			Required: true,
 			Start:    p.bpfObjects.ObiKprobeTcpClose,
@@ -487,7 +491,7 @@ func (p *Tracer) Run(ctx context.Context, ebpfEventContext *ebpfcommon.EBPFEvent
 	}
 
 	timeoutTicker := time.NewTicker(2 * time.Second)
-	parseContext := ebpfcommon.NewEBPFParseContext(&p.cfg.EBPF)
+	parseContext := ebpfcommon.NewEBPFParseContext(&p.cfg.EBPF, eventsChan, p.pidsFilter)
 
 	go p.watchForMisclassifedEvents(ctx)
 	go p.lookForTimeouts(ctx, parseContext, timeoutTicker, eventsChan)

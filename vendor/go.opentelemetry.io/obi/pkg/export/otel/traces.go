@@ -11,6 +11,7 @@ import (
 
 	expirable2 "github.com/hashicorp/golang-lru/v2/expirable"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/configgrpc"
@@ -216,7 +217,7 @@ func getTracesExporter(ctx context.Context, cfg otelcfg.TracesConfig, im imetric
 			Headers: convertHeaders(opts.Headers),
 		}
 		slog.Debug("getTracesExporter: confighttp.ClientConfig created", "endpoint", config.ClientConfig.Endpoint)
-		set := getTraceSettings(factory.Type())
+		set := getTraceSettings(factory.Type(), cfg.SDKLogLevel)
 		exp, err := factory.CreateTraces(ctx, set, config)
 		if err != nil {
 			slog.Error("can't create OTLP HTTP traces exporter", "error", err)
@@ -272,7 +273,7 @@ func getTracesExporter(ctx context.Context, cfg otelcfg.TracesConfig, im imetric
 			},
 			Headers: convertHeaders(opts.Headers),
 		}
-		set := getTraceSettings(factory.Type())
+		set := getTraceSettings(factory.Type(), cfg.SDKLogLevel)
 		exp, err := factory.CreateTraces(ctx, set, config)
 		if err != nil {
 			return nil, err
@@ -286,11 +287,34 @@ func getTracesExporter(ctx context.Context, cfg otelcfg.TracesConfig, im imetric
 	}
 }
 
-func getTraceSettings(dataTypeMetrics component.Type) exporter.Settings {
+func createZapLoggerDev(sdkLogLevel string) *zap.Logger {
+	if sdkLogLevel == "" {
+		return zap.NewNop()
+	}
+
+	var level zapcore.Level
+	if err := level.UnmarshalText([]byte(sdkLogLevel)); err != nil {
+		slog.Error("unsupported trace exporter logger level", "error", err, "level", sdkLogLevel)
+		return zap.NewNop()
+	}
+
+	config := zap.NewDevelopmentConfig()
+	config.Level = zap.NewAtomicLevelAt(level)
+
+	logger, err := config.Build()
+	if err != nil {
+		slog.Error("unable to create trace exporter logger", "error", err)
+		return zap.NewNop()
+	}
+
+	return logger
+}
+
+func getTraceSettings(dataTypeMetrics component.Type, sdkLogLevel string) exporter.Settings {
 	traceProvider := tracenoop.NewTracerProvider()
 	meterProvider := metric.NewMeterProvider()
 	telemetrySettings := component.TelemetrySettings{
-		Logger:         zap.NewNop(),
+		Logger:         createZapLoggerDev(sdkLogLevel),
 		MeterProvider:  meterProvider,
 		TracerProvider: traceProvider,
 		Resource:       pcommon.NewResource(),

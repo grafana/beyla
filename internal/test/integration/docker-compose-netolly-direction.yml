@@ -1,0 +1,87 @@
+version: "3.8"
+
+services:
+  testserver:
+    build:
+      context: ../../..
+      dockerfile: internal/test/integration/components/testserver/Dockerfile${TESTSERVER_DOCKERFILE_SUFFIX}
+    image: hatest-testserver
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+      - "8082:8082"
+      - "8083:8083"
+      - "8087:8087"
+      - "50051:50051"
+    environment:
+      LOG_LEVEL: DEBUG
+      TARGET_URL: http://testserver2:8080
+
+  testserver2:
+    image: hatest-testserver
+    environment:
+      LOG_LEVEL: DEBUG
+    depends_on:
+      testserver:
+        condition: service_started
+
+  autoinstrumenter:
+    build:
+      context: ../../..
+      dockerfile: ./internal/test/integration/components/beyla/Dockerfile
+    volumes:
+      - ./configs/:/configs
+      - ./system/sys/kernel/security:/sys/kernel/security
+      - ../../../testoutput:/coverage
+      - ../../../testoutput/run-netolly-direction:/var/run/beyla
+    image: hatest-autoinstrumenter
+    privileged: true
+    network_mode: service:testserver
+    environment:
+      BEYLA_CONFIG_PATH: /configs/instrumenter-config-netolly${BEYLA_CONFIG_SUFFIX}.yml
+      GOCOVERDIR: "/coverage"
+      BEYLA_NETWORK_SOURCE: ${BEYLA_NETWORK_SOURCE}
+      BEYLA_OTEL_METRICS_FEATURES: "network" # implicitly enabling network metrics without a global enable
+      BEYLA_NETWORK_PRINT_FLOWS: "true"
+      BEYLA_METRICS_INTERVAL: "1s"
+      BEYLA_BPF_BATCH_TIMEOUT: "1s"
+      BEYLA_NETWORK_CACHE_ACTIVE_TIMEOUT: "1s"
+      BEYLA_NETWORK_DEDUPER: ${BEYLA_NETWORK_DEDUPER}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otelcol:4318
+      BEYLA_LOG_LEVEL: "DEBUG"
+      BEYLA_BPF_DEBUG: "TRUE"
+      BEYLA_HOSTNAME: "beyla"
+
+  # OpenTelemetry Collector for Metrics. For Traces, we use directly Jaeger
+  otelcol:
+    image: otel/opentelemetry-collector-contrib:0.104.0@sha256:e07e325e303e86f4a87a617491e921b579a92da6d404007394757ac910bf9587
+    container_name: otel-col
+    deploy:
+      resources:
+        limits:
+          memory: 125M
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol-config/otelcol-config.yml"]
+    volumes:
+      - ./configs/:/etc/otelcol-config
+    ports:
+      - "4317" # OTLP over gRPC receiver
+      - "4318" # OTLP over HTTP receiver
+      - "9464" # Prometheus exporter
+      - "8888" # metrics endpoint
+    depends_on:
+      prometheus:
+        condition: service_started
+
+  # Prometheus
+  prometheus:
+    image: quay.io/prometheus/prometheus:v2.55.1@sha256:2659f4c2ebb718e7695cb9b25ffa7d6be64db013daba13e05c875451cf51b0d3
+    container_name: prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus-config${PROM_CONFIG_SUFFIX}.yml
+      - --web.enable-lifecycle
+      - --web.route-prefix=/
+    volumes:
+      - ./configs/:/etc/prometheus
+    ports:
+      - "9090:9090"

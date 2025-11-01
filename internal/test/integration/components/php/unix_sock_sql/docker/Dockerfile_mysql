@@ -1,0 +1,22 @@
+FROM mysql:8.0.34-debian@sha256:2a31847951cdf92d6901ef58b4c5a9fbe75b47823d9ade1f7a4652ede7a88e2d
+
+SHELL ["/bin/bash", "-c"]
+
+RUN chmod 1777 /tmp
+RUN usermod -u 1000 mysql
+RUN groupmod -g 1000 mysql
+
+COPY internal/test/integration/components/php/unix_sock_sql/docker/init_sql/ /docker-entrypoint-initdb.d/
+COPY internal/test/integration/components/php/unix_sock_sql/config/mysql/custom.cnf /etc/mysql/conf.d/
+
+RUN rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+EXPOSE 3306
+
+RUN chown -R mysql:mysql /var/lib/mysql
+
+RUN install -o mysql -g mysql -d /var/log/mysql && \
+    install -o mysql -g mysql /dev/null /var/log/mysql/error.log && \
+    install -o mysql -g mysql /dev/null /var/log/mysql/slow.log
+
+USER mysql

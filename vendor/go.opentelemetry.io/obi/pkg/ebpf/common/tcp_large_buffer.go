@@ -42,6 +42,10 @@ func appendTCPLargeBuffer(parseCtx *EBPFParseContext, record *ringbuf.Record) (r
 		connInfo:   event.ConnInfo,
 	}
 
+	if parseCtx.protocolDebug {
+		fmt.Printf(">>> LargeBufferAppend: (packet=%d direction=%d action=%d)\n%s\n", event.PacketType, event.Direction, event.Action, string(record.RawSample[hdrSize:hdrSize+event.Len]))
+	}
+
 	switch event.Action {
 	case largeBufferActionInit:
 		newBuffer := make([]byte, event.Len)
@@ -70,9 +74,17 @@ func extractTCPLargeBuffer(parseCtx *EBPFParseContext, traceID [16]uint8, packet
 		connInfo:   connInfo,
 	}
 
+	//nolint:gocritic
 	if lb, ok := parseCtx.largeBuffers.Get(key); ok {
+		if parseCtx.protocolDebug {
+			fmt.Printf("<<< LargeBufferExtract: (packet=%d direction=%d)\n%s\n", key.packetType, key.direction, string(lb.buf))
+		}
 		parseCtx.largeBuffers.Remove(key)
 		return lb.buf, true
+	} else {
+		if parseCtx.protocolDebug {
+			fmt.Println("<<< LargeBufferExtract: not found!")
+		}
 	}
 
 	return nil, false

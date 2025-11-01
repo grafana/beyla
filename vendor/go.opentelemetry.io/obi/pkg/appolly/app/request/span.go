@@ -45,6 +45,7 @@ const (
 	EventTypeGPUMalloc
 	EventTypeGPUMemcpy
 	EventTypeFailedConnect
+	EventTypeDNS
 )
 
 const (
@@ -81,6 +82,7 @@ const (
 	HTTPSubtypeGraphQL       = 1 // http + graphql
 	HTTPSubtypeElasticsearch = 2 // http + elasticsearch
 	HTTPSubtypeAWSS3         = 3 // http + aws s3
+	HTTPSubtypeAWSSQS        = 4 // http + aws sqs
 )
 
 //nolint:cyclop
@@ -118,6 +120,8 @@ func (t EventType) String() string {
 		return "CUSTOM"
 	case EventTypeFailedConnect:
 		return "CONNECTION ERR"
+	case EventTypeDNS:
+		return "DNS"
 	default:
 		return fmt.Sprintf("UNKNOWN (%d)", t)
 	}
@@ -182,15 +186,30 @@ type Elasticsearch struct {
 type AWS struct {
 	// https://opentelemetry.io/docs/specs/semconv/object-stores/s3/
 	S3 AWSS3 `json:"s3"`
+	// https://opentelemetry.io/docs/specs/semconv/messaging/sqs/
+	SQS AWSSQS `json:"sqs"`
 }
 
-type AWSS3 struct {
+type AWSMeta struct {
 	RequestID         string `json:"requestId"`
 	ExtendedRequestID string `json:"extendedRequestId"`
 	Region            string `json:"region"`
-	Method            string `json:"method"`
-	Bucket            string `json:"bucket"`
-	Key               string `json:"key"`
+}
+
+type AWSS3 struct {
+	Meta   AWSMeta `json:"meta"`
+	Method string  `json:"method"`
+	Bucket string  `json:"bucket"`
+	Key    string  `json:"key"`
+}
+
+type AWSSQS struct {
+	Meta          AWSMeta `json:"meta"`
+	OperationName string  `json:"operationName"`
+	OperationType string  `json:"operationType"`
+	Destination   string  `json:"destination"`
+	QueueURL      string  `json:"queueUrl"`
+	MessageID     string  `json:"messageId"`
 }
 
 // Span contains the information being submitted by the following nodes in the graph.
@@ -287,12 +306,24 @@ func spanAttributes(s *Span) SpanAttributes {
 			attrs["dbQueryText"] = s.Elasticsearch.DBQueryText
 		}
 		if s.SubType == HTTPSubtypeAWSS3 && s.AWS != nil {
-			attrs["awsRequestID"] = s.AWS.S3.RequestID
-			attrs["awsExtendedRequestID"] = s.AWS.S3.ExtendedRequestID
-			attrs["awsRegion"] = s.AWS.S3.Region
-			attrs["awsS3Method"] = s.AWS.S3.Method
-			attrs["awsS3Bucket"] = s.AWS.S3.Bucket
-			attrs["awsS3Key"] = s.AWS.S3.Key
+			s3 := s.AWS.S3
+			attrs["awsRequestID"] = s3.Meta.RequestID
+			attrs["awsExtendedRequestID"] = s3.Meta.ExtendedRequestID
+			attrs["awsRegion"] = s3.Meta.Region
+			attrs["awsS3Method"] = s3.Method
+			attrs["awsS3Bucket"] = s3.Bucket
+			attrs["awsS3Key"] = s3.Key
+		}
+		if s.SubType == HTTPSubtypeAWSSQS && s.AWS != nil {
+			sqs := s.AWS.SQS
+			attrs["awsRequestID"] = sqs.Meta.RequestID
+			attrs["awsExtendedRequestID"] = sqs.Meta.ExtendedRequestID
+			attrs["awsRegion"] = sqs.Meta.Region
+			attrs["awsSQSOperationName"] = sqs.OperationName
+			attrs["awsSQSOperationType"] = sqs.OperationType
+			attrs["awsSQSDestination"] = sqs.Destination
+			attrs["awsSQSQueueURL"] = sqs.QueueURL
+			attrs["awsSQSMessageID"] = sqs.MessageID
 		}
 		return attrs
 	case EventTypeGRPC:
@@ -500,7 +531,7 @@ func SpanStatusCode(span *Span) string {
 		return HTTPSpanStatusCode(span)
 	case EventTypeGRPC, EventTypeGRPCClient:
 		return GrpcSpanStatusCode(span)
-	case EventTypeSQLClient, EventTypeRedisClient, EventTypeRedisServer, EventTypeMongoClient:
+	case EventTypeSQLClient, EventTypeRedisClient, EventTypeRedisServer, EventTypeMongoClient, EventTypeDNS:
 		if span.Status != 0 {
 			return StatusCodeError
 		}
@@ -653,6 +684,14 @@ func (s *Span) TraceName() string {
 			}
 		}
 
+		if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeAWSSQS && s.AWS != nil {
+			if s.AWS.SQS.OperationName != "" {
+				return "sqs." + s.AWS.SQS.OperationName
+			} else {
+				return "sqs.Operation"
+			}
+		}
+
 		name := s.Method
 		if s.Route != "" {
 			name += " " + s.Route
@@ -696,6 +735,14 @@ func (s *Span) TraceName() string {
 		return s.Method
 	case EventTypeFailedConnect:
 		return "CONNECT"
+	case EventTypeDNS:
+		if s.Path == "" {
+			if s.Method == "" {
+				return "DNS"
+			}
+			return s.Method
+		}
+		return s.Method + " " + s.Path
 	}
 	return ""
 }

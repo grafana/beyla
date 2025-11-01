@@ -62,12 +62,12 @@ jobs:
 
             2. Review the changes:
                \`\`\`bash
-               git diff test/integration/
+               git diff internal/test/integration/
                \`\`\`
 
             3. Commit and push the changes:
                \`\`\`bash
-               git add test/integration/
+               git add internal/test/integration/
                git commit -m "Sync tests from OBI"
                git push
                \`\`\`

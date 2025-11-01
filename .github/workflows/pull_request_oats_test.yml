@@ -3,8 +3,32 @@ name: PR OATS test
 on:
   push:
     branches: ["main", "release-*"]
+    paths:
+      - "**.go"
+      - "go.mod"
+      - "go.sum"
+      - "bpf/**"
+      - "internal/**"
+      - "pkg/**"
+      - "cmd/**"
+      - "vendor/**"
+      - "Makefile"
+      - "scripts/generate-dir-matrix.sh"
+      - ".github/workflows/pull_request_oats_test.yml"
   pull_request:
     branches: ["main", "release-*"]
+    paths:
+      - "**.go"
+      - "go.mod"
+      - "go.sum"
+      - "bpf/**"
+      - "internal/**"
+      - "pkg/**"
+      - "cmd/**"
+      - "vendor/**"
+      - "Makefile"
+      - "scripts/generate-dir-matrix.sh"
+      - ".github/workflows/pull_request_oats_test.yml"
 
 permissions:
   contents: read
@@ -63,7 +87,7 @@ jobs:
         if: always()
         with:
           name: Oats test logs - ${{ matrix.basename }}
-          path: test/oats/${{ matrix.basename }}/build/*
+          path: internal/test/oats/${{ matrix.basename }}/build/*
 
       - name: Process coverage data
         run: make itest-coverage-data

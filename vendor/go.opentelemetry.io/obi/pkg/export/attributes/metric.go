@@ -114,6 +114,11 @@ var (
 		Prom:    "gpu_memory_copies_bytes_total",
 		OTEL:    "gpu.memory.copies",
 	}
+	DNSLookupDuration = Name{
+		Section: "dns.lookup.duration",
+		Prom:    "dns_lookup_duration_seconds",
+		OTEL:    "dns.lookup.duration",
+	}
 )
 
 // normalizeMetric will facilitate the user-input in the attributes.enable section.

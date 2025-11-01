@@ -7,8 +7,8 @@ services:
     ports:
       - 8080:80
     volumes:
-      - ../../internal/test/integration/components/php/unix_sock_sql/src/:/var/www/html
-      - ../../internal/test/integration/components/php/unix_sock_sql/config/nginx/sites-available:/etc/nginx/sites-available
+      - ../../../internal/test/integration/components/php/unix_sock_sql/src/:/var/www/html
+      - ../../../internal/test/integration/components/php/unix_sock_sql/config/nginx/sites-available:/etc/nginx/sites-available
       - php-socket:/var/run/php-fpm
     networks:
       - test-network
@@ -23,7 +23,7 @@ services:
     ports:
       - 9000:9000
     volumes:
-      - ../../internal/test/integration/components/php/unix_sock_sql/src/:/var/www/html
+      - ../../../internal/test/integration/components/php/unix_sock_sql/src/:/var/www/html
       - /var/www/html/vendor/
       - php-socket:/run/php-fpm
     networks:

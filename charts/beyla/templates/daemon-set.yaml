@@ -1,3 +1,4 @@
+{{- if .Values.enabled }}
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -149,3 +150,4 @@ spec:
       {{- with .Values.volumes }}
         {{- toYaml . | nindent 8 }}
       {{- end }}
+{{- end }}

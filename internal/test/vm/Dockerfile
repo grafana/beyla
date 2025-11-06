@@ -1,4 +1,4 @@
-FROM golang:1.25.1-alpine@sha256:b6ed3fd0452c0e9bcdef5597f29cc1418f61672e9d3a2f55bf02e7222c014abd
+FROM alpine:3.20
 
 # this is the toplevel Makefile target to be invoked
 # see the contents of 'startup.sh' at the end of this file
@@ -6,23 +6,31 @@ ARG target=run-integration-test-vm
 ARG test_pattern=TestMultiProcess
 ARG run_number=1
 
-# Pin Docker/runc to versions before November 2025 CVE patches
+# Pin Docker/runc to Alpine 3.20 versions (before November 2025 CVE patches)
 # The procfs security checks in newer runc (CVE-2025-52881, CVE-2025-52565,
 # CVE-2025-31133) prevent containers from starting in nested virtualization.
 # Even buildkit containers fail to boot, so insecure buildx approach is not viable.
 RUN apk update && \
-    apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/v3.20/community/ \
+    apk add --no-cache \
     agetty \
     bash \
-    runc=1.1.14-r0 \
-    containerd=1.7.23-r0 \
-    docker=27.3.1-r0 \
+    ca-certificates \
+    docker \
     docker-cli-compose \
     git \
     make \
     openrc \
     openssh \
-    shadow
+    shadow \
+    wget
+
+# Install Go 1.25.1 manually (not available in Alpine 3.20 repos)
+RUN wget -q https://go.dev/dl/go1.25.1.linux-amd64.tar.gz && \
+    tar -C /usr/local -xzf go1.25.1.linux-amd64.tar.gz && \
+    rm go1.25.1.linux-amd64.tar.gz && \
+    ln -s /usr/local/go/bin/go /usr/bin/go && \
+    ln -s /usr/local/go/bin/gofmt /usr/bin/gofmt && \
+    go version
 
 RUN ssh-keygen -A && \
     echo "root:root" | chpasswd && \
@@ -81,6 +89,12 @@ while ! docker info >/dev/null 2>&1; do
     sleep 1
 done
 echo "Docker daemon is ready"
+
+# Verify runc version
+echo "=== Docker/runc versions in VM ==="
+docker version
+runc --version
+echo "=================================="
 
 if [[ -n "$target" ]]; then
     echo "=== Starting test execution ==="

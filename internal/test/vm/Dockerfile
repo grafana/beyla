@@ -11,6 +11,7 @@ RUN apk update && apk add --no-cache \
     bash \
     docker \
     docker-compose \
+    docker-buildx \
     git \
     make \
     openrc \
@@ -25,23 +26,6 @@ RUN ssh-keygen -A && \
     rc-update add sshd default && \
     echo ttyS0::respawn:/sbin/agetty --autologin root ttyS0 vt100 >> /etc/inittab && \
     mkdir -p /overlay/upper/testoutput /overlay/work /build /beyla /precompiled-tests
-
-# Configure Docker daemon to disable seccomp for CI/VM environment
-# This is needed to work around runc procfs safety checks in nested virtualization
-# Ref: CVE-2025-52881, CVE-2025-52565, CVE-2025-31133
-RUN mkdir -p /etc/docker && cat <<EOF > /etc/docker/daemon.json
-{
-  "seccomp-profile": "/etc/docker/seccomp-unconfined.json"
-}
-EOF
-
-# Create an unconfined seccomp profile
-RUN cat <<EOF > /etc/docker/seccomp-unconfined.json
-{
-  "defaultAction": "SCMP_ACT_ALLOW"
-}
-EOF
-
 
 RUN cat <<EOF >> /etc/fstab
 beyla        /beyla             9p      trans=virtio,version=9p2000.L                                  0  0
@@ -91,6 +75,45 @@ while ! docker info >/dev/null 2>&1; do
     sleep 1
 done
 echo "Docker daemon is ready"
+
+# Create buildx builder with insecure entitlement for pre-building images
+# This bypasses runc procfs safety checks in nested VM environment
+# Ref: CVE-2025-52881, CVE-2025-52565, CVE-2025-31133 - safe in isolated CI
+echo "=== Setting up buildx builder with security.insecure entitlement ==="
+docker buildx create --use --name insecure-builder \
+    --driver docker-container \
+    --buildkitd-flags '--allow-insecure-entitlement security.insecure' || true
+docker buildx inspect --bootstrap
+
+# Pre-build common test images using buildx with insecure entitlement
+# This allows docker-compose to use cached images instead of rebuilding
+echo "=== Pre-building test images with buildx ==="
+cd /build/internal/test/integration
+
+# Build testserver image (used by most tests)
+if [ -f "components/testserver/Dockerfile" ]; then
+    echo "Building hatest-testserver..."
+    docker buildx build \
+        --allow security.insecure \
+        --load \
+        -t hatest-testserver \
+        -f components/testserver/Dockerfile \
+        ../../.. || echo "Warning: testserver build failed, will retry with compose"
+fi
+
+# Build autoinstrumenter image (used by all tests)
+if [ -f "components/beyla/Dockerfile" ]; then
+    echo "Building hatest-autoinstrumenter..."
+    docker buildx build \
+        --allow security.insecure \
+        --load \
+        -t hatest-autoinstrumenter \
+        -f components/beyla/Dockerfile \
+        ../../.. || echo "Warning: autoinstrumenter build failed, will retry with compose"
+fi
+
+cd /build
+echo "=== Pre-build complete ==="
 
 if [[ -n "$target" ]]; then
     echo "=== Starting test execution ==="

@@ -26,20 +26,22 @@ RUN ssh-keygen -A && \
     echo ttyS0::respawn:/sbin/agetty --autologin root ttyS0 vt100 >> /etc/inittab && \
     mkdir -p /overlay/upper/testoutput /overlay/work /build /beyla /precompiled-tests
 
-# Configure Docker to relax procfs security checks.
-# Ref: CVE-2025-31133, CVE-2025-52565, and CVE-2025-52881.
+# Configure Docker daemon to disable seccomp for CI/VM environment
+# This is needed to work around runc procfs safety checks in nested virtualization
+# Ref: CVE-2025-52881, CVE-2025-52565, CVE-2025-31133
 RUN mkdir -p /etc/docker && cat <<EOF > /etc/docker/daemon.json
 {
-  "features": {
-    "containerd-snapshotter": false
-  }
+  "seccomp-profile": "/etc/docker/seccomp-unconfined.json"
 }
 EOF
 
-# Set environment variable to allow runc to run with VM procfs
-RUN cat <<EOF > /etc/conf.d/docker
-RUNC_ALLOW_UNSAFE_PROCFS=1
+# Create an unconfined seccomp profile
+RUN cat <<EOF > /etc/docker/seccomp-unconfined.json
+{
+  "defaultAction": "SCMP_ACT_ALLOW"
+}
 EOF
+
 
 RUN cat <<EOF >> /etc/fstab
 beyla        /beyla             9p      trans=virtio,version=9p2000.L                                  0  0

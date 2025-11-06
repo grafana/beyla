@@ -6,12 +6,18 @@ ARG target=run-integration-test-vm
 ARG test_pattern=TestMultiProcess
 ARG run_number=1
 
-RUN apk update && apk add --no-cache \
+# Pin Docker/runc to versions before November 2025 CVE patches
+# The procfs security checks in newer runc (CVE-2025-52881, CVE-2025-52565,
+# CVE-2025-31133) prevent containers from starting in nested virtualization.
+# Even buildkit containers fail to boot, so insecure buildx approach is not viable.
+RUN apk update && \
+    apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/v3.20/community/ \
     agetty \
     bash \
-    docker \
-    docker-compose \
-    docker-cli-buildx \
+    runc=1.1.14-r0 \
+    containerd=1.7.23-r0 \
+    docker=27.3.1-r0 \
+    docker-cli-compose \
     git \
     make \
     openrc \
@@ -75,45 +81,6 @@ while ! docker info >/dev/null 2>&1; do
     sleep 1
 done
 echo "Docker daemon is ready"
-
-# Create buildx builder with insecure entitlement for pre-building images
-# This bypasses runc procfs safety checks in nested VM environment
-# Ref: CVE-2025-52881, CVE-2025-52565, CVE-2025-31133 - safe in isolated CI
-echo "=== Setting up buildx builder with security.insecure entitlement ==="
-docker buildx create --use --name insecure-builder \
-    --driver docker-container \
-    --buildkitd-flags '--allow-insecure-entitlement security.insecure' || true
-docker buildx inspect --bootstrap
-
-# Pre-build common test images using buildx with insecure entitlement
-# This allows docker-compose to use cached images instead of rebuilding
-echo "=== Pre-building test images with buildx ==="
-cd /build/internal/test/integration
-
-# Build testserver image (used by most tests)
-if [ -f "components/testserver/Dockerfile" ]; then
-    echo "Building hatest-testserver..."
-    docker buildx build \
-        --allow security.insecure \
-        --load \
-        -t hatest-testserver \
-        -f components/testserver/Dockerfile \
-        ../../.. || echo "Warning: testserver build failed, will retry with compose"
-fi
-
-# Build autoinstrumenter image (used by all tests)
-if [ -f "components/beyla/Dockerfile" ]; then
-    echo "Building hatest-autoinstrumenter..."
-    docker buildx build \
-        --allow security.insecure \
-        --load \
-        -t hatest-autoinstrumenter \
-        -f components/beyla/Dockerfile \
-        ../../.. || echo "Warning: autoinstrumenter build failed, will retry with compose"
-fi
-
-cd /build
-echo "=== Pre-build complete ==="
 
 if [[ -n "$target" ]]; then
     echo "=== Starting test execution ==="

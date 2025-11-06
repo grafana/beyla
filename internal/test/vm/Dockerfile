@@ -5,6 +5,7 @@ FROM alpine:3.20
 ARG target=run-integration-test-vm
 ARG test_pattern=TestMultiProcess
 ARG run_number=1
+ARG GO_VERSION=1.25.1
 
 # Pin Docker/runc to Alpine 3.20 versions (before November 2025 CVE patches)
 # The procfs security checks in newer runc (CVE-2025-52881, CVE-2025-52565,
@@ -24,10 +25,10 @@ RUN apk update && \
     shadow \
     wget
 
-# Install Go 1.25.1 manually (not available in Alpine 3.20 repos)
-RUN wget -q https://go.dev/dl/go1.25.1.linux-amd64.tar.gz && \
-    tar -C /usr/local -xzf go1.25.1.linux-amd64.tar.gz && \
-    rm go1.25.1.linux-amd64.tar.gz && \
+# Install desired Go version
+RUN wget -q https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz && \
+    tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz && \
+    rm go${GO_VERSION}.linux-amd64.tar.gz && \
     ln -s /usr/local/go/bin/go /usr/bin/go && \
     ln -s /usr/local/go/bin/gofmt /usr/bin/gofmt && \
     go version

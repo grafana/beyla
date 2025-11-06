@@ -26,6 +26,21 @@ RUN ssh-keygen -A && \
     echo ttyS0::respawn:/sbin/agetty --autologin root ttyS0 vt100 >> /etc/inittab && \
     mkdir -p /overlay/upper/testoutput /overlay/work /build /beyla /precompiled-tests
 
+# Configure Docker to relax procfs security checks.
+# Ref: CVE-2025-31133, CVE-2025-52565, and CVE-2025-52881.
+RUN mkdir -p /etc/docker && cat <<EOF > /etc/docker/daemon.json
+{
+  "features": {
+    "containerd-snapshotter": false
+  }
+}
+EOF
+
+# Set environment variable to allow runc to run with VM procfs
+RUN cat <<EOF > /etc/conf.d/docker
+RUNC_ALLOW_UNSAFE_PROCFS=1
+EOF
+
 RUN cat <<EOF >> /etc/fstab
 beyla        /beyla             9p      trans=virtio,version=9p2000.L                                  0  0
 overlay      /build             overlay lowerdir=/beyla,upperdir=/overlay/upper,workdir=/overlay/work  0  0

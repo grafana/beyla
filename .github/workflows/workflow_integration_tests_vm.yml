@@ -58,9 +58,8 @@ jobs:
         kernel:
           - kernel-version: "5.15.152"
             arch: "x86_64"
-          # 6.10.6 not needed as GitHub runners are already on 6.11
-          # - kernel-version: "6.10.6"
-          #   arch: "x86_64"
+          - kernel-version: "6.10.6"
+            arch: "x86_64"
         test: ${{ fromJson(needs.vm-test-matrix.outputs.matrix).include }}
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0

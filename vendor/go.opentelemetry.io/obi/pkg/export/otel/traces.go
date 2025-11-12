@@ -317,10 +317,10 @@ func getRetrySettings(cfg otelcfg.TracesConfig) configretry.BackOffConfig {
 	return backOffCfg
 }
 
-func convertHeaders(headers map[string]string) map[string]configopaque.String {
-	opaqueHeaders := make(map[string]configopaque.String)
+func convertHeaders(headers map[string]string) configopaque.MapList {
+	opaqueHeaders := configopaque.MapList{}
 	for key, value := range headers {
-		opaqueHeaders[key] = configopaque.String(value)
+		opaqueHeaders.Set(key, configopaque.String(value))
 	}
 	return opaqueHeaders
 }

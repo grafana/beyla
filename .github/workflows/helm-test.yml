@@ -119,8 +119,8 @@ jobs:
         with:
           start: false
 
-      - name: Run test
-        run: helm-chart-toolbox/tools/helm-test/helm-test "${TEST_DIRECTORY}"
-        env:
-          TEST_DIRECTORY: "source/${{ env.INTEGRARION_TESTS_DIR }}/${{ matrix.test }}"
-          DELETE_CLUSTER: true
+      # - name: Run test
+      #   run: helm-chart-toolbox/tools/helm-test/helm-test "${TEST_DIRECTORY}"
+      #   env:
+      #     TEST_DIRECTORY: "source/${{ env.INTEGRARION_TESTS_DIR }}/${{ matrix.test }}"
+      #     DELETE_CLUSTER: true

@@ -33,7 +33,7 @@ var commandRunner = gexe.New()
 // install the provider and setup the required binaries to perform the tests. In case if the install
 // is done by this helper, it will return the value for installed binary as provider which can then
 // be set in the invoker to make sure the right path is used for the binaries while invoking
-// rest of the workfow after this helper is triggered.
+// rest of the workflow after this helper is triggered.
 func FindOrInstallGoBasedProvider(pPath, provider, module, version string) (string, error) {
 	if gexe.ProgAvail(pPath) != "" {
 		log.V(4).InfoS("Found Provider tooling already installed on the machine", "command", pPath)

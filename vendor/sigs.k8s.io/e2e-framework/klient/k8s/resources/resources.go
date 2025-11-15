@@ -255,7 +255,7 @@ func (r *Resources) PatchStatus(ctx context.Context, objs k8s.Object, patch k8s.
 	return r.PatchSubresource(ctx, objs, "status", patch, opts...)
 }
 
-// Annotate attach annotations to an existing resource objec
+// Annotate attach annotations to an existing resource object
 func (r *Resources) Annotate(obj k8s.Object, annotation map[string]string) {
 	obj.SetAnnotations(annotation)
 }

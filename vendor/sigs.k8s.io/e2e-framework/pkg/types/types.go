@@ -212,7 +212,7 @@ type E2EClusterProvider interface {
 	// attributes are setup accordingly if any.
 	SetDefaults() E2EClusterProvider
 
-	// WaitForControlPlane is a helper function that can be used to indiate the Provider based cluster create workflow
+	// WaitForControlPlane is a helper function that can be used to indicate the Provider based cluster create workflow
 	// that the control plane is fully up and running. This method is invoked after the Create/CreateWithConfig handlers
 	// and is expected to return an error if the control plane doesn't stabilize. If the provider being implemented
 	// does not have a clear mechanism to identify the Control plane readiness or is not required to wait for the control

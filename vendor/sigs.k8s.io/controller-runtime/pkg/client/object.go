@@ -55,7 +55,7 @@ type Object interface {
 // is a kubernetes list wrapper (has items, pagination fields, etc) -- think
 // the wrapper used in a response from a `kubectl list --output yaml` call.
 //
-// Code-wise, this means that any object which embedds both ListMeta (which
+// Code-wise, this means that any object which embeds both ListMeta (which
 // provides metav1.ListInterface) and TypeMeta (which provides half of
 // runtime.Object) and has a `DeepCopyObject` implementation (the other half of
 // runtime.Object) will implement this by default.

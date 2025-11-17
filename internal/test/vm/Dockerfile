@@ -1,4 +1,4 @@
-FROM alpine:3.20
+FROM alpine:3.20@sha256:765942a4039992336de8dd5db680586e1a206607dd06170ff0a37267a9e01958
 
 # this is the toplevel Makefile target to be invoked
 # see the contents of 'startup.sh' at the end of this file

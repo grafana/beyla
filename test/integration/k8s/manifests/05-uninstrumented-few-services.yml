@@ -106,8 +106,8 @@ spec:
                   - go-progs
       containers:
         - name: testserver
-          image: testserver:dev
-          imagePullPolicy: Never # loaded into Kind from localhost
+          image: ghcr.io/open-telemetry/obi-testimg:gotestserver-net
+          imagePullPolicy: IfNotPresent 
           ports:
             - containerPort: 8080
               hostPort: 8080

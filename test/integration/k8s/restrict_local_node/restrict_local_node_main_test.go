@@ -28,8 +28,6 @@ var cluster *kube.Kind
 
 func TestMain(m *testing.M) {
 	if err := docker.Build(os.Stdout, tools.ProjectDir(),
-		docker.ImageBuild{Tag: "testserver:dev", Dockerfile: k8s.DockerfileTestServer},
-		docker.ImageBuild{Tag: "httppinger:dev", Dockerfile: k8s.DockerfileHTTPPinger},
 		docker.ImageBuild{Tag: "beyla:dev", Dockerfile: k8s.DockerfileBeyla},
 		docker.ImageBuild{Tag: "quay.io/prometheus/prometheus:v2.55.1"},
 		docker.ImageBuild{Tag: "otel/opentelemetry-collector-contrib:0.103.0"},
@@ -40,8 +38,6 @@ func TestMain(m *testing.M) {
 
 	cluster = kube.NewKind("test-kind-cluster-otel-multi",
 		kube.KindConfig(testpath.Manifests+"/00-kind-multi-node.yml"),
-		kube.LocalImage("testserver:dev"),
-		kube.LocalImage("httppinger:dev"),
 		kube.LocalImage("beyla:dev"),
 		kube.LocalImage("quay.io/prometheus/prometheus:v2.55.1"),
 		kube.LocalImage("otel/opentelemetry-collector-contrib:0.103.0"),

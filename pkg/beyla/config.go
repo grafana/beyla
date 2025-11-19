@@ -48,6 +48,8 @@ const (
 	defaultMetricsTTL = 5 * time.Minute
 )
 
+var defaultSpanMetricsExtraLabels = []string{"k8s.cluster.name", "k8s.namespace.name", "service.version", "deployment.environment"}
+
 var DefaultConfig = Config{
 	ChannelBufferLen: 10,
 	LogLevel:         "INFO",
@@ -97,7 +99,8 @@ var DefaultConfig = Config{
 		Instrumentations: []string{
 			instrumentations.InstrumentationALL,
 		},
-		TTL: defaultMetricsTTL,
+		TTL:                     defaultMetricsTTL,
+		ExtraSpanResourceLabels: defaultSpanMetricsExtraLabels,
 	},
 	Traces: otelcfg.TracesConfig{
 		Protocol:          otelcfg.ProtocolUnset,
@@ -118,6 +121,7 @@ var DefaultConfig = Config{
 		},
 		TTL:                         defaultMetricsTTL,
 		SpanMetricsServiceCacheSize: 10000,
+		ExtraSpanResourceLabels:     defaultSpanMetricsExtraLabels,
 	},
 	TracePrinter: debug.TracePrinterDisabled,
 	InternalMetrics: imetrics.Config{

@@ -173,8 +173,9 @@ network:
 			Instrumentations: []string{
 				instrumentations.InstrumentationALL,
 			},
-			HistogramAggregation: "base2_exponential_bucket_histogram",
-			TTL:                  5 * time.Minute,
+			HistogramAggregation:    "base2_exponential_bucket_histogram",
+			TTL:                     5 * time.Minute,
+			ExtraSpanResourceLabels: []string{"k8s.cluster.name", "k8s.namespace.name", "service.version", "deployment.environment"},
 		},
 		Traces: otelcfg.TracesConfig{
 			TracesProtocol:    otelcfg.ProtocolHTTPProtobuf,
@@ -200,6 +201,7 @@ network:
 				RequestSizeHistogram:  []float64{0, 10, 20, 22},
 				ResponseSizeHistogram: []float64{0, 10, 20, 22},
 			},
+			ExtraSpanResourceLabels: []string{"k8s.cluster.name", "k8s.namespace.name", "service.version", "deployment.environment"},
 		},
 		InternalMetrics: imetrics.Config{
 			Exporter: imetrics.InternalMetricsExporterDisabled,

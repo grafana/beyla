@@ -36,7 +36,7 @@ func TestMultiNodeTracing(t *testing.T) {
 		Assess("it sends connected traces for all services",
 			func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 				var trace jaeger.Trace
-				var traceID string
+				// var traceID string
 				test.Eventually(t, testTimeout, func(t require.TestingT) {
 
 					resp, err := http.Get("http://localhost:38080/gotracemetoo")

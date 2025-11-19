@@ -25,7 +25,6 @@ var cluster *kube.Kind
 
 func TestMain(m *testing.M) {
 	if err := docker.Build(os.Stdout, tools.ProjectDir(),
-		docker.ImageBuild{Tag: "testserver:dev", Dockerfile: k8s.DockerfileTestServer},
 		docker.ImageBuild{Tag: "pythontestserver:dev", Dockerfile: k8s.DockerfilePythonTestServer},
 		docker.ImageBuild{Tag: "beyla:dev", Dockerfile: k8s.DockerfileBeyla},
 		// Pull public images but don't pre-load them into Kind nodes
@@ -41,7 +40,6 @@ func TestMain(m *testing.M) {
 	cluster = kube.NewKind("test-kind-cluster-otel-multi",
 		kube.KindConfig(testpath.Manifests+"/00-kind-multi-node.yml"),
 		// Only pre-load locally built images
-		kube.LocalImage("testserver:dev"),
 		kube.LocalImage("pythontestserver:dev"),
 		kube.LocalImage("beyla:dev"),
 		kube.Deploy(testpath.Manifests+"/01-volumes.yml"),

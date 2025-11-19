@@ -13,6 +13,7 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/components/svc"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
+	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/services"
 )
 
@@ -83,26 +84,35 @@ func FindExecELF(p *services.ProcessInfo, svcID svc.Attrs, k8sEnabled bool) (*Fi
 
 func setServiceEnvVariables(service svc.Attrs, envVars map[string]string, k8sEnabled bool) svc.Attrs {
 	service.EnvVars = envVars
+	allVars := map[string]string{}
+	service.Metadata = map[attr.Name]string{}
+	if resourceAttrs, ok := service.EnvVars[envResourceAttrs]; ok {
+		collect := func(k string, v string) {
+			allVars[k] = v
+		}
+		attributes.ParseOTELResourceVariable(resourceAttrs, collect)
+
+		for k, v := range allVars {
+			if k != serviceNameKey && k != serviceNamespaceKey {
+				service.Metadata[attr.Name(k)] = v
+			}
+		}
+	}
+
 	// If Kubernetes is enabled we use the K8S metadata as the source of truth
 	// including the k8s supplied environment variables
 	if k8sEnabled {
 		return service
 	}
+
 	if svcName, ok := service.EnvVars[envServiceName]; ok {
 		service.UID.Name = svcName
-	} else {
-		if resourceAttrs, ok := service.EnvVars[envResourceAttrs]; ok {
-			allVars := map[string]string{}
-			collect := func(k string, v string) {
-				allVars[k] = v
-			}
-			attributes.ParseOTELResourceVariable(resourceAttrs, collect)
-			if result, ok := allVars[serviceNameKey]; ok {
-				service.UID.Name = result
-			} else if result, ok := allVars[serviceNamespaceKey]; ok {
-				service.UID.Namespace = result
-			}
-		}
+	} else if result, ok := allVars[serviceNameKey]; ok {
+		service.UID.Name = result
+	}
+
+	if result, ok := allVars[serviceNamespaceKey]; ok {
+		service.UID.Namespace = result
 	}
 
 	return service

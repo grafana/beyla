@@ -62,6 +62,11 @@ type MetricsConfig struct {
 
 	// InjectHeaders allows injecting custom headers to the HTTP OTLP exporter
 	InjectHeaders func(dst map[string]string) `yaml:"-" env:"-"`
+
+	// ExtraSpanResourceLabels adds extra metadata labels to OTEL span metrics from sources whose availability can't be known
+	// beforehand. For example, to add the OTEL deployment.environment resource attribute as a OTEL resource attribute,
+	// you should add `deployment.environment`.
+	ExtraSpanResourceLabels []string `yaml:"extra_span_resource_attributes" env:"OTEL_EBPF_EXTRA_SPAN_RESOURCE_ATTRIBUTES" envSeparator:","`
 }
 
 func (m MetricsConfig) MarshalYAML() (any, error) {

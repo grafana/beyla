@@ -157,10 +157,11 @@ func (md *metadataDecorator) nodeLoop(ctx context.Context) {
 func (md *metadataDecorator) do(span *request.Span) {
 	if podMeta, containerName := md.db.PodContainerByPIDNs(span.Pid.Namespace); podMeta != nil {
 		AppendKubeMetadata(md.db, &span.Service, podMeta, md.clusterName, containerName)
-	} else {
+	} else if span.Service.Metadata == nil {
 		// do not leave the service attributes map as nil
 		span.Service.Metadata = map[attr.Name]string{}
 	}
+
 	// override the peer and host names from Kubernetes metadata, if found
 	if span.Host != "" {
 		if name, _ := md.db.ServiceNameNamespaceForIP(span.Host); name != "" {
@@ -383,7 +384,7 @@ func AppendKubeMetadata(db *kube.Store, svc *svc.Attrs, meta *kube.CachedObjMeta
 
 	// if, in the future, other pipeline steps modify the service metadata, we should
 	// replace the map literal by individual entry insertions
-	svc.Metadata = map[attr.Name]string{
+	k8sMeta := map[attr.Name]string{
 		attr.K8sNamespaceName: meta.Meta.Namespace,
 		attr.K8sPodName:       meta.Meta.Name,
 		attr.K8sContainerName: containerName,
@@ -391,6 +392,12 @@ func AppendKubeMetadata(db *kube.Store, svc *svc.Attrs, meta *kube.CachedObjMeta
 		attr.K8sPodUID:        meta.Meta.Pod.Uid,
 		attr.K8sPodStartTime:  meta.Meta.Pod.StartTimeStr,
 		attr.K8sClusterName:   clusterName,
+	}
+
+	if svc.Metadata == nil {
+		svc.Metadata = k8sMeta
+	} else {
+		maps.Copy(svc.Metadata, k8sMeta)
 	}
 
 	// ownerKind could be also "Pod", but we won't insert it as "owner" label to avoid

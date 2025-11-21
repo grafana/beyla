@@ -15,7 +15,7 @@ COPY internal/test/integration/components/testserver_1.17/ .
 RUN go build -o testserver testserver.go
 
 # Create final image from minimal + built binary
-FROM debian:bookworm-slim@sha256:78d2f66e0fec9e5a39fb2c72ea5e052b548df75602b5215ed01a17171529f706
+FROM debian:bookworm-slim@sha256:b4aa902587c2e61ce789849cb54c332b0400fe27b1ee33af4669e1f7e7c3e22f
 
 WORKDIR /
 COPY --from=builder /src/testserver .

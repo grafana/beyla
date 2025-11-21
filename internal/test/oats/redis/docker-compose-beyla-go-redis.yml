@@ -1,7 +1,7 @@
 services:
   # Use postgres as a test SQL server
   redis:
-    image: redis:latest@sha256:acb90ced0bd769b7c04cb4c32c4494ba7b3e0ee068bdbfff0eeb0d31c2a21078
+    image: redis:latest@sha256:43355efd22490e31ca14b9d569367d05121e2be61fd8e47937563ae2a80952ae
     ports:
       - "6379:6379"
   # Simple python HTTP server, which exposes one endpoint /query that does a few redis queries

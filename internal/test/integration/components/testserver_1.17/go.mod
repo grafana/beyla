@@ -5,7 +5,7 @@ go 1.17
 require (
 	github.com/caarlos0/env/v9 v9.0.0
 	github.com/gin-gonic/gin v1.7.7
-	github.com/gorilla/mux v1.8.0
+	github.com/gorilla/mux v1.8.1
 	google.golang.org/grpc v1.40.1
 	google.golang.org/protobuf v1.31.0
 )

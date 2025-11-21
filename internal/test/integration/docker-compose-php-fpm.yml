@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   nginx:
-    image: nginx:latest@sha256:029d4461bd98f124e531380505ceea2072418fdf28752aa73b7b273ba3048903
+    image: nginx:latest@sha256:553f64aecdc31b5bf944521731cd70e35da4faed96b2b7548a3d8e2598c52a42
     mem_limit: 128m
     container_name: hatest-nginx
     ports:
@@ -14,7 +14,7 @@ services:
       - php-fpm
 
   php-fpm:
-    image: php:fpm@sha256:231ab3ac3db542e1d019a35abee1bd106d278a5712d1dc2bb4fbe103de016792
+    image: php:fpm@sha256:82dfb99acd7694582f75eca8070b02b5ada368d90008e433dbe99b8260fd6f63
     mem_limit: 512m
     container_name: hatest-php-fpm
     volumes:

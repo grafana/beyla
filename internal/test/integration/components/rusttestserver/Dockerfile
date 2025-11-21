@@ -1,4 +1,4 @@
-FROM rust:latest@sha256:52e36cdd822b813542e13e06a816953234ecad01ebae2d0d7ec4a084c7cda6bd AS rustbuilder
+FROM rust:latest@sha256:ad8c72c693b517ed60c930839daed91a5696fa6118f031d888cd0b7055a921a3 AS rustbuilder
 
 # Set the working directory to /build
 WORKDIR /build
@@ -10,7 +10,7 @@ COPY internal/test/integration/components/rusttestserver .
 RUN cargo build --release
 
 # The App Image
-FROM debian:bookworm-slim@sha256:78d2f66e0fec9e5a39fb2c72ea5e052b548df75602b5215ed01a17171529f706
+FROM debian:bookworm-slim@sha256:b4aa902587c2e61ce789849cb54c332b0400fe27b1ee33af4669e1f7e7c3e22f
 
 RUN apt update
 RUN apt install libssl3 -y

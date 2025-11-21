@@ -4,7 +4,7 @@ on:
 
 jobs:
   release-beyla-helm-chart:
-    uses: grafana/helm-charts/.github/workflows/update-helm-repo.yaml@64b1c8260d69a9b1d9a186df25c51358b92f7662
+    uses: grafana/helm-charts/.github/workflows/update-helm-repo.yaml@e5ee6963cce3ab19519dc6dbd5f250aa14dc6f12
     permissions:
       contents: "write"
       id-token: "write"

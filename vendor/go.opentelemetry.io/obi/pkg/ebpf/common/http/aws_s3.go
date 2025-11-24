@@ -4,7 +4,6 @@
 package ebpfcommon
 
 import (
-	"bytes"
 	"errors"
 	"net/http"
 	"strings"
@@ -38,7 +37,7 @@ func parseAWSS3(req *http.Request, resp *http.Response) (request.AWSS3, error) {
 	if s3.Meta.ExtendedRequestID == "" {
 		return s3, errors.New("missing x-amz-id-2 header")
 	}
-	s3.Bucket, s3.Key = parseS3bucketKey(req.URL.Path)
+	s3.Bucket, s3.Key = parseS3bucketKey(req)
 	s3.Method = inferS3Method(req)
 	if s3.Method == "" {
 		return s3, errors.New("unable to parse s3 operation")
@@ -47,71 +46,93 @@ func parseAWSS3(req *http.Request, resp *http.Response) (request.AWSS3, error) {
 	return s3, nil
 }
 
-func parseS3bucketKey(path string) (string, string) {
-	// S3 paths are generally in the format 'PUT /bucket/key'
-	var bucket, key string
-	parts := bytes.SplitN([]byte(path), []byte("/"), 3)
-	if len(parts) >= 2 {
-		bucket = string(parts[1])
+// parseS3bucketKey extracts the S3 bucket name and object key from an HTTP request.
+// It supports both virtual-hosted-style (bucket.s3.region.amazonaws.com)
+// and path-style (s3.amazonaws.com/bucket/object) addressing.
+//
+// Examples:
+//
+//	Host: my-bucket.s3.eu-west-1.amazonaws.com, Path: /foo/bar.txt
+//	  => ("my-bucket", "foo/bar.txt")
+//
+//	Host: s3.amazonaws.com, Path: /my-bucket/foo/bar.txt
+//	  => ("my-bucket", "foo/bar.txt")
+//
+//	Host: my-bucket.s3.amazonaws.com, Path: /
+//	  => ("my-bucket", "")
+func parseS3bucketKey(req *http.Request) (string, string) {
+	path := strings.TrimPrefix(req.URL.Path, "/")
+
+	// Case 1: Virtual-hosted–style — bucket in the hostname.
+	// Example: my-bucket.s3.amazonaws.com /foo/bar.txt
+	if strings.Contains(req.Host, ".s3.") {
+		bucket := strings.SplitN(req.Host, ".s3.", 2)[0]
+		return bucket, path
 	}
-	if len(parts) == 3 {
-		key = string(parts[2])
+
+	// Case 2: Path-style — bucket in the first path segment.
+	// Example: s3.amazonaws.com /my-bucket/foo/bar.txt
+	parts := strings.SplitN(path, "/", 2)
+	if len(parts) == 0 || parts[0] == "" {
+		return "", ""
+	}
+
+	bucket := parts[0]
+	key := ""
+	if len(parts) > 1 {
+		key = parts[1]
 	}
 	return bucket, key
 }
 
 // This is a naive inference of S3 operations based on HTTP method and URL path/query
 func inferS3Method(req *http.Request) string {
-	q := req.URL.Query()
-	path := strings.Trim(strings.TrimPrefix(req.URL.Path, "/"), "/")
-	parts := strings.Split(path, "/")
+	path := strings.TrimPrefix(req.URL.Path, "/")
+
+	var bucket, object string
+	// --- Virtual-hosted–style URL ---
+	// Example: PUT bucket.s3.eu-west-1.amazonaws.com /hello.txt
+	if strings.Contains(req.Host, ".s3.") {
+		bucket = strings.SplitN(req.Host, ".s3.", 2)[0]
+		object = path // path may be empty or "object-key"
+	} else {
+		// --- Path-style URL ---
+		// Example: PUT s3.amazonaws.com /bucket/hello.txt
+		parts := strings.SplitN(path, "/", 2)
+		if len(parts) > 0 {
+			bucket = parts[0]
+		}
+		if len(parts) > 1 {
+			object = parts[1]
+		}
+	}
+
+	hasBucket := bucket != ""
+	hasObject := object != ""
 
 	switch req.Method {
-	case http.MethodGet:
-		switch {
-		case path == "":
-			return "ListBuckets"
-		case len(parts) == 1:
-			return "ListObjects"
-		case q.Has("uploads"):
-			return "ListMultipartUploads"
-		case q.Has("uploadId"):
-			return "ListParts"
-		default:
-			return "GetObject"
-		}
 	case http.MethodPut:
-		if q.Has("uploadId") && q.Has("partNumber") {
-			return "UploadPart"
-		}
-		if q.Has("uploadId") {
-			return "CompleteMultipartUpload"
-		}
-
-		switch len(parts) {
-		case 1:
-			// PUT /my-bucket -> Create bucket
+		if hasBucket && !hasObject {
 			return "CreateBucket"
-		default:
-			// PUT /my-bucket/object.txt
+		}
+		if hasBucket && hasObject {
 			return "PutObject"
 		}
-	case http.MethodPost:
-		if q.Has("uploads") {
-			return "CreateMultipartUpload"
-		}
-		if q.Has("uploadId") {
-			return "CompleteMultipartUpload"
-		}
-		return "PutObject"
 	case http.MethodDelete:
-		if q.Has("uploadId") {
-			return "AbortMultipartUpload"
-		}
-		if len(parts) == 1 {
+		if hasBucket && !hasObject {
 			return "DeleteBucket"
 		}
-		return "DeleteObject"
+		if hasBucket && hasObject {
+			return "DeleteObject"
+		}
+	case http.MethodGet:
+		if !hasBucket {
+			return "ListBuckets"
+		}
+		if hasBucket && !hasObject {
+			return "ListObjects"
+		}
+		return "GetObject"
 	}
 
 	return ""

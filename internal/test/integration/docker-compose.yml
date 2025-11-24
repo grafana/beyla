@@ -17,6 +17,7 @@ services:
       - "50051:50051"
     environment:
       LOG_LEVEL: DEBUG
+      OTEL_RESOURCE_ATTRIBUTES: "service.version=1.0.0"
 
   autoinstrumenter:
     build:
@@ -50,6 +51,8 @@ services:
       BEYLA_PROCESSES_INTERVAL: "100ms"
       BEYLA_HOSTNAME: "beyla"
       BEYLA_OTLP_TRACES_BATCH_TIMEOUT: "1ms"
+      BEYLA_PROMETHEUS_EXTRA_SPAN_RESOURCE_ATTRIBUTES: "service.version"
+      BEYLA_EXTRA_SPAN_RESOURCE_ATTRIBUTES: "service.version"
     ports:
       - "8999:8999" # Prometheus scrape port, if enabled via config
 

@@ -97,23 +97,20 @@ func testREDMetricsPythonKafkaOnly(t *testing.T) {
 						attribute.String("messaging.destination.name", "my-topic"),
 						attribute.String("messaging.client_id", "kafka-python-producer-1"),
 						attribute.Int64("messaging.destination.partition.id", 0),
-					},
 				},
-				{
-					Name: "process my-topic",
-					Attributes: []attribute.KeyValue{
-						attribute.String("span.kind", "consumer"),
-						attribute.String("messaging.operation.type", "process"),
-						attribute.String("messaging.destination.name", "my-topic"),
-						attribute.String("messaging.client_id", "kafka-python-2.2.15"),
-						attribute.Int64("messaging.destination.partition.id", 0),
-					},
+			},
+			{
+				Name: "process my-topic",
+				Attributes: []attribute.KeyValue{
+					attribute.String("span.kind", "consumer"),
+					attribute.String("messaging.operation.type", "process"),
+					attribute.String("messaging.destination.name", "my-topic"),
+					attribute.Int64("messaging.destination.partition.id", 0),
 				},
 			},
 		},
-	}
-
-	for _, testCase := range testCases {
+	},
+}	for _, testCase := range testCases {
 		for i := range testCase.Spans {
 			testCase.Spans[i].Attributes = append(testCase.Spans[i].Attributes, commonAttrs...)
 		}

@@ -8,6 +8,7 @@ services:
     image: hatest-testclient
     environment:
       TARGET_URL: "https://testserver:7373"
+      TEST_HTTP2_PROTOCOLS: ${TEST_HTTP2_PROTOCOLS}
     depends_on:
       testserver:
         condition: service_started
@@ -19,6 +20,8 @@ services:
     image: hatest-server
     ports:
       - "7373:7373"
+    environment:
+      TEST_HTTP2_PROTOCOLS: ${TEST_HTTP2_PROTOCOLS}
     depends_on:
       prometheus:
         condition: service_started

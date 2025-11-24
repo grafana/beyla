@@ -91,6 +91,10 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 		getter = func(s *Span) attribute.KeyValue { return SpanNameMetric(s.TraceName()) }
 	case attr.Source:
 		getter = func(_ *Span) attribute.KeyValue { return SourceMetric(attr.VendorPrefix) }
+	case attr.TelemetrySDKLanguage:
+		getter = func(s *Span) attribute.KeyValue {
+			return semconv.TelemetrySDKLanguageKey.String(s.Service.SDKLanguage.String())
+		}
 	case attr.StatusCode:
 		getter = func(s *Span) attribute.KeyValue { return StatusCodeMetric(SpanStatusCode(s)) }
 	case attr.DBOperation:
@@ -106,7 +110,7 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 				return DBSystemName(semconv.DBSystemMongoDB.Value.AsString())
 			case EventTypeHTTPClient:
 				if span.SubType == HTTPSubtypeElasticsearch {
-					return DBSystemName(semconv.DBSystemElasticsearch.Value.AsString())
+					return DBSystemName(span.Elasticsearch.DBSystemName)
 				}
 			}
 			return DBSystemName("unknown")
@@ -218,6 +222,9 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeAWSS3 && s.AWS != nil {
 				return AWSRequestID(s.AWS.S3.Meta.RequestID)
 			}
+			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeAWSSQS && s.AWS != nil {
+				return AWSRequestID(s.AWS.SQS.Meta.RequestID)
+			}
 			return AWSRequestID("")
 		}
 	case attr.AWSExtendedRequestID:
@@ -252,6 +259,9 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 		getter = func(s *Span) attribute.KeyValue {
 			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeAWSS3 && s.AWS != nil {
 				return CloudRegion(s.AWS.S3.Meta.Region)
+			}
+			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeAWSSQS && s.AWS != nil {
+				return CloudRegion(s.AWS.SQS.Meta.Region)
 			}
 			return CloudRegion("")
 		}

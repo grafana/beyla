@@ -86,7 +86,7 @@ func (l *spanNameLimiter) doLimit(ctx context.Context) {
 			removed := l.spanNamesCount.ExpireAll()
 			l.log.Debug("inactive services expired", "len", removed)
 		case spans := <-l.in:
-			l.out.Send(l.aggregate(spans))
+			l.out.SendCtx(ctx, l.aggregate(spans))
 		}
 	}
 }

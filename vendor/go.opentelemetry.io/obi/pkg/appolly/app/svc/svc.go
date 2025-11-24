@@ -10,6 +10,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/internal/transform/route"
+	"go.opentelemetry.io/obi/pkg/internal/transform/route/clusterurl"
 )
 
 type InstrumentableType int
@@ -117,6 +118,7 @@ type Attrs struct {
 	CustomInRouteMatcher  route.Matcher
 	CustomOutRouteMatcher route.Matcher
 	HarvestedRouteMatcher route.Matcher
+	PathTrie              *clusterurl.PathTrie
 }
 
 func (i *Attrs) GetUID() UID {

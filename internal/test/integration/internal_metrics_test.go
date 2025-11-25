@@ -83,10 +83,10 @@ func TestAvoidedServicesMetrics(t *testing.T) {
 func checkInstrumentationErrorMetrics(t *testing.T) {
 	pq := prom.Client{HostPort: prometheusHostPort}
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
-		results, err := pq.Query(`obi_instrumentation_errors_total`)
+		results, err := pq.Query(`beyla_instrumentation_errors_total`)
 		require.NoError(t, err)
 
-		require.GreaterOrEqual(t, len(results), 1, "obi_instrumentation_errors_total metric should be present")
+		require.GreaterOrEqual(t, len(results), 1, "beyla_instrumentation_errors_total metric should be present")
 
 		// Verify we have some errors and proper labels
 		totalErrors := 0
@@ -117,8 +117,8 @@ func checkAvoidedServicesMetrics(t *testing.T) {
 		metrics, err := parser.TextToMetricFamilies(resp.Body)
 		require.NoError(t, err)
 
-		metricFamily, ok := metrics["obi_avoided_services"]
-		require.True(t, ok, "Expected obi_avoided_services metric to be present")
+		metricFamily, ok := metrics["beyla_avoided_services"]
+		require.True(t, ok, "Expected beyla_avoided_services metric to be present")
 		require.NotEmpty(t, metricFamily.Metric, "Expected avoided services metrics to have values")
 
 		// Just check the first occurrence

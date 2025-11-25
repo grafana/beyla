@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math/rand/v2"
 	"net"
 	"net/http"
 	"os"
@@ -252,11 +253,40 @@ func echoCall(rw http.ResponseWriter) {
 	rw.WriteHeader(http.StatusNoContent)
 }
 
+var rd = rand.New(rand.NewPCG(uint64(time.Now().Unix()), 0))
+
+func rolldice(w http.ResponseWriter, r *http.Request) {
+	// Print all headers
+	for name, values := range r.Header {
+		// Loop over all values for the name.
+		for _, value := range values {
+			fmt.Printf("%s: %s\n", name, value)
+		}
+	}
+
+	id := r.PathValue("id")
+
+	n := rd.IntN(6) + 1
+
+	// Add response headers
+	w.Header().Set("Content-Type", "text/plain")
+	w.Header().Set("X-Dice-Roll", strconv.Itoa(n))
+
+	slog.Info("rolldice called", "id", id, "dice", n)
+	time.Sleep(200 * time.Millisecond)
+
+	fmt.Fprintf(w, "%v", n)
+}
+
 func Setup(port int) {
 	log := slog.With("component", "std.Server")
 	address := fmt.Sprintf(":%d", port)
 	log.Info("starting HTTP server", "address", address)
-	err := http.ListenAndServe(address, HTTPHandler(log, port))
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /rolldice/{id}", rolldice)
+	mux.HandleFunc("/", HTTPHandler(log, port))
+
+	err := http.ListenAndServe(address, mux)
 	log.Error("HTTP server has unexpectedly stopped", "error", err)
 }
 
@@ -264,6 +294,11 @@ func SetupTLS(port int) {
 	log := slog.With("component", "std.Server")
 	address := fmt.Sprintf(":%d", port)
 	log.Info("starting HTTPS server", "address", address)
-	err := http.ListenAndServeTLS(address, "x509/server_test_cert.pem", "x509/server_test_key.pem", HTTPHandler(log, port))
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /rolldice/{id}", rolldice)
+	mux.HandleFunc("/", HTTPHandler(log, port))
+
+	err := http.ListenAndServeTLS(address, "x509/server_test_cert.pem", "x509/server_test_key.pem", mux)
 	log.Error("HTTPS server has unexpectedly stopped", "error", err)
 }

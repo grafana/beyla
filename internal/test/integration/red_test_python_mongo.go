@@ -1,3 +1,6 @@
+// Copyright The OpenTelemetry Authors
+// SPDX-License-Identifier: Apache-2.0
+
 //go:build integration
 
 package integration
@@ -5,6 +8,7 @@ package integration
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"testing"
 	"time"
 
@@ -19,8 +23,8 @@ import (
 	"github.com/grafana/beyla/v2/internal/test/integration/components/prom"
 )
 
-func testREDMetricsForPythonRedisLibrary(t *testing.T, testCase TestCase) {
-	url := testCase.Route
+func testREDMetricsForPythonMongoLibrary(t *testing.T, testCase TestCase) {
+	uri := testCase.Route
 	urlPath := testCase.Subpath
 	comm := testCase.Comm
 	namespace := testCase.Namespace
@@ -28,18 +32,20 @@ func testREDMetricsForPythonRedisLibrary(t *testing.T, testCase TestCase) {
 	// - take a large JSON file
 	// - returning a 200 code
 	for i := 0; i < 4; i++ {
-		ti.DoHTTPGet(t, url+"/"+urlPath, 200)
+		ti.DoHTTPGet(t, uri+"/"+urlPath, 200)
 	}
 
-	// Eventually, Prometheus would make redis operations visible
+	// Eventually, Prometheus would make mongo operations visible
 	pq := prom.Client{HostPort: prometheusHostPort}
 	var results []prom.Result
 	var err error
 	for _, span := range testCase.Spans {
+		operation := span.FindAttribute("db.operation.name")
+		require.NotNil(t, operation, "db.operation.name attribute not found in span %s", span.Name)
 		test.Eventually(t, testTimeout, func(t require.TestingT) {
 			var err error
 			results, err = pq.Query(`db_client_operation_duration_seconds_count{` +
-				`db_operation_name="` + span.Name + `",` +
+				`db_operation_name="` + operation.Value.AsString() + `",` +
 				`service_namespace="` + namespace + `"}`)
 			require.NoError(t, err, "failed to query prometheus for %s", span.Name)
 			enoughPromResults(t, results)
@@ -55,7 +61,7 @@ func testREDMetricsForPythonRedisLibrary(t *testing.T, testCase TestCase) {
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		for _, span := range testCase.Spans {
 			command := span.Name
-			resp, err := http.Get(jaegerQueryURL + "?service=" + comm + "&operation=" + command)
+			resp, err := http.Get(jaegerQueryURL + "?service=" + comm + "&operation=" + url.QueryEscape(command))
 			require.NoError(t, err, "failed to query jaeger for %s", command)
 			if resp == nil {
 				return
@@ -85,121 +91,49 @@ func testREDMetricsForPythonRedisLibrary(t *testing.T, testCase TestCase) {
 	require.Empty(t, traces, "expected no HTTP traces, got %d", len(traces))
 }
 
-func testREDMetricsPythonRedisOnly(t *testing.T) {
-	redisCommonAttributes := []attribute.KeyValue{
-		attribute.String("db.system.name", "redis"),
+func testREDMetricsPythonMongoOnly(t *testing.T) {
+	mongoCommonAttributes := []attribute.KeyValue{
+		attribute.String("db.system.name", "mongodb"),
 		attribute.String("span.kind", "client"),
-		attribute.Int("server.port", 6379),
+		attribute.Int("server.port", 27017),
 	}
 	testCases := []TestCase{
 		{
 			Route:     "http://localhost:8381",
-			Subpath:   "redis",
+			Subpath:   "mongo",
 			Comm:      "python3.12",
 			Namespace: "integration-test",
 			Spans: []TestCaseSpan{
 				{
-					Name: "HSET",
+					Name: "insert mycollection",
 					Attributes: []attribute.KeyValue{
-						attribute.String("db.operation.name", "HSET"),
-						attribute.String("db.query.text", "HSET user-session:123 name John surname Smith company Redis age 29"),
+						attribute.String("db.operation.name", "insert"),
+						attribute.String("db.collection.name", "mycollection"),
+						attribute.String("db.namespace", "mydatabase"),
 					},
 				},
 				{
-					Name: "HGETALL",
+					Name: "update mycollection",
 					Attributes: []attribute.KeyValue{
-						attribute.String("db.operation.name", "HGETALL"),
-						attribute.String("db.query.text", "HGETALL user-session:123"),
+						attribute.String("db.operation.name", "update"),
+						attribute.String("db.collection.name", "mycollection"),
+						attribute.String("db.namespace", "mydatabase"),
 					},
 				},
 				{
-					Name: "SET",
+					Name: "delete mycollection",
 					Attributes: []attribute.KeyValue{
-						attribute.String("db.operation.name", "SET"),
-						attribute.String("db.query.text", "SET obi rocks"),
+						attribute.String("db.operation.name", "delete"),
+						attribute.String("db.collection.name", "mycollection"),
+						attribute.String("db.namespace", "mydatabase"),
 					},
 				},
 				{
-					Name: "GET",
+					Name: "find mycollection",
 					Attributes: []attribute.KeyValue{
-						attribute.String("db.operation.name", "GET"),
-						attribute.String("db.query.text", "GET obi"),
-					},
-				},
-			},
-		},
-		{
-			Route:     "http://localhost:8381",
-			Subpath:   "redis-error",
-			Comm:      "python3.12",
-			Namespace: "integration-test",
-			Spans: []TestCaseSpan{
-				{
-					Name: "INVALID_COMMAND",
-					Attributes: []attribute.KeyValue{
-						attribute.String("db.operation.name", "INVALID_COMMAND"),
-						attribute.String("db.query.text", "INVALID_COMMAND"),
-						attribute.Bool("error", true),
-						attribute.String("db.response.status_code", "ERR"),
-						attribute.String("otel.status_description", "ERR unknown command 'INVALID_COMMAND', with args beginning with: "),
-					},
-				},
-				{
-					Name: "SET",
-					Attributes: []attribute.KeyValue{
-						attribute.String("db.operation.name", "SET"),
-						attribute.String("db.query.text", "SET obi-error rocks"),
-					},
-				},
-				{
-					Name: "LPUSH",
-					Attributes: []attribute.KeyValue{
-						attribute.String("db.operation.name", "LPUSH"),
-						attribute.String("db.query.text", "LPUSH obi-error rocks more"),
-						attribute.Bool("error", true),
-						attribute.String("db.response.status_code", "WRONGTYPE"),
-						attribute.String("otel.status_description", "WRONGTYPE Operation against a key holding the wrong kind of value"),
-					},
-				},
-				{
-					Name: "EVALSHA",
-					Attributes: []attribute.KeyValue{
-						attribute.String("db.operation.name", "EVALSHA"),
-						attribute.String("db.query.text", "EVALSHA INVALID_SHA 0"),
-						attribute.Bool("error", true),
-						attribute.String("db.response.status_code", "NOSCRIPT"),
-						attribute.String("otel.status_description", "NOSCRIPT No matching script. Please use EVAL."),
-					},
-				},
-			},
-		},
-		{
-			Route:     "http://localhost:8381",
-			Subpath:   "redis-db",
-			Comm:      "python3.12",
-			Namespace: "integration-test",
-			Spans: []TestCaseSpan{
-				{
-					Name: "SELECT",
-					Attributes: []attribute.KeyValue{
-						attribute.String("db.operation.name", "SELECT"),
-						attribute.String("db.query.text", "SELECT 1"),
-					},
-				},
-				{
-					Name: "SET",
-					Attributes: []attribute.KeyValue{
-						attribute.String("db.operation.name", "SET"),
-						attribute.String("db.query.text", "SET obi-db-1 rocks"),
-						attribute.String("db.namespace", "1"),
-					},
-				},
-				{
-					Name: "GET",
-					Attributes: []attribute.KeyValue{
-						attribute.String("db.operation.name", "GET"),
-						attribute.String("db.query.text", "GET obi-db-1"),
-						attribute.String("db.namespace", "1"),
+						attribute.String("db.operation.name", "find"),
+						attribute.String("db.collection.name", "mycollection"),
+						attribute.String("db.namespace", "mydatabase"),
 					},
 				},
 			},
@@ -208,17 +142,17 @@ func testREDMetricsPythonRedisOnly(t *testing.T) {
 	for _, testCase := range testCases {
 		// Add common attributes to each span
 		for i := range testCase.Spans {
-			testCase.Spans[i].Attributes = append(testCase.Spans[i].Attributes, redisCommonAttributes...)
+			testCase.Spans[i].Attributes = append(testCase.Spans[i].Attributes, mongoCommonAttributes...)
 		}
 
 		t.Run(testCase.Route, func(t *testing.T) {
-			waitForRedisTestComponents(t, testCase.Route, "/"+testCase.Subpath)
-			testREDMetricsForPythonRedisLibrary(t, testCase)
+			waitForMongoTestComponents(t, testCase.Route, "/"+testCase.Subpath)
+			testREDMetricsForPythonMongoLibrary(t, testCase)
 		})
 	}
 }
 
-func waitForRedisTestComponents(t *testing.T, url string, subpath string) {
+func waitForMongoTestComponents(t *testing.T, url string, subpath string) {
 	pq := prom.Client{HostPort: prometheusHostPort}
 	test.Eventually(t, 1*time.Minute, func(t require.TestingT) {
 		// first, verify that the test service endpoint is healthy
@@ -231,7 +165,7 @@ func waitForRedisTestComponents(t *testing.T, url string, subpath string) {
 		// now, verify that the metric has been reported.
 		// we don't really care that this metric could be from a previous
 		// test. Once one it is visible, it means that Otel and Prometheus are healthy
-		results, err := pq.Query(`db_client_operation_duration_seconds_count{db_system_name="redis"}`)
+		results, err := pq.Query(`db_client_operation_duration_seconds_count{db_system_name="mongodb"}`)
 		require.NoError(t, err)
 		require.NotEmpty(t, results)
 	}, test.Interval(time.Second))

@@ -23,30 +23,8 @@ import (
 	grpcclient "github.com/grafana/beyla/v2/internal/test/integration/components/testserver/grpc/client"
 )
 
-const (
-	instrumentedServiceStdURL         = "http://localhost:8080"
-	instrumentedServiceGinURL         = "http://localhost:8081"
-	instrumentedServiceGorillaURL     = "http://localhost:8082"
-	instrumentedServiceGorillaMidURL  = "http://localhost:8083"
-	instrumentedServiceGorillaMid2URL = "http://localhost:8087"
-	instrumentedServiceStdTLSURL      = "https://localhost:8383"
-	instrumentedServiceJSONRPCURL     = "http://localhost:8088"
-	prometheusHostPort                = "localhost:9090"
-	jaegerQueryURL                    = "http://localhost:16686/api/traces"
-
-	testTimeout = 60 * time.Second
-)
-
 func rndStr() string {
 	return strconv.Itoa(rand.Intn(10000))
-}
-
-func waitForTestComponents(t *testing.T, url string) {
-	waitForTestComponentsSub(t, url, "/smoke")
-}
-
-func waitForTestComponentsHTTP2(t *testing.T, url string) {
-	waitForTestComponentsHTTP2Sub(t, url, "/smoke", 1)
 }
 
 func testREDMetricsHTTP(t *testing.T) {

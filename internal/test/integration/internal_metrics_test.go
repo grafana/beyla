@@ -29,7 +29,7 @@ func TestInstrumentationErrors(t *testing.T) {
 	require.NoError(t, err)
 
 	// Run OBI without privileged mode to force instrumentation errors
-	compose.Env = append(compose.Env, `OTEL_EBPF_EXECUTABLE_PATH=`, `OTEL_EBPF_OPEN_PORT=`)
+	compose.Env = append(compose.Env, `BEYLA_EXECUTABLE_NAME=`, `BEYLA_OPEN_PORT=`)
 	require.NoError(t, compose.Up())
 
 	t.Run("Instrumentation error metrics", func(t *testing.T) {
@@ -45,13 +45,13 @@ func TestAvoidedServicesMetrics(t *testing.T) {
 
 	// we are going to setup discovery directly in the configuration file
 	compose.Env = append(compose.Env,
-		`OTEL_EBPF_EXECUTABLE_PATH=`,
-		`OTEL_EBPF_OPEN_PORT=8080`,
+		`BEYLA_EXECUTABLE_NAME=`,
+		`BEYLA_OPEN_PORT=8080`,
 		`APP_OTEL_METRICS_ENDPOINT=http://otelcol:4318`,
 		`APP_OTEL_TRACES_ENDPOINT=http://jaeger:4318`,
 		// Enable avoidance and internal metrics
-		`OTEL_EBPF_EXCLUDE_OTEL_INSTRUMENTED_SERVICES=true`,
-		`OTEL_EBPF_INTERNAL_METRICS_PROMETHEUS_PORT=8999`)
+		`BEYLA_EXCLUDE_OTEL_INSTRUMENTED_SERVICES=true`,
+		`BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT=8999`)
 
 	lockdown := KernelLockdownMode()
 	if !lockdown {

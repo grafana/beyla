@@ -75,21 +75,6 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up Go
-        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
-        with:
-          go-version-file: "go.mod"
-          cache: false
-
-      - name: Generate files
-        run: make prereqs vendor-obi
-
-      - name: Install gotestsum
-        run: go install gotest.tools/gotestsum@v1.12.3
-
-      - name: Check disk usage before tests
-        run: df -h
-
       - name: Free up disk space
         run: |
           # Remove Java (JDKs)
@@ -122,12 +107,27 @@ jobs:
           # Remove PowerShell
           sudo rm -rf /usr/local/share/powershell
 
-          # Remove CodeQL and other toolcaches
-          sudo rm -rf /opt/hostedtoolcache
+          # Remove CodeQL (but keep hostedtoolcache for Go)
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
 
           docker system prune -af || true
           docker builder prune -af || true
           df -h
+
+      - name: Set up Go
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version-file: "go.mod"
+          cache: false
+
+      - name: Generate files
+        run: make prereqs vendor-obi
+
+      - name: Install gotestsum
+        run: go install gotest.tools/gotestsum@v1.12.3
+
+      - name: Check disk usage before tests
+        run: df -h
 
       - name: Run integration tests
         timeout-minutes: 35

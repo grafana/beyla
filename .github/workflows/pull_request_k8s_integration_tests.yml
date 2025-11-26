@@ -103,8 +103,8 @@ jobs:
           # Remove PowerShell
           sudo rm -rf /usr/local/share/powershell
 
-          # Remove CodeQL and other toolcaches
-          sudo rm -rf /opt/hostedtoolcache
+          # Remove CodeQL (but keep hostedtoolcache for Go)
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
 
           docker system prune -af || true
           docker builder prune -af || true

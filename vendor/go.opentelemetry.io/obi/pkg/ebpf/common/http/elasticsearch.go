@@ -5,7 +5,6 @@ package ebpfcommon
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -20,19 +19,36 @@ import (
 type elasticsearchOperation struct {
 	NodeName         string
 	DBQueryText      string
-	DBOperationName  string
 	DBCollectionName string
+	DBSytemName      string
 }
 
-const (
-	pathSearch string = "_search"
-)
+var elasticsearchOperationMethods = map[string]map[string]struct{}{
+	// https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-search
+	"search": {http.MethodPost: {}, http.MethodGet: {}},
+	// https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-msearch
+	"msearch": {http.MethodPost: {}, http.MethodGet: {}},
+	// https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-bulk
+	"bulk": {http.MethodPost: {}, http.MethodPut: {}},
+	// https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-get
+	// https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-index
+	// https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-delete
+	// https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-exists
+	"doc": {http.MethodGet: {}, http.MethodPost: {}, http.MethodPut: {}, http.MethodHead: {}, http.MethodDelete: {}},
+}
 
 func ElasticsearchSpan(baseSpan *request.Span, req *http.Request, resp *http.Response) (request.Span, bool) {
-	if !isElasticsearchResponse(resp) {
+	dbSystemName := elasticsearchSystemName(resp)
+	if dbSystemName == "" {
 		return *baseSpan, false
 	}
-	if err := isSearchRequest(req); err != nil {
+
+	operationName := extractElasticsearchOperationName(req)
+	if operationName == "" {
+		return *baseSpan, false
+	}
+
+	if err := isElasticsearchSupportedRequest(operationName, req.Method); err != nil {
 		slog.Debug(err.Error())
 		return *baseSpan, false
 	}
@@ -42,23 +58,28 @@ func ElasticsearchSpan(baseSpan *request.Span, req *http.Request, resp *http.Res
 		slog.Debug("parse Elasticsearch request", "error", err)
 		return *baseSpan, false
 	}
-
-	if resp != nil {
-		if v := resp.Header.Get("X-Found-Handling-Instance"); v != "" {
-			op.NodeName = v
-		}
-	} else {
-		op.NodeName = req.URL.Host
+	if v := resp.Header.Get("X-Found-Handling-Instance"); v != "" {
+		op.NodeName = v
 	}
 
 	baseSpan.SubType = request.HTTPSubtypeElasticsearch
 	baseSpan.Elasticsearch = &request.Elasticsearch{
 		NodeName:         op.NodeName,
-		DBOperationName:  op.DBOperationName,
+		DBOperationName:  operationName,
 		DBCollectionName: op.DBCollectionName,
 		DBQueryText:      op.DBQueryText,
+		DBSystemName:     dbSystemName,
 	}
 	return *baseSpan, true
+}
+
+func elasticsearchSystemName(resp *http.Response) string {
+	if isElasticsearchResponse(resp) {
+		return "elasticsearch"
+	} else if isOpensearchResponse(resp) {
+		return "opensearch"
+	}
+	return ""
 }
 
 func parseElasticsearchRequest(req *http.Request) (elasticsearchOperation, error) {
@@ -67,42 +88,23 @@ func parseElasticsearchRequest(req *http.Request) (elasticsearchOperation, error
 	if err != nil {
 		return op, fmt.Errorf("failed to read Elasticsearch request body %w", err)
 	}
-
 	req.Body = io.NopCloser(bytes.NewBuffer(reqB))
-	if len(reqB) == 0 {
-		op.DBQueryText = ""
-	} else {
-		dbQueryText, err := extractDBQueryText(reqB)
-		if err != nil {
-			return op, err
-		}
-		op.DBQueryText = dbQueryText
-	}
-	op.DBOperationName = extractOperationName(req)
-	op.DBCollectionName = extractDBCollectionName(req)
+	op.DBQueryText = string(reqB)
+	op.DBCollectionName = extractElasticsearchDBCollectionName(req)
 	return op, nil
 }
 
-func extractDBQueryText(body []byte) (string, error) {
-	var buf bytes.Buffer
-
-	if err := json.Compact(&buf, body); err != nil {
-		return "", fmt.Errorf("invalid Elasticsearch JSON body: %w", err)
+func isElasticsearchSupportedRequest(operationName, methodName string) error {
+	methods, exists := elasticsearchOperationMethods[operationName]
+	if !exists {
+		return errors.New("parse Elasticsearch request: unsupported endpoint")
 	}
 
-	return buf.String(), nil
-}
-
-func isSearchRequest(req *http.Request) error {
-	// let's focus only on _search operation that has only GET and POST http methods
-	if !strings.Contains(req.URL.Path, pathSearch) {
-		return errors.New("parse Elasticsearch search request: unsupported endpoint")
+	_, supported := methods[methodName]
+	if supported {
+		return nil
 	}
-
-	if req.Method != http.MethodGet && req.Method != http.MethodPost {
-		return errors.New("parse Elasticsearch search request: unsupported method")
-	}
-	return nil
+	return fmt.Errorf("parse Elasticsearch %s request: unsupported method %s", operationName, methodName)
 }
 
 // isElasticsearchResponse checks if X-Elastic-Product HTTP header is present.
@@ -114,26 +116,52 @@ func isElasticsearchResponse(resp *http.Response) bool {
 	return headerValue == expectedValue
 }
 
+// isOpensearchResponse checks if X-Opensearch-Version HTTP header is present.
+// Note: this header should be present from release 3.0.0
+// https://github.com/opensearch-project/OpenSearch/blob/dc4efa821904cc2d7ea7ef61c0f577d3fc0d8be9/server/src/main/java/org/opensearch/http/DefaultRestChannel.java#L73
+func isOpensearchResponse(resp *http.Response) bool {
+	headerValue := resp.Header.Get("X-OpenSearch-Version")
+	expectedValue := "OpenSearch/"
+	return strings.Contains(headerValue, expectedValue)
+}
+
 // extractOperationName is a generic function used to extract the operation name
 // that is the endpoint identifier provided in the request
-func extractOperationName(req *http.Request) string {
+// we can have different operations where the name of the operation is found in
+// the last or second to last part of the url
+func extractElasticsearchOperationName(req *http.Request) string {
 	path := strings.Trim(req.URL.Path, "/")
 	if path == "" {
 		return ""
 	}
+
 	parts := strings.Split(path, "/")
 	if len(parts) == 0 {
 		return ""
 	}
-	name := parts[len(parts)-1]
-	return strings.TrimPrefix(name, "_")
+
+	lastPart := parts[len(parts)-1]
+	possibleOperationName := strings.TrimPrefix(lastPart, "_")
+
+	if _, found := elasticsearchOperationMethods[possibleOperationName]; found {
+		return possibleOperationName
+	}
+
+	if len(parts) >= 2 {
+		secondLastPart := parts[len(parts)-2]
+		possibleOperationName = strings.TrimPrefix(secondLastPart, "_")
+		if _, found := elasticsearchOperationMethods[possibleOperationName]; found {
+			return possibleOperationName
+		}
+	}
+	return ""
 }
 
-// extractDBCollectionName takes into account this rule from semconv
+// extractElasticsearchDBCollectionName takes into account this rule from semconv
 // The query may target multiple indices or data streams,
 // in which case it SHOULD be a comma separated list of those.
 // If the query doesn’t target a specific index, this field MUST NOT be set.
-func extractDBCollectionName(req *http.Request) string {
+func extractElasticsearchDBCollectionName(req *http.Request) string {
 	path := strings.Trim(req.URL.Path, "/")
 	if path == "" {
 		return ""

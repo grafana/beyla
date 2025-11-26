@@ -13,7 +13,7 @@ import (
 func Setup(port int) {
 	r := gin.Default()
 
-	r.Any("/*path", func(ctx *gin.Context) {
+	r.NoRoute(func(ctx *gin.Context) {
 		fmt.Printf("received request with url %s\n", ctx.Request.RequestURI)
 		status := arg.DefaultStatus
 		if sstr := ctx.Query(arg.Status); sstr != "" {

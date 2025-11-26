@@ -133,6 +133,14 @@ type BeylaDiscoveryConfig struct {
 
 	// nolint:undoc
 	DisabledRouteHarvesters []string `yaml:"disabled_route_harvesters"`
+
+	// nolint:undoc
+	RouteHarvestConfig RouteHarvestingConfig `yaml:"route_harvester_advanced"`
+}
+
+type RouteHarvestingConfig struct {
+	// nolint:undoc
+	JavaHarvestDelay time.Duration `yaml:"java_harvest_delay" env:"OTEL_EBPF_JAVA_ROUTE_HARVEST_DELAY"`
 }
 
 func (d *BeylaDiscoveryConfig) SurveyEnabled() bool {

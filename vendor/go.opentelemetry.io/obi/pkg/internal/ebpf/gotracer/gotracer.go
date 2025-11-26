@@ -18,6 +18,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"strings"
 	"unsafe"
 
 	"github.com/cilium/ebpf"
@@ -41,21 +42,33 @@ import (
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 BpfTPDebug ../../../../bpf/gotracer/gotracer.c -- -I../../../../bpf -DBPF_DEBUG
 
 type Tracer struct {
-	log        *slog.Logger
-	pidsFilter ebpfcommon.ServiceFilter
-	cfg        *config.EBPFTracer
-	metrics    imetrics.Reporter
-	bpfObjects BpfObjects
-	closers    []io.Closer
+	log                     *slog.Logger
+	pidsFilter              ebpfcommon.ServiceFilter
+	cfg                     *config.EBPFTracer
+	metrics                 imetrics.Reporter
+	bpfObjects              BpfObjects
+	closers                 []io.Closer
+	disabledRouteHarvesting bool
 }
 
 func New(pidFilter ebpfcommon.ServiceFilter, cfg *obi.Config, metrics imetrics.Reporter) *Tracer {
 	log := slog.With("component", "go.Tracer")
+
+	disabledRouteHarvesting := false
+
+	for _, lang := range cfg.Discovery.DisabledRouteHarvesters {
+		if strings.ToLower(lang) == "go" {
+			disabledRouteHarvesting = true
+			break
+		}
+	}
+
 	return &Tracer{
-		log:        log,
-		pidsFilter: pidFilter,
-		cfg:        &cfg.EBPF,
-		metrics:    metrics,
+		log:                     log,
+		pidsFilter:              pidFilter,
+		cfg:                     &cfg.EBPF,
+		metrics:                 metrics,
+		disabledRouteHarvesting: disabledRouteHarvesting,
 	}
 }
 
@@ -186,6 +199,8 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 		goexec.MongoOpNamePos,
 		goexec.MongoOpDBPos,
 		goexec.MongoOneThirteenOne,
+		goexec.MuxTemplatePos,
+		goexec.GinFullpathPos,
 	} {
 		if val, ok := offsets.Field[field].(uint64); ok {
 			offTable.Table[field] = val
@@ -528,6 +543,25 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 		"go.mongodb.org/mongo-driver/v2/mongo.(*Collection).Distinct": {{
 			Start: p.bpfObjects.ObiUprobeMongoOpDistinct,
 		}},
+	}
+
+	// Route extraction
+	if !p.disabledRouteHarvesting {
+		// Go mux router
+		m["net/http.(*ServeMux).findHandler"] = []*ebpfcommon.ProbeDesc{{
+			End: p.bpfObjects.ObiUprobeFindHandlerRet,
+		}}
+		m["net/http.(*serveMux121).findHandler"] = []*ebpfcommon.ProbeDesc{{
+			End: p.bpfObjects.ObiUprobeFindHandlerRet,
+		}}
+		// Gorilla mux router
+		m["github.com/gorilla/mux.routeRegexpGroup.setMatch"] = []*ebpfcommon.ProbeDesc{{
+			Start: p.bpfObjects.ObiUprobeMuxSetMatch,
+		}}
+		// Gin router
+		m["github.com/gin-gonic/gin.(*node).getValue"] = []*ebpfcommon.ProbeDesc{{
+			End: p.bpfObjects.ObiUprobeGinGetValueRet,
+		}}
 	}
 
 	if p.supportsContextPropagation() {

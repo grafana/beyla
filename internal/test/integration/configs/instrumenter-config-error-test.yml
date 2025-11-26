@@ -1,0 +1,28 @@
+routes:
+  patterns:
+    - /basic/:rnd
+  unmatched: path
+otel_metrics_export:
+  endpoint: http://otelcol:4018
+otel_traces_export:
+  endpoint: http://jaeger:4318
+discovery:
+  services:
+    # Target the real testserver process to attempt instrumentation
+    - namespace: error-test
+      name: testserver
+      open_ports: 8080
+      exe_path: "testserver"
+attributes:
+  kubernetes:
+    enable: true
+# Enable context propagation to trigger cgroup operations that may fail
+ebpf:
+  context_propagation: all
+  track_request_headers: true
+# Enable internal metrics to capture instrumentation errors
+internal_metrics:
+  prometheus:
+    port: 8999
+    path: /metrics
+log_level: debug

@@ -1,0 +1,30 @@
+routes:
+  patterns:
+    - /basic/:rnd
+  unmatched: path
+otel_metrics_export:
+  endpoint: http://otelcol:4018
+otel_traces_export:
+  endpoint: http://jaeger:4318
+discovery:
+  services:
+    - name: another-service
+      exe_path: asdflkjasdf
+    - namespace: multi-k
+      name: service-a
+      open_ports: 5000
+    - namespace: multi-k
+      name: service-c
+      open_ports: 5002
+    - namespace: multi-k
+      name: service-d
+      open_ports: 5003
+attributes:
+  kubernetes:
+    enable: true
+    cluster_name: my-kube
+  select:
+    http_server_request_duration_seconds_count:
+      exclude: ["server_address"]
+    "*":
+      include: ["*"]

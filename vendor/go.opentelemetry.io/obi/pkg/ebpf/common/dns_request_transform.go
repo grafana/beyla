@@ -64,9 +64,9 @@ func readDNSEventIntoSpan(parseCtx *EBPFParseContext, record *ringbuf.Record) (r
 			Host:          hostname,
 			HostPort:      hostPort,
 			ContentLength: 0,
-			RequestStart:  int64(event.Ts),
-			Start:         int64(event.Ts),
-			End:           int64(event.Ts + 1),
+			RequestStart:  int64(event.Tp.Ts),
+			Start:         int64(event.Tp.Ts),
+			End:           int64(event.Tp.Ts + 1),
 			TraceID:       trace.TraceID(event.Tp.TraceId),
 			SpanID:        trace.SpanID(event.Tp.SpanId),
 			ParentSpanID:  trace.SpanID(event.Tp.ParentId),
@@ -122,7 +122,7 @@ func readDNSEventIntoSpan(parseCtx *EBPFParseContext, record *ringbuf.Record) (r
 	if msg.Response {
 		responseCode = uint16(msg.RCode)
 		span.Status = int(responseCode)
-		span.End = int64(event.Ts)
+		span.End = int64(event.Tp.Ts)
 	} else {
 		return *span, true, nil // ignore until we get a response or never hear back
 	}

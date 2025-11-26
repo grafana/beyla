@@ -16,8 +16,16 @@ func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
 	// From C, assuming 0-ended strings
 	method := cstr(trace.Method[:])
 	path := cstr(trace.Path[:])
+	pattern := cstr(trace.Pattern[:])
 	scheme := cstr(trace.Scheme[:])
 	origHost := cstr(trace.Host[:])
+
+	if pattern != "" {
+		pattern = stripPattern(pattern)
+		if pattern == "/" {
+			pattern = ""
+		}
+	}
 
 	peer := ""
 	hostname := ""
@@ -38,6 +46,7 @@ func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
 		Type:           request.EventType(trace.Type),
 		Method:         method,
 		Path:           path,
+		Route:          pattern,
 		Peer:           peer,
 		PeerPort:       int(trace.Conn.S_port),
 		Host:           hostname,
@@ -59,6 +68,20 @@ func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
 		},
 		Statement: schemeHost,
 	}
+}
+
+func stripPattern(p string) string {
+	if p != "" && p[0] == '/' {
+		return p
+	}
+
+	for _, s := range []string{"GET ", "PUT ", "POST ", "PATCH ", "DELETE ", "OPTIONS ", "HEAD "} {
+		if strings.HasPrefix(p, s) {
+			return p[len(s):]
+		}
+	}
+
+	return ""
 }
 
 func SQLRequestTraceToSpan(trace *SQLRequestTrace) request.Span {

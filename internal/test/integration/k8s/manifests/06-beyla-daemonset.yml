@@ -91,3 +91,5 @@ spec:
               value: "application,application_process"
             - name: BEYLA_NAME_RESOLVER_SOURCES
               value: "dns,k8s"
+            - name: BEYLA_OTLP_TRACES_BATCH_TIMEOUT
+              value: "0ms"

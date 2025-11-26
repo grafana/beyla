@@ -1,0 +1,130 @@
+version: "3.8"
+
+services:
+  zookeeper:
+    restart: always
+    container_name: kafka-like-zookeeper
+    image: docker.io/bitnamilegacy/zookeeper:3.9@sha256:46d5bcbdf4434f40b7a453a7f53e6ea436a770981433c173ab782c0b13a5fb87
+    ports:
+      - "2181:2181"
+    volumes:
+      - "zookeeper-volume:/bitnami"
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+
+  kafka:
+    restart: always
+    container_name: kafka-like
+    image: docker.io/bitnamilegacy/kafka:3.9@sha256:55df55bfc7ed5980447387620afa3498eab3985a4d8c731013d82b3fa8b43bff
+    ports:
+      - "9093:9093"
+    volumes:
+      - "kafka-volume:/bitnami"
+    environment:
+      - KAFKA_BROKER_ID=1
+      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
+      - ALLOW_PLAINTEXT_LISTENER=yes
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CLIENT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      - KAFKA_CFG_LISTENERS=CLIENT://:9092,EXTERNAL://:9093
+      - KAFKA_CFG_ADVERTISED_LISTENERS=CLIENT://kafka:9092,EXTERNAL://localhost:9093
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=CLIENT
+    depends_on:
+      - zookeeper
+
+  testserver:
+    build:
+      context: ../../..
+      dockerfile: ./internal/test/integration/components/javakafka/Dockerfile
+    image: hatest-testserver-java-kafka
+    ports:
+      - "${TEST_SERVICE_PORTS}"
+    depends_on:
+      otelcol:
+        condition: service_started
+      kafka:
+        condition: service_started
+
+  autoinstrumenter:
+    build:
+      context: ../../..
+      dockerfile: ./internal/test/integration/components/beyla/Dockerfile
+    volumes:
+      - ./configs/:/configs
+      - ./system/sys/kernel/security:/sys/kernel/security
+      - ../../../testoutput:/coverage
+      - ../../../testoutput/run-java:/var/run/beyla
+    image: hatest-autoinstrumenter
+    privileged: true # in some environments (not GH Pull Requests) you can set it to false and then cap_add: [ SYS_ADMIN ]
+    network_mode: "service:testserver"
+    pid: "service:testserver"
+    environment:
+      BEYLA_CONFIG_PATH: "/configs/instrumenter-config.yml"
+      GOCOVERDIR: "/coverage"
+      BEYLA_TRACE_PRINTER: "text"
+      BEYLA_OPEN_PORT: "${BEYLA_OPEN_PORT}"
+      BEYLA_DISCOVERY_POLL_INTERVAL: 500ms
+      BEYLA_EXECUTABLE_NAME: "${BEYLA_EXECUTABLE_NAME}"
+      BEYLA_SERVICE_NAMESPACE: "integration-test"
+      BEYLA_METRICS_INTERVAL: "10ms"
+      BEYLA_BPF_BATCH_TIMEOUT: "10ms"
+      BEYLA_OTLP_TRACES_BATCH_TIMEOUT: "1ms"
+      BEYLA_LOG_LEVEL: "DEBUG"
+      BEYLA_BPF_DEBUG: "TRUE"
+      BEYLA_HOSTNAME: "beyla"
+      BEYLA_BPF_HTTP_REQUEST_TIMEOUT: "5s"
+      BEYLA_PROCESSES_INTERVAL: "100ms"
+      BEYLA_OTEL_TRACES_INSTRUMENTATIONS: "kafka"
+      BEYLA_OTEL_METRICS_INSTRUMENTATIONS: "kafka"
+      BEYLA_OTEL_METRICS_FEATURES: "application"
+      BEYLA_KAFKA_TOPIC_UUID_CACHE_SIZE: "1000"
+    depends_on:
+      testserver:
+        condition: service_started
+
+  # OpenTelemetry Collector
+  otelcol:
+    image: otel/opentelemetry-collector-contrib:0.118.0@sha256:3f6274fe609da4f9964fbc2ef36b83d08d47964fbb11629251393590d3924072
+    container_name: otel-col
+    deploy:
+      resources:
+        limits:
+          memory: 125M
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol-config/otelcol-config.yml"]
+    volumes:
+      - ./configs/:/etc/otelcol-config
+    ports:
+      - "4317" # OTLP over gRPC receiver
+      - "4318:4318" # OTLP over HTTP receiver
+      - "9464" # Prometheus exporter
+      - "8888" # metrics endpoint
+    depends_on:
+      prometheus:
+        condition: service_started
+
+  # Prometheus
+  prometheus:
+    image: quay.io/prometheus/prometheus:v2.55.1@sha256:2659f4c2ebb718e7695cb9b25ffa7d6be64db013daba13e05c875451cf51b0d3
+    container_name: prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus-config.yml
+      - --web.enable-lifecycle
+      - --web.route-prefix=/
+    volumes:
+      - ./configs/:/etc/prometheus
+    ports:
+      - "9090:9090"
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.60@sha256:4fd2d70fa347d6a47e79fcb06b1c177e6079f92cba88b083153d56263082135e
+    ports:
+      - "16686:16686" # Query frontend
+      - "4317" # OTEL GRPC traces collector
+      - "4318" # OTEL HTTP traces collector
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - LOG_LEVEL=debug
+
+volumes:
+  kafka-volume:
+  zookeeper-volume:

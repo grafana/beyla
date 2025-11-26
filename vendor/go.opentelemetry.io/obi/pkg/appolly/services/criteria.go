@@ -110,6 +110,12 @@ type DiscoveryConfig struct {
 	RouteHarvesterTimeout time.Duration `yaml:"route_harvester_timeout" env:"OTEL_EBPF_ROUTE_HARVESTER_TIMEOUT"`
 
 	DisabledRouteHarvesters []string `yaml:"disabled_route_harvesters"`
+
+	RouteHarvestConfig RouteHarvestingConfig `yaml:"route_harvester_advanced"`
+}
+
+type RouteHarvestingConfig struct {
+	JavaHarvestDelay time.Duration `yaml:"java_harvest_delay" env:"OTEL_EBPF_JAVA_ROUTE_HARVEST_DELAY"`
 }
 
 func (c *DiscoveryConfig) Validate() error {

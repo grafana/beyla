@@ -2,7 +2,7 @@ package gorillamid
 
 import (
 	"bufio"
-	"fmt"
+	"errors"
 	"net"
 	"net/http"
 )
@@ -55,5 +55,5 @@ func (b *responseWriterSniffer) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	if ok {
 		return hj.Hijack()
 	}
-	return nil, nil, fmt.Errorf("responseWriterSniffer: can't cast underlying response writer to Hijacker")
+	return nil, nil, errors.New("responseWriterSniffer: can't cast underlying response writer to Hijacker")
 }

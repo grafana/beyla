@@ -82,6 +82,7 @@ type MetricsReporter struct {
 	is               instrumentations.InstrumentationSelection
 	targetMetrics    map[svc.UID]*TargetMetrics
 	attrGetters      attributes.NamedGetters[*request.Span, attribute.KeyValue]
+	spanExtraAttrs   []attr.Name
 
 	// user-selected fields for each of the reported metrics
 	attrHTTPDuration           []attributes.Field[*request.Span, attribute.KeyValue]
@@ -212,6 +213,11 @@ func newMetricsReporter(
 		userAttribSelection: selectorCfg.SelectionCfg,
 		log:                 mlog(),
 		attrGetters:         request.SpanOTELGetters(unresolved),
+	}
+
+	mr.spanExtraAttrs = []attr.Name{}
+	for _, label := range cfg.ExtraSpanResourceLabels {
+		mr.spanExtraAttrs = append(mr.spanExtraAttrs, attr.Name(label))
 	}
 
 	mr.createEventMetrics = mr.createTargetMetricData
@@ -760,7 +766,7 @@ func (mr *MetricsReporter) tracesResourceAttributes(service *svc.Attrs) attribut
 		semconv.ServiceInstanceID(service.UID.Instance),
 		semconv.ServiceNamespace(service.UID.Namespace),
 		semconv.TelemetrySDKLanguageKey.String(service.SDKLanguage.String()),
-		semconv.TelemetrySDKNameKey.String("opentelemetry-ebpf-instrumentation"),
+		semconv.TelemetrySDKNameKey.String(attr.VendorSDKName),
 		request.SourceMetric(attr.VendorPrefix),
 		semconv.OSTypeKey.String("linux"),
 	}
@@ -789,6 +795,7 @@ func (mr *MetricsReporter) spanMetricAttributes() []attributes.Field[*request.Sp
 			attr.SpanName,
 			attr.StatusCode,
 			attr.Source,
+			attr.TelemetrySDKLanguage,
 		}),
 		// hostID is not taken from the span but common to the metrics reporter,
 		// so the getter is injected here directly
@@ -894,6 +901,14 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 	}
 
 	if otelSpanMetricsAccepted(span, mr) {
+		extraAttrs := []attribute.KeyValue{}
+
+		for _, l := range mr.spanExtraAttrs {
+			if v, ok := span.Service.Metadata[l]; ok {
+				extraAttrs = append(extraAttrs, l.OTEL().String(v))
+			}
+		}
+
 		if mr.cfg.SpanMetricsEnabled() {
 			sml, attrs := r.spanMetricsLatency.ForRecord(span)
 			sml.Record(ctx, duration, instrument.WithAttributeSet(attrs))

@@ -242,14 +242,6 @@ type BpfDebugSendArgsT struct {
 	Pad       [6]uint8
 }
 
-type BpfDebugSkMsgBufferT struct {
-	_        structs.HostLayout
-	Buf      [256]uint8
-	Size     uint16
-	Inactive uint8
-	Pad      [1]uint8
-}
-
 type BpfDebugSockArgsT struct {
 	_      structs.HostLayout
 	Addr   uint64
@@ -486,8 +478,6 @@ type BpfDebugMapSpecs struct {
 	ProtocolCache               *ebpf.MapSpec `ebpf:"protocol_cache"`
 	ServerTraces                *ebpf.MapSpec `ebpf:"server_traces"`
 	ServerTracesAux             *ebpf.MapSpec `ebpf:"server_traces_aux"`
-	SkBufferMem                 *ebpf.MapSpec `ebpf:"sk_buffer_mem"`
-	SkBuffers                   *ebpf.MapSpec `ebpf:"sk_buffers"`
 	SockPids                    *ebpf.MapSpec `ebpf:"sock_pids"`
 	SslToConn                   *ebpf.MapSpec `ebpf:"ssl_to_conn"`
 	SslToPidTid                 *ebpf.MapSpec `ebpf:"ssl_to_pid_tid"`
@@ -593,8 +583,6 @@ type BpfDebugMaps struct {
 	ProtocolCache               *ebpf.Map `ebpf:"protocol_cache"`
 	ServerTraces                *ebpf.Map `ebpf:"server_traces"`
 	ServerTracesAux             *ebpf.Map `ebpf:"server_traces_aux"`
-	SkBufferMem                 *ebpf.Map `ebpf:"sk_buffer_mem"`
-	SkBuffers                   *ebpf.Map `ebpf:"sk_buffers"`
 	SockPids                    *ebpf.Map `ebpf:"sock_pids"`
 	SslToConn                   *ebpf.Map `ebpf:"ssl_to_conn"`
 	SslToPidTid                 *ebpf.Map `ebpf:"ssl_to_pid_tid"`
@@ -652,8 +640,6 @@ func (m *BpfDebugMaps) Close() error {
 		m.ProtocolCache,
 		m.ServerTraces,
 		m.ServerTracesAux,
-		m.SkBufferMem,
-		m.SkBuffers,
 		m.SockPids,
 		m.SslToConn,
 		m.SslToPidTid,

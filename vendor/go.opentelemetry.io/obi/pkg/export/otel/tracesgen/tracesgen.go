@@ -342,6 +342,7 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 			request.HTTPUrlFull(url),
 			semconv.HTTPScheme(scheme),
 			request.ServerAddr(host),
+			request.PeerService(request.PeerServiceFromSpan(span)),
 			request.ServerPort(span.HostPort),
 			request.HTTPRequestBodySize(int(span.RequestBodyLength())),
 			request.HTTPResponseBodySize(span.ResponseBodyLength()),
@@ -355,7 +356,7 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 				attrs = append(attrs, request.DBQueryText(span.Elasticsearch.DBQueryText))
 			}
 			attrs = append(attrs, request.DBOperationName(span.Elasticsearch.DBOperationName))
-			attrs = append(attrs, request.DBSystemName(semconv.DBSystemElasticsearch.Value.AsString()))
+			attrs = append(attrs, request.DBSystemName(span.Elasticsearch.DBSystemName))
 			attrs = append(attrs, request.ErrorType(span.DBError.ErrorCode))
 		}
 
@@ -388,11 +389,13 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 			semconv.RPCSystemGRPC,
 			semconv.RPCGRPCStatusCodeKey.Int(span.Status),
 			request.ServerAddr(request.HostAsServer(span)),
+			request.PeerService(request.PeerServiceFromSpan(span)),
 			request.ServerPort(span.HostPort),
 		}
 	case request.EventTypeSQLClient:
 		attrs = []attribute.KeyValue{
 			request.ServerAddr(request.HostAsServer(span)),
+			request.PeerService(request.PeerServiceFromSpan(span)),
 			request.ServerPort(span.HostPort),
 			span.DBSystemName(), // We can distinguish in the future for MySQL, Postgres etc
 		}
@@ -416,6 +419,9 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 			request.ServerAddr(request.HostAsServer(span)),
 			request.ServerPort(span.HostPort),
 			dbSystemRedis,
+		}
+		if span.Type == request.EventTypeRedisClient {
+			attrs = append(attrs, request.PeerService(request.PeerServiceFromSpan(span)))
 		}
 		operation := span.Method
 		if operation != "" {
@@ -443,6 +449,11 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 			semconv.MessagingClientID(span.Statement),
 			operation,
 		}
+
+		if span.Type == request.EventTypeKafkaClient {
+			attrs = append(attrs, request.PeerService(request.PeerServiceFromSpan(span)))
+		}
+
 		if span.MessagingInfo != nil {
 			attrs = append(attrs, request.MessagingPartition(span.MessagingInfo.Partition))
 			if span.Method == request.MessagingProcess {
@@ -453,6 +464,7 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 		attrs = []attribute.KeyValue{
 			request.ServerAddr(request.HostAsServer(span)),
 			request.ServerPort(span.HostPort),
+			request.PeerService(request.PeerServiceFromSpan(span)),
 			dbSystemMongo,
 		}
 		operation := span.Method

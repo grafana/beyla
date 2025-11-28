@@ -45,7 +45,7 @@ func ReadFromChannel(r *ReadDecorator) swarm.InstanceFunc {
 					for i := range traces {
 						decorate(&traces[i].Service, int(traces[i].Pid.HostPID))
 					}
-					out.Send(traces)
+					out.SendCtx(ctx, traces)
 				} else {
 					rlog().Debug("input channel closed. Exiting traces input loop")
 					return

@@ -114,7 +114,8 @@ type PrometheusConfig struct {
 
 	DisableBuildInfo bool `yaml:"disable_build_info" env:"OTEL_EBPF_PROMETHEUS_DISABLE_BUILD_INFO"`
 
-	// Features of metrics that are can be exported. Accepted values are "application" and "network".
+	// Features of metrics that can be exported. Accepted values: application, network, application_process,
+	// application_span, application_service_graph, ...
 	Features []string `yaml:"features" env:"OTEL_EBPF_PROMETHEUS_FEATURES" envSeparator:","`
 	// Allows configuration of which instrumentations should be enabled, e.g. http, grpc, sql...
 	Instrumentations []string `yaml:"instrumentations" env:"OTEL_EBPF_PROMETHEUS_INSTRUMENTATIONS" envSeparator:","`
@@ -136,6 +137,11 @@ type PrometheusConfig struct {
 	// beforehand. For example, to add the OTEL deployment.environment resource attribute as a Prometheus resource attribute,
 	// you should add `deployment.environment`.
 	ExtraResourceLabels []string `yaml:"extra_resource_attributes" env:"OTEL_EBPF_PROMETHEUS_EXTRA_RESOURCE_ATTRIBUTES" envSeparator:","`
+
+	// ExtraSpanResourceLabels adds extra metadata labels to Prometheus span metrics from sources whose availability can't be known
+	// beforehand. For example, to add the OTEL deployment.environment resource attribute as a Prometheus resource attribute,
+	// you should add `deployment.environment`.
+	ExtraSpanResourceLabels []string `yaml:"extra_span_resource_attributes" env:"OTEL_EBPF_PROMETHEUS_EXTRA_SPAN_RESOURCE_ATTRIBUTES" envSeparator:","`
 }
 
 func mlog() *slog.Logger {
@@ -196,10 +202,12 @@ func (p *PrometheusConfig) Enabled() bool {
 }
 
 type metricsReporter struct {
-	cfg                 *PrometheusConfig
-	extraMetadataLabels []attr.Name
-	input               <-chan []request.Span
-	processEvents       <-chan exec.ProcessEvent
+	cfg                     *PrometheusConfig
+	extraMetadataLabels     []attr.Name
+	extraSpanMetadataLabels []attr.Name
+
+	input         <-chan []request.Span
+	processEvents <-chan exec.ProcessEvent
 
 	beylaInfo              *Expirer[prometheus.Gauge]
 	httpDuration           *Expirer[prometheus.Histogram]
@@ -414,6 +422,7 @@ func newReporter(
 	// If service name is not explicitly set, we take the service name as set by the
 	// executable inspector
 	extraMetadataLabels := parseExtraMetadata(cfg.ExtraResourceLabels)
+	extraSpanMetadataLabels := parseExtraMetadata(cfg.ExtraSpanResourceLabels)
 	mr := &metricsReporter{
 		input:                      input.Subscribe(msg.SubscriberName("prom.InputSpans")),
 		processEvents:              processEventCh.Subscribe(msg.SubscriberName("prom.ProcessEvents")),
@@ -423,6 +432,7 @@ func newReporter(
 		cfg:                        cfg,
 		kubeEnabled:                kubeEnabled,
 		extraMetadataLabels:        extraMetadataLabels,
+		extraSpanMetadataLabels:    extraSpanMetadataLabels,
 		hostID:                     ctxInfo.HostID,
 		clock:                      clock,
 		is:                         is,
@@ -576,25 +586,25 @@ func newReporter(
 				NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
 				NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
 				NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
-			}, labelNamesSpans()).MetricVec, clock.Time, cfg.TTL)
+			}, labelNamesSpans(extraSpanMetadataLabels)).MetricVec, clock.Time, cfg.TTL)
 		}),
 		spanMetricsCallsTotal: optionalCounterProvider(cfg.SpanMetricsEnabled(), func() *Expirer[prometheus.Counter] {
 			return NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
 				Name: cfg.spanMetricsCallsName(),
 				Help: "number of service calls in trace span metrics format",
-			}, labelNamesSpans()).MetricVec, clock.Time, cfg.TTL)
+			}, labelNamesSpans(extraSpanMetadataLabels)).MetricVec, clock.Time, cfg.TTL)
 		}),
 		spanMetricsRequestSizeTotal: optionalCounterProvider(cfg.SpanMetricsSizesEnabled(), func() *Expirer[prometheus.Counter] {
 			return NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
 				Name: SpanMetricsRequestSizes,
 				Help: "size of service calls, in bytes, in trace span metrics format",
-			}, labelNamesSpans()).MetricVec, clock.Time, cfg.TTL)
+			}, labelNamesSpans(extraSpanMetadataLabels)).MetricVec, clock.Time, cfg.TTL)
 		}),
 		spanMetricsResponseSizeTotal: optionalCounterProvider(cfg.SpanMetricsSizesEnabled(), func() *Expirer[prometheus.Counter] {
 			return NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
 				Name: SpanMetricsResponseSizes,
 				Help: "size of service responses, in bytes, in trace span metrics format",
-			}, labelNamesSpans()).MetricVec, clock.Time, cfg.TTL)
+			}, labelNamesSpans(extraSpanMetadataLabels)).MetricVec, clock.Time, cfg.TTL)
 		}),
 		tracesTargetInfo: optionalDirectGaugeProvider(cfg.AnySpanMetricsEnabled(), func() *prometheus.GaugeVec {
 			return prometheus.NewGaugeVec(prometheus.GaugeOpts{
@@ -1036,12 +1046,28 @@ func appendK8sLabelValuesService(values []string, service *svc.Attrs) []string {
 	return values
 }
 
-func labelNamesSpans() []string {
-	return []string{serviceNameKey, serviceNamespaceKey, spanNameKey, statusCodeKey, spanKindKey, serviceInstanceKey, serviceJobKey, sourceKey}
+func labelNamesSpans(extraMetadataLabelNames []attr.Name) []string {
+	names := []string{
+		serviceNameKey,
+		serviceNamespaceKey,
+		spanNameKey,
+		statusCodeKey,
+		spanKindKey,
+		serviceInstanceKey,
+		serviceJobKey,
+		sourceKey,
+		telemetryLanguageKey,
+	}
+
+	for _, mdn := range extraMetadataLabelNames {
+		names = append(names, mdn.Prom())
+	}
+
+	return names
 }
 
 func (r *metricsReporter) labelValuesSpans(span *request.Span) []string {
-	return []string{
+	values := []string{
 		span.Service.UID.Name,
 		span.Service.UID.Namespace,
 		span.TraceName(),
@@ -1050,7 +1076,14 @@ func (r *metricsReporter) labelValuesSpans(span *request.Span) []string {
 		span.Service.UID.Instance, // app instance ID
 		span.Service.Job(),
 		attr.VendorPrefix,
+		span.Service.SDKLanguage.String(),
 	}
+
+	for _, k := range r.extraSpanMetadataLabels {
+		values = append(values, span.Service.Metadata[k])
+	}
+
+	return values
 }
 
 func labelNamesTargetInfo(kubeEnabled bool, extraMetadataLabelNames []attr.Name) []string {
@@ -1088,7 +1121,7 @@ func (r *metricsReporter) labelValuesTargetInfo(service *svc.Attrs) []string {
 		service.UID.Instance, // app instance ID
 		service.Job(),
 		service.SDKLanguage.String(),
-		attr.VendorPrefix,
+		attr.VendorSDKName,
 		buildinfo.Version,
 		attr.VendorPrefix,
 		"linux",

@@ -11,7 +11,8 @@ on:
       # v1.0.0-beta.2
       # v1.0.0-beta.11
       # v1.0.0-rc.1
-      - "v[0-9]+.[0-9]+.[0-9]+-.+"
+      # https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#filter-pattern-cheat-sheet
+      - "v[0-9]+.[0-9]+.[0-9]+-*"
 
 permissions:
   contents: read

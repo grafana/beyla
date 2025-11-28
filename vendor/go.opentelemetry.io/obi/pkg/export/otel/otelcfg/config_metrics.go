@@ -42,7 +42,7 @@ type MetricsConfig struct {
 	// and the Info messages leak internal details that are not usually valuable for the final user.
 	SDKLogLevel string `yaml:"otel_sdk_log_level" env:"OTEL_EBPF_SDK_LOG_LEVEL"`
 
-	// Features of metrics that are can be exported. Accepted values: application, network, application_process,
+	// Features of metrics that can be exported. Accepted values: application, network, application_process,
 	// application_span, application_service_graph, ...
 	// envDefault is provided to avoid breaking changes
 	Features []string `yaml:"features" env:"OTEL_EBPF_METRICS_FEATURES,expand" envDefault:"${OTEL_EBPF_METRIC_FEATURES}"  envSeparator:","`
@@ -62,6 +62,11 @@ type MetricsConfig struct {
 
 	// InjectHeaders allows injecting custom headers to the HTTP OTLP exporter
 	InjectHeaders func(dst map[string]string) `yaml:"-" env:"-"`
+
+	// ExtraSpanResourceLabels adds extra metadata labels to OTEL span metrics from sources whose availability can't be known
+	// beforehand. For example, to add the OTEL deployment.environment resource attribute as a OTEL resource attribute,
+	// you should add `deployment.environment`.
+	ExtraSpanResourceLabels []string `yaml:"extra_span_resource_attributes" env:"OTEL_EBPF_EXTRA_SPAN_RESOURCE_ATTRIBUTES" envSeparator:","`
 }
 
 func (m MetricsConfig) MarshalYAML() (any, error) {

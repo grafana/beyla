@@ -5,6 +5,7 @@
 package msg
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -105,21 +106,30 @@ func NewQueue[T any](opts ...QueueOpts) *Queue[T] {
 	return &Queue[T]{cfg: &cfg, remainingClosers: cfg.closingAttempts, sendTimeout: time.NewTimer(cfg.sendTimeout)}
 }
 
-// Send a message to all subscribers of this queue.
+// SendCtx sends a message to all subscribers of this queue, and interrupts the operation if the
+// passed context is canceled.
 // If there are no subscribers at the moment of sending the message, the message will be lost.
 // If there are subscribers, the message will be stored on their respective internal channels
 // until it is read by the subscribers.
 // If a subscriber is blocked, its internal channel might be full and
-// the Send operation would block for all the subscribers until all the internal channels
+// the SendCtx operation would block for all the subscribers until all the internal channels
 // of the Queue room for a new message.
-func (q *Queue[T]) Send(o T) {
-	q.chainedSend(o, []string{q.cfg.name})
+func (q *Queue[T]) SendCtx(ctx context.Context, o T) {
+	q.chainedSend(ctx, o, []string{q.cfg.name})
 }
 
-func (q *Queue[T]) chainedSend(o T, bypassPath []string) {
+// Send is analogous to SendCtx(context.Background()).
+// This operation could get into a deadlock if during the Send operation, the subscriber node stops
+// reading messages (e.g. during OBI shutdown). So it is highly recommended to use SendCtx instead.
+// Deprecated: use SendCtx instead.
+func (q *Queue[T]) Send(o T) {
+	q.chainedSend(context.Background(), o, []string{q.cfg.name})
+}
+
+func (q *Queue[T]) chainedSend(ctx context.Context, o T, bypassPath []string) {
 	q.assertNotClosed()
 	if q.bypassTo != nil {
-		q.bypassTo.chainedSend(o, append(bypassPath, q.bypassTo.cfg.name))
+		q.bypassTo.chainedSend(ctx, o, append(bypassPath, q.bypassTo.cfg.name))
 		return
 	}
 
@@ -135,6 +145,8 @@ func (q *Queue[T]) chainedSend(o T, bypassPath []string) {
 	var blocked []dst[T]
 	for _, d := range q.dsts {
 		select {
+		case <-ctx.Done():
+			return
 		case d.ch <- o:
 			// good!
 		case <-q.sendTimeout.C:
@@ -156,6 +168,8 @@ func (q *Queue[T]) chainedSend(o T, bypassPath []string) {
 	q.sendTimeout.Reset(q.cfg.sendTimeout / 4)
 	for _, d := range blocked {
 		select {
+		case <-ctx.Done():
+			return
 		case d.ch <- o:
 			// good!
 		case <-q.sendTimeout.C:

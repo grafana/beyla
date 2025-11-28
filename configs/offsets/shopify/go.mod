@@ -1,6 +1,6 @@
 module shopify_sarama_off
 
-go 1.25.1
+go 1.25.3
 
 require github.com/Shopify/sarama v1.37.1
 

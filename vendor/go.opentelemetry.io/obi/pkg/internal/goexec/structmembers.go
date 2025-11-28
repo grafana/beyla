@@ -104,6 +104,9 @@ const (
 	MongoOpNamePos
 	MongoOpDBPos
 	MongoOneThirteenOne
+	// route harvesting offsets
+	MuxTemplatePos
+	GinFullpathPos
 )
 
 //go:embed offsets.json
@@ -404,6 +407,18 @@ var structMembers = map[string]structInfo{
 		fields: map[string]GoOffset{
 			"Name":     MongoOpNamePos,
 			"Database": MongoOpDBPos,
+		},
+	},
+	"github.com/gorilla/mux.routeRegexp": {
+		lib: "github.com/gorilla/mux",
+		fields: map[string]GoOffset{
+			"template": MuxTemplatePos,
+		},
+	},
+	"github.com/gin-gonic/gin.nodeValue": {
+		lib: "github.com/gin-gonic/gin",
+		fields: map[string]GoOffset{
+			"fullPath": GinFullpathPos,
 		},
 	},
 }

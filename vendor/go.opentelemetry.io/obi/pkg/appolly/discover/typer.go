@@ -21,11 +21,13 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	"go.opentelemetry.io/obi/pkg/internal/goexec"
 	"go.opentelemetry.io/obi/pkg/internal/procs"
+	"go.opentelemetry.io/obi/pkg/internal/transform/route/clusterurl"
 	"go.opentelemetry.io/obi/pkg/kube"
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm/swarms"
+	"go.opentelemetry.io/obi/pkg/transform"
 )
 
 type instrumentedExecutable struct {
@@ -87,7 +89,7 @@ func samplerFromConfig(s *services.SamplerConfig) trace.Sampler {
 	return nil
 }
 
-func makeServiceAttrs(processMatch *ProcessMatch) svc.Attrs {
+func makeServiceAttrs(processMatch *ProcessMatch, routesCfg *transform.RoutesConfig) svc.Attrs {
 	var name string
 	var namespace string
 	exportModes := services.ExportModeUnset
@@ -116,6 +118,11 @@ func makeServiceAttrs(processMatch *ProcessMatch) svc.Attrs {
 		}
 	}
 
+	wildcard := byte('*')
+	if routesCfg.WildcardChar != "" {
+		wildcard = routesCfg.WildcardChar[0]
+	}
+
 	s := svc.Attrs{
 		UID: svc.UID{
 			Name:      name,
@@ -124,6 +131,7 @@ func makeServiceAttrs(processMatch *ProcessMatch) svc.Attrs {
 		ProcPID:     processMatch.Process.Pid,
 		ExportModes: exportModes,
 		Sampler:     samplerFromConfig(samplerConfig),
+		PathTrie:    clusterurl.NewPathTrie(routesCfg.MaxPathSegmentCardinality, wildcard),
 	}
 
 	if routesConfig != nil {
@@ -146,9 +154,9 @@ func (t *typer) FilterClassify(evs []Event[ProcessMatch]) []Event[ebpf.Instrumen
 		ev := &evs[i]
 		switch evs[i].Type {
 		case EventCreated:
-			svcID := makeServiceAttrs(&ev.Obj)
+			svcID := makeServiceAttrs(&ev.Obj, t.cfg.Routes)
 
-			if elfFile, err := findExecElf(ev.Obj.Process, svcID, t.k8sInformer.IsKubeEnabled()); err != nil {
+			if elfFile, err := findExecElf(ev.Obj.Process, svcID); err != nil {
 				t.log.Debug("error finding process ELF. Ignoring", "error", err)
 			} else {
 				t.currentPids[ev.Obj.Process.Pid] = elfFile

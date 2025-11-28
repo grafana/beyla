@@ -125,6 +125,7 @@ go.opentelemetry.io/collector/config/confignet,https://github.com/grafana/beyla/
 go.opentelemetry.io/collector/config/configopaque,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/collector/config/configopaque/LICENSE,Apache-2.0
 go.opentelemetry.io/collector/config/configoptional,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/collector/config/configoptional/LICENSE,Apache-2.0
 go.opentelemetry.io/collector/config/configretry,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/collector/config/configretry/LICENSE,Apache-2.0
+go.opentelemetry.io/collector/config/configtelemetry,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/collector/config/configtelemetry/LICENSE,Apache-2.0
 go.opentelemetry.io/collector/config/configtls,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/collector/config/configtls/LICENSE,Apache-2.0
 go.opentelemetry.io/collector/confmap,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/collector/confmap/LICENSE,Apache-2.0
 go.opentelemetry.io/collector/confmap/xconfmap,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/collector/confmap/xconfmap/LICENSE,Apache-2.0
@@ -133,6 +134,7 @@ go.opentelemetry.io/collector/consumer/consumererror,https://github.com/grafana/
 go.opentelemetry.io/collector/consumer/consumererror/xconsumererror,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/collector/consumer/consumererror/xconsumererror/LICENSE,Apache-2.0
 go.opentelemetry.io/collector/consumer/xconsumer,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/collector/consumer/xconsumer/LICENSE,Apache-2.0
 go.opentelemetry.io/collector/exporter,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/collector/exporter/LICENSE,Apache-2.0
+go.opentelemetry.io/collector/exporter/debugexporter,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/collector/exporter/debugexporter/LICENSE,Apache-2.0
 go.opentelemetry.io/collector/exporter/exporterhelper,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/collector/exporter/exporterhelper/LICENSE,Apache-2.0
 go.opentelemetry.io/collector/exporter/exporterhelper/xexporterhelper,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/collector/exporter/exporterhelper/xexporterhelper/LICENSE,Apache-2.0
 go.opentelemetry.io/collector/exporter/otlpexporter,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/collector/exporter/otlpexporter/LICENSE,Apache-2.0
@@ -144,13 +146,11 @@ go.opentelemetry.io/collector/extension/extensionmiddleware,https://github.com/g
 go.opentelemetry.io/collector/extension/xextension/storage,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/collector/extension/xextension/LICENSE,Apache-2.0
 go.opentelemetry.io/collector/featuregate,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/collector/featuregate/LICENSE,Apache-2.0
 go.opentelemetry.io/collector/internal/statusutil,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/collector/LICENSE,Apache-2.0
-go.opentelemetry.io/collector/internal/telemetry,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/collector/internal/telemetry/LICENSE,Apache-2.0
 go.opentelemetry.io/collector/pdata,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/collector/pdata/LICENSE,Apache-2.0
 go.opentelemetry.io/collector/pdata/pprofile,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/collector/pdata/pprofile/LICENSE,Apache-2.0
 go.opentelemetry.io/collector/pdata/xpdata,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/collector/pdata/xpdata/LICENSE,Apache-2.0
 go.opentelemetry.io/collector/pipeline,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/collector/pipeline/LICENSE,Apache-2.0
 go.opentelemetry.io/collector/pipeline/xpipeline,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/collector/pipeline/xpipeline/LICENSE,Apache-2.0
-go.opentelemetry.io/contrib/bridges/otelzap,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/contrib/bridges/otelzap/LICENSE,Apache-2.0
 go.opentelemetry.io/contrib/detectors/aws/ec2/v2,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/contrib/detectors/aws/ec2/v2/LICENSE,Apache-2.0
 go.opentelemetry.io/contrib/detectors/aws/eks,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/contrib/detectors/aws/eks/LICENSE,Apache-2.0
 go.opentelemetry.io/contrib/detectors/azure/azurevm,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/contrib/detectors/azure/azurevm/LICENSE,Apache-2.0
@@ -164,7 +164,6 @@ go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp,https://github
 go.opentelemetry.io/otel/exporters/otlp/otlptrace,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/otel/exporters/otlp/otlptrace/LICENSE,Apache-2.0
 go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc/LICENSE,Apache-2.0
 go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp/LICENSE,Apache-2.0
-go.opentelemetry.io/otel/log,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/otel/log/LICENSE,Apache-2.0
 go.opentelemetry.io/otel/metric,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/otel/metric/LICENSE,Apache-2.0
 go.opentelemetry.io/otel/sdk,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/otel/sdk/LICENSE,Apache-2.0
 go.opentelemetry.io/otel/sdk/metric,https://github.com/grafana/beyla/blob/HEAD/vendor/go.opentelemetry.io/otel/sdk/metric/LICENSE,Apache-2.0

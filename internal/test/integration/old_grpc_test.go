@@ -72,7 +72,7 @@ func testREDMetricsTracesForOldGRPCLibrary(t *testing.T, svcNs string) {
 
 	var trace jaeger.Trace
 	test.Eventually(t, time.Duration(1)*time.Minute, func(t require.TestingT) {
-		resp, err := http.Get(jaegerQueryURL + "?service=backend&operation=GET%20%2Ffactorial%2F%3Arnd")
+		resp, err := http.Get(jaegerQueryURL + "?service=backend&operation=GET%20%2Ffactorial%2F")
 		require.NoError(t, err)
 		if resp == nil {
 			return
@@ -86,7 +86,7 @@ func testREDMetricsTracesForOldGRPCLibrary(t *testing.T, svcNs string) {
 	}, test.Interval(100*time.Millisecond))
 
 	// Check the information of the python parent span
-	res := trace.FindByOperationName("GET /factorial/:rnd", "server")
+	res := trace.FindByOperationName("GET /factorial/", "server")
 	require.Len(t, res, 1)
 	parent := res[0]
 	require.NotEmpty(t, parent.TraceID)
@@ -98,7 +98,7 @@ func testREDMetricsTracesForOldGRPCLibrary(t *testing.T, svcNs string) {
 		jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
 		jaeger.Tag{Key: "url.path", Type: "string", Value: path},
 		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(8080)},
-		jaeger.Tag{Key: "http.route", Type: "string", Value: "/factorial/:rnd"},
+		jaeger.Tag{Key: "http.route", Type: "string", Value: "/factorial/"},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
 	)
 	assert.Empty(t, sd, sd.String())

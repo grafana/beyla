@@ -186,12 +186,14 @@ func (s *Store) cacheResourceMetadata(meta *informer.ObjectMeta) *kube.CachedObj
 			continue
 		}
 		attributes.ParseOTELResourceVariable(cnt.Env[EnvResourceAttributes], func(k, v string) {
-			com.OTELResourceMeta[attr.Name(k)] = v
+			if v != "" && !strings.HasPrefix(v, "$") {
+				com.OTELResourceMeta[attr.Name(k)] = v
+			}
 		})
-		if val := cnt.Env[EnvServiceName]; val != "" {
+		if val := cnt.Env[EnvServiceName]; val != "" && !strings.HasPrefix(val, "$") {
 			com.OTELResourceMeta[serviceNameKey] = val
 		}
-		if val := cnt.Env[EnvServiceNamespace]; val != "" {
+		if val := cnt.Env[EnvServiceNamespace]; val != "" && !strings.HasPrefix(val, "$") {
 			com.OTELResourceMeta[serviceNamespaceKey] = val
 		}
 	}

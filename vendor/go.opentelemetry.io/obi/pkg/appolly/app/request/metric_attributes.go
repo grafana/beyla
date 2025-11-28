@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"go.opentelemetry.io/otel/attribute"
+	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 )
@@ -174,6 +175,10 @@ func CloudRegion(val string) attribute.KeyValue {
 	return attribute.Key(attr.CloudRegion).String(val)
 }
 
+func PeerService(val string) attribute.KeyValue {
+	return semconv.PeerService(val)
+}
+
 func SpanHost(span *Span) string {
 	if span.HostName != "" {
 		return span.HostName
@@ -238,6 +243,18 @@ func HostAsServer(span *Span) string {
 	}
 
 	return SpanHost(span)
+}
+
+func PeerServiceFromSpan(span *Span) string {
+	if !span.IsClientSpan() {
+		return ""
+	}
+
+	if span.OtherNamespace != "" && span.OtherNamespace != span.Service.UID.Namespace && span.HostName != "" {
+		return span.HostName + "." + span.OtherNamespace
+	}
+
+	return span.HostName
 }
 
 func PeerAsClient(span *Span) string {

@@ -15,7 +15,14 @@ func Setup(port int) {
 	log := slog.With("component", "gin.Server")
 	r := gin.Default()
 
-	r.Any("/*path", func(ctx *gin.Context) {
+	r.GET("/rolldice/:id", func(c *gin.Context) {
+		diceID := c.Param("id")
+		c.JSON(200, gin.H{
+			"id": diceID,
+		})
+	})
+
+	r.NoRoute(func(ctx *gin.Context) {
 		log.Debug("received request", "url", ctx.Request.RequestURI)
 		status := arg.DefaultStatus
 		if sstr := ctx.Query(arg.Status); sstr != "" {

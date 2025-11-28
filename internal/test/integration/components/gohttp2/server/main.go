@@ -25,7 +25,14 @@ func main() {
 		Addr:    "0.0.0.0:7373",
 		Handler: handler,
 	}
-	http2.ConfigureServer(server, nil)
+
+	if os.Getenv("TEST_HTTP2_PROTOCOLS") == "1" {
+		protocols := &http.Protocols{}
+		protocols.SetHTTP2(true)
+		server.Protocols = protocols
+	} else {
+		http2.ConfigureServer(server, nil)
+	}
 
 	fmt.Printf("Listening [0.0.0.0:7373]...\n")
 	checkErr(server.ListenAndServeTLS("cert.pem", "key.pem"), "while listening")

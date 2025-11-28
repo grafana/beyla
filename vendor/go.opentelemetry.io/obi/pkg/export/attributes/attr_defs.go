@@ -95,6 +95,7 @@ func getDefinitions(
 			attr.ClientPort:     false,
 			attr.SrcZone:        false,
 			attr.DstZone:        false,
+			attr.NetworkType:    false,
 			attr.IfaceDirection: Default(ifaceDirEnabled),
 			attr.Iface:          Default(ifaceDirEnabled),
 		},
@@ -229,6 +230,7 @@ func getDefinitions(
 		map[attr.Name]Default{
 			attr.MessagingSystem:      true,
 			attr.MessagingDestination: true,
+			attr.ServerAddr:           true,
 		},
 		extraGroupAttributes[GroupMessaging],
 	)
@@ -277,6 +279,7 @@ func getDefinitions(
 		DBClientDuration.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes},
 			Attributes: map[attr.Name]Default{
+				attr.ServerAddr:   true,
 				attr.DBOperation:  true,
 				attr.DBSystemName: true,
 				attr.ErrorType:    true,
@@ -334,17 +337,18 @@ func getDefinitions(
 		// TODO: when service graph and span metrics implement attribute selection, replace this section by proper metric names
 		"---- temporary placeholder for span and service graph metrics ----": {
 			Attributes: map[attr.Name]Default{
-				attr.Client:            false,
-				attr.ClientNamespace:   false,
-				attr.Server:            false,
-				attr.ServerNamespace:   false,
-				attr.Source:            false,
-				attr.ServiceName:       false,
-				attr.ServiceInstanceID: false,
-				attr.ServiceNamespace:  false,
-				attr.SpanKind:          false,
-				attr.SpanName:          false,
-				attr.StatusCode:        false,
+				attr.Client:               false,
+				attr.ClientNamespace:      false,
+				attr.Server:               false,
+				attr.ServerNamespace:      false,
+				attr.Source:               false,
+				attr.ServiceName:          false,
+				attr.ServiceInstanceID:    false,
+				attr.ServiceNamespace:     false,
+				attr.SpanKind:             false,
+				attr.SpanName:             false,
+				attr.StatusCode:           false,
+				attr.TelemetrySDKLanguage: false,
 			},
 		},
 	}

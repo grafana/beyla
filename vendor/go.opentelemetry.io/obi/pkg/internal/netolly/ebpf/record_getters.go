@@ -29,6 +29,10 @@ func RecordGetters(name attr.Name) (attributes.Getter[*Record, attribute.KeyValu
 		getter = func(r *Record) attribute.KeyValue {
 			return attribute.String(string(attr.Transport), transport.Protocol(r.Id.TransportProtocol).String())
 		}
+	case attr.NetworkType:
+		getter = func(r *Record) attribute.KeyValue {
+			return attribute.String(string(attr.NetworkType), transport.NetworkType(r.Id.EthProtocol).String())
+		}
 	case attr.SrcAddress:
 		getter = func(r *Record) attribute.KeyValue {
 			return attribute.String(string(attr.SrcAddress), r.Id.SrcIP().IP().String())

@@ -181,8 +181,9 @@ var DefaultConfig = Config{
 		MetricSpanNameAggregationLimit: 100,
 	},
 	Routes: &transform.RoutesConfig{
-		Unmatch:      transform.UnmatchDefault,
-		WildcardChar: "*",
+		Unmatch:                   transform.UnmatchDefault,
+		WildcardChar:              "*",
+		MaxPathSegmentCardinality: 10,
 	},
 	NetworkFlows: DefaultNetworkConfig,
 	Discovery: services.DiscoveryConfig{
@@ -206,6 +207,9 @@ var DefaultConfig = Config{
 		MinProcessAge:         5 * time.Second,
 		DefaultOtlpGRPCPort:   4317,
 		RouteHarvesterTimeout: 10 * time.Second,
+		RouteHarvestConfig: services.RouteHarvestingConfig{
+			JavaHarvestDelay: 60 * time.Second,
+		},
 	},
 	NodeJS: NodeJSConfig{
 		Enabled: true,

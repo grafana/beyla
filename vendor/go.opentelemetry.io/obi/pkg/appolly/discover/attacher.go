@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"time"
 
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/rlimit"
@@ -70,6 +71,9 @@ type traceAttacher struct {
 
 	// Extracts HTTP routes from executables
 	routeHarvester *harvest.RouteHarvester
+
+	// Is able to find process lifetime duration
+	processAgeFunc func(int32) time.Duration
 }
 
 func traceAttacherProvider(ta *traceAttacher) swarm.InstanceFunc {
@@ -84,7 +88,8 @@ func (ta *traceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 	ta.processInstances = maps.MultiCounter[uint64]{}
 	ta.obiPID = os.Getpid()
 	ta.EbpfEventContext.CommonPIDsFilter = ebpfcommon.CommonPIDsFilter(&ta.Cfg.Discovery, ta.Metrics)
-	ta.routeHarvester = harvest.NewRouteHarvester(ta.Cfg.Discovery.DisabledRouteHarvesters, ta.Cfg.Discovery.RouteHarvesterTimeout)
+	ta.routeHarvester = harvest.NewRouteHarvester(&ta.Cfg.Discovery.RouteHarvestConfig, ta.Cfg.Discovery.DisabledRouteHarvesters, ta.Cfg.Discovery.RouteHarvesterTimeout)
+	ta.processAgeFunc = ProcessAgeFunc()
 
 	if err := ta.init(); err != nil {
 		ta.log.Error("cant start process tracer. Stopping it", "error", err)
@@ -136,7 +141,7 @@ func (ta *traceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 			"cmd", ie.FileInfo.CmdExePath)
 		ie.FileInfo.Service.SDKLanguage = ie.Type
 		// Must be called after we've set the SDKLanguage
-		ta.harvestRoutes(ie, false)
+		ta.harvestRoutes(ie, true)
 
 		// allowing the tracer to forward traces from the new PID and its children processes
 		ta.monitorPIDs(tracer, ie)
@@ -262,7 +267,7 @@ func (ta *traceAttacher) withCommonTracersGroup(tracers []ebpf.Tracer) []ebpf.Tr
 	return tracers
 }
 
-func (ta *traceAttacher) harvestRoutes(ie *ebpf.Instrumentable, reused bool) {
+func (ta *traceAttacher) harvestRoutesProcessor(ie *ebpf.Instrumentable, reused bool) {
 	routes, err := ta.routeHarvester.HarvestRoutes(ie.FileInfo)
 	if err != nil {
 		ta.log.Info("encountered error harvesting routes", "error", err, "pid", ie.FileInfo.Pid, "cmd", ie.FileInfo.CmdExePath)
@@ -271,6 +276,24 @@ func (ta *traceAttacher) harvestRoutes(ie *ebpf.Instrumentable, reused bool) {
 		m := harvest.RouteMatcherFromResult(*routes)
 		ie.FileInfo.Service.SetHarvestedRoutes(m)
 	}
+}
+
+func (ta *traceAttacher) harvestRoutes(ie *ebpf.Instrumentable, reused bool) {
+	if delay, delayTime := ta.routeHarvester.HarvestRoutesDelay(ie.FileInfo); delay {
+		procAge := ta.processAgeFunc(ie.FileInfo.Pid)
+		if procAge < delayTime {
+			time.AfterFunc(delayTime-procAge, func() {
+				// sanity check that the program is still up and running and it's the same command
+				if exePath, ready := ExecutableReady(PID(ie.FileInfo.Pid)); ready && exePath == ie.FileInfo.CmdExePath {
+					ta.harvestRoutesProcessor(ie, reused)
+				}
+			})
+
+			return
+		}
+	}
+
+	ta.harvestRoutesProcessor(ie, reused)
 }
 
 func (ta *traceAttacher) loadExecutable(ie *ebpf.Instrumentable) (*link.Executable, bool) {

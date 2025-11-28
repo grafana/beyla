@@ -468,6 +468,61 @@ func TestSuite_PythonSelfReference(t *testing.T) {
 	require.NoError(t, compose.Close())
 }
 
+func TestSuite_PythonMongo(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-python-mongo.yml", path.Join(pathOutput, "test-suite-python-mongo.log"))
+	require.NoError(t, err)
+
+	compose.Env = append(compose.Env, `BEYLA_OPEN_PORT=8080`, `BEYLA_EXECUTABLE_NAME=`, `TEST_SERVICE_PORTS=8381:8080`)
+	require.NoError(t, compose.Up())
+	t.Run("Python Mongo metrics", testREDMetricsPythonMongoOnly)
+	require.NoError(t, compose.Close())
+}
+
+func TestSuite_PythonGraphQL(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-python-graphql.yml", path.Join(pathOutput, "test-suite-python-graphql.log"))
+	require.NoError(t, err)
+
+	compose.Env = append(compose.Env, `BEYLA_OPEN_PORT=8080`, `BEYLA_EXECUTABLE_NAME=`, `TEST_SERVICE_PORTS=8381:8080`)
+	require.NoError(t, compose.Up())
+	t.Run("Python GraphQL", testPythonGraphQL)
+	require.NoError(t, compose.Close())
+}
+
+func TestSuite_PythonElasticsearch(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-elasticsearch.yml", path.Join(pathOutput, "test-suite-elasticsearch.log"))
+	require.NoError(t, err)
+
+	compose.Env = append(compose.Env, `BEYLA_OPEN_PORT=8080`, `BEYLA_EXECUTABLE_NAME=`, `TEST_SERVICE_PORTS=8381:8080`)
+	require.NoError(t, compose.Up())
+	t.Run("Python Elasticsearch", func(t *testing.T) {
+		testPythonElasticsearch(t, "elasticsearch")
+	})
+	t.Run("Python Opensearch", func(t *testing.T) {
+		testPythonElasticsearch(t, "opensearch")
+	})
+	require.NoError(t, compose.Close())
+}
+
+func TestSuite_PythonAWSS3(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-python-aws.yml", path.Join(pathOutput, "test-suite-python-aws-s3.log"))
+	require.NoError(t, err)
+
+	compose.Env = append(compose.Env, `BEYLA_OPEN_PORT=8080`, `BEYLA_EXECUTABLE_NAME=`, `TEST_SERVICE_PORTS=8381:8080`)
+	require.NoError(t, compose.Up())
+	t.Run("Python AWS S3", testPythonAWSS3)
+	require.NoError(t, compose.Close())
+}
+
+func TestSuite_PythonAWSSQS(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-python-aws.yml", path.Join(pathOutput, "test-suite-python-aws-sqs.log"))
+	require.NoError(t, err)
+
+	compose.Env = append(compose.Env, `BEYLA_OPEN_PORT=8080`, `BEYLA_EXECUTABLE_NAME=`, `TEST_SERVICE_PORTS=8381:8080`)
+	require.NoError(t, compose.Up())
+	t.Run("Python AWS SQS", testPythonAWSSQS)
+	require.NoError(t, compose.Close())
+}
+
 func TestSuite_NodeJSDist(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-nodejs-dist.yml", path.Join(pathOutput, "test-suite-nodejs-dist.log"))
 	compose.Env = append(compose.Env, `BEYLA_OPEN_PORT=`, `BEYLA_EXECUTABLE_NAME=`)

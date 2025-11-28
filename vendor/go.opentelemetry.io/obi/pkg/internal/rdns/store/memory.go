@@ -5,6 +5,8 @@ package store
 
 import (
 	"sync"
+
+	"github.com/hashicorp/golang-lru/v2/simplelru"
 )
 
 type DNSEntry struct {
@@ -18,13 +20,17 @@ type InMemory struct {
 	access sync.RWMutex
 	// key: IP address, values: hostname
 	// TODO: address scenarios where different hostnames point to a same IP
-	entries map[string][]string
+	entries *simplelru.LRU[string, []string]
 }
 
-func NewInMemory() *InMemory {
-	return &InMemory{
-		entries: map[string][]string{},
+func NewInMemory(cacheSize int) (*InMemory, error) {
+	cache, err := simplelru.NewLRU[string, []string](cacheSize, nil)
+	if err != nil {
+		return nil, err
 	}
+	return &InMemory{
+		entries: cache,
+	}, nil
 }
 
 func (im *InMemory) Store(entry *DNSEntry) {
@@ -32,12 +38,19 @@ func (im *InMemory) Store(entry *DNSEntry) {
 	defer im.access.Unlock()
 	for _, ip := range entry.IPs {
 		// TODO: store IPv4 also with its IPv6 representation
-		im.entries[ip] = []string{entry.HostName}
+		im.entries.Add(ip, []string{entry.HostName})
 	}
+}
+
+func (im *InMemory) StorePair(ip, name string) {
+	im.access.Lock()
+	defer im.access.Unlock()
+	im.entries.Add(ip, []string{name})
 }
 
 func (im *InMemory) GetHostnames(ip string) ([]string, error) {
 	im.access.RLock()
 	defer im.access.RUnlock()
-	return im.entries[ip], nil
+	r, _ := im.entries.Get(ip)
+	return r, nil
 }

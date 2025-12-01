@@ -2,7 +2,7 @@
     "name": "service-r",
     "version": "1.0.0",
     "dependencies": {
-      "express": "^5.0.0",
+      "express": "^5.2.0",
       "axios": "^1.12.0"
     }
   }

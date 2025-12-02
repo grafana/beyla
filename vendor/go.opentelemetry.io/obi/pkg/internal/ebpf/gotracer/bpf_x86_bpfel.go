@@ -149,7 +149,7 @@ type BpfNewFuncInvocationT struct {
 
 type BpfOffTableT struct {
 	_     structs.HostLayout
-	Table [66]uint64
+	Table [68]uint64
 }
 
 type BpfOtelSpanT struct {
@@ -356,9 +356,9 @@ type BpfProgramSpecs struct {
 	ObiUprobeExecDC                               *ebpf.ProgramSpec `ebpf:"obi_uprobe_execDC"`
 	ObiUprobeFindHandlerRet                       *ebpf.ProgramSpec `ebpf:"obi_uprobe_findHandlerRet"`
 	ObiUprobeGinGetValueRet                       *ebpf.ProgramSpec `ebpf:"obi_uprobe_ginGetValueRet"`
+	ObiUprobeGolangHttp2FramerWriteHeaders        *ebpf.ProgramSpec `ebpf:"obi_uprobe_golang_http2FramerWriteHeaders"`
 	ObiUprobeGrpcFramerWriteHeaders               *ebpf.ProgramSpec `ebpf:"obi_uprobe_grpcFramerWriteHeaders"`
 	ObiUprobeGrpcFramerWriteHeadersReturns        *ebpf.ProgramSpec `ebpf:"obi_uprobe_grpcFramerWriteHeaders_returns"`
-	ObiUprobeHttp2FramerWriteHeaders              *ebpf.ProgramSpec `ebpf:"obi_uprobe_http2FramerWriteHeaders"`
 	ObiUprobeHttp2FramerWriteHeadersReturns       *ebpf.ProgramSpec `ebpf:"obi_uprobe_http2FramerWriteHeaders_returns"`
 	ObiUprobeHttp2ResponseWriterStateWriteHeader  *ebpf.ProgramSpec `ebpf:"obi_uprobe_http2ResponseWriterStateWriteHeader"`
 	ObiUprobeHttp2RoundTrip                       *ebpf.ProgramSpec `ebpf:"obi_uprobe_http2RoundTrip"`
@@ -383,6 +383,7 @@ type BpfProgramSpecs struct {
 	ObiUprobeMongoOpUpdateOrReplace               *ebpf.ProgramSpec `ebpf:"obi_uprobe_mongo_op_updateOrReplace"`
 	ObiUprobeMuxSetMatch                          *ebpf.ProgramSpec `ebpf:"obi_uprobe_muxSetMatch"`
 	ObiUprobeNetFdRead                            *ebpf.ProgramSpec `ebpf:"obi_uprobe_netFdRead"`
+	ObiUprobeNetHttp2FramerWriteHeaders           *ebpf.ProgramSpec `ebpf:"obi_uprobe_net_http2FramerWriteHeaders"`
 	ObiUprobeNonRecordingSpanEnd                  *ebpf.ProgramSpec `ebpf:"obi_uprobe_nonRecordingSpan_End"`
 	ObiUprobePersistConnRoundTrip                 *ebpf.ProgramSpec `ebpf:"obi_uprobe_persistConnRoundTrip"`
 	ObiUprobeProcGoexit1                          *ebpf.ProgramSpec `ebpf:"obi_uprobe_proc_goexit1"`
@@ -641,9 +642,9 @@ type BpfPrograms struct {
 	ObiUprobeExecDC                               *ebpf.Program `ebpf:"obi_uprobe_execDC"`
 	ObiUprobeFindHandlerRet                       *ebpf.Program `ebpf:"obi_uprobe_findHandlerRet"`
 	ObiUprobeGinGetValueRet                       *ebpf.Program `ebpf:"obi_uprobe_ginGetValueRet"`
+	ObiUprobeGolangHttp2FramerWriteHeaders        *ebpf.Program `ebpf:"obi_uprobe_golang_http2FramerWriteHeaders"`
 	ObiUprobeGrpcFramerWriteHeaders               *ebpf.Program `ebpf:"obi_uprobe_grpcFramerWriteHeaders"`
 	ObiUprobeGrpcFramerWriteHeadersReturns        *ebpf.Program `ebpf:"obi_uprobe_grpcFramerWriteHeaders_returns"`
-	ObiUprobeHttp2FramerWriteHeaders              *ebpf.Program `ebpf:"obi_uprobe_http2FramerWriteHeaders"`
 	ObiUprobeHttp2FramerWriteHeadersReturns       *ebpf.Program `ebpf:"obi_uprobe_http2FramerWriteHeaders_returns"`
 	ObiUprobeHttp2ResponseWriterStateWriteHeader  *ebpf.Program `ebpf:"obi_uprobe_http2ResponseWriterStateWriteHeader"`
 	ObiUprobeHttp2RoundTrip                       *ebpf.Program `ebpf:"obi_uprobe_http2RoundTrip"`
@@ -668,6 +669,7 @@ type BpfPrograms struct {
 	ObiUprobeMongoOpUpdateOrReplace               *ebpf.Program `ebpf:"obi_uprobe_mongo_op_updateOrReplace"`
 	ObiUprobeMuxSetMatch                          *ebpf.Program `ebpf:"obi_uprobe_muxSetMatch"`
 	ObiUprobeNetFdRead                            *ebpf.Program `ebpf:"obi_uprobe_netFdRead"`
+	ObiUprobeNetHttp2FramerWriteHeaders           *ebpf.Program `ebpf:"obi_uprobe_net_http2FramerWriteHeaders"`
 	ObiUprobeNonRecordingSpanEnd                  *ebpf.Program `ebpf:"obi_uprobe_nonRecordingSpan_End"`
 	ObiUprobePersistConnRoundTrip                 *ebpf.Program `ebpf:"obi_uprobe_persistConnRoundTrip"`
 	ObiUprobeProcGoexit1                          *ebpf.Program `ebpf:"obi_uprobe_proc_goexit1"`
@@ -726,9 +728,9 @@ func (p *BpfPrograms) Close() error {
 		p.ObiUprobeExecDC,
 		p.ObiUprobeFindHandlerRet,
 		p.ObiUprobeGinGetValueRet,
+		p.ObiUprobeGolangHttp2FramerWriteHeaders,
 		p.ObiUprobeGrpcFramerWriteHeaders,
 		p.ObiUprobeGrpcFramerWriteHeadersReturns,
-		p.ObiUprobeHttp2FramerWriteHeaders,
 		p.ObiUprobeHttp2FramerWriteHeadersReturns,
 		p.ObiUprobeHttp2ResponseWriterStateWriteHeader,
 		p.ObiUprobeHttp2RoundTrip,
@@ -753,6 +755,7 @@ func (p *BpfPrograms) Close() error {
 		p.ObiUprobeMongoOpUpdateOrReplace,
 		p.ObiUprobeMuxSetMatch,
 		p.ObiUprobeNetFdRead,
+		p.ObiUprobeNetHttp2FramerWriteHeaders,
 		p.ObiUprobeNonRecordingSpanEnd,
 		p.ObiUprobePersistConnRoundTrip,
 		p.ObiUprobeProcGoexit1,

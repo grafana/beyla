@@ -204,6 +204,8 @@ config:
     # routes:
     #   unmatched: heuristic
     # log_level: info
+    # shutdown_timeout: 10s
+    # enforce_sys_caps: false
     # otel_traces_export:
     #   endpoint: http://grafana-agent:4318
     ## or alternatively use

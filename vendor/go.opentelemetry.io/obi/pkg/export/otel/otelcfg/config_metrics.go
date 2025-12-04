@@ -9,9 +9,11 @@ import (
 	"maps"
 	"net/url"
 	"os"
-	"slices"
 	"strings"
 	"time"
+
+	"go.opentelemetry.io/obi/pkg/export"
+	"go.opentelemetry.io/obi/pkg/export/instrumentations"
 )
 
 func mlog() *slog.Logger {
@@ -33,8 +35,8 @@ type MetricsConfig struct {
 	// InsecureSkipVerify is not standard, so we don't follow the same naming convention
 	InsecureSkipVerify bool `yaml:"insecure_skip_verify" env:"OTEL_EBPF_INSECURE_SKIP_VERIFY"`
 
-	Buckets              Buckets `yaml:"buckets"`
-	HistogramAggregation string  `yaml:"histogram_aggregation" env:"OTEL_EXPORTER_OTLP_METRICS_DEFAULT_HISTOGRAM_AGGREGATION"`
+	Buckets              export.Buckets `yaml:"buckets"`
+	HistogramAggregation string         `yaml:"histogram_aggregation" env:"OTEL_EXPORTER_OTLP_METRICS_DEFAULT_HISTOGRAM_AGGREGATION"`
 
 	ReportersCacheLen int `yaml:"reporters_cache_len" env:"OTEL_EBPF_METRICS_REPORT_CACHE_LEN"`
 
@@ -45,10 +47,10 @@ type MetricsConfig struct {
 	// Features of metrics that can be exported. Accepted values: application, network, application_process,
 	// application_span, application_service_graph, ...
 	// envDefault is provided to avoid breaking changes
-	Features []string `yaml:"features" env:"OTEL_EBPF_METRICS_FEATURES,expand" envDefault:"${OTEL_EBPF_METRIC_FEATURES}"  envSeparator:","`
+	Features export.Features `yaml:"features" env:"OTEL_EBPF_METRICS_FEATURES,expand" envDefault:"${OTEL_EBPF_METRIC_FEATURES}" envSeparator:","`
 
 	// Allows configuration of which instrumentations should be enabled, e.g. http, grpc, sql...
-	Instrumentations []string `yaml:"instrumentations" env:"OTEL_EBPF_METRICS_INSTRUMENTATIONS" envSeparator:","`
+	Instrumentations []instrumentations.Instrumentation `yaml:"instrumentations" env:"OTEL_EBPF_METRICS_INSTRUMENTATIONS" envSeparator:","`
 
 	// TTL is the time since a metric was updated for the last time until it is
 	// removed from the metrics set.
@@ -131,27 +133,27 @@ func (m *MetricsConfig) AnySpanMetricsEnabled() bool {
 }
 
 func (m *MetricsConfig) SpanMetricsSizesEnabled() bool {
-	return slices.Contains(m.Features, FeatureSpanSizes)
+	return m.Features.Has(export.FeatureSpanSizes)
 }
 
 func (m *MetricsConfig) SpanMetricsEnabled() bool {
-	return slices.Contains(m.Features, FeatureSpan) || slices.Contains(m.Features, FeatureSpanOTel)
+	return m.Features.Any(export.FeatureSpan | export.FeatureSpanOTel)
 }
 
 func (m *MetricsConfig) InvalidSpanMetricsConfig() bool {
-	return slices.Contains(m.Features, FeatureSpan) && slices.Contains(m.Features, FeatureSpanOTel)
+	return m.Features.Has(export.FeatureSpan | export.FeatureSpanOTel)
 }
 
 func (m *MetricsConfig) HostMetricsEnabled() bool {
-	return slices.Contains(m.Features, FeatureApplicationHost)
+	return m.Features.Has(export.FeatureApplicationHost)
 }
 
 func (m *MetricsConfig) ServiceGraphMetricsEnabled() bool {
-	return slices.Contains(m.Features, FeatureGraph)
+	return m.Features.Has(export.FeatureGraph)
 }
 
 func (m *MetricsConfig) OTelMetricsEnabled() bool {
-	return slices.Contains(m.Features, FeatureApplication)
+	return m.Features.Has(export.FeatureApplication)
 }
 
 func (m *MetricsConfig) NetworkMetricsEnabled() bool {
@@ -159,11 +161,11 @@ func (m *MetricsConfig) NetworkMetricsEnabled() bool {
 }
 
 func (m *MetricsConfig) NetworkFlowBytesEnabled() bool {
-	return slices.Contains(m.Features, FeatureNetwork)
+	return m.Features.Has(export.FeatureNetwork)
 }
 
 func (m *MetricsConfig) NetworkInterzoneMetricsEnabled() bool {
-	return slices.Contains(m.Features, FeatureNetworkInterZone)
+	return m.Features.Has(export.FeatureNetworkInterZone)
 }
 
 func (m *MetricsConfig) Enabled() bool {

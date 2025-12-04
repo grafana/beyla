@@ -8,7 +8,6 @@ import (
 	"fmt"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
-	"go.opentelemetry.io/obi/pkg/config"
 	"go.opentelemetry.io/obi/pkg/ebpf"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
@@ -130,16 +129,19 @@ func (pf *ProcessFinder) Done() <-chan error {
 
 // the common tracer group should get loaded for any tracer group, only once
 func newCommonTracersGroup(cfg *obi.Config) []ebpf.Tracer {
-	switch cfg.EBPF.ContextPropagation {
-	case config.ContextPropagationAll:
-		return []ebpf.Tracer{tctracer.New(cfg), tpinjector.New(cfg)}
-	case config.ContextPropagationHeadersOnly:
-		return []ebpf.Tracer{tpinjector.New(cfg)}
-	case config.ContextPropagationIPOptionsOnly:
-		return []ebpf.Tracer{tctracer.New(cfg)}
+	var tracers []ebpf.Tracer
+
+	// Add tracers based on enabled propagation modes
+	// tpinjector handles both HTTP headers (sk_msg) and TCP options (BPF_SOCK_OPS)
+	if cfg.EBPF.ContextPropagation.HasHeaders() || cfg.EBPF.ContextPropagation.HasTCP() {
+		tracers = append(tracers, tpinjector.New(cfg))
+	}
+	// tctracer handles IP options only (TC egress/ingress)
+	if cfg.EBPF.ContextPropagation.HasIPOptions() {
+		tracers = append(tracers, tctracer.New(cfg))
 	}
 
-	return []ebpf.Tracer{}
+	return tracers
 }
 
 func newGoTracersGroup(pidFilter ebpfcommon.ServiceFilter, cfg *obi.Config, metrics imetrics.Reporter) []ebpf.Tracer {

@@ -16,6 +16,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/config"
 	"go.opentelemetry.io/obi/pkg/ebpf/tcmanager"
+	"go.opentelemetry.io/obi/pkg/export"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/debug"
@@ -28,6 +29,15 @@ import (
 	"go.opentelemetry.io/obi/pkg/kube"
 	"go.opentelemetry.io/obi/pkg/kube/kubeflags"
 	"go.opentelemetry.io/obi/pkg/transform"
+)
+
+type LogLevel string
+
+const (
+	LogLevelDebug LogLevel = "DEBUG"
+	LogLevelInfo  LogLevel = "INFO"
+	LogLevelWarn  LogLevel = "WARN"
+	LogLevelError LogLevel = "ERROR"
 )
 
 // CustomValidations is a map of tag:function for custom validations
@@ -68,17 +78,16 @@ var (
 
 var DefaultConfig = Config{
 	ChannelBufferLen: 10,
-	LogLevel:         "INFO",
+	LogLevel:         LogLevelInfo,
 	ShutdownTimeout:  10 * time.Second,
 	EnforceSysCaps:   false,
 	EBPF: config.EBPFTracer{
-		BatchLength:               100,
-		BatchTimeout:              time.Second,
-		HTTPRequestTimeout:        0,
-		TCBackend:                 config.TCBackendAuto,
-		DNSRequestTimeout:         5 * time.Second,
-		ContextPropagationEnabled: false,
-		ContextPropagation:        config.ContextPropagationDisabled,
+		BatchLength:        100,
+		BatchTimeout:       time.Second,
+		HTTPRequestTimeout: 0,
+		TCBackend:          config.TCBackendAuto,
+		DNSRequestTimeout:  5 * time.Second,
+		ContextPropagation: config.ContextPropagationDisabled,
 		RedisDBCache: config.RedisDBCacheConfig{
 			Enabled: false,
 			MaxSize: 1000,
@@ -118,11 +127,11 @@ var DefaultConfig = Config{
 		MetricsProtocol: otelcfg.ProtocolUnset,
 		// Matches Alloy and Grafana recommended scrape interval
 		OTELIntervalMS:       60_000,
-		Buckets:              otelcfg.DefaultBuckets,
+		Buckets:              export.DefaultBuckets,
 		ReportersCacheLen:    ReporterLRUSize,
 		HistogramAggregation: otel.AggregationExplicit,
-		Features:             []string{otelcfg.FeatureApplication},
-		Instrumentations: []string{
+		Features:             export.FeatureApplication,
+		Instrumentations: []instrumentations.Instrumentation{
 			instrumentations.InstrumentationALL,
 		},
 		TTL: defaultMetricsTTL,
@@ -133,7 +142,7 @@ var DefaultConfig = Config{
 		MaxQueueSize:      4096,
 		BatchTimeout:      15 * time.Second,
 		ReportersCacheLen: ReporterLRUSize,
-		Instrumentations: []string{
+		Instrumentations: []instrumentations.Instrumentation{
 			instrumentations.InstrumentationHTTP,
 			instrumentations.InstrumentationGRPC,
 			instrumentations.InstrumentationSQL,
@@ -145,9 +154,9 @@ var DefaultConfig = Config{
 	},
 	Prometheus: prom.PrometheusConfig{
 		Path:     "/metrics",
-		Buckets:  otelcfg.DefaultBuckets,
-		Features: []string{otelcfg.FeatureApplication},
-		Instrumentations: []string{
+		Buckets:  export.DefaultBuckets,
+		Features: export.FeatureApplication,
+		Instrumentations: []instrumentations.Instrumentation{
 			instrumentations.InstrumentationALL,
 		},
 		TTL:                         defaultMetricsTTL,
@@ -260,7 +269,7 @@ type Config struct {
 	// Discovery configuration
 	Discovery services.DiscoveryConfig `yaml:"discovery"`
 
-	LogLevel string `yaml:"log_level" env:"OTEL_EBPF_LOG_LEVEL"`
+	LogLevel LogLevel `yaml:"log_level" env:"OTEL_EBPF_LOG_LEVEL"`
 
 	// Timeout for a graceful shutdown
 	ShutdownTimeout time.Duration `yaml:"shutdown_timeout" env:"OTEL_EBPF_SHUTDOWN_TIMEOUT"`
@@ -407,9 +416,6 @@ func (c *Config) Validate() error {
 		return ConfigError("you can't enable OTEL internal metrics without enabling OTEL metrics")
 	}
 
-	// TODO deprecated (REMOVE)
-	c.EBPF.IsContextPropagationEnabled()
-
 	return nil
 }
 
@@ -422,10 +428,7 @@ func (c *Config) otelNetO11yEnabled() bool {
 }
 
 func (c *Config) willUseTC() bool {
-	// remove after deleting ContextPropagationEnabled
-	return c.EBPF.ContextPropagation == config.ContextPropagationAll ||
-		c.EBPF.ContextPropagation == config.ContextPropagationIPOptionsOnly ||
-		c.EBPF.ContextPropagationEnabled ||
+	return c.EBPF.ContextPropagation.HasIPOptions() ||
 		(c.Enabled(FeatureNetO11y) && c.NetworkFlows.Source == EbpfSourceTC)
 }
 

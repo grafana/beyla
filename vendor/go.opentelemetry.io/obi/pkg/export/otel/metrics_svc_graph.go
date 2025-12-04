@@ -279,6 +279,10 @@ func serviceGraphGetters(unresolved request.UnresolvedNames) []attributes.Field[
 }
 
 func (r *SvcGraphMetrics) record(span *request.Span, mr *SvcGraphMetricsReporter) {
+	if span.IsDNSSpan() {
+		return
+	}
+
 	t := span.Timings()
 	duration := t.End.Sub(t.RequestStart).Seconds()
 

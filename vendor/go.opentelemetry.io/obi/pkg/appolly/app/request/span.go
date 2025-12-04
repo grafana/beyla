@@ -871,6 +871,10 @@ func (s *Span) IsSelfReferenceSpan() bool {
 	return s.Peer == s.Host && (s.Service.UID.Namespace == s.OtherNamespace || s.OtherNamespace == "")
 }
 
+func (s *Span) IsDNSSpan() bool {
+	return s.Type == EventTypeDNS
+}
+
 // TODO: replace by semconv.DBSystemPostgreSQL, semconv.DBSystemMySQL, semconv.DBSystemRedis when we
 // update semantic conventions library to 1.30.0
 var (

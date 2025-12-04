@@ -869,7 +869,7 @@ func (r *metricsReporter) otelMetricsObserved(span *request.Span) bool {
 }
 
 func (r *metricsReporter) otelSpanMetricsObserved(span *request.Span) bool {
-	return r.cfg.AnySpanMetricsEnabled() && !span.Service.ExportsOTelMetricsSpan()
+	return r.cfg.AnySpanMetricsEnabled() && !span.Service.ExportsOTelMetricsSpan() && !span.IsDNSSpan()
 }
 
 func (r *metricsReporter) otelSpanFiltered(span *request.Span) bool {

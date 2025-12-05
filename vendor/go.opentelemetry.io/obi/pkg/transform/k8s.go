@@ -151,14 +151,14 @@ func (md *metadataDecorator) nodeLoop(ctx context.Context) {
 		for i := range spans {
 			md.do(&spans[i])
 		}
-		md.output.Send(spans)
+		md.output.SendCtx(ctx, spans)
 	})
 }
 
 func (md *metadataDecorator) do(span *request.Span) {
 	if podMeta, containerName := md.db.PodContainerByPIDNs(span.Pid.Namespace); podMeta != nil {
 		AppendKubeMetadata(md.db, &span.Service, podMeta, md.clusterName, containerName)
-	} else {
+	} else if span.Service.Metadata == nil {
 		// do not leave the service attributes map as nil
 		span.Service.Metadata = map[attr.Name]string{}
 	}
@@ -384,7 +384,7 @@ func AppendKubeMetadata(db *kube.Store, svc *svc.Attrs, meta *ikube.CachedObjMet
 
 	// if, in the future, other pipeline steps modify the service metadata, we should
 	// replace the map literal by individual entry insertions
-	svc.Metadata = map[attr.Name]string{
+	k8sMeta := map[attr.Name]string{
 		attr.K8sNamespaceName: meta.Meta.Namespace,
 		attr.K8sPodName:       meta.Meta.Name,
 		attr.K8sContainerName: containerName,
@@ -394,24 +394,38 @@ func AppendKubeMetadata(db *kube.Store, svc *svc.Attrs, meta *ikube.CachedObjMet
 		attr.K8sClusterName:   clusterName,
 	}
 
+	// Create a new map to avoid concurrent map writes on svc.Metadata.
+	m := make(map[attr.Name]string)
+
+	// Thread-safe copy for the existing metadata.
+	if svcMetadata := svc.Metadata; svcMetadata != nil {
+		maps.Copy(m, svcMetadata)
+	}
+
+	// Thread-safe copy for the new k8s metadata.
+	maps.Copy(m, k8sMeta)
+
 	// ownerKind could be also "Pod", but we won't insert it as "owner" label to avoid
 	// growing cardinality
 	if topOwner != nil {
-		svc.Metadata[attr.K8sOwnerName] = topOwner.Name
-		svc.Metadata[attr.K8sKind] = topOwner.Kind
+		m[attr.K8sOwnerName] = topOwner.Name
+		m[attr.K8sKind] = topOwner.Kind
 	}
 
 	for _, owner := range meta.Meta.Pod.Owners {
-		if _, ok := svc.Metadata[attr.K8sKind]; !ok {
-			svc.Metadata[attr.K8sKind] = owner.Kind
+		if _, ok := m[attr.K8sKind]; !ok {
+			m[attr.K8sKind] = owner.Kind
 		}
 		if kindLabel := OwnerLabelName(owner.Kind); kindLabel != "" {
-			svc.Metadata[kindLabel] = owner.Name
+			m[kindLabel] = owner.Name
 		}
 	}
 
 	// append resource metadata from cached object
-	maps.Copy(svc.Metadata, meta.OTELResourceMeta)
+	maps.Copy(m, meta.OTELResourceMeta)
+
+	// Thread-safe assignment of the new metadata map.
+	svc.Metadata = m
 
 	// override hostname by the Pod name
 	svc.HostName = meta.Meta.Name

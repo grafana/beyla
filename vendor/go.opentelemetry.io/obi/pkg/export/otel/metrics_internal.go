@@ -228,10 +228,10 @@ func (p *InternalMetricsReporter) InstrumentationError(processName, errorType st
 
 func newResourceInternal(hostID string) *resource.Resource {
 	attrs := []attribute.KeyValue{
-		semconv.ServiceName("opentelemetry-ebpf-instrumentation"),
+		semconv.ServiceName(attr.VendorSDKName),
 		semconv.ServiceInstanceID(uuid.New().String()),
 		semconv.TelemetrySDKLanguageKey.String(semconv.TelemetrySDKLanguageGo.Value.AsString()),
-		semconv.TelemetrySDKNameKey.String("opentelemetry-ebpf-instrumentation"),
+		semconv.TelemetrySDKNameKey.String(attr.VendorSDKName),
 		semconv.HostID(hostID),
 	}
 

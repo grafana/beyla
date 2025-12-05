@@ -1,0 +1,20 @@
+routes:
+  patterns:
+    - /basic/:rnd
+  unmatched: path
+  ignored_patterns:
+    - /metrics
+  ignore_mode: traces
+otel_metrics_export:
+  endpoint: http://otelcol:4318
+otel_traces_export:
+  endpoint: http://otelcol:4318
+  otel_sdk_log_level: debug
+attributes:
+  kubernetes:
+    cluster_name: obi-k8s-test-cluster
+    resource_labels:
+      deployment.environment: ["deployment.environment"]
+  select:
+    "*":
+      include: ["*"]

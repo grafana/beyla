@@ -74,7 +74,7 @@ func ProcessWatcherFunc(cfg *obi.Config, ebpfContext *ebpfcommon.EBPFEventContex
 		pids:              map[PID]ProcessAttrs{},
 		pidPorts:          map[pidPort]ProcessAttrs{},
 		listProcesses:     fetchProcessPorts,
-		executableReady:   executableReady,
+		executableReady:   ExecutableReady,
 		loadBPFWatcher:    loadBPFWatcher,
 		loadBPFLogger:     loadBPFLogger,
 		fetchPorts:        true,  // must be true until we've activated the bpf watcher component
@@ -284,7 +284,7 @@ func (pa *pollAccounter) snapshot(fetchedProcs map[PID]ProcessAttrs) []Event[Pro
 	return events
 }
 
-func executableReady(pid PID) (string, bool) {
+func ExecutableReady(pid PID) (string, bool) {
 	proc, err := process.NewProcess(int32(pid))
 	if err != nil {
 		return "", false
@@ -348,13 +348,13 @@ func (pa *pollAccounter) checkNewProcessNotification(pid PID, reportedProcs, not
 	return false
 }
 
-func makeProcessAgeFunc() func(int32) time.Duration {
+func ProcessAgeFunc() func(int32) time.Duration {
 	r := procStatReader{}
 	return r.processAge
 }
 
 // overridden in tests
-var processAgeFunc = makeProcessAgeFunc()
+var processAgeFunc = ProcessAgeFunc()
 
 // see https://man7.org/linux/man-pages/man5/proc_pid_stat.5.html
 func parseProcStatField(buf string, field int) string {

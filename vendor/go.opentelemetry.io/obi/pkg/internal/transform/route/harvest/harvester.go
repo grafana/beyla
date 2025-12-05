@@ -8,10 +8,12 @@ import (
 	"log/slog"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
+	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/internal/transform/route"
 )
 
@@ -19,7 +21,9 @@ type RouteHarvester struct {
 	log      *slog.Logger
 	java     *JavaRoutes
 	disabled map[svc.InstrumentableType]struct{}
+	cfg      *services.RouteHarvestingConfig
 	timeout  time.Duration
+	mux      *sync.Mutex
 
 	// testing related
 	javaExtractRoutes func(pid int32) (*RouteHarvesterResult, error)
@@ -46,7 +50,7 @@ func (e *HarvestError) Error() string {
 	return e.Message
 }
 
-func NewRouteHarvester(disabled []string, timeout time.Duration) *RouteHarvester {
+func NewRouteHarvester(cfg *services.RouteHarvestingConfig, disabled []string, timeout time.Duration) *RouteHarvester {
 	dMap := map[svc.InstrumentableType]struct{}{}
 	for _, lang := range disabled {
 		if strings.ToLower(lang) == "java" {
@@ -59,6 +63,8 @@ func NewRouteHarvester(disabled []string, timeout time.Duration) *RouteHarvester
 		java:     NewJavaRoutesHarvester(),
 		disabled: dMap,
 		timeout:  timeout,
+		cfg:      cfg,
+		mux:      &sync.Mutex{},
 	}
 
 	h.javaExtractRoutes = h.java.ExtractRoutes
@@ -67,6 +73,10 @@ func NewRouteHarvester(disabled []string, timeout time.Duration) *RouteHarvester
 }
 
 func (h *RouteHarvester) HarvestRoutes(fileInfo *exec.FileInfo) (*RouteHarvesterResult, error) {
+	// Ensure we harvest one by one
+	h.mux.Lock()
+	defer h.mux.Unlock()
+
 	// Create a context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), h.timeout)
 	defer cancel()
@@ -135,4 +145,12 @@ func RouteMatcherFromResult(r RouteHarvesterResult) route.Matcher {
 	}
 
 	return nil
+}
+
+func (h *RouteHarvester) HarvestRoutesDelay(fileInfo *exec.FileInfo) (bool, time.Duration) {
+	if fileInfo.Service.SDKLanguage == svc.InstrumentableJava {
+		return true, h.cfg.JavaHarvestDelay
+	}
+
+	return false, 0
 }

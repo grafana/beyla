@@ -148,7 +148,7 @@ func testREDMetricsPythonSQLSSL(t *testing.T) {
 	} {
 		t.Run(testCaseURL, func(t *testing.T) {
 			waitForTestComponentsSub(t, testCaseURL, "/query")
-			testREDMetricsForPythonSQLSSL(t, testCaseURL, "python3.12", "integration-test")
+			testREDMetricsForPythonSQLSSL(t, testCaseURL, "python3.14", "integration-test")
 		})
 	}
 }

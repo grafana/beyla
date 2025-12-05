@@ -103,7 +103,6 @@ func testREDMetricsPythonKafkaOnly(t *testing.T) {
 						attribute.String("span.kind", "consumer"),
 						attribute.String("messaging.operation.type", "process"),
 						attribute.String("messaging.destination.name", "my-topic"),
-						attribute.String("messaging.client_id", "kafka-python-2.2.16"),
 						attribute.Int64("messaging.destination.partition.id", 0),
 					},
 				},

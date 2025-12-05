@@ -47,7 +47,7 @@ func (span TestCaseSpan) FindAttribute(key string) *attribute.KeyValue {
 TestCase represents a test case for the RED metrics, where calling an endpoint is expected to produce spans
 - Route: the URL of the instrumented service (example: http://localhost:8381)
 - Subpath: the subpath of the endpoint to call (without leading /) (example: redis)
-- Comm: the name of the instrumented service (example: python3.12)
+- Comm: the name of the instrumented service (example: python3.14)
 - Namespace: the namespace of the service (example: integration-test)
 - Spans: a list of spans that are expected to be produced by the instrumented service, each span has:
 */

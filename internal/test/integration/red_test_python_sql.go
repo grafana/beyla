@@ -81,7 +81,7 @@ func testREDMetricsPythonSQLOnly(t *testing.T) {
 	} {
 		t.Run(testCaseURL, func(t *testing.T) {
 			waitForSQLTestComponents(t, testCaseURL, "/query")
-			testREDMetricsForPythonSQLLibrary(t, testCaseURL, "python3.12", "integration-test")
+			testREDMetricsForPythonSQLLibrary(t, testCaseURL, "python3.14", "integration-test")
 		})
 	}
 }

@@ -228,12 +228,6 @@ func (c *Config) Validate() error {
 		return ConfigError("Invalid BEYLA_BPF_TC_BACKEND value")
 	}
 
-	// nolint:staticcheck
-	// remove after deleting ContextPropagationEnabled
-	if c.EBPF.ContextPropagation != obicfg.ContextPropagationDisabled {
-		return ConfigError("context_propagation_enabled and context_propagation are mutually exclusive")
-	}
-
 	if c.willUseTC() {
 		if err := tcmanager.EnsureCiliumCompatibility(c.EBPF.TCBackend); err != nil {
 			return ConfigError(fmt.Sprintf("Cilium compatibility error: %s", err.Error()))

@@ -24,6 +24,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
 	"go.opentelemetry.io/obi/pkg/export/otel"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
+	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
 	"go.opentelemetry.io/obi/pkg/export/prom"
 	"go.opentelemetry.io/obi/pkg/filter"
 	"go.opentelemetry.io/obi/pkg/kube"
@@ -122,7 +123,10 @@ var DefaultConfig = Config{
 		CacheLen: 1024,
 		CacheTTL: 5 * time.Minute,
 	},
-	Metrics: otelcfg.MetricsConfig{
+	Metrics: perapp.MetricsConfig{
+		Features: export.FeatureApplicationRED,
+	},
+	OTELMetrics: otelcfg.MetricsConfig{
 		Protocol:        otelcfg.ProtocolUnset,
 		MetricsProtocol: otelcfg.ProtocolUnset,
 		// Matches Alloy and Grafana recommended scrape interval
@@ -130,7 +134,6 @@ var DefaultConfig = Config{
 		Buckets:              export.DefaultBuckets,
 		ReportersCacheLen:    ReporterLRUSize,
 		HistogramAggregation: otel.AggregationExplicit,
-		Features:             export.FeatureApplication,
 		Instrumentations: []instrumentations.Instrumentation{
 			instrumentations.InstrumentationALL,
 		},
@@ -153,9 +156,8 @@ var DefaultConfig = Config{
 		},
 	},
 	Prometheus: prom.PrometheusConfig{
-		Path:     "/metrics",
-		Buckets:  export.DefaultBuckets,
-		Features: export.FeatureApplication,
+		Path:    "/metrics",
+		Buckets: export.DefaultBuckets,
 		Instrumentations: []instrumentations.Instrumentation{
 			instrumentations.InstrumentationALL,
 		},
@@ -237,7 +239,7 @@ type Config struct {
 	// Routes is an optional node. If not set, data will be directly forwarded to exporters.
 	Routes       *transform.RoutesConfig       `yaml:"routes"`
 	NameResolver *transform.NameResolverConfig `yaml:"name_resolver"`
-	Metrics      otelcfg.MetricsConfig         `yaml:"otel_metrics_export"`
+	OTELMetrics  otelcfg.MetricsConfig         `yaml:"otel_metrics_export"`
 	Traces       otelcfg.TracesConfig          `yaml:"otel_traces_export"`
 	Prometheus   prom.PrometheusConfig         `yaml:"prometheus_export"`
 	TracePrinter debug.TracePrinter            `yaml:"trace_printer" env:"OTEL_EBPF_TRACE_PRINTER"`
@@ -265,6 +267,9 @@ type Config struct {
 	// Deprecated: Service namespace should be set in the instrumentation target (env vars, kube metadata...)
 	// as this is a reminiscence of past times when we only supported one executable per instance.
 	ServiceNamespace string `yaml:"service_namespace" env:"OTEL_EBPF_SERVICE_NAMESPACE"`
+
+	// Metrics is a placeholder for the progressive support of the OTEL declarative configuration.
+	Metrics perapp.MetricsConfig `yaml:"metrics"`
 
 	// Discovery configuration
 	Discovery services.DiscoveryConfig `yaml:"discovery"`
@@ -363,10 +368,9 @@ func (c *Config) Validate() error {
 
 	if !c.Enabled(FeatureNetO11y) && !c.Enabled(FeatureAppO11y) {
 		return ConfigError("at least one of 'network' or 'application' features must be enabled. " +
-			"Enable OpenTelemetry export features using the 'OTEL_EBPF_METRIC_FEATURES=network,application' environment variable " +
-			"or 'otel_metrics_export: { features: [network,application] }' in the YAML configuration file. " +
-			"Enable Prometheus export features using the 'OTEL_EBPF_PROMETHEUS_FEATURES=network,application' environment variable " +
-			"or 'prometheus_export: { features: [network,application] }' in the YAML configuration file.")
+			"Enable an OpenTelemetry or Prometheus metrics export, then enable any of the network* or application*" +
+			"features using the 'OTEL_EBPF_METRICS_FEATURES=network,application' environment variable " +
+			"or 'meter_provicer: { features: [network,application] }' in the YAML configuration file. ")
 	}
 
 	if c.willUseTC() {
@@ -379,8 +383,8 @@ func (c *Config) Validate() error {
 		return ConfigError("OTEL_EBPF_KUBE_INFORMERS_SYNC_TIMEOUT duration must be greater than 0s")
 	}
 
-	if c.Enabled(FeatureNetO11y) && !c.Metrics.Enabled() &&
-		!c.Prometheus.Enabled() && !c.NetworkFlows.Print {
+	if c.Enabled(FeatureNetO11y) && !c.OTELMetrics.EndpointEnabled() &&
+		!c.Prometheus.EndpointEnabled() && !c.NetworkFlows.Print {
 		return ConfigError("enabling network metrics requires to enable at least the OpenTelemetry" +
 			" metrics exporter: otel_metrics_export or prometheus_export sections in the YAML configuration file; or the" +
 			" OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_METRICS_ENDPOINT or OTEL_EBPF_PROMETHEUS_PORT environment variables. For debugging" +
@@ -392,15 +396,14 @@ func (c *Config) Validate() error {
 	}
 
 	if c.Enabled(FeatureAppO11y) && !c.TracePrinter.Enabled() &&
-		!c.Metrics.Enabled() && !c.Traces.Enabled() &&
-		!c.Prometheus.Enabled() && !c.TracePrinter.Enabled() {
+		!c.OTELMetrics.EndpointEnabled() && !c.Traces.Enabled() &&
+		!c.Prometheus.EndpointEnabled() && !c.TracePrinter.Enabled() {
 		return ConfigError("you need to define at least one exporter: trace_printer," +
 			" otel_metrics_export, otel_traces_export or prometheus_export")
 	}
 
 	if c.Enabled(FeatureAppO11y) &&
-		((c.Prometheus.Enabled() && c.Prometheus.InvalidSpanMetricsConfig()) ||
-			(c.Metrics.Enabled() && c.Metrics.InvalidSpanMetricsConfig())) {
+		((c.Prometheus.EndpointEnabled() || c.OTELMetrics.EndpointEnabled()) && c.Metrics.Features.InvalidSpanMetricsConfig()) {
 		return ConfigError("you can only enable one format of span metrics," +
 			" application_span or application_span_otel")
 	}
@@ -412,7 +415,7 @@ func (c *Config) Validate() error {
 	if c.InternalMetrics.Exporter == imetrics.InternalMetricsExporterOTEL && c.InternalMetrics.Prometheus.Port != 0 {
 		return ConfigError("you can't enable both OTEL and Prometheus internal metrics")
 	}
-	if c.InternalMetrics.Exporter == imetrics.InternalMetricsExporterOTEL && !c.Metrics.Enabled() {
+	if c.InternalMetrics.Exporter == imetrics.InternalMetricsExporterOTEL && !c.OTELMetrics.EndpointEnabled() {
 		return ConfigError("you can't enable OTEL internal metrics without enabling OTEL metrics")
 	}
 
@@ -420,11 +423,11 @@ func (c *Config) Validate() error {
 }
 
 func (c *Config) promNetO11yEnabled() bool {
-	return c.Prometheus.Enabled() && c.Prometheus.NetworkMetricsEnabled()
+	return c.Prometheus.EndpointEnabled() && c.Metrics.Features.AnyNetwork()
 }
 
 func (c *Config) otelNetO11yEnabled() bool {
-	return c.Metrics.Enabled() && c.Metrics.NetworkMetricsEnabled()
+	return c.OTELMetrics.EndpointEnabled() && c.Metrics.Features.AnyNetwork()
 }
 
 func (c *Config) willUseTC() bool {
@@ -445,10 +448,8 @@ func (c *Config) Enabled(feature Feature) bool {
 }
 
 func (c *Config) SpanMetricsEnabledForTraces() bool {
-	otelSpanMetricsEnabled := c.Metrics.Enabled() && c.Metrics.AnySpanMetricsEnabled()
-	promSpanMetricsEnabled := c.Prometheus.Enabled() && c.Prometheus.AnySpanMetricsEnabled()
-
-	return otelSpanMetricsEnabled || promSpanMetricsEnabled
+	return c.Metrics.Features.AnySpanMetrics() &&
+		(c.OTELMetrics.EndpointEnabled() || c.Prometheus.EndpointEnabled())
 }
 
 // ExternalLogger sets the logging capabilities of OBI.
@@ -487,6 +488,8 @@ func LoadConfig(file io.Reader) (*Config, error) {
 		return nil, fmt.Errorf("reading env vars: %w", err)
 	}
 
+	cfg.normalize()
+
 	return &cfg, nil
 }
 
@@ -497,4 +500,22 @@ func registerCustomValidations(validate *validator.Validate, customValidations C
 		}
 	}
 	return nil
+}
+
+// normalizeConfig normalizes user input to a common set of assumptions that are global to OBI
+func (c *Config) normalize() {
+	c.Attributes.Select.Normalize()
+	// backwards compatibility assumptions for the deprecated Metric feature sections in OTEL and Prom metrics config.
+	// Old, deprecated properties would take precedence over metrics > features, to avoid breaking changes.
+	if c.OTELMetrics.EndpointEnabled() && c.OTELMetrics.DeprFeatures != 0 {
+		// if the user has overridden otel_metrics_export > features
+		c.Metrics.Features = c.OTELMetrics.DeprFeatures
+	} else if c.Prometheus.EndpointEnabled() && c.Prometheus.DeprFeatures != 0 {
+		// if the user has overridden prometheus_export > features
+		c.Metrics.Features = c.Prometheus.DeprFeatures
+	}
+	// Deprecated: to be removed together with OTEL_EBPF_NETWORK_METRICS bool flag
+	if c.NetworkFlows.Enable {
+		c.Metrics.Features |= export.FeatureNetwork
+	}
 }

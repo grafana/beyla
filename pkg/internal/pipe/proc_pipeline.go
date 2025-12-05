@@ -3,7 +3,6 @@ package pipe
 import (
 	"context"
 	"fmt"
-	"slices"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	attributes "go.opentelemetry.io/obi/pkg/export/attributes"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
+	"github.com/grafana/beyla/v2/pkg/export/otel/bexport"
 	"github.com/grafana/beyla/v2/pkg/export/prom"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
 )
@@ -20,10 +20,8 @@ import (
 // the sub-pipe is enabled only if there is a metrics exporter enabled,
 // and both the "application" and "application_process" features are enabled
 func isProcessSubPipeEnabled(cfg *beyla.Config) bool {
-	return (cfg.Metrics.EndpointEnabled() && cfg.Metrics.OTelMetricsEnabled() &&
-		slices.Contains(cfg.Metrics.Features, otel.FeatureProcess)) ||
-		(cfg.Prometheus.EndpointEnabled() && cfg.Prometheus.OTelMetricsEnabled() &&
-			slices.Contains(cfg.Prometheus.Features, otel.FeatureProcess))
+	return (cfg.Prometheus.EndpointEnabled() || cfg.OTELMetrics.EndpointEnabled()) &&
+		bexport.Any(cfg.Metrics.Features, bexport.FeatureProcess)
 }
 
 // ProcessMetricsSwarmInstancer returns a swarm.Instancer that actually has contains another swarm.Instancer
@@ -60,8 +58,9 @@ func ProcessMetricsSwarmInstancer(
 		builder.Add(otel.ProcMetricsExporterProvider(
 			ctxInfo,
 			&otel.ProcMetricsConfig{
-				Metrics:     &cfg.Metrics,
+				Metrics:     &cfg.OTELMetrics,
 				SelectorCfg: selectorCfg,
+				CommonCfg:   &cfg.Metrics,
 			},
 			processCollectStatus,
 		))
@@ -69,6 +68,7 @@ func ProcessMetricsSwarmInstancer(
 			&prom.ProcPrometheusConfig{
 				Metrics:     &cfg.Prometheus,
 				SelectorCfg: selectorCfg,
+				CommonCfg:   &cfg.Metrics,
 			},
 			processCollectStatus,
 		))

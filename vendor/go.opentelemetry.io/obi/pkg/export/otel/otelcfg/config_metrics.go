@@ -44,10 +44,11 @@ type MetricsConfig struct {
 	// and the Info messages leak internal details that are not usually valuable for the final user.
 	SDKLogLevel string `yaml:"otel_sdk_log_level" env:"OTEL_EBPF_SDK_LOG_LEVEL"`
 
-	// Features of metrics that can be exported. Accepted values: application, network, application_process,
+	// Features of metrics that can be exported. Accepted values: application, network,
 	// application_span, application_service_graph, ...
 	// envDefault is provided to avoid breaking changes
-	Features export.Features `yaml:"features" env:"OTEL_EBPF_METRICS_FEATURES,expand" envDefault:"${OTEL_EBPF_METRIC_FEATURES}" envSeparator:","`
+	// Deprecated: use top-level MetricsConfig.Features instead.
+	DeprFeatures export.Features `yaml:"features"`
 
 	// Allows configuration of which instrumentations should be enabled, e.g. http, grpc, sql...
 	Instrumentations []instrumentations.Instrumentation `yaml:"instrumentations" env:"OTEL_EBPF_METRICS_INSTRUMENTATIONS" envSeparator:","`
@@ -126,50 +127,6 @@ func (m *MetricsConfig) OTLPMetricsEndpoint() (string, bool) {
 func (m *MetricsConfig) EndpointEnabled() bool {
 	ep, _ := m.OTLPMetricsEndpoint()
 	return ep != ""
-}
-
-func (m *MetricsConfig) AnySpanMetricsEnabled() bool {
-	return m.SpanMetricsEnabled() || m.SpanMetricsSizesEnabled() || m.ServiceGraphMetricsEnabled()
-}
-
-func (m *MetricsConfig) SpanMetricsSizesEnabled() bool {
-	return m.Features.Has(export.FeatureSpanSizes)
-}
-
-func (m *MetricsConfig) SpanMetricsEnabled() bool {
-	return m.Features.Any(export.FeatureSpan | export.FeatureSpanOTel)
-}
-
-func (m *MetricsConfig) InvalidSpanMetricsConfig() bool {
-	return m.Features.Has(export.FeatureSpan | export.FeatureSpanOTel)
-}
-
-func (m *MetricsConfig) HostMetricsEnabled() bool {
-	return m.Features.Has(export.FeatureApplicationHost)
-}
-
-func (m *MetricsConfig) ServiceGraphMetricsEnabled() bool {
-	return m.Features.Has(export.FeatureGraph)
-}
-
-func (m *MetricsConfig) OTelMetricsEnabled() bool {
-	return m.Features.Has(export.FeatureApplication)
-}
-
-func (m *MetricsConfig) NetworkMetricsEnabled() bool {
-	return m.NetworkFlowBytesEnabled() || m.NetworkInterzoneMetricsEnabled()
-}
-
-func (m *MetricsConfig) NetworkFlowBytesEnabled() bool {
-	return m.Features.Has(export.FeatureNetwork)
-}
-
-func (m *MetricsConfig) NetworkInterzoneMetricsEnabled() bool {
-	return m.Features.Has(export.FeatureNetworkInterZone)
-}
-
-func (m *MetricsConfig) Enabled() bool {
-	return m.EndpointEnabled() && (m.OTelMetricsEnabled() || m.AnySpanMetricsEnabled() || m.NetworkMetricsEnabled())
 }
 
 func httpMetricEndpointOptions(cfg *MetricsConfig) (OTLPOptions, error) {

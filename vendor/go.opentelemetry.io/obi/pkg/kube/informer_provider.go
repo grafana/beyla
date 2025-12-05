@@ -183,7 +183,7 @@ func (mp *MetadataProvider) fetchNodeName(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("can't get kubernetes client: %w", err)
 	}
-	// fist: get the current pod name and namespace
+	// first: get the current pod name and namespace
 	podHostName, err := os.Hostname()
 	if err != nil {
 		return "", fmt.Errorf("can't get hostname of current pod: %w", err)

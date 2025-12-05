@@ -72,7 +72,7 @@ func (m TracesConfig) MarshalYAML() (any, error) {
 // either the OTEL endpoint and OTEL traces endpoint is defined.
 // If not enabled, this node won't be instantiated
 func (m *TracesConfig) Enabled() bool {
-	return m.CommonEndpoint != "" || m.TracesEndpoint != ""
+	return m.CommonEndpoint != "" || m.TracesEndpoint != "" || m.GetProtocol() == ProtocolDebug
 }
 
 func (m *TracesConfig) GetProtocol() Protocol {

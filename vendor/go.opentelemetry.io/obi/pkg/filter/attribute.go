@@ -131,7 +131,7 @@ func (f *filter[T]) doFilter(ctx context.Context) {
 
 	swarms.ForEachInput(ctx, f.input, aflog().Debug, func(attrs []T) {
 		if attrs = f.filterBatch(attrs); len(attrs) > 0 {
-			f.output.Send(attrs)
+			f.output.SendCtx(ctx, attrs)
 		}
 	})
 }

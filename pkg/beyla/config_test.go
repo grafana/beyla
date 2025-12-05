@@ -246,8 +246,9 @@ network:
 			MetricSpanNameAggregationLimit: 100,
 		},
 		Routes: &transform.RoutesConfig{
-			Unmatch:      transform.UnmatchHeuristic,
-			WildcardChar: "*",
+			Unmatch:                   transform.UnmatchHeuristic,
+			WildcardChar:              "*",
+			MaxPathSegmentCardinality: 10,
 		},
 		NameResolver: &transform.NameResolverConfig{
 			Sources:  []string{"k8s", "dns"},
@@ -288,6 +289,9 @@ network:
 			},
 			DefaultOtlpGRPCPort:   4317,
 			RouteHarvesterTimeout: 10 * time.Second,
+			RouteHarvestConfig: servicesextra.RouteHarvestingConfig{
+				JavaHarvestDelay: 60 * time.Second,
+			},
 		},
 		NodeJS: obi.NodeJSConfig{Enabled: true},
 	}, cfg)
@@ -615,6 +619,10 @@ func TestOBIConfigConversion(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Prometheus.Port = 6060
 	cfg.Metrics.MetricsEndpoint = "http://localhost:4318"
+	cfg.NetworkFlows.Enable = true
+	cfg.Attributes.Kubernetes.Enable = kubeflags.EnabledTrue
+	cfg.Attributes.HostID.Override = "test-instance-id"
+	cfg.ServiceName = "test-service"
 	cfg.Discovery = servicesextra.BeylaDiscoveryConfig{
 		Instrument: services.GlobDefinitionCriteria{
 			{Path: services.NewGlob("hello*")},
@@ -622,10 +630,13 @@ func TestOBIConfigConversion(t *testing.T) {
 		},
 	}
 
-	// TODO: add more fields that you want to verify they are properly converted
 	dst := cfg.AsOBI()
 	assert.Equal(t, dst.Prometheus.Port, 6060)
 	assert.Equal(t, dst.Metrics.MetricsEndpoint, "http://localhost:4318")
+	assert.True(t, dst.NetworkFlows.Enable)
+	assert.Equal(t, kubeflags.EnabledTrue, dst.Attributes.Kubernetes.Enable)
+	assert.Equal(t, "test-instance-id", dst.Attributes.HostID.Override)
+	assert.Equal(t, "test-service", dst.ServiceName)
 	assert.Equal(t,
 		services.GlobDefinitionCriteria{
 			{Path: services.NewGlob("hello*")},

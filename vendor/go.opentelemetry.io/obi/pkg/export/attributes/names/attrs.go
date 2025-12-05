@@ -63,6 +63,7 @@ const (
 	GraphQLOperationType   = Name(semconv.GraphqlOperationTypeKey)
 	DNSAnswers             = Name("dns.answers")
 	ErrorMessage           = Name("error.message")
+	TelemetrySDKLanguage   = Name(semconv.TelemetrySDKLanguageKey)
 
 	K8sNamespaceName   = Name("k8s.namespace.name")
 	K8sPodName         = Name("k8s.pod.name")
@@ -87,23 +88,27 @@ const (
 // VendorPrefix allows identifying some metrics (network, internal counters...)
 // as custom metrics, since at the moment they don't follow any semantic convention for them.
 // This value can be overridden when OBI is vendored as a library (e.g. from the OTEL collector)
-var VendorPrefix = "obi"
+var (
+	VendorPrefix  = "obi"
+	VendorSDKName = "opentelemetry-ebpf-instrumentation"
+)
 
 var OBIIP = Name("obi.ip")
 
 const (
-	Transport  = Name("transport")
-	SrcAddress = Name("src.address")
-	DstAddres  = Name("dst.address")
-	SrcPort    = Name("src.port")
-	DstPort    = Name("dst.port")
-	SrcName    = Name("src.name")
-	DstName    = Name("dst.name")
-	Iface      = Name("iface")
-	SrcCIDR    = Name("src.cidr")
-	DstCIDR    = Name("dst.cidr")
-	SrcZone    = Name("src.zone")
-	DstZone    = Name("dst.zone")
+	Transport   = Name("transport")
+	NetworkType = Name("network.type")
+	SrcAddress  = Name("src.address")
+	DstAddres   = Name("dst.address")
+	SrcPort     = Name("src.port")
+	DstPort     = Name("dst.port")
+	SrcName     = Name("src.name")
+	DstName     = Name("dst.name")
+	Iface       = Name("iface")
+	SrcCIDR     = Name("src.cidr")
+	DstCIDR     = Name("dst.cidr")
+	SrcZone     = Name("src.zone")
+	DstZone     = Name("dst.zone")
 
 	ClientPort = Name("client.port")
 

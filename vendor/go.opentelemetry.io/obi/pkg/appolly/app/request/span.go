@@ -181,6 +181,7 @@ type Elasticsearch struct {
 	NodeName         string `json:"nodeName"`
 	DBOperationName  string `json:"dbOperationName"`
 	DBQueryText      string `json:"dbQueryText"`
+	DBSystemName     string `json:"dbSystemName"`
 }
 
 type AWS struct {
@@ -304,6 +305,7 @@ func spanAttributes(s *Span) SpanAttributes {
 			attrs["nodeName"] = s.Elasticsearch.NodeName
 			attrs["dbOperationName"] = s.Elasticsearch.DBOperationName
 			attrs["dbQueryText"] = s.Elasticsearch.DBQueryText
+			attrs["dbSystemName"] = s.Elasticsearch.DBSystemName
 		}
 		if s.SubType == HTTPSubtypeAWSS3 && s.AWS != nil {
 			s3 := s.AWS.S3

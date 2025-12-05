@@ -15,9 +15,12 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/otel/metric"
 	instrument "go.opentelemetry.io/obi/pkg/export/otel/metric/api/metric"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
+	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
+
+	"github.com/grafana/beyla/v2/pkg/export/otel/bexport"
 )
 
 func smlog() *slog.Logger {
@@ -46,10 +49,11 @@ type SurveyMetricsReporter struct {
 func SurveyInfoMetrics(
 	ctxInfo *global.ContextInfo,
 	cfg *otelcfg.MetricsConfig,
+	commonCfg *perapp.MetricsConfig,
 	processEventCh *msg.Queue[exec.ProcessEvent],
 ) swarm.InstanceFunc {
 	return func(ctx context.Context) (swarm.RunFunc, error) {
-		if !cfg.Enabled() {
+		if bexport.Any(commonCfg.Features, bexport.FeatureSurveyInfo) {
 			return swarm.EmptyRunFunc()
 		}
 		otelcfg.SetupInternalOTELSDKLogger(cfg.SDKLogLevel)
@@ -93,7 +97,7 @@ func newSurveyMetricsReporter(
 			metric.WithInterval(smr.cfg.Interval))),
 	)
 	meter := smr.provider.Meter(ReporterName)
-	smr.surveyInfo, err = meter.Int64UpDownCounter(SurveyInfo)
+	smr.surveyInfo, err = meter.Int64UpDownCounter(SurveyInfoMetricName)
 	if err != nil {
 		return nil, fmt.Errorf("creating survey info: %w", err)
 	}

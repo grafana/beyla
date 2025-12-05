@@ -30,7 +30,7 @@ func TestConnection_Spans(t *testing.T) {
 		&otelcfg.TracesConfig{
 			TracesEndpoint: otlp.ServerEndpoint + "/v1/traces",
 			TracesProtocol: otelcfg.ProtocolHTTPJSON,
-			Instrumentations: []string{
+			Instrumentations: []instrumentations.Instrumentation{
 				instrumentations.InstrumentationALL,
 			},
 			SamplerConfig: services.SamplerConfig{Name: "always_on"},

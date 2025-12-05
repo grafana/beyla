@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	comm          = "python3.12"
+	comm          = "python3.14"
 	testIndex     = "test_index"
 	testServerURL = "http://localhost:8381"
 )

@@ -139,7 +139,7 @@ func internalMetrics(
 	switch {
 	case config.InternalMetrics.Exporter == imetrics.InternalMetricsExporterOTEL:
 		slog.Debug("reporting internal metrics as OpenTelemetry")
-		return obiotel.NewInternalMetricsReporter(ctx, ctxInfo, &config.Metrics, &config.InternalMetrics)
+		return obiotel.NewInternalMetricsReporter(ctx, ctxInfo, &config.OTELMetrics, &config.InternalMetrics)
 	case config.InternalMetrics.Exporter == imetrics.InternalMetricsExporterPrometheus || config.InternalMetrics.Prometheus.Port != 0:
 		slog.Debug("reporting internal metrics as Prometheus")
 		metrics := imetrics.NewPrometheusReporter(&config.InternalMetrics, promMgr, nil)
@@ -189,7 +189,7 @@ func buildCommonContextInfo(
 	promMgr := &connector.PrometheusManager{}
 	ctxInfo := &global.ContextInfo{
 		Prometheus:              promMgr,
-		OTELMetricsExporter:     &otelcfg.MetricsExporterInstancer{Cfg: &config.Metrics},
+		OTELMetricsExporter:     &otelcfg.MetricsExporterInstancer{Cfg: &config.OTELMetrics},
 		ExtraResourceAttributes: []attribute.KeyValue{semconv.OTelLibraryName(otel.ReporterName)},
 		OverrideAppExportQueue: msg.NewQueue[[]request.Span](
 			msg.ChannelBufferLen(config.ChannelBufferLen),

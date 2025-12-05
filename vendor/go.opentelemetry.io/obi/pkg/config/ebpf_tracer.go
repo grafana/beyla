@@ -4,9 +4,7 @@
 package config
 
 import (
-	"errors"
 	"fmt"
-	"log/slog"
 	"strings"
 	"time"
 )
@@ -19,10 +17,13 @@ type RedisDBCacheConfig struct {
 }
 
 const (
-	ContextPropagationAll = ContextPropagationMode(iota)
-	ContextPropagationHeadersOnly
-	ContextPropagationIPOptionsOnly
-	ContextPropagationDisabled
+	ContextPropagationDisabled  ContextPropagationMode = 0
+	ContextPropagationHeaders   ContextPropagationMode = 1 << 0 // HTTP headers
+	ContextPropagationTCP       ContextPropagationMode = 1 << 1 // TCP options
+	ContextPropagationIPOptions ContextPropagationMode = 1 << 2 // IP options
+
+	// Convenience aliases
+	ContextPropagationAll = ContextPropagationHeaders | ContextPropagationTCP | ContextPropagationIPOptions
 )
 
 // EBPFTracer configuration for eBPF programs
@@ -54,11 +55,9 @@ type EBPFTracer struct {
 	// Must be at least 0
 	HTTPRequestTimeout time.Duration `yaml:"http_request_timeout" env:"OTEL_EBPF_BPF_HTTP_REQUEST_TIMEOUT" validate:"gte=0"`
 
-	// Deprecated: equivalent to ContextPropagationAll
-	ContextPropagationEnabled bool `yaml:"enable_context_propagation" env:"OTEL_EBPF_BPF_ENABLE_CONTEXT_PROPAGATION" validate:"boolean"`
-
 	// Enables distributed context propagation.
-	ContextPropagation ContextPropagationMode `yaml:"context_propagation" env:"OTEL_EBPF_BPF_CONTEXT_PROPAGATION" validate:"oneof=0 1 2 3"`
+	// Can be a combination of: headers, tcp, ip (e.g., "headers,tcp" or "all")
+	ContextPropagation ContextPropagationMode `yaml:"context_propagation" env:"OTEL_EBPF_BPF_CONTEXT_PROPAGATION"`
 
 	// Skips checking the kernel version for bpf_loop functionality. Some modified kernels have this
 	// backported prior to version 5.17.
@@ -125,55 +124,84 @@ type EBPFBufferSizes struct {
 	Postgres uint32 `yaml:"postgres" env:"OTEL_EBPF_BPF_BUFFER_SIZE_POSTGRES" validate:"lte=8192"`
 }
 
-func (c *EBPFTracer) Validate() error {
-	// TODO remove after deleting ContextPropagationEnabled
-	if c.ContextPropagationEnabled && c.ContextPropagation != ContextPropagationDisabled {
-		return errors.New("ebpf.enable_context_propagation and ebpf.context_propagation in the YAML configuration file or OTEL_EBPF_BPF_ENABLE_CONTEXT_PROPAGATION and OTEL_EBPF_BPF_CONTEXT_PROPAGATION are mutually exclusive")
-	}
-
-	return nil
+// HasHeaders returns true if HTTP headers context propagation is enabled
+func (m ContextPropagationMode) HasHeaders() bool {
+	return m&ContextPropagationHeaders != 0
 }
 
-func (c *EBPFTracer) IsContextPropagationEnabled() {
-	// TODO deprecated (REMOVE)
-	// remove after deleting ContextPropagationEnabled
-	if c.ContextPropagationEnabled {
-		slog.Warn("DEPRECATION NOTICE: 'ebpf.enable_context_propagation' configuration option has been " +
-			"deprecated and will be removed in the future - use 'ebpf.context_propagation' instead")
-		c.ContextPropagation = ContextPropagationAll
-	}
+// HasTCP returns true if TCP options context propagation is enabled
+func (m ContextPropagationMode) HasTCP() bool {
+	return m&ContextPropagationTCP != 0
+}
+
+// HasIPOptions returns true if IP options context propagation is enabled
+func (m ContextPropagationMode) HasIPOptions() bool {
+	return m&ContextPropagationIPOptions != 0
+}
+
+// IsEnabled returns true if any context propagation is enabled
+func (m ContextPropagationMode) IsEnabled() bool {
+	return m != ContextPropagationDisabled
 }
 
 func (m *ContextPropagationMode) UnmarshalText(text []byte) error {
-	switch strings.TrimSpace(string(text)) {
+	str := strings.TrimSpace(string(text))
+
+	// Handle simple cases first
+	switch str {
 	case "all":
 		*m = ContextPropagationAll
 		return nil
-	case "headers":
-		*m = ContextPropagationHeadersOnly
-		return nil
-	case "ip":
-		*m = ContextPropagationIPOptionsOnly
-		return nil
-	case "disabled":
+	case "disabled", "":
 		*m = ContextPropagationDisabled
 		return nil
 	}
 
-	return fmt.Errorf("invalid value for context_propagation: '%s'", text)
+	// Parse comma-separated list
+	parts := strings.Split(str, ",")
+	var result ContextPropagationMode
+
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		switch part {
+		case "headers", "http":
+			result |= ContextPropagationHeaders
+		case "tcp":
+			result |= ContextPropagationTCP
+		case "ip":
+			result |= ContextPropagationIPOptions
+		default:
+			return fmt.Errorf("invalid value for context_propagation: '%s' (valid: all, disabled, headers, tcp, ip)", part)
+		}
+	}
+
+	*m = result
+	return nil
 }
 
 func (m ContextPropagationMode) MarshalText() ([]byte, error) {
-	switch m {
-	case ContextPropagationAll:
-		return []byte("all"), nil
-	case ContextPropagationHeadersOnly:
-		return []byte("headers"), nil
-	case ContextPropagationIPOptionsOnly:
-		return []byte("ip"), nil
-	case ContextPropagationDisabled:
+	if m == ContextPropagationDisabled {
 		return []byte("disabled"), nil
 	}
 
-	return nil, fmt.Errorf("invalid context propagation mode: %d", m)
+	if m == ContextPropagationAll {
+		return []byte("all"), nil
+	}
+
+	var parts []string
+	if m.HasHeaders() {
+		parts = append(parts, "headers")
+	}
+	if m.HasTCP() {
+		parts = append(parts, "tcp")
+	}
+	if m.HasIPOptions() {
+		parts = append(parts, "ip")
+	}
+
+	if len(parts) == 0 {
+		return nil, fmt.Errorf("invalid context propagation mode: %d", m)
+	}
+
+	return []byte(strings.Join(parts, ",")), nil
 }

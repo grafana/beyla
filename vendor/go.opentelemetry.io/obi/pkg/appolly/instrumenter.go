@@ -124,14 +124,13 @@ func newGraphBuilder(
 	// some nodes (ipNodesFilter, span name limiter...) are only passed to the metrics export nodes.
 	// Nodes directly handling raw traces will still get the unfiltered exportableSpans queue.
 	// If no metrics exporter is configured, we will not start the metrics subpipeline to save resources.
-	exportingMetrics := config.Metrics.Enabled() ||
-		config.Metrics.ServiceGraphMetricsEnabled() ||
-		config.Prometheus.Enabled()
+	exportingMetrics := config.Metrics.Features.AnyAppO11yMetric() &&
+		(config.OTELMetrics.EndpointEnabled() || config.Prometheus.EndpointEnabled())
 	if exportingMetrics {
 		setupMetricsSubPipeline(config, ctxInfo, swi, exportableSpans, selectorCfg, processEventsCh)
 	}
 
-	swi.Add(prom.BPFMetrics(ctxInfo, &config.Prometheus),
+	swi.Add(prom.BPFMetrics(ctxInfo, &config.Prometheus, &config.Metrics),
 		swarm.WithID("BPFMetrics"))
 
 	// The returned builder later invokes its "Build" function that, given
@@ -155,9 +154,10 @@ func setupMetricsSubPipeline(
 
 	spanNameAggregatedMetrics := newQueue("spanNameAggregatedMetrics")
 	swi.Add(transform.SpanNameLimiter(transform.SpanNameLimiterConfig{
-		Limit: config.Attributes.MetricSpanNameAggregationLimit,
-		OTEL:  &config.Metrics,
-		Prom:  &config.Prometheus,
+		Limit:      config.Attributes.MetricSpanNameAggregationLimit,
+		OTEL:       &config.OTELMetrics,
+		Prom:       &config.Prometheus,
+		MetricsCfg: &config.Metrics,
 	}, exportableSpans, spanNameAggregatedMetrics))
 
 	unresolvedCfg := request.UnresolvedNames{
@@ -168,6 +168,7 @@ func setupMetricsSubPipeline(
 
 	swi.Add(otel.ReportMetrics(
 		ctxInfo,
+		&config.OTELMetrics,
 		&config.Metrics,
 		selectorCfg,
 		unresolvedCfg,
@@ -177,6 +178,7 @@ func setupMetricsSubPipeline(
 
 	swi.Add(otel.ReportSvcGraphMetrics(
 		ctxInfo,
+		&config.OTELMetrics,
 		&config.Metrics,
 		unresolvedCfg,
 		spanNameAggregatedMetrics,
@@ -186,6 +188,7 @@ func setupMetricsSubPipeline(
 	swi.Add(prom.PrometheusEndpoint(
 		ctxInfo,
 		&config.Prometheus,
+		&config.Metrics,
 		selectorCfg,
 		unresolvedCfg,
 		spanNameAggregatedMetrics,

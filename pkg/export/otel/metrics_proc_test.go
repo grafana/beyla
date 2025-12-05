@@ -9,13 +9,16 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
+	"go.opentelemetry.io/obi/pkg/export"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
+	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 
 	"github.com/grafana/beyla/v2/pkg/export/extraattributes"
+	"github.com/grafana/beyla/v2/pkg/export/otel/bexport"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
 	"github.com/grafana/beyla/v2/pkg/test/collector"
 )
@@ -37,9 +40,8 @@ func TestProcMetrics_Disaggregated(t *testing.T) {
 		ReportersCacheLen: 100,
 		CommonEndpoint:    otlp.ServerEndpoint,
 		MetricsProtocol:   otelcfg.ProtocolHTTPProtobuf,
-		Features:          []string{otelcfg.FeatureApplication, FeatureProcess},
 		TTL:               3 * time.Minute,
-		Instrumentations: []string{
+		Instrumentations: []instrumentations.Instrumentation{
 			instrumentations.InstrumentationALL,
 		},
 	}
@@ -55,6 +57,9 @@ func TestProcMetrics_Disaggregated(t *testing.T) {
 					extraattributes.ProcessDiskIO.Section:         includedAttributes,
 					extraattributes.ProcessNetIO.Section:          includedAttributes,
 				},
+			},
+			CommonCfg: &perapp.MetricsConfig{
+				Features: export.FeatureApplicationRED | bexport.FeatureProcess,
 			},
 		}, procsInput)(ctx)
 	require.NoError(t, err)

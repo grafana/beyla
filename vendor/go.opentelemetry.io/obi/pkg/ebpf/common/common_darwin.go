@@ -26,3 +26,11 @@ func FindNetworkNamespace(_ int32) (string, error) {
 func RootDirectoryForPID(_ int32) string {
 	return ""
 }
+
+func CMDLineForPID(_ int32) (string, []string, error) {
+	return "", nil, nil
+}
+
+func CWDForPID(_ int32) (string, error) {
+	return "", nil
+}

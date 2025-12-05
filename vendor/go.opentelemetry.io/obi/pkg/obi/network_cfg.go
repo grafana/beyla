@@ -44,7 +44,7 @@ const (
 type NetworkConfig struct {
 	// Enable network metrics.
 	// Default value is false (disabled)
-	// Deprecated: add "network" to OTEL_EBPF_METRIC_FEATURES or OTEL_EBPF_PROMETHEUS_FEATURES
+	// Deprecated: add "network" or "network_inter_zone" to OTEL_EBPF_METRICS_FEATURES
 	// TODO OBI 3.0: remove
 	Enable bool `yaml:"enable" env:"OTEL_EBPF_NETWORK_METRICS" validate:"boolean"`
 

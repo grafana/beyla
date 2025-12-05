@@ -6,6 +6,8 @@ package harvest
 import (
 	"context"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -27,6 +29,7 @@ type RouteHarvester struct {
 
 	// testing related
 	javaExtractRoutes func(pid int32) (*RouteHarvesterResult, error)
+	nodeExtractRoutes func(pid int32) (*RouteHarvesterResult, error)
 }
 
 type RouteHarvesterResultKind uint8
@@ -53,8 +56,11 @@ func (e *HarvestError) Error() string {
 func NewRouteHarvester(cfg *services.RouteHarvestingConfig, disabled []string, timeout time.Duration) *RouteHarvester {
 	dMap := map[svc.InstrumentableType]struct{}{}
 	for _, lang := range disabled {
-		if strings.ToLower(lang) == "java" {
+		if strings.ToLower(lang) == svc.InstrumentableJava.String() {
 			dMap[svc.InstrumentableJava] = struct{}{}
+		}
+		if strings.ToLower(lang) == svc.InstrumentableNodejs.String() {
+			dMap[svc.InstrumentableNodejs] = struct{}{}
 		}
 	}
 
@@ -68,6 +74,7 @@ func NewRouteHarvester(cfg *services.RouteHarvestingConfig, disabled []string, t
 	}
 
 	h.javaExtractRoutes = h.java.ExtractRoutes
+	h.nodeExtractRoutes = ExtractNodejsRoutes
 
 	return h
 }
@@ -110,7 +117,8 @@ func (h *RouteHarvester) HarvestRoutes(fileInfo *exec.FileInfo) (*RouteHarvester
 			}
 		}()
 
-		if fileInfo.Service.SDKLanguage == svc.InstrumentableJava {
+		switch fileInfo.Service.SDKLanguage {
+		case svc.InstrumentableJava:
 			if _, ok := h.disabled[svc.InstrumentableJava]; !ok {
 				r, err := h.javaExtractRoutes(fileInfo.Pid)
 				if err != nil {
@@ -121,7 +129,20 @@ func (h *RouteHarvester) HarvestRoutes(fileInfo *exec.FileInfo) (*RouteHarvester
 			} else {
 				resultChan <- result{r: nil}
 			}
-		} else {
+		case svc.InstrumentableNodejs:
+			if _, ok := h.disabled[svc.InstrumentableNodejs]; !ok {
+				r, err := h.nodeExtractRoutes(fileInfo.Pid)
+				if err != nil {
+					resultChan <- result{err: err}
+					return
+				}
+				h.log.Debug("found node js application routes", "routes", r.Routes)
+
+				resultChan <- result{r: r}
+			} else {
+				resultChan <- result{r: nil}
+			}
+		default:
 			resultChan <- result{r: nil}
 		}
 	}()
@@ -153,4 +174,37 @@ func (h *RouteHarvester) HarvestRoutesDelay(fileInfo *exec.FileInfo) (bool, time
 	}
 
 	return false, 0
+}
+
+func isDir(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
+}
+
+// for testing purposes
+var isDirFunc = isDir
+
+func FindScriptDirectory(root, firstArg, cwd string) string {
+	if strings.HasPrefix(firstArg, "/") {
+		path := filepath.Join(root, firstArg)
+		if isDirFunc(path) {
+			return path + string(filepath.Separator)
+		}
+
+		lastSlashPos := strings.LastIndex(firstArg, "/")
+		if lastSlashPos > 1 {
+			path := filepath.Join(root, firstArg[:lastSlashPos])
+
+			if isDirFunc(path) {
+				return path + string(filepath.Separator)
+			}
+		}
+	}
+
+	result := filepath.Join(root, cwd)
+	if result != "" && result[len(result)-1] != filepath.Separator {
+		result += string(filepath.Separator)
+	}
+
+	return result
 }

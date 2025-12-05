@@ -1076,6 +1076,10 @@ func oldRustToString(name string, options []Option) (string, bool) {
 			name = name[1:]
 		}
 
+		if val == 0 {
+			return "", false
+		}
+
 		// An optional trailing underscore can separate the
 		// length from the identifier.
 		if len(name) > 0 && name[0] == '_' {

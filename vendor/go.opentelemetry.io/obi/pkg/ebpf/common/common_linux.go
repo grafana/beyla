@@ -4,6 +4,7 @@
 package ebpfcommon
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -110,4 +111,69 @@ func HasHostNetworkAccess() (bool, error) {
 
 func RootDirectoryForPID(pid int32) string {
 	return filepath.Join("/proc", strconv.Itoa(int(pid)), "root")
+}
+
+// CMDLineForPID parses /proc/<pid>/cmdline and extracts the executable and arguments.
+// Returns the executable path and a slice of arguments (excluding the executable).
+// The cmdline file contains null-separated arguments.
+func CMDLineForPID(pid int32) (string, []string, error) {
+	cmdlinePath := filepath.Join("/proc", strconv.Itoa(int(pid)), "cmdline")
+	exec, args, err := cmdLineForPath(cmdlinePath)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to read /proc/%d/cmdline: %w", pid, err)
+	}
+	return exec, args, nil
+}
+
+func cmdLineForPath(cmdlinePath string) (string, []string, error) {
+	data, err := os.ReadFile(cmdlinePath)
+	if err != nil {
+		return "", nil, err
+	}
+
+	if len(data) == 0 {
+		return "", nil, errors.New("empty cmd line")
+	}
+
+	// Parse null-separated arguments
+	var components []string
+	start := 0
+	for i, b := range data {
+		if b == 0 {
+			if i > start {
+				components = append(components, string(data[start:i]))
+			}
+			start = i + 1
+		}
+	}
+
+	// Handle case where last argument doesn't end with null
+	if start < len(data) {
+		components = append(components, string(data[start:]))
+	}
+
+	if len(components) == 0 {
+		return "", nil, errors.New("no command found")
+	}
+
+	executable := components[0]
+	args := []string{}
+	if len(components) > 1 {
+		args = components[1:]
+	}
+
+	return executable, args, nil
+}
+
+// CWDForPID extracts the current working directory for a process by reading
+// the symlink at /proc/<pid>/cwd.
+func CWDForPID(pid int32) (string, error) {
+	cwdPath := filepath.Join("/proc", strconv.Itoa(int(pid)), "cwd")
+
+	cwd, err := os.Readlink(cwdPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read symlink /proc/%d/cwd: %w", pid, err)
+	}
+
+	return cwd, nil
 }

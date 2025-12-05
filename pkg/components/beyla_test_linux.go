@@ -10,6 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"go.opentelemetry.io/obi/pkg/export"
+
 	"github.com/grafana/beyla/v2/pkg/beyla"
 )
 
@@ -23,7 +25,7 @@ func TestRunDontPanic(t *testing.T) {
 		description: "otel endpoint but feature excluded",
 		configProvider: func() *beyla.Config {
 			cfg := beyla.DefaultConfig()
-			cfg.OTELMetrics.Features = []string{"application"}
+			cfg.Metrics.Features = export.FeatureApplicationRED
 			cfg.NetworkFlows.Enable = true
 			cfg.OTELMetrics.CommonEndpoint = "http://localhost"
 			return cfg
@@ -32,7 +34,7 @@ func TestRunDontPanic(t *testing.T) {
 		description: "prom endpoint but feature excluded",
 		configProvider: func() *beyla.Config {
 			cfg := beyla.DefaultConfig()
-			cfg.Prometheus.Features = []string{"application"}
+			cfg.Metrics.Features = export.FeatureApplicationRED
 			cfg.NetworkFlows.Enable = true
 			cfg.Prometheus.Port = 9090
 			return cfg
@@ -41,7 +43,7 @@ func TestRunDontPanic(t *testing.T) {
 		description: "otel endpoint, otel feature excluded, but prom enabled",
 		configProvider: func() *beyla.Config {
 			cfg := beyla.DefaultConfig()
-			cfg.OTELMetrics.Features = []string{"application"}
+			cfg.Metrics.Features = export.FeatureApplicationRED
 			cfg.NetworkFlows.Enable = true
 			cfg.OTELMetrics.CommonEndpoint = "http://localhost"
 			cfg.Prometheus.Port = 9090
@@ -53,9 +55,8 @@ func TestRunDontPanic(t *testing.T) {
 			cfg := beyla.DefaultConfig()
 			cfg.NetworkFlows.Enable = true
 			cfg.Prometheus.Port = 9090
-			cfg.Prometheus.Features = []string{"application"}
 			cfg.OTELMetrics.CommonEndpoint = "http://localhost"
-			cfg.OTELMetrics.Features = []string{"application"}
+			cfg.Metrics.Features = export.FeatureApplicationRED
 			return cfg
 		},
 	}}

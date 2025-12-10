@@ -2,7 +2,7 @@ module grafana.com/gokafka-seg
 
 go 1.25.3
 
-require github.com/segmentio/kafka-go v0.4.47
+require github.com/segmentio/kafka-go v0.4.49
 
 require (
 	github.com/klauspost/compress v1.15.9 // indirect

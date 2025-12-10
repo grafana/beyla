@@ -17,11 +17,11 @@ jobs:
 
     steps:
       - id: checkout
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           persist-credentials: 'false'
       - id: docker-build-beyla
-        uses: grafana/shared-workflows/actions/build-push-to-dockerhub@fa48192dac470ae356b3f7007229f3ac28c48a25 # main
+        uses: grafana/shared-workflows/actions/build-push-to-dockerhub@bae259f9ed5b6fcb050e3b58adf7aee776d4edb5 # main
         with:
           context: .
           file: ${{ matrix.file }}

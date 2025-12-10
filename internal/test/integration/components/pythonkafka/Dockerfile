@@ -1,5 +1,5 @@
 # Dockerfile that will build a container that runs python
-FROM python:3.11@sha256:80d0556a9376af37548850151f0838cfa50137214fe7a2563e627c297d4811e1
+FROM python:3.11@sha256:38639aa0267125ab0def2778f0aa8453043178ec67bf494c5af11f75a8392d9d
 EXPOSE 8080
 RUN apt update
 RUN pip install kafka-python

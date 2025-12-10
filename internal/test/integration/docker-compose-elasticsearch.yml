@@ -17,7 +17,7 @@ services:
           memory: 1G
 
   opensearchserver:
-    image: opensearchproject/opensearch:3.3.1@sha256:773b05b026c01e7d520f6b857f486b7312d9290e14f2aebe4630eb80787e9eb3
+    image: opensearchproject/opensearch:3.3.2@sha256:22fdee0d6db3f500a64cd27ddff3633f32244d0ea58b68ffb151cd2217f0bb0d
     container_name: opensearch-server
     ports:
       - "9201:9200"

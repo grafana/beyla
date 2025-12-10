@@ -52,7 +52,7 @@ func Build(ctx context.Context, config *beyla.Config, ctxInfo *global.ContextInf
 		SelectionCfg:            config.Attributes.Select,
 		ExtraGroupAttributesCfg: config.Attributes.ExtraGroupAttributes,
 	}
-	swi.Add(alloy.TracesReceiver(ctxInfo, &config.TracesReceiver, config.Metrics.Features.SpanMetrics(),
+	swi.Add(alloy.TracesReceiver(ctxInfo, &config.TracesReceiver, config.AsOBI().SpanMetricsEnabledForTraces(),
 		selectorCfg, ctxInfo.OverrideAppExportQueue))
 
 	clusterConnectorsSubpipeline(swi, ctxInfo, config)

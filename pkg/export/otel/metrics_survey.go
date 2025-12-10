@@ -53,7 +53,10 @@ func SurveyInfoMetrics(
 	processEventCh *msg.Queue[exec.ProcessEvent],
 ) swarm.InstanceFunc {
 	return func(ctx context.Context) (swarm.RunFunc, error) {
-		if bexport.Any(commonCfg.Features, bexport.FeatureSurveyInfo) {
+		// Survey info only works with OTEL. If no OTEL endpoint is set, we ignore
+		// survey info
+		if !cfg.EndpointEnabled() ||
+			bexport.Any(commonCfg.Features, bexport.FeatureSurveyInfo) {
 			return swarm.EmptyRunFunc()
 		}
 		otelcfg.SetupInternalOTELSDKLogger(cfg.SDKLogLevel)

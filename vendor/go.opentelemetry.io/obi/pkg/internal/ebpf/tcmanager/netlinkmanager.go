@@ -358,7 +358,7 @@ func (tc *netlinkManager) emitError(msg string, args ...any) {
 
 // doIgnoreNoDev runs the provided syscall over the provided device and ignores the error
 // if the cause is a non-existing device (just logs the error as debug).
-// If the agent is deployed as part of the Network OTELMetrics pipeline, normally
+// If the agent is deployed as part of the Network Metrics pipeline, normally
 // undeploying the FlowCollector could cause the agent to try to remove resources
 // from Pods that have been removed immediately before (e.g. flowlogs-pipeline or the
 // console plugin), so we avoid logging some errors that would unnecessarily raise the

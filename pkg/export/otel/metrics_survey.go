@@ -15,12 +15,9 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/otel/metric"
 	instrument "go.opentelemetry.io/obi/pkg/export/otel/metric/api/metric"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
-	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
-
-	"github.com/grafana/beyla/v2/pkg/export/otel/bexport"
 )
 
 func smlog() *slog.Logger {
@@ -49,14 +46,10 @@ type SurveyMetricsReporter struct {
 func SurveyInfoMetrics(
 	ctxInfo *global.ContextInfo,
 	cfg *otelcfg.MetricsConfig,
-	commonCfg *perapp.MetricsConfig,
 	processEventCh *msg.Queue[exec.ProcessEvent],
 ) swarm.InstanceFunc {
 	return func(ctx context.Context) (swarm.RunFunc, error) {
-		// Survey info only works with OTEL. If no OTEL endpoint is set, we ignore
-		// survey info
-		if !cfg.EndpointEnabled() ||
-			bexport.Any(commonCfg.Features, bexport.FeatureSurveyInfo) {
+		if !cfg.EndpointEnabled() {
 			return swarm.EmptyRunFunc()
 		}
 		otelcfg.SetupInternalOTELSDKLogger(cfg.SDKLogLevel)

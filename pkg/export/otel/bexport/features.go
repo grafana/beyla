@@ -8,14 +8,12 @@ import (
 // To not collide with OBI features, we start reserving positions
 // at the most significant bit
 const (
-	FeatureSurveyInfo = export.Features((1 << 63) >> iota)
-	FeatureProcess
+	FeatureProcess = export.Features((1 << 63) >> iota)
 )
 
 func init() {
 	export.AppO11yFeatures |= FeatureProcess
 	export.FeatureMapper["application_process"] = FeatureProcess
-	export.FeatureMapper["survey_info"] = FeatureSurveyInfo
 }
 
 // Has is added here for convenience, as features.Feature has already a Has

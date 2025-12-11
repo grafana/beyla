@@ -1,6 +1,6 @@
 # Build the testserver binary
 # Docker command must be invoked from the project root directory
-FROM golang:1.25.3 AS builder
+FROM golang:1.25.4@sha256:698183780de28062f4ef46f82a79ec0ae69d2d22f7b160cf69f71ea8d98bf25d AS builder
 
 ARG TARGETARCH
 
@@ -20,7 +20,7 @@ COPY x509/server_test_key.pem x509/server_test_key.pem
 RUN go build -o testserver main.go
 
 # Create final image from minimal + built binary
-FROM debian:bookworm-slim@sha256:78d2f66e0fec9e5a39fb2c72ea5e052b548df75602b5215ed01a17171529f706
+FROM debian:bookworm-slim@sha256:e899040a73d36e2b36fa33216943539d9957cba8172b858097c2cabcdb20a3e2
 
 WORKDIR /
 RUN mkdir -p x509

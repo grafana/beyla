@@ -1,4 +1,4 @@
-FROM python:3.12@sha256:de96c54f25e2d69597a72bd3309d723110e59586845c5675c8cb83afb808af18
+FROM python:3.12@sha256:b499cef422563a0ea06776df379781343de803291ffcfcd5513faf87a36ede6b
 EXPOSE 8080
 RUN pip install ariadne fastapi uvicorn
 COPY main.py /main.py

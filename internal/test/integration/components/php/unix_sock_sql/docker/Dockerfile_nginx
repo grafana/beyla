@@ -1,4 +1,4 @@
-FROM nginx:latest@sha256:029d4461bd98f124e531380505ceea2072418fdf28752aa73b7b273ba3048903
+FROM nginx:latest@sha256:325b00a35073d9aa1d3df16da8afbbae1ac7d824c505f7490cd5cdbb79d60f6d
 
 SHELL ["/bin/bash", "-c"]
 

@@ -1,6 +1,6 @@
 # Build the testserver binary
 # Docker command must be invoked from the project root directory
-FROM golang:1.25.3 AS builder
+FROM golang:1.25.4@sha256:698183780de28062f4ef46f82a79ec0ae69d2d22f7b160cf69f71ea8d98bf25d AS builder
 
 ARG TARGETARCH
 
@@ -20,7 +20,7 @@ RUN go build -tags -a -ldflags '-linkmode external -extldflags "-static"' -o tes
 
 # Create final image from minimal + built binary
 #TODO: use minimal image
-FROM debian:12@sha256:26f2a7cab45014541c65f9d140ccfa6aaefbb49686c6759bea9c6f7f5bb3d72f
+FROM debian:12@sha256:7e5bc0e499a8d50cb1e32287944a90b9ec8fd7d500673e75daff3f52882f5798
 
 WORKDIR /
 RUN mkdir -p x509

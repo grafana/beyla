@@ -334,6 +334,7 @@ func TestSuite_NodeJS(t *testing.T) {
 	require.NoError(t, compose.Up())
 	t.Run("NodeJS RED metrics", testREDMetricsNodeJSHTTP)
 	t.Run("HTTP traces (kprobes)", testHTTPTracesKProbes)
+	t.Run("HTTP nested traces large HTTPS (kprobes)", testHTTPTracesNestedNodeJSLargeHTTPS)
 	require.NoError(t, compose.Close())
 }
 

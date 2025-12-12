@@ -11,7 +11,6 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	ebpfcfg "go.opentelemetry.io/obi/pkg/config"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/internal/helpers"
 )
@@ -91,7 +90,7 @@ func checkCapabilitiesForSetOptions(config *Config, caps *helpers.OSCapabilities
 		testAndSet(caps, capError, unix.CAP_PERFMON)
 		testAndSet(caps, capError, unix.CAP_NET_RAW)
 
-		if config.EBPF.ContextPropagation != ebpfcfg.ContextPropagationDisabled {
+		if config.EBPF.ContextPropagation.IsEnabled() {
 			testAndSet(caps, capError, unix.CAP_NET_ADMIN)
 		}
 	}

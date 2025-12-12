@@ -17,12 +17,14 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	obiconfig "go.opentelemetry.io/obi/pkg/config"
+	"go.opentelemetry.io/obi/pkg/export"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/debug"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
+	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
 	"go.opentelemetry.io/obi/pkg/export/prom"
 	"go.opentelemetry.io/obi/pkg/kube"
 	"go.opentelemetry.io/obi/pkg/kube/kubeflags"
@@ -132,12 +134,11 @@ network:
 		EnforceSysCaps:   false,
 		TracePrinter:     "json",
 		EBPF: obiconfig.EBPFTracer{
-			BatchLength:               100,
-			BatchTimeout:              time.Second,
-			HTTPRequestTimeout:        0,
-			TCBackend:                 obiconfig.TCBackendAuto,
-			ContextPropagationEnabled: false,
-			ContextPropagation:        obiconfig.ContextPropagationDisabled,
+			BatchLength:        100,
+			BatchTimeout:       time.Second,
+			HTTPRequestTimeout: 0,
+			TCBackend:          obiconfig.TCBackendAuto,
+			ContextPropagation: obiconfig.ContextPropagationDisabled,
 			RedisDBCache: obiconfig.RedisDBCacheConfig{
 				Enabled: false,
 				MaxSize: 1000,
@@ -160,19 +161,18 @@ network:
 			},
 		},
 		NetworkFlows: nc,
-		Metrics: otelcfg.MetricsConfig{
+		OTELMetrics: otelcfg.MetricsConfig{
 			OTELIntervalMS:    60_000,
 			CommonEndpoint:    "localhost:3131",
 			MetricsEndpoint:   "localhost:3030",
 			MetricsProtocol:   otelcfg.ProtocolHTTPProtobuf,
 			ReportersCacheLen: ReporterLRUSize,
-			Buckets: otelcfg.Buckets{
+			Buckets: export.Buckets{
 				DurationHistogram:     []float64{0, 1, 2},
-				RequestSizeHistogram:  otelcfg.DefaultBuckets.RequestSizeHistogram,
-				ResponseSizeHistogram: otelcfg.DefaultBuckets.ResponseSizeHistogram,
+				RequestSizeHistogram:  export.DefaultBuckets.RequestSizeHistogram,
+				ResponseSizeHistogram: export.DefaultBuckets.ResponseSizeHistogram,
 			},
-			Features: []string{"application"},
-			Instrumentations: []string{
+			Instrumentations: []instrumentations.Instrumentation{
 				instrumentations.InstrumentationALL,
 			},
 			HistogramAggregation: "base2_exponential_bucket_histogram",
@@ -185,7 +185,7 @@ network:
 			MaxQueueSize:      4096,
 			BatchTimeout:      15 * time.Second,
 			ReportersCacheLen: ReporterLRUSize,
-			Instrumentations: []string{
+			Instrumentations: []instrumentations.Instrumentation{
 				instrumentations.InstrumentationHTTP,
 				instrumentations.InstrumentationGRPC,
 				instrumentations.InstrumentationSQL,
@@ -194,16 +194,18 @@ network:
 				instrumentations.InstrumentationMongo,
 			},
 		},
+		Metrics: perapp.MetricsConfig{
+			Features: export.FeatureApplicationRED | export.FeatureNetwork,
+		},
 		Prometheus: prom.PrometheusConfig{
-			Path:     "/metrics",
-			Features: []string{otelcfg.FeatureApplication},
-			Instrumentations: []string{
+			Path: "/metrics",
+			Instrumentations: []instrumentations.Instrumentation{
 				instrumentations.InstrumentationALL,
 			},
 			TTL:                         time.Second,
 			SpanMetricsServiceCacheSize: 10000,
-			Buckets: otelcfg.Buckets{
-				DurationHistogram:     otelcfg.DefaultBuckets.DurationHistogram,
+			Buckets: export.Buckets{
+				DurationHistogram:     export.DefaultBuckets.DurationHistogram,
 				RequestSizeHistogram:  []float64{0, 10, 20, 22},
 				ResponseSizeHistogram: []float64{0, 10, 20, 22},
 			},
@@ -586,16 +588,8 @@ func TestDefaultExclusionFilter(t *testing.T) {
 }
 
 func TestWillUseTC(t *testing.T) {
-	env := envMap{"BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION": "true"}
+	env := envMap{"BEYLA_BPF_CONTEXT_PROPAGATION": "disabled"}
 	cfg := loadConfig(t, env)
-	assert.True(t, cfg.willUseTC())
-
-	env = envMap{"BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION": "false"}
-	cfg = loadConfig(t, env)
-	assert.False(t, cfg.willUseTC())
-
-	env = envMap{"BEYLA_BPF_CONTEXT_PROPAGATION": "disabled"}
-	cfg = loadConfig(t, env)
 	assert.False(t, cfg.willUseTC())
 
 	env = envMap{"BEYLA_BPF_CONTEXT_PROPAGATION": "all"}
@@ -618,7 +612,7 @@ func TestWillUseTC(t *testing.T) {
 func TestOBIConfigConversion(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Prometheus.Port = 6060
-	cfg.Metrics.MetricsEndpoint = "http://localhost:4318"
+	cfg.OTELMetrics.MetricsEndpoint = "http://localhost:4318"
 	cfg.NetworkFlows.Enable = true
 	cfg.Attributes.Kubernetes.Enable = kubeflags.EnabledTrue
 	cfg.Attributes.HostID.Override = "test-instance-id"
@@ -632,7 +626,7 @@ func TestOBIConfigConversion(t *testing.T) {
 
 	dst := cfg.AsOBI()
 	assert.Equal(t, dst.Prometheus.Port, 6060)
-	assert.Equal(t, dst.Metrics.MetricsEndpoint, "http://localhost:4318")
+	assert.Equal(t, dst.OTELMetrics.MetricsEndpoint, "http://localhost:4318")
 	assert.True(t, dst.NetworkFlows.Enable)
 	assert.Equal(t, kubeflags.EnabledTrue, dst.Attributes.Kubernetes.Enable)
 	assert.Equal(t, "test-instance-id", dst.Attributes.HostID.Override)

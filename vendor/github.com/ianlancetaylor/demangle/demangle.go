@@ -775,8 +775,21 @@ func (st *state) prefix() AST {
 			next = un
 			module = nil
 			if isUnCast {
-				if tn, ok := un.(*TaggedName); ok {
+				if cast != nil {
+					st.fail("cast in scope of cast")
+				}
+				if m, ok := un.(*ModuleEntity); ok {
+					un = m.Name
+				}
+				for {
+					tn, ok := un.(*TaggedName)
+					if !ok {
+						break
+					}
 					un = tn.Name
+				}
+				if f, ok := un.(*Friend); ok {
+					un = f.Name
 				}
 				cast = un.(*Cast)
 			}
@@ -794,6 +807,12 @@ func (st *state) prefix() AST {
 				}
 				if last == nil {
 					st.fail("constructor before name is seen")
+				}
+				switch st.str[0] {
+				// 0 is not used.
+				case '1', '2', '3', '4', '5':
+				default:
+					st.fail("unknown constructor type")
 				}
 				st.advance(1)
 				var base AST
@@ -816,6 +835,12 @@ func (st *state) prefix() AST {
 					}
 					if last == nil {
 						st.fail("destructor before name is seen")
+					}
+					switch st.str[1] {
+					// 3 is not used.
+					case '0', '1', '2', '4', '5':
+					default:
+						st.fail("unknown destructor type")
 					}
 					st.advance(2)
 					next = &Destructor{Name: getLast(last)}
@@ -981,6 +1006,8 @@ func (st *state) unqualifiedName(module AST) (r AST, isCast bool) {
 				st.advance(2)
 				st.compactNumber()
 				a = &Name{Name: "'block-literal'"}
+			case 'e':
+				a = st.unnamedEnum()
 			case 'l':
 				a = st.closureTypeName()
 			case 't':
@@ -1660,7 +1687,11 @@ func (st *state) demangleType(isCast bool) AST {
 		if isDigit(c2) || c2 == '_' || isUpper(c2) {
 			ret = st.substitution(false)
 			if _, ok := ret.(*ModuleName); ok {
-				ret, _ = st.unqualifiedName(ret)
+				var isCast bool
+				ret, isCast = st.unqualifiedName(ret)
+				if isCast {
+					st.setTemplate(ret, nil)
+				}
 				st.subs.add(ret)
 			}
 			if len(st.str) == 0 || st.str[0] != 'I' {
@@ -1706,6 +1737,9 @@ func (st *state) demangleType(isCast bool) AST {
 			st.fail("expected source name or unnamed type")
 		}
 		switch st.str[1] {
+		case 'e':
+			ret = st.unnamedEnum()
+			addSubst = false
 		case 'l':
 			ret = st.closureTypeName()
 			addSubst = false
@@ -2714,7 +2748,10 @@ func (st *state) expression() AST {
 			// Skip operator function ID.
 			st.advance(2)
 		}
-		n, _ := st.unqualifiedName(nil)
+		n, isCast := st.unqualifiedName(nil)
+		if isCast {
+			st.setTemplate(n, nil)
+		}
 		if len(st.str) > 0 && st.str[0] == 'I' {
 			n = st.template(n)
 		}
@@ -2816,7 +2853,11 @@ func (st *state) expression() AST {
 				right = st.expression()
 				return &Fold{Left: code[1] == 'l', Op: left, Arg1: right, Arg2: nil}
 			} else if code == "di" {
-				left, _ = st.unqualifiedName(nil)
+				var isCast bool
+				left, isCast = st.unqualifiedName(nil)
+				if isCast {
+					st.setTemplate(left, nil)
+				}
 			} else {
 				left = st.expression()
 			}
@@ -3047,6 +3088,9 @@ func (st *state) requiresExpr() AST {
 		for len(st.str) > 0 && st.str[0] != '_' {
 			typ := st.demangleType(false)
 			params = append(params, typ)
+		}
+		if len(st.str) == 0 {
+			st.fail("expected requirement parameter")
 		}
 		st.advance(1)
 	}
@@ -3399,6 +3443,21 @@ func (st *state) unnamedTypeName() AST {
 	st.checkChar('t')
 	num := st.compactNumber()
 	ret := &UnnamedType{Num: num}
+	st.subs.add(ret)
+	return ret
+}
+
+// unnamedEnum parses an unnamed enum type.
+// https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2020/p2115r0.html
+func (st *state) unnamedEnum() AST {
+	st.checkChar('U')
+	st.checkChar('e')
+	typ := st.demangleType(false)
+	name := st.sourceName()
+	ret := &UnnamedEnum{
+		Underlying: typ,
+		Name:       name,
+	}
 	st.subs.add(ret)
 	return ret
 }

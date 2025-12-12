@@ -21,6 +21,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/otel/metric"
 	metric2 "go.opentelemetry.io/obi/pkg/export/otel/metric/api/metric"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
+	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
 	"go.opentelemetry.io/obi/pkg/internal/netolly/ebpf"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
@@ -30,13 +31,13 @@ import (
 // NetMetricsConfig extends MetricsConfig for Network Metrics
 type NetMetricsConfig struct {
 	Metrics     *otelcfg.MetricsConfig
+	CommonCfg   *perapp.MetricsConfig
 	SelectorCfg *attributes.SelectorConfig
-	// Deprecated: to be removed in Beyla 3.0 with OTEL_EBPF_NETWORK_METRICS bool flag
-	GloballyEnabled bool
 }
 
-func (mc NetMetricsConfig) Enabled() bool {
-	return mc.Metrics != nil && mc.Metrics.EndpointEnabled() && (mc.Metrics.NetworkMetricsEnabled() || mc.GloballyEnabled)
+func (mc *NetMetricsConfig) Enabled() bool {
+	return mc.Metrics != nil && mc.Metrics.EndpointEnabled() &&
+		mc.CommonCfg.Features.AnyNetwork()
 }
 
 func nmlog() *slog.Logger {
@@ -79,7 +80,9 @@ type netMetricsExporter struct {
 }
 
 func NetMetricsExporterProvider(
-	ctxInfo *global.ContextInfo, cfg *NetMetricsConfig, input *msg.Queue[[]*ebpf.Record],
+	ctxInfo *global.ContextInfo,
+	cfg *NetMetricsConfig,
+	input *msg.Queue[[]*ebpf.Record],
 ) swarm.InstanceFunc {
 	return func(ctx context.Context) (swarm.RunFunc, error) {
 		if !cfg.Enabled() {
@@ -98,7 +101,10 @@ func NetMetricsExporterProvider(
 }
 
 func newMetricsExporter(
-	ctx context.Context, ctxInfo *global.ContextInfo, cfg *NetMetricsConfig, input *msg.Queue[[]*ebpf.Record],
+	ctx context.Context,
+	ctxInfo *global.ContextInfo,
+	cfg *NetMetricsConfig,
+	input *msg.Queue[[]*ebpf.Record],
 ) (*netMetricsExporter, error) {
 	log := nmlog()
 	log.Debug("instantiating network metrics exporter provider")
@@ -124,7 +130,7 @@ func newMetricsExporter(
 		clock:     clock,
 		expireTTL: cfg.Metrics.TTL,
 	}
-	if cfg.GloballyEnabled || cfg.Metrics.NetworkFlowBytesEnabled() {
+	if cfg.CommonCfg.Features.NetworkBytes() {
 		log := log.With("metricFamily", "FlowBytes")
 		bytesMetric, err := ebpfEvents.Int64Counter(attributes.NetworkFlow.OTEL,
 			metric2.WithDescription("total bytes_sent value of network flows observed by probe since its launch"),
@@ -143,7 +149,7 @@ func newMetricsExporter(
 		nme.flowBytes = NewExpirer[*ebpf.Record, metric2.Int64Counter, float64](ctx, bytesMetric, attrs, clock.Time, cfg.Metrics.TTL)
 	}
 
-	if cfg.Metrics.NetworkInterzoneMetricsEnabled() {
+	if cfg.CommonCfg.Features.NetworkInterZone() {
 		log := log.With("metricFamily", "InterZoneBytes")
 		bytesMetric, err := ebpfEvents.Int64Counter(attributes.NetworkInterZone.OTEL,
 			metric2.WithDescription("total bytes_sent value between Cloud availability zones"),

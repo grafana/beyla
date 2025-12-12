@@ -766,7 +766,12 @@ func (twq *TypeWithQualifiers) print(ps *printState) {
 		// The qualifier wasn't printed by Base.
 		ps.writeByte(' ')
 		ps.print(twq.Qualifiers)
-		ps.inner = ps.inner[:len(ps.inner)-1]
+		// In implausible situations like a throw qualified by a throw,
+		// we may have printed the qualifier already,
+		// so check the length of ps.inner again.
+		if len(ps.inner) > 0 {
+			ps.inner = ps.inner[:len(ps.inner)-1]
+		}
 	}
 }
 
@@ -4583,6 +4588,59 @@ func (ut *UnnamedType) goString(indent int, field string) string {
 	return fmt.Sprintf("%*s%sUnnamedType: Num: %d", indent, "", field, ut.Num)
 }
 
+// UnnamedEnum is an unnamed enum type.
+type UnnamedEnum struct {
+	Underlying AST
+	Name       AST
+}
+
+func (ue *UnnamedEnum) print(ps *printState) {
+	ps.writeString("{enum:")
+	ps.print(ue.Underlying)
+	ps.writeByte('{')
+	ps.print(ue.Name)
+	ps.writeString("}}")
+}
+
+func (ue *UnnamedEnum) Traverse(fn func(AST) bool) {
+	if fn(ue) {
+		ue.Underlying.Traverse(fn)
+		ue.Name.Traverse(fn)
+	}
+}
+
+func (ue *UnnamedEnum) Copy(fn func(AST) AST, skip func(AST) bool) AST {
+	if skip(ue) {
+		return nil
+	}
+	underlying := ue.Underlying.Copy(fn, skip)
+	name := ue.Name.Copy(fn, skip)
+	if underlying == nil && name == nil {
+		return fn(ue)
+	}
+	if underlying == nil {
+		underlying = ue.Underlying
+	}
+	if name == nil {
+		name = ue.Name
+	}
+	ue = &UnnamedEnum{Underlying: underlying, Name: name}
+	if r := fn(ue); r != nil {
+		return r
+	}
+	return ue
+}
+
+func (ue *UnnamedEnum) GoString() string {
+	return ue.goString(0, "")
+}
+
+func (ue *UnnamedEnum) goString(indent int, field string) string {
+	return fmt.Sprintf("%*s%sUnnamedEnum:\n%s\n%s", indent, "", field,
+		ue.Underlying.goString(indent+2, "Underlying: "),
+		ue.Name.goString(indent+2, "Name: "))
+}
+
 // Clone is a clone of a function, with a distinguishing suffix.
 type Clone struct {
 	Base   AST
@@ -4827,7 +4885,9 @@ func (mn *ModuleName) print(ps *printState) {
 
 func (mn *ModuleName) Traverse(fn func(AST) bool) {
 	if fn(mn) {
-		mn.Parent.Traverse(fn)
+		if mn.Parent != nil {
+			mn.Parent.Traverse(fn)
+		}
 		mn.Name.Traverse(fn)
 	}
 }

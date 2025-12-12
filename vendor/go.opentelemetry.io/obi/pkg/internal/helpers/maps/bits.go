@@ -46,3 +46,9 @@ func MappedBits[T comparable](values []T, maps map[T]Bits, opts ...BuilderOpt[T]
 func (i Bits) Has(value Bits) bool {
 	return i&value == value
 }
+
+// Any returns true if the map contains any of the value Bits passed as argument.
+// This is, returns whether target & value != 0.
+func (i Bits) Any(value Bits) bool {
+	return i&value != 0
+}

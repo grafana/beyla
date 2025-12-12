@@ -7,10 +7,12 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
+	"go.opentelemetry.io/obi/pkg/export"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/connector"
 	"go.opentelemetry.io/obi/pkg/export/expire"
+	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
 	"go.opentelemetry.io/obi/pkg/export/prom"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
@@ -18,7 +20,7 @@ import (
 
 	"github.com/grafana/beyla/v2/pkg/export/extraattributes"
 	extranames "github.com/grafana/beyla/v2/pkg/export/extraattributes/names"
-	"github.com/grafana/beyla/v2/pkg/export/otel"
+	"github.com/grafana/beyla/v2/pkg/export/otel/bexport"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
 )
 
@@ -26,12 +28,13 @@ import (
 type ProcPrometheusConfig struct {
 	Metrics     *prom.PrometheusConfig
 	SelectorCfg *attributes.SelectorConfig
+	CommonCfg   *perapp.MetricsConfig
 }
 
 // nolint:gocritic
 func (p ProcPrometheusConfig) Enabled() bool {
-	return p.Metrics != nil && (p.Metrics.Port != 0 || p.Metrics.Registry != nil) && p.Metrics.OTelMetricsEnabled() &&
-		slices.Contains(p.Metrics.Features, otel.FeatureProcess)
+	return p.Metrics != nil && (p.Metrics.Port != 0 || p.Metrics.Registry != nil) &&
+		bexport.Has(p.CommonCfg.Features, export.FeatureApplicationRED|bexport.FeatureProcess)
 }
 
 // ProcPrometheusEndpoint provides a pipeline node that export the process information as

@@ -1,0 +1,7 @@
+---
+config:
+  data:
+    prometheus_export:
+      port: 0
+    internal_metrics:
+      prometheus: {}

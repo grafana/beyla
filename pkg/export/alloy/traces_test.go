@@ -265,7 +265,7 @@ func TestConnectTraces(t *testing.T) {
 			TracesReceiver: beyla.TracesReceiverConfig{
 				Sampler:          services.SamplerConfig{Name: "always_on"},
 				Traces:           []beyla.Consumer{mts},
-				Instrumentations: []string{instrumentations.InstrumentationALL},
+				Instrumentations: []instrumentations.Instrumentation{instrumentations.InstrumentationALL},
 			},
 		},
 		input,
@@ -386,7 +386,7 @@ func makeTracesTestReceiverWithConsumer(mockConsumer *mockTraceConsumer) *traces
 	return &tracesReceiver{
 		cfg:    cfg,
 		hostID: "Alloy",
-		is: instrumentations.NewInstrumentationSelection([]string{
+		is: instrumentations.NewInstrumentationSelection([]instrumentations.Instrumentation{
 			instrumentations.InstrumentationALL,
 		}),
 		traceAttrs:     make(map[attr.Name]struct{}),
@@ -398,7 +398,7 @@ func makeTracesTestReceiver() *tracesReceiver {
 	return &tracesReceiver{
 		cfg:    &beyla.TracesReceiverConfig{},
 		hostID: "Alloy",
-		is: instrumentations.NewInstrumentationSelection([]string{
+		is: instrumentations.NewInstrumentationSelection([]instrumentations.Instrumentation{
 			instrumentations.InstrumentationALL,
 		}),
 	}
@@ -409,7 +409,7 @@ func makeTracesTestReceiverWithSpanMetrics() *tracesReceiver {
 		cfg:                &beyla.TracesReceiverConfig{},
 		hostID:             "Alloy",
 		spanMetricsEnabled: true,
-		is: instrumentations.NewInstrumentationSelection([]string{
+		is: instrumentations.NewInstrumentationSelection([]instrumentations.Instrumentation{
 			instrumentations.InstrumentationALL,
 		}),
 	}

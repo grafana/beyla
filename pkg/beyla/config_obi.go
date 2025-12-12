@@ -40,16 +40,9 @@ func (c *Config) AsOBI() *obi.Config {
 			// ".Some.Missing.FieldInSrc": cfgutil.SkipConversion,
 		})
 		overrideOBI(c, obiCfg)
-		normalizeOBIConfig(obiCfg)
 		c.obi = obiCfg
 	}
 	return c.obi
-}
-
-// normalizeConfig normalizes user input to a common set of assumptions that are global to OBI
-// TODO: this replicates a private function in OBI repo. We should make it public and invoke it here instead.
-func normalizeOBIConfig(c *obi.Config) {
-	c.Attributes.Select.Normalize()
 }
 
 // overrideOBI contains some extra tweaking that are required in the destination OBI configuration,
@@ -57,10 +50,10 @@ func normalizeOBIConfig(c *obi.Config) {
 func overrideOBI(src *Config, dst *obi.Config) {
 	// metrics && traces endpoints
 	if src.Grafana.OTLP.MetricsEnabled() {
-		dst.Metrics.OTLPEndpointProvider = func() (string, bool) {
-			return otel.ResolveOTLPEndpoint(src.Metrics.MetricsEndpoint, src.Metrics.CommonEndpoint, &src.Grafana.OTLP)
+		dst.OTELMetrics.OTLPEndpointProvider = func() (string, bool) {
+			return otel.ResolveOTLPEndpoint(src.OTELMetrics.MetricsEndpoint, src.OTELMetrics.CommonEndpoint, &src.Grafana.OTLP)
 		}
-		dst.Metrics.InjectHeaders = src.Grafana.OTLP.OverrideHeaders
+		dst.OTELMetrics.InjectHeaders = src.Grafana.OTLP.OverrideHeaders
 	}
 	if src.Grafana.OTLP.TracesEnabled() {
 		dst.Traces.OTLPEndpointProvider = func() (string, bool) {

@@ -148,7 +148,7 @@ func (pf *ProcessFinder) connectSurveySubPipeline(swi *swarm.Instancer, kubeEnri
 		msg.ChannelBufferLen(pf.cfg.ChannelBufferLen), msg.Name("surveyEvents"))
 	swi.Add(SurveyEventGenerator(&pf.cfg.Attributes.Kubernetes, pf.ctxInfo.K8sInformer, surveyExecutableTypes, surveyEvents),
 		swarm.WithID("SurveyEventGenerator"))
-	swi.Add(otel.SurveyInfoMetrics(pf.ctxInfo, &pf.cfg.Metrics, surveyEvents),
+	swi.Add(otel.SurveyInfoMetrics(pf.ctxInfo, &pf.cfg.OTELMetrics, surveyEvents),
 		swarm.WithID("SurveyInfoMetrics"))
 	swi.Add(prom.SurveyPrometheusEndpoint(pf.ctxInfo, &pf.cfg.Prometheus, surveyEvents),
 		swarm.WithID("SurveyPrometheusEndpoint"))

@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"regexp"
 	"strconv"
 	"strings"
 	"unsafe"
@@ -33,6 +34,11 @@ const (
 )
 
 const initialHeaderTableSize = 4096
+
+var (
+	validPath        = regexp.MustCompile(`^[A-Za-z0-9\-/._~]+$`)
+	validContentType = regexp.MustCompile(`^[A-Za-z\-/\+]+$`)
+)
 
 type h2Connection struct {
 	hdec     *bhpack.Decoder
@@ -84,13 +90,50 @@ func protocolIsGRPC(activeGRPCConnections *lru.Cache[uint64, h2Connection], conn
 
 var commonHDec = bhpack.NewDecoder(0, nil)
 
+func isHTTPOp(op string) bool {
+	return op == "GET" || op == "POST" || op == "PATCH" || op == "DELETE" || op == "OPTIONS" || op == "HEAD"
+}
+
+func handleHeaderField(hf *bhpack.HeaderField) bool {
+	hfKey := strings.ToLower(hf.Name)
+	switch hfKey {
+	case ":method":
+		val := strings.ToUpper(hf.Value)
+		if isHTTPOp(val) {
+			return true
+		}
+	case ":scheme":
+		val := strings.ToUpper(hf.Value)
+		if val == "HTTP" {
+			return true
+		}
+	case "traceparent":
+		return true
+	case ":path":
+		val := hf.Value
+		if pos := strings.Index(val, "?"); pos >= 0 {
+			val = val[:pos]
+		}
+		if validPath.MatchString(val) {
+			return true
+		}
+	case "content-type":
+		val := hf.Value
+		if validContentType.MatchString(val) {
+			return true
+		}
+	case "grpc-status":
+		return true
+	}
+
+	return false
+}
+
 func knownFrameKeys(fr *http2.Framer, hf *http2.HeadersFrame) bool {
-	known := false
+	knownCount := 0
 	commonHDec.SetEmitFunc(func(hf bhpack.HeaderField) {
-		hfKey := strings.ToLower(hf.Name)
-		switch hfKey {
-		case ":method", ":path", "content-type", ":status", "grpc-status":
-			known = true
+		if handleHeaderField(&hf) {
+			knownCount++
 		}
 	})
 	// Lose reference to MetaHeadersFrame:
@@ -116,7 +159,7 @@ func knownFrameKeys(fr *http2.Framer, hf *http2.HeadersFrame) bool {
 		frag = cf.HeaderBlockFragment()
 	}
 
-	return known
+	return knownCount > 1
 }
 
 func readMetaFrame(parseContext *EBPFParseContext, connID uint64, fr *http2.Framer, hf *http2.HeadersFrame) (string, string, string, bool) {
@@ -358,8 +401,10 @@ func http2FromBuffers(parseContext *EBPFParseContext, event *BPFHTTP2Info) (requ
 		if ff, ok := f.(*http2.HeadersFrame); ok {
 			rok := false
 			method, path, contentType, ok := readMetaFrame(parseContext, connID, framer, ff)
-
-			if path == "" {
+			if pos := strings.Index(path, "?"); pos >= 0 {
+				path = path[:pos]
+			}
+			if path == "" || !validPath.MatchString(path) {
 				path = "*"
 			}
 

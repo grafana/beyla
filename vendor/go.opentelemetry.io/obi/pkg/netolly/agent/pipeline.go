@@ -104,15 +104,15 @@ func (f *Flows) buildPipeline(ctx context.Context) (*swarm.Runner, error) {
 	// Not all the nodes are mandatory here. Is the responsibility of each Provider function to decide
 	// whether each node is going to be instantiated or just ignored.
 	swi.Add(otel.NetMetricsExporterProvider(f.ctxInfo, &otel.NetMetricsConfig{
-		Metrics:         &f.cfg.Metrics,
-		SelectorCfg:     selectorCfg,
-		GloballyEnabled: f.cfg.NetworkFlows.Enable,
+		Metrics:     &f.cfg.OTELMetrics,
+		SelectorCfg: selectorCfg,
+		CommonCfg:   &f.cfg.Metrics,
 	}, filteredFlows), swarm.WithID("OTelExporter"))
 
 	swi.Add(prom.NetPrometheusEndpoint(f.ctxInfo, &prom.NetPrometheusConfig{
-		Config:          &f.cfg.Prometheus,
-		SelectorCfg:     selectorCfg,
-		GloballyEnabled: f.cfg.NetworkFlows.Enable,
+		Config:      &f.cfg.Prometheus,
+		SelectorCfg: selectorCfg,
+		CommonCfg:   &f.cfg.Metrics,
 	}, filteredFlows), swarm.WithID("PrometheusExporter"))
 
 	swi.Add(swarm.DirectInstance(export.FlowPrinterProvider(f.cfg.NetworkFlows.Print, filteredFlows)),

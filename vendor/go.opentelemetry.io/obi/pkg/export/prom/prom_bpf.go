@@ -16,6 +16,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/connector"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	"go.opentelemetry.io/obi/pkg/export/otel"
+	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 )
@@ -23,6 +24,7 @@ import (
 // BPFCollector implements prometheus.Collector for collecting metrics about currently loaded eBPF programs.
 type BPFCollector struct {
 	promCfg         *PrometheusConfig
+	commonCfg       *perapp.MetricsConfig
 	internalMetrics imetrics.Reporter
 	promConnect     *connector.PrometheusManager
 	ctxInfo         *global.ContextInfo
@@ -61,12 +63,13 @@ type BpfMapMetrics struct {
 func BPFMetrics(
 	ctxInfo *global.ContextInfo,
 	cfg *PrometheusConfig,
+	mpCfg *perapp.MetricsConfig,
 ) swarm.InstanceFunc {
 	return func(_ context.Context) (swarm.RunFunc, error) {
-		if !bpfCollectorEnabled(cfg, ctxInfo.Metrics) {
+		if !bpfCollectorEnabled(cfg, mpCfg, ctxInfo.Metrics) {
 			return swarm.EmptyRunFunc()
 		}
-		collector := newBPFCollector(ctxInfo, cfg)
+		collector := newBPFCollector(ctxInfo, cfg, mpCfg)
 		return collector.start, nil
 	}
 }
@@ -76,17 +79,18 @@ func internalMetricsOTELEnabled(internalMetrics imetrics.Reporter) bool {
 	return ok
 }
 
-func promMetricsEnabled(cfg *PrometheusConfig) bool {
-	return cfg.EndpointEnabled() && cfg.EBPFEnabled()
+func promMetricsEnabled(cfg *PrometheusConfig, mpCfg *perapp.MetricsConfig) bool {
+	return cfg.EndpointEnabled() && mpCfg.Features.BPF()
 }
 
-func bpfCollectorEnabled(cfg *PrometheusConfig, internalMetrics imetrics.Reporter) bool {
-	return promMetricsEnabled(cfg) || internalMetricsOTELEnabled(internalMetrics)
+func bpfCollectorEnabled(cfg *PrometheusConfig, mpCfg *perapp.MetricsConfig, internalMetrics imetrics.Reporter) bool {
+	return promMetricsEnabled(cfg, mpCfg) || internalMetricsOTELEnabled(internalMetrics)
 }
 
-func newBPFCollector(ctxInfo *global.ContextInfo, cfg *PrometheusConfig) *BPFCollector {
+func newBPFCollector(ctxInfo *global.ContextInfo, cfg *PrometheusConfig, mpCfg *perapp.MetricsConfig) *BPFCollector {
 	c := &BPFCollector{
 		promCfg:         cfg,
+		commonCfg:       mpCfg,
 		internalMetrics: ctxInfo.Metrics,
 		log:             slog.With("component", "prom.BPFCollector"),
 		ctxInfo:         ctxInfo,
@@ -105,7 +109,7 @@ func newBPFCollector(ctxInfo *global.ContextInfo, cfg *PrometheusConfig) *BPFCol
 			nil,
 		),
 	}
-	if promMetricsEnabled(cfg) {
+	if promMetricsEnabled(cfg, mpCfg) {
 		// Register the collector
 		c.promConnect.Register(cfg.Port, cfg.Path, c)
 	}
@@ -113,7 +117,7 @@ func newBPFCollector(ctxInfo *global.ContextInfo, cfg *PrometheusConfig) *BPFCol
 }
 
 func (bc *BPFCollector) start(ctx context.Context) {
-	if promMetricsEnabled(bc.promCfg) {
+	if promMetricsEnabled(bc.promCfg, bc.commonCfg) {
 		bc.reportMetrics(ctx)
 	} else {
 		go bc.collectInternalMetrics(ctx)

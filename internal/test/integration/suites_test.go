@@ -334,6 +334,7 @@ func TestSuite_NodeJS(t *testing.T) {
 	require.NoError(t, compose.Up())
 	t.Run("NodeJS RED metrics", testREDMetricsNodeJSHTTP)
 	t.Run("HTTP traces (kprobes)", testHTTPTracesKProbes)
+	t.Run("HTTP nested traces large HTTPS (kprobes)", testHTTPTracesNestedNodeJSLargeHTTPS)
 	require.NoError(t, compose.Close())
 }
 
@@ -394,10 +395,10 @@ func TestSuite_Python(t *testing.T) {
 	// checking process metrics before any other test lets us verify that even if an application
 	// hasn't received any request, their processes are still instrumented
 	t.Run("Checking process metrics", testProcesses(map[string]string{
-		"process_executable_name": "python",
-		"process_executable_path": "/usr/local/bin/python",
+		"process_executable_name": "python3.14",
+		"process_executable_path": "/usr/local/bin/python3.14",
 		"process_command":         "gunicorn",
-		"process_command_line":    "/usr/local/bin/python /usr/local/bin/gunicorn -w 4 -b 0.0.0.0:8380 main:app --timeout 90",
+		"process_command_line":    "/usr/local/bin/python3.14 /usr/local/bin/gunicorn -w 4 -b 0.0.0.0:8380 main:app --timeout 90",
 	}))
 	t.Run("Python RED metrics", testREDMetricsPythonHTTP)
 	t.Run("Python RED metrics with timeouts", testREDMetricsTimeoutPythonHTTP)

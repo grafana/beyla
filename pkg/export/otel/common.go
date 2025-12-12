@@ -11,9 +11,8 @@ import (
 var timeNow = time.Now
 
 const (
-	SurveyInfo     = "survey_info"
-	FeatureProcess = "application_process"
-	ReporterName   = "github.com/grafana/beyla"
+	SurveyInfoMetricName = "survey_info"
+	ReporterName         = "github.com/grafana/beyla"
 )
 
 // ResolveOTLPEndpoint returns the OTLP endpoint, defined from one of the following sources, from highest to lowest priority

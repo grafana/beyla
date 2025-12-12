@@ -136,15 +136,21 @@ func ReadTCPRequestIntoSpan(parseCtx *EBPFParseContext, cfg *config.EBPFTracer, 
 		if isHTTP2(requestBuffer, int(event.Len)) || isHTTP2(responseBuffer, int(event.RespLen)) {
 			evCopy := *event
 			MisclassifiedEvents <- MisclassifiedEvent{EventType: EventTypeKHTTP2, TCPInfo: &evCopy}
+			return request.Span{}, true, nil // ignore for now, next event will be parsed
 		} else {
 			k, ignore, err := ProcessPossibleKafkaEvent(event, requestBuffer, responseBuffer, parseCtx.kafkaTopicUUIDToName)
-			if ignore {
+			if ignore && err == nil {
 				return request.Span{}, true, nil // parsed kafka event, but we don't want to create a span for it
 			}
 			if err == nil {
 				return TCPToKafkaToSpan(event, k), false, nil
 			}
 		}
+	}
+
+	if cfg.ProtocolDebug {
+		fmt.Printf("![>] %v\n", requestBuffer)
+		fmt.Printf("![<] %v\n", responseBuffer)
 	}
 
 	return request.Span{}, true, nil // ignore if we couldn't parse it

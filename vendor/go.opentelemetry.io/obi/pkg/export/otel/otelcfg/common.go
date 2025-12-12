@@ -61,17 +61,6 @@ const (
 const (
 	UsualPortGRPC = "4317"
 	UsualPortHTTP = "4318"
-
-	FeatureNetwork          = "network"
-	FeatureNetworkInterZone = "network_inter_zone"
-	FeatureApplication      = "application"
-	FeatureSpan             = "application_span"
-	FeatureSpanOTel         = "application_span_otel"
-	FeatureSpanSizes        = "application_span_sizes"
-	FeatureGraph            = "application_service_graph"
-	FeatureProcess          = "application_process"
-	FeatureApplicationHost  = "application_host"
-	FeatureEBPF             = "ebpf"
 )
 
 func omitFieldsForYAML(input any, omitFields map[string]struct{}) map[string]any {
@@ -102,23 +91,6 @@ func omitFieldsForYAML(input any, omitFields map[string]struct{}) map[string]any
 	}
 
 	return result
-}
-
-// Buckets defines the histograms bucket boundaries, and allows users to
-// redefine them
-type Buckets struct {
-	DurationHistogram     []float64 `yaml:"duration_histogram"`
-	RequestSizeHistogram  []float64 `yaml:"request_size_histogram"`
-	ResponseSizeHistogram []float64 `yaml:"response_size_histogram"`
-}
-
-var DefaultBuckets = Buckets{
-	// Default values as specified in the OTEL specification
-	// https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/metrics/semantic_conventions/http-metrics.md
-	DurationHistogram: []float64{0, 0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10},
-
-	RequestSizeHistogram:  []float64{0, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192},
-	ResponseSizeHistogram: []float64{0, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192},
 }
 
 func GetAppResourceAttrs(hostID string, service *svc.Attrs) []attribute.KeyValue {

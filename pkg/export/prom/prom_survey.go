@@ -16,10 +16,8 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
-)
 
-const (
-	SurveyInfo = "survey_info"
+	otel2 "github.com/grafana/beyla/v2/pkg/export/otel"
 )
 
 func pslog() *slog.Logger {
@@ -83,7 +81,7 @@ func newSurveyReporter(
 		hostID:        ctxInfo.HostID,
 		promConnect:   ctxInfo.Prometheus,
 		surveyInfo: prometheus.NewGaugeVec(prometheus.GaugeOpts{
-			Name: SurveyInfo,
+			Name: otel2.SurveyInfoMetricName,
 			Help: "attributes associated to a given surveyed entity",
 		}, labelNamesTargetInfo(kubeEnabled, extraMetadataLabels)),
 		extraMetadataLabels: extraMetadataLabels,

@@ -68,7 +68,7 @@ func (i *SDKInjector) findTempDir(root string, ie *ebpf.Instrumentable) (string,
 }
 
 func (i *SDKInjector) Enabled() bool {
-	return i.cfg.EBPF.UseOTelSDKForJava && (i.cfg.Traces.Enabled() || i.cfg.Metrics.Enabled())
+	return i.cfg.EBPF.UseOTelSDKForJava && (i.cfg.Traces.Enabled() || i.cfg.OTELMetrics.EndpointEnabled())
 }
 
 func (i *SDKInjector) NewExecutable(ie *ebpf.Instrumentable) error {
@@ -138,7 +138,7 @@ func otlpOptions(cfg *obi.Config) (map[string]string, error) {
 	var tracesCommon, metricsCommon bool
 
 	tracesEndpoint, tracesCommon = cfg.Traces.OTLPTracesEndpoint()
-	metricsEndpoint, metricsCommon = cfg.Metrics.OTLPMetricsEndpoint()
+	metricsEndpoint, metricsCommon = cfg.OTELMetrics.OTLPMetricsEndpoint()
 
 	if tracesCommon || metricsCommon {
 		if tracesEndpoint != metricsEndpoint {
@@ -147,7 +147,7 @@ func otlpOptions(cfg *obi.Config) (map[string]string, error) {
 		}
 		options["otel.exporter.otlp.endpoint"] = tracesEndpoint
 		options["otel.exporter.otlp.protocol"] = string(cfg.Traces.GetProtocol())
-		options["otel.metric.export.interval"] = strconv.Itoa(int(cfg.Metrics.GetInterval().Milliseconds()))
+		options["otel.metric.export.interval"] = strconv.Itoa(int(cfg.OTELMetrics.GetInterval().Milliseconds()))
 		maps.Copy(options, otelcfg.HeadersFromEnv("OTEL_EXPORTER_OTLP_HEADERS"))
 	} else {
 		if cfg.Traces.Enabled() {
@@ -158,10 +158,10 @@ func otlpOptions(cfg *obi.Config) (map[string]string, error) {
 			options["otel.traces.exporter"] = "none"
 		}
 
-		if cfg.Metrics.Enabled() {
+		if cfg.OTELMetrics.EndpointEnabled() {
 			options["otel.exporter.otlp.metrics.endpoint"] = metricsEndpoint
-			options["otel.exporter.otlp.metrics.protocol"] = string(cfg.Metrics.GetProtocol())
-			options["otel.metric.export.interval"] = strconv.Itoa(int(cfg.Metrics.GetInterval().Milliseconds()))
+			options["otel.exporter.otlp.metrics.protocol"] = string(cfg.OTELMetrics.GetProtocol())
+			options["otel.metric.export.interval"] = strconv.Itoa(int(cfg.OTELMetrics.GetInterval().Milliseconds()))
 			maps.Copy(options, otelcfg.HeadersFromEnv("OTEL_EXPORTER_OTLP_METRICS_HEADERS"))
 		} else {
 			options["otel.metrics.exporter"] = "none"

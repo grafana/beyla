@@ -321,13 +321,28 @@ func (i *instrumenter) sockfilters(p Tracer) error {
 			if i.metrics != nil {
 				i.metrics.InstrumentationError(i.processName, imetrics.InstrumentationErrorAttachingSockFilter)
 			}
-			return fmt.Errorf("attaching socket filter: %w", err)
+			return fmt.Errorf("attaching socket filter: %w", i.handleSockFilterErr(err, filter))
 		}
 
 		p.AddCloser(&ebpfcommon.Filter{Fd: fd})
 	}
 
 	return nil
+}
+
+func (i *instrumenter) handleSockFilterErr(originalErr error, filter *ebpf.Program) error {
+	if !errors.Is(originalErr, unix.ENOMEM) {
+		return originalErr
+	}
+	info, err := filter.Info()
+	if err != nil {
+		return fmt.Errorf("getting program info: %w", originalErr)
+	}
+	jitedSize, err := info.JitedSize()
+	if err != nil {
+		return fmt.Errorf("getting jited size: %w", originalErr)
+	}
+	return fmt.Errorf("%s, socket filter has a jited size of %d, consider increasing the value net.core.optmem_max kernel parameter to be larger then the program jited size, this will not affect existing sockets but only future ones created", originalErr.Error(), jitedSize)
 }
 
 func attachSocketFilter(filter *ebpf.Program) (int, error) {

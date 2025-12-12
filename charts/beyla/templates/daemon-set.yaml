@@ -73,22 +73,16 @@ spec:
                 - ALL
           {{- end }}
           ports:
-          {{- if (and
-                    (or (.Values.service.targetPort) (.Values.config.data.prometheus_export))
-                    (ne .Values.service.targetPort 0)
-                    (ne (int .Values.config.data.prometheus_export.port) 0)
-                 ) }}
+          {{- if (or (.Values.service.targetPort) ((.Values.config.data.prometheus_export).port)) }}
           - name: {{ .Values.service.portName }}
             containerPort: {{ .Values.service.targetPort | default .Values.config.data.prometheus_export.port }}
             protocol: TCP
           {{- end }}
           {{- if (and
-                    (or (.Values.service.internalMetrics.targetPort) ((and .Values.config.data.internal_metrics .Values.config.data.internal_metrics.prometheus)))
-                    (not (eq (int .Values.config.data.prometheus_export.port) (int .Values.config.data.internal_metrics.prometheus.port)))
-                    (ne (int .Values.service.internalMetrics.targetPort) 0)
-                    (ne (int .Values.config.data.internal_metrics.prometheus.port) 0)
-                  )
-          }}
+                    (or .Values.service.internalMetrics.targetPort ((.Values.config.data.internal_metrics).prometheus).port)
+                    (ne ((.Values.config.data).prometheus_export).port ((.Values.config.data.internal_metrics).prometheus).port)
+                    (ne .Values.service.internalMetrics.targetPort .Values.service.targetPort)
+                  ) }}
           - name: {{ .Values.service.internalMetrics.portName }}
             containerPort: {{ .Values.service.internalMetrics.targetPort | default .Values.config.data.internal_metrics.prometheus.port }}
             protocol: TCP

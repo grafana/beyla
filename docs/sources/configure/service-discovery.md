@@ -44,6 +44,7 @@ You can override the service name, namespace, and other configurations per servi
 | `k8s_owner_name`       | Filter services by Kubernetes Pod owner (Deployment, ReplicaSet, DaemonSet, or StatefulSet). Refer to [K8s owner name](#k8s-owner-name). | string (glob)            | (unset)                  |
 | `k8s_pod_labels`       | Filter services by Kubernetes Pod labels. Refer to [K8s Pod labels](#k8s-pod-labels).                                                    | map[string]string (glob) | (unset)                  |
 | `k8s_pod_annotations`  | Filter services by Kubernetes Pod annotations. Refer to [K8s Pod annotations](#k8s-pod-annotations).                                     | map[string]string (glob) | (unset)                  |
+| `exports`              | Control what telemetry data to export for the matching service. Refer to [Exports](#exports).                                             | list of strings          | (all signals)            |
 
 ### Name
 
@@ -179,6 +180,25 @@ discovery:
 ```
 
 The preceding example discovers all Pods in the `backend` namespace that have an annotation `beyla.instrument` with a value that matches the glob `true`.
+
+### Exports
+
+Controls which telemetry signals Beyla exports for the matching service. This property enables per-service feature enablement, allowing you to selectively enable specific observability capabilities for different services within a single Beyla instance.
+
+The `exports` property accepts a list containing `metrics` and/or `traces`. An empty list `[]` disables export for the service. If not specified, Beyla exports all configured telemetry signals.
+
+For example:
+
+```yaml
+discovery:
+  instrument:
+    - k8s_deployment_name: frontend
+      exports: [metrics, traces]
+    - k8s_deployment_name: backend
+      exports: [metrics]
+    - k8s_deployment_name: worker
+      exports: []
+```
 
 ## Survey mode
 

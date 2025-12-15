@@ -5,6 +5,7 @@ on:
     branches: [ main ]
     paths:
       - 'pkg/**/*.go'
+      - '.obi-src/pkg/**/*.go'
 # Set restrictive permissions at workflow level
 permissions:
   contents: read

@@ -14,15 +14,7 @@ on:
       - "vendor/**"
       - "Makefile"
       - ".github/workflows/pull_request_integration_tests_arm.yml"
-      - ".obi-src/**.go"
-      - ".obi-src/go.mod"
-      - ".obi-src/go.sum"
-      - ".obi-src/bpf/**"
-      - ".obi-src/internal/**"
-      - ".obi-src/pkg/**"
-      - ".obi-src/cmd/**"
-      - ".obi-src/vendor/**"
-      - ".obi-src/Makefile"
+      - ".obi-src/**"
 
   pull_request:
     branches: ["main", "release-*"]
@@ -37,15 +29,7 @@ on:
       - "vendor/**"
       - "Makefile"
       - ".github/workflows/pull_request_integration_tests_arm.yml"
-      - ".obi-src/**.go"
-      - ".obi-src/go.mod"
-      - ".obi-src/go.sum"
-      - ".obi-src/bpf/**"
-      - ".obi-src/internal/**"
-      - ".obi-src/pkg/**"
-      - ".obi-src/cmd/**"
-      - ".obi-src/vendor/**"
-      - ".obi-src/Makefile"
+      - ".obi-src/**"
 
 # Set restrictive permissions at workflow level
 permissions:

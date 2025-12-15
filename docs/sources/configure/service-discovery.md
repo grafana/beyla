@@ -192,13 +192,17 @@ For example:
 ```yaml
 discovery:
   instrument:
-    - k8s_deployment_name: frontend
-      exports: [metrics, traces]
-    - k8s_deployment_name: backend
+    - k8s_deployment_name: "*"
       exports: [metrics]
+    - k8s_deployment_name: backend
+      exports: [traces]
     - k8s_deployment_name: worker
       exports: []
 ```
+
+This example configures Beyla to export only metrics for all services. For the specific case of `backend`, only traces are enabled, and for `worker`, everything is disabled. The order of defined instrument selectors matters, as later entries can override earlier export rules.
+
+For an export signal to function, you must configure the corresponding exporter in Beyla. For example, specifying `traces` in the `exports` list requires configuring the OTLP traces exporter via `otel_traces_export`. Specifying `metrics` requires configuring at least one metrics exporter, such as `prometheus_export` or `otel_metrics_export`. If you specify an export signal without configuring the corresponding exporter, Beyla ignores that signal.
 
 ## Survey mode
 

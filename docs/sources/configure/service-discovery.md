@@ -185,7 +185,7 @@ The preceding example discovers all Pods in the `backend` namespace that have an
 
 Controls which telemetry signals Beyla exports for the matching service. This property enables per-service feature enablement, allowing you to selectively enable specific observability capabilities for different services within a single Beyla instance.
 
-The `exports` property accepts a list containing `metrics` and/or `traces`. An empty list `[]` disables export for the service. If not specified, Beyla exports all configured telemetry signals.
+The `exports` property accepts a list containing `metrics`, `traces`, or both. An empty list `[]` disables export for the service. If not specified, Beyla exports all configured telemetry signals.
 
 For example:
 

@@ -1,0 +1,17 @@
+routes:
+  patterns:
+    - /test/:test_id
+  unmatched: path
+otel_metrics_export:
+  endpoint: http://otelcol:4318
+attributes:
+  select:
+    "*":
+      include: ["*"]
+discovery:
+  instrument:
+    - open_ports: 4000
+      namespace: integration-test
+      # TODO: elixir fails to be recognized as running in a container on kernels 6.14+.
+      # https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation/issues/780
+      # containers_only: true

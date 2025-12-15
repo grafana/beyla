@@ -30,7 +30,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/process"
-	"go.opentelemetry.io/obi/pkg/components/helpers"
+
+	"github.com/grafana/beyla/v2/pkg/internal/helpers"
 )
 
 const unknown string = "-"

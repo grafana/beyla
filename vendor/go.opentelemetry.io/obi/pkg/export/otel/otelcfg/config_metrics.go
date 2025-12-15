@@ -9,9 +9,11 @@ import (
 	"maps"
 	"net/url"
 	"os"
-	"slices"
 	"strings"
 	"time"
+
+	"go.opentelemetry.io/obi/pkg/export"
+	"go.opentelemetry.io/obi/pkg/export/instrumentations"
 )
 
 func mlog() *slog.Logger {
@@ -33,8 +35,8 @@ type MetricsConfig struct {
 	// InsecureSkipVerify is not standard, so we don't follow the same naming convention
 	InsecureSkipVerify bool `yaml:"insecure_skip_verify" env:"OTEL_EBPF_INSECURE_SKIP_VERIFY"`
 
-	Buckets              Buckets `yaml:"buckets"`
-	HistogramAggregation string  `yaml:"histogram_aggregation" env:"OTEL_EXPORTER_OTLP_METRICS_DEFAULT_HISTOGRAM_AGGREGATION"`
+	Buckets              export.Buckets `yaml:"buckets"`
+	HistogramAggregation string         `yaml:"histogram_aggregation" env:"OTEL_EXPORTER_OTLP_METRICS_DEFAULT_HISTOGRAM_AGGREGATION"`
 
 	ReportersCacheLen int `yaml:"reporters_cache_len" env:"OTEL_EBPF_METRICS_REPORT_CACHE_LEN"`
 
@@ -42,12 +44,14 @@ type MetricsConfig struct {
 	// and the Info messages leak internal details that are not usually valuable for the final user.
 	SDKLogLevel string `yaml:"otel_sdk_log_level" env:"OTEL_EBPF_SDK_LOG_LEVEL"`
 
-	// Features of metrics that are can be exported. Accepted values are "application" and "network".
+	// Features of metrics that can be exported. Accepted values: application, network,
+	// application_span, application_service_graph, ...
 	// envDefault is provided to avoid breaking changes
-	Features []string `yaml:"features" env:"OTEL_EBPF_METRICS_FEATURES,expand" envDefault:"${OTEL_EBPF_METRIC_FEATURES}"  envSeparator:","`
+	// Deprecated: use top-level MetricsConfig.Features instead.
+	DeprFeatures export.Features `yaml:"features"`
 
 	// Allows configuration of which instrumentations should be enabled, e.g. http, grpc, sql...
-	Instrumentations []string `yaml:"instrumentations" env:"OTEL_EBPF_METRICS_INSTRUMENTATIONS" envSeparator:","`
+	Instrumentations []instrumentations.Instrumentation `yaml:"instrumentations" env:"OTEL_EBPF_METRICS_INSTRUMENTATIONS" envSeparator:","`
 
 	// TTL is the time since a metric was updated for the last time until it is
 	// removed from the metrics set.
@@ -61,6 +65,11 @@ type MetricsConfig struct {
 
 	// InjectHeaders allows injecting custom headers to the HTTP OTLP exporter
 	InjectHeaders func(dst map[string]string) `yaml:"-" env:"-"`
+
+	// ExtraSpanResourceLabels adds extra metadata labels to OTEL span metrics from sources whose availability can't be known
+	// beforehand. For example, to add the OTEL deployment.environment resource attribute as a OTEL resource attribute,
+	// you should add `deployment.environment`.
+	ExtraSpanResourceLabels []string `yaml:"extra_span_resource_attributes" env:"OTEL_EBPF_EXTRA_SPAN_RESOURCE_ATTRIBUTES" envSeparator:","`
 }
 
 func (m MetricsConfig) MarshalYAML() (any, error) {
@@ -118,50 +127,6 @@ func (m *MetricsConfig) OTLPMetricsEndpoint() (string, bool) {
 func (m *MetricsConfig) EndpointEnabled() bool {
 	ep, _ := m.OTLPMetricsEndpoint()
 	return ep != ""
-}
-
-func (m *MetricsConfig) AnySpanMetricsEnabled() bool {
-	return m.SpanMetricsEnabled() || m.SpanMetricsSizesEnabled() || m.ServiceGraphMetricsEnabled()
-}
-
-func (m *MetricsConfig) SpanMetricsSizesEnabled() bool {
-	return slices.Contains(m.Features, FeatureSpanSizes)
-}
-
-func (m *MetricsConfig) SpanMetricsEnabled() bool {
-	return slices.Contains(m.Features, FeatureSpan) || slices.Contains(m.Features, FeatureSpanOTel)
-}
-
-func (m *MetricsConfig) InvalidSpanMetricsConfig() bool {
-	return slices.Contains(m.Features, FeatureSpan) && slices.Contains(m.Features, FeatureSpanOTel)
-}
-
-func (m *MetricsConfig) HostMetricsEnabled() bool {
-	return slices.Contains(m.Features, FeatureApplicationHost)
-}
-
-func (m *MetricsConfig) ServiceGraphMetricsEnabled() bool {
-	return slices.Contains(m.Features, FeatureGraph)
-}
-
-func (m *MetricsConfig) OTelMetricsEnabled() bool {
-	return slices.Contains(m.Features, FeatureApplication)
-}
-
-func (m *MetricsConfig) NetworkMetricsEnabled() bool {
-	return m.NetworkFlowBytesEnabled() || m.NetworkInterzoneMetricsEnabled()
-}
-
-func (m *MetricsConfig) NetworkFlowBytesEnabled() bool {
-	return slices.Contains(m.Features, FeatureNetwork)
-}
-
-func (m *MetricsConfig) NetworkInterzoneMetricsEnabled() bool {
-	return slices.Contains(m.Features, FeatureNetworkInterZone)
-}
-
-func (m *MetricsConfig) Enabled() bool {
-	return m.EndpointEnabled() && (m.OTelMetricsEnabled() || m.AnySpanMetricsEnabled() || m.NetworkMetricsEnabled())
 }
 
 func httpMetricEndpointOptions(cfg *MetricsConfig) (OTLPOptions, error) {

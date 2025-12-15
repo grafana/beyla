@@ -19,7 +19,7 @@ jobs:
     
     steps:
       - id: get-vault-secrets
-        uses: grafana/shared-workflows/actions/get-vault-secrets@get-vault-secrets/v1.2.1
+        uses: grafana/shared-workflows/actions/get-vault-secrets@9f37f656e063f0ad0b0bfc38d49894b57d363936 # get-vault-secrets/v1.2.1
         with:
           vault_instance: ops
           export_env: false
@@ -29,7 +29,7 @@ jobs:
             EKS_CLUSTER_NAME=noteldemo:eks-cluster-name
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
         with:
           role-to-assume: ${{ fromJSON(steps.get-vault-secrets.outputs.secrets).AWS_ROLE_ARN }}
           role-session-name: beyla-demo-restart

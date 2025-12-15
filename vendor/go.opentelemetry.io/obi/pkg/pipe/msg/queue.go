@@ -5,20 +5,33 @@
 package msg
 
 import (
+	"context"
+	"fmt"
+	"log/slog"
+	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
+// if a Send operation takes more than this time, we panic informing about a deadlock
+// in the user-provide pipeline
+const defaultSendTimeout = 20 * time.Second
+
+const unnamed = "(unnamed)"
+
 type queueConfig struct {
-	channelBufferLen       int
-	discardIfNoSubscribers bool
-	closingAttempts        int
+	channelBufferLen int
+	closingAttempts  int
+	name             string
+	sendTimeout      time.Duration
 }
 
 var defaultQueueConfig = queueConfig{
-	channelBufferLen:       1,
-	discardIfNoSubscribers: false,
-	closingAttempts:        1,
+	channelBufferLen: 1,
+	closingAttempts:  1,
+	name:             unnamed,
+	sendTimeout:      defaultSendTimeout,
 }
 
 // QueueOpts allow configuring some operation of a queue
@@ -31,13 +44,21 @@ func ChannelBufferLen(l int) QueueOpts {
 	}
 }
 
-// NotBlockIfNoSubscribers will prevent the Send operation to block when there are
-// no subscribers to the channel.
-// This is useful to define connections to destination nodes that are optional and
-// might not be instantiated.
-func NotBlockIfNoSubscribers() QueueOpts {
+// Name sets the name of the queue. Useful for debugging.
+func Name(name string) QueueOpts {
 	return func(c *queueConfig) {
-		c.discardIfNoSubscribers = true
+		c.name = name
+	}
+}
+
+// SendTimeout sets the timeout for Send operations. This is useful for detecting
+// deadlocks derived from a wrong Pipeline construction. It panics if after
+// a send operation, the channel is blocked for more than this timeout.
+// Some nodes might require too long to initialize. For example the Kubernetes Decorator
+// at start, has to download a whole snapshot
+func SendTimeout(to time.Duration) QueueOpts {
+	return func(c *queueConfig) {
+		c.sendTimeout = to
 	}
 }
 
@@ -51,6 +72,11 @@ func ClosingAttempts(attempts int) QueueOpts {
 	}
 }
 
+type dst[T any] struct {
+	name string
+	ch   chan T
+}
+
 // Queue is a simple message queue that allows sending messages to multiple subscribers.
 // It also allows bypassing messages to other queues, so that a message sent to one queue
 // can be received by subscribers of another queue.
@@ -60,19 +86,15 @@ type Queue[T any] struct {
 	mt  sync.Mutex
 	cfg *queueConfig
 
-	// in blocking channels, dsts will be at least 1 even if subscribers are 0
-	// this channel will hold submitted data at least until someone subscribes and
-	// reads it. This can block the sender if no one subscribes to the channel
-	subscribers      int
-	dsts             []chan T
+	dsts             []dst[T]
 	remainingClosers int
 
-	// double-linked list of bypassing queues
-	// For simplicity, a Queue instance:
-	// - can't bypass to a queue and having other dsts
-	// - can only bypass to a single queue, despite multiple queues can bypass to it
+	// linked list of bypassing queues
+	// For simplicity, a Queue instance can only bypass to a single queue, despite multiple queues can bypass to it
 	bypassTo *Queue[T]
 	closed   atomic.Bool
+
+	sendTimeout *time.Timer
 }
 
 // NewQueue creates a new Queue instance with the given options.
@@ -81,72 +103,154 @@ func NewQueue[T any](opts ...QueueOpts) *Queue[T] {
 	for _, opt := range opts {
 		opt(&cfg)
 	}
-	var dsts []chan T
-	if !cfg.discardIfNoSubscribers {
-		dsts = []chan T{make(chan T, cfg.channelBufferLen)}
-	}
-	return &Queue[T]{cfg: &cfg, dsts: dsts, remainingClosers: cfg.closingAttempts}
+	return &Queue[T]{cfg: &cfg, remainingClosers: cfg.closingAttempts, sendTimeout: time.NewTimer(cfg.sendTimeout)}
 }
 
-func (q *Queue[T]) config() *queueConfig {
-	if q.cfg == nil {
-		return &defaultQueueConfig
-	}
-	return q.cfg
+// SendCtx sends a message to all subscribers of this queue, and interrupts the operation if the
+// passed context is canceled.
+// If there are no subscribers at the moment of sending the message, the message will be lost.
+// If there are subscribers, the message will be stored on their respective internal channels
+// until it is read by the subscribers.
+// If a subscriber is blocked, its internal channel might be full and
+// the SendCtx operation would block for all the subscribers until all the internal channels
+// of the Queue room for a new message.
+func (q *Queue[T]) SendCtx(ctx context.Context, o T) {
+	q.chainedSend(ctx, o, []string{q.cfg.name})
 }
 
-// Send a message to all subscribers of this queue.
-// If there are no subscribers and the internal channel is full,
-// the sender might block unless the Queue has been instantiated
-// with the NotBlockIfNoSubscribers option. In that case,
-// the message will be lost and the sender will not be blocked.
+// Send is analogous to SendCtx(context.Background()).
+// This operation could get into a deadlock if during the Send operation, the subscriber node stops
+// reading messages (e.g. during OBI shutdown). So it is highly recommended to use SendCtx instead.
+// Deprecated: use SendCtx instead.
 func (q *Queue[T]) Send(o T) {
+	q.chainedSend(context.Background(), o, []string{q.cfg.name})
+}
+
+func (q *Queue[T]) chainedSend(ctx context.Context, o T, bypassPath []string) {
 	q.assertNotClosed()
 	if q.bypassTo != nil {
-		q.bypassTo.Send(o)
+		q.bypassTo.chainedSend(ctx, o, append(bypassPath, q.bypassTo.cfg.name))
 		return
 	}
+
+	// this can happen in dead paths (which are valid for disabled pipeline branches),
+	// exiting early to save timeout management
+	if len(q.dsts) == 0 {
+		return
+	}
+
+	// instead of directly panicking in sendTimeout, we first warn at 0.75*sendTimeout,
+	// to get logged about other blocked senders before panicking
+	q.sendTimeout.Reset(3 * q.cfg.sendTimeout / 4)
+	var blocked []dst[T]
 	for _, d := range q.dsts {
-		d <- o
+		select {
+		case <-ctx.Done():
+			return
+		case d.ch <- o:
+			// good!
+		case <-q.sendTimeout.C:
+			slog.With(
+				"timeout", q.cfg.sendTimeout,
+				"queueLen", len(d.ch), "queueCap", cap(d.ch),
+				"sendPath", strings.Join(bypassPath, "->"),
+				"dstName", d.name).
+				Warn("subscriber channel is taking too long to respond")
+			// reset timeout to a small amount to detect any other possible blocked subscriber
+			q.sendTimeout.Reset(time.Second)
+			blocked = append(blocked, d)
+		}
+	}
+	if len(blocked) == 0 {
+		return
+	}
+	// if we confirm that the blocker candidates are actually blocked, we panic
+	q.sendTimeout.Reset(q.cfg.sendTimeout / 4)
+	for _, d := range blocked {
+		select {
+		case <-ctx.Done():
+			return
+		case d.ch <- o:
+			// good!
+		case <-q.sendTimeout.C:
+			panic(fmt.Sprintf("sending through queue path %s. Subscriber channel %s is blocked",
+				strings.Join(bypassPath, "->"), d.name))
+		}
+	}
+}
+
+type subscribeOpts struct {
+	subscriber string
+}
+
+type SubscribeOpt func(*subscribeOpts)
+
+// SubscriberName helps debugging any blocked channel reader
+func SubscriberName(nodeName string) SubscribeOpt {
+	return func(o *subscribeOpts) {
+		o.subscriber = nodeName
+	}
+}
+
+func withRawOpts(opts subscribeOpts) SubscribeOpt {
+	return func(o *subscribeOpts) {
+		*o = opts
 	}
 }
 
 // Subscribe to this queue. This will return a channel that will receive messages.
 // It's important to notice that, if Subscribe is invoked after Send, the sent message
-// will be lost, or forwarded to other subscribed but not to the channel resulting from the
-// last invocation.
-// You can't subscribe to a queue that is bypassing to another queue.
+// will be lost.
 // Concurrent invocations to Subscribe and Bypass are thread-safe between them, so you can be
 // sure that any subscriber will get its own effective channel. But invocations to Subscribe are not
 // thread-safe with the Send method. This means that concurrent invocations to Subscribe and Send might
 // result in few initial lost messages.
-func (q *Queue[T]) Subscribe() <-chan T {
+func (q *Queue[T]) Subscribe(options ...SubscribeOpt) <-chan T {
 	q.assertNotClosed()
 	q.mt.Lock()
 	defer q.mt.Unlock()
-	q.assertNotBypassing()
 
-	// might be that subscribers <= len(dsts), for example when the queue is new
-	// and has a channel to block sender before subscribers are added
-	q.subscribers++
-	if q.subscribers > len(q.dsts) {
-		q.dsts = append(q.dsts, make(chan T, q.config().channelBufferLen))
+	opts := subscribeOpts{subscriber: unnamed}
+	for _, opt := range options {
+		opt(&opts)
 	}
-	return q.dsts[q.subscribers-1]
+
+	if q.bypassTo != nil {
+		return q.bypassTo.Subscribe(withRawOpts(opts))
+	}
+
+	ch := make(chan T, q.cfg.channelBufferLen)
+	q.dsts = append(q.dsts, dst[T]{ch: ch, name: opts.subscriber})
+	return ch
 }
 
 // Bypass allows this queue to bypass messages to another queue. This means that
 // messages sent to this queue will also be sent to the other queue.
-// This operation is not thread-safe and does not control for graph cycles.
+// This operation does not control for graph cycles. It might result in an internal mutex deadlock.
 func (q *Queue[T]) Bypass(to *Queue[T]) {
 	q.assertNotClosed()
 	q.mt.Lock()
 	defer q.mt.Unlock()
 	if q == to {
-		panic("this queue can't bypass to itself")
+		panic(q.cfg.name + ": this queue can't bypass to itself")
 	}
 	q.assertNotBypassing()
+
 	q.bypassTo = to
+	// will copy all the subscribers of the queue to the last queue in the
+	// bypassing chain
+	last := to
+	last.mt.Lock()
+	for last.bypassTo != nil {
+		l := last
+		last = last.bypassTo
+		last.mt.Lock()
+		l.mt.Unlock()
+	}
+	last.dsts = append(last.dsts, q.dsts...)
+	q.dsts = nil
+	q.sendTimeout = nil
+	last.mt.Unlock()
 }
 
 // Close all the subscribers of this queue. This will close all the channels
@@ -154,6 +258,9 @@ func (q *Queue[T]) Bypass(to *Queue[T]) {
 func (q *Queue[T]) Close() {
 	q.mt.Lock()
 	defer q.mt.Unlock()
+	if q.sendTimeout != nil {
+		q.sendTimeout.Stop()
+	}
 	q.close()
 }
 
@@ -178,7 +285,7 @@ func (q *Queue[T]) close() {
 		q.bypassTo.Close()
 	} else {
 		for _, d := range q.dsts {
-			close(d)
+			close(d.ch)
 		}
 		q.dsts = nil
 	}
@@ -186,12 +293,12 @@ func (q *Queue[T]) close() {
 
 func (q *Queue[T]) assertNotBypassing() {
 	if q.bypassTo != nil {
-		panic("queue already bypassing data to another queue")
+		panic(fmt.Sprintf("queue %s already bypassing data to queue %s", q.cfg.name, q.bypassTo.cfg.name))
 	}
 }
 
 func (q *Queue[T]) assertNotClosed() {
 	if q.closed.Load() {
-		panic("queue is closed")
+		panic(q.cfg.name + ": queue is closed")
 	}
 }

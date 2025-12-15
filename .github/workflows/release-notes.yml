@@ -1,0 +1,42 @@
+name: Generate Release Notes
+on:
+  release:
+    types:
+      - published
+
+jobs:
+  release-notes:
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          persist-credentials: 'false'
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Generate Release Notes
+        id: release-notes
+        uses: mariomac/linked-release-notes@2a6d7503fe822c734f2b0b118f65c43a7df84202 # v0.0.7
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ github.event.release.tag_name }}
+          # since our submodule is grafana/opentelemetry-ebpf-instrumentation, we need to replace it
+          # with the original repo in the release notes, so the PR links won't be broken
+          generated_submodule_link: open-telemetry/opentelemetry-ebpf-instrumentation
+
+      - name: Update Release with Notes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ github.event.release.id }}
+          RELEASE_NOTES: ${{ steps.release-notes.outputs.release_notes }}
+        run: |
+          curl -L -f \
+            -X PATCH \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID \
+            -d "{\"body\":$(jq -Rs . <<< "$RELEASE_NOTES")}"

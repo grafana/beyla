@@ -5,18 +5,19 @@ import (
 	"fmt"
 	"log/slog"
 
-	"go.opentelemetry.io/obi/pkg/components/exec"
-	"go.opentelemetry.io/obi/pkg/components/pipe/global"
-	"go.opentelemetry.io/obi/pkg/components/svc"
+	"go.opentelemetry.io/otel/attribute"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/resource"
+
+	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
+	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	"go.opentelemetry.io/obi/pkg/export/otel"
 	"go.opentelemetry.io/obi/pkg/export/otel/metric"
 	instrument "go.opentelemetry.io/obi/pkg/export/otel/metric/api/metric"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
+	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
-	"go.opentelemetry.io/otel/attribute"
-	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
-	"go.opentelemetry.io/otel/sdk/resource"
 )
 
 func smlog() *slog.Logger {
@@ -36,6 +37,10 @@ type SurveyMetricsReporter struct {
 	exporter      sdkmetric.Exporter
 	pidTracker    otel.PidServiceTracker
 	serviceMap    map[svc.UID][]attribute.KeyValue
+
+	// testing support
+	createEventMetrics func(ctx context.Context, service *svc.Attrs)
+	deleteEventMetrics func(ctx context.Context, uid svc.UID)
 }
 
 func SurveyInfoMetrics(
@@ -44,7 +49,7 @@ func SurveyInfoMetrics(
 	processEventCh *msg.Queue[exec.ProcessEvent],
 ) swarm.InstanceFunc {
 	return func(ctx context.Context) (swarm.RunFunc, error) {
-		if !cfg.Enabled() {
+		if !cfg.EndpointEnabled() {
 			return swarm.EmptyRunFunc()
 		}
 		otelcfg.SetupInternalOTELSDKLogger(cfg.SDKLogLevel)
@@ -68,7 +73,7 @@ func newSurveyMetricsReporter(
 		cfg:           cfg,
 		hostID:        ctxInfo.HostID,
 		serviceMap:    map[svc.UID][]attribute.KeyValue{},
-		processEvents: processEventsQueue.Subscribe(),
+		processEvents: processEventsQueue.Subscribe(msg.SubscriberName("processEvents")),
 		pidTracker:    otel.NewPidServiceTracker(),
 	}
 	log.Debug("creating new Survey Metrics reporter")
@@ -79,18 +84,60 @@ func newSurveyMetricsReporter(
 		return nil, fmt.Errorf("instantiating OTEL Survey metrics exporter: %w", err)
 	}
 
+	smr.createEventMetrics = smr.createSurveyInfo
+	smr.deleteEventMetrics = smr.deleteSurveyInfo
+
 	smr.provider = metric.NewMeterProvider(
 		metric.WithResource(resource.Empty()),
 		metric.WithReader(metric.NewPeriodicReader(smr.exporter,
 			metric.WithInterval(smr.cfg.Interval))),
 	)
 	meter := smr.provider.Meter(ReporterName)
-	smr.surveyInfo, err = meter.Int64UpDownCounter(SurveyInfo)
+	smr.surveyInfo, err = meter.Int64UpDownCounter(SurveyInfoMetricName)
 	if err != nil {
 		return nil, fmt.Errorf("creating survey info: %w", err)
 	}
 
 	return smr, nil
+}
+
+func (smr *SurveyMetricsReporter) onProcessEvent(ctx context.Context, pe *exec.ProcessEvent) {
+	log := smr.log.With("event_type", pe.Type, "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
+	log.Debug("process event received")
+
+	switch pe.Type {
+	case exec.ProcessEventTerminated:
+		if deleted, origUID := smr.disassociatePIDFromService(pe.File.Pid); deleted {
+			// We only need the UID to look up in the pool, no need to cache
+			// the whole of the attrs in the pidTracker
+			log.Debug("deleting survey_info", "origuid", origUID)
+			smr.deleteEventMetrics(ctx, origUID)
+		}
+	case exec.ProcessEventCreated:
+		uid := pe.File.Service.UID
+
+		// Handle the case when the PID changed its feathers, e.g. got new metadata impacting the service name.
+		// There's no new PID, just an update to the metadata.
+		if staleUID, exists := smr.pidTracker.TracksPID(pe.File.Pid); exists && !staleUID.Equals(&uid) {
+			smr.log.Debug("updating older service definition", "from", staleUID, "new", uid)
+			smr.pidTracker.ReplaceUID(staleUID, uid)
+			smr.deleteEventMetrics(ctx, staleUID)
+			smr.createEventMetrics(ctx, &pe.File.Service)
+			// we don't setup the pid again, we just replaced the metrics it's associated with
+			return
+		}
+
+		// Handle the case when we have new labels for same service
+		// It could be a brand new PID with this information, so we fall through after deleting
+		// the old target info
+		if _, ok := smr.serviceMap[uid]; ok {
+			smr.log.Debug("updating stale attributes for", "service", uid)
+			smr.deleteEventMetrics(ctx, uid)
+		}
+
+		smr.createEventMetrics(ctx, &pe.File.Service)
+		smr.setupPIDToServiceRelationship(pe.File.Pid, pe.File.Service.UID)
+	}
 }
 
 func (smr *SurveyMetricsReporter) watchForProcessEvents(ctx context.Context) {
@@ -103,22 +150,7 @@ func (smr *SurveyMetricsReporter) watchForProcessEvents(ctx context.Context) {
 				return
 			}
 
-			log := smr.log.With("event_type", pe.Type, "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
-			log.Debug("process event received")
-
-			switch pe.Type {
-			case exec.ProcessEventTerminated:
-				if deleted, origUID := smr.disassociatePIDFromService(pe.File.Pid); deleted {
-					// We only need the UID to look up in the pool, no need to cache
-					// the whole of the attrs in the pidTracker
-					svc := svc.Attrs{UID: origUID}
-					log.Debug("deleting survey_info", "origuid", origUID)
-					smr.deleteSurveyInfo(ctx, &svc)
-				}
-			case exec.ProcessEventCreated:
-				smr.createSurveyInfo(ctx, &pe.File.Service)
-				smr.setupPIDToServiceRelationship(pe.File.Pid, pe.File.Service.UID)
-			}
+			smr.onProcessEvent(ctx, &pe)
 		}
 	}
 }
@@ -131,22 +163,26 @@ func (smr *SurveyMetricsReporter) disassociatePIDFromService(pid int32) (bool, s
 	return smr.pidTracker.RemovePID(pid)
 }
 
+func (smr *SurveyMetricsReporter) attrsFromService(service *svc.Attrs) []attribute.KeyValue {
+	return append(otelcfg.GetAppResourceAttrs(smr.hostID, service), otelcfg.ResourceAttrsFromEnv(service)...)
+}
+
 func (smr *SurveyMetricsReporter) createSurveyInfo(ctx context.Context, service *svc.Attrs) {
-	resourceAttributes := append(otelcfg.GetAppResourceAttrs(smr.hostID, service), otelcfg.ResourceAttrsFromEnv(service)...)
+	resourceAttributes := smr.attrsFromService(service)
 	smr.log.Debug("Creating survey_info", "attrs", resourceAttributes)
 	attrOpt := instrument.WithAttributeSet(attribute.NewSet(resourceAttributes...))
 	smr.surveyInfo.Add(ctx, 1, attrOpt)
 	smr.serviceMap[service.UID] = resourceAttributes
 }
 
-func (smr *SurveyMetricsReporter) deleteSurveyInfo(ctx context.Context, s *svc.Attrs) {
-	attrs, ok := smr.serviceMap[s.UID]
+func (smr *SurveyMetricsReporter) deleteSurveyInfo(ctx context.Context, uid svc.UID) {
+	attrs, ok := smr.serviceMap[uid]
 	if !ok {
-		smr.log.Debug("No service map", "UID", s.UID)
+		smr.log.Debug("No service map", "UID", uid)
 		return
 	}
 	smr.log.Debug("Deleting survey_info for", "attrs", attrs)
 	attrOpt := instrument.WithAttributeSet(attribute.NewSet(attrs...))
 	smr.surveyInfo.Remove(ctx, attrOpt)
-	delete(smr.serviceMap, s.UID)
+	delete(smr.serviceMap, uid)
 }

@@ -31,7 +31,8 @@ import (
 	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/obi/pkg/components/svc"
+
+	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 )
 
 func TestLinuxHarvester_IsPrivileged(t *testing.T) {

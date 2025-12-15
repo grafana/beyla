@@ -55,10 +55,7 @@ func reservoirFunc[N int64 | float64](agg sdkmetric.Aggregation) func() exemplar
 		// SimpleFixedSizeExemplarReservoir with a reservoir equal to the
 		// smaller of the maximum number of buckets configured on the
 		// aggregation or twenty (e.g. min(20, max_buckets)).
-		n = int(a.MaxSize)
-		if n > 20 {
-			n = 20
-		}
+		n = min(int(a.MaxSize), 20)
 	} else {
 		// https://github.com/open-telemetry/opentelemetry-specification/blob/e94af89e3d0c01de30127a0f423e912f6cda7bed/specification/metrics/sdk.md#simplefixedsizeexemplarreservoir
 		//   This Exemplar reservoir MAY take a configuration parameter for
@@ -66,11 +63,9 @@ func reservoirFunc[N int64 | float64](agg sdkmetric.Aggregation) func() exemplar
 		//   provided, the default size MAY be the number of possible
 		//   concurrent threads (e.g. number of CPUs) to help reduce
 		//   contention. Otherwise, a default size of 1 SHOULD be used.
-		n = runtime.NumCPU()
-		if n < 1 {
+		n = max(runtime.NumCPU(),
 			// Should never be the case, but be defensive.
-			n = 1
-		}
+			1)
 	}
 
 	return func() exemplar.FilteredReservoir[N] {

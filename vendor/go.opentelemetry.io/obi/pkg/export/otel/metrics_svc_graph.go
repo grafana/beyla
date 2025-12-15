@@ -14,16 +14,17 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 	"go.opentelemetry.io/otel/trace"
 
-	"go.opentelemetry.io/obi/pkg/app/request"
-	"go.opentelemetry.io/obi/pkg/components/exec"
-	"go.opentelemetry.io/obi/pkg/components/pipe/global"
-	"go.opentelemetry.io/obi/pkg/components/svc"
+	"go.opentelemetry.io/obi/pkg/appolly/app/request"
+	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
+	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
 	"go.opentelemetry.io/obi/pkg/export/otel/metric"
 	instrument "go.opentelemetry.io/obi/pkg/export/otel/metric/api/metric"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
+	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
+	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 )
@@ -39,7 +40,7 @@ const (
 	ServiceGraphTotal  = "traces_service_graph_request_total"
 )
 
-// MetricsReporter implements the graph node that receives request.Span
+// SvcGraphMetricsReporter implements the graph node that receives request.Span
 // instances and forwards them as OTEL metrics.
 type SvcGraphMetricsReporter struct {
 	ctx              context.Context
@@ -57,7 +58,7 @@ type SvcGraphMetricsReporter struct {
 	log *slog.Logger
 }
 
-// SvcGraphMetrics is a set of metrics associated to a given OTEL MeterProvider.
+// SvcGraphMetrics is a set of metrics associated with a given OTEL Metrics.
 // There is a Metrics instance for each service/process instrumented by OBI.
 type SvcGraphMetrics struct {
 	ctx                      context.Context
@@ -75,11 +76,13 @@ type SvcGraphMetrics struct {
 func ReportSvcGraphMetrics(
 	ctxInfo *global.ContextInfo,
 	cfg *otelcfg.MetricsConfig,
+	mpCfg *perapp.MetricsConfig,
+	unresolved request.UnresolvedNames,
 	input *msg.Queue[[]request.Span],
 	processEvents *msg.Queue[exec.ProcessEvent],
 ) swarm.InstanceFunc {
 	return func(ctx context.Context) (swarm.RunFunc, error) {
-		if !cfg.EndpointEnabled() || !cfg.ServiceGraphMetricsEnabled() {
+		if !cfg.EndpointEnabled() || !mpCfg.Features.ServiceGraph() {
 			return swarm.EmptyRunFunc()
 		}
 		otelcfg.SetupInternalOTELSDKLogger(cfg.SDKLogLevel)
@@ -88,6 +91,7 @@ func ReportSvcGraphMetrics(
 			ctx,
 			ctxInfo,
 			cfg,
+			unresolved,
 			input,
 			processEvents,
 		)
@@ -103,6 +107,7 @@ func newSvcGraphMetricsReporter(
 	ctx context.Context,
 	ctxInfo *global.ContextInfo,
 	cfg *otelcfg.MetricsConfig,
+	unresolved request.UnresolvedNames,
 	input *msg.Queue[[]request.Span],
 	processEventCh *msg.Queue[exec.ProcessEvent],
 ) (*SvcGraphMetricsReporter, error) {
@@ -115,9 +120,9 @@ func newSvcGraphMetricsReporter(
 		cfg:              cfg,
 		is:               is,
 		hostID:           ctxInfo.HostID,
-		input:            input.Subscribe(),
-		processEvents:    processEventCh.Subscribe(),
-		metricAttributes: serviceGraphGetters(),
+		input:            input.Subscribe(msg.SubscriberName("otel.SvcGraphMetricsReporter.input")),
+		processEvents:    processEventCh.Subscribe(msg.SubscriberName("otel.SvcGraphMetricsReporter.processEvents")),
+		metricAttributes: serviceGraphGetters(unresolved),
 		log:              log,
 	}
 
@@ -247,7 +252,7 @@ func (mr *SvcGraphMetricsReporter) tracesResourceAttributes(service *svc.Attrs) 
 		semconv.ServiceInstanceID(service.UID.Instance),
 		semconv.ServiceNamespace(service.UID.Namespace),
 		semconv.TelemetrySDKLanguageKey.String(service.SDKLanguage.String()),
-		semconv.TelemetrySDKNameKey.String("opentelemetry-ebpf-instrumentation"),
+		semconv.TelemetrySDKNameKey.String(attr.VendorSDKName),
 		request.SourceMetric(attr.VendorPrefix),
 		semconv.OSTypeKey.String("linux"),
 	}
@@ -264,17 +269,9 @@ func (mr *SvcGraphMetricsReporter) tracesResourceAttributes(service *svc.Attrs) 
 	return attribute.NewSet(filteredAttrs...)
 }
 
-func (mr *SvcGraphMetricsReporter) metricHostAttributes() attribute.Set {
-	attrs := []attribute.KeyValue{
-		GrafanaHostIDKey.String(mr.hostID),
-	}
-
-	return attribute.NewSet(attrs...)
-}
-
-func serviceGraphGetters() []attributes.Field[*request.Span, attribute.KeyValue] {
+func serviceGraphGetters(unresolved request.UnresolvedNames) []attributes.Field[*request.Span, attribute.KeyValue] {
 	return attributes.OpenTelemetryGetters(
-		request.SpanOTELGetters, []attr.Name{
+		request.SpanOTELGetters(unresolved), []attr.Name{
 			attr.Client,
 			attr.ClientNamespace,
 			attr.Server,
@@ -318,9 +315,9 @@ func ClientSpanToUninstrumentedService(tracker *PidServiceTracker, span *request
 		n := svc.ServiceNameNamespace{Name: span.HostName, Namespace: span.OtherNamespace}
 		return !tracker.IsTrackingServerService(n)
 	}
-	// If we haven't resolved a hostname, don't add this node to the service graph
-	// it will appear only in client requests. Essentially, in this case we have no
-	// idea if the service is instrumented or not, therefore we take the conservative
+	// If we haven't resolved a hostname, don't add this node to the service graph.
+	// It will appear only in client requests. Essentially, in this case we have no
+	// idea if the service is instrumented or not; therefore, we take the conservative
 	// approach to avoid double counting.
 	return false
 }

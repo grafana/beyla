@@ -116,7 +116,7 @@ func NewPeriodicReader(exporter sdkmetric.Exporter, options ...PeriodicReaderOpt
 		cancel:   cancel,
 		done:     make(chan struct{}),
 		rmPool: sync.Pool{
-			New: func() interface{} {
+			New: func() any {
 				return &sdkmetricdata.ResourceMetrics{}
 			},
 		},
@@ -234,7 +234,7 @@ func (r *PeriodicReader) Collect(ctx context.Context, rm *sdkmetricdata.Resource
 }
 
 // collect unwraps p as a produceHolder and returns its produce results.
-func (r *PeriodicReader) collect(ctx context.Context, p interface{}, rm *sdkmetricdata.ResourceMetrics) error {
+func (r *PeriodicReader) collect(ctx context.Context, p any, rm *sdkmetricdata.ResourceMetrics) error {
 	if p == nil {
 		return ErrReaderNotRegistered
 	}
@@ -350,7 +350,7 @@ func (r *PeriodicReader) Shutdown(ctx context.Context) error {
 }
 
 // MarshalLog returns logging data about the PeriodicReader.
-func (r *PeriodicReader) MarshalLog() interface{} {
+func (r *PeriodicReader) MarshalLog() any {
 	r.mu.Lock()
 	down := r.isShutdown
 	r.mu.Unlock()

@@ -22,7 +22,7 @@ IMG_REGISTRY ?= docker.io
 IMG_ORG ?= grafana
 IMG_NAME ?= beyla
 
-# Container image creation creation
+# Container image creation
 VERSION ?= dev
 IMG = $(IMG_REGISTRY)/$(IMG_ORG)/$(IMG_NAME):$(VERSION)
 
@@ -33,7 +33,7 @@ GEN_IMG_VERSION=latest
 # building eBPF binaries
 GEN_IMG ?= ghcr.io/open-telemetry/obi-generator:$(GEN_IMG_VERSION)
 
-COMPOSE_ARGS ?= -f test/integration/docker-compose.yml
+COMPOSE_ARGS ?= -f internal/test/integration/docker-compose.yml
 
 OCI_BIN ?= docker
 
@@ -46,7 +46,7 @@ CLANG_TIDY ?= clang-tidy
 CILIUM_EBPF_VER ?= $(call gomod-version,cilium/ebpf)
 
 # regular expressions for excluded file patterns
-EXCLUDE_COVERAGE_FILES="(_bpfel.go)|(/beyla/v2/test/)|(/beyla/v2/configs/)|(/v2/examples/)|(.pb.go)|(/beyla/v2/pkg/export/otel/metric/)"
+EXCLUDE_COVERAGE_FILES="(_bpfel.go)|(/beyla/v2/internal/test/)|(/beyla/v2/configs/)|(/v2/examples/)|(.pb.go)|(/beyla/v2/pkg/export/otel/metric/)"
 
 .DEFAULT_GOAL := all
 
@@ -97,7 +97,6 @@ __check_defined = \
 GOLANGCI_LINT = $(TOOLS_DIR)/golangci-lint
 BPF2GO = $(TOOLS_DIR)/bpf2go
 GO_OFFSETS_TRACKER = $(TOOLS_DIR)/go-offsets-tracker
-GOIMPORTS_REVISER = $(TOOLS_DIR)/goimports-reviser
 GO_LICENSES = $(TOOLS_DIR)/go-licenses
 KIND = $(TOOLS_DIR)/kind
 DASHBOARD_LINTER = $(TOOLS_DIR)/dashboard-linter
@@ -106,19 +105,6 @@ GINKGO = $(TOOLS_DIR)/ginkgo
 # Required for k8s-cache unit tests
 ENVTEST = $(TOOLS_DIR)/setup-envtest
 ENVTEST_K8S_VERSION = 1.30.0
-
-# Setting SHELL to bash allows bash commands to be executed by recipes.
-# This is a requirement for 'setup-envtest.sh' in the test target.
-# Options are set to exit when a recipe line exits non-zero or a piped command fails.
-SHELL = /usr/bin/env bash -o pipefail
-.SHELLFLAGS = -ec
-
-GOIMPORTS_REVISER_ARGS = -company-prefixes github.com/grafana -project-name github.com/grafana/beyla/
-
-define check_format
-	$(shell $(foreach FILE, $(shell find . -name "*.go" -not -path "**/vendor/*" -not -path "**/.obi-src/*"), \
-		$(GOIMPORTS_REVISER) $(GOIMPORTS_REVISER_ARGS) -list-diff -output stdout $(FILE);))
-endef
 
 .phony: obi-submodule
 obi-submodule:
@@ -141,9 +127,8 @@ bpf2go:
 prereqs: install-hooks bpf2go
 	@echo "### Check if prerequisites are met, and installing missing dependencies"
 	mkdir -p $(TEST_OUTPUT)/run
-	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint,v1.64.7)
+	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/v2/cmd/golangci-lint,v2.4.0)
 	$(call go-install-tool,$(GO_OFFSETS_TRACKER),github.com/grafana/go-offsets-tracker/cmd/go-offsets-tracker,$(call gomod-version,grafana/go-offsets-tracker))
-	$(call go-install-tool,$(GOIMPORTS_REVISER),github.com/incu6us/goimports-reviser/v3,v3.6.4)
 	$(call go-install-tool,$(GO_LICENSES),github.com/google/go-licenses,v1.6.0)
 	$(call go-install-tool,$(KIND),sigs.k8s.io/kind,v0.20.0)
 	$(call go-install-tool,$(DASHBOARD_LINTER),github.com/grafana/dashboard-linter,latest)
@@ -152,8 +137,7 @@ prereqs: install-hooks bpf2go
 .PHONY: fmt
 fmt: prereqs
 	@echo "### Formatting code and fixing imports"
-	@$(foreach FILE, $(shell find . -name "*.go" -not -path "**/vendor/*" -not -path "**/.obi-src/*"), \
-		$(GOIMPORTS_REVISER) $(GOIMPORTS_REVISER_ARGS) $(FILE);)
+	$(GOLANGCI_LINT) fmt
 
 .PHONY: checkfmt
 checkfmt:
@@ -203,6 +187,7 @@ generate: obi-submodule
 docker-generate: export GOFLAGS := "-mod=mod"
 docker-generate: obi-submodule
 	@echo "### Generating files (submodule:  $(OBI_MODULE))"
+	@$(OCI_BIN) pull $(GEN_IMG)
 	@OTEL_EBPF_GENFILES_GEN_IMG=$(GEN_IMG) go generate $(OBI_MODULE)/cmd/obi-genfiles/obi_genfiles.go
 	@cd $(OBI_MODULE) && make docker-generate
 
@@ -304,24 +289,61 @@ cleanup-integration-test:
 run-integration-test:
 	@echo "### Running integration tests"
 	go clean -testcache
-	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./test/integration/... --tags=integration
+	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./internal/test/integration/... --tags=integration
 
 .PHONY: run-integration-test-k8s
 run-integration-test-k8s:
 	@echo "### Running integration tests"
 	go clean -testcache
-	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./test/integration/... --tags=integration_k8s
+	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./internal/test/integration/... --tags=integration_k8s
 
 .PHONY: run-integration-test-vm
 run-integration-test-vm:
-	@echo "### Running integration tests"
-	go test -p 1 -failfast -v -timeout 90m -mod vendor -a ./test/integration/... --tags=integration -run "^TestMultiProcess"
+	@echo "### Running integration tests (pattern: $(TEST_PATTERN))"
+	@TEST_TIMEOUT="60m"; \
+	TEST_PARALLEL="1"; \
+	if [ -f "/precompiled-tests/integration.test" ]; then \
+		echo "Using pre-compiled integration tests"; \
+		chmod +x /precompiled-tests/integration.test; \
+		/precompiled-tests/integration.test \
+			-test.parallel=$$TEST_PARALLEL \
+			-test.timeout=$$TEST_TIMEOUT \
+			-test.failfast \
+			-test.v \
+			-test.run="^($(TEST_PATTERN))\$$"; \
+	else \
+		echo "Pre-compiled tests not found, compiling in VM"; \
+		go test \
+			-p $$TEST_PARALLEL \
+			-timeout $$TEST_TIMEOUT \
+			-failfast \
+			-v -a \
+			-mod vendor \
+			-tags=integration \
+			-run="^($(TEST_PATTERN))\$$" ./internal/test/integration/...; \
+	fi
 
 .PHONY: run-integration-test-arm
 run-integration-test-arm:
 	@echo "### Running integration tests"
 	go clean -testcache
-	go test -p 1 -failfast -v -timeout 90m -mod vendor -a ./test/integration/... --tags=integration -run "^TestMultiProcess"
+	go test -p 1 -failfast -v -timeout 90m -mod vendor -a ./internal/test/integration/... --tags=integration -run "^TestMultiProcess"
+
+.PHONY: integration-test-matrix-json
+integration-test-matrix-json:
+	@./scripts/generate-integration-matrix.sh "$${TEST_TAGS:-integration}" internal/test/integration "$${PARTITIONS:-5}"
+
+.PHONY: vm-integration-test-matrix-json
+vm-integration-test-matrix-json:
+	@./scripts/generate-integration-matrix.sh "$${TEST_TAGS:-integration}" internal/test/integration "$${PARTITIONS:-3}" "TestMultiProcess"
+
+.PHONY: k8s-integration-test-matrix-json
+k8s-integration-test-matrix-json:
+	@./scripts/generate-dir-matrix.sh internal/test/integration/k8s common
+
+.PHONY: oats-integration-test-matrix-json
+oats-integration-test-matrix-json:
+	@./scripts/generate-dir-matrix.sh internal/test/oats
 
 .PHONY: integration-test
 integration-test: prereqs prepare-integration-test
@@ -361,31 +383,36 @@ oats-prereq: bin/ginkgo vendor-obi
 
 .PHONY: oats-test-sql
 oats-test-sql: oats-prereq
-	mkdir -p test/oats/sql/$(TEST_OUTPUT)/run
-	cd test/oats/sql && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
+	mkdir -p internal/test/oats/sql/$(TEST_OUTPUT)/run
+	cd internal/test/oats/sql && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
 
 .PHONY: oats-test-redis
 oats-test-redis: oats-prereq
-	mkdir -p test/oats/redis/$(TEST_OUTPUT)/run
-	cd test/oats/redis && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
+	mkdir -p internal/test/oats/redis/$(TEST_OUTPUT)/run
+	cd internal/test/oats/redis && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
 
 .PHONY: oats-test-kafka
 oats-test-kafka: oats-prereq
-	mkdir -p test/oats/kafka/$(TEST_OUTPUT)/run
-	cd test/oats/kafka && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
+	mkdir -p internal/test/oats/kafka/$(TEST_OUTPUT)/run
+	cd internal/test/oats/kafka && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
 
 .PHONY: oats-test-http
 oats-test-http: oats-prereq
-	mkdir -p test/oats/http/$(TEST_OUTPUT)/run
-	cd test/oats/http && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
+	mkdir -p internal/test/oats/http/$(TEST_OUTPUT)/run
+	cd internal/test/oats/http && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
+
+.PHONY: oats-test-mongo
+oats-test-mongo: oats-prereq
+	mkdir -p internal/test/oats/mongo/$(TEST_OUTPUT)/run
+	cd internal/test/oats/mongo && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
 
 .PHONY: oats-test
-oats-test: oats-test-sql oats-test-redis oats-test-kafka oats-test-http
+oats-test: oats-test-sql oats-test-mongo oats-test-redis oats-test-kafka oats-test-http
 	$(MAKE) itest-coverage-data
 
 .PHONY: oats-test-debug
 oats-test-debug: oats-prereq
-	cd test/oats/kafka && TESTCASE_BASE_PATH=./yaml TESTCASE_MANUAL_DEBUG=true TESTCASE_TIMEOUT=1h $(GINKGO) -v -r
+	cd internal/test/oats/kafka && TESTCASE_BASE_PATH=./yaml TESTCASE_MANUAL_DEBUG=true TESTCASE_TIMEOUT=1h $(GINKGO) -v -r
 
 .PHONY: update-licenses check-license
 update-licenses: prereqs

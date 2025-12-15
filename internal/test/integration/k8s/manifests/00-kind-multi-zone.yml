@@ -1,0 +1,53 @@
+apiVersion: kind.x-k8s.io/v1alpha4
+kind: Cluster
+name: beyla
+nodes:
+  - role: control-plane
+    labels:
+      cluster.x-k8s.io/cluster-name: beyla-k8s-test-cluster
+      # faking a multi-zone cluster
+      topology.kubernetes.io/zone: control-plane-zone
+    extraMounts:
+      # configuration files that need to be mounted in the host
+      - hostPath: ../../configs
+        containerPath: /configs
+      # testoutput folder to store coverage data
+      - hostPath: ../../../../../testoutput
+        containerPath: /testoutput
+  - role: worker
+    labels:
+      # faking a multi-zone cluster
+      topology.kubernetes.io/zone: server-zone
+      cluster.x-k8s.io/cluster-name: beyla-k8s-test-cluster
+    extraMounts:
+      # configuration files that need to be mounted in the host
+      - hostPath: ../../configs
+        containerPath: /configs
+      # testoutput folder to store coverage data
+      - hostPath: ../../../../../testoutput
+        containerPath: /testoutput
+  - role: worker
+    labels:
+      # faking a multi-zone cluster
+      topology.kubernetes.io/zone: client-zone
+      cluster.x-k8s.io/cluster-name: beyla-k8s-test-cluster
+      # otel collector / prom scraper needs to be placed here, due to port mappings
+      deployment/zone: otel
+    extraMounts:
+      # configuration files that need to be mounted in the host
+      - hostPath: ../../configs
+        containerPath: /configs
+      # testoutput folder to store coverage data
+      - hostPath: ../../../../../testoutput
+        containerPath: /testoutput
+    extraPortMappings:
+      # to avoid having to do port-forwarding from the Go client (a bit cumbersome process),
+      # we just make visible some container ports through host ports
+      # hostPorts need to be in range 30000-32767
+      # containerPort must be the "hostPort" value that needs to be
+      # exposed on each Pod container
+      - containerPort: 8999
+        hostPort: 38999
+      - containerPort: 9090
+        hostPort: 39090
+

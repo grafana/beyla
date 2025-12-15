@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"time"
 
-	"go.opentelemetry.io/obi/pkg/services"
+	"go.opentelemetry.io/obi/pkg/appolly/services"
 )
 
 const (
@@ -22,6 +22,7 @@ var K8sDefaultNamespacesGlob = services.NewGlob("{kube-system,kube-node-lease,lo
 
 var K8sDefaultNamespacesWithSurveyRegex = services.NewRegexp("^kube-system$|^kube-node-lease$|^local-path-storage$|^cert-manager$" + k8sGKEDefaultNamespacesRegex + k8sAKSDefaultNamespacesRegex)
 var K8sDefaultNamespacesWithSurveyGlob = services.NewGlob("{kube-system,kube-node-lease,local-path-storage,cert-manager" + k8sGKEDefaultNamespacesGlob + k8sAKSDefaultNamespacesGlob + "}")
+var K8sDefaultExcludeContainerNamesGlob = services.NewGlob("{beyla,ebpf-instrument,alloy,prometheus-config-reloader,otelcol,otelcol-contrib}")
 
 var DefaultExcludeServices = services.RegexDefinitionCriteria{
 	services.RegexSelector{
@@ -47,6 +48,9 @@ var DefaultExcludeInstrument = services.GlobDefinitionCriteria{
 	services.GlobAttributes{
 		Metadata: map[string]*services.GlobAttr{"k8s_namespace": &K8sDefaultNamespacesGlob},
 	},
+	services.GlobAttributes{
+		Metadata: map[string]*services.GlobAttr{"k8s_container_name": &K8sDefaultExcludeContainerNamesGlob},
+	},
 }
 var DefaultExcludeInstrumentWithSurvey = services.GlobDefinitionCriteria{
 	services.GlobAttributes{
@@ -54,6 +58,9 @@ var DefaultExcludeInstrumentWithSurvey = services.GlobDefinitionCriteria{
 	},
 	services.GlobAttributes{
 		Metadata: map[string]*services.GlobAttr{"k8s_namespace": &K8sDefaultNamespacesWithSurveyGlob},
+	},
+	services.GlobAttributes{
+		Metadata: map[string]*services.GlobAttr{"k8s_container_name": &K8sDefaultExcludeContainerNamesGlob},
 	},
 }
 
@@ -109,12 +116,31 @@ type BeylaDiscoveryConfig struct {
 	// Disables instrumentation of services which are already instrumented
 	ExcludeOTelInstrumentedServices bool `yaml:"exclude_otel_instrumented_services" env:"BEYLA_EXCLUDE_OTEL_INSTRUMENTED_SERVICES"`
 
+	// DefaultOtlpGRPCPort specifies the default OTLP gRPC port (4317) to fallback on when missing environment variables on service, for
+	// checking for grpc export requests, defaults to 4317
+	// nolint:undoc
+	DefaultOtlpGRPCPort int `yaml:"default_otlp_grpc_port" env:"BEYLA_DEFAULT_OTLP_GRPC_PORT"`
+
 	// Min process age to be considered for discovery.
 	// nolint:undoc
 	MinProcessAge time.Duration `yaml:"min_process_age" env:"BEYLA_MIN_PROCESS_AGE"`
 
 	// Disables generation of span metrics of services which are already instrumented
 	ExcludeOTelInstrumentedServicesSpanMetrics bool `yaml:"exclude_otel_instrumented_services_span_metrics" env:"BEYLA_EXCLUDE_OTEL_INSTRUMENTED_SERVICES_SPAN_METRICS"`
+
+	// nolint:undoc
+	RouteHarvesterTimeout time.Duration `yaml:"route_harvester_timeout" env:"OTEL_EBPF_ROUTE_HARVESTER_TIMEOUT"`
+
+	// nolint:undoc
+	DisabledRouteHarvesters []string `yaml:"disabled_route_harvesters"`
+
+	// nolint:undoc
+	RouteHarvestConfig RouteHarvestingConfig `yaml:"route_harvester_advanced"`
+}
+
+type RouteHarvestingConfig struct {
+	// nolint:undoc
+	JavaHarvestDelay time.Duration `yaml:"java_harvest_delay" env:"OTEL_EBPF_JAVA_ROUTE_HARVEST_DELAY"`
 }
 
 func (d *BeylaDiscoveryConfig) SurveyEnabled() bool {

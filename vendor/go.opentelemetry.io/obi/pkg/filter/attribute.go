@@ -6,6 +6,7 @@ package filter
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/gobwas/glob"
 
@@ -13,7 +14,12 @@ import (
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
+	"go.opentelemetry.io/obi/pkg/pipe/swarm/swarms"
 )
+
+func aflog() *slog.Logger {
+	return slog.With("component", "filter.ByAttribute")
+}
 
 // AttributesConfig stores the user-provided section for filtering either Application or Network
 // records by attribute values
@@ -83,7 +89,11 @@ func newFilter[T any](
 		}
 		matchers = append(matchers, matcher)
 	}
-	return &filter[T]{matchers: matchers, input: input.Subscribe(), output: output}, nil
+	return &filter[T]{
+		matchers: matchers,
+		input:    input.Subscribe(msg.SubscriberName("AttributesFilter")),
+		output:   output,
+	}, nil
 }
 
 // buildMatcher returns a Matcher given an attribute name, the user-provided MatchDefinition, and the provided
@@ -115,15 +125,15 @@ func buildMatcher[T any](getters attributes.NamedGetters[T, string], attribute a
 }
 
 // main pipeline node loop
-func (f *filter[T]) doFilter(_ context.Context) {
+func (f *filter[T]) doFilter(ctx context.Context) {
 	// output channel must be closed so later stages in the pipeline can finish in cascade
 	defer f.output.Close()
 
-	for i := range f.input {
-		if i = f.filterBatch(i); len(i) > 0 {
-			f.output.Send(i)
+	swarms.ForEachInput(ctx, f.input, aflog().Debug, func(attrs []T) {
+		if attrs = f.filterBatch(attrs); len(attrs) > 0 {
+			f.output.SendCtx(ctx, attrs)
 		}
-	}
+	})
 }
 
 // filterBatch removes from the input slice the records that do not match

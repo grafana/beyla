@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"go.opentelemetry.io/obi/pkg/transform"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"

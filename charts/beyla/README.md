@@ -1,6 +1,6 @@
 # beyla
 
-![Version: 1.8.0](https://img.shields.io/badge/Version-1.8.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 2.2.3](https://img.shields.io/badge/AppVersion-2.2.3-informational?style=flat-square)
+![Version: 1.10.0](https://img.shields.io/badge/Version-1.10.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 2.7.5](https://img.shields.io/badge/AppVersion-2.7.5-informational?style=flat-square)
 
 eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network metrics.
 
@@ -14,6 +14,7 @@ eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network
 | grcevski |  | <https://github.com/grcevski> |
 | marctc |  | <https://github.com/marctc> |
 | rafaelroquetto |  | <https://github.com/rafaelroquetto> |
+| skl |  | <https://github.com/skl> |
 
 ## Source Code
 
@@ -30,6 +31,7 @@ eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network
 | config.skipConfigMapCheck | bool | `false` | set to true, to skip the check around the ConfigMap creation |
 | contextPropagation | object | `{"enabled":true}` | Enables context propagation support. |
 | dnsPolicy | string | `"ClusterFirstWithHostNet"` | Determines how DNS resolution is handled for that pod. If `.Values.preset` is set to `network` or `.Values.config.data.network` is enabled, Beyla requires `hostNetwork` access, causing cluster service DNS resolution to fail. It is recommended not to change this if Beyla sends traces and metrics to Grafana components via k8s service. |
+| enabled | bool | `true` | Whether to deploy the Beyla DaemonSet. Defaults to true. Set to false to deploy only the Kubernetes metadata cache. |
 | env | object | `{}` | extra environment variables |
 | envValueFrom | object | `{}` | extra environment variables to be set from resources such as k8s configMaps/secrets |
 | extraCapabilities | list | `[]` | Extra capabilities for unprivileged / less privileged setup. |
@@ -70,8 +72,8 @@ eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network
 | preset | string | `"application"` | Preconfigures some default properties for network or application observability. Accepted values are "network" or "application". |
 | priorityClassName | string | `""` |  |
 | privileged | bool | `true` | If set to false, deploys an unprivileged / less privileged setup. |
-| rbac.create | bool | `true` | Whether to create RBAC resources for Belya |
-| rbac.extraClusterRoleRules | list | `[]` | Extra custer roles to be created for Belya |
+| rbac.create | bool | `true` | Whether to create RBAC resources for Beyla |
+| rbac.extraClusterRoleRules | list | `[]` | Extra cluster roles to be created for Beyla |
 | resources | object | `{}` |  |
 | securityContext | object | `{"privileged":true}` | Security context for privileged setup. |
 | service.annotations | object | `{}` | Service annotations. |

@@ -18,8 +18,8 @@ import (
 
 	"go.opentelemetry.io/contrib/detectors/aws/eks"
 
-	"go.opentelemetry.io/obi/pkg/components/kube"
 	attr2 "go.opentelemetry.io/obi/pkg/export/attributes/names"
+	"go.opentelemetry.io/obi/pkg/kube"
 )
 
 const (

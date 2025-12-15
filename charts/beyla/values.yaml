@@ -7,6 +7,9 @@ global:
     # -- Optional set of global image pull secrets.
     pullSecrets: []
 
+# -- Whether to deploy the Beyla DaemonSet. Defaults to true. Set to false to deploy only the Kubernetes metadata cache.
+enabled: true
+
 image:
   # -- Beyla image registry (defaults to docker.io)
   registry: "docker.io"
@@ -35,9 +38,9 @@ namespaceOverride: ""
 # annotations: {}
 
 rbac:
-  # -- Whether to create RBAC resources for Belya
+  # -- Whether to create RBAC resources for Beyla
   create: true
-  # -- Extra custer roles to be created for Belya
+  # -- Extra cluster roles to be created for Beyla
   extraClusterRoleRules: []
   # - apiGroups: []
   #   resources: []

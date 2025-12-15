@@ -3,11 +3,6 @@
 
 package pprofile // import "go.opentelemetry.io/collector/pdata/pprofile"
 
-// Deprecated: [v0.133.0] use Dictionary().
-func (ms Profiles) ProfilesDictionary() ProfilesDictionary {
-	return ms.Dictionary()
-}
-
 // MarkReadOnly marks the ResourceProfiles as shared so that no further modifications can be done on it.
 func (ms Profiles) MarkReadOnly() {
 	ms.getState().MarkReadOnly()
@@ -28,7 +23,7 @@ func (ms Profiles) SampleCount() int {
 		for j := 0; j < sps.Len(); j++ {
 			pcs := sps.At(j).Profiles()
 			for k := 0; k < pcs.Len(); k++ {
-				sampleCount += pcs.At(k).Sample().Len()
+				sampleCount += pcs.At(k).Samples().Len()
 			}
 		}
 	}

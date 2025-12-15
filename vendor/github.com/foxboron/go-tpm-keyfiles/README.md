@@ -86,7 +86,7 @@ func main(){
 	}.Execute(tpm)
 
 	k := keyfile.NewTPMKey(
-		keyfile.OIDOldLoadableKey
+		keyfile.OIDLoadableKey
 		eccKeyResponse.OutPublic,
 		eccKeyResponse.OutPrivate,
 		keyfile.WithDescription("This is a TPM Key"),

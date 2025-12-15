@@ -11,16 +11,18 @@ import (
 	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/obi/pkg/components/connector"
-	"go.opentelemetry.io/obi/pkg/components/pipe/global"
-	"go.opentelemetry.io/obi/pkg/components/svc"
+
+	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
+	"go.opentelemetry.io/obi/pkg/export"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
-	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
+	"go.opentelemetry.io/obi/pkg/export/connector"
+	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
 	"go.opentelemetry.io/obi/pkg/export/prom"
+	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 
 	"github.com/grafana/beyla/v2/pkg/export/extraattributes"
-	"github.com/grafana/beyla/v2/pkg/export/otel"
+	"github.com/grafana/beyla/v2/pkg/export/otel/bexport"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
 )
 
@@ -47,7 +49,6 @@ func TestProcPrometheusEndpoint_AggregatedMetrics(t *testing.T) {
 			Path:                        "/metrics",
 			TTL:                         3 * time.Minute,
 			SpanMetricsServiceCacheSize: 10,
-			Features:                    []string{otelcfg.FeatureApplication, otel.FeatureProcess},
 		}, SelectorCfg: &attributes.SelectorConfig{
 			SelectionCfg: attributes.Selection{
 				extraattributes.ProcessCPUTime.Section:        attribs,
@@ -55,6 +56,8 @@ func TestProcPrometheusEndpoint_AggregatedMetrics(t *testing.T) {
 				extraattributes.ProcessDiskIO.Section:         attribs,
 				extraattributes.ProcessNetIO.Section:          attribs,
 			},
+		}, CommonCfg: &perapp.MetricsConfig{
+			Features: export.FeatureApplicationRED | bexport.FeatureProcess,
 		}},
 		procsInput,
 	)(ctx)
@@ -136,7 +139,6 @@ func TestProcPrometheusEndpoint_DisaggregatedMetrics(t *testing.T) {
 			Path:                        "/metrics",
 			TTL:                         3 * time.Minute,
 			SpanMetricsServiceCacheSize: 10,
-			Features:                    []string{otelcfg.FeatureApplication, otel.FeatureProcess},
 		}, SelectorCfg: &attributes.SelectorConfig{
 			SelectionCfg: attributes.Selection{
 				extraattributes.ProcessCPUTime.Section:        attribs,
@@ -144,6 +146,8 @@ func TestProcPrometheusEndpoint_DisaggregatedMetrics(t *testing.T) {
 				extraattributes.ProcessDiskIO.Section:         attribs,
 				extraattributes.ProcessNetIO.Section:          attribs,
 			},
+		}, CommonCfg: &perapp.MetricsConfig{
+			Features: export.FeatureApplicationRED | bexport.FeatureProcess,
 		}},
 		procsInput,
 	)(ctx)

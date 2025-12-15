@@ -7,17 +7,18 @@ import (
 	"time"
 
 	expirable2 "github.com/hashicorp/golang-lru/v2/expirable"
-	"go.opentelemetry.io/obi/pkg/app/request"
-	"go.opentelemetry.io/obi/pkg/components/pipe/global"
-	"go.opentelemetry.io/obi/pkg/components/svc"
+	"go.opentelemetry.io/otel/attribute"
+
+	"go.opentelemetry.io/obi/pkg/appolly/app/request"
+	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	attributes "go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/export/otel/tracesgen"
+	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
-	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
@@ -38,7 +39,7 @@ func TracesReceiver(
 
 		tr := &tracesReceiver{
 			cfg: cfg, hostID: ctxInfo.HostID, spanMetricsEnabled: spanMetricsEnabled,
-			input:          input.Subscribe(),
+			input:          input.Subscribe(msg.SubscriberName("alloyTracesInput")),
 			is:             instrumentations.NewInstrumentationSelection(cfg.Instrumentations),
 			attributeCache: expirable2.NewLRU[svc.UID, []attribute.KeyValue](1024, nil, 5*time.Minute),
 		}

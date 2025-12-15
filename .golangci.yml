@@ -1,51 +1,77 @@
-issues:
-  exclude-dirs:
-    - configs
-    - docs
-    - .obi-src
-  exclude-rules:
-    # revive returns false indent-error-flow errors in some cases where
-    # an "else" clause is required to access the if condition context
-    - path: .*
-      linters:
-        - revive
-      text: indent-error-flow
+version: "2"
 
-    # exclude deprecated API usage errors. If we deprecate some properties is because we don't want to remove them
-    # (hide/undocument them, but keep supporting them until the next major version)
-    - path: .*
-      linters:
-        - staticcheck
-      text: "SA1019:"
+formatters:
+  enable:
+    - gofmt
+    - gci
+  settings:
+    gofmt:
+      # simplify code: gofmt with `-s` option, true by default
+      simplify: true
+
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(go.opentelemetry.io/obi)
+        - prefix(github.com/grafana)
+        - localmodule
 run:
-  go: "1.24"
+  go: "1.25"
   build-tags:
     - integration
 linters:
+  exclusions:
+    paths:
+      - ^configs
+      - ^docs
+      - ^.obi-src
+      - ^vendor
+    presets:
+      - std-error-handling
+    # Log a warning if an exclusion rule is unused.
+    warn-unused: true
+    rules:
+      # Exclude some linters from running on tests files.
+      - path: _test\.go
+        linters:
+          - gocyclo
+          - cyclop
+
+      # revive returns false indent-error-flow errors in some cases where
+      # an "else" clause is required to access the if condition context
+      - path: .*
+        linters:
+          - revive
+        text: indent-error-flow
+
+      # exclude deprecated API usage errors. If we deprecate some properties is because we don't want to remove them
+      # (hide/undocument them, but keep supporting them until the next major version)
+      - path: .*
+        linters:
+          - staticcheck
+        text: "SA1019:"
+
   enable:
     - errcheck
     - errorlint
     - cyclop
     - errname
     - gocritic
-    - goimports
-    - gosimple
     - govet
     - ineffassign
-    - revive
+    # - revive TODO: re-add
     - staticcheck
-    - stylecheck
-    - typecheck
     - unused
   disable:
     - exhaustive
-linters-settings:
-  gocritic:
-    enabled-checks:
-      - rangeExprCopy
-      - rangeValCopy
-      - indexAlloc
-      - commentedOutCode
-  cyclop:
-    max-complexity: 12
+  settings:
 
+    gocritic:
+      enabled-checks:
+        - rangeExprCopy
+        - rangeValCopy
+        - indexAlloc
+        - commentedOutCode
+    cyclop:
+      max-complexity: 12

@@ -22,8 +22,9 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.25.0"
 	trace2 "go.opentelemetry.io/otel/trace"
 
-	"go.opentelemetry.io/obi/pkg/app/request"
-	"go.opentelemetry.io/obi/pkg/components/svc"
+	"go.opentelemetry.io/obi/pkg/appolly/app/request"
+	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
+	"go.opentelemetry.io/obi/pkg/ebpf/common/dnsparser"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
@@ -278,6 +279,10 @@ func acceptSpan(is instrumentations.InstrumentationSelection, span *request.Span
 		return is.MongoEnabled()
 	case request.EventTypeManualSpan:
 		return true
+	case request.EventTypeFailedConnect:
+		return true
+	case request.EventTypeDNS:
+		return is.DNSEnabled()
 	}
 
 	return false
@@ -309,6 +314,11 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 		if span.Route != "" {
 			attrs = append(attrs, semconv.HTTPRoute(span.Route))
 		}
+		if span.SubType == request.HTTPSubtypeGraphQL && span.GraphQL != nil {
+			attrs = append(attrs, semconv.GraphqlDocument(span.GraphQL.Document))
+			attrs = append(attrs, semconv.GraphqlOperationName(span.GraphQL.OperationName))
+			attrs = append(attrs, request.GraphqlOperationType(span.GraphQL.OperationType))
+		}
 	case request.EventTypeGRPC:
 		attrs = []attribute.KeyValue{
 			semconv.RPCMethod(span.Path),
@@ -332,9 +342,46 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 			request.HTTPUrlFull(url),
 			semconv.HTTPScheme(scheme),
 			request.ServerAddr(host),
+			request.PeerService(request.PeerServiceFromSpan(span)),
 			request.ServerPort(span.HostPort),
 			request.HTTPRequestBodySize(int(span.RequestBodyLength())),
 			request.HTTPResponseBodySize(span.ResponseBodyLength()),
+		}
+
+		if span.SubType == request.HTTPSubtypeElasticsearch && span.Elasticsearch != nil {
+			attrs = append(attrs, request.DBCollectionName(span.Elasticsearch.DBCollectionName))
+			attrs = append(attrs, request.ElasticsearchNodeName(span.Elasticsearch.NodeName))
+			attrs = append(attrs, request.DBNamespace(span.DBNamespace))
+			if _, ok := optionalAttrs[attr.DBQueryText]; ok {
+				attrs = append(attrs, request.DBQueryText(span.Elasticsearch.DBQueryText))
+			}
+			attrs = append(attrs, request.DBOperationName(span.Elasticsearch.DBOperationName))
+			attrs = append(attrs, request.DBSystemName(span.Elasticsearch.DBSystemName))
+			attrs = append(attrs, request.ErrorType(span.DBError.ErrorCode))
+		}
+
+		if span.SubType == request.HTTPSubtypeAWSS3 && span.AWS != nil {
+			s3 := span.AWS.S3
+			attrs = append(attrs, semconv.RPCService("S3"))
+			attrs = append(attrs, request.RPCSystem("aws-api"))
+			attrs = append(attrs, semconv.RPCMethod(s3.Method))
+			attrs = append(attrs, semconv.CloudRegion(s3.Meta.Region))
+			attrs = append(attrs, semconv.AWSRequestID(s3.Meta.RequestID))
+			attrs = append(attrs, request.AWSExtendedRequestID(s3.Meta.ExtendedRequestID))
+			attrs = append(attrs, semconv.AWSS3Bucket(s3.Bucket))
+			attrs = append(attrs, semconv.AWSS3Key(s3.Key))
+		}
+
+		if span.SubType == request.HTTPSubtypeAWSSQS && span.AWS != nil {
+			sqs := span.AWS.SQS
+			attrs = append(attrs, request.MessagingOperationName(sqs.OperationName))
+			attrs = append(attrs, request.MessagingOperationType(sqs.OperationType))
+			attrs = append(attrs, request.MessagingDestinationName(sqs.Destination))
+			attrs = append(attrs, request.MessagingMessageID(sqs.MessageID))
+			attrs = append(attrs, semconv.CloudRegion(sqs.Meta.Region))
+			attrs = append(attrs, semconv.AWSRequestID(sqs.Meta.RequestID))
+			attrs = append(attrs, request.AWSExtendedRequestID(sqs.Meta.ExtendedRequestID))
+			attrs = append(attrs, request.AWSSQSQueueURL(sqs.QueueURL))
 		}
 	case request.EventTypeGRPCClient:
 		attrs = []attribute.KeyValue{
@@ -342,11 +389,13 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 			semconv.RPCSystemGRPC,
 			semconv.RPCGRPCStatusCodeKey.Int(span.Status),
 			request.ServerAddr(request.HostAsServer(span)),
+			request.PeerService(request.PeerServiceFromSpan(span)),
 			request.ServerPort(span.HostPort),
 		}
 	case request.EventTypeSQLClient:
 		attrs = []attribute.KeyValue{
 			request.ServerAddr(request.HostAsServer(span)),
+			request.PeerService(request.PeerServiceFromSpan(span)),
 			request.ServerPort(span.HostPort),
 			span.DBSystemName(), // We can distinguish in the future for MySQL, Postgres etc
 		}
@@ -370,6 +419,9 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 			request.ServerAddr(request.HostAsServer(span)),
 			request.ServerPort(span.HostPort),
 			dbSystemRedis,
+		}
+		if span.Type == request.EventTypeRedisClient {
+			attrs = append(attrs, request.PeerService(request.PeerServiceFromSpan(span)))
 		}
 		operation := span.Method
 		if operation != "" {
@@ -397,10 +449,22 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 			semconv.MessagingClientID(span.Statement),
 			operation,
 		}
+
+		if span.Type == request.EventTypeKafkaClient {
+			attrs = append(attrs, request.PeerService(request.PeerServiceFromSpan(span)))
+		}
+
+		if span.MessagingInfo != nil {
+			attrs = append(attrs, request.MessagingPartition(span.MessagingInfo.Partition))
+			if span.Method == request.MessagingProcess {
+				attrs = append(attrs, request.MessagingKafkaOffset(span.MessagingInfo.Offset))
+			}
+		}
 	case request.EventTypeMongoClient:
 		attrs = []attribute.KeyValue{
 			request.ServerAddr(request.HostAsServer(span)),
 			request.ServerPort(span.HostPort),
+			request.PeerService(request.PeerServiceFromSpan(span)),
 			dbSystemMongo,
 		}
 		operation := span.Method
@@ -418,6 +482,24 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 		}
 	case request.EventTypeManualSpan:
 		attrs = manualSpanAttributes(span)
+	case request.EventTypeFailedConnect:
+		attrs = []attribute.KeyValue{
+			request.ClientAddr(request.PeerAsClient(span)),
+			request.ServerAddr(request.SpanHost(span)),
+			request.ServerPort(span.HostPort),
+		}
+	case request.EventTypeDNS:
+		attrs = []attribute.KeyValue{
+			request.ClientAddr(request.SpanHost(span)),
+			request.ServerAddr(request.PeerAsClient(span)),
+			request.ServerPort(span.HostPort),
+			semconv.DNSQuestionName(span.Path),
+			request.DNSAnswers(span.Statement),
+		}
+
+		if span.Status != 0 {
+			attrs = append(attrs, request.ErrorMessage(dnsparser.RCode(span.Status).String()))
+		}
 	}
 
 	if _, ok := optionalAttrs[attr.SkipSpanMetrics]; ok {
@@ -431,7 +513,7 @@ func spanKind(span *request.Span) trace2.SpanKind {
 	switch span.Type {
 	case request.EventTypeHTTP, request.EventTypeGRPC, request.EventTypeRedisServer, request.EventTypeKafkaServer:
 		return trace2.SpanKindServer
-	case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient, request.EventTypeRedisClient, request.EventTypeMongoClient:
+	case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient, request.EventTypeRedisClient, request.EventTypeMongoClient, request.EventTypeFailedConnect:
 		return trace2.SpanKindClient
 	case request.EventTypeKafkaClient:
 		switch span.Method {

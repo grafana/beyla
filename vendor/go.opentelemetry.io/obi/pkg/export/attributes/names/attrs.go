@@ -50,11 +50,20 @@ const (
 	ErrorType              = Name("error.type")
 	RPCMethod              = Name(semconv.RPCMethodKey)
 	RPCSystem              = Name(semconv.RPCSystemKey)
+	RPCService             = Name(semconv.RPCServiceKey)
 	RPCGRPCStatusCode      = Name(semconv.RPCGRPCStatusCodeKey)
 	HTTPRoute              = Name(semconv.HTTPRouteKey)
+	MessagingOpName        = Name("messaging.operation.name")
 	MessagingOpType        = Name("messaging.operation.type")
+	MessagingMessageID     = Name(semconv.MessagingMessageIDKey)
 	MessagingSystem        = Name(semconv.MessagingSystemKey)
 	MessagingDestination   = Name(semconv.MessagingDestinationNameKey)
+	GraphQLDocument        = Name(semconv.GraphqlDocumentKey)
+	GraphQLOperationName   = Name(semconv.GraphqlOperationNameKey)
+	GraphQLOperationType   = Name(semconv.GraphqlOperationTypeKey)
+	DNSAnswers             = Name("dns.answers")
+	ErrorMessage           = Name("error.message")
+	TelemetrySDKLanguage   = Name(semconv.TelemetrySDKLanguageKey)
 
 	K8sNamespaceName   = Name("k8s.namespace.name")
 	K8sPodName         = Name("k8s.pod.name")
@@ -79,23 +88,27 @@ const (
 // VendorPrefix allows identifying some metrics (network, internal counters...)
 // as custom metrics, since at the moment they don't follow any semantic convention for them.
 // This value can be overridden when OBI is vendored as a library (e.g. from the OTEL collector)
-var VendorPrefix = "obi"
+var (
+	VendorPrefix  = "obi"
+	VendorSDKName = "opentelemetry-ebpf-instrumentation"
+)
 
 var OBIIP = Name("obi.ip")
 
 const (
-	Transport  = Name("transport")
-	SrcAddress = Name("src.address")
-	DstAddres  = Name("dst.address")
-	SrcPort    = Name("src.port")
-	DstPort    = Name("dst.port")
-	SrcName    = Name("src.name")
-	DstName    = Name("dst.name")
-	Iface      = Name("iface")
-	SrcCIDR    = Name("src.cidr")
-	DstCIDR    = Name("dst.cidr")
-	SrcZone    = Name("src.zone")
-	DstZone    = Name("dst.zone")
+	Transport   = Name("transport")
+	NetworkType = Name("network.type")
+	SrcAddress  = Name("src.address")
+	DstAddres   = Name("dst.address")
+	SrcPort     = Name("src.port")
+	DstPort     = Name("dst.port")
+	SrcName     = Name("src.name")
+	DstName     = Name("dst.name")
+	Iface       = Name("iface")
+	SrcCIDR     = Name("src.cidr")
+	DstCIDR     = Name("dst.cidr")
+	SrcZone     = Name("src.zone")
+	DstZone     = Name("dst.zone")
 
 	ClientPort = Name("client.port")
 
@@ -153,6 +166,23 @@ const (
 	DBQueryText          = Name("db.query.text")
 	DBResponseStatusCode = Name("db.response.status_code")
 	DBNamespace          = Name("db.namespace")
+
+	// Messaging
+	MessagingPartition   = Name("messaging.destination.partition.id")
+	MessagingKafkaOffset = Name("messaging.kafka.offset")
+
+	// Elasticsearch
+	ElasticsearchNodeName = Name("elasticsearch.node.name")
+
+	// AWS
+	AWSRequestID         = Name("aws.request_id")
+	AWSExtendedRequestID = Name("aws.extended_request_id")
+	AWSS3Bucket          = Name("aws.s3.bucket")
+	AWSS3Key             = Name("aws.s3.key")
+	AWSSQSQueueURL       = Name("aws.sqs.queue_url")
+
+	// Cloud
+	CloudRegion = Name(semconv.CloudRegionKey)
 )
 
 // Beyla specific GPU events
@@ -160,4 +190,9 @@ const (
 	// GPU/Cuda related attributes
 	CudaKernelName = Name("cuda.kernel.name")
 	CudaMemcpyKind = Name("cuda.memcpy.kind")
+)
+
+// DNS events
+const (
+	DNSQuestionName = Name("dns.question.name")
 )

@@ -1,0 +1,29 @@
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  extends: ["config:best-practices", "helpers:pinGitHubActionDigestsToSemver"],
+  ignorePaths: [
+    // the following components are used to test the behavior of Beyla with legacy versions of libraries
+    // so we don't want to get them updated
+    "internal/test/integration/components/testserver_1.17",
+    "internal/test/integration/components/old_grpc",
+    // github.com/Shopify/sarama has been moved to github.com/IBM/sarama
+    // but we keep supporting the go-offsets for the outdated library, which must not
+    // be updated.
+    "configs/offsets/shopify/**",
+    "NOTICES/**",
+  ],
+  packageRules: [
+    {
+      groupName: "all patch and digest versions",
+      matchUpdateTypes: ["patch", "digest"],
+      schedule: ["before 8am on Monday"],
+      // group all patches in a single PR
+      matchPackageNames: ["*"],
+    },
+    {
+      matchUpdateTypes: ["minor", "major"],
+      schedule: ["before 8am on Monday"],
+    },
+  ],
+  labels: ["dependencies"],
+}

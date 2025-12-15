@@ -9,13 +9,13 @@ import (
 	"sync"
 	"time"
 
-	"go.opentelemetry.io/obi/pkg/app/request"
-	obiDiscover "go.opentelemetry.io/obi/pkg/components/discover"
-	"go.opentelemetry.io/obi/pkg/components/ebpf"
-	ebpfcommon "go.opentelemetry.io/obi/pkg/components/ebpf/common"
-	"go.opentelemetry.io/obi/pkg/components/exec"
-	"go.opentelemetry.io/obi/pkg/components/pipe/global"
-	"go.opentelemetry.io/obi/pkg/components/traces"
+	"go.opentelemetry.io/obi/pkg/appolly/app/request"
+	obiDiscover "go.opentelemetry.io/obi/pkg/appolly/discover"
+	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
+	"go.opentelemetry.io/obi/pkg/appolly/traces"
+	"go.opentelemetry.io/obi/pkg/ebpf"
+	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
+	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 	"go.opentelemetry.io/obi/pkg/transform"
@@ -56,7 +56,7 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 	tracesInput := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(config.ChannelBufferLen))
 
 	newEventQueue := func() *msg.Queue[exec.ProcessEvent] {
-		return msg.NewQueue[exec.ProcessEvent](msg.ChannelBufferLen(config.ChannelBufferLen), msg.NotBlockIfNoSubscribers())
+		return msg.NewQueue[exec.ProcessEvent](msg.ChannelBufferLen(config.ChannelBufferLen))
 	}
 
 	swi := &swarm.Instancer{}

@@ -4,11 +4,11 @@ import (
 	"log/slog"
 	"os"
 
-	obiDiscover "go.opentelemetry.io/obi/pkg/components/discover"
-	ebpfcommon "go.opentelemetry.io/obi/pkg/components/ebpf/common"
+	obiDiscover "go.opentelemetry.io/obi/pkg/appolly/discover"
+	"go.opentelemetry.io/obi/pkg/appolly/services"
+	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
-	"go.opentelemetry.io/obi/pkg/services"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 )
@@ -28,7 +28,7 @@ func SurveyCriteriaMatcherProvider(
 		Criteria:         surveyCriteria(cfg),
 		ExcludeCriteria:  surveyExcludingCriteria(cfg),
 		ProcessHistory:   map[obiDiscover.PID]obiDiscover.ProcessMatch{},
-		Input:            input.Subscribe(),
+		Input:            input.Subscribe(msg.SubscriberName("surveyInput")),
 		Output:           output,
 		Namespace:        beylaNamespace,
 		HasHostPidAccess: hasHostPidAccess(),

@@ -12,13 +12,14 @@ import (
 	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/obi/pkg/app/request"
-	"go.opentelemetry.io/obi/pkg/components/pipe/global"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
+
+	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	"go.opentelemetry.io/obi/pkg/export/otel"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
+	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
-	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 )
 
 func TestGrafanaEndpointOverride(t *testing.T) {
@@ -32,7 +33,7 @@ grafana:
     cloud_api_key: "affafafaafkd"
 `))
 	require.NoError(t, err)
-	obiCfg := config.AsOBI().Metrics
+	obiCfg := config.AsOBI().OTELMetrics
 
 	// WHEN OBI is requested to get the endpoint
 	ep, _ := obiCfg.OTLPMetricsEndpoint()
@@ -62,7 +63,7 @@ grafana:
 `, metricServer.URL)))
 	require.NoError(t, err)
 
-	instancer := &otelcfg.MetricsExporterInstancer{Cfg: &config.AsOBI().Metrics}
+	instancer := &otelcfg.MetricsExporterInstancer{Cfg: &config.AsOBI().OTELMetrics}
 
 	// WHEN the metrics exporter starts to send metrics
 	export, err := instancer.Instantiate(t.Context())
@@ -88,6 +89,7 @@ func TestGrafanaHeadersOverride_Traces(t *testing.T) {
 	config, err := LoadConfig(strings.NewReader(fmt.Sprintf(`
 otel_traces_export:
   endpoint: "%s"
+  batch_timeout: "10ms"
 grafana:
   otlp:
     cloud_submit: ["traces"]

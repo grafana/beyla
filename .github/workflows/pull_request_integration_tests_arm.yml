@@ -2,9 +2,31 @@ name: Pull request integration tests ARM
 
 on:
   push:
-    branches: [ 'main', 'release-*' ]
+    branches: ["main", "release-*"]
+    paths:
+      - "**.go"
+      - "go.mod"
+      - "go.sum"
+      - "bpf/**"
+      - "internal/**"
+      - "pkg/**"
+      - "cmd/**"
+      - "vendor/**"
+      - "Makefile"
+      - ".github/workflows/pull_request_integration_tests_arm.yml"
   pull_request:
-    branches: [ 'main', 'release-*' ]
+    branches: ["main", "release-*"]
+    paths:
+      - "**.go"
+      - "go.mod"
+      - "go.sum"
+      - "bpf/**"
+      - "internal/**"
+      - "pkg/**"
+      - "cmd/**"
+      - "vendor/**"
+      - "Makefile"
+      - ".github/workflows/pull_request_integration_tests_arm.yml"
 
 # Set restrictive permissions at workflow level
 permissions:
@@ -20,18 +42,15 @@ jobs:
       pull-requests: write
       # required for CODECOV token
       id-token: write
-    strategy:
-      matrix:
-        go: [ '1.24' ]
     steps:
-      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3
+      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
         with:
           persist-credentials: false
       - name: Set up Go
-        uses: actions/setup-go@be3c94b385c4f180051c996d336f57a34c397495 # v3
+        uses: actions/setup-go@be3c94b385c4f180051c996d336f57a34c397495 # v3.6.1
         with:
-          cache: false  # Disable caching to avoid extraction conflicts
-          go-version: ${{ matrix.go }}
+          cache: false # Disable caching to avoid extraction conflicts
+          go-version-file: "go.mod"
       - name: Clean up disk space
         run: |
           docker system prune -af
@@ -40,7 +59,7 @@ jobs:
         run: make docker-generate integration-test-arm
         timeout-minutes: 60
       - name: Upload integration test logs
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: Test Logs
@@ -48,14 +67,14 @@ jobs:
             testoutput/*.log
             testoutput/kind
       - id: get-codecov-token
-        uses: grafana/shared-workflows/actions/get-vault-secrets@get-vault-secrets/v1.2.1
+        uses: grafana/shared-workflows/actions/get-vault-secrets@9f37f656e063f0ad0b0bfc38d49894b57d363936 # get-vault-secrets/v1.2.1
         continue-on-error: true
         with:
           # Secrets placed in the ci/repo/grafana/beyla/codecov path in Vault
           repo_secrets: |
             CODECOV_TOKEN=codecov:token
       - name: Report coverage
-        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4
+        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4.6.0
         continue-on-error: true
         with:
           file: ./testoutput/itest-covdata.txt

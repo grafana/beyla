@@ -10,9 +10,10 @@ import (
 	"fmt"
 	"log/slog"
 
-	"go.opentelemetry.io/obi/pkg/app/request"
+	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
+	"go.opentelemetry.io/obi/pkg/pipe/swarm/swarms"
 )
 
 type TracePrinter string
@@ -68,52 +69,63 @@ func PrinterNode(p TracePrinter, input *msg.Queue[[]request.Span]) swarm.Instanc
 }
 
 func textPrinter(in *msg.Queue[[]request.Span]) swarm.RunFunc {
-	input := in.Subscribe()
-	return func(_ context.Context) {
-		for spans := range input {
+	input := in.Subscribe(msg.SubscriberName("textPrinter"))
+	return func(ctx context.Context) {
+		swarms.ForEachInput(ctx, input, nil, func(spans []request.Span) {
 			for i := range spans {
-				t := spans[i].Timings()
-
-				pn := ""
-				hn := ""
-
-				if spans[i].IsClientSpan() {
-					if spans[i].Service.UID.Namespace != "" {
-						pn = "." + spans[i].Service.UID.Namespace
-					}
-					if spans[i].OtherNamespace != "" {
-						hn = "." + spans[i].OtherNamespace
-					}
-				} else {
-					if spans[i].OtherNamespace != "" {
-						pn = "." + spans[i].OtherNamespace
-					}
-					if spans[i].Service.UID.Namespace != "" {
-						hn = "." + spans[i].Service.UID.Namespace
-					}
-				}
-
-				fmt.Printf("%s (%s[%s]) %s %v %s %s [%s:%d]->[%s:%d] contentLen:%dB responseLen:%dB svc=[%s %s] traceparent=[%s]\n",
-					t.Start.Format("2006-01-02 15:04:05.12345"),
-					t.End.Sub(t.RequestStart),
-					t.End.Sub(t.Start),
-					spans[i].Type,
-					spans[i].Status,
-					spans[i].Method,
-					spans[i].Path,
-					spans[i].Peer+" as "+request.SpanPeer(&spans[i])+pn,
-					spans[i].PeerPort,
-					spans[i].Host+" as "+request.SpanHost(&spans[i])+hn,
-					spans[i].HostPort,
-					spans[i].ContentLength,
-					spans[i].ResponseLength,
-					&spans[i].Service,
-					spans[i].Service.SDKLanguage.String(),
-					traceparent(&spans[i]),
-				)
+				printSpan(&spans[i])
 			}
+		})
+	}
+}
+
+func printSpan(span *request.Span) {
+	t := span.Timings()
+
+	pn := ""
+	hn := ""
+
+	if span.IsClientSpan() {
+		if span.Service.UID.Namespace != "" {
+			pn = "." + span.Service.UID.Namespace
+		}
+		if span.OtherNamespace != "" {
+			hn = "." + span.OtherNamespace
+		}
+	} else {
+		if span.OtherNamespace != "" {
+			pn = "." + span.OtherNamespace
+		}
+		if span.Service.UID.Namespace != "" {
+			hn = "." + span.Service.UID.Namespace
 		}
 	}
+
+	r := ""
+	if span.Route != "" {
+		r = "(" + span.Route + ")"
+	}
+
+	fmt.Printf("%s (%s[%s]) %s(subType=%d) %v %s %s%s [%s:%d]->[%s:%d] contentLen:%dB responseLen:%dB svc=[%s %s] traceparent=[%s]\n",
+		t.Start.Format("2006-01-02 15:04:05.12345"),
+		t.End.Sub(t.RequestStart),
+		t.End.Sub(t.Start),
+		span.Type,
+		span.SubType,
+		span.Status,
+		span.Method,
+		span.Path,
+		r,
+		span.Peer+" as "+request.SpanPeer(span)+pn,
+		span.PeerPort,
+		span.Host+" as "+request.SpanHost(span)+hn,
+		span.HostPort,
+		span.ContentLength,
+		span.ResponseLength,
+		&span.Service,
+		span.Service.SDKLanguage.String(),
+		traceparent(span),
+	)
 }
 
 func serializeSpansJSON(spans []request.Span, indent bool) ([]byte, error) {
@@ -125,7 +137,7 @@ func serializeSpansJSON(spans []request.Span, indent bool) ([]byte, error) {
 }
 
 func jsonPrinter(in *msg.Queue[[]request.Span], indent bool) swarm.RunFunc {
-	input := in.Subscribe()
+	input := in.Subscribe(msg.SubscriberName("jsonPrinter"))
 	return func(_ context.Context) {
 		for spans := range input {
 			data, err := serializeSpansJSON(spans, indent)
@@ -147,7 +159,7 @@ func traceparent(span *request.Span) string {
 }
 
 func counterPrinter(in *msg.Queue[[]request.Span]) swarm.RunFunc {
-	input := in.Subscribe()
+	input := in.Subscribe(msg.SubscriberName("counterPrinter"))
 	counter := 0
 	return func(_ context.Context) {
 		for spans := range input {

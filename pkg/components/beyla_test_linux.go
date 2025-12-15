@@ -10,6 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"go.opentelemetry.io/obi/pkg/export"
+
 	"github.com/grafana/beyla/v2/pkg/beyla"
 )
 
@@ -17,45 +19,44 @@ import (
 func TestRunDontPanic(t *testing.T) {
 	type testCase struct {
 		description    string
-		configProvider func() beyla.Config
+		configProvider func() *beyla.Config
 	}
 	testCases := []testCase{{
 		description: "otel endpoint but feature excluded",
-		configProvider: func() beyla.Config {
-			cfg := beyla.DefaultConfig
-			cfg.Metrics.Features = []string{"application"}
+		configProvider: func() *beyla.Config {
+			cfg := beyla.DefaultConfig()
+			cfg.Metrics.Features = export.FeatureApplicationRED
 			cfg.NetworkFlows.Enable = true
-			cfg.Metrics.CommonEndpoint = "http://localhost"
+			cfg.OTELMetrics.CommonEndpoint = "http://localhost"
 			return cfg
 		},
 	}, {
 		description: "prom endpoint but feature excluded",
-		configProvider: func() beyla.Config {
-			cfg := beyla.DefaultConfig
-			cfg.Prometheus.Features = []string{"application"}
+		configProvider: func() *beyla.Config {
+			cfg := beyla.DefaultConfig()
+			cfg.Metrics.Features = export.FeatureApplicationRED
 			cfg.NetworkFlows.Enable = true
 			cfg.Prometheus.Port = 9090
 			return cfg
 		},
 	}, {
 		description: "otel endpoint, otel feature excluded, but prom enabled",
-		configProvider: func() beyla.Config {
-			cfg := beyla.DefaultConfig
-			cfg.Metrics.Features = []string{"application"}
+		configProvider: func() *beyla.Config {
+			cfg := beyla.DefaultConfig()
+			cfg.Metrics.Features = export.FeatureApplicationRED
 			cfg.NetworkFlows.Enable = true
-			cfg.Metrics.CommonEndpoint = "http://localhost"
+			cfg.OTELMetrics.CommonEndpoint = "http://localhost"
 			cfg.Prometheus.Port = 9090
 			return cfg
 		},
 	}, {
 		description: "all endpoints, all features excluded",
-		configProvider: func() beyla.Config {
-			cfg := beyla.DefaultConfig
+		configProvider: func() *beyla.Config {
+			cfg := beyla.DefaultConfig()
 			cfg.NetworkFlows.Enable = true
 			cfg.Prometheus.Port = 9090
-			cfg.Prometheus.Features = []string{"application"}
-			cfg.Metrics.CommonEndpoint = "http://localhost"
-			cfg.Metrics.Features = []string{"application"}
+			cfg.OTELMetrics.CommonEndpoint = "http://localhost"
+			cfg.Metrics.Features = export.FeatureApplicationRED
 			return cfg
 		},
 	}}
@@ -65,7 +66,7 @@ func TestRunDontPanic(t *testing.T) {
 			require.NoError(t, cfg.Validate())
 
 			require.NotPanics(t, func() {
-				_ = RunBeyla(t.Context(), &cfg)
+				_ = RunBeyla(t.Context(), cfg)
 			})
 		})
 	}

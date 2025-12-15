@@ -28,7 +28,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/obi/pkg/components/helpers"
+
+	"github.com/grafana/beyla/v2/pkg/internal/helpers"
 )
 
 func TestLinuxProcess_CmdLine(t *testing.T) {

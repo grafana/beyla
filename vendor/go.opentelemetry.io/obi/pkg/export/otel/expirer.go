@@ -85,7 +85,7 @@ func (ex *Expirer[Record, Metric, ValType]) ForRecord(r Record, extraAttrs ...at
 	}
 	recordAttrs, attrValues := ex.recordAttributes(r, extraAttrs...)
 	return ex.metric, ex.entries.GetOrCreate(attrValues, func() attribute.Set {
-		ex.log.With("labelValues", attrValues).Debug("storing new metric label set")
+		ex.log.Debug("storing new metric label set", "labelValues", attrValues)
 		return recordAttrs
 	})
 }

@@ -15,6 +15,21 @@ import (
 	cfgutil "github.com/grafana/beyla/v2/pkg/helpers/config"
 )
 
+func FromOBI(c *obi.Config) *Config {
+	cfg := &Config{}
+	cfgutil.Convert(c, cfg, map[string]string{
+		// Fields that do not exist in OBI Config are marked for skipping,
+		// to avoid that convert panics,
+		".obi":              cfgutil.SkipConversion,
+		".TracesReceiver":   cfgutil.SkipConversion,
+		".Processes":        cfgutil.SkipConversion,
+		".Grafana":          cfgutil.SkipConversion,
+		".Topology":         cfgutil.SkipConversion,
+		".Discovery.Survey": cfgutil.SkipConversion,
+	})
+	return cfg
+}
+
 func (c *Config) AsOBI() *obi.Config {
 	if c.obi == nil {
 		obiCfg := &obi.Config{}
@@ -35,10 +50,10 @@ func (c *Config) AsOBI() *obi.Config {
 func overrideOBI(src *Config, dst *obi.Config) {
 	// metrics && traces endpoints
 	if src.Grafana.OTLP.MetricsEnabled() {
-		dst.Metrics.OTLPEndpointProvider = func() (string, bool) {
-			return otel.ResolveOTLPEndpoint(src.Metrics.MetricsEndpoint, src.Metrics.CommonEndpoint, &src.Grafana.OTLP)
+		dst.OTELMetrics.OTLPEndpointProvider = func() (string, bool) {
+			return otel.ResolveOTLPEndpoint(src.OTELMetrics.MetricsEndpoint, src.OTELMetrics.CommonEndpoint, &src.Grafana.OTLP)
 		}
-		dst.Metrics.InjectHeaders = src.Grafana.OTLP.OverrideHeaders
+		dst.OTELMetrics.InjectHeaders = src.Grafana.OTLP.OverrideHeaders
 	}
 	if src.Grafana.OTLP.TracesEnabled() {
 		dst.Traces.OTLPEndpointProvider = func() (string, bool) {
@@ -62,17 +77,11 @@ func OverrideOBIGlobalConfig() {
 			}
 		}
 	}
-	// Temporary patch: Overrides telemetry_sdk_name in OBI until we are able
-	// to provide OBI with a mechanism to override resource & metric attributes
-	if ras := os.Getenv("OTEL_RESOURCE_ATTRIBUTES"); ras != "" {
-		os.Setenv("OTEL_RESOURCE_ATTRIBUTES", ras+",telemetry.sdk.name=beyla")
-	} else {
-		os.Setenv("OTEL_RESOURCE_ATTRIBUTES", "telemetry.sdk.name=beyla")
-	}
 	// Override global metric naming options
 	obibuildinfo.Version = buildinfo.Version
 	obibuildinfo.Revision = buildinfo.Revision
 	attr.VendorPrefix = "beyla"
+	attr.VendorSDKName = "beyla"
 	attr.OBIIP = "beyla.ip"
 	attributes.NetworkFlow = attributes.Name{
 		Section: "beyla.network.flow",

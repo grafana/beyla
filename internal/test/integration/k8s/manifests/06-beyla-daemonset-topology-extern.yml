@@ -1,0 +1,84 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: beyla-config
+data:
+  beyla-config.yml: |
+    attributes:
+      kubernetes:
+        enable: true
+        resource_labels:
+          deployment.environment: ["deployment.environment"]
+      select:
+        process_*:
+          include: ["*"]
+    trace_printer: text
+    log_level: debug
+    discovery:
+      instrument:
+        - k8s_deployment_name: testserver
+      patterns:
+        - /pingpong
+      ignored_patterns:
+        - /metrics
+      unmatched: path
+    otel_metrics_export:
+      endpoint: http://otelcol:4318
+    otel_traces_export:
+      endpoint: http://jaeger:4318
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: beyla
+spec:
+  selector:
+    matchLabels:
+      instrumentation: beyla
+  template:
+    metadata:
+      labels:
+        instrumentation: beyla
+        # this label will trigger a deletion of beyla pods before tearing down
+        # kind, to force Beyla writing the coverage data
+        teardown: delete
+    spec:
+      hostPID: true  #important!
+      serviceAccountName: beyla
+      volumes:
+        - name: beyla-config
+          configMap:
+            name: beyla-config
+        - name: testoutput
+          persistentVolumeClaim:
+            claimName: testoutput
+      containers:
+        - name: beyla
+          image: beyla:dev
+          imagePullPolicy: Never # loaded into Kind from localhost
+          args: ["--config=/config/beyla-config.yml"]
+          securityContext:
+            privileged: true
+            runAsUser: 0
+          volumeMounts:
+            - mountPath: /config
+              name: beyla-config
+            - mountPath: /testoutput
+              name: testoutput
+          env:
+            - name: GOCOVERDIR
+              value: "/testoutput"
+            - name: BEYLA_DISCOVERY_POLL_INTERVAL
+              value: "500ms"
+            - name: BEYLA_METRICS_INTERVAL
+              value: "10ms"
+            - name: BEYLA_BPF_BATCH_TIMEOUT
+              value: "10ms"
+            - name: BEYLA_OTEL_METRICS_TTL
+              value: "30m0s"
+            - name: BEYLA_OTEL_METRICS_FEATURES
+              value: "application,application_process"
+            - name: BEYLA_NAME_RESOLVER_SOURCES
+              value: "k8s,dns"
+            - name: BEYLA_TOPOLOGY_SPANS
+              value: "inter_cluster"

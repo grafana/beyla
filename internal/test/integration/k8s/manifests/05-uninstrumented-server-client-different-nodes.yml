@@ -1,0 +1,117 @@
+# this file depends in the annotations and 00-kind-multi-node.yml to deploy a otherinstance
+# and a client in different nodes.
+# Beyla will instrument both, but restricting the metadata only to the local node,
+# so network flows between client and otherinstance would be incomplete
+apiVersion: v1
+kind: Pod
+metadata:
+  name: httppinger
+  labels:
+    component: httppinger
+    # this label will trigger a deletion of beyla pods before tearing down
+    # kind, to force Beyla writing the coverage data
+    teardown: delete
+spec:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: deployment/zone
+                operator: In
+                values:
+                  - other-progs
+  volumes:
+    - name: configs
+      persistentVolumeClaim:
+        claimName: configs
+    - name: testoutput
+      persistentVolumeClaim:
+        claimName: testoutput
+    - name: maincode
+      configMap:
+        name: maincode
+  containers:
+    - name: httppinger
+      image: ghcr.io/open-telemetry/obi-testimg:httppinger-net
+      imagePullPolicy: IfNotPresent       
+      env:
+        - name: TARGET_URL
+          value: "http://otherinstance:8080"
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: "deployment.environment=integration-test,service.version=3.2.1"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otherinstance
+spec:
+  selector:
+    app: otherinstance
+  ports:
+    - port: 8080
+      name: http0
+      targetPort: http0
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otherinstance
+  labels:
+    app: otherinstance
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: otherinstance
+  template:
+    metadata:
+      name: otherinstance
+      labels:
+        app: otherinstance
+        # this label will trigger a deletion of beyla pods before tearing down
+        # kind, to force Beyla writing the coverage data
+        teardown: delete
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: deployment/zone
+                    operator: In
+                    values:
+                      - otel
+      volumes:
+        - name: configs
+          persistentVolumeClaim:
+            claimName: configs
+        - name: testoutput
+          persistentVolumeClaim:
+            claimName: testoutput
+      containers:
+        - name: otherinstance
+          image: ghcr.io/open-telemetry/obi-testimg:gotestserver-net
+          imagePullPolicy: IfNotPresent 
+          ports:
+            # exposing hostports to enable operation from tests
+            - containerPort: 8080
+              hostPort: 8080
+              name: http0
+            - containerPort: 8081
+              hostPort: 8081
+              name: http1
+            - containerPort: 8082
+              hostPort: 8082
+              name: http2
+            - containerPort: 8083
+              hostPort: 8083
+              name: http3
+            - containerPort: 5051
+              hostPort: 5051
+              name: grpc
+          env:
+            - name: LOG_LEVEL
+              value: "DEBUG"
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "deployment.environment=integration-test,service.version=3.2.1"

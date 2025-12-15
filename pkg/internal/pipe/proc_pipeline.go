@@ -3,16 +3,16 @@ package pipe
 import (
 	"context"
 	"fmt"
-	"slices"
 
-	"go.opentelemetry.io/obi/pkg/app/request"
-	"go.opentelemetry.io/obi/pkg/components/pipe/global"
+	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	attributes "go.opentelemetry.io/obi/pkg/export/attributes"
+	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
+	"github.com/grafana/beyla/v2/pkg/export/otel/bexport"
 	"github.com/grafana/beyla/v2/pkg/export/prom"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
 )
@@ -20,10 +20,8 @@ import (
 // the sub-pipe is enabled only if there is a metrics exporter enabled,
 // and both the "application" and "application_process" features are enabled
 func isProcessSubPipeEnabled(cfg *beyla.Config) bool {
-	return (cfg.Metrics.EndpointEnabled() && cfg.Metrics.OTelMetricsEnabled() &&
-		slices.Contains(cfg.Metrics.Features, otel.FeatureProcess)) ||
-		(cfg.Prometheus.EndpointEnabled() && cfg.Prometheus.OTelMetricsEnabled() &&
-			slices.Contains(cfg.Prometheus.Features, otel.FeatureProcess))
+	return (cfg.Prometheus.EndpointEnabled() || cfg.OTELMetrics.EndpointEnabled()) &&
+		bexport.Any(cfg.Metrics.Features, bexport.FeatureProcess)
 }
 
 // ProcessMetricsSwarmInstancer returns a swarm.Instancer that actually has contains another swarm.Instancer
@@ -40,7 +38,7 @@ func ProcessMetricsSwarmInstancer(
 	}
 	// needs to be instantiated here to make sure all the messages from the
 	// vendored OBI app swarm are catched
-	appInputSpansCh := appInputSpans.Subscribe()
+	appInputSpansCh := appInputSpans.Subscribe(msg.SubscriberName("appInputSpans"))
 	return func(ctx context.Context) (swarm.RunFunc, error) {
 		selectorCfg := &attributes.SelectorConfig{
 			SelectionCfg:            cfg.Attributes.Select,
@@ -48,7 +46,8 @@ func ProcessMetricsSwarmInstancer(
 		}
 
 		// communication channel between the process collector and the metrics exporters
-		processCollectStatus := msg.NewQueue[[]*process.Status](msg.ChannelBufferLen(cfg.ChannelBufferLen))
+		processCollectStatus := msg.NewQueue[[]*process.Status](
+			msg.ChannelBufferLen(cfg.ChannelBufferLen), msg.Name("processCollectStatus"))
 
 		builder := swarm.Instancer{}
 		builder.Add(process.NewCollectorProvider(
@@ -59,8 +58,9 @@ func ProcessMetricsSwarmInstancer(
 		builder.Add(otel.ProcMetricsExporterProvider(
 			ctxInfo,
 			&otel.ProcMetricsConfig{
-				Metrics:     &cfg.Metrics,
+				Metrics:     &cfg.OTELMetrics,
 				SelectorCfg: selectorCfg,
+				CommonCfg:   &cfg.Metrics,
 			},
 			processCollectStatus,
 		))
@@ -68,6 +68,7 @@ func ProcessMetricsSwarmInstancer(
 			&prom.ProcPrometheusConfig{
 				Metrics:     &cfg.Prometheus,
 				SelectorCfg: selectorCfg,
+				CommonCfg:   &cfg.Metrics,
 			},
 			processCollectStatus,
 		))

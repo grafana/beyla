@@ -1,13 +1,18 @@
 package otel
 
-import "time"
+import (
+	"time"
+
+	trace2 "go.opentelemetry.io/otel/trace"
+
+	"go.opentelemetry.io/obi/pkg/appolly/app/request"
+)
 
 var timeNow = time.Now
 
 const (
-	SurveyInfo     = "survey_info"
-	FeatureProcess = "application_process"
-	ReporterName   = "github.com/grafana/beyla"
+	SurveyInfoMetricName = "survey_info"
+	ReporterName         = "github.com/grafana/beyla"
 )
 
 // ResolveOTLPEndpoint returns the OTLP endpoint, defined from one of the following sources, from highest to lowest priority
@@ -31,4 +36,21 @@ func ResolveOTLPEndpoint(endpoint, common string, grafana *GrafanaOTLP) (string,
 	}
 
 	return "", false
+}
+
+func SpanKind(span *request.Span) trace2.SpanKind {
+	switch span.Type {
+	case request.EventTypeHTTP, request.EventTypeGRPC, request.EventTypeRedisServer, request.EventTypeKafkaServer:
+		return trace2.SpanKindServer
+	case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient, request.EventTypeRedisClient, request.EventTypeMongoClient:
+		return trace2.SpanKindClient
+	case request.EventTypeKafkaClient:
+		switch span.Method {
+		case request.MessagingPublish:
+			return trace2.SpanKindProducer
+		case request.MessagingProcess:
+			return trace2.SpanKindConsumer
+		}
+	}
+	return trace2.SpanKindInternal
 }

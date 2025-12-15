@@ -12,7 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"go.opentelemetry.io/obi/pkg/services"
+	"go.opentelemetry.io/obi/pkg/appolly/services"
+	"go.opentelemetry.io/obi/pkg/export/instrumentations"
 )
 
 func tlog() *slog.Logger {
@@ -27,7 +28,7 @@ type TracesConfig struct {
 	TracesProtocol Protocol `yaml:"-" env:"OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"`
 
 	// Allows configuration of which instrumentations should be enabled, e.g. http, grpc, sql...
-	Instrumentations []string `yaml:"instrumentations" env:"OTEL_EBPF_TRACES_INSTRUMENTATIONS" envSeparator:","`
+	Instrumentations []instrumentations.Instrumentation `yaml:"instrumentations" env:"OTEL_EBPF_TRACES_INSTRUMENTATIONS" envSeparator:","`
 
 	// InsecureSkipVerify is not standard, so we don't follow the same naming convention
 	InsecureSkipVerify bool `yaml:"insecure_skip_verify" env:"OTEL_EBPF_INSECURE_SKIP_VERIFY"`
@@ -72,7 +73,7 @@ func (m TracesConfig) MarshalYAML() (any, error) {
 // either the OTEL endpoint and OTEL traces endpoint is defined.
 // If not enabled, this node won't be instantiated
 func (m *TracesConfig) Enabled() bool {
-	return m.CommonEndpoint != "" || m.TracesEndpoint != ""
+	return m.CommonEndpoint != "" || m.TracesEndpoint != "" || m.GetProtocol() == ProtocolDebug
 }
 
 func (m *TracesConfig) GetProtocol() Protocol {

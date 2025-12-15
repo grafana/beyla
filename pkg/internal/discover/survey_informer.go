@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"log/slog"
 
-	obiDiscover "go.opentelemetry.io/obi/pkg/components/discover"
-	"go.opentelemetry.io/obi/pkg/components/ebpf"
-	"go.opentelemetry.io/obi/pkg/components/exec"
-	"go.opentelemetry.io/obi/pkg/components/kube"
+	obiDiscover "go.opentelemetry.io/obi/pkg/appolly/discover"
+	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
+	"go.opentelemetry.io/obi/pkg/ebpf"
+	"go.opentelemetry.io/obi/pkg/kube"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 	"go.opentelemetry.io/obi/pkg/transform"
@@ -25,7 +25,7 @@ func SurveyEventGenerator(
 ) swarm.InstanceFunc {
 	m := &surveyor{
 		log:    slog.With("component", "discover.SurveyEventGenerator"),
-		input:  input.Subscribe(),
+		input:  input.Subscribe(msg.SubscriberName("surveyEventInput")),
 		output: output,
 	}
 	return func(ctx context.Context) (swarm.RunFunc, error) {

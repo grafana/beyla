@@ -11,6 +11,7 @@ import (
 
 	expirable2 "github.com/hashicorp/golang-lru/v2/expirable"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/configgrpc"
@@ -18,9 +19,11 @@ import (
 	"go.opentelemetry.io/collector/config/configopaque"
 	"go.opentelemetry.io/collector/config/configoptional"
 	"go.opentelemetry.io/collector/config/configretry"
+	"go.opentelemetry.io/collector/config/configtelemetry"
 	"go.opentelemetry.io/collector/config/configtls"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/exporter"
+	"go.opentelemetry.io/collector/exporter/debugexporter"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
 	"go.opentelemetry.io/collector/exporter/otlpexporter"
 	"go.opentelemetry.io/collector/exporter/otlphttpexporter"
@@ -30,19 +33,25 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace"
 	tracenoop "go.opentelemetry.io/otel/trace/noop"
 
-	"go.opentelemetry.io/obi/pkg/app/request"
-	"go.opentelemetry.io/obi/pkg/components/pipe/global"
-	"go.opentelemetry.io/obi/pkg/components/svc"
+	"go.opentelemetry.io/obi/pkg/appolly/app/request"
+	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
+	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/export/otel/tracesgen"
+	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
+	"go.opentelemetry.io/obi/pkg/pipe/swarm/swarms"
 )
 
 const reporterName = "go.opentelemetry.io/obi"
+
+func otlog() *slog.Logger {
+	return slog.With("component", "otel.TracesReceiver")
+}
 
 func makeTracesReceiver(
 	cfg otelcfg.TracesConfig,
@@ -57,7 +66,7 @@ func makeTracesReceiver(
 		selectorCfg:        selectorCfg,
 		is:                 instrumentations.NewInstrumentationSelection(cfg.Instrumentations),
 		spanMetricsEnabled: spanMetricsEnabled,
-		input:              input.Subscribe(),
+		input:              input.Subscribe(msg.SubscriberName("otel.TracesReceiver")),
 		attributeCache:     expirable2.NewLRU[svc.UID, []attribute.KeyValue](1024, nil, 5*time.Minute),
 	}
 }
@@ -113,6 +122,9 @@ func (tr *tracesOTELReceiver) processSpans(ctx context.Context, exp exporter.Tra
 			}
 
 			envResourceAttrs := otelcfg.ResourceAttrsFromEnv(&sample.Span.Service)
+			if tr.spanMetricsEnabled {
+				envResourceAttrs = append(envResourceAttrs, attribute.Bool(string(attr.SkipSpanMetrics.OTEL()), true))
+			}
 			traces := tracesgen.GenerateTracesWithAttributes(tr.attributeCache, &sample.Span.Service, envResourceAttrs, tr.ctxInfo.HostID, spanGroup, reporterName, tr.ctxInfo.ExtraResourceAttributes...)
 			err := exp.ConsumeTraces(ctx, traces)
 			if err != nil {
@@ -123,7 +135,7 @@ func (tr *tracesOTELReceiver) processSpans(ctx context.Context, exp exporter.Tra
 }
 
 func (tr *tracesOTELReceiver) provideLoop(ctx context.Context) {
-	exp, err := getTracesExporter(ctx, tr.cfg)
+	exp, err := getTracesExporter(ctx, tr.cfg, tr.ctxInfo.Metrics)
 	if err != nil {
 		slog.Error("error creating traces exporter", "error", err)
 		return
@@ -147,14 +159,27 @@ func (tr *tracesOTELReceiver) provideLoop(ctx context.Context) {
 	}
 
 	sampler := tr.cfg.SamplerConfig.Implementation()
-
-	for spans := range tr.input {
+	swarms.ForEachInput(ctx, tr.input, otlog().Debug, func(spans []request.Span) {
 		tr.processSpans(ctx, exp, spans, traceAttrs, sampler)
+	})
+}
+
+// instrumentTracesExporter checks whether the context is configured to report internal metrics and,
+// in this case, wraps the passed metrics exporter inside an instrumented exporter
+func instrumentTracesExporter(internalMetrics imetrics.Reporter, in exporter.Traces) exporter.Traces {
+	// avoid wrapping the instrumented exporter if we don't have
+	// internal instrumentation (NoopReporter)
+	if _, ok := internalMetrics.(imetrics.NoopReporter); ok || internalMetrics == nil {
+		return in
+	}
+	return &instrumentedTracesExporter{
+		Traces:   in,
+		internal: internalMetrics,
 	}
 }
 
 //nolint:cyclop
-func getTracesExporter(ctx context.Context, cfg otelcfg.TracesConfig) (exporter.Traces, error) {
+func getTracesExporter(ctx context.Context, cfg otelcfg.TracesConfig, im imetrics.Reporter) (exporter.Traces, error) {
 	switch proto := cfg.GetProtocol(); proto {
 	case otelcfg.ProtocolHTTPJSON, otelcfg.ProtocolHTTPProtobuf, "": // zero value defaults to HTTP for backwards-compatibility
 		slog.Debug("instantiating HTTP TracesReporter", "protocol", proto)
@@ -180,6 +205,7 @@ func getTracesExporter(ctx context.Context, cfg otelcfg.TracesConfig) (exporter.
 		}
 		if cfg.BatchTimeout > 0 {
 			batchCfg.FlushTimeout = cfg.BatchTimeout
+			batchCfg.MinSize = int64(cfg.MaxQueueSize)
 		}
 		queueConfig.Batch = configoptional.Some(batchCfg)
 		config.QueueConfig = queueConfig
@@ -193,17 +219,18 @@ func getTracesExporter(ctx context.Context, cfg otelcfg.TracesConfig) (exporter.
 			Headers: convertHeaders(opts.Headers),
 		}
 		slog.Debug("getTracesExporter: confighttp.ClientConfig created", "endpoint", config.ClientConfig.Endpoint)
-		set := getTraceSettings(factory.Type())
-		exporter, err := factory.CreateTraces(ctx, set, config)
+		set := getTraceSettings(factory.Type(), cfg.SDKLogLevel)
+		exp, err := factory.CreateTraces(ctx, set, config)
 		if err != nil {
 			slog.Error("can't create OTLP HTTP traces exporter", "error", err)
 			return nil, err
 		}
+		exp = instrumentTracesExporter(im, exp)
 		// TODO: remove this once the batcher helper is added to otlphttpexporter
 		return exporterhelper.NewTraces(ctx, set, cfg,
-			exporter.ConsumeTraces,
-			exporterhelper.WithStart(exporter.Start),
-			exporterhelper.WithShutdown(exporter.Shutdown),
+			exp.ConsumeTraces,
+			exporterhelper.WithStart(exp.Start),
+			exporterhelper.WithShutdown(exp.Shutdown),
 			exporterhelper.WithCapabilities(consumer.Capabilities{MutatesData: false}),
 			exporterhelper.WithQueue(config.QueueConfig),
 			exporterhelper.WithRetry(config.RetryConfig))
@@ -235,6 +262,7 @@ func getTracesExporter(ctx context.Context, cfg otelcfg.TracesConfig) (exporter.
 		}
 		if cfg.BatchTimeout > 0 {
 			batchCfg.FlushTimeout = cfg.BatchTimeout
+			batchCfg.MinSize = int64(cfg.MaxQueueSize)
 		}
 		queueConfig.Batch = configoptional.Some(batchCfg)
 		config.QueueConfig = queueConfig
@@ -247,8 +275,25 @@ func getTracesExporter(ctx context.Context, cfg otelcfg.TracesConfig) (exporter.
 			},
 			Headers: convertHeaders(opts.Headers),
 		}
-		set := getTraceSettings(factory.Type())
-		return factory.CreateTraces(ctx, set, config)
+		set := getTraceSettings(factory.Type(), cfg.SDKLogLevel)
+		exp, err := factory.CreateTraces(ctx, set, config)
+		if err != nil {
+			return nil, err
+		}
+		exp = instrumentTracesExporter(im, exp)
+		return exp, nil
+	case otelcfg.ProtocolDebug:
+		slog.Debug("instantiating Debug TracesReporter", "protocol", proto)
+		factory := debugexporter.NewFactory()
+		config := factory.CreateDefaultConfig().(*debugexporter.Config)
+		config.UseInternalLogger = false
+		config.Verbosity = configtelemetry.LevelDetailed
+		set := getTraceSettings(factory.Type(), cfg.SDKLogLevel)
+		exp, err := factory.CreateTraces(ctx, set, config)
+		if err != nil {
+			return nil, err
+		}
+		return exp, nil
 	default:
 		slog.Error(fmt.Sprintf("invalid protocol value: %q. Accepted values are: %s, %s, %s",
 			proto, otelcfg.ProtocolGRPC, otelcfg.ProtocolHTTPJSON, otelcfg.ProtocolHTTPProtobuf))
@@ -256,11 +301,34 @@ func getTracesExporter(ctx context.Context, cfg otelcfg.TracesConfig) (exporter.
 	}
 }
 
-func getTraceSettings(dataTypeMetrics component.Type) exporter.Settings {
+func createZapLoggerDev(sdkLogLevel string) *zap.Logger {
+	if sdkLogLevel == "" {
+		return zap.NewNop()
+	}
+
+	var level zapcore.Level
+	if err := level.UnmarshalText([]byte(sdkLogLevel)); err != nil {
+		slog.Error("unsupported trace exporter logger level", "error", err, "level", sdkLogLevel)
+		return zap.NewNop()
+	}
+
+	config := zap.NewDevelopmentConfig()
+	config.Level = zap.NewAtomicLevelAt(level)
+
+	logger, err := config.Build()
+	if err != nil {
+		slog.Error("unable to create trace exporter logger", "error", err)
+		return zap.NewNop()
+	}
+
+	return logger
+}
+
+func getTraceSettings(dataTypeMetrics component.Type, sdkLogLevel string) exporter.Settings {
 	traceProvider := tracenoop.NewTracerProvider()
 	meterProvider := metric.NewMeterProvider()
 	telemetrySettings := component.TelemetrySettings{
-		Logger:         zap.NewNop(),
+		Logger:         createZapLoggerDev(sdkLogLevel),
 		MeterProvider:  meterProvider,
 		TracerProvider: traceProvider,
 		Resource:       pcommon.NewResource(),
@@ -286,10 +354,10 @@ func getRetrySettings(cfg otelcfg.TracesConfig) configretry.BackOffConfig {
 	return backOffCfg
 }
 
-func convertHeaders(headers map[string]string) map[string]configopaque.String {
-	opaqueHeaders := make(map[string]configopaque.String)
+func convertHeaders(headers map[string]string) configopaque.MapList {
+	opaqueHeaders := make(configopaque.MapList, 0, len(headers))
 	for key, value := range headers {
-		opaqueHeaders[key] = configopaque.String(value)
+		opaqueHeaders = append(opaqueHeaders, configopaque.Pair{Name: key, Value: configopaque.String(value)})
 	}
 	return opaqueHeaders
 }

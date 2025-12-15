@@ -1,6 +1,6 @@
 # Add new TCP based BPF tracer
 
-This document the steps required to add a new TCP protocol based BPF tracer to Beyla.
+This documents the steps required to add a new TCP protocol based BPF tracer to Beyla.
 
 ## Investigate the protocol
 

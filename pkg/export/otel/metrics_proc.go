@@ -7,23 +7,26 @@ import (
 	"slices"
 	"strconv"
 
-	"go.opentelemetry.io/obi/pkg/components/pipe/global"
-	"go.opentelemetry.io/obi/pkg/components/svc"
+	"go.opentelemetry.io/otel/attribute"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/resource"
+	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
+
+	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	"go.opentelemetry.io/obi/pkg/export/expire"
 	obiotel "go.opentelemetry.io/obi/pkg/export/otel"
 	"go.opentelemetry.io/obi/pkg/export/otel/metric"
 	metric2 "go.opentelemetry.io/obi/pkg/export/otel/metric/api/metric"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
+	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
+	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
-	"go.opentelemetry.io/otel/attribute"
-	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
-	"go.opentelemetry.io/otel/sdk/resource"
-	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
 	"github.com/grafana/beyla/v2/pkg/export/extraattributes"
 	extranames "github.com/grafana/beyla/v2/pkg/export/extraattributes/names"
+	"github.com/grafana/beyla/v2/pkg/export/otel/bexport"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
 )
 
@@ -43,11 +46,12 @@ var (
 type ProcMetricsConfig struct {
 	Metrics     *otelcfg.MetricsConfig
 	SelectorCfg *attributes.SelectorConfig
+	CommonCfg   *perapp.MetricsConfig
 }
 
 func (mc *ProcMetricsConfig) Enabled() bool {
-	return mc.Metrics != nil && mc.Metrics.EndpointEnabled() && mc.Metrics.OTelMetricsEnabled() &&
-		slices.Contains(mc.Metrics.Features, FeatureProcess)
+	return mc.Metrics != nil && mc.Metrics.EndpointEnabled() &&
+		bexport.Has(mc.CommonCfg.Features, bexport.FeatureProcess)
 }
 
 func pmlog() *slog.Logger {
@@ -160,7 +164,7 @@ func newProcMetricsExporter(
 			attrProv.For(extraattributes.ProcessMemoryVirtual)),
 		attrDisk:        attrDisk,
 		attrNet:         attrNet,
-		procStatusInput: input.Subscribe(),
+		procStatusInput: input.Subscribe(msg.SubscriberName("procStatusInput")),
 	}
 	if slices.Contains(cpuTimeNames, extranames.ProcCPUMode) {
 		mr.cpuTimeObserver = cpuTimeDisaggregatedObserver

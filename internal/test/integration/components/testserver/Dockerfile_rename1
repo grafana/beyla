@@ -1,0 +1,32 @@
+# Build the testserver binary
+# Docker command must be invoked from the project root directory
+FROM golang:1.25.3 AS builder
+
+ARG TARGETARCH
+
+ENV GOARCH=$TARGETARCH
+
+WORKDIR /src
+
+# Copy the go manifests and source
+COPY vendor/ vendor/
+COPY internal/test/ internal/test/
+COPY go.mod go.mod
+COPY go.sum go.sum
+
+# Build
+RUN go build -o testserver ./internal/test/integration/components/testserver/testserver.go
+
+# Create final image from minimal + built binary
+FROM debian:bookworm-slim@sha256:78d2f66e0fec9e5a39fb2c72ea5e052b548df75602b5215ed01a17171529f706
+
+WORKDIR /
+RUN mkdir -p x509
+COPY --from=builder /src/internal/test/integration/components/testserver/x509/server_test_cert.pem x509
+COPY --from=builder /src/internal/test/integration/components/testserver/x509/server_test_key.pem x509
+COPY --from=builder /src/testserver /rename1
+USER 0:0
+
+ENV STD_PORT=8900
+
+CMD [ "/rename1" ]

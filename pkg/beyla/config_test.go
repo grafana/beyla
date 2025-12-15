@@ -14,23 +14,24 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/obi/pkg/components/ebpf/tcmanager"
-	"go.opentelemetry.io/obi/pkg/components/imetrics"
-	"go.opentelemetry.io/obi/pkg/components/kube"
-	"go.opentelemetry.io/obi/pkg/components/netolly/transform/cidr"
-	"go.opentelemetry.io/obi/pkg/components/traces"
+
+	"go.opentelemetry.io/obi/pkg/appolly/services"
+	obiconfig "go.opentelemetry.io/obi/pkg/config"
+	"go.opentelemetry.io/obi/pkg/export"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/debug"
+	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
+	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
 	"go.opentelemetry.io/obi/pkg/export/prom"
-	"go.opentelemetry.io/obi/pkg/kubeflags"
+	"go.opentelemetry.io/obi/pkg/kube"
+	"go.opentelemetry.io/obi/pkg/kube/kubeflags"
+	"go.opentelemetry.io/obi/pkg/netolly/cidr"
 	"go.opentelemetry.io/obi/pkg/obi"
-	"go.opentelemetry.io/obi/pkg/services"
 	"go.opentelemetry.io/obi/pkg/transform"
 
-	"github.com/grafana/beyla/v2/pkg/config"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
 	servicesextra "github.com/grafana/beyla/v2/pkg/services"
@@ -58,7 +59,6 @@ prometheus_export:
     request_size_histogram: [0, 10, 20, 22]
     response_size_histogram: [0, 10, 20, 22]
 attributes:
-  drop_metric_unresolved_ips: false
   kubernetes:
     kubeconfig_path: /foo/bar
     enable: true
@@ -92,6 +92,8 @@ network:
 	t.Setenv("OTEL_SERVICE_NAME", "svc-name")
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "localhost:3131")
 	t.Setenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "localhost:3232")
+	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_PROTOCOL", "http/protobuf")
+	t.Setenv("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL", "http/protobuf")
 	t.Setenv("BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT", "3210")
 	t.Setenv("GRAFANA_CLOUD_SUBMIT", "metrics,traces")
 	t.Setenv("KUBECONFIG", "/foo/bar")
@@ -110,7 +112,7 @@ network:
 	assert.False(t, cfg.Port.Matches(8078))
 	assert.False(t, cfg.Port.Matches(8098))
 
-	nc := defaultNetworkConfig
+	nc := obi.DefaultNetworkConfig
 	nc.Enable = true
 	nc.AgentIP = "1.2.3.4"
 	nc.CIDRs = cidr.Definitions{"10.244.0.0/16"}
@@ -131,24 +133,27 @@ network:
 		ShutdownTimeout:  30 * time.Second,
 		EnforceSysCaps:   false,
 		TracePrinter:     "json",
-		EBPF: config.EBPFTracer{
-			BatchLength:               100,
-			BatchTimeout:              time.Second,
-			HTTPRequestTimeout:        0,
-			TCBackend:                 tcmanager.TCBackendAuto,
-			ContextPropagationEnabled: false,
-			ContextPropagation:        config.ContextPropagationDisabled,
-			RedisDBCache: config.RedisDBCacheConfig{
+		EBPF: obiconfig.EBPFTracer{
+			BatchLength:        100,
+			BatchTimeout:       time.Second,
+			HTTPRequestTimeout: 0,
+			TCBackend:          obiconfig.TCBackendAuto,
+			ContextPropagation: obiconfig.ContextPropagationDisabled,
+			RedisDBCache: obiconfig.RedisDBCacheConfig{
 				Enabled: false,
 				MaxSize: 1000,
 			},
-			BufferSizes: config.EBPFBufferSizes{
+			BufferSizes: obiconfig.EBPFBufferSizes{
+				HTTP:     0,
 				MySQL:    0,
 				Postgres: 0,
 			},
 			MySQLPreparedStatementsCacheSize:    1024,
 			MongoRequestsCacheSize:              1024,
 			PostgresPreparedStatementsCacheSize: 1024,
+			KafkaTopicUUIDCacheSize:             1024,
+			MaxTransactionTime:                  5 * time.Minute,
+			DNSRequestTimeout:                   5 * time.Second,
 		},
 		Grafana: otel.GrafanaConfig{
 			OTLP: otel.GrafanaOTLP{
@@ -156,19 +161,18 @@ network:
 			},
 		},
 		NetworkFlows: nc,
-		Metrics: otelcfg.MetricsConfig{
+		OTELMetrics: otelcfg.MetricsConfig{
 			OTELIntervalMS:    60_000,
 			CommonEndpoint:    "localhost:3131",
 			MetricsEndpoint:   "localhost:3030",
 			MetricsProtocol:   otelcfg.ProtocolHTTPProtobuf,
 			ReportersCacheLen: ReporterLRUSize,
-			Buckets: otelcfg.Buckets{
+			Buckets: export.Buckets{
 				DurationHistogram:     []float64{0, 1, 2},
-				RequestSizeHistogram:  otelcfg.DefaultBuckets.RequestSizeHistogram,
-				ResponseSizeHistogram: otelcfg.DefaultBuckets.ResponseSizeHistogram,
+				RequestSizeHistogram:  export.DefaultBuckets.RequestSizeHistogram,
+				ResponseSizeHistogram: export.DefaultBuckets.ResponseSizeHistogram,
 			},
-			Features: []string{"application"},
-			Instrumentations: []string{
+			Instrumentations: []instrumentations.Instrumentation{
 				instrumentations.InstrumentationALL,
 			},
 			HistogramAggregation: "base2_exponential_bucket_histogram",
@@ -179,33 +183,43 @@ network:
 			CommonEndpoint:    "localhost:3131",
 			TracesEndpoint:    "localhost:3232",
 			MaxQueueSize:      4096,
+			BatchTimeout:      15 * time.Second,
 			ReportersCacheLen: ReporterLRUSize,
-			Instrumentations: []string{
-				instrumentations.InstrumentationALL,
+			Instrumentations: []instrumentations.Instrumentation{
+				instrumentations.InstrumentationHTTP,
+				instrumentations.InstrumentationGRPC,
+				instrumentations.InstrumentationSQL,
+				instrumentations.InstrumentationRedis,
+				instrumentations.InstrumentationKafka,
+				instrumentations.InstrumentationMongo,
 			},
 		},
+		Metrics: perapp.MetricsConfig{
+			Features: export.FeatureApplicationRED | export.FeatureNetwork,
+		},
 		Prometheus: prom.PrometheusConfig{
-			Path:     "/metrics",
-			Features: []string{otelcfg.FeatureApplication},
-			Instrumentations: []string{
+			Path: "/metrics",
+			Instrumentations: []instrumentations.Instrumentation{
 				instrumentations.InstrumentationALL,
 			},
 			TTL:                         time.Second,
 			SpanMetricsServiceCacheSize: 10000,
-			Buckets: otelcfg.Buckets{
-				DurationHistogram:     otelcfg.DefaultBuckets.DurationHistogram,
+			Buckets: export.Buckets{
+				DurationHistogram:     export.DefaultBuckets.DurationHistogram,
 				RequestSizeHistogram:  []float64{0, 10, 20, 22},
 				ResponseSizeHistogram: []float64{0, 10, 20, 22},
-			}},
+			},
+		},
 		InternalMetrics: imetrics.Config{
 			Exporter: imetrics.InternalMetricsExporterDisabled,
 			Prometheus: imetrics.PrometheusConfig{
 				Port: 3210,
 				Path: "/internal/metrics",
 			},
+			BpfMetricScrapeInterval: 15 * time.Second,
 		},
 		Attributes: Attributes{
-			InstanceID: traces.InstanceIDConfig{
+			InstanceID: obiconfig.InstanceIDConfig{
 				HostnameDNSResolution: true,
 			},
 			Kubernetes: transform.KubernetesDecorator{
@@ -228,10 +242,15 @@ network:
 			ExtraGroupAttributes: map[string][]attr.Name{
 				"k8s_app_meta": {"k8s.app.version"},
 			},
+			RenameUnresolvedHosts:          "unresolved",
+			RenameUnresolvedHostsOutgoing:  "outgoing",
+			RenameUnresolvedHostsIncoming:  "incoming",
+			MetricSpanNameAggregationLimit: 100,
 		},
 		Routes: &transform.RoutesConfig{
-			Unmatch:      transform.UnmatchHeuristic,
-			WildcardChar: "*",
+			Unmatch:                   transform.UnmatchHeuristic,
+			WildcardChar:              "*",
+			MaxPathSegmentCardinality: 10,
 		},
 		NameResolver: &transform.NameResolverConfig{
 			Sources:  []string{"k8s", "dns"},
@@ -266,6 +285,14 @@ network:
 				services.GlobAttributes{
 					Metadata: map[string]*services.GlobAttr{"k8s_namespace": &servicesextra.K8sDefaultNamespacesGlob},
 				},
+				services.GlobAttributes{
+					Metadata: map[string]*services.GlobAttr{"k8s_container_name": &servicesextra.K8sDefaultExcludeContainerNamesGlob},
+				},
+			},
+			DefaultOtlpGRPCPort:   4317,
+			RouteHarvesterTimeout: 10 * time.Second,
+			RouteHarvestConfig: servicesextra.RouteHarvestingConfig{
+				JavaHarvestDelay: 60 * time.Second,
 			},
 		},
 		NodeJS: obi.NodeJSConfig{Enabled: true},
@@ -507,7 +534,7 @@ time=\S+ level=DEBUG msg=debug arg=debug$`),
 		debugMode: true,
 		expectedCfg: Config{
 			TracePrinter: debug.TracePrinterText,
-			EBPF:         config.EBPFTracer{BpfDebug: true, ProtocolDebug: true},
+			EBPF:         obiconfig.EBPFTracer{BpfDebug: true, ProtocolDebug: true},
 		},
 	}, {
 		name: "debug log with network flows",
@@ -521,12 +548,12 @@ time=\S+ level=DEBUG msg=debug arg=debug$`),
 		debugMode: true,
 		expectedCfg: Config{
 			TracePrinter: debug.TracePrinterText,
-			EBPF:         config.EBPFTracer{BpfDebug: true, ProtocolDebug: true},
-			NetworkFlows: NetworkConfig{Enable: true, Print: true},
+			EBPF:         obiconfig.EBPFTracer{BpfDebug: true, ProtocolDebug: true},
+			NetworkFlows: obi.NetworkConfig{Enable: true, Print: true},
 		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg := Config{NetworkFlows: NetworkConfig{Enable: tc.networkEnable}}
+			cfg := Config{NetworkFlows: obi.NetworkConfig{Enable: tc.networkEnable}}
 			out := &bytes.Buffer{}
 			cfg.ExternalLogger(tc.handler(out), tc.debugMode)
 			slog.Info("information", "arg", "info")
@@ -538,7 +565,7 @@ time=\S+ level=DEBUG msg=debug arg=debug$`),
 }
 
 func TestDefaultExclusionFilter(t *testing.T) {
-	c := DefaultConfig.Discovery.DefaultExcludeServices
+	c := DefaultConfig().Discovery.DefaultExcludeServices
 
 	assert.True(t, c[0].Path.MatchString("beyla"))
 	assert.True(t, c[0].Path.MatchString("alloy"))
@@ -561,16 +588,8 @@ func TestDefaultExclusionFilter(t *testing.T) {
 }
 
 func TestWillUseTC(t *testing.T) {
-	env := envMap{"BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION": "true"}
+	env := envMap{"BEYLA_BPF_CONTEXT_PROPAGATION": "disabled"}
 	cfg := loadConfig(t, env)
-	assert.True(t, cfg.willUseTC())
-
-	env = envMap{"BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION": "false"}
-	cfg = loadConfig(t, env)
-	assert.False(t, cfg.willUseTC())
-
-	env = envMap{"BEYLA_BPF_CONTEXT_PROPAGATION": "disabled"}
-	cfg = loadConfig(t, env)
 	assert.False(t, cfg.willUseTC())
 
 	env = envMap{"BEYLA_BPF_CONTEXT_PROPAGATION": "all"}
@@ -591,9 +610,13 @@ func TestWillUseTC(t *testing.T) {
 }
 
 func TestOBIConfigConversion(t *testing.T) {
-	cfg := DefaultConfig
+	cfg := DefaultConfig()
 	cfg.Prometheus.Port = 6060
-	cfg.Metrics.MetricsEndpoint = "http://localhost:4318"
+	cfg.OTELMetrics.MetricsEndpoint = "http://localhost:4318"
+	cfg.NetworkFlows.Enable = true
+	cfg.Attributes.Kubernetes.Enable = kubeflags.EnabledTrue
+	cfg.Attributes.HostID.Override = "test-instance-id"
+	cfg.ServiceName = "test-service"
 	cfg.Discovery = servicesextra.BeylaDiscoveryConfig{
 		Instrument: services.GlobDefinitionCriteria{
 			{Path: services.NewGlob("hello*")},
@@ -601,10 +624,13 @@ func TestOBIConfigConversion(t *testing.T) {
 		},
 	}
 
-	// TODO: add more fields that you want to verify they are properly converted
 	dst := cfg.AsOBI()
 	assert.Equal(t, dst.Prometheus.Port, 6060)
-	assert.Equal(t, dst.Metrics.MetricsEndpoint, "http://localhost:4318")
+	assert.Equal(t, dst.OTELMetrics.MetricsEndpoint, "http://localhost:4318")
+	assert.True(t, dst.NetworkFlows.Enable)
+	assert.Equal(t, kubeflags.EnabledTrue, dst.Attributes.Kubernetes.Enable)
+	assert.Equal(t, "test-instance-id", dst.Attributes.HostID.Override)
+	assert.Equal(t, "test-service", dst.ServiceName)
 	assert.Equal(t,
 		services.GlobDefinitionCriteria{
 			{Path: services.NewGlob("hello*")},

@@ -6,18 +6,21 @@ import (
 	"slices"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"go.opentelemetry.io/obi/pkg/components/connector"
-	"go.opentelemetry.io/obi/pkg/components/pipe/global"
+
+	"go.opentelemetry.io/obi/pkg/export"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
+	"go.opentelemetry.io/obi/pkg/export/connector"
 	"go.opentelemetry.io/obi/pkg/export/expire"
+	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
 	"go.opentelemetry.io/obi/pkg/export/prom"
+	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 
 	"github.com/grafana/beyla/v2/pkg/export/extraattributes"
 	extranames "github.com/grafana/beyla/v2/pkg/export/extraattributes/names"
-	"github.com/grafana/beyla/v2/pkg/export/otel"
+	"github.com/grafana/beyla/v2/pkg/export/otel/bexport"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
 )
 
@@ -25,12 +28,13 @@ import (
 type ProcPrometheusConfig struct {
 	Metrics     *prom.PrometheusConfig
 	SelectorCfg *attributes.SelectorConfig
+	CommonCfg   *perapp.MetricsConfig
 }
 
 // nolint:gocritic
 func (p ProcPrometheusConfig) Enabled() bool {
-	return p.Metrics != nil && (p.Metrics.Port != 0 || p.Metrics.Registry != nil) && p.Metrics.OTelMetricsEnabled() &&
-		slices.Contains(p.Metrics.Features, otel.FeatureProcess)
+	return p.Metrics != nil && (p.Metrics.Port != 0 || p.Metrics.Registry != nil) &&
+		bexport.Has(p.CommonCfg.Features, export.FeatureApplicationRED|bexport.FeatureProcess)
 }
 
 // ProcPrometheusEndpoint provides a pipeline node that export the process information as
@@ -156,7 +160,7 @@ func newProcReporter(ctxInfo *global.ContextInfo, cfg *ProcPrometheusConfig, inp
 			Name: extraattributes.ProcessNetIO.Prom,
 			Help: "Network bytes transferred",
 		}, netLblNames).MetricVec, clock.Time, cfg.Metrics.TTL),
-		procStatusInput: input.Subscribe(),
+		procStatusInput: input.Subscribe(msg.SubscriberName("procStatusInput")),
 	}
 
 	if cpuTimeHasState {

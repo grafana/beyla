@@ -11,9 +11,8 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	ebpfcommon "go.opentelemetry.io/obi/pkg/components/ebpf/common"
-	"go.opentelemetry.io/obi/pkg/components/helpers"
-	ebpfcfg "go.opentelemetry.io/obi/pkg/config"
+	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
+	"go.opentelemetry.io/obi/pkg/internal/helpers"
 )
 
 // Minimum required Kernel version: 4.18
@@ -91,7 +90,7 @@ func checkCapabilitiesForSetOptions(config *Config, caps *helpers.OSCapabilities
 		testAndSet(caps, capError, unix.CAP_PERFMON)
 		testAndSet(caps, capError, unix.CAP_NET_RAW)
 
-		if config.EBPF.ContextPropagation != ebpfcfg.ContextPropagationDisabled {
+		if config.EBPF.ContextPropagation.IsEnabled() {
 			testAndSet(caps, capError, unix.CAP_NET_ADMIN)
 		}
 	}

@@ -3,18 +3,24 @@
 
 package instrumentations
 
-type InstrumentationSelection uint64
+type Instrumentation string
 
 const (
-	InstrumentationALL   = "*"
-	InstrumentationHTTP  = "http"
-	InstrumentationGRPC  = "grpc"
-	InstrumentationSQL   = "sql"
-	InstrumentationRedis = "redis"
-	InstrumentationKafka = "kafka"
-	InstrumentationGPU   = "gpu"
-	InstrumentationMongo = "mongo"
+	InstrumentationALL   Instrumentation = "*"
+	InstrumentationHTTP  Instrumentation = "http"
+	InstrumentationGRPC  Instrumentation = "grpc"
+	InstrumentationSQL   Instrumentation = "sql"
+	InstrumentationRedis Instrumentation = "redis"
+	InstrumentationKafka Instrumentation = "kafka"
+	InstrumentationGPU   Instrumentation = "gpu"
+	InstrumentationMongo Instrumentation = "mongo"
+	InstrumentationDNS   Instrumentation = "dns"
+	// Traces export selectively enables only some instrumentations by
+	// default. If you add a new instrumentation type, make sure you
+	// update the TracesConfig accordingly. Metrics do ALL == "*".
 )
+
+type InstrumentationSelection uint64
 
 const (
 	flagAll  = 0xFFFFFFFF_FFFFFFFF
@@ -25,9 +31,10 @@ const (
 	flagKafka
 	flagGPU
 	flagMongo
+	flagDNS
 )
 
-func strToFlag(str string) InstrumentationSelection {
+func instrumentationToFlag(str Instrumentation) InstrumentationSelection {
 	switch str {
 	case InstrumentationALL:
 		return flagAll
@@ -45,14 +52,16 @@ func strToFlag(str string) InstrumentationSelection {
 		return flagGPU
 	case InstrumentationMongo:
 		return flagMongo
+	case InstrumentationDNS:
+		return flagDNS
 	}
 	return 0
 }
 
-func NewInstrumentationSelection(instrumentations []string) InstrumentationSelection {
+func NewInstrumentationSelection(instrumentations []Instrumentation) InstrumentationSelection {
 	selection := InstrumentationSelection(0)
 	for _, i := range instrumentations {
-		selection |= strToFlag(i)
+		selection |= instrumentationToFlag(i)
 	}
 
 	return selection
@@ -92,4 +101,8 @@ func (s InstrumentationSelection) GPUEnabled() bool {
 
 func (s InstrumentationSelection) MongoEnabled() bool {
 	return s&flagMongo != 0
+}
+
+func (s InstrumentationSelection) DNSEnabled() bool {
+	return s&flagDNS != 0
 }

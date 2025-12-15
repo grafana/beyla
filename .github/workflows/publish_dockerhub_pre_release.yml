@@ -1,0 +1,53 @@
+# TODO: trigger only if testing or any other checks previously succeeded
+name: Push to DockerHub (pre-release)
+on:
+  push:
+    tags:
+      # pre-release tags, examples:
+      # v1.0.0-alpha
+      # v1.0.0-alpha.1
+      # v1.0.0-alpha.beta
+      # v1.0.0-beta
+      # v1.0.0-beta.2
+      # v1.0.0-beta.11
+      # v1.0.0-rc.1
+      # https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#filter-pattern-cheat-sheet
+      - "v[0-9]+.[0-9]+.[0-9]+-*"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build-multiarch:
+    runs-on: ubuntu-latest-8-cores
+
+    steps:
+      - id: checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: "false"
+      - id: push-beyla-to-dockerhub
+        uses: grafana/shared-workflows/actions/build-push-to-dockerhub@fa48192dac470ae356b3f7007229f3ac28c48a25 # main
+        with:
+          repository: grafana/beyla
+          context: .
+          platforms: |-
+            "linux/amd64"
+            "linux/arm64"
+          tags: |-
+            "type=semver,pattern={{version}}"
+          push: true
+
+      - id: push-beyla-k8s-cache-to-dockerhub
+        uses: grafana/shared-workflows/actions/build-push-to-dockerhub@fa48192dac470ae356b3f7007229f3ac28c48a25 # main
+        with:
+          repository: grafana/beyla-k8s-cache
+          file: k8scache.Dockerfile
+          context: .
+          platforms: |-
+            "linux/amd64"
+            "linux/arm64"
+          tags: |-
+            "type=semver,pattern={{version}}"
+          push: true

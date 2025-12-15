@@ -828,7 +828,6 @@ go.opentelemetry.io/obi/pkg/internal/netolly/flow/transport
 go.opentelemetry.io/obi/pkg/internal/netolly/ifaces
 go.opentelemetry.io/obi/pkg/internal/netolly/transform/k8s
 go.opentelemetry.io/obi/pkg/internal/nodejs
-go.opentelemetry.io/obi/pkg/internal/otelsdk
 go.opentelemetry.io/obi/pkg/internal/procs
 go.opentelemetry.io/obi/pkg/internal/rdns/ebpf/xdp
 go.opentelemetry.io/obi/pkg/internal/rdns/store

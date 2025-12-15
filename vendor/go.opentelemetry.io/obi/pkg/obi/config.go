@@ -119,7 +119,7 @@ var DefaultConfig = Config{
 		MaxTransactionTime: 5 * time.Minute,
 	},
 	NameResolver: &transform.NameResolverConfig{
-		Sources:  []string{"k8s"},
+		Sources:  []transform.Source{transform.SourceK8s},
 		CacheLen: 1024,
 		CacheTTL: 5 * time.Minute,
 	},
@@ -370,7 +370,7 @@ func (c *Config) Validate() error {
 		return ConfigError("at least one of 'network' or 'application' features must be enabled. " +
 			"Enable an OpenTelemetry or Prometheus metrics export, then enable any of the network* or application*" +
 			"features using the 'OTEL_EBPF_METRICS_FEATURES=network,application' environment variable " +
-			"or 'meter_provicer: { features: [network,application] }' in the YAML configuration file. ")
+			"or 'meter_provider: { features: [network,application] }' in the YAML configuration file. ")
 	}
 
 	if c.willUseTC() {

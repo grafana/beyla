@@ -323,9 +323,9 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.ProbeDesc {
 			Required: true,
 			Start:    p.bpfObjects.ObiKprobeInetCskListenStop,
 		},
-		"do_vfs_ioctl": {
+		"sys_ioctl": {
 			Required: true,
-			Start:    p.bpfObjects.ObiKprobeDoVfsIoctl,
+			Start:    p.bpfObjects.ObiKprobeSysIoctl,
 		},
 	}
 
@@ -419,6 +419,16 @@ func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 			"uv_fs_access": {{
 				Required: false,
 				Start:    p.bpfObjects.ObiUvFsAccess,
+			}},
+		},
+		"libruby": {
+			"rb_ary_shift": {{
+				Required: false,
+				Start:    p.bpfObjects.ObiRbAryShift,
+			}},
+			"rb_obj_call_init_kw": {{
+				Required: false,
+				Start:    p.bpfObjects.ObiRbObjCallInitKw,
 			}},
 		},
 	}

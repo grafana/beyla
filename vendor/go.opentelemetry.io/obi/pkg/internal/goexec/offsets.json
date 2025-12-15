@@ -270,7 +270,7 @@
       "name": {
         "versions": {
           "oldest": "2.0.1",
-          "newest": "2.4.0"
+          "newest": "2.4.1"
         },
         "offsets": [
           {
@@ -284,7 +284,7 @@
       "Database": {
         "versions": {
           "oldest": "2.0.1",
-          "newest": "2.4.0"
+          "newest": "2.4.1"
         },
         "offsets": [
           {
@@ -296,7 +296,7 @@
       "Name": {
         "versions": {
           "oldest": "2.0.1",
-          "newest": "2.4.0"
+          "newest": "2.4.1"
         },
         "offsets": [
           {
@@ -344,7 +344,7 @@
       "delegate": {
         "versions": {
           "oldest": "1.10.0",
-          "newest": "1.38.0"
+          "newest": "1.39.0"
         },
         "offsets": [
           {
@@ -362,7 +362,7 @@
       "fr": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.47.0"
+          "newest": "0.48.0"
         },
         "offsets": [
           {
@@ -392,13 +392,17 @@
           {
             "offset": 352,
             "since": "0.44.0"
+          },
+          {
+            "offset": 368,
+            "since": "0.48.0"
           }
         ]
       },
       "nextStreamID": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.47.0"
+          "newest": "0.48.0"
         },
         "offsets": [
           {
@@ -426,7 +430,7 @@
       "tconn": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.47.0"
+          "newest": "0.48.0"
         },
         "offsets": [
           {
@@ -440,7 +444,7 @@
       "w": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.47.0"
+          "newest": "0.48.0"
         },
         "offsets": [
           {
@@ -454,7 +458,7 @@
       "Fields": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.47.0"
+          "newest": "0.48.0"
         },
         "offsets": [
           {
@@ -468,7 +472,7 @@
       "conn": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.47.0"
+          "newest": "0.48.0"
         },
         "offsets": [
           {
@@ -482,7 +486,7 @@
       "w": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.47.0"
+          "newest": "0.48.0"
         },
         "offsets": [
           {

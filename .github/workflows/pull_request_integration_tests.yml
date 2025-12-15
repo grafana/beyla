@@ -15,6 +15,7 @@ on:
       - "Makefile"
       - "scripts/generate-integration-matrix.sh"
       - ".github/workflows/pull_request_integration_tests.yml"
+      - ".obi-src/**"
   pull_request:
     branches: ["main", "release-*"]
     paths:
@@ -29,6 +30,7 @@ on:
       - "Makefile"
       - "scripts/generate-integration-matrix.sh"
       - ".github/workflows/pull_request_integration_tests.yml"
+      - ".obi-src/**"
 
 # Set restrictive permissions at workflow level
 permissions:

@@ -14,6 +14,8 @@ on:
       - "vendor/**"
       - "Makefile"
       - ".github/workflows/pull_request_integration_tests_arm.yml"
+      - ".obi-src/**"
+
   pull_request:
     branches: ["main", "release-*"]
     paths:
@@ -27,6 +29,7 @@ on:
       - "vendor/**"
       - "Makefile"
       - ".github/workflows/pull_request_integration_tests_arm.yml"
+      - ".obi-src/**"
 
 # Set restrictive permissions at workflow level
 permissions:

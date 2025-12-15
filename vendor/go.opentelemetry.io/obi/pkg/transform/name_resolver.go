@@ -29,25 +29,37 @@ func nrlog() *slog.Logger {
 	return slog.With("component", "transform.NameResolver")
 }
 
+type Source string
+
+const (
+	SourceDNS        Source = "dns"
+	SourceK8s        Source = "k8s"
+	SourceKube       Source = "kube"
+	SourceKubernetes Source = "kubernetes"
+	SourceRDNS       Source = "rdns"
+)
+
 const (
 	ResolverDNS = maps.Bits(1 << iota)
 	ResolverK8s
 	ResolverRDNS
 )
 
-func resolverSources(str []string) maps.Bits {
-	return maps.MappedBits(str, map[string]maps.Bits{
-		"dns":        ResolverDNS,
-		"k8s":        ResolverK8s,
-		"kube":       ResolverK8s,
-		"kubernetes": ResolverK8s,
-		"rdns":       ResolverRDNS,
-	}, maps.WithTransform(strings.ToLower))
+func resolverSources(src []Source) maps.Bits {
+	return maps.MappedBits(src, map[Source]maps.Bits{
+		SourceDNS:        ResolverDNS,
+		SourceK8s:        ResolverK8s,
+		SourceKube:       ResolverK8s,
+		SourceKubernetes: ResolverK8s,
+		SourceRDNS:       ResolverRDNS,
+	}, maps.WithTransform(func(s Source) Source {
+		return Source(strings.ToLower(string(s)))
+	}))
 }
 
 type NameResolverConfig struct {
-	// Sources for name resolving. Accepted values: dns, k8s
-	Sources []string `yaml:"sources" env:"OTEL_EBPF_NAME_RESOLVER_SOURCES" envSeparator:"," envDefault:"k8s"`
+	// Sources for name resolving. Accepted values: dns, k8s, rdns
+	Sources []Source `yaml:"sources" env:"OTEL_EBPF_NAME_RESOLVER_SOURCES" envSeparator:"," envDefault:"k8s"`
 	// CacheLen specifies the max size of the LRU cache that is checked before
 	// performing the name lookup. Default: 256
 	CacheLen int `yaml:"cache_len" env:"OTEL_EBPF_NAME_RESOLVER_CACHE_LEN"`
@@ -144,6 +156,19 @@ func isValidRDNS(ip string) bool {
 		ip != "::"
 }
 
+// parseK8sFQDN returns the service name and namespace from a Kubernetes FQDN.
+func parseK8sFQDN(fqdn string) (string, string) {
+	fqdn = strings.TrimSuffix(fqdn, ".")
+	base := trimSuffixIgnoreCase(fqdn, ".svc.cluster.local")
+	if base == fqdn {
+		return fqdn, "" // not a K8s FQDN
+	}
+	if parts := strings.SplitN(base, ".", 2); len(parts) == 2 {
+		return parts[0], parts[1]
+	}
+	return base, ""
+}
+
 func (nr *NameResolver) resolveNames(span *request.Span) {
 	var hn, pn, ns string
 
@@ -154,7 +179,10 @@ func (nr *NameResolver) resolveNames(span *request.Span) {
 	if span.IsClientSpan() {
 		hn, span.OtherNamespace = nr.resolve(&span.Service, span.Host)
 		if hn == "" || hn == span.Host {
-			hn = request.HostFromSchemeHost(span)
+			hostHeader := request.HostFromSchemeHost(span)
+			if hostHeader != "" {
+				hn, span.OtherNamespace = parseK8sFQDN(hostHeader)
+			}
 		}
 		pn, ns = nr.resolve(&span.Service, span.Peer)
 		if pn == "" || pn == span.Peer {

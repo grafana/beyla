@@ -7,7 +7,7 @@ const app = express();
  * CLI Usage:
  * node service.js <route> <port> [upstreamURL]
  */
-const [route = 'a', port = 5001, upstream] = process.argv.slice(2);
+const [route = 'a', port = 5000, upstream] = process.argv.slice(2);
 
 app.get(`/${route}`, async (req, res) => {
   if (upstream) {

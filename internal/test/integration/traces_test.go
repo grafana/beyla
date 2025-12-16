@@ -1248,3 +1248,73 @@ func testHTTPTracesNestedNodeJSDistCalls(t *testing.T) {
 	assert.True(t, seenQ)
 	assert.True(t, seenR)
 }
+
+func testHTTPTracesNestedNodeJSLargeHTTPS(t *testing.T) {
+	var parentID string
+
+	// Run a request, since we have a single app, we should see always all requests
+	ti.DoHTTPGet(t, "http://localhost:3031/api/test-apm", 200)
+
+	var trace jaeger.Trace
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		resp, err := http.Get(jaegerQueryURL + "?service=node&operation=GET%20%2Fapi%2Ftest-apm")
+		require.NoError(t, err)
+		if resp == nil {
+			return
+		}
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		var tq jaeger.TracesQuery
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
+		traces := tq.FindBySpan(jaeger.Tag{Key: "url.path", Type: "string", Value: "/api/test-apm"})
+		require.Len(t, traces, 1)
+		trace = traces[0]
+	}, test.Interval(100*time.Millisecond))
+
+	// Check the information of the parent span
+	res := trace.FindByOperationName("GET /api/test-apm", "")
+	require.Len(t, res, 1)
+	server := res[0]
+	require.NotEmpty(t, server.TraceID)
+	require.NotEmpty(t, server.SpanID)
+	parentID = server.SpanID
+
+	// check span attributes
+	sd := server.Diff(
+		jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
+		jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(200)},
+		jaeger.Tag{Key: "url.path", Type: "string", Value: "/api/test-apm"},
+		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(3030)},
+		jaeger.Tag{Key: "http.route", Type: "string", Value: "/api/test-apm"},
+		jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
+	)
+	assert.Empty(t, sd, sd.String())
+
+	children := trace.ChildrenOf(parentID)
+	require.GreaterOrEqual(t, len(children), 2)
+
+	res = trace.FindByOperationName("processing", "internal")
+
+	var processing *jaeger.Span
+
+	if len(res) > 0 {
+		for i := range res {
+			r := &res[i]
+			// Check parenthood
+			p, ok := trace.ParentOf(r)
+
+			if ok {
+				if p.TraceID == server.TraceID && p.SpanID == server.SpanID {
+					processing = r
+					break
+				}
+			}
+		}
+	}
+
+	if processing != nil {
+		children = trace.ChildrenOf(processing.SpanID)
+	}
+
+	// We must see two children
+	require.Len(t, children, 2)
+}

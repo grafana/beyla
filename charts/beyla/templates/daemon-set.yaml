@@ -73,12 +73,16 @@ spec:
                 - ALL
           {{- end }}
           ports:
-          {{- if or (.Values.service.targetPort) (.Values.config.data.prometheus_export) }}
+          {{- if (or (.Values.service.targetPort) ((.Values.config.data.prometheus_export).port)) }}
           - name: {{ .Values.service.portName }}
             containerPort: {{ .Values.service.targetPort | default .Values.config.data.prometheus_export.port }}
             protocol: TCP
           {{- end }}
-          {{- if (and (or (.Values.service.internalMetrics.targetPort) ((and .Values.config.data.internal_metrics .Values.config.data.internal_metrics.prometheus))) (not (eq .Values.config.data.prometheus_export.port .Values.config.data.internal_metrics.prometheus.port))) }}
+          {{- if (and
+                    (or .Values.service.internalMetrics.targetPort ((.Values.config.data.internal_metrics).prometheus).port)
+                    (ne ((.Values.config.data).prometheus_export).port ((.Values.config.data.internal_metrics).prometheus).port)
+                    (ne .Values.service.internalMetrics.targetPort .Values.service.targetPort)
+                  ) }}
           - name: {{ .Values.service.internalMetrics.portName }}
             containerPort: {{ .Values.service.internalMetrics.targetPort | default .Values.config.data.internal_metrics.prometheus.port }}
             protocol: TCP

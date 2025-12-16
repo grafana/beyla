@@ -23,6 +23,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/otel/metric"
 	instrument "go.opentelemetry.io/obi/pkg/export/otel/metric/api/metric"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
+	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
@@ -39,7 +40,7 @@ const (
 	ServiceGraphTotal  = "traces_service_graph_request_total"
 )
 
-// MetricsReporter implements the graph node that receives request.Span
+// SvcGraphMetricsReporter implements the graph node that receives request.Span
 // instances and forwards them as OTEL metrics.
 type SvcGraphMetricsReporter struct {
 	ctx              context.Context
@@ -57,7 +58,7 @@ type SvcGraphMetricsReporter struct {
 	log *slog.Logger
 }
 
-// SvcGraphMetrics is a set of metrics associated to a given OTEL MeterProvider.
+// SvcGraphMetrics is a set of metrics associated with a given OTEL Metrics.
 // There is a Metrics instance for each service/process instrumented by OBI.
 type SvcGraphMetrics struct {
 	ctx                      context.Context
@@ -75,12 +76,13 @@ type SvcGraphMetrics struct {
 func ReportSvcGraphMetrics(
 	ctxInfo *global.ContextInfo,
 	cfg *otelcfg.MetricsConfig,
+	mpCfg *perapp.MetricsConfig,
 	unresolved request.UnresolvedNames,
 	input *msg.Queue[[]request.Span],
 	processEvents *msg.Queue[exec.ProcessEvent],
 ) swarm.InstanceFunc {
 	return func(ctx context.Context) (swarm.RunFunc, error) {
-		if !cfg.EndpointEnabled() || !cfg.ServiceGraphMetricsEnabled() {
+		if !cfg.EndpointEnabled() || !mpCfg.Features.ServiceGraph() {
 			return swarm.EmptyRunFunc()
 		}
 		otelcfg.SetupInternalOTELSDKLogger(cfg.SDKLogLevel)
@@ -313,9 +315,9 @@ func ClientSpanToUninstrumentedService(tracker *PidServiceTracker, span *request
 		n := svc.ServiceNameNamespace{Name: span.HostName, Namespace: span.OtherNamespace}
 		return !tracker.IsTrackingServerService(n)
 	}
-	// If we haven't resolved a hostname, don't add this node to the service graph
-	// it will appear only in client requests. Essentially, in this case we have no
-	// idea if the service is instrumented or not, therefore we take the conservative
+	// If we haven't resolved a hostname, don't add this node to the service graph.
+	// It will appear only in client requests. Essentially, in this case we have no
+	// idea if the service is instrumented or not; therefore, we take the conservative
 	// approach to avoid double counting.
 	return false
 }

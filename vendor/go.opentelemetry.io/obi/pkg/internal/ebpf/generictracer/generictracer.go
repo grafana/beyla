@@ -24,7 +24,6 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
-	"go.opentelemetry.io/obi/pkg/config"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	"go.opentelemetry.io/obi/pkg/internal/goexec"
@@ -140,7 +139,7 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 	}
 
 	if p.cfg.EBPF.TrackRequestHeaders ||
-		p.cfg.EBPF.ContextPropagation != config.ContextPropagationDisabled {
+		p.cfg.EBPF.ContextPropagation.IsEnabled() {
 		loader = LoadBpfTP
 		if p.cfg.EBPF.BpfDebug {
 			loader = LoadBpfTPDebug
@@ -194,7 +193,7 @@ func GenericTracerConstants(cfg *obi.Config) map[string]any {
 	}
 
 	if cfg.EBPF.TrackRequestHeaders ||
-		cfg.EBPF.ContextPropagation != config.ContextPropagationDisabled {
+		cfg.EBPF.ContextPropagation.IsEnabled() {
 		m["capture_header_buffer"] = int32(1)
 	} else {
 		m["capture_header_buffer"] = int32(0)
@@ -324,13 +323,13 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.ProbeDesc {
 			Required: true,
 			Start:    p.bpfObjects.ObiKprobeInetCskListenStop,
 		},
-		"do_vfs_ioctl": {
+		"sys_ioctl": {
 			Required: true,
-			Start:    p.bpfObjects.ObiKprobeDoVfsIoctl,
+			Start:    p.bpfObjects.ObiKprobeSysIoctl,
 		},
 	}
 
-	if p.cfg.EBPF.ContextPropagation != config.ContextPropagationDisabled {
+	if p.cfg.EBPF.ContextPropagation.IsEnabled() {
 		// tcp_rate_check_app_limited and tcp_sendmsg_fastopen are backup
 		// for tcp_sendmsg_locked which doesn't fire on certain kernels
 		// if sk_msg is attached.
@@ -420,6 +419,16 @@ func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 			"uv_fs_access": {{
 				Required: false,
 				Start:    p.bpfObjects.ObiUvFsAccess,
+			}},
+		},
+		"libruby": {
+			"rb_ary_shift": {{
+				Required: false,
+				Start:    p.bpfObjects.ObiRbAryShift,
+			}},
+			"rb_obj_call_init_kw": {{
+				Required: false,
+				Start:    p.bpfObjects.ObiRbObjCallInitKw,
 			}},
 		},
 	}

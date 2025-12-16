@@ -15,6 +15,7 @@ on:
       - "Makefile"
       - "scripts/generate-dir-matrix.sh"
       - ".github/workflows/pull_request_oats_test.yml"
+      - ".obi-src/**"
   pull_request:
     branches: ["main", "release-*"]
     paths:
@@ -29,6 +30,7 @@ on:
       - "Makefile"
       - "scripts/generate-dir-matrix.sh"
       - ".github/workflows/pull_request_oats_test.yml"
+      - ".obi-src/**"
 
 permissions:
   contents: read

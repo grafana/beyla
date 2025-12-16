@@ -1,0 +1,19 @@
+---
+apiVersion: helm-chart-toolbox.grafana.com/v1
+kind: TestPlan
+name: zeroed-port-values
+
+subject:
+  path: ../../..
+  valuesFile: values.yaml
+
+cluster:
+  type: kind
+
+tests:
+  - type: kubernetes-objects-test
+    values:
+      checks:
+        - kind: Daemonset
+          name: zeroed-port-values-beyla
+          namespace: default

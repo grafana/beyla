@@ -70,7 +70,7 @@ func (p *Tracer) SetupTailCalls() {
 }
 
 func (p *Tracer) Constants() map[string]any {
-	m := make(map[string]any, 2)
+	m := make(map[string]any, 3)
 
 	// The eBPF side does some basic filtering of events that do not belong to
 	// processes which we monitor. We filter more accurately in the userspace, but
@@ -83,6 +83,16 @@ func (p *Tracer) Constants() map[string]any {
 	}
 
 	m["max_transaction_time"] = uint64(p.cfg.EBPF.MaxTransactionTime.Nanoseconds())
+
+	// Set injection flags based on context propagation configuration
+	flags := uint32(0)
+	if p.cfg.EBPF.ContextPropagation.HasHeaders() {
+		flags |= 1 // k_inject_http_headers
+	}
+	if p.cfg.EBPF.ContextPropagation.HasTCP() {
+		flags |= 2 // k_inject_tcp_options
+	}
+	m["inject_flags"] = flags
 
 	return m
 }

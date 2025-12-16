@@ -8,6 +8,7 @@ on:
       - "bpf/**"
       - "internal/**"
       - "scripts/generate-integration-matrix.sh"
+      - ".obi-src/**"
   pull_request:
     branches: ["main", "release-*"]
     paths:
@@ -15,6 +16,7 @@ on:
       - "bpf/**"
       - "internal/**"
       - "scripts/generate-integration-matrix.sh"
+      - ".obi-src/**"
 
 permissions:
   contents: read

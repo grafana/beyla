@@ -33,7 +33,7 @@ grafana:
     cloud_api_key: "affafafaafkd"
 `))
 	require.NoError(t, err)
-	obiCfg := config.AsOBI().Metrics
+	obiCfg := config.AsOBI().OTELMetrics
 
 	// WHEN OBI is requested to get the endpoint
 	ep, _ := obiCfg.OTLPMetricsEndpoint()
@@ -63,7 +63,7 @@ grafana:
 `, metricServer.URL)))
 	require.NoError(t, err)
 
-	instancer := &otelcfg.MetricsExporterInstancer{Cfg: &config.AsOBI().Metrics}
+	instancer := &otelcfg.MetricsExporterInstancer{Cfg: &config.AsOBI().OTELMetrics}
 
 	// WHEN the metrics exporter starts to send metrics
 	export, err := instancer.Instantiate(t.Context())

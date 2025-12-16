@@ -19,12 +19,14 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/otel/metric"
 	metric2 "go.opentelemetry.io/obi/pkg/export/otel/metric/api/metric"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
+	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 
 	"github.com/grafana/beyla/v2/pkg/export/extraattributes"
 	extranames "github.com/grafana/beyla/v2/pkg/export/extraattributes/names"
+	"github.com/grafana/beyla/v2/pkg/export/otel/bexport"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
 )
 
@@ -44,11 +46,12 @@ var (
 type ProcMetricsConfig struct {
 	Metrics     *otelcfg.MetricsConfig
 	SelectorCfg *attributes.SelectorConfig
+	CommonCfg   *perapp.MetricsConfig
 }
 
 func (mc *ProcMetricsConfig) Enabled() bool {
-	return mc.Metrics != nil && mc.Metrics.EndpointEnabled() && mc.Metrics.OTelMetricsEnabled() &&
-		slices.Contains(mc.Metrics.Features, FeatureProcess)
+	return mc.Metrics != nil && mc.Metrics.EndpointEnabled() &&
+		bexport.Has(mc.CommonCfg.Features, bexport.FeatureProcess)
 }
 
 func pmlog() *slog.Logger {

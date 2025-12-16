@@ -49,7 +49,7 @@ func SurveyInfoMetrics(
 	processEventCh *msg.Queue[exec.ProcessEvent],
 ) swarm.InstanceFunc {
 	return func(ctx context.Context) (swarm.RunFunc, error) {
-		if !cfg.Enabled() {
+		if !cfg.EndpointEnabled() {
 			return swarm.EmptyRunFunc()
 		}
 		otelcfg.SetupInternalOTELSDKLogger(cfg.SDKLogLevel)
@@ -93,7 +93,7 @@ func newSurveyMetricsReporter(
 			metric.WithInterval(smr.cfg.Interval))),
 	)
 	meter := smr.provider.Meter(ReporterName)
-	smr.surveyInfo, err = meter.Int64UpDownCounter(SurveyInfo)
+	smr.surveyInfo, err = meter.Int64UpDownCounter(SurveyInfoMetricName)
 	if err != nil {
 		return nil, fmt.Errorf("creating survey info: %w", err)
 	}

@@ -13,6 +13,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	"go.opentelemetry.io/obi/pkg/export/connector"
 	"go.opentelemetry.io/obi/pkg/export/expire"
+	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
 	"go.opentelemetry.io/obi/pkg/internal/netolly/ebpf"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
@@ -25,13 +26,12 @@ import (
 type NetPrometheusConfig struct {
 	Config      *PrometheusConfig
 	SelectorCfg *attributes.SelectorConfig
-	// Deprecated: to be removed in Beyla 3.0 with OTEL_EBPF_NETWORK_METRICS bool flag
-	GloballyEnabled bool
+	CommonCfg   *perapp.MetricsConfig
 }
 
 // Enabled returns whether the node needs to be activated
 func (p NetPrometheusConfig) Enabled() bool {
-	return p.Config != nil && p.Config.EndpointEnabled() && (p.Config.NetworkMetricsEnabled() || p.GloballyEnabled)
+	return p.Config != nil && p.Config.EndpointEnabled() && (p.CommonCfg.Features.AnyNetwork())
 }
 
 type netMetricsReporter struct {
@@ -97,7 +97,7 @@ func newNetReporter(
 
 	var register []prometheus.Collector
 	log := slog.With("component", "prom.NetworkEndpoint")
-	if cfg.GloballyEnabled || mr.cfg.NetworkFlowBytesEnabled() {
+	if cfg.CommonCfg.Features.NetworkBytes() {
 		log.Debug("registering network flow bytes metric")
 		mr.flowAttrs = attributes.PrometheusGetters(
 			ebpf.RecordStringGetters,
@@ -110,7 +110,7 @@ func newNetReporter(
 		register = append(register, mr.flowBytes)
 	}
 
-	if mr.cfg.NetworkInterzoneMetricsEnabled() {
+	if cfg.CommonCfg.Features.NetworkInterZone() {
 		log.Debug("registering network inter-zone metric")
 		mr.interZoneAttrs = attributes.PrometheusGetters(
 			ebpf.RecordStringGetters,

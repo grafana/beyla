@@ -7,6 +7,7 @@ otel_metrics_export:
 otel_traces_export:
   endpoint: http://jaeger:4318
 discovery:
+  disabled_route_harvesters: ["nodejs"]
   services:
     - name: another-service
       exe_path: asdflkjasdf

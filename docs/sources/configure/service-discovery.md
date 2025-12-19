@@ -271,16 +271,17 @@ You can override the Kubernetes labels from the previous bullet 3 via configurat
 In YAML:
 
 ```yaml
-kubernetes:
-  resource_labels:
-    service.name:
-      # gets service name from the first existing Pod label
-      - override-svc-name
-      - app.kubernetes.io/name
-    service.namespace:
-      # gets service namespace from the first existing Pod label
-      - override-svc-ns
-      - app.kubernetes.io/part-of
+attributes:
+  kubernetes:
+    resource_labels:
+      service.name:
+        # gets service name from the first existing Pod label
+        - override-svc-name
+        - app.kubernetes.io/name
+      service.namespace:
+        # gets service namespace from the first existing Pod label
+        - override-svc-ns
+        - app.kubernetes.io/part-of
 ```
 
 They accept a comma-separated list of annotation and label names.

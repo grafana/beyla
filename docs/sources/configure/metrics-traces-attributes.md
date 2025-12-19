@@ -277,7 +277,7 @@ attributes:
 
 In this example:
 
-- Adding `k8s.app.version` to the `resource_labels` block causes the `k8s.app.version` label to appear in the metrics.
+- Adding `k8s.app.version` to the `extra_group_attributes > k8s_app_meta` block causes the `k8s.app.version` label to appear in the metrics.
 - You can also define annotations with the prefix `resource.opentelemetry.io/` and suffix `k8s.app.version` in your Kubernetes manifests, these annotations are automatically included in the metrics.
 
 The following table describes the default group attributes.

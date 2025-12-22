@@ -4,7 +4,7 @@ services:
   zookeeper:
     restart: always
     container_name: kafka-like-zookeeper
-    image: docker.io/bitnamilegacy/zookeeper:3.8@sha256:4d450d4b1dab610e1012993d2ea78ba00a516b63e74214a57fef40c060ce4986
+    image: docker.io/bitnamilegacy/zookeeper:3.9@sha256:46d5bcbdf4434f40b7a453a7f53e6ea436a770981433c173ab782c0b13a5fb87
     ports:
       - "2181:2181"
     volumes:

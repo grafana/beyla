@@ -12,7 +12,7 @@ services:
   kafka:
     restart: always
     container_name: kafka-like
-    image: docker.io/bitnamilegacy/kafka:3.3@sha256:c5dd5bcf4b76df6f388be3f3c2f54255b7ca028e4c88337a6fb50b5fed2f1b22
+    image: docker.io/bitnamilegacy/kafka:3.9@sha256:55df55bfc7ed5980447387620afa3498eab3985a4d8c731013d82b3fa8b43bff
     ports:
       - "9093:9093"
       - "9092:9092"

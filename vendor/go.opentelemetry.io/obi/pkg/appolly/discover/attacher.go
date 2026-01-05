@@ -19,6 +19,7 @@ import (
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	"go.opentelemetry.io/obi/pkg/internal/helpers/maps"
+	javaagent "go.opentelemetry.io/obi/pkg/internal/java"
 	"go.opentelemetry.io/obi/pkg/internal/nodejs"
 	"go.opentelemetry.io/obi/pkg/internal/transform/route/harvest"
 	"go.opentelemetry.io/obi/pkg/obi"
@@ -44,6 +45,7 @@ type traceAttacher struct {
 	// keeps a copy of all the tracers for a given executable path
 	existingTracers     map[uint64]*ebpf.ProcessTracer
 	nodeInjector        *nodejs.NodeInjector
+	javaInjector        *javaagent.JavaInjector
 	reusableTracer      *ebpf.ProcessTracer
 	reusableGoTracer    *ebpf.ProcessTracer
 	commonTracersLoaded bool
@@ -82,6 +84,12 @@ func (ta *traceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 	ta.log = slog.With("component", "discover.traceAttacher")
 	ta.existingTracers = map[uint64]*ebpf.ProcessTracer{}
 	ta.nodeInjector = nodejs.NewNodeInjector(ta.Cfg)
+	javaInjector, err := javaagent.NewJavaInjector(ta.Cfg)
+	if err != nil {
+		ta.log.Warn("unable to inject OBI java agent, Java TLS telemetry generation will not work", "error", err)
+	} else {
+		ta.javaInjector = javaInjector
+	}
 	ta.processInstances = maps.MultiCounter[uint64]{}
 	ta.obiPID = os.Getpid()
 	ta.EbpfEventContext.CommonPIDsFilter = ebpfcommon.CommonPIDsFilter(&ta.Cfg.Discovery, ta.Metrics)
@@ -103,6 +111,11 @@ func (ta *traceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 				switch instr.Type {
 				case EventCreated:
 					ta.nodeInjector.NewExecutable(&instr.Obj)
+					if ta.javaInjector != nil {
+						if err := ta.javaInjector.NewExecutable(&instr.Obj); err != nil {
+							ta.log.Warn("unable to attach java agent to process, Java TLS telemetry will not work", "pid", instr.Obj.FileInfo.Pid, "error", err)
+						}
+					}
 
 					ta.processInstances.Inc(instr.Obj.FileInfo.Ino)
 					if ok := ta.getTracer(&instr.Obj); ok {

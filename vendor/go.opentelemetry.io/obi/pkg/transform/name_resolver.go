@@ -177,14 +177,14 @@ func (nr *NameResolver) resolveNames(span *request.Span) {
 	}
 
 	if span.IsClientSpan() {
-		hn, span.OtherNamespace = nr.resolve(&span.Service, span.Host)
+		hn, span.OtherNamespace = nr.resolve(&span.Service, span.Host, span.HostName)
 		if hn == "" || hn == span.Host {
 			hostHeader := request.HostFromSchemeHost(span)
 			if hostHeader != "" {
 				hn, span.OtherNamespace = parseK8sFQDN(hostHeader)
 			}
 		}
-		pn, ns = nr.resolve(&span.Service, span.Peer)
+		pn, ns = nr.resolve(&span.Service, span.Peer, span.PeerName)
 		if pn == "" || pn == span.Peer {
 			pn = span.Service.UID.Name
 			if ns == "" {
@@ -192,8 +192,8 @@ func (nr *NameResolver) resolveNames(span *request.Span) {
 			}
 		}
 	} else {
-		pn, span.OtherNamespace = nr.resolve(&span.Service, span.Peer)
-		hn, ns = nr.resolve(&span.Service, span.Host)
+		pn, span.OtherNamespace = nr.resolve(&span.Service, span.Peer, span.PeerName)
+		hn, ns = nr.resolve(&span.Service, span.Host, span.HostName)
 		if hn == "" || hn == span.Host {
 			hn = span.Service.UID.Name
 			if ns == "" {
@@ -214,17 +214,24 @@ func (nr *NameResolver) resolveNames(span *request.Span) {
 	}
 }
 
-func (nr *NameResolver) resolve(svc *svc.Attrs, ip string) (string, string) {
+// resolve attempts to resolve an IP address to a hostname using available resolution methods.
+// If resolution fails (no K8s metadata, no DNS/RDNS entry), it returns the fallback value if provided,
+// otherwise it returns the IP itself.
+func (nr *NameResolver) resolve(svc *svc.Attrs, ip string, fallback string) (string, string) {
 	var name, ns string
 
 	if len(ip) > 0 {
 		var peer string
 		peer, ns = nr.dnsResolve(svc, ip)
-		if len(peer) > 0 {
-			name = peer
-		} else {
-			name = ip
+		name = ip
+		if fallback != "" {
+			name = fallback
 		}
+		if len(peer) > 0 && peer != ip {
+			name = peer
+		}
+	} else if fallback != "" {
+		name = fallback
 	}
 
 	return name, ns

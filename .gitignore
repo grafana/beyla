@@ -89,5 +89,3 @@ internal/test/integration/components/pythonserver/lib64
 internal/test/integration/components/pythonserver/pyvenv.cfg
 internal/test/integration/components/gosql/qosql
 internal/test/integration/components/testserver_1.17/vendor
-*_bpfel.go
-*_bpfel.o

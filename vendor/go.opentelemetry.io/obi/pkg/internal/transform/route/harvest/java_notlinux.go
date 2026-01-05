@@ -5,19 +5,20 @@
 
 package harvest
 
-import (
-	"io"
-	"log/slog"
+type (
+	JavaRoutes   struct{ Attacher JavaAttacher }
+	JavaAttacher interface {
+		Init()
+		Cleanup()
+	}
 )
 
-var jvmAttachFunc = func(_ int, _ []string, _ *slog.Logger) (io.ReadCloser, error) {
-	return nil, nil
+func NewJavaRoutesHarvester() *JavaRoutes {
+	return &JavaRoutes{Attacher: fakeAttacher{}}
 }
+func (h *JavaRoutes) ExtractRoutes(_ int32) (*RouteHarvesterResult, error) { return nil, nil }
 
-var jvmAttachInitFunc = func() (int, int, int) {
-	return 0, 0, 0
-}
+type fakeAttacher struct{}
 
-var jvmAttachCleanupFunc = func(int, int, int) error {
-	return nil
-}
+func (f fakeAttacher) Init()    {}
+func (f fakeAttacher) Cleanup() {}

@@ -40,6 +40,20 @@
         ]
       }
     },
+    "database/sql.driverConn": {
+      "ci": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.25.5"
+        },
+        "offsets": [
+          {
+            "offset": 40,
+            "since": "1.17.0"
+          }
+        ]
+      }
+    },
     "github.com/IBM/sarama.Broker": {
       "conn": {
         "versions": {
@@ -162,6 +176,42 @@
           {
             "offset": 40,
             "since": "1.7.0"
+          }
+        ]
+      }
+    },
+    "github.com/go-sql-driver/mysql.Config": {
+      "Addr": {
+        "versions": {
+          "oldest": "1.5.0",
+          "newest": "1.9.3"
+        },
+        "offsets": [
+          {
+            "offset": 48,
+            "since": "1.5.0"
+          }
+        ]
+      }
+    },
+    "github.com/go-sql-driver/mysql.mysqlConn": {
+      "cfg": {
+        "versions": {
+          "oldest": "1.5.0",
+          "newest": "1.9.3"
+        },
+        "offsets": [
+          {
+            "offset": 168,
+            "since": "1.5.0"
+          },
+          {
+            "offset": 200,
+            "since": "1.8.0"
+          },
+          {
+            "offset": 136,
+            "since": "1.9.0"
           }
         ]
       }
@@ -514,7 +564,7 @@
       "s": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.77.0"
+          "newest": "1.78.0"
         },
         "offsets": [
           {
@@ -528,7 +578,7 @@
       "Stream": {
         "versions": {
           "oldest": "1.69.0",
-          "newest": "1.77.0"
+          "newest": "1.78.0"
         },
         "offsets": [
           {
@@ -542,7 +592,7 @@
       "Stream": {
         "versions": {
           "oldest": "1.69.0",
-          "newest": "1.77.0"
+          "newest": "1.78.0"
         },
         "offsets": [
           {
@@ -554,7 +604,7 @@
       "st": {
         "versions": {
           "oldest": "1.69.0",
-          "newest": "1.77.0"
+          "newest": "1.78.0"
         },
         "offsets": [
           {
@@ -572,7 +622,7 @@
       "id": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.77.0"
+          "newest": "1.78.0"
         },
         "offsets": [
           {
@@ -588,7 +638,7 @@
       "method": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.77.0"
+          "newest": "1.78.0"
         },
         "offsets": [
           {
@@ -612,7 +662,7 @@
       "st": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.77.0"
+          "newest": "1.78.0"
         },
         "offsets": [
           {
@@ -630,7 +680,7 @@
       "buf": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.77.0"
+          "newest": "1.78.0"
         },
         "offsets": [
           {
@@ -646,7 +696,7 @@
       "conn": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.77.0"
+          "newest": "1.78.0"
         },
         "offsets": [
           {
@@ -662,7 +712,7 @@
       "offset": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.77.0"
+          "newest": "1.78.0"
         },
         "offsets": [
           {
@@ -680,7 +730,7 @@
       "conn": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.77.0"
+          "newest": "1.78.0"
         },
         "offsets": [
           {
@@ -700,7 +750,7 @@
       "scheme": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.77.0"
+          "newest": "1.78.0"
         },
         "offsets": [
           {
@@ -726,7 +776,7 @@
       "conn": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.77.0"
+          "newest": "1.78.0"
         },
         "offsets": [
           {

@@ -356,7 +356,7 @@ github.com/gorilla/websocket
 github.com/grafana/go-offsets-tracker/pkg/offsets
 github.com/grafana/go-offsets-tracker/pkg/utils
 github.com/grafana/go-offsets-tracker/pkg/versions
-# github.com/grafana/jvmtools v0.0.3
+# github.com/grafana/jvmtools v0.0.5
 ## explicit; go 1.23.2
 github.com/grafana/jvmtools/jvm
 github.com/grafana/jvmtools/util
@@ -385,7 +385,7 @@ github.com/ianlancetaylor/demangle
 # github.com/json-iterator/go v1.1.12
 ## explicit; go 1.12
 github.com/json-iterator/go
-# github.com/klauspost/compress v1.18.1
+# github.com/klauspost/compress v1.18.2
 ## explicit; go 1.23
 github.com/klauspost/compress
 github.com/klauspost/compress/flate
@@ -820,6 +820,7 @@ go.opentelemetry.io/obi/pkg/internal/helpers/cache
 go.opentelemetry.io/obi/pkg/internal/helpers/container
 go.opentelemetry.io/obi/pkg/internal/helpers/maps
 go.opentelemetry.io/obi/pkg/internal/helpers/sync
+go.opentelemetry.io/obi/pkg/internal/java
 go.opentelemetry.io/obi/pkg/internal/kube
 go.opentelemetry.io/obi/pkg/internal/netolly/ebpf
 go.opentelemetry.io/obi/pkg/internal/netolly/export

@@ -148,6 +148,9 @@ type Config struct {
 	// nolint:undoc
 	NodeJS obi.NodeJSConfig `yaml:"nodejs"`
 
+	// nolint:undoc
+	Java obi.JavaConfig `yaml:"javaagent"`
+
 	// Topology enables extra topology-related features, such as inter-cluster connection spans.
 	// nolint:undoc
 	Topology spanscfg.Topology `yaml:"topology"`

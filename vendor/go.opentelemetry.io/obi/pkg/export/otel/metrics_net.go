@@ -113,6 +113,7 @@ func newMetricsExporter(
 		log.Error("can't instantiate metrics exporter", "error", err)
 		return nil, err
 	}
+	exporter = instrumentMetricsExporter(ctxInfo.Metrics, exporter)
 
 	resource := createFilteredNetworkResource(ctxInfo.HostID, cfg.SelectorCfg.SelectionCfg)
 	provider := newMeterProvider(resource, &exporter, cfg.Metrics.Interval)

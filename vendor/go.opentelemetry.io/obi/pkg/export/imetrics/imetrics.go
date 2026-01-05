@@ -34,6 +34,8 @@ var BpfLatenciesBuckets = []float64{
 	0.005,
 }
 
+var InformerLagBuckets = []float64{0.5, 1, 2, 4, 8, 16, 32, 64, 128, 256}
+
 // Instrumentation status constants for the instrumented_processes metric
 const (
 	InstrumentationErrorInspectionFailed               = "inspection_failed"

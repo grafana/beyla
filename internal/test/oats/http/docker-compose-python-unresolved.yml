@@ -1,0 +1,51 @@
+services:
+  # GRPC server
+  grpcsrv:
+    build:
+      context: ../../integration/components/pythongrpc
+      dockerfile: Dockerfile_srv
+    image: grpcsrv
+    ports:
+      - "50051:50051"
+  # Simple python HTTP server, which exposes one endpoint /query that calls the GRPC server
+  testserver:
+    build:
+      context: ../../integration/components/pythongrpc
+      dockerfile: Dockerfile
+    image: grpclient
+    ports:
+      - "8080:8080"
+    depends_on:
+      grpcsrv:
+        condition: service_started
+  # eBPF auto instrumenter
+  autoinstrumenter:
+    build:
+      context: ../../../..
+      dockerfile: ./internal/test/integration/components/ebpf-instrument/Dockerfile
+    command:
+      - --config=/configs/instrumenter-config-python-grpc.yml
+    volumes:
+      - {{ .ConfigDir }}:/configs
+      - ./testoutput/run:/var/run/beyla
+      - ../../../../testoutput:/coverage
+      - /sys/fs/cgroup:/sys/fs/cgroup
+    privileged: true # in some environments (not GH Pull Requests) you can set it to false and then cap_add: [ SYS_ADMIN ]
+    network_mode: "service:testserver"
+    pid: "service:testserver"
+    environment:
+      GOCOVERDIR: "/coverage"
+      OTEL_EBPF_TRACE_PRINTER: "text"
+      OTEL_EBPF_OPEN_PORT: {{ .ApplicationPort }}
+      OTEL_EBPF_SERVICE_NAMESPACE: "integration-test"
+      OTEL_EBPF_METRICS_INTERVAL: "10ms"
+      OTEL_EBPF_BPF_BATCH_TIMEOUT: "10ms"
+      OTEL_EBPF_LOG_LEVEL: "DEBUG"
+      OTEL_EBPF_BPF_DEBUG: "true"
+      OTEL_EBPF_OTLP_TRACES_BATCH_TIMEOUT: "1ms"
+      OTEL_EBPF_BPF_CONTEXT_PROPAGATION: "all"
+      OTEL_EBPF_METRICS_FEATURES: "application,application_span,application_service_graph"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://collector:4318"
+    depends_on:
+      testserver:
+        condition: service_started

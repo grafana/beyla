@@ -1,0 +1,34 @@
+services:
+  testserver:
+    image: ghcr.io/open-telemetry/obi-testimg:netty-tls-0.0.1@sha256:04d122f1047e6c16aa5e117bebc5f986878b54d6dbab37e2b20913e221194cb1
+    ports:
+      - "8080:8080"
+  # eBPF auto instrumenter
+  autoinstrumenter:
+    build:
+      context: ../../../..
+      dockerfile: ./internal/test/integration/components/ebpf-instrument/Dockerfile-with-javaagent
+    command:
+      - --config=/configs/instrumenter-config-traces.yml
+    volumes:
+      - {{ .ConfigDir }}:/configs
+      - ./testoutput/run:/var/run/beyla
+      - ../../../../testoutput:/coverage
+    privileged: true # in some environments (not GH Pull Requests) you can set it to false and then cap_add: [ SYS_ADMIN ]
+    network_mode: "service:testserver"
+    pid: "service:testserver"
+    environment:
+      GOCOVERDIR: "/coverage"
+      OTEL_EBPF_TRACE_PRINTER: "text"
+      OTEL_EBPF_EXECUTABLE_PATH: "java"
+      OTEL_EBPF_SERVICE_NAMESPACE: "integration-test"
+      OTEL_EBPF_METRICS_INTERVAL: "10ms"
+      OTEL_EBPF_OTLP_TRACES_BATCH_TIMEOUT: "1ms"
+      OTEL_EBPF_BPF_BATCH_TIMEOUT: "10ms"
+      OTEL_EBPF_LOG_LEVEL: "DEBUG"
+      OTEL_EBPF_BPF_DEBUG: "true"
+      OTEL_EBPF_JAVA_ROUTE_HARVEST_DELAY: "10s"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://collector:4318"
+    depends_on:
+      testserver:
+        condition: service_started

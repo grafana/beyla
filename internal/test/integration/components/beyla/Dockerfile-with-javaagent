@@ -11,9 +11,9 @@ WORKDIR /src
 
 # Copy the go manifests and source
 COPY .git/ .git/
-COPY bpf/ bpf/
 COPY cmd/ cmd/
 COPY pkg/ pkg/
+COPY vendor/ vendor/
 COPY go.mod go.mod
 COPY go.sum go.sum
 COPY Makefile Makefile
@@ -37,7 +37,7 @@ RUN ./gradlew build --no-daemon
 FROM ubuntu@sha256:c35e29c9450151419d9448b0fd75374fec4fff364a27f176fb458d472dfc9e54
 
 COPY --from=builder /src/bin/beyla /beyla
-COPY --from=javaagent-builder /build/build/beyla-java-agent.jar /beyla-java-agent.jar
+COPY --from=javaagent-builder /build/build/obi-java-agent.jar /obi-java-agent.jar
 # Wrap the executable in a script that waits for the processes to end
 # in order to avoid issues when tearing down the container on kernels 6.14+.
 # https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation/issues/781

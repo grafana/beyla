@@ -14,7 +14,7 @@ services:
   autoinstrumenter:
     build:
       context: ../../../..
-      dockerfile: ./internal/test/integration/components/ebpf-instrument/Dockerfile-with-javaagent
+      dockerfile: ./internal/test/integration/components/beyla/Dockerfile-with-javaagent
     command:
       - --config=/configs/instrumenter-config-traces.yml
     volumes:

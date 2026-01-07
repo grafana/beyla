@@ -185,7 +185,7 @@ func (rbf *ringBufForwarder) processAndForward(record ringbuf.Record, spansChan 
 	defer rbf.access.Unlock()
 	s, ignore, err := rbf.reader(rbf.parseContext, rbf.cfg, &record, rbf.filter)
 	if err != nil {
-		rbf.logger.Error("error parsing perf event", "error", err)
+		rbf.logger.Debug("error parsing perf event", "error", err)
 		return
 	}
 	if ignore {

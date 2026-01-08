@@ -2,7 +2,7 @@
 title: Configure Beyla instrumentation options
 menuTitle: Controlling instrumentation
 description: Configure the way instrumentation behaves for various protocols and programming languages
-weight: 31
+weight: 32
 keywords:
   - Beyla
   - eBPF

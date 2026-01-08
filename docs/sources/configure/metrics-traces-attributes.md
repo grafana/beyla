@@ -261,3 +261,26 @@ And the following table describes the metrics and their associated groups.
 | `k8s_app_meta` | `gpu.kernel.grid.size` | `gpu_kernel_grid_size_total` |
 | `k8s_app_meta` | `gpu.kernel.block.size` | `gpu_kernel_block_size_total` |
 | `k8s_app_meta` | `gpu.memory.allocations` | `gpu_memory_allocations_bytes_total` |
+
+## Limiting cardinality
+
+YAML section: `attributes`
+
+Since Beyla instruments at the protocol level, it doesn't have access to programming language/framework information about host names or URL routes. Therefore, it's possible to create a metric cardinality explosion, without putting restrictions on how many possible values can be reported for a given metric label. To limit the possibility of cardinality explosion, Beyla has several options that control cardinality.
+
+
+| YAML<p>environment variable</p>             | Description                                                                                               | Type    | Default |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ------- | ------- |
+| `metric_span_names_limit`<p>`BEYLA_METRIC_SPAN_NAMES_LIMIT`</p> | Sets the maximum cardinality of the `span_name` attribute for span metrics. See more details below. | int | (100)    |
+| `rename_unresolved_hosts`<p>`BEYLA_RENAME_UNRESOLVED_HOSTS`</p>  | Value used for the host and peer service graph attributes when they are empty or contain unresolved IP addresses to reduce cardinality. | string  | "unresolved" |
+| `rename_unresolved_hosts_outgoing`<p>`BEYLA_RENAME_UNRESOLVED_HOSTS_OUTGOING`</p>  | Value used for the client peer service graph attribute when it's empty or contain unresolved IP addresses to reduce cardinality. | string  | "outgoing" |
+| `rename_unresolved_hosts_incoming`<p>`BEYLA_RENAME_UNRESOLVED_HOSTS_INCOMING`</p>  | Value used for the client peer service graph attribute when it's empty or contain unresolved IP addresses to reduce cardinality. | string  | "incoming" |
+
+### Metric span name limit
+
+`metric_span_names_limit` works `per service` and only relates to span metrics (metrics option `application_span`).
+When the `span_name` cardinality surpasses this limit, the `span_name` will be reported as AGGREGATED. If the value is set to less or equal to zero, the aggregation is disabled.
+
+### Unresolved host names
+
+`rename_unresolved_hosts`, `rename_unresolved_hosts_outgoing` and `rename_unresolved_hosts_incoming` only affect service graph metrics (metrics option `application_service_graph`).

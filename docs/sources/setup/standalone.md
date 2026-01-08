@@ -29,10 +29,9 @@ go install github.com/grafana/beyla/cmd/beyla@latest
 
 ## Installing as a service
 
-Once you have Beyla installed on your system, you can use the
+After you have Beyla installed on your system, you can use the
 [systemd service script](https://github.com/grafana/beyla/tree/main/contrib/beyla.service) to get the daemon up and running.
-Installing the script is as simple as creating a file at `/etc/systemd/system/beyla.service` and running
-`systemctl daemon-reload`.
+Installing the script involves creating a file at `/etc/systemd/system/beyla.service` and running `systemctl daemon-reload`.
 
 The systemd service expects the following requirements to be met:
 

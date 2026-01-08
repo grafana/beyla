@@ -296,6 +296,7 @@ network:
 			},
 		},
 		NodeJS: obi.NodeJSConfig{Enabled: true},
+		Java:   obi.JavaConfig{Enabled: true, Timeout: 10 * time.Second},
 	}, cfg)
 }
 

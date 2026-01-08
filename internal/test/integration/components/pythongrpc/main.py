@@ -2,6 +2,8 @@ from __future__ import print_function
 from fastapi import FastAPI
 import os
 import uvicorn
+import requests
+import urllib3
 
 import logging
 import random
@@ -10,6 +12,9 @@ import grpc
 import route_guide_pb2
 import route_guide_pb2_grpc
 import route_guide_resources
+
+# Disable SSL warnings for unsigned certificates
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 app = FastAPI()
 
@@ -122,6 +127,36 @@ async def root():
     guide_get_feature(stub)
 
     return "GRPC"
+
+@app.get("/with_name")
+async def with_name():
+    try:
+        response = requests.get("https://google.com", verify=False, timeout=10)
+        print(f"Called https://google.com, status: {response.status_code}")
+    except Exception as e:
+        print(f"Error calling https://google.com: {e}")
+    
+    return {"message": "Called google.com", "endpoint": "/with_name"}
+
+@app.get("/without_name")
+async def without_name():
+    try:
+        response = requests.get("https://142.251.32.78", verify=False, timeout=10)
+        print(f"Called https://142.251.32.78, status: {response.status_code}")
+    except Exception as e:
+        print(f"Error calling https://142.251.32.78: {e}")
+    
+    return {"message": "Called 142.251.32.78", "endpoint": "/without_name"}
+
+@app.get("/unknown")
+async def without_name():
+    try:
+        response = requests.get("http://8.8.8.9", verify=False, timeout=10)
+        print(f"Called http://8.8.8.9, status: {response.status_code}")
+    except Exception as e:
+        print(f"Error calling http://8.8.8.9: {e}")
+    
+    return {"message": "Called 8.8.8.9", "endpoint": "/unknown"}
 
 if __name__ == "__main__":
     print(f"Server running: port={8080} process_id={os.getpid()}")

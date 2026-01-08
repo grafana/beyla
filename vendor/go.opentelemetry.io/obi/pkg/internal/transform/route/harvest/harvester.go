@@ -100,12 +100,8 @@ func (h *RouteHarvester) HarvestRoutes(fileInfo *exec.FileInfo) (*RouteHarvester
 	if fileInfo.Service.SDKLanguage == svc.InstrumentableJava {
 		runtime.LockOSThread()
 		defer runtime.UnlockOSThread()
-		myUID, myGID, myPID := jvmAttachInitFunc()
-		defer func() {
-			if err := jvmAttachCleanupFunc(myUID, myGID, myPID); err != nil {
-				h.log.Error("route harvesting cleanup failed", "error", err)
-			}
-		}()
+		h.java.Attacher.Init()
+		defer h.java.Attacher.Cleanup()
 	}
 
 	// Run the harvesting in a goroutine

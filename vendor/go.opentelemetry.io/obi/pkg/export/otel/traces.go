@@ -130,9 +130,11 @@ func (tr *tracesOTELReceiver) processSpans(ctx context.Context, exp exporter.Tra
 			if err != nil {
 				// We can't do if errors.Is(err, queue.ErrQueueIsFull), since the queue package is internal
 				if err.Error() == "sending queue is full" {
+					// TODO: set this condition case to Warn once we make sure that
+					// queueConfig.BlockOnOverflow = true works as expected
 					slog.Debug("error sending trace to consumer", "error", err)
 				} else {
-					slog.Error("error sending trace to consumer", "error", err)
+					slog.Warn("error sending trace to consumer", "error", err)
 				}
 			}
 		}
@@ -199,6 +201,8 @@ func getTracesExporter(ctx context.Context, cfg otelcfg.TracesConfig, im imetric
 		config := factory.CreateDefaultConfig().(*otlphttpexporter.Config)
 		queueConfig := exporterhelper.NewDefaultQueueConfig()
 		queueConfig.Sizer = exporterhelper.RequestSizerTypeItems
+		// Avoid continuously seeing "sending queue is full" errors in the standard output
+		queueConfig.BlockOnOverflow = true
 		batchCfg := exporterhelper.BatchConfig{
 			Sizer: queueConfig.Sizer,
 		}

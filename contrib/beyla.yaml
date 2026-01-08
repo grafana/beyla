@@ -1,0 +1,15 @@
+#log_level: DEBUG
+
+discovery:
+  instrument:
+    # Instrument applications listening on port 8000
+    - open_ports: 8000
+
+ebpf:
+  wakeup_len: 100
+
+otel_metrics_export:
+  endpoint: https://otlp-gateway-prod-gb-south-0.grafana.net/otlp/v1/metrics
+
+otel_traces_export:
+  endpoint: https://otlp-gateway-prod-gb-south-0.grafana.net/otlp/v1/traces

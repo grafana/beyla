@@ -1,5 +1,5 @@
 [Unit]
-Description=Run the Beyla application for a given application
+Description=Run the Beyla service
 After=network.target
 
 [Service]
@@ -8,10 +8,10 @@ Restart = always
 User = root
 Group = root
 WorkingDirectory = /etc/beyla
-EnvironmentFile = /etc/beyla/%i.env
+EnvironmentFile = /etc/beyla/beyla.env
 ExecStart=
 ExecStart=/usr/local/bin/beyla \
-	--config=/etc/beyla/%i.yaml
+	--config=/etc/beyla/beyla.yaml
 
 [Install]
 WantedBy = multi-user.target

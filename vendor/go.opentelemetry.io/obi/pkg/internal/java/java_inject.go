@@ -239,6 +239,22 @@ func returnCodeLine(line string) (bool, error) {
 	return false, nil
 }
 
+func (i *JavaInjector) attachOpts() string {
+	var opts []string
+	if i.cfg.Java.Debug {
+		opts = append(opts, "debug=true")
+	}
+	if i.cfg.Java.DebugInstrumentation {
+		opts = append(opts, "debugBB=true")
+	}
+
+	if len(opts) == 0 {
+		return ""
+	}
+
+	return "=" + strings.Join(opts, ",")
+}
+
 func (i *JavaInjector) attachJDKAgent(attacher *jvm.JAttacher, pid int32, path string) error {
 	attacher.Init()
 
@@ -247,7 +263,7 @@ func (i *JavaInjector) attachJDKAgent(attacher *jvm.JAttacher, pid int32, path s
 			slog.Warn("error on JVM attach cleanup", "error", err)
 		}
 	}()
-	out, err := attacher.Attach(int(pid), []string{"load", "instrument", "false", path}, false)
+	out, err := attacher.Attach(int(pid), []string{"load", "instrument", "false", path + i.attachOpts()}, false)
 	if err != nil {
 		i.log.Error("error executing command for the JVM", "pid", pid, "error", err)
 		return err

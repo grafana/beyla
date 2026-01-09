@@ -32,6 +32,7 @@ const (
 	GroupHTTPCommon
 	GroupHost
 	GroupMessaging
+	GroupNetGeoIP
 )
 
 func (e *AttrGroups) Has(groups AttrGroups) bool {
@@ -52,6 +53,7 @@ func getDefinitions(
 	promEnabled := groups.Has(GroupPrometheus)
 	ifaceDirEnabled := groups.Has(GroupNetIfaceDirection)
 	cidrEnabled := groups.Has(GroupNetCIDR)
+	geoipEnabled := groups.Has(GroupNetGeoIP)
 
 	// attributes to be reported exclusively for prometheus exporters
 	prometheusAttributes := NewAttrReportGroup(
@@ -137,6 +139,18 @@ func getDefinitions(
 			attr.SrcCIDR: true,
 		},
 		extraGroupAttributes[GroupNetCIDR],
+	)
+
+	networkGeoIP := NewAttrReportGroup(
+		!geoipEnabled,
+		nil,
+		map[attr.Name]Default{
+			attr.SrcCountry: true,
+			attr.DstCountry: true,
+			attr.SrcASN:     true,
+			attr.DstASN:     true,
+		},
+		extraGroupAttributes[GroupNetGeoIP],
 	)
 
 	// networkInterZone* supports the same attributes as
@@ -237,10 +251,10 @@ func getDefinitions(
 
 	return map[Section]AttrReportGroup{
 		NetworkFlow.Section: {
-			SubGroups: []*AttrReportGroup{&networkAttributes, &networkCIDR, &networkKubeAttributes},
+			SubGroups: []*AttrReportGroup{&networkAttributes, &networkCIDR, &networkGeoIP, &networkKubeAttributes},
 		},
 		NetworkInterZone.Section: {
-			SubGroups: []*AttrReportGroup{&networkInterZone, &networkInterZoneCIDR, &networkInterZoneKube},
+			SubGroups: []*AttrReportGroup{&networkInterZone, &networkInterZoneCIDR, &networkGeoIP, &networkInterZoneKube},
 		},
 		HTTPServerDuration.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &httpCommon, &serverInfo},

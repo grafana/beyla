@@ -105,7 +105,7 @@ The Beyla metrics exporter can export the following metrics data groups for proc
 - `application_service_graph`: Application-level service graph metrics.
   It's recommended to use a DNS for service discovery and to ensure the DNS names match the OpenTelemetry service names Beyla uses.
   In Kubernetes environments, the OpenTelemetry service name set by the service name discovery is the best choice for service graph metrics.
-- `application_process`: Metrics about the processes that runs the instrumented application
+- `application_process`: Low-level process metrics (for example, CPU, memory, disk metrics) for the selected services
 - `network`: Network-level metrics, refer to the [network metrics](/docs/beyla/latest/network/) configuration documentation to learn more
 - `network_inter_zone`: Network inter-zone metrics, refer to the [network metrics](/docs/beyla/latest/network/) configuration documentation to learn more
 
@@ -239,7 +239,7 @@ The Prometheus metrics exporter can export the following metrics data groups:
 - `application_service_graph`: Application-level service graph metrics.
   It's recommended to use a DNS for service discovery and to ensure the DNS names match the OpenTelemetry service names Beyla uses.
   In Kubernetes environments, the OpenTelemetry service name set by the service name discovery is the best choice for service graph metrics.
-- `application_process`: Metrics about the processes that runs the instrumented application
+- `application_process`: Low-level process metrics (for example, CPU, memory, disk metrics) for the selected services
 - `network`: Network-level metrics, refer to the [network metrics](/docs/beyla/latest/network/) configuration documentation to learn more
 - `network_inter_zone`: Network inter-zone metrics, refer to the [network metrics](/docs/beyla/latest/network/) configuration documentation to learn more
 

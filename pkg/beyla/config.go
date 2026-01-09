@@ -135,7 +135,7 @@ type Config struct {
 	InternalMetrics imetrics.Config `yaml:"internal_metrics"`
 
 	// Processes metrics for application. They will be only enabled if there is a metrics exporter enabled,
-	// and both the "application" and "application_process" features are enabled
+	// "application_process" features are enabled
 	Processes process.CollectConfig `yaml:"processes"`
 
 	// Grafana Alloy specific configuration

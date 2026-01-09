@@ -59,65 +59,6 @@ In the previous example, all metrics with a name starting with `http_` or `http.
 
 When a metric name matches multiple definitions using wildcards, exact matches take precedence over wildcard matches.
 
-## Distributed traces and context propagation
-
-YAML section: `ebpf`
-
-You can configure the component under the `ebpf` section of your YAML configuration or via environment variables.
-
-| YAML<p>environment variable</p>                                           | Description                                                                                                                                                                      | Type    | Default  |
-| ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | -------- |
-| `enable_context_propagation`<p>`BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION`</p> | Deprecated. Use `context_propagation` instead. For more information, refer to the [enable context propagation section](#enable-context-propagation).                             | boolean | false    |
-| `context_propagation`<p>`BEYLA_BPF_CONTEXT_PROPAGATION`</p>               | Controls trace context propagation method. Accepted: `all`, `headers`, `ip`, `disabled`. For more information, refer to the [context propagation section](#context-propagation). | string  | disabled |
-| `track_request_headers`<p>`BEYLA_BPF_TRACK_REQUEST_HEADERS`</p>           | Track incoming `Traceparent` headers for trace spans. For more information, refer to the [track request headers section](#track-request-headers).                                | boolean | false    |
-
-### Enable context propagation
-
-Deprecated. Use `context_propagation` instead.
-
-### Context propagation
-
-Beyla injects the `Traceparent` header value for outgoing HTTP requests, so it can propagate any incoming context to downstream services. This context propagation works for any programming language.
-
-For TLS encrypted HTTP requests (HTTPS), Beyla encodes the `Traceparent` header value at the TCP/IP packet level. Beyla must be present on both sides of the communication.
-
-The TCP/IP packet level encoding uses Linux Traffic Control (TC). eBPF programs that also use TC must chain correctly with Beyla. For more information about chaining programs, see the [Cilium compatibility documentation](../../cilium-compatibility/).
-
-You can disable the TCP/IP level encoding and TC programs by setting `context_propagation="headers"`. This context propagation is fully compatible with any OpenTelemetry distributed tracing library.
-
-Context propagation values:
-
-- `all`: Enable both HTTP and IP options context propagation
-- `headers`: Enable context propagation via the HTTP headers only
-- `ip`: Enable context propagation via the IP options field only
-- `disabled`: Disable trace context propagation
-
-To use this option in containerized environments (Kubernetes and Docker), you must:
-
-- Deploy Beyla as a `DaemonSet` with host network access `hostNetwork: true`
-- Volume mount the `/sys/fs/cgroup` path from the host as local `/sys/fs/cgroup` path
-- Grant the `CAP_NET_ADMIN` capability to the Beyla container
-
-gRPC and HTTP2 are not supported.
-
-For an example of how to configure distributed traces in Kubernetes, see our [Distributed traces with Beyla](../../distributed-traces/) guide.
-
-### Track request headers
-
-This option lets Beyla process any incoming `Traceparent` header values. If enabled, when Beyla sees an incoming server request with a `Traceparent` header value, it uses the provided 'trace id' to create its own trace spans.
-
-This option does not affect Go applications, where the `Traceparent` field is always processed.
-
-Enabling this option may increase performance overhead in high request volume scenarios. This option is only useful when generating Beyla traces; it does not affect metrics.
-
-### Other attributes
-
-| YAML option<p>Environment variable</p>                    | Description                                                   | Type    | Default |
-| --------------------------------------------------------- | ------------------------------------------------------------- | ------- | ------- |
-| `heuristic_sql_detect`<p>`BEYLA_HEURISTIC_SQL_DETECT`</p> | Enable heuristic SQL client detection. See below for details. | boolean | (false) |
-
-The `heuristic sql detect` option lets Beyla detect SQL client requests by inspecting query statements, even if the protocol is not directly supported. By default, Beyla detects SQL client requests by their binary protocol format. If you use a database technology not directly supported by Beyla, you can enable this option to get database client telemetry. This option is not enabled by default, because it can create false positives, for example, if an application sends SQL text for logging through a TCP connection. Currently, Beyla natively supports the Postgres and MySQL binary protocols.
-
 ## Instance ID decoration
 
 YAML section: `attributes.instance_id`
@@ -320,3 +261,26 @@ And the following table describes the metrics and their associated groups.
 | `k8s_app_meta` | `gpu.kernel.grid.size` | `gpu_kernel_grid_size_total` |
 | `k8s_app_meta` | `gpu.kernel.block.size` | `gpu_kernel_block_size_total` |
 | `k8s_app_meta` | `gpu.memory.allocations` | `gpu_memory_allocations_bytes_total` |
+
+## Configure cardinality limits
+
+YAML section: `attributes`
+
+Since Beyla instruments at the protocol level, it doesn't have access to programming language/framework information about host names or URL routes. Therefore, it's possible to create a metric cardinality explosion, without putting restrictions on how many possible values can be reported for a given metric label. To limit the possibility of cardinality explosion, Beyla has several options that control cardinality.
+
+
+| YAML<p>environment variable</p>             | Description                                                                                               | Type    | Default |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ------- | ------- |
+| `metric_span_names_limit`<p>`BEYLA_METRIC_SPAN_NAMES_LIMIT`</p> | Sets the maximum cardinality of the `span_name` attribute for span metrics. See more details below. | int | (100)    |
+| `rename_unresolved_hosts`<p>`BEYLA_RENAME_UNRESOLVED_HOSTS`</p>  | Value used for the host and peer service graph attributes when they are empty or contain unresolved IP addresses to reduce cardinality. | string  | "unresolved" |
+| `rename_unresolved_hosts_outgoing`<p>`BEYLA_RENAME_UNRESOLVED_HOSTS_OUTGOING`</p>  | Value used for the client peer service graph attribute when it's empty or contain unresolved IP addresses to reduce cardinality. | string  | "outgoing" |
+| `rename_unresolved_hosts_incoming`<p>`BEYLA_RENAME_UNRESOLVED_HOSTS_INCOMING`</p>  | Value used for the client peer service graph attribute when it's empty or contain unresolved IP addresses to reduce cardinality. | string  | "incoming" |
+
+### Metric span name limit
+
+`metric_span_names_limit` works `per service` and only relates to span metrics (metrics option `application_span`).
+When the `span_name` cardinality surpasses this limit, the `span_name` is be reported as AGGREGATED for all future spans. If the value is set to less or equal to zero, the aggregation is disabled.
+
+### Unresolved host names
+
+`rename_unresolved_hosts`, `rename_unresolved_hosts_outgoing` and `rename_unresolved_hosts_incoming` only affect service graph metrics (metrics option `application_service_graph`).

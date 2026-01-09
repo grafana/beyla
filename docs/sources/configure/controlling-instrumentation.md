@@ -8,6 +8,10 @@ keywords:
   - eBPF
 ---
 
+# Configure Beyla instrumentation options
+
+This configuration section describes various options for controlling the instrumentation capabilities of Beyla related to distributed traces, context propagation and various protocol instrumentation options.
+
 ## Distributed traces and context propagation
 
 YAML section: `ebpf`
@@ -148,4 +152,3 @@ The `heuristic sql detect` option lets Beyla detect SQL client requests by inspe
 The `max_transaction_time` option configures the distributed tracing transaction correlation maximum allowed time. It specifies the maximum time allowed for two requests to be correlated as parent -> child.
 This is implemented as a safety measure for limiting the maximum possible trace size, because some programs (e.g. load generators) keep on generating requests from the same thread in perpetuity, which can generate very large traces. 
 If a child request has started later than the time specified by `max_transaction_time`, then we consider the two requests not correlated to prevent infinite traces.
-

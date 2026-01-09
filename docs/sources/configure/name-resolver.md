@@ -18,7 +18,7 @@ YAML section: `name_resolver`
 
 | YAML<p>environment variable</p>               | Description                                                                                               | Type    | Default |
 | --------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ------- | ------- |
-| `sources`<p>`BEYLA_NAME_RESOLVER_SOURCES`</p> | A comma separated list of metadata sources to use for name resolution. More details below.                | list    | ["k8s"] |
+| `sources`<p>`BEYLA_NAME_RESOLVER_SOURCES`</p> | A comma separated list of metadata sources to use for name resolution. More details below.                | list of strings    | ["k8s"] |
 | `cache_len`<p>`BEYLA_NAME_RESOLVER_CACHE_LEN`</p> | Size of the service name cache. Used to speed up reverse IP lookups.                | int    | (1024) |
 | `cache_expiry`<p>`BEYLA_NAME_RESOLVER_CACHE_TTL`</p> | Time-to-live value for the service name cache.                | string    | "5m" |
 

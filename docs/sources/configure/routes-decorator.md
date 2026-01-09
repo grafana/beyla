@@ -28,14 +28,14 @@ routes:
   ignore_mode: traces
 ```
 
-| YAML               | Description                                                                                                                   | Type            | Default   |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------- | --------------- | --------- |
-| `patterns`         | List of URL path patterns to match and set the `http.route` property. See [patterns](#patterns).                              | list of strings | (unset)   |
-| `ignored_patterns` | List of URL path patterns to ignore. Discards trace/metric events if matched. See [ignored patterns](#ignored-patterns).      | list of strings | (unset)   |
-| `ignore_mode`      | Specifies which event types to ignore when using `ignored_patterns`. See [ignore mode](#ignore-mode).                         | string          | all       |
-| `unmatched`        | Specifies what to do when an HTTP path doesn't match any `patterns` entries. See [unmatched](#unmatched).                     | string          | heuristic |
-| `wildcard_char`    | Character to use for path components replaced by cardinality reducing modes. See [wildcard char](#wildcard-char).             | string          | "*"       |
-| `max_path_segment_cardinality` | Maximum cardinality in a segment for the low-cardinality unmatched mode.                                          | int             | 10       |
+| YAML               | Description                                                                                                                        | Type            | Default   |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------- | --------------- | --------- |
+| `patterns`         | List of URL path patterns to match and set the `http.route` property. Refer to [patterns](#patterns).                              | list of strings | (unset)   |
+| `ignored_patterns` | List of URL path patterns to ignore. Discards trace/metric events if matched. Refer to [ignored patterns](#ignored-patterns).      | list of strings | (unset)   |
+| `ignore_mode`      | Specifies which event types to ignore when using `ignored_patterns`. Refer to [ignore mode](#ignore-mode).                         | string          | all       |
+| `unmatched`        | Specifies what to do when an HTTP path doesn't match any `patterns` entries. Refer to [unmatched](#unmatched).                     | string          | heuristic |
+| `wildcard_char`    | Character to use for path components replaced by cardinality reducing modes. Refer to [wildcard char](#wildcard-char).             | string          | "*"       |
+| `max_path_segment_cardinality` | Maximum cardinality in a segment for the low-cardinality unmatched mode.                                               | int             | 10       |
 
 ## Patterns
 
@@ -85,7 +85,7 @@ Any traces with HTTP paths starting with `/user` (including `/user` itself) matc
 
 ## Ignored patterns
 
-Beyla matches the provided URL path against the defined patterns and discards trace and/or metric events if they match any `ignored_patterns`. The format for `ignored_patterns` is identical to `patterns`. You can define ignored patterns with or without wildcard options. For example, if you define these ignored patterns:
+Beyla matches the provided URL path against the defined patterns and discards trace or metric events if they match any `ignored_patterns`. The format for `ignored_patterns` is identical to `patterns`. You can define ignored patterns with or without wildcard options. For example, if you define these ignored patterns:
 
 ```yaml
 routes:
@@ -132,7 +132,7 @@ Use this property with `unmatched: heuristic` to choose the character that repla
 ## Heuristic route decorator mode
 
 The `heuristic` decorator is a best effort route decorator, which may still lead to cardinality explosion in some scenarios.
-For example, GitHub URL paths are constructed like a directory tree, so all paths remain unique and lead to cardinality explosion. In this case please consider the [low-cardinality](#low-cardinality-route-decorator-mode) route decorator.
+For example, GitHub URL paths are constructed like a directory tree, so all paths remain unique and lead to cardinality explosion. In this case consider the [low-cardinality](#low-cardinality-route-decorator-mode) route decorator.
 
 If your URL path patterns follow a certain structure and unique IDs are made of numbers or random characters, then the `heuristic` decorator may work for your use case with minimal configuration. For example, these mock Google Docs URLs are correctly reduced to a low cardinality version:
 
@@ -167,6 +167,6 @@ Example flow with `low-cardinality` mode and `max_path_segment_cardinality=3`:
   Insert `/api/users/dave`   -> `/api/users/*`       (threshold exceeded, collapsed)
   Insert `/api/users/eve`    -> `/api/users/*`       (stays collapsed)
 
-This means the first three routes match the original URL path. Once the cardinality limit is reached, all future URL paths collapse to a low cardinality route.
+This means the first three routes match the original URL path. After the cardinality limit is reached, all future URL paths collapse to a low cardinality route.
 
 Note that the per-service low-cardinality route database is in-memory only and resets on every Beyla restart.

@@ -262,7 +262,7 @@ And the following table describes the metrics and their associated groups.
 | `k8s_app_meta` | `gpu.kernel.block.size` | `gpu_kernel_block_size_total` |
 | `k8s_app_meta` | `gpu.memory.allocations` | `gpu_memory_allocations_bytes_total` |
 
-## Limiting cardinality
+## Configuring cardinality limits
 
 YAML section: `attributes`
 
@@ -279,7 +279,7 @@ Since Beyla instruments at the protocol level, it doesn't have access to program
 ### Metric span name limit
 
 `metric_span_names_limit` works `per service` and only relates to span metrics (metrics option `application_span`).
-When the `span_name` cardinality surpasses this limit, the `span_name` will be reported as AGGREGATED. If the value is set to less or equal to zero, the aggregation is disabled.
+When the `span_name` cardinality surpasses this limit, the `span_name` is be reported as AGGREGATED for all future spans. If the value is set to less or equal to zero, the aggregation is disabled.
 
 ### Unresolved host names
 

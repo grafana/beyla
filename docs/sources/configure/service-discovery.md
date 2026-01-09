@@ -293,18 +293,18 @@ The `min_process_age` (environment variable `BEYLA_MIN_PROCESS_AGE`) option sets
 
 ## Route harvesting
 
-Since Beyla instruments at the protocol level, for HTTP requests we see the actual URL path, while the OpenTelemetry specification requires that we provide a low-cardinality URL route. Beyla has purpose built route detector, which uses heuristics and cardinality reduction logic to automatically determine the low-cardinality route from the protocol provided URL path (for more information on this see [Routes Decorator](../routes-decorator/)). However, for certain programming languages, Beyla can process the application symbols and extract the actual routes set in the application.
+Since Beyla instruments at the protocol level, for HTTP requests we see the actual URL path, while the OpenTelemetry specification requires that we provide a low-cardinality URL route. Beyla has purpose built route detector, which uses heuristics and cardinality reduction logic to automatically determine the low-cardinality route from the protocol provided URL path (for more information on this refer to [Routes Decorator](../routes-decorator/)). However, for certain programming languages, Beyla can process the application symbols and extract the actual routes set in the application.
 
 Currently the route harvesting is supported for `Java`, `Go` and `NodeJS`.
 
 | YAML<p>environment variable</p>               | Description                                                                                               | Type    | Default |
 | --------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ------- | ------- |
 | `route_harvester_timeout`<p>`BEYLA_ROUTE_HARVESTER_TIMEOUT`</p> | A timeout to abandon the route harvesting if it takes too long | string    | "10s" |
-| `disabled_route_harvesters` | A list of disabled route harvesters. Available choices: ["java", "nodejs", "go"]                | list of strings    | (empty) |
+| `disabled_route_harvesters` | A list of disabled route harvesters. Available choices: ["`java`", "`nodejs`", "`go`"]                | list of strings    | (empty) |
 
 The route harvesting for `Java` applications works by communicating with the JVM at runtime. `Java` application typically load after a bit of time, which may result in incomplete route
 information, if Beyla harvests the Java application routes immediately as it instruments the process. Therefore, Beyla performs Java route harvesting on Java applications which have been
-running for at least 60 seconds. This value can be modified by setting the environment variable `BEYLA_JAVA_ROUTE_HARVEST_DELAY` or by setting the config file option:
+running for at least 60 seconds. This value can be modified by setting the environment variable `BEYLA_JAVA_ROUTE_HARVEST_DELAY` or by setting the configuration file option:
 
 ```
 discovery:

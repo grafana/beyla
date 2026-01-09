@@ -89,14 +89,14 @@ ebpf:
 
 | YAML option<p>Environment variable</p>                    | Description                                                         | Type    | Default |
 | --------------------------------------------------------- | ------------------------------------------------------------------- | ------- | ------- |
-| `enabled`<p>`BEYLA_HTTP_HTTP_ELASTICSEARCH_ENABLED`</p>   | Enable Elasticsearch protocol detection in HTTP payload processing.  See below for details. | boolean | (true)  |
+| `enabled`<p>`BEYLA_HTTP_HTTP_ELASTICSEARCH_ENABLED`</p>   | Enable Elasticsearch protocol detection in HTTP payload processing. See below for details. | boolean | (true)  |
 
 `Opensearch` is a fork of `Elasticsearch` and therefore also supported.
 
-| Product           | Methods                                                                                  | Version  |
-| ------------------| ---------------------------------------------------------------------------------------- | -------- |
-| Elasticsearch     | /_search, /_msearch, /_bulk, /_doc                                                       | 7.14+    |
-| Opensearch        | /_search, /_msearch, /_bulk, /_doc                                                       | 3.0.0+   |
+| Product             | Methods                                                                                  | Version  |
+| --------------------| ---------------------------------------------------------------------------------------- | -------- |
+| `Elasticsearch`     | /_search, /_msearch, /_bulk, /_doc                                                       | 7.14+    |
+| `Opensearch`        | /_search, /_msearch, /_bulk, /_doc                                                       | 3.0.0+   |
 
 
 YAML section:
@@ -118,7 +118,7 @@ List of supported AWS services protocol detectors:
 | S3                | CreateBucket, DeleteBucket, PutObject, DeleteObject, ListBuckets, ListObjects, GetObject |
 | SQS               | All                                                                                      |
 
-## Processing buffer sizes
+## Configuring data processing buffer sizes
 
 To minimize the performance impact of eBPF data collection, Beyla uses limited payload buffer size capture for various protocols, which gives us the best quality to performance ratio. However, for certain kinds of protocols, especially for some that are mentioned in [Payload extraction](#payload-extraction), it might be beneficial to use larger buffer sizes. The following section describes the configuration options for controlling the auxiliary buffers captured for higher quality trace generation.
 
@@ -150,5 +150,5 @@ The `heuristic sql detect` option lets Beyla detect SQL client requests by inspe
 | `max_transaction_time`<p>`BEYLA_BPF_MAX_TRANSACTION_TIME`</p> | Maximum allowed transaction time. See below for details.      | string  | (5m)    |
 
 The `max_transaction_time` option configures the distributed tracing transaction correlation maximum allowed time. It specifies the maximum time allowed for two requests to be correlated as parent -> child.
-This is implemented as a safety measure for limiting the maximum possible trace size, because some programs (e.g. load generators) keep on generating requests from the same thread in perpetuity, which can generate very large traces. 
+This is implemented as a safety measure for limiting the maximum possible trace size, because some programs (for example load generators) keep on generating requests from the same thread in perpetuity, which can generate very large traces. 
 If a child request has started later than the time specified by `max_transaction_time`, then we consider the two requests not correlated to prevent infinite traces.

@@ -130,6 +130,13 @@ func (tr *connectionSpansExport) processSpans(ctx context.Context, exp exporter.
 	}
 }
 
+// emptyHost prevents nil pointer dereference after invoking exp.Start below
+type emptyHost struct{}
+
+func (emptyHost) GetExtensions() map[component.ID]component.Component {
+	return nil
+}
+
 func (tr *connectionSpansExport) provideLoop(ctx context.Context) {
 	exp, err := tr.getTracesExporter(ctx)
 	if err != nil {
@@ -142,7 +149,7 @@ func (tr *connectionSpansExport) provideLoop(ctx context.Context) {
 			tr.log.Error("error shutting down traces exporter", "error", err)
 		}
 	}()
-	err = exp.Start(ctx, nil)
+	err = exp.Start(ctx, emptyHost{})
 	if err != nil {
 		tr.log.Error("error starting traces exporter", "error", err)
 		return

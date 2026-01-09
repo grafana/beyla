@@ -101,7 +101,7 @@ func testREDMetricsPythonMongoOnly(t *testing.T) {
 		{
 			Route:     "http://localhost:8381",
 			Subpath:   "mongo",
-			Comm:      "python3.14",
+			Comm:      "python3.12",
 			Namespace: "integration-test",
 			Spans: []TestCaseSpan{
 				{

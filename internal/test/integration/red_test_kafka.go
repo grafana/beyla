@@ -87,7 +87,7 @@ func testREDMetricsPythonKafkaOnly(t *testing.T) {
 		{
 			Route:   "http://localhost:8381",
 			Subpath: "message",
-			Comm:    "python3.14",
+			Comm:    "python3.11",
 			Spans: []TestCaseSpan{
 				{
 					Name: "publish my-topic",

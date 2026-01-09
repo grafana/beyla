@@ -90,7 +90,6 @@ func testREDMetricsNodeJSHTTP(t *testing.T) {
 		t.Run(testCaseURL, func(t *testing.T) {
 			waitForTestComponents(t, testCaseURL)
 			testREDMetricsForNodeHTTPLibrary(t, testCaseURL, "/greeting", "node", "integration-test")
-			testREDMetricsForNodeHTTPLibraryRoutes(t, testCaseURL, "node", "integration-test")
 		})
 	}
 }

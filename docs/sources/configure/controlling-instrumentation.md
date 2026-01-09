@@ -118,7 +118,7 @@ List of supported AWS services protocol detectors:
 | S3                | CreateBucket, DeleteBucket, PutObject, DeleteObject, ListBuckets, ListObjects, GetObject |
 | SQS               | All                                                                                      |
 
-## Configuring data processing buffer sizes
+## Configure data processing buffer sizes
 
 To minimize the performance impact of eBPF data collection, Beyla uses limited payload buffer size capture for various protocols, which gives us the best quality to performance ratio. However, for certain kinds of protocols, especially for some that are mentioned in [Payload extraction](#payload-extraction), it might be beneficial to use larger buffer sizes. The following section describes the configuration options for controlling the auxiliary buffers captured for higher quality trace generation.
 

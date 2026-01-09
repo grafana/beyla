@@ -262,7 +262,7 @@ And the following table describes the metrics and their associated groups.
 | `k8s_app_meta` | `gpu.kernel.block.size` | `gpu_kernel_block_size_total` |
 | `k8s_app_meta` | `gpu.memory.allocations` | `gpu_memory_allocations_bytes_total` |
 
-## Configuring cardinality limits
+## Configure cardinality limits
 
 YAML section: `attributes`
 

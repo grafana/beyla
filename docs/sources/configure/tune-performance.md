@@ -22,6 +22,7 @@ You can configure the component under the `ebpf` section of your YAML configurat
 | `traffic_control_backend`<p>`BEYLA_BPF_TC_BACKEND`</p>        | Selects the backend for attaching traffic control probes. Refer to the [traffic control backend](#traffic-control-backend) section for details.               | string  | `auto`  |
 | `http_request_timeout`<p>`BEYLA_BPF_HTTP_REQUEST_TIMEOUT`</p> | Sets the time interval after which Beyla considers an HTTP request a timeout. Refer to the [HTTP request timeout](#http-request-timeout) section for details. | string  | (0ms)   |
 | `high_request_volume`<p>`BEYLA_BPF_HIGH_REQUEST_VOLUME`</p>   | Sends telemetry events as soon as Beyla detects a response. Refer to the [high request volume](#high-request-volume) section for details.                     | boolean | (false) |
+| `dns_request_timeout`<p>`BEYLA_BPF_DNS_REQUEST_TIMEOUT`</p>   | Sets the time interval after which Beyla considers an DNS request a timeout.                                                                                  | string  | (5s)    |
 
 ## Wake up length
 

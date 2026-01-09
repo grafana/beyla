@@ -17,7 +17,11 @@ import (
 type Features maps.Bits
 
 const (
-	FeatureNetwork Features = 1 << iota
+	// FeatureEmpty is a special value that can be used to indicate that a feature list has been explicitly
+	// set to an empty list (e.g. [] in YAML), as opposed to the undefined value, which would correspond to the
+	// zero value.
+	FeatureEmpty Features = 1 << iota
+	FeatureNetwork
 	FeatureNetworkInterZone
 	FeatureApplicationRED
 	FeatureSpanLegacy
@@ -55,6 +59,9 @@ var AppO11yFeatures = FeatureApplicationRED |
 	FeatureApplicationHost
 
 func LoadFeatures(features []string) Features {
+	if len(features) == 0 {
+		return FeatureEmpty
+	}
 	// convert the public data type to the internal representation
 	feats := Features(0)
 	for _, f := range features {
@@ -90,6 +97,14 @@ func (f *Features) UnmarshalYAML(value *yaml.Node) error {
 func (f *Features) UnmarshalText(text []byte) error {
 	*f = LoadFeatures(strings.Split(string(text), ","))
 	return nil
+}
+
+func (f Features) Undefined() bool {
+	return f == 0
+}
+
+func (f Features) Empty() bool {
+	return f == FeatureEmpty
 }
 
 func (f Features) AnyAppO11yMetric() bool {

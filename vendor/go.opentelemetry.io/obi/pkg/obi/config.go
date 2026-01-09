@@ -343,8 +343,10 @@ type NodeJSConfig struct {
 }
 
 type JavaConfig struct {
-	Enabled bool          `yaml:"enabled" env:"OTEL_EBPF_JAVAAGENT_ENABLED"`
-	Timeout time.Duration `yaml:"attach_timeout" env:"OTEL_EBPF_JAVAAGENT_ATTACH_TIMEOUT" validate:"gte=0"`
+	Enabled              bool          `yaml:"enabled" env:"OTEL_EBPF_JAVAAGENT_ENABLED"`
+	Debug                bool          `yaml:"debug" env:"OTEL_EBPF_JAVAAGENT_DEBUG"`
+	DebugInstrumentation bool          `yaml:"debug_instrumentation" env:"OTEL_EBPF_JAVAAGENT_DEBUG_INSTRUMENTATION"`
+	Timeout              time.Duration `yaml:"attach_timeout" env:"OTEL_EBPF_JAVAAGENT_ATTACH_TIMEOUT" validate:"gte=0"`
 }
 
 type ConfigError string

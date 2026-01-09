@@ -18,6 +18,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/ebpf"
+	"go.opentelemetry.io/obi/pkg/export"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	"go.opentelemetry.io/obi/pkg/internal/goexec"
 	"go.opentelemetry.io/obi/pkg/internal/procs"
@@ -27,7 +28,6 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm/swarms"
-	"go.opentelemetry.io/obi/pkg/transform"
 )
 
 type instrumentedExecutable struct {
@@ -89,12 +89,13 @@ func samplerFromConfig(s *services.SamplerConfig) trace.Sampler {
 	return nil
 }
 
-func makeServiceAttrs(processMatch *ProcessMatch, routesCfg *transform.RoutesConfig) svc.Attrs {
+func (t *typer) makeServiceAttrs(processMatch *ProcessMatch) svc.Attrs {
 	var name string
 	var namespace string
 	exportModes := services.ExportModeUnset
 	var samplerConfig *services.SamplerConfig
 	var routesConfig *services.CustomRoutesConfig
+	svcFeatures := export.Features(0)
 
 	for _, s := range processMatch.Criteria {
 		if n := s.GetName(); n != "" {
@@ -116,8 +117,18 @@ func makeServiceAttrs(processMatch *ProcessMatch, routesCfg *transform.RoutesCon
 		if m := s.GetRoutesConfig(); m != nil {
 			routesConfig = m
 		}
+
+		if critFeat := s.MetricsConfig().Features; svcFeatures.Undefined() && !critFeat.Undefined() {
+			svcFeatures = critFeat
+		}
 	}
 
+	// If no matching criteria defines their own features, we set it to the base configuration.
+	if svcFeatures.Undefined() {
+		svcFeatures = t.cfg.Metrics.Features
+	}
+
+	routesCfg := t.cfg.Routes
 	wildcard := byte('*')
 	if routesCfg.WildcardChar != "" {
 		wildcard = routesCfg.WildcardChar[0]
@@ -132,6 +143,7 @@ func makeServiceAttrs(processMatch *ProcessMatch, routesCfg *transform.RoutesCon
 		ExportModes: exportModes,
 		Sampler:     samplerFromConfig(samplerConfig),
 		PathTrie:    clusterurl.NewPathTrie(routesCfg.MaxPathSegmentCardinality, wildcard),
+		Features:    svcFeatures,
 	}
 
 	if routesConfig != nil {
@@ -154,7 +166,7 @@ func (t *typer) FilterClassify(evs []Event[ProcessMatch]) []Event[ebpf.Instrumen
 		ev := &evs[i]
 		switch evs[i].Type {
 		case EventCreated:
-			svcID := makeServiceAttrs(&ev.Obj, t.cfg.Routes)
+			svcID := t.makeServiceAttrs(&ev.Obj)
 
 			if elfFile, err := findExecElf(ev.Obj.Process, svcID); err != nil {
 				t.log.Debug("error finding process ELF. Ignoring", "error", err)

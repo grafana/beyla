@@ -20,12 +20,17 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 )
 
+// Max interval before reading stale available bytes from the ring buffer
+const flushInterval = 3 * time.Second
+
 // ringBufReader interface extracts the used methods from ringbuf.Reader for proper
 // dependency injection during tests
 type ringBufReader interface {
 	io.Closer
 	Read() (ringbuf.Record, error)
 	ReadInto(*ringbuf.Record) error
+	AvailableBytes() int
+	Flush() error
 }
 
 // readerFactory instantiates a ringBufReader from a ring buffer. In unit tests, we can
@@ -49,6 +54,7 @@ type ringBufForwarder struct {
 	filter       ServiceFilter
 	metrics      imetrics.Reporter
 	parseContext *EBPFParseContext
+	lastReadAt   time.Time
 }
 
 // SharedRingbuf returns a function reads HTTPRequestTraces from an input ring buffer, accumulates them into an
@@ -139,12 +145,33 @@ func (rbf *ringBufForwarder) readAndForward(ctx context.Context, spansChan *msg.
 	rbf.readAndForwardInner(ctx, eventsReader, spansChan)
 }
 
+func (rbf *ringBufForwarder) flushOnAvailableBytes(ctx context.Context, eventsReader ringBufReader) {
+	ticker := time.NewTicker(flushInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			available := eventsReader.AvailableBytes()
+			if available > 0 && time.Since(rbf.lastReadAt) > flushInterval {
+				err := eventsReader.Flush()
+				rbf.logger.Debug("flushing ringbuf", "available_bytes", available, "flush_err", err)
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
 func (rbf *ringBufForwarder) readAndForwardInner(ctx context.Context, eventsReader ringBufReader, spansChan *msg.Queue[[]request.Span]) {
 	// Forwards periodically on timeout, if the batch is not full
 	if rbf.cfg.BatchTimeout > 0 {
 		rbf.ticker = time.NewTicker(rbf.cfg.BatchTimeout)
 		go rbf.bgFlushOnTimeout(ctx, spansChan)
 	}
+
+	// Ensure we periodically flush any pending bytes
+	go rbf.flushOnAvailableBytes(ctx, eventsReader)
 
 	// Main loop:
 	// 1. Listen for content in the ring buffer
@@ -159,9 +186,14 @@ func (rbf *ringBufForwarder) readAndForwardInner(ctx context.Context, eventsRead
 	rbf.logger.Debug("starting to read ring buffer")
 
 	var record ringbuf.Record
-	err := eventsReader.ReadInto(&record)
 	for {
+		err := eventsReader.ReadInto(&record)
+		rbf.lastReadAt = time.Now()
 		if err != nil {
+			if errors.Is(err, ringbuf.ErrFlushed) {
+				rbf.logger.Debug("ring buffer already flushed")
+				continue
+			}
 			if errors.Is(err, ringbuf.ErrClosed) {
 				rbf.logger.Debug("ring buffer is closed")
 				return
@@ -170,9 +202,6 @@ func (rbf *ringBufForwarder) readAndForwardInner(ctx context.Context, eventsRead
 			continue
 		}
 		rbf.processAndForward(record, spansChan)
-
-		// read another event before the next loop iteration
-		err = eventsReader.ReadInto(&record)
 	}
 }
 

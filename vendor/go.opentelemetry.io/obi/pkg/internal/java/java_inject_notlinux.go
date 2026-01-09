@@ -9,5 +9,5 @@ package javaagent
 
 type JavaInjector struct{}
 
-func NewJavaInjector(_ any) *JavaInjector       { return nil }
-func (*JavaInjector) NewExecutable(_ any) error { return nil }
+func NewJavaInjector(_ any) (*JavaInjector, error) { return nil, nil }
+func (*JavaInjector) NewExecutable(_ any) error    { return nil }

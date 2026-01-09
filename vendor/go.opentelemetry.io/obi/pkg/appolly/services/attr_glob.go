@@ -9,6 +9,8 @@ import (
 
 	"github.com/gobwas/glob"
 	"gopkg.in/yaml.v3"
+
+	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
 )
 
 // GlobDefinitionCriteria allows defining a group of services to be instrumented according to a set
@@ -82,6 +84,9 @@ type GlobAttributes struct {
 	SamplerConfig *SamplerConfig `yaml:"sampler"`
 
 	Routes *CustomRoutesConfig `yaml:"routes"`
+
+	// Metrics configuration that is custom for this service match
+	Metrics perapp.SvcMetricsConfig `yaml:"metrics" env:"-"`
 }
 
 // GlobAttr provides a YAML handler for glob.Glob so the type can be parsed from YAML or environment variables
@@ -142,12 +147,13 @@ func (p *GlobAttr) MatchString(input string) bool {
 	return p.glob.Match(input)
 }
 
-func (ga *GlobAttributes) GetName() string              { return ga.Name }
-func (ga *GlobAttributes) GetNamespace() string         { return ga.Namespace }
-func (ga *GlobAttributes) GetPath() StringMatcher       { return &ga.Path }
-func (ga *GlobAttributes) GetPathRegexp() StringMatcher { return nilMatcher{} }
-func (ga *GlobAttributes) GetOpenPorts() *PortEnum      { return &ga.OpenPorts }
-func (ga *GlobAttributes) IsContainersOnly() bool       { return ga.ContainersOnly }
+func (ga *GlobAttributes) GetName() string                        { return ga.Name }
+func (ga *GlobAttributes) GetNamespace() string                   { return ga.Namespace }
+func (ga *GlobAttributes) GetPath() StringMatcher                 { return &ga.Path }
+func (ga *GlobAttributes) GetPathRegexp() StringMatcher           { return nilMatcher{} }
+func (ga *GlobAttributes) GetOpenPorts() *PortEnum                { return &ga.OpenPorts }
+func (ga *GlobAttributes) IsContainersOnly() bool                 { return ga.ContainersOnly }
+func (ga *GlobAttributes) MetricsConfig() perapp.SvcMetricsConfig { return ga.Metrics }
 
 func (ga *GlobAttributes) RangeMetadata() iter.Seq2[string, StringMatcher] {
 	return func(yield func(string, StringMatcher) bool) {

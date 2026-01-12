@@ -161,11 +161,11 @@ The cardinality reduction logic detects cardinality explosion in specific URL pa
 
 Example flow with `low-cardinality` mode and `max_path_segment_cardinality=3`:
 
-  Insert `/api/users/alice`  -> `/api/users/alice`   (cardinality: 1)
-  Insert `/api/users/bob`    -> `/api/users/bob`     (cardinality: 2)
-  Insert `/api/users/carol`  -> `/api/users/carol`   (cardinality: 3)
-  Insert `/api/users/dave`   -> `/api/users/*`       (threshold exceeded, collapsed)
-  Insert `/api/users/eve`    -> `/api/users/*`       (stays collapsed)
+  - Insert `/api/users/alice`  -> `/api/users/alice`   (cardinality: 1)
+  - Insert `/api/users/bob`    -> `/api/users/bob`     (cardinality: 2)
+  - Insert `/api/users/carol`  -> `/api/users/carol`   (cardinality: 3)
+  - Insert `/api/users/dave`   -> `/api/users/*`       (threshold exceeded, collapsed)
+  - Insert `/api/users/eve`    -> `/api/users/*`       (stays collapsed)
 
 This means the first three routes match the original URL path. After the cardinality limit is reached, all future URL paths collapse to a low cardinality route.
 

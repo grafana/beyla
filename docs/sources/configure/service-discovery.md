@@ -204,6 +204,51 @@ This example configures Beyla to export only metrics for all services. For the s
 
 For an export signal to function, you must configure the corresponding exporter in Beyla. For example, specifying `traces` in the `exports` list requires configuring the OTLP traces exporter via `otel_traces_export`. Specifying `metrics` requires configuring at least one metrics exporter, such as `prometheus_export` or `otel_metrics_export`. If you specify an export signal without configuring the corresponding exporter, Beyla ignores that signal.
 
+### Custom trace sampler
+
+By using the `sampler` property for an `instrument` definition criteria, you can define individual trace sampling strategy for each `instrument` criteria. This option overrides the default specified trace sampling configuration if it is defined for all instrumented services. For more details on configuring sampling, refer to the [sample traces](../sample-traces/) documentation section.
+
+For example:
+
+```yaml
+discovery:
+  instrument:
+    - k8s_deployment_name: backend
+      sampler:
+        name: "traceidratio"
+        arg: "0.1"      
+    - k8s_deployment_name: worker
+otel_traces_export:
+  sampler:
+    name: "traceidratio"
+    arg: "0.5"      
+```
+
+This example configures a global trace sampling configuration with the `traceidratio` sampling option of 50%, for all instrumented services. However, for the deployment name `backend`, this discovery criteria defines an override that uses the same `traceidratio` sampling option, but samples only 10% of the traces.
+
+### Custom route matching rules
+
+By using the `routes` property for an `instrument` definition criteria, you can define individual incoming and outgoing route matching rules for each `instrument` criteria. This option appends to the default specified route matching patterns if it is defined for all instrumented services. For more details on configuring route matching patterns, refer to the [routes decorator](../routes-decorator/) documentation section.
+
+Unlike the default `routes` pattern matching configuration option, the `instrument` definition criteria routes option has separate section for defining route matching rules for `incoming` and `outgoing` requests. This allows for precise control of your HTTP route cardinality. 
+
+For example:
+
+```yaml
+discovery:
+  instrument:
+    - k8s_deployment_name: backend
+      routes:
+        incoming: ["/api/users/{user_id}", "/api/customers/{customer_id}"]
+        outgoing: ["/*"]  
+    - k8s_deployment_name: frontend
+routes:
+  patterns:
+    - /user/{id}
+```
+
+In the example above, we have global route matching pattern definition for the HTTP route `/user/{id}`. However, the service `backend` has additional route matchers for incoming calls to `/api/users/{user_id}` and `/api/customers/{customer_id}`, and an additional outgoing request pattern for `/*`. If the `backend` service was making high-cardinality outgoing calls that we didn't want to store in out metrics database, by specifying a catch all outgoing pattern of `/*`, we can selectively remove the problematic cardinality source without impacting all other services.
+
 ## Survey mode
 
 In survey mode, Beyla only performs service discovery and detects the programming language of each service, but doesn't instrument any discovered services.

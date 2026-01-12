@@ -26,11 +26,11 @@ Contents:
 
 <!-- TOC -->
 
-- [Deploying Beyla with the Kubernetes Monitoring Helm Chart](#deploying-beyla-from-helm)
+- [Deploying Beyla with the Kubernetes Monitoring Helm Chart](#deploying-beyla-with-the-kubernetes-monitoring-helm-chart)
 - [Configuring Beyla](#configuring-beyla)
 <!-- TOC -->
 
-## Deploying Beyla with the Kubernetes Monitoring Helm Chart for Application Observability
+## Deploying Beyla with the Kubernetes Monitoring Helm Chart
 
 The easiest way to get started with deploying Beyla with the Kubernetes Monitoring Helm chart is to visit your
 cloud Kubernetes Monitoring configuration page. For example:

@@ -237,11 +237,11 @@ For example:
 ```yaml
 discovery:
   instrument:
-  - k8s_deployment_name: backend
-    routes:
-      incoming: ["/api/users/{user_id}", "/api/customers/{customer_id}"]
-      outgoing: ["/*"]  
-  - k8s_deployment_name: frontend
+    - k8s_deployment_name: backend
+      routes:
+        incoming: ["/api/users/{user_id}", "/api/customers/{customer_id}"]
+        outgoing: ["/*"]  
+    - k8s_deployment_name: frontend
 routes:
   patterns:
     - /user/{id}

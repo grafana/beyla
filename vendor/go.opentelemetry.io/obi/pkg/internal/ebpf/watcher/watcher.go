@@ -20,7 +20,6 @@ import (
 )
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type watch_info_t -target amd64,arm64 Bpf ../../../../bpf/watcher/watcher.c -- -I../../../../bpf
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type watch_info_t -target amd64,arm64 BpfDebug ../../../../bpf/watcher/watcher.c -- -I../../../../bpf -DBPF_DEBUG
 
 type BPFWatchInfo BpfWatchInfoT
 
@@ -54,12 +53,13 @@ func New(cfg *obi.Config, events chan<- Event) *Watcher {
 }
 
 func (p *Watcher) Load() (*ebpf.CollectionSpec, error) {
-	loader := LoadBpf
-	if p.cfg.EBPF.BpfDebug {
-		loader = LoadBpfDebug
-	}
+	return LoadBpf()
+}
 
-	return loader()
+func (p *Watcher) Constants() map[string]any {
+	return map[string]any{
+		"g_bpf_debug": p.cfg.EBPF.BpfDebug,
+	}
 }
 
 func (p *Watcher) BpfObjects() any {

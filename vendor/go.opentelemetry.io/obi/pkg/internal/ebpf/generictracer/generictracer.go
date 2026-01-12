@@ -33,9 +33,6 @@ import (
 )
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 Bpf ../../../../bpf/generictracer/generictracer.c -- -I../../../../bpf
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 BpfTP ../../../../bpf/generictracer/generictracer.c -- -I../../../../bpf -DBPF_TRACEPARENT
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 BpfDebug ../../../../bpf/generictracer/generictracer.c -- -I../../../../bpf -DBPF_DEBUG
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 BpfTPDebug ../../../../bpf/generictracer/generictracer.c -- -I../../../../bpf -DBPF_DEBUG -DBPF_TRACEPARENT
 
 type Tracer struct {
 	pidsFilter       ebpfcommon.ServiceFilter
@@ -133,22 +130,12 @@ func (p *Tracer) BlockPID(pid, ns uint32) {
 }
 
 func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
-	loader := LoadBpf
-	if p.cfg.EBPF.BpfDebug {
-		loader = LoadBpfDebug
-	}
-
 	if p.cfg.EBPF.TrackRequestHeaders ||
 		p.cfg.EBPF.ContextPropagation.IsEnabled() {
-		loader = LoadBpfTP
-		if p.cfg.EBPF.BpfDebug {
-			loader = LoadBpfTPDebug
-		}
-
 		p.log.Info("Enabling trace information parsing", "bpf_loop_enabled", ebpfcommon.SupportsEBPFLoops(p.log, p.cfg.EBPF.OverrideBPFLoopEnabled))
 	}
 
-	spec, err := loader()
+	spec, err := LoadBpf()
 	if err != nil {
 		return nil, fmt.Errorf("can't load bpf collection from reader: %w", err)
 	}
@@ -177,50 +164,49 @@ func (p *Tracer) SetupTailCalls() {
 	}
 }
 
-func GenericTracerConstants(cfg *obi.Config) map[string]any {
+func (p *Tracer) Constants() map[string]any {
 	m := make(map[string]any, 2)
 
-	m["wakeup_data_bytes"] = uint32(cfg.EBPF.WakeupLen) * uint32(unsafe.Sizeof(ebpfcommon.HTTPRequestTrace{}))
+	m["wakeup_data_bytes"] = uint32(p.cfg.EBPF.WakeupLen) * uint32(unsafe.Sizeof(ebpfcommon.HTTPRequestTrace{}))
 
 	// The eBPF side does some basic filtering of events that do not belong to
 	// processes which we monitor. We filter more accurately in the userspace, but
 	// for performance reasons we enable the PID based filtering in eBPF.
 	// This must match httpfltr.go, otherwise we get partial events in userspace.
-	if cfg.Discovery.BPFPidFilterOff {
+	if p.cfg.Discovery.BPFPidFilterOff {
 		m["filter_pids"] = int32(0)
 	} else {
 		m["filter_pids"] = int32(1)
 	}
 
-	if cfg.EBPF.TrackRequestHeaders ||
-		cfg.EBPF.ContextPropagation.IsEnabled() {
+	if p.cfg.EBPF.TrackRequestHeaders ||
+		p.cfg.EBPF.ContextPropagation.IsEnabled() {
 		m["capture_header_buffer"] = int32(1)
 	} else {
 		m["capture_header_buffer"] = int32(0)
 	}
 
-	if cfg.EBPF.HighRequestVolume {
+	if p.cfg.EBPF.HighRequestVolume {
 		m["high_request_volume"] = uint32(1)
 	} else {
 		m["high_request_volume"] = uint32(0)
 	}
 
-	if cfg.EBPF.DisableBlackBoxCP {
+	if p.cfg.EBPF.DisableBlackBoxCP {
 		m["disable_black_box_cp"] = uint32(1)
 	} else {
 		m["disable_black_box_cp"] = uint32(0)
 	}
 
-	m["http_buffer_size"] = cfg.EBPF.BufferSizes.HTTP
-	m["mysql_buffer_size"] = cfg.EBPF.BufferSizes.MySQL
-	m["postgres_buffer_size"] = cfg.EBPF.BufferSizes.Postgres
-	m["max_transaction_time"] = uint64(cfg.EBPF.MaxTransactionTime.Nanoseconds())
+	m["http_buffer_size"] = p.cfg.EBPF.BufferSizes.HTTP
+	m["mysql_buffer_size"] = p.cfg.EBPF.BufferSizes.MySQL
+	m["postgres_buffer_size"] = p.cfg.EBPF.BufferSizes.Postgres
+	m["max_transaction_time"] = uint64(p.cfg.EBPF.MaxTransactionTime.Nanoseconds())
+
+	m["g_bpf_debug"] = p.cfg.EBPF.BpfDebug
+	m["g_bpf_traceparent_enabled"] = p.cfg.EBPF.TrackRequestHeaders || p.cfg.EBPF.ContextPropagation.IsEnabled()
 
 	return m
-}
-
-func (p *Tracer) Constants() map[string]any {
-	return GenericTracerConstants(p.cfg)
 }
 
 func (p *Tracer) RegisterOffsets(_ *exec.FileInfo, _ *goexec.Offsets) {}

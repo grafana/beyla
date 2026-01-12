@@ -22,7 +22,6 @@ import (
 )
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 Bpf ../../../../bpf/tpinjector/tpinjector.c -- -I../../../../bpf -I../../../../bpf
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 BpfDebug ../../../../bpf/tpinjector/tpinjector.c -- -I../../../../bpf -I../../../../bpf -DBPF_DEBUG -DBPF_DEBUG_TC
 
 type Tracer struct {
 	cfg        *obi.Config
@@ -45,10 +44,6 @@ func (p *Tracer) AllowPID(uint32, uint32, *svc.Attrs) {}
 func (p *Tracer) BlockPID(uint32, uint32) {}
 
 func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
-	if p.cfg.EBPF.BpfDebug {
-		return LoadBpfDebug()
-	}
-
 	return LoadBpf()
 }
 
@@ -93,6 +88,7 @@ func (p *Tracer) Constants() map[string]any {
 		flags |= 2 // k_inject_tcp_options
 	}
 	m["inject_flags"] = flags
+	m["g_bpf_debug"] = p.cfg.EBPF.BpfDebug
 
 	return m
 }

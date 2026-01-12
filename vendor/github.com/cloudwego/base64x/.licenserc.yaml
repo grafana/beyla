@@ -8,7 +8,7 @@ header:
     - '**/*.s'
 
   paths-ignore:
-    - 'native_subr_amd64.go'
-    - 'native_text_amd64.go'
+    - 'internal/native/avx2/*.go'
+    - 'internal/native/sse/*.go'
 
   comment: on-failure

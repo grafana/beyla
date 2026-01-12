@@ -16,6 +16,7 @@ type (
 )
 
 var (
-	ErrClosed = ringbuf.ErrClosed
-	NewReader = ringbuf.NewReader
+	ErrClosed  = ringbuf.ErrClosed
+	ErrFlushed = ringbuf.ErrFlushed
+	NewReader  = ringbuf.NewReader
 )

@@ -7,7 +7,6 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	"go.opentelemetry.io/obi/pkg/export"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/connector"
@@ -34,7 +33,7 @@ type ProcPrometheusConfig struct {
 // nolint:gocritic
 func (p ProcPrometheusConfig) Enabled() bool {
 	return p.Metrics != nil && (p.Metrics.Port != 0 || p.Metrics.Registry != nil) &&
-		bexport.Has(p.CommonCfg.Features, export.FeatureApplicationRED|bexport.FeatureProcess)
+		bexport.Has(p.CommonCfg.Features, bexport.FeatureProcess)
 }
 
 // ProcPrometheusEndpoint provides a pipeline node that export the process information as

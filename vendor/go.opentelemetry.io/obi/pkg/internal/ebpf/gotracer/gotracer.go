@@ -203,6 +203,11 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 		goexec.MongoOpNamePos,
 		goexec.MongoOpDBPos,
 		goexec.MongoOneThirteenOne,
+		// database/sql stdlib
+		goexec.DriverConnCiPos,
+		// mysql driver
+		goexec.MySQLConnCfgPos,
+		goexec.MySQLConfigAddrPos,
 		goexec.MuxTemplatePos,
 		goexec.GinFullpathPos,
 	} {
@@ -222,6 +227,10 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 		{
 			symbol: "*errors.errorString",
 			field:  goexec.GoErrorStringOffset,
+		},
+		{
+			symbol: "*github.com/go-sql-driver/mysql.mysqlConn",
+			field:  goexec.MySQLConnTypeOffset,
 		},
 	} {
 		if offset, ok := offsets.ITypes[iType.symbol]; ok {
@@ -335,6 +344,10 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 		"database/sql.(*DB).execDC": {{
 			Start: p.bpfObjects.ObiUprobeExecDC,
 			End:   p.bpfObjects.ObiUprobeQueryReturn,
+		}},
+		// PostgreSQL lib/pq
+		"github.com/lib/pq.network": {{
+			End: p.bpfObjects.ObiUprobePqNetworkReturn,
 		}},
 		// Go gRPC
 		"google.golang.org/grpc.(*Server).handleStream": {{

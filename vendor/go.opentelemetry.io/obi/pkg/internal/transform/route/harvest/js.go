@@ -5,6 +5,8 @@ package harvest
 
 import (
 	"bufio"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -49,6 +51,7 @@ var skipDirs = map[string]string{
 	".git":         "git source control",
 	"dist":         "distribution directories",
 	"build":        "build directories",
+	".next":        "Next.js output/metadata directory",
 }
 
 // RoutePattern represents an extracted HTTP route
@@ -89,6 +92,16 @@ type FrameworkPatterns struct {
 	// ValidPathChars matches valid URL path characters per RFC 3986
 	// Includes: unreserved (A-Za-z0-9-._~)
 	ValidPathChars *regexp.Regexp
+}
+
+// nextRoutesManifest is a partial representation of .next/routes-manifest.json.
+type nextRoutesManifest struct {
+	DynamicRoutes []struct {
+		Page string `json:"page"`
+	} `json:"dynamicRoutes"`
+	StaticRoutes []struct {
+		Page string `json:"page"`
+	} `json:"staticRoutes"`
 }
 
 func newFrameworkPatterns() *FrameworkPatterns {
@@ -266,6 +279,65 @@ func (e *RouteExtractor) handleFallback(filePath, line string, lineNum int) bool
 	}
 
 	return false
+}
+
+// extractNextJSRoutesFromManifest tries to read a Next.js routes-manifest.json
+// under the given directory. It adds any routes found to the extractor.
+func (e *RouteExtractor) extractNextJSRoutesFromManifest(dir string) error {
+	manifestPath := filepath.Join(dir, ".next", "routes-manifest.json")
+
+	f, err := os.Open(manifestPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			// Not a Next.js app or no build output yet; nothing to do.
+			return nil
+		}
+		return fmt.Errorf("open next.js routes-manifest %q: %w", manifestPath, err)
+	}
+	defer f.Close()
+
+	var manifest nextRoutesManifest
+	if err := json.NewDecoder(f).Decode(&manifest); err != nil {
+		// Malformed JSON or incompatible format – return an error.
+		return fmt.Errorf("decode next.js routes-manifest %q: %w", manifestPath, err)
+	}
+
+	// Convert Next.js params [id], [...slug] -> :id, :slug
+	paramRe := regexp.MustCompile(`\[(\.\.\.)?([^\]]+)\]`)
+
+	normalizePage := func(page string) string {
+		return paramRe.ReplaceAllStringFunc(page, func(m string) string {
+			sub := paramRe.FindStringSubmatch(m)
+			if len(sub) < 3 {
+				return m
+			}
+			// sub[1] is "..." or "", sub[2] is the param name
+			name := sub[2]
+			return ":" + name
+		})
+	}
+
+	for _, r := range manifest.StaticRoutes {
+		path := normalizePage(r.Page)
+		e.routes = append(e.routes, RoutePattern{
+			Method: "ALL",
+			Path:   path,
+			File:   manifestPath,
+			Line:   0, // not line-based
+		})
+	}
+
+	for _, r := range manifest.DynamicRoutes {
+		path := normalizePage(r.Page)
+		e.routes = append(e.routes, RoutePattern{
+			Method: "ALL",
+			Path:   path,
+			File:   manifestPath,
+			Line:   0,
+		})
+	}
+
+	return nil
 }
 
 func (e *RouteExtractor) scanFile(filePath string) error {
@@ -519,6 +591,13 @@ func ExtractNodejsRoutes(pid int32) (*RouteHarvesterResult, error) {
 	if dir == "" {
 		return nil, fmt.Errorf("failed to find script directory for pid %d, script %s, cwd %s", pid, firstArg, workdir)
 	}
+
+	if err := jsExtractor.extractNextJSRoutesFromManifest(dir); err != nil {
+		jsExtractor.log.Debug("error extracting next.js routes",
+			"dir", dir,
+			"error", err)
+	}
+
 	err = jsExtractor.ScanDirectory(dir)
 	if err != nil {
 		return nil, fmt.Errorf("error scanning directory, error %w", err)

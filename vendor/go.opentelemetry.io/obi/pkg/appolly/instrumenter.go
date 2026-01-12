@@ -14,6 +14,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/debug"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	"go.opentelemetry.io/obi/pkg/export/otel"
+	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
 	"go.opentelemetry.io/obi/pkg/export/prom"
 	"go.opentelemetry.io/obi/pkg/filter"
 	"go.opentelemetry.io/obi/pkg/internal/traces"
@@ -130,7 +131,7 @@ func newGraphBuilder(
 		setupMetricsSubPipeline(config, ctxInfo, swi, exportableSpans, selectorCfg, processEventsCh)
 	}
 
-	swi.Add(prom.BPFMetrics(ctxInfo, &config.Prometheus, &config.Metrics),
+	swi.Add(prom.BPFMetrics(ctxInfo, &config.Prometheus, joinMetricsConfig(config)),
 		swarm.WithID("BPFMetrics"))
 
 	// The returned builder later invokes its "Build" function that, given
@@ -151,13 +152,14 @@ func setupMetricsSubPipeline(
 	newQueue := func(name string) *msg.Queue[[]request.Span] {
 		return msg.NewQueue[[]request.Span](msg.ChannelBufferLen(config.ChannelBufferLen), msg.Name(name))
 	}
+	jointMetricsConfig := joinMetricsConfig(config)
 
 	spanNameAggregatedMetrics := newQueue("spanNameAggregatedMetrics")
 	swi.Add(transform.SpanNameLimiter(transform.SpanNameLimiterConfig{
 		Limit:      config.Attributes.MetricSpanNameAggregationLimit,
 		OTEL:       &config.OTELMetrics,
 		Prom:       &config.Prometheus,
-		MetricsCfg: &config.Metrics,
+		MetricsCfg: jointMetricsConfig,
 	}, exportableSpans, spanNameAggregatedMetrics))
 
 	unresolvedCfg := request.UnresolvedNames{
@@ -169,7 +171,7 @@ func setupMetricsSubPipeline(
 	swi.Add(otel.ReportMetrics(
 		ctxInfo,
 		&config.OTELMetrics,
-		&config.Metrics,
+		jointMetricsConfig,
 		selectorCfg,
 		unresolvedCfg,
 		spanNameAggregatedMetrics,
@@ -179,7 +181,7 @@ func setupMetricsSubPipeline(
 	swi.Add(otel.ReportSvcGraphMetrics(
 		ctxInfo,
 		&config.OTELMetrics,
-		&config.Metrics,
+		jointMetricsConfig,
 		unresolvedCfg,
 		spanNameAggregatedMetrics,
 		processEventsCh,
@@ -188,7 +190,7 @@ func setupMetricsSubPipeline(
 	swi.Add(prom.PrometheusEndpoint(
 		ctxInfo,
 		&config.Prometheus,
-		&config.Metrics,
+		jointMetricsConfig,
 		selectorCfg,
 		unresolvedCfg,
 		spanNameAggregatedMetrics,
@@ -240,4 +242,19 @@ func spanPtrPromGetters(cfg *obi.Config) attributes.NamedGetters[request.Span, s
 		}
 		return nil, false
 	}
+}
+
+// joinMetricsConfig returns a combination of the base and per-application metrics config
+// it is used to initialize some resources that should be only initialized if they are enabled
+// for any of the possible service matches.
+// Then they would be used or not for each service, based on the per-service features-.
+func joinMetricsConfig(cfg *obi.Config) *perapp.MetricsConfig {
+	mc := cfg.Metrics
+	for _, d := range cfg.Discovery.Instrument {
+		mc.Features |= d.Metrics.Features
+	}
+	for _, d := range cfg.Discovery.Services {
+		mc.Features |= d.Metrics.Features
+	}
+	return &mc
 }

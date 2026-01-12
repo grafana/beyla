@@ -135,7 +135,7 @@ type Config struct {
 	InternalMetrics imetrics.Config `yaml:"internal_metrics"`
 
 	// Processes metrics for application. They will be only enabled if there is a metrics exporter enabled,
-	// and both the "application" and "application_process" features are enabled
+	// "application_process" features are enabled
 	Processes process.CollectConfig `yaml:"processes"`
 
 	// Grafana Alloy specific configuration
@@ -147,6 +147,9 @@ type Config struct {
 
 	// nolint:undoc
 	NodeJS obi.NodeJSConfig `yaml:"nodejs"`
+
+	// nolint:undoc
+	Java obi.JavaConfig `yaml:"javaagent"`
 
 	// Topology enables extra topology-related features, such as inter-cluster connection spans.
 	// nolint:undoc

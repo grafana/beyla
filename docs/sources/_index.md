@@ -73,7 +73,7 @@ All library or agent based instrumentation has the same fundamental flaw when it
 
 As a result, the telemetry provided by library or agent instrumentation, may indicate low request duration times even though clients experience high latency. This is especially problematic if there are SLOs on response times. In fact, this situation typically arises when the service is overloaded, which is a very common scenario in which SLOs can be breached and application workloads need to be scaled.
 
-Beyla looks at interactions from outside of the application, on the kernel's network level. Therefore, Beyla's latency numbers represent the behavior as seen by the client, including queue times. This is not just a nuance: Queue times may be orders of magnitude higher than the actual service times if an application is struggling to keep up with the amount of requests being sent its way. To read more about this, refer to the [Measuring total request times, instead of service times](./requesttime.md) section of the documentation.
+Beyla looks at interactions from outside of the application, on the kernel's network level. Therefore, the latency numbers produced by Beyla represent the behavior as seen by the client, including queue times. This is not just a nuance: Queue times may be orders of magnitude higher than the actual service times if an application is struggling to keep up with the amount of requests being sent its way. To read more about this, refer to the [Measuring total request times, instead of service times](./requesttime.md) section of the documentation.
 
 ## Requirements
 

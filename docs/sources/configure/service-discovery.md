@@ -235,12 +235,14 @@ Unlike the default `routes` pattern matching configuration option, the `instrume
 For example:
 
 ```yaml
-routes:
+discovery:
+  instrument:
   - k8s_deployment_name: backend
     routes:
       incoming: ["/api/users/{user_id}", "/api/customers/{customer_id}"]
       outgoing: ["/*"]  
   - k8s_deployment_name: frontend
+routes:
   patterns:
     - /user/{id}
 ```

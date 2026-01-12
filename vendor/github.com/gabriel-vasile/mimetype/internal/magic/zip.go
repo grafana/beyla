@@ -2,36 +2,69 @@ package magic
 
 import (
 	"bytes"
-	"encoding/binary"
-	"strings"
+
+	"github.com/gabriel-vasile/mimetype/internal/scan"
 )
 
-var (
-	// Odt matches an OpenDocument Text file.
-	Odt = offset([]byte("mimetypeapplication/vnd.oasis.opendocument.text"), 30)
-	// Ott matches an OpenDocument Text Template file.
-	Ott = offset([]byte("mimetypeapplication/vnd.oasis.opendocument.text-template"), 30)
-	// Ods matches an OpenDocument Spreadsheet file.
-	Ods = offset([]byte("mimetypeapplication/vnd.oasis.opendocument.spreadsheet"), 30)
-	// Ots matches an OpenDocument Spreadsheet Template file.
-	Ots = offset([]byte("mimetypeapplication/vnd.oasis.opendocument.spreadsheet-template"), 30)
-	// Odp matches an OpenDocument Presentation file.
-	Odp = offset([]byte("mimetypeapplication/vnd.oasis.opendocument.presentation"), 30)
-	// Otp matches an OpenDocument Presentation Template file.
-	Otp = offset([]byte("mimetypeapplication/vnd.oasis.opendocument.presentation-template"), 30)
-	// Odg matches an OpenDocument Drawing file.
-	Odg = offset([]byte("mimetypeapplication/vnd.oasis.opendocument.graphics"), 30)
-	// Otg matches an OpenDocument Drawing Template file.
-	Otg = offset([]byte("mimetypeapplication/vnd.oasis.opendocument.graphics-template"), 30)
-	// Odf matches an OpenDocument Formula file.
-	Odf = offset([]byte("mimetypeapplication/vnd.oasis.opendocument.formula"), 30)
-	// Odc matches an OpenDocument Chart file.
-	Odc = offset([]byte("mimetypeapplication/vnd.oasis.opendocument.chart"), 30)
-	// Epub matches an EPUB file.
-	Epub = offset([]byte("mimetypeapplication/epub+zip"), 30)
-	// Sxc matches an OpenOffice Spreadsheet file.
-	Sxc = offset([]byte("mimetypeapplication/vnd.sun.xml.calc"), 30)
-)
+// Odt matches an OpenDocument Text file.
+func Odt(raw []byte, _ uint32) bool {
+	return offset(raw, []byte("mimetypeapplication/vnd.oasis.opendocument.text"), 30)
+}
+
+// Ott matches an OpenDocument Text Template file.
+func Ott(raw []byte, _ uint32) bool {
+	return offset(raw, []byte("mimetypeapplication/vnd.oasis.opendocument.text-template"), 30)
+}
+
+// Ods matches an OpenDocument Spreadsheet file.
+func Ods(raw []byte, _ uint32) bool {
+	return offset(raw, []byte("mimetypeapplication/vnd.oasis.opendocument.spreadsheet"), 30)
+}
+
+// Ots matches an OpenDocument Spreadsheet Template file.
+func Ots(raw []byte, _ uint32) bool {
+	return offset(raw, []byte("mimetypeapplication/vnd.oasis.opendocument.spreadsheet-template"), 30)
+}
+
+// Odp matches an OpenDocument Presentation file.
+func Odp(raw []byte, _ uint32) bool {
+	return offset(raw, []byte("mimetypeapplication/vnd.oasis.opendocument.presentation"), 30)
+}
+
+// Otp matches an OpenDocument Presentation Template file.
+func Otp(raw []byte, _ uint32) bool {
+	return offset(raw, []byte("mimetypeapplication/vnd.oasis.opendocument.presentation-template"), 30)
+}
+
+// Odg matches an OpenDocument Drawing file.
+func Odg(raw []byte, _ uint32) bool {
+	return offset(raw, []byte("mimetypeapplication/vnd.oasis.opendocument.graphics"), 30)
+}
+
+// Otg matches an OpenDocument Drawing Template file.
+func Otg(raw []byte, _ uint32) bool {
+	return offset(raw, []byte("mimetypeapplication/vnd.oasis.opendocument.graphics-template"), 30)
+}
+
+// Odf matches an OpenDocument Formula file.
+func Odf(raw []byte, _ uint32) bool {
+	return offset(raw, []byte("mimetypeapplication/vnd.oasis.opendocument.formula"), 30)
+}
+
+// Odc matches an OpenDocument Chart file.
+func Odc(raw []byte, _ uint32) bool {
+	return offset(raw, []byte("mimetypeapplication/vnd.oasis.opendocument.chart"), 30)
+}
+
+// Epub matches an EPUB file.
+func Epub(raw []byte, _ uint32) bool {
+	return offset(raw, []byte("mimetypeapplication/epub+zip"), 30)
+}
+
+// Sxc matches an OpenOffice Spreadsheet file.
+func Sxc(raw []byte, _ uint32) bool {
+	return offset(raw, []byte("mimetypeapplication/vnd.sun.xml.calc"), 30)
+}
 
 // Zip matches a zip archive.
 func Zip(raw []byte, limit uint32) bool {
@@ -41,52 +74,156 @@ func Zip(raw []byte, limit uint32) bool {
 		(raw[3] == 0x4 || raw[3] == 0x6 || raw[3] == 0x8)
 }
 
-// Jar matches a Java archive file.
+// Jar matches a Java archive file. There are two types of Jar files:
+// 1. the ones that can be opened with jexec and have 0xCAFE optional flag
+// https://stackoverflow.com/tags/executable-jar/info
+// 2. regular jars, same as above, just without the executable flag
+// https://bugs.freebsd.org/bugzilla/show_bug.cgi?id=262278#c0
+// There is an argument to only check for manifest, since it's the common nominator
+// for both executable and non-executable versions. But the traversing zip entries
+// is unreliable because it does linear search for signatures
+// (instead of relying on offsets told by the file.)
 func Jar(raw []byte, limit uint32) bool {
-	return zipContains(raw, "META-INF/MANIFEST.MF")
+	return executableJar(raw) ||
+		// First entry must be an empty META-INF directory or the manifest.
+		// There is no specification saying that, but the jar reader and writer
+		// implementations from Java do it that way.
+		// https://github.com/openjdk/jdk/blob/88c4678eed818cbe9380f35352e90883fed27d33/src/java.base/share/classes/java/util/jar/JarInputStream.java#L170-L173
+		zipHas(raw, zipEntries{{
+			name: []byte("META-INF/"),
+		}, {
+			name: []byte("META-INF/MANIFEST.MF"),
+		}}, 1)
 }
 
-// zipTokenizer holds the source zip file and scanned index.
-type zipTokenizer struct {
-	in []byte
-	i  int // current index
+// KMZ matches a zipped KML file, which is "doc.kml" by convention.
+func KMZ(raw []byte, _ uint32) bool {
+	return zipHas(raw, zipEntries{{
+		name: []byte("doc.kml"),
+	}}, 100)
 }
 
-// next returns the next file name from the zip headers.
-// https://web.archive.org/web/20191129114319/https://users.cs.jmu.edu/buchhofp/forensics/formats/pkzip.html
-func (t *zipTokenizer) next() (fileName string) {
-	if t.i > len(t.in) {
-		return
+// An executable Jar has a 0xCAFE flag enabled in the first zip entry.
+// The rule from file/file is:
+// >(26.s+30)	leshort	0xcafe		Java archive data (JAR)
+func executableJar(b scan.Bytes) bool {
+	b.Advance(0x1A)
+	offset, ok := b.Uint16()
+	if !ok {
+		return false
 	}
-	in := t.in[t.i:]
-	// pkSig is the signature of the zip local file header.
-	pkSig := []byte("PK\003\004")
-	pkIndex := bytes.Index(in, pkSig)
-	// 30 is the offset of the file name in the header.
-	fNameOffset := pkIndex + 30
-	// end if signature not found or file name offset outside of file.
-	if pkIndex == -1 || fNameOffset > len(in) {
-		return
-	}
+	b.Advance(int(offset) + 2)
 
-	fNameLen := int(binary.LittleEndian.Uint16(in[pkIndex+26 : pkIndex+28]))
-	if fNameLen <= 0 || fNameOffset+fNameLen > len(in) {
-		return
-	}
-	t.i += fNameOffset + fNameLen
-	return string(in[fNameOffset : fNameOffset+fNameLen])
+	cafe, ok := b.Uint16()
+	return ok && cafe == 0xCAFE
 }
 
-// zipContains returns true if the zip file headers from in contain any of the paths.
-func zipContains(in []byte, paths ...string) bool {
-	t := zipTokenizer{in: in}
-	for i, tok := 0, t.next(); tok != ""; i, tok = i+1, t.next() {
-		for p := range paths {
-			if strings.HasPrefix(tok, paths[p]) {
+// zipIterator iterates over a zip file returning the name of the zip entries
+// in that file.
+type zipIterator struct {
+	b scan.Bytes
+}
+
+type zipEntries []struct {
+	name []byte
+	dir  bool // dir means checking just the prefix of the entry, not the whole path
+}
+
+func (z zipEntries) match(file []byte) bool {
+	for i := range z {
+		if z[i].dir {
+			if bytes.HasPrefix(file, z[i].name) {
 				return true
+			}
+		} else {
+			if bytes.Equal(file, z[i].name) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func zipHas(raw scan.Bytes, searchFor zipEntries, stopAfter int) bool {
+	iter := zipIterator{raw}
+	for i := 0; i < stopAfter; i++ {
+		f := iter.next()
+		if len(f) == 0 {
+			break
+		}
+		if searchFor.match(f) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// msoxml behaves like zipHas, but it puts restrictions on what the first zip
+// entry can be.
+func msoxml(raw scan.Bytes, searchFor zipEntries, stopAfter int) bool {
+	iter := zipIterator{raw}
+	for i := 0; i < stopAfter; i++ {
+		f := iter.next()
+		if len(f) == 0 {
+			break
+		}
+		if searchFor.match(f) {
+			return true
+		}
+		// If the first is not one of the next usually expected entries,
+		// then abort this check.
+		if i == 0 {
+			if !bytes.Equal(f, []byte("[Content_Types].xml")) && // this is a file
+				!bytes.HasPrefix(f, []byte("_rels/")) && // these are directories
+				!bytes.HasPrefix(f, []byte("docProps/")) &&
+				!bytes.HasPrefix(f, []byte("customXml/")) &&
+				!bytes.HasPrefix(f, []byte("[trash]/")) {
+				return false
 			}
 		}
 	}
 
 	return false
+}
+
+// next extracts the name of the next zip entry.
+func (i *zipIterator) next() []byte {
+	pk := []byte("PK\003\004")
+
+	n := bytes.Index(i.b, pk)
+	if n == -1 {
+		return nil
+	}
+	i.b.Advance(n)
+	if !i.b.Advance(0x1A) {
+		return nil
+	}
+	l, ok := i.b.Uint16()
+	if !ok {
+		return nil
+	}
+	if !i.b.Advance(0x02) {
+		return nil
+	}
+	if len(i.b) < int(l) {
+		return nil
+	}
+	return i.b[:l]
+}
+
+// APK matches an Android Package Archive.
+// The source of signatures is https://github.com/file/file/blob/1778642b8ba3d947a779a36fcd81f8e807220a19/magic/Magdir/archive#L1820-L1887
+func APK(raw []byte, _ uint32) bool {
+	return zipHas(raw, zipEntries{{
+		name: []byte("AndroidManifest.xml"),
+	}, {
+		name: []byte("META-INF/com/android/build/gradle/app-metadata.properties"),
+	}, {
+		name: []byte("classes.dex"),
+	}, {
+		name: []byte("resources.arsc"),
+	}, {
+		name: []byte("res/drawable"),
+	}}, 100)
 }

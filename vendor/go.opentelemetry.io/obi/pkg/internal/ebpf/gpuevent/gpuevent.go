@@ -31,7 +31,6 @@ import (
 )
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type gpu_kernel_launch_t -type gpu_malloc_t -type gpu_memcpy_t -target amd64,arm64 Bpf ../../../../bpf/gpuevent/gpuevent.c -- -I../../../../bpf
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type gpu_kernel_launch_t -type gpu_malloc_t -type gpu_memcpy_t -target amd64,arm64 BpfDebug ../../../../bpf/gpuevent/gpuevent.c -- -I../../../../bpf -DBPF_DEBUG
 
 const (
 	EventTypeKernelLaunch = 1 // EVENT_GPU_KERNEL_LAUNCH
@@ -102,12 +101,7 @@ func (p *Tracer) BlockPID(pid, ns uint32) {
 }
 
 func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
-	loader := LoadBpf
-	if p.cfg.EBPF.BpfDebug {
-		loader = LoadBpfDebug
-	}
-
-	return loader()
+	return LoadBpf()
 }
 
 func (p *Tracer) Constants() map[string]any {
@@ -121,6 +115,7 @@ func (p *Tracer) Constants() map[string]any {
 	} else {
 		m["filter_pids"] = int32(1)
 	}
+	m["g_bpf_debug"] = p.cfg.EBPF.BpfDebug
 
 	return m
 }

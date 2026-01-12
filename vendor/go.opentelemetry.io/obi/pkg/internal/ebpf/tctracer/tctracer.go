@@ -25,7 +25,6 @@ import (
 )
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 Bpf ../../../../bpf/tctracer/tctracer.c -- -I../../../../bpf -I../../../../bpf
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 BpfDebug ../../../../bpf/tctracer/tctracer.c -- -I../../../../bpf -I../../../../bpf -DBPF_DEBUG -DBPF_DEBUG_TC
 
 type Tracer struct {
 	cfg          *obi.Config
@@ -63,10 +62,6 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 		return nil, errors.New("L4 context-propagation requires host network access, e.g. hostNetwork:true")
 	}
 
-	if p.cfg.EBPF.BpfDebug {
-		return LoadBpfDebug()
-	}
-
 	return LoadBpf()
 }
 
@@ -74,7 +69,9 @@ func (p *Tracer) SetupTailCalls() {
 }
 
 func (p *Tracer) Constants() map[string]any {
-	return map[string]any{}
+	return map[string]any{
+		"g_bpf_debug": p.cfg.EBPF.BpfDebug,
+	}
 }
 
 func (p *Tracer) RegisterOffsets(_ *exec.FileInfo, _ *goexec.Offsets) {}

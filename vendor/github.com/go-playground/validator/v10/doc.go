@@ -188,7 +188,7 @@ Same as structonly tag except that any struct level validations will not run.
 
 # Omit Empty
 
-Allows conditional validation, for example if a field is not set with
+Allows conditional validation, for example, if a field is not set with
 a value (Determined by the "required" validator) then other validation
 such as min or max won't run, but if a value is set validation will run.
 
@@ -200,6 +200,15 @@ Allows to skip the validation if the value is nil (same as omitempty, but
 only for the nil-values).
 
 	Usage: omitnil
+
+# Omit Zero
+
+Allows to skip the validation if the value is a zero value.
+For pointers, it checks if the pointer is nil or the underlying value is a zero value.
+For slices and maps, it checks if the value is nil or empty.
+Otherwise, behaves the same as omitempty.
+
+	Usage: omitzero
 
 # Dive
 
@@ -253,7 +262,7 @@ Example #2
 
 This validates that the value is not the data types default zero value.
 For numbers ensures value is not zero. For strings ensures value is
-not "". For slices, maps, pointers, interfaces, channels and functions
+not "". For booleans ensures value is not false. For slices, maps, pointers, interfaces, channels and functions
 ensures the value is not nil. For structs ensures value is not the zero value when using WithRequiredStructEnabled.
 
 	Usage: required
@@ -264,6 +273,7 @@ The field under validation must be present and not empty only if all
 the other specified fields are equal to the value following the specified
 field. For strings ensures value is not "". For slices, maps, pointers,
 interfaces, channels and functions ensures the value is not nil. For structs ensures value is not the zero value.
+Using the same field name multiple times in the parameters will result in a panic at runtime.
 
 	Usage: required_if
 
@@ -489,11 +499,18 @@ For strings, ints, and uints, oneof will ensure that the value
 is one of the values in the parameter.  The parameter should be
 a list of values separated by whitespace. Values may be
 strings or numbers. To match strings with spaces in them, include
-the target string between single quotes.
+the target string between single quotes. Kind of like an 'enum'.
 
 	Usage: oneof=red green
 	       oneof='red green' 'blue yellow'
 	       oneof=5 7 9
+
+# One Of Case Insensitive
+
+Works the same as oneof but is case insensitive and therefore only accepts strings.
+
+	Usage: oneofci=red green
+	       oneofci='red green' 'blue yellow'
 
 # Greater Than
 
@@ -749,17 +766,43 @@ in a field of the struct specified via a parameter.
 	// For slices of struct:
 	Usage: unique=field
 
+# ValidateFn
+
+This validates that an object responds to a method that can return error or bool.
+By default it expects an interface `Validate() error` and check that the method
+does not return an error. Other methods can be specified using two signatures:
+If the method returns an error, it check if the return value is nil.
+If the method returns a boolean, it checks if the value is true.
+
+	// to use the default method Validate() error
+	Usage: validateFn
+
+	// to use the custom method IsValid() bool (or error)
+	Usage: validateFn=IsValid
+
 # Alpha Only
 
 This validates that a string value contains ASCII alpha characters only
 
 	Usage: alpha
 
+# Alpha Space
+
+This validates that a string value contains ASCII alpha characters and spaces only
+
+	Usage: alphaspace
+
 # Alphanumeric
 
 This validates that a string value contains ASCII alphanumeric characters only
 
 	Usage: alphanum
+
+# Alphanumeric Space
+
+This validates that a string value contains ASCII alphanumeric characters and spaces only
+
+	Usage: alphanumspace
 
 # Alpha Unicode
 
@@ -911,7 +954,7 @@ This will accept any uri the golang request uri accepts
 
 # Urn RFC 2141 String
 
-This validataes that a string value contains a valid URN
+This validates that a string value contains a valid URN
 according to the RFC 2141 spec.
 
 	Usage: urn_rfc2141
@@ -952,7 +995,7 @@ Although an empty string is a valid base64 URL safe value, this will report
 an empty string as an error, if you wish to accept an empty string as valid
 you can use this with the omitempty tag.
 
-	Usage: base64url
+	Usage: base64rawurl
 
 # Bitcoin Address
 
@@ -966,7 +1009,7 @@ Bitcoin Bech32 Address (segwit)
 
 This validates that a string value contains a valid bitcoin Bech32 address as defined
 by bip-0173 (https://github.com/bitcoin/bips/blob/master/bip-0173.mediawiki)
-Special thanks to Pieter Wuille for providng reference implementations.
+Special thanks to Pieter Wuille for providing reference implementations.
 
 	Usage: btc_addr_bech32
 
@@ -1127,6 +1170,12 @@ This validates that a string value contains a valid longitude.
 
 	Usage: longitude
 
+# Employeer Identification Number EIN
+
+This validates that a string value contains a valid U.S. Employer Identification Number.
+
+	Usage: ein
+
 # Social Security Number SSN
 
 This validates that a string value contains a valid U.S. Social Security Number.
@@ -1229,6 +1278,15 @@ This validates that a string value contains a valid Unix Address.
 
 	Usage: unix_addr
 
+# Unix Domain Socket Exists
+
+This validates that a Unix domain socket file exists at the specified path.
+It checks both filesystem-based sockets and Linux abstract sockets (prefixed with @).
+For filesystem sockets, it verifies the path exists and is a socket file.
+For abstract sockets on Linux, it checks /proc/net/unix.
+
+	Usage: uds_exists
+
 # Media Access Control Address MAC
 
 This validates that a string value contains a valid MAC Address.
@@ -1299,9 +1357,15 @@ may not exist at the time of validation.
 # HostPort
 
 This validates that a string value contains a valid DNS hostname and port that
-can be used to valiate fields typically passed to sockets and connections.
+can be used to validate fields typically passed to sockets and connections.
 
 	Usage: hostname_port
+
+# Port
+
+This validates that the value falls within the valid port number range of 1 to 65,535.
+
+	Usage: port
 
 # Datetime
 
@@ -1338,12 +1402,19 @@ More information on https://pkg.go.dev/golang.org/x/text/language
 
 	Usage: bcp47_language_tag
 
-BIC (SWIFT code)
+BIC (SWIFT code - 2022 standard)
 
-This validates that a string value is a valid Business Identifier Code (SWIFT code), defined in ISO 9362.
-More information on https://www.iso.org/standard/60390.html
+This validates that a string value is a valid Business Identifier Code (SWIFT code), defined in ISO 9362:2022.
+More information on https://www.iso.org/standard/84108.html
 
 	Usage: bic
+
+BIC (SWIFT code - 2014 standard)
+
+This validates that a string value is a valid Business Identifier Code (SWIFT code), defined in ISO 9362:2014.
+More information on https://www.iso.org/standard/60390.html
+
+	Usage: bic_iso_9362_2014
 
 # RFC 1035 label
 
@@ -1386,11 +1457,19 @@ This validates that a string value contains a valid credit card number using Luh
 
 This validates that a string or (u)int value contains a valid checksum using the Luhn algorithm.
 
-# MongoDb ObjectID
+# MongoDB
 
-This validates that a string is a valid 24 character hexadecimal string.
+This validates that a string is a valid 24 character hexadecimal string or valid connection string.
 
 	Usage: mongodb
+	       mongodb_connection_string
+
+Example:
+
+	type Test struct {
+		ObjectIdField         string `validate:"mongodb"`
+		ConnectionStringField string `validate:"mongodb_connection_string"`
+	}
 
 # Cron
 
@@ -1471,7 +1550,7 @@ This package panics when bad input is provided, this is by design, bad code like
 that should not make it to production.
 
 	type Test struct {
-		TestField string `validate:"nonexistantfunction=1"`
+		TestField string `validate:"nonexistentfunction=1"`
 	}
 
 	t := &Test{

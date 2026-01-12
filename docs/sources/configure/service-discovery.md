@@ -235,15 +235,16 @@ discovery:
       open_ports: 8090
 ```
 
-This example configures Beyla to only export application service graph metrics by default, but it later overrides a specific discovery criteria with different set of exported metrics:
+This example configures Beyla to only export application service graph metrics by default, but it later overrides specific discovery criteria with different set of exported metrics. 
+The outcome of the configuration is as follows:
 
-- The `apache`, `nginx`, and `tomcat` service instances will only export
+- The `apache`, `nginx`, and `tomcat` service instances only export
   `application_service_graph` metrics (as defined in the top-level
   `metrics > features` configuration).
 
-- The `pyserver` service will only export the `application` group of metrics.
+- The `pyserver` service only exports the `application` group of metrics.
 
-- Services listening on ports 3030 or 3040 will export the `application`,
+- Services listening on ports 3030 or 3040 export the `application`,
   `application_span`, and `application_service_graph` metric groups.
 
 

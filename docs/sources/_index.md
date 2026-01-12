@@ -39,7 +39,7 @@ Beyla offers the following features:
 - [distributed traces](./distributed-traces/) with Beyla 2
 - runs in any Linux environment
 - listens to the Kubernetes API to decorate metrics and traces with Pods and Services metadata
-- simple setup for Grafana customers already using Grafana Alloy
+- Grafana Alloy integration
 
 ## eBPF overview and how it differs from other types of instrumentation
 
@@ -55,7 +55,7 @@ The eBPF programs are safe and compiled for their own [Virtual Machine instructi
 
 eBPF binaries get verified and compiled with a Just-In-Time (JIT) compiler for the native host architecture such as x86-64 or ARM64 for efficient and fast execution.
 
-Unlike other types of instrumentation, for example language specific SDK libraries or instrumentation agents, eBPF instrumentation doesn't add anything to your application as a dependency. This means that the eBPF instrumentation code, which extracts and generates all of the application telemetry, doesn't run within your application process memory. When you add an instrumentation library dependency to your code, any vulnerabilities in the instrumentation library are all of a sudden vulnerabilities in your application as well. This is inherently true for all application dependencies, and instrumentation dependencies are not any different. With eBPF, since all instrumentation is done outside of your application process memory, any vulnerability to the eBPF user-space components will impact just the telemetry collection and generation part of your system.
+Unlike other types of instrumentation, for example language specific SDK libraries or instrumentation agents, eBPF instrumentation doesn't add anything to your application as a dependency. This means that the eBPF instrumentation code, which extracts and generates all of the application telemetry, doesn't run within your application process memory. When you add an instrumentation library dependency to your code, any vulnerabilities in the instrumentation library are all of a sudden vulnerabilities in your application as well. This is inherently true for all application dependencies, and instrumentation dependencies are not any different. With eBPF, since all instrumentation is done outside of your application process memory, any vulnerability to the eBPF user-space components impacts just the telemetry collection and generation part of your system.
 
 Since eBPF instrumentation runs out of your application process, you can apply very restrictive access policies to the eBPF agent and secure the telemetry generation process. For example, you can ensure that the eBPF agent (Beyla) doesn't open any ports and only uses push for the generated telemetry, which wouldn't be feasible if the application is instrumented using language specific SDK libraries or instrumentation agents.
 
@@ -63,17 +63,17 @@ Beyla eBPF instrumentation is also safer than proxy based black box instrumentat
 
 ### eBPF instrumentation is non-intrusive
 
-Beyla can instrument all of your applications without restart and without disrupting your application performance. The eBPF instrumentation can be added and removed without any impact to the system or application performance. Since the eBPF instrumentation runs outside of the application process, it will never add any memory, CPU, IO or locking overhead to your application performance. Any instability of the eBPF monitoring stack is purely an instability of that component. This means that performance or functional bugs in the eBPF instrumentation, will not cause performance or stability issues to your applications. 
+Beyla can instrument all of your applications without restart and without disrupting your application performance. The eBPF instrumentation can be added and removed without any impact to the system or application performance. Since the eBPF instrumentation runs outside of the application process, it doesn't add any memory, CPU, IO or locking overhead to your application performance. Any instability of the eBPF monitoring stack is purely an instability of that component. This means that performance or functional bugs in the eBPF instrumentation, do not cause performance or stability issues to your applications. 
 
-Since eBPF instrumentation can easily be added or removed without disrupting the application behavior, this also means that you can safely and easily update/upgrade your observability. Upgrading Beyla to a newer version, for example to gain access to new types of instrumentations or to upgrade the OpenTelemetry standard, is painless and will immediately take effect on all of your instrumented services.
+Since eBPF instrumentation can be added or removed without disrupting the application behavior, this also means that you can safely update/upgrade your observability. Upgrading Beyla to a newer version, for example to gain access to new functionality or to upgrade the OpenTelemetry standard, is painless and it immediately takes an effect on all of your instrumented services.
 
 ### eBPF instrumentation produces correct latency metrics
 
-All library or agent based instrumentations have the same fundamental flaw when it comes down to measuring request latency. They instrument the service time, that is, the time it takes for a request handler to process a request. However, requests may need to wait in an internal framework queue before they are being serviced. A common example of when requests are waiting for a handler, is when all threads in the incoming application thread pool are busy. These wait times are never accounted for by library level instrumentations.
+All library or agent based instrumentation has the same fundamental flaw when it comes down to measuring request latency. They instrument the service time, that is, the time it takes for a request handler to process a request. However, requests may need to wait in an internal framework queue before they are being serviced. A common example of when requests are waiting for a handler, is when all threads in the incoming application thread pool are busy. These wait times are never accounted for by library level instrumentation.
 
 As a result, the telemetry provided by library or agent instrumentation, may indicate low request duration times even though clients experience high latency. This is especially problematic if there are SLOs on response times. In fact, this situation typically arises when the service is overloaded, which is a very common scenario in which SLOs can be breached and application workloads need to be scaled.
 
-Beyla looks at interactions from outside of the application, on the kernel’s network level. Therefore, Beyla’s latency numbers represent the behavior as seen by the client, including queue times. This is not just a nuance: Queue times may be orders of magnitude higher than the actual service times if an application is struggling to keep up with the amount of requests being sent its way. To read more about this, refer to the [Measuring total request times, instead of service times](./requesttime.md) section of the documentation.
+Beyla looks at interactions from outside of the application, on the kernel's network level. Therefore, Beyla's latency numbers represent the behavior as seen by the client, including queue times. This is not just a nuance: Queue times may be orders of magnitude higher than the actual service times if an application is struggling to keep up with the amount of requests being sent its way. To read more about this, refer to the [Measuring total request times, instead of service times](./requesttime.md) section of the documentation.
 
 ## Requirements
 

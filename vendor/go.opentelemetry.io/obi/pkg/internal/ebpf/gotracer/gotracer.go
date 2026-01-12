@@ -36,10 +36,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 )
 
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 Bpf ../../../../bpf/gotracer/gotracer.c -- -I../../../../bpf -DNO_HEADER_PROPAGATION
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 BpfDebug ../../../../bpf/gotracer/gotracer.c -- -I../../../../bpf -DBPF_DEBUG -DNO_HEADER_PROPAGATION
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 BpfTP ../../../../bpf/gotracer/gotracer.c -- -I../../../../bpf
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 BpfTPDebug ../../../../bpf/gotracer/gotracer.c -- -I../../../../bpf -DBPF_DEBUG
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 Bpf ../../../../bpf/gotracer/gotracer.c -- -I../../../../bpf
 
 type Tracer struct {
 	log                     *slog.Logger
@@ -85,20 +82,11 @@ func (p *Tracer) supportsContextPropagation() bool {
 }
 
 func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
-	loader := LoadBpf
-	if p.cfg.BpfDebug {
-		loader = LoadBpfDebug
-	}
-
-	if p.supportsContextPropagation() {
-		loader = LoadBpfTP
-		if p.cfg.BpfDebug {
-			loader = LoadBpfTPDebug
-		}
-	} else {
+	if !p.supportsContextPropagation() {
 		p.log.Info("Kernel in lockdown mode or missing CAP_SYS_ADMIN.")
 	}
-	return loader()
+
+	return LoadBpf()
 }
 
 func (p *Tracer) SetupTailCalls() {
@@ -111,17 +99,19 @@ func (p *Tracer) Constants() map[string]any {
 	}
 
 	return map[string]any{
-		"wakeup_data_bytes":      uint32(p.cfg.WakeupLen) * uint32(unsafe.Sizeof(ebpfcommon.HTTPRequestTrace{})),
-		"disable_black_box_cp":   blackBoxCP,
-		"attr_type_invalid":      uint64(attribute.INVALID),
-		"attr_type_bool":         uint64(attribute.BOOL),
-		"attr_type_int64":        uint64(attribute.INT64),
-		"attr_type_float64":      uint64(attribute.FLOAT64),
-		"attr_type_string":       uint64(attribute.STRING),
-		"attr_type_boolslice":    uint64(attribute.BOOLSLICE),
-		"attr_type_int64slice":   uint64(attribute.INT64SLICE),
-		"attr_type_float64slice": uint64(attribute.FLOAT64SLICE),
-		"attr_type_stringslice":  uint64(attribute.STRINGSLICE),
+		"g_bpf_debug":              p.cfg.BpfDebug,
+		"g_bpf_header_propagation": p.supportsContextPropagation(),
+		"wakeup_data_bytes":        uint32(p.cfg.WakeupLen) * uint32(unsafe.Sizeof(ebpfcommon.HTTPRequestTrace{})),
+		"disable_black_box_cp":     blackBoxCP,
+		"attr_type_invalid":        uint64(attribute.INVALID),
+		"attr_type_bool":           uint64(attribute.BOOL),
+		"attr_type_int64":          uint64(attribute.INT64),
+		"attr_type_float64":        uint64(attribute.FLOAT64),
+		"attr_type_string":         uint64(attribute.STRING),
+		"attr_type_boolslice":      uint64(attribute.BOOLSLICE),
+		"attr_type_int64slice":     uint64(attribute.INT64SLICE),
+		"attr_type_float64slice":   uint64(attribute.FLOAT64SLICE),
+		"attr_type_stringslice":    uint64(attribute.STRINGSLICE),
 	}
 }
 

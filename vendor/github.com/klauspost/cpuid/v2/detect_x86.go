@@ -32,7 +32,14 @@ func addInfo(c *CPUInfo, safe bool) {
 	c.LogicalCores = logicalCores()
 	c.PhysicalCores = physicalCores()
 	c.VendorID, c.VendorString = vendorID()
+	c.HypervisorVendorID, c.HypervisorVendorString = hypervisorVendorID()
 	c.AVX10Level = c.supportAVX10()
 	c.cacheSize()
 	c.frequencies()
+	if c.maxFunc >= 0x0A {
+		eax, ebx, _, edx := cpuid(0x0A)
+		c.PMU = parseLeaf0AH(c, eax, ebx, edx)
+	}
 }
+
+func getVectorLength() (vl, pl uint64) { return 0, 0 }

@@ -7,14 +7,15 @@ package mimetype
 
 import (
 	"io"
-	"io/ioutil"
 	"mime"
 	"os"
 	"sync/atomic"
 )
 
+const defaultLimit uint32 = 3072
+
 // readLimit is the maximum number of bytes from the input used when detecting.
-var readLimit uint32 = 3072
+var readLimit uint32 = defaultLimit
 
 // Detect returns the MIME type found from the provided byte slice.
 //
@@ -48,7 +49,7 @@ func DetectReader(r io.Reader) (*MIME, error) {
 	// Using atomic because readLimit can be written at the same time in other goroutine.
 	l := atomic.LoadUint32(&readLimit)
 	if l == 0 {
-		in, err = ioutil.ReadAll(r)
+		in, err = io.ReadAll(r)
 		if err != nil {
 			return errMIME, err
 		}
@@ -103,6 +104,7 @@ func EqualsAny(s string, mimes ...string) bool {
 // SetLimit sets the maximum number of bytes read from input when detecting the MIME type.
 // Increasing the limit provides better detection for file formats which store
 // their magical numbers towards the end of the file: docx, pptx, xlsx, etc.
+// During detection data is read in a single block of size limit, i.e. it is not buffered.
 // A limit of 0 means the whole input file will be used.
 func SetLimit(limit uint32) {
 	// Using atomic because readLimit can be read at the same time in other goroutine.
@@ -110,15 +112,18 @@ func SetLimit(limit uint32) {
 }
 
 // Extend adds detection for other file formats.
-// It is equivalent to calling Extend() on the root mime type "application/octet-stream".
+// It is equivalent to calling Extend() on the root MIME type "application/octet-stream".
 func Extend(detector func(raw []byte, limit uint32) bool, mime, extension string, aliases ...string) {
 	root.Extend(detector, mime, extension, aliases...)
 }
 
 // Lookup finds a MIME object by its string representation.
-// The representation can be the main mime type, or any of its aliases.
-func Lookup(mime string) *MIME {
+// The representation can be the main MIME type, or any of its aliases.
+func Lookup(m string) *MIME {
+	// We store the MIME types without optional params, so
+	// perform parsing to extract the target MIME type without optional params.
+	m, _, _ = mime.ParseMediaType(m)
 	mu.RLock()
 	defer mu.RUnlock()
-	return root.lookup(mime)
+	return root.lookup(m)
 }

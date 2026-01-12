@@ -7,10 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"strings"
 
+	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 
+	convenience "go.opentelemetry.io/obi/pkg/internal/ebpf/convenience"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
 )
 
@@ -45,9 +48,27 @@ func (t *tracer) Close() error {
 // Returns an error if any step fails.
 func newTracer() (*tracer, error) {
 	objects := BpfObjects{}
+	spec, err := LoadBpf()
+	if err != nil {
+		return nil, fmt.Errorf("loading BPF data: %w", err)
+	}
 
-	if err := LoadBpfObjects(&objects, nil); err != nil {
-		return nil, fmt.Errorf("loading BPF objects: %w", err)
+	// Debug events map is unsupported due to pinning
+	spec.Maps["debug_events"] = &ebpf.MapSpec{
+		Name:       "dummy_map",
+		Type:       ebpf.RingBuf,
+		Pinning:    ebpf.PinNone,
+		MaxEntries: uint32(os.Getpagesize()),
+	}
+
+	if err := convenience.RewriteConstants(spec, map[string]any{
+		"g_bpf_debug": true,
+	}); err != nil {
+		return nil, fmt.Errorf("rewriting BPF constants definition: %w", err)
+	}
+
+	if err := spec.LoadAndAssign(&objects, nil); err != nil {
+		return nil, fmt.Errorf("loading and assigning BPF objects: %w", err)
 	}
 
 	tracer := tracer{bpfObjects: &objects}
@@ -80,8 +101,6 @@ func newTracer() (*tracer, error) {
 		_ = tracer.Close()
 		return nil, errors.New("no interfaces found")
 	}
-
-	var err error
 
 	tracer.ringbuf, err = ringbuf.NewReader(tracer.bpfObjects.RingBuffer)
 	if err != nil {

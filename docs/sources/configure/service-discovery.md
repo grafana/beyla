@@ -204,6 +204,49 @@ This example configures Beyla to export only metrics for all services. For the s
 
 For an export signal to function, you must configure the corresponding exporter in Beyla. For example, specifying `traces` in the `exports` list requires configuring the OTLP traces exporter via `otel_traces_export`. Specifying `metrics` requires configuring at least one metrics exporter, such as `prometheus_export` or `otel_metrics_export`. If you specify an export signal without configuring the corresponding exporter, Beyla ignores that signal.
 
+### Metrics export features
+
+Additionally to configuring custom export modes per discovery instrumentation criteria, Beyla allows you to override the global metrics export features
+for each discovery criteria by adding `metrics > features` as a property to individual `discovery > instrument` entries.
+
+For example:
+
+```yaml
+metrics:
+  features: ['application_service_graph']
+discovery:
+  instrument:
+    - open_ports: 3030,3040
+      metrics:
+        features:
+          - 'application'
+          - 'application_span'
+          - 'application_service_graph'
+    - name: pyserver
+      open_ports: 7773
+      metrics:
+        features:
+          - 'application'
+    - name: apache
+      open_ports: 8080
+    - name: nginx
+      open_ports: 8085
+    - name: tomcat
+      open_ports: 8090
+```
+
+This example configures Beyla to only export application service graph metrics by default, but it later overrides a specific discovery criteria with different set of exported metrics:
+
+- The `apache`, `nginx`, and `tomcat` service instances will only export
+  `application_service_graph` metrics (as defined in the top-level
+  `metrics > features` configuration).
+
+- The `pyserver` service will only export the `application` group of metrics.
+
+- Services listening on ports 3030 or 3040 will export the `application`,
+  `application_span`, and `application_service_graph` metric groups.
+
+
 ### Custom trace sampler
 
 By using the `sampler` property for an `instrument` definition criteria, you can define individual trace sampling strategy for each `instrument` criteria. This option overrides the default specified trace sampling configuration if it is defined for all instrumented services. For more details on configuring sampling, refer to the [sample traces](../sample-traces/) documentation section.

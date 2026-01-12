@@ -167,22 +167,7 @@ func (tr *connectionSpansExport) getTracesExporter(ctx context.Context) (exporte
 		}
 		factory := otlphttpexporter.NewFactory()
 		config := factory.CreateDefaultConfig().(*otlphttpexporter.Config)
-		queueConfig := exporterhelper.NewDefaultQueueConfig()
-		queueConfig.Sizer = exporterhelper.RequestSizerTypeItems
-		batchCfg := exporterhelper.BatchConfig{
-			Sizer: queueConfig.Sizer,
-		}
-		if tr.cfg.MaxQueueSize > 0 || tr.cfg.BatchTimeout > 0 {
-			queueConfig.Enabled = true
-		}
-		if tr.cfg.MaxQueueSize > 0 {
-			batchCfg.MaxSize = int64(tr.cfg.MaxQueueSize)
-		}
-		if tr.cfg.BatchTimeout > 0 {
-			batchCfg.FlushTimeout = tr.cfg.BatchTimeout
-		}
-		queueConfig.Batch = configoptional.Some(batchCfg)
-		config.QueueConfig = queueConfig
+		config.QueueConfig = getQueueConfig(tr.cfg)
 		config.RetryConfig = getRetrySettings(tr.cfg)
 		config.ClientConfig = confighttp.ClientConfig{
 			Endpoint: opts.Scheme + "://" + opts.Endpoint + opts.BaseURLPath,
@@ -222,22 +207,7 @@ func (tr *connectionSpansExport) getTracesExporter(ctx context.Context) (exporte
 		}
 		factory := otlpexporter.NewFactory()
 		config := factory.CreateDefaultConfig().(*otlpexporter.Config)
-		queueConfig := exporterhelper.NewDefaultQueueConfig()
-		queueConfig.Sizer = exporterhelper.RequestSizerTypeItems
-		batchCfg := exporterhelper.BatchConfig{
-			Sizer: queueConfig.Sizer,
-		}
-		if tr.cfg.MaxQueueSize > 0 || tr.cfg.BatchTimeout > 0 {
-			queueConfig.Enabled = true
-		}
-		if tr.cfg.MaxQueueSize > 0 {
-			batchCfg.MaxSize = int64(tr.cfg.MaxQueueSize)
-		}
-		if tr.cfg.BatchTimeout > 0 {
-			batchCfg.FlushTimeout = tr.cfg.BatchTimeout
-		}
-		queueConfig.Batch = configoptional.Some(batchCfg)
-		config.QueueConfig = queueConfig
+		config.QueueConfig = getQueueConfig(tr.cfg)
 		config.RetryConfig = getRetrySettings(tr.cfg)
 		config.ClientConfig = configgrpc.ClientConfig{
 			Endpoint: endpoint.String(),
@@ -258,6 +228,34 @@ func (tr *connectionSpansExport) getTracesExporter(ctx context.Context) (exporte
 			proto, otelcfg.ProtocolGRPC, otelcfg.ProtocolHTTPJSON, otelcfg.ProtocolHTTPProtobuf))
 		return nil, fmt.Errorf("invalid protocol value: %q", proto)
 	}
+}
+
+func getQueueConfig(cfg *otelcfg.TracesConfig) configoptional.Optional[exporterhelper.QueueBatchConfig] {
+	// enable batching only if the queue config is enabled
+	if cfg.MaxQueueSize <= 0 && cfg.BatchTimeout <= 0 {
+		return configoptional.None[exporterhelper.QueueBatchConfig]()
+	}
+	queueConfig := exporterhelper.NewDefaultQueueConfig()
+	queueConfig.Sizer = exporterhelper.RequestSizerTypeItems
+	// Avoid continuously seeing "sending queue is full" errors in the standard output
+	queueConfig.BlockOnOverflow = true
+	batchCfg := exporterhelper.BatchConfig{
+		Sizer: queueConfig.Sizer,
+	}
+	batchSet := false
+	if cfg.MaxQueueSize > 0 {
+		batchSet = true
+		batchCfg.MaxSize = int64(cfg.MaxQueueSize)
+	}
+	if cfg.BatchTimeout > 0 {
+		batchSet = true
+		batchCfg.FlushTimeout = cfg.BatchTimeout
+		batchCfg.MinSize = int64(cfg.MaxQueueSize)
+	}
+	if batchSet {
+		queueConfig.Batch = configoptional.Some(batchCfg)
+	}
+	return configoptional.Some(queueConfig)
 }
 
 func getTraceSettings(dataTypeMetrics component.Type) exporter.Settings {

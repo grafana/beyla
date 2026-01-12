@@ -76,13 +76,13 @@ type SvcGraphMetrics struct {
 func ReportSvcGraphMetrics(
 	ctxInfo *global.ContextInfo,
 	cfg *otelcfg.MetricsConfig,
-	mpCfg *perapp.MetricsConfig,
+	jointMetricsConfig *perapp.MetricsConfig,
 	unresolved request.UnresolvedNames,
 	input *msg.Queue[[]request.Span],
 	processEvents *msg.Queue[exec.ProcessEvent],
 ) swarm.InstanceFunc {
 	return func(ctx context.Context) (swarm.RunFunc, error) {
-		if !cfg.EndpointEnabled() || !mpCfg.Features.ServiceGraph() {
+		if !cfg.EndpointEnabled() || !jointMetricsConfig.Features.ServiceGraph() {
 			return swarm.EmptyRunFunc()
 		}
 		otelcfg.SetupInternalOTELSDKLogger(cfg.SDKLogLevel)
@@ -287,27 +287,43 @@ func (r *SvcGraphMetrics) record(span *request.Span, mr *SvcGraphMetricsReporter
 	ctx := trace.ContextWithSpanContext(r.ctx, trace.SpanContext{}.WithTraceID(span.TraceID).WithSpanID(span.SpanID).WithTraceFlags(trace.TraceFlags(span.TraceFlags)))
 
 	if !span.IsSelfReferenceSpan() || mr.cfg.AllowServiceGraphSelfReferences {
+		connType := request.ConnectionTypeMetric(ConnectionTypeForSpan(span, &mr.pidTracker))
+
 		if span.IsClientSpan() {
-			sgc, attrs := r.serviceGraphClient.ForRecord(span)
+			sgc, attrs := r.serviceGraphClient.ForRecord(span, connType)
 			sgc.Record(ctx, duration, instrument.WithAttributeSet(attrs))
 			// If we managed to resolve the remote name only, we check to see
 			// we are not instrumenting the server service, then and only then,
 			// we generate client span count for service graph total
 			if ClientSpanToUninstrumentedService(&mr.pidTracker, span) {
-				sgt, attrs := r.serviceGraphTotal.ForRecord(span)
+				sgt, attrs := r.serviceGraphTotal.ForRecord(span, connType)
 				sgt.Add(ctx, 1, instrument.WithAttributeSet(attrs))
 			}
 		} else {
-			sgs, attrs := r.serviceGraphServer.ForRecord(span)
+			sgs, attrs := r.serviceGraphServer.ForRecord(span, connType)
 			sgs.Record(ctx, duration, instrument.WithAttributeSet(attrs))
-			sgt, attrs := r.serviceGraphTotal.ForRecord(span)
+			sgt, attrs := r.serviceGraphTotal.ForRecord(span, connType)
 			sgt.Add(ctx, 1, instrument.WithAttributeSet(attrs))
 		}
 		if request.SpanStatusCode(span) == request.StatusCodeError {
-			sgf, attrs := r.serviceGraphFailed.ForRecord(span)
+			sgf, attrs := r.serviceGraphFailed.ForRecord(span, connType)
 			sgf.Add(ctx, 1, instrument.WithAttributeSet(attrs))
 		}
 	}
+}
+
+func ConnectionTypeForSpan(span *request.Span, tracker *PidServiceTracker) string {
+	connType := span.ServiceGraphConnectionType()
+	if connType != "" {
+		return connType
+	}
+
+	// For client spans to uninstrumented services, set virtual_node
+	if span.IsClientSpan() && ClientSpanToUninstrumentedService(tracker, span) {
+		return "virtual_node"
+	}
+
+	return ""
 }
 
 func ClientSpanToUninstrumentedService(tracker *PidServiceTracker, span *request.Span) bool {
@@ -377,8 +393,8 @@ func (mr *SvcGraphMetricsReporter) onSpan(spans []request.Span) {
 		if !s.Service.ExportModes.CanExportMetrics() {
 			continue
 		}
-		// If we are ignoring this span because of route patterns, don't do anything
-		if request.IgnoreMetrics(s) {
+		// If we are ignoring this span because of route patterns or features, don't do anything
+		if request.IgnoreMetrics(s) || !s.Service.Features.ServiceGraph() {
 			continue
 		}
 		reporter, err := mr.reporters.For(&s.Service)

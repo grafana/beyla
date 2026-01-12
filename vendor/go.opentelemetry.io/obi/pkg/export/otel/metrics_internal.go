@@ -159,6 +159,18 @@ func NewInternalMetricsReporter(ctx context.Context, ctxInfo *global.ContextInfo
 		return nil, err
 	}
 
+	informerLag, err := meter.Float64Histogram(
+		attr.VendorPrefix+".kube.cache.forward.lag",
+		instrument.WithDescription("How long, in seconds, it takes since a Kubernetes event happens until it is forwarded to the subscribers"),
+		instrument.WithUnit("s"),
+		instrument.WithExplicitBucketBoundaries(
+			imetrics.InformerLagBuckets...,
+		),
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	return &InternalMetricsReporter{
 		ctx:                              ctx,
 		tracerFlushes:                    tracerFlushes,
@@ -174,6 +186,7 @@ func NewInternalMetricsReporter(ctx context.Context, ctxInfo *global.ContextInfo
 		bpfMapEntries:                    bpfMapEntries,
 		bpfMapMaxEntries:                 bpfMapMaxEntries,
 		bpfInternalMetricsScrapeInterval: internalMetrics.BpfMetricScrapeInterval,
+		informerLag:                      informerLag,
 	}, nil
 }
 

@@ -4,6 +4,7 @@
 package ebpfcommon
 
 import (
+	"math"
 	"strings"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
@@ -78,14 +79,19 @@ func detectSQLPayload(useHeuristics bool, b []byte) (string, string, string, req
 
 func detectSQL(buf string) (string, string, string) {
 	b := asciiToUpper(buf)
+	minIdx := math.MaxInt
 	for _, q := range []string{"SELECT", "UPDATE", "DELETE", "INSERT", "ALTER", "CREATE", "DROP"} {
 		i := strings.Index(b, q)
-		if i >= 0 {
-			sql := cstr([]uint8(buf[i:]))
-
-			op, table := sqlprune.SQLParseOperationAndTable(sql)
-			return op, table, sql
+		if i >= 0 && i < minIdx {
+			minIdx = i
 		}
+	}
+
+	if minIdx < math.MaxInt && minIdx < len(b) {
+		sql := cstr([]uint8(buf[minIdx:]))
+
+		op, table := sqlprune.SQLParseOperationAndTable(sql)
+		return op, table, sql
 	}
 
 	return "", "", ""

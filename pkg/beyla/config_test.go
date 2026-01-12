@@ -253,7 +253,7 @@ network:
 			MaxPathSegmentCardinality: 10,
 		},
 		NameResolver: &transform.NameResolverConfig{
-			Sources:  []string{"k8s", "dns"},
+			Sources:  []transform.Source{"k8s", "dns"},
 			CacheLen: 1024,
 			CacheTTL: 5 * time.Minute,
 		},
@@ -296,6 +296,7 @@ network:
 			},
 		},
 		NodeJS: obi.NodeJSConfig{Enabled: true},
+		Java:   obi.JavaConfig{Enabled: true, Timeout: 10 * time.Second},
 	}, cfg)
 }
 

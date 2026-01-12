@@ -1,0 +1,24 @@
+docker-compose:
+  generator: generic
+  files:
+    - ../docker-compose-python-unknown.yml
+input:
+  - path: "/unknown"
+
+interval: 500ms
+expected:
+  metrics:
+    - promql: 'traces_spanmetrics_latency_count{service_name="testserver", span_name="CONNECT", status_code="STATUS_CODE_ERROR", span_kind="SPAN_KIND_CLIENT" }'
+      value: "> 1"
+    - promql: 'traces_service_graph_request_failed_total{client="testserver", server="outgoing"}'
+      value: "> 1"
+  traces:
+    - traceql: '{ name="CONNECT" }'
+      spans:
+        - name: "CONNECT"
+          allow-duplicates: true
+          status: '{Message: "", Code: 2}'
+          attributes:
+            server.port: "80"
+            client.address: "testserver"
+            server.address: "8.8.8.9"

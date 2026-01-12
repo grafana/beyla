@@ -9,6 +9,8 @@ import (
 	"regexp"
 
 	"gopkg.in/yaml.v3"
+
+	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
 )
 
 // RegexDefinitionCriteria allows defining a group of services to be instrumented according to a set
@@ -88,6 +90,9 @@ type RegexSelector struct {
 	SamplerConfig *SamplerConfig `yaml:"sampler"`
 
 	Routes *CustomRoutesConfig `yaml:"routes"`
+
+	// Metrics configuration that is custom for this service match
+	Metrics perapp.SvcMetricsConfig `yaml:"metrics"`
 }
 
 // RegexpAttr stores a regular expression representing an executable file path.
@@ -147,12 +152,13 @@ func (p *RegexpAttr) MatchString(input string) bool {
 	return p.re.MatchString(input)
 }
 
-func (a *RegexSelector) GetName() string              { return a.Name }
-func (a *RegexSelector) GetNamespace() string         { return a.Namespace }
-func (a *RegexSelector) GetPath() StringMatcher       { return &a.Path }
-func (a *RegexSelector) GetPathRegexp() StringMatcher { return &a.PathRegexp }
-func (a *RegexSelector) GetOpenPorts() *PortEnum      { return &a.OpenPorts }
-func (a *RegexSelector) IsContainersOnly() bool       { return a.ContainersOnly }
+func (a *RegexSelector) GetName() string                        { return a.Name }
+func (a *RegexSelector) GetNamespace() string                   { return a.Namespace }
+func (a *RegexSelector) GetPath() StringMatcher                 { return &a.Path }
+func (a *RegexSelector) GetPathRegexp() StringMatcher           { return &a.PathRegexp }
+func (a *RegexSelector) GetOpenPorts() *PortEnum                { return &a.OpenPorts }
+func (a *RegexSelector) IsContainersOnly() bool                 { return a.ContainersOnly }
+func (a *RegexSelector) MetricsConfig() perapp.SvcMetricsConfig { return a.Metrics }
 func (a *RegexSelector) RangeMetadata() iter.Seq2[string, StringMatcher] {
 	return func(yield func(string, StringMatcher) bool) {
 		for k, v := range a.Metadata {

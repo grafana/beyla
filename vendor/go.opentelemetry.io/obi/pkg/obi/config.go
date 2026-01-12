@@ -119,7 +119,7 @@ var DefaultConfig = Config{
 		MaxTransactionTime: 5 * time.Minute,
 	},
 	NameResolver: &transform.NameResolverConfig{
-		Sources:  []string{"k8s"},
+		Sources:  []transform.Source{transform.SourceK8s},
 		CacheLen: 1024,
 		CacheTTL: 5 * time.Minute,
 	},
@@ -225,6 +225,10 @@ var DefaultConfig = Config{
 	NodeJS: NodeJSConfig{
 		Enabled: true,
 	},
+	Java: JavaConfig{
+		Enabled: true,
+		Timeout: 10 * time.Second,
+	},
 }
 
 type Config struct {
@@ -295,6 +299,7 @@ type Config struct {
 	LogConfig LogConfigOption `yaml:"log_config" env:"OTEL_EBPF_LOG_CONFIG"`
 
 	NodeJS NodeJSConfig `yaml:"nodejs"`
+	Java   JavaConfig   `yaml:"javaagent"`
 }
 
 type LogConfigOption string
@@ -337,6 +342,13 @@ type NodeJSConfig struct {
 	Enabled bool `yaml:"enabled" env:"OTEL_EBPF_NODEJS_ENABLED"`
 }
 
+type JavaConfig struct {
+	Enabled              bool          `yaml:"enabled" env:"OTEL_EBPF_JAVAAGENT_ENABLED"`
+	Debug                bool          `yaml:"debug" env:"OTEL_EBPF_JAVAAGENT_DEBUG"`
+	DebugInstrumentation bool          `yaml:"debug_instrumentation" env:"OTEL_EBPF_JAVAAGENT_DEBUG_INSTRUMENTATION"`
+	Timeout              time.Duration `yaml:"attach_timeout" env:"OTEL_EBPF_JAVAAGENT_ATTACH_TIMEOUT" validate:"gte=0"`
+}
+
 type ConfigError string
 
 func (e ConfigError) Error() string {
@@ -370,7 +382,7 @@ func (c *Config) Validate() error {
 		return ConfigError("at least one of 'network' or 'application' features must be enabled. " +
 			"Enable an OpenTelemetry or Prometheus metrics export, then enable any of the network* or application*" +
 			"features using the 'OTEL_EBPF_METRICS_FEATURES=network,application' environment variable " +
-			"or 'meter_provicer: { features: [network,application] }' in the YAML configuration file. ")
+			"or 'meter_provider: { features: [network,application] }' in the YAML configuration file. ")
 	}
 
 	if c.willUseTC() {

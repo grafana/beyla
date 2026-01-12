@@ -44,6 +44,7 @@ You can override the service name, namespace, and other configurations per servi
 | `k8s_owner_name`       | Filter services by Kubernetes Pod owner (Deployment, ReplicaSet, DaemonSet, or StatefulSet). Refer to [K8s owner name](#k8s-owner-name). | string (glob)            | (unset)                  |
 | `k8s_pod_labels`       | Filter services by Kubernetes Pod labels. Refer to [K8s Pod labels](#k8s-pod-labels).                                                    | map[string]string (glob) | (unset)                  |
 | `k8s_pod_annotations`  | Filter services by Kubernetes Pod annotations. Refer to [K8s Pod annotations](#k8s-pod-annotations).                                     | map[string]string (glob) | (unset)                  |
+| `exports`              | Control what telemetry data to export for the matching service. Refer to [Exports](#exports).                                             | list of strings          | (all signals)            |
 
 ### Name
 
@@ -180,6 +181,29 @@ discovery:
 
 The preceding example discovers all Pods in the `backend` namespace that have an annotation `beyla.instrument` with a value that matches the glob `true`.
 
+### Exports
+
+Controls which telemetry signals Beyla exports for the matching service. This property enables per-service feature enablement, allowing you to selectively enable specific observability capabilities for different services within a single Beyla instance.
+
+The `exports` property accepts a list containing `metrics`, `traces`, or both. An empty list `[]` disables export for the service. If not specified, Beyla exports all configured telemetry signals.
+
+For example:
+
+```yaml
+discovery:
+  instrument:
+    - k8s_deployment_name: "*"
+      exports: [metrics]
+    - k8s_deployment_name: backend
+      exports: [traces]
+    - k8s_deployment_name: worker
+      exports: []
+```
+
+This example configures Beyla to export only metrics for all services. For the specific case of `backend`, only traces are enabled, and for `worker`, everything is disabled. The order of defined instrument selectors matters, as later entries can override earlier export rules.
+
+For an export signal to function, you must configure the corresponding exporter in Beyla. For example, specifying `traces` in the `exports` list requires configuring the OTLP traces exporter via `otel_traces_export`. Specifying `metrics` requires configuring at least one metrics exporter, such as `prometheus_export` or `otel_metrics_export`. If you specify an export signal without configuring the corresponding exporter, Beyla ignores that signal.
+
 ## Survey mode
 
 In survey mode, Beyla only performs service discovery and detects the programming language of each service, but doesn't instrument any discovered services.
@@ -213,6 +237,7 @@ a part of a encompassing inclusion criteria.
 ## Skip go specific tracers
 
 The `skip_go_specific_tracers` option disables the detection of Go specifics when the **ebpf** tracer inspects executables to be instrumented. The tracer falls back to using generic instrumentation, which is generally less efficient.
+This option should only be used for Go services built with Go versions older than 1.17.
 
 ## Exclude otel instrumented services
 
@@ -247,16 +272,42 @@ You can override the Kubernetes labels from the previous bullet 3 via configurat
 In YAML:
 
 ```yaml
-kubernetes:
-  resource_labels:
-    service.name:
-      # gets service name from the first existing Pod label
-      - override-svc-name
-      - app.kubernetes.io/name
-    service.namespace:
-      # gets service namespace from the first existing Pod label
-      - override-svc-ns
-      - app.kubernetes.io/part-of
+attributes:
+  kubernetes:
+    resource_labels:
+      service.name:
+        # gets service name from the first existing Pod label
+        - override-svc-name
+        - app.kubernetes.io/name
+      service.namespace:
+        # gets service namespace from the first existing Pod label
+        - override-svc-ns
+        - app.kubernetes.io/part-of
 ```
 
 They accept a comma-separated list of annotation and label names.
+
+## Minimum process age
+
+The `min_process_age` (environment variable `BEYLA_MIN_PROCESS_AGE`) option sets a requirement for a process to be alive for at least certain amount of time before it is considered for instrumentation. The default value is `"5s"` (five seconds). This option is a performance optimization related to cost of processing discovered binaries based on the chosen discovery criteria. It avoids instrumenting periodic short lived processes.
+
+## Route harvesting
+
+Since Beyla instruments at the protocol level, for HTTP requests we see the actual URL path, while the OpenTelemetry specification requires that we provide a low-cardinality URL route. Beyla has purpose built route detector, which uses heuristics and cardinality reduction logic to automatically determine the low-cardinality route from the protocol provided URL path (for more information on this refer to [Routes Decorator](../routes-decorator/)). However, for certain programming languages, Beyla can process the application symbols and extract the actual routes set in the application.
+
+Currently the route harvesting is supported for `Java`, `Go` and `NodeJS`.
+
+| YAML<p>environment variable</p>               | Description                                                                                               | Type    | Default |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ------- | ------- |
+| `route_harvester_timeout`<p>`BEYLA_ROUTE_HARVESTER_TIMEOUT`</p> | A timeout to abandon the route harvesting if it takes too long | string    | "10s" |
+| `disabled_route_harvesters` | A list of disabled route harvesters. Available choices: ["`java`", "`nodejs`", "`go`"]                | list of strings    | (empty) |
+
+The route harvesting for `Java` applications works by communicating with the JVM at runtime. `Java` application typically load after a bit of time, which may result in incomplete route
+information, if Beyla harvests the Java application routes immediately as it instruments the process. Therefore, Beyla performs Java route harvesting on Java applications which have been
+running for at least 60 seconds. This value can be modified by setting the environment variable `BEYLA_JAVA_ROUTE_HARVEST_DELAY` or by setting the configuration file option:
+
+```
+discovery:
+  route_harvester_advanced:
+    java_harvest_delay: 30s
+```

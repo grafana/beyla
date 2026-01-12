@@ -76,8 +76,12 @@ func (f *Flows) buildPipeline(ctx context.Context) (*swarm.Runner, error) {
 	swi.Add(flow.ReverseDNSProvider(&f.cfg.NetworkFlows.ReverseDNS, kubeDecoratedFlows, dnsDecoratedFlows),
 		swarm.WithID("ReverseDNS"))
 
+	geoIPDecoratedFlows := newQueue("geoIPDecoratedFlows")
+	swi.Add(flow.GeoIPProvider(&f.cfg.NetworkFlows.GeoIP,
+		dnsDecoratedFlows, geoIPDecoratedFlows), swarm.WithID("GeoIPDecorator"))
+
 	cidrDecoratedFlows := newQueue("cidrDecoratedFlows")
-	swi.Add(cidr.DecoratorProvider(f.cfg.NetworkFlows.CIDRs, dnsDecoratedFlows, cidrDecoratedFlows),
+	swi.Add(cidr.DecoratorProvider(f.cfg.NetworkFlows.CIDRs, geoIPDecoratedFlows, cidrDecoratedFlows),
 		swarm.WithID("CIDRDecorator"))
 
 	decoratedFlows := newQueue("decoratedFlows")

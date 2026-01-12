@@ -19,8 +19,8 @@ import (
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	"go.opentelemetry.io/obi/pkg/internal/helpers/maps"
+	javaagent "go.opentelemetry.io/obi/pkg/internal/java"
 	"go.opentelemetry.io/obi/pkg/internal/nodejs"
-	"go.opentelemetry.io/obi/pkg/internal/otelsdk"
 	"go.opentelemetry.io/obi/pkg/internal/transform/route/harvest"
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
@@ -44,8 +44,8 @@ type traceAttacher struct {
 
 	// keeps a copy of all the tracers for a given executable path
 	existingTracers     map[uint64]*ebpf.ProcessTracer
-	sdkInjector         *otelsdk.SDKInjector
 	nodeInjector        *nodejs.NodeInjector
+	javaInjector        *javaagent.JavaInjector
 	reusableTracer      *ebpf.ProcessTracer
 	reusableGoTracer    *ebpf.ProcessTracer
 	commonTracersLoaded bool
@@ -83,8 +83,13 @@ func traceAttacherProvider(ta *traceAttacher) swarm.InstanceFunc {
 func (ta *traceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) {
 	ta.log = slog.With("component", "discover.traceAttacher")
 	ta.existingTracers = map[uint64]*ebpf.ProcessTracer{}
-	ta.sdkInjector = otelsdk.NewSDKInjector(ta.Cfg)
 	ta.nodeInjector = nodejs.NewNodeInjector(ta.Cfg)
+	javaInjector, err := javaagent.NewJavaInjector(ta.Cfg)
+	if err != nil {
+		ta.log.Warn("unable to inject OBI java agent, Java TLS telemetry generation will not work", "error", err)
+	} else {
+		ta.javaInjector = javaInjector
+	}
 	ta.processInstances = maps.MultiCounter[uint64]{}
 	ta.obiPID = os.Getpid()
 	ta.EbpfEventContext.CommonPIDsFilter = ebpfcommon.CommonPIDsFilter(&ta.Cfg.Discovery, ta.Metrics)
@@ -105,24 +110,20 @@ func (ta *traceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 					"exec", instr.Obj.FileInfo.CmdExePath, "pid", instr.Obj.FileInfo.Pid)
 				switch instr.Type {
 				case EventCreated:
-					sdkInstrumented := false
-					if ta.sdkInjectionPossible(&instr.Obj) {
-						if err := ta.sdkInjector.NewExecutable(&instr.Obj); err == nil {
-							sdkInstrumented = true
+					ta.nodeInjector.NewExecutable(&instr.Obj)
+					if ta.javaInjector != nil {
+						if err := ta.javaInjector.NewExecutable(&instr.Obj); err != nil {
+							ta.log.Warn("unable to attach java agent to process, Java TLS telemetry will not work", "pid", instr.Obj.FileInfo.Pid, "error", err)
 						}
 					}
 
-					if !sdkInstrumented {
-						ta.nodeInjector.NewExecutable(&instr.Obj)
+					ta.processInstances.Inc(instr.Obj.FileInfo.Ino)
+					if ok := ta.getTracer(&instr.Obj); ok {
+						ta.OutputTracerEvents.Send(Event[*ebpf.Instrumentable]{Type: EventCreated, Obj: &instr.Obj})
+					}
 
-						ta.processInstances.Inc(instr.Obj.FileInfo.Ino)
-						if ok := ta.getTracer(&instr.Obj); ok {
-							ta.OutputTracerEvents.Send(Event[*ebpf.Instrumentable]{Type: EventCreated, Obj: &instr.Obj})
-						}
-
-						if instr.Obj.FileInfo.ELF != nil {
-							_ = instr.Obj.FileInfo.ELF.Close()
-						}
+					if instr.Obj.FileInfo.ELF != nil {
+						_ = instr.Obj.FileInfo.ELF.Close()
 					}
 				case EventDeleted:
 					ta.notifyProcessDeletion(&instr.Obj)
@@ -405,10 +406,6 @@ func (ta *traceAttacher) notifyProcessDeletion(ie *ebpf.Instrumentable) {
 			ta.OutputTracerEvents.Send(Event[*ebpf.Instrumentable]{Type: EventInstanceDeleted, Obj: ie})
 		}
 	}
-}
-
-func (ta *traceAttacher) sdkInjectionPossible(ie *ebpf.Instrumentable) bool {
-	return ta.sdkInjector.Enabled() && ie.Type == svc.InstrumentableJava
 }
 
 func (ta *traceAttacher) init() error {

@@ -29,16 +29,16 @@ go install github.com/grafana/beyla/cmd/beyla@latest
 
 ## Installing as a service
 
-Once you have Beyla installed on your system, you can use the [systemd service script](https://github.com/grafana/beyla/tree/main/contrib/beyla@.service) to get the daemon up and running. Installing the script is as simple as creating a file at `/etc/systemd/system/beyla@.service` (the `@` is important!) and running `systemctl daemon-reload`.
+After you have Beyla installed on your system, you can use the
+[systemd service script](https://github.com/grafana/beyla/tree/main/contrib/beyla.service) to get the daemon up and running.
+Installing the script involves creating a file at `/etc/systemd/system/beyla.service` and running `systemctl daemon-reload`.
 
 The systemd service expects the following requirements to be met:
 
 - The `beyla` binary is in `/usr/local/bin` and is executable
-- A directory exists at `/etc/beyla` to hold the various configuration files
-
-The service script works in such a way that it will pick up the files named after the service name that follows the `@` sign. As an example, if we wanted to use Beyla to monitor a moodle installation, we would create a configuration file at `/etc/beyla/moodle.yaml` and place our environment variables in `/etc/beyla/moodle.env`, then start the service with the command `systemctl start beyla@moodle.service` - the service will automatically pick up the `moodle` related files and start monitoring.
-
-If you want to add a second Beyla install on the same system monitoring a Django installation, you would create `/etc/beyla/django.yaml` and `/etc/beyla/django.env`, then start the service as `systemctl start beyla@django` and it will run alongside the existing Moodle Beyla but with the Django configuration.
+- A directory exists at `/etc/beyla` to hold the various configuration files:
+  - [beyla.env](https://github.com/grafana/beyla/tree/main/contrib/beyla.env)
+  - [beyla.yaml](https://github.com/grafana/beyla/tree/main/contrib/beyla.yaml)
 
 ## Configure
 

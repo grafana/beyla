@@ -128,7 +128,14 @@ func (tr *tracesOTELReceiver) processSpans(ctx context.Context, exp exporter.Tra
 			traces := tracesgen.GenerateTracesWithAttributes(tr.attributeCache, &sample.Span.Service, envResourceAttrs, tr.ctxInfo.HostID, spanGroup, reporterName, tr.ctxInfo.ExtraResourceAttributes...)
 			err := exp.ConsumeTraces(ctx, traces)
 			if err != nil {
-				slog.Error("error sending trace to consumer", "error", err)
+				// We can't do if errors.Is(err, queue.ErrQueueIsFull), since the queue package is internal
+				if err.Error() == "sending queue is full" {
+					// TODO: set this condition case to Warn once we make sure that
+					// queueConfig.BlockOnOverflow = true works as expected
+					slog.Debug("error sending trace to consumer", "error", err)
+				} else {
+					slog.Warn("error sending trace to consumer", "error", err)
+				}
 			}
 		}
 	}
@@ -194,6 +201,8 @@ func getTracesExporter(ctx context.Context, cfg otelcfg.TracesConfig, im imetric
 		config := factory.CreateDefaultConfig().(*otlphttpexporter.Config)
 		queueConfig := exporterhelper.NewDefaultQueueConfig()
 		queueConfig.Sizer = exporterhelper.RequestSizerTypeItems
+		// Avoid continuously seeing "sending queue is full" errors in the standard output
+		queueConfig.BlockOnOverflow = true
 		batchCfg := exporterhelper.BatchConfig{
 			Sizer: queueConfig.Sizer,
 		}
@@ -327,6 +336,7 @@ func createZapLoggerDev(sdkLogLevel string) *zap.Logger {
 func getTraceSettings(dataTypeMetrics component.Type, sdkLogLevel string) exporter.Settings {
 	traceProvider := tracenoop.NewTracerProvider()
 	meterProvider := metric.NewMeterProvider()
+
 	telemetrySettings := component.TelemetrySettings{
 		Logger:         createZapLoggerDev(sdkLogLevel),
 		MeterProvider:  meterProvider,

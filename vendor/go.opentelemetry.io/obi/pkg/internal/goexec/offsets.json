@@ -40,6 +40,20 @@
         ]
       }
     },
+    "database/sql.driverConn": {
+      "ci": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.25.5"
+        },
+        "offsets": [
+          {
+            "offset": 40,
+            "since": "1.17.0"
+          }
+        ]
+      }
+    },
     "github.com/IBM/sarama.Broker": {
       "conn": {
         "versions": {
@@ -166,6 +180,42 @@
         ]
       }
     },
+    "github.com/go-sql-driver/mysql.Config": {
+      "Addr": {
+        "versions": {
+          "oldest": "1.5.0",
+          "newest": "1.9.3"
+        },
+        "offsets": [
+          {
+            "offset": 48,
+            "since": "1.5.0"
+          }
+        ]
+      }
+    },
+    "github.com/go-sql-driver/mysql.mysqlConn": {
+      "cfg": {
+        "versions": {
+          "oldest": "1.5.0",
+          "newest": "1.9.3"
+        },
+        "offsets": [
+          {
+            "offset": 168,
+            "since": "1.5.0"
+          },
+          {
+            "offset": 200,
+            "since": "1.8.0"
+          },
+          {
+            "offset": 136,
+            "since": "1.9.0"
+          }
+        ]
+      }
+    },
     "github.com/gorilla/mux.routeRegexp": {
       "template": {
         "versions": {
@@ -270,7 +320,7 @@
       "name": {
         "versions": {
           "oldest": "2.0.1",
-          "newest": "2.4.0"
+          "newest": "2.4.1"
         },
         "offsets": [
           {
@@ -284,7 +334,7 @@
       "Database": {
         "versions": {
           "oldest": "2.0.1",
-          "newest": "2.4.0"
+          "newest": "2.4.1"
         },
         "offsets": [
           {
@@ -296,7 +346,7 @@
       "Name": {
         "versions": {
           "oldest": "2.0.1",
-          "newest": "2.4.0"
+          "newest": "2.4.1"
         },
         "offsets": [
           {
@@ -344,7 +394,7 @@
       "delegate": {
         "versions": {
           "oldest": "1.10.0",
-          "newest": "1.38.0"
+          "newest": "1.39.0"
         },
         "offsets": [
           {
@@ -362,7 +412,7 @@
       "fr": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.47.0"
+          "newest": "0.48.0"
         },
         "offsets": [
           {
@@ -392,13 +442,17 @@
           {
             "offset": 352,
             "since": "0.44.0"
+          },
+          {
+            "offset": 368,
+            "since": "0.48.0"
           }
         ]
       },
       "nextStreamID": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.47.0"
+          "newest": "0.48.0"
         },
         "offsets": [
           {
@@ -426,7 +480,7 @@
       "tconn": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.47.0"
+          "newest": "0.48.0"
         },
         "offsets": [
           {
@@ -440,7 +494,7 @@
       "w": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.47.0"
+          "newest": "0.48.0"
         },
         "offsets": [
           {
@@ -454,7 +508,7 @@
       "Fields": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.47.0"
+          "newest": "0.48.0"
         },
         "offsets": [
           {
@@ -468,7 +522,7 @@
       "conn": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.47.0"
+          "newest": "0.48.0"
         },
         "offsets": [
           {
@@ -482,7 +536,7 @@
       "w": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.47.0"
+          "newest": "0.48.0"
         },
         "offsets": [
           {
@@ -510,7 +564,7 @@
       "s": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.77.0"
+          "newest": "1.78.0"
         },
         "offsets": [
           {
@@ -524,7 +578,7 @@
       "Stream": {
         "versions": {
           "oldest": "1.69.0",
-          "newest": "1.77.0"
+          "newest": "1.78.0"
         },
         "offsets": [
           {
@@ -538,7 +592,7 @@
       "Stream": {
         "versions": {
           "oldest": "1.69.0",
-          "newest": "1.77.0"
+          "newest": "1.78.0"
         },
         "offsets": [
           {
@@ -550,7 +604,7 @@
       "st": {
         "versions": {
           "oldest": "1.69.0",
-          "newest": "1.77.0"
+          "newest": "1.78.0"
         },
         "offsets": [
           {
@@ -568,7 +622,7 @@
       "id": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.77.0"
+          "newest": "1.78.0"
         },
         "offsets": [
           {
@@ -584,7 +638,7 @@
       "method": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.77.0"
+          "newest": "1.78.0"
         },
         "offsets": [
           {
@@ -608,7 +662,7 @@
       "st": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.77.0"
+          "newest": "1.78.0"
         },
         "offsets": [
           {
@@ -626,7 +680,7 @@
       "buf": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.77.0"
+          "newest": "1.78.0"
         },
         "offsets": [
           {
@@ -642,7 +696,7 @@
       "conn": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.77.0"
+          "newest": "1.78.0"
         },
         "offsets": [
           {
@@ -658,7 +712,7 @@
       "offset": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.77.0"
+          "newest": "1.78.0"
         },
         "offsets": [
           {
@@ -676,7 +730,7 @@
       "conn": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.77.0"
+          "newest": "1.78.0"
         },
         "offsets": [
           {
@@ -696,7 +750,7 @@
       "scheme": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.77.0"
+          "newest": "1.78.0"
         },
         "offsets": [
           {
@@ -722,7 +776,7 @@
       "conn": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.77.0"
+          "newest": "1.78.0"
         },
         "offsets": [
           {

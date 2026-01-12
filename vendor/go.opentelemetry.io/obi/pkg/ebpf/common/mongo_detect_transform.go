@@ -233,6 +233,9 @@ func addSectionToMessage(isResponse bool, pendingRequest *MongoRequestValue, sec
 // |    16B      |     4B      |     ?     | optional 4B |
 // +------------+-------------+------------------+
 func parseOpMessage(buf []uint8, time int64, isResponse bool, pendingRequest *MongoRequestValue) (*MongoRequestValue, bool, error) {
+	if len(buf) < msgHeaderSize+int32Size {
+		return nil, false, errors.New("packet too short for MongoDB flag bits")
+	}
 	flagBits := int32(binary.LittleEndian.Uint32(buf[msgHeaderSize : msgHeaderSize+int32Size]))
 	err := validateFlagBits(flagBits)
 	if err != nil {
@@ -259,11 +262,10 @@ func parseOpMessage(buf []uint8, time int64, isResponse bool, pendingRequest *Mo
 
 func parseSections(buf []uint8) ([]mongoSection, error) {
 	offSet := 0
-	sections := []mongoSection{}
+	var sections []mongoSection
 	for offSet < len(buf) {
-
-		if len(buf[offSet:]) < int32Size {
-			return nil, errors.New("not enough data for section header")
+		if len(buf[offSet:]) == 0 {
+			return nil, fmt.Errorf("not enough data for section[%d] type", len(sections))
 		}
 
 		sectionType := SectionType(buf[offSet])
@@ -283,6 +285,9 @@ func parseSections(buf []uint8) ([]mongoSection, error) {
 			sections = append(sections, mongoSection{
 				Type: sectionTypeDocumentSequence,
 			})
+			if len(buf) < offSet+int32Size {
+				return nil, fmt.Errorf("not enough data for section[%d] length", len(sections))
+			}
 			length := int(binary.LittleEndian.Uint32(buf[offSet : offSet+int32Size]))
 			offSet += length
 			// TODO (mongo) actually read documents? for now we just skip them

@@ -17,7 +17,7 @@ aliases:
 
 # Deploy Beyla with the Kubernetes Monitoring Helm Chart 
 
-This documentation section explains the best practices for deploying Beyla using the Kubernetes Monitoring Helm chart, but specifically for
+This documentation section explains the best practices for deploying Beyla using the [Kubernetes Monitoring Helm chart](https://github.com/grafana/k8s-monitoring-helm/), but specifically for
 Grafana Cloud Entity Catalog, Entity Graph and Application Observability. For documentation on how to deploy Beyla using the Beyla standalone
 Helm chart, refer to the [Deploy Beyla in Kubernetes with Helm for Grafana Cloud Application Observability](./kubernetes-helm-appolly.md)
 documentation section.

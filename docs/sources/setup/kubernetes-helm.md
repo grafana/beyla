@@ -24,13 +24,13 @@ Contents:
 
 <!-- TOC -->
 
-- [Deploying Beyla from helm](#deploying-beyla-from-helm)
-- [Configuring Beyla](#configuring-beyla)
-- [Configuring Beyla metadata](#configuring-beyla-metadata)
-- [Providing secrets to the Helm configuration](#providing-secrets-to-the-helm-configuration)
+- [Deploy Beyla with helm](#deploy-beyla-from-helm)
+- [Configure Beyla](#configure-beyla)
+- [Configure Beyla metadata](#configure-beyla-metadata)
+- [Provide secrets to the Helm configuration](#provide-secrets-to-the-helm-configuration)
 <!-- TOC -->
 
-## Deploying Beyla from helm
+## Deploy Beyla with helm
 
 First, you need to add the Grafana helm repository to Helm:
 
@@ -51,7 +51,7 @@ The default Beyla configuration:
 - only provides application-level metrics and excludes [network-level metrics](../../network/) by default
 - configures Beyla to decorate the metrics with Kubernetes metadata labels, for example `k8s.namespace.name` or `k8s.pod.name`
 
-## Configuring Beyla
+## Configure Beyla
 
 You might want to override the default configuration of Beyla. For example, to export the metrics and/or spans
 as OpenTelemetry instead of Prometheus, or to restrict the number of services to instrument.
@@ -87,7 +87,7 @@ or, if the Beyla chart was previously deployed:
 helm upgrade beyla grafana/beyla -f helm-beyla.yml
 ```
 
-## Configuring Beyla metadata
+## Configure Beyla metadata
 
 If Beyla exports the data using the Prometheus exporter, you can expose its metrics 
 by creating a Kubernetes Service and configuring a ServiceMonitor, allowing your Prometheus scraper to discover it. 
@@ -107,7 +107,7 @@ accounts, cluster roles, security contexts, etc. The
 [Beyla Helm chart documentation](https://github.com/grafana/beyla/blob/main/charts/beyla/README.md)
 describes the diverse configuration options.
 
-## Providing secrets to the Helm configuration
+## Provide secrets to the Helm configuration
 
 If you are submitting directly the metrics and traces to Grafana Cloud via the
 OpenTelemetry Endpoint, you need to provide the credentials via the

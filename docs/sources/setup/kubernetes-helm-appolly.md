@@ -1,7 +1,7 @@
 ---
 title: Deploy Beyla in Kubernetes with Helm for Grafana Cloud Application Observability
 menuTitle: Helm chart
-description: Learn how to deploy Beyla with a Helm chart in Kubernetes for Entity Catalog, Entity Graph and Application Observability in Grafana Cloud.
+description: Learn how to deploy Beyla with a Helm chart in Kubernetes for Knowledge Graph and Application Observability in Grafana Cloud.
 weight: 2
 keywords:
   - Beyla
@@ -15,12 +15,12 @@ aliases:
   - /docs/grafana-cloud/monitor-applications/beyla/setup/kubernetes-helm-appolly/
 ---
 
-# Deploy Beyla in Kubernetes with Helm for Grafana Cloud Entity Catalog and Entity Graph
+# Deploy Beyla in Kubernetes with Helm for Grafana Cloud Knowledge Graph and Application Observability
 
 This documentation section explains the best practices for deploying Beyla using the Helm chart, but specifically for
-Grafana Cloud Entity Catalog, Entity Graph and Application Observability. 
+[Grafana Cloud Knowledge Graph](https://grafana.com/docs/grafana-cloud/knowledge-graph/) and [Application Observability](https://grafana.com/docs/grafana-cloud/monitor-applications/application-observability/). 
 
-Entity Catalog, Entity Graph and Application Observability in Grafana Cloud rely on OpenTelemetry span and service graph metrics, 
+Knowledge Graph and Application Observability in Grafana Cloud rely on OpenTelemetry span and service graph metrics, 
 which are typically produced from traces. Beyla can directly generate span and service graph metrics, without having to generate traces, 
 which means that we can configure head sampling for OpenTelemetry traces, or disable trace
 generation completely, and still generate correct Request-Error-Duration(RED) metrics. 
@@ -84,7 +84,7 @@ EOF
 
 The Beyla configuration above:
 
-- exports metrics and traces in a format that can be consumed by Entity Graph, Entity Catalog and Application Observability.
+- exports metrics and traces in a format that can be consumed by Grafana Cloud Knowledge Graph and Application Observability.
 - exports host information metrics `application_host` which are needed for the host based pricing model of the Grafana Cloud products.
 - tries to instrument all the applications in your cluster.
 - only provides application-level metrics (span and service graph) and excludes [network-level metrics](../../network/) by default

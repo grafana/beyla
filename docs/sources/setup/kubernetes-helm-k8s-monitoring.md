@@ -1,7 +1,7 @@
 ---
 title: Deploy Beyla with the Kubernetes Monitoring Helm Chart
 menuTitle: Helm chart
-description: Learn how to deploy Beyla with the Kubernetes Monitoring Helm chart in Kubernetes for Entity Catalog, Entity Graph and Application Observability in Grafana Cloud.
+description: Learn how to deploy Beyla with the Kubernetes Monitoring Helm chart in Kubernetes for Knowledge Graph and Application Observability in Grafana Cloud.
 weight: 2
 keywords:
   - Beyla
@@ -18,7 +18,7 @@ aliases:
 # Deploy Beyla with the Kubernetes Monitoring Helm Chart 
 
 This documentation section explains the best practices for deploying Beyla using the [Kubernetes Monitoring Helm chart](https://github.com/grafana/k8s-monitoring-helm/), but specifically for
-Grafana Cloud Entity Catalog, Entity Graph and Application Observability. For documentation on how to deploy Beyla using the Beyla standalone
+[Grafana Cloud Knowledge Graph](https://grafana.com/docs/grafana-cloud/knowledge-graph/) and [Application Observability](https://grafana.com/docs/grafana-cloud/monitor-applications/application-observability/). For documentation on how to deploy Beyla using the Beyla standalone
 Helm chart, refer to the [Deploy Beyla in Kubernetes with Helm for Grafana Cloud Application Observability](./kubernetes-helm-appolly.md)
 documentation section.
 
@@ -66,7 +66,7 @@ EOF
 
 The Beyla configuration above:
 
-- exports metrics in a format that can be consumed by Entity Graph, Entity Catalog and Application Observability.
+- exports metrics in a format that can be consumed by Grafana Cloud Knowledge Graph and Application Observability.
 - does not export Beyla traces.
 - tries to instrument all the applications in your cluster.
 

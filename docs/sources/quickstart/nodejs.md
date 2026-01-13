@@ -59,7 +59,7 @@ Beyla automatically reports the name of the process executable as service name: 
 To override it, refer to the [override service name and namespace](../configure/service-discovery#override-service-name-and-namespace)
 documentation section.
 
-Notice: Beyla requires administrative (sudo) privileges, or at least it needs to be granted the `CAP_SYS_ADMIN` capability.
+Notice: Beyla requires elevated privileges. Running with `sudo` is the simplest approach. For more restrictive environments, Beyla can run with specific Linux capabilities. Refer to [Security, permissions and capabilities](../../security/) for details on the required capabilities for your use case.
 
 ```sh
 export BEYLA_OPEN_PORT=8080

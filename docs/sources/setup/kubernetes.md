@@ -123,18 +123,7 @@ requirements:
 - The process namespace must be shared between all containers in the Pod (`shareProcessNamespace: true`
   pod variable)
 - The auto-instrument container must run in privileged mode (`securityContext.privileged: true` property of the
-  container configuration).
-  - Some Kubernetes installation allow the following `securityContext` configuration,
-    but it might not work with all the container runtime configurations, as some of them confine
-    the containers and remove some permissions:
-    ```yaml
-    securityContext:
-      runAsUser: 0
-      capabilities:
-        add:
-          - SYS_ADMIN
-          - SYS_RESOURCE # not required for kernels 5.11+
-    ```
+  container configuration), or with the required Linux capabilities. Refer to [Security, permissions and capabilities](../../security/) for the list of capabilities required for your use case, or check the [Deploy Beyla unprivileged](#deploy-beyla-unprivileged) section below.
 
 The following example instruments the `goblog` pod by attaching Beyla
 as a container (image available at `grafana/beyla:latest`). The

@@ -69,13 +69,12 @@ config:
         - k8s_namespace: "*"
     otel_metrics_export:
       endpoint: <Your Grafana Cloud tenant Mimir endpoint> e.g. "https://otlp-gateway-ops-eu-south-0.grafana-ops.net/otlp/v1/metrics"
-    otel_traces_export:
-      endpoint: <Your Grafana Cloud tenant Tempo endpoint> e.g. "https://otlp-gateway-ops-eu-south-0.grafana-ops.net/otlp/v1/traces"
-    metrics:
       features:
         - application_span
         - application_service_graph
         - application_host
+    otel_traces_export:
+      endpoint: <Your Grafana Cloud tenant Tempo endpoint> e.g. "https://otlp-gateway-ops-eu-south-0.grafana-ops.net/otlp/v1/traces"
 env:
   OTEL_EXPORTER_OTLP_METRICS_HEADERS: "Authorization=Basic <Your Grafana Cloud Mimir auth token>"
   OTEL_EXPORTER_OTLP_TRACES_HEADERS: "Authorization=Basic <Your Grafana Cloud Tempo auth token>"

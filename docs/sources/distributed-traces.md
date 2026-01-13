@@ -58,9 +58,6 @@ Parsing incoming trace context information from OpenTelemetry SDK instrumented s
 
 gRPC and HTTP2 are not supported at the moment.
 
-This type of context propagation works for any programming language and doesn't require that Beyla runs in `privileged` mode or has
-`CAP_SYS_ADMIN` granted. For more details, see the [Distributed traces and context propagation](../configure/metrics-traces-attributes/) configuration section.
-
 #### Kubernetes Configuration
 
 The recommended way to deploy Beyla on Kubernetes with distributed tracing support at network level is as `DaemonSet`.
@@ -104,6 +101,7 @@ The following YAML snippet shows an example Beyla deployment configuration:
               - DAC_READ_SEARCH     # <-- Important. Allows Beyla to open ELF files.
               - PERFMON             # <-- Important. Allows Beyla to load BPF programs.
               - NET_ADMIN           # <-- Important. Allows Beyla to inject HTTP and TCP context propagation information.
+              - SYS_ADMIN           # <-- Important. Allows Beyla to get better language specific information.
         volumeMounts:
           - name: cgroup
             mountPath: /sys/fs/cgroup # <-- Important. Allows Beyla to monitor all newly sockets to track outgoing requests.
@@ -126,17 +124,10 @@ The following YAML snippet shows an example Beyla deployment configuration:
 If `/sys/fs/cgroup` is not mounted as a local volume path for the Beyla `DaemonSet` some requests may not
 have their context propagated. We use this volume path to listen to newly created sockets.
 
-#### Kernel version limitations
-
-The network level context propagation incoming headers parsing generally requires kernel 5.17 or newer for the addition and use of BPF loops.
-
-Some patched kernels, such as RHEL 9.2, may have this functionality ported back. Setting BEYLA_OVERRIDE_BPF_LOOP_ENABLED skips kernel checks in the case your kernel includes the functionality but is lower than 5.17.
-
 ### Go context propagation by instrumenting at library level
 
 This type of context propagation is only supported for Go applications and uses eBPF user memory write support (`bpf_probe_write_user`).
-The advantage of this approach is that it works for HTTP/HTTP2/HTTPS and gRPC with some limitations, however the use of `bpf_probe_write_user` requires
-the Beyla is granted `CAP_SYS_ADMIN` or it's configured to run as `privileged` container.
+The advantage of this approach is that it works for HTTP/HTTP2/HTTPS and gRPC with some limitations.
 
 #### Kernel integrity mode limitations
 

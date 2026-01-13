@@ -1,7 +1,7 @@
 ---
 title: Deploy Beyla in Kubernetes with Helm for Grafana Cloud Application Observability
 menuTitle: Helm chart
-description: Learn how to deploy Beyla as a Helm chart in Kubernetes for Entity Catalog, Entity Graph and Application Observability in Grafana Cloud.
+description: Learn how to deploy Beyla with a Helm chart in Kubernetes for Entity Catalog, Entity Graph and Application Observability in Grafana Cloud.
 weight: 2
 keywords:
   - Beyla
@@ -28,23 +28,23 @@ generation completely, and still generate correct Request-Error-Duration(RED) me
 If you are familiar with the Grafana Cloud Application Observability configuration for the Tempo span metric generator, this component
 is not needed, nor needs to be configured/enabled for Beyla span and service graph metrics generation.
 
-{{% admonition type="note" %}}
+{{< admonition type="note" >}}
 For more details about the diverse Helm configuration options, check out the
 [Beyla Helm chart options](https://github.com/grafana/beyla/blob/main/charts/beyla/README.md)
 document.
-{{% /admonition %}}
+{{< /admonition >}}
 
 Contents:
 
 <!-- TOC -->
 
-- [Deploying Beyla from helm for Grafana Cloud](#deploying-beyla-from-helm)
-- [Configuring Beyla](#configuring-beyla)
-- [Configuring Beyla metadata](#configuring-beyla-metadata)
-- [Providing secrets to the Helm configuration](#providing-secrets-to-the-helm-configuration)
+- [Deploy Beyla with Helm for Grafana Cloud](#deploy-beyla-from-helm)
+- [Configure Beyla](#configure-beyla)
+- [Configure Beyla metadata](#configure-beyla-metadata)
+- [Provide secrets to the Helm configuration](#provide-secrets-to-the-helm-configuration)
 <!-- TOC -->
 
-## Deploying Beyla from helm for Grafana Cloud
+## Deploy Beyla with Helm for Grafana Cloud
 
 First, you need to add the Grafana helm repository to Helm:
 
@@ -52,13 +52,13 @@ First, you need to add the Grafana helm repository to Helm:
 helm repo add grafana https://grafana.github.io/helm-charts
 ```
 
-If you have previously added the Grafana Helm repository, please run the update command to refresh the information:
+If you have previously added the Grafana Helm repository, run the update command to refresh the helm repository information:
 
 ```sh
 helm repo update
 ```
 
-The following command deploys a Beyla DaemonSet with a default configuration for Grafana Clound in the `beyla` namespace:
+The following command deploys a Beyla DaemonSet with a default configuration for Grafana Cloud in the `beyla` namespace:
 
 ```sh
 helm upgrade --install --atomic --timeout 300s beyla grafana/beyla --namespace "beyla" --create-namespace --values - <<EOF
@@ -90,7 +90,7 @@ The Beyla configuration above:
 - only provides application-level metrics (span and service graph) and excludes [network-level metrics](../../network/) by default
 - configures Beyla to decorate the metrics with Kubernetes metadata labels, for example `k8s.namespace.name` or `k8s.pod.name`
 
-## Configuring Beyla
+## Configure Beyla
 
 You might want to override the default configuration of Beyla. For example, to export the metrics using the OpenTelemetry 
 semantic conventions instead of span metrics, or to restrict the number of services to instrument.
@@ -139,7 +139,7 @@ or, if the Beyla chart was previously deployed:
 helm upgrade beyla grafana/beyla -f helm-beyla.yml
 ```
 
-## Configuring Beyla metadata
+## Configure Beyla metadata
 
 If Beyla exports the data using the Prometheus exporter, you can expose its metrics 
 by creating a Kubernetes Service and configuring a ServiceMonitor, allowing your Prometheus scraper to discover it. 
@@ -159,7 +159,7 @@ accounts, cluster roles, security contexts, etc. The
 [Beyla Helm chart documentation](https://github.com/grafana/beyla/blob/main/charts/beyla/README.md)
 describes the diverse configuration options.
 
-## Providing secrets to the Helm configuration
+## Provide secrets to the Helm configuration
 
 If you are submitting directly the metrics and traces to Grafana Cloud via the
 OpenTelemetry Endpoint, you need to provide the credentials via the

@@ -18,19 +18,19 @@ aliases:
 # Deploy Beyla with the Kubernetes Monitoring Helm Chart 
 
 This documentation section explains the best practices for deploying Beyla using the Kubernetes Monitoring Helm chart, but specifically for
-Grafana Cloud Entity Catalog, Entity Graph and Application Observability. For documenation on how to deploy Beyla using the Beyla standalone
-Helm chart, please refer to the [Deploy Beyla in Kubernetes with Helm for Grafana Cloud Application Observability](./kubernetes-helm-appolly.md)
+Grafana Cloud Entity Catalog, Entity Graph and Application Observability. For documentation on how to deploy Beyla using the Beyla standalone
+Helm chart, refer to the [Deploy Beyla in Kubernetes with Helm for Grafana Cloud Application Observability](./kubernetes-helm-appolly.md)
 documentation section.
 
 Contents:
 
 <!-- TOC -->
 
-- [Deploying Beyla with the Kubernetes Monitoring Helm Chart](#deploying-beyla-with-the-kubernetes-monitoring-helm-chart)
-- [Configuring Beyla](#configuring-beyla)
+- [Deploy Beyla](#deploy-beyla)
+- [Configure Beyla](#configure-beyla)
 <!-- TOC -->
 
-## Deploying Beyla with the Kubernetes Monitoring Helm Chart
+## Deploy Beyla
 
 The easiest way to get started with deploying Beyla with the Kubernetes Monitoring Helm chart is to visit your
 cloud Kubernetes Monitoring configuration page. For example:
@@ -42,7 +42,7 @@ https://<my grafana slug>.grafana.net/a/grafana-k8s-app/configuration?from=now-1
 In the `Containerized application monitoring` section, enable `Auto Instrumentation -> Metrics of inbound and outbound calls`. 
 If you also want to generate OpenTelemetry traces from Beyla directly, you can choose to also enable `Forward traces to application receivers`.
 
-After choosing your other desired options, the Grafana Cloud Kubernetes Monitoring UI will generate a Helm deployment script for you, which 
+After choosing your other desired options, the Grafana Cloud Kubernetes Monitoring UI generates a Helm deployment script for you, which 
 contains all the necessary settings for you to get started. The Beyla instrumentation section can be found under the section `autoInstrumentation:`.
 
 For example:
@@ -70,7 +70,7 @@ The Beyla configuration above:
 - does not export Beyla traces.
 - tries to instrument all the applications in your cluster.
 
-## Configuring Beyla
+## Configure Beyla
 
 You might want to override the default configuration of Beyla. For example, to choose a subset of your cluster
 namespaces to instrument or to override the Beyla image used to a newer version.

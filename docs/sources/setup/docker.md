@@ -23,8 +23,7 @@ grafana/beyla:latest
 
 The Beyla container must be configured in following way:
 
-- run as a **privileged** container, or as a container with the `SYS_ADMIN` capability (but
-  this last option might not work in some container environments)
+- run as a **privileged** container, or with the required Linux capabilities. Refer to [Security, permissions and capabilities](../../security/) for the list of capabilities required for your use case
 - share the PID space with the container that is being instrumented
 
 ## Docker CLI example
@@ -46,8 +45,7 @@ export BEYLA_OPEN_PORT=8443
 
 Beyla needs to be run with the following settings:
 
-- in `--privileged` mode, or with `SYS_ADMIN` capability (despite `SYS_ADMIN` might
-  not be enough privileges in some container environments)
+- in `--privileged` mode, or with the required Linux capabilities. Refer to [Security, permissions and capabilities](../../security/) for the list of capabilities required for your use case
 - a container PID namespace, with the option `--pid="container:goblog"`.
 
 ```sh

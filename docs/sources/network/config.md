@@ -44,10 +44,8 @@ network metrics (in the previous example, `otel_metrics_export`, but it also acc
 
 ## Network metrics configuration properties
 
-To enable network metrics add one of the following `features` to either
-the [otel_metrics_export](../../configure/export-data/))
-or [prometheus_export](../../configure/export-data/#prometheus-http-endpoint))
-configuration properties:
+To enable network metrics, add one of the following `features` to the
+first-level [metrics section](../../configure/export-data/#metrics-export-features):
 
 * `network` enables the `beyla_network_flow_bytes` metric: the number of bytes between two endpoints of your cluster
 * `network_inter_zone` enables `beyla_network_inter_zone_bytes` metric: the number of bytes between different

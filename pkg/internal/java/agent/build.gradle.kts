@@ -2,7 +2,7 @@ plugins {
     java
     id("com.gradleup.shadow") version "8.3.9"
     id("me.champeau.jmh") version "0.7.3"
-    id("com.diffplug.spotless") version "6.25.0"
+    id("com.diffplug.spotless") version "8.0.0"
 }
 
 group = "io.opentelemetry.obi"

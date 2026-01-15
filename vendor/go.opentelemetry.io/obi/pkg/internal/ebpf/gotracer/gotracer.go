@@ -339,6 +339,11 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 		"github.com/lib/pq.network": {{
 			End: p.bpfObjects.ObiUprobePqNetworkReturn,
 		}},
+		// PostgreSQL pgx
+		"github.com/jackc/pgx/v5.(*Conn).Query": {{
+			Start: p.bpfObjects.ObiUprobePgxQuery,
+			End:   p.bpfObjects.ObiUprobePgxQueryReturn,
+		}},
 		// Go gRPC
 		"google.golang.org/grpc.(*Server).handleStream": {{
 			Start: p.bpfObjects.ObiUprobeServerHandleStream,

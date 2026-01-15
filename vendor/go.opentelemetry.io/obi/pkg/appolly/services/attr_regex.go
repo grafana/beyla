@@ -30,7 +30,7 @@ func (dc RegexDefinitionCriteria) Validate() error {
 			return fmt.Errorf("index [%d] should define at least one selection criteria", i)
 		}
 		for k := range dc[i].Metadata {
-			if _, ok := allowedAttributeNames[k]; !ok {
+			if _, ok := AllowedAttributeNames[k]; !ok {
 				return fmt.Errorf("unknown attribute in index [%d]: %s", i, k)
 			}
 		}
@@ -71,7 +71,7 @@ type RegexSelector struct {
 	PathRegexp RegexpAttr `yaml:"exe_path_regexp"`
 
 	// Metadata stores other attributes, such as Kubernetes object metadata
-	Metadata map[string]*RegexpAttr `yaml:",inline"`
+	Metadata map[string]*RegexpAttr `yaml:",inline" mapstructure:",remain"`
 
 	// PodLabels allows matching against the labels of a pod
 	PodLabels map[string]*RegexpAttr `yaml:"k8s_pod_labels"`

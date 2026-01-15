@@ -83,7 +83,7 @@ func extractTCPLargeBuffer(parseCtx *EBPFParseContext, traceID [16]uint8, packet
 		return lb.buf, true
 	} else {
 		if parseCtx.protocolDebug {
-			fmt.Println("<<< LargeBufferExtract: not found!")
+			fmt.Printf("<<< LargeBufferExtract: not found!(packet=%d direction=%d)\n", key.packetType, key.direction)
 		}
 	}
 

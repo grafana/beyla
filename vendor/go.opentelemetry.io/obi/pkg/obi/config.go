@@ -4,14 +4,20 @@
 package obi
 
 import (
+	"encoding"
 	"fmt"
 	"io"
 	"log/slog"
+	"reflect"
+	"strings"
 	"time"
 
 	"github.com/caarlos0/env/v9"
 	"github.com/go-playground/validator/v10"
+	"github.com/go-viper/mapstructure/v2"
 	"gopkg.in/yaml.v3"
+
+	"go.opentelemetry.io/collector/confmap"
 
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/config"
@@ -97,6 +103,7 @@ var DefaultConfig = Config{
 			HTTP:     0,
 			MySQL:    0,
 			Postgres: 0,
+			Kafka:    0,
 		},
 		MySQLPreparedStatementsCacheSize:    1024,
 		PostgresPreparedStatementsCacheSize: 1024,
@@ -300,6 +307,112 @@ type Config struct {
 
 	NodeJS NodeJSConfig `yaml:"nodejs"`
 	Java   JavaConfig   `yaml:"javaagent"`
+}
+
+func (c *Config) Unmarshal(component *confmap.Conf) error {
+	if component == nil {
+		return nil
+	}
+
+	raw := component.ToStringMap()
+
+	dec, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		TagName:          "yaml",
+		Result:           c,
+		WeaklyTypedInput: true,
+		DecodeHook: mapstructure.ComposeDecodeHookFunc(
+			mapstructure.StringToTimeDurationHookFunc(),
+			mapstructure.TextUnmarshallerHookFunc(),
+			stringSliceToTextUnmarshalerHookFunc(),
+			inlineMetadataHookFunc(),
+		),
+	})
+	if err != nil {
+		return err
+	}
+
+	return dec.Decode(raw)
+}
+
+// stringSliceToTextUnmarshalerHookFunc returns a DecodeHookFunc that converts
+// slices of strings (or []interface{} containing strings) to types implementing
+// encoding.TextUnmarshaler by joining them with commas.
+// This handles types like Features and ExportModes that have UnmarshalYAML for
+// YAML sequences but also support comma-separated text via UnmarshalText.
+func stringSliceToTextUnmarshalerHookFunc() mapstructure.DecodeHookFunc {
+	return func(_ reflect.Type, to reflect.Type, data any) (any, error) {
+		// Check if target implements TextUnmarshaler
+		if to.Kind() == reflect.Ptr {
+			to = to.Elem()
+		}
+		toPtr := reflect.New(to)
+		if _, ok := toPtr.Interface().(encoding.TextUnmarshaler); !ok {
+			return data, nil
+		}
+
+		if slice, ok := data.([]any); ok {
+			strs := make([]string, 0, len(slice))
+			for _, v := range slice {
+				if s, ok := v.(string); ok {
+					strs = append(strs, s)
+				} else {
+					// Not a string slice, let mapstructure handle it
+					return data, nil
+				}
+			}
+			return strings.Join(strs, ","), nil
+		}
+
+		// Handle []string directly
+		if slice, ok := data.([]string); ok {
+			return strings.Join(slice, ","), nil
+		}
+
+		return data, nil
+	}
+}
+
+// inlineMetadataHookFunc returns a DecodeHookFunc that handles the ",inline" yaml tag
+// for Metadata fields in GlobAttributes and RegexSelector types.
+// Since mapstructure uses TagName: "yaml" but doesn't understand the yaml ",inline" directive,
+// this hook manually extracts keys that are in AllowedAttributeNames and places them in the "Metadata" field.
+func inlineMetadataHookFunc() mapstructure.DecodeHookFunc {
+	return func(_ reflect.Type, to reflect.Type, data any) (any, error) {
+		// Only process map inputs
+		inputMap, ok := data.(map[string]any)
+		if !ok {
+			return data, nil
+		}
+
+		// Check if target type is GlobAttributes or RegexSelector
+		switch to {
+		case reflect.TypeOf(services.GlobAttributes{}), reflect.TypeOf(services.RegexSelector{}):
+			// continue processing
+		default:
+			return data, nil
+		}
+
+		// Extract fields that are in AllowedAttributeNames into metadata
+		metadata := make(map[string]any)
+		for k, v := range inputMap {
+			if _, isAllowed := services.AllowedAttributeNames[k]; isAllowed {
+				metadata[k] = v
+			}
+		}
+
+		// If there are metadata fields, add them to the input map under "Metadata"
+		// mapstructure will use the struct field name when the yaml tag is ",inline"
+		if len(metadata) > 0 {
+			// Remove metadata keys from the original map
+			for k := range metadata {
+				delete(inputMap, k)
+			}
+			// Add them under the "Metadata" key (matching the struct field name)
+			inputMap["Metadata"] = metadata
+		}
+
+		return inputMap, nil
+	}
 }
 
 type LogConfigOption string

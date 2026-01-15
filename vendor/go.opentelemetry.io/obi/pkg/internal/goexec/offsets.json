@@ -412,7 +412,7 @@
       "fr": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.48.0"
+          "newest": "0.49.0"
         },
         "offsets": [
           {
@@ -452,7 +452,7 @@
       "nextStreamID": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.48.0"
+          "newest": "0.49.0"
         },
         "offsets": [
           {
@@ -480,7 +480,7 @@
       "tconn": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.48.0"
+          "newest": "0.49.0"
         },
         "offsets": [
           {
@@ -494,7 +494,7 @@
       "w": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.48.0"
+          "newest": "0.49.0"
         },
         "offsets": [
           {
@@ -508,7 +508,7 @@
       "Fields": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.48.0"
+          "newest": "0.49.0"
         },
         "offsets": [
           {
@@ -522,7 +522,7 @@
       "conn": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.48.0"
+          "newest": "0.49.0"
         },
         "offsets": [
           {
@@ -536,7 +536,7 @@
       "w": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.48.0"
+          "newest": "0.49.0"
         },
         "offsets": [
           {

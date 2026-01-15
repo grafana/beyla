@@ -32,8 +32,10 @@ const (
 	AttrContainerName = "k8s_container_name"
 )
 
-// any attribute name not in this set will cause an error during the YAML unmarshalling
-var allowedAttributeNames = map[string]struct{}{
+// AllowedAttributeNames contains the set of attribute names that can be used as metadata
+// in service discovery criteria. Any attribute name not in this set will cause an error
+// during the YAML unmarshalling.
+var AllowedAttributeNames = map[string]struct{}{
 	AttrNamespace:       {},
 	AttrPodName:         {},
 	AttrDeploymentName:  {},

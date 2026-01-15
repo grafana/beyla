@@ -200,6 +200,7 @@ func (p *Tracer) Constants() map[string]any {
 
 	m["http_buffer_size"] = p.cfg.EBPF.BufferSizes.HTTP
 	m["mysql_buffer_size"] = p.cfg.EBPF.BufferSizes.MySQL
+	m["kafka_buffer_size"] = p.cfg.EBPF.BufferSizes.Kafka
 	m["postgres_buffer_size"] = p.cfg.EBPF.BufferSizes.Postgres
 	m["max_transaction_time"] = uint64(p.cfg.EBPF.MaxTransactionTime.Nanoseconds())
 

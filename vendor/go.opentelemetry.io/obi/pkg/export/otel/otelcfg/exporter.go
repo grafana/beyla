@@ -27,11 +27,18 @@ type MetricsExporterInstancer struct {
 	Cfg      *MetricsConfig
 }
 
-// Instantiate the OTLP HTTP or GRPC metrics exporter
+// Instantiate the OTLP HTTP or GRPC metrics exporter, or a consumer-based exporter
 func (i *MetricsExporterInstancer) Instantiate(ctx context.Context) (sdkmetric.Exporter, error) {
 	i.mutex.Lock()
 	defer i.mutex.Unlock()
 	if i.instance != nil {
+		return i.instance, nil
+	}
+
+	// If a MetricsConsumer is configured, use the ConsumerExporter
+	if i.Cfg.MetricsConsumer != nil {
+		meilog().Debug("instantiating Consumer MetricsReporter")
+		i.instance = NewConsumerExporter(i.Cfg.MetricsConsumer)
 		return i.instance, nil
 	}
 

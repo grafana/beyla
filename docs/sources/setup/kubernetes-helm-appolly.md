@@ -1,6 +1,6 @@
 ---
 title: Deploy Beyla in Kubernetes with Helm for Grafana Cloud
-menuTitle: Helm chart
+menuTitle: Helm chart for Grafana Cloud
 description: Learn how to deploy Beyla with a Helm chart in Kubernetes for Knowledge Graph and Application Observability in Grafana Cloud.
 weight: 2
 keywords:

@@ -37,6 +37,7 @@ ENV TOOLS_DIR=/go/bin
 
 # Build
 RUN if [ -z "${DEV_OBI}" ]; then \
+    export PATH="/usr/lib/llvm20/bin:\$PATH" && \
     make generate && \
     make copy-obi-vendor \
     ; fi

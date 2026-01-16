@@ -16,6 +16,18 @@ const (
 	DirectionResponse = "response"
 )
 
+func serverPort(r *Record) uint16 {
+	switch r.Metrics.Initiator {
+	case InitiatorDst:
+		return r.Id.SrcPort
+	case InitiatorSrc:
+		return r.Id.DstPort
+	default:
+		// guess it, assuming that ephemeral ports for clients would be usually higher
+		return min(r.Id.DstPort, r.Id.SrcPort)
+	}
+}
+
 // RecordGetters returns the attributes.Getter function that returns the string value of a given
 // attribute name.
 //
@@ -32,6 +44,10 @@ func RecordGetters(name attr.Name) (attributes.Getter[*Record, attribute.KeyValu
 	case attr.NetworkType:
 		getter = func(r *Record) attribute.KeyValue {
 			return attribute.String(string(attr.NetworkType), transport.NetworkType(r.Id.EthProtocol).String())
+		}
+	case attr.NetworkProtocol:
+		getter = func(r *Record) attribute.KeyValue {
+			return attribute.String(string(attr.NetworkProtocol), transport.ApplicationPortToString(serverPort(r)))
 		}
 	case attr.SrcAddress:
 		getter = func(r *Record) attribute.KeyValue {
@@ -89,17 +105,7 @@ func RecordGetters(name attr.Name) (attributes.Getter[*Record, attribute.KeyValu
 		}
 	case attr.ServerPort:
 		getter = func(r *Record) attribute.KeyValue {
-			var serverPort uint16
-			switch r.Metrics.Initiator {
-			case InitiatorDst:
-				serverPort = r.Id.SrcPort
-			case InitiatorSrc:
-				serverPort = r.Id.DstPort
-			default:
-				// guess it, assuming that ephemeral ports for clients would be usually higher
-				serverPort = min(r.Id.DstPort, r.Id.SrcPort)
-			}
-			return attribute.Int(string(attr.ServerPort), int(serverPort))
+			return attribute.Int(string(attr.ServerPort), int(serverPort(r)))
 		}
 	case attr.SrcZone:
 		getter = func(r *Record) attribute.KeyValue { return attribute.String(string(attr.SrcZone), r.Attrs.SrcZone) }

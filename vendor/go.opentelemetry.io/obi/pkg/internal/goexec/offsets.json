@@ -230,6 +230,34 @@
         ]
       }
     },
+    "github.com/jackc/pgx/v5.Conn": {
+      "config": {
+        "versions": {
+          "oldest": "5.0.0",
+          "newest": "5.8.0"
+        },
+        "offsets": [
+          {
+            "offset": 8,
+            "since": "5.0.0"
+          }
+        ]
+      }
+    },
+    "github.com/jackc/pgx/v5/pgconn.Config": {
+      "Host": {
+        "versions": {
+          "oldest": "5.0.0",
+          "newest": "5.8.0"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "5.0.0"
+          }
+        ]
+      }
+    },
     "github.com/redis/go-redis/v9/internal/pool.Conn": {
       "bw": {
         "versions": {
@@ -412,7 +440,7 @@
       "fr": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.48.0"
+          "newest": "0.49.0"
         },
         "offsets": [
           {
@@ -452,7 +480,7 @@
       "nextStreamID": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.48.0"
+          "newest": "0.49.0"
         },
         "offsets": [
           {
@@ -480,7 +508,7 @@
       "tconn": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.48.0"
+          "newest": "0.49.0"
         },
         "offsets": [
           {
@@ -494,7 +522,7 @@
       "w": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.48.0"
+          "newest": "0.49.0"
         },
         "offsets": [
           {
@@ -508,7 +536,7 @@
       "Fields": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.48.0"
+          "newest": "0.49.0"
         },
         "offsets": [
           {
@@ -522,7 +550,7 @@
       "conn": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.48.0"
+          "newest": "0.49.0"
         },
         "offsets": [
           {
@@ -536,7 +564,7 @@
       "w": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.48.0"
+          "newest": "0.49.0"
         },
         "offsets": [
           {

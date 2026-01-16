@@ -110,6 +110,9 @@ type EBPFTracer struct {
 
 	// DNS timeout after which we report failed event
 	DNSRequestTimeout time.Duration `yaml:"dns_request_timeout" env:"OTEL_EBPF_BPF_DNS_REQUEST_TIMEOUT"`
+
+	// Log trace-context enricher config
+	LogEnricher LogEnricherConfig `yaml:"log_enricher"`
 }
 
 // Per-protocol data buffer size in bytes.
@@ -118,6 +121,7 @@ type EBPFTracer struct {
 type EBPFBufferSizes struct {
 	HTTP     uint32 `yaml:"http" env:"OTEL_EBPF_BPF_BUFFER_SIZE_HTTP" validate:"lte=8192"`
 	MySQL    uint32 `yaml:"mysql" env:"OTEL_EBPF_BPF_BUFFER_SIZE_MYSQL" validate:"lte=8192"`
+	Kafka    uint32 `yaml:"kafka" env:"OTEL_EBPF_BPF_BUFFER_SIZE_KAFKA" validate:"lte=8192"`
 	Postgres uint32 `yaml:"postgres" env:"OTEL_EBPF_BPF_BUFFER_SIZE_POSTGRES" validate:"lte=8192"`
 }
 

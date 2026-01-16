@@ -3,7 +3,9 @@
 
 package kafkaparser
 
-import "errors"
+import (
+	"errors"
+)
 
 const partitionLen = // 26
 Int16Len +           // error_code
@@ -28,12 +30,12 @@ func ParseMetadataResponse(pkt []byte, header *KafkaRequestHeader, offset int) (
 	if err != nil {
 		return nil, err
 	}
-	topics, err := parsMetadataTopics(pkt, header, offset)
+	topics, err := parseMetadataTopics(pkt, header, offset)
 	if err != nil {
 		return nil, err
 	}
 	if len(topics) == 0 {
-		return nil, errors.New("no Topics found in metadata request")
+		return nil, errors.New("no Topics found in metadata response")
 	}
 	return &MetadataResponse{
 		Topics: topics,
@@ -98,7 +100,7 @@ func skipMetadataResponseBrokers(pkt []byte, header *KafkaRequestHeader, offset 
 	return offset, nil
 }
 
-func parsMetadataTopics(pkt []byte, header *KafkaRequestHeader, offset int) ([]*MetadataTopic, error) {
+func parseMetadataTopics(pkt []byte, header *KafkaRequestHeader, offset int) ([]*MetadataTopic, error) {
 	topicsLen, offset, err := readArrayLength(pkt, header, offset)
 	if err != nil {
 		return nil, err
@@ -121,6 +123,7 @@ func parsMetadataTopics(pkt []byte, header *KafkaRequestHeader, offset int) ([]*
 func parseMetadataTopic(pkt []byte, header *KafkaRequestHeader, offset int, isLast bool) (*MetadataTopic, int, error) {
 	var topic MetadataTopic
 	/*
+	  Metadata Response (Version: 10, 11, 12 and 13)
 	  Topics => error_code Name topic_id is_internal [partitions] topic_authorized_operations _tagged_fields
 	    error_code => INT16
 	    Name => COMPACT_STRING / (12+) COMPACT_NULLABLE_STRING

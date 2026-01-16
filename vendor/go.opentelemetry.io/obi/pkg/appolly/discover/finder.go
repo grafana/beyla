@@ -14,6 +14,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/generictracer"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/gotracer"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/gpuevent"
+	"go.opentelemetry.io/obi/pkg/internal/ebpf/logenricher"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/tctracer"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/tpinjector"
 	"go.opentelemetry.io/obi/pkg/obi"
@@ -131,12 +132,14 @@ func (pf *ProcessFinder) Done() <-chan error {
 func newCommonTracersGroup(cfg *obi.Config) []ebpf.Tracer {
 	var tracers []ebpf.Tracer
 
-	// Add tracers based on enabled propagation modes
-	// tpinjector handles both HTTP headers (sk_msg) and TCP options (BPF_SOCK_OPS)
+	// Add tracers based on configuration
+
+	// Enables tpinjector which handles context propagation via both HTTP headers (sk_msg) and TCP options (BPF_SOCK_OPS)
 	if cfg.EBPF.ContextPropagation.HasHeaders() || cfg.EBPF.ContextPropagation.HasTCP() {
 		tracers = append(tracers, tpinjector.New(cfg))
 	}
-	// tctracer handles IP options only (TC egress/ingress)
+
+	// Enables tctracer which handles context propagations via IP options only (TC egress/ingress)
 	if cfg.EBPF.ContextPropagation.HasIPOptions() {
 		tracers = append(tracers, tctracer.New(cfg))
 	}
@@ -149,8 +152,23 @@ func newGoTracersGroup(pidFilter ebpfcommon.ServiceFilter, cfg *obi.Config, metr
 }
 
 func newGenericTracersGroup(pidFilter ebpfcommon.ServiceFilter, cfg *obi.Config, metrics imetrics.Reporter) []ebpf.Tracer {
+	var tracers []ebpf.Tracer
+
+	// Add tracers based on configuration
+	tracers = append(tracers, generictracer.New(pidFilter, cfg, metrics))
+
+	// Enables GPU tracer
 	if cfg.EBPF.InstrumentGPU {
-		return []ebpf.Tracer{generictracer.New(pidFilter, cfg, metrics), gpuevent.New(pidFilter, cfg, metrics)}
+		tracers = append(tracers, gpuevent.New(pidFilter, cfg, metrics))
 	}
-	return []ebpf.Tracer{generictracer.New(pidFilter, cfg, metrics)}
+
+	// Enables log enricher which handles trace-log correlation
+	if cfg.EBPF.LogEnricher.Enabled() {
+		logEnricher := logenricher.New(pidFilter, cfg)
+		if logEnricher != nil {
+			tracers = append(tracers, logEnricher)
+		}
+	}
+
+	return tracers
 }

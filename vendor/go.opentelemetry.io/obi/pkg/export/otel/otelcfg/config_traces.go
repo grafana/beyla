@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"go.opentelemetry.io/collector/consumer"
+
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
 )
@@ -21,8 +23,9 @@ func tlog() *slog.Logger {
 }
 
 type TracesConfig struct {
-	CommonEndpoint string `yaml:"-" env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
-	TracesEndpoint string `yaml:"endpoint" env:"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"`
+	TracesConsumer consumer.Traces `yaml:"-"`
+	CommonEndpoint string          `yaml:"-" env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
+	TracesEndpoint string          `yaml:"endpoint" env:"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"`
 
 	Protocol       Protocol `yaml:"protocol" env:"OTEL_EXPORTER_OTLP_PROTOCOL"`
 	TracesProtocol Protocol `yaml:"-" env:"OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"`
@@ -73,10 +76,13 @@ func (m TracesConfig) MarshalYAML() (any, error) {
 // either the OTEL endpoint and OTEL traces endpoint is defined.
 // If not enabled, this node won't be instantiated
 func (m *TracesConfig) Enabled() bool {
-	return m.CommonEndpoint != "" || m.TracesEndpoint != "" || m.GetProtocol() == ProtocolDebug
+	return m.TracesConsumer != nil || m.CommonEndpoint != "" || m.TracesEndpoint != "" || m.GetProtocol() == ProtocolDebug
 }
 
 func (m *TracesConfig) GetProtocol() Protocol {
+	if m.TracesConsumer != nil {
+		return ProtocolUnset
+	}
 	if m.TracesProtocol != "" {
 		return m.TracesProtocol
 	}

@@ -194,6 +194,27 @@ func instrumentTracesExporter(internalMetrics imetrics.Reporter, in exporter.Tra
 
 //nolint:cyclop
 func getTracesExporter(ctx context.Context, cfg otelcfg.TracesConfig, im imetrics.Reporter) (exporter.Traces, error) {
+	if cfg.TracesConsumer != nil {
+		newType, err := component.NewType("traces")
+		if err != nil {
+			return nil, err
+		}
+		set := getTraceSettings(newType, cfg.SDKLogLevel)
+		// TODO nimrod: do we need this?
+		exp, err := exporterhelper.NewTraces(ctx, set, cfg,
+			cfg.TracesConsumer.ConsumeTraces,
+			// exporterhelper.WithStart(exp.Start),
+			// exporterhelper.WithShutdown(exp.Shutdown),
+			exporterhelper.WithCapabilities(consumer.Capabilities{MutatesData: false}),
+			// exporterhelper.WithQueue(config.QueueConfig),
+			// exporterhelper.WithRetry(config.RetryConfig))
+		)
+		if err != nil {
+			return nil, err
+		}
+		exp = instrumentTracesExporter(im, exp)
+		return exp, nil
+	}
 	switch proto := cfg.GetProtocol(); proto {
 	case otelcfg.ProtocolHTTPJSON, otelcfg.ProtocolHTTPProtobuf, "": // zero value defaults to HTTP for backwards-compatibility
 		slog.Debug("instantiating HTTP TracesReporter", "protocol", proto)
@@ -334,7 +355,7 @@ func createZapLoggerDev(sdkLogLevel string) *zap.Logger {
 	return logger
 }
 
-func getTraceSettings(dataTypeMetrics component.Type, sdkLogLevel string) exporter.Settings {
+func getTraceSettings(dataType component.Type, sdkLogLevel string) exporter.Settings {
 	traceProvider := tracenoop.NewTracerProvider()
 	meterProvider := metric.NewMeterProvider()
 
@@ -346,7 +367,7 @@ func getTraceSettings(dataTypeMetrics component.Type, sdkLogLevel string) export
 	}
 
 	return exporter.Settings{
-		ID:                component.NewIDWithName(dataTypeMetrics, "beyla"),
+		ID:                component.NewIDWithName(dataType, "obi"),
 		TelemetrySettings: telemetrySettings,
 	}
 }

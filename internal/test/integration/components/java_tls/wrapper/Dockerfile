@@ -1,6 +1,6 @@
 # Build the testserver binary
 # Docker command must be invoked from the projec root directory
-FROM golang:1.25.5@sha256:20b91eda7a9627c127c0225b0d4e8ec927b476fa4130c6760928b849d769c149 AS builder
+FROM golang:1.25.6@sha256:c1252002e1a0ba34875937d59d4f123d0a4673a50f69c38fca4175cae194c7f9 AS builder
 
 ARG TARGETARCH
 

@@ -8,5 +8,5 @@ input:
 interval: 500ms
 expected:
   metrics:
-    - promql: 'rpc_client_duration_count{rpc_method="/routeguide.RouteGuide/GetFeature"}'
+    - promql: 'rpc_client_duration_seconds_count{rpc_method="/routeguide.RouteGuide/GetFeature"}'
       value: "> 5"

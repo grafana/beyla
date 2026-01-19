@@ -23,5 +23,5 @@ expected:
       value: "== 0"
     - promql: 'db_client_operation_duration_bucket{le="10", db_system_name="mysql"}'
       value: "> 0"
-    - promql: 'db_client_operation_duration_count{db_system_name="mysql"}'
+    - promql: 'db_client_operation_duration_seconds_count{db_system_name="mysql"}'
       value: "> 0"

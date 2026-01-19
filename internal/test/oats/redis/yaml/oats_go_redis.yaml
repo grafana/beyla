@@ -23,7 +23,7 @@ expected:
       value: "== 0"
     - promql: 'db_client_operation_duration_bucket{le="10", db_operation_name="get", db_system_name="redis"}'
       value: "> 0"
-    - promql: 'db_client_operation_duration_count{db_operation_name="get", db_system_name="redis"}'
+    - promql: 'db_client_operation_duration_seconds_count{db_operation_name="get", db_system_name="redis"}'
       value: "> 0"
     - promql: 'db_client_operation_duration_sum{db_operation_name="set", db_system_name="redis"}'
       value: "> 0"
@@ -31,7 +31,7 @@ expected:
       value: "== 0"
     - promql: 'db_client_operation_duration_bucket{le="10", db_operation_name="set", db_system_name="redis"}'
       value: "> 0"
-    - promql: 'db_client_operation_duration_count{db_operation_name="set", db_system_name="redis"}'
+    - promql: 'db_client_operation_duration_seconds_count{db_operation_name="set", db_system_name="redis"}'
       value: "> 0"
 
 

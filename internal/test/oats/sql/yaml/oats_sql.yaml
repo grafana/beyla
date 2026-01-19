@@ -30,7 +30,7 @@ expected:
       value: "== 0"
     - promql: 'db_client_operation_duration_bucket{le="10",db_operation_name="SELECT", db_system_name="other_sql"}'
       value: "> 0"
-    - promql: 'db_client_operation_duration_count{db_operation_name="SELECT", db_system_name="other_sql"}'
+    - promql: 'db_client_operation_duration_seconds_count{db_operation_name="SELECT", db_system_name="other_sql"}'
       value: "> 0"
     - promql: 'db_client_operation_duration_sum{db_operation_name="UPDATE", db_system_name="other_sql"}'
       value: "> 0"
@@ -38,5 +38,5 @@ expected:
       value: "== 0"
     - promql: 'db_client_operation_duration_bucket{le="10",db_operation_name="UPDATE", db_system_name="other_sql"}'
       value: "> 0"
-    - promql: 'db_client_operation_duration_count{db_operation_name="UPDATE", db_system_name="other_sql"}'
+    - promql: 'db_client_operation_duration_seconds_count{db_operation_name="UPDATE", db_system_name="other_sql"}'
       value: "> 0"

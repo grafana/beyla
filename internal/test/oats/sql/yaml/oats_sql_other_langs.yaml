@@ -17,11 +17,11 @@ expected:
             db.system.name: postgresql
             db.query.text: "SELECT * FROM accounting.contacts WHERE id = 1"
   metrics:
-    - promql: 'db_client_operation_duration_sum{db_system_name="postgresql"}'
+    - promql: 'db_client_operation_duration_seconds_sum{db_system_name="postgresql"}'
       value: "> 0"
-    - promql: 'db_client_operation_duration_bucket{le="0", db_system_name="postgresql"}'
+    - promql: 'db_client_operation_duration_seconds_bucket{le="0", db_system_name="postgresql"}'
       value: "== 0"
-    - promql: 'db_client_operation_duration_bucket{le="10", db_system_name="postgresql"}'
+    - promql: 'db_client_operation_duration_seconds_bucket{le="10", db_system_name="postgresql"}'
       value: "> 0"
     - promql: 'db_client_operation_duration_seconds_count{db_system_name="postgresql"}'
       value: "> 0"

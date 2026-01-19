@@ -16,22 +16,20 @@ services:
     ports:
       - "{{ .PrometheusHTTPPort }}:9090"
   tempo:
-    image: grafana/tempo:2.2.3@sha256:fbf0dea05b736ced1694fde8bd63e9236a49359c94ec24efcad5a7d2047e4d9a
+    image: grafana/tempo:2.9.0@sha256:65a5789759435f1ef696f1953258b9bbdb18eb571d5ce711ff812d2e128288a4
     volumes:
       - "{{ .ConfigDir }}/tempo-config.yaml:/config.yaml"
     command:
       - --config.file=/config.yaml
     ports:
+      - 4317:4317
       - "{{ .TempoHTTPPort }}:3200"
-#  loki:
-#    image: grafana/loki:2.9.0
-#    ports:
-#      - "{{ .LokiHTTPPort }}:3100"
+
   collector:
-    image: otel/opentelemetry-collector-contrib:0.119.0@sha256:36c35cc213c0f3b64d6e8a3e844dc90822f00725e0e518eaed5b08bcc2231e72
+    image: otel/opentelemetry-collector-contrib:0.143.1@sha256:f051aff195ad50ed5ad9d95bcdd51d7258200c937def3797cf830366ed62e034
     volumes:
       - "{{ .ConfigDir }}/otelcol-config.yaml:/config.yaml"
     command:
       - --config=file:/config.yaml
-      # we currently don't support this in our dashboards and grafana agent doesn't understand it yet
-      - --feature-gates=-pkg.translator.prometheus.NormalizeName
+    ports:
+      - 4318:4318

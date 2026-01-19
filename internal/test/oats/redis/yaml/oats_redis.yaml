@@ -17,37 +17,37 @@ expected:
             server.port: 6379
             db.query.text: "SET obi rocks"
   metrics:
-    - promql: 'db_client_operation_duration_sum{db_operation_name="GET", db_system_name="redis"}'
+    - promql: 'db_client_operation_duration_seconds_sum{db_operation_name="GET", db_system_name="redis"}'
       value: "> 0"
-    - promql: 'db_client_operation_duration_bucket{le="0",db_operation_name="GET", db_system_name="redis"}'
+    - promql: 'db_client_operation_duration_seconds_bucket{le="0",db_operation_name="GET", db_system_name="redis"}'
       value: "== 0"
-    - promql: 'db_client_operation_duration_bucket{le="10",db_operation_name="GET", db_system_name="redis"}'
+    - promql: 'db_client_operation_duration_seconds_bucket{le="10",db_operation_name="GET", db_system_name="redis"}'
       value: "> 0"
-    - promql: 'db_client_operation_duration_count{db_operation_name="GET", db_system_name="redis"}'
+    - promql: 'db_client_operation_duration_seconds_count{db_operation_name="GET", db_system_name="redis"}'
       value: "> 0"
-    - promql: 'db_client_operation_duration_sum{db_operation_name="SET", db_system_name="redis"}'
+    - promql: 'db_client_operation_duration_seconds_sum{db_operation_name="SET", db_system_name="redis"}'
       value: "> 0"
-    - promql: 'db_client_operation_duration_bucket{le="0",db_operation_name="SET", db_system_name="redis"}'
+    - promql: 'db_client_operation_duration_seconds_bucket{le="0",db_operation_name="SET", db_system_name="redis"}'
       value: "== 0"
-    - promql: 'db_client_operation_duration_bucket{le="10",db_operation_name="SET", db_system_name="redis"}'
+    - promql: 'db_client_operation_duration_seconds_bucket{le="10",db_operation_name="SET", db_system_name="redis"}'
       value: "> 0"
-    - promql: 'db_client_operation_duration_count{db_operation_name="SET", db_system_name="redis"}'
+    - promql: 'db_client_operation_duration_seconds_count{db_operation_name="SET", db_system_name="redis"}'
       value: "> 0"
-    - promql: 'db_client_operation_duration_sum{db_operation_name="HSET", db_system_name="redis"}'
+    - promql: 'db_client_operation_duration_seconds_sum{db_operation_name="HSET", db_system_name="redis"}'
       value: "> 0"
-    - promql: 'db_client_operation_duration_bucket{le="0",db_operation_name="HSET", db_system_name="redis"}'
+    - promql: 'db_client_operation_duration_seconds_bucket{le="0",db_operation_name="HSET", db_system_name="redis"}'
       value: "== 0"
-    - promql: 'db_client_operation_duration_bucket{le="10",db_operation_name="HSET", db_system_name="redis"}'
+    - promql: 'db_client_operation_duration_seconds_bucket{le="10",db_operation_name="HSET", db_system_name="redis"}'
       value: "> 0"
-    - promql: 'db_client_operation_duration_count{db_operation_name="HSET", db_system_name="redis"}'
+    - promql: 'db_client_operation_duration_seconds_count{db_operation_name="HSET", db_system_name="redis"}'
       value: "> 0"
-    - promql: 'db_client_operation_duration_sum{db_operation_name="HGETALL", db_system_name="redis"}'
+    - promql: 'db_client_operation_duration_seconds_sum{db_operation_name="HGETALL", db_system_name="redis"}'
       value: "> 0"
-    - promql: 'db_client_operation_duration_bucket{le="0",db_operation_name="HGETALL", db_system_name="redis"}'
+    - promql: 'db_client_operation_duration_seconds_bucket{le="0",db_operation_name="HGETALL", db_system_name="redis"}'
       value: "== 0"
-    - promql: 'db_client_operation_duration_bucket{le="10",db_operation_name="HGETALL", db_system_name="redis"}'
+    - promql: 'db_client_operation_duration_seconds_bucket{le="10",db_operation_name="HGETALL", db_system_name="redis"}'
       value: "> 0"
-    - promql: 'db_client_operation_duration_count{db_operation_name="HGETALL", db_system_name="redis"}'
+    - promql: 'db_client_operation_duration_seconds_count{db_operation_name="HGETALL", db_system_name="redis"}'
       value: "> 0"
 
 

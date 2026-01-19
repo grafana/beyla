@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/grafana/beyla/v2/internal/test/integration/components/prom"
+	"github.com/grafana/beyla/v2/internal/test/integration/components/promtest"
 	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -14,7 +14,7 @@ import (
 
 func testProcesses(attribMatcher map[string]string) func(t *testing.T) {
 	return func(t *testing.T) {
-		pq := prom.Client{HostPort: prometheusHostPort}
+		pq := promtest.Client{HostPort: prometheusHostPort}
 		utilizationLen := 0
 		// cpu load is so low in integration tests that we don't check if the
 		// value is > 0
@@ -72,7 +72,7 @@ func testProcesses(attribMatcher map[string]string) func(t *testing.T) {
 	}
 }
 
-func matchAttributes(t require.TestingT, results []prom.Result, attribMatcher map[string]string) {
+func matchAttributes(t require.TestingT, results []promtest.Result, attribMatcher map[string]string) {
 	assert.NotEmpty(t, results)
 	for _, result := range results {
 		for k, v := range attribMatcher {

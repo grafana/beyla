@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/v2/internal/test/integration/components/docker"
-	"github.com/grafana/beyla/v2/internal/test/integration/components/prom"
+	"github.com/grafana/beyla/v2/internal/test/integration/components/promtest"
 )
 
 func TestNetwork_Deduplication(t *testing.T) {
@@ -101,7 +101,7 @@ func TestNetwork_ReverseDNS(t *testing.T) {
 	require.NoError(t, compose.Up())
 
 	var checkCurlFlows = func(query string) {
-		pq := prom.Client{HostPort: prometheusHostPort}
+		pq := promtest.Client{HostPort: prometheusHostPort}
 		test.Eventually(t, 4*testTimeout, func(t require.TestingT) {
 			// now, verify that the network metric has been reported.
 			results, err := pq.Query(`beyla_network_flow_bytes_total` + query)
@@ -128,13 +128,13 @@ func TestNetwork_Direction(t *testing.T) {
 	}
 
 	// test correct direction labels and client/server ports
-	client := results[slices.IndexFunc(results, func(result prom.Result) bool { return result.Metric["dst_port"] == "8080" })]
+	client := results[slices.IndexFunc(results, func(result promtest.Result) bool { return result.Metric["dst_port"] == "8080" })]
 	assert.Equal(t, "request", client.Metric["direction"])
 	assert.Equal(t, "egress", client.Metric["iface_direction"])
 	assert.Equal(t, "7000", client.Metric["client_port"])
 	assert.Equal(t, "8080", client.Metric["server_port"])
 
-	server := results[slices.IndexFunc(results, func(result prom.Result) bool { return result.Metric["src_port"] == "8080" })]
+	server := results[slices.IndexFunc(results, func(result promtest.Result) bool { return result.Metric["src_port"] == "8080" })]
 	assert.Equal(t, "response", server.Metric["direction"])
 	assert.Equal(t, "ingress", server.Metric["iface_direction"], "ingress")
 	assert.Equal(t, "7000", server.Metric["client_port"])
@@ -155,13 +155,13 @@ func TestNetwork_IfaceDirection_Use_Socket_Filter(t *testing.T) {
 	}
 
 	// test correct direction labels and client/server ports
-	client := results[slices.IndexFunc(results, func(result prom.Result) bool { return result.Metric["dst_port"] == "8080" })]
+	client := results[slices.IndexFunc(results, func(result promtest.Result) bool { return result.Metric["dst_port"] == "8080" })]
 	require.Equal(t, "request", client.Metric["direction"])
 	require.Equal(t, "egress", client.Metric["iface_direction"])
 	require.Equal(t, "7000", client.Metric["client_port"])
 	require.Equal(t, "8080", client.Metric["server_port"])
 
-	server := results[slices.IndexFunc(results, func(result prom.Result) bool { return result.Metric["src_port"] == "8080" })]
+	server := results[slices.IndexFunc(results, func(result promtest.Result) bool { return result.Metric["src_port"] == "8080" })]
 	require.Equal(t, "response", server.Metric["direction"])
 	require.Equal(t, "ingress", server.Metric["iface_direction"])
 	require.Equal(t, "7000", server.Metric["client_port"])

@@ -21,7 +21,7 @@ import (
 	ti "go.opentelemetry.io/obi/pkg/test/integration"
 
 	"github.com/grafana/beyla/v2/internal/test/integration/components/docker"
-	"github.com/grafana/beyla/v2/internal/test/integration/components/prom"
+	"github.com/grafana/beyla/v2/internal/test/integration/components/promtest"
 )
 
 func TestInstrumentationErrors(t *testing.T) {

@@ -17,7 +17,7 @@ import (
 
 	"github.com/grafana/beyla/v2/internal/test/integration/components/docker"
 	"github.com/grafana/beyla/v2/internal/test/integration/components/jaeger"
-	"github.com/grafana/beyla/v2/internal/test/integration/components/prom"
+	"github.com/grafana/beyla/v2/internal/test/integration/components/promtest"
 )
 
 func testSelectiveExports(t *testing.T) {
@@ -71,9 +71,9 @@ func testSelectiveExports(t *testing.T) {
 		require.NotEmpty(t, dTraces)
 	}, test.Interval(500*time.Millisecond))
 
-	pq := prom.Client{HostPort: "localhost:9090"}
+	pq := promtest.Client{HostPort: "localhost:9090"}
 
-	getMetrics := func(path string) []prom.Result {
+	getMetrics := func(path string) []promtest.Result {
 		query := fmt.Sprintf(`http_server_request_duration_seconds_count{url_path="%s"}`, path)
 		results, err := pq.Query(query)
 

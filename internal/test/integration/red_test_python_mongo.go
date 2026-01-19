@@ -20,7 +20,7 @@ import (
 	ti "go.opentelemetry.io/obi/pkg/test/integration"
 
 	"github.com/grafana/beyla/v2/internal/test/integration/components/jaeger"
-	"github.com/grafana/beyla/v2/internal/test/integration/components/prom"
+	"github.com/grafana/beyla/v2/internal/test/integration/components/promtest"
 )
 
 func testREDMetricsForPythonMongoLibrary(t *testing.T, testCase TestCase) {
@@ -36,8 +36,8 @@ func testREDMetricsForPythonMongoLibrary(t *testing.T, testCase TestCase) {
 	}
 
 	// Eventually, Prometheus would make mongo operations visible
-	pq := prom.Client{HostPort: prometheusHostPort}
-	var results []prom.Result
+	pq := promtest.Client{HostPort: prometheusHostPort}
+	var results []promtest.Result
 	var err error
 	for _, span := range testCase.Spans {
 		operation := span.FindAttribute("db.operation.name")

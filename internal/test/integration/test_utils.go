@@ -21,7 +21,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/grafana/beyla/v2/internal/test/integration/components/jaeger"
-	"github.com/grafana/beyla/v2/internal/test/integration/components/prom"
+	"github.com/grafana/beyla/v2/internal/test/integration/components/promtest"
 )
 
 /*
@@ -265,11 +265,11 @@ func waitForSQLTestComponentsWithDB(t *testing.T, url, subpath, db string) {
 	}, test.Interval(time.Second))
 }
 
-func enoughPromResults(t require.TestingT, results []prom.Result) {
+func enoughPromResults(t require.TestingT, results []promtest.Result) {
 	require.GreaterOrEqual(t, len(results), 1)
 }
 
-func totalPromCount(t require.TestingT, results []prom.Result) int {
+func totalPromCount(t require.TestingT, results []promtest.Result) int {
 	total := 0
 	for _, res := range results {
 		require.Len(t, res.Value, 2)
@@ -281,7 +281,7 @@ func totalPromCount(t require.TestingT, results []prom.Result) int {
 	return total
 }
 
-func checkServerPromQueryResult(t require.TestingT, pq prom.Client, query string, promCount int) {
+func checkServerPromQueryResult(t require.TestingT, pq promtest.Client, query string, promCount int) {
 	results, err := pq.Query(query)
 	require.NoError(t, err)
 	// check duration_count has 3 calls and all the arguments
@@ -295,7 +295,7 @@ func checkServerPromQueryResult(t require.TestingT, pq prom.Client, query string
 	}
 }
 
-func checkClientPromQueryResult(t require.TestingT, pq prom.Client, query string, promCount int) {
+func checkClientPromQueryResult(t require.TestingT, pq promtest.Client, query string, promCount int) {
 	results, err := pq.Query(query)
 	require.NoError(t, err)
 	enoughPromResults(t, results)

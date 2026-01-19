@@ -18,7 +18,7 @@ import (
 
 	"github.com/grafana/beyla/v2/internal/test/integration/components/docker"
 	"github.com/grafana/beyla/v2/internal/test/integration/components/jaeger"
-	"github.com/grafana/beyla/v2/internal/test/integration/components/prom"
+	"github.com/grafana/beyla/v2/internal/test/integration/components/promtest"
 )
 
 // does a smoke test to verify that all the components that started
@@ -35,8 +35,8 @@ func waitForPHPTraceTestComponents(t *testing.T, url string) {
 func testREDMetricsForPHPHTTPLibrary(t *testing.T, url string, nginx, php string) {
 	path := "/ping"
 
-	pq := prom.Client{HostPort: prometheusHostPort}
-	var results []prom.Result
+	pq := promtest.Client{HostPort: prometheusHostPort}
+	var results []promtest.Result
 
 	// Call 4 times the instrumented service, forcing it to:
 	// - process multiple calls in a row with, one more than we might need

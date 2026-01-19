@@ -16,7 +16,7 @@ import (
 	ti "go.opentelemetry.io/obi/pkg/test/integration"
 
 	"github.com/grafana/beyla/v2/internal/test/integration/components/jaeger"
-	"github.com/grafana/beyla/v2/internal/test/integration/components/prom"
+	"github.com/grafana/beyla/v2/internal/test/integration/components/promtest"
 )
 
 // does a smoke test to verify that all the components that started
@@ -28,8 +28,8 @@ func waitForRubyTestComponents(t *testing.T, url string) {
 func testREDMetricsForRubyHTTPLibrary(t *testing.T, url string, comm string) {
 	path := "/users"
 
-	pq := prom.Client{HostPort: prometheusHostPort}
-	var results []prom.Result
+	pq := promtest.Client{HostPort: prometheusHostPort}
+	var results []promtest.Result
 
 	// add couple of record to users, we will get records id of 1,2,3,4
 	jsonBody := []byte(`{"name": "Jane Doe", "email": "jane@grafana.com"}`)

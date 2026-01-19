@@ -18,7 +18,7 @@ import (
 
 	"github.com/grafana/beyla/v2/internal/test/integration/components/docker"
 	"github.com/grafana/beyla/v2/internal/test/integration/components/jaeger"
-	"github.com/grafana/beyla/v2/internal/test/integration/components/prom"
+	"github.com/grafana/beyla/v2/internal/test/integration/components/promtest"
 )
 
 func testForHTTPGoOTelLibrary(t *testing.T, route, svcNs string) {
@@ -28,7 +28,7 @@ func testForHTTPGoOTelLibrary(t *testing.T, route, svcNs string) {
 
 	// Eventually, Prometheus would make this query visible
 	var (
-		pq     = prom.Client{HostPort: prometheusHostPort}
+		pq     = promtest.Client{HostPort: prometheusHostPort}
 		labels = `http_request_method="GET",` +
 			`http_response_status_code="200",` +
 			`service_namespace="` + svcNs + `",` +
@@ -96,8 +96,8 @@ func testInstrumentationMissing(t *testing.T, route, svcNs string) {
 	}, test.Interval(100*time.Millisecond))
 
 	// Eventually, Prometheus would make this query visible
-	pq := prom.Client{HostPort: prometheusHostPort}
-	var results []prom.Result
+	pq := promtest.Client{HostPort: prometheusHostPort}
+	var results []promtest.Result
 
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error

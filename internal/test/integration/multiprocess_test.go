@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/v2/internal/test/integration/components/docker"
-	"github.com/grafana/beyla/v2/internal/test/integration/components/prom"
+	"github.com/grafana/beyla/v2/internal/test/integration/components/promtest"
 )
 
 func TestMultiProcess(t *testing.T) {
@@ -82,7 +82,7 @@ func TestMultiProcess(t *testing.T) {
 	// testing the earlier invocations to /dont-instrument
 	t.Run("Non-selected processes must not be instrumented"+
 		" even if they share the executable of another instrumented process", func(t *testing.T) {
-		pq := prom.Client{HostPort: prometheusHostPort}
+		pq := promtest.Client{HostPort: prometheusHostPort}
 		results, err := pq.Query(`http_server_request_duration_seconds_count{url_path="/dont-instrument"}`)
 		require.NoError(t, err)
 		assert.Empty(t, results)

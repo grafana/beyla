@@ -19,20 +19,20 @@ import (
 	ti "go.opentelemetry.io/obi/pkg/test/integration"
 
 	"github.com/grafana/beyla/v2/internal/test/integration/components/jaeger"
-	"github.com/grafana/beyla/v2/internal/test/integration/components/prom"
+	"github.com/grafana/beyla/v2/internal/test/integration/components/promtest"
 )
 
 func runKafkaTestCase(t *testing.T, testCase TestCase) {
 	t.Helper()
 
 	var (
-		pq = prom.Client{HostPort: prometheusHostPort}
+		pq = promtest.Client{HostPort: prometheusHostPort}
 
 		url     = testCase.Route
 		urlPath = testCase.Subpath
 		comm    = testCase.Comm
 
-		results []prom.Result
+		results []promtest.Result
 		err     error
 	)
 

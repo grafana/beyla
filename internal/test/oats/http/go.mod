@@ -1,6 +1,6 @@
 module github.com/grafana/beyla/internal/test/oats/http
 
-go 1.25.3
+go 1.25.5
 
 require (
 	github.com/grafana/oats v0.0.3

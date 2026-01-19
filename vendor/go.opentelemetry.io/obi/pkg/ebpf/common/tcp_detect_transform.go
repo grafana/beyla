@@ -48,6 +48,15 @@ func ReadTCPRequestIntoSpan(parseCtx *EBPFParseContext, cfg *config.EBPFTracer, 
 
 	// We might know already the protocol for this event
 	switch event.ProtocolType {
+	case ProtocolTypeKafka:
+		k, ignore, err := ProcessPossibleKafkaEvent(event, requestBuffer, responseBuffer, parseCtx.kafkaTopicUUIDToName)
+		if ignore && err == nil {
+			return request.Span{}, true, nil // parsed kafka event, but we don't want to create a span for it
+		}
+		if err == nil {
+			return TCPToKafkaToSpan(event, k), false, nil
+		}
+		return request.Span{}, true, fmt.Errorf("failed to handle Kafka event: %w", err)
 	case ProtocolTypeMySQL:
 		span, err := handleMySQL(parseCtx, event, requestBuffer, responseBuffer)
 		if errors.Is(err, errFallback) {
@@ -138,6 +147,7 @@ func ReadTCPRequestIntoSpan(parseCtx *EBPFParseContext, cfg *config.EBPFTracer, 
 			MisclassifiedEvents <- MisclassifiedEvent{EventType: EventTypeKHTTP2, TCPInfo: &evCopy}
 			return request.Span{}, true, nil // ignore for now, next event will be parsed
 		} else {
+			// we should not arrive here, leave it for completeness
 			k, ignore, err := ProcessPossibleKafkaEvent(event, requestBuffer, responseBuffer, parseCtx.kafkaTopicUUIDToName)
 			if ignore && err == nil {
 				return request.Span{}, true, nil // parsed kafka event, but we don't want to create a span for it
@@ -170,10 +180,10 @@ func getBuffers(parseCtx *EBPFParseContext, event *TCPRequestInfo) (req []byte, 
 	resp = event.Rbuf[:l]
 
 	if event.HasLargeBuffers == 1 {
-		if b, ok := extractTCPLargeBuffer(parseCtx, event.Tp.TraceId, packetTypeRequest, directionSend, event.ConnInfo); ok {
+		if b, ok := extractTCPLargeBuffer(parseCtx, event.Tp.TraceId, packetTypeRequest, directionByPacketType(packetTypeRequest, !event.IsServer), event.ConnInfo); ok {
 			req = b
 		}
-		if b, ok := extractTCPLargeBuffer(parseCtx, event.Tp.TraceId, packetTypeResponse, directionRecv, event.ConnInfo); ok {
+		if b, ok := extractTCPLargeBuffer(parseCtx, event.Tp.TraceId, packetTypeResponse, directionByPacketType(packetTypeResponse, !event.IsServer), event.ConnInfo); ok {
 			resp = b
 		}
 	}

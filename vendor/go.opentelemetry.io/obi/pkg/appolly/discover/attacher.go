@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"os"
 	"time"
 
 	"github.com/cilium/ebpf/link"
@@ -35,7 +34,6 @@ type traceAttacher struct {
 	log     *slog.Logger
 	Cfg     *obi.Config
 	Metrics imetrics.Reporter
-	obiPID  int
 
 	// processInstances keeps track of the instances of each process. This will help making sure
 	// that we don't remove the BPF resources of an executable until all their instances are removed
@@ -91,8 +89,7 @@ func (ta *traceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 		ta.javaInjector = javaInjector
 	}
 	ta.processInstances = maps.MultiCounter[uint64]{}
-	ta.obiPID = os.Getpid()
-	ta.EbpfEventContext.CommonPIDsFilter = ebpfcommon.CommonPIDsFilter(&ta.Cfg.Discovery, ta.Metrics)
+	ta.EbpfEventContext.CommonPIDsFilter = ebpfcommon.NewPIDsFilter(&ta.Cfg.Discovery, slog.With("component", "ebpfCommon.CommonPIDsFilter"), ta.Metrics)
 	ta.routeHarvester = harvest.NewRouteHarvester(&ta.Cfg.Discovery.RouteHarvestConfig, ta.Cfg.Discovery.DisabledRouteHarvesters, ta.Cfg.Discovery.RouteHarvesterTimeout)
 	ta.processAgeFunc = ProcessAgeFunc()
 
@@ -159,12 +156,14 @@ func (ta *traceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 		ta.log.Debug(".done", "success", ok)
 		return ok
 	}
+
 	ta.log.Info("instrumenting process",
 		"cmd", ie.FileInfo.CmdExePath,
 		"pid", ie.FileInfo.Pid,
 		"ino", ie.FileInfo.Ino,
 		"type", ie.Type,
 		"service", ie.FileInfo.Service.UID.Name,
+		"logenricher", ie.FileInfo.Service.LogEnricherEnabled,
 	)
 
 	// builds a tracer for that executable

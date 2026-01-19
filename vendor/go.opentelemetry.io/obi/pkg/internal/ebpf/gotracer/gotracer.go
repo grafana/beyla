@@ -198,6 +198,9 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 		// mysql driver
 		goexec.MySQLConnCfgPos,
 		goexec.MySQLConfigAddrPos,
+		// pgx driver
+		goexec.PgxConnConfigPos,
+		goexec.PgxConfigHostPos,
 		goexec.MuxTemplatePos,
 		goexec.GinFullpathPos,
 	} {
@@ -338,6 +341,11 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 		// PostgreSQL lib/pq
 		"github.com/lib/pq.network": {{
 			End: p.bpfObjects.ObiUprobePqNetworkReturn,
+		}},
+		// PostgreSQL pgx
+		"github.com/jackc/pgx/v5.(*Conn).Query": {{
+			Start: p.bpfObjects.ObiUprobePgxQuery,
+			End:   p.bpfObjects.ObiUprobePgxQueryReturn,
 		}},
 		// Go gRPC
 		"google.golang.org/grpc.(*Server).handleStream": {{

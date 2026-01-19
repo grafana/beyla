@@ -1,6 +1,6 @@
 module opentelemetry.io/obi/mongo
 
-go 1.25.3
+go 1.25.5
 
 require go.mongodb.org/mongo-driver/v2 v2.3.0
 

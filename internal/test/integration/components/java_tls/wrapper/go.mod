@@ -1,3 +1,3 @@
 module github.com/grafana/beyla/v2/internal/test/integration/components/wrapper
 
-go 1.25.3
+go 1.25.5

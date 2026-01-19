@@ -29,7 +29,7 @@ func (dc GlobDefinitionCriteria) Validate() error {
 			return fmt.Errorf("entry [%d] should define at least one selection criteria", i)
 		}
 		for k := range dc[i].Metadata {
-			if _, ok := allowedAttributeNames[k]; !ok {
+			if _, ok := AllowedAttributeNames[k]; !ok {
 				return fmt.Errorf("unknown attribute in discovery.services[%d]: %s", i, k)
 			}
 		}
@@ -65,7 +65,7 @@ type GlobAttributes struct {
 	Path GlobAttr `yaml:"exe_path"`
 
 	// Metadata stores other attributes, such as Kubernetes object metadata
-	Metadata map[string]*GlobAttr `yaml:",inline"`
+	Metadata map[string]*GlobAttr `yaml:",inline" mapstructure:",remain"`
 
 	// PodLabels allows matching against the labels of a pod
 	PodLabels map[string]*GlobAttr `yaml:"k8s_pod_labels"`

@@ -18,7 +18,6 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/ebpf"
-	"go.opentelemetry.io/obi/pkg/export"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	"go.opentelemetry.io/obi/pkg/internal/goexec"
 	"go.opentelemetry.io/obi/pkg/internal/procs"
@@ -95,7 +94,7 @@ func (t *typer) makeServiceAttrs(processMatch *ProcessMatch) svc.Attrs {
 	exportModes := services.ExportModeUnset
 	var samplerConfig *services.SamplerConfig
 	var routesConfig *services.CustomRoutesConfig
-	svcFeatures := export.Features(0)
+	svcFeatures := t.cfg.Metrics.Features
 
 	for _, s := range processMatch.Criteria {
 		if n := s.GetName(); n != "" {
@@ -118,14 +117,9 @@ func (t *typer) makeServiceAttrs(processMatch *ProcessMatch) svc.Attrs {
 			routesConfig = m
 		}
 
-		if critFeat := s.MetricsConfig().Features; svcFeatures.Undefined() && !critFeat.Undefined() {
+		if critFeat := s.MetricsConfig().Features; !critFeat.Undefined() {
 			svcFeatures = critFeat
 		}
-	}
-
-	// If no matching criteria defines their own features, we set it to the base configuration.
-	if svcFeatures.Undefined() {
-		svcFeatures = t.cfg.Metrics.Features
 	}
 
 	routesCfg := t.cfg.Routes
@@ -139,11 +133,12 @@ func (t *typer) makeServiceAttrs(processMatch *ProcessMatch) svc.Attrs {
 			Name:      name,
 			Namespace: namespace,
 		},
-		ProcPID:     processMatch.Process.Pid,
-		ExportModes: exportModes,
-		Sampler:     samplerFromConfig(samplerConfig),
-		PathTrie:    clusterurl.NewPathTrie(routesCfg.MaxPathSegmentCardinality, wildcard),
-		Features:    svcFeatures,
+		ProcPID:            processMatch.Process.Pid,
+		ExportModes:        exportModes,
+		Sampler:            samplerFromConfig(samplerConfig),
+		PathTrie:           clusterurl.NewPathTrie(routesCfg.MaxPathSegmentCardinality, wildcard),
+		Features:           svcFeatures,
+		LogEnricherEnabled: processMatch.LogEnricherEnabled(),
 	}
 
 	if routesConfig != nil {
@@ -254,7 +249,15 @@ func (t *typer) asInstrumentable(execElf *exec.FileInfo) ebpf.Instrumentable {
 	// Return the instrumentable without offsets, as it is identified as a generic
 	// (or non-instrumentable Go proxy) executable
 	t.instrumentableCache.Add(execElf.Ino, instrumentedExecutable{Type: detectedType, Offsets: nil, InstrumentationError: err})
-	return ebpf.Instrumentable{Type: detectedType, Offsets: nil, FileInfo: execElf, ChildPids: child, InstrumentationError: err}
+
+	return ebpf.Instrumentable{
+		Type:                 detectedType,
+		Offsets:              nil,
+		FileInfo:             execElf,
+		ChildPids:            child,
+		InstrumentationError: err,
+		LogEnricherEnabled:   execElf.Service.LogEnricherEnabled,
+	}
 }
 
 func (t *typer) inspectOffsets(execElf *exec.FileInfo) (*goexec.Offsets, bool, error) {

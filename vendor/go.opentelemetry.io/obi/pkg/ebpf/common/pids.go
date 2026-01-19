@@ -20,6 +20,7 @@ type PIDType uint8
 const (
 	PIDTypeKProbes PIDType = iota + 1
 	PIDTypeGo
+	PIDTypeLogEnricher
 )
 
 // injectable functions (can be replaced in tests). It reads the
@@ -54,7 +55,7 @@ type PIDsFilter struct {
 	metrics             imetrics.Reporter
 }
 
-func newPIDsFilter(c *services.DiscoveryConfig, log *slog.Logger, metrics imetrics.Reporter) *PIDsFilter {
+func NewPIDsFilter(c *services.DiscoveryConfig, log *slog.Logger, metrics imetrics.Reporter) *PIDsFilter {
 	return &PIDsFilter{
 		log:                 log,
 		current:             map[uint32]map[uint32]PIDInfo{},
@@ -64,10 +65,6 @@ func newPIDsFilter(c *services.DiscoveryConfig, log *slog.Logger, metrics imetri
 		defaultOtlpGRPCPort: c.DefaultOtlpGRPCPort,
 		metrics:             metrics,
 	}
-}
-
-func CommonPIDsFilter(c *services.DiscoveryConfig, metrics imetrics.Reporter) ServiceFilter {
-	return newPIDsFilter(c, slog.With("component", "ebpfCommon.CommonPIDsFilter"), metrics)
 }
 
 func (pf *PIDsFilter) AllowPID(pid, ns uint32, svc *svc.Attrs, pidType PIDType) {

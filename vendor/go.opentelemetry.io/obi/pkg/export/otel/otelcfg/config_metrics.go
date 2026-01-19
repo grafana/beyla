@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"go.opentelemetry.io/collector/consumer"
+
 	"go.opentelemetry.io/obi/pkg/export"
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
 )
@@ -21,6 +23,10 @@ func mlog() *slog.Logger {
 }
 
 type MetricsConfig struct {
+	// MetricsConsumer is the collector consumer to send metrics to.
+	// When set, metrics will be sent directly to this consumer instead of via HTTP/gRPC.
+	MetricsConsumer consumer.Metrics `yaml:"-"`
+
 	Interval time.Duration `yaml:"interval" env:"OTEL_EBPF_METRICS_INTERVAL"`
 	// OTELIntervalMS supports metric intervals as specified by the standard OTEL definition.
 	// OTEL_EBPF_METRICS_INTERVAL takes precedence over it.
@@ -80,6 +86,10 @@ func (m MetricsConfig) MarshalYAML() (any, error) {
 }
 
 func (m *MetricsConfig) GetProtocol() Protocol {
+	// When using a consumer, protocol is not needed
+	if m.MetricsConsumer != nil {
+		return ProtocolUnset
+	}
 	if m.MetricsProtocol != "" {
 		return m.MetricsProtocol
 	}
@@ -120,11 +130,14 @@ func (m *MetricsConfig) OTLPMetricsEndpoint() (string, bool) {
 }
 
 // EndpointEnabled specifies that the OTEL metrics node is enabled if and only if
-// either the OTEL endpoint and OTEL metrics endpoint is defined.
+// either the OTEL endpoint, OTEL metrics endpoint, or a MetricsConsumer is defined.
 // If not enabled, this node won't be instantiated
 // Reason to disable linting: it requires to be a value despite it is considered a "heavy struct".
 // This method is invoked only once during startup time so it doesn't have a noticeable performance impact.
 func (m *MetricsConfig) EndpointEnabled() bool {
+	if m.MetricsConsumer != nil {
+		return true
+	}
 	ep, _ := m.OTLPMetricsEndpoint()
 	return ep != ""
 }

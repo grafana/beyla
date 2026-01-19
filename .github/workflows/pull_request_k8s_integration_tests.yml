@@ -38,7 +38,7 @@ permissions:
 
 jobs:
   test-matrix:
-    name: "Build integration_k8s matrix"
+    name: "Build integration k8s matrix"
     runs-on: ubuntu-x64-small
     outputs:
       matrix: ${{ steps.build-matrix.outputs.matrix }}
@@ -142,7 +142,7 @@ jobs:
           MATRIX_JSON: ${{ toJson(matrix) }}
           MATRIX_TEST_PATTERN: ${{ matrix.test_pattern }}
           RUN_NUMBER: ${{ github.run_number }}
-          TEST_TAGS: integration_k8s
+          TEST_TAGS: integration
         run: |
           echo Partition
           echo "${MATRIX_JSON}"

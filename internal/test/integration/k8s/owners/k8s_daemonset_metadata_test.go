@@ -1,4 +1,4 @@
-//go:build integration_k8s
+//go:build integration
 
 package owners
 

@@ -1,4 +1,4 @@
-//go:build integration_k8s
+//go:build integration
 
 // package owners tests the selection and detection of pod ownership metadata, others than deployment:
 // StatefulSet and DaemonSet

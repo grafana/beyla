@@ -6,12 +6,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/grafana/beyla/v2/internal/test/integration/components/promtest"
 	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	ti "go.opentelemetry.io/obi/pkg/test/integration"
+
+	"github.com/grafana/beyla/v2/internal/test/integration/components/promtest"
 )
 
 func testREDMetricsForPythonHTTPLibrary(t *testing.T, url, comm, namespace string) {

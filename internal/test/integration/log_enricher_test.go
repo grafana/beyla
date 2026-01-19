@@ -55,9 +55,9 @@ func testContainerID(t require.TestingT, cl *client.Client, image string) string
 	containers, err := cl.ContainerList(context.TODO(), container.ListOptions{All: true})
 	require.NoError(t, err)
 
-	for _, c := range containers {
-		if c.Image == image {
-			return c.ID
+	for i := range containers {
+		if containers[i].Image == image {
+			return containers[i].ID
 		}
 	}
 

@@ -5,12 +5,13 @@ package integration
 import (
 	"testing"
 
-	"github.com/grafana/beyla/v2/internal/test/integration/components/promtest"
 	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	ti "go.opentelemetry.io/obi/pkg/test/integration"
+
+	"github.com/grafana/beyla/v2/internal/test/integration/components/promtest"
 )
 
 // does a smoke test to verify that all the components that started

@@ -72,4 +72,3 @@ func main() {
 		db.Close()
 	}
 }
-

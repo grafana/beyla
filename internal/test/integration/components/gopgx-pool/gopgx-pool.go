@@ -64,4 +64,3 @@ func main() {
 		pool.Close()
 	}
 }
-

@@ -1,0 +1,52 @@
+docker-compose:
+  generator: generic
+  files:
+    - ../docker-compose-beyla-gopgxclient.yml
+input:
+  - path: /pgxquery
+  - path: /pgxupdate
+  - path: /pgxerror
+
+interval: 500ms
+expected:
+  traces:
+    # Successful SELECT
+    - traceql: '{ name = "SELECT accounting.contacts" }'
+      spans:
+        - name: 'SELECT accounting.contacts'
+          attributes:
+            db.operation.name: SELECT
+            db.collection.name: accounting.contacts
+            db.system.name: other_sql
+    # Successful UPDATE
+    - traceql: '{ name = "UPDATE accounting.contacts" }'
+      spans:
+        - name: 'UPDATE accounting.contacts'
+          attributes:
+            db.operation.name: UPDATE
+            db.collection.name: accounting.contacts
+            db.system.name: other_sql
+    # Error query
+    - traceql: '{ .db.operation.name = "SELECT" && status = error }'
+      spans:
+        - name: 'SELECT nonexistent_table'
+          attributes:
+            db.operation.name: SELECT
+            db.collection.name: nonexistent_table
+            db.system.name: other_sql
+  metrics:
+    # SELECT metrics
+    - promql: 'db_client_operation_duration_seconds_sum{db_operation_name="SELECT", db_system_name="other_sql", server_address="sqlserver"}'
+      value: "> 0"
+    - promql: 'db_client_operation_duration_seconds_bucket{le="0",db_operation_name="SELECT", db_system_name="other_sql", server_address="sqlserver"}'
+      value: "== 0"
+    - promql: 'db_client_operation_duration_seconds_bucket{le="10",db_operation_name="SELECT", db_system_name="other_sql", server_address="sqlserver"}'
+      value: "> 0"
+    - promql: 'db_client_operation_duration_seconds_count{db_operation_name="SELECT", db_system_name="other_sql", server_address="sqlserver"}'
+      value: "> 0"
+    # UPDATE metrics
+    - promql: 'db_client_operation_duration_seconds_sum{db_operation_name="UPDATE", db_system_name="other_sql", server_address="sqlserver"}'
+      value: "> 0"
+    - promql: 'db_client_operation_duration_seconds_count{db_operation_name="UPDATE", db_system_name="other_sql", server_address="sqlserver"}'
+      value: "> 0"
+

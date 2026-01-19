@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package shardedqueue
+package shardedqueue // import "go.opentelemetry.io/obi/pkg/internal/shardedqueue"
 
 import (
 	"context"

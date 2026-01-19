@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package cidr
+package cidr // import "go.opentelemetry.io/obi/pkg/netolly/cidr"
 
 import (
 	"context"

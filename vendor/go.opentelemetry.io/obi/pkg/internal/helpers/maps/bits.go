@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package maps
+package maps // import "go.opentelemetry.io/obi/pkg/internal/helpers/maps"
 
 // Bits wraps an unsigned integer that can be used as a bit map
 type Bits uint

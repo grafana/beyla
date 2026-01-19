@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package prom
+package prom // import "go.opentelemetry.io/obi/pkg/export/prom"
 
 import (
 	"github.com/cilium/ebpf"

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package gotracer
+package gotracer // import "go.opentelemetry.io/obi/pkg/internal/ebpf/gotracer"
 
 import (
 	"context"
@@ -345,6 +345,10 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 		// PostgreSQL pgx
 		"github.com/jackc/pgx/v5.(*Conn).Query": {{
 			Start: p.bpfObjects.ObiUprobePgxQuery,
+			End:   p.bpfObjects.ObiUprobePgxQueryReturn,
+		}},
+		"github.com/jackc/pgx/v5.(*Conn).Exec": {{
+			Start: p.bpfObjects.ObiUprobePgxExec,
 			End:   p.bpfObjects.ObiUprobePgxQueryReturn,
 		}},
 		// Go gRPC

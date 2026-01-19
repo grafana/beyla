@@ -6,7 +6,7 @@
 // license that can be found in the LICENSE file.
 
 //nolint:unused
-package bhpack
+package bhpack // import "go.opentelemetry.io/obi/pkg/internal/ebpf/bhpack"
 
 import (
 	"fmt"

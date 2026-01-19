@@ -10,7 +10,7 @@
 //
 // See http://tools.ietf.org/html/draft-ietf-httpbis-header-compression-09
 
-package bhpack
+package bhpack // import "go.opentelemetry.io/obi/pkg/internal/ebpf/bhpack"
 
 import (
 	"bytes"

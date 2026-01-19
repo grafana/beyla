@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package clusterurl
+package clusterurl // import "go.opentelemetry.io/obi/pkg/internal/transform/route/clusterurl"
 
 import (
 	"strings"

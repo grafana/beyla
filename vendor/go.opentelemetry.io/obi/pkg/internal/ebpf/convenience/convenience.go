@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package ebpfconvenience
+package ebpfconvenience // import "go.opentelemetry.io/obi/pkg/internal/ebpf/convenience"
 
 import (
 	"fmt"

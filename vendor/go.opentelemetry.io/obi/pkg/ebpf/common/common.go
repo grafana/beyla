@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package ebpfcommon
+package ebpfcommon // import "go.opentelemetry.io/obi/pkg/ebpf/common"
 
 import (
 	"bufio"
@@ -320,7 +320,7 @@ func SupportsLogInjection(log *slog.Logger) bool {
 	}
 
 	lockdownMode := KernelLockdownMode()
-	if lockdownMode != KernelLockdownNone && lockdownMode != KernelLockdownIntegrity {
+	if lockdownMode != KernelLockdownNone {
 		log.Info("log injection not supported: kernel in lockdown mode")
 		return false
 	}

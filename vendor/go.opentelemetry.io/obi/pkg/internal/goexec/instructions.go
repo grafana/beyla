@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package goexec
+package goexec // import "go.opentelemetry.io/obi/pkg/internal/goexec"
 
 import (
 	"debug/elf"

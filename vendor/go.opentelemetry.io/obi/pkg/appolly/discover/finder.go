@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package discover
+package discover // import "go.opentelemetry.io/obi/pkg/appolly/discover"
 
 import (
 	"context"
@@ -164,7 +164,7 @@ func newGenericTracersGroup(pidFilter ebpfcommon.ServiceFilter, cfg *obi.Config,
 
 	// Enables log enricher which handles trace-log correlation
 	if cfg.EBPF.LogEnricher.Enabled() {
-		logEnricher := logenricher.New(pidFilter, cfg)
+		logEnricher := logenricher.New(cfg)
 		if logEnricher != nil {
 			tracers = append(tracers, logEnricher)
 		}

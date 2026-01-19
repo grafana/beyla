@@ -1,10 +1,11 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package obi
+package obi // import "go.opentelemetry.io/obi/pkg/obi"
 
 import (
 	"encoding"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -338,6 +339,40 @@ func (c *Config) Unmarshal(component *confmap.Conf) error {
 	}
 
 	return dec.Decode(raw)
+}
+
+func (c *Config) Log() {
+	if c.LogConfig == "" {
+		return
+	}
+	var configString string
+	configYaml, err := yaml.Marshal(c)
+	if err != nil {
+		slog.Warn("can't marshal configuration to YAML", "error", err)
+		return
+	}
+	switch c.LogConfig {
+	case LogConfigOptionYAML:
+		configString = string(configYaml)
+	case LogConfigOptionJSON:
+		// instead of annotating the config with json tags, we unmarshal the YAML to a map[string]any, and marshal that map to
+		var configMap map[string]any
+		err = yaml.Unmarshal(configYaml, &configMap)
+		if err != nil {
+			slog.Warn("can't unmarshal yaml configuration to map", "error", err)
+			break
+		}
+		configJSON, err := json.Marshal(configMap)
+		if err != nil {
+			slog.Warn("can't marshal configuration to JSON", "error", err)
+			break
+		}
+		configString = string(configJSON)
+	}
+	if configString != "" {
+		slog.Info("Running OpenTelemetry eBPF Instrumentation with configuration")
+		fmt.Println(configString)
+	}
 }
 
 // stringSliceToTextUnmarshalerHookFunc returns a DecodeHookFunc that converts

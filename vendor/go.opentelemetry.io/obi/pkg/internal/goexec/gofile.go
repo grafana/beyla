@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package goexec provides the utilities to analyze the executable code
-package goexec
+package goexec // import "go.opentelemetry.io/obi/pkg/internal/goexec"
 
 import (
 	"bytes"

@@ -3,7 +3,7 @@
 
 //go:build linux
 
-package generictracer
+package generictracer // import "go.opentelemetry.io/obi/pkg/internal/ebpf/generictracer"
 
 import (
 	"bufio"

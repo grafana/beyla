@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package swarms provides helper functions for operating OBI swarms
-package swarms
+package swarms // import "go.opentelemetry.io/obi/pkg/pipe/swarm/swarms"
 
 import (
 	"context"

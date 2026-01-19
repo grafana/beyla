@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package services
+package services // import "go.opentelemetry.io/obi/pkg/appolly/services"
 
 import (
 	"bytes"

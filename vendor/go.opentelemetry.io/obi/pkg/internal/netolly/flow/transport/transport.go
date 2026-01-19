@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package transport
+package transport // import "go.opentelemetry.io/obi/pkg/internal/netolly/flow/transport"
 
 import (
 	"fmt"

@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package agent
+package agent // import "go.opentelemetry.io/obi/pkg/netolly/agent"
 
 import (
 	"context"

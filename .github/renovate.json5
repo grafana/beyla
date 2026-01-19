@@ -11,6 +11,7 @@
     // be updated.
     "configs/offsets/shopify/**",
     "NOTICES/**",
+    "vendor/**",
   ],
   packageRules: [
     {

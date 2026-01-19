@@ -1,5 +1,5 @@
-// Package prom provides some convenience functions for prometheus handling in integration tests
-package prom
+// Package promtest provides some convenience functions for prometheus handling in integration tests
+package promtest
 
 import (
 	"bufio"

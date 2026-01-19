@@ -1,4 +1,4 @@
-package prom
+package promtest
 
 import (
 	"net/http"

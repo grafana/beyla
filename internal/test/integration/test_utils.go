@@ -182,7 +182,7 @@ func waitForTestComponentsSubStatus(t *testing.T, url, subpath string, status in
 // does a smoke test to verify that all the components that started
 // asynchronously are up and communicating properly
 func waitForTestComponentsSubWithTime(t *testing.T, url, subpath string, minutes int) {
-	pq := prom.Client{HostPort: prometheusHostPort}
+	pq := promtest.Client{HostPort: prometheusHostPort}
 	test.Eventually(t, time.Duration(minutes)*time.Minute, func(t require.TestingT) {
 		// first, verify that the test service endpoint is healthy
 		req, err := http.NewRequest(http.MethodGet, url+subpath, nil)
@@ -201,7 +201,7 @@ func waitForTestComponentsSubWithTime(t *testing.T, url, subpath string, minutes
 }
 
 func waitForTestComponentsSubWithTimeAndCode(t *testing.T, url, subpath string, status, minutes int) {
-	pq := prom.Client{HostPort: prometheusHostPort}
+	pq := promtest.Client{HostPort: prometheusHostPort}
 	test.Eventually(t, time.Duration(minutes)*time.Minute, func(t require.TestingT) {
 		// first, verify that the test service endpoint is healthy
 		req, err := http.NewRequest(http.MethodGet, url+subpath, nil)
@@ -220,7 +220,7 @@ func waitForTestComponentsSubWithTimeAndCode(t *testing.T, url, subpath string, 
 }
 
 func waitForTestComponentsRoute(t *testing.T, url, route string) {
-	pq := prom.Client{HostPort: prometheusHostPort}
+	pq := promtest.Client{HostPort: prometheusHostPort}
 	test.Eventually(t, time.Duration(1)*time.Minute, func(t require.TestingT) {
 		// first, verify that the test service endpoint is healthy
 		req, err := http.NewRequest(http.MethodGet, url+route, nil)
@@ -247,7 +247,7 @@ func waitForSQLTestComponentsMySQL(t *testing.T, url, subpath string) {
 }
 
 func waitForSQLTestComponentsWithDB(t *testing.T, url, subpath, db string) {
-	pq := prom.Client{HostPort: prometheusHostPort}
+	pq := promtest.Client{HostPort: prometheusHostPort}
 	test.Eventually(t, 1*time.Minute, func(t require.TestingT) {
 		// first, verify that the test service endpoint is healthy
 		req, err := http.NewRequest(http.MethodGet, url+subpath, nil)
@@ -318,7 +318,7 @@ func doHTTP2Post(t *testing.T, path string, status int, jsonBody []byte) {
 }
 
 func waitForTestComponentsHTTP2Sub(t *testing.T, url, subpath string, minutes int) {
-	pq := prom.Client{HostPort: prometheusHostPort}
+	pq := promtest.Client{HostPort: prometheusHostPort}
 	test.Eventually(t, time.Duration(minutes)*time.Minute, func(t require.TestingT) {
 		// first, verify that the test service endpoint is healthy
 		req, err := http.NewRequest(http.MethodGet, url+subpath, nil)

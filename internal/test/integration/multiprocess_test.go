@@ -145,8 +145,8 @@ func checkReportedOnlyOnce(t *testing.T, baseURL, serviceName string) {
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 	}
-	pq := prom.Client{HostPort: prometheusHostPort}
-	var results []prom.Result
+	pq := promtest.Client{HostPort: prometheusHostPort}
+	var results []promtest.Result
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
 		results, err = pq.Query(`http_server_request_duration_seconds_count{` +
@@ -162,7 +162,7 @@ func checkReportedOnlyOnce(t *testing.T, baseURL, serviceName string) {
 }
 
 func checkInstrumentedProcessesMetric(t *testing.T) {
-	pq := prom.Client{HostPort: prometheusHostPort}
+	pq := promtest.Client{HostPort: prometheusHostPort}
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		// we expected to have this in Prometheus at this point
 		processes := map[string]int{

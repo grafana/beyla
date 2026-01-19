@@ -6,11 +6,10 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/grafana/beyla/v2/internal/test/integration/components/prom"
 	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/grafana/beyla/v2/internal/test/integration/components/prom"
 )
 
 func testProcesses(attribMatcher map[string]string) func(t *testing.T) {

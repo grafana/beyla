@@ -20,7 +20,7 @@ import (
 func testClientWithMethodAndStatusCode(t *testing.T, method string, statusCode int, traces bool) {
 	// Eventually, Prometheus would make this query visible
 	var (
-		pq     = prom.Client{HostPort: prometheusHostPort}
+		pq     = promtest.Client{HostPort: prometheusHostPort}
 		labels = fmt.Sprintf(`http_request_method="%s",`, method) +
 			fmt.Sprintf(`http_response_status_code="%d",`, statusCode) +
 			`http_route="/oss/",` +

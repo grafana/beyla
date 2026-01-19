@@ -81,7 +81,7 @@ func TestAvoidedServicesMetrics(t *testing.T) {
 }
 
 func checkInstrumentationErrorMetrics(t *testing.T) {
-	pq := prom.Client{HostPort: prometheusHostPort}
+	pq := promtest.Client{HostPort: prometheusHostPort}
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		results, err := pq.Query(`beyla_instrumentation_errors_total`)
 		require.NoError(t, err)

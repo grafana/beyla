@@ -31,7 +31,7 @@ import (
 	"sigs.k8s.io/e2e-framework/support/kind"
 
 	"github.com/grafana/beyla/v2/internal/test/integration/components/jaeger"
-	"github.com/grafana/beyla/v2/internal/test/integration/components/prom"
+	prom "github.com/grafana/beyla/v2/internal/test/integration/components/promtest"
 	"github.com/grafana/beyla/v2/internal/test/integration/k8s/common/testpath"
 )
 

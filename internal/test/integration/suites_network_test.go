@@ -170,9 +170,9 @@ func TestNetwork_IfaceDirection_Use_Socket_Filter(t *testing.T) {
 	require.NoError(t, compose.Close())
 }
 
-func getNetFlows(t *testing.T) []prom.Result {
-	var results []prom.Result
-	pq := prom.Client{HostPort: prometheusHostPort}
+func getNetFlows(t *testing.T) []promtest.Result {
+	var results []promtest.Result
+	pq := promtest.Client{HostPort: prometheusHostPort}
 	test.Eventually(t, 4*testTimeout, func(t require.TestingT) {
 		// first, verify that the test service endpoint is healthy
 		req, err := http.NewRequest(http.MethodGet, instrumentedServiceStdURL, nil)
@@ -189,9 +189,9 @@ func getNetFlows(t *testing.T) []prom.Result {
 	return results
 }
 
-func getDirectionNetFlows(t *testing.T) []prom.Result {
-	var results []prom.Result
-	pq := prom.Client{HostPort: prometheusHostPort}
+func getDirectionNetFlows(t *testing.T) []promtest.Result {
+	var results []promtest.Result
+	pq := promtest.Client{HostPort: prometheusHostPort}
 
 	// wait for first network flow metrics
 	test.Eventually(t, 4*testTimeout, func(t require.TestingT) {
@@ -217,7 +217,7 @@ func getDirectionNetFlows(t *testing.T) []prom.Result {
 	return results
 }
 
-func callAndCheckMetrics(t *testing.T, req *http.Request, pq prom.Client, previousClientValue int, previousServerValue int) (int, int) {
+func callAndCheckMetrics(t *testing.T, req *http.Request, pq promtest.Client, previousClientValue int, previousServerValue int) (int, int) {
 	var clientValue, serverValue int
 
 	// make call
@@ -232,10 +232,10 @@ func callAndCheckMetrics(t *testing.T, req *http.Request, pq prom.Client, previo
 		require.Len(t, results, 2)
 		require.NotEmpty(t, results)
 		// wait till the amount of bytes is greater than the previous read
-		client := results[slices.IndexFunc(results, func(result prom.Result) bool { return result.Metric["dst_port"] == "8080" })]
+		client := results[slices.IndexFunc(results, func(result promtest.Result) bool { return result.Metric["dst_port"] == "8080" })]
 		clientValue, _ = strconv.Atoi(client.Value[1].(string))
 		require.Greater(t, clientValue, previousClientValue)
-		server := results[slices.IndexFunc(results, func(result prom.Result) bool { return result.Metric["src_port"] == "8080" })]
+		server := results[slices.IndexFunc(results, func(result promtest.Result) bool { return result.Metric["src_port"] == "8080" })]
 		serverValue, _ = strconv.Atoi(server.Value[1].(string))
 		require.Greater(t, serverValue, previousServerValue)
 	}, test.Interval(time.Second))

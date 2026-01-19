@@ -16,7 +16,7 @@ import (
 
 	"github.com/grafana/beyla/v2/internal/test/integration/components/docker"
 	"github.com/grafana/beyla/v2/internal/test/integration/components/kube"
-	"github.com/grafana/beyla/v2/internal/test/integration/components/prom"
+	prom "github.com/grafana/beyla/v2/internal/test/integration/components/promtest"
 	k8s "github.com/grafana/beyla/v2/internal/test/integration/k8s/common"
 	"github.com/grafana/beyla/v2/internal/test/integration/k8s/common/testpath"
 	"github.com/grafana/beyla/v2/internal/test/tools"

@@ -150,7 +150,7 @@ func TestHTTPGoOTelInstrumentedApp(t *testing.T) {
 }
 
 func otelWaitForTestComponents(t *testing.T, url, subpath string) {
-	pq := prom.Client{HostPort: prometheusHostPort}
+	pq := promtest.Client{HostPort: prometheusHostPort}
 	test.Eventually(t, 1*time.Minute, func(t require.TestingT) {
 		// first, verify that the test service endpoint is healthy
 		req, err := http.NewRequest(http.MethodGet, url+subpath, nil)

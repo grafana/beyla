@@ -16,7 +16,7 @@ import (
 	"sigs.k8s.io/e2e-framework/pkg/features"
 
 	"github.com/grafana/beyla/v2/internal/test/integration/components/kube"
-	"github.com/grafana/beyla/v2/internal/test/integration/components/prom"
+	prom "github.com/grafana/beyla/v2/internal/test/integration/components/promtest"
 )
 
 // This file contains some functions and features that are accessed/used

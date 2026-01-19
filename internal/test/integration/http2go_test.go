@@ -21,7 +21,7 @@ import (
 func testREDMetricsForHTTP2Library(t *testing.T, route, svcNs string) {
 	// Eventually, Prometheus would make this query visible
 	var (
-		pq           = prom.Client{HostPort: prometheusHostPort}
+		pq           = promtest.Client{HostPort: prometheusHostPort}
 		serverLabels = `http_request_method="GET",` +
 			`http_response_status_code="200",` +
 			`service_namespace="` + svcNs + `",` +

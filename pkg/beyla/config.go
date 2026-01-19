@@ -59,6 +59,12 @@ func DefaultConfig() *Config {
 	}
 	def.Discovery.DefaultExcludeServices = servicesextra.DefaultExcludeServices
 	def.Discovery.DefaultExcludeInstrument = servicesextra.DefaultExcludeInstrument
+	def.Webhook = WebhookConfig{
+		Enable:   false,
+		Port:     8443,
+		CertPath: "/etc/webhook/certs/tls.crt",
+		KeyPath:  "/etc/webhook/certs/tls.key",
+	}
 	return def
 }
 
@@ -155,6 +161,9 @@ type Config struct {
 	// nolint:undoc
 	Topology spanscfg.Topology `yaml:"topology"`
 
+	// Webhook configuration for mutating admission controller
+	Webhook WebhookConfig `yaml:"webhook"`
+
 	// cached equivalent for the OBI conversion
 	obi *obi.Config `yaml:"-"`
 }
@@ -206,6 +215,22 @@ type HostIDConfig struct {
 	// FetchTimeout specifies the timeout for trying to fetch the HostID from diverse Cloud Providers
 	// nolint:undoc
 	FetchTimeout time.Duration `yaml:"fetch_timeout" env:"BEYLA_HOST_ID_FETCH_TIMEOUT"`
+}
+
+// WebhookConfig contains the configuration for the mutating webhook
+type WebhookConfig struct {
+	// Enable enables the mutating webhook server
+	Enable bool `yaml:"enable" env:"BEYLA_WEBHOOK_ENABLE"`
+	// Port is the port the webhook server listens on
+	Port int `yaml:"port" env:"BEYLA_WEBHOOK_LISTEN_PORT"`
+	// CertPath is the path to the TLS certificate file
+	CertPath string `yaml:"cert_path" env:"BEYLA_WEBHOOK_CERT_PATH"`
+	// KeyPath is the path to the TLS key file
+	KeyPath string `yaml:"key_path" env:"BEYLA_WEBHOOK_KEY_PATH"`
+}
+
+func (w WebhookConfig) Enabled() bool {
+	return w.Enable && w.Port > 0 && w.CertPath != "" && w.KeyPath != ""
 }
 
 type ConfigError string

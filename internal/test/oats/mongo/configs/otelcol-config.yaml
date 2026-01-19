@@ -25,10 +25,8 @@ service:
     traces:
       receivers: [otlp]
       processors: [batch]
-      #exporters: [otlp]
-      exporters: [otlp,logging/traces]
+      exporters: [otlp]
     metrics:
       receivers: [otlp]
       processors: [batch]
       exporters: [prometheusremotewrite]
-      #exporters: [prometheusremotewrite,logging/metrics]

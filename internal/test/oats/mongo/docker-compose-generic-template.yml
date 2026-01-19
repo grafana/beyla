@@ -24,10 +24,7 @@ services:
     ports:
       - 4317:4317
       - "{{ .TempoHTTPPort }}:3200"
-#  loki:
-#    image: grafana/loki:2.9.0
-#    ports:
-#      - "{{ .LokiHTTPPort }}:3100"
+
   collector:
     image: otel/opentelemetry-collector-contrib:0.143.1@sha256:f051aff195ad50ed5ad9d95bcdd51d7258200c937def3797cf830366ed62e034
     volumes:

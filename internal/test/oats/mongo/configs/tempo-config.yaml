@@ -16,12 +16,3 @@ storage:
     local:
       path: /tmp/tempo/blocks
 
-#metrics_generator:
-#  storage:
-#    path: /tmp/tempo/generator/wal
-#    remote_write:
-#      - url: http://localhost:9090/api/v1/write
-#        send_exemplars: true
-
-#overrides:
-#  metrics_generator_processors: [span-metrics]

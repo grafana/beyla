@@ -17,7 +17,6 @@ formatters:
         - prefix(github.com/grafana)
         - localmodule
 run:
-  go: "1.25"
   build-tags:
     - integration
 linters:
@@ -66,7 +65,6 @@ linters:
   disable:
     - exhaustive
   settings:
-
     gocritic:
       enabled-checks:
         - rangeExprCopy

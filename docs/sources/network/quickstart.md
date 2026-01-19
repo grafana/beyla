@@ -47,10 +47,7 @@ Or export the following environment variable
 export BEYLA_KUBE_METADATA_ENABLE=true
 ```
 
-Finally, network metrics requires administrative `sudo` privileges with the following capabilities:
-
-- Full privileged access, `root`, `sudo`, or `privileged: true` for Kubernetes
-- The following capabilities: `BPF`, `PERFMON`, `NET_ADMIN`, `SYS_RESOURCE`
+Finally, network metrics requires elevated privileges. Running with `sudo` or `privileged: true` for Kubernetes is the simplest approach. For more restrictive environments, Beyla can run with specific Linux capabilities. Refer to [Security, permissions and capabilities](../../security/) for details on the required capabilities for your use case.
 
 To learn more about Beyla configuration, consult the [Beyla configuration documentation](../../configure/options/).
 

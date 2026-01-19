@@ -130,13 +130,22 @@ func (tr *tracesOTELReceiver) processSpans(ctx context.Context, exp exporter.Tra
 			if err != nil {
 				// We can't do if errors.Is(err, queue.ErrQueueIsFull), since the queue package is internal
 				if err.Error() == "sending queue is full" {
+					// TODO: set this condition case to Warn once we make sure that
+					// queueConfig.BlockOnOverflow = true works as expected
 					slog.Debug("error sending trace to consumer", "error", err)
 				} else {
-					slog.Error("error sending trace to consumer", "error", err)
+					slog.Warn("error sending trace to consumer", "error", err)
 				}
 			}
 		}
 	}
+}
+
+// emptyHost prevents nil pointer dereference after invoking exp.Start below
+type emptyHost struct{}
+
+func (emptyHost) GetExtensions() map[component.ID]component.Component {
+	return nil
 }
 
 func (tr *tracesOTELReceiver) provideLoop(ctx context.Context) {
@@ -151,7 +160,7 @@ func (tr *tracesOTELReceiver) provideLoop(ctx context.Context) {
 			slog.Error("error shutting down traces exporter", "error", err)
 		}
 	}()
-	err = exp.Start(ctx, nil)
+	err = exp.Start(ctx, emptyHost{})
 	if err != nil {
 		slog.Error("error starting traces exporter", "error", err)
 		return
@@ -197,23 +206,7 @@ func getTracesExporter(ctx context.Context, cfg otelcfg.TracesConfig, im imetric
 		}
 		factory := otlphttpexporter.NewFactory()
 		config := factory.CreateDefaultConfig().(*otlphttpexporter.Config)
-		queueConfig := exporterhelper.NewDefaultQueueConfig()
-		queueConfig.Sizer = exporterhelper.RequestSizerTypeItems
-		batchCfg := exporterhelper.BatchConfig{
-			Sizer: queueConfig.Sizer,
-		}
-		if cfg.MaxQueueSize > 0 || cfg.BatchTimeout > 0 {
-			queueConfig.Enabled = true
-		}
-		if cfg.MaxQueueSize > 0 {
-			batchCfg.MaxSize = int64(cfg.MaxQueueSize)
-		}
-		if cfg.BatchTimeout > 0 {
-			batchCfg.FlushTimeout = cfg.BatchTimeout
-			batchCfg.MinSize = int64(cfg.MaxQueueSize)
-		}
-		queueConfig.Batch = configoptional.Some(batchCfg)
-		config.QueueConfig = queueConfig
+		config.QueueConfig = getQueueConfig(cfg)
 		config.RetryConfig = getRetrySettings(cfg)
 		config.ClientConfig = confighttp.ClientConfig{
 			Endpoint: opts.Scheme + "://" + opts.Endpoint + opts.BaseURLPath,
@@ -254,23 +247,7 @@ func getTracesExporter(ctx context.Context, cfg otelcfg.TracesConfig, im imetric
 		}
 		factory := otlpexporter.NewFactory()
 		config := factory.CreateDefaultConfig().(*otlpexporter.Config)
-		queueConfig := exporterhelper.NewDefaultQueueConfig()
-		queueConfig.Sizer = exporterhelper.RequestSizerTypeItems
-		batchCfg := exporterhelper.BatchConfig{
-			Sizer: queueConfig.Sizer,
-		}
-		if cfg.MaxQueueSize > 0 || cfg.BatchTimeout > 0 {
-			queueConfig.Enabled = true
-		}
-		if cfg.MaxQueueSize > 0 {
-			batchCfg.MaxSize = int64(cfg.MaxQueueSize)
-		}
-		if cfg.BatchTimeout > 0 {
-			batchCfg.FlushTimeout = cfg.BatchTimeout
-			batchCfg.MinSize = int64(cfg.MaxQueueSize)
-		}
-		queueConfig.Batch = configoptional.Some(batchCfg)
-		config.QueueConfig = queueConfig
+		config.QueueConfig = getQueueConfig(cfg)
 		config.RetryConfig = getRetrySettings(cfg)
 		config.ClientConfig = configgrpc.ClientConfig{
 			Endpoint: endpoint.String(),
@@ -304,6 +281,34 @@ func getTracesExporter(ctx context.Context, cfg otelcfg.TracesConfig, im imetric
 			proto, otelcfg.ProtocolGRPC, otelcfg.ProtocolHTTPJSON, otelcfg.ProtocolHTTPProtobuf))
 		return nil, fmt.Errorf("invalid protocol value: %q", proto)
 	}
+}
+
+func getQueueConfig(cfg otelcfg.TracesConfig) configoptional.Optional[exporterhelper.QueueBatchConfig] {
+	// enable batching only if the queue config is enabled
+	if cfg.MaxQueueSize <= 0 && cfg.BatchTimeout <= 0 {
+		return configoptional.None[exporterhelper.QueueBatchConfig]()
+	}
+	queueConfig := exporterhelper.NewDefaultQueueConfig()
+	queueConfig.Sizer = exporterhelper.RequestSizerTypeItems
+	// Avoid continuously seeing "sending queue is full" errors in the standard output
+	queueConfig.BlockOnOverflow = true
+	batchCfg := exporterhelper.BatchConfig{
+		Sizer: queueConfig.Sizer,
+	}
+	batchSet := false
+	if cfg.MaxQueueSize > 0 {
+		batchSet = true
+		batchCfg.MaxSize = int64(cfg.MaxQueueSize)
+	}
+	if cfg.BatchTimeout > 0 {
+		batchSet = true
+		batchCfg.FlushTimeout = cfg.BatchTimeout
+		batchCfg.MinSize = int64(cfg.MaxQueueSize)
+	}
+	if batchSet {
+		queueConfig.Batch = configoptional.Some(batchCfg)
+	}
+	return configoptional.Some(queueConfig)
 }
 
 func createZapLoggerDev(sdkLogLevel string) *zap.Logger {

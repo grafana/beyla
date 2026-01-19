@@ -72,6 +72,14 @@ func NewSockFlowFetcher(
 	spec.Maps[flowDirectionsMap].MaxEntries = uint32(cacheMaxSize)
 	spec.Maps[connInitiatorsMap].MaxEntries = uint32(cacheMaxSize)
 
+	// Debug events map is unsupported due to pinning
+	spec.Maps["debug_events"] = &ebpf.MapSpec{
+		Name:       "dummy_map",
+		Type:       ebpf.RingBuf,
+		Pinning:    ebpf.PinNone,
+		MaxEntries: uint32(os.Getpagesize()),
+	}
+
 	traceMsgs := 0
 	if tlog.Enabled(context.TODO(), slog.LevelDebug) {
 		traceMsgs = 1
@@ -79,6 +87,7 @@ func NewSockFlowFetcher(
 	if err := convenience.RewriteConstants(spec, map[string]any{
 		constSampling:      uint32(sampling),
 		constTraceMessages: uint8(traceMsgs),
+		"g_bpf_debug":      true,
 	}); err != nil {
 		return nil, fmt.Errorf("rewriting BPF constants definition: %w", err)
 	}

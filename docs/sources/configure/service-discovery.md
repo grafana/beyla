@@ -204,6 +204,95 @@ This example configures Beyla to export only metrics for all services. For the s
 
 For an export signal to function, you must configure the corresponding exporter in Beyla. For example, specifying `traces` in the `exports` list requires configuring the OTLP traces exporter via `otel_traces_export`. Specifying `metrics` requires configuring at least one metrics exporter, such as `prometheus_export` or `otel_metrics_export`. If you specify an export signal without configuring the corresponding exporter, Beyla ignores that signal.
 
+### Metrics export features
+
+Additionally to configuring custom export modes per discovery instrumentation criteria, Beyla allows you to override the global metrics export features
+for each discovery criteria by adding `metrics > features` as a property to individual `discovery > instrument` entries.
+
+For example:
+
+```yaml
+metrics:
+  features: ['application_service_graph']
+discovery:
+  instrument:
+    - open_ports: 3030,3040
+      metrics:
+        features:
+          - 'application'
+          - 'application_span'
+          - 'application_service_graph'
+    - name: pyserver
+      open_ports: 7773
+      metrics:
+        features:
+          - 'application'
+    - name: apache
+      open_ports: 8080
+    - name: nginx
+      open_ports: 8085
+    - name: tomcat
+      open_ports: 8090
+```
+
+This example configures Beyla to only export application service graph metrics by default, but it later overrides specific discovery criteria with different set of exported metrics. 
+The outcome of the configuration is as follows:
+
+- The `apache`, `nginx`, and `tomcat` service instances only export
+  `application_service_graph` metrics (as defined in the top-level
+  `metrics > features` configuration).
+
+- The `pyserver` service only exports the `application` group of metrics.
+
+- Services listening on ports 3030 or 3040 export the `application`,
+  `application_span`, and `application_service_graph` metric groups.
+
+
+### Custom trace sampler
+
+By using the `sampler` property for an `instrument` definition criteria, you can define individual trace sampling strategy for each `instrument` criteria. This option overrides the default specified trace sampling configuration if it is defined for all instrumented services. For more details on configuring sampling, refer to the [sample traces](../sample-traces/) documentation section.
+
+For example:
+
+```yaml
+discovery:
+  instrument:
+    - k8s_deployment_name: backend
+      sampler:
+        name: "traceidratio"
+        arg: "0.1"      
+    - k8s_deployment_name: worker
+otel_traces_export:
+  sampler:
+    name: "traceidratio"
+    arg: "0.5"      
+```
+
+This example configures a global trace sampling configuration with the `traceidratio` sampling option of 50%, for all instrumented services. However, for the deployment name `backend`, this discovery criteria defines an override that uses the same `traceidratio` sampling option, but samples only 10% of the traces.
+
+### Custom route matching rules
+
+By using the `routes` property for an `instrument` definition criteria, you can define individual incoming and outgoing route matching rules for each `instrument` criteria. This option appends to the default specified route matching patterns if it is defined for all instrumented services. For more details on configuring route matching patterns, refer to the [routes decorator](../routes-decorator/) documentation section.
+
+Unlike the default `routes` pattern matching configuration option, the `instrument` definition criteria routes option has separate section for defining route matching rules for `incoming` and `outgoing` requests. This allows for precise control of your HTTP route cardinality. 
+
+For example:
+
+```yaml
+discovery:
+  instrument:
+    - k8s_deployment_name: backend
+      routes:
+        incoming: ["/api/users/{user_id}", "/api/customers/{customer_id}"]
+        outgoing: ["/*"]  
+    - k8s_deployment_name: frontend
+routes:
+  patterns:
+    - /user/{id}
+```
+
+In the example above, we have global route matching pattern definition for the HTTP route `/user/{id}`. However, the service `backend` has additional route matchers for incoming calls to `/api/users/{user_id}` and `/api/customers/{customer_id}`, and an additional outgoing request pattern for `/*`. If the `backend` service was making high-cardinality outgoing calls that we didn't want to store in out metrics database, by specifying a catch all outgoing pattern of `/*`, we can selectively remove the problematic cardinality source without impacting all other services.
+
 ## Survey mode
 
 In survey mode, Beyla only performs service discovery and detects the programming language of each service, but doesn't instrument any discovered services.
@@ -237,6 +326,7 @@ a part of a encompassing inclusion criteria.
 ## Skip go specific tracers
 
 The `skip_go_specific_tracers` option disables the detection of Go specifics when the **ebpf** tracer inspects executables to be instrumented. The tracer falls back to using generic instrumentation, which is generally less efficient.
+This option should only be used for Go services built with Go versions older than 1.17.
 
 ## Exclude otel instrumented services
 
@@ -271,16 +361,42 @@ You can override the Kubernetes labels from the previous bullet 3 via configurat
 In YAML:
 
 ```yaml
-kubernetes:
-  resource_labels:
-    service.name:
-      # gets service name from the first existing Pod label
-      - override-svc-name
-      - app.kubernetes.io/name
-    service.namespace:
-      # gets service namespace from the first existing Pod label
-      - override-svc-ns
-      - app.kubernetes.io/part-of
+attributes:
+  kubernetes:
+    resource_labels:
+      service.name:
+        # gets service name from the first existing Pod label
+        - override-svc-name
+        - app.kubernetes.io/name
+      service.namespace:
+        # gets service namespace from the first existing Pod label
+        - override-svc-ns
+        - app.kubernetes.io/part-of
 ```
 
 They accept a comma-separated list of annotation and label names.
+
+## Minimum process age
+
+The `min_process_age` (environment variable `BEYLA_MIN_PROCESS_AGE`) option sets a requirement for a process to be alive for at least certain amount of time before it is considered for instrumentation. The default value is `"5s"` (five seconds). This option is a performance optimization related to cost of processing discovered binaries based on the chosen discovery criteria. It avoids instrumenting periodic short lived processes.
+
+## Route harvesting
+
+Since Beyla instruments at the protocol level, for HTTP requests we see the actual URL path, while the OpenTelemetry specification requires that we provide a low-cardinality URL route. Beyla has purpose built route detector, which uses heuristics and cardinality reduction logic to automatically determine the low-cardinality route from the protocol provided URL path (for more information on this refer to [Routes Decorator](../routes-decorator/)). However, for certain programming languages, Beyla can process the application symbols and extract the actual routes set in the application.
+
+Currently the route harvesting is supported for `Java`, `Go` and `NodeJS`.
+
+| YAML<p>environment variable</p>               | Description                                                                                               | Type    | Default |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ------- | ------- |
+| `route_harvester_timeout`<p>`BEYLA_ROUTE_HARVESTER_TIMEOUT`</p> | A timeout to abandon the route harvesting if it takes too long | string    | "10s" |
+| `disabled_route_harvesters` | A list of disabled route harvesters. Available choices: ["`java`", "`nodejs`", "`go`"]                | list of strings    | (empty) |
+
+The route harvesting for `Java` applications works by communicating with the JVM at runtime. `Java` application typically load after a bit of time, which may result in incomplete route
+information, if Beyla harvests the Java application routes immediately as it instruments the process. Therefore, Beyla performs Java route harvesting on Java applications which have been
+running for at least 60 seconds. This value can be modified by setting the environment variable `BEYLA_JAVA_ROUTE_HARVEST_DELAY` or by setting the configuration file option:
+
+```
+discovery:
+  route_harvester_advanced:
+    java_harvest_delay: 30s
+```

@@ -11,6 +11,7 @@ github.com/aws/aws-sdk-go-v2/internal/ini,https://github.com/grafana/beyla/blob/
 github.com/aws/aws-sdk-go-v2/internal/sync/singleflight,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/aws/aws-sdk-go-v2/internal/sync/singleflight/LICENSE,BSD-3-Clause
 github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding/LICENSE.txt,Apache-2.0
 github.com/aws/aws-sdk-go-v2/service/internal/presigned-url,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/aws/aws-sdk-go-v2/service/internal/presigned-url/LICENSE.txt,Apache-2.0
+github.com/aws/aws-sdk-go-v2/service/signin,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/aws/aws-sdk-go-v2/service/signin/LICENSE.txt,Apache-2.0
 github.com/aws/aws-sdk-go-v2/service/sso,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/aws/aws-sdk-go-v2/service/sso/LICENSE.txt,Apache-2.0
 github.com/aws/aws-sdk-go-v2/service/ssooidc,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/aws/aws-sdk-go-v2/service/ssooidc/LICENSE.txt,Apache-2.0
 github.com/aws/aws-sdk-go-v2/service/sts,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/aws/aws-sdk-go-v2/service/sts/LICENSE.txt,Apache-2.0
@@ -55,7 +56,7 @@ github.com/go-playground/universal-translator,https://github.com/grafana/beyla/b
 github.com/go-playground/validator/v10,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/go-playground/validator/v10/LICENSE,MIT
 github.com/go-viper/mapstructure/v2,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/go-viper/mapstructure/v2/LICENSE,MIT
 github.com/gobwas/glob,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/gobwas/glob/LICENSE,MIT
-github.com/gogo/protobuf,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/gogo/protobuf/LICENSE,BSD-3-Clause
+github.com/goccy/go-yaml,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/goccy/go-yaml/LICENSE,MIT
 github.com/golang/snappy,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/golang/snappy/LICENSE,BSD-3-Clause
 github.com/google/gnostic-models,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/google/gnostic-models/LICENSE,Apache-2.0
 github.com/google/go-tpm,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/google/go-tpm/LICENSE,Apache-2.0
@@ -89,6 +90,7 @@ github.com/modern-go/reflect2,https://github.com/grafana/beyla/blob/HEAD/vendor/
 github.com/mostynb/go-grpc-compression,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/mostynb/go-grpc-compression/LICENSE,Apache-2.0
 github.com/munnerz/goautoneg,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/munnerz/goautoneg/LICENSE,BSD-3-Clause
 github.com/mxk/go-flowrate/flowrate,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/mxk/go-flowrate/LICENSE,BSD-3-Clause
+github.com/oschwald/maxminddb-golang,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/oschwald/maxminddb-golang/LICENSE,ISC
 github.com/pelletier/go-toml/v2,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/pelletier/go-toml/v2/LICENSE,MIT
 github.com/pierrec/lz4/v4,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/pierrec/lz4/v4/LICENSE,BSD-3-Clause
 github.com/pkg/errors,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/pkg/errors/LICENSE,BSD-2-Clause
@@ -98,6 +100,8 @@ github.com/prometheus/client_golang/prometheus,https://github.com/grafana/beyla/
 github.com/prometheus/client_model/go,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/prometheus/client_model/LICENSE,Apache-2.0
 github.com/prometheus/common,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/prometheus/common/LICENSE,Apache-2.0
 github.com/prometheus/procfs,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/prometheus/procfs/LICENSE,Apache-2.0
+github.com/quic-go/qpack,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/quic-go/qpack/LICENSE.md,MIT
+github.com/quic-go/quic-go,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/quic-go/quic-go/LICENSE,MIT
 github.com/rs/cors,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/rs/cors/LICENSE,MIT
 github.com/shirou/gopsutil/v3,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/shirou/gopsutil/v3/LICENSE,BSD-3-Clause
 github.com/spf13/pflag,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/spf13/pflag/LICENSE,BSD-3-Clause

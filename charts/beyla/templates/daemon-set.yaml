@@ -63,6 +63,7 @@ spec:
                 - CHECKPOINT_RESTORE
                 - DAC_READ_SEARCH
                 - PERFMON
+                - SYS_ADMIN
               {{- if .Values.contextPropagation.enabled }}
                 - NET_ADMIN
               {{- end }}

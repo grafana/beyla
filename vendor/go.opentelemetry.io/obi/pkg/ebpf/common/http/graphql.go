@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 
 	"github.com/vektah/gqlparser/v2/ast"
@@ -33,20 +32,17 @@ type (
 
 func GraphQLSpan(baseSpan *request.Span, req *http.Request, _ *http.Response) (request.Span, bool) {
 	if req.Method != http.MethodPost {
-		slog.Debug("parse GraphQL request: unsupported method")
 		return *baseSpan, false
 	}
 
 	reqB, err := io.ReadAll(req.Body)
 	if err != nil {
-		slog.Debug("read GraphQL request body", "error", err)
 		return *baseSpan, false
 	}
 	req.Body = io.NopCloser(bytes.NewBuffer(reqB))
 
 	op, err := parseGraphQLRequest(reqB)
 	if err != nil {
-		slog.Debug("parse GraphQL request", "error", err)
 		return *baseSpan, false
 	}
 

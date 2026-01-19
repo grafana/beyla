@@ -132,6 +132,11 @@ const (
 	K8sDstOwnerType = Name("k8s.dst.owner.type")
 	K8sDstNodeIP    = Name("k8s.dst.node.ip")
 	K8sDstNodeName  = Name("k8s.dst.node.name")
+
+	SrcCountry = Name("src.country")
+	DstCountry = Name("dst.country")
+	SrcASN     = Name("src.asn")
+	DstASN     = Name("dst.asn")
 )
 
 // other OBI-specific attributes

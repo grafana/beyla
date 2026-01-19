@@ -1,6 +1,8 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
+//go:build linux
+
 package harvest
 
 import (
@@ -13,10 +15,25 @@ import (
 	"sort"
 	"strings"
 	"unicode"
+
+	"github.com/grafana/jvmtools/jvm"
 )
 
 type JavaRoutes struct {
-	log *slog.Logger
+	log      *slog.Logger
+	Attacher JavaAttacher
+}
+
+type JavaAttacher interface {
+	Init()
+	Cleanup()
+	Attach(pid int, argv []string, ignoreOnJ9 bool) (io.ReadCloser, error)
+}
+
+type RealJavaAttacher struct {
+	JavaAttacher
+	Attacher *jvm.JAttacher
+	logger   *slog.Logger
 }
 
 const (
@@ -27,8 +44,10 @@ const (
 var validURLPath = regexp.MustCompile(`^[A-Za-z0-9\-_{}\./]+$`)
 
 func NewJavaRoutesHarvester() *JavaRoutes {
+	logger := slog.With("component", "route.harvester.java")
 	return &JavaRoutes{
-		log: slog.With("component", "route.harvester.java"),
+		log:      logger,
+		Attacher: RealJavaAttacher{Attacher: jvm.NewJAttacher(logger), logger: logger},
 	}
 }
 
@@ -134,9 +153,14 @@ func (h *JavaRoutes) processSymbolLine(lineBytes []byte, routes []string) []stri
 
 func (h *JavaRoutes) ExtractRoutes(pid int32) (*RouteHarvesterResult, error) {
 	routes := []string{}
-	out, err := jvmAttachFunc(int(pid), []string{"jcmd", "VM.symboltable -verbose"}, h.log)
+	out, err := h.Attacher.Attach(int(pid), []string{"jcmd", "VM.symboltable -verbose"}, true)
 	if err != nil {
 		return nil, err
+	}
+
+	if out == nil {
+		h.log.Info("route harvesting not supported on this JVM")
+		return &RouteHarvesterResult{Routes: nil, Kind: PartialRoutes}, nil
 	}
 
 	defer out.Close()
@@ -163,4 +187,18 @@ func (h *JavaRoutes) ExtractRoutes(pid int32) (*RouteHarvesterResult, error) {
 	h.log.Debug("java routes", "routes", routes)
 
 	return &RouteHarvesterResult{Routes: routes, Kind: PartialRoutes}, nil
+}
+
+func (j RealJavaAttacher) Init() {
+	j.Attacher.Init()
+}
+
+func (j RealJavaAttacher) Cleanup() {
+	if err := j.Attacher.Cleanup(); err != nil {
+		j.logger.Warn("error on JVM attach cleanup", "error", err)
+	}
+}
+
+func (j RealJavaAttacher) Attach(pid int, argv []string, ignoreOnJ9 bool) (io.ReadCloser, error) {
+	return j.Attacher.Attach(pid, argv, ignoreOnJ9)
 }

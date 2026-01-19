@@ -13,7 +13,7 @@ repository configuration and release process.
 
 ## Beyla main branch
 
-Beyla's main branch is always pinned to a specific hash of the upstream OpenTelemetry eBPF Instrumentation 
+Beyla's main branch is always pinned to a specific hash of the upstream OpenTelemetry eBPF Instrumentation
 project. We use a git sub-module so we can build the eBPF binaries directly. Beyla's main branch closely
 tracks OBI's main branch and the hash is moved forward from time to time.
 
@@ -35,12 +35,12 @@ then checkout that hash and manually push to the Grafana OBI main branch.
 ### Step 2: Create new release branch in Grafana OBI
 
 To start the process we first need to make a new release branch in [Grafana's fork of the OBI
-project](https://github.com/grafana/opentelemetry-ebpf-instrumentation). 
-After the branch is made, we preferably also make a tag and a release, which can follow any 
+project](https://github.com/grafana/opentelemetry-ebpf-instrumentation).
+After the branch is made, we preferably also make a tag and a release, which can follow any
 release numbering, e.g. v1.2.0.
 
 If there are any OBI upstream changes that we consider perhaps too new and experimental to
-be shipped to our end users, we can perform changes to the newly cut release branch and 
+be shipped to our end users, we can perform changes to the newly cut release branch and
 adjust the code. We can also change defaults in this release, if the Grafana desired defaults should
 be different than the upstream OBI.
 
@@ -51,7 +51,7 @@ follow the Beyla release naming schedule.
 
 ### Step 4: Point the release branch to the Grafana OBI release
 
-The Beyla main repository sub-module points to the upstream OBI repository. We need 
+The Beyla main repository sub-module points to the upstream OBI repository. We need
 to change that to make it point to the new Grafana OBI branch we cut.
 
 Beyla's main sub-module definition (`.gitmodules`) will look like this:
@@ -62,7 +62,7 @@ Beyla's main sub-module definition (`.gitmodules`) will look like this:
 	url = https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation.git
 ```
 
-Check-out the release branch you just cut and edit the `.gitmodules` file to point 
+Check-out the release branch you just cut and edit the `.gitmodules` file to point
 it to the Grafana OBI branch, e.g. for branch `release-1.2`.
 
 ```
@@ -132,6 +132,29 @@ merge the code, make a PR with the updated Grafana OBI branch in Beyla, get appr
 pass CI and merge.
 
 All fixes are to be forward-ported to the upstream OBI repository, don't put
-fixes in the Grafana OBI main branch. If you want to update the Grafana OBI main 
+fixes in the Grafana OBI main branch. If you want to update the Grafana OBI main
 branch with the fix, it must be first merged in upstream OBI and then you can sync
 the changes to the Grafana OBI main.
+
+## Checking if an OBI PR was released in Beyla
+
+Use [scripts/release-lookup.sh](../scripts/release-lookup.sh) to check if an OBI
+PR was releassed in Beyla.
+
+Example below to find if the OBI PR linked to this issue https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation/issues/995 was released in Beyla (it wasn't):
+
+```shell
+./scripts/release-lookup.sh --obi 995
+[info] Issue #995: Use HTTP Host header for service name resolution when K8s lookup fails (state: closed)
+[info] Found linked PR #997: fix: fallback to http host header for service graph
+
+OBI Issue #995 (PR #997) was not yet released as part of Beyla
+```
+
+Another example with https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation/issues/896:
+
+```shell
+❯ ./scripts/release-lookup.sh --obi 896
+
+OBI PR #896 was released as part of Beyla 2.8.0
+```

@@ -19,13 +19,13 @@ import (
 	"go.opentelemetry.io/obi/pkg/obi"
 )
 
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type log_info_t -target amd64,arm64 BpfDebug ../../../../bpf/logger/logger.c -- -I../../../../bpf -DBPF_DEBUG
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type log_info_t -target amd64,arm64 Bpf ../../../../bpf/logger/logger.c -- -I../../../../bpf
 
-type BPFLogInfo BpfDebugLogInfoT
+type BPFLogInfo BpfLogInfoT
 
 type BPFLogger struct {
 	cfg        *obi.Config
-	bpfObjects BpfDebugObjects
+	bpfObjects BpfObjects
 	closers    []io.Closer
 	log        *slog.Logger
 }
@@ -44,7 +44,7 @@ func New(cfg *obi.Config) *BPFLogger {
 
 func (p *BPFLogger) Load() (*ebpf.CollectionSpec, error) {
 	if p.cfg.EBPF.BpfDebug {
-		return LoadBpfDebug()
+		return LoadBpf()
 	}
 	return nil, errors.New("BPF debug is not enabled")
 }
@@ -63,6 +63,12 @@ func (p *BPFLogger) KProbes() map[string]ebpfcommon.ProbeDesc {
 
 func (p *BPFLogger) Tracepoints() map[string]ebpfcommon.ProbeDesc {
 	return nil
+}
+
+func (p *BPFLogger) Constants() map[string]any {
+	return map[string]any{
+		"g_bpf_debug": p.cfg.EBPF.BpfDebug,
+	}
 }
 
 func (p *BPFLogger) SetupTailCalls() {}

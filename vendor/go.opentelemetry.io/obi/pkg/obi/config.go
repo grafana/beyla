@@ -225,6 +225,10 @@ var DefaultConfig = Config{
 	NodeJS: NodeJSConfig{
 		Enabled: true,
 	},
+	Java: JavaConfig{
+		Enabled: true,
+		Timeout: 10 * time.Second,
+	},
 }
 
 type Config struct {
@@ -295,6 +299,7 @@ type Config struct {
 	LogConfig LogConfigOption `yaml:"log_config" env:"OTEL_EBPF_LOG_CONFIG"`
 
 	NodeJS NodeJSConfig `yaml:"nodejs"`
+	Java   JavaConfig   `yaml:"javaagent"`
 }
 
 type LogConfigOption string
@@ -335,6 +340,13 @@ type HostIDConfig struct {
 
 type NodeJSConfig struct {
 	Enabled bool `yaml:"enabled" env:"OTEL_EBPF_NODEJS_ENABLED"`
+}
+
+type JavaConfig struct {
+	Enabled              bool          `yaml:"enabled" env:"OTEL_EBPF_JAVAAGENT_ENABLED"`
+	Debug                bool          `yaml:"debug" env:"OTEL_EBPF_JAVAAGENT_DEBUG"`
+	DebugInstrumentation bool          `yaml:"debug_instrumentation" env:"OTEL_EBPF_JAVAAGENT_DEBUG_INSTRUMENTATION"`
+	Timeout              time.Duration `yaml:"attach_timeout" env:"OTEL_EBPF_JAVAAGENT_ATTACH_TIMEOUT" validate:"gte=0"`
 }
 
 type ConfigError string

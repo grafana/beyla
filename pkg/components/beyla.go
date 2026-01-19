@@ -189,7 +189,7 @@ func buildCommonContextInfo(
 	promMgr := &connector.PrometheusManager{}
 	ctxInfo := &global.ContextInfo{
 		Prometheus:              promMgr,
-		OTELMetricsExporter:     &otelcfg.MetricsExporterInstancer{Cfg: &config.OTELMetrics},
+		OTELMetricsExporter:     &otelcfg.MetricsExporterInstancer{Cfg: &config.AsOBI().OTELMetrics},
 		ExtraResourceAttributes: []attribute.KeyValue{semconv.OTelLibraryName(otel.ReporterName)},
 		OverrideAppExportQueue: msg.NewQueue[[]request.Span](
 			msg.ChannelBufferLen(config.ChannelBufferLen),

@@ -60,7 +60,7 @@ Beyla requires the following list of capabilities for its functionality:
 | `CAP_CHECKPOINT_RESTORE` | Access to symlinks in the `/proc` filesystem, used by Beyla to obtain various process and system information.                                                                                                                     |
 | `CAP_SYS_PTRACE`         | Access to `/proc/pid/exe` and executable modules, used by Beyla to scan executable symbols and instrument different parts of a program.                                                                                           |
 | `CAP_SYS_RESOURCE`       | Increase the amount of locked memory available, **kernels < 5.11** only                                                                                                                                                           |
-| `CAP_SYS_ADMIN`          | Library-level Go trace-context propagation via `bpf_probe_write_user()` and access to BTF data by the BPF metrics exporter                                                                                                        |
+| `CAP_SYS_ADMIN`          | Library-level instrumentation with BPF `uprobes`, used for capturing better language level insights for various programming languages. |
 
 ### Performance monitoring tasks
 
@@ -178,31 +178,13 @@ Required capabilities:
 * `CAP_CHECKPOINT_RESTORE`
 * `CAP_PERFMON`
 * `CAP_NET_RAW`
+* `CAP_SYS_ADMIN`
 * `CAP_SYS_PTRACE`
 
 Set the required capabilities and start Beyla:
 
 ```shell
-sudo setcap cap_bpf,cap_dac_read_search,cap_perfmon,cap_net_raw,cap_sys_ptrace+ep ./bin/beyla
-BEYLA_OPEN_PORT=8080 BEYLA_TRACE_PRINTER=text bin/beyla
-```
-
-### Application observability with trace context propagation
-
-Required capabilities:
-
-* `CAP_BPF`
-* `CAP_DAC_READ_SEARCH`
-* `CAP_CHECKPOINT_RESTORE`
-* `CAP_PERFMON`
-* `CAP_NET_RAW`
-* `CAP_SYS_PTRACE`
-* `CAP_NET_ADMIN`
-
-Set the required capabilities and start Beyla:
-
-```shell
-sudo setcap cap_bpf,cap_dac_read_search,cap_perfmon,cap_net_raw,cap_sys_ptrace,cap_net_admin+ep ./bin/beyla
+sudo setcap cap_bpf,cap_dac_read_search,cap_perfmon,cap_net_raw,cap_sys_ptrace,cap_sys_admin+ep ./bin/beyla
 BEYLA_ENABLE_CONTEXT_PROPAGATION=all BEYLA_OPEN_PORT=8080 BEYLA_TRACE_PRINTER=text bin/beyla
 ```
 
@@ -231,7 +213,7 @@ The list below maps each internal tracer to their required capabilities, intende
 * `CAP_DAC_READ_SEARCH`: for access to `/proc/self/mem` to determine kernel version
 * `CAP_PERFMON`: for loading `BPF_PROG_TYPE_KPROBE` eBPF programs that require pointer arithmetic
 
-**(Application observability) Support for languages other than Go:**
+**(Application observability) Support for all programming languages:**
 
 * `CAP_BPF`
 * `CAP_DAC_READ_SEARCH`
@@ -239,20 +221,4 @@ The list below maps each internal tracer to their required capabilities, intende
 * `CAP_PERFMON`
 * `CAP_NET_RAW`: to create `AF_PACKET` socket used to attach `beyla_socket__http_filter` to network interfaces
 * `CAP_SYS_PTRACE`: for access to `/proc/pid/exe` and other nodes in `/proc`
-
-**(Application and network observability) network monitoring in TC mode and context propagation:**
-
-* `CAP_BPF`
-* `CAP_DAC_READ_SEARCH`
-* `CAP_PERFMON`
-* `CAP_NET_ADMIN`: allows loading`BPF_PROG_TYPE_SCHED_CLS`, `BPF_PROG_TYPE_SOCK_OPS` and `BPF_PROG_TYPE_SK_MSG`, all used by trace context propagation and network monitoring
-
-**(Application observability) GO tracer:**
-
-* `CAP_BPF`
-* `CAP_DAC_READ_SEARCH`
-* `CAP_CHECKPOINT_RESTORE`
-* `CAP_PERFMON`
-* `CAP_NET_RAW`: to create `AF_PACKET` socket used to attach `beyla_socket__http_filter` to network interfaces
-* `CAP_SYS_PTRACE`: for access to `/proc/pid/exe` and other nodes in `/proc`
-* `CAP_SYS_ADMIN`: for probe based (`bpf_probe_write_user()`) library level context propagation
+* `CAP_SYS_ADMIN`: for probe based library level instrumentation

@@ -8,6 +8,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.25.0"
 
 	"go.opentelemetry.io/obi/pkg/appolly/services"
+	"go.opentelemetry.io/obi/pkg/export"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/internal/transform/route"
 	"go.opentelemetry.io/obi/pkg/internal/transform/route/clusterurl"
@@ -114,6 +115,10 @@ type Attrs struct {
 	ExportModes services.ExportModes
 
 	Sampler trace.Sampler
+
+	// Features that are defined in a per-service basis. For example, we might want to enable
+	// Service Graph Metrics for all the services but RED metrics only for a few
+	Features export.Features
 
 	CustomInRouteMatcher  route.Matcher
 	CustomOutRouteMatcher route.Matcher

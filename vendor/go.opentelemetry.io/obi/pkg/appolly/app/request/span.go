@@ -647,6 +647,25 @@ func (s *Span) ServiceGraphKind() string {
 	return "SPAN_KIND_INTERNAL"
 }
 
+// ServiceGraphConnectionType returns the connection_type for service graph metrics.
+// See: https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/connector/servicegraphconnector
+func (s *Span) ServiceGraphConnectionType() string {
+	switch s.Type {
+	case EventTypeSQLClient, EventTypeRedisClient, EventTypeMongoClient:
+		return "database"
+	case EventTypeKafkaClient:
+		return "messaging_system"
+	case EventTypeHTTPClient:
+		if s.SubType == HTTPSubtypeAWSSQS {
+			return "messaging_system"
+		}
+		if s.SubType == HTTPSubtypeElasticsearch {
+			return "database"
+		}
+	}
+	return ""
+}
+
 func (s *Span) TraceName() string {
 	if s.OverrideTraceName != "" {
 		return s.OverrideTraceName

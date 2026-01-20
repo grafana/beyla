@@ -72,6 +72,22 @@ You can use [k9s](https://k9scli.io) to check the Beyla logs that will be printi
 
 You can also check the Beyla pod logs with `kubectl`.
 
+## Testing the instrumentation
+
+### 1. Open the port to the Node.js frontend application
+
+```sh
+kubectl port-forward svc/frontend 8080:8080
+```
+
+### 2. Run curl to send some traffic
+
+```sh
+curl "http://localhost:8080/suggestion?language=english&gender=boy"
+```
+
+After this point you should see some traces appear in your Tempo in LGTM.
+
 ## Testing a new image (after making changes or debugging)
 
 I usually delete the prior deployments and install fresh, like this:

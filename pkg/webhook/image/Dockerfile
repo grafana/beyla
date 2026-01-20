@@ -57,6 +57,7 @@ COPY node.js/package.json .
 COPY node.js/tsconfig.json .
 
 RUN npm install
+RUN ls -al *
 
 # build the final instrumentation image
 FROM alpine:3.23.2
@@ -70,6 +71,7 @@ COPY --from=download-dotnet-sdk /glibc /dist/agents/dotnet/glibc
 COPY --from=download-dotnet-sdk /musl /dist/agents/dotnet/musl
 COPY --from=download-java-sdk /opentelemetry-javaagent.jar /dist/agents/jvm/opentelemetry-javaagent.jar
 COPY --from=build-nodejs-sdk /operator-build/build/workspace/node_modules/@opentelemetry/auto-instrumentations-node/build/src/ /dist/agents/node.js/
+COPY --from=build-nodejs-sdk /operator-build/node_modules /dist/agents/node.js/node_modules
 
 WORKDIR /
 CMD ["/copy-to-volume.sh"]

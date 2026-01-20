@@ -10,6 +10,9 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/grafana/beyla/v2/pkg/beyla"
+	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
+	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -29,7 +32,7 @@ const (
 	injectVolumeName   = "otel-inject-instrumentation"
 	initContainerName  = "otel-inject-instrumentation"
 	injectVolumeSizeMB = 500
-	injectorImage      = "ghcr.io/grafana/beyla/inject-sdk-image:0.0.1"
+	injectorImage      = "ghcr.io/grafana/beyla/inject-sdk-image:0.0.3"
 	// this value is hardcoded in the copy script and the injector config
 	internalMountPath = "/__otel_sdk_auto_instrumentation__"
 
@@ -38,6 +41,8 @@ const (
 	envOtelInjectorConfigFileName   = "OTEL_INJECTOR_CONFIG_FILE"
 	envOtelInjectorConfigFileValue  = internalMountPath + "/injector/otelinject.conf"
 	envOtelExporterOtlpEndpointName = "OTEL_EXPORTER_OTLP_ENDPOINT"
+	envOtelExporterOtlpProtocolName = "OTEL_EXPORTER_OTLP_PROTOCOL"
+	envOtelExtraResourceAttrs       = "OTEL_INJECTOR_RESOURCE_ATTRIBUTES"
 )
 
 func init() {
@@ -47,14 +52,40 @@ func init() {
 
 // PodMutator handles the mutation of pods
 type PodMutator struct {
-	logger *slog.Logger
+	logger        *slog.Logger
+	cfg           *beyla.Config
+	endpoint      string
+	proto         string
+	exportHeaders map[string]string
 }
 
 // NewPodMutator creates a new PodMutator
-func NewPodMutator() *PodMutator {
-	return &PodMutator{
-		logger: slog.Default().With("component", "webhook"),
+func NewPodMutator(cfg *beyla.Config) (*PodMutator, error) {
+	var opts otelcfg.OTLPOptions
+	var err error
+
+	switch proto := cfg.Traces.GetProtocol(); proto {
+	case otelcfg.ProtocolHTTPJSON, otelcfg.ProtocolHTTPProtobuf, "":
+		opts, err = otelcfg.HTTPTracesEndpointOptions(&cfg.Traces)
+		if err != nil {
+			return nil, err
+		}
+	case otelcfg.ProtocolGRPC:
+		opts, err = otelcfg.GRPCTracesEndpointOptions(&cfg.Traces)
+		if err != nil {
+			return nil, err
+		}
+	default:
+		return nil, fmt.Errorf("unsupported SDK export protocol %s", proto)
 	}
+
+	return &PodMutator{
+		logger:        slog.Default().With("component", "webhook"),
+		cfg:           cfg,
+		endpoint:      opts.Scheme + "://" + opts.Endpoint + opts.BaseURLPath,
+		exportHeaders: opts.Headers,
+		proto:         string(cfg.Traces.Protocol),
+	}, nil
 }
 
 func errorResponse(admResponse *admissionv1.AdmissionResponse, message string) {
@@ -195,12 +226,13 @@ func (pm *PodMutator) mutatePod(pod *corev1.Pod) bool {
 	pm.addInitContainer(spec)
 
 	// instrument all containers that don't have some preexisting LD_PRELOAD set on them
-	for _, c := range spec.Containers {
-		if _, ok := findEnvVar(&c, envVarLdPreloadName); ok {
+	for i := range spec.Containers {
+		c := &spec.Containers[i]
+		if _, ok := findEnvVar(c, envVarLdPreloadName); ok {
 			pm.logger.Warn("container already using LD_PRELOAD, ignoring...", "container", c.Name)
 			continue
 		}
-		pm.instrumentContainer(&c)
+		pm.instrumentContainer(c)
 	}
 
 	return !reflect.DeepEqual(originalSpec, spec)
@@ -345,14 +377,14 @@ func (pm *PodMutator) createInitContainer(podSpec *corev1.PodSpec) *corev1.Conta
 
 func (pm *PodMutator) instrumentContainer(c *corev1.Container) {
 	pm.addMount(c)
-	pm.addEnvironmentVariables(c)
+	pm.addEnvVars(c)
 }
 
-func (pm *PodMutator) addMount(container *corev1.Container) {
-	if container.VolumeMounts == nil {
-		container.VolumeMounts = make([]corev1.VolumeMount, 0)
+func (pm *PodMutator) addMount(c *corev1.Container) {
+	if c.VolumeMounts == nil {
+		c.VolumeMounts = make([]corev1.VolumeMount, 0)
 	}
-	idx := slices.IndexFunc(container.VolumeMounts, func(c corev1.VolumeMount) bool {
+	idx := slices.IndexFunc(c.VolumeMounts, func(c corev1.VolumeMount) bool {
 		return c.Name == injectVolumeName
 	})
 
@@ -361,9 +393,9 @@ func (pm *PodMutator) addMount(container *corev1.Container) {
 		MountPath: internalMountPath,
 	}
 	if idx < 0 {
-		container.VolumeMounts = append(container.VolumeMounts, *volume)
+		c.VolumeMounts = append(c.VolumeMounts, *volume)
 	} else {
-		container.VolumeMounts[idx] = *volume
+		c.VolumeMounts[idx] = *volume
 	}
 }
 
@@ -384,7 +416,7 @@ func setEnvVar(c *corev1.Container, envVar corev1.EnvVar) {
 	}
 }
 
-func (pm *PodMutator) addEnvironmentVariables(c *corev1.Container) {
+func (pm *PodMutator) addEnvVars(c *corev1.Container) {
 	if c.Env == nil {
 		c.Env = []corev1.EnvVar{}
 	}
@@ -403,7 +435,41 @@ func (pm *PodMutator) addEnvironmentVariables(c *corev1.Container) {
 		},
 	)
 
-	// TODO: Add exporter variables, resource attributes, etc.
+	setEnvVar(c,
+		corev1.EnvVar{
+			Name:  envOtelExporterOtlpEndpointName,
+			Value: pm.endpoint,
+		},
+	)
+
+	if pm.proto != "" {
+		setEnvVar(c,
+			corev1.EnvVar{
+				Name:  envOtelExporterOtlpProtocolName,
+				Value: pm.proto,
+			},
+		)
+	}
+
+	if pm.cfg.Metrics.Features.AnySpanMetrics() {
+		setEnvVar(c,
+			corev1.EnvVar{
+				Name:  envOtelExtraResourceAttrs,
+				Value: string(attr.SkipSpanMetrics.OTEL()) + "=true",
+			},
+		)
+	}
+
+	for k, v := range pm.exportHeaders {
+		setEnvVar(c,
+			corev1.EnvVar{
+				Name:  k,
+				Value: v,
+			},
+		)
+	}
+
+	pm.logger.Info("env vars", "vars", c.Env)
 }
 
 // HealthCheck is a simple health check endpoint

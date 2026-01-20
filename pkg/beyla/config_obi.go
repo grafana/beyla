@@ -26,7 +26,7 @@ func FromOBI(c *obi.Config) *Config {
 		".Grafana":          cfgutil.SkipConversion,
 		".Topology":         cfgutil.SkipConversion,
 		".Discovery.Survey": cfgutil.SkipConversion,
-		".Webhook":          cfgutil.SkipConversion,
+		".Injector":         cfgutil.SkipConversion,
 	})
 	return cfg
 }

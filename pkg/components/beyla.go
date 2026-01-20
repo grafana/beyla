@@ -41,7 +41,7 @@ func RunBeyla(ctx context.Context, cfg *beyla.Config) error {
 
 	app := cfg.Enabled(beyla.FeatureAppO11y)
 	net := cfg.Enabled(beyla.FeatureNetO11y)
-	webhookEnabled := cfg.Webhook.Enabled()
+	webhookEnabled := cfg.Injector.Webhook.Enabled()
 
 	// if one of nodes fail, the other should stop
 	g, ctx := errgroup.WithContext(ctx)
@@ -127,15 +127,12 @@ func setupNetO11y(ctx context.Context, ctxInfo *global.ContextInfo, cfg *beyla.C
 }
 
 func setupWebhook(ctx context.Context, cfg *beyla.Config) error {
-	slog.Info("starting Beyla mutating webhook server", "port", cfg.Webhook.Port)
+	slog.Info("starting Beyla mutating webhook server", "port", cfg.Injector.Webhook.Port)
 
-	webhookCfg := webhook.Config{
-		Port:     cfg.Webhook.Port,
-		CertPath: cfg.Webhook.CertPath,
-		KeyPath:  cfg.Webhook.KeyPath,
+	server, err := webhook.NewServer(cfg)
+	if err != nil {
+		return err
 	}
-
-	server := webhook.NewServer(webhookCfg)
 	if err := server.Start(ctx); err != nil {
 		slog.Debug("webhook server stopped", "error", err)
 		return fmt.Errorf("webhook server error: %w", err)

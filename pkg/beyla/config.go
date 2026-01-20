@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/caarlos0/env/v9"
@@ -59,7 +60,7 @@ func DefaultConfig() *Config {
 	}
 	def.Discovery.DefaultExcludeServices = servicesextra.DefaultExcludeServices
 	def.Discovery.DefaultExcludeInstrument = servicesextra.DefaultExcludeInstrument
-	def.Webhook = WebhookConfig{
+	def.Injector.Webhook = WebhookConfig{
 		Enable:   false,
 		Port:     8443,
 		CertPath: "/etc/webhook/certs/tls.crt",
@@ -161,8 +162,7 @@ type Config struct {
 	// nolint:undoc
 	Topology spanscfg.Topology `yaml:"topology"`
 
-	// Webhook configuration for mutating admission controller
-	Webhook WebhookConfig `yaml:"webhook"`
+	Injector SDKInject `yaml:"injector"`
 
 	// cached equivalent for the OBI conversion
 	obi *obi.Config `yaml:"-"`
@@ -215,6 +215,13 @@ type HostIDConfig struct {
 	// FetchTimeout specifies the timeout for trying to fetch the HostID from diverse Cloud Providers
 	// nolint:undoc
 	FetchTimeout time.Duration `yaml:"fetch_timeout" env:"BEYLA_HOST_ID_FETCH_TIMEOUT"`
+}
+
+type SDKInject struct {
+	Services   services.RegexDefinitionCriteria `yaml:"services"`
+	Instrument services.GlobDefinitionCriteria  `yaml:"instrument"`
+	// Webhook configuration for a mutating admission controller
+	Webhook WebhookConfig `yaml:"webhook"`
 }
 
 // WebhookConfig contains the configuration for the mutating webhook
@@ -303,6 +310,19 @@ func (c *Config) Validate() error {
 	}
 	if c.InternalMetrics.Exporter == imetrics.InternalMetricsExporterOTEL && !c.OTELMetrics.EndpointEnabled() && !c.Grafana.OTLP.MetricsEnabled() {
 		return ConfigError("you can't enable OTEL internal metrics without enabling OTEL metrics")
+	}
+
+	if c.Injector.Webhook.Enabled() {
+		if !c.Traces.Enabled() {
+			return ConfigError("you can't enable OTEL SDK instrumentation injection without enabling OTEL traces")
+		}
+		proto := c.Traces.GetProtocol()
+		pos := slices.IndexFunc([]otelcfg.Protocol{otelcfg.ProtocolHTTPJSON, otelcfg.ProtocolHTTPProtobuf, otelcfg.ProtocolGRPC, ""}, func(p otelcfg.Protocol) bool {
+			return p == proto
+		})
+		if pos < 0 {
+			return ConfigError(fmt.Sprintf("unsupported OTEL traces export protocol %s", proto))
+		}
 	}
 
 	return nil

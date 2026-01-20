@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/grafana/beyla/v2/pkg/beyla"
 )
 
 // Server represents the webhook server
@@ -21,22 +23,19 @@ type Server struct {
 	server   *http.Server
 }
 
-// Config holds the webhook server configuration
-type Config struct {
-	Port     int
-	CertPath string
-	KeyPath  string
-}
-
 // NewServer creates a new webhook server
-func NewServer(cfg Config) *Server {
-	return &Server{
-		Port:     cfg.Port,
-		CertPath: cfg.CertPath,
-		KeyPath:  cfg.KeyPath,
-		mutator:  NewPodMutator(),
-		logger:   slog.Default().With("component", "webhook-server"),
+func NewServer(cfg *beyla.Config) (*Server, error) {
+	mutator, err := NewPodMutator(cfg)
+	if err != nil {
+		return nil, err
 	}
+	return &Server{
+		Port:     cfg.Injector.Webhook.Port,
+		CertPath: cfg.Injector.Webhook.CertPath,
+		KeyPath:  cfg.Injector.Webhook.KeyPath,
+		mutator:  mutator,
+		logger:   slog.Default().With("component", "webhook-server"),
+	}, nil
 }
 
 // Start starts the webhook server

@@ -37,6 +37,9 @@ TRANSFORMATIONS=(
     'OTEL_EBPF_|BEYLA_'
     'otel-ebpf|beyla'
     'otel_ebpf|beyla'
+    # Attribute values should NOT have /v2 suffix (matched first, more specific)
+    'Value: "go.opentelemetry.io/obi"|Value: "github.com/grafana/beyla"'
+    # Go import paths need /v2 suffix
     'go\.opentelemetry\.io/obi|github.com/grafana/beyla/v2'
     'obi-k8s-test-cluster|beyla-k8s-test-cluster'
     'obi-config-|instrumenter-config-'
@@ -59,7 +62,12 @@ TRANSFORMATIONS=(
 REVERSE_TRANSFORMATIONS=(
     'BEYLA_OTEL_|OTEL_EBPF_'
     'BEYLA_|OTEL_EBPF_'
+    # Attribute values (no /v2) - must be before import paths
+    'Value: "github.com/grafana/beyla"|Value: "go.opentelemetry.io/obi"'
+    # Go import paths (with /v2)
     'github\.com/grafana/beyla/v2|go.opentelemetry.io/obi'
+    # Go import paths (without /v2, for any that slipped through)
+    'github\.com/grafana/beyla|go.opentelemetry.io/obi'
     'beyla-k8s-test-cluster|obi-k8s-test-cluster'
     'beyla_|obi_'
     'hatest-autoinstrumenter|hatest-obi'

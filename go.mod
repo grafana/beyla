@@ -7,9 +7,12 @@ go 1.25.6
 replace go.opentelemetry.io/obi => ./.obi-src
 
 require (
+	github.com/XSAM/otelsql v0.41.0
 	github.com/caarlos0/env/v9 v9.0.0
 	github.com/docker/docker v28.3.2+incompatible
+	github.com/eclipse/paho.mqtt.golang v1.5.1
 	github.com/gin-gonic/gin v1.11.0
+	github.com/go-sql-driver/mysql v1.9.3
 	github.com/goccy/go-json v0.10.5
 	github.com/gorilla/mux v1.8.1
 	github.com/grafana/jvmtools v0.0.5
@@ -54,6 +57,7 @@ require (
 
 require (
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
+	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/AlessandroPomponio/go-gibberish v0.0.0-20191004143433-a2d4156f0396 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.30.0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect

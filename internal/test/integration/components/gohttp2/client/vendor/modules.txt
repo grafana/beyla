@@ -1,0 +1,12 @@
+# golang.org/x/net v0.20.0
+## explicit; go 1.18
+golang.org/x/net/http/httpguts
+golang.org/x/net/http2
+golang.org/x/net/http2/hpack
+golang.org/x/net/idna
+# golang.org/x/text v0.14.0
+## explicit; go 1.18
+golang.org/x/text/secure/bidirule
+golang.org/x/text/transform
+golang.org/x/text/unicode/bidi
+golang.org/x/text/unicode/norm

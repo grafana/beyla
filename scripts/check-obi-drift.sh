@@ -31,6 +31,8 @@ SKIP_FILES='go\.mod$|go\.sum$'  # Intentionally different between projects
 
 # OBI -> Beyla text transformations (applied via sed)
 # Format: "pattern|replacement" - order matters, more specific patterns first
+# Note: BEYLA_OTEL_* and BEYLA_* are both valid (the OTEL_ is optional per config_obi.go)
+# We use the shorter BEYLA_* form to match existing Beyla convention
 TRANSFORMATIONS=(
     'OTEL_EBPF_|BEYLA_'
     'otel-ebpf|beyla'
@@ -53,7 +55,9 @@ TRANSFORMATIONS=(
 )
 
 # Reverse transformations for comparison (Beyla -> OBI)
+# Handles both BEYLA_OTEL_* and BEYLA_* forms
 REVERSE_TRANSFORMATIONS=(
+    'BEYLA_OTEL_|OTEL_EBPF_'
     'BEYLA_|OTEL_EBPF_'
     'github\.com/grafana/beyla/v2|go.opentelemetry.io/obi'
     'beyla-k8s-test-cluster|obi-k8s-test-cluster'

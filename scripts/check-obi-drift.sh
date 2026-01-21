@@ -42,7 +42,8 @@ TRANSFORMATIONS=(
     # Go import paths need /v2 suffix
     'go\.opentelemetry\.io/obi|github.com/grafana/beyla/v2'
     'obi-k8s-test-cluster|beyla-k8s-test-cluster'
-    'obi-config-|instrumenter-config-'
+    # Config file naming (handles obi-config-*.yml and obi-config.yml and obi-config${VAR})
+    'obi-config|instrumenter-config'
     'obi_|beyla_'
     'hatest-obi|hatest-autoinstrumenter'
     'opentelemetry-ebpf-instrumentation|beyla'
@@ -71,6 +72,7 @@ REVERSE_TRANSFORMATIONS=(
     # Go import paths (without /v2, for any that slipped through)
     'github\.com/grafana/beyla|go.opentelemetry.io/obi'
     'beyla-k8s-test-cluster|obi-k8s-test-cluster'
+    'instrumenter-config|obi-config'
     'beyla_|obi_'
     'hatest-autoinstrumenter|hatest-obi'
     'autoinstrumenter:|obi:'
@@ -152,7 +154,7 @@ map_path() {
     done
     
     # Transform config filenames
-    path="${path//obi-config-/instrumenter-config-}"
+    path="${path//obi-config/instrumenter-config}"
     
     echo "$path"
 }

@@ -64,6 +64,8 @@ REVERSE_TRANSFORMATIONS=(
     'BEYLA_|OTEL_EBPF_'
     # Attribute values (no /v2) - must be before import paths
     'Value: "github.com/grafana/beyla"|Value: "go.opentelemetry.io/obi"'
+    # telemetry.sdk.name value (specific context to avoid over-matching)
+    'Value: "beyla"|Value: "opentelemetry-ebpf-instrumentation"'
     # Go import paths (with /v2)
     'github\.com/grafana/beyla/v2|go.opentelemetry.io/obi'
     # Go import paths (without /v2, for any that slipped through)
@@ -87,26 +89,28 @@ TOTAL_DRIFT=0
 # UTILITY FUNCTIONS
 # =============================================================================
 
-# Build sed expression from transformation array
-build_sed_expr() {
-    local -n transforms=$1
-    local expr=""
-    for t in "${transforms[@]}"; do
-        local pattern="${t%%|*}"
-        local replacement="${t#*|}"
-        expr+=" -e 's|${pattern}|${replacement}|g'"
-    done
-    echo "$expr"
-}
-
 # Transform OBI content to Beyla conventions
 transform_obi_to_beyla() {
-    eval "sed $(build_sed_expr TRANSFORMATIONS)"
+    local result
+    result=$(cat)
+    for t in "${TRANSFORMATIONS[@]}"; do
+        local pattern="${t%%|*}"
+        local replacement="${t#*|}"
+        result=$(echo "$result" | sed "s|${pattern}|${replacement}|g")
+    done
+    echo "$result"
 }
 
 # Transform Beyla content to OBI conventions (for comparison)
 transform_beyla_to_obi() {
-    eval "sed $(build_sed_expr REVERSE_TRANSFORMATIONS)"
+    local result
+    result=$(cat)
+    for t in "${REVERSE_TRANSFORMATIONS[@]}"; do
+        local pattern="${t%%|*}"
+        local replacement="${t#*|}"
+        result=$(echo "$result" | sed "s|${pattern}|${replacement}|g")
+    done
+    echo "$result"
 }
 
 # Normalize content for comparison (strip copyright, trailing whitespace)

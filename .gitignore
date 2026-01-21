@@ -5,6 +5,9 @@
 *.so
 *.dylib
 
+# Main beyla binary (should be built to bin/beyla via make compile)
+beyla
+
 .DS_Store
 
 # Test binary, built with `go test -c`

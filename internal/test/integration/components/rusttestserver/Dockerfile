@@ -1,4 +1,5 @@
 FROM rust:latest@sha256:65734d21f103d104fe0d9e508a424f7f60abd10e489d36de8bd36ae6c80e746d AS rustbuilder
+
 # Set the working directory to /build
 WORKDIR /build
 

@@ -1,4 +1,5 @@
 FROM debian:bookworm@sha256:c66c66fac809bfb56a8001b12f08181a49b6db832d2c8ddabe22b6374264055f AS rustbuilder
+
 RUN apt update
 RUN apt install -y build-essential curl pkg-config libssl-dev
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | bash -s -- -y

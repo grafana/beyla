@@ -10,6 +10,7 @@ development:
   sslcert: /certs/client-cert.pem
   sslkey: /certs/client-key.pem
   sslverify: false
+
 test:
   adapter: mysql2
   encoding: utf8

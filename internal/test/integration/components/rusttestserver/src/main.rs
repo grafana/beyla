@@ -11,6 +11,7 @@ use std::fs;
 use std::io::Read;
 use reqwest;
 use tokio;
+
 #[derive(Debug, Serialize, Deserialize)]
 struct MyObj {
     name: String,

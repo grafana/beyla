@@ -7,6 +7,7 @@ use mime::Mime;
 use actix_web::http::header::ContentDisposition;
 use actix_web::http::header::DispositionType;
 use std::io::Read;
+
 #[derive(Debug, Serialize, Deserialize)]
 struct MyObj {
     name: String,

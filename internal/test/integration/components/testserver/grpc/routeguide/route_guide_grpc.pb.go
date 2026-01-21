@@ -3,6 +3,7 @@
 // - protoc-gen-go-grpc v1.2.0
 // - protoc             v4.23.2
 // source: routeguide/route_guide.proto
+
 package routeguide
 
 import (

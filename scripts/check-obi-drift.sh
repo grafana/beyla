@@ -316,7 +316,8 @@ files_have_drifted() {
     local beyla_file="$2"
     
     # Compare expected Beyla content (transformed from OBI, with preserved features) with actual Beyla content
-    local expected_beyla=$(cat "$obi_file" | transform_obi_to_beyla | add_preserved_features "$beyla_file" | normalize_content)
+    # Use same pipeline as sync_file for consistency
+    local expected_beyla=$(cat "$obi_file" | strip_obi_headers | transform_obi_to_beyla | add_preserved_features "$beyla_file" | normalize_content)
     local actual_beyla=$(cat "$beyla_file" | normalize_content)
     
     [[ "$expected_beyla" != "$actual_beyla" ]]
@@ -330,7 +331,7 @@ strip_obi_headers() {
     { grep -v "^# Copyright The OpenTelemetry Authors" || true; } | \
     { grep -v "^# SPDX-License-Identifier:" || true; } | \
     sed 's| // import "go\.opentelemetry\.io/obi[^"]*"||g' | \
-    awk 'NF || seen++' | \
+    awk 'NF {p=1} p' | \
     cat -s
 }
 

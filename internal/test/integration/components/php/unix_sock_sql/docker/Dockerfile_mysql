@@ -1,4 +1,5 @@
 FROM mysql:8.0.44-debian@sha256:91f968e434fa4c9ea47e3fac55f83da86b080f903bbce1201931e97f4194bd5e
+
 SHELL ["/bin/bash", "-c"]
 
 RUN chmod 1777 /tmp

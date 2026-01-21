@@ -3,6 +3,7 @@
 // 	protoc-gen-go v1.28.1
 // 	protoc        v3.19.6
 // source: proto/service.proto
+
 package gprc
 
 import (

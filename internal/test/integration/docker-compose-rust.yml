@@ -31,15 +31,15 @@ services:
       BEYLA_TRACE_PRINTER: "json_indent"
       BEYLA_OPEN_PORT: "${BEYLA_OPEN_PORT}"
       BEYLA_DISCOVERY_POLL_INTERVAL: 500ms
-      BEYLA_EXECUTABLE_NAME: "${BEYLA_EXECUTABLE_NAME}"
+      BEYLA_EXECUTABLE_PATH: "${BEYLA_EXECUTABLE_PATH}"
       BEYLA_SERVICE_NAMESPACE: "integration-test"
+      BEYLA_OTLP_TRACES_BATCH_TIMEOUT: "1ms"
       BEYLA_METRICS_INTERVAL: "10ms"
       BEYLA_BPF_BATCH_TIMEOUT: "10ms"
       BEYLA_LOG_LEVEL: "DEBUG"
       BEYLA_BPF_DEBUG: "TRUE"
       BEYLA_HOSTNAME: "beyla"
       BEYLA_BPF_TRACK_REQUEST_HEADERS: "true"
-      BEYLA_OTLP_TRACES_BATCH_TIMEOUT: "1ms"
     depends_on:
       testserver:
         condition: service_started

@@ -20,13 +20,13 @@ type Compose struct {
 
 func defaultEnv() []string {
 	env := os.Environ()
-	env = append(env, "BEYLA_EXECUTABLE_NAME=testserver")
-	env = append(env, "JAVA_EXECUTABLE_NAME=greeting")
+	env = append(env, "BEYLA_EXECUTABLE_PATH=testserver")
+	env = append(env, "JAVA_EXECUTABLE_PATH=greeting")
 	return env
 }
 
 func ComposeSuite(composeFile, logFile string) (*Compose, error) {
-	logs, err := os.OpenFile(logFile, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0666)
+	logs, err := os.OpenFile(logFile, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o666)
 	if err != nil {
 		return nil, err
 	}

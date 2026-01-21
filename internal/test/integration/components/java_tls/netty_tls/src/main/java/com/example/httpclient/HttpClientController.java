@@ -1,5 +1,4 @@
 package com.example.httpclient;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
@@ -8,6 +7,7 @@ import reactor.core.publisher.Mono;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
+import java.util.concurrent.*;
 
 @RestController
 @RequestMapping("/api")
@@ -24,6 +24,9 @@ public class HttpClientController {
 
     @Value("${app.scheduled.interval-seconds:30}")
     private int scheduledIntervalSeconds;
+
+    private ExecutorService executor = Executors.newFixedThreadPool(10);
+    private ForkJoinPool forkJoinPool = new ForkJoinPool(10);
 
     /**
      * Health check endpoint
@@ -110,6 +113,60 @@ public class HttpClientController {
                     "duration_ms", System.currentTimeMillis() - startTime,
                     "method", "GET_ASYNC"
                 ));
+    }
+
+    /**
+     * Trigger an async GET request
+     * Example: GET /api/async-request-c?url=https://httpbin.org/get
+     */
+    @GetMapping("/async-request-c")
+    public Map<String, Object> makeAsyncGetRequestCallable(@RequestParam String url) throws ExecutionException, InterruptedException {
+        long startTime = System.currentTimeMillis();
+
+        // Submit a Callable task
+        Future<String> future = executor.submit(() -> {
+            // Make HTTP request
+            return httpClientService.makeGetRequest(url);
+        });
+
+        // Get result (blocks until complete)
+        String response = future.get();
+
+        long duration = System.currentTimeMillis() - startTime;
+        
+        return Map.of(
+            "target_url", url,
+            "response", response,
+            "duration_ms", duration,
+            "method", "GET"
+        );    
+    }
+
+    /**
+     * Trigger an async GET request using ForkJoinPool
+     * Example: GET /api/async-request-fj?url=https://httpbin.org/get
+     */
+    @GetMapping("/async-request-fj")
+    public Map<String, Object> makeAsyncGetRequestForkJoin(@RequestParam String url) throws ExecutionException, InterruptedException {
+        long startTime = System.currentTimeMillis();
+        // Submit a Callable task to ForkJoinPool
+        Future<String> future = forkJoinPool.submit(() -> {
+            // Make HTTP request
+            return httpClientService.makeGetRequest(url);
+        });
+
+        // Get result (blocks until complete)
+        String response = future.get();
+
+        long duration = System.currentTimeMillis() - startTime;
+        
+        return Map.of(
+            "target_url", url,
+            "response", response,
+            "duration_ms", duration,
+            "method", "GET_FORKJOIN",
+            "pool_type", "ForkJoinPool"
+        );    
     }
 
     /**

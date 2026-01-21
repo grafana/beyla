@@ -1,4 +1,4 @@
-// Package promtest provides some convenience functions for prometheus handling in integration tests
+// Package promtest provides some convenience functions for prometheus handling in integration tests.
 package promtest
 
 import (
@@ -28,7 +28,7 @@ type data struct {
 // Result structure assumes that resultType is always == "vector"
 type Result struct {
 	Metric map[string]string `json:"metric"`
-	Value  []interface{}
+	Value  []any
 }
 
 type Client struct {
@@ -99,7 +99,7 @@ func parseMetric(text string) ScrapedMetric {
 	labelsStr, valueStr := split[0], split[1]
 	value, _ := strconv.ParseFloat(valueStr, 64)
 	labels := map[string]string{}
-	for _, keyValStr := range strings.Split(labelsStr, ",") {
+	for keyValStr := range strings.SplitSeq(labelsStr, ",") {
 		split := strings.Split(keyValStr, "=")
 		labels[split[0]] = strings.Trim(split[1], `"`)
 	}

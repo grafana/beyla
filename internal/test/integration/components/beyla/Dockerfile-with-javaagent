@@ -1,7 +1,7 @@
 # Development version of the beyla Dockerfile that compiles for coverage
 # and allows retrieving coverage files.
 # The production-ready minimal image is in the project root's dockerfile.
-FROM golang:1.25.6@sha256:c1252002e1a0ba34875937d59d4f123d0a4673a50f69c38fca4175cae194c7f9 AS builder
+FROM golang:1.25.6@sha256:fc24d3881a021e7b968a4610fc024fba749f98fe5c07d4f28e6cfa14dc65a84c AS builder
 
 ARG TARGETARCH
 
@@ -11,9 +11,9 @@ WORKDIR /src
 
 # Copy the go manifests and source
 COPY .git/ .git/
+COPY vendor/ vendor/
 COPY cmd/ cmd/
 COPY pkg/ pkg/
-COPY vendor/ vendor/
 COPY go.mod go.mod
 COPY go.sum go.sum
 COPY Makefile Makefile
@@ -23,7 +23,7 @@ COPY internal/test/integration/components/beyla/beyla_wrapper.sh /beyla_wrapper.
 RUN make compile-for-coverage
 
 # Build the Java OBI agent
-FROM gradle:9.2.1-jdk21-corretto@sha256:3392a25fbe142defde5a13ec7e7171cac8c08ec6bcec00b44705d9a24b544fa3 AS javaagent-builder
+FROM gradle:9.3.0-jdk21-corretto@sha256:2458e66c572212fd24f55ffecde7b88fafdba81e6017eb741179d80cb03d153a AS javaagent-builder
 
 WORKDIR /build
 

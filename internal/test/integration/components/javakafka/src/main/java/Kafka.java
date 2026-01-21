@@ -3,7 +3,6 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
-
 import java.time.Duration;
 import java.util.Collections;
 import java.util.Properties;
@@ -26,7 +25,6 @@ public class Kafka {
             producerProps.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
             producerProps.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
             producerProps.put("partitioner.class", "org.apache.kafka.clients.producer.RoundRobinPartitioner"); // Explicit partitioner
-            producerProps.put("inter.broker.protocol.version", "2.8");
 
             Thread producerThread = new Thread(() -> {
                 KafkaProducer<String, String> producer = new KafkaProducer<>(producerProps);

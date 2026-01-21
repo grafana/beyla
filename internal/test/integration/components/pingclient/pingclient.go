@@ -17,7 +17,7 @@ var tr = &http.Transport{
 var testHTTPClient = &http.Client{Transport: tr, Timeout: 10 * time.Second}
 
 func regularGetRequest(url string, counter int) {
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		fmt.Println("error creating request:", err)
 		return
@@ -60,7 +60,7 @@ func (rt *MyRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 func rtRequest(url string, counter int) {
-	req, err := http.NewRequest("OPTIONS", url, nil)
+	req, err := http.NewRequest(http.MethodOptions, url, nil)
 	if err != nil {
 		fmt.Println("error creating request:", err)
 		return

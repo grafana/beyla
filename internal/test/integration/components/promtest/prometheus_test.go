@@ -21,7 +21,9 @@ beyla_network_flow_bytes_total{beyla_ip="1.2.3.4",dst_port="1415",iface="fakeifa
 promhttp_metric_handler_errors_total{cause="encoding"} 2
 promhttp_metric_handler_errors_total{cause="gathering"} 3
 			`))
-		require.NoError(t, err)
+		if err != nil {
+			t.Error(err)
+		}
 	}))
 	defer server.Close()
 

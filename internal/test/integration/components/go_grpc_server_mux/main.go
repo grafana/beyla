@@ -19,9 +19,7 @@ import (
 	"google.golang.org/grpc/reflection"
 )
 
-var (
-	tls = flag.Bool("tls", false, "Connection uses TLS if true, else plain TCP")
-)
+var tls = flag.Bool("tls", false, "Connection uses TLS if true, else plain TCP")
 
 func main() {
 	flag.Parse()

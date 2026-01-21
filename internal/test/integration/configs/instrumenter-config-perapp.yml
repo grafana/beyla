@@ -23,6 +23,6 @@ discovery:
     # with the global metrics features
     - name: to-be-ignored
       open_ports: 8090
-      metrics: { features: ["application", "application_span"] }
+      metrics: { features: [ "application", "application_span" ] }
     - name: rtestserver
       open_ports: 8090

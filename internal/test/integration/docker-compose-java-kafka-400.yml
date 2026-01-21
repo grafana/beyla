@@ -1,3 +1,5 @@
+version: "3.8"
+
 services:
   kafka:
     restart: always
@@ -58,6 +60,7 @@ services:
       BEYLA_METRICS_INTERVAL: "10ms"
       BEYLA_BPF_BATCH_TIMEOUT: "10ms"
       BEYLA_LOG_LEVEL: "DEBUG"
+      BEYLA_OTLP_TRACES_BATCH_TIMEOUT: "1ms"
       BEYLA_BPF_DEBUG: "TRUE"
       BEYLA_HOSTNAME: "beyla"
       BEYLA_BPF_HTTP_REQUEST_TIMEOUT: "5s"

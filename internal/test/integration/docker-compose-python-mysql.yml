@@ -45,7 +45,7 @@ services:
       BEYLA_TRACE_PRINTER: "text"
       BEYLA_OPEN_PORT: "${BEYLA_OPEN_PORT}"
       BEYLA_DISCOVERY_POLL_INTERVAL: 500ms
-      BEYLA_EXECUTABLE_NAME: "${BEYLA_EXECUTABLE_NAME}"
+      BEYLA_EXECUTABLE_PATH: "${BEYLA_EXECUTABLE_PATH}"
       BEYLA_SERVICE_NAMESPACE: "integration-test"
       BEYLA_OTLP_TRACES_BATCH_TIMEOUT: "1ms"
       BEYLA_METRICS_INTERVAL: "10ms"
@@ -55,9 +55,9 @@ services:
       BEYLA_HOSTNAME: "beyla"
       BEYLA_BPF_HTTP_REQUEST_TIMEOUT: "5s"
       BEYLA_PROCESSES_INTERVAL: "100ms"
-      BEYLA_OTEL_TRACES_INSTRUMENTATIONS: "sql"
-      BEYLA_OTEL_METRICS_INSTRUMENTATIONS: "sql"
-      BEYLA_OTEL_METRICS_FEATURES: "application"
+      BEYLA_TRACES_INSTRUMENTATIONS: "sql"
+      BEYLA_METRICS_INSTRUMENTATIONS: "sql"
+      BEYLA_METRICS_FEATURES: "application"
       BEYLA_BPF_BUFFER_SIZE_MYSQL: 1024
     depends_on:
       testserver:
@@ -65,7 +65,7 @@ services:
 
   # OpenTelemetry Collector
   otelcol:
-    image: otel/opentelemetry-collector-contrib:0.118.0@sha256:3f6274fe609da4f9964fbc2ef36b83d08d47964fbb11629251393590d3924072
+    image: otel/opentelemetry-collector-contrib:0.104.0@sha256:e07e325e303e86f4a87a617491e921b579a92da6d404007394757ac910bf9587
     container_name: otel-col
     deploy:
       resources:
@@ -108,4 +108,3 @@ services:
       - LOG_LEVEL=debug
 # curl http://localhost:16686/api/services
 # curl http://localhost:16686/api/traces?service=testserver
-

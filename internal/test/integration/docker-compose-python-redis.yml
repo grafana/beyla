@@ -44,13 +44,13 @@ services:
       BEYLA_BPF_BATCH_TIMEOUT: "10ms"
       BEYLA_LOG_LEVEL: "DEBUG"
       BEYLA_BPF_DEBUG: "TRUE"
+      BEYLA_OTLP_TRACES_BATCH_TIMEOUT: "1ms"
       BEYLA_HOSTNAME: "beyla"
       BEYLA_BPF_HTTP_REQUEST_TIMEOUT: "5s"
       BEYLA_PROCESSES_INTERVAL: "100ms"
-      BEYLA_OTEL_TRACES_INSTRUMENTATIONS: "redis"
-      BEYLA_OTEL_METRICS_INSTRUMENTATIONS: "redis"
-      BEYLA_OTEL_METRICS_FEATURES: "application"
-      BEYLA_OTLP_TRACES_BATCH_TIMEOUT: "1ms"
+      BEYLA_TRACES_INSTRUMENTATIONS: "redis"
+      BEYLA_METRICS_INSTRUMENTATIONS: "redis"
+      BEYLA_METRICS_FEATURES: "application"
     depends_on:
       testserver:
         condition: service_started

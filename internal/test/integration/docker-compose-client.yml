@@ -28,10 +28,10 @@ services:
       BEYLA_TRACE_PRINTER: "text"
       BEYLA_OPEN_PORT: "${BEYLA_OPEN_PORT}"
       BEYLA_DISCOVERY_POLL_INTERVAL: 500ms
-      BEYLA_OTLP_TRACES_BATCH_TIMEOUT: "1ms"
-      BEYLA_EXECUTABLE_NAME: "${BEYLA_EXECUTABLE_NAME}"
+      BEYLA_EXECUTABLE_PATH: "${BEYLA_EXECUTABLE_PATH}"
       BEYLA_SERVICE_NAMESPACE: "integration-test"
       BEYLA_METRICS_INTERVAL: "10ms"
+      BEYLA_OTLP_TRACES_BATCH_TIMEOUT: "1ms"
       BEYLA_BPF_BATCH_TIMEOUT: "10ms"
       BEYLA_LOG_LEVEL: "DEBUG"
       BEYLA_ENFORCE_SYS_CAPS: "false"
@@ -40,7 +40,7 @@ services:
       BEYLA_PROCESSES_INTERVAL: "100ms"
       BEYLA_HOSTNAME: "beyla"
       BEYLA_PROMETHEUS_FEATURES: "application,application_span,application_process,application_service_graph,application_host"
-      BEYLA_OTEL_METRIC_FEATURES: "application,application_process"
+      BEYLA_METRIC_FEATURES: "application,application_process"
     ports:
       - "8999:8999" # Prometheus scrape port, if enabled via config
 

@@ -1,9 +1,8 @@
-FROM mysql:8@sha256:b306273d4d36bc1a7f265130c3dd93c0462253af7634203e569add0403a7b273 as builder
+FROM mysql:8@sha256:90544b3775490579867a30988d48f0215fc3b88d78d8d62b2c0d96ee9226a2b7 as builder
 ENV MYSQL_ROOT_PASSWORD=p_ssW0rd
 ENV MYSQL_DATABASE=sakila
 ENV MYSQL_USER=sakila
 ENV MYSQL_PASSWORD=p_ssW0rd
-
 COPY ./1-sakila-schema.sql /docker-entrypoint-initdb.d/step_1.sql
 COPY ./2-sakila-data.sql /docker-entrypoint-initdb.d/step_2.sql
 COPY ./3-sakila-complete.sql /docker-entrypoint-initdb.d/step_3.sql
@@ -15,7 +14,7 @@ RUN ["sed", "-i", "s/exec \"$@\"/echo \"skipping...\"/", "/usr/local/bin/docker-
 USER mysql
 RUN ["/usr/local/bin/docker-entrypoint.sh", "mysqld"]
 
-FROM mysql:8@sha256:b306273d4d36bc1a7f265130c3dd93c0462253af7634203e569add0403a7b273
+FROM mysql:8@sha256:90544b3775490579867a30988d48f0215fc3b88d78d8d62b2c0d96ee9226a2b7
 ENV MYSQL_ROOT_PASSWORD=p_ssW0rd
 ENV MYSQL_DATABASE=sakila
 ENV MYSQL_USER=sakila

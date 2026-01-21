@@ -12,7 +12,7 @@ otel_traces_export:
   otel_sdk_log_level: debug
 attributes:
   kubernetes:
-    cluster_name: obi-k8s-test-cluster
+    cluster_name: beyla-k8s-test-cluster
     resource_labels:
       deployment.environment: ["deployment.environment"]
   select:

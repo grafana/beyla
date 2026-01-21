@@ -1,7 +1,6 @@
 # Build the testserver binary
-# Docker command must be invoked from the project root directory
-FROM golang:1.25.6@sha256:c1252002e1a0ba34875937d59d4f123d0a4673a50f69c38fca4175cae194c7f9 AS builder
-
+# Docker command must be invoked from the projec root directory
+FROM golang:1.25.6@sha256:fc24d3881a021e7b968a4610fc024fba749f98fe5c07d4f28e6cfa14dc65a84c AS builder
 ARG TARGETARCH
 
 ENV GOARCH=$TARGETARCH
@@ -18,7 +17,7 @@ COPY go.sum go.sum
 RUN go build -o http2srv ./internal/test/integration/components/gohttp2/server/main.go
 
 # Create final image from minimal + built binary
-FROM debian:bookworm-slim@sha256:78d2f66e0fec9e5a39fb2c72ea5e052b548df75602b5215ed01a17171529f706
+FROM debian:bookworm-slim@sha256:d5d3f9c23164ea16f31852f95bd5959aad1c5e854332fe00f7b3a20fcc9f635c
 
 WORKDIR /
 COPY --from=builder /src/http2srv .

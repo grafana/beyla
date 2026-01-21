@@ -33,13 +33,13 @@ services:
     environment:
       GOCOVERDIR: "/coverage"
       BEYLA_TRACE_PRINTER: "text"
-      BEYLA_OTEL_METRICS_FEATURES: "application,application_span"
+      BEYLA_METRICS_FEATURES: "application,application_span"
       BEYLA_OPEN_PORT: "${BEYLA_OPEN_PORT}"
       BEYLA_DISCOVERY_POLL_INTERVAL: 500ms
-      BEYLA_OTLP_TRACES_BATCH_TIMEOUT: "1ms"
       OTEL_GO_AUTO_TARGET_EXE: "${OTEL_GO_AUTO_TARGET_EXE}"
       BEYLA_SERVICE_NAMESPACE: "integration-test"
       BEYLA_METRICS_INTERVAL: "10ms"
+      BEYLA_OTLP_TRACES_BATCH_TIMEOUT: "1ms"
       BEYLA_BPF_BATCH_TIMEOUT: "10ms"
       BEYLA_LOG_LEVEL: "DEBUG"
       BEYLA_BPF_DEBUG: "TRUE"

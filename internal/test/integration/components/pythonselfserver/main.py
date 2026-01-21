@@ -1,8 +1,8 @@
 from flask import Flask, request, jsonify, Response
 import requests
 import ssl
+import time
 from threading import Thread
-
 # Create four Flask applications for different ports
 app1 = Flask(__name__)
 app2 = Flask(__name__)
@@ -47,6 +47,27 @@ def api2():
 @app3.route("/smoke")
 def smoke():
     return Response(status=200)
+
+@app3.route("/smoke1")
+def smoke1():
+    return Response(status=200)
+
+# API for the first application (Port 7771)
+@app3.route('/slow', methods=['GET'])
+def slow():
+    try:
+        # Forward all incoming headers to the internal HTTPS call
+        headers = dict(request.headers)
+
+        time.sleep(2)
+
+        # Internal HTTPS call to the second API
+        response = requests.get('http://localhost:7773/smoke1', headers=headers, verify=False)
+        return jsonify({
+            "message": "Internal call to smoke succeeded",
+        }), response.status_code
+    except requests.exceptions.RequestException as e:
+        return jsonify({"error": str(e)}), 500
 
 # API for the first application (Port 7773)
 @app3.route('/api3', methods=['GET'])

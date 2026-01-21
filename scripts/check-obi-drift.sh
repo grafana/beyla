@@ -29,6 +29,26 @@ INCLUDE_SPECIAL='^Dockerfile|^Makefile'
 SKIP_DIRS='vendor|node_modules|\.git|__pycache__|target|build'
 SKIP_FILES='go\.mod$|go\.sum$'  # Intentionally different between projects
 
+# Files with significant Beyla-specific content that shouldn't be synced
+# These files have additions (like process metrics, discovery.survey, application_process) that don't exist in OBI
+# Use OBI filenames since we check against OBI source files
+SKIP_BEYLA_SPECIFIC_FILES=(
+    'obi-config-java.yml'
+    'obi-config-promscrape.yml'
+    'obi-config-go-otel-grpc.yml'
+    'obi-config-grpc-http2-mux.yml'
+    'obi-config-http2.yml'
+    # OBI has two wrapper scripts but Beyla only has beyla_wrapper.sh (manually maintained)
+    'ebpf_instrument_wrapper_minimal.sh'
+    'ebpf_instrument_wrapper.sh'
+)
+
+# Beyla-specific features that should be preserved if they exist in current Beyla files
+# These are features that don't exist in OBI but may have been manually added to Beyla test files
+BEYLA_PRESERVE_FEATURES=(
+    'application_process'
+)
+
 # OBI -> Beyla text transformations (applied via sed)
 # Format: "pattern|replacement" - order matters, more specific patterns first
 # Note: BEYLA_OTEL_* and BEYLA_* are both valid (the OTEL_ is optional per config_obi.go)
@@ -38,15 +58,44 @@ TRANSFORMATIONS=(
     'otel-ebpf|beyla'
     'otel_ebpf|beyla'
     # Attribute values should NOT have /v2 suffix (matched first, more specific)
+    # Go struct format: Value: "..."
     'Value: "go.opentelemetry.io/obi"|Value: "github.com/grafana/beyla"'
+    # JSON format: "value":"..." (for Jaeger test fixtures etc)
+    '"value":"go.opentelemetry.io/obi"|"value":"github.com/grafana/beyla"'
     # Go import paths need /v2 suffix
     'go\.opentelemetry\.io/obi|github.com/grafana/beyla/v2'
     'obi-k8s-test-cluster|beyla-k8s-test-cluster'
+    # Prometheus job names and scrape targets (obi-* -> beyla-*)
+    'obi-network-flows|beyla-network-flows'
+    'obi-testserver|beyla-testserver'
+    'obi-pinger|beyla-pinger'
+    'obi-netolly|beyla-netolly'
+    'obi-promscrape|beyla-promscrape'
+    'obi-collector|beyla-collector'
+    # Attribute names
+    'obi\.ip|beyla.ip'
     # Config file naming (handles obi-config-*.yml and obi-config.yml and obi-config${VAR})
     'obi-config|instrumenter-config'
     'obi_|beyla_'
+    # Volume paths and hostnames
+    '/var/run/obi|/var/run/beyla'
+    'HOSTNAME: "obi"|HOSTNAME: "beyla"'
     'hatest-obi|hatest-autoinstrumenter'
-    'opentelemetry-ebpf-instrumentation|beyla'
+    # Image names with language prefixes (e.g., hatest-javaobi -> hatest-javaautoinstrumenter)
+    'hatest-javaobi|hatest-javaautoinstrumenter'
+    # SDK/service name (but NOT in GitHub URLs - those are preserved)
+    'service_name="opentelemetry-ebpf-instrumentation"|service_name="beyla"'
+    '"opentelemetry-ebpf-instrumentation"|"beyla"'
+    # Dockerfile-specific: OBI uses bpf/, Beyla uses vendor/
+    'COPY bpf/ bpf/|COPY vendor/ vendor/'
+    # Wrapper script naming: OBI uses ebpf_instrument_wrapper*, Beyla uses beyla_wrapper*
+    'ebpf_instrument_wrapper_minimal.sh|beyla_wrapper.sh'
+    'ebpf_instrument_wrapper.sh|beyla_wrapper.sh'
+    # Binary name in Dockerfile COPY commands
+    '/src/bin/ebpf-instrument|/src/bin/beyla'
+    '/ebpf-instrument|/beyla'
+    # Binary path in entrypoint/command (e.g. - /ebpf-instrument -> - /beyla)
+    '- /ebpf-instrument|- /beyla'
     'ebpf-instrument/Dockerfile|beyla/Dockerfile'
     'components/ebpf-instrument|components/beyla'
     'ebpf-instrument:|autoinstrumenter:'
@@ -56,6 +105,8 @@ TRANSFORMATIONS=(
     'service:obi|service:autoinstrumenter'
     '// OBI |// Beyla '
     '# OBI |# Beyla '
+    # Note: Copyright headers are stripped by normalize_content() instead of sed
+    # Note: Go import path comments are stripped by transform patterns below
 )
 
 # Reverse transformations for comparison (Beyla -> OBI)
@@ -64,17 +115,50 @@ REVERSE_TRANSFORMATIONS=(
     'BEYLA_OTEL_|OTEL_EBPF_'
     'BEYLA_|OTEL_EBPF_'
     # Attribute values (no /v2) - must be before import paths
+    # Go struct format
     'Value: "github.com/grafana/beyla"|Value: "go.opentelemetry.io/obi"'
+    # JSON format
+    '"value":"github.com/grafana/beyla"|"value":"go.opentelemetry.io/obi"'
     # telemetry.sdk.name value (specific context to avoid over-matching)
     'Value: "beyla"|Value: "opentelemetry-ebpf-instrumentation"'
+    # SDK/service name patterns
+    'service_name="beyla"|service_name="opentelemetry-ebpf-instrumentation"'
+    '"beyla"|"opentelemetry-ebpf-instrumentation"'
     # Go import paths (with /v2)
     'github\.com/grafana/beyla/v2|go.opentelemetry.io/obi'
     # Go import paths (without /v2, for any that slipped through)
     'github\.com/grafana/beyla|go.opentelemetry.io/obi'
+    # Note: GitHub URLs are preserved as-is (not transformed)
     'beyla-k8s-test-cluster|obi-k8s-test-cluster'
+    # Prometheus job names and scrape targets
+    'beyla-network-flows|obi-network-flows'
+    'beyla-testserver|obi-testserver'
+    'beyla-pinger|obi-pinger'
+    'beyla-netolly|obi-netolly'
+    'beyla-promscrape|obi-promscrape'
+    'beyla-collector|obi-collector'
+    # Attribute names
+    'beyla\.ip|obi.ip'
     'instrumenter-config|obi-config'
+    # Binary path in entrypoint/command (only at start of entrypoint, not in volume paths like /var/run/beyla)
+    '- /beyla|- /ebpf-instrument'
+    # Dockerfile and component paths
+    'beyla/Dockerfile|ebpf-instrument/Dockerfile'
+    'components/beyla|components/ebpf-instrument'
+    # Dockerfile-specific: Beyla uses vendor/, OBI uses bpf/
+    'COPY vendor/ vendor/|COPY bpf/ bpf/'
+    # Wrapper script naming
+    'beyla_wrapper.sh|ebpf_instrument_wrapper_minimal.sh'
+    # Binary paths in Dockerfiles
+    '/src/bin/beyla|/src/bin/ebpf-instrument'
+    '/beyla|/ebpf-instrument'
     'beyla_|obi_'
+    # Volume paths and hostnames
+    '/var/run/beyla|/var/run/obi'
+    'HOSTNAME: "beyla"|HOSTNAME: "obi"'
+    'hatest-javaautoinstrumenter|hatest-javaobi'
     'hatest-autoinstrumenter|hatest-obi'
+    'image: hatest-autoinstrumenter|image: hatest-obi'
     'autoinstrumenter:|obi:'
     'service:autoinstrumenter|service:obi'
 )
@@ -95,11 +179,65 @@ TOTAL_DRIFT=0
 transform_obi_to_beyla() {
     local result
     result=$(cat)
+    # Apply OBI->Beyla transformations
     for t in "${TRANSFORMATIONS[@]}"; do
         local pattern="${t%%|*}"
         local replacement="${t#*|}"
         result=$(echo "$result" | sed "s|${pattern}|${replacement}|g")
     done
+    echo "$result"
+}
+
+# Add preserved features back to content if they existed in original file
+# Usage: echo "$content" | add_preserved_features "$original_file"
+add_preserved_features() {
+    local original_file="$1"
+    local result
+    result=$(cat)
+    
+    [[ ! -f "$original_file" ]] && { echo "$result"; return; }
+    
+    for feature in "${BEYLA_PRESERVE_FEATURES[@]}"; do
+        # For each FEATURES line in original that has the feature, add it to corresponding line in result
+        while IFS= read -r orig_line; do
+            # Extract the env var name (e.g., BEYLA_PROMETHEUS_FEATURES or BEYLA_OTEL_METRICS_FEATURES)
+            local env_var=$(echo "$orig_line" | grep -oE '[A-Z_]+FEATURES')
+            [[ -z "$env_var" ]] && continue
+            
+            # Normalize: BEYLA_OTEL_X_FEATURES -> BEYLA_X_FEATURES (to match transformed result)
+            local normalized_env_var=$(echo "$env_var" | sed 's/BEYLA_OTEL_/BEYLA_/')
+            
+            # Check if this line in original has the feature
+            if echo "$orig_line" | grep -q "$feature"; then
+                # Check if result already has the feature for this env var (use normalized name)
+                if ! echo "$result" | grep "$normalized_env_var" | grep -q "$feature"; then
+                    # Add feature: try after application_span* (including _otel suffix) first, then after application
+                    if echo "$result" | grep "$normalized_env_var" | grep -q "application_span"; then
+                        # Match application_span plus any suffix (_otel, _sizes, etc.) as complete feature name
+                        result=$(echo "$result" | sed -E "s/(${normalized_env_var}.*application_span[a-z_]*)([\",])/\1,${feature}\2/")
+                    else
+                        result=$(echo "$result" | sed -E "s/(${normalized_env_var}.*\"application)([\",])/\1,${feature}\2/")
+                    fi
+                fi
+            fi
+        done < <(grep "FEATURES" "$original_file" 2>/dev/null || true)
+    done
+    
+    # Preserve COPY vendor/ lines in Dockerfiles (Beyla uses vendor/, OBI doesn't always have it)
+    if [[ "$original_file" == *Dockerfile* ]] && grep -q "^COPY vendor/ vendor/" "$original_file" 2>/dev/null; then
+        # If original has COPY vendor/ but result doesn't, add it
+        if ! echo "$result" | grep -q "^COPY vendor/ vendor/"; then
+            # Try to add after COPY .git/, or after "# Copy the go manifests" comment
+            if echo "$result" | grep -q "^COPY \.git\/"; then
+                result=$(echo "$result" | sed '/^COPY \.git\/ \.git\//a\
+COPY vendor/ vendor/')
+            elif echo "$result" | grep -q "# Copy the go manifests"; then
+                result=$(echo "$result" | sed '/# Copy the go manifests/a\
+COPY vendor/ vendor/')
+            fi
+        fi
+    fi
+    
     echo "$result"
 }
 
@@ -136,6 +274,11 @@ should_check_file() {
     # Skip excluded file patterns
     echo "$basename" | grep -qE "$SKIP_FILES" && return 1
     
+    # Skip Beyla-specific files (files with significant Beyla additions)
+    for skip_file in "${SKIP_BEYLA_SPECIFIC_FILES[@]}"; do
+        [[ "$basename" == "$skip_file" ]] && return 1
+    done
+    
     # Include by extension or special name
     echo "$basename" | grep -qE "\.($INCLUDE_EXTENSIONS)$|$INCLUDE_SPECIAL"
 }
@@ -156,6 +299,10 @@ map_path() {
     # Transform config filenames
     path="${path//obi-config/instrumenter-config}"
     
+    # Transform wrapper script filenames (both OBI variants map to single Beyla wrapper)
+    path="${path//ebpf_instrument_wrapper_minimal.sh/beyla_wrapper.sh}"
+    path="${path//ebpf_instrument_wrapper.sh/beyla_wrapper.sh}"
+    
     echo "$path"
 }
 
@@ -168,10 +315,23 @@ files_have_drifted() {
     local obi_file="$1"
     local beyla_file="$2"
     
-    local obi_content=$(cat "$obi_file" | transform_obi_to_beyla | normalize_content)
-    local beyla_content=$(cat "$beyla_file" | normalize_content)
+    # Compare expected Beyla content (transformed from OBI, with preserved features) with actual Beyla content
+    local expected_beyla=$(cat "$obi_file" | transform_obi_to_beyla | add_preserved_features "$beyla_file" | normalize_content)
+    local actual_beyla=$(cat "$beyla_file" | normalize_content)
     
-    [[ "$obi_content" != "$beyla_content" ]]
+    [[ "$expected_beyla" != "$actual_beyla" ]]
+}
+
+# Strip OBI copyright headers and import path comments (Beyla doesn't use them in test files)
+strip_obi_headers() {
+    # Use || true to handle empty files (grep returns 1 when no matches)
+    { grep -v "^// Copyright The OpenTelemetry Authors" || true; } | \
+    { grep -v "^// SPDX-License-Identifier:" || true; } | \
+    { grep -v "^# Copyright The OpenTelemetry Authors" || true; } | \
+    { grep -v "^# SPDX-License-Identifier:" || true; } | \
+    sed 's| // import "go\.opentelemetry\.io/obi[^"]*"||g' | \
+    awk 'NF || seen++' | \
+    cat -s
 }
 
 # Sync a file from OBI to Beyla
@@ -180,7 +340,9 @@ sync_file() {
     local beyla_file="$2"
     
     mkdir -p "$(dirname "$beyla_file")"
-    cat "$obi_file" | transform_obi_to_beyla > "$beyla_file"
+    # Transform OBI to Beyla, strip copyrights/import comments, preserve Beyla-specific features
+    cat "$obi_file" | strip_obi_headers | transform_obi_to_beyla | add_preserved_features "$beyla_file" > "${beyla_file}.tmp"
+    mv "${beyla_file}.tmp" "$beyla_file"
 }
 
 # Generic function to check drift in a set of files
@@ -197,6 +359,14 @@ check_drift_in_files() {
     
     while IFS= read -r obi_file; do
         [[ -f "$obi_file" ]] || continue
+        
+        # Skip Beyla-specific files
+        local basename="${obi_file##*/}"
+        local skip=false
+        for skip_file in "${SKIP_BEYLA_SPECIFIC_FILES[@]}"; do
+            [[ "$basename" == "$skip_file" ]] && skip=true && break
+        done
+        [[ "$skip" == "true" ]] && continue
         
         local beyla_file=$(map_path "$obi_file")
         

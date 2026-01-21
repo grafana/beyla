@@ -11,7 +11,6 @@ use std::fs;
 use std::io::Read;
 use reqwest;
 use tokio;
-
 #[derive(Debug, Serialize, Deserialize)]
 struct MyObj {
     name: String,
@@ -58,7 +57,7 @@ async fn download1() -> Result<NamedFile> {
 async fn download2() -> impl Responder {
     if let Ok(mut file) = NamedFile::open("large_data.json") {
         let my_data_stream = async_stream::stream! {
-        let mut chunk = vec![0u8; 10 * 1024 *1024]; // I declare the chunk size here as 10 mb 
+        let mut chunk = vec![0u8; 10 * 1024 *1024]; // I decalare the chunk size here as 10 mb 
    
         loop {
             match file.read(&mut chunk) {

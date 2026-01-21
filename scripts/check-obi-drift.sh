@@ -253,6 +253,33 @@ ENV CGO_ENABLED=1')
         fi
     fi
     
+    # Preserve discovery sections in YAML config files (Beyla-only feature, not in OBI)
+    if [[ "$original_file" == *.yml ]] || [[ "$original_file" == *.yaml ]]; then
+        # Extract discovery section from Beyla's original file if it exists
+        # The discovery section starts with "^discovery:" and includes all indented lines until next top-level key
+        local discovery_section=$(awk '/^discovery:/ {p=1} p {if (/^[a-zA-Z][^:]*:/ && !/^discovery:/ && !/^  / && !/^    / && !/^      / && !/^        /) exit; print}' "$original_file" 2>/dev/null)
+        if [[ -n "$discovery_section" ]] && ! echo "$result" | grep -q "^discovery:"; then
+            # Add discovery section at the beginning of the file (before other top-level keys)
+            # Find the first non-comment, non-blank line that's a top-level key
+            local first_key=$(echo "$result" | grep -E "^[a-zA-Z]" | head -1)
+            if [[ -n "$first_key" ]]; then
+                # Insert discovery section before the first top-level key
+                # Use a temporary file to avoid sed escaping issues with multi-line content
+                local tmp_file=$(mktemp)
+                echo "$discovery_section" > "$tmp_file"
+                echo "" >> "$tmp_file"  # Add blank line after discovery section
+                local insert_line=$(echo "$result" | grep -n "^${first_key%%:*}" | head -1 | cut -d: -f1)
+                if [[ -n "$insert_line" ]]; then
+                    result=$(echo "$result" | sed "${insert_line}r $tmp_file")
+                fi
+                rm -f "$tmp_file"
+            else
+                # If no other keys, just prepend
+                result=$(echo -e "${discovery_section}\n${result}")
+            fi
+        fi
+    fi
+    
     echo "$result"
 }
 

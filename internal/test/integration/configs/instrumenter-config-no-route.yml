@@ -2,6 +2,7 @@ discovery:
   instrument:
     - name: testserver
       open_ports: 8080,8081,8082,8083,8087,8383
+
 routes:
   ignored_patterns:
     - /metrics

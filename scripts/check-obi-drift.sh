@@ -264,14 +264,21 @@ ENV CGO_ENABLED=1')
             local first_key=$(echo "$result" | grep -E "^[a-zA-Z]" | head -1)
             if [[ -n "$first_key" ]]; then
                 # Insert discovery section before the first top-level key
-                # Use a temporary file to avoid sed escaping issues with multi-line content
+                # Use awk to insert before the first key line
                 local tmp_file=$(mktemp)
                 echo "$discovery_section" > "$tmp_file"
                 echo "" >> "$tmp_file"  # Add blank line after discovery section
-                local insert_line=$(echo "$result" | grep -n "^${first_key%%:*}" | head -1 | cut -d: -f1)
-                if [[ -n "$insert_line" ]]; then
-                    result=$(echo "$result" | sed "${insert_line}r $tmp_file")
-                fi
+                local first_key_pattern="${first_key%%:*}"
+                result=$(echo "$result" | awk -v key="$first_key_pattern" -v discovery_file="$tmp_file" '
+                    /^[a-zA-Z]/ && $0 ~ "^" key ":" && !found {
+                        while ((getline line < discovery_file) > 0) {
+                            print line
+                        }
+                        close(discovery_file)
+                        found = 1
+                    }
+                    { print }
+                ')
                 rm -f "$tmp_file"
             else
                 # If no other keys, just prepend

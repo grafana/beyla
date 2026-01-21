@@ -129,7 +129,7 @@ prereqs: install-hooks bpf2go
 	mkdir -p $(TEST_OUTPUT)/run
 	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/v2/cmd/golangci-lint,v2.4.0)
 	$(call go-install-tool,$(GO_OFFSETS_TRACKER),github.com/grafana/go-offsets-tracker/cmd/go-offsets-tracker,$(call gomod-version,grafana/go-offsets-tracker))
-	$(call go-install-tool,$(GO_LICENSES),github.com/google/go-licenses,v1.6.0)
+	$(call go-install-tool,$(GO_LICENSES),github.com/google/go-licenses/v2,v2.0.1)
 	$(call go-install-tool,$(KIND),sigs.k8s.io/kind,v0.20.0)
 	$(call go-install-tool,$(DASHBOARD_LINTER),github.com/grafana/dashboard-linter,latest)
 	$(call go-install-tool,$(ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest,latest)
@@ -417,7 +417,7 @@ oats-test-debug: oats-prereq
 .PHONY: update-licenses check-license
 update-licenses: prereqs
 	@echo "### Updating third_party_licenses.csv"
-	GOOS=linux GOARCH=amd64 $(GO_LICENSES) report --include_tests ./... > third_party_licenses.csv
+	GOOS=linux GOARCH=amd64 $(GO_LICENSES) report --include_tests --ignore go.opentelemetry.io/obi ./... > third_party_licenses.csv
 
 check-licenses: update-licenses
 	@echo "### Checking third party licenses"

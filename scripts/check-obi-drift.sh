@@ -238,6 +238,21 @@ COPY vendor/ vendor/')
         fi
     fi
     
+    # Preserve ENV CGO_ENABLED=1 in Dockerfiles (Beyla needs CGO for some dependencies)
+    if [[ "$original_file" == *Dockerfile* ]] && grep -q "^ENV CGO_ENABLED=1" "$original_file" 2>/dev/null; then
+        # If original has CGO_ENABLED=1 but result doesn't, add it
+        if ! echo "$result" | grep -q "^ENV CGO_ENABLED=1"; then
+            # Try to add after ENV GOARCH=, or after ARG TARGETARCH
+            if echo "$result" | grep -q "^ENV GOARCH="; then
+                result=$(echo "$result" | sed '/^ENV GOARCH=/a\
+ENV CGO_ENABLED=1')
+            elif echo "$result" | grep -q "^ARG TARGETARCH"; then
+                result=$(echo "$result" | sed '/^ARG TARGETARCH/a\
+ENV CGO_ENABLED=1')
+            fi
+        fi
+    fi
+    
     echo "$result"
 }
 

@@ -15,8 +15,10 @@ import (
 )
 
 const (
-	EnvPodUID  = "OTEL_RESOURCE_ATTRIBUTES_POD_UID"
-	EnvPodName = "OTEL_RESOURCE_ATTRIBUTES_POD_NAME"
+	EnvPodUID        = "OTEL_RESOURCE_ATTRIBUTES_POD_UID"
+	EnvPodName       = "OTEL_RESOURCE_ATTRIBUTES_POD_NAME"
+	EnvNamespaceName = "OTEL_RESOURCE_ATTRIBUTES_NAMESPACE_NAME"
+	EnvNodeName      = "OTEL_RESOURCE_ATTRIBUTES_NODE_NAME"
 
 	ResourceAttributeAnnotationPrefix = "resource.opentelemetry.io/"
 )
@@ -39,54 +41,36 @@ func (pm *PodMutator) setResourceAttributes(container *corev1.Container, pod *co
 		res[k] = v
 	}
 
-	// k8s resources have a higher precedence than CRD entries
-	k8sResources := map[attribute.Key]string{}
-	k8sResources[semconv.K8SNamespaceNameKey] = pod.Namespace
-	k8sResources[semconv.K8SContainerNameKey] = container.Name
-	// Some fields might be empty - node name, pod name
-	// The pod name might be empty if the pod is created form deployment template
-	k8sResources[semconv.K8SPodUIDKey] = string(pod.UID)
-	k8sResources[semconv.K8SNodeNameKey] = pod.Spec.NodeName
-	k8sResources[semconv.ServiceInstanceIDKey] = createServiceInstanceId(pod, pod.Namespace, downwardsAPIRef(EnvPodName), container.Name)
+	// k8s resources have a higher precedence than Config entries
+	res[string(semconv.K8SContainerNameKey)] = container.Name
 	// todo do we already have this info cached?
 	//pm.addParentResourceLabels(ctx, cfg.AddK8sUIDAttributes, ns, pod.ObjectMeta, k8sResources)
 
-	for k, v := range k8sResources {
-		if v != "" {
-			res[string(k)] = v
-		}
-	}
-
-	// attributes and labels from the pod have the highest precedence (except for values set in environment variables)
-	for k, v := range pod.GetAnnotations() {
-		if strings.HasPrefix(k, ResourceAttributeAnnotationPrefix) {
-			key := strings.TrimPrefix(k, ResourceAttributeAnnotationPrefix)
-			if key != string(semconv.ServiceNameKey) {
-				res[key] = v
-			}
-		}
-	}
-
-	namespace := chooseServiceNamespace(pod, cfg.UseLabelsForResourceAttributes, pod.Namespace)
-	if namespace != "" {
-		res[string(semconv.ServiceNamespaceKey)] = namespace
-	}
-
-	res[string(semconv.ServiceNameKey)] = chooseServiceName(pod, cfg.UseLabelsForResourceAttributes, res, container)
-
+	addFromDownwardsAPI(container, res, semconv.K8SNamespaceNameKey, EnvNamespaceName, "metadata.namespace")
 	addFromDownwardsAPI(container, res, semconv.K8SPodNameKey, EnvPodName, "metadata.name")
-
-	// Some attributes might be empty, we should get them via k8s downward API
+	addFromDownwardsAPI(container, res, semconv.K8SNodeNameKey, EnvNodeName, "spec.nodeName")
 	if cfg.AddK8sUIDAttributes {
 		addFromDownwardsAPI(container, res, semconv.K8SPodUIDKey, EnvPodUID, "metadata.uid")
 	}
 
-	vsn := chooseServiceVersion(pod, cfg.UseLabelsForResourceAttributes, container)
-	if vsn != "" {
-		res[string(semconv.ServiceVersionKey)] = vsn
+	res[string(semconv.ServiceNamespaceKey)] = chooseServiceNamespace(pod, cfg.UseLabelsForResourceAttributes, downwardsAPIRef(EnvNamespaceName))
+	res[string(semconv.ServiceNameKey)] = chooseServiceName(pod, cfg.UseLabelsForResourceAttributes, res, container)
+
+	serviceVersion := chooseServiceVersion(pod, cfg.UseLabelsForResourceAttributes, container)
+	if serviceVersion != "" {
+		res[string(semconv.ServiceVersionKey)] = serviceVersion
+	}
+	serviceInstanceId := createServiceInstanceId(pod, downwardsAPIRef(EnvNamespaceName), downwardsAPIRef(EnvPodName), container.Name)
+	if serviceInstanceId != "" {
+		res[string(semconv.ServiceInstanceIDKey)] = serviceInstanceId
 	}
 
-	addFromDownwardsAPI(container, res, semconv.K8SNodeNameKey, "OTEL_RESOURCE_ATTRIBUTES_NODE_NAME", "spec.nodeName")
+	// attributes from the pod have the highest precedence
+	for k, v := range pod.GetAnnotations() {
+		if strings.HasPrefix(k, ResourceAttributeAnnotationPrefix) {
+			res[strings.TrimPrefix(k, ResourceAttributeAnnotationPrefix)] = v
+		}
+	}
 
 	// todo: propagators and sampler from config?
 	//idx = getIndexOfEnv(container.Env, constants.EnvOTELPropagators)
@@ -136,17 +120,15 @@ func (pm *PodMutator) setResourceAttributes(container *corev1.Container, pod *co
 }
 
 func addFromDownwardsAPI(container *corev1.Container, res map[string]string, key attribute.Key, envVar string, fieldPath string) {
-	if res[string(key)] == "" {
-		container.Env = append(container.Env, corev1.EnvVar{
-			Name: envVar,
-			ValueFrom: &corev1.EnvVarSource{
-				FieldRef: &corev1.ObjectFieldSelector{
-					FieldPath: fieldPath,
-				},
+	container.Env = append(container.Env, corev1.EnvVar{
+		Name: envVar,
+		ValueFrom: &corev1.EnvVarSource{
+			FieldRef: &corev1.ObjectFieldSelector{
+				FieldPath: fieldPath,
 			},
-		})
-		res[string(key)] = downwardsAPIRef(envVar)
-	}
+		},
+	})
+	res[string(key)] = downwardsAPIRef(envVar)
 }
 
 func downwardsAPIRef(envVar string) string {

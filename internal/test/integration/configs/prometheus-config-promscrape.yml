@@ -6,4 +6,4 @@ scrape_configs:
     honor_labels: true
     static_configs:
       - targets:
-          - 'autoinstrumenter:8999'
+          - 'beyla:8999'

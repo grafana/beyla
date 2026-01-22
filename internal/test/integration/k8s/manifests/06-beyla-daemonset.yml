@@ -1,38 +1,35 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: beyla-config
+  name: instrumenter-config
 data:
-  beyla-config.yml: |
+  instrumenter-config.yml: |
     attributes:
       kubernetes:
         enable: true
         resource_labels:
           deployment.environment: ["deployment.environment"]
-      select:
-        process_*:
-          include: ["*"]
-    trace_printer: text
     log_level: debug
     discovery:
-      survey:
-        - k8s_deployment_name: "*"
       instrument:
         # name and namespace will be automatically set from the K8s metadata
         - k8s_deployment_name: "{otherinstance,testserver}"
         # used in the k8s_owners_*_test.go
         - k8s_statefulset_name: statefulservice
         - k8s_daemonset_name: dsservice
+        - k8s_job_name: jobservice
+        - k8s_cronjob_name: cronjobservice
       exclude_instrument:
         # testing service exclusion, by expecting that K8s discovery only picks the "otherinstance"
         # deployment (ignoring the "testserver" in the other pod)
-        - k8s_deployment_name: testserver        
+        - k8s_deployment_name: "testserver"        
     routes:
       patterns:
         - /pingpong
+      unmatched: path
       ignored_patterns:
         - /metrics
-      unmatched: path
+      ignore_mode: traces
     otel_metrics_export:
       endpoint: http://otelcol:4318
     otel_traces_export:
@@ -54,12 +51,12 @@ spec:
         # kind, to force Beyla writing the coverage data
         teardown: delete
     spec:
-      hostPID: true  #important!
+      hostPID: true #important!
       serviceAccountName: beyla
       volumes:
-        - name: beyla-config
+        - name: instrumenter-config
           configMap:
-            name: beyla-config
+            name: instrumenter-config
         - name: testoutput
           persistentVolumeClaim:
             claimName: testoutput
@@ -67,13 +64,13 @@ spec:
         - name: beyla
           image: beyla:dev
           imagePullPolicy: Never # loaded into Kind from localhost
-          args: ["--config=/config/beyla-config.yml"]
+          args: ["--config=/config/instrumenter-config.yml"]
           securityContext:
             privileged: true
             runAsUser: 0
           volumeMounts:
             - mountPath: /config
-              name: beyla-config
+              name: instrumenter-config
             - mountPath: /testoutput
               name: testoutput
           env:
@@ -88,7 +85,7 @@ spec:
             - name: BEYLA_OTEL_METRICS_TTL
               value: "30m0s"
             - name: BEYLA_OTEL_METRICS_FEATURES
-              value: "application,application_process"
+              value: "application"
             - name: BEYLA_NAME_RESOLVER_SOURCES
               value: "dns,k8s"
             - name: BEYLA_OTLP_TRACES_BATCH_TIMEOUT

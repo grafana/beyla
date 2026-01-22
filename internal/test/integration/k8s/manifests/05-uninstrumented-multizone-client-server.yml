@@ -8,7 +8,7 @@ metadata:
   name: httppinger
   labels:
     component: httppinger
-    # this label will trigger a deletion of beyla pods before tearing down
+    # this label will trigger a deletion of Beyla pods before tearing down
     # kind, to force Beyla writing the coverage data
     teardown: delete
   annotations:
@@ -60,7 +60,7 @@ spec:
       name: testserver
       labels:
         app: testserver
-        # this label will trigger a deletion of beyla pods before tearing down
+        # this label will trigger a deletion of Beyla pods before tearing down
         # kind, to force Beyla writing the coverage data
         teardown: delete
       annotations:

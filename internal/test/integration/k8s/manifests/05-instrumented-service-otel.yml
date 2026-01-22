@@ -113,6 +113,6 @@ spec:
             - name: BEYLA_KUBE_METADATA_ENABLE
               value: "autodetect"
             - name: BEYLA_OTEL_METRIC_FEATURES 
-              value: "application,application_span,application_service_graph,application_process"
+              value: "application,application_span,application_process,application_service_graph"
             - name: BEYLA_NAME_RESOLVER_SOURCES
               value: "dns,k8s"

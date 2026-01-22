@@ -13,7 +13,7 @@ services:
       otelcol:
         condition: service_started
 
-  autoinstrumenter:
+  beyla:
     build:
       context: ../../..
       dockerfile: ./internal/test/integration/components/beyla/Dockerfile${INSTRUMENT_DOCKERFILE_SUFFIX}

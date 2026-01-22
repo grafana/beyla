@@ -24,7 +24,7 @@ services:
     depends_on:
       - testserver
 
-  autoinstrumenter:
+  beyla:
     build:
       context: ../../..
       dockerfile: ./internal/test/integration/components/beyla/Dockerfile

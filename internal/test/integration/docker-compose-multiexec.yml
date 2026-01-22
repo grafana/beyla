@@ -115,7 +115,7 @@ services:
     ports:
       - "8086:8085"
 
-  autoinstrumenter:
+  beyla:
     build:
       context: ../../..
       dockerfile: ./internal/test/integration/components/beyla/Dockerfile

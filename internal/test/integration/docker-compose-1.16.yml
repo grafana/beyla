@@ -13,7 +13,7 @@ services:
     environment:
       LOG_LEVEL: DEBUG
 
-  autoinstrumenter:
+  beyla:
     build:
       context: ../../..
       dockerfile: ./internal/test/integration/components/beyla/Dockerfile
@@ -60,7 +60,7 @@ services:
       - "9464" # Prometheus exporter
       - "8888" # metrics endpoint
     depends_on:
-      autoinstrumenter:
+      beyla:
         condition: service_started
       prometheus:
         condition: service_started

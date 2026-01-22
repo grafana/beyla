@@ -51,7 +51,7 @@ services:
     networks:
       - app_network
 
-  autoinstrumenter:
+  beyla:
     build:
       context: ../../..
       dockerfile: ./internal/test/integration/components/beyla/Dockerfile

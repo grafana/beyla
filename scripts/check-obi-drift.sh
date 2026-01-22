@@ -121,6 +121,8 @@ TRANSFORMATIONS=(
     'OTEL_EBPF_TRACES_INSTRUMENTATIONS|BEYLA_OTEL_TRACES_INSTRUMENTATIONS'
     'OTEL_EBPF_METRICS_INSTRUMENTATIONS|BEYLA_OTEL_METRICS_INSTRUMENTATIONS'
     'OTEL_EBPF_METRICS_FEATURES|BEYLA_OTEL_METRICS_FEATURES'
+    'OTEL_EBPF_METRIC_FEATURES|BEYLA_OTEL_METRIC_FEATURES'
+    'OTEL_EBPF_METRICS_TTL|BEYLA_OTEL_METRICS_TTL'
     'OTEL_EBPF_|BEYLA_'
     'otel-ebpf|beyla'
     'otel_ebpf|beyla'
@@ -146,8 +148,25 @@ TRANSFORMATIONS=(
     'obi-netolly|beyla-netolly'
     'obi-all-processes|beyla-all-processes'
     'obi-external-informer|beyla-external-informer'
-    # Attribute names
+    # K8s manifest YAML values (name:, serviceAccountName:, etc.)
+    'name: obi$|name: beyla'
+    'serviceAccountName: obi$|serviceAccountName: beyla'
+    'instrumentation: obi$|instrumentation: beyla'
+    '- name: obi$|- name: beyla'
+    # K8s manifest comments
+    'deletion of obi pods|deletion of beyla pods'
+    'deletion of OBI pods|deletion of Beyla pods'
+    'force OBI writing|force Beyla writing'
+    'that OBI is able|that Beyla is able'
+    'Allows OBI to|Allows Beyla to'
+    'OBI requires|Beyla requires'
+    # K8s image names
+    'obi-k8s-cache|beyla-k8s-cache'
+    # K8s env var values
+    'value: "obi"|value: "beyla"'
+    # Metric/attribute names
     'obi\.ip|beyla.ip'
+    'obi\.network\.flow|beyla.network.flow'
     # Config file naming (handles obi-config-*.yml and obi-config.yml and obi-config${VAR})
     'obi-config|instrumenter-config'
     'obi_|beyla_'
@@ -175,8 +194,8 @@ TRANSFORMATIONS=(
     'ebpf-instrument:|autoinstrumenter:'
     'service:ebpf-instrument|service:autoinstrumenter'
     'image: hatest-ebpf-instrument|image: hatest-autoinstrumenter'
-    'obi:|autoinstrumenter:'
-    'service:obi|service:autoinstrumenter'
+    'obi:|beyla:'
+    'service:obi|service:beyla'
     '// OBI |// Beyla '
     '# OBI |# Beyla '
     # Note: Copyright headers are stripped by normalize_content() instead of sed
@@ -194,6 +213,8 @@ REVERSE_TRANSFORMATIONS=(
     'BEYLA_OTEL_TRACES_INSTRUMENTATIONS|OTEL_EBPF_TRACES_INSTRUMENTATIONS'
     'BEYLA_OTEL_METRICS_INSTRUMENTATIONS|OTEL_EBPF_METRICS_INSTRUMENTATIONS'
     'BEYLA_OTEL_METRICS_FEATURES|OTEL_EBPF_METRICS_FEATURES'
+    'BEYLA_OTEL_METRIC_FEATURES|OTEL_EBPF_METRIC_FEATURES'
+    'BEYLA_OTEL_METRICS_TTL|OTEL_EBPF_METRICS_TTL'
     'BEYLA_OTEL_|OTEL_EBPF_'
     'BEYLA_|OTEL_EBPF_'
     # Attribute values (no /v2) - must be before import paths
@@ -247,7 +268,7 @@ REVERSE_TRANSFORMATIONS=(
     'hatest-javaautoinstrumenter|hatest-javaobi'
     'hatest-autoinstrumenter|hatest-obi'
     'image: hatest-autoinstrumenter|image: hatest-obi'
-    'autoinstrumenter:|obi:'
+    'beyla:|obi:'
     'service:autoinstrumenter|service:obi'
 )
 
@@ -287,28 +308,24 @@ add_preserved_features() {
     
     for feature in "${BEYLA_PRESERVE_FEATURES[@]}"; do
         # For each FEATURES line in original that has the feature, add it to corresponding line in result
-        while IFS= read -r orig_line; do
-            # Extract the env var name (e.g., BEYLA_PROMETHEUS_FEATURES or BEYLA_OTEL_METRICS_FEATURES)
-            local env_var=$(echo "$orig_line" | grep -oE '[A-Z_]+FEATURES')
-            [[ -z "$env_var" ]] && continue
-            
-            # Use the env var name as-is (we now preserve BEYLA_OTEL_* names)
-            local normalized_env_var="$env_var"
-            
-            # Check if this line in original has the feature
-            if echo "$orig_line" | grep -q "$feature"; then
-                # Check if result already has the feature for this env var (use normalized name)
-                if ! echo "$result" | grep "$normalized_env_var" | grep -q "$feature"; then
-                    # Add feature: try after application_span* (including _otel suffix) first, then after application
-                    if echo "$result" | grep "$normalized_env_var" | grep -q "application_span"; then
-                        # Match application_span plus any suffix (_otel, _sizes, etc.) as complete feature name
-                        result=$(echo "$result" | sed -E "s/(${normalized_env_var}.*application_span[a-z_]*)([\",])/\1,${feature}\2/")
-                    else
-                        result=$(echo "$result" | sed -E "s/(${normalized_env_var}.*\"application)([\",])/\1,${feature}\2/")
-                    fi
-                fi
-            fi
-        done < <(grep "FEATURES" "$original_file" 2>/dev/null || true)
+        # Handle both docker-compose format (VAR: "value") and k8s manifest format (name: VAR\nvalue: "...")
+        
+        # Check if original file has this feature at all
+        if ! grep -q "$feature" "$original_file" 2>/dev/null; then
+            continue
+        fi
+        
+        # Check if result already has this feature
+        if echo "$result" | grep -q "$feature"; then
+            continue
+        fi
+        
+        # Add feature after application_span (handles both docker-compose and k8s formats)
+        if echo "$result" | grep -q "application_span"; then
+            result=$(echo "$result" | sed -E "s/(application_span[a-z_]*)([\",])/\1,${feature}\2/")
+        elif echo "$result" | grep -q '"application'; then
+            result=$(echo "$result" | sed -E 's/("application)([",$])/\1,'"${feature}"'\2/')
+        fi
     done
     
     # Preserve COPY vendor/ lines in Dockerfiles (Beyla uses vendor/, OBI doesn't always have it)
@@ -448,6 +465,9 @@ map_path() {
     
     # Transform config filenames
     path="${path//obi-config/instrumenter-config}"
+    
+    # Transform k8s manifest filenames (06-obi-* -> 06-beyla-*)
+    path="${path//06-obi-/06-beyla-}"
     
     # Transform wrapper script filenames (both OBI variants map to single Beyla wrapper)
     path="${path//ebpf_instrument_wrapper_minimal.sh/beyla_wrapper.sh}"
@@ -668,14 +688,19 @@ Compares:
   - Docker-compose files
 
 Options:
-  --sync      Apply OBI changes to Beyla files
-  --verbose   Show all drifted file names (default: only if ≤5)
-  --help      Show this help
+  --sync              Apply OBI changes to Beyla files
+  --verbose           Show all drifted file names (default: only if ≤5)
+  --only CATEGORIES   Only check specific categories (comma-separated)
+                      Categories: go, components, configs, docker-compose, k8s
+  --help              Show this help
 
 Examples:
-  ./scripts/check-obi-drift.sh              # Quick summary
-  ./scripts/check-obi-drift.sh --verbose    # List all drifted files
-  ./scripts/check-obi-drift.sh --sync       # Sync changes
+  ./scripts/check-obi-drift.sh                    # Check all categories
+  ./scripts/check-obi-drift.sh --verbose          # List all drifted files
+  ./scripts/check-obi-drift.sh --sync             # Sync all changes
+  ./scripts/check-obi-drift.sh --only k8s         # Only check k8s manifests
+  ./scripts/check-obi-drift.sh --only k8s --sync  # Only sync k8s manifests
+  ./scripts/check-obi-drift.sh --only go,configs  # Check Go functions and configs
 
 To see diff for a specific file:
   diff -u internal/test/integration/FILE .obi-src/internal/test/integration/FILE
@@ -694,19 +719,33 @@ main() {
     echo "─────────────────────────────────────────────"
     
     # Go functions
-    check_all_go_functions
+    if should_run_check "go"; then
+        check_all_go_functions
+    fi
     
     # Component files
-    check_drift_in_files "Components" \
-        "find '$OBI_DIR/components' -type f 2>/dev/null | while read -r f; do should_check_file \"\$f\" && echo \"\$f\"; done"
+    if should_run_check "components"; then
+        check_drift_in_files "Components" \
+            "find '$OBI_DIR/components' -type f 2>/dev/null | while read -r f; do should_check_file \"\$f\" && echo \"\$f\"; done"
+    fi
     
     # Config files
-    check_drift_in_files "Configs" \
-        "find '$OBI_DIR/configs' -maxdepth 1 -type f \\( -name '*.yml' -o -name '*.yaml' -o -name '*.json' \\) 2>/dev/null"
+    if should_run_check "configs"; then
+        check_drift_in_files "Configs" \
+            "find '$OBI_DIR/configs' -maxdepth 1 -type f \\( -name '*.yml' -o -name '*.yaml' -o -name '*.json' \\) 2>/dev/null"
+    fi
     
     # Docker-compose files
-    check_drift_in_files "Docker-compose" \
-        "find '$OBI_DIR' -maxdepth 1 -name 'docker-compose*.yml' -type f 2>/dev/null"
+    if should_run_check "docker-compose"; then
+        check_drift_in_files "Docker-compose" \
+            "find '$OBI_DIR' -maxdepth 1 -name 'docker-compose*.yml' -type f 2>/dev/null"
+    fi
+    
+    # K8s manifest files
+    if should_run_check "k8s"; then
+        check_drift_in_files "K8s-manifests" \
+            "find '$OBI_DIR/k8s/manifests' -type f -name '*.yml' 2>/dev/null | while read -r f; do should_check_file \"\$f\" && echo \"\$f\"; done"
+    fi
     
     echo "─────────────────────────────────────────────"
     
@@ -725,15 +764,33 @@ main() {
     fi
 }
 
+# Filter for --only option (empty = all)
+ONLY_CHECKS=()
+
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --sync) SYNC_MODE=true ;;
         --verbose|-v) VERBOSE=true ;;
+        --only)
+            shift
+            [[ -z "$1" ]] && { echo "Error: --only requires an argument"; exit 1; }
+            IFS=',' read -ra ONLY_CHECKS <<< "$1"
+            ;;
         --help|-h) show_help; exit 0 ;;
         *) echo "Unknown option: $1"; show_help; exit 1 ;;
     esac
     shift
 done
+
+# Helper to check if a category should be processed
+should_run_check() {
+    local check="$1"
+    [[ ${#ONLY_CHECKS[@]} -eq 0 ]] && return 0  # No filter = run all
+    for c in "${ONLY_CHECKS[@]}"; do
+        [[ "$c" == "$check" ]] && return 0
+    done
+    return 1
+}
 
 main

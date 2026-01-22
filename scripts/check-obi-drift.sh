@@ -94,6 +94,8 @@ TRANSFORMATIONS=(
     # Go import paths need /v2 suffix
     'go\.opentelemetry\.io/obi|github.com/grafana/beyla/v2'
     'obi-k8s-test-cluster|beyla-k8s-test-cluster'
+    # K8s test Dockerfile variable names
+    'DockerfileOBI|DockerfileBeyla'
     # Prometheus job names and scrape targets (obi-* -> beyla-*)
     'obi-network-flows|beyla-network-flows'
     'obi-testserver|beyla-testserver'
@@ -163,6 +165,8 @@ REVERSE_TRANSFORMATIONS=(
     'github\.com/grafana/beyla|go.opentelemetry.io/obi'
     # Note: GitHub URLs are preserved as-is (not transformed)
     'beyla-k8s-test-cluster|obi-k8s-test-cluster'
+    # K8s test Dockerfile variable names
+    'DockerfileBeyla|DockerfileOBI'
     # Prometheus job names and scrape targets
     'beyla-network-flows|obi-network-flows'
     'beyla-testserver|obi-testserver'

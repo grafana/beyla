@@ -30,7 +30,7 @@ var cluster *kube.Kind
 func TestMain(m *testing.M) {
 	if err := docker.Build(os.Stdout, tools.ProjectDir(),
 		docker.ImageBuild{Tag: "testserver:dev", Dockerfile: k8s.DockerfileTestServer},
-		docker.ImageBuild{Tag: "beyla:dev", Dockerfile: k8s.DockerfileOBI},
+		docker.ImageBuild{Tag: "beyla:dev", Dockerfile: k8s.DockerfileBeyla},
 		docker.ImageBuild{Tag: "grpcpinger:dev", Dockerfile: k8s.DockerfilePinger},
 	); err != nil {
 		slog.Error("can't build docker images", "error", err)

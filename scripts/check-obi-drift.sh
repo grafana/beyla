@@ -83,6 +83,10 @@ TRANSFORMATIONS=(
     'OTEL_EBPF_EXECUTABLE_PATH|BEYLA_EXECUTABLE_NAME'
     # Shell variable references also need to be transformed (e.g., ${JAVA_EXECUTABLE_PATH} -> ${JAVA_EXECUTABLE_NAME})
     'JAVA_EXECUTABLE_PATH|JAVA_EXECUTABLE_NAME'
+    # These env vars keep the OTEL_ part: OTEL_EBPF_X -> BEYLA_OTEL_X (must be before generic transform)
+    'OTEL_EBPF_TRACES_INSTRUMENTATIONS|BEYLA_OTEL_TRACES_INSTRUMENTATIONS'
+    'OTEL_EBPF_METRICS_INSTRUMENTATIONS|BEYLA_OTEL_METRICS_INSTRUMENTATIONS'
+    'OTEL_EBPF_METRICS_FEATURES|BEYLA_OTEL_METRICS_FEATURES'
     'OTEL_EBPF_|BEYLA_'
     'otel-ebpf|beyla'
     'otel_ebpf|beyla'
@@ -147,6 +151,10 @@ REVERSE_TRANSFORMATIONS=(
     'BEYLA_EXECUTABLE_NAME|OTEL_EBPF_EXECUTABLE_PATH'
     # Shell variable references also need to be reversed
     'JAVA_EXECUTABLE_NAME|JAVA_EXECUTABLE_PATH'
+    # These env vars have OTEL_ in Beyla: BEYLA_OTEL_X -> OTEL_EBPF_X (must be before generic transform)
+    'BEYLA_OTEL_TRACES_INSTRUMENTATIONS|OTEL_EBPF_TRACES_INSTRUMENTATIONS'
+    'BEYLA_OTEL_METRICS_INSTRUMENTATIONS|OTEL_EBPF_METRICS_INSTRUMENTATIONS'
+    'BEYLA_OTEL_METRICS_FEATURES|OTEL_EBPF_METRICS_FEATURES'
     'BEYLA_OTEL_|OTEL_EBPF_'
     'BEYLA_|OTEL_EBPF_'
     # Attribute values (no /v2) - must be before import paths
@@ -241,8 +249,8 @@ add_preserved_features() {
             local env_var=$(echo "$orig_line" | grep -oE '[A-Z_]+FEATURES')
             [[ -z "$env_var" ]] && continue
             
-            # Normalize: BEYLA_OTEL_X_FEATURES -> BEYLA_X_FEATURES (to match transformed result)
-            local normalized_env_var=$(echo "$env_var" | sed 's/BEYLA_OTEL_/BEYLA_/')
+            # Use the env var name as-is (we now preserve BEYLA_OTEL_* names)
+            local normalized_env_var="$env_var"
             
             # Check if this line in original has the feature
             if echo "$orig_line" | grep -q "$feature"; then

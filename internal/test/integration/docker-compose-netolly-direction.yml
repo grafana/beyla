@@ -41,7 +41,7 @@ services:
       BEYLA_CONFIG_PATH: /configs/instrumenter-config-netolly${BEYLA_CONFIG_SUFFIX}.yml
       GOCOVERDIR: "/coverage"
       BEYLA_NETWORK_SOURCE: ${BEYLA_NETWORK_SOURCE}
-      BEYLA_METRICS_FEATURES: "network" # implicitly enabling network metrics without a global enable
+      BEYLA_OTEL_METRICS_FEATURES: "network" # implicitly enabling network metrics without a global enable
       BEYLA_NETWORK_PRINT_FLOWS: "true"
       BEYLA_METRICS_INTERVAL: "1s"
       BEYLA_BPF_BATCH_TIMEOUT: "1s"

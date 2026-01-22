@@ -15,9 +15,9 @@ import (
 )
 
 const (
-	EnvPodUID                         = "OTEL_RESOURCE_ATTRIBUTES_POD_UID"   // todo review this
-	EnvPodName                        = "OTEL_RESOURCE_ATTRIBUTES_POD_NAME"  // todo review this
-	EnvNodeName                       = "OTEL_RESOURCE_ATTRIBUTES_NODE_NAME" // todo review this
+	EnvPodUID  = "OTEL_RESOURCE_ATTRIBUTES_POD_UID"
+	EnvPodName = "OTEL_RESOURCE_ATTRIBUTES_POD_NAME"
+
 	ResourceAttributeAnnotationPrefix = "resource.opentelemetry.io/"
 )
 
@@ -29,28 +29,27 @@ var (
 	LabelAppVersion = []string{"app.kubernetes.io/version"}
 )
 
-func (pm *PodMutator) setResourceAttributes(container *corev1.Container, pod *corev1.Pod, ns corev1.Namespace) {
+func (pm *PodMutator) setResourceAttributes(container *corev1.Container, pod *corev1.Pod) {
 
 	// entries from the CRD have the lowest precedence - they are overridden by later values
-	// todo do we want this functionality?
-	//for k, v := range cfg.Attributes {
-	//		res[k] = v
-	//}
+	cfg := pm.cfg.Injector.Webhook.Resource
+
+	res := map[string]string{}
+	for k, v := range cfg.Attributes {
+		res[k] = v
+	}
 
 	// k8s resources have a higher precedence than CRD entries
 	k8sResources := map[attribute.Key]string{}
-	k8sResources[semconv.K8SNamespaceNameKey] = ns.Name
+	k8sResources[semconv.K8SNamespaceNameKey] = pod.Namespace
 	k8sResources[semconv.K8SContainerNameKey] = container.Name
 	// Some fields might be empty - node name, pod name
 	// The pod name might be empty if the pod is created form deployment template
-	k8sResources[semconv.K8SPodNameKey] = pod.Name
 	k8sResources[semconv.K8SPodUIDKey] = string(pod.UID)
 	k8sResources[semconv.K8SNodeNameKey] = pod.Spec.NodeName
-	k8sResources[semconv.ServiceInstanceIDKey] = createServiceInstanceId(pod, ns.Name, fmt.Sprintf("$(%s)", EnvPodName), container.Name)
+	k8sResources[semconv.ServiceInstanceIDKey] = createServiceInstanceId(pod, pod.Namespace, downwardsAPIRef(EnvPodName), container.Name)
 	// todo do we already have this info cached?
-	//i.addParentResourceLabels(ctx, cfg.AddK8sUIDAttributes, ns, pod.ObjectMeta, k8sResources)
-
-	res := map[string]string{}
+	//pm.addParentResourceLabels(ctx, cfg.AddK8sUIDAttributes, ns, pod.ObjectMeta, k8sResources)
 
 	for k, v := range k8sResources {
 		if v != "" {
@@ -68,41 +67,18 @@ func (pm *PodMutator) setResourceAttributes(container *corev1.Container, pod *co
 		}
 	}
 
-	cfg := pm.cfg.Injector.Webhook.Resource
-
-	namespace := chooseServiceNamespace(pod, cfg.UseLabelsForResourceAttributes, ns.Name)
+	namespace := chooseServiceNamespace(pod, cfg.UseLabelsForResourceAttributes, pod.Namespace)
 	if namespace != "" {
 		res[string(semconv.ServiceNamespaceKey)] = namespace
 	}
 
-	// todo workloadMeta vs podMeta ? from dash0 code
-
 	res[string(semconv.ServiceNameKey)] = chooseServiceName(pod, cfg.UseLabelsForResourceAttributes, res, container)
 
-	// Always retrieve the pod name from the Downward API. Ensure that the OTEL_RESOURCE_ATTRIBUTES_POD_NAME env exists.
-	container.Env = append(container.Env, corev1.EnvVar{
-		Name: EnvPodName,
-		ValueFrom: &corev1.EnvVarSource{
-			FieldRef: &corev1.ObjectFieldSelector{
-				FieldPath: "metadata.name",
-			},
-		},
-	})
-	res[string(semconv.K8SPodNameKey)] = fmt.Sprintf("$(%s)", EnvPodName)
+	addFromDownwardsAPI(container, res, semconv.K8SPodNameKey, EnvPodName, "metadata.name")
 
 	// Some attributes might be empty, we should get them via k8s downward API
 	if cfg.AddK8sUIDAttributes {
-		if res[string(semconv.K8SPodUIDKey)] == "" {
-			container.Env = append(container.Env, corev1.EnvVar{
-				Name: EnvPodUID,
-				ValueFrom: &corev1.EnvVarSource{
-					FieldRef: &corev1.ObjectFieldSelector{
-						FieldPath: "metadata.uid",
-					},
-				},
-			})
-			res[string(semconv.K8SPodUIDKey)] = fmt.Sprintf("$(%s)", EnvPodUID)
-		}
+		addFromDownwardsAPI(container, res, semconv.K8SPodUIDKey, EnvPodUID, "metadata.uid")
 	}
 
 	vsn := chooseServiceVersion(pod, cfg.UseLabelsForResourceAttributes, container)
@@ -110,18 +86,9 @@ func (pm *PodMutator) setResourceAttributes(container *corev1.Container, pod *co
 		res[string(semconv.ServiceVersionKey)] = vsn
 	}
 
-	if res[string(semconv.K8SNodeNameKey)] == "" {
-		container.Env = append(container.Env, corev1.EnvVar{
-			Name: EnvNodeName,
-			ValueFrom: &corev1.EnvVarSource{
-				FieldRef: &corev1.ObjectFieldSelector{
-					FieldPath: "spec.nodeName",
-				},
-			},
-		})
-		res[string(semconv.K8SNodeNameKey)] = fmt.Sprintf("$(%s)", EnvNodeName)
-	}
+	addFromDownwardsAPI(container, res, semconv.K8SNodeNameKey, "OTEL_RESOURCE_ATTRIBUTES_NODE_NAME", "spec.nodeName")
 
+	// todo: propagators and sampler from config?
 	//idx = getIndexOfEnv(container.Env, constants.EnvOTELPropagators)
 	//if idx == -1 && len(otelinst.Spec.Propagators) > 0 {
 	//	propagators := *(*[]string)((unsafe.Pointer(&otelinst.Spec.Propagators)))
@@ -166,6 +133,24 @@ func (pm *PodMutator) setResourceAttributes(container *corev1.Container, pod *co
 				Value: strings.Join(resourceAttributeList, ","),
 			})
 	}
+}
+
+func addFromDownwardsAPI(container *corev1.Container, res map[string]string, key attribute.Key, envVar string, fieldPath string) {
+	if res[string(key)] == "" {
+		container.Env = append(container.Env, corev1.EnvVar{
+			Name: envVar,
+			ValueFrom: &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					FieldPath: fieldPath,
+				},
+			},
+		})
+		res[string(key)] = downwardsAPIRef(envVar)
+	}
+}
+
+func downwardsAPIRef(envVar string) string {
+	return fmt.Sprintf("$(%s)", envVar)
 }
 
 // chooseServiceName returns the service name to be used in the instrumentation.
@@ -295,7 +280,7 @@ func createServiceInstanceId(pod *corev1.Pod, namespaceName, podName, containerN
 	return serviceInstanceId
 }
 
-//func (i *sdkInjector) addParentResourceLabels(ctx context.Context, uid bool, ns corev1.Namespace, objectMeta metav1.ObjectMeta, resources map[attribute.Key]string) {
+//func (pm *PodMutator) addParentResourceLabels(ctx context.Context, uid bool, ns corev1.Namespace, objectMeta metav1.ObjectMeta, resources map[attribute.Key]string) {
 //	for _, owner := range objectMeta.OwnerReferences {
 //		switch strings.ToLower(owner.Kind) {
 //		case "replicaset":

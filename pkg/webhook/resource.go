@@ -15,11 +15,6 @@ import (
 )
 
 const (
-	EnvPodUID        = "OTEL_RESOURCE_ATTRIBUTES_POD_UID"
-	EnvPodName       = "OTEL_RESOURCE_ATTRIBUTES_POD_NAME"
-	EnvNamespaceName = "OTEL_RESOURCE_ATTRIBUTES_NAMESPACE_NAME"
-	EnvNodeName      = "OTEL_RESOURCE_ATTRIBUTES_NODE_NAME"
-
 	ResourceAttributeAnnotationPrefix = "resource.opentelemetry.io/"
 )
 
@@ -36,39 +31,40 @@ func (pm *PodMutator) setResourceAttributes(container *corev1.Container, pod *co
 	// entries from the CRD have the lowest precedence - they are overridden by later values
 	cfg := pm.cfg.Injector.Webhook.Resource
 
-	res := map[string]string{}
+	// Extra resource attributes that don't have dedicated OTEL_INJECTOR_* variables
+	extraResAttrs := map[string]string{}
 	for k, v := range cfg.Attributes {
-		res[k] = v
+		extraResAttrs[k] = v
 	}
 
-	// k8s resources have a higher precedence than Config entries
-	res[string(semconv.K8SContainerNameKey)] = container.Name
+	setEnvVar(container, envOtelK8sContainerName, container.Name)
+
 	// todo do we already have this info cached?
 	//pm.addParentResourceLabels(ctx, cfg.AddK8sUIDAttributes, ns, pod.ObjectMeta, k8sResources)
 
-	addFromDownwardsAPI(container, res, semconv.K8SNamespaceNameKey, EnvNamespaceName, "metadata.namespace")
-	addFromDownwardsAPI(container, res, semconv.K8SPodNameKey, EnvPodName, "metadata.name")
-	addFromDownwardsAPI(container, res, semconv.K8SNodeNameKey, EnvNodeName, "spec.nodeName")
+	// Set K8s attributes from downwards API
+	setEnvVarFromFieldPath(container, envOtelK8sNamespaceName, "metadata.namespace")
+	setEnvVarFromFieldPath(container, envOtelK8sPodName, "metadata.name")
+	setEnvVarFromFieldPath(container, envOtelK8sNodeName, "spec.nodeName")
 	if cfg.AddK8sUIDAttributes {
-		addFromDownwardsAPI(container, res, semconv.K8SPodUIDKey, EnvPodUID, "metadata.uid")
+		setEnvVarFromFieldPath(container, envOtelK8sPodUID, "metadata.uid")
 	}
 
-	res[string(semconv.ServiceNamespaceKey)] = chooseServiceNamespace(pod, cfg.UseLabelsForResourceAttributes, downwardsAPIRef(EnvNamespaceName))
-	res[string(semconv.ServiceNameKey)] = chooseServiceName(pod, cfg.UseLabelsForResourceAttributes, res, container)
+	// Set service attributes using dedicated env vars
+	setEnvVar(container, envOtelServiceNamespace, chooseServiceNamespace(pod, cfg.UseLabelsForResourceAttributes))
+	setEnvVar(container, envOtelServiceName, chooseServiceName(pod, cfg.UseLabelsForResourceAttributes, container))
+	setEnvVar(container, envOtelServiceVersion, chooseServiceVersion(pod, cfg.UseLabelsForResourceAttributes, container))
 
-	serviceVersion := chooseServiceVersion(pod, cfg.UseLabelsForResourceAttributes, container)
-	if serviceVersion != "" {
-		res[string(semconv.ServiceVersionKey)] = serviceVersion
-	}
-	serviceInstanceId := createServiceInstanceId(pod, downwardsAPIRef(EnvNamespaceName), downwardsAPIRef(EnvPodName), container.Name)
+	// Service instance ID is added to extra attributes since it uses pod name reference
+	serviceInstanceId := createServiceInstanceId(pod, container.Name)
 	if serviceInstanceId != "" {
-		res[string(semconv.ServiceInstanceIDKey)] = serviceInstanceId
+		extraResAttrs[string(semconv.ServiceInstanceIDKey)] = serviceInstanceId
 	}
 
-	// attributes from the pod have the highest precedence
+	// attributes from the pod annotations have the highest precedence
 	for k, v := range pod.GetAnnotations() {
 		if strings.HasPrefix(k, ResourceAttributeAnnotationPrefix) {
-			res[strings.TrimPrefix(k, ResourceAttributeAnnotationPrefix)] = v
+			extraResAttrs[strings.TrimPrefix(k, ResourceAttributeAnnotationPrefix)] = v
 		}
 	}
 
@@ -101,34 +97,19 @@ func (pm *PodMutator) setResourceAttributes(container *corev1.Container, pod *co
 	//}
 
 	if pm.cfg.Metrics.Features.AnySpanMetrics() {
-		res[string(attr.SkipSpanMetrics.OTEL())] = "true"
+		extraResAttrs[string(attr.SkipSpanMetrics.OTEL())] = "true"
 	}
 
-	if len(res) > 0 {
+	// Set extra resource attributes if any exist
+	if len(extraResAttrs) > 0 {
 		var resourceAttributeList []string
-		for _, resourceAttributeKey := range slices.Sorted(maps.Keys(res)) {
+		for _, resourceAttributeKey := range slices.Sorted(maps.Keys(extraResAttrs)) {
 			resourceAttributeList = append(
 				resourceAttributeList,
-				fmt.Sprintf("%s=%s", resourceAttributeKey, res[resourceAttributeKey]))
+				fmt.Sprintf("%s=%s", resourceAttributeKey, extraResAttrs[resourceAttributeKey]))
 		}
-		setEnvVar(container,
-			corev1.EnvVar{
-				Name:  envOtelExtraResourceAttrs,
-				Value: strings.Join(resourceAttributeList, ","),
-			})
+		setEnvVar(container, envOtelExtraResourceAttrs, strings.Join(resourceAttributeList, ","))
 	}
-}
-
-func addFromDownwardsAPI(container *corev1.Container, res map[string]string, key attribute.Key, envVar string, fieldPath string) {
-	container.Env = append(container.Env, corev1.EnvVar{
-		Name: envVar,
-		ValueFrom: &corev1.EnvVarSource{
-			FieldRef: &corev1.ObjectFieldSelector{
-				FieldPath: fieldPath,
-			},
-		},
-	})
-	res[string(key)] = downwardsAPIRef(envVar)
 }
 
 func downwardsAPIRef(envVar string) string {
@@ -200,12 +181,14 @@ func chooseServiceVersion(pod *corev1.Pod, useLabelsForResourceAttributes bool, 
 
 // chooseServiceNamespace returns the service.namespace to be used in the instrumentation.
 // See https://github.com/open-telemetry/semantic-conventions/blob/main/docs/non-normative/k8s-attributes.md#how-servicenamespace-should-be-calculated
-func chooseServiceNamespace(pod *corev1.Pod, useLabelsForResourceAttributes bool, namespaceName string) string {
+func chooseServiceNamespace(pod *corev1.Pod, useLabelsForResourceAttributes bool) string {
 	namespace := chooseLabelOrAnnotation(pod, useLabelsForResourceAttributes, semconv.ServiceNamespaceKey, nil)
 	if namespace != "" {
 		return namespace
 	}
-	return namespaceName
+	// Return empty string to indicate we should not set service.namespace
+	// since k8s.namespace.name will be set from downwards API
+	return ""
 }
 
 var cannotRetrieveImage = errors.New("cannot retrieve image name")
@@ -242,9 +225,9 @@ func parseServiceVersionFromImage(image string) (string, error) {
 	return "", cannotRetrieveImage
 }
 
-// chooseServiceInstanceId returns the service.instance.id to be used in the instrumentation.
+// createServiceInstanceId returns the service.instance.id to be used in the instrumentation.
 // See https://github.com/open-telemetry/semantic-conventions/blob/main/docs/non-normative/k8s-attributes.md#how-serviceinstanceid-should-be-calculated
-func createServiceInstanceId(pod *corev1.Pod, namespaceName, podName, containerName string) string {
+func createServiceInstanceId(pod *corev1.Pod, containerName string) string {
 	// Do not use labels for service instance id,
 	// because multiple containers in the same pod would get the same service instance id,
 	// which violates the uniqueness requirement of service instance id -
@@ -255,11 +238,21 @@ func createServiceInstanceId(pod *corev1.Pod, namespaceName, podName, containerN
 		return serviceInstanceId
 	}
 
-	if namespaceName != "" && podName != "" && containerName != "" {
-		resNames := []string{namespaceName, podName, containerName}
-		serviceInstanceId = strings.Join(resNames, ".")
-	}
-	return serviceInstanceId
+	// Build service instance ID using environment variable references from downwards API
+	// The injector will expand these references at runtime
+	return fmt.Sprintf("$(%s).$(%s).%s", envOtelK8sNamespaceName, envOtelK8sPodName, containerName)
+}
+
+// setEnvVarFromFieldPath is a helper function that sets an environment variable from a Kubernetes downwards API field path
+func setEnvVarFromFieldPath(container *corev1.Container, envVarName, fieldPath string) {
+	container.Env = append(container.Env, corev1.EnvVar{
+		Name: envVarName,
+		ValueFrom: &corev1.EnvVarSource{
+			FieldRef: &corev1.ObjectFieldSelector{
+				FieldPath: fieldPath,
+			},
+		},
+	})
 }
 
 //func (pm *PodMutator) addParentResourceLabels(ctx context.Context, uid bool, ns corev1.Namespace, objectMeta metav1.ObjectMeta, resources map[attribute.Key]string) {

@@ -42,6 +42,14 @@ const (
 	envOtelExporterOtlpEndpointName = "OTEL_EXPORTER_OTLP_ENDPOINT"
 	envOtelExporterOtlpProtocolName = "OTEL_EXPORTER_OTLP_PROTOCOL"
 	envOtelExtraResourceAttrs       = "OTEL_INJECTOR_RESOURCE_ATTRIBUTES"
+	envOtelServiceName              = "OTEL_INJECTOR_SERVICE_NAME"
+	envOtelServiceVersion           = "OTEL_INJECTOR_SERVICE_VERSION"
+	envOtelServiceNamespace         = "OTEL_INJECTOR_SERVICE_NAMESPACE"
+	envOtelK8sNamespaceName         = "OTEL_INJECTOR_K8S_NAMESPACE_NAME"
+	envOtelK8sPodName               = "OTEL_INJECTOR_K8S_POD_NAME"
+	envOtelK8sPodUID                = "OTEL_INJECTOR_K8S_POD_UID"
+	envOtelK8sContainerName         = "OTEL_INJECTOR_K8S_CONTAINER_NAME"
+	envOtelK8sNodeName              = "OTEL_INJECTOR_K8S_NODE_NAME"
 )
 
 func init() {
@@ -429,12 +437,18 @@ func findEnvVar(c *corev1.Container, name string) (int, bool) {
 	return pos, pos >= 0
 }
 
-func setEnvVar(c *corev1.Container, envVar corev1.EnvVar) {
-	if pos, ok := findEnvVar(c, envVar.Name); !ok {
-		c.Env = append(c.Env, envVar)
-	} else {
-		c.Env[pos].ValueFrom = nil
-		c.Env[pos].Value = envVar.Value
+// setEnvVar is a helper function that sets an environment variable only if the value is not empty
+func setEnvVar(c *corev1.Container, envVarName, value string) {
+	if value != "" {
+		if pos, ok := findEnvVar(c, envVarName); !ok {
+			c.Env = append(c.Env, corev1.EnvVar{
+				Name:  envVarName,
+				Value: value,
+			})
+		} else {
+			c.Env[pos].ValueFrom = nil
+			c.Env[pos].Value = value
+		}
 	}
 }
 
@@ -443,45 +457,15 @@ func (pm *PodMutator) addEnvVars(c *corev1.Container, pod *corev1.Pod) {
 		c.Env = []corev1.EnvVar{}
 	}
 
-	setEnvVar(c,
-		corev1.EnvVar{
-			Name:  envVarLdPreloadName,
-			Value: envVarLdPreloadValue,
-		},
-	)
-
-	setEnvVar(c,
-		corev1.EnvVar{
-			Name:  envOtelInjectorConfigFileName,
-			Value: envOtelInjectorConfigFileValue,
-		},
-	)
-
-	setEnvVar(c,
-		corev1.EnvVar{
-			Name:  envOtelExporterOtlpEndpointName,
-			Value: pm.endpoint,
-		},
-	)
-
-	if pm.proto != "" {
-		setEnvVar(c,
-			corev1.EnvVar{
-				Name:  envOtelExporterOtlpProtocolName,
-				Value: pm.proto,
-			},
-		)
-	}
+	setEnvVar(c, envVarLdPreloadName, envVarLdPreloadValue)
+	setEnvVar(c, envOtelInjectorConfigFileName, envOtelInjectorConfigFileValue)
+	setEnvVar(c, envOtelExporterOtlpEndpointName, pm.endpoint)
+	setEnvVar(c, envOtelExporterOtlpProtocolName, pm.proto)
 
 	pm.setResourceAttributes(c, pod)
 
 	for k, v := range pm.exportHeaders {
-		setEnvVar(c,
-			corev1.EnvVar{
-				Name:  k,
-				Value: v,
-			},
-		)
+		setEnvVar(c, k, v)
 	}
 
 	pm.logger.Info("env vars", "vars", c.Env)

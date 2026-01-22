@@ -2,8 +2,8 @@ global:
   evaluation_interval: 30s
   scrape_interval: 5s
 scrape_configs:
-  - job_name: beyla-collector
+  - job_name: autoinstrumenter-collector
     honor_labels: true
     static_configs:
       - targets:
-          - 'beyla:8999'
+          - 'autoinstrumenter:8999'

@@ -71,6 +71,8 @@ SKIP_BEYLA_SPECIFIC_FILES=(
     # Multiexec config files have discovery sections with regex patterns that differ between OBI and Beyla
     'obi-config-multiexec.yml'
     'obi-config-multiexec-host.yml'
+    # Prometheus config for promscrape test - OBI uses 'obi:8999', Beyla uses 'autoinstrumenter:8999'
+    'prometheus-config-promscrape.yml'
 )
 
 # Beyla-specific component directories that should NOT be synced from OBI

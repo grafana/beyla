@@ -1,9 +1,6 @@
 discovery:
   survey:
     - k8s_namespace: "*"
-  instrument:
-    - name: testserver
-      open_ports: 8082
 routes:
   patterns:
     - /basic/:rnd

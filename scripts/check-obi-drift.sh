@@ -59,6 +59,8 @@ BEYLA_PRESERVE_FEATURES=(
 TRANSFORMATIONS=(
     # OBI uses EXECUTABLE_PATH, Beyla uses EXECUTABLE_NAME (must be before generic OTEL_EBPF_ transform)
     'OTEL_EBPF_EXECUTABLE_PATH|BEYLA_EXECUTABLE_NAME'
+    # Shell variable references also need to be transformed (e.g., ${JAVA_EXECUTABLE_PATH} -> ${JAVA_EXECUTABLE_NAME})
+    'JAVA_EXECUTABLE_PATH|JAVA_EXECUTABLE_NAME'
     'OTEL_EBPF_|BEYLA_'
     'otel-ebpf|beyla'
     'otel_ebpf|beyla'
@@ -119,6 +121,8 @@ TRANSFORMATIONS=(
 REVERSE_TRANSFORMATIONS=(
     # Beyla uses EXECUTABLE_NAME, OBI uses EXECUTABLE_PATH (must be before generic transforms)
     'BEYLA_EXECUTABLE_NAME|OTEL_EBPF_EXECUTABLE_PATH'
+    # Shell variable references also need to be reversed
+    'JAVA_EXECUTABLE_NAME|JAVA_EXECUTABLE_PATH'
     'BEYLA_OTEL_|OTEL_EBPF_'
     'BEYLA_|OTEL_EBPF_'
     # Attribute values (no /v2) - must be before import paths

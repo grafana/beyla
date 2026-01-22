@@ -11,7 +11,7 @@ import (
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
 	"sigs.k8s.io/e2e-framework/pkg/features"
 
-	prom "github.com/grafana/beyla/v2/internal/test/integration/components/promtest"
+	"github.com/grafana/beyla/v2/internal/test/integration/components/prom"
 )
 
 const (

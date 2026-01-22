@@ -46,6 +46,28 @@ SKIP_BEYLA_SPECIFIC_FILES=(
     'docker-compose.yml'
 )
 
+# Beyla-specific component directories that should NOT be synced from OBI
+# These are test components unique to Beyla that don't exist in OBI or have different requirements
+SKIP_BEYLA_SPECIFIC_COMPONENTS=(
+    'testserver_1.17'  # Beyla-specific test for oldest supported Go version (uses go 1.17)
+)
+
+# Beyla-specific integration test files that should NOT be synced from OBI
+# These files either don't exist in OBI or have Beyla-specific test functions added
+SKIP_BEYLA_SPECIFIC_TEST_FILES=(
+    # K8s tests that are Beyla-only (don't exist in OBI)
+    'connection_spans_test.go'           # TestConnectionSpans
+    'k8s_daemonset_y_metrics_test.go'    # TestSurveyMetrics
+    'k8s_daemonset_z_metrics_test.go'    # TestProcessMetrics
+    'k8s_process_notraces_test.go'       # TestProcessMetrics_NoTraces
+    # Top-level integration tests for Beyla-specific features
+    'process_test.go'                    # Process metrics tests
+    # K8s tests that exist in OBI but have Beyla-specific functions added
+    'k8s_prom_test.go'                   # +TestPrometheus_ProcessMetrics, +TestPrometheus_SurveyMetrics
+    'k8s_otel_metrics_test.go'           # +TestOTEL_ProcessMetrics
+    'k8s_informer_cache_main_test.go'    # +TestInformersCache_ProcessMetrics
+)
+
 # Beyla-specific features that should be preserved if they exist in current Beyla files
 # These are features that don't exist in OBI but may have been manually added to Beyla test files
 BEYLA_PRESERVE_FEATURES=(
@@ -340,6 +362,16 @@ should_check_file() {
     # Skip Beyla-specific files (files with significant Beyla additions)
     for skip_file in "${SKIP_BEYLA_SPECIFIC_FILES[@]}"; do
         [[ "$basename" == "$skip_file" ]] && return 1
+    done
+    
+    # Skip Beyla-specific component directories
+    for skip_comp in "${SKIP_BEYLA_SPECIFIC_COMPONENTS[@]}"; do
+        echo "$file" | grep -qE "/components/$skip_comp/" && return 1
+    done
+    
+    # Skip Beyla-specific test files (tests that don't exist in OBI)
+    for skip_test in "${SKIP_BEYLA_SPECIFIC_TEST_FILES[@]}"; do
+        [[ "$basename" == "$skip_test" ]] && return 1
     done
     
     # Include by extension or special name

@@ -1,3 +1,6 @@
+// Copyright The OpenTelemetry Authors
+// SPDX-License-Identifier: Apache-2.0
+
 //go:build integration
 
 package otel
@@ -16,7 +19,7 @@ import (
 
 	"github.com/grafana/beyla/v2/internal/test/integration/components/docker"
 	"github.com/grafana/beyla/v2/internal/test/integration/components/kube"
-	prom "github.com/grafana/beyla/v2/internal/test/integration/components/promtest"
+	"github.com/grafana/beyla/v2/internal/test/integration/components/promtest"
 	k8s "github.com/grafana/beyla/v2/internal/test/integration/k8s/common"
 	"github.com/grafana/beyla/v2/internal/test/integration/k8s/common/testpath"
 	"github.com/grafana/beyla/v2/internal/test/tools"
@@ -32,7 +35,7 @@ var cluster *kube.Kind
 func TestMain(m *testing.M) {
 	if err := docker.Build(os.Stdout, tools.ProjectDir(),
 		docker.ImageBuild{Tag: "testserver:dev", Dockerfile: k8s.DockerfileTestServer},
-		docker.ImageBuild{Tag: "beyla:dev", Dockerfile: k8s.DockerfileBeyla},
+		docker.ImageBuild{Tag: "beyla:dev", Dockerfile: k8s.DockerfileOBI},
 		docker.ImageBuild{Tag: "httppinger:dev", Dockerfile: k8s.DockerfileHTTPPinger},
 	); err != nil {
 		slog.Error("can't build docker images", "error", err)
@@ -49,7 +52,7 @@ func TestMain(m *testing.M) {
 		kube.Deploy(testpath.Manifests+"/02-prometheus-otelscrape.yml"),
 		kube.Deploy(testpath.Manifests+"/03-otelcol.yml"),
 		kube.Deploy(testpath.Manifests+"/05-uninstrumented-service.yml"),
-		kube.Deploy(testpath.Manifests+"/06-beyla-netolly-dropexternal.yml"),
+		kube.Deploy(testpath.Manifests+"/06-obi-netolly-dropexternal.yml"),
 	)
 
 	cluster.Run(m)
@@ -72,22 +75,22 @@ func TestNetworkFlowBytes_DropExternal(t *testing.T) {
 }
 
 func testNoFlowsForExternalTraffic(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
-	pq := prom.Client{HostPort: prometheusHostPort}
+	pq := promtest.Client{HostPort: prometheusHostPort}
 
 	// testing first that internal traffic is reported (this leaves room to populate Prometheus with
 	// the inspected metrics)
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
-		results, err := pq.Query(`beyla_network_flow_bytes_total{src_name="internal-pinger",dst_name="testserver"}`)
+		results, err := pq.Query(`obi_network_flow_bytes_total{src_name="internal-pinger",dst_name="testserver"}`)
 		require.NoError(t, err)
 		require.NotEmpty(t, results)
 	})
 
 	// test that there isn't external traffic neither as source nor as a destination
-	results, err := pq.Query(`beyla_network_flow_bytes_total{k8s_src_owner_name=""}`)
+	results, err := pq.Query(`obi_network_flow_bytes_total{k8s_src_owner_name=""}`)
 	require.NoError(t, err)
 	require.Empty(t, results)
 
-	results, err = pq.Query(`beyla_network_flow_bytes_total{k8s_dst_owner_name=""}`)
+	results, err = pq.Query(`obi_network_flow_bytes_total{k8s_dst_owner_name=""}`)
 	require.NoError(t, err)
 	require.Empty(t, results)
 	return ctx

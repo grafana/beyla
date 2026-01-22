@@ -1,4 +1,4 @@
-//go:build integration
+//go:build integration_k8s
 
 package k8s
 
@@ -16,7 +16,7 @@ import (
 	"sigs.k8s.io/e2e-framework/pkg/features"
 
 	"github.com/grafana/beyla/v2/internal/test/integration/components/kube"
-	prom "github.com/grafana/beyla/v2/internal/test/integration/components/promtest"
+	"github.com/grafana/beyla/v2/internal/test/integration/components/prom"
 )
 
 // This file contains some functions and features that are accessed/used

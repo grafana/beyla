@@ -7,12 +7,12 @@ import (
 	"github.com/caarlos0/env/v9"
 	gin2 "github.com/gin-gonic/gin"
 
-	"github.com/grafana/beyla/v2/internal/test/integration/components/testserver_1.17/gin"
-	"github.com/grafana/beyla/v2/internal/test/integration/components/testserver_1.17/gorilla"
-	"github.com/grafana/beyla/v2/internal/test/integration/components/testserver_1.17/gorillamid"
-	"github.com/grafana/beyla/v2/internal/test/integration/components/testserver_1.17/gorillamid2"
-	grpctest "github.com/grafana/beyla/v2/internal/test/integration/components/testserver_1.17/grpc/server"
-	"github.com/grafana/beyla/v2/internal/test/integration/components/testserver_1.17/std"
+	"github.com/grafana/beyla/v2/testserver_1.17/gin"
+	"github.com/grafana/beyla/v2/testserver_1.17/gorilla"
+	"github.com/grafana/beyla/v2/testserver_1.17/gorillamid"
+	"github.com/grafana/beyla/v2/testserver_1.17/gorillamid2"
+	grpctest "github.com/grafana/beyla/v2/testserver_1.17/grpc/server"
+	"github.com/grafana/beyla/v2/testserver_1.17/std"
 )
 
 /*

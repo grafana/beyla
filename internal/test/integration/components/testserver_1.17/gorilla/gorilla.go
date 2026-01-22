@@ -6,7 +6,7 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"github.com/grafana/beyla/v2/internal/test/integration/components/testserver_1.17/std"
+	"github.com/grafana/beyla/v2/testserver_1.17/std"
 )
 
 func Setup(port, stdPort int) {

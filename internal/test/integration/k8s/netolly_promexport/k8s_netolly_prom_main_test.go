@@ -1,3 +1,6 @@
+// Copyright The OpenTelemetry Authors
+// SPDX-License-Identifier: Apache-2.0
+
 //go:build integration
 
 package promtest
@@ -20,7 +23,7 @@ var cluster *kube.Kind
 func TestMain(m *testing.M) {
 	if err := docker.Build(os.Stdout, tools.ProjectDir(),
 		docker.ImageBuild{Tag: "testserver:dev", Dockerfile: k8s.DockerfileTestServer},
-		docker.ImageBuild{Tag: "beyla:dev", Dockerfile: k8s.DockerfileBeyla},
+		docker.ImageBuild{Tag: "beyla:dev", Dockerfile: k8s.DockerfileOBI},
 		docker.ImageBuild{Tag: "httppinger:dev", Dockerfile: k8s.DockerfileHTTPPinger},
 	); err != nil {
 		slog.Error("can't build docker images", "error", err)
@@ -36,7 +39,7 @@ func TestMain(m *testing.M) {
 		kube.Deploy(testpath.Manifests+"/01-serviceaccount.yml"),
 		kube.Deploy(testpath.Manifests+"/02-prometheus-promscrape.yml"),
 		kube.Deploy(testpath.Manifests+"/05-uninstrumented-service.yml"),
-		kube.Deploy(testpath.Manifests+"/06-beyla-netolly-promexport.yml"),
+		kube.Deploy(testpath.Manifests+"/06-obi-netolly-promexport.yml"),
 	)
 
 	cluster.Run(m)

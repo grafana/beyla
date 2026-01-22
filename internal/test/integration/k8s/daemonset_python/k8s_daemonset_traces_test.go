@@ -1,3 +1,6 @@
+// Copyright The OpenTelemetry Authors
+// SPDX-License-Identifier: Apache-2.0
+
 //go:build integration
 
 package otel
@@ -21,11 +24,11 @@ import (
 	"github.com/grafana/beyla/v2/internal/test/integration/k8s/common/testpath"
 )
 
-// For the DaemonSet scenario, we only check that Beyla is able to instrument any
+// For the DaemonSet scenario, we only check that OBI is able to instrument any
 // process in the system. We just check that traces are properly generated without
 // entering in too many details
 func TestPythonBasicTracing(t *testing.T) {
-	feat := features.New("Beyla is able to instrument an arbitrary process").
+	feat := features.New("OBI is able to instrument an arbitrary process").
 		Assess("it sends traces for that service",
 			func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 				var trace jaeger.Trace
@@ -77,15 +80,15 @@ func TestPythonBasicTracing(t *testing.T) {
 					assert.True(t, found)
 
 					podID = tag.Value.(string)
-					assert.NotEqual(t, "", podID)
+					assert.NotEmpty(t, podID)
 				}, test.Interval(100*time.Millisecond))
 
-				// Let's take down our services, keeping Beyla alive and then redeploy them
+				// Let's take down our services, keeping OBI alive and then redeploy them
 				err := kube.DeleteExistingManifestFile(cfg, testpath.Manifests+"/05-uninstrumented-service-python.yml")
-				assert.NoError(t, err, "we should see no error when deleting the uninstrumented service manifest file")
+				require.NoError(t, err, "we should see no error when deleting the uninstrumented service manifest file")
 
 				err = kube.DeployManifestFile(cfg, testpath.Manifests+"/05-uninstrumented-service-python.yml")
-				assert.NoError(t, err, "we should see no error when re-deploying the uninstrumented service manifest file")
+				require.NoError(t, err, "we should see no error when re-deploying the uninstrumented service manifest file")
 
 				// We now use /smoke instead of /greeting to ensure we see those APIs after a restart
 				test.Eventually(t, testTimeout, func(t require.TestingT) {

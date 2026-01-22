@@ -2,7 +2,6 @@ package std
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -11,18 +10,9 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/trace"
-
-	"github.com/grafana/beyla/v2/internal/test/integration/components/testserver_1.17/arg"
-	pb "github.com/grafana/beyla/v2/internal/test/integration/components/testserver_1.17/grpc/routeguide"
+	"github.com/grafana/beyla/v2/testserver_1.17/arg"
+	pb "github.com/grafana/beyla/v2/testserver_1.17/grpc/routeguide"
 )
-
-var y2k = time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
-
-var tracer = otel.Tracer("trace-example")
 
 func HTTPHandler(echoPort int) http.HandlerFunc {
 	return func(rw http.ResponseWriter, req *http.Request) {
@@ -35,11 +25,6 @@ func HTTPHandler(echoPort int) http.HandlerFunc {
 
 		if req.RequestURI == "/echoCall" {
 			echoCall(rw)
-			return
-		}
-
-		if req.RequestURI == "/manual" {
-			manual(rw)
 			return
 		}
 
@@ -67,56 +52,9 @@ func HTTPHandler(echoPort int) http.HandlerFunc {
 	}
 }
 
-func inner(id int) {
-	ctx := context.Background()
-	ts := y2k.Add(10 * time.Microsecond)
-
-	t := tracer
-
-	opts := []trace.SpanStartOption{
-		trace.WithAttributes(
-			attribute.String("user", "user"+strconv.Itoa(id)),
-			attribute.Bool("admin", true),
-		),
-		trace.WithTimestamp(y2k.Add(500 * time.Microsecond)),
-		trace.WithSpanKind(trace.SpanKindServer),
-	}
-
-	_, span := t.Start(ctx, fmt.Sprintf("sig_inner %d", id), opts...)
-
-	if id == 2 {
-		span.SetName("changed name")
-		span.SetAttributes(
-			attribute.String("test", "append"),
-		)
-	}
-	defer span.End(trace.WithTimestamp(ts.Add(100 * time.Microsecond)))
-}
-
-func manual(rw http.ResponseWriter) {
-	ctx := context.Background()
-	ts := y2k.Add(10 * time.Microsecond)
-
-	t := tracer
-	_, span := t.Start(ctx, "sig", trace.WithTimestamp(ts))
-	defer span.End(trace.WithTimestamp(ts.Add(100 * time.Microsecond)))
-
-	inner(1)
-	inner(2)
-
-	span.SetStatus(codes.Error, "application error")
-	span.RecordError(
-		errors.New("some unknown error"),
-		trace.WithTimestamp(y2k.Add(2*time.Second)),
-		trace.WithStackTrace(true),
-		trace.WithAttributes(attribute.Int("impact", 11)),
-	)
-
-	rw.WriteHeader(http.StatusOK)
-}
-
 func echoAsync(rw http.ResponseWriter, port int) {
 	duration, err := time.ParseDuration("10s")
+
 	if err != nil {
 		fmt.Printf("can't parse duration %w\n", err)
 		rw.WriteHeader(500)

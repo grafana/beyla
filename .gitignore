@@ -92,5 +92,20 @@ internal/test/integration/components/pythonserver/lib64
 internal/test/integration/components/pythonserver/pyvenv.cfg
 internal/test/integration/components/gosql/qosql
 internal/test/integration/components/testserver_1.17/vendor
+
+# Go vendor directories in test components - should be downloaded during docker build, not committed
+# Exception: old_grpc/*/vendor is committed because it needs specific older dependency versions
+internal/test/integration/components/go_*/vendor/
+internal/test/integration/components/gomysql/vendor/
+internal/test/integration/components/gomysql-tls/vendor/
+internal/test/integration/components/gomongo/vendor/
+internal/test/integration/components/gomongov2/vendor/
+internal/test/integration/components/gopgx/vendor/
+internal/test/integration/components/gopgx-pool/vendor/
+internal/test/integration/components/gopgx-stdlib/vendor/
+internal/test/integration/components/gosql/vendor/
+internal/test/integration/components/sqlclient/vendor/
+internal/test/integration/components/gohttp2/*/vendor/
+
 *_bpfel.go
 *_bpfel.o

@@ -1,3 +1,6 @@
+// Copyright The OpenTelemetry Authors
+// SPDX-License-Identifier: Apache-2.0
+
 //go:build integration
 
 package otel
@@ -26,7 +29,7 @@ var cluster *kube.Kind
 func TestMain(m *testing.M) {
 	if err := docker.Build(os.Stdout, tools.ProjectDir(),
 		docker.ImageBuild{Tag: "pythontestserver:dev", Dockerfile: k8s.DockerfilePythonTestServer},
-		docker.ImageBuild{Tag: "beyla:dev", Dockerfile: k8s.DockerfileBeyla},
+		docker.ImageBuild{Tag: "beyla:dev", Dockerfile: k8s.DockerfileOBI},
 	); err != nil {
 		slog.Error("can't build docker images", "error", err)
 		os.Exit(-1)
@@ -41,7 +44,7 @@ func TestMain(m *testing.M) {
 		kube.Deploy(testpath.Manifests+"/03-otelcol.yml"),
 		kube.Deploy(testpath.Manifests+"/04-jaeger.yml"),
 		kube.Deploy(testpath.Manifests+"/05-uninstrumented-service-python.yml"),
-		kube.Deploy(testpath.Manifests+"/06-beyla-daemonset-python.yml"),
+		kube.Deploy(testpath.Manifests+"/06-obi-daemonset-python.yml"),
 	)
 
 	cluster.Run(m)

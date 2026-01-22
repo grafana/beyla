@@ -1,20 +1,14 @@
-discovery:
-  instrument:
-    - name: testserver
-      open_ports: 8080,8081,8082,8083,8087,8383
-
 routes:
   patterns:
     - /basic/:rnd
-  unmatched: path
   ignored_patterns:
     - /metrics
   ignore_mode: traces
+  unmatched: path
 otel_metrics_export:
   endpoint: http://otelcol:4318
 otel_traces_export:
   endpoint: http://jaeger:4318
-  otel_sdk_log_level: debug
 attributes:
   kubernetes:
     cluster_name: beyla-k8s-test-cluster

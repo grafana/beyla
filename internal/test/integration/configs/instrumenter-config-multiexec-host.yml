@@ -14,9 +14,9 @@ discovery:
     - namespace: initial-set
       name: some-server
       open_ports: 18080
-      exe_path: "*dupe*" # choose only the dupe* process that uses port 18080
+      exe_path: "*dupe*" # choose only the dupe.* process that uses port 18080
     - namespace: initial-set
-      exe_path: "*{testserver,rename1}"
+      exe_path: "*/{testserver,rename1}"
     - namespace: multi-k
       name: rust-service-ssl
       open_ports: 8490

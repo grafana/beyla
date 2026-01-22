@@ -1,8 +1,3 @@
-discovery:
-  instrument:
-    - name: javatestserver
-      open_ports: 8085
-
 routes:
   patterns:
     - /greeting

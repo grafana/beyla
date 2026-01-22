@@ -1,8 +1,3 @@
-discovery:
-  instrument:
-    - name: testserver
-      open_ports: 8080,8081,8082,8083,8087,8383
-
 service_name: overridden-svc-name
 routes:
   patterns:

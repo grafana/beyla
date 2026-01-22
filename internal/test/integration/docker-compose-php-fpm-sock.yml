@@ -61,14 +61,14 @@ services:
     environment:
       GOCOVERDIR: "/coverage"
       BEYLA_TRACE_PRINTER: "text"
-      BEYLA_EXECUTABLE_NAME: "(nginx|php-fpm)"
+      BEYLA_EXECUTABLE_NAME: "nginx|php-fpm"
       BEYLA_SERVICE_NAMESPACE: "integration-test"
       BEYLA_METRICS_INTERVAL: "10ms"
       BEYLA_BPF_BATCH_TIMEOUT: "10ms"
-      BEYLA_OTLP_TRACES_BATCH_TIMEOUT: "1ms"
       BEYLA_LOG_LEVEL: "DEBUG"
       BEYLA_BPF_DEBUG: "TRUE"
       BEYLA_HOSTNAME: "beyla"
+      BEYLA_OTLP_TRACES_BATCH_TIMEOUT: "1ms"
     depends_on:
       nginx:
         condition: service_started

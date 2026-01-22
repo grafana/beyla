@@ -44,6 +44,24 @@ SKIP_BEYLA_SPECIFIC_FILES=(
     # docker-compose.yml has significant Beyla-specific differences (pid namespace, env vars)
     # that cannot be automatically transformed from OBI
     'docker-compose.yml'
+    # docker-compose files that use env var based discovery or have Beyla-specific config
+    'docker-compose-client.yml'
+    'docker-compose-php-fpm.yml'
+    'docker-compose-php-fpm-sock.yml'
+    # Java Kafka tests have different env var prefixes and otel collector versions
+    'docker-compose-java-kafka.yml'
+    'docker-compose-java-kafka-400.yml'
+    'docker-compose-java-kafka-400-lb.yml'
+    # Config files that rely on env vars for discovery (no discovery: section in config)
+    # OBI's config files have discovery sections, but Beyla tests use BEYLA_EXECUTABLE_NAME/BEYLA_OPEN_PORT env vars
+    'obi-config.yml'
+    'obi-config-java-host.yml'
+    'obi-config-no-route.yml'
+    'obi-config-override-svcname.yml'
+    'obi-config-php.yml'
+    # Multiexec config files have regex patterns that differ between OBI and Beyla
+    'obi-config-multiexec.yml'
+    'obi-config-multiexec-host.yml'
 )
 
 # Beyla-specific component directories that should NOT be synced from OBI

@@ -1,9 +1,3 @@
-discovery:
-  instrument:
-    - open_ports: 80
-      namespace: integration-test
-      name: nginx
-
 otel_metrics_export:
   endpoint: http://127.0.0.1:4018
 otel_traces_export:

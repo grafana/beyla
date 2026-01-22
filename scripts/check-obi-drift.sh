@@ -93,6 +93,13 @@ SKIP_BEYLA_SPECIFIC_TEST_FILES=(
     'k8s_prom_test.go'                   # +TestPrometheus_ProcessMetrics, +TestPrometheus_SurveyMetrics
     'k8s_otel_metrics_test.go'           # +TestOTEL_ProcessMetrics
     'k8s_informer_cache_main_test.go'    # +TestInformersCache_ProcessMetrics
+    # K8s test files that reference manifest files (06-beyla-* vs 06-obi-*)
+    'k8s_netolly_main_test.go'
+    'k8s_netolly_prom_main_test.go'
+    'k8s_netolly_dropexternal_test.go'
+    'k8s_netolly_multizone_main_test.go'
+    'k8s_netolly_multizone_prom_main_test.go'
+    'restrict_local_node_main_test.go'
 )
 
 # Beyla-specific features that should be preserved if they exist in current Beyla files

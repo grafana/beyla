@@ -39,7 +39,7 @@ func TestMain(m *testing.M) {
 		kube.Deploy(testpath.Manifests+"/02-prometheus-otelscrape-multi-node.yml"),
 		kube.Deploy(testpath.Manifests+"/03-otelcol-multi-node.yml"),
 		kube.Deploy(testpath.Manifests+"/05-uninstrumented-multizone-client-server.yml"),
-		kube.Deploy(testpath.Manifests+"/06-obi-netolly-multizone.yml"),
+		kube.Deploy(testpath.Manifests+"/06-beyla-netolly-multizone.yml"),
 	)
 
 	cluster.Run(m)

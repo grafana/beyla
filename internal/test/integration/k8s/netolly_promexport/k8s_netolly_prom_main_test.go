@@ -39,7 +39,7 @@ func TestMain(m *testing.M) {
 		kube.Deploy(testpath.Manifests+"/01-serviceaccount.yml"),
 		kube.Deploy(testpath.Manifests+"/02-prometheus-promscrape.yml"),
 		kube.Deploy(testpath.Manifests+"/05-uninstrumented-service.yml"),
-		kube.Deploy(testpath.Manifests+"/06-obi-netolly-promexport.yml"),
+		kube.Deploy(testpath.Manifests+"/06-beyla-netolly-promexport.yml"),
 	)
 
 	cluster.Run(m)

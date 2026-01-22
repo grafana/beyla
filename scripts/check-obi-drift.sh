@@ -52,6 +52,20 @@ SKIP_BEYLA_SPECIFIC_FILES=(
     'docker-compose-java-kafka.yml'
     'docker-compose-java-kafka-400.yml'
     'docker-compose-java-kafka-400-lb.yml'
+    # Docker-compose files with Beyla-specific features (application_process, different values)
+    'docker-compose-python.yml'
+    'docker-compose-python-kafka.yml'
+    'docker-compose-python-self.yml'
+    'docker-compose-python-mongo.yml'
+    'docker-compose-python-mysql.yml'
+    'docker-compose-python-postgresql.yml'
+    'docker-compose-python-redis.yml'
+    'docker-compose-nodejs-dist.yml'
+    'docker-compose-nodemultiproc.yml'
+    'docker-compose-discovery.yml'
+    'docker-compose-error-test.yml'
+    'docker-compose-sampler.yml'
+    'docker-compose-1.17.yml'
     # obi-config.yml has minor differences (otel_sdk_log_level, line ordering) - keep Beyla version
     'obi-config.yml'
     # Multiexec config files have discovery sections with regex patterns that differ between OBI and Beyla
@@ -96,7 +110,7 @@ TRANSFORMATIONS=(
     'OTEL_EBPF_EXECUTABLE_PATH|BEYLA_EXECUTABLE_NAME'
     # Shell variable references also need to be transformed (e.g., ${JAVA_EXECUTABLE_PATH} -> ${JAVA_EXECUTABLE_NAME})
     'JAVA_EXECUTABLE_PATH|JAVA_EXECUTABLE_NAME'
-    # These env vars keep the OTEL_ part: OTEL_EBPF_X -> BEYLA_OTEL_X (must be before generic transform)
+    # These env vars keep OTEL_ part: OTEL_EBPF_X -> BEYLA_OTEL_X (to match main's convention)
     'OTEL_EBPF_TRACES_INSTRUMENTATIONS|BEYLA_OTEL_TRACES_INSTRUMENTATIONS'
     'OTEL_EBPF_METRICS_INSTRUMENTATIONS|BEYLA_OTEL_METRICS_INSTRUMENTATIONS'
     'OTEL_EBPF_METRICS_FEATURES|BEYLA_OTEL_METRICS_FEATURES'

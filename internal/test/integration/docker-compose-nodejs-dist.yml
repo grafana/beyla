@@ -50,16 +50,16 @@ services:
       BEYLA_SERVICE_NAMESPACE: "integration-test"
       BEYLA_METRICS_INTERVAL: "10ms"
       BEYLA_BPF_BATCH_TIMEOUT: "10ms"
-      BEYLA_OTLP_TRACES_BATCH_TIMEOUT: "1ms"
-      BEYLA_LOG_LEVEL: "DEBUG"
+      BEYLA_LOG_LEVEL: "INFO"
       BEYLA_BPF_DEBUG: "TRUE"
       BEYLA_HOSTNAME: "beyla"
-      BEYLA_BPF_CONTEXT_PROPAGATION: "all"
+      BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION: true
       BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT: 8999
       BEYLA_INTERNAL_METRICS_PROMETHEUS_PATH: /metrics
       BEYLA_BPF_HTTP_REQUEST_TIMEOUT: "5s"
+      BEYLA_OTLP_TRACES_BATCH_TIMEOUT: "1ms"
       BEYLA_PROCESSES_INTERVAL: "100ms"
-      BEYLA_OTEL_METRICS_FEATURES: "application,application_span,application_process,application_service_graph"
+      BEYLA_OTEL_METRICS_FEATURES: "application,application_process,application_span,application_service_graph"
     depends_on:
       testserver_b:
         condition: service_started

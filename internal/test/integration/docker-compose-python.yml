@@ -8,7 +8,6 @@ services:
     image: hatest-testserver-python
     ports:
       - "${TEST_SERVICE_PORTS}"
-      - 8999:8999
     depends_on:
       otelcol:
         condition: service_started
@@ -27,7 +26,7 @@ services:
     network_mode: "service:testserver"
     pid: "service:testserver"
     environment:
-      BEYLA_CONFIG_PATH: "/configs/instrumenter-config${INSTRUMENTER_CONFIG_SUFFIX}.yml"
+      BEYLA_CONFIG_PATH: "/configs/instrumenter-config-java.yml"
       GOCOVERDIR: "/coverage"
       BEYLA_TRACE_PRINTER: "text"
       BEYLA_OPEN_PORT: "${BEYLA_OPEN_PORT}"
@@ -39,12 +38,10 @@ services:
       BEYLA_LOG_LEVEL: "DEBUG"
       BEYLA_BPF_DEBUG: "TRUE"
       BEYLA_HOSTNAME: "beyla"
-      BEYLA_OTLP_TRACES_BATCH_TIMEOUT: "1ms"
       BEYLA_BPF_HTTP_REQUEST_TIMEOUT: "5s"
       BEYLA_PROCESSES_INTERVAL: "100ms"
-      BEYLA_OTEL_METRICS_FEATURES: "application,application_span,application_process,application_service_graph"
-      BEYLA_PROMETHEUS_FEATURES: "application,application_span,application_service_graph"
-
+      BEYLA_OTLP_TRACES_BATCH_TIMEOUT: "1ms"
+      BEYLA_OTEL_METRICS_FEATURES: "application,application_process,application_span,application_service_graph"
     depends_on:
       testserver:
         condition: service_started

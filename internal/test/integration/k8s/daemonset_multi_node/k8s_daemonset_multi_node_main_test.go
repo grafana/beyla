@@ -46,7 +46,7 @@ func TestMain(m *testing.M) {
 		kube.Deploy(testpath.Manifests+"/03-otelcol-multi-node.yml"),
 		kube.Deploy(testpath.Manifests+"/04-jaeger-multi-node.yml"),
 		kube.Deploy(testpath.Manifests+"/05-uninstrumented-few-services.yml"),
-		kube.Deploy(testpath.Manifests+"/06-obi-daemonset-multi-node.yml"),
+		kube.Deploy(testpath.Manifests+"/06-beyla-daemonset-multi-node.yml"),
 	)
 
 	cluster.Run(m)

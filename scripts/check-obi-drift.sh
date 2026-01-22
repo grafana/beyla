@@ -107,6 +107,11 @@ TRANSFORMATIONS=(
     'obi-netolly|beyla-netolly'
     'obi-promscrape|beyla-promscrape'
     'obi-collector|beyla-collector'
+    # K8s manifest file references
+    'obi-daemonset|beyla-daemonset'
+    'obi-netolly|beyla-netolly'
+    'obi-all-processes|beyla-all-processes'
+    'obi-external-informer|beyla-external-informer'
     # Attribute names
     'obi\.ip|beyla.ip'
     # Config file naming (handles obi-config-*.yml and obi-config.yml and obi-config${VAR})
@@ -182,6 +187,10 @@ REVERSE_TRANSFORMATIONS=(
     'beyla-netolly|obi-netolly'
     'beyla-promscrape|obi-promscrape'
     'beyla-collector|obi-collector'
+    # K8s manifest file references
+    'beyla-daemonset|obi-daemonset'
+    'beyla-all-processes|obi-all-processes'
+    'beyla-external-informer|obi-external-informer'
     # Attribute names
     'beyla\.ip|obi.ip'
     'instrumenter-config|obi-config'

@@ -51,7 +51,7 @@ func TestMain(m *testing.M) {
 		kube.Deploy(testpath.Manifests+"/05-uninstrumented-daemonset.yml"),
 		kube.Deploy(testpath.Manifests+"/05-uninstrumented-job.yml"),
 		kube.Deploy(testpath.Manifests+"/05-uninstrumented-cronjob.yml"),
-		kube.Deploy(testpath.Manifests+"/06-obi-daemonset.yml"),
+		kube.Deploy(testpath.Manifests+"/06-beyla-daemonset.yml"),
 	)
 
 	cluster.Run(m)

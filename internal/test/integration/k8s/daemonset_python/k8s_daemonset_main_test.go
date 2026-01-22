@@ -44,7 +44,7 @@ func TestMain(m *testing.M) {
 		kube.Deploy(testpath.Manifests+"/03-otelcol.yml"),
 		kube.Deploy(testpath.Manifests+"/04-jaeger.yml"),
 		kube.Deploy(testpath.Manifests+"/05-uninstrumented-service-python.yml"),
-		kube.Deploy(testpath.Manifests+"/06-obi-daemonset-python.yml"),
+		kube.Deploy(testpath.Manifests+"/06-beyla-daemonset-python.yml"),
 	)
 
 	cluster.Run(m)

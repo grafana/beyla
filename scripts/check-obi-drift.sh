@@ -194,6 +194,7 @@ TRANSFORMATIONS=(
     'ebpf-instrument:|autoinstrumenter:'
     'service:ebpf-instrument|service:autoinstrumenter'
     'image: hatest-ebpf-instrument|image: hatest-autoinstrumenter'
+    # Service names and image tags (obi: -> beyla:)
     'obi:|beyla:'
     'service:obi|service:beyla'
     '// OBI |// Beyla '
@@ -268,7 +269,13 @@ REVERSE_TRANSFORMATIONS=(
     'hatest-javaautoinstrumenter|hatest-javaobi'
     'hatest-autoinstrumenter|hatest-obi'
     'image: hatest-autoinstrumenter|image: hatest-obi'
-    'beyla:|obi:'
+    # Service names and image tags, but NOT test regex patterns like beyla:\d+
+    # Transform beyla: followed by lowercase letter (service names, image tags)
+    'beyla:d|obi:d'
+    'beyla:l|obi:l'
+    # Transform beyla: followed by number (port endpoints like beyla:8999)
+    'beyla:8|obi:8'
+    'beyla:9|obi:9'
     'service:autoinstrumenter|service:obi'
 )
 

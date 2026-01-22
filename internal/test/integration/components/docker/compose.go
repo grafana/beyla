@@ -20,7 +20,7 @@ type Compose struct {
 
 func defaultEnv() []string {
 	env := os.Environ()
-	env = append(env, "BEYLA_EXECUTABLE_PATH=testserver")
+	env = append(env, "BEYLA_EXECUTABLE_NAME=testserver")
 	env = append(env, "JAVA_EXECUTABLE_PATH=greeting")
 	return env
 }

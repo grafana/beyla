@@ -41,6 +41,9 @@ SKIP_BEYLA_SPECIFIC_FILES=(
     # OBI has two wrapper scripts but Beyla only has beyla_wrapper.sh (manually maintained)
     'ebpf_instrument_wrapper_minimal.sh'
     'ebpf_instrument_wrapper.sh'
+    # docker-compose.yml has significant Beyla-specific differences (pid namespace, env vars)
+    # that cannot be automatically transformed from OBI
+    'docker-compose.yml'
 )
 
 # Beyla-specific features that should be preserved if they exist in current Beyla files
@@ -54,6 +57,8 @@ BEYLA_PRESERVE_FEATURES=(
 # Note: BEYLA_OTEL_* and BEYLA_* are both valid (the OTEL_ is optional per config_obi.go)
 # We use the shorter BEYLA_* form to match existing Beyla convention
 TRANSFORMATIONS=(
+    # OBI uses EXECUTABLE_PATH, Beyla uses EXECUTABLE_NAME (must be before generic OTEL_EBPF_ transform)
+    'OTEL_EBPF_EXECUTABLE_PATH|BEYLA_EXECUTABLE_NAME'
     'OTEL_EBPF_|BEYLA_'
     'otel-ebpf|beyla'
     'otel_ebpf|beyla'
@@ -112,6 +117,8 @@ TRANSFORMATIONS=(
 # Reverse transformations for comparison (Beyla -> OBI)
 # Handles both BEYLA_OTEL_* and BEYLA_* forms
 REVERSE_TRANSFORMATIONS=(
+    # Beyla uses EXECUTABLE_NAME, OBI uses EXECUTABLE_PATH (must be before generic transforms)
+    'BEYLA_EXECUTABLE_NAME|OTEL_EBPF_EXECUTABLE_PATH'
     'BEYLA_OTEL_|OTEL_EBPF_'
     'BEYLA_|OTEL_EBPF_'
     # Attribute values (no /v2) - must be before import paths
@@ -238,8 +245,11 @@ COPY vendor/ vendor/')
         fi
     fi
     
-    # Preserve ENV CGO_ENABLED=1 in Dockerfiles (Beyla needs CGO for some dependencies)
-    if [[ "$original_file" == *Dockerfile* ]] && grep -q "^ENV CGO_ENABLED=1" "$original_file" 2>/dev/null; then
+    # Preserve ENV CGO_ENABLED=1 ONLY in the main beyla/Dockerfile (not component Dockerfiles)
+    # Component Dockerfiles (go_otel, go_otel_grpc, etc.) should NOT have CGO_ENABLED=1
+    # because their vendored dependencies (golang.org/x/sys/unix) contain C files that
+    # cause build failures when CGO is enabled: "C source files not allowed when not using cgo or SWIG"
+    if [[ "$original_file" == *components/beyla/Dockerfile* ]] && grep -q "^ENV CGO_ENABLED=1" "$original_file" 2>/dev/null; then
         # If original has CGO_ENABLED=1 but result doesn't, add it
         if ! echo "$result" | grep -q "^ENV CGO_ENABLED=1"; then
             # Try to add after ENV GOARCH=, or after ARG TARGETARCH

@@ -34,7 +34,7 @@ services:
       BEYLA_METRICS_FEATURES: "application,application_span,application_process"
       BEYLA_PROMETHEUS_FEATURES: "application,application_span,application_process"
       BEYLA_DISCOVERY_POLL_INTERVAL: 500ms
-      BEYLA_EXECUTABLE_PATH: "${BEYLA_EXECUTABLE_PATH}"
+      BEYLA_EXECUTABLE_NAME: "${BEYLA_EXECUTABLE_NAME}"
       BEYLA_OTLP_TRACES_BATCH_TIMEOUT: "1ms"
       BEYLA_SERVICE_NAMESPACE: "integration-test"
       BEYLA_METRICS_INTERVAL: "10ms"

@@ -1,6 +1,3 @@
-// Copyright The OpenTelemetry Authors
-// SPDX-License-Identifier: Apache-2.0
-
 //go:build integration
 
 package otel
@@ -80,17 +77,17 @@ func testNoFlowsForExternalTraffic(ctx context.Context, t *testing.T, _ *envconf
 	// testing first that internal traffic is reported (this leaves room to populate Prometheus with
 	// the inspected metrics)
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
-		results, err := pq.Query(`obi_network_flow_bytes_total{src_name="internal-pinger",dst_name="testserver"}`)
+		results, err := pq.Query(`beyla_network_flow_bytes_total{src_name="internal-pinger",dst_name="testserver"}`)
 		require.NoError(t, err)
 		require.NotEmpty(t, results)
 	})
 
 	// test that there isn't external traffic neither as source nor as a destination
-	results, err := pq.Query(`obi_network_flow_bytes_total{k8s_src_owner_name=""}`)
+	results, err := pq.Query(`beyla_network_flow_bytes_total{k8s_src_owner_name=""}`)
 	require.NoError(t, err)
 	require.Empty(t, results)
 
-	results, err = pq.Query(`obi_network_flow_bytes_total{k8s_dst_owner_name=""}`)
+	results, err = pq.Query(`beyla_network_flow_bytes_total{k8s_dst_owner_name=""}`)
 	require.NoError(t, err)
 	require.Empty(t, results)
 	return ctx

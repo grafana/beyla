@@ -1,6 +1,3 @@
-// Copyright The OpenTelemetry Authors
-// SPDX-License-Identifier: Apache-2.0
-
 //go:build integration
 
 package otel
@@ -63,7 +60,7 @@ func TestNoSourceAndDestAvailable(t *testing.T) {
 		t.Run("check "+args, func(t *testing.T) {
 			test.Eventually(t, testTimeout, func(t require.TestingT) {
 				var err error
-				results, err := pq.Query(`obi_network_flow_bytes_total{` + args + `}`)
+				results, err := pq.Query(`beyla_network_flow_bytes_total{` + args + `}`)
 				require.NoError(t, err)
 				require.NotEmpty(t, results)
 			})
@@ -71,13 +68,13 @@ func TestNoSourceAndDestAvailable(t *testing.T) {
 	}
 
 	// Verify that HTTP pinger/testserver metrics can't have both source and destination labels,
-	// as the test client and server are in different nodes, and OBI is only getting information
+	// as the test client and server are in different nodes, and Beyla is only getting information
 	// from its local node
-	results, err := pq.Query(`obi_network_flow_bytes_total{k8s_dst_name="httppinger",k8s_src_name=~"otherinstance.*",k8s_src_kind="Pod"}`)
+	results, err := pq.Query(`beyla_network_flow_bytes_total{k8s_dst_name="httppinger",k8s_src_name=~"otherinstance.*",k8s_src_kind="Pod"}`)
 	require.NoError(t, err)
 	require.Empty(t, results)
 
-	results, err = pq.Query(`obi_network_flow_bytes_total{k8s_src_name="httppinger",k8s_dst_name=~"otherinstance.*",k8s_dst_kind="Pod"}`)
+	results, err = pq.Query(`beyla_network_flow_bytes_total{k8s_src_name="httppinger",k8s_dst_name=~"otherinstance.*",k8s_dst_kind="Pod"}`)
 	require.NoError(t, err)
 	require.Empty(t, results)
 }

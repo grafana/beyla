@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
-	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -63,6 +62,15 @@ type PodMutator struct {
 func NewPodMutator(cfg *beyla.Config) (*PodMutator, error) {
 	var opts otelcfg.OTLPOptions
 	var err error
+
+	//mgrOptions := ctrl.Options{}
+	//restConfig := ctrl.GetConfigOrDie()
+	//
+	//mgr, err := ctrl.NewManager(restConfig, mgrOptions)
+	//if err != nil {
+	//	//setupLog.Error(err, "unable to start manager")
+	//	os.Exit(1)
+	//}
 
 	switch proto := cfg.Traces.GetProtocol(); proto {
 	case otelcfg.ProtocolHTTPJSON, otelcfg.ProtocolHTTPProtobuf, "":
@@ -211,6 +219,20 @@ func (pm *PodMutator) HandleMutate(w http.ResponseWriter, r *http.Request) {
 // TODO: Add some labels to make sure we mark this pod as something we've instrumented
 // TODO: How do we detect that we caused the pod to crash and not do this again on restart?
 func (pm *PodMutator) mutatePod(pod *corev1.Pod) bool {
+	// we use the req.Namespace here because the pod might have not been created yet
+	//ns := corev1.Namespace{}
+	//err := p.client.Get(ctx, types.NamespacedName{Name: req.Namespace, Namespace: ""}, &ns)
+	//if err != nil {
+	//	res := admission.Errored(http.StatusInternalServerError, err)
+	//	// By default, admission.Errored sets Allowed to false which blocks pod creation even though the failurePolicy=ignore.
+	//	// Allowed set to true makes sure failure does not block pod creation in case of an error.
+	//	// Using the http.StatusInternalServerError creates a k8s event associated with the replica set.
+	//	// The admission.Allowed("").WithWarnings(err.Error()) or http.StatusBadRequest does not
+	//	// create any event. Additionally, an event/log cannot be created explicitly because the pod name is not known.
+	//	res.Allowed = true
+	//	return res
+	//}
+
 	spec := &pod.Spec
 
 	// check if maybe someone is adding instrumentation manually
@@ -232,7 +254,7 @@ func (pm *PodMutator) mutatePod(pod *corev1.Pod) bool {
 			pm.logger.Warn("container already using LD_PRELOAD, ignoring...", "container", c.Name)
 			continue
 		}
-		pm.instrumentContainer(c)
+		pm.instrumentContainer(c, pod)
 	}
 
 	return !reflect.DeepEqual(originalSpec, spec)
@@ -375,9 +397,9 @@ func (pm *PodMutator) createInitContainer(podSpec *corev1.PodSpec) *corev1.Conta
 	return initContainer
 }
 
-func (pm *PodMutator) instrumentContainer(c *corev1.Container) {
+func (pm *PodMutator) instrumentContainer(c *corev1.Container, pod *corev1.Pod) {
 	pm.addMount(c)
-	pm.addEnvVars(c)
+	pm.addEnvVars(c, pod)
 }
 
 func (pm *PodMutator) addMount(c *corev1.Container) {
@@ -416,7 +438,7 @@ func setEnvVar(c *corev1.Container, envVar corev1.EnvVar) {
 	}
 }
 
-func (pm *PodMutator) addEnvVars(c *corev1.Container) {
+func (pm *PodMutator) addEnvVars(c *corev1.Container, pod *corev1.Pod) {
 	if c.Env == nil {
 		c.Env = []corev1.EnvVar{}
 	}
@@ -451,14 +473,7 @@ func (pm *PodMutator) addEnvVars(c *corev1.Container) {
 		)
 	}
 
-	if pm.cfg.Metrics.Features.AnySpanMetrics() {
-		setEnvVar(c,
-			corev1.EnvVar{
-				Name:  envOtelExtraResourceAttrs,
-				Value: string(attr.SkipSpanMetrics.OTEL()) + "=true",
-			},
-		)
-	}
+	pm.setResourceAttributes(c, pod)
 
 	for k, v := range pm.exportHeaders {
 		setEnvVar(c,

@@ -224,6 +224,26 @@ type SDKInject struct {
 	Webhook WebhookConfig `yaml:"webhook"`
 }
 
+// Resource defines the configuration for the resource attributes, as defined by the OpenTelemetry specification.
+// See also: https://github.com/open-telemetry/opentelemetry-specification/blob/v1.8.0/specification/overview.md#resources
+type Resource struct {
+	// Attributes defines attributes that are added to the resource.
+	// For example environment: dev
+	// +optional
+	Attributes map[string]string `yaml:"resourceAttributes" env:"BEYLA_RESOURCE_ATTRIBUTES"`
+
+	// AddK8sUIDAttributes defines whether K8s UID attributes should be collected (e.g. k8s.deployment.uid).
+	// +optional
+	AddK8sUIDAttributes bool `yaml:"addK8sUIDAttributes" env:"BEYLA_RESOURCE_ADD_K8S_UID_ATTRIBUTES"`
+
+	// UseLabelsForResourceAttributes defines whether to use common labels for resource attributes:
+	// Note: first entry wins:
+	//   - `app.kubernetes.io/instance` becomes `service.name`
+	//   - `app.kubernetes.io/name` becomes `service.name`
+	//   - `app.kubernetes.io/version` becomes `service.version`
+	UseLabelsForResourceAttributes bool `yaml:"useLabelsForResourceAttributes,omitempty" env:"BEYLA_RESOURCE_USE_LABELS_FOR_RESOURCE_ATTRIBUTES"`
+}
+
 // WebhookConfig contains the configuration for the mutating webhook
 type WebhookConfig struct {
 	// Enable enables the mutating webhook server
@@ -233,7 +253,8 @@ type WebhookConfig struct {
 	// CertPath is the path to the TLS certificate file
 	CertPath string `yaml:"cert_path" env:"BEYLA_WEBHOOK_CERT_PATH"`
 	// KeyPath is the path to the TLS key file
-	KeyPath string `yaml:"key_path" env:"BEYLA_WEBHOOK_KEY_PATH"`
+	KeyPath  string   `yaml:"key_path" env:"BEYLA_WEBHOOK_KEY_PATH"`
+	Resource Resource `yaml:"resources"`
 }
 
 func (w WebhookConfig) Enabled() bool {

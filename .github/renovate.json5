@@ -2,10 +2,33 @@
   $schema: "https://docs.renovatebot.com/renovate-schema.json",
   extends: ["config:best-practices", "helpers:pinGitHubActionDigestsToSemver"],
   ignorePaths: [
-    // the following components are used to test the behavior of Beyla with legacy versions of libraries
-    // so we don't want to get them updated
-    "internal/test/integration/components/testserver_1.17",
-    "internal/test/integration/components/old_grpc",
+    // OBI submodule - managed by submodule updates, not Renovate
+    ".obi-src/**",
+    
+    // Integration test components synced from OBI - managed by scripts/check-obi-drift.sh
+    // Beyla-specific components NOT in this list: testserver_1.17 (legacy), prom (Beyla-only)
+    "internal/test/integration/components/beyla/**",
+    "internal/test/integration/components/beyla-k8s-cache/**",
+    "internal/test/integration/components/go_otel/**",
+    "internal/test/integration/components/go_otel_grpc/**",
+    "internal/test/integration/components/gorillamid/**",
+    "internal/test/integration/components/gorillamid2/**",
+    "internal/test/integration/components/grpcpinger/**",
+    "internal/test/integration/components/javatestserver/**",
+    "internal/test/integration/components/nodejsserver/**",
+    "internal/test/integration/components/old_grpc/**",
+    "internal/test/integration/components/pythonserver/**",
+    "internal/test/integration/components/rubytestserver/**",
+    "internal/test/integration/components/rusttestserver/**",
+    
+    // Legacy components that should not be updated (test old library behavior)
+    "internal/test/integration/components/testserver_1.17/**",
+    
+    // Config and compose files synced from OBI
+    "internal/test/integration/configs/**",
+    "internal/test/integration/docker-compose*.yml",
+    "internal/test/integration/k8s/manifests/**",
+    
     // github.com/Shopify/sarama has been moved to github.com/IBM/sarama
     // but we keep supporting the go-offsets for the outdated library, which must not
     // be updated.

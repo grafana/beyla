@@ -77,6 +77,14 @@ func httpRequestResponseToSpan(parseCtx *EBPFParseContext, event *BPFHTTPInfo, r
 
 	peer, host := (*BPFConnInfo)(&event.ConnInfo).reqHostInfo()
 
+	scheme := req.URL.Scheme
+	if scheme == "" {
+		if event.Ssl == 1 {
+			scheme = "https"
+		} else {
+			scheme = "http"
+		}
+	}
 	httpSpan := request.Span{
 		Type:           request.EventType(event.Type),
 		Method:         req.Method,
@@ -100,7 +108,7 @@ func httpRequestResponseToSpan(parseCtx *EBPFParseContext, event *BPFHTTPInfo, r
 			UserPID:   event.Pid.UserPid,
 			Namespace: event.Pid.Ns,
 		},
-		Statement: req.URL.Scheme + request.SchemeHostSeparator + req.Host,
+		Statement: scheme + request.SchemeHostSeparator + req.Host,
 	}
 
 	if isClientEvent(event.Type) && parseCtx != nil && parseCtx.payloadExtraction.HTTP.AWS.Enabled {

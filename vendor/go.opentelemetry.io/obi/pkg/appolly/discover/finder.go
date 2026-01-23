@@ -17,6 +17,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/logenricher"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/tctracer"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/tpinjector"
+	msgh "go.opentelemetry.io/obi/pkg/internal/helpers/msg"
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
@@ -65,39 +66,33 @@ func (pf *ProcessFinder) Start(ctx context.Context, opts ...ProcessFinderStartOp
 		opt(&startConfig)
 	}
 
-	tracerEvents := msg.NewQueue[Event[*ebpf.Instrumentable]](
-		msg.ChannelBufferLen(pf.cfg.ChannelBufferLen), msg.Name("tracerEvents"))
+	tracerEvents := msgh.QueueFromConfig[Event[*ebpf.Instrumentable]](pf.cfg, "tracerEvents")
 
 	swi := swarm.Instancer{}
-	processEvents := msg.NewQueue[[]Event[ProcessAttrs]](
-		msg.ChannelBufferLen(pf.cfg.ChannelBufferLen), msg.Name("processEvents"))
+	processEvents := msgh.QueueFromConfig[[]Event[ProcessAttrs]](pf.cfg, "processEvents")
 
 	swi.Add(swarm.DirectInstance(ProcessWatcherFunc(pf.cfg, pf.ebpfEventContext, processEvents)),
 		swarm.WithID("ProcessWatcher"))
 
 	enrichedProcessEvents := startConfig.enrichedProcessEvents
 	if enrichedProcessEvents == nil {
-		enrichedProcessEvents = msg.NewQueue[[]Event[ProcessAttrs]](
-			msg.ChannelBufferLen(pf.cfg.ChannelBufferLen), msg.Name("enrichedProcessEvents"))
+		enrichedProcessEvents = msgh.QueueFromConfig[[]Event[ProcessAttrs]](pf.cfg, "enrichedProcessEvents")
 	}
 	swi.Add(WatcherKubeEnricherProvider(pf.ctxInfo.K8sInformer, processEvents, enrichedProcessEvents),
 		swarm.WithID("WatcherKubeEnricher"))
 
-	criteriaFilteredEvents := msg.NewQueue[[]Event[ProcessMatch]](
-		msg.ChannelBufferLen(pf.cfg.ChannelBufferLen), msg.Name("criteriaFilteredEvents"))
+	criteriaFilteredEvents := msgh.QueueFromConfig[[]Event[ProcessMatch]](pf.cfg, "criteriaFilteredEvents")
 	swi.Add(criteriaMatcherProvider(pf.cfg, enrichedProcessEvents, criteriaFilteredEvents),
 		swarm.WithID("CriteriaMatcher"))
 
-	executableTypes := msg.NewQueue[[]Event[ebpf.Instrumentable]](
-		msg.ChannelBufferLen(pf.cfg.ChannelBufferLen), msg.Name("executableTypes"))
+	executableTypes := msgh.QueueFromConfig[[]Event[ebpf.Instrumentable]](pf.cfg, "executableTypes")
 	swi.Add(ExecTyperProvider(pf.cfg, pf.ctxInfo.Metrics, pf.ctxInfo.K8sInformer, criteriaFilteredEvents, executableTypes),
 		swarm.WithID("ExecTyper"))
 
 	// we could subscribe ContainerDBUpdater directly to the executableTypes queue and not providing any output channel
 	// but forcing the output by the executableTypesReplica channel only after the Container DB has been updated
 	// prevents race conditions in later stages of the pipeline
-	storedExecutableTypes := msg.NewQueue[[]Event[ebpf.Instrumentable]](
-		msg.ChannelBufferLen(pf.cfg.ChannelBufferLen), msg.Name("storedExecutableTypes"))
+	storedExecutableTypes := msgh.QueueFromConfig[[]Event[ebpf.Instrumentable]](pf.cfg, "storedExecutableTypes")
 	swi.Add(ContainerDBUpdaterProvider(pf.ctxInfo.K8sInformer, executableTypes, storedExecutableTypes),
 		swarm.WithID("ContainerDBUpdater"))
 

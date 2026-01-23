@@ -334,7 +334,7 @@
       "name": {
         "versions": {
           "oldest": "1.10.1",
-          "newest": "1.17.6"
+          "newest": "1.17.7"
         },
         "offsets": [
           {
@@ -348,7 +348,7 @@
       "name": {
         "versions": {
           "oldest": "2.0.1",
-          "newest": "2.4.1"
+          "newest": "2.4.2"
         },
         "offsets": [
           {
@@ -362,7 +362,7 @@
       "Database": {
         "versions": {
           "oldest": "2.0.1",
-          "newest": "2.4.1"
+          "newest": "2.4.2"
         },
         "offsets": [
           {
@@ -374,7 +374,7 @@
       "Name": {
         "versions": {
           "oldest": "2.0.1",
-          "newest": "2.4.1"
+          "newest": "2.4.2"
         },
         "offsets": [
           {
@@ -392,7 +392,7 @@
       "Database": {
         "versions": {
           "oldest": "1.10.1",
-          "newest": "1.17.6"
+          "newest": "1.17.7"
         },
         "offsets": [
           {
@@ -404,7 +404,7 @@
       "Name": {
         "versions": {
           "oldest": "1.10.1",
-          "newest": "1.17.6"
+          "newest": "1.17.7"
         },
         "offsets": [
           {

@@ -960,6 +960,7 @@ go.opentelemetry.io/obi/pkg/internal/helpers
 go.opentelemetry.io/obi/pkg/internal/helpers/cache
 go.opentelemetry.io/obi/pkg/internal/helpers/container
 go.opentelemetry.io/obi/pkg/internal/helpers/maps
+go.opentelemetry.io/obi/pkg/internal/helpers/msg
 go.opentelemetry.io/obi/pkg/internal/helpers/sync
 go.opentelemetry.io/obi/pkg/internal/java
 go.opentelemetry.io/obi/pkg/internal/kube

@@ -137,6 +137,13 @@ spec:
       hostPID: true # <-- Important. Required in Daemonset mode so Beyla can discover all monitored processes
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
+      initContainers:
+        - name: populate-instrumentation
+          image: ghcr.io/grafana/beyla/inject-sdk-image:0.0.3
+          command: ["sh", "-c", "cp -r /dist/* /var/lib/beyla/instrumentation/"]
+          volumeMounts:
+          - name: instrumentation-hostpath
+            mountPath: /var/lib/beyla/instrumentation
       containers:
         - name: beyla
           resources:
@@ -197,6 +204,10 @@ spec:
         - effect: NoExecute
           operator: Exists
       volumes:
+        - name: instrumentation-hostpath
+          hostPath:
+            path: /var/lib/beyla/instrumentation
+            type: DirectoryOrCreate
         - name: beyla-config
           configMap:
             name: beyla-config

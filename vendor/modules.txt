@@ -977,6 +977,7 @@ go.opentelemetry.io/obi/pkg/internal/rdns/store
 go.opentelemetry.io/obi/pkg/internal/shardedqueue
 go.opentelemetry.io/obi/pkg/internal/split
 go.opentelemetry.io/obi/pkg/internal/sqlprune
+go.opentelemetry.io/obi/pkg/internal/testutil
 go.opentelemetry.io/obi/pkg/internal/traces
 go.opentelemetry.io/obi/pkg/internal/traces/hostname
 go.opentelemetry.io/obi/pkg/internal/transform/route

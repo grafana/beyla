@@ -131,6 +131,11 @@ type Config struct {
 	// nolint:undoc
 	ChannelBufferLen int `yaml:"channel_buffer_len" env:"BEYLA_CHANNEL_BUFFER_LEN"`
 	// nolint:undoc
+	ChannelSendTimeout time.Duration `yaml:"channel_send_timeout" env:"OTEL_EBPF_CHANNEL_SEND_TIMEOUT"`
+	// nolint:undoc
+	ChannelSendTimeoutPanic bool `yaml:"channel_send_timeout_panic" env:"OTEL_EBPF_CHANNEL_SEND_TIMEOUT_PANIC"`
+
+	// nolint:undoc
 	ProfilePort     int             `yaml:"profile_port" env:"BEYLA_PROFILE_PORT"`
 	InternalMetrics imetrics.Config `yaml:"internal_metrics"`
 

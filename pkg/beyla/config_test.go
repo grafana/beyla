@@ -125,14 +125,16 @@ network:
 	// uncache internal field
 	cfg.obi = nil
 	assert.Equal(t, &Config{
-		Exec:             cfg.Exec,
-		Port:             cfg.Port,
-		ServiceName:      "svc-name",
-		ChannelBufferLen: 33,
-		LogLevel:         "INFO",
-		ShutdownTimeout:  30 * time.Second,
-		EnforceSysCaps:   false,
-		TracePrinter:     "json",
+		Exec:                    cfg.Exec,
+		Port:                    cfg.Port,
+		ServiceName:             "svc-name",
+		ChannelBufferLen:        33,
+		ChannelSendTimeoutPanic: false,
+		ChannelSendTimeout:      time.Minute,
+		LogLevel:                "INFO",
+		ShutdownTimeout:         30 * time.Second,
+		EnforceSysCaps:          false,
+		TracePrinter:            "json",
 		EBPF: obiconfig.EBPFTracer{
 			BatchLength:        100,
 			BatchTimeout:       time.Second,

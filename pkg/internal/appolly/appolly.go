@@ -22,6 +22,7 @@ import (
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/internal/discover"
+	msg2 "github.com/grafana/beyla/v2/pkg/internal/helpers/msg"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe"
 )
 
@@ -53,17 +54,13 @@ type Instrumenter struct {
 func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config) (*Instrumenter, error) {
 	setupFeatureContextInfo(ctx, ctxInfo, config)
 
-	tracesInput := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(config.ChannelBufferLen))
-
-	newEventQueue := func() *msg.Queue[exec.ProcessEvent] {
-		return msg.NewQueue[exec.ProcessEvent](msg.ChannelBufferLen(config.ChannelBufferLen))
-	}
+	tracesInput := msg2.QueueFromConfig[[]request.Span](config.AsOBI(), "tracesInput")
 
 	swi := &swarm.Instancer{}
 	obiCfg := config.AsOBI()
 
-	processEventsInput := newEventQueue()
-	processEventsHostDecorated := newEventQueue()
+	processEventsInput := msg2.QueueFromConfig[exec.ProcessEvent](config.AsOBI(), "processEventsInput")
+	processEventsHostDecorated := msg2.QueueFromConfig[exec.ProcessEvent](config.AsOBI(), "processEventsHostDecorated")
 
 	swi.Add(traces.HostProcessEventDecoratorProvider(
 		&obiCfg.Attributes.InstanceID,
@@ -71,7 +68,7 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 		processEventsHostDecorated,
 	))
 
-	processEventsKubeDecorated := newEventQueue()
+	processEventsKubeDecorated := msg2.QueueFromConfig[exec.ProcessEvent](config.AsOBI(), "processEventsKubeDecorated")
 	swi.Add(transform.KubeProcessEventDecoratorProvider(
 		ctxInfo,
 		&obiCfg.Attributes.Kubernetes,

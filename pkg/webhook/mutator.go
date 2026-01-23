@@ -8,11 +8,15 @@ import (
 	"net/http"
 	"reflect"
 	"slices"
+	"strings"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
+	"go.opentelemetry.io/obi/pkg/appolly/services"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
+	"go.opentelemetry.io/obi/pkg/kube/kubecache/informer"
+	"go.opentelemetry.io/obi/pkg/transform"
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,7 +32,8 @@ var (
 )
 
 const (
-	injectVolumeName = "otel-inject-instrumentation"
+	instrumentedLabel = "com.grafana.beyla/instrumented"
+	injectVolumeName  = "otel-inject-instrumentation"
 	// this value is hardcoded in the config file
 	internalMountPath = "/__otel_sdk_auto_instrumentation__"
 
@@ -48,15 +53,17 @@ func init() {
 
 // PodMutator handles the mutation of pods
 type PodMutator struct {
-	logger        *slog.Logger
-	cfg           *beyla.Config
+	logger  *slog.Logger
+	matcher *PodMatcher
+	cfg     *beyla.Config
+
 	endpoint      string
 	proto         string
 	exportHeaders map[string]string
 }
 
 // NewPodMutator creates a new PodMutator
-func NewPodMutator(cfg *beyla.Config) (*PodMutator, error) {
+func NewPodMutator(cfg *beyla.Config, matcher *PodMatcher) (*PodMutator, error) {
 	var opts otelcfg.OTLPOptions
 	var err error
 
@@ -77,6 +84,7 @@ func NewPodMutator(cfg *beyla.Config) (*PodMutator, error) {
 
 	return &PodMutator{
 		logger:        slog.Default().With("component", "webhook"),
+		matcher:       matcher,
 		cfg:           cfg,
 		endpoint:      opts.Scheme + "://" + opts.Endpoint + opts.BaseURLPath,
 		exportHeaders: opts.Headers,
@@ -100,10 +108,16 @@ func (pm *PodMutator) CanInstrument(kind svc.InstrumentableType) bool {
 	return false
 }
 
-func (pm *PodMutator) AlreadyInstrumented(env map[string]string) bool {
-	_, ok := env[envVarLdPreloadName]
+func (pm *PodMutator) AlreadyInstrumented(info *ProcessInfo) bool {
+	if _, ok := info.env[envVarLdPreloadName]; ok {
+		return true
+	}
 
-	return ok
+	if label, ok := info.podLabels[instrumentedLabel]; ok && label != "" {
+		return true
+	}
+
+	return false
 }
 
 // HandleMutate is the HTTP handler for the mutating webhook
@@ -219,21 +233,25 @@ func (pm *PodMutator) HandleMutate(w http.ResponseWriter, r *http.Request) {
 	pm.logger.Info("admission response sent successfully", "uid", admResponse.UID)
 }
 
-// TODO: Add some labels to make sure we mark this pod as something we've instrumented
 // TODO: How do we detect that we caused the pod to crash and not do this again on restart?
 func (pm *PodMutator) mutatePod(pod *corev1.Pod) bool {
 	spec := &pod.Spec
+	meta := &pod.ObjectMeta
 
 	// check if maybe someone is adding instrumentation manually
-	if pm.alreadyInstrumented(spec) {
+	if pm.alreadyInstrumented(spec, meta) {
+		return false
+	}
+
+	if !pm.matchesSelection(meta) {
+		pm.logger.Info("pod doesn't match selection criteria")
 		return false
 	}
 
 	originalSpec := spec.DeepCopy()
 
 	// mount the shared hostPath volume with the injector and SDKs
-	pm.mountVolume(spec, &pod.ObjectMeta)
-	// No init container needed - files are already on the host
+	pm.mountVolume(spec, meta)
 
 	// instrument all containers that don't have some preexisting LD_PRELOAD set on them
 	for i := range spec.Containers {
@@ -245,17 +263,27 @@ func (pm *PodMutator) mutatePod(pod *corev1.Pod) bool {
 		pm.instrumentContainer(c)
 	}
 
+	// add a label with the version of the SDKs we've instrumented
+	version := pm.cfg.Injector.SDKVersion
+	if version == "" {
+		version = "unversioned"
+	}
+
+	pm.addLabel(meta, instrumentedLabel, version)
+
 	return !reflect.DeepEqual(originalSpec, spec)
 }
 
-// TODO: we also need to check perhaps for labels set by the OTel operator and skip
-// those containers too
-func (pm *PodMutator) alreadyInstrumented(spec *corev1.PodSpec) bool {
+func (pm *PodMutator) alreadyInstrumented(spec *corev1.PodSpec, meta *metav1.ObjectMeta) bool {
 	for _, c := range spec.Containers {
 		if _, ok := findEnvVar(&c, envOtelInjectorConfigFileName); ok {
 			pm.logger.Debug("container already instrumented, ignoring...", "container", c.Name)
 			return true
 		}
+	}
+
+	if val, ok := pm.getLabel(meta, instrumentedLabel); ok && val != "" {
+		return true
 	}
 
 	return false
@@ -315,6 +343,23 @@ func (pm *PodMutator) addMount(c *corev1.Container) {
 	} else {
 		c.VolumeMounts[idx] = *volume
 	}
+}
+
+func (pm *PodMutator) addLabel(meta *metav1.ObjectMeta, key string, value string) {
+	if meta.Labels == nil {
+		meta.Labels = make(map[string]string, 1)
+	}
+	meta.Labels[key] = value
+}
+
+func (pm *PodMutator) getLabel(meta *metav1.ObjectMeta, key string) (string, bool) {
+	if meta.Labels == nil {
+		return "", false
+	}
+	if value, ok := meta.Labels[key]; ok {
+		return value, true
+	}
+	return "", false
 }
 
 func findEnvVar(c *corev1.Container, name string) (int, bool) {
@@ -388,6 +433,67 @@ func (pm *PodMutator) addEnvVars(c *corev1.Container) {
 	}
 
 	pm.logger.Info("env vars", "vars", c.Env)
+}
+
+func ownersFrom(meta *metav1.ObjectMeta) []*informer.Owner {
+	if len(meta.OwnerReferences) == 0 {
+		// If no owner references' found, return itself as owner
+		return []*informer.Owner{{Kind: "Pod", Name: meta.Name}}
+	}
+	owners := make([]*informer.Owner, 0, len(meta.OwnerReferences))
+	for i := range meta.OwnerReferences {
+		or := &meta.OwnerReferences[i]
+		owners = append(owners, &informer.Owner{Kind: or.Kind, Name: or.Name})
+		// ReplicaSets usually have a Deployment as owner too. Returning it as well
+		if or.APIVersion == "apps/v1" && or.Kind == "ReplicaSet" {
+			// we heuristically extract the Deployment name from the replicaset name
+			if idx := strings.LastIndexByte(or.Name, '-'); idx > 0 {
+				owners = append(owners, &informer.Owner{Kind: "Deployment", Name: or.Name[:idx]})
+				// we already have what we need for decoration and selection. Ignoring any other owner
+				// it might hypothetically have (it would be a rare case)
+				return owners
+			}
+		}
+		if or.APIVersion == "batch/v1" && or.Kind == "Job" {
+			// we heuristically extract the CronJob name from the Job name
+			if idx := strings.LastIndexByte(or.Name, '-'); idx > 0 {
+				owners = append(owners, &informer.Owner{Kind: "CronJob", Name: or.Name[:idx]})
+				// we already have what we need for decoration and selection. Ignoring any other owner
+				// it might hypothetically have (it would be a rare case)
+				return owners
+			}
+		}
+	}
+	return owners
+}
+
+func processMetadata(meta *metav1.ObjectMeta) *ProcessInfo {
+	ownerName := meta.Name
+	owners := ownersFrom(meta)
+	if topOwner := topOwner(owners); topOwner != nil {
+		ownerName = topOwner.Name
+	}
+
+	ret := ProcessInfo{}
+
+	ret.metadata = map[string]string{
+		services.AttrNamespace: meta.Namespace,
+		services.AttrPodName:   meta.Name,
+		services.AttrOwnerName: ownerName,
+	}
+	ret.podLabels = meta.Labels
+	ret.podAnnotations = meta.Annotations
+
+	// add any other owner name (they might be several, e.g. replicaset and deployment)
+	for _, owner := range owners {
+		ret.metadata[transform.OwnerLabelName(owner.Kind).Prom()] = owner.Name
+	}
+	return &ret
+}
+
+func (pm *PodMutator) matchesSelection(meta *metav1.ObjectMeta) bool {
+	info := processMetadata(meta)
+	return pm.matcher.MatchProcessInfo(info)
 }
 
 // HealthCheck is a simple health check endpoint

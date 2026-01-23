@@ -34,13 +34,13 @@ type Server struct {
 
 // NewServer creates a new webhook server
 func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) {
-	mutator, err := NewPodMutator(cfg)
+	matcher := NewPodMatcher(cfg)
+	var bouncer *PodBouncer
+
+	mutator, err := NewPodMutator(cfg, matcher)
 	if err != nil {
 		return nil, err
 	}
-
-	matcher := NewPodMatcher(cfg)
-	var bouncer *PodBouncer
 
 	if matcher.HasSelectionCriteria() {
 		bouncer, err = NewPodBouncer(ctxInfo)
@@ -185,7 +185,7 @@ func (s *Server) On(event *informer.Event) error {
 				// It's important to check here for the SDK supported programming languages.
 				// Go would be the killer here, since many of the Kubernetes services are written in
 				// Go, and we don't want to say bounce coredns.
-				if s.mutator.CanInstrument(a.kind) && !s.mutator.AlreadyInstrumented(a.env) {
+				if s.mutator.CanInstrument(a.kind) && !s.mutator.AlreadyInstrumented(a) {
 					if s.matcher.MatchProcessInfo(a) {
 						namespace := a.metadata[services.AttrNamespace]
 						deployment := a.metadata[attr.K8sDeploymentName.Prom()]
@@ -220,7 +220,7 @@ func (s *Server) enrichProcessInfo(pod *informer.ObjectMeta) []*ProcessInfo {
 	for _, cnt := range pod.Pod.Containers {
 		if procInfos, ok := s.initialState[cnt.Id]; ok {
 			for _, p := range procInfos {
-				attr := s.addMetadata(p, pod, cnt.Id)
+				attr := s.addMetadata(p, pod)
 				res = append(res, attr)
 			}
 		}
@@ -229,18 +229,20 @@ func (s *Server) enrichProcessInfo(pod *informer.ObjectMeta) []*ProcessInfo {
 	return res
 }
 
-func topOwner(pod *informer.PodInfo) *informer.Owner {
-	if pod == nil || len(pod.Owners) == 0 {
+func topOwner(owners []*informer.Owner) *informer.Owner {
+	if len(owners) == 0 {
 		return nil
 	}
-	return pod.Owners[len(pod.Owners)-1]
+	return owners[len(owners)-1]
 }
 
 // Adds the kubernetes metadata to the matched local process
-func (s *Server) addMetadata(pp *ProcessInfo, info *informer.ObjectMeta, containerID string) *ProcessInfo {
+func (s *Server) addMetadata(pp *ProcessInfo, info *informer.ObjectMeta) *ProcessInfo {
 	ownerName := info.Name
-	if topOwner := topOwner(info.Pod); topOwner != nil {
-		ownerName = topOwner.Name
+	if info.Pod != nil {
+		if topOwner := topOwner(info.Pod.Owners); topOwner != nil {
+			ownerName = topOwner.Name
+		}
 	}
 
 	ret := pp
@@ -256,15 +258,6 @@ func (s *Server) addMetadata(pp *ProcessInfo, info *informer.ObjectMeta, contain
 	// add any other owner name (they might be several, e.g. replicaset and deployment)
 	for _, owner := range info.Pod.Owners {
 		ret.metadata[transform.OwnerLabelName(owner.Kind).Prom()] = owner.Name
-	}
-	if containerID == "" {
-		return ret
-	}
-	for _, podContainer := range info.Pod.Containers {
-		if podContainer.Id == containerID {
-			ret.metadata[services.AttrContainerName] = podContainer.Name
-			break
-		}
 	}
 	return ret
 }

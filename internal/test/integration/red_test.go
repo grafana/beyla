@@ -19,7 +19,7 @@ import (
 
 	ti "go.opentelemetry.io/obi/pkg/test/integration"
 
-	"github.com/grafana/beyla/v2/internal/test/integration/components/prom"
+	"github.com/grafana/beyla/v2/internal/test/integration/components/promtest"
 	grpcclient "github.com/grafana/beyla/v2/internal/test/integration/components/testserver/grpc/client"
 )
 
@@ -101,8 +101,8 @@ func testExemplarsExist(t *testing.T) {
 
 // **IMPORTANT** Tests must first call -> func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 func testSpanMetricsForHTTPLibraryOTelFormat(t *testing.T, svcName, svcNs string) {
-	pq := prom.Client{HostPort: prometheusHostPort}
-	var results []prom.Result
+	pq := promtest.Client{HostPort: prometheusHostPort}
+	var results []promtest.Result
 
 	// Test span metrics
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
@@ -155,8 +155,8 @@ func testSpanMetricsForHTTPLibraryOTelFormat(t *testing.T, svcName, svcNs string
 
 // **IMPORTANT** Tests must first call -> func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 func testSpanMetricsForHTTPLibrary(t *testing.T, svcName, svcNs string) {
-	pq := prom.Client{HostPort: prometheusHostPort}
-	var results []prom.Result
+	pq := promtest.Client{HostPort: prometheusHostPort}
+	var results []promtest.Result
 
 	// Test span metrics
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
@@ -209,8 +209,8 @@ func testSpanMetricsForHTTPLibrary(t *testing.T, svcName, svcNs string) {
 
 // **IMPORTANT** Tests must first call -> func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 func testServiceGraphMetricsForHTTPLibrary(t *testing.T, svcNs string) {
-	pq := prom.Client{HostPort: prometheusHostPort}
-	var results []prom.Result
+	pq := promtest.Client{HostPort: prometheusHostPort}
+	var results []promtest.Result
 
 	// Test span metrics
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
@@ -269,8 +269,8 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 	}
 
 	// Eventually, Prometheus would make this query visible
-	pq := prom.Client{HostPort: prometheusHostPort}
-	var results []prom.Result
+	pq := promtest.Client{HostPort: prometheusHostPort}
+	var results []promtest.Result
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
 		results, err = pq.Query(`http_server_request_duration_seconds_count{` +
@@ -517,8 +517,8 @@ func testREDMetricsGRPCInternal(t *testing.T, opts []grpcclient.PingOption, serv
 	}
 
 	// Eventually, Prometheus would make this query visible
-	pq := prom.Client{HostPort: prometheusHostPort}
-	var results []prom.Result
+	pq := promtest.Client{HostPort: prometheusHostPort}
+	var results []promtest.Result
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
 		results, err = pq.Query(`rpc_server_duration_seconds_count{` +
@@ -556,8 +556,8 @@ func testREDMetricsForHTTPLibraryNoRoute(t *testing.T, url, svcName string) {
 	}
 
 	// Eventually, Prometheus would make this query visible
-	pq := prom.Client{HostPort: prometheusHostPort}
-	var results []prom.Result
+	pq := promtest.Client{HostPort: prometheusHostPort}
+	var results []promtest.Result
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
 		results, err = pq.Query(`http_server_request_duration_seconds_count{` +
@@ -822,8 +822,8 @@ func testREDMetricsForGoBasicOnly(t *testing.T, url string, comm string) {
 	}
 
 	// Eventually, Prometheus would make this query visible
-	pq := prom.Client{HostPort: prometheusHostPort}
-	var results []prom.Result
+	pq := promtest.Client{HostPort: prometheusHostPort}
+	var results []promtest.Result
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
 		results, err = pq.Query(`http_server_request_duration_seconds_count{` +
@@ -847,8 +847,8 @@ func testREDMetricsForGoBasicOnly(t *testing.T, url string, comm string) {
 }
 
 func testPrometheusBeylaBuildInfo(t *testing.T) {
-	pq := prom.Client{HostPort: prometheusHostPort}
-	var results []prom.Result
+	pq := promtest.Client{HostPort: prometheusHostPort}
+	var results []promtest.Result
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
 		results, err = pq.Query(`beyla_build_info{target_lang="go"}`)
@@ -858,8 +858,8 @@ func testPrometheusBeylaBuildInfo(t *testing.T) {
 }
 
 func testHostInfo(t *testing.T) {
-	pq := prom.Client{HostPort: prometheusHostPort}
-	var results []prom.Result
+	pq := promtest.Client{HostPort: prometheusHostPort}
+	var results []promtest.Result
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
 		results, err = pq.Query(`traces_host_info{}`)
@@ -870,8 +870,8 @@ func testHostInfo(t *testing.T) {
 
 func testPrometheusBPFMetrics(t *testing.T) {
 	t.Skip("BPF metrics are not available in the test environment")
-	pq := prom.Client{HostPort: prometheusHostPort}
-	var results []prom.Result
+	pq := promtest.Client{HostPort: prometheusHostPort}
+	var results []promtest.Result
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
 		results, err = pq.Query(`bpf_probe_latency_seconds_count{probe_name=~"uprobe_.*"}`)
@@ -888,8 +888,8 @@ func testPrometheusBPFMetrics(t *testing.T) {
 }
 
 func testPrometheusNoBeylaEvents(t *testing.T) {
-	pq := prom.Client{HostPort: prometheusHostPort}
-	var results []prom.Result
+	pq := promtest.Client{HostPort: prometheusHostPort}
+	var results []promtest.Result
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
 		results, err = pq.Query(`http_server_request_duration_seconds_count{service_name="beyla"}`)

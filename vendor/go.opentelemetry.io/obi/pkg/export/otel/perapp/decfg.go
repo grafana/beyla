@@ -3,7 +3,7 @@
 
 // Package perapp is a placeholder for the future global and per-service support
 // of different metrics/traces export options.
-package perapp
+package perapp // import "go.opentelemetry.io/obi/pkg/export/otel/perapp"
 
 import (
 	"go.opentelemetry.io/obi/pkg/export"

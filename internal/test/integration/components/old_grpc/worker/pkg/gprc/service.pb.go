@@ -153,7 +153,7 @@ func file_proto_service_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_service_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
-var file_proto_service_proto_goTypes = []interface{}{
+var file_proto_service_proto_goTypes = []any{
 	(*LoopRequest)(nil),  // 0: fib.LoopRequest
 	(*LoopResponse)(nil), // 1: fib.LoopResponse
 }
@@ -173,7 +173,7 @@ func file_proto_service_proto_init() {
 		return
 	}
 	if !protoimpl.UnsafeEnabled {
-		file_proto_service_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
+		file_proto_service_proto_msgTypes[0].Exporter = func(v any, i int) any {
 			switch v := v.(*LoopRequest); i {
 			case 0:
 				return &v.state
@@ -185,7 +185,7 @@ func file_proto_service_proto_init() {
 				return nil
 			}
 		}
-		file_proto_service_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
+		file_proto_service_proto_msgTypes[1].Exporter = func(v any, i int) any {
 			switch v := v.(*LoopResponse); i {
 			case 0:
 				return &v.state

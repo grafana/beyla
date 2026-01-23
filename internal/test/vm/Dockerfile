@@ -5,7 +5,7 @@ FROM alpine:3.20@sha256:765942a4039992336de8dd5db680586e1a206607dd06170ff0a37267
 ARG target=run-integration-test-vm
 ARG test_pattern=TestMultiProcess
 ARG run_number=1
-ARG GO_VERSION=1.25.5
+ARG GO_VERSION=1.25.6
 
 # Pin Docker/runc to Alpine 3.20 versions (before November 2025 CVE patches)
 # The procfs security checks in newer runc (CVE-2025-52881, CVE-2025-52565,

@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package ebpfcommon
+package ebpfcommon // import "go.opentelemetry.io/obi/pkg/ebpf/common"
 
 import (
 	"log/slog"
@@ -20,7 +20,6 @@ type PIDType uint8
 const (
 	PIDTypeKProbes PIDType = iota + 1
 	PIDTypeGo
-	PIDTypeLogEnricher
 )
 
 // injectable functions (can be replaced in tests). It reads the

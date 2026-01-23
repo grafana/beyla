@@ -15,7 +15,7 @@ import (
 	ti "go.opentelemetry.io/obi/pkg/test/integration"
 
 	"github.com/grafana/beyla/v2/internal/test/integration/components/jaeger"
-	"github.com/grafana/beyla/v2/internal/test/integration/components/prom"
+	"github.com/grafana/beyla/v2/internal/test/integration/components/promtest"
 )
 
 func testREDMetricsForPythonSQLLibrary(t *testing.T, url, comm, namespace string) {
@@ -29,8 +29,8 @@ func testREDMetricsForPythonSQLLibrary(t *testing.T, url, comm, namespace string
 	}
 
 	// Eventually, Prometheus would make this query visible
-	pq := prom.Client{HostPort: prometheusHostPort}
-	var results []prom.Result
+	pq := promtest.Client{HostPort: prometheusHostPort}
+	var results []promtest.Result
 	var err error
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
@@ -97,8 +97,8 @@ func testREDMetricsForPythonSQLSSL(t *testing.T, url, comm, namespace string) {
 	}
 
 	// Eventually, Prometheus would make this query visible
-	pq := prom.Client{HostPort: prometheusHostPort}
-	var results []prom.Result
+	pq := promtest.Client{HostPort: prometheusHostPort}
+	var results []promtest.Result
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
 		results, err = pq.Query(`db_client_operation_duration_seconds_count{` +

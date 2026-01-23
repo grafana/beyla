@@ -34,6 +34,7 @@ services:
       BEYLA_NETWORK_SOURCE: ${BEYLA_NETWORK_SOURCE}
       BEYLA_NETWORK_METRICS: "true" # explicitly enabling network metrics
       BEYLA_NETWORK_PRINT_FLOWS: "true"
+      BEYLA_OTLP_TRACES_BATCH_TIMEOUT: "1ms"
       BEYLA_METRICS_INTERVAL: "1s"
       BEYLA_BPF_BATCH_TIMEOUT: "1s"
       BEYLA_NETWORK_CACHE_ACTIVE_TIMEOUT: "1s"
@@ -42,7 +43,6 @@ services:
       BEYLA_LOG_LEVEL: "DEBUG"
       BEYLA_BPF_DEBUG: "TRUE"
       BEYLA_HOSTNAME: "beyla"
-      BEYLA_OTLP_TRACES_BATCH_TIMEOUT: "1ms"
 
   # OpenTelemetry Collector for Metrics. For Traces, we use directly Jaeger
   otelcol:

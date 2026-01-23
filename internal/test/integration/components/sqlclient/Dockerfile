@@ -1,6 +1,6 @@
 # Build the testserver binary
-# Docker command must be invoked from the project root directory
-FROM golang:1.25.5@sha256:6cc2338c038bc20f96ab32848da2b5c0641bb9bb5363f2c33e9b7c8838f9a208 AS builder
+# Docker command must be invoked from the projec root directory
+FROM golang:1.25.6@sha256:fc24d3881a021e7b968a4610fc024fba749f98fe5c07d4f28e6cfa14dc65a84c AS builder
 
 ARG TARGETARCH
 
@@ -18,7 +18,7 @@ RUN go mod download
 RUN go build gosqlite.go
 
 # Create final image from minimal + built binary
-FROM debian:bookworm-slim@sha256:78d2f66e0fec9e5a39fb2c72ea5e052b548df75602b5215ed01a17171529f706
+FROM debian:bookworm-slim@sha256:d5d3f9c23164ea16f31852f95bd5959aad1c5e854332fe00f7b3a20fcc9f635c
 
 WORKDIR /
 COPY --from=builder /src/gosqlite .

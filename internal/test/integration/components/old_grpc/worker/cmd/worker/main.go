@@ -5,9 +5,10 @@ import (
 	"net"
 
 	"github.com/caarlos0/env/v7"
-	"github.com/mariomac/distributed-service-example/worker/pkg/gprc"
-	"github.com/mariomac/distributed-service-example/worker/pkg/server"
 	"google.golang.org/grpc"
+
+	"github.com/grafana/beyla/v2/internal/test/integration/components/old_grpc/worker/internal/gprc"
+	"github.com/grafana/beyla/v2/internal/test/integration/components/old_grpc/worker/internal/server"
 )
 
 type Config struct {

@@ -33,8 +33,10 @@ import (
 	pb "github.com/grafana/beyla/v2/internal/test/integration/components/testserver/grpc/routeguide"
 )
 
-var logs = slog.With("component", "grpc.Client")
-var counter int64
+var (
+	logs    = slog.With("component", "grpc.Client")
+	counter int64
+)
 
 type pingOpts struct {
 	ssl        bool
@@ -65,7 +67,6 @@ func printFeature(ctx context.Context, client pb.RouteGuideClient, point *pb.Poi
 	feature, err := client.GetFeature(ctx, point)
 	if err != nil {
 		logs.Error("client.GetFeature failed", "error", err)
-		// nolint:gocritic
 		return err
 	}
 	if slog.Default().Enabled(ctx, slog.LevelDebug) {
@@ -152,7 +153,7 @@ func printFeatures(client pb.RouteGuideClient, rect *pb.Rectangle) {
 	stream, err := client.ListFeatures(ctx, rect)
 	if err != nil {
 		slog.Error("client.ListFeatures failed", "error", err)
-		// nolint:gocritic
+		//nolint:gocritic
 		os.Exit(-1)
 	}
 	for {

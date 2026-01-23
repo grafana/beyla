@@ -8,7 +8,7 @@ metadata:
   name: httppinger
   labels:
     component: httppinger
-    # this label will trigger a deletion of beyla pods before tearing down
+    # this label will trigger a deletion of Beyla pods before tearing down
     # kind, to force Beyla writing the coverage data
     teardown: delete
 spec:
@@ -28,9 +28,7 @@ spec:
     - name: testoutput
       persistentVolumeClaim:
         claimName: testoutput
-    - name: maincode
-      configMap:
-        name: maincode
+
   containers:
     - name: httppinger
       image: ghcr.io/open-telemetry/obi-testimg:httppinger-net
@@ -69,7 +67,7 @@ spec:
       name: otherinstance
       labels:
         app: otherinstance
-        # this label will trigger a deletion of beyla pods before tearing down
+        # this label will trigger a deletion of Beyla pods before tearing down
         # kind, to force Beyla writing the coverage data
         teardown: delete
     spec:

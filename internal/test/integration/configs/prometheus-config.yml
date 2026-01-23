@@ -11,7 +11,7 @@ scrape_configs:
     static_configs:
       - targets:
           - 'otelcol:8888'
-  - job_name: autoinstrumenter-collector
+  - job_name: beyla-collector
     honor_labels: true
     static_configs:
       - targets:

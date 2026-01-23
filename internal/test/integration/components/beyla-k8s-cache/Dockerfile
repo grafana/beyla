@@ -1,7 +1,7 @@
 # Development version of the beyla Dockerfile that compiles for coverage
 # and allows retrieving coverage files.
 # The production-ready minimal image is in the project root's dockerfile.
-FROM golang:1.25.5@sha256:6cc2338c038bc20f96ab32848da2b5c0641bb9bb5363f2c33e9b7c8838f9a208 AS builder
+FROM golang:1.25.6@sha256:fc24d3881a021e7b968a4610fc024fba749f98fe5c07d4f28e6cfa14dc65a84c AS builder
 
 ARG TARGETARCH
 
@@ -11,9 +11,9 @@ WORKDIR /src
 
 # Copy the go manifests and source
 COPY .git/ .git/
+COPY vendor/ vendor/
 COPY cmd/ cmd/
 COPY pkg/ pkg/
-COPY vendor/ vendor/
 COPY go.mod go.mod
 COPY go.sum go.sum
 COPY Makefile Makefile

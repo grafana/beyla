@@ -50,7 +50,7 @@ services:
 
   # OpenTelemetry Collector
   otelcol:
-    image: otel/opentelemetry-collector-contrib:0.118.0@sha256:3f6274fe609da4f9964fbc2ef36b83d08d47964fbb11629251393590d3924072
+    image: otel/opentelemetry-collector-contrib:0.104.0@sha256:e07e325e303e86f4a87a617491e921b579a92da6d404007394757ac910bf9587
     container_name: otel-col
     deploy:
       resources:
@@ -93,4 +93,3 @@ services:
       - LOG_LEVEL=debug
 # curl http://localhost:16686/api/services
 # curl http://localhost:16686/api/traces?service=testserver
-

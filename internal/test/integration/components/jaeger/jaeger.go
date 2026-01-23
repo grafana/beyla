@@ -1,6 +1,5 @@
 // Package jaeger provides some convenience data structures for integration testing.
 // Disable some linting, as this is just a test class where readability is preferred to performance
-// nolint:gocritic
 package jaeger
 
 import (
@@ -35,9 +34,9 @@ type Span struct {
 }
 
 type Tag struct {
-	Key   string      `json:"key"`
-	Type  string      `json:"type"`
-	Value interface{} `json:"value"`
+	Key   string `json:"key"`
+	Type  string `json:"type"`
+	Value any    `json:"value"`
 }
 
 type Reference struct {
@@ -55,7 +54,8 @@ func (tq *TracesQuery) FindBySpan(tags ...Tag) []Trace {
 	var matches []Trace
 	for _, trace := range tq.Data {
 		for _, span := range trace.Spans {
-			if len(span.Diff(tags...)) == 0 {
+			diff := span.Diff(tags...)
+			if len(diff) == 0 {
 				matches = append(matches, trace)
 				break
 			}

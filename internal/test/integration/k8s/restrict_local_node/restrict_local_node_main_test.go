@@ -1,4 +1,4 @@
-//go:build integration_k8s
+//go:build integration
 
 package otel
 
@@ -13,7 +13,7 @@ import (
 
 	"github.com/grafana/beyla/v2/internal/test/integration/components/docker"
 	"github.com/grafana/beyla/v2/internal/test/integration/components/kube"
-	"github.com/grafana/beyla/v2/internal/test/integration/components/prom"
+	"github.com/grafana/beyla/v2/internal/test/integration/components/promtest"
 	k8s "github.com/grafana/beyla/v2/internal/test/integration/k8s/common"
 	"github.com/grafana/beyla/v2/internal/test/integration/k8s/common/testpath"
 	"github.com/grafana/beyla/v2/internal/test/tools"
@@ -34,7 +34,7 @@ func TestMain(m *testing.M) {
 		os.Exit(-1)
 	}
 
-	cluster = kube.NewKind("test-kind-cluster-otel-multi",
+	cluster = kube.NewKind("test-kind-cluster-restrict-local-node",
 		kube.KindConfig(testpath.Manifests+"/00-kind-multi-node.yml"),
 		kube.LocalImage("beyla:dev"),
 		kube.Deploy(testpath.Manifests+"/01-volumes.yml"),
@@ -50,7 +50,7 @@ func TestMain(m *testing.M) {
 
 func TestNoSourceAndDestAvailable(t *testing.T) {
 	// Wait for some metrics available at Prometheus
-	pq := prom.Client{HostPort: prometheusHostPort}
+	pq := promtest.Client{HostPort: prometheusHostPort}
 	for _, args := range []string{
 		`k8s_dst_name="httppinger"`,
 		`k8s_src_name="httppinger"`,

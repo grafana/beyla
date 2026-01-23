@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package procs
+package procs // import "go.opentelemetry.io/obi/pkg/internal/procs"
 
 import (
 	"bufio"
@@ -56,8 +56,8 @@ func FindNamespacedPids(pid int32) ([]uint32, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open(/proc/%d/status): %w", pid, err)
 	}
-
 	defer f.Close()
+
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -65,20 +65,23 @@ func FindNamespacedPids(pid int32) ([]uint32, error) {
 			l := line[6:]
 			parts := strings.Split(l, "\t")
 			result := make([]uint32, 0)
+
 			for _, p := range parts {
 				if len(p) == 0 {
 					continue
 				}
-				id, err := strconv.ParseUint(p, 10, 32)
 
-				if err == nil {
-					result = append(result, uint32(id))
-				} else {
-					return nil, err
+				id, err := strconv.ParseUint(p, 10, 32)
+				if err != nil {
+					return nil, fmt.Errorf("failed to parse namespaced pid %w", err)
 				}
+
+				result = append(result, uint32(id))
 			}
+
 			return result, nil
 		}
 	}
+
 	return nil, nil
 }

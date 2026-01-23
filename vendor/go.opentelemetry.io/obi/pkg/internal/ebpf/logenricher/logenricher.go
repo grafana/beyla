@@ -3,19 +3,19 @@
 
 //go:build linux
 
-package logenricher
+package logenricher // import "go.opentelemetry.io/obi/pkg/internal/ebpf/logenricher"
 
 import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"unsafe"
 
 	"github.com/cilium/ebpf"
@@ -31,6 +31,7 @@ import (
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/internal/goexec"
+	"go.opentelemetry.io/obi/pkg/internal/procs"
 	"go.opentelemetry.io/obi/pkg/internal/shardedqueue"
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
@@ -49,12 +50,13 @@ type Tracer struct {
 	bpfObjects  BpfObjects
 	closers     []io.Closer
 	log         *slog.Logger
-	pf          ebpfcommon.ServiceFilter
 	fdCache     *expirable.LRU[string, *os.File]
 	asyncWriter *shardedqueue.ShardedQueue[LogEvent]
+	pids        map[uint32][]uint32 // ns:[]pid
+	pidsMU      sync.Mutex
 }
 
-func New(pf ebpfcommon.ServiceFilter, cfg *obi.Config) *Tracer {
+func New(cfg *obi.Config) *Tracer {
 	logger := slog.With("component", "logenricher")
 
 	if !ebpfcommon.SupportsLogInjection(logger) {
@@ -65,10 +67,10 @@ func New(pf ebpfcommon.ServiceFilter, cfg *obi.Config) *Tracer {
 	tr := &Tracer{
 		log: logger,
 		cfg: cfg,
-		pf:  pf,
 		fdCache: expirable.NewLRU[string, *os.File](cfg.EBPF.LogEnricher.CacheSize, func(_ string, f *os.File) {
 			f.Close()
 		}, cfg.EBPF.LogEnricher.CacheTTL),
+		pids: make(map[uint32][]uint32),
 	}
 
 	asyncWriter := shardedqueue.NewShardedQueue[LogEvent](
@@ -194,19 +196,8 @@ func (p *Tracer) pidKey(nsid, pid uint32) uint64 {
 	return (uint64(nsid) << 32) | uint64(pid)
 }
 
-func (p *Tracer) flattenPIDs() []uint64 {
-	newPids := make([]uint64, 0)
-
-	for nsid, pids := range p.pf.CurrentPIDs(ebpfcommon.PIDTypeLogEnricher) {
-		for pid := range pids {
-			newPids = append(newPids, p.pidKey(nsid, pid))
-		}
-	}
-
-	return newPids
-}
-
 func (p *Tracer) addPID(key uint64) error {
+	p.log.Debug("adding pid", "pid", uint32(key), "ns", key>>32)
 	if err := p.bpfObjects.LogEnricherPids.Put(key, uint8(1)); err != nil {
 		return fmt.Errorf("error adding pid %d (ns=%d) to bpf map: %w", uint32(key), key>>32, err)
 	}
@@ -214,55 +205,62 @@ func (p *Tracer) addPID(key uint64) error {
 }
 
 func (p *Tracer) removePID(key uint64) error {
+	p.log.Debug("removing pid", "pid", uint32(key), "ns", key>>32)
 	if err := p.bpfObjects.LogEnricherPids.Delete(key); err != nil {
 		return fmt.Errorf("error removing pid %d (ns=%d) from bpf map: %w", uint32(key), key>>32, err)
 	}
 	return nil
 }
 
-func (p *Tracer) initPIDsMap(m *ebpf.Map) error {
-	if m == nil {
-		return errors.New("pids bpf map is nil")
-	}
+func (p *Tracer) AllowPID(pid, ns uint32, _ *svc.Attrs) {
+	p.pidsMU.Lock()
+	defer p.pidsMU.Unlock()
 
-	pids := p.flattenPIDs()
-
-	p.log.Debug("allowing pids", "count", len(pids))
-
-	for _, pid := range pids {
-		if err := p.addPID(pid); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (p *Tracer) AllowPID(pid, ns uint32, svc *svc.Attrs) {
-	p.log.Debug("adding pid", "pid", pid, "ns", ns)
-	p.pf.AllowPID(pid, ns, svc, ebpfcommon.PIDTypeLogEnricher)
 	if err := p.addPID(p.pidKey(ns, pid)); err != nil {
 		p.log.Error(err.Error())
 	}
+
+	nsPids, err := procs.FindNamespacedPids(int32(pid))
+	if err != nil {
+		p.log.Error("allow pid: error finding namespaced pids", "error", err)
+		return
+	}
+
+	for _, nsPid := range nsPids {
+		if err := p.addPID(p.pidKey(ns, nsPid)); err != nil {
+			p.log.Error(err.Error())
+		}
+	}
+
+	nsPids = append(nsPids, pid)
+
+	p.pids[pid] = nsPids
 }
 
 func (p *Tracer) BlockPID(pid, ns uint32) {
-	p.log.Debug("removing pid", "pid", pid, "ns", ns)
-	p.pf.BlockPID(pid, ns)
+	p.pidsMU.Lock()
+	defer p.pidsMU.Unlock()
+
 	if err := p.removePID(p.pidKey(ns, pid)); err != nil {
 		p.log.Error(err.Error())
 	}
+
+	if knownPids, ok := p.pids[pid]; ok {
+		for _, nsPid := range knownPids {
+			if err := p.removePID(p.pidKey(ns, nsPid)); err != nil {
+				p.log.Error(err.Error())
+			}
+		}
+		return
+	}
+
+	p.log.Debug("block pid: namespaced pids not found in internal cache, removing only the given pid", "pid", pid, "ns", ns)
 }
 
 func (p *Tracer) Run(ctx context.Context, eventCtx *ebpfcommon.EBPFEventContext, _ *msg.Queue[[]request.Span]) {
 	p.log.Debug("starting")
 
 	p.ctx = ctx
-
-	if err := p.initPIDsMap(p.bpfObjects.LogEnricherPids); err != nil {
-		p.log.Error("failed to init pids map, not starting", "error", err)
-		return
-	}
 
 	ebpfcommon.ForwardRingbuf(
 		&p.cfg.EBPF,

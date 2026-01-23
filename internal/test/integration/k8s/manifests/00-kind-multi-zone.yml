@@ -50,4 +50,3 @@ nodes:
         hostPort: 38999
       - containerPort: 9090
         hostPort: 39090
-

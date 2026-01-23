@@ -155,7 +155,7 @@ jobs:
               --jsonfile=reports/test-run-"${RUN_NUMBER}"-"${MATRIX_ID}".log \
               -- -race -tags=${TEST_TAGS} -timeout 30m \
               -mod vendor \
-              -run="^(${MATRIX_TEST_PATTERN})$" ./internal/test/integration/...
+              -run="^(${MATRIX_TEST_PATTERN})$" ./internal/test/integration
 
       - name: Process coverage data
         run: make itest-coverage-data

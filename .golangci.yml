@@ -17,7 +17,6 @@ formatters:
         - prefix(github.com/grafana)
         - localmodule
 run:
-  go: "1.25"
   build-tags:
     - integration
 linters:
@@ -27,6 +26,7 @@ linters:
       - ^docs
       - ^.obi-src
       - ^vendor
+      - ^internal/test/integration/components # Synced from OBI, lint issues should be fixed upstream
     presets:
       - std-error-handling
     # Log a warning if an exclusion rule is unused.
@@ -66,7 +66,6 @@ linters:
   disable:
     - exhaustive
   settings:
-
     gocritic:
       enabled-checks:
         - rangeExprCopy

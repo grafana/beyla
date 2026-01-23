@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-//go:build integration_k8s
+//go:build integration
 
 package otel
 
@@ -31,8 +31,6 @@ func TestMain(m *testing.M) {
 		docker.ImageBuild{Tag: "testserver:dev", Dockerfile: k8s.DockerfileTestServer},
 		docker.ImageBuild{Tag: "pythontestserver:dev", Dockerfile: k8s.DockerfilePythonTestServer},
 		docker.ImageBuild{Tag: "beyla:dev", Dockerfile: k8s.DockerfileBeyla},
-		docker.ImageBuild{Tag: "otel/opentelemetry-collector-contrib:0.103.0"},
-		docker.ImageBuild{Tag: "jaegertracing/all-in-one:1.57"},
 	); err != nil {
 		slog.Error("can't build docker images", "error", err)
 		os.Exit(-1)
@@ -43,8 +41,6 @@ func TestMain(m *testing.M) {
 		kube.LocalImage("testserver:dev"),
 		kube.LocalImage("pythontestserver:dev"),
 		kube.LocalImage("beyla:dev"),
-		kube.LocalImage("otel/opentelemetry-collector-contrib:0.103.0"),
-		kube.LocalImage("jaegertracing/all-in-one:1.57"),
 		kube.Deploy(testpath.Manifests+"/01-volumes.yml"),
 		kube.Deploy(testpath.Manifests+"/01-serviceaccount.yml"),
 		kube.Deploy(testpath.Manifests+"/03-otelcol-multi-node.yml"),

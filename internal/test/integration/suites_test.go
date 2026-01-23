@@ -655,3 +655,14 @@ func KernelLockdownMode() bool {
 
 	return false
 }
+
+func TestSuite_LogEnricher(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-log-enricher.yml", path.Join(pathOutput, "test-suite-log-enricher.log"))
+	require.NoError(t, err)
+
+	compose.Env = append(compose.Env, `BEYLA_OPEN_PORT=8380`, `BEYLA_EXECUTABLE_NAME=`, `TEST_SERVICE_PORTS=8381:8380`)
+	require.NoError(t, compose.Up())
+
+	t.Run("Log Enricher", testLogEnricher)
+	require.NoError(t, compose.Close())
+}

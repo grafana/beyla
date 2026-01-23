@@ -16,7 +16,7 @@
 // This implementation was inspired by the code in
 // https://github.com/open-telemetry/opentelemetry-go-instrumentation/blob/cdfad4a67b86c282ed29141ca0b3bca46509eee9/internal/pkg/opentelemetry/id_generator.go
 
-package idgen
+package idgen // import "go.opentelemetry.io/obi/pkg/export/otel/idgen"
 
 import (
 	"encoding/binary"

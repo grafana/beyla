@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package kube
+package kube // import "go.opentelemetry.io/obi/pkg/internal/kube"
 
 import (
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"

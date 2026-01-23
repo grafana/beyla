@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package appolly
+package appolly // import "go.opentelemetry.io/obi/pkg/appolly"
 
 import (
 	"context"

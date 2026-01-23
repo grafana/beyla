@@ -1,4 +1,4 @@
-FROM golang:1.25.5 AS builder
+FROM golang:1.25.6@sha256:fc24d3881a021e7b968a4610fc024fba749f98fe5c07d4f28e6cfa14dc65a84c AS builder
 
 WORKDIR /src
 
@@ -6,7 +6,7 @@ COPY internal/test/integration/components/old_grpc/worker .
 
 RUN make compile
 
-FROM ubuntu:latest@sha256:66460d557b25769b102175144d538d88219c077c678a49af4afca6fbfc1b5252
+FROM ubuntu:latest@sha256:c35e29c9450151419d9448b0fd75374fec4fff364a27f176fb458d472dfc9e54
 
 WORKDIR /
 COPY --from=builder /src/bin/worker /worker

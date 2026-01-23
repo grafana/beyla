@@ -13,7 +13,7 @@ services:
         condition: service_started
 
   nginx:
-    image: nginx:latest@sha256:029d4461bd98f124e531380505ceea2072418fdf28752aa73b7b273ba3048903
+    image: nginx:latest@sha256:7272239bd21472f311aa3e86a85fdca0f1ad648995f983ab6e5e7dea665cd233
     container_name: nginx_server
     ports:
       - "8443:443" # Expose TLS port
@@ -44,6 +44,7 @@ services:
       BEYLA_TRACE_PRINTER: "text"
       BEYLA_OPEN_PORT: "${BEYLA_OPEN_PORT}"
       BEYLA_DISCOVERY_POLL_INTERVAL: 500ms
+      BEYLA_OTLP_TRACES_BATCH_TIMEOUT: "1ms"
       BEYLA_EXECUTABLE_NAME: "${BEYLA_EXECUTABLE_NAME}"
       BEYLA_SERVICE_NAMESPACE: "integration-test"
       BEYLA_METRICS_INTERVAL: "10ms"

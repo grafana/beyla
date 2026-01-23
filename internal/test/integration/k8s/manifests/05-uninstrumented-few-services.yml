@@ -54,19 +54,19 @@ spec:
       name: pytestserver
       labels:
         app: pytestserver
-        deployment.environment: "to-be-ignored-in-favor-of-annotation"
+        deployment.environment: 'to-be-ignored-in-favor-of-annotation'
       annotations:
-        resource.opentelemetry.io/deployment.environment: "integration-test"
+        resource.opentelemetry.io/deployment.environment: 'integration-test'
     spec:
       affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
+          nodeAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              nodeSelectorTerms:
               - matchExpressions:
-                  - key: deployment/zone
-                    operator: In
-                    values:
-                      - other-progs
+                - key: deployment/zone
+                  operator: In
+                  values:
+                  - other-progs
       containers:
         - name: pytestserver
           image: pythontestserver:dev
@@ -99,14 +99,14 @@ spec:
         app: testserver
     spec:
       affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
+          nodeAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              nodeSelectorTerms:
               - matchExpressions:
-                  - key: deployment/zone
-                    operator: In
-                    values:
-                      - go-progs
+                - key: deployment/zone
+                  operator: In
+                  values:
+                  - go-progs
       containers:
         - name: testserver
           image: testserver:dev
@@ -140,25 +140,26 @@ spec:
       # hostNetwork: true
       # dnsPolicy: ClusterFirstWithHostNet
       affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
+          nodeAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              nodeSelectorTerms:
               - matchExpressions:
-                  - key: deployment/zone
-                    operator: In
-                    values:
-                      - other-progs
+                - key: deployment/zone
+                  operator: In
+                  values:
+                  - other-progs
       containers:
         - name: utestserver
-          image: "ghcr.io/open-telemetry/obi-testimg:rails-0.1.0"
+          image: 'ghcr.io/open-telemetry/obi-testimg:rails-0.1.0'
           imagePullPolicy: IfNotPresent
-          ports:
-            - containerPort: 3040
-              hostPort: 3040
-              name: http2
+          ports:          
+          - containerPort: 3040
+            hostPort: 3040
+            name: http2
           volumeMounts:
-            - name: tmp-rails
-              mountPath: /tmp
+          - name: tmp-rails
+            mountPath: /tmp
       volumes:
-        - name: tmp-rails
-          emptyDir: {}
+      - name: tmp-rails
+        emptyDir: {}      
+---

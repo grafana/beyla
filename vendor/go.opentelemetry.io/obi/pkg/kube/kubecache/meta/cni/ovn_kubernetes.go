@@ -21,7 +21,7 @@
 
 // Package cni provides utilities
 // for working with Container Network Interface (CNI) configurations.
-package cni
+package cni // import "go.opentelemetry.io/obi/pkg/kube/kubecache/meta/cni"
 
 import (
 	"encoding/json"

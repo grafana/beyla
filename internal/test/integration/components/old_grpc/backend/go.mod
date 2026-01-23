@@ -1,11 +1,11 @@
-module github.com/mariomac/distributed-service-example/backend
+module github.com/grafana/beyla/v2/internal/test/integration/components/old_grpc/backend
 
 go 1.20
 
 require (
 	github.com/caarlos0/env/v7 v7.1.0
 	github.com/gin-gonic/gin v1.9.0
-	github.com/mariomac/distributed-service-example/worker v0.0.0
+	github.com/grafana/beyla/v2/internal/test/integration/components/old_grpc/worker v0.0.0
 	google.golang.org/grpc v1.55.0
 )
 
@@ -37,4 +37,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/mariomac/distributed-service-example/worker v0.0.0 => ../worker
+replace github.com/grafana/beyla/v2/internal/test/integration/components/old_grpc/worker => ../worker

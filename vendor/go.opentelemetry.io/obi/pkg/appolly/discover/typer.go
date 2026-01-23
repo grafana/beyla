@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package discover
+package discover // import "go.opentelemetry.io/obi/pkg/appolly/discover"
 
 import (
 	"context"
@@ -117,8 +117,12 @@ func (t *typer) makeServiceAttrs(processMatch *ProcessMatch) svc.Attrs {
 			routesConfig = m
 		}
 
-		if critFeat := s.MetricsConfig().Features; !critFeat.Undefined() {
-			svcFeatures = critFeat
+		// if the matching service > instrument entry does not define features,
+		// the globally defined features apply (and override any previous,
+		// wider-scope match features)
+		svcFeatures = s.MetricsConfig().Features
+		if svcFeatures.Undefined() {
+			svcFeatures = t.cfg.Metrics.Features
 		}
 	}
 

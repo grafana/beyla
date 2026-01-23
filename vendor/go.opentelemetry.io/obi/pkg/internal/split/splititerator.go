@@ -3,7 +3,7 @@
 
 // Package split provides an Iterator that allows for zero-copy string
 // splitting.
-package split
+package split // import "go.opentelemetry.io/obi/pkg/internal/split"
 
 import (
 	"strings"

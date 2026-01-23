@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package watcher
+package watcher // import "go.opentelemetry.io/obi/pkg/internal/ebpf/watcher"
 
 import (
 	"bytes"

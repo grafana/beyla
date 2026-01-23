@@ -12,7 +12,7 @@ import (
 
 	ti "go.opentelemetry.io/obi/pkg/test/integration"
 
-	"github.com/grafana/beyla/v2/internal/test/integration/components/prom"
+	"github.com/grafana/beyla/v2/internal/test/integration/components/promtest"
 )
 
 // does a smoke test to verify that all the components that started
@@ -24,8 +24,8 @@ func waitForElixirTestComponents(t *testing.T, url string) {
 func testREDMetricsForElixirHTTPLibrary(t *testing.T, url string, comm string) {
 	path := "/test"
 
-	pq := prom.Client{HostPort: prometheusHostPort}
-	var results []prom.Result
+	pq := promtest.Client{HostPort: prometheusHostPort}
+	var results []promtest.Result
 
 	// Call 4 times the instrumented service, forcing it to:
 	// - process multiple calls in a row with, one more than we might need

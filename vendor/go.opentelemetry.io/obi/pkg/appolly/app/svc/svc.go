@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package svc
+package svc // import "go.opentelemetry.io/obi/pkg/appolly/app/svc"
 
 import (
 	"go.opentelemetry.io/otel/sdk/trace"

@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   curler:
-    image: alpine/curl@sha256:d9d451635fea7317186adda62cebe3f7e46810a3de6ddfcae662339e456b6c55
+    image: alpine/curl@sha256:72c7a3654d014de2ad5220b764396138880ce1ff69ce70f04f95f25f7babc500
     command:
       - sh
       - -c
@@ -26,6 +26,7 @@ services:
       BEYLA_NETWORK_METRICS: "true" # explicitly enabling network metrics
       BEYLA_NETWORK_PRINT_FLOWS: "true"
       BEYLA_METRICS_INTERVAL: "1s"
+      BEYLA_OTLP_TRACES_BATCH_TIMEOUT: "1ms"
       BEYLA_BPF_BATCH_TIMEOUT: "1s"
       BEYLA_NETWORK_CACHE_ACTIVE_TIMEOUT: "1s"
       OTEL_EXPORTER_OTLP_ENDPOINT: http://localhost:4318 # otelcol exposing port in local node

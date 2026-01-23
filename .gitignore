@@ -6,7 +6,7 @@
 *.dylib
 
 # Main beyla binary (should be built to bin/beyla via make compile)
-beyla
+/beyla
 
 .DS_Store
 

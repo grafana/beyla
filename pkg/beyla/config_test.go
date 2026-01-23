@@ -44,6 +44,8 @@ func TestConfig_Overrides(t *testing.T) {
 trace_printer: json
 shutdown_timeout: 30s
 channel_buffer_len: 33
+channel_send_timeout: 2m
+channel_send_timeout_panic: true
 ebpf:
   functions:
     - FooBar
@@ -125,16 +127,18 @@ network:
 	// uncache internal field
 	cfg.obi = nil
 	assert.Equal(t, &Config{
-		Exec:                    cfg.Exec,
-		Port:                    cfg.Port,
-		ServiceName:             "svc-name",
+		Exec:        cfg.Exec,
+		Port:        cfg.Port,
+		ServiceName: "svc-name",
+
 		ChannelBufferLen:        33,
-		ChannelSendTimeoutPanic: false,
-		ChannelSendTimeout:      time.Minute,
-		LogLevel:                "INFO",
-		ShutdownTimeout:         30 * time.Second,
-		EnforceSysCaps:          false,
-		TracePrinter:            "json",
+		ChannelSendTimeout:      2 * time.Minute,
+		ChannelSendTimeoutPanic: true,
+
+		LogLevel:        "INFO",
+		ShutdownTimeout: 30 * time.Second,
+		EnforceSysCaps:  false,
+		TracePrinter:    "json",
 		EBPF: obiconfig.EBPFTracer{
 			BatchLength:        100,
 			BatchTimeout:       time.Second,

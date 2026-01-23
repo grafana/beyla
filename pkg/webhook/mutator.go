@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"reflect"
 	"slices"
-	"strings"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
@@ -16,7 +15,6 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -236,10 +234,9 @@ func (pm *PodMutator) mutatePod(pod *corev1.Pod) bool {
 
 	originalSpec := spec.DeepCopy()
 
-	// mount the volume with the injector and SDKs
+	// mount the shared hostPath volume with the injector and SDKs
 	pm.mountVolume(spec, &pod.ObjectMeta)
-	// create the init container to copy all the files over to the mounted volume
-	pm.addInitContainer(spec)
+	// No init container needed - files are already on the host
 
 	// instrument all containers that don't have some preexisting LD_PRELOAD set on them
 	for i := range spec.Containers {
@@ -272,13 +269,17 @@ func (pm *PodMutator) mountVolume(spec *corev1.PodSpec, meta *metav1.ObjectMeta)
 		spec.Volumes = make([]corev1.Volume, 0)
 	}
 
+	// Use hostPath volume shared across all pods on the node
+	// The Beyla DaemonSet populates this directory once per node
 	v := corev1.Volume{
 		Name: injectVolumeName,
 		VolumeSource: corev1.VolumeSource{
-			EmptyDir: &corev1.EmptyDirVolumeSource{
-				// Enough space for all the instrumentations and future
-				// SDKs that are not currently supported.
-				SizeLimit: resource.NewScaledQuantity(injectVolumeSizeMB, resource.Mega),
+			HostPath: &corev1.HostPathVolumeSource{
+				Path: "/var/lib/beyla/instrumentation",
+				Type: func() *corev1.HostPathType {
+					t := corev1.HostPathDirectoryOrCreate
+					return &t
+				}(),
 			},
 		},
 	}
@@ -292,103 +293,6 @@ func (pm *PodMutator) mountVolume(spec *corev1.PodSpec, meta *metav1.ObjectMeta)
 	} else {
 		spec.Volumes[pos] = v
 	}
-
-	// we need to set this new volume as safe to evict, to avoid not allowing
-	// nodes to be scaled down. This volume contains only disposable data.
-	if meta.Annotations == nil {
-		meta.Annotations = make(map[string]string)
-	}
-
-	const safeToEvict = "cluster-autoscaler.kubernetes.io/safe-to-evict-local-volumes"
-
-	annotation, ok := meta.Annotations[safeToEvict]
-
-	if !ok {
-		meta.Annotations[safeToEvict] = injectVolumeName
-		return
-	}
-
-	if !strings.Contains(annotation, injectVolumeName) {
-		volumes := volumes(annotation)
-		volumes = append(volumes, injectVolumeName)
-		meta.Annotations[safeToEvict] = strings.Join(volumes, ",")
-		return
-	}
-
-}
-
-func volumes(annotationValue string) []string {
-	result := []string{}
-
-	for _, v := range strings.Split(annotationValue, ",") {
-		v = strings.TrimSpace(v)
-		if v == "" {
-			continue
-		}
-		result = append(result, v)
-	}
-	return result
-}
-
-func (pm *PodMutator) addInitContainer(podSpec *corev1.PodSpec) {
-	if podSpec.InitContainers == nil {
-		podSpec.InitContainers = make([]corev1.Container, 0)
-	}
-	pos := slices.IndexFunc(podSpec.InitContainers, func(c corev1.Container) bool {
-		return c.Name == initContainerName
-	})
-
-	initContainer := pm.createInitContainer(podSpec)
-	if pos < 0 {
-		podSpec.InitContainers = append(podSpec.InitContainers, *initContainer)
-	} else {
-		podSpec.InitContainers[pos] = *initContainer
-	}
-}
-
-func (pm *PodMutator) createInitContainer(podSpec *corev1.PodSpec) *corev1.Container {
-	nonSystemUserGroup := int64(10_000)
-	privileged := false
-	allowEscalate := false
-	readOnlyFS := true
-
-	initContainerUser := &nonSystemUserGroup
-	initContainerGroup := &nonSystemUserGroup
-
-	securityContext := podSpec.SecurityContext
-	if securityContext == nil {
-		securityContext = &corev1.PodSecurityContext{}
-	}
-	if securityContext.FSGroup != nil {
-		initContainerUser = securityContext.FSGroup
-		initContainerGroup = securityContext.FSGroup
-	}
-
-	initContainer := &corev1.Container{
-		Name:  initContainerName,
-		Image: injectorImage,
-		SecurityContext: &corev1.SecurityContext{
-			Privileged:               &privileged,
-			AllowPrivilegeEscalation: &allowEscalate,
-			ReadOnlyRootFilesystem:   &readOnlyFS,
-			RunAsNonRoot:             securityContext.RunAsNonRoot,
-			RunAsUser:                initContainerUser,
-			RunAsGroup:               initContainerGroup,
-			SeccompProfile: &corev1.SeccompProfile{
-				Type: corev1.SeccompProfileTypeRuntimeDefault,
-			},
-		},
-		VolumeMounts: []corev1.VolumeMount{
-			{
-				Name:      injectVolumeName,
-				ReadOnly:  false,
-				MountPath: internalMountPath,
-			},
-		},
-		ImagePullPolicy: "IfNotPresent", // TODO: needs config
-	}
-
-	return initContainer
 }
 
 func (pm *PodMutator) instrumentContainer(c *corev1.Container) {

@@ -12,6 +12,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	semconv "go.opentelemetry.io/otel/semconv/v1.38.0"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -32,39 +33,41 @@ func (pm *PodMutator) setResourceAttributes(container *corev1.Container, pod *co
 	cfg := pm.cfg.Injector.Webhook.Resource
 
 	// Extra resource attributes that don't have dedicated OTEL_INJECTOR_* variables
-	extraResAttrs := map[string]string{}
+	extraResAttrs := map[attribute.Key]string{}
 	for k, v := range cfg.Attributes {
-		extraResAttrs[k] = v
+		extraResAttrs[attribute.Key(k)] = v
 	}
 
-	setEnvVar(container, envOtelK8sContainerName, container.Name)
+	setEnvVar(container, envInjectorOtelK8sContainerName, container.Name)
 
-	// todo do we already have this info cached?
-	//pm.addParentResourceLabels(ctx, cfg.AddK8sUIDAttributes, ns, pod.ObjectMeta, k8sResources)
+	pm.addParentResourceLabels(cfg.AddK8sUIDAttributes, pod.ObjectMeta, extraResAttrs)
 
 	// Set K8s attributes from downwards API
-	setEnvVarFromFieldPath(container, envOtelK8sNamespaceName, "metadata.namespace")
-	setEnvVarFromFieldPath(container, envOtelK8sPodName, "metadata.name")
-	setEnvVarFromFieldPath(container, envOtelK8sNodeName, "spec.nodeName")
+	namespace := setEnvVarFromFieldPath(container, envInjectorOtelK8sNamespaceName, "metadata.namespace")
+	podName := setEnvVarFromFieldPath(container, envInjectorOtelK8sPodName, "metadata.name")
+	// node name has to be added to extra attributes as there is no dedicated OTEL_INJECTOR_* variable
+	extraResAttrs[semconv.K8SNodeNameKey] =
+		setEnvVarFromFieldPath(container, envOtelK8sNodeName, "spec.nodeName")
+
 	if cfg.AddK8sUIDAttributes {
-		setEnvVarFromFieldPath(container, envOtelK8sPodUID, "metadata.uid")
+		setEnvVarFromFieldPath(container, envInjectorOtelK8sPodUID, "metadata.uid")
 	}
 
 	// Set service attributes using dedicated env vars
-	setEnvVar(container, envOtelServiceNamespace, chooseServiceNamespace(pod, cfg.UseLabelsForResourceAttributes))
-	setEnvVar(container, envOtelServiceName, chooseServiceName(pod, cfg.UseLabelsForResourceAttributes, container))
-	setEnvVar(container, envOtelServiceVersion, chooseServiceVersion(pod, cfg.UseLabelsForResourceAttributes, container))
+	setEnvVar(container, envInjectorOtelServiceNamespace, chooseServiceNamespace(pod, cfg.UseLabelsForResourceAttributes, namespace))
+	setEnvVar(container, envInjectorOtelServiceName, chooseServiceName(pod, cfg.UseLabelsForResourceAttributes, podName, extraResAttrs))
+	setEnvVar(container, envInjectorOtelServiceVersion, chooseServiceVersion(pod, cfg.UseLabelsForResourceAttributes, container))
 
 	// Service instance ID is added to extra attributes since it uses pod name reference
-	serviceInstanceId := createServiceInstanceId(pod, container.Name)
+	serviceInstanceId := createServiceInstanceId(pod, namespace, podName, container.Name)
 	if serviceInstanceId != "" {
-		extraResAttrs[string(semconv.ServiceInstanceIDKey)] = serviceInstanceId
+		extraResAttrs[semconv.ServiceInstanceIDKey] = serviceInstanceId
 	}
 
 	// attributes from the pod annotations have the highest precedence
 	for k, v := range pod.GetAnnotations() {
 		if strings.HasPrefix(k, ResourceAttributeAnnotationPrefix) {
-			extraResAttrs[strings.TrimPrefix(k, ResourceAttributeAnnotationPrefix)] = v
+			extraResAttrs[attribute.Key(strings.TrimPrefix(k, ResourceAttributeAnnotationPrefix))] = v
 		}
 	}
 
@@ -97,7 +100,7 @@ func (pm *PodMutator) setResourceAttributes(container *corev1.Container, pod *co
 	//}
 
 	if pm.cfg.Metrics.Features.AnySpanMetrics() {
-		extraResAttrs[string(attr.SkipSpanMetrics.OTEL())] = "true"
+		extraResAttrs[attr.SkipSpanMetrics.OTEL()] = "true"
 	}
 
 	// Set extra resource attributes if any exist
@@ -108,42 +111,35 @@ func (pm *PodMutator) setResourceAttributes(container *corev1.Container, pod *co
 				resourceAttributeList,
 				fmt.Sprintf("%s=%s", resourceAttributeKey, extraResAttrs[resourceAttributeKey]))
 		}
-		setEnvVar(container, envOtelExtraResourceAttrs, strings.Join(resourceAttributeList, ","))
+		setEnvVar(container, envInjectorOtelExtraResourceAttrs, strings.Join(resourceAttributeList, ","))
 	}
-}
-
-func downwardsAPIRef(envVar string) string {
-	return fmt.Sprintf("$(%s)", envVar)
 }
 
 // chooseServiceName returns the service name to be used in the instrumentation.
 // See https://github.com/open-telemetry/semantic-conventions/blob/main/docs/non-normative/k8s-attributes.md#how-servicename-should-be-calculated
-func chooseServiceName(pod *corev1.Pod, useLabelsForResourceAttributes bool, resources map[string]string, container *corev1.Container) string {
+func chooseServiceName(pod *corev1.Pod, useLabelsForResourceAttributes bool, podName string, resources map[attribute.Key]string) string {
 	if name := chooseLabelOrAnnotation(pod, useLabelsForResourceAttributes, semconv.ServiceNameKey, LabelAppName); name != "" {
 		return name
 	}
-	if name := resources[string(semconv.K8SDeploymentNameKey)]; name != "" {
+	if name := resources[semconv.K8SDeploymentNameKey]; name != "" {
 		return name
 	}
-	if name := resources[string(semconv.K8SReplicaSetNameKey)]; name != "" {
+	if name := resources[semconv.K8SReplicaSetNameKey]; name != "" {
 		return name
 	}
-	if name := resources[string(semconv.K8SStatefulSetNameKey)]; name != "" {
+	if name := resources[semconv.K8SStatefulSetNameKey]; name != "" {
 		return name
 	}
-	if name := resources[string(semconv.K8SDaemonSetNameKey)]; name != "" {
+	if name := resources[semconv.K8SDaemonSetNameKey]; name != "" {
 		return name
 	}
-	if name := resources[string(semconv.K8SCronJobNameKey)]; name != "" {
+	if name := resources[semconv.K8SCronJobNameKey]; name != "" {
 		return name
 	}
-	if name := resources[string(semconv.K8SJobNameKey)]; name != "" {
+	if name := resources[semconv.K8SJobNameKey]; name != "" {
 		return name
 	}
-	if name := resources[string(semconv.K8SPodNameKey)]; name != "" {
-		return name
-	}
-	return container.Name
+	return podName
 }
 
 // chooseLabelOrAnnotation returns the value of the label or annotation with the given key.
@@ -181,14 +177,12 @@ func chooseServiceVersion(pod *corev1.Pod, useLabelsForResourceAttributes bool, 
 
 // chooseServiceNamespace returns the service.namespace to be used in the instrumentation.
 // See https://github.com/open-telemetry/semantic-conventions/blob/main/docs/non-normative/k8s-attributes.md#how-servicenamespace-should-be-calculated
-func chooseServiceNamespace(pod *corev1.Pod, useLabelsForResourceAttributes bool) string {
+func chooseServiceNamespace(pod *corev1.Pod, useLabelsForResourceAttributes bool, namespaceName string) string {
 	namespace := chooseLabelOrAnnotation(pod, useLabelsForResourceAttributes, semconv.ServiceNamespaceKey, nil)
 	if namespace != "" {
 		return namespace
 	}
-	// Return empty string to indicate we should not set service.namespace
-	// since k8s.namespace.name will be set from downwards API
-	return ""
+	return namespaceName
 }
 
 var cannotRetrieveImage = errors.New("cannot retrieve image name")
@@ -225,9 +219,9 @@ func parseServiceVersionFromImage(image string) (string, error) {
 	return "", cannotRetrieveImage
 }
 
-// createServiceInstanceId returns the service.instance.id to be used in the instrumentation.
+// chooseServiceInstanceId returns the service.instance.id to be used in the instrumentation.
 // See https://github.com/open-telemetry/semantic-conventions/blob/main/docs/non-normative/k8s-attributes.md#how-serviceinstanceid-should-be-calculated
-func createServiceInstanceId(pod *corev1.Pod, containerName string) string {
+func createServiceInstanceId(pod *corev1.Pod, namespaceName, podName, containerName string) string {
 	// Do not use labels for service instance id,
 	// because multiple containers in the same pod would get the same service instance id,
 	// which violates the uniqueness requirement of service instance id -
@@ -238,13 +232,15 @@ func createServiceInstanceId(pod *corev1.Pod, containerName string) string {
 		return serviceInstanceId
 	}
 
-	// Build service instance ID using environment variable references from downwards API
-	// The injector will expand these references at runtime
-	return fmt.Sprintf("$(%s).$(%s).%s", envOtelK8sNamespaceName, envOtelK8sPodName, containerName)
+	if namespaceName != "" && podName != "" && containerName != "" {
+		resNames := []string{namespaceName, podName, containerName}
+		serviceInstanceId = strings.Join(resNames, ".")
+	}
+	return ""
 }
 
 // setEnvVarFromFieldPath is a helper function that sets an environment variable from a Kubernetes downwards API field path
-func setEnvVarFromFieldPath(container *corev1.Container, envVarName, fieldPath string) {
+func setEnvVarFromFieldPath(container *corev1.Container, envVarName, fieldPath string) string {
 	container.Env = append(container.Env, corev1.EnvVar{
 		Name: envVarName,
 		ValueFrom: &corev1.EnvVarSource{
@@ -253,80 +249,83 @@ func setEnvVarFromFieldPath(container *corev1.Container, envVarName, fieldPath s
 			},
 		},
 	})
+	return fmt.Sprintf("$(%s)", envVarName)
 }
 
-//func (pm *PodMutator) addParentResourceLabels(ctx context.Context, uid bool, ns corev1.Namespace, objectMeta metav1.ObjectMeta, resources map[attribute.Key]string) {
-//	for _, owner := range objectMeta.OwnerReferences {
-//		switch strings.ToLower(owner.Kind) {
-//		case "replicaset":
-//			resources[semconv.K8SReplicaSetNameKey] = owner.Name
-//			if uid {
-//				resources[semconv.K8SReplicaSetUIDKey] = string(owner.UID)
-//			}
-//			// parent of ReplicaSet is e.g. Deployment which we are interested to know
-//			rs := appsv1.ReplicaSet{}
-//			nsn := types.NamespacedName{Namespace: ns.Name, Name: owner.Name}
-//			backOff := wait.Backoff{Duration: 10 * time.Millisecond, Factor: 1.5, Jitter: 0.1, Steps: 20, Cap: 2 * time.Second}
-//
-//			checkError := func(err error) bool {
-//				return apierrors.IsNotFound(err)
-//			}
-//
-//			getReplicaSet := func() error {
-//				return i.client.Get(ctx, nsn, &rs)
-//			}
-//
-//			// use a retry loop to get the Deployment. A single call to client.get fails occasionally
-//			err := retry.OnError(backOff, checkError, getReplicaSet)
-//			if err != nil {
-//				i.logger.Error(err, "failed to get replicaset", "replicaset", nsn.Name, "namespace", nsn.Namespace)
-//			}
-//			i.addParentResourceLabels(ctx, uid, ns, rs.ObjectMeta, resources)
-//		case "deployment":
-//			resources[semconv.K8SDeploymentNameKey] = owner.Name
-//			if uid {
-//				resources[semconv.K8SDeploymentUIDKey] = string(owner.UID)
-//			}
-//		case "statefulset":
-//			resources[semconv.K8SStatefulSetNameKey] = owner.Name
-//			if uid {
-//				resources[semconv.K8SStatefulSetUIDKey] = string(owner.UID)
-//			}
-//		case "daemonset":
-//			resources[semconv.K8SDaemonSetNameKey] = owner.Name
-//			if uid {
-//				resources[semconv.K8SDaemonSetUIDKey] = string(owner.UID)
-//			}
-//		case "job":
-//			resources[semconv.K8SJobNameKey] = owner.Name
-//			if uid {
-//				resources[semconv.K8SJobUIDKey] = string(owner.UID)
-//			}
-//
-//			// parent of Job can be CronJob which we are interested to know
-//			j := batchv1.Job{}
-//			nsn := types.NamespacedName{Namespace: ns.Name, Name: owner.Name}
-//			backOff := wait.Backoff{Duration: 10 * time.Millisecond, Factor: 1.5, Jitter: 0.1, Steps: 20, Cap: 2 * time.Second}
-//
-//			checkError := func(err error) bool {
-//				return apierrors.IsNotFound(err)
-//			}
-//
-//			getJob := func() error {
-//				return i.client.Get(ctx, nsn, &j)
-//			}
-//
-//			// use a retry loop to get the Job. A single call to client.get fails occasionally
-//			err := retry.OnError(backOff, checkError, getJob)
-//			if err != nil {
-//				i.logger.Error(err, "failed to get job", "job", nsn.Name, "namespace", nsn.Namespace)
-//			}
-//			i.addParentResourceLabels(ctx, uid, ns, j.ObjectMeta, resources)
-//		case "cronjob":
-//			resources[semconv.K8SCronJobNameKey] = owner.Name
-//			if uid {
-//				resources[semconv.K8SCronJobUIDKey] = string(owner.UID)
-//			}
-//		}
-//	}
-//}
+func (pm *PodMutator) addParentResourceLabels(uid bool, objectMeta metav1.ObjectMeta, resources map[attribute.Key]string) {
+	for _, owner := range objectMeta.OwnerReferences {
+		switch strings.ToLower(owner.Kind) {
+		case "replicaset":
+			resources[semconv.K8SReplicaSetNameKey] = owner.Name
+			if uid {
+				resources[semconv.K8SReplicaSetUIDKey] = string(owner.UID)
+			}
+			// parent of ReplicaSet is e.g. Deployment which we are interested to know
+			// todo
+			//rs := appsv1.ReplicaSet{}
+			//nsn := types.NamespacedName{Namespace: ns.Name, Name: owner.Name}
+			//backOff := wait.Backoff{Duration: 10 * time.Millisecond, Factor: 1.5, Jitter: 0.1, Steps: 20, Cap: 2 * time.Second}
+			//
+			//checkError := func(err error) bool {
+			//	return apierrors.IsNotFound(err)
+			//}
+			//
+			//getReplicaSet := func() error {
+			//	return i.client.Get(ctx, nsn, &rs)
+			//}
+			//
+			//// use a retry loop to get the Deployment. A single call to client.get fails occasionally
+			//err := retry.OnError(backOff, checkError, getReplicaSet)
+			//if err != nil {
+			//	i.logger.Error(err, "failed to get replicaset", "replicaset", nsn.Name, "namespace", nsn.Namespace)
+			//}
+			//i.addParentResourceLabels(ctx, uid, ns, rs.ObjectMeta, resources)
+		case "deployment":
+			resources[semconv.K8SDeploymentNameKey] = owner.Name
+			if uid {
+				resources[semconv.K8SDeploymentUIDKey] = string(owner.UID)
+			}
+		case "statefulset":
+			resources[semconv.K8SStatefulSetNameKey] = owner.Name
+			if uid {
+				resources[semconv.K8SStatefulSetUIDKey] = string(owner.UID)
+			}
+		case "daemonset":
+			resources[semconv.K8SDaemonSetNameKey] = owner.Name
+			if uid {
+				resources[semconv.K8SDaemonSetUIDKey] = string(owner.UID)
+			}
+		case "job":
+			resources[semconv.K8SJobNameKey] = owner.Name
+			if uid {
+				resources[semconv.K8SJobUIDKey] = string(owner.UID)
+			}
+
+			// parent of Job can be CronJob which we are interested to know
+			// todo
+			//j := batchv1.Job{}
+			//nsn := types.NamespacedName{Namespace: ns.Name, Name: owner.Name}
+			//backOff := wait.Backoff{Duration: 10 * time.Millisecond, Factor: 1.5, Jitter: 0.1, Steps: 20, Cap: 2 * time.Second}
+			//
+			//checkError := func(err error) bool {
+			//	return apierrors.IsNotFound(err)
+			//}
+			//
+			//getJob := func() error {
+			//	return i.client.Get(ctx, nsn, &j)
+			//}
+			//
+			//// use a retry loop to get the Job. A single call to client.get fails occasionally
+			//err := retry.OnError(backOff, checkError, getJob)
+			//if err != nil {
+			//	i.logger.Error(err, "failed to get job", "job", nsn.Name, "namespace", nsn.Namespace)
+			//}
+			//i.addParentResourceLabels(ctx, uid, ns, j.ObjectMeta, resources)
+		case "cronjob":
+			resources[semconv.K8SCronJobNameKey] = owner.Name
+			if uid {
+				resources[semconv.K8SCronJobUIDKey] = string(owner.UID)
+			}
+		}
+	}
+}

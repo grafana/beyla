@@ -35,21 +35,21 @@ const (
 	// this value is hardcoded in the copy script and the injector config
 	internalMountPath = "/__otel_sdk_auto_instrumentation__"
 
-	envVarLdPreloadName             = "LD_PRELOAD"
-	envVarLdPreloadValue            = internalMountPath + "/injector/libotelinject.so"
-	envOtelInjectorConfigFileName   = "OTEL_INJECTOR_CONFIG_FILE"
-	envOtelInjectorConfigFileValue  = internalMountPath + "/injector/otelinject.conf"
-	envOtelExporterOtlpEndpointName = "OTEL_EXPORTER_OTLP_ENDPOINT"
-	envOtelExporterOtlpProtocolName = "OTEL_EXPORTER_OTLP_PROTOCOL"
-	envOtelExtraResourceAttrs       = "OTEL_INJECTOR_RESOURCE_ATTRIBUTES"
-	envOtelServiceName              = "OTEL_INJECTOR_SERVICE_NAME"
-	envOtelServiceVersion           = "OTEL_INJECTOR_SERVICE_VERSION"
-	envOtelServiceNamespace         = "OTEL_INJECTOR_SERVICE_NAMESPACE"
-	envOtelK8sNamespaceName         = "OTEL_INJECTOR_K8S_NAMESPACE_NAME"
-	envOtelK8sPodName               = "OTEL_INJECTOR_K8S_POD_NAME"
-	envOtelK8sPodUID                = "OTEL_INJECTOR_K8S_POD_UID"
-	envOtelK8sContainerName         = "OTEL_INJECTOR_K8S_CONTAINER_NAME"
-	envOtelK8sNodeName              = "OTEL_INJECTOR_K8S_NODE_NAME"
+	envVarLdPreloadName               = "LD_PRELOAD"
+	envVarLdPreloadValue              = internalMountPath + "/injector/libotelinject.so"
+	envOtelInjectorConfigFileName     = "OTEL_INJECTOR_CONFIG_FILE"
+	envOtelInjectorConfigFileValue    = internalMountPath + "/injector/otelinject.conf"
+	envOtelExporterOtlpEndpointName   = "OTEL_EXPORTER_OTLP_ENDPOINT"
+	envOtelExporterOtlpProtocolName   = "OTEL_EXPORTER_OTLP_PROTOCOL"
+	envInjectorOtelExtraResourceAttrs = "OTEL_INJECTOR_RESOURCE_ATTRIBUTES"
+	envInjectorOtelServiceName        = "OTEL_INJECTOR_SERVICE_NAME"
+	envInjectorOtelServiceVersion     = "OTEL_INJECTOR_SERVICE_VERSION"
+	envInjectorOtelServiceNamespace   = "OTEL_INJECTOR_SERVICE_NAMESPACE"
+	envInjectorOtelK8sNamespaceName   = "OTEL_INJECTOR_K8S_NAMESPACE_NAME"
+	envInjectorOtelK8sPodName         = "OTEL_INJECTOR_K8S_POD_NAME"
+	envInjectorOtelK8sPodUID          = "OTEL_INJECTOR_K8S_POD_UID"
+	envInjectorOtelK8sContainerName   = "OTEL_INJECTOR_K8S_CONTAINER_NAME"
+	envOtelK8sNodeName                = "OTEL_RESOURCE_ATTRIBUTES_NODE_NAME" // NOT supported in the injector yet
 )
 
 func init() {

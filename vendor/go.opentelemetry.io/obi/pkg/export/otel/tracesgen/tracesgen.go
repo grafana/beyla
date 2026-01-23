@@ -311,6 +311,10 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 			request.HTTPRequestBodySize(int(span.RequestBodyLength())),
 			request.HTTPResponseBodySize(span.ResponseBodyLength()),
 		}
+		scheme := request.HTTPScheme(span)
+		if scheme != "" {
+			attrs = append(attrs, semconv.URLScheme(scheme))
+		}
 		if span.Route != "" {
 			attrs = append(attrs, semconv.HTTPRoute(span.Route))
 		}

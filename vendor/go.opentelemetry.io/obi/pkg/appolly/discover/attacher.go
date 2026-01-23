@@ -174,10 +174,12 @@ func (ta *traceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 		// gets all the possible supported tracers for a go program, and filters out
 		// those whose symbols are not present in the ELF functions list
 		if ta.Cfg.Discovery.SkipGoSpecificTracers || ie.InstrumentationError != nil || ie.Offsets == nil {
-			if ie.InstrumentationError != nil {
-				ta.log.Warn("Unsupported Go program detected, using generic instrumentation", "error", ie.InstrumentationError)
-			} else if ie.Offsets == nil {
-				ta.log.Warn("Go program with null offsets detected, using generic instrumentation")
+			if !ta.Cfg.Discovery.SkipGoSpecificTracers {
+				if ie.InstrumentationError != nil {
+					ta.log.Warn("Unsupported Go program detected, using generic instrumentation", "error", ie.InstrumentationError)
+				} else if ie.Offsets == nil {
+					ta.log.Warn("Go program with null offsets detected, using generic instrumentation")
+				}
 			}
 			if ta.reusableTracer != nil {
 				// We need to do more than monitor PIDs. It's possible that this new

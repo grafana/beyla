@@ -10,6 +10,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/otel"
 	"go.opentelemetry.io/obi/pkg/export/prom"
 	"go.opentelemetry.io/obi/pkg/filter"
+	msgh "go.opentelemetry.io/obi/pkg/internal/helpers/msg"
 	"go.opentelemetry.io/obi/pkg/internal/netolly/ebpf"
 	"go.opentelemetry.io/obi/pkg/internal/netolly/export"
 	"go.opentelemetry.io/obi/pkg/internal/netolly/flow"
@@ -43,48 +44,41 @@ func (f *Flows) buildPipeline(ctx context.Context) (*swarm.Runner, error) {
 
 	swi := &swarm.Instancer{}
 	// Start nodes: those generating flow records (reading them from eBPF)
-	ebpfFlows := msg.NewQueue[[]*ebpf.Record](
-		msg.ChannelBufferLen(f.cfg.ChannelBufferLen),
-		msg.Name("ebpfFlows"),
-	)
+	ebpfFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, "ebpfFlows")
 	swi.Add(swarm.DirectInstance(newMapTracer(f, ebpfFlows)), swarm.WithID("MapTracer"))
 	swi.Add(swarm.DirectInstance(newRingBufTracer(f, ebpfFlows)), swarm.WithID("RingBufTracer"))
-
-	newQueue := func(name string) *msg.Queue[[]*ebpf.Record] {
-		return msg.NewQueue[[]*ebpf.Record](msg.ChannelBufferLen(f.cfg.ChannelBufferLen), msg.Name(name))
-	}
 
 	// Middle nodes: transforming flow records and passing them to the next stage in the pipeline.
 	// Many of the nodes here are not mandatory. It's decision of each InstanceFunc to decide
 	// whether the node needs to be instantiated or just bypass their input/output channels.
-	protocolFilteredEbpfFlows := msg.NewQueue[[]*ebpf.Record](msg.ChannelBufferLen(f.cfg.ChannelBufferLen))
+	protocolFilteredEbpfFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, "protocolFilteredEbpfFlows")
 	swi.Add(flow.ProtocolFilterProvider(f.cfg.NetworkFlows.Protocols, f.cfg.NetworkFlows.ExcludeProtocols,
 		ebpfFlows, protocolFilteredEbpfFlows), swarm.WithID("ProtocolFilter"))
 
-	dedupedEBPFFlows := newQueue("dedupedEBPFFlows")
+	dedupedEBPFFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, "dedupedEBPFFlows")
 	swi.Add(flow.DeduperProvider(&flow.Deduper{
 		Type:               f.cfg.NetworkFlows.Deduper,
 		FCTTL:              f.cfg.NetworkFlows.DeduperFCTTL,
 		CacheActiveTimeout: f.cfg.NetworkFlows.CacheActiveTimeout,
 	}, protocolFilteredEbpfFlows, dedupedEBPFFlows), swarm.WithID("FlowDeduper"))
 
-	kubeDecoratedFlows := newQueue("kubeDecoratedFlows")
+	kubeDecoratedFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, "kubeDecoratedFlows")
 	swi.Add(k8s.MetadataDecoratorProvider(ctx, &f.cfg.Attributes.Kubernetes, f.ctxInfo.K8sInformer,
 		dedupedEBPFFlows, kubeDecoratedFlows), swarm.WithID("K8sMetadataDecorator"))
 
-	dnsDecoratedFlows := newQueue("dnsDecoratedFlows")
+	dnsDecoratedFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, "dnsDecoratedFlows")
 	swi.Add(flow.ReverseDNSProvider(&f.cfg.NetworkFlows.ReverseDNS, kubeDecoratedFlows, dnsDecoratedFlows),
 		swarm.WithID("ReverseDNS"))
 
-	geoIPDecoratedFlows := newQueue("geoIPDecoratedFlows")
+	geoIPDecoratedFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, "geoIPDecoratedFlows")
 	swi.Add(flow.GeoIPProvider(&f.cfg.NetworkFlows.GeoIP,
 		dnsDecoratedFlows, geoIPDecoratedFlows), swarm.WithID("GeoIPDecorator"))
 
-	cidrDecoratedFlows := newQueue("cidrDecoratedFlows")
+	cidrDecoratedFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, "cidrDecoratedFlows")
 	swi.Add(cidr.DecoratorProvider(f.cfg.NetworkFlows.CIDRs, geoIPDecoratedFlows, cidrDecoratedFlows),
 		swarm.WithID("CIDRDecorator"))
 
-	decoratedFlows := newQueue("decoratedFlows")
+	decoratedFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, "decoratedFlows")
 	swi.Add(func(_ context.Context) (swarm.RunFunc, error) {
 		// If deduper is enabled, we know that interfaces are unset.
 		// As an optimization, we just pass here an empty-string interface namer
@@ -99,7 +93,7 @@ func (f *Flows) buildPipeline(ctx context.Context) (*swarm.Runner, error) {
 
 	filteredFlows := f.ctxInfo.OverrideNetExportQueue
 	if filteredFlows == nil {
-		filteredFlows = newQueue("filteredFlows")
+		filteredFlows = msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, "filteredFlows")
 	}
 	swi.Add(filter.ByAttribute(f.cfg.Filters.Network, nil, selectorCfg.ExtraGroupAttributesCfg, ebpf.RecordStringGetters, decoratedFlows, filteredFlows),
 		swarm.WithID("AttributeFilter"))

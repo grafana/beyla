@@ -66,7 +66,7 @@ func RunBeyla(ctx context.Context, cfg *beyla.Config) error {
 
 	if webhookEnabled {
 		g.Go(func() error {
-			if err := setupWebhook(ctx, cfg); err != nil {
+			if err := setupWebhook(ctx, ctxInfo, cfg); err != nil {
 				return fmt.Errorf("setupWebhook: %w", err)
 			}
 			return nil
@@ -126,10 +126,10 @@ func setupNetO11y(ctx context.Context, ctxInfo *global.ContextInfo, cfg *beyla.C
 	return nil
 }
 
-func setupWebhook(ctx context.Context, cfg *beyla.Config) error {
+func setupWebhook(ctx context.Context, ctxInfo *global.ContextInfo, cfg *beyla.Config) error {
 	slog.Info("starting Beyla mutating webhook server", "port", cfg.Injector.Webhook.Port)
 
-	server, err := webhook.NewServer(cfg)
+	server, err := webhook.NewServer(cfg, ctxInfo)
 	if err != nil {
 		return err
 	}

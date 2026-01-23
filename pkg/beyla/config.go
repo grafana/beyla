@@ -218,8 +218,7 @@ type HostIDConfig struct {
 }
 
 type SDKInject struct {
-	Services   services.RegexDefinitionCriteria `yaml:"services"`
-	Instrument services.GlobDefinitionCriteria  `yaml:"instrument"`
+	Instrument services.GlobDefinitionCriteria `yaml:"instrument"`
 	// Webhook configuration for a mutating admission controller
 	Webhook WebhookConfig `yaml:"webhook"`
 }

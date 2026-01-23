@@ -37,19 +37,23 @@ rules:
     resources: ["services"]
     # list services is needed by network-policy beyla.
     verbs: ["list", "watch", "get"]
-  - apiGroups: ["*"]
+  - apiGroups: ["apps"]
     resources:
       [
         "deployments",
         "replicasets",
         "statefulsets",
         "daemonsets",
-        "jobs",
-        "cronjobs",
-        "replicationcontrollers",
       ]
-    # Required to retrieve the owner references used by the seccomp beyla.
+    # Required to retrieve the owner references and patch deployments for restart
+    verbs: ["get", "list", "watch", "patch"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
     verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["replicationcontrollers"]
+    verbs: ["get", "list", "watch"]
+    # Required to retrieve the owner references used by the seccomp beyla.
   - apiGroups: ["security-profiles-operator.x-k8s.io"]
     resources: ["seccompprofiles"]
     # Required for integration with the Kubernetes Security Profiles Operator

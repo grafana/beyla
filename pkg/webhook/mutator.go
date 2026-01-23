@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
+	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	admissionv1 "k8s.io/api/admission/v1"
@@ -93,6 +94,21 @@ func errorResponse(admResponse *admissionv1.AdmissionResponse, message string) {
 	admResponse.Result = &metav1.Status{
 		Message: message,
 	}
+}
+
+func (pm *PodMutator) CanInstrument(kind svc.InstrumentableType) bool {
+	switch kind {
+	case svc.InstrumentableJava, svc.InstrumentableDotnet, svc.InstrumentableNodejs:
+		return true
+	}
+
+	return false
+}
+
+func (pm *PodMutator) AlreadyInstrumented(env map[string]string) bool {
+	_, ok := env[envVarLdPreloadName]
+
+	return ok
 }
 
 // HandleMutate is the HTTP handler for the mutating webhook

@@ -33,7 +33,7 @@ services:
       jaeger:
         condition: service_started
 
-  beyla:
+  autoinstrumenter:
     build:
       context: ../../..
       dockerfile: ./internal/test/integration/components/beyla/Dockerfile

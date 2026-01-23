@@ -73,6 +73,9 @@ SKIP_BEYLA_SPECIFIC_FILES=(
     'obi-config-multiexec-host.yml'
     # Prometheus config for promscrape test - OBI uses 'obi:8999', Beyla uses 'autoinstrumenter:8999'
     'prometheus-config-promscrape.yml'
+    # K8s manifests with Beyla-specific features (survey, process metrics, etc.)
+    '06-obi-daemonset.yml'
+    '06-obi-external-informer.yml'
 )
 
 # Beyla-specific component directories that should NOT be synced from OBI
@@ -196,9 +199,12 @@ TRANSFORMATIONS=(
     'ebpf-instrument:|autoinstrumenter:'
     'service:ebpf-instrument|service:autoinstrumenter'
     'image: hatest-ebpf-instrument|image: hatest-autoinstrumenter'
-    # Service names and image tags (obi: -> beyla:)
-    'obi:|beyla:'
-    'service:obi|service:beyla'
+    # Docker-compose service names (obi: -> autoinstrumenter:)
+    # This handles the YAML service definition lines like "  obi:"
+    'obi:|autoinstrumenter:'
+    'service:obi|service:autoinstrumenter'
+    # Image tags (obi:dev -> beyla:dev) - must be after service name transform
+    'image: autoinstrumenter:dev|image: beyla:dev'
     '// OBI |// Beyla '
     '# OBI |# Beyla '
     # Note: Copyright headers are stripped by normalize_content() instead of sed
@@ -271,14 +277,14 @@ REVERSE_TRANSFORMATIONS=(
     'hatest-javaautoinstrumenter|hatest-javaobi'
     'hatest-autoinstrumenter|hatest-obi'
     'image: hatest-autoinstrumenter|image: hatest-obi'
-    # Service names and image tags, but NOT test regex patterns like beyla:\d+
-    # Transform beyla: followed by lowercase letter (service names, image tags)
-    'beyla:d|obi:d'
-    'beyla:l|obi:l'
-    # Transform beyla: followed by number (port endpoints like beyla:8999)
+    # Docker-compose service names (autoinstrumenter: -> obi:)
+    'autoinstrumenter:|obi:'
+    'service:autoinstrumenter|service:obi'
+    # Image tags (beyla:dev -> obi:dev)
+    'image: beyla:dev|image: obi:dev'
+    # Port endpoints like beyla:8999 -> obi:8999 (not test patterns like beyla:\d+)
     'beyla:8|obi:8'
     'beyla:9|obi:9'
-    'service:autoinstrumenter|service:obi'
 )
 
 # =============================================================================

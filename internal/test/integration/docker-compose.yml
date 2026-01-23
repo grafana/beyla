@@ -1,3 +1,5 @@
+version: "3.8"
+
 services:
   testserver:
     build:
@@ -17,14 +19,6 @@ services:
     environment:
       LOG_LEVEL: DEBUG
       OTEL_RESOURCE_ATTRIBUTES: "service.version=1.0.0"
-
-  pingclient:
-    build:
-      context: ../../..
-      dockerfile: internal/test/integration/components/pingclient/Dockerfile
-    image: hatest-pingclient
-    environment:
-      LOG_LEVEL: DEBUG
 
   autoinstrumenter:
     build:

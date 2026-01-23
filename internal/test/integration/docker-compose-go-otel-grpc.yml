@@ -13,7 +13,7 @@ services:
       OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: "${APP_OTEL_METRICS_ENDPOINT}"
       OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: "${APP_OTEL_TRACES_ENDPOINT}"
 
-  beyla:
+  autoinstrumenter:
     build:
       context: ../../..
       dockerfile: ./internal/test/integration/components/beyla/Dockerfile
@@ -65,7 +65,7 @@ services:
       - "9464" # Prometheus exporter
       - "8888" # metrics endpoint
     depends_on:
-      beyla:
+      autoinstrumenter:
         condition: service_started
       prometheus:
         condition: service_started

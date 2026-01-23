@@ -16,7 +16,7 @@ services:
     environment:
       LOG_LEVEL: DEBUG
 
-  beyla:
+  autoinstrumenter:
     build:
       context: ../../..
       dockerfile: ./internal/test/integration/components/beyla/Dockerfile

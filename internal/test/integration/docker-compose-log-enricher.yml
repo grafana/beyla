@@ -9,7 +9,7 @@ services:
     ports:
       - "${TEST_SERVICE_PORTS}"
 
-  beyla:
+  autoinstrumenter:
     build:
       context: ../../..
       dockerfile: ./internal/test/integration/components/beyla/Dockerfile

@@ -1,14 +1,15 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: instrumenter-config
+  name: beyla-config
 data:
-  instrumenter-config.yml: |
+  beyla-config.yml: |
     prometheus_export:
       port: 8999
       features:
         - application
         - network
+        - application_process
         - application_span
         - application_service_graph
     attributes:
@@ -52,7 +53,7 @@ spec:
     metadata:
       labels:
         instrumentation: beyla
-        # this label will trigger a deletion of Beyla pods before tearing down
+        # this label will trigger a deletion of beyla pods before tearing down
         # kind, to force Beyla writing the coverage data
         teardown: delete
     spec:
@@ -62,9 +63,9 @@ spec:
       # we still need this for reading the HOST ID from the Kube Node
       serviceAccountName: beyla
       volumes:
-        - name: instrumenter-config
+        - name: beyla-config
           configMap:
-            name: instrumenter-config
+            name: beyla-config
         - name: testoutput
           persistentVolumeClaim:
             claimName: testoutput
@@ -72,13 +73,13 @@ spec:
         - name: beyla
           image: beyla:dev
           imagePullPolicy: Never # loaded into Kind from localhost
-          args: [ "--config=/config/instrumenter-config.yml" ]
+          args: [ "--config=/config/beyla-config.yml" ]
           securityContext:
             privileged: true
             runAsUser: 0
           volumeMounts:
             - mountPath: /config
-              name: instrumenter-config
+              name: beyla-config
             - mountPath: /testoutput
               name: testoutput
           env:
@@ -124,7 +125,7 @@ spec:
       name: k8s-cache
       labels:
         app: k8s-cache
-        # this label will trigger a deletion of Beyla pods before tearing down
+        # this label will trigger a deletion of beyla pods before tearing down
         # kind, to force Beyla writing the coverage data
         teardown: delete
     spec:

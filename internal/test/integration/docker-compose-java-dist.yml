@@ -9,7 +9,7 @@ services:
       LOG_LEVEL: DEBUG
       OTEL_SERVICE_NAME: testserver
 
-  beyla:
+  autoinstrumenter:
     build:
       context: ../../..
       dockerfile: ./internal/test/integration/components/beyla/Dockerfile-with-javaagent

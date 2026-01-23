@@ -63,9 +63,11 @@ func DefaultConfig() *Config {
 	def.Injector.Webhook = WebhookConfig{
 		Enable:   false,
 		Port:     8443,
+		Timeout:  30 * time.Second,
 		CertPath: "/etc/webhook/certs/tls.crt",
 		KeyPath:  "/etc/webhook/certs/tls.key",
 	}
+	def.Injector.HostPathVolumeDir = "/var/lib/beyla/instrumentation"
 	return def
 }
 
@@ -162,6 +164,9 @@ type Config struct {
 	// nolint:undoc
 	Topology spanscfg.Topology `yaml:"topology"`
 
+	// Experimental support for OpenTelemetry SDK injection, by using the OpenTelemetry Injector
+	// WARNING: This is purely experimental and undocumented feature and can be removed in the future without warning.
+	// nolint:undoc
 	Injector SDKInject `yaml:"injector"`
 
 	// cached equivalent for the OBI conversion
@@ -217,22 +222,44 @@ type HostIDConfig struct {
 	FetchTimeout time.Duration `yaml:"fetch_timeout" env:"BEYLA_HOST_ID_FETCH_TIMEOUT"`
 }
 
+// OpenTelemetry SDK injection for Kubernetes
+// WARNING:
+// This option is experimental, undocumented and might be removed in the future without warning.
+// For SDK instrumentation on Kubernetes, use the OpenTelemetry Operator instead.
 type SDKInject struct {
+	// OTel SDK instrumentation criteria
+	// nolint:undoc
 	Instrument services.GlobDefinitionCriteria `yaml:"instrument"`
 	// Webhook configuration for a mutating admission controller
+	// nolint:undoc
 	Webhook WebhookConfig `yaml:"webhook"`
+	// The host path volume directory which gets mounted into pods
+	// nolint:undoc
+	HostPathVolumeDir string `yaml:"host_path_volume"`
+	// The mutator will set the version on pods if this value is set
+	// This is used to let Beyla upgrade already instrumented services
+	// If the version doesn't match we still bounce existing pods
+	// nolint:undoc
+	SDKVersion string `yaml:"sdk_version"`
 }
 
 // WebhookConfig contains the configuration for the mutating webhook
 type WebhookConfig struct {
 	// Enable enables the mutating webhook server
+	// nolint:undoc
 	Enable bool `yaml:"enable" env:"BEYLA_WEBHOOK_ENABLE"`
 	// Port is the port the webhook server listens on
+	// nolint:undoc
 	Port int `yaml:"port" env:"BEYLA_WEBHOOK_LISTEN_PORT"`
 	// CertPath is the path to the TLS certificate file
+	// nolint:undoc
 	CertPath string `yaml:"cert_path" env:"BEYLA_WEBHOOK_CERT_PATH"`
 	// KeyPath is the path to the TLS key file
+	// nolint:undoc
 	KeyPath string `yaml:"key_path" env:"BEYLA_WEBHOOK_KEY_PATH"`
+	// Timeout is the time we wait for the TLS webhook to get initialized
+	// nolint:undoc
+	Timeout time.Duration `yaml:"timeout" env:"BEYLA_WEBHOOK_TIMEOUT"`
 }
 
 func (w WebhookConfig) Enabled() bool {

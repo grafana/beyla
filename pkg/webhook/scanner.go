@@ -8,24 +8,22 @@ import (
 	"strings"
 
 	"github.com/prometheus/procfs"
-	"github.com/shirou/gopsutil/v3/net"
 	"github.com/shirou/gopsutil/v3/process"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 )
 
-type PID int32
+type LocalProcessScanner struct {
+	logger *slog.Logger
+}
 
 type ProcessInfo struct {
-	pid            PID
-	ppid           PID
-	openPorts      []uint32
-	exePath        string
+	pid            int32
 	metadata       map[string]string
 	podLabels      map[string]string
 	podAnnotations map[string]string
+	env            map[string]string
 	kind           svc.InstrumentableType
 	containerInfo  *Info
-	env            map[string]string
 }
 
 var (
@@ -33,14 +31,14 @@ var (
 	pythonModule = regexp.MustCompile(`^(.*/)?python[\d.]*$`)
 )
 
-func wslog() *slog.Logger {
-	return slog.With("component", "webhook.Scanner")
+func NewInitialStateScanner() *LocalProcessScanner {
+	return &LocalProcessScanner{
+		logger: slog.With("component", "webhook.Scanner"),
+	}
 }
 
-func findExistingProcesses() (map[string][]*ProcessInfo, error) {
-	log := wslog()
-
-	procs, err := fetchProcessesWithPorts(log)
+func (s *LocalProcessScanner) FindExistingProcesses() (map[string][]*ProcessInfo, error) {
+	procs, err := fetchProcesses()
 	if err != nil {
 		return nil, err
 	}
@@ -48,32 +46,25 @@ func findExistingProcesses() (map[string][]*ProcessInfo, error) {
 	containers := map[string][]*ProcessInfo{}
 
 	for _, v := range procs {
-		log.Debug("found process", "process", v)
+		s.logger.Debug("found process", "process", v)
 		v.kind = findProcLanguageCheap(int32(v.pid))
 
 		proc, err := process.NewProcess(int32(v.pid))
 		if err != nil {
-			log.Debug("cannot find executable info", "pid", v.pid, "error", err)
+			s.logger.Debug("cannot find executable info", "pid", v.pid, "error", err)
 			continue
 		}
-		if exePath, err := proc.Exe(); err == nil {
-			v.exePath = exePath
-		}
-		if ppid, err := proc.Parent(); err == nil {
-			v.ppid = PID(ppid.Pid)
-		}
-
 		if env, err := proc.Environ(); err == nil {
 			v.env = envStrsToMap(env)
 		}
 
 		containerInfo, err := containerInfoForPID(uint32(v.pid))
 		if err != nil {
-			log.Debug("cannot find container info for pid", "pid", v.pid, "error", err)
+			s.logger.Debug("cannot find container info for pid", "pid", v.pid, "error", err)
 			continue
 		}
 		v.containerInfo = &containerInfo
-		log.Debug("final process state", "state", v)
+		s.logger.Debug("final process state", "state", v)
 
 		if existing, ok := containers[containerInfo.ContainerID]; ok {
 			existing = append(existing, v)
@@ -86,24 +77,15 @@ func findExistingProcesses() (map[string][]*ProcessInfo, error) {
 	return containers, nil
 }
 
-func fetchProcessesWithPorts(log *slog.Logger) (map[PID]*ProcessInfo, error) {
-	processes := map[PID]*ProcessInfo{}
+func fetchProcesses() (map[int32]*ProcessInfo, error) {
+	processes := map[int32]*ProcessInfo{}
 	pids, err := process.Pids()
 	if err != nil {
 		return nil, fmt.Errorf("can't get processes: %w", err)
 	}
 
 	for _, pid := range pids {
-		conns, err := net.ConnectionsPid("inet", pid)
-		if err != nil {
-			log.Debug("can't get connections for process. Skipping", "pid", pid, "error", err)
-			continue
-		}
-		var openPorts []uint32
-		for _, conn := range conns {
-			openPorts = append(openPorts, conn.Laddr.Port)
-		}
-		processes[PID(pid)] = &ProcessInfo{pid: PID(pid), openPorts: openPorts}
+		processes[pid] = &ProcessInfo{pid: pid}
 	}
 	return processes, nil
 }

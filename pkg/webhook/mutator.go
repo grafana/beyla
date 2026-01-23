@@ -28,11 +28,8 @@ var (
 )
 
 const (
-	injectVolumeName   = "otel-inject-instrumentation"
-	initContainerName  = "otel-inject-instrumentation"
-	injectVolumeSizeMB = 500
-	injectorImage      = "ghcr.io/grafana/beyla/inject-sdk-image:0.0.3"
-	// this value is hardcoded in the copy script and the injector config
+	injectVolumeName = "otel-inject-instrumentation"
+	// this value is hardcoded in the config file
 	internalMountPath = "/__otel_sdk_auto_instrumentation__"
 
 	envVarLdPreloadName             = "LD_PRELOAD"
@@ -270,12 +267,13 @@ func (pm *PodMutator) mountVolume(spec *corev1.PodSpec, meta *metav1.ObjectMeta)
 	}
 
 	// Use hostPath volume shared across all pods on the node
-	// The Beyla DaemonSet populates this directory once per node
+	// The Beyla DaemonSet deployment populates this directory once per node
+	// and it must be setup before Beyla launches
 	v := corev1.Volume{
 		Name: injectVolumeName,
 		VolumeSource: corev1.VolumeSource{
 			HostPath: &corev1.HostPathVolumeSource{
-				Path: "/var/lib/beyla/instrumentation",
+				Path: pm.cfg.Injector.HostPathVolumeDir,
 				Type: func() *corev1.HostPathType {
 					t := corev1.HostPathDirectoryOrCreate
 					return &t

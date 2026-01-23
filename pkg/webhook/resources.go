@@ -28,11 +28,9 @@ var (
 )
 
 func (pm *PodMutator) setResourceAttributes(meta *metav1.ObjectMeta, container *corev1.Container) {
-
-	// entries from the CRD have the lowest precedence - they are overridden by later values
 	cfg := pm.cfg.Injector.Resources
 
-	// Extra resource attributes that don't have dedicated OTEL_INJECTOR_* variables
+	// entries from the CRD have the lowest precedence - they are overridden by later values
 	extraResAttrs := map[attribute.Key]string{}
 	for k, v := range cfg.Attributes {
 		extraResAttrs[attribute.Key(k)] = v
@@ -42,7 +40,6 @@ func (pm *PodMutator) setResourceAttributes(meta *metav1.ObjectMeta, container *
 
 	pm.addParentResourceLabels(meta, extraResAttrs, cfg.AddK8sUIDAttributes)
 
-	// Set K8s attributes from downwards API
 	namespace := setEnvVarFromFieldPath(container, envInjectorOtelK8sNamespaceName, "metadata.namespace")
 	podName := setEnvVarFromFieldPath(container, envInjectorOtelK8sPodName, "metadata.name")
 	// node name has to be added to extra attributes as there is no dedicated OTEL_INJECTOR_* variable

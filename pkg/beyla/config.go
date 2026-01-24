@@ -241,7 +241,12 @@ type SDKInject struct {
 	// If the version doesn't match we still bounce existing pods
 	// nolint:undoc
 	SDKVersion string `yaml:"sdk_version"`
+	// The host mount path where the SDK copy init container copies the files.
+	// This is the root path, sdk_version is appended on top
+	// nolint:undoc
+	HostMountPath string `yaml:"host_mount_path"`
 	// Resource attributes related settings
+	// nolint:undoc
 	Resources SDKResource `yaml:"resources"`
 }
 
@@ -374,6 +379,10 @@ func (c *Config) Validate() error {
 
 		if c.Injector.SDKVersion == "" {
 			return ConfigError("sdk_version must be supplied for the Injector component and this version must match the version used in the SDK init container")
+		}
+
+		if c.Injector.HostMountPath == "" {
+			return ConfigError("host_mount_path must be supplied for the Injector component otherwise we cannot clean-up stale SDK versions")
 		}
 	}
 

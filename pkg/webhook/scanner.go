@@ -1,6 +1,7 @@
 package webhook
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -10,10 +11,12 @@ import (
 	"github.com/prometheus/procfs"
 	"github.com/shirou/gopsutil/v3/process"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
+	"golang.org/x/mod/semver"
 )
 
 type LocalProcessScanner struct {
-	logger *slog.Logger
+	logger           *slog.Logger
+	oldestSDKVersion string
 }
 
 type ProcessInfo struct {
@@ -26,6 +29,10 @@ type ProcessInfo struct {
 	containerInfo  *Info
 }
 
+const (
+	dummySDKVersion = "v999.999.999"
+)
+
 var (
 	rubyModule   = regexp.MustCompile(`^(.*/)?ruby[\d.]*$`)
 	pythonModule = regexp.MustCompile(`^(.*/)?python[\d.]*$`)
@@ -33,8 +40,17 @@ var (
 
 func NewInitialStateScanner() *LocalProcessScanner {
 	return &LocalProcessScanner{
-		logger: slog.With("component", "webhook.Scanner"),
+		logger:           slog.With("component", "webhook.Scanner"),
+		oldestSDKVersion: dummySDKVersion,
 	}
+}
+
+func (s *LocalProcessScanner) OldestSDKVersion() (string, error) {
+	if s.oldestSDKVersion == dummySDKVersion {
+		return "", errors.New("no SDK version found in processes")
+	}
+
+	return s.oldestSDKVersion, nil
 }
 
 func (s *LocalProcessScanner) FindExistingProcesses() (map[string][]*ProcessInfo, error) {
@@ -56,6 +72,11 @@ func (s *LocalProcessScanner) FindExistingProcesses() (map[string][]*ProcessInfo
 		}
 		if env, err := proc.Environ(); err == nil {
 			v.env = envStrsToMap(env)
+			if ver, ok := v.env[envVarSDKVersion]; ok && semver.IsValid(ver) {
+				if semver.Compare(ver, s.oldestSDKVersion) < 0 {
+					s.oldestSDKVersion = ver
+				}
+			}
 		}
 
 		containerInfo, err := containerInfoForPID(uint32(v.pid))

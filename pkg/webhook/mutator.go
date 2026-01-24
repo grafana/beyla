@@ -51,6 +51,7 @@ const (
 	envInjectorOtelK8sPodUID          = "OTEL_INJECTOR_K8S_POD_UID"
 	envInjectorOtelK8sContainerName   = "OTEL_INJECTOR_K8S_CONTAINER_NAME"
 	envOtelK8sNodeName                = "OTEL_RESOURCE_ATTRIBUTES_NODE_NAME" // NOT supported in the injector yet
+	envVarSDKVersion                  = "BEYLA_INJECTOR_SDK_VERSION"
 )
 
 func init() {
@@ -129,7 +130,12 @@ func (pm *PodMutator) AlreadyInstrumented(info *ProcessInfo) bool {
 	// Consult the labels, if we instrumented the pod, we'd have set the
 	// instrumented label.
 	if label, ok := info.podLabels[instrumentedLabel]; ok && label != "" {
-		return label == pm.cfg.Injector.SDKVersion || pm.cfg.Injector.SDKVersion == ""
+		return label == pm.cfg.Injector.SDKVersion
+	}
+
+	// this a duplicate of the check above, but done on environment variables
+	if ver, ok := info.env[envVarSDKVersion]; ok && ver != "" {
+		return ver == pm.cfg.Injector.SDKVersion
 	}
 
 	return false
@@ -281,7 +287,7 @@ func (pm *PodMutator) mutatePod(pod *corev1.Pod) bool {
 	// add a label with the version of the SDKs we've instrumented
 	version := pm.cfg.Injector.SDKVersion
 	if version == "" {
-		version = "unversioned"
+		panic("version must be set, did someone remove the check in the config?")
 	}
 
 	pm.addLabel(meta, instrumentedLabel, version)
@@ -405,6 +411,10 @@ func (pm *PodMutator) addEnvVars(meta *metav1.ObjectMeta, c *corev1.Container) {
 		c.Env = []corev1.EnvVar{}
 	}
 
+	// we set the SDK version on the environment variable so that
+	// we can tell on start, when we scan the processes of the oldest
+	// SDK version in use.
+	setEnvVar(c, envVarSDKVersion, pm.cfg.Injector.SDKVersion)
 	setEnvVar(c, envVarLdPreloadName, envVarLdPreloadValue)
 	setEnvVar(c, envOtelInjectorConfigFileName, envOtelInjectorConfigFileValue)
 	setEnvVar(c, envOtelExporterOtlpEndpointName, pm.endpoint)

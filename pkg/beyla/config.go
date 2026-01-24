@@ -9,6 +9,7 @@ import (
 
 	"github.com/caarlos0/env/v9"
 	otelconsumer "go.opentelemetry.io/collector/consumer"
+	"golang.org/x/mod/semver"
 	"gopkg.in/yaml.v3"
 
 	"go.opentelemetry.io/obi/pkg/appolly/services"
@@ -379,6 +380,8 @@ func (c *Config) Validate() error {
 
 		if c.Injector.SDKVersion == "" {
 			return ConfigError("sdk_version must be supplied for the Injector component and this version must match the version used in the SDK init container")
+		} else if !semver.IsValid(c.Injector.SDKVersion) {
+			return ConfigError("sdk_version must be in valid semantic versioning format, e.g. v0.0.1 (the v prefix is required)")
 		}
 
 		if c.Injector.HostMountPath == "" {

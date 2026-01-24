@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
@@ -17,6 +18,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/kube/kubecache/informer"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/transform"
+	"golang.org/x/mod/semver"
 )
 
 // Server represents the webhook server
@@ -162,6 +164,15 @@ func (s *Server) getInitialState(ctx context.Context) error {
 	}
 	s.initialState = initialState
 
+	if oldestSDK, err := s.scanner.OldestSDKVersion(); err != nil {
+		// we could be downgrading the SDK, check if the oldest version is not
+		// newer than what we are launching with now
+		if semver.Compare(oldestSDK, s.cfg.Injector.SDKVersion) > 0 {
+			oldestSDK = s.cfg.Injector.SDKVersion
+		}
+		s.cleanupOldInstrumentationVersions(s.cfg.Injector.HostMountPath, oldestSDK)
+	}
+
 	go store.Subscribe(s)
 
 	return nil
@@ -271,4 +282,41 @@ func (s *Server) addMetadata(pp *ProcessInfo, info *informer.ObjectMeta) *Proces
 		ret.metadata[transform.OwnerLabelName(owner.Kind).Prom()] = owner.Name
 	}
 	return ret
+}
+
+// cleanupOldInstrumentationVersions removes instrumentation directories
+// older than the specified minimum version
+func (s *Server) cleanupOldInstrumentationVersions(instrumentDir string, minVersion string) error {
+	if !semver.IsValid(minVersion) {
+		return fmt.Errorf("invalid minimum version: %s", minVersion)
+	}
+
+	entries, err := os.ReadDir(instrumentDir)
+	if err != nil {
+		return fmt.Errorf("failed to read directory %s: %w", instrumentDir, err)
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		version := entry.Name()
+
+		// Skip if the directory not a valid semver in the instrumentation volume
+		if !semver.IsValid(version) {
+			s.logger.Debug("ignoring directory in the instrumentation path", "dir", entry.Name())
+			continue
+		}
+
+		if semver.Compare(version, minVersion) < 0 {
+			dirPath := filepath.Join(instrumentDir, entry.Name())
+			if err := os.RemoveAll(dirPath); err != nil {
+				return fmt.Errorf("failed to remove directory %s: %w", dirPath, err)
+			}
+			s.logger.Info("Removed old instrumentation", "version", entry.Name())
+		}
+	}
+
+	return nil
 }

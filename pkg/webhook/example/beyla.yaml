@@ -86,7 +86,7 @@ data:
         key_path: /etc/webhook/certs/tls.key
       instrument:
         - k8s_namespace: "*"
-      sdk_version: 0.0.3
+      sdk_version: v0.0.3
       host_mount_path: /var/lib/beyla/instrumentation
     discovery:
       services:
@@ -146,7 +146,7 @@ spec:
           image: ghcr.io/grafana/beyla/inject-sdk-image:0.0.3
           env:
             - name: SDK_VERSION
-              value: "0.0.3"
+              value: "v0.0.3"
             - name: MOUNT_PATH
               value: "/var/lib/beyla/instrumentation"
           command: 

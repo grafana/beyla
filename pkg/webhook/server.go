@@ -314,7 +314,7 @@ func (s *Server) cleanupOldInstrumentationVersions(instrumentDir string, minVers
 			if err := os.RemoveAll(dirPath); err != nil {
 				return fmt.Errorf("failed to remove directory %s: %w", dirPath, err)
 			}
-			s.logger.Info("Removed old instrumentation", "version", entry.Name())
+			s.logger.Info("removed old instrumentation", "version", entry.Name())
 		}
 	}
 

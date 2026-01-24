@@ -121,7 +121,7 @@ func (pm *PodMutator) AlreadyInstrumented(info *ProcessInfo) bool {
 	}
 
 	if label, ok := info.podLabels[instrumentedLabel]; ok && label != "" {
-		return true
+		return label == pm.cfg.Injector.SDKVersion || pm.cfg.Injector.SDKVersion == ""
 	}
 
 	return false

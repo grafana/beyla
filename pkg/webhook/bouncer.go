@@ -26,8 +26,9 @@ func NewPodBouncer(ctxInfo *global.ContextInfo) (*PodBouncer, error) {
 	}
 
 	return &PodBouncer{
-		kubeClient: kubeClient,
-		logger:     slog.Default().With("component", "webhook.bouncer"),
+		kubeClient:         kubeClient,
+		logger:             slog.Default().With("component", "webhook.bouncer"),
+		bouncedDeployments: map[string]any{},
 	}, nil
 }
 

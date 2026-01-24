@@ -84,6 +84,9 @@ data:
         port: 8443
         cert_path: /etc/webhook/certs/tls.crt
         key_path: /etc/webhook/certs/tls.key
+      instrument:
+        - k8s_namespace: "*"
+      sdk_version: 0.0.3
     discovery:
       services:
         - open_ports: "3000"

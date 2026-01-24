@@ -169,6 +169,24 @@ func (s *Server) getInitialState(ctx context.Context) error {
 
 func (s *Server) ID() string { return "unique-webhook-server-id" }
 
+func (s *Server) restartDeployment(a *ProcessInfo) {
+	namespace := a.metadata[services.AttrNamespace]
+	deployment := a.metadata[attr.K8sDeploymentName.Prom()]
+
+	if !s.bouncer.CanBeBounced(namespace, deployment) {
+		s.logger.Debug("ignoring non kubernetes process", "info", a)
+		return
+	}
+	if s.bouncer.AlreadyBounced(namespace, deployment) {
+		s.logger.Debug("already restarted", "namespace", namespace, "deployment", deployment)
+		return
+	}
+
+	if err := s.bouncer.RestartDeployment(context.Background(), namespace, deployment); err != nil {
+		s.logger.Info("failed to restart pods", "error", err)
+	}
+}
+
 func (s *Server) On(event *informer.Event) error {
 	// ignoring updates on non-pod resources
 	if event.Resource == nil || event.GetResource().GetPod() == nil {
@@ -185,23 +203,16 @@ func (s *Server) On(event *informer.Event) error {
 				// It's important to check here for the SDK supported programming languages.
 				// Go would be the killer here, since many of the Kubernetes services are written in
 				// Go, and we don't want to say bounce coredns.
-				if s.mutator.CanInstrument(a.kind) && !s.mutator.AlreadyInstrumented(a) {
+				instrumented := s.mutator.AlreadyInstrumented(a)
+				if !instrumented && s.mutator.CanInstrument(a.kind) && !s.mutator.PreloadsSomethingElse(a) {
 					if s.matcher.MatchProcessInfo(a) {
-						namespace := a.metadata[services.AttrNamespace]
-						deployment := a.metadata[attr.K8sDeploymentName.Prom()]
-
-						if !s.bouncer.CanBeBounced(namespace, deployment) {
-							s.logger.Debug("ignoring non kubernetes process", "info", a)
-							continue
-						}
-						if s.bouncer.AlreadyBounced(namespace, deployment) {
-							s.logger.Debug("already restarted", "namespace", namespace, "deployment", deployment)
-							continue
-						}
-
-						if err := s.bouncer.RestartDeployment(context.Background(), namespace, deployment); err != nil {
-							s.logger.Info("failed to restart pods", "error", err)
-						}
+						s.restartDeployment(a)
+					}
+				} else if instrumented {
+					// If this pod was instrumented, but the new Beyla config says don't anymore
+					// we bounce the pods to undo the instrumentation
+					if !s.matcher.MatchProcessInfo(a) {
+						s.restartDeployment(a)
 					}
 				} else {
 					s.logger.Debug("ignoring process because of unsupported programming language", "info", a)

@@ -548,15 +548,17 @@ func TestAddParentResourceLabels(t *testing.T) {
 			meta: &metav1.ObjectMeta{
 				OwnerReferences: []metav1.OwnerReference{
 					{
-						Kind: "Job",
-						Name: "my-job",
-						UID:  "job-uid-202",
+						APIVersion: "batch/v1",
+						Kind:       "Job",
+						Name:       "my-job-202",
+						UID:        "job-uid-202",
 					},
 				},
 			},
 			includeUID: false,
 			expected: map[attribute.Key]string{
-				semconv.K8SJobNameKey: "my-job",
+				semconv.K8SJobNameKey:     "my-job-202",
+				semconv.K8SCronJobNameKey: "my-job",
 			},
 		},
 		{
@@ -594,20 +596,16 @@ func TestAddParentResourceLabels(t *testing.T) {
 			meta: &metav1.ObjectMeta{
 				OwnerReferences: []metav1.OwnerReference{
 					{
-						Kind: "ReplicaSet",
-						Name: "my-replicaset",
-						UID:  "rs-uid-456",
-					},
-					{
-						Kind: "Deployment",
-						Name: "my-deployment",
-						UID:  "deployment-uid-123",
+						APIVersion: "apps/v1",
+						Kind:       "ReplicaSet",
+						Name:       "my-deployment-1",
+						UID:        "rs-uid-456",
 					},
 				},
 			},
 			includeUID: false,
 			expected: map[attribute.Key]string{
-				semconv.K8SReplicaSetNameKey: "my-replicaset",
+				semconv.K8SReplicaSetNameKey: "my-deployment-1",
 				semconv.K8SDeploymentNameKey: "my-deployment",
 			},
 		},

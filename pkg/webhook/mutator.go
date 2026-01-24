@@ -13,7 +13,6 @@ import (
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
-	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/kube/kubecache/informer"
 	"go.opentelemetry.io/obi/pkg/transform"
@@ -37,13 +36,21 @@ const (
 	// this value is hardcoded in the config file
 	internalMountPath = "/__otel_sdk_auto_instrumentation__"
 
-	envVarLdPreloadName             = "LD_PRELOAD"
-	envVarLdPreloadValue            = internalMountPath + "/injector/libotelinject.so"
-	envOtelInjectorConfigFileName   = "OTEL_INJECTOR_CONFIG_FILE"
-	envOtelInjectorConfigFileValue  = internalMountPath + "/injector/otelinject.conf"
-	envOtelExporterOtlpEndpointName = "OTEL_EXPORTER_OTLP_ENDPOINT"
-	envOtelExporterOtlpProtocolName = "OTEL_EXPORTER_OTLP_PROTOCOL"
-	envOtelExtraResourceAttrs       = "OTEL_INJECTOR_RESOURCE_ATTRIBUTES"
+	envVarLdPreloadName               = "LD_PRELOAD"
+	envVarLdPreloadValue              = internalMountPath + "/injector/libotelinject.so"
+	envOtelInjectorConfigFileName     = "OTEL_INJECTOR_CONFIG_FILE"
+	envOtelInjectorConfigFileValue    = internalMountPath + "/injector/otelinject.conf"
+	envOtelExporterOtlpEndpointName   = "OTEL_EXPORTER_OTLP_ENDPOINT"
+	envOtelExporterOtlpProtocolName   = "OTEL_EXPORTER_OTLP_PROTOCOL"
+	envInjectorOtelExtraResourceAttrs = "OTEL_INJECTOR_RESOURCE_ATTRIBUTES"
+	envInjectorOtelServiceName        = "OTEL_INJECTOR_SERVICE_NAME"
+	envInjectorOtelServiceVersion     = "OTEL_INJECTOR_SERVICE_VERSION"
+	envInjectorOtelServiceNamespace   = "OTEL_INJECTOR_SERVICE_NAMESPACE"
+	envInjectorOtelK8sNamespaceName   = "OTEL_INJECTOR_K8S_NAMESPACE_NAME"
+	envInjectorOtelK8sPodName         = "OTEL_INJECTOR_K8S_POD_NAME"
+	envInjectorOtelK8sPodUID          = "OTEL_INJECTOR_K8S_POD_UID"
+	envInjectorOtelK8sContainerName   = "OTEL_INJECTOR_K8S_CONTAINER_NAME"
+	envOtelK8sNodeName                = "OTEL_RESOURCE_ATTRIBUTES_NODE_NAME" // NOT supported in the injector yet
 )
 
 func init() {
@@ -260,7 +267,7 @@ func (pm *PodMutator) mutatePod(pod *corev1.Pod) bool {
 			pm.logger.Warn("container already using LD_PRELOAD, ignoring...", "container", c.Name)
 			continue
 		}
-		pm.instrumentContainer(c)
+		pm.instrumentContainer(meta, c)
 	}
 
 	// add a label with the version of the SDKs we've instrumented
@@ -321,9 +328,9 @@ func (pm *PodMutator) mountVolume(spec *corev1.PodSpec, meta *metav1.ObjectMeta)
 	}
 }
 
-func (pm *PodMutator) instrumentContainer(c *corev1.Container) {
+func (pm *PodMutator) instrumentContainer(meta *metav1.ObjectMeta, c *corev1.Container) {
 	pm.addMount(c)
-	pm.addEnvVars(c)
+	pm.addEnvVars(meta, c)
 }
 
 func (pm *PodMutator) addMount(c *corev1.Container) {
@@ -370,66 +377,35 @@ func findEnvVar(c *corev1.Container, name string) (int, bool) {
 	return pos, pos >= 0
 }
 
-func setEnvVar(c *corev1.Container, envVar corev1.EnvVar) {
-	if pos, ok := findEnvVar(c, envVar.Name); !ok {
-		c.Env = append(c.Env, envVar)
-	} else {
-		c.Env[pos].ValueFrom = nil
-		c.Env[pos].Value = envVar.Value
+// setEnvVar is a helper function that sets an environment variable only if the value is not empty
+func setEnvVar(c *corev1.Container, envVarName, value string) {
+	if value != "" {
+		if pos, ok := findEnvVar(c, envVarName); !ok {
+			c.Env = append(c.Env, corev1.EnvVar{
+				Name:  envVarName,
+				Value: value,
+			})
+		} else {
+			c.Env[pos].ValueFrom = nil
+			c.Env[pos].Value = value
+		}
 	}
 }
 
-func (pm *PodMutator) addEnvVars(c *corev1.Container) {
+func (pm *PodMutator) addEnvVars(meta *metav1.ObjectMeta, c *corev1.Container) {
 	if c.Env == nil {
 		c.Env = []corev1.EnvVar{}
 	}
 
-	setEnvVar(c,
-		corev1.EnvVar{
-			Name:  envVarLdPreloadName,
-			Value: envVarLdPreloadValue,
-		},
-	)
+	setEnvVar(c, envVarLdPreloadName, envVarLdPreloadValue)
+	setEnvVar(c, envOtelInjectorConfigFileName, envOtelInjectorConfigFileValue)
+	setEnvVar(c, envOtelExporterOtlpEndpointName, pm.endpoint)
+	setEnvVar(c, envOtelExporterOtlpProtocolName, pm.proto)
 
-	setEnvVar(c,
-		corev1.EnvVar{
-			Name:  envOtelInjectorConfigFileName,
-			Value: envOtelInjectorConfigFileValue,
-		},
-	)
-
-	setEnvVar(c,
-		corev1.EnvVar{
-			Name:  envOtelExporterOtlpEndpointName,
-			Value: pm.endpoint,
-		},
-	)
-
-	if pm.proto != "" {
-		setEnvVar(c,
-			corev1.EnvVar{
-				Name:  envOtelExporterOtlpProtocolName,
-				Value: pm.proto,
-			},
-		)
-	}
-
-	if pm.cfg.Metrics.Features.AnySpanMetrics() {
-		setEnvVar(c,
-			corev1.EnvVar{
-				Name:  envOtelExtraResourceAttrs,
-				Value: string(attr.SkipSpanMetrics.OTEL()) + "=true",
-			},
-		)
-	}
+	pm.setResourceAttributes(meta, c)
 
 	for k, v := range pm.exportHeaders {
-		setEnvVar(c,
-			corev1.EnvVar{
-				Name:  k,
-				Value: v,
-			},
-		)
+		setEnvVar(c, k, v)
 	}
 
 	pm.logger.Info("env vars", "vars", c.Env)

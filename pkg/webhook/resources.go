@@ -28,11 +28,9 @@ var (
 )
 
 func (pm *PodMutator) setResourceAttributes(meta *metav1.ObjectMeta, container *corev1.Container) {
-
-	// entries from the CRD have the lowest precedence - they are overridden by later values
 	cfg := pm.cfg.Injector.Resources
 
-	// Extra resource attributes that don't have dedicated OTEL_INJECTOR_* variables
+	// entries from the CRD have the lowest precedence - they are overridden by later values
 	extraResAttrs := map[attribute.Key]string{}
 	for k, v := range cfg.Attributes {
 		extraResAttrs[attribute.Key(k)] = v
@@ -42,7 +40,6 @@ func (pm *PodMutator) setResourceAttributes(meta *metav1.ObjectMeta, container *
 
 	pm.addParentResourceLabels(meta, extraResAttrs, cfg.AddK8sUIDAttributes)
 
-	// Set K8s attributes from downwards API
 	namespace := setEnvVarFromFieldPath(container, envInjectorOtelK8sNamespaceName, "metadata.namespace")
 	podName := setEnvVarFromFieldPath(container, envInjectorOtelK8sPodName, "metadata.name")
 	// node name has to be added to extra attributes as there is no dedicated OTEL_INJECTOR_* variable
@@ -253,79 +250,37 @@ func setEnvVarFromFieldPath(container *corev1.Container, envVarName, fieldPath s
 }
 
 func (pm *PodMutator) addParentResourceLabels(meta *metav1.ObjectMeta, resources map[attribute.Key]string, includeUID bool) {
-	for _, owner := range meta.OwnerReferences {
-		switch strings.ToLower(owner.Kind) {
-		case "replicaset":
-			resources[semconv.K8SReplicaSetNameKey] = owner.Name
-			if includeUID {
-				resources[semconv.K8SReplicaSetUIDKey] = string(owner.UID)
-			}
-			// parent of ReplicaSet is e.g. Deployment which we are interested to know
-			// todo
-			//rs := appsv1.ReplicaSet{}
-			//nsn := types.NamespacedName{Namespace: ns.Name, Name: owner.Name}
-			//backOff := wait.Backoff{Duration: 10 * time.Millisecond, Factor: 1.5, Jitter: 0.1, Steps: 20, Cap: 2 * time.Second}
-			//
-			//checkError := func(err error) bool {
-			//	return apierrors.IsNotFound(err)
-			//}
-			//
-			//getReplicaSet := func() error {
-			//	return i.client.Get(ctx, nsn, &rs)
-			//}
-			//
-			//// use a retry loop to get the Deployment. A single call to client.get fails occasionally
-			//err := retry.OnError(backOff, checkError, getReplicaSet)
-			//if err != nil {
-			//	i.logger.Error(err, "failed to get replicaset", "replicaset", nsn.Name, "namespace", nsn.Namespace)
-			//}
-			//i.addParentResourceLabels(ctx, uid, ns, rs.ObjectMeta, resources)
-		case "deployment":
-			resources[semconv.K8SDeploymentNameKey] = owner.Name
-			if includeUID {
-				resources[semconv.K8SDeploymentUIDKey] = string(owner.UID)
-			}
-		case "statefulset":
-			resources[semconv.K8SStatefulSetNameKey] = owner.Name
-			if includeUID {
-				resources[semconv.K8SStatefulSetUIDKey] = string(owner.UID)
-			}
-		case "daemonset":
-			resources[semconv.K8SDaemonSetNameKey] = owner.Name
-			if includeUID {
-				resources[semconv.K8SDaemonSetUIDKey] = string(owner.UID)
-			}
-		case "job":
-			resources[semconv.K8SJobNameKey] = owner.Name
-			if includeUID {
-				resources[semconv.K8SJobUIDKey] = string(owner.UID)
-			}
-
-			// parent of Job can be CronJob which we are interested to know
-			// todo
-			//j := batchv1.Job{}
-			//nsn := types.NamespacedName{Namespace: ns.Name, Name: owner.Name}
-			//backOff := wait.Backoff{Duration: 10 * time.Millisecond, Factor: 1.5, Jitter: 0.1, Steps: 20, Cap: 2 * time.Second}
-			//
-			//checkError := func(err error) bool {
-			//	return apierrors.IsNotFound(err)
-			//}
-			//
-			//getJob := func() error {
-			//	return i.client.Get(ctx, nsn, &j)
-			//}
-			//
-			//// use a retry loop to get the Job. A single call to client.get fails occasionally
-			//err := retry.OnError(backOff, checkError, getJob)
-			//if err != nil {
-			//	i.logger.Error(err, "failed to get job", "job", nsn.Name, "namespace", nsn.Namespace)
-			//}
-			//i.addParentResourceLabels(ctx, uid, ns, j.ObjectMeta, resources)
-		case "cronjob":
-			resources[semconv.K8SCronJobNameKey] = owner.Name
-			if includeUID {
-				resources[semconv.K8SCronJobUIDKey] = string(owner.UID)
+	for _, owner := range ownersFrom(meta) {
+		resourceAttribute := getResourceAttribute(owner.Kind)
+		if resourceAttribute != "" {
+			resources[resourceAttribute] = owner.Name
+		}
+	}
+	if includeUID {
+		for _, owner := range meta.OwnerReferences {
+			resourceAttribute := getResourceAttribute(owner.Kind)
+			if resourceAttribute != "" {
+				resources[resourceAttribute] = string(owner.UID)
 			}
 		}
+	}
+}
+
+func getResourceAttribute(kind string) attribute.Key {
+	switch strings.ToLower(kind) {
+	case "replicaset":
+		return semconv.K8SReplicaSetNameKey
+	case "deployment":
+		return semconv.K8SDeploymentNameKey
+	case "statefulset":
+		return semconv.K8SStatefulSetNameKey
+	case "daemonset":
+		return semconv.K8SDaemonSetNameKey
+	case "job":
+		return semconv.K8SJobNameKey
+	case "cronjob":
+		return semconv.K8SCronJobNameKey
+	default:
+		return ""
 	}
 }

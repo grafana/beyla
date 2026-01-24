@@ -371,6 +371,10 @@ func (c *Config) Validate() error {
 		if pos < 0 {
 			return ConfigError(fmt.Sprintf("unsupported OTEL traces export protocol %s", proto))
 		}
+
+		if c.Injector.SDKVersion == "" {
+			return ConfigError("sdk_version must be supplied for the Injector component and this version must match the version used in the SDK init container")
+		}
 	}
 
 	return nil

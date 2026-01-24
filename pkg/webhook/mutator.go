@@ -116,10 +116,15 @@ func (pm *PodMutator) CanInstrument(kind svc.InstrumentableType) bool {
 }
 
 func (pm *PodMutator) AlreadyInstrumented(info *ProcessInfo) bool {
-	if _, ok := info.env[envVarLdPreloadName]; ok {
-		return true
+	// If there's an LD_PRELOAD on this process, don't touch it if it's not us
+	if injector, ok := info.env[envVarLdPreloadName]; ok {
+		if injector != envVarLdPreloadValue {
+			return true
+		}
 	}
 
+	// Otherwise consult the labels, if we instrumented the pod, we'd have set the
+	// instrumented label.
 	if label, ok := info.podLabels[instrumentedLabel]; ok && label != "" {
 		return label == pm.cfg.Injector.SDKVersion || pm.cfg.Injector.SDKVersion == ""
 	}

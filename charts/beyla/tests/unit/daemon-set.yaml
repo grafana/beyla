@@ -1,0 +1,36 @@
+suite: test daemon-set template
+templates:
+  - configmap.yaml
+  - daemon-set.yaml
+tests:
+  - it: should set minReadySeconds when provided
+    template: daemon-set.yaml
+    set:
+      minReadySeconds: 42
+    asserts:
+      - isKind:
+          of: DaemonSet
+      - equal:
+          path: spec.minReadySeconds
+          value: 42
+
+  - it: should set minReadySeconds to 0 when explicitly set
+    template: daemon-set.yaml
+    set:
+      minReadySeconds: 0
+    asserts:
+      - isKind:
+          of: DaemonSet
+      - equal:
+          path: spec.minReadySeconds
+          value: 0
+
+  - it: should not set minReadySeconds when not provided
+    template: daemon-set.yaml
+    set:
+      minReadySeconds: null
+    asserts:
+      - isKind:
+          of: DaemonSet
+      - notExists:
+          path: spec.minReadySeconds

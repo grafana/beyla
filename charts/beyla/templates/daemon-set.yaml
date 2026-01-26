@@ -19,6 +19,9 @@ spec:
   updateStrategy:
     {{- toYaml . | trim | nindent 4 }}
   {{- end }}
+  {{- if ne .Values.minReadySeconds nil }}
+  minReadySeconds: {{ .Values.minReadySeconds }}
+  {{- end }}
   template:
     metadata:
       annotations:

@@ -147,6 +147,11 @@ updateStrategy:
   # -- update strategy type
   type: RollingUpdate
 
+# -- Minimum number of seconds for which a newly created DaemonSet pod should be ready
+# without any of its containers crashing, for it to be considered available.
+# ref: https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/#min-ready-seconds
+minReadySeconds: 0
+
 # -- Additional volumes on the output daemonset definition.
 volumes: []
 # - name: foo
@@ -260,15 +265,15 @@ serviceMonitor:
   # -- ServiceMonitor annotations
   annotations: {}
   metrics:
-  # -- ServiceMonitor Prometheus scraping endpoint.
-  # Target port and path is set based on service and `prometheus_export` values.
-  # For additional values, see the ServiceMonitor spec
+    # -- ServiceMonitor Prometheus scraping endpoint.
+    # Target port and path is set based on service and `prometheus_export` values.
+    # For additional values, see the ServiceMonitor spec
     endpoint:
       interval: 15s
   internalMetrics:
-  # -- ServiceMonitor internal metrics scraping endpoint.
-  # Target port and path is set based on service and `internal_metrics` values.
-  # For additional values, see the ServiceMonitor spec
+    # -- ServiceMonitor internal metrics scraping endpoint.
+    # Target port and path is set based on service and `internal_metrics` values.
+    # For additional values, see the ServiceMonitor spec
     endpoint:
       interval: 15s
   # -- Prometheus job label.

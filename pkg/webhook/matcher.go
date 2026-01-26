@@ -41,17 +41,21 @@ func (m *PodMatcher) MatchProcessInfo(info *ProcessInfo) bool {
 
 func (m *PodMatcher) matchProcess(actual *ProcessInfo, required services.Selector) bool {
 	if required == nil {
-		return true
+		return false
 	}
 	if actual == nil {
 		return false
 	}
+
+	matchedAny := false
+
 	// match metadata
 	for attrName, criteriaRegexp := range required.RangeMetadata() {
 		if attrValue, ok := actual.metadata[attrName]; !ok || !criteriaRegexp.MatchString(attrValue) {
 			m.logger.Debug("metadata does not match", "attr", attrName, "value", attrValue)
 			return false
 		}
+		matchedAny = true
 	}
 
 	// match pod labels
@@ -60,6 +64,7 @@ func (m *PodMatcher) matchProcess(actual *ProcessInfo, required services.Selecto
 			m.logger.Debug("pod label does not match", "label", labelName, "value", actualPodLabelValue)
 			return false
 		}
+		matchedAny = true
 	}
 
 	// match pod annotations
@@ -68,6 +73,8 @@ func (m *PodMatcher) matchProcess(actual *ProcessInfo, required services.Selecto
 			m.logger.Debug("pod annotation does not match", "annotation", annotationName, "value", actualPodAnnotationValue)
 			return false
 		}
+		matchedAny = true
 	}
-	return true
+
+	return matchedAny
 }

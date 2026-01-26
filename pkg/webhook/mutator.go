@@ -255,7 +255,6 @@ func (pm *PodMutator) HandleMutate(w http.ResponseWriter, r *http.Request) {
 	pm.logger.Info("admission response sent successfully", "uid", admResponse.UID)
 }
 
-// TODO: How do we detect that we caused the pod to crash and not do this again on restart?
 func (pm *PodMutator) mutatePod(pod *corev1.Pod) bool {
 	spec := &pod.Spec
 	meta := &pod.ObjectMeta

@@ -29,6 +29,16 @@ type ProcessInfo struct {
 	containerInfo  *Info
 }
 
+// testing related
+var (
+	fetchProcessesFunc = fetchProcesses
+	readEnvFunc        = readEnv
+	findLibMapsFunc    = findLibMaps
+	newProcessFunc     = process.NewProcess
+	procEnvironFunc    = procEnviron
+	containerInfoFunc  = containerInfoForPID
+)
+
 const (
 	dummySDKVersion = "v999.999.999"
 )
@@ -54,7 +64,7 @@ func (s *LocalProcessScanner) OldestSDKVersion() (string, error) {
 }
 
 func (s *LocalProcessScanner) FindExistingProcesses() (map[string][]*ProcessInfo, error) {
-	procs, err := fetchProcesses()
+	procs, err := fetchProcessesFunc()
 	if err != nil {
 		return nil, err
 	}
@@ -65,12 +75,12 @@ func (s *LocalProcessScanner) FindExistingProcesses() (map[string][]*ProcessInfo
 		s.logger.Debug("found process", "process", v)
 		v.kind = findProcLanguageCheap(int32(v.pid))
 
-		proc, err := process.NewProcess(int32(v.pid))
+		proc, err := newProcessFunc(int32(v.pid))
 		if err != nil {
 			s.logger.Debug("cannot find executable info", "pid", v.pid, "error", err)
 			continue
 		}
-		if env, err := proc.Environ(); err == nil {
+		if env, err := procEnvironFunc(proc); err == nil {
 			v.env = envStrsToMap(env)
 			if ver, ok := v.env[envVarSDKVersion]; ok && semver.IsValid(ver) {
 				if semver.Compare(ver, s.oldestSDKVersion) < 0 {
@@ -79,7 +89,7 @@ func (s *LocalProcessScanner) FindExistingProcesses() (map[string][]*ProcessInfo
 			}
 		}
 
-		containerInfo, err := containerInfoForPID(uint32(v.pid))
+		containerInfo, err := containerInfoFunc(uint32(v.pid))
 		if err != nil {
 			s.logger.Debug("cannot find container info for pid", "pid", v.pid, "error", err)
 			continue
@@ -111,20 +121,26 @@ func fetchProcesses() (map[int32]*ProcessInfo, error) {
 	return processes, nil
 }
 
-func findProcLanguageCheap(pid int32) svc.InstrumentableType {
-	maps, err := findLibMaps(pid)
-	if err != nil {
-		return svc.InstrumentableGeneric
-	}
+func procEnviron(proc *process.Process) ([]string, error) {
+	return proc.Environ()
+}
 
-	for _, m := range maps {
-		t := instrumentableFromModuleMap(m.Pathname)
-		if t != svc.InstrumentableGeneric {
-			return t
+func readEnv(pid int32) ([]byte, error) {
+	return os.ReadFile(fmt.Sprintf("/proc/%d/environ", pid))
+}
+
+func findProcLanguageCheap(pid int32) svc.InstrumentableType {
+	maps, err := findLibMapsFunc(pid)
+	if err == nil {
+		for _, m := range maps {
+			t := instrumentableFromModuleMap(m.Pathname)
+			if t != svc.InstrumentableGeneric {
+				return t
+			}
 		}
 	}
 
-	bytes, err := os.ReadFile(fmt.Sprintf("/proc/%d/environ", pid))
+	bytes, err := readEnvFunc(pid)
 	if err != nil {
 		return svc.InstrumentableGeneric
 	}

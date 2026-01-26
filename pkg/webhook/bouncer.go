@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"go.opentelemetry.io/obi/pkg/pipe/global"
@@ -33,12 +34,16 @@ func NewPodBouncer(ctxInfo *global.ContextInfo) (*PodBouncer, error) {
 }
 
 func mutationKey(namespace, deploymentName string) string {
-	return namespace + ":" + deploymentName
+	return trimmedName(namespace) + ":" + trimmedName(deploymentName)
+}
+
+func trimmedName(name string) string {
+	return strings.TrimSpace(name)
 }
 
 // Ensures that we have sufficient information to perform the restart
 func (b *PodBouncer) CanBeBounced(namespace, deploymentName string) bool {
-	return namespace != "" && deploymentName != ""
+	return trimmedName(namespace) != "" && trimmedName(deploymentName) != ""
 }
 
 // Prevents double restarts for pods that belong to the same deployment, since

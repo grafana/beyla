@@ -15,7 +15,7 @@ services:
       - db
 
   nginx:
-    image: nginx:latest@sha256:7272239bd21472f311aa3e86a85fdca0f1ad648995f983ab6e5e7dea665cd233
+    image: nginx:latest@sha256:c881927c4077710ac4b1da63b83aa163937fb47457950c267d92f7e4dedf4aec
     container_name: nginx_server
     ports:
       - "443:443" # Expose TLS port
@@ -29,7 +29,7 @@ services:
       - app_network
 
   db:
-    image: mysql:8.4.7@sha256:90544b3775490579867a30988d48f0215fc3b88d78d8d62b2c0d96ee9226a2b7
+    image: mysql:8.4.8@sha256:63e8ae20eaef51da56723dbeea68dc75e8baa50429f641ba88e8058ce81e17e2
     command:
       - --ssl-ca=/etc/mysql/certs/ca.pem
       - --ssl-cert=/etc/mysql/certs/server-cert.pem

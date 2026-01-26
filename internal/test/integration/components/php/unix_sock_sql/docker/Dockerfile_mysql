@@ -1,4 +1,4 @@
-FROM mysql:8.0.44-debian@sha256:91f968e434fa4c9ea47e3fac55f83da86b080f903bbce1201931e97f4194bd5e
+FROM mysql:8.0.45-debian@sha256:5284868db9fd4c480d37e8394fb37316ba29b1bdbec31185676faaf42cd82612
 
 SHELL ["/bin/bash", "-c"]
 

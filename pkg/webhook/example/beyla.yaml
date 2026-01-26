@@ -197,8 +197,6 @@ spec:
           imagePullPolicy: "Never"
           command: ["/beyla", "--config=/config/beyla-config.yml"]
           env:
-            - name: SDK_VERSION
-              value: "0.0.3"
             - name: BEYLA_TRACE_PRINTER
               value: "text"
             # - name: BEYLA_BPF_TC_L7_CP

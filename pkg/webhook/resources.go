@@ -231,7 +231,7 @@ func createServiceInstanceId(meta *metav1.ObjectMeta, namespaceName, podName, co
 
 	if namespaceName != "" && podName != "" && containerName != "" {
 		resNames := []string{namespaceName, podName, containerName}
-		serviceInstanceId = strings.Join(resNames, ".")
+		return strings.Join(resNames, ".")
 	}
 	return ""
 }

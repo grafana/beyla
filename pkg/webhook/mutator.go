@@ -42,6 +42,7 @@ const (
 	envOtelInjectorConfigFileValue    = internalMountPath + "/injector/otelinject.conf"
 	envOtelExporterOtlpEndpointName   = "OTEL_EXPORTER_OTLP_ENDPOINT"
 	envOtelExporterOtlpProtocolName   = "OTEL_EXPORTER_OTLP_PROTOCOL"
+	envOtelSemConvStabilityName       = "OTEL_SEMCONV_STABILITY_OPT_IN"
 	envInjectorOtelExtraResourceAttrs = "OTEL_INJECTOR_RESOURCE_ATTRIBUTES"
 	envInjectorOtelServiceName        = "OTEL_INJECTOR_SERVICE_NAME"
 	envInjectorOtelServiceVersion     = "OTEL_INJECTOR_SERVICE_VERSION"
@@ -419,6 +420,7 @@ func (pm *PodMutator) addEnvVars(meta *metav1.ObjectMeta, c *corev1.Container) {
 	setEnvVar(c, envOtelInjectorConfigFileName, envOtelInjectorConfigFileValue)
 	setEnvVar(c, envOtelExporterOtlpEndpointName, pm.endpoint)
 	setEnvVar(c, envOtelExporterOtlpProtocolName, pm.proto)
+	setEnvVar(c, envOtelSemConvStabilityName, "http")
 
 	pm.setResourceAttributes(meta, c)
 

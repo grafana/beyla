@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package logger // import "go.opentelemetry.io/obi/pkg/internal/ebpf/logger"
+package logger
 
 import (
 	"context"

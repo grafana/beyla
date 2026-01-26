@@ -3,7 +3,7 @@
 
 //go:build linux
 
-package javaagent // import "go.opentelemetry.io/obi/pkg/internal/java"
+package javaagent
 
 import (
 	"bufio"

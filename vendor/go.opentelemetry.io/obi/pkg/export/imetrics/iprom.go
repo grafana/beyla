@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package imetrics // import "go.opentelemetry.io/obi/pkg/export/imetrics"
+package imetrics
 
 import (
 	"context"

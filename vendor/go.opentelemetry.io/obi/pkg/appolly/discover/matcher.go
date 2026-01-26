@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package discover // import "go.opentelemetry.io/obi/pkg/appolly/discover"
+package discover
 
 import (
 	"context"
@@ -35,15 +35,14 @@ func criteriaMatcherProvider(
 ) swarm.InstanceFunc {
 	beylaNamespace, _ := namespaceFetcherFunc(int32(osPidFunc()))
 	m := &Matcher{
-		Log:                 slog.With("component", "discover.CriteriaMatcher"),
-		Criteria:            FindingCriteria(cfg),
-		ExcludeCriteria:     ExcludingCriteria(cfg),
-		LogEnricherCriteria: LogEnricherFindingCriteria(cfg),
-		ProcessHistory:      map[PID]ProcessMatch{},
-		Input:               input.Subscribe(msg.SubscriberName("discover.CriteriaMatcher")),
-		Output:              output,
-		Namespace:           beylaNamespace,
-		HasHostPidAccess:    hasHostPidAccess(),
+		Log:              slog.With("component", "discover.CriteriaMatcher"),
+		Criteria:         FindingCriteria(cfg),
+		ExcludeCriteria:  ExcludingCriteria(cfg),
+		ProcessHistory:   map[PID]ProcessMatch{},
+		Input:            input.Subscribe(msg.SubscriberName("discover.CriteriaMatcher")),
+		Output:           output,
+		Namespace:        beylaNamespace,
+		HasHostPidAccess: hasHostPidAccess(),
 	}
 	return swarm.DirectInstance(m.Run)
 }
@@ -51,10 +50,9 @@ func criteriaMatcherProvider(
 // Matcher is the component that matches the processes against the discovery criteria.
 // It filters the processes that match the discovery criteria and sends them to the output channel.
 type Matcher struct {
-	Log                 *slog.Logger
-	Criteria            []services.Selector
-	ExcludeCriteria     []services.Selector
-	LogEnricherCriteria []services.Selector
+	Log             *slog.Logger
+	Criteria        []services.Selector
+	ExcludeCriteria []services.Selector
 	// ProcessHistory keeps track of the processes that have been already matched and submitted for
 	// instrumentation.
 	// This avoids keep inspecting again and again client processes each time they open a new connection port
@@ -67,13 +65,8 @@ type Matcher struct {
 
 // ProcessMatch matches a found process with the first selection criteria it fulfilled.
 type ProcessMatch struct {
-	Criteria            []services.Selector
-	LogEnricherCriteria []services.Selector
-	Process             *services.ProcessInfo
-}
-
-func (pm ProcessMatch) LogEnricherEnabled() bool {
-	return len(pm.LogEnricherCriteria) > 0
+	Criteria []services.Selector
+	Process  *services.ProcessInfo
 }
 
 func (m *Matcher) Run(ctx context.Context) {
@@ -112,36 +105,18 @@ func (m *Matcher) alreadyMatched(pid PID) bool {
 
 func (m *Matcher) matchCriteria(obj ProcessAttrs, proc *services.ProcessInfo) *ProcessMatch {
 	criteria := make([]services.Selector, 0, len(m.Criteria))
+
 	for i := range m.Criteria {
 		if m.matchProcess(&obj, proc, m.Criteria[i]) && !m.isExcluded(&obj, proc) {
 			criteria = append(criteria, m.Criteria[i])
 		}
 	}
 
-	logEnricherCriteria := make([]services.Selector, 0, len(m.LogEnricherCriteria))
-	for i := range m.LogEnricherCriteria {
-		if m.matchProcess(&obj, proc, m.LogEnricherCriteria[i]) {
-			logEnricherCriteria = append(logEnricherCriteria, m.LogEnricherCriteria[i])
-		}
-	}
-
 	if len(criteria) > 0 {
 		m.Log.Debug("found process", "pid", proc.Pid, "comm", proc.ExePath, "metadata",
-			obj.metadata, "podLabels", obj.podLabels, "criteria", criteria, "logEnricherCriteria", logEnricherCriteria)
+			obj.metadata, "podLabels", obj.podLabels, "criteria", criteria)
 
-		return &ProcessMatch{Criteria: criteria, LogEnricherCriteria: logEnricherCriteria, Process: proc}
-	}
-
-	if len(logEnricherCriteria) > 0 {
-		m.Log.Info(
-			"avoiding log instrumentation for process, since it wasn't matched for instrumentation. Log enrichment criteria must be a subset of instrumentation matching criteria",
-			"pid", proc.Pid,
-			"comm", proc.ExePath,
-			"metadata", obj.metadata,
-			"podLabels", obj.podLabels,
-			"criteria", criteria,
-			"logEnricherCriteria", logEnricherCriteria,
-		)
+		return &ProcessMatch{Criteria: criteria, Process: proc}
 	}
 
 	return nil
@@ -320,20 +295,6 @@ func normalizeRegexCriteria(finderCriteria services.RegexDefinitionCriteria) []s
 		criteria = append(criteria, fc)
 	}
 	return criteria
-}
-
-func LogEnricherFindingCriteria(cfg *obi.Config) []services.Selector {
-	var selectors []services.Selector
-
-	if !cfg.EBPF.LogEnricher.Enabled() {
-		return selectors
-	}
-
-	for _, svcs := range cfg.EBPF.LogEnricher.Services {
-		selectors = append(selectors, NormalizeGlobCriteria(svcs.Service)...)
-	}
-
-	return selectors
 }
 
 func FindingCriteria(cfg *obi.Config) []services.Selector {

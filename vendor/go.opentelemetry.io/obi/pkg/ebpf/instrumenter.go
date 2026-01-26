@@ -3,7 +3,7 @@
 
 //go:build linux
 
-package ebpf // import "go.opentelemetry.io/obi/pkg/ebpf"
+package ebpf
 
 import (
 	"debug/elf"

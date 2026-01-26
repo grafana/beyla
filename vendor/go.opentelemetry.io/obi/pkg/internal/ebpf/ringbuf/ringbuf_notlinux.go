@@ -3,7 +3,7 @@
 
 //go:build !linux
 
-package ringbuf // import "go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
+package ringbuf
 
 import (
 	"errors"

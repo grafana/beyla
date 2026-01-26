@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package sqlprune // import "go.opentelemetry.io/obi/pkg/internal/sqlprune"
+package sqlprune
 
 import (
 	"encoding/binary"

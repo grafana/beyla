@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package instrument // import "go.opentelemetry.io/obi/pkg/kube/kubecache/instrument"
+package instrument
 
 import (
 	"context"

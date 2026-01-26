@@ -3,7 +3,7 @@
 
 //go:build linux
 
-package harvest // import "go.opentelemetry.io/obi/pkg/internal/transform/route/harvest"
+package harvest
 
 import (
 	"bufio"

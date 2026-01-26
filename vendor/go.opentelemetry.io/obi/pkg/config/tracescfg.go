@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package config // import "go.opentelemetry.io/obi/pkg/config"
+package config
 
 // InstanceIDConfig configures how OBI will get the Instance ID of the traces/metrics
 // from the current hostname + the instrumented process PID

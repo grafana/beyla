@@ -3,7 +3,7 @@
 
 // Package attr contains definition of the attribute names of for the metrics, especially
 // for the metrics whose reported attributes are selected in the attributes.select YAML option
-package attr // import "go.opentelemetry.io/obi/pkg/export/attributes/names"
+package attr
 
 import (
 	"strings"

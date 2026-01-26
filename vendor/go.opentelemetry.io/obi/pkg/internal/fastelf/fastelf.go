@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package fastelf // import "go.opentelemetry.io/obi/pkg/internal/fastelf"
+package fastelf
 
 import (
 	"errors"

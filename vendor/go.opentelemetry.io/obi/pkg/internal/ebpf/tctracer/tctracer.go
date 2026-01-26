@@ -3,7 +3,7 @@
 
 //go:build linux
 
-package tctracer // import "go.opentelemetry.io/obi/pkg/internal/ebpf/tctracer"
+package tctracer
 
 import (
 	"context"

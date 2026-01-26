@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package appolly // import "go.opentelemetry.io/obi/pkg/appolly"
+package appolly
 
 import (
 	"context"
@@ -17,7 +17,6 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
 	"go.opentelemetry.io/obi/pkg/export/prom"
 	"go.opentelemetry.io/obi/pkg/filter"
-	msg2 "go.opentelemetry.io/obi/pkg/internal/helpers/msg"
 	"go.opentelemetry.io/obi/pkg/internal/traces"
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
@@ -66,33 +65,39 @@ func newGraphBuilder(
 		ExtraGroupAttributesCfg: config.Attributes.ExtraGroupAttributes,
 	}
 
+	newQueue := func(name string) *msg.Queue[[]request.Span] {
+		return msg.NewQueue[[]request.Span](msg.ChannelBufferLen(config.ChannelBufferLen), msg.Name(name))
+	}
+
 	// Second, we register instancers for each pipe node, as well as communication queues between them
 	// TODO: consider moving the queues to a public structure so when OBI is used as library, other components can
 	// listen to the messages and expanding the Pipeline
-	tracesReaderToRouter := msg2.QueueFromConfig[[]request.Span](config, "tracesReaderToRouter")
+	tracesReaderToRouter := newQueue("tracesReaderToRouter")
 	swi.Add(traces.ReadFromChannel(&traces.ReadDecorator{
 		InstanceID:      config.Attributes.InstanceID,
 		TracesInput:     tracesCh,
 		DecoratedTraces: tracesReaderToRouter,
 	}), swarm.WithID("ReadFromChannel"))
 
-	routerToKubeDecorator := msg2.QueueFromConfig[[]request.Span](config, "routerToKubeDecorator",
+	routerToKubeDecorator := msg.NewQueue[[]request.Span](
+		msg.ChannelBufferLen(config.ChannelBufferLen),
+		msg.Name("routerToKubeDecorator"),
 		// make sure that we are able to wait for the informer sync timeout before failing the pipeline
 		// if a message gets bocked while the Kube decorator starts
-		msg.SendTimeout(max(config.Attributes.Kubernetes.InformersSyncTimeout, config.ChannelSendTimeout)))
+		msg.SendTimeout(config.Attributes.Kubernetes.InformersSyncTimeout+20*time.Second))
 	swi.Add(transform.RoutesProvider(
 		config.Routes,
 		tracesReaderToRouter,
 		routerToKubeDecorator,
 	), swarm.WithID("Routes"))
 
-	kubeDecoratorToNameResolver := msg2.QueueFromConfig[[]request.Span](config, "kubeDecoratorToNameResolver")
+	kubeDecoratorToNameResolver := newQueue("kubeDecoratorToNameResolver")
 	swi.Add(transform.KubeDecoratorProvider(
 		ctxInfo, &config.Attributes.Kubernetes,
 		routerToKubeDecorator, kubeDecoratorToNameResolver,
 	), swarm.WithID("KubeDecorator"))
 
-	nameResolverToAttrFilter := msg2.QueueFromConfig[[]request.Span](config, "nameResolverToAttrFilter")
+	nameResolverToAttrFilter := newQueue("nameResolverToAttrFilter")
 	swi.Add(transform.NameResolutionProvider(ctxInfo, config.NameResolver,
 		kubeDecoratorToNameResolver, nameResolverToAttrFilter),
 		swarm.WithID("NameResolution"))
@@ -101,7 +106,7 @@ func newGraphBuilder(
 	// own exporters, otherwise we create a new queue
 	exportableSpans := ctxInfo.OverrideAppExportQueue
 	if exportableSpans == nil {
-		exportableSpans = msg2.QueueFromConfig[[]request.Span](config, "exportableSpans")
+		exportableSpans = newQueue("exportableSpans")
 	}
 	swi.Add(filter.ByAttribute(config.Filters.Application,
 		nil,
@@ -144,10 +149,12 @@ func setupMetricsSubPipeline(
 	selectorCfg *attributes.SelectorConfig,
 	processEventsCh *msg.Queue[exec.ProcessEvent],
 ) {
+	newQueue := func(name string) *msg.Queue[[]request.Span] {
+		return msg.NewQueue[[]request.Span](msg.ChannelBufferLen(config.ChannelBufferLen), msg.Name(name))
+	}
 	jointMetricsConfig := joinMetricsConfig(config)
 
-	spanNameAggregatedMetrics := msg2.QueueFromConfig[[]request.Span](config, "spanNameAggregatedMetrics")
-
+	spanNameAggregatedMetrics := newQueue("spanNameAggregatedMetrics")
 	swi.Add(transform.SpanNameLimiter(transform.SpanNameLimiterConfig{
 		Limit:      config.Attributes.MetricSpanNameAggregationLimit,
 		OTEL:       &config.OTELMetrics,

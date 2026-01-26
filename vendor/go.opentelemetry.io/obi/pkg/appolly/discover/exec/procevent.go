@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package exec // import "go.opentelemetry.io/obi/pkg/appolly/discover/exec"
+package exec
 
 type ProcessEventType int
 

@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package kubeflags // import "go.opentelemetry.io/obi/pkg/kube/kubeflags"
+package kubeflags
 
 type EnableFlag string
 

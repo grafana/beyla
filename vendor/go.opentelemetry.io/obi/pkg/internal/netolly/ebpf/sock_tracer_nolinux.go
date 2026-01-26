@@ -3,7 +3,7 @@
 
 //go:build !linux
 
-package ebpf // import "go.opentelemetry.io/obi/pkg/internal/netolly/ebpf"
+package ebpf
 
 import (
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"

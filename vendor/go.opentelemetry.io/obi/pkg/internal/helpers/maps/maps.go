@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package maps // import "go.opentelemetry.io/obi/pkg/internal/helpers/maps"
+package maps
 
 // MultiCounter maps a counter to a given key
 type MultiCounter[K comparable] map[K]*int

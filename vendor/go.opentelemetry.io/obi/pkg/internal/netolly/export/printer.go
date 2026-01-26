@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package export // import "go.opentelemetry.io/obi/pkg/internal/netolly/export"
+package export
 
 import (
 	"context"

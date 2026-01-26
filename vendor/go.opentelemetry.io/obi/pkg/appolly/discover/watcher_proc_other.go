@@ -3,7 +3,7 @@
 
 //go:build !linux
 
-package discover // import "go.opentelemetry.io/obi/pkg/appolly/discover"
+package discover
 
 // placeholder files to allow local compilation/unit testing in non-linux environments
 

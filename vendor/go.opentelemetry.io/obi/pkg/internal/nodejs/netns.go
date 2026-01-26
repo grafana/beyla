@@ -3,7 +3,7 @@
 
 //go:build linux
 
-package nodejs // import "go.opentelemetry.io/obi/pkg/internal/nodejs"
+package nodejs
 
 import (
 	"fmt"

@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package meta // import "go.opentelemetry.io/obi/pkg/kube/kubecache/meta"
+package meta
 
 import (
 	"strings"

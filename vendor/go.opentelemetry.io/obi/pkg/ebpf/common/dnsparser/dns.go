@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package dnsparser // import "go.opentelemetry.io/obi/pkg/ebpf/common/dnsparser"
+package dnsparser
 
 import "fmt"
 

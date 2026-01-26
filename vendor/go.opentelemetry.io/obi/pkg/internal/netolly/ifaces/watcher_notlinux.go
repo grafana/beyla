@@ -3,7 +3,7 @@
 
 //go:build !linux
 
-package ifaces // import "go.opentelemetry.io/obi/pkg/internal/netolly/ifaces"
+package ifaces
 
 import (
 	"context"

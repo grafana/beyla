@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package tracesgen // import "go.opentelemetry.io/obi/pkg/export/otel/tracesgen"
+package tracesgen
 
 import (
 	"context"
@@ -310,10 +310,6 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 			request.ServerPort(span.HostPort),
 			request.HTTPRequestBodySize(int(span.RequestBodyLength())),
 			request.HTTPResponseBodySize(span.ResponseBodyLength()),
-		}
-		scheme := request.HTTPScheme(span)
-		if scheme != "" {
-			attrs = append(attrs, semconv.URLScheme(scheme))
 		}
 		if span.Route != "" {
 			attrs = append(attrs, semconv.HTTPRoute(span.Route))

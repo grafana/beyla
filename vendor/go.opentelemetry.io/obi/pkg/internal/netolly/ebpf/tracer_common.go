@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package ebpf // import "go.opentelemetry.io/obi/pkg/internal/netolly/ebpf"
+package ebpf
 
 const (
 	// DirectionUnset is a convenience value to specify an unset/removed direction field

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package imetrics supports recording and submission of internal metrics
-package imetrics // import "go.opentelemetry.io/obi/pkg/export/imetrics"
+package imetrics
 
 import (
 	"context"

@@ -3,7 +3,7 @@
 
 //go:build linux
 
-package tcmanager // import "go.opentelemetry.io/obi/pkg/ebpf/tcmanager"
+package tcmanager
 
 import (
 	"errors"

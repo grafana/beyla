@@ -5,7 +5,7 @@
 
 // this file is emptied on purpose to allow Beyla compiling in non-linux environments
 
-package tpinjector // import "go.opentelemetry.io/obi/pkg/internal/ebpf/tpinjector"
+package tpinjector
 
 import (
 	"context"

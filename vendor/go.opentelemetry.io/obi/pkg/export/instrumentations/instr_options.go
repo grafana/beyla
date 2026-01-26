@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package instrumentations // import "go.opentelemetry.io/obi/pkg/export/instrumentations"
+package instrumentations
 
 type Instrumentation string
 

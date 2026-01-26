@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package svc // import "go.opentelemetry.io/obi/pkg/appolly/app/svc"
+package svc
 
 import (
 	"go.opentelemetry.io/otel/sdk/trace"
@@ -119,8 +119,6 @@ type Attrs struct {
 	// Features that are defined in a per-service basis. For example, we might want to enable
 	// Service Graph Metrics for all the services but RED metrics only for a few
 	Features export.Features
-
-	LogEnricherEnabled bool
 
 	CustomInRouteMatcher  route.Matcher
 	CustomOutRouteMatcher route.Matcher

@@ -1,13 +1,12 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package ebpfcommon // import "go.opentelemetry.io/obi/pkg/ebpf/common"
+package ebpfcommon
 
 import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"io"
 	"regexp"
 	"strconv"
 	"strings"
@@ -48,10 +47,8 @@ type h2Connection struct {
 }
 
 func byteFramer(data []uint8) *http2.Framer {
-	fr := http2.NewFramer(
-		// we never write. We can save some resources
-		io.Discard,
-		bytes.NewReader(data))
+	buf := bytes.NewBuffer(data)
+	fr := http2.NewFramer(buf, buf) // the write is same as read, but we never write
 
 	return fr
 }

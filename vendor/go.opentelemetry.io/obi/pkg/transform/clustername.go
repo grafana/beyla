@@ -5,7 +5,7 @@
 // https://github.com/DataDog/datadog-agent,
 // published under Apache License 2.0
 
-package transform // import "go.opentelemetry.io/obi/pkg/transform"
+package transform
 
 import (
 	"bytes"

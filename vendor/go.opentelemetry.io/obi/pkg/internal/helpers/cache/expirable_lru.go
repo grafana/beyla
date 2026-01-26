@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package cache // import "go.opentelemetry.io/obi/pkg/internal/helpers/cache"
+package cache
 
 import (
 	"container/list"

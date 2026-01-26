@@ -3,7 +3,7 @@
 
 //go:build linux
 
-package tpinjector // import "go.opentelemetry.io/obi/pkg/internal/ebpf/tpinjector"
+package tpinjector
 
 import (
 	"context"

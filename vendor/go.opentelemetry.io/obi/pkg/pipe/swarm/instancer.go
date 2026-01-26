@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package swarm // import "go.opentelemetry.io/obi/pkg/pipe/swarm"
+package swarm
 
 import (
 	"context"
@@ -22,7 +22,7 @@ type Instancer struct {
 	creators []instanceMeta
 }
 
-// Add a service instancer to the swarm. The instancer will be called when the swarm Instance starts,
+// Add a service instancer to the swarm. The intancer will be called when the swarm Instance starts,
 // and must return a RunFunc instance that will execute the actual operation of the service node.
 func (s *Instancer) Add(c InstanceFunc, opts ...AddOpt) {
 	s.mt.Lock()

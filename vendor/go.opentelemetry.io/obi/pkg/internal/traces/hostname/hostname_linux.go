@@ -3,7 +3,7 @@
 
 // Copyright 2020 New Relic Corporation. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
-package hostname // import "go.opentelemetry.io/obi/pkg/internal/traces/hostname"
+package hostname
 
 import (
 	"errors"

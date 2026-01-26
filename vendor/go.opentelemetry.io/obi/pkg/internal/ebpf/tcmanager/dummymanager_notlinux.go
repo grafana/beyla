@@ -3,7 +3,7 @@
 
 //go:build !linux
 
-package tcmanager // import "go.opentelemetry.io/obi/pkg/internal/ebpf/tcmanager"
+package tcmanager
 
 import (
 	"github.com/cilium/ebpf"

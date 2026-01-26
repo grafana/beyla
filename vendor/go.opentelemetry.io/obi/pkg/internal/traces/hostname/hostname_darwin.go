@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //go:build darwin
 
-package hostname // import "go.opentelemetry.io/obi/pkg/internal/traces/hostname"
+package hostname
 
 import "os"
 

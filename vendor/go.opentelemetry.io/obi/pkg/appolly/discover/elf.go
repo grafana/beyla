@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package discover // import "go.opentelemetry.io/obi/pkg/appolly/discover"
+package discover
 
 import (
 	"debug/elf"

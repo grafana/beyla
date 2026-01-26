@@ -3,7 +3,7 @@
 
 //go:build linux
 
-package helpers // import "go.opentelemetry.io/obi/pkg/internal/helpers"
+package helpers
 
 import (
 	"os"

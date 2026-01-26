@@ -16,4 +16,4 @@
 //	integration.InternalPrometheusExport(t, config)
 //
 // For OBI, use the provided DefaultOBIConfig() function.
-package integration // import "go.opentelemetry.io/obi/pkg/test/integration"
+package integration

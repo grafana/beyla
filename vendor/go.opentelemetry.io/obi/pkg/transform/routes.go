@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package transform provides some intermediate nodes that might filter/process/transform the events
-package transform // import "go.opentelemetry.io/obi/pkg/transform"
+package transform
 
 import (
 	"context"

@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package metric // import "go.opentelemetry.io/obi/pkg/export/otel/metric"
+package metric
 
 import (
 	"container/list"

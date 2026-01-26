@@ -3,7 +3,7 @@
 
 //go:build linux
 
-package tcmanager // import "go.opentelemetry.io/obi/pkg/internal/ebpf/tcmanager"
+package tcmanager
 
 func removeIf[T any](s []T, pred func(T) bool) []T {
 	i := 0

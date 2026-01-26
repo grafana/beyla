@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // line below avoids linter errors on Mac
-package tcmanager // import "go.opentelemetry.io/obi/pkg/internal/ebpf/tcmanager"
+package tcmanager
 
 import (
 	"log/slog"

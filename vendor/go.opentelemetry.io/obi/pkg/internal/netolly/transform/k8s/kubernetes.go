@@ -19,7 +19,7 @@
 // This implementation is a derivation of the code in
 // https://github.com/netobserv/netobserv-ebpf-agent/tree/release-1.4
 
-package k8s // import "go.opentelemetry.io/obi/pkg/internal/netolly/transform/k8s"
+package k8s
 
 import (
 	"context"

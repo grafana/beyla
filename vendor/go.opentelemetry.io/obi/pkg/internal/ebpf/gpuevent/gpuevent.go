@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package gpuevent // import "go.opentelemetry.io/obi/pkg/internal/ebpf/gpuevent"
+package gpuevent
 
 import (
 	"context"

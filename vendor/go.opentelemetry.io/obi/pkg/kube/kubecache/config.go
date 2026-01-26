@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package kubecache // import "go.opentelemetry.io/obi/pkg/kube/kubecache"
+package kubecache
 
 import (
 	"fmt"

@@ -2,7 +2,7 @@ plugins {
     java
     id("com.gradleup.shadow") version "8.3.9"
     id("me.champeau.jmh") version "0.7.3"
-    id("com.diffplug.spotless") version "8.0.0"
+    id("com.diffplug.spotless") version "8.2.0"
 }
 
 group = "io.opentelemetry.obi"
@@ -39,7 +39,7 @@ repositories {
 }
 
 dependencies {
-    implementation("net.bytebuddy:byte-buddy:1.17.8")
+    implementation("net.bytebuddy:byte-buddy:1.18.4")
     implementation("net.bytebuddy:byte-buddy-agent:1.18.4")
     implementation("net.java.dev.jna:jna:5.18.1")
     implementation("com.github.ben-manes.caffeine:caffeine:2.9.3")

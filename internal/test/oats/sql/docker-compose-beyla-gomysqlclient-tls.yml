@@ -1,7 +1,7 @@
 version: "3.9"
 services:
   mysqlserver:
-    image: mysql:8.0@sha256:0275a35e79c60caae68fac520602d9f6897feb9b0941a1471196b1a01760e581
+    image: mysql:8.4@sha256:63e8ae20eaef51da56723dbeea68dc75e8baa50429f641ba88e8058ce81e17e2
     command:
       - --ssl-ca=/etc/certs/ca.pem
       - --ssl-cert=/etc/certs/server-cert.pem

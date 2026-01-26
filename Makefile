@@ -243,6 +243,16 @@ test-privileged:
 	@echo "### Testing code with privileged tests enabled"
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" PRIVILEGED_TESTS=true go test -race -mod vendor -a ./... -coverpkg=./... -coverprofile $(TEST_OUTPUT)/cover.all.txt
 
+.PHONY: helm-unittest
+helm-unittest:
+	@echo "### Running Helm chart unit tests"
+	$(OCI_BIN) run --rm -v "$(PROJECT_DIR):/apps" -w /apps helmunittest/helm-unittest -f charts/beyla/tests/unit/*.yaml charts/beyla
+
+.PHONY: helm-docs
+helm-docs:
+	@echo "### Generating Helm chart documentation"
+	cd charts && $(OCI_BIN) run --rm --volume "$$(pwd):/helm-docs" -u "$$(id -u)" jnorwood/helm-docs:v1.13.1
+
 .PHONY: cov-exclude-generated
 cov-exclude-generated:
 	grep -vE $(EXCLUDE_COVERAGE_FILES) $(TEST_OUTPUT)/cover.all.txt > $(TEST_OUTPUT)/cover.txt

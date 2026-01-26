@@ -110,10 +110,6 @@ func (tr *connectionSpansExport) processSpans(ctx context.Context, exp exporter.
 		if len(spanGroup) > 0 {
 			sample := &spanGroup[0]
 
-			if !sample.Span.Service.ExportModes.CanExportTraces() {
-				continue
-			}
-
 			// append external attribute
 			sample.Attributes = make([]attribute.KeyValue, 0, len(tr.attributeProvider))
 			for _, getter := range tr.attributeProvider {

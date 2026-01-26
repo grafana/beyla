@@ -36,7 +36,10 @@ type externalSpanFilter struct {
 func (esp *externalSpanFilter) filter(spans []request.Span) []request.Span {
 	var extern []request.Span
 	for i := range spans {
-		if esp.isExternalSelectable(&spans[i]) {
+		// this node is the entrance of this pipeline. We early discard whatever
+		// we think is not going to be exported
+		if spans[i].Service.ExportModes.CanExportTraces() &&
+			esp.isExternalSelectable(&spans[i]) {
 			extern = append(extern, spans[i])
 		}
 	}

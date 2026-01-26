@@ -234,6 +234,10 @@ type SDKInject struct {
 	// Webhook configuration for a mutating admission controller
 	// nolint:undoc
 	Webhook WebhookConfig `yaml:"webhook"`
+	// Option to disable automatic bouncing of pods, it will be
+	// a responsibility of the end-user to bounce the pods to be instrumented
+	// nolint:undoc
+	NoAutoRestart bool `yaml:"disable_auto_restart"`
 	// The host path volume directory which gets mounted into pods
 	// nolint:undoc
 	HostPathVolumeDir string `yaml:"host_path_volume"`

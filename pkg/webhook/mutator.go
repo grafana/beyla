@@ -51,7 +51,7 @@ const (
 	envInjectorOtelK8sPodName         = "OTEL_INJECTOR_K8S_POD_NAME"
 	envInjectorOtelK8sPodUID          = "OTEL_INJECTOR_K8S_POD_UID"
 	envInjectorOtelK8sContainerName   = "OTEL_INJECTOR_K8S_CONTAINER_NAME"
-	envOtelK8sNodeName                = "OTEL_RESOURCE_ATTRIBUTES_NODE_NAME" // NOT supported in the injector yet
+	envOtelK8sNodeName                = "OTEL_RESOURCE_ATTRIBUTES_NODE_NAME" // stored in OTEL_INJECTOR_RESOURCE_ATTRIBUTES, since there's no individual OTEL_INJECTOR_K8S_NODE_NAME
 	envVarSDKVersion                  = "BEYLA_INJECTOR_SDK_VERSION"
 )
 

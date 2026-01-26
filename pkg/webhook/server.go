@@ -89,7 +89,7 @@ func (s *Server) Start(ctx context.Context) error {
 
 	s.logger.Info("starting webhook server", "port", s.cfg.Injector.Webhook.Port, "certPath", s.cfg.Injector.Webhook.CertPath)
 
-	if s.matcher.HasSelectionCriteria() {
+	if s.matcher.HasSelectionCriteria() && !s.cfg.Injector.NoAutoRestart {
 		s.logger.Info("starting initial state scanning")
 		go func() {
 			err := s.getInitialState(ctx)

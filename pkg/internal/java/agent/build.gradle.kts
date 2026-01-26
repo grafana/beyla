@@ -44,11 +44,11 @@ dependencies {
     implementation("net.java.dev.jna:jna:5.18.1")
     implementation("com.github.ben-manes.caffeine:caffeine:2.9.3")
 
-    testImplementation("org.junit.jupiter:junit-jupiter-api:5.13.3")
-    testImplementation("org.junit.platform:junit-platform-launcher:1.10.2")
+    testImplementation("org.junit.jupiter:junit-jupiter-api:5.14.2")
+    testImplementation("org.junit.platform:junit-platform-launcher:1.14.2")
     testImplementation("org.awaitility:awaitility:4.3.0")
 
-    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.13.3")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.14.2")
 }
 
 tasks.test {

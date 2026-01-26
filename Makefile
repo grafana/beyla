@@ -246,7 +246,7 @@ test-privileged:
 .PHONY: helm-unittest
 helm-unittest:
 	@echo "### Running Helm chart unit tests"
-	$(OCI_BIN) run --rm -v "$(PROJECT_DIR):/apps" -w /apps helmunittest/helm-unittest -f charts/beyla/tests/unit/*.yaml charts/beyla
+	$(OCI_BIN) run --rm -v "$(PROJECT_DIR):/apps" -w /apps -u "$$(id -u)" helmunittest/helm-unittest -f charts/beyla/tests/unit/*.yaml charts/beyla
 
 .PHONY: helm-docs
 helm-docs:

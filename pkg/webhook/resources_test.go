@@ -242,22 +242,22 @@ func TestChooseServiceVersion(t *testing.T) {
 			expected: "",
 		},
 		{
-			name:                           "digest only returns empty",
+			name:                           "digest only",
 			meta:                           &metav1.ObjectMeta{},
 			useLabelsForResourceAttributes: false,
 			container: &corev1.Container{
-				Image: "myapp@sha256:1234567890abcdef",
+				Image: "myapp@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 			},
-			expected: "", // Current implementation doesn't support digest-only format
+			expected: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 		},
 		{
-			name:                           "tag and digest returns empty",
+			name:                           "tag and digest",
 			meta:                           &metav1.ObjectMeta{},
 			useLabelsForResourceAttributes: false,
 			container: &corev1.Container{
-				Image: "myapp:v1.0.0@sha256:1234567890abcdef",
+				Image: "myapp:v1.0.0@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 			},
-			expected: "", // Current implementation doesn't support tag+digest format
+			expected: "v1.0.0@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 		},
 	}
 
@@ -328,14 +328,24 @@ func TestParseServiceVersionFromImage(t *testing.T) {
 			expected: "v1.0.0",
 		},
 		{
-			name:      "digest only",
-			image:     "myapp@sha256:abcdef1234567890",
-			expectErr: true, // Current parser doesn't handle digest-only format
+			name:     "digest only",
+			image:    "myapp@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+			expected: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 		},
 		{
-			name:      "tag and digest",
-			image:     "myapp:v1.0.0@sha256:abcdef1234567890",
-			expectErr: true, // Current parser doesn't handle tag+digest format
+			name:     "tag and digest",
+			image:    "myapp:v1.0.0@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+			expected: "v1.0.0@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+		},
+		{
+			name:      "invalid digest format - too short",
+			image:     "myapp@sha256:abcdef",
+			expectErr: true,
+		},
+		{
+			name:      "invalid tag and digest format - too short",
+			image:     "myapp:v1.0.0@sha256:abcdef",
+			expectErr: true,
 		},
 		{
 			name:     "latest tag",

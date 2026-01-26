@@ -245,7 +245,7 @@ type SDKInject struct {
 	// This is used to let Beyla upgrade already instrumented services
 	// If the version doesn't match we still bounce existing pods
 	// nolint:undoc
-	SDKVersion string `yaml:"sdk_version"`
+	SDKPkgVersion string `yaml:"sdk_package_version"`
 	// The host mount path where the SDK copy init container copies the files.
 	// This is the root path, sdk_version is appended on top
 	// nolint:undoc
@@ -382,9 +382,9 @@ func (c *Config) Validate() error {
 			return ConfigError(fmt.Sprintf("unsupported OTEL traces export protocol %s", proto))
 		}
 
-		if c.Injector.SDKVersion == "" {
+		if c.Injector.SDKPkgVersion == "" {
 			return ConfigError("sdk_version must be supplied for the Injector component and this version must match the version used in the SDK init container")
-		} else if !semver.IsValid(c.Injector.SDKVersion) {
+		} else if !semver.IsValid(c.Injector.SDKPkgVersion) {
 			return ConfigError("sdk_version must be in valid semantic versioning format, e.g. v0.0.1 (the v prefix is required)")
 		}
 

@@ -167,8 +167,8 @@ func (s *Server) getInitialState(ctx context.Context) error {
 	if oldestSDK, err := s.scanner.OldestSDKVersion(); err != nil {
 		// we could be downgrading the SDK, check if the oldest version is not
 		// newer than what we are launching with now
-		if semver.Compare(oldestSDK, s.cfg.Injector.SDKVersion) > 0 {
-			oldestSDK = s.cfg.Injector.SDKVersion
+		if semver.Compare(oldestSDK, s.cfg.Injector.SDKPkgVersion) > 0 {
+			oldestSDK = s.cfg.Injector.SDKPkgVersion
 		}
 		s.cleanupOldInstrumentationVersions(s.cfg.Injector.HostMountPath, oldestSDK)
 	}

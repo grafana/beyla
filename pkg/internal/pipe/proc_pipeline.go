@@ -14,6 +14,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/export/otel/bexport"
 	"github.com/grafana/beyla/v2/pkg/export/prom"
+	msg2 "github.com/grafana/beyla/v2/pkg/internal/helpers/msg"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
 )
 
@@ -46,8 +47,8 @@ func ProcessMetricsSwarmInstancer(
 		}
 
 		// communication channel between the process collector and the metrics exporters
-		processCollectStatus := msg.NewQueue[[]*process.Status](
-			msg.ChannelBufferLen(cfg.ChannelBufferLen), msg.Name("processCollectStatus"))
+		processCollectStatus := msg2.QueueFromConfig[[]*process.Status](
+			cfg.AsOBI(), "processCollectStatus")
 
 		builder := swarm.Instancer{}
 		builder.Add(process.NewCollectorProvider(

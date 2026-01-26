@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package xdp provides DNS message parsing functionality for the XDP-based DNS response tracker.
-package xdp
+package xdp // import "go.opentelemetry.io/obi/pkg/internal/rdns/ebpf/xdp"
 
 import (
 	"bytes"

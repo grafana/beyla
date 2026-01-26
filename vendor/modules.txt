@@ -906,7 +906,7 @@ go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp/internal/request
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp/internal/semconv
 # go.opentelemetry.io/obi v0.4.1 => ./.obi-src
-## explicit; go 1.25.3
+## explicit; go 1.25.6
 go.opentelemetry.io/obi/pkg/appolly
 go.opentelemetry.io/obi/pkg/appolly/app/request
 go.opentelemetry.io/obi/pkg/appolly/app/svc
@@ -949,6 +949,7 @@ go.opentelemetry.io/obi/pkg/internal/ebpf/generictracer
 go.opentelemetry.io/obi/pkg/internal/ebpf/gotracer
 go.opentelemetry.io/obi/pkg/internal/ebpf/gpuevent
 go.opentelemetry.io/obi/pkg/internal/ebpf/kafkaparser
+go.opentelemetry.io/obi/pkg/internal/ebpf/logenricher
 go.opentelemetry.io/obi/pkg/internal/ebpf/logger
 go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf
 go.opentelemetry.io/obi/pkg/internal/ebpf/tcmanager
@@ -961,6 +962,7 @@ go.opentelemetry.io/obi/pkg/internal/helpers
 go.opentelemetry.io/obi/pkg/internal/helpers/cache
 go.opentelemetry.io/obi/pkg/internal/helpers/container
 go.opentelemetry.io/obi/pkg/internal/helpers/maps
+go.opentelemetry.io/obi/pkg/internal/helpers/msg
 go.opentelemetry.io/obi/pkg/internal/helpers/sync
 go.opentelemetry.io/obi/pkg/internal/java
 go.opentelemetry.io/obi/pkg/internal/kube
@@ -974,6 +976,7 @@ go.opentelemetry.io/obi/pkg/internal/nodejs
 go.opentelemetry.io/obi/pkg/internal/procs
 go.opentelemetry.io/obi/pkg/internal/rdns/ebpf/xdp
 go.opentelemetry.io/obi/pkg/internal/rdns/store
+go.opentelemetry.io/obi/pkg/internal/shardedqueue
 go.opentelemetry.io/obi/pkg/internal/split
 go.opentelemetry.io/obi/pkg/internal/sqlprune
 go.opentelemetry.io/obi/pkg/internal/traces

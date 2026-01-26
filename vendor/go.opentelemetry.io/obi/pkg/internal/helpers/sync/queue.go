@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package sync
+package sync // import "go.opentelemetry.io/obi/pkg/internal/helpers/sync"
 
 import (
 	"sync"

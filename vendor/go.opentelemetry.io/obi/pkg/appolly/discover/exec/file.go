@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package exec provides the utilities to analyze the executable code
-package exec
+package exec // import "go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 
 import (
 	"debug/elf"

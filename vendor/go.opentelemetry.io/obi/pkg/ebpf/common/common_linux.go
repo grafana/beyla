@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package ebpfcommon
+package ebpfcommon // import "go.opentelemetry.io/obi/pkg/ebpf/common"
 
 import (
 	"errors"
@@ -9,8 +9,10 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"syscall"
 
+	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/link"
 	"golang.org/x/sys/unix"
 
@@ -176,4 +178,59 @@ func CWDForPID(pid int32) (string, error) {
 	}
 
 	return cwd, nil
+}
+
+type KSym string
+
+const (
+	KSymPipeWrite     KSym = "pipe_write"
+	KSymAnonPipeWrite KSym = "anon_pipe_write"
+
+	// Stable symbol, used for testing
+	KSymTCPSendmsg KSym = "tcp_sendmsg"
+	// Non-existent symbol, used for testing
+	KSymTestDummy KSym = "test_dummy"
+)
+
+var kSymsCache = struct {
+	sync.Once
+	syms map[KSym]bool
+	err  error
+}{
+	syms: map[KSym]bool{
+		KSymPipeWrite:     false,
+		KSymAnonPipeWrite: false,
+		KSymTCPSendmsg:    false,
+		KSymTestDummy:     false,
+	},
+}
+
+func KernelHasSymbol(sym KSym) (bool, error) {
+	kSymsCache.Do(func() {
+		spec, err := btf.LoadKernelSpec()
+		if err != nil {
+			kSymsCache.err = fmt.Errorf("failed to load kernel BTF spec: %w", err)
+			return
+		}
+
+		for s := range kSymsCache.syms {
+			var function *btf.Func
+			if err := spec.TypeByName(string(s), &function); err != nil {
+				kSymsCache.syms[s] = false
+				continue
+			}
+			kSymsCache.syms[s] = true
+		}
+	})
+
+	if kSymsCache.err != nil {
+		return false, kSymsCache.err
+	}
+
+	found, ok := kSymsCache.syms[sym]
+	if !ok {
+		return false, fmt.Errorf("symbol %q not in cache", sym)
+	}
+
+	return found, nil
 }

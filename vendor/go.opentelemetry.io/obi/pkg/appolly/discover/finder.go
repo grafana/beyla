@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package discover
+package discover // import "go.opentelemetry.io/obi/pkg/appolly/discover"
 
 import (
 	"context"
@@ -14,8 +14,10 @@ import (
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/generictracer"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/gotracer"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/gpuevent"
+	"go.opentelemetry.io/obi/pkg/internal/ebpf/logenricher"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/tctracer"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/tpinjector"
+	msgh "go.opentelemetry.io/obi/pkg/internal/helpers/msg"
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
@@ -64,39 +66,33 @@ func (pf *ProcessFinder) Start(ctx context.Context, opts ...ProcessFinderStartOp
 		opt(&startConfig)
 	}
 
-	tracerEvents := msg.NewQueue[Event[*ebpf.Instrumentable]](
-		msg.ChannelBufferLen(pf.cfg.ChannelBufferLen), msg.Name("tracerEvents"))
+	tracerEvents := msgh.QueueFromConfig[Event[*ebpf.Instrumentable]](pf.cfg, "tracerEvents")
 
 	swi := swarm.Instancer{}
-	processEvents := msg.NewQueue[[]Event[ProcessAttrs]](
-		msg.ChannelBufferLen(pf.cfg.ChannelBufferLen), msg.Name("processEvents"))
+	processEvents := msgh.QueueFromConfig[[]Event[ProcessAttrs]](pf.cfg, "processEvents")
 
 	swi.Add(swarm.DirectInstance(ProcessWatcherFunc(pf.cfg, pf.ebpfEventContext, processEvents)),
 		swarm.WithID("ProcessWatcher"))
 
 	enrichedProcessEvents := startConfig.enrichedProcessEvents
 	if enrichedProcessEvents == nil {
-		enrichedProcessEvents = msg.NewQueue[[]Event[ProcessAttrs]](
-			msg.ChannelBufferLen(pf.cfg.ChannelBufferLen), msg.Name("enrichedProcessEvents"))
+		enrichedProcessEvents = msgh.QueueFromConfig[[]Event[ProcessAttrs]](pf.cfg, "enrichedProcessEvents")
 	}
 	swi.Add(WatcherKubeEnricherProvider(pf.ctxInfo.K8sInformer, processEvents, enrichedProcessEvents),
 		swarm.WithID("WatcherKubeEnricher"))
 
-	criteriaFilteredEvents := msg.NewQueue[[]Event[ProcessMatch]](
-		msg.ChannelBufferLen(pf.cfg.ChannelBufferLen), msg.Name("criteriaFilteredEvents"))
+	criteriaFilteredEvents := msgh.QueueFromConfig[[]Event[ProcessMatch]](pf.cfg, "criteriaFilteredEvents")
 	swi.Add(criteriaMatcherProvider(pf.cfg, enrichedProcessEvents, criteriaFilteredEvents),
 		swarm.WithID("CriteriaMatcher"))
 
-	executableTypes := msg.NewQueue[[]Event[ebpf.Instrumentable]](
-		msg.ChannelBufferLen(pf.cfg.ChannelBufferLen), msg.Name("executableTypes"))
+	executableTypes := msgh.QueueFromConfig[[]Event[ebpf.Instrumentable]](pf.cfg, "executableTypes")
 	swi.Add(ExecTyperProvider(pf.cfg, pf.ctxInfo.Metrics, pf.ctxInfo.K8sInformer, criteriaFilteredEvents, executableTypes),
 		swarm.WithID("ExecTyper"))
 
 	// we could subscribe ContainerDBUpdater directly to the executableTypes queue and not providing any output channel
 	// but forcing the output by the executableTypesReplica channel only after the Container DB has been updated
 	// prevents race conditions in later stages of the pipeline
-	storedExecutableTypes := msg.NewQueue[[]Event[ebpf.Instrumentable]](
-		msg.ChannelBufferLen(pf.cfg.ChannelBufferLen), msg.Name("storedExecutableTypes"))
+	storedExecutableTypes := msgh.QueueFromConfig[[]Event[ebpf.Instrumentable]](pf.cfg, "storedExecutableTypes")
 	swi.Add(ContainerDBUpdaterProvider(pf.ctxInfo.K8sInformer, executableTypes, storedExecutableTypes),
 		swarm.WithID("ContainerDBUpdater"))
 
@@ -131,12 +127,14 @@ func (pf *ProcessFinder) Done() <-chan error {
 func newCommonTracersGroup(cfg *obi.Config) []ebpf.Tracer {
 	var tracers []ebpf.Tracer
 
-	// Add tracers based on enabled propagation modes
-	// tpinjector handles both HTTP headers (sk_msg) and TCP options (BPF_SOCK_OPS)
+	// Add tracers based on configuration
+
+	// Enables tpinjector which handles context propagation via both HTTP headers (sk_msg) and TCP options (BPF_SOCK_OPS)
 	if cfg.EBPF.ContextPropagation.HasHeaders() || cfg.EBPF.ContextPropagation.HasTCP() {
 		tracers = append(tracers, tpinjector.New(cfg))
 	}
-	// tctracer handles IP options only (TC egress/ingress)
+
+	// Enables tctracer which handles context propagations via IP options only (TC egress/ingress)
 	if cfg.EBPF.ContextPropagation.HasIPOptions() {
 		tracers = append(tracers, tctracer.New(cfg))
 	}
@@ -149,8 +147,23 @@ func newGoTracersGroup(pidFilter ebpfcommon.ServiceFilter, cfg *obi.Config, metr
 }
 
 func newGenericTracersGroup(pidFilter ebpfcommon.ServiceFilter, cfg *obi.Config, metrics imetrics.Reporter) []ebpf.Tracer {
+	var tracers []ebpf.Tracer
+
+	// Add tracers based on configuration
+	tracers = append(tracers, generictracer.New(pidFilter, cfg, metrics))
+
+	// Enables GPU tracer
 	if cfg.EBPF.InstrumentGPU {
-		return []ebpf.Tracer{generictracer.New(pidFilter, cfg, metrics), gpuevent.New(pidFilter, cfg, metrics)}
+		tracers = append(tracers, gpuevent.New(pidFilter, cfg, metrics))
 	}
-	return []ebpf.Tracer{generictracer.New(pidFilter, cfg, metrics)}
+
+	// Enables log enricher which handles trace-log correlation
+	if cfg.EBPF.LogEnricher.Enabled() {
+		logEnricher := logenricher.New(cfg)
+		if logEnricher != nil {
+			tracers = append(tracers, logEnricher)
+		}
+	}
+
+	return tracers
 }

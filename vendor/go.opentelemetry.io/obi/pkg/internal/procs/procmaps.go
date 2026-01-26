@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package procs
+package procs // import "go.opentelemetry.io/obi/pkg/internal/procs"
 
 import (
 	"path/filepath"

@@ -3,7 +3,7 @@
 
 //go:build !linux
 
-package harvest
+package harvest // import "go.opentelemetry.io/obi/pkg/internal/transform/route/harvest"
 
 type (
 	JavaRoutes   struct{ Attacher JavaAttacher }

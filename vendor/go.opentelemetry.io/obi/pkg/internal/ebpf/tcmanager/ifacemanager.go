@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package tcmanager
+package tcmanager // import "go.opentelemetry.io/obi/pkg/internal/ebpf/tcmanager"
 
 import (
 	"context"

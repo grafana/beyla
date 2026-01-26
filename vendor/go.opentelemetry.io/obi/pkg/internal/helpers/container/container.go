@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package container provides helper tools to inspect container information
-package container
+package container // import "go.opentelemetry.io/obi/pkg/internal/helpers/container"
 
 import (
 	"bytes"

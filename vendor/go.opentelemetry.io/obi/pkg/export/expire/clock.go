@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package expire
+package expire // import "go.opentelemetry.io/obi/pkg/export/expire"
 
 import (
 	"sync"

@@ -3,7 +3,7 @@
 
 //go:build !linux
 
-package javaagent
+package javaagent // import "go.opentelemetry.io/obi/pkg/internal/java"
 
 // placeholder to avoid compilation errors in non-linux platforms
 

@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package ebpfcommon
+package ebpfcommon // import "go.opentelemetry.io/obi/pkg/ebpf/common"
 
 import (
 	"log/slog"
@@ -54,7 +54,7 @@ type PIDsFilter struct {
 	metrics             imetrics.Reporter
 }
 
-func newPIDsFilter(c *services.DiscoveryConfig, log *slog.Logger, metrics imetrics.Reporter) *PIDsFilter {
+func NewPIDsFilter(c *services.DiscoveryConfig, log *slog.Logger, metrics imetrics.Reporter) *PIDsFilter {
 	return &PIDsFilter{
 		log:                 log,
 		current:             map[uint32]map[uint32]PIDInfo{},
@@ -64,10 +64,6 @@ func newPIDsFilter(c *services.DiscoveryConfig, log *slog.Logger, metrics imetri
 		defaultOtlpGRPCPort: c.DefaultOtlpGRPCPort,
 		metrics:             metrics,
 	}
-}
-
-func CommonPIDsFilter(c *services.DiscoveryConfig, metrics imetrics.Reporter) ServiceFilter {
-	return newPIDsFilter(c, slog.With("component", "ebpfCommon.CommonPIDsFilter"), metrics)
 }
 
 func (pf *PIDsFilter) AllowPID(pid, ns uint32, svc *svc.Attrs, pidType PIDType) {

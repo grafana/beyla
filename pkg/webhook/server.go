@@ -11,14 +11,16 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/grafana/beyla/v2/pkg/beyla"
+	"golang.org/x/mod/semver"
+
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/kube"
 	"go.opentelemetry.io/obi/pkg/kube/kubecache/informer"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/transform"
-	"golang.org/x/mod/semver"
+
+	"github.com/grafana/beyla/v2/pkg/beyla"
 )
 
 // Server represents the webhook server
@@ -170,7 +172,10 @@ func (s *Server) getInitialState(ctx context.Context) error {
 		if semver.Compare(oldestSDK, s.cfg.Injector.SDKPkgVersion) > 0 {
 			oldestSDK = s.cfg.Injector.SDKPkgVersion
 		}
-		s.cleanupOldInstrumentationVersions(s.cfg.Injector.HostMountPath, oldestSDK)
+
+		if err := s.cleanupOldInstrumentationVersions(s.cfg.Injector.HostMountPath, oldestSDK); err != nil {
+			s.logger.Warn("error cleaning up old instrumentation versions", "error", err)
+		}
 	}
 
 	go store.Subscribe(s)
@@ -214,19 +219,21 @@ func (s *Server) On(event *informer.Event) error {
 				// It's important to check here for the SDK supported programming languages.
 				// Go would be the killer here, since many of the Kubernetes services are written in
 				// Go, and we don't want to say bounce coredns.
-				instrumented := s.mutator.AlreadyInstrumented(a)
-				if !instrumented && s.mutator.CanInstrument(a.kind) && !s.mutator.PreloadsSomethingElse(a) {
-					if s.matcher.MatchProcessInfo(a) {
-						s.restartDeployment(a)
+				switch s.mutator.AlreadyInstrumented(a) {
+				case false:
+					if s.mutator.CanInstrument(a.kind) && !s.mutator.PreloadsSomethingElse(a) {
+						if s.matcher.MatchProcessInfo(a) {
+							s.restartDeployment(a)
+						}
+					} else {
+						s.logger.Debug("ignoring process because of unsupported programming language or LD_PRELOAD", "info", a)
 					}
-				} else if instrumented {
+				case true:
 					// If this pod was instrumented, but the new Beyla config says don't anymore
 					// we bounce the pods to undo the instrumentation
 					if !s.matcher.MatchProcessInfo(a) {
 						s.restartDeployment(a)
 					}
-				} else {
-					s.logger.Debug("ignoring process because of unsupported programming language", "info", a)
 				}
 			}
 		}

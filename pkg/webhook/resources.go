@@ -8,11 +8,12 @@ import (
 	"strings"
 
 	"github.com/distribution/reference"
-	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/otel/attribute"
 	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 )
 
 const (
@@ -27,6 +28,7 @@ var (
 	LabelAppVersion = []string{"app.kubernetes.io/version"}
 )
 
+// nolint:gocritic
 func (pm *PodMutator) setResourceAttributes(meta *metav1.ObjectMeta, container *corev1.Container) {
 	cfg := pm.cfg.Injector.Resources
 
@@ -69,32 +71,32 @@ func (pm *PodMutator) setResourceAttributes(meta *metav1.ObjectMeta, container *
 	}
 
 	// todo: propagators and sampler from config?
-	//idx = getIndexOfEnv(container.Env, constants.EnvOTELPropagators)
-	//if idx == -1 && len(otelinst.Spec.Propagators) > 0 {
-	//	propagators := *(*[]string)((unsafe.Pointer(&otelinst.Spec.Propagators)))
-	//	container.Env = append(container.Env, corev1.EnvVar{
-	//		Name:  constants.EnvOTELPropagators,
-	//		Value: strings.Join(propagators, ","),
-	//	})
-	//}
-	//
-	//idx = getIndexOfEnv(container.Env, constants.EnvOTELTracesSampler)
-	//// configure sampler only if it is configured in the CR
-	//if idx == -1 && otelinst.Spec.Sampler.Type != "" {
-	//	idxSamplerArg := getIndexOfEnv(container.Env, constants.EnvOTELTracesSamplerArg)
-	//	if idxSamplerArg == -1 {
-	//		container.Env = append(container.Env, corev1.EnvVar{
-	//			Name:  constants.EnvOTELTracesSampler,
-	//			Value: string(otelinst.Spec.Sampler.Type),
-	//		})
-	//		if otelinst.Spec.Sampler.Argument != "" {
-	//			container.Env = append(container.Env, corev1.EnvVar{
-	//				Name:  constants.EnvOTELTracesSamplerArg,
-	//				Value: otelinst.Spec.Sampler.Argument,
-	//			})
-	//		}
-	//	}
-	//}
+	// idx = getIndexOfEnv(container.Env, constants.EnvOTELPropagators)
+	// if idx == -1 && len(otelinst.Spec.Propagators) > 0 {
+	// 	propagators := *(*[]string)((unsafe.Pointer(&otelinst.Spec.Propagators)))
+	// 	container.Env = append(container.Env, corev1.EnvVar{
+	// 		Name:  constants.EnvOTELPropagators,
+	// 		Value: strings.Join(propagators, ","),
+	// 	})
+	// }
+
+	// idx = getIndexOfEnv(container.Env, constants.EnvOTELTracesSampler)
+	// // configure sampler only if it is configured in the CR
+	// if idx == -1 && otelinst.Spec.Sampler.Type != "" {
+	// 	idxSamplerArg := getIndexOfEnv(container.Env, constants.EnvOTELTracesSamplerArg)
+	// 	if idxSamplerArg == -1 {
+	// 		container.Env = append(container.Env, corev1.EnvVar{
+	// 			Name:  constants.EnvOTELTracesSampler,
+	// 			Value: string(otelinst.Spec.Sampler.Type),
+	// 		})
+	// 		if otelinst.Spec.Sampler.Argument != "" {
+	// 			container.Env = append(container.Env, corev1.EnvVar{
+	// 				Name:  constants.EnvOTELTracesSamplerArg,
+	// 				Value: otelinst.Spec.Sampler.Argument,
+	// 			})
+	// 		}
+	// 	}
+	// }
 
 	if pm.cfg.Metrics.Features.AnySpanMetrics() {
 		extraResAttrs[attr.SkipSpanMetrics.OTEL()] = "true"
@@ -182,7 +184,7 @@ func chooseServiceNamespace(meta *metav1.ObjectMeta, useLabelsForResourceAttribu
 	return namespaceName
 }
 
-var cannotRetrieveImage = errors.New("cannot retrieve image name")
+var errCannotRetrieveImage = errors.New("cannot retrieve image name")
 
 // parseServiceVersionFromImage parses the service version for differently-formatted image names
 // according to https://github.com/open-telemetry/semantic-conventions/blob/main/docs/non-normative/k8s-attributes.md#how-serviceversion-should-be-calculated
@@ -194,7 +196,7 @@ func parseServiceVersionFromImage(image string) (string, error) {
 
 	namedRef, ok := ref.(reference.Named)
 	if !ok {
-		return "", cannotRetrieveImage
+		return "", errCannotRetrieveImage
 	}
 	var tag, digest string
 	if taggedRef, ok := namedRef.(reference.Tagged); ok {
@@ -213,7 +215,7 @@ func parseServiceVersionFromImage(image string) (string, error) {
 		return tag, nil
 	}
 
-	return "", cannotRetrieveImage
+	return "", errCannotRetrieveImage
 }
 
 // chooseServiceInstanceId returns the service.instance.id to be used in the instrumentation.

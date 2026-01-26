@@ -261,10 +261,12 @@ type SDKResource struct {
 	// Attributes defines attributes that are added to the resource.
 	// For example environment: dev
 	// +optional
+	// nolint:undoc
 	Attributes map[string]string `yaml:"resourceAttributes" env:"BEYLA_RESOURCE_ATTRIBUTES"`
 
 	// AddK8sUIDAttributes defines whether K8s UID attributes should be collected (e.g. k8s.deployment.uid).
 	// +optional
+	// nolint:undoc
 	AddK8sUIDAttributes bool `yaml:"addK8sUIDAttributes" env:"BEYLA_RESOURCE_ADD_K8S_UID_ATTRIBUTES"`
 
 	// UseLabelsForResourceAttributes defines whether to use common labels for resource attributes:
@@ -272,6 +274,7 @@ type SDKResource struct {
 	//   - `app.kubernetes.io/instance` becomes `service.name`
 	//   - `app.kubernetes.io/name` becomes `service.name`
 	//   - `app.kubernetes.io/version` becomes `service.version`
+	// nolint:undoc
 	UseLabelsForResourceAttributes bool `yaml:"useLabelsForResourceAttributes,omitempty" env:"BEYLA_RESOURCE_USE_LABELS_FOR_RESOURCE_ATTRIBUTES"`
 }
 

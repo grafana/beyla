@@ -4,15 +4,17 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/stretchr/testify/assert"
+	admissionv1 "k8s.io/api/admission/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/kube/kubecache/informer"
-	admissionv1 "k8s.io/api/admission/v1"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/grafana/beyla/v2/pkg/beyla"
 )
 
 func TestErrorResponse(t *testing.T) {
@@ -545,7 +547,7 @@ func TestPodMutator_MutatePod(t *testing.T) {
 			assert.Equal(t, tt.expectModified, modified, "mutation result mismatch")
 
 			if tt.expectLabel {
-				label, ok := tt.pod.ObjectMeta.Labels[instrumentedLabel]
+				label, ok := tt.pod.Labels[instrumentedLabel]
 				assert.True(t, ok, "instrumented label should be present")
 				assert.Equal(t, tt.cfg.Injector.SDKPkgVersion, label)
 			}
@@ -555,8 +557,8 @@ func TestPodMutator_MutatePod(t *testing.T) {
 				for _, vol := range tt.pod.Spec.Volumes {
 					if vol.Name == injectVolumeName {
 						found = true
-						assert.NotNil(t, vol.VolumeSource.HostPath)
-						assert.Equal(t, tt.cfg.Injector.HostPathVolumeDir, vol.VolumeSource.HostPath.Path)
+						assert.NotNil(t, vol.HostPath)
+						assert.Equal(t, tt.cfg.Injector.HostPathVolumeDir, vol.HostPath.Path)
 						break
 					}
 				}
@@ -638,9 +640,9 @@ func TestPodMutator_AddLabel(t *testing.T) {
 		expected map[string]string
 	}{
 		{
-			name: "add label to empty labels",
-			meta: &metav1.ObjectMeta{},
-			key:  "test-key",
+			name:  "add label to empty labels",
+			meta:  &metav1.ObjectMeta{},
+			key:   "test-key",
 			value: "test-value",
 			expected: map[string]string{
 				"test-key": "test-value",
@@ -653,7 +655,7 @@ func TestPodMutator_AddLabel(t *testing.T) {
 					"existing": "label",
 				},
 			},
-			key:  "new-key",
+			key:   "new-key",
 			value: "new-value",
 			expected: map[string]string{
 				"existing": "label",
@@ -667,7 +669,7 @@ func TestPodMutator_AddLabel(t *testing.T) {
 					"test-key": "old-value",
 				},
 			},
-			key:  "test-key",
+			key:   "test-key",
 			value: "new-value",
 			expected: map[string]string{
 				"test-key": "new-value",
@@ -796,11 +798,11 @@ func TestFindEnvVar(t *testing.T) {
 
 func TestSetEnvVar(t *testing.T) {
 	tests := []struct {
-		name         string
-		container    *corev1.Container
-		envVarName   string
-		value        string
-		expectedEnv  []corev1.EnvVar
+		name        string
+		container   *corev1.Container
+		envVarName  string
+		value       string
+		expectedEnv []corev1.EnvVar
 	}{
 		{
 			name:       "add new env var to empty list",
@@ -883,15 +885,15 @@ func TestSetEnvVar(t *testing.T) {
 
 func TestPodMutator_AddEnvVars(t *testing.T) {
 	tests := []struct {
-		name               string
-		meta               *metav1.ObjectMeta
-		container          *corev1.Container
-		cfg                *beyla.Config
-		endpoint           string
-		proto              string
-		exportHeaders      map[string]string
-		expectedEnvCount   int
-		checkEnvVars       map[string]string
+		name             string
+		meta             *metav1.ObjectMeta
+		container        *corev1.Container
+		cfg              *beyla.Config
+		endpoint         string
+		proto            string
+		exportHeaders    map[string]string
+		expectedEnvCount int
+		checkEnvVars     map[string]string
 	}{
 		{
 			name: "add basic env vars",
@@ -907,8 +909,8 @@ func TestPodMutator_AddEnvVars(t *testing.T) {
 					SDKPkgVersion: "v0.0.3",
 				},
 			},
-			endpoint: "http://localhost:4318",
-			proto:    "http/protobuf",
+			endpoint:      "http://localhost:4318",
+			proto:         "http/protobuf",
 			exportHeaders: map[string]string{},
 			checkEnvVars: map[string]string{
 				envVarSDKVersion:                "v0.0.3",
@@ -939,11 +941,11 @@ func TestPodMutator_AddEnvVars(t *testing.T) {
 				"OTEL_EXPORTER_OTLP_HEADERS": "Authorization=Bearer token",
 			},
 			checkEnvVars: map[string]string{
-				envVarSDKVersion:                  "v0.0.4",
-				envVarLdPreloadName:               envVarLdPreloadValue,
-				envOtelExporterOtlpEndpointName:   "http://localhost:4318",
-				envOtelExporterOtlpProtocolName:   "grpc",
-				"OTEL_EXPORTER_OTLP_HEADERS":      "Authorization=Bearer token",
+				envVarSDKVersion:                "v0.0.4",
+				envVarLdPreloadName:             envVarLdPreloadValue,
+				envOtelExporterOtlpEndpointName: "http://localhost:4318",
+				envOtelExporterOtlpProtocolName: "grpc",
+				"OTEL_EXPORTER_OTLP_HEADERS":    "Authorization=Bearer token",
 			},
 		},
 	}
@@ -978,9 +980,9 @@ func TestPodMutator_AddEnvVars(t *testing.T) {
 
 func TestOwnersFrom(t *testing.T) {
 	tests := []struct {
-		name     string
-		meta     *metav1.ObjectMeta
-		expected int
+		name        string
+		meta        *metav1.ObjectMeta
+		expected    int
 		checkOwners func(t *testing.T, owners []*informer.Owner)
 	}{
 		{
@@ -1165,7 +1167,7 @@ func TestProcessMetadata(t *testing.T) {
 			info := processMetadata(tt.meta)
 
 			assert.NotNil(t, info)
-			
+
 			if tt.checkMetadata != nil {
 				for key, expected := range tt.checkMetadata {
 					actual, ok := info.metadata[key]

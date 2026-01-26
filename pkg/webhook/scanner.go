@@ -10,8 +10,9 @@ import (
 
 	"github.com/prometheus/procfs"
 	"github.com/shirou/gopsutil/v3/process"
-	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"golang.org/x/mod/semver"
+
+	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 )
 
 type LocalProcessScanner struct {

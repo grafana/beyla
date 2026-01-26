@@ -4,9 +4,11 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/stretchr/testify/assert"
+
 	"go.opentelemetry.io/obi/pkg/appolly/services"
+
+	"github.com/grafana/beyla/v2/pkg/beyla"
 )
 
 func TestPodMatcher_HasSelectionCriteria(t *testing.T) {
@@ -315,7 +317,7 @@ func TestNewPodMatcher(t *testing.T) {
 	})
 
 	t.Run("creates matcher with instrumentation criteria", func(t *testing.T) {
-		globs := []services.GlobAttributes{services.GlobAttributes{
+		globs := []services.GlobAttributes{{
 			Metadata: map[string]*services.GlobAttr{
 				"k8s_namespace": strToGlob("prod*"),
 			}},

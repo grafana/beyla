@@ -10,18 +10,20 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/grafana/beyla/v2/pkg/beyla"
-	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
-	"go.opentelemetry.io/obi/pkg/appolly/services"
-	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
-	"go.opentelemetry.io/obi/pkg/kube/kubecache/informer"
-	"go.opentelemetry.io/obi/pkg/transform"
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+
+	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
+	"go.opentelemetry.io/obi/pkg/appolly/services"
+	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
+	"go.opentelemetry.io/obi/pkg/kube/kubecache/informer"
+	"go.opentelemetry.io/obi/pkg/transform"
+
+	"github.com/grafana/beyla/v2/pkg/beyla"
 )
 
 var (
@@ -227,6 +229,10 @@ func (pm *PodMutator) HandleMutate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	pm.mutateResponse(w, admResponse)
+}
+
+func (pm *PodMutator) mutateResponse(w http.ResponseWriter, admResponse *admissionv1.AdmissionResponse) {
 	// Construct the response
 	admReviewResponse := admissionv1.AdmissionReview{
 		TypeMeta: metav1.TypeMeta{
@@ -296,8 +302,9 @@ func (pm *PodMutator) mutatePod(pod *corev1.Pod) bool {
 }
 
 func (pm *PodMutator) alreadyInstrumented(spec *corev1.PodSpec, meta *metav1.ObjectMeta) bool {
-	for _, c := range spec.Containers {
-		if _, ok := findEnvVar(&c, envOtelInjectorConfigFileName); ok {
+	for i := range spec.Containers {
+		c := &spec.Containers[i]
+		if _, ok := findEnvVar(c, envOtelInjectorConfigFileName); ok {
 			pm.logger.Debug("container already instrumented, ignoring...", "container", c.Name)
 			return true
 		}
@@ -494,5 +501,7 @@ func (pm *PodMutator) matchesSelection(meta *metav1.ObjectMeta) bool {
 // HealthCheck is a simple health check endpoint
 func (pm *PodMutator) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("OK"))
+	if _, err := w.Write([]byte("OK")); err != nil {
+		pm.logger.Debug("error responding to health check", "error", err)
+	}
 }

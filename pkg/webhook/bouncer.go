@@ -7,10 +7,11 @@ import (
 	"strings"
 	"time"
 
-	"go.opentelemetry.io/obi/pkg/pipe/global"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
+
+	"go.opentelemetry.io/obi/pkg/pipe/global"
 )
 
 type PodBouncer struct {

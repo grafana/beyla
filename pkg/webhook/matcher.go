@@ -3,9 +3,10 @@ package webhook
 import (
 	"log/slog"
 
-	"github.com/grafana/beyla/v2/pkg/beyla"
 	"go.opentelemetry.io/obi/pkg/appolly/discover"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
+
+	"github.com/grafana/beyla/v2/pkg/beyla"
 )
 
 type PodMatcher struct {

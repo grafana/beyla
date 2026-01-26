@@ -14,13 +14,14 @@ import (
 	"strconv"
 	"time"
 
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+
 	"go.opentelemetry.io/auto/sdk"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/grafana/beyla/v2/internal/test/integration/components/testserver/arg"
 	pb "github.com/grafana/beyla/v2/internal/test/integration/components/testserver/grpc/routeguide"

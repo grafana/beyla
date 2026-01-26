@@ -40,7 +40,7 @@ repositories {
 
 dependencies {
     implementation("net.bytebuddy:byte-buddy:1.18.4")
-    implementation("net.bytebuddy:byte-buddy-agent:1.17.8")
+    implementation("net.bytebuddy:byte-buddy-agent:1.18.4")
     implementation("net.java.dev.jna:jna:5.18.1")
     implementation("com.github.ben-manes.caffeine:caffeine:2.9.3")
 

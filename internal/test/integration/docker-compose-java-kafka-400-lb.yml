@@ -1,0 +1,202 @@
+services:
+  kafkakafkakafkakafka000000000000000000000000000001:
+    image: docker.io/bitnamilegacy/kafka:4.0.0@sha256:f45d5b813412e1ef7ce67b467309a84e4c6dc03d7626a0b6da867db9b69bd107
+    hostname: kafka1
+    container_name: kafka-1
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+    environment:
+      - KAFKA_ENABLE_KRAFT=yes
+      - KAFKA_CFG_NODE_ID=1
+      - KAFKA_BROKER_ID=1
+      - KAFKA_CFG_PROCESS_ROLES=broker,controller
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@kafkakafkakafkakafka000000000000000000000000000001:9093,2@kafkakafkakafkakafka000000000000000000000000000002:9093,3@kafkakafkakafkakafka000000000000000000000000000003:9093
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafkakafkakafkakafka000000000000000000000000000001:9092
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+      - KAFKA_KRAFT_CLUSTER_ID="13fda84d-f438-4b56-921c-9f156c809a31"
+      - KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR=3
+      - KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0
+      - KAFKA_DEFAULT_REPLICATION_FACTOR=3
+      - KAFKA_MIN_INSYNC_REPLICAS=2
+      - KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3
+      - KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR=2
+      - ALLOW_PLAINTEXT_LISTENER=yes
+      - KAFKA_CFG_TRANSACTION_STATE_LOG_NUM_PARTITIONS=1
+      - KAFKA_CFG_OFFSETS_TOPIC_NUM_PARTITIONS=1
+    volumes:
+      - kafka1_data:/bitnami/kafka
+
+  kafkakafkakafkakafka000000000000000000000000000002:
+    image: docker.io/bitnamilegacy/kafka:4.0.0@sha256:f45d5b813412e1ef7ce67b467309a84e4c6dc03d7626a0b6da867db9b69bd107
+    hostname: kafka2
+    container_name: kafka-2
+    ports:
+      - "9094:9092"
+      - "9095:9093"
+    environment:
+      - KAFKA_ENABLE_KRAFT=yes
+      - KAFKA_CFG_NODE_ID=2
+      - KAFKA_BROKER_ID=2
+      - KAFKA_CFG_PROCESS_ROLES=broker,controller
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@kafkakafkakafkakafka000000000000000000000000000001:9093,2@kafkakafkakafkakafka000000000000000000000000000002:9093,3@kafkakafkakafkakafka000000000000000000000000000003:9093
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafkakafkakafkakafka000000000000000000000000000002:9092
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+      - KAFKA_KRAFT_CLUSTER_ID="13fda84d-f438-4b56-921c-9f156c809a31"
+      - KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR=3
+      - KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0
+      - KAFKA_DEFAULT_REPLICATION_FACTOR=3
+      - KAFKA_MIN_INSYNC_REPLICAS=2
+      - KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3
+      - KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR=2
+      - ALLOW_PLAINTEXT_LISTENER=yes
+      - KAFKA_CFG_TRANSACTION_STATE_LOG_NUM_PARTITIONS=1
+      - KAFKA_CFG_OFFSETS_TOPIC_NUM_PARTITIONS=1
+    volumes:
+      - kafka2_data:/bitnami/kafka
+
+  kafkakafkakafkakafka000000000000000000000000000003:
+    image: docker.io/bitnamilegacy/kafka:4.0.0@sha256:f45d5b813412e1ef7ce67b467309a84e4c6dc03d7626a0b6da867db9b69bd107
+    hostname: kafka3
+    container_name: kafka-3
+    ports:
+      - "9096:9092"
+      - "9097:9093"
+    environment:
+      - KAFKA_ENABLE_KRAFT=yes
+      - KAFKA_CFG_NODE_ID=3
+      - KAFKA_BROKER_ID=3
+      - KAFKA_CFG_PROCESS_ROLES=broker,controller
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@kafkakafkakafkakafka000000000000000000000000000001:9093,2@kafkakafkakafkakafka000000000000000000000000000002:9093,3@kafkakafkakafkakafka000000000000000000000000000003:9093
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafkakafkakafkakafka000000000000000000000000000003:9092
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+      - KAFKA_KRAFT_CLUSTER_ID="13fda84d-f438-4b56-921c-9f156c809a31"
+      - KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR=3
+      - KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0
+      - KAFKA_DEFAULT_REPLICATION_FACTOR=3
+      - KAFKA_MIN_INSYNC_REPLICAS=2
+      - KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3
+      - KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR=2
+      - ALLOW_PLAINTEXT_LISTENER=yes
+      - KAFKA_CFG_TRANSACTION_STATE_LOG_NUM_PARTITIONS=1
+      - KAFKA_CFG_OFFSETS_TOPIC_NUM_PARTITIONS=1
+    volumes:
+      - kafka3_data:/bitnami/kafka
+
+  testserver:
+    build:
+      context: ../../..
+      dockerfile: ./internal/test/integration/components/javakafka-lb/Dockerfile_400
+    image: hatest-testserver-java-kafka-lb
+    ports:
+      - "${TEST_SERVICE_PORTS}"
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka1:9092,kafka2:9092,kafka3:9092
+    depends_on:
+      otelcol:
+        condition: service_started
+      kafkakafkakafkakafka000000000000000000000000000001:
+        condition: service_started
+      kafkakafkakafkakafka000000000000000000000000000002:
+        condition: service_started
+      kafkakafkakafkakafka000000000000000000000000000003:
+        condition: service_started
+
+  autoinstrumenter:
+    build:
+      context: ../../..
+      dockerfile: ./internal/test/integration/components/beyla/Dockerfile
+    volumes:
+      - ./configs/:/configs
+      - ./system/sys/kernel/security:/sys/kernel/security
+      - ../../../testoutput:/coverage
+      - ../../../testoutput/run-java:/var/run/beyla
+    image: hatest-autoinstrumenter
+    privileged: true # in some environments (not GH Pull Requests) you can set it to false and then cap_add: [ SYS_ADMIN ]
+    network_mode: "service:testserver"
+    pid: "service:testserver"
+    environment:
+      BEYLA_CONFIG_PATH: "/configs/instrumenter-config.yml"
+      GOCOVERDIR: "/coverage"
+      BEYLA_TRACE_PRINTER: "text"
+      BEYLA_OPEN_PORT: "${BEYLA_OPEN_PORT}"
+      BEYLA_DISCOVERY_POLL_INTERVAL: 500ms
+      BEYLA_EXECUTABLE_PATH: "${BEYLA_EXECUTABLE_PATH}"
+      BEYLA_SERVICE_NAMESPACE: "integration-test"
+      BEYLA_METRICS_INTERVAL: "10ms"
+      BEYLA_BPF_BATCH_TIMEOUT: "10ms"
+      BEYLA_LOG_LEVEL: "DEBUG"
+      BEYLA_OTLP_TRACES_BATCH_TIMEOUT: "1ms"
+      BEYLA_BPF_DEBUG: "TRUE"
+      BEYLA_HOSTNAME: "beyla"
+      BEYLA_BPF_HTTP_REQUEST_TIMEOUT: "5s"
+      BEYLA_PROCESSES_INTERVAL: "100ms"
+      BEYLA_TRACES_INSTRUMENTATIONS: "kafka"
+      BEYLA_METRICS_INSTRUMENTATIONS: "kafka"
+      BEYLA_METRICS_FEATURES: "application"
+      OTEL_KAFKA_TOPIC_UUID_CACHE_SIZE: "1000"
+      BEYLA_BPF_BUFFER_SIZE_KAFKA: "1024"
+    depends_on:
+      testserver:
+        condition: service_started
+
+  # OpenTelemetry Collector
+  otelcol:
+    image: otel/opentelemetry-collector-contrib:0.104.0@sha256:e07e325e303e86f4a87a617491e921b579a92da6d404007394757ac910bf9587
+    container_name: otel-col
+    deploy:
+      resources:
+        limits:
+          memory: 125M
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol-config/otelcol-config.yml"]
+    volumes:
+      - ./configs/:/etc/otelcol-config
+    ports:
+      - "4317" # OTLP over gRPC receiver
+      - "4318:4318" # OTLP over HTTP receiver
+      - "9464" # Prometheus exporter
+      - "8888" # metrics endpoint
+    depends_on:
+      prometheus:
+        condition: service_started
+
+  # Prometheus
+  prometheus:
+    image: quay.io/prometheus/prometheus:v2.55.1@sha256:2659f4c2ebb718e7695cb9b25ffa7d6be64db013daba13e05c875451cf51b0d3
+    container_name: prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus-config.yml
+      - --web.enable-lifecycle
+      - --web.route-prefix=/
+    volumes:
+      - ./configs/:/etc/prometheus
+    ports:
+      - "9090:9090"
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.60@sha256:4fd2d70fa347d6a47e79fcb06b1c177e6079f92cba88b083153d56263082135e
+    ports:
+      - "16686:16686" # Query frontend
+      - "4317" # OTEL GRPC traces collector
+      - "4318" # OTEL HTTP traces collector
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - LOG_LEVEL=debug
+    volumes:
+      - ./configs/jaeger-ui-config.json:/etc/jaeger/ui-config.json
+    command: ["--query.ui-config=/etc/jaeger/ui-config.json"]
+
+volumes:
+  kafka1_data:
+  kafka2_data:
+  kafka3_data:

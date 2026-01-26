@@ -1,4 +1,7 @@
-//go:build integration_k8s
+// Copyright The OpenTelemetry Authors
+// SPDX-License-Identifier: Apache-2.0
+
+//go:build integration
 
 package owners
 
@@ -19,11 +22,11 @@ import (
 	k8s "github.com/grafana/beyla/v2/internal/test/integration/k8s/common"
 )
 
-// For the DaemonSet scenario, we only check that Beyla is able to instrument any
+// For the DaemonSet scenario, we only check that OBI is able to instrument any
 // process in the system. We just check that traces are properly generated without
 // entering in too many details
 func TestStatefulSetMetadata(t *testing.T) {
-	feat := features.New("Beyla is able to decorate the metadata of a statefulset").
+	feat := features.New("OBI is able to decorate the metadata of a statefulset").
 		Assess("it sends decorated traces for the statefulset",
 			func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
 				test.Eventually(t, testTimeout, func(t require.TestingT) {
@@ -78,10 +81,14 @@ func TestStatefulSetMetadata(t *testing.T) {
 					sd = jaeger.DiffAsRegexp([]jaeger.Tag{
 						{Key: "k8s.deployment.name", Type: "string"},
 						{Key: "k8s.daemonset.name", Type: "string"},
+						{Key: "k8s.job.name", Type: "string"},
+						{Key: "k8s.cronjob.name", Type: "string"},
 					}, trace.Processes[parent.ProcessID].Tags)
 					require.Equal(t, jaeger.DiffResult{
 						{ErrType: jaeger.ErrTypeMissing, Expected: jaeger.Tag{Key: "k8s.deployment.name", Type: "string"}},
 						{ErrType: jaeger.ErrTypeMissing, Expected: jaeger.Tag{Key: "k8s.daemonset.name", Type: "string"}},
+						{ErrType: jaeger.ErrTypeMissing, Expected: jaeger.Tag{Key: "k8s.job.name", Type: "string"}},
+						{ErrType: jaeger.ErrTypeMissing, Expected: jaeger.Tag{Key: "k8s.cronjob.name", Type: "string"}},
 					}, sd)
 				}, test.Interval(100*time.Millisecond))
 				return ctx

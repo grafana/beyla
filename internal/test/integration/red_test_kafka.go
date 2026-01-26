@@ -19,20 +19,20 @@ import (
 	ti "go.opentelemetry.io/obi/pkg/test/integration"
 
 	"github.com/grafana/beyla/v2/internal/test/integration/components/jaeger"
-	"github.com/grafana/beyla/v2/internal/test/integration/components/prom"
+	"github.com/grafana/beyla/v2/internal/test/integration/components/promtest"
 )
 
 func runKafkaTestCase(t *testing.T, testCase TestCase) {
 	t.Helper()
 
 	var (
-		pq = prom.Client{HostPort: prometheusHostPort}
+		pq = promtest.Client{HostPort: prometheusHostPort}
 
 		url     = testCase.Route
 		urlPath = testCase.Subpath
 		comm    = testCase.Comm
 
-		results []prom.Result
+		results []promtest.Result
 		err     error
 	)
 
@@ -44,7 +44,7 @@ func runKafkaTestCase(t *testing.T, testCase TestCase) {
 	require.Empty(t, results, "expected no HTTP requests, got %d", len(results))
 
 	// Ensure we see the expected spans in Jaeger
-	test.Eventually(t, testTimeout, func(t require.TestingT) {
+	test.Eventually(t, 2*testTimeout, func(t require.TestingT) {
 		for _, span := range testCase.Spans {
 			command := span.Name
 			resp, err := http.Get(jaegerQueryURL + "?service=" + comm + "&limit=1000")
@@ -147,13 +147,62 @@ func testJavaKafka(t *testing.T) {
 					},
 				},
 				{
-					// TODO: in here we can't recognize the topic name since the metadata response is cut to the first 4 bytes
-					// in java, to get this to work we need to use eBPF large buffers for kafka, will do so in a future PR
+					// In here we can't recognize the topic name (so we use *) since the metadata response is cut to
+					// the first 4 bytes in java, to get this to work we need to use eBPF large buffer feature for
+					// kafka which is tested in testJavaKafkaLargeBuffer
 					Name: "process *",
 					Attributes: []attribute.KeyValue{
 						attribute.String("span.kind", "consumer"),
 						attribute.String("messaging.operation.type", "process"),
 						attribute.String("messaging.destination.name", "*"),
+						attribute.String("messaging.client_id", "consumer-1-1"),
+						attribute.Int64("messaging.destination.partition.id", 0),
+					},
+				},
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		for i := range testCase.Spans {
+			testCase.Spans[i].Attributes = append(testCase.Spans[i].Attributes, commonAttrs...)
+		}
+
+		t.Run(testCase.Route, func(t *testing.T) {
+			waitForKafkaTestComponents(t, testCase.Route, "/"+testCase.Subpath)
+			runKafkaTestCase(t, testCase)
+		})
+	}
+}
+
+func testJavaKafkaLargeBuffer(t *testing.T) {
+	commonAttrs := []attribute.KeyValue{
+		attribute.String("messaging.system", "kafka"),
+		attribute.Int("server.port", 9092),
+	}
+
+	testCases := []TestCase{
+		{
+			Route:   "http://localhost:8381",
+			Subpath: "message",
+			Comm:    "javakafka-lb",
+			Spans: []TestCaseSpan{
+				{
+					Name: "publish theotelebpfagentisperfectlyimpatientitskipsthecodethesdkandfindsthekernelssecretkeyitwatcheshttpandgrpctogiveyoumetricsforfreeapowerfulkernellevelspree",
+					Attributes: []attribute.KeyValue{
+						attribute.String("span.kind", "producer"),
+						attribute.String("messaging.operation.type", "publish"),
+						attribute.String("messaging.destination.name", "theotelebpfagentisperfectlyimpatientitskipsthecodethesdkandfindsthekernelssecretkeyitwatcheshttpandgrpctogiveyoumetricsforfreeapowerfulkernellevelspree"),
+						attribute.String("messaging.client_id", "producer-1"),
+						attribute.Int64("messaging.destination.partition.id", 0),
+					},
+				},
+				{
+					Name: "process theotelebpfagentisperfectlyimpatientitskipsthecodethesdkandfindsthekernelssecretkeyitwatcheshttpandgrpctogiveyoumetricsforfreeapowerfulkernellevelspree",
+					Attributes: []attribute.KeyValue{
+						attribute.String("span.kind", "consumer"),
+						attribute.String("messaging.operation.type", "process"),
+						attribute.String("messaging.destination.name", "theotelebpfagentisperfectlyimpatientitskipsthecodethesdkandfindsthekernelssecretkeyitwatcheshttpandgrpctogiveyoumetricsforfreeapowerfulkernellevelspree"),
 						attribute.String("messaging.client_id", "consumer-1-1"),
 						attribute.Int64("messaging.destination.partition.id", 0),
 					},

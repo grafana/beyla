@@ -1,0 +1,57 @@
+version: "3.9"
+services:
+  sqlserver:
+    build:
+      context: ../../integration/components/postgresql
+      dockerfile: Dockerfile
+    image: postgres
+    environment:
+      POSTGRES_PASSWORD: "postgres"
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 10s
+      retries: 10
+  testserver:
+    build:
+      context: ../../integration/components/gopgx-stdlib
+      dockerfile: Dockerfile
+    image: gopgx-stdlib-client
+    ports:
+      - "8080:8080"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+  # eBPF auto instrumenter
+  autoinstrumenter:
+    build:
+      context: ../../../..
+      dockerfile: ./internal/test/integration/components/beyla/Dockerfile
+    command:
+      - --config=/configs/instrumenter-config-traces.yml
+    volumes:
+      - {{ .ConfigDir }}:/configs
+      - ./testoutput/run:/var/run/beyla
+      - ../../../../testoutput:/coverage
+    cap_add:
+      - SYS_ADMIN
+    privileged: true
+    network_mode: "service:testserver"
+    pid: "service:testserver"
+    environment:
+      GOCOVERDIR: "/coverage"
+      BEYLA_TRACE_PRINTER: "text"
+      BEYLA_OPEN_PORT: {{ .ApplicationPort }}
+      BEYLA_OTLP_TRACES_BATCH_TIMEOUT: "1ms"
+      BEYLA_SERVICE_NAMESPACE: "integration-test"
+      BEYLA_METRICS_INTERVAL: "10ms"
+      BEYLA_BPF_BATCH_TIMEOUT: "10ms"
+      BEYLA_LOG_LEVEL: "DEBUG"
+      BEYLA_BPF_DEBUG: "true"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://collector:4318"
+    depends_on:
+      testserver:
+        condition: service_started
+

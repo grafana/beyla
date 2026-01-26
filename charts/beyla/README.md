@@ -1,6 +1,6 @@
 # beyla
 
-![Version: 1.10.3](https://img.shields.io/badge/Version-1.10.3-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 2.8.1](https://img.shields.io/badge/AppVersion-2.8.1-informational?style=flat-square)
+![Version: 1.11.0](https://img.shields.io/badge/Version-1.11.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 2.8.4](https://img.shields.io/badge/AppVersion-2.8.4-informational?style=flat-square)
 
 eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network metrics.
 
@@ -63,6 +63,7 @@ eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network
 | k8sCache.service.labels | object | `{}` | Service labels. |
 | k8sCache.service.name | string | `"beyla-k8s-cache"` | Name of both the Service and Deployment |
 | k8sCache.service.port | int | `50055` | Port of the Kubernetes metadata cache service. |
+| minReadySeconds | int | `0` | Minimum number of seconds for which a newly created DaemonSet pod should be ready without any of its containers crashing, for it to be considered available. ref: https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/#min-ready-seconds |
 | nameOverride | string | `""` | Overrides the chart's name |
 | namespaceOverride | string | `""` | Override the deployment namespace |
 | nodeSelector | object | `{}` | The nodeSelector field allows user to constrain which nodes your DaemonSet pods are scheduled to based on labels on the node |

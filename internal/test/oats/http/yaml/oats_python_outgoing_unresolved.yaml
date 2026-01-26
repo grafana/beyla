@@ -8,5 +8,5 @@ input:
 interval: 500ms
 expected:
   metrics:
-    - promql: 'traces_service_graph_request_client_count{client="testserver", server="outgoing"}'
+    - promql: 'traces_service_graph_request_client_seconds_count{client="testserver", server="outgoing"}'
       value: "> 5"

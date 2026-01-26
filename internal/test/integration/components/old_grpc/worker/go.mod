@@ -1,4 +1,4 @@
-module github.com/mariomac/distributed-service-example/worker
+module github.com/grafana/beyla/v2/internal/test/integration/components/old_grpc/worker
 
 go 1.20
 

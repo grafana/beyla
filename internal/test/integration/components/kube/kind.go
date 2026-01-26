@@ -31,7 +31,7 @@ import (
 	"sigs.k8s.io/e2e-framework/support/kind"
 
 	"github.com/grafana/beyla/v2/internal/test/integration/components/jaeger"
-	"github.com/grafana/beyla/v2/internal/test/integration/components/prom"
+	"github.com/grafana/beyla/v2/internal/test/integration/components/promtest"
 	"github.com/grafana/beyla/v2/internal/test/integration/k8s/common/testpath"
 )
 
@@ -161,21 +161,8 @@ func (k *Kind) Run(m *testing.M) {
 			k.exportAllTraces(),
 			k.deleteLabeled(),
 			envfuncs.DestroyCluster(k.clusterName),
-			k.cleanupDocker(),
 		).Run(m)
 	log.With("returnCode", code).Info("tests finished run")
-}
-
-// cleanupDocker prunes docker resources after the cluster is destroyed to save disk space
-func (k *Kind) cleanupDocker() env.Func {
-	return func(ctx context.Context, _ *envconf.Config) (context.Context, error) {
-		log := log()
-		log.Info("cleaning up docker resources to save disk space")
-		exe := gexe.New()
-		out := exe.Run("docker system prune -af --volumes")
-		log.With("out", out).Info("docker cleanup completed")
-		return ctx, nil
-	}
 }
 
 // export logs into the e2e-logs folder of the base directory.
@@ -198,7 +185,7 @@ func (k *Kind) exportAllMetrics() env.Func {
 		if k.promEndpoint == "" {
 			return ctx, nil
 		}
-		_ = os.MkdirAll(path.Join(k.logsDir, k.clusterName), 0755)
+		_ = os.MkdirAll(path.Join(k.logsDir, k.clusterName), 0o755)
 		out, err := os.Create(path.Join(k.logsDir, k.clusterName, "prometheus_metrics.txt"))
 		if err != nil {
 			log().Error("creating prometheus export file", "error", err)
@@ -218,7 +205,7 @@ func (k *Kind) exportAllTraces() env.Func {
 		if k.promEndpoint == "" {
 			return ctx, nil
 		}
-		_ = os.MkdirAll(path.Join(k.logsDir, k.clusterName), 0755)
+		_ = os.MkdirAll(path.Join(k.logsDir, k.clusterName), 0o755)
 		out, err := os.Create(path.Join(k.logsDir, k.clusterName, "jaeger_traces.txt"))
 		if err != nil {
 			log().Error("creating jaeger export file", "error", err)
@@ -432,7 +419,7 @@ func DumpMetrics(out io.Writer, promHostPort string) error {
 	if _, err := fmt.Fprintf(out, "===== Dumping metrics from %s ====\n", promHostPort); err != nil {
 		return err
 	}
-	pq := prom.Client{HostPort: promHostPort}
+	pq := promtest.Client{HostPort: promHostPort}
 	results, err := pq.Query(`{__name__!=""}`)
 	if err != nil {
 		return err

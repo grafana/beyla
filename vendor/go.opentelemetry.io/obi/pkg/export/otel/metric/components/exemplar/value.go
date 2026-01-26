@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package exemplar
+package exemplar // import "go.opentelemetry.io/obi/pkg/export/otel/metric/components/exemplar"
 
 import "math"
 

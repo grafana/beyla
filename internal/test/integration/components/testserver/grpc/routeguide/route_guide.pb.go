@@ -515,7 +515,7 @@ func file_routeguide_route_guide_proto_rawDescGZIP() []byte {
 }
 
 var file_routeguide_route_guide_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
-var file_routeguide_route_guide_proto_goTypes = []interface{}{
+var file_routeguide_route_guide_proto_goTypes = []any{
 	(*Point)(nil),        // 0: routeguide.Point
 	(*Rectangle)(nil),    // 1: routeguide.Rectangle
 	(*Feature)(nil),      // 2: routeguide.Feature
@@ -552,7 +552,7 @@ func file_routeguide_route_guide_proto_init() {
 		return
 	}
 	if !protoimpl.UnsafeEnabled {
-		file_routeguide_route_guide_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
+		file_routeguide_route_guide_proto_msgTypes[0].Exporter = func(v any, i int) any {
 			switch v := v.(*Point); i {
 			case 0:
 				return &v.state
@@ -564,7 +564,7 @@ func file_routeguide_route_guide_proto_init() {
 				return nil
 			}
 		}
-		file_routeguide_route_guide_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
+		file_routeguide_route_guide_proto_msgTypes[1].Exporter = func(v any, i int) any {
 			switch v := v.(*Rectangle); i {
 			case 0:
 				return &v.state
@@ -576,7 +576,7 @@ func file_routeguide_route_guide_proto_init() {
 				return nil
 			}
 		}
-		file_routeguide_route_guide_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
+		file_routeguide_route_guide_proto_msgTypes[2].Exporter = func(v any, i int) any {
 			switch v := v.(*Feature); i {
 			case 0:
 				return &v.state
@@ -588,7 +588,7 @@ func file_routeguide_route_guide_proto_init() {
 				return nil
 			}
 		}
-		file_routeguide_route_guide_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
+		file_routeguide_route_guide_proto_msgTypes[3].Exporter = func(v any, i int) any {
 			switch v := v.(*RouteNote); i {
 			case 0:
 				return &v.state
@@ -600,7 +600,7 @@ func file_routeguide_route_guide_proto_init() {
 				return nil
 			}
 		}
-		file_routeguide_route_guide_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
+		file_routeguide_route_guide_proto_msgTypes[4].Exporter = func(v any, i int) any {
 			switch v := v.(*RouteSummary); i {
 			case 0:
 				return &v.state
@@ -612,7 +612,7 @@ func file_routeguide_route_guide_proto_init() {
 				return nil
 			}
 		}
-		file_routeguide_route_guide_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
+		file_routeguide_route_guide_proto_msgTypes[5].Exporter = func(v any, i int) any {
 			switch v := v.(*DebugReq); i {
 			case 0:
 				return &v.state
@@ -624,7 +624,7 @@ func file_routeguide_route_guide_proto_init() {
 				return nil
 			}
 		}
-		file_routeguide_route_guide_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
+		file_routeguide_route_guide_proto_msgTypes[6].Exporter = func(v any, i int) any {
 			switch v := v.(*Empty); i {
 			case 0:
 				return &v.state

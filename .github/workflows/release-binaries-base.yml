@@ -3,11 +3,11 @@ on:
   workflow_call:
     inputs:
       arch:
-        description: 'Target architecture to build the binaries'
+        description: "Target architecture to build the binaries"
         required: true
         type: string
       runner:
-        description: 'The github runner to run on'
+        description: "The github runner to run on"
         required: true
         type: string
 permissions:
@@ -16,9 +16,6 @@ jobs:
   release-binaries:
     name: Release compiled binaries for Linux/${{inputs.arch}}
     runs-on: ${{inputs.runner}}
-    strategy:
-      matrix:
-        go: [ '1.25' ]
     permissions:
       contents: write
     steps:
@@ -28,8 +25,8 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@be3c94b385c4f180051c996d336f57a34c397495 # v3.6.1
         with:
-          cache: false  # Disable caching to avoid extraction conflicts
-          go-version: ${{ matrix.go }}
+          cache: false # Disable caching to avoid extraction conflicts
+          go-version-file: "go.mod"
       - name: Build Go release for linux/${{inputs.arch}}
         run: make artifact
         env:

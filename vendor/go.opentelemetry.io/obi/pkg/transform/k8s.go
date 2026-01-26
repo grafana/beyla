@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package transform
+package transform // import "go.opentelemetry.io/obi/pkg/transform"
 
 import (
 	"context"

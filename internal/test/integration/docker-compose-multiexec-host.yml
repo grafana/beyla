@@ -11,6 +11,7 @@ services:
       - "8088:8088"
     environment:
       LOG_LEVEL: DEBUG
+      BYPASS_JSONRPC: "${BYPASS_JSONRPC}"
     depends_on:
       otelcol:
         condition: service_started
@@ -25,6 +26,7 @@ services:
       - "38080:8080"
     environment:
       LOG_LEVEL: DEBUG
+      BYPASS_JSONRPC: "${BYPASS_JSONRPC}"
 
   testserver1:
     build:
@@ -35,6 +37,7 @@ services:
       - "8900:8900"
     environment:
       LOG_LEVEL: DEBUG
+      BYPASS_JSONRPC: "${BYPASS_JSONRPC}"
 
   # image that runs two instances of the 'testserver' executable
   # Used to test the deduplication
@@ -49,6 +52,7 @@ services:
       - "18090:18090"
     environment:
       LOG_LEVEL: DEBUG
+      BYPASS_JSONRPC: "${BYPASS_JSONRPC}"
 
   rtestserver:
     image: ghcr.io/open-telemetry/obi-testimg:rust-0.1.0@sha256:4e01a4f839db0df6cdd825ae30e2a17f65725d61dd65b15549e4006e142a8844
@@ -141,8 +145,8 @@ services:
       BEYLA_BPF_DEBUG: "TRUE"
       BEYLA_HOSTNAME: "beyla"
       BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT: 8999
+      BEYLA_OTLP_TRACES_BATCH_TIMEOUT: "0ms"
       BEYLA_INTERNAL_METRICS_PROMETHEUS_PATH: /metrics
-      BEYLA_OTLP_TRACES_BATCH_TIMEOUT: "1ms"
       BEYLA_BPF_DISABLE_BLACK_BOX_CP: "${BEYLA_BPF_DISABLE_BLACK_BOX_CP}"
       BEYLA_BPF_CONTEXT_PROPAGATION: "${BEYLA_BPF_CONTEXT_PROPAGATION}"
       BEYLA_BPF_TRACK_REQUEST_HEADERS: "${BEYLA_BPF_TRACK_REQUEST_HEADERS}"

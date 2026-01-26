@@ -1,4 +1,4 @@
-//go:build integration_k8s
+//go:build integration
 
 package otel
 
@@ -16,7 +16,7 @@ import (
 
 	"github.com/grafana/beyla/v2/internal/test/integration/components/docker"
 	"github.com/grafana/beyla/v2/internal/test/integration/components/kube"
-	"github.com/grafana/beyla/v2/internal/test/integration/components/prom"
+	"github.com/grafana/beyla/v2/internal/test/integration/components/promtest"
 	k8s "github.com/grafana/beyla/v2/internal/test/integration/k8s/common"
 	"github.com/grafana/beyla/v2/internal/test/integration/k8s/common/testpath"
 	"github.com/grafana/beyla/v2/internal/test/tools"
@@ -72,7 +72,7 @@ func TestNetworkFlowBytes_DropExternal(t *testing.T) {
 }
 
 func testNoFlowsForExternalTraffic(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
-	pq := prom.Client{HostPort: prometheusHostPort}
+	pq := promtest.Client{HostPort: prometheusHostPort}
 
 	// testing first that internal traffic is reported (this leaves room to populate Prometheus with
 	// the inspected metrics)

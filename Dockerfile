@@ -1,5 +1,5 @@
 # Build the autoinstrumenter binary
-ARG GEN_IMG=ghcr.io/open-telemetry/obi-generator:0.2.3@sha256:7d9ca3af8c0183e87d67c9507a6d8ca7ea1cea6794335e6d61514ba18ea18910
+ARG GEN_IMG=ghcr.io/open-telemetry/obi-generator:0.2.6@sha256:440d8777714014e7dc98fecbe2ce96ea827d35f885cfec8861a963b8e41f42cd
 
 FROM $GEN_IMG AS builder
 
@@ -37,6 +37,7 @@ ENV TOOLS_DIR=/go/bin
 
 # Build
 RUN if [ -z "${DEV_OBI}" ]; then \
+    export PATH="/usr/lib/llvm20/bin:$PATH" && \
     make generate && \
     make copy-obi-vendor \
     ; fi

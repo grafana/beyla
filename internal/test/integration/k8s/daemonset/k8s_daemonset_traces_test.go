@@ -1,4 +1,7 @@
-//go:build integration_k8s
+// Copyright The OpenTelemetry Authors
+// SPDX-License-Identifier: Apache-2.0
+
+//go:build integration
 
 package otel
 
@@ -21,11 +24,11 @@ import (
 	"github.com/grafana/beyla/v2/internal/test/integration/k8s/common/testpath"
 )
 
-// For the DaemonSet scenario, we only check that Beyla is able to instrument any
+// For the DaemonSet scenario, we only check that OBI is able to instrument any
 // process in the system. We just check that traces are properly generated without
 // entering in too many details
 func TestBasicTracing(t *testing.T) {
-	feat := features.New("Beyla is able to instrument an arbitrary process").
+	feat := features.New("OBI is able to instrument an arbitrary process").
 		Assess("it sends traces for that service",
 			func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 				var podID string
@@ -85,7 +88,7 @@ func TestBasicTracing(t *testing.T) {
 					assert.True(t, found)
 
 					podID = tag.Value.(string)
-					assert.NotEqual(t, "", podID)
+					assert.NotEmpty(t, podID)
 				}, test.Interval(100*time.Millisecond))
 
 				// Check that the "testserver" service is never instrumented
@@ -96,12 +99,12 @@ func TestBasicTracing(t *testing.T) {
 				require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
 				assert.Empty(t, tq.Data)
 
-				// Let's take down our services, keeping Beyla alive and then redeploy them
+				// Let's take down our services, keeping OBI alive and then redeploy them
 				err = kube.DeleteExistingManifestFile(cfg, testpath.Manifests+"/05-uninstrumented-service.yml")
-				assert.NoError(t, err, "we should see no error when deleting the uninstrumented service manifest file")
+				require.NoError(t, err, "we should see no error when deleting the uninstrumented service manifest file")
 
 				err = kube.DeployManifestFile(cfg, testpath.Manifests+"/05-uninstrumented-service.yml")
-				assert.NoError(t, err, "we should see no error when re-deploying the uninstrumented service manifest file")
+				require.NoError(t, err, "we should see no error when re-deploying the uninstrumented service manifest file")
 
 				// We now use a different API, this ensures that after undeploying and redeploying the application we
 				// can still monitor its data

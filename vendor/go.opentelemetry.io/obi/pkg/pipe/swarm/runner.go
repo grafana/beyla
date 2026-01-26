@@ -3,7 +3,7 @@
 
 // Package swarm provides tools for the creation and coordination of the nodes that go inside the different
 // Beyla pipelines
-package swarm
+package swarm // import "go.opentelemetry.io/obi/pkg/pipe/swarm"
 
 import (
 	"context"

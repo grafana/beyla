@@ -1,0 +1,37 @@
+development:
+  adapter: mysql2
+  encoding: utf8
+  database: my_database
+  username: user
+  password: password
+  host: db
+  port: 3306
+  sslca: /certs/ca.pem
+  sslcert: /certs/client-cert.pem
+  sslkey: /certs/client-key.pem
+  sslverify: false
+
+test:
+  adapter: mysql2
+  encoding: utf8
+  database: my_database
+  username: user
+  password: password
+  host: db
+  port: 3306
+  sslca: /certs/ca.pem
+  sslcert: /certs/client-cert.pem
+  sslkey: /certs/client-key.pem
+  sslverify: false
+
+production:
+  adapter: mysql2
+  encoding: utf8
+  database: my_database
+  username: user
+  password: <%= ENV['MYAPP_DATABASE_PASSWORD'] %>
+  host: db
+  port: 3306
+  sslca: /certs/ca.pem
+  sslcert: /certs/client-cert.pem
+  sslkey: /certs/client-key.pem

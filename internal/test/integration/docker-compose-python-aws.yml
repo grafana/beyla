@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   localstack:
-    image: localstack/localstack:4.10@sha256:a65ee2a9d45a7a34a1f1faae515d2e577ce11210312c077700ccc82daefec238
+    image: localstack/localstack:4.12@sha256:0df3a97da57de03a588c05d9b8f390f15c7033fc7c4512f94619d344bc3cd317
     container_name: localstack
     ports:
       - "4566:4566"
@@ -11,6 +11,11 @@ services:
     build:
       context: ../../../internal/test/integration/components/pythonawsclient/
       dockerfile: Dockerfile
+    # TODO: use ghcr.io/open-telemetry/obi-testimg:python_aws_s3-0.0.1@sha256:6c113d604dc62f999425c70d82ce678f13498eef364f797bc18f2c3ed2988b15
+    # That image is only being built for amd64:
+    # docker inspect ghcr.io/open-telemetry/obi-testimg:python_aws_s3-0.0.1 --format '{{.Architecture}}' amd64
+    # In tests we rely on commands to filter spans, if the binary changes (e.g. python3.12 -> python3.14) it's not updated right away in the image:
+    # docker inspect ghcr.io/open-telemetry/obi-testimg:python_aws_s3-0.0.1 | jq '.[0].Config.Env.[3]' "PYTHON_VERSION=3.12.12"
     image: hatest-testserver-python-aws-client
     ports:
       - "${TEST_SERVICE_PORTS}"
@@ -28,7 +33,7 @@ services:
       - ./configs/:/configs
       - ./system/sys/kernel/security:/sys/kernel/security
       - ../../../testoutput:/coverage
-      - ../../../testoutput/run-python-aws:/var/run/beyla
+      - ../../../testoutput/run-python-graphql:/var/run/beyla
     image: hatest-autoinstrumenter
     privileged: true # in some environments (not GH Pull Requests) you can set it to false and then cap_add: [ SYS_ADMIN ]
     network_mode: "service:testserver"
@@ -59,7 +64,7 @@ services:
 
   # OpenTelemetry Collector
   otelcol:
-    image: otel/opentelemetry-collector-contrib:0.118.0@sha256:3f6274fe609da4f9964fbc2ef36b83d08d47964fbb11629251393590d3924072
+    image: otel/opentelemetry-collector-contrib:0.104.0@sha256:e07e325e303e86f4a87a617491e921b579a92da6d404007394757ac910bf9587
     container_name: otel-col
     deploy:
       resources:
@@ -102,4 +107,3 @@ services:
       - LOG_LEVEL=debug
 # curl http://localhost:16686/api/services
 # curl http://localhost:16686/api/traces?service=testserver
-

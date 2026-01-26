@@ -26,7 +26,6 @@ public class Kafka {
             producerProps.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
             producerProps.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
             producerProps.put("partitioner.class", "org.apache.kafka.clients.producer.RoundRobinPartitioner"); // Explicit partitioner
-            producerProps.put("inter.broker.protocol.version", "2.8");
 
             Thread producerThread = new Thread(() -> {
                 KafkaProducer<String, String> producer = new KafkaProducer<>(producerProps);

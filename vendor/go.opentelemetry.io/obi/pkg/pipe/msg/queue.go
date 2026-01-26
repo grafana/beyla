@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package msg provides tools for message passing and queues between the different nodes of the Beyla pipelines.
-package msg
+package msg // import "go.opentelemetry.io/obi/pkg/pipe/msg"
 
 import (
 	"context"
@@ -16,7 +16,7 @@ import (
 
 // if a Send operation takes more than this time, we panic informing about a deadlock
 // in the user-provide pipeline
-const defaultSendTimeout = 20 * time.Second
+const defaultSendTimeout = time.Minute
 
 const unnamed = "(unnamed)"
 
@@ -25,6 +25,7 @@ type queueConfig struct {
 	closingAttempts  int
 	name             string
 	sendTimeout      time.Duration
+	panicOnTimeout   bool
 }
 
 var defaultQueueConfig = queueConfig{
@@ -32,6 +33,7 @@ var defaultQueueConfig = queueConfig{
 	closingAttempts:  1,
 	name:             unnamed,
 	sendTimeout:      defaultSendTimeout,
+	panicOnTimeout:   false,
 }
 
 // QueueOpts allow configuring some operation of a queue
@@ -59,6 +61,13 @@ func Name(name string) QueueOpts {
 func SendTimeout(to time.Duration) QueueOpts {
 	return func(c *queueConfig) {
 		c.sendTimeout = to
+	}
+}
+
+// PanicOnSendTimeout configures the queue to panic when a send operation times out.
+func PanicOnSendTimeout() QueueOpts {
+	return func(c *queueConfig) {
+		c.panicOnTimeout = true
 	}
 }
 
@@ -95,6 +104,7 @@ type Queue[T any] struct {
 	closed   atomic.Bool
 
 	sendTimeout *time.Timer
+	logger      *slog.Logger
 }
 
 // NewQueue creates a new Queue instance with the given options.
@@ -103,7 +113,12 @@ func NewQueue[T any](opts ...QueueOpts) *Queue[T] {
 	for _, opt := range opts {
 		opt(&cfg)
 	}
-	return &Queue[T]{cfg: &cfg, remainingClosers: cfg.closingAttempts, sendTimeout: time.NewTimer(cfg.sendTimeout)}
+	return &Queue[T]{
+		cfg:              &cfg,
+		remainingClosers: cfg.closingAttempts,
+		sendTimeout:      time.NewTimer(cfg.sendTimeout),
+		logger:           slog.With("queueName", cfg.name),
+	}
 }
 
 // SendCtx sends a message to all subscribers of this queue, and interrupts the operation if the
@@ -139,9 +154,13 @@ func (q *Queue[T]) chainedSend(ctx context.Context, o T, bypassPath []string) {
 		return
 	}
 
-	// instead of directly panicking in sendTimeout, we first warn at 0.75*sendTimeout,
-	// to get logged about other blocked senders before panicking
-	q.sendTimeout.Reset(3 * q.cfg.sendTimeout / 4)
+	if q.cfg.panicOnTimeout {
+		// instead of directly panicking in sendTimeout, we first warn at 90% sendTimeout,
+		// to get logged about other blocked senders before panicking
+		q.sendTimeout.Reset(9 * q.cfg.sendTimeout / 10)
+	} else {
+		q.sendTimeout.Reset(q.cfg.sendTimeout)
+	}
 	var blocked []dst[T]
 	for _, d := range q.dsts {
 		select {
@@ -150,31 +169,44 @@ func (q *Queue[T]) chainedSend(ctx context.Context, o T, bypassPath []string) {
 		case d.ch <- o:
 			// good!
 		case <-q.sendTimeout.C:
-			slog.With(
-				"timeout", q.cfg.sendTimeout,
-				"queueLen", len(d.ch), "queueCap", cap(d.ch),
-				"sendPath", strings.Join(bypassPath, "->"),
-				"dstName", d.name).
-				Warn("subscriber channel is taking too long to respond")
-			// reset timeout to a small amount to detect any other possible blocked subscriber
-			q.sendTimeout.Reset(time.Second)
+			q.logger.Warn("an internal queue seems to be blocked. You might need to change "+
+				"some of the following configuration options: OTEL_EBPF_OTLP_TRACES_MAX_QUEUE_SIZE, "+
+				"OTEL_EBPF_CHANNEL_BUFFER_LEN, OTEL_EBPF_CHANNEL_SEND_TIMEOUT, "+
+				"OTEL_EBPF_BPF_BATCH_LENGTH, OTEL_EBPF_BPF_BATCH_TIMEOUT",
+				slog.Duration("timeout", q.cfg.sendTimeout),
+				slog.Int("queueLen", len(d.ch)),
+				slog.Int("queueCap", cap(d.ch)),
+				slog.String("sendPath", strings.Join(bypassPath, "->")),
+				slog.String("subscriber", d.name),
+			)
 			blocked = append(blocked, d)
 		}
 	}
-	if len(blocked) == 0 {
-		return
-	}
-	// if we confirm that the blocker candidates are actually blocked, we panic
-	q.sendTimeout.Reset(q.cfg.sendTimeout / 4)
-	for _, d := range blocked {
-		select {
-		case <-ctx.Done():
-			return
-		case d.ch <- o:
-			// good!
-		case <-q.sendTimeout.C:
-			panic(fmt.Sprintf("sending through queue path %s. Subscriber channel %s is blocked",
-				strings.Join(bypassPath, "->"), d.name))
+
+	if !q.cfg.panicOnTimeout {
+		// if we don't configure the queue to panic on timeout, we wait
+		// for the messages to be delivered
+		for _, d := range blocked {
+			select {
+			case <-ctx.Done():
+				return
+			case d.ch <- o:
+				// good!
+			}
+		}
+	} else {
+		// if we confirm that the blocker candidates are actually blocked, we panic
+		q.sendTimeout.Reset(q.cfg.sendTimeout / 10)
+		for _, d := range blocked {
+			select {
+			case <-ctx.Done():
+				return
+			case d.ch <- o:
+				// good!
+			case <-q.sendTimeout.C:
+				panic(fmt.Sprintf("sending through queue path %s. Subscriber channel %s is blocked",
+					strings.Join(bypassPath, "->"), d.name))
+			}
 		}
 	}
 }

@@ -3,7 +3,7 @@
 
 // Copyright 2020 New Relic Corporation. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
-package helpers
+package helpers // import "go.opentelemetry.io/obi/pkg/internal/helpers"
 
 import (
 	"bytes"

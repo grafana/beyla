@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package ebpf
+package ebpf // import "go.opentelemetry.io/obi/pkg/ebpf"
 
 import (
 	"context"
@@ -16,6 +16,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
+	"go.opentelemetry.io/obi/pkg/internal/ebpf/logenricher"
 	"go.opentelemetry.io/obi/pkg/internal/goexec"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 )
@@ -31,6 +32,8 @@ type Instrumentable struct {
 	FileInfo *exec.FileInfo
 	Offsets  *goexec.Offsets
 	Tracer   *ProcessTracer
+
+	LogEnricherEnabled bool
 }
 
 func (ie *Instrumentable) CopyToServiceAttributes() {
@@ -154,6 +157,12 @@ type ProcessTracer struct {
 
 func (pt *ProcessTracer) AllowPID(pid, ns uint32, svc *svc.Attrs) {
 	for i := range pt.Programs {
+		_, ok := pt.Programs[i].(*logenricher.Tracer)
+		if ok {
+			if !svc.LogEnricherEnabled {
+				continue
+			}
+		}
 		pt.Programs[i].AllowPID(pid, ns, svc)
 	}
 }

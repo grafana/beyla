@@ -1,9 +1,9 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: beyla-config
+  name: instrumenter-config
 data:
-  beyla-config.yml: |
+  instrumenter-config.yml: |
     log_level: debug
     prometheus_export:
       port: 8999
@@ -40,7 +40,7 @@ spec:
     metadata:
       labels:
         instrumentation: beyla
-        # this label will trigger a deletion of beyla pods before tearing down
+        # this label will trigger a deletion of Beyla pods before tearing down
         # kind, to force Beyla writing the coverage data
         teardown: delete
       annotations:
@@ -53,9 +53,9 @@ spec:
       dnsPolicy: ClusterFirstWithHostNet # important to get connection to otelcollector from hostnetwork !!
       serviceAccountName: beyla
       volumes:
-        - name: beyla-config
+        - name: instrumenter-config
           configMap:
-            name: beyla-config
+            name: instrumenter-config
         - name: testoutput
           persistentVolumeClaim:
             claimName: testoutput
@@ -72,14 +72,14 @@ spec:
               protocol: TCP
           volumeMounts:
             - mountPath: /config
-              name: beyla-config
+              name: instrumenter-config
             - mountPath: /testoutput
               name: testoutput
           env:
             - name: GOCOVERDIR
               value: "/testoutput"
             - name: BEYLA_CONFIG_PATH
-              value: /config/beyla-config.yml
+              value: /config/instrumenter-config.yml
               # network_inter_zone won't have effect on non-multizone kind clusters
             - name: BEYLA_PROMETHEUS_FEATURES
               value: "network,network_inter_zone"

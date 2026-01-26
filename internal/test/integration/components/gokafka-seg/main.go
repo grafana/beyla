@@ -24,7 +24,6 @@ func producerHandler(kafkaWriter *kafka.Writer) func(http.ResponseWriter, *http.
 			Value: body,
 		}
 		err = kafkaWriter.WriteMessages(req.Context(), msg)
-
 		if err != nil {
 			fmt.Printf("error %v\n", err)
 		}
@@ -43,7 +42,6 @@ func producerHandlerWithTopic(kafkaWriter *kafka.Writer, topic string) func(http
 			Topic: topic,
 		}
 		err = kafkaWriter.WriteMessages(req.Context(), msg)
-
 		if err != nil {
 			fmt.Printf("error %v\n", err)
 		}

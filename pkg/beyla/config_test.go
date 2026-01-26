@@ -44,6 +44,8 @@ func TestConfig_Overrides(t *testing.T) {
 trace_printer: json
 shutdown_timeout: 30s
 channel_buffer_len: 33
+channel_send_timeout: 2m
+channel_send_timeout_panic: true
 ebpf:
   functions:
     - FooBar
@@ -125,35 +127,45 @@ network:
 	// uncache internal field
 	cfg.obi = nil
 	assert.Equal(t, &Config{
-		Exec:             cfg.Exec,
-		Port:             cfg.Port,
-		ServiceName:      "svc-name",
-		ChannelBufferLen: 33,
-		LogLevel:         "INFO",
-		ShutdownTimeout:  30 * time.Second,
-		EnforceSysCaps:   false,
-		TracePrinter:     "json",
+		Exec:        cfg.Exec,
+		Port:        cfg.Port,
+		ServiceName: "svc-name",
+
+		ChannelBufferLen:        33,
+		ChannelSendTimeout:      2 * time.Minute,
+		ChannelSendTimeoutPanic: true,
+
+		LogLevel:        "INFO",
+		ShutdownTimeout: 30 * time.Second,
+		EnforceSysCaps:  false,
+		TracePrinter:    "json",
 		EBPF: obiconfig.EBPFTracer{
 			BatchLength:        100,
 			BatchTimeout:       time.Second,
 			HTTPRequestTimeout: 0,
+			MaxTransactionTime: 5 * time.Minute,
 			TCBackend:          obiconfig.TCBackendAuto,
+			DNSRequestTimeout:  5 * time.Second,
 			ContextPropagation: obiconfig.ContextPropagationDisabled,
 			RedisDBCache: obiconfig.RedisDBCacheConfig{
 				Enabled: false,
 				MaxSize: 1000,
 			},
 			BufferSizes: obiconfig.EBPFBufferSizes{
-				HTTP:     0,
 				MySQL:    0,
 				Postgres: 0,
+				Kafka:    0,
 			},
 			MySQLPreparedStatementsCacheSize:    1024,
-			MongoRequestsCacheSize:              1024,
 			PostgresPreparedStatementsCacheSize: 1024,
+			MongoRequestsCacheSize:              1024,
 			KafkaTopicUUIDCacheSize:             1024,
-			MaxTransactionTime:                  5 * time.Minute,
-			DNSRequestTimeout:                   5 * time.Second,
+			LogEnricher: obiconfig.LogEnricherConfig{
+				CacheTTL:              30 * time.Minute,
+				CacheSize:             128,
+				AsyncWriterWorkers:    8,
+				AsyncWriterChannelLen: 500,
+			},
 		},
 		Grafana: otel.GrafanaConfig{
 			OTLP: otel.GrafanaOTLP{
@@ -161,6 +173,9 @@ network:
 			},
 		},
 		NetworkFlows: nc,
+		Metrics: perapp.MetricsConfig{
+			Features: export.FeatureApplicationRED | export.FeatureNetwork,
+		},
 		OTELMetrics: otelcfg.MetricsConfig{
 			OTELIntervalMS:    60_000,
 			CommonEndpoint:    "localhost:3131",
@@ -193,9 +208,6 @@ network:
 				instrumentations.InstrumentationKafka,
 				instrumentations.InstrumentationMongo,
 			},
-		},
-		Metrics: perapp.MetricsConfig{
-			Features: export.FeatureApplicationRED | export.FeatureNetwork,
 		},
 		Prometheus: prom.PrometheusConfig{
 			Path: "/metrics",

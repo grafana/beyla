@@ -19,6 +19,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/export/otel/spanscfg"
 	"github.com/grafana/beyla/v2/pkg/internal/appolly/traces"
+	msg2 "github.com/grafana/beyla/v2/pkg/internal/helpers/msg"
 )
 
 func ilog() *slog.Logger {
@@ -88,7 +89,7 @@ func clusterConnectorsSubpipeline(swi *swarm.Instancer, ctxInfo *global.ContextI
 		return
 	}
 
-	externalTraces := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(config.ChannelBufferLen))
+	externalTraces := msg2.QueueFromConfig[[]request.Span](config.AsOBI(), "externalTraces")
 	swi.Add(traces.SelectExternal(
 		func(ip string) bool { return store.ObjectMetaByIP(ip) != nil },
 		ctxInfo.OverrideAppExportQueue,

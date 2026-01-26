@@ -29,7 +29,7 @@ RUN ./mvnw -version
 RUN ./mvnw -Pnative native:compile
 
 # The App Image
-FROM debian:bookworm-slim@sha256:78d2f66e0fec9e5a39fb2c72ea5e052b548df75602b5215ed01a17171529f706
+FROM debian:bookworm-slim@sha256:d5d3f9c23164ea16f31852f95bd5959aad1c5e854332fe00f7b3a20fcc9f635c
 
 EXPOSE 8085
 

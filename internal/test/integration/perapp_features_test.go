@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/v2/internal/test/integration/components/docker"
-	"github.com/grafana/beyla/v2/internal/test/integration/components/prom"
+	"github.com/grafana/beyla/v2/internal/test/integration/components/promtest"
 )
 
 func TestPerAppFeatures(t *testing.T) {
@@ -57,7 +57,7 @@ func testPerAppFeatures(t *testing.T, exportedSource string) {
 	})
 }
 
-var pq = prom.Client{HostPort: prometheusHostPort}
+var pq = promtest.Client{HostPort: prometheusHostPort}
 
 func checkSpanMetric(t *testing.T, timeout time.Duration, exportedSource, serviceName string, port int, path string) {
 	test.Eventually(t, timeout, func(t require.TestingT) {

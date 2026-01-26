@@ -3,7 +3,7 @@
 
 // Package connector provides tools for sharing the connection of diverse exporters
 // (Prometheus, OTEL...) from different nodes
-package connector
+package connector // import "go.opentelemetry.io/obi/pkg/export/connector"
 
 import (
 	"context"

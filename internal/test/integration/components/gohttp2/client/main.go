@@ -54,7 +54,6 @@ func RoundTripExample() {
 	checkErr(err, "during new request")
 
 	tr := newHTTP2Transport()
-
 	resp, err := tr.RoundTrip(req)
 	checkErr(err, "during roundtrip")
 

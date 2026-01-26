@@ -1,4 +1,4 @@
-FROM golang:1.25.3-alpine@sha256:aee43c3ccbf24fdffb7295693b6e33b21e01baec1b2a55acc351fde345e9ec34 as builder
+FROM golang:1.25.6-alpine@sha256:217cb265b15f1bce711dda88e3dd2302da61b8b1096d6afe15727a7e96719dd1 as builder
 
 ARG TARGETARCH
 

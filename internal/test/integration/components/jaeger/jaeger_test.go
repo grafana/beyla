@@ -57,8 +57,8 @@ func Fixture() *TracesQuery {
 		`","value":"github.com/grafana/beyla"},{"key":"span.kind","type":"string","value":"internal"},{"key"`+
 		`:"internal.span.format","type":"string","value":"proto"}],"logs":[],"processID":"p1","warnings":null},{"traceID":`+
 		`"eae56fbbec9505c102e8aabfc6b5c481","spanID":"1eef766536d58ec8","operationName":"GET /holanen","references":[],"st`+
-		`artTime":1686641491452470,"duration":3322,"tags":[{"key":"otel.library.name","type":"string","value":"github.com/`+
-		`grafana/beyla"},{"key":"http.method","type":"string","value":"GET"},{"key":"http.status_code","type`+
+		`artTime":1686641491452470,"duration":3322,"tags":[{"key":"otel.library.name","type":"string","value":"github.com/grafana/beyla"`+
+		`},{"key":"http.method","type":"string","value":"GET"},{"key":"http.status_code","type`+
 		`":"int64","value":200},{"key":"http.target","type":"string","value":"/holanen"},{"key":"net.sock.peer.addr","type`+
 		`":"string","value":"172.18.0.1"},{"key":"net.host.name","type":"string","value":"localhost"},{"key":"net.host.por`+
 		`t","type":"int64","value":8080},{"key":"http.request_content_length","type":"int64","value":0},{"key":"http.route`+
@@ -106,11 +106,11 @@ func TestDiff(t *testing.T) {
 	}
 	dr := Diff(expected, actual)
 	t.Log(dr.String())
-	assert.Equal(t, dr, DiffResult{
+	assert.Equal(t, DiffResult{
 		{ErrType: ErrTypeNotEqual, Expected: expected[0], Actual: actual[2]},
 		{ErrType: ErrTypeNotEqual, Expected: expected[1], Actual: actual[1]},
 		{ErrType: ErrTypeMissing, Expected: expected[3]},
-	})
+	}, dr)
 }
 
 func TestDiff_Matching(t *testing.T) {

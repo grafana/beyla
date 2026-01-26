@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package ebpf
+package ebpf // import "go.opentelemetry.io/obi/pkg/ebpf"
 
 import (
 	"context"

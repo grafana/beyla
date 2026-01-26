@@ -1,6 +1,3 @@
-// Copyright The OpenTelemetry Authors
-// SPDX-License-Identifier: Apache-2.0
-
 package main
 
 import (
@@ -51,6 +48,31 @@ func main() {
 			}
 		}
 		fmt.Fprintf(w, "Student: %s, ID: %d", name, id)
+	})
+
+	http.HandleFunc("/mysqlerror", func(w http.ResponseWriter, r *http.Request) {
+		if !mysqlInit {
+			db, err = sql.Open("mysql", "root:mysql@tcp(mysqlserver:3306)/sqltest")
+			if err != nil {
+				log.Printf("Failed to connect: %v\n", err)
+				w.WriteHeader(200)
+				w.Write([]byte("DB connection failed (expected)"))
+				return
+			}
+			mysqlInit = true
+		}
+
+		// Execute broken SQL - this should return an error
+		rows, err := db.Query("SELECT * FROM nonexistent_table WHERE id=1")
+		if err != nil {
+			log.Printf("Expected error from broken SQL: %v\n", err)
+			w.WriteHeader(200) // Return 200 for OATS framework, actual SQL error is in trace
+			w.Write([]byte("SQL error (expected)"))
+			return
+		}
+		defer rows.Close()
+
+		w.Write([]byte("unexpected success"))
 	})
 
 	log.Println("Starting Go MySQL test server on :8080")

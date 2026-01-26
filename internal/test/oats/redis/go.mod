@@ -1,6 +1,6 @@
 module github.com/grafana/beyla/internal/test/oats/redis
 
-go 1.25.1
+go 1.25.6
 
 require (
 	github.com/grafana/oats v0.0.3

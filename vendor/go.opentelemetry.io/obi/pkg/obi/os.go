@@ -3,7 +3,7 @@
 
 //go:build linux
 
-package obi
+package obi // import "go.opentelemetry.io/obi/pkg/obi"
 
 import (
 	"fmt"

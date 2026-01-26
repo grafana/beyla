@@ -21,11 +21,11 @@ import (
 	"go.opentelemetry.io/obi/pkg/netolly/agent"
 	"go.opentelemetry.io/obi/pkg/netolly/flowdef"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
-	"go.opentelemetry.io/obi/pkg/pipe/msg"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/internal/appolly"
+	msg2 "github.com/grafana/beyla/v2/pkg/internal/helpers/msg"
 	"github.com/grafana/beyla/v2/pkg/webhook"
 )
 
@@ -217,10 +217,7 @@ func buildCommonContextInfo(
 		Prometheus:              promMgr,
 		OTELMetricsExporter:     &otelcfg.MetricsExporterInstancer{Cfg: &config.AsOBI().OTELMetrics},
 		ExtraResourceAttributes: []attribute.KeyValue{semconv.OTelLibraryName(otel.ReporterName)},
-		OverrideAppExportQueue: msg.NewQueue[[]request.Span](
-			msg.ChannelBufferLen(config.ChannelBufferLen),
-			msg.Name("overriddenAppExportQueue"),
-		),
+		OverrideAppExportQueue:  msg2.QueueFromConfig[[]request.Span](config.AsOBI(), "overriddenAppExportQueue"),
 	}
 
 	if config.Attributes.HostID.Override == "" {

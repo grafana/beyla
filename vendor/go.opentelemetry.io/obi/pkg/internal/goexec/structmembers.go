@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package goexec
+package goexec // import "go.opentelemetry.io/obi/pkg/internal/goexec"
 
 import (
 	"bytes"
@@ -115,6 +115,9 @@ const (
 	MySQLConnCfgPos
 	MySQLConfigAddrPos
 	MySQLConnTypeOffset
+	// pgx driver
+	PgxConnConfigPos
+	PgxConfigHostPos
 	// route harvesting offsets
 	MuxTemplatePos
 	GinFullpathPos
@@ -436,6 +439,18 @@ var structMembers = map[string]structInfo{
 		lib: "github.com/go-sql-driver/mysql",
 		fields: map[string]GoOffset{
 			"Addr": MySQLConfigAddrPos,
+		},
+	},
+	"github.com/jackc/pgx/v5.Conn": {
+		lib: "github.com/jackc/pgx/v5",
+		fields: map[string]GoOffset{
+			"config": PgxConnConfigPos,
+		},
+	},
+	"github.com/jackc/pgx/v5/pgconn.Config": {
+		lib: "github.com/jackc/pgx/v5",
+		fields: map[string]GoOffset{
+			"Host": PgxConfigHostPos,
 		},
 	},
 	"github.com/gorilla/mux.routeRegexp": {

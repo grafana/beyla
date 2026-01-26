@@ -123,7 +123,7 @@ spec:
             - name: BEYLA_KUBE_METADATA_ENABLE
               value: "autodetect"
             - name: BEYLA_PROMETHEUS_FEATURES
-              value: "application,application_span,application_service_graph,application_process"
+              value: "application,application_span,application_process,application_service_graph"
             - name: BEYLA_OTEL_METRICS_TTL
               value: "30m0s"
             - name: BEYLA_NAME_RESOLVER_SOURCES

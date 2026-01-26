@@ -1,4 +1,3 @@
-// Copyright The OpenTelemetry Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,11 +16,13 @@ package main
 import (
 	"context"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"os"
 	"time"
+
+	"go.uber.org/zap"
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
@@ -33,7 +34,6 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
-	"go.uber.org/zap"
 )
 
 // Server is Http server that exposes multiple endpoints.
@@ -43,7 +43,7 @@ type Server struct {
 
 // NewServer creates a server struct after initialing rand.
 func NewServer() *Server {
-	rd := rand.New(rand.NewSource(time.Now().Unix()))
+	rd := rand.New(rand.NewPCG(uint64(time.Now().Unix()), 0))
 	return &Server{
 		rand: rd,
 	}
@@ -126,7 +126,7 @@ func initOTelProvider() {
 }
 
 func (s *Server) rolldice(w http.ResponseWriter, r *http.Request) {
-	n := s.rand.Intn(6) + 1
+	n := s.rand.IntN(6) + 1
 	logger.Info("rolldice called", zap.Int("dice", n))
 
 	fmt.Fprintf(w, "%v", n)

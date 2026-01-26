@@ -15,7 +15,7 @@ scrape_configs:
           exported: "otel"
         targets:
           - 'otelcol:8888'
-  - job_name: obi-collector
+  - job_name: beyla-collector
     honor_labels: true
     static_configs:
       - labels:

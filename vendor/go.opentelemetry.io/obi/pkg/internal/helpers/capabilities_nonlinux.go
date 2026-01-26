@@ -3,7 +3,7 @@
 
 //go:build !linux
 
-package helpers
+package helpers // import "go.opentelemetry.io/obi/pkg/internal/helpers"
 
 // Fake file to avoid failing tests in non-linux environments
 

@@ -1,4 +1,4 @@
-# Exposes two services and will test that beyla is able to select
+# Exposes two services and will test that Beyla is able to select
 # only one service of both via K8s metadata
 apiVersion: v1
 kind: Service

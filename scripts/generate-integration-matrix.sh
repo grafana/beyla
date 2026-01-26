@@ -15,10 +15,10 @@ TEST_PATTERN="${4:-Test}"
 # Get test names (embedded list-tests.sh logic)
 if [ -n "$TEST_TAGS" ]; then
     # Find files with the specific build tag (exact match with word boundaries)
-    FILES=$(find "$SEARCH_DIR" -type f -name "*_test.go" -exec grep -l "//go:build.*\b$TEST_TAGS\b" {} \;)
+    FILES=$(find "$SEARCH_DIR" -maxdepth 1 -type f -name "*_test.go" -exec grep -l "//go:build.*\b$TEST_TAGS\b" {} \;)
 else
     # Find all test files
-    FILES=$(find "$SEARCH_DIR" -type f -name "*_test.go")
+    FILES=$(find "$SEARCH_DIR" -maxdepth 1 -type f -name "*_test.go")
 fi
 
 if [ -z "$FILES" ]; then

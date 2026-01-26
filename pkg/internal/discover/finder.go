@@ -17,6 +17,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/export/prom"
+	msg2 "github.com/grafana/beyla/v2/pkg/internal/helpers/msg"
 )
 
 type ProcessFinder struct {
@@ -40,16 +41,16 @@ func NewProcessFinder(
 
 func (pf *ProcessFinder) startSuveyPipeline(ctx context.Context) (<-chan obiDiscover.Event[*ebpf.Instrumentable], error) {
 	swi := swarm.Instancer{}
-	processEvents := msg.NewQueue[[]obiDiscover.Event[obiDiscover.ProcessAttrs]](
-		msg.ChannelBufferLen(pf.cfg.ChannelBufferLen), msg.Name("processEvents"))
+	processEvents := msg2.QueueFromConfig[[]obiDiscover.Event[obiDiscover.ProcessAttrs]](
+		pf.cfg.AsOBI(), "processEvents")
 
 	obiCfg := pf.cfg.AsOBI()
 
 	swi.Add(swarm.DirectInstance(obiDiscover.ProcessWatcherFunc(obiCfg, pf.ebpfEventContext, processEvents)),
 		swarm.WithID("ProcessWatcher"))
 
-	enrichedProcessEvents := msg.NewQueue[[]obiDiscover.Event[obiDiscover.ProcessAttrs]](
-		msg.ChannelBufferLen(pf.cfg.ChannelBufferLen), msg.Name("enrichedProcessEvents"))
+	enrichedProcessEvents := msg2.QueueFromConfig[[]obiDiscover.Event[obiDiscover.ProcessAttrs]](
+		pf.cfg.AsOBI(), "enrichedProcessEvents")
 
 	swi.Add(obiDiscover.WatcherKubeEnricherProvider(pf.ctxInfo.K8sInformer, processEvents, enrichedProcessEvents),
 		swarm.WithID("WatcherKubeEnricher"))
@@ -74,8 +75,8 @@ func (pf *ProcessFinder) startSuveyPipeline(ctx context.Context) (<-chan obiDisc
 // ebpf.ProcessTracer will be notified.
 func (pf *ProcessFinder) startMixedPipeline(ctx context.Context) (<-chan obiDiscover.Event[*ebpf.Instrumentable], error) {
 
-	enrichedProcessEvents := msg.NewQueue[[]obiDiscover.Event[obiDiscover.ProcessAttrs]](
-		msg.ChannelBufferLen(pf.cfg.ChannelBufferLen), msg.Name("enrichedProcessEvents"))
+	enrichedProcessEvents := msg2.QueueFromConfig[[]obiDiscover.Event[obiDiscover.ProcessAttrs]](
+		pf.cfg.AsOBI(), "enrichedProcessEvents")
 	swi := swarm.Instancer{}
 	obiPFStart := make(chan (<-chan obiDiscover.Event[*ebpf.Instrumentable]), 1)
 	pf.connectSurveySubPipeline(&swi, enrichedProcessEvents)
@@ -129,23 +130,23 @@ func (pf *ProcessFinder) connectSurveySubPipeline(swi *swarm.Instancer, kubeEnri
 	}
 	obiCfg := pf.cfg.AsOBI()
 
-	surveyFilteredEvents := msg.NewQueue[[]obiDiscover.Event[obiDiscover.ProcessMatch]](
-		msg.ChannelBufferLen(pf.cfg.ChannelBufferLen), msg.Name("surveyFilteredEvents"))
+	surveyFilteredEvents := msg2.QueueFromConfig[[]obiDiscover.Event[obiDiscover.ProcessMatch]](
+		pf.cfg.AsOBI(), "surveyFilteredEvents")
 	swi.Add(SurveyCriteriaMatcherProvider(pf.cfg, kubeEnrichedEvents, surveyFilteredEvents),
 		swarm.WithID("SurveyCriteriaMatcherProvider"))
 
-	surveyExecutables := msg.NewQueue[[]obiDiscover.Event[ebpf.Instrumentable]](
-		msg.ChannelBufferLen(pf.cfg.ChannelBufferLen), msg.Name("surveyExecutables"))
+	surveyExecutables := msg2.QueueFromConfig[[]obiDiscover.Event[ebpf.Instrumentable]](
+		pf.cfg.AsOBI(), "surveyExecutables")
 	swi.Add(obiDiscover.ExecTyperProvider(obiCfg, pf.ctxInfo.Metrics, pf.ctxInfo.K8sInformer, surveyFilteredEvents, surveyExecutables),
 		swarm.WithID("SurveyExecTyperProvider"))
 
-	surveyExecutableTypes := msg.NewQueue[[]obiDiscover.Event[ebpf.Instrumentable]](
-		msg.ChannelBufferLen(pf.cfg.ChannelBufferLen), msg.Name("surveyExecutableTypes"))
+	surveyExecutableTypes := msg2.QueueFromConfig[[]obiDiscover.Event[ebpf.Instrumentable]](
+		pf.cfg.AsOBI(), "surveyExecutableTypes")
 	swi.Add(obiDiscover.ContainerDBUpdaterProvider(pf.ctxInfo.K8sInformer, surveyExecutables, surveyExecutableTypes),
 		swarm.WithID("SurveyContainerDBUpdaterProvider"))
 
-	surveyEvents := msg.NewQueue[exec.ProcessEvent](
-		msg.ChannelBufferLen(pf.cfg.ChannelBufferLen), msg.Name("surveyEvents"))
+	surveyEvents := msg2.QueueFromConfig[exec.ProcessEvent](
+		pf.cfg.AsOBI(), "surveyEvents")
 	swi.Add(SurveyEventGenerator(&pf.cfg.Attributes.Kubernetes, pf.ctxInfo.K8sInformer, surveyExecutableTypes, surveyEvents),
 		swarm.WithID("SurveyEventGenerator"))
 	swi.Add(otel.SurveyInfoMetrics(pf.ctxInfo, &pf.cfg.OTELMetrics, surveyEvents),

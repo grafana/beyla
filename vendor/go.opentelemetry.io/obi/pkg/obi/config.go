@@ -1,10 +1,11 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package obi
+package obi // import "go.opentelemetry.io/obi/pkg/obi"
 
 import (
 	"encoding"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -84,10 +85,12 @@ var (
 )
 
 var DefaultConfig = Config{
-	ChannelBufferLen: 10,
-	LogLevel:         LogLevelInfo,
-	ShutdownTimeout:  10 * time.Second,
-	EnforceSysCaps:   false,
+	ChannelBufferLen:        50,
+	ChannelSendTimeout:      time.Minute,
+	ChannelSendTimeoutPanic: false,
+	LogLevel:                LogLevelInfo,
+	ShutdownTimeout:         10 * time.Second,
+	EnforceSysCaps:          false,
 	EBPF: config.EBPFTracer{
 		BatchLength:        100,
 		BatchTimeout:       time.Second,
@@ -124,6 +127,12 @@ var DefaultConfig = Config{
 			},
 		},
 		MaxTransactionTime: 5 * time.Minute,
+		LogEnricher: config.LogEnricherConfig{
+			CacheTTL:              30 * time.Minute,
+			CacheSize:             128,
+			AsyncWriterWorkers:    8,
+			AsyncWriterChannelLen: 500,
+		},
 	},
 	NameResolver: &transform.NameResolverConfig{
 		Sources:  []transform.Source{transform.SourceK8s},
@@ -298,9 +307,12 @@ type Config struct {
 	// From this comment, the properties below will remain undocumented, as they
 	// are useful for development purposes. They might be helpful for customer support.
 
-	ChannelBufferLen int             `yaml:"channel_buffer_len" env:"OTEL_EBPF_CHANNEL_BUFFER_LEN"`
-	ProfilePort      int             `yaml:"profile_port" env:"OTEL_EBPF_PROFILE_PORT"`
-	InternalMetrics  imetrics.Config `yaml:"internal_metrics"`
+	ChannelBufferLen        int           `yaml:"channel_buffer_len" env:"OTEL_EBPF_CHANNEL_BUFFER_LEN"`
+	ChannelSendTimeout      time.Duration `yaml:"channel_send_timeout" env:"OTEL_EBPF_CHANNEL_SEND_TIMEOUT"`
+	ChannelSendTimeoutPanic bool          `yaml:"channel_send_timeout_panic" env:"OTEL_EBPF_CHANNEL_SEND_TIMEOUT_PANIC"`
+
+	ProfilePort     int             `yaml:"profile_port" env:"OTEL_EBPF_PROFILE_PORT"`
+	InternalMetrics imetrics.Config `yaml:"internal_metrics"`
 
 	// LogConfig enables the logging of the configuration on startup.
 	LogConfig LogConfigOption `yaml:"log_config" env:"OTEL_EBPF_LOG_CONFIG"`
@@ -332,6 +344,40 @@ func (c *Config) Unmarshal(component *confmap.Conf) error {
 	}
 
 	return dec.Decode(raw)
+}
+
+func (c *Config) Log() {
+	if c.LogConfig == "" {
+		return
+	}
+	var configString string
+	configYaml, err := yaml.Marshal(c)
+	if err != nil {
+		slog.Warn("can't marshal configuration to YAML", "error", err)
+		return
+	}
+	switch c.LogConfig {
+	case LogConfigOptionYAML:
+		configString = string(configYaml)
+	case LogConfigOptionJSON:
+		// instead of annotating the config with json tags, we unmarshal the YAML to a map[string]any, and marshal that map to
+		var configMap map[string]any
+		err = yaml.Unmarshal(configYaml, &configMap)
+		if err != nil {
+			slog.Warn("can't unmarshal yaml configuration to map", "error", err)
+			break
+		}
+		configJSON, err := json.Marshal(configMap)
+		if err != nil {
+			slog.Warn("can't marshal configuration to JSON", "error", err)
+			break
+		}
+		configString = string(configJSON)
+	}
+	if configString != "" {
+		slog.Info("Running OpenTelemetry eBPF Instrumentation with configuration")
+		fmt.Println(configString)
+	}
 }
 
 // stringSliceToTextUnmarshalerHookFunc returns a DecodeHookFunc that converts

@@ -1,9 +1,9 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: beyla-config
+  name: instrumenter-config
 data:
-  beyla-config.yml: |
+  instrumenter-config.yml: |
     attributes:
       kubernetes:
         enable: true
@@ -21,7 +21,7 @@ data:
           namespace: integration-test
     routes:
       patterns:
-        - /jsonrpc
+         - /jsonrpc
       unmatched: heuristic
     otel_metrics_export:
       endpoint: http://otelcol:4318
@@ -40,7 +40,7 @@ spec:
     metadata:
       labels:
         instrumentation: beyla
-        # this label will trigger a deletion of beyla pods before tearing down
+        # this label will trigger a deletion of Beyla pods before tearing down
         # kind, to force Beyla writing the coverage data
         teardown: delete
     spec:
@@ -49,9 +49,9 @@ spec:
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
       volumes:
-        - name: beyla-config
+        - name: instrumenter-config
           configMap:
-            name: beyla-config
+            name: instrumenter-config
         - name: testoutput
           persistentVolumeClaim:
             claimName: testoutput
@@ -59,7 +59,7 @@ spec:
         - name: beyla
           image: beyla:dev
           imagePullPolicy: Never # loaded into Kind from localhost
-          args: ["--config=/config/beyla-config.yml"]
+          args: ["--config=/config/instrumenter-config.yml"]
           securityContext:
             runAsUser: 0
             readOnlyRootFilesystem: true
@@ -70,7 +70,7 @@ spec:
                 - NET_ADMIN # <-- Important. Allows Beyla to attach the Linux TC (Traffic Control) probes
           volumeMounts:
             - mountPath: /config
-              name: beyla-config
+              name: instrumenter-config
             - mountPath: /testoutput
               name: testoutput
           env:
@@ -82,11 +82,11 @@ spec:
               value: "10ms"
             - name: BEYLA_BPF_BATCH_TIMEOUT
               value: "10ms"
-            - name: BEYLA_OTLP_TRACES_BATCH_TIMEOUT
-              value: "0ms"
             - name: BEYLA_NAME_RESOLVER_SOURCES
               value: "dns,k8s"
             - name: BEYLA_BPF_CONTEXT_PROPAGATION
               value: "all"
             - name: BEYLA_BPF_DEBUG
               value: "true"
+            - name: BEYLA_OTLP_TRACES_BATCH_TIMEOUT
+              value: "0ms"

@@ -1,9 +1,9 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: beyla-config
+  name: instrumenter-config
 data:
-  beyla-config.yml: |
+  instrumenter-config.yml: |
     attributes:
       kubernetes:
         enable: true
@@ -38,12 +38,12 @@ spec:
         # kind, to force Beyla writing the coverage data
         teardown: delete
     spec:
-      hostPID: true  #important!
+      hostPID: true #important!
       serviceAccountName: beyla
       volumes:
-        - name: beyla-config
+        - name: instrumenter-config
           configMap:
-            name: beyla-config
+            name: instrumenter-config
         - name: testoutput
           persistentVolumeClaim:
             claimName: testoutput
@@ -51,13 +51,13 @@ spec:
         - name: beyla
           image: beyla:dev
           imagePullPolicy: Never # loaded into Kind from localhost
-          args: ["--config=/config/beyla-config.yml"]
+          args: ["--config=/config/instrumenter-config.yml"]
           securityContext:
             privileged: true
             runAsUser: 0
           volumeMounts:
             - mountPath: /config
-              name: beyla-config
+              name: instrumenter-config
             - mountPath: /testoutput
               name: testoutput
           env:
@@ -71,3 +71,5 @@ spec:
               value: "10ms"
             - name: BEYLA_NAME_RESOLVER_SOURCES
               value: "dns,k8s"
+            - name: BEYLA_OTLP_TRACES_BATCH_TIMEOUT
+              value: "0ms"

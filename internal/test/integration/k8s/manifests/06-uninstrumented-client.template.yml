@@ -1,18 +1,6 @@
 # this file is actually a Go template that needs to be processed before deploying
 # Mandatory variables are PodName and TargetURL
 apiVersion: v1
-kind: Service
-metadata:
-  # this is the service name as expected by configs/prometheus-config-promscrape.yml
-  name: beyla-pinger
-spec:
-  selector:
-    component: pinger
-  ports:
-    - port: 8999
-      name: prometheus
----
-apiVersion: v1
 kind: Pod
 metadata:
   name: "{{.PodName}}"
@@ -27,9 +15,7 @@ spec:
     - name: configs
       persistentVolumeClaim:
         claimName: configs
-    - name: maincode
-      configMap:
-        name: maincode
+
   containers:
     - name: pinger
       image: httppinger:dev

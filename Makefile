@@ -129,7 +129,7 @@ prereqs: install-hooks bpf2go
 	mkdir -p $(TEST_OUTPUT)/run
 	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/v2/cmd/golangci-lint,v2.4.0)
 	$(call go-install-tool,$(GO_OFFSETS_TRACKER),github.com/grafana/go-offsets-tracker/cmd/go-offsets-tracker,$(call gomod-version,grafana/go-offsets-tracker))
-	$(call go-install-tool,$(GO_LICENSES),github.com/google/go-licenses,v1.6.0)
+	$(call go-install-tool,$(GO_LICENSES),github.com/google/go-licenses/v2,v2.0.1)
 	$(call go-install-tool,$(KIND),sigs.k8s.io/kind,v0.20.0)
 	$(call go-install-tool,$(DASHBOARD_LINTER),github.com/grafana/dashboard-linter,latest)
 	$(call go-install-tool,$(ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest,latest)
@@ -243,6 +243,16 @@ test-privileged:
 	@echo "### Testing code with privileged tests enabled"
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" PRIVILEGED_TESTS=true go test -race -mod vendor -a ./... -coverpkg=./... -coverprofile $(TEST_OUTPUT)/cover.all.txt
 
+.PHONY: helm-unittest
+helm-unittest:
+	@echo "### Running Helm chart unit tests"
+	$(OCI_BIN) run --rm -v "$(PROJECT_DIR):/apps" -w /apps -u "$$(id -u)" helmunittest/helm-unittest -f charts/beyla/tests/unit/*.yaml charts/beyla
+
+.PHONY: helm-docs
+helm-docs:
+	@echo "### Generating Helm chart documentation"
+	cd charts && $(OCI_BIN) run --rm --volume "$$(pwd):/helm-docs" -u "$$(id -u)" jnorwood/helm-docs:v1.13.1
+
 .PHONY: cov-exclude-generated
 cov-exclude-generated:
 	grep -vE $(EXCLUDE_COVERAGE_FILES) $(TEST_OUTPUT)/cover.all.txt > $(TEST_OUTPUT)/cover.txt
@@ -289,13 +299,13 @@ cleanup-integration-test:
 run-integration-test:
 	@echo "### Running integration tests"
 	go clean -testcache
-	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./internal/test/integration/... --tags=integration
+	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./internal/test/integration --tags=integration
 
 .PHONY: run-integration-test-k8s
 run-integration-test-k8s:
 	@echo "### Running integration tests"
 	go clean -testcache
-	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./internal/test/integration/... --tags=integration_k8s
+	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./internal/test/integration --tags=integration
 
 .PHONY: run-integration-test-vm
 run-integration-test-vm:
@@ -320,14 +330,14 @@ run-integration-test-vm:
 			-v -a \
 			-mod vendor \
 			-tags=integration \
-			-run="^($(TEST_PATTERN))\$$" ./internal/test/integration/...; \
+			-run="^($(TEST_PATTERN))\$$" ./internal/test/integration; \
 	fi
 
 .PHONY: run-integration-test-arm
 run-integration-test-arm:
 	@echo "### Running integration tests"
 	go clean -testcache
-	go test -p 1 -failfast -v -timeout 90m -mod vendor -a ./internal/test/integration/... --tags=integration -run "^TestMultiProcess"
+	go test -p 1 -failfast -v -timeout 90m -mod vendor -a ./internal/test/integration --tags=integration -run "^TestMultiProcess"
 
 .PHONY: integration-test-matrix-json
 integration-test-matrix-json:
@@ -417,7 +427,7 @@ oats-test-debug: oats-prereq
 .PHONY: update-licenses check-license
 update-licenses: prereqs
 	@echo "### Updating third_party_licenses.csv"
-	GOOS=linux GOARCH=amd64 $(GO_LICENSES) report --include_tests ./... > third_party_licenses.csv
+	GOOS=linux GOARCH=amd64 $(GO_LICENSES) report --include_tests --ignore go.opentelemetry.io/obi ./... > third_party_licenses.csv
 
 check-licenses: update-licenses
 	@echo "### Checking third party licenses"

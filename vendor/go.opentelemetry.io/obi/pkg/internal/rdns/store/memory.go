@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package store
+package store // import "go.opentelemetry.io/obi/pkg/internal/rdns/store"
 
 import (
 	"sync"

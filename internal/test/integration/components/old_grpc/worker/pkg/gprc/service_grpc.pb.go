@@ -70,7 +70,7 @@ func RegisterMultiplierServer(s grpc.ServiceRegistrar, srv MultiplierServer) {
 	s.RegisterService(&Multiplier_ServiceDesc, srv)
 }
 
-func _Multiplier_Loop_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Multiplier_Loop_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(LoopRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -82,7 +82,7 @@ func _Multiplier_Loop_Handler(srv interface{}, ctx context.Context, dec func(int
 		Server:     srv,
 		FullMethod: "/fib.Multiplier/Loop",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(MultiplierServer).Loop(ctx, req.(*LoopRequest))
 	}
 	return interceptor(ctx, in, info, handler)

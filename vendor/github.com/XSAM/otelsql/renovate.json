@@ -1,0 +1,69 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:best-practices",
+    "helpers:pinGitHubActionDigestsToSemver"
+  ],
+  "ignorePaths": [],
+  "postUpdateOptions": [
+    "gomodTidy"
+  ],
+  "packageRules": [
+    {
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchDepTypes": [
+        "indirect"
+      ],
+      "enabled": true
+    },
+    {
+      "matchFileNames": [
+        "internal/tools/**"
+      ],
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchDepTypes": [
+        "indirect"
+      ],
+      "enabled": false
+    },
+    {
+      "matchPackageNames": [
+        "google.golang.org/genproto/googleapis/**"
+      ],
+      "groupName": "googleapis",
+      "schedule": [
+        "* * 1 * *"
+      ]
+    },
+    {
+      "matchPackageNames": [
+        "golang.org/x/**"
+      ],
+      "groupName": "golang.org/x"
+    },
+    {
+      "description": "Disable all dependency updates in examples",
+      "matchFileNames": [
+        "example/**"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "Allow OpenTelemetry dependency updates in examples",
+      "matchFileNames": [
+        "example/**"
+      ],
+      "matchManagers": [
+        "gomod"
+      ],
+      "enabled": true,
+      "matchPackageNames": [
+        "/^go\\.opentelemetry\\.io//"
+      ]
+    }
+  ]
+}

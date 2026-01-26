@@ -1,0 +1,54 @@
+services:
+  app:
+    build:
+      context: ./testapi
+    command: bash -c "sleep 10 && bundle exec rails db:create db:migrate db:seed && rails server -p 3040 -b 0.0.0.0"
+    image: myapp:latest
+    container_name: rails_app
+    expose:
+      - "3040" # Rails app listens on port 3040
+    networks:
+      - app_network
+    volumes:
+      - ./certs/newcerts:/certs
+    depends_on:
+      - db
+
+  nginx:
+    image: nginx:latest@sha256:7272239bd21472f311aa3e86a85fdca0f1ad648995f983ab6e5e7dea665cd233
+    container_name: nginx_server
+    ports:
+      - "443:443" # Expose TLS port
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/cert.pem:/etc/nginx/cert.pem:ro
+      - ./nginx/key.pem:/etc/nginx/key.pem:ro
+    depends_on:
+      - app
+    networks:
+      - app_network
+
+  db:
+    image: mysql:8.4.7@sha256:90544b3775490579867a30988d48f0215fc3b88d78d8d62b2c0d96ee9226a2b7
+    command:
+      - --ssl-ca=/etc/mysql/certs/ca.pem
+      - --ssl-cert=/etc/mysql/certs/server-cert.pem
+      - --ssl-key=/etc/mysql/certs/server-key.pem
+      - --bind-address=0.0.0.0    
+    container_name: mysql_db
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: my_database
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./certs/newcerts:/etc/mysql/certs
+    networks:
+      - app_network
+
+volumes:
+  db_data:
+
+networks:
+  app_network:

@@ -14,13 +14,14 @@ import (
 	"strconv"
 	"time"
 
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+
 	"go.opentelemetry.io/auto/sdk"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/grafana/beyla/v2/internal/test/integration/components/testserver/arg"
 	pb "github.com/grafana/beyla/v2/internal/test/integration/components/testserver/grpc/routeguide"
@@ -213,19 +214,36 @@ func echoLowPort(rw http.ResponseWriter) {
 }
 
 func echoDist(rw http.ResponseWriter) {
-	requestURL := "http://testserver:8088/jsonrpc"
+	var requestURL string
 
-	slog.Debug("calling", "url", requestURL)
+	// Check if we should bypass the JSON-RPC hop for IP-only testing
+	if os.Getenv("BYPASS_JSONRPC") == "true" {
+		// Direct call to pytestserver - avoids loopback, enables IP option injection
+		requestURL = "http://pytestserver:7773/tracemetoo"
+		slog.Debug("bypassing JSON-RPC, calling directly", "url", requestURL)
 
-	res, err := http.Post(requestURL, "application/json", bytes.NewReader([]byte(`{"jsonrpc":"2.0","method":"Arith.Traceme","params":[{"A":1,"B":2}],"id":1}`)))
-	if err != nil {
-		slog.Error("error making http request", "error", err)
-		rw.WriteHeader(http.StatusInternalServerError)
-		return
+		res, err := http.Get(requestURL)
+		if err != nil {
+			slog.Error("error making http request", "error", err)
+			rw.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		defer res.Body.Close()
+		rw.WriteHeader(res.StatusCode)
+	} else {
+		// Normal flow: call JSON-RPC which then calls pytestserver
+		requestURL = "http://testserver:8088/jsonrpc"
+		slog.Debug("calling", "url", requestURL)
+
+		res, err := http.Post(requestURL, "application/json", bytes.NewReader([]byte(`{"jsonrpc":"2.0","method":"Arith.Traceme","params":[{"A":1,"B":2}],"id":1}`)))
+		if err != nil {
+			slog.Error("error making http request", "error", err)
+			rw.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		defer res.Body.Close()
+		rw.WriteHeader(res.StatusCode)
 	}
-
-	defer res.Body.Close()
-	rw.WriteHeader(res.StatusCode)
 }
 
 func echoCall(rw http.ResponseWriter) {

@@ -395,7 +395,7 @@ func TestCreateServiceInstanceId(t *testing.T) {
 			namespaceName: "production",
 			podName:       "web-server-abc123",
 			containerName: "nginx",
-			expected:      "", // Current implementation returns empty string (possible bug?)
+			expected:      "production.web-server-abc123.nginx",
 		},
 		{
 			name:          "returns empty when namespace is missing",

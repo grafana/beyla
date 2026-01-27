@@ -29,8 +29,10 @@ var (
 	LabelAppVersion = []string{"app.kubernetes.io/version"}
 )
 
+// configureContainerEnvVars sets all environment variables for the container including
+// resource attributes, sampler configuration, and service identification.
 // nolint:gocritic
-func (pm *PodMutator) setResourceAttributes(meta *metav1.ObjectMeta, container *corev1.Container, selector services.Selector) {
+func (pm *PodMutator) configureContainerEnvVars(meta *metav1.ObjectMeta, container *corev1.Container, selector services.Selector) {
 	cfg := pm.cfg.Injector.Resources
 
 	// entries from the CRD have the lowest precedence - they are overridden by later values

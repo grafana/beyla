@@ -431,7 +431,7 @@ func (pm *PodMutator) addEnvVars(meta *metav1.ObjectMeta, c *corev1.Container, s
 	setEnvVar(c, envOtelExporterOtlpProtocolName, pm.proto)
 	setEnvVar(c, envOtelSemConvStabilityName, "http")
 
-	pm.setResourceAttributes(meta, c, selector)
+	pm.configureContainerEnvVars(meta, c, selector)
 
 	for k, v := range pm.exportHeaders {
 		setEnvVar(c, k, v)

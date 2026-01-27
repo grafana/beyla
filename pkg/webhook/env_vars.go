@@ -13,6 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"go.opentelemetry.io/obi/pkg/appolly/services"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 )
 
@@ -28,8 +29,50 @@ var (
 	LabelAppVersion = []string{"app.kubernetes.io/version"}
 )
 
+// configureContainerEnvVars sets all environment variables for the container including
+// resource attributes, sampler configuration, and service identification.
 // nolint:gocritic
-func (pm *PodMutator) setResourceAttributes(meta *metav1.ObjectMeta, container *corev1.Container) {
+func (pm *PodMutator) configureContainerEnvVars(meta *metav1.ObjectMeta, container *corev1.Container, selector services.Selector) {
+	extraResAttrs := pm.setResourceAttributes(meta, container)
+
+	// Configure propagators from default config
+	if len(pm.cfg.Injector.Propagators) > 0 {
+		pm.configurePropagators(container, pm.cfg.Injector.Propagators)
+	}
+
+	// Configure sampler with priority: selector > default
+	var samplerConfig *services.SamplerConfig
+	if selector != nil {
+		samplerConfig = selector.GetSamplerConfig()
+	}
+	if samplerConfig == nil {
+		samplerConfig = pm.cfg.Injector.DefaultSampler
+	}
+	if samplerConfig != nil {
+		pm.configureSampler(container, samplerConfig)
+	}
+
+	if pm.cfg.Metrics.Features.AnySpanMetrics() {
+		extraResAttrs[attr.SkipSpanMetrics.OTEL()] = "true"
+	}
+
+	pm.injectEnvVars(extraResAttrs, container)
+}
+
+func (pm *PodMutator) injectEnvVars(extraResAttrs map[attribute.Key]string, container *corev1.Container) {
+	// Set extra resource attributes if any exist
+	if len(extraResAttrs) > 0 {
+		var resourceAttributeList []string
+		for _, resourceAttributeKey := range slices.Sorted(maps.Keys(extraResAttrs)) {
+			resourceAttributeList = append(
+				resourceAttributeList,
+				fmt.Sprintf("%s=%s", resourceAttributeKey, extraResAttrs[resourceAttributeKey]))
+		}
+		setEnvVar(container, envInjectorOtelExtraResourceAttrs, strings.Join(resourceAttributeList, ","))
+	}
+}
+
+func (pm *PodMutator) setResourceAttributes(meta *metav1.ObjectMeta, container *corev1.Container) map[attribute.Key]string {
 	cfg := pm.cfg.Injector.Resources
 
 	// entries from the CRD have the lowest precedence - they are overridden by later values
@@ -69,53 +112,28 @@ func (pm *PodMutator) setResourceAttributes(meta *metav1.ObjectMeta, container *
 			extraResAttrs[attribute.Key(strings.TrimPrefix(k, ResourceAttributeAnnotationPrefix))] = v
 		}
 	}
+	return extraResAttrs
+}
 
-	// todo: propagators and sampler from config?
-	// idx = getIndexOfEnv(container.Env, constants.EnvOTELPropagators)
-	// if idx == -1 && len(otelinst.Spec.Propagators) > 0 {
-	// 	propagators := *(*[]string)((unsafe.Pointer(&otelinst.Spec.Propagators)))
-	// 	container.Env = append(container.Env, corev1.EnvVar{
-	// 		Name:  constants.EnvOTELPropagators,
-	// 		Value: strings.Join(propagators, ","),
-	// 	})
-	// }
+// configureSampler sets sampler environment variables from the provided sampler configuration.
+// The samplerConfig parameter must be non-nil.
+// Respects existing environment variables (won't override user settings).
+func (pm *PodMutator) configureSampler(container *corev1.Container, samplerConfig *services.SamplerConfig) {
+	// Use existing setEnvVar helper (handles empty values and duplicates)
+	setEnvVar(container, envOtelTracesSamplerName, samplerConfig.Name)
+	setEnvVar(container, envOtelTracesSamplerArgName, samplerConfig.Arg)
+}
 
-	// idx = getIndexOfEnv(container.Env, constants.EnvOTELTracesSampler)
-	// // configure sampler only if it is configured in the CR
-	// if idx == -1 && otelinst.Spec.Sampler.Type != "" {
-	// 	idxSamplerArg := getIndexOfEnv(container.Env, constants.EnvOTELTracesSamplerArg)
-	// 	if idxSamplerArg == -1 {
-	// 		container.Env = append(container.Env, corev1.EnvVar{
-	// 			Name:  constants.EnvOTELTracesSampler,
-	// 			Value: string(otelinst.Spec.Sampler.Type),
-	// 		})
-	// 		if otelinst.Spec.Sampler.Argument != "" {
-	// 			container.Env = append(container.Env, corev1.EnvVar{
-	// 				Name:  constants.EnvOTELTracesSamplerArg,
-	// 				Value: otelinst.Spec.Sampler.Argument,
-	// 			})
-	// 		}
-	// 	}
-	// }
-
-	if pm.cfg.Metrics.Features.AnySpanMetrics() {
-		extraResAttrs[attr.SkipSpanMetrics.OTEL()] = "true"
-	}
-
-	// Set extra resource attributes if any exist
-	if len(extraResAttrs) > 0 {
-		var resourceAttributeList []string
-		for _, resourceAttributeKey := range slices.Sorted(maps.Keys(extraResAttrs)) {
-			resourceAttributeList = append(
-				resourceAttributeList,
-				fmt.Sprintf("%s=%s", resourceAttributeKey, extraResAttrs[resourceAttributeKey]))
-		}
-		setEnvVar(container, envInjectorOtelExtraResourceAttrs, strings.Join(resourceAttributeList, ","))
-	}
+// configurePropagators sets propagators environment variable from the provided list.
+// The propagators parameter must be non-empty.
+// Respects existing environment variables (won't override user settings).
+func (pm *PodMutator) configurePropagators(container *corev1.Container, propagators []string) {
+	// Join propagators with comma separator as per OTEL spec
+	setEnvVar(container, envOtelPropagatorsName, strings.Join(propagators, ","))
 }
 
 // chooseServiceName returns the service name to be used in the instrumentation.
-// See https://github.com/open-telemetry/semantic-conventions/blob/main/docs/non-normative/k8s-attributes.md#how-servicename-should-be-calculated
+// See https://opentelemetry.io/docs/specs/semconv/non-normative/k8s-attributes/#how-servicename-should-be-calculated
 func chooseServiceName(meta *metav1.ObjectMeta, useLabelsForResourceAttributes bool, podName string, resources map[attribute.Key]string) string {
 	if name := chooseLabelOrAnnotation(meta, useLabelsForResourceAttributes, semconv.ServiceNameKey, LabelAppName); name != "" {
 		return name
@@ -160,7 +178,7 @@ func chooseLabelOrAnnotation(meta *metav1.ObjectMeta, useLabelsForResourceAttrib
 }
 
 // chooseServiceVersion returns the service version to be used in the instrumentation.
-// See https://github.com/open-telemetry/semantic-conventions/blob/main/docs/non-normative/k8s-attributes.md#how-serviceversion-should-be-calculated
+// See https://opentelemetry.io/docs/specs/semconv/non-normative/k8s-attributes/#how-serviceversion-should-be-calculated
 func chooseServiceVersion(meta *metav1.ObjectMeta, useLabelsForResourceAttributes bool, container *corev1.Container) string {
 	v := chooseLabelOrAnnotation(meta, useLabelsForResourceAttributes, semconv.ServiceVersionKey, LabelAppVersion)
 	if v != "" {
@@ -175,7 +193,7 @@ func chooseServiceVersion(meta *metav1.ObjectMeta, useLabelsForResourceAttribute
 }
 
 // chooseServiceNamespace returns the service.namespace to be used in the instrumentation.
-// See https://github.com/open-telemetry/semantic-conventions/blob/main/docs/non-normative/k8s-attributes.md#how-servicenamespace-should-be-calculated
+// See https://opentelemetry.io/docs/specs/semconv/non-normative/k8s-attributes/#how-servicenamespace-should-be-calculated
 func chooseServiceNamespace(meta *metav1.ObjectMeta, useLabelsForResourceAttributes bool, namespaceName string) string {
 	namespace := chooseLabelOrAnnotation(meta, useLabelsForResourceAttributes, semconv.ServiceNamespaceKey, nil)
 	if namespace != "" {
@@ -187,7 +205,7 @@ func chooseServiceNamespace(meta *metav1.ObjectMeta, useLabelsForResourceAttribu
 var errCannotRetrieveImage = errors.New("cannot retrieve image name")
 
 // parseServiceVersionFromImage parses the service version for differently-formatted image names
-// according to https://github.com/open-telemetry/semantic-conventions/blob/main/docs/non-normative/k8s-attributes.md#how-serviceversion-should-be-calculated
+// according to https://opentelemetry.io/docs/specs/semconv/non-normative/k8s-attributes/#how-serviceversion-should-be-calculated
 func parseServiceVersionFromImage(image string) (string, error) {
 	ref, err := reference.Parse(image)
 	if err != nil {
@@ -219,7 +237,7 @@ func parseServiceVersionFromImage(image string) (string, error) {
 }
 
 // chooseServiceInstanceId returns the service.instance.id to be used in the instrumentation.
-// See https://github.com/open-telemetry/semantic-conventions/blob/main/docs/non-normative/k8s-attributes.md#how-serviceinstanceid-should-be-calculated
+// See https://opentelemetry.io/docs/specs/semconv/non-normative/k8s-attributes/#how-serviceinstanceid-should-be-calculated
 func createServiceInstanceId(meta *metav1.ObjectMeta, namespaceName, podName, containerName string) string {
 	// Do not use labels for service instance id,
 	// because multiple containers in the same pod would get the same service instance id,

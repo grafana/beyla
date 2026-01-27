@@ -55,6 +55,9 @@ const (
 	envInjectorOtelK8sContainerName   = "OTEL_INJECTOR_K8S_CONTAINER_NAME"
 	envOtelK8sNodeName                = "OTEL_RESOURCE_ATTRIBUTES_NODE_NAME" // stored in OTEL_INJECTOR_RESOURCE_ATTRIBUTES, since there's no individual OTEL_INJECTOR_K8S_NODE_NAME
 	envVarSDKVersion                  = "BEYLA_INJECTOR_SDK_PKG_VERSION"
+	envOtelTracesSamplerName          = "OTEL_TRACES_SAMPLER"
+	envOtelTracesSamplerArgName       = "OTEL_TRACES_SAMPLER_ARG"
+	envOtelPropagatorsName            = "OTEL_PROPAGATORS"
 )
 
 func init() {
@@ -276,7 +279,8 @@ func (pm *PodMutator) mutatePod(pod *corev1.Pod) bool {
 		return false
 	}
 
-	if !pm.matchesSelection(meta) {
+	selector, matched := pm.matchesSelection(meta)
+	if !matched {
 		pm.logger.Info("pod doesn't match selection criteria")
 		return false
 	}
@@ -293,7 +297,7 @@ func (pm *PodMutator) mutatePod(pod *corev1.Pod) bool {
 			pm.logger.Warn("container already using LD_PRELOAD, ignoring...", "container", c.Name)
 			continue
 		}
-		pm.instrumentContainer(meta, c)
+		pm.instrumentContainer(meta, c, selector)
 	}
 
 	pm.addLabel(meta, instrumentedLabel, pm.cfg.Injector.SDKPkgVersion)
@@ -349,9 +353,9 @@ func (pm *PodMutator) mountVolume(spec *corev1.PodSpec, meta *metav1.ObjectMeta)
 	}
 }
 
-func (pm *PodMutator) instrumentContainer(meta *metav1.ObjectMeta, c *corev1.Container) {
+func (pm *PodMutator) instrumentContainer(meta *metav1.ObjectMeta, c *corev1.Container, selector services.Selector) {
 	pm.addMount(c)
-	pm.addEnvVars(meta, c)
+	pm.addEnvVars(meta, c, selector)
 }
 
 func (pm *PodMutator) addMount(c *corev1.Container) {
@@ -413,7 +417,7 @@ func setEnvVar(c *corev1.Container, envVarName, value string) {
 	}
 }
 
-func (pm *PodMutator) addEnvVars(meta *metav1.ObjectMeta, c *corev1.Container) {
+func (pm *PodMutator) addEnvVars(meta *metav1.ObjectMeta, c *corev1.Container, selector services.Selector) {
 	if c.Env == nil {
 		c.Env = []corev1.EnvVar{}
 	}
@@ -428,7 +432,7 @@ func (pm *PodMutator) addEnvVars(meta *metav1.ObjectMeta, c *corev1.Container) {
 	setEnvVar(c, envOtelExporterOtlpProtocolName, pm.proto)
 	setEnvVar(c, envOtelSemConvStabilityName, "http")
 
-	pm.setResourceAttributes(meta, c)
+	pm.configureContainerEnvVars(meta, c, selector)
 
 	for k, v := range pm.exportHeaders {
 		setEnvVar(c, k, v)
@@ -493,7 +497,7 @@ func processMetadata(meta *metav1.ObjectMeta) *ProcessInfo {
 	return &ret
 }
 
-func (pm *PodMutator) matchesSelection(meta *metav1.ObjectMeta) bool {
+func (pm *PodMutator) matchesSelection(meta *metav1.ObjectMeta) (services.Selector, bool) {
 	info := processMetadata(meta)
 	return pm.matcher.MatchProcessInfo(info)
 }

@@ -10,6 +10,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"go.opentelemetry.io/obi/pkg/appolly/services"
+	"go.opentelemetry.io/obi/pkg/export"
+	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
+
 	"github.com/grafana/beyla/v2/pkg/beyla"
 )
 
@@ -722,7 +726,7 @@ func TestChooseLabelOrAnnotation(t *testing.T) {
 	}
 }
 
-func TestSetResourceAttributes(t *testing.T) {
+func TestConfigureContainerEnvVars(t *testing.T) {
 	tests := []struct {
 		name                   string
 		cfg                    *beyla.Config
@@ -886,7 +890,7 @@ func TestSetResourceAttributes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			pm := &PodMutator{cfg: tt.cfg}
-			pm.setResourceAttributes(tt.meta, tt.container)
+			pm.configureContainerEnvVars(tt.meta, tt.container, nil)
 
 			// Check specific environment variables
 			for envName, expectedValue := range tt.checkEnvVars {
@@ -917,6 +921,618 @@ func TestSetResourceAttributes(t *testing.T) {
 					}
 				}
 				assert.True(t, found, "expected env var %s not found", envName)
+			}
+		})
+	}
+}
+
+func TestConfigureContainerEnvVars_Propagators(t *testing.T) {
+	tests := []struct {
+		name            string
+		propagators     []string
+		expectedEnvVars map[string]string
+	}{
+		{
+			name:        "configures default propagators",
+			propagators: []string{"tracecontext", "baggage"},
+			expectedEnvVars: map[string]string{
+				envOtelPropagatorsName: "tracecontext,baggage",
+			},
+		},
+		{
+			name:        "configures multiple propagators including b3 and jaeger",
+			propagators: []string{"tracecontext", "baggage", "b3multi", "jaeger", "xray"},
+			expectedEnvVars: map[string]string{
+				envOtelPropagatorsName: "tracecontext,baggage,b3multi,jaeger,xray",
+			},
+		},
+		{
+			name:            "no propagators configured - env var not set",
+			propagators:     []string{},
+			expectedEnvVars: map[string]string{},
+		},
+		{
+			name:            "nil propagators - env var not set",
+			propagators:     nil,
+			expectedEnvVars: map[string]string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &beyla.Config{
+				Injector: beyla.SDKInject{
+					Propagators: tt.propagators,
+					Resources: beyla.SDKResource{
+						Attributes:                     map[string]string{},
+						UseLabelsForResourceAttributes: false,
+						AddK8sUIDAttributes:            false,
+					},
+				},
+			}
+			meta := &metav1.ObjectMeta{
+				Name:      "test-pod",
+				Namespace: "default",
+			}
+			container := &corev1.Container{
+				Name:  "test-container",
+				Image: "myapp:v1.0.0",
+				Env:   []corev1.EnvVar{},
+			}
+
+			pm := &PodMutator{cfg: cfg}
+			pm.configureContainerEnvVars(meta, container, nil)
+
+			// Check propagator env vars
+			for envName, expectedValue := range tt.expectedEnvVars {
+				found := false
+				for _, env := range container.Env {
+					if env.Name == envName {
+						found = true
+						assert.Equal(t, expectedValue, env.Value, "env var %s value mismatch", envName)
+						break
+					}
+				}
+				assert.True(t, found, "expected env var %s not found", envName)
+			}
+
+			// If no propagators, ensure env var is not set
+			if len(tt.expectedEnvVars) == 0 {
+				for _, env := range container.Env {
+					assert.NotEqual(t, envOtelPropagatorsName, env.Name,
+						"propagators env var should not be set when propagators list is empty")
+				}
+			}
+		})
+	}
+}
+
+func TestConfigureContainerEnvVars_SamplerPriority(t *testing.T) {
+	tests := []struct {
+		name                   string
+		defaultSampler         *services.SamplerConfig
+		selectorSampler        *services.SamplerConfig
+		expectedSamplerEnvVars map[string]string
+	}{
+		{
+			name: "selector sampler takes precedence over default",
+			defaultSampler: &services.SamplerConfig{
+				Name: "always_on",
+				Arg:  "",
+			},
+			selectorSampler: &services.SamplerConfig{
+				Name: "traceidratio",
+				Arg:  "0.1",
+			},
+			expectedSamplerEnvVars: map[string]string{
+				envOtelTracesSamplerName:    "traceidratio",
+				envOtelTracesSamplerArgName: "0.1",
+			},
+		},
+		{
+			name: "uses default sampler when selector has no sampler",
+			defaultSampler: &services.SamplerConfig{
+				Name: "parentbased_traceidratio",
+				Arg:  "0.5",
+			},
+			selectorSampler: nil,
+			expectedSamplerEnvVars: map[string]string{
+				envOtelTracesSamplerName:    "parentbased_traceidratio",
+				envOtelTracesSamplerArgName: "0.5",
+			},
+		},
+		{
+			name:                   "no sampler configured - no env vars set",
+			defaultSampler:         nil,
+			selectorSampler:        nil,
+			expectedSamplerEnvVars: map[string]string{},
+		},
+		{
+			name:           "only selector sampler configured",
+			defaultSampler: nil,
+			selectorSampler: &services.SamplerConfig{
+				Name: "always_off",
+				Arg:  "",
+			},
+			expectedSamplerEnvVars: map[string]string{
+				envOtelTracesSamplerName: "always_off",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &beyla.Config{
+				Injector: beyla.SDKInject{
+					DefaultSampler: tt.defaultSampler,
+					Resources: beyla.SDKResource{
+						Attributes:                     map[string]string{},
+						UseLabelsForResourceAttributes: false,
+						AddK8sUIDAttributes:            false,
+					},
+				},
+			}
+			meta := &metav1.ObjectMeta{
+				Name:      "test-pod",
+				Namespace: "default",
+			}
+			container := &corev1.Container{
+				Name:  "test-container",
+				Image: "myapp:v1.0.0",
+				Env:   []corev1.EnvVar{},
+			}
+
+			// Create a mock selector with sampler config if needed
+			var selector services.Selector
+			if tt.selectorSampler != nil {
+				selector = &services.GlobAttributes{
+					SamplerConfig: tt.selectorSampler,
+				}
+			}
+
+			pm := &PodMutator{cfg: cfg}
+			pm.configureContainerEnvVars(meta, container, selector)
+
+			// Check sampler env vars
+			for envName, expectedValue := range tt.expectedSamplerEnvVars {
+				found := false
+				for _, env := range container.Env {
+					if env.Name == envName {
+						found = true
+						assert.Equal(t, expectedValue, env.Value, "env var %s value mismatch", envName)
+						break
+					}
+				}
+				assert.True(t, found, "expected env var %s not found", envName)
+			}
+
+			// If no sampler configured, ensure env vars are not set
+			if len(tt.expectedSamplerEnvVars) == 0 {
+				for _, env := range container.Env {
+					assert.NotEqual(t, envOtelTracesSamplerName, env.Name,
+						"sampler name env var should not be set")
+					assert.NotEqual(t, envOtelTracesSamplerArgName, env.Name,
+						"sampler arg env var should not be set")
+				}
+			}
+		})
+	}
+}
+
+func TestConfigureContainerEnvVars_SpanMetrics(t *testing.T) {
+	tests := []struct {
+		name               string
+		spanMetricsEnabled bool
+		shouldHaveSkipAttr bool
+	}{
+		{
+			name:               "span metrics enabled - adds skip attribute",
+			spanMetricsEnabled: true,
+			shouldHaveSkipAttr: true,
+		},
+		{
+			name:               "span metrics disabled - no skip attribute",
+			spanMetricsEnabled: false,
+			shouldHaveSkipAttr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &beyla.Config{
+				Metrics: perapp.MetricsConfig{
+					Features: 0, // Will be set below
+				},
+				Injector: beyla.SDKInject{
+					Resources: beyla.SDKResource{
+						Attributes:                     map[string]string{},
+						UseLabelsForResourceAttributes: false,
+						AddK8sUIDAttributes:            false,
+					},
+				},
+			}
+
+			if tt.spanMetricsEnabled {
+				// Set feature flag for span metrics
+				cfg.Metrics.Features = export.FeatureSpanLegacy
+			}
+
+			meta := &metav1.ObjectMeta{
+				Name:      "test-pod",
+				Namespace: "default",
+			}
+			container := &corev1.Container{
+				Name:  "test-container",
+				Image: "myapp:v1.0.0",
+				Env:   []corev1.EnvVar{},
+			}
+
+			pm := &PodMutator{cfg: cfg}
+			pm.configureContainerEnvVars(meta, container, nil)
+
+			// Check if skip_span_metrics attribute is present in extra resource attrs
+			foundResourceAttrs := false
+			hasSkipAttr := false
+			for _, env := range container.Env {
+				if env.Name == envInjectorOtelExtraResourceAttrs {
+					foundResourceAttrs = true
+					if tt.shouldHaveSkipAttr {
+						assert.Contains(t, env.Value, "span.metrics.skip=true",
+							"should contain span.metrics.skip when span metrics enabled")
+						hasSkipAttr = true
+					} else {
+						assert.NotContains(t, env.Value, "span.metrics.skip",
+							"should not contain span.metrics.skip when disabled")
+					}
+					break
+				}
+			}
+
+			if tt.shouldHaveSkipAttr {
+				assert.True(t, foundResourceAttrs && hasSkipAttr,
+					"span.metrics.skip attribute should be set when span metrics enabled")
+			}
+		})
+	}
+}
+
+func TestConfigureContainerEnvVars_Integration(t *testing.T) {
+	tests := []struct {
+		name                   string
+		cfg                    *beyla.Config
+		meta                   *metav1.ObjectMeta
+		container              *corev1.Container
+		selector               services.Selector
+		checkEnvVars           map[string]string
+		checkEnvVarsContaining map[string][]string
+		checkEnvVarsNotSet     []string
+	}{
+		{
+			name: "all features enabled - propagators, sampler, span metrics",
+			cfg: &beyla.Config{
+				Metrics: perapp.MetricsConfig{
+					Features: export.FeatureSpanLegacy, // Span metrics enabled
+				},
+				Injector: beyla.SDKInject{
+					Propagators: []string{"tracecontext", "baggage", "b3"},
+					DefaultSampler: &services.SamplerConfig{
+						Name: "traceidratio",
+						Arg:  "0.75",
+					},
+					Resources: beyla.SDKResource{
+						Attributes: map[string]string{
+							"environment": "production",
+							"region":      "us-west-2",
+						},
+						UseLabelsForResourceAttributes: true,
+						AddK8sUIDAttributes:            true,
+					},
+				},
+			},
+			meta: &metav1.ObjectMeta{
+				Name:      "test-pod",
+				Namespace: "production",
+				Labels: map[string]string{
+					"app.kubernetes.io/name":    "my-service",
+					"app.kubernetes.io/version": "v1.2.3",
+				},
+				Annotations: map[string]string{
+					ResourceAttributeAnnotationPrefix + "custom.annotation": "custom-value",
+				},
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						APIVersion: "apps/v1",
+						Kind:       "Deployment",
+						Name:       "my-deployment",
+						UID:        "deploy-uid-123",
+					},
+				},
+			},
+			container: &corev1.Container{
+				Name:  "app-container",
+				Image: "myapp:v1.2.3",
+				Env:   []corev1.EnvVar{},
+			},
+			selector: nil,
+			checkEnvVars: map[string]string{
+				envOtelPropagatorsName:          "tracecontext,baggage,b3",
+				envOtelTracesSamplerName:        "traceidratio",
+				envOtelTracesSamplerArgName:     "0.75",
+				envInjectorOtelK8sContainerName: "app-container",
+				envInjectorOtelServiceName:      "my-service",
+				envInjectorOtelServiceVersion:   "v1.2.3",
+			},
+			checkEnvVarsContaining: map[string][]string{
+				envInjectorOtelExtraResourceAttrs: {
+					"environment=production",
+					"region=us-west-2",
+					"custom.annotation=custom-value",
+					"span.metrics.skip=true",
+					// Note: when AddK8sUIDAttributes is true, the UID is used instead of the name
+					"k8s.deployment.name=deploy-uid-123",
+				},
+			},
+		},
+		{
+			name: "selector sampler overrides default",
+			cfg: &beyla.Config{
+				Injector: beyla.SDKInject{
+					DefaultSampler: &services.SamplerConfig{
+						Name: "always_on",
+						Arg:  "",
+					},
+					Resources: beyla.SDKResource{
+						Attributes:                     map[string]string{},
+						UseLabelsForResourceAttributes: false,
+						AddK8sUIDAttributes:            false,
+					},
+				},
+			},
+			meta: &metav1.ObjectMeta{
+				Name:      "test-pod",
+				Namespace: "default",
+			},
+			container: &corev1.Container{
+				Name:  "test-container",
+				Image: "myapp:latest",
+				Env:   []corev1.EnvVar{},
+			},
+			selector: &services.GlobAttributes{
+				SamplerConfig: &services.SamplerConfig{
+					Name: "parentbased_traceidratio",
+					Arg:  "0.01",
+				},
+			},
+			checkEnvVars: map[string]string{
+				envOtelTracesSamplerName:    "parentbased_traceidratio",
+				envOtelTracesSamplerArgName: "0.01",
+			},
+		},
+		{
+			name: "minimal configuration - no optional features",
+			cfg: &beyla.Config{
+				Injector: beyla.SDKInject{
+					Resources: beyla.SDKResource{
+						Attributes:                     map[string]string{},
+						UseLabelsForResourceAttributes: false,
+						AddK8sUIDAttributes:            false,
+					},
+				},
+			},
+			meta: &metav1.ObjectMeta{
+				Name:      "simple-pod",
+				Namespace: "default",
+			},
+			container: &corev1.Container{
+				Name:  "simple-container",
+				Image: "simple:latest",
+				Env:   []corev1.EnvVar{},
+			},
+			selector: nil,
+			checkEnvVars: map[string]string{
+				envInjectorOtelK8sContainerName: "simple-container",
+				// Note: service name uses ValueFrom, so it will be $(OTEL_INJECTOR_K8S_POD_NAME)
+				envInjectorOtelServiceName: "$(OTEL_INJECTOR_K8S_POD_NAME)",
+			},
+			checkEnvVarsNotSet: []string{
+				envOtelPropagatorsName,
+				envOtelTracesSamplerName,
+				envOtelTracesSamplerArgName,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pm := &PodMutator{cfg: tt.cfg}
+			pm.configureContainerEnvVars(tt.meta, tt.container, tt.selector)
+
+			// Check specific environment variables
+			for envName, expectedValue := range tt.checkEnvVars {
+				found := false
+				for _, env := range tt.container.Env {
+					if env.Name == envName {
+						found = true
+						if env.Value != "" {
+							assert.Equal(t, expectedValue, env.Value, "env var %s value mismatch", envName)
+						}
+						break
+					}
+				}
+				assert.True(t, found, "expected env var %s not found", envName)
+			}
+
+			// Check environment variables containing substrings
+			for envName, expectedSubstrings := range tt.checkEnvVarsContaining {
+				found := false
+				for _, env := range tt.container.Env {
+					if env.Name == envName {
+						found = true
+						for _, substring := range expectedSubstrings {
+							assert.Contains(t, env.Value, substring, "env var %s should contain %s", envName, substring)
+						}
+						break
+					}
+				}
+				assert.True(t, found, "expected env var %s not found", envName)
+			}
+
+			// Check that certain env vars are NOT set
+			for _, envName := range tt.checkEnvVarsNotSet {
+				for _, env := range tt.container.Env {
+					assert.NotEqual(t, envName, env.Name, "env var %s should not be set", envName)
+				}
+			}
+		})
+	}
+}
+
+func TestConfigureSampler(t *testing.T) {
+	tests := []struct {
+		name            string
+		samplerConfig   *services.SamplerConfig
+		expectedEnvVars map[string]string
+	}{
+		{
+			name: "sampler with name and arg",
+			samplerConfig: &services.SamplerConfig{
+				Name: "traceidratio",
+				Arg:  "0.5",
+			},
+			expectedEnvVars: map[string]string{
+				envOtelTracesSamplerName:    "traceidratio",
+				envOtelTracesSamplerArgName: "0.5",
+			},
+		},
+		{
+			name: "sampler with only name - empty arg not set",
+			samplerConfig: &services.SamplerConfig{
+				Name: "always_on",
+				Arg:  "",
+			},
+			expectedEnvVars: map[string]string{
+				envOtelTracesSamplerName: "always_on",
+			},
+		},
+		{
+			name: "sampler with parentbased_always_off",
+			samplerConfig: &services.SamplerConfig{
+				Name: "parentbased_always_off",
+				Arg:  "",
+			},
+			expectedEnvVars: map[string]string{
+				envOtelTracesSamplerName: "parentbased_always_off",
+			},
+		},
+		{
+			name: "sampler with traceidratio and low probability",
+			samplerConfig: &services.SamplerConfig{
+				Name: "traceidratio",
+				Arg:  "0.1",
+			},
+			expectedEnvVars: map[string]string{
+				envOtelTracesSamplerName:    "traceidratio",
+				envOtelTracesSamplerArgName: "0.1",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pm := &PodMutator{}
+			container := &corev1.Container{
+				Name: "test-container",
+				Env:  []corev1.EnvVar{},
+			}
+
+			pm.configureSampler(container, tt.samplerConfig)
+
+			// Check that expected environment variables are set
+			for envName, expectedValue := range tt.expectedEnvVars {
+				found := false
+				for _, env := range container.Env {
+					if env.Name == envName {
+						found = true
+						assert.Equal(t, expectedValue, env.Value, "env var %s value mismatch", envName)
+						break
+					}
+				}
+				assert.True(t, found, "expected env var %s not found", envName)
+			}
+		})
+	}
+}
+
+func TestConfigurePropagators(t *testing.T) {
+	tests := []struct {
+		name            string
+		propagators     []string
+		expectedEnvVars map[string]string
+	}{
+		{
+			name:        "standard propagators - tracecontext and baggage",
+			propagators: []string{"tracecontext", "baggage"},
+			expectedEnvVars: map[string]string{
+				envOtelPropagatorsName: "tracecontext,baggage",
+			},
+		},
+		{
+			name:        "single propagator",
+			propagators: []string{"b3"},
+			expectedEnvVars: map[string]string{
+				envOtelPropagatorsName: "b3",
+			},
+		},
+		{
+			name:        "multiple propagators with b3multi and jaeger",
+			propagators: []string{"tracecontext", "baggage", "b3multi", "jaeger"},
+			expectedEnvVars: map[string]string{
+				envOtelPropagatorsName: "tracecontext,baggage,b3multi,jaeger",
+			},
+		},
+		{
+			name:            "empty propagators list - no env var set",
+			propagators:     []string{},
+			expectedEnvVars: map[string]string{},
+		},
+		{
+			name:            "nil propagators - no env var set",
+			propagators:     nil,
+			expectedEnvVars: map[string]string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pm := &PodMutator{}
+			container := &corev1.Container{
+				Name: "test-container",
+				Env:  []corev1.EnvVar{},
+			}
+
+			if len(tt.propagators) > 0 {
+				pm.configurePropagators(container, tt.propagators)
+			}
+
+			// Check that expected environment variables are set
+			for envName, expectedValue := range tt.expectedEnvVars {
+				found := false
+				for _, env := range container.Env {
+					if env.Name == envName {
+						found = true
+						assert.Equal(t, expectedValue, env.Value, "env var %s value mismatch", envName)
+						break
+					}
+				}
+				assert.True(t, found, "expected env var %s not found", envName)
+			}
+
+			// If no env vars expected, ensure OTEL_PROPAGATORS is not set
+			if len(tt.expectedEnvVars) == 0 {
+				for _, env := range container.Env {
+					assert.NotEqual(t, envOtelPropagatorsName, env.Name,
+						"OTEL_PROPAGATORS should not be set for empty/nil propagators")
+				}
 			}
 		})
 	}

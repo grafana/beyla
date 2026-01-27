@@ -919,7 +919,7 @@ func TestPodMutator_AddEnvVars(t *testing.T) {
 				exportHeaders: tt.exportHeaders,
 			}
 
-			mutator.addEnvVars(tt.meta, tt.container)
+			mutator.addEnvVars(tt.meta, tt.container, nil)
 
 			// Check that expected env vars are present
 			for key, expectedValue := range tt.checkEnvVars {

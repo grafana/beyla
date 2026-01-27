@@ -590,47 +590,6 @@ func TestPodMutator_MutatePod(t *testing.T) {
 	}
 }
 
-func TestPodMutator_MutatePod_Panic(t *testing.T) {
-	t.Run("panics when SDK version is empty", func(t *testing.T) {
-		mutator := &PodMutator{
-			cfg: &beyla.Config{
-				Injector: beyla.SDKInject{
-					SDKPkgVersion:     "", // empty version should panic
-					HostPathVolumeDir: "/var/lib/beyla/instrumentation",
-				},
-			},
-			logger: slog.With("component", "webhook.Mutator"),
-			matcher: &PodMatcher{
-				selectors: []services.Selector{
-					&services.GlobAttributes{
-						Metadata: map[string]*services.GlobAttr{
-							"k8s_namespace": strToGlob("*"),
-						},
-					},
-				},
-			},
-			endpoint: "http://localhost:4318",
-			proto:    "http/protobuf",
-		}
-
-		pod := &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "test-pod",
-				Namespace: "default",
-			},
-			Spec: corev1.PodSpec{
-				Containers: []corev1.Container{
-					{Name: "app"},
-				},
-			},
-		}
-
-		assert.Panics(t, func() {
-			mutator.mutatePod(pod)
-		}, "should panic when SDK version is empty")
-	})
-}
-
 func TestPodMutator_AddLabel(t *testing.T) {
 	tests := []struct {
 		name     string

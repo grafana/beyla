@@ -2,9 +2,9 @@
 
 set -e  # Exit immediately if any command fails
 
-# Validate if SDK_VERSION is set
-if [ -z "${SDK_VERSION}" ]; then
-  echo "ERROR: SDK_VERSION environment variable is not set"
+# Validate if SDK_PKG_VERSION is set
+if [ -z "${SDK_PKG_VERSION}" ]; then
+  echo "ERROR: SDK_PKG_VERSION environment variable is not set"
   exit 1
 fi
 
@@ -14,9 +14,9 @@ if [ -z "${MOUNT_PATH}" ]; then
   exit 1
 fi
 
-echo "Starting instrumentation population for SDK version ${SDK_VERSION}..."
+echo "Starting instrumentation population for SDK version ${SDK_PKG_VERSION}..."
 
-TARGET_DIR="${MOUNT_PATH}/${SDK_VERSION}"
+TARGET_DIR="${MOUNT_PATH}/${SDK_PKG_VERSION}"
 
 # Check if instrumentation directory already has files
 if [ -d "${TARGET_DIR}" ] && [ -n "$(ls -A ${TARGET_DIR} 2>/dev/null)" ]; then

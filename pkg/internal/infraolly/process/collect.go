@@ -29,6 +29,8 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
+
+	"github.com/grafana/beyla/v2/pkg/export/otel/bexport"
 )
 
 type CollectConfig struct {
@@ -75,7 +77,6 @@ func NewCollectorProvider(
 }
 
 func (ps *Collector) Run(ctx context.Context) {
-	// TODO: set app metadata as key for later decoration? (e.g. K8s metadata, svc.Attrs)
 	pids := map[int32]*svc.Attrs{}
 	collectTicker := time.NewTicker(ps.cfg.Interval)
 	defer ps.collectedProcesses.Close()
@@ -88,6 +89,10 @@ func (ps *Collector) Run(ctx context.Context) {
 		case spans := <-ps.newPids:
 			// updating PIDs map with spans information
 			for i := range spans {
+				// discarding pids from applications not configured to export process metrics
+				if !bexport.Any(spans[i].Service.Features, bexport.FeatureProcess) {
+					continue
+				}
 				pids[spans[i].Service.ProcPID] = &spans[i].Service
 			}
 		case <-collectTicker.C:

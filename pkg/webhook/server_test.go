@@ -7,14 +7,16 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/grafana/beyla/v2/pkg/beyla"
 	"github.com/prometheus/procfs"
 	"github.com/shirou/gopsutil/v3/process"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/kube/kubecache/informer"
 	"go.opentelemetry.io/obi/pkg/transform"
+
+	"github.com/grafana/beyla/v2/pkg/beyla"
 )
 
 func TestEnrichProcessInfo(t *testing.T) {

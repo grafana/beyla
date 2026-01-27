@@ -257,7 +257,7 @@ type SDKInject struct {
 	// Default sampler configuration for SDK instrumentation
 	// This is used when no sampler is specified in the selector
 	// nolint:undoc
-	DefaultSampler *services.SamplerConfig `yaml:"default_sampler"`
+	DefaultSampler *services.SamplerConfig `yaml:"sampler"`
 	// Propagators configuration for SDK instrumentation
 	// Common values: tracecontext, baggage, b3, b3multi, jaeger, xray
 	// nolint:undoc

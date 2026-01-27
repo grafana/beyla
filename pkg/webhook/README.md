@@ -57,153 +57,222 @@ Scans running processes on the node to:
 - Detect programming languages (Java, .NET, Node.js, Python, Ruby)
 - Track SDK versions in use
 
-## Usage
+## Configuration
 
-### Basic Setup
+### Basic YAML Configuration
 
-```go
-import (
-    "context"
-    "github.com/grafana/beyla/v2/pkg/beyla"
-    "github.com/grafana/beyla/v2/pkg/webhook"
-    "go.opentelemetry.io/obi/pkg/pipe/global"
-)
+```yaml
+# Instrumentation targeting
+discovery:
+  instrument:
+    - open_ports: 8080
 
-func main() {
-    cfg := &beyla.Config{
-        Injector: beyla.InjectorConfig{
-            Webhook: beyla.WebhookConfig{
-                Port:     8443,
-                CertPath: "/etc/webhook/certs/tls.crt",
-                KeyPath:  "/etc/webhook/certs/tls.key",
-                Timeout:  30 * time.Second,
-            },
-            HostPathVolumeDir: "/opt/otel-instrumentation",
-            SDKPkgVersion:     "v1.0.0",
-        },
-        Traces: beyla.TracesConfig{
-            Endpoint: "http://otel-collector:4318",
-            Protocol: "http/protobuf",
-        },
-    }
+# Webhook injection configuration
+injector:
+  webhook:
+    enable: true
+    port: 8443
+    cert_path: /etc/webhook/certs/tls.crt
+    key_path: /etc/webhook/certs/tls.key
+    timeout: 30s
 
-    ctxInfo := &global.ContextInfo{
-        K8sInformer: k8sProvider,
-    }
+  host_path_volume: /opt/otel-instrumentation
+  sdk_package_version: v1.0.0
 
-    server, err := webhook.NewServer(cfg, ctxInfo)
-    if err != nil {
-        log.Fatal(err)
-    }
+# OTLP export endpoints
+otel_traces_export:
+  endpoint: http://otel-collector:4318
+  protocol: http/protobuf
 
-    if err := server.Start(context.Background()); err != nil {
-        log.Fatal(err)
-    }
-}
+otel_metrics_export:
+  endpoint: http://otel-collector:4318
 ```
 
-### Configuration Examples
+### Sampling Configuration
 
-#### Selective Instrumentation by Namespace
+#### Per-Selector Sampling
 
-```go
-cfg.Injector.Instrument = []services.Selector{
-    {
-        Metadata: map[string]*regexp.Regexp{
-            "k8s.namespace.name": regexp.MustCompile("^production$"),
-        },
-    },
-}
+Configure sampling for specific services:
+
+```yaml
+discovery:
+  instrument:
+    # Match by port with 50% sampling
+    - open_ports: 5000
+      sampler:
+        name: traceidratio
+        arg: "0.5"
+
+    # Match by namespace with parent-based sampling
+    - k8s_namespace_name: "production"
+      sampler:
+        name: parentbased_traceidratio
+        arg: "0.25"
+
+    # Match by pod label with always-on sampling
+    - k8s_pod_labels:
+        app: my-critical-service
+      sampler:
+        name: always_on
+```
+
+#### Default Sampling
+
+Configure a fallback sampler for all instrumented pods:
+
+```yaml
+injector:
+  sampler:
+    name: parentbased_traceidratio
+    arg: "0.1"  # 10% sampling
+```
+
+#### Sampler Types
+
+**Valid sampler names:**
+- `always_on` - Sample all traces
+- `always_off` - Sample no traces
+- `traceidratio` - Sample based on trace ID (requires `arg` between 0.0-1.0)
+- `parentbased_always_on` - Respect parent decision, otherwise always sample
+- `parentbased_always_off` - Respect parent decision, otherwise never sample
+- `parentbased_traceidratio` - Respect parent decision, otherwise sample by ratio (requires `arg`)
+
+### Selector Matching
+
+#### Match by Namespace
+
+```yaml
+discovery:
+  instrument:
+    - k8s_namespace_name: "production"
 ```
 
 #### Match by Pod Labels
 
-```go
-cfg.Injector.Instrument = []services.Selector{
-    {
-        PodLabels: map[string]*regexp.Regexp{
-            "app.kubernetes.io/name": regexp.MustCompile("^my-app$"),
-        },
-    },
-}
+```yaml
+discovery:
+  instrument:
+    - k8s_pod_labels:
+        app.kubernetes.io/name: my-app
 ```
 
 #### Match by Deployment Name
 
-```go
-cfg.Injector.Instrument = []services.Selector{
-    {
-        Metadata: map[string]*regexp.Regexp{
-            "k8s.deployment.name": regexp.MustCompile("^web-.*"),
-        },
-    },
-}
+```yaml
+discovery:
+  instrument:
+    - k8s_deployment_name: "web-*"  # Glob pattern
 ```
 
-#### Configure Sampling
+#### Match by Executable Path
 
-```go
-// Default sampler for all instrumented pods
-cfg.Injector.DefaultSampler = &services.SamplerConfig{
-    Name: "parentbased_traceidratio",
-    Arg:  "0.1", // 10% sampling
-}
-
-// Or per-selector sampling
-cfg.Injector.Instrument = []services.Selector{
-    {
-        Metadata: map[string]*regexp.Regexp{
-            "k8s.namespace.name": regexp.MustCompile("^production$"),
-        },
-        SamplerConfig: &services.SamplerConfig{
-            Name: "always_on",
-        },
-    },
-}
+```yaml
+discovery:
+  instrument:
+    - exe_path: "*/bin/my-app"  # Glob pattern
 ```
 
-#### Configure Propagators
+#### Match by Multiple Criteria
 
-```go
-cfg.Injector.Propagators = []string{"tracecontext", "baggage", "b3"}
+```yaml
+discovery:
+  instrument:
+    - k8s_namespace_name: "production"
+      k8s_pod_labels:
+        app: my-service
+      open_ports: 8080,8090-8099
+      sampler:
+        name: always_on
 ```
 
-#### Resource Attributes
+### Propagator Configuration
 
-```go
-cfg.Injector.Resources = beyla.ResourcesConfig{
-    // Add custom resource attributes
-    Attributes: map[string]string{
-        "deployment.environment": "production",
-        "team": "backend",
-    },
+Configure trace context propagators:
 
-    // Use pod labels for service name/version
-    UseLabelsForResourceAttributes: true,
-
-    // Include Kubernetes UID attributes
-    AddK8sUIDAttributes: true,
-}
+```yaml
+injector:
+  propagators:
+    - tracecontext  # W3C Trace Context (default)
+    - baggage       # W3C Baggage (default)
+    - b3            # Zipkin B3 single header
+    - b3multi       # Zipkin B3 multi header
+    - jaeger        # Jaeger propagation
+    - xray          # AWS X-Ray
 ```
 
-### Advanced Usage
+### Advanced Configuration
 
 #### Disable Auto-Restart
 
 Prevent automatic restart of existing deployments:
 
-```go
-cfg.Injector.NoAutoRestart = true
+```yaml
+injector:
+  disable_auto_restart: true
 ```
 
 #### Custom TLS Configuration
 
-The webhook server requires TLS certificates. The server will wait for certificates to be available:
+The webhook server requires TLS certificates. Configure paths and timeout:
 
-```go
-cfg.Injector.Webhook.CertPath = "/custom/path/tls.crt"
-cfg.Injector.Webhook.KeyPath = "/custom/path/tls.key"
-cfg.Injector.Webhook.Timeout = 60 * time.Second // Wait up to 60s for certs
+```yaml
+injector:
+  webhook:
+    cert_path: /custom/path/tls.crt
+    key_path: /custom/path/tls.key
+    timeout: 60s  # Wait up to 60s for certs to be available
+```
+
+#### Complete Example
+
+```yaml
+discovery:
+  instrument:
+    # Production services with 100% sampling
+    - k8s_namespace_name: "production"
+      k8s_pod_labels:
+        tier: backend
+      sampler:
+        name: always_on
+
+    # Staging services with 10% sampling
+    - k8s_namespace_name: "staging"
+      sampler:
+        name: parentbased_traceidratio
+        arg: "0.1"
+
+    # Development services with trace ID ratio sampling
+    - k8s_namespace_name: "dev-*"
+      open_ports: 8080-8099
+      sampler:
+        name: traceidratio
+        arg: "0.05"
+
+injector:
+  webhook:
+    enable: true
+    port: 8443
+    cert_path: /etc/webhook/certs/tls.crt
+    key_path: /etc/webhook/certs/tls.key
+
+  sampler:
+    name: parentbased_always_off  # Don't sample by default
+
+  propagators:
+    - tracecontext
+    - baggage
+    - b3
+
+  host_path_volume: /var/lib/beyla/instrumentation
+  sdk_package_version: v1.2.3
+  disable_auto_restart: false
+
+otel_traces_export:
+  endpoint: http://otel-collector:4318
+  protocol: http/protobuf
+
+otel_metrics_export:
+  endpoint: http://otel-collector:4318
 ```
 
 ## How It Works

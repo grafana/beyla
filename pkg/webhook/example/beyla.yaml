@@ -1,0 +1,280 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: beyla
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: beyla-role
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: beyla-role-binding
+subjects:
+  - kind: ServiceAccount
+    name: beyla
+roleRef:
+  kind: Role
+  name: beyla-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: beyla-cluster-role
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces", "nodes", "pods"]
+    verbs: ["get", "watch", "list"]
+  - apiGroups: [""]
+    resources: ["services"]
+    # list services is needed by network-policy beyla.
+    verbs: ["list", "watch", "get"]
+  - apiGroups: ["apps"]
+    resources:
+      [
+        "deployments",
+        "replicasets",
+        "statefulsets",
+        "daemonsets",
+      ]
+    # Required to retrieve the owner references and patch deployments for restart
+    verbs: ["get", "list", "watch", "patch"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["replicationcontrollers"]
+    verbs: ["get", "list", "watch"]
+    # Required to retrieve the owner references used by the seccomp beyla.
+  - apiGroups: ["security-profiles-operator.x-k8s.io"]
+    resources: ["seccompprofiles"]
+    # Required for integration with the Kubernetes Security Profiles Operator
+    verbs: ["list", "watch", "create"]
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: beyla-cluster-role-binding
+subjects:
+  - kind: ServiceAccount
+    name: beyla
+    namespace: default
+roleRef:
+  kind: ClusterRole
+  name: beyla-cluster-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: beyla-config
+data:
+  beyla-config.yml: |
+    injector:
+      webhook:
+        enable: true
+        port: 8443
+        cert_path: /etc/webhook/certs/tls.crt
+        key_path: /etc/webhook/certs/tls.key
+      instrument:
+        - k8s_namespace: "*"
+      sdk_package_version: v0.0.4
+      host_mount_path: /var/lib/beyla/instrumentation
+    discovery:
+      services:
+        - open_ports: "3000"
+    routes:
+      ignored_patterns:
+        - /health
+        - /ready
+      unmatched: heuristic
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: beyla-webhook
+  namespace: default
+spec:
+  selector:
+    app: beyla
+  ports:
+  - name: webhook
+    port: 443
+    targetPort: 8443
+    protocol: TCP
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: beyla
+  labels:
+    app: beyla
+spec:
+  selector:
+    matchLabels:
+      app: beyla
+  template:
+    metadata:
+      labels:
+        app: beyla
+      annotations:
+        # We need to set beyla container as unconfined so it is able to write
+        # the BPF file system.
+        # Otherwise, we can have error like:
+        # "failed to create server failed to create or mount folder for pinning bpf maps: can't mount BPF filesystem: permission denied""
+        #
+        # Default rules can be found here: https://github.com/moby/moby/blob/master/profiles/apparmor/template.go
+        # Both 'mount' and access to /sys/fs/bpf are denied by default.
+        #
+        # Instead of 'unconfined', you can define a more refined policy which allows Beyla to use 'mount'
+        container.apparmor.security.beta.kubernetes.io/beyla: "unconfined" # <-- Important
+    spec:
+      serviceAccount: beyla
+      hostPID: true # <-- Important. Required in Daemonset mode so Beyla can discover all monitored processes
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      initContainers:
+        - name: populate-instrumentation
+          image: ghcr.io/grafana/beyla/inject-sdk-image:0.0.4
+          env:
+            - name: SDK_PKG_VERSION
+              value: "v0.0.4"
+            - name: MOUNT_PATH
+              value: "/var/lib/beyla/instrumentation"
+          volumeMounts:
+          - name: instrumentation-hostpath
+            mountPath: /var/lib/beyla/instrumentation
+      containers:
+        - name: beyla
+          resources:
+            limits:
+              memory: 500Mi
+          terminationMessagePolicy: FallbackToLogsOnError
+          image: "beyla:local"
+          imagePullPolicy: "Never"
+          command: ["/beyla", "--config=/config/beyla-config.yml"]
+          env:
+            - name: BEYLA_TRACE_PRINTER
+              value: "text"
+            # - name: BEYLA_BPF_TC_L7_CP
+            #   value: "true"
+            - name: BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION
+              value: "true"
+            - name: BEYLA_PROFILE_PORT
+              value: "6060"
+            - name: BEYLA_KUBE_CLUSTER_NAME
+              value: "otel-demo-cluster"
+            - name: BEYLA_PROMETHEUS_TTL
+              value: "20s"
+            # - name: BEYLA_BPF_DEBUG
+            #   value: "true"
+            #- name: BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT
+            #  value: "8999"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://172.17.0.1:4318"
+            - name: BEYLA_OTEL_METRIC_FEATURES
+              value: "application,application_span,application_service_graph"
+            #- name: OTEL_EXPORTER_OTLP_METRICS_ENDPOINT
+            #  value: "http://grafana-k8s-monitoring-grafana-agent.default.svc.cluster.local:4318/v1/metrics"
+            - name: BEYLA_KUBE_METADATA_ENABLE
+              value: "autodetect"
+            - name: BEYLA_METRICS_INTERVAL
+              value: "1s"
+          securityContext:
+            runAsUser: 0
+            readOnlyRootFilesystem: true
+            privileged: true
+          volumeMounts:
+            - name: var-run-beyla
+              mountPath: /var/run/beyla
+            - name: webhook-certs
+              mountPath: /etc/webhook/certs
+              readOnly: true
+            - name: cgroup
+              mountPath: /sys/fs/cgroup
+            - mountPath: /config
+              name: beyla-config
+          ports:
+            - name: webhook
+              containerPort: 8443
+              protocol: TCP
+      tolerations:
+        - effect: NoSchedule
+          operator: Exists
+        - effect: NoExecute
+          operator: Exists
+      volumes:
+        - name: instrumentation-hostpath
+          hostPath:
+            path: /var/lib/beyla/instrumentation
+            type: DirectoryOrCreate
+        - name: beyla-config
+          configMap:
+            name: beyla-config
+        - name: var-run-beyla
+          emptyDir: {}
+        - name: cgroup
+          hostPath:
+            path: /sys/fs/cgroup
+        - name: webhook-certs
+          secret:
+            secretName: beyla-webhook-cert
+---
+# cert-manager: self-signed issuer and serving cert
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: beyla-selfsigned-issuer
+  namespace: default
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: beyla-webhook-cert
+  namespace: default
+spec:
+  privateKey:
+    rotationPolicy: Always  # or Never, depending on your needs
+  dnsNames:
+  - beyla-webhook
+  - beyla-webhook.default
+  - beyla-webhook.default.svc
+  - beyla-webhook.default.svc.cluster.local
+  secretName: beyla-webhook-cert
+  issuerRef:
+    name: beyla-selfsigned-issuer
+    kind: Issuer
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: beyla-mutating-webhook
+  annotations:
+    cert-manager.io/inject-ca-from: default/beyla-webhook-cert
+webhooks:
+- name: mutate.beyla.grafana.com
+  admissionReviewVersions: ["v1"]
+  clientConfig:
+    service:
+      name: beyla-webhook
+      namespace: default
+      path: /mutate
+  rules:
+  - operations: ["CREATE"]
+    apiGroups: [""]
+    apiVersions: ["v1"]
+    resources: ["pods"]
+  sideEffects: None
+  failurePolicy: Fail
+  timeoutSeconds: 10
+  namespaceSelector: {}

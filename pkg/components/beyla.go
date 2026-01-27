@@ -26,6 +26,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/export/otel"
 	"github.com/grafana/beyla/v2/pkg/internal/appolly"
 	msg2 "github.com/grafana/beyla/v2/pkg/internal/helpers/msg"
+	"github.com/grafana/beyla/v2/pkg/webhook"
 )
 
 // RunBeyla in the foreground process. This is a blocking function and won't exit
@@ -40,6 +41,7 @@ func RunBeyla(ctx context.Context, cfg *beyla.Config) error {
 
 	app := cfg.Enabled(beyla.FeatureAppO11y)
 	net := cfg.Enabled(beyla.FeatureNetO11y)
+	webhookEnabled := cfg.Injector.Webhook.Enabled()
 
 	// if one of nodes fail, the other should stop
 	g, ctx := errgroup.WithContext(ctx)
@@ -57,6 +59,15 @@ func RunBeyla(ctx context.Context, cfg *beyla.Config) error {
 		g.Go(func() error {
 			if err := setupNetO11y(ctx, ctxInfo, cfg); err != nil {
 				return fmt.Errorf("setupNetO11y: %w", err)
+			}
+			return nil
+		})
+	}
+
+	if webhookEnabled {
+		g.Go(func() error {
+			if err := setupWebhook(ctx, ctxInfo, cfg); err != nil {
+				return fmt.Errorf("setupWebhook: %w", err)
 			}
 			return nil
 		})
@@ -110,6 +121,21 @@ func setupNetO11y(ctx context.Context, ctxInfo *global.ContextInfo, cfg *beyla.C
 	if err != nil {
 		slog.Debug("can't run network metrics capture", "error", err)
 		return fmt.Errorf("can't run network metrics capture: %w", err)
+	}
+
+	return nil
+}
+
+func setupWebhook(ctx context.Context, ctxInfo *global.ContextInfo, cfg *beyla.Config) error {
+	slog.Info("starting Beyla mutating webhook server", "port", cfg.Injector.Webhook.Port)
+
+	server, err := webhook.NewServer(cfg, ctxInfo)
+	if err != nil {
+		return err
+	}
+	if err := server.Start(ctx); err != nil {
+		slog.Debug("webhook server stopped", "error", err)
+		return fmt.Errorf("webhook server error: %w", err)
 	}
 
 	return nil

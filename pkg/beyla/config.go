@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/caarlos0/env/v9"
 	otelconsumer "go.opentelemetry.io/collector/consumer"
+	"golang.org/x/mod/semver"
 	"gopkg.in/yaml.v3"
 
 	"go.opentelemetry.io/obi/pkg/appolly/services"
@@ -59,6 +61,14 @@ func DefaultConfig() *Config {
 	}
 	def.Discovery.DefaultExcludeServices = servicesextra.DefaultExcludeServices
 	def.Discovery.DefaultExcludeInstrument = servicesextra.DefaultExcludeInstrument
+	def.Injector.Webhook = WebhookConfig{
+		Enable:   false,
+		Port:     8443,
+		Timeout:  30 * time.Second,
+		CertPath: "/etc/webhook/certs/tls.crt",
+		KeyPath:  "/etc/webhook/certs/tls.key",
+	}
+	def.Injector.HostPathVolumeDir = "/var/lib/beyla/instrumentation"
 	return def
 }
 
@@ -159,6 +169,11 @@ type Config struct {
 	// nolint:undoc
 	Topology spanscfg.Topology `yaml:"topology"`
 
+	// Experimental support for OpenTelemetry SDK injection, by using the OpenTelemetry Injector
+	// WARNING: This is purely experimental and undocumented feature and can be removed in the future without warning.
+	// nolint:undoc
+	Injector SDKInject `yaml:"injector"`
+
 	// cached equivalent for the OBI conversion
 	obi *obi.Config `yaml:"-"`
 }
@@ -210,6 +225,84 @@ type HostIDConfig struct {
 	// FetchTimeout specifies the timeout for trying to fetch the HostID from diverse Cloud Providers
 	// nolint:undoc
 	FetchTimeout time.Duration `yaml:"fetch_timeout" env:"BEYLA_HOST_ID_FETCH_TIMEOUT"`
+}
+
+// OpenTelemetry SDK injection for Kubernetes
+// WARNING:
+// This option is experimental, undocumented and might be removed in the future without warning.
+// For SDK instrumentation on Kubernetes, use the OpenTelemetry Operator instead.
+type SDKInject struct {
+	// OTel SDK instrumentation criteria
+	// nolint:undoc
+	Instrument services.GlobDefinitionCriteria `yaml:"instrument"`
+	// Webhook configuration for a mutating admission controller
+	// nolint:undoc
+	Webhook WebhookConfig `yaml:"webhook"`
+	// Option to disable automatic bouncing of pods, it will be
+	// a responsibility of the end-user to bounce the pods to be instrumented
+	// nolint:undoc
+	NoAutoRestart bool `yaml:"disable_auto_restart"`
+	// The host path volume directory which gets mounted into pods
+	// nolint:undoc
+	HostPathVolumeDir string `yaml:"host_path_volume"`
+	// The mutator will set the version on pods if this value is set
+	// This is used to let Beyla upgrade already instrumented services
+	// If the version doesn't match we still bounce existing pods
+	// nolint:undoc
+	SDKPkgVersion string `yaml:"sdk_package_version"`
+	// The host mount path where the SDK copy init container copies the files.
+	// This is the root path, sdk_version is appended on top
+	// nolint:undoc
+	HostMountPath string `yaml:"host_mount_path"`
+	// Resource attributes related settings
+	// nolint:undoc
+	Resources SDKResource `yaml:"resources"`
+}
+
+// Resource defines the configuration for the resource attributes, as defined by the OpenTelemetry specification.
+// See also: https://github.com/open-telemetry/opentelemetry-specification/blob/v1.8.0/specification/overview.md#resources
+type SDKResource struct {
+	// Attributes defines attributes that are added to the resource.
+	// For example environment: dev
+	// +optional
+	// nolint:undoc
+	Attributes map[string]string `yaml:"resourceAttributes" env:"BEYLA_RESOURCE_ATTRIBUTES"`
+
+	// AddK8sUIDAttributes defines whether K8s UID attributes should be collected (e.g. k8s.deployment.uid).
+	// +optional
+	// nolint:undoc
+	AddK8sUIDAttributes bool `yaml:"addK8sUIDAttributes" env:"BEYLA_RESOURCE_ADD_K8S_UID_ATTRIBUTES"`
+
+	// UseLabelsForResourceAttributes defines whether to use common labels for resource attributes:
+	// Note: first entry wins:
+	//   - `app.kubernetes.io/instance` becomes `service.name`
+	//   - `app.kubernetes.io/name` becomes `service.name`
+	//   - `app.kubernetes.io/version` becomes `service.version`
+	// nolint:undoc
+	UseLabelsForResourceAttributes bool `yaml:"useLabelsForResourceAttributes,omitempty" env:"BEYLA_RESOURCE_USE_LABELS_FOR_RESOURCE_ATTRIBUTES"`
+}
+
+// WebhookConfig contains the configuration for the mutating webhook
+type WebhookConfig struct {
+	// Enable enables the mutating webhook server
+	// nolint:undoc
+	Enable bool `yaml:"enable" env:"BEYLA_WEBHOOK_ENABLE"`
+	// Port is the port the webhook server listens on
+	// nolint:undoc
+	Port int `yaml:"port" env:"BEYLA_WEBHOOK_LISTEN_PORT"`
+	// CertPath is the path to the TLS certificate file
+	// nolint:undoc
+	CertPath string `yaml:"cert_path" env:"BEYLA_WEBHOOK_CERT_PATH"`
+	// KeyPath is the path to the TLS key file
+	// nolint:undoc
+	KeyPath string `yaml:"key_path" env:"BEYLA_WEBHOOK_KEY_PATH"`
+	// Timeout is the time we wait for the TLS webhook to get initialized
+	// nolint:undoc
+	Timeout time.Duration `yaml:"timeout" env:"BEYLA_WEBHOOK_TIMEOUT"`
+}
+
+func (w WebhookConfig) Enabled() bool {
+	return w.Enable && w.Port > 0 && w.CertPath != "" && w.KeyPath != ""
 }
 
 type ConfigError string
@@ -282,6 +375,29 @@ func (c *Config) Validate() error {
 	}
 	if c.InternalMetrics.Exporter == imetrics.InternalMetricsExporterOTEL && !c.OTELMetrics.EndpointEnabled() && !c.Grafana.OTLP.MetricsEnabled() {
 		return ConfigError("you can't enable OTEL internal metrics without enabling OTEL metrics")
+	}
+
+	if c.Injector.Webhook.Enabled() {
+		if !c.Traces.Enabled() {
+			return ConfigError("you can't enable OTEL SDK instrumentation injection without enabling OTEL traces")
+		}
+		proto := c.Traces.GetProtocol()
+		pos := slices.IndexFunc([]otelcfg.Protocol{otelcfg.ProtocolHTTPJSON, otelcfg.ProtocolHTTPProtobuf, otelcfg.ProtocolGRPC, ""}, func(p otelcfg.Protocol) bool {
+			return p == proto
+		})
+		if pos < 0 {
+			return ConfigError(fmt.Sprintf("unsupported OTEL traces export protocol %s", proto))
+		}
+
+		if c.Injector.SDKPkgVersion == "" {
+			return ConfigError("sdk_version must be supplied for the Injector component and this version must match the version used in the SDK init container")
+		} else if !semver.IsValid(c.Injector.SDKPkgVersion) {
+			return ConfigError("sdk_version must be in valid semantic versioning format, e.g. v0.0.1 (the v prefix is required)")
+		}
+
+		if c.Injector.HostMountPath == "" {
+			return ConfigError("host_mount_path must be supplied for the Injector component otherwise we cannot clean-up stale SDK versions")
+		}
 	}
 
 	return nil

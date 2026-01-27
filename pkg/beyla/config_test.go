@@ -309,6 +309,16 @@ network:
 		},
 		NodeJS: obi.NodeJSConfig{Enabled: true},
 		Java:   obi.JavaConfig{Enabled: true, Timeout: 10 * time.Second},
+		Injector: SDKInject{
+			Webhook: WebhookConfig{
+				Enable:   false,
+				Port:     8443,
+				Timeout:  30 * time.Second,
+				CertPath: "/etc/webhook/certs/tls.crt",
+				KeyPath:  "/etc/webhook/certs/tls.key",
+			},
+			HostPathVolumeDir: "/var/lib/beyla/instrumentation",
+		},
 	}, cfg)
 }
 

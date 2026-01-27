@@ -186,6 +186,13 @@ func (pm *PodMutator) HandleMutate(w http.ResponseWriter, r *http.Request) {
 		Allowed: true,
 	}
 
+	// add a label with the version of the SDKs we've instrumented
+	if pm.cfg.Injector.SDKPkgVersion == "" {
+		errorResponse(admResponse, "SDK package version must be set")
+		pm.mutateResponse(w, admResponse)
+		return
+	}
+
 	// Process the pod
 	if admReview.Request.Kind.Kind == "Pod" {
 		pod := corev1.Pod{}
@@ -219,7 +226,6 @@ func (pm *PodMutator) HandleMutate(w http.ResponseWriter, r *http.Request) {
 							admResponse.PatchType = &patchType
 						}
 					} else {
-						admResponse.Allowed = false
 						errorResponse(admResponse, "no changes")
 					}
 				}
@@ -290,13 +296,7 @@ func (pm *PodMutator) mutatePod(pod *corev1.Pod) bool {
 		pm.instrumentContainer(meta, c)
 	}
 
-	// add a label with the version of the SDKs we've instrumented
-	version := pm.cfg.Injector.SDKPkgVersion
-	if version == "" {
-		panic("version must be set, did someone remove the check in the config?")
-	}
-
-	pm.addLabel(meta, instrumentedLabel, version)
+	pm.addLabel(meta, instrumentedLabel, pm.cfg.Injector.SDKPkgVersion)
 
 	return !reflect.DeepEqual(originalSpec, spec)
 }

@@ -1,14 +1,17 @@
 package webhook
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/grafana/beyla/v2/pkg/beyla"
+	"github.com/prometheus/procfs"
+	"github.com/shirou/gopsutil/v3/process"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/kube/kubecache/informer"
 	"go.opentelemetry.io/obi/pkg/transform"
@@ -469,4 +472,210 @@ func TestServer_CleanupOldInstrumentationVersions(t *testing.T) {
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to read directory")
 	})
+}
+
+func TestServer_EstablishInitialProcessState(t *testing.T) {
+	tests := []struct {
+		name                  string
+		mockProcessesByPid    map[int32]*ProcessInfo
+		mockProcessesErr      error
+		mockEnvs              map[int32][]string
+		configSDKVersion      string
+		setupCleanupDir       bool
+		createVersionDirs     []string
+		expectError           bool
+		expectedRemainingDirs []string
+	}{
+		{
+			name: "successful scan with cleanup",
+			mockProcessesByPid: map[int32]*ProcessInfo{
+				123: {pid: 123},
+				456: {pid: 456},
+			},
+			mockProcessesErr: nil,
+			mockEnvs: map[int32][]string{
+				123: {fmt.Sprintf("%s=v0.0.5", envVarSDKVersion), "PATH=/usr/bin"},
+				456: {fmt.Sprintf("%s=v0.0.7", envVarSDKVersion), "PATH=/usr/bin"},
+			},
+			configSDKVersion:      "v0.0.8",
+			setupCleanupDir:       true,
+			createVersionDirs:     []string{"v0.0.3", "v0.0.5", "v0.0.7"},
+			expectError:           false,
+			expectedRemainingDirs: []string{"v0.0.5", "v0.0.7"}, // v0.0.3 removed (< v0.0.5)
+		},
+		{
+			name: "downgrade scenario - oldest SDK newer than config",
+			mockProcessesByPid: map[int32]*ProcessInfo{
+				123: {pid: 123},
+			},
+			mockProcessesErr: nil,
+			mockEnvs: map[int32][]string{
+				123: {fmt.Sprintf("%s=v0.1.0", envVarSDKVersion), "PATH=/usr/bin"},
+			},
+			configSDKVersion:      "v0.0.5",
+			setupCleanupDir:       true,
+			createVersionDirs:     []string{"v0.0.3", "v0.0.5", "v0.1.0"},
+			expectError:           false,
+			expectedRemainingDirs: []string{"v0.0.5", "v0.1.0"}, // Use config version, remove v0.0.3
+		},
+		{
+			name: "no oldest SDK version found",
+			mockProcessesByPid: map[int32]*ProcessInfo{
+				123: {pid: 123},
+			},
+			mockProcessesErr: nil,
+			mockEnvs: map[int32][]string{
+				123: {"PATH=/usr/bin"}, // No SDK version
+			},
+			configSDKVersion: "v0.0.5",
+			setupCleanupDir:  false,
+			expectError:      false, // Should not error, just skip cleanup
+		},
+		{
+			name:               "error finding existing processes",
+			mockProcessesByPid: nil,
+			mockProcessesErr:   assert.AnError,
+			mockEnvs:           map[int32][]string{},
+			configSDKVersion:   "v0.0.5",
+			setupCleanupDir:    false,
+			expectError:        true,
+		},
+		{
+			name: "cleanup error does not fail the function",
+			mockProcessesByPid: map[int32]*ProcessInfo{
+				123: {pid: 123},
+			},
+			mockProcessesErr: nil,
+			mockEnvs: map[int32][]string{
+				123: {fmt.Sprintf("%s=v0.0.5", envVarSDKVersion), "PATH=/usr/bin"},
+			},
+			configSDKVersion: "v0.0.8",
+			setupCleanupDir:  false, // No directory setup means cleanup will fail
+			expectError:      false, // But function should not error
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Save originals
+			originalReadEnv := readEnvFunc
+			originalLibMaps := findLibMapsFunc
+			originalFetchProcesses := fetchProcessesFunc
+			originalNewProcess := newProcessFunc
+			originalProcEnviron := procEnvironFunc
+			originalContainerInfo := containerInfoFunc
+			defer func() {
+				fetchProcessesFunc = originalFetchProcesses
+				findLibMapsFunc = originalLibMaps
+				readEnvFunc = originalReadEnv
+				newProcessFunc = originalNewProcess
+				procEnvironFunc = originalProcEnviron
+				containerInfoFunc = originalContainerInfo
+			}()
+
+			// Setup mock functions
+			findLibMapsFunc = func(pid int32) ([]*procfs.ProcMap, error) {
+				return []*procfs.ProcMap{
+					{Pathname: "/usr/bin/node"},
+				}, nil
+			}
+
+			readEnvFunc = func(pid int32) ([]byte, error) {
+				return []byte("PATH=/usr/bin"), nil
+			}
+
+			fetchProcessesFunc = func() (map[int32]*ProcessInfo, error) {
+				return tt.mockProcessesByPid, tt.mockProcessesErr
+			}
+
+			newProcessFunc = func(pid int32) (*process.Process, error) {
+				return &process.Process{}, nil
+			}
+
+			// Mock procEnvironFunc to return different environments based on PID
+			procEnvironFunc = func(proc *process.Process) ([]string, error) {
+				for pid, env := range tt.mockEnvs {
+					if env != nil {
+						result := env
+						tt.mockEnvs[pid] = nil // Mark as used
+						return result, nil
+					}
+				}
+				return []string{"PATH=/usr/bin"}, nil
+			}
+
+			containerInfoFunc = func(pid uint32) (Info, error) {
+				return Info{ContainerID: fmt.Sprintf("container-%d", pid)}, nil
+			}
+
+			// Setup temporary directory for cleanup tests
+			var tmpDir string
+			if tt.setupCleanupDir {
+				var err error
+				tmpDir, err = os.MkdirTemp("", "server-test-*")
+				require.NoError(t, err)
+				defer os.RemoveAll(tmpDir)
+
+				// Create version directories
+				for _, ver := range tt.createVersionDirs {
+					dirPath := filepath.Join(tmpDir, ver)
+					err := os.Mkdir(dirPath, 0755)
+					require.NoError(t, err)
+					// Add a dummy file
+					dummyFile := filepath.Join(dirPath, "lib.so")
+					err = os.WriteFile(dummyFile, []byte("test"), 0644)
+					require.NoError(t, err)
+				}
+			} else {
+				tmpDir = "/nonexistent/path"
+			}
+
+			// Create real scanner
+			scanner := NewInitialStateScanner()
+
+			// Create server with mocked config
+			server := &Server{
+				cfg: &beyla.Config{
+					Injector: beyla.SDKInject{
+						SDKPkgVersion: tt.configSDKVersion,
+						HostMountPath: tmpDir,
+					},
+				},
+				scanner: scanner,
+				logger:  slog.With("component", "test"),
+			}
+
+			// Execute
+			err := server.establishInitialProcessState()
+
+			// Assert
+			if tt.expectError {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
+
+			// Verify initial state was set
+			if tt.mockProcessesByPid != nil {
+				// Check that we have some containers in the initial state
+				assert.NotEmpty(t, server.initialState)
+			}
+
+			// Verify cleanup happened correctly if directory was setup
+			if tt.setupCleanupDir && tt.expectedRemainingDirs != nil {
+				entries, err := os.ReadDir(tmpDir)
+				require.NoError(t, err)
+
+				var remainingDirs []string
+				for _, entry := range entries {
+					if entry.IsDir() {
+						remainingDirs = append(remainingDirs, entry.Name())
+					}
+				}
+
+				assert.ElementsMatch(t, tt.expectedRemainingDirs, remainingDirs)
+			}
+		})
+	}
 }

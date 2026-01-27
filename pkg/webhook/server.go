@@ -153,20 +153,14 @@ func waitForTLSFiles(ctx context.Context, certPath, keyPath string, timeout, pol
 	}
 }
 
-func (s *Server) getInitialState(ctx context.Context) error {
-	provider := s.ctxInfo.K8sInformer
-	store, err := provider.Get(ctx)
-	if err != nil {
-		return fmt.Errorf("instantiating Kubernetes metadata scanner: %w", err)
-	}
-	s.store = store
+func (s *Server) establishInitialProcessState() error {
 	initialState, err := s.scanner.FindExistingProcesses()
 	if err != nil {
 		return fmt.Errorf("finding initial process state: %w", err)
 	}
 	s.initialState = initialState
 
-	if oldestSDK, err := s.scanner.OldestSDKVersion(); err != nil {
+	if oldestSDK, err := s.scanner.OldestSDKVersion(); err == nil {
 		// we could be downgrading the SDK, check if the oldest version is not
 		// newer than what we are launching with now
 		if semver.Compare(oldestSDK, s.cfg.Injector.SDKPkgVersion) > 0 {
@@ -176,6 +170,20 @@ func (s *Server) getInitialState(ctx context.Context) error {
 		if err := s.cleanupOldInstrumentationVersions(s.cfg.Injector.HostMountPath, oldestSDK); err != nil {
 			s.logger.Warn("error cleaning up old instrumentation versions", "error", err)
 		}
+	}
+	return nil
+}
+
+func (s *Server) getInitialState(ctx context.Context) error {
+	provider := s.ctxInfo.K8sInformer
+	store, err := provider.Get(ctx)
+	if err != nil {
+		return fmt.Errorf("instantiating Kubernetes metadata scanner: %w", err)
+	}
+	s.store = store
+
+	if err = s.establishInitialProcessState(); err != nil {
+		return err
 	}
 
 	go store.Subscribe(s)

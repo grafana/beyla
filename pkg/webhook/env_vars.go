@@ -133,7 +133,7 @@ func (pm *PodMutator) configurePropagators(container *corev1.Container, propagat
 }
 
 // chooseServiceName returns the service name to be used in the instrumentation.
-// See https://github.com/open-telemetry/semantic-conventions/blob/main/docs/non-normative/k8s-attributes.md#how-servicename-should-be-calculated
+// See https://opentelemetry.io/docs/specs/semconv/non-normative/k8s-attributes/#how-servicename-should-be-calculated
 func chooseServiceName(meta *metav1.ObjectMeta, useLabelsForResourceAttributes bool, podName string, resources map[attribute.Key]string) string {
 	if name := chooseLabelOrAnnotation(meta, useLabelsForResourceAttributes, semconv.ServiceNameKey, LabelAppName); name != "" {
 		return name
@@ -178,7 +178,7 @@ func chooseLabelOrAnnotation(meta *metav1.ObjectMeta, useLabelsForResourceAttrib
 }
 
 // chooseServiceVersion returns the service version to be used in the instrumentation.
-// See https://github.com/open-telemetry/semantic-conventions/blob/main/docs/non-normative/k8s-attributes.md#how-serviceversion-should-be-calculated
+// See https://opentelemetry.io/docs/specs/semconv/non-normative/k8s-attributes/#how-serviceversion-should-be-calculated
 func chooseServiceVersion(meta *metav1.ObjectMeta, useLabelsForResourceAttributes bool, container *corev1.Container) string {
 	v := chooseLabelOrAnnotation(meta, useLabelsForResourceAttributes, semconv.ServiceVersionKey, LabelAppVersion)
 	if v != "" {
@@ -193,7 +193,7 @@ func chooseServiceVersion(meta *metav1.ObjectMeta, useLabelsForResourceAttribute
 }
 
 // chooseServiceNamespace returns the service.namespace to be used in the instrumentation.
-// See https://github.com/open-telemetry/semantic-conventions/blob/main/docs/non-normative/k8s-attributes.md#how-servicenamespace-should-be-calculated
+// See https://opentelemetry.io/docs/specs/semconv/non-normative/k8s-attributes/#how-servicenamespace-should-be-calculated
 func chooseServiceNamespace(meta *metav1.ObjectMeta, useLabelsForResourceAttributes bool, namespaceName string) string {
 	namespace := chooseLabelOrAnnotation(meta, useLabelsForResourceAttributes, semconv.ServiceNamespaceKey, nil)
 	if namespace != "" {
@@ -205,7 +205,7 @@ func chooseServiceNamespace(meta *metav1.ObjectMeta, useLabelsForResourceAttribu
 var errCannotRetrieveImage = errors.New("cannot retrieve image name")
 
 // parseServiceVersionFromImage parses the service version for differently-formatted image names
-// according to https://github.com/open-telemetry/semantic-conventions/blob/main/docs/non-normative/k8s-attributes.md#how-serviceversion-should-be-calculated
+// according to https://opentelemetry.io/docs/specs/semconv/non-normative/k8s-attributes/#how-serviceversion-should-be-calculated
 func parseServiceVersionFromImage(image string) (string, error) {
 	ref, err := reference.Parse(image)
 	if err != nil {
@@ -237,7 +237,7 @@ func parseServiceVersionFromImage(image string) (string, error) {
 }
 
 // chooseServiceInstanceId returns the service.instance.id to be used in the instrumentation.
-// See https://github.com/open-telemetry/semantic-conventions/blob/main/docs/non-normative/k8s-attributes.md#how-serviceinstanceid-should-be-calculated
+// See https://opentelemetry.io/docs/specs/semconv/non-normative/k8s-attributes/#how-serviceinstanceid-should-be-calculated
 func createServiceInstanceId(meta *metav1.ObjectMeta, namespaceName, podName, containerName string) string {
 	// Do not use labels for service instance id,
 	// because multiple containers in the same pod would get the same service instance id,

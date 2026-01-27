@@ -33,6 +33,51 @@ var (
 // resource attributes, sampler configuration, and service identification.
 // nolint:gocritic
 func (pm *PodMutator) configureContainerEnvVars(meta *metav1.ObjectMeta, container *corev1.Container, selector services.Selector) {
+	extraResAttrs := pm.setResourceAttributes(meta, container)
+
+	// todo: propagators from config
+	// idx = getIndexOfEnv(container.Env, constants.EnvOTELPropagators)
+	// if idx == -1 && len(otelinst.Spec.Propagators) > 0 {
+	// 	propagators := *(*[]string)((unsafe.Pointer(&otelinst.Spec.Propagators)))
+	// 	container.Env = append(container.Env, corev1.EnvVar{
+	// 		Name:  constants.EnvOTELPropagators,
+	// 		Value: strings.Join(propagators, ","),
+	// 	})
+	// }
+
+	// Configure sampler with priority: selector > default
+	var samplerConfig *services.SamplerConfig
+	if selector != nil {
+		samplerConfig = selector.GetSamplerConfig()
+	}
+	if samplerConfig == nil {
+		samplerConfig = pm.cfg.Injector.DefaultSampler
+	}
+	if samplerConfig != nil {
+		pm.configureSampler(container, samplerConfig)
+	}
+
+	if pm.cfg.Metrics.Features.AnySpanMetrics() {
+		extraResAttrs[attr.SkipSpanMetrics.OTEL()] = "true"
+	}
+
+	pm.injectEnvVars(extraResAttrs, container)
+}
+
+func (pm *PodMutator) injectEnvVars(extraResAttrs map[attribute.Key]string, container *corev1.Container) {
+	// Set extra resource attributes if any exist
+	if len(extraResAttrs) > 0 {
+		var resourceAttributeList []string
+		for _, resourceAttributeKey := range slices.Sorted(maps.Keys(extraResAttrs)) {
+			resourceAttributeList = append(
+				resourceAttributeList,
+				fmt.Sprintf("%s=%s", resourceAttributeKey, extraResAttrs[resourceAttributeKey]))
+		}
+		setEnvVar(container, envInjectorOtelExtraResourceAttrs, strings.Join(resourceAttributeList, ","))
+	}
+}
+
+func (pm *PodMutator) setResourceAttributes(meta *metav1.ObjectMeta, container *corev1.Container) map[attribute.Key]string {
 	cfg := pm.cfg.Injector.Resources
 
 	// entries from the CRD have the lowest precedence - they are overridden by later values
@@ -72,58 +117,13 @@ func (pm *PodMutator) configureContainerEnvVars(meta *metav1.ObjectMeta, contain
 			extraResAttrs[attribute.Key(strings.TrimPrefix(k, ResourceAttributeAnnotationPrefix))] = v
 		}
 	}
-
-	// todo: propagators from config
-	// idx = getIndexOfEnv(container.Env, constants.EnvOTELPropagators)
-	// if idx == -1 && len(otelinst.Spec.Propagators) > 0 {
-	// 	propagators := *(*[]string)((unsafe.Pointer(&otelinst.Spec.Propagators)))
-	// 	container.Env = append(container.Env, corev1.EnvVar{
-	// 		Name:  constants.EnvOTELPropagators,
-	// 		Value: strings.Join(propagators, ","),
-	// 	})
-	// }
-
-	// Configure sampler with priority: selector > default
-	pm.configureSampler(container, selector)
-
-	if pm.cfg.Metrics.Features.AnySpanMetrics() {
-		extraResAttrs[attr.SkipSpanMetrics.OTEL()] = "true"
-	}
-
-	// Set extra resource attributes if any exist
-	if len(extraResAttrs) > 0 {
-		var resourceAttributeList []string
-		for _, resourceAttributeKey := range slices.Sorted(maps.Keys(extraResAttrs)) {
-			resourceAttributeList = append(
-				resourceAttributeList,
-				fmt.Sprintf("%s=%s", resourceAttributeKey, extraResAttrs[resourceAttributeKey]))
-		}
-		setEnvVar(container, envInjectorOtelExtraResourceAttrs, strings.Join(resourceAttributeList, ","))
-	}
+	return extraResAttrs
 }
 
-// configureSampler sets sampler environment variables based on priority:
-// 1. Sampler from matched selector (highest priority)
-// 2. Default sampler from SDKInject configuration
-// Respects existing environment variables (won't override user settings)
-func (pm *PodMutator) configureSampler(container *corev1.Container, selector services.Selector) {
-	var samplerConfig *services.SamplerConfig
-
-	// Priority 1: Selector's sampler config
-	if selector != nil {
-		samplerConfig = selector.GetSamplerConfig()
-	}
-
-	// Priority 2: Default sampler from config
-	if samplerConfig == nil {
-		samplerConfig = pm.cfg.Injector.DefaultSampler
-	}
-
-	// No sampler configured - early return
-	if samplerConfig == nil {
-		return
-	}
-
+// configureSampler sets sampler environment variables from the provided sampler configuration.
+// The samplerConfig parameter must be non-nil.
+// Respects existing environment variables (won't override user settings).
+func (pm *PodMutator) configureSampler(container *corev1.Container, samplerConfig *services.SamplerConfig) {
 	// Use existing setEnvVar helper (handles empty values and duplicates)
 	setEnvVar(container, envOtelTracesSamplerName, samplerConfig.Name)
 	setEnvVar(container, envOtelTracesSamplerArgName, samplerConfig.Arg)

@@ -1,13 +1,11 @@
 package webhook
 
 import (
-	"iter"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
-	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
 	"go.opentelemetry.io/otel/attribute"
 	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
 	corev1 "k8s.io/api/core/v1"
@@ -925,60 +923,17 @@ func TestConfigureContainerEnvVars(t *testing.T) {
 	}
 }
 
-// mockSelector is a test mock for services.Selector that only implements GetSamplerConfig
-type mockSelector struct {
-	samplerConfig *services.SamplerConfig
-}
-
-func (m *mockSelector) GetName() string                                           { return "" }
-func (m *mockSelector) GetNamespace() string                                      { return "" }
-func (m *mockSelector) GetPath() services.StringMatcher                           { return nil }
-func (m *mockSelector) GetPathRegexp() services.StringMatcher                     { return nil }
-func (m *mockSelector) GetOpenPorts() *services.PortEnum                          { return nil }
-func (m *mockSelector) IsContainersOnly() bool                                    { return false }
-func (m *mockSelector) RangeMetadata() iter.Seq2[string, services.StringMatcher]  { return nil }
-func (m *mockSelector) RangePodLabels() iter.Seq2[string, services.StringMatcher] { return nil }
-func (m *mockSelector) RangePodAnnotations() iter.Seq2[string, services.StringMatcher] {
-	return nil
-}
-func (m *mockSelector) GetExportModes() services.ExportModes          { return services.ExportModes{} }
-func (m *mockSelector) GetSamplerConfig() *services.SamplerConfig     { return m.samplerConfig }
-func (m *mockSelector) GetRoutesConfig() *services.CustomRoutesConfig { return nil }
-func (m *mockSelector) MetricsConfig() perapp.SvcMetricsConfig        { return perapp.SvcMetricsConfig{} }
-func (m *mockSelector) String() string                                { return "" }
-
 func TestConfigureSampler(t *testing.T) {
 	tests := []struct {
 		name            string
-		cfg             *beyla.Config
-		selector        services.Selector
+		samplerConfig   *services.SamplerConfig
 		expectedEnvVars map[string]string
 	}{
 		{
-			name: "no sampler configured - nil selector and nil default",
-			cfg: &beyla.Config{
-				Injector: beyla.SDKInject{
-					DefaultSampler: nil,
-				},
-			},
-			selector:        nil,
-			expectedEnvVars: map[string]string{},
-		},
-		{
-			name: "sampler from selector takes precedence",
-			cfg: &beyla.Config{
-				Injector: beyla.SDKInject{
-					DefaultSampler: &services.SamplerConfig{
-						Name: "always_off",
-						Arg:  "",
-					},
-				},
-			},
-			selector: &mockSelector{
-				samplerConfig: &services.SamplerConfig{
-					Name: "traceidratio",
-					Arg:  "0.5",
-				},
+			name: "sampler with name and arg",
+			samplerConfig: &services.SamplerConfig{
+				Name: "traceidratio",
+				Arg:  "0.5",
 			},
 			expectedEnvVars: map[string]string{
 				envOtelTracesSamplerName:    "traceidratio",
@@ -986,79 +941,47 @@ func TestConfigureSampler(t *testing.T) {
 			},
 		},
 		{
-			name: "sampler from default config when selector is nil",
-			cfg: &beyla.Config{
-				Injector: beyla.SDKInject{
-					DefaultSampler: &services.SamplerConfig{
-						Name: "always_on",
-						Arg:  "",
-					},
-				},
+			name: "sampler with only name - empty arg not set",
+			samplerConfig: &services.SamplerConfig{
+				Name: "always_on",
+				Arg:  "",
 			},
-			selector: nil,
 			expectedEnvVars: map[string]string{
 				envOtelTracesSamplerName: "always_on",
 			},
 		},
 		{
-			name: "sampler from default config when selector has no sampler",
-			cfg: &beyla.Config{
-				Injector: beyla.SDKInject{
-					DefaultSampler: &services.SamplerConfig{
-						Name: "parentbased_always_off",
-						Arg:  "",
-					},
-				},
-			},
-			selector: &mockSelector{
-				samplerConfig: nil,
+			name: "sampler with parentbased_always_off",
+			samplerConfig: &services.SamplerConfig{
+				Name: "parentbased_always_off",
+				Arg:  "",
 			},
 			expectedEnvVars: map[string]string{
 				envOtelTracesSamplerName: "parentbased_always_off",
 			},
 		},
 		{
-			name: "sampler with name and arg",
-			cfg: &beyla.Config{
-				Injector: beyla.SDKInject{
-					DefaultSampler: &services.SamplerConfig{
-						Name: "traceidratio",
-						Arg:  "0.1",
-					},
-				},
+			name: "sampler with traceidratio and low probability",
+			samplerConfig: &services.SamplerConfig{
+				Name: "traceidratio",
+				Arg:  "0.1",
 			},
-			selector: nil,
 			expectedEnvVars: map[string]string{
 				envOtelTracesSamplerName:    "traceidratio",
 				envOtelTracesSamplerArgName: "0.1",
-			},
-		},
-		{
-			name: "sampler with only name - empty arg not set",
-			cfg: &beyla.Config{
-				Injector: beyla.SDKInject{
-					DefaultSampler: &services.SamplerConfig{
-						Name: "always_on",
-						Arg:  "",
-					},
-				},
-			},
-			selector: nil,
-			expectedEnvVars: map[string]string{
-				envOtelTracesSamplerName: "always_on",
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pm := &PodMutator{cfg: tt.cfg}
+			pm := &PodMutator{}
 			container := &corev1.Container{
 				Name: "test-container",
 				Env:  []corev1.EnvVar{},
 			}
 
-			pm.configureSampler(container, tt.selector)
+			pm.configureSampler(container, tt.samplerConfig)
 
 			// Check that expected environment variables are set
 			for envName, expectedValue := range tt.expectedEnvVars {
@@ -1071,14 +994,6 @@ func TestConfigureSampler(t *testing.T) {
 					}
 				}
 				assert.True(t, found, "expected env var %s not found", envName)
-			}
-
-			// Check that no unexpected sampler env vars are set when none expected
-			if len(tt.expectedEnvVars) == 0 {
-				for _, env := range container.Env {
-					assert.NotEqual(t, envOtelTracesSamplerName, env.Name, "unexpected sampler name env var set")
-					assert.NotEqual(t, envOtelTracesSamplerArgName, env.Name, "unexpected sampler arg env var set")
-				}
 			}
 		})
 	}

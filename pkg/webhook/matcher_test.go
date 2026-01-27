@@ -300,8 +300,13 @@ func TestPodMatcher_MatchProcessInfo(t *testing.T) {
 				selectors: tt.selectors,
 				logger:    slog.With("component", "webhook.Matcher"),
 			}
-			result := matcher.MatchProcessInfo(tt.process)
-			assert.Equal(t, tt.expected, result)
+			selector, matched := matcher.MatchProcessInfo(tt.process)
+			assert.Equal(t, tt.expected, matched)
+			if matched {
+				assert.NotNil(t, selector)
+			} else {
+				assert.Nil(t, selector)
+			}
 		})
 	}
 }

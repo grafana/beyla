@@ -222,7 +222,7 @@ func (s *Server) On(event *informer.Event) error {
 				switch s.mutator.AlreadyInstrumented(a) {
 				case false:
 					if s.mutator.CanInstrument(a.kind) && !s.mutator.PreloadsSomethingElse(a) {
-						if s.matcher.MatchProcessInfo(a) {
+						if _, matched := s.matcher.MatchProcessInfo(a); matched {
 							s.restartDeployment(a)
 						}
 					} else {
@@ -231,7 +231,7 @@ func (s *Server) On(event *informer.Event) error {
 				case true:
 					// If this pod was instrumented, but the new Beyla config says don't anymore
 					// we bounce the pods to undo the instrumentation
-					if !s.matcher.MatchProcessInfo(a) {
+					if _, matched := s.matcher.MatchProcessInfo(a); !matched {
 						s.restartDeployment(a)
 					}
 				}

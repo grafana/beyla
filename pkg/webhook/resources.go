@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/distribution/reference"
+	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/otel/attribute"
 	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
 	corev1 "k8s.io/api/core/v1"
@@ -29,7 +30,7 @@ var (
 )
 
 // nolint:gocritic
-func (pm *PodMutator) setResourceAttributes(meta *metav1.ObjectMeta, container *corev1.Container) {
+func (pm *PodMutator) setResourceAttributes(meta *metav1.ObjectMeta, container *corev1.Container, selector services.Selector) {
 	cfg := pm.cfg.Injector.Resources
 
 	// entries from the CRD have the lowest precedence - they are overridden by later values
@@ -70,7 +71,7 @@ func (pm *PodMutator) setResourceAttributes(meta *metav1.ObjectMeta, container *
 		}
 	}
 
-	// todo: propagators and sampler from config?
+	// todo: propagators from config
 	// idx = getIndexOfEnv(container.Env, constants.EnvOTELPropagators)
 	// if idx == -1 && len(otelinst.Spec.Propagators) > 0 {
 	// 	propagators := *(*[]string)((unsafe.Pointer(&otelinst.Spec.Propagators)))
@@ -80,23 +81,8 @@ func (pm *PodMutator) setResourceAttributes(meta *metav1.ObjectMeta, container *
 	// 	})
 	// }
 
-	// idx = getIndexOfEnv(container.Env, constants.EnvOTELTracesSampler)
-	// // configure sampler only if it is configured in the CR
-	// if idx == -1 && otelinst.Spec.Sampler.Type != "" {
-	// 	idxSamplerArg := getIndexOfEnv(container.Env, constants.EnvOTELTracesSamplerArg)
-	// 	if idxSamplerArg == -1 {
-	// 		container.Env = append(container.Env, corev1.EnvVar{
-	// 			Name:  constants.EnvOTELTracesSampler,
-	// 			Value: string(otelinst.Spec.Sampler.Type),
-	// 		})
-	// 		if otelinst.Spec.Sampler.Argument != "" {
-	// 			container.Env = append(container.Env, corev1.EnvVar{
-	// 				Name:  constants.EnvOTELTracesSamplerArg,
-	// 				Value: otelinst.Spec.Sampler.Argument,
-	// 			})
-	// 		}
-	// 	}
-	// }
+	// Configure sampler with priority: selector > default
+	pm.configureSampler(container, selector)
 
 	if pm.cfg.Metrics.Features.AnySpanMetrics() {
 		extraResAttrs[attr.SkipSpanMetrics.OTEL()] = "true"
@@ -112,6 +98,33 @@ func (pm *PodMutator) setResourceAttributes(meta *metav1.ObjectMeta, container *
 		}
 		setEnvVar(container, envInjectorOtelExtraResourceAttrs, strings.Join(resourceAttributeList, ","))
 	}
+}
+
+// configureSampler sets sampler environment variables based on priority:
+// 1. Sampler from matched selector (highest priority)
+// 2. Default sampler from SDKInject configuration
+// Respects existing environment variables (won't override user settings)
+func (pm *PodMutator) configureSampler(container *corev1.Container, selector services.Selector) {
+	var samplerConfig *services.SamplerConfig
+
+	// Priority 1: Selector's sampler config
+	if selector != nil {
+		samplerConfig = selector.GetSamplerConfig()
+	}
+
+	// Priority 2: Default sampler from config
+	if samplerConfig == nil {
+		samplerConfig = pm.cfg.Injector.DefaultSampler
+	}
+
+	// No sampler configured - early return
+	if samplerConfig == nil {
+		return
+	}
+
+	// Use existing setEnvVar helper (handles empty values and duplicates)
+	setEnvVar(container, envOtelTracesSamplerName, samplerConfig.Name)
+	setEnvVar(container, envOtelTracesSamplerArgName, samplerConfig.Arg)
 }
 
 // chooseServiceName returns the service name to be used in the instrumentation.

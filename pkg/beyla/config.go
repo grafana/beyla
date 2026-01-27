@@ -254,6 +254,10 @@ type SDKInject struct {
 	// This is the root path, sdk_version is appended on top
 	// nolint:undoc
 	HostMountPath string `yaml:"host_mount_path"`
+	// Default sampler configuration for SDK instrumentation
+	// This is used when no sampler is specified in the selector
+	// nolint:undoc
+	DefaultSampler *services.SamplerConfig `yaml:"default_sampler"`
 	// Resource attributes related settings
 	// nolint:undoc
 	Resources SDKResource `yaml:"resources"`

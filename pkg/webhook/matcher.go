@@ -30,14 +30,14 @@ func (m *PodMatcher) HasSelectionCriteria() bool {
 	return len(m.selectors) > 0
 }
 
-func (m *PodMatcher) MatchProcessInfo(info *ProcessInfo) bool {
+func (m *PodMatcher) MatchProcessInfo(info *ProcessInfo) (services.Selector, bool) {
 	for _, s := range m.selectors {
 		if m.matchProcess(info, s) {
-			return true
+			return s, true
 		}
 	}
 
-	return false
+	return nil, false
 }
 
 func (m *PodMatcher) matchProcess(actual *ProcessInfo, required services.Selector) bool {

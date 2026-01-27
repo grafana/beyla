@@ -69,6 +69,8 @@ func DefaultConfig() *Config {
 		KeyPath:  "/etc/webhook/certs/tls.key",
 	}
 	def.Injector.HostPathVolumeDir = "/var/lib/beyla/instrumentation"
+	def.OTELMetrics.ExtraSpanResourceLabels = append(def.OTELMetrics.ExtraSpanResourceLabels, "k8s.namespace.name")
+	def.Prometheus.ExtraResourceLabels = append(def.Prometheus.ExtraSpanResourceLabels, "k8s.namespace.name")
 	return def
 }
 

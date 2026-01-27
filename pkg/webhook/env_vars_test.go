@@ -998,3 +998,78 @@ func TestConfigureSampler(t *testing.T) {
 		})
 	}
 }
+
+func TestConfigurePropagators(t *testing.T) {
+	tests := []struct {
+		name            string
+		propagators     []string
+		expectedEnvVars map[string]string
+	}{
+		{
+			name:        "standard propagators - tracecontext and baggage",
+			propagators: []string{"tracecontext", "baggage"},
+			expectedEnvVars: map[string]string{
+				envOtelPropagatorsName: "tracecontext,baggage",
+			},
+		},
+		{
+			name:        "single propagator",
+			propagators: []string{"b3"},
+			expectedEnvVars: map[string]string{
+				envOtelPropagatorsName: "b3",
+			},
+		},
+		{
+			name:        "multiple propagators with b3multi and jaeger",
+			propagators: []string{"tracecontext", "baggage", "b3multi", "jaeger"},
+			expectedEnvVars: map[string]string{
+				envOtelPropagatorsName: "tracecontext,baggage,b3multi,jaeger",
+			},
+		},
+		{
+			name:            "empty propagators list - no env var set",
+			propagators:     []string{},
+			expectedEnvVars: map[string]string{},
+		},
+		{
+			name:            "nil propagators - no env var set",
+			propagators:     nil,
+			expectedEnvVars: map[string]string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pm := &PodMutator{}
+			container := &corev1.Container{
+				Name: "test-container",
+				Env:  []corev1.EnvVar{},
+			}
+
+			if len(tt.propagators) > 0 {
+				pm.configurePropagators(container, tt.propagators)
+			}
+
+			// Check that expected environment variables are set
+			for envName, expectedValue := range tt.expectedEnvVars {
+				found := false
+				for _, env := range container.Env {
+					if env.Name == envName {
+						found = true
+						assert.Equal(t, expectedValue, env.Value, "env var %s value mismatch", envName)
+						break
+					}
+				}
+				assert.True(t, found, "expected env var %s not found", envName)
+			}
+
+			// If no env vars expected, ensure OTEL_PROPAGATORS is not set
+			if len(tt.expectedEnvVars) == 0 {
+				for _, env := range container.Env {
+					assert.NotEqual(t, envOtelPropagatorsName, env.Name,
+						"OTEL_PROPAGATORS should not be set for empty/nil propagators")
+				}
+			}
+		})
+	}
+}

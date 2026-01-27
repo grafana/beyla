@@ -35,15 +35,10 @@ var (
 func (pm *PodMutator) configureContainerEnvVars(meta *metav1.ObjectMeta, container *corev1.Container, selector services.Selector) {
 	extraResAttrs := pm.setResourceAttributes(meta, container)
 
-	// todo: propagators from config
-	// idx = getIndexOfEnv(container.Env, constants.EnvOTELPropagators)
-	// if idx == -1 && len(otelinst.Spec.Propagators) > 0 {
-	// 	propagators := *(*[]string)((unsafe.Pointer(&otelinst.Spec.Propagators)))
-	// 	container.Env = append(container.Env, corev1.EnvVar{
-	// 		Name:  constants.EnvOTELPropagators,
-	// 		Value: strings.Join(propagators, ","),
-	// 	})
-	// }
+	// Configure propagators from default config
+	if len(pm.cfg.Injector.Propagators) > 0 {
+		pm.configurePropagators(container, pm.cfg.Injector.Propagators)
+	}
 
 	// Configure sampler with priority: selector > default
 	var samplerConfig *services.SamplerConfig
@@ -127,6 +122,14 @@ func (pm *PodMutator) configureSampler(container *corev1.Container, samplerConfi
 	// Use existing setEnvVar helper (handles empty values and duplicates)
 	setEnvVar(container, envOtelTracesSamplerName, samplerConfig.Name)
 	setEnvVar(container, envOtelTracesSamplerArgName, samplerConfig.Arg)
+}
+
+// configurePropagators sets propagators environment variable from the provided list.
+// The propagators parameter must be non-empty.
+// Respects existing environment variables (won't override user settings).
+func (pm *PodMutator) configurePropagators(container *corev1.Container, propagators []string) {
+	// Join propagators with comma separator as per OTEL spec
+	setEnvVar(container, envOtelPropagatorsName, strings.Join(propagators, ","))
 }
 
 // chooseServiceName returns the service name to be used in the instrumentation.

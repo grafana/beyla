@@ -57,6 +57,7 @@ const (
 	envVarSDKVersion                  = "BEYLA_INJECTOR_SDK_PKG_VERSION"
 	envOtelTracesSamplerName          = "OTEL_TRACES_SAMPLER"
 	envOtelTracesSamplerArgName       = "OTEL_TRACES_SAMPLER_ARG"
+	envOtelPropagatorsName            = "OTEL_PROPAGATORS"
 )
 
 func init() {

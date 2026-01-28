@@ -102,7 +102,7 @@ serviceMonitor:
 ```
 
 {{< admonition type="note" >}}
-Configure your Prometheus scraper with [`honor_labels: true`](../../configure/export-data/#prometheus-exporter-component) to preserve Beyla's per-process instance identifiers.
+Configure your Prometheus scraper with [`honor_labels: true`](../../configure/export-data/#prometheus-exporter-component) to preserve the per-process instance identifiers set by Beyla.
 {{< /admonition >}}
 
 Analogously, the Helm chart allows overriding names, labels, and annotations for

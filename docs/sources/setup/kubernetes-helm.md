@@ -101,6 +101,10 @@ serviceMonitor:
   enabled: true
 ```
 
+{{< admonition type="note" >}}
+Configure your Prometheus scraper with [`honor_labels: true`](../../configure/export-data/#prometheus-exporter-component) to preserve Beyla's per-process instance identifiers.
+{{< /admonition >}}
+
 Analogously, the Helm chart allows overriding names, labels, and annotations for
 multiple resources involved in the deployment of Beyla, such as service
 accounts, cluster roles, security contexts, etc. The

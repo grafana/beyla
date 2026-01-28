@@ -187,9 +187,7 @@ You can configure the component under the `prometheus_export` section of your YA
 This component opens an HTTP endpoint in the auto-instrumentation tool that allows any external scraper to pull metrics in Prometheus format. It is enabled if the `port` property is set.
 
 {{< admonition type="note" >}}
-The Prometheus scraper might override the values of the `instance` and `job` labels.
-To keep the original values as set by Beyla,
-refer to the [Grafana Alloy Prometheus scraper component documentation](/docs/alloy/latest/reference/components/prometheus/prometheus.scrape/).
+Prometheus scrapers override the `instance` and `job` labels by default. To preserve Beyla's per-process instance identifiers, configure your scraper with `honor_labels: true`. See the [Prometheus documentation](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#scrape_config) or [Alloy prometheus.scrape documentation](/docs/alloy/latest/reference/components/prometheus/prometheus.scrape/).
 {{< /admonition >}}
 
 ```yaml

@@ -52,6 +52,11 @@ func (pm *PodMutator) configureContainerEnvVars(meta *metav1.ObjectMeta, contain
 		pm.configureSampler(container, samplerConfig)
 	}
 
+	// Configure exporters based on selector's export modes
+	if selector != nil {
+		pm.configureExporters(container, selector.GetExportModes())
+	}
+
 	if pm.cfg.Metrics.Features.AnySpanMetrics() {
 		extraResAttrs[attr.SkipSpanMetrics.OTEL()] = "true"
 	}
@@ -130,6 +135,25 @@ func (pm *PodMutator) configureSampler(container *corev1.Container, samplerConfi
 func (pm *PodMutator) configurePropagators(container *corev1.Container, propagators []string) {
 	// Join propagators with comma separator as per OTEL spec
 	setEnvVar(container, envOtelPropagatorsName, strings.Join(propagators, ","))
+}
+
+// configureExporters sets exporter environment variables based on the export modes.
+// Sets OTEL_METRICS_EXPORTER to "otlp" or "none" based on CanExportMetrics().
+// Sets OTEL_TRACES_EXPORTER to "otlp" or "none" based on CanExportTraces().
+func (pm *PodMutator) configureExporters(container *corev1.Container, exportModes services.ExportModes) {
+	// Set metrics exporter
+	if exportModes.CanExportMetrics() {
+		setEnvVar(container, envOtelMetricsExporterName, "otlp")
+	} else {
+		setEnvVar(container, envOtelMetricsExporterName, "none")
+	}
+
+	// Set traces exporter
+	if exportModes.CanExportTraces() {
+		setEnvVar(container, envOtelTracesExporterName, "otlp")
+	} else {
+		setEnvVar(container, envOtelTracesExporterName, "none")
+	}
 }
 
 // chooseServiceName returns the service name to be used in the instrumentation.

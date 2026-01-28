@@ -352,14 +352,16 @@ Standard OpenTelemetry environment variables follow the [OTEL SDK Configuration]
 | `OTEL_TRACES_SAMPLER`               | Sampler type [1]                   | Not set (OTEL default used)                                    | `parentbased_always_on`                           | `parentbased_traceidratio`                                     |
 | `OTEL_TRACES_SAMPLER_ARG`           | Sampler argument [1]               | Not set (unless configured)                                    | N/A                                               | `0.1`                                                          |
 | `OTEL_PROPAGATORS`                  | Propagators to use [2]             | Not set (OTEL default used)                                    | `tracecontext,baggage`                            | `tracecontext,baggage,b3`                                      |
+| `OTEL_METRICS_EXPORTER`             | Metrics exporter type [3]          | Set based on selector export modes                             | `otlp`                                            | `otlp` or `none`                                               |
+| `OTEL_TRACES_EXPORTER`              | Traces exporter type [3]           | Set based on selector export modes                             | `otlp`                                            | `otlp` or `none`                                               |
 | `OTEL_INJECTOR_K8S_NAMESPACE_NAME`  | Pod namespace (from downward API)  | From `metadata.namespace`                                      | N/A                                               | `production`                                                   |
 | `OTEL_INJECTOR_K8S_POD_NAME`        | Pod name (from downward API)       | From `metadata.name`                                           | N/A                                               | `my-app-abc123-xyz`                                            |
-| `OTEL_INJECTOR_K8S_POD_UID`         | Pod UID (from downward API) [3]    | From `metadata.uid` (if enabled)                               | N/A                                               | `abc-123-def-456`                                              |
+| `OTEL_INJECTOR_K8S_POD_UID`         | Pod UID (from downward API) [4]    | From `metadata.uid` (if enabled)                               | N/A                                               | `abc-123-def-456`                                              |
 | `OTEL_INJECTOR_K8S_CONTAINER_NAME`  | Container name                     | From container spec                                            | N/A                                               | `main`                                                         |
-| `OTEL_INJECTOR_SERVICE_NAME`        | Derived service name [4]           | See footnote 4                                                 | `unknown_service`                                 | `my-app`                                                       |
-| `OTEL_INJECTOR_SERVICE_VERSION`     | Derived service version [5]        | See footnote 5                                                 | N/A                                               | `1.2.3`                                                        |
-| `OTEL_INJECTOR_SERVICE_NAMESPACE`   | Derived service namespace [6]      | See footnote 6                                                 | N/A                                               | `production`                                                   |
-| `OTEL_INJECTOR_RESOURCE_ATTRIBUTES` | Additional resource attributes [7] | See footnote 7                                                 | N/A                                               | `k8s.node.name=node-1,...`                                     |
+| `OTEL_INJECTOR_SERVICE_NAME`        | Derived service name [5]           | See footnote 5                                                 | `unknown_service`                                 | `my-app`                                                       |
+| `OTEL_INJECTOR_SERVICE_VERSION`     | Derived service version [6]        | See footnote 6                                                 | N/A                                               | `1.2.3`                                                        |
+| `OTEL_INJECTOR_SERVICE_NAMESPACE`   | Derived service namespace [7]      | See footnote 7                                                 | N/A                                               | `production`                                                   |
+| `OTEL_INJECTOR_RESOURCE_ATTRIBUTES` | Additional resource attributes [8] | See footnote 8                                                 | N/A                                               | `k8s.node.name=node-1,...`                                     |
 
 ### Configuration Notes
 
@@ -399,10 +401,47 @@ cfg.Injector.Propagators = []string{"tracecontext", "baggage", "b3"}
 
 Valid propagators: `tracecontext`, `baggage`, `b3`, `b3multi`, `jaeger`, `xray`, `ottrace`.
 
-**[3] Kubernetes UID Attributes:**
+**[3] Exporter Configuration:**
+Configured per-selector via `selector.GetExportModes()`. Controls which telemetry signals are exported by setting the appropriate exporter type.
+See [OTEL SDK Configuration - Exporters](https://opentelemetry.io/docs/languages/sdk-configuration/general/#otel_metrics_exporter).
+
+When a selector is present:
+- If the selector allows metrics export (via `exports: ["metrics"]`), sets `OTEL_METRICS_EXPORTER=otlp`
+- If the selector allows traces export (via `exports: ["traces"]`), sets `OTEL_TRACES_EXPORTER=otlp`
+- If a signal is not in the exports list, the corresponding exporter is set to `none` (disabling that signal)
+
+When no selector matches or selector is nil, these environment variables are not set (OTEL SDK defaults apply).
+
+```yaml
+# Example: Export only metrics, disable traces
+- metadata:
+    k8s.namespace.name: "production"
+  exports:
+    - metrics
+
+# Example: Export only traces, disable metrics
+- metadata:
+    k8s.namespace.name: "staging"
+  exports:
+    - traces
+
+# Example: Export both (default if exports is not specified)
+- metadata:
+    k8s.namespace.name: "dev"
+  exports:
+    - metrics
+    - traces
+
+# Example: Export nothing
+- metadata:
+    k8s.namespace.name: "test"
+  exports: []
+```
+
+**[4] Kubernetes UID Attributes:**
 Pod UID is only set when `cfg.Injector.Resources.AddK8sUIDAttributes = true`.
 
-**[4] Service Name Derivation:**
+**[5] Service Name Derivation:**
 Follows the [OpenTelemetry Kubernetes semantic conventions](https://opentelemetry.io/docs/specs/semconv/non-normative/k8s-attributes/). Priority order:
 1. Annotation: `resource.opentelemetry.io/service.name`
 2. Label: `app.kubernetes.io/name` (if `UseLabelsForResourceAttributes` enabled)

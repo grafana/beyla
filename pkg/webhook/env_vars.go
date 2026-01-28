@@ -53,7 +53,9 @@ func (pm *PodMutator) configureContainerEnvVars(meta *metav1.ObjectMeta, contain
 	}
 
 	// Configure exporters based on selector's export modes
-	pm.configureExporters(container, selector)
+	if selector != nil {
+		pm.configureExporters(container, selector.GetExportModes())
+	}
 
 	if pm.cfg.Metrics.Features.AnySpanMetrics() {
 		extraResAttrs[attr.SkipSpanMetrics.OTEL()] = "true"
@@ -135,17 +137,10 @@ func (pm *PodMutator) configurePropagators(container *corev1.Container, propagat
 	setEnvVar(container, envOtelPropagatorsName, strings.Join(propagators, ","))
 }
 
-// configureExporters sets exporter environment variables based on the selector's export modes.
-// When selector is nil, no exporter configuration is set (defaults to OTEL SDK defaults).
+// configureExporters sets exporter environment variables based on the export modes.
 // Sets OTEL_METRICS_EXPORTER to "otlp" or "none" based on CanExportMetrics().
 // Sets OTEL_TRACES_EXPORTER to "otlp" or "none" based on CanExportTraces().
-func (pm *PodMutator) configureExporters(container *corev1.Container, selector services.Selector) {
-	if selector == nil {
-		return
-	}
-
-	exportModes := selector.GetExportModes()
-
+func (pm *PodMutator) configureExporters(container *corev1.Container, exportModes services.ExportModes) {
 	// Set metrics exporter
 	if exportModes.CanExportMetrics() {
 		setEnvVar(container, envOtelMetricsExporterName, "otlp")

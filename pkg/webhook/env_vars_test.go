@@ -1,7 +1,6 @@
 package webhook
 
 import (
-	"iter"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -1227,9 +1226,7 @@ func TestConfigureContainerEnvVars_WithExporters(t *testing.T) {
 				Image: "myapp:latest",
 				Env:   []corev1.EnvVar{},
 			},
-			selector: &mockSelector{
-				exportModes: createExportModes(true, false), // metrics only
-			},
+			selector: createSelectorWithExportModes(true, false), // metrics only
 			checkEnvVars: map[string]string{
 				envOtelMetricsExporterName: "otlp",
 				envOtelTracesExporterName:  "none",
@@ -1255,9 +1252,7 @@ func TestConfigureContainerEnvVars_WithExporters(t *testing.T) {
 				Image: "myapp:latest",
 				Env:   []corev1.EnvVar{},
 			},
-			selector: &mockSelector{
-				exportModes: createExportModes(false, true), // traces only
-			},
+			selector: createSelectorWithExportModes(false, true), // traces only
 			checkEnvVars: map[string]string{
 				envOtelMetricsExporterName: "none",
 				envOtelTracesExporterName:  "otlp",
@@ -1283,9 +1278,7 @@ func TestConfigureContainerEnvVars_WithExporters(t *testing.T) {
 				Image: "myapp:latest",
 				Env:   []corev1.EnvVar{},
 			},
-			selector: &mockSelector{
-				exportModes: createExportModes(true, true), // both enabled
-			},
+			selector: createSelectorWithExportModes(true, true), // both enabled
 			checkEnvVars: map[string]string{
 				envOtelMetricsExporterName: "otlp",
 				envOtelTracesExporterName:  "otlp",
@@ -1696,33 +1689,6 @@ func TestConfigurePropagators(t *testing.T) {
 	}
 }
 
-// mockSelector is a test helper for creating selectors with specific export modes
-type mockSelector struct {
-	exportModes   services.ExportModes
-	samplerConfig *services.SamplerConfig
-}
-
-func (m *mockSelector) GetExportModes() services.ExportModes {
-	return m.exportModes
-}
-
-func (m *mockSelector) GetSamplerConfig() *services.SamplerConfig {
-	return m.samplerConfig
-}
-
-// Implement remaining Selector interface methods (not used in tests)
-func (m *mockSelector) GetName() string                                                { return "" }
-func (m *mockSelector) GetNamespace() string                                           { return "" }
-func (m *mockSelector) GetPath() services.StringMatcher                                { return nil }
-func (m *mockSelector) GetPathRegexp() services.StringMatcher                          { return nil }
-func (m *mockSelector) GetOpenPorts() *services.PortEnum                               { return nil }
-func (m *mockSelector) IsContainersOnly() bool                                         { return false }
-func (m *mockSelector) RangeMetadata() iter.Seq2[string, services.StringMatcher]       { return nil }
-func (m *mockSelector) RangePodLabels() iter.Seq2[string, services.StringMatcher]      { return nil }
-func (m *mockSelector) RangePodAnnotations() iter.Seq2[string, services.StringMatcher] { return nil }
-func (m *mockSelector) GetRoutesConfig() *services.CustomRoutesConfig                  { return nil }
-func (m *mockSelector) MetricsConfig() perapp.SvcMetricsConfig                         { return perapp.SvcMetricsConfig{} }
-
 // createExportModes creates ExportModes programmatically for testing
 func createExportModes(metrics, traces bool) services.ExportModes {
 	modes := services.NewExportModes()
@@ -1735,66 +1701,58 @@ func createExportModes(metrics, traces bool) services.ExportModes {
 	return modes
 }
 
+// createSelectorWithExportModes creates a selector with specific export modes for testing
+func createSelectorWithExportModes(metrics, traces bool) *services.GlobAttributes {
+	return &services.GlobAttributes{
+		ExportModes: createExportModes(metrics, traces),
+	}
+}
+
 func TestConfigureExporters(t *testing.T) {
 	tests := []struct {
 		name            string
-		selector        services.Selector
+		exportModes     services.ExportModes
 		expectedEnvVars map[string]string
 	}{
 		{
-			name: "both metrics and traces enabled",
-			selector: &mockSelector{
-				exportModes: createExportModes(true, true),
-			},
+			name:        "both metrics and traces enabled",
+			exportModes: createExportModes(true, true),
 			expectedEnvVars: map[string]string{
 				envOtelMetricsExporterName: "otlp",
 				envOtelTracesExporterName:  "otlp",
 			},
 		},
 		{
-			name: "only metrics enabled",
-			selector: &mockSelector{
-				exportModes: createExportModes(true, false),
-			},
+			name:        "only metrics enabled",
+			exportModes: createExportModes(true, false),
 			expectedEnvVars: map[string]string{
 				envOtelMetricsExporterName: "otlp",
 				envOtelTracesExporterName:  "none",
 			},
 		},
 		{
-			name: "only traces enabled",
-			selector: &mockSelector{
-				exportModes: createExportModes(false, true),
-			},
+			name:        "only traces enabled",
+			exportModes: createExportModes(false, true),
 			expectedEnvVars: map[string]string{
 				envOtelMetricsExporterName: "none",
 				envOtelTracesExporterName:  "otlp",
 			},
 		},
 		{
-			name: "both disabled",
-			selector: &mockSelector{
-				exportModes: createExportModes(false, false),
-			},
+			name:        "both disabled",
+			exportModes: createExportModes(false, false),
 			expectedEnvVars: map[string]string{
 				envOtelMetricsExporterName: "none",
 				envOtelTracesExporterName:  "none",
 			},
 		},
 		{
-			name: "unset export modes - defaults to both enabled",
-			selector: &mockSelector{
-				exportModes: services.ExportModeUnset,
-			},
+			name:        "unset export modes - defaults to both enabled",
+			exportModes: services.ExportModeUnset,
 			expectedEnvVars: map[string]string{
 				envOtelMetricsExporterName: "otlp",
 				envOtelTracesExporterName:  "otlp",
 			},
-		},
-		{
-			name:            "nil selector - no env vars set",
-			selector:        nil,
-			expectedEnvVars: map[string]string{},
 		},
 	}
 
@@ -1806,7 +1764,7 @@ func TestConfigureExporters(t *testing.T) {
 				Env:  []corev1.EnvVar{},
 			}
 
-			pm.configureExporters(container, tt.selector)
+			pm.configureExporters(container, tt.exportModes)
 
 			// Check that expected environment variables are set
 			for envName, expectedValue := range tt.expectedEnvVars {
@@ -1819,16 +1777,6 @@ func TestConfigureExporters(t *testing.T) {
 					}
 				}
 				assert.True(t, found, "expected env var %s not found", envName)
-			}
-
-			// If no env vars expected (nil selector), ensure exporter vars are not set
-			if len(tt.expectedEnvVars) == 0 {
-				for _, env := range container.Env {
-					assert.NotEqual(t, envOtelMetricsExporterName, env.Name,
-						"OTEL_METRICS_EXPORTER should not be set for nil selector")
-					assert.NotEqual(t, envOtelTracesExporterName, env.Name,
-						"OTEL_TRACES_EXPORTER should not be set for nil selector")
-				}
 			}
 		})
 	}
@@ -1844,20 +1792,18 @@ func TestConfigureExporters_OverridesExistingVars(t *testing.T) {
 		},
 	}
 
-	selector := &mockSelector{
-		exportModes: createExportModes(true, true),
-	}
+	exportModes := createExportModes(true, true)
 
-	pm.configureExporters(container, selector)
+	pm.configureExporters(container, exportModes)
 
-	// Verify existing values ARE overridden by the selector configuration
-	// Note: setEnvVar will override existing values with selector-based config
+	// Verify existing values ARE overridden by the export modes configuration
+	// Note: setEnvVar will override existing values with export mode-based config
 	for _, env := range container.Env {
 		if env.Name == envOtelMetricsExporterName {
-			assert.Equal(t, "otlp", env.Value, "metrics exporter should be overridden based on selector")
+			assert.Equal(t, "otlp", env.Value, "metrics exporter should be overridden based on export modes")
 		}
 		if env.Name == envOtelTracesExporterName {
-			assert.Equal(t, "otlp", env.Value, "traces exporter should be overridden based on selector")
+			assert.Equal(t, "otlp", env.Value, "traces exporter should be overridden based on export modes")
 		}
 	}
 }

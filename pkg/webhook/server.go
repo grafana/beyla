@@ -160,15 +160,17 @@ func (s *Server) establishInitialProcessState() error {
 	}
 	s.initialState = initialState
 
-	if oldestSDK, err := s.scanner.OldestSDKVersion(); err == nil {
-		// we could be downgrading the SDK, check if the oldest version is not
-		// newer than what we are launching with now
-		if semver.Compare(oldestSDK, s.cfg.Injector.SDKPkgVersion) > 0 {
-			oldestSDK = s.cfg.Injector.SDKPkgVersion
-		}
+	if s.cfg.Injector.ManageSDKVersions {
+		if oldestSDK, err := s.scanner.OldestSDKVersion(); err == nil {
+			// we could be downgrading the SDK, check if the oldest version is not
+			// newer than what we are launching with now
+			if semver.Compare(oldestSDK, s.cfg.Injector.SDKPkgVersion) > 0 {
+				oldestSDK = s.cfg.Injector.SDKPkgVersion
+			}
 
-		if err := s.cleanupOldInstrumentationVersions(s.cfg.Injector.HostMountPath, oldestSDK); err != nil {
-			s.logger.Warn("error cleaning up old instrumentation versions", "error", err)
+			if err := s.cleanupOldInstrumentationVersions(s.cfg.Injector.HostMountPath, oldestSDK); err != nil {
+				s.logger.Warn("error cleaning up old instrumentation versions", "error", err)
+			}
 		}
 	}
 	return nil

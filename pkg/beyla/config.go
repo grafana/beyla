@@ -69,6 +69,7 @@ func DefaultConfig() *Config {
 		KeyPath:  "/etc/webhook/certs/tls.key",
 	}
 	def.Injector.HostPathVolumeDir = "/var/lib/beyla/instrumentation"
+	def.Injector.ManageSDKVersions = true
 	return def
 }
 
@@ -254,6 +255,10 @@ type SDKInject struct {
 	// This is the root path, sdk_version is appended on top
 	// nolint:undoc
 	HostMountPath string `yaml:"host_mount_path"`
+	// The host mount path where the SDK copy init container copies the files.
+	// This is the root path, sdk_version is appended on top
+	// nolint:undoc
+	ManageSDKVersions bool `yaml:"manage_sdk_versions"`
 	// Default sampler configuration for SDK instrumentation
 	// This is used when no sampler is specified in the selector
 	// nolint:undoc

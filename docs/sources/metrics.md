@@ -25,8 +25,7 @@ The following table describes the exported metrics in both OpenTelemetry and Pro
 | Application         | `http.server.response.body.size` | `http_server_response_body_size_bytes`  | Histogram     | bytes   | Size of the HTTP response body as received at the server side                                                                         |
 | Application         | `rpc.client.duration`           | `rpc_client_duration_seconds`          | Histogram     | seconds | Duration of GRPC service calls from the client side                                                                                  |
 | Application         | `rpc.server.duration`           | `rpc_server_duration_seconds`          | Histogram     | seconds | Duration of RPC service calls from the server side                                                                                   |
-| Application         | `sql.client.duration`           | `sql_client_duration_seconds`          | Histogram     | seconds | Duration of SQL client operations (Experimental)                                                                                     |
-| Application         | `redis.client.duration`         | `redis_client_duration_seconds`        | Histogram     | seconds | Duration of Redis client operations (Experimental)                                                                                   |
+| Application         | `db.client.operation.duration`  | `db_client_operation_duration_seconds` | Histogram     | seconds | Duration of database client operations (SQL, Redis, MongoDB)                                                                         |
 | Application         | `messaging.publish.duration`    | `messaging_publish_duration`           | Histogram     | seconds | Duration of Messaging (Kafka) publish operations (Experimental)                                                                      |
 | Application         | `messaging.process.duration`    | `messaging_process_duration`           | Histogram     | seconds | Duration of Messaging (Kafka) process operations (Experimental)                                                                      |
 | Application process | `process.cpu.time`              | `process_cpu_time_seconds_total`       | Counter       | seconds | Total CPU seconds broken down by different states (system/user/wait)                                                                 |
@@ -47,6 +46,14 @@ Beyla can also export [Span metrics](/docs/tempo/latest/metrics-generator/span_m
 For the sake of brevity, the metrics and attributes in this list use the OTEL `dot.notation`. When using the Prometheus exporter, the metrics use `underscore_notation`.
 
 In order to configure which attributes to show or which attributes to hide, check the `attributes`->`select` section in the [configuration documentation](../configure/options/).
+
+For more information about the OpenTelemetry semantic conventions for each metric type, refer to:
+- [HTTP metrics conventions](https://opentelemetry.io/docs/specs/semconv/http/http-metrics/)
+- [RPC metrics conventions](https://opentelemetry.io/docs/specs/semconv/rpc/rpc-metrics/)
+- [Database metrics conventions](https://opentelemetry.io/docs/specs/semconv/database/database-metrics/)
+- [Messaging metrics conventions](https://opentelemetry.io/docs/specs/semconv/messaging/messaging-metrics/)
+- [Process metrics conventions](https://opentelemetry.io/docs/specs/semconv/system/process-metrics/)
+- [Kubernetes resource conventions](https://opentelemetry.io/docs/specs/semconv/resource/k8s/)
 
 | Metrics                        | Name                         | Default                                           |
 |--------------------------------|------------------------------|---------------------------------------------------|
@@ -83,13 +90,17 @@ In order to configure which attributes to show or which attributes to hide, chec
 | Application `rpc.*`            | `rpc.method`                 | shown                                             |
 | Application `rpc.*`            | `rpc.system`                 | shown                                             |
 | Application (server)           | `client.address`             | hidden                                            |
-| `beyla.network.flow.bytes`     | `beyla.ip`                   | hidden                                            |
 | `db.client.operation.duration` | `db.operation.name`          | shown                                             |
 | `db.client.operation.duration` | `db.collection.name`         | hidden                                            |
+| `db.client.operation.duration` | `db.system.name`             | shown                                             |
+| `db.client.operation.duration` | `db.query.text`              | hidden                                            |
+| `db.client.operation.duration` | `server.address`             | shown                                             |
+| `db.client.operation.duration` | `error.type`                 | shown                                             |
 | `messaging.publish.duration`   | `messaging.system`           | shown                                             |
 | `messaging.publish.duration`   | `messaging.destination.name` | shown                                             |
 | `messaging.process.duration`   | `messaging.system`           | shown                                             |
 | `messaging.process.duration`   | `messaging.destination.name` | shown                                             |
+| `beyla.network.flow.bytes`     | `beyla.ip`                   | hidden                                            |
 | `beyla.network.flow.bytes`     | `client.port`                | hidden                                            |
 | `beyla.network.flow.bytes`     | `direction`                  | hidden                                            |
 | `beyla.network.flow.bytes`     | `dst.address`                | hidden                                            |
@@ -119,7 +130,6 @@ In order to configure which attributes to show or which attributes to hide, chec
 | `beyla.network.flow.bytes`     | `src.port`                   | hidden                                            |
 | `beyla.network.flow.bytes`     | `src.zone` (only Kubernetes) | hidden                                            |
 | `beyla.network.flow.bytes`     | `transport`                  | hidden                                            |
-| Traces (SQL, Redis)            | `db.query.text`              | hidden                                            |
 
 {{< admonition type="note" >}}
 The `beyla.network.inter.zone.bytes` metric supports the same set of attributes as `beyla.network.flow.bytes`,

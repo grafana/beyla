@@ -45,3 +45,12 @@ filter:
     dst_port:
       match: "53"
 ```
+
+The following example filters application metrics to only report database operations for PostgreSQL and MongoDB:
+
+```yaml
+filter:
+  application:
+    db.system.name:
+      match: "{postgresql,mongodb}"
+```

@@ -30,10 +30,10 @@ attributes:
         - beyla.ip
         - src.name
         - dst.port
-    sql_client_duration:
-      # report all the possible attributes but db_statement
+    db_client_operation_duration:
+      # report all the possible attributes but db_query_text
       include: ["*"]
-      exclude: ["db_statement"]
+      exclude: ["db_query_text"]
     http_client_request_duration:
       # report the default attribute set but exclude the Kubernetes Pod information
       exclude: ["k8s.pod.*"]

@@ -255,8 +255,8 @@ type SDKInject struct {
 	// This is the root path, sdk_version is appended on top
 	// nolint:undoc
 	HostMountPath string `yaml:"host_mount_path"`
-	// The host mount path where the SDK copy init container copies the files.
-	// This is the root path, sdk_version is appended on top
+	// Tells Beyla that it should delete old SDK versions on the
+	// host mount volume. Default true.
 	// nolint:undoc
 	ManageSDKVersions bool `yaml:"manage_sdk_versions"`
 	// Default sampler configuration for SDK instrumentation

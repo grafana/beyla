@@ -318,6 +318,7 @@ network:
 				KeyPath:  "/etc/webhook/certs/tls.key",
 			},
 			HostPathVolumeDir: "/var/lib/beyla/instrumentation",
+			ManageSDKVersions: true,
 		},
 	}, cfg)
 }

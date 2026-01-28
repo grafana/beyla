@@ -9,7 +9,7 @@ import (
 	"github.com/XSAM/otelsql"
 	_ "github.com/go-sql-driver/mysql"
 
-	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.38.0"
 )
 
 func main() {
@@ -22,7 +22,7 @@ func main() {
 			// Use otelsql.Open instead of sql.Open - this wraps the MySQL driver
 			db, err = otelsql.Open("mysql", "root:mysql@tcp(mysqlserver:3306)/sqltest",
 				otelsql.WithAttributes(
-					semconv.DBSystemMySQL,
+					semconv.DBSystemNameMySQL,
 					semconv.ServerAddress("mysqlserver"),
 					semconv.ServerPort(3306),
 				),
@@ -65,7 +65,7 @@ func main() {
 		if !mysqlInit {
 			db, err = otelsql.Open("mysql", "root:mysql@tcp(mysqlserver:3306)/sqltest",
 				otelsql.WithAttributes(
-					semconv.DBSystemMySQL,
+					semconv.DBSystemNameMySQL,
 					semconv.ServerAddress("mysqlserver"),
 					semconv.ServerPort(3306),
 				),

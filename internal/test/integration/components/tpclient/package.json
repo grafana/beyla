@@ -1,0 +1,10 @@
+{
+  "name": "tpclient",
+  "version": "1.0.0",
+  "description": "Traceparent extraction test client",
+  "main": "service.js",
+  "dependencies": {
+    "axios": "^1.6.0",
+    "express": "^4.22.1"
+  }
+}

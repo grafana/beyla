@@ -211,7 +211,7 @@ The `attributes > kubernetes > enable` enables Kubernetes decoration for metrics
 
 The argument `discovery > services > kubernetes` specifies the selection of services based on Kubernetes metadata. In this example, Beyla instruments all deployments in namespace "default".
 
-The `prometheus.scrape` section configures the Prometheus scrape configuration to collect the metrics from Beyla. The `prometheus.remote_write` section configures the remote write to send the metrics to Grafana Cloud Prometheus.
+The `prometheus.scrape` section configures Prometheus scrape to collect metrics from Beyla. The `honor_labels = true` setting preserves the per-process instance identifiers set by Beyla. The `prometheus.remote_write` section sends the metrics to Grafana Cloud Prometheus.
 
 The `output` section configures that Beyla component sends traces to `otelcol.exporter.otlp` component. The `otelcol.exporter.otlp` section configures the [OTLP exporter](/docs/alloy/latest/reference/components/otelcol.exporter.otlp) to send the traces to Grafana Cloud Tempo.
 

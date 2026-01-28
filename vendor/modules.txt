@@ -537,8 +537,8 @@ github.com/moby/docker-image-spec/specs-go/v1
 ## explicit; go 1.13
 github.com/moby/spdystream
 github.com/moby/spdystream/spdy
-# github.com/moby/sys/atomicwriter v0.1.0
-## explicit; go 1.18
+# github.com/moby/sys/sequential v0.6.0
+## explicit; go 1.17
 # github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd
 ## explicit
 github.com/modern-go/concurrent
@@ -1315,8 +1315,6 @@ gopkg.in/inf.v0
 # gopkg.in/yaml.v3 v3.0.1
 ## explicit
 gopkg.in/yaml.v3
-# gotest.tools/v3 v3.5.2
-## explicit; go 1.17
 # k8s.io/api v0.35.0
 ## explicit; go 1.25.0
 k8s.io/api/admission/v1

@@ -102,7 +102,6 @@ Edit your release branch `.gitignore` and remove the following exclusions:
 ```
 *_bpfel.go
 *_bpfel.o
-pkg/internal/otelsdk/grafana-opentelemetry-java.jar
 ```
 
 Vendor the Grafana OBI to build the binaries:

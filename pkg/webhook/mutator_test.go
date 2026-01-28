@@ -558,7 +558,7 @@ func TestPodMutator_MutatePod(t *testing.T) {
 					if vol.Name == injectVolumeName {
 						found = true
 						assert.NotNil(t, vol.HostPath)
-						assert.Equal(t, tt.cfg.Injector.HostPathVolumeDir, vol.HostPath.Path)
+						assert.Equal(t, tt.cfg.Injector.HostPathVolumeDir+"/"+tt.cfg.Injector.SDKPkgVersion, vol.HostPath.Path)
 						break
 					}
 				}

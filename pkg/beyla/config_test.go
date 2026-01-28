@@ -160,6 +160,7 @@ network:
 			PostgresPreparedStatementsCacheSize: 1024,
 			MongoRequestsCacheSize:              1024,
 			KafkaTopicUUIDCacheSize:             1024,
+			CouchbaseDBCacheSize:                1024,
 			LogEnricher: obiconfig.LogEnricherConfig{
 				CacheTTL:              30 * time.Minute,
 				CacheSize:             128,
@@ -190,8 +191,9 @@ network:
 			Instrumentations: []instrumentations.Instrumentation{
 				instrumentations.InstrumentationALL,
 			},
-			HistogramAggregation: "base2_exponential_bucket_histogram",
-			TTL:                  5 * time.Minute,
+			HistogramAggregation:    "base2_exponential_bucket_histogram",
+			TTL:                     5 * time.Minute,
+			ExtraSpanResourceLabels: []string{"k8s.namespace.name"},
 		},
 		Traces: otelcfg.TracesConfig{
 			TracesProtocol:    otelcfg.ProtocolHTTPProtobuf,
@@ -206,6 +208,7 @@ network:
 				instrumentations.InstrumentationSQL,
 				instrumentations.InstrumentationRedis,
 				instrumentations.InstrumentationKafka,
+				instrumentations.InstrumentationMQTT,
 				instrumentations.InstrumentationMongo,
 			},
 		},
@@ -221,6 +224,7 @@ network:
 				RequestSizeHistogram:  []float64{0, 10, 20, 22},
 				ResponseSizeHistogram: []float64{0, 10, 20, 22},
 			},
+			ExtraSpanResourceLabels: []string{"k8s.namespace.name"},
 		},
 		InternalMetrics: imetrics.Config{
 			Exporter: imetrics.InternalMetricsExporterDisabled,

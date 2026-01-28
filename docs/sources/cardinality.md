@@ -109,8 +109,7 @@ However, here is a list of factors that can influence the overall cardinality:
   * `http.client.request.duration`
   * `http.client.request.body.size`
   * `rpc.client.duration`
-  * `sql.client.duration`
-  * `redis.client.duration`
+  * `db.client.operation.duration`
   * `messaging.publish.duration`
   * `messaging.process.duration`
 * Server-side metrics, when Beyla instruments application that dispatches requests from other applications:
@@ -162,7 +161,7 @@ The numbers taken as reference:
   * Backend as an SQL and HTTP client
     * `http.client.request.duration`
     * `http.client.request.body.size`
-    * `sql.client.duration`
+    * `db.client.operation.duration`
 * 17 histogram metrics, as most metrics are duration-based
 * 7 operations: RPC Add/List/Delete, HTTP PUT, SQL Insert/Select/Delete
 * 3 endpoints: backend, Identity provider, and DB
@@ -192,12 +191,12 @@ In this simple scenario, we can manually count more the maximum cardinality to 3
 | 16  | Backend  | `http.client.request.body.size` | Identity Prov | PUT /login | 200  |
 | 17  | Backend  | `http.client.request.body.size` | Identity Prov | PUT /login | 401  |
 | 18  | Backend  | `http.client.request.body.size` | Identity Prov | PUT /login | 500  |
-| 19  | Backend  | `sql.client.duration`           | DB            | Insert     | Ok   |
-| 20  | Backend  | `sql.client.duration`           | DB            | Insert     | Err  |
-| 21  | Backend  | `sql.client.duration`           | DB            | Select     | Ok   |
-| 22  | Backend  | `sql.client.duration`           | DB            | Select     | Err  |
-| 23  | Backend  | `sql.client.duration`           | DB            | Delete     | Ok   |
-| 24  | Backend  | `sql.client.duration`           | DB            | Delete     | Err  |
+| 19  | Backend  | `db.client.operation.duration`  | DB            | Insert     | Ok   |
+| 20  | Backend  | `db.client.operation.duration`  | DB            | Insert     | Err  |
+| 21  | Backend  | `db.client.operation.duration`  | DB            | Select     | Ok   |
+| 22  | Backend  | `db.client.operation.duration`  | DB            | Select     | Err  |
+| 23  | Backend  | `db.client.operation.duration`  | DB            | Delete     | Ok   |
+| 24  | Backend  | `db.client.operation.duration`  | DB            | Delete     | Err  |
 
 <!-- vale Grafana.OK = YES -->
 
@@ -339,7 +338,7 @@ The total, maximum calculated limit for HTTP metrics is:
 
 This shows how ineffective the formula is for the application-level metrics, as the measured number is much lower, even for all the known application metric types:
 
-`count({__name__=~"http_.*|rpc_.*|sql_.*|redis_.*|messaging_.*"})` **→ 9,600**
+`count({__name__=~"http_.*|rpc_.*|db_client.*|messaging_.*"})` **→ 9,600**
 
 ### Measure network-level metrics
 

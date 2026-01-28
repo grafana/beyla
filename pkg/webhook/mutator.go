@@ -333,7 +333,7 @@ func (pm *PodMutator) mountVolume(spec *corev1.PodSpec, meta *metav1.ObjectMeta)
 		Name: injectVolumeName,
 		VolumeSource: corev1.VolumeSource{
 			HostPath: &corev1.HostPathVolumeSource{
-				Path: pm.cfg.Injector.HostPathVolumeDir,
+				Path: strings.Join([]string{pm.cfg.Injector.HostPathVolumeDir, pm.cfg.Injector.SDKPkgVersion}, "/"),
 				Type: func() *corev1.HostPathType {
 					t := corev1.HostPathDirectoryOrCreate
 					return &t

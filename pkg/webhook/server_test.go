@@ -639,8 +639,9 @@ func TestServer_EstablishInitialProcessState(t *testing.T) {
 			server := &Server{
 				cfg: &beyla.Config{
 					Injector: beyla.SDKInject{
-						SDKPkgVersion: tt.configSDKVersion,
-						HostMountPath: tmpDir,
+						SDKPkgVersion:     tt.configSDKVersion,
+						HostMountPath:     tmpDir,
+						ManageSDKVersions: true,
 					},
 				},
 				scanner: scanner,

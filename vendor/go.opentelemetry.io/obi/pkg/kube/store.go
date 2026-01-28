@@ -34,8 +34,9 @@ const (
 )
 
 type otelServiceNamePair struct {
-	Name      string
-	Namespace string
+	Name         string
+	Namespace    string
+	K8SNamespace string
 }
 
 type qualifiedName struct {
@@ -431,25 +432,26 @@ func (s *Store) valueFromMetadata(om *informer.ObjectMeta, annotationName string
 
 // ServiceNameNamespaceForIP returns the service name and namespace for a given IP address
 // This means that, for a given Pod, we will not return the Pod Name, but the Pod Owner Name
-func (s *Store) ServiceNameNamespaceForIP(ip string) (string, string) {
+func (s *Store) ServiceNameNamespaceForIP(ip string) (string, string, string) {
 	s.access.RLock()
 	if serviceInfo, ok := s.otelServiceInfoByIP[ip]; ok {
 		s.access.RUnlock()
-		return serviceInfo.Name, serviceInfo.Namespace
+		return serviceInfo.Name, serviceInfo.Namespace, serviceInfo.K8SNamespace
 	}
 	s.access.RUnlock()
 
 	s.access.Lock()
 	defer s.access.Unlock()
 
-	name, namespace := "", ""
+	name, namespace, k8sNamespace := "", "", ""
 	if om, ok := s.objectMetaByIP[ip]; ok {
 		name, namespace = s.serviceNameNamespaceOwnerID(om.Meta, "")
+		k8sNamespace = om.Meta.Namespace
 	}
 
-	s.otelServiceInfoByIP[ip] = otelServiceNamePair{Name: name, Namespace: namespace}
+	s.otelServiceInfoByIP[ip] = otelServiceNamePair{Name: name, Namespace: namespace, K8SNamespace: k8sNamespace}
 
-	return name, namespace
+	return name, namespace, k8sNamespace
 }
 
 // serviceNameNamespaceOwnerID takes service name and namespace from diverse sources according to the

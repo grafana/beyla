@@ -98,16 +98,13 @@ func isHTTPOp(op string) bool {
 }
 
 func handleHeaderField(hf *bhpack.HeaderField) bool {
-	hfKey := strings.ToLower(hf.Name)
-	switch hfKey {
+	switch hf.Name {
 	case ":method":
-		val := strings.ToUpper(hf.Value)
-		if isHTTPOp(val) {
+		if isHTTPOp(hf.Value) {
 			return true
 		}
 	case ":scheme":
-		val := strings.ToUpper(hf.Value)
-		if val == "HTTP" {
+		if hf.Value == "http" {
 			return true
 		}
 	case "traceparent":
@@ -178,8 +175,7 @@ func readMetaFrame(parseContext *EBPFParseContext, connID uint64, fr *http2.Fram
 	}
 
 	h2c.hdec.SetEmitFunc(func(hf bhpack.HeaderField) {
-		hfKey := strings.ToLower(hf.Name)
-		switch hfKey {
+		switch hf.Name {
 		case ":method":
 			method = hf.Value
 			ok = true
@@ -187,7 +183,7 @@ func readMetaFrame(parseContext *EBPFParseContext, connID uint64, fr *http2.Fram
 			path = hf.Value
 			ok = true
 		case "content-type":
-			contentType = strings.ToLower(hf.Value)
+			contentType = hf.Value
 			if contentType == "application/grpc" {
 				protocolIsGRPC(parseContext.h2c, connID)
 			}
@@ -243,11 +239,10 @@ func readRetMetaFrame(parseContext *EBPFParseContext, connID uint64, fr *http2.F
 	}
 
 	h2c.hdecRet.SetEmitFunc(func(hf bhpack.HeaderField) {
-		hfKey := strings.ToLower(hf.Name)
 		// grpc requests may have :status and grpc-status. :status will be HTTP code.
 		// we prefer the grpc one if it exists, it's always later since : tagged headers
 		// end up first in the headers list.
-		switch hfKey {
+		switch hf.Name {
 		case ":status":
 			if !grpc { // only set the HTTP status if we didn't find grpc status
 				status, _ = strconv.Atoi(hf.Value)

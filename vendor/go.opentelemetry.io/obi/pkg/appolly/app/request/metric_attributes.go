@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"go.opentelemetry.io/otel/attribute"
-	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.38.0"
 
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 )
@@ -72,12 +72,28 @@ func ClientNamespaceMetric(val string) attribute.KeyValue {
 	return attribute.Key(attr.ClientNamespace).String(val)
 }
 
+func K8SClientNamespaceMetric(val string) attribute.KeyValue {
+	return attribute.Key(attr.K8SClientNamespace).String(val)
+}
+
+func K8SClientClusterMetric(val string) attribute.KeyValue {
+	return attribute.Key(attr.K8SClientCluster).String(val)
+}
+
 func ServerMetric(val string) attribute.KeyValue {
 	return attribute.Key(attr.Server).String(val)
 }
 
 func ServerNamespaceMetric(val string) attribute.KeyValue {
 	return attribute.Key(attr.ServerNamespace).String(val)
+}
+
+func K8SServerNamespaceMetric(val string) attribute.KeyValue {
+	return attribute.Key(attr.K8SServerNamespace).String(val)
+}
+
+func K8SServerClusterMetric(val string) attribute.KeyValue {
+	return attribute.Key(attr.K8SServerCluster).String(val)
 }
 
 func ConnectionTypeMetric(val string) attribute.KeyValue {

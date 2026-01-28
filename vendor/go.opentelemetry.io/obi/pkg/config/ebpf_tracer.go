@@ -113,6 +113,8 @@ type EBPFTracer struct {
 
 	// Log trace-context enricher config
 	LogEnricher LogEnricherConfig `yaml:"log_enricher"`
+
+	CouchbaseDBCacheSize int `yaml:"couchbase_db_cache_size" env:"OTEL_EBPF_COUCHBASE_DB_CACHE_SIZE" validate:"gt=0"`
 }
 
 // Per-protocol data buffer size in bytes.

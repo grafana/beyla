@@ -177,14 +177,14 @@ func (nr *NameResolver) resolveNames(span *request.Span) {
 	}
 
 	if span.IsClientSpan() {
-		hn, span.OtherNamespace = nr.resolve(&span.Service, span.Host, span.HostName)
+		hn, span.OtherNamespace, span.OtherK8SNamespace = nr.resolve(&span.Service, span.Host, span.HostName)
 		if hn == "" || hn == span.Host {
 			hostHeader := request.HostFromSchemeHost(span)
 			if hostHeader != "" {
 				hn, span.OtherNamespace = parseK8sFQDN(hostHeader)
 			}
 		}
-		pn, ns = nr.resolve(&span.Service, span.Peer, span.PeerName)
+		pn, ns, _ = nr.resolve(&span.Service, span.Peer, span.PeerName)
 		if pn == "" || pn == span.Peer {
 			pn = span.Service.UID.Name
 			if ns == "" {
@@ -192,8 +192,8 @@ func (nr *NameResolver) resolveNames(span *request.Span) {
 			}
 		}
 	} else {
-		pn, span.OtherNamespace = nr.resolve(&span.Service, span.Peer, span.PeerName)
-		hn, ns = nr.resolve(&span.Service, span.Host, span.HostName)
+		pn, span.OtherNamespace, span.OtherK8SNamespace = nr.resolve(&span.Service, span.Peer, span.PeerName)
+		hn, ns, _ = nr.resolve(&span.Service, span.Host, span.HostName)
 		if hn == "" || hn == span.Host {
 			hn = span.Service.UID.Name
 			if ns == "" {
@@ -217,12 +217,12 @@ func (nr *NameResolver) resolveNames(span *request.Span) {
 // resolve attempts to resolve an IP address to a hostname using available resolution methods.
 // If resolution fails (no K8s metadata, no DNS/RDNS entry), it returns the fallback value if provided,
 // otherwise it returns the IP itself.
-func (nr *NameResolver) resolve(svc *svc.Attrs, ip string, fallback string) (string, string) {
-	var name, ns string
+func (nr *NameResolver) resolve(svc *svc.Attrs, ip string, fallback string) (string, string, string) {
+	var name, ns, k8sNs string
 
 	if len(ip) > 0 {
 		var peer string
-		peer, ns = nr.dnsResolve(svc, ip)
+		peer, ns, k8sNs = nr.dnsResolve(svc, ip)
 		name = ip
 		if fallback != "" {
 			name = fallback
@@ -234,7 +234,7 @@ func (nr *NameResolver) resolve(svc *svc.Attrs, ip string, fallback string) (str
 		name = fallback
 	}
 
-	return name, ns
+	return name, ns, k8sNs
 }
 
 func (nr *NameResolver) cleanName(svc *svc.Attrs, ip, n string) string {
@@ -253,19 +253,19 @@ func (nr *NameResolver) cleanName(svc *svc.Attrs, ip, n string) string {
 	return n
 }
 
-func (nr *NameResolver) dnsResolve(svc *svc.Attrs, ip string) (string, string) {
+func (nr *NameResolver) dnsResolve(svc *svc.Attrs, ip string) (string, string, string) {
 	if ip == "" {
-		return "", ""
+		return "", "", ""
 	}
 
 	if nr.sources.Has(ResolverK8s) && nr.db != nil {
 		ipAddr := net.ParseIP(ip)
 
 		if ipAddr != nil && !ipAddr.IsLoopback() {
-			n, ns := nr.resolveFromK8s(ip)
+			n, ns, k8sNs := nr.resolveFromK8s(ip)
 
 			if n != "" {
-				return n, ns
+				return n, ns, k8sNs
 			}
 		}
 	}
@@ -273,21 +273,21 @@ func (nr *NameResolver) dnsResolve(svc *svc.Attrs, ip string) (string, string) {
 	if nr.sources.Has(ResolverRDNS) && nr.dnsDB != nil {
 		n := nr.resolveRDNS(ip)
 		n = nr.cleanName(svc, ip, n)
-		return n, svc.UID.Namespace
+		return n, svc.UID.Namespace, ""
 	}
 
 	if nr.sources.Has(ResolverDNS) {
 		n := nr.resolveIP(ip)
 		if n == ip {
-			return n, svc.UID.Namespace
+			return n, svc.UID.Namespace, ""
 		}
 		n = nr.cleanName(svc, ip, n)
-		return n, svc.UID.Namespace
+		return n, svc.UID.Namespace, ""
 	}
-	return "", ""
+	return "", "", ""
 }
 
-func (nr *NameResolver) resolveFromK8s(ip string) (string, string) {
+func (nr *NameResolver) resolveFromK8s(ip string) (string, string, string) {
 	return nr.db.ServiceNameNamespaceForIP(ip)
 }
 

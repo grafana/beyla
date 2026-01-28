@@ -12,7 +12,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/instrumentation"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
-	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.38.0"
 	"go.opentelemetry.io/otel/trace"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
@@ -858,13 +858,24 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 				httpClientResponseSize, attrs := r.httpClientResponseSize.ForRecord(span)
 				httpClientResponseSize.Record(ctx, float64(span.ResponseBodyLength()), instrument.WithAttributeSet(attrs))
 			}
-		case request.EventTypeRedisServer, request.EventTypeRedisClient, request.EventTypeSQLClient, request.EventTypeMongoClient:
+		case request.EventTypeRedisServer, request.EventTypeRedisClient, request.EventTypeSQLClient, request.EventTypeMongoClient, request.EventTypeCouchbaseClient:
 			if mr.is.DBEnabled() {
 				dbClientDuration, attrs := r.dbClientDuration.ForRecord(span)
 				dbClientDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
 			}
 		case request.EventTypeKafkaClient, request.EventTypeKafkaServer:
-			if mr.is.MQEnabled() {
+			if mr.is.KafkaEnabled() {
+				switch span.Method {
+				case request.MessagingPublish:
+					msgPublishDuration, attrs := r.msgPublishDuration.ForRecord(span)
+					msgPublishDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
+				case request.MessagingProcess:
+					msgProcessDuration, attrs := r.msgProcessDuration.ForRecord(span)
+					msgProcessDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
+				}
+			}
+		case request.EventTypeMQTTClient, request.EventTypeMQTTServer:
+			if mr.is.MQTTEnabled() {
 				switch span.Method {
 				case request.MessagingPublish:
 					msgPublishDuration, attrs := r.msgPublishDuration.ForRecord(span)

@@ -945,12 +945,14 @@ go.opentelemetry.io/obi/pkg/export/prom
 go.opentelemetry.io/obi/pkg/filter
 go.opentelemetry.io/obi/pkg/internal/ebpf/bhpack
 go.opentelemetry.io/obi/pkg/internal/ebpf/convenience
+go.opentelemetry.io/obi/pkg/internal/ebpf/couchbasekv
 go.opentelemetry.io/obi/pkg/internal/ebpf/generictracer
 go.opentelemetry.io/obi/pkg/internal/ebpf/gotracer
 go.opentelemetry.io/obi/pkg/internal/ebpf/gpuevent
 go.opentelemetry.io/obi/pkg/internal/ebpf/kafkaparser
 go.opentelemetry.io/obi/pkg/internal/ebpf/logenricher
 go.opentelemetry.io/obi/pkg/internal/ebpf/logger
+go.opentelemetry.io/obi/pkg/internal/ebpf/mqttparser
 go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf
 go.opentelemetry.io/obi/pkg/internal/ebpf/tcmanager
 go.opentelemetry.io/obi/pkg/internal/ebpf/tctracer
@@ -1013,17 +1015,16 @@ go.opentelemetry.io/otel/codes
 go.opentelemetry.io/otel/internal/baggage
 go.opentelemetry.io/otel/internal/global
 go.opentelemetry.io/otel/propagation
-go.opentelemetry.io/otel/semconv/v1.17.0
 go.opentelemetry.io/otel/semconv/v1.19.0
 go.opentelemetry.io/otel/semconv/v1.21.0
 go.opentelemetry.io/otel/semconv/v1.24.0
 go.opentelemetry.io/otel/semconv/v1.25.0
 go.opentelemetry.io/otel/semconv/v1.30.0
-go.opentelemetry.io/otel/semconv/v1.34.0
 go.opentelemetry.io/otel/semconv/v1.37.0
 go.opentelemetry.io/otel/semconv/v1.37.0/httpconv
 go.opentelemetry.io/otel/semconv/v1.37.0/otelconv
 go.opentelemetry.io/otel/semconv/v1.37.0/rpcconv
+go.opentelemetry.io/otel/semconv/v1.38.0
 # go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v1.39.0
 ## explicit; go 1.24.0
 go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc

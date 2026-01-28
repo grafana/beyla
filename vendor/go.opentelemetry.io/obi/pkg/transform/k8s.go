@@ -164,12 +164,12 @@ func (md *metadataDecorator) do(span *request.Span) {
 	}
 	// override the peer and host names from Kubernetes metadata, if found
 	if span.Host != "" {
-		if name, _ := md.db.ServiceNameNamespaceForIP(span.Host); name != "" {
+		if name, _, _ := md.db.ServiceNameNamespaceForIP(span.Host); name != "" {
 			span.HostName = name
 		}
 	}
 	if span.Peer != "" {
-		if name, _ := md.db.ServiceNameNamespaceForIP(span.Peer); name != "" {
+		if name, _, _ := md.db.ServiceNameNamespaceForIP(span.Peer); name != "" {
 			span.PeerName = name
 		}
 	}

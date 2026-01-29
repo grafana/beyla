@@ -52,10 +52,29 @@ func (pm *PodMutator) configureContainerEnvVars(meta *metav1.ObjectMeta, contain
 		pm.configureSampler(container, samplerConfig)
 	}
 
-	// Configure exporters based on selector's export modes
-	if selector != nil {
-		pm.configureExporters(container, selector.GetExportModes())
+	// Configure exporters: start with global config, then override with selector's export modes
+	tracesEnabled := pm.cfg.Traces.Enabled()
+	metricsEnabled := pm.cfg.OTELMetrics.EndpointEnabled()
+
+	// Start with a new ExportModes (all blocked by default)
+	exportModes := services.NewExportModes()
+
+	// Enable based on global configuration
+	if tracesEnabled {
+		exportModes.AllowTraces()
 	}
+	if metricsEnabled {
+		exportModes.AllowMetrics()
+	}
+
+	// If selector has export modes, override the global ones
+	if selector != nil {
+		if selectorModes := selector.GetExportModes(); selectorModes != services.ExportModeUnset {
+			exportModes = selectorModes
+		}
+	}
+
+	pm.configureExporters(container, exportModes)
 
 	if pm.cfg.Metrics.Features.AnySpanMetrics() {
 		extraResAttrs[attr.SkipSpanMetrics.OTEL()] = "true"

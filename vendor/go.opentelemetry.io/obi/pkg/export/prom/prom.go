@@ -366,12 +366,17 @@ func newReporter(
 			attrsProvider.For(attributes.DNSLookupDuration))
 	}
 
+	kubeEnabled := ctxInfo.K8sInformer.IsKubeEnabled()
+
 	if jointMetricsConfig.Features.ServiceGraph() {
-		attrSvcGraph = attributes.PrometheusGetters(attributeGetters, []attr.Name{attr.Client, attr.ClientNamespace, attr.Server, attr.ServerNamespace, attr.Source})
+		attrs := []attr.Name{attr.Client, attr.ClientNamespace, attr.Server, attr.ServerNamespace, attr.Source}
+		if kubeEnabled {
+			attrs = append(attrs, attr.K8SClientCluster, attr.K8SServerCluster, attr.K8SClientNamespace, attr.K8SServerNamespace)
+		}
+		attrSvcGraph = attributes.PrometheusGetters(attributeGetters, attrs)
 	}
 
 	clock := expire.NewCachedClock(timeNow)
-	kubeEnabled := ctxInfo.K8sInformer.IsKubeEnabled()
 	// If service name is not explicitly set, we take the service name as set by the
 	// executable inspector
 	extraMetadataLabels := parseExtraMetadata(cfg.ExtraResourceLabels)
@@ -882,14 +887,27 @@ func (r *metricsReporter) observe(span *request.Span) {
 					labelValues(span, r.attrGRPCClientDuration)...,
 				).Metric.Observe(duration)
 			}
-		case request.EventTypeRedisClient, request.EventTypeSQLClient, request.EventTypeRedisServer, request.EventTypeMongoClient:
+		case request.EventTypeRedisClient, request.EventTypeSQLClient, request.EventTypeRedisServer, request.EventTypeMongoClient, request.EventTypeCouchbaseClient:
 			if r.is.DBEnabled() {
 				r.dbClientDuration.WithLabelValues(
 					labelValues(span, r.attrDBClientDuration)...,
 				).Metric.Observe(duration)
 			}
 		case request.EventTypeKafkaClient, request.EventTypeKafkaServer:
-			if r.is.MQEnabled() {
+			if r.is.KafkaEnabled() {
+				switch span.Method {
+				case request.MessagingPublish:
+					r.msgPublishDuration.WithLabelValues(
+						labelValues(span, r.attrMsgPublishDuration)...,
+					).Metric.Observe(duration)
+				case request.MessagingProcess:
+					r.msgProcessDuration.WithLabelValues(
+						labelValues(span, r.attrMsgProcessDuration)...,
+					).Metric.Observe(duration)
+				}
+			}
+		case request.EventTypeMQTTClient, request.EventTypeMQTTServer:
+			if r.is.MQTTEnabled() {
 				switch span.Method {
 				case request.MessagingPublish:
 					r.msgPublishDuration.WithLabelValues(

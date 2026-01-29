@@ -11,7 +11,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
-	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.38.0"
 	"go.opentelemetry.io/otel/trace"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
@@ -122,7 +122,7 @@ func newSvcGraphMetricsReporter(
 		hostID:           ctxInfo.HostID,
 		input:            input.Subscribe(msg.SubscriberName("otel.SvcGraphMetricsReporter.input")),
 		processEvents:    processEventCh.Subscribe(msg.SubscriberName("otel.SvcGraphMetricsReporter.processEvents")),
-		metricAttributes: serviceGraphGetters(unresolved),
+		metricAttributes: serviceGraphGetters(unresolved, ctxInfo.K8sInformer.IsKubeEnabled()),
 		log:              log,
 	}
 
@@ -269,15 +269,19 @@ func (mr *SvcGraphMetricsReporter) tracesResourceAttributes(service *svc.Attrs) 
 	return attribute.NewSet(filteredAttrs...)
 }
 
-func serviceGraphGetters(unresolved request.UnresolvedNames) []attributes.Field[*request.Span, attribute.KeyValue] {
+func serviceGraphGetters(unresolved request.UnresolvedNames, k8sEnabled bool) []attributes.Field[*request.Span, attribute.KeyValue] {
+	attrs := []attr.Name{
+		attr.Client,
+		attr.ClientNamespace,
+		attr.Server,
+		attr.ServerNamespace,
+		attr.Source,
+	}
+	if k8sEnabled {
+		attrs = append(attrs, attr.K8SClientCluster, attr.K8SServerCluster, attr.K8SClientNamespace, attr.K8SServerNamespace)
+	}
 	return attributes.OpenTelemetryGetters(
-		request.SpanOTELGetters(unresolved), []attr.Name{
-			attr.Client,
-			attr.ClientNamespace,
-			attr.Server,
-			attr.ServerNamespace,
-			attr.Source,
-		})
+		request.SpanOTELGetters(unresolved), attrs)
 }
 
 func (r *SvcGraphMetrics) record(span *request.Span, mr *SvcGraphMetricsReporter) {

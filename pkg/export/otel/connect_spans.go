@@ -342,6 +342,7 @@ func GenerateConnectSpans(
 	// Override OBI library name by Beyla
 	resourceAttrsMap := tracesgen.AttrsToMap(resourceAttrs)
 	resourceAttrsMap.PutStr(string(semconv.OTelLibraryNameKey), ReporterName)
+	resourceAttrsMap.PutStr(string(semconv.OTelScopeNameKey), ReporterName)
 	resourceAttrsMap.MoveTo(rs.Resource().Attributes())
 
 	for _, spanWithAttributes := range spans {

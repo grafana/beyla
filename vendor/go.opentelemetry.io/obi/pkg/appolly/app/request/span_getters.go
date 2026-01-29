@@ -5,7 +5,7 @@ package request // import "go.opentelemetry.io/obi/pkg/appolly/app/request"
 
 import (
 	"go.opentelemetry.io/otel/attribute"
-	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.38.0"
 
 	"go.opentelemetry.io/obi/pkg/ebpf/common/dnsparser"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
@@ -27,6 +27,27 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 				return ClientNamespaceMetric(s.Service.UID.Namespace)
 			}
 			return ClientNamespaceMetric(s.OtherNamespace)
+		}
+	case attr.K8SClientNamespace:
+		getter = func(s *Span) attribute.KeyValue {
+			if s.IsClientSpan() {
+				return K8SClientNamespaceMetric(s.Service.Metadata[attr.K8sNamespaceName])
+			}
+			return K8SClientNamespaceMetric(s.OtherK8SNamespace)
+		}
+	case attr.K8SClientCluster:
+		getter = func(s *Span) attribute.KeyValue {
+			if s.IsClientSpan() {
+				return K8SClientClusterMetric(s.Service.Metadata[attr.K8sClusterName])
+			}
+			// OBI has only cluster level information at the moment. If we were able to
+			// find the peer k8s.namespace.name, we use the same cluster, otherwise it's
+			// left blank
+			otherCluster := ""
+			if s.OtherK8SNamespace != "" {
+				otherCluster = s.Service.Metadata[attr.K8sClusterName]
+			}
+			return K8SClientClusterMetric(otherCluster)
 		}
 	case attr.HTTPRequestMethod:
 		getter = func(s *Span) attribute.KeyValue { return HTTPRequestMethod(s.Method) }
@@ -79,6 +100,27 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 			}
 			return ServerNamespaceMetric(s.Service.UID.Namespace)
 		}
+	case attr.K8SServerNamespace:
+		getter = func(s *Span) attribute.KeyValue {
+			if s.IsClientSpan() {
+				return K8SServerNamespaceMetric(s.OtherK8SNamespace)
+			}
+			return K8SServerNamespaceMetric(s.Service.Metadata[attr.K8sNamespaceName])
+		}
+	case attr.K8SServerCluster:
+		getter = func(s *Span) attribute.KeyValue {
+			if s.IsClientSpan() {
+				// OBI has only cluster level information at the moment. If we were able to
+				// find the peer k8s.namespace.name, we use the same cluster, otherwise it's
+				// left blank
+				otherCluster := ""
+				if s.OtherK8SNamespace != "" {
+					otherCluster = s.Service.Metadata[attr.K8sClusterName]
+				}
+				return K8SServerClusterMetric(otherCluster)
+			}
+			return K8SServerClusterMetric(s.Service.Metadata[attr.K8sClusterName])
+		}
 	case attr.ServiceInstanceID:
 		getter = func(s *Span) attribute.KeyValue { return semconv.ServiceInstanceID(s.Service.UID.Instance) }
 	case attr.ServiceName:
@@ -105,9 +147,11 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 			case EventTypeSQLClient:
 				return DBSystemName(span.DBSystemName().Value.AsString())
 			case EventTypeRedisClient, EventTypeRedisServer:
-				return DBSystemName(semconv.DBSystemRedis.Value.AsString())
+				return semconv.DBSystemNameRedis
 			case EventTypeMongoClient:
-				return DBSystemName(semconv.DBSystemMongoDB.Value.AsString())
+				return semconv.DBSystemNameMongoDB
+			case EventTypeCouchbaseClient:
+				return semconv.DBSystemNameCouchbase
 			case EventTypeHTTPClient:
 				if span.SubType == HTTPSubtypeElasticsearch {
 					return DBSystemName(span.Elasticsearch.DBSystemName)
@@ -129,16 +173,22 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 	case attr.MessagingSystem:
 		getter = func(span *Span) attribute.KeyValue {
 			if span.Type == EventTypeKafkaClient || span.Type == EventTypeKafkaServer {
-				return semconv.MessagingSystem("kafka")
+				return semconv.MessagingSystemKafka
+			}
+			if span.Type == EventTypeMQTTClient || span.Type == EventTypeMQTTServer {
+				return semconv.MessagingSystemKey.String("mqtt")
 			}
 			if span.Type == EventTypeHTTPClient && span.SubType == HTTPSubtypeAWSSQS && span.AWS != nil {
-				return semconv.MessagingSystem("aws-sqs")
+				return semconv.MessagingSystemAWSSQS
 			}
-			return semconv.MessagingSystem("unknown")
+			return semconv.MessagingSystemKey.String("unknown")
 		}
 	case attr.MessagingDestination:
 		getter = func(span *Span) attribute.KeyValue {
 			if span.Type == EventTypeKafkaClient || span.Type == EventTypeKafkaServer {
+				return semconv.MessagingDestinationName(span.Path)
+			}
+			if span.Type == EventTypeMQTTClient || span.Type == EventTypeMQTTServer {
 				return semconv.MessagingDestinationName(span.Path)
 			}
 			if span.Type == EventTypeHTTPClient && span.SubType == HTTPSubtypeAWSSQS && span.AWS != nil {
@@ -178,16 +228,16 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 	case attr.GraphQLDocument:
 		getter = func(s *Span) attribute.KeyValue {
 			if s.Type == EventTypeHTTP && s.SubType == HTTPSubtypeGraphQL && s.GraphQL != nil {
-				return semconv.GraphqlDocument(s.GraphQL.Document)
+				return semconv.GraphQLDocument(s.GraphQL.Document)
 			}
-			return semconv.GraphqlDocument("")
+			return semconv.GraphQLDocument("")
 		}
 	case attr.GraphQLOperationName:
 		getter = func(s *Span) attribute.KeyValue {
 			if s.Type == EventTypeHTTP && s.SubType == HTTPSubtypeGraphQL && s.GraphQL != nil {
-				return semconv.GraphqlOperationName(s.GraphQL.OperationName)
+				return semconv.GraphQLOperationName(s.GraphQL.OperationName)
 			}
-			return semconv.GraphqlOperationName("")
+			return semconv.GraphQLOperationName("")
 		}
 	case attr.GraphQLOperationType:
 		getter = func(s *Span) attribute.KeyValue {

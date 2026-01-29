@@ -70,6 +70,13 @@ func DefaultConfig() *Config {
 	}
 	def.Injector.HostPathVolumeDir = "/var/lib/beyla/instrumentation"
 	def.Injector.ManageSDKVersions = true
+
+	if !slices.Contains(def.OTELMetrics.ExtraSpanResourceLabels, "k8s.namespace.name") {
+		def.OTELMetrics.ExtraSpanResourceLabels = append(def.OTELMetrics.ExtraSpanResourceLabels, "k8s.namespace.name")
+	}
+	if !slices.Contains(def.Prometheus.ExtraSpanResourceLabels, "k8s.namespace.name") {
+		def.Prometheus.ExtraSpanResourceLabels = append(def.Prometheus.ExtraSpanResourceLabels, "k8s.namespace.name")
+	}
 	return def
 }
 

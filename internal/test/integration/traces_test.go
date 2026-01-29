@@ -217,7 +217,7 @@ func testGRPCTracesForServiceName(t *testing.T, svcName string) {
 	assert.Regexp(t, `^beyla:\d+$$`, serviceInstance.Value)
 
 	jaeger.Diff([]jaeger.Tag{
-		{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
+		{Key: "otel.scope.name", Type: "string", Value: "github.com/grafana/beyla"},
 		{Key: "telemetry.sdk.language", Type: "string", Value: "go"},
 		{Key: "service.namespace", Type: "string", Value: "integration-test"},
 		serviceInstance,
@@ -360,7 +360,7 @@ func testHTTPTracesKProbes(t *testing.T) {
 	assert.Regexp(t, `^beyla:\d+$$`, serviceInstance.Value)
 
 	jaeger.Diff([]jaeger.Tag{
-		{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
+		{Key: "otel.scope.name", Type: "string", Value: "github.com/grafana/beyla"},
 		{Key: "telemetry.sdk.language", Type: "string", Value: "nodejs"},
 		{Key: "telemetry.sdk.name", Type: "string", Value: "beyla"},
 		{Key: "service.namespace", Type: "string", Value: "integration-test"},

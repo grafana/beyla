@@ -162,6 +162,8 @@ func (pm *PodMutator) configurePropagators(container *corev1.Container, propagat
 // Sets OTEL_METRICS_EXPORTER to "otlp" or "none" based on CanExportMetrics().
 // Sets OTEL_TRACES_EXPORTER to "otlp" or "none" based on CanExportTraces().
 // Sets OTEL_LOGS_EXPORTER to "otlp" or "none" based on logsEnabled parameter.
+// Logs are passed separately until they are added to ExportModes
+// See https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pull/1207
 func (pm *PodMutator) configureExporters(container *corev1.Container, exportModes services.ExportModes, logsEnabled bool) {
 	// Set metrics exporter
 	if exportModes.CanExportMetrics() {

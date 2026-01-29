@@ -39,7 +39,7 @@ The following table describes the exported metrics in both OpenTelemetry and Pro
 
 Beyla can also export [Span metrics](/docs/tempo/latest/metrics-generator/span_metrics/) and
 [Service graph metrics](/docs/tempo/latest/metrics-generator/service-graph-view/), which you can enable via the
-[features](../configure/options/) configuration option.
+[features](../configure/export-data/#metrics-export-features/) configuration option.
 
 ## Attributes of Beyla metrics
 

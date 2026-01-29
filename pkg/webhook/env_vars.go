@@ -52,6 +52,32 @@ func (pm *PodMutator) configureContainerEnvVars(meta *metav1.ObjectMeta, contain
 		pm.configureSampler(container, samplerConfig)
 	}
 
+	// Configure exporters: start with SDK export config, then override with selector's export modes
+	// Use SDK-specific export settings which are independent from global Beyla export config
+	tracesEnabled := pm.cfg.Injector.Export.TracesEnabled()
+	metricsEnabled := pm.cfg.Injector.Export.MetricsEnabled()
+	logsEnabled := pm.cfg.Injector.Export.LogsEnabled()
+
+	// Start with a new ExportModes (all blocked by default)
+	exportModes := services.NewExportModes()
+
+	// Enable based on SDK export configuration
+	if tracesEnabled {
+		exportModes.AllowTraces()
+	}
+	if metricsEnabled {
+		exportModes.AllowMetrics()
+	}
+
+	// If selector has export modes, override the global ones
+	if selector != nil {
+		if selectorModes := selector.GetExportModes(); selectorModes != services.ExportModeUnset {
+			exportModes = selectorModes
+		}
+	}
+
+	pm.configureExporters(container, exportModes, logsEnabled)
+
 	if pm.cfg.Metrics.Features.AnySpanMetrics() {
 		extraResAttrs[attr.SkipSpanMetrics.OTEL()] = "true"
 	}
@@ -130,6 +156,35 @@ func (pm *PodMutator) configureSampler(container *corev1.Container, samplerConfi
 func (pm *PodMutator) configurePropagators(container *corev1.Container, propagators []string) {
 	// Join propagators with comma separator as per OTEL spec
 	setEnvVar(container, envOtelPropagatorsName, strings.Join(propagators, ","))
+}
+
+// configureExporters sets exporter environment variables based on the export modes.
+// Sets OTEL_METRICS_EXPORTER to "otlp" or "none" based on CanExportMetrics().
+// Sets OTEL_TRACES_EXPORTER to "otlp" or "none" based on CanExportTraces().
+// Sets OTEL_LOGS_EXPORTER to "otlp" or "none" based on logsEnabled parameter.
+// Logs are passed separately until they are added to ExportModes
+// See https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pull/1207
+func (pm *PodMutator) configureExporters(container *corev1.Container, exportModes services.ExportModes, logsEnabled bool) {
+	// Set metrics exporter
+	if exportModes.CanExportMetrics() {
+		setEnvVar(container, envOtelMetricsExporterName, "otlp")
+	} else {
+		setEnvVar(container, envOtelMetricsExporterName, "none")
+	}
+
+	// Set traces exporter
+	if exportModes.CanExportTraces() {
+		setEnvVar(container, envOtelTracesExporterName, "otlp")
+	} else {
+		setEnvVar(container, envOtelTracesExporterName, "none")
+	}
+
+	// Set logs exporter
+	if logsEnabled {
+		setEnvVar(container, envOtelLogsExporterName, "otlp")
+	} else {
+		setEnvVar(container, envOtelLogsExporterName, "none")
+	}
 }
 
 // chooseServiceName returns the service name to be used in the instrumentation.

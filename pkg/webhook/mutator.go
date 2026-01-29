@@ -58,6 +58,9 @@ const (
 	envOtelTracesSamplerName          = "OTEL_TRACES_SAMPLER"
 	envOtelTracesSamplerArgName       = "OTEL_TRACES_SAMPLER_ARG"
 	envOtelPropagatorsName            = "OTEL_PROPAGATORS"
+	envOtelMetricsExporterName        = "OTEL_METRICS_EXPORTER"
+	envOtelTracesExporterName         = "OTEL_TRACES_EXPORTER"
+	envOtelLogsExporterName           = "OTEL_LOGS_EXPORTER"
 )
 
 func init() {

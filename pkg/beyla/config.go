@@ -267,9 +267,59 @@ type SDKInject struct {
 	// Common values: tracecontext, baggage, b3, b3multi, jaeger, xray
 	// nolint:undoc
 	Propagators []string `yaml:"propagators"`
+	// Export configuration for SDK instrumentation
+	// Controls which signals (traces, metrics, logs) should be exported from injected SDKs
+	// nolint:undoc
+	Export SDKExport `yaml:"export"`
 	// Resource attributes related settings
 	// nolint:undoc
 	Resources SDKResource `yaml:"resources"`
+}
+
+// SDKExport defines which telemetry signals should be exported from injected SDKs.
+// These settings are independent from the global export configuration and allow
+// the injector to export metrics/traces/logs even when Beyla uses Prometheus for metrics.
+type SDKExport struct {
+	// Traces enables trace export from injected SDKs via OTLP
+	// Defaults to true (enabled) when not explicitly set
+	// nolint:undoc
+	Traces *bool `yaml:"traces" env:"BEYLA_SDK_EXPORT_TRACES"`
+	// Metrics enables metric export from injected SDKs via OTLP
+	// Defaults to true (enabled) when not explicitly set
+	// Note: SDKs can only export via OTLP, not Prometheus scraping
+	// nolint:undoc
+	Metrics *bool `yaml:"metrics" env:"BEYLA_SDK_EXPORT_METRICS"`
+	// Logs enables log export from injected SDKs via OTLP
+	// Defaults to false (disabled) when not explicitly set
+	// nolint:undoc
+	Logs *bool `yaml:"logs" env:"BEYLA_SDK_EXPORT_LOGS"`
+}
+
+// TracesEnabled returns whether trace export is enabled for SDK instrumentation
+// Defaults to true when not explicitly set
+func (e SDKExport) TracesEnabled() bool {
+	if e.Traces == nil {
+		return true // default to enabled
+	}
+	return *e.Traces
+}
+
+// MetricsEnabled returns whether metric export is enabled for SDK instrumentation
+// Defaults to true when not explicitly set
+func (e SDKExport) MetricsEnabled() bool {
+	if e.Metrics == nil {
+		return true // default to enabled
+	}
+	return *e.Metrics
+}
+
+// LogsEnabled returns whether log export is enabled for SDK instrumentation
+// Defaults to false when not explicitly set
+func (e SDKExport) LogsEnabled() bool {
+	if e.Logs == nil {
+		return false // default to disabled
+	}
+	return *e.Logs
 }
 
 // Resource defines the configuration for the resource attributes, as defined by the OpenTelemetry specification.

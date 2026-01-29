@@ -1855,7 +1855,7 @@ func TestConfigureContainerEnvVars_SDKExportConfig(t *testing.T) {
 		checkEnvVars map[string]string
 	}{
 		{
-			name: "SDK export defaults (traces/metrics enabled, logs disabled)",
+			name:      "SDK export defaults (traces/metrics enabled, logs disabled)",
 			sdkExport: beyla.SDKExport{
 				// nil values default to enabled for traces/metrics, disabled for logs
 			},

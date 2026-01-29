@@ -60,6 +60,7 @@ const (
 	envOtelPropagatorsName            = "OTEL_PROPAGATORS"
 	envOtelMetricsExporterName        = "OTEL_METRICS_EXPORTER"
 	envOtelTracesExporterName         = "OTEL_TRACES_EXPORTER"
+	envOtelLogsExporterName           = "OTEL_LOGS_EXPORTER"
 )
 
 func init() {

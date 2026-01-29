@@ -56,6 +56,7 @@ func (pm *PodMutator) configureContainerEnvVars(meta *metav1.ObjectMeta, contain
 	// Use SDK-specific export settings which are independent from global Beyla export config
 	tracesEnabled := pm.cfg.Injector.Export.TracesEnabled()
 	metricsEnabled := pm.cfg.Injector.Export.MetricsEnabled()
+	logsEnabled := pm.cfg.Injector.Export.LogsEnabled()
 
 	// Start with a new ExportModes (all blocked by default)
 	exportModes := services.NewExportModes()
@@ -75,7 +76,7 @@ func (pm *PodMutator) configureContainerEnvVars(meta *metav1.ObjectMeta, contain
 		}
 	}
 
-	pm.configureExporters(container, exportModes)
+	pm.configureExporters(container, exportModes, logsEnabled)
 
 	if pm.cfg.Metrics.Features.AnySpanMetrics() {
 		extraResAttrs[attr.SkipSpanMetrics.OTEL()] = "true"
@@ -160,7 +161,8 @@ func (pm *PodMutator) configurePropagators(container *corev1.Container, propagat
 // configureExporters sets exporter environment variables based on the export modes.
 // Sets OTEL_METRICS_EXPORTER to "otlp" or "none" based on CanExportMetrics().
 // Sets OTEL_TRACES_EXPORTER to "otlp" or "none" based on CanExportTraces().
-func (pm *PodMutator) configureExporters(container *corev1.Container, exportModes services.ExportModes) {
+// Sets OTEL_LOGS_EXPORTER to "otlp" or "none" based on logsEnabled parameter.
+func (pm *PodMutator) configureExporters(container *corev1.Container, exportModes services.ExportModes, logsEnabled bool) {
 	// Set metrics exporter
 	if exportModes.CanExportMetrics() {
 		setEnvVar(container, envOtelMetricsExporterName, "otlp")
@@ -173,6 +175,13 @@ func (pm *PodMutator) configureExporters(container *corev1.Container, exportMode
 		setEnvVar(container, envOtelTracesExporterName, "otlp")
 	} else {
 		setEnvVar(container, envOtelTracesExporterName, "none")
+	}
+
+	// Set logs exporter
+	if logsEnabled {
+		setEnvVar(container, envOtelLogsExporterName, "otlp")
+	} else {
+		setEnvVar(container, envOtelLogsExporterName, "none")
 	}
 }
 

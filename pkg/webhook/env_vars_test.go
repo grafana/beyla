@@ -1712,46 +1712,77 @@ func TestConfigureExporters(t *testing.T) {
 	tests := []struct {
 		name            string
 		exportModes     services.ExportModes
+		logsEnabled     bool
 		expectedEnvVars map[string]string
 	}{
 		{
-			name:        "both metrics and traces enabled",
+			name:        "both metrics and traces enabled, logs disabled",
 			exportModes: createExportModes(true, true),
+			logsEnabled: false,
 			expectedEnvVars: map[string]string{
 				envOtelMetricsExporterName: "otlp",
 				envOtelTracesExporterName:  "otlp",
+				envOtelLogsExporterName:    "none",
 			},
 		},
 		{
-			name:        "only metrics enabled",
+			name:        "only metrics enabled, logs disabled",
 			exportModes: createExportModes(true, false),
+			logsEnabled: false,
 			expectedEnvVars: map[string]string{
 				envOtelMetricsExporterName: "otlp",
 				envOtelTracesExporterName:  "none",
+				envOtelLogsExporterName:    "none",
 			},
 		},
 		{
-			name:        "only traces enabled",
+			name:        "only traces enabled, logs disabled",
 			exportModes: createExportModes(false, true),
+			logsEnabled: false,
 			expectedEnvVars: map[string]string{
 				envOtelMetricsExporterName: "none",
 				envOtelTracesExporterName:  "otlp",
+				envOtelLogsExporterName:    "none",
 			},
 		},
 		{
-			name:        "both disabled",
+			name:        "all disabled",
 			exportModes: createExportModes(false, false),
+			logsEnabled: false,
 			expectedEnvVars: map[string]string{
 				envOtelMetricsExporterName: "none",
 				envOtelTracesExporterName:  "none",
+				envOtelLogsExporterName:    "none",
 			},
 		},
 		{
-			name:        "unset export modes - defaults to both enabled",
+			name:        "unset export modes, logs enabled",
 			exportModes: services.ExportModeUnset,
+			logsEnabled: true,
 			expectedEnvVars: map[string]string{
 				envOtelMetricsExporterName: "otlp",
 				envOtelTracesExporterName:  "otlp",
+				envOtelLogsExporterName:    "otlp",
+			},
+		},
+		{
+			name:        "only logs enabled",
+			exportModes: createExportModes(false, false),
+			logsEnabled: true,
+			expectedEnvVars: map[string]string{
+				envOtelMetricsExporterName: "none",
+				envOtelTracesExporterName:  "none",
+				envOtelLogsExporterName:    "otlp",
+			},
+		},
+		{
+			name:        "all signals enabled",
+			exportModes: createExportModes(true, true),
+			logsEnabled: true,
+			expectedEnvVars: map[string]string{
+				envOtelMetricsExporterName: "otlp",
+				envOtelTracesExporterName:  "otlp",
+				envOtelLogsExporterName:    "otlp",
 			},
 		},
 	}
@@ -1764,7 +1795,7 @@ func TestConfigureExporters(t *testing.T) {
 				Env:  []corev1.EnvVar{},
 			}
 
-			pm.configureExporters(container, tt.exportModes)
+			pm.configureExporters(container, tt.exportModes, tt.logsEnabled)
 
 			// Check that expected environment variables are set
 			for envName, expectedValue := range tt.expectedEnvVars {
@@ -1789,12 +1820,14 @@ func TestConfigureExporters_OverridesExistingVars(t *testing.T) {
 		Env: []corev1.EnvVar{
 			{Name: envOtelMetricsExporterName, Value: "prometheus"},
 			{Name: envOtelTracesExporterName, Value: "jaeger"},
+			{Name: envOtelLogsExporterName, Value: "stdout"},
 		},
 	}
 
 	exportModes := createExportModes(true, true)
+	logsEnabled := true
 
-	pm.configureExporters(container, exportModes)
+	pm.configureExporters(container, exportModes, logsEnabled)
 
 	// Verify existing values ARE overridden by the export modes configuration
 	// Note: setEnvVar will override existing values with export mode-based config
@@ -1804,6 +1837,9 @@ func TestConfigureExporters_OverridesExistingVars(t *testing.T) {
 		}
 		if env.Name == envOtelTracesExporterName {
 			assert.Equal(t, "otlp", env.Value, "traces exporter should be overridden based on export modes")
+		}
+		if env.Name == envOtelLogsExporterName {
+			assert.Equal(t, "otlp", env.Value, "logs exporter should be overridden to otlp")
 		}
 	}
 }
@@ -1819,14 +1855,15 @@ func TestConfigureContainerEnvVars_SDKExportConfig(t *testing.T) {
 		checkEnvVars map[string]string
 	}{
 		{
-			name: "SDK export defaults (both enabled)",
+			name: "SDK export defaults (traces/metrics enabled, logs disabled)",
 			sdkExport: beyla.SDKExport{
-				// nil values default to enabled for traces/metrics
+				// nil values default to enabled for traces/metrics, disabled for logs
 			},
 			selector: nil,
 			checkEnvVars: map[string]string{
 				envOtelMetricsExporterName: "otlp",
 				envOtelTracesExporterName:  "otlp",
+				envOtelLogsExporterName:    "none",
 			},
 		},
 		{
@@ -1834,11 +1871,13 @@ func TestConfigureContainerEnvVars_SDKExportConfig(t *testing.T) {
 			sdkExport: beyla.SDKExport{
 				Traces:  &trueVal,
 				Metrics: &falseVal,
+				Logs:    &falseVal,
 			},
 			selector: nil,
 			checkEnvVars: map[string]string{
 				envOtelMetricsExporterName: "none",
 				envOtelTracesExporterName:  "otlp",
+				envOtelLogsExporterName:    "none",
 			},
 		},
 		{
@@ -1846,35 +1885,55 @@ func TestConfigureContainerEnvVars_SDKExportConfig(t *testing.T) {
 			sdkExport: beyla.SDKExport{
 				Traces:  &falseVal,
 				Metrics: &trueVal,
+				Logs:    &falseVal,
 			},
 			selector: nil,
 			checkEnvVars: map[string]string{
 				envOtelMetricsExporterName: "otlp",
 				envOtelTracesExporterName:  "none",
+				envOtelLogsExporterName:    "none",
 			},
 		},
 		{
-			name: "SDK export: both disabled",
+			name: "SDK export: all disabled",
 			sdkExport: beyla.SDKExport{
 				Traces:  &falseVal,
 				Metrics: &falseVal,
+				Logs:    &falseVal,
 			},
 			selector: nil,
 			checkEnvVars: map[string]string{
 				envOtelMetricsExporterName: "none",
 				envOtelTracesExporterName:  "none",
+				envOtelLogsExporterName:    "none",
 			},
 		},
 		{
-			name: "SDK export disabled, but selector overrides",
+			name: "SDK export: all enabled",
+			sdkExport: beyla.SDKExport{
+				Traces:  &trueVal,
+				Metrics: &trueVal,
+				Logs:    &trueVal,
+			},
+			selector: nil,
+			checkEnvVars: map[string]string{
+				envOtelMetricsExporterName: "otlp",
+				envOtelTracesExporterName:  "otlp",
+				envOtelLogsExporterName:    "otlp",
+			},
+		},
+		{
+			name: "SDK export disabled, but selector overrides (logs stay disabled)",
 			sdkExport: beyla.SDKExport{
 				Traces:  &falseVal,
 				Metrics: &falseVal,
+				Logs:    &falseVal,
 			},
 			selector: createSelectorWithExportModes(true, true),
 			checkEnvVars: map[string]string{
 				envOtelMetricsExporterName: "otlp",
 				envOtelTracesExporterName:  "otlp",
+				envOtelLogsExporterName:    "none", // logs not overridden by selector
 			},
 		},
 		{
@@ -1882,11 +1941,13 @@ func TestConfigureContainerEnvVars_SDKExportConfig(t *testing.T) {
 			sdkExport: beyla.SDKExport{
 				Traces:  &trueVal,
 				Metrics: &trueVal,
+				Logs:    &trueVal,
 			},
 			selector: createSelectorWithExportModes(false, true), // only traces
 			checkEnvVars: map[string]string{
 				envOtelMetricsExporterName: "none",
 				envOtelTracesExporterName:  "otlp",
+				envOtelLogsExporterName:    "otlp", // logs not affected by selector override
 			},
 		},
 	}

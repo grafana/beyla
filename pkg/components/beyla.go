@@ -216,7 +216,7 @@ func buildCommonContextInfo(
 	ctxInfo := &global.ContextInfo{
 		Prometheus:              promMgr,
 		OTELMetricsExporter:     &otelcfg.MetricsExporterInstancer{Cfg: &config.AsOBI().OTELMetrics},
-		ExtraResourceAttributes: []attribute.KeyValue{semconv.OTelLibraryName(otel.ReporterName)},
+		ExtraResourceAttributes: []attribute.KeyValue{semconv.OTelLibraryName(otel.ReporterName), semconv.OTelScopeName(otel.ReporterName)},
 		OverrideAppExportQueue:  msg2.QueueFromConfig[[]request.Span](config.AsOBI(), "overriddenAppExportQueue"),
 	}
 

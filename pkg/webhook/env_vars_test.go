@@ -1807,3 +1807,127 @@ func TestConfigureExporters_OverridesExistingVars(t *testing.T) {
 		}
 	}
 }
+
+func TestConfigureContainerEnvVars_SDKExportConfig(t *testing.T) {
+	trueVal := true
+	falseVal := false
+
+	tests := []struct {
+		name         string
+		sdkExport    beyla.SDKExport
+		selector     services.Selector
+		checkEnvVars map[string]string
+	}{
+		{
+			name: "SDK export defaults (both enabled)",
+			sdkExport: beyla.SDKExport{
+				// nil values default to enabled for traces/metrics
+			},
+			selector: nil,
+			checkEnvVars: map[string]string{
+				envOtelMetricsExporterName: "otlp",
+				envOtelTracesExporterName:  "otlp",
+			},
+		},
+		{
+			name: "SDK export: only traces enabled",
+			sdkExport: beyla.SDKExport{
+				Traces:  &trueVal,
+				Metrics: &falseVal,
+			},
+			selector: nil,
+			checkEnvVars: map[string]string{
+				envOtelMetricsExporterName: "none",
+				envOtelTracesExporterName:  "otlp",
+			},
+		},
+		{
+			name: "SDK export: only metrics enabled",
+			sdkExport: beyla.SDKExport{
+				Traces:  &falseVal,
+				Metrics: &trueVal,
+			},
+			selector: nil,
+			checkEnvVars: map[string]string{
+				envOtelMetricsExporterName: "otlp",
+				envOtelTracesExporterName:  "none",
+			},
+		},
+		{
+			name: "SDK export: both disabled",
+			sdkExport: beyla.SDKExport{
+				Traces:  &falseVal,
+				Metrics: &falseVal,
+			},
+			selector: nil,
+			checkEnvVars: map[string]string{
+				envOtelMetricsExporterName: "none",
+				envOtelTracesExporterName:  "none",
+			},
+		},
+		{
+			name: "SDK export disabled, but selector overrides",
+			sdkExport: beyla.SDKExport{
+				Traces:  &falseVal,
+				Metrics: &falseVal,
+			},
+			selector: createSelectorWithExportModes(true, true),
+			checkEnvVars: map[string]string{
+				envOtelMetricsExporterName: "otlp",
+				envOtelTracesExporterName:  "otlp",
+			},
+		},
+		{
+			name: "SDK export enabled, but selector overrides to partial",
+			sdkExport: beyla.SDKExport{
+				Traces:  &trueVal,
+				Metrics: &trueVal,
+			},
+			selector: createSelectorWithExportModes(false, true), // only traces
+			checkEnvVars: map[string]string{
+				envOtelMetricsExporterName: "none",
+				envOtelTracesExporterName:  "otlp",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &beyla.Config{
+				Injector: beyla.SDKInject{
+					Export: tt.sdkExport,
+					Resources: beyla.SDKResource{
+						Attributes:                     map[string]string{},
+						UseLabelsForResourceAttributes: false,
+						AddK8sUIDAttributes:            false,
+					},
+				},
+			}
+			meta := &metav1.ObjectMeta{
+				Name:      "test-pod",
+				Namespace: "default",
+			}
+			container := &corev1.Container{
+				Name:  "test-container",
+				Image: "myapp:latest",
+				Env:   []corev1.EnvVar{},
+			}
+
+			pm := &PodMutator{cfg: cfg}
+			pm.configureContainerEnvVars(meta, container, tt.selector)
+
+			// Check specific environment variables
+			for envName, expectedValue := range tt.checkEnvVars {
+				found := false
+				for _, env := range container.Env {
+					if env.Name == envName {
+						found = true
+						assert.Equal(t, expectedValue, env.Value, "env var %s value mismatch", envName)
+						break
+					}
+				}
+				assert.True(t, found, "expected env var %s not found", envName)
+			}
+		})
+	}
+}

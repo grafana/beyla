@@ -52,14 +52,15 @@ func (pm *PodMutator) configureContainerEnvVars(meta *metav1.ObjectMeta, contain
 		pm.configureSampler(container, samplerConfig)
 	}
 
-	// Configure exporters: start with global config, then override with selector's export modes
-	tracesEnabled := pm.cfg.Traces.Enabled()
-	metricsEnabled := pm.cfg.OTELMetrics.EndpointEnabled()
+	// Configure exporters: start with SDK export config, then override with selector's export modes
+	// Use SDK-specific export settings which are independent from global Beyla export config
+	tracesEnabled := pm.cfg.Injector.Export.TracesEnabled()
+	metricsEnabled := pm.cfg.Injector.Export.MetricsEnabled()
 
 	// Start with a new ExportModes (all blocked by default)
 	exportModes := services.NewExportModes()
 
-	// Enable based on global configuration
+	// Enable based on SDK export configuration
 	if tracesEnabled {
 		exportModes.AllowTraces()
 	}

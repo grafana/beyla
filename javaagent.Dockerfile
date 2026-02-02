@@ -6,7 +6,7 @@ RUN apt install -y clang llvm
 WORKDIR /build
 
 # Copy build files
-COPY java-vendor/java .
+COPY .obi-src/pkg/internal/java .
 
 # Build the project
 RUN ./gradlew build --no-daemon

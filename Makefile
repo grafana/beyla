@@ -1,8 +1,6 @@
 # Main binary configuration
 CMD ?= beyla
 JAVA_AGENT ?= obi-java-agent.jar
-JAVA_AGENT_ORIG_DIR := .obi-src/pkg/internal/java
-JAVA_AGENT_DIR := java-vendor/java
 MAIN_GO_FILE ?= cmd/$(CMD)/main.go
 
 # populated from go.mod replace, as you might need to temporarily change it during development
@@ -200,12 +198,8 @@ copy-obi-vendor:
 	go get go.opentelemetry.io/obi
 	go mod vendor
 
-copy-obi-java-agent-vendor:
-	@echo "### Vendoring OBI Java agent submodule..."
-	cp -r $(JAVA_AGENT_ORIG_DIR)/* $(JAVA_AGENT_DIR)
-
 .PHONY: vendor-obi
-vendor-obi: obi-submodule docker-generate copy-obi-vendor copy-obi-java-agent-vendor
+vendor-obi: obi-submodule docker-generate copy-obi-vendor
 
 .PHONY: verify
 verify: prereqs lint-dashboard vendor-obi lint test
@@ -241,6 +235,7 @@ compile-cache-for-coverage:
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -cover -a -o bin/$(CACHE_CMD) $(CACHE_MAIN_GO_FILE)
 
 # Java agent targets
+JAVA_AGENT_DIR := .obi-src/pkg/internal/java
 
 .PHONY: java-build
 java-build:

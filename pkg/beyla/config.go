@@ -388,7 +388,7 @@ func (c *Config) Validate() error {
 		return ConfigError(err.Error())
 	}
 
-	if !c.Enabled(FeatureNetO11y) && !c.Enabled(FeatureAppO11y) {
+	if !c.Enabled(FeatureNetO11y) && !c.Enabled(FeatureAppO11y) && !c.Injector.Webhook.Enabled() {
 		return ConfigError("missing application discovery section or network metrics configuration. Check documentation.")
 	}
 	if c.EBPF.BatchLength == 0 {
@@ -460,9 +460,9 @@ func (c *Config) Validate() error {
 		}
 
 		if c.Injector.SDKPkgVersion == "" {
-			return ConfigError("sdk_version must be supplied for the Injector component and this version must match the version used in the SDK init container")
+			return ConfigError("sdk_package_version must be supplied for the Injector component and this version must match the version used in the SDK init container")
 		} else if !semver.IsValid(c.Injector.SDKPkgVersion) {
-			return ConfigError("sdk_version must be in valid semantic versioning format, e.g. v0.0.1 (the v prefix is required)")
+			return ConfigError("sdk_package_version must be in valid semantic versioning format, e.g. v0.0.1 (the v prefix is required)")
 		}
 
 		if c.Injector.HostMountPath == "" {

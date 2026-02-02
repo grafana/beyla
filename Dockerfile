@@ -52,7 +52,7 @@ RUN apt update
 RUN apt install -y clang llvm
 
 # Copy build files
-COPY .obi-src/pkg/internal/java .
+COPY java-vendor/java .
 
 # Build the project
 RUN ./gradlew build --no-daemon

@@ -109,3 +109,8 @@ internal/test/integration/components/gohttp2/*/vendor/
 
 *_bpfel.go
 *_bpfel.o
+java-vendor/java/.gradle
+java-vendor/java/agent/build
+java-vendor/java/loader/build
+java-vendor/java/build
+java-vendor/java/*.go

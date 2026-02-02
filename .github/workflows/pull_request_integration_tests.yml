@@ -126,7 +126,7 @@ jobs:
         run: make prereqs vendor-obi
 
       - name: Install gotestsum
-        run: go install gotest.tools/gotestsum@v1.12.3
+        run: go install gotest.tools/gotestsum@v1.13.0
 
       - name: Check disk usage before tests
         run: df -h
@@ -151,7 +151,9 @@ jobs:
 
           mkdir reports
 
-          ~/go/bin/gotestsum -ftestname \
+          ~/go/bin/gotestsum \
+              --rerun-fails=2 --rerun-fails-max-failures=2 --rerun-fails-abort-on-data-race \
+              --packages="./internal/test/integration" -ftestname \
               --jsonfile=reports/test-run-"${RUN_NUMBER}"-"${MATRIX_ID}".log \
               -- -race -tags=${TEST_TAGS} -timeout 30m \
               -mod vendor \

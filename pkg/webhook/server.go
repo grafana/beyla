@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"golang.org/x/mod/semver"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
@@ -35,7 +34,6 @@ type Server struct {
 	logger       *slog.Logger
 	store        *kube.Store
 	initialState map[string][]*ProcessInfo
-	crashingPods map[string]bool // tracks pods in crash loop after instrumentation
 }
 
 // NewServer creates a new webhook server
@@ -56,115 +54,14 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 	}
 
 	return &Server{
-		cfg:          cfg,
-		mutator:      mutator,
-		bouncer:      bouncer,
-		scanner:      NewInitialStateScanner(),
-		matcher:      matcher,
-		logger:       slog.Default().With("component", "webhook-server"),
-		ctxInfo:      ctxInfo,
-		crashingPods: make(map[string]bool),
+		cfg:     cfg,
+		mutator: mutator,
+		bouncer: bouncer,
+		scanner: NewInitialStateScanner(),
+		matcher: matcher,
+		logger:  slog.Default().With("component", "webhook-server"),
+		ctxInfo: ctxInfo,
 	}, nil
-}
-
-// checkPodCrashes queries the Kubernetes API to check if an instrumented pod
-// is experiencing crashes, and tracks it to prevent bouncing
-func (s *Server) checkPodCrashes(podMeta *informer.ObjectMeta) {
-	// Only check if pod has instrumentation label
-	if label, ok := podMeta.Labels[instrumentedLabel]; !ok || label == "" {
-		return
-	}
-
-	// Need to query full pod status from API since informer doesn't provide container statuses
-	if s.bouncer == nil {
-		return // no kube client available
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	kubeClient, err := s.ctxInfo.K8sInformer.KubeClient()
-	if err != nil {
-		s.logger.Debug("failed to get kube client for crash detection", "error", err)
-		return
-	}
-
-	pod, err := kubeClient.CoreV1().Pods(podMeta.Namespace).Get(ctx, podMeta.Name, metav1.GetOptions{})
-	if err != nil {
-		s.logger.Debug("failed to get pod status for crash detection",
-			"pod", podMeta.Name,
-			"namespace", podMeta.Namespace,
-			"error", err)
-		return
-	}
-
-	podKey := podMeta.Namespace + "/" + podMeta.Name
-	instrumentedVersion := podMeta.Labels[instrumentedLabel]
-
-	// Check all container statuses for crashes
-	for _, containerStatus := range pod.Status.ContainerStatuses {
-		// Check if container is in CrashLoopBackOff
-		if containerStatus.State.Waiting != nil &&
-			containerStatus.State.Waiting.Reason == "CrashLoopBackOff" {
-			s.logger.Warn("instrumented pod in CrashLoopBackOff - marking to skip bouncing",
-				"pod", podKey,
-				"container", containerStatus.Name,
-				"restarts", containerStatus.RestartCount,
-				"message", containerStatus.State.Waiting.Message,
-				"instrumentedVersion", instrumentedVersion)
-			s.crashingPods[podKey] = true
-			return
-		}
-
-		// Check for high restart count
-		if containerStatus.RestartCount >= 3 {
-			lastState := "unknown"
-			if containerStatus.LastTerminationState.Terminated != nil {
-				lastState = fmt.Sprintf("exitCode=%d, reason=%s",
-					containerStatus.LastTerminationState.Terminated.ExitCode,
-					containerStatus.LastTerminationState.Terminated.Reason)
-			}
-			s.logger.Warn("instrumented pod has high restart count - marking to skip bouncing",
-				"pod", podKey,
-				"container", containerStatus.Name,
-				"restarts", containerStatus.RestartCount,
-				"lastState", lastState,
-				"instrumentedVersion", instrumentedVersion)
-			s.crashingPods[podKey] = true
-			return
-		}
-	}
-
-	// Also check init containers
-	for _, containerStatus := range pod.Status.InitContainerStatuses {
-		if containerStatus.State.Waiting != nil &&
-			containerStatus.State.Waiting.Reason == "CrashLoopBackOff" {
-			s.logger.Warn("instrumented pod init container in CrashLoopBackOff - marking to skip bouncing",
-				"pod", podKey,
-				"container", containerStatus.Name,
-				"restarts", containerStatus.RestartCount,
-				"instrumentedVersion", instrumentedVersion)
-			s.crashingPods[podKey] = true
-			return
-		}
-
-		if containerStatus.RestartCount >= 3 {
-			s.logger.Warn("instrumented pod init container has high restart count - marking to skip bouncing",
-				"pod", podKey,
-				"container", containerStatus.Name,
-				"restarts", containerStatus.RestartCount,
-				"instrumentedVersion", instrumentedVersion)
-			s.crashingPods[podKey] = true
-			return
-		}
-	}
-
-	// If we get here, pod is healthy - remove from crashing list if it was there
-	if s.crashingPods[podKey] {
-		s.logger.Info("previously crashing pod now healthy - removing from crash list",
-			"pod", podKey)
-		delete(s.crashingPods, podKey)
-	}
 }
 
 // Start starts the webhook server
@@ -321,28 +218,14 @@ func (s *Server) On(event *informer.Event) error {
 	if event.Resource == nil || event.GetResource().GetPod() == nil {
 		return nil
 	}
-
-	pod := event.GetResource()
-
 	switch event.Type {
 	case informer.EventType_CREATED, informer.EventType_UPDATED:
 		s.logger.Debug("new pod", "pod", event.Resource)
-
-		// Check if this is an instrumented pod with crashes
-		s.checkPodCrashes(pod)
-
 		// It's important to consider the local process info here
 		// so that we are not evaluating pods from other nodes, since
 		// Beyla gets the cluster wide info.
-		if attrs := s.enrichProcessInfo(pod); attrs != nil {
+		if attrs := s.enrichProcessInfo(event.GetResource()); attrs != nil {
 			for _, a := range attrs {
-				// Skip bouncing if this pod is in crash loop
-				podKey := pod.Namespace + "/" + pod.Name
-				if s.crashingPods[podKey] {
-					s.logger.Debug("skipping restart for crashing pod", "pod", podKey)
-					continue
-				}
-
 				// It's important to check here for the SDK supported programming languages.
 				// Go would be the killer here, since many of the Kubernetes services are written in
 				// Go, and we don't want to say bounce coredns.

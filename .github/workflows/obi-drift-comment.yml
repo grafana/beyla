@@ -1,0 +1,68 @@
+name: OBI Drift Comment
+
+on:
+  workflow_run:
+    workflows: ["OBI Drift Check"]
+    types:
+      - completed
+
+# This workflow runs in the context of the base repository,
+# so it has write permissions even for fork PRs
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  comment:
+    runs-on: ubuntu-x64-small
+    if: github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'failure'
+    steps:
+      - name: Download PR number artifact
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: pr-comment
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+        continue-on-error: true
+        id: download
+
+      - name: Comment on PR with instructions
+        if: steps.download.outcome == 'success'
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        with:
+          script: |
+            const fs = require('fs');
+            const prNumber = parseInt(fs.readFileSync('./pr_number', 'utf8').trim(), 10);
+
+            const comment = `## ⚠️ OBI Drift Detected
+
+            The \`.obi-src\` submodule has been updated, but there are test functions that have drifted between Beyla and OBI.
+
+            ### To fix this issue:
+
+            1. Run the sync script locally on your branch:
+               \`\`\`bash
+               make vendor-obi
+               ./scripts/check-obi-drift.sh --sync
+               \`\`\`
+
+            2. Review the changes:
+               \`\`\`bash
+               git diff internal/test/integration/
+               \`\`\`
+
+            3. Commit and push the changes:
+               \`\`\`bash
+               git add internal/test/integration/
+               git commit -m "Sync tests from OBI"
+               git push
+               \`\`\`
+
+            This check will pass once the drift is resolved.`;
+
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: comment
+            });

@@ -1,7 +1,7 @@
 name: Test Docker build
 on:
   pull_request:
-    branches: [ 'main', 'release-*' ]
+    branches: ["main", "release-*"]
 
 permissions:
   contents: read
@@ -19,7 +19,8 @@ jobs:
       - id: checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
-          persist-credentials: 'false'
+          persist-credentials: "false"
+          submodules: "recursive"
       - id: docker-build-beyla
         uses: grafana/shared-workflows/actions/build-push-to-dockerhub@fa48192dac470ae356b3f7007229f3ac28c48a25 # main
         with:

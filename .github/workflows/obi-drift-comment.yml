@@ -1,5 +1,10 @@
 name: OBI Drift Comment
 
+# zizmor: ignore[dangerous-triggers] - This workflow_run trigger is safe because:
+# 1. We do NOT checkout any code from the PR
+# 2. We only read a numeric PR number from an artifact (no executable content)
+# 3. The comment body is hardcoded, not from PR input
+# This is the GitHub-recommended pattern for commenting on fork PRs.
 on:
   workflow_run:
     workflows: ["OBI Drift Check"]

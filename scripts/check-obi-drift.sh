@@ -76,6 +76,8 @@ SKIP_BEYLA_SPECIFIC_FILES=(
     # K8s manifests with Beyla-specific features (survey, process metrics, etc.)
     '06-obi-daemonset.yml'
     '06-obi-external-informer.yml'
+    # Java agent build path is different
+    'Dockerfile-with-javaagent'
 )
 
 # Beyla-specific component directories that should NOT be synced from OBI

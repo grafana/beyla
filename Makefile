@@ -1,5 +1,6 @@
 # Main binary configuration
 CMD ?= beyla
+JAVA_AGENT ?= obi-java-agent.jar
 MAIN_GO_FILE ?= cmd/$(CMD)/main.go
 
 # populated from go.mod replace, as you might need to temporarily change it during development
@@ -232,6 +233,43 @@ compile-for-coverage:
 compile-cache-for-coverage:
 	@echo "### Compiling K8s cache service to generate coverage profiles"
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -cover -a -o bin/$(CACHE_CMD) $(CACHE_MAIN_GO_FILE)
+
+# Java agent targets
+JAVA_AGENT_DIR := .obi-src/pkg/internal/java
+
+.PHONY: java-build
+java-build:
+	@echo "### Building Java agent"
+	cd $(JAVA_AGENT_DIR) && ./gradlew build
+	cp $(JAVA_AGENT_DIR)/build/$(JAVA_AGENT) bin/
+
+.PHONY: java-docker-build
+java-docker-build:
+	@echo "### Building Java agent with Docker"
+	$(OCI_BIN) build --output type=local,dest=./bin --target=export -f javaagent.Dockerfile .
+
+.PHONY: java-test
+java-test:
+	@echo "### Testing Java agent"
+	cd $(JAVA_AGENT_DIR) && ./gradlew test
+
+.PHONY: java-spotless-check
+java-spotless-check:
+	@echo "### Checking Java code formatting"
+	cd $(JAVA_AGENT_DIR) && ./gradlew spotlessCheck
+
+.PHONY: java-spotless-apply
+java-spotless-apply:
+	@echo "### Formatting Java code"
+	cd $(JAVA_AGENT_DIR) && ./gradlew spotlessApply
+
+.PHONY: java-clean
+java-clean:
+	@echo "### Cleaning Java agent build artifacts"
+	cd $(JAVA_AGENT_DIR) && ./gradlew clean
+
+.PHONY: java-verify
+java-verify: java-spotless-check java-test java-build
 
 .PHONY: test
 test:

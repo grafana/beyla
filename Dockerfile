@@ -43,6 +43,20 @@ RUN if [ -z "${DEV_OBI}" ]; then \
     ; fi
 RUN make compile
 
+# Build the Java OBI agent
+FROM gradle:9.3.0-jdk21-noble@sha256:c81b8eca24ce89252df6f8e81cb61266d62dbc84ab5f969ea22fc00804f995e2 AS javaagent-builder
+
+WORKDIR /build
+
+RUN apt update
+RUN apt install -y clang llvm
+
+# Copy build files
+COPY .obi-src/pkg/internal/java .
+
+# Build the project
+RUN ./gradlew build --no-daemon
+
 # Create final image from minimal + built binary
 FROM scratch
 
@@ -50,6 +64,7 @@ LABEL maintainer="Grafana Labs <hello@grafana.com>"
 
 WORKDIR /
 
+COPY --from=javaagent-builder /build/build/obi-java-agent.jar .
 COPY --from=builder /src/bin/beyla .
 COPY --from=builder /src/LICENSE .
 COPY --from=builder /src/NOTICE .

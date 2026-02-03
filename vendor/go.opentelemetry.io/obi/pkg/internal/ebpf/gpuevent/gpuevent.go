@@ -256,7 +256,7 @@ func (p *Tracer) processCudaEvent(_ *ebpfcommon.EBPFParseContext, _ *config.EBPF
 		p.log.Error("unknown cuda event")
 	}
 
-	return request.Span{}, false, nil
+	return request.Span{}, true, nil
 }
 
 func (p *Tracer) readGPUMallocIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {

@@ -335,6 +335,35 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 			request.ServerPort(span.HostPort),
 		}
 	case request.EventTypeHTTPClient:
+		// SQL++ spans should only have DB attributes, not HTTP attributes
+		if span.SubType == request.HTTPSubtypeSQLPP {
+			attrs = []attribute.KeyValue{
+				request.ServerAddr(request.HostAsServer(span)),
+				request.ServerPort(span.HostPort),
+				request.PeerService(request.PeerServiceFromSpan(span)),
+				request.DBSystemName(span.DBSystem),
+			}
+			if span.Route != "" {
+				attrs = append(attrs, request.DBCollectionName(span.Route))
+			}
+			if span.DBNamespace != "" {
+				attrs = append(attrs, request.DBNamespace(span.DBNamespace))
+			}
+			if _, ok := optionalAttrs[attr.DBQueryText]; ok {
+				if span.Statement != "" {
+					attrs = append(attrs, request.DBQueryText(span.Statement))
+				}
+			}
+			if span.Method != "" {
+				attrs = append(attrs, request.DBOperationName(span.Method))
+			}
+			if span.DBError.ErrorCode != "" {
+				attrs = append(attrs, request.ErrorType(span.DBError.ErrorCode))
+				attrs = append(attrs, request.DBResponseStatusCode(span.DBError.ErrorCode))
+			}
+			break
+		}
+
 		host := request.HTTPClientHost(span)
 		scheme := request.HTTPScheme(span)
 		url := span.Path

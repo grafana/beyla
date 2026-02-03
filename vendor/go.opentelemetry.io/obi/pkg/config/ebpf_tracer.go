@@ -115,6 +115,9 @@ type EBPFTracer struct {
 	LogEnricher LogEnricherConfig `yaml:"log_enricher"`
 
 	CouchbaseDBCacheSize int `yaml:"couchbase_db_cache_size" env:"OTEL_EBPF_COUCHBASE_DB_CACHE_SIZE" validate:"gt=0"`
+
+	// BPF path used to pin eBPF maps
+	BpfFsPath string `yaml:"bpf_fs_path" env:"OTEL_EBPF_BPF_FS_PATH"`
 }
 
 // Per-protocol data buffer size in bytes.

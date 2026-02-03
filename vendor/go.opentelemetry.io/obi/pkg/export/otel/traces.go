@@ -200,14 +200,9 @@ func getTracesExporter(ctx context.Context, cfg otelcfg.TracesConfig, im imetric
 			return nil, err
 		}
 		set := getTraceSettings(newType, cfg.SDKLogLevel)
-		// TODO nimrod: do we need this?
 		exp, err := exporterhelper.NewTraces(ctx, set, cfg,
 			cfg.TracesConsumer.ConsumeTraces,
-			// exporterhelper.WithStart(exp.Start),
-			// exporterhelper.WithShutdown(exp.Shutdown),
 			exporterhelper.WithCapabilities(consumer.Capabilities{MutatesData: false}),
-			// exporterhelper.WithQueue(config.QueueConfig),
-			// exporterhelper.WithRetry(config.RetryConfig))
 		)
 		if err != nil {
 			return nil, err

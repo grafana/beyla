@@ -52,7 +52,7 @@ type Tracer struct {
 	log         *slog.Logger
 	fdCache     *expirable.LRU[string, *os.File]
 	asyncWriter *shardedqueue.ShardedQueue[LogEvent]
-	pids        map[uint32][]uint32 // ns:[]pid
+	pids        map[uint64][]uint64 // pid:[]nsPids
 	pidsMU      sync.Mutex
 }
 
@@ -70,7 +70,7 @@ func New(cfg *obi.Config) *Tracer {
 		fdCache: expirable.NewLRU[string, *os.File](cfg.EBPF.LogEnricher.CacheSize, func(_ string, f *os.File) {
 			f.Close()
 		}, cfg.EBPF.LogEnricher.CacheTTL),
-		pids: make(map[uint32][]uint32),
+		pids: make(map[uint64][]uint64),
 	}
 
 	asyncWriter := shardedqueue.NewShardedQueue[LogEvent](
@@ -216,7 +216,8 @@ func (p *Tracer) AllowPID(pid, ns uint32, _ *svc.Attrs) {
 	p.pidsMU.Lock()
 	defer p.pidsMU.Unlock()
 
-	if err := p.addPID(p.pidKey(ns, pid)); err != nil {
+	pk := p.pidKey(ns, pid)
+	if err := p.addPID(pk); err != nil {
 		p.log.Error(err.Error())
 	}
 
@@ -227,27 +228,30 @@ func (p *Tracer) AllowPID(pid, ns uint32, _ *svc.Attrs) {
 	}
 
 	for _, nsPid := range nsPids {
-		if err := p.addPID(p.pidKey(ns, nsPid)); err != nil {
+		if pid == nsPid {
+			continue
+		}
+
+		nsPk := p.pidKey(ns, nsPid)
+		if err := p.addPID(nsPk); err != nil {
 			p.log.Error(err.Error())
 		}
+		p.pids[pk] = append(p.pids[pk], nsPk)
 	}
-
-	nsPids = append(nsPids, pid)
-
-	p.pids[pid] = nsPids
 }
 
 func (p *Tracer) BlockPID(pid, ns uint32) {
 	p.pidsMU.Lock()
 	defer p.pidsMU.Unlock()
 
-	if err := p.removePID(p.pidKey(ns, pid)); err != nil {
+	pk := p.pidKey(ns, pid)
+	if err := p.removePID(pk); err != nil {
 		p.log.Error(err.Error())
 	}
 
-	if knownPids, ok := p.pids[pid]; ok {
-		for _, nsPid := range knownPids {
-			if err := p.removePID(p.pidKey(ns, nsPid)); err != nil {
+	if knownPids, ok := p.pids[pk]; ok {
+		for _, nsPk := range knownPids {
+			if err := p.removePID(nsPk); err != nil {
 				p.log.Error(err.Error())
 			}
 		}
@@ -281,7 +285,7 @@ func (p *Tracer) Required() bool {
 }
 
 func (p *Tracer) handleLogEvent(_ *ebpfcommon.EBPFParseContext, _ *config.EBPFTracer, record *ringbuf.Record, _ ebpfcommon.ServiceFilter) (request.Span, bool, error) {
-	hdrSize := uint32(unsafe.Sizeof(BpfLogEventT{})) - uint32(unsafe.Sizeof(uintptr(0))) // Remove `log` placeholder
+	hdrSize := uint32(unsafe.Offsetof(BpfLogEventT{}.Log)) // Remove `log` placeholder
 
 	event, err := ebpfcommon.ReinterpretCast[BpfLogEventT](record.RawSample)
 	if err != nil {
@@ -336,7 +340,7 @@ func (p *Tracer) handle(e LogEvent) {
 		zeroTraceID [16]uint8
 		zeroSpanID  [8]uint8
 	)
-	if e.orig.PidTp.Tp.TraceId == zeroTraceID || e.orig.PidTp.Tp.SpanId == zeroSpanID {
+	if e.orig.Ctx.TraceId == zeroTraceID || e.orig.Ctx.SpanId == zeroSpanID {
 		// No trace context to inject, write original log line
 		_, err := f.Write([]byte(e.logLine))
 		if err != nil {
@@ -347,8 +351,8 @@ func (p *Tracer) handle(e LogEvent) {
 
 	var (
 		b       bytes.Buffer
-		spanID  = trace.SpanID(e.orig.PidTp.Tp.SpanId)
-		traceID = trace.TraceID(e.orig.PidTp.Tp.TraceId)
+		spanID  = trace.SpanID(e.orig.Ctx.SpanId)
+		traceID = trace.TraceID(e.orig.Ctx.TraceId)
 	)
 
 	var m map[string]any
@@ -368,7 +372,7 @@ func (p *Tracer) handle(e LogEvent) {
 		b.WriteByte('\n')
 	} else {
 		// Not JSON -> preserve the original logline
-		b.Write([]byte(e.logLine[:e.orig.Len]))
+		b.Write([]byte(e.logLine))
 	}
 
 	_, err := f.Write(b.Bytes())

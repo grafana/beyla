@@ -10,9 +10,9 @@ import (
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/obi"
 
-	"github.com/grafana/beyla/v2/pkg/buildinfo"
-	"github.com/grafana/beyla/v2/pkg/export/otel"
-	cfgutil "github.com/grafana/beyla/v2/pkg/helpers/config"
+	"github.com/grafana/beyla/v3/pkg/buildinfo"
+	"github.com/grafana/beyla/v3/pkg/export/otel"
+	cfgutil "github.com/grafana/beyla/v3/pkg/helpers/config"
 )
 
 func FromOBI(c *obi.Config) *Config {

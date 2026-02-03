@@ -21,9 +21,9 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/obi"
 
-	"github.com/grafana/beyla/v2/pkg/beyla"
-	"github.com/grafana/beyla/v2/pkg/buildinfo"
-	"github.com/grafana/beyla/v2/pkg/components"
+	"github.com/grafana/beyla/v3/pkg/beyla"
+	"github.com/grafana/beyla/v3/pkg/buildinfo"
+	"github.com/grafana/beyla/v3/pkg/components"
 )
 
 func main() {

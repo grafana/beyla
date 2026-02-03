@@ -12,7 +12,7 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/export"
 
-	"github.com/grafana/beyla/v2/pkg/beyla"
+	"github.com/grafana/beyla/v3/pkg/beyla"
 )
 
 // Tests fix for https://github.com/grafana/beyla/issues/926

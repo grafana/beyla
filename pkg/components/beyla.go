@@ -22,11 +22,11 @@ import (
 	"go.opentelemetry.io/obi/pkg/netolly/flowdef"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 
-	"github.com/grafana/beyla/v2/pkg/beyla"
-	"github.com/grafana/beyla/v2/pkg/export/otel"
-	"github.com/grafana/beyla/v2/pkg/internal/appolly"
-	msg2 "github.com/grafana/beyla/v2/pkg/internal/helpers/msg"
-	"github.com/grafana/beyla/v2/pkg/webhook"
+	"github.com/grafana/beyla/v3/pkg/beyla"
+	"github.com/grafana/beyla/v3/pkg/export/otel"
+	"github.com/grafana/beyla/v3/pkg/internal/appolly"
+	msg2 "github.com/grafana/beyla/v3/pkg/internal/helpers/msg"
+	"github.com/grafana/beyla/v3/pkg/webhook"
 )
 
 // RunBeyla in the foreground process. This is a blocking function and won't exit

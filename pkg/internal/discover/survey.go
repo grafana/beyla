@@ -10,7 +10,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 
-	"github.com/grafana/beyla/v2/pkg/beyla"
+	"github.com/grafana/beyla/v3/pkg/beyla"
 )
 
 var namespaceFetcherFunc = ebpfcommon.FindNetworkNamespace

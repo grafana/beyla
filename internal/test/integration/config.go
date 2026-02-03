@@ -5,7 +5,7 @@ import (
 
 	ti "go.opentelemetry.io/obi/pkg/test/integration"
 
-	"github.com/grafana/beyla/v2/internal/test/tools"
+	"github.com/grafana/beyla/v3/internal/test/tools"
 )
 
 var (

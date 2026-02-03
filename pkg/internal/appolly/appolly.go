@@ -20,10 +20,10 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 	"go.opentelemetry.io/obi/pkg/transform"
 
-	"github.com/grafana/beyla/v2/pkg/beyla"
-	"github.com/grafana/beyla/v2/pkg/internal/discover"
-	msg2 "github.com/grafana/beyla/v2/pkg/internal/helpers/msg"
-	"github.com/grafana/beyla/v2/pkg/internal/pipe"
+	"github.com/grafana/beyla/v3/pkg/beyla"
+	"github.com/grafana/beyla/v3/pkg/internal/discover"
+	msg2 "github.com/grafana/beyla/v3/pkg/internal/helpers/msg"
+	"github.com/grafana/beyla/v3/pkg/internal/pipe"
 )
 
 var errShutdownTimeout = errors.New("graceful shutdown has timed out")

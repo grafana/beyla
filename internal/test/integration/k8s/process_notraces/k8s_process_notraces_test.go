@@ -14,12 +14,12 @@ import (
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
 	"sigs.k8s.io/e2e-framework/pkg/features"
 
-	"github.com/grafana/beyla/v2/internal/test/integration/components/docker"
-	"github.com/grafana/beyla/v2/internal/test/integration/components/kube"
-	"github.com/grafana/beyla/v2/internal/test/integration/components/prom"
-	k8s "github.com/grafana/beyla/v2/internal/test/integration/k8s/common"
-	"github.com/grafana/beyla/v2/internal/test/integration/k8s/common/testpath"
-	"github.com/grafana/beyla/v2/internal/test/tools"
+	"github.com/grafana/beyla/v3/internal/test/integration/components/docker"
+	"github.com/grafana/beyla/v3/internal/test/integration/components/kube"
+	"github.com/grafana/beyla/v3/internal/test/integration/components/prom"
+	k8s "github.com/grafana/beyla/v3/internal/test/integration/k8s/common"
+	"github.com/grafana/beyla/v3/internal/test/integration/k8s/common/testpath"
+	"github.com/grafana/beyla/v3/internal/test/tools"
 )
 
 var cluster *kube.Kind

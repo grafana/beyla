@@ -15,8 +15,8 @@ import (
 	"go.opentelemetry.io/obi/pkg/export"
 	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
 
-	"github.com/grafana/beyla/v2/pkg/beyla"
-	svcextra "github.com/grafana/beyla/v2/pkg/services"
+	"github.com/grafana/beyla/v3/pkg/beyla"
+	svcextra "github.com/grafana/beyla/v3/pkg/services"
 )
 
 func TestChooseServiceName(t *testing.T) {

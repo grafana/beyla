@@ -7,7 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/grafana/beyla/v2/testserver_1.17/arg"
+	"github.com/grafana/beyla/v3/testserver_1.17/arg"
 )
 
 func Setup(port int) {

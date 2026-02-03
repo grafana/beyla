@@ -10,7 +10,7 @@ import (
 
 	"github.com/caarlos0/env/v7"
 
-	"github.com/grafana/beyla/v2/internal/test/integration/components/old_grpc/backend/internal/distributed-service-example/pkg/rest"
+	"github.com/grafana/beyla/v3/internal/test/integration/components/old_grpc/backend/internal/distributed-service-example/pkg/rest"
 )
 
 type Config struct {

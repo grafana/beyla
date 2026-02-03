@@ -15,8 +15,8 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 
-	"github.com/grafana/beyla/v2/pkg/internal/testutil"
-	"github.com/grafana/beyla/v2/pkg/test/collector"
+	"github.com/grafana/beyla/v3/pkg/internal/testutil"
+	"github.com/grafana/beyla/v3/pkg/test/collector"
 )
 
 func TestConnection_Spans(t *testing.T) {

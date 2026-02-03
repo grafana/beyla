@@ -748,7 +748,7 @@ injector:
     port: 8443
     cert_path: /etc/webhook/certs/tls.crt
     key_path: /etc/webhook/certs/tls.key
-  sdk_package_version: v0.0.1
+  sdk_package_version: v0.0.2
 `)
 	cfg, err := LoadConfig(userConfig)
 	require.NoError(t, err)

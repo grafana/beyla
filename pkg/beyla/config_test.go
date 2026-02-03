@@ -688,6 +688,73 @@ discovery:
 	assert.Equal(t, servicesextra.DefaultExcludeInstrumentWithSurvey, cfg.Discovery.DefaultExcludeInstrument)
 }
 
+func TestConfigRunsWithJustInjector(t *testing.T) {
+	userConfig := bytes.NewBufferString(`
+injector:
+  webhook:
+    enable: true
+    port: 8443
+    cert_path: /etc/webhook/certs/tls.crt
+    key_path: /etc/webhook/certs/tls.key
+  sdk_package_version: v0.0.1
+  host_mount_path: /test
+otel_traces_export:
+  endpoint: http://localhost:4317/v1/traces
+`)
+	cfg, err := LoadConfig(userConfig)
+	require.NoError(t, err)
+	require.NoError(t, cfg.Validate())
+}
+
+func TestConfigRunsWithJustInjectorButNotWithoutSDKPackage(t *testing.T) {
+	userConfig := bytes.NewBufferString(`
+injector:
+  webhook:
+    enable: true
+    port: 8443
+    cert_path: /etc/webhook/certs/tls.crt
+    key_path: /etc/webhook/certs/tls.key
+  host_mount_path: /test
+otel_traces_export:
+  endpoint: http://localhost:4317/v1/traces
+`)
+	cfg, err := LoadConfig(userConfig)
+	require.NoError(t, err)
+	require.Error(t, cfg.Validate())
+}
+
+func TestConfigRunsWithJustInjectorButNotWithoutHostPath(t *testing.T) {
+	userConfig := bytes.NewBufferString(`
+injector:
+  webhook:
+    enable: true
+    port: 8443
+    cert_path: /etc/webhook/certs/tls.crt
+    key_path: /etc/webhook/certs/tls.key
+  sdk_package_version: v0.0.1
+otel_traces_export:
+  endpoint: http://localhost:4317/v1/traces
+`)
+	cfg, err := LoadConfig(userConfig)
+	require.NoError(t, err)
+	require.Error(t, cfg.Validate())
+}
+
+func TestConfigRunsWithJustInjectorButNotWithoutTraces(t *testing.T) {
+	userConfig := bytes.NewBufferString(`
+injector:
+  webhook:
+    enable: true
+    port: 8443
+    cert_path: /etc/webhook/certs/tls.crt
+    key_path: /etc/webhook/certs/tls.key
+  sdk_package_version: v0.0.2
+`)
+	cfg, err := LoadConfig(userConfig)
+	require.NoError(t, err)
+	require.Error(t, cfg.Validate())
+}
+
 func loadConfig(t *testing.T, env envMap) *Config {
 	for k, v := range env {
 		t.Setenv(k, v)

@@ -17,7 +17,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 
-	otel2 "github.com/grafana/beyla/v2/pkg/export/otel"
+	otel2 "github.com/grafana/beyla/v3/pkg/export/otel"
 )
 
 func pslog() *slog.Logger {

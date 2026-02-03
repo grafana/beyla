@@ -14,8 +14,8 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/kube/kubecache/informer"
 
-	"github.com/grafana/beyla/v2/pkg/beyla"
-	svcextra "github.com/grafana/beyla/v2/pkg/services"
+	"github.com/grafana/beyla/v3/pkg/beyla"
+	svcextra "github.com/grafana/beyla/v3/pkg/services"
 )
 
 func TestErrorResponse(t *testing.T) {

@@ -14,7 +14,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/grafana/beyla/v2/internal/test/integration/components/old_grpc/worker/pkg/gprc"
+	"github.com/grafana/beyla/v3/internal/test/integration/components/old_grpc/worker/pkg/gprc"
 )
 
 const (

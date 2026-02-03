@@ -32,7 +32,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 
-	pb "github.com/grafana/beyla/v2/internal/test/cmd/grpc/routeguide"
+	pb "github.com/grafana/beyla/v3/internal/test/cmd/grpc/routeguide"
 )
 
 var (

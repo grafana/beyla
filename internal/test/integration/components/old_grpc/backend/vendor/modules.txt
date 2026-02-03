@@ -1,22 +1,6 @@
-# github.com/bytedance/sonic v1.8.0
-## explicit; go 1.15
 # github.com/caarlos0/env/v7 v7.1.0
 ## explicit; go 1.17
 github.com/caarlos0/env/v7
-# github.com/chenzhuoyu/base64x v0.0.0-20221115062448-fe3a3abad311
-## explicit; go 1.15
-# github.com/gin-contrib/sse v0.1.0
-## explicit; go 1.12
-# github.com/gin-gonic/gin v1.9.0
-## explicit; go 1.18
-# github.com/go-playground/locales v0.14.1
-## explicit; go 1.17
-# github.com/go-playground/universal-translator v0.18.1
-## explicit; go 1.18
-# github.com/go-playground/validator/v10 v10.11.2
-## explicit; go 1.18
-# github.com/goccy/go-json v0.10.0
-## explicit; go 1.12
 # github.com/golang/protobuf v1.5.3
 ## explicit; go 1.9
 github.com/golang/protobuf/jsonpb
@@ -25,31 +9,9 @@ github.com/golang/protobuf/ptypes
 github.com/golang/protobuf/ptypes/any
 github.com/golang/protobuf/ptypes/duration
 github.com/golang/protobuf/ptypes/timestamp
-# github.com/grafana/beyla/v2/internal/test/integration/components/old_grpc/worker v0.0.0 => ../worker
+# github.com/grafana/beyla/v3/internal/test/integration/components/old_grpc/worker v0.0.0 => ../worker
 ## explicit; go 1.20
-github.com/grafana/beyla/v2/internal/test/integration/components/old_grpc/worker/pkg/gprc
-# github.com/json-iterator/go v1.1.12
-## explicit; go 1.12
-# github.com/klauspost/cpuid/v2 v2.0.9
-## explicit; go 1.13
-# github.com/leodido/go-urn v1.2.1
-## explicit; go 1.13
-# github.com/mattn/go-isatty v0.0.17
-## explicit; go 1.15
-# github.com/modern-go/concurrent v0.0.0-20180228061459-e0a39a4cb421
-## explicit
-# github.com/modern-go/reflect2 v1.0.2
-## explicit; go 1.12
-# github.com/pelletier/go-toml/v2 v2.0.6
-## explicit; go 1.16
-# github.com/twitchyliquid64/golang-asm v0.15.1
-## explicit; go 1.13
-# github.com/ugorji/go/codec v1.2.9
-## explicit; go 1.11
-# golang.org/x/arch v0.0.0-20210923205945-b76863e36670
-## explicit; go 1.17
-# golang.org/x/crypto v0.5.0
-## explicit; go 1.17
+github.com/grafana/beyla/v3/internal/test/integration/components/old_grpc/worker/pkg/gprc
 # golang.org/x/net v0.8.0
 ## explicit; go 1.17
 golang.org/x/net/http/httpguts
@@ -154,6 +116,4 @@ google.golang.org/protobuf/types/descriptorpb
 google.golang.org/protobuf/types/known/anypb
 google.golang.org/protobuf/types/known/durationpb
 google.golang.org/protobuf/types/known/timestamppb
-# gopkg.in/yaml.v3 v3.0.1
-## explicit
-# github.com/grafana/beyla/v2/internal/test/integration/components/old_grpc/worker => ../worker
+# github.com/grafana/beyla/v3/internal/test/integration/components/old_grpc/worker => ../worker

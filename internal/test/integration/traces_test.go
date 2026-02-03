@@ -16,8 +16,8 @@ import (
 
 	ti "go.opentelemetry.io/obi/pkg/test/integration"
 
-	"github.com/grafana/beyla/v2/internal/test/integration/components/jaeger"
-	grpcclient "github.com/grafana/beyla/v2/internal/test/integration/components/testserver/grpc/client"
+	"github.com/grafana/beyla/v3/internal/test/integration/components/jaeger"
+	grpcclient "github.com/grafana/beyla/v3/internal/test/integration/components/testserver/grpc/client"
 )
 
 func testHTTPTracesNoTraceID(t *testing.T) {

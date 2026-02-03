@@ -15,7 +15,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 
-	"github.com/grafana/beyla/v2/pkg/beyla"
+	"github.com/grafana/beyla/v3/pkg/beyla"
 )
 
 func TestProcessEventsLoopDoesntBlock(t *testing.T) {

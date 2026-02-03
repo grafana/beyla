@@ -29,11 +29,11 @@ import (
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/transform"
 
-	"github.com/grafana/beyla/v2/pkg/config"
-	botel "github.com/grafana/beyla/v2/pkg/export/otel"
-	"github.com/grafana/beyla/v2/pkg/export/otel/spanscfg"
-	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
-	servicesextra "github.com/grafana/beyla/v2/pkg/services"
+	"github.com/grafana/beyla/v3/pkg/config"
+	botel "github.com/grafana/beyla/v3/pkg/export/otel"
+	"github.com/grafana/beyla/v3/pkg/export/otel/spanscfg"
+	"github.com/grafana/beyla/v3/pkg/internal/infraolly/process"
+	servicesextra "github.com/grafana/beyla/v3/pkg/services"
 )
 
 const ReporterLRUSize = 256

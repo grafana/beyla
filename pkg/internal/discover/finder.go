@@ -14,10 +14,10 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 
-	"github.com/grafana/beyla/v2/pkg/beyla"
-	"github.com/grafana/beyla/v2/pkg/export/otel"
-	"github.com/grafana/beyla/v2/pkg/export/prom"
-	msg2 "github.com/grafana/beyla/v2/pkg/internal/helpers/msg"
+	"github.com/grafana/beyla/v3/pkg/beyla"
+	"github.com/grafana/beyla/v3/pkg/export/otel"
+	"github.com/grafana/beyla/v3/pkg/export/prom"
+	msg2 "github.com/grafana/beyla/v3/pkg/internal/helpers/msg"
 )
 
 type ProcessFinder struct {

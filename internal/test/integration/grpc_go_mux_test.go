@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/beyla/v2/internal/test/integration/components/docker"
-	"github.com/grafana/beyla/v2/internal/test/integration/components/promtest"
+	"github.com/grafana/beyla/v3/internal/test/integration/components/docker"
+	"github.com/grafana/beyla/v3/internal/test/integration/components/promtest"
 )
 
 func testREDMetricsForGRPCMuxLibrary(t *testing.T, route, svcNs, serverPort string) {

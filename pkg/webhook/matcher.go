@@ -6,7 +6,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/discover"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 
-	"github.com/grafana/beyla/v2/pkg/beyla"
+	"github.com/grafana/beyla/v3/pkg/beyla"
 )
 
 type PodMatcher struct {

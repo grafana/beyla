@@ -1,4 +1,4 @@
-module github.com/grafana/beyla/v2/testserver_1.17
+module github.com/grafana/beyla/v3/testserver_1.17
 
 go 1.17
 

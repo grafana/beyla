@@ -30,9 +30,9 @@ import (
 	"sigs.k8s.io/e2e-framework/pkg/envfuncs"
 	"sigs.k8s.io/e2e-framework/support/kind"
 
-	"github.com/grafana/beyla/v2/internal/test/integration/components/jaeger"
-	"github.com/grafana/beyla/v2/internal/test/integration/components/promtest"
-	"github.com/grafana/beyla/v2/internal/test/integration/k8s/common/testpath"
+	"github.com/grafana/beyla/v3/internal/test/integration/components/jaeger"
+	"github.com/grafana/beyla/v3/internal/test/integration/components/promtest"
+	"github.com/grafana/beyla/v3/internal/test/integration/k8s/common/testpath"
 )
 
 const (

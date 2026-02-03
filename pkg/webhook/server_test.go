@@ -16,7 +16,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/kube/kubecache/informer"
 	"go.opentelemetry.io/obi/pkg/transform"
 
-	"github.com/grafana/beyla/v2/pkg/beyla"
+	"github.com/grafana/beyla/v3/pkg/beyla"
 )
 
 func TestEnrichProcessInfo(t *testing.T) {

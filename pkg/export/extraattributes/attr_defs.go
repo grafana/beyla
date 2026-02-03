@@ -4,7 +4,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 
-	names "github.com/grafana/beyla/v2/pkg/export/extraattributes/names"
+	names "github.com/grafana/beyla/v3/pkg/export/extraattributes/names"
 )
 
 const (

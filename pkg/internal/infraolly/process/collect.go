@@ -30,7 +30,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 
-	"github.com/grafana/beyla/v2/pkg/export/otel/bexport"
+	"github.com/grafana/beyla/v3/pkg/export/otel/bexport"
 )
 
 type CollectConfig struct {

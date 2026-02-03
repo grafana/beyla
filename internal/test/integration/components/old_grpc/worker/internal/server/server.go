@@ -10,7 +10,7 @@ import (
 	"math/big"
 	"math/rand"
 
-	"github.com/grafana/beyla/v2/internal/test/integration/components/old_grpc/worker/internal/gprc"
+	"github.com/grafana/beyla/v3/internal/test/integration/components/old_grpc/worker/internal/gprc"
 )
 
 var one = big.NewInt(1)

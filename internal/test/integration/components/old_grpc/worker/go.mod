@@ -1,4 +1,4 @@
-module github.com/grafana/beyla/v2/internal/test/integration/components/old_grpc/worker
+module github.com/grafana/beyla/v3/internal/test/integration/components/old_grpc/worker
 
 go 1.20
 

@@ -25,9 +25,9 @@ github.com/golang/protobuf/ptypes
 github.com/golang/protobuf/ptypes/any
 github.com/golang/protobuf/ptypes/duration
 github.com/golang/protobuf/ptypes/timestamp
-# github.com/grafana/beyla/v2/internal/test/integration/components/old_grpc/worker v0.0.0 => ../worker
+# github.com/grafana/beyla/v3/internal/test/integration/components/old_grpc/worker v0.0.0 => ../worker
 ## explicit; go 1.20
-github.com/grafana/beyla/v2/internal/test/integration/components/old_grpc/worker/pkg/gprc
+github.com/grafana/beyla/v3/internal/test/integration/components/old_grpc/worker/pkg/gprc
 # github.com/json-iterator/go v1.1.12
 ## explicit; go 1.12
 # github.com/klauspost/cpuid/v2 v2.0.9
@@ -156,4 +156,4 @@ google.golang.org/protobuf/types/known/durationpb
 google.golang.org/protobuf/types/known/timestamppb
 # gopkg.in/yaml.v3 v3.0.1
 ## explicit
-# github.com/grafana/beyla/v2/internal/test/integration/components/old_grpc/worker => ../worker
+# github.com/grafana/beyla/v3/internal/test/integration/components/old_grpc/worker => ../worker

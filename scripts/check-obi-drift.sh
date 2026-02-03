@@ -139,7 +139,7 @@ TRANSFORMATIONS=(
     # JSON format: "value":"..." (for Jaeger test fixtures etc)
     '"value":"go.opentelemetry.io/obi"|"value":"github.com/grafana/beyla"'
     # Go import paths need /v2 suffix
-    'go\.opentelemetry\.io/obi|github.com/grafana/beyla/v2'
+    'go\.opentelemetry\.io/obi|github.com/grafana/beyla/v3'
     'obi-k8s-test-cluster|beyla-k8s-test-cluster'
     # K8s test Dockerfile variable names
     'DockerfileOBI|DockerfileBeyla'

@@ -29,7 +29,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/protobuf/proto"
 
-	pb "github.com/grafana/beyla/v2/internal/test/integration/components/testserver/grpc/routeguide"
+	pb "github.com/grafana/beyla/v3/internal/test/integration/components/testserver/grpc/routeguide"
 )
 
 var jsonDBFile = flag.String("json_db_file", "", "A json file containing a list of features")

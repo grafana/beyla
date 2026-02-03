@@ -28,7 +28,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 
-	pb "github.com/grafana/beyla/v2/testserver_1.17/grpc/routeguide"
+	pb "github.com/grafana/beyla/v3/testserver_1.17/grpc/routeguide"
 )
 
 var counter int64

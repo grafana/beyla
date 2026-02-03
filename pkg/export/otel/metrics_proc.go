@@ -24,10 +24,10 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 
-	"github.com/grafana/beyla/v2/pkg/export/extraattributes"
-	extranames "github.com/grafana/beyla/v2/pkg/export/extraattributes/names"
-	"github.com/grafana/beyla/v2/pkg/export/otel/bexport"
-	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
+	"github.com/grafana/beyla/v3/pkg/export/extraattributes"
+	extranames "github.com/grafana/beyla/v3/pkg/export/extraattributes/names"
+	"github.com/grafana/beyla/v3/pkg/export/otel/bexport"
+	"github.com/grafana/beyla/v3/pkg/internal/infraolly/process"
 )
 
 var (

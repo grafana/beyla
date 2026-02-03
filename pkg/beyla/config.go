@@ -281,6 +281,10 @@ type SDKInject struct {
 	// Resource attributes related settings
 	// nolint:undoc
 	Resources SDKResource `yaml:"resources"`
+	// List of disabled SDK auto-instrumentations. Can be used to disable specific
+	// language instrumentations.
+	// nolint:undoc
+	DisabledSDKs []string `yaml:"disabled_sdks"`
 }
 
 // SDKExport defines which telemetry signals should be exported from injected SDKs.

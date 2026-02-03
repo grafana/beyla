@@ -10,6 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/export"
 	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
@@ -1989,6 +1990,136 @@ func TestConfigureContainerEnvVars_SDKExportConfig(t *testing.T) {
 				}
 				assert.True(t, found, "expected env var %s not found", envName)
 			}
+		})
+	}
+}
+
+func TestPodMutator_disableUndesiredSDKs(t *testing.T) {
+	tests := []struct {
+		name        string
+		enabledSDKs map[svc.InstrumentableType]any
+		expected    map[string]string // expected env vars that should be set to " "
+	}{
+		{
+			name: "all SDKs enabled - no env vars set",
+			enabledSDKs: map[svc.InstrumentableType]any{
+				svc.InstrumentableJava:   true,
+				svc.InstrumentableDotnet: true,
+				svc.InstrumentableNodejs: true,
+			},
+			expected: map[string]string{},
+		},
+		{
+			name: "Java disabled - only Java env var set",
+			enabledSDKs: map[svc.InstrumentableType]any{
+				svc.InstrumentableDotnet: true,
+				svc.InstrumentableNodejs: true,
+			},
+			expected: map[string]string{
+				envJavaEnabledName: " ",
+			},
+		},
+		{
+			name: "Dotnet disabled - only Dotnet env var set",
+			enabledSDKs: map[svc.InstrumentableType]any{
+				svc.InstrumentableJava:   true,
+				svc.InstrumentableNodejs: true,
+			},
+			expected: map[string]string{
+				envDotnetEnabledName: " ",
+			},
+		},
+		{
+			name: "NodeJS disabled - only NodeJS env var set",
+			enabledSDKs: map[svc.InstrumentableType]any{
+				svc.InstrumentableJava:   true,
+				svc.InstrumentableDotnet: true,
+			},
+			expected: map[string]string{
+				envNodejsEnabledName: " ",
+			},
+		},
+		{
+			name:        "all SDKs disabled - all env vars set",
+			enabledSDKs: map[svc.InstrumentableType]any{},
+			expected: map[string]string{
+				envJavaEnabledName:   " ",
+				envDotnetEnabledName: " ",
+				envNodejsEnabledName: " ",
+			},
+		},
+		{
+			name: "only Java enabled - Dotnet and NodeJS env vars set",
+			enabledSDKs: map[svc.InstrumentableType]any{
+				svc.InstrumentableJava: true,
+			},
+			expected: map[string]string{
+				envDotnetEnabledName: " ",
+				envNodejsEnabledName: " ",
+			},
+		},
+		{
+			name: "only Dotnet enabled - Java and NodeJS env vars set",
+			enabledSDKs: map[svc.InstrumentableType]any{
+				svc.InstrumentableDotnet: true,
+			},
+			expected: map[string]string{
+				envJavaEnabledName:   " ",
+				envNodejsEnabledName: " ",
+			},
+		},
+		{
+			name: "only NodeJS enabled - Java and Dotnet env vars set",
+			enabledSDKs: map[svc.InstrumentableType]any{
+				svc.InstrumentableNodejs: true,
+			},
+			expected: map[string]string{
+				envJavaEnabledName:   " ",
+				envDotnetEnabledName: " ",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pm := &PodMutator{
+				enabledSDKs: tt.enabledSDKs,
+			}
+
+			container := &corev1.Container{
+				Name: "test-container",
+				Env:  []corev1.EnvVar{},
+			}
+
+			pm.disableUndesiredSDKs(container)
+
+			// Check that expected env vars are set to " " (space character)
+			for envName, expectedValue := range tt.expected {
+				found := false
+				for _, env := range container.Env {
+					if env.Name == envName {
+						found = true
+						assert.Equal(t, expectedValue, env.Value, "env var %s should be set to disable SDK", envName)
+						break
+					}
+				}
+				assert.True(t, found, "expected env var %s to be set to disable SDK", envName)
+			}
+
+			// Check that unwanted env vars are NOT set
+			allSDKEnvVars := []string{envJavaEnabledName, envDotnetEnabledName, envNodejsEnabledName}
+			for _, envName := range allSDKEnvVars {
+				if _, shouldBeSet := tt.expected[envName]; !shouldBeSet {
+					for _, env := range container.Env {
+						if env.Name == envName {
+							t.Errorf("env var %s should not be set when SDK is enabled", envName)
+						}
+					}
+				}
+			}
+
+			// Verify total number of env vars matches expectations
+			assert.Equal(t, len(tt.expected), len(container.Env), "unexpected number of env vars set")
 		})
 	}
 }

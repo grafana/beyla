@@ -27,9 +27,10 @@ import (
 )
 
 var (
-	runtimeScheme = runtime.NewScheme()
-	codecFactory  = serializer.NewCodecFactory(runtimeScheme)
-	deserializer  = codecFactory.UniversalDeserializer()
+	runtimeScheme     = runtime.NewScheme()
+	codecFactory      = serializer.NewCodecFactory(runtimeScheme)
+	deserializer      = codecFactory.UniversalDeserializer()
+	supportedSDKLangs = []svc.InstrumentableType{svc.InstrumentableDotnet, svc.InstrumentableJava, svc.InstrumentableNodejs}
 )
 
 const (
@@ -61,6 +62,11 @@ const (
 	envOtelMetricsExporterName        = "OTEL_METRICS_EXPORTER"
 	envOtelTracesExporterName         = "OTEL_TRACES_EXPORTER"
 	envOtelLogsExporterName           = "OTEL_LOGS_EXPORTER"
+
+	// Enabling/disabling of language specific SDKs
+	envDotnetEnabledName = "DOTNET_AUTO_INSTRUMENTATION_AGENT_PATH_PREFIX"
+	envJavaEnabledName   = "JVM_AUTO_INSTRUMENTATION_AGENT_PATH"
+	envNodejsEnabledName = "NODEJS_AUTO_INSTRUMENTATION_AGENT_PATH"
 )
 
 func init() {
@@ -77,6 +83,7 @@ type PodMutator struct {
 	endpoint      string
 	proto         string
 	exportHeaders map[string]string
+	enabledSDKs   map[svc.InstrumentableType]any
 }
 
 // NewPodMutator creates a new PodMutator
@@ -99,14 +106,39 @@ func NewPodMutator(cfg *beyla.Config, matcher *PodMatcher) (*PodMutator, error) 
 		return nil, fmt.Errorf("unsupported SDK export protocol %s", proto)
 	}
 
+	logger := slog.Default().With("component", "webhook")
 	return &PodMutator{
-		logger:        slog.Default().With("component", "webhook"),
+		logger:        logger,
+		enabledSDKs:   enabledSDKs(cfg, logger),
 		matcher:       matcher,
 		cfg:           cfg,
 		endpoint:      opts.Scheme + "://" + opts.Endpoint + opts.BaseURLPath,
 		exportHeaders: opts.Headers,
 		proto:         string(cfg.Traces.Protocol),
 	}, nil
+}
+
+func enabledSDKs(cfg *beyla.Config, log *slog.Logger) map[svc.InstrumentableType]any {
+	langMap := map[svc.InstrumentableType]any{
+		svc.InstrumentableJava:   true,
+		svc.InstrumentableDotnet: true,
+		svc.InstrumentableNodejs: true,
+	}
+	for _, lang := range cfg.Injector.DisabledSDKs {
+		lang = strings.ToLower(lang)
+		found := false
+		for _, supported := range supportedSDKLangs {
+			if lang == supported.String() {
+				delete(langMap, supported)
+				found = true
+			}
+		}
+		if !found {
+			log.Info("unknown SDK language filter in configuration (supported SDKs: java, dotnet, nodejs)", "language", lang)
+		}
+	}
+
+	return langMap
 }
 
 func errorResponse(admResponse *admissionv1.AdmissionResponse, message string) {
@@ -117,12 +149,8 @@ func errorResponse(admResponse *admissionv1.AdmissionResponse, message string) {
 }
 
 func (pm *PodMutator) CanInstrument(kind svc.InstrumentableType) bool {
-	switch kind {
-	case svc.InstrumentableJava, svc.InstrumentableDotnet, svc.InstrumentableNodejs:
-		return true
-	}
-
-	return false
+	_, ok := pm.enabledSDKs[kind]
+	return ok
 }
 
 func (pm *PodMutator) PreloadsSomethingElse(info *ProcessInfo) bool {
@@ -436,6 +464,7 @@ func (pm *PodMutator) addEnvVars(meta *metav1.ObjectMeta, c *corev1.Container, s
 	setEnvVar(c, envOtelSemConvStabilityName, "http")
 
 	pm.configureContainerEnvVars(meta, c, selector)
+	pm.disableUndesiredSDKs(c)
 
 	for k, v := range pm.exportHeaders {
 		setEnvVar(c, k, v)

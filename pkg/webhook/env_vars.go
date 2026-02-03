@@ -13,6 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 )
@@ -357,5 +358,24 @@ func getResourceAttribute(kind string) attribute.Key {
 		return semconv.K8SCronJobNameKey
 	default:
 		return ""
+	}
+}
+
+// The injector code ignores empty environment variables, however
+// it will accept whitespace characters, <space>\t\r\n. These characters
+// are then stripped and the SDK path is set to empty, which disables
+// the SDK injection.
+func (pm *PodMutator) disableUndesiredSDKs(c *corev1.Container) {
+	for _, supported := range supportedSDKLangs {
+		if !pm.CanInstrument(supported) {
+			switch supported {
+			case svc.InstrumentableDotnet:
+				setEnvVar(c, envDotnetEnabledName, " ")
+			case svc.InstrumentableJava:
+				setEnvVar(c, envJavaEnabledName, " ")
+			case svc.InstrumentableNodejs:
+				setEnvVar(c, envNodejsEnabledName, " ")
+			}
+		}
 	}
 }

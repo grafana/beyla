@@ -8,7 +8,7 @@ type PayloadExtraction struct {
 }
 
 func (p PayloadExtraction) Enabled() bool {
-	return p.HTTP.GraphQL.Enabled || p.HTTP.Elasticsearch.Enabled || p.HTTP.AWS.Enabled
+	return p.HTTP.GraphQL.Enabled || p.HTTP.Elasticsearch.Enabled || p.HTTP.AWS.Enabled || p.HTTP.SQLPP.Enabled
 }
 
 type HTTPConfig struct {
@@ -18,6 +18,8 @@ type HTTPConfig struct {
 	Elasticsearch ElasticsearchConfig `yaml:"elasticsearch"`
 	// AWS payload extraction and parsing
 	AWS AWSConfig `yaml:"aws"`
+	// SQL++ payload extraction and parsing (Couchbase and other SQL++ databases)
+	SQLPP SQLPPConfig `yaml:"sqlpp"`
 }
 
 type GraphQLConfig struct {
@@ -33,4 +35,12 @@ type AWSConfig struct {
 type ElasticsearchConfig struct {
 	// Enable Elasticsearch payload extraction and parsing
 	Enabled bool `yaml:"enabled" env:"OTEL_EBPF_HTTP_ELASTICSEARCH_ENABLED" validate:"boolean"`
+}
+
+type SQLPPConfig struct {
+	// Enable SQL++ payload extraction and parsing
+	Enabled bool `yaml:"enabled" env:"OTEL_EBPF_HTTP_SQLPP_ENABLED" validate:"boolean"`
+	// EndpointPatterns specifies URL path patterns to detect SQL++ endpoints
+	// Example: ["/query/service", "/query"]
+	EndpointPatterns []string `yaml:"endpoint_patterns" env:"OTEL_EBPF_HTTP_SQLPP_ENDPOINT_PATTERNS"`
 }

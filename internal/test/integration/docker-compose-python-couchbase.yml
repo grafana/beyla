@@ -5,6 +5,7 @@ services:
     image: couchbase:community-7.6.1@sha256:878cc4e64321aaa599f7079ef7528babe376d06bb998bbee3b327d72cb3ac44f
     ports:
       - "8091:8091"
+      - "8093:8093"
       - "11210:11210"
     ulimits:
       nofile:
@@ -53,6 +54,11 @@ services:
           -u Administrator -p password \
           --bucket test-bucket \
           --create-collection test-scope.test-collection
+        echo 'Waiting for query service to be ready...'
+        until curl -s -u Administrator:password http://couchbase:8093/admin/ping > /dev/null 2>&1; do
+          echo 'Query service not ready, waiting...'
+          sleep 2
+        done
         echo 'Couchbase initialization complete'
 
   testserver:
@@ -97,10 +103,13 @@ services:
       BEYLA_HOSTNAME: "beyla"
       BEYLA_BPF_HTTP_REQUEST_TIMEOUT: "5s"
       BEYLA_PROCESSES_INTERVAL: "100ms"
-      BEYLA_OTEL_TRACES_INSTRUMENTATIONS: "couchbase"
-      BEYLA_OTEL_METRICS_INSTRUMENTATIONS: "couchbase"
+      BEYLA_OTEL_TRACES_INSTRUMENTATIONS: "http,couchbase"
+      BEYLA_OTEL_METRICS_INSTRUMENTATIONS: "http,couchbase"
       BEYLA_OTEL_METRICS_FEATURES: "application"
       BEYLA_PROTOCOL_DEBUG_PRINT: "true"
+      # SQL++ settings
+      BEYLA_BPF_BUFFER_SIZE_HTTP: 2048
+      BEYLA_HTTP_SQLPP_ENABLED: "true"
     depends_on:
       testserver:
         condition: service_started

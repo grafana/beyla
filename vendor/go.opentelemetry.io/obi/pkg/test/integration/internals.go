@@ -6,8 +6,8 @@ package integration // import "go.opentelemetry.io/obi/pkg/test/integration"
 import (
 	"net/http"
 	"testing"
+	"time"
 
-	"github.com/mariomac/guara/pkg/test"
 	io_prometheus_client "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 	"github.com/prometheus/common/model"
@@ -33,15 +33,15 @@ func InternalPrometheusExport(t *testing.T, config *TestConfig) {
 		DoHTTPGet(t, instrumentedServiceStdURL+"/testing/some/flushes", http.StatusOK)
 	}
 	eventuallyIterations := 0
-	test.Eventually(t, testTimeout, func(t require.TestingT) {
+	require.EventuallyWithT(t, func(ct *assert.CollectT) {
 		eventuallyIterations++
-		endFlushedRecords := metricValue(t, flushesMetricName, nil)
+		endFlushedRecords := metricValue(ct, flushesMetricName, nil)
 		// we use LessOrEqual because other elements could have been flushed
 		// from other tests. The correct count of flushes is being tested in the unit
 		// tests, so we just test here that the metrics are properly exported.
-		assert.LessOrEqual(t, 7, endFlushedRecords-initialFlushedRecords,
+		assert.LessOrEqual(ct, 7, endFlushedRecords-initialFlushedRecords,
 			"%d - %d should be >= 7", endFlushedRecords, initialFlushedRecords)
-	})
+	}, testTimeout, 100*time.Millisecond)
 
 	// also testing the internal instrumentation of the prometheus export
 	// prometheus metrics endpoint must have been invoked once at the beginning of the test,

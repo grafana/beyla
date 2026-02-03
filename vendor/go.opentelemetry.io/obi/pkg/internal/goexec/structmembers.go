@@ -63,6 +63,9 @@ const (
 	ScConnPos
 	CRwcPos
 	CTlsPos
+	TextReaderRPos
+	BufReaderBufPos
+	BufReaderWPos
 	// grpc
 	GrpcStreamStPtrPos
 	GrpcStreamMethodPtrPos
@@ -317,6 +320,19 @@ var structMembers = map[string]structInfo{
 		lib: "go",
 		fields: map[string]GoOffset{
 			"ServiceMethod": GoJsonrpcRequestHeaderServiceMethodPos,
+		},
+	},
+	"net/textproto.Reader": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"R": TextReaderRPos,
+		},
+	},
+	"bufio.Reader": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"buf": BufReaderBufPos,
+			"w":   BufReaderWPos,
 		},
 	},
 	"google.golang.org/grpc/internal/transport.bufWriter": {

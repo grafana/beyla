@@ -10,6 +10,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"path"
 	"reflect"
 	"runtime"
 	"strings"
@@ -27,6 +28,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	ebpfconvenience "go.opentelemetry.io/obi/pkg/internal/ebpf/convenience"
 	"go.opentelemetry.io/obi/pkg/internal/goexec"
+	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 )
 
@@ -108,13 +110,14 @@ func unloadInternalMaps(eventContext *common.EBPFEventContext) {
 	eventContext.EBPFMaps = make(map[string]*ebpf.Map)
 }
 
-func NewProcessTracer(tracerType ProcessTracerType, programs []Tracer, shutdownTimeout time.Duration, metrics imetrics.Reporter) *ProcessTracer {
+func NewProcessTracer(tracerType ProcessTracerType, programs []Tracer, cfg *obi.Config, metrics imetrics.Reporter) *ProcessTracer {
 	return &ProcessTracer{
 		Programs:        programs,
 		Type:            tracerType,
 		Instrumentables: map[uint64]*instrumenter{},
-		shutdownTimeout: shutdownTimeout,
+		shutdownTimeout: cfg.ShutdownTimeout,
 		metrics:         metrics,
+		bpfFsPath:       cfg.EBPF.BpfFsPath,
 	}
 }
 
@@ -182,6 +185,16 @@ func (pt *ProcessTracer) loadSpec(p Tracer) (*ebpf.CollectionSpec, error) {
 	return spec, nil
 }
 
+func (pt *ProcessTracer) makeOtelBpfFsPath() (string, error) {
+	otelPath := path.Join(pt.bpfFsPath, "otel")
+
+	if err := os.MkdirAll(otelPath, 0o1700); err != nil {
+		return "", fmt.Errorf("creating bpffs otel path: %w", err)
+	}
+
+	return otelPath, nil
+}
+
 func (pt *ProcessTracer) loadAndAssign(eventContext *common.EBPFEventContext, p Tracer) error {
 	spec, err := pt.loadSpec(p)
 	if err != nil {
@@ -193,7 +206,23 @@ func (pt *ProcessTracer) loadAndAssign(eventContext *common.EBPFEventContext, p 
 		return err
 	}
 
+	otelBpfFsPath, err := pt.makeOtelBpfFsPath()
+	if err != nil {
+		slog.Error("creating OTEL namespace in BPFFS failed (is BPFFS mounted?)", "bpf_fs_path", pt.bpfFsPath, "err", err)
+
+		// Avoid load errors due to pinning when BPFFS is not mounted
+		// OBI will still work, but features depending on pinned maps (e.g., log enricher, profile correlation)
+		// will not work.
+		for _, v := range spec.Maps {
+			if v.Pinning == ebpf.PinByName {
+				v.Pinning = ebpf.PinNone
+				v.MaxEntries = 1
+			}
+		}
+	}
+
 	collOpts.Programs = ebpf.ProgramOptions{LogSizeStart: 640 * 1024}
+	collOpts.Maps = ebpf.MapOptions{PinPath: otelBpfFsPath}
 
 	return spec.LoadAndAssign(p.BpfObjects(), collOpts)
 }

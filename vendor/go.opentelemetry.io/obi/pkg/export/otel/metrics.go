@@ -850,7 +850,11 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 				grpcClientDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
 			}
 		case request.EventTypeHTTPClient:
-			if mr.is.HTTPEnabled() {
+			// HTTP client subtypes that are database calls get recorded as db client metrics
+			if mr.is.DBEnabled() && (span.SubType == request.HTTPSubtypeSQLPP || span.SubType == request.HTTPSubtypeElasticsearch) {
+				dbClientDuration, attrs := r.dbClientDuration.ForRecord(span)
+				dbClientDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
+			} else if mr.is.HTTPEnabled() {
 				httpClientDuration, attrs := r.httpClientDuration.ForRecord(span)
 				httpClientDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
 				httpClientRequestSize, attrs := r.httpClientRequestSize.ForRecord(span)
@@ -1187,9 +1191,15 @@ func (r *Metrics) cleanupAllMetricsInstances() {
 	cleanupMetrics(r.ctx, r.httpRequestSize)
 	cleanupMetrics(r.ctx, r.httpResponseSize)
 	cleanupMetrics(r.ctx, r.httpClientRequestSize)
+	cleanupMetrics(r.ctx, r.httpClientResponseSize)
 	cleanupMetrics(r.ctx, r.spanMetricsLatency)
 	cleanupCounterMetrics(r.ctx, r.spanMetricsCallsTotal)
 	cleanupFloatCounterMetrics(r.ctx, r.spanMetricsRequestSizeTotal)
 	cleanupFloatCounterMetrics(r.ctx, r.spanMetricsResponseSizeTotal)
 	cleanupCounterMetrics(r.ctx, r.gpuKernelCallsTotal)
+	cleanupCounterMetrics(r.ctx, r.gpuMemoryAllocsTotal)
+	cleanupMetrics(r.ctx, r.gpuKernelGridSize)
+	cleanupMetrics(r.ctx, r.gpuKernelBlockSize)
+	cleanupMetrics(r.ctx, r.gpuMemoryCopySize)
+	cleanupMetrics(r.ctx, r.dnsLookupDuration)
 }

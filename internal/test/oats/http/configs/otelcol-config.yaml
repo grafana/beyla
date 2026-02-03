@@ -8,9 +8,6 @@ receivers:
             - "http://*"
             - "https://*"
 
-processors:
-  batch:
-
 exporters:
   prometheusremotewrite:
     endpoint: http://prometheus:9090/api/v1/write
@@ -24,9 +21,7 @@ service:
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [batch]
       exporters: [otlp]
     metrics:
       receivers: [otlp]
-      processors: [batch]
       exporters: [prometheusremotewrite]

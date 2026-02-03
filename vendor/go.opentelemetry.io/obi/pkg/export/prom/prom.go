@@ -864,7 +864,12 @@ func (r *metricsReporter) observe(span *request.Span) {
 				).Metric.Observe(float64(span.ResponseBodyLength()))
 			}
 		case request.EventTypeHTTPClient:
-			if r.is.HTTPEnabled() {
+			// HTTP client subtypes that are database calls get recorded as db client metrics
+			if r.is.DBEnabled() && (span.SubType == request.HTTPSubtypeSQLPP || span.SubType == request.HTTPSubtypeElasticsearch) {
+				r.dbClientDuration.WithLabelValues(
+					labelValues(span, r.attrDBClientDuration)...,
+				).Metric.Observe(duration)
+			} else if r.is.HTTPEnabled() {
 				r.httpClientDuration.WithLabelValues(
 					labelValues(span, r.attrHTTPClientDuration)...,
 				).Metric.Observe(duration)

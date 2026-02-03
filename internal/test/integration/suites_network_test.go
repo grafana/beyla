@@ -173,19 +173,19 @@ func TestNetwork_IfaceDirection_Use_Socket_Filter(t *testing.T) {
 func getNetFlows(t *testing.T) []promtest.Result {
 	var results []promtest.Result
 	pq := promtest.Client{HostPort: prometheusHostPort}
-	test.Eventually(t, 4*testTimeout, func(t require.TestingT) {
+	require.EventuallyWithT(t, func(ct *assert.CollectT) {
 		// first, verify that the test service endpoint is healthy
 		req, err := http.NewRequest(http.MethodGet, instrumentedServiceStdURL, nil)
-		require.NoError(t, err)
+		require.NoError(ct, err)
 		r, err := testHTTPClient.Do(req)
-		require.NoError(t, err)
-		require.Equal(t, http.StatusOK, r.StatusCode)
+		require.NoError(ct, err)
+		require.Equal(ct, http.StatusOK, r.StatusCode)
 
 		// now, verify that the network metric has been reported.
 		results, err = pq.Query(`beyla_network_flow_bytes_total`)
-		require.NoError(t, err)
-		require.NotEmpty(t, results)
-	}, test.Interval(time.Second))
+		require.NoError(ct, err)
+		require.NotEmpty(ct, results)
+	}, 4*testTimeout, time.Second)
 	return results
 }
 
@@ -194,11 +194,11 @@ func getDirectionNetFlows(t *testing.T) []promtest.Result {
 	pq := promtest.Client{HostPort: prometheusHostPort}
 
 	// wait for first network flow metrics
-	test.Eventually(t, 4*testTimeout, func(t require.TestingT) {
+	require.EventuallyWithT(t, func(ct *assert.CollectT) {
 		results, err := pq.Query(`beyla_network_flow_bytes_total`)
-		require.NoError(t, err)
-		require.NotEmpty(t, results)
-	}, test.Interval(time.Second))
+		require.NoError(ct, err)
+		require.NotEmpty(ct, results)
+	}, 4*testTimeout, time.Second)
 
 	// make a few calls to the testserver, which will call testserver2 with a source port lower than a destination port (7000 -> 8080)
 	req, err := http.NewRequest(http.MethodGet, "http://localhost:8080/echoLowPort", nil)
@@ -208,12 +208,12 @@ func getDirectionNetFlows(t *testing.T) []promtest.Result {
 	callAndCheckMetrics(t, req, pq, clientBytes, serverBytes)
 
 	// verify that the correct network metric has been reported.
-	test.Eventually(t, 4*testTimeout, func(t require.TestingT) {
+	require.EventuallyWithT(t, func(ct *assert.CollectT) {
 		results, err = pq.Query(`beyla_network_flow_bytes_total{src_port="7000", dst_port="8080"} or beyla_network_flow_bytes_total{src_port="8080", dst_port="7000"}`)
-		require.NoError(t, err)
-		require.Len(t, results, 2)
-		require.NotEmpty(t, results)
-	}, test.Interval(time.Second))
+		require.NoError(ct, err)
+		require.Len(ct, results, 2)
+		require.NotEmpty(ct, results)
+	}, 4*testTimeout, time.Second)
 	return results
 }
 
@@ -226,18 +226,18 @@ func callAndCheckMetrics(t *testing.T, req *http.Request, pq promtest.Client, pr
 	require.Equal(t, http.StatusOK, r.StatusCode)
 
 	// wait for fetching aggregated flows in beyla about this call
-	test.Eventually(t, 4*testTimeout, func(t require.TestingT) {
+	require.EventuallyWithT(t, func(ct *assert.CollectT) {
 		results, err := pq.Query(`beyla_network_flow_bytes_total{src_port="7000", dst_port="8080"} or beyla_network_flow_bytes_total{src_port="8080", dst_port="7000"}`)
-		require.NoError(t, err)
-		require.Len(t, results, 2)
-		require.NotEmpty(t, results)
+		require.NoError(ct, err)
+		require.Len(ct, results, 2)
+		require.NotEmpty(ct, results)
 		// wait till the amount of bytes is greater than the previous read
 		client := results[slices.IndexFunc(results, func(result promtest.Result) bool { return result.Metric["dst_port"] == "8080" })]
 		clientValue, _ = strconv.Atoi(client.Value[1].(string))
-		require.Greater(t, clientValue, previousClientValue)
+		require.Greater(ct, clientValue, previousClientValue)
 		server := results[slices.IndexFunc(results, func(result promtest.Result) bool { return result.Metric["src_port"] == "8080" })]
 		serverValue, _ = strconv.Atoi(server.Value[1].(string))
-		require.Greater(t, serverValue, previousServerValue)
-	}, test.Interval(time.Second))
+		require.Greater(ct, serverValue, previousServerValue)
+	}, 4*testTimeout, time.Second)
 	return clientValue, serverValue
 }

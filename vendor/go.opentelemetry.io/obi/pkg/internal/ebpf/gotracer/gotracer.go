@@ -46,6 +46,7 @@ type Tracer struct {
 	bpfObjects              BpfObjects
 	closers                 []io.Closer
 	disabledRouteHarvesting bool
+	supportsBPFLoop         bool
 }
 
 func New(pidFilter ebpfcommon.ServiceFilter, cfg *obi.Config, metrics imetrics.Reporter) *Tracer {
@@ -66,6 +67,7 @@ func New(pidFilter ebpfcommon.ServiceFilter, cfg *obi.Config, metrics imetrics.R
 		cfg:                     &cfg.EBPF,
 		metrics:                 metrics,
 		disabledRouteHarvesting: disabledRouteHarvesting,
+		supportsBPFLoop:         ebpfcommon.SupportsEBPFLoops(log, cfg.EBPF.OverrideBPFLoopEnabled),
 	}
 }
 
@@ -99,19 +101,21 @@ func (p *Tracer) Constants() map[string]any {
 	}
 
 	return map[string]any{
-		"g_bpf_debug":              p.cfg.BpfDebug,
-		"g_bpf_header_propagation": p.supportsContextPropagation(),
-		"wakeup_data_bytes":        uint32(p.cfg.WakeupLen) * uint32(unsafe.Sizeof(ebpfcommon.HTTPRequestTrace{})),
-		"disable_black_box_cp":     blackBoxCP,
-		"attr_type_invalid":        uint64(attribute.INVALID),
-		"attr_type_bool":           uint64(attribute.BOOL),
-		"attr_type_int64":          uint64(attribute.INT64),
-		"attr_type_float64":        uint64(attribute.FLOAT64),
-		"attr_type_string":         uint64(attribute.STRING),
-		"attr_type_boolslice":      uint64(attribute.BOOLSLICE),
-		"attr_type_int64slice":     uint64(attribute.INT64SLICE),
-		"attr_type_float64slice":   uint64(attribute.FLOAT64SLICE),
-		"attr_type_stringslice":    uint64(attribute.STRINGSLICE),
+		"g_bpf_debug":               p.cfg.BpfDebug,
+		"g_bpf_header_propagation":  p.supportsContextPropagation(),
+		"wakeup_data_bytes":         uint32(p.cfg.WakeupLen) * uint32(unsafe.Sizeof(ebpfcommon.HTTPRequestTrace{})),
+		"disable_black_box_cp":      blackBoxCP,
+		"attr_type_invalid":         uint64(attribute.INVALID),
+		"attr_type_bool":            uint64(attribute.BOOL),
+		"attr_type_int64":           uint64(attribute.INT64),
+		"attr_type_float64":         uint64(attribute.FLOAT64),
+		"attr_type_string":          uint64(attribute.STRING),
+		"attr_type_boolslice":       uint64(attribute.BOOLSLICE),
+		"attr_type_int64slice":      uint64(attribute.INT64SLICE),
+		"attr_type_float64slice":    uint64(attribute.FLOAT64SLICE),
+		"attr_type_stringslice":     uint64(attribute.STRINGSLICE),
+		"g_bpf_traceparent_enabled": true,
+		"g_bpf_loop_enabled":        p.supportsBPFLoop,
 	}
 }
 
@@ -149,6 +153,9 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 		goexec.ScConnPos,
 		goexec.CRwcPos,
 		goexec.CTlsPos,
+		goexec.TextReaderRPos,
+		goexec.BufReaderBufPos,
+		goexec.BufReaderWPos,
 		// grpc
 		goexec.GrpcStreamStPtrPos,
 		goexec.GrpcStreamMethodPtrPos,
@@ -270,9 +277,6 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 			Start: p.bpfObjects.ObiUprobeJsonrpcReadRequestHeader,
 			End:   p.bpfObjects.ObiUprobeJsonrpcReadRequestHeaderReturns,
 		}},
-		"net/textproto.(*Reader).readContinuedLineSlice": {{
-			End: p.bpfObjects.ObiUprobeReadContinuedLineSliceReturns,
-		}},
 		"net/http.(*Transport).roundTrip": {{ // HTTP client, works with Client.Do as well as using the RoundTripper directly
 			Start: p.bpfObjects.ObiUprobeRoundTrip,
 			End:   p.bpfObjects.ObiUprobeRoundTripReturn,
@@ -321,11 +325,9 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 			Start: p.bpfObjects.ObiUprobeConnServe,
 			End:   p.bpfObjects.ObiUprobeConnServeRet,
 		}},
-		"net.(*netFD).Read": {
-			{
-				Start: p.bpfObjects.ObiUprobeNetFdRead,
-			},
-		},
+		"net.(*netFD).Read": {{
+			Start: p.bpfObjects.ObiUprobeNetFdRead,
+		}},
 		"net/http.(*persistConn).roundTrip": {{ // http client
 			Start: p.bpfObjects.ObiUprobePersistConnRoundTrip,
 		}},
@@ -562,6 +564,23 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 		"go.mongodb.org/mongo-driver/v2/mongo.(*Collection).Distinct": {{
 			Start: p.bpfObjects.ObiUprobeMongoOpDistinct,
 		}},
+	}
+
+	// HTTP Header extraction
+	// with bpf_loop we scan the buffer with a single uprobe - this is less overhead
+	// otherwise we have a probe per header net/textproto.(*Reader).readContinuedLineSlice
+	if p.supportsBPFLoop {
+		m["net/textproto.readMIMEHeader"] = []*ebpfcommon.ProbeDesc{{
+			Start: p.bpfObjects.ObiUprobeReadMimeHeader,
+		}}
+		// old go versions
+		m["net/textproto.(*Reader).ReadMIMEHeader"] = []*ebpfcommon.ProbeDesc{{
+			Start: p.bpfObjects.ObiUprobeReadMimeHeader,
+		}}
+	} else {
+		m["net/textproto.(*Reader).readContinuedLineSlice"] = []*ebpfcommon.ProbeDesc{{
+			End: p.bpfObjects.ObiUprobeReadContinuedLineSliceReturns,
+		}}
 	}
 
 	// Route extraction

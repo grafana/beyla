@@ -143,6 +143,7 @@ network:
 		EBPF: obiconfig.EBPFTracer{
 			BatchLength:        100,
 			BatchTimeout:       time.Second,
+			WakeupLen:          500,
 			HTTPRequestTimeout: 0,
 			MaxTransactionTime: 5 * time.Minute,
 			TCBackend:          obiconfig.TCBackendAuto,
@@ -162,12 +163,22 @@ network:
 			MongoRequestsCacheSize:              1024,
 			KafkaTopicUUIDCacheSize:             1024,
 			CouchbaseDBCacheSize:                1024,
+			PayloadExtraction: obiconfig.PayloadExtraction{
+				HTTP: obiconfig.HTTPConfig{
+					SQLPP: obiconfig.SQLPPConfig{
+						EndpointPatterns: []string{
+							"/query/service",
+						},
+					},
+				},
+			},
 			LogEnricher: obiconfig.LogEnricherConfig{
 				CacheTTL:              30 * time.Minute,
 				CacheSize:             128,
 				AsyncWriterWorkers:    8,
 				AsyncWriterChannelLen: 500,
 			},
+			BpfFsPath: "/sys/fs/bpf/",
 		},
 		Grafana: otel.GrafanaConfig{
 			OTLP: otel.GrafanaOTLP{
@@ -211,6 +222,8 @@ network:
 				instrumentations.InstrumentationKafka,
 				instrumentations.InstrumentationMQTT,
 				instrumentations.InstrumentationMongo,
+				instrumentations.InstrumentationCouchbase,
+				// no traces for DNS and GPU by default
 			},
 		},
 		Prometheus: prom.PrometheusConfig{

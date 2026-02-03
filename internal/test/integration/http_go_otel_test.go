@@ -151,21 +151,21 @@ func TestHTTPGoOTelInstrumentedApp(t *testing.T) {
 
 func otelWaitForTestComponents(t *testing.T, url, subpath string) {
 	pq := promtest.Client{HostPort: prometheusHostPort}
-	test.Eventually(t, 1*time.Minute, func(t require.TestingT) {
+	require.EventuallyWithT(t, func(ct *assert.CollectT) {
 		// first, verify that the test service endpoint is healthy
 		req, err := http.NewRequest(http.MethodGet, url+subpath, nil)
-		require.NoError(t, err)
+		require.NoError(ct, err)
 		r, err := testHTTPClient.Do(req)
-		require.NoError(t, err)
-		require.Equal(t, http.StatusOK, r.StatusCode)
+		require.NoError(ct, err)
+		require.Equal(ct, http.StatusOK, r.StatusCode)
 
 		// now, verify that the metric has been reported.
 		// we don't really care that this metric could be from a previous
 		// test. Once one it is visible, it means that Otel and Prometheus are healthy
 		results, err := pq.Query(`http_server_duration_count{http_method="GET"}`)
-		require.NoError(t, err)
-		require.NotEmpty(t, results)
-	}, test.Interval(time.Second))
+		require.NoError(ct, err)
+		require.NotEmpty(ct, results)
+	}, 1*time.Minute, time.Second)
 }
 
 func TestHTTPGoOTelAvoidsInstrumentedApp(t *testing.T) {
@@ -242,25 +242,25 @@ func TestHTTPGoOTelInstrumentedAppGRPC(t *testing.T) {
 }
 
 func otelWaitForTestComponentsTraces(t *testing.T, url, subpath string) {
-	test.Eventually(t, 1*time.Minute, func(t require.TestingT) {
+	require.EventuallyWithT(t, func(ct *assert.CollectT) {
 		// first, verify that the test service endpoint is healthy
 		req, err := http.NewRequest(http.MethodGet, url+subpath, nil)
-		require.NoError(t, err)
+		require.NoError(ct, err)
 		r, err := testHTTPClient.Do(req)
-		require.NoError(t, err)
-		require.Equal(t, http.StatusOK, r.StatusCode)
+		require.NoError(ct, err)
+		require.Equal(ct, http.StatusOK, r.StatusCode)
 
 		resp, err := http.Get(jaegerQueryURL + "?service=dicer&operation=Smoke")
-		require.NoError(t, err)
+		require.NoError(ct, err)
 		if resp == nil {
 			return
 		}
-		require.Equal(t, http.StatusOK, resp.StatusCode)
+		require.Equal(ct, http.StatusOK, resp.StatusCode)
 		var tq jaeger.TracesQuery
-		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
+		require.NoError(ct, json.NewDecoder(resp.Body).Decode(&tq))
 		traces := tq.FindBySpan(jaeger.Tag{Key: "http.method", Type: "string", Value: "GET"})
-		assert.LessOrEqual(t, 1, len(traces))
-	}, test.Interval(time.Second))
+		assert.LessOrEqual(ct, 1, len(traces))
+	}, 1*time.Minute, time.Second)
 }
 
 func TestHTTPGoOTelAvoidsInstrumentedAppGRPC(t *testing.T) {

@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mariomac/guara/pkg/test"
 	"github.com/prometheus/common/expfmt"
 	"github.com/prometheus/common/model"
 	"github.com/stretchr/testify/assert"
@@ -82,44 +81,44 @@ func TestAvoidedServicesMetrics(t *testing.T) {
 
 func checkInstrumentationErrorMetrics(t *testing.T) {
 	pq := promtest.Client{HostPort: prometheusHostPort}
-	test.Eventually(t, testTimeout, func(t require.TestingT) {
+	require.EventuallyWithT(t, func(ct *assert.CollectT) {
 		results, err := pq.Query(`beyla_instrumentation_errors_total`)
-		require.NoError(t, err)
+		require.NoError(ct, err)
 
-		require.GreaterOrEqual(t, len(results), 1, "beyla_instrumentation_errors_total metric should be present")
+		require.GreaterOrEqual(ct, len(results), 1, "beyla_instrumentation_errors_total metric should be present")
 
 		// Verify we have some errors and proper labels
 		totalErrors := 0
 		for _, result := range results {
 			labels := result.Metric
-			require.Contains(t, labels, "process_name", "process_name label should be present")
-			require.Contains(t, labels, "error_type", "error_type label should be present")
+			require.Contains(ct, labels, "process_name", "process_name label should be present")
+			require.Contains(ct, labels, "error_type", "error_type label should be present")
 
 			value, err := strconv.Atoi(result.Value[1].(string))
-			require.NoError(t, err)
+			require.NoError(ct, err)
 			totalErrors += value
 		}
 
 		// We should have at least some errors when running without privileges
-		require.Positive(t, totalErrors, "Should have instrumentation errors when running without privileges")
-	}, test.Interval(1000*time.Millisecond))
+		require.Positive(ct, totalErrors, "Should have instrumentation errors when running without privileges")
+	}, testTimeout, 1000*time.Millisecond)
 }
 
 func checkAvoidedServicesMetrics(t *testing.T) {
 	const internalMetricsURL = "http://localhost:8999/internal/metrics"
 
-	test.Eventually(t, testTimeout, func(t require.TestingT) {
+	require.EventuallyWithT(t, func(ct *assert.CollectT) {
 		parser := expfmt.NewTextParser(model.UTF8Validation)
 		resp, err := http.Get(internalMetricsURL)
-		require.NoError(t, err)
-		require.Equal(t, http.StatusOK, resp.StatusCode)
+		require.NoError(ct, err)
+		require.Equal(ct, http.StatusOK, resp.StatusCode)
 
 		metrics, err := parser.TextToMetricFamilies(resp.Body)
-		require.NoError(t, err)
+		require.NoError(ct, err)
 
 		metricFamily, ok := metrics["beyla_avoided_services"]
-		require.True(t, ok, "Expected beyla_avoided_services metric to be present")
-		require.NotEmpty(t, metricFamily.Metric, "Expected avoided services metrics to have values")
+		require.True(ct, ok, "Expected beyla_avoided_services metric to be present")
+		require.NotEmpty(ct, metricFamily.Metric, "Expected avoided services metrics to have values")
 
 		// Just check the first occurrence
 		metric := metricFamily.Metric[0]
@@ -129,18 +128,18 @@ func checkAvoidedServicesMetrics(t *testing.T) {
 		}
 
 		// Assert specific values for service_name and service_namespace
-		assert.Equal(t, "rolldice", labelMap["service_name"], "service_name label should be 'rolldice'")
-		assert.Equal(t, "integration-test", labelMap["service_namespace"], "service_namespace label should be 'integration-test'")
-		assert.NotEmpty(t, labelMap["telemetry_type"], "telemetry_type label should not be empty")
-		assert.Condition(t, func() bool {
+		assert.Equal(ct, "rolldice", labelMap["service_name"], "service_name label should be 'rolldice'")
+		assert.Equal(ct, "integration-test", labelMap["service_namespace"], "service_namespace label should be 'integration-test'")
+		assert.NotEmpty(ct, labelMap["telemetry_type"], "telemetry_type label should not be empty")
+		assert.Condition(ct, func() bool {
 			return labelMap["telemetry_type"] == "metrics" || labelMap["telemetry_type"] == "traces"
 		}, "telemetry_type label should be either 'metrics' or 'traces'")
 		// service_instance_id can be empty, but should be present
 		_, ok = labelMap["service_instance_id"]
-		assert.True(t, ok, "service_instance_id label should be present")
+		assert.True(ct, ok, "service_instance_id label should be present")
 
 		if metric.Gauge != nil {
-			assert.Greater(t, metric.Gauge.GetValue(), float64(0), "Expected avoided service metric value to be > 0")
+			assert.Greater(ct, metric.Gauge.GetValue(), float64(0), "Expected avoided service metric value to be > 0")
 		}
-	}, test.Interval(1000*time.Millisecond))
+	}, testTimeout, 1000*time.Millisecond)
 }

@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mariomac/guara/pkg/test"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/v2/internal/test/integration/components/docker"
@@ -60,27 +60,27 @@ func testPerAppFeatures(t *testing.T, exportedSource string) {
 var pq = promtest.Client{HostPort: prometheusHostPort}
 
 func checkSpanMetric(t *testing.T, timeout time.Duration, exportedSource, serviceName string, port int, path string) {
-	test.Eventually(t, timeout, func(t require.TestingT) {
+	require.EventuallyWithT(t, func(ct *assert.CollectT) {
 		// first, verify that the test service endpoint is healthy
 		req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://localhost:%d%s", port, path), nil)
-		require.NoError(t, err)
+		require.NoError(ct, err)
 		_, err = testHTTPClient.Do(req)
-		require.NoError(t, err)
+		require.NoError(ct, err)
 
 		results, err := pq.Query(`traces_spanmetrics_latency_sum{exported="` + exportedSource +
 			`",service_name="` + serviceName + `",span_name="GET ` + path + `"}`)
-		require.NoError(t, err)
-		require.NotEmpty(t, results)
-	}, test.Interval(time.Second))
+		require.NoError(ct, err)
+		require.NotEmpty(ct, results)
+	}, timeout, time.Second)
 }
 
 func hasREDMetrics(t *testing.T, exportedSource, serviceName string, path string) {
-	test.Eventually(t, time.Minute, func(t require.TestingT) {
+	require.EventuallyWithT(t, func(ct *assert.CollectT) {
 		results, err := pq.Query(`http_server_request_body_size_bytes_sum{exported="` + exportedSource +
 			`",service_name="` + serviceName + `",http_route="` + path + `"}`)
-		require.NoError(t, err)
-		require.NotEmpty(t, results)
-	}, test.Interval(time.Second))
+		require.NoError(ct, err)
+		require.NotEmpty(ct, results)
+	}, time.Minute, time.Second)
 }
 
 func hasNotREDMetrics(t *testing.T, serviceName string) {

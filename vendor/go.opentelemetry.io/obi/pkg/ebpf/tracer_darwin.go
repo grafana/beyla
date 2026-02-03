@@ -5,7 +5,6 @@ package ebpf // import "go.opentelemetry.io/obi/pkg/ebpf"
 
 import (
 	"context"
-	"time"
 
 	"github.com/cilium/ebpf/link"
 
@@ -13,6 +12,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
+	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 )
 
@@ -26,13 +26,13 @@ func (pt *ProcessTracer) Run(ctx context.Context, _ *ebpfcommon.EBPFEventContext
 	pt.metrics.Start(ctx)
 }
 
-func NewProcessTracer(_ ProcessTracerType, _ []Tracer, _ time.Duration, _ imetrics.Reporter) *ProcessTracer {
+func NewProcessTracer(_ ProcessTracerType, _ []Tracer, _ *obi.Config, _ imetrics.Reporter) *ProcessTracer {
 	return nil
 }
 
 func (pt *ProcessTracer) Init(_ *ebpfcommon.EBPFEventContext) error {
-	pt.log.Debug("avoiding linter complaints for not using log and shutdownTimeout fields",
-		"v", pt.shutdownTimeout)
+	pt.log.Debug("avoiding linter complaints for not using log, shutdownTimeout, and bpfFsPath fields",
+		"v", pt.shutdownTimeout, "bpfFsPath", pt.bpfFsPath)
 	return nil
 }
 

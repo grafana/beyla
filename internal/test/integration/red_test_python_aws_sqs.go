@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mariomac/guara/pkg/test"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/v2/internal/test/integration/components/jaeger"
@@ -42,14 +42,14 @@ func testPythonAWSSQS(t *testing.T) {
 	awsReq(t, awsProxyAddress+"/getqueueattributes?queue_url="+qr.QueueURL)
 	awsReq(t, awsProxyAddress+"/deletequeue?queue_url="+qr.QueueURL)
 
-	test.Eventually(t, testTimeout, func(t require.TestingT) {
-		assertSQSOperation(t, "CreateQueue", qr.QueueURL, "", "")
-		assertSQSOperation(t, "SendMessage", qr.QueueURL, mr.Messages[0].MessageID, "send")
-		assertSQSOperation(t, "ReceiveMessage", qr.QueueURL, "", "receive")
-		assertSQSOperation(t, "DeleteMessage", qr.QueueURL, "", "")
-		assertSQSOperation(t, "GetQueueAttributes", qr.QueueURL, "", "")
-		assertSQSOperation(t, "DeleteQueue", qr.QueueURL, "", "")
-	}, test.Interval(time.Second))
+	require.EventuallyWithT(t, func(ct *assert.CollectT) {
+		assertSQSOperation(ct, "CreateQueue", qr.QueueURL, "", "")
+		assertSQSOperation(ct, "SendMessage", qr.QueueURL, mr.Messages[0].MessageID, "send")
+		assertSQSOperation(ct, "ReceiveMessage", qr.QueueURL, "", "receive")
+		assertSQSOperation(ct, "DeleteMessage", qr.QueueURL, "", "")
+		assertSQSOperation(ct, "GetQueueAttributes", qr.QueueURL, "", "")
+		assertSQSOperation(ct, "DeleteQueue", qr.QueueURL, "", "")
+	}, testTimeout, time.Second)
 }
 
 func sqsRequestWithData[T sqsQueueURL | sqsMessages](t *testing.T, url string) T {

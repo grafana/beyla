@@ -1,5 +1,31 @@
 {
   "data": {
+    "bufio.Reader": {
+      "buf": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.25.6"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "w": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.25.6"
+        },
+        "offsets": [
+          {
+            "offset": 48,
+            "since": "1.17.0"
+          }
+        ]
+      }
+    },
     "bufio.Writer": {
       "buf": {
         "versions": {
@@ -334,7 +360,7 @@
       "name": {
         "versions": {
           "oldest": "1.10.1",
-          "newest": "1.17.7"
+          "newest": "1.17.8"
         },
         "offsets": [
           {
@@ -348,7 +374,7 @@
       "name": {
         "versions": {
           "oldest": "2.0.1",
-          "newest": "2.4.2"
+          "newest": "2.5.0"
         },
         "offsets": [
           {
@@ -362,7 +388,7 @@
       "Database": {
         "versions": {
           "oldest": "2.0.1",
-          "newest": "2.4.2"
+          "newest": "2.5.0"
         },
         "offsets": [
           {
@@ -374,7 +400,7 @@
       "Name": {
         "versions": {
           "oldest": "2.0.1",
-          "newest": "2.4.2"
+          "newest": "2.5.0"
         },
         "offsets": [
           {
@@ -392,7 +418,7 @@
       "Database": {
         "versions": {
           "oldest": "1.10.1",
-          "newest": "1.17.7"
+          "newest": "1.17.8"
         },
         "offsets": [
           {
@@ -404,7 +430,7 @@
       "Name": {
         "versions": {
           "oldest": "1.10.1",
-          "newest": "1.17.7"
+          "newest": "1.17.8"
         },
         "offsets": [
           {
@@ -422,7 +448,7 @@
       "delegate": {
         "versions": {
           "oldest": "1.10.0",
-          "newest": "1.39.0"
+          "newest": "1.40.0"
         },
         "offsets": [
           {
@@ -1160,6 +1186,20 @@
     },
     "net/rpc.Request": {
       "ServiceMethod": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.25.6"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.17.0"
+          }
+        ]
+      }
+    },
+    "net/textproto.Reader": {
+      "R": {
         "versions": {
           "oldest": "1.17.0",
           "newest": "1.25.6"

@@ -15,6 +15,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/kube/kubecache/informer"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
+	svcextra "github.com/grafana/beyla/v2/pkg/services"
 )
 
 func TestErrorResponse(t *testing.T) {
@@ -56,7 +57,17 @@ func TestErrorResponse(t *testing.T) {
 }
 
 func TestPodMutator_CanInstrument(t *testing.T) {
-	mutator := &PodMutator{}
+	mutator := &PodMutator{
+		cfg: &beyla.Config{
+			Injector: beyla.SDKInject{
+				EnabledSDKs: []svcextra.InstrumentableType{
+					{InstrumentableType: svc.InstrumentableJava},
+					{InstrumentableType: svc.InstrumentableDotnet},
+					{InstrumentableType: svc.InstrumentableNodejs},
+				},
+			},
+		},
+	}
 
 	tests := []struct {
 		name     string

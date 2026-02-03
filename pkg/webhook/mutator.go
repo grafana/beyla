@@ -27,9 +27,10 @@ import (
 )
 
 var (
-	runtimeScheme = runtime.NewScheme()
-	codecFactory  = serializer.NewCodecFactory(runtimeScheme)
-	deserializer  = codecFactory.UniversalDeserializer()
+	runtimeScheme     = runtime.NewScheme()
+	codecFactory      = serializer.NewCodecFactory(runtimeScheme)
+	deserializer      = codecFactory.UniversalDeserializer()
+	supportedSDKLangs = []svc.InstrumentableType{svc.InstrumentableDotnet, svc.InstrumentableJava, svc.InstrumentableNodejs}
 )
 
 const (
@@ -61,6 +62,11 @@ const (
 	envOtelMetricsExporterName        = "OTEL_METRICS_EXPORTER"
 	envOtelTracesExporterName         = "OTEL_TRACES_EXPORTER"
 	envOtelLogsExporterName           = "OTEL_LOGS_EXPORTER"
+
+	// Enabling/disabling of language specific SDKs
+	envDotnetEnabledName = "DOTNET_AUTO_INSTRUMENTATION_AGENT_PATH_PREFIX"
+	envJavaEnabledName   = "JVM_AUTO_INSTRUMENTATION_AGENT_PATH"
+	envNodejsEnabledName = "NODEJS_AUTO_INSTRUMENTATION_AGENT_PATH"
 )
 
 func init() {
@@ -99,8 +105,9 @@ func NewPodMutator(cfg *beyla.Config, matcher *PodMatcher) (*PodMutator, error) 
 		return nil, fmt.Errorf("unsupported SDK export protocol %s", proto)
 	}
 
+	logger := slog.Default().With("component", "webhook")
 	return &PodMutator{
-		logger:        slog.Default().With("component", "webhook"),
+		logger:        logger,
 		matcher:       matcher,
 		cfg:           cfg,
 		endpoint:      opts.Scheme + "://" + opts.Endpoint + opts.BaseURLPath,
@@ -117,11 +124,11 @@ func errorResponse(admResponse *admissionv1.AdmissionResponse, message string) {
 }
 
 func (pm *PodMutator) CanInstrument(kind svc.InstrumentableType) bool {
-	switch kind {
-	case svc.InstrumentableJava, svc.InstrumentableDotnet, svc.InstrumentableNodejs:
-		return true
+	for _, k := range pm.cfg.Injector.EnabledSDKs {
+		if k.InstrumentableType == kind {
+			return true
+		}
 	}
-
 	return false
 }
 
@@ -406,17 +413,22 @@ func findEnvVar(c *corev1.Container, name string) (int, bool) {
 }
 
 // setEnvVar is a helper function that sets an environment variable only if the value is not empty
+func setEnvVarEvenIfEmpty(c *corev1.Container, envVarName, value string) {
+	if pos, ok := findEnvVar(c, envVarName); !ok {
+		c.Env = append(c.Env, corev1.EnvVar{
+			Name:  envVarName,
+			Value: value,
+		})
+	} else {
+		c.Env[pos].ValueFrom = nil
+		c.Env[pos].Value = value
+	}
+}
+
+// setEnvVar is a helper function that sets an environment variable only if the value is not empty
 func setEnvVar(c *corev1.Container, envVarName, value string) {
 	if value != "" {
-		if pos, ok := findEnvVar(c, envVarName); !ok {
-			c.Env = append(c.Env, corev1.EnvVar{
-				Name:  envVarName,
-				Value: value,
-			})
-		} else {
-			c.Env[pos].ValueFrom = nil
-			c.Env[pos].Value = value
-		}
+		setEnvVarEvenIfEmpty(c, envVarName, value)
 	}
 }
 
@@ -436,6 +448,7 @@ func (pm *PodMutator) addEnvVars(meta *metav1.ObjectMeta, c *corev1.Container, s
 	setEnvVar(c, envOtelSemConvStabilityName, "http")
 
 	pm.configureContainerEnvVars(meta, c, selector)
+	pm.disableUndesiredSDKs(c)
 
 	for k, v := range pm.exportHeaders {
 		setEnvVar(c, k, v)

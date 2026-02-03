@@ -13,6 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 )
@@ -357,5 +358,22 @@ func getResourceAttribute(kind string) attribute.Key {
 		return semconv.K8SCronJobNameKey
 	default:
 		return ""
+	}
+}
+
+// Setting an empty environment variable is picked up by the
+// injector as disabled instrumentation for that language.
+func (pm *PodMutator) disableUndesiredSDKs(c *corev1.Container) {
+	for _, supported := range supportedSDKLangs {
+		if !pm.CanInstrument(supported) {
+			switch supported {
+			case svc.InstrumentableDotnet:
+				setEnvVarEvenIfEmpty(c, envDotnetEnabledName, "")
+			case svc.InstrumentableJava:
+				setEnvVarEvenIfEmpty(c, envJavaEnabledName, "")
+			case svc.InstrumentableNodejs:
+				setEnvVarEvenIfEmpty(c, envNodejsEnabledName, "")
+			}
+		}
 	}
 }

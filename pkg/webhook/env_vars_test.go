@@ -16,6 +16,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
+	svcextra "github.com/grafana/beyla/v2/pkg/services"
 )
 
 func TestChooseServiceName(t *testing.T) {
@@ -1997,23 +1998,23 @@ func TestConfigureContainerEnvVars_SDKExportConfig(t *testing.T) {
 func TestPodMutator_disableUndesiredSDKs(t *testing.T) {
 	tests := []struct {
 		name        string
-		enabledSDKs map[svc.InstrumentableType]any
+		enabledSDKs []svcextra.InstrumentableType
 		expected    map[string]string // expected env vars that should be set to " "
 	}{
 		{
 			name: "all SDKs enabled - no env vars set",
-			enabledSDKs: map[svc.InstrumentableType]any{
-				svc.InstrumentableJava:   true,
-				svc.InstrumentableDotnet: true,
-				svc.InstrumentableNodejs: true,
+			enabledSDKs: []svcextra.InstrumentableType{
+				{InstrumentableType: svc.InstrumentableJava},
+				{InstrumentableType: svc.InstrumentableDotnet},
+				{InstrumentableType: svc.InstrumentableNodejs},
 			},
 			expected: map[string]string{},
 		},
 		{
 			name: "Java disabled - only Java env var set",
-			enabledSDKs: map[svc.InstrumentableType]any{
-				svc.InstrumentableDotnet: true,
-				svc.InstrumentableNodejs: true,
+			enabledSDKs: []svcextra.InstrumentableType{
+				{InstrumentableType: svc.InstrumentableDotnet},
+				{InstrumentableType: svc.InstrumentableNodejs},
 			},
 			expected: map[string]string{
 				envJavaEnabledName: "",
@@ -2021,9 +2022,9 @@ func TestPodMutator_disableUndesiredSDKs(t *testing.T) {
 		},
 		{
 			name: "Dotnet disabled - only Dotnet env var set",
-			enabledSDKs: map[svc.InstrumentableType]any{
-				svc.InstrumentableJava:   true,
-				svc.InstrumentableNodejs: true,
+			enabledSDKs: []svcextra.InstrumentableType{
+				{InstrumentableType: svc.InstrumentableJava},
+				{InstrumentableType: svc.InstrumentableNodejs},
 			},
 			expected: map[string]string{
 				envDotnetEnabledName: "",
@@ -2031,9 +2032,9 @@ func TestPodMutator_disableUndesiredSDKs(t *testing.T) {
 		},
 		{
 			name: "NodeJS disabled - only NodeJS env var set",
-			enabledSDKs: map[svc.InstrumentableType]any{
-				svc.InstrumentableJava:   true,
-				svc.InstrumentableDotnet: true,
+			enabledSDKs: []svcextra.InstrumentableType{
+				{InstrumentableType: svc.InstrumentableJava},
+				{InstrumentableType: svc.InstrumentableDotnet},
 			},
 			expected: map[string]string{
 				envNodejsEnabledName: "",
@@ -2041,7 +2042,7 @@ func TestPodMutator_disableUndesiredSDKs(t *testing.T) {
 		},
 		{
 			name:        "all SDKs disabled - all env vars set",
-			enabledSDKs: map[svc.InstrumentableType]any{},
+			enabledSDKs: []svcextra.InstrumentableType{},
 			expected: map[string]string{
 				envJavaEnabledName:   "",
 				envDotnetEnabledName: "",
@@ -2050,8 +2051,8 @@ func TestPodMutator_disableUndesiredSDKs(t *testing.T) {
 		},
 		{
 			name: "only Java enabled - Dotnet and NodeJS env vars set",
-			enabledSDKs: map[svc.InstrumentableType]any{
-				svc.InstrumentableJava: true,
+			enabledSDKs: []svcextra.InstrumentableType{
+				{InstrumentableType: svc.InstrumentableJava},
 			},
 			expected: map[string]string{
 				envDotnetEnabledName: "",
@@ -2060,8 +2061,8 @@ func TestPodMutator_disableUndesiredSDKs(t *testing.T) {
 		},
 		{
 			name: "only Dotnet enabled - Java and NodeJS env vars set",
-			enabledSDKs: map[svc.InstrumentableType]any{
-				svc.InstrumentableDotnet: true,
+			enabledSDKs: []svcextra.InstrumentableType{
+				{InstrumentableType: svc.InstrumentableDotnet},
 			},
 			expected: map[string]string{
 				envJavaEnabledName:   "",
@@ -2070,8 +2071,8 @@ func TestPodMutator_disableUndesiredSDKs(t *testing.T) {
 		},
 		{
 			name: "only NodeJS enabled - Java and Dotnet env vars set",
-			enabledSDKs: map[svc.InstrumentableType]any{
-				svc.InstrumentableNodejs: true,
+			enabledSDKs: []svcextra.InstrumentableType{
+				{InstrumentableType: svc.InstrumentableNodejs},
 			},
 			expected: map[string]string{
 				envJavaEnabledName:   "",
@@ -2082,8 +2083,13 @@ func TestPodMutator_disableUndesiredSDKs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+
 			pm := &PodMutator{
-				enabledSDKs: tt.enabledSDKs,
+				cfg: &beyla.Config{
+					Injector: beyla.SDKInject{
+						EnabledSDKs: tt.enabledSDKs,
+					},
+				},
 			}
 
 			container := &corev1.Container{

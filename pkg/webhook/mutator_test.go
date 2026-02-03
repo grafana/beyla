@@ -15,6 +15,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/kube/kubecache/informer"
 
 	"github.com/grafana/beyla/v2/pkg/beyla"
+	svcextra "github.com/grafana/beyla/v2/pkg/services"
 )
 
 func TestErrorResponse(t *testing.T) {
@@ -56,7 +57,17 @@ func TestErrorResponse(t *testing.T) {
 }
 
 func TestPodMutator_CanInstrument(t *testing.T) {
-	mutator := &PodMutator{}
+	mutator := &PodMutator{
+		cfg: &beyla.Config{
+			Injector: beyla.SDKInject{
+				EnabledSDKs: []svcextra.InstrumentableType{
+					{InstrumentableType: svc.InstrumentableJava},
+					{InstrumentableType: svc.InstrumentableDotnet},
+					{InstrumentableType: svc.InstrumentableNodejs},
+				},
+			},
+		},
+	}
 
 	tests := []struct {
 		name     string
@@ -1141,128 +1152,6 @@ func TestProcessMetadata(t *testing.T) {
 
 			if tt.checkAnnotations != nil {
 				assert.Equal(t, tt.checkAnnotations, info.podAnnotations)
-			}
-		})
-	}
-}
-
-func TestEnabledSDKs(t *testing.T) {
-	tests := []struct {
-		name         string
-		disabledSDKs []string
-		expected     map[svc.InstrumentableType]any
-	}{
-		{
-			name:         "no SDKs disabled - all enabled by default",
-			disabledSDKs: []string{},
-			expected: map[svc.InstrumentableType]any{
-				svc.InstrumentableJava:   true,
-				svc.InstrumentableDotnet: true,
-				svc.InstrumentableNodejs: true,
-			},
-		},
-		{
-			name:         "disable Java SDK",
-			disabledSDKs: []string{"java"},
-			expected: map[svc.InstrumentableType]any{
-				svc.InstrumentableDotnet: true,
-				svc.InstrumentableNodejs: true,
-			},
-		},
-		{
-			name:         "disable Dotnet SDK",
-			disabledSDKs: []string{"dotnet"},
-			expected: map[svc.InstrumentableType]any{
-				svc.InstrumentableJava:   true,
-				svc.InstrumentableNodejs: true,
-			},
-		},
-		{
-			name:         "disable NodeJS SDK",
-			disabledSDKs: []string{"nodejs"},
-			expected: map[svc.InstrumentableType]any{
-				svc.InstrumentableJava:   true,
-				svc.InstrumentableDotnet: true,
-			},
-		},
-		{
-			name:         "disable multiple SDKs",
-			disabledSDKs: []string{"java", "nodejs"},
-			expected: map[svc.InstrumentableType]any{
-				svc.InstrumentableDotnet: true,
-			},
-		},
-		{
-			name:         "disable all SDKs",
-			disabledSDKs: []string{"java", "dotnet", "nodejs"},
-			expected:     map[svc.InstrumentableType]any{},
-		},
-		{
-			name:         "case insensitive - uppercase",
-			disabledSDKs: []string{"JAVA", "DOTNET"},
-			expected: map[svc.InstrumentableType]any{
-				svc.InstrumentableNodejs: true,
-			},
-		},
-		{
-			name:         "case insensitive - mixed case",
-			disabledSDKs: []string{"Java", "NodeJS"},
-			expected: map[svc.InstrumentableType]any{
-				svc.InstrumentableDotnet: true,
-			},
-		},
-		{
-			name:         "unknown SDK language - ignored",
-			disabledSDKs: []string{"python", "go"},
-			expected: map[svc.InstrumentableType]any{
-				svc.InstrumentableJava:   true,
-				svc.InstrumentableDotnet: true,
-				svc.InstrumentableNodejs: true,
-			},
-		},
-		{
-			name:         "mixed valid and invalid SDKs",
-			disabledSDKs: []string{"java", "python", "nodejs", "ruby"},
-			expected: map[svc.InstrumentableType]any{
-				svc.InstrumentableDotnet: true,
-			},
-		},
-		{
-			name:         "duplicate disabled SDKs",
-			disabledSDKs: []string{"java", "java", "dotnet"},
-			expected: map[svc.InstrumentableType]any{
-				svc.InstrumentableNodejs: true,
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg := &beyla.Config{
-				Injector: beyla.SDKInject{
-					DisabledSDKs: tt.disabledSDKs,
-				},
-			}
-			log := slog.Default()
-
-			result := enabledSDKs(cfg, log)
-
-			assert.Equal(t, len(tt.expected), len(result), "number of enabled SDKs doesn't match")
-			for expectedType := range tt.expected {
-				_, exists := result[expectedType]
-				assert.True(t, exists, "expected SDK %s to be enabled", expectedType)
-			}
-
-			// Check that disabled SDKs are not in the result
-			allSupportedSDKs := []svc.InstrumentableType{
-				svc.InstrumentableJava,
-				svc.InstrumentableDotnet,
-				svc.InstrumentableNodejs,
-			}
-			for _, sdkType := range allSupportedSDKs {
-				_, shouldExist := tt.expected[sdkType]
-				_, exists := result[sdkType]
-				assert.Equal(t, shouldExist, exists, "SDK %s existence mismatch", sdkType)
 			}
 		})
 	}

@@ -12,6 +12,7 @@ import (
 	"golang.org/x/mod/semver"
 	"gopkg.in/yaml.v3"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	obicfg "go.opentelemetry.io/obi/pkg/config"
 	"go.opentelemetry.io/obi/pkg/ebpf/tcmanager"
@@ -70,6 +71,11 @@ func DefaultConfig() *Config {
 	}
 	def.Injector.HostPathVolumeDir = "/var/lib/beyla/instrumentation"
 	def.Injector.ManageSDKVersions = true
+	def.Injector.EnabledSDKs = []servicesextra.InstrumentableType{
+		{InstrumentableType: svc.InstrumentableJava},
+		{InstrumentableType: svc.InstrumentableDotnet},
+		{InstrumentableType: svc.InstrumentableNodejs},
+	}
 
 	if !slices.Contains(def.OTELMetrics.ExtraSpanResourceLabels, "k8s.namespace.name") {
 		def.OTELMetrics.ExtraSpanResourceLabels = append(def.OTELMetrics.ExtraSpanResourceLabels, "k8s.namespace.name")
@@ -281,10 +287,10 @@ type SDKInject struct {
 	// Resource attributes related settings
 	// nolint:undoc
 	Resources SDKResource `yaml:"resources"`
-	// List of disabled SDK auto-instrumentations. Can be used to disable specific
+	// List of enabled SDK auto-instrumentations. Can be used to disable specific
 	// language instrumentations.
 	// nolint:undoc
-	DisabledSDKs []string `yaml:"disabled_sdks"`
+	EnabledSDKs []servicesextra.InstrumentableType `yaml:"enabled_sdks"`
 }
 
 // SDKExport defines which telemetry signals should be exported from injected SDKs.

@@ -83,7 +83,6 @@ type PodMutator struct {
 	endpoint      string
 	proto         string
 	exportHeaders map[string]string
-	enabledSDKs   map[svc.InstrumentableType]any
 }
 
 // NewPodMutator creates a new PodMutator
@@ -109,36 +108,12 @@ func NewPodMutator(cfg *beyla.Config, matcher *PodMatcher) (*PodMutator, error) 
 	logger := slog.Default().With("component", "webhook")
 	return &PodMutator{
 		logger:        logger,
-		enabledSDKs:   enabledSDKs(cfg, logger),
 		matcher:       matcher,
 		cfg:           cfg,
 		endpoint:      opts.Scheme + "://" + opts.Endpoint + opts.BaseURLPath,
 		exportHeaders: opts.Headers,
 		proto:         string(cfg.Traces.Protocol),
 	}, nil
-}
-
-func enabledSDKs(cfg *beyla.Config, log *slog.Logger) map[svc.InstrumentableType]any {
-	langMap := map[svc.InstrumentableType]any{
-		svc.InstrumentableJava:   true,
-		svc.InstrumentableDotnet: true,
-		svc.InstrumentableNodejs: true,
-	}
-	for _, lang := range cfg.Injector.DisabledSDKs {
-		lang = strings.ToLower(lang)
-		found := false
-		for _, supported := range supportedSDKLangs {
-			if lang == supported.String() {
-				delete(langMap, supported)
-				found = true
-			}
-		}
-		if !found {
-			log.Info("unknown SDK language filter in configuration (supported SDKs: java, dotnet, nodejs)", "language", lang)
-		}
-	}
-
-	return langMap
 }
 
 func errorResponse(admResponse *admissionv1.AdmissionResponse, message string) {
@@ -149,8 +124,12 @@ func errorResponse(admResponse *admissionv1.AdmissionResponse, message string) {
 }
 
 func (pm *PodMutator) CanInstrument(kind svc.InstrumentableType) bool {
-	_, ok := pm.enabledSDKs[kind]
-	return ok
+	for _, k := range pm.cfg.Injector.EnabledSDKs {
+		if k.InstrumentableType == kind {
+			return true
+		}
+	}
+	return false
 }
 
 func (pm *PodMutator) PreloadsSomethingElse(info *ProcessInfo) bool {

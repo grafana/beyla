@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	obiconfig "go.opentelemetry.io/obi/pkg/config"
 	"go.opentelemetry.io/obi/pkg/export"
@@ -323,6 +324,11 @@ network:
 			},
 			HostPathVolumeDir: "/var/lib/beyla/instrumentation",
 			ManageSDKVersions: true,
+			EnabledSDKs: []servicesextra.InstrumentableType{
+				{InstrumentableType: svc.InstrumentableJava},
+				{InstrumentableType: svc.InstrumentableDotnet},
+				{InstrumentableType: svc.InstrumentableNodejs},
+			},
 		},
 	}, cfg)
 }

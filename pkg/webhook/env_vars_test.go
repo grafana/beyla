@@ -2016,7 +2016,7 @@ func TestPodMutator_disableUndesiredSDKs(t *testing.T) {
 				svc.InstrumentableNodejs: true,
 			},
 			expected: map[string]string{
-				envJavaEnabledName: " ",
+				envJavaEnabledName: "",
 			},
 		},
 		{
@@ -2026,7 +2026,7 @@ func TestPodMutator_disableUndesiredSDKs(t *testing.T) {
 				svc.InstrumentableNodejs: true,
 			},
 			expected: map[string]string{
-				envDotnetEnabledName: " ",
+				envDotnetEnabledName: "",
 			},
 		},
 		{
@@ -2036,16 +2036,16 @@ func TestPodMutator_disableUndesiredSDKs(t *testing.T) {
 				svc.InstrumentableDotnet: true,
 			},
 			expected: map[string]string{
-				envNodejsEnabledName: " ",
+				envNodejsEnabledName: "",
 			},
 		},
 		{
 			name:        "all SDKs disabled - all env vars set",
 			enabledSDKs: map[svc.InstrumentableType]any{},
 			expected: map[string]string{
-				envJavaEnabledName:   " ",
-				envDotnetEnabledName: " ",
-				envNodejsEnabledName: " ",
+				envJavaEnabledName:   "",
+				envDotnetEnabledName: "",
+				envNodejsEnabledName: "",
 			},
 		},
 		{
@@ -2054,8 +2054,8 @@ func TestPodMutator_disableUndesiredSDKs(t *testing.T) {
 				svc.InstrumentableJava: true,
 			},
 			expected: map[string]string{
-				envDotnetEnabledName: " ",
-				envNodejsEnabledName: " ",
+				envDotnetEnabledName: "",
+				envNodejsEnabledName: "",
 			},
 		},
 		{
@@ -2064,8 +2064,8 @@ func TestPodMutator_disableUndesiredSDKs(t *testing.T) {
 				svc.InstrumentableDotnet: true,
 			},
 			expected: map[string]string{
-				envJavaEnabledName:   " ",
-				envNodejsEnabledName: " ",
+				envJavaEnabledName:   "",
+				envNodejsEnabledName: "",
 			},
 		},
 		{
@@ -2074,8 +2074,8 @@ func TestPodMutator_disableUndesiredSDKs(t *testing.T) {
 				svc.InstrumentableNodejs: true,
 			},
 			expected: map[string]string{
-				envJavaEnabledName:   " ",
-				envDotnetEnabledName: " ",
+				envJavaEnabledName:   "",
+				envDotnetEnabledName: "",
 			},
 		},
 	}
@@ -2093,7 +2093,6 @@ func TestPodMutator_disableUndesiredSDKs(t *testing.T) {
 
 			pm.disableUndesiredSDKs(container)
 
-			// Check that expected env vars are set to " " (space character)
 			for envName, expectedValue := range tt.expected {
 				found := false
 				for _, env := range container.Env {

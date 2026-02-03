@@ -361,20 +361,18 @@ func getResourceAttribute(kind string) attribute.Key {
 	}
 }
 
-// The injector code ignores empty environment variables, however
-// it will accept whitespace characters, <space>\t\r\n. These characters
-// are then stripped and the SDK path is set to empty, which disables
-// the SDK injection.
+// Setting an empty environment variable is picked up by the
+// injector as disabled instrumentation for that language.
 func (pm *PodMutator) disableUndesiredSDKs(c *corev1.Container) {
 	for _, supported := range supportedSDKLangs {
 		if !pm.CanInstrument(supported) {
 			switch supported {
 			case svc.InstrumentableDotnet:
-				setEnvVar(c, envDotnetEnabledName, " ")
+				setEnvVarEvenIfEmpty(c, envDotnetEnabledName, "")
 			case svc.InstrumentableJava:
-				setEnvVar(c, envJavaEnabledName, " ")
+				setEnvVarEvenIfEmpty(c, envJavaEnabledName, "")
 			case svc.InstrumentableNodejs:
-				setEnvVar(c, envNodejsEnabledName, " ")
+				setEnvVarEvenIfEmpty(c, envNodejsEnabledName, "")
 			}
 		}
 	}

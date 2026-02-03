@@ -434,17 +434,22 @@ func findEnvVar(c *corev1.Container, name string) (int, bool) {
 }
 
 // setEnvVar is a helper function that sets an environment variable only if the value is not empty
+func setEnvVarEvenIfEmpty(c *corev1.Container, envVarName, value string) {
+	if pos, ok := findEnvVar(c, envVarName); !ok {
+		c.Env = append(c.Env, corev1.EnvVar{
+			Name:  envVarName,
+			Value: value,
+		})
+	} else {
+		c.Env[pos].ValueFrom = nil
+		c.Env[pos].Value = value
+	}
+}
+
+// setEnvVar is a helper function that sets an environment variable only if the value is not empty
 func setEnvVar(c *corev1.Container, envVarName, value string) {
 	if value != "" {
-		if pos, ok := findEnvVar(c, envVarName); !ok {
-			c.Env = append(c.Env, corev1.EnvVar{
-				Name:  envVarName,
-				Value: value,
-			})
-		} else {
-			c.Env[pos].ValueFrom = nil
-			c.Env[pos].Value = value
-		}
+		setEnvVarEvenIfEmpty(c, envVarName, value)
 	}
 }
 

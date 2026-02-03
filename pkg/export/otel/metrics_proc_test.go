@@ -17,10 +17,10 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 
-	"github.com/grafana/beyla/v2/pkg/export/extraattributes"
-	"github.com/grafana/beyla/v2/pkg/export/otel/bexport"
-	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
-	"github.com/grafana/beyla/v2/pkg/test/collector"
+	"github.com/grafana/beyla/v3/pkg/export/extraattributes"
+	"github.com/grafana/beyla/v3/pkg/export/otel/bexport"
+	"github.com/grafana/beyla/v3/pkg/internal/infraolly/process"
+	"github.com/grafana/beyla/v3/pkg/test/collector"
 )
 
 const timeout = 3 * time.Second

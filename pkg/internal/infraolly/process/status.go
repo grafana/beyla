@@ -11,7 +11,7 @@ import (
 	attributes "go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 
-	extranames "github.com/grafana/beyla/v2/pkg/export/extraattributes/names"
+	extranames "github.com/grafana/beyla/v3/pkg/export/extraattributes/names"
 )
 
 func pslog() *slog.Logger {

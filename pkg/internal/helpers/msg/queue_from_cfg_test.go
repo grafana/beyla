@@ -19,7 +19,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 
-	"github.com/grafana/beyla/v2/pkg/internal/testutil"
+	"github.com/grafana/beyla/v3/pkg/internal/testutil"
 )
 
 const timeout = 5 * time.Second

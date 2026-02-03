@@ -21,9 +21,9 @@ import (
 	"go.opentelemetry.io/obi/pkg/kube/kubecache/meta"
 	"go.opentelemetry.io/obi/pkg/kube/kubecache/service"
 
-	"github.com/grafana/beyla/v2/cmd/k8s-cache/cfg"
-	"github.com/grafana/beyla/v2/pkg/buildinfo"
-	configutil "github.com/grafana/beyla/v2/pkg/helpers/config"
+	"github.com/grafana/beyla/v3/cmd/k8s-cache/cfg"
+	"github.com/grafana/beyla/v3/pkg/buildinfo"
+	configutil "github.com/grafana/beyla/v3/pkg/helpers/config"
 )
 
 // main code of te Kubernetes K8s informer's metadata cache service, when it runs as a separate service and not

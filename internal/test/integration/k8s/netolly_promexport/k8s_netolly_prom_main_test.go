@@ -10,12 +10,12 @@ import (
 	"os"
 	"testing"
 
-	"github.com/grafana/beyla/v2/internal/test/integration/components/docker"
-	"github.com/grafana/beyla/v2/internal/test/integration/components/kube"
-	k8s "github.com/grafana/beyla/v2/internal/test/integration/k8s/common"
-	"github.com/grafana/beyla/v2/internal/test/integration/k8s/common/testpath"
-	otel "github.com/grafana/beyla/v2/internal/test/integration/k8s/netolly"
-	"github.com/grafana/beyla/v2/internal/test/tools"
+	"github.com/grafana/beyla/v3/internal/test/integration/components/docker"
+	"github.com/grafana/beyla/v3/internal/test/integration/components/kube"
+	k8s "github.com/grafana/beyla/v3/internal/test/integration/k8s/common"
+	"github.com/grafana/beyla/v3/internal/test/integration/k8s/common/testpath"
+	otel "github.com/grafana/beyla/v3/internal/test/integration/k8s/netolly"
+	"github.com/grafana/beyla/v3/internal/test/tools"
 )
 
 var cluster *kube.Kind

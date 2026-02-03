@@ -15,7 +15,7 @@ import (
 
 	ti "go.opentelemetry.io/obi/pkg/test/integration"
 
-	"github.com/grafana/beyla/v2/internal/test/integration/components/promtest"
+	"github.com/grafana/beyla/v3/internal/test/integration/components/promtest"
 )
 
 func testREDMetricsForNodeHTTPLibrary(t *testing.T, url, urlPath, comm, namespace string) {

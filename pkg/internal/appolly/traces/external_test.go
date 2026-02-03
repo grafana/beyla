@@ -10,7 +10,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 
-	"github.com/grafana/beyla/v2/pkg/internal/testutil"
+	"github.com/grafana/beyla/v3/pkg/internal/testutil"
 )
 
 func TestSelectExternal(t *testing.T) {

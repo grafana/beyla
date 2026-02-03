@@ -33,9 +33,9 @@ import (
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/transform"
 
-	"github.com/grafana/beyla/v2/pkg/export/otel"
-	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
-	servicesextra "github.com/grafana/beyla/v2/pkg/services"
+	"github.com/grafana/beyla/v3/pkg/export/otel"
+	"github.com/grafana/beyla/v3/pkg/internal/infraolly/process"
+	servicesextra "github.com/grafana/beyla/v3/pkg/services"
 )
 
 type envMap map[string]string

@@ -19,8 +19,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/attribute"
 
-	"github.com/grafana/beyla/v2/internal/test/integration/components/jaeger"
-	"github.com/grafana/beyla/v2/internal/test/integration/components/promtest"
+	"github.com/grafana/beyla/v3/internal/test/integration/components/jaeger"
+	"github.com/grafana/beyla/v3/internal/test/integration/components/promtest"
 )
 
 /*

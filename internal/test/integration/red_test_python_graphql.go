@@ -14,7 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -35,32 +34,32 @@ func testPythonGraphQL(t *testing.T) {
 	params.Add("operation", operationName)
 	fullJaegerURL := fmt.Sprintf("%s?%s", jaegerQueryURL, params.Encode())
 
-	test.Eventually(t, testTimeout, func(t require.TestingT) {
+	require.EventuallyWithT(t, func(ct *assert.CollectT) {
 		resp, err := http.Post(address, "application/json", bytes.NewBuffer([]byte(query)))
-		require.NoError(t, err)
-		require.Equal(t, http.StatusOK, resp.StatusCode)
+		require.NoError(ct, err)
+		require.Equal(ct, http.StatusOK, resp.StatusCode)
 
 		resp, err = http.Get(fullJaegerURL)
-		require.NoError(t, err)
+		require.NoError(ct, err)
 		if resp == nil {
 			return
 		}
-		require.Equal(t, http.StatusOK, resp.StatusCode)
+		require.Equal(ct, http.StatusOK, resp.StatusCode)
 
-		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
+		require.NoError(ct, json.NewDecoder(resp.Body).Decode(&tq))
 		traces := tq.FindBySpan(jaeger.Tag{Key: "graphql.operation.type", Type: "string", Value: "query"})
-		require.GreaterOrEqual(t, len(traces), 1)
+		require.GreaterOrEqual(ct, len(traces), 1)
 		lastTrace := traces[len(traces)-1]
 		span := lastTrace.Spans[0]
 
-		assert.Equal(t, operationName, span.OperationName)
+		assert.Equal(ct, operationName, span.OperationName)
 
 		tag, found := jaeger.FindIn(span.Tags, "graphql.operation.name")
-		assert.True(t, found)
-		assert.Equal(t, "TestMe", tag.Value)
+		assert.True(ct, found)
+		assert.Equal(ct, "TestMe", tag.Value)
 
 		tag, found = jaeger.FindIn(span.Tags, "graphql.document")
-		assert.True(t, found)
-		assert.Equal(t, "query TestMe { testme }", tag.Value)
-	}, test.Interval(100*time.Millisecond))
+		assert.True(ct, found)
+		assert.Equal(ct, "query TestMe { testme }", tag.Value)
+	}, testTimeout, 100*time.Millisecond)
 }

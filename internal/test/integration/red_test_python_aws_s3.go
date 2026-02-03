@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mariomac/guara/pkg/test"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/v2/internal/test/integration/components/jaeger"
@@ -32,13 +32,13 @@ func testPythonAWSS3(t *testing.T) {
 	awsReq(t, awsProxyAddress+"/deleteobject")
 	awsReq(t, awsProxyAddress+"/deletebucket")
 
-	test.Eventually(t, testTimeout, func(t require.TestingT) {
-		assertS3Operation(t, "CreateBucket", "")
-		assertS3Operation(t, "PutObject", s3ObjectKey)
-		assertS3Operation(t, "ListObjects", "")
-		assertS3Operation(t, "DeleteObject", s3ObjectKey)
-		assertS3Operation(t, "DeleteBucket", "")
-	}, test.Interval(time.Second))
+	require.EventuallyWithT(t, func(ct *assert.CollectT) {
+		assertS3Operation(ct, "CreateBucket", "")
+		assertS3Operation(ct, "PutObject", s3ObjectKey)
+		assertS3Operation(ct, "ListObjects", "")
+		assertS3Operation(ct, "DeleteObject", s3ObjectKey)
+		assertS3Operation(ct, "DeleteBucket", "")
+	}, testTimeout, time.Second)
 }
 
 func assertS3Operation(t require.TestingT, op, expectedKey string) {

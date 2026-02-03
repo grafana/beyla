@@ -18,6 +18,7 @@ services:
       - /sys/kernel/security:/sys/kernel/security:ro
       - ../../../testoutput:/coverage
       - ../../../testoutput/run-python:/var/run/beyla
+      - /sys/fs/bpf:/sys/fs/bpf
     image: hatest-autoinstrumenter
     privileged: true # in some environments (not GH Pull Requests) you can set it to false and then cap_add: [ SYS_ADMIN ]
     network_mode: "service:testserver"

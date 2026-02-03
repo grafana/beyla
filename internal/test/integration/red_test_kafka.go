@@ -226,11 +226,11 @@ func testJavaKafkaLargeBuffer(t *testing.T) {
 func waitForKafkaTestComponents(t *testing.T, url string, subpath string) {
 	t.Helper()
 
-	test.Eventually(t, time.Minute, func(t require.TestingT) {
+	require.EventuallyWithT(t, func(ct *assert.CollectT) {
 		req, err := http.NewRequest(http.MethodGet, url+subpath, nil)
-		require.NoError(t, err)
+		require.NoError(ct, err)
 		r, err := testHTTPClient.Do(req)
-		require.NoError(t, err)
-		require.Equal(t, http.StatusOK, r.StatusCode)
-	}, test.Interval(time.Second))
+		require.NoError(ct, err)
+		require.Equal(ct, http.StatusOK, r.StatusCode)
+	}, time.Minute, time.Second)
 }

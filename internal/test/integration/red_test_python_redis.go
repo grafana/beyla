@@ -220,19 +220,19 @@ func testREDMetricsPythonRedisOnly(t *testing.T) {
 
 func waitForRedisTestComponents(t *testing.T, url string, subpath string) {
 	pq := promtest.Client{HostPort: prometheusHostPort}
-	test.Eventually(t, 1*time.Minute, func(t require.TestingT) {
+	require.EventuallyWithT(t, func(ct *assert.CollectT) {
 		// first, verify that the test service endpoint is healthy
 		req, err := http.NewRequest(http.MethodGet, url+subpath, nil)
-		require.NoError(t, err)
+		require.NoError(ct, err)
 		r, err := testHTTPClient.Do(req)
-		require.NoError(t, err)
-		require.Equal(t, http.StatusOK, r.StatusCode)
+		require.NoError(ct, err)
+		require.Equal(ct, http.StatusOK, r.StatusCode)
 
 		// now, verify that the metric has been reported.
 		// we don't really care that this metric could be from a previous
 		// test. Once one it is visible, it means that Otel and Prometheus are healthy
 		results, err := pq.Query(`db_client_operation_duration_seconds_count{db_system_name="redis"}`)
-		require.NoError(t, err)
-		require.NotEmpty(t, results)
-	}, test.Interval(time.Second))
+		require.NoError(ct, err)
+		require.NotEmpty(ct, results)
+	}, 1*time.Minute, time.Second)
 }

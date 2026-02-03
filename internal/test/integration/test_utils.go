@@ -15,7 +15,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/attribute"
@@ -164,11 +163,11 @@ func waitForTestComponentsHTTP2(t *testing.T, url string) {
 }
 
 func waitForTestComponentsNoMetrics(t *testing.T, url string) {
-	test.Eventually(t, 2*time.Minute, func(t require.TestingT) {
+	require.EventuallyWithT(t, func(ct *assert.CollectT) {
 		resp, err := http.Get(url)
-		require.NoError(t, err)
-		require.Equal(t, http.StatusOK, resp.StatusCode)
-	}, test.Interval(time.Second))
+		require.NoError(ct, err)
+		require.Equal(ct, http.StatusOK, resp.StatusCode)
+	}, 2*time.Minute, time.Second)
 }
 
 func waitForTestComponentsSub(t *testing.T, url, subpath string) {
@@ -183,59 +182,59 @@ func waitForTestComponentsSubStatus(t *testing.T, url, subpath string, status in
 // asynchronously are up and communicating properly
 func waitForTestComponentsSubWithTime(t *testing.T, url, subpath string, minutes int) {
 	pq := promtest.Client{HostPort: prometheusHostPort}
-	test.Eventually(t, time.Duration(minutes)*time.Minute, func(t require.TestingT) {
+	require.EventuallyWithT(t, func(ct *assert.CollectT) {
 		// first, verify that the test service endpoint is healthy
 		req, err := http.NewRequest(http.MethodGet, url+subpath, nil)
-		require.NoError(t, err)
+		require.NoError(ct, err)
 		r, err := testHTTPClient.Do(req)
-		require.NoError(t, err)
-		require.Equal(t, http.StatusOK, r.StatusCode)
+		require.NoError(ct, err)
+		require.Equal(ct, http.StatusOK, r.StatusCode)
 
 		// now, verify that the metric has been reported.
 		// we don't really care that this metric could be from a previous
 		// test. Once one it is visible, it means that Otel and Prometheus are healthy
 		results, err := pq.Query(`http_server_request_duration_seconds_count{url_path="` + subpath + `"}`)
-		require.NoError(t, err)
-		require.NotEmpty(t, results)
-	}, test.Interval(time.Second))
+		require.NoError(ct, err)
+		require.NotEmpty(ct, results)
+	}, time.Duration(minutes)*time.Minute, time.Second)
 }
 
 func waitForTestComponentsSubWithTimeAndCode(t *testing.T, url, subpath string, status, minutes int) {
 	pq := promtest.Client{HostPort: prometheusHostPort}
-	test.Eventually(t, time.Duration(minutes)*time.Minute, func(t require.TestingT) {
+	require.EventuallyWithT(t, func(ct *assert.CollectT) {
 		// first, verify that the test service endpoint is healthy
 		req, err := http.NewRequest(http.MethodGet, url+subpath, nil)
-		require.NoError(t, err)
+		require.NoError(ct, err)
 		r, err := testHTTPClient.Do(req)
-		require.NoError(t, err)
-		require.Equal(t, status, r.StatusCode)
+		require.NoError(ct, err)
+		require.Equal(ct, status, r.StatusCode)
 
 		// now, verify that the metric has been reported.
 		// we don't really care that this metric could be from a previous
 		// test. Once one it is visible, it means that Otel and Prometheus are healthy
 		results, err := pq.Query(`http_server_request_duration_seconds_count{url_path="` + subpath + `"}`)
-		require.NoError(t, err)
-		require.NotEmpty(t, results)
-	}, test.Interval(time.Second))
+		require.NoError(ct, err)
+		require.NotEmpty(ct, results)
+	}, time.Duration(minutes)*time.Minute, time.Second)
 }
 
 func waitForTestComponentsRoute(t *testing.T, url, route string) {
 	pq := promtest.Client{HostPort: prometheusHostPort}
-	test.Eventually(t, time.Duration(1)*time.Minute, func(t require.TestingT) {
+	require.EventuallyWithT(t, func(ct *assert.CollectT) {
 		// first, verify that the test service endpoint is healthy
 		req, err := http.NewRequest(http.MethodGet, url+route, nil)
-		require.NoError(t, err)
+		require.NoError(ct, err)
 		r, err := testHTTPClient.Do(req)
-		require.NoError(t, err)
-		require.Equal(t, http.StatusOK, r.StatusCode)
+		require.NoError(ct, err)
+		require.Equal(ct, http.StatusOK, r.StatusCode)
 
 		// now, verify that the metric has been reported.
 		// we don't really care that this metric could be from a previous
 		// test. Once one it is visible, it means that Otel and Prometheus are healthy
 		results, err := pq.Query(`http_server_request_duration_seconds_count{http_route="` + route + `"}`)
-		require.NoError(t, err)
-		require.NotEmpty(t, results)
-	}, test.Interval(time.Second))
+		require.NoError(ct, err)
+		require.NotEmpty(ct, results)
+	}, 1*time.Minute, time.Second)
 }
 
 func waitForSQLTestComponents(t *testing.T, url, subpath string) {
@@ -248,21 +247,21 @@ func waitForSQLTestComponentsMySQL(t *testing.T, url, subpath string) {
 
 func waitForSQLTestComponentsWithDB(t *testing.T, url, subpath, db string) {
 	pq := promtest.Client{HostPort: prometheusHostPort}
-	test.Eventually(t, 1*time.Minute, func(t require.TestingT) {
+	require.EventuallyWithT(t, func(ct *assert.CollectT) {
 		// first, verify that the test service endpoint is healthy
 		req, err := http.NewRequest(http.MethodGet, url+subpath, nil)
-		require.NoError(t, err)
+		require.NoError(ct, err)
 		r, err := testHTTPClient.Do(req)
-		require.NoError(t, err)
-		require.Equal(t, http.StatusOK, r.StatusCode)
+		require.NoError(ct, err)
+		require.Equal(ct, http.StatusOK, r.StatusCode)
 
 		// now, verify that the metric has been reported.
 		// we don't really care that this metric could be from a previous
 		// test. Once one it is visible, it means that Otel and Prometheus are healthy
 		results, err := pq.Query(`db_client_operation_duration_seconds_count{db_system_name="` + db + `"}`)
-		require.NoError(t, err)
-		require.NotEmpty(t, results)
-	}, test.Interval(time.Second))
+		require.NoError(ct, err)
+		require.NotEmpty(ct, results)
+	}, 1*time.Minute, time.Second)
 }
 
 func enoughPromResults(t require.TestingT, results []promtest.Result) {
@@ -319,23 +318,23 @@ func doHTTP2Post(t *testing.T, path string, status int, jsonBody []byte) {
 
 func waitForTestComponentsHTTP2Sub(t *testing.T, url, subpath string, minutes int) {
 	pq := promtest.Client{HostPort: prometheusHostPort}
-	test.Eventually(t, time.Duration(minutes)*time.Minute, func(t require.TestingT) {
+	require.EventuallyWithT(t, func(ct *assert.CollectT) {
 		// first, verify that the test service endpoint is healthy
 		req, err := http.NewRequest(http.MethodGet, url+subpath, nil)
-		require.NoError(t, err)
+		require.NoError(ct, err)
 		tr := newHTTP2Transport()
 
 		r, err := tr.RoundTrip(req)
-		require.NoError(t, err)
-		require.Equal(t, http.StatusOK, r.StatusCode)
+		require.NoError(ct, err)
+		require.Equal(ct, http.StatusOK, r.StatusCode)
 
 		// now, verify that the metric has been reported.
 		// we don't really care that this metric could be from a previous
 		// test. Once one it is visible, it means that Otel and Prometheus are healthy
 		results, err := pq.Query(`http_server_request_duration_seconds_count{url_path="` + subpath + `"}`)
-		require.NoError(t, err)
-		require.NotEmpty(t, results)
-	}, test.Interval(time.Second))
+		require.NoError(ct, err)
+		require.NotEmpty(ct, results)
+	}, time.Duration(minutes)*time.Minute, time.Second)
 }
 
 func otelAttributeToJaegerTag(attr attribute.KeyValue) jaeger.Tag {

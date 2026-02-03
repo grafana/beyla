@@ -1,4 +1,3 @@
-executable_name: java
 routes:
   patterns:
     - /create-trace

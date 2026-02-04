@@ -178,7 +178,7 @@ network:
 				AsyncWriterWorkers:    8,
 				AsyncWriterChannelLen: 500,
 			},
-			BpfFsPath: "/sys/fs/bpf/",
+			BPFFSPath: "/sys/fs/bpf/",
 		},
 		Grafana: otel.GrafanaConfig{
 			OTLP: otel.GrafanaOTLP{

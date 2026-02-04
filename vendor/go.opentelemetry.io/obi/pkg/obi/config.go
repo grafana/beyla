@@ -141,7 +141,7 @@ var DefaultConfig = Config{
 			AsyncWriterWorkers:    8,
 			AsyncWriterChannelLen: 500,
 		},
-		BpfFsPath: "/sys/fs/bpf/",
+		BPFFSPath: "/sys/fs/bpf/",
 	},
 	NameResolver: &transform.NameResolverConfig{
 		Sources:  []transform.Source{transform.SourceK8s},

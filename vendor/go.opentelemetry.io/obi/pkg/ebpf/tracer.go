@@ -148,7 +148,7 @@ type ProcessTracer struct {
 	log             *slog.Logger
 	metrics         imetrics.Reporter
 	shutdownTimeout time.Duration
-	bpfFsPath       string
+	bpffsPath       string
 
 	Type            ProcessTracerType
 	Instrumentables map[uint64]*instrumenter

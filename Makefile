@@ -196,10 +196,11 @@ docker-generate: obi-submodule
 copy-obi-vendor:
 	@echo "### Vendoring OBI submodule..."
 	go get go.opentelemetry.io/obi
+	go get -t github.com/grafana/beyla/v3/internal/obi/test/integration
 	go mod vendor
 
 .PHONY: vendor-obi
-vendor-obi: obi-submodule docker-generate copy-obi-vendor
+vendor-obi: obi-submodule docker-generate generate-obi-tests copy-obi-vendor
 
 .PHONY: verify
 verify: prereqs lint-dashboard vendor-obi lint test

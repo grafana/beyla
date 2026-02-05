@@ -147,16 +147,9 @@ generate() {
         done
     fi
     
-    # Copy Beyla-specific extension files
-    BEYLA_EXTENSIONS="internal/test/beyla_extensions"
-    if [[ -d "$BEYLA_EXTENSIONS" ]]; then
-        echo "  Copying Beyla extension files..."
-        find "$BEYLA_EXTENSIONS" -maxdepth 1 -name "*.go" -exec cp {} "$OBI_DEST/" \;
-        # Transform build tags in extension files (remove obi_extension constraint)
-        find "$OBI_DEST" -maxdepth 1 \( -name "*_beyla*.go" -o -name "beyla_*.go" -o -name "process_test.go" \) 2>/dev/null | while read -r file; do
-            sed_i -e 's/integration && obi_extension/integration/g' "$file"
-        done
-    fi
+    # NOTE: Beyla-specific extension files (internal/test/beyla_extensions/) are NOT copied here.
+    # They depend on Beyla's test infrastructure and run as a separate test target.
+    # See: make integration-test-beyla
     
     # Remove OBI copyright headers (Beyla has its own)
     echo "  Cleaning up headers..."

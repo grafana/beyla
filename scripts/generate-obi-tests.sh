@@ -33,6 +33,15 @@ GO_PACKAGES=(
 # FUNCTIONS
 # =============================================================================
 
+# Portable sed -i (works on both macOS and Linux)
+sed_i() {
+    if [[ "$(uname)" == "Darwin" ]]; then
+        sed -i '' "$@"
+    else
+        sed -i "$@"
+    fi
+}
+
 clean() {
     echo "Cleaning generated OBI tests..."
     rm -rf "$OBI_DEST"
@@ -84,32 +93,43 @@ generate() {
     
     # Transform Go import paths
     echo "  Transforming Go imports..."
-    find "$OBI_DEST" -name "*.go" -type f -print0 | xargs -0 sed -i \
-        -e 's|go\.opentelemetry\.io/obi/internal/test/integration|github.com/grafana/beyla/v3/internal/obi/test/integration|g' \
-        -e 's|go\.opentelemetry\.io/obi/internal/test/tools|github.com/grafana/beyla/v3/internal/obi/test/tools|g' \
-        -e 's|// import "go\.opentelemetry\.io/obi/internal/test/integration[^"]*"||g'
+    find "$OBI_DEST" -name "*.go" -type f | while read -r file; do
+        sed_i \
+            -e 's|go\.opentelemetry\.io/obi/internal/test/integration|github.com/grafana/beyla/v3/internal/obi/test/integration|g' \
+            -e 's|go\.opentelemetry\.io/obi/internal/test/tools|github.com/grafana/beyla/v3/internal/obi/test/tools|g' \
+            -e 's|// import "go\.opentelemetry\.io/obi/internal/test/integration[^"]*"||g' \
+            "$file"
+    done
     
     # Transform environment variable prefixes in YAML files
     echo "  Transforming env vars in configs..."
-    find "$OBI_DEST" -type f \( -name "*.yml" -o -name "*.yaml" \) -print0 | xargs -0 sed -i \
-        -e 's|OTEL_EBPF_EXECUTABLE_PATH|BEYLA_EXECUTABLE_NAME|g' \
-        -e 's|OTEL_EBPF_|BEYLA_|g'
+    find "$OBI_DEST" -type f \( -name "*.yml" -o -name "*.yaml" \) | while read -r file; do
+        sed_i \
+            -e 's|OTEL_EBPF_EXECUTABLE_PATH|BEYLA_EXECUTABLE_NAME|g' \
+            -e 's|OTEL_EBPF_|BEYLA_|g' \
+            "$file"
+    done
     
     # Transform Dockerfile paths in docker-compose files to reference .obi-src
     echo "  Transforming docker-compose Dockerfile paths..."
-    find "$OBI_DEST" -maxdepth 1 -name "docker-compose*.yml" -print0 | xargs -0 sed -i \
-        -e 's|dockerfile: internal/test/integration/components/|dockerfile: .obi-src/internal/test/integration/components/|g' \
-        -e 's|dockerfile: \./internal/test/integration/components/|dockerfile: .obi-src/internal/test/integration/components/|g'
+    find "$OBI_DEST" -maxdepth 1 -name "docker-compose*.yml" | while read -r file; do
+        sed_i \
+            -e 's|dockerfile: internal/test/integration/components/|dockerfile: .obi-src/internal/test/integration/components/|g' \
+            -e 's|dockerfile: \./internal/test/integration/components/|dockerfile: .obi-src/internal/test/integration/components/|g' \
+            "$file"
+    done
     
     # Transform docker-compose paths in K8s manifests (if any reference components)
-    find "$OBI_DEST/k8s" -name "*.yml" -print0 2>/dev/null | xargs -0 sed -i \
-        -e 's|dockerfile: internal/test/integration/components/|dockerfile: .obi-src/internal/test/integration/components/|g' \
-        2>/dev/null || true
+    find "$OBI_DEST/k8s" -name "*.yml" 2>/dev/null | while read -r file; do
+        sed_i \
+            -e 's|dockerfile: internal/test/integration/components/|dockerfile: .obi-src/internal/test/integration/components/|g' \
+            "$file"
+    done 2>/dev/null || true
     
     # Update docker/compose.go to use OBI test directory
     if [[ -f "$OBI_DEST/components/docker/compose.go" ]]; then
         echo "  Updating docker/compose.go paths..."
-        sed -i \
+        sed_i \
             -e 's|"internal", "test", "integration"|"internal", "obi", "test", "integration"|g' \
             "$OBI_DEST/components/docker/compose.go"
     fi
@@ -120,8 +140,11 @@ generate() {
         mkdir -p "internal/obi/test/tools"
         cp -r ".obi-src/internal/test/tools/"* "internal/obi/test/tools/"
         # Transform imports in tools
-        find "internal/obi/test/tools" -name "*.go" -type f -print0 | xargs -0 sed -i \
-            -e 's|go\.opentelemetry\.io/obi/internal/test/tools|github.com/grafana/beyla/v3/internal/obi/test/tools|g'
+        find "internal/obi/test/tools" -name "*.go" -type f | while read -r file; do
+            sed_i \
+                -e 's|go\.opentelemetry\.io/obi/internal/test/tools|github.com/grafana/beyla/v3/internal/obi/test/tools|g' \
+                "$file"
+        done
     fi
     
     # Copy Beyla-specific extension files
@@ -130,15 +153,19 @@ generate() {
         echo "  Copying Beyla extension files..."
         find "$BEYLA_EXTENSIONS" -maxdepth 1 -name "*.go" -exec cp {} "$OBI_DEST/" \;
         # Transform build tags in extension files (remove obi_extension constraint)
-        find "$OBI_DEST" -maxdepth 1 -name "*_beyla*.go" -o -name "beyla_*.go" -o -name "process_test.go" 2>/dev/null | \
-            xargs -r sed -i -e 's/integration && obi_extension/integration/g'
+        find "$OBI_DEST" -maxdepth 1 \( -name "*_beyla*.go" -o -name "beyla_*.go" -o -name "process_test.go" \) 2>/dev/null | while read -r file; do
+            sed_i -e 's/integration && obi_extension/integration/g' "$file"
+        done
     fi
     
     # Remove OBI copyright headers (Beyla has its own)
     echo "  Cleaning up headers..."
-    find "$OBI_DEST" -name "*.go" -type f -print0 | xargs -0 sed -i \
-        -e '/^\/\/ Copyright The OpenTelemetry Authors/d' \
-        -e '/^\/\/ SPDX-License-Identifier:/d'
+    find "$OBI_DEST" -name "*.go" -type f | while read -r file; do
+        sed_i \
+            -e '/^\/\/ Copyright The OpenTelemetry Authors/d' \
+            -e '/^\/\/ SPDX-License-Identifier:/d' \
+            "$file"
+    done
     
     echo "Done. Generated OBI tests at $OBI_DEST"
     echo ""

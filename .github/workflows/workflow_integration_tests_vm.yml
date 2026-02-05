@@ -8,6 +8,7 @@ on:
       - "bpf/**"
       - "internal/**"
       - "scripts/generate-integration-matrix.sh"
+      - "scripts/generate-obi-tests.sh"
       - ".obi-src/**"
   pull_request:
     branches: ["main", "release-*"]
@@ -16,14 +17,35 @@ on:
       - "bpf/**"
       - "internal/**"
       - "scripts/generate-integration-matrix.sh"
+      - "scripts/generate-obi-tests.sh"
       - ".obi-src/**"
 
 permissions:
   contents: read
 
 jobs:
+  generate-tests:
+    name: "Generate OBI tests"
+    runs-on: ubuntu-x64-small
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+          submodules: true
+
+      - name: Generate OBI tests
+        run: ./scripts/generate-obi-tests.sh
+
+      - name: Upload generated tests
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: generated-obi-tests-vm
+          path: internal/obi/
+          retention-days: 1
+
   vm-test-matrix:
     name: "Build VM integration matrix"
+    needs: generate-tests
     runs-on: ubuntu-x64-small
     outputs:
       matrix: ${{ steps.build-matrix.outputs.matrix }}
@@ -31,6 +53,13 @@ jobs:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           persist-credentials: false
+          submodules: true
+
+      - name: Download generated tests
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: generated-obi-tests-vm
+          path: internal/obi/
 
       - name: build matrix
         id: build-matrix
@@ -44,7 +73,7 @@ jobs:
 
   test:
     name: kernel ${{ matrix.kernel.kernel-version }} ${{ matrix.kernel.arch }} ${{ matrix.test.description }}
-    needs: vm-test-matrix
+    needs: [generate-tests, vm-test-matrix]
     permissions:
       contents: read
       pull-requests: write
@@ -67,6 +96,13 @@ jobs:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           persist-credentials: false
+          submodules: true
+
+      - name: Download generated tests
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: generated-obi-tests-vm
+          path: internal/obi/
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
@@ -85,7 +121,7 @@ jobs:
       - name: Pre-compile Go integration tests
         run: |
           mkdir compiled-tests
-          CC=musl-gcc CGO_ENABLED=1 go test -c -tags=integration -mod vendor -ldflags="-s -w" -o compiled-tests/ ./internal/test/integration
+          CC=musl-gcc CGO_ENABLED=1 go test -c -tags=integration -mod vendor -ldflags="-s -w" -o compiled-tests/ ./internal/obi/test/integration
 
       - name: Run VM integration tests (${{ matrix.test.description }})
         timeout-minutes: 60

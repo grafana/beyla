@@ -337,13 +337,13 @@ cleanup-integration-test:
 run-integration-test:
 	@echo "### Running integration tests"
 	go clean -testcache
-	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./internal/test/integration --tags=integration
+	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./internal/obi/test/integration --tags=integration
 
 .PHONY: run-integration-test-k8s
 run-integration-test-k8s:
-	@echo "### Running integration tests"
+	@echo "### Running K8s integration tests"
 	go clean -testcache
-	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./internal/test/integration --tags=integration
+	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./internal/test/integration/k8s/... --tags=integration
 
 .PHONY: run-integration-test-vm
 run-integration-test-vm:
@@ -368,22 +368,22 @@ run-integration-test-vm:
 			-v -a \
 			-mod vendor \
 			-tags=integration \
-			-run="^($(TEST_PATTERN))\$$" ./internal/test/integration; \
+			-run="^($(TEST_PATTERN))\$$" ./internal/obi/test/integration; \
 	fi
 
 .PHONY: run-integration-test-arm
 run-integration-test-arm:
-	@echo "### Running integration tests"
+	@echo "### Running integration tests (ARM)"
 	go clean -testcache
-	go test -p 1 -failfast -v -timeout 90m -mod vendor -a ./internal/test/integration --tags=integration -run "^TestMultiProcess"
+	go test -p 1 -failfast -v -timeout 90m -mod vendor -a ./internal/obi/test/integration --tags=integration -run "^TestMultiProcess"
 
 .PHONY: integration-test-matrix-json
 integration-test-matrix-json:
-	@./scripts/generate-integration-matrix.sh "$${TEST_TAGS:-integration}" internal/test/integration "$${PARTITIONS:-5}"
+	@./scripts/generate-integration-matrix.sh "$${TEST_TAGS:-integration}" internal/obi/test/integration "$${PARTITIONS:-5}"
 
 .PHONY: vm-integration-test-matrix-json
 vm-integration-test-matrix-json:
-	@./scripts/generate-integration-matrix.sh "$${TEST_TAGS:-integration}" internal/test/integration "$${PARTITIONS:-3}" "TestMultiProcess"
+	@./scripts/generate-integration-matrix.sh "$${TEST_TAGS:-integration}" internal/obi/test/integration "$${PARTITIONS:-3}" "TestMultiProcess"
 
 .PHONY: k8s-integration-test-matrix-json
 k8s-integration-test-matrix-json:
@@ -394,7 +394,7 @@ oats-integration-test-matrix-json:
 	@./scripts/generate-dir-matrix.sh internal/test/oats
 
 .PHONY: integration-test
-integration-test: prereqs prepare-integration-test
+integration-test: prereqs generate-obi-tests prepare-integration-test
 	$(MAKE) run-integration-test || (ret=$$?; $(MAKE) cleanup-integration-test && exit $$ret)
 	$(MAKE) itest-coverage-data
 	$(MAKE) cleanup-integration-test
@@ -406,8 +406,69 @@ integration-test-k8s: prereqs prepare-integration-test
 	$(MAKE) cleanup-integration-test
 
 .PHONY: integration-test-arm
-integration-test-arm: prereqs prepare-integration-test
+integration-test-arm: prereqs generate-obi-tests prepare-integration-test
 	$(MAKE) run-integration-test-arm || (ret=$$?; $(MAKE) cleanup-integration-test && exit $$ret)
+	$(MAKE) itest-coverage-data
+	$(MAKE) cleanup-integration-test
+
+# =============================================================================
+# OBI Integration Tests (generated from .obi-src)
+# =============================================================================
+
+.PHONY: generate-obi-tests
+generate-obi-tests:
+	@echo "### Generating OBI integration tests from .obi-src"
+	./scripts/generate-obi-tests.sh
+
+.PHONY: clean-obi-tests
+clean-obi-tests:
+	@echo "### Cleaning generated OBI tests"
+	./scripts/generate-obi-tests.sh --clean
+
+.PHONY: run-integration-test-obi
+run-integration-test-obi:
+	@echo "### Running OBI integration tests"
+	go clean -testcache
+	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./internal/obi/test/integration --tags=integration
+
+.PHONY: run-integration-test-beyla
+run-integration-test-beyla:
+	@echo "### Running Beyla-specific integration tests"
+	go clean -testcache
+	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./internal/test/integration --tags=integration
+
+.PHONY: obi-integration-test-matrix-json
+obi-integration-test-matrix-json:
+	@./scripts/generate-integration-matrix.sh "$${TEST_TAGS:-integration}" internal/obi/test/integration "$${PARTITIONS:-5}"
+
+.PHONY: beyla-integration-test-matrix-json
+beyla-integration-test-matrix-json:
+	@./scripts/generate-integration-matrix.sh "$${TEST_TAGS:-integration}" internal/test/integration "$${PARTITIONS:-5}"
+
+.PHONY: obi-k8s-integration-test-matrix-json
+obi-k8s-integration-test-matrix-json:
+	@./scripts/generate-dir-matrix.sh internal/obi/test/integration/k8s common
+
+.PHONY: beyla-k8s-integration-test-matrix-json
+beyla-k8s-integration-test-matrix-json:
+	@./scripts/generate-dir-matrix.sh internal/test/integration/k8s common
+
+.PHONY: integration-test-obi
+integration-test-obi: prereqs generate-obi-tests prepare-integration-test
+	$(MAKE) run-integration-test-obi || (ret=$$?; $(MAKE) cleanup-integration-test && exit $$ret)
+	$(MAKE) itest-coverage-data
+	$(MAKE) cleanup-integration-test
+
+.PHONY: integration-test-beyla
+integration-test-beyla: prereqs prepare-integration-test
+	$(MAKE) run-integration-test-beyla || (ret=$$?; $(MAKE) cleanup-integration-test && exit $$ret)
+	$(MAKE) itest-coverage-data
+	$(MAKE) cleanup-integration-test
+
+.PHONY: integration-test-all
+integration-test-all: prereqs generate-obi-tests prepare-integration-test
+	$(MAKE) run-integration-test-obi || (ret=$$?; $(MAKE) cleanup-integration-test && exit $$ret)
+	$(MAKE) run-integration-test-beyla || (ret=$$?; $(MAKE) cleanup-integration-test && exit $$ret)
 	$(MAKE) itest-coverage-data
 	$(MAKE) cleanup-integration-test
 

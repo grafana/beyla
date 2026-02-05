@@ -109,3 +109,6 @@ internal/test/integration/components/gohttp2/*/vendor/
 
 *_bpfel.go
 *_bpfel.o
+
+# Generated OBI test suite (created by scripts/generate-obi-tests.sh)
+internal/obi/

@@ -1,4 +1,7 @@
-//go:build integration
+//go:build integration && obi_extension
+
+// Beyla-specific process metrics test helpers
+// This file is copied to internal/obi/test/integration/ by generate-obi-tests.sh
 
 package integration
 
@@ -10,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/beyla/v3/internal/test/integration/components/promtest"
+	"github.com/grafana/beyla/v3/internal/obi/test/integration/components/promtest"
 )
 
 func testProcesses(attribMatcher map[string]string) func(t *testing.T) {

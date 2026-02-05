@@ -14,6 +14,7 @@ on:
       - "vendor/**"
       - "Makefile"
       - "scripts/generate-integration-matrix.sh"
+      - "scripts/generate-obi-tests.sh"
       - ".github/workflows/pull_request_integration_tests.yml"
       - ".obi-src/**"
   pull_request:
@@ -29,6 +30,7 @@ on:
       - "vendor/**"
       - "Makefile"
       - "scripts/generate-integration-matrix.sh"
+      - "scripts/generate-obi-tests.sh"
       - ".github/workflows/pull_request_integration_tests.yml"
       - ".obi-src/**"
 
@@ -37,8 +39,28 @@ permissions:
   contents: read
 
 jobs:
+  generate-tests:
+    name: "Generate OBI tests"
+    runs-on: ubuntu-x64-small
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+          submodules: true
+
+      - name: Generate OBI tests
+        run: ./scripts/generate-obi-tests.sh
+
+      - name: Upload generated tests
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: generated-obi-tests
+          path: internal/obi/
+          retention-days: 1
+
   test-matrix:
     name: "Build integration matrix"
+    needs: generate-tests
     runs-on: ubuntu-x64-small
     outputs:
       matrix: ${{ steps.build-matrix.outputs.matrix }}
@@ -46,19 +68,26 @@ jobs:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           persist-credentials: false
+          submodules: true
 
-      - name: build matrix
+      - name: Download generated tests
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: generated-obi-tests
+          path: internal/obi/
+
+      - name: Build matrix
         id: build-matrix
         env:
           PARTITIONS: 10
           TEST_TAGS: integration
         run: |
           echo -n "matrix=" >> $GITHUB_OUTPUT
-          make integration-test-matrix-json >> $GITHUB_OUTPUT
+          ./scripts/generate-integration-matrix.sh "$TEST_TAGS" "internal/obi/test/integration" "$PARTITIONS" >> $GITHUB_OUTPUT
 
   test:
     name: ${{ matrix.description }}
-    needs: test-matrix
+    needs: [generate-tests, test-matrix]
     runs-on: ubuntu-latest
     # Grant specific permissions needed only for this job
     permissions:
@@ -76,6 +105,7 @@ jobs:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           persist-credentials: false
+          submodules: true
 
       - name: Free up disk space
         run: |
@@ -116,6 +146,12 @@ jobs:
           docker builder prune -af || true
           df -h
 
+      - name: Download generated tests
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: generated-obi-tests
+          path: internal/obi/
+
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
@@ -149,15 +185,15 @@ jobs:
             exit 1
           fi
 
-          mkdir reports
+          mkdir -p reports
 
           ~/go/bin/gotestsum \
               --rerun-fails=2 --rerun-fails-max-failures=2 --rerun-fails-abort-on-data-race \
-              --packages="./internal/test/integration" -ftestname \
+              --packages="./internal/obi/test/integration" -ftestname \
               --jsonfile=reports/test-run-"${RUN_NUMBER}"-"${MATRIX_ID}".log \
               -- -race -tags=${TEST_TAGS} -timeout 30m \
               -mod vendor \
-              -run="^(${MATRIX_TEST_PATTERN})$" ./internal/test/integration
+              -run="^(${MATRIX_TEST_PATTERN})$" ./internal/obi/test/integration
 
       - name: Process coverage data
         run: make itest-coverage-data

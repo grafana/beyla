@@ -13,6 +13,7 @@ on:
       - "cmd/**"
       - "vendor/**"
       - "Makefile"
+      - "scripts/generate-obi-tests.sh"
       - ".github/workflows/pull_request_integration_tests_arm.yml"
       - ".obi-src/**"
 
@@ -28,6 +29,7 @@ on:
       - "cmd/**"
       - "vendor/**"
       - "Makefile"
+      - "scripts/generate-obi-tests.sh"
       - ".github/workflows/pull_request_integration_tests_arm.yml"
       - ".obi-src/**"
 
@@ -49,6 +51,7 @@ jobs:
       - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
         with:
           persist-credentials: false
+          submodules: true
       - name: Set up Go
         uses: actions/setup-go@be3c94b385c4f180051c996d336f57a34c397495 # v3.6.1
         with:

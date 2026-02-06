@@ -38,7 +38,7 @@ services:
     network_mode: "service:testserver"
     pid: "service:testserver"
     environment:
-      BEYLA_CONFIG_PATH: "/configs/instrumenter-config.yml"
+      BEYLA_CONFIG_PATH: "/configs/obi-config.yml"
       GOCOVERDIR: "/coverage"
       BEYLA_TRACE_PRINTER: "text"
       BEYLA_OPEN_PORT: "${BEYLA_OPEN_PORT}"

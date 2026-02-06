@@ -226,6 +226,12 @@ generate() {
         for file in "$OBI_DEST"/*.go; do
             sed_i 's|^//go:build beyla_extension$|//go:build integration|' "$file"
         done
+        # Copy Beyla-specific config overrides (e.g. configs that add
+        # application_process features for process-level metric tests).
+        # These overlay on top of the OBI upstream configs already copied.
+        if [[ -d "$BEYLA_EXT/configs" ]]; then
+            cp "$BEYLA_EXT"/configs/*.yml "$OBI_DEST/configs/" 2>/dev/null || true
+        fi
     fi
 
     # -----------------------------------------------------------------

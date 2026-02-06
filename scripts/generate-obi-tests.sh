@@ -160,6 +160,16 @@ generate() {
             "$file"
     done
     
+    # Add //go:build integration tag to test files that don't have it
+    echo "  Adding build tags to test files..."
+    find "$OBI_DEST" -name "*_test.go" -type f | while read -r file; do
+        if ! grep -q "^//go:build" "$file"; then
+            # Create temp file with build tag prepended
+            { echo "//go:build integration"; echo ""; cat "$file"; } > "$file.tmp"
+            mv "$file.tmp" "$file"
+        fi
+    done
+    
     echo "Done. Generated OBI tests at $OBI_DEST"
     echo ""
     echo "To run OBI tests: make test-integration-obi"

@@ -1,4 +1,4 @@
-//go:build integration
+//go:build beyla_extension
 
 // Beyla-specific integration tests for multiprocess context propagation
 // This file is copied to internal/obi/test/integration/ by generate-obi-tests.sh

@@ -215,6 +215,12 @@ generate() {
     BEYLA_EXT="internal/test/beyla_extensions"
     if [[ -d "$BEYLA_EXT" ]]; then
         find "$BEYLA_EXT" -maxdepth 1 -name "*.go" -exec cp {} "$OBI_DEST/" \;
+        # Source files use //go:build beyla_extension to prevent compilation
+        # during lint (the linter only enables the 'integration' tag).
+        # Replace with //go:build integration for the generated output.
+        for file in "$OBI_DEST"/*.go; do
+            sed_i 's|^//go:build beyla_extension$|//go:build integration|' "$file"
+        done
     fi
 
     # -----------------------------------------------------------------

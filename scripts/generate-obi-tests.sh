@@ -51,6 +51,15 @@ BEHAVIORAL_TRANSFORMS=(
     # Generic env var prefix (must be after specific OTEL_EBPF_ rules above)
     'OTEL_EBPF_|BEYLA_'
 
+    # --- Identity values (where "obi" is a config value or assertion, not a name) ---
+    'HOSTNAME: "obi"|HOSTNAME: "beyla"'
+    'value: "obi"|value: "beyla"'
+    '/var/run/obi|/var/run/beyla'
+    '"source":[ ]*"obi"|"source": "beyla"'
+
+    # --- Binary name (entrypoint overrides in compose files) ---
+    '/ebpf-instrument|/beyla'
+
     # --- Metric name prefixes (exported output) ---
     'obi_|beyla_'
 

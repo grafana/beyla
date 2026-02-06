@@ -12,7 +12,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"syscall"
+
+	"golang.org/x/sys/unix"
 )
 
 // injectable values for testing
@@ -92,8 +93,8 @@ func findNamespace(pid int32) (uint32, error) {
 	defer f.Close()
 
 	// read the value of the symbolic link
-	buf := make([]byte, syscall.PathMax)
-	n, err := syscall.Readlink(pidPath, buf)
+	buf := make([]byte, unix.PathMax)
+	n, err := unix.Readlink(pidPath, buf)
 	if err != nil {
 		return 0, fmt.Errorf("failed to read symlink(/proc/%d/ns/pid): %w", pid, err)
 	}

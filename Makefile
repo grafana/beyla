@@ -34,7 +34,7 @@ GEN_IMG_VERSION=latest
 # building eBPF binaries
 GEN_IMG ?= ghcr.io/open-telemetry/obi-generator:$(GEN_IMG_VERSION)
 
-COMPOSE_ARGS ?= -f internal/test/integration/docker-compose.yml
+COMPOSE_ARGS ?= -f internal/obi/test/integration/docker-compose.yml
 
 OCI_BIN ?= docker
 
@@ -107,7 +107,7 @@ GINKGO = $(TOOLS_DIR)/ginkgo
 ENVTEST = $(TOOLS_DIR)/setup-envtest
 ENVTEST_K8S_VERSION = 1.30.0
 
-.phony: obi-submodule
+.PHONY: obi-submodule
 obi-submodule:
 	@echo "# Updating OBI Git submodule..."
 	git submodule update --init --recursive
@@ -198,8 +198,14 @@ copy-obi-vendor:
 	go get go.opentelemetry.io/obi
 	go mod vendor
 
+.PHONY: vendor-obi-tests
+vendor-obi-tests:
+	@echo "### Vendoring OBI test dependencies..."
+	go get -t ./internal/obi/test/integration/...
+	go mod vendor
+
 .PHONY: vendor-obi
-vendor-obi: obi-submodule docker-generate copy-obi-vendor
+vendor-obi: obi-submodule docker-generate generate-obi-tests copy-obi-vendor vendor-obi-tests
 
 .PHONY: verify
 verify: prereqs lint-dashboard vendor-obi lint test
@@ -337,13 +343,13 @@ cleanup-integration-test:
 run-integration-test:
 	@echo "### Running integration tests"
 	go clean -testcache
-	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./internal/test/integration --tags=integration
+	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./internal/obi/test/integration --tags=integration
 
 .PHONY: run-integration-test-k8s
 run-integration-test-k8s:
-	@echo "### Running integration tests"
+	@echo "### Running K8s integration tests"
 	go clean -testcache
-	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./internal/test/integration --tags=integration
+	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./internal/test/integration/k8s/... --tags=integration
 
 .PHONY: run-integration-test-vm
 run-integration-test-vm:
@@ -368,22 +374,22 @@ run-integration-test-vm:
 			-v -a \
 			-mod vendor \
 			-tags=integration \
-			-run="^($(TEST_PATTERN))\$$" ./internal/test/integration; \
+			-run="^($(TEST_PATTERN))\$$" ./internal/obi/test/integration; \
 	fi
 
 .PHONY: run-integration-test-arm
 run-integration-test-arm:
-	@echo "### Running integration tests"
+	@echo "### Running integration tests (ARM)"
 	go clean -testcache
-	go test -p 1 -failfast -v -timeout 90m -mod vendor -a ./internal/test/integration --tags=integration -run "^TestMultiProcess"
+	go test -p 1 -failfast -v -timeout 90m -mod vendor -a ./internal/obi/test/integration --tags=integration -run "^TestMultiProcess"
 
 .PHONY: integration-test-matrix-json
 integration-test-matrix-json:
-	@./scripts/generate-integration-matrix.sh "$${TEST_TAGS:-integration}" internal/test/integration "$${PARTITIONS:-5}"
+	@./scripts/generate-integration-matrix.sh "$${TEST_TAGS:-integration}" internal/obi/test/integration "$${PARTITIONS:-5}"
 
 .PHONY: vm-integration-test-matrix-json
 vm-integration-test-matrix-json:
-	@./scripts/generate-integration-matrix.sh "$${TEST_TAGS:-integration}" internal/test/integration "$${PARTITIONS:-3}" "TestMultiProcess"
+	@./scripts/generate-integration-matrix.sh "$${TEST_TAGS:-integration}" internal/obi/test/integration "$${PARTITIONS:-3}" "TestMultiProcess"
 
 .PHONY: k8s-integration-test-matrix-json
 k8s-integration-test-matrix-json:
@@ -394,7 +400,7 @@ oats-integration-test-matrix-json:
 	@./scripts/generate-dir-matrix.sh internal/test/oats
 
 .PHONY: integration-test
-integration-test: prereqs prepare-integration-test
+integration-test: prereqs generate-obi-tests prepare-integration-test
 	$(MAKE) run-integration-test || (ret=$$?; $(MAKE) cleanup-integration-test && exit $$ret)
 	$(MAKE) itest-coverage-data
 	$(MAKE) cleanup-integration-test
@@ -406,10 +412,20 @@ integration-test-k8s: prereqs prepare-integration-test
 	$(MAKE) cleanup-integration-test
 
 .PHONY: integration-test-arm
-integration-test-arm: prereqs prepare-integration-test
+integration-test-arm: prereqs generate-obi-tests prepare-integration-test
 	$(MAKE) run-integration-test-arm || (ret=$$?; $(MAKE) cleanup-integration-test && exit $$ret)
 	$(MAKE) itest-coverage-data
 	$(MAKE) cleanup-integration-test
+
+.PHONY: generate-obi-tests
+generate-obi-tests:
+	@echo "### Generating OBI integration tests from .obi-src"
+	./scripts/generate-obi-tests.sh
+
+.PHONY: clean-obi-tests
+clean-obi-tests:
+	@echo "### Cleaning generated OBI tests"
+	./scripts/generate-obi-tests.sh --clean
 
 .PHONY: itest-coverage-data
 itest-coverage-data:

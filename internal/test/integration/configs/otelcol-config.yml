@@ -1,0 +1,26 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+        max_recv_msg_size_mib: 100
+      http:
+        endpoint: 0.0.0.0:4318
+        cors:
+          allowed_origins:
+            - "http://*"
+            - "https://*"
+exporters:
+  prometheus:
+    endpoint: "otelcol:9464"
+    resource_to_telemetry_conversion:
+      enabled: true
+    enable_open_metrics: true
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      exporters: [prometheus]
+#  telemetry:
+#    logs:
+#      level: debug

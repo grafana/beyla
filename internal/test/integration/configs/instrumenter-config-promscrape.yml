@@ -1,0 +1,35 @@
+discovery:
+  survey:
+    - k8s_namespace: "*"
+routes:
+  patterns:
+    - /basic/:rnd
+  unmatched: path
+prometheus_export:
+  port: 8999
+  features:
+    - application
+    - application_process
+  extra_resource_attributes: ["deployment_environment"]
+attributes:
+  select:
+    process_cpu_utilization:
+      include: ["*"]
+      exclude: ["cpu_mode"]
+    process_cpu_time:
+      include: ["*"]
+      exclude: ["cpu_mode"]
+    process_memory_usage:
+      include: ["*"]
+    process_memory_virtual:
+      include: ["*"]
+    process_disk_io:
+      include: ["*"]
+    process_network_io:
+      include: ["*"]
+    "*":
+      include: ["*"]
+  kubernetes:
+    cluster_name: beyla-k8s-test-cluster
+  extra_group_attributes:
+    k8s_app_meta: ["component"]

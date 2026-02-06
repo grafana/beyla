@@ -1,0 +1,57 @@
+routes:
+  patterns:
+    - /basic/:rnd
+  unmatched: path
+otel_metrics_export:
+  endpoint: http://otelcol:4018
+otel_traces_export:
+  endpoint: http://jaeger:4318
+discovery:
+  # services section is left in this file for legacy configuration compatibility
+  # users should define the "instrument:" section instead
+  services:
+    - namespace: just-will-be-ignored
+      name: another-service
+      exe_path: asdflkjasdf
+    - namespace: initial-set
+      name: some-server
+      open_ports: 18080
+      exe_path: dupe # choose only the dupe.* process that uses port 18080
+    - namespace: initial-set
+      exe_path: ((testserver)|(rename1))
+    - namespace: multi-k
+      name: rust-service-ssl
+      open_ports: 8490
+    - namespace: multi-k
+      name: python-service-ssl
+      open_ports: 8380      
+    - namespace: multi-k
+      name: python-service
+      open_ports: 7773
+    - namespace: multi-k
+      name: nodejs-service-ssl
+      open_ports: 3033      
+    - namespace: multi-k
+      name: nodejs-service
+      open_ports: 3030
+    - namespace: multi-k
+      name: rails-service-ssl
+      open_ports: 3043      
+    - namespace: multi-k
+      name: rails-service
+      open_ports: 3040
+    - namespace: multi-k
+      name: java-service
+      open_ports: 8085
+    - namespace: multi-k
+      name: rust-service
+      open_ports: 8090
+attributes:
+  kubernetes:
+    enable: true
+    cluster_name: my-kube
+  select:
+    http_server_request_duration_seconds_count:
+      exclude: ["server_address"]
+    "*":
+      include: ["*"]

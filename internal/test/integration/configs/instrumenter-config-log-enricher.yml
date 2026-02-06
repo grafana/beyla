@@ -1,0 +1,23 @@
+routes:
+  patterns:
+    - /basic/:rnd
+  unmatched: path
+  ignored_patterns:
+    - /metrics
+attributes:
+  kubernetes:
+    cluster_name: beyla-k8s-test-cluster
+    resource_labels:
+      deployment.environment: ["deployment.environment"]
+  select:
+    "*":
+      include: ["*"]
+ebpf:
+  log_enricher:
+    services:
+      - service:
+        - open_ports: "8380"
+discovery:
+  min_process_age: "0s"
+log_config: "yaml"
+

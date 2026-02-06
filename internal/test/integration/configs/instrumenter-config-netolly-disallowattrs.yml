@@ -1,0 +1,7 @@
+attributes:
+  select:
+    beyla_network_flow_bytes:
+      include:
+      - beyla.ip
+      - src.name
+      - dst.port

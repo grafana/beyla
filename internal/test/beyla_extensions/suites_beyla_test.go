@@ -29,13 +29,11 @@ func TestSuiteClient_Beyla(t *testing.T) {
 
 // TestSuiteClientPromScrape_Beyla is a Beyla-specific test for client HTTP library with Prometheus scrape
 // NOTE: Named with _Beyla suffix to avoid conflict with OBI's TestSuiteClientPromScrape
+// Uses a dedicated docker-compose that sets BEYLA_PROMETHEUS_FEATURES to include application_process,
+// since the OBI upstream docker-compose-client.yml hardcodes features without it.
 func TestSuiteClientPromScrape_Beyla(t *testing.T) {
-	compose, err := docker.ComposeSuite("docker-compose-client.yml", path.Join(pathOutput, "test-suite-client-promscrape.log"))
+	compose, err := docker.ComposeSuite("docker-compose-client-promscrape.yml", path.Join(pathOutput, "test-suite-client-promscrape.log"))
 	compose.Env = append(compose.Env, `BEYLA_EXECUTABLE_NAME=pingclient`)
-	compose.Env = append(compose.Env,
-		`INSTRUMENTER_CONFIG_SUFFIX=-promscrape`,
-		`PROM_CONFIG_SUFFIX=-promscrape`,
-	)
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("Client RED metrics", testREDMetricsForClientHTTPLibraryNoTraces)

@@ -60,7 +60,7 @@ jobs:
           TEST_TAGS: integration
         run: |
           echo -n "matrix=" >> $GITHUB_OUTPUT
-          ./scripts/generate-integration-matrix.sh "$TEST_TAGS" "internal/obi/test/integration" "$PARTITIONS" >> $GITHUB_OUTPUT
+          make integration-test-matrix-json >> $GITHUB_OUTPUT
 
   test:
     name: ${{ matrix.description }}

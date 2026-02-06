@@ -111,12 +111,23 @@ generate() {
             "$file"
     done
     
-    # Transform Dockerfile paths in docker-compose files to reference .obi-src
+    # Transform docker-compose Dockerfile paths to reference .obi-src
+    # For non-OBI Dockerfiles: prefix path with .obi-src/ (context stays at repo root)
+    # For ebpf-instrument: change context to .obi-src root (it needs bpf/, cmd/, pkg/)
     echo "  Transforming docker-compose Dockerfile paths..."
     find "$OBI_DEST" -maxdepth 1 -name "docker-compose*.yml" | while read -r file; do
         sed_i \
             -e 's|dockerfile: internal/test/integration/components/|dockerfile: .obi-src/internal/test/integration/components/|g' \
             -e 's|dockerfile: \./internal/test/integration/components/|dockerfile: .obi-src/internal/test/integration/components/|g' \
+            "$file"
+        # ebpf-instrument Dockerfile needs OBI's bpf/, cmd/, pkg/ dirs in its build context.
+        # Change context from repo root to .obi-src and remove .obi-src/ prefix from Dockerfile path.
+        sed_i \
+            -e '/dockerfile:.*\.obi-src.*ebpf-instrument/{s|dockerfile: \.obi-src/|dockerfile: |;}' \
+            "$file"
+        # Adjust context line preceding ebpf-instrument dockerfile to point to .obi-src
+        sed_i \
+            -e '/ebpf-instrument/!{N;/\n.*ebpf-instrument/{s|context: \.\./\.\./\.\.|context: ../../../../.obi-src|;};P;D;}' \
             "$file"
     done
     

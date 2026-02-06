@@ -205,6 +205,19 @@ generate() {
     fi
 
     # -----------------------------------------------------------------
+    # 1b. Copy Beyla-specific extension tests
+    #     These are Beyla-original tests (not from OBI upstream) that run
+    #     alongside the generated OBI tests. They already use Beyla naming
+    #     (BEYLA_* env vars, beyla_ metric prefix) so no behavioral
+    #     transforms are needed — just a straight copy.
+    # -----------------------------------------------------------------
+    echo "  Copying Beyla extension tests..."
+    BEYLA_EXT="internal/test/beyla_extensions"
+    if [[ -d "$BEYLA_EXT" ]]; then
+        find "$BEYLA_EXT" -maxdepth 1 -name "*.go" -exec cp {} "$OBI_DEST/" \;
+    fi
+
+    # -----------------------------------------------------------------
     # 2. Go import / path transforms
     # -----------------------------------------------------------------
     echo "  Transforming Go imports and paths..."

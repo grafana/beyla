@@ -1,4 +1,4 @@
-//go:build integration && obi_extension
+//go:build integration
 
 // Beyla-specific test helpers
 // This file is copied to internal/obi/test/integration/ by generate-obi-tests.sh

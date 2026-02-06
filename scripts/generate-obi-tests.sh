@@ -91,7 +91,7 @@ generate() {
         fi
     done
     
-    # Transform Go import paths and Dockerfile references in Go files
+    # Transform Go import paths and file references in Go files
     echo "  Transforming Go imports..."
     find "$OBI_DEST" -name "*.go" -type f | while read -r file; do
         sed_i \
@@ -99,8 +99,18 @@ generate() {
             -e 's|go\.opentelemetry\.io/obi/internal/test/tools|github.com/grafana/beyla/v3/internal/obi/test/tools|g' \
             -e 's|// import "go\.opentelemetry\.io/obi/internal/test/integration[^"]*"||g' \
             -e 's|"internal/test/integration/components/|".obi-src/internal/test/integration/components/|g' \
+            -e 's|"internal/test/integration/configs"|".obi-src/internal/test/integration/configs"|g' \
+            -e 's|"internal/test/integration/system/|".obi-src/internal/test/integration/system/|g' \
             "$file"
     done
+    # Fix ebpf-instrument build: ContextDir must point to .obi-src for bpf/, cmd/, pkg/
+    echo "  Fixing ebpf-instrument Go build context..."
+    if [[ -f "$OBI_DEST/dockerutil_test.go" ]]; then
+        sed_i \
+            -e 's|ContextDir:   pathRoot,|ContextDir:   filepath.Join(pathRoot, ".obi-src"),|g' \
+            -e 's|Dockerfile:   ".obi-src/internal/test/integration/components/ebpf-instrument/|Dockerfile:   "internal/test/integration/components/ebpf-instrument/|g' \
+            "$OBI_DEST/dockerutil_test.go"
+    fi
     
     # Transform environment variable prefixes in YAML files
     echo "  Transforming env vars in configs..."

@@ -65,6 +65,17 @@ BEHAVIORAL_TRANSFORMS=(
     'opentelemetry-ebpf-instrumentation|beyla'
 )
 
+# ---- Code injections (line inserted after a matching line in Go files) --------
+# For cases where a simple substitution isn't enough — e.g. overriding a value
+# returned by a vendored function, or adding a statement after a specific call.
+#
+# Format: "sed_pattern|code_to_inject"
+CODE_INJECTIONS=(
+    # The vendored DefaultOBIConfig() returns MetricPrefix="obi", but the
+    # Beyla binary exports internal metrics with the "beyla" prefix.
+    'config := ti\.DefaultOBIConfig()|config.MetricPrefix = "beyla"'
+)
+
 # =============================================================================
 # FUNCTIONS
 # =============================================================================
@@ -78,13 +89,37 @@ sed_i() {
     fi
 }
 
-# Discover Go sub-packages imported by test files under OBI_SRC.
-# These are the packages that must be copied (they can't be referenced in place
-# because Go import paths are rewritten to the Beyla module).
+# Discover Go sub-packages imported by the test files we copy, including
+# transitive imports. Starts from root-level and k8s test files, then
+# iteratively resolves imports from discovered packages until stable.
 discover_go_packages() {
-    grep -roh "\"${OBI_MODULE}/internal/test/integration/[^\"]*\"" "$OBI_SRC" | \
-        sed "s|\"${OBI_MODULE}/internal/test/integration/||;s|\"||" | \
-        sort -u
+    local import_pattern="\"${OBI_MODULE}/internal/test/integration/[^\"]*\""
+    local extract="s|\"${OBI_MODULE}/internal/test/integration/||;s|\"||"
+    local prev="" pkgs
+
+    # Seed: direct imports from root-level Go files and k8s test files
+    pkgs=$(
+        {
+            find "$OBI_SRC" -maxdepth 1 -name "*.go" -exec grep -oh "$import_pattern" {} +
+            find "$OBI_SRC/k8s" -name "*.go" -exec grep -oh "$import_pattern" {} + 2>/dev/null
+        } | sed "$extract" | sort -u
+    )
+
+    # Iterate: resolve transitive imports from discovered packages
+    while [[ "$pkgs" != "$prev" ]]; do
+        prev="$pkgs"
+        pkgs=$(
+            {
+                echo "$prev"
+                echo "$prev" | while read -r pkg; do
+                    [[ -d "$OBI_SRC/$pkg" ]] && \
+                        find "$OBI_SRC/$pkg" -maxdepth 1 -name "*.go" \
+                            -exec grep -oh "$import_pattern" {} + 2>/dev/null
+                done
+            } | sed "$extract" | sort -u
+        )
+    done
+    echo "$pkgs"
 }
 
 # Apply an array of "pattern|replacement" transforms to a file using sed.
@@ -96,6 +131,22 @@ apply_transforms() {
         local pattern="${rule%%|*}"
         local replacement="${rule#*|}"
         sed_i -e "s|${pattern}|${replacement}|g" "$file"
+    done
+}
+
+# Inject a line of code after each matching line in a file.
+# Rules are "sed_pattern|code_to_inject"; only files containing the pattern
+# are modified.
+apply_injections() {
+    local file="$1"
+    shift
+    local rules=("$@")
+    for rule in "${rules[@]}"; do
+        local pattern="${rule%%|*}"
+        local injection="${rule#*|}"
+        if grep -q "${pattern}" "$file" 2>/dev/null; then
+            sed_i -e "s|${pattern}|&\n\t${injection}|" "$file"
+        fi
     done
 }
 
@@ -186,6 +237,12 @@ generate() {
         sed_i -e 's|\.\./\.\./\.\./testoutput|../../../../testoutput|g' "$file"
         sed_i -e 's|\.\./\.\./\.\./internal/|../../../../.obi-src/internal/|g' "$file"
 
+        # Redirect bare ./components/ and components/ paths to .obi-src.
+        # These reference standalone app dirs that aren't copied to the
+        # generated output (they're built via Docker from the OBI source).
+        sed_i -e 's|\./components/|../../../../.obi-src/internal/test/integration/components/|g' "$file"
+        sed_i -e 's|context: components/|context: ../../../../.obi-src/internal/test/integration/components/|g' "$file"
+
         # Swap the OBI Dockerfile for the Beyla Dockerfile and point its
         # build context at the Beyla repo root instead of .obi-src.
         sed_i -e "s|dockerfile: \\./${OBI_DOCKERFILE}|dockerfile: ${BEYLA_DOCKERFILE}|" "$file"
@@ -210,6 +267,9 @@ generate() {
     echo "  Applying OBI → Beyla behavioral transforms..."
     find "$OBI_DEST" -type f \( -name "*.go" -o -name "*.yml" -o -name "*.yaml" \) | while read -r file; do
         apply_transforms "$file" "${BEHAVIORAL_TRANSFORMS[@]}"
+    done
+    find "$OBI_DEST" -name "*.go" -type f | while read -r file; do
+        apply_injections "$file" "${CODE_INJECTIONS[@]}"
     done
 
     # -----------------------------------------------------------------
